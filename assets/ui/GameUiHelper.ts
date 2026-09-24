@@ -1,4 +1,4 @@
-import { AnimationClip, Button, Color, Label, Node, ProgressBar, Size, Sprite, UITransform, Vec2 } from "cc";
+import { AnimationClip, Button, Color, Label, Node, ProgressBar, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
 import { AnimationPlayer } from "../scripts/AnimationPlayer";
 import { BottomNavBarButton, Role, RoleInfoFramePositionsMap } from "../configs";
@@ -114,6 +114,25 @@ const GameUiHelper = {
     expBar.addChild(expProgress);
     expBar.getComponent(ProgressBar).barSprite = expProgress.getComponent(Sprite);
     return expBar;
+  },
+
+  /**
+   * 创建错误提示
+   * @param error 错误信息
+   */
+  createErrorTip(error: string) {
+    const errorTip = UiHelper.createErrorTip(error);
+    const uiOpacity = errorTip.addComponent(UIOpacity);
+    tween(errorTip)
+      .to(0.3, { position: new Vec3(0, 40, 0) })
+      .start();
+    tween(uiOpacity)
+      .to(1.5, { opacity: 0 })
+      .call(() => {
+        errorTip.destroy();
+      })
+      .start();
+    LayerHelper.addToUILayer(errorTip);
   },
 };
 
