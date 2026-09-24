@@ -1,4 +1,4 @@
-import { AnimationClip, Button, Color, Label, Node, ProgressBar, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { AnimationClip, Button, Color, Label, LabelAtlas, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
 import { AnimationPlayer } from "../scripts/AnimationPlayer";
 import { BottomNavBarButton, Role, RoleInfoFramePositionsMap } from "../configs";
@@ -30,7 +30,7 @@ const GameUiHelper = {
   createRoleInfoFrame(role: Role) {
     const node = UiHelper.createSprite("common/user-info-frame", RoleInfoFramePositionsMap.get(role.relationShip), new Size(300, 70));
     // 昵称
-    const name = UiHelper.createLabel(role.name, Color.WHITE, 16, new Vec2(25, 2.5), new Size(190, 24));
+    const name = UiHelper.createLabel(role.name, Color.WHITE, 16, new Vec2(17, 24), new Size(190, 24));
     name.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     LayerHelper.setLayerToUILayer(name);
     node.addChild(name);
@@ -72,6 +72,28 @@ const GameUiHelper = {
     silverCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
     LayerHelper.setLayerToUILayer(silverCount);
     node.addChild(silverCount);
+    // 站斗力
+    const combatIcon = UiHelper.createSprite("common/combat", new Vec2(-44, 2), new Size(75, 41));
+    LayerHelper.setLayerToUILayer(combatIcon);
+    node.addChild(combatIcon);
+    // 战斗力数字
+    const combatNumber = UiHelper.createLabel("99999999", Color.WHITE, 20, new Vec2(-7, 4), new Size(200, 30));
+    combatNumber.getComponent(UITransform).setAnchorPoint(0, 0.5);
+    const label = combatNumber.getComponent(Label);
+    label.horizontalAlign = Label.HorizontalAlign.LEFT;
+    resources.load("fonts/combat", LabelAtlas, (err, atlas) => {
+      if (err) {
+        console.error("战斗力字体加载失败");
+        return;
+      }
+      label.font = atlas;
+    });
+    LayerHelper.setLayerToUILayer(combatNumber);
+    node.addChild(combatNumber);
+    // vip按钮
+    const vipButton = UiHelper.createButton("money/vip", new Vec2(110, 30), new Size(75, 25));
+    LayerHelper.setLayerToUILayer(vipButton);
+    node.addChild(vipButton);
     return node;
   },
   /**
