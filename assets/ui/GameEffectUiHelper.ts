@@ -8,7 +8,7 @@ const GameEffectUiHelper = {
    */
   createUpgradeEffect(position: Vec2 = new Vec2()) {
     const upgrade = UiHelper.createSprite("", new Vec2(), new Size(284, 380));
-    AnimationHelper.playOnce("upgrade", upgrade, "effect/upgrade", 1);
+    AnimationHelper.playOnceWithDir("upgrade", upgrade, "effect/upgrade", 1);
     return upgrade;
   },
 };
