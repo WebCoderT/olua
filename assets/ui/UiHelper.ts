@@ -168,6 +168,15 @@ const UiHelper = {
   },
 
   /**
+   * 创建一个提示文本元素
+   * @param text 提示文本内容
+   */
+  createTip: (text: string) => {
+    const node = UiHelper.createLabel(text, Color.GREEN, 12, new Vec2(0, 0), new Size(300, 20));
+    return node;
+  },
+
+  /**
    * 创建选择器
    * @param src 图片地址
    * @param selectedSrc 选择后的图片地址

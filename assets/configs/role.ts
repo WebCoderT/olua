@@ -1,4 +1,5 @@
 import { RELATION_SHIP } from "./game";
+import { levelMap } from "./level";
 
 export interface Role {
   // 编号
@@ -13,6 +14,8 @@ export interface Role {
   level: number;
   // 经验
   exp: number;
+  // 最大血量
+  maxHp: number;
   // 关系
   relationShip: RELATION_SHIP;
   // 头像
@@ -40,10 +43,12 @@ export class Role implements Role {
   bindGold: number = 10000;
   silver: number = 10000;
   exp: number = 0;
+  maxHp: number;
   constructor(name: string, occupation: string, sex: string) {
     this.id = new Date().getTime().toString();
     this.name = name;
     this.occupation = occupation;
     this.sex = sex;
+    this.maxHp = levelMap.get(this.level).maxHp;
   }
 }

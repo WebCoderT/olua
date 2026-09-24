@@ -1,4 +1,4 @@
-import { Node, Size, Sprite, Vec2 } from "cc";
+import { Node, ProgressBar, Size, Sprite, Vec2 } from "cc";
 import { bottomNavBarButtons, getCurrentLevelExpRate, Role } from "../../configs";
 import GameUiHelper from "../GameUiHelper";
 import StorageHelper from "../StorageHelper";
@@ -8,6 +8,10 @@ import LayerHelper from "../LayerHelper";
 interface BottomBarFrame {
   selectedRole: Role | null;
   init: () => void;
+  // 经验条
+  expBar: Node;
+  // 更新经验条
+  updateExpBar: Function;
 }
 
 const BottomBarFrame: BottomBarFrame = {
@@ -34,14 +38,23 @@ const BottomBarFrame: BottomBarFrame = {
       bottomNavBar.addChild(node);
     });
     // 经验条
-    const bar = GameUiHelper.createExpBar("exp", getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp), new Vec2(0, -50), new Size(784, 10));
-    LayerHelper.setLayerToUILayer(bar);
+    BottomBarFrame.expBar = GameUiHelper.createExpBar("exp", getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp), new Vec2(0, -50), new Size(784, 10));
+    LayerHelper.setLayerToUILayer(BottomBarFrame.expBar);
 
     // 统一添加进底层区域
     bottomNavBarBg.addChild(bottomNavBar);
-    bottomNavBarBg.addChild(bar);
+    bottomNavBarBg.addChild(BottomBarFrame.expBar);
 
     LayerHelper.addToUILayer(bottomNavBarBg);
+  },
+  // 经验条
+  expBar: null,
+  // 更新经验条
+  updateExpBar() {
+    // 更新角色数据
+    BottomBarFrame.selectedRole = StorageHelper.findSelectedRole();
+    // 更新经验条
+    BottomBarFrame.expBar.getComponent(ProgressBar).progress = getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp);
   },
 };
 

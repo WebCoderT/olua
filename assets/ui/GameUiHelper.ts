@@ -87,14 +87,14 @@ const GameUiHelper = {
         return;
       }
       label.font = atlas;
+      LayerHelper.setLayerToUILayer(combatNumber);
+      node.addChild(combatNumber);
     });
-    LayerHelper.setLayerToUILayer(combatNumber);
-    node.addChild(combatNumber);
     // vip按钮
     const vipButton = UiHelper.createButton("money/vip", new Vec2(110, 30), new Size(75, 25));
     LayerHelper.setLayerToUILayer(vipButton);
     node.addChild(vipButton);
-    return node;
+    return { node, combatNumber, level };
   },
   /**
    * 创建底部导航功能区域按键
@@ -150,6 +150,24 @@ const GameUiHelper = {
       .start();
     tween(uiOpacity)
       .to(1.5, { opacity: 0 })
+      .call(() => {
+        errorTip.destroy();
+      })
+      .start();
+    LayerHelper.addToUILayer(errorTip);
+  },
+
+  /**
+   * 创建提示
+   */
+  createTip(text: string) {
+    const errorTip = UiHelper.createTip(text);
+    const uiOpacity = errorTip.addComponent(UIOpacity);
+    tween(errorTip)
+      .to(0.5, { position: new Vec3(0, 40, 0) })
+      .start();
+    tween(uiOpacity)
+      .to(3, { opacity: 0 })
       .call(() => {
         errorTip.destroy();
       })
