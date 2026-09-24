@@ -3,6 +3,7 @@ import { Role } from "../../configs";
 import GameUiHelper from "../GameUiHelper";
 import LayerHelper from "../LayerHelper";
 import StorageHelper from "../StorageHelper";
+import EffectFrame from "./EffectFrame";
 
 interface RoleAvatarFrame {
   selectedRole: Role | null;
@@ -34,6 +35,8 @@ const RoleAvatarFrame: RoleAvatarFrame = {
     RoleAvatarFrame.selectedRole = StorageHelper.findSelectedRole();
     // 更新等级
     RoleAvatarFrame.level.getComponent(Label).string = RoleAvatarFrame.selectedRole.level.toString();
+    // 升级则播放升级特效
+    EffectFrame.selfUpgrade();
   },
 };
 

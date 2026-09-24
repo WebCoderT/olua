@@ -37,15 +37,25 @@ const LayerHelper = {
     return node;
   },
 
+  // 特效层
+  EffectLayer: new Node("effect_layer"),
+  // 给特效层添加元素
+  addToEffectLayer(node: Node) {
+    node.layer = Layer.EFFECT;
+    LayerHelper.EffectLayer.addChild(node);
+  },
+
   // 初始化图层
   initLayer(game: Node, camera: Camera) {
     LayerHelper.UILayer.layer = Layer.UI;
     LayerHelper.RoleLayer.layer = Layer.ROLE;
+    LayerHelper.EffectLayer.layer = Layer.EFFECT;
     // 摄像机设置可视图层
-    camera.visibility = Layer.UI | Layer.ROLE;
+    camera.visibility = Layer.UI | Layer.ROLE | Layer.EFFECT;
     // 添加进游戏场景
     game.addChild(LayerHelper.UILayer);
     game.addChild(LayerHelper.RoleLayer);
+    game.addChild(LayerHelper.EffectLayer);
   },
 };
 

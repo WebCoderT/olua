@@ -150,6 +150,7 @@ const UiHelper = {
     node.setPosition(position.x, position.y, 0);
     const spriteComponent = node.addComponent(Sprite);
     spriteComponent.sizeMode = Sprite.SizeMode.CUSTOM;
+    spriteComponent.trim = false;
     bgSrc &&
       resources.load(bgSrc + "/spriteFrame", SpriteFrame, (err, sprite) => {
         if (err) console.error(err.message);
