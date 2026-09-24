@@ -1,9 +1,9 @@
-import { _decorator, Camera, Component, error, Node, Size, Sprite, tween, UIOpacity, Vec2, Vec3 } from "cc";
+import { _decorator, Camera, Component } from "cc";
 import LayerHelper from "./LayerHelper";
-import { Role } from "../configs";
 import BottomBarFrame from "./components/BottomBarFrame";
 import RoleAvatarFrame from "./components/RoleAvatarFrame";
 import { ActivityController } from "./controllers/ActivityController";
+import RoleDisplayFrame from "./components/RoleDisplayFrame";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -11,19 +11,22 @@ export class Game extends Component {
   @property({ type: Camera })
   camera: Camera;
 
-  selectedRole: Role;
-
+  //底部区域
   bottomBar: BottomBarFrame = BottomBarFrame;
-
+  // 角色头像
   roleAvatar: RoleAvatarFrame = RoleAvatarFrame;
+  // 角色显示效果
+  roleDisplay: RoleDisplayFrame = RoleDisplayFrame;
 
   start() {
     // 初始化图层
     LayerHelper.initLayer(this.node, this.camera);
     // 初始化底部
     this.bottomBar.init();
-    // 用户头像
+    // 初始化用户头像
     this.roleAvatar.init();
+    // 初始化角色显示
+    this.roleDisplay.init();
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
   }

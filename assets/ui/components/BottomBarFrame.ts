@@ -7,6 +7,7 @@ import LayerHelper from "../LayerHelper";
 
 interface BottomBarFrame {
   selectedRole: Role | null;
+  // 初始化
   init: () => void;
   // 经验条
   expBar: Node;
