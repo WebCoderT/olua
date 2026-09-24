@@ -4,6 +4,7 @@ import BottomBarFrame from "./components/BottomBarFrame";
 import RoleAvatarFrame from "./components/RoleAvatarFrame";
 import { ActivityController } from "./controllers/ActivityController";
 import RoleDisplayFrame from "./components/RoleDisplayFrame";
+import MapFrame from "./components/MapFrame";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -17,6 +18,8 @@ export class Game extends Component {
   roleAvatar: RoleAvatarFrame = RoleAvatarFrame;
   // 角色显示效果
   roleDisplay: RoleDisplayFrame = RoleDisplayFrame;
+  // 地图显示
+  map: MapFrame = MapFrame;
 
   start() {
     // 初始化图层
@@ -27,6 +30,8 @@ export class Game extends Component {
     this.roleAvatar.init();
     // 初始化角色显示
     this.roleDisplay.init();
+    // 初始化地图
+    this.map.init();
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
   }
