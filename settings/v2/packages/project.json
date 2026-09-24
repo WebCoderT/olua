@@ -1,0 +1,42 @@
+{
+  "__version__": "1.0.6",
+  "general": {
+    "designResolution": {
+      "height": 750,
+      "width": 1624,
+      "fitHeight": false,
+      "fitWidth": true
+    }
+  },
+  "custom_joint_texture_layouts": [],
+  "layer": [
+    {
+      "name": "MapLayer",
+      "value": 1
+    },
+    {
+      "name": "UiLayer",
+      "value": 64
+    },
+    {
+      "name": "SkillLayer",
+      "value": 32
+    },
+    {
+      "name": "EffectLayer",
+      "value": 16
+    },
+    {
+      "name": "PlayerLayer",
+      "value": 8
+    },
+    {
+      "name": "MonsterLayer",
+      "value": 4
+    },
+    {
+      "name": "DropLayer",
+      "value": 2
+    }
+  ]
+}
