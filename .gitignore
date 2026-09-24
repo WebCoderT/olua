@@ -24,3 +24,4 @@ node_modules/
 .idea/
 
 assets/**/**.meta
+assets/resources/
