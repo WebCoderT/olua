@@ -24,14 +24,14 @@ const LayerHelper = {
     return node;
   },
 
-  // 角色层
+  // 其他角色层
   RoleLayer: new Node("role_layer"),
-  // 给角色层添加元素
+  // 给其他角色层添加元素
   addToRoleLayer: function (node: Node): void {
     node.layer = Layer.ROLE;
     LayerHelper.RoleLayer.addChild(node);
   },
-  // 设置node节点为角色层
+  // 设置node节点为其他角色层
   setLayerToRoleLayer: function (node: Node): Node {
     node.layer = Layer.ROLE;
     return node;
@@ -60,7 +60,6 @@ const LayerHelper = {
 
   // 移动
   move(position: Vec3) {
-    LayerHelper.RoleLayer.setWorldPosition(position);
     LayerHelper.UILayer.setWorldPosition(position);
     const cameraPosition = LayerHelper.camera.node.getWorldPosition();
     LayerHelper.camera.node.setWorldPosition(position.x, position.y, cameraPosition.z);

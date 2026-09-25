@@ -2,6 +2,7 @@ import { Node, TiledMap, Vec3 } from "cc";
 import GameMapUiHelper from "../GameMapUiHelper";
 import LayerHelper from "../LayerHelper";
 import { getMapOffset, getMapPointPositionOnWorld } from "../utils/MapPointMath";
+import RolePlayFrame from "./RolePlayFrame";
 
 interface MapFrame {
   // 地图
@@ -32,7 +33,7 @@ const MapFrame: MapFrame = {
     const point = map.getObjectGroup("objects").getObject("revive");
     if (!point) throw new Error("该地图无复活点！");
     const worldPosition = getMapPointPositionOnWorld(new Vec3(point.x, point.y), MapFrame.map);
-    LayerHelper.move(worldPosition);
+    RolePlayFrame.updateWorldPosition(worldPosition);
   },
 };
 

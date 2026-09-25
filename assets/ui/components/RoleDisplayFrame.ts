@@ -11,18 +11,18 @@ interface RoleDisplayFrame {
   // 基础裸模
   basicRole: Node | null;
   // 初始化
-  init: () => void;
+  init: (game: Node) => void;
 }
 
 const RoleDisplayFrame: RoleDisplayFrame = {
   selectedRole: null,
   basicRole: null,
-  init() {
+  init(game: Node) {
     // 初始化角色数据
     this.selectedRole = StorageHelper.findSelectedRole();
     // 创建基础裸模
     RoleDisplayFrame.basicRole = GameRoleUiHelper.createBasicRole();
-    LayerHelper.addToRoleLayer(RoleDisplayFrame.basicRole);
+    game.addChild(RoleDisplayFrame.basicRole);
     // 初始化角色操作
     RolePlayFrame.init(RoleDisplayFrame.basicRole);
   },

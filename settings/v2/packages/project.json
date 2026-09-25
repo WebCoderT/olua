@@ -38,5 +38,11 @@
       "name": "DropLayer",
       "value": 2
     }
-  ]
+  ],
+  "physics": {
+    "gravity": {
+      "y": 0
+    },
+    "autoSimulation": true
+  }
 }

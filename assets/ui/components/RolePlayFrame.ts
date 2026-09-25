@@ -1,6 +1,7 @@
-import { Animation, AnimationClip, EventKeyboard, input, Input, isValid, Node, resources, SpriteFrame } from "cc";
+import { Animation, AnimationClip, BoxCollider2D, EventKeyboard, input, Input, isValid, math, Node, resources, RigidBody2D, SpriteFrame, Vec2, Vec3 } from "cc";
 import { getRoleAnimationName, Role, ROLE_ACTION, ROLE_DIRECTION, roleActions, roleAnimationMap } from "../../configs";
 import StorageHelper from "../StorageHelper";
+import LayerHelper from "../LayerHelper";
 
 interface RolePlayFrame {
   // 角色信息
@@ -38,6 +39,10 @@ interface RolePlayFrame {
   action: ROLE_ACTION;
   // 动作更改
   updateAction: Function;
+  // 手动修改角色位置
+  updateRoleWorldPosition: (worldPosition: Vec3) => void;
+  // 移动，修改世界定位
+  updateWorldPosition: Function;
 }
 
 const RolePlayFrame: RolePlayFrame = {
@@ -64,6 +69,12 @@ const RolePlayFrame: RolePlayFrame = {
   playNodeHandler(node: Node) {
     RolePlayFrame.basicRole = node;
     RolePlayFrame.animate = RolePlayFrame.basicRole.addComponent(Animation);
+    const rigidBody = RolePlayFrame.basicRole.addComponent(RigidBody2D);
+    rigidBody.gravityScale = 0;
+    rigidBody.fixedRotation = true;
+    // rigidBody.group = GameCollisionLayer.PLAYER;
+    const boxCollider = RolePlayFrame.basicRole.addComponent(BoxCollider2D);
+    // this.boxCollider.group = GameCollisionLayer.PLAYER;
   },
   // 加载裸模动画
   loadBasicSpriteFrames() {
@@ -187,6 +198,36 @@ const RolePlayFrame: RolePlayFrame = {
     }
     RolePlayFrame.action = ROLE_ACTION.STAND;
     RolePlayFrame.updateAnimationPlay();
+  },
+
+  updateRoleWorldPosition(worldPosition) {
+    RolePlayFrame.basicRole.setWorldPosition(worldPosition);
+    LayerHelper.move(RolePlayFrame.basicRole.getWorldPosition());
+  },
+
+  updateWorldPosition() {
+    const rigidBody = RolePlayFrame.basicRole.getComponent(RigidBody2D);
+    const speed = 2;
+    let inputX = 0;
+    let inputY = 0;
+    if (RolePlayFrame.up) inputY += 1;
+    if (RolePlayFrame.down) inputY -= 1;
+    if (RolePlayFrame.left) inputX -= 1;
+    if (RolePlayFrame.right) inputX += 1;
+
+    const moveVec = new Vec2(inputX, inputY);
+    if (moveVec.length() > 0) {
+      moveVec.normalize();
+    }
+
+    // 关键：直接赋值速度，有输入就动，没输入就立刻清零，彻底解决漂移
+    if (RolePlayFrame.action === ROLE_ACTION.WALK || RolePlayFrame.action === ROLE_ACTION.RUN) {
+      rigidBody.linearVelocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
+      LayerHelper.move(RolePlayFrame.basicRole.getWorldPosition());
+    } else {
+      // 松开按键后，立刻把速度设为0，实现“松手即停”
+      rigidBody.linearVelocity = Vec2.ZERO;
+    }
   },
 };
 
