@@ -5,19 +5,19 @@ import UiHelper from "../helpers/UiHelper";
 import { equipmentSlots } from "../../configs/equipments";
 import StorageHelper from "../helpers/StorageHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
+import { EQUIPMENT_TYPE } from "../../types/common";
+import { Role } from "../../configs/role";
 
 interface RoleInformationDialog {
   dialog: Node | null;
-  // 装备槽-左侧
-  leftSlots: Node[];
-  // 装备槽-右侧
-  rightSlots: Node[];
-  // 装备槽-底部
-  bottomSlots: Node[];
+  // 装备槽
+  slots: Node[];
   // 衣服内观
   clothInShow: Node | null;
   // 添加衣服内观
-  createClothInShow: () => void;
+  createClothInShow: (role: Role) => void;
+  // 更新节点显示
+  updateDialog: (equipmentType: EQUIPMENT_TYPE) => void;
   open: () => void;
   close: () => void;
 }
@@ -25,16 +25,14 @@ interface RoleInformationDialog {
 const RoleInformationDialog: RoleInformationDialog = {
   // 节点
   dialog: null,
-  // 装备槽-左侧
-  leftSlots: [],
-  // 装备槽-右侧
-  rightSlots: [],
-  // 装备槽-底部
-  bottomSlots: [],
+  // 装备槽
+  slots: [],
   // 打开
   open() {
     if (RoleInformationDialog.dialog && RoleInformationDialog.dialog.active) RoleInformationDialog.close();
     else {
+      // 角色信息
+      const role = StorageHelper.findOnlineRole();
       RoleInformationDialog.dialog = GameRoleUiHelper.createDialog("personal_information_dialog", "角色信息");
       LayerHelper.addToUILayer(RoleInformationDialog.dialog);
       // 添加装饰
@@ -58,45 +56,70 @@ const RoleInformationDialog: RoleInformationDialog = {
       equipmentSlots.forEach((value, key) => {
         const slot = UiHelper.createSprite(`equipment_slot_${key}`, value.imageSrc, new Vec2(), new Size(50, 50));
         slot.name = key;
-        if (StorageHelper.findOnlineRole().equipments[key]) {
-          console.log(StorageHelper.findOnlineRole().equipments[key]);
-          GameUiHelper.createGood(slot, StorageHelper.findOnlineRole().equipments[key]);
+        if (role.equipments[key]) {
+          GameUiHelper.createGood(slot, role.equipments[key]);
         }
         LayerHelper.setLayerToUILayer(slot);
         if (value.position === "left") {
-          RoleInformationDialog.leftSlots.push(slot);
+          RoleInformationDialog.slots.push(slot);
           leftSlots.addChild(slot);
         }
         if (value.position === "right") {
-          RoleInformationDialog.rightSlots.push(slot);
+          RoleInformationDialog.slots.push(slot);
           rightSlots.addChild(slot);
         }
         if (value.position === "bottom") {
-          RoleInformationDialog.bottomSlots.push(slot);
+          RoleInformationDialog.slots.push(slot);
           bottomSlots.addChild(slot);
         }
       });
       RoleInformationDialog.dialog.addChild(leftSlots);
       RoleInformationDialog.dialog.addChild(rightSlots);
       RoleInformationDialog.dialog.addChild(bottomSlots);
-      RoleInformationDialog.createClothInShow();
+      role.equipments.cloth && RoleInformationDialog.createClothInShow(role);
     }
   },
 
   // 衣服内观
   clothInShow: null,
   // 添加衣服内观
-  createClothInShow() {
-    const role = StorageHelper.findOnlineRole();
+  createClothInShow(role: Role) {
     RoleInformationDialog.clothInShow = GameUiHelper.createRoleClothInShow(role, new Vec2(-73, -10), new Size(400, 400));
     RoleInformationDialog.dialog.addChild(RoleInformationDialog.clothInShow);
   },
 
+  // 更新节点显示
+  updateDialog(equipmentType) {
+    if (!RoleInformationDialog.dialog || !RoleInformationDialog.dialog.active) return;
+    const role = StorageHelper.findOnlineRole();
+    RoleInformationDialog.slots.find((node) => {
+      if (node.name === equipmentType) {
+        node.removeAllChildren();
+        if (role.equipments[equipmentType]) GameUiHelper.createGood(node, role.equipments[equipmentType]);
+      }
+    });
+    switch (equipmentType) {
+      case EQUIPMENT_TYPE.CLOTH:
+        RoleInformationDialog.clothInShow && RoleInformationDialog.clothInShow.destroy() && (RoleInformationDialog.clothInShow = null);
+        RoleInformationDialog.createClothInShow(role);
+      case EQUIPMENT_TYPE.ACCESSORIES:
+      case EQUIPMENT_TYPE.BELT:
+      case EQUIPMENT_TYPE.HELMET:
+      case EQUIPMENT_TYPE.NECKLACE:
+      case EQUIPMENT_TYPE.RING:
+      case EQUIPMENT_TYPE.SCAPULAR:
+      case EQUIPMENT_TYPE.SHINGUARD:
+      case EQUIPMENT_TYPE.SHOES:
+      case EQUIPMENT_TYPE.WEAPON:
+      case EQUIPMENT_TYPE.WRISTBAND:
+      case EQUIPMENT_TYPE.OTHER1:
+      case EQUIPMENT_TYPE.OTHER2:
+    }
+  },
+
   // 关闭
   close() {
-    RoleInformationDialog.bottomSlots.length = 0;
-    RoleInformationDialog.leftSlots.length = 0;
-    RoleInformationDialog.rightSlots.length = 0;
+    RoleInformationDialog.slots.length = 0;
     RoleInformationDialog.dialog.destroy();
     RoleInformationDialog.dialog = null;
   },

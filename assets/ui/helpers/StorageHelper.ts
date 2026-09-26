@@ -5,6 +5,7 @@ import { levelMap } from "../../configs/level";
 import { Role } from "../../configs/role";
 import { Equipment } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
+import RoleInformationDialog from "../components/RoleInformationDialog";
 
 /**
  * 存储
@@ -79,6 +80,7 @@ const StorageHelper = {
       const role = StorageHelper.findOnlineRole();
       role.equipments[equipment.type] = equipment;
       StorageHelper.updateOnlineRole(role);
+      RoleInformationDialog.updateDialog(equipment.type);
     }
   },
   // 判断
