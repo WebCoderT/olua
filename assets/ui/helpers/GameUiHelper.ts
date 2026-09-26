@@ -7,6 +7,7 @@ import { RoleInfoFramePositionsMap } from "../../configs/game";
 import { goodsDialogSize } from "../../configs/equipments";
 import { Role } from "../../configs/role";
 import { Goods } from "../../types/common";
+import GameHelper from "../utils/GameHelper";
 
 export interface BottomNavBarButton {
   label: string;
@@ -243,6 +244,23 @@ const GameUiHelper = {
     LayerHelper.setLayerToUILayer(label);
     bigButton.addChild(label);
     return bigButton;
+  },
+
+  // 在某个格子上创建物品
+  createGood(cell: Node, good: Goods) {
+    const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
+    LayerHelper.setLayerToUILayer(sprite);
+    cell.addChild(sprite);
+    sprite.on(
+      Node.EventType.MOUSE_ENTER,
+      () => {
+        const screenPosition = GameHelper.worldPositionToScreenPosition(cell.getWorldPosition());
+        const detailDialog = GameUiHelper.createGoodDetailDialog(good, cell.getComponent(UITransform).contentSize, screenPosition);
+        LayerHelper.addToUILayer(detailDialog);
+        sprite.once(Node.EventType.MOUSE_LEAVE, () => detailDialog.destroy(), this);
+      },
+      this,
+    );
   },
 
   /**

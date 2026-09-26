@@ -10,15 +10,15 @@ export interface RoleOccupationInfo {
 
 // 职业
 export enum OECCUPATION {
-  ZHAN = 1,
-  FA = 2,
-  DAO = 3,
+  ZHAN = "1",
+  FA = "2",
+  DAO = "3",
 }
 
 // 性别
 export enum SEX {
-  BOY = 1,
-  GRIL = 2,
+  BOY = "1",
+  GRIL = "2",
 }
 
 // 关系MAP

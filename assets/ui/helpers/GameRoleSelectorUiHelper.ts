@@ -61,11 +61,11 @@ const GameRoleSelectorUiHelper = {
     };
   },
 
-  updateRolePreviews(view: RoleSelectorMainView, parent: Node, roles: Role[], onSelectRole: (roleId: string) => void): void {
+  updateRolePreviews(view: RoleSelectorMainView, parent: Node, roles: Role[], ononlineRole: (roleId: string) => void): void {
     this.destroyNodes(view.ownerRoleNodes);
     view.ownerRoleNodes = roles.map((role, index) => {
       const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, rolePositions[index] ?? new Vec2(), new Size(200, 360));
-      node.on(Node.EventType.TOUCH_END, () => onSelectRole(role.id));
+      node.on(Node.EventType.TOUCH_END, () => ononlineRole(role.id));
       parent.addChild(node);
       return node;
     });

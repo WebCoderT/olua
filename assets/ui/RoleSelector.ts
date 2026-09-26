@@ -23,16 +23,16 @@ export class RoleSelector extends Component {
 
   beginGame() {
     if (this.ownerRoleSelectedId) {
-      StorageHelper.selectRole(this.ownerRoleSelectedId);
+      StorageHelper.onlineRole(this.ownerRoleSelectedId);
       SceneManager.loadScene("Game");
     }
   }
 
   showOwnerRolesUI() {
-    GameRoleSelectorUiHelper.updateRolePreviews(this.mainView, this.node, StorageHelper.getRoles(), (roleId) => this.selectRole(roleId));
+    GameRoleSelectorUiHelper.updateRolePreviews(this.mainView, this.node, StorageHelper.getRoles(), (roleId) => this.onlineRole(roleId));
   }
 
-  private selectRole(roleId: string) {
+  private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;
     const role = StorageHelper.findRoleById(this.ownerRoleSelectedId);
     if (!role) return;

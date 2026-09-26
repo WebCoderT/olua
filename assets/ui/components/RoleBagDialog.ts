@@ -3,6 +3,7 @@ import StorageHelper from "../helpers/StorageHelper";
 import RoleBagUiHelper from "../helpers/RoleBagUiHelper";
 import { Role } from "../../configs/role";
 import { Goods, EQUIPMENT_TYPE } from "../../types/common";
+import GameUiHelper from "../helpers/GameUiHelper";
 
 interface RoleBagDialog {
   dialog: Node | null;
@@ -43,7 +44,7 @@ const RoleBagDialog: RoleBagDialog = {
     RoleBagDialog.role.bag.forEach((row, rowIndex) => {
       row.forEach((good, colIndex) => {
         if (good) {
-          RoleBagUiHelper.createGood(RoleBagDialog.cells[rowIndex][colIndex], good);
+          GameUiHelper.createGood(RoleBagDialog.cells[rowIndex][colIndex], good);
           // 添加点击事件
           RoleBagDialog.cells[rowIndex][colIndex].on(
             Node.EventType.TOUCH_END,

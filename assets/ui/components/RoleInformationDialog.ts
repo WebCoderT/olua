@@ -3,6 +3,8 @@ import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import UiHelper from "../helpers/UiHelper";
 import { equipmentSlots } from "../../configs/equipments";
+import StorageHelper from "../helpers/StorageHelper";
+import GameUiHelper from "../helpers/GameUiHelper";
 
 interface RoleInformationDialog {
   dialog: Node | null;
@@ -52,6 +54,10 @@ const RoleInformationDialog: RoleInformationDialog = {
       equipmentSlots.forEach((value, key) => {
         const slot = UiHelper.createSprite(`equipment_slot_${key}`, value.imageSrc, new Vec2(), new Size(50, 50));
         slot.name = key;
+        if (StorageHelper.findOnlineRole().equipments[key]) {
+          console.log(StorageHelper.findOnlineRole().equipments[key]);
+          GameUiHelper.createGood(slot, StorageHelper.findOnlineRole().equipments[key]);
+        }
         LayerHelper.setLayerToUILayer(slot);
         if (value.position === "left") {
           RoleInformationDialog.leftSlots.push(slot);
@@ -71,6 +77,7 @@ const RoleInformationDialog: RoleInformationDialog = {
       RoleInformationDialog.dialog.addChild(bottomSlots);
     }
   },
+
   // 关闭
   close() {
     RoleInformationDialog.bottomSlots.length = 0;

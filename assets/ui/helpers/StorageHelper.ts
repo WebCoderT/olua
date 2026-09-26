@@ -4,6 +4,7 @@ import RoleAvatarFrame from "../components/RoleAvatarFrame";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../configs/role";
 import { Equipment } from "../../types/common";
+import GameHelper from "../utils/GameHelper";
 
 /**
  * 存储
@@ -25,6 +26,7 @@ const StorageHelper = {
     if (roles.length < 3) {
       roles.push(new Role(name, occupation, sex));
       StorageHelper.setRoles(roles);
+      console.log(roles);
     } else console.error("角色超出3个");
   },
   // 根据id获取角色
@@ -36,7 +38,7 @@ const StorageHelper = {
     sys.localStorage.clear();
   },
   // 选择角色
-  selectRole: (id: string) => {
+  onlineRole: (id: string) => {
     sys.localStorage.setItem("selectedRole", id);
   },
   // 获取选择的角色
@@ -73,8 +75,13 @@ const StorageHelper = {
   },
   // 更换装备
   changeEquipment(equipment: Equipment) {
-    console.log(equipment.type);
+    if (GameHelper.checkRoleCanUseEquipment(equipment)) {
+      const role = StorageHelper.findOnlineRole();
+      role.equipments[equipment.type] = equipment;
+      StorageHelper.updateOnlineRole(role);
+    }
   },
+  // 判断
 };
 
 export default StorageHelper;

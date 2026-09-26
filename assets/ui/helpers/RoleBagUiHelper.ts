@@ -47,29 +47,6 @@ const RoleBagUiHelper = {
     dialog.addChild(bagGrid);
     return { dialog, cells };
   },
-
-  // 在某个格子上创建物品
-  createGood(cell: Node, good: Goods) {
-    const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
-    LayerHelper.setLayerToUILayer(sprite);
-    cell.addChild(sprite);
-    sprite.on(
-      Node.EventType.MOUSE_ENTER,
-      () => {
-        const dialog = RoleBagUiHelper.showGoodDetail(cell, good);
-        sprite.once(Node.EventType.MOUSE_LEAVE, () => dialog.destroy(), this);
-      },
-      this,
-    );
-  },
-
-  // 鼠标移入物品，显示物品详情
-  showGoodDetail(cell: Node, good: Goods) {
-    const screenPosition = GameHelper.worldPositionToScreenPosition(cell.getWorldPosition());
-    const detailDialog = GameUiHelper.createGoodDetailDialog(good, cell.getComponent(UITransform).contentSize, screenPosition);
-    LayerHelper.addToUILayer(detailDialog);
-    return detailDialog;
-  },
 };
 
 export default RoleBagUiHelper;
