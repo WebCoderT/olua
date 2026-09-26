@@ -14,14 +14,14 @@ const GameRoleUiHelper = {
   },
 
   /**
-   * 创建个人信息弹窗
+   * 创建通用弹窗
    */
-  createPersonalInformationDialog(name: string) {
+  createDialog(name: string, title: string) {
     // 弹窗
     const dialog = GameUiHelper.createDialog(name);
     LayerHelper.setLayerToUILayer(dialog);
     // 弹窗标题
-    const dialogTitle = GameUiHelper.createDialogTitle("角色信息");
+    const dialogTitle = GameUiHelper.createDialogTitle(title);
     LayerHelper.setLayerToUILayer(dialogTitle);
     dialog.addChild(dialogTitle);
     // 关闭弹窗按钮
@@ -30,6 +30,22 @@ const GameRoleUiHelper = {
     dialog.addChild(closeButton);
     // 添加关闭功能
     closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy(), this);
+    return dialog;
+  },
+
+  /**
+   * 创建个人信息弹窗
+   */
+  createPersonalInformationDialog() {
+    const dialog = GameRoleUiHelper.createDialog("personal_information_dialog", "角色信息");
+    return dialog;
+  },
+
+  /**
+   * 创建背包弹窗
+   */
+  createBagDialog(name: string) {
+    const dialog = GameRoleUiHelper.createDialog(name, "背包");
     return dialog;
   },
 };

@@ -1,5 +1,6 @@
 import { Size, Vec2 } from "cc";
 import GameRoleUiHelper from "../ui/GameRoleUiHelper";
+import RoleInformationDialog from "../ui/components/RoleInformationDialog";
 
 export interface RoleOccupationInfo {
   name: string;
@@ -69,8 +70,8 @@ export interface BottomNavBarButton {
 
 // 主页面下方导航部分功能按键
 export const bottomNavBarButtons: BottomNavBarButton[] = [
-  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
-  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: RoleInformationDialog.open, name: "personal_information_dialog" },
+  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: GameRoleUiHelper.createBagDialog, name: "bag_dialog" },
   { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
   { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
   { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
@@ -79,6 +80,53 @@ export const bottomNavBarButtons: BottomNavBarButton[] = [
   { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
   { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
 ];
+
+// 装备类型id
+export enum EquipmentId {
+  CLOTH = "cloth", // 衣服
+  ACCESSORIES = "accessories", // 饰品
+  BELT = "belt", // 腰带
+  HELMET = "helmet", // 头盔
+  NECKLACE = "necklace", // 项链
+  RING = "ring", // 戒指
+  SCAPULAR = "scapular", // 肩胛
+  SHINGUARD = "shinguard", // 护腿
+  SHOES = "shoes", // 鞋子
+  WEAPON = "weapon", // 武器
+  WRISTBAND = "wristband", // 护腕
+  OTHER1 = "other1", // 其他1
+  OTHER2 = "other2", // 其他2
+}
+
+// 装备槽接口
+interface EquipmentSlot {
+  // 名称
+  label: string;
+  // 图片地址
+  imageSrc: string;
+  // 插槽位置
+  position: "left" | "right" | "bottom" | "custom";
+  // 下方特殊插槽为主,当为
+  customPosition?: Vec2;
+}
+
+// 角色弹窗中装备槽map
+export const equipmentSlots = new Map<EquipmentId, EquipmentSlot>();
+equipmentSlots.set(EquipmentId.OTHER1, { label: "其他1", imageSrc: "slots/other", position: "bottom" });
+equipmentSlots.set(EquipmentId.CLOTH, { label: "衣服", imageSrc: "slots/cloth", position: "bottom" });
+equipmentSlots.set(EquipmentId.OTHER2, { label: "其他2", imageSrc: "slots/other", position: "bottom" });
+
+equipmentSlots.set(EquipmentId.WEAPON, { label: "武器", imageSrc: "slots/weapon", position: "left" });
+equipmentSlots.set(EquipmentId.NECKLACE, { label: "项链", imageSrc: "slots/necklace", position: "left" });
+equipmentSlots.set(EquipmentId.RING, { label: "戒指", imageSrc: "slots/ring", position: "left" });
+equipmentSlots.set(EquipmentId.ACCESSORIES, { label: "饰品", imageSrc: "slots/accessories", position: "left" });
+equipmentSlots.set(EquipmentId.SHINGUARD, { label: "护腿", imageSrc: "slots/shinguard", position: "left" });
+
+equipmentSlots.set(EquipmentId.HELMET, { label: "头盔", imageSrc: "slots/helmet", position: "right" });
+equipmentSlots.set(EquipmentId.SCAPULAR, { label: "肩胛", imageSrc: "slots/scapular", position: "right" });
+equipmentSlots.set(EquipmentId.BELT, { label: "腰带", imageSrc: "slots/belt", position: "right" });
+equipmentSlots.set(EquipmentId.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
+equipmentSlots.set(EquipmentId.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
 
 // 8方向：地图或角色朝向的八个离散方向编码
 export enum ROLE_DIRECTION {

@@ -222,6 +222,26 @@ const UiHelper = {
   },
 
   /**
+   * 创建弹性布局-列
+   * @param spaceY 横向距离
+   * @param position 位置
+   * @param size 尺寸
+   */
+  createFlexCol: (spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
+    const node = new Node();
+    const layout = node.addComponent(Layout);
+    layout.type = Layout.Type.VERTICAL;
+    layout.alignHorizontal = true;
+    layout.resizeMode = Layout.ResizeMode.NONE;
+    layout.spacingY = spacey;
+    layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    layout.getComponent(UITransform).height = size.height;
+    layout.getComponent(UITransform).width = size.width;
+    node.setPosition(position.x, position.y);
+    return node;
+  },
+
+  /**
    * 创建弹性布局
    * @param nodes 元素
    * @param spacex 横向距离

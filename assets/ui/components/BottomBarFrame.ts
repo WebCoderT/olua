@@ -7,10 +7,6 @@ import LayerHelper from "../LayerHelper";
 
 interface BottomBarFrame {
   selectedRole: Role | null;
-  // 弹窗列表---弹窗为唯一，不可重复开启放在这里
-  dialogs: Map<string, Node>;
-  // 判断弹窗是否已经存在，存在则关闭，不存在则创建
-  checkDialog: (button: BottomNavBarButton) => void;
   // 初始化
   init: () => void;
   // 经验条
@@ -37,7 +33,7 @@ const BottomBarFrame: BottomBarFrame = {
         () => {
           // 禁用，出现提示
           if (node.getComponent(Sprite).grayscale) GameUiHelper.createErrorTip(`${button.label}功能需要在${button.openLevel}级后开放`);
-          else BottomBarFrame.checkDialog(button);
+          else button.onClick();
         },
         this,
       );
@@ -61,19 +57,6 @@ const BottomBarFrame: BottomBarFrame = {
     BottomBarFrame.selectedRole = StorageHelper.findSelectedRole();
     // 更新经验条
     BottomBarFrame.expBar.getComponent(ProgressBar).progress = getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp);
-  },
-  // 弹窗列表
-  dialogs: new Map(),
-  // 判断弹窗是创建还是销毁
-  checkDialog(button) {
-    if (BottomBarFrame.dialogs.get(button.name) && BottomBarFrame.dialogs.get(button.name).active) {
-      BottomBarFrame.dialogs.get(button.name).destroy();
-      BottomBarFrame.dialogs.delete(button.name);
-    } else {
-      const dialog = button.onClick(button.name);
-      LayerHelper.addToUILayer(dialog);
-      BottomBarFrame.dialogs.set(button.name, dialog);
-    }
   },
 };
 
