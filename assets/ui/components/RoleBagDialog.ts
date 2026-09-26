@@ -1,5 +1,5 @@
 import { Node, Size, Vec2 } from "cc";
-import StorageHelper from "../helpers/StorageHelper";
+import StorageHelper from "../utils/StorageHelper";
 import RoleBagUiHelper from "../helpers/RoleBagUiHelper";
 import { Role } from "../../configs/role";
 import { Goods, EQUIPMENT_TYPE } from "../../types/common";

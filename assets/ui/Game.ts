@@ -7,6 +7,7 @@ import RoleDisplayFrame from "./components/RoleDisplayFrame";
 import MapFrame from "./components/MapFrame";
 import RolePlayFrame from "./components/RolePlayFrame";
 import GameHelper from "./utils/GameHelper";
+import StorageHelper from "./utils/StorageHelper";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -26,12 +27,14 @@ export class Game extends Component {
   gameHelper: GameHelper = GameHelper;
 
   start() {
+    // 获取角色信息
+    const role = StorageHelper.findOnlineRole();
     // 初始化图层
     LayerHelper.initLayer(this.node, this.camera);
     // 初始化底部
     this.bottomBar.init();
     // 初始化用户头像
-    this.roleAvatar.init();
+    this.roleAvatar.init(role);
     // 初始化角色显示
     this.roleDisplay.init(this.node);
     // 初始化地图

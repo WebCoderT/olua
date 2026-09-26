@@ -1,7 +1,7 @@
 import { _decorator, Color, Component, EditBox, Node, Size, Vec2 } from "cc";
 import UiHelper from "./helpers/UiHelper";
 import SceneManager from "./SceneManager";
-import StorageHelper from "./helpers/StorageHelper";
+import StorageHelper from "./utils/StorageHelper";
 const { ccclass, property } = _decorator;
 
 @ccclass("Login")

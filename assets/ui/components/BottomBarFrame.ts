@@ -1,7 +1,7 @@
 import { Node, ProgressBar, Size, Sprite, Vec2 } from "cc";
 import GameUiHelper, { BottomNavBarButton } from "../helpers/GameUiHelper";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
-import StorageHelper from "../helpers/StorageHelper";
+import StorageHelper from "../utils/StorageHelper";
 import UiHelper from "../helpers/UiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import RoleInformationDialog from "./RoleInformationDialog";

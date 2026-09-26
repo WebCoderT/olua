@@ -90,7 +90,7 @@ const GameUiHelper = {
     LayerHelper.setLayerToUILayer(combatIcon);
     node.addChild(combatIcon);
     // 战斗力数字
-    const combatNumber = UiHelper.createLabel("combat_number", "99999999", Color.WHITE, 20, new Vec2(-7, 4), new Size(200, 30));
+    const combatNumber = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(-7, 4), new Size(200, 30));
     combatNumber.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const label = combatNumber.getComponent(Label);
     label.horizontalAlign = Label.HorizontalAlign.LEFT;

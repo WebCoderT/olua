@@ -1,6 +1,6 @@
 import { Camera, Vec3 } from "cc";
 import { Equipment } from "../../types/common";
-import StorageHelper from "../helpers/StorageHelper";
+import StorageHelper from "../utils/StorageHelper";
 
 interface GameHelper {
   camera: Camera;

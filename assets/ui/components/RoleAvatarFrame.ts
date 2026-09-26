@@ -1,42 +1,34 @@
 import { Label, Node } from "cc";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
-import StorageHelper from "../helpers/StorageHelper";
-import EffectFrame from "./EffectFrame";
 import { Role } from "../../configs/role";
 
 interface RoleAvatarFrame {
-  selectedRole: Role | null;
   combatNumber: Node | null;
-  init: () => void;
+  init: (role: Role) => void;
   level: Node | null;
-  updateLevel: () => void;
+  update: (role: Role) => void;
 }
 
 const RoleAvatarFrame: RoleAvatarFrame = {
-  // 角色信息
-  selectedRole: null,
   // 战斗力
   combatNumber: null,
-  init: () => {
-    // 初始化角色数据
-    RoleAvatarFrame.selectedRole = StorageHelper.findOnlineRole();
+  init: (role) => {
     // 用户头像
-    const avatarNodes = GameUiHelper.createRoleInfoFrame(RoleAvatarFrame.selectedRole);
+    const avatarNodes = GameUiHelper.createRoleInfoFrame(role);
     RoleAvatarFrame.combatNumber = avatarNodes.combatNumber;
     RoleAvatarFrame.level = avatarNodes.level;
     LayerHelper.addToUILayer(avatarNodes.node);
   },
   // 等级
   level: null,
-  // 更新等级
-  updateLevel() {
-    // 更新角色数据
-    RoleAvatarFrame.selectedRole = StorageHelper.findOnlineRole();
+
+  // 更新
+  update(role: Role) {
     // 更新等级
-    RoleAvatarFrame.level.getComponent(Label).string = RoleAvatarFrame.selectedRole.level.toString();
-    // 升级则播放升级特效
-    EffectFrame.selfUpgrade();
+    RoleAvatarFrame.level.getComponent(Label).string = role.level.toString();
+    // 更新战斗力
+    RoleAvatarFrame.combatNumber.getComponent(Label).string = role.combat.toString();
   },
 };
 

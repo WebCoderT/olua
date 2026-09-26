@@ -3,7 +3,7 @@ import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import UiHelper from "../helpers/UiHelper";
 import { equipmentSlots } from "../../configs/equipments";
-import StorageHelper from "../helpers/StorageHelper";
+import StorageHelper from "../utils/StorageHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { EQUIPMENT_TYPE } from "../../types/common";
 import { Role } from "../../configs/role";

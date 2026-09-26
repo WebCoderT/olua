@@ -6,6 +6,7 @@ import { Role } from "../../configs/role";
 import { Equipment } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
 import RoleInformationDialog from "../components/RoleInformationDialog";
+import EffectFrame from "../components/EffectFrame";
 
 /**
  * 存储
@@ -67,9 +68,12 @@ const StorageHelper = {
       role.exp -= levelMap.get(role.level).exp;
       // 升级
       role.level += 1;
+      // 播放升级动画
+      EffectFrame.selfUpgrade();
+      // 保存
       StorageHelper.updateOnlineRole(role);
-      // 更新等级
-      RoleAvatarFrame.updateLevel();
+      // 更新属性
+      StorageHelper.AttributeCalc(role);
     } else StorageHelper.updateOnlineRole(role);
     // 更新经验条
     BottomBarFrame.updateExpBar();
@@ -81,7 +85,28 @@ const StorageHelper = {
       role.equipments[equipment.type] = equipment;
       StorageHelper.updateOnlineRole(role);
       RoleInformationDialog.updateDialog(equipment.type);
+      StorageHelper.AttributeCalc(role);
     }
+  },
+  // 属性计算
+  AttributeCalc(role: Role) {
+    role.maxHp = StorageHelper.maxHpCalc(role);
+    role.combat = StorageHelper.combatCalc(role);
+    StorageHelper.updateOnlineRole(role);
+    RoleAvatarFrame.update(role);
+  },
+  // 计算血量
+  maxHpCalc(role: Role) {
+    let maxHp = 0;
+    maxHp += levelMap.get(role.level).maxHp;
+    role.equipments.cloth && (maxHp += role.equipments.cloth.maxHp);
+    return maxHp;
+  },
+  // 战斗力计算
+  combatCalc(role: Role) {
+    let combat = 0;
+    combat += role.maxHp * 10;
+    return combat;
   },
   // 判断
 };

@@ -1,7 +1,7 @@
 import { Node } from "cc";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
-import StorageHelper from "../helpers/StorageHelper";
+import StorageHelper from "../utils/StorageHelper";
 import RolePlayFrame from "./RolePlayFrame";
 import { Role } from "../../configs/role";
 
