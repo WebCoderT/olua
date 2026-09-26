@@ -1,9 +1,20 @@
-import { AnimationClip, Button, Color, Label, LabelAtlas, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { AnimationClip, Button, Color, Label, LabelAtlas, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3, Vertex } from "cc";
 import UiHelper from "./UiHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
-import { BottomNavBarButton, Role, RoleInfoFramePositionsMap } from "../../configs";
 import LayerHelper from "./LayerHelper";
 import { Draggable } from "../utils/Draggable";
+import { RoleInfoFramePositionsMap } from "../../configs/game";
+import { goodsDialogSize } from "../../configs/equipments";
+import { Role } from "../../configs/role";
+import { Goods } from "../../types/common";
+
+export interface BottomNavBarButton {
+  label: string;
+  icon: string;
+  openLevel: number;
+  onClick: () => void;
+  name: string;
+}
 
 const GameUiHelper = {
   /**
@@ -176,12 +187,13 @@ const GameUiHelper = {
   },
 
   /**
-   * 创建游戏通用弹窗
+   * 创建游戏通用弹窗背景
    */
-  createDialog(name: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
+  createDialogBg(name: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
     const dialog = UiHelper.createSprite(name, "common/popup-bg", position, size);
     dialog.name = name;
     dialog.addComponent(Draggable);
+    LayerHelper.setLayerToUILayer(dialog);
     return dialog;
   },
 
@@ -190,6 +202,7 @@ const GameUiHelper = {
    */
   createDialogTitle(name: string, title: string, position: Vec2 = new Vec2(0, 228)) {
     const dialogTitle = UiHelper.createLabel(name, title, Color.WHITE, 18, position, new Size(300, 30));
+    LayerHelper.setLayerToUILayer(dialogTitle);
     return dialogTitle;
   },
 
@@ -198,7 +211,25 @@ const GameUiHelper = {
    */
   createCloseButton(name: string, position: Vec2 = new Vec2(), size: Size = new Size(30, 30)) {
     const closeButton = UiHelper.createButton(name, "common/close-button", position, size);
+    LayerHelper.setLayerToUILayer(closeButton);
     return closeButton;
+  },
+
+  /**
+   * 创建通用弹窗
+   */
+  createDialog(name: string, title: string) {
+    // 弹窗
+    const dialog = GameUiHelper.createDialogBg(name);
+    // 弹窗标题
+    const dialogTitle = GameUiHelper.createDialogTitle("dialog_title", title);
+    dialog.addChild(dialogTitle);
+    // 关闭弹窗按钮
+    const closeButton = GameUiHelper.createCloseButton("close_button", new Vec2(280, 230));
+    dialog.addChild(closeButton);
+    // 添加关闭功能
+    closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy(), this);
+    return dialog;
   },
 
   /**
@@ -212,6 +243,37 @@ const GameUiHelper = {
     LayerHelper.setLayerToUILayer(label);
     bigButton.addChild(label);
     return bigButton;
+  },
+
+  /**
+   * 创建物品详情弹窗
+   */
+  createGoodDetailDialog(good: Goods, contentSize: Size, screenPosition: Vec3 = new Vec3()) {
+    const screenSize = UiHelper.getScreenSize();
+    const position = new Vec2(screenPosition.x - screenSize.width / 2, screenPosition.y - screenSize.height / 2);
+    const dialog = UiHelper.createSprite("good_detail", "common/bg", position, goodsDialogSize.get(good.type));
+    LayerHelper.setLayerToUILayer(dialog);
+    // 物品在左侧
+    if (screenPosition.x < screenSize.width / 2) {
+      position.x += contentSize.width / 2;
+      dialog.getComponent(UITransform).anchorX = 0;
+    }
+    // 物品在右侧
+    if (screenPosition.x > screenSize.width / 2) {
+      dialog.getComponent(UITransform).anchorX = 1;
+    }
+    // 物品在上册
+    if (screenPosition.y > screenSize.height / 2) {
+      position.y += contentSize.height / 2;
+      dialog.getComponent(UITransform).anchorY = 1;
+    }
+    // 物品在下册
+    if (screenPosition.y < screenSize.height / 2) {
+      position.y -= contentSize.height / 2;
+      dialog.getComponent(UITransform).anchorY = 0;
+    }
+    dialog.setPosition(position.x, position.y, 0);
+    return dialog;
   },
 };
 

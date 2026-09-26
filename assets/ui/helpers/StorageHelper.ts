@@ -1,7 +1,9 @@
 import { sys } from "cc";
-import { levelMap, Role } from "../../configs";
 import BottomBarFrame from "../components/BottomBarFrame";
 import RoleAvatarFrame from "../components/RoleAvatarFrame";
+import { levelMap } from "../../configs/level";
+import { Role } from "../../configs/role";
+import { Equipment } from "../../types/common";
 
 /**
  * 存储
@@ -38,7 +40,7 @@ const StorageHelper = {
     sys.localStorage.setItem("selectedRole", id);
   },
   // 获取选择的角色
-  findSelectedRole: () => {
+  findOnlineRole: () => {
     const selectedRole = sys.localStorage.getItem("selectedRole");
     return StorageHelper.getRoles().find((i) => i.id === selectedRole);
   },
@@ -54,7 +56,7 @@ const StorageHelper = {
   },
   // 角色获得经验(当前在线角色)
   onlineRoleGetExp: (exp: number) => {
-    const role = StorageHelper.findSelectedRole();
+    const role = StorageHelper.findOnlineRole();
     role.exp += exp;
     // 确认是否升级,经验满了则升级
     if (role.exp >= levelMap.get(role.level).exp) {
@@ -68,6 +70,10 @@ const StorageHelper = {
     } else StorageHelper.updateOnlineRole(role);
     // 更新经验条
     BottomBarFrame.updateExpBar();
+  },
+  // 更换装备
+  changeEquipment(equipment: Equipment) {
+    console.log(equipment.type);
   },
 };
 

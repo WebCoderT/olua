@@ -1,15 +1,5 @@
-export interface LevelConfig {
-  // 等级存储经验
-  exp: number;
-  // 等级基础最大血量
-  maxHp: number;
-  // 等级基础物理攻击
-  // 等级基础魔法攻击
-  // 等级基础道术攻击
-  // 等级基础物理防御
-  // 等级基础魔法防御
-  // 等级基础道术防御
-}
+import { LevelConfig } from "../types/common";
+
 // 等级配置map
 export const levelMap = new Map<number, LevelConfig>();
 

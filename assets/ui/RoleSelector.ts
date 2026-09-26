@@ -1,9 +1,9 @@
 import { _decorator, Component } from "cc";
-import { Role, roles } from "../configs";
 import GameRoleSelectorUiHelper from "./helpers/GameRoleSelectorUiHelper";
 import type { RoleSelectorCreateView, RoleSelectorMainView } from "./helpers/GameRoleSelectorUiHelper";
 import StorageHelper from "./helpers/StorageHelper";
 import SceneManager from "./SceneManager";
+import { roles } from "../configs/game";
 const { ccclass } = _decorator;
 
 @ccclass("RoleSelector")

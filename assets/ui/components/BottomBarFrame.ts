@@ -1,9 +1,25 @@
 import { Node, ProgressBar, Size, Sprite, Vec2 } from "cc";
-import { BottomNavBarButton, bottomNavBarButtons, getCurrentLevelExpRate, Role } from "../../configs";
-import GameUiHelper from "../helpers/GameUiHelper";
+import GameUiHelper, { BottomNavBarButton } from "../helpers/GameUiHelper";
+import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import StorageHelper from "../helpers/StorageHelper";
 import UiHelper from "../helpers/UiHelper";
 import LayerHelper from "../helpers/LayerHelper";
+import RoleInformationDialog from "./RoleInformationDialog";
+import RoleBagDialog from "./RoleBagDialog";
+import { getCurrentLevelExpRate } from "../../configs/level";
+import { Role } from "../../configs/role";
+
+const bottomNavBarButtons: BottomNavBarButton[] = [
+  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: () => RoleInformationDialog.open(), name: "personal_information_dialog" },
+  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: () => RoleBagDialog.open(), name: "bag_dialog" },
+  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+];
 
 interface BottomBarFrame {
   selectedRole: Role | null;
@@ -19,7 +35,7 @@ const BottomBarFrame: BottomBarFrame = {
   selectedRole: null,
   init() {
     // 初始化角色数据
-    this.selectedRole = StorageHelper.findSelectedRole();
+    this.selectedRole = StorageHelper.findOnlineRole();
     // 基础UI
     // 底部导航区域
     const bottomNavBarBg = UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(0, -316), new Size(1200, 240));
@@ -54,7 +70,7 @@ const BottomBarFrame: BottomBarFrame = {
   // 更新经验条
   updateExpBar() {
     // 更新角色数据
-    BottomBarFrame.selectedRole = StorageHelper.findSelectedRole();
+    BottomBarFrame.selectedRole = StorageHelper.findOnlineRole();
     // 更新经验条
     BottomBarFrame.expBar.getComponent(ProgressBar).progress = getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp);
   },

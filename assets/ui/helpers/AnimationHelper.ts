@@ -11,7 +11,7 @@ const AnimationHelper = {
   playOnceWithDir(name: string, node: Node, dirSrc: string, time: number = 1) {
     resources.loadDir(dirSrc, SpriteFrame, (err, spriteFrames) => {
       if (err) {
-        console.log(`${name}动画帧加载失败：${err.message}`);
+        console.error(`${name}动画帧加载失败：${err.message}`);
         return;
       }
       spriteFrames = spriteFrames.sort((a, b) => Number(a.name) - Number(b.name));

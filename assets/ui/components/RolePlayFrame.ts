@@ -1,7 +1,9 @@
 import { Animation, AnimationClip, BoxCollider2D, EventKeyboard, input, Input, isValid, math, Node, resources, RigidBody2D, SpriteFrame, Vec2, Vec3 } from "cc";
-import { getRoleAnimationName, Role, ROLE_ACTION, ROLE_DIRECTION, roleActions, roleAnimationMap } from "../../configs";
 import StorageHelper from "../helpers/StorageHelper";
 import LayerHelper from "../helpers/LayerHelper";
+import { Role } from "../../configs/role";
+import { roleAnimationMap, getRoleAnimationName } from "../../configs/game";
+import { ROLE_DIRECTION, ROLE_ACTION } from "../../types/common";
 
 interface RolePlayFrame {
   // 角色信息
@@ -57,7 +59,7 @@ const RolePlayFrame: RolePlayFrame = {
   run: false,
   init(node: Node) {
     // 初始化角色数据
-    RolePlayFrame.selectedRole = StorageHelper.findSelectedRole();
+    RolePlayFrame.selectedRole = StorageHelper.findOnlineRole();
     // 操作节点处理
     RolePlayFrame.playNodeHandler(node);
     // 加载裸模动画
@@ -80,7 +82,7 @@ const RolePlayFrame: RolePlayFrame = {
   loadBasicSpriteFrames() {
     resources.loadDir(`role/${RolePlayFrame.selectedRole.sex}`, SpriteFrame, (err, spriteFrames) => {
       if (err) {
-        console.log(`裸模动画帧加载失败：${err.message}`);
+        console.error(`裸模动画帧加载失败：${err.message}`);
         return;
       }
       RolePlayFrame.spliceAnimation(spriteFrames);
@@ -106,7 +108,6 @@ const RolePlayFrame: RolePlayFrame = {
   },
   // 更改动画
   updateAnimationPlay() {
-    console.log(RolePlayFrame.action, RolePlayFrame.direction);
     RolePlayFrame.animate.crossFade(getRoleAnimationName(RolePlayFrame.action, RolePlayFrame.direction));
   },
   // 键盘监听

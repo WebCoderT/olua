@@ -1,31 +1,27 @@
-import { CommonAttributes, EQUIPMENT_TYPE, OECCUPATION, SEX } from "./game";
+import { Size } from "cc";
+import { Equipment, EQUIPMENT_TYPE, EquipmentSlot, OECCUPATION, SEX } from "../types/common";
 
-export interface Equipment extends CommonAttributes {
-  // 装备类型
-  type: EQUIPMENT_TYPE;
-  // 职业
-  occupation: OECCUPATION;
-  // 性别
-  sex: SEX;
-  // 内观
-  in: string;
-  // 外观
-  out: string;
-  // 物理攻击
-  physicalAttack: [number, number];
-  // 魔法攻击
-  magicAttack: [number, number];
-  // 道术攻击
-  taoistAttack: [number, number];
-  // 物理防御
-  physicalDefense: [number, number];
-  // 魔法防御
-  magicDefense: [number, number];
-  // 道术防御
-  taoistDefense: [number, number];
-  // 最大血量
-  maxHp: number;
-}
+// 角色弹窗中装备槽map
+export const equipmentSlots = new Map<EQUIPMENT_TYPE, EquipmentSlot>();
+equipmentSlots.set(EQUIPMENT_TYPE.OTHER1, { label: "其他1", imageSrc: "slots/other", position: "bottom" });
+equipmentSlots.set(EQUIPMENT_TYPE.CLOTH, { label: "衣服", imageSrc: "slots/cloth", position: "bottom" });
+equipmentSlots.set(EQUIPMENT_TYPE.OTHER2, { label: "其他2", imageSrc: "slots/other", position: "bottom" });
+
+equipmentSlots.set(EQUIPMENT_TYPE.WEAPON, { label: "武器", imageSrc: "slots/weapon", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.NECKLACE, { label: "项链", imageSrc: "slots/necklace", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.RING, { label: "戒指", imageSrc: "slots/ring", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.ACCESSORIES, { label: "饰品", imageSrc: "slots/accessories", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.SHINGUARD, { label: "护腿", imageSrc: "slots/shinguard", position: "left" });
+
+equipmentSlots.set(EQUIPMENT_TYPE.HELMET, { label: "头盔", imageSrc: "slots/helmet", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.SCAPULAR, { label: "肩胛", imageSrc: "slots/scapular", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.BELT, { label: "腰带", imageSrc: "slots/belt", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
+
+// 物品详情弹窗尺寸
+export const goodsDialogSize = new Map<EQUIPMENT_TYPE, Size>();
+goodsDialogSize.set(EQUIPMENT_TYPE.CLOTH, new Size(240, 400));
 
 export const clothes: Equipment[] = [
   {

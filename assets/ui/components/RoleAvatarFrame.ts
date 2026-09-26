@@ -1,9 +1,9 @@
 import { Label, Node } from "cc";
-import { Role } from "../../configs";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import StorageHelper from "../helpers/StorageHelper";
 import EffectFrame from "./EffectFrame";
+import { Role } from "../../configs/role";
 
 interface RoleAvatarFrame {
   selectedRole: Role | null;
@@ -20,7 +20,7 @@ const RoleAvatarFrame: RoleAvatarFrame = {
   combatNumber: null,
   init: () => {
     // 初始化角色数据
-    RoleAvatarFrame.selectedRole = StorageHelper.findSelectedRole();
+    RoleAvatarFrame.selectedRole = StorageHelper.findOnlineRole();
     // 用户头像
     const avatarNodes = GameUiHelper.createRoleInfoFrame(RoleAvatarFrame.selectedRole);
     RoleAvatarFrame.combatNumber = avatarNodes.combatNumber;
@@ -32,7 +32,7 @@ const RoleAvatarFrame: RoleAvatarFrame = {
   // 更新等级
   updateLevel() {
     // 更新角色数据
-    RoleAvatarFrame.selectedRole = StorageHelper.findSelectedRole();
+    RoleAvatarFrame.selectedRole = StorageHelper.findOnlineRole();
     // 更新等级
     RoleAvatarFrame.level.getComponent(Label).string = RoleAvatarFrame.selectedRole.level.toString();
     // 升级则播放升级特效

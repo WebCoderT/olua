@@ -22,7 +22,6 @@ export class AnimationPlayer extends Component {
         console.error(`${this.animationName} 加载失败`, err);
         return;
       }
-      console.log(`${this.animationName} 加载成功`);
       this.createAnimation(spriteAtlas);
     });
   }
@@ -37,7 +36,6 @@ export class AnimationPlayer extends Component {
     clip.name = this.animationName;
     this.animate.addClip(clip, this.animationName);
     this.animate.play(this.animationName);
-    console.log(`播放：${this.animationName}`);
     // 如果是单次播放，默认播放结束后移除元素
     if (this.wrapMode === AnimationClip.WrapMode.Normal) this.animate.on(Animation.EventType.FINISHED, this.playFinished, this);
   }

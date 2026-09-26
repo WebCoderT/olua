@@ -1,9 +1,9 @@
 import { Node } from "cc";
-import { Role } from "../../configs";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import StorageHelper from "../helpers/StorageHelper";
 import RolePlayFrame from "./RolePlayFrame";
+import { Role } from "../../configs/role";
 
 interface RoleDisplayFrame {
   // 角色信息
@@ -19,7 +19,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
   basicRole: null,
   init(game: Node) {
     // 初始化角色数据
-    this.selectedRole = StorageHelper.findSelectedRole();
+    this.selectedRole = StorageHelper.findOnlineRole();
     // 创建基础裸模
     RoleDisplayFrame.basicRole = GameRoleUiHelper.createBasicRole();
     game.addChild(RoleDisplayFrame.basicRole);

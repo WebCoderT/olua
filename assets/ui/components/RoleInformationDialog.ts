@@ -1,8 +1,8 @@
 import { instantiate, Node, Size, Vec2 } from "cc";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
-import { equipmentSlots } from "../../configs";
 import UiHelper from "../helpers/UiHelper";
+import { equipmentSlots } from "../../configs/equipments";
 
 interface RoleInformationDialog {
   dialog: Node | null;

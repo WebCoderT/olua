@@ -18,7 +18,7 @@ const GameRoleUiHelper = {
    */
   createDialog(name: string, title: string) {
     // 弹窗
-    const dialog = GameUiHelper.createDialog(name);
+    const dialog = GameUiHelper.createDialogBg(name);
     LayerHelper.setLayerToUILayer(dialog);
     // 弹窗标题
     const dialogTitle = GameUiHelper.createDialogTitle("dialog_title", title);

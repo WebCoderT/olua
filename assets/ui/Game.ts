@@ -6,6 +6,7 @@ import { ActivityController } from "./controllers/ActivityController";
 import RoleDisplayFrame from "./components/RoleDisplayFrame";
 import MapFrame from "./components/MapFrame";
 import RolePlayFrame from "./components/RolePlayFrame";
+import GameHelper from "./utils/GameHelper";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -21,6 +22,8 @@ export class Game extends Component {
   roleDisplay: RoleDisplayFrame = RoleDisplayFrame;
   // 地图显示
   map: MapFrame = MapFrame;
+  // 游戏工具
+  gameHelper: GameHelper = GameHelper;
 
   start() {
     // 初始化图层
@@ -33,6 +36,8 @@ export class Game extends Component {
     this.roleDisplay.init(this.node);
     // 初始化地图
     this.map.init();
+    // 初始化游戏全局工具
+    this.gameHelper.init(this.camera);
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
   }

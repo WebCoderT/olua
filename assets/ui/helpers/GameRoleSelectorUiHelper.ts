@@ -1,7 +1,8 @@
 import { Color, EditBox, EventHandler, Label, Node, Size, Sprite, ToggleContainer, Vec2 } from "cc";
-import { OECCUPATION, Role, RoleOccupationInfo } from "../../configs";
 import GameUiHelper from "./GameUiHelper";
 import UiHelper from "./UiHelper";
+import { Role } from "../../configs/role";
+import { OECCUPATION, RoleOccupationInfo } from "../../types/common";
 
 export interface RoleSelectorMainView {
   beginGameButton: Node;
