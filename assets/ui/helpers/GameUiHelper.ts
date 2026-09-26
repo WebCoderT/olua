@@ -90,7 +90,7 @@ const GameUiHelper = {
     LayerHelper.setLayerToUILayer(combatIcon);
     node.addChild(combatIcon);
     // 战斗力数字
-    const combatNumber = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(-7, 4), new Size(200, 30));
+    const combatNumber = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(-3.5, 4), new Size(200, 30));
     combatNumber.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const label = combatNumber.getComponent(Label);
     label.horizontalAlign = Label.HorizontalAlign.LEFT;
@@ -115,7 +115,7 @@ const GameUiHelper = {
    * @return node Node
    */
   createBottomNavBarButton(button: BottomNavBarButton, role: Role) {
-    const node = UiHelper.createButton(`bottom_nav_${button.icon.replace(/\//g, "_")}`, button.icon, new Vec2(0, 0), new Size(44, 44));
+    const node = UiHelper.createButton(`bottom_nav_${button.icon.replace(/\//g, "_")}`, button.icon, new Vec2(0, 0), new Size(40, 40));
     LayerHelper.setLayerToUILayer(node);
     // 判断是否解锁
     if (button.openLevel > role.level) node.getComponent(Sprite).grayscale = true;

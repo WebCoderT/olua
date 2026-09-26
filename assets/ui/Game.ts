@@ -32,7 +32,7 @@ export class Game extends Component {
     // 初始化图层
     LayerHelper.initLayer(this.node, this.camera);
     // 初始化底部
-    this.bottomBar.init();
+    this.bottomBar.init(role);
     // 初始化用户头像
     this.roleAvatar.init(role);
     // 初始化角色显示

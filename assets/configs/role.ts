@@ -17,6 +17,7 @@ export class Role {
   silver: number = 10000;
   exp: number = 0;
   maxHp: number;
+  hp: number;
   bag: Array<Array<Goods | null>>;
   combat: number = 0;
   equipments: { [key in EQUIPMENT_TYPE]: Equipment | null } = {
@@ -39,7 +40,7 @@ export class Role {
     this.name = name;
     this.occupation = occupation;
     this.sex = sex;
-    this.maxHp = levelMap.get(this.level).maxHp;
+    this.hp = this.maxHp = levelMap.get(this.level).maxHp;
     this.combat = this.maxHp * 10;
 
     // 初始化背包数据

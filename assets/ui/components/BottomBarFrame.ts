@@ -1,4 +1,4 @@
-import { Node, ProgressBar, Size, Sprite, Vec2 } from "cc";
+import { Color, Label, Node, ProgressBar, Size, Sprite, UITransform, Vec2 } from "cc";
 import GameUiHelper, { BottomNavBarButton } from "../helpers/GameUiHelper";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import StorageHelper from "../utils/StorageHelper";
@@ -23,24 +23,33 @@ const bottomNavBarButtons: BottomNavBarButton[] = [
 
 interface BottomBarFrame {
   selectedRole: Role | null;
+  // 底部导航节点
+  node: Node;
   // 初始化
-  init: () => void;
+  init: (role: Role) => void;
   // 经验条
   expBar: Node;
-  // 更新经验条
-  updateExpBar: () => void;
+  // 角色血量文字显示
+  hpText: Node;
+  // 角色血量徒刑显示
+  hpBar: Node;
+  // 初始化血量
+  initHp: (role: Role) => void;
+  // 更新
+  update: (role: Role) => void;
 }
 
 const BottomBarFrame: BottomBarFrame = {
   selectedRole: null,
-  init() {
+  node: null,
+  init(role) {
     // 初始化角色数据
     this.selectedRole = StorageHelper.findOnlineRole();
     // 基础UI
     // 底部导航区域
-    const bottomNavBarBg = UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(0, -316), new Size(1200, 240));
+    BottomBarFrame.node = UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(0, -324), new Size(1100, 210));
     // 功能按键区域
-    const bottomNavBar = GameUiHelper.createBottomNavBar(6, new Vec2(200, -10), new Size(500, 44));
+    const bottomNavBar = GameUiHelper.createBottomNavBar(6, new Vec2(153.5, -10), new Size(400, 40));
     bottomNavBarButtons.map((button) => {
       const node = GameUiHelper.createBottomNavBarButton(button, this.selectedRole);
       // 如果node是禁用，禁用使用grayscale表示
@@ -56,23 +65,53 @@ const BottomBarFrame: BottomBarFrame = {
       bottomNavBar.addChild(node);
     });
     // 经验条
-    BottomBarFrame.expBar = GameUiHelper.createExpBar("exp", getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp), new Vec2(0, -50), new Size(784, 10));
+    BottomBarFrame.expBar = GameUiHelper.createExpBar("exp", getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp), new Vec2(0, -44.5), new Size(724, 8));
     LayerHelper.setLayerToUILayer(BottomBarFrame.expBar);
 
     // 统一添加进底层区域
-    bottomNavBarBg.addChild(bottomNavBar);
-    bottomNavBarBg.addChild(BottomBarFrame.expBar);
+    BottomBarFrame.node.addChild(bottomNavBar);
+    BottomBarFrame.node.addChild(BottomBarFrame.expBar);
+    // 初始化血量
+    BottomBarFrame.initHp(role);
 
-    LayerHelper.addToUILayer(bottomNavBarBg);
+    LayerHelper.addToUILayer(BottomBarFrame.node);
   },
   // 经验条
   expBar: null,
-  // 更新经验条
-  updateExpBar() {
-    // 更新角色数据
-    BottomBarFrame.selectedRole = StorageHelper.findOnlineRole();
+  // 角色血量文字显示
+  hpText: null,
+  // 角色血量徒刑显示
+  hpBar: null,
+  // 初始化血量
+  initHp(role) {
+    // 血量文字
+    BottomBarFrame.hpText = UiHelper.createLabel("hp_text", `${role.hp} / ${role.maxHp}`, Color.WHITE, 12, new Vec2(-421, -39), new Size(100, 10));
+    LayerHelper.setLayerToUILayer(BottomBarFrame.hpText);
+    BottomBarFrame.node.addChild(BottomBarFrame.hpText);
+    // 圆形血量显示
+    const hpBarSprite = UiHelper.createSprite("ho_bar_sprite", "common/max", new Vec2(-420, 12.5), new Size(90, 90));
+    LayerHelper.setLayerToUILayer(hpBarSprite);
+    BottomBarFrame.hpBar = UiHelper.createProgressBar("hp_bar", role.hp / role.maxHp, "", new Vec2(), new Size(90, 90));
+    LayerHelper.setLayerToUILayer(BottomBarFrame.hpBar);
+    const hpProgress = UiHelper.createSprite(`hp_bar_progress`, "common/hp", new Vec2(), new Size(90, 90));
+    hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
+    LayerHelper.setLayerToUILayer(hpProgress);
+    BottomBarFrame.hpBar.addChild(hpProgress);
+    hpProgress.setPosition(0, 0);
+    hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
+    BottomBarFrame.hpBar.getComponent(ProgressBar).barSprite = hpProgress.getComponent(Sprite);
+    BottomBarFrame.hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
+    hpBarSprite.addChild(BottomBarFrame.hpBar);
+    BottomBarFrame.node.addChild(hpBarSprite);
+  },
+  // 更新
+  update(role) {
+    // 更新血量
+    BottomBarFrame.hpText.getComponent(Label).string = `${role.hp} / ${role.maxHp}`;
+    // 更新圆形血条
+    BottomBarFrame.hpBar.getComponent(ProgressBar).progress = role.hp / role.maxHp;
     // 更新经验条
-    BottomBarFrame.expBar.getComponent(ProgressBar).progress = getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp);
+    BottomBarFrame.expBar.getComponent(ProgressBar).progress = getCurrentLevelExpRate(role.level, role.exp);
   },
 };
 

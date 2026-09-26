@@ -68,15 +68,17 @@ const StorageHelper = {
       role.exp -= levelMap.get(role.level).exp;
       // 升级
       role.level += 1;
+      // 更新属性
+      const newRole = StorageHelper.AttributeCalc(role);
+      // 升级时补满血量至最大血量
+      role.hp = newRole.maxHp;
       // 播放升级动画
       EffectFrame.selfUpgrade();
-      // 保存
-      StorageHelper.updateOnlineRole(role);
-      // 更新属性
-      StorageHelper.AttributeCalc(role);
-    } else StorageHelper.updateOnlineRole(role);
-    // 更新经验条
-    BottomBarFrame.updateExpBar();
+    }
+    // 保存
+    StorageHelper.updateOnlineRole(role);
+    // 更新底部导航
+    BottomBarFrame.update(role);
   },
   // 更换装备
   changeEquipment(equipment: Equipment) {
@@ -94,6 +96,7 @@ const StorageHelper = {
     role.combat = StorageHelper.combatCalc(role);
     StorageHelper.updateOnlineRole(role);
     RoleAvatarFrame.update(role);
+    return role;
   },
   // 计算血量
   maxHpCalc(role: Role) {
