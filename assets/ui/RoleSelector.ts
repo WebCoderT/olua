@@ -1,6 +1,6 @@
 import { _decorator, Color, Component, EditBox, EventHandler, Input, Label, Node, NodeEventType, Size, Sprite, ToggleContainer, UI, Vec2 } from "cc";
 import UiHelper from "./helpers/UiHelper";
-import { getRoleOccupationInfoById, Role } from "../configs";
+import { OECCUPATION, Role, roles } from "../configs";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageHelper from "./helpers/StorageHelper";
 import SceneManager from "./SceneManager";
@@ -15,21 +15,21 @@ export class RoleSelector extends Component {
 
   start() {
     // 角色选择界面
-    this.node.addChild(UiHelper.createFullScreenNode("create_role/bg"));
+    this.node.addChild(UiHelper.createFullScreenNode("role_selector_background", "create_role/bg"));
     // 创建角色时开始游戏按钮
-    const bottomBar = UiHelper.createSprite("create_role/bg_bottom", new Vec2(0, -305), new Size(1624, 139));
+    const bottomBar = UiHelper.createSprite("role_selector_bottom_bar", "create_role/bg_bottom", new Vec2(0, -305), new Size(1624, 139));
     this.node.addChild(bottomBar);
     // 开始游戏按钮
-    this.beginGameButton = UiHelper.createButton("create_role/start_btn", new Vec2(0, -40), new Size(190, 48));
+    this.beginGameButton = UiHelper.createButton("begin_game_button", "create_role/start_btn", new Vec2(0, -40), new Size(190, 48));
     this.beginGameButton.getComponent(Sprite).grayscale = true;
     this.beginGameButton.on(Node.EventType.TOUCH_END, this.beginGame, this);
     bottomBar.addChild(this.beginGameButton);
     // 创建角色按钮
-    const createRoleButton = UiHelper.createButton("create_role/new_role", new Vec2(-740, 300), new Size(75, 79));
+    const createRoleButton = UiHelper.createButton("show_create_role_button", "create_role/new_role", new Vec2(-740, 300), new Size(75, 79));
     this.node.addChild(createRoleButton);
     createRoleButton.on(Node.EventType.TOUCH_END, this.createRoleUI, this);
     // 管理角色按钮
-    const manageRoleButton = UiHelper.createButton("create_role/manage", new Vec2(-740, 200), new Size(75, 79));
+    const manageRoleButton = UiHelper.createButton("manage_role_button", "create_role/manage", new Vec2(-740, 200), new Size(75, 79));
     this.node.addChild(manageRoleButton);
     // 展示已有角色
     this.showOwnerRolesUI();
@@ -95,7 +95,7 @@ export class RoleSelector extends Component {
     if (this.isCreateRole) return;
     this.isCreateRole = true;
     // 返回按钮
-    this.backButton = UiHelper.createButton("create_role/back_btn", new Vec2(-740, -210), new Size(75, 79));
+    this.backButton = UiHelper.createButton("cancel_create_role_button", "create_role/back_btn", new Vec2(-740, -210), new Size(75, 79));
     this.node.addChild(this.backButton);
     this.createRoleDialogUI();
     this.backButton.on(Node.EventType.TOUCH_END, this.cancelCreateRoleUI, this);
@@ -110,14 +110,15 @@ export class RoleSelector extends Component {
     eventHandler.handler = "occupationDescriptionUI"; // 回调函数名
 
     // 创建角色弹窗
-    this.createRoleDialog = UiHelper.createSprite("create_role/bg_dialog", new Vec2(630, 35), new Size(320, 580));
+    this.createRoleDialog = UiHelper.createSprite("create_role_dialog", "create_role/bg_dialog", new Vec2(630, 35), new Size(320, 580));
     this.node.addChild(this.createRoleDialog);
     // 标题
-    this.createRoleDialog.addChild(UiHelper.createSprite("create_role/label_title", new Vec2(0, 242), new Size(128, 28)));
+    this.createRoleDialog.addChild(UiHelper.createSprite("create_role_dialog_title", "create_role/label_title", new Vec2(0, 242), new Size(128, 28)));
     // 性别
-    this.createRoleDialog.addChild(UiHelper.createSprite("create_role/label_1", new Vec2(0, 190), new Size(56, 25)));
+    this.createRoleDialog.addChild(UiHelper.createSprite("gender_label", "create_role/label_1", new Vec2(0, 190), new Size(56, 25)));
     // 性别选择
     this.roleSexToggleGroup = UiHelper.createToggleGroup(
+      "role_sex_toggle_group",
       [
         UiHelper.createToggle("1", "create_role/1_1", "create_role/1_0", new Vec2(0, 0), new Size(48, 48)),
         UiHelper.createToggle("2", "create_role/2_1", "create_role/2_0", new Vec2(0, 0), new Size(48, 48)),
@@ -128,8 +129,9 @@ export class RoleSelector extends Component {
     this.roleSexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
     this.createRoleDialog.addChild(this.roleSexToggleGroup);
     // 职业
-    this.createRoleDialog.addChild(UiHelper.createSprite("create_role/label_2", new Vec2(0, 100), new Size(56, 25)));
+    this.createRoleDialog.addChild(UiHelper.createSprite("occupation_label", "create_role/label_2", new Vec2(0, 100), new Size(56, 25)));
     this.roleOccupationToggleGroup = UiHelper.createToggleGroup(
+      "role_occupation_toggle_group",
       [
         UiHelper.createToggle("1", "create_role/3_1", "create_role/3_0", new Vec2(0, 0), new Size(48, 48)),
         UiHelper.createToggle("2", "create_role/4_1", "create_role/4_0", new Vec2(0, 0), new Size(48, 48)),
@@ -148,13 +150,13 @@ export class RoleSelector extends Component {
     this.occupationPreviewUI();
 
     // 角色名称输入框
-    const roleNameInputBg = UiHelper.createSprite("login/input_bg", new Vec2(0, -26), new Size(240, 60));
-    this.roleNameInput = UiHelper.createInputBox("输入角色名称", new Vec2(0, -6), new Vec2(200, 60));
+    const roleNameInputBg = UiHelper.createSprite("role_name_input_background", "login/input_bg", new Vec2(0, -26), new Size(240, 60));
+    this.roleNameInput = UiHelper.createInputBox("role_name_input", "输入角色名称", new Vec2(0, -6), new Vec2(200, 60));
     roleNameInputBg.addChild(this.roleNameInput);
     this.createRoleDialog.addChild(roleNameInputBg);
 
     // 创建角色按钮
-    this.createRoleButton = UiHelper.createButton("create_role/start_btn", new Vec2(0, -238), new Size(190, 48));
+    this.createRoleButton = UiHelper.createButton("confirm_create_role_button", "create_role/start_btn", new Vec2(0, -238), new Size(190, 48));
     this.createRoleButton.getComponent(Sprite).grayscale = true;
     this.createRoleButton.on(Node.EventType.TOUCH_END, this.createRole, this);
     this.createRoleDialog.addChild(this.createRoleButton);
@@ -164,8 +166,8 @@ export class RoleSelector extends Component {
   occupationDescriptionUI() {
     this.occupationDescription?.destroy();
     const activeOccupationId = this.roleOccupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0].node.name;
-    const activeOccupation = getRoleOccupationInfoById(activeOccupationId);
-    this.occupationDescription = UiHelper.createSprite(activeOccupation.description, new Vec2(0, -142), activeOccupation.descriptionSize);
+    const activeOccupation = roles.get(activeOccupationId as unknown as OECCUPATION);
+    this.occupationDescription = UiHelper.createSprite("occupation_description", activeOccupation.description, new Vec2(0, -142), activeOccupation.descriptionSize);
     this.createRoleDialog.addChild(this.occupationDescription);
     // 职业文字更换后，同时更换预览效果
     this.occupationPreviewUI();
@@ -205,10 +207,10 @@ export class RoleSelector extends Component {
   roleSelectedLevel: Node;
   // 已选择的角色UI
   selectedRoleInfoUI() {
-    const selectedInfoBox = UiHelper.createSprite("create_role/idlv", new Vec2(-435, -335), new Size(345, 26));
+    const selectedInfoBox = UiHelper.createSprite("selected_role_info_background", "create_role/idlv", new Vec2(-435, -335), new Size(345, 26));
     this.node.addChild(selectedInfoBox);
-    this.roleSelectedName = UiHelper.createLabel("---", Color.WHITE, 20, new Vec2(-35, 0), new Size(160, 30));
-    this.roleSelectedLevel = UiHelper.createLabel("-", Color.WHITE, 16, new Vec2(147, 0), new Size(40, 30));
+    this.roleSelectedName = UiHelper.createLabel("selected_role_name", "---", Color.WHITE, 20, new Vec2(-35, 0), new Size(160, 30));
+    this.roleSelectedLevel = UiHelper.createLabel("selected_role_level", "-", Color.WHITE, 16, new Vec2(147, 0), new Size(40, 30));
     selectedInfoBox.addChild(this.roleSelectedName);
     selectedInfoBox.addChild(this.roleSelectedLevel);
   }

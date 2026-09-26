@@ -26,14 +26,14 @@ const RoleBagDialog: RoleBagDialog = {
     else {
       RoleBagDialog.dialog = GameRoleUiHelper.createDialog("bag_dialog", "背包");
       LayerHelper.addToUILayer(RoleBagDialog.dialog);
-      const bag = UiHelper.createFlexCol(3, new Vec2(0, 17), new Size(580, 368));
+      const bag = UiHelper.createFlexCol("bag_grid", 3, new Vec2(0, 17), new Size(580, 368));
       LayerHelper.setLayerToUILayer(bag);
       for (let row = 0; row < bagRow; row++) {
         RoleBagDialog.grids[row] = [];
-        const rowNode = UiHelper.createFlexRow(3, new Vec2(0, 0), new Size(580, 50));
+        const rowNode = UiHelper.createFlexRow(`bag_row_${row}`, 3, new Vec2(0, 0), new Size(580, 50));
         LayerHelper.setLayerToUILayer(rowNode);
         for (let col = 0; col < bagCol; col++) {
-          const grid = UiHelper.createSprite("common/grid", new Vec2(), new Size(50, 50));
+          const grid = UiHelper.createSprite(`bag_slot_${row}_${col}`, "common/grid", new Vec2(), new Size(50, 50));
           LayerHelper.setLayerToUILayer(grid);
           RoleBagDialog.grids[row][col] = grid;
           rowNode.addChild(grid);

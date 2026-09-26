@@ -168,6 +168,7 @@ const UiHelper = {
 
   /**
    * 创建选择器
+   * @param name 元素名称
    * @param src 图片地址
    * @param selectedSrc 选择后的图片地址
    * @param position 位置

@@ -19,19 +19,11 @@ export enum OECCUPATION {
 }
 
 // 角色MAP
-export const roleMap = new Map<OECCUPATION, RoleOccupationInfo>();
+export const roles = new Map<OECCUPATION, RoleOccupationInfo>();
 
-roleMap.set(OECCUPATION.ZHAN, { name: "战士", description: "create_role/tips_1", descriptionSize: new Size(245, 51) });
-roleMap.set(OECCUPATION.FA, { name: "魔法师", description: "create_role/tips_2", descriptionSize: new Size(249, 69) });
-roleMap.set(OECCUPATION.DAO, { name: "道士", description: "create_role/tips_3", descriptionSize: new Size(249, 69) });
-
-/**
- * @param key 游戏角色编号
- * @returns 游戏角色信息
- */
-export function getRoleOccupationInfoById(key: OECCUPATION): RoleOccupationInfo {
-  return roleMap.get(key);
-}
+roles.set(OECCUPATION.ZHAN, { name: "战士", description: "create_role/tips_1", descriptionSize: new Size(245, 51) });
+roles.set(OECCUPATION.FA, { name: "魔法师", description: "create_role/tips_2", descriptionSize: new Size(249, 69) });
+roles.set(OECCUPATION.DAO, { name: "道士", description: "create_role/tips_3", descriptionSize: new Size(249, 69) });
 
 // 性别
 export enum SEX {

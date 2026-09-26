@@ -13,8 +13,7 @@ const GameUiHelper = {
    */
   createRolePreview: (name: string, level: number, occupation: string = "1", sex: string = "1", position: Vec2 = new Vec2(), size: Size = new Size()) => {
     const role = UiHelper.createEmptyNode(name, position, size);
-    const node = UiHelper.createSprite("");
-    node.name = name;
+    const node = UiHelper.createSprite(name ? `${name}_animation` : "role_preview_animation", "");
     node.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     node.getComponent(Sprite).trim = false;
     const animationPlayer = node.addComponent(AnimationPlayer);
@@ -29,56 +28,56 @@ const GameUiHelper = {
    * @param role 角色信息
    */
   createRoleInfoFrame(role: Role) {
-    const node = UiHelper.createSprite("common/user-info-frame", RoleInfoFramePositionsMap.get(role.relationShip), new Size(300, 70));
+    const node = UiHelper.createSprite("role_info_frame", "common/user-info-frame", RoleInfoFramePositionsMap.get(role.relationShip), new Size(300, 70));
     // 昵称
-    const name = UiHelper.createLabel(role.name, Color.WHITE, 16, new Vec2(17, 24), new Size(190, 24));
+    const name = UiHelper.createLabel("role_name", role.name, Color.WHITE, 16, new Vec2(17, 24), new Size(190, 24));
     name.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     LayerHelper.setLayerToUILayer(name);
     node.addChild(name);
     // 等级
-    const level = UiHelper.createLabel(role.level.toString(), Color.WHITE, 16, new Vec2(-138, -17.5), new Size(24, 24));
+    const level = UiHelper.createLabel("role_level", role.level.toString(), Color.WHITE, 16, new Vec2(-138, -17.5), new Size(24, 24));
     LayerHelper.setLayerToUILayer(level);
     node.addChild(level);
     // 头像
-    const avatar = UiHelper.createSprite(`avatars/${role.occupation}-${role.sex}`, new Vec2(-109.5, 7.5), new Size(51, 60));
+    const avatar = UiHelper.createSprite("role_avatar", `avatars/${role.occupation}-${role.sex}`, new Vec2(-109.5, 7.5), new Size(51, 60));
     LayerHelper.setLayerToUILayer(avatar);
     node.addChild(avatar);
     // 元宝
-    const goldIcon = UiHelper.createSprite("money/gold", new Vec2(-68, -20), new Size(15, 10));
+    const goldIcon = UiHelper.createSprite("gold_icon", "money/gold", new Vec2(-68, -20), new Size(15, 10));
     LayerHelper.setLayerToUILayer(goldIcon);
     node.addChild(goldIcon);
     // 元宝数量
-    const goldCount = UiHelper.createLabel(role.gold.toString(), Color.WHITE, 12, new Vec2(-45, -20), new Size(30, 10));
+    const goldCount = UiHelper.createLabel("gold_count", role.gold.toString(), Color.WHITE, 12, new Vec2(-45, -20), new Size(30, 10));
     goldCount.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     goldCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
     LayerHelper.setLayerToUILayer(goldCount);
     node.addChild(goldCount);
     // 绑定元宝
-    const bindGoldIcon = UiHelper.createSprite("money/bind-gold", new Vec2(-22, -20), new Size(15, 10));
+    const bindGoldIcon = UiHelper.createSprite("bind_gold_icon", "money/bind-gold", new Vec2(-22, -20), new Size(15, 10));
     LayerHelper.setLayerToUILayer(bindGoldIcon);
     node.addChild(bindGoldIcon);
     // 绑定元宝数量
-    const bindGoldCount = UiHelper.createLabel(role.bindGold.toString(), Color.WHITE, 12, new Vec2(1, -20), new Size(30, 10));
+    const bindGoldCount = UiHelper.createLabel("bind_gold_count", role.bindGold.toString(), Color.WHITE, 12, new Vec2(1, -20), new Size(30, 10));
     bindGoldCount.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     bindGoldCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
     LayerHelper.setLayerToUILayer(bindGoldCount);
     node.addChild(bindGoldCount);
     // 银子
-    const silverIcon = UiHelper.createSprite("money/silver", new Vec2(24, -20), new Size(15, 10));
+    const silverIcon = UiHelper.createSprite("silver_icon", "money/silver", new Vec2(24, -20), new Size(15, 10));
     LayerHelper.setLayerToUILayer(silverIcon);
     node.addChild(silverIcon);
     // 银子数量
-    const silverCount = UiHelper.createLabel(role.bindGold.toString(), Color.WHITE, 12, new Vec2(47, -20), new Size(30, 10));
+    const silverCount = UiHelper.createLabel("silver_count", role.bindGold.toString(), Color.WHITE, 12, new Vec2(47, -20), new Size(30, 10));
     silverCount.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     silverCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
     LayerHelper.setLayerToUILayer(silverCount);
     node.addChild(silverCount);
     // 站斗力
-    const combatIcon = UiHelper.createSprite("common/combat", new Vec2(-44, 2), new Size(75, 41));
+    const combatIcon = UiHelper.createSprite("combat_icon", "common/combat", new Vec2(-44, 2), new Size(75, 41));
     LayerHelper.setLayerToUILayer(combatIcon);
     node.addChild(combatIcon);
     // 战斗力数字
-    const combatNumber = UiHelper.createLabel("99999999", Color.WHITE, 20, new Vec2(-7, 4), new Size(200, 30));
+    const combatNumber = UiHelper.createLabel("combat_number", "99999999", Color.WHITE, 20, new Vec2(-7, 4), new Size(200, 30));
     combatNumber.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const label = combatNumber.getComponent(Label);
     label.horizontalAlign = Label.HorizontalAlign.LEFT;
@@ -92,7 +91,7 @@ const GameUiHelper = {
       node.addChild(combatNumber);
     });
     // vip按钮
-    const vipButton = UiHelper.createButton("money/vip", new Vec2(110, 30), new Size(75, 25));
+    const vipButton = UiHelper.createButton("vip_button", "money/vip", new Vec2(110, 30), new Size(75, 25));
     LayerHelper.setLayerToUILayer(vipButton);
     node.addChild(vipButton);
     return { node, combatNumber, level };
@@ -103,7 +102,7 @@ const GameUiHelper = {
    * @return node Node
    */
   createBottomNavBarButton(button: BottomNavBarButton, role: Role) {
-    const node = UiHelper.createButton(button.icon, new Vec2(0, 0), new Size(44, 44));
+    const node = UiHelper.createButton(`bottom_nav_${button.icon.replace(/\//g, "_")}`, button.icon, new Vec2(0, 0), new Size(44, 44));
     LayerHelper.setLayerToUILayer(node);
     // 判断是否解锁
     if (button.openLevel > role.level) node.getComponent(Sprite).grayscale = true;
@@ -116,7 +115,7 @@ const GameUiHelper = {
    * @param size 尺寸
    */
   createBottomNavBar(spacex: number, position: Vec2, size: Size) {
-    const node = UiHelper.createFlexRow(spacex, position, size);
+    const node = UiHelper.createFlexRow("bottom_nav_bar", spacex, position, size);
     LayerHelper.setLayerToUILayer(node);
     return node;
   },
@@ -132,7 +131,7 @@ const GameUiHelper = {
   createExpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const expBar = UiHelper.createProgressBar(name, progress, "", position, size);
     LayerHelper.setLayerToUILayer(expBar);
-    const expProgress = UiHelper.createSprite("bottom-nav-bar/exp", new Vec2(), size);
+    const expProgress = UiHelper.createSprite(`${name}_progress`, "bottom-nav-bar/exp", new Vec2(), size);
     LayerHelper.setLayerToUILayer(expProgress);
     expBar.addChild(expProgress);
     expBar.getComponent(ProgressBar).barSprite = expProgress.getComponent(Sprite);
@@ -143,8 +142,8 @@ const GameUiHelper = {
    * 创建错误提示
    * @param error 错误信息
    */
-  createErrorTip(error: string) {
-    const errorTip = UiHelper.createErrorTip(error);
+  createErrorTip(name: string, error: string) {
+    const errorTip = UiHelper.createErrorTip(name, error);
     const uiOpacity = errorTip.addComponent(UIOpacity);
     tween(errorTip)
       .to(0.3, { position: new Vec3(0, 40, 0) })
@@ -161,8 +160,8 @@ const GameUiHelper = {
   /**
    * 创建提示
    */
-  createTip(text: string) {
-    const errorTip = UiHelper.createTip(text);
+  createTip(name: string, text: string) {
+    const errorTip = UiHelper.createTip(name, text);
     const uiOpacity = errorTip.addComponent(UIOpacity);
     tween(errorTip)
       .to(0.5, { position: new Vec3(0, 40, 0) })
@@ -180,7 +179,7 @@ const GameUiHelper = {
    * 创建游戏通用弹窗
    */
   createDialog(name: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
-    const dialog = UiHelper.createSprite("common/popup-bg", position, size);
+    const dialog = UiHelper.createSprite(name, "common/popup-bg", position, size);
     dialog.name = name;
     dialog.addComponent(Draggable);
     return dialog;
@@ -189,18 +188,16 @@ const GameUiHelper = {
   /**
    * 创建游戏通用弹窗标题
    */
-  createDialogTitle(title: string, position: Vec2 = new Vec2(0, 228)) {
-    const dialogTitle = UiHelper.createLabel(title, Color.WHITE, 18, position, new Size(300, 30));
-    dialogTitle.name = "dialog_title";
+  createDialogTitle(name: string, title: string, position: Vec2 = new Vec2(0, 228)) {
+    const dialogTitle = UiHelper.createLabel(name, title, Color.WHITE, 18, position, new Size(300, 30));
     return dialogTitle;
   },
 
   /**
    * 创建游戏通用关闭按钮
    */
-  createCloseButton(position: Vec2 = new Vec2(), size: Size = new Size(30, 30)) {
-    const closeButton = UiHelper.createButton("common/close-button", position, size);
-    closeButton.name = "close_button";
+  createCloseButton(name: string, position: Vec2 = new Vec2(), size: Size = new Size(30, 30)) {
+    const closeButton = UiHelper.createButton(name, "common/close-button", position, size);
     return closeButton;
   },
 
@@ -208,10 +205,10 @@ const GameUiHelper = {
    * 创建游戏大按钮
    */
   createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const bigButton = UiHelper.createButton("common/bg-button", position, new Size(129, 54));
+    const bigButton = UiHelper.createButton(name, "common/bg-button", position, new Size(129, 54));
     bigButton.name = name;
     LayerHelper.setLayerToUILayer(bigButton);
-    const label = UiHelper.createLabel(text, Color.WHITE, 30, new Vec2(), new Size(129, 54));
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 30, new Vec2(), new Size(129, 54));
     LayerHelper.setLayerToUILayer(label);
     bigButton.addChild(label);
     return bigButton;

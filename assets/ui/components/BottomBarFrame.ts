@@ -22,7 +22,7 @@ const BottomBarFrame: BottomBarFrame = {
     this.selectedRole = StorageHelper.findSelectedRole();
     // 基础UI
     // 底部导航区域
-    const bottomNavBarBg = UiHelper.createSprite("bottom-nav-bar/bg", new Vec2(0, -316), new Size(1200, 240));
+    const bottomNavBarBg = UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(0, -316), new Size(1200, 240));
     // 功能按键区域
     const bottomNavBar = GameUiHelper.createBottomNavBar(6, new Vec2(200, -10), new Size(500, 44));
     bottomNavBarButtons.map((button) => {
@@ -32,7 +32,7 @@ const BottomBarFrame: BottomBarFrame = {
         Node.EventType.TOUCH_END,
         () => {
           // 禁用，出现提示
-          if (node.getComponent(Sprite).grayscale) GameUiHelper.createErrorTip(`${button.label}功能需要在${button.openLevel}级后开放`);
+          if (node.getComponent(Sprite).grayscale) GameUiHelper.createErrorTip("feature_locked_tip", `${button.label}功能需要在${button.openLevel}级后开放`);
           else button.onClick();
         },
         this,
