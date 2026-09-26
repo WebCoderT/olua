@@ -1,5 +1,5 @@
 import { Node, resources, TiledMap, TiledMapAsset, UITransform } from "cc";
-import { loadResourcesAsync } from "./utils/ResourceLoad";
+import { loadResourcesAsync } from "../utils/ResourceLoad";
 import LayerHelper from "./LayerHelper";
 
 const GameMapUiHelper = {

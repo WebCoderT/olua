@@ -1,10 +1,10 @@
 import { _decorator, Color, Component, EditBox, EventHandler, Input, Label, Node, NodeEventType, Size, Sprite, ToggleContainer, UI, Vec2 } from "cc";
-import UiHelper from "./UiHelper";
+import UiHelper from "./helpers/UiHelper";
 import { getRoleOccupationInfoById, Role } from "../configs";
-import GameUiHelper from "./GameUiHelper";
-import StorageHelper from "./StorageHelper";
+import GameUiHelper from "./helpers/GameUiHelper";
+import StorageHelper from "./helpers/StorageHelper";
 import SceneManager from "./SceneManager";
-const { ccclass, property } = _decorator;
+const { ccclass } = _decorator;
 
 @ccclass("RoleSelector")
 export class RoleSelector extends Component {

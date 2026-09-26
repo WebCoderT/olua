@@ -1,3 +1,5 @@
+import { Equipment, clothes } from "./equipments";
+import { bagCol, bagRow } from "./game";
 import { RELATION_SHIP } from "./game";
 import { levelMap } from "./level";
 
@@ -28,6 +30,8 @@ export interface Role {
   silver: number;
   // 角色衣服-时装
   fashionCloth: number | null;
+  // 背包
+  bag: Array<Array<Equipment | null>>;
 }
 
 export class Role implements Role {
@@ -44,11 +48,24 @@ export class Role implements Role {
   silver: number = 10000;
   exp: number = 0;
   maxHp: number;
+  bag: Equipment[][];
   constructor(name: string, occupation: string, sex: string) {
     this.id = new Date().getTime().toString();
     this.name = name;
     this.occupation = occupation;
     this.sex = sex;
     this.maxHp = levelMap.get(this.level).maxHp;
+
+    // 初始化背包数据
+    this.bag = [];
+    for (let row = 0; row < bagRow; row++) {
+      this.bag[row] = [];
+      for (let col = 0; col < bagCol; col++) {
+        this.bag[row][col] = null;
+      }
+    }
+    // 初始化成功后，默认赠送物品
+    this.bag[0][0] = clothes[0];
+    this.bag[0][1] = clothes[1];
   }
 }

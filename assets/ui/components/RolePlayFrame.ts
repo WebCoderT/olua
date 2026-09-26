@@ -1,7 +1,7 @@
 import { Animation, AnimationClip, BoxCollider2D, EventKeyboard, input, Input, isValid, math, Node, resources, RigidBody2D, SpriteFrame, Vec2, Vec3 } from "cc";
 import { getRoleAnimationName, Role, ROLE_ACTION, ROLE_DIRECTION, roleActions, roleAnimationMap } from "../../configs";
-import StorageHelper from "../StorageHelper";
-import LayerHelper from "../LayerHelper";
+import StorageHelper from "../helpers/StorageHelper";
+import LayerHelper from "../helpers/LayerHelper";
 
 interface RolePlayFrame {
   // 角色信息
@@ -34,15 +34,15 @@ interface RolePlayFrame {
   // 方向
   direction: ROLE_DIRECTION;
   // 方向更改
-  updateDirection: Function;
+  updateDirection: () => void;
   // 动作
   action: ROLE_ACTION;
   // 动作更改
-  updateAction: Function;
+  updateAction: () => void;
   // 手动修改角色位置
   updateRoleWorldPosition: (worldPosition: Vec3) => void;
   // 移动，修改世界定位
-  updateWorldPosition: Function;
+  updateWorldPosition: () => void;
 }
 
 const RolePlayFrame: RolePlayFrame = {

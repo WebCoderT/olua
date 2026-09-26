@@ -1,5 +1,5 @@
 import { Size, Vec2 } from "cc";
-import GameRoleUiHelper from "../ui/GameRoleUiHelper";
+import GameRoleUiHelper from "../ui/helpers/GameRoleUiHelper";
 import RoleInformationDialog from "../ui/components/RoleInformationDialog";
 import RoleBagDialog from "../ui/components/RoleBagDialog";
 
@@ -11,21 +11,32 @@ export interface RoleOccupationInfo {
   descriptionSize: Size;
 }
 
+// 职业
+export enum OECCUPATION {
+  ZHAN = 1,
+  FA = 2,
+  DAO = 3,
+}
+
 // 角色MAP
-export const roleMap = new Map<string, RoleOccupationInfo>();
+export const roleMap = new Map<OECCUPATION, RoleOccupationInfo>();
 
-roleMap.set("1", { name: "战士", description: "create_role/tips_1", descriptionSize: new Size(245, 51) });
-roleMap.set("2", { name: "魔法师", description: "create_role/tips_2", descriptionSize: new Size(249, 69) });
-roleMap.set("3", { name: "道士", description: "create_role/tips_3", descriptionSize: new Size(249, 69) });
-
-export const roleMapKeys = roleMap.keys();
+roleMap.set(OECCUPATION.ZHAN, { name: "战士", description: "create_role/tips_1", descriptionSize: new Size(245, 51) });
+roleMap.set(OECCUPATION.FA, { name: "魔法师", description: "create_role/tips_2", descriptionSize: new Size(249, 69) });
+roleMap.set(OECCUPATION.DAO, { name: "道士", description: "create_role/tips_3", descriptionSize: new Size(249, 69) });
 
 /**
  * @param key 游戏角色编号
  * @returns 游戏角色信息
  */
-export function getRoleOccupationInfoById(key: string): RoleOccupationInfo {
+export function getRoleOccupationInfoById(key: OECCUPATION): RoleOccupationInfo {
   return roleMap.get(key);
+}
+
+// 性别
+export enum SEX {
+  BOY = 1,
+  GRIL = 2,
 }
 
 // 性别MAP
@@ -33,16 +44,6 @@ export const sexMap = new Map<string, string>();
 
 sexMap.set("1", "男");
 sexMap.set("2", "女");
-
-export const sexMapKeys = sexMap.keys();
-
-/**
- * @param key 游戏性别编号
- * @returns 游戏性别信息
- */
-export function getSex(key: string): String {
-  return sexMap.get(key);
-}
 
 // 关系MAP
 export enum RELATION_SHIP {
@@ -82,8 +83,8 @@ export const bottomNavBarButtons: BottomNavBarButton[] = [
   { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
 ];
 
-// 装备类型id
-export enum EquipmentId {
+// 装备类型
+export enum EQUIPMENT_TYPE {
   CLOTH = "cloth", // 衣服
   ACCESSORIES = "accessories", // 饰品
   BELT = "belt", // 腰带
@@ -112,22 +113,22 @@ interface EquipmentSlot {
 }
 
 // 角色弹窗中装备槽map
-export const equipmentSlots = new Map<EquipmentId, EquipmentSlot>();
-equipmentSlots.set(EquipmentId.OTHER1, { label: "其他1", imageSrc: "slots/other", position: "bottom" });
-equipmentSlots.set(EquipmentId.CLOTH, { label: "衣服", imageSrc: "slots/cloth", position: "bottom" });
-equipmentSlots.set(EquipmentId.OTHER2, { label: "其他2", imageSrc: "slots/other", position: "bottom" });
+export const equipmentSlots = new Map<EQUIPMENT_TYPE, EquipmentSlot>();
+equipmentSlots.set(EQUIPMENT_TYPE.OTHER1, { label: "其他1", imageSrc: "slots/other", position: "bottom" });
+equipmentSlots.set(EQUIPMENT_TYPE.CLOTH, { label: "衣服", imageSrc: "slots/cloth", position: "bottom" });
+equipmentSlots.set(EQUIPMENT_TYPE.OTHER2, { label: "其他2", imageSrc: "slots/other", position: "bottom" });
 
-equipmentSlots.set(EquipmentId.WEAPON, { label: "武器", imageSrc: "slots/weapon", position: "left" });
-equipmentSlots.set(EquipmentId.NECKLACE, { label: "项链", imageSrc: "slots/necklace", position: "left" });
-equipmentSlots.set(EquipmentId.RING, { label: "戒指", imageSrc: "slots/ring", position: "left" });
-equipmentSlots.set(EquipmentId.ACCESSORIES, { label: "饰品", imageSrc: "slots/accessories", position: "left" });
-equipmentSlots.set(EquipmentId.SHINGUARD, { label: "护腿", imageSrc: "slots/shinguard", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.WEAPON, { label: "武器", imageSrc: "slots/weapon", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.NECKLACE, { label: "项链", imageSrc: "slots/necklace", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.RING, { label: "戒指", imageSrc: "slots/ring", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.ACCESSORIES, { label: "饰品", imageSrc: "slots/accessories", position: "left" });
+equipmentSlots.set(EQUIPMENT_TYPE.SHINGUARD, { label: "护腿", imageSrc: "slots/shinguard", position: "left" });
 
-equipmentSlots.set(EquipmentId.HELMET, { label: "头盔", imageSrc: "slots/helmet", position: "right" });
-equipmentSlots.set(EquipmentId.SCAPULAR, { label: "肩胛", imageSrc: "slots/scapular", position: "right" });
-equipmentSlots.set(EquipmentId.BELT, { label: "腰带", imageSrc: "slots/belt", position: "right" });
-equipmentSlots.set(EquipmentId.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
-equipmentSlots.set(EquipmentId.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.HELMET, { label: "头盔", imageSrc: "slots/helmet", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.SCAPULAR, { label: "肩胛", imageSrc: "slots/scapular", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.BELT, { label: "腰带", imageSrc: "slots/belt", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
+equipmentSlots.set(EQUIPMENT_TYPE.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
 
 // 背包插槽行数和列数
 export const bagRow = 7; // 10行
@@ -199,3 +200,22 @@ roleActions.forEach((action, actionIndex) => {
     );
   });
 });
+
+// 物品类型
+export enum GOOD_TYPE {
+  GOLD = "gold", // 金
+}
+
+// 游戏中的所有基础属性
+export interface CommonAttributes {
+  // 名称
+  label: string;
+  // 等级
+  level: number;
+  // 介绍
+  description: string;
+  // 图标
+  icon: string;
+  // 出售价格
+  sellPirce: number;
+}

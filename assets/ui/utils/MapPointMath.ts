@@ -1,5 +1,5 @@
 import { Node, Size, TiledMap, Vec3 } from "cc";
-import UiHelper from "../UiHelper";
+import UiHelper from "../helpers/UiHelper";
 
 // 获取地图上尺寸偏移
 export function getMapOffset(map: TiledMap) {

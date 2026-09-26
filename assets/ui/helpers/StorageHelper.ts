@@ -1,7 +1,7 @@
-import { math, sys, utils } from "cc";
-import { levelMap, Role } from "../configs";
-import BottomBarFrame from "./components/BottomBarFrame";
-import RoleAvatarFrame from "./components/RoleAvatarFrame";
+import { sys } from "cc";
+import { levelMap, Role } from "../../configs";
+import BottomBarFrame from "../components/BottomBarFrame";
+import RoleAvatarFrame from "../components/RoleAvatarFrame";
 
 /**
  * 存储

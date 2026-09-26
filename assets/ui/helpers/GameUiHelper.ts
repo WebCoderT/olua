@@ -1,9 +1,9 @@
 import { AnimationClip, Button, Color, Label, LabelAtlas, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
-import { AnimationPlayer } from "../scripts/AnimationPlayer";
-import { BottomNavBarButton, Role, RoleInfoFramePositionsMap } from "../configs";
+import { AnimationPlayer } from "../../scripts/AnimationPlayer";
+import { BottomNavBarButton, Role, RoleInfoFramePositionsMap } from "../../configs";
 import LayerHelper from "./LayerHelper";
-import { Draggable } from "./utils/Draggable";
+import { Draggable } from "../utils/Draggable";
 
 const GameUiHelper = {
   /**

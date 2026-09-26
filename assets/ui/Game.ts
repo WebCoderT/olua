@@ -1,5 +1,5 @@
 import { _decorator, Camera, Component, PhysicsSystem, Vec3 } from "cc";
-import LayerHelper from "./LayerHelper";
+import LayerHelper from "./helpers/LayerHelper";
 import BottomBarFrame from "./components/BottomBarFrame";
 import RoleAvatarFrame from "./components/RoleAvatarFrame";
 import { ActivityController } from "./controllers/ActivityController";
@@ -37,7 +37,7 @@ export class Game extends Component {
     this.node.addComponent(ActivityController);
   }
 
-  update(deltaTime: number) {
-    RolePlayFrame.updateWorldPosition(deltaTime);
+  update() {
+    RolePlayFrame.updateWorldPosition();
   }
 }

@@ -1,8 +1,8 @@
 import { Label, Node } from "cc";
 import { Role } from "../../configs";
-import GameUiHelper from "../GameUiHelper";
-import LayerHelper from "../LayerHelper";
-import StorageHelper from "../StorageHelper";
+import GameUiHelper from "../helpers/GameUiHelper";
+import LayerHelper from "../helpers/LayerHelper";
+import StorageHelper from "../helpers/StorageHelper";
 import EffectFrame from "./EffectFrame";
 
 interface RoleAvatarFrame {

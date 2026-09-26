@@ -1,8 +1,8 @@
 import { instantiate, Node, Size, Vec2 } from "cc";
-import GameRoleUiHelper from "../GameRoleUiHelper";
-import LayerHelper from "../LayerHelper";
+import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
+import LayerHelper from "../helpers/LayerHelper";
 import { equipmentSlots } from "../../configs";
-import UiHelper from "../UiHelper";
+import UiHelper from "../helpers/UiHelper";
 
 interface RoleInformationDialog {
   dialog: Node | null;
@@ -12,8 +12,8 @@ interface RoleInformationDialog {
   rightSlots: Node[];
   // 装备槽-底部
   bottomSlots: Node[];
-  open: Function;
-  close: Function;
+  open: () => void;
+  close: () => void;
 }
 
 const RoleInformationDialog: RoleInformationDialog = {

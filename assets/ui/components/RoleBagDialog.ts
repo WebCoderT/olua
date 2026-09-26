@@ -1,8 +1,9 @@
 import { Node, Size, Vec2 } from "cc";
-import GameRoleUiHelper from "../GameRoleUiHelper";
-import LayerHelper from "../LayerHelper";
-import UiHelper from "../UiHelper";
+import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
+import LayerHelper from "../helpers/LayerHelper";
+import UiHelper from "../helpers/UiHelper";
 import { bagCol, bagRow } from "../../configs";
+import StorageHelper from "../helpers/StorageHelper";
 
 interface RoleBagDialog {
   dialog: Node | null;
@@ -10,6 +11,8 @@ interface RoleBagDialog {
   grids: Node[][];
   open: Function;
   close: Function;
+  // 读取背包数据并显示
+  readBagDataAndShow: Function;
 }
 
 const RoleBagDialog: RoleBagDialog = {
@@ -38,8 +41,13 @@ const RoleBagDialog: RoleBagDialog = {
         bag.addChild(rowNode);
       }
       RoleBagDialog.dialog.addChild(bag);
-      // 添加整理按钮
+      // 读取背包数据并显示
+      RoleBagDialog.readBagDataAndShow();
     }
+  },
+  // 读取背包数据并显示
+  readBagDataAndShow() {
+    console.log(StorageHelper.findSelectedRole().bag);
   },
   // 关闭
   close() {

@@ -1,9 +1,9 @@
 import { Node, ProgressBar, Size, Sprite, Vec2 } from "cc";
 import { BottomNavBarButton, bottomNavBarButtons, getCurrentLevelExpRate, Role } from "../../configs";
-import GameUiHelper from "../GameUiHelper";
-import StorageHelper from "../StorageHelper";
-import UiHelper from "../UiHelper";
-import LayerHelper from "../LayerHelper";
+import GameUiHelper from "../helpers/GameUiHelper";
+import StorageHelper from "../helpers/StorageHelper";
+import UiHelper from "../helpers/UiHelper";
+import LayerHelper from "../helpers/LayerHelper";
 
 interface BottomBarFrame {
   selectedRole: Role | null;
@@ -12,7 +12,7 @@ interface BottomBarFrame {
   // 经验条
   expBar: Node;
   // 更新经验条
-  updateExpBar: Function;
+  updateExpBar: () => void;
 }
 
 const BottomBarFrame: BottomBarFrame = {

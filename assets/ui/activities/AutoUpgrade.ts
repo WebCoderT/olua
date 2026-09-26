@@ -2,7 +2,7 @@
 // 又称泡点
 // 开启活动后持续时间获得经验
 import { _decorator, Component } from "cc";
-import StorageHelper from "../StorageHelper";
+import StorageHelper from "../helpers/StorageHelper";
 const { ccclass } = _decorator;
 
 @ccclass("AutoUpgrade")

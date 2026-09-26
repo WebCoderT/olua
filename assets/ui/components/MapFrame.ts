@@ -1,6 +1,6 @@
 import { Node, TiledMap, Vec3 } from "cc";
-import GameMapUiHelper from "../GameMapUiHelper";
-import LayerHelper from "../LayerHelper";
+import GameMapUiHelper from "../helpers/GameMapUiHelper";
+import LayerHelper from "../helpers/LayerHelper";
 import { getMapOffset, getMapPointPositionOnWorld } from "../utils/MapPointMath";
 import RolePlayFrame from "./RolePlayFrame";
 
@@ -8,11 +8,11 @@ interface MapFrame {
   // 地图
   map: Node | null;
   // 初始化
-  init: Function;
+  init: () => Promise<void>;
   // 初始化地图包含的对象
-  initMapObjects: Function;
+  initMapObjects: () => void;
   // 前往复活点
-  goToRevivePoint: Function;
+  goToRevivePoint: () => void;
 }
 
 const MapFrame: MapFrame = {
@@ -33,7 +33,7 @@ const MapFrame: MapFrame = {
     const point = map.getObjectGroup("objects").getObject("revive");
     if (!point) throw new Error("该地图无复活点！");
     const worldPosition = getMapPointPositionOnWorld(new Vec3(point.x, point.y), MapFrame.map);
-    RolePlayFrame.updateWorldPosition(worldPosition);
+    RolePlayFrame.updateRoleWorldPosition(worldPosition);
   },
 };
 

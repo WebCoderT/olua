@@ -1,26 +1,4 @@
-import {
-  Button,
-  Color,
-  EditBox,
-  Font,
-  Label,
-  math,
-  Node,
-  resources,
-  Sprite,
-  SpriteFrame,
-  Size,
-  UITransform,
-  Vec2,
-  view,
-  Toggle,
-  Layout,
-  ToggleContainer,
-  size,
-  utils,
-  Graphics,
-  ProgressBar,
-} from "cc";
+import { Button, Color, EditBox, Font, Label, math, Node, resources, Sprite, SpriteFrame, Size, UITransform, Vec2, view, Toggle, Layout, ToggleContainer, Graphics, ProgressBar } from "cc";
 
 /**
  * Ui界面元素统一生成
@@ -30,24 +8,26 @@ const UiHelper = {
    * 获取屏幕尺寸
    * @returns Size
    */
-  getScreenSize: () => {
-    let designSize = view.getDesignResolutionSize();
-    return designSize;
-  },
+  getScreenSize: () => view.getDesignResolutionSize(),
 
   /**
-   * 创建一个全屏的背景元素
-   * @param src 图片地址
+   * 创建全屏背景
+   * @param name 元素名称
+   * @param src 图片资源路径
    */
-  createFullScreenNode: (src: string) => {
+  createFullScreenNode: (name: string, src: string) => {
     const screenSize = UiHelper.getScreenSize();
     const node = new Node();
+    node.name = name;
     const uiTransform = node.addComponent(UITransform);
     const spriteComponent = node.addComponent(Sprite);
     spriteComponent.sizeMode = Sprite.SizeMode.CUSTOM;
     uiTransform.setContentSize(screenSize.width, screenSize.height);
     resources.load(src + "/spriteFrame", SpriteFrame, (err, sprite) => {
-      if (err) console.error(err.message);
+      if (err) {
+        console.error(err.message);
+        return;
+      }
       spriteComponent.spriteFrame = sprite;
     });
     return node;
@@ -55,10 +35,12 @@ const UiHelper = {
 
   /**
    * 创建一个操作按钮
+   * @param name 元素名称
    * @param src 图片地址
    */
-  createButton: (src: string, position: Vec2 = new Vec2(0, 0), size: Size = new Size(100, 30)) => {
+  createButton: (name: string, src: string, position: Vec2 = new Vec2(0, 0), size: Size = new Size(100, 30)) => {
     const node = new Node();
+    node.name = name;
     const uiTransform = node.addComponent(UITransform);
     const spriteComponent = node.addComponent(Sprite);
     const button = node.addComponent(Button);
@@ -78,12 +60,14 @@ const UiHelper = {
 
   /**
    * 创建一个文本标签
+   * @param name 元素名称
    * @param text 文本内容
    * @param position 位置
    * @param size 尺寸
    */
-  createLabel: (text: string, color: Color = Color.WHITE, fontSize: number = 24, position: Vec2 = new Vec2(), size: Size = new Size()) => {
+  createLabel: (name: string, text: string, color: Color = Color.WHITE, fontSize: number = 24, position: Vec2 = new Vec2(), size: Size = new Size()) => {
     const node = new Node();
+    node.name = name;
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(size.x, size.y);
     node.setPosition(position.x, position.y, 0);
@@ -104,12 +88,14 @@ const UiHelper = {
   },
   /**
    * 创建一个输入框
+   * @param name 元素名称
    * @param placeholder 占位符文本
    * @param position 位置
    * @param size 尺寸
    */
-  createInputBox: (placeholder: string, position: Vec2, size: Vec2, isPassword: boolean = false) => {
+  createInputBox: (name: string, placeholder: string, position: Vec2, size: Vec2, isPassword: boolean = false) => {
     const node = new Node();
+    node.name = name;
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(size.x, size.y);
     node.setPosition(position.x, position.y, 0);
@@ -138,13 +124,14 @@ const UiHelper = {
 
   /**
    * 创建一个图片元素
+   * @param name 元素名称
    * @param bgSrc 图片地址
    * @param position 位置
    * @param size 尺寸
    */
-  createSprite: (bgSrc: string, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
+  createSprite: (name: string, bgSrc: string, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
     const node = new Node();
-    node.name = bgSrc.replace("/", "_");
+    node.name = name;
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(size.x, size.y);
     node.setPosition(position.x, position.y, 0);
@@ -161,19 +148,21 @@ const UiHelper = {
 
   /**
    * 创建一个错误提示文本元素
+   * @param name 元素名称
    * @param text 提示文本内容
    */
-  createErrorTip: (text: string) => {
-    const node = UiHelper.createLabel(text, Color.RED, 12, new Vec2(0, 0), new Size(300, 20));
+  createErrorTip: (name: string, text: string) => {
+    const node = UiHelper.createLabel(name, text, Color.RED, 12, new Vec2(0, 0), new Size(300, 20));
     return node;
   },
 
   /**
    * 创建一个提示文本元素
+   * @param name 元素名称
    * @param text 提示文本内容
    */
-  createTip: (text: string) => {
-    const node = UiHelper.createLabel(text, Color.GREEN, 12, new Vec2(0, 0), new Size(300, 20));
+  createTip: (name: string, text: string) => {
+    const node = UiHelper.createLabel(name, text, Color.GREEN, 12, new Vec2(0, 0), new Size(300, 20));
     return node;
   },
 
@@ -188,8 +177,9 @@ const UiHelper = {
     const node = new Node();
     node.name = name;
     const toggle = node.addComponent(Toggle);
-    const spriteNode = UiHelper.createSprite(src, new Vec2(0, 0), size);
-    const selectedSpriteNode = UiHelper.createSprite(selectedSrc, new Vec2(0, 0), size);
+    node.setPosition(position.x, position.y, 0);
+    const spriteNode = UiHelper.createSprite(`${name}_unchecked`, src, new Vec2(0, 0), size);
+    const selectedSpriteNode = UiHelper.createSprite(`${name}_checked`, selectedSrc, new Vec2(0, 0), size);
     node.getComponent(UITransform).setContentSize(math.size(size.x, size.y));
     spriteNode.name = "true";
     selectedSpriteNode.name = "false";
@@ -203,12 +193,14 @@ const UiHelper = {
 
   /**
    * 创建弹性布局
+   * @param name 元素名称
    * @param spacex 横向距离
    * @param position 位置
    * @param size 尺寸
    */
-  createFlexRow: (spacex: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
+  createFlexRow: (name: string, spacex: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
     const node = new Node();
+    node.name = name;
     const layout = node.addComponent(Layout);
     layout.type = Layout.Type.HORIZONTAL;
     layout.alignHorizontal = true;
@@ -223,12 +215,14 @@ const UiHelper = {
 
   /**
    * 创建弹性布局-列
+   * @param name 元素名称
    * @param spaceY 横向距离
    * @param position 位置
    * @param size 尺寸
    */
-  createFlexCol: (spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
+  createFlexCol: (name: string, spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
     const node = new Node();
+    node.name = name;
     const layout = node.addComponent(Layout);
     layout.type = Layout.Type.VERTICAL;
     layout.alignHorizontal = true;
@@ -243,33 +237,28 @@ const UiHelper = {
 
   /**
    * 创建弹性布局
+   * @param name 元素名称
    * @param nodes 元素
    * @param spacex 横向距离
    * @param position 位置
    */
-  createToggleGroup: (nodes: Node[], spacex: number = 0, position: Vec2 = new Vec2(0, 0)) => {
+  createToggleGroup: (name: string, nodes: Node[], spacex: number = 0, position: Vec2 = new Vec2(0, 0)) => {
     const size = new Size(nodes[0].getComponent(UITransform).width, nodes[0].getComponent(UITransform).height);
     const sizes = new Size(size.width * nodes.length + spacex * (nodes.length - 1), size.y);
-    const node = UiHelper.createFlexRow(spacex, new Vec2(0, 0), sizes);
+    const node = UiHelper.createFlexRow(name, spacex, new Vec2(0, 0), sizes);
     node.addComponent(ToggleContainer);
     nodes.forEach((n) => node.addChild(n));
     node.setPosition(position.x, position.y, 0);
     return node;
   },
 
-  createBulkFrame: (size: Vec2 = new Vec2()) => {
-    const node = new Node();
-
-    return node;
-  },
-
   /**
    * 创建一个空节点，可用于确认选择体积
    * @param name 名称
-   * @param position 位置
-   * @param size 尺寸
+   * @param position 位置，默认原点
+   * @param size 尺寸，默认零尺寸
    */
-  createEmptyNode: (name: string, position?: Vec2, size?: Size) => {
+  createEmptyNode: (name: string, position: Vec2 = new Vec2(), size: Size = new Size()) => {
     const node = new Node();
     node.name = name;
     node.setPosition(position.x, position.y);
@@ -302,7 +291,7 @@ const UiHelper = {
     uiTransform.setContentSize(size);
 
     if (progressBarBgSrc) {
-      const background = UiHelper.createSprite(progressBarBgSrc, new Vec2(), size);
+      const background = UiHelper.createSprite(`${name}_background`, progressBarBgSrc, new Vec2(), size);
       progressBar.node.addChild(background);
     }
     progressBar.progress = progress;

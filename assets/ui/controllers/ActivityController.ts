@@ -1,6 +1,6 @@
 import { _decorator, Component, Node } from "cc";
 import { AutoUpgrade } from "../activities/AutoUpgrade";
-import GameUiHelper from "../GameUiHelper";
+import GameUiHelper from "../helpers/GameUiHelper";
 const { ccclass, property } = _decorator;
 
 @ccclass("ActivityController")
