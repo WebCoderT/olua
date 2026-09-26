@@ -4,7 +4,7 @@ import LayerHelper from "../LayerHelper";
 const EffectFrame = {
   // 自己升级特效播放
   selfUpgrade() {
-    LayerHelper.addToEffectLayer(GameEffectUiHelper.createUpgradeEffect());
+    LayerHelper.addToUILayer(GameEffectUiHelper.createUpgradeEffect());
   },
 };
 

@@ -3,6 +3,7 @@ import UiHelper from "./UiHelper";
 import { AnimationPlayer } from "../scripts/AnimationPlayer";
 import { BottomNavBarButton, Role, RoleInfoFramePositionsMap } from "../configs";
 import LayerHelper from "./LayerHelper";
+import { Draggable } from "./utils/Draggable";
 
 const GameUiHelper = {
   /**
@@ -173,6 +174,34 @@ const GameUiHelper = {
       })
       .start();
     LayerHelper.addToUILayer(errorTip);
+  },
+
+  /**
+   * 创建游戏通用弹窗
+   */
+  createDialog(name: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
+    const dialog = UiHelper.createSprite("common/popup-bg", position, size);
+    dialog.name = name;
+    dialog.addComponent(Draggable);
+    return dialog;
+  },
+
+  /**
+   * 创建游戏通用弹窗标题
+   */
+  createDialogTitle(title: string, position: Vec2 = new Vec2(0, 228)) {
+    const dialogTitle = UiHelper.createLabel(title, Color.WHITE, 18, position, new Size(300, 30));
+    dialogTitle.name = "dialog_title";
+    return dialogTitle;
+  },
+
+  /**
+   * 创建游戏通用关闭按钮
+   */
+  createCloseButton(position: Vec2 = new Vec2(), size: Size = new Size(30, 30)) {
+    const closeButton = UiHelper.createButton("common/close-button", position, size);
+    closeButton.name = "close_button";
+    return closeButton;
   },
 };
 

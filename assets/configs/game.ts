@@ -1,4 +1,5 @@
 import { Size, Vec2 } from "cc";
+import GameRoleUiHelper from "../ui/GameRoleUiHelper";
 
 export interface RoleOccupationInfo {
   name: string;
@@ -62,19 +63,21 @@ export interface BottomNavBarButton {
   label: string;
   icon: string;
   openLevel: number;
+  onClick: Function;
+  name: string;
 }
 
 // 主页面下方导航部分功能按键
 export const bottomNavBarButtons: BottomNavBarButton[] = [
-  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1 },
-  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1 },
-  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10 },
-  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10 },
-  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1 },
-  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1 },
-  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1 },
-  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1 },
-  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1 },
+  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
+  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
 ];
 
 // 8方向：地图或角色朝向的八个离散方向编码
