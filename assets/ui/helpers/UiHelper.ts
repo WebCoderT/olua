@@ -79,6 +79,7 @@ const UiHelper = {
     label.horizontalAlign = Label.HorizontalAlign.CENTER;
     label.verticalAlign = Label.VerticalAlign.CENTER;
     label.color = color;
+    label.enableWrapText = false;
     resources.load("fonts/msyh", Font, (err, font) => {
       if (err) console.error(err.message);
       label.font = font;

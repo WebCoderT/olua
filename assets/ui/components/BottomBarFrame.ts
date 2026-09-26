@@ -85,7 +85,7 @@ const BottomBarFrame: BottomBarFrame = {
   // 初始化血量
   initHp(role) {
     // 血量文字
-    BottomBarFrame.hpText = UiHelper.createLabel("hp_text", `${role.hp} / ${role.maxHp}`, Color.WHITE, 12, new Vec2(-421, -39), new Size(100, 10));
+    BottomBarFrame.hpText = UiHelper.createLabel("hp_text", `${role.hp} / ${role.maxHp}`, Color.WHITE, 12, new Vec2(-421, -39), new Size(120, 10));
     LayerHelper.setLayerToUILayer(BottomBarFrame.hpText);
     BottomBarFrame.node.addChild(BottomBarFrame.hpText);
     // 圆形血量显示
