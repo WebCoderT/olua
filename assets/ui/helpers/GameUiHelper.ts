@@ -8,6 +8,7 @@ import { goodsDialogSize } from "../../configs/equipments";
 import { Role } from "../../configs/role";
 import { Goods } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
+import AnimationHelper from "./AnimationHelper";
 
 export interface BottomNavBarButton {
   label: string;
@@ -292,6 +293,16 @@ const GameUiHelper = {
     }
     dialog.setPosition(position.x, position.y, 0);
     return dialog;
+  },
+
+  /**
+   * 创建角色衣服内观
+   */
+  createRoleClothInShow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    const clothInShow = UiHelper.createSprite("cloth_in_show", "", position, size);
+    LayerHelper.setLayerToUILayer(clothInShow);
+    AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, role.equipments.cloth.in, 1);
+    return clothInShow;
   },
 };
 

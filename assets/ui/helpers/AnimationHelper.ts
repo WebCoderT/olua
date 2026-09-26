@@ -15,7 +15,7 @@ const AnimationHelper = {
         return;
       }
       spriteFrames = spriteFrames.sort((a, b) => Number(a.name) - Number(b.name));
-      AnimationHelper.playOnce(name, node, spriteFrames, time);
+      AnimationHelper.play(name, node, spriteFrames, time, AnimationClip.WrapMode.Normal);
     });
   },
 
@@ -34,18 +34,39 @@ const AnimationHelper = {
    * @param node 播放动画的节点
    * @param spriteFrames 动画帧列表
    * @param time 动画播放时间
+   * @param wrapMode 播放模式
    */
-  playOnce(name: string, node: Node, spriteFrames: SpriteFrame[], time: number = 1) {
+  play(name: string, node: Node, spriteFrames: SpriteFrame[], time: number = 1, wrapMode: AnimationClip.WrapMode) {
     const animation = node.addComponent(Animation);
     const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / time);
-    clip.wrapMode = AnimationClip.WrapMode.Normal;
+    clip.wrapMode = wrapMode;
     clip.enableTrsBlending = false;
     clip.name = name;
     animation.addClip(clip, name);
-    animation.on(Animation.EventType.FINISHED, () => {
-      node.destroy();
-    });
+    if (wrapMode === AnimationClip.WrapMode.Normal)
+      animation.on(Animation.EventType.FINISHED, () => {
+        node.destroy();
+      });
     animation.play(name);
+  },
+
+  /**
+   *
+   * 通过文件夹加载并循环播放
+   * @param name 动画名称
+   * @param node 播放动画的节点
+   * @param dirSrc 动画帧存放的文件夹
+   * @param time 动画播放时间
+   */
+  playLoopWithDir(name: string, node: Node, dirSrc: string, time: number = 1) {
+    resources.loadDir(dirSrc, SpriteFrame, (err, spriteFrames) => {
+      if (err) {
+        console.error(`${name}动画帧加载失败：${err.message}`);
+        return;
+      }
+      spriteFrames = spriteFrames.sort((a, b) => Number(a.name) - Number(b.name));
+      AnimationHelper.play(name, node, spriteFrames, time, AnimationClip.WrapMode.Loop);
+    });
   },
 };
 

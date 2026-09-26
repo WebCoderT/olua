@@ -14,6 +14,10 @@ interface RoleInformationDialog {
   rightSlots: Node[];
   // 装备槽-底部
   bottomSlots: Node[];
+  // 衣服内观
+  clothInShow: Node | null;
+  // 添加衣服内观
+  createClothInShow: () => void;
   open: () => void;
   close: () => void;
 }
@@ -75,7 +79,17 @@ const RoleInformationDialog: RoleInformationDialog = {
       RoleInformationDialog.dialog.addChild(leftSlots);
       RoleInformationDialog.dialog.addChild(rightSlots);
       RoleInformationDialog.dialog.addChild(bottomSlots);
+      RoleInformationDialog.createClothInShow();
     }
+  },
+
+  // 衣服内观
+  clothInShow: null,
+  // 添加衣服内观
+  createClothInShow() {
+    const role = StorageHelper.findOnlineRole();
+    RoleInformationDialog.clothInShow = GameUiHelper.createRoleClothInShow(role, new Vec2(-73, -10), new Size(400, 400));
+    RoleInformationDialog.dialog.addChild(RoleInformationDialog.clothInShow);
   },
 
   // 关闭
