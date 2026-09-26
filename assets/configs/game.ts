@@ -1,6 +1,7 @@
 import { Size, Vec2 } from "cc";
 import GameRoleUiHelper from "../ui/GameRoleUiHelper";
 import RoleInformationDialog from "../ui/components/RoleInformationDialog";
+import RoleBagDialog from "../ui/components/RoleBagDialog";
 
 export interface RoleOccupationInfo {
   name: string;
@@ -71,7 +72,7 @@ export interface BottomNavBarButton {
 // 主页面下方导航部分功能按键
 export const bottomNavBarButtons: BottomNavBarButton[] = [
   { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: RoleInformationDialog.open, name: "personal_information_dialog" },
-  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: GameRoleUiHelper.createBagDialog, name: "bag_dialog" },
+  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: RoleBagDialog.open, name: "bag_dialog" },
   { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
   { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
   { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: GameRoleUiHelper.createPersonalInformationDialog, name: "personal_information_dialog" },
@@ -127,6 +128,10 @@ equipmentSlots.set(EquipmentId.SCAPULAR, { label: "肩胛", imageSrc: "slots/sca
 equipmentSlots.set(EquipmentId.BELT, { label: "腰带", imageSrc: "slots/belt", position: "right" });
 equipmentSlots.set(EquipmentId.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
 equipmentSlots.set(EquipmentId.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
+
+// 背包插槽行数和列数
+export const bagRow = 7; // 10行
+export const bagCol = 11; // 10列
 
 // 8方向：地图或角色朝向的八个离散方向编码
 export enum ROLE_DIRECTION {

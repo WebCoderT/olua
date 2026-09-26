@@ -203,6 +203,19 @@ const GameUiHelper = {
     closeButton.name = "close_button";
     return closeButton;
   },
+
+  /**
+   * 创建游戏大按钮
+   */
+  createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
+    const bigButton = UiHelper.createButton("common/bg-button", position, new Size(129, 54));
+    bigButton.name = name;
+    LayerHelper.setLayerToUILayer(bigButton);
+    const label = UiHelper.createLabel(text, Color.WHITE, 30, new Vec2(), new Size(129, 54));
+    LayerHelper.setLayerToUILayer(label);
+    bigButton.addChild(label);
+    return bigButton;
+  },
 };
 
 export default GameUiHelper;
