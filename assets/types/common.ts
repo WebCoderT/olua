@@ -76,19 +76,6 @@ export interface CommonAttributes {
   sellPirce: number;
 }
 
-export interface LevelConfig {
-  // 等级存储经验
-  exp: number;
-  // 等级基础最大血量
-  maxHp: number;
-  // 等级基础物理攻击
-  // 等级基础魔法攻击
-  // 等级基础道术攻击
-  // 等级基础物理防御
-  // 等级基础魔法防御
-  // 等级基础道术防御
-}
-
 // 装备类型
 export enum EQUIPMENT_TYPE {
   CLOTH = "cloth", // 衣服
@@ -118,8 +105,26 @@ export interface EquipmentSlot {
   customPosition?: Vec2;
 }
 
-// 装备接口
-export interface Equipment extends CommonAttributes {
+// 战斗属性接口
+export interface BattleAttributes {
+  /** 物理攻击 */
+  physicalAttack: [number, number];
+  /** 魔法攻击 */
+  magicAttack: [number, number];
+  /** 道术攻击 */
+  taoistAttack: [number, number];
+  /** 物理防御 */
+  physicalDefense: [number, number];
+  /** 魔法防御 */
+  magicDefense: [number, number];
+  /** 道术防御 */
+  taoistDefense: [number, number];
+  /** 最大血量 */
+  maxHp: number;
+}
+
+// 物品接口
+export interface Good extends CommonAttributes {
   // 装备类型
   type: EQUIPMENT_TYPE;
   // 职业
@@ -130,20 +135,14 @@ export interface Equipment extends CommonAttributes {
   in: string;
   // 外观
   out: string;
-  // 物理攻击
-  physicalAttack: [number, number];
-  // 魔法攻击
-  magicAttack: [number, number];
-  // 道术攻击
-  taoistAttack: [number, number];
-  // 物理防御
-  physicalDefense: [number, number];
-  // 魔法防御
-  magicDefense: [number, number];
-  // 道术防御
-  taoistDefense: [number, number];
-  // 最大血量
-  maxHp: number;
 }
 
-export type Goods = Equipment;
+// 装备接口
+export interface Equipment extends Good, BattleAttributes {}
+
+export type Goods = Equipment | Good;
+
+export interface LevelConfig extends BattleAttributes {
+  // 等级存储经验
+  exp: number;
+}
