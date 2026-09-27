@@ -1,7 +1,7 @@
 import { _decorator, Color, Component, EditBox, Node, Size, Vec2 } from "cc";
 import UiHelper from "./helpers/UiHelper";
-import SceneManager from "./SceneManager";
-import StorageHelper from "./utils/StorageHelper";
+import StorageManager from "./utils/StorageManager";
+import SceneManager from "./utils/SceneManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("Login")
@@ -36,7 +36,7 @@ export class Login extends Component {
     const logo = UiHelper.createSprite("game_logo", "logo", new Vec2(0, 200), new Size(600, 300));
     this.node.addChild(logo);
     // 清空缓存------开发时使用
-    StorageHelper.clear();
+    StorageManager.clear();
   }
 
   // 登陆事件

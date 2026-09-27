@@ -1,6 +1,6 @@
 import { Color, Node, Size, Sprite, TiledMap, Vec2, Vec3 } from "cc";
 import GameMapUiHelper from "../helpers/GameMapUiHelper";
-import LayerHelper from "../helpers/LayerHelper";
+import LayerManager from "../utils/LayerManager";
 import { getMapPointPosition } from "../utils/MapPointMath";
 import { npcs } from "../../configs/npc";
 import UiHelper from "../helpers/UiHelper";
@@ -24,7 +24,7 @@ const MapFrame: MapFrame = {
   async init() {
     MapFrame.map = await GameMapUiHelper.createMap("基础地图", "map/0");
     // MapFrame.map.setPosition(getMapOffset(MapFrame.map.getComponent(TiledMap)));
-    LayerHelper.addToMapLayer(MapFrame.map);
+    LayerManager.addToMapLayer(MapFrame.map);
     MapFrame.goToRevivePoint();
     // 添加地图上包含的所有对象
     MapFrame.initMapObjects();
@@ -43,20 +43,20 @@ const MapFrame: MapFrame = {
     const npc = npcs.get(id);
     const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 0));
     const npcLabel = UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20));
-    LayerHelper.setLayerToMapLayer(npcLabel);
+    LayerManager.setLayerToMapLayer(npcLabel);
     npcNode.addChild(npcLabel);
     const positionOnMap = getMapPointPosition(position, MapFrame.map);
     const npcSprteNode = UiHelper.createSprite("npc_sprite_node", "", new Vec2(), new Size(100, 150));
-    LayerHelper.setLayerToMapLayer(npcSprteNode);
+    LayerManager.setLayerToMapLayer(npcSprteNode);
     const npcSprite = UiHelper.createSprite("npc_sprite", "");
     npc.scale && npcSprite.setScale(npc.scale);
     npc.position && npcSprite.setPosition(npc.position);
-    LayerHelper.setLayerToMapLayer(npcSprite);
+    LayerManager.setLayerToMapLayer(npcSprite);
     AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
     npcSprteNode.addChild(npcSprite);
     npcNode.addChild(npcSprteNode);
     npcNode.setWorldPosition(positionOnMap);
-    LayerHelper.addToMapLayer(npcNode);
+    LayerManager.addToMapLayer(npcNode);
   },
   // 前往复活点
   goToRevivePoint() {

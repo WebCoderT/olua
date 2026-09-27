@@ -1,9 +1,9 @@
 import { _decorator, Component } from "cc";
 import GameRoleSelectorUiHelper from "./helpers/GameRoleSelectorUiHelper";
 import type { RoleSelectorCreateView, RoleSelectorMainView } from "./helpers/GameRoleSelectorUiHelper";
-import SceneManager from "./SceneManager";
 import { roles } from "../configs/game";
-import StorageHelper from "./utils/StorageHelper";
+import StorageManager from "./utils/StorageManager";
+import SceneManager from "./utils/SceneManager";
 const { ccclass } = _decorator;
 
 @ccclass("RoleSelector")
@@ -23,18 +23,18 @@ export class RoleSelector extends Component {
 
   beginGame() {
     if (this.ownerRoleSelectedId) {
-      StorageHelper.onlineRole(this.ownerRoleSelectedId);
+      StorageManager.onlineRole(this.ownerRoleSelectedId);
       SceneManager.loadScene("Game");
     }
   }
 
   showOwnerRolesUI() {
-    GameRoleSelectorUiHelper.updateRolePreviews(this.mainView, this.node, StorageHelper.getRoles(), (roleId) => this.onlineRole(roleId));
+    GameRoleSelectorUiHelper.updateRolePreviews(this.mainView, this.node, StorageManager.getRoles(), (roleId) => this.onlineRole(roleId));
   }
 
   private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;
-    const role = StorageHelper.findRoleById(this.ownerRoleSelectedId);
+    const role = StorageManager.findRoleById(this.ownerRoleSelectedId);
     if (!role) return;
     GameRoleSelectorUiHelper.setBeginGameEnabled(this.mainView, true);
     GameRoleSelectorUiHelper.updateSelectedRole(this.mainView, role);
@@ -67,7 +67,7 @@ export class RoleSelector extends Component {
     if (!this.createRoleView) return;
     const role = GameRoleSelectorUiHelper.readRoleForm(this.createRoleView);
     if (!role.name) return;
-    StorageHelper.createRole(role.name, role.occupation, role.sex);
+    StorageManager.createRole(role.name, role.occupation, role.sex);
     this.cancelCreateRoleUI();
     this.showOwnerRolesUI();
   }

@@ -1,6 +1,6 @@
 import { Node, resources, TiledMap, TiledMapAsset, UITransform } from "cc";
 import { loadResourcesAsync } from "../utils/ResourceLoad";
-import LayerHelper from "./LayerHelper";
+import LayerManager from "../utils/LayerManager";
 
 const GameMapUiHelper = {
   // 创建地图
@@ -12,7 +12,7 @@ const GameMapUiHelper = {
       tiledMap.tmxAsset = map;
     });
     node.children.forEach((n) => {
-      LayerHelper.setLayerToMapLayer(n);
+      LayerManager.setLayerToMapLayer(n);
     });
     return node;
   },

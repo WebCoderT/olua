@@ -1,6 +1,6 @@
 import { Camera, Vec3 } from "cc";
 import { BattleAttributes, Equipment, OECCUPATION, SEX } from "../../types/common";
-import StorageHelper from "../utils/StorageHelper";
+import StorageManager from "../utils/StorageManager";
 import { Role } from "../../configs/role";
 import { levelMap } from "../../configs/level";
 import { combatCalc as combatAttributeWeights } from "../../configs/game";
@@ -30,7 +30,7 @@ const GameHelper: GameHelper = {
     return screenPos;
   },
   checkRoleCanUseEquipment(equipment: Equipment) {
-    const role = StorageHelper.findOnlineRole();
+    const role = StorageManager.findOnlineRole();
     return equipment.level <= role.level && (equipment.sex === role.sex || equipment.sex === SEX.ALL) && (equipment.occupation === role.occupation || equipment.occupation === OECCUPATION.ALL);
   },
   // 战斗属性计算公式

@@ -1,5 +1,5 @@
 import { Node, Size, Vec2 } from "cc";
-import StorageHelper from "../utils/StorageHelper";
+import StorageManager from "../utils/StorageManager";
 import RoleBagUiHelper from "../helpers/RoleBagUiHelper";
 import { Role } from "../../configs/role";
 import { Goods, EQUIPMENT_TYPE, Equipment } from "../../types/common";
@@ -29,7 +29,7 @@ const RoleBagDialog: RoleBagDialog = {
   // 打开
   open() {
     // 打开时读取角色信息
-    RoleBagDialog.role = StorageHelper.findOnlineRole();
+    RoleBagDialog.role = StorageManager.findOnlineRole();
     if (RoleBagDialog.dialog && RoleBagDialog.dialog.active) RoleBagDialog.close();
     else {
       const { dialog, cells } = RoleBagUiHelper.createRoleBag();
@@ -73,7 +73,7 @@ const RoleBagDialog: RoleBagDialog = {
       case EQUIPMENT_TYPE.WRISTBAND:
       case EQUIPMENT_TYPE.OTHER1:
       case EQUIPMENT_TYPE.OTHER2:
-        StorageHelper.changeEquipment(good as Equipment);
+        StorageManager.changeEquipment(good as Equipment);
         break;
     }
   },

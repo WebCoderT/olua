@@ -1,8 +1,8 @@
 import { Color, Label, Node, ProgressBar, Size, Sprite, UITransform, Vec2 } from "cc";
 import GameUiHelper, { BottomNavBarButton } from "../helpers/GameUiHelper";
-import StorageHelper from "../utils/StorageHelper";
+import StorageManager from "../utils/StorageManager";
 import UiHelper from "../helpers/UiHelper";
-import LayerHelper from "../helpers/LayerHelper";
+import LayerManager from "../utils/LayerManager";
 import RoleInformationDialog from "./RoleInformationDialog";
 import RoleBagDialog from "./RoleBagDialog";
 import { getCurrentLevelExpRate } from "../../configs/level";
@@ -43,7 +43,7 @@ const BottomBarFrame: BottomBarFrame = {
   node: null,
   init(role) {
     // 初始化角色数据
-    this.selectedRole = StorageHelper.findOnlineRole();
+    this.selectedRole = StorageManager.findOnlineRole();
     // 基础UI
     // 底部导航区域
     BottomBarFrame.node = UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(0, -324), new Size(1100, 210));
@@ -65,7 +65,7 @@ const BottomBarFrame: BottomBarFrame = {
     });
     // 经验条
     BottomBarFrame.expBar = GameUiHelper.createExpBar("exp", getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp), new Vec2(0, -44.5), new Size(724, 8));
-    LayerHelper.setLayerToUILayer(BottomBarFrame.expBar);
+    LayerManager.setLayerToUILayer(BottomBarFrame.expBar);
 
     // 统一添加进底层区域
     BottomBarFrame.node.addChild(bottomNavBar);
@@ -73,7 +73,7 @@ const BottomBarFrame: BottomBarFrame = {
     // 初始化血量
     BottomBarFrame.initHp(role);
 
-    LayerHelper.addToUILayer(BottomBarFrame.node);
+    LayerManager.addToUILayer(BottomBarFrame.node);
   },
   // 经验条
   expBar: null,
@@ -85,16 +85,16 @@ const BottomBarFrame: BottomBarFrame = {
   initHp(role) {
     // 血量文字
     BottomBarFrame.hpText = UiHelper.createLabel("hp_text", `${role.hp} / ${role.maxHp}`, Color.WHITE, 12, new Vec2(-421, -39), new Size(120, 10));
-    LayerHelper.setLayerToUILayer(BottomBarFrame.hpText);
+    LayerManager.setLayerToUILayer(BottomBarFrame.hpText);
     BottomBarFrame.node.addChild(BottomBarFrame.hpText);
     // 圆形血量显示
     const hpBarSprite = UiHelper.createSprite("ho_bar_sprite", "common/max", new Vec2(-420, 12.5), new Size(90, 90));
-    LayerHelper.setLayerToUILayer(hpBarSprite);
+    LayerManager.setLayerToUILayer(hpBarSprite);
     BottomBarFrame.hpBar = UiHelper.createProgressBar("hp_bar", role.hp / role.maxHp, "", new Vec2(), new Size(90, 90));
-    LayerHelper.setLayerToUILayer(BottomBarFrame.hpBar);
+    LayerManager.setLayerToUILayer(BottomBarFrame.hpBar);
     const hpProgress = UiHelper.createSprite(`hp_bar_progress`, "common/hp", new Vec2(), new Size(90, 90));
     hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
-    LayerHelper.setLayerToUILayer(hpProgress);
+    LayerManager.setLayerToUILayer(hpProgress);
     BottomBarFrame.hpBar.addChild(hpProgress);
     hpProgress.setPosition(0, 0);
     hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);

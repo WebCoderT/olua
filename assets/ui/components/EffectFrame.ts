@@ -1,10 +1,10 @@
 import GameEffectUiHelper from "../helpers/GameEffectUiHelper";
-import LayerHelper from "../helpers/LayerHelper";
+import LayerManager from "../utils/LayerManager";
 
 const EffectFrame = {
   // 自己升级特效播放
   selfUpgrade() {
-    LayerHelper.addToUILayer(GameEffectUiHelper.createUpgradeEffect());
+    LayerManager.addToUILayer(GameEffectUiHelper.createUpgradeEffect());
   },
 };
 

@@ -12,7 +12,7 @@ import RoleDisplayFrame from "../components/RoleDisplayFrame";
 /**
  * 存储
  */
-const StorageHelper = {
+const StorageManager = {
   // 获取角色列表
   getRoles: (): Role[] => {
     const roles = sys.localStorage.getItem("roles");
@@ -25,15 +25,15 @@ const StorageHelper = {
   },
   // 创建新角色
   createRole: (name: string, occupation: Role["occupation"], sex: Role["sex"]): void => {
-    const roles = StorageHelper.getRoles();
+    const roles = StorageManager.getRoles();
     if (roles.length < 3) {
       roles.push(new Role(name, occupation, sex));
-      StorageHelper.setRoles(roles);
+      StorageManager.setRoles(roles);
     } else console.error("角色超出3个");
   },
   // 根据id获取角色
   findRoleById: (id: string) => {
-    return StorageHelper.getRoles().find((i) => i.id === id);
+    return StorageManager.getRoles().find((i) => i.id === id);
   },
   // 清空本地所有存储
   clear() {
@@ -46,21 +46,21 @@ const StorageHelper = {
   // 获取选择的角色
   findOnlineRole: () => {
     const selectedRole = sys.localStorage.getItem("selectedRole");
-    return StorageHelper.getRoles().find((i) => i.id === selectedRole);
+    return StorageManager.getRoles().find((i) => i.id === selectedRole);
   },
   // 更新在线角色
   updateOnlineRole: (role: Role) => {
-    const roles = StorageHelper.getRoles().map((i) => {
+    const roles = StorageManager.getRoles().map((i) => {
       if (i.id === role.id) {
         Object.assign(i, role);
       }
       return i;
     });
-    StorageHelper.setRoles(roles);
+    StorageManager.setRoles(roles);
   },
   // 角色获得经验(当前在线角色)
   onlineRoleGetExp: (exp: number) => {
-    const role = StorageHelper.findOnlineRole();
+    const role = StorageManager.findOnlineRole();
     role.exp += exp;
     // 确认是否升级,经验满了则升级
     if (role.exp >= levelMap.get(role.level).exp) {
@@ -77,22 +77,22 @@ const StorageHelper = {
       EffectFrame.selfUpgrade();
     }
     // 保存
-    StorageHelper.updateOnlineRole(role);
+    StorageManager.updateOnlineRole(role);
     // 更新UI
-    StorageHelper.updateUi(role);
+    StorageManager.updateUi(role);
   },
   // 更换装备
   changeEquipment(equipment: Equipment) {
     if (GameHelper.checkRoleCanUseEquipment(equipment)) {
-      const role = StorageHelper.findOnlineRole();
+      const role = StorageManager.findOnlineRole();
       // 换装备
       role.equipments[equipment.type] = equipment;
       // 属性重新计算
       Object.assign(role, GameHelper.combatCalc(role));
       // 保存
-      StorageHelper.updateOnlineRole(role);
+      StorageManager.updateOnlineRole(role);
       // 更新UI
-      StorageHelper.updateUi(role, equipment);
+      StorageManager.updateUi(role, equipment);
     }
   },
   // 更新UI
@@ -108,4 +108,4 @@ const StorageHelper = {
   },
 };
 
-export default StorageHelper;
+export default StorageManager;

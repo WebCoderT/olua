@@ -1,6 +1,6 @@
 import { Label, Node } from "cc";
 import GameUiHelper from "../helpers/GameUiHelper";
-import LayerHelper from "../helpers/LayerHelper";
+import LayerManager from "../utils/LayerManager";
 import { Role } from "../../configs/role";
 
 interface RoleAvatarFrame {
@@ -18,7 +18,7 @@ const RoleAvatarFrame: RoleAvatarFrame = {
     const avatarNodes = GameUiHelper.createRoleInfoFrame(role);
     RoleAvatarFrame.combatNumber = avatarNodes.combatNumber;
     RoleAvatarFrame.level = avatarNodes.level;
-    LayerHelper.addToUILayer(avatarNodes.node);
+    LayerManager.addToUILayer(avatarNodes.node);
   },
   // 等级
   level: null,

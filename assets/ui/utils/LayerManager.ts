@@ -10,7 +10,7 @@ enum Layer {
   UI = 1 << 5,
 }
 
-const LayerHelper = {
+const LayerManager = {
   // 角色显示效果
   roleDisplay: RoleDisplayFrame,
   // UI层
@@ -18,7 +18,7 @@ const LayerHelper = {
   // 给UI层添加元素
   addToUILayer(node: Node) {
     node.layer = Layer.UI;
-    LayerHelper.UILayer.addChild(node);
+    LayerManager.UILayer.addChild(node);
   },
   // 设置node节点图层为UI层
   setLayerToUILayer(node: Node) {
@@ -31,7 +31,7 @@ const LayerHelper = {
   // 给特效层添加元素
   addToEffectLayer(node: Node) {
     node.layer = Layer.EFFECT;
-    LayerHelper.EffectLayer.addChild(node);
+    LayerManager.EffectLayer.addChild(node);
   },
 
   // 地图层
@@ -39,7 +39,7 @@ const LayerHelper = {
   // 添加地图
   addToMapLayer(node: Node) {
     node.layer = Layer.MAP;
-    LayerHelper.MapLayer.addChild(node);
+    LayerManager.MapLayer.addChild(node);
   },
   // 设置节点图层为地图层
   setLayerToMapLayer(node: Node) {
@@ -49,9 +49,9 @@ const LayerHelper = {
 
   // 移动
   move(position: Vec3) {
-    LayerHelper.UILayer.setWorldPosition(position);
-    const cameraPosition = LayerHelper.camera.node.getWorldPosition();
-    LayerHelper.camera.node.setWorldPosition(position.x, position.y, cameraPosition.z);
+    LayerManager.UILayer.setWorldPosition(position);
+    const cameraPosition = LayerManager.camera.node.getWorldPosition();
+    LayerManager.camera.node.setWorldPosition(position.x, position.y, cameraPosition.z);
   },
 
   // 相机
@@ -59,19 +59,19 @@ const LayerHelper = {
 
   // 初始化图层
   initLayer(game: Node, camera: Camera) {
-    LayerHelper.camera = camera;
-    LayerHelper.MapLayer.layer = Layer.MAP;
-    LayerHelper.UILayer.layer = Layer.UI;
-    LayerHelper.EffectLayer.layer = Layer.EFFECT;
+    LayerManager.camera = camera;
+    LayerManager.MapLayer.layer = Layer.MAP;
+    LayerManager.UILayer.layer = Layer.UI;
+    LayerManager.EffectLayer.layer = Layer.EFFECT;
     // 摄像机设置可视图层
     camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP;
     // 添加进游戏场景
-    game.addChild(LayerHelper.MapLayer);
+    game.addChild(LayerManager.MapLayer);
     // 初始化角色显示
-    LayerHelper.roleDisplay.init(game);
-    game.addChild(LayerHelper.EffectLayer);
-    game.addChild(LayerHelper.UILayer);
+    LayerManager.roleDisplay.init(game);
+    game.addChild(LayerManager.EffectLayer);
+    game.addChild(LayerManager.UILayer);
   },
 };
 
-export default LayerHelper;
+export default LayerManager;

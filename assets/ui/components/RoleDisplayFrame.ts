@@ -1,10 +1,10 @@
 import { Animation, AnimationClip, BoxCollider2D, EventKeyboard, Input, input, Node, resources, RigidBody2D, SpriteFrame, Vec2, Vec3 } from "cc";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
-import StorageHelper from "../utils/StorageHelper";
+import StorageManager from "../utils/StorageManager";
 import { Role } from "../../configs/role";
 import { ROLE_ACTION, ROLE_DIRECTION } from "../../types/common";
 import { getRoleAnimationName, roleAnimationMap } from "../../configs/game";
-import LayerHelper from "../helpers/LayerHelper";
+import LayerManager from "../utils/LayerManager";
 import AnimationHelper from "../helpers/AnimationHelper";
 
 interface RoleDisplayFrame {
@@ -63,7 +63,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
   run: false,
   init(game: Node) {
     // 初始化角色数据
-    const role = StorageHelper.findOnlineRole();
+    const role = StorageManager.findOnlineRole();
     // 创建基础角色
     const { node, cloth, weapon } = GameRoleUiHelper.createBasicRole();
     // 添加进场景
@@ -186,7 +186,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
 
   updateRoleWorldPosition(worldPosition) {
     RoleDisplayFrame.basicRole.setWorldPosition(worldPosition);
-    LayerHelper.move(RoleDisplayFrame.basicRole.getWorldPosition());
+    LayerManager.move(RoleDisplayFrame.basicRole.getWorldPosition());
   },
 
   updateWorldPosition() {
@@ -207,7 +207,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     // 关键：直接赋值速度，有输入就动，没输入就立刻清零，彻底解决漂移
     if (RoleDisplayFrame.action === ROLE_ACTION.WALK || RoleDisplayFrame.action === ROLE_ACTION.RUN) {
       rigidBody.linearVelocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
-      LayerHelper.move(RoleDisplayFrame.basicRole.getWorldPosition());
+      LayerManager.move(RoleDisplayFrame.basicRole.getWorldPosition());
     } else {
       // 松开按键后，立刻把速度设为0，实现“松手即停”
       rigidBody.linearVelocity = Vec2.ZERO;

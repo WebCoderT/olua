@@ -1,12 +1,12 @@
 import { _decorator, Camera, Component, PhysicsSystem, Vec3 } from "cc";
-import LayerHelper from "./helpers/LayerHelper";
 import BottomBarFrame from "./components/BottomBarFrame";
 import RoleAvatarFrame from "./components/RoleAvatarFrame";
 import { ActivityController } from "./controllers/ActivityController";
 import MapFrame from "./components/MapFrame";
 import GameHelper from "./utils/GameHelper";
-import StorageHelper from "./utils/StorageHelper";
+import StorageManager from "./utils/StorageManager";
 import RoleDisplayFrame from "./components/RoleDisplayFrame";
+import LayerManager from "./utils/LayerManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -25,9 +25,9 @@ export class Game extends Component {
 
   start() {
     // 获取角色信息
-    const role = StorageHelper.findOnlineRole();
+    const role = StorageManager.findOnlineRole();
     // 初始化图层
-    LayerHelper.initLayer(this.node, this.camera);
+    LayerManager.initLayer(this.node, this.camera);
     // 初始化底部
     this.bottomBar.init(role);
     // 初始化用户头像
