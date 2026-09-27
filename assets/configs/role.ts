@@ -1,4 +1,4 @@
-import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, OECCUPATION, RELATION_SHIP, SEX } from "../types/common";
+import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, OECCUPATION, RELATION_SHIP, SEX } from "../types/common";
 import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
@@ -26,6 +26,7 @@ export class Role implements BattleAttributes {
   physicalDefense: [number, number] = [0, 0];
   magicDefense: [number, number] = [0, 0];
   taoistDefense: [number, number] = [0, 0];
+  onMap: MapId = "0";
   equipments: { [key in EQUIPMENT_TYPE]: Equipment | null } = {
     [EQUIPMENT_TYPE.CLOTH]: null,
     [EQUIPMENT_TYPE.ACCESSORIES]: null,

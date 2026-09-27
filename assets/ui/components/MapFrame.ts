@@ -5,6 +5,8 @@ import { getMapPointPosition } from "../utils/MapPointMath";
 import { npcs } from "../../configs/npc";
 import UiHelper from "../helpers/UiHelper";
 import AnimationHelper from "../helpers/AnimationHelper";
+import StorageManager from "../utils/StorageManager";
+import { maps } from "../../configs/map";
 
 interface MapFrame {
   // 地图
@@ -22,7 +24,9 @@ interface MapFrame {
 const MapFrame: MapFrame = {
   map: null,
   async init() {
-    MapFrame.map = await GameMapUiHelper.createMap("基础地图", "map/0");
+    const role = StorageManager.findOnlineRole();
+    const onMap = maps.get(role.onMap);
+    MapFrame.map = await GameMapUiHelper.createMap("map_" + role.onMap, onMap.src);
     // MapFrame.map.setPosition(getMapOffset(MapFrame.map.getComponent(TiledMap)));
     LayerManager.addToMapLayer(MapFrame.map);
     MapFrame.goToRevivePoint();
@@ -57,6 +61,7 @@ const MapFrame: MapFrame = {
     npcNode.addChild(npcSprteNode);
     npcNode.setWorldPosition(positionOnMap);
     LayerManager.addToMapLayer(npcNode);
+    npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
   },
   // 前往复活点
   goToRevivePoint() {

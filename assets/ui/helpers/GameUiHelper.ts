@@ -1,4 +1,4 @@
-import { AnimationClip, Button, Color, Label, LabelAtlas, Layout, Node, ProgressBar, resources, size, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3, Vertex } from "cc";
+import { AnimationClip, Button, Color, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, size, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3, Vertex } from "cc";
 import UiHelper from "./UiHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
 import { Draggable } from "../utils/Draggable";
@@ -203,7 +203,7 @@ const GameUiHelper = {
    * 创建游戏通用弹窗标题
    */
   createDialogTitle(name: string, title: string, position: Vec2 = new Vec2(0, 228)) {
-    const dialogTitle = UiHelper.createLabel(name, title, Color.WHITE, 18, position, new Size(300, 30));
+    const dialogTitle = UiHelper.createLabel(name, title, math.color("#FF8B8B"), 14, position, new Size(300, 30));
     LayerManager.setLayerToUILayer(dialogTitle);
     return dialogTitle;
   },

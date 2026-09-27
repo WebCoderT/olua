@@ -161,4 +161,17 @@ export interface NPC {
   scale?: Vec3;
   // 位置
   position?: Vec3;
+  // 点击事件
+  onClick?: Function;
+}
+
+// 地图编号
+export type MapId = "0";
+
+// 地图配置接口
+export interface MapConfig {
+  // 地图名称
+  label: string;
+  // 地图地址
+  src: string;
 }
