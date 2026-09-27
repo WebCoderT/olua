@@ -9,7 +9,7 @@ const GameRoleUiHelper = {
    */
   createBasicRole(): Node {
     const node = UiHelper.createSprite("basic_role", "role/0", new Vec2(), new Size(60, 70));
-    LayerHelper.setLayerToRoleLayer(node);
+    LayerHelper.setLayerToUILayer(node);
     return node;
   },
 
@@ -30,22 +30,6 @@ const GameRoleUiHelper = {
     dialog.addChild(closeButton);
     // 添加关闭功能
     closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy(), this);
-    return dialog;
-  },
-
-  /**
-   * 创建个人信息弹窗
-   */
-  createPersonalInformationDialog() {
-    const dialog = GameRoleUiHelper.createDialog("personal_information_dialog", "角色信息");
-    return dialog;
-  },
-
-  /**
-   * 创建背包弹窗
-   */
-  createBagDialog(name: string) {
-    const dialog = GameRoleUiHelper.createDialog(name, "背包");
     return dialog;
   },
 };

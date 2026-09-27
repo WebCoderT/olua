@@ -1,6 +1,5 @@
 import { Color, Label, Node, ProgressBar, Size, Sprite, UITransform, Vec2 } from "cc";
 import GameUiHelper, { BottomNavBarButton } from "../helpers/GameUiHelper";
-import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import StorageHelper from "../utils/StorageHelper";
 import UiHelper from "../helpers/UiHelper";
 import LayerHelper from "../helpers/LayerHelper";
@@ -12,13 +11,13 @@ import { Role } from "../../configs/role";
 const bottomNavBarButtons: BottomNavBarButton[] = [
   { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: () => RoleInformationDialog.open(), name: "personal_information_dialog" },
   { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: () => RoleBagDialog.open(), name: "bag_dialog" },
-  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
-  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
-  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
-  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
-  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
-  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
-  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: () => GameRoleUiHelper.createPersonalInformationDialog(), name: "personal_information_dialog" },
+  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
 ];
 
 interface BottomBarFrame {

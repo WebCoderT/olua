@@ -1,16 +1,18 @@
 import { Camera, Node, Vec2, Vec3 } from "cc";
+import RoleDisplayFrame from "../components/RoleDisplayFrame";
 
 enum Layer {
   MAP = 1 << 0,
   DROP = 1 << 1,
   MONSTER = 1 << 2,
-  ROLE = 1 << 3,
-  EFFECT = 1 << 4,
-  SKILL = 1 << 5,
-  UI = 1 << 6,
+  EFFECT = 1 << 3,
+  SKILL = 1 << 4,
+  UI = 1 << 5,
 }
 
 const LayerHelper = {
+  // 角色显示效果
+  roleDisplay: RoleDisplayFrame,
   // UI层
   UILayer: new Node("ui_layer"),
   // 给UI层添加元素
@@ -21,19 +23,6 @@ const LayerHelper = {
   // 设置node节点图层为UI层
   setLayerToUILayer(node: Node) {
     node.layer = Layer.UI;
-    return node;
-  },
-
-  // 其他角色层
-  RoleLayer: new Node("role_layer"),
-  // 给其他角色层添加元素
-  addToRoleLayer: function (node: Node): void {
-    node.layer = Layer.ROLE;
-    LayerHelper.RoleLayer.addChild(node);
-  },
-  // 设置node节点为其他角色层
-  setLayerToRoleLayer: function (node: Node): Node {
-    node.layer = Layer.ROLE;
     return node;
   },
 
@@ -73,13 +62,13 @@ const LayerHelper = {
     LayerHelper.camera = camera;
     LayerHelper.MapLayer.layer = Layer.MAP;
     LayerHelper.UILayer.layer = Layer.UI;
-    LayerHelper.RoleLayer.layer = Layer.ROLE;
     LayerHelper.EffectLayer.layer = Layer.EFFECT;
     // 摄像机设置可视图层
-    camera.visibility = Layer.UI | Layer.ROLE | Layer.EFFECT | Layer.MAP;
+    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP;
     // 添加进游戏场景
     game.addChild(LayerHelper.MapLayer);
-    game.addChild(LayerHelper.RoleLayer);
+    // 初始化角色显示
+    LayerHelper.roleDisplay.init(game);
     game.addChild(LayerHelper.EffectLayer);
     game.addChild(LayerHelper.UILayer);
   },

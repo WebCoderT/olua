@@ -15,22 +15,6 @@
       "value": 1
     },
     {
-      "name": "UiLayer",
-      "value": 64
-    },
-    {
-      "name": "SkillLayer",
-      "value": 32
-    },
-    {
-      "name": "EffectLayer",
-      "value": 16
-    },
-    {
-      "name": "RoleLayer",
-      "value": 8
-    },
-    {
       "name": "MonsterLayer",
       "value": 4
     },
