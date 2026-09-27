@@ -5,7 +5,7 @@ import LayerHelper from "./LayerHelper";
 import { Draggable } from "../utils/Draggable";
 import { RoleInfoFramePositionsMap } from "../../configs/game";
 import { Role } from "../../configs/role";
-import { Goods } from "../../types/common";
+import { BattleAttributes, Goods } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
 import AnimationHelper from "./AnimationHelper";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
@@ -321,23 +321,7 @@ const GameUiHelper = {
     contentBody.getComponent(Layout).resizeMode = Layout.ResizeMode.CONTAINER;
     LayerHelper.setLayerToUILayer(contentBody);
     goodShowAttributes.get(good.type).forEach((attr) => {
-      const goodAttribute = UiHelper.createFlexRow(attr, 10, new Vec2(), new Size(220, 20));
-      LayerHelper.setLayerToUILayer(goodAttribute);
-
-      const icon = UiHelper.createSprite("icon", "common/dot", new Vec2(), new Size(10, 10));
-      LayerHelper.setLayerToUILayer(icon);
-      goodAttribute.addChild(icon);
-
-      const label = UiHelper.createLabel(attr, goodShowAttributesLabel.get(attr), Color.WHITE, 12, new Vec2(), new Size(100, 20));
-      label.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
-      LayerHelper.setLayerToUILayer(label);
-      goodAttribute.addChild(label);
-
-      const attribute = UiHelper.createLabel(attr, good[attr], Color.WHITE, 12, new Vec2(), new Size(100, 20));
-      LayerHelper.setLayerToUILayer(attribute);
-      goodAttribute.addChild(attribute);
-
-      contentBody.addChild(goodAttribute);
+      contentBody.addChild(GameUiHelper.createAttributeLabel(attr, good[attr].toString()));
     });
 
     dialog.addChild(contentHeader);
@@ -377,6 +361,29 @@ const GameUiHelper = {
       contentDescription.getComponent(UITransform).anchorY = 0;
     }
     return dialog;
+  },
+
+  /**
+   * 创建属性标签
+   */
+  createAttributeLabel(key: keyof BattleAttributes, value: string, size: Size = new Size(220, 20)) {
+    const attributeLabel = UiHelper.createFlexRow(key, 10, new Vec2(), size);
+    LayerHelper.setLayerToUILayer(attributeLabel);
+
+    const icon = UiHelper.createSprite("icon", "common/dot", new Vec2(), new Size(10, 10));
+    LayerHelper.setLayerToUILayer(icon);
+    attributeLabel.addChild(icon);
+
+    const label = UiHelper.createLabel(key, goodShowAttributesLabel.get(key), Color.WHITE, 12, new Vec2(), new Size(50, size.height));
+    label.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+    LayerHelper.setLayerToUILayer(label);
+    attributeLabel.addChild(label);
+
+    const attribute = UiHelper.createLabel(key, value.replace(",", " - "), Color.WHITE, 12, new Vec2(), new Size(size.width - 20 - 50 - 10, size.height));
+    LayerHelper.setLayerToUILayer(attribute);
+    attributeLabel.addChild(attribute);
+
+    return attributeLabel;
   },
 
   /**

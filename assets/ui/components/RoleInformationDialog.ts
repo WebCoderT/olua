@@ -1,4 +1,4 @@
-import { instantiate, isValid, Node, Size, Vec2 } from "cc";
+import { Color, isValid, Layout, Node, Size, UITransform, Vec2 } from "cc";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import UiHelper from "../helpers/UiHelper";
@@ -7,6 +7,7 @@ import StorageHelper from "../utils/StorageHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { EQUIPMENT_TYPE } from "../../types/common";
 import { Role } from "../../configs/role";
+import { goodShowAttributesLabel } from "../../configs/good";
 
 interface RoleInformationDialog {
   dialog: Node | null;
@@ -22,6 +23,11 @@ interface RoleInformationDialog {
   createWeaponInShow: (role: Role) => void;
   // 更新节点显示
   updateDialog: (equipmentType: EQUIPMENT_TYPE) => void;
+  // 角色属性列表
+  roleAttributes: Node[];
+  // 角色属性显示UI
+  createRoleAttributeUi: (role: Role, parent: Node) => void;
+  //
   open: () => void;
   close: () => void;
 }
@@ -91,7 +97,41 @@ const RoleInformationDialog: RoleInformationDialog = {
       RoleInformationDialog.dialog.addChild(bottomSlots);
       role.equipments.cloth && RoleInformationDialog.createClothInShow(role);
       role.equipments.weapon && RoleInformationDialog.createWeaponInShow(role);
+      RoleInformationDialog.createRoleAttributeUi(role, RoleInformationDialog.dialog);
     }
+  },
+
+  // 角色属性列表
+  roleAttributes: [],
+  // 角色属性显示UI
+  createRoleAttributeUi(role, parent) {
+    // 基础布局
+    const layout = UiHelper.createFlexCol("role_attributes", 5, new Vec2(217, 205), new Size(150, 0));
+    LayerHelper.setLayerToUILayer(layout);
+    const layoutCompoent = layout.getComponent(Layout);
+    layoutCompoent.resizeMode = Layout.ResizeMode.CONTAINER;
+    layoutCompoent.padding = 10;
+    const uitransform = layout.getComponent(UITransform);
+    uitransform.setAnchorPoint(0.5, 1);
+
+    // 基础属性
+    const label = UiHelper.createLabel("role_basic_attributes", "基础属性", Color.WHITE, 14, new Vec2(), new Size(150, 14));
+    LayerHelper.setLayerToUILayer(label);
+    layout.addChild(label);
+
+    // 基础属性
+    for (const element of goodShowAttributesLabel.keys()) {
+      const node = GameUiHelper.createAttributeLabel(element, role[element].toString(), new Size(150, 20));
+      RoleInformationDialog.roleAttributes.push(node);
+      layout.addChild(node);
+    }
+
+    // 特殊属性
+    const spcialLabel = UiHelper.createLabel("role_basic_attributes", "特殊属性", Color.WHITE, 14, new Vec2(), new Size(150, 14));
+    LayerHelper.setLayerToUILayer(spcialLabel);
+    layout.addChild(spcialLabel);
+
+    parent.addChild(layout);
   },
 
   // 衣服内观
