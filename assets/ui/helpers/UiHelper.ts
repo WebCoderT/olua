@@ -1,4 +1,4 @@
-import { Button, Color, EditBox, Font, Label, math, Node, resources, Sprite, SpriteFrame, Size, UITransform, Vec2, view, Toggle, Layout, ToggleContainer, Graphics, ProgressBar } from "cc";
+import { Button, Color, EditBox, Font, isValid, Label, math, Node, resources, Sprite, SpriteFrame, Size, UITransform, Vec2, view, Toggle, Layout, ToggleContainer, Graphics, ProgressBar } from "cc";
 
 /**
  * Ui界面元素统一生成
@@ -141,7 +141,11 @@ const UiHelper = {
     spriteComponent.trim = false;
     bgSrc &&
       resources.load(bgSrc + "/spriteFrame", SpriteFrame, (err, sprite) => {
-        if (err) console.error(err.message);
+        if (err) {
+          console.error(err.message);
+          return;
+        }
+        if (!isValid(node) || !isValid(spriteComponent) || !sprite) return;
         spriteComponent.spriteFrame = sprite;
       });
     return node;
