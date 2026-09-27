@@ -287,13 +287,21 @@ const GameUiHelper = {
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
 
     // 头部
-    const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 50));
+    const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 40));
     LayerHelper.setLayerToUILayer(contentHeader);
     // 图标
     const goodImage = UiHelper.createSprite("good_image", good.icon, new Vec2(), new Size(40, 40));
     LayerHelper.setLayerToUILayer(goodImage);
     // 标题
-    const title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 20));
+    const title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 40));
+    const titleLabel = title.getComponent(Label);
+    titleLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
+    titleLabel.verticalAlign = Label.VerticalAlign.TOP;
+    titleLabel.enableWrapText = true;
+    titleLabel.isBold = true;
+    titleLabel.isItalic = true;
+    titleLabel.isUnderline = true;
+    titleLabel.lineHeight = 20;
     LayerHelper.setLayerToUILayer(title);
 
     contentHeader.addChild(goodImage);
@@ -315,6 +323,11 @@ const GameUiHelper = {
     goodShowAttributes.get(good.type).forEach((attr) => {
       const goodAttribute = UiHelper.createFlexRow(attr, 10, new Vec2(), new Size(220, 20));
       LayerHelper.setLayerToUILayer(goodAttribute);
+
+      const icon = UiHelper.createSprite("icon", "common/dot", new Vec2(), new Size(10, 10));
+      LayerHelper.setLayerToUILayer(icon);
+      goodAttribute.addChild(icon);
+
       const label = UiHelper.createLabel(attr, goodShowAttributesLabel.get(attr), Color.WHITE, 12, new Vec2(), new Size(100, 20));
       label.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
       LayerHelper.setLayerToUILayer(label);
