@@ -1,14 +1,14 @@
-import { AnimationClip, Button, Color, Label, LabelAtlas, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3, Vertex } from "cc";
+import { AnimationClip, Button, Color, Label, LabelAtlas, Layout, Node, ProgressBar, resources, size, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3, Vertex } from "cc";
 import UiHelper from "./UiHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
 import LayerHelper from "./LayerHelper";
 import { Draggable } from "../utils/Draggable";
 import { RoleInfoFramePositionsMap } from "../../configs/game";
-import { goodsDialogSize } from "../../configs/equipments";
 import { Role } from "../../configs/role";
 import { Goods } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
 import AnimationHelper from "./AnimationHelper";
+import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 
 export interface BottomNavBarButton {
   label: string;
@@ -270,28 +270,99 @@ const GameUiHelper = {
   createGoodDetailDialog(good: Goods, contentSize: Size, screenPosition: Vec3 = new Vec3()) {
     const screenSize = UiHelper.getScreenSize();
     const position = new Vec2(screenPosition.x - screenSize.width / 2, screenPosition.y - screenSize.height / 2);
-    const dialog = UiHelper.createSprite("good_detail", "common/bg", position, goodsDialogSize.get(good.type));
+    const dialog = UiHelper.createSprite("good_detail", "common/bg", position, new Size(240, 200));
     LayerHelper.setLayerToUILayer(dialog);
+
+    dialog.setPosition(position.x, position.y, 0);
+    const layout = dialog.addComponent(Layout);
+    layout.type = Layout.Type.GRID;
+    layout.alignHorizontal = true;
+    layout.resizeMode = Layout.ResizeMode.NONE;
+    layout.spacingY = 8;
+    layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    layout.node.setPosition(position.x, position.y);
+    layout.paddingLeft = 10;
+    layout.paddingRight = 10;
+    layout.paddingBottom = 10;
+    layout.resizeMode = Layout.ResizeMode.CONTAINER;
+
+    // 头部
+    const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 50));
+    LayerHelper.setLayerToUILayer(contentHeader);
+    // 图标
+    const goodImage = UiHelper.createSprite("good_image", good.icon, new Vec2(), new Size(40, 40));
+    LayerHelper.setLayerToUILayer(goodImage);
+    // 标题
+    const title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 20));
+    LayerHelper.setLayerToUILayer(title);
+
+    contentHeader.addChild(goodImage);
+    contentHeader.addChild(title);
+
+    // 介绍
+    const contentDescription = UiHelper.createLabel("content_description", good.description, Color.WHITE, 12, new Vec2(), new Size(220, 50));
+    LayerHelper.setLayerToUILayer(contentDescription);
+    const descLabel = contentDescription.getComponent(Label);
+    descLabel.lineHeight = 16;
+    descLabel.enableWrapText = true;
+    descLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
+    descLabel.overflow = Label.Overflow.RESIZE_HEIGHT;
+
+    // 属性列表
+    const contentBody = UiHelper.createFlexCol("content_body", 3, new Vec2(), new Size(220, 220));
+    contentBody.getComponent(Layout).resizeMode = Layout.ResizeMode.CONTAINER;
+    LayerHelper.setLayerToUILayer(contentBody);
+    goodShowAttributes.get(good.type).forEach((attr) => {
+      const goodAttribute = UiHelper.createFlexRow(attr, 10, new Vec2(), new Size(220, 20));
+      LayerHelper.setLayerToUILayer(goodAttribute);
+      const label = UiHelper.createLabel(attr, goodShowAttributesLabel.get(attr), Color.WHITE, 12, new Vec2(), new Size(100, 20));
+      label.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+      LayerHelper.setLayerToUILayer(label);
+      goodAttribute.addChild(label);
+
+      const attribute = UiHelper.createLabel(attr, good[attr], Color.WHITE, 12, new Vec2(), new Size(100, 20));
+      LayerHelper.setLayerToUILayer(attribute);
+      goodAttribute.addChild(attribute);
+
+      contentBody.addChild(goodAttribute);
+    });
+
+    dialog.addChild(contentHeader);
+    dialog.addChild(contentDescription);
+    dialog.addChild(contentBody);
+
+    // 脚步图标
+    const footerLogo = UiHelper.createSprite("logo", "logo", new Vec2(), new Size(220, 120));
+    LayerHelper.setLayerToUILayer(footerLogo);
+    dialog.addChild(footerLogo);
+
     // 物品在左侧
     if (screenPosition.x < screenSize.width / 2) {
       position.x += contentSize.width / 2;
       dialog.getComponent(UITransform).anchorX = 0;
+      contentHeader.getComponent(UITransform).anchorX = 0;
+      contentDescription.getComponent(UITransform).anchorX = 0;
     }
     // 物品在右侧
     if (screenPosition.x > screenSize.width / 2) {
       dialog.getComponent(UITransform).anchorX = 1;
+      contentHeader.getComponent(UITransform).anchorX = 0.5;
+      contentDescription.getComponent(UITransform).anchorX = 1;
     }
     // 物品在上册
     if (screenPosition.y > screenSize.height / 2) {
       position.y += contentSize.height / 2;
       dialog.getComponent(UITransform).anchorY = 1;
+      contentHeader.getComponent(UITransform).anchorY = 0.5;
+      contentDescription.getComponent(UITransform).anchorY = 1;
     }
     // 物品在下册
     if (screenPosition.y < screenSize.height / 2) {
       position.y -= contentSize.height / 2;
       dialog.getComponent(UITransform).anchorY = 0;
+      contentHeader.getComponent(UITransform).anchorY = 0;
+      contentDescription.getComponent(UITransform).anchorY = 0;
     }
-    dialog.setPosition(position.x, position.y, 0);
     return dialog;
   },
 

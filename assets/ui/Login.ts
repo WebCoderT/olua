@@ -33,7 +33,7 @@ export class Login extends Component {
     this.node.addChild(loginButton);
     loginButton.on(Node.EventType.TOUCH_END, this.login, this);
     // logo
-    const logo = UiHelper.createSprite("game_logo", "logo", new Vec2(0, 200), new Size(322, 219));
+    const logo = UiHelper.createSprite("game_logo", "logo", new Vec2(0, 200), new Size(600, 300));
     this.node.addChild(logo);
     // 清空缓存------开发时使用
     StorageHelper.clear();

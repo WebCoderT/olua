@@ -19,10 +19,6 @@ equipmentSlots.set(EQUIPMENT_TYPE.BELT, { label: "腰带", imageSrc: "slots/belt
 equipmentSlots.set(EQUIPMENT_TYPE.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
 equipmentSlots.set(EQUIPMENT_TYPE.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
 
-// 物品详情弹窗尺寸
-export const goodsDialogSize = new Map<EQUIPMENT_TYPE, Size>();
-goodsDialogSize.set(EQUIPMENT_TYPE.CLOTH, new Size(240, 400));
-
 // 衣服
 export const clothes: Equipment[] = [
   {
@@ -72,7 +68,7 @@ export const weapons: Equipment[] = [
   {
     type: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
-    label: "武器1",
+    label: "新手武器",
     sex: SEX.ALL,
     level: 1,
     description: "新手赠送武器，穿上此装备，开启你的旅程吧！",
