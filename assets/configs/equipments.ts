@@ -1,4 +1,4 @@
-import { Size } from "cc";
+import { Size, Vec2 } from "cc";
 import { Equipment, EQUIPMENT_TYPE, EquipmentSlot, OECCUPATION, SEX } from "../types/common";
 
 // 角色弹窗中装备槽map
@@ -43,6 +43,7 @@ export const clothes: Equipment[] = [
     magicDefense: [0, 10],
     taoistDefense: [0, 10],
     maxHp: 100,
+    inOffset: new Vec2(),
   },
   {
     type: EQUIPMENT_TYPE.CLOTH,
@@ -62,6 +63,7 @@ export const clothes: Equipment[] = [
     magicDefense: [0, 10],
     taoistDefense: [0, 10],
     maxHp: 100,
+    inOffset: new Vec2(),
   },
 ];
 
@@ -70,8 +72,8 @@ export const weapons: Equipment[] = [
   {
     type: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
-    label: "新手赠送-梁山伯&祝英台",
-    sex: SEX.BOY,
+    label: "武器1",
+    sex: SEX.ALL,
     level: 1,
     description: "新手赠送武器，穿上此装备，开启你的旅程吧！",
     sellPirce: 0,
@@ -85,12 +87,13 @@ export const weapons: Equipment[] = [
     magicDefense: [0, 0],
     taoistDefense: [0, 0],
     maxHp: 0,
+    inOffset: new Vec2(),
   },
   {
     type: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
-    label: "第一大陆-灭神-寂灭",
-    sex: SEX.BOY,
+    label: "武器2",
+    sex: SEX.ALL,
     level: 1,
     description: "第一大陆武器，只有征服第一大陆才有机会获取！拥有此武器，说明您的实力已经到达了第一大陆巅峰！",
     sellPirce: 0,
@@ -104,5 +107,46 @@ export const weapons: Equipment[] = [
     magicDefense: [0, 0],
     taoistDefense: [0, 0],
     maxHp: 0,
+    inOffset: new Vec2(),
+  },
+  {
+    type: EQUIPMENT_TYPE.WEAPON,
+    occupation: OECCUPATION.ZHAN,
+    label: "武器3",
+    sex: SEX.ALL,
+    level: 1,
+    description: "",
+    sellPirce: 0,
+    icon: "weapons/icon/3",
+    in: "weapons/in/3",
+    out: "weapons/out/3",
+    physicalAttack: [0, 20],
+    magicAttack: [0, 2],
+    taoistAttack: [0, 2],
+    physicalDefense: [0, 0],
+    magicDefense: [0, 0],
+    taoistDefense: [0, 0],
+    maxHp: 0,
+    inOffset: new Vec2(-50, 100),
+  },
+  {
+    type: EQUIPMENT_TYPE.WEAPON,
+    occupation: OECCUPATION.ZHAN,
+    label: "武器4",
+    sex: SEX.ALL,
+    level: 1,
+    description: "",
+    sellPirce: 0,
+    icon: "weapons/icon/4",
+    in: "weapons/in/4",
+    out: "weapons/out/4",
+    physicalAttack: [0, 20],
+    magicAttack: [0, 2],
+    taoistAttack: [0, 2],
+    physicalDefense: [0, 0],
+    magicDefense: [0, 0],
+    taoistDefense: [0, 0],
+    maxHp: 0,
+    inOffset: new Vec2(90, -60),
   },
 ];

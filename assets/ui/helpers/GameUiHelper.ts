@@ -308,6 +308,9 @@ const GameUiHelper = {
 
   /** 创建角色武器内观 */
   createRoleWeaponInshow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    // 内观偏移
+    position.x += role.equipments.weapon.inOffset.x;
+    position.y += role.equipments.weapon.inOffset.y;
     const weaponInShow = UiHelper.createSprite("weapon_in_show", "", position, size);
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     LayerHelper.setLayerToUILayer(weaponInShow);

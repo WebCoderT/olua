@@ -56,5 +56,7 @@ export class Role {
     this.bag[0][1] = clothes[1];
     this.bag[0][2] = weapons[0];
     this.bag[0][3] = weapons[1];
+    this.bag[0][4] = weapons[2];
+    this.bag[0][5] = weapons[3];
   }
 }

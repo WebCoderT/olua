@@ -1,5 +1,5 @@
 import { Camera, Vec3 } from "cc";
-import { Equipment } from "../../types/common";
+import { Equipment, SEX } from "../../types/common";
 import StorageHelper from "../utils/StorageHelper";
 
 interface GameHelper {
@@ -22,7 +22,7 @@ const GameHelper: GameHelper = {
   },
   checkRoleCanUseEquipment(equipment: Equipment) {
     const role = StorageHelper.findOnlineRole();
-    return equipment.level <= role.level && equipment.sex === role.sex && equipment.occupation === role.occupation;
+    return equipment.level <= role.level && (equipment.sex === role.sex || equipment.sex === SEX.ALL) && equipment.occupation === role.occupation;
   },
 };
 

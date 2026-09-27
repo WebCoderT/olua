@@ -19,6 +19,7 @@ export enum OECCUPATION {
 export enum SEX {
   BOY = "1",
   GRIL = "2",
+  ALL = "3",
 }
 
 // 关系MAP
@@ -133,6 +134,8 @@ export interface Good extends CommonAttributes {
   sex: SEX;
   // 内观
   in: string;
+  // 内观偏移
+  inOffset: Vec2;
   // 外观
   out: string;
 }
