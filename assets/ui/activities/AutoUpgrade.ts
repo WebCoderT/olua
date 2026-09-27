@@ -8,7 +8,7 @@ const { ccclass } = _decorator;
 @ccclass("AutoUpgrade")
 export class AutoUpgrade extends Component {
   // 每秒获得多少经验
-  exp = 1;
+  exp = 1111;
   // 获得经验时间间隔-秒
   stamp = 1;
   // 记时
