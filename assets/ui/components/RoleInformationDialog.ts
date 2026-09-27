@@ -1,4 +1,4 @@
-import { instantiate, Node, Size, Vec2 } from "cc";
+import { instantiate, isValid, Node, Size, Vec2 } from "cc";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerHelper from "../helpers/LayerHelper";
 import UiHelper from "../helpers/UiHelper";
@@ -33,8 +33,17 @@ const RoleInformationDialog: RoleInformationDialog = {
   slots: [],
   // 打开
   open() {
-    if (RoleInformationDialog.dialog && RoleInformationDialog.dialog.active) RoleInformationDialog.close();
-    else {
+    if (RoleInformationDialog.dialog && isValid(RoleInformationDialog.dialog) && RoleInformationDialog.dialog.active) {
+      RoleInformationDialog.close();
+      return;
+    }
+    if (RoleInformationDialog.dialog && !isValid(RoleInformationDialog.dialog)) {
+      RoleInformationDialog.dialog = null;
+      RoleInformationDialog.clothInShow = null;
+      RoleInformationDialog.weaponInShow = null;
+    }
+    RoleInformationDialog.slots.length = 0;
+    {
       // 角色信息
       const role = StorageHelper.findOnlineRole();
       RoleInformationDialog.dialog = GameRoleUiHelper.createDialog("personal_information_dialog", "角色信息");
@@ -89,10 +98,10 @@ const RoleInformationDialog: RoleInformationDialog = {
   clothInShow: null,
   // 添加衣服内观
   createClothInShow(role: Role) {
-    if (RoleInformationDialog.clothInShow) {
+    if (RoleInformationDialog.clothInShow && isValid(RoleInformationDialog.clothInShow)) {
       RoleInformationDialog.clothInShow.destroy();
-      RoleInformationDialog.clothInShow = null;
     }
+    RoleInformationDialog.clothInShow = null;
     RoleInformationDialog.clothInShow = GameUiHelper.createRoleClothInShow(role, new Vec2(-73, -10), new Size(400, 400));
     RoleInformationDialog.dialog.addChild(RoleInformationDialog.clothInShow);
   },
@@ -101,10 +110,10 @@ const RoleInformationDialog: RoleInformationDialog = {
   weaponInShow: null,
   // 添加衣服内观
   createWeaponInShow(role: Role) {
-    if (RoleInformationDialog.weaponInShow) {
+    if (RoleInformationDialog.weaponInShow && isValid(RoleInformationDialog.weaponInShow)) {
       RoleInformationDialog.weaponInShow.destroy();
-      RoleInformationDialog.weaponInShow = null;
     }
+    RoleInformationDialog.weaponInShow = null;
     RoleInformationDialog.weaponInShow = GameUiHelper.createRoleWeaponInshow(role, new Vec2(-169, 95), new Size(400, 400));
     RoleInformationDialog.dialog.addChild(RoleInformationDialog.weaponInShow);
   },
@@ -132,8 +141,10 @@ const RoleInformationDialog: RoleInformationDialog = {
   // 关闭
   close() {
     RoleInformationDialog.slots.length = 0;
-    RoleInformationDialog.dialog.destroy();
+    if (RoleInformationDialog.dialog && isValid(RoleInformationDialog.dialog)) RoleInformationDialog.dialog.destroy();
     RoleInformationDialog.dialog = null;
+    RoleInformationDialog.clothInShow = null;
+    RoleInformationDialog.weaponInShow = null;
   },
 };
 
