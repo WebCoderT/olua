@@ -146,3 +146,123 @@ export const weapons: Equipment[] = [
     inOffset: new Vec2(90, -60),
   },
 ];
+
+// 戒指
+export const rings: Equipment[] = [
+  {
+    type: EQUIPMENT_TYPE.RING,
+    occupation: OECCUPATION.ALL,
+    sex: SEX.ALL,
+    in: "",
+    inOffset: new Vec2(),
+    out: "",
+    label: "新手戒指",
+    level: 1,
+    description: "新手戒指，穿上此装备，开启你的旅程吧！",
+    icon: "item/2010210",
+    sellPirce: 0,
+    physicalAttack: [0, 1],
+    magicAttack: [0, 1],
+    taoistAttack: [0, 1],
+    physicalDefense: [0, 0],
+    magicDefense: [0, 0],
+    taoistDefense: [0, 0],
+    maxHp: 0,
+  },
+];
+
+// 项链
+export const nicklaces = [
+  {
+    type: EQUIPMENT_TYPE.NECKLACE,
+    occupation: OECCUPATION.ALL,
+    sex: SEX.ALL,
+    in: "",
+    inOffset: new Vec2(),
+    out: "",
+    label: "新手项链",
+    level: 1,
+    description: "新手项链，穿上此装备，开启你的旅程吧！",
+    icon: "item/2010310",
+    sellPirce: 0,
+    physicalAttack: [0, 1],
+    magicAttack: [0, 1],
+    taoistAttack: [0, 1],
+    physicalDefense: [0, 0],
+    magicDefense: [0, 0],
+    taoistDefense: [0, 0],
+    maxHp: 0,
+  },
+];
+
+// 鞋子
+export const shoes = [
+  {
+    type: EQUIPMENT_TYPE.SHOES,
+    occupation: OECCUPATION.ALL,
+    sex: SEX.ALL,
+    in: "",
+    inOffset: new Vec2(),
+    out: "",
+    label: "新手鞋子",
+    level: 1,
+    description: "新手鞋子，穿上此装备，开启你的旅程吧！",
+    icon: "item/2030410",
+    sellPirce: 0,
+    physicalAttack: [0, 0],
+    magicAttack: [0, 0],
+    taoistAttack: [0, 0],
+    physicalDefense: [0, 5],
+    magicDefense: [0, 5],
+    taoistDefense: [0, 5],
+    maxHp: 5,
+  },
+];
+
+// 头盔
+export const helmets = [
+  {
+    type: EQUIPMENT_TYPE.HELMET,
+    occupation: OECCUPATION.ALL,
+    sex: SEX.ALL,
+    in: "",
+    inOffset: new Vec2(),
+    out: "",
+    label: "新手头盔",
+    level: 1,
+    description: "新手头盔，穿上此装备，开启你的旅程吧！",
+    icon: "item/2030702",
+    sellPirce: 0,
+    physicalAttack: [0, 0],
+    magicAttack: [0, 0],
+    taoistAttack: [0, 0],
+    physicalDefense: [0, 5],
+    magicDefense: [0, 5],
+    taoistDefense: [0, 5],
+    maxHp: 5,
+  },
+];
+
+// 腰带
+export const belts = [
+  {
+    type: EQUIPMENT_TYPE.BELT,
+    occupation: OECCUPATION.ALL,
+    sex: SEX.ALL,
+    in: "",
+    inOffset: new Vec2(),
+    out: "",
+    label: "新手腰带",
+    level: 1,
+    description: "新手腰带，穿上此装备，开启你的旅程吧！",
+    icon: "item/2030810",
+    sellPirce: 0,
+    physicalAttack: [0, 0],
+    magicAttack: [0, 0],
+    taoistAttack: [0, 0],
+    physicalDefense: [0, 5],
+    magicDefense: [0, 5],
+    taoistDefense: [0, 5],
+    maxHp: 5,
+  },
+];

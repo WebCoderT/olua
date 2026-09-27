@@ -13,6 +13,7 @@ export enum OECCUPATION {
   ZHAN = "1",
   FA = "2",
   DAO = "3",
+  ALL = "4",
 }
 
 // 性别

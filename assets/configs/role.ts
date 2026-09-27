@@ -1,5 +1,5 @@
-import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, RELATION_SHIP, SEX } from "../types/common";
-import { clothes, weapons } from "./equipments";
+import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, OECCUPATION, RELATION_SHIP, SEX } from "../types/common";
+import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
 
@@ -58,12 +58,26 @@ export class Role implements BattleAttributes {
         this.bag[row][col] = null;
       }
     }
-    // 初始化成功后，默认赠送物品
-    this.bag[0][0] = clothes[0];
-    this.bag[0][1] = clothes[1];
-    this.bag[0][2] = weapons[0];
-    this.bag[0][3] = weapons[1];
-    this.bag[0][4] = weapons[2];
-    this.bag[0][5] = weapons[3];
+    // 初始化成功后，获得新手物品
+    const equiments = getNewRoleEquipments(this);
+    equiments.forEach((eq, index) => {
+      this.bag[Math.floor(index / bagCol)][index % bagCol] = eq;
+    });
   }
+}
+
+// 获得新手装备
+function getNewRoleEquipments(role) {
+  // 通用装备
+  const equipments = [rings[0], nicklaces[0], shoes[0], helmets[0], belts[0]];
+
+  // 根据角色职业，性别获取衣服
+  if (role.sex === SEX.BOY) {
+    if (role.occupation === OECCUPATION.ZHAN) equipments.push(clothes[0]);
+  } else {
+    if (role.occupation === OECCUPATION.ZHAN) equipments.push(clothes[1]);
+  }
+  // 根据角色职业获得武器
+  if (role.occupation === OECCUPATION.ZHAN) equipments.push(weapons[0]);
+  return equipments;
 }
