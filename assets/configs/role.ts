@@ -1,5 +1,5 @@
 import { Equipment, EQUIPMENT_TYPE, Goods, RELATION_SHIP, SEX } from "../types/common";
-import { clothes } from "./equipments";
+import { clothes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
 
@@ -54,5 +54,7 @@ export class Role {
     // 初始化成功后，默认赠送物品
     this.bag[0][0] = clothes[0];
     this.bag[0][1] = clothes[1];
+    this.bag[0][2] = weapons[0];
+    this.bag[0][3] = weapons[1];
   }
 }

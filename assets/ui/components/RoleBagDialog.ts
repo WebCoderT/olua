@@ -2,7 +2,7 @@ import { Node, Size, Vec2 } from "cc";
 import StorageHelper from "../utils/StorageHelper";
 import RoleBagUiHelper from "../helpers/RoleBagUiHelper";
 import { Role } from "../../configs/role";
-import { Goods, EQUIPMENT_TYPE } from "../../types/common";
+import { Goods, EQUIPMENT_TYPE, Equipment } from "../../types/common";
 import GameUiHelper from "../helpers/GameUiHelper";
 
 interface RoleBagDialog {
@@ -73,7 +73,7 @@ const RoleBagDialog: RoleBagDialog = {
       case EQUIPMENT_TYPE.WRISTBAND:
       case EQUIPMENT_TYPE.OTHER1:
       case EQUIPMENT_TYPE.OTHER2:
-        StorageHelper.changeEquipment(good);
+        StorageHelper.changeEquipment(good as Equipment);
         break;
     }
   },

@@ -1,16 +1,28 @@
-import { Node, Size, Vec2 } from "cc";
+import { Node, Size, Sprite, Vec2 } from "cc";
 import UiHelper from "./UiHelper";
 import LayerHelper from "./LayerHelper";
 import GameUiHelper from "./GameUiHelper";
 
 const GameRoleUiHelper = {
   /**
-   * 创建基础裸模
+   * 创建基础角色
    */
-  createBasicRole(): Node {
-    const node = UiHelper.createSprite("basic_role", "role/0", new Vec2(), new Size(60, 70));
+  createBasicRole() {
+    const node = UiHelper.createSprite("basic_role", "", new Vec2(), new Size(40, 70));
     LayerHelper.setLayerToUILayer(node);
-    return node;
+    const cloth = UiHelper.createSprite("cloth", "");
+    cloth.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    LayerHelper.setLayerToUILayer(cloth);
+    node.addChild(cloth);
+    const weapon = UiHelper.createSprite("weapon", "");
+    weapon.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    LayerHelper.setLayerToUILayer(weapon);
+    node.addChild(weapon);
+    return {
+      node,
+      cloth,
+      weapon,
+    };
   },
 
   /**

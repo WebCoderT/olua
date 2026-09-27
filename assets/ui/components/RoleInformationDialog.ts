@@ -16,6 +16,10 @@ interface RoleInformationDialog {
   clothInShow: Node | null;
   // 添加衣服内观
   createClothInShow: (role: Role) => void;
+  // 武器内观
+  weaponInShow: Node | null;
+  // 添加武器内观
+  createWeaponInShow: (role: Role) => void;
   // 更新节点显示
   updateDialog: (equipmentType: EQUIPMENT_TYPE) => void;
   open: () => void;
@@ -77,6 +81,7 @@ const RoleInformationDialog: RoleInformationDialog = {
       RoleInformationDialog.dialog.addChild(rightSlots);
       RoleInformationDialog.dialog.addChild(bottomSlots);
       role.equipments.cloth && RoleInformationDialog.createClothInShow(role);
+      role.equipments.weapon && RoleInformationDialog.createWeaponInShow(role);
     }
   },
 
@@ -84,8 +89,24 @@ const RoleInformationDialog: RoleInformationDialog = {
   clothInShow: null,
   // 添加衣服内观
   createClothInShow(role: Role) {
+    if (RoleInformationDialog.clothInShow) {
+      RoleInformationDialog.clothInShow.destroy();
+      RoleInformationDialog.clothInShow = null;
+    }
     RoleInformationDialog.clothInShow = GameUiHelper.createRoleClothInShow(role, new Vec2(-73, -10), new Size(400, 400));
     RoleInformationDialog.dialog.addChild(RoleInformationDialog.clothInShow);
+  },
+
+  // 武器内观
+  weaponInShow: null,
+  // 添加衣服内观
+  createWeaponInShow(role: Role) {
+    if (RoleInformationDialog.weaponInShow) {
+      RoleInformationDialog.weaponInShow.destroy();
+      RoleInformationDialog.weaponInShow = null;
+    }
+    RoleInformationDialog.weaponInShow = GameUiHelper.createRoleWeaponInshow(role, new Vec2(-169, 95), new Size(400, 400));
+    RoleInformationDialog.dialog.addChild(RoleInformationDialog.weaponInShow);
   },
 
   // 更新节点显示
@@ -100,20 +121,11 @@ const RoleInformationDialog: RoleInformationDialog = {
     });
     switch (equipmentType) {
       case EQUIPMENT_TYPE.CLOTH:
-        RoleInformationDialog.clothInShow && RoleInformationDialog.clothInShow.destroy() && (RoleInformationDialog.clothInShow = null);
         RoleInformationDialog.createClothInShow(role);
-      case EQUIPMENT_TYPE.ACCESSORIES:
-      case EQUIPMENT_TYPE.BELT:
-      case EQUIPMENT_TYPE.HELMET:
-      case EQUIPMENT_TYPE.NECKLACE:
-      case EQUIPMENT_TYPE.RING:
-      case EQUIPMENT_TYPE.SCAPULAR:
-      case EQUIPMENT_TYPE.SHINGUARD:
-      case EQUIPMENT_TYPE.SHOES:
+        break;
       case EQUIPMENT_TYPE.WEAPON:
-      case EQUIPMENT_TYPE.WRISTBAND:
-      case EQUIPMENT_TYPE.OTHER1:
-      case EQUIPMENT_TYPE.OTHER2:
+        RoleInformationDialog.createWeaponInShow(role);
+        break;
     }
   },
 

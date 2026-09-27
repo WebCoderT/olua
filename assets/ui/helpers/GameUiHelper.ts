@@ -300,9 +300,19 @@ const GameUiHelper = {
    */
   createRoleClothInShow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const clothInShow = UiHelper.createSprite("cloth_in_show", "", position, size);
+    clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     LayerHelper.setLayerToUILayer(clothInShow);
     AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, role.equipments.cloth.in, 1);
     return clothInShow;
+  },
+
+  /** 创建角色武器内观 */
+  createRoleWeaponInshow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    const weaponInShow = UiHelper.createSprite("weapon_in_show", "", position, size);
+    weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    LayerHelper.setLayerToUILayer(weaponInShow);
+    AnimationHelper.playLoopWithDir("weapon_in_show", weaponInShow, role.equipments.weapon.in, 1);
+    return weaponInShow;
   },
 };
 

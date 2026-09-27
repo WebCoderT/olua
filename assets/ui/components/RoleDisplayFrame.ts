@@ -5,16 +5,13 @@ import { Role } from "../../configs/role";
 import { ROLE_ACTION, ROLE_DIRECTION } from "../../types/common";
 import { getRoleAnimationName, roleAnimationMap } from "../../configs/game";
 import LayerHelper from "../helpers/LayerHelper";
+import AnimationHelper from "../helpers/AnimationHelper";
 
 interface RoleDisplayFrame {
-  // 角色信息
-  selectedRole: Role | null;
-  // 基础裸模
+  // 基础角色区域
   basicRole: Node | null;
   // 初始化
   init: (game: Node) => void;
-  // 动画组件
-  animate: Animation | null;
   // 按键方向
   up: boolean;
   down: boolean;
@@ -23,13 +20,7 @@ interface RoleDisplayFrame {
   // 奔跑
   run: boolean;
   // 操作节点处理
-  playNodeHandler: () => void;
-  // 加载裸模动画
-  loadBasicSpriteFrames: () => void;
-  // 动画切割
-  spliceAnimation: (spriteFrames: SpriteFrame[]) => void;
-  // 创建动画
-  createAnimation: (name: string, spriteFrames: SpriteFrame[]) => void;
+  addRigid: () => void;
   // 更改动画
   updateAnimationPlay: () => void;
   // 键盘监听
@@ -46,13 +37,25 @@ interface RoleDisplayFrame {
   updateRoleWorldPosition: (worldPosition: Vec3) => void;
   // 移动，修改世界定位
   updateWorldPosition: () => void;
+  // 衣服节点
+  cloth: Node | null;
+  // 动画组件
+  clothAnimate: Animation | null;
+  // 更改衣服外观
+  updateClothOutShow(role: Role): void;
+  // 武器节点
+  weapon: Node | null;
+  // 武器外观动画组件
+  weaponAnimate: Animation | null;
+  // 更改武器外观
+  updateWeaponOutShow(role: Role): void;
+  // 更改外观
+  updateOutShow(role: Role): void;
 }
 
 const RoleDisplayFrame: RoleDisplayFrame = {
-  selectedRole: null,
+  // 基础角色区域
   basicRole: null,
-  // 动画组件
-  animate: null,
   up: false,
   down: false,
   left: false,
@@ -60,22 +63,23 @@ const RoleDisplayFrame: RoleDisplayFrame = {
   run: false,
   init(game: Node) {
     // 初始化角色数据
-    this.selectedRole = StorageHelper.findOnlineRole();
-    // 创建基础裸模
-    RoleDisplayFrame.basicRole = GameRoleUiHelper.createBasicRole();
+    const role = StorageHelper.findOnlineRole();
+    // 创建基础角色
+    const { node, cloth, weapon } = GameRoleUiHelper.createBasicRole();
+    // 添加进场景
+    RoleDisplayFrame.basicRole = node;
+    RoleDisplayFrame.cloth = cloth;
+    RoleDisplayFrame.weapon = weapon;
     game.addChild(RoleDisplayFrame.basicRole);
-    // 初始化角色数据
-    RoleDisplayFrame.selectedRole = StorageHelper.findOnlineRole();
-    // 操作节点处理
-    RoleDisplayFrame.playNodeHandler();
-    // 加载裸模动画
-    RoleDisplayFrame.loadBasicSpriteFrames();
+    // 增加碰撞
+    RoleDisplayFrame.addRigid();
+    // 加载动画
+    RoleDisplayFrame.updateOutShow(role);
     // 开启监听
     RoleDisplayFrame.keyboardListener();
   },
-  // 操作节点处理
-  playNodeHandler() {
-    RoleDisplayFrame.animate = RoleDisplayFrame.basicRole.addComponent(Animation);
+  // 增加碰撞
+  addRigid() {
     const rigidBody = RoleDisplayFrame.basicRole.addComponent(RigidBody2D);
     rigidBody.gravityScale = 0;
     rigidBody.fixedRotation = true;
@@ -83,38 +87,12 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     const boxCollider = RoleDisplayFrame.basicRole.addComponent(BoxCollider2D);
     // this.boxCollider.group = GameCollisionLayer.PLAYER;
   },
-  // 加载裸模动画
-  loadBasicSpriteFrames() {
-    resources.loadDir(`role/${RoleDisplayFrame.selectedRole.sex}`, SpriteFrame, (err, spriteFrames) => {
-      if (err) {
-        console.error(`裸模动画帧加载失败：${err.message}`);
-        return;
-      }
-      RoleDisplayFrame.spliceAnimation(spriteFrames);
-    });
-  },
-  // 动画切割
-  spliceAnimation(spriteFrames) {
-    roleAnimationMap.forEach((value, key) => {
-      // 有效动画帧过滤
-      const validSpriteFrames = spriteFrames.filter((spriteFrame) => value.indexOf(Number(spriteFrame.name)) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1);
-      RoleDisplayFrame.createAnimation(key, validSpriteFrames);
-    });
-    // 完成后首次播放动画
-    RoleDisplayFrame.updateAnimationPlay();
-  },
-  // 创建动画
-  createAnimation(name: string, spriteFrames: SpriteFrame[]) {
-    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length);
-    clip.wrapMode = AnimationClip.WrapMode.Loop;
-    clip.enableTrsBlending = false;
-    clip.name = name;
-    RoleDisplayFrame.animate.addClip(clip, name);
-  },
   // 更改动画
   updateAnimationPlay() {
-    RoleDisplayFrame.animate.crossFade(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction));
+    RoleDisplayFrame.clothAnimate && RoleDisplayFrame.clothAnimate.crossFade(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), 0.2);
+    RoleDisplayFrame.weaponAnimate && RoleDisplayFrame.weaponAnimate.crossFade(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), 0.2);
   },
+
   // 键盘监听
   keyboardListener() {
     // 游戏按键监听
@@ -234,6 +212,45 @@ const RoleDisplayFrame: RoleDisplayFrame = {
       // 松开按键后，立刻把速度设为0，实现“松手即停”
       rigidBody.linearVelocity = Vec2.ZERO;
     }
+  },
+
+  // 衣服节点
+  cloth: null,
+  // 动画组件
+  clothAnimate: null,
+  // 更改衣服外观
+  updateClothOutShow(role) {
+    // 销毁动画组件
+    RoleDisplayFrame.cloth.getComponent(Animation)?.destroy();
+    RoleDisplayFrame.clothAnimate = null;
+    // 加载动画
+    if (role.equipments.cloth) {
+      RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.cloth, role.equipments.cloth.out);
+      RoleDisplayFrame.updateAnimationPlay();
+    }
+  },
+  // 武器节点
+  weapon: null,
+  // 武器外观动画组件
+  weaponAnimate: null,
+  // 更改武器外观
+  updateWeaponOutShow(role: Role) {
+    // 销毁动画组件
+    RoleDisplayFrame.weapon.getComponent(Animation)?.destroy();
+    RoleDisplayFrame.weaponAnimate = null;
+    // 加载动画
+    if (role.equipments.weapon) {
+      RoleDisplayFrame.weaponAnimate = AnimationHelper.useRoleAnimation(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.weapon, role.equipments.weapon.out);
+      RoleDisplayFrame.updateAnimationPlay();
+    }
+  },
+
+  // 更改外观
+  updateOutShow(role) {
+    // 衣服
+    RoleDisplayFrame.updateClothOutShow(role);
+    // 武器
+    RoleDisplayFrame.updateWeaponOutShow(role);
   },
 };
 

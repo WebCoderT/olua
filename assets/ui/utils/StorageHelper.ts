@@ -7,6 +7,7 @@ import { Equipment } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
 import RoleInformationDialog from "../components/RoleInformationDialog";
 import EffectFrame from "../components/EffectFrame";
+import RoleDisplayFrame from "../components/RoleDisplayFrame";
 
 /**
  * 存储
@@ -28,7 +29,6 @@ const StorageHelper = {
     if (roles.length < 3) {
       roles.push(new Role(name, occupation, sex));
       StorageHelper.setRoles(roles);
-      console.log(roles);
     } else console.error("角色超出3个");
   },
   // 根据id获取角色
@@ -67,7 +67,8 @@ const StorageHelper = {
       // 扣除升级所需经验
       role.exp -= levelMap.get(role.level).exp;
       // 升级
-      role.level += 1;
+      if (role.level >= 30) role.level = 30;
+      else role.level += 1;
       // 更新属性
       const newRole = StorageHelper.AttributeCalc(role);
       // 升级时补满血量至最大血量
@@ -88,6 +89,8 @@ const StorageHelper = {
       StorageHelper.updateOnlineRole(role);
       RoleInformationDialog.updateDialog(equipment.type);
       StorageHelper.AttributeCalc(role);
+      // 更改外观
+      RoleDisplayFrame.updateOutShow(role);
     }
   },
   // 属性计算
@@ -101,7 +104,7 @@ const StorageHelper = {
   // 计算血量
   maxHpCalc(role: Role) {
     let maxHp = 0;
-    maxHp += levelMap.get(role.level).maxHp;
+    maxHp += levelMap.get(role.level).maxHp ?? 0;
     role.equipments.cloth && (maxHp += role.equipments.cloth.maxHp);
     return maxHp;
   },
