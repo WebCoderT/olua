@@ -1,4 +1,4 @@
-import { Size, Vec2 } from "cc";
+import { Size, Vec2, Vec3 } from "cc";
 
 export interface RoleOccupationInfo {
   name: string;
@@ -149,4 +149,16 @@ export type Goods = Equipment | Good;
 export interface LevelConfig extends BattleAttributes {
   // 等级存储经验
   exp: number;
+}
+
+// npc接口
+export interface NPC {
+  // 名称
+  label: string;
+  // 地址
+  src: string;
+  // 放大倍率
+  scale?: Vec3;
+  // 位置
+  position?: Vec3;
 }

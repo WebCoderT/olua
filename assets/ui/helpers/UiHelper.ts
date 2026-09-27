@@ -130,14 +130,18 @@ const UiHelper = {
    * @param position 位置
    * @param size 尺寸
    */
-  createSprite: (name: string, bgSrc: string, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) => {
+  createSprite: (name: string, bgSrc: string, position: Vec2 = new Vec2(0, 0), size?: Size) => {
     const node = new Node();
     node.name = name;
     const uiTransform = node.addComponent(UITransform);
-    uiTransform.setContentSize(size.x, size.y);
     node.setPosition(position.x, position.y, 0);
     const spriteComponent = node.addComponent(Sprite);
-    spriteComponent.sizeMode = Sprite.SizeMode.CUSTOM;
+    if (size) {
+      uiTransform.setContentSize(size.x, size.y);
+      spriteComponent.sizeMode = Sprite.SizeMode.CUSTOM;
+    } else {
+      spriteComponent.sizeMode = Sprite.SizeMode.RAW;
+    }
     spriteComponent.trim = false;
     bgSrc &&
       resources.load(bgSrc + "/spriteFrame", SpriteFrame, (err, sprite) => {
@@ -232,7 +236,8 @@ const UiHelper = {
     const layout = node.addComponent(Layout);
     layout.type = Layout.Type.VERTICAL;
     layout.alignHorizontal = true;
-    layout.resizeMode = Layout.ResizeMode.NONE;
+    if (size.height) layout.resizeMode = Layout.ResizeMode.NONE;
+    else layout.resizeMode = Layout.ResizeMode.CONTAINER;
     layout.spacingY = spacey;
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     layout.getComponent(UITransform).height = size.height;

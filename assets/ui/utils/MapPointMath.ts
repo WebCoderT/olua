@@ -1,4 +1,4 @@
-import { Node, Size, TiledMap, Vec3 } from "cc";
+import { Node, Size, TiledMap, Vec2, Vec3 } from "cc";
 import UiHelper from "../helpers/UiHelper";
 
 // 获取地图上尺寸偏移
@@ -15,4 +15,12 @@ export function getMapPointPositionOnWorld(position: Vec3, map: Node) {
   const width = tiledMap.getMapSize().width * tiledMap.getTileSize().width;
   const mapWorldPosition = map.getWorldPosition();
   return new Vec3(position.x - width / 2 + mapWorldPosition.x, position.y - height / 2 + mapWorldPosition.y);
+}
+
+// 获取地图上点的坐标
+export function getMapPointPosition(position: Vec3, map: Node) {
+  const tiledMap = map.getComponent(TiledMap);
+  const height = tiledMap.getMapSize().height * tiledMap.getTileSize().height;
+  const width = tiledMap.getMapSize().width * tiledMap.getTileSize().width;
+  return new Vec3(position.x - width / 2, position.y - height / 2);
 }
