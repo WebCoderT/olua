@@ -69,52 +69,43 @@ const StorageHelper = {
       // 升级
       if (role.level >= 30) role.level = 30;
       else role.level += 1;
-      // 更新属性
-      const newRole = StorageHelper.AttributeCalc(role);
+      // 属性重新计算
+      Object.assign(role, GameHelper.combatCalc(role));
       // 升级时补满血量至最大血量
-      role.hp = newRole.maxHp;
+      role.hp = role.maxHp;
       // 播放升级动画
       EffectFrame.selfUpgrade();
     }
     // 保存
     StorageHelper.updateOnlineRole(role);
-    // 更新底部导航
-    BottomBarFrame.update(role);
+    // 更新UI
+    StorageHelper.updateUi(role);
   },
   // 更换装备
   changeEquipment(equipment: Equipment) {
     if (GameHelper.checkRoleCanUseEquipment(equipment)) {
       const role = StorageHelper.findOnlineRole();
+      // 换装备
       role.equipments[equipment.type] = equipment;
+      // 属性重新计算
+      Object.assign(role, GameHelper.combatCalc(role));
+      // 保存
       StorageHelper.updateOnlineRole(role);
-      RoleInformationDialog.updateDialog(equipment.type);
-      StorageHelper.AttributeCalc(role);
-      // 更改外观
-      RoleDisplayFrame.updateOutShow(role);
+      // 更新UI
+      StorageHelper.updateUi(role, equipment);
     }
   },
-  // 属性计算
-  AttributeCalc(role: Role) {
-    role.maxHp = StorageHelper.maxHpCalc(role);
-    role.combat = StorageHelper.combatCalc(role);
-    StorageHelper.updateOnlineRole(role);
+  // 更新UI
+  updateUi(role: Role, equipment?: Equipment) {
+    // 更改外观
+    RoleDisplayFrame.updateOutShow(role);
+    // 更新战斗力
     RoleAvatarFrame.update(role);
-    return role;
+    // 更新内观
+    equipment && RoleInformationDialog.updateDialog(equipment.type);
+    // 更新底部导航
+    BottomBarFrame.update(role);
   },
-  // 计算血量
-  maxHpCalc(role: Role) {
-    let maxHp = 0;
-    maxHp += levelMap.get(role.level).maxHp ?? 0;
-    role.equipments.cloth && (maxHp += role.equipments.cloth.maxHp);
-    return maxHp;
-  },
-  // 战斗力计算
-  combatCalc(role: Role) {
-    let combat = 0;
-    combat += role.maxHp * 10;
-    return combat;
-  },
-  // 判断
 };
 
 export default StorageHelper;

@@ -1,9 +1,9 @@
-import { Equipment, EQUIPMENT_TYPE, Goods, RELATION_SHIP, SEX } from "../types/common";
+import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, RELATION_SHIP, SEX } from "../types/common";
 import { clothes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
 
-export class Role {
+export class Role implements BattleAttributes {
   id: string;
   name: string;
   occupation: string;
@@ -20,6 +20,12 @@ export class Role {
   hp: number;
   bag: Array<Array<Goods | null>>;
   combat: number = 0;
+  physicalAttack: [number, number] = [0, 0];
+  magicAttack: [number, number] = [0, 0];
+  taoistAttack: [number, number] = [0, 0];
+  physicalDefense: [number, number] = [0, 0];
+  magicDefense: [number, number] = [0, 0];
+  taoistDefense: [number, number] = [0, 0];
   equipments: { [key in EQUIPMENT_TYPE]: Equipment | null } = {
     [EQUIPMENT_TYPE.CLOTH]: null,
     [EQUIPMENT_TYPE.ACCESSORIES]: null,
@@ -42,6 +48,7 @@ export class Role {
     this.sex = sex;
     this.hp = this.maxHp = levelMap.get(this.level).maxHp;
     this.combat = this.maxHp * 10;
+    this.physicalAttack = levelMap.get(this.level).physicalAttack;
 
     // 初始化背包数据
     this.bag = [];

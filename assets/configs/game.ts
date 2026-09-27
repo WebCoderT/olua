@@ -1,5 +1,5 @@
 import { Size, Vec2 } from "cc";
-import { OECCUPATION, RELATION_SHIP, ROLE_ACTION, ROLE_DIRECTION, RoleOccupationInfo } from "../types/common";
+import { BattleAttributes, OECCUPATION, RELATION_SHIP, ROLE_ACTION, ROLE_DIRECTION, RoleOccupationInfo } from "../types/common";
 
 // 角色MAP
 export const roles = new Map<OECCUPATION, RoleOccupationInfo>();
@@ -64,3 +64,13 @@ roleActions.forEach((action, actionIndex) => {
     );
   });
 });
+
+// 战斗力计算参考
+export const combatCalc = new Map<keyof BattleAttributes, number>();
+combatCalc.set("magicAttack", 5);
+combatCalc.set("physicalAttack", 5);
+combatCalc.set("taoistAttack", 5);
+combatCalc.set("magicDefense", 10);
+combatCalc.set("physicalDefense", 10);
+combatCalc.set("taoistDefense", 10);
+combatCalc.set("maxHp", 15);
