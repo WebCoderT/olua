@@ -1,4 +1,4 @@
-import { Animation, AnimationClip, Node, resources, SpriteFrame } from "cc";
+import { Animation, AnimationClip, isValid, Node, resources, SpriteFrame } from "cc";
 import { roleAnimationMap } from "../../configs/game";
 
 const AnimationHelper = {
@@ -84,6 +84,7 @@ const AnimationHelper = {
         console.error(`${name}动画帧加载失败：${err.message}`);
         return;
       }
+      if (!isValid(node) || !isValid(animate) || !spriteFrames?.length) return;
       AnimationHelper.spliceAnimation(roleAnimationMap, spriteFrames, animate);
       animate.play(name);
     });
@@ -97,7 +98,7 @@ const AnimationHelper = {
     animationMap.forEach((value, key) => {
       // 有效动画帧过滤
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => value.indexOf(Number(spriteFrame.name)) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1);
-      AnimationHelper.createAnimation(key, validSpriteFrames, animate);
+      if (validSpriteFrames.length > 0) AnimationHelper.createAnimation(key, validSpriteFrames, animate);
     });
     // // 完成后首次播放动画
     // RoleDisplayFrame.updateAnimationPlay();
