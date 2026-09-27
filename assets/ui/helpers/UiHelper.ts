@@ -238,6 +238,7 @@ const UiHelper = {
     layout.alignHorizontal = true;
     if (size.height) layout.resizeMode = Layout.ResizeMode.NONE;
     else layout.resizeMode = Layout.ResizeMode.CONTAINER;
+    if (!size.height) layout.getComponent(UITransform).setAnchorPoint(0.5, 1);
     layout.spacingY = spacey;
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     layout.getComponent(UITransform).height = size.height;

@@ -28,6 +28,7 @@ const MapFrame: MapFrame = {
     const onMap = maps.get(role.onMap);
     MapFrame.map = await GameMapUiHelper.createMap("map_" + role.onMap, onMap.src);
     // MapFrame.map.setPosition(getMapOffset(MapFrame.map.getComponent(TiledMap)));
+    LayerManager.clearMapLayer();
     LayerManager.addToMapLayer(MapFrame.map);
     MapFrame.goToRevivePoint();
     // 添加地图上包含的所有对象

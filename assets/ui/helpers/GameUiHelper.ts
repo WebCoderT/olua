@@ -238,10 +238,10 @@ const GameUiHelper = {
    * 创建游戏大按钮
    */
   createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const bigButton = UiHelper.createButton(name, "common/bg-button", position, new Size(129, 54));
+    const bigButton = UiHelper.createButton(name, "common/big-button", position, new Size(129, 54));
     bigButton.name = name;
     LayerManager.setLayerToUILayer(bigButton);
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 30, new Vec2(), new Size(129, 54));
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 20, new Vec2(), new Size(129, 54));
     LayerManager.setLayerToUILayer(label);
     bigButton.addChild(label);
     return bigButton;

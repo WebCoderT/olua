@@ -166,7 +166,14 @@ export interface NPC {
 }
 
 // 地图编号
-export type MapId = "0";
+export type MapId = "0" | "1";
+// 地图类型
+export enum MapType {
+  // 安全
+  SAFE = "0",
+  // 测试
+  TEST = "9999",
+}
 
 // 地图配置接口
 export interface MapConfig {
@@ -174,4 +181,6 @@ export interface MapConfig {
   label: string;
   // 地图地址
   src: string;
+  // 地图类型
+  type: MapType;
 }

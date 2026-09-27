@@ -3,7 +3,7 @@ import BottomBarFrame from "../components/BottomBarFrame";
 import RoleAvatarFrame from "../components/RoleAvatarFrame";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../configs/role";
-import { Equipment } from "../../types/common";
+import { Equipment, MapId } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
 import RoleInformationDialog from "../components/RoleInformationDialog";
 import EffectFrame from "../components/EffectFrame";
@@ -94,6 +94,15 @@ const StorageManager = {
       // 更新UI
       StorageManager.updateUi(role, equipment);
     }
+  },
+  // 跳转地图
+  changeOnMap(mapId: MapId) {
+    // 获取最新信息
+    const role = StorageManager.findOnlineRole();
+    // 更改所在地图
+    role.onMap = mapId;
+    // 保存
+    StorageManager.updateOnlineRole(role);
   },
   // 更新UI
   updateUi(role: Role, equipment?: Equipment) {

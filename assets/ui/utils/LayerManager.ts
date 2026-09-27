@@ -36,6 +36,10 @@ const LayerManager = {
 
   // 地图层
   MapLayer: new Node("map_layer"),
+  // 清除地图层
+  clearMapLayer() {
+    LayerManager.MapLayer.removeAllChildren();
+  },
   // 添加地图
   addToMapLayer(node: Node) {
     node.layer = Layer.MAP;
