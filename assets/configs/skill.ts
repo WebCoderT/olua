@@ -1,0 +1,373 @@
+import { OECCUPATION } from "../types/common";
+import { Role } from "./role";
+
+// 技能类型
+export enum SkillType {
+  /** 主动技能 */
+  PROACTIVE = "0",
+  /** 被动技能 */
+  PASSIVE = "1",
+  /** 状态技能 */
+  STATUS = "2",
+  /** 回复技能 */
+  REPLY = "3",
+}
+
+// 技能目标类型
+export enum SkillTargetType {
+  /** 区域 */
+  PLACE = "0",
+  /** 单体 */
+  SINGLE = "1",
+  /** 群体 */
+  MUTIPLE = "2",
+}
+
+/** 技能伤害计算系数 */
+export interface DamageCoefficient {
+  /** 基础伤害类型来源 */
+  baseType: keyof Role;
+  /** 基础伤害倍数 */
+  baseTypeRate: number;
+}
+
+// 技能接口
+export interface SkillConfig {
+  /** 技能名称 */
+  label: string;
+  /** 技能图标 */
+  icon: string;
+  /** 技能冷却时间:秒 */
+  cooldown: number;
+  /** 技能目标类型 */
+  targetType: SkillTargetType;
+  /** 技能职业 */
+  oeccupation: OECCUPATION;
+  /** 技能开启等级 */
+  level: number;
+  /** 技能描述 */
+  description: string;
+  /** 技能类型 */
+  type: SkillType;
+  /** 技能等级与伤害系数 */
+  damageCoefficients: DamageCoefficient[];
+}
+
+/** 技能ID */
+export type SkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "1006" | "1007" | "1008" | "1009" | "1010" | "1011" | "1012";
+
+/** 所有技能 */
+export const skills = new Map<SkillId, SkillConfig>();
+
+/** 插入技能数据 */
+skills.set("1000", {
+  label: "‌基础剑术",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 1,
+  description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 1 },
+    { baseType: "physicalAttack", baseTypeRate: 1.1 },
+    { baseType: "physicalAttack", baseTypeRate: 1.2 },
+    { baseType: "physicalAttack", baseTypeRate: 1.3 },
+    { baseType: "physicalAttack", baseTypeRate: 1.4 },
+    { baseType: "physicalAttack", baseTypeRate: 1.5 },
+    { baseType: "physicalAttack", baseTypeRate: 1.6 },
+    { baseType: "physicalAttack", baseTypeRate: 1.7 },
+    { baseType: "physicalAttack", baseTypeRate: 1.8 },
+    { baseType: "physicalAttack", baseTypeRate: 1.9 },
+    { baseType: "physicalAttack", baseTypeRate: 2 },
+  ],
+});
+
+skills.set("1001", {
+  label: "烈火剑法",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "战士标志性爆发技能，10级可造成‌280%~560%‌ 攻击伤害，附带15%暴击率，觉醒后还会附加灼烧效果，是PK秒杀、打BOSS爆发的核心招式",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1002", {
+  label: "刺杀剑术",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "公认的破防神技，隔位释放的第二格剑气为无属性攻击，可无视目标防御，直接穿透法师的魔法盾，是克制远程职业、挑战高防BOSS的必备技能",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1003", {
+  label: "莲月剑法",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "传奇3版本特色技能，可打出两段连击，总伤害达300%，目标防御越高伤害增幅越明显，适合团战持续黏人输出、残血收割",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1004", {
+  label: "莲月剑法",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "高伤单体技能，附加高额攻击力加成，是后期PK中终结脆皮对手的关键招式",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1005", {
+  label: "野蛮冲撞",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "全版本通用的核心控场技能，10级可冲撞4格，65%概率将等级低于自身的目标撞飞并眩晕0.8秒，用于追击敌人、分割敌方阵型、抢BOSS卡位都非常实用",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1006", {
+  label: "逐日剑法‌",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "四格范围内的突进突袭技能，可快速拉近与远程职业的距离，弥补战士手短的短板，是PK中追击残血目标的利器",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1007", {
+  label: "狮子吼",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "范围麻痹技能，可震开并麻痹周围3格内的敌人，等级高于目标时必中，被围攻时能快速脱身，团战中可打乱敌方后排输出节奏",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1008", {
+  label: "十步一杀",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "高阶专属技能，突进目标后有概率触发麻痹效果，是后期版本中打先手控制的神技",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1009", {
+  label: "半月弯刀",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "扇形范围群攻技能，可同时攻击身前半圆内的多个敌人，挂机清怪效率极高，被围时贴身释放也能快速清场突围",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1010", {
+  label: "‌护体神盾",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1011", {
+  label: "金刚护体",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});
+
+skills.set("1012", {
+  label: "‌擒龙手‌",
+  icon: "skill/1001",
+  cooldown: 1,
+  targetType: SkillTargetType.SINGLE,
+  oeccupation: OECCUPATION.ZHAN,
+  level: 10,
+  description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技",
+  type: SkillType.PROACTIVE,
+  damageCoefficients: [
+    { baseType: "physicalAttack", baseTypeRate: 3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.1 },
+    { baseType: "physicalAttack", baseTypeRate: 3.2 },
+    { baseType: "physicalAttack", baseTypeRate: 3.3 },
+    { baseType: "physicalAttack", baseTypeRate: 3.4 },
+    { baseType: "physicalAttack", baseTypeRate: 3.5 },
+    { baseType: "physicalAttack", baseTypeRate: 3.6 },
+    { baseType: "physicalAttack", baseTypeRate: 3.7 },
+    { baseType: "physicalAttack", baseTypeRate: 3.8 },
+    { baseType: "physicalAttack", baseTypeRate: 3.9 },
+    { baseType: "physicalAttack", baseTypeRate: 4 },
+  ],
+});

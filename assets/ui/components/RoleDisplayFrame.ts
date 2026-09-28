@@ -227,6 +227,9 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     if (role.equipments.cloth) {
       RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.cloth, role.equipments.cloth.out);
       RoleDisplayFrame.updateAnimationPlay();
+    } else {
+      RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(getRoleAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.cloth, "role/1");
+      RoleDisplayFrame.updateAnimationPlay();
     }
   },
   // 武器节点

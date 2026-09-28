@@ -1,31 +1,41 @@
 import { Size, Vec2, Vec3 } from "cc";
 
 export interface RoleOccupationInfo {
+  /** 名称 */
   name: string;
-  // 介绍文字的图片路径
+  /** 介绍文字的图片路径 */
   description: string;
-  // 介绍文字的图片尺寸
+  /** 介绍文字的图片尺寸 */
   descriptionSize: Size;
 }
 
 // 职业
 export enum OECCUPATION {
+  /** 战士 */
   ZHAN = "1",
+  /** 法师 */
   FA = "2",
+  /** 道士 */
   DAO = "3",
+  /** 全职业 */
   ALL = "4",
 }
 
 // 性别
 export enum SEX {
+  /** 男 */
   BOY = "1",
+  /** 女 */
   GRIL = "2",
+  /** 全性别 */
   ALL = "3",
 }
 
 // 关系MAP
 export enum RELATION_SHIP {
+  /** 自己 */
   SELF = "1",
+  /** 兄弟 */
   BROTHER = "2",
 }
 

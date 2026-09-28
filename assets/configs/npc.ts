@@ -34,3 +34,5 @@ npcs.set("26", { label: "未知-26", src: "npc/26" });
 npcs.set("27", { label: "未知-27", src: "npc/27" });
 npcs.set("28", { label: "未知-28", src: "npc/28" });
 npcs.set("29", { label: "未知-29", src: "npc/29" });
+
+npcs.set("30", { label: "王者之剑-试炼", src: "npc/1" });

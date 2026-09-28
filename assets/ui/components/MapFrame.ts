@@ -17,6 +17,8 @@ interface MapFrame {
   initMapObjects: () => void;
   // 创建npc
   createNpc: (id: string, position: Vec3) => void;
+  // 创建npc怪物
+  createNpcMonster: (id: string, position: Vec3) => void;
   // 前往复活点
   goToRevivePoint: () => void;
 }
@@ -38,15 +40,24 @@ const MapFrame: MapFrame = {
   initMapObjects() {
     const objects = MapFrame.map.getComponent(TiledMap).getObjectGroup("objects");
     objects.getObjects().forEach((object) => {
-      if (object.properties.id && object.properties.type === "npc") {
-        MapFrame.createNpc(object.properties.id as string, new Vec3(object.x, object.y));
+      if (object.properties.id) {
+        switch (object.properties.type) {
+          case "npc":
+            MapFrame.createNpc(object.properties.id as string, new Vec3(object.x, object.y));
+            break;
+          case "monster":
+            MapFrame.createNpcMonster(object.properties.id as string, new Vec3(object.x, object.y));
+            break;
+          default:
+            break;
+        }
       }
     });
   },
   // 添加NPC
   createNpc(id, position) {
     const npc = npcs.get(id);
-    const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 0));
+    const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
     const npcLabel = UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20));
     LayerManager.setLayerToMapLayer(npcLabel);
     npcNode.addChild(npcLabel);
@@ -64,6 +75,12 @@ const MapFrame: MapFrame = {
     LayerManager.addToMapLayer(npcNode);
     npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
   },
+
+  // 添加NPC怪物，比如试炼
+  createNpcMonster(id, position) {
+    MapFrame.createNpc(id, position);
+  },
+
   // 前往复活点
   goToRevivePoint() {
     const map = MapFrame.map.getComponent(TiledMap);
