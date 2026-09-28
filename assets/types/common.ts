@@ -40,7 +40,7 @@ export enum RELATION_SHIP {
 }
 
 // 8方向：地图或角色朝向的八个离散方向编码
-export enum ROLE_DIRECTION {
+export enum DIRECTION {
   // 上
   UP = "up",
   // 右上
@@ -60,13 +60,15 @@ export enum ROLE_DIRECTION {
 }
 
 // 动作：角色或NPC可能的动作状态，用以控制动画与移动逻辑
-export enum ROLE_ACTION {
+export enum ACTION {
   // 站立
   STAND = "stand",
   // 走路
   WALK = "walk",
   // 跑动
   RUN = "run",
+  /** 攻击 */
+  ATTACK = "attack",
 }
 
 // 物品类型
@@ -254,12 +256,20 @@ export type SkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "100
 export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   /** 图标 */
   icon: string;
-  // 内观
-  in: string;
-  // 内观偏移
-  inOffset: Vec2;
   // 外观
   out: string;
   /** 外观偏移 */
   outOffset: Vec2;
+  /** 怪物选中区域 */
+  contentSize: Size;
+  /** 怪物每个动作对应时长
+   * 每一个怪物都不同，没有添加
+   */
+  actionSpeed: Map<ACTION, number>;
+}
+
+/** 生成的怪物接口 */
+export interface Monster extends MonsterConfig {
+  /** 当前血量 */
+  hp: number;
 }

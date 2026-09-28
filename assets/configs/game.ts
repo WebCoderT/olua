@@ -1,5 +1,5 @@
 import { Size, Vec2 } from "cc";
-import { BattleAttributes, OECCUPATION, RELATION_SHIP, ROLE_ACTION, ROLE_DIRECTION, RoleOccupationInfo, SkillId } from "../types/common";
+import { BattleAttributes, OECCUPATION, RELATION_SHIP, ACTION, DIRECTION, RoleOccupationInfo, SkillId } from "../types/common";
 
 // 角色MAP
 export const roles = new Map<OECCUPATION, RoleOccupationInfo>();
@@ -28,38 +28,63 @@ RoleInfoFramePositionsMap.set(RELATION_SHIP.BROTHER, new Vec2());
 export const bagRow = 7; // 10行
 export const bagCol = 11; // 10列
 
-// 角色动作顺序
-export const roleActions: ROLE_ACTION[] = [ROLE_ACTION.STAND, ROLE_ACTION.WALK, ROLE_ACTION.RUN];
-
-// 角色方向顺序
-export const roleDirections: ROLE_DIRECTION[] = [
-  ROLE_DIRECTION.UP,
-  ROLE_DIRECTION.RIGHT_UP,
-  ROLE_DIRECTION.RIGHT,
-  ROLE_DIRECTION.RIGHT_DOWN,
-  ROLE_DIRECTION.DOWN,
-  ROLE_DIRECTION.LEFT_DOWN,
-  ROLE_DIRECTION.LEFT,
-  ROLE_DIRECTION.LEFT_UP,
-];
-
 // 获取角色动画名称,实现归一化
-export function getRoleAnimationName(action: ROLE_ACTION, direction: ROLE_DIRECTION) {
+export function getAnimationName(action: ACTION, direction: DIRECTION) {
   return `${action}_${direction}`;
 }
 
-// 角色裸模动画长度（动作+方向）
-export const roleBasicSpriteFrameInterval = 8;
+// 方向顺序
+export const directions: DIRECTION[] = [DIRECTION.UP, DIRECTION.RIGHT_UP, DIRECTION.RIGHT, DIRECTION.RIGHT_DOWN, DIRECTION.DOWN, DIRECTION.LEFT_DOWN, DIRECTION.LEFT, DIRECTION.LEFT_UP];
 
+// 角色动作顺序
+export const roleActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN, ACTION.ATTACK];
+// 动画长度（动作+方向）
+export const roleSpriteFrameLength = new Map<ACTION, number>([
+  [ACTION.STAND, 8],
+  [ACTION.WALK, 8],
+  [ACTION.RUN, 8],
+  [ACTION.ATTACK, 2],
+]);
 // 角色拥有动画map
 export const roleAnimationMap = new Map<string, number[]>();
 // 角色动画map填入数据
 roleActions.forEach((action, actionIndex) => {
-  roleDirections.forEach((direction, directionIndex) => {
+  directions.forEach((direction, directionIndex) => {
     roleAnimationMap.set(
-      getRoleAnimationName(action, direction),
-      Array.from({ length: roleBasicSpriteFrameInterval }, (v, k) => {
-        return actionIndex * roleDirections.length * roleBasicSpriteFrameInterval + directionIndex * roleBasicSpriteFrameInterval + k;
+      getAnimationName(action, direction),
+      Array.from({ length: roleSpriteFrameLength.get(action) }, (v, k) => {
+        /** 按照每个动作，每个方向进行计数，并且截取正确的数据长度 */
+        return actionIndex * directions.length * roleSpriteFrameLength + directionIndex * roleSpriteFrameLength + k;
+      }),
+    );
+  });
+});
+/** 角色每个动作对应时长
+ *  1 代表 1秒1个循环
+ *  0.5 代表1秒2个循环
+ * 可通过修改此表修改角色动作时长
+ * 比如攻速：1，则1秒攻击1次，0.5，则表示1秒攻击两次
+ * */
+export const roleActionSpeed = new Map<ACTION, number>([
+  [ACTION.STAND, 1],
+  [ACTION.WALK, 1],
+  [ACTION.RUN, 1],
+  [ACTION.ATTACK, 1],
+]);
+
+/** 怪物动作顺序 */
+export const monsterActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN];
+/** 怪物动画帧长度 */
+export const monsterSpriteFrameInterval = 10;
+/** 怪物拥有动画映射 */
+export const monsterAnimation = new Map<string, number[]>();
+/** 怪物动画map填入数据 */
+monsterActions.forEach((action, actionIndex) => {
+  directions.forEach((direction, directionIndex) => {
+    monsterAnimation.set(
+      getAnimationName(action, direction),
+      Array.from({ length: monsterSpriteFrameInterval }, (v, k) => {
+        return actionIndex * directions.length * monsterSpriteFrameInterval + directionIndex * monsterSpriteFrameInterval + k;
       }),
     );
   });

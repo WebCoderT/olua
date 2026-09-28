@@ -1,5 +1,5 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteFrame } from "cc";
-import { roleAnimationMap } from "../../configs/game";
+import { monsterAnimation, roleAnimationMap } from "../../configs/game";
 
 const AnimationHelper = {
   /**
@@ -78,6 +78,27 @@ const AnimationHelper = {
    * @param time 动画播放时间
    */
   useRoleAnimation(name: string, node: Node, dirSrc: string, time: number = 1) {
+    return AnimationHelper.useManyNameAnimation(name, node, dirSrc, time, roleAnimationMap);
+  },
+
+  /** 使用怪物动画
+   * @param name 首次播放动画名称
+   * @param node 播放动画的节点
+   * @param dirSrc 动画帧存放的文件夹
+   * @param time 动画播放时间
+   */
+  useMonsterAnimation(name: string, node: Node, dirSrc: string, time: number = 1) {
+    return AnimationHelper.useManyNameAnimation(name, node, dirSrc, time, monsterAnimation);
+  },
+
+  /** 使用多个名称的动画
+   * @param name 首次播放动画名称
+   * @param node 播放动画的节点
+   * @param dirSrc 动画帧存放的文件夹
+   * @param time 动画播放时间
+   * @param map 动画映射
+   */
+  useManyNameAnimation(name: string, node: Node, dirSrc: string, time: number = 1, map: Map<string, number[]>) {
     const animate = node.addComponent(Animation);
     resources.loadDir(dirSrc, SpriteFrame, (err, spriteFrames) => {
       if (err) {
@@ -85,7 +106,7 @@ const AnimationHelper = {
         return;
       }
       if (!isValid(node) || !isValid(animate) || !spriteFrames?.length) return;
-      AnimationHelper.spliceAnimation(roleAnimationMap, spriteFrames, animate);
+      AnimationHelper.spliceAnimation(map, spriteFrames, animate, time);
       animate.play(name);
     });
     return animate;
@@ -94,22 +115,20 @@ const AnimationHelper = {
   /**
    * 动画切割成多个
    */
-  spliceAnimation(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], animate: Animation) {
+  spliceAnimation(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], animate: Animation, time: number = 1) {
     animationMap.forEach((value, key) => {
       // 有效动画帧过滤
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => value.indexOf(Number(spriteFrame.name)) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1);
-      if (validSpriteFrames.length > 0) AnimationHelper.createAnimation(key, validSpriteFrames, animate);
+      if (validSpriteFrames.length > 0) AnimationHelper.createAnimation(key, validSpriteFrames, animate, time);
     });
-    // // 完成后首次播放动画
-    // RoleDisplayFrame.updateAnimationPlay();
   },
   /**
    * 切割后创建动画
    * @param name 动画名称
    * @param spriteFrames 动画帧
    */
-  createAnimation(name: string, spriteFrames: SpriteFrame[], animate: Animation) {
-    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length);
+  createAnimation(name: string, spriteFrames: SpriteFrame[], animate: Animation, time: number = 1) {
+    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / time);
     clip.wrapMode = AnimationClip.WrapMode.Loop;
     clip.enableTrsBlending = false;
     clip.name = name;

@@ -138,6 +138,36 @@ const GameUiHelper = {
     return expBar;
   },
 
+  /** 创建血条 */
+  createHpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    const hpBar = UiHelper.createProgressBar(name, progress, "common/bg_gray", position, size);
+    const hpProgress = UiHelper.createSprite(`${name}_progress`, "common/bg_white", new Vec2(), size);
+    hpProgress.getComponent(Sprite).color = Color.RED;
+    hpBar.addChild(hpProgress);
+    hpBar.getComponent(ProgressBar).barSprite = hpProgress.getComponent(Sprite);
+    return hpBar;
+  },
+
+  /** 创建头部信息 */
+  createHead(name: string, label: string, hp: number, maxHp: number) {
+    /** 头部信息栏父节点 */
+    const head = UiHelper.createFlexCol(name, 3, new Vec2(0, 100), new Size(100, 0));
+    head.getComponent(UITransform).setAnchorPoint(0.5, 0);
+    /** 角色名称显示节点 */
+    const roleName = UiHelper.createLabel("role_name", label, Color.WHITE, 10, new Vec2(), new Size(100, 10));
+    head.addChild(roleName);
+    /** 文字称号 */
+    const roleTitle = UiHelper.createLabel("role_title", "- 战神 * 女武神 -", Color.RED, 10, new Vec2(), new Size(100, 12));
+    head.addChild(roleTitle);
+    /** 血量进度条 */
+    const roleHp = GameUiHelper.createHpBar("", hp / maxHp, new Vec2(), new Size(80, 4));
+    head.addChild(roleHp);
+    /** 血量文字显示 */
+    const roleHpText = UiHelper.createLabel("role_name", `${hp} / ${maxHp}`, Color.WHITE, 8, new Vec2(), new Size(100, 8));
+    head.addChild(roleHpText);
+    return head;
+  },
+
   /**
    * 创建错误提示
    * @param error 错误信息

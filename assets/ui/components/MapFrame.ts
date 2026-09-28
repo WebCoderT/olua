@@ -8,6 +8,7 @@ import AnimationHelper from "../helpers/AnimationHelper";
 import StorageManager from "../utils/StorageManager";
 import { maps } from "../../configs/map";
 import { addObstacleCollider } from "../utils/utils";
+import Monsters from "./Monsters";
 
 interface MapFrame {
   // 地图
@@ -18,8 +19,6 @@ interface MapFrame {
   initMapObjects: () => void;
   // 创建npc
   createNpc: (id: string, position: Vec3) => void;
-  // 创建npc怪物
-  createNpcMonster: (id: string, position: Vec3) => void;
   // 前往复活点
   goToRevivePoint: () => void;
 }
@@ -47,7 +46,7 @@ const MapFrame: MapFrame = {
             MapFrame.createNpc(object.properties.id as string, new Vec3(object.x, object.y));
             break;
           case "monster":
-            MapFrame.createNpcMonster(object.properties.id as string, new Vec3(object.x, object.y));
+            Monsters.createOneMonster(object.properties.id as string, getMapPointPosition(new Vec3(object.x, object.y), MapFrame.map));
             break;
           default:
             break;
@@ -73,26 +72,6 @@ const MapFrame: MapFrame = {
     npcNode.setWorldPosition(positionOnMap);
     LayerManager.addToMapLayer(npcNode);
     npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
-  },
-
-  // 添加NPC怪物，比如试炼
-  createNpcMonster(id, position) {
-    const npc = npcs.get(id);
-    const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
-    const npcLabel = UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20));
-    npcNode.addChild(npcLabel);
-    const positionOnMap = getMapPointPosition(position, MapFrame.map);
-    const npcSprteNode = UiHelper.createSprite("npc_sprite_node", "", new Vec2(), new Size(100, 150));
-    const npcSprite = UiHelper.createSprite("npc_sprite", "");
-    npc.scale && npcSprite.setScale(npc.scale);
-    npc.position && npcSprite.setPosition(npc.position);
-    AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
-    npcSprteNode.addChild(npcSprite);
-    addObstacleCollider(npcSprteNode);
-    npcNode.addChild(npcSprteNode);
-    npcNode.setWorldPosition(positionOnMap);
-    LayerManager.addToGameLayer(npcNode);
-    /** npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this); */
   },
 
   // 前往复活点

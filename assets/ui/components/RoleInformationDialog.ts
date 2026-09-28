@@ -1,5 +1,4 @@
 import { Color, isValid, Layout, Node, Size, UITransform, Vec2 } from "cc";
-import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import LayerManager from "../utils/LayerManager";
 import UiHelper from "../helpers/UiHelper";
 import { equipmentSlots } from "../../configs/equipments";
@@ -52,7 +51,7 @@ const RoleInformationDialog: RoleInformationDialog = {
     {
       // 角色信息
       const role = StorageManager.findOnlineRole();
-      RoleInformationDialog.dialog = GameRoleUiHelper.createDialog("personal_information_dialog", "角色信息");
+      RoleInformationDialog.dialog = GameUiHelper.createDialog("personal_information_dialog", "角色信息");
       // 添加装饰
       const bg = UiHelper.createSprite("role_information_background", "common/personal-information-bg", new Vec2(-78, -19), new Size(431, 452));
       RoleInformationDialog.dialog.addChild(bg);
