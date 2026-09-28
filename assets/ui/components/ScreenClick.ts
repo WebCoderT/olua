@@ -1,5 +1,5 @@
 import { Camera, EventTouch, Input, input, geometry, PhysicsSystem } from "cc";
-import LayerManager, { Layer } from "../utils/LayerManager";
+import { Layer } from "../utils/LayerManager";
 
 const ScreenClick = {
   /** 相机 */
@@ -13,6 +13,8 @@ const ScreenClick = {
   },
   /** 判断点击目标 */
   checkClickTarget(event: EventTouch) {
+    return;
+
     const touchPos = event.getUILocation();
     // 屏幕坐标转世界空间射线
     const ray = new geometry.Ray();
