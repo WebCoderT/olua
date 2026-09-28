@@ -1,4 +1,4 @@
-import { Animation, AnimationClip, BoxCollider2D, EventKeyboard, Input, input, Node, resources, RigidBody2D, SpriteFrame, Vec2, Vec3 } from "cc";
+import { Animation, AnimationClip, BoxCollider2D, EventKeyboard, Input, input, Node, resources, RigidBody2D, Size, SpriteFrame, Vec2, Vec3 } from "cc";
 import GameRoleUiHelper from "../helpers/GameRoleUiHelper";
 import StorageManager from "../utils/StorageManager";
 import { Role } from "../../configs/role";
@@ -85,6 +85,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     rigidBody.fixedRotation = true;
     // rigidBody.group = GameCollisionLayer.PLAYER;
     const boxCollider = RoleDisplayFrame.basicRole.addComponent(BoxCollider2D);
+    boxCollider.size = new Size(40, 70);
     // this.boxCollider.group = GameCollisionLayer.PLAYER;
   },
   // 更改动画

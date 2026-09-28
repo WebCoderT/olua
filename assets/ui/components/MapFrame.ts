@@ -1,4 +1,4 @@
-import { Color, Node, Size, Sprite, TiledMap, Vec2, Vec3 } from "cc";
+import { BoxCollider2D, Color, ERigidBody2DType, Node, RigidBody2D, Size, Sprite, TiledMap, Vec2, Vec3 } from "cc";
 import GameMapUiHelper from "../helpers/GameMapUiHelper";
 import LayerManager from "../utils/LayerManager";
 import { getMapPointPosition } from "../utils/MapPointMath";
@@ -7,6 +7,7 @@ import UiHelper from "../helpers/UiHelper";
 import AnimationHelper from "../helpers/AnimationHelper";
 import StorageManager from "../utils/StorageManager";
 import { maps } from "../../configs/map";
+import { addObstacleCollider } from "../utils/utils";
 
 interface MapFrame {
   // 地图
@@ -67,6 +68,7 @@ const MapFrame: MapFrame = {
     npc.position && npcSprite.setPosition(npc.position);
     AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
     npcSprteNode.addChild(npcSprite);
+    addObstacleCollider(npcSprteNode);
     npcNode.addChild(npcSprteNode);
     npcNode.setWorldPosition(positionOnMap);
     LayerManager.addToMapLayer(npcNode);
@@ -86,6 +88,7 @@ const MapFrame: MapFrame = {
     npc.position && npcSprite.setPosition(npc.position);
     AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
     npcSprteNode.addChild(npcSprite);
+    addObstacleCollider(npcSprteNode);
     npcNode.addChild(npcSprteNode);
     npcNode.setWorldPosition(positionOnMap);
     LayerManager.addToGameLayer(npcNode);
