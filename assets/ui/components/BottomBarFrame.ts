@@ -65,7 +65,6 @@ const BottomBarFrame: BottomBarFrame = {
     });
     // 经验条
     BottomBarFrame.expBar = GameUiHelper.createExpBar("exp", getCurrentLevelExpRate(this.selectedRole.level, this.selectedRole.exp), new Vec2(0, -44.5), new Size(724, 8));
-    LayerManager.setLayerToUILayer(BottomBarFrame.expBar);
 
     // 统一添加进底层区域
     BottomBarFrame.node.addChild(bottomNavBar);
@@ -85,16 +84,12 @@ const BottomBarFrame: BottomBarFrame = {
   initHp(role) {
     // 血量文字
     BottomBarFrame.hpText = UiHelper.createLabel("hp_text", `${role.hp} / ${role.maxHp}`, Color.WHITE, 12, new Vec2(-421, -39), new Size(120, 10));
-    LayerManager.setLayerToUILayer(BottomBarFrame.hpText);
     BottomBarFrame.node.addChild(BottomBarFrame.hpText);
     // 圆形血量显示
     const hpBarSprite = UiHelper.createSprite("ho_bar_sprite", "common/max", new Vec2(-420, 12.5), new Size(90, 90));
-    LayerManager.setLayerToUILayer(hpBarSprite);
     BottomBarFrame.hpBar = UiHelper.createProgressBar("hp_bar", role.hp / role.maxHp, "", new Vec2(), new Size(90, 90));
-    LayerManager.setLayerToUILayer(BottomBarFrame.hpBar);
     const hpProgress = UiHelper.createSprite(`hp_bar_progress`, "common/hp", new Vec2(), new Size(90, 90));
     hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
-    LayerManager.setLayerToUILayer(hpProgress);
     BottomBarFrame.hpBar.addChild(hpProgress);
     hpProgress.setPosition(0, 0);
     hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);

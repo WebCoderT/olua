@@ -45,49 +45,39 @@ const GameUiHelper = {
     // 昵称
     const name = UiHelper.createLabel("role_name", role.name, Color.WHITE, 16, new Vec2(17, 24), new Size(190, 24));
     name.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
-    LayerManager.setLayerToUILayer(name);
     node.addChild(name);
     // 等级
     const level = UiHelper.createLabel("role_level", role.level.toString(), Color.WHITE, 16, new Vec2(-138, -17.5), new Size(24, 24));
-    LayerManager.setLayerToUILayer(level);
     node.addChild(level);
     // 头像
     const avatar = UiHelper.createSprite("role_avatar", `avatars/${role.occupation}-${role.sex}`, new Vec2(-109.5, 7.5), new Size(51, 60));
-    LayerManager.setLayerToUILayer(avatar);
     node.addChild(avatar);
     // 元宝
     const goldIcon = UiHelper.createSprite("gold_icon", "money/gold", new Vec2(-68, -20), new Size(15, 10));
-    LayerManager.setLayerToUILayer(goldIcon);
     node.addChild(goldIcon);
     // 元宝数量
     const goldCount = UiHelper.createLabel("gold_count", role.gold.toString(), Color.WHITE, 12, new Vec2(-45, -20), new Size(30, 10));
     goldCount.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     goldCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
-    LayerManager.setLayerToUILayer(goldCount);
     node.addChild(goldCount);
     // 绑定元宝
     const bindGoldIcon = UiHelper.createSprite("bind_gold_icon", "money/bind-gold", new Vec2(-22, -20), new Size(15, 10));
-    LayerManager.setLayerToUILayer(bindGoldIcon);
     node.addChild(bindGoldIcon);
     // 绑定元宝数量
     const bindGoldCount = UiHelper.createLabel("bind_gold_count", role.bindGold.toString(), Color.WHITE, 12, new Vec2(1, -20), new Size(30, 10));
     bindGoldCount.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     bindGoldCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
-    LayerManager.setLayerToUILayer(bindGoldCount);
     node.addChild(bindGoldCount);
     // 银子
     const silverIcon = UiHelper.createSprite("silver_icon", "money/silver", new Vec2(24, -20), new Size(15, 10));
-    LayerManager.setLayerToUILayer(silverIcon);
     node.addChild(silverIcon);
     // 银子数量
     const silverCount = UiHelper.createLabel("silver_count", role.bindGold.toString(), Color.WHITE, 12, new Vec2(47, -20), new Size(30, 10));
     silverCount.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     silverCount.getComponent(Label).verticalAlign = Label.VerticalAlign.TOP;
-    LayerManager.setLayerToUILayer(silverCount);
     node.addChild(silverCount);
     // 站斗力
     const combatIcon = UiHelper.createSprite("combat_icon", "common/combat", new Vec2(-44, 2), new Size(75, 41));
-    LayerManager.setLayerToUILayer(combatIcon);
     node.addChild(combatIcon);
     // 战斗力数字
     const combatNumber = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(-3.5, 4), new Size(200, 30));
@@ -100,12 +90,10 @@ const GameUiHelper = {
         return;
       }
       label.font = atlas;
-      LayerManager.setLayerToUILayer(combatNumber);
       node.addChild(combatNumber);
     });
     // vip按钮
     const vipButton = UiHelper.createButton("vip_button", "money/vip", new Vec2(110, 30), new Size(75, 25));
-    LayerManager.setLayerToUILayer(vipButton);
     node.addChild(vipButton);
     return { node, combatNumber, level };
   },
@@ -116,7 +104,6 @@ const GameUiHelper = {
    */
   createBottomNavBarButton(button: BottomNavBarButton, role: Role) {
     const node = UiHelper.createButton(`bottom_nav_${button.icon.replace(/\//g, "_")}`, button.icon, new Vec2(0, 0), new Size(40, 40));
-    LayerManager.setLayerToUILayer(node);
     // 判断是否解锁
     if (button.openLevel > role.level) node.getComponent(Sprite).grayscale = true;
     return node;
@@ -129,7 +116,6 @@ const GameUiHelper = {
    */
   createBottomNavBar(spacex: number, position: Vec2, size: Size) {
     const node = UiHelper.createFlexRow("bottom_nav_bar", spacex, position, size);
-    LayerManager.setLayerToUILayer(node);
     return node;
   },
 
@@ -143,9 +129,7 @@ const GameUiHelper = {
    */
   createExpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const expBar = UiHelper.createProgressBar(name, progress, "", position, size);
-    LayerManager.setLayerToUILayer(expBar);
     const expProgress = UiHelper.createSprite(`${name}_progress`, "bottom-nav-bar/exp", new Vec2(), size);
-    LayerManager.setLayerToUILayer(expProgress);
     expBar.addChild(expProgress);
     expBar.getComponent(ProgressBar).barSprite = expProgress.getComponent(Sprite);
     return expBar;
@@ -195,7 +179,6 @@ const GameUiHelper = {
     const dialog = UiHelper.createSprite(name, "common/popup-bg", position, size);
     dialog.name = name;
     dialog.addComponent(Draggable);
-    LayerManager.setLayerToUILayer(dialog);
     return dialog;
   },
 
@@ -204,7 +187,6 @@ const GameUiHelper = {
    */
   createDialogTitle(name: string, title: string, position: Vec2 = new Vec2(0, 228)) {
     const dialogTitle = UiHelper.createLabel(name, title, math.color("#FF8B8B"), 14, position, new Size(300, 30));
-    LayerManager.setLayerToUILayer(dialogTitle);
     return dialogTitle;
   },
 
@@ -213,7 +195,6 @@ const GameUiHelper = {
    */
   createCloseButton(name: string, position: Vec2 = new Vec2(), size: Size = new Size(30, 30)) {
     const closeButton = UiHelper.createButton(name, "common/close-button", position, size);
-    LayerManager.setLayerToUILayer(closeButton);
     return closeButton;
   },
 
@@ -240,9 +221,7 @@ const GameUiHelper = {
   createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
     const bigButton = UiHelper.createButton(name, "common/big-button", position, new Size(129, 54));
     bigButton.name = name;
-    LayerManager.setLayerToUILayer(bigButton);
     const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 20, new Vec2(), new Size(129, 54));
-    LayerManager.setLayerToUILayer(label);
     bigButton.addChild(label);
     return bigButton;
   },
@@ -250,7 +229,6 @@ const GameUiHelper = {
   // 在某个格子上创建物品
   createGood(cell: Node, good: Goods) {
     const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
-    LayerManager.setLayerToUILayer(sprite);
     cell.addChild(sprite);
     sprite.on(
       Node.EventType.MOUSE_ENTER,
@@ -271,7 +249,6 @@ const GameUiHelper = {
     const screenSize = UiHelper.getScreenSize();
     const position = new Vec2(screenPosition.x - screenSize.width / 2, screenPosition.y - screenSize.height / 2);
     const dialog = UiHelper.createSprite("good_detail", "common/bg", position, new Size(240, 200));
-    LayerManager.setLayerToUILayer(dialog);
 
     dialog.setPosition(position.x, position.y, 0);
     const layout = dialog.addComponent(Layout);
@@ -288,10 +265,8 @@ const GameUiHelper = {
 
     // 头部
     const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 40));
-    LayerManager.setLayerToUILayer(contentHeader);
     // 图标
     const goodImage = UiHelper.createSprite("good_image", good.icon, new Vec2(), new Size(40, 40));
-    LayerManager.setLayerToUILayer(goodImage);
     // 标题
     const title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 40));
     const titleLabel = title.getComponent(Label);
@@ -302,14 +277,12 @@ const GameUiHelper = {
     titleLabel.isItalic = true;
     titleLabel.isUnderline = true;
     titleLabel.lineHeight = 20;
-    LayerManager.setLayerToUILayer(title);
 
     contentHeader.addChild(goodImage);
     contentHeader.addChild(title);
 
     // 介绍
     const contentDescription = UiHelper.createLabel("content_description", good.description, Color.WHITE, 12, new Vec2(), new Size(220, 50));
-    LayerManager.setLayerToUILayer(contentDescription);
     const descLabel = contentDescription.getComponent(Label);
     descLabel.lineHeight = 16;
     descLabel.enableWrapText = true;
@@ -319,7 +292,6 @@ const GameUiHelper = {
     // 属性列表
     const contentBody = UiHelper.createFlexCol("content_body", 3, new Vec2(), new Size(220, 220));
     contentBody.getComponent(Layout).resizeMode = Layout.ResizeMode.CONTAINER;
-    LayerManager.setLayerToUILayer(contentBody);
     goodShowAttributes.get(good.type).forEach((attr) => {
       contentBody.addChild(GameUiHelper.createAttributeLabel(attr, good[attr].toString()));
     });
@@ -330,7 +302,6 @@ const GameUiHelper = {
 
     // 脚步图标
     const footerLogo = UiHelper.createSprite("logo", "logo", new Vec2(), new Size(220, 120));
-    LayerManager.setLayerToUILayer(footerLogo);
     dialog.addChild(footerLogo);
 
     // 物品在左侧
@@ -368,19 +339,15 @@ const GameUiHelper = {
    */
   createAttributeLabel(key: keyof BattleAttributes, value: string, size: Size = new Size(220, 20)) {
     const attributeLabel = UiHelper.createFlexRow(key, 10, new Vec2(), size);
-    LayerManager.setLayerToUILayer(attributeLabel);
 
     const icon = UiHelper.createSprite("icon", "common/dot", new Vec2(), new Size(10, 10));
-    LayerManager.setLayerToUILayer(icon);
     attributeLabel.addChild(icon);
 
     const label = UiHelper.createLabel(key, goodShowAttributesLabel.get(key), Color.WHITE, 12, new Vec2(), new Size(50, size.height));
     label.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
-    LayerManager.setLayerToUILayer(label);
     attributeLabel.addChild(label);
 
     const attribute = UiHelper.createLabel(key, value.replace(",", " - "), Color.WHITE, 12, new Vec2(), new Size(size.width - 20 - 50 - 10, size.height));
-    LayerManager.setLayerToUILayer(attribute);
     attributeLabel.addChild(attribute);
 
     return attributeLabel;
@@ -392,7 +359,6 @@ const GameUiHelper = {
   createRoleClothInShow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const clothInShow = UiHelper.createSprite("cloth_in_show", "", position, size);
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    LayerManager.setLayerToUILayer(clothInShow);
     AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, role.equipments.cloth.in, 1);
     return clothInShow;
   },
@@ -404,7 +370,6 @@ const GameUiHelper = {
     position.y += role.equipments.weapon.inOffset.y;
     const weaponInShow = UiHelper.createSprite("weapon_in_show", "", position, size);
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    LayerManager.setLayerToUILayer(weaponInShow);
     AnimationHelper.playLoopWithDir("weapon_in_show", weaponInShow, role.equipments.weapon.in, 1);
     return weaponInShow;
   },

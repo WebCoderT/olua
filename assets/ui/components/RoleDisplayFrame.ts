@@ -11,7 +11,7 @@ interface RoleDisplayFrame {
   // 基础角色区域
   basicRole: Node | null;
   // 初始化
-  init: (game: Node) => void;
+  init: () => void;
   // 按键方向
   up: boolean;
   down: boolean;
@@ -61,7 +61,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
   left: false,
   right: false,
   run: false,
-  init(game: Node) {
+  init() {
     // 初始化角色数据
     const role = StorageManager.findOnlineRole();
     // 创建基础角色
@@ -70,7 +70,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     RoleDisplayFrame.basicRole = node;
     RoleDisplayFrame.cloth = cloth;
     RoleDisplayFrame.weapon = weapon;
-    game.addChild(RoleDisplayFrame.basicRole);
+    LayerManager.addToGameLayer(node);
     // 增加碰撞
     RoleDisplayFrame.addRigid();
     // 加载动画

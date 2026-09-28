@@ -16,17 +16,14 @@ const MapSelectorDialog = {
   // 添加传送按钮
   createSelectorButtons(dialog: Node) {
     const grid = UiHelper.createFlexCol("grid", 10, new Vec2(0, 198), new Size(580, 0));
-    LayerManager.setLayerToUILayer(grid);
 
     // // 安全区
     // const safe = UiHelper.createLabel("safe", "安全区域", Color.GREEN, 18, new Vec2(), new Size(680, 30));
-    // LayerManager.setLayerToUILayer(safe);
     // grid.addChild(safe);
 
     for (const key of maps.keys()) {
       const map = maps.get(key);
       const button = GameUiHelper.createBigButton("map_selector", map.label);
-      LayerManager.setLayerToUILayer(button);
       grid.addChild(button);
       button.on(
         Node.EventType.TOUCH_END,

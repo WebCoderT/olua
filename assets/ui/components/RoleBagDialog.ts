@@ -4,6 +4,7 @@ import RoleBagUiHelper from "../helpers/RoleBagUiHelper";
 import { Role } from "../../configs/role";
 import { Goods, EQUIPMENT_TYPE, Equipment } from "../../types/common";
 import GameUiHelper from "../helpers/GameUiHelper";
+import LayerManager from "../utils/LayerManager";
 
 interface RoleBagDialog {
   dialog: Node | null;
@@ -56,6 +57,7 @@ const RoleBagDialog: RoleBagDialog = {
         }
       });
     });
+    LayerManager.addToUILayer(RoleBagDialog.dialog);
   },
   // 使用物品
   useGood(cell, good) {

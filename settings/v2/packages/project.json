@@ -15,12 +15,20 @@
       "value": 1
     },
     {
-      "name": "MonsterLayer",
+      "name": "GameLayer",
       "value": 4
     },
     {
       "name": "DropLayer",
       "value": 2
+    },
+    {
+      "name": "EffectLayer",
+      "value": 8
+    },
+    {
+      "name": "UiLayer",
+      "value": 16
     }
   ],
   "physics": {

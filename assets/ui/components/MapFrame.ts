@@ -59,15 +59,12 @@ const MapFrame: MapFrame = {
     const npc = npcs.get(id);
     const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
     const npcLabel = UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20));
-    LayerManager.setLayerToMapLayer(npcLabel);
     npcNode.addChild(npcLabel);
     const positionOnMap = getMapPointPosition(position, MapFrame.map);
     const npcSprteNode = UiHelper.createSprite("npc_sprite_node", "", new Vec2(), new Size(100, 150));
-    LayerManager.setLayerToMapLayer(npcSprteNode);
     const npcSprite = UiHelper.createSprite("npc_sprite", "");
     npc.scale && npcSprite.setScale(npc.scale);
     npc.position && npcSprite.setPosition(npc.position);
-    LayerManager.setLayerToMapLayer(npcSprite);
     AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
     npcSprteNode.addChild(npcSprite);
     npcNode.addChild(npcSprteNode);

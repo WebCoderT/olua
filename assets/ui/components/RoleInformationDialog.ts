@@ -53,24 +53,18 @@ const RoleInformationDialog: RoleInformationDialog = {
       // 角色信息
       const role = StorageManager.findOnlineRole();
       RoleInformationDialog.dialog = GameRoleUiHelper.createDialog("personal_information_dialog", "角色信息");
-      LayerManager.addToUILayer(RoleInformationDialog.dialog);
       // 添加装饰
       const bg = UiHelper.createSprite("role_information_background", "common/personal-information-bg", new Vec2(-78, -19), new Size(431, 452));
-      LayerManager.setLayerToUILayer(bg);
       RoleInformationDialog.dialog.addChild(bg);
       // 战斗力
       const combatIcon = UiHelper.createSprite("combat_icon", "common/combat", new Vec2(-7, -225), new Size(100, 50));
-      LayerManager.setLayerToUILayer(combatIcon);
       bg.addChild(combatIcon);
       // 左侧插槽列表
       const leftSlots = UiHelper.createFlexCol("equipment_slots_left", 10, new Vec2(-240, 40), new Size(50, 290));
-      LayerManager.setLayerToUILayer(leftSlots);
       // 右侧插槽列表
       const rightSlots = UiHelper.createFlexCol("equipment_slots_right", 10, new Vec2(80, 40), new Size(50, 290));
-      LayerManager.setLayerToUILayer(rightSlots);
       // 底部插槽列表
       const bottomSlots = UiHelper.createFlexRow("equipment_slots_bottom", 10, new Vec2(-75, -140), new Size(170, 50));
-      LayerManager.setLayerToUILayer(bottomSlots);
       // 添加显示插槽
       equipmentSlots.forEach((value, key) => {
         const slot = UiHelper.createSprite(`equipment_slot_${key}`, value.imageSrc, new Vec2(), new Size(50, 50));
@@ -78,7 +72,6 @@ const RoleInformationDialog: RoleInformationDialog = {
         if (role.equipments[key]) {
           GameUiHelper.createGood(slot, role.equipments[key]);
         }
-        LayerManager.setLayerToUILayer(slot);
         if (value.position === "left") {
           RoleInformationDialog.slots.push(slot);
           leftSlots.addChild(slot);
@@ -98,6 +91,7 @@ const RoleInformationDialog: RoleInformationDialog = {
       role.equipments.cloth && RoleInformationDialog.createClothInShow(role);
       role.equipments.weapon && RoleInformationDialog.createWeaponInShow(role);
       RoleInformationDialog.createRoleAttributeUi(role, RoleInformationDialog.dialog);
+      LayerManager.addToUILayer(RoleInformationDialog.dialog);
     }
   },
 
@@ -107,7 +101,6 @@ const RoleInformationDialog: RoleInformationDialog = {
   createRoleAttributeUi(role, parent) {
     // 基础布局
     const layout = UiHelper.createFlexCol("role_attributes", 5, new Vec2(217, 205), new Size(150, 0));
-    LayerManager.setLayerToUILayer(layout);
     const layoutCompoent = layout.getComponent(Layout);
     layoutCompoent.resizeMode = Layout.ResizeMode.CONTAINER;
     layoutCompoent.padding = 10;
@@ -116,7 +109,6 @@ const RoleInformationDialog: RoleInformationDialog = {
 
     // 基础属性
     const label = UiHelper.createLabel("role_basic_attributes", "基础属性", Color.WHITE, 14, new Vec2(), new Size(150, 14));
-    LayerManager.setLayerToUILayer(label);
     layout.addChild(label);
 
     // 基础属性
@@ -128,7 +120,6 @@ const RoleInformationDialog: RoleInformationDialog = {
 
     // 特殊属性
     const spcialLabel = UiHelper.createLabel("role_basic_attributes", "特殊属性", Color.WHITE, 14, new Vec2(), new Size(150, 14));
-    LayerManager.setLayerToUILayer(spcialLabel);
     layout.addChild(spcialLabel);
 
     parent.addChild(layout);
