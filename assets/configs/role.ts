@@ -1,4 +1,4 @@
-import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, OECCUPATION, RELATION_SHIP, SEX } from "../types/common";
+import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, OECCUPATION, RELATION_SHIP, SEX, SkillId } from "../types/common";
 import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
@@ -6,7 +6,7 @@ import { levelMap } from "./level";
 export class Role implements BattleAttributes {
   id: string;
   name: string;
-  occupation: string;
+  occupation: OECCUPATION;
   sex: SEX;
   level: number = 1;
   fashionCloth: number | null = null;
@@ -42,7 +42,23 @@ export class Role implements BattleAttributes {
     [EQUIPMENT_TYPE.OTHER1]: null,
     [EQUIPMENT_TYPE.OTHER2]: null,
   };
-  constructor(name: string, occupation: string, sex: SEX) {
+  skills: { [key in SkillId]: number } = {
+    "1000": 1,
+    "1001": 0,
+    "1002": 0,
+    "1003": 0,
+    "1004": 0,
+    "1005": 0,
+    "1006": 0,
+    "1007": 0,
+    "1008": 0,
+    "1009": 0,
+    "1010": 0,
+    "1011": 0,
+  };
+  /** 快捷键 */
+  shortcutKeys: SkillId[] = [];
+  constructor(name: string, occupation: OECCUPATION, sex: SEX) {
     this.id = new Date().getTime().toString();
     this.name = name;
     this.occupation = occupation;

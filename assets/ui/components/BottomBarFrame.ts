@@ -7,17 +7,18 @@ import RoleInformationDialog from "./RoleInformationDialog";
 import RoleBagDialog from "./RoleBagDialog";
 import { getCurrentLevelExpRate } from "../../configs/level";
 import { Role } from "../../configs/role";
+import SkillDialog from "./SkillDialog";
 
 const bottomNavBarButtons: BottomNavBarButton[] = [
-  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: () => RoleInformationDialog.open(), name: "personal_information_dialog" },
-  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: () => RoleBagDialog.open(), name: "bag_dialog" },
-  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: () => {}, name: "personal_information_dialog" },
-  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: () => {}, name: "personal_information_dialog" },
-  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
-  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
-  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
-  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
-  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: () => {}, name: "personal_information_dialog" },
+  { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: () => RoleInformationDialog.open(), name: "personal_information_dialog", shortcutKey: "C" },
+  { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: () => RoleBagDialog.open(), name: "bag_dialog", shortcutKey: "B" },
+  { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: () => {}, name: "personal_information_dialog", shortcutKey: "F" },
+  { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: () => {}, name: "personal_information_dialog", shortcutKey: "G" },
+  { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: () => {}, name: "personal_information_dialog", shortcutKey: "Q" },
+  { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: SkillDialog.createDialog, name: "personal_information_dialog", shortcutKey: "K" },
+  { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: () => {}, name: "personal_information_dialog", shortcutKey: "T" },
+  { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: () => {}, name: "personal_information_dialog", shortcutKey: "M" },
+  { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: () => {}, name: "personal_information_dialog", shortcutKey: "/" },
 ];
 
 interface BottomBarFrame {
@@ -26,6 +27,10 @@ interface BottomBarFrame {
   node: Node;
   // 初始化
   init: (role: Role) => void;
+  /** 左侧快捷键列表 */
+  leftShortcutKeys: [];
+  /** 初始化左侧快捷键 */
+  initLeftShortcutKeys: () => void;
   // 经验条
   expBar: Node;
   // 角色血量文字显示
@@ -71,8 +76,16 @@ const BottomBarFrame: BottomBarFrame = {
     BottomBarFrame.node.addChild(BottomBarFrame.expBar);
     // 初始化血量
     BottomBarFrame.initHp(role);
-
+    /** 添加快捷键 */
+    BottomBarFrame.initLeftShortcutKeys();
     LayerManager.addToUILayer(BottomBarFrame.node);
+  },
+  /** 左侧快捷键列表 */
+  leftShortcutKeys: [],
+  /** 初始化左侧快捷键 */
+  initLeftShortcutKeys() {
+    /** 绘制每个按钮的UI */
+    const leftShortcut = UiHelper.createFlexRow("left_shortcut_keys", 6, new Vec2(), new Size(300, 40));
   },
   // 经验条
   expBar: null,

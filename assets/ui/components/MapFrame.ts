@@ -75,7 +75,21 @@ const MapFrame: MapFrame = {
 
   // 添加NPC怪物，比如试炼
   createNpcMonster(id, position) {
-    MapFrame.createNpc(id, position);
+    const npc = npcs.get(id);
+    const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
+    const npcLabel = UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20));
+    npcNode.addChild(npcLabel);
+    const positionOnMap = getMapPointPosition(position, MapFrame.map);
+    const npcSprteNode = UiHelper.createSprite("npc_sprite_node", "", new Vec2(), new Size(100, 150));
+    const npcSprite = UiHelper.createSprite("npc_sprite", "");
+    npc.scale && npcSprite.setScale(npc.scale);
+    npc.position && npcSprite.setPosition(npc.position);
+    AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
+    npcSprteNode.addChild(npcSprite);
+    npcNode.addChild(npcSprteNode);
+    npcNode.setWorldPosition(positionOnMap);
+    LayerManager.addToGameLayer(npcNode);
+    /** npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this); */
   },
 
   // 前往复活点

@@ -1,4 +1,28 @@
-import { Button, Color, EditBox, Font, isValid, Label, math, Node, resources, Sprite, SpriteFrame, Size, UITransform, Vec2, view, Toggle, Layout, ToggleContainer, Graphics, ProgressBar } from "cc";
+import {
+  Button,
+  Color,
+  EditBox,
+  Font,
+  isValid,
+  Label,
+  math,
+  Node,
+  resources,
+  Sprite,
+  SpriteFrame,
+  Size,
+  UITransform,
+  Vec2,
+  view,
+  Toggle,
+  Layout,
+  ToggleContainer,
+  Graphics,
+  ProgressBar,
+  ScrollView,
+  Mask,
+  Vec3,
+} from "cc";
 
 /**
  * Ui界面元素统一生成
@@ -307,6 +331,27 @@ const UiHelper = {
       progressBar.node.addChild(background);
     }
     progressBar.progress = progress;
+    return node;
+  },
+
+  /** 创建滚动视图 */
+  createScrollView(name: string, position: Vec2, size: Size) {
+    const node = new Node();
+    node.name = name;
+    node.addComponent(Mask);
+    const scrollView = node.addComponent(ScrollView);
+    scrollView.inertia = false;
+    scrollView.elastic = false;
+    const uitransform = node.getComponent(UITransform);
+    uitransform.setContentSize(size);
+    node.setPosition(new Vec3(position.x, position.y));
+    const content = UiHelper.createFlexCol(`${name}_content`, 3, new Vec2(position.x, size.height / 2), size);
+    node.addChild(content);
+    const layout = content.getComponent(Layout);
+    layout.resizeMode = Layout.ResizeMode.CONTAINER;
+    const contentUiTransform = content.getComponent(UITransform);
+    contentUiTransform.anchorY = 1;
+    scrollView.content = content;
     return node;
   },
 };

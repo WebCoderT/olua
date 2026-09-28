@@ -1,5 +1,5 @@
 import { Size, Vec2 } from "cc";
-import { BattleAttributes, OECCUPATION, RELATION_SHIP, ROLE_ACTION, ROLE_DIRECTION, RoleOccupationInfo } from "../types/common";
+import { BattleAttributes, OECCUPATION, RELATION_SHIP, ROLE_ACTION, ROLE_DIRECTION, RoleOccupationInfo, SkillId } from "../types/common";
 
 // 角色MAP
 export const roles = new Map<OECCUPATION, RoleOccupationInfo>();
@@ -74,3 +74,12 @@ combatCalc.set("magicDefense", 10);
 combatCalc.set("physicalDefense", 10);
 combatCalc.set("taoistDefense", 10);
 combatCalc.set("maxHp", 15);
+
+/** 职业技能映射 */
+export const oeccupationSkills = new Map<OECCUPATION, SkillId[]>();
+/** 战士技能映射 */
+oeccupationSkills.set(OECCUPATION.ZHAN, ["1000", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011"]);
+/** 法师技能映射 */
+oeccupationSkills.set(OECCUPATION.FA, []);
+/** 道士技能映射 */
+oeccupationSkills.set(OECCUPATION.DAO, []);

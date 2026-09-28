@@ -7,6 +7,7 @@ import GameHelper from "./utils/GameHelper";
 import StorageManager from "./utils/StorageManager";
 import RoleDisplayFrame from "./components/RoleDisplayFrame";
 import LayerManager from "./utils/LayerManager";
+import ScreenClick from "./components/ScreenClick";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -36,6 +37,8 @@ export class Game extends Component {
     this.map.init();
     // 初始化游戏全局工具
     this.gameHelper.init(this.camera);
+    /** 挂载全局点击事件 */
+    ScreenClick.init(this.camera);
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
   }

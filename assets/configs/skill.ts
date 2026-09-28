@@ -1,60 +1,4 @@
-import { OECCUPATION } from "../types/common";
-import { Role } from "./role";
-
-// 技能类型
-export enum SkillType {
-  /** 主动技能 */
-  PROACTIVE = "0",
-  /** 被动技能 */
-  PASSIVE = "1",
-  /** 状态技能 */
-  STATUS = "2",
-  /** 回复技能 */
-  REPLY = "3",
-}
-
-// 技能目标类型
-export enum SkillTargetType {
-  /** 区域 */
-  PLACE = "0",
-  /** 单体 */
-  SINGLE = "1",
-  /** 群体 */
-  MUTIPLE = "2",
-}
-
-/** 技能伤害计算系数 */
-export interface DamageCoefficient {
-  /** 基础伤害类型来源 */
-  baseType: keyof Role;
-  /** 基础伤害倍数 */
-  baseTypeRate: number;
-}
-
-// 技能接口
-export interface SkillConfig {
-  /** 技能名称 */
-  label: string;
-  /** 技能图标 */
-  icon: string;
-  /** 技能冷却时间:秒 */
-  cooldown: number;
-  /** 技能目标类型 */
-  targetType: SkillTargetType;
-  /** 技能职业 */
-  oeccupation: OECCUPATION;
-  /** 技能开启等级 */
-  level: number;
-  /** 技能描述 */
-  description: string;
-  /** 技能类型 */
-  type: SkillType;
-  /** 技能等级与伤害系数 */
-  damageCoefficients: DamageCoefficient[];
-}
-
-/** 技能ID */
-export type SkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "1006" | "1007" | "1008" | "1009" | "1010" | "1011" | "1012";
+import { OECCUPATION, SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/common";
 
 /** 所有技能 */
 export const skills = new Map<SkillId, SkillConfig>();
@@ -86,7 +30,7 @@ skills.set("1000", {
 
 skills.set("1001", {
   label: "烈火剑法",
-  icon: "skill/1001",
+  icon: "skill/1006",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -110,7 +54,7 @@ skills.set("1001", {
 
 skills.set("1002", {
   label: "刺杀剑术",
-  icon: "skill/1001",
+  icon: "skill/1003",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -134,7 +78,7 @@ skills.set("1002", {
 
 skills.set("1003", {
   label: "莲月剑法",
-  icon: "skill/1001",
+  icon: "skill/2003",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -157,13 +101,13 @@ skills.set("1003", {
 });
 
 skills.set("1004", {
-  label: "莲月剑法",
-  icon: "skill/1001",
+  label: "‌擒龙手‌",
+  icon: "skill/3010",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
   level: 10,
-  description: "高伤单体技能，附加高额攻击力加成，是后期PK中终结脆皮对手的关键招式",
+  description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技",
   type: SkillType.PROACTIVE,
   damageCoefficients: [
     { baseType: "physicalAttack", baseTypeRate: 3 },
@@ -182,7 +126,7 @@ skills.set("1004", {
 
 skills.set("1005", {
   label: "野蛮冲撞",
-  icon: "skill/1001",
+  icon: "skill/1010",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -206,7 +150,7 @@ skills.set("1005", {
 
 skills.set("1006", {
   label: "逐日剑法‌",
-  icon: "skill/1001",
+  icon: "skill/2202",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -230,7 +174,7 @@ skills.set("1006", {
 
 skills.set("1007", {
   label: "狮子吼",
-  icon: "skill/1001",
+  icon: "skill/3007",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -254,7 +198,7 @@ skills.set("1007", {
 
 skills.set("1008", {
   label: "十步一杀",
-  icon: "skill/1001",
+  icon: "skill/1005",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -278,7 +222,7 @@ skills.set("1008", {
 
 skills.set("1009", {
   label: "半月弯刀",
-  icon: "skill/1001",
+  icon: "skill/1004",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -302,7 +246,7 @@ skills.set("1009", {
 
 skills.set("1010", {
   label: "‌护体神盾",
-  icon: "skill/1001",
+  icon: "skill/2009",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
@@ -326,36 +270,12 @@ skills.set("1010", {
 
 skills.set("1011", {
   label: "金刚护体",
-  icon: "skill/1001",
+  icon: "skill/1008",
   cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
   level: 10,
   description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开",
-  type: SkillType.PROACTIVE,
-  damageCoefficients: [
-    { baseType: "physicalAttack", baseTypeRate: 3 },
-    { baseType: "physicalAttack", baseTypeRate: 3.1 },
-    { baseType: "physicalAttack", baseTypeRate: 3.2 },
-    { baseType: "physicalAttack", baseTypeRate: 3.3 },
-    { baseType: "physicalAttack", baseTypeRate: 3.4 },
-    { baseType: "physicalAttack", baseTypeRate: 3.5 },
-    { baseType: "physicalAttack", baseTypeRate: 3.6 },
-    { baseType: "physicalAttack", baseTypeRate: 3.7 },
-    { baseType: "physicalAttack", baseTypeRate: 3.8 },
-    { baseType: "physicalAttack", baseTypeRate: 3.9 },
-    { baseType: "physicalAttack", baseTypeRate: 4 },
-  ],
-});
-
-skills.set("1012", {
-  label: "‌擒龙手‌",
-  icon: "skill/1001",
-  cooldown: 1,
-  targetType: SkillTargetType.SINGLE,
-  oeccupation: OECCUPATION.ZHAN,
-  level: 10,
-  description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技",
   type: SkillType.PROACTIVE,
   damageCoefficients: [
     { baseType: "physicalAttack", baseTypeRate: 3 },

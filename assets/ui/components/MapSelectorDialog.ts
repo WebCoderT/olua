@@ -10,16 +10,12 @@ const MapSelectorDialog = {
   //打开
   open() {
     const dialog = GameUiHelper.createDialog("map_selector", "大陆传送官");
-    LayerManager.addToUILayer(dialog);
     MapSelectorDialog.createSelectorButtons(dialog);
+    LayerManager.addToUILayer(dialog);
   },
   // 添加传送按钮
   createSelectorButtons(dialog: Node) {
     const grid = UiHelper.createFlexCol("grid", 10, new Vec2(0, 198), new Size(580, 0));
-
-    // // 安全区
-    // const safe = UiHelper.createLabel("safe", "安全区域", Color.GREEN, 18, new Vec2(), new Size(680, 30));
-    // grid.addChild(safe);
 
     for (const key of maps.keys()) {
       const map = maps.get(key);

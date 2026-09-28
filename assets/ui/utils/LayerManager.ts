@@ -1,7 +1,7 @@
 import { Camera, Node, Vec2, Vec3 } from "cc";
 import RoleDisplayFrame from "../components/RoleDisplayFrame";
 
-enum Layer {
+export enum Layer {
   MAP = 1 << 0,
   DROP = 1 << 1,
   GAME = 1 << 2,
@@ -45,7 +45,7 @@ const LayerManager = {
   },
   /** 添加元素至游戏层 */
   addToGameLayer(node: Node) {
-    LayerManager.setNodeToLayer(node, Layer.MAP);
+    LayerManager.setNodeToLayer(node, Layer.GAME);
     LayerManager.GameLayer.addChild(node);
   },
 
@@ -89,7 +89,7 @@ const LayerManager = {
   initLayer(scene: Node, camera: Camera) {
     LayerManager.camera = camera;
     // 摄像机设置可视图层
-    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP;
+    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP | Layer.GAME;
     /** 初始化所有图层 */
     LayerManager.initMapLayer(scene);
     LayerManager.initGameLayer(scene);

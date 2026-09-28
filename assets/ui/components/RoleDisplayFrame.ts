@@ -97,6 +97,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
   keyboardListener() {
     // 游戏按键监听
     input.on(Input.EventType.KEY_DOWN, (event: EventKeyboard) => {
+      console.log(event.keyCode);
       switch (event.keyCode) {
         case 87:
           RoleDisplayFrame.up = true;

@@ -16,6 +16,7 @@ export interface BottomNavBarButton {
   openLevel: number;
   onClick: () => void;
   name: string;
+  shortcutKey: string;
 }
 
 const GameUiHelper = {
@@ -104,6 +105,8 @@ const GameUiHelper = {
    */
   createBottomNavBarButton(button: BottomNavBarButton, role: Role) {
     const node = UiHelper.createButton(`bottom_nav_${button.icon.replace(/\//g, "_")}`, button.icon, new Vec2(0, 0), new Size(40, 40));
+    const shortcutKey = UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, 10, new Vec2(15, -15), new Size(20, 20));
+    node.addChild(shortcutKey);
     // 判断是否解锁
     if (button.openLevel > role.level) node.getComponent(Sprite).grayscale = true;
     return node;
@@ -201,15 +204,15 @@ const GameUiHelper = {
   /**
    * 创建通用弹窗
    */
-  createDialog(name: string, title: string) {
+  createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
     // 弹窗
-    const dialog = GameUiHelper.createDialogBg(name);
-    // 弹窗标题
-    const dialogTitle = GameUiHelper.createDialogTitle("dialog_title", title);
-    dialog.addChild(dialogTitle);
+    const dialog = GameUiHelper.createDialogBg(name, position, size);
     // 关闭弹窗按钮
-    const closeButton = GameUiHelper.createCloseButton("close_button", new Vec2(280, 230));
+    const closeButton = UiHelper.createButton(`${name}_close_button`, "common/close-button", new Vec2(size.width / 2 - 15, size.height / 2 - 15), new Size(30, 30));
     dialog.addChild(closeButton);
+    // 弹窗标题
+    const dialogTitle = UiHelper.createLabel(`${name}_title`, title, math.color("#FF8B8B"), 14, new Vec2(0, size.height / 2 - 15), new Size(size.width - 60, 30));
+    dialog.addChild(dialogTitle);
     // 添加关闭功能
     closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy(), this);
     return dialog;
