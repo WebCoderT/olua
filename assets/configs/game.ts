@@ -37,28 +37,42 @@ export function getAnimationName(action: ACTION, direction: DIRECTION) {
 export const directions: DIRECTION[] = [DIRECTION.UP, DIRECTION.RIGHT_UP, DIRECTION.RIGHT, DIRECTION.RIGHT_DOWN, DIRECTION.DOWN, DIRECTION.LEFT_DOWN, DIRECTION.LEFT, DIRECTION.LEFT_UP];
 
 // 角色动作顺序
-export const roleActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN, ACTION.ATTACK];
+export const roleActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN, ACTION.TEST1, ACTION.ATTACK, ACTION.ATTACK1, ACTION.ATTACK2, ACTION.SKILL, ACTION.INJURED, ACTION.A1, ACTION.DIE];
 // 动画长度（动作+方向）
 export const roleSpriteFrameLength = new Map<ACTION, number>([
   [ACTION.STAND, 8],
   [ACTION.WALK, 8],
   [ACTION.RUN, 8],
-  [ACTION.ATTACK, 2],
+  [ACTION.ATTACK, 8],
+  [ACTION.ATTACK1, 8],
+  [ACTION.ATTACK2, 8],
+  [ACTION.SKILL, 8],
+  [ACTION.INJURED, 2],
+  [ACTION.A1, 8],
+  [ACTION.DIE, 8],
+  [ACTION.TEST1, 1],
 ]);
+
+function fillAnimationMap(animationMap: Map<string, number[]>, actions: ACTION[], getFrameLength: (action: ACTION) => number) {
+  animationMap.clear();
+  let actionStartIndex = 0;
+
+  actions.forEach((action) => {
+    const frameLength = getFrameLength(action);
+    directions.forEach((direction, directionIndex) => {
+      const directionStartIndex = actionStartIndex + directionIndex * frameLength;
+      animationMap.set(
+        getAnimationName(action, direction),
+        Array.from({ length: frameLength }, (_, frameIndex) => directionStartIndex + frameIndex),
+      );
+    });
+    actionStartIndex += directions.length * frameLength;
+  });
+}
+
 // 角色拥有动画map
 export const roleAnimationMap = new Map<string, number[]>();
-// 角色动画map填入数据
-roleActions.forEach((action, actionIndex) => {
-  directions.forEach((direction, directionIndex) => {
-    roleAnimationMap.set(
-      getAnimationName(action, direction),
-      Array.from({ length: roleSpriteFrameLength.get(action) }, (v, k) => {
-        /** 按照每个动作，每个方向进行计数，并且截取正确的数据长度 */
-        return actionIndex * directions.length * roleSpriteFrameLength + directionIndex * roleSpriteFrameLength + k;
-      }),
-    );
-  });
-});
+fillAnimationMap(roleAnimationMap, roleActions, (action) => roleSpriteFrameLength.get(action) ?? 0);
 /** 角色每个动作对应时长
  *  1 代表 1秒1个循环
  *  0.5 代表1秒2个循环
@@ -70,6 +84,7 @@ export const roleActionSpeed = new Map<ACTION, number>([
   [ACTION.WALK, 1],
   [ACTION.RUN, 1],
   [ACTION.ATTACK, 1],
+  [ACTION.TEST1, 1],
 ]);
 
 /** 怪物动作顺序 */
@@ -78,17 +93,7 @@ export const monsterActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN];
 export const monsterSpriteFrameInterval = 10;
 /** 怪物拥有动画映射 */
 export const monsterAnimation = new Map<string, number[]>();
-/** 怪物动画map填入数据 */
-monsterActions.forEach((action, actionIndex) => {
-  directions.forEach((direction, directionIndex) => {
-    monsterAnimation.set(
-      getAnimationName(action, direction),
-      Array.from({ length: monsterSpriteFrameInterval }, (v, k) => {
-        return actionIndex * directions.length * monsterSpriteFrameInterval + directionIndex * monsterSpriteFrameInterval + k;
-      }),
-    );
-  });
-});
+fillAnimationMap(monsterAnimation, monsterActions, () => monsterSpriteFrameInterval);
 
 // 战斗力计算参考
 export const combatCalc = new Map<keyof BattleAttributes, number>();

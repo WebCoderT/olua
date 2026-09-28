@@ -69,6 +69,20 @@ export enum ACTION {
   RUN = "run",
   /** 攻击 */
   ATTACK = "attack",
+  /** 攻击1 */
+  ATTACK1 = "attack1",
+  /** 攻击2 */
+  ATTACK2 = "attack2",
+  /** 释放技能，法师攻击，道士攻击使用这个动作 */
+  SKILL = "skill",
+  /** 受伤 */
+  INJURED = "injured",
+  /** A1 */
+  A1 = "a1",
+  /** 死亡 */
+  DIE = "die",
+  /** 测试1 */
+  TEST1 = "test1",
 }
 
 // 物品类型

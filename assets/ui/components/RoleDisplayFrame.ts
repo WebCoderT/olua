@@ -79,7 +79,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     RoleDisplayFrame.updateOutShow(role);
     // 开启监听
     RoleDisplayFrame.keyboardListener();
-    console.log(roleAnimationMap.get("attack_up"));
+    console.log(roleAnimationMap.get("attack3_left_up"));
   },
   /**
    * 创建基础角色
@@ -198,7 +198,7 @@ const RoleDisplayFrame: RoleDisplayFrame = {
   },
 
   // 动作
-  action: ACTION.ATTACK,
+  action: ACTION.STAND,
 
   // 动作更改
   updateAction() {
