@@ -1,6 +1,7 @@
 import { OECCUPATION } from "../types/role";
 import { SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/skill";
 import { skill_1000, skill_1001 } from "../skills/zhan";
+import { ACTION } from "../types/animation";
 
 /** 职业技能映射 */
 export const oeccupationSkills = new Map<OECCUPATION, SkillId[]>();
@@ -18,7 +19,7 @@ export const skills = new Map<SkillId, SkillConfig>();
 skills.set("1000", {
   label: "‌基础剑术",
   icon: "skill/1001",
-  cooldown: 1,
+  cooldown: 100,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
   level: 1,
@@ -39,6 +40,7 @@ skills.set("1000", {
     { baseType: "physicalAttack", baseTypeRate: 2 },
   ],
   onClick: skill_1000,
+  action: ACTION.ATTACK_NEAR,
 });
 
 skills.set("1001", {
@@ -65,6 +67,7 @@ skills.set("1001", {
   ],
   distance: 0,
   onClick: skill_1001,
+  action: ACTION.ATTACK_SKILL_1,
 });
 
 skills.set("1002", {
@@ -91,6 +94,7 @@ skills.set("1002", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1003", {
@@ -117,6 +121,7 @@ skills.set("1003", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1004", {
@@ -143,6 +148,7 @@ skills.set("1004", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1005", {
@@ -169,6 +175,7 @@ skills.set("1005", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1006", {
@@ -195,6 +202,7 @@ skills.set("1006", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1007", {
@@ -221,6 +229,7 @@ skills.set("1007", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1008", {
@@ -247,6 +256,7 @@ skills.set("1008", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1009", {
@@ -273,6 +283,7 @@ skills.set("1009", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1010", {
@@ -299,6 +310,7 @@ skills.set("1010", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });
 
 skills.set("1011", {
@@ -325,4 +337,5 @@ skills.set("1011", {
   ],
   distance: 0,
   onClick: skill_1000,
+  action: ACTION.STAND,
 });

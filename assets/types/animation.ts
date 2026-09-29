@@ -29,7 +29,7 @@ export enum ACTION {
   /** 攻击_近 */
   ATTACK_NEAR = "attack_near",
   /** 攻击1 */
-  TEST2 = "test2",
+  ATTACK_SKILL_1 = "attack_skill_1",
   /** 攻击2 */
   TEST3 = "test3",
   /** 释放技能，法师攻击，道士攻击使用这个动作 */

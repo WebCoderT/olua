@@ -1,6 +1,6 @@
 import type { Node, Vec3 } from "cc";
 import type { Role } from "../entities/Role";
-import type { DIRECTION } from "./animation";
+import type { ACTION, DIRECTION } from "./animation";
 import type { Monster } from "./monster";
 import type { BattleAttributes } from "./common";
 import type { OECCUPATION } from "./role";
@@ -92,6 +92,8 @@ export interface SkillConfig {
   damageCoefficients: DamageCoefficient[];
   /** 使用距离 */
   distance: number;
+  /** 对应动画 */
+  action: ACTION;
   /** 释放技能方法（入参为技能上下文） */
   onClick: (context: SkillContext) => void;
 }
