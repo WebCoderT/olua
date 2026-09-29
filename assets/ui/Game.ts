@@ -1,6 +1,5 @@
 import { _decorator, Camera, Component, PhysicsSystem, Vec3 } from "cc";
 import BottomBarFrame from "./components/BottomBarFrame";
-import RoleAvatarFrame from "./components/RoleAvatarFrame";
 import { ActivityController } from "./controllers/ActivityController";
 import MapFrame from "./components/MapFrame";
 import GameHelper from "./utils/GameHelper";
@@ -8,6 +7,7 @@ import StorageManager from "./utils/StorageManager";
 import RoleDisplayFrame from "./components/RoleDisplayFrame";
 import LayerManager from "./utils/LayerManager";
 import ScreenClick from "./components/ScreenClick";
+import RoleAvatar from "./nodes/RoleAvatar";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -18,7 +18,7 @@ export class Game extends Component {
   //底部区域
   bottomBar: BottomBarFrame = BottomBarFrame;
   // 角色头像
-  roleAvatar: RoleAvatarFrame = RoleAvatarFrame;
+  RoleAvatar: RoleAvatar;
   // 地图显示
   map: MapFrame = MapFrame;
   // 游戏工具
@@ -32,7 +32,8 @@ export class Game extends Component {
     // 初始化底部
     this.bottomBar.init(role);
     // 初始化用户头像
-    this.roleAvatar.init(role);
+    this.RoleAvatar = new RoleAvatar(role);
+    LayerManager.addToUILayer(this.RoleAvatar);
     // 初始化地图
     this.map.init();
     // 初始化游戏全局工具
