@@ -1,4 +1,4 @@
-import { Node, Sprite, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, Node, Sprite, UITransform, Vec2, Vec3 } from "cc";
 import monsters from "../../configs/monster";
 import { ACTION, DIRECTION, Monster, MonsterConfig } from "../../types/common";
 import AnimationHelper from "../helpers/AnimationHelper";
@@ -6,6 +6,7 @@ import { getAnimationName } from "../../configs/game";
 import LayerManager from "../utils/LayerManager";
 import { addObstacleCollider } from "../utils/utils";
 import GameUiHelper from "../helpers/GameUiHelper";
+import { Role } from "../../configs/role";
 
 const Monsters = {
   /** 已生成怪物数据列表 */
@@ -32,7 +33,17 @@ const Monsters = {
     uitransform.setContentSize(monster.contentSize);
     const animationNode = new Node();
     animationNode.addComponent(Sprite);
-    AnimationHelper.useMonsterAnimation(getAnimationName(ACTION.STAND, DIRECTION.DOWN), animationNode, monster.out, 0.1);
+    console.log(monster.speedRate);
+    const animate = AnimationHelper.useMonsterAnimation(getAnimationName(ACTION.STAND, DIRECTION.DOWN), animationNode, monster.out, monster.speedRate);
+    animate.on(
+      Animation.EventType.FINISHED,
+      (_, { name }: { name: string }) => {
+        if (name.includes("attack")) console.log("播放完成：" + name);
+        /** 播放完成后更换当前最新动画 */
+        animate.play(getAnimationName(ACTION.STAND, DIRECTION.DOWN));
+      },
+      this,
+    );
     node.addChild(animationNode);
     addObstacleCollider(node);
     const head = GameUiHelper.createHead("monster_head", monster.label, monster.hp, monster.maxHp);
@@ -44,6 +55,15 @@ const Monsters = {
   checkWhichMonterBeClicked(position: Vec2) {
     return Monsters.monsterNodes.find((node) => {
       return node.getComponent(UITransform).isHit(position);
+    });
+  },
+
+  /** 怪物属性更改 */
+  monsterUpdate(uuid: string, attack: Role) {
+    Monsters.monsterNodes.forEach((node, index) => {
+      if (node.uuid === uuid) {
+        console.log(node);
+      }
     });
   },
 };

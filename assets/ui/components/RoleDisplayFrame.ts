@@ -2,11 +2,13 @@ import { Animation, BoxCollider2D, Color, EventKeyboard, Input, input, Node, res
 import StorageManager from "../utils/StorageManager";
 import { Role } from "../../configs/role";
 import { ACTION, DIRECTION } from "../../types/common";
-import { getAnimationName, roleAnimationMap } from "../../configs/game";
+import { actionNeedWeapon, getAnimationName, ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../configs/game";
 import LayerManager from "../utils/LayerManager";
 import AnimationHelper from "../helpers/AnimationHelper";
 import UiHelper from "../helpers/UiHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
+import BattleHelper from "../utils/BattleHelper";
+import Monsters from "./Monsters";
 
 interface RoleDisplayFrame {
   // 基础角色区域
@@ -54,6 +56,14 @@ interface RoleDisplayFrame {
   updateWeaponOutShow(role: Role): void;
   // 更改外观
   updateOutShow(role: Role): void;
+  /** 打架目标 */
+  target: Node;
+  /** 设置打架目标 */
+  setTarget: (target: Node, attackNow?: boolean) => void;
+  /** 攻击目标 */
+  attackTarget: (target: Node) => void;
+  /** 攻击目标数据更新 */
+  attackTargetUpdate: () => void;
 }
 
 const RoleDisplayFrame: RoleDisplayFrame = {
@@ -79,7 +89,6 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     RoleDisplayFrame.updateOutShow(role);
     // 开启监听
     RoleDisplayFrame.keyboardListener();
-    console.log(roleAnimationMap.get("attack3_left_up"));
   },
   /**
    * 创建基础角色
@@ -119,8 +128,10 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     boxCollider.offset = new Vec2(0, 35);
     // this.boxCollider.group = GameCollisionLayer.PLAYER;
   },
-  // 更改动画
+  // 更改播放的动作
   updateAnimationPlay() {
+    /** 更换动作前判断，动作是否需要武器 */
+    if (actionNeedWeapon[RoleDisplayFrame.action] && !RoleDisplayFrame.weaponAnimate) return;
     RoleDisplayFrame.clothAnimate && RoleDisplayFrame.clothAnimate.crossFade(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), 0.2);
     RoleDisplayFrame.weaponAnimate && RoleDisplayFrame.weaponAnimate.crossFade(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), 0.2);
   },
@@ -223,19 +234,17 @@ const RoleDisplayFrame: RoleDisplayFrame = {
 
   updateWorldPosition() {
     const rigidBody = RoleDisplayFrame.basicRole.getComponent(RigidBody2D);
-    const speed = 2;
+    const speed = RoleDisplayFrame.run ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
     let inputX = 0;
     let inputY = 0;
     if (RoleDisplayFrame.up) inputY += 1;
     if (RoleDisplayFrame.down) inputY -= 1;
     if (RoleDisplayFrame.left) inputX -= 1;
     if (RoleDisplayFrame.right) inputX += 1;
-
     const moveVec = new Vec2(inputX, inputY);
     if (moveVec.length() > 0) {
       moveVec.normalize();
     }
-
     // 关键：直接赋值速度，有输入就动，没输入就立刻清零，彻底解决漂移
     if (RoleDisplayFrame.action === ACTION.WALK || RoleDisplayFrame.action === ACTION.RUN) {
       rigidBody.linearVelocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
@@ -257,12 +266,25 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     RoleDisplayFrame.clothAnimate = null;
     // 加载动画
     if (role.equipments.cloth) {
-      RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.cloth, role.equipments.cloth.out);
+      RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(
+        getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction),
+        RoleDisplayFrame.cloth,
+        role.equipments.cloth.out,
+        role.speedRate,
+      );
       RoleDisplayFrame.updateAnimationPlay();
     } else {
-      RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.cloth, "role/1");
+      RoleDisplayFrame.clothAnimate = AnimationHelper.useRoleAnimation(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.cloth, "role/1", role.speedRate);
       RoleDisplayFrame.updateAnimationPlay();
     }
+    RoleDisplayFrame.clothAnimate.on(
+      Animation.EventType.FINISHED,
+      (_, { name }: { name: string }) => {
+        /** 播放完成后更换当前最新动画 */
+        RoleDisplayFrame.clothAnimate.play(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction));
+      },
+      this,
+    );
   },
   // 武器节点
   weapon: null,
@@ -273,10 +295,26 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     // 销毁动画组件
     RoleDisplayFrame.weapon.getComponent(Animation)?.destroy();
     RoleDisplayFrame.weaponAnimate = null;
-    // 加载动画
+    /** 加载动画,除了最基础的站立，跑动，走路动画外，其他动画都必须有武器 */
     if (role.equipments.weapon) {
-      RoleDisplayFrame.weaponAnimate = AnimationHelper.useRoleAnimation(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction), RoleDisplayFrame.weapon, role.equipments.weapon.out);
+      RoleDisplayFrame.weaponAnimate = AnimationHelper.useRoleAnimation(
+        getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction),
+        RoleDisplayFrame.weapon,
+        role.equipments.weapon.out,
+        role.speedRate,
+      );
       RoleDisplayFrame.updateAnimationPlay();
+      RoleDisplayFrame.weaponAnimate.on(
+        Animation.EventType.FINISHED,
+        (_, { name }: { name: string }) => {
+          if (name.includes("attack")) {
+            RoleDisplayFrame.attackTargetUpdate();
+          }
+          /** 播放完成后更换当前最新动画 */
+          RoleDisplayFrame.weaponAnimate.play(getAnimationName(RoleDisplayFrame.action, RoleDisplayFrame.direction));
+        },
+        this,
+      );
     }
   },
 
@@ -286,6 +324,30 @@ const RoleDisplayFrame: RoleDisplayFrame = {
     RoleDisplayFrame.updateClothOutShow(role);
     // 武器
     RoleDisplayFrame.updateWeaponOutShow(role);
+  },
+
+  /** 打架目标 */
+  target: null,
+  /** 设置攻击目标 */
+  setTarget(target, attackNow = false) {
+    RoleDisplayFrame.target = target;
+    attackNow && RoleDisplayFrame.attackTarget(target);
+  },
+  /** 攻击目标 */
+  attackTarget(target) {
+    /** 先设置动作为攻击，并立即更改动作 */
+    RoleDisplayFrame.action = ACTION.ATTACK_NEAR;
+    RoleDisplayFrame.updateAnimationPlay();
+
+    /** 判断攻击距离 */
+    const canAttack = BattleHelper.checkTargetCanAttack(target, RoleDisplayFrame.basicRole);
+    /** 判断攻击方向 */
+    const d = BattleHelper.checkSelfDirection(target, RoleDisplayFrame.basicRole);
+  },
+
+  /** 攻击目标数据更新 */
+  attackTargetUpdate() {
+    return Monsters.monsterUpdate(RoleDisplayFrame.target.uuid, StorageManager.findOnlineRole());
   },
 };
 

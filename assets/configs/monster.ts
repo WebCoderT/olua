@@ -19,11 +19,19 @@ monsters.set("1", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(100, 100),
-  actionSpeed: new Map([
-    [ACTION.STAND, 1],
-    [ACTION.WALK, 1],
-    [ACTION.RUN, 1],
-  ]),
+  speedRate: {
+    [ACTION.STAND]: 0.01,
+    [ACTION.WALK]: 1,
+    [ACTION.RUN]: 1,
+    [ACTION.ATTACK_NEAR]: 1,
+    [ACTION.TEST2]: 1,
+    [ACTION.TEST3]: 1,
+    [ACTION.ATTACK_FAR]: 1,
+    [ACTION.INJURED]: 1,
+    [ACTION.A1]: 1,
+    [ACTION.DIE]: 1,
+    [ACTION.TEST1]: 1,
+  },
 });
 monsters.set("2", {
   icon: "monster/icon/2",
@@ -41,7 +49,7 @@ monsters.set("2", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("3", {
   icon: "monster/icon/3",
@@ -59,7 +67,7 @@ monsters.set("3", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("4", {
   icon: "monster/icon/4",
@@ -77,7 +85,7 @@ monsters.set("4", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("5", {
   icon: "monster/icon/5",
@@ -95,7 +103,7 @@ monsters.set("5", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("6", {
   icon: "monster/icon/6",
@@ -113,7 +121,7 @@ monsters.set("6", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("7", {
   icon: "monster/icon/7",
@@ -131,7 +139,7 @@ monsters.set("7", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("8", {
   icon: "monster/icon/8",
@@ -149,7 +157,7 @@ monsters.set("8", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("9", {
   icon: "monster/icon/9",
@@ -167,7 +175,7 @@ monsters.set("9", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("10", {
   icon: "monster/icon/10",
@@ -185,7 +193,7 @@ monsters.set("10", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("11", {
   icon: "monster/icon/11",
@@ -203,7 +211,7 @@ monsters.set("11", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("12", {
   icon: "monster/icon/12",
@@ -221,7 +229,7 @@ monsters.set("12", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("13", {
   icon: "monster/icon/13",
@@ -239,7 +247,7 @@ monsters.set("13", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("14", {
   icon: "monster/icon/14",
@@ -257,7 +265,7 @@ monsters.set("14", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("15", {
   icon: "monster/icon/15",
@@ -275,7 +283,7 @@ monsters.set("15", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("16", {
   icon: "monster/icon/16",
@@ -293,7 +301,7 @@ monsters.set("16", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("17", {
   icon: "monster/icon/17",
@@ -311,7 +319,7 @@ monsters.set("17", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("18", {
   icon: "monster/icon/18",
@@ -329,7 +337,7 @@ monsters.set("18", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("19", {
   icon: "monster/icon/19",
@@ -347,7 +355,7 @@ monsters.set("19", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("20", {
   icon: "monster/icon/20",
@@ -365,7 +373,7 @@ monsters.set("20", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("21", {
   icon: "monster/icon/21",
@@ -383,7 +391,7 @@ monsters.set("21", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("22", {
   icon: "monster/icon/22",
@@ -401,7 +409,7 @@ monsters.set("22", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("23", {
   icon: "monster/icon/23",
@@ -419,7 +427,7 @@ monsters.set("23", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("24", {
   icon: "monster/icon/24",
@@ -437,7 +445,7 @@ monsters.set("24", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("25", {
   icon: "monster/icon/25",
@@ -455,7 +463,7 @@ monsters.set("25", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("26", {
   icon: "monster/icon/26",
@@ -473,7 +481,7 @@ monsters.set("26", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("27", {
   icon: "monster/icon/27",
@@ -491,7 +499,7 @@ monsters.set("27", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("28", {
   icon: "monster/icon/28",
@@ -509,7 +517,7 @@ monsters.set("28", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("29", {
   icon: "monster/icon/29",
@@ -527,7 +535,7 @@ monsters.set("29", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("30", {
   icon: "monster/icon/30",
@@ -545,7 +553,7 @@ monsters.set("30", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("31", {
   icon: "monster/icon/31",
@@ -563,7 +571,7 @@ monsters.set("31", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("32", {
   icon: "monster/icon/32",
@@ -581,7 +589,7 @@ monsters.set("32", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("33", {
   icon: "monster/icon/33",
@@ -599,7 +607,7 @@ monsters.set("33", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("34", {
   icon: "monster/icon/34",
@@ -617,7 +625,7 @@ monsters.set("34", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("35", {
   icon: "monster/icon/35",
@@ -635,7 +643,7 @@ monsters.set("35", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("36", {
   icon: "monster/icon/36",
@@ -653,7 +661,7 @@ monsters.set("36", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("37", {
   icon: "monster/icon/37",
@@ -671,7 +679,7 @@ monsters.set("37", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("38", {
   icon: "monster/icon/38",
@@ -689,7 +697,7 @@ monsters.set("38", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("39", {
   icon: "monster/icon/39",
@@ -707,7 +715,7 @@ monsters.set("39", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("40", {
   icon: "monster/icon/40",
@@ -725,7 +733,7 @@ monsters.set("40", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("41", {
   icon: "monster/icon/41",
@@ -743,7 +751,7 @@ monsters.set("41", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("42", {
   icon: "monster/icon/42",
@@ -761,7 +769,7 @@ monsters.set("42", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("43", {
   icon: "monster/icon/43",
@@ -779,7 +787,7 @@ monsters.set("43", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("44", {
   icon: "monster/icon/44",
@@ -797,7 +805,7 @@ monsters.set("44", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("45", {
   icon: "monster/icon/45",
@@ -815,7 +823,7 @@ monsters.set("45", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("46", {
   icon: "monster/icon/46",
@@ -833,7 +841,7 @@ monsters.set("46", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("47", {
   icon: "monster/icon/47",
@@ -851,7 +859,7 @@ monsters.set("47", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("48", {
   icon: "monster/icon/48",
@@ -869,7 +877,7 @@ monsters.set("48", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("49", {
   icon: "monster/icon/49",
@@ -887,7 +895,7 @@ monsters.set("49", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("50", {
   icon: "monster/icon/50",
@@ -905,7 +913,7 @@ monsters.set("50", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("51", {
   icon: "monster/icon/51",
@@ -923,7 +931,7 @@ monsters.set("51", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("52", {
   icon: "monster/icon/52",
@@ -941,7 +949,7 @@ monsters.set("52", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("53", {
   icon: "monster/icon/53",
@@ -959,7 +967,7 @@ monsters.set("53", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("54", {
   icon: "monster/icon/54",
@@ -977,7 +985,7 @@ monsters.set("54", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("55", {
   icon: "monster/icon/55",
@@ -995,7 +1003,7 @@ monsters.set("55", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("56", {
   icon: "monster/icon/56",
@@ -1013,7 +1021,7 @@ monsters.set("56", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("57", {
   icon: "monster/icon/57",
@@ -1031,7 +1039,7 @@ monsters.set("57", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("58", {
   icon: "monster/icon/58",
@@ -1049,7 +1057,7 @@ monsters.set("58", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("59", {
   icon: "monster/icon/59",
@@ -1067,7 +1075,7 @@ monsters.set("59", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("60", {
   icon: "monster/icon/60",
@@ -1085,7 +1093,7 @@ monsters.set("60", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("61", {
   icon: "monster/icon/61",
@@ -1103,7 +1111,7 @@ monsters.set("61", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("62", {
   icon: "monster/icon/62",
@@ -1121,7 +1129,7 @@ monsters.set("62", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("63", {
   icon: "monster/icon/63",
@@ -1139,7 +1147,7 @@ monsters.set("63", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("64", {
   icon: "monster/icon/64",
@@ -1157,7 +1165,7 @@ monsters.set("64", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("65", {
   icon: "monster/icon/65",
@@ -1175,7 +1183,7 @@ monsters.set("65", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("66", {
   icon: "monster/icon/66",
@@ -1193,7 +1201,7 @@ monsters.set("66", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("67", {
   icon: "monster/icon/67",
@@ -1211,7 +1219,7 @@ monsters.set("67", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("68", {
   icon: "monster/icon/68",
@@ -1229,7 +1237,7 @@ monsters.set("68", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("69", {
   icon: "monster/icon/69",
@@ -1247,7 +1255,7 @@ monsters.set("69", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("70", {
   icon: "monster/icon/70",
@@ -1265,7 +1273,7 @@ monsters.set("70", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("71", {
   icon: "monster/icon/71",
@@ -1283,7 +1291,7 @@ monsters.set("71", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("72", {
   icon: "monster/icon/72",
@@ -1301,7 +1309,7 @@ monsters.set("72", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("73", {
   icon: "monster/icon/73",
@@ -1319,7 +1327,7 @@ monsters.set("73", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("74", {
   icon: "monster/icon/74",
@@ -1337,7 +1345,7 @@ monsters.set("74", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("75", {
   icon: "monster/icon/75",
@@ -1355,7 +1363,7 @@ monsters.set("75", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("76", {
   icon: "monster/icon/76",
@@ -1373,7 +1381,7 @@ monsters.set("76", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("77", {
   icon: "monster/icon/77",
@@ -1391,7 +1399,7 @@ monsters.set("77", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("78", {
   icon: "monster/icon/78",
@@ -1409,7 +1417,7 @@ monsters.set("78", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("79", {
   icon: "monster/icon/79",
@@ -1427,7 +1435,7 @@ monsters.set("79", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("80", {
   icon: "monster/icon/80",
@@ -1445,7 +1453,7 @@ monsters.set("80", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("81", {
   icon: "monster/icon/81",
@@ -1463,7 +1471,7 @@ monsters.set("81", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("82", {
   icon: "monster/icon/82",
@@ -1481,7 +1489,7 @@ monsters.set("82", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("83", {
   icon: "monster/icon/83",
@@ -1499,7 +1507,7 @@ monsters.set("83", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("84", {
   icon: "monster/icon/84",
@@ -1517,7 +1525,7 @@ monsters.set("84", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("85", {
   icon: "monster/icon/85",
@@ -1535,7 +1543,7 @@ monsters.set("85", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("86", {
   icon: "monster/icon/86",
@@ -1553,7 +1561,7 @@ monsters.set("86", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("87", {
   icon: "monster/icon/87",
@@ -1571,7 +1579,7 @@ monsters.set("87", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("88", {
   icon: "monster/icon/88",
@@ -1589,7 +1597,7 @@ monsters.set("88", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("89", {
   icon: "monster/icon/89",
@@ -1607,7 +1615,7 @@ monsters.set("89", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("90", {
   icon: "monster/icon/90",
@@ -1625,7 +1633,7 @@ monsters.set("90", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("91", {
   icon: "monster/icon/91",
@@ -1643,7 +1651,7 @@ monsters.set("91", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("92", {
   icon: "monster/icon/92",
@@ -1661,7 +1669,7 @@ monsters.set("92", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("93", {
   icon: "monster/icon/93",
@@ -1679,7 +1687,7 @@ monsters.set("93", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("94", {
   icon: "monster/icon/94",
@@ -1697,7 +1705,7 @@ monsters.set("94", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("95", {
   icon: "monster/icon/95",
@@ -1715,7 +1723,7 @@ monsters.set("95", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("96", {
   icon: "monster/icon/96",
@@ -1733,7 +1741,7 @@ monsters.set("96", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("97", {
   icon: "monster/icon/97",
@@ -1751,7 +1759,7 @@ monsters.set("97", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("98", {
   icon: "monster/icon/98",
@@ -1769,7 +1777,7 @@ monsters.set("98", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("99", {
   icon: "monster/icon/99",
@@ -1787,7 +1795,7 @@ monsters.set("99", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("100", {
   icon: "monster/icon/100",
@@ -1805,7 +1813,7 @@ monsters.set("100", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("101", {
   icon: "monster/icon/101",
@@ -1823,7 +1831,7 @@ monsters.set("101", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("102", {
   icon: "monster/icon/102",
@@ -1841,7 +1849,7 @@ monsters.set("102", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("103", {
   icon: "monster/icon/103",
@@ -1859,7 +1867,7 @@ monsters.set("103", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("104", {
   icon: "monster/icon/104",
@@ -1877,7 +1885,7 @@ monsters.set("104", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("105", {
   icon: "monster/icon/105",
@@ -1895,7 +1903,7 @@ monsters.set("105", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("106", {
   icon: "monster/icon/106",
@@ -1913,7 +1921,7 @@ monsters.set("106", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("107", {
   icon: "monster/icon/107",
@@ -1931,7 +1939,7 @@ monsters.set("107", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("108", {
   icon: "monster/icon/108",
@@ -1949,7 +1957,7 @@ monsters.set("108", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("109", {
   icon: "monster/icon/109",
@@ -1967,7 +1975,7 @@ monsters.set("109", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("110", {
   icon: "monster/icon/110",
@@ -1985,7 +1993,7 @@ monsters.set("110", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("111", {
   icon: "monster/icon/111",
@@ -2003,7 +2011,7 @@ monsters.set("111", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("112", {
   icon: "monster/icon/112",
@@ -2021,7 +2029,7 @@ monsters.set("112", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("113", {
   icon: "monster/icon/113",
@@ -2039,7 +2047,7 @@ monsters.set("113", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("114", {
   icon: "monster/icon/114",
@@ -2057,7 +2065,7 @@ monsters.set("114", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("115", {
   icon: "monster/icon/115",
@@ -2075,7 +2083,7 @@ monsters.set("115", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("116", {
   icon: "monster/icon/116",
@@ -2093,7 +2101,7 @@ monsters.set("116", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("117", {
   icon: "monster/icon/117",
@@ -2111,7 +2119,7 @@ monsters.set("117", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("118", {
   icon: "monster/icon/118",
@@ -2129,7 +2137,7 @@ monsters.set("118", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("119", {
   icon: "monster/icon/119",
@@ -2147,7 +2155,7 @@ monsters.set("119", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("120", {
   icon: "monster/icon/120",
@@ -2165,7 +2173,7 @@ monsters.set("120", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("121", {
   icon: "monster/icon/121",
@@ -2183,7 +2191,7 @@ monsters.set("121", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("122", {
   icon: "monster/icon/122",
@@ -2201,7 +2209,7 @@ monsters.set("122", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("123", {
   icon: "monster/icon/123",
@@ -2219,7 +2227,7 @@ monsters.set("123", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("124", {
   icon: "monster/icon/124",
@@ -2237,7 +2245,7 @@ monsters.set("124", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("125", {
   icon: "monster/icon/125",
@@ -2255,7 +2263,7 @@ monsters.set("125", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("126", {
   icon: "monster/icon/126",
@@ -2273,7 +2281,7 @@ monsters.set("126", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("127", {
   icon: "monster/icon/127",
@@ -2291,7 +2299,7 @@ monsters.set("127", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("128", {
   icon: "monster/icon/128",
@@ -2309,7 +2317,7 @@ monsters.set("128", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("129", {
   icon: "monster/icon/129",
@@ -2327,7 +2335,7 @@ monsters.set("129", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("130", {
   icon: "monster/icon/130",
@@ -2345,7 +2353,7 @@ monsters.set("130", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("131", {
   icon: "monster/icon/131",
@@ -2363,7 +2371,7 @@ monsters.set("131", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("132", {
   icon: "monster/icon/132",
@@ -2381,7 +2389,7 @@ monsters.set("132", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("133", {
   icon: "monster/icon/133",
@@ -2399,7 +2407,7 @@ monsters.set("133", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("134", {
   icon: "monster/icon/134",
@@ -2417,7 +2425,7 @@ monsters.set("134", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("135", {
   icon: "monster/icon/135",
@@ -2435,7 +2443,7 @@ monsters.set("135", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("136", {
   icon: "monster/icon/136",
@@ -2453,7 +2461,7 @@ monsters.set("136", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("137", {
   icon: "monster/icon/137",
@@ -2471,7 +2479,7 @@ monsters.set("137", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("138", {
   icon: "monster/icon/138",
@@ -2489,7 +2497,7 @@ monsters.set("138", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("139", {
   icon: "monster/icon/139",
@@ -2507,7 +2515,7 @@ monsters.set("139", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("140", {
   icon: "monster/icon/140",
@@ -2525,7 +2533,7 @@ monsters.set("140", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("141", {
   icon: "monster/icon/141",
@@ -2543,7 +2551,7 @@ monsters.set("141", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("142", {
   icon: "monster/icon/142",
@@ -2561,7 +2569,7 @@ monsters.set("142", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("143", {
   icon: "monster/icon/143",
@@ -2579,7 +2587,7 @@ monsters.set("143", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("144", {
   icon: "monster/icon/144",
@@ -2597,7 +2605,7 @@ monsters.set("144", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("145", {
   icon: "monster/icon/145",
@@ -2615,7 +2623,7 @@ monsters.set("145", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("146", {
   icon: "monster/icon/146",
@@ -2633,7 +2641,7 @@ monsters.set("146", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("147", {
   icon: "monster/icon/147",
@@ -2651,7 +2659,7 @@ monsters.set("147", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("148", {
   icon: "monster/icon/148",
@@ -2669,7 +2677,7 @@ monsters.set("148", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("149", {
   icon: "monster/icon/149",
@@ -2687,7 +2695,7 @@ monsters.set("149", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("150", {
   icon: "monster/icon/150",
@@ -2705,7 +2713,7 @@ monsters.set("150", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("151", {
   icon: "monster/icon/151",
@@ -2723,7 +2731,7 @@ monsters.set("151", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("152", {
   icon: "monster/icon/152",
@@ -2741,7 +2749,7 @@ monsters.set("152", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("153", {
   icon: "monster/icon/153",
@@ -2759,7 +2767,7 @@ monsters.set("153", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("154", {
   icon: "monster/icon/154",
@@ -2777,7 +2785,7 @@ monsters.set("154", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("155", {
   icon: "monster/icon/155",
@@ -2795,7 +2803,7 @@ monsters.set("155", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("156", {
   icon: "monster/icon/156",
@@ -2813,7 +2821,7 @@ monsters.set("156", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("157", {
   icon: "monster/icon/157",
@@ -2831,7 +2839,7 @@ monsters.set("157", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("158", {
   icon: "monster/icon/158",
@@ -2849,7 +2857,7 @@ monsters.set("158", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("159", {
   icon: "monster/icon/159",
@@ -2867,7 +2875,7 @@ monsters.set("159", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("160", {
   icon: "monster/icon/160",
@@ -2885,7 +2893,7 @@ monsters.set("160", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("161", {
   icon: "monster/icon/161",
@@ -2903,7 +2911,7 @@ monsters.set("161", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("162", {
   icon: "monster/icon/162",
@@ -2921,7 +2929,7 @@ monsters.set("162", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("163", {
   icon: "monster/icon/163",
@@ -2939,7 +2947,7 @@ monsters.set("163", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("164", {
   icon: "monster/icon/164",
@@ -2957,7 +2965,7 @@ monsters.set("164", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("165", {
   icon: "monster/icon/165",
@@ -2975,7 +2983,7 @@ monsters.set("165", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("166", {
   icon: "monster/icon/166",
@@ -2993,7 +3001,7 @@ monsters.set("166", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("167", {
   icon: "monster/icon/167",
@@ -3011,7 +3019,7 @@ monsters.set("167", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("168", {
   icon: "monster/icon/168",
@@ -3029,7 +3037,7 @@ monsters.set("168", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("169", {
   icon: "monster/icon/169",
@@ -3047,7 +3055,7 @@ monsters.set("169", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("170", {
   icon: "monster/icon/170",
@@ -3065,7 +3073,7 @@ monsters.set("170", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("171", {
   icon: "monster/icon/171",
@@ -3083,7 +3091,7 @@ monsters.set("171", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("172", {
   icon: "monster/icon/172",
@@ -3101,7 +3109,7 @@ monsters.set("172", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("173", {
   icon: "monster/icon/173",
@@ -3119,7 +3127,7 @@ monsters.set("173", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("174", {
   icon: "monster/icon/174",
@@ -3137,7 +3145,7 @@ monsters.set("174", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("175", {
   icon: "monster/icon/175",
@@ -3155,7 +3163,7 @@ monsters.set("175", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("176", {
   icon: "monster/icon/176",
@@ -3173,7 +3181,7 @@ monsters.set("176", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("177", {
   icon: "monster/icon/177",
@@ -3191,7 +3199,7 @@ monsters.set("177", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("178", {
   icon: "monster/icon/178",
@@ -3209,7 +3217,7 @@ monsters.set("178", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("179", {
   icon: "monster/icon/179",
@@ -3227,7 +3235,7 @@ monsters.set("179", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("180", {
   icon: "monster/icon/180",
@@ -3245,7 +3253,7 @@ monsters.set("180", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("181", {
   icon: "monster/icon/181",
@@ -3263,7 +3271,7 @@ monsters.set("181", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("182", {
   icon: "monster/icon/182",
@@ -3281,7 +3289,7 @@ monsters.set("182", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("183", {
   icon: "monster/icon/183",
@@ -3299,7 +3307,7 @@ monsters.set("183", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("184", {
   icon: "monster/icon/184",
@@ -3317,7 +3325,7 @@ monsters.set("184", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("185", {
   icon: "monster/icon/185",
@@ -3335,7 +3343,7 @@ monsters.set("185", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("186", {
   icon: "monster/icon/186",
@@ -3353,7 +3361,7 @@ monsters.set("186", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("187", {
   icon: "monster/icon/187",
@@ -3371,7 +3379,7 @@ monsters.set("187", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("188", {
   icon: "monster/icon/188",
@@ -3389,7 +3397,7 @@ monsters.set("188", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("189", {
   icon: "monster/icon/189",
@@ -3407,7 +3415,7 @@ monsters.set("189", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("190", {
   icon: "monster/icon/190",
@@ -3425,7 +3433,7 @@ monsters.set("190", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("191", {
   icon: "monster/icon/191",
@@ -3443,7 +3451,7 @@ monsters.set("191", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("192", {
   icon: "monster/icon/192",
@@ -3461,7 +3469,7 @@ monsters.set("192", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("193", {
   icon: "monster/icon/193",
@@ -3479,7 +3487,7 @@ monsters.set("193", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("194", {
   icon: "monster/icon/194",
@@ -3497,7 +3505,7 @@ monsters.set("194", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("195", {
   icon: "monster/icon/195",
@@ -3515,7 +3523,7 @@ monsters.set("195", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("196", {
   icon: "monster/icon/196",
@@ -3533,7 +3541,7 @@ monsters.set("196", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("197", {
   icon: "monster/icon/197",
@@ -3551,7 +3559,7 @@ monsters.set("197", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("198", {
   icon: "monster/icon/198",
@@ -3569,7 +3577,7 @@ monsters.set("198", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("199", {
   icon: "monster/icon/199",
@@ -3587,7 +3595,7 @@ monsters.set("199", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("200", {
   icon: "monster/icon/200",
@@ -3605,7 +3613,7 @@ monsters.set("200", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("201", {
   icon: "monster/icon/201",
@@ -3623,7 +3631,7 @@ monsters.set("201", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("202", {
   icon: "monster/icon/202",
@@ -3641,7 +3649,7 @@ monsters.set("202", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("203", {
   icon: "monster/icon/203",
@@ -3659,7 +3667,7 @@ monsters.set("203", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("204", {
   icon: "monster/icon/204",
@@ -3677,7 +3685,7 @@ monsters.set("204", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("205", {
   icon: "monster/icon/205",
@@ -3695,7 +3703,7 @@ monsters.set("205", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("206", {
   icon: "monster/icon/206",
@@ -3713,7 +3721,7 @@ monsters.set("206", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("207", {
   icon: "monster/icon/207",
@@ -3731,7 +3739,7 @@ monsters.set("207", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("208", {
   icon: "monster/icon/208",
@@ -3749,7 +3757,7 @@ monsters.set("208", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("209", {
   icon: "monster/icon/209",
@@ -3767,7 +3775,7 @@ monsters.set("209", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("210", {
   icon: "monster/icon/210",
@@ -3785,7 +3793,7 @@ monsters.set("210", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("211", {
   icon: "monster/icon/211",
@@ -3803,7 +3811,7 @@ monsters.set("211", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("212", {
   icon: "monster/icon/212",
@@ -3821,7 +3829,7 @@ monsters.set("212", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("213", {
   icon: "monster/icon/213",
@@ -3839,7 +3847,7 @@ monsters.set("213", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("214", {
   icon: "monster/icon/214",
@@ -3857,7 +3865,7 @@ monsters.set("214", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("215", {
   icon: "monster/icon/215",
@@ -3875,7 +3883,7 @@ monsters.set("215", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("216", {
   icon: "monster/icon/216",
@@ -3893,7 +3901,7 @@ monsters.set("216", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("217", {
   icon: "monster/icon/217",
@@ -3911,7 +3919,7 @@ monsters.set("217", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("218", {
   icon: "monster/icon/218",
@@ -3929,7 +3937,7 @@ monsters.set("218", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("219", {
   icon: "monster/icon/219",
@@ -3947,7 +3955,7 @@ monsters.set("219", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 monsters.set("220", {
   icon: "monster/icon/220",
@@ -3965,7 +3973,7 @@ monsters.set("220", {
   taoistDefense: [0, 0],
   maxHp: 10,
   contentSize: new Size(),
-  actionSpeed: undefined,
+  speedRate: undefined,
 });
 
 export default monsters;

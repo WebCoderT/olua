@@ -1,5 +1,6 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteFrame } from "cc";
 import { monsterAnimation, roleAnimationMap } from "../../configs/game";
+import { SpeedRate } from "../../types/common";
 
 const AnimationHelper = {
   /**
@@ -77,8 +78,8 @@ const AnimationHelper = {
    * @param dirSrc 动画帧存放的文件夹
    * @param time 动画播放时间
    */
-  useRoleAnimation(name: string, node: Node, dirSrc: string, time: number = 1) {
-    return AnimationHelper.useManyNameAnimation(name, node, dirSrc, time, roleAnimationMap);
+  useRoleAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate) {
+    return AnimationHelper.useManyNameAnimation(name, node, dirSrc, speedRate, roleAnimationMap);
   },
 
   /** 使用怪物动画
@@ -87,8 +88,8 @@ const AnimationHelper = {
    * @param dirSrc 动画帧存放的文件夹
    * @param time 动画播放时间
    */
-  useMonsterAnimation(name: string, node: Node, dirSrc: string, time: number = 1) {
-    return AnimationHelper.useManyNameAnimation(name, node, dirSrc, time, monsterAnimation);
+  useMonsterAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate) {
+    return AnimationHelper.useManyNameAnimation(name, node, dirSrc, speedRate, monsterAnimation);
   },
 
   /** 使用多个名称的动画
@@ -98,7 +99,7 @@ const AnimationHelper = {
    * @param time 动画播放时间
    * @param map 动画映射
    */
-  useManyNameAnimation(name: string, node: Node, dirSrc: string, time: number = 1, map: Map<string, number[]>) {
+  useManyNameAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate, map: Map<string, number[]>) {
     const animate = node.addComponent(Animation);
     resources.loadDir(dirSrc, SpriteFrame, (err, spriteFrames) => {
       if (err) {
@@ -106,7 +107,7 @@ const AnimationHelper = {
         return;
       }
       if (!isValid(node) || !isValid(animate) || !spriteFrames?.length) return;
-      AnimationHelper.spliceAnimation(map, spriteFrames, animate, time);
+      AnimationHelper.spliceAnimation(map, spriteFrames, animate, speedRate);
       animate.play(name);
     });
     return animate;
@@ -115,10 +116,17 @@ const AnimationHelper = {
   /**
    * 动画切割成多个
    */
-  spliceAnimation(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], animate: Animation, time: number = 1) {
+  spliceAnimation(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], animate: Animation, speedRate: SpeedRate) {
     animationMap.forEach((value, key) => {
       // 有效动画帧过滤
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => value.indexOf(Number(spriteFrame.name)) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1);
+      let time = 1;
+      for (const rate in speedRate) {
+        const element = speedRate[rate];
+        if (key.includes(rate)) {
+          time = element;
+        }
+      }
       if (validSpriteFrames.length > 0) AnimationHelper.createAnimation(key, validSpriteFrames, animate, time);
     });
   },
@@ -129,7 +137,7 @@ const AnimationHelper = {
    */
   createAnimation(name: string, spriteFrames: SpriteFrame[], animate: Animation, time: number = 1) {
     const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / time);
-    clip.wrapMode = AnimationClip.WrapMode.Loop;
+    clip.wrapMode = AnimationClip.WrapMode.Normal;
     clip.enableTrsBlending = false;
     clip.name = name;
     animate.addClip(clip, name);

@@ -13,6 +13,7 @@ skills.set("1000", {
   level: 1,
   description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关",
   type: SkillType.PROACTIVE,
+  distance: 10,
   damageCoefficients: [
     { baseType: "physicalAttack", baseTypeRate: 1 },
     { baseType: "physicalAttack", baseTypeRate: 1.1 },
@@ -50,6 +51,7 @@ skills.set("1001", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1002", {
@@ -74,6 +76,7 @@ skills.set("1002", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1003", {
@@ -98,6 +101,7 @@ skills.set("1003", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1004", {
@@ -122,6 +126,7 @@ skills.set("1004", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1005", {
@@ -146,6 +151,7 @@ skills.set("1005", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1006", {
@@ -170,6 +176,7 @@ skills.set("1006", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1007", {
@@ -194,6 +201,7 @@ skills.set("1007", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1008", {
@@ -218,6 +226,7 @@ skills.set("1008", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1009", {
@@ -242,6 +251,7 @@ skills.set("1009", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1010", {
@@ -266,6 +276,7 @@ skills.set("1010", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });
 
 skills.set("1011", {
@@ -290,4 +301,5 @@ skills.set("1011", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
+  distance: 0,
 });

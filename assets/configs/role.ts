@@ -1,4 +1,4 @@
-import { BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, OECCUPATION, RELATION_SHIP, SEX, SkillId } from "../types/common";
+import { ACTION, BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, OECCUPATION, RELATION_SHIP, SEX, SkillId, SpeedRate } from "../types/common";
 import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
@@ -58,6 +58,20 @@ export class Role implements BattleAttributes {
   };
   /** 快捷键 */
   shortcutKeys: SkillId[] = [];
+  /** 速度倍率 */
+  speedRate: SpeedRate = {
+    [ACTION.STAND]: 1,
+    [ACTION.WALK]: 1,
+    [ACTION.RUN]: 1,
+    [ACTION.ATTACK_NEAR]: 1,
+    [ACTION.TEST2]: 1,
+    [ACTION.TEST3]: 1,
+    [ACTION.ATTACK_FAR]: 1,
+    [ACTION.INJURED]: 1,
+    [ACTION.A1]: 1,
+    [ACTION.DIE]: 1,
+    [ACTION.TEST1]: 1,
+  };
   constructor(name: string, occupation: OECCUPATION, sex: SEX) {
     this.id = new Date().getTime().toString();
     this.name = name;

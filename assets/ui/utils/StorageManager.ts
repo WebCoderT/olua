@@ -92,7 +92,11 @@ const StorageManager = {
       // 保存
       StorageManager.updateOnlineRole(role);
       // 更新UI
-      StorageManager.updateUi(role, equipment);
+      StorageManager.updateUi(role);
+      // 更改外观
+      RoleDisplayFrame.updateOutShow(role);
+      // 更新内观
+      equipment && RoleInformationDialog.updateDialog(equipment.type);
     }
   },
   // 跳转地图
@@ -106,12 +110,8 @@ const StorageManager = {
   },
   // 更新UI
   updateUi(role: Role, equipment?: Equipment) {
-    // 更改外观
-    RoleDisplayFrame.updateOutShow(role);
     // 更新战斗力
     RoleAvatarFrame.update(role);
-    // 更新内观
-    equipment && RoleInformationDialog.updateDialog(equipment.type);
     // 更新底部导航
     BottomBarFrame.update(role);
   },
