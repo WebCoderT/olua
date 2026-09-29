@@ -19,7 +19,7 @@ export const skills = new Map<SkillId, SkillConfig>();
 skills.set("1000", {
   label: "‌基础剑术",
   icon: "skill/1001",
-  cooldown: 100,
+  cooldown: 1,
   targetType: SkillTargetType.SINGLE,
   oeccupation: OECCUPATION.ZHAN,
   level: 1,

@@ -280,19 +280,6 @@ export default class RoleDisplay extends Node {
     this.target = target;
   }
 
-  /** 攻击目标 */
-  private attackTarget(target: Node) {
-    /** 判断攻击距离，不在范围内不发起攻击 */
-    if (!BattleHelper.checkTargetCanAttack(target, this as Node)) {
-      GameUiHelper.createErrorTip("attack_range_tip", "距离太远，无法攻击！");
-      return;
-    }
-    /** 设置动作为攻击，并立即更改动作 */
-    this.action = ACTION.ATTACK_NEAR;
-    this.direction = BattleHelper.checkSelfDirection(target, this as Node);
-    this.updateAnimationPlay();
-  }
-
   /** 攻击动画播放完成后的结算 */
   private attackTargetUpdate() {
     if (!this.target) return;
