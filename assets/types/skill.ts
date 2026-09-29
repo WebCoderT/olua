@@ -39,8 +39,11 @@ export interface DamageCoefficient {
 export interface SkillCaster extends Node {
   /** 是否正在攻击/施法（动作动画未播放完成期间为 true，期间释放技能无反应） */
   isAttacking(): boolean;
-  /** 面向指定方向播放攻击动画（技能表现），动画播放完成前锁定移动与再次攻击 */
-  playSkillAttack(direction: DIRECTION): void;
+  /**
+   * 面向指定方向播放技能配置的动作动画（技能表现），动画播放完成前锁定移动与再次攻击
+   * @param action 技能配置的动作（config.action）
+   */
+  playSkillAttack(action: ACTION, direction: DIRECTION): boolean;
 }
 
 /** 怪物管理器为技能提供的能力（由 MonsterManager 实现） */

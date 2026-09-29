@@ -5,8 +5,8 @@ import BattleHelper from "../ui/utils/BattleHelper";
 export function skill_1000(context: SkillContext) {
   const { config, level, role, caster, target, monsters } = context;
   if (!target) return;
-  // 面向目标播放攻击动画
-  caster.playSkillAttack(BattleHelper.checkSelfDirection(target, caster));
+  // 面向目标播放技能配置的动作动画（config.action）
+  caster.playSkillAttack(config.action, BattleHelper.checkSelfDirection(target, caster));
   // 物理伤害结算
   const monster = monsters.getMonsterData(target);
   if (!monster) return;

@@ -369,9 +369,12 @@ export default class RoleDisplay extends Node {
     };
   }
 
-  /** 面向指定方向播放攻击动画（技能表现），动画播放完成前锁定移动与再次攻击 */
-  playSkillAttack(direction: DIRECTION) {
-    this.startAttack(ACTION.ATTACK_NEAR, direction, () => {});
+  /**
+   * 面向指定方向播放技能配置的动作动画（技能表现），动画播放完成前锁定移动与再次攻击
+   * @param action 技能配置的动作（config.action）
+   */
+  playSkillAttack(action: ACTION, direction: DIRECTION) {
+    return this.startAttack(action, direction, () => {});
   }
 
   //#endregion
