@@ -263,6 +263,8 @@ export interface SkillConfig {
   damageCoefficients: DamageCoefficient[];
   /** 使用距离 */
   distance: number;
+  /** 释放技能方法 */
+  onClick: Function;
 }
 
 /** 技能ID */
@@ -306,3 +308,16 @@ export type ActionNeedWeapon = Record<ACTION, boolean>;
 
 /** 动画对应帧名称列表 */
 export type AnimationSpritesName = Record<`${ACTION}_${DIRECTION}`, number>;
+
+/** 快捷键 */
+export type ShortcutKeys = 49 | 50 | 51 | 52;
+
+/** 需要配置的快捷键接口 */
+export interface needSetShortCutKeyConfig {
+  /** 名称 */
+  label: string;
+  /** 快捷键 */
+  key: ShortcutKeys;
+  /** 技能id */
+  skillId: SkillId | null;
+}

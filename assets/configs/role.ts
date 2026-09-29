@@ -1,4 +1,4 @@
-import { ACTION, BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, OECCUPATION, RELATION_SHIP, SEX, SkillId, SpeedRate } from "../types/common";
+import { ACTION, BattleAttributes, Equipment, EQUIPMENT_TYPE, Goods, MapId, needSetShortCutKeyConfig, OECCUPATION, RELATION_SHIP, SEX, SkillId, SpeedRate } from "../types/common";
 import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { bagCol, bagRow } from "./game";
 import { levelMap } from "./level";
@@ -44,20 +44,41 @@ export class Role implements BattleAttributes {
   };
   skills: { [key in SkillId]: number } = {
     "1000": 1,
-    "1001": 0,
-    "1002": 0,
-    "1003": 0,
-    "1004": 0,
-    "1005": 0,
-    "1006": 0,
-    "1007": 0,
-    "1008": 0,
-    "1009": 0,
-    "1010": 0,
-    "1011": 0,
+    "1001": 1,
+    "1002": 1,
+    "1003": 1,
+    "1004": 1,
+    "1005": 1,
+    "1006": 1,
+    "1007": 1,
+    "1008": 1,
+    "1009": 1,
+    "1010": 1,
+    "1011": 1,
   };
   /** 快捷键 */
-  shortcutKeys: SkillId[] = [];
+  shortcutKeys: needSetShortCutKeyConfig[] = [
+    {
+      label: "1",
+      key: 49,
+      skillId: null,
+    },
+    {
+      label: "2",
+      key: 50,
+      skillId: null,
+    },
+    {
+      label: "3",
+      key: 51,
+      skillId: null,
+    },
+    {
+      label: "4",
+      key: 52,
+      skillId: null,
+    },
+  ];
   /** 速度倍率 */
   speedRate: SpeedRate = {
     [ACTION.STAND]: 1,

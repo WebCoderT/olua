@@ -1,4 +1,5 @@
 import { OECCUPATION, SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/common";
+import { skill_1000 } from "../ui/skills/zhan";
 
 /** 所有技能 */
 export const skills = new Map<SkillId, SkillConfig>();
@@ -27,6 +28,7 @@ skills.set("1000", {
     { baseType: "physicalAttack", baseTypeRate: 1.9 },
     { baseType: "physicalAttack", baseTypeRate: 2 },
   ],
+  onClick: skill_1000,
 });
 
 skills.set("1001", {
@@ -52,6 +54,7 @@ skills.set("1001", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1002", {
@@ -77,6 +80,7 @@ skills.set("1002", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1003", {
@@ -102,6 +106,7 @@ skills.set("1003", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1004", {
@@ -127,6 +132,7 @@ skills.set("1004", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1005", {
@@ -152,6 +158,7 @@ skills.set("1005", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1006", {
@@ -177,6 +184,7 @@ skills.set("1006", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1007", {
@@ -202,6 +210,7 @@ skills.set("1007", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1008", {
@@ -227,6 +236,7 @@ skills.set("1008", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1009", {
@@ -252,6 +262,7 @@ skills.set("1009", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1010", {
@@ -277,6 +288,7 @@ skills.set("1010", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });
 
 skills.set("1011", {
@@ -302,4 +314,5 @@ skills.set("1011", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
+  onClick: skill_1000,
 });

@@ -8,6 +8,9 @@ import RoleBagDialog from "./RoleBagDialog";
 import { getCurrentLevelExpRate } from "../../configs/level";
 import { Role } from "../../configs/role";
 import SkillDialog from "./SkillDialog";
+import { ShortcutKeys } from "../../types/common";
+import { skills } from "../../configs/skill";
+import ShortcutKey from "../nodes/ShortcutKey";
 
 const bottomNavBarButtons: BottomNavBarButton[] = [
   { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: () => RoleInformationDialog.open(), name: "personal_information_dialog", shortcutKey: "C" },
@@ -28,9 +31,9 @@ interface BottomBarFrame {
   // 初始化
   init: (role: Role) => void;
   /** 左侧快捷键列表 */
-  leftShortcutKeys: [];
+  leftShortcutKeys: { [key in ShortcutKeys]: ShortcutKey };
   /** 初始化左侧快捷键 */
-  initLeftShortcutKeys: () => void;
+  initLeftShortcutKeys: (role: Role) => Node;
   // 经验条
   expBar: Node;
   // 角色血量文字显示
@@ -76,17 +79,31 @@ const BottomBarFrame: BottomBarFrame = {
     BottomBarFrame.node.addChild(BottomBarFrame.expBar);
     // 初始化血量
     BottomBarFrame.initHp(role);
-    /** 添加快捷键 */
-    BottomBarFrame.initLeftShortcutKeys();
+    /** 初始化左侧快捷键 */
+    BottomBarFrame.node.addChild(BottomBarFrame.initLeftShortcutKeys(role));
     LayerManager.addToUILayer(BottomBarFrame.node);
   },
   /** 左侧快捷键列表 */
-  leftShortcutKeys: [],
-  /** 初始化左侧快捷键 */
-  initLeftShortcutKeys() {
-    /** 绘制每个按钮的UI */
-    const leftShortcut = UiHelper.createFlexRow("left_shortcut_keys", 6, new Vec2(), new Size(300, 40));
+  leftShortcutKeys: {
+    49: null,
+    50: null,
+    51: null,
+    52: null,
   },
+  /** 初始化左侧快捷键 */
+  initLeftShortcutKeys(role: Role) {
+    /** 绘制按钮组 */
+    const leftShortcut = UiHelper.createFlexRow("left_shortcut_keys", 6, new Vec2(-270, -9), new Size(178, 40));
+    /** 绘制按钮 */
+    role.shortcutKeys.forEach((shortkey) => {
+      const skill = skills.get(shortkey.skillId);
+      BottomBarFrame.leftShortcutKeys[shortkey.key] = new ShortcutKey(shortkey.label, shortkey.key, skill?.icon, skill?.onClick);
+      leftShortcut.addChild(BottomBarFrame.leftShortcutKeys[shortkey.key]);
+    });
+    return leftShortcut;
+  },
+  /** 快捷键更新 */
+
   // 经验条
   expBar: null,
   // 角色血量文字显示

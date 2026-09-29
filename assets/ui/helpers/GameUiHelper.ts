@@ -259,6 +259,15 @@ const GameUiHelper = {
     return bigButton;
   },
 
+  /** 创建游戏小按钮 */
+  createSmallButtion(name: string, text: string, position: Vec2 = new Vec2()) {
+    const button = UiHelper.createButton(name, "common/small-button", position, new Size(50, 48));
+    button.name = name;
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 20, new Vec2(), new Size(50, 48));
+    button.addChild(label);
+    return button;
+  },
+
   // 在某个格子上创建物品
   createGood(cell: Node, good: Goods) {
     const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));

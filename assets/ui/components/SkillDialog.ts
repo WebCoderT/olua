@@ -1,10 +1,12 @@
-import { Color, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc";
+import { Color, isValid, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc";
 import GameUiHelper from "../helpers/GameUiHelper";
 import UiHelper from "../helpers/UiHelper";
 import LayerManager from "../utils/LayerManager";
 import StorageManager from "../utils/StorageManager";
 import { oeccupationSkills } from "../../configs/game";
 import { skills } from "../../configs/skill";
+import { Role } from "../../configs/role";
+import { SkillId } from "../../types/common";
 
 const SkillDialog = {
   /** 弹窗名称 */
@@ -38,6 +40,8 @@ const SkillDialog = {
       const node = UiHelper.createFlexRow(skillId, 5, new Vec2(), new Size(250, 50));
       const skillIcon = UiHelper.createSprite(skillId, skillConfig.icon, new Vec2(), new Size(40, 40));
       if (!role.skills[skillId]) skillIcon.getComponent(Sprite).grayscale = true;
+      /** 已学习技能打开快捷配置弹窗 */
+      if (role.skills[skillId]) skillIcon.on(Node.EventType.TOUCH_END, () => SkillDialog.openSetShortcutKey(role, skillId), this);
       node.addChild(skillIcon);
       const description = UiHelper.createFlexCol(`${skillId}_desc`, 3, new Vec2(), new Size(205, 40));
       const skillLabel = UiHelper.createLabel(
@@ -56,6 +60,26 @@ const SkillDialog = {
       node.addChild(description);
       parent.addChild(node);
     });
+  },
+
+  /** 快捷配置弹窗 */
+  shortcutKeyDialog: null as Node,
+
+  /** 如果是已学习技能，点击图标打开快捷配置 */
+  openSetShortcutKey(role: Role, skillId: SkillId) {
+    if (SkillDialog.shortcutKeyDialog && isValid(SkillDialog.shortcutKeyDialog)) {
+      SkillDialog.shortcutKeyDialog.destroy();
+      SkillDialog.shortcutKeyDialog = null;
+    }
+    SkillDialog.shortcutKeyDialog = GameUiHelper.createDialog("shortcut_key_dialog", "设置快捷键", new Vec2(), new Size(300, 200));
+    const content = UiHelper.createFlexRow("skill_dialog_content", 10, new Vec2(), new Size(230, 50));
+    role.shortcutKeys.forEach((shortcutkey, index) => {
+      const button = GameUiHelper.createSmallButtion(shortcutkey.key.toString(), shortcutkey.label, new Vec2());
+      content.addChild(button);
+      button.on(Node.EventType.TOUCH_END, () => StorageManager.changeShorcutKey(index, skillId));
+    });
+    SkillDialog.shortcutKeyDialog.addChild(content);
+    LayerManager.addToUILayer(SkillDialog.shortcutKeyDialog);
   },
 };
 

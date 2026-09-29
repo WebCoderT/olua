@@ -3,11 +3,12 @@ import BottomBarFrame from "../components/BottomBarFrame";
 import RoleAvatarFrame from "../components/RoleAvatarFrame";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../configs/role";
-import { Equipment, MapId } from "../../types/common";
+import { Equipment, MapId, SkillId } from "../../types/common";
 import GameHelper from "../utils/GameHelper";
 import RoleInformationDialog from "../components/RoleInformationDialog";
 import EffectFrame from "../components/EffectFrame";
 import RoleDisplayFrame from "../components/RoleDisplayFrame";
+import { skills } from "../../configs/skill";
 
 /**
  * 存储
@@ -114,6 +115,13 @@ const StorageManager = {
     RoleAvatarFrame.update(role);
     // 更新底部导航
     BottomBarFrame.update(role);
+  },
+  /** 更滑快捷键 */
+  changeShorcutKey(index: number, skillId: SkillId) {
+    const role = StorageManager.findOnlineRole();
+    role.shortcutKeys[index].skillId = skillId;
+    StorageManager.updateOnlineRole(role);
+    BottomBarFrame.leftShortcutKeys[role.shortcutKeys[index].key].updateIcon(skills.get(skillId).icon ?? null);
   },
 };
 
