@@ -1,7 +1,8 @@
-import { Node, TiledMap, Vec3 } from "cc";
+import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import { getMapPointPosition } from "../../utils/MapPointMath";
+import { loadResourcesAsync } from "../../utils/ResourceLoad";
 import { npcs } from "../../../configs/npc";
 import StorageManager from "../../core/StorageManager";
 import { maps } from "../../../configs/map";
@@ -9,34 +10,37 @@ import { addObstacleCollider } from "../../utils/utils";
 import Monsters from "./Monsters";
 
 /**
- * 地图组件
- * 挂载于地图层的节点容器，负责地图加载、地图对象（NPC/怪物）生成与复活点定位
+ * 地图组件（自身即地图节点）
+ * 挂载于地图层，负责地图资源加载、地图对象（NPC/怪物）生成与复活点定位
+ * 地图资源异步加载完成后才在自身挂载 TiledMap 组件并生成地图对象，
+ * 避免节点先挂上而地图未加载完成导致的黑屏
  * 怪物容器（Monsters）由外部注入，跨地图共享
  */
 export default class GameMap extends Node {
-  /** 当前地图的 Tiled 节点 */
-  private tiledMapNode: Node | null = null;
   /** 怪物容器（外部注入，跨地图共享） */
   private monsters: Monsters;
 
   constructor(monsters: Monsters) {
     super("map");
     this.monsters = monsters;
-  }
-
-  /** 初始化地图 */
-  async init() {
     const role = StorageManager.findOnlineRole();
     const onMap = maps.get(role.onMap);
     this.name = "map_" + role.onMap;
     // 清空上一张地图的怪物
     this.monsters.reset();
     LayerManager.clearMapLayer();
+    this.loadMap(onMap.src);
+  }
+
+  /** 初始化地图（异步：地图资源加载完成后才挂载 TiledMap 组件） */
+  async loadMap(src: string) {
+    // 等待地图资源加载完成后，将 TiledMap 组件挂到自身
+    const mapAsset = await loadResourcesAsync<TiledMapAsset>("map", src, TiledMapAsset);
+    // 重复初始化时先移除旧组件
+    this.getComponent(TiledMap)?.destroy();
+    const tiledMap = this.addComponent(TiledMap);
+    tiledMap.tmxAsset = mapAsset;
     LayerManager.addToMapLayer(this);
-    // 加载 Tiled 地图（由 GameUiHelper 生成）
-    const tiledMapNode = await GameUiHelper.createTiledMap("tiled_map", onMap.src);
-    this.tiledMapNode = tiledMapNode;
-    this.addChild(tiledMapNode);
     this.goToRevivePoint();
     // 添加地图上包含的所有对象
     this.initMapObjects();
@@ -44,7 +48,7 @@ export default class GameMap extends Node {
 
   /** 初始化地图包含的对象 */
   private initMapObjects() {
-    const objects = this.tiledMapNode.getComponent(TiledMap).getObjectGroup("objects");
+    const objects = this.getComponent(TiledMap).getObjectGroup("objects");
     objects.getObjects().forEach((object) => {
       if (object.properties.id) {
         switch (object.properties.type) {
@@ -52,7 +56,7 @@ export default class GameMap extends Node {
             this.createNpc(object.properties.id as string, new Vec3(object.x, object.y));
             break;
           case "monster":
-            this.monsters.createOneMonster(object.properties.id as string, getMapPointPosition(new Vec3(object.x, object.y), this.tiledMapNode));
+            this.monsters.createOneMonster(object.properties.id as string, getMapPointPosition(new Vec3(object.x, object.y), this));
             break;
           default:
             break;
@@ -66,18 +70,18 @@ export default class GameMap extends Node {
     const npc = npcs.get(id);
     const npcNode = GameUiHelper.createNpcNode(npc);
     addObstacleCollider(npcNode);
-    npcNode.setWorldPosition(getMapPointPosition(position, this.tiledMapNode));
+    npcNode.setWorldPosition(getMapPointPosition(position, this));
     LayerManager.addToMapLayer(npcNode);
     npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
   }
 
   /** 前往复活点 */
   private goToRevivePoint() {
-    const map = this.tiledMapNode.getComponent(TiledMap);
+    const map = this.getComponent(TiledMap);
     const point = map.getObjectGroup("objects").getObject("revive");
     if (!point) throw new Error("该地图无复活点！");
     // TODO: 地图坐标 -> 世界坐标换算后传送角色
-    // const worldPosition = getMapPointPositionOnWorld(new Vec3(point.x, point.y), this.tiledMapNode);
+    // const worldPosition = getMapPointPositionOnWorld(new Vec3(point.x, point.y), this);
     // StorageManager.updateRoleWorldPosition(worldPosition);
   }
 }

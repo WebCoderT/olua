@@ -105,7 +105,16 @@ export default class GameUiHelper {
   static createCurrencyItem(icon: string, value: string | number, position: Vec2 = new Vec2(), labelWidth: number = 30) {
     const node = UiHelper.createNode("currency_item", position);
     node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(), new Size(15, 10)));
-    const valueLabel = UiHelper.createLabel("currency_value", value.toString(), Color.WHITE, 12, new Vec2(7.5 + 7, 0), new Size(labelWidth, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP).getComponent(Label);
+    const valueLabel = UiHelper.createLabel(
+      "currency_value",
+      value.toString(),
+      Color.WHITE,
+      12,
+      new Vec2(7.5 + 7, 0),
+      new Size(labelWidth, 10),
+      Label.HorizontalAlign.LEFT,
+      Label.VerticalAlign.TOP,
+    ).getComponent(Label);
     node.addChild(valueLabel.node);
     return { node, valueLabel };
   }
@@ -725,11 +734,6 @@ export default class GameUiHelper {
     return npcNode;
   }
 
-  /** 创建 Tiled 地图节点（异步加载地图资源） */
-  static async createTiledMap(name: string, src: string) {
-    return UiHelper.createMap(name, src);
-  }
-
   //#endregion
 
   //#region 技能列表
@@ -748,14 +752,7 @@ export default class GameUiHelper {
     if (role.skills[skillId]) skillIcon.on(Node.EventType.TOUCH_END, onOpenShortcutKey, this);
     node.addChild(skillIcon);
     const description = UiHelper.createFlexCol(`${skillId}_desc`, 3, new Vec2(), new Size(205, 40));
-    const skillLabel = UiHelper.createLabel(
-      "skill_label",
-      `${skillConfig.label} (${role.skills[skillId] ? "lv." + role.skills[skillId] : "未学习"})`,
-      Color.WHITE,
-      12,
-      new Vec2(),
-      new Size(205, 20),
-    );
+    const skillLabel = UiHelper.createLabel("skill_label", `${skillConfig.label} (${role.skills[skillId] ? "lv." + role.skills[skillId] : "未学习"})`, Color.WHITE, 12, new Vec2(), new Size(205, 20));
     skillLabel.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     description.addChild(skillLabel);
     const skillDesc = UiHelper.createLabel("skill_label", skillConfig.description, Color.WHITE, 10, new Vec2(), new Size(205, 15));

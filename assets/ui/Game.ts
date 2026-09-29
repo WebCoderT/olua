@@ -51,8 +51,6 @@ export class Game extends Component {
     this.roleAvatar = new RoleAvatar(role);
     LayerManager.addToUILayer(this.roleAvatar);
     RoleUIManager.registerRoleAvatar(this.roleAvatar);
-    // 初始化地图（异步）
-    this.gameMap.init();
     // 初始化主角外观动画与键盘监听
     this.roleDisplay.init();
     // 初始化游戏全局工具

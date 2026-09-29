@@ -10,8 +10,6 @@ import {
   Sprite,
   SpriteFrame,
   Size,
-  TiledMap,
-  TiledMapAsset,
   UITransform,
   Vec2,
   view,
@@ -24,7 +22,6 @@ import {
   Mask,
   Vec3,
 } from "cc";
-import { loadResourcesAsync } from "../utils/ResourceLoad";
 
 /**
  * UI基础元素工厂（静态类）
@@ -113,19 +110,6 @@ export default class UiHelper {
         if (!isValid(node) || !isValid(spriteComponent)) return;
         spriteComponent.spriteFrame = sprite;
       });
-    return node;
-  }
-
-  /**
-   * 创建 Tiled 地图节点（异步加载地图资源）
-   * @param name 元素名称
-   * @param src 地图资源路径
-   */
-  static async createMap(name: string, src: string) {
-    const node = this.createNode(name);
-    const tiledMap = node.addComponent(TiledMap);
-    const map = await loadResourcesAsync<TiledMapAsset>("map", src, TiledMapAsset);
-    tiledMap.tmxAsset = map;
     return node;
   }
 
@@ -365,4 +349,3 @@ export default class UiHelper {
 
   //#endregion
 }
-

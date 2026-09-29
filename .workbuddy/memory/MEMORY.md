@@ -8,3 +8,4 @@
 - 移动 assets 下文件必须连同 .meta 一起移动（保留 UUID，场景引用依赖它）；.meta 被 .gitignore 忽略（风险）。
 - 场景/地图切换一律走 SceneManager.loadScene → Loading 过渡场景（一行文字显示百分比）：场景预加载 0~90%，进 Game 前预载当前地图 TiledMapAsset 90~100%，完成后才进入目标场景；地图切换=保存 onMap 后重进 Game 场景（不存在原地换图）。给场景挂脚本组件：手写脚本 .meta uuid，scene JSON 用压缩 uuid（前 5 hex + 27 hex→108bit base64 18 字符）。
 - 静态类跨场景持有节点（LayerManager 图层容器）时必须在 initLayer/进场景时重建（旧场景销毁会连带销毁静态节点，否则黑屏）；相机等由 Game.start 重新注入。全局 input 监听（RoleDisplay 键盘、ScreenClick 鼠标）必须随节点销毁移除（NODE_DESTROYED once / Game.onDestroy），否则重进场景叠加残留。
+- GameMap 自身即地图节点：init() 先 await 地图 TiledMapAsset 加载完成，再 addComponent(TiledMap) 挂到自身（组件挂上即地图已就绪，不会黑屏）；不通过 helper 创建地图子节点（UiHelper.createMap/GameUiHelper.createTiledMap 已删）。
