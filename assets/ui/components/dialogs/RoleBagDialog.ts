@@ -1,7 +1,7 @@
 import { Node } from "cc";
 import StorageManager from "../../core/StorageManager";
-import { Role } from "../../../configs/role";
-import { Goods, EQUIPMENT_TYPE, Equipment } from "../../../types/common";
+import { Role } from "../../../entities/Role";
+import { Equipment, EQUIPMENT_TYPE, Goods } from "../../../types/good";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 
@@ -41,7 +41,10 @@ export default class RoleBagDialog {
     if (this.dialog && this.dialog.active) {
       this.close();
     } else {
-      const { dialog, cells } = GameUiHelper.createRoleBag();
+      // 弹窗框与背包格子由通用零件拼装
+      const dialog = GameUiHelper.createDialog("bag_dialog", "背包");
+      const { bagGrid, cells } = GameUiHelper.createRoleBagCells();
+      dialog.addChild(bagGrid);
       this.dialog = dialog;
       this.cells = cells;
       // 读取背包数据并显示

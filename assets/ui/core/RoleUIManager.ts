@@ -1,5 +1,5 @@
-import { EQUIPMENT_TYPE, } from "../../types/common";
-import { Role } from "../../configs/role";
+import { EQUIPMENT_TYPE } from "../../types/good";
+import { Role } from "../../entities/Role";
 
 interface RoleAvatarView {
   updateRole: (role: Role) => void;

@@ -1,5 +1,5 @@
 import { Vec2, Vec3 } from "cc";
-import { NPC } from "../types/common";
+import { NPC } from "../types/map";
 import MapSelectorDialog from "../ui/components/dialogs/MapSelectorDialog";
 
 export const npcs = new Map<string, NPC>();

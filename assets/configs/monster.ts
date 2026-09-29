@@ -1,5 +1,6 @@
 import { Size, Vec2 } from "cc";
-import { ACTION, MonsterConfig } from "../types/common";
+import { ACTION } from "../types/animation";
+import { MonsterConfig } from "../types/monster";
 
 export const monsters = new Map<string, MonsterConfig>();
 

@@ -1,5 +1,15 @@
-import { OECCUPATION, SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/common";
-import { skill_1000 } from "../ui/skills/zhan";
+import { OECCUPATION } from "../types/role";
+import { SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/skill";
+import { skill_1000 } from "../skills/zhan";
+
+/** 职业技能映射 */
+export const oeccupationSkills = new Map<OECCUPATION, SkillId[]>();
+/** 战士技能映射 */
+oeccupationSkills.set(OECCUPATION.ZHAN, ["1000", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011"]);
+/** 法师技能映射 */
+oeccupationSkills.set(OECCUPATION.FA, []);
+/** 道士技能映射 */
+oeccupationSkills.set(OECCUPATION.DAO, []);
 
 /** 所有技能 */
 export const skills = new Map<SkillId, SkillConfig>();

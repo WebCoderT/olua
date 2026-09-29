@@ -37,7 +37,7 @@ export default class UiHelper {
   /**
    * 创建带 UITransform 的基础节点，统一处理名称、位置与尺寸
    */
-  private static createNode(name: string, position: Vec2 = new Vec2(), size?: Size | Vec2) {
+  static createNode(name: string, position: Vec2 = new Vec2(), size?: Size | Vec2) {
     const node = new Node();
     node.name = name;
     node.setPosition(position.x, position.y, 0);
@@ -49,7 +49,7 @@ export default class UiHelper {
   /**
    * 加载 SpriteFrame 资源并回调，统一错误日志
    */
-  private static loadSprite(src: string, onLoad: (spriteFrame: SpriteFrame) => void) {
+  static loadSprite(src: string, onLoad: (spriteFrame: SpriteFrame) => void) {
     resources.load(src + "/spriteFrame", SpriteFrame, (err, sprite) => {
       if (err) {
         console.error(err.message);
@@ -141,16 +141,27 @@ export default class UiHelper {
    * @param fontSize 字号
    * @param position 位置
    * @param size 尺寸
+   * @param horizontalAlign 水平对齐（默认居中）
+   * @param verticalAlign 垂直对齐（默认居中）
    */
-  static createLabel(name: string, text: string, color: Color = Color.WHITE, fontSize: number = 24, position: Vec2 = new Vec2(), size: Size = new Size()) {
+  static createLabel(
+    name: string,
+    text: string,
+    color: Color = Color.WHITE,
+    fontSize: number = 24,
+    position: Vec2 = new Vec2(),
+    size: Size = new Size(),
+    horizontalAlign?: Label["horizontalAlign"],
+    verticalAlign?: Label["verticalAlign"],
+  ) {
     const node = this.createNode(name, position, size);
     const label = node.addComponent(Label);
     label.string = text;
     label.fontSize = fontSize;
     label.lineHeight = size.y;
     label.overflow = Label.Overflow.CLAMP;
-    label.horizontalAlign = Label.HorizontalAlign.CENTER;
-    label.verticalAlign = Label.VerticalAlign.CENTER;
+    label.horizontalAlign = horizontalAlign ?? Label.HorizontalAlign.CENTER;
+    label.verticalAlign = verticalAlign ?? Label.VerticalAlign.CENTER;
     label.color = color;
     label.enableWrapText = false;
     resources.load("fonts/msyh", Font, (err, font) => {

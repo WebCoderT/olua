@@ -1,13 +1,21 @@
-import { AnimationClip, Color, EditBox, EventHandler, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, ToggleContainer, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, AnimationClip, Button, Color, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
 import { Draggable } from "../utils/Draggable";
-import { bagRow, bagCol } from "../../configs/game";
-import { Role } from "../../configs/role";
-import { BattleAttributes, Goods, OECCUPATION, RoleOccupationInfo, SEX, SpeedRate } from "../../types/common";
+import { getAnimationName } from "../../configs/animation";
+import { bagRow, bagCol } from "../../configs/role";
+import { Role } from "../../entities/Role";
+import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
+import { BattleAttributes } from "../../types/common";
+import { EQUIPMENT_TYPE, Goods } from "../../types/good";
+import { Monster } from "../../types/monster";
+import { NPC } from "../../types/map";
+import { OECCUPATION } from "../../types/role";
+import { SkillId } from "../../types/skill";
 import GameHelper from "../core/GameHelper";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
+import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 
 //#region 类型定义
@@ -21,41 +29,125 @@ export interface BottomNavBarButton {
   shortcutKey: string;
 }
 
-export interface RoleSelectorMainView {
-  beginGameButton: Node;
-  selectedRoleName: Node;
-  selectedRoleLevel: Node;
-  ownerRoleNodes: Node[];
-}
-
-export interface RoleSelectorCreateView {
-  backButton: Node;
-  dialog: Node;
-  nameInput: Node;
-  sexToggleGroup: Node;
-  occupationToggleGroup: Node;
-  createButton: Node;
-  occupationDescription: Node | null;
-  occupationPreview: Node | null;
-}
-
-interface RoleSelectorCallbacks {
-  onCreateRole: () => void;
-  onCancelCreateRole: () => void;
-  onOccupationChanged: () => void;
-}
-
-/** 角色预览默认站位（最多3个角色） */
-const rolePositions = [new Vec2(-485, -25), new Vec2(-250, -75), new Vec2(-10, -40)];
-
 //#endregion
 
 /**
- * 游戏UI工厂（静态类）
- * 在 UiHelper 基础组件之上固化游戏内的 UI 样式：角色信息框、血条经验条、
- * 弹窗、物品详情、背包、升级特效、角色内观、选角界面等
+ * 游戏UI零件工厂（静态类）
+ * 只提供单个可复用的 UI 零件（货币、按钮、插槽、头像、血条、弹窗、物品等），
+ * 页面/弹窗的拼接组装由各组件自身完成，本类不做整页视图生成
  */
 export default class GameUiHelper {
+  //#region 通用元素零件
+
+  /** 创建一张带资源图的节点 */
+  static createImage(name: string, src: string, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    return UiHelper.createSprite(name, src, position, size);
+  }
+
+  /** 创建铺满全屏的资源图 */
+  static createFullScreenImage(name: string, src: string) {
+    return UiHelper.createFullScreenNode(name, src);
+  }
+
+  /** 创建文本 */
+  static createText(
+    name: string,
+    text: string,
+    fontSize: number,
+    position: Vec2 = new Vec2(),
+    size: Size = new Size(),
+    color: Color = Color.WHITE,
+    horizontalAlign: Label["horizontalAlign"] = Label.HorizontalAlign.CENTER,
+    verticalAlign: Label["verticalAlign"] = Label.VerticalAlign.CENTER,
+  ) {
+    return UiHelper.createLabel(name, text, color, fontSize, position, size, horizontalAlign, verticalAlign);
+  }
+
+  /** 创建横向排列容器 */
+  static createRow(name: string, spacing: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    return UiHelper.createFlexRow(name, spacing, position, size);
+  }
+
+  /** 创建纵向排列容器 */
+  static createColumn(name: string, spacing: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    return UiHelper.createFlexCol(name, spacing, position, size);
+  }
+
+  /** 创建带资源图的按钮（可选文字） */
+  static createTexturedButton(name: string, src: string, text: string = "", position: Vec2 = new Vec2(), size: Size = new Size(129, 54), textColor: Color = Color.WHITE, fontSize: number = 20) {
+    const button = UiHelper.createButton(name, src, position, size);
+    if (text) button.addChild(UiHelper.createLabel(`${name}_label`, text, textColor, fontSize, new Vec2(), size));
+    return button;
+  }
+
+  /** 创建带图标的输入框组（背景 + 可选图标 + 输入框），返回背景节点与输入框节点 */
+  static createInputField(placeholder: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 80), icon?: string, password: boolean = false) {
+    const background = UiHelper.createSprite("input_background", "login/input_bg", position, size);
+    if (icon) background.addChild(UiHelper.createSprite("input_icon", icon, new Vec2(-size.width / 2 + 60, -6), new Size(40, 40)));
+    const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, -6), new Vec2(size.width - 200, 60), password);
+    background.addChild(input);
+    return { node: background, input };
+  }
+
+  /** 创建开关组 */
+  static createToggleGroup(name: string, toggles: Node[], spacing: number, position: Vec2 = new Vec2()) {
+    return UiHelper.createToggleGroup(name, toggles, spacing, position);
+  }
+
+  /**
+   * 创建货币显示零件（图标 + 数量），可在任意界面复用
+   * @param icon 货币图标资源
+   * @param value 数量
+   * @param position 图标中心位置
+   * @param labelWidth 数量文本宽度
+   * @return node 零件节点、valueLabel 数量文本（供刷新）
+   */
+  static createCurrencyItem(icon: string, value: string | number, position: Vec2 = new Vec2(), labelWidth: number = 30) {
+    const node = UiHelper.createNode("currency_item", position);
+    node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(), new Size(15, 10)));
+    const valueLabel = UiHelper.createLabel("currency_value", value.toString(), Color.WHITE, 12, new Vec2(7.5 + 7, 0), new Size(labelWidth, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP).getComponent(Label);
+    node.addChild(valueLabel.node);
+    return { node, valueLabel };
+  }
+
+  /**
+   * 创建战斗力显示零件（图标 + 数字图集文本）
+   * @return node 零件节点、combatLabel 战斗力文本（供刷新）
+   */
+  static createCombatPower(role: Role, position: Vec2 = new Vec2()) {
+    const node = UiHelper.createNode("combat_power", position);
+    node.addChild(UiHelper.createSprite("combat_icon", "common/combat", new Vec2(), new Size(75, 41)));
+    const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(40.5, 2), new Size(200, 30), Label.HorizontalAlign.LEFT);
+    labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
+    const combatLabel = labelNode.getComponent(Label);
+    resources.load("fonts/combat", LabelAtlas, (error, atlas) => {
+      if (!error && atlas && combatLabel.isValid) combatLabel.font = atlas;
+    });
+    node.addChild(labelNode);
+    return { node, combatLabel };
+  }
+
+  /** 创建角色头像（按职业与性别取图） */
+  static createAvatarPortrait(role: Role, position: Vec2 = new Vec2(), size: Size = new Size(51, 60)) {
+    return UiHelper.createSprite(`role_avatar_${role.occupation}_${role.sex}`, `avatars/${role.occupation}-${role.sex}`, position, size);
+  }
+
+  /** 创建 VIP 按钮 */
+  static createVipButton(position: Vec2 = new Vec2()) {
+    const vipNode = UiHelper.createSprite("vip_button", "money/vip", position, new Size(75, 25));
+    vipNode.addComponent(Button);
+    return vipNode;
+  }
+
+  /** 创建装备插槽（名称即装备类型，便于按类型查找） */
+  static createEquipmentSlot(type: EQUIPMENT_TYPE, imageSrc: string, size: Size = new Size(50, 50)) {
+    const slot = UiHelper.createSprite(`equipment_slot_${type}`, imageSrc, new Vec2(), size);
+    slot.name = type;
+    return slot;
+  }
+
+  //#endregion
+
   //#region 角色预览
 
   /**
@@ -74,6 +166,34 @@ export default class GameUiHelper {
     animationPlayer.sample = 8;
     role.addChild(node);
     return role;
+  }
+
+  //#endregion
+
+  //#region 选角开关组零件
+
+  /** 创建性别选择开关组（选中值为节点名 "1"/"2"） */
+  static createSexToggleGroup(position: Vec2 = new Vec2(0, 148)) {
+    return UiHelper.createToggleGroup(
+      "role_sex_toggle_group",
+      [UiHelper.createToggle("1", "create_role/1_1", "create_role/1_0", new Vec2(), new Size(48, 48)), UiHelper.createToggle("2", "create_role/2_1", "create_role/2_0", new Vec2(), new Size(48, 48))],
+      30,
+      position,
+    );
+  }
+
+  /** 创建职业选择开关组（选中值为 OECCUPATION 枚举） */
+  static createOccupationToggleGroup(position: Vec2 = new Vec2(0, 52)) {
+    return UiHelper.createToggleGroup(
+      "role_occupation_toggle_group",
+      [
+        UiHelper.createToggle(OECCUPATION.ZHAN, "create_role/3_1", "create_role/3_0", new Vec2(), new Size(48, 48)),
+        UiHelper.createToggle(OECCUPATION.FA, "create_role/4_1", "create_role/4_0", new Vec2(), new Size(48, 48)),
+        UiHelper.createToggle(OECCUPATION.DAO, "create_role/5_1", "create_role/5_0", new Vec2(), new Size(48, 48)),
+      ],
+      30,
+      position,
+    );
   }
 
   //#endregion
@@ -467,14 +587,6 @@ export default class GameUiHelper {
     return { bagGrid, cells };
   }
 
-  /** 创建背包UI */
-  static createRoleBag() {
-    const dialog = this.createDialog("bag_dialog", "背包");
-    const { bagGrid, cells } = this.createRoleBagCells();
-    dialog.addChild(bagGrid);
-    return { dialog, cells };
-  }
-
   //#endregion
 
   //#region 角色/怪物动画
@@ -503,169 +615,142 @@ export default class GameUiHelper {
 
   //#endregion
 
-  //#region 选角界面
+  //#region 快捷键图标
 
-  /** 创建选角界面主视图 */
-  static createMainView(parent: Node, onBeginGame: () => void, onCreateRole: () => void): RoleSelectorMainView {
-    parent.addChild(UiHelper.createFullScreenNode("role_selector_background", "create_role/bg"));
-
-    const bottomBar = UiHelper.createSprite("role_selector_bottom_bar", "create_role/bg_bottom", new Vec2(0, -305), new Size(1624, 139));
-    parent.addChild(bottomBar);
-
-    const beginGameButton = UiHelper.createButton("begin_game_button", "create_role/start_btn", new Vec2(0, -40), new Size(190, 48));
-    beginGameButton.getComponent(Sprite).grayscale = true;
-    beginGameButton.on(Node.EventType.TOUCH_END, onBeginGame);
-    bottomBar.addChild(beginGameButton);
-
-    const createRoleButton = UiHelper.createButton("show_create_role_button", "create_role/new_role", new Vec2(-740, 300), new Size(75, 79));
-    createRoleButton.on(Node.EventType.TOUCH_END, onCreateRole);
-    parent.addChild(createRoleButton);
-
-    parent.addChild(UiHelper.createButton("manage_role_button", "create_role/manage", new Vec2(-740, 200), new Size(75, 79)));
-
-    const selectedInfoBox = UiHelper.createSprite("selected_role_info_background", "create_role/idlv", new Vec2(-435, -335), new Size(345, 26));
-    selectedInfoBox.addChild(UiHelper.createLabel("selected_role_name", "---", Color.WHITE, 20, new Vec2(-35, 0), new Size(160, 30)));
-    selectedInfoBox.addChild(UiHelper.createLabel("selected_role_level", "-", Color.WHITE, 16, new Vec2(147, 0), new Size(40, 30)));
-    parent.addChild(selectedInfoBox);
-
-    return {
-      beginGameButton,
-      selectedRoleName: selectedInfoBox.getChildByName("selected_role_name"),
-      selectedRoleLevel: selectedInfoBox.getChildByName("selected_role_level"),
-      ownerRoleNodes: [],
-    };
+  /** 为快捷键节点附加图标样式与按键名 */
+  static applyShortcutKeyStyle(node: Node, label: string) {
+    const sprite = node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    node.getComponent(UITransform).setContentSize(40, 40);
+    node.addChild(UiHelper.createLabel("shortcut_key_label", label, Color.WHITE, 10, new Vec2(20, -15), new Size(20, 10)));
   }
 
-  /** 更新选角界面角色预览列表 */
-  static updateRolePreviews(view: RoleSelectorMainView, parent: Node, roles: Role[], ononlineRole: (roleId: string) => void): void {
-    this.destroyNodes(view.ownerRoleNodes);
-    view.ownerRoleNodes = roles.map((role, index) => {
-      const node = this.createRolePreview(role.id, 1, role.occupation, role.sex, rolePositions[index] ?? new Vec2(), new Size(200, 360));
-      node.on(Node.EventType.TOUCH_END, () => ononlineRole(role.id));
-      parent.addChild(node);
-      return node;
+  /** 更新节点图标（异步加载 SpriteFrame） */
+  static updateNodeIcon(node: Node, src?: string) {
+    const sprite = node.getComponent(Sprite);
+    if (!src || !sprite) return;
+    UiHelper.loadSprite(src, (spriteFrame) => {
+      if (node.isValid && sprite.isValid) sprite.spriteFrame = spriteFrame;
     });
   }
 
-  /** 批量销毁节点并清空数组 */
-  static destroyNodes(nodes: Node[]): void {
-    nodes.forEach((node) => node.destroy());
-    nodes.length = 0;
+  //#endregion
+
+  //#region 底部栏
+
+  /** 创建底部栏主体（尺寸、位置与背景） */
+  static createBottomBarBody(node: Node) {
+    node.addComponent(UITransform).setContentSize(1100, 210);
+    node.setPosition(0, -324);
+    node.addChild(UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(), new Size(1100, 210)));
   }
 
-  /** 设置"开始游戏"按钮可用状态 */
-  static setBeginGameEnabled(view: RoleSelectorMainView, enabled: boolean): void {
-    view.beginGameButton.getComponent(Sprite).grayscale = !enabled;
+  /** 创建底部血量文字 */
+  static createBottomHpText(text: string) {
+    return UiHelper.createLabel("hp_text", text, Color.WHITE, 12, new Vec2(-421, -39), new Size(120, 10));
   }
 
-  /** 更新选中角色的名字与等级显示 */
-  static updateSelectedRole(view: RoleSelectorMainView, role: Role): void {
-    view.selectedRoleName.getComponent(Label).string = role.name;
-    view.selectedRoleLevel.getComponent(Label).string = role.level.toString();
+  /** 创建左侧快捷键按钮组容器 */
+  static createLeftShortcutRow() {
+    return UiHelper.createFlexRow("left_shortcut_keys", 6, new Vec2(-270, -9), new Size(178, 40));
   }
 
-  /** 创建创建角色弹窗视图 */
-  static createRoleView(parent: Node, callbacks: RoleSelectorCallbacks, occupations: Map<OECCUPATION, RoleOccupationInfo>): RoleSelectorCreateView {
-    const backButton = UiHelper.createButton("cancel_create_role_button", "create_role/back_btn", new Vec2(-740, -210), new Size(75, 79));
-    parent.addChild(backButton);
-    backButton.on(Node.EventType.TOUCH_END, callbacks.onCancelCreateRole);
+  /** 创建圆形血量显示（底图 + 竖向进度条） */
+  static createRoundHpBar(progress: number): { barSprite: Node; hpBar: Node } {
+    const barSprite = UiHelper.createSprite("hp_bar_sprite", "common/max", new Vec2(-420, 12.5), new Size(90, 90));
+    const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), new Size(90, 90));
+    const hpProgress = UiHelper.createSprite("hp_bar_progress", "common/hp", new Vec2(), new Size(90, 90));
+    hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
+    hpProgress.setPosition(0, 0);
+    hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
+    hpBar.addChild(hpProgress);
+    hpBar.getComponent(ProgressBar).barSprite = hpProgress.getComponent(Sprite);
+    hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
+    barSprite.addChild(hpBar);
+    return { barSprite, hpBar };
+  }
 
-    const dialog = UiHelper.createSprite("create_role_dialog", "create_role/bg_dialog", new Vec2(630, 35), new Size(320, 580));
-    parent.addChild(dialog);
-    dialog.addChild(UiHelper.createSprite("create_role_dialog_title", "create_role/label_title", new Vec2(0, 242), new Size(128, 28)));
-    dialog.addChild(UiHelper.createSprite("gender_label", "create_role/label_1", new Vec2(0, 190), new Size(56, 25)));
+  //#endregion
 
-    const sexToggleGroup = UiHelper.createToggleGroup(
-      "role_sex_toggle_group",
-      [UiHelper.createToggle("1", "create_role/1_1", "create_role/1_0", new Vec2(), new Size(48, 48)), UiHelper.createToggle("2", "create_role/2_1", "create_role/2_0", new Vec2(), new Size(48, 48))],
-      30,
-      new Vec2(0, 148),
+  //#region 主角外观与怪物/NPC
+
+  /** 创建主角衣服展示节点 */
+  static createRoleClothNode() {
+    const cloth = UiHelper.createSprite("cloth", "");
+    cloth.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    return cloth;
+  }
+
+  /** 创建主角武器展示节点 */
+  static createRoleWeaponNode() {
+    const weapon = UiHelper.createSprite("weapon", "");
+    weapon.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    return weapon;
+  }
+
+  /** 创建怪物节点主体（身体 + 待机动画），碰撞体与点击事件由调用方处理 */
+  static createMonsterBody(monster: Monster): { node: Node; animate: Animation } {
+    const node = UiHelper.createNode("monster", new Vec2(), monster.contentSize);
+    const animationNode = UiHelper.createNode("monster_animation");
+    animationNode.addComponent(Sprite);
+    const animate = AnimationHelper.useMonsterAnimation(getAnimationName(ACTION.STAND, DIRECTION.DOWN), animationNode, monster.out, monster.speedRate);
+    node.addChild(animationNode);
+    return { node, animate };
+  }
+
+  /** 创建NPC节点主体（名字 + 外观动画），位置与点击事件由调用方处理 */
+  static createNpcNode(npc: NPC) {
+    const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
+    npcNode.addChild(UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20)));
+    const npcSpriteNode = UiHelper.createSprite("npc_sprite_node", "", new Vec2(), new Size(100, 150));
+    const npcSprite = UiHelper.createSprite("npc_sprite", "");
+    npc.scale && npcSprite.setScale(npc.scale);
+    npc.position && npcSprite.setPosition(npc.position);
+    AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
+    npcSpriteNode.addChild(npcSprite);
+    npcNode.addChild(npcSpriteNode);
+    return npcNode;
+  }
+
+  /** 创建 Tiled 地图节点（异步加载地图资源） */
+  static async createTiledMap(name: string, src: string) {
+    return UiHelper.createMap(name, src);
+  }
+
+  //#endregion
+
+  //#region 技能列表
+
+  /** 创建技能列表滚动区 */
+  static createSkillListView(): Node {
+    return UiHelper.createScrollView("skill_list", new Vec2(0, -15), new Size(260, 350));
+  }
+
+  /** 创建单个技能行（未学习置灰；已学习点击触发回调） */
+  static createSkillItem(role: Role, skillId: SkillId, onOpenShortcutKey: () => void): Node {
+    const skillConfig = skills.get(skillId);
+    const node = UiHelper.createFlexRow(skillId, 5, new Vec2(), new Size(250, 50));
+    const skillIcon = UiHelper.createSprite(skillId, skillConfig.icon, new Vec2(), new Size(40, 40));
+    if (!role.skills[skillId]) skillIcon.getComponent(Sprite).grayscale = true;
+    if (role.skills[skillId]) skillIcon.on(Node.EventType.TOUCH_END, onOpenShortcutKey, this);
+    node.addChild(skillIcon);
+    const description = UiHelper.createFlexCol(`${skillId}_desc`, 3, new Vec2(), new Size(205, 40));
+    const skillLabel = UiHelper.createLabel(
+      "skill_label",
+      `${skillConfig.label} (${role.skills[skillId] ? "lv." + role.skills[skillId] : "未学习"})`,
+      Color.WHITE,
+      12,
+      new Vec2(),
+      new Size(205, 20),
     );
-    dialog.addChild(sexToggleGroup);
-
-    dialog.addChild(UiHelper.createSprite("occupation_label", "create_role/label_2", new Vec2(0, 100), new Size(56, 25)));
-    const occupationToggleGroup = UiHelper.createToggleGroup(
-      "role_occupation_toggle_group",
-      [
-        UiHelper.createToggle(OECCUPATION.ZHAN, "create_role/3_1", "create_role/3_0", new Vec2(), new Size(48, 48)),
-        UiHelper.createToggle(OECCUPATION.FA, "create_role/4_1", "create_role/4_0", new Vec2(), new Size(48, 48)),
-        UiHelper.createToggle(OECCUPATION.DAO, "create_role/5_1", "create_role/5_0", new Vec2(), new Size(48, 48)),
-      ],
-      30,
-      new Vec2(0, 52),
-    );
-    dialog.addChild(occupationToggleGroup);
-
-    const nameInputBackground = UiHelper.createSprite("role_name_input_background", "login/input_bg", new Vec2(0, -26), new Size(240, 60));
-    const nameInput = UiHelper.createInputBox("role_name_input", "输入角色名称", new Vec2(0, -6), new Vec2(200, 60));
-    nameInputBackground.addChild(nameInput);
-    dialog.addChild(nameInputBackground);
-
-    const createButton = UiHelper.createButton("confirm_create_role_button", "create_role/start_btn", new Vec2(0, -238), new Size(190, 48));
-    createButton.getComponent(Sprite).grayscale = true;
-    createButton.on(Node.EventType.TOUCH_END, callbacks.onCreateRole);
-    dialog.addChild(createButton);
-
-    const view: RoleSelectorCreateView = {
-      backButton,
-      dialog,
-      nameInput,
-      sexToggleGroup,
-      occupationToggleGroup,
-      createButton,
-      occupationDescription: null,
-      occupationPreview: null,
-    };
-
-    const eventHandler = new EventHandler();
-    eventHandler.target = parent;
-    eventHandler.component = "RoleSelector";
-    eventHandler.handler = "onOccupationChanged";
-    occupationToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
-    sexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
-
-    this.updateOccupationSelection(view, occupations);
-    return view;
-  }
-
-  /** 根据当前选中的职业与性别更新职业描述和预览 */
-  static updateOccupationSelection(view: RoleSelectorCreateView, occupations: Map<OECCUPATION, RoleOccupationInfo>): void {
-    const occupationId = view.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
-    const sex = view.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
-    const occupation = occupationId && occupations.get(occupationId as OECCUPATION);
-    if (!occupation || !sex) return;
-
-    view.occupationDescription?.destroy();
-    view.occupationPreview?.destroy();
-
-    view.occupationDescription = UiHelper.createSprite("occupation_description", occupation.description, new Vec2(0, -142), occupation.descriptionSize);
-    view.dialog.addChild(view.occupationDescription);
-    view.occupationPreview = this.createRolePreview("role_creation_preview", 0, occupationId, sex, new Vec2(-245, -95), new Size(200, 360));
-    view.dialog.addChild(view.occupationPreview);
-  }
-
-  /** 读取创建角色表单（职业与性别取自选中开关的节点名称，即枚举值） */
-  static readRoleForm(view: RoleSelectorCreateView): { name: string; occupation: OECCUPATION; sex: SEX } {
-    const occupation = (view.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as OECCUPATION;
-    const sex = (view.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as SEX;
-    return {
-      name: view.nameInput.getComponent(EditBox).string,
-      occupation,
-      sex,
-    };
-  }
-
-  /** 根据名称输入同步创建按钮可用状态 */
-  static syncCreateButtonState(view: RoleSelectorCreateView): void {
-    view.createButton.getComponent(Sprite).grayscale = !Boolean(view.nameInput.getComponent(EditBox).string);
-  }
-
-  /** 关闭创建角色弹窗 */
-  static closeRoleView(view: RoleSelectorCreateView): void {
-    view.dialog.destroy();
-    view.backButton.destroy();
+    skillLabel.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+    description.addChild(skillLabel);
+    const skillDesc = UiHelper.createLabel("skill_label", skillConfig.description, Color.WHITE, 10, new Vec2(), new Size(205, 15));
+    skillDesc.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+    description.addChild(skillDesc);
+    node.addChild(description);
+    return node;
   }
 
   //#endregion
 }
-

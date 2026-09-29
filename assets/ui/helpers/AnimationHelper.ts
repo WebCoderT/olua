@@ -1,6 +1,6 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteFrame } from "cc";
-import { monsterAnimation, roleAnimationMap } from "../../configs/game";
-import { SpeedRate } from "../../types/common";
+import { monsterAnimation, roleAnimationMap } from "../../configs/animation";
+import { SpeedRate } from "../../types/animation";
 
 /**
  * 动画助手（静态类）

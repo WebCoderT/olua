@@ -1,5 +1,6 @@
 import { BoxCollider2D, Node } from "cc";
-import { BattleAttributes, DIRECTION } from "../../types/common";
+import { BattleAttributes } from "../../types/common";
+import { DIRECTION } from "../../types/animation";
 
 type AttackAttribute = "physicalAttack" | "magicAttack" | "taoistAttack";
 type DefenseAttribute = "physicalDefense" | "magicDefense" | "taoistDefense";

@@ -1,16 +1,15 @@
-import { Color, isValid, Layout, Node, Size, UITransform, Vec2 } from "cc";
+import { isValid, Layout, Node, Size, UITransform, Vec2 } from "cc";
 import LayerManager from "../../core/LayerManager";
-import UiHelper from "../../helpers/UiHelper";
-import { equipmentSlots } from "../../../configs/equipments";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { EQUIPMENT_TYPE } from "../../../types/common";
-import { Role } from "../../../configs/role";
+import { EQUIPMENT_TYPE } from "../../../types/good";
+import { Role } from "../../../entities/Role";
+import { equipmentSlots } from "../../../configs/equipments";
 import { goodShowAttributesLabel } from "../../../configs/good";
 
 /**
  * 角色信息弹窗
- * 实例由使用方（BottomBar）创建持有，不导出全局单例
+ * 弹窗由通用零件（弹窗框/装饰图/装备插槽/属性标签）拼装，本类负责开关、内观与装备刷新逻辑
  */
 export default class RoleInformationDialog {
   /** 弹窗节点 */
@@ -21,8 +20,6 @@ export default class RoleInformationDialog {
   private clothInShow: Node | null = null;
   /** 武器内观节点 */
   private weaponInShow: Node | null = null;
-  /** 角色属性显示节点列表 */
-  private roleAttributes: Node[] = [];
 
   /** 打开/关闭弹窗 */
   open() {
@@ -38,26 +35,19 @@ export default class RoleInformationDialog {
     this.slots.length = 0;
     // 角色信息
     const role = StorageManager.findOnlineRole();
+    // 弹窗框
     this.dialog = GameUiHelper.createDialog("personal_information_dialog", "角色信息");
-    // 添加装饰
-    const bg = UiHelper.createSprite("role_information_background", "common/personal-information-bg", new Vec2(-78, -19), new Size(431, 452));
+    // 装饰背景与战斗力图标
+    const bg = GameUiHelper.createImage("role_information_background", "common/personal-information-bg", new Vec2(-78, -19), new Size(431, 452));
+    bg.addChild(GameUiHelper.createImage("combat_icon", "common/combat", new Vec2(-7, -225), new Size(100, 50)));
     this.dialog.addChild(bg);
-    // 战斗力
-    const combatIcon = UiHelper.createSprite("combat_icon", "common/combat", new Vec2(-7, -225), new Size(100, 50));
-    bg.addChild(combatIcon);
-    // 左侧插槽列表
-    const leftSlots = UiHelper.createFlexCol("equipment_slots_left", 10, new Vec2(-240, 40), new Size(50, 290));
-    // 右侧插槽列表
-    const rightSlots = UiHelper.createFlexCol("equipment_slots_right", 10, new Vec2(80, 40), new Size(50, 290));
-    // 底部插槽列表
-    const bottomSlots = UiHelper.createFlexRow("equipment_slots_bottom", 10, new Vec2(-75, -140), new Size(170, 50));
-    // 添加显示插槽
+    // 装备插槽分组（左/右/底）
+    const leftSlots = GameUiHelper.createColumn("equipment_slots_left", 10, new Vec2(-240, 40), new Size(50, 290));
+    const rightSlots = GameUiHelper.createColumn("equipment_slots_right", 10, new Vec2(80, 40), new Size(50, 290));
+    const bottomSlots = GameUiHelper.createRow("equipment_slots_bottom", 10, new Vec2(-75, -140), new Size(170, 50));
     equipmentSlots.forEach((value, key) => {
-      const slot = UiHelper.createSprite(`equipment_slot_${key}`, value.imageSrc, new Vec2(), new Size(50, 50));
-      slot.name = key;
-      if (role.equipments[key]) {
-        GameUiHelper.createGood(slot, role.equipments[key]);
-      }
+      const slot = GameUiHelper.createEquipmentSlot(key, value.imageSrc);
+      if (role.equipments[key]) GameUiHelper.createGood(slot, role.equipments[key]);
       if (value.position === "left") {
         this.slots.push(slot);
         leftSlots.addChild(slot);
@@ -74,37 +64,27 @@ export default class RoleInformationDialog {
     this.dialog.addChild(leftSlots);
     this.dialog.addChild(rightSlots);
     this.dialog.addChild(bottomSlots);
+    // 角色属性列表
+    this.dialog.addChild(this.createRoleAttributes(role));
+    // 内观
     role.equipments.cloth && this.createClothInShow(role);
     role.equipments.weapon && this.createWeaponInShow(role);
-    this.createRoleAttributeUi(role, this.dialog);
     LayerManager.addToUILayer(this.dialog);
   }
 
-  /** 角色属性显示UI */
-  private createRoleAttributeUi(role: Role, parent: Node) {
-    // 基础布局
-    const layout = UiHelper.createFlexCol("role_attributes", 5, new Vec2(217, 205), new Size(150, 0));
+  /** 角色属性列表（基础属性 + 特殊属性标题） */
+  private createRoleAttributes(role: Role) {
+    const layout = GameUiHelper.createColumn("role_attributes", 5, new Vec2(217, 205), new Size(150, 0));
     const layoutComponent = layout.getComponent(Layout);
     layoutComponent.resizeMode = Layout.ResizeMode.CONTAINER;
     layoutComponent.padding = 10;
-    const uitransform = layout.getComponent(UITransform);
-    uitransform.setAnchorPoint(0.5, 1);
-
-    // 基础属性
-    const label = UiHelper.createLabel("role_basic_attributes", "基础属性", Color.WHITE, 14, new Vec2(), new Size(150, 14));
-    layout.addChild(label);
-
+    layout.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    layout.addChild(GameUiHelper.createText("role_basic_attributes", "基础属性", 14, new Vec2(), new Size(150, 14)));
     for (const element of goodShowAttributesLabel.keys()) {
-      const node = GameUiHelper.createAttributeLabel(element, role[element].toString(), new Size(150, 20));
-      this.roleAttributes.push(node);
-      layout.addChild(node);
+      layout.addChild(GameUiHelper.createAttributeLabel(element, role[element].toString(), new Size(150, 20)));
     }
-
-    // 特殊属性
-    const specialLabel = UiHelper.createLabel("role_special_attributes", "特殊属性", Color.WHITE, 14, new Vec2(), new Size(150, 14));
-    layout.addChild(specialLabel);
-
-    parent.addChild(layout);
+    layout.addChild(GameUiHelper.createText("role_special_attributes", "特殊属性", 14, new Vec2(), new Size(150, 14)));
+    return layout;
   }
 
   /** 添加衣服内观 */
@@ -148,7 +128,6 @@ export default class RoleInformationDialog {
   /** 关闭弹窗 */
   close() {
     this.slots.length = 0;
-    this.roleAttributes.length = 0;
     if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
     this.dialog = null;
     this.clothInShow = null;

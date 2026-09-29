@@ -1,5 +1,6 @@
 import { Size, Vec2 } from "cc";
-import { Equipment, EQUIPMENT_TYPE, EquipmentSlot, OECCUPATION, SEX } from "../types/common";
+import { Equipment, EQUIPMENT_TYPE, EquipmentSlot } from "../types/good";
+import { OECCUPATION, SEX } from "../types/role";
 
 // 角色弹窗中装备槽map
 export const equipmentSlots = new Map<EQUIPMENT_TYPE, EquipmentSlot>();
@@ -172,7 +173,7 @@ export const rings: Equipment[] = [
 ];
 
 // 项链
-export const nicklaces = [
+export const nicklaces: Equipment[] = [
   {
     type: EQUIPMENT_TYPE.NECKLACE,
     occupation: OECCUPATION.ALL,
@@ -196,7 +197,7 @@ export const nicklaces = [
 ];
 
 // 鞋子
-export const shoes = [
+export const shoes: Equipment[] = [
   {
     type: EQUIPMENT_TYPE.SHOES,
     occupation: OECCUPATION.ALL,
@@ -220,7 +221,7 @@ export const shoes = [
 ];
 
 // 头盔
-export const helmets = [
+export const helmets: Equipment[] = [
   {
     type: EQUIPMENT_TYPE.HELMET,
     occupation: OECCUPATION.ALL,
@@ -244,7 +245,7 @@ export const helmets = [
 ];
 
 // 腰带
-export const belts = [
+export const belts: Equipment[] = [
   {
     type: EQUIPMENT_TYPE.BELT,
     occupation: OECCUPATION.ALL,

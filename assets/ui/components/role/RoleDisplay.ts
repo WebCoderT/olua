@@ -1,10 +1,10 @@
-import { Animation, BoxCollider2D, EventKeyboard, Input, input, Node, RigidBody2D, Size, Sprite, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, BoxCollider2D, EventKeyboard, Input, input, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
 import StorageManager from "../../core/StorageManager";
-import { Role } from "../../../configs/role";
-import { ACTION, DIRECTION } from "../../../types/common";
-import { actionNeedWeapon, getAnimationName, ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/game";
+import { Role } from "../../../entities/Role";
+import { ACTION, DIRECTION } from "../../../types/animation";
+import { actionNeedWeapon, getAnimationName } from "../../../configs/animation";
+import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
-import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BattleHelper from "../../utils/BattleHelper";
 import Monsters from "../map/Monsters";
@@ -62,14 +62,12 @@ export default class RoleDisplay extends Node {
     const uiTransform = this.addComponent(UITransform);
     uiTransform.setContentSize(40, 70);
     this.getComponent(UITransform).setAnchorPoint(0.5, 0);
-    /** 角色衣服效果展示节点 */
-    const cloth = UiHelper.createSprite("cloth", "");
-    cloth.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    /** 角色衣服效果展示节点（由 GameUiHelper 生成） */
+    const cloth = GameUiHelper.createRoleClothNode();
     this.addChild(cloth);
     this.cloth = cloth;
-    /** 角色武器效果展示节点 */
-    const weapon = UiHelper.createSprite("weapon", "");
-    weapon.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
+    /** 角色武器效果展示节点（由 GameUiHelper 生成） */
+    const weapon = GameUiHelper.createRoleWeaponNode();
     this.addChild(weapon);
     this.weapon = weapon;
     /** 角色头部信息栏父节点 */

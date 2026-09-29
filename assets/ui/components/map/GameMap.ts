@@ -1,6 +1,5 @@
-import { Color, Node, Size, TiledMap, Vec2, Vec3 } from "cc";
-import UiHelper from "../../helpers/UiHelper";
-import AnimationHelper from "../../helpers/AnimationHelper";
+import { Node, TiledMap, Vec3 } from "cc";
+import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import { getMapPointPosition } from "../../utils/MapPointMath";
 import { npcs } from "../../../configs/npc";
@@ -34,8 +33,8 @@ export default class GameMap extends Node {
     this.monsters.reset();
     LayerManager.clearMapLayer();
     LayerManager.addToMapLayer(this);
-    // 加载 Tiled 地图
-    const tiledMapNode = await UiHelper.createMap("tiled_map", onMap.src);
+    // 加载 Tiled 地图（由 GameUiHelper 生成）
+    const tiledMapNode = await GameUiHelper.createTiledMap("tiled_map", onMap.src);
     this.tiledMapNode = tiledMapNode;
     this.addChild(tiledMapNode);
     this.goToRevivePoint();
@@ -62,22 +61,12 @@ export default class GameMap extends Node {
     });
   }
 
-  /** 添加NPC */
+  /** 添加NPC（节点主体由 GameUiHelper 生成，此处只负责放置与事件绑定） */
   private createNpc(id: string, position: Vec3) {
     const npc = npcs.get(id);
-    const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
-    const npcLabel = UiHelper.createLabel("npc_label", npc.label, Color.WHITE, 12, new Vec2(), new Size(100, 20));
-    npcNode.addChild(npcLabel);
-    const positionOnMap = getMapPointPosition(position, this.tiledMapNode);
-    const npcSpriteNode = UiHelper.createSprite("npc_sprite_node", "", new Vec2(), new Size(100, 150));
-    const npcSprite = UiHelper.createSprite("npc_sprite", "");
-    npc.scale && npcSprite.setScale(npc.scale);
-    npc.position && npcSprite.setPosition(npc.position);
-    AnimationHelper.playLoopWithDir("npc", npcSprite, npc.src);
-    npcSpriteNode.addChild(npcSprite);
-    addObstacleCollider(npcSpriteNode);
-    npcNode.addChild(npcSpriteNode);
-    npcNode.setWorldPosition(positionOnMap);
+    const npcNode = GameUiHelper.createNpcNode(npc);
+    addObstacleCollider(npcNode);
+    npcNode.setWorldPosition(getMapPointPosition(position, this.tiledMapNode));
     LayerManager.addToMapLayer(npcNode);
     npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
   }

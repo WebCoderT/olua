@@ -1,4 +1,4 @@
-import { MapConfig, MapId, MapType } from "../types/common";
+import { MapConfig, MapId, MapType } from "../types/map";
 
 export const maps = new Map<MapId, MapConfig>();
 

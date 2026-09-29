@@ -1,5 +1,5 @@
 import { _decorator, Color, Component, EditBox, Node, Size, Vec2 } from "cc";
-import UiHelper from "./helpers/UiHelper";
+import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 const { ccclass, property } = _decorator;
@@ -10,31 +10,22 @@ export class Login extends Component {
   passwordInput: Node;
 
   start() {
-    // 登陆界面
-    this.node.addChild(UiHelper.createFullScreenNode("login_background", "login/login_bg"));
+    // 背景与 logo
+    this.node.addChild(GameUiHelper.createFullScreenImage("login_background", "login/login_bg"));
     // 账号输入框
-    const accountInputBg = UiHelper.createSprite("account_input_background", "login/input_bg", new Vec2(0, -20), new Size(600, 80));
-    const accountIcon = UiHelper.createSprite("account_icon", "login/icon_user", new Vec2(-240, -6), new Size(40, 40));
-    accountInputBg.addChild(accountIcon);
-    this.accountInput = UiHelper.createInputBox("account_input", "请输入您的游戏账号", new Vec2(0, -6), new Vec2(400, 60));
-    accountInputBg.addChild(this.accountInput);
-    this.node.addChild(accountInputBg);
+    const account = GameUiHelper.createInputField("请输入您的游戏账号", new Vec2(0, -20), new Size(600, 80), "login/icon_user");
+    this.accountInput = account.input;
+    this.node.addChild(account.node);
     // 密码输入框
-    const passwordInputBg = UiHelper.createSprite("password_input_background", "login/input_bg", new Vec2(0, -120), new Size(600, 80));
-    const passwordIcon = UiHelper.createSprite("password_icon", "login/icon_pwd", new Vec2(-240, -6), new Size(40, 40));
-    this.passwordInput = UiHelper.createInputBox("password_input", "请输入您的游戏密码", new Vec2(0, -6), new Vec2(400, 60), true);
-    passwordInputBg.addChild(passwordIcon);
-    passwordInputBg.addChild(this.passwordInput);
-    this.node.addChild(passwordInputBg);
-    // 登陆按钮
-    const loginButton = UiHelper.createButton("login_button", "login/button", new Vec2(0, -260), new Size(300, 80));
-    const label = UiHelper.createLabel("login_button_label", "账号登录", new Color("#f4fc00"), 30, new Vec2(0, 0), new Size(300, 80));
-    loginButton.addChild(label);
+    const password = GameUiHelper.createInputField("请输入您的游戏密码", new Vec2(0, -120), new Size(600, 80), "login/icon_pwd", true);
+    this.passwordInput = password.input;
+    this.node.addChild(password.node);
+    // 登录按钮
+    const loginButton = GameUiHelper.createTexturedButton("login_button", "login/button", "账号登录", new Vec2(0, -260), new Size(300, 80), new Color("#f4fc00"), 30);
     this.node.addChild(loginButton);
     loginButton.on(Node.EventType.TOUCH_END, this.login, this);
     // logo
-    const logo = UiHelper.createSprite("game_logo", "logo", new Vec2(0, 200), new Size(600, 300));
-    this.node.addChild(logo);
+    this.node.addChild(GameUiHelper.createImage("game_logo", "logo", new Vec2(0, 200), new Size(600, 300)));
     // 清空缓存------开发时使用
     StorageManager.clear();
   }

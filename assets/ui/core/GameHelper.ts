@@ -1,9 +1,11 @@
 import { Camera, Vec3 } from "cc";
-import { BattleAttributes, Equipment, OECCUPATION, SEX } from "../../types/common";
+import { BattleAttributes } from "../../types/common";
+import { Equipment } from "../../types/good";
+import { OECCUPATION, SEX } from "../../types/role";
 import StorageManager from "./StorageManager";
-import { Role } from "../../configs/role";
+import { Role } from "../../entities/Role";
 import { levelMap } from "../../configs/level";
-import { combatCalc as combatAttributeWeights } from "../../configs/game";
+import { combatCalc as combatAttributeWeights } from "../../configs/battle";
 
 /**
  * 游戏工具（静态类）

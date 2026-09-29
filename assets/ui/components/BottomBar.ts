@@ -1,12 +1,11 @@
-import { Color, Label, Node, ProgressBar, Size, Sprite, UITransform, Vec2 } from "cc";
+import { Label, Node, ProgressBar, Size, Sprite, Vec2 } from "cc";
 import GameUiHelper, { BottomNavBarButton } from "../helpers/GameUiHelper";
-import UiHelper from "../helpers/UiHelper";
 import RoleInformationDialog from "./dialogs/RoleInformationDialog";
 import RoleBagDialog from "./dialogs/RoleBagDialog";
 import { getCurrentLevelExpRate } from "../../configs/level";
-import { Role } from "../../configs/role";
+import { Role } from "../../entities/Role";
 import SkillDialog from "./dialogs/SkillDialog";
-import { ShortcutKeys } from "../../types/common";
+import { ShortcutKeys } from "../../types/role";
 import { skills } from "../../configs/skill";
 import ShortcutKey from "./ShortcutKey";
 import RoleUIManager from "../core/RoleUIManager";
@@ -62,14 +61,8 @@ export default class BottomBar extends Node {
   }
 
   private createUI(role: Role) {
-    const transform = this.addComponent(UITransform);
-    transform.setContentSize(1100, 210);
-    this.setPosition(0, -324);
-
-    // 基础UI
-    // 底部导航区域
-    const background = UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(), new Size(1100, 210));
-    this.addChild(background);
+    // 底部栏主体（尺寸/位置/背景）由 GameUiHelper 生成
+    GameUiHelper.createBottomBarBody(this);
     // 功能按键区域
     const bottomNavBar = GameUiHelper.createBottomNavBar(6, new Vec2(153.5, -10), new Size(400, 40));
     this.bottomNavBarButtons.forEach((button) => {
@@ -99,8 +92,8 @@ export default class BottomBar extends Node {
 
   /** 初始化左侧快捷键 */
   private initLeftShortcutKeys(role: Role) {
-    /** 绘制按钮组 */
-    const leftShortcut = UiHelper.createFlexRow("left_shortcut_keys", 6, new Vec2(-270, -9), new Size(178, 40));
+    /** 按钮组容器由 GameUiHelper 生成 */
+    const leftShortcut = GameUiHelper.createLeftShortcutRow();
     /** 绘制按钮 */
     role.shortcutKeys.forEach((shortkey) => {
       const skill = skills.get(shortkey.skillId);
@@ -113,21 +106,13 @@ export default class BottomBar extends Node {
 
   /** 初始化血量 */
   private initHp(role: Role) {
-    // 血量文字
-    this.hpText = UiHelper.createLabel("hp_text", `${role.hp} / ${role.maxHp}`, Color.WHITE, 12, new Vec2(-421, -39), new Size(120, 10));
+    // 血量文字（由 GameUiHelper 生成）
+    this.hpText = GameUiHelper.createBottomHpText(`${role.hp} / ${role.maxHp}`);
     this.addChild(this.hpText);
-    // 圆形血量显示
-    const hpBarSprite = UiHelper.createSprite("hp_bar_sprite", "common/max", new Vec2(-420, 12.5), new Size(90, 90));
-    this.hpBar = UiHelper.createProgressBar("hp_bar", role.hp / role.maxHp, "", new Vec2(), new Size(90, 90));
-    const hpProgress = UiHelper.createSprite(`hp_bar_progress`, "common/hp", new Vec2(), new Size(90, 90));
-    hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
-    this.hpBar.addChild(hpProgress);
-    hpProgress.setPosition(0, 0);
-    hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
-    this.hpBar.getComponent(ProgressBar).barSprite = hpProgress.getComponent(Sprite);
-    this.hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
-    hpBarSprite.addChild(this.hpBar);
-    this.addChild(hpBarSprite);
+    // 圆形血量显示（由 GameUiHelper 生成）
+    const { barSprite, hpBar } = GameUiHelper.createRoundHpBar(role.hp / role.maxHp);
+    this.hpBar = hpBar;
+    this.addChild(barSprite);
   }
 
   /** 更新快捷键图标 */

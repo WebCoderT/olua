@@ -1,4 +1,5 @@
-import { BattleAttributes, EQUIPMENT_TYPE, Goods } from "../types/common";
+import { BattleAttributes } from "../types/common";
+import { EQUIPMENT_TYPE, Goods } from "../types/good";
 
 // 物品显示属性
 export const goodShowAttributes = new Map<Goods["type"], Array<keyof BattleAttributes>>();

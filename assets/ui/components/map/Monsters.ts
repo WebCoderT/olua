@@ -1,11 +1,12 @@
-import { Animation, Node, Sprite, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, Node, UITransform, Vec2, Vec3 } from "cc";
 import monsters from "../../../configs/monster";
-import { ACTION, DIRECTION, Monster } from "../../../types/common";
-import { getAnimationName } from "../../../configs/game";
+import { ACTION, DIRECTION } from "../../../types/animation";
+import { Monster } from "../../../types/monster";
+import { getAnimationName } from "../../../configs/animation";
 import LayerManager, { Layer } from "../../core/LayerManager";
 import { addObstacleCollider } from "../../utils/utils";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { Role } from "../../../configs/role";
+import { Role } from "../../../entities/Role";
 
 /**
  * 怪物容器组件
@@ -42,12 +43,8 @@ export default class Monsters extends Node {
 
   /** 创建怪物节点 */
   private createMonsterNode(monster: Monster) {
-    const node = new Node();
-    const uitransform = node.addComponent(UITransform);
-    uitransform.setContentSize(monster.contentSize);
-    const animationNode = new Node();
-    animationNode.addComponent(Sprite);
-    const animate = GameUiHelper.useMonsterAnimation(getAnimationName(ACTION.STAND, DIRECTION.DOWN), animationNode, monster.out, monster.speedRate);
+    // 身体与待机动画由 GameUiHelper 生成
+    const { node, animate } = GameUiHelper.createMonsterBody(monster);
     animate.on(
       Animation.EventType.FINISHED,
       (_, { name }: { name: string }) => {
@@ -56,7 +53,6 @@ export default class Monsters extends Node {
       },
       this,
     );
-    node.addChild(animationNode);
     addObstacleCollider(node);
     const head = GameUiHelper.createHead("monster_head", monster.label, monster.hp, monster.maxHp);
     node.addChild(head);

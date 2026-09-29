@@ -1,10 +1,9 @@
-import { Node, Size, TiledMap, Vec2, Vec3 } from "cc";
-import UiHelper from "../helpers/UiHelper";
+import { Node, TiledMap, Vec2, Vec3, view } from "cc";
 
 // 获取地图上尺寸偏移
 export function getMapOffset(map: TiledMap) {
   const width = map.getMapSize().width * map.getTileSize().width;
-  const screenWidth = UiHelper.getScreenSize().width;
+  const screenWidth = view.getDesignResolutionSize().width;
   return new Vec3((width - screenWidth) / 2, 0);
 }
 

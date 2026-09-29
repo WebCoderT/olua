@@ -1,8 +1,10 @@
 import { sys } from "cc";
 import RoleUIManager from "./RoleUIManager";
 import { levelMap } from "../../configs/level";
-import { Role } from "../../configs/role";
-import { Equipment, MapId, SkillId } from "../../types/common";
+import { Role } from "../../entities/Role";
+import { Equipment } from "../../types/good";
+import { MapId } from "../../types/map";
+import { SkillId } from "../../types/skill";
 import GameHelper from "./GameHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
