@@ -1,4 +1,4 @@
-import { Animation, BoxCollider2D, EventKeyboard, Input, input, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, BoxCollider2D, EventKeyboard, Input, input, isValid, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
 import { ACTION, DIRECTION } from "../../../types/animation";
@@ -14,6 +14,7 @@ import MonsterManager from "../../core/MonsterManager";
  * 角色展示组件（自身即主角节点）
  * 负责主角节点的构建、键盘操控、动作/方向状态机、外观（衣服与武器）动画切换及攻击逻辑
  * 怪物查询与结算统一走 MonsterManager
+ * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间锁定移动，且不接受新的攻击/技能（按下无反应）
  */
 export default class RoleDisplay extends Node {
   /** 衣服节点 */
@@ -33,6 +34,13 @@ export default class RoleDisplay extends Node {
 
   /** 当前角色数据 */
   private role: Role;
+
+  /** 攻击/技能锁：动作动画播放完成前为 true */
+  private attacking = false;
+  /** 攻击锁期间待执行的完成回调（动画完整播放后调用） */
+  private attackComplete: (() => void) | null = null;
+  /** 兜底解锁定时器（FINISHED 事件未触发时按动作时长解锁） */
+  private attackTimeout: ReturnType<typeof setTimeout> | null = null;
 
   /** 键盘方向键按下状态 */
   private moveUp = false;
@@ -101,6 +109,8 @@ export default class RoleDisplay extends Node {
   /** 按键按下 */
   private onKeyDown(event: EventKeyboard) {
     this.setKeyState(event.keyCode, true);
+    // 攻击/技能锁期间只记录按键状态，不改变动作与方向（解锁后恢复移动）
+    if (this.attacking) return;
     this.updateAction();
     this.updateDirection();
   }
@@ -108,6 +118,7 @@ export default class RoleDisplay extends Node {
   /** 按键抬起 */
   private onKeyUp(event: EventKeyboard) {
     this.setKeyState(event.keyCode, false);
+    if (this.attacking) return;
     this.updateAction();
     this.updateDirection();
   }
@@ -186,6 +197,11 @@ export default class RoleDisplay extends Node {
   /** 每帧根据按键状态更新角色位移 */
   updateWorldPosition() {
     const rigidBody = this.getComponent(RigidBody2D);
+    // 攻击/技能锁期间不可移动，立刻停住
+    if (this.attacking) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
     const speed = this.sprint ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
     let inputX = 0;
     let inputY = 0;
@@ -241,6 +257,7 @@ export default class RoleDisplay extends Node {
     this.clothAnimate.on(
       Animation.EventType.FINISHED,
       (_, { name }: { name: string }) => {
+        if (name.includes("attack")) this.onAttackFinished();
         /** 播放完成后更换当前最新动画 */
         this.clothAnimate.play(getAnimationName(this.action, this.direction));
       },
@@ -260,15 +277,55 @@ export default class RoleDisplay extends Node {
       this.weaponAnimate.on(
         Animation.EventType.FINISHED,
         (_, { name }: { name: string }) => {
-          if (name.includes("attack")) {
-            this.attackTargetUpdate();
-          }
+          if (name.includes("attack")) this.onAttackFinished();
           /** 播放完成后更换当前最新动画 */
           this.weaponAnimate.play(getAnimationName(this.action, this.direction));
         },
         this,
       );
     }
+  }
+
+  //#endregion
+
+  //#region 攻击锁（普攻/技能通用）
+
+  /**
+   * 发起一次攻击动作（普攻/技能通用入口）
+   * 正在攻击（动画未播放完成）时返回 false，按下不产生任何反应
+   * 动画完整播放完成（FINISHED）后解锁并回调 onComplete；FINISHED 未触发时按动作时长兜底解锁
+   */
+  startAttack(action: ACTION, direction: DIRECTION, onComplete: () => void): boolean {
+    if (this.attacking) return false;
+    this.attacking = true;
+    this.direction = direction;
+    this.action = action;
+    this.attackComplete = onComplete;
+    this.updateAnimationPlay();
+    // 兜底：动作时长（speedRate 为每秒循环数，一段动画时长即该值）+ 1 秒余量后强制解锁
+    this.attackTimeout = setTimeout(() => this.onAttackFinished(), ((this.role.speedRate[action] ?? 1) + 1) * 1000);
+    return true;
+  }
+
+  /** 是否正在攻击/施法（供 SkillManager 释放前校验） */
+  isAttacking(): boolean {
+    return this.attacking;
+  }
+
+  /** 攻击动画播放完成：解锁、回到待机/恢复移动，并执行待结算回调 */
+  private onAttackFinished() {
+    if (!this.attacking) return;
+    this.attacking = false;
+    if (this.attackTimeout !== null) {
+      clearTimeout(this.attackTimeout);
+      this.attackTimeout = null;
+    }
+    const complete = this.attackComplete;
+    this.attackComplete = null;
+    // 恢复动作状态（攻击期间按下的方向键此时生效：有键则直接走/跑，无键回到待机）
+    this.updateAction();
+    this.updateDirection();
+    complete?.();
   }
 
   //#endregion
@@ -280,9 +337,20 @@ export default class RoleDisplay extends Node {
     this.target = target;
   }
 
+  /** 攻击目标 */
+  private attackTarget(target: Node) {
+    /** 判断攻击距离，不在范围内不发起攻击 */
+    if (!BattleHelper.checkTargetCanAttack(target, this as Node)) {
+      GameUiHelper.createErrorTip("attack_range_tip", "距离太远，无法攻击！");
+      return;
+    }
+    /** 发起普攻：锁定至攻击动画播放完成，完成后结算 */
+    this.startAttack(ACTION.ATTACK_NEAR, BattleHelper.checkSelfDirection(target, this as Node), () => this.attackTargetUpdate());
+  }
+
   /** 攻击动画播放完成后的结算 */
   private attackTargetUpdate() {
-    if (!this.target) return;
+    if (!this.target || !isValid(this.target)) return;
     return MonsterManager.attack(this.target, StorageManager.findOnlineRole());
   }
 
@@ -301,11 +369,9 @@ export default class RoleDisplay extends Node {
     };
   }
 
-  /** 面向指定方向播放攻击动画（技能表现） */
+  /** 面向指定方向播放攻击动画（技能表现），动画播放完成前锁定移动与再次攻击 */
   playSkillAttack(direction: DIRECTION) {
-    this.direction = direction;
-    this.action = ACTION.ATTACK_NEAR;
-    this.updateAnimationPlay();
+    this.startAttack(ACTION.ATTACK_NEAR, direction, () => {});
   }
 
   //#endregion

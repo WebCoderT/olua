@@ -25,6 +25,8 @@ export default class SkillManager {
     const context = this.contextProvider?.();
     const config = skills.get(skillId);
     if (!context || !config) return false;
+    // 攻击/技能锁：正在攻击（动画未播放完成）时按下不产生任何反应
+    if (context.caster.isAttacking()) return false;
     // 未学习不可释放
     const level = context.role.skills[skillId];
     if (!level) {

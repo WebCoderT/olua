@@ -37,7 +37,9 @@ export interface DamageCoefficient {
 
 /** 施法者能力（由 RoleDisplay 实现） */
 export interface SkillCaster extends Node {
-  /** 面向指定方向播放攻击动画（技能表现） */
+  /** 是否正在攻击/施法（动作动画未播放完成期间为 true，期间释放技能无反应） */
+  isAttacking(): boolean;
+  /** 面向指定方向播放攻击动画（技能表现），动画播放完成前锁定移动与再次攻击 */
   playSkillAttack(direction: DIRECTION): void;
 }
 
