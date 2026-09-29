@@ -52,8 +52,9 @@ export default class SkillManager {
         return false;
       }
     }
-    // 记录冷却并调用技能实现
+    // 记录冷却，显示技能释放提示（位置在释放者，挂特效层），调用技能实现
     this.cooldowns.set(skillId, Date.now());
+    GameUiHelper.showSkillTip(context.caster, config.label);
     config.onClick({ ...context, target, config, level });
     return true;
   }

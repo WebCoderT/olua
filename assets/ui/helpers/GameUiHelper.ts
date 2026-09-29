@@ -374,6 +374,30 @@ export default class GameUiHelper {
       .start();
   }
 
+  /**
+   * 在技能释放者位置显示技能释放提示（挂特效层，上浮淡出后自动销毁）
+   * @param caster 技能释放者节点
+   * @param skillName 技能名称
+   */
+  static showSkillTip(caster: Node, skillName: string) {
+    if (!isValid(caster)) return;
+    const skillTip = UiHelper.createLabel("skill_tip", `释放${skillName}`, Color.YELLOW, 14, new Vec2(), new Size(120, 20));
+    LayerManager.addToEffectLayer(skillTip);
+    // 位置在释放者头顶（上移角色身高的一半）
+    const casterPosition = caster.getWorldPosition();
+    skillTip.setWorldPosition(casterPosition.x, casterPosition.y + 40, casterPosition.z);
+    const uiOpacity = skillTip.addComponent(UIOpacity);
+    tween(skillTip)
+      .to(0.6, { position: new Vec3(skillTip.position.x, skillTip.position.y + 30, 0) })
+      .start();
+    tween(uiOpacity)
+      .to(0.9, { opacity: 0 })
+      .call(() => {
+        skillTip.destroy();
+      })
+      .start();
+  }
+
   //#endregion
 
   //#region 弹窗与按钮
