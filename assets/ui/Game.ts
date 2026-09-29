@@ -1,14 +1,15 @@
-import { _decorator, Camera, Component, PhysicsSystem, Vec3 } from "cc";
-import BottomBarFrame from "./components/BottomBarFrame";
+import { _decorator, Camera, Component } from "cc";
+import BottomBar from "./components/BottomBar";
 import { ActivityController } from "./controllers/ActivityController";
-import MapFrame from "./components/MapFrame";
-import GameHelper from "./utils/GameHelper";
-import StorageManager from "./utils/StorageManager";
-import RoleDisplayFrame from "./components/RoleDisplayFrame";
-import LayerManager from "./utils/LayerManager";
+import GameMap from "./components/map/GameMap";
+import Monsters from "./components/map/Monsters";
+import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClick from "./components/ScreenClick";
-import RoleUIManager from "./utils/RoleUIManager";
-import RoleAvatar from "./nodes/RoleAvatar";
+import GameHelper from "./core/GameHelper";
+import StorageManager from "./core/StorageManager";
+import LayerManager from "./core/LayerManager";
+import RoleUIManager from "./core/RoleUIManager";
+import RoleAvatar from "./components/role/RoleAvatar";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -16,38 +17,55 @@ export class Game extends Component {
   @property({ type: Camera })
   camera: Camera;
 
-  //底部区域
-  bottomBar: BottomBarFrame = BottomBarFrame;
-  // 角色头像
-  RoleAvatar: RoleAvatar;
-  // 地图显示
-  map: MapFrame = MapFrame;
-  // 游戏工具
-  gameHelper: GameHelper = GameHelper;
+  /** 怪物容器（跨地图共享） */
+  private monsters: Monsters;
+  /** 地图组件 */
+  private gameMap: GameMap;
+  /** 主角组件 */
+  private roleDisplay: RoleDisplay;
+  /** 屏幕点击 */
+  private screenClick: ScreenClick;
+  /** 底部区域 */
+  private bottomBar: BottomBar | null = null;
+  /** 角色头像 */
+  private roleAvatar: RoleAvatar | null = null;
 
   start() {
     // 获取角色信息
     const role = StorageManager.findOnlineRole();
     // 初始化图层
     LayerManager.initLayer(this.node, this.camera);
+    // 创建怪物容器（挂在游戏层，跨地图共享）
+    this.monsters = new Monsters();
+    LayerManager.addToGameLayer(this.monsters);
+    // 创建地图与主角（互不直接依赖，通过注入协作）
+    this.gameMap = new GameMap(this.monsters);
+    this.roleDisplay = new RoleDisplay(role, this.monsters);
+    RoleUIManager.registerRoleDisplay(this.roleDisplay);
+    this.screenClick = new ScreenClick(this.monsters, this.roleDisplay);
     // 初始化底部
-    this.bottomBar.init(role);
+    this.bottomBar = new BottomBar(role);
+    LayerManager.addToUILayer(this.bottomBar);
+    RoleUIManager.registerBottomBar(this.bottomBar);
     /** 将用户头像加入游戏UI */
-    this.RoleAvatar = new RoleAvatar(role);
-    LayerManager.addToUILayer(this.RoleAvatar);
-    RoleUIManager.registerRoleAvatar(this.RoleAvatar);
-    RoleUIManager.registerBottomBarUpdater((updatedRole) => this.bottomBar.update(updatedRole));
-    // 初始化地图
-    this.map.init();
+    this.roleAvatar = new RoleAvatar(role);
+    LayerManager.addToUILayer(this.roleAvatar);
+    RoleUIManager.registerRoleAvatar(this.roleAvatar);
+    // 初始化地图（异步）
+    this.gameMap.init();
+    // 初始化主角外观动画与键盘监听
+    this.roleDisplay.init();
     // 初始化游戏全局工具
-    this.gameHelper.init(this.camera);
+    GameHelper.init(this.camera);
     /** 挂载全局点击事件 */
-    ScreenClick.init();
+    this.screenClick.init();
+    // 地图切换后重新加载地图
+    StorageManager.setMapChangeHandler(() => this.gameMap.init());
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
   }
 
   update() {
-    RoleDisplayFrame.updateWorldPosition();
+    this.roleDisplay?.updateWorldPosition();
   }
 }

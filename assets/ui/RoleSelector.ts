@@ -1,9 +1,9 @@
 import { _decorator, Component } from "cc";
-import GameRoleSelectorUiHelper from "./helpers/GameRoleSelectorUiHelper";
-import type { RoleSelectorCreateView, RoleSelectorMainView } from "./helpers/GameRoleSelectorUiHelper";
+import GameUiHelper from "./helpers/GameUiHelper";
+import type { RoleSelectorCreateView, RoleSelectorMainView } from "./helpers/GameUiHelper";
 import { roles } from "../configs/game";
-import StorageManager from "./utils/StorageManager";
-import SceneManager from "./utils/SceneManager";
+import StorageManager from "./core/StorageManager";
+import SceneManager from "./core/SceneManager";
 const { ccclass } = _decorator;
 
 @ccclass("RoleSelector")
@@ -13,7 +13,7 @@ export class RoleSelector extends Component {
   private ownerRoleSelectedId: string | null = null;
 
   start() {
-    this.mainView = GameRoleSelectorUiHelper.createMainView(
+    this.mainView = GameUiHelper.createMainView(
       this.node,
       () => this.beginGame(),
       () => this.createRoleUI(),
@@ -29,20 +29,20 @@ export class RoleSelector extends Component {
   }
 
   showOwnerRolesUI() {
-    GameRoleSelectorUiHelper.updateRolePreviews(this.mainView, this.node, StorageManager.getRoles(), (roleId) => this.onlineRole(roleId));
+    GameUiHelper.updateRolePreviews(this.mainView, this.node, StorageManager.getRoles(), (roleId) => this.onlineRole(roleId));
   }
 
   private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;
     const role = StorageManager.findRoleById(this.ownerRoleSelectedId);
     if (!role) return;
-    GameRoleSelectorUiHelper.setBeginGameEnabled(this.mainView, true);
-    GameRoleSelectorUiHelper.updateSelectedRole(this.mainView, role);
+    GameUiHelper.setBeginGameEnabled(this.mainView, true);
+    GameUiHelper.updateSelectedRole(this.mainView, role);
   }
 
   createRoleUI() {
     if (this.createRoleView) return;
-    this.createRoleView = GameRoleSelectorUiHelper.createRoleView(
+    this.createRoleView = GameUiHelper.createRoleView(
       this.node,
       {
         onCreateRole: () => this.createRole(),
@@ -54,18 +54,18 @@ export class RoleSelector extends Component {
   }
 
   onOccupationChanged() {
-    if (this.createRoleView) GameRoleSelectorUiHelper.updateOccupationSelection(this.createRoleView, roles);
+    if (this.createRoleView) GameUiHelper.updateOccupationSelection(this.createRoleView, roles);
   }
 
   cancelCreateRoleUI() {
     if (!this.createRoleView) return;
-    GameRoleSelectorUiHelper.closeRoleView(this.createRoleView);
+    GameUiHelper.closeRoleView(this.createRoleView);
     this.createRoleView = null;
   }
 
   createRole() {
     if (!this.createRoleView) return;
-    const role = GameRoleSelectorUiHelper.readRoleForm(this.createRoleView);
+    const role = GameUiHelper.readRoleForm(this.createRoleView);
     if (!role.name) return;
     StorageManager.createRole(role.name, role.occupation, role.sex);
     this.cancelCreateRoleUI();
@@ -73,6 +73,6 @@ export class RoleSelector extends Component {
   }
 
   update() {
-    if (this.createRoleView) GameRoleSelectorUiHelper.syncCreateButtonState(this.createRoleView);
+    if (this.createRoleView) GameUiHelper.syncCreateButtonState(this.createRoleView);
   }
 }

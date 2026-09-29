@@ -1,6 +1,6 @@
 import { Vec2, Vec3 } from "cc";
 import { NPC } from "../types/common";
-import MapSelectorDialog from "../ui/components/MapSelectorDialog";
+import MapSelectorDialog from "../ui/components/dialogs/MapSelectorDialog";
 
 export const npcs = new Map<string, NPC>();
 
@@ -29,7 +29,7 @@ npcs.set("21", { label: "未知-21", src: "npc/21" });
 npcs.set("22", { label: "未知-22", src: "npc/22" });
 npcs.set("23", { label: "未知-23", src: "npc/23" });
 npcs.set("24", { label: "未知-24", src: "npc/24" });
-npcs.set("25", { label: "大陆传送官", src: "npc/25", scale: new Vec3(1.5, 1.5), position: new Vec3(11, 0), onClick: MapSelectorDialog.open });
+npcs.set("25", { label: "大陆传送官", src: "npc/25", scale: new Vec3(1.5, 1.5), position: new Vec3(11, 0), onClick: () => new MapSelectorDialog().open() });
 npcs.set("26", { label: "未知-26", src: "npc/26" });
 npcs.set("27", { label: "未知-27", src: "npc/27" });
 npcs.set("28", { label: "未知-28", src: "npc/28" });

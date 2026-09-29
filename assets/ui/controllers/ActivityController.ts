@@ -1,5 +1,5 @@
 import { _decorator, Component, Node } from "cc";
-import { AutoUpgrade } from "../activities/AutoUpgrade";
+import { AutoUpgrade } from "./AutoUpgrade";
 import GameUiHelper from "../helpers/GameUiHelper";
 const { ccclass, property } = _decorator;
 

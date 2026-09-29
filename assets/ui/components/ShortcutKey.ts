@@ -1,6 +1,6 @@
-import { Color, Label, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
+import { Color, Label, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 
-/** 快捷键 */
+/** 快捷键组件 */
 export default class ShortcutKey extends Node {
   /** 快捷键名称 */
   private label: string;
@@ -9,9 +9,12 @@ export default class ShortcutKey extends Node {
   /** 图标 */
   private spriteSrc?: string;
 
-  /** 构建 */
-  private init() {
+  constructor(label: string, listenKey: number, spriteSrc?: string, onClick?: Function) {
+    super(`shortcut_key_${label}`);
+    this.label = label;
+    this.listenKey = listenKey;
     this.initUI();
+    this.updateIcon(spriteSrc, onClick);
   }
 
   /** 构建UI */
@@ -28,29 +31,23 @@ export default class ShortcutKey extends Node {
     label.color = Color.WHITE;
     label.lineHeight = 10;
     this.addChild(labelNode);
-    this.updateIcon();
   }
 
-  /** 修改图标 */
+  /** 修改图标（同时更新点击回调） */
   public updateIcon(spriteSrc?: string, onClick?: Function) {
     this.spriteSrc = spriteSrc;
+    // 先移除旧的点击监听，避免重复注册
+    this.off(Node.EventType.TOUCH_END);
     const sprite = this.getComponent(Sprite);
     if (this.spriteSrc) {
       resources.load(`${this.spriteSrc}/spriteFrame`, SpriteFrame, (err, spriteFrame) => {
-        if (err) throw new Error(`${this.label}图标加载失败`);
-        sprite.spriteFrame = spriteFrame;
+        if (err) {
+          console.error(`${this.label}图标加载失败`);
+          return;
+        }
+        if (sprite.isValid) sprite.spriteFrame = spriteFrame;
       });
       this.on(Node.EventType.TOUCH_END, onClick, this);
-    } else {
-      this.off(Node.EventType.TOUCH_END);
     }
-  }
-
-  constructor(label: string, listenKey: number, spriteSrc?: string, onClick?: Function) {
-    super(`shortcut_key_${label}`);
-    this.label = label;
-    this.listenKey = listenKey;
-    this.init();
-    this.updateIcon(spriteSrc, onClick);
   }
 }

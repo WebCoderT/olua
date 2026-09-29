@@ -1,39 +1,49 @@
 import { Button, Color, Font, Label, LabelAtlas, Node, resources, Size, Sprite, SpriteFrame, UITransform, Vec2 } from "cc";
-import { RELATION_SHIP } from "../../types/common";
-import { Role } from "../../configs/role";
+import { RELATION_SHIP } from "../../../types/common";
+import { Role } from "../../../configs/role";
 
+/**
+ * 角色头像栏组件
+ * 显示角色名称、等级、头像、货币与战斗力
+ */
 export default class RoleAvatar extends Node {
+  /** 角色名称显示 */
   private nameLabel: Label;
+  /** 等级显示 */
   private levelLabel: Label;
+  /** 金币数量显示 */
   private goldCountLabel: Label;
+  /** 绑定金币数量显示 */
   private bindGoldCountLabel: Label;
+  /** 银子数量显示 */
   private silverCountLabel: Label;
+  /** 战斗力显示 */
   private combatLabel: Label;
 
-  constructor(private role: Role) {
+  constructor(role: Role) {
     super("role_avatar");
-    this.createUI();
+    this.createUI(role);
   }
 
-  private createUI() {
+  private createUI(role: Role) {
     const transform = this.addComponent(UITransform);
     transform.setContentSize(300, 70);
-    this.setPosition(this.role.relationShip === RELATION_SHIP.SELF ? -648 : 0, this.role.relationShip === RELATION_SHIP.SELF ? 324 : 0);
+    this.setPosition(role.relationShip === RELATION_SHIP.SELF ? -648 : 0, role.relationShip === RELATION_SHIP.SELF ? 324 : 0);
 
-    this.createSprite("role_info_background", "common/user-info-frame", new Vec2(), new Size(300, 70));
-    this.nameLabel = this.createLabel("role_name", this.role.name, 16, new Vec2(17, 24), new Size(190, 24), Label.HorizontalAlign.LEFT);
-    this.levelLabel = this.createLabel("role_level", this.role.level.toString(), 16, new Vec2(-138, -17.5), new Size(24, 24));
-    this.createSprite(`role_avatar_${this.role.occupation}_${this.role.sex}`, `avatars/${this.role.occupation}-${this.role.sex}`, new Vec2(-109.5, 7.5), new Size(51, 60));
+    this.createSprite("role_info_background", "common/user-info-frame", new Vec2(0, 0), new Size(300, 70));
+    this.nameLabel = this.createLabel("role_name", role.name, 16, new Vec2(17, 24), new Size(190, 24), Label.HorizontalAlign.LEFT);
+    this.levelLabel = this.createLabel("role_level", role.level.toString(), 16, new Vec2(-138, -17.5), new Size(24, 24));
+    this.createSprite(`role_avatar_${role.occupation}_${role.sex}`, `avatars/${role.occupation}-${role.sex}`, new Vec2(-109.5, 7.5), new Size(51, 60));
 
     this.createSprite("gold_icon", "money/gold", new Vec2(-68, -20), new Size(15, 10));
-    this.goldCountLabel = this.createLabel("gold_count", this.role.gold.toString(), 12, new Vec2(-45, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    this.goldCountLabel = this.createLabel("gold_count", role.gold.toString(), 12, new Vec2(-45, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
     this.createSprite("bind_gold_icon", "money/bind-gold", new Vec2(-22, -20), new Size(15, 10));
-    this.bindGoldCountLabel = this.createLabel("bind_gold_count", this.role.bindGold.toString(), 12, new Vec2(1, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    this.bindGoldCountLabel = this.createLabel("bind_gold_count", role.bindGold.toString(), 12, new Vec2(1, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
     this.createSprite("silver_icon", "money/silver", new Vec2(24, -20), new Size(15, 10));
-    this.silverCountLabel = this.createLabel("silver_count", this.role.silver.toString(), 12, new Vec2(47, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    this.silverCountLabel = this.createLabel("silver_count", role.silver.toString(), 12, new Vec2(47, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
 
     this.createSprite("combat_icon", "common/combat", new Vec2(-44, 2), new Size(75, 41));
-    this.combatLabel = this.createLabel("combat_number", this.role.combat.toString(), 20, new Vec2(-3.5, 4), new Size(200, 30), Label.HorizontalAlign.LEFT);
+    this.combatLabel = this.createLabel("combat_number", role.combat.toString(), 20, new Vec2(-3.5, 4), new Size(200, 30), Label.HorizontalAlign.LEFT);
     this.combatLabel.node.getComponent(UITransform).setAnchorPoint(0, 0.5);
     resources.load("fonts/combat", LabelAtlas, (error, atlas) => {
       if (!error && atlas && this.combatLabel.isValid) this.combatLabel.font = atlas;
@@ -93,6 +103,7 @@ export default class RoleAvatar extends Node {
     return label;
   }
 
+  /** 数据变更后刷新显示 */
   updateRole(role: Role) {
     this.nameLabel.string = role.name;
     this.levelLabel.string = role.level.toString();

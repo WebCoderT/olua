@@ -1,26 +1,40 @@
 import { EventMouse, Input, input } from "cc";
-import Monsters from "./Monsters";
-import RoleDisplayFrame from "./RoleDisplayFrame";
+import Monsters from "./map/Monsters";
+import RoleDisplay from "./role/RoleDisplay";
 
-const ScreenClick = {
+/**
+ * 屏幕点击处理
+ * 负责鼠标点击选中怪物：左键选中，右键选中并攻击
+ * 依赖通过构造函数注入
+ */
+export default class ScreenClick {
+  /** 怪物容器（外部注入） */
+  private monsters: Monsters;
+  /** 主角（外部注入） */
+  private roleDisplay: RoleDisplay;
+
+  constructor(monsters: Monsters, roleDisplay: RoleDisplay) {
+    this.monsters = monsters;
+    this.roleDisplay = roleDisplay;
+  }
+
   /** 初始化屏幕点击 */
   init() {
-    input.on(Input.EventType.MOUSE_UP, ScreenClick.checkClickTarget, this);
-  },
+    input.on(Input.EventType.MOUSE_UP, this.checkClickTarget, this);
+  }
+
   /** 根据鼠标按键处理目标选择 */
-  checkClickTarget(event: EventMouse) {
-    const clickedNode = Monsters.checkWhichMonterBeClicked(event.getUILocation());
+  private checkClickTarget(event: EventMouse) {
+    const clickedNode = this.monsters.getClickedMonster(event.getUILocation());
     if (clickedNode) {
       if (event.getButton() === EventMouse.BUTTON_RIGHT) {
         /** 右键点击直接攻击 */
-        RoleDisplayFrame.setTarget(clickedNode, true);
+        this.roleDisplay.setTarget(clickedNode, true);
       }
       if (event.getButton() === EventMouse.BUTTON_LEFT) {
         /** 左键点击仅显示目标信息 */
-        RoleDisplayFrame.setTarget(clickedNode);
+        this.roleDisplay.setTarget(clickedNode);
       }
     }
-  },
-};
-
-export default ScreenClick;
+  }
+}
