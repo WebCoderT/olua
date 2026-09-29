@@ -27,16 +27,16 @@ function getWorldBounds(node: Node) {
 const BattleHelper = {
   /**
    * 判断两个矩形之间的距离是否在攻击范围内
-   * attackRange 为矩形边缘间距，默认 0 表示接触或重叠
+   * attackRange 为矩形边缘间距，默认 1 表示接触或重叠
    */
-  checkTargetCanAttack(target: Node, self: Node, attackRange: number = 0): boolean {
+  checkTargetCanAttack(target: Node, self: Node, attackRange: number = 1): boolean {
     const targetBounds = getWorldBounds(target);
     const selfBounds = getWorldBounds(self);
     if (!targetBounds || !selfBounds) return false;
 
     const horizontalGap = Math.max(targetBounds.x - (selfBounds.x + selfBounds.width), selfBounds.x - (targetBounds.x + targetBounds.width), 0);
     const verticalGap = Math.max(targetBounds.y - (selfBounds.y + selfBounds.height), selfBounds.y - (targetBounds.y + targetBounds.height), 0);
-    return Math.hypot(horizontalGap, verticalGap) <= Math.max(0, attackRange);
+    return Math.hypot(horizontalGap, verticalGap) <= Math.max(1, attackRange);
   },
 
   /** 根据两个矩形中心的相对位置，取得 self 朝向 target 的八方向 */
