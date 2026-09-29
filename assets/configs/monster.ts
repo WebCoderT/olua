@@ -18,7 +18,7 @@ monsters.set("1", {
   physicalDefense: [0, 0],
   magicDefense: [0, 0],
   taoistDefense: [0, 0],
-  maxHp: 10,
+  maxHp: 10000000000,
   contentSize: new Size(100, 100),
   speedRate: {
     [ACTION.STAND]: 0.01,

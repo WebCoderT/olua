@@ -104,11 +104,19 @@ export default class BottomBar extends Node {
         shortkey.key,
         skill?.icon,
         shortkey.skillId ? () => SkillManager.release(shortkey.skillId as SkillId) : undefined,
+        shortkey.skillId as SkillId | undefined,
       );
       this.leftShortcutKeys[shortkey.key] = shortcutKey;
       leftShortcut.addChild(shortcutKey);
     });
     return leftShortcut;
+  }
+
+  /** 刷新快捷键冷却显示（由组合根每帧驱动） */
+  updateCooldowns() {
+    for (const key in this.leftShortcutKeys) {
+      this.leftShortcutKeys[key]?.updateCooldown();
+    }
   }
 
   /** 初始化血量 */
@@ -123,8 +131,8 @@ export default class BottomBar extends Node {
   }
 
   /** 更新快捷键图标 */
-  updateShortcutIcon(key: ShortcutKeys, icon?: string, onClick?: Function) {
-    this.leftShortcutKeys[key]?.updateIcon(icon, onClick);
+  updateShortcutIcon(key: ShortcutKeys, icon?: string, onClick?: Function, skillId?: SkillId) {
+    this.leftShortcutKeys[key]?.updateIcon(icon, onClick, skillId);
   }
 
   /** 数据变更后刷新显示 */

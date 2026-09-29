@@ -639,12 +639,16 @@ export default class GameUiHelper {
 
   //#region 快捷键图标
 
-  /** 为快捷键节点附加图标样式与按键名 */
+  /** 为快捷键节点附加图标样式与按键名，返回冷却倒计时文字引用（居中，默认隐藏由组件控制显隐） */
   static applyShortcutKeyStyle(node: Node, label: string) {
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     node.getComponent(UITransform).setContentSize(40, 40);
     node.addChild(UiHelper.createLabel("shortcut_key_label", label, Color.WHITE, 10, new Vec2(20, -15), new Size(20, 10)));
+    const cooldownNode = UiHelper.createLabel("shortcut_key_cooldown", "", Color.WHITE, 16, new Vec2(0, 0), new Size(40, 20));
+    cooldownNode.active = false;
+    node.addChild(cooldownNode);
+    return { cooldownLabel: cooldownNode.getComponent(Label) };
   }
 
   /** 更新节点图标（异步加载 SpriteFrame） */

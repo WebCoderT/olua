@@ -138,8 +138,8 @@ export default class StorageManager {
     role.shortcutKeys[index].skillId = skillId;
     this.updateOnlineRole(role);
     const skill = skills.get(skillId);
-    // 触发统一走 SkillManager（图标更新，回调改为按技能 id 释放）
-    RoleUIManager.updateShortcutIcon(role.shortcutKeys[index].key, skill?.icon, () => SkillManager.release(skillId));
+    // 触发统一走 SkillManager（图标更新，回调改为按技能 id 释放，并同步冷却绑定）
+    RoleUIManager.updateShortcutIcon(role.shortcutKeys[index].key, skill?.icon, () => SkillManager.release(skillId), skillId);
   }
 }
 

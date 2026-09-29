@@ -1,5 +1,6 @@
 import { EQUIPMENT_TYPE } from "../../types/good";
 import { Role } from "../../entities/Role";
+import type { SkillId } from "../../types/skill";
 
 interface RoleAvatarView {
   updateRole: (role: Role) => void;
@@ -7,7 +8,7 @@ interface RoleAvatarView {
 
 interface BottomBarView {
   update: (role: Role) => void;
-  updateShortcutIcon: (key: number, icon?: string, onClick?: Function) => void;
+  updateShortcutIcon: (key: number, icon?: string, onClick?: Function, skillId?: SkillId) => void;
 }
 
 /** 角色外观视图（主角换装刷新） */
@@ -58,8 +59,8 @@ export default class RoleUIManager {
   }
 
   /** 更新快捷键图标 */
-  static updateShortcutIcon(key: number, icon?: string, onClick?: Function) {
-    this.bottomBar?.updateShortcutIcon(key, icon, onClick);
+  static updateShortcutIcon(key: number, icon?: string, onClick?: Function, skillId?: SkillId) {
+    this.bottomBar?.updateShortcutIcon(key, icon, onClick, skillId);
   }
 
   /** 装备变更后刷新主角外观 */

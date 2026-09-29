@@ -61,4 +61,12 @@ export default class SkillManager {
     const last = this.cooldowns.get(skillId);
     return last !== undefined && Date.now() - last < cooldown * 1000;
   }
+
+  /** 获取技能冷却剩余秒数（未冷却/未配置返回 0），供 UI 显示倒计时 */
+  static getCooldownRemaining(skillId: SkillId): number {
+    const config = skills.get(skillId);
+    const last = this.cooldowns.get(skillId);
+    if (!config || last === undefined) return 0;
+    return Math.max(0, config.cooldown - (Date.now() - last) / 1000);
+  }
 }

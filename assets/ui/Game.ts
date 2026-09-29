@@ -65,5 +65,7 @@ export class Game extends Component {
 
   update() {
     this.roleDisplay?.updateWorldPosition();
+    // 快捷键冷却显示
+    this.bottomBar?.updateCooldowns();
   }
 }
