@@ -44,12 +44,7 @@ export enum ACTION {
   TEST1 = "test1",
 }
 
-/** 速度倍率接口
- *  1 代表 1秒1个循环
- *  0.5 代表1秒2个循环
- * 可通过修改此表修改角色动作时长
- * 比如攻速：1，则1秒攻击1次，0.5，则表示1秒攻击两次
- */
+/** 速度倍率接口 */
 export type SpeedRate = Record<ACTION, number>;
 
 /** 动画长度 */

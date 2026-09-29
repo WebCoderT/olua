@@ -117,7 +117,7 @@ export default class AnimationHelper {
    * @param spriteFrames 动画帧
    */
   static createAnimation(name: string, spriteFrames: SpriteFrame[], animate: Animation, time: number = 1) {
-    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / time);
+    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length * time);
     clip.wrapMode = AnimationClip.WrapMode.Normal;
     clip.enableTrsBlending = false;
     clip.name = name;
@@ -152,4 +152,3 @@ export default class AnimationHelper {
 
   //#endregion
 }
-

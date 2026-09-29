@@ -3,6 +3,7 @@ import { skills } from "../../configs/skill";
 import { SkillContextInput, SkillId, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
 import BattleHelper from "../utils/BattleHelper";
+import StorageManager from "./StorageManager";
 
 /**
  * 技能管理器
@@ -34,7 +35,7 @@ export default class SkillManager {
       return false;
     }
     // 冷却校验
-    if (this.inCooldown(skillId, config.cooldown)) {
+    if (this.inCooldown(skillId)) {
       GameUiHelper.createTip("skill_cooldown_tip", `${config.label} 冷却中`);
       return false;
     }
@@ -59,17 +60,24 @@ export default class SkillManager {
     return true;
   }
 
-  /** 技能是否处于冷却 */
-  static inCooldown(skillId: SkillId, cooldown: number): boolean {
-    const last = this.cooldowns.get(skillId);
-    return last !== undefined && Date.now() - last < cooldown * 1000;
+  /** 技能实际冷却时间（秒）：技能配置冷却 / 角色对应动作的速度倍率（倍率 <= 0 视为 1，即不加速） */
+  private static getEffectiveCooldown(skillId: SkillId): number {
+    const config = skills.get(skillId);
+    if (!config) return 0;
+    const rate = StorageManager.findOnlineRole()?.speedRate[config.action] ?? 1;
+    return config.cooldown / (rate > 0 ? rate : 1);
   }
 
-  /** 获取技能冷却剩余秒数（未冷却/未配置返回 0），供 UI 显示倒计时 */
-  static getCooldownRemaining(skillId: SkillId): number {
-    const config = skills.get(skillId);
+  /** 技能是否处于冷却 */
+  static inCooldown(skillId: SkillId): boolean {
     const last = this.cooldowns.get(skillId);
-    if (!config || last === undefined) return 0;
-    return Math.max(0, config.cooldown - (Date.now() - last) / 1000);
+    return last !== undefined && Date.now() - last < this.getEffectiveCooldown(skillId) * 1000;
+  }
+
+  /** 获取技能冷却剩余秒数（未冷却返回 0），按实际冷却（含速度倍率折算）计算，供 UI 显示倒计时 */
+  static getCooldownRemaining(skillId: SkillId): number {
+    const last = this.cooldowns.get(skillId);
+    if (last === undefined) return 0;
+    return Math.max(0, this.getEffectiveCooldown(skillId) - (Date.now() - last) / 1000);
   }
 }
