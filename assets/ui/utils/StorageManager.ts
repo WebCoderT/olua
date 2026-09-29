@@ -1,6 +1,6 @@
 import { sys } from "cc";
 import BottomBarFrame from "../components/BottomBarFrame";
-import RoleAvatarFrame from "../components/RoleAvatarFrame";
+import RoleUIManager from "./RoleUIManager";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../configs/role";
 import { Equipment, MapId, SkillId } from "../../types/common";
@@ -111,10 +111,7 @@ const StorageManager = {
   },
   // 更新UI
   updateUi(role: Role, equipment?: Equipment) {
-    // 更新战斗力
-    RoleAvatarFrame.update(role);
-    // 更新底部导航
-    BottomBarFrame.update(role);
+    RoleUIManager.updateRoleData(role);
   },
   /** 更滑快捷键 */
   changeShorcutKey(index: number, skillId: SkillId) {

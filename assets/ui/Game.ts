@@ -7,6 +7,7 @@ import StorageManager from "./utils/StorageManager";
 import RoleDisplayFrame from "./components/RoleDisplayFrame";
 import LayerManager from "./utils/LayerManager";
 import ScreenClick from "./components/ScreenClick";
+import RoleUIManager from "./utils/RoleUIManager";
 import RoleAvatar from "./nodes/RoleAvatar";
 const { ccclass, property } = _decorator;
 
@@ -31,9 +32,11 @@ export class Game extends Component {
     LayerManager.initLayer(this.node, this.camera);
     // 初始化底部
     this.bottomBar.init(role);
-    // 初始化用户头像
+    /** 将用户头像加入游戏UI */
     this.RoleAvatar = new RoleAvatar(role);
     LayerManager.addToUILayer(this.RoleAvatar);
+    RoleUIManager.registerRoleAvatar(this.RoleAvatar);
+    RoleUIManager.registerBottomBarUpdater((updatedRole) => this.bottomBar.update(updatedRole));
     // 初始化地图
     this.map.init();
     // 初始化游戏全局工具

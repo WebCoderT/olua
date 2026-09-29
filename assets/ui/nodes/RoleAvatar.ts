@@ -3,7 +3,11 @@ import { RELATION_SHIP } from "../../types/common";
 import { Role } from "../../configs/role";
 
 export default class RoleAvatar extends Node {
+  private nameLabel: Label;
   private levelLabel: Label;
+  private goldCountLabel: Label;
+  private bindGoldCountLabel: Label;
+  private silverCountLabel: Label;
   private combatLabel: Label;
 
   constructor(private role: Role) {
@@ -17,16 +21,16 @@ export default class RoleAvatar extends Node {
     this.setPosition(this.role.relationShip === RELATION_SHIP.SELF ? -648 : 0, this.role.relationShip === RELATION_SHIP.SELF ? 324 : 0);
 
     this.createSprite("role_info_background", "common/user-info-frame", new Vec2(), new Size(300, 70));
-    this.createLabel("role_name", this.role.name, 16, new Vec2(17, 24), new Size(190, 24), Label.HorizontalAlign.LEFT);
+    this.nameLabel = this.createLabel("role_name", this.role.name, 16, new Vec2(17, 24), new Size(190, 24), Label.HorizontalAlign.LEFT);
     this.levelLabel = this.createLabel("role_level", this.role.level.toString(), 16, new Vec2(-138, -17.5), new Size(24, 24));
     this.createSprite(`role_avatar_${this.role.occupation}_${this.role.sex}`, `avatars/${this.role.occupation}-${this.role.sex}`, new Vec2(-109.5, 7.5), new Size(51, 60));
 
     this.createSprite("gold_icon", "money/gold", new Vec2(-68, -20), new Size(15, 10));
-    this.createLabel("gold_count", this.role.gold.toString(), 12, new Vec2(-45, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    this.goldCountLabel = this.createLabel("gold_count", this.role.gold.toString(), 12, new Vec2(-45, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
     this.createSprite("bind_gold_icon", "money/bind-gold", new Vec2(-22, -20), new Size(15, 10));
-    this.createLabel("bind_gold_count", this.role.bindGold.toString(), 12, new Vec2(1, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    this.bindGoldCountLabel = this.createLabel("bind_gold_count", this.role.bindGold.toString(), 12, new Vec2(1, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
     this.createSprite("silver_icon", "money/silver", new Vec2(24, -20), new Size(15, 10));
-    this.createLabel("silver_count", this.role.silver.toString(), 12, new Vec2(47, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    this.silverCountLabel = this.createLabel("silver_count", this.role.silver.toString(), 12, new Vec2(47, -20), new Size(30, 10), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
 
     this.createSprite("combat_icon", "common/combat", new Vec2(-44, 2), new Size(75, 41));
     this.combatLabel = this.createLabel("combat_number", this.role.combat.toString(), 20, new Vec2(-3.5, 4), new Size(200, 30), Label.HorizontalAlign.LEFT);
@@ -90,7 +94,11 @@ export default class RoleAvatar extends Node {
   }
 
   updateRole(role: Role) {
+    this.nameLabel.string = role.name;
     this.levelLabel.string = role.level.toString();
+    this.goldCountLabel.string = role.gold.toString();
+    this.bindGoldCountLabel.string = role.bindGold.toString();
+    this.silverCountLabel.string = role.silver.toString();
     this.combatLabel.string = role.combat.toString();
   }
 }
