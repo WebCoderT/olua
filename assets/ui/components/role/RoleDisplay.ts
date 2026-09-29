@@ -2,6 +2,7 @@ import { Animation, BoxCollider2D, EventKeyboard, Input, input, Node, RigidBody2
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
 import { ACTION, DIRECTION } from "../../../types/animation";
+import { SkillContextInput } from "../../../types/skill";
 import { actionNeedWeapon, getAnimationName } from "../../../configs/animation";
 import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
@@ -298,6 +299,28 @@ export default class RoleDisplay extends Node {
   /** 攻击动画播放完成后的结算 */
   private attackTargetUpdate() {
     return this.monsters.monsterUpdate(this.target.uuid, StorageManager.findOnlineRole());
+  }
+
+  //#endregion
+
+  //#region 技能释放
+
+  /** 组装技能释放上下文（由组合根注入 SkillManager，作为统一触发来源） */
+  buildSkillContext(): SkillContextInput {
+    return {
+      // 角色数据实时读取存储，避免组件内快照过期
+      role: StorageManager.findOnlineRole() ?? this.role,
+      caster: this,
+      target: this.target,
+      monsters: this.monsters,
+    };
+  }
+
+  /** 面向指定方向播放攻击动画（技能表现） */
+  playSkillAttack(direction: DIRECTION) {
+    this.direction = direction;
+    this.action = ACTION.ATTACK_NEAR;
+    this.updateAnimationPlay();
   }
 
   //#endregion

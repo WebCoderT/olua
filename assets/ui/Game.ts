@@ -10,6 +10,7 @@ import StorageManager from "./core/StorageManager";
 import LayerManager from "./core/LayerManager";
 import RoleUIManager from "./core/RoleUIManager";
 import RoleAvatar from "./components/role/RoleAvatar";
+import SkillManager from "./core/SkillManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -53,6 +54,8 @@ export class Game extends Component {
     RoleUIManager.registerRoleAvatar(this.roleAvatar);
     // 初始化主角外观动画与键盘监听
     this.roleDisplay.init();
+    // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）
+    SkillManager.setContextProvider(() => this.roleDisplay.buildSkillContext());
     // 初始化游戏全局工具
     GameHelper.init(this.camera);
     /** 挂载全局点击事件 */

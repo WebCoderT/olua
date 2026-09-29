@@ -1,6 +1,7 @@
 import { sys } from "cc";
 import RoleUIManager from "./RoleUIManager";
 import SceneManager from "./SceneManager";
+import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../entities/Role";
 import { Equipment } from "../../types/good";
@@ -137,7 +138,8 @@ export default class StorageManager {
     role.shortcutKeys[index].skillId = skillId;
     this.updateOnlineRole(role);
     const skill = skills.get(skillId);
-    RoleUIManager.updateShortcutIcon(role.shortcutKeys[index].key, skill?.icon, skill?.onClick);
+    // 触发统一走 SkillManager（图标更新，回调改为按技能 id 释放）
+    RoleUIManager.updateShortcutIcon(role.shortcutKeys[index].key, skill?.icon, () => SkillManager.release(skillId));
   }
 }
 

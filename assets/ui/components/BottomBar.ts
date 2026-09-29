@@ -6,9 +6,11 @@ import { getCurrentLevelExpRate } from "../../configs/level";
 import { Role } from "../../entities/Role";
 import SkillDialog from "./dialogs/SkillDialog";
 import { ShortcutKeys } from "../../types/role";
+import { SkillId } from "../../types/skill";
 import { skills } from "../../configs/skill";
 import ShortcutKey from "./ShortcutKey";
 import RoleUIManager from "../core/RoleUIManager";
+import SkillManager from "../core/SkillManager";
 
 /**
  * 底部栏组件
@@ -94,10 +96,15 @@ export default class BottomBar extends Node {
   private initLeftShortcutKeys(role: Role) {
     /** 按钮组容器由 GameUiHelper 生成 */
     const leftShortcut = GameUiHelper.createLeftShortcutRow();
-    /** 绘制按钮 */
+    /** 绘制按钮（触发统一走 SkillManager，上下文由 RoleDisplay 提供） */
     role.shortcutKeys.forEach((shortkey) => {
-      const skill = skills.get(shortkey.skillId);
-      const shortcutKey = new ShortcutKey(shortkey.label, shortkey.key, skill?.icon, skill?.onClick);
+      const skill = skills.get(shortkey.skillId as SkillId);
+      const shortcutKey = new ShortcutKey(
+        shortkey.label,
+        shortkey.key,
+        skill?.icon,
+        shortkey.skillId ? () => SkillManager.release(shortkey.skillId as SkillId) : undefined,
+      );
       this.leftShortcutKeys[shortkey.key] = shortcutKey;
       leftShortcut.addChild(shortcutKey);
     });

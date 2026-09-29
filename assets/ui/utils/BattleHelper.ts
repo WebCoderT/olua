@@ -63,6 +63,13 @@ const BattleHelper = {
     self.hp = Math.max(0, previousHp - damage);
     return previousHp - self.hp;
   },
+
+  /** 计算一次技能伤害：攻击区间随机值 * 技能倍率 - 防御区间随机值 */
+  calcSkillDamage(attacker: BattleAttributes, victim: BattleAttributes, attackAttribute: AttackAttribute = "physicalAttack", rate: number = 1): number {
+    const attack = rollAttributeRange(attacker[attackAttribute]) * rate;
+    const defense = rollAttributeRange(victim[defenseAttributeByAttack[attackAttribute]]);
+    return Math.max(0, Math.round(attack - defense));
+  },
 };
 
 export default BattleHelper;

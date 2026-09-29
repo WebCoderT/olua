@@ -1,3 +1,7 @@
+import type { Node, Vec3 } from "cc";
+import type { Role } from "../entities/Role";
+import type { DIRECTION } from "./animation";
+import type { Monster } from "./monster";
 import type { BattleAttributes } from "./common";
 import type { OECCUPATION } from "./role";
 
@@ -31,6 +35,41 @@ export interface DamageCoefficient {
   baseTypeRate: number;
 }
 
+/** 施法者能力（由 RoleDisplay 实现） */
+export interface SkillCaster extends Node {
+  /** 面向指定方向播放攻击动画（技能表现） */
+  playSkillAttack(direction: DIRECTION): void;
+}
+
+/** 怪物容器为技能提供的能力（由 Monsters 实现） */
+export interface SkillMonsterProvider {
+  /** 获取以 position 为中心、distance 范围内最近的存活怪物节点（distance <= 0 不限距离） */
+  getNearestMonster(position: Vec3, distance: number): Node | null;
+  /** 获取目标节点的怪物数据 */
+  getMonsterData(target: Node): Monster | null;
+  /** 对目标结算一次伤害（刷新血条，死亡移除） */
+  hurt(target: Node, damage: number): void;
+}
+
+/** 技能释放上下文（技能实现只依赖此对象，不反查全局） */
+export interface SkillContext {
+  /** 施法者角色数据 */
+  role: Role;
+  /** 施法者节点 */
+  caster: SkillCaster;
+  /** 目标怪物节点（单体技能由 SkillManager 补全/校验） */
+  target: Node | null;
+  /** 技能等级（从 1 开始） */
+  level: number;
+  /** 技能配置 */
+  config: SkillConfig;
+  /** 怪物容器能力 */
+  monsters: SkillMonsterProvider;
+}
+
+/** 技能触发输入（由 RoleDisplay 组装，config/level 由 SkillManager 补全） */
+export type SkillContextInput = Omit<SkillContext, "config" | "level">;
+
 // 技能接口
 export interface SkillConfig {
   /** 技能名称 */
@@ -53,8 +92,8 @@ export interface SkillConfig {
   damageCoefficients: DamageCoefficient[];
   /** 使用距离 */
   distance: number;
-  /** 释放技能方法 */
-  onClick: Function;
+  /** 释放技能方法（入参为技能上下文） */
+  onClick: (context: SkillContext) => void;
 }
 
 /** 技能ID */

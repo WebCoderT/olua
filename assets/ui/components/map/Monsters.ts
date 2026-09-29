@@ -1,4 +1,4 @@
-import { Animation, Node, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, isValid, Label, Node, ProgressBar, UITransform, Vec2, Vec3 } from "cc";
 import monsters from "../../../configs/monster";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { Monster } from "../../../types/monster";
@@ -74,5 +74,51 @@ export default class Monsters extends Node {
         // TODO: 结算伤害并更新怪物血条
       }
     });
+  }
+
+  /** 获取以 position 为中心、distance 范围内最近的存活怪物节点（distance <= 0 不限距离，技能自动选目标用） */
+  getNearestMonster(position: Vec3, distance: number): Node | null {
+    let nearest: Node | null = null;
+    let nearestDistance = distance > 0 ? distance : Infinity;
+    this.monsterNodes.forEach((node, index) => {
+      if (!isValid(node) || this.monsters[index].hp <= 0) return;
+      const current = Vec3.distance(position, node.getWorldPosition());
+      if (current <= nearestDistance) {
+        nearestDistance = current;
+        nearest = node;
+      }
+    });
+    return nearest;
+  }
+
+  /** 获取目标节点的怪物数据 */
+  getMonsterData(target: Node): Monster | null {
+    const index = this.monsterNodes.indexOf(target);
+    return index === -1 ? null : this.monsters[index];
+  }
+
+  /** 对目标怪物结算一次伤害（刷新血条，死亡移除） */
+  hurt(target: Node, damage: number) {
+    const monster = this.getMonsterData(target);
+    if (!monster) return;
+    monster.hp = Math.max(0, monster.hp - damage);
+    this.updateHead(target, monster);
+    // 死亡：移除怪物（TODO: 死亡经验/掉落结算）
+    if (monster.hp <= 0) {
+      const index = this.monsterNodes.indexOf(target);
+      this.monsterNodes.splice(index, 1);
+      this.monsters.splice(index, 1);
+      target.destroy();
+    }
+  }
+
+  /** 刷新怪物头顶血条与血量文字 */
+  private updateHead(node: Node, monster: Monster) {
+    const head = node.getChildByName("monster_head");
+    if (!head) return;
+    const hpBar = head.children[2]?.getComponent(ProgressBar);
+    if (hpBar) hpBar.progress = monster.hp / monster.maxHp;
+    const hpText = head.children[3]?.getComponent(Label);
+    if (hpText) hpText.string = `${monster.hp} / ${monster.maxHp}`;
   }
 }
