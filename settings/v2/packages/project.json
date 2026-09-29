@@ -23,12 +23,16 @@
       "value": 2
     },
     {
-      "name": "EffectLayer",
+      "name": "MonsterLayer",
       "value": 8
     },
     {
-      "name": "UiLayer",
+      "name": "EffectLayer",
       "value": 16
+    },
+    {
+      "name": "UILayer",
+      "value": 32
     }
   ],
   "physics": {

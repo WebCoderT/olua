@@ -41,7 +41,7 @@ export interface SkillCaster extends Node {
   playSkillAttack(direction: DIRECTION): void;
 }
 
-/** 怪物容器为技能提供的能力（由 Monsters 实现） */
+/** 怪物管理器为技能提供的能力（由 MonsterManager 实现） */
 export interface SkillMonsterProvider {
   /** 获取以 position 为中心、distance 范围内最近的存活怪物节点（distance <= 0 不限距离） */
   getNearestMonster(position: Vec3, distance: number): Node | null;

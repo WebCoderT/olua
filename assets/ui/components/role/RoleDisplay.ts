@@ -8,12 +8,12 @@ import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BattleHelper from "../../utils/BattleHelper";
-import Monsters from "../map/Monsters";
+import MonsterManager from "../../core/MonsterManager";
 
 /**
  * 角色展示组件（自身即主角节点）
  * 负责主角节点的构建、键盘操控、动作/方向状态机、外观（衣服与武器）动画切换及攻击逻辑
- * 怪物容器（Monsters）由外部注入
+ * 怪物查询与结算统一走 MonsterManager
  */
 export default class RoleDisplay extends Node {
   /** 衣服节点 */
@@ -31,8 +31,6 @@ export default class RoleDisplay extends Node {
   /** 攻击目标 */
   private target: Node | null = null;
 
-  /** 怪物容器（外部注入） */
-  private monsters: Monsters;
   /** 当前角色数据 */
   private role: Role;
 
@@ -43,10 +41,9 @@ export default class RoleDisplay extends Node {
   private moveRight = false;
   private sprint = false;
 
-  constructor(role: Role, monsters: Monsters) {
+  constructor(role: Role) {
     super("basic_role");
     this.role = role;
-    this.monsters = monsters;
     this.createBody();
     this.addRigid();
     LayerManager.addToGameLayer(this);
@@ -298,7 +295,8 @@ export default class RoleDisplay extends Node {
 
   /** 攻击动画播放完成后的结算 */
   private attackTargetUpdate() {
-    return this.monsters.monsterUpdate(this.target.uuid, StorageManager.findOnlineRole());
+    if (!this.target) return;
+    return MonsterManager.attack(this.target, StorageManager.findOnlineRole());
   }
 
   //#endregion
@@ -312,7 +310,7 @@ export default class RoleDisplay extends Node {
       role: StorageManager.findOnlineRole() ?? this.role,
       caster: this,
       target: this.target,
-      monsters: this.monsters,
+      monsters: MonsterManager,
     };
   }
 

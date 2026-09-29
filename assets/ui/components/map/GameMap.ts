@@ -1,33 +1,29 @@
 import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
+import MonsterManager from "../../core/MonsterManager";
 import { getMapPointPosition } from "../../utils/MapPointMath";
 import { loadResourcesAsync } from "../../utils/ResourceLoad";
 import { npcs } from "../../../configs/npc";
 import StorageManager from "../../core/StorageManager";
 import { maps } from "../../../configs/map";
 import { addObstacleCollider } from "../../utils/utils";
-import Monsters from "./Monsters";
 
 /**
  * 地图组件（自身即地图节点）
  * 挂载于地图层，负责地图资源加载、地图对象（NPC/怪物）生成与复活点定位
  * 地图资源异步加载完成后才在自身挂载 TiledMap 组件并生成地图对象，
  * 避免节点先挂上而地图未加载完成导致的黑屏
- * 怪物容器（Monsters）由外部注入，跨地图共享
+ * 怪物的生成与清空统一交给 MonsterManager（怪物节点挂载到怪物层）
  */
 export default class GameMap extends Node {
-  /** 怪物容器（外部注入，跨地图共享） */
-  private monsters: Monsters;
-
-  constructor(monsters: Monsters) {
+  constructor() {
     super("map");
-    this.monsters = monsters;
     const role = StorageManager.findOnlineRole();
     const onMap = maps.get(role.onMap);
     this.name = "map_" + role.onMap;
     // 清空上一张地图的怪物
-    this.monsters.reset();
+    MonsterManager.reset();
     LayerManager.clearMapLayer();
     this.loadMap(onMap.src);
   }
@@ -56,7 +52,7 @@ export default class GameMap extends Node {
             this.createNpc(object.properties.id as string, new Vec3(object.x, object.y));
             break;
           case "monster":
-            this.monsters.createOneMonster(object.properties.id as string, getMapPointPosition(new Vec3(object.x, object.y), this));
+            MonsterManager.spawn(object.properties.id as string, getMapPointPosition(new Vec3(object.x, object.y), this));
             break;
           default:
             break;

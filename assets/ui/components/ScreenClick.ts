@@ -1,20 +1,17 @@
 import { EventMouse, Input, input } from "cc";
-import Monsters from "./map/Monsters";
+import MonsterManager from "../core/MonsterManager";
 import RoleDisplay from "./role/RoleDisplay";
 
 /**
  * 屏幕点击处理
  * 负责鼠标点击选中怪物：左键选中，右键选中并攻击
- * 依赖通过构造函数注入
+ * 怪物查询统一走 MonsterManager，主角通过构造函数注入
  */
 export default class ScreenClick {
-  /** 怪物容器（外部注入） */
-  private monsters: Monsters;
   /** 主角（外部注入） */
   private roleDisplay: RoleDisplay;
 
-  constructor(monsters: Monsters, roleDisplay: RoleDisplay) {
-    this.monsters = monsters;
+  constructor(roleDisplay: RoleDisplay) {
     this.roleDisplay = roleDisplay;
   }
 
@@ -30,7 +27,7 @@ export default class ScreenClick {
 
   /** 根据鼠标按键处理目标选择 */
   private checkClickTarget(event: EventMouse) {
-    const clickedNode = this.monsters.getClickedMonster(event.getUILocation());
+    const clickedNode = MonsterManager.getClickedMonster(event.getUILocation());
     if (clickedNode) this.roleDisplay.setTarget(clickedNode);
   }
 }

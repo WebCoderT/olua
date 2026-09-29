@@ -4,13 +4,14 @@ export enum Layer {
   MAP = 1 << 0,
   DROP = 1 << 1,
   GAME = 1 << 2,
-  EFFECT = 1 << 3,
-  UI = 1 << 4,
+  MONSTER = 1 << 3,
+  EFFECT = 1 << 4,
+  UI = 1 << 5,
 }
 
 /**
  * 图层管理器
- * 负责场景内各渲染图层（地图层/游戏层/特效层/UI层）的初始化与元素挂载
+ * 负责场景内各渲染图层（地图层/怪物层/游戏层/特效层/UI层）的初始化与元素挂载
  */
 export default class LayerManager {
   /** 相机（初始化后可用） */
@@ -20,6 +21,8 @@ export default class LayerManager {
   static MapLayer: Node = new Node("map_layer");
   /** 游戏层 */
   static GameLayer: Node = new Node("game_layer");
+  /** 怪物层 */
+  static MonsterLayer: Node = new Node("monster_layer");
   /** 特效层 */
   static EffectLayer: Node = new Node("effect_layer");
   /** UI层 */
@@ -37,9 +40,10 @@ export default class LayerManager {
   static initLayer(scene: Node, camera: Camera) {
     this.camera = camera;
     // 摄像机设置可视图层
-    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP | Layer.GAME;
+    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP | Layer.GAME | Layer.MONSTER;
     this.initMapLayer(scene);
     this.initGameLayer(scene);
+    this.initMonsterLayer(scene);
     this.initEffectLayer(scene);
     this.initUiLayer(scene);
   }
@@ -71,6 +75,23 @@ export default class LayerManager {
   static addToGameLayer(node: Node) {
     this.setNodeToLayer(node, Layer.GAME);
     this.GameLayer.addChild(node);
+  }
+
+  /** 初始化怪物层 */
+  private static initMonsterLayer(scene: Node) {
+    this.MonsterLayer.layer = Layer.MONSTER;
+    scene.addChild(this.MonsterLayer);
+  }
+
+  /** 清除怪物层 */
+  static clearMonsterLayer() {
+    this.MonsterLayer.removeAllChildren();
+  }
+
+  /** 添加元素至怪物层 */
+  static addToMonsterLayer(node: Node) {
+    this.setNodeToLayer(node, Layer.MONSTER);
+    this.MonsterLayer.addChild(node);
   }
 
   /** 初始化特效层 */
