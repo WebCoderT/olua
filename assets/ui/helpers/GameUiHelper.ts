@@ -1,4 +1,4 @@
-import { Animation, AnimationClip, Button, Color, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, AnimationClip, Button, Color, isValid, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
@@ -345,6 +345,33 @@ export default class GameUiHelper {
       })
       .start();
     LayerManager.addToUILayer(errorTip);
+  }
+
+  //#endregion
+
+  //#region 战斗特效
+
+  /**
+   * 在受伤物体位置显示受伤飘字（挂特效层，上浮淡出后自动销毁）
+   * @param target 受伤物体节点
+   * @param damage 受到的伤害数值
+   */
+  static showDamageText(target: Node, damage: number) {
+    if (!isValid(target)) return;
+    const damageText = UiHelper.createLabel("damage_text", damage > 0 ? `-${damage}` : "MISS", Color.RED, 18, new Vec2(), new Size(80, 24));
+    LayerManager.addToEffectLayer(damageText);
+    // 位置与受伤物体保持一致
+    damageText.setWorldPosition(target.getWorldPosition());
+    const uiOpacity = damageText.addComponent(UIOpacity);
+    tween(damageText)
+      .to(0.6, { position: new Vec3(damageText.position.x, damageText.position.y + 40, 0) })
+      .start();
+    tween(uiOpacity)
+      .to(0.9, { opacity: 0 })
+      .call(() => {
+        damageText.destroy();
+      })
+      .start();
   }
 
   //#endregion

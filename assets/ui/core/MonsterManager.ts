@@ -95,10 +95,12 @@ export default class MonsterManager {
     this.hurt(target, damage);
   }
 
-  /** 对目标怪物结算一次伤害（刷新血条，死亡移除） */
+  /** 对目标怪物结算一次伤害（特效层显示受伤飘字，刷新血条，死亡移除） */
   static hurt(target: Node, damage: number) {
     const monster = this.getMonsterData(target);
     if (!monster || monster.hp <= 0) return;
+    // 受伤飘字（需在死亡销毁节点前显示）
+    GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, monster.hp - damage);
     this.updateHead(target, monster);
     // 死亡：注销数据并移除节点（TODO: 死亡经验/掉落结算）

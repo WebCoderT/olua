@@ -65,7 +65,7 @@ skills.set("1001", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
-  distance: 0,
+  distance: 10,
   onClick: skill_1001,
   action: ACTION.ATTACK_SKILL_1,
 });
@@ -146,9 +146,9 @@ skills.set("1004", {
     { baseType: "physicalAttack", baseTypeRate: 3.9 },
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
-  distance: 0,
+  distance: 100000,
   onClick: skill_1000,
-  action: ACTION.STAND,
+  action: ACTION.ATTACK_FAR,
 });
 
 skills.set("1005", {
