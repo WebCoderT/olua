@@ -91,16 +91,27 @@ export default class RoleDisplay extends Node {
   /** 键盘监听 */
   private keyboardListener() {
     // 游戏按键监听
-    input.on(Input.EventType.KEY_DOWN, (event: EventKeyboard) => {
-      this.setKeyState(event.keyCode, true);
-      this.updateAction();
-      this.updateDirection();
+    input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
+    input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
+    // 场景销毁时移除全局键盘监听，避免重进场景后残留对已销毁节点的引用
+    this.once(Node.EventType.NODE_DESTROYED, () => {
+      input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
+      input.off(Input.EventType.KEY_UP, this.onKeyUp, this);
     });
-    input.on(Input.EventType.KEY_UP, (event: EventKeyboard) => {
-      this.setKeyState(event.keyCode, false);
-      this.updateAction();
-      this.updateDirection();
-    });
+  }
+
+  /** 按键按下 */
+  private onKeyDown(event: EventKeyboard) {
+    this.setKeyState(event.keyCode, true);
+    this.updateAction();
+    this.updateDirection();
+  }
+
+  /** 按键抬起 */
+  private onKeyUp(event: EventKeyboard) {
+    this.setKeyState(event.keyCode, false);
+    this.updateAction();
+    this.updateDirection();
   }
 
   /** 按键码对应的按下状态变更 */

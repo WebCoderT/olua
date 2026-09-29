@@ -148,6 +148,19 @@ export default class GameUiHelper {
 
   //#endregion
 
+  //#region 过渡场景
+
+  /**
+   * 创建加载进度文本零件（一行字，百分比显示）
+   * @return node 零件节点、progressLabel 进度文本（供刷新）
+   */
+  static createLoadingProgress(text: string, position: Vec2 = new Vec2(), fontSize: number = 32) {
+    const node = UiHelper.createLabel("loading_progress", text, Color.WHITE, fontSize, position, new Size(960, 50));
+    return { node, progressLabel: node.getComponent(Label) };
+  }
+
+  //#endregion
+
   //#region 角色预览
 
   /**

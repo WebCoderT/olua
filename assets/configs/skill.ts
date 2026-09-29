@@ -309,7 +309,7 @@ skills.set("1011", {
   oeccupation: OECCUPATION.ZHAN,
   level: 10,
   description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开",
-  type: SkillType.PROACTIVE,
+  type: SkillType.STATUS,
   damageCoefficients: [
     { baseType: "physicalAttack", baseTypeRate: 3 },
     { baseType: "physicalAttack", baseTypeRate: 3.1 },

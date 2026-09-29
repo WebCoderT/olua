@@ -1,5 +1,6 @@
 import { sys } from "cc";
 import RoleUIManager from "./RoleUIManager";
+import SceneManager from "./SceneManager";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../entities/Role";
 import { Equipment } from "../../types/good";
@@ -15,14 +16,6 @@ import { skills } from "../../configs/skill";
  * 负责本地角色数据的读写，以及数据变更后的属性重算、UI刷新与外观更新
  */
 export default class StorageManager {
-  /** 地图变更回调（由 Game 在创建地图后注入，用于触发重新加载） */
-  private static mapChangeHandler: (() => void) | null = null;
-
-  /** 注入地图变更回调 */
-  static setMapChangeHandler(handler: () => void) {
-    this.mapChangeHandler = handler;
-  }
-
   /** 获取角色列表 */
   static getRoles(): Role[] {
     const roles = sys.localStorage.getItem("roles");
@@ -129,8 +122,8 @@ export default class StorageManager {
     role.onMap = mapId;
     // 保存
     this.updateOnlineRole(role);
-    // 通知地图重新加载
-    this.mapChangeHandler?.();
+    // 重新进入游戏场景，走过渡场景完成新地图资源加载后再进入
+    SceneManager.loadScene("Game");
   }
 
   /** 更新UI */

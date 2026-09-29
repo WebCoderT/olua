@@ -6,3 +6,5 @@
 - 分层：ui/core（全局管理器）、ui/components（通用组件 + map/ 地图类 + role/ 角色类 + dialogs/ 弹窗）、ui/controllers（场景 Component 控制器）、ui/helpers（UI 工厂，仅 3 个）、ui/utils（纯工具）、assets/entities（运行时实体，如 Role）、assets/skills（技能行为实现）、configs（纯静态数据，按域一文件）、types（纯类型，按域一文件）。configs 与 types 不互相依赖 UI 层。
 - helpers 仅 3 个，不要新建更多：UiHelper（Cocos 基础组件封装，只被 GameUiHelper 引用）、GameUiHelper（UI 零件库）、AnimationHelper（帧动画加载/切割/播放）。新 UI 方法按语义归入对应类；类内用 //#region 分块。规则：生成 UI 样式的代码只允许出现在 UiHelper/GameUiHelper 中；**GameUiHelper 只做单个可复用零件（如 createCurrencyItem/createCombatPower/createEquipmentSlot），不做整页视图生成，拼接组装由各组件自己完成**（需要数据刷新的零件返回 {node, xxxLabel} 形式）。物理碰撞体（RigidBody2D/BoxCollider2D）与 LayerManager 图层容器不算 UI 样式。
 - 移动 assets 下文件必须连同 .meta 一起移动（保留 UUID，场景引用依赖它）；.meta 被 .gitignore 忽略（风险）。
+- 场景/地图切换一律走 SceneManager.loadScene → Loading 过渡场景（一行文字显示百分比）：场景预加载 0~90%，进 Game 前预载当前地图 TiledMapAsset 90~100%，完成后才进入目标场景；地图切换=保存 onMap 后重进 Game 场景（不存在原地换图）。给场景挂脚本组件：手写脚本 .meta uuid，scene JSON 用压缩 uuid（前 5 hex + 27 hex→108bit base64 18 字符）。
+- 静态类跨场景持有节点（LayerManager 图层容器）时必须在 initLayer/进场景时重建（旧场景销毁会连带销毁静态节点，否则黑屏）；相机等由 Game.start 重新注入。全局 input 监听（RoleDisplay 键盘、ScreenClick 鼠标）必须随节点销毁移除（NODE_DESTROYED once / Game.onDestroy），否则重进场景叠加残留。

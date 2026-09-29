@@ -33,7 +33,7 @@ export default class LayerManager {
     });
   }
 
-  /** 初始化所有图层 */
+  /** 初始化所有图层（图层容器为静态节点，会随上一个场景销毁，进入新场景时必须重建） */
   static initLayer(scene: Node, camera: Camera) {
     this.camera = camera;
     // 摄像机设置可视图层
@@ -105,4 +105,3 @@ export default class LayerManager {
     this.camera.node.setWorldPosition(position.x, position.y, cameraPosition.z);
   }
 }
-

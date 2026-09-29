@@ -59,10 +59,13 @@ export class Game extends Component {
     GameHelper.init(this.camera);
     /** 挂载全局点击事件 */
     this.screenClick.init();
-    // 地图切换后重新加载地图
-    StorageManager.setMapChangeHandler(() => this.gameMap.init());
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
+  }
+
+  /** 场景卸载：清理全局监听（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
+  onDestroy() {
+    this.screenClick?.destroy();
   }
 
   update() {

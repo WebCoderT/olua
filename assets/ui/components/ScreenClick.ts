@@ -23,6 +23,11 @@ export default class ScreenClick {
     input.on(Input.EventType.MOUSE_UP, this.checkClickTarget, this);
   }
 
+  /** 销毁（场景卸载时由 Game 调用），移除全局监听避免重进场景后残留 */
+  destroy() {
+    input.off(Input.EventType.MOUSE_UP, this.checkClickTarget, this);
+  }
+
   /** 根据鼠标按键处理目标选择 */
   private checkClickTarget(event: EventMouse) {
     const clickedNode = this.monsters.getClickedMonster(event.getUILocation());
