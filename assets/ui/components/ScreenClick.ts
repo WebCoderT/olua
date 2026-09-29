@@ -31,15 +31,6 @@ export default class ScreenClick {
   /** 根据鼠标按键处理目标选择 */
   private checkClickTarget(event: EventMouse) {
     const clickedNode = this.monsters.getClickedMonster(event.getUILocation());
-    if (clickedNode) {
-      if (event.getButton() === EventMouse.BUTTON_RIGHT) {
-        /** 右键点击直接攻击 */
-        this.roleDisplay.setTarget(clickedNode, true);
-      }
-      if (event.getButton() === EventMouse.BUTTON_LEFT) {
-        /** 左键点击仅显示目标信息 */
-        this.roleDisplay.setTarget(clickedNode);
-      }
-    }
+    if (clickedNode) this.roleDisplay.setTarget(clickedNode);
   }
 }

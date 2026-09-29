@@ -278,9 +278,8 @@ export default class RoleDisplay extends Node {
   //#region 攻击逻辑
 
   /** 设置攻击目标 */
-  setTarget(target: Node, attackNow = false) {
+  setTarget(target: Node) {
     this.target = target;
-    attackNow && this.attackTarget(target);
   }
 
   /** 攻击目标 */

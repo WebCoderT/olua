@@ -1,6 +1,6 @@
 import { OECCUPATION } from "../types/role";
 import { SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/skill";
-import { skill_1000 } from "../skills/zhan";
+import { skill_1000, skill_1001 } from "../skills/zhan";
 
 /** 职业技能映射 */
 export const oeccupationSkills = new Map<OECCUPATION, SkillId[]>();
@@ -64,7 +64,7 @@ skills.set("1001", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
-  onClick: skill_1000,
+  onClick: skill_1001,
 });
 
 skills.set("1002", {
