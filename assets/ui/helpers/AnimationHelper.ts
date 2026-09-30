@@ -1,4 +1,4 @@
-import { Animation, AnimationClip, isValid, Node, resources, SpriteFrame } from "cc";
+import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
 import { monsterAnimation, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 
@@ -20,6 +20,10 @@ export default class AnimationHelper {
   private static frameLoading = new Map<string, Promise<SpriteFrame[]>>();
   /** 片段缓存：缓存键 -> 动画名 -> 片段 */
   private static clipCache = new Map<string, Map<string, AnimationClip>>();
+  /** 图集帧缓存：图集资源路径 -> 已按帧序号排序的帧列表（空数组同样缓存以免反复请求） */
+  private static atlasFrameCache = new Map<string, SpriteFrame[]>();
+  /** 加载中的图集（同一图集并发请求只真正加载一次） */
+  private static atlasFrameLoading = new Map<string, Promise<SpriteFrame[]>>();
 
   //#region 预加载与缓存
 
@@ -125,6 +129,59 @@ export default class AnimationHelper {
 
   //#endregion
 
+  //#region 图集帧（TexturePacker plist 图集）
+
+  /**
+   * 取一个 TexturePacker 图集（plist）里的全部帧（已按帧序号排序；缓存规则与目录帧一致）
+   * 同名 png 与 plist 路径相同（图集与图片共存），路径查询可能命中图片资源：
+   * 直接加载失败时回退为 loadDir 按类型过滤整个目录，再用帧名前缀（图集文件名去掉 @分页 后缀）匹配
+   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名，如 "tips/auto_attack@0"）
+   */
+  static loadFramesFromAtlas(atlasSrc: string): Promise<SpriteFrame[]> {
+    const cached = this.atlasFrameCache.get(atlasSrc);
+    if (cached) return Promise.resolve(cached);
+    const loading = this.atlasFrameLoading.get(atlasSrc);
+    if (loading) return loading;
+    const task = new Promise<SpriteFrame[]>((resolve) => {
+      resources.load(atlasSrc, SpriteAtlas, (err, atlas) => {
+        if (!err && atlas) {
+          resolve(this.sortAtlasFrames(atlas, atlasSrc));
+          return;
+        }
+        const directory = atlasSrc.slice(0, atlasSrc.lastIndexOf("/"));
+        resources.loadDir(directory, SpriteAtlas, (dirErr, atlases) => {
+          // 帧名前缀 = 图集文件名去掉 @分页 后缀（auto_attack@0 -> 帧名 auto_attack/00000）
+          const prefix = atlasSrc.slice(atlasSrc.lastIndexOf("/") + 1).split("@")[0];
+          const target = (atlases ?? []).find((item) => (item.getSpriteFrames().find((frame) => !!frame)?.name ?? "").startsWith(`${prefix}/`));
+          if (dirErr || !target) {
+            console.error(`${atlasSrc} 图集帧加载失败：${(dirErr ?? err)?.message ?? "目录中未找到该图集"}`);
+            this.atlasFrameCache.set(atlasSrc, []);
+            resolve([]);
+            return;
+          }
+          resolve(this.sortAtlasFrames(target, atlasSrc));
+        });
+      });
+    }).then((frames) => {
+      this.atlasFrameLoading.delete(atlasSrc);
+      return frames;
+    });
+    this.atlasFrameLoading.set(atlasSrc, task);
+    return task;
+  }
+
+  /** 图集帧排序入缓存：帧名形如 "auto_attack/00000"，按末尾帧序号升序（spriteFrames 属性是名字字典，取数组用 getSpriteFrames） */
+  private static sortAtlasFrames(atlas: SpriteAtlas, atlasSrc: string): SpriteFrame[] {
+    const frames = atlas
+      .getSpriteFrames()
+      .filter((frame): frame is SpriteFrame => !!frame)
+      .sort((a, b) => Number(a.name.split("/").pop()) - Number(b.name.split("/").pop()));
+    this.atlasFrameCache.set(atlasSrc, frames);
+    return frames;
+  }
+
+  //#endregion
+
   //#region 一次性 / 循环播放
 
   /**
@@ -155,6 +212,19 @@ export default class AnimationHelper {
       if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
       this.play(name, node, animate, spriteFrames, time, AnimationClip.WrapMode.Loop);
     });
+  }
+
+  /**
+   * 使用已有帧列表循环播放（图集帧等非目录来源，见 loadFramesFromAtlas）
+   * @param name 动画名称
+   * @param node 播放动画的节点
+   * @param spriteFrames 帧列表（顺序即播放顺序）
+   * @param frameRate 每秒帧数（与 play 系列方法的速度语义一致）
+   */
+  static playLoopWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], frameRate: number) {
+    if (!spriteFrames.length) return;
+    const animate = this.useAnimation(node);
+    this.play(name, node, animate, spriteFrames, frameRate, AnimationClip.WrapMode.Loop);
   }
 
   //#endregion

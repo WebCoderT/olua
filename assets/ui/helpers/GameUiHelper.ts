@@ -445,6 +445,22 @@ export default class GameUiHelper {
     LayerManager.addToUILayer(errorTip);
   }
 
+  /**
+   * 创建自动战斗提示动画节点（"自动战斗中/自动寻路中"，屏幕中间循环播放的图集帧动画）
+   * 帧来自 TexturePacker 图集且各帧原始尺寸一致（800×800，内容居中），
+   * sizeMode 用原始尺寸 + trim，保证逐帧切换时内容位置稳定不抖动
+   * 节点默认隐藏，帧动画由调用方通过 AnimationHelper.playLoopWithFrames 装载
+   */
+  static createAutoBattleTip(name: string): { node: Node; animate: Animation } {
+    const node = UiHelper.createSprite(name, "");
+    const sprite = node.getComponent(Sprite)!;
+    sprite.sizeMode = Sprite.SizeMode.RAW;
+    sprite.trim = true;
+    const animate = node.addComponent(Animation);
+    node.active = false;
+    return { node, animate };
+  }
+
   //#endregion
 
   //#region 战斗特效

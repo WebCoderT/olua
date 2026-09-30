@@ -17,6 +17,7 @@ import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
+import AutoBattleTips from "./core/AutoBattleTips";
 import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
@@ -104,6 +105,7 @@ export class Game extends Component {
     this.cursorInput?.destroy();
     CursorManager.destroy();
     AutoBattle.reset();
+    AutoBattleTips.reset();
     RoleUIManager.clearViews();
   }
 
@@ -117,6 +119,8 @@ export class Game extends Component {
     AutoBattle.tick(this.roleDisplay?.isMovementKeyDown() ?? false);
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
+    // 自动战斗提示（屏幕中间循环播放：「自动战斗中」挂机期间 /「自动寻路中」自动走位期间，允许同显，挂特效层）
+    AutoBattleTips.update(this.roleDisplay);
     // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入）
     MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay);
     // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）

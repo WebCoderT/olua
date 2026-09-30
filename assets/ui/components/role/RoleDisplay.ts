@@ -263,6 +263,11 @@ export default class RoleDisplay extends Node {
     return !!this.keyboardInput?.isMoving;
   }
 
+  /** 是否正在自动移动（自动战斗走位中，「自动寻路中」提示的显示依据） */
+  isAutoMoving(): boolean {
+    return !!this.autoMove && this.autoMove.lengthSqr() > 0;
+  }
+
   /**
    * 设置自动移动（自动战斗走位用，见 core/AutoBattle；传 null 表示停止并按键盘状态恢复动作）
    * 键盘输入优先于自动移动（玩家随时可接管）；攻击锁期间只记录方向，解锁后由下一帧自动战斗接管
