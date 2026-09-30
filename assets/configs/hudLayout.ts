@@ -34,8 +34,6 @@ export const hudImages = {
   /** 战斗力图标与其数字图集字体 */
   combatIcon: commonImage("combat"),
   combatFont: "fonts/combat",
-  /** VIP 按钮 */
-  vip: moneyImage("vip"),
   /** 金币 / 绑定金币 / 银币 */
   gold: moneyImage("gold"),
   bindGold: moneyImage("bind-gold"),
@@ -81,19 +79,15 @@ export const roleInfoBarLayout = {
   /** 背景框尺寸（与原图一致） */
   backgroundSize: new Size(300, 70),
   /** 名称（左对齐） */
-  name: { position: new Vec2(17, 24), size: new Size(190, 24), fontSize: 16 },
+  name: { position: new Vec2(17, -20), size: new Size(190, 20), fontSize: 14 },
   /** 等级 */
   level: { position: new Vec2(-138, -17.5), size: new Size(24, 24), fontSize: 16 },
   /** 头像（按职业/性别取图） */
   portrait: { position: new Vec2(-109.5, 7.5), size: new Size(51, 60) },
-  /** 三种货币（零件内部几何见 GameUiHelper.createCurrencyItem） */
-  gold: { position: new Vec2(-68, -20) },
-  bindGold: { position: new Vec2(-22, -20) },
-  silver: { position: new Vec2(24, -20) },
-  /** 战斗力 */
-  combat: { position: new Vec2(-44, 2) },
-  /** VIP 按钮 */
-  vip: { position: new Vec2(110, 30), size: new Size(75, 25) },
+  /** 三种货币（同一个横向布局容器，子件均分容器宽度且内部左对齐） */
+  currencyBar: { position: new Vec2(20, 24), size: new Size(200, 14), spacing: 0 },
+  /** 战斗力（图标尺寸；数值文本紧随图标右边缘，间隔 labelGap） */
+  combat: { position: new Vec2(-38, 1), iconSize: new Size(60, 30), labelGap: 3 },
 };
 
 //#endregion

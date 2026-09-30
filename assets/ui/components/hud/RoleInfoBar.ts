@@ -1,12 +1,15 @@
-import { Color, Label, Node, UITransform, Vec2 } from "cc";
+import { Color, Label, Node, Size, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
 import { hudImages, roleInfoBarLayout } from "../../../configs/hudLayout";
 
+/** 货币种数（金币 / 绑定金币 / 银币），用于把货币容器宽度等分给每件 */
+const CURRENCY_COUNT = 3;
+
 /**
  * 角色信息栏组件（左上角常驻 HUD）
- * 展示：背景框 + 头像 + 名称 + 等级 + 金币/绑定金币/银币 + 战斗力 + VIP 入口
+ * 展示：背景框 + 头像 + 名称 + 等级 + 金币/绑定金币/银币（横向布局容器）+ 战斗力
  * 由通用零件（背景/头像/货币/战斗力）拼装而成，本组件负责拼装与数据刷新
  * 位置与尺寸全部来自 configs/hudLayout（各子件坐标以信息栏中心为原点）
  */
@@ -40,22 +43,23 @@ export default class RoleInfoBar extends Node {
     this.addChild(this.levelLabel.node);
     // 头像
     this.addChild(GameUiHelper.createAvatarPortrait(role, layout.portrait.position, layout.portrait.size));
-    // 货币区（createCurrencyItem 为通用零件，其他界面可直接复用）
-    const gold = GameUiHelper.createCurrencyItem(hudImages.gold, role.gold, layout.gold.position);
+    // 货币区：三种货币放在同一个横向布局容器里，每件占容器宽度的三分之一、内容各自左对齐
+    const currencyBar = GameUiHelper.createRow("role_currency_bar", layout.currencyBar.spacing, layout.currencyBar.position, layout.currencyBar.size);
+    const itemSize = new Size(layout.currencyBar.size.width / CURRENCY_COUNT, layout.currencyBar.size.height);
+    const gold = GameUiHelper.createCurrencyItem(hudImages.gold, role.gold, new Vec2(), itemSize);
     this.goldCountLabel = gold.valueLabel;
-    this.addChild(gold.node);
-    const bindGold = GameUiHelper.createCurrencyItem(hudImages.bindGold, role.bindGold, layout.bindGold.position);
+    currencyBar.addChild(gold.node);
+    const bindGold = GameUiHelper.createCurrencyItem(hudImages.bindGold, role.bindGold, new Vec2(), itemSize);
     this.bindGoldCountLabel = bindGold.valueLabel;
-    this.addChild(bindGold.node);
-    const silver = GameUiHelper.createCurrencyItem(hudImages.silver, role.silver, layout.silver.position);
+    currencyBar.addChild(bindGold.node);
+    const silver = GameUiHelper.createCurrencyItem(hudImages.silver, role.silver, new Vec2(), itemSize);
     this.silverCountLabel = silver.valueLabel;
-    this.addChild(silver.node);
+    currencyBar.addChild(silver.node);
+    this.addChild(currencyBar);
     // 战斗力
     const combat = GameUiHelper.createCombatPower(role, layout.combat.position);
     this.combatLabel = combat.combatLabel;
     this.addChild(combat.node);
-    // VIP 按钮
-    this.addChild(GameUiHelper.createVipButton(layout.vip.position, layout.vip.size));
   }
 
   /** 数据变更后刷新显示 */

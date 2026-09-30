@@ -185,38 +185,35 @@ export default class GameUiHelper {
   }
 
   /**
-   * 创建货币显示零件（图标 + 数量），可在任意界面复用
-   * @param icon 货币图标资源
-   * @param value 数量
-   * @param position 图标中心位置
-   * @param labelWidth 数量文本宽度
-   * @return node 零件节点、valueLabel 数量文本（供刷新）
+   * 创建货币显示零件（图标 + 数值，内容在零件内左对齐：图标贴左边缘、数值紧随其右）
+   * @param icon 货币图标资源路径
+   * @param value 数值
+   * @param position 零件中心位置
+   * @param size 零件尺寸（父容器等分时传容器宽度/份数）
    */
-  static createCurrencyItem(icon: string, value: string | number, position: Vec2 = new Vec2(), labelWidth: number = 30) {
-    const node = UiHelper.createNode("currency_item", position);
-    node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(), new Size(15, 10)));
-    const valueLabel = UiHelper.createLabel(
-      "currency_value",
-      value.toString(),
-      Color.WHITE,
-      12,
-      new Vec2(7.5 + 7, 0),
-      new Size(labelWidth, 10),
-      Label.HorizontalAlign.LEFT,
-      Label.VerticalAlign.TOP,
-    ).getComponent(Label);
-    node.addChild(valueLabel.node);
-    return { node, valueLabel };
+  static createCurrencyItem(icon: string, value: string | number, position: Vec2 = new Vec2(), size: Size = new Size(43, 12)) {
+    const node = UiHelper.createNode("currency_item", position, size);
+    const iconWidth = 15;
+    const iconGap = 3;
+    const left = -size.width / 2;
+    node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(left + iconWidth / 2, 0), new Size(iconWidth, 10)));
+    const valueLabelNode = UiHelper.createLabel("currency_value", value.toString(), Color.WHITE, 12, new Vec2(left + iconWidth + iconGap, 0), new Size(size.width - iconWidth - iconGap, size.height), Label.HorizontalAlign.LEFT);
+    valueLabelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
+    node.addChild(valueLabelNode);
+    return { node, valueLabel: valueLabelNode.getComponent(Label) };
   }
 
   /**
-   * 创建战斗力显示零件（图标 + 数字图集文本）
+   * 创建战斗力显示零件（图标 + 数字图集文本，数值紧随图标右边缘）
+   * 图标尺寸见 hudLayout.roleInfoBarLayout.combat.iconSize
    * @return node 零件节点、combatLabel 战斗力文本（供刷新）
    */
   static createCombatPower(role: Role, position: Vec2 = new Vec2()) {
+    const { iconSize, labelGap } = roleInfoBarLayout.combat;
     const node = UiHelper.createNode("combat_power", position);
-    node.addChild(UiHelper.createSprite("combat_icon", hudImages.combatIcon, new Vec2(), new Size(75, 41)));
-    const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(40.5, 2), new Size(200, 30), Label.HorizontalAlign.LEFT);
+    node.addChild(UiHelper.createSprite("combat_icon", hudImages.combatIcon, new Vec2(), iconSize));
+    const labelX = iconSize.width / 2 + labelGap;
+    const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(labelX, 0), new Size(200, iconSize.height), Label.HorizontalAlign.LEFT);
     labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const combatLabel = labelNode.getComponent(Label);
     resources.load(hudImages.combatFont, LabelAtlas, (error, atlas) => {
@@ -226,16 +223,14 @@ export default class GameUiHelper {
     return { node, combatLabel };
   }
 
-  /** 创建角色头像（按职业与性别取图，尺寸见 hudLayout.roleInfoBar.portrait） */
+  /**
+   * 创建角色头像（按职业与性别取图，尺寸见 hudLayout.roleInfoBar.portrait）
+   * 打开 Sprite 的 trim：头像图四周透明边距较多，裁剪后内容正好填满零件尺寸
+   */
   static createAvatarPortrait(role: Role, position: Vec2 = new Vec2(), size: Size = roleInfoBarLayout.portrait.size) {
-    return UiHelper.createSprite(`role_avatar_${role.occupation}_${role.sex}`, avatarImage(role.occupation, role.sex), position, size);
-  }
-
-  /** 创建 VIP 按钮（尺寸见 hudLayout.roleInfoBar.vip） */
-  static createVipButton(position: Vec2 = new Vec2(), size: Size = roleInfoBarLayout.vip.size) {
-    const vipNode = UiHelper.createSprite("vip_button", hudImages.vip, position, size);
-    vipNode.addComponent(Button);
-    return vipNode;
+    const node = UiHelper.createSprite(`role_avatar_${role.occupation}_${role.sex}`, avatarImage(role.occupation, role.sex), position, size);
+    node.getComponent(Sprite)!.trim = true;
+    return node;
   }
 
   /** 创建装备插槽（名称即装备类型，便于按类型查找） */
