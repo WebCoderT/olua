@@ -1,4 +1,4 @@
-import { BoxCollider2D, Node } from "cc";
+import { BoxCollider2D, Node, Vec2 } from "cc";
 import { DIRECTION } from "../../../types/animation";
 import { BattleAttributes } from "../../../types/common";
 
@@ -49,6 +49,13 @@ export function canAttackTarget(target: Node, self: Node, attackRange: number = 
   return Math.hypot(horizontalGap, verticalGap) <= Math.max(1, attackRange);
 }
 
+/** 取向量对应的八方向（按 45° 分八瓣，零向量返回朝下） */
+export function getDirectionByVector(vector: Vec2): DIRECTION {
+  if (vector.x === 0 && vector.y === 0) return DIRECTION.DOWN;
+  const octant = (Math.round(Math.atan2(vector.y, vector.x) / (Math.PI / 4)) + 8) % 8;
+  return directionByOctant[octant];
+}
+
 /** 取得 self 朝向 target 的八方向（按两个碰撞盒中心的相对位置，取不到碰撞盒时返回朝下） */
 export function getDirectionToTarget(target: Node, self: Node): DIRECTION {
   const targetBounds = getWorldBounds(target);
@@ -57,10 +64,7 @@ export function getDirectionToTarget(target: Node, self: Node): DIRECTION {
 
   const deltaX = targetBounds.x + targetBounds.width / 2 - (selfBounds.x + selfBounds.width / 2);
   const deltaY = targetBounds.y + targetBounds.height / 2 - (selfBounds.y + selfBounds.height / 2);
-  if (deltaX === 0 && deltaY === 0) return DIRECTION.DOWN;
-
-  const octant = (Math.round(Math.atan2(deltaY, deltaX) / (Math.PI / 4)) + 8) % 8;
-  return directionByOctant[octant];
+  return getDirectionByVector(new Vec2(deltaX, deltaY));
 }
 
 /**

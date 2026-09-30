@@ -7,6 +7,7 @@ import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { canAttackTarget, getDirectionToTarget } from "../../utils/battle/BattleMath";
+import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleAppearance from "./RoleAppearance";
@@ -18,6 +19,8 @@ import RoleKeyboardInput from "../input/RoleKeyboardInput";
  * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput
  * 怪物查询与结算统一走 MonsterManager
  * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间锁定移动，且不接受新的攻击/技能（按下无反应）
+ * 怪物推不动角色、角色也推不动怪物（怪物的碰撞盒是传感器，见 addMonsterCollider），
+ * 角色不会穿过怪物这一条由位移前的阻挡预测保证：撞上只取消这一步，不把怪物挤开（见 MoveBlocking）
  */
 export default class RoleDisplay extends Node {
   /** 外观（衣服/武器节点与动画） */
@@ -158,7 +161,9 @@ export default class RoleDisplay extends Node {
     const speed = this.keyboardInput?.isSprinting ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
     const moveVec = this.keyboardInput?.moveDirection ?? new Vec2();
     // 直接赋值速度，有输入就动，没输入就立刻清零，解决漂移
-    rigidBody.linearVelocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
+    // 位移前先做阻挡预测：撞上怪物只取消这一步（怪物不会因此被推动，角色也不会被怪物挤开）
+    const velocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
+    rigidBody.linearVelocity = resolveBlockedVelocity(this as Node, velocity, MonsterManager.getBlockingRects());
     LayerManager.move(this.getWorldPosition());
   }
 

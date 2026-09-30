@@ -12,6 +12,8 @@ import StorageManager from "./core/StorageManager";
 import LayerManager from "./core/LayerManager";
 import CursorManager from "./core/CursorManager";
 import DropManager from "./core/DropManager";
+import MonsterManager from "./core/MonsterManager";
+import MonsterAI from "./core/MonsterAI";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
 const { ccclass, property } = _decorator;
@@ -87,6 +89,8 @@ export class Game extends Component {
     CursorManager.tick();
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
+    // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入）
+    MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay);
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
     const rolePosition = this.roleDisplay?.getWorldPosition();
     if (rolePosition) DropManager.autoPickup(rolePosition);

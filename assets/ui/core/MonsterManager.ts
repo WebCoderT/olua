@@ -1,15 +1,15 @@
-import { Animation, isValid, Label, Node, ProgressBar, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
 import { monsters } from "../../configs/monster";
-import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
-import { getAnimationName } from "../../configs/animation";
 import { cursorConfig } from "../../configs/cursor";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import DropManager from "./DropManager";
+import MonsterAI from "./MonsterAI";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { calcSkillDamage } from "../utils/battle/BattleMath";
-import { addObstacleCollider } from "../utils/physics/ObstacleCollider";
+import { addMonsterCollider } from "../utils/physics/MonsterCollider";
+import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
 import { Role } from "../../entities/Role";
 
 /**
@@ -17,11 +17,17 @@ import { Role } from "../../entities/Role";
  * 统一管理怪物数据与怪物节点的映射：
  * 生成（数据+节点+图层挂载）→ 点击/最近目标查询 → 受击结算（扣血/刷血条/死亡移除）→ 换图清空
  * 怪物只在开图时按地图的刷怪区域生成一次，之后不做刷新/补充（数量策略待重新设计）
+ * 怪物的行为与动画（待机游走/追击玩家/普攻/被击退）由 MonsterAI 每帧驱动，本类只管数据与生命周期
  * 所有怪物节点一律挂载到 LayerManager 怪物层（Layer.MONSTER）
  */
 export default class MonsterManager {
   /** 已生成怪物：怪物节点 -> 怪物运行时数据 */
   private static monsterMap = new Map<Node, Monster>();
+
+  /** 场上怪物（节点 -> 怪物数据），供 MonsterAI 每帧遍历 */
+  static getMonsterMap() {
+    return this.monsterMap;
+  }
 
   /** 清空所有怪物（切换地图时调用） */
   static reset() {
@@ -55,15 +61,9 @@ export default class MonsterManager {
   /** 创建怪物节点（身体与头部血条由 GameUiHelper 生成零件拼装） */
   private static createMonsterNode(monster: Monster) {
     const { node, animate } = GameUiHelper.createMonsterBody(monster);
-    // 动作动画播放完成后回到待机
-    animate.on(
-      Animation.EventType.FINISHED,
-      (_, { name }: { name: string }) => {
-        animate.play(getAnimationName(ACTION.STAND, DIRECTION.DOWN));
-      },
-      node,
-    );
-    addObstacleCollider(node);
+    // 动作动画播完续播当前动作（当前动作由 MonsterAI 维护，它同时负责追击/待机时切动作）
+    animate.on(Animation.EventType.FINISHED, () => MonsterAI.replayCurrent(node), node);
+    addMonsterCollider(node);
     // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
     GameUiHelper.showColliderRange(node, monster.label);
     const head = GameUiHelper.createHead("monster_head", monster.label, monster.hp, monster.maxHp);
@@ -123,6 +123,33 @@ export default class MonsterManager {
   /** 获取目标节点的怪物数据 */
   static getMonsterData(target: Node): Monster | null {
     return this.monsterMap.get(target) ?? null;
+  }
+
+  /**
+   * 取所有存活怪物的碰撞盒（世界坐标）
+   * 供角色移动做阻挡预测（见 utils/physics/MoveBlocking）：
+   * 怪与角色的碰撞盒都是传感器，物理引擎不产生碰撞响应，不能穿过怪物这一条由这里手动保证
+   */
+  static getBlockingRects(): Rect[] {
+    const rects: Rect[] = [];
+    this.monsterMap.forEach((monster, node) => {
+      if (!isValid(node) || monster.hp <= 0) return;
+      const rect = getWorldColliderRect(node);
+      if (rect) rects.push(rect);
+    });
+    return rects;
+  }
+
+  /**
+   * 击退怪物（技能造成的位移，场上唯一能推动位置的途径，由 SkillManager 按技能配置 push 调用）
+   * @param target 怪物节点
+   * @param direction 击退方向（世界坐标，无需归一化）
+   * @param distance 击退距离（像素）
+   * @param duration 击退时长（毫秒，缺省取 configs/monster 的 monsterAI.pushDuration）
+   */
+  static push(target: Node, direction: Vec2, distance: number, duration?: number) {
+    if (!this.monsterMap.has(target)) return;
+    MonsterAI.push(target, direction, distance, duration);
   }
 
   /** 普通攻击结算：按攻击者属性对目标怪物结算一次伤害 */

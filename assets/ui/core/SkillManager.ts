@@ -1,6 +1,6 @@
-import { isValid } from "cc";
+import { isValid, Node, Vec2 } from "cc";
 import { skills } from "../../configs/skill";
-import { SkillContextInput, SkillId, SkillTargetType } from "../../types/skill";
+import { SkillContextInput, SkillId, SkillPushConfig, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { canAttackTarget } from "../utils/battle/BattleMath";
 import StorageManager from "./StorageManager";
@@ -8,6 +8,7 @@ import StorageManager from "./StorageManager";
 /**
  * 技能管理器
  * 技能触发的统一入口：学习校验 → 冷却校验 → 单体目标补全/距离校验 → 记录冷却 → 调用技能实现（动画与结算由技能实现自行处理）
+ * 技能配置了 push 时，单体技能在命中后由本类统一把目标击退（场上唯一能推动怪物的途径）
  * 施法上下文由组合根（Game）通过 setContextProvider 注入（来源为 RoleDisplay，天然持有角色/目标/怪物容器）
  */
 export default class SkillManager {
@@ -57,7 +58,17 @@ export default class SkillManager {
     this.cooldowns.set(skillId, Date.now());
     GameUiHelper.showSkillTip(context.caster, config.label);
     config.onClick({ ...context, target, config, level });
+    // 技能击退：配置了 push 的单体技能把目标推开（方向 = 施法者指向目标）
+    if (config.push && target && isValid(target)) this.pushTarget(context, target, config.push);
     return true;
+  }
+
+  /** 按技能配置击退单体目标（方向 = 施法者 → 目标；两者完全重叠时取不到方向，不作位移） */
+  private static pushTarget(context: SkillContextInput, target: Node, push: SkillPushConfig) {
+    const casterPosition = context.caster.getWorldPosition();
+    const targetPosition = target.getWorldPosition();
+    const direction = new Vec2(targetPosition.x - casterPosition.x, targetPosition.y - casterPosition.y);
+    context.monsters.push(target, direction, push.distance, push.duration);
   }
 
   /** 技能实际冷却时间（秒）：技能配置冷却 / 角色对应动作的速度倍率（倍率 <= 0 视为 1，即不加速） */

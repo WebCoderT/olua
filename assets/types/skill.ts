@@ -1,4 +1,4 @@
-import type { Node, Vec3 } from "cc";
+import type { Node, Vec2, Vec3 } from "cc";
 import type { Role } from "../entities/Role";
 import type { ACTION, DIRECTION } from "./animation";
 import type { Monster } from "./monster";
@@ -35,6 +35,19 @@ export interface DamageCoefficient {
   baseTypeRate: number;
 }
 
+/**
+ * 技能击退配置（技能对目标的位移）
+ * 怪物与角色之间谁都不会推动谁走，技能击退是场上唯一能推动位置的途径：
+ * 单体技能在技能配置里写上 push 即可生效（由 SkillManager 统一处理），
+ * 群体/区域技能在技能实现里自行调用 monsters.push
+ */
+export interface SkillPushConfig {
+  /** 击退距离（像素） */
+  distance: number;
+  /** 击退时长（毫秒，缺省取 configs/monster 的 monsterAI.pushDuration） */
+  duration?: number;
+}
+
 /** 施法者能力（由 RoleDisplay 实现） */
 export interface SkillCaster extends Node {
   /** 是否正在攻击/施法（动作动画未播放完成期间为 true，期间释放技能无反应） */
@@ -54,6 +67,11 @@ export interface SkillMonsterProvider {
   getMonsterData(target: Node): Monster | null;
   /** 对目标结算一次伤害（刷新血条，死亡移除） */
   hurt(target: Node, damage: number): void;
+  /**
+   * 击退目标（direction 为世界坐标下的方向向量，无需归一化；distance 像素，duration 毫秒）
+   * 这是场上唯一能推动怪物的途径
+   */
+  push(target: Node, direction: Vec2, distance: number, duration?: number): void;
 }
 
 /** 技能释放上下文（技能实现只依赖此对象，不反查全局） */
@@ -99,6 +117,11 @@ export interface SkillConfig {
   distance: number;
   /** 对应动画 */
   action: ACTION;
+  /**
+   * 击退配置：配置后该技能命中会击退目标（单体技能由 SkillManager 统一处理，
+   * 群体/区域技能在技能实现里自行调用 monsters.push）
+   */
+  push?: SkillPushConfig;
   /** 释放技能方法（入参为技能上下文） */
   onClick: (context: SkillContext) => void;
 }
