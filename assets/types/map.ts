@@ -15,7 +15,7 @@ export interface NPC {
 }
 
 // 地图编号
-export type MapId = "0" | "1";
+export type MapId = "0" | "1" | "2";
 
 // 地图类型
 export enum MapType {
