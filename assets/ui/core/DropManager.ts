@@ -1,11 +1,13 @@
 import { isValid, Node, UITransform, Vec2, Vec3 } from "cc";
 import { resolveDropTable } from "../../configs/drop";
+import { getGoodCursorStyle, cursorConfig } from "../../configs/cursor";
 import { getItem } from "../../configs/items";
 import type { DropResult, DropSource } from "../../types/drop";
 import type { Goods } from "../../types/good";
 import { rollDropTable } from "../utils/drop/DropRoller";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
+import CursorManager from "./CursorManager";
 import StorageManager from "./StorageManager";
 
 /** 掉落物运行时数据（节点 -> 物品与数量） */
@@ -73,6 +75,8 @@ export default class DropManager {
     const angle = (Math.PI * 2 * index) / Math.max(1, total);
     node.setWorldPosition(position.x + Math.cos(angle) * radius, position.y + Math.sin(angle) * radius * 0.5, position.z);
     this.dropMap.set(node, { good, count });
+    // 鼠标移到掉落物上时显示该物品大类对应的指针颜色（拾取/换图时注销，见 takeDrop / reset）
+    CursorManager.registerHover(node, cursorConfig.priority.drop, () => getGoodCursorStyle(good.type));
   }
 
   /**
@@ -139,6 +143,7 @@ export default class DropManager {
     if (!drop) return null;
     if (!StorageManager.addGood(drop.good, drop.count)) return null;
     this.dropMap.delete(node);
+    CursorManager.unregisterHover(node);
     if (isValid(node)) node.destroy();
     return drop;
   }

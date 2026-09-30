@@ -3,7 +3,9 @@ import { monsters } from "../../configs/monster";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
 import { getAnimationName } from "../../configs/animation";
+import { cursorConfig } from "../../configs/cursor";
 import LayerManager from "./LayerManager";
+import CursorManager from "./CursorManager";
 import DropManager from "./DropManager";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { calcSkillDamage } from "../utils/battle/BattleMath";
@@ -24,6 +26,7 @@ export default class MonsterManager {
   /** 清空所有怪物（切换地图时调用） */
   static reset() {
     this.monsterMap.forEach((_, node) => {
+      CursorManager.unregisterHover(node);
       if (isValid(node)) node.destroy();
     });
     this.monsterMap.clear();
@@ -45,6 +48,8 @@ export default class MonsterManager {
     monsterNode.setWorldPosition(position);
     // 数据与节点建立映射
     this.monsterMap.set(monsterNode, monster);
+    // 鼠标移到怪物身上时显示攻击指针（死亡/换图时注销，见 hurt / reset）
+    CursorManager.registerHover(monsterNode, cursorConfig.priority.monster, cursorConfig.attack);
   }
 
   /** 创建怪物节点（身体与头部血条由 GameUiHelper 生成零件拼装） */
@@ -138,9 +143,10 @@ export default class MonsterManager {
     monster.hp = Math.max(0, monster.hp - damage);
     this.updateHead(target, monster);
     if (monster.hp > 0) return;
-    // 死亡：先按掉落配置在地面生成掉落物，再注销数据并移除节点
+    // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册并移除节点
     DropManager.drop(monster.drops, target.getWorldPosition());
     this.monsterMap.delete(target);
+    CursorManager.unregisterHover(target);
     target.destroy();
   }
 

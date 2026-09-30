@@ -1,6 +1,8 @@
 import { Node, Size, Vec2 } from "cc";
 import { Equipment, EQUIPMENT_TYPE } from "../../../types/good";
 import { equipmentSlots } from "../../../configs/equipments";
+import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
+import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction } from "../../utils/input/Pointer";
 
@@ -69,6 +71,10 @@ export default class EquipmentSlotGroup extends Node {
     const slot = this.slots.get(type);
     if (!slot) return;
     slot.removeAllChildren();
-    if (equipment) GameUiHelper.createGood(slot, equipment);
+    CursorManager.unregisterHover(slot);
+    if (!equipment) return;
+    GameUiHelper.createGood(slot, equipment);
+    // 鼠标移到已穿戴的装备上时显示装备对应的指针颜色（界面物品优先于世界对象）
+    CursorManager.registerHover(slot, cursorConfig.priority.ui, () => getGoodCursorStyle(equipment.type));
   }
 }

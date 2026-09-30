@@ -1,5 +1,7 @@
 import { Node, Size, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
+import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
+import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction, PointerButton } from "../../utils/input/Pointer";
 
@@ -42,6 +44,7 @@ export default class BagGridView extends Node {
   refresh(role: Role) {
     this.cells.forEach((row) =>
       row.forEach((cell) => {
+        CursorManager.unregisterHover(cell);
         cell.removeAllChildren();
         cell.targetOff(this);
       }),
@@ -52,6 +55,8 @@ export default class BagGridView extends Node {
         const cell = this.cells[rowIndex][colIndex];
         GameUiHelper.createGood(cell, good);
         bindPointerAction(cell, (button) => this.onCellAction(rowIndex, colIndex, this.toAction(button)), this);
+        // 鼠标移到格子里的物品上时显示该物品大类对应的指针颜色（界面物品优先于世界对象）
+        CursorManager.registerHover(cell, cursorConfig.priority.ui, () => getGoodCursorStyle(good.type));
       });
     });
   }
