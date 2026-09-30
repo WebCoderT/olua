@@ -1,8 +1,8 @@
 import { Node, Size, TiledMap } from "cc";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { getMapRectCenterPosition } from "../../utils/MapPointMath";
-import { addObstacleCollider } from "../../utils/utils";
+import { getMapRectCenterPosition } from "../../utils/map/MapPointMath";
+import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
 /** Tiled 碰撞层对象（只取本生成器用到的字段） */
 interface CollisionAreaObject {

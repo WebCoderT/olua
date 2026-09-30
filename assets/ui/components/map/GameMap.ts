@@ -5,7 +5,7 @@ import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
-import { loadResourcesAsync } from "../../utils/ResourceLoad";
+import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { maps } from "../../../configs/map";
 
 /**
@@ -31,7 +31,7 @@ export default class GameMap extends Node {
   /** 初始化地图（异步：地图资源加载完成后才挂载 TiledMap 组件） */
   async loadMap(src: string) {
     // 等待地图资源加载完成后，将 TiledMap 组件挂到自身
-    const mapAsset = await loadResourcesAsync<TiledMapAsset>("map", src, TiledMapAsset);
+    const mapAsset = await loadResourceAsync<TiledMapAsset>(src, TiledMapAsset);
     // 重复初始化时先移除旧组件
     this.getComponent(TiledMap)?.destroy();
     const tiledMap = this.addComponent(TiledMap);

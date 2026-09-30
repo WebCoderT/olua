@@ -6,7 +6,7 @@ import { SkillContextInput } from "../../../types/skill";
 import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import BattleHelper from "../../utils/BattleHelper";
+import { canAttackTarget, getDirectionToTarget } from "../../utils/battle/BattleMath";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleAppearance from "./RoleAppearance";
@@ -232,12 +232,12 @@ export default class RoleDisplay extends Node {
   /** 攻击目标 */
   private attackTarget(target: Node) {
     /** 判断攻击距离，不在范围内不发起攻击 */
-    if (!BattleHelper.checkTargetCanAttack(target, this as Node)) {
+    if (!canAttackTarget(target, this as Node)) {
       GameUiHelper.createErrorTip("attack_range_tip", "距离太远，无法攻击！");
       return;
     }
     /** 发起普攻：锁定至攻击动画播放完成，完成后结算 */
-    this.startAttack(ACTION.ATTACK_NEAR, BattleHelper.checkSelfDirection(target, this as Node), () => this.attackTargetUpdate());
+    this.startAttack(ACTION.ATTACK_NEAR, getDirectionToTarget(target, this as Node), () => this.attackTargetUpdate());
   }
 
   /** 攻击动画播放完成后的结算 */

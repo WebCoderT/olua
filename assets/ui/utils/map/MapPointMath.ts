@@ -1,5 +1,11 @@
 import { Node, Size, TiledMap, Vec3, view } from "cc";
 
+/**
+ * 地图坐标换算（纯函数模块）
+ * Tiled 的坐标原点在地图左上角且 y 轴向下，地图节点本地坐标以地图中心为原点且 y 轴向上，
+ * 本模块负责两者的互转；点、矩形区域、世界坐标三种入口都在这里，调用方不用再自行翻转 y
+ */
+
 /** 地图像素尺寸（横向格数 x 单格宽、纵向格数 x 单格高） */
 export function getMapPixelSize(map: Node) {
   const tiledMap = map.getComponent(TiledMap);

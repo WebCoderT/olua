@@ -2,7 +2,7 @@ import { Animation, AnimationClip, Button, Color, Graphics, isValid, Label, Labe
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
-import { Draggable } from "../utils/Draggable";
+import { Draggable } from "../components/input/Draggable";
 import { getAnimationName } from "../../configs/animation";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";

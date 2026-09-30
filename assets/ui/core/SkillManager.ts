@@ -2,7 +2,7 @@ import { isValid } from "cc";
 import { skills } from "../../configs/skill";
 import { SkillContextInput, SkillId, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
-import BattleHelper from "../utils/BattleHelper";
+import { canAttackTarget } from "../utils/battle/BattleMath";
 import StorageManager from "./StorageManager";
 
 /**
@@ -48,7 +48,7 @@ export default class SkillManager {
         return false;
       }
       // 距离校验（distance <= 0 表示不限制距离）
-      if (config.distance > 0 && !BattleHelper.checkTargetCanAttack(target, context.caster, config.distance)) {
+      if (config.distance > 0 && !canAttackTarget(target, context.caster, config.distance)) {
         GameUiHelper.createErrorTip("skill_distance_tip", "距离太远，无法攻击！");
         return false;
       }

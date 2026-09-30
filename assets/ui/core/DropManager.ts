@@ -3,7 +3,7 @@ import { resolveDropTable } from "../../configs/drop";
 import { getItem } from "../../configs/items";
 import type { DropResult, DropSource } from "../../types/drop";
 import type { Goods } from "../../types/good";
-import { rollDropTable } from "../utils/DropHelper";
+import { rollDropTable } from "../utils/drop/DropRoller";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import StorageManager from "./StorageManager";

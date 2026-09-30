@@ -6,9 +6,9 @@ import { getAnimationName } from "../../configs/animation";
 import LayerManager from "./LayerManager";
 import DropManager from "./DropManager";
 import GameUiHelper from "../helpers/GameUiHelper";
-import BattleHelper from "../utils/BattleHelper";
+import { calcSkillDamage } from "../utils/battle/BattleMath";
+import { addObstacleCollider } from "../utils/physics/ObstacleCollider";
 import { Role } from "../../entities/Role";
-import { addObstacleCollider } from "../utils/utils";
 
 /**
  * 怪物管理器（静态类）
@@ -93,7 +93,7 @@ export default class MonsterManager {
     const monster = this.getMonsterData(target);
     if (!monster) return;
     // 只计算伤害，扣血统一由 hurt 处理（避免重复扣血）
-    const damage = BattleHelper.calcSkillDamage(attacker, monster);
+    const damage = calcSkillDamage(attacker, monster);
     this.hurt(target, damage);
   }
 

@@ -1,4 +1,9 @@
-import { DropEntry, DropResult, DropTable } from "../../types/drop";
+import { DropEntry, DropResult, DropTable } from "../../../types/drop";
+
+/**
+ * 掉落表抽取（纯函数模块）
+ * 只算出「掉了什么、各多少」，物品实例化与地面节点生成由 DropManager 负责
+ */
 
 /** 在 [min, max] 区间随机取整数（自动纠正大小顺序） */
 function randomInt(min: number, max: number): number {

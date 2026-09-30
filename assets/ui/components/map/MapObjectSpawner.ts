@@ -3,8 +3,8 @@ import { npcs } from "../../../configs/npc";
 import MonsterManager from "../../core/MonsterManager";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { getMapPointPosition } from "../../utils/MapPointMath";
-import { addObstacleCollider } from "../../utils/utils";
+import { getMapPointPosition } from "../../utils/map/MapPointMath";
+import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
 /**
  * 地图对象生成器
