@@ -4,6 +4,7 @@ import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction, PointerButton } from "../../utils/input/Pointer";
+import { clearChildren } from "../../utils/node/NodeTree";
 
 /** 背包网格布局（弹窗内固定几何） */
 const GRID_POSITION = new Vec2(0, 17);
@@ -40,12 +41,12 @@ export default class BagGridView extends Node {
     this.cells = GameUiHelper.createRoleBagCellRow(this);
   }
 
-  /** 按背包数据刷新：先清空旧内容与旧监听，再逐格填充物品与操作事件 */
+  /** 按背包数据刷新：先清空旧内容（真正销毁）与旧监听，再逐格填充物品与操作事件 */
   refresh(role: Role) {
     this.cells.forEach((row) =>
       row.forEach((cell) => {
         CursorManager.unregisterHover(cell);
-        cell.removeAllChildren();
+        clearChildren(cell);
         cell.targetOff(this);
       }),
     );

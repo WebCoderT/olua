@@ -18,6 +18,9 @@ export default class LayerManager {
   /** 相机（初始化后可用） */
   static camera: Camera | null = null;
 
+  /** 已注册图层继承监听的节点（弱引用，节点销毁后自动回收） */
+  private static layerWatchers = new WeakSet<Node>();
+
   /** 地图层 */
   static MapLayer: Node = new Node("map_layer");
   /** 掉落层（怪物死亡掉落物） */
@@ -31,10 +34,30 @@ export default class LayerManager {
   /** UI层 */
   static UILayer: Node = new Node("ui_layer");
 
-  /** 循环元素下所有元素添加至指定图层 */
+  /**
+   * 循环元素下所有元素添加至指定图层
+   * 同时为整棵子树注册「新增子节点自动继承图层」监听
+   * （引擎新建节点的 layer 恒为 DEFAULT，不在相机 visibility 内，且不会随父节点继承，
+   * 挂载图层之后再动态新建的子节点会渲染不出来，例如背包刷新、装备槽换装、属性列表重建）
+   */
   static setNodeToLayer(node: Node, layer: Layer) {
     node.layer = layer;
+    this.watchChildAdded(node, layer);
     node.children.forEach((child) => {
+      this.setNodeToLayer(child, layer);
+    });
+  }
+
+  /**
+   * 为节点注册一次「新增子节点自动继承图层」监听（同一节点只注册一次）
+   * 节点销毁时监听随之回收，不会残留
+   */
+  private static watchChildAdded(node: Node, layer: Layer) {
+    if (this.layerWatchers.has(node)) return;
+    this.layerWatchers.add(node);
+    node.on(Node.EventType.CHILD_ADDED, (child: Node) => {
+      // 节点已被移出该图层时跳过，避免残留监听把子节点刷回旧图层
+      if (!isValid(node) || node.layer !== layer) return;
       this.setNodeToLayer(child, layer);
     });
   }
@@ -63,8 +86,9 @@ export default class LayerManager {
     const existed = scene.getChildByName(name);
     if (existed && isValid(existed)) existed.removeFromParent();
     const node = new Node(name);
-    node.layer = layer;
     scene.addChild(node);
+    // 容器自身与后续动态新增的子节点都对齐到该图层
+    this.setNodeToLayer(node, layer);
     return node;
   }
 
@@ -109,7 +133,7 @@ export default class LayerManager {
 
   /** 添加元素至特效层 */
   static addToEffectLayer(node: Node) {
-    node.layer = Layer.EFFECT;
+    this.setNodeToLayer(node, Layer.EFFECT);
     this.EffectLayer.addChild(node);
   }
 

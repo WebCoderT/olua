@@ -5,6 +5,7 @@ import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction } from "../../utils/input/Pointer";
+import { clearChildren } from "../../utils/node/NodeTree";
 
 /** 装备槽分组方向（对应装备槽配置的 position） */
 export type EquipmentSlotSide = "left" | "right" | "bottom";
@@ -70,7 +71,7 @@ export default class EquipmentSlotGroup extends Node {
   updateSlot(type: EQUIPMENT_TYPE, equipment: Equipment | null) {
     const slot = this.slots.get(type);
     if (!slot) return;
-    slot.removeAllChildren();
+    clearChildren(slot);
     CursorManager.unregisterHover(slot);
     if (!equipment) return;
     GameUiHelper.createGood(slot, equipment);

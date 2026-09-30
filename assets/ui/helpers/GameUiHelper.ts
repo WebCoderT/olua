@@ -18,6 +18,7 @@ import GameHelper from "../core/GameHelper";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
+import { clearChildren } from "../utils/node/NodeTree";
 
 //#region 类型定义
 
@@ -546,7 +547,16 @@ export default class GameUiHelper {
         const screenPosition = GameHelper.worldPositionToScreenPosition(cell.getWorldPosition());
         const detailDialog = this.createGoodDetailDialog(good, cell.getComponent(UITransform).contentSize, screenPosition);
         LayerManager.addToUILayer(detailDialog);
-        sprite.once(Node.EventType.MOUSE_LEAVE, () => detailDialog.destroy(), this);
+        // 鼠标移出、或物品节点被销毁（背包刷新/换装重建）都要销毁详情，
+        // 否则图标被销毁时不会触发 MOUSE_LEAVE，详情会永久留在屏幕上并挡住后续点击
+        let closed = false;
+        const closeDetail = () => {
+          if (closed) return;
+          closed = true;
+          detailDialog.destroy();
+        };
+        sprite.once(Node.EventType.MOUSE_LEAVE, closeDetail, this);
+        sprite.once(Node.EventType.NODE_DESTROYED, closeDetail, this);
       },
       this,
     );
@@ -679,8 +689,8 @@ export default class GameUiHelper {
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
     layout.padding = 10;
     node.getComponent(UITransform).setAnchorPoint(0.5, 1);
-    // 重复调用即刷新（装备穿脱等改变属性后重建条目）
-    node.removeAllChildren();
+    // 重复调用即刷新（装备穿脱等改变属性后重建条目，旧条目真正销毁）
+    clearChildren(node);
     node.addChild(this.createText("role_basic_attributes", "基础属性", 14, new Vec2(), new Size(size.width, 14)));
     for (const element of goodShowAttributesLabel.keys()) {
       node.addChild(this.createAttributeLabel(element, role[element].toString(), new Size(size.width, 20)));
