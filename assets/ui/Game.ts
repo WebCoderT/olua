@@ -5,6 +5,7 @@ import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
 import RoleInfoBar from "./components/hud/RoleInfoBar";
 import MonsterInfoPanel from "./components/hud/MonsterInfoPanel";
+import SmallMap from "./components/hud/SmallMap";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
 import CursorInput from "./components/input/CursorInput";
@@ -38,6 +39,8 @@ export class Game extends Component {
   private bottomBar: BottomBar | null = null;
   /** 角色信息栏 */
   private roleInfoBar: RoleInfoBar | null = null;
+  /** 小地图（右上角：地图名称/世界坐标/角色黑点/附近怪物红点） */
+  private smallMap: SmallMap | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
   private ready = false;
 
@@ -67,6 +70,9 @@ export class Game extends Component {
     this.roleInfoBar = new RoleInfoBar(role);
     LayerManager.addToUILayer(this.roleInfoBar);
     RoleUIManager.registerRoleInfoBar(this.roleInfoBar);
+    /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
+    this.smallMap = new SmallMap(this.roleDisplay);
+    LayerManager.addToUILayer(this.smallMap);
     /** 怪物信息面板创建器（选中怪物时才动态创建，取消选中即销毁） */
     RoleUIManager.setMonsterInfoFactory((target) => {
       const monsterInfoPanel = new MonsterInfoPanel(target);
@@ -113,6 +119,8 @@ export class Game extends Component {
     this.roleDisplay?.update();
     // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入）
     MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay);
+    // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）
+    this.smallMap?.update();
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
     const rolePosition = this.roleDisplay?.getWorldPosition();
     if (rolePosition) DropManager.autoPickup(rolePosition);

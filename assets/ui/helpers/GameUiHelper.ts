@@ -1,4 +1,26 @@
-import { Animation, AnimationClip, BoxCollider2D, Button, Color, Graphics, isValid, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import {
+  Animation,
+  AnimationClip,
+  BoxCollider2D,
+  Button,
+  Color,
+  Graphics,
+  isValid,
+  Label,
+  LabelAtlas,
+  Layout,
+  math,
+  Node,
+  ProgressBar,
+  resources,
+  Size,
+  Sprite,
+  tween,
+  UIOpacity,
+  UITransform,
+  Vec2,
+  Vec3,
+} from "cc";
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
@@ -19,8 +41,21 @@ import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good"
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
+import { smallMapConfig } from "../../configs/smallMap";
 
 //#region 类型定义
+
+/** 小地图坐标点（地图内容区本地坐标，调用方负责把世界坐标换算过来） */
+export interface SmallMapDot {
+  /** 相对内容区中心的横向偏移 */
+  x: number;
+  /** 相对内容区中心的纵向偏移 */
+  y: number;
+  /** 点颜色 */
+  color: Color;
+  /** 点半径 */
+  radius: number;
+}
 
 /** 底部功能按钮配置 */
 export interface BottomNavBarButton {
@@ -300,7 +335,7 @@ export default class GameUiHelper {
   static applyAutoFightButtonStyle(node: Node) {
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(44, 44);
-    node.setPosition(-115, -9);
+    node.setPosition(-338, 62);
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     sprite.trim = false;
@@ -995,7 +1030,17 @@ export default class GameUiHelper {
     node.addChild(view);
     // 图层挂载完成后再创建显示节点时也要跟随所在图层，否则会留在默认图层而不可见
     LayerManager.setNodeToLayer(view, node.layer);
-    if (label) view.addChild(UiHelper.createLabel("collider_range_name", `${label} ${Math.round(size.width)}×${Math.round(size.height)}`, color, COLLIDER_RANGE_NAME_FONT_SIZE, new Vec2(), new Size(COLLIDER_RANGE_NAME_WIDTH, COLLIDER_RANGE_NAME_HEIGHT)));
+    if (label)
+      view.addChild(
+        UiHelper.createLabel(
+          "collider_range_name",
+          `${label} ${Math.round(size.width)}×${Math.round(size.height)}`,
+          color,
+          COLLIDER_RANGE_NAME_FONT_SIZE,
+          new Vec2(),
+          new Size(COLLIDER_RANGE_NAME_WIDTH, COLLIDER_RANGE_NAME_HEIGHT),
+        ),
+      );
     return view;
   }
 
@@ -1035,6 +1080,41 @@ export default class GameUiHelper {
       row.addChild(slot);
     });
     return row;
+  }
+
+  //#endregion
+
+  //#region 小地图
+
+  /**
+   * 为已有节点施加小地图主体样式（尺寸与屏幕右上角位置），节点由小地图组件自身充当
+   * 尺寸需容纳「左侧功能按钮列 + 名称条/地图/标签/坐标条」整块内容（子节点位置以地图内容区中心为原点），
+   * 位置按设计分辨率贴右上角，与角色信息栏（左上角）留出相同量级的边距
+   */
+  static applySmallMapBodyStyle(node: Node) {
+    const uiTransform = node.addComponent(UITransform);
+    uiTransform.setContentSize(280, 250);
+    const screenSize = UiHelper.getScreenSize();
+    node.setPosition(665, 238);
+  }
+
+  /**
+   * 创建小地图坐标点绘制层（单个 Graphics 节点，占满内容区）
+   * 点位由 drawSmallMapDots 整体重绘，避免按怪物增删节点
+   */
+  static createSmallMapDotLayer(position: Vec2, size: Size) {
+    const node = UiHelper.createNode("small_map_dots", position, size);
+    return node.addComponent(Graphics);
+  }
+
+  /** 在绘制层上重绘全部坐标点（先清空再画，重绘频率由调用方节流） */
+  static drawSmallMapDots(graphics: Graphics, dots: SmallMapDot[]) {
+    graphics.clear();
+    dots.forEach((dot) => {
+      graphics.fillColor = dot.color;
+      graphics.circle(dot.x, dot.y, dot.radius);
+      graphics.fill();
+    });
   }
 
   //#endregion
