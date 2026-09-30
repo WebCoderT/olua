@@ -1,4 +1,5 @@
 import { Node, Size } from "cc";
+import { tiledGroupNames } from "../../../configs/map";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { getMapRectCenterPosition } from "../../utils/map/MapPointMath";
@@ -14,9 +15,6 @@ import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
  * 地图坐标到本地坐标的换算依赖地图节点本身，因此构造时注入地图节点
  */
 export default class CollisionAreaSpawner {
-  /** 碰撞层对象组名称 */
-  private static readonly GROUP_NAME = "collision";
-
   /** 地图节点（自身即地图，坐标换算需要） */
   private map: Node;
 
@@ -26,7 +24,7 @@ export default class CollisionAreaSpawner {
 
   /** 生成碰撞层中的全部元素（地图未画碰撞层时得到空数组，直接跳过） */
   spawnAll() {
-    getTiledObjects(this.map, CollisionAreaSpawner.GROUP_NAME).forEach((object) => {
+    getTiledObjects(this.map, tiledGroupNames.collision).forEach((object) => {
       // 没有面积的元素（点、多边形）构不成矩形碰撞范围，跳过
       if (object.width <= 0 || object.height <= 0) return;
       this.spawnArea(object);

@@ -1,5 +1,6 @@
 import { Node, Size, Vec3 } from "cc";
 import { debugConfig } from "../../../configs/debug";
+import { tiledGroupNames, tiledPropertyNames } from "../../../configs/map";
 import { monsters } from "../../../configs/monster";
 import { MonsterSpawnArea } from "../../../types/monster";
 import LayerManager from "../../core/LayerManager";
@@ -18,16 +19,6 @@ import { getTiledObjects, TiledObject } from "../../utils/map/TiledObjects";
  * 地图坐标换算依赖地图节点本身，因此构造时注入地图节点
  */
 export default class MonsterAreaSpawner {
-  /** 刷怪区域对象组名称 */
-  private static readonly GROUP_NAME = "monster";
-
-  /** 自定义属性名：怪物编号 */
-  private static readonly PROPERTY_MONSTER_ID = "id";
-  /** 自定义属性名：区域允许的最少怪物数 */
-  private static readonly PROPERTY_MIN = "min";
-  /** 自定义属性名：区域允许的最多怪物数 */
-  private static readonly PROPERTY_MAX = "max";
-
   /** 地图节点（自身即地图，坐标换算需要） */
   private map: Node;
 
@@ -37,7 +28,7 @@ export default class MonsterAreaSpawner {
 
   /** 解析并注册全部刷怪区域（地图没有该对象组时得到空数组，怪物层保持为空） */
   spawnAll() {
-    const areas = getTiledObjects(this.map, MonsterAreaSpawner.GROUP_NAME)
+    const areas = getTiledObjects(this.map, tiledGroupNames.monster)
       .map((object) => this.createArea(object))
       .filter((area): area is MonsterSpawnArea => area !== null);
     MonsterManager.spawnByAreas(areas);
@@ -50,7 +41,7 @@ export default class MonsterAreaSpawner {
       console.warn(`[MonsterAreaSpawner] 区域「${object.name}」不是矩形，没有落点范围，已跳过`);
       return null;
     }
-    const monsterId = `${object.properties[MonsterAreaSpawner.PROPERTY_MONSTER_ID] ?? ""}`;
+    const monsterId = `${object.properties[tiledPropertyNames.id] ?? ""}`;
     if (!monsterId) {
       console.warn(`[MonsterAreaSpawner] 区域「${object.name}」缺少 id 属性，已跳过`);
       return null;
@@ -59,8 +50,8 @@ export default class MonsterAreaSpawner {
       console.warn(`[MonsterAreaSpawner] 区域「${object.name}」的怪物编号 ${monsterId} 没有对应的怪物配置，已跳过`);
       return null;
     }
-    const min = Math.max(0, this.readNumber(object, MonsterAreaSpawner.PROPERTY_MIN, 0));
-    let max = this.readNumber(object, MonsterAreaSpawner.PROPERTY_MAX, 0);
+    const min = Math.max(0, this.readNumber(object, tiledPropertyNames.min, 0));
+    let max = this.readNumber(object, tiledPropertyNames.max, 0);
     if (max < min) {
       console.warn(`[MonsterAreaSpawner] 区域「${object.name}」的 max(${max}) 小于 min(${min})，已按 min 处理`);
       max = min;

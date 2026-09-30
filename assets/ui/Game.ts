@@ -1,4 +1,5 @@
-import { _decorator, Camera, Component } from "cc";
+import { _decorator, Camera, Component, isValid } from "cc";
+import { maps } from "../configs/map";
 import { ActivityController } from "./controllers/ActivityController";
 import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
@@ -14,6 +15,7 @@ import CursorManager from "./core/CursorManager";
 import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
 import MonsterAI from "./core/MonsterAI";
+import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
 const { ccclass, property } = _decorator;
@@ -35,12 +37,21 @@ export class Game extends Component {
   private bottomBar: BottomBar | null = null;
   /** 角色信息栏 */
   private roleInfoBar: RoleInfoBar | null = null;
+  /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
+  private ready = false;
 
-  start() {
+  async start() {
     // 获取角色信息
     const role = StorageManager.findOnlineRole();
     // 初始化图层（含掉落物层/怪物层）
     LayerManager.initLayer(this.node, this.camera);
+    // 预加载：地图信息 → 地图内 NPC/怪物帧动画 → 当前角色穿戴的帧动画（见 core/PreloadManager）
+    // 走 Loading 过渡场景进来时资源已就绪，这里直接命中缓存立即返回；
+    // 直接从 Game 场景启动（编辑器里单独跑 Game）时在此补齐，避免进图后逐个节点异步加载帧动画造成卡顿
+    const map = role && maps.get(role.onMap);
+    if (map) await PreloadManager.preloadGame(map.src, role).catch((error) => console.error("资源预加载失败：", error));
+    // 预加载是异步的，期间场景可能已被切换/销毁（组件失效）——此时不再创建任何节点
+    if (!isValid(this)) return;
     // 创建地图与主角（互不直接依赖，怪物由地图侧的刷怪区域一次性生成）
     this.gameMap = new GameMap();
     this.roleDisplay = new RoleDisplay(role);
@@ -74,6 +85,8 @@ export class Game extends Component {
     this.cursorInput.init();
     // 挂载活动控制器
     this.node.addComponent(ActivityController);
+    // 上面全部就绪后才开始驱动每帧逻辑
+    this.ready = true;
   }
 
   /** 场景卸载：清理全局监听、动态面板与视图引用（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
@@ -85,6 +98,8 @@ export class Game extends Component {
   }
 
   update() {
+    // 资源预加载完成前（start 里在 await）不驱动任何逻辑，避免用到还没创建的组件
+    if (!this.ready) return;
     // 鼠标指针样式（每帧最多判定一次：鼠标未移动且悬停目标未变化时不做任何事）
     CursorManager.tick();
     // 主角每帧驱动（选中目标失效校验 + 位移）

@@ -10,6 +10,12 @@ export const ROLE_WALK_SPEED = 2;
 /** 角色跑动速度-全局 */
 export const ROLE_RUN_SPEED = 4;
 
+/**
+ * 角色默认外观目录（未穿戴衣服时使用）
+ * 保证角色始终有身体，同时让"预加载角色外观"与 RoleAppearance 的回退取到同一份资源
+ */
+export const ROLE_DEFAULT_CLOTH_OUT = "role/1";
+
 /** 职业介绍信息MAP */
 export const occupations = new Map<OECCUPATION, RoleOccupationInfo>();
 
