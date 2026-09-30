@@ -43,6 +43,8 @@ skills.set("1000", {
   onClick: skill_1000,
   action: ACTION.ATTACK_NEAR,
   canAuto: true,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1001", {
@@ -74,6 +76,8 @@ skills.set("1001", {
   // 示例：命中后把目标击退 120 像素（技能击退是场上唯一能推动怪物的途径，删掉这行就不击退）
   push: { distance: 120 },
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1002", {
@@ -103,6 +107,8 @@ skills.set("1002", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1003", {
@@ -132,6 +138,8 @@ skills.set("1003", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1004", {
@@ -161,6 +169,8 @@ skills.set("1004", {
   onClick: skill_1000,
   action: ACTION.ATTACK_FAR,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: false,
 });
 
 skills.set("1005", {
@@ -190,6 +200,8 @@ skills.set("1005", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1006", {
@@ -219,6 +231,8 @@ skills.set("1006", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1007", {
@@ -248,6 +262,8 @@ skills.set("1007", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1008", {
@@ -277,6 +293,8 @@ skills.set("1008", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: false,
 });
 
 skills.set("1009", {
@@ -306,6 +324,8 @@ skills.set("1009", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1010", {
@@ -335,6 +355,8 @@ skills.set("1010", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });
 
 skills.set("1011", {
@@ -364,4 +386,6 @@ skills.set("1011", {
   onClick: skill_1000,
   action: ACTION.STAND,
   canAuto: false,
+  effect: "effect/skill/s_1002@0",
+  effectIsOnSelf: true,
 });

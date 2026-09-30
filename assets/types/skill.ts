@@ -128,6 +128,10 @@ export interface SkillConfig {
   onClick: (context: SkillContext) => void;
   /** 是否可自动释放 */
   canAuto: boolean;
+  /** 技能特效 */
+  effect: string;
+  /** 特效是否在自己身上 */
+  effectIsOnSelf: boolean;
 }
 
 /** 技能ID */
