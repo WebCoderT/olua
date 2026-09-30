@@ -44,7 +44,7 @@ export default class GameMap extends Node {
     objectSpawner.spawnAll();
     // 按 collision 对象组生成碰撞区域（静态碰撞体 + 名称/区域指示线）
     new CollisionAreaSpawner(this as Node).spawnAll();
-    // 按 monster 对象组注册刷怪区域（初始怪物由 MonsterManager 按区域刷满，后续按重生时间补充）
+    // 按 monster 对象组生成怪物（每个区域在开图时按其 max 一次性生成，之后不再刷新）
     new MonsterAreaSpawner(this as Node).spawnAll();
     this.goToRevivePoint(objectSpawner.getRevivePoint());
   }

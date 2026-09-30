@@ -1,5 +1,5 @@
 import { Animation, isValid, Label, Node, ProgressBar, UITransform, Vec2, Vec3 } from "cc";
-import { getMonsterRespawnInterval, monsters } from "../../configs/monster";
+import { monsters } from "../../configs/monster";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
 import { getAnimationName } from "../../configs/animation";
@@ -14,27 +14,19 @@ import { Role } from "../../entities/Role";
  * 怪物管理器（静态类）
  * 统一管理怪物数据与怪物节点的映射：
  * 生成（数据+节点+图层挂载）→ 点击/最近目标查询 → 受击结算（扣血/刷血条/死亡移除）→ 换图清空
- * 同时按地图的刷怪区域维护怪物数量：开图时按区域刷满，之后按重生时间检测并补充
+ * 怪物只在开图时按地图的刷怪区域生成一次，之后不做刷新/补充（数量策略待重新设计）
  * 所有怪物节点一律挂载到 LayerManager 怪物层（Layer.MONSTER）
  */
 export default class MonsterManager {
   /** 已生成怪物：怪物节点 -> 怪物运行时数据 */
   private static monsterMap = new Map<Node, Monster>();
 
-  /** 刷怪区域（按怪物编号聚合：编号 -> 该编号的全部区域，同一编号可能分布在多个区域） */
-  private static spawnGroups = new Map<string, MonsterSpawnArea[]>();
-
-  /** 各编号怪物距下次补充检测的剩余时间（秒） */
-  private static respawnTimers = new Map<string, number>();
-
-  /** 清空所有怪物（切换地图时调用，同时清空刷怪区域与重生计时） */
+  /** 清空所有怪物（切换地图时调用） */
   static reset() {
     this.monsterMap.forEach((_, node) => {
       if (isValid(node)) node.destroy();
     });
     this.monsterMap.clear();
-    this.spawnGroups.clear();
-    this.respawnTimers.clear();
     LayerManager.clearMonsterLayer();
   }
 
@@ -74,67 +66,17 @@ export default class MonsterManager {
     return node;
   }
 
-  //#region 刷怪区域与重生（补充）
+  //#region 按刷怪区域生成
 
   /**
-   * 设置刷怪区域并刷出初始怪物（换图时由地图的 MonsterAreaSpawner 注入）
-   * 每个区域按 max 刷满，之后的增减交给 update 按重生时间维持
+   * 按地图的刷怪区域生成怪物（开图时由地图的 MonsterAreaSpawner 调用，只生成这一次）
+   * 每个区域按 max 在其矩形范围内随机落点生成对应编号的怪物，之后不再补充
    * @param areas 地图 monster 对象组解析出的区域列表（空数组表示该地图不刷怪）
    */
-  static setSpawnAreas(areas: MonsterSpawnArea[]) {
-    this.spawnGroups.clear();
-    this.respawnTimers.clear();
+  static spawnByAreas(areas: MonsterSpawnArea[]) {
     areas.forEach((area) => {
-      const group = this.spawnGroups.get(area.monsterId);
-      if (group) group.push(area);
-      else this.spawnGroups.set(area.monsterId, [area]);
-      // 重生计时从开图起算
-      this.respawnTimers.set(area.monsterId, getMonsterRespawnInterval(area.monsterId));
       for (let index = 0; index < area.max; index++) this.spawnInArea(area);
     });
-  }
-
-  /**
-   * 重生检测（每帧驱动，由组合根在 Game.update 中调用）
-   * 按编号逐个检查：到达该编号的重生时间后统计存活数，少于各区域 min 之和即补充到 max 之和，
-   * 并把计时重置为下一个周期（同一编号的多个区域共用一份计时与数量约束）
-   * @param deltaTime 距上一帧的秒数
-   */
-  static update(deltaTime: number) {
-    this.spawnGroups.forEach((areas, monsterId) => {
-      const interval = getMonsterRespawnInterval(monsterId);
-      const remaining = (this.respawnTimers.get(monsterId) ?? interval) - deltaTime;
-      if (remaining > 0) {
-        this.respawnTimers.set(monsterId, remaining);
-        return;
-      }
-      this.respawnTimers.set(monsterId, interval);
-      this.replenish(monsterId, areas);
-    });
-  }
-
-  /** 统计某编号怪物当前在地图中的存活数量（跨区域统计） */
-  static countAlive(monsterId: string): number {
-    let count = 0;
-    this.monsterMap.forEach((monster, node) => {
-      if (isValid(node) && monster.hp > 0 && monster.id === monsterId) count++;
-    });
-    return count;
-  }
-
-  /**
-   * 补充某编号怪物：存活数少于各区域 min 之和时，按区域补到各区域 max 之和
-   * min 为 0 表示不设下限（该编号允许被清空，不做补充）
-   */
-  private static replenish(monsterId: string, areas: MonsterSpawnArea[]) {
-    const alive = this.countAlive(monsterId);
-    const min = areas.reduce((total, area) => total + area.min, 0);
-    if (alive >= min) return;
-    const max = areas.reduce((total, area) => total + area.max, 0);
-    for (let index = alive; index < max; index++) {
-      // 落点在哪个区域随机，同一编号分散在各区域更自然
-      this.spawnInArea(areas[Math.floor(Math.random() * areas.length)]);
-    }
   }
 
   /** 在区域内的随机位置生成一只怪物 */

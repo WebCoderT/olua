@@ -12,7 +12,7 @@ import { getTiledObjects, TiledObject } from "../../utils/map/TiledObjects";
  * 刷怪区域生成器
  * 读取 TiledMap 中名为 monster 的对象组，把其中每个矩形区域解析成刷怪区域
  * （自定义属性 id = 怪物编号、min/max = 该区域允许的最少/最多怪物数）并整体交给 MonsterManager：
- * 初始怪物与后续的重生补充都由 MonsterManager 按区域完成（怪物数据与节点统一由它管理），
+ * 区域内的初始怪物由 MonsterManager 按区域一次性生成（怪物数据与节点统一由它管理），
  * 本类只负责「地图数据 -> 区域描述」的翻译与区域范围（调试）显示
  * 区域中心由 MapPointMath 换算成世界坐标（怪物节点用世界坐标定位），本类不自行翻转 y
  * 地图坐标换算依赖地图节点本身，因此构造时注入地图节点
@@ -40,7 +40,7 @@ export default class MonsterAreaSpawner {
     const areas = getTiledObjects(this.map, MonsterAreaSpawner.GROUP_NAME)
       .map((object) => this.createArea(object))
       .filter((area): area is MonsterSpawnArea => area !== null);
-    MonsterManager.setSpawnAreas(areas);
+    MonsterManager.spawnByAreas(areas);
   }
 
   /** 解析单个区域（点位、多边形、缺属性、怪物编号无配置等无效区域返回 null 并给出提示） */

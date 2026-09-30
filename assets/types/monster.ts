@@ -38,7 +38,7 @@ export interface Monster extends MonsterConfig {
 /**
  * 怪物刷新区域
  * 对应地图 monster 对象组里的一个矩形区域（自定义属性 id/min/max）：
- * 区域内维持该编号怪物的数量，初始刷满 max 只，之后按重生时间检测、不足时补充
+ * 开图时在该区域内随机落点生成 max 只对应编号的怪物（只生成一次，不做刷新补充）
  */
 export interface MonsterSpawnArea {
   /** 区域名称（地图里给区域起的名字，仅用于日志与调试显示） */
@@ -49,8 +49,8 @@ export interface MonsterSpawnArea {
   center: Vec3;
   /** 区域尺寸（即怪物落点的取值范围） */
   size: Size;
-  /** 该区域允许的最少怪物数（存活数少于它即触发补充；为 0 表示不设下限、不补充） */
+  /** 该区域允许的最少怪物数（地图配置里的 min，当前生成逻辑未使用，保留给后续数量策略） */
   min: number;
-  /** 该区域允许的最多怪物数（初始数量与补充上限） */
+  /** 该区域生成的怪物数量（地图配置里的 max） */
   max: number;
 }

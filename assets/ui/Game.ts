@@ -10,7 +10,6 @@ import GameHelper from "./core/GameHelper";
 import StorageManager from "./core/StorageManager";
 import LayerManager from "./core/LayerManager";
 import DropManager from "./core/DropManager";
-import MonsterManager from "./core/MonsterManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
 const { ccclass, property } = _decorator;
@@ -36,7 +35,7 @@ export class Game extends Component {
     const role = StorageManager.findOnlineRole();
     // 初始化图层（含掉落物层/怪物层）
     LayerManager.initLayer(this.node, this.camera);
-    // 创建地图与主角（互不直接依赖，怪物的生成/查询/结算统一走 MonsterManager）
+    // 创建地图与主角（互不直接依赖，怪物由地图侧的刷怪区域一次性生成）
     this.gameMap = new GameMap();
     this.roleDisplay = new RoleDisplay(role);
     RoleUIManager.registerRoleDisplay(this.roleDisplay);
@@ -73,14 +72,12 @@ export class Game extends Component {
     RoleUIManager.clearViews();
   }
 
-  update(deltaTime: number) {
+  update() {
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
     const rolePosition = this.roleDisplay?.getWorldPosition();
     if (rolePosition) DropManager.autoPickup(rolePosition);
-    // 怪物重生检测（按刷怪区域的重生时间统计数量并补充）
-    MonsterManager.update(deltaTime);
     // 快捷键冷却显示
     this.bottomBar?.updateCooldowns();
     // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）
