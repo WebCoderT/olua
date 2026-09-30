@@ -55,3 +55,11 @@ export type ActionNeedWeapon = Record<ACTION, boolean>;
 
 /** 动画对应帧名称列表 */
 export type AnimationSpritesName = Record<`${ACTION}_${DIRECTION}`, number>;
+
+/**
+ * 动画种类：决定按哪张动画表切割整包帧动画
+ * role = 角色（衣服/武器，见 configs/animation 的 roleAnimationMap）
+ * monster = 怪物（见 configs/animation 的 monsterAnimation）
+ * frames = 不切割，只需要帧序列（整包循环播放的动画，如 NPC 外观）
+ */
+export type AnimationKind = "role" | "monster" | "frames";
