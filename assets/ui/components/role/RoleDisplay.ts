@@ -195,6 +195,14 @@ export default class RoleDisplay extends Node {
 
   //#region 位置更新
 
+  /** 每帧驱动：选中目标已死亡/移除则取消选中（面板随之销毁），并更新角色位移 */
+  update() {
+    // 选中状态只由鼠标点击改变（点击怪物选中、点击其他位置取消），移动不影响；
+    // 但目标本身消失（死亡/移除）时必须同步取消，避免残留无效引用
+    if (this.target && !isValid(this.target)) this.setTarget(null);
+    this.updateWorldPosition();
+  }
+
   /** 每帧根据按键状态更新角色位移 */
   updateWorldPosition() {
     const rigidBody = this.getComponent(RigidBody2D);

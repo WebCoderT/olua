@@ -804,7 +804,7 @@ export default class GameUiHelper {
   }
 
   /** 创建怪物头像（左侧，取怪物图标） */
-  static createMonsterAvatar(monster: Monster, position: Vec2 = new Vec2(-83, 0), size: Size = new Size(60, 66)) {
+  static createMonsterAvatar(monster: Monster, position: Vec2 = new Vec2(-75, 0), size: Size = new Size(60, 66)) {
     return UiHelper.createSprite("monster_avatar", monster.icon, position, size);
   }
 

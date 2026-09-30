@@ -72,10 +72,11 @@ export class Game extends Component {
   }
 
   update() {
-    this.roleDisplay?.updateWorldPosition();
+    // 主角每帧驱动（选中目标失效校验 + 位移）
+    this.roleDisplay?.update();
     // 快捷键冷却显示
     this.bottomBar?.updateCooldowns();
-    // 怪物信息面板血量刷新（目标失效时自动销毁）
+    // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）
     RoleUIManager.updateMonsterInfo();
   }
 }
