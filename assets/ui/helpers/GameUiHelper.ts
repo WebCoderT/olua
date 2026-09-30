@@ -472,6 +472,20 @@ export default class GameUiHelper {
   //#region 战斗特效
 
   /**
+   * 创建技能特效节点（图集帧动画，挂在特效层由 core/EffectManager 播放，播完自动销毁）
+   * 与角色外观同一套口径：原始尺寸（RAW）+ 不裁剪，因此特效与角色美术天然对齐、逐帧不抖动
+   * （特效图集各帧源画布尺寸一致，如 800×700/800×800，内容位置由帧自带的 offset 决定）
+   */
+  static createSkillEffect(name: string): Node {
+    const node = UiHelper.createSprite(name, "");
+    const sprite = node.getComponent(Sprite)!;
+    sprite.sizeMode = Sprite.SizeMode.RAW;
+    sprite.trim = false;
+    node.addComponent(Animation);
+    return node;
+  }
+
+  /**
    * 在受伤物体位置显示受伤飘字（挂特效层，上浮淡出后自动销毁）
    * @param target 受伤物体节点
    * @param damage 受到的伤害数值

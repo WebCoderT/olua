@@ -132,8 +132,13 @@ export default class RoleDisplay extends Node {
     this.action = isWalk ? ACTION.WALK : ACTION.STAND;
   }
 
-  /** 更改播放的动作 */
+  /**
+   * 更改播放的动作
+   * 节点已销毁（切场景收尾）、外观尚未建好（构造未完成）时直接跳过：
+   * 该状态下再去操作动画组件只会报错，且动画已无意义
+   */
   private updateAnimationPlay() {
+    if (!isValid(this) || !this.appearance) return;
     this.appearance.play(this.action, this.direction);
   }
 
@@ -197,7 +202,8 @@ export default class RoleDisplay extends Node {
   /** 更改外观 */
   updateOutShow(role: Role) {
     this.role = role;
-    // 衣服与武器外观
+    // 衣服与武器外观（节点已销毁/外观未就绪时跳过，同 updateAnimationPlay）
+    if (!isValid(this) || !this.appearance) return;
     this.appearance.updateOutShow(role, this.action, this.direction);
   }
 

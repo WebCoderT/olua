@@ -133,36 +133,18 @@ export default class AnimationHelper {
 
   /**
    * 取一个 TexturePacker 图集（plist）里的全部帧（已按帧序号排序；缓存规则与目录帧一致）
-   * 同名 png 与 plist 路径相同（图集与图片共存），路径查询可能命中图片资源：
-   * 直接加载失败时回退为 loadDir 按类型过滤整个目录，再用帧名前缀（图集文件名去掉 @分页 后缀）匹配
-   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名，如 "tips/auto_attack@0"）
+   * 同一个动画被切成多页时（如 s_1102@0 / s_1102@1）会把各页合并成一整条帧序列
+   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名，如 "effect/skill/s_1002@0"）
    */
   static loadFramesFromAtlas(atlasSrc: string): Promise<SpriteFrame[]> {
     const cached = this.atlasFrameCache.get(atlasSrc);
     if (cached) return Promise.resolve(cached);
     const loading = this.atlasFrameLoading.get(atlasSrc);
     if (loading) return loading;
-    const task = new Promise<SpriteFrame[]>((resolve) => {
-      resources.load(atlasSrc, SpriteAtlas, (err, atlas) => {
-        if (!err && atlas) {
-          resolve(this.sortAtlasFrames(atlas, atlasSrc));
-          return;
-        }
-        const directory = atlasSrc.slice(0, atlasSrc.lastIndexOf("/"));
-        resources.loadDir(directory, SpriteAtlas, (dirErr, atlases) => {
-          // 帧名前缀 = 图集文件名去掉 @分页 后缀（auto_attack@0 -> 帧名 auto_attack/00000）
-          const prefix = atlasSrc.slice(atlasSrc.lastIndexOf("/") + 1).split("@")[0];
-          const target = (atlases ?? []).find((item) => (item.getSpriteFrames().find((frame) => !!frame)?.name ?? "").startsWith(`${prefix}/`));
-          if (dirErr || !target) {
-            console.error(`${atlasSrc} 图集帧加载失败：${(dirErr ?? err)?.message ?? "目录中未找到该图集"}`);
-            this.atlasFrameCache.set(atlasSrc, []);
-            resolve([]);
-            return;
-          }
-          resolve(this.sortAtlasFrames(target, atlasSrc));
-        });
-      });
-    }).then((frames) => {
+    const task = this.loadAtlasFrames(atlasSrc).then((frames) => {
+      // 空结果同样入缓存：路径写错时只报一次错，不会因为每次生成节点都重试而刷屏
+      if (!frames.length) console.error(`${atlasSrc} 图集帧加载失败`);
+      this.atlasFrameCache.set(atlasSrc, frames);
       this.atlasFrameLoading.delete(atlasSrc);
       return frames;
     });
@@ -170,14 +152,83 @@ export default class AnimationHelper {
     return task;
   }
 
-  /** 图集帧排序入缓存：帧名形如 "auto_attack/00000"，按末尾帧序号升序（spriteFrames 属性是名字字典，取数组用 getSpriteFrames） */
-  private static sortAtlasFrames(atlas: SpriteAtlas, atlasSrc: string): SpriteFrame[] {
-    const frames = atlas
-      .getSpriteFrames()
-      .filter((frame): frame is SpriteFrame => !!frame)
-      .sort((a, b) => Number(a.name.split("/").pop()) - Number(b.name.split("/").pop()));
-    this.atlasFrameCache.set(atlasSrc, frames);
-    return frames;
+  /** 加载图集的全部分页帧（同一个动画被切成多页时合并成一整条帧序列） */
+  private static async loadAtlasFrames(atlasSrc: string): Promise<SpriteFrame[]> {
+    const frames: SpriteFrame[] = [];
+    for (const page of this.atlasPagePaths(atlasSrc)) {
+      const atlas = await this.loadAtlas(page);
+      if (atlas) this.collectFrames(atlas, frames);
+    }
+    return frames.length ? this.sortFrames(frames) : this.loadFramesByDir(atlasSrc);
+  }
+
+  /**
+   * 取同名图集的全部分页路径（含传入的那一页，如 effect/skill/s_1102@0 / s_1102@1）
+   * 目录索引是同步查询：不加载资源、缺页也不会报错；索引拿不到时只加载传入的那一页
+   */
+  private static atlasPagePaths(atlasSrc: string): string[] {
+    const slash = atlasSrc.lastIndexOf("/");
+    if (slash < 0) return [atlasSrc];
+    const page = atlasSrc.slice(slash + 1);
+    const name = page.split("@")[0];
+    const paths = resources
+      .getDirWithPath(atlasSrc.slice(0, slash), SpriteAtlas)
+      .map((info) => info.path)
+      .filter((path) => {
+        const pageName = path.slice(path.lastIndexOf("/") + 1);
+        return pageName === page || pageName.startsWith(`${name}@`);
+      })
+      .sort();
+    return paths.length ? paths : [atlasSrc];
+  }
+
+  /** 加载一页图集（加载不到返回 null） */
+  private static loadAtlas(atlasSrc: string): Promise<SpriteAtlas | null> {
+    return new Promise((resolve) => {
+      resources.load(atlasSrc, SpriteAtlas, (err, atlas) => resolve(!err && atlas ? atlas : null));
+    });
+  }
+
+  /**
+   * 退路：按目录加载图集，再用帧名前缀匹配目标（同名 png 与 plist 路径相同，路径查询可能命中图片资源）
+   * 帧名前缀 = 图集文件名去掉 @分页 后缀（auto_attack@0 -> 帧名 auto_attack/00000）
+   */
+  private static loadFramesByDir(atlasSrc: string): Promise<SpriteFrame[]> {
+    return new Promise((resolve) => {
+      const slash = atlasSrc.lastIndexOf("/") + 1;
+      const prefix = atlasSrc.slice(slash).split("@")[0];
+      resources.loadDir(atlasSrc.slice(0, slash - 1), SpriteAtlas, (err, atlases) => {
+        const target = (atlases ?? []).find((item) => (item.getSpriteFrames().find((frame) => !!frame)?.name ?? "").startsWith(`${prefix}/`));
+        if (err || !target) {
+          resolve([]);
+          return;
+        }
+        const frames: SpriteFrame[] = [];
+        this.collectFrames(target, frames);
+        resolve(this.sortFrames(frames));
+      });
+    });
+  }
+
+  /** 收集一页图集里的有效帧（spriteFrames 属性是名字字典，取数组用 getSpriteFrames） */
+  private static collectFrames(atlas: SpriteAtlas, out: SpriteFrame[]) {
+    atlas.getSpriteFrames().forEach((frame) => {
+      if (frame) out.push(frame);
+    });
+  }
+
+  /**
+   * 帧序列排序：按帧名末尾的帧序号升序
+   * 帧名形如 "auto_attack/00000" 或 "1002/attack/00000.png"（带扩展名），取不到序号时按 0 处理
+   */
+  private static sortFrames(frames: SpriteFrame[]) {
+    return frames.sort((a, b) => this.frameOrder(a) - this.frameOrder(b));
+  }
+
+  /** 帧序号：帧名最后一段去掉扩展名后的数字 */
+  private static frameOrder(frame: SpriteFrame) {
+    const order = Number((frame.name.split("/").pop() ?? "").replace(/\.[^.]*$/, ""));
+    return order > 0 ? order : 0;
   }
 
   //#endregion
@@ -189,13 +240,13 @@ export default class AnimationHelper {
    * @param name 动画名称
    * @param node 播放动画的节点
    * @param dirSrc 动画帧存放的文件夹
-   * @param time 动画播放时间（每帧时长）
+   * @param duration 动画总时长（秒）
    */
-  static playOnceWithDir(name: string, node: Node, dirSrc: string, time: number = 1) {
+  static playOnceWithDir(name: string, node: Node, dirSrc: string, duration: number = 1) {
     const animate = this.useAnimation(node);
     this.loadFrames(dirSrc).then((spriteFrames) => {
       if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
-      this.play(name, node, animate, spriteFrames, time, AnimationClip.WrapMode.Normal);
+      this.play(name, node, animate, spriteFrames, duration, AnimationClip.WrapMode.Normal);
     });
   }
 
@@ -204,13 +255,13 @@ export default class AnimationHelper {
    * @param name 动画名称
    * @param node 播放动画的节点
    * @param dirSrc 动画帧存放的文件夹
-   * @param time 动画播放时间（每帧时长）
+   * @param duration 动画总时长（秒）
    */
-  static playLoopWithDir(name: string, node: Node, dirSrc: string, time: number = 1) {
+  static playLoopWithDir(name: string, node: Node, dirSrc: string, duration: number = 1) {
     const animate = this.useAnimation(node);
     this.loadFrames(dirSrc).then((spriteFrames) => {
       if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
-      this.play(name, node, animate, spriteFrames, time, AnimationClip.WrapMode.Loop);
+      this.play(name, node, animate, spriteFrames, duration, AnimationClip.WrapMode.Loop);
     });
   }
 
@@ -219,12 +270,31 @@ export default class AnimationHelper {
    * @param name 动画名称
    * @param node 播放动画的节点
    * @param spriteFrames 帧列表（顺序即播放顺序）
-   * @param frameRate 每秒帧数（与 play 系列方法的速度语义一致）
+   * @param frameRate 每秒帧数（如 20 表示每秒 20 帧，一轮循环时长 = 帧数 / 帧率）
    */
   static playLoopWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], frameRate: number) {
     if (!spriteFrames.length) return;
     const animate = this.useAnimation(node);
-    this.play(name, node, animate, spriteFrames, frameRate, AnimationClip.WrapMode.Loop);
+    this.play(name, node, animate, spriteFrames, spriteFrames.length / this.normalizeFrameRate(frameRate), AnimationClip.WrapMode.Loop);
+  }
+
+  /**
+   * 使用已有帧列表播放一次后销毁节点（图集帧等非目录来源，如技能特效）
+   * @param name 动画名称
+   * @param node 播放动画的节点
+   * @param spriteFrames 帧列表（顺序即播放顺序）
+   * @param duration 动画总时长（秒）：与角色动作动画同一口径
+   *        （角色动作动画总时长 = 1 / speedRate，见 configs/role 的 defaultRoleSpeedRate）
+   */
+  static playOnceWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], duration: number) {
+    if (!spriteFrames.length) return;
+    const animate = this.useAnimation(node);
+    this.play(name, node, animate, spriteFrames, duration > 0 ? duration : spriteFrames.length, AnimationClip.WrapMode.Normal);
+  }
+
+  /** 帧率合法性归一（非正数视为每秒 1 帧，避免除零） */
+  private static normalizeFrameRate(frameRate: number) {
+    return frameRate > 0 ? frameRate : 1;
   }
 
   //#endregion
@@ -290,11 +360,11 @@ export default class AnimationHelper {
    * @param node 播放动画的节点
    * @param animate 动画组件
    * @param spriteFrames 动画帧列表
-   * @param time 动画播放时间（每帧时长）
+   * @param duration 动画总时长（秒）：引擎的片段帧率按「帧数 / 时长」折算
    * @param wrapMode 播放模式（Normal 播完自动销毁节点）
    */
-  private static play(name: string, node: Node, animate: Animation, spriteFrames: SpriteFrame[], time: number, wrapMode: AnimationClip.WrapMode) {
-    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / time);
+  private static play(name: string, node: Node, animate: Animation, spriteFrames: SpriteFrame[], duration: number, wrapMode: AnimationClip.WrapMode) {
+    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / duration);
     clip.wrapMode = wrapMode;
     clip.enableTrsBlending = false;
     clip.name = name;

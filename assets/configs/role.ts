@@ -74,7 +74,7 @@ export const defaultRoleSpeedRate: SpeedRate = {
   [ACTION.STAND]: 1,
   [ACTION.WALK]: 1,
   [ACTION.RUN]: 1,
-  [ACTION.ATTACK_NEAR]: 10,
+  [ACTION.ATTACK_NEAR]: 1,
   [ACTION.ATTACK_SKILL_1]: 1,
   [ACTION.TEST3]: 1,
   [ACTION.ATTACK_FAR]: 1,

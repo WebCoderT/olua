@@ -5,6 +5,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import { canAttackTarget } from "../utils/battle/BattleMath";
 import MpHelper from "../utils/battle/MpHelper";
 import AutoBattle from "./AutoBattle";
+import EffectManager from "./EffectManager";
 import RoleUIManager from "./RoleUIManager";
 import StorageManager from "./StorageManager";
 
@@ -104,6 +105,8 @@ export default class SkillManager {
       RoleUIManager.updateRoleData(context.role);
     }
     GameUiHelper.showSkillTip(context.caster, config.label);
+    // 技能特效（配置的 effect / effectIsOnSelf）：与动作动画同时开始播放，见 core/EffectManager
+    EffectManager.play(config, context.caster, target, context.role);
     config.onClick({ ...context, target, config, level });
     // 技能击退：配置了 push 的单体技能把目标推开（方向 = 施法者指向目标）
     if (config.push && target && isValid(target)) this.pushTarget(context, target, config.push);

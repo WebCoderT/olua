@@ -129,9 +129,9 @@ export interface SkillConfig {
   /** 是否可自动释放 */
   canAuto: boolean;
   /** 技能特效 */
-  effect: string;
+  effect?: string;
   /** 特效是否在自己身上 */
-  effectIsOnSelf: boolean;
+  effectIsOnSelf?: boolean;
 }
 
 /** 技能ID */

@@ -43,8 +43,6 @@ skills.set("1000", {
   onClick: skill_1000,
   action: ACTION.ATTACK_NEAR,
   canAuto: true,
-  effect: "effect/skill/s_1002@0",
-  effectIsOnSelf: true,
 });
 
 skills.set("1001", {
@@ -76,7 +74,7 @@ skills.set("1001", {
   // 示例：命中后把目标击退 120 像素（技能击退是场上唯一能推动怪物的途径，删掉这行就不击退）
   push: { distance: 120 },
   canAuto: false,
-  effect: "effect/skill/s_1002@0",
+  effect: "effect/skill/s_1006@0",
   effectIsOnSelf: true,
 });
 

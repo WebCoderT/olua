@@ -166,22 +166,29 @@ export default class AutoBattle {
 
   /** 停止自动战斗（清快速攻击请求/目标/路径并停住自动移动；挂机开关状态不动） */
   static cancel() {
-    this.pendingSkill = null;
-    this.target = null;
-    this.path = [];
-    this.pathIndex = 0;
-    this.stuckCount = 0;
+    this.clearRuntimeState();
     this.roleDisplay?.setAutoMove(null);
   }
 
   /** 场景卸载（组合根 onDestroy 调用）：全部运行时状态清空，挂机开关保留（重进场景继续挂机） */
   static reset() {
-    this.cancel();
+    // 只清状态、不再驱动主角：此时主角节点正在随场景销毁，
+    // 再走一次动作/朝向状态机去播放动画属于给已销毁的节点发指令（切图时表现为播放动画报错）
+    this.clearRuntimeState();
     this.banned.clear();
     this.grid = null;
     this.mapNode = null;
     this.roleDisplay = null;
     this.hangStateListener = null;
+  }
+
+  /** 清空运行时状态（快速攻击请求/目标/路径/卡住计数），不触碰主角节点 */
+  private static clearRuntimeState() {
+    this.pendingSkill = null;
+    this.target = null;
+    this.path = [];
+    this.pathIndex = 0;
+    this.stuckCount = 0;
   }
 
   /** 目标是否仍可打（节点存活且怪物数据还在、血量大于 0） */
