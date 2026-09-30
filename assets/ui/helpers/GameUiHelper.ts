@@ -56,6 +56,8 @@ const COLLIDER_RANGE_NAME_HEIGHT = 18;
 const COLLIDER_RANGE_OBSTACLE_COLOR = new Color(255, 64, 64);
 /** 角色自身的碰撞范围颜色（与静态障碍区分，便于混杂场景下分辨） */
 const COLLIDER_RANGE_ROLE_COLOR = new Color(64, 255, 128);
+/** 怪物刷怪区域的颜色（无碰撞体，用另一种配色与碰撞体区分） */
+const COLLIDER_RANGE_AREA_COLOR = new Color(255, 208, 64);
 
 //#endregion
 
@@ -888,6 +890,21 @@ export default class GameUiHelper {
 
   //#endregion
 
+  //#region 怪物刷怪区域
+
+  /**
+   * 创建刷怪区域节点（节点尺寸即区域范围，本体不含任何显示元素）
+   * 用于把 Tiled monster 对象组里的矩形实例化成怪物落点范围，
+   * 怪物本身的生成由 MonsterManager 按区域完成，区域范围显示见 showAreaRange
+   * @param label 区域名称（用于命名节点与调试显示）
+   * @param size 区域尺寸
+   */
+  static createMonsterAreaNode(label: string, size: Size) {
+    return UiHelper.createNode(`monster_area_${label}`, new Vec2(), size);
+  }
+
+  //#endregion
+
   //#region 碰撞范围显示（调试）
 
   /**
@@ -905,10 +922,36 @@ export default class GameUiHelper {
     const collider = node.getComponent(BoxCollider2D);
     if (!collider) return null;
     const color = kind === "role" ? COLLIDER_RANGE_ROLE_COLOR : COLLIDER_RANGE_OBSTACLE_COLOR;
-    const size = collider.size;
-    const offset = collider.offset;
+    return this.drawRange(node, collider.size, collider.offset, color, name ?? node.name);
+  }
 
-    /** 范围框：按碰撞体偏移换算矩形左下角（组件绘制在节点自身，不受子节点布局影响） */
+  /**
+   * 显示区域的范围（范围框 + 名称 + 尺寸），用于没有碰撞体的区域（如怪物刷怪区域）
+   * 取节点 UITransform 的尺寸绘制，尺寸即区域的落点范围
+   * 由 debugConfig.areaRange 一个开关控制
+   * @param node 区域节点（带 UITransform，其尺寸即区域尺寸）
+   * @param name 显示名称（缺省取节点名）
+   * @return 显示节点（开关关闭或无 UITransform 时为 null）
+   */
+  static showAreaRange(node: Node, name?: string) {
+    if (!debugConfig.areaRange) return null;
+    const uiTransform = node.getComponent(UITransform);
+    if (!uiTransform) return null;
+    return this.drawRange(node, uiTransform.contentSize, new Vec2(), COLLIDER_RANGE_AREA_COLOR, name ?? node.name);
+  }
+
+  /**
+   * 在节点上绘制范围框与名称尺寸（碰撞范围显示与区域范围显示共用的绘制实现）
+   * 直接绘制在目标节点自身，因此显示范围与节点的实际尺寸/碰撞体偏移永远一致
+   * @param node 目标节点
+   * @param size 范围尺寸
+   * @param offset 范围相对节点原点的偏移（碰撞体偏移，无偏移传 Vec2.ZERO）
+   * @param color 范围框与名称颜色
+   * @param label 名称（空串则只画范围框）
+   * @return 承载名称的显示节点
+   */
+  private static drawRange(node: Node, size: Size, offset: Vec2, color: Color, label: string) {
+    /** 范围框：按偏移换算矩形左下角（组件绘制在节点自身，不受子节点布局影响） */
     const graphics = node.addComponent(Graphics);
     graphics.lineWidth = COLLIDER_RANGE_LINE_WIDTH;
     graphics.strokeColor = color;
@@ -922,7 +965,6 @@ export default class GameUiHelper {
     node.addChild(view);
     // 图层挂载完成后再创建显示节点时也要跟随所在图层，否则会留在默认图层而不可见
     LayerManager.setNodeToLayer(view, node.layer);
-    const label = name ?? node.name;
     if (label) view.addChild(UiHelper.createLabel("collider_range_name", `${label} ${Math.round(size.width)}×${Math.round(size.height)}`, color, COLLIDER_RANGE_NAME_FONT_SIZE, new Vec2(), new Size(COLLIDER_RANGE_NAME_WIDTH, COLLIDER_RANGE_NAME_HEIGHT)));
     return view;
   }

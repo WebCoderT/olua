@@ -1,4 +1,4 @@
-import { Size, Vec2 } from "cc";
+import { Size, Vec2, Vec3 } from "cc";
 import type { BattleAttributes, CommonAttributes } from "./common";
 import type { SpeedRate } from "./animation";
 import type { DropSource } from "./drop";
@@ -29,6 +29,28 @@ export interface MonsterConfig extends CommonAttributes, BattleAttributes {
 
 /** 生成的怪物接口 */
 export interface Monster extends MonsterConfig {
+  /** 怪物编号（configs/monster 中的 key，同一编号的怪物可分布在多个刷怪区域） */
+  id: string;
   /** 当前血量 */
   hp: number;
+}
+
+/**
+ * 怪物刷新区域
+ * 对应地图 monster 对象组里的一个矩形区域（自定义属性 id/min/max）：
+ * 区域内维持该编号怪物的数量，初始刷满 max 只，之后按重生时间检测、不足时补充
+ */
+export interface MonsterSpawnArea {
+  /** 区域名称（地图里给区域起的名字，仅用于日志与调试显示） */
+  label: string;
+  /** 怪物编号（configs/monster 中的 key，由自定义属性 id 指定） */
+  monsterId: string;
+  /** 区域中心（世界坐标，怪物落点以它为基准；地图节点位于原点时与本地坐标一致） */
+  center: Vec3;
+  /** 区域尺寸（即怪物落点的取值范围） */
+  size: Size;
+  /** 该区域允许的最少怪物数（存活数少于它即触发补充；为 0 表示不设下限、不补充） */
+  min: number;
+  /** 该区域允许的最多怪物数（初始数量与补充上限） */
+  max: number;
 }

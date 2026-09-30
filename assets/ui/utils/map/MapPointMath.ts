@@ -55,3 +55,12 @@ export function getMapPointPosition(position: Vec3, map: Node) {
 export function getMapRectCenterPosition(x: number, y: number, width: number, height: number, map: Node) {
   return getMapPointPosition(new Vec3(x + width / 2, y + height / 2), map);
 }
+
+/**
+ * 获取地图上矩形区域中心的世界坐标（Tiled 矩形 -> 世界坐标）
+ * 与 getMapRectCenterPosition 的区别只在于多叠加了地图节点的世界坐标，
+ * 供那些直接吃世界坐标的调用方使用（如按区域生成怪物、区域调试显示）
+ */
+export function getMapRectCenterPositionOnWorld(x: number, y: number, width: number, height: number, map: Node) {
+  return getMapPointPositionOnWorld(new Vec3(x + width / 2, y + height / 2), map);
+}

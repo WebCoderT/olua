@@ -1998,6 +1998,28 @@ monsters.set("110", {
   contentSize: new Size(),
   speedRate: undefined,
 });
+
+/**
+ * 怪物重生（补充）配置
+ * 地图的 monster 对象组把怪物按矩形区域划分，每个区域用自定义属性声明该区域允许的怪物数量区间
+ * （id 为怪物编号，min/max 为该区域的最少/最多怪物数）。
+ * 每隔 interval 秒检测一次：某编号怪物在地图中的存活总数少于其各区域 min 之和时，
+ * 按区域补充到各区域 max 之和（同一编号有多个区域时，落点在这些区域间随机）
+ */
+export const monsterRespawn = {
+  /** 默认检测间隔（秒），如 60 = 1 分钟、300 = 5 分钟 */
+  interval: 60,
+  /** 按怪物编号覆盖的检测间隔（秒），未配置的怪物走 interval */
+  intervals: new Map<string, number>([
+    // BOSS 类怪物重生更慢
+    ["200", 300],
+  ]),
+};
+
+/** 取某编号怪物的重生检测间隔（秒） */
+export function getMonsterRespawnInterval(monsterId: string) {
+  return monsterRespawn.intervals.get(monsterId) ?? monsterRespawn.interval;
+}
 monsters.set("111", {
   icon: "monster/icon/111",
   out: "monster/out/111",
