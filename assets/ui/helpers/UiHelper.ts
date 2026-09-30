@@ -163,7 +163,13 @@ export default class UiHelper {
     label.color = color;
     label.enableWrapText = false;
     resources.load("fonts/msyh", Font, (err, font) => {
-      if (err) console.error(err.message);
+      // 加载失败（font 为空）或 Label 已随节点销毁（如怪物死亡时销毁身上的文本）时直接跳过：
+      // 对已销毁的 Label 写 font 会命中已清空的渲染数据（_renderData 为 null）并抛错
+      if (err || !font) {
+        if (err) console.error(err.message);
+        return;
+      }
+      if (!isValid(label) || !isValid(label.node)) return;
       label.font = font;
     });
     return node;
