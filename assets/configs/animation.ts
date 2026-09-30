@@ -22,7 +22,19 @@ const roleSpriteFrameLength: AnimationLength = {
 };
 
 /** 怪物动作顺序 */
-const monsterActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN];
+const monsterActions: ACTION[] = [
+  ACTION.STAND,
+  ACTION.WALK,
+  ACTION.RUN,
+  ACTION.TEST1,
+  ACTION.ATTACK_NEAR,
+  ACTION.ATTACK_SKILL_1,
+  ACTION.TEST3,
+  ACTION.ATTACK_FAR,
+  ACTION.INJURED,
+  ACTION.A1,
+  ACTION.DIE,
+];
 
 /** 怪物动画帧长度 */
 const monsterSpriteFrameInterval = 10;
