@@ -1,22 +1,9 @@
-import { Node, Size, TiledMap } from "cc";
+import { Node, Size } from "cc";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { getMapRectCenterPosition } from "../../utils/map/MapPointMath";
+import { getTiledObjects, TiledObject } from "../../utils/map/TiledObjects";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
-
-/** Tiled 碰撞层对象（只取本生成器用到的字段） */
-interface CollisionAreaObject {
-  /** 对象名称（Tiled 里给区域起的名字，用于调试显示） */
-  name: string;
-  /** 矩形左上角 x（Tiled 坐标，原点在地图左上角） */
-  x: number;
-  /** 矩形左上角 y（Tiled 坐标，y 轴向下） */
-  y: number;
-  /** 矩形宽（像素） */
-  width: number;
-  /** 矩形高（像素） */
-  height: number;
-}
 
 /**
  * 碰撞区域生成器
@@ -37,21 +24,17 @@ export default class CollisionAreaSpawner {
     this.map = map;
   }
 
-  /** 生成碰撞层中的全部元素 */
+  /** 生成碰撞层中的全部元素（地图未画碰撞层时得到空数组，直接跳过） */
   spawnAll() {
-    const group = this.map.getComponent(TiledMap).getObjectGroup(CollisionAreaSpawner.GROUP_NAME);
-    // 地图未画碰撞层时无需生成（如纯安全区地图）
-    if (!group) return;
-    group.getObjects().forEach((object) => {
-      const area: CollisionAreaObject = object;
-      // 没有面积的元素（如点）构不成碰撞范围，跳过
-      if (area.width <= 0 || area.height <= 0) return;
-      this.spawnArea(area);
+    getTiledObjects(this.map, CollisionAreaSpawner.GROUP_NAME).forEach((object) => {
+      // 没有面积的元素（点、多边形）构不成矩形碰撞范围，跳过
+      if (object.width <= 0 || object.height <= 0) return;
+      this.spawnArea(object);
     });
   }
 
   /** 生成单个碰撞区域（节点尺寸即碰撞范围，位置为矩形中心） */
-  private spawnArea(area: CollisionAreaObject) {
+  private spawnArea(area: TiledObject) {
     const size = new Size(area.width, area.height);
     const node = GameUiHelper.createCollisionAreaNode(area.name, size);
     addObstacleCollider(node);

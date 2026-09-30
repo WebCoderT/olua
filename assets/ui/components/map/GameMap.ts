@@ -1,4 +1,4 @@
-import { Node, TiledMap, TiledMapAsset } from "cc";
+import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
 import LayerManager from "../../core/LayerManager";
 import DropManager from "../../core/DropManager";
 import MonsterManager from "../../core/MonsterManager";
@@ -10,7 +10,7 @@ import { maps } from "../../../configs/map";
 
 /**
  * 地图组件（自身即地图节点）
- * 负责地图资源加载与复活点定位，地图对象（NPC/怪物）生成交给 MapObjectSpawner、
+ * 负责地图资源加载与复活点定位，地图对象（NPC/复活点）生成交给 MapObjectSpawner、
  * 碰撞区域（collision 对象组）生成交给 CollisionAreaSpawner
  * 地图资源异步加载完成后才在自身挂载 TiledMap 组件并生成地图对象，
  * 避免节点先挂上而地图未加载完成导致的黑屏
@@ -37,20 +37,26 @@ export default class GameMap extends Node {
     const tiledMap = this.addComponent(TiledMap);
     tiledMap.tmxAsset = mapAsset;
     LayerManager.addToMapLayer(this);
-    this.goToRevivePoint();
-    // 添加地图上包含的所有对象（NPC/怪物）
-    new MapObjectSpawner(this as Node).spawnAll();
-    // 按 map 的 collision 对象组生成碰撞区域（静态碰撞体 + 对象名称/区域指示线）
+    // 按 npc 对象组生成 NPC（碰撞区与 NPC 的碰撞范围显示都在生成流程内完成）
+    const objectSpawner = new MapObjectSpawner(this as Node);
+    objectSpawner.spawnAll();
+    // 按 collision 对象组生成碰撞区域（静态碰撞体 + 名称/区域指示线）
     new CollisionAreaSpawner(this as Node).spawnAll();
+    this.goToRevivePoint(objectSpawner.getRevivePoint());
   }
 
-  /** 前往复活点 */
-  private goToRevivePoint() {
-    const map = this.getComponent(TiledMap);
-    const point = map.getObjectGroup("objects").getObject("revive");
-    if (!point) throw new Error("该地图无复活点！");
+  /**
+   * 前往复活点（复活点由 npc 对象组中 type=revive 的点位决定）
+   * 地图未标复活点时只提示、不打断后续流程（否则会连带阻断地图对象生成）
+   * @param revivePoint 复活点坐标（Tiled 原始坐标），无复活点时为 null
+   */
+  private goToRevivePoint(revivePoint: Vec3 | null) {
+    if (!revivePoint) {
+      console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个 type=revive 的点位`);
+      return;
+    }
     // TODO: 地图坐标 -> 世界坐标换算后传送角色
-    // const worldPosition = getMapPointPositionOnWorld(new Vec3(point.x, point.y), this);
+    // const worldPosition = getMapPointPositionOnWorld(revivePoint, this);
     // StorageManager.updateRoleWorldPosition(worldPosition);
   }
 }
