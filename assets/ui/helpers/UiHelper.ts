@@ -44,6 +44,20 @@ export default class UiHelper {
   }
 
   /**
+   * 创建纯分组节点（不带 UITransform，只做位置与层级组织）
+   * 用途：承载那些"不希望被父节点 Layout 排列"的子元素——Layout 只排列带 UITransform 的子节点，
+   * 纯分组节点因此不会被重排（如挂在 NPC 这类布局容器下的调试显示）
+   * @param name 名称
+   * @param position 位置，默认原点
+   */
+  static createGroupNode(name: string, position: Vec2 = new Vec2()) {
+    const node = new Node();
+    node.name = name;
+    node.setPosition(position.x, position.y, 0);
+    return node;
+  }
+
+  /**
    * 加载 SpriteFrame 资源并回调，统一错误日志
    */
   static loadSprite(src: string, onLoad: (spriteFrame: SpriteFrame) => void) {

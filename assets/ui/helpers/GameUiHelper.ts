@@ -1,8 +1,9 @@
-import { Animation, AnimationClip, Button, Color, Graphics, isValid, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, AnimationClip, BoxCollider2D, Button, Color, Graphics, isValid, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
 import { Draggable } from "../components/input/Draggable";
+import { debugConfig } from "../../configs/debug";
 import { getAnimationName } from "../../configs/animation";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
@@ -34,16 +35,29 @@ export interface BottomNavBarButton {
   shortcutKey: string;
 }
 
+/** 碰撞范围显示类别（决定配色：静态障碍 / 角色自身） */
+export type ColliderRangeKind = "obstacle" | "role";
+
 //#endregion
 
-/** 碰撞区域指示线宽（像素） */
-const COLLISION_AREA_LINE_WIDTH = 3;
-/** 碰撞区域指示线与名称颜色 */
-const COLLISION_AREA_COLOR = new Color(255, 64, 64, 230);
-/** 碰撞区域填充色（低透明度，避免遮挡地图底图） */
-const COLLISION_AREA_FILL_COLOR = new Color(255, 64, 64, 40);
-/** 碰撞区域名称文本宽度（窄区域下允许超出，保证名称完整可读） */
-const COLLISION_AREA_NAME_WIDTH = 200;
+//#region 碰撞范围显示常量（调试用）
+
+/** 碰撞范围框线宽（像素） */
+const COLLIDER_RANGE_LINE_WIDTH = 3;
+/** 碰撞范围填充透明度（低透明度，避免遮挡地图与角色） */
+const COLLIDER_RANGE_FILL_ALPHA = 40;
+/** 碰撞范围名称字号 */
+const COLLIDER_RANGE_NAME_FONT_SIZE = 14;
+/** 碰撞范围名称文本宽度（窄区域下允许超出，保证名称完整可读） */
+const COLLIDER_RANGE_NAME_WIDTH = 260;
+/** 碰撞范围名称文本高度 */
+const COLLIDER_RANGE_NAME_HEIGHT = 18;
+/** 静态障碍的碰撞范围颜色（Tiled 碰撞区 / NPC / 怪物） */
+const COLLIDER_RANGE_OBSTACLE_COLOR = new Color(255, 64, 64);
+/** 角色自身的碰撞范围颜色（与静态障碍区分，便于混杂场景下分辨） */
+const COLLIDER_RANGE_ROLE_COLOR = new Color(64, 255, 128);
+
+//#endregion
 
 /**
  * 游戏UI零件工厂（静态类）
@@ -872,23 +886,45 @@ export default class GameUiHelper {
     return UiHelper.createNode(`collision_${name}`, new Vec2(), size);
   }
 
+  //#endregion
+
+  //#region 碰撞范围显示（调试）
+
   /**
-   * 为碰撞区域节点附加调试显示：区域指示线 + 对象名称
-   * 仅用于核对 Tiled 里画的碰撞范围与游戏内实际范围是否一致，确认无误后不要调用本方法即可
-   * @param node 碰撞区域节点（尺寸需与 size 一致）
-   * @param name 对象名称（显示在区域中心）
-   * @param size 区域尺寸
+   * 显示节点的碰撞范围：范围框 + 名称 + 尺寸，用于核对游戏内实际的碰撞范围
+   * 直接读取节点上 BoxCollider2D 的 size 与 offset 绘制，因此显示范围与引擎实际判定范围永远一致
+   * （角色碰撞体相对脚下原点有偏移，范围框与名称都按该偏移摆放）
+   * 所有碰撞体（Tiled 碰撞区 / NPC / 怪物 / 角色）统一走本方法，由 debugConfig.colliderRange 一个开关控制
+   * @param node 已挂载 BoxCollider2D 的节点（没有碰撞体则不做任何事）
+   * @param name 显示名称（缺省取节点名；传空串则只画范围框）
+   * @param kind 类别（role 使用另一种配色，便于与静态障碍区分）
+   * @return 显示节点（无碰撞体或开关关闭时为 null）
    */
-  static applyCollisionAreaDebugStyle(node: Node, name: string, size: Size) {
+  static showColliderRange(node: Node, name?: string, kind: ColliderRangeKind = "obstacle") {
+    if (!debugConfig.colliderRange) return null;
+    const collider = node.getComponent(BoxCollider2D);
+    if (!collider) return null;
+    const color = kind === "role" ? COLLIDER_RANGE_ROLE_COLOR : COLLIDER_RANGE_OBSTACLE_COLOR;
+    const size = collider.size;
+    const offset = collider.offset;
+
+    /** 范围框：按碰撞体偏移换算矩形左下角（组件绘制在节点自身，不受子节点布局影响） */
     const graphics = node.addComponent(Graphics);
-    graphics.lineWidth = COLLISION_AREA_LINE_WIDTH;
-    graphics.strokeColor = COLLISION_AREA_COLOR;
-    graphics.fillColor = COLLISION_AREA_FILL_COLOR;
-    graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
+    graphics.lineWidth = COLLIDER_RANGE_LINE_WIDTH;
+    graphics.strokeColor = color;
+    graphics.fillColor = new Color(color.r, color.g, color.b, COLLIDER_RANGE_FILL_ALPHA);
+    graphics.rect(offset.x - size.width / 2, offset.y - size.height / 2, size.width, size.height);
     graphics.fill();
     graphics.stroke();
-    node.addChild(UiHelper.createLabel("collision_area_name", name, COLLISION_AREA_COLOR, 14, new Vec2(), new Size(COLLISION_AREA_NAME_WIDTH, 18)));
-    return graphics;
+
+    /** 名称与尺寸：挂在纯分组节点上，避免目标节点是布局容器（如 NPC 节点）时子节点被 Layout 重排 */
+    const view = UiHelper.createGroupNode("collider_range_view", offset);
+    node.addChild(view);
+    // 图层挂载完成后再创建显示节点时也要跟随所在图层，否则会留在默认图层而不可见
+    LayerManager.setNodeToLayer(view, node.layer);
+    const label = name ?? node.name;
+    if (label) view.addChild(UiHelper.createLabel("collider_range_name", `${label} ${Math.round(size.width)}×${Math.round(size.height)}`, color, COLLIDER_RANGE_NAME_FONT_SIZE, new Vec2(), new Size(COLLIDER_RANGE_NAME_WIDTH, COLLIDER_RANGE_NAME_HEIGHT)));
+    return view;
   }
 
   //#endregion

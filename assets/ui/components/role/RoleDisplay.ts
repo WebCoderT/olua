@@ -74,6 +74,8 @@ export default class RoleDisplay extends Node {
     const boxCollider = this.addComponent(BoxCollider2D);
     boxCollider.size = new Size(40, 70);
     boxCollider.offset = new Vec2(0, 35);
+    // 碰撞范围显示（调试用，全部碰撞体共用一套开关；角色自身用另一种配色区分于静态障碍）
+    GameUiHelper.showColliderRange(this as Node, this.role.name, "role");
   }
 
   //#region 动作与朝向状态机

@@ -23,15 +23,12 @@ interface CollisionAreaObject {
  * 读取 TiledMap 中名为 collision 的对象组，把其中每个矩形对象实例化为游戏内的静态碰撞体：
  * 节点尺寸即碰撞范围（静态 RigidBody2D + BoxCollider2D，与 NPC 的障碍物同一套做法），
  * 位置按「Tiled 左上角坐标」换算到地图节点本地坐标，节点统一挂到地图层；
- * 同时显示对象名称与区域指示线，便于核对 Tiled 里画的碰撞范围与游戏内实际碰撞范围是否一致。
+ * 碰撞范围的可视化由 GameUiHelper.showColliderRange 统一负责（与全部碰撞体共用一套调试开关）
  * 地图坐标到本地坐标的换算依赖地图节点本身，因此构造时注入地图节点
  */
 export default class CollisionAreaSpawner {
   /** 碰撞层对象组名称 */
   private static readonly GROUP_NAME = "collision";
-
-  /** 是否显示对象名称与区域指示线（核对用；确认碰撞范围无误后可置 false，只保留碰撞体） */
-  static showDebug = true;
 
   /** 地图节点（自身即地图，坐标换算需要） */
   private map: Node;
@@ -57,9 +54,9 @@ export default class CollisionAreaSpawner {
   private spawnArea(area: CollisionAreaObject) {
     const size = new Size(area.width, area.height);
     const node = GameUiHelper.createCollisionAreaNode(area.name, size);
-    // 名称与区域指示线（仅核对碰撞范围用）
-    if (CollisionAreaSpawner.showDebug) GameUiHelper.applyCollisionAreaDebugStyle(node, area.name, size);
     addObstacleCollider(node);
+    // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
+    GameUiHelper.showColliderRange(node, area.name);
     node.setPosition(getMapRectCenterPosition(area.x, area.y, size.width, size.height, this.map));
     LayerManager.addToMapLayer(node);
   }

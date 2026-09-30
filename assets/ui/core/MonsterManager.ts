@@ -55,6 +55,8 @@ export default class MonsterManager {
       node,
     );
     addObstacleCollider(node);
+    // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
+    GameUiHelper.showColliderRange(node, monster.label);
     const head = GameUiHelper.createHead("monster_head", monster.label, monster.hp, monster.maxHp);
     node.addChild(head);
     return node;

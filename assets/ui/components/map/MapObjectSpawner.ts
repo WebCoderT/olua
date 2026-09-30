@@ -43,6 +43,8 @@ export default class MapObjectSpawner {
     const npc = npcs.get(id);
     const npcNode = GameUiHelper.createNpcNode(npc);
     addObstacleCollider(npcNode);
+    // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
+    GameUiHelper.showColliderRange(npcNode, npc.label);
     npcNode.setWorldPosition(getMapPointPosition(position, this.map));
     LayerManager.addToMapLayer(npcNode);
     npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
