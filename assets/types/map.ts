@@ -19,10 +19,14 @@ export type MapId = "0" | "1" | "2";
 
 // 地图类型
 export enum MapType {
-  // 安全
-  SAFE = "0",
-  // 测试
-  TEST = "9999",
+  /** 普通地图 */
+  NORMAL = "0",
+  /** 等级地图 */
+  LEVEL = "1",
+  /** 战斗力地图 */
+  COMBAT = "2",
+  /** 战魂地图 */
+  SOUL_OF_WAR = 3,
 }
 
 // 地图配置接口
@@ -33,4 +37,10 @@ export interface MapConfig {
   src: string;
   // 地图类型
   type: MapType;
+  /** 进入地图所需等级 */
+  level: number;
+  /** 进入地图所需战斗力 */
+  combat: number;
+  /** 进入地图所需战魂等级 */
+  soulOfWar: number;
 }
