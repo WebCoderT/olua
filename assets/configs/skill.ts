@@ -1,6 +1,6 @@
 import { OECCUPATION } from "../types/role";
 import { SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/skill";
-import { skill_1000, skill_1001 } from "../skills/zhan";
+import { skill_1000, skill_1001, skill_1010 } from "../skills/zhan";
 import { ACTION } from "../types/animation";
 
 /** 职业技能映射 */
@@ -329,13 +329,13 @@ skills.set("1009", {
 skills.set("1010", {
   label: "‌护体神盾",
   icon: "skill/2009",
-  cooldown: 1,
+  cooldown: 60,
   mpCost: 15,
-  targetType: SkillTargetType.SINGLE,
+  targetType: SkillTargetType.SELF,
   oeccupation: OECCUPATION.ZHAN,
-  level: 10,
+  level: 1,
   description: "被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障",
-  type: SkillType.PROACTIVE,
+  type: SkillType.STATUS,
   damageCoefficients: [
     { baseType: "physicalAttack", baseTypeRate: 3 },
     { baseType: "physicalAttack", baseTypeRate: 3.1 },
@@ -350,11 +350,9 @@ skills.set("1010", {
     { baseType: "physicalAttack", baseTypeRate: 4 },
   ],
   distance: 0,
-  onClick: skill_1000,
-  action: ACTION.STAND,
+  onClick: skill_1010,
+  action: ACTION.ATTACK_FAR,
   canAuto: false,
-  effect: "effect/skill/s_1002@0",
-  effectIsOnSelf: true,
 });
 
 skills.set("1011", {
@@ -382,8 +380,6 @@ skills.set("1011", {
   ],
   distance: 0,
   onClick: skill_1000,
-  action: ACTION.STAND,
+  action: ACTION.ATTACK_FAR,
   canAuto: false,
-  effect: "effect/skill/s_1002@0",
-  effectIsOnSelf: true,
 });

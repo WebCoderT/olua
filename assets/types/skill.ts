@@ -25,6 +25,8 @@ export enum SkillTargetType {
   SINGLE = "1",
   /** 群体 */
   MUTIPLE = "2",
+  /** 自身 */
+  SELF = "3",
 }
 
 /** 技能伤害计算系数 */

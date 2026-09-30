@@ -19,3 +19,6 @@ export function skill_1000(context: SkillContext) {
 export function skill_1001(context: SkillContext) {
   skill_1000(context);
 }
+
+/** 护体神盾 */
+export function skill_1010(context: SkillContext) {}
