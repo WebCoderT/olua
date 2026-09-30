@@ -49,8 +49,9 @@ export class Game extends Component {
   private mpRecoverTimer = 0;
 
   async start() {
-    // 获取角色信息
+    // 获取角色信息（兼容魔法值上线前的旧存档：进图先补齐 mp/maxMp 等字段，底部栏血量/魔法值显示依赖）
     const role = StorageManager.findOnlineRole();
+    if (role) MpHelper.ensureDefaults(role);
     // 初始化图层（含掉落物层/怪物层）
     LayerManager.initLayer(this.node, this.camera);
     // 预加载：地图信息 → 地图内 NPC/怪物帧动画 → 当前角色穿戴的帧动画（见 core/PreloadManager）

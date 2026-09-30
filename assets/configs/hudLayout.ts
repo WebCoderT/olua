@@ -48,6 +48,8 @@ export const hudImages = {
   /** 圆形血球：底图 / 血量填充 */
   hpOrbBase: commonImage("max"),
   hpOrbFill: commonImage("hp"),
+  /** 圆形魔法球填充（hp 图的蓝色转色副本：红球直接染蓝色会发黑，故离线转色生成） */
+  mpOrbFill: commonImage("mp"),
   /** 怪物信息面板背景 */
   monsterInfoBackground: commonImage("monster_bg"),
   /** 挂机开关图标（关=收剑 / 开=举剑） */
@@ -112,6 +114,10 @@ export const bottomBarLayout = {
   hpText: { position: new Vec2(-421, -39), size: new Size(120, 10), fontSize: 12 },
   /** 圆形血球（底图与填充同尺寸，竖向进度） */
   hpOrb: { position: new Vec2(-420, 12.5), size: new Size(90, 90) },
+  /** 魔法值文字（与血量文字同款式，镜像到底部栏右侧） */
+  mpText: { position: new Vec2(421, -39), size: new Size(120, 10), fontSize: 12 },
+  /** 圆形魔法球（与血球同款式同尺寸，镜像到底部栏右侧） */
+  mpOrb: { position: new Vec2(420, 12.5), size: new Size(90, 90) },
   /** 快捷键栏（横向布局容器） */
   shortcutBar: { spacing: 6, position: new Vec2(-270, -9), size: new Size(178, 40) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */

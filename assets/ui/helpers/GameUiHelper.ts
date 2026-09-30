@@ -896,20 +896,20 @@ export default class GameUiHelper {
     node.addChild(UiHelper.createSprite("bottom_nav_bar_background", hudImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
   }
 
-  /** 创建血量文字零件（位置与尺寸见 hudLayout.bottomBar.hpText） */
-  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpText.size) {
-    return UiHelper.createLabel("hp_text", text, Color.WHITE, bottomBarLayout.hpText.fontSize, position, size);
+  /** 创建血量/魔法值文字零件（位置与尺寸见 hudLayout.bottomBar.hpText / mpText） */
+  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpText.size, name = "hp_text") {
+    return UiHelper.createLabel(name, text, Color.WHITE, bottomBarLayout.hpText.fontSize, position, size);
   }
 
   /**
-   * 创建圆形血量显示零件（底图 + 竖向进度条）
-   * 返回底图节点与其内部的进度条节点，位置与尺寸见 hudLayout.bottomBar.hpOrb
-   * 底图/填充图见 hudImages.hpOrbBase / hpOrbFill
+   * 创建圆形血量/魔法值显示零件（底图 + 竖向进度条）
+   * 返回底图节点与其内部的进度条节点，位置与尺寸见 hudLayout.bottomBar.hpOrb / mpOrb
+   * 底图见 hudImages.hpOrbBase；填充图缺省为 hudImages.hpOrbFill，魔法球传 hudImages.mpOrbFill
    */
-  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size): { barSprite: Node; hpBar: Node } {
+  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size, fillImage: string = hudImages.hpOrbFill): { barSprite: Node; hpBar: Node } {
     const barSprite = UiHelper.createSprite("hp_bar_sprite", hudImages.hpOrbBase, position, size);
     const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), size);
-    const hpProgress = UiHelper.createSprite("hp_bar_progress", hudImages.hpOrbFill, new Vec2(), size);
+    const hpProgress = UiHelper.createSprite("hp_bar_progress", fillImage, new Vec2(), size);
     hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
     hpProgress.setPosition(0, 0);
     hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
