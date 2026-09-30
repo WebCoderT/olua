@@ -9,6 +9,7 @@ import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BattleHelper from "../../utils/BattleHelper";
 import MonsterManager from "../../core/MonsterManager";
+import RoleUIManager from "../../core/RoleUIManager";
 
 /**
  * 角色展示组件（自身即主角节点）
@@ -332,9 +333,10 @@ export default class RoleDisplay extends Node {
 
   //#region 攻击逻辑
 
-  /** 设置攻击目标 */
-  setTarget(target: Node) {
+  /** 设置攻击目标（null 表示取消选中），并刷新怪物信息面板 */
+  setTarget(target: Node | null) {
     this.target = target;
+    RoleUIManager.selectMonster(target);
   }
 
   /** 攻击目标 */

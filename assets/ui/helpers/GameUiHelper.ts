@@ -791,6 +791,44 @@ export default class GameUiHelper {
 
   //#endregion
 
+  //#region 怪物信息面板
+
+  /**
+   * 创建怪物信息面板主体（尺寸、位置与背景），居中靠顶部
+   * 背景使用 common/monster_bg（238 x 71）
+   */
+  static createMonsterInfoBody(node: Node) {
+    node.addComponent(UITransform).setContentSize(238, 71);
+    node.setPosition(0, 330);
+    node.addChild(UiHelper.createSprite("monster_info_background", "common/monster_bg", new Vec2(), new Size(238, 71)));
+  }
+
+  /** 创建怪物头像（左侧，取怪物图标） */
+  static createMonsterAvatar(monster: Monster, position: Vec2 = new Vec2(-83, 0), size: Size = new Size(60, 66)) {
+    return UiHelper.createSprite("monster_avatar", monster.icon, position, size);
+  }
+
+  /**
+   * 创建怪物技能行（怪物技能图标，未配置技能则不渲染）
+   * @param monster 怪物数据
+   * @param position 行位置
+   * @param slotSize 单个技能图标尺寸
+   * @param spacing 图标间距
+   */
+  static createMonsterSkillRow(monster: Monster, position: Vec2 = new Vec2(65, -18), slotSize: number = 20, spacing: number = 4) {
+    const row = UiHelper.createNode("monster_skills", position, new Size(238, slotSize));
+    const skillIds = monster.skills ?? [];
+    skillIds.forEach((skillId, index) => {
+      const skillConfig = skills.get(skillId);
+      if (!skillConfig) return;
+      const slot = UiHelper.createSprite(skillId, skillConfig.icon, new Vec2((index - (skillIds.length - 1) / 2) * (slotSize + spacing), 0), new Size(slotSize, slotSize));
+      row.addChild(slot);
+    });
+    return row;
+  }
+
+  //#endregion
+
   //#region 技能列表
 
   /** 创建技能列表滚动区 */

@@ -2,6 +2,7 @@ import { _decorator, Camera, Component } from "cc";
 import BottomBar from "./components/BottomBar";
 import { ActivityController } from "./controllers/ActivityController";
 import GameMap from "./components/map/GameMap";
+import MonsterInfo from "./components/MonsterInfo";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClick from "./components/ScreenClick";
 import GameHelper from "./core/GameHelper";
@@ -46,6 +47,12 @@ export class Game extends Component {
     this.roleAvatar = new RoleAvatar(role);
     LayerManager.addToUILayer(this.roleAvatar);
     RoleUIManager.registerRoleAvatar(this.roleAvatar);
+    /** 怪物信息面板创建器（选中怪物时才动态创建，取消选中即销毁） */
+    RoleUIManager.setMonsterInfoFactory((target) => {
+      const monsterInfo = new MonsterInfo(target);
+      LayerManager.addToUILayer(monsterInfo);
+      return monsterInfo;
+    });
     // 初始化主角外观动画与键盘监听
     this.roleDisplay.init();
     // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）
@@ -58,14 +65,17 @@ export class Game extends Component {
     this.node.addComponent(ActivityController);
   }
 
-  /** 场景卸载：清理全局监听（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
+  /** 场景卸载：清理全局监听与动态面板（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
   onDestroy() {
     this.screenClick?.destroy();
+    RoleUIManager.destroyMonsterInfo();
   }
 
   update() {
     this.roleDisplay?.updateWorldPosition();
     // 快捷键冷却显示
     this.bottomBar?.updateCooldowns();
+    // 怪物信息面板血量刷新（目标失效时自动销毁）
+    RoleUIManager.updateMonsterInfo();
   }
 }

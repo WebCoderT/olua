@@ -25,9 +25,9 @@ export default class ScreenClick {
     input.off(Input.EventType.MOUSE_UP, this.checkClickTarget, this);
   }
 
-  /** 根据鼠标按键处理目标选择 */
+  /** 根据鼠标按键处理目标选择（点击空地取消选中） */
   private checkClickTarget(event: EventMouse) {
     const clickedNode = MonsterManager.getClickedMonster(event.getUILocation());
-    if (clickedNode) this.roleDisplay.setTarget(clickedNode);
+    this.roleDisplay.setTarget(clickedNode);
   }
 }
