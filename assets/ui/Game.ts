@@ -15,6 +15,7 @@ import CursorManager from "./core/CursorManager";
 import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
 import MonsterAI from "./core/MonsterAI";
+import AutoBattle from "./core/AutoBattle";
 import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
@@ -74,6 +75,8 @@ export class Game extends Component {
     });
     // 初始化主角外观动画与键盘操控
     this.roleDisplay.init();
+    // 自动战斗（快速攻击/自动挂机）以主角为载体走位与出手
+    AutoBattle.setRoleDisplay(this.roleDisplay);
     // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）
     SkillManager.setContextProvider(() => this.roleDisplay.buildSkillContext());
     // 初始化游戏全局工具
@@ -94,6 +97,7 @@ export class Game extends Component {
     this.screenClickInput?.destroy();
     this.cursorInput?.destroy();
     CursorManager.destroy();
+    AutoBattle.reset();
     RoleUIManager.clearViews();
   }
 
@@ -102,6 +106,9 @@ export class Game extends Component {
     if (!this.ready) return;
     // 鼠标指针样式（每帧最多判定一次：鼠标未移动且悬停目标未变化时不做任何事）
     CursorManager.tick();
+    // 自动战斗每帧驱动（快速攻击/自动挂机：写入自动移动方向、按冷却出手；移动键按下时由玩家接管）
+    // 先于主角 update：本帧写入的自动移动方向当帧即生效
+    AutoBattle.tick(this.roleDisplay?.isMovementKeyDown() ?? false);
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
     // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入）

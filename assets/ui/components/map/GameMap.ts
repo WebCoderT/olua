@@ -2,6 +2,7 @@ import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
 import LayerManager from "../../core/LayerManager";
 import DropManager from "../../core/DropManager";
 import MonsterManager from "../../core/MonsterManager";
+import AutoBattle from "../../core/AutoBattle";
 import StorageManager from "../../core/StorageManager";
 import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
@@ -46,6 +47,8 @@ export default class GameMap extends Node {
     new CollisionAreaSpawner(this as Node).spawnAll();
     // 按 monster 对象组生成怪物（每个区域在开图时按其 max 一次性生成，之后不再刷新）
     new MonsterAreaSpawner(this as Node).spawnAll();
+    // 自动战斗的寻路网格以这张地图为基准（换图后旧网格作废，挂机目标重新选取）
+    AutoBattle.setMap(this as Node);
     this.goToRevivePoint(objectSpawner.getRevivePoint());
   }
 

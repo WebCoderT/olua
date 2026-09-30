@@ -291,6 +291,24 @@ export default class GameUiHelper {
     return sprite;
   }
 
+  /**
+   * 为已有节点施加自动挂机开关按钮样式（组件自身即按钮时使用）
+   * 圆形图标随挂机状态切换（关闭=收剑 / 开启=举剑，资源在 main 目录，切换由组件调 updateNodeIcon），
+   * 位置在底部栏中段（快捷键栏与功能按键区之间的空档），图标下方带「挂机」文字
+   * @param node 目标节点
+   */
+  static applyAutoFightButtonStyle(node: Node) {
+    const uiTransform = node.addComponent(UITransform);
+    uiTransform.setContentSize(44, 44);
+    node.setPosition(-115, -9);
+    const sprite = node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = false;
+    this.updateNodeIcon(node, "main/auto_fight_close");
+    node.addChild(UiHelper.createLabel("auto_fight_label", "挂机", Color.WHITE, 10, new Vec2(0, -14), new Size(44, 12)));
+    return sprite;
+  }
+
   //#endregion
 
   //#region 血条与经验条

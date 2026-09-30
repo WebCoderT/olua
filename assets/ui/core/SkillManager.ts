@@ -3,12 +3,15 @@ import { skills } from "../../configs/skill";
 import { SkillContextInput, SkillId, SkillPushConfig, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { canAttackTarget } from "../utils/battle/BattleMath";
+import AutoBattle from "./AutoBattle";
 import StorageManager from "./StorageManager";
 
 /**
  * 技能管理器
  * 技能触发的统一入口：学习校验 → 冷却校验 → 单体目标补全/距离校验 → 记录冷却 → 调用技能实现（动画与结算由技能实现自行处理）
  * 技能配置了 push 时，单体技能在命中后由本类统一把目标击退（场上唯一能推动怪物的途径）
+ * 玩家手动释放（release）时，canAuto 技能没有可打目标/目标超出距离会委托 AutoBattle 自动接战（快速攻击）；
+ * 自动战斗出手（releaseAuto）则不再委托，避免互相递归
  * 施法上下文由组合根（Game）通过 setContextProvider 注入（来源为 RoleDisplay，天然持有角色/目标/怪物容器）
  */
 export default class SkillManager {
@@ -22,8 +25,37 @@ export default class SkillManager {
     this.contextProvider = provider;
   }
 
-  /** 释放技能（快捷键/点击图标统一入口），返回是否进入释放流程 */
+  /**
+   * 释放技能（玩家手动触发的统一入口：快捷键/技能图标）
+   * canAuto 技能没有可打目标或目标超出施法距离时，委托 AutoBattle 自动选取最近怪物并走位到范围后再出手
+   */
   static release(skillId: SkillId): boolean {
+    return this.tryCast(skillId, false);
+  }
+
+  /** 释放技能（自动战斗出手专用：AutoBattle 已保证目标与距离，静默失败且不再触发自动接近） */
+  static releaseAuto(skillId: SkillId): boolean {
+    return this.tryCast(skillId, true);
+  }
+
+  /** 取第一个已学习且可自动释放（canAuto）的技能（自动挂机的默认出手技能，按配置顺序取最靠前的） */
+  static findAutoSkill(): SkillId | null {
+    const role = StorageManager.findOnlineRole();
+    if (!role) return null;
+    let found: SkillId | null = null;
+    skills.forEach((config, skillId) => {
+      if (found || !config.canAuto || !role.skills[skillId]) return;
+      found = skillId;
+    });
+    return found;
+  }
+
+  /**
+   * 尝试释放一次技能
+   * @param skillId 技能编号
+   * @param fromAutoBattle 是否来自自动战斗（AutoBattle 调用）：失败不弹提示，也不会再委托自动接战
+   */
+  private static tryCast(skillId: SkillId, fromAutoBattle: boolean): boolean {
     const context = this.contextProvider?.();
     const config = skills.get(skillId);
     if (!context || !config) return false;
@@ -32,12 +64,12 @@ export default class SkillManager {
     // 未学习不可释放
     const level = context.role.skills[skillId];
     if (!level) {
-      GameUiHelper.createTip("skill_not_learned_tip", `尚未学习 ${config.label}`);
+      if (!fromAutoBattle) GameUiHelper.createTip("skill_not_learned_tip", `尚未学习 ${config.label}`);
       return false;
     }
     // 冷却校验
     if (this.inCooldown(skillId)) {
-      GameUiHelper.createTip("skill_cooldown_tip", `${config.label} 冷却中`);
+      if (!fromAutoBattle) GameUiHelper.createTip("skill_cooldown_tip", `${config.label} 冷却中`);
       return false;
     }
     // 单体技能：无选中目标时自动选取施法距离内最近的存活怪物
@@ -45,12 +77,15 @@ export default class SkillManager {
     if (config.targetType === SkillTargetType.SINGLE) {
       if (!target || !isValid(target)) target = context.monsters.getNearestMonster(context.caster.getWorldPosition(), config.distance);
       if (!target) {
-        GameUiHelper.createTip("skill_no_target_tip", `${config.label} 无可攻击目标`);
+        // 可自动释放的技能：交给 AutoBattle 自动选最近的怪物并走位到范围内（快速攻击）
+        if (!fromAutoBattle && config.canAuto && AutoBattle.requestSkill(skillId, null)) return true;
+        if (!fromAutoBattle) GameUiHelper.createTip("skill_no_target_tip", `${config.label} 无可攻击目标`);
         return false;
       }
-      // 距离校验（distance <= 0 表示不限制距离）
+      // 距离校验（distance <= 0 表示不限制距离）：超出时同样交给 AutoBattle 走位接近
       if (config.distance > 0 && !canAttackTarget(target, context.caster, config.distance)) {
-        GameUiHelper.createErrorTip("skill_distance_tip", "距离太远，无法攻击！");
+        if (!fromAutoBattle && config.canAuto && AutoBattle.requestSkill(skillId, target)) return true;
+        if (!fromAutoBattle) GameUiHelper.createErrorTip("skill_distance_tip", "距离太远，无法攻击！");
         return false;
       }
     }

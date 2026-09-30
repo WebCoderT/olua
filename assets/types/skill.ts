@@ -124,6 +124,8 @@ export interface SkillConfig {
   push?: SkillPushConfig;
   /** 释放技能方法（入参为技能上下文） */
   onClick: (context: SkillContext) => void;
+  /** 是否可自动释放 */
+  canAuto: boolean;
 }
 
 /** 技能ID */

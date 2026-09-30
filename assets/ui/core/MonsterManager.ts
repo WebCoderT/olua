@@ -105,12 +105,16 @@ export default class MonsterManager {
     return null;
   }
 
-  /** 获取以 position 为中心、distance 范围内最近的存活怪物节点（distance <= 0 不限距离，技能自动选目标用） */
-  static getNearestMonster(position: Vec3, distance: number): Node | null {
+  /**
+   * 获取以 position 为中心、distance 范围内最近的存活怪物节点
+   * （distance <= 0 不限距离；exclude 用于自动战斗跳过被拉黑的目标）
+   */
+  static getNearestMonster(position: Vec3, distance: number, exclude?: Set<Node>): Node | null {
     let nearest: Node | null = null;
     let nearestDistance = distance > 0 ? distance : Infinity;
     this.monsterMap.forEach((monster, node) => {
       if (!isValid(node) || monster.hp <= 0) return;
+      if (exclude?.has(node)) return;
       const current = Vec3.distance(position, node.getWorldPosition());
       if (current <= nearestDistance) {
         nearestDistance = current;
@@ -127,13 +131,15 @@ export default class MonsterManager {
 
   /**
    * 取所有存活怪物的碰撞盒（世界坐标）
-   * 供角色移动做阻挡预测（见 utils/physics/MoveBlocking）：
-   * 怪与角色的碰撞盒都是传感器，物理引擎不产生碰撞响应，不能穿过怪物这一条由这里手动保证
+   * 供角色移动做阻挡预测（见 utils/physics/MoveBlocking）：怪与角色的碰撞盒都是传感器，
+   * 物理引擎不产生碰撞响应，不能穿过怪物这一条由这里手动保证
+   * 自动战斗寻路也用它当动态障碍（exclude 传当前追击目标，让路径能通到目标身边）
    */
-  static getBlockingRects(): Rect[] {
+  static getBlockingRects(exclude?: Node): Rect[] {
     const rects: Rect[] = [];
     this.monsterMap.forEach((monster, node) => {
       if (!isValid(node) || monster.hp <= 0) return;
+      if (node === exclude) return;
       const rect = getWorldColliderRect(node);
       if (rect) rects.push(rect);
     });

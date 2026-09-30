@@ -11,6 +11,7 @@ import BottomNavBar from "./BottomNavBar";
 import RoleExpBar from "./RoleExpBar";
 import RoleHpOrb from "./RoleHpOrb";
 import ShortcutKeyBar from "./ShortcutKeyBar";
+import AutoFightButton from "./AutoFightButton";
 
 /**
  * 底部栏组件（底部 HUD 容器）
@@ -33,6 +34,8 @@ export default class BottomBar extends Node {
   private hpOrb: RoleHpOrb;
   /** 技能快捷键栏 */
   private shortcutKeyBar: ShortcutKeyBar;
+  /** 自动挂机开关按钮 */
+  private autoFightButton: AutoFightButton;
 
   constructor(role: Role) {
     super("bottom_bar");
@@ -50,6 +53,9 @@ export default class BottomBar extends Node {
     this.addChild(this.hpOrb);
     this.shortcutKeyBar = new ShortcutKeyBar(role);
     this.addChild(this.shortcutKeyBar);
+    // 自动挂机开关（图标随挂机状态切换，状态由 AutoBattle 回调同步）
+    this.autoFightButton = new AutoFightButton();
+    this.addChild(this.autoFightButton);
   }
 
   /** 底部功能按钮配置（依赖本组件持有的弹窗实例） */

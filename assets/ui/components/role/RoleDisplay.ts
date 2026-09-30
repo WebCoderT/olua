@@ -6,7 +6,7 @@ import { SkillContextInput } from "../../../types/skill";
 import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { canAttackTarget, getDirectionToTarget } from "../../utils/battle/BattleMath";
+import { canAttackTarget, getDirectionByVector, getDirectionToTarget } from "../../utils/battle/BattleMath";
 import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
@@ -33,6 +33,10 @@ export default class RoleDisplay extends Node {
   private action: ACTION = ACTION.STAND;
   /** 攻击目标 */
   private target: Node | null = null;
+  /** 自动移动方向（自动战斗写入；键盘输入优先，键盘无输入时生效） */
+  private autoMove: Vec2 | null = null;
+  /** 自动移动是否使用跑步速度 */
+  private autoRun = false;
 
   /** 当前角色数据 */
   private role: Role;
@@ -158,11 +162,24 @@ export default class RoleDisplay extends Node {
       rigidBody.linearVelocity = Vec2.ZERO;
       return;
     }
-    const speed = this.keyboardInput?.isSprinting ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
-    const moveVec = this.keyboardInput?.moveDirection ?? new Vec2();
-    // 直接赋值速度，有输入就动，没输入就立刻清零，解决漂移
+    // 键盘输入优先（玩家随时接管），没有键盘输入时才走自动战斗写入的自动移动方向
+    const keyboard = this.keyboardInput;
+    const keyboardVector = keyboard?.moveDirection ?? new Vec2();
+    let speed: number;
+    let moveVector: Vec2;
+    if (keyboard && keyboardVector.lengthSqr() > 0) {
+      speed = keyboard.isSprinting ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+      moveVector = keyboardVector;
+    } else if (this.autoMove && this.autoMove.lengthSqr() > 0) {
+      speed = this.autoRun ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+      moveVector = this.autoMove;
+    } else {
+      // 直接赋值速度清零，解决漂移
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
     // 位移前先做阻挡预测：撞上怪物只取消这一步（怪物不会因此被推动，角色也不会被怪物挤开）
-    const velocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
+    const velocity = new Vec2(moveVector.x * speed, moveVector.y * speed);
     rigidBody.linearVelocity = resolveBlockedVelocity(this as Node, velocity, MonsterManager.getBlockingRects());
     LayerManager.move(this.getWorldPosition());
   }
@@ -234,6 +251,39 @@ export default class RoleDisplay extends Node {
   setTarget(target: Node | null) {
     this.target = target;
     RoleUIManager.selectMonster(target);
+  }
+
+  /** 当前选中的攻击目标（自动战斗同步选中状态用） */
+  getTarget(): Node | null {
+    return this.target;
+  }
+
+  /** 是否有移动键按下（自动战斗用：玩家手动移动优先于自动走位） */
+  isMovementKeyDown(): boolean {
+    return !!this.keyboardInput?.isMoving;
+  }
+
+  /**
+   * 设置自动移动（自动战斗走位用，见 core/AutoBattle；传 null 表示停止并按键盘状态恢复动作）
+   * 键盘输入优先于自动移动（玩家随时可接管）；攻击锁期间只记录方向，解锁后由下一帧自动战斗接管
+   */
+  setAutoMove(direction: Vec2 | null, run: boolean = false) {
+    this.autoMove = direction;
+    this.autoRun = run;
+    if (this.attacking) return;
+    if (direction && direction.lengthSqr() > 0) {
+      const action = run ? ACTION.RUN : ACTION.WALK;
+      const targetDirection = getDirectionByVector(direction);
+      // 动作与朝向都没变时不重复触发动画：crossFade 每帧调用会不断把动画拉回开头
+      if (this.action === action && this.direction === targetDirection) return;
+      this.action = action;
+      this.direction = targetDirection;
+      this.updateAnimationPlay();
+      return;
+    }
+    // 停止自动移动：按键盘当前状态恢复动作与朝向（无键回待机）
+    this.updateAction();
+    this.updateDirection();
   }
 
   /** 攻击目标 */

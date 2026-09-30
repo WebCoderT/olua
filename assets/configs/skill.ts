@@ -41,6 +41,7 @@ skills.set("1000", {
   ],
   onClick: skill_1000,
   action: ACTION.ATTACK_NEAR,
+  canAuto: true,
 });
 
 skills.set("1001", {
@@ -70,6 +71,7 @@ skills.set("1001", {
   action: ACTION.ATTACK_SKILL_1,
   // 示例：命中后把目标击退 120 像素（技能击退是场上唯一能推动怪物的途径，删掉这行就不击退）
   push: { distance: 120 },
+  canAuto: false,
 });
 
 skills.set("1002", {
@@ -97,6 +99,7 @@ skills.set("1002", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1003", {
@@ -124,6 +127,7 @@ skills.set("1003", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1004", {
@@ -151,6 +155,7 @@ skills.set("1004", {
   distance: 100000,
   onClick: skill_1000,
   action: ACTION.ATTACK_FAR,
+  canAuto: false,
 });
 
 skills.set("1005", {
@@ -178,6 +183,7 @@ skills.set("1005", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1006", {
@@ -205,6 +211,7 @@ skills.set("1006", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1007", {
@@ -232,6 +239,7 @@ skills.set("1007", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1008", {
@@ -259,6 +267,7 @@ skills.set("1008", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1009", {
@@ -286,6 +295,7 @@ skills.set("1009", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1010", {
@@ -313,6 +323,7 @@ skills.set("1010", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
 
 skills.set("1011", {
@@ -340,4 +351,5 @@ skills.set("1011", {
   distance: 0,
   onClick: skill_1000,
   action: ACTION.STAND,
+  canAuto: false,
 });
