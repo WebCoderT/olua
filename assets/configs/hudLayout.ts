@@ -118,8 +118,8 @@ export const bottomBarLayout = {
   mpText: { position: new Vec2(421, -39), size: new Size(120, 10), fontSize: 12 },
   /** 圆形魔法球（与血球同款式同尺寸，镜像到底部栏右侧） */
   mpOrb: { position: new Vec2(420, 12.5), size: new Size(90, 90) },
-  /** 快捷键栏（横向布局容器） */
-  shortcutBar: { spacing: 6, position: new Vec2(-270, -9), size: new Size(178, 40) },
+  /** 快捷键栏（横向布局容器，6 格 = 6×40 + 5×6 = 270；居中在血球与功能按键区之间的空档） */
+  shortcutBar: { spacing: 6, position: new Vec2(-210, -9), size: new Size(270, 40) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {
     size: new Size(40, 40),

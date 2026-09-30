@@ -65,6 +65,8 @@ export const initialShortcutKeys: NeedSetShortcutKeyConfig[] = [
   { label: "2", key: 50, skillId: null },
   { label: "3", key: 51, skillId: null },
   { label: "4", key: 52, skillId: null },
+  { label: "5", key: 53, skillId: null },
+  { label: "6", key: 54, skillId: null },
 ];
 
 /** 角色默认速度倍率 */

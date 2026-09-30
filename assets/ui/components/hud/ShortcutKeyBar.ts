@@ -14,12 +14,14 @@ import ShortcutKeySlot from "./ShortcutKeySlot";
  * 按角色快捷键配置逐格生成快捷键槽，技能触发统一走 SkillManager（施法上下文由 RoleDisplay 提供）
  */
 export default class ShortcutKeyBar extends Node {
-  /** 各快捷键槽（按按键码索引） */
+  /** 各快捷键槽（按按键码索引，键位数量需与 types/role.ShortcutKeys 一致） */
   private slots: { [key in ShortcutKeys]: ShortcutKeySlot | null } = {
     49: null,
     50: null,
     51: null,
     52: null,
+    53: null,
+    54: null,
   };
 
   constructor(role: Role) {

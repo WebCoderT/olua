@@ -20,8 +20,9 @@ export default class SkillShortcutSettingDialog {
   /** 打开：为指定技能选择快捷键 */
   open(role: Role, skillId: SkillId) {
     this.close();
-    const dialog = GameUiHelper.createDialog(DIALOG_NAME, "设置快捷键", new Vec2(), new Size(300, 200));
-    const content = GameUiHelper.createRow("shortcut_key_options", 10, new Vec2(), new Size(230, 50));
+    // 尺寸按「快捷键数量」留足：每个选项按钮 50 宽 + 间距 10（见 GameUiHelper.createSmallButtion）
+    const dialog = GameUiHelper.createDialog(DIALOG_NAME, "设置快捷键", new Vec2(), new Size(370, 200));
+    const content = GameUiHelper.createRow("shortcut_key_options", 10, new Vec2(), new Size(350, 50));
     role.shortcutKeys.forEach((config, index) => {
       const button = GameUiHelper.createSmallButtion(`shortcut_key_option_${config.label}`, config.label, new Vec2());
       content.addChild(button);

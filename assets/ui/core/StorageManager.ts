@@ -3,13 +3,16 @@ import RoleUIManager from "./RoleUIManager";
 import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
+import { initialShortcutKeys } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
+import { NeedSetShortcutKeyConfig } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import GameHelper from "./GameHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
+import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
 
 /**
@@ -55,10 +58,14 @@ export default class StorageManager {
     sys.localStorage.setItem("selectedRole", id);
   }
 
-  /** 获取当前在线角色 */
+  /** 获取当前在线角色（每次读取都会补齐旧存档缺失的字段，见 ensureRoleDefaults） */
   static findOnlineRole() {
     const selectedRole = sys.localStorage.getItem("selectedRole");
-    return this.getRoles().find((i) => i.id === selectedRole);
+    const role = this.getRoles().find((i) => i.id === selectedRole);
+    // 存储里是 JSON.parse 出来的普通对象（非 Role 实例），字段可能缺后续版本新增的部分，
+    // 统一在这里补齐，避免各调用方（快捷键栏/快捷键设置/落库）各自处理
+    if (role) this.ensureRoleDefaults(role);
+    return role;
   }
 
   /** 更新在线角色 */
@@ -70,6 +77,22 @@ export default class StorageManager {
       return i;
     });
     this.setRoles(roles);
+  }
+
+  /**
+   * 旧存档补齐（后续版本新增角色字段/新增配置项时都在这里补，保证读到的角色对象字段完整）
+   * 调用时机：进入游戏取得在线角色之后（见 ui/Game.start）
+   * - 魔法值：mp / maxMp / mpRecoverAccumulator（默认值规则见 utils/battle/MpHelper）
+   * - 快捷键：按 configs/role.initialShortcutKeys 的按键码对齐（保留玩家已绑定的技能，补齐新增的按键槽，
+   *   例如快捷键由 4 个扩展到 6 个后，旧存档会补出 5/6 两格，否则快捷键栏只显示旧有的 4 格）
+   */
+  static ensureRoleDefaults(role: Role) {
+    MpHelper.ensureDefaults(role);
+    const saved: NeedSetShortcutKeyConfig[] = Array.isArray(role.shortcutKeys) ? role.shortcutKeys : [];
+    role.shortcutKeys = initialShortcutKeys.map((config) => {
+      const exist = saved.find((i) => i.key === config.key);
+      return exist ? { ...config, ...exist } : { ...config };
+    });
   }
 
   /** 角色获得经验(当前在线角色) */

@@ -42,7 +42,7 @@ export interface RoleOccupationInfo {
 }
 
 /** 快捷键（keyCode） */
-export type ShortcutKeys = 49 | 50 | 51 | 52;
+export type ShortcutKeys = 49 | 50 | 51 | 52 | 53 | 54;
 
 /** 需要配置的快捷键接口 */
 export interface NeedSetShortcutKeyConfig {
