@@ -33,8 +33,11 @@ export function getMapPointPositionOnWorld(position: Vec3, map: Node) {
 
 /**
  * 获取地图上点的坐标（Tiled 对象坐标 -> 地图节点本地坐标）
- * Tiled 的对象坐标原点在地图左上角且 y 轴向下，而地图节点本地坐标以地图中心为原点且 y 轴向上，
- * 因此 x 减去地图半宽、y 用「地图高度 - y」翻转（引擎解析对象组内部同样是 y = 地图高 - y）
+ * Tiled 的对象坐标原点在地图左上角且 y 轴向下，地图节点本地坐标以地图中心为原点且 y 轴向上，
+ * 故 x 减去地图半宽、y 用「地图半高 - y」翻转。
+ * 入参必须是 **Tiled 原始坐标**：引擎 getObjects() 给出的 y 已被 TiledObjectGroup._init
+ * 翻转过一次（y = 地图像素高 - y），直接用会再翻一次造成南北镜像，
+ * 所以读取对象组一律走 TiledObjects（它取的是 object.offset 里的原始值）
  */
 export function getMapPointPosition(position: Vec3, map: Node) {
   const { width, height } = getMapPixelSize(map);

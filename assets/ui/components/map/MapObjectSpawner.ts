@@ -12,17 +12,18 @@ const NPC_GROUP_NAME = "npc";
 /** 兼容对象组名称：早期地图把 NPC 与复活点画在 objects 组 */
 const LEGACY_OBJECT_GROUP_NAME = "objects";
 
-/** 自定义属性 type 取值：NPC */
-const OBJECT_TYPE_NPC = "npc";
+/** 对象类取值：NPC */
+const OBJECT_CLASS_NPC = "npc";
 
-/** 自定义属性 type 取值：复活点 */
-const OBJECT_TYPE_REVIVE = "revive";
+/** 对象类取值：复活点 */
+const OBJECT_CLASS_REVIVE = "revive";
 
 /**
  * 地图对象生成器
- * 读取 TiledMap 的 npc 对象组，把其中每个点位按自定义属性 type 分流：
- * type=npc 生成 NPC 节点（挂地图层、带静态碰撞体、绑定点击事件），
- * type=revive 记录为复活点坐标供 GameMap 使用（不生成节点）。
+ * 读取 TiledMap 的 npc 对象组，把其中每个点位按**对象类**（Tiled 的 Class 字段，由
+ * TiledObjects 从 TMX 原文读出）分流：
+ * 类=npc 生成 NPC 节点（挂地图层、带静态碰撞体、绑定点击事件），
+ * 类=revive 记录为复活点坐标供 GameMap 使用（不生成节点）。
  * 点位坐标（Tiled 左上角原点、y 轴向下）由 MapPointMath 统一换算，本类不自行翻转 y
  * 地图坐标换算依赖地图节点本身，因此构造时注入地图节点
  */
@@ -49,17 +50,22 @@ export default class MapObjectSpawner {
     return this.revivePoint;
   }
 
-  /** 按点位用途分流：复活点只记录坐标，NPC 生成节点 */
+  /** 按对象类分流：复活点只记录坐标，NPC 生成节点 */
   private spawnObject(object: TiledObject) {
-    const type = `${object.properties.type ?? ""}`;
-    // 复活点：以自定义属性 type=revive 标记；早期地图用对象名 revive 标记的同样识别
-    if (type === OBJECT_TYPE_REVIVE || object.name === OBJECT_TYPE_REVIVE) {
+    // 复活点：以对象类 revive 标记（早期地图用对象名 revive 标记，同样识别）
+    if (object.objectClass === OBJECT_CLASS_REVIVE || object.name === OBJECT_CLASS_REVIVE) {
       this.revivePoint = new Vec3(object.x, object.y);
       return;
     }
-    if (type !== OBJECT_TYPE_NPC) return;
+    if (object.objectClass !== OBJECT_CLASS_NPC) {
+      console.warn(`[MapObjectSpawner] 点位「${object.name}」的对象类不是 npc/revive，已跳过`);
+      return;
+    }
     const id = `${object.properties.id ?? ""}`;
-    if (!id) return;
+    if (!id) {
+      console.warn(`[MapObjectSpawner] NPC 点位「${object.name}」缺少 id 属性，已跳过`);
+      return;
+    }
     this.spawnNpc(id, new Vec3(object.x, object.y));
   }
 
