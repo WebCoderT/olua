@@ -1,12 +1,14 @@
-import { Color, Label, Node, Size, UITransform, Vec2 } from "cc";
+import { Color, Label, Node, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
+import { hudImages, roleInfoBarLayout } from "../../../configs/hudLayout";
 
 /**
  * 角色信息栏组件（左上角常驻 HUD）
  * 展示：背景框 + 头像 + 名称 + 等级 + 金币/绑定金币/银币 + 战斗力 + VIP 入口
  * 由通用零件（背景/头像/货币/战斗力）拼装而成，本组件负责拼装与数据刷新
+ * 位置与尺寸全部来自 configs/hudLayout（各子件坐标以信息栏中心为原点）
  */
 export default class RoleInfoBar extends Node {
   /** 名称文本 */
@@ -24,34 +26,36 @@ export default class RoleInfoBar extends Node {
 
   constructor(role: Role) {
     super("role_info_bar");
+    const layout = roleInfoBarLayout;
     const isSelf = role.relationShip === RELATION_SHIP.SELF;
-    this.addComponent(UITransform).setContentSize(300, 70);
-    this.setPosition(isSelf ? -648 : 0, isSelf ? 324 : 0);
+    this.addComponent(UITransform).setContentSize(layout.size);
+    const position = isSelf ? layout.selfPosition : layout.otherPosition;
+    this.setPosition(position.x, position.y, 0);
     // 背景框
-    this.addChild(GameUiHelper.createImage("role_info_background", "common/user-info-frame", new Vec2(), new Size(300, 70)));
+    this.addChild(GameUiHelper.createImage("role_info_background", hudImages.roleInfoBackground, new Vec2(), layout.backgroundSize));
     // 名称与等级
-    this.nameLabel = GameUiHelper.createText("role_name", role.name, 16, new Vec2(17, 24), new Size(190, 24), Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
+    this.nameLabel = GameUiHelper.createText("role_name", role.name, layout.name.fontSize, layout.name.position, layout.name.size, Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
     this.addChild(this.nameLabel.node);
-    this.levelLabel = GameUiHelper.createText("role_level", role.level.toString(), 16, new Vec2(-138, -17.5), new Size(24, 24)).getComponent(Label);
+    this.levelLabel = GameUiHelper.createText("role_level", role.level.toString(), layout.level.fontSize, layout.level.position, layout.level.size).getComponent(Label);
     this.addChild(this.levelLabel.node);
     // 头像
-    this.addChild(GameUiHelper.createAvatarPortrait(role, new Vec2(-109.5, 7.5)));
+    this.addChild(GameUiHelper.createAvatarPortrait(role, layout.portrait.position, layout.portrait.size));
     // 货币区（createCurrencyItem 为通用零件，其他界面可直接复用）
-    const gold = GameUiHelper.createCurrencyItem("money/gold", role.gold, new Vec2(-68, -20));
+    const gold = GameUiHelper.createCurrencyItem(hudImages.gold, role.gold, layout.gold.position);
     this.goldCountLabel = gold.valueLabel;
     this.addChild(gold.node);
-    const bindGold = GameUiHelper.createCurrencyItem("money/bind-gold", role.bindGold, new Vec2(-22, -20));
+    const bindGold = GameUiHelper.createCurrencyItem(hudImages.bindGold, role.bindGold, layout.bindGold.position);
     this.bindGoldCountLabel = bindGold.valueLabel;
     this.addChild(bindGold.node);
-    const silver = GameUiHelper.createCurrencyItem("money/silver", role.silver, new Vec2(24, -20));
+    const silver = GameUiHelper.createCurrencyItem(hudImages.silver, role.silver, layout.silver.position);
     this.silverCountLabel = silver.valueLabel;
     this.addChild(silver.node);
     // 战斗力
-    const combat = GameUiHelper.createCombatPower(role, new Vec2(-44, 2));
+    const combat = GameUiHelper.createCombatPower(role, layout.combat.position);
     this.combatLabel = combat.combatLabel;
     this.addChild(combat.node);
     // VIP 按钮
-    this.addChild(GameUiHelper.createVipButton(new Vec2(110, 30)));
+    this.addChild(GameUiHelper.createVipButton(layout.vip.position, layout.vip.size));
   }
 
   /** 数据变更后刷新显示 */

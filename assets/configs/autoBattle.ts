@@ -31,17 +31,3 @@ export const autoBattle = {
   targetSearchInterval: 500,
 };
 
-/**
- * 自动战斗提示动画（resources/tips 下的 TexturePacker 图集帧动画，屏幕中间循环播放）
- * 两个提示互相独立、允许同时出现；均挂在特效层（EffectLayer）
- */
-export const autoBattleTips = {
-  /** 自动战斗中（自动挂机开启期间显示）图集资源路径 */
-  attackAtlas: "tips/auto_attack@0",
-  /** 自动寻路中（自动战斗走位期间显示）图集资源路径 */
-  pathAtlas: "tips/auto_path@0",
-  /** 每秒帧数（帧率），15 帧 20fps 即一轮约 0.75 秒 */
-  frameRate: 20,
-  /** 两个提示同时显示时，寻路提示相对屏幕中心的纵向偏移（像素，负值向下，给战斗提示让位） */
-  pathTipOffsetY: -100,
-};

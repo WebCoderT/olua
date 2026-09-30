@@ -41,7 +41,15 @@ import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good"
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
-import { smallMapConfig } from "../../configs/smallMap";
+import {
+  avatarImage,
+  bottomBarLayout,
+  hudImages,
+  monsterInfoPanelLayout,
+  roleInfoBarLayout,
+  smallMapLayout,
+  tipsLayout,
+} from "../../configs/hudLayout";
 
 //#region 类型定义
 
@@ -207,25 +215,25 @@ export default class GameUiHelper {
    */
   static createCombatPower(role: Role, position: Vec2 = new Vec2()) {
     const node = UiHelper.createNode("combat_power", position);
-    node.addChild(UiHelper.createSprite("combat_icon", "common/combat", new Vec2(), new Size(75, 41)));
+    node.addChild(UiHelper.createSprite("combat_icon", hudImages.combatIcon, new Vec2(), new Size(75, 41)));
     const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(40.5, 2), new Size(200, 30), Label.HorizontalAlign.LEFT);
     labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const combatLabel = labelNode.getComponent(Label);
-    resources.load("fonts/combat", LabelAtlas, (error, atlas) => {
+    resources.load(hudImages.combatFont, LabelAtlas, (error, atlas) => {
       if (!error && atlas && combatLabel.isValid) combatLabel.font = atlas;
     });
     node.addChild(labelNode);
     return { node, combatLabel };
   }
 
-  /** 创建角色头像（按职业与性别取图） */
-  static createAvatarPortrait(role: Role, position: Vec2 = new Vec2(), size: Size = new Size(51, 60)) {
-    return UiHelper.createSprite(`role_avatar_${role.occupation}_${role.sex}`, `avatars/${role.occupation}-${role.sex}`, position, size);
+  /** 创建角色头像（按职业与性别取图，尺寸见 hudLayout.roleInfoBar.portrait） */
+  static createAvatarPortrait(role: Role, position: Vec2 = new Vec2(), size: Size = roleInfoBarLayout.portrait.size) {
+    return UiHelper.createSprite(`role_avatar_${role.occupation}_${role.sex}`, avatarImage(role.occupation, role.sex), position, size);
   }
 
-  /** 创建 VIP 按钮 */
-  static createVipButton(position: Vec2 = new Vec2()) {
-    const vipNode = UiHelper.createSprite("vip_button", "money/vip", position, new Size(75, 25));
+  /** 创建 VIP 按钮（尺寸见 hudLayout.roleInfoBar.vip） */
+  static createVipButton(position: Vec2 = new Vec2(), size: Size = roleInfoBarLayout.vip.size) {
+    const vipNode = UiHelper.createSprite("vip_button", hudImages.vip, position, size);
     vipNode.addComponent(Button);
     return vipNode;
   }
@@ -312,15 +320,16 @@ export default class GameUiHelper {
    * @returns 该节点的 Sprite 组件
    */
   static applyBottomNavBarButtonStyle(node: Node, button: BottomNavBarButton, role: Role) {
+    const layout = bottomBarLayout.navButton;
     const uiTransform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
-    uiTransform.setContentSize(40, 40);
+    uiTransform.setContentSize(layout.size);
     const buttonComponent = node.getComponent(Button) ?? node.addComponent(Button);
     buttonComponent.transition = Button.Transition.SCALE;
     const sprite = node.getComponent(Sprite) ?? node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     sprite.trim = false;
     this.updateNodeIcon(node, button.icon);
-    node.addChild(UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, 10, new Vec2(15, -15), new Size(20, 20)));
+    node.addChild(UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, layout.key.fontSize, layout.key.position, layout.key.size));
     // 判断是否解锁
     if (button.openLevel > role.level) sprite.grayscale = true;
     return sprite;
@@ -328,19 +337,20 @@ export default class GameUiHelper {
 
   /**
    * 为已有节点施加自动挂机开关按钮样式（组件自身即按钮时使用）
-   * 圆形图标随挂机状态切换（关闭=收剑 / 开启=举剑，资源在 main 目录，切换由组件调 updateNodeIcon），
-   * 位置在底部栏中段（快捷键栏与功能按键区之间的空档），图标下方带「挂机」文字
+   * 圆形图标随挂机状态切换（关闭=收剑 / 开启=举剑），位置在底部栏中段（快捷键栏与功能按键区之间的空档），
+   * 图标下方带「挂机」文字；图标资源见 hudImages.autoFightOff / autoFightOn，切换由组件调 updateNodeIcon
    * @param node 目标节点
    */
   static applyAutoFightButtonStyle(node: Node) {
+    const layout = bottomBarLayout.autoFight;
     const uiTransform = node.addComponent(UITransform);
-    uiTransform.setContentSize(44, 44);
-    node.setPosition(-338, 62);
+    uiTransform.setContentSize(layout.size);
+    node.setPosition(layout.position.x, layout.position.y, 0);
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     sprite.trim = false;
-    this.updateNodeIcon(node, "main/auto_fight_close");
-    node.addChild(UiHelper.createLabel("auto_fight_label", "挂机", Color.WHITE, 10, new Vec2(0, -14), new Size(44, 12)));
+    this.updateNodeIcon(node, hudImages.autoFightOff);
+    node.addChild(UiHelper.createLabel("auto_fight_label", layout.label.text, Color.WHITE, layout.label.fontSize, layout.label.position, layout.label.size));
     return sprite;
   }
 
@@ -357,12 +367,12 @@ export default class GameUiHelper {
    * @return 经验条
    */
   static createExpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    return this.createBar(name, progress, "", "bottom-nav-bar/exp", position, size);
+    return this.createBar(name, progress, "", hudImages.expBarFill, position, size);
   }
 
-  /** 创建血条 */
+  /** 创建血条（底图与填充图见 hudImages.hpBarBackground / hpBarFill） */
   static createHpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    return this.createBar(name, progress, "common/bg_gray", "common/bg_white", position, size, Color.RED);
+    return this.createBar(name, progress, hudImages.hpBarBackground, hudImages.hpBarFill, position, size, Color.RED);
   }
 
   /**
@@ -413,13 +423,13 @@ export default class GameUiHelper {
    * @param error 错误信息
    */
   static createErrorTip(name: string, error: string) {
-    const errorTip = UiHelper.createErrorTip(name, error);
+    const errorTip = UiHelper.createTipLabel(name, error, tipsLayout.errorColor, tipsLayout.fontSize, tipsLayout.size);
     const uiOpacity = errorTip.addComponent(UIOpacity);
     tween(errorTip)
-      .to(0.3, { position: new Vec3(0, 40, 0) })
+      .to(tipsLayout.errorMoveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
       .start();
     tween(uiOpacity)
-      .to(1.5, { opacity: 0 })
+      .to(tipsLayout.errorFadeDuration, { opacity: 0 })
       .call(() => {
         errorTip.destroy();
       })
@@ -431,13 +441,13 @@ export default class GameUiHelper {
    * 创建提示
    */
   static createTip(name: string, text: string) {
-    const errorTip = UiHelper.createTip(name, text);
+    const errorTip = UiHelper.createTipLabel(name, text, tipsLayout.messageColor, tipsLayout.fontSize, tipsLayout.size);
     const uiOpacity = errorTip.addComponent(UIOpacity);
     tween(errorTip)
-      .to(0.5, { position: new Vec3(0, 40, 0) })
+      .to(tipsLayout.messageMoveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
       .start();
     tween(uiOpacity)
-      .to(3, { opacity: 0 })
+      .to(tipsLayout.messageFadeDuration, { opacity: 0 })
       .call(() => {
         errorTip.destroy();
       })
@@ -447,15 +457,16 @@ export default class GameUiHelper {
 
   /**
    * 创建自动战斗提示动画节点（"自动战斗中/自动寻路中"，屏幕中间循环播放的图集帧动画）
-   * 帧来自 TexturePacker 图集且各帧原始尺寸一致（800×800，内容居中），
-   * sizeMode 用原始尺寸 + trim，保证逐帧切换时内容位置稳定不抖动
+   * 帧来自 TexturePacker 图集且各帧源画布尺寸一致（800×800，内容居中），
+   * 用 tipsLayout.autoTipSize 的自定义尺寸 + 不裁剪：每帧都按源画布等比缩放到该尺寸，
+   * 逐帧内容位置与缩放比稳定不抖动（若裁剪，各帧裁剪矩形不同会被拉伸成不同缩放比而抖动）
    * 节点默认隐藏，帧动画由调用方通过 AnimationHelper.playLoopWithFrames 装载
    */
   static createAutoBattleTip(name: string): { node: Node; animate: Animation } {
-    const node = UiHelper.createSprite(name, "");
+    const node = UiHelper.createSprite(name, "", new Vec2(), tipsLayout.autoTipSize);
     const sprite = node.getComponent(Sprite)!;
-    sprite.sizeMode = Sprite.SizeMode.RAW;
-    sprite.trim = true;
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = false;
     const animate = node.addComponent(Animation);
     node.active = false;
     return { node, animate };
@@ -857,13 +868,14 @@ export default class GameUiHelper {
 
   //#region 快捷键图标
 
-  /** 为快捷键节点附加图标样式与按键名，返回冷却倒计时文字引用（居中，默认隐藏由组件控制显隐） */
+  /** 为快捷键节点附加图标样式与按键名，返回冷却倒计时文字引用（几何见 hudLayout.bottomBar.shortcutSlot） */
   static applyShortcutKeyStyle(node: Node, label: string) {
+    const layout = bottomBarLayout.shortcutSlot;
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    node.getComponent(UITransform).setContentSize(40, 40);
-    node.addChild(UiHelper.createLabel("shortcut_key_label", label, Color.WHITE, 10, new Vec2(20, -15), new Size(20, 10)));
-    const cooldownNode = UiHelper.createLabel("shortcut_key_cooldown", "", Color.WHITE, 16, new Vec2(0, 0), new Size(40, 20));
+    node.getComponent(UITransform).setContentSize(layout.size);
+    node.addChild(UiHelper.createLabel("shortcut_key_label", label, Color.WHITE, layout.key.fontSize, layout.key.position, layout.key.size));
+    const cooldownNode = UiHelper.createLabel("shortcut_key_cooldown", "", Color.WHITE, layout.cooldown.fontSize, layout.cooldown.position, layout.cooldown.size);
     cooldownNode.active = false;
     node.addChild(cooldownNode);
     return { cooldownLabel: cooldownNode.getComponent(Label) };
@@ -882,26 +894,27 @@ export default class GameUiHelper {
 
   //#region 底部栏
 
-  /** 为已有节点施加底部栏主体样式（尺寸、位置与背景），节点由底部栏组件自身充当 */
+  /** 为已有节点施加底部栏主体样式（尺寸、位置与背景见 hudLayout.bottomBar），节点由底部栏组件自身充当 */
   static applyBottomBarBodyStyle(node: Node) {
-    node.addComponent(UITransform).setContentSize(1100, 210);
-    node.setPosition(0, -324);
-    node.addChild(UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(), new Size(1100, 210)));
+    node.addComponent(UITransform).setContentSize(bottomBarLayout.size);
+    node.setPosition(bottomBarLayout.position.x, bottomBarLayout.position.y, 0);
+    node.addChild(UiHelper.createSprite("bottom_nav_bar_background", hudImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
   }
 
-  /** 创建血量文字零件（位置与尺寸由使用方决定） */
-  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = new Size(120, 10)) {
-    return UiHelper.createLabel("hp_text", text, Color.WHITE, 12, position, size);
+  /** 创建血量文字零件（位置与尺寸见 hudLayout.bottomBar.hpText） */
+  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpText.size) {
+    return UiHelper.createLabel("hp_text", text, Color.WHITE, bottomBarLayout.hpText.fontSize, position, size);
   }
 
   /**
    * 创建圆形血量显示零件（底图 + 竖向进度条）
-   * 返回底图节点与其内部的进度条节点，位置由使用方决定
+   * 返回底图节点与其内部的进度条节点，位置与尺寸见 hudLayout.bottomBar.hpOrb
+   * 底图/填充图见 hudImages.hpOrbBase / hpOrbFill
    */
-  static createRoundHpBar(progress: number, position: Vec2 = new Vec2()): { barSprite: Node; hpBar: Node } {
-    const barSprite = UiHelper.createSprite("hp_bar_sprite", "common/max", position, new Size(90, 90));
-    const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), new Size(90, 90));
-    const hpProgress = UiHelper.createSprite("hp_bar_progress", "common/hp", new Vec2(), new Size(90, 90));
+  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size): { barSprite: Node; hpBar: Node } {
+    const barSprite = UiHelper.createSprite("hp_bar_sprite", hudImages.hpOrbBase, position, size);
+    const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), size);
+    const hpProgress = UiHelper.createSprite("hp_bar_progress", hudImages.hpOrbFill, new Vec2(), size);
     hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
     hpProgress.setPosition(0, 0);
     hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
@@ -1065,29 +1078,29 @@ export default class GameUiHelper {
   //#region 怪物信息面板
 
   /**
-   * 为已有节点施加怪物信息面板主体样式（尺寸、位置与背景），节点由面板组件自身充当
-   * 背景使用 common/monster_bg（238 x 71）
+   * 为已有节点施加怪物信息面板主体样式（尺寸、位置与背景见 hudLayout.monsterInfoPanel），节点由面板组件自身充当
+   * 背景资源见 hudImages.monsterInfoBackground
    */
   static applyMonsterInfoBodyStyle(node: Node) {
-    node.addComponent(UITransform).setContentSize(238, 71);
-    node.setPosition(0, 330);
-    node.addChild(UiHelper.createSprite("monster_info_background", "common/monster_bg", new Vec2(), new Size(238, 71)));
+    node.addComponent(UITransform).setContentSize(monsterInfoPanelLayout.size);
+    node.setPosition(monsterInfoPanelLayout.position.x, monsterInfoPanelLayout.position.y, 0);
+    node.addChild(UiHelper.createSprite("monster_info_background", hudImages.monsterInfoBackground, new Vec2(), monsterInfoPanelLayout.size));
   }
 
-  /** 创建怪物头像（左侧，取怪物图标） */
-  static createMonsterAvatar(monster: Monster, position: Vec2 = new Vec2(-75, 0), size: Size = new Size(60, 66)) {
+  /** 创建怪物头像（左侧，取怪物图标；位置与尺寸见 hudLayout.monsterInfoPanel.avatar） */
+  static createMonsterAvatar(monster: Monster, position: Vec2 = monsterInfoPanelLayout.avatar.position, size: Size = monsterInfoPanelLayout.avatar.size) {
     return UiHelper.createSprite("monster_avatar", monster.icon, position, size);
   }
 
   /**
    * 创建怪物技能行（怪物技能图标，未配置技能则不渲染）
    * @param monster 怪物数据
-   * @param position 行位置
+   * @param position 行位置（缺省取 hudLayout.monsterInfoPanel.skillRow）
    * @param slotSize 单个技能图标尺寸
    * @param spacing 图标间距
    */
-  static createMonsterSkillRow(monster: Monster, position: Vec2 = new Vec2(65, -18), slotSize: number = 20, spacing: number = 4) {
-    const row = UiHelper.createNode("monster_skills", position, new Size(238, slotSize));
+  static createMonsterSkillRow(monster: Monster, position: Vec2 = monsterInfoPanelLayout.skillRow.position, slotSize: number = monsterInfoPanelLayout.skillRow.slotSize, spacing: number = monsterInfoPanelLayout.skillRow.spacing) {
+    const row = UiHelper.createNode("monster_skills", position, new Size(monsterInfoPanelLayout.size.width, slotSize));
     const skillIds = monster.skills ?? [];
     skillIds.forEach((skillId, index) => {
       const skillConfig = skills.get(skillId);
@@ -1103,15 +1116,13 @@ export default class GameUiHelper {
   //#region 小地图
 
   /**
-   * 为已有节点施加小地图主体样式（尺寸与屏幕右上角位置），节点由小地图组件自身充当
-   * 尺寸需容纳「左侧功能按钮列 + 名称条/地图/标签/坐标条」整块内容（子节点位置以地图内容区中心为原点），
-   * 位置按设计分辨率贴右上角，与角色信息栏（左上角）留出相同量级的边距
+   * 为已有节点施加小地图主体样式（尺寸与屏幕右上角位置见 hudLayout.smallMap），节点由小地图组件自身充当
+   * 尺寸需容纳「左侧功能按钮列 + 名称条/地图/标签/坐标条」整块内容（子节点位置以地图内容区中心为原点）
    */
   static applySmallMapBodyStyle(node: Node) {
     const uiTransform = node.addComponent(UITransform);
-    uiTransform.setContentSize(280, 250);
-    const screenSize = UiHelper.getScreenSize();
-    node.setPosition(665, 238);
+    uiTransform.setContentSize(smallMapLayout.size);
+    node.setPosition(smallMapLayout.position.x, smallMapLayout.position.y, 0);
   }
 
   /**

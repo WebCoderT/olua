@@ -1,17 +1,14 @@
-import { Color, Size } from "cc";
+import { Color } from "cc";
 
 /**
  * 小地图配置（右上角常驻 HUD）
- * 地图底图暂为空图片（resources/small-map/map-frame 占位），后续按地图替换成对应缩略图；
+ * 地图底图暂为空图片（hudLayout.hudImages.smallMapFrame 占位），后续按地图替换成对应缩略图；
  * 点位在其上实时绘制：角色黑点固定在内容区中心，附近怪物按相对位置显示红点（不显示朝向）
+ * 位置、尺寸与图片来源见 configs/hudLayout.smallMap，本文件只管视野、点位与刷新频率
  */
 export const smallMapConfig = {
-  /** 小地图距屏幕右上角的边距（像素） */
-  screenMargin: 10,
   /** 视野半径（世界像素）：以角色为中心的方形世界范围映射到地图内容区，范围外的怪物不显示 */
   viewRadius: 600,
-  /** 地图内容区尺寸（底图去除边框后的可绘制区域，红点/黑点画在这里） */
-  contentSize: new Size(200, 180),
   /** 角色黑点半径（像素） */
   roleDotRadius: 4,
   /** 怪物红点半径（像素） */

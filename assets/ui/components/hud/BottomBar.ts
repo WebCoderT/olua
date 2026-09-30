@@ -3,6 +3,7 @@ import { Role } from "../../../entities/Role";
 import { SkillId } from "../../../types/skill";
 import { ShortcutKeys } from "../../../types/role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
+import { bottomNavImage } from "../../../configs/hudLayout";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
 import BagDialog from "../dialogs/BagDialog";
@@ -58,18 +59,18 @@ export default class BottomBar extends Node {
     this.addChild(this.autoFightButton);
   }
 
-  /** 底部功能按钮配置（依赖本组件持有的弹窗实例） */
+  /** 底部功能按钮配置（依赖本组件持有的弹窗实例；图标统一走 hudLayout.bottomNavImage 取图） */
   private get bottomNavBarButtons(): BottomNavBarButton[] {
     return [
-      { label: "角色", icon: "bottom-nav-bar/role", openLevel: 1, onClick: () => this.roleInfoDialog.open(), shortcutKey: "C" },
-      { label: "背包", icon: "bottom-nav-bar/bag", openLevel: 1, onClick: () => this.bagDialog.open(), shortcutKey: "B" },
-      { label: "好友", icon: "bottom-nav-bar/friend", openLevel: 10, onClick: () => {}, shortcutKey: "F" },
-      { label: "组队", icon: "bottom-nav-bar/group", openLevel: 10, onClick: () => {}, shortcutKey: "G" },
-      { label: "任务", icon: "bottom-nav-bar/task", openLevel: 1, onClick: () => {}, shortcutKey: "Q" },
-      { label: "技能", icon: "bottom-nav-bar/skill", openLevel: 1, onClick: () => this.skillListDialog.open(), shortcutKey: "K" },
-      { label: "坐骑", icon: "bottom-nav-bar/horse", openLevel: 1, onClick: () => {}, shortcutKey: "T" },
-      { label: "商城", icon: "bottom-nav-bar/mall", openLevel: 1, onClick: () => {}, shortcutKey: "M" },
-      { label: "设置", icon: "bottom-nav-bar/config", openLevel: 1, onClick: () => {}, shortcutKey: "/" },
+      { label: "角色", icon: bottomNavImage("role"), openLevel: 1, onClick: () => this.roleInfoDialog.open(), shortcutKey: "C" },
+      { label: "背包", icon: bottomNavImage("bag"), openLevel: 1, onClick: () => this.bagDialog.open(), shortcutKey: "B" },
+      { label: "好友", icon: bottomNavImage("friend"), openLevel: 10, onClick: () => {}, shortcutKey: "F" },
+      { label: "组队", icon: bottomNavImage("group"), openLevel: 10, onClick: () => {}, shortcutKey: "G" },
+      { label: "任务", icon: bottomNavImage("task"), openLevel: 1, onClick: () => {}, shortcutKey: "Q" },
+      { label: "技能", icon: bottomNavImage("skill"), openLevel: 1, onClick: () => this.skillListDialog.open(), shortcutKey: "K" },
+      { label: "坐骑", icon: bottomNavImage("horse"), openLevel: 1, onClick: () => {}, shortcutKey: "T" },
+      { label: "商城", icon: bottomNavImage("mall"), openLevel: 1, onClick: () => {}, shortcutKey: "M" },
+      { label: "设置", icon: bottomNavImage("config"), openLevel: 1, onClick: () => {}, shortcutKey: "/" },
     ];
   }
 

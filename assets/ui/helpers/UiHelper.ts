@@ -170,21 +170,15 @@ export default class UiHelper {
   }
 
   /**
-   * 创建一个错误提示文本元素
+   * 创建一个提示文本元素（全局提示的尺寸/字号/颜色见 configs/hudLayout.tipsLayout，由 GameUiHelper 使用）
    * @param name 元素名称
    * @param text 提示文本内容
+   * @param color 文本颜色
+   * @param fontSize 字号
+   * @param size 尺寸
    */
-  static createErrorTip(name: string, text: string) {
-    return this.createLabel(name, text, Color.RED, 12, new Vec2(0, 0), new Size(300, 20));
-  }
-
-  /**
-   * 创建一个提示文本元素
-   * @param name 元素名称
-   * @param text 提示文本内容
-   */
-  static createTip(name: string, text: string) {
-    return this.createLabel(name, text, Color.GREEN, 12, new Vec2(0, 0), new Size(300, 20));
+  static createTipLabel(name: string, text: string, color: Color, fontSize: number, size: Size) {
+    return this.createLabel(name, text, color, fontSize, new Vec2(0, 0), size);
   }
 
   /**

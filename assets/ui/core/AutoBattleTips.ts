@@ -1,5 +1,5 @@
 import { Animation, isValid, Node } from "cc";
-import { autoBattleTips } from "../../configs/autoBattle";
+import { hudImages, tipsLayout } from "../../configs/hudLayout";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -15,11 +15,12 @@ interface TipView {
 /**
  * 自动战斗提示（静态控制器）
  * 屏幕中间循环播放的两个图集帧动画提示，互相独立、允许同时出现，均挂在特效层：
- * - 「自动战斗中」（tips/auto_attack@0）：自动挂机开启期间一直显示
- * - 「自动寻路中」（tips/auto_path@0）：自动战斗走位（A* 寻路移动）期间显示
+ * - 「自动战斗中」（hudImages.autoAttackTip）：自动挂机开启期间一直显示
+ * - 「自动寻路中」（hudImages.autoPathTip）：自动战斗走位（A* 寻路移动）期间显示
  * 屏幕中心即相机中心，相机跟随主角，因此把提示节点世界坐标每帧对齐主角世界坐标即可；
- * 两个提示同时显示时寻路提示向下让位（autoBattleTips.pathTipOffsetY），避免文字重叠
- * 由组合根在 Game.update 每帧调用 update；场景卸载时 reset 清引用（节点随特效层销毁）
+ * 两个提示同时显示时寻路提示向下让位（tipsLayout.autoTipPathOffsetY），避免文字重叠
+ * 帧率与让位偏移见 configs/hudLayout.tipsLayout，由组合根在 Game.update 每帧调用 update；
+ * 场景卸载时 reset 清引用（节点随特效层销毁）
  */
 export default class AutoBattleTips {
   /** 自动战斗中提示 */
@@ -46,7 +47,7 @@ export default class AutoBattleTips {
     // 自动寻路中：与战斗提示同显时向下让位，单独显示时也在屏幕正中
     this.setTipVisible(this.pathTip, pathing);
     if (pathing) {
-      const offsetY = hangEnabled ? autoBattleTips.pathTipOffsetY : 0;
+      const offsetY = hangEnabled ? tipsLayout.autoTipPathOffsetY : 0;
       this.pathTip!.node.setWorldPosition(position.x, position.y + offsetY, 0);
     }
   }
@@ -65,8 +66,8 @@ export default class AutoBattleTips {
     if (this.attackTip && isValid(this.attackTip.node) && this.pathTip && isValid(this.pathTip.node)) return true;
     if (this.preparing) return false;
     this.preparing = true;
-    this.attackTip = this.createTip("auto_battle_attack_tip", autoBattleTips.attackAtlas);
-    this.pathTip = this.createTip("auto_battle_path_tip", autoBattleTips.pathAtlas);
+    this.attackTip = this.createTip("auto_battle_attack_tip", hudImages.autoAttackTip);
+    this.pathTip = this.createTip("auto_battle_path_tip", hudImages.autoPathTip);
     return false;
   }
 
@@ -77,7 +78,7 @@ export default class AutoBattleTips {
     AnimationHelper.loadFramesFromAtlas(atlasSrc).then((frames) => {
       // 场景可能已切换：节点失效就不再装载，reset 已把引用清空
       if (!isValid(tip.node)) return;
-      if (frames.length) AnimationHelper.playLoopWithFrames(name, tip.node, frames, autoBattleTips.frameRate);
+      if (frames.length) AnimationHelper.playLoopWithFrames(name, tip.node, frames, tipsLayout.autoTipFrameRate);
       this.preparing = false;
     });
     return tip;

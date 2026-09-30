@@ -1,19 +1,16 @@
-import { Node, Size, Vec2 } from "cc";
+import { Node } from "cc";
 import { Role } from "../../../entities/Role";
 import { ShortcutKeys } from "../../../types/role";
 import { SkillId } from "../../../types/skill";
 import { skills } from "../../../configs/skill";
+import { bottomBarLayout } from "../../../configs/hudLayout";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import SkillManager from "../../core/SkillManager";
 import ShortcutKeySlot from "./ShortcutKeySlot";
 
-/** 快捷键栏布局（底部栏内固定几何） */
-const SHORTCUT_SPACING = 6;
-const SHORTCUT_POSITION = new Vec2(-270, -9);
-const SHORTCUT_SIZE = new Size(178, 40);
-
 /**
  * 技能快捷键栏组件（自身即快捷键行容器）
+ * 布局（间距/位置/尺寸）见 configs/hudLayout.bottomBar.shortcutBar
  * 按角色快捷键配置逐格生成快捷键槽，技能触发统一走 SkillManager（施法上下文由 RoleDisplay 提供）
  */
 export default class ShortcutKeyBar extends Node {
@@ -27,7 +24,8 @@ export default class ShortcutKeyBar extends Node {
 
   constructor(role: Role) {
     super("shortcut_key_bar");
-    GameUiHelper.applyRowStyle(this, SHORTCUT_SPACING, SHORTCUT_POSITION, SHORTCUT_SIZE);
+    const layout = bottomBarLayout.shortcutBar;
+    GameUiHelper.applyRowStyle(this, layout.spacing, layout.position, layout.size);
     role.shortcutKeys.forEach((config) => {
       const skill = skills.get(config.skillId as SkillId);
       const slot = new ShortcutKeySlot(
