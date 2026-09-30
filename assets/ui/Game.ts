@@ -65,10 +65,10 @@ export class Game extends Component {
     this.node.addComponent(ActivityController);
   }
 
-  /** 场景卸载：清理全局监听与动态面板（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
+  /** 场景卸载：清理全局监听、动态面板与视图引用（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
   onDestroy() {
     this.screenClick?.destroy();
-    RoleUIManager.destroyMonsterInfo();
+    RoleUIManager.clearViews();
   }
 
   update() {

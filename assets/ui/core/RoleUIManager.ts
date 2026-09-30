@@ -105,6 +105,15 @@ export default class RoleUIManager {
     if (view && view.isValidNode()) view.destroy();
   }
 
+  /** 清空全部视图引用（场景卸载时由组合根调用，避免跨场景残留已销毁节点） */
+  static clearViews() {
+    this.destroyMonsterInfo();
+    this.roleAvatar = null;
+    this.bottomBar = null;
+    this.roleDisplay = null;
+    this.roleInfoDialog = null;
+  }
+
   /** 角色数据变更后统一刷新视图 */
   static updateRoleData(role: Role) {
     this.roleAvatar?.updateRole(role);
