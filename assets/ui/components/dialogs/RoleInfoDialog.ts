@@ -14,6 +14,7 @@ const DIALOG_NAME = "role_info_dialog";
  * 角色信息弹窗
  * 只负责开关与组装：弹窗框 + 装饰背景（含战斗力图标）+ 装备槽分组（EquipmentSlotGroup）
  * + 属性列表（RoleAttributeList）+ 内观（RoleInShowView）
+ * 槽位右键 = 脱下装备：转交数据层处理（脱下后装备进背包、属性重算与四处刷新由数据层统一收尾）
  * 换装后由数据层经 RoleUIManager 调用 updateDialog 刷新对应区块
  */
 export default class RoleInfoDialog {
@@ -21,6 +22,8 @@ export default class RoleInfoDialog {
   private dialog: Node | null = null;
   /** 装备槽分组（左/右/底） */
   private equipmentGroups: EquipmentSlotGroup[] = [];
+  /** 属性列表（装备变化后刷新数值） */
+  private attributeList: RoleAttributeList | null = null;
   /** 内观（衣服 + 武器） */
   private inShowView: RoleInShowView | null = null;
 
@@ -40,23 +43,26 @@ export default class RoleInfoDialog {
     const bg = GameUiHelper.createImage("role_information_background", "common/personal-information-bg", new Vec2(-78, -19), new Size(431, 452));
     bg.addChild(GameUiHelper.createImage("combat_icon", "common/combat", new Vec2(-7, -225), new Size(100, 50)));
     this.dialog.addChild(bg);
-    // 装备槽分组（左/右/底三个方向）
-    this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) => new EquipmentSlotGroup(side, role.equipments));
+    // 装备槽分组（左/右/底三个方向），右键槽位脱下装备
+    this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) => new EquipmentSlotGroup(side, role.equipments, (type) => StorageManager.unequipToBag(type)));
     this.equipmentGroups.forEach((group) => this.dialog.addChild(group));
     // 角色属性列表
-    this.dialog.addChild(new RoleAttributeList(role));
+    this.attributeList = new RoleAttributeList(role);
+    this.dialog.addChild(this.attributeList);
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
     this.dialog.addChild(this.inShowView);
     LayerManager.addToUILayer(this.dialog);
   }
 
-  /** 装备变更后刷新：对应槽位的装备显示与对应部位的内观 */
+  /** 装备变更后刷新：对应槽位的装备显示、属性数值与对应部位的内观 */
   updateDialog(equipmentType: EQUIPMENT_TYPE) {
     if (!this.dialog || !this.dialog.active) return;
     const role = StorageManager.findOnlineRole();
     // 槽位显示（不在本分组内的槽位会被忽略）
     this.equipmentGroups.forEach((group) => group.updateSlot(equipmentType, role.equipments[equipmentType]));
+    // 属性与战斗力随装备变化
+    this.attributeList?.update(role);
     // 内观（衣服/武器）
     if (equipmentType === EQUIPMENT_TYPE.CLOTH) this.inShowView?.updateCloth(role);
     if (equipmentType === EQUIPMENT_TYPE.WEAPON) this.inShowView?.updateWeapon(role);
@@ -72,6 +78,7 @@ export default class RoleInfoDialog {
   private reset() {
     this.dialog = null;
     this.equipmentGroups = [];
+    this.attributeList = null;
     this.inShowView = null;
   }
 }

@@ -28,6 +28,8 @@ export default class ScreenClickInput {
 
   /** 根据鼠标按键处理目标选择（优先拾取掉落物；点击空地取消选中） */
   private checkClickTarget(event: EventMouse) {
+    // 右键属于界面操作（背包穿戴、脱下装备等），不参与世界点击
+    if (event.getButton() !== EventMouse.BUTTON_LEFT) return;
     const uiLocation = event.getUILocation();
     // 命中掉落物则直接拾取，不改变当前选中目标
     const clickedDrop = DropManager.getClickedDrop(uiLocation);

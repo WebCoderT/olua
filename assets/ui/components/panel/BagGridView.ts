@@ -1,7 +1,7 @@
 import { Node, Size, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
-import { Goods } from "../../../types/good";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import { bindPointerAction, PointerButton } from "../../utils/input/Pointer";
 
 /** 背包网格布局（弹窗内固定几何） */
 const GRID_POSITION = new Vec2(0, 17);
@@ -9,28 +9,36 @@ const GRID_SIZE = new Size(580, 368);
 /** 行间距：与 createRoleBagCellRow 内的行容器间距一致 */
 const GRID_SPACING = 3;
 
-/** 物品使用回调：由弹窗注入（按物品大类分发穿戴/服用等行为） */
-export type UseGoodHandler = (good: Goods, row: number, col: number) => void;
+/**
+ * 背包格子的操作动作
+ * - use：使用（左键/触屏点击，按物品大类分发）
+ * - equip：穿戴（右键，仅装备有效）
+ */
+export type BagCellAction = "use" | "equip";
+
+/** 背包格子操作回调：由弹窗注入（规则判定与提示在数据层，本组件只上报操作） */
+export type BagCellHandler = (row: number, col: number, action: BagCellAction) => void;
 
 /**
  * 背包格子网格组件（自身即背包网格容器）
- * 负责按角色背包数据填充物品图标与点击使用回调，不关心物品使用规则（由弹窗注入回调）
+ * 负责按角色背包数据填充物品图标与操作回调：左键（触屏点击）上报 use、右键上报 equip，
+ * 物品能否使用由弹窗转交数据层判定，本组件不关心使用规则
  */
 export default class BagGridView extends Node {
   /** 格子节点（[行][列]） */
   private cells: Node[][] = [];
-  /** 物品使用回调 */
-  private onUseGood: UseGoodHandler;
+  /** 格子操作回调 */
+  private onCellAction: BagCellHandler;
 
-  constructor(onUseGood: UseGoodHandler) {
+  constructor(onCellAction: BagCellHandler) {
     super("bag_grid");
-    this.onUseGood = onUseGood;
+    this.onCellAction = onCellAction;
     GameUiHelper.applyColumnStyle(this, GRID_SPACING, GRID_POSITION, GRID_SIZE);
     // 行与格子由零件工厂生成（行容器为格子的 flex row）
     this.cells = GameUiHelper.createRoleBagCellRow(this);
   }
 
-  /** 按背包数据刷新：先清空旧内容与旧监听，再逐格填充物品与点击事件 */
+  /** 按背包数据刷新：先清空旧内容与旧监听，再逐格填充物品与操作事件 */
   refresh(role: Role) {
     this.cells.forEach((row) =>
       row.forEach((cell) => {
@@ -43,8 +51,13 @@ export default class BagGridView extends Node {
         if (!good) return;
         const cell = this.cells[rowIndex][colIndex];
         GameUiHelper.createGood(cell, good);
-        cell.on(Node.EventType.TOUCH_END, () => this.onUseGood(good, rowIndex, colIndex), this);
+        bindPointerAction(cell, (button) => this.onCellAction(rowIndex, colIndex, this.toAction(button)), this);
       });
     });
+  }
+
+  /** 指针按键转背包动作（左键使用、右键穿戴） */
+  private toAction(button: PointerButton): BagCellAction {
+    return button === "right" ? "equip" : "use";
   }
 }

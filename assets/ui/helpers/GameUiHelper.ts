@@ -679,6 +679,8 @@ export default class GameUiHelper {
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
     layout.padding = 10;
     node.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    // 重复调用即刷新（装备穿脱等改变属性后重建条目）
+    node.removeAllChildren();
     node.addChild(this.createText("role_basic_attributes", "基础属性", 14, new Vec2(), new Size(size.width, 14)));
     for (const element of goodShowAttributesLabel.keys()) {
       node.addChild(this.createAttributeLabel(element, role[element].toString(), new Size(size.width, 20)));

@@ -4,7 +4,7 @@ import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../entities/Role";
-import { Equipment, GOOD_TYPE, getGoodCount, Goods } from "../../types/good";
+import { EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
 import { SkillId } from "../../types/skill";
 import GameHelper from "./GameHelper";
@@ -96,24 +96,99 @@ export default class StorageManager {
     this.updateUi(role);
   }
 
-  /** 更换装备 */
-  static changeEquipment(equipment: Equipment) {
-    if (GameHelper.checkRoleCanUseEquipment(equipment)) {
-      const role = this.findOnlineRole();
-      // 换装备（按装备槽位穿戴）
-      role.equipments[equipment.slot] = equipment;
-      // 属性重新计算
-      Object.assign(role, GameHelper.combatCalc(role));
-      // 保存
-      this.updateOnlineRole(role);
-      // 更新UI
-      this.updateUi(role);
-      // 更改主角外观
-      RoleUIManager.updateRoleOutShow(role);
-      // 更新内观
-      equipment && RoleUIManager.updateEquipmentDialog(equipment.slot);
-    }
+  //#region 背包物品使用
+
+  /**
+   * 使用背包物品（统一入口：背包左键、快捷键等一切「使用物品」都走这里）
+   * 按物品大类分发，新增物品类型时在此补一条分支并实现对应的 useXxx：
+   * 装备 → 穿戴、药品 → 服用、材料/其他 → 暂未开放（后续合成、任务用途在此扩展）
+   * @param row 背包行
+   * @param col 背包列
+   * @returns 是否成功使用
+   */
+  static useGood(row: number, col: number): boolean {
+    const good = this.findOnlineRole()?.bag[row]?.[col];
+    if (!good) return false;
+    if (isEquipment(good)) return this.equipFromBag(row, col);
+    if (isDrug(good)) return this.useDrug(row, col);
+    GameUiHelper.createTip("good_unsupported_tip", "该物品暂无可以使用的方式");
+    return false;
   }
+
+  /**
+   * 从背包穿戴装备：脱下同槽位的旧装备并放回刚腾出的格子
+   * 等级/性别/职业不符时提示原因并放弃（校验与文案由 GameHelper 给出）
+   * @param row 背包行
+   * @param col 背包列
+   * @returns 是否穿戴成功
+   */
+  static equipFromBag(row: number, col: number): boolean {
+    const role = this.findOnlineRole();
+    const good = role?.bag[row]?.[col];
+    if (!role || !good) return false;
+    if (!isEquipment(good)) {
+      GameUiHelper.createTip("equip_unsupported_tip", "该物品不能穿戴");
+      return false;
+    }
+    const reason = GameHelper.getEquipmentRejectReason(good);
+    if (reason) {
+      GameUiHelper.createTip("equip_reject_tip", reason);
+      return false;
+    }
+    // 旧装备放回刚腾空的格子：格数守恒，换装不会丢装备
+    const worn = role.equipments[good.slot];
+    role.bag[row][col] = worn ? { ...worn } : null;
+    // 复制一份入槽，避免背包与装备槽共享同一个物品对象
+    role.equipments[good.slot] = { ...good };
+    this.applyEquipmentChange(role, good.slot);
+    return true;
+  }
+
+  /**
+   * 脱下装备放入背包（放进第一个空格；背包已满时提示并放弃）
+   * @param slot 装备槽位
+   * @returns 是否脱下成功
+   */
+  static unequipToBag(slot: EQUIPMENT_TYPE): boolean {
+    const role = this.findOnlineRole();
+    const equipment = role?.equipments[slot];
+    if (!role || !equipment) return false;
+    const cell = this.findEmptyBagCell(role);
+    if (!cell) {
+      GameUiHelper.createTip("bag_full_tip", "背包已满，无法脱下装备");
+      return false;
+    }
+    role.bag[cell.row][cell.col] = { ...equipment };
+    role.equipments[slot] = null;
+    this.applyEquipmentChange(role, slot);
+    return true;
+  }
+
+  /** 找背包的第一个空格（没有空格返回 null） */
+  private static findEmptyBagCell(role: Role) {
+    for (let row = 0; row < role.bag.length; row++) {
+      for (let col = 0; col < role.bag[row].length; col++) {
+        if (!role.bag[row][col]) return { row, col };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 装备变更后的统一收尾：属性重算 → 血量修正 → 落盘 → 刷新各视图
+   * 装备影响 maxHp，脱下加血装备时当前血量要跟随上限下调，避免血量超过上限
+   */
+  private static applyEquipmentChange(role: Role, slot: EQUIPMENT_TYPE) {
+    Object.assign(role, GameHelper.combatCalc(role));
+    role.hp = Math.min(role.hp, role.maxHp);
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.updateRoleOutShow(role);
+    RoleUIManager.updateEquipmentDialog(slot);
+    RoleUIManager.refreshBag();
+  }
+
+  //#endregion
 
   /**
    * 添加物品至背包（拾取掉落物/任务奖励等统一入口）
@@ -189,7 +264,7 @@ export default class StorageManager {
   static useDrug(row: number, col: number): boolean {
     const role = this.findOnlineRole();
     const good = role?.bag[row]?.[col];
-    if (!role || !good || good.type !== GOOD_TYPE.DRUG) return false;
+    if (!role || !good || !isDrug(good)) return false;
     // 当前仅实现回血（mp 等效果待资源字段补齐后在此扩展）
     const heal = good.effects.reduce((sum, effect) => sum + (effect.hp ?? 0), 0);
     if (heal <= 0) {
@@ -223,7 +298,7 @@ export default class StorageManager {
   }
 
   /** 更新UI */
-  static updateUi(role: Role, equipment?: Equipment) {
+  static updateUi(role: Role) {
     RoleUIManager.updateRoleData(role);
   }
 

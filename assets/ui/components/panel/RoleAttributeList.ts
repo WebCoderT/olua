@@ -15,4 +15,9 @@ export default class RoleAttributeList extends Node {
     super("role_attributes");
     GameUiHelper.applyRoleAttributeListStyle(this, role, ATTRIBUTE_LIST_POSITION, ATTRIBUTE_LIST_SIZE);
   }
+
+  /** 属性变化后刷新（装备穿脱、升级等；条目内容按最新属性重建） */
+  update(role: Role) {
+    GameUiHelper.applyRoleAttributeListStyle(this, role, ATTRIBUTE_LIST_POSITION, ATTRIBUTE_LIST_SIZE);
+  }
 }

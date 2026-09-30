@@ -4,7 +4,10 @@ import { Vec2 } from "cc";
 
 /**
  * 物品大类
- * 新增物品类型时在此扩展，并实现对应接口（接口统一继承 Good）
+ * 新增物品类型时：
+ * 1. 在此扩展枚举，并实现对应接口（接口统一继承 Good）
+ * 2. 在 configs/items 注册该类型的配置来源
+ * 3. 若该类型有「使用行为」，在 StorageManager.useGood 中补一条分发分支并实现对应的 useXxx
  */
 export enum GOOD_TYPE {
   EQUIPMENT = "equipment", // 装备

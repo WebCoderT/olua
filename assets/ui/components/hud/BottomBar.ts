@@ -36,7 +36,7 @@ export default class BottomBar extends Node {
 
   constructor(role: Role) {
     super("bottom_bar");
-    // 注册弹窗，供数据层刷新：装备内观（StorageManager.changeEquipment）、背包显示（拾取/使用物品）
+    // 注册弹窗，供数据层刷新：装备穿脱后的槽位/内观（StorageManager 装备变更流程）、背包显示（拾取/使用物品）
     RoleUIManager.registerRoleInfoDialog(this.roleInfoDialog);
     RoleUIManager.registerBagDialog(this.bagDialog);
     // 底部栏主体（尺寸/位置/背景）

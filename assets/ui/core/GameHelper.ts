@@ -28,8 +28,21 @@ export default class GameHelper {
 
   /** 角色是否能穿上装备 */
   static checkRoleCanUseEquipment(equipment: Equipment) {
+    return this.getEquipmentRejectReason(equipment) === null;
+  }
+
+  /**
+   * 取装备不可穿戴的原因（可穿戴返回 null）
+   * 判定项与顺序：等级 → 性别 → 职业；返回文案可直接用于提示玩家
+   * @param equipment 待校验装备
+   */
+  static getEquipmentRejectReason(equipment: Equipment): string | null {
     const role = StorageManager.findOnlineRole();
-    return equipment.level <= role.level && (equipment.sex === role.sex || equipment.sex === SEX.ALL) && (equipment.occupation === role.occupation || equipment.occupation === OECCUPATION.ALL);
+    if (!role) return "角色不存在";
+    if (equipment.level > role.level) return `需要等级 ${equipment.level}`;
+    if (equipment.sex !== role.sex && equipment.sex !== SEX.ALL) return `${equipment.sex === SEX.BOY ? "男性" : "女性"}角色才能穿戴`;
+    if (equipment.occupation !== role.occupation && equipment.occupation !== OECCUPATION.ALL) return "职业不符，无法穿戴";
+    return null;
   }
 
   /** 战斗属性计算公式 */
