@@ -6,7 +6,7 @@ const { ccclass, property } = _decorator;
 @ccclass("ActivityController")
 export class ActivityController extends Component {
   // 自动升级开关
-  autoUpgrade: boolean = true;
+  autoUpgrade: boolean = false;
   start() {
     if (this.autoUpgrade) {
       GameUiHelper.createTip("activity_started_tip", "泡点活动已开启，尽情享受吧～");
