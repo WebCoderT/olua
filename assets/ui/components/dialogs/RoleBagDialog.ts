@@ -1,26 +1,9 @@
 import { Node } from "cc";
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
-import { Equipment, EQUIPMENT_TYPE, Goods } from "../../../types/good";
+import { Goods, GOOD_TYPE, isEquipment } from "../../../types/good";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
-
-/** 可穿戴的装备类型集合 */
-const wearableTypes = new Set<EQUIPMENT_TYPE>([
-  EQUIPMENT_TYPE.CLOTH,
-  EQUIPMENT_TYPE.ACCESSORIES,
-  EQUIPMENT_TYPE.BELT,
-  EQUIPMENT_TYPE.HELMET,
-  EQUIPMENT_TYPE.NECKLACE,
-  EQUIPMENT_TYPE.RING,
-  EQUIPMENT_TYPE.SCAPULAR,
-  EQUIPMENT_TYPE.SHINGUARD,
-  EQUIPMENT_TYPE.SHOES,
-  EQUIPMENT_TYPE.WEAPON,
-  EQUIPMENT_TYPE.WRISTBAND,
-  EQUIPMENT_TYPE.OTHER1,
-  EQUIPMENT_TYPE.OTHER2,
-]);
 
 /**
  * 角色背包弹窗
@@ -48,34 +31,52 @@ export default class RoleBagDialog {
       this.dialog = dialog;
       this.cells = cells;
       // 读取背包数据并显示
-      this.readBagDataAndShow();
+      this.showBagData();
+      LayerManager.addToUILayer(dialog);
     }
   }
 
-  /** 读取背包数据并显示 */
-  private readBagDataAndShow() {
-    this.role.bag.forEach((row, rowIndex) => {
-      row.forEach((good, colIndex) => {
-        if (good) {
-          GameUiHelper.createGood(this.cells[rowIndex][colIndex], good);
-          // 添加点击事件
-          this.cells[rowIndex][colIndex].on(
-            Node.EventType.TOUCH_END,
-            () => {
-              this.useGood(this.cells[rowIndex][colIndex], good);
-            },
-            this,
-          );
-        }
-      });
-    });
-    LayerManager.addToUILayer(this.dialog);
+  /** 刷新背包（物品变更后调用，弹窗未打开时忽略） */
+  refresh() {
+    if (!this.dialog || !this.dialog.active) return;
+    this.role = StorageManager.findOnlineRole();
+    this.showBagData();
   }
 
-  /** 使用物品 */
-  private useGood(cell: Node, good: Goods) {
-    if (wearableTypes.has(good.type)) {
-      StorageManager.changeEquipment(good as Equipment);
+  /** 读取背包数据并填充格子 */
+  private showBagData() {
+    // 先清空旧内容，避免刷新时叠加（同时移除上一次注册的点击监听）
+    this.cells.forEach((row) =>
+      row.forEach((cell) => {
+        cell.removeAllChildren();
+        cell.targetOff(this);
+      }),
+    );
+    this.role?.bag.forEach((row, rowIndex) => {
+      row.forEach((good, colIndex) => {
+        if (!good) return;
+        const cell = this.cells[rowIndex][colIndex];
+        GameUiHelper.createGood(cell, good);
+        // 添加点击事件
+        cell.on(
+          Node.EventType.TOUCH_END,
+          () => {
+            this.useGood(good, rowIndex, colIndex);
+          },
+          this,
+        );
+      });
+    });
+  }
+
+  /** 使用物品（按物品大类分发：装备穿戴、药品服用） */
+  private useGood(good: Goods, row: number, col: number) {
+    if (isEquipment(good)) {
+      StorageManager.changeEquipment(good);
+      return;
+    }
+    if (good.type === GOOD_TYPE.DRUG) {
+      StorageManager.useDrug(row, col);
     }
   }
 

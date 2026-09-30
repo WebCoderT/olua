@@ -1,5 +1,5 @@
 import { Size, Vec2 } from "cc";
-import { Equipment, EQUIPMENT_TYPE, EquipmentSlot } from "../types/good";
+import { Equipment, EQUIPMENT_TYPE, EquipmentSlot, GOOD_TYPE } from "../types/good";
 import { OECCUPATION, SEX } from "../types/role";
 
 // 角色弹窗中装备槽map
@@ -23,7 +23,8 @@ equipmentSlots.set(EQUIPMENT_TYPE.SHOES, { label: "鞋子", imageSrc: "slots/sho
 // 衣服
 export const clothes: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.CLOTH,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.CLOTH,
     occupation: OECCUPATION.ZHAN,
     label: "新手赠送-梁山伯&祝英台(套装)",
     sex: SEX.BOY,
@@ -43,7 +44,8 @@ export const clothes: Equipment[] = [
     inOffset: new Vec2(),
   },
   {
-    type: EQUIPMENT_TYPE.CLOTH,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.CLOTH,
     occupation: OECCUPATION.ZHAN,
     label: "新手赠送-梁山伯&祝英台(套装)",
     sex: SEX.GRIL,
@@ -67,7 +69,8 @@ export const clothes: Equipment[] = [
 // 武器
 export const weapons: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.WEAPON,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
     label: "新手赠送-梁山伯&祝英台(套装)",
     sex: SEX.ALL,
@@ -87,7 +90,8 @@ export const weapons: Equipment[] = [
     inOffset: new Vec2(),
   },
   {
-    type: EQUIPMENT_TYPE.WEAPON,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
     label: "第一大陆-烈焰焚天-",
     sex: SEX.ALL,
@@ -107,7 +111,8 @@ export const weapons: Equipment[] = [
     inOffset: new Vec2(),
   },
   {
-    type: EQUIPMENT_TYPE.WEAPON,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
     label: "武器3",
     sex: SEX.ALL,
@@ -127,7 +132,8 @@ export const weapons: Equipment[] = [
     inOffset: new Vec2(-50, 100),
   },
   {
-    type: EQUIPMENT_TYPE.WEAPON,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ZHAN,
     label: "武器4",
     sex: SEX.ALL,
@@ -151,7 +157,8 @@ export const weapons: Equipment[] = [
 // 戒指
 export const rings: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.RING,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.RING,
     occupation: OECCUPATION.ALL,
     sex: SEX.ALL,
     in: "",
@@ -175,7 +182,8 @@ export const rings: Equipment[] = [
 // 项链
 export const nicklaces: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.NECKLACE,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.NECKLACE,
     occupation: OECCUPATION.ALL,
     sex: SEX.ALL,
     in: "",
@@ -199,7 +207,8 @@ export const nicklaces: Equipment[] = [
 // 鞋子
 export const shoes: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.SHOES,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.SHOES,
     occupation: OECCUPATION.ALL,
     sex: SEX.ALL,
     in: "",
@@ -223,7 +232,8 @@ export const shoes: Equipment[] = [
 // 头盔
 export const helmets: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.HELMET,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.HELMET,
     occupation: OECCUPATION.ALL,
     sex: SEX.ALL,
     in: "",
@@ -247,7 +257,8 @@ export const helmets: Equipment[] = [
 // 腰带
 export const belts: Equipment[] = [
   {
-    type: EQUIPMENT_TYPE.BELT,
+    type: GOOD_TYPE.EQUIPMENT,
+    slot: EQUIPMENT_TYPE.BELT,
     occupation: OECCUPATION.ALL,
     sex: SEX.ALL,
     in: "",

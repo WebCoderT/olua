@@ -44,6 +44,8 @@ export default class BottomBar extends Node {
     this.selectedRole = role;
     // 注册角色信息弹窗，供数据层（StorageManager）刷新装备内观
     RoleUIManager.registerRoleInformationDialog(this.roleInfoDialog);
+    // 注册背包弹窗，供数据层（拾取/使用物品）刷新背包显示
+    RoleUIManager.registerBagDialog(this.roleBagDialog);
     this.createUI(role);
   }
 

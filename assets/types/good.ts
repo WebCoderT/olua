@@ -2,7 +2,18 @@ import type { BattleAttributes, CommonAttributes } from "./common";
 import type { OECCUPATION, SEX } from "./role";
 import { Vec2 } from "cc";
 
-// 装备类型
+/**
+ * 物品大类
+ * 新增物品类型时在此扩展，并实现对应接口（接口统一继承 Good）
+ */
+export enum GOOD_TYPE {
+  EQUIPMENT = "equipment", // 装备
+  DRUG = "drug", // 药品
+  MATERIAL = "material", // 材料
+  OTHER = "other", // 其他
+}
+
+/** 装备槽位类型 */
 export enum EQUIPMENT_TYPE {
   CLOTH = "cloth", // 衣服
   ACCESSORIES = "accessories", // 饰品
@@ -19,7 +30,7 @@ export enum EQUIPMENT_TYPE {
   OTHER2 = "other2", // 其他2
 }
 
-// 装备槽接口
+/** 装备槽接口 */
 export interface EquipmentSlot {
   // 名称
   label: string;
@@ -31,10 +42,25 @@ export interface EquipmentSlot {
   customPosition?: Vec2;
 }
 
-// 物品接口
+/** 物品通用属性（所有物品共有） */
 export interface Good extends CommonAttributes {
-  // 装备类型
-  type: EQUIPMENT_TYPE;
+  /** 物品 id（物品总表 configs/items 的键，缺省由注册表按类别+序号生成） */
+  id?: string;
+  /** 物品大类 */
+  type: GOOD_TYPE;
+  /** 是否可叠加（药品/材料等）；缺省表示不可叠加（装备） */
+  stackable?: boolean;
+  /** 最大叠加数量（可叠加时有效，缺省 99） */
+  maxStack?: number;
+  /** 当前数量（运行时字段，仅背包/掉落物使用，缺省 1） */
+  count?: number;
+}
+
+/** 装备 */
+export interface Equipment extends Good, BattleAttributes {
+  type: GOOD_TYPE.EQUIPMENT;
+  /** 装备槽位 */
+  slot: EQUIPMENT_TYPE;
   // 职业
   occupation: OECCUPATION;
   // 性别
@@ -47,7 +73,43 @@ export interface Good extends CommonAttributes {
   out: string;
 }
 
-// 装备接口
-export interface Equipment extends Good, BattleAttributes {}
+/** 药品使用效果（新增效果类型时在此扩展） */
+export interface DrugEffect {
+  /** 恢复血量 */
+  hp?: number;
+  /** 恢复魔法 */
+  mp?: number;
+  /** 持续时间（秒），增益类效果使用 */
+  duration?: number;
+}
 
-export type Goods = Equipment | Good;
+/** 药品 */
+export interface Drug extends Good {
+  type: GOOD_TYPE.DRUG;
+  /** 使用效果（可多项叠加） */
+  effects: DrugEffect[];
+  /** 使用冷却（秒），缺省无冷却 */
+  cooldown?: number;
+}
+
+/** 材料（合成/任务等用途） */
+export interface Material extends Good {
+  type: GOOD_TYPE.MATERIAL;
+}
+
+export type Goods = Equipment | Drug | Material;
+
+/** 是否为装备 */
+export function isEquipment(good: Goods): good is Equipment {
+  return good.type === GOOD_TYPE.EQUIPMENT;
+}
+
+/** 是否为药品 */
+export function isDrug(good: Goods): good is Drug {
+  return good.type === GOOD_TYPE.DRUG;
+}
+
+/** 获取物品数量（不可叠加物品恒为 1） */
+export function getGoodCount(good: Goods): number {
+  return good.stackable ? Math.max(1, good.count ?? 1) : 1;
+}

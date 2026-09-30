@@ -8,6 +8,7 @@ import ScreenClick from "./components/ScreenClick";
 import GameHelper from "./core/GameHelper";
 import StorageManager from "./core/StorageManager";
 import LayerManager from "./core/LayerManager";
+import DropManager from "./core/DropManager";
 import RoleUIManager from "./core/RoleUIManager";
 import RoleAvatar from "./components/role/RoleAvatar";
 import SkillManager from "./core/SkillManager";
@@ -74,6 +75,9 @@ export class Game extends Component {
   update() {
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
+    // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
+    const rolePosition = this.roleDisplay?.getWorldPosition();
+    if (rolePosition) DropManager.autoPickup(rolePosition);
     // 快捷键冷却显示
     this.bottomBar?.updateCooldowns();
     // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）

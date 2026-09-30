@@ -11,7 +11,7 @@ export enum Layer {
 
 /**
  * 图层管理器
- * 负责场景内各渲染图层（地图层/怪物层/游戏层/特效层/UI层）的初始化与元素挂载
+ * 负责场景内各渲染图层（地图层/掉落层/怪物层/游戏层/特效层/UI层）的初始化与元素挂载
  * 图层容器为静态节点，会随场景销毁，因此每次进场景（initLayer）都必须重建
  */
 export default class LayerManager {
@@ -20,6 +20,8 @@ export default class LayerManager {
 
   /** 地图层 */
   static MapLayer: Node = new Node("map_layer");
+  /** 掉落层（怪物死亡掉落物） */
+  static DropLayer: Node = new Node("drop_layer");
   /** 游戏层 */
   static GameLayer: Node = new Node("game_layer");
   /** 怪物层 */
@@ -45,9 +47,10 @@ export default class LayerManager {
   static initLayer(scene: Node, camera: Camera) {
     this.camera = camera;
     // 摄像机设置可视图层
-    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP | Layer.GAME | Layer.MONSTER;
+    camera.visibility = Layer.UI | Layer.EFFECT | Layer.MAP | Layer.DROP | Layer.GAME | Layer.MONSTER;
     // 重建全部图层容器
     this.MapLayer = this.createLayer(scene, "map_layer", Layer.MAP);
+    this.DropLayer = this.createLayer(scene, "drop_layer", Layer.DROP);
     this.GameLayer = this.createLayer(scene, "game_layer", Layer.GAME);
     this.MonsterLayer = this.createLayer(scene, "monster_layer", Layer.MONSTER);
     this.EffectLayer = this.createLayer(scene, "effect_layer", Layer.EFFECT);
@@ -80,6 +83,17 @@ export default class LayerManager {
   static addToGameLayer(node: Node) {
     this.setNodeToLayer(node, Layer.GAME);
     this.GameLayer.addChild(node);
+  }
+
+  /** 清除掉落层 */
+  static clearDropLayer() {
+    if (isValid(this.DropLayer)) this.DropLayer.removeAllChildren();
+  }
+
+  /** 添加元素至掉落层 */
+  static addToDropLayer(node: Node) {
+    this.setNodeToLayer(node, Layer.DROP);
+    this.DropLayer.addChild(node);
   }
 
   /** 清除怪物层 */

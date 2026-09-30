@@ -4,7 +4,7 @@ import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { Role } from "../../entities/Role";
-import { Equipment } from "../../types/good";
+import { Equipment, GOOD_TYPE, getGoodCount, Goods } from "../../types/good";
 import { MapId } from "../../types/map";
 import { SkillId } from "../../types/skill";
 import GameHelper from "./GameHelper";
@@ -100,8 +100,8 @@ export default class StorageManager {
   static changeEquipment(equipment: Equipment) {
     if (GameHelper.checkRoleCanUseEquipment(equipment)) {
       const role = this.findOnlineRole();
-      // 换装备
-      role.equipments[equipment.type] = equipment;
+      // 换装备（按装备槽位穿戴）
+      role.equipments[equipment.slot] = equipment;
       // 属性重新计算
       Object.assign(role, GameHelper.combatCalc(role));
       // 保存
@@ -111,8 +111,103 @@ export default class StorageManager {
       // 更改主角外观
       RoleUIManager.updateRoleOutShow(role);
       // 更新内观
-      equipment && RoleUIManager.updateEquipmentDialog(equipment.type);
+      equipment && RoleUIManager.updateEquipmentDialog(equipment.slot);
     }
+  }
+
+  /**
+   * 添加物品至背包（拾取掉落物/任务奖励等统一入口）
+   * 可叠加物品优先合并到已有格子，剩余数量再占用空格
+   * @param good 物品（内部会复制一份，避免污染配置表）
+   * @param count 数量，缺省取物品自身数量
+   * @returns 是否全部放入（背包满时返回 false，可能有部分放入）
+   */
+  static addGood(good: Goods, count: number = getGoodCount(good)): boolean {
+    const role = this.findOnlineRole();
+    if (!role || count <= 0) return false;
+    const stackable = !!good.stackable;
+    const maxStack = good.maxStack ?? 99;
+    let remaining = count;
+
+    /** 剩余数量放入空格 */
+    const fillEmptyCells = () => {
+      for (let row = 0; row < role.bag.length && remaining > 0; row++) {
+        for (let col = 0; col < role.bag[row].length && remaining > 0; col++) {
+          if (role.bag[row][col]) continue;
+          const add = stackable ? Math.min(maxStack, remaining) : 1;
+          role.bag[row][col] = { ...good, count: add };
+          remaining -= add;
+        }
+      }
+    };
+
+    if (stackable) {
+      const stackCells: Goods[] = [];
+      role.bag.forEach((row) =>
+        row.forEach((cell) => {
+          if (cell && cell.type === good.type && cell.id === good.id) stackCells.push(cell);
+        }),
+      );
+      stackCells.forEach((cell) => {
+        if (remaining <= 0) return;
+        const canAdd = maxStack - getGoodCount(cell);
+        if (canAdd <= 0) return;
+        const add = Math.min(canAdd, remaining);
+        cell.count = getGoodCount(cell) + add;
+        remaining -= add;
+      });
+    }
+    // 剩余数量放入空格
+    fillEmptyCells();
+
+    if (remaining < count) {
+      // 保存并刷新背包显示
+      this.updateOnlineRole(role);
+      RoleUIManager.refreshBag();
+    }
+    return remaining <= 0;
+  }
+
+  /**
+   * 消耗背包指定格子中的一个物品（减到 0 时清空格子；仅可叠加物品有数量概念）
+   * @param role 目标角色，缺省取当前在线角色（注意：角色对象每次从存储反序列化，需与调用方用同一个实例）
+   */
+  static consumeBagGood(row: number, col: number, role: Role | undefined = this.findOnlineRole()) {
+    const good = role?.bag[row]?.[col];
+    if (!role || !good) return;
+    const remaining = getGoodCount(good) - 1;
+    role.bag[row][col] = remaining > 0 ? { ...good, count: remaining } : null;
+  }
+
+  /**
+   * 使用药品（当前在线角色）：按 effects 恢复血量并消耗一个
+   * 魔法/增益类效果待角色具备对应资源字段（mp/maxMp）后在此扩展
+   * @param row 背包行
+   * @param col 背包列
+   * @returns 是否成功使用（格子为空、非药品、无可生效效果、已满血时返回 false 且不消耗）
+   */
+  static useDrug(row: number, col: number): boolean {
+    const role = this.findOnlineRole();
+    const good = role?.bag[row]?.[col];
+    if (!role || !good || good.type !== GOOD_TYPE.DRUG) return false;
+    // 当前仅实现回血（mp 等效果待资源字段补齐后在此扩展）
+    const heal = good.effects.reduce((sum, effect) => sum + (effect.hp ?? 0), 0);
+    if (heal <= 0) {
+      GameUiHelper.createTip("drug_unsupported_tip", "该药品效果暂未开放");
+      return false;
+    }
+    if (role.hp >= role.maxHp) {
+      GameUiHelper.createTip("drug_full_tip", "血量已满");
+      return false;
+    }
+    role.hp = Math.min(role.maxHp, role.hp + heal);
+    // 消耗一个（复用同一个角色实例，保证消耗结果一起落盘）
+    this.consumeBagGood(row, col, role);
+    // 保存并刷新（血量与背包）
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.refreshBag();
+    return true;
   }
 
   /** 跳转地图 */

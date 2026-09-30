@@ -22,6 +22,11 @@ interface RoleInfoDialogView {
   updateDialog: (equipmentType: EQUIPMENT_TYPE) => void;
 }
 
+/** 背包弹窗视图（物品变更后刷新背包显示） */
+interface BagDialogView {
+  refresh: () => void;
+}
+
 /** 怪物信息面板视图（选中怪物时展示血量/名称/头像/技能） */
 interface MonsterInfoView {
   /** 面板节点是否仍存活 */
@@ -47,6 +52,7 @@ export default class RoleUIManager {
   private static bottomBar: BottomBarView | null = null;
   private static roleDisplay: RoleDisplayView | null = null;
   private static roleInfoDialog: RoleInfoDialogView | null = null;
+  private static bagDialog: BagDialogView | null = null;
   /** 当前存活的怪物信息面板（未选中怪物时为 null） */
   private static monsterInfo: MonsterInfoView | null = null;
   private static monsterInfoFactory: MonsterInfoFactory | null = null;
@@ -69,6 +75,16 @@ export default class RoleUIManager {
   /** 注册角色信息弹窗视图（由持有弹窗实例的 BottomBar 注册） */
   static registerRoleInformationDialog(view: RoleInfoDialogView) {
     this.roleInfoDialog = view;
+  }
+
+  /** 注册背包弹窗视图（由持有弹窗实例的 BottomBar 注册） */
+  static registerBagDialog(view: BagDialogView) {
+    this.bagDialog = view;
+  }
+
+  /** 物品变更后刷新背包显示（弹窗未打开时忽略） */
+  static refreshBag() {
+    this.bagDialog?.refresh();
   }
 
   /** 设置怪物信息面板创建器（由组合根注入，选中怪物时才真正创建面板） */
@@ -112,6 +128,7 @@ export default class RoleUIManager {
     this.bottomBar = null;
     this.roleDisplay = null;
     this.roleInfoDialog = null;
+    this.bagDialog = null;
   }
 
   /** 角色数据变更后统一刷新视图 */

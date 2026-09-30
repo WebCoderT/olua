@@ -8,7 +8,7 @@ import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
 import { BattleAttributes } from "../../types/common";
-import { EQUIPMENT_TYPE, Goods } from "../../types/good";
+import { EQUIPMENT_TYPE, getGoodCount, Good, Goods, isEquipment } from "../../types/good";
 import { Monster } from "../../types/monster";
 import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";
@@ -400,6 +400,31 @@ export default class GameUiHelper {
 
   //#endregion
 
+  //#region 掉落物
+
+  /**
+   * 创建掉落物零件（地面上的物品：图标 + 名称，可叠加物品显示数量）
+   * 挂载点与拾取逻辑由 DropManager 处理
+   * @param good 物品数据
+   * @param count 掉落数量
+   * @param size 图标尺寸
+   * @return node 掉落物节点、nameLabel 名称文本（供刷新/高亮）
+   */
+  static createDropItem(good: Goods, count: number = 1, size: Size = new Size(40, 40)) {
+    const node = UiHelper.createNode("drop_item", new Vec2(), new Size(size.width, size.height + 14));
+    const icon = UiHelper.createSprite(`drop_icon_${good.type}`, good.icon, new Vec2(0, 7), size);
+    node.addChild(icon);
+    // 名称（可叠加物品带上数量）
+    const name = count > 1 ? `${good.label} x${count}` : good.label;
+    const nameLabel = UiHelper.createLabel("drop_name", name, Color.WHITE, 10, new Vec2(0, -size.height / 2 - 3), new Size(120, 12));
+    // 名称超出图标宽度时靠底部对齐，避免遮挡
+    nameLabel.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    node.addChild(nameLabel);
+    return { node, nameLabel: nameLabel.getComponent(Label) };
+  }
+
+  //#endregion
+
   //#region 弹窗与按钮
 
   /**
@@ -530,12 +555,14 @@ export default class GameUiHelper {
     descLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
     descLabel.overflow = Label.Overflow.RESIZE_HEIGHT;
 
-    // 属性列表
+    // 属性列表（装备按槽位显示战斗属性）
     const contentBody = UiHelper.createFlexCol("content_body", 3, new Vec2(), new Size(220, 220));
     contentBody.getComponent(Layout).resizeMode = Layout.ResizeMode.CONTAINER;
-    goodShowAttributes.get(good.type).forEach((attr) => {
-      contentBody.addChild(this.createAttributeLabel(attr, good[attr].toString()));
-    });
+    if (isEquipment(good)) {
+      (goodShowAttributes.get(good.slot) ?? []).forEach((attr) => {
+        contentBody.addChild(this.createAttributeLabel(attr, good[attr].toString()));
+      });
+    }
 
     dialog.addChild(contentHeader);
     dialog.addChild(contentDescription);

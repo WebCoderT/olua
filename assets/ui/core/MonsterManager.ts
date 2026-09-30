@@ -4,6 +4,7 @@ import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster } from "../../types/monster";
 import { getAnimationName } from "../../configs/animation";
 import LayerManager from "./LayerManager";
+import DropManager from "./DropManager";
 import GameUiHelper from "../helpers/GameUiHelper";
 import BattleHelper from "../utils/BattleHelper";
 import { Role } from "../../entities/Role";
@@ -91,11 +92,12 @@ export default class MonsterManager {
   static attack(target: Node, attacker: Role) {
     const monster = this.getMonsterData(target);
     if (!monster) return;
-    const damage = BattleHelper.attributeCalcAfterAttacked(monster, attacker);
+    // 只计算伤害，扣血统一由 hurt 处理（避免重复扣血）
+    const damage = BattleHelper.calcSkillDamage(attacker, monster);
     this.hurt(target, damage);
   }
 
-  /** 对目标怪物结算一次伤害（特效层显示受伤飘字，刷新血条，死亡移除） */
+  /** 对目标怪物结算一次伤害（特效层显示受伤飘字，刷新血条，死亡结算掉落并移除） */
   static hurt(target: Node, damage: number) {
     const monster = this.getMonsterData(target);
     if (!monster || monster.hp <= 0) return;
@@ -103,11 +105,11 @@ export default class MonsterManager {
     GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, monster.hp - damage);
     this.updateHead(target, monster);
-    // 死亡：注销数据并移除节点（TODO: 死亡经验/掉落结算）
-    if (monster.hp <= 0) {
-      this.monsterMap.delete(target);
-      target.destroy();
-    }
+    if (monster.hp > 0) return;
+    // 死亡：先按掉落配置在地面生成掉落物，再注销数据并移除节点
+    DropManager.drop(monster.drops, target.getWorldPosition());
+    this.monsterMap.delete(target);
+    target.destroy();
   }
 
   /** 刷新怪物头顶血条与血量文字 */

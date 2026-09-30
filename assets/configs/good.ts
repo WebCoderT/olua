@@ -1,8 +1,8 @@
 import { BattleAttributes } from "../types/common";
-import { EQUIPMENT_TYPE, Goods } from "../types/good";
+import { EQUIPMENT_TYPE } from "../types/good";
 
-// 物品显示属性
-export const goodShowAttributes = new Map<Goods["type"], Array<keyof BattleAttributes>>();
+// 物品显示属性（仅装备，按装备槽位区分）
+export const goodShowAttributes = new Map<EQUIPMENT_TYPE, Array<keyof BattleAttributes>>();
 // 防御
 goodShowAttributes.set(EQUIPMENT_TYPE.CLOTH, ["maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 goodShowAttributes.set(EQUIPMENT_TYPE.BELT, ["maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);

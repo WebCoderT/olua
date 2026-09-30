@@ -1,6 +1,7 @@
 import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
+import DropManager from "../../core/DropManager";
 import MonsterManager from "../../core/MonsterManager";
 import { getMapPointPosition } from "../../utils/MapPointMath";
 import { loadResourcesAsync } from "../../utils/ResourceLoad";
@@ -22,8 +23,9 @@ export default class GameMap extends Node {
     const role = StorageManager.findOnlineRole();
     const onMap = maps.get(role.onMap);
     this.name = "map_" + role.onMap;
-    // 清空上一张地图的怪物
+    // 清空上一张地图的怪物与掉落物
     MonsterManager.reset();
+    DropManager.reset();
     LayerManager.clearMapLayer();
     this.loadMap(onMap.src);
   }
