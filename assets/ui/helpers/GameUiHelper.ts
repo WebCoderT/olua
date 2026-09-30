@@ -1,4 +1,4 @@
-import { Animation, AnimationClip, Button, Color, isValid, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, AnimationClip, Button, Color, Graphics, isValid, Label, LabelAtlas, Layout, math, Node, ProgressBar, resources, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { AnimationPlayer } from "../../scripts/AnimationPlayer";
@@ -35,6 +35,15 @@ export interface BottomNavBarButton {
 }
 
 //#endregion
+
+/** 碰撞区域指示线宽（像素） */
+const COLLISION_AREA_LINE_WIDTH = 3;
+/** 碰撞区域指示线与名称颜色 */
+const COLLISION_AREA_COLOR = new Color(255, 64, 64, 230);
+/** 碰撞区域填充色（低透明度，避免遮挡地图底图） */
+const COLLISION_AREA_FILL_COLOR = new Color(255, 64, 64, 40);
+/** 碰撞区域名称文本宽度（窄区域下允许超出，保证名称完整可读） */
+const COLLISION_AREA_NAME_WIDTH = 200;
 
 /**
  * 游戏UI零件工厂（静态类）
@@ -846,6 +855,40 @@ export default class GameUiHelper {
     npcSpriteNode.addChild(npcSprite);
     npcNode.addChild(npcSpriteNode);
     return npcNode;
+  }
+
+  //#endregion
+
+  //#region 地图碰撞区
+
+  /**
+   * 创建碰撞区域节点（节点尺寸即碰撞范围，本体不含任何显示元素）
+   * 用于把 Tiled collision 对象组里的矩形实例化成游戏内的碰撞范围，
+   * 碰撞体由调用方（CollisionAreaSpawner）通过 addObstacleCollider 添加
+   * @param name 对象名称（仅用于命名节点，便于在层级中定位）
+   * @param size 区域尺寸
+   */
+  static createCollisionAreaNode(name: string, size: Size) {
+    return UiHelper.createNode(`collision_${name}`, new Vec2(), size);
+  }
+
+  /**
+   * 为碰撞区域节点附加调试显示：区域指示线 + 对象名称
+   * 仅用于核对 Tiled 里画的碰撞范围与游戏内实际范围是否一致，确认无误后不要调用本方法即可
+   * @param node 碰撞区域节点（尺寸需与 size 一致）
+   * @param name 对象名称（显示在区域中心）
+   * @param size 区域尺寸
+   */
+  static applyCollisionAreaDebugStyle(node: Node, name: string, size: Size) {
+    const graphics = node.addComponent(Graphics);
+    graphics.lineWidth = COLLISION_AREA_LINE_WIDTH;
+    graphics.strokeColor = COLLISION_AREA_COLOR;
+    graphics.fillColor = COLLISION_AREA_FILL_COLOR;
+    graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
+    graphics.fill();
+    graphics.stroke();
+    node.addChild(UiHelper.createLabel("collision_area_name", name, COLLISION_AREA_COLOR, 14, new Vec2(), new Size(COLLISION_AREA_NAME_WIDTH, 18)));
+    return graphics;
   }
 
   //#endregion

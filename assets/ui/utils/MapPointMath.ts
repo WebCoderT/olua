@@ -1,4 +1,12 @@
-import { Node, TiledMap, Vec2, Vec3, view } from "cc";
+import { Node, Size, TiledMap, Vec3, view } from "cc";
+
+/** 地图像素尺寸（横向格数 x 单格宽、纵向格数 x 单格高） */
+export function getMapPixelSize(map: Node) {
+  const tiledMap = map.getComponent(TiledMap);
+  const mapSize = tiledMap.getMapSize();
+  const tileSize = tiledMap.getTileSize();
+  return new Size(mapSize.width * tileSize.width, mapSize.height * tileSize.height);
+}
 
 // 获取地图上尺寸偏移
 export function getMapOffset(map: TiledMap) {
@@ -7,19 +15,34 @@ export function getMapOffset(map: TiledMap) {
   return new Vec3((width - screenWidth) / 2, 0);
 }
 
-// 获取地图上点的坐标，归一化处理
+/**
+ * 获取地图上点的世界坐标（Tiled 对象坐标 -> 地图节点本地坐标 -> 世界坐标）
+ * 地图节点可能不在原点，故在本地坐标上叠加地图节点的世界坐标
+ */
 export function getMapPointPositionOnWorld(position: Vec3, map: Node) {
-  const tiledMap = map.getComponent(TiledMap);
-  const height = tiledMap.getMapSize().height * tiledMap.getTileSize().height;
-  const width = tiledMap.getMapSize().width * tiledMap.getTileSize().width;
   const mapWorldPosition = map.getWorldPosition();
-  return new Vec3(position.x - width / 2 + mapWorldPosition.x, position.y - height / 2 + mapWorldPosition.y);
+  const localPosition = getMapPointPosition(position, map);
+  return new Vec3(localPosition.x + mapWorldPosition.x, localPosition.y + mapWorldPosition.y);
 }
 
-// 获取地图上点的坐标
+/**
+ * 获取地图上点的坐标（Tiled 对象坐标 -> 地图节点本地坐标）
+ * Tiled 的对象坐标原点在地图左上角且 y 轴向下，而地图节点本地坐标以地图中心为原点且 y 轴向上，
+ * 因此 x 减去地图半宽、y 用「地图高度 - y」翻转（引擎解析对象组内部同样是 y = 地图高 - y）
+ */
 export function getMapPointPosition(position: Vec3, map: Node) {
-  const tiledMap = map.getComponent(TiledMap);
-  const height = tiledMap.getMapSize().height * tiledMap.getTileSize().height;
-  const width = tiledMap.getMapSize().width * tiledMap.getTileSize().width;
-  return new Vec3(position.x - width / 2, position.y - height / 2);
+  const { width, height } = getMapPixelSize(map);
+  return new Vec3(position.x - width / 2, height / 2 - position.y);
+}
+
+/**
+ * 获取地图上矩形区域中心的坐标（Tiled 矩形 -> 地图节点本地坐标）
+ * Tiled 矩形对象的 x/y 是左上角坐标，故先取几何中心再按点坐标换算
+ * @param x 矩形左上角 x（Tiled 坐标）
+ * @param y 矩形左上角 y（Tiled 坐标，y 轴向下）
+ * @param width 矩形宽
+ * @param height 矩形高
+ */
+export function getMapRectCenterPosition(x: number, y: number, width: number, height: number, map: Node) {
+  return getMapPointPosition(new Vec3(x + width / 2, y + height / 2), map);
 }

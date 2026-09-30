@@ -4,12 +4,14 @@ import DropManager from "../../core/DropManager";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import MapObjectSpawner from "./MapObjectSpawner";
+import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import { loadResourcesAsync } from "../../utils/ResourceLoad";
 import { maps } from "../../../configs/map";
 
 /**
  * 地图组件（自身即地图节点）
- * 负责地图资源加载与复活点定位，地图对象（NPC/怪物）生成交给 MapObjectSpawner
+ * 负责地图资源加载与复活点定位，地图对象（NPC/怪物）生成交给 MapObjectSpawner、
+ * 碰撞区域（collision 对象组）生成交给 CollisionAreaSpawner
  * 地图资源异步加载完成后才在自身挂载 TiledMap 组件并生成地图对象，
  * 避免节点先挂上而地图未加载完成导致的黑屏
  */
@@ -38,6 +40,8 @@ export default class GameMap extends Node {
     this.goToRevivePoint();
     // 添加地图上包含的所有对象（NPC/怪物）
     new MapObjectSpawner(this as Node).spawnAll();
+    // 按 map 的 collision 对象组生成碰撞区域（静态碰撞体 + 对象名称/区域指示线）
+    new CollisionAreaSpawner(this as Node).spawnAll();
   }
 
   /** 前往复活点 */
