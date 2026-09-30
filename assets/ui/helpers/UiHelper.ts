@@ -277,13 +277,29 @@ export default class UiHelper {
    */
   static createFlexRow(name: string, spacex: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) {
     const node = this.createNode(name, position, size);
-    const layout = node.addComponent(Layout);
+    this.applyFlexRowStyle(node, spacex, position, size);
+    return node;
+  }
+
+  /**
+   * 为已有节点施加横向排列容器样式（组件"自身即容器"时使用，避免为了套样式多包一层节点）
+   * @param node 目标节点
+   * @param spacex 横向间距
+   * @param position 位置
+   * @param size 尺寸
+   * @returns 该节点的 Layout 组件
+   */
+  static applyFlexRowStyle(node: Node, spacex: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) {
+    const uiTransform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    uiTransform.setContentSize(size);
+    node.setPosition(position.x, position.y, 0);
+    const layout = node.getComponent(Layout) ?? node.addComponent(Layout);
     layout.type = Layout.Type.HORIZONTAL;
     layout.alignHorizontal = true;
     layout.resizeMode = Layout.ResizeMode.NONE;
     layout.spacingX = spacex;
     layout.horizontalDirection = Layout.HorizontalDirection.LEFT_TO_RIGHT;
-    return node;
+    return layout;
   }
 
   /**
@@ -295,15 +311,32 @@ export default class UiHelper {
    */
   static createFlexCol(name: string, spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) {
     const node = this.createNode(name, position, size);
-    const layout = node.addComponent(Layout);
+    this.applyFlexColStyle(node, spacey, position, size);
+    return node;
+  }
+
+  /**
+   * 为已有节点施加纵向排列容器样式（组件"自身即容器"时使用）
+   * 未指定高度时按内容自适应（CONTAINER）且锚点上对齐，与 createFlexCol 行为一致
+   * @param node 目标节点
+   * @param spacey 纵向间距
+   * @param position 位置
+   * @param size 尺寸
+   * @returns 该节点的 Layout 组件
+   */
+  static applyFlexColStyle(node: Node, spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) {
+    const uiTransform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    uiTransform.setContentSize(size);
+    node.setPosition(position.x, position.y, 0);
+    const layout = node.getComponent(Layout) ?? node.addComponent(Layout);
     layout.type = Layout.Type.VERTICAL;
     layout.alignHorizontal = true;
     if (size.height) layout.resizeMode = Layout.ResizeMode.NONE;
     else layout.resizeMode = Layout.ResizeMode.CONTAINER;
-    if (!size.height) layout.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    if (!size.height) uiTransform.setAnchorPoint(0.5, 1);
     layout.spacingY = spacey;
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
-    return node;
+    return layout;
   }
 
   //#endregion

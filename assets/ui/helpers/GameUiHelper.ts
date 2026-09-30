@@ -20,12 +20,17 @@ import LayerManager from "../core/LayerManager";
 
 //#region 类型定义
 
+/** 底部功能按钮配置 */
 export interface BottomNavBarButton {
+  /** 功能名称（未解锁时用于提示文案） */
   label: string;
+  /** 图标资源 */
   icon: string;
+  /** 解锁等级（角色等级低于该值时置灰并提示） */
   openLevel: number;
+  /** 点击回调 */
   onClick: () => void;
-  name: string;
+  /** 显示在图标上的快捷键名（仅展示用） */
   shortcutKey: string;
 }
 
@@ -71,6 +76,22 @@ export default class GameUiHelper {
   /** 创建纵向排列容器 */
   static createColumn(name: string, spacing: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
     return UiHelper.createFlexCol(name, spacing, position, size);
+  }
+
+  /**
+   * 为已有节点施加"横向排列容器"样式（组件自身即容器时使用，避免多包一层节点）
+   * @returns 该节点的 Layout 组件
+   */
+  static applyRowStyle(node: Node, spacing: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    return UiHelper.applyFlexRowStyle(node, spacing, position, size);
+  }
+
+  /**
+   * 为已有节点施加"纵向排列容器"样式（组件自身即容器时使用，避免多包一层节点）
+   * @returns 该节点的 Layout 组件
+   */
+  static applyColumnStyle(node: Node, spacing: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    return UiHelper.applyFlexColStyle(node, spacing, position, size);
   }
 
   /** 创建带资源图的按钮（可选文字） */
@@ -223,27 +244,25 @@ export default class GameUiHelper {
   //#region 底部导航
 
   /**
-   * 创建底部导航功能区域按键
-   * @param button BottomNavBarButton
-   * @return node Node
+   * 为已有节点施加底部导航按钮样式（组件自身即按钮时使用）
+   * @param node 目标节点
+   * @param button 按钮配置
+   * @param role 当前角色（用于判断功能是否解锁并置灰）
+   * @returns 该节点的 Sprite 组件
    */
-  static createBottomNavBarButton(button: BottomNavBarButton, role: Role) {
-    const node = UiHelper.createButton(`bottom_nav_${button.icon.replace(/\//g, "_")}`, button.icon, new Vec2(0, 0), new Size(40, 40));
-    const shortcutKey = UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, 10, new Vec2(15, -15), new Size(20, 20));
-    node.addChild(shortcutKey);
+  static applyBottomNavBarButtonStyle(node: Node, button: BottomNavBarButton, role: Role) {
+    const uiTransform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    uiTransform.setContentSize(40, 40);
+    const buttonComponent = node.getComponent(Button) ?? node.addComponent(Button);
+    buttonComponent.transition = Button.Transition.SCALE;
+    const sprite = node.getComponent(Sprite) ?? node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = false;
+    this.updateNodeIcon(node, button.icon);
+    node.addChild(UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, 10, new Vec2(15, -15), new Size(20, 20)));
     // 判断是否解锁
-    if (button.openLevel > role.level) node.getComponent(Sprite).grayscale = true;
-    return node;
-  }
-
-  /**
-   * 创建底部功能区域
-   * @param spacex 横向距离
-   * @param position 位置
-   * @param size 尺寸
-   */
-  static createBottomNavBar(spacex: number, position: Vec2, size: Size) {
-    return UiHelper.createFlexRow("bottom_nav_bar", spacex, position, size);
+    if (button.openLevel > role.level) sprite.grayscale = true;
+    return sprite;
   }
 
   //#endregion
@@ -621,6 +640,28 @@ export default class GameUiHelper {
     return attributeLabel;
   }
 
+  /**
+   * 为已有节点施加"角色属性列表"样式并填充属性条目（组件自身即列表容器时使用）
+   * 结构：基础属性标题 + 各属性行 + 特殊属性标题
+   * @param node 目标节点
+   * @param role 角色数据
+   * @param position 位置
+   * @param size 尺寸
+   * @returns 该节点的 Layout 组件
+   */
+  static applyRoleAttributeListStyle(node: Node, role: Role, position: Vec2 = new Vec2(217, 205), size: Size = new Size(150, 0)) {
+    const layout = this.applyColumnStyle(node, 5, position, size);
+    layout.resizeMode = Layout.ResizeMode.CONTAINER;
+    layout.padding = 10;
+    node.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    node.addChild(this.createText("role_basic_attributes", "基础属性", 14, new Vec2(), new Size(size.width, 14)));
+    for (const element of goodShowAttributesLabel.keys()) {
+      node.addChild(this.createAttributeLabel(element, role[element].toString(), new Size(size.width, 20)));
+    }
+    node.addChild(this.createText("role_special_attributes", "特殊属性", 14, new Vec2(), new Size(size.width, 14)));
+    return layout;
+  }
+
   //#endregion
 
   //#region 角色内观与特效
@@ -664,7 +705,7 @@ export default class GameUiHelper {
     return UiHelper.createSprite(`bag_slot_${row}_${col}`, "common/grid", new Vec2(), new Size(50, 50));
   }
 
-  /** 创建背包格子行 */
+  /** 创建背包格子行（在 parent 下逐行生成格子并返回 [行][列] 索引） */
   static createRoleBagCellRow(parent: Node) {
     const cells = [];
     for (let row = 0; row < bagRow; row++) {
@@ -678,13 +719,6 @@ export default class GameUiHelper {
       }
     }
     return cells;
-  }
-
-  /** 创建背包格子行列 */
-  static createRoleBagCells() {
-    const bagGrid = UiHelper.createFlexCol("bag_grid", 3, new Vec2(0, 17), new Size(580, 368));
-    const cells = this.createRoleBagCellRow(bagGrid);
-    return { bagGrid, cells };
   }
 
   //#endregion
@@ -742,26 +776,24 @@ export default class GameUiHelper {
 
   //#region 底部栏
 
-  /** 创建底部栏主体（尺寸、位置与背景） */
-  static createBottomBarBody(node: Node) {
+  /** 为已有节点施加底部栏主体样式（尺寸、位置与背景），节点由底部栏组件自身充当 */
+  static applyBottomBarBodyStyle(node: Node) {
     node.addComponent(UITransform).setContentSize(1100, 210);
     node.setPosition(0, -324);
     node.addChild(UiHelper.createSprite("bottom_nav_bar_background", "bottom-nav-bar/bg", new Vec2(), new Size(1100, 210)));
   }
 
-  /** 创建底部血量文字 */
-  static createBottomHpText(text: string) {
-    return UiHelper.createLabel("hp_text", text, Color.WHITE, 12, new Vec2(-421, -39), new Size(120, 10));
+  /** 创建血量文字零件（位置与尺寸由使用方决定） */
+  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = new Size(120, 10)) {
+    return UiHelper.createLabel("hp_text", text, Color.WHITE, 12, position, size);
   }
 
-  /** 创建左侧快捷键按钮组容器 */
-  static createLeftShortcutRow() {
-    return UiHelper.createFlexRow("left_shortcut_keys", 6, new Vec2(-270, -9), new Size(178, 40));
-  }
-
-  /** 创建圆形血量显示（底图 + 竖向进度条） */
-  static createRoundHpBar(progress: number): { barSprite: Node; hpBar: Node } {
-    const barSprite = UiHelper.createSprite("hp_bar_sprite", "common/max", new Vec2(-420, 12.5), new Size(90, 90));
+  /**
+   * 创建圆形血量显示零件（底图 + 竖向进度条）
+   * 返回底图节点与其内部的进度条节点，位置由使用方决定
+   */
+  static createRoundHpBar(progress: number, position: Vec2 = new Vec2()): { barSprite: Node; hpBar: Node } {
+    const barSprite = UiHelper.createSprite("hp_bar_sprite", "common/max", position, new Size(90, 90));
     const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), new Size(90, 90));
     const hpProgress = UiHelper.createSprite("hp_bar_progress", "common/hp", new Vec2(), new Size(90, 90));
     hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
@@ -821,10 +853,10 @@ export default class GameUiHelper {
   //#region 怪物信息面板
 
   /**
-   * 创建怪物信息面板主体（尺寸、位置与背景），居中靠顶部
+   * 为已有节点施加怪物信息面板主体样式（尺寸、位置与背景），节点由面板组件自身充当
    * 背景使用 common/monster_bg（238 x 71）
    */
-  static createMonsterInfoBody(node: Node) {
+  static applyMonsterInfoBodyStyle(node: Node) {
     node.addComponent(UITransform).setContentSize(238, 71);
     node.setPosition(0, 330);
     node.addChild(UiHelper.createSprite("monster_info_background", "common/monster_bg", new Vec2(), new Size(238, 71)));

@@ -4,10 +4,11 @@ import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
 
 /**
- * 角色头像栏组件
+ * 角色信息栏组件（左上角常驻 HUD）
+ * 展示：背景框 + 头像 + 名称 + 等级 + 金币/绑定金币/银币 + 战斗力 + VIP 入口
  * 由通用零件（背景/头像/货币/战斗力）拼装而成，本组件负责拼装与数据刷新
  */
-export default class RoleAvatar extends Node {
+export default class RoleInfoBar extends Node {
   /** 名称文本 */
   private nameLabel: Label;
   /** 等级文本 */
@@ -22,7 +23,7 @@ export default class RoleAvatar extends Node {
   private combatLabel: Label;
 
   constructor(role: Role) {
-    super("role_avatar");
+    super("role_info_bar");
     const isSelf = role.relationShip === RELATION_SHIP.SELF;
     this.addComponent(UITransform).setContentSize(300, 70);
     this.setPosition(isSelf ? -648 : 0, isSelf ? 324 : 0);

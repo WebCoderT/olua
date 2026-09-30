@@ -1,6 +1,6 @@
 import { Color, isValid, Label, Node, ProgressBar, Size, Vec2 } from "cc";
-import MonsterManager from "../core/MonsterManager";
-import GameUiHelper from "../helpers/GameUiHelper";
+import MonsterManager from "../../core/MonsterManager";
+import GameUiHelper from "../../helpers/GameUiHelper";
 
 /** 面板背景节点名（重建动态内容时保留） */
 const BACKGROUND_NAME = "monster_info_background";
@@ -11,7 +11,7 @@ const BACKGROUND_NAME = "monster_info_background";
  * 展示内容：背景（common/monster_bg）+ 左侧头像 + 名称 + 血量 + 技能
  * 面板样式全部由 GameUiHelper 零件拼装
  */
-export default class MonsterInfo extends Node {
+export default class MonsterInfoPanel extends Node {
   /** 当前选中的怪物节点 */
   private target: Node | null = null;
   /** 血量进度条 */
@@ -22,7 +22,7 @@ export default class MonsterInfo extends Node {
   constructor(target: Node) {
     super("monster_info");
     // 面板主体（尺寸/位置/背景）由 GameUiHelper 生成
-    GameUiHelper.createMonsterInfoBody(this);
+    GameUiHelper.applyMonsterInfoBodyStyle(this);
     this.select(target);
   }
 

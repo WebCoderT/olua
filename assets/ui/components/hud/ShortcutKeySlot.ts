@@ -1,15 +1,15 @@
 import { EventKeyboard, Input, input, Label, Node, Sprite } from "cc";
-import GameUiHelper from "../helpers/GameUiHelper";
-import SkillManager from "../core/SkillManager";
-import { SkillId } from "../../types/skill";
+import GameUiHelper from "../../helpers/GameUiHelper";
+import SkillManager from "../../core/SkillManager";
+import { SkillId } from "../../../types/skill";
 
 /**
- * 快捷键组件
+ * 技能快捷键槽组件（自身即一个快捷键格子，作为快捷键栏的 flex item）
  * 图标与按键名样式由 GameUiHelper 生成，本组件只负责图标更新、点击/键盘监听与冷却显示
  * 键盘事件只在全局 input 上派发（节点上监听不到），因此监听全局键盘按下并按按键码过滤
  * 冷却显示由外部每帧驱动 updateCooldown()：冷却中图标置灰并居中显示剩余秒数（最多 2 位小数）
  */
-export default class ShortcutKey extends Node {
+export default class ShortcutKeySlot extends Node {
   /** 快捷键名称 */
   private label: string;
   /** 监听的键盘输入 */

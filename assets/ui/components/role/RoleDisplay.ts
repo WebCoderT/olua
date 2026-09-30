@@ -1,31 +1,29 @@
-import { Animation, BoxCollider2D, EventKeyboard, Input, input, isValid, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
+import { BoxCollider2D, isValid, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { SkillContextInput } from "../../../types/skill";
-import { actionNeedWeapon, getAnimationName } from "../../../configs/animation";
 import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BattleHelper from "../../utils/BattleHelper";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
+import RoleAppearance from "./RoleAppearance";
+import RoleKeyboardInput from "../input/RoleKeyboardInput";
 
 /**
  * 角色展示组件（自身即主角节点）
- * 负责主角节点的构建、键盘操控、动作/方向状态机、外观（衣服与武器）动画切换及攻击逻辑
+ * 负责主角节点的构建与状态机（动作/朝向）、位移、攻击锁与技能上下文组装
+ * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput
  * 怪物查询与结算统一走 MonsterManager
  * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间锁定移动，且不接受新的攻击/技能（按下无反应）
  */
 export default class RoleDisplay extends Node {
-  /** 衣服节点 */
-  private cloth: Node;
-  /** 衣服动画组件 */
-  private clothAnimate: Animation | null = null;
-  /** 武器节点 */
-  private weapon: Node;
-  /** 武器外观动画组件 */
-  private weaponAnimate: Animation | null = null;
+  /** 外观（衣服/武器节点与动画） */
+  private appearance: RoleAppearance;
+  /** 键盘操控输入（init 时创建） */
+  private keyboardInput: RoleKeyboardInput | null = null;
   /** 当前朝向 */
   private direction: DIRECTION = DIRECTION.DOWN;
   /** 当前动作 */
@@ -43,13 +41,6 @@ export default class RoleDisplay extends Node {
   /** 兜底解锁定时器（FINISHED 事件未触发时按动作时长解锁） */
   private attackTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  /** 键盘方向键按下状态 */
-  private moveUp = false;
-  private moveDown = false;
-  private moveLeft = false;
-  private moveRight = false;
-  private sprint = false;
-
   constructor(role: Role) {
     super("basic_role");
     this.role = role;
@@ -58,29 +49,21 @@ export default class RoleDisplay extends Node {
     LayerManager.addToGameLayer(this);
   }
 
-  /** 初始化（外观动画与键盘监听） */
+  /** 初始化（外观动画与键盘操控） */
   init() {
     this.updateOutShow(this.role);
-    this.keyboardListener();
+    this.keyboardInput = new RoleKeyboardInput(this as Node, () => this.refreshMotion());
   }
 
-  /** 构建角色身体（衣服/武器节点与头部信息栏） */
+  /** 构建角色身体（尺寸/锚点 + 外观节点 + 头部信息栏） */
   private createBody() {
     const uiTransform = this.addComponent(UITransform);
     uiTransform.setContentSize(40, 70);
-    this.getComponent(UITransform).setAnchorPoint(0.5, 0);
-    /** 角色衣服效果展示节点（由 GameUiHelper 生成） */
-    const cloth = GameUiHelper.createRoleClothNode();
-    this.addChild(cloth);
-    this.cloth = cloth;
-    /** 角色武器效果展示节点（由 GameUiHelper 生成） */
-    const weapon = GameUiHelper.createRoleWeaponNode();
-    this.addChild(weapon);
-    this.weapon = weapon;
-    /** 角色头部信息栏父节点 */
-    const roleInformationNode = GameUiHelper.createHead("role_head", this.role.name, this.role.hp, this.role.maxHp);
-    /** 将角色头部信息栏加入节点 */
-    this.addChild(roleInformationNode);
+    uiTransform.setAnchorPoint(0.5, 0);
+    /** 角色外观（衣服与武器节点由 RoleAppearance 自建并挂到自身） */
+    this.appearance = new RoleAppearance(this as Node, () => this.onAttackFinished());
+    /** 角色头部信息栏父节点（最后添加，绘制在角色之上） */
+    this.addChild(GameUiHelper.createHead("role_head", this.role.name, this.role.hp, this.role.maxHp));
   }
 
   /** 增加碰撞 */
@@ -93,102 +76,56 @@ export default class RoleDisplay extends Node {
     boxCollider.offset = new Vec2(0, 35);
   }
 
-  //#region 动作与方向状态机
+  //#region 动作与朝向状态机
 
-  /** 键盘监听 */
-  private keyboardListener() {
-    // 游戏按键监听
-    input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
-    input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
-    // 场景销毁时移除全局键盘监听，避免重进场景后残留对已销毁节点的引用
-    this.once(Node.EventType.NODE_DESTROYED, () => {
-      input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
-      input.off(Input.EventType.KEY_UP, this.onKeyUp, this);
-    });
-  }
-
-  /** 按键按下 */
-  private onKeyDown(event: EventKeyboard) {
-    this.setKeyState(event.keyCode, true);
-    // 攻击/技能锁期间只记录按键状态，不改变动作与方向（解锁后恢复移动）
+  /** 按键状态变化：攻击/技能锁期间只记录按键状态，不改变动作与朝向（解锁后恢复移动） */
+  private refreshMotion() {
     if (this.attacking) return;
     this.updateAction();
     this.updateDirection();
   }
 
-  /** 按键抬起 */
-  private onKeyUp(event: EventKeyboard) {
-    this.setKeyState(event.keyCode, false);
-    if (this.attacking) return;
-    this.updateAction();
-    this.updateDirection();
-  }
-
-  /** 按键码对应的按下状态变更 */
-  private setKeyState(keyCode: number, pressed: boolean) {
-    switch (keyCode) {
-      case 87:
-        this.moveUp = pressed;
-        break;
-      case 65:
-        this.moveLeft = pressed;
-        break;
-      case 83:
-        this.moveDown = pressed;
-        break;
-      case 68:
-        this.moveRight = pressed;
-        break;
-      case 16:
-        this.sprint = pressed;
-        break;
-    }
-  }
-
-  /** 方向更改 */
+  /** 朝向更改（根据按下的方向键组合取八方向） */
   private updateDirection() {
-    if (this.moveUp && this.moveLeft) {
-      this.direction = DIRECTION.LEFT_UP;
-    } else if (this.moveUp && this.moveRight) {
-      this.direction = DIRECTION.RIGHT_UP;
-    } else if (this.moveDown && this.moveLeft) {
-      this.direction = DIRECTION.LEFT_DOWN;
-    } else if (this.moveDown && this.moveRight) {
-      this.direction = DIRECTION.RIGHT_DOWN;
-    } else if (this.moveUp) {
-      this.direction = DIRECTION.UP;
-    } else if (this.moveDown) {
-      this.direction = DIRECTION.DOWN;
-    } else if (this.moveLeft) {
-      this.direction = DIRECTION.LEFT;
-    } else if (this.moveRight) {
-      this.direction = DIRECTION.RIGHT;
+    const keyboard = this.keyboardInput;
+    if (keyboard) {
+      if (keyboard.isUp && keyboard.isLeft) {
+        this.direction = DIRECTION.LEFT_UP;
+      } else if (keyboard.isUp && keyboard.isRight) {
+        this.direction = DIRECTION.RIGHT_UP;
+      } else if (keyboard.isDown && keyboard.isLeft) {
+        this.direction = DIRECTION.LEFT_DOWN;
+      } else if (keyboard.isDown && keyboard.isRight) {
+        this.direction = DIRECTION.RIGHT_DOWN;
+      } else if (keyboard.isUp) {
+        this.direction = DIRECTION.UP;
+      } else if (keyboard.isDown) {
+        this.direction = DIRECTION.DOWN;
+      } else if (keyboard.isLeft) {
+        this.direction = DIRECTION.LEFT;
+      } else if (keyboard.isRight) {
+        this.direction = DIRECTION.RIGHT;
+      }
     }
+    // 动作/朝向统一在此处落地为动画播放（调用方总是成对调用 updateAction + updateDirection）
     this.updateAnimationPlay();
   }
 
-  /** 动作更改 */
+  /** 动作更改（只计算动作，动画播放由 updateDirection 统一触发） */
   private updateAction() {
-    const isWalk = this.moveUp || this.moveLeft || this.moveDown || this.moveRight;
-    const isRun = isWalk && this.sprint;
-    if (isWalk && isRun) {
+    const keyboard = this.keyboardInput;
+    const isWalk = !!keyboard?.isMoving;
+    const isRun = isWalk && !!keyboard?.isSprinting;
+    if (isRun) {
       this.action = ACTION.RUN;
       return;
     }
-    if (isWalk) {
-      this.action = ACTION.WALK;
-      return;
-    }
-    this.action = ACTION.STAND;
-    this.updateAnimationPlay();
+    this.action = isWalk ? ACTION.WALK : ACTION.STAND;
   }
 
   /** 更改播放的动作 */
   private updateAnimationPlay() {
-    /** 更换动作前判断，动作是否需要武器 */
-    if (actionNeedWeapon[this.action] && !this.weaponAnimate) return;
-    this.clothAnimate && this.clothAnimate.crossFade(getAnimationName(this.action, this.direction), 0.2);
-    this.weaponAnimate && this.weaponAnimate.crossFade(getAnimationName(this.action, this.direction), 0.2);
+    this.appearance.play(this.action, this.direction);
   }
 
   //#endregion
@@ -211,25 +148,16 @@ export default class RoleDisplay extends Node {
       rigidBody.linearVelocity = Vec2.ZERO;
       return;
     }
-    const speed = this.sprint ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
-    let inputX = 0;
-    let inputY = 0;
-    if (this.moveUp) inputY += 1;
-    if (this.moveDown) inputY -= 1;
-    if (this.moveLeft) inputX -= 1;
-    if (this.moveRight) inputX += 1;
-    const moveVec = new Vec2(inputX, inputY);
-    if (moveVec.length() > 0) {
-      moveVec.normalize();
-    }
-    // 直接赋值速度，有输入就动，没输入就立刻清零，解决漂移
-    if (this.action === ACTION.WALK || this.action === ACTION.RUN) {
-      rigidBody.linearVelocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
-      LayerManager.move(this.getWorldPosition());
-    } else {
-      // 松开按键后，立刻把速度设为0，实现"松手即停"
+    // 非移动动作（待机/攻击等）立刻把速度设为 0，实现"松手即停"
+    if (this.action !== ACTION.WALK && this.action !== ACTION.RUN) {
       rigidBody.linearVelocity = Vec2.ZERO;
+      return;
     }
+    const speed = this.keyboardInput?.isSprinting ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+    const moveVec = this.keyboardInput?.moveDirection ?? new Vec2();
+    // 直接赋值速度，有输入就动，没输入就立刻清零，解决漂移
+    rigidBody.linearVelocity = new Vec2(moveVec.x * speed, moveVec.y * speed);
+    LayerManager.move(this.getWorldPosition());
   }
 
   /** 设置角色世界坐标（如传送到复活点） */
@@ -245,54 +173,8 @@ export default class RoleDisplay extends Node {
   /** 更改外观 */
   updateOutShow(role: Role) {
     this.role = role;
-    // 衣服
-    this.updateClothOutShow(role);
-    // 武器
-    this.updateWeaponOutShow(role);
-  }
-
-  /** 更改衣服外观 */
-  private updateClothOutShow(role: Role) {
-    // 销毁动画组件
-    this.cloth.getComponent(Animation)?.destroy();
-    this.clothAnimate = null;
-    // 加载动画
-    if (role.equipments.cloth) {
-      this.clothAnimate = GameUiHelper.useRoleAnimation(getAnimationName(this.action, this.direction), this.cloth, role.equipments.cloth.out, role.speedRate);
-    } else {
-      this.clothAnimate = GameUiHelper.useRoleAnimation(getAnimationName(this.action, this.direction), this.cloth, "role/1", role.speedRate);
-    }
-    this.updateAnimationPlay();
-    this.clothAnimate.on(
-      Animation.EventType.FINISHED,
-      (_, { name }: { name: string }) => {
-        if (name.includes("attack")) this.onAttackFinished();
-        /** 播放完成后更换当前最新动画 */
-        this.clothAnimate.play(getAnimationName(this.action, this.direction));
-      },
-      this,
-    );
-  }
-
-  /** 更改武器外观 */
-  private updateWeaponOutShow(role: Role) {
-    // 销毁动画组件
-    this.weapon.getComponent(Animation)?.destroy();
-    this.weaponAnimate = null;
-    /** 加载动画,除了最基础的站立，跑动，走路动画外，其他动画都必须有武器 */
-    if (role.equipments.weapon) {
-      this.weaponAnimate = GameUiHelper.useRoleAnimation(getAnimationName(this.action, this.direction), this.weapon, role.equipments.weapon.out, role.speedRate);
-      this.updateAnimationPlay();
-      this.weaponAnimate.on(
-        Animation.EventType.FINISHED,
-        (_, { name }: { name: string }) => {
-          if (name.includes("attack")) this.onAttackFinished();
-          /** 播放完成后更换当前最新动画 */
-          this.weaponAnimate.play(getAnimationName(this.action, this.direction));
-        },
-        this,
-      );
-    }
+    // 衣服与武器外观
+    this.appearance.updateOutShow(role, this.action, this.direction);
   }
 
   //#endregion

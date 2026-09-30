@@ -3,7 +3,7 @@ import { Role } from "../../entities/Role";
 import type { Node } from "cc";
 import type { SkillId } from "../../types/skill";
 
-interface RoleAvatarView {
+interface RoleInfoBarView {
   updateRole: (role: Role) => void;
 }
 
@@ -44,11 +44,11 @@ type MonsterInfoFactory = (target: Node) => MonsterInfoView;
 
 /**
  * 角色UI管理器
- * 统一注册与刷新角色相关视图（头像栏、底部栏、主角外观、角色信息弹窗），
+ * 统一注册与刷新角色相关视图（信息栏、底部栏、主角外观、角色信息弹窗），
  * 并管理怪物信息面板的动态创建与销毁，避免数据层与视图层直接互相引用
  */
 export default class RoleUIManager {
-  private static roleAvatar: RoleAvatarView | null = null;
+  private static roleInfoBar: RoleInfoBarView | null = null;
   private static bottomBar: BottomBarView | null = null;
   private static roleDisplay: RoleDisplayView | null = null;
   private static roleInfoDialog: RoleInfoDialogView | null = null;
@@ -57,9 +57,9 @@ export default class RoleUIManager {
   private static monsterInfo: MonsterInfoView | null = null;
   private static monsterInfoFactory: MonsterInfoFactory | null = null;
 
-  /** 注册角色头像视图 */
-  static registerRoleAvatar(view: RoleAvatarView) {
-    this.roleAvatar = view;
+  /** 注册角色信息栏视图 */
+  static registerRoleInfoBar(view: RoleInfoBarView) {
+    this.roleInfoBar = view;
   }
 
   /** 注册底部栏视图 */
@@ -73,7 +73,7 @@ export default class RoleUIManager {
   }
 
   /** 注册角色信息弹窗视图（由持有弹窗实例的 BottomBar 注册） */
-  static registerRoleInformationDialog(view: RoleInfoDialogView) {
+  static registerRoleInfoDialog(view: RoleInfoDialogView) {
     this.roleInfoDialog = view;
   }
 
@@ -124,7 +124,7 @@ export default class RoleUIManager {
   /** 清空全部视图引用（场景卸载时由组合根调用，避免跨场景残留已销毁节点） */
   static clearViews() {
     this.destroyMonsterInfo();
-    this.roleAvatar = null;
+    this.roleInfoBar = null;
     this.bottomBar = null;
     this.roleDisplay = null;
     this.roleInfoDialog = null;
@@ -133,7 +133,7 @@ export default class RoleUIManager {
 
   /** 角色数据变更后统一刷新视图 */
   static updateRoleData(role: Role) {
-    this.roleAvatar?.updateRole(role);
+    this.roleInfoBar?.updateRole(role);
     this.bottomBar?.update(role);
   }
 
