@@ -101,6 +101,8 @@ export interface SkillConfig {
   icon: string;
   /** 技能冷却时间:秒 */
   cooldown: number;
+  /** 释放一次消耗的魔法值（角色当前魔法值不足时无法释放，见 SkillManager） */
+  mpCost: number;
   /** 技能目标类型 */
   targetType: SkillTargetType;
   /** 技能职业 */

@@ -56,6 +56,8 @@ export default class GameHelper {
     const attributeKeys: (keyof Omit<BattleAttributes, "maxHp">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 
     role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0);
+    // 最大魔法值只跟等级走（装备暂不影响魔法值）
+    role.maxMp = levelConfig.maxMp;
     for (const key of attributeKeys) {
       role[key] = this.twoAttributesCalc([levelConfig[key], ...equipmentList.map((equipment) => equipment[key])]);
     }

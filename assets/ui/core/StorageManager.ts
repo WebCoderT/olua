@@ -85,8 +85,9 @@ export default class StorageManager {
       else role.level += 1;
       // 属性重新计算
       Object.assign(role, GameHelper.combatCalc(role));
-      // 升级时补满血量至最大血量
+      // 升级时补满血量与魔法值至最大值
       role.hp = role.maxHp;
+      role.mp = role.maxMp;
       // 播放升级特效
       LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
     }

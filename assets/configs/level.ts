@@ -10,6 +10,8 @@ function createLevelConfig(exp: number, maxHp: number): LevelConfig {
   return {
     exp,
     maxHp,
+    // 最大魔法值：血量的一半（相对关系见 configs/role.mpRecoverPerSecond，技能的消耗见 configs/skill 的 mpCost）
+    maxMp: Math.floor(maxHp / 2),
     physicalAttack: attributeRange(0.1),
     magicAttack: attributeRange(0.08),
     taoistAttack: attributeRange(0.06),

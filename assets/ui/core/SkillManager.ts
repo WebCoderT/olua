@@ -3,7 +3,9 @@ import { skills } from "../../configs/skill";
 import { SkillContextInput, SkillId, SkillPushConfig, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { canAttackTarget } from "../utils/battle/BattleMath";
+import MpHelper from "../utils/battle/MpHelper";
 import AutoBattle from "./AutoBattle";
+import RoleUIManager from "./RoleUIManager";
 import StorageManager from "./StorageManager";
 
 /**
@@ -72,6 +74,11 @@ export default class SkillManager {
       if (!fromAutoBattle) GameUiHelper.createTip("skill_cooldown_tip", `${config.label} 冷却中`);
       return false;
     }
+    // 魔法值校验（每个技能的消耗见配置 mpCost）：不足则本次不释放，手动释放时给出提示
+    if (!MpHelper.hasEnough(context.role, config.mpCost)) {
+      if (!fromAutoBattle) GameUiHelper.createErrorTip("skill_mp_tip", `魔法值不足（当前 ${context.role.mp}，需要 ${config.mpCost}）`);
+      return false;
+    }
     // 单体技能：无选中目标时自动选取施法距离内最近的存活怪物
     let target = context.target;
     if (config.targetType === SkillTargetType.SINGLE) {
@@ -89,8 +96,13 @@ export default class SkillManager {
         return false;
       }
     }
-    // 记录冷却，显示技能释放提示（位置在释放者，挂特效层），调用技能实现
+    // 记录冷却，扣除魔法值（扣完落盘，角色数据在存储层是反序列化对象，不落盘下次读取会回滚），
+    // 显示技能释放提示（位置在释放者，挂特效层），调用技能实现
     this.cooldowns.set(skillId, Date.now());
+    if (config.mpCost > 0 && MpHelper.spend(context.role, config.mpCost)) {
+      StorageManager.updateOnlineRole(context.role);
+      RoleUIManager.updateRoleData(context.role);
+    }
     GameUiHelper.showSkillTip(context.caster, config.label);
     config.onClick({ ...context, target, config, level });
     // 技能击退：配置了 push 的单体技能把目标推开（方向 = 施法者指向目标）

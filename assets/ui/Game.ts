@@ -1,5 +1,6 @@
 import { _decorator, Camera, Component, isValid } from "cc";
 import { maps } from "../configs/map";
+import MpHelper from "./utils/battle/MpHelper";
 import { ActivityController } from "./controllers/ActivityController";
 import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
@@ -44,6 +45,8 @@ export class Game extends Component {
   private smallMap: SmallMap | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
   private ready = false;
+  /** 魔法值自然回复的结算计时（秒，满 1 秒结算一次） */
+  private mpRecoverTimer = 0;
 
   async start() {
     // 获取角色信息
@@ -109,7 +112,7 @@ export class Game extends Component {
     RoleUIManager.clearViews();
   }
 
-  update() {
+  update(deltaTime: number) {
     // 资源预加载完成前（start 里在 await）不驱动任何逻辑，避免用到还没创建的组件
     if (!this.ready) return;
     // 鼠标指针样式（每帧最多判定一次：鼠标未移动且悬停目标未变化时不做任何事）
@@ -119,6 +122,16 @@ export class Game extends Component {
     AutoBattle.tick(this.roleDisplay?.isMovementKeyDown() ?? false);
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
+    // 角色魔法值自然回复（每秒结算一次并落盘：角色数据在存储层是反序列化对象，不落盘下次读取会回滚）
+    this.mpRecoverTimer += deltaTime;
+    if (this.mpRecoverTimer >= 1) {
+      const role = StorageManager.findOnlineRole();
+      if (role && MpHelper.recover(role, this.mpRecoverTimer * 1000)) {
+        StorageManager.updateOnlineRole(role);
+        RoleUIManager.updateRoleData(role);
+      }
+      this.mpRecoverTimer = 0;
+    }
     // 自动战斗提示（屏幕中间循环播放：「自动战斗中」挂机期间 /「自动寻路中」自动走位期间，允许同显，挂特效层）
     AutoBattleTips.update(this.roleDisplay);
     // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入）

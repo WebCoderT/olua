@@ -39,4 +39,6 @@ export interface BattleAttributes {
 export interface LevelConfig extends BattleAttributes {
   // 等级存储经验
   exp: number;
+  /** 该等级的最大魔法值 */
+  maxMp: number;
 }

@@ -26,6 +26,12 @@ export class Role implements BattleAttributes {
   exp: number = 0;
   maxHp: number;
   hp: number;
+  /** 最大魔法值（按等级取自 configs/level） */
+  maxMp: number;
+  /** 当前魔法值：释放技能扣除（技能消耗见 configs/skill 的 mpCost），读写统一走 ui/utils/battle/MpHelper */
+  mp: number;
+  /** 魔法值自然回复的累积量（不足 1 点的部分，避免低回复速度下被取整丢弃） */
+  mpRecoverAccumulator: number = 0;
   bag: Array<Array<Goods | null>>;
   combat: number = 0;
   physicalAttack: [number, number] = [0, 0];
@@ -62,6 +68,7 @@ export class Role implements BattleAttributes {
     this.occupation = occupation;
     this.sex = sex;
     this.hp = this.maxHp = levelMap.get(this.level).maxHp;
+    this.mp = this.maxMp = levelMap.get(this.level).maxMp;
     this.combat = this.maxHp * 10;
     this.physicalAttack = levelMap.get(this.level).physicalAttack;
 

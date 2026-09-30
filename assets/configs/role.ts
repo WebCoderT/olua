@@ -11,6 +11,12 @@ export const ROLE_WALK_SPEED = 2;
 export const ROLE_RUN_SPEED = 4;
 
 /**
+ * 角色魔法值自然回复速度（点/秒），设为 0 即关闭自然回复
+ * 最大魔法值见 configs/level 的等级配置（maxMp），技能消耗见 configs/skill 的 mpCost
+ */
+export const mpRecoverPerSecond = 2;
+
+/**
  * 角色默认外观目录（未穿戴衣服时使用）
  * 保证角色始终有身体，同时让"预加载角色外观"与 RoleAppearance 的回退取到同一份资源
  */
