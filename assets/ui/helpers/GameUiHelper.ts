@@ -31,7 +31,7 @@ import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
 import { BattleAttributes } from "../../types/common";
-import { EQUIPMENT_TYPE, getGoodCount, Good, Goods, isEquipment } from "../../types/good";
+import { EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good";
 import { Monster } from "../../types/monster";
 import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";

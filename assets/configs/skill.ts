@@ -15,6 +15,12 @@ oeccupationSkills.set(OECCUPATION.DAO, []);
 /** 所有技能 */
 export const skills = new Map<SkillId, SkillConfig>();
 
+/**
+ * 普攻技能（左键点击怪物直接释放的那个技能，见 components/input/ScreenClickInput）
+ * 走 SkillManager.release 统一入口：冷却/魔法值/距离校验都在里面，超出距离时 canAuto 会委托 AutoBattle 走过去继续打
+ */
+export const basicAttackSkillId: SkillId = "1000";
+
 /** 插入技能数据 */
 skills.set("1000", {
   label: "‌基础剑术",

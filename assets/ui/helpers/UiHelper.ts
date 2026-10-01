@@ -20,7 +20,6 @@ import {
   ProgressBar,
   ScrollView,
   Mask,
-  Vec3,
 } from "cc";
 
 /**

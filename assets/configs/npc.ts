@@ -1,4 +1,4 @@
-import { Vec2, Vec3 } from "cc";
+import { Vec3 } from "cc";
 import { NPC } from "../types/map";
 import MapTeleportDialog from "../ui/components/dialogs/MapTeleportDialog";
 

@@ -1,4 +1,4 @@
-import { Node, ScrollView, Size, Vec2 } from "cc";
+import { ScrollView, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";

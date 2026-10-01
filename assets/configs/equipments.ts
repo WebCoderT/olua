@@ -1,4 +1,4 @@
-import { Size, Vec2 } from "cc";
+import { Vec2 } from "cc";
 import { Equipment, EQUIPMENT_TYPE, EquipmentSlot, GOOD_TYPE } from "../types/good";
 import { OECCUPATION, SEX } from "../types/role";
 
@@ -25,23 +25,29 @@ export const clothes: Equipment[] = [
   {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ZHAN,
-    label: "新手赠送-梁山伯&祝英台(套装)",
+    occupation: OECCUPATION.ALL,
+    label: "* 唯一深爱 *",
     sex: SEX.ALL,
     level: 1,
-    description: "新手赠送套装衣服，穿上此装备，开启你的旅程吧！",
+    description: "葬爱家族专属衣服，穿上此装备，开启你的旅程吧！",
     sellPirce: 0,
-    icon: "clothes/icon/001",
-    in: "clothes/in/001",
-    out: "clothes/out/001",
-    physicalAttack: [0, 0],
-    magicAttack: [0, 0],
-    taoistAttack: [0, 0],
-    physicalDefense: [0, 10],
-    magicDefense: [0, 10],
-    taoistDefense: [0, 10],
-    maxHp: 100,
-    inOffset: new Vec2(),
+    icon: "clothes/icon/005",
+    in: "clothes/in/005",
+    out: "clothes/out/005",
+    physicalAttack: [0, 100],
+    magicAttack: [0, 100],
+    taoistAttack: [0, 100],
+    physicalDefense: [0, 50],
+    magicDefense: [0, 50],
+    taoistDefense: [0, 50],
+    maxHp: 3000,
+    inOffset: new Vec2(0, 0),
+    tags: ["第一大陆"],
+    prefix: "葬爱",
+    suffix: "魂级",
+    inScale: 1.3,
+    outScale: 1,
+    outOffset: new Vec2(0, 0),
   },
 ];
 
@@ -67,6 +73,12 @@ export const weapons: Equipment[] = [
     taoistDefense: [0, 0],
     maxHp: 0,
     inOffset: new Vec2(),
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -88,6 +100,12 @@ export const weapons: Equipment[] = [
     taoistDefense: [0, 0],
     maxHp: 0,
     inOffset: new Vec2(),
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -109,6 +127,12 @@ export const weapons: Equipment[] = [
     taoistDefense: [0, 0],
     maxHp: 0,
     inOffset: new Vec2(-50, 100),
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -130,6 +154,12 @@ export const weapons: Equipment[] = [
     taoistDefense: [0, 0],
     maxHp: 0,
     inOffset: new Vec2(90, -60),
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
 ];
 
@@ -155,6 +185,12 @@ export const rings: Equipment[] = [
     magicDefense: [0, 0],
     taoistDefense: [0, 0],
     maxHp: 0,
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
 ];
 
@@ -180,6 +216,12 @@ export const nicklaces: Equipment[] = [
     magicDefense: [0, 0],
     taoistDefense: [0, 0],
     maxHp: 0,
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
 ];
 
@@ -205,6 +247,12 @@ export const shoes: Equipment[] = [
     magicDefense: [0, 5],
     taoistDefense: [0, 5],
     maxHp: 5,
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
 ];
 
@@ -230,6 +278,12 @@ export const helmets: Equipment[] = [
     magicDefense: [0, 5],
     taoistDefense: [0, 5],
     maxHp: 5,
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
 ];
 
@@ -255,5 +309,11 @@ export const belts: Equipment[] = [
     magicDefense: [0, 5],
     taoistDefense: [0, 5],
     maxHp: 5,
+    tags: [],
+    prefix: "",
+    suffix: "",
+    inScale: 1,
+    outScale: 1,
+    outOffset: new Vec2(),
   },
 ];

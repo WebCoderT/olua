@@ -10,8 +10,6 @@ import { SkillId } from "../../../types/skill";
  * 冷却显示由外部每帧驱动 updateCooldown()：冷却中图标置灰并居中显示剩余秒数（最多 2 位小数）
  */
 export default class ShortcutKeySlot extends Node {
-  /** 快捷键名称 */
-  private label: string;
   /** 监听的键盘输入 */
   private listenKey: number;
   /** 图标 */
@@ -25,7 +23,6 @@ export default class ShortcutKeySlot extends Node {
 
   constructor(label: string, listenKey: number, spriteSrc?: string, onClick?: Function, skillId?: SkillId) {
     super(`shortcut_key_${label}`);
-    this.label = label;
     this.listenKey = listenKey;
     this.cooldownLabel = GameUiHelper.applyShortcutKeyStyle(this, label).cooldownLabel;
     this.updateIcon(spriteSrc, onClick, skillId);

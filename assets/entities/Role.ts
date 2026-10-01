@@ -1,4 +1,4 @@
-import { ACTION, SpeedRate } from "../types/animation";
+import { SpeedRate } from "../types/animation";
 import { BattleAttributes } from "../types/common";
 import { Equipment, EQUIPMENT_TYPE, Goods } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../types/role";

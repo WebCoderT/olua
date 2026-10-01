@@ -1,7 +1,7 @@
-import { _decorator, Component, Node } from "cc";
+import { _decorator, Component } from "cc";
 import { AutoUpgrade } from "./AutoUpgrade";
 import GameUiHelper from "../helpers/GameUiHelper";
-const { ccclass, property } = _decorator;
+const { ccclass } = _decorator;
 
 @ccclass("ActivityController")
 export class ActivityController extends Component {

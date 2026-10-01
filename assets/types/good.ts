@@ -70,10 +70,22 @@ export interface Equipment extends Good, BattleAttributes {
   sex: SEX;
   // 内观
   in: string;
+  /** 内观缩放 */
+  inScale: number;
   // 内观偏移
   inOffset: Vec2;
+  /** 外观缩放 */
+  outScale: number;
+  /** 外观偏移 */
+  outOffset: Vec2;
   // 外观
   out: string;
+  /** 标签 */
+  tags: string[];
+  /** 前缀 */
+  prefix: string;
+  /** 后缀 */
+  suffix: string;
 }
 
 /** 药品使用效果（新增效果类型时在此扩展） */

@@ -4,7 +4,6 @@ import { EQUIPMENT_TYPE } from "../types/good";
 // 物品显示属性（仅装备，按装备槽位区分）
 export const goodShowAttributes = new Map<EQUIPMENT_TYPE, Array<keyof BattleAttributes>>();
 // 防御
-goodShowAttributes.set(EQUIPMENT_TYPE.CLOTH, ["maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 goodShowAttributes.set(EQUIPMENT_TYPE.BELT, ["maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 goodShowAttributes.set(EQUIPMENT_TYPE.HELMET, ["maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 goodShowAttributes.set(EQUIPMENT_TYPE.SCAPULAR, ["maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
@@ -18,6 +17,7 @@ goodShowAttributes.set(EQUIPMENT_TYPE.RING, ["physicalAttack", "magicAttack", "t
 goodShowAttributes.set(EQUIPMENT_TYPE.ACCESSORIES, ["physicalAttack", "magicAttack", "taoistAttack"]);
 
 // 其他全属性
+goodShowAttributes.set(EQUIPMENT_TYPE.CLOTH, ["physicalAttack", "magicAttack", "taoistAttack", "maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 goodShowAttributes.set(EQUIPMENT_TYPE.OTHER1, ["physicalAttack", "magicAttack", "taoistAttack", "maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 goodShowAttributes.set(EQUIPMENT_TYPE.OTHER2, ["physicalAttack", "magicAttack", "taoistAttack", "maxHp", "physicalDefense", "magicDefense", "taoistDefense"]);
 

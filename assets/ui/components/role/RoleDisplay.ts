@@ -6,7 +6,7 @@ import { SkillContextInput } from "../../../types/skill";
 import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { canAttackTarget, getDirectionByVector, getDirectionToTarget } from "../../utils/battle/BattleMath";
+import { getDirectionByVector } from "../../utils/battle/BattleMath";
 import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
@@ -246,7 +246,7 @@ export default class RoleDisplay extends Node {
 
   //#endregion
 
-  //#region 攻击逻辑
+  //#region 选中目标与操控状态
 
   /** 设置攻击目标（null 表示取消选中），并刷新怪物信息面板 */
   setTarget(target: Node | null) {
@@ -290,23 +290,6 @@ export default class RoleDisplay extends Node {
     // 停止自动移动：按键盘当前状态恢复动作与朝向（无键回待机）
     this.updateAction();
     this.updateDirection();
-  }
-
-  /** 攻击目标 */
-  private attackTarget(target: Node) {
-    /** 判断攻击距离，不在范围内不发起攻击 */
-    if (!canAttackTarget(target, this as Node)) {
-      GameUiHelper.createErrorTip("attack_range_tip", "距离太远，无法攻击！");
-      return;
-    }
-    /** 发起普攻：锁定至攻击动画播放完成，完成后结算 */
-    this.startAttack(ACTION.ATTACK_NEAR, getDirectionToTarget(target, this as Node), () => this.attackTargetUpdate());
-  }
-
-  /** 攻击动画播放完成后的结算 */
-  private attackTargetUpdate() {
-    if (!this.target || !isValid(this.target)) return;
-    return MonsterManager.attack(this.target, StorageManager.findOnlineRole());
   }
 
   //#endregion

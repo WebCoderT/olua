@@ -7,10 +7,8 @@ import CursorManager from "./CursorManager";
 import DropManager from "./DropManager";
 import MonsterAI from "./MonsterAI";
 import GameUiHelper from "../helpers/GameUiHelper";
-import { calcSkillDamage } from "../utils/battle/BattleMath";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import { Role } from "../../entities/Role";
 
 /**
  * 怪物管理器（静态类）
@@ -156,15 +154,6 @@ export default class MonsterManager {
   static push(target: Node, direction: Vec2, distance: number, duration?: number) {
     if (!this.monsterMap.has(target)) return;
     MonsterAI.push(target, direction, distance, duration);
-  }
-
-  /** 普通攻击结算：按攻击者属性对目标怪物结算一次伤害 */
-  static attack(target: Node, attacker: Role) {
-    const monster = this.getMonsterData(target);
-    if (!monster) return;
-    // 只计算伤害，扣血统一由 hurt 处理（避免重复扣血）
-    const damage = calcSkillDamage(attacker, monster);
-    this.hurt(target, damage);
   }
 
   /** 对目标怪物结算一次伤害（特效层显示受伤飘字，刷新血条，死亡结算掉落并移除） */

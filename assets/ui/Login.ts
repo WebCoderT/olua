@@ -2,7 +2,7 @@ import { _decorator, Color, Component, EditBox, Node, Size, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
-const { ccclass, property } = _decorator;
+const { ccclass } = _decorator;
 
 @ccclass("Login")
 export class Login extends Component {

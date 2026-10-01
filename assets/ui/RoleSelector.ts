@@ -3,8 +3,7 @@ import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
-import { OECCUPATION, RoleOccupationInfo, SEX } from "../types/role";
-import { Role } from "../entities/Role";
+import { OECCUPATION, SEX } from "../types/role";
 const { ccclass } = _decorator;
 
 /** 选角主视图引用（本组件拼装并持有） */

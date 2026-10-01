@@ -1,5 +1,5 @@
-import { _decorator, Animation, AnimationClip, AnimationState, AssetManager, Component, resources, SpriteAtlas } from "cc";
-const { ccclass, property } = _decorator;
+import { _decorator, Animation, AnimationClip, Component, resources, SpriteAtlas } from "cc";
+const { ccclass } = _decorator;
 
 @ccclass("AnimationPlayer")
 export class AnimationPlayer extends Component {
