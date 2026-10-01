@@ -1,6 +1,7 @@
 import { Node, Size, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
 import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
+import { getItem } from "../../../configs/items";
 import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction, PointerButton } from "../../utils/input/Pointer";
@@ -51,7 +52,10 @@ export default class BagGridView extends Node {
       }),
     );
     role.bag.forEach((row, rowIndex) => {
-      row.forEach((good, colIndex) => {
+      row.forEach((bagCell, colIndex) => {
+        if (!bagCell) return;
+        // 格子只存物品 key，显示数据实时解析（id 失效的格子跳过不渲染）
+        const good = getItem(bagCell.id);
         if (!good) return;
         const cell = this.cells[rowIndex][colIndex];
         GameUiHelper.createGood(cell, good);

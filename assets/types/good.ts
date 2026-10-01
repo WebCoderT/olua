@@ -123,6 +123,17 @@ export interface Material extends Good {
 
 export type Goods = Equipment | Drug | Material;
 
+/**
+ * 背包格子：只存物品 key 与数量，物品数据经 configs/items 实时解析
+ * （改物品配置后重启即生效，无需重新拾取）
+ */
+export interface BagCell {
+  /** 物品 id（configs/items 总表的 key） */
+  id: string;
+  /** 数量（不可叠加物品恒为 1） */
+  count: number;
+}
+
 /** 是否为装备 */
 export function isEquipment(good: Goods): good is Equipment {
   return good.type === GOOD_TYPE.EQUIPMENT;

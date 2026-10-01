@@ -1,4 +1,4 @@
-import { GOOD_TYPE, Goods } from "../types/good";
+import { Equipment, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
 import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { materials } from "./material";
@@ -40,6 +40,13 @@ registerItems(materials, "material");
 export function getItem(id: string): Goods | null {
   const item = items.get(id);
   return item ? { ...item } : null;
+}
+
+/** 按 id 获取装备（角色装备槽只存 id，显示/属性一律经此实时解析；非装备或无此物品返回 null） */
+export function getEquipment(id: string | null | undefined): Equipment | null {
+  if (!id) return null;
+  const item = getItem(id);
+  return item && isEquipment(item) ? item : null;
 }
 
 /** 按物品大类获取全部物品 */

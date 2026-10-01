@@ -1,10 +1,11 @@
 import { Camera, Vec3 } from "cc";
 import { BattleAttributes } from "../../types/common";
-import { Equipment } from "../../types/good";
+import { Equipment, EQUIPMENT_TYPE } from "../../types/good";
 import { OECCUPATION, SEX } from "../../types/role";
 import StorageManager from "./StorageManager";
 import { Role } from "../../entities/Role";
 import { levelMap } from "../../configs/level";
+import { getEquipment } from "../../configs/items";
 import { combatCalc as combatAttributeWeights } from "../../configs/battle";
 
 /**
@@ -50,8 +51,8 @@ export default class GameHelper {
     const levelConfig = levelMap.get(role.level);
     if (!levelConfig) return role;
 
-    const equipmentList = Object.keys(role.equipments)
-      .map((key) => role.equipments[key as keyof Role["equipments"]])
+    const equipmentList = (Object.keys(role.equipments) as EQUIPMENT_TYPE[])
+      .map((slot) => getEquipment(role.equipments[slot]))
       .filter((equipment): equipment is Equipment => equipment !== null);
     const attributeKeys: (keyof Omit<BattleAttributes, "maxHp">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 

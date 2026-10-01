@@ -1,6 +1,7 @@
 import { Node, Size, Vec2 } from "cc";
 import { Equipment, EQUIPMENT_TYPE } from "../../../types/good";
 import { equipmentSlots } from "../../../configs/equipments";
+import { getEquipment } from "../../../configs/items";
 import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -39,11 +40,10 @@ export default class EquipmentSlotGroup extends Node {
   private onUnequip: EquipmentSlotHandler;
 
   /**
-   * @param side 分组方向
-   * @param equipments 已穿戴装备（按槽位索引，未穿戴为 null）
+   * @param equipments 已穿戴装备（按槽位存装备 id，未穿戴为 null；装备数据经配置表实时解析）
    * @param onUnequip 槽位右键操作回调
    */
-  constructor(side: EquipmentSlotSide, equipments: { [key in EQUIPMENT_TYPE]: Equipment | null }, onUnequip: EquipmentSlotHandler) {
+  constructor(side: EquipmentSlotSide, equipments: { [key in EQUIPMENT_TYPE]: string | null }, onUnequip: EquipmentSlotHandler) {
     const layout = GROUP_LAYOUT[side];
     super(layout.name);
     this.onUnequip = onUnequip;
@@ -63,7 +63,7 @@ export default class EquipmentSlotGroup extends Node {
         this,
       );
       this.addChild(slot);
-      this.updateSlot(type, equipments[type]);
+      this.updateSlot(type, getEquipment(equipments[type]));
     });
   }
 

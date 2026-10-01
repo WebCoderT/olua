@@ -1,6 +1,6 @@
 import { SpeedRate } from "../types/animation";
 import { BattleAttributes } from "../types/common";
-import { Equipment, EQUIPMENT_TYPE, Goods } from "../types/good";
+import { EQUIPMENT_TYPE, BagCell } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../types/role";
 import { SkillId } from "../types/skill";
 import { MapId } from "../types/map";
@@ -32,7 +32,8 @@ export class Role implements BattleAttributes {
   mp: number;
   /** 魔法值自然回复的累积量（不足 1 点的部分，避免低回复速度下被取整丢弃） */
   mpRecoverAccumulator: number = 0;
-  bag: Array<Array<Goods | null>>;
+  /** 背包：格子只存物品 key 与数量（BagCell），物品数据经 configs/items 实时解析 */
+  bag: Array<Array<BagCell | null>>;
   combat: number = 0;
   physicalAttack: [number, number] = [0, 0];
   magicAttack: [number, number] = [0, 0];
@@ -41,7 +42,9 @@ export class Role implements BattleAttributes {
   magicDefense: [number, number] = [0, 0];
   taoistDefense: [number, number] = [0, 0];
   onMap: MapId = "0";
-  equipments: { [key in EQUIPMENT_TYPE]: Equipment | null } = {
+  /** 已穿戴装备：槽位只存装备 id（items 总表的 key），装备数据一律经 configs/items.getEquipment 实时解析，
+   *  因此调整装备配置后重启即可生效，无需重新穿戴；旧存档快照由 StorageManager.ensureRoleDefaults 迁移 */
+  equipments: { [key in EQUIPMENT_TYPE]: string | null } = {
     [EQUIPMENT_TYPE.CLOTH]: null,
     [EQUIPMENT_TYPE.ACCESSORIES]: null,
     [EQUIPMENT_TYPE.BELT]: null,
@@ -80,10 +83,10 @@ export class Role implements BattleAttributes {
         this.bag[row][col] = null;
       }
     }
-    // 初始化成功后，获得新手物品
+    // 初始化成功后，获得新手物品（配置对象经 items 注册表带有 id，格子只存 key + 数量）
     const equipments = getNewRoleEquipments(occupation, sex);
     equipments.forEach((eq, index) => {
-      this.bag[Math.floor(index / bagCol)][index % bagCol] = eq;
+      this.bag[Math.floor(index / bagCol)][index % bagCol] = eq.id ? { id: eq.id, count: 1 } : null;
     });
   }
 }

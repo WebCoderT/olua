@@ -31,7 +31,7 @@ import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
 import { BattleAttributes } from "../../types/common";
-import { EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good";
+import { Equipment, EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good";
 import { Monster } from "../../types/monster";
 import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";
@@ -708,9 +708,7 @@ export default class GameUiHelper {
     layout.spacingY = 8;
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     layout.node.setPosition(position.x, position.y);
-    layout.paddingLeft = 10;
-    layout.paddingRight = 10;
-    layout.paddingBottom = 10;
+    layout.padding = 10;
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
 
     // 头部
@@ -856,8 +854,7 @@ export default class GameUiHelper {
    * 创建角色衣服内观
    * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
    */
-  static createRoleClothInShow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    const cloth = role.equipments.cloth;
+  static createRoleClothInShow(cloth: Equipment, size: Size = new Size()) {
     const clothInShow = UiHelper.createSprite("cloth_in_show", "", cloth.inPosition, size);
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     clothInShow.setScale(cloth?.inScaleX ?? 1, cloth?.inScaleY ?? 1, 1);
@@ -870,8 +867,7 @@ export default class GameUiHelper {
    * 创建角色武器内观
    * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
    */
-  static createRoleWeaponInshow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    const weapon = role.equipments.weapon;
+  static createRoleWeaponInshow(weapon: Equipment, size: Size = new Size()) {
     const weaponInShow = UiHelper.createSprite("weapon_in_show", "", weapon.inPosition, size);
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     weaponInShow.setScale(weapon?.inScaleX ?? 1, weapon?.inScaleY ?? 1, 1);

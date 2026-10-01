@@ -3,8 +3,12 @@ import { Role } from "../../../entities/Role";
 import { Equipment } from "../../../types/good";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
+import { getEquipment } from "../../../configs/items";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
+
+/** 这些朝向下衣服在武器上方（武器在身后）：左 / 左上 / 上 / 左下；其余朝向武器在衣服上方 */
+const CLOTH_ON_TOP_DIRECTIONS: DIRECTION[] = [DIRECTION.LEFT, DIRECTION.LEFT_UP, DIRECTION.UP, DIRECTION.LEFT_DOWN];
 
 /**
  * 角色外观（衣服 + 武器）
@@ -36,11 +40,13 @@ export default class RoleAppearance {
   /** 当前穿戴的衣服/武器装备（play 里按方向应用外观位置用；未装备时为 null） */
   private clothEquipment: Equipment | null = null;
   private weaponEquipment: Equipment | null = null;
+  /** 上次计算的层级关系（null 表示尚未计算；方向没变时不重复调整 sibling） */
+  private clothOnTop: boolean | null = null;
 
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
     // 衣服/武器节点（样式由 GameUiHelper 零件生成，本类只负责挂到宿主并持有引用）
-    // 先武器后衣服：同层后加的节点渲染在上面，需求是衣服盖在武器上方（武器在身后）
+    // 两者的层级关系由 updateLayerOrder 按朝向动态调整（首次 play 时立即生效），这里的顺序只是初始兜底
     this.weapon = GameUiHelper.createRoleWeaponNode();
     host.addChild(this.weapon);
     this.cloth = GameUiHelper.createRoleClothNode();
@@ -66,17 +72,30 @@ export default class RoleAppearance {
     // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
     this.applyOutTransform(this.cloth, this.clothEquipment);
     this.applyOutTransform(this.weapon, this.weaponEquipment);
+    this.updateLayerOrder();
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
     this.clothAnimate?.crossFade(animationName, 0.2);
     this.weaponAnimate?.crossFade(animationName, 0.2);
   }
 
+  /**
+   * 按朝向调整衣服与武器的层级：左/左上/上/左下时衣服在武器上方，其余朝向武器在衣服上方
+   * 方向没变时不做任何事（play 会在动作切换时频繁调用，避免反复触发 sibling 重排）
+   */
+  private updateLayerOrder() {
+    const clothOnTop = CLOTH_ON_TOP_DIRECTIONS.indexOf(this.direction) !== -1;
+    if (this.clothOnTop === clothOnTop) return;
+    this.clothOnTop = clothOnTop;
+    if (clothOnTop) this.cloth.setSiblingIndex(this.weapon.getSiblingIndex() + 1);
+    else this.weapon.setSiblingIndex(this.cloth.getSiblingIndex() + 1);
+  }
+
   /** 重新加载衣服动画：无衣服时回退默认外观，保证角色始终有身体 */
   private reloadClothAnimation(role: Role) {
-    const cloth = role.equipments.cloth;
+    const cloth = getEquipment(role.equipments.cloth);
     const src = cloth?.out || ROLE_DEFAULT_CLOTH_OUT;
-    this.clothEquipment = cloth ?? null;
+    this.clothEquipment = cloth;
     if (src === this.clothSrc) return;
     this.clothSrc = src;
     this.clothAnimate = this.loadAnimation(this.cloth, src, role);
@@ -84,9 +103,9 @@ export default class RoleAppearance {
 
   /** 重新加载武器动画：未装备武器或该武器没有外观时不加载（武器节点整节点隐藏） */
   private reloadWeaponAnimation(role: Role) {
-    const weapon = role.equipments.weapon;
+    const weapon = getEquipment(role.equipments.weapon);
     const src = weapon?.out ?? "";
-    this.weaponEquipment = weapon ?? null;
+    this.weaponEquipment = weapon;
     if (src === this.weaponSrc) return;
     this.weaponSrc = src;
     this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, role) : null;

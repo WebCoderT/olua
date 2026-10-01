@@ -5,7 +5,7 @@ import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { initialShortcutKeys } from "../../configs/role";
 import { Role } from "../../entities/Role";
-import { EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
+import { BagCell, EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
 import { NeedSetShortcutKeyConfig } from "../../types/role";
 import { SkillId } from "../../types/skill";
@@ -14,6 +14,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
+import { getItem } from "../../configs/items";
 
 /**
  * 存储管理器
@@ -85,9 +86,32 @@ export default class StorageManager {
    * - 魔法值：mp / maxMp / mpRecoverAccumulator（默认值规则见 utils/battle/MpHelper）
    * - 快捷键：按 configs/role.initialShortcutKeys 的按键码对齐（保留玩家已绑定的技能，补齐新增的按键槽，
    *   例如快捷键由 4 个扩展到 6 个后，旧存档会补出 5/6 两格，否则快捷键栏只显示旧有的 4 格）
+   * - 装备槽：旧存档存的是装备快照对象，迁移为只存装备 id（新格式经配置表实时解析，改配置重启即生效）
+   * - 背包：旧存档格子存的是物品快照对象，迁移为 { id, count }（物品数据经配置表实时解析）
    */
   static ensureRoleDefaults(role: Role) {
     MpHelper.ensureDefaults(role);
+    (Object.keys(role.equipments) as EQUIPMENT_TYPE[]).forEach((slot) => {
+      const value = role.equipments[slot] as unknown;
+      if (value && typeof value === "object") {
+        // 旧快照对象：取它的 id 作为槽位值（快照无 id 或 id 不在配置表时视为空槽）
+        role.equipments[slot] = (value as Goods).id ?? null;
+      } else if (typeof value !== "string") {
+        role.equipments[slot] = null;
+      }
+    });
+    // 背包格子迁移：旧快照（带 type 的完整物品对象）收敛为 { id, count }；新格式原样规整；无法确定 id 的格子丢弃
+    role.bag = role.bag.map((row) =>
+      row.map((cell) => {
+        if (!cell || typeof cell !== "object") return null;
+        const snapshot = cell as Goods & Partial<BagCell>;
+        const id = snapshot.id;
+        if (!id) return null;
+        // 旧快照带 type 字段：数量按物品叠加规则取（不可叠加恒 1）；新格式直接读 count
+        const count = "type" in cell ? getGoodCount(cell as Goods) : Math.max(1, snapshot.count ?? 1);
+        return { id, count };
+      }),
+    );
     const saved: NeedSetShortcutKeyConfig[] = Array.isArray(role.shortcutKeys) ? role.shortcutKeys : [];
     role.shortcutKeys = initialShortcutKeys.map((config) => {
       const exist = saved.find((i) => i.key === config.key);
@@ -131,7 +155,10 @@ export default class StorageManager {
    * @returns 是否成功使用
    */
   static useGood(row: number, col: number): boolean {
-    const good = this.findOnlineRole()?.bag[row]?.[col];
+    const role = this.findOnlineRole();
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) return false;
+    const good = getItem(cell.id);
     if (!good) return false;
     if (isEquipment(good)) return this.equipFromBag(row, col);
     if (isDrug(good)) return this.useDrug(row, col);
@@ -148,8 +175,11 @@ export default class StorageManager {
    */
   static equipFromBag(row: number, col: number): boolean {
     const role = this.findOnlineRole();
-    const good = role?.bag[row]?.[col];
-    if (!role || !good) return false;
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) return false;
+    // 格子只存物品 key，数据实时解析
+    const good = getItem(cell.id);
+    if (!good) return false;
     if (!isEquipment(good)) {
       GameUiHelper.createTip("equip_unsupported_tip", "该物品不能穿戴");
       return false;
@@ -159,11 +189,10 @@ export default class StorageManager {
       GameUiHelper.createTip("equip_reject_tip", reason);
       return false;
     }
-    // 旧装备放回刚腾空的格子：格数守恒，换装不会丢装备
-    const worn = role.equipments[good.slot];
-    role.bag[row][col] = worn ? { ...worn } : null;
-    // 复制一份入槽，避免背包与装备槽共享同一个物品对象
-    role.equipments[good.slot] = { ...good };
+    // 旧装备放回刚腾空的格子：格数守恒，换装不会丢装备（格子存 key，槽位也是 key）
+    const wornId = role.equipments[good.slot];
+    role.bag[row][col] = wornId ? { id: wornId, count: 1 } : null;
+    role.equipments[good.slot] = good.id ?? cell.id;
     this.applyEquipmentChange(role, good.slot);
     return true;
   }
@@ -175,14 +204,21 @@ export default class StorageManager {
    */
   static unequipToBag(slot: EQUIPMENT_TYPE): boolean {
     const role = this.findOnlineRole();
-    const equipment = role?.equipments[slot];
-    if (!role || !equipment) return false;
+    const equipmentId = role?.equipments[slot];
+    if (!role || !equipmentId) return false;
     const cell = this.findEmptyBagCell(role);
     if (!cell) {
       GameUiHelper.createTip("bag_full_tip", "背包已满，无法脱下装备");
       return false;
     }
-    role.bag[cell.row][cell.col] = { ...equipment };
+    // 从配置确认装备存在后，格子存 key（脱下后槽位清空）
+    const equipment = getItem(equipmentId);
+    if (!equipment) {
+      GameUiHelper.createTip("equip_missing_tip", "该装备已不存在");
+      role.equipments[slot] = null;
+      return false;
+    }
+    role.bag[cell.row][cell.col] = { id: equipmentId, count: 1 };
     role.equipments[slot] = null;
     this.applyEquipmentChange(role, slot);
     return true;
@@ -217,13 +253,15 @@ export default class StorageManager {
   /**
    * 添加物品至背包（拾取掉落物/任务奖励等统一入口）
    * 可叠加物品优先合并到已有格子，剩余数量再占用空格
-   * @param good 物品（内部会复制一份，避免污染配置表）
+   * @param good 物品（取其 id 与叠加规则；格子只存 key + 数量，不存物品数据）
    * @param count 数量，缺省取物品自身数量
    * @returns 是否全部放入（背包满时返回 false，可能有部分放入）
    */
   static addGood(good: Goods, count: number = getGoodCount(good)): boolean {
     const role = this.findOnlineRole();
-    if (!role || count <= 0) return false;
+    // 掉落/奖励链路的物品都经 items 注册表带 id；没有 id 的物品无法入包
+    const goodId = good.id;
+    if (!role || count <= 0 || !goodId) return false;
     const stackable = !!good.stackable;
     const maxStack = good.maxStack ?? 99;
     let remaining = count;
@@ -234,25 +272,25 @@ export default class StorageManager {
         for (let col = 0; col < role.bag[row].length && remaining > 0; col++) {
           if (role.bag[row][col]) continue;
           const add = stackable ? Math.min(maxStack, remaining) : 1;
-          role.bag[row][col] = { ...good, count: add };
+          role.bag[row][col] = { id: goodId, count: add };
           remaining -= add;
         }
       }
     };
 
     if (stackable) {
-      const stackCells: Goods[] = [];
+      const stackCells: BagCell[] = [];
       role.bag.forEach((row) =>
         row.forEach((cell) => {
-          if (cell && cell.type === good.type && cell.id === good.id) stackCells.push(cell);
+          if (cell && cell.id === goodId) stackCells.push(cell);
         }),
       );
       stackCells.forEach((cell) => {
         if (remaining <= 0) return;
-        const canAdd = maxStack - getGoodCount(cell);
+        const canAdd = maxStack - cell.count;
         if (canAdd <= 0) return;
         const add = Math.min(canAdd, remaining);
-        cell.count = getGoodCount(cell) + add;
+        cell.count += add;
         remaining -= add;
       });
     }
@@ -272,10 +310,10 @@ export default class StorageManager {
    * @param role 目标角色，缺省取当前在线角色（注意：角色对象每次从存储反序列化，需与调用方用同一个实例）
    */
   static consumeBagGood(row: number, col: number, role: Role | undefined = this.findOnlineRole()) {
-    const good = role?.bag[row]?.[col];
-    if (!role || !good) return;
-    const remaining = getGoodCount(good) - 1;
-    role.bag[row][col] = remaining > 0 ? { ...good, count: remaining } : null;
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) return;
+    const remaining = cell.count - 1;
+    role.bag[row][col] = remaining > 0 ? { ...cell, count: remaining } : null;
   }
 
   /**
@@ -287,8 +325,11 @@ export default class StorageManager {
    */
   static useDrug(row: number, col: number): boolean {
     const role = this.findOnlineRole();
-    const good = role?.bag[row]?.[col];
-    if (!role || !good || !isDrug(good)) return false;
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) return false;
+    // 格子只存物品 key，数据实时解析
+    const good = getItem(cell.id);
+    if (!good || !isDrug(good)) return false;
     // 当前仅实现回血（mp 等效果待资源字段补齐后在此扩展）
     const heal = good.effects.reduce((sum, effect) => sum + (effect.hp ?? 0), 0);
     if (heal <= 0) {

@@ -3,6 +3,7 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { EQUIPMENT_TYPE } from "../../../types/good";
+import { getEquipment } from "../../../configs/items";
 import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlotGroup";
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
@@ -59,8 +60,8 @@ export default class RoleInfoDialog {
   updateDialog(equipmentType: EQUIPMENT_TYPE) {
     if (!this.dialog || !this.dialog.active) return;
     const role = StorageManager.findOnlineRole();
-    // 槽位显示（不在本分组内的槽位会被忽略）
-    this.equipmentGroups.forEach((group) => group.updateSlot(equipmentType, role.equipments[equipmentType]));
+    // 槽位显示（不在本分组内的槽位会被忽略；槽位只存装备 id，显示前实时解析）
+    this.equipmentGroups.forEach((group) => group.updateSlot(equipmentType, getEquipment(role.equipments[equipmentType])));
     // 属性与战斗力随装备变化
     this.attributeList?.update(role);
     // 内观（衣服/武器）
