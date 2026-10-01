@@ -89,12 +89,12 @@ export default class RoleAppearance {
   }
 
   /**
-   * 应用装备配置的外观缩放与偏移（outScale / outOffset）
+   * 应用装备配置的外观缩放与位置（outScale / outPosition）
    * 未装备（或旧存档缺字段）时回到默认值，避免脱下装备后残留上一件的变换
    */
   private applyOutTransform(node: Node, equipment: Equipment | null) {
     const scale = equipment?.outScale ?? 1;
-    const offset = equipment?.outOffset ?? Vec2.ZERO;
+    const offset = equipment?.outPosition ?? Vec2.ZERO;
     node.setScale(scale, scale, 1);
     node.setPosition(offset.x, offset.y, 0);
   }

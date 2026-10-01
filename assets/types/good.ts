@@ -70,8 +70,12 @@ export interface Equipment extends Good, BattleAttributes {
   sex: SEX;
   // 内观
   in: string;
-  /** 内观缩放 */
-  inScale: number;
+  /** 内观横向缩放（缺省 1） */
+  inScaleX?: number;
+  /** 内观纵向缩放（缺省 1） */
+  inScaleY?: number;
+  /** 内观旋转角度（度，缺省 0） */
+  inRotate?: number;
   // 内观位置
   inPosition: Vec2;
   /** 外观缩放 */

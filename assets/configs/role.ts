@@ -106,6 +106,8 @@ export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipme
     if (occupation === OECCUPATION.ZHAN) equipments.push(clothes[1]);
   }
   // 根据角色职业获得武器
-  if (occupation === OECCUPATION.ZHAN) equipments.push(weapons[0]);
+  /** if (occupation === OECCUPATION.ZHAN) equipments.push(weapons[0]); */
+  /** 将所有武器放在装备列表中 */
+  equipments.push(...weapons);
   return equipments;
 }

@@ -854,28 +854,28 @@ export default class GameUiHelper {
 
   /**
    * 创建角色衣服内观
-   * 内观的大小与位置由装备配置的 inScale / inOffset 决定（基准几何由调用方给出）
+   * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
    */
   static createRoleClothInShow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const cloth = role.equipments.cloth;
     const clothInShow = UiHelper.createSprite("cloth_in_show", "", cloth.inPosition, size);
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    const scale = cloth?.inScale ?? 1;
-    clothInShow.setScale(scale, scale, 1);
+    clothInShow.setScale(cloth?.inScaleX ?? 1, cloth?.inScaleY ?? 1, 1);
+    clothInShow.angle = cloth?.inRotate ?? 0;
     AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, cloth.in, 1);
     return clothInShow;
   }
 
   /**
    * 创建角色武器内观
-   * 内观的大小与位置由装备配置的 inScale / inOffset 决定（基准几何由调用方给出）
+   * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
    */
   static createRoleWeaponInshow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const weapon = role.equipments.weapon;
     const weaponInShow = UiHelper.createSprite("weapon_in_show", "", weapon.inPosition, size);
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    const scale = weapon?.inScale ?? 1;
-    weaponInShow.setScale(scale, scale, 1);
+    weaponInShow.setScale(weapon?.inScaleX ?? 1, weapon?.inScaleY ?? 1, 1);
+    weaponInShow.angle = weapon?.inRotate ?? 0;
     AnimationHelper.playLoopWithDir("weapon_in_show", weaponInShow, weapon.in, 1);
     return weaponInShow;
   }
