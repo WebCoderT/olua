@@ -15,7 +15,7 @@ export default class MapTeleportDialog {
     const dialog = GameUiHelper.createDialog("map_teleport_dialog", "大陆传送官");
     const grid = GameUiHelper.createColumn("map_teleport_grid", 10, new Vec2(0, 198), new Size(580, 0));
     for (const key of maps.keys()) {
-      const button = GameUiHelper.createSmallButtion(`map_button_${key}`, maps.get(key).label);
+      const button = GameUiHelper.createMiddleButton(`map_button_${key}`, maps.get(key).label);
       grid.addChild(button);
       button.on(Node.EventType.TOUCH_END, () => StorageManager.changeOnMap(key as MapId));
     }

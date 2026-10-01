@@ -623,16 +623,25 @@ export default class GameUiHelper {
   static createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
     const bigButton = UiHelper.createButton(name, hudImages.bigButtonBackground, position, hudSize.bigButtonSize);
     bigButton.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.buttonFontSize, new Vec2(), hudSize.bigButtonSize);
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.bigButtonFontSize, new Vec2(), hudSize.bigButtonSize);
     bigButton.addChild(label);
     return bigButton;
+  }
+
+  /** 创建游戏中按钮 */
+  static createMiddleButton(name: string, text: string, position: Vec2 = new Vec2()) {
+    const middleButton = UiHelper.createButton(name, hudImages.middleButtonBackground, position, hudSize.middleButtonSize);
+    middleButton.name = name;
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.middleButtonFontSize, new Vec2(), hudSize.middleButtonSize);
+    middleButton.addChild(label);
+    return middleButton;
   }
 
   /** 创建游戏小按钮 */
   static createSmallButtion(name: string, text: string, position: Vec2 = new Vec2()) {
     const button = UiHelper.createButton(name, hudImages.smallButtonBackground, position, hudSize.smallButtonSize);
     button.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.buttonFontSize, new Vec2(), hudSize.smallButtonSize);
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.smallButtonFontSize, new Vec2(), hudSize.smallButtonSize);
     button.addChild(label);
     return button;
   }

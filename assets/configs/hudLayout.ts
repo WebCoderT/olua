@@ -78,8 +78,10 @@ export const hudSize = {
   bigButtonSize: new Size(183, 48),
   middleButtonSize: new Size(123, 36),
   smallButtonSize: new Size(56.5, 24),
-  /** 按钮文字尺寸 */
-  buttonFontSize: 12,
+  /** 按钮文字尺寸（大/中/小） */
+  smallButtonFontSize: 10,
+  middleButtonFontSize: 12,
+  bigButtonFontSize: 14,
 };
 
 //#endregion

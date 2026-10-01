@@ -117,7 +117,7 @@ export default class RoleDisplay extends Node {
   }
 
   /**
-   * 玩家操控的移动意图：键盘优先（按下即接管），其次鼠标按下的八方向，都没有输入返回 null
+   * 玩家操控的移动意图：键盘优先（按下即接管），其次鼠标按住的八方向（方向随指针移动实时更新），都没有输入返回 null
    * 走跑速度不在这里取（见 updateWorldPosition），这里只回答「往哪走、是否跑」
    */
   private getMoveIntent(): { vector: Vec2; run: boolean } | null {
