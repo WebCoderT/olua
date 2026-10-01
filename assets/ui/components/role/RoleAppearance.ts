@@ -40,10 +40,11 @@ export default class RoleAppearance {
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
     // 衣服/武器节点（样式由 GameUiHelper 零件生成，本类只负责挂到宿主并持有引用）
-    this.cloth = GameUiHelper.createRoleClothNode();
-    host.addChild(this.cloth);
+    // 先武器后衣服：同层后加的节点渲染在上面，需求是衣服盖在武器上方（武器在身后）
     this.weapon = GameUiHelper.createRoleWeaponNode();
     host.addChild(this.weapon);
+    this.cloth = GameUiHelper.createRoleClothNode();
+    host.addChild(this.cloth);
   }
 
   /** 更新外观（换装后调用）：按当前装备重新加载衣服与武器动画 */
