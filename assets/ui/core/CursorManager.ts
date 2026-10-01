@@ -29,7 +29,7 @@ export default class CursorManager {
   private static targets = new Map<Node, CursorHoverTarget>();
   /** 注册序号自增计数 */
   private static order = 0;
-  /** 上次鼠标位置（UI 坐标） */
+  /** 上次鼠标位置（屏幕坐标，命中检测与 UITransform.hitTest 同一口径，见 utils/input/Pointer.getHitScreenPoint） */
   private static location = new Vec2();
   /** 是否需要重新判定（鼠标移动或悬停目标变化时置位） */
   private static dirty = false;
@@ -73,9 +73,9 @@ export default class CursorManager {
     this.dirty = true;
   }
 
-  /** 上报鼠标位置（由 input 组件在鼠标移动时调用，只记录不判定） */
-  static setLocation(uiLocation: Vec2) {
-    this.location.set(uiLocation);
+  /** 上报鼠标位置（由 input 组件在鼠标移动时调用，只记录不判定；坐标为屏幕坐标） */
+  static setLocation(screenPoint: Vec2) {
+    this.location.set(screenPoint);
     this.dirty = true;
   }
 

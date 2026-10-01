@@ -26,6 +26,8 @@ export const smallMapImage = (name: string) => `small-map/${name}`;
 export const tipsImage = (name: string) => `tips/${name}`;
 /** resources/avatars：角色头像（按「职业-性别」取图） */
 export const avatarImage = (occupation: string, sex: string) => `avatars/${occupation}-${sex}`;
+/** resources/buttons：按钮背景 */
+export const buttonImage = (name: string) => `buttons/${name}`;
 
 /** 全局 UI 用到的具体图片（全部由上面的取图函数生成，换图只改这里） */
 export const hudImages = {
@@ -64,6 +66,20 @@ export const hudImages = {
   smallMapServerLine: smallMapImage("server-line"),
   smallMapRankingList: smallMapImage("ranking-list"),
   smallMapPosition: smallMapImage("position"),
+  /** 按钮背景（大/中/小） */
+  bigButtonBackground: buttonImage("big"),
+  middleButtonBackground: buttonImage("middle"),
+  smallButtonBackground: buttonImage("small"),
+};
+
+/** 全局 UI 用到公用的尺寸） */
+export const hudSize = {
+  /** 按钮尺寸（大/中/小） */
+  bigButtonSize: new Size(183, 48),
+  middleButtonSize: new Size(123, 36),
+  smallButtonSize: new Size(56.5, 24),
+  /** 按钮文字尺寸 */
+  buttonFontSize: 12,
 };
 
 //#endregion
@@ -209,4 +225,8 @@ export const tipsLayout = {
   autoTipPathOffsetY: -100,
 };
 
+//#endregion
+
+//#region 大陆传送官-弹窗
+export const mapTeleportDialog = {};
 //#endregion

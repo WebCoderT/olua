@@ -11,6 +11,16 @@ export const ROLE_WALK_SPEED = 2;
 export const ROLE_RUN_SPEED = 4;
 
 /**
+ * 鼠标操控角色（鼠标左键按下走路、右键按下跑动，抬起即停）
+ * 移动方向 = 「按下点相对角色的方位」按 360° 平分八块取其一（与角色八方向动画、八方向移动一致），
+ * 由 components/input/RolePointerInput 负责取点与判定，这里只放手感参数
+ */
+export const pointerMove = {
+  /** 死区：按下点与角色的距离小于该值视为「原地按下」，不移动（世界单位；角色体型 40×70） */
+  deadZone: 24,
+};
+
+/**
  * 角色魔法值自然回复速度（点/秒），设为 0 即关闭自然回复
  * 最大魔法值见 configs/level 的等级配置（maxMp），技能消耗见 configs/skill 的 mpCost
  */

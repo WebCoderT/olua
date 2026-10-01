@@ -56,6 +56,12 @@ export function getDirectionByVector(vector: Vec2): DIRECTION {
   return directionByOctant[octant];
 }
 
+/** 取八方向对应的单位向量（getDirectionByVector 的反函数；斜向与键盘斜按的归一化向量一致） */
+export function getVectorByDirection(direction: DIRECTION): Vec2 {
+  const angle = directionByOctant.indexOf(direction) * (Math.PI / 4);
+  return new Vec2(Math.cos(angle), Math.sin(angle));
+}
+
 /** 取得 self 朝向 target 的八方向（按两个碰撞盒中心的相对位置，取不到碰撞盒时返回朝下） */
 export function getDirectionToTarget(target: Node, self: Node): DIRECTION {
   const targetBounds = getWorldBounds(target);

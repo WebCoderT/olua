@@ -12,11 +12,12 @@ import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleAppearance from "./RoleAppearance";
 import RoleKeyboardInput from "../input/RoleKeyboardInput";
+import RolePointerInput from "../input/RolePointerInput";
 
 /**
  * 角色展示组件（自身即主角节点）
  * 负责主角节点的构建与状态机（动作/朝向）、位移、攻击锁与技能上下文组装
- * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput
+ * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput，鼠标操控 → RolePointerInput
  * 怪物查询与结算统一走 MonsterManager
  * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间锁定移动，且不接受新的攻击/技能（按下无反应）
  * 怪物推不动角色、角色也推不动怪物（怪物的碰撞盒是传感器，见 addMonsterCollider），
@@ -27,6 +28,8 @@ export default class RoleDisplay extends Node {
   private appearance: RoleAppearance;
   /** 键盘操控输入（init 时创建） */
   private keyboardInput: RoleKeyboardInput | null = null;
+  /** 鼠标操控输入（init 时创建：左键按下走路、右键按下跑动、抬起即停） */
+  private pointerInput: RolePointerInput | null = null;
   /** 当前朝向 */
   private direction: DIRECTION = DIRECTION.DOWN;
   /** 当前动作 */
@@ -56,10 +59,11 @@ export default class RoleDisplay extends Node {
     LayerManager.addToGameLayer(this);
   }
 
-  /** 初始化（外观动画与键盘操控） */
+  /** 初始化（外观动画、键盘操控与鼠标操控） */
   init() {
     this.updateOutShow(this.role);
     this.keyboardInput = new RoleKeyboardInput(this as Node, () => this.refreshMotion());
+    this.pointerInput = new RolePointerInput(this as Node, () => this.refreshMotion());
   }
 
   /** 构建角色身体（尺寸/锚点 + 外观节点 + 头部信息栏） */
@@ -87,49 +91,41 @@ export default class RoleDisplay extends Node {
 
   //#region 动作与朝向状态机
 
-  /** 按键状态变化：攻击/技能锁期间只记录按键状态，不改变动作与朝向（解锁后恢复移动） */
+  /** 操控状态变化（键盘按键/鼠标按下）：攻击/技能锁期间只记录状态，不改变动作与朝向（解锁后恢复移动） */
   private refreshMotion() {
     if (this.attacking) return;
     this.updateAction();
     this.updateDirection();
   }
 
-  /** 朝向更改（根据按下的方向键组合取八方向） */
+  /** 朝向更改（按当前移动意图取八方向；无输入时保持原朝向） */
   private updateDirection() {
-    const keyboard = this.keyboardInput;
-    if (keyboard) {
-      if (keyboard.isUp && keyboard.isLeft) {
-        this.direction = DIRECTION.LEFT_UP;
-      } else if (keyboard.isUp && keyboard.isRight) {
-        this.direction = DIRECTION.RIGHT_UP;
-      } else if (keyboard.isDown && keyboard.isLeft) {
-        this.direction = DIRECTION.LEFT_DOWN;
-      } else if (keyboard.isDown && keyboard.isRight) {
-        this.direction = DIRECTION.RIGHT_DOWN;
-      } else if (keyboard.isUp) {
-        this.direction = DIRECTION.UP;
-      } else if (keyboard.isDown) {
-        this.direction = DIRECTION.DOWN;
-      } else if (keyboard.isLeft) {
-        this.direction = DIRECTION.LEFT;
-      } else if (keyboard.isRight) {
-        this.direction = DIRECTION.RIGHT;
-      }
-    }
+    const intent = this.getMoveIntent();
+    if (intent) this.direction = getDirectionByVector(intent.vector);
     // 动作/朝向统一在此处落地为动画播放（调用方总是成对调用 updateAction + updateDirection）
     this.updateAnimationPlay();
   }
 
   /** 动作更改（只计算动作，动画播放由 updateDirection 统一触发） */
   private updateAction() {
-    const keyboard = this.keyboardInput;
-    const isWalk = !!keyboard?.isMoving;
-    const isRun = isWalk && !!keyboard?.isSprinting;
-    if (isRun) {
-      this.action = ACTION.RUN;
+    const intent = this.getMoveIntent();
+    if (!intent) {
+      this.action = ACTION.STAND;
       return;
     }
-    this.action = isWalk ? ACTION.WALK : ACTION.STAND;
+    this.action = intent.run ? ACTION.RUN : ACTION.WALK;
+  }
+
+  /**
+   * 玩家操控的移动意图：键盘优先（按下即接管），其次鼠标按下的八方向，都没有输入返回 null
+   * 走跑速度不在这里取（见 updateWorldPosition），这里只回答「往哪走、是否跑」
+   */
+  private getMoveIntent(): { vector: Vec2; run: boolean } | null {
+    const keyboard = this.keyboardInput;
+    if (keyboard?.isMoving) return { vector: keyboard.moveDirection, run: keyboard.isSprinting };
+    const pointer = this.pointerInput;
+    if (pointer?.isMoving) return { vector: pointer.moveDirection, run: pointer.isRunning };
+    return null;
   }
 
   /**
@@ -167,14 +163,13 @@ export default class RoleDisplay extends Node {
       rigidBody.linearVelocity = Vec2.ZERO;
       return;
     }
-    // 键盘输入优先（玩家随时接管），没有键盘输入时才走自动战斗写入的自动移动方向
-    const keyboard = this.keyboardInput;
-    const keyboardVector = keyboard?.moveDirection ?? new Vec2();
+    // 玩家操控优先（键盘 > 鼠标按下，随时接管），没有玩家输入时才走自动战斗写入的自动移动方向
+    const intent = this.getMoveIntent();
     let speed: number;
     let moveVector: Vec2;
-    if (keyboard && keyboardVector.lengthSqr() > 0) {
-      speed = keyboard.isSprinting ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
-      moveVector = keyboardVector;
+    if (intent) {
+      speed = intent.run ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+      moveVector = intent.vector;
     } else if (this.autoMove && this.autoMove.lengthSqr() > 0) {
       speed = this.autoRun ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
       moveVector = this.autoMove;
@@ -264,9 +259,9 @@ export default class RoleDisplay extends Node {
     return this.target;
   }
 
-  /** 是否有移动键按下（自动战斗用：玩家手动移动优先于自动走位） */
-  isMovementKeyDown(): boolean {
-    return !!this.keyboardInput?.isMoving;
+  /** 玩家是否正在手动移动（键盘方向键或鼠标按下；自动战斗据此让位：快速攻击结束、挂机暂停） */
+  isManualMoving(): boolean {
+    return !!this.keyboardInput?.isMoving || !!this.pointerInput?.isMoving;
   }
 
   /** 是否正在自动移动（自动战斗走位中，「自动寻路中」提示的显示依据） */

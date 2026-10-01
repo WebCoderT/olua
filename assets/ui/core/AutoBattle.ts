@@ -17,9 +17,9 @@ import SkillManager from "./SkillManager";
  * 「快速攻击」与「自动挂机」共用一套「选目标 → A* 走位接近 → 范围内出手」的循环，
  * 由组合根在 Game.update 每帧调用 tick（键盘移动输入优先于自动移动，作为参数传入）：
  * - 快速攻击：释放 canAuto 技能时没有可打目标/目标超出距离，由 SkillManager 委托本类
- *   自动选取最近的怪物并走位到技能范围内连续出手，直到玩家按下移动键或目标死亡
+ *   自动选取最近的怪物并走位到技能范围内连续出手，直到玩家手动移动（键盘/鼠标操控）或目标死亡
  * - 自动挂机：挂机按钮开启后自动选取最近怪物持续攻击，目标死亡换下一个无限重复；
- *   玩家按下移动键期间整体暂停（由玩家接管），松开继续；开关状态跨地图保留
+ *   玩家手动移动期间整体暂停（由玩家接管），松开继续；开关状态跨地图保留
  * 走位用 A* 寻路（见 utils/map/PathGrid）绕开障碍：网格以当前地图为基准（GameMap 注册），
  * 静态障碍取 Tiled 碰撞区与 NPC 占位，动态障碍为场上怪物碰撞盒（目标自身除外），每次寻路前重烙；
  * 目标永远取「最近」，被判定无法接近的目标短暂拉黑后自动换下一个，避免卡死
@@ -116,14 +116,14 @@ export default class AutoBattle {
     return true;
   }
 
-  /** 每帧驱动（组合根在 Game.update 调用；keyboardMoving 为当前是否有移动键按下） */
-  static tick(keyboardMoving: boolean) {
+  /** 每帧驱动（组合根在 Game.update 调用；manualMoving 为玩家是否正在手动移动：键盘方向键或鼠标按下操控） */
+  static tick(manualMoving: boolean) {
     const roleDisplay = this.roleDisplay;
     if (!roleDisplay || !isValid(roleDisplay)) return;
     // 没有开启挂机也没有快速攻击请求时零开销返回
     if (!this.hangEnabled && !this.pendingSkill) return;
-    // 玩家手动移动优先：快速攻击被移动键打断直接结束；挂机只是暂停（松手继续）
-    if (keyboardMoving) {
+    // 玩家手动移动优先：快速攻击被玩家移动打断直接结束；挂机只是暂停（松开继续）
+    if (manualMoving) {
       if (this.pendingSkill) this.cancel();
       return;
     }

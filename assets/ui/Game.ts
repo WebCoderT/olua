@@ -131,9 +131,9 @@ export class Game extends Component {
     if (!this.ready) return;
     // 鼠标指针样式（每帧最多判定一次：鼠标未移动且悬停目标未变化时不做任何事）
     CursorManager.tick();
-    // 自动战斗每帧驱动（快速攻击/自动挂机：写入自动移动方向、按冷却出手；移动键按下时由玩家接管）
+    // 自动战斗每帧驱动（快速攻击/自动挂机：写入自动移动方向、按冷却出手；玩家手动移动时由玩家接管）
     // 先于主角 update：本帧写入的自动移动方向当帧即生效
-    AutoBattle.tick(this.roleDisplay?.isMovementKeyDown() ?? false);
+    AutoBattle.tick(this.roleDisplay?.isManualMoving() ?? false);
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
     // 角色魔法值自然回复（每秒结算一次并落盘：角色数据在存储层是反序列化对象，不落盘下次读取会回滚）

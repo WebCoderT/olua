@@ -1,5 +1,6 @@
 import { EventMouse, Input, input } from "cc";
 import CursorManager from "../../core/CursorManager";
+import { getHitScreenPoint } from "../../utils/input/Pointer";
 
 /**
  * 鼠标指针输入
@@ -17,8 +18,8 @@ export default class CursorInput {
     input.off(Input.EventType.MOUSE_MOVE, this.trackPointer, this);
   }
 
-  /** 记录鼠标位置（UI 坐标，与命中检测使用同一坐标系） */
+  /** 记录鼠标位置（屏幕坐标，与命中检测使用同一坐标系，见 utils/input/Pointer.getHitScreenPoint） */
   private trackPointer(event: EventMouse) {
-    CursorManager.setLocation(event.getUILocation());
+    CursorManager.setLocation(getHitScreenPoint(event));
   }
 }

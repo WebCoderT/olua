@@ -43,15 +43,7 @@ import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good"
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
-import {
-  avatarImage,
-  bottomBarLayout,
-  hudImages,
-  monsterInfoPanelLayout,
-  roleInfoBarLayout,
-  smallMapLayout,
-  tipsLayout,
-} from "../../configs/hudLayout";
+import { avatarImage, bottomBarLayout, hudImages, hudSize, monsterInfoPanelLayout, roleInfoBarLayout, smallMapLayout, tipsLayout } from "../../configs/hudLayout";
 
 //#region 类型定义
 
@@ -199,7 +191,15 @@ export default class GameUiHelper {
     const iconGap = 3;
     const left = -size.width / 2;
     node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(left + iconWidth / 2, 0), new Size(iconWidth, 10)));
-    const valueLabelNode = UiHelper.createLabel("currency_value", value.toString(), Color.WHITE, 12, new Vec2(left + iconWidth + iconGap, 0), new Size(size.width - iconWidth - iconGap, size.height), Label.HorizontalAlign.LEFT);
+    const valueLabelNode = UiHelper.createLabel(
+      "currency_value",
+      value.toString(),
+      Color.WHITE,
+      12,
+      new Vec2(left + iconWidth + iconGap, 0),
+      new Size(size.width - iconWidth - iconGap, size.height),
+      Label.HorizontalAlign.LEFT,
+    );
     valueLabelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
     node.addChild(valueLabelNode);
     return { node, valueLabel: valueLabelNode.getComponent(Label) };
@@ -621,18 +621,18 @@ export default class GameUiHelper {
    * 创建游戏大按钮
    */
   static createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const bigButton = UiHelper.createButton(name, "common/big-button", position, new Size(129, 54));
+    const bigButton = UiHelper.createButton(name, hudImages.bigButtonBackground, position, hudSize.bigButtonSize);
     bigButton.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 20, new Vec2(), new Size(129, 54));
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.buttonFontSize, new Vec2(), hudSize.bigButtonSize);
     bigButton.addChild(label);
     return bigButton;
   }
 
   /** 创建游戏小按钮 */
   static createSmallButtion(name: string, text: string, position: Vec2 = new Vec2()) {
-    const button = UiHelper.createButton(name, "common/small-button", position, new Size(50, 48));
+    const button = UiHelper.createButton(name, hudImages.smallButtonBackground, position, hudSize.smallButtonSize);
     button.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, 20, new Vec2(), new Size(50, 48));
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.buttonFontSize, new Vec2(), hudSize.smallButtonSize);
     button.addChild(label);
     return button;
   }
@@ -1125,7 +1125,12 @@ export default class GameUiHelper {
    * @param slotSize 单个技能图标尺寸
    * @param spacing 图标间距
    */
-  static createMonsterSkillRow(monster: Monster, position: Vec2 = monsterInfoPanelLayout.skillRow.position, slotSize: number = monsterInfoPanelLayout.skillRow.slotSize, spacing: number = monsterInfoPanelLayout.skillRow.spacing) {
+  static createMonsterSkillRow(
+    monster: Monster,
+    position: Vec2 = monsterInfoPanelLayout.skillRow.position,
+    slotSize: number = monsterInfoPanelLayout.skillRow.slotSize,
+    spacing: number = monsterInfoPanelLayout.skillRow.spacing,
+  ) {
     const row = UiHelper.createNode("monster_skills", position, new Size(monsterInfoPanelLayout.size.width, slotSize));
     const skillIds = monster.skills ?? [];
     skillIds.forEach((skillId, index) => {
