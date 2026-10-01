@@ -8,6 +8,7 @@ import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import MonsterAreaSpawner from "./MonsterAreaSpawner";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
+import { getMapPointPositionOnWorld } from "../../utils/map/MapPointMath";
 import { maps } from "../../../configs/map";
 
 /**
@@ -19,6 +20,11 @@ import { maps } from "../../../configs/map";
  * 避免节点先挂上而地图未加载完成导致的黑屏
  */
 export default class GameMap extends Node {
+  /** 复活点世界坐标（地图标了 class=revive 的点位且地图加载完成后才有值） */
+  private reviveWorldPosition: Vec3 | null = null;
+  /** 复活点就绪回调（由组合根注入主角的定位方法，见 setReviveHandler） */
+  private reviveHandler: ((worldPosition: Vec3) => void) | null = null;
+
   constructor() {
     super("map");
     const role = StorageManager.findOnlineRole();
@@ -53,17 +59,28 @@ export default class GameMap extends Node {
   }
 
   /**
-   * 前往复活点（复活点由 npc 对象组中 type=revive 的点位决定）
+   * 注册复活点定位回调（组合根创建主角后调用）
+   * 地图资源是异步加载的，而主角在地图构造之后创建，「谁后就绪谁触发」：
+   * 地图已就绪时注册即立刻回调一次，避免地图先加载完导致定位丢失
+   * @param handler 复活点世界坐标的接收者（主角的传送方法）
+   */
+  setReviveHandler(handler: (worldPosition: Vec3) => void) {
+    this.reviveHandler = handler;
+    if (this.reviveWorldPosition) handler(this.reviveWorldPosition);
+  }
+
+  /**
+   * 前往复活点：把复活点的地图坐标换算成世界坐标后交给主角
+   * 复活点由 npc 对象组中类为 revive 的点位决定（旧地图用对象名 revive 标记，同样识别）
    * 地图未标复活点时只提示、不打断后续流程（否则会连带阻断地图对象生成）
    * @param revivePoint 复活点坐标（Tiled 原始坐标），无复活点时为 null
    */
   private goToRevivePoint(revivePoint: Vec3 | null) {
     if (!revivePoint) {
-      console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个 type=revive 的点位`);
+      console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个类为 revive 的点位`);
       return;
     }
-    // TODO: 地图坐标 -> 世界坐标换算后传送角色
-    // const worldPosition = getMapPointPositionOnWorld(revivePoint, this);
-    // StorageManager.updateRoleWorldPosition(worldPosition);
+    this.reviveWorldPosition = getMapPointPositionOnWorld(revivePoint, this as Node);
+    this.reviveHandler?.(this.reviveWorldPosition);
   }
 }

@@ -64,6 +64,9 @@ export class Game extends Component {
     // 创建地图与主角（互不直接依赖，怪物由地图侧的刷怪区域一次性生成）
     this.gameMap = new GameMap();
     this.roleDisplay = new RoleDisplay(role);
+    // 复活点定位：每次进入地图（含大陆传送）都在该地图 npc 对象组的 revive 点位出生
+    // 地图是异步加载的、主角在其后创建，故以回调注册，地图先就绪时会立刻回调一次
+    this.gameMap.setReviveHandler((worldPosition) => this.roleDisplay.setWorldPositionByTransfer(worldPosition));
     RoleUIManager.registerRoleDisplay(this.roleDisplay);
     this.screenClickInput = new ScreenClickInput(this.roleDisplay);
     this.cursorInput = new CursorInput();
