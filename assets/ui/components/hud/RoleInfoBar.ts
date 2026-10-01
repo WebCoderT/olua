@@ -1,5 +1,7 @@
 import { Color, Label, Node, Size, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import RoleUIManager from "../../core/RoleUIManager";
+import StatusIconBar from "./StatusIconBar";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
 import { hudImages, roleInfoBarLayout } from "../../../configs/hudLayout";
@@ -60,6 +62,10 @@ export default class RoleInfoBar extends Node {
     const combat = GameUiHelper.createCombatPower(role, layout.combat.position);
     this.combatLabel = combat.combatLabel;
     this.addChild(combat.node);
+    // 状态图标条（头像正下方，进行中状态的图标；由 StatusManager 经 RoleUIManager 刷新）
+    const statusIconBar = new StatusIconBar();
+    this.addChild(statusIconBar);
+    RoleUIManager.registerStatusIconBar(statusIconBar);
   }
 
   /** 数据变更后刷新显示 */

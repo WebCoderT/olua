@@ -18,7 +18,7 @@ export const skills = new Map<SkillId, SkillConfig>();
 /** 插入技能数据 */
 skills.set("1000", {
   label: "‌基础剑术",
-  icon: "skill/1001",
+  icon: "skill/icon/1001",
   cooldown: 1,
   mpCost: 0,
   targetType: SkillTargetType.SINGLE,
@@ -47,7 +47,7 @@ skills.set("1000", {
 
 skills.set("1001", {
   label: "烈火剑法",
-  icon: "skill/1006",
+  icon: "skill/icon/1006",
   cooldown: 1,
   mpCost: 8,
   targetType: SkillTargetType.SINGLE,
@@ -80,7 +80,7 @@ skills.set("1001", {
 
 skills.set("1002", {
   label: "刺杀剑术",
-  icon: "skill/1003",
+  icon: "skill/icon/1003",
   cooldown: 1,
   mpCost: 6,
   targetType: SkillTargetType.SINGLE,
@@ -111,7 +111,7 @@ skills.set("1002", {
 
 skills.set("1003", {
   label: "莲月剑法",
-  icon: "skill/2003",
+  icon: "skill/icon/2003",
   cooldown: 1,
   mpCost: 6,
   targetType: SkillTargetType.SINGLE,
@@ -142,7 +142,7 @@ skills.set("1003", {
 
 skills.set("1004", {
   label: "‌擒龙手‌",
-  icon: "skill/3010",
+  icon: "skill/icon/3010",
   cooldown: 1,
   mpCost: 10,
   targetType: SkillTargetType.SINGLE,
@@ -173,7 +173,7 @@ skills.set("1004", {
 
 skills.set("1005", {
   label: "野蛮冲撞",
-  icon: "skill/1010",
+  icon: "skill/icon/1010",
   cooldown: 1,
   mpCost: 8,
   targetType: SkillTargetType.SINGLE,
@@ -204,7 +204,7 @@ skills.set("1005", {
 
 skills.set("1006", {
   label: "逐日剑法‌",
-  icon: "skill/2202",
+  icon: "skill/icon/2202",
   cooldown: 1,
   mpCost: 8,
   targetType: SkillTargetType.SINGLE,
@@ -235,7 +235,7 @@ skills.set("1006", {
 
 skills.set("1007", {
   label: "狮子吼",
-  icon: "skill/3007",
+  icon: "skill/icon/3007",
   cooldown: 1,
   mpCost: 12,
   targetType: SkillTargetType.SINGLE,
@@ -266,7 +266,7 @@ skills.set("1007", {
 
 skills.set("1008", {
   label: "十步一杀",
-  icon: "skill/1005",
+  icon: "skill/icon/1005",
   cooldown: 1,
   mpCost: 10,
   targetType: SkillTargetType.SINGLE,
@@ -297,7 +297,7 @@ skills.set("1008", {
 
 skills.set("1009", {
   label: "半月弯刀",
-  icon: "skill/1004",
+  icon: "skill/icon/1004",
   cooldown: 1,
   mpCost: 6,
   targetType: SkillTargetType.SINGLE,
@@ -328,7 +328,7 @@ skills.set("1009", {
 
 skills.set("1010", {
   label: "‌护体神盾",
-  icon: "skill/2009",
+  icon: "skill/icon/2009",
   cooldown: 60,
   mpCost: 15,
   targetType: SkillTargetType.SELF,
@@ -357,7 +357,7 @@ skills.set("1010", {
 
 skills.set("1011", {
   label: "金刚护体",
-  icon: "skill/1008",
+  icon: "skill/icon/1008",
   cooldown: 1,
   mpCost: 15,
   targetType: SkillTargetType.SINGLE,

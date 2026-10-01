@@ -36,6 +36,7 @@ import { Monster } from "../../types/monster";
 import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
+import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 import { skills } from "../../configs/skill";
@@ -483,6 +484,15 @@ export default class GameUiHelper {
     sprite.trim = false;
     node.addComponent(Animation);
     return node;
+  }
+
+  /**
+   * 创建状态图标零件（头像下方状态图标条的一项，见 ui/components/hud/StatusIconBar）
+   * 图标来源为状态配置（configs/status 的 icon，resources 下精灵路径），尺寸统一见 hudLayout
+   */
+  static createStatusIcon(badge: StatusBadge): Node {
+    const size = roleInfoBarLayout.statusBar.iconSize;
+    return UiHelper.createSprite(`status_icon_${badge.id}`, badge.icon, new Vec2(), size);
   }
 
   /**

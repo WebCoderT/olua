@@ -22,6 +22,7 @@ import AutoBattleTips from "./core/AutoBattleTips";
 import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
+import StatusManager from "./core/StatusManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -89,6 +90,8 @@ export class Game extends Component {
     AutoBattle.setRoleDisplay(this.roleDisplay);
     // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）
     SkillManager.setContextProvider(() => this.roleDisplay.buildSkillContext());
+    // 状态归属主角（状态特效跟随主角移动，见 core/StatusManager）
+    StatusManager.setOwner(this.roleDisplay);
     // 初始化游戏全局工具
     GameHelper.init(this.camera);
     /** 挂载全局点击事件 */
@@ -109,6 +112,7 @@ export class Game extends Component {
     CursorManager.destroy();
     AutoBattle.reset();
     AutoBattleTips.reset();
+    StatusManager.reset();
     RoleUIManager.clearViews();
   }
 
@@ -143,6 +147,8 @@ export class Game extends Component {
     if (rolePosition) DropManager.autoPickup(rolePosition);
     // 快捷键冷却显示
     this.bottomBar?.updateCooldowns();
+    // 状态每帧驱动（到期移除 + 身上特效跟随主角）
+    StatusManager.tick();
     // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）
     RoleUIManager.updateMonsterInfo();
   }

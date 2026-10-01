@@ -1,4 +1,5 @@
 import { SkillContext } from "../types/skill";
+import StatusManager from "../ui/core/StatusManager";
 import { calcSkillDamage, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
 
 /** ‌基础剑术：对单体目标造成一次物理伤害（伤害与物理攻击相关） */
@@ -20,5 +21,7 @@ export function skill_1001(context: SkillContext) {
   skill_1000(context);
 }
 
-/** 护体神盾 */
-export function skill_1010(context: SkillContext) {}
+/** 护体神盾：给自身添加护体神盾状态（身上循环特效 + 头像下方图标；重复释放刷新持续时间，见 core/StatusManager） */
+export function skill_1010(context: SkillContext) {
+  StatusManager.applyStatusOfSkill("1010");
+}

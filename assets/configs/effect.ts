@@ -12,3 +12,14 @@ export const skillEffect = {
   /** 挂在目标（怪物）身上时的世界坐标偏移 */
   targetOffset: new Vec2(0, 0),
 };
+
+/**
+ * 状态特效的统一口径（进行中的状态在角色身上循环播放的特效，见 core/StatusManager）
+ * 各状态用哪张图集在 configs/status 的 effect 配置，这里只放共用的挂点偏移与播放帧率
+ */
+export const statusEffect = {
+  /** 相对角色锚点（脚底）的世界坐标偏移 */
+  offset: new Vec2(0, 0),
+  /** 循环播放帧率（每秒帧数） */
+  frameRate: 12,
+};

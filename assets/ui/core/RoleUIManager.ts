@@ -2,6 +2,7 @@ import { EQUIPMENT_TYPE } from "../../types/good";
 import { Role } from "../../entities/Role";
 import type { Node } from "cc";
 import type { SkillId } from "../../types/skill";
+import type { StatusBadge } from "../../types/status";
 
 interface RoleInfoBarView {
   updateRole: (role: Role) => void;
@@ -25,6 +26,11 @@ interface RoleInfoDialogView {
 /** 背包弹窗视图（物品变更后刷新背包显示） */
 interface BagDialogView {
   refresh: () => void;
+}
+
+/** 状态图标条视图（状态增删后重建图标） */
+interface StatusIconBarView {
+  updateStatuses: (badges: StatusBadge[]) => void;
 }
 
 /** 怪物信息面板视图（选中怪物时展示血量/名称/头像/技能） */
@@ -53,6 +59,8 @@ export default class RoleUIManager {
   private static roleDisplay: RoleDisplayView | null = null;
   private static roleInfoDialog: RoleInfoDialogView | null = null;
   private static bagDialog: BagDialogView | null = null;
+  /** 状态图标条视图 */
+  private static statusIconBar: StatusIconBarView | null = null;
   /** 当前存活的怪物信息面板（未选中怪物时为 null） */
   private static monsterInfo: MonsterInfoView | null = null;
   private static monsterInfoFactory: MonsterInfoFactory | null = null;
@@ -80,6 +88,16 @@ export default class RoleUIManager {
   /** 注册背包弹窗视图（由持有弹窗实例的 BottomBar 注册） */
   static registerBagDialog(view: BagDialogView) {
     this.bagDialog = view;
+  }
+
+  /** 注册状态图标条视图（由 RoleInfoBar 注册，状态增删后重建图标） */
+  static registerStatusIconBar(view: StatusIconBarView) {
+    this.statusIconBar = view;
+  }
+
+  /** 状态增删后刷新状态图标条（由 StatusManager 调用，徽标列表为其数据来源） */
+  static updateStatuses(badges: StatusBadge[]) {
+    this.statusIconBar?.updateStatuses(badges);
   }
 
   /** 物品变更后刷新背包显示（弹窗未打开时忽略） */
@@ -129,6 +147,7 @@ export default class RoleUIManager {
     this.roleDisplay = null;
     this.roleInfoDialog = null;
     this.bagDialog = null;
+    this.statusIconBar = null;
   }
 
   /** 角色数据变更后统一刷新视图 */
