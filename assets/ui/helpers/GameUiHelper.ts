@@ -38,6 +38,7 @@ import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
+import { markClickThrough } from "../utils/input/UiHit";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
@@ -420,6 +421,8 @@ export default class GameUiHelper {
    */
   static createErrorTip(name: string, error: string) {
     const errorTip = UiHelper.createTipLabel(name, error, tipsLayout.errorColor, tipsLayout.fontSize, tipsLayout.size);
+    // 飘字是临时装饰（屏幕中间上浮 1~3 秒），标为点击穿透：不遮挡世界点击
+    markClickThrough(errorTip);
     const uiOpacity = errorTip.addComponent(UIOpacity);
     tween(errorTip)
       .to(tipsLayout.errorMoveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
@@ -438,6 +441,8 @@ export default class GameUiHelper {
    */
   static createTip(name: string, text: string) {
     const errorTip = UiHelper.createTipLabel(name, text, tipsLayout.messageColor, tipsLayout.fontSize, tipsLayout.size);
+    // 飘字是临时装饰（屏幕中间上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
+    markClickThrough(errorTip);
     const uiOpacity = errorTip.addComponent(UIOpacity);
     tween(errorTip)
       .to(tipsLayout.messageMoveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
@@ -828,6 +833,8 @@ export default class GameUiHelper {
    */
   static createUpgradeEffect(position: Vec2 = new Vec2()) {
     const upgrade = UiHelper.createSprite("upgrade_effect", "", new Vec2(0, 90), new Size(284, 380));
+    // 升级特效是纯装饰动画，标为点击穿透：不遮挡世界点击
+    markClickThrough(upgrade);
     AnimationHelper.playOnceWithDir("upgrade", upgrade, "effect/upgrade", 1);
     return upgrade;
   }

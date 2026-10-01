@@ -1,4 +1,5 @@
-import { Camera, isValid, Node, Vec3 } from "cc";
+import { Camera, isValid, Node, Vec2, Vec3 } from "cc";
+import { isPointOnUi as uiHitTest } from "../utils/input/UiHit";
 
 export enum Layer {
   MAP = 1 << 0,
@@ -150,5 +151,15 @@ export default class LayerManager {
     if (!this.camera || !isValid(this.camera.node)) return;
     const cameraPosition = this.camera.node.getWorldPosition();
     this.camera.node.setWorldPosition(position.x, position.y, cameraPosition.z);
+  }
+
+  /**
+   * 屏幕坐标点是否落在 UI 层元素上
+   * 用途：世界点击（选中怪物/拾取掉落物）据此忽略 UI 上的点击，避免点界面时打断角色正在进行的操作
+   * 判定细节见 utils/input/UiHit
+   * @param screenPoint 屏幕坐标点（EventMouse.getLocation()）
+   */
+  static isPointOnUi(screenPoint: Vec2): boolean {
+    return uiHitTest(this.UILayer, screenPoint);
   }
 }
