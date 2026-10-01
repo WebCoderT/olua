@@ -23,3 +23,16 @@ export const statusEffect = {
   /** 循环播放帧率（每秒帧数） */
   frameRate: 12,
 };
+
+/**
+ * 选中怪物指示器的统一口径（选中怪物脚下循环播放的光圈，见 ui/components/hud/MonsterSelectIndicator）
+ * 选中时创建、取消选中/目标失效即销毁，生命周期与怪物信息面板一致（见 core/RoleUIManager）
+ */
+export const selectIndicator = {
+  /** 光圈图集（resources 路径，不含扩展名；TexturePacker 图集 plist + png 同名） */
+  atlas: "effect/selected/select_monster@0",
+  /** 相对怪物节点锚点的世界坐标偏移：怪物节点锚点居中（身体中心），负数向下压向脚底 */
+  offset: new Vec2(0, -40),
+  /** 循环播放帧率（每秒帧数） */
+  frameRate: 10,
+};

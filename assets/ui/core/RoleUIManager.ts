@@ -48,6 +48,21 @@ interface MonsterInfoView {
 /** 怪物信息面板创建器（由组合根注入，面板按需动态创建） */
 type MonsterInfoFactory = (target: Node) => MonsterInfoView;
 
+/** 选中指示器视图（选中怪物脚下循环播放的光圈，随选中切换目标） */
+interface MonsterSelectView {
+  /** 指示器节点是否仍存活 */
+  isValidNode: () => boolean;
+  /** 切换跟随的怪物 */
+  select: (target: Node) => void;
+  /** 每帧跟随，返回 false 表示选中目标已失效（指示器将被销毁） */
+  update: () => boolean;
+  /** 销毁指示器节点 */
+  destroy: () => void;
+}
+
+/** 选中指示器创建器（由组合根注入，选中怪物时才真正创建） */
+type MonsterSelectFactory = (target: Node) => MonsterSelectView;
+
 /**
  * 角色UI管理器
  * 统一注册与刷新角色相关视图（信息栏、底部栏、主角外观、角色信息弹窗），
@@ -64,6 +79,9 @@ export default class RoleUIManager {
   /** 当前存活的怪物信息面板（未选中怪物时为 null） */
   private static monsterInfo: MonsterInfoView | null = null;
   private static monsterInfoFactory: MonsterInfoFactory | null = null;
+  /** 当前存活的选中指示器（未选中怪物时为 null），与怪物信息面板同一套生命周期 */
+  private static monsterSelect: MonsterSelectView | null = null;
+  private static monsterSelectFactory: MonsterSelectFactory | null = null;
 
   /** 注册角色信息栏视图 */
   static registerRoleInfoBar(view: RoleInfoBarView) {
@@ -110,19 +128,27 @@ export default class RoleUIManager {
     this.monsterInfoFactory = factory;
   }
 
-  /** 选中怪物（null 表示取消选中）：动态创建/销毁怪物信息面板 */
+  /** 设置选中指示器创建器（由组合根注入，选中怪物时才真正创建） */
+  static setMonsterSelectFactory(factory: MonsterSelectFactory) {
+    this.monsterSelectFactory = factory;
+  }
+
+  /** 选中怪物（null 表示取消选中）：动态创建/销毁怪物信息面板与脚下选中光圈 */
   static selectMonster(target: Node | null) {
-    // 取消选中：销毁面板
+    // 取消选中：销毁面板与指示器
     if (!target) {
       this.destroyMonsterInfo();
+      this.destroyMonsterSelect();
       return;
     }
-    // 已有面板则复用，否则按需创建
+    // 已有视图则复用（面板重建内容、指示器改跟随目标），否则按需创建
     if (!this.monsterInfo) {
       this.monsterInfo = this.monsterInfoFactory ? this.monsterInfoFactory(target) : null;
+      this.monsterSelect = this.monsterSelectFactory ? this.monsterSelectFactory(target) : null;
       return;
     }
     this.monsterInfo.select(target);
+    this.monsterSelect?.select(target);
   }
 
   /** 每帧刷新怪物信息面板（目标已死亡/移除则销毁面板） */
@@ -132,6 +158,13 @@ export default class RoleUIManager {
     if (!view.isValidNode() || !view.update()) this.destroyMonsterInfo();
   }
 
+  /** 每帧驱动选中指示器（跟随目标脚下；目标已死亡/移除则销毁指示器） */
+  static updateMonsterSelect() {
+    const view = this.monsterSelect;
+    if (!view) return;
+    if (!view.isValidNode() || !view.update()) this.destroyMonsterSelect();
+  }
+
   /** 销毁怪物信息面板并释放引用（取消选中、目标失效、场景卸载时调用） */
   static destroyMonsterInfo() {
     const view = this.monsterInfo;
@@ -139,9 +172,17 @@ export default class RoleUIManager {
     if (view && view.isValidNode()) view.destroy();
   }
 
+  /** 销毁选中指示器并释放引用（取消选中、目标失效、场景卸载时调用） */
+  static destroyMonsterSelect() {
+    const view = this.monsterSelect;
+    this.monsterSelect = null;
+    if (view && view.isValidNode()) view.destroy();
+  }
+
   /** 清空全部视图引用（场景卸载时由组合根调用，避免跨场景残留已销毁节点） */
   static clearViews() {
     this.destroyMonsterInfo();
+    this.destroyMonsterSelect();
     this.roleInfoBar = null;
     this.bottomBar = null;
     this.roleDisplay = null;

@@ -178,10 +178,10 @@ export const monsterInfoPanelLayout = {
   /** 左侧头像（取怪物图标） */
   avatar: { position: new Vec2(-75, 0), size: new Size(60, 66) },
   /** 名称（左对齐） */
-  name: { position: new Vec2(20, 22), size: new Size(150, 16), fontSize: 14 },
+  name: { position: new Vec2(26, 17.5), size: new Size(135, 16), fontSize: 14 },
   /** 血量条与血量文字 */
-  hpBar: { position: new Vec2(40, 2), size: new Size(140, 12) },
-  hpText: { position: new Vec2(-5, -18), size: new Size(80, 12), fontSize: 12 },
+  hpBar: { position: new Vec2(29.5, 1.7), size: new Size(140, 12) },
+  hpText: { position: new Vec2(-1, -18), size: new Size(80, 12), fontSize: 12 },
   /** 技能行（未配置技能则不渲染） */
   skillRow: { position: new Vec2(65, -18), slotSize: 20, spacing: 4 },
 };

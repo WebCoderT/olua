@@ -6,6 +6,7 @@ import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
 import RoleInfoBar from "./components/hud/RoleInfoBar";
 import MonsterInfoPanel from "./components/hud/MonsterInfoPanel";
+import MonsterSelectIndicator from "./components/hud/MonsterSelectIndicator";
 import SmallMap from "./components/hud/SmallMap";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
@@ -87,6 +88,12 @@ export class Game extends Component {
       LayerManager.addToUILayer(monsterInfoPanel);
       return monsterInfoPanel;
     });
+    /** 选中指示器创建器（怪物脚下的循环光圈，与信息面板同一套生命周期；口径见 configs/effect.selectIndicator） */
+    RoleUIManager.setMonsterSelectFactory((target) => {
+      const indicator = new MonsterSelectIndicator(target);
+      LayerManager.addToEffectLayer(indicator);
+      return indicator;
+    });
     // 初始化主角外观动画与键盘操控
     this.roleDisplay.init();
     // 自动战斗（快速攻击/自动挂机）以主角为载体走位与出手
@@ -154,5 +161,7 @@ export class Game extends Component {
     StatusManager.tick();
     // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）
     RoleUIManager.updateMonsterInfo();
+    // 选中指示器跟随目标脚下（目标失效时自动销毁）
+    RoleUIManager.updateMonsterSelect();
   }
 }

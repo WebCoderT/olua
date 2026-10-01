@@ -38,7 +38,7 @@ export const monsterAI = {
 };
 
 monsters.set("1", {
-  icon: "monster/icon/1",
+  icon: "monster/icon/1_00000",
   out: "monster/out/1",
   outOffset: new Vec2(),
   label: "赤焰斗鸡",
@@ -72,7 +72,7 @@ monsters.set("1", {
   },
 });
 monsters.set("2", {
-  icon: "monster/icon/2",
+  icon: "monster/icon/2_00000",
   out: "monster/out/2",
   outOffset: new Vec2(),
   label: "金斑雄鹿",
@@ -106,7 +106,7 @@ monsters.set("2", {
   },
 });
 monsters.set("3", {
-  icon: "monster/icon/3",
+  icon: "monster/icon/3_00000",
   out: "monster/out/3",
   outOffset: new Vec2(),
   label: "干尸行者",
@@ -139,7 +139,7 @@ monsters.set("3", {
   },
 });
 monsters.set("4", {
-  icon: "monster/icon/4",
+  icon: "monster/icon/4_00000",
   out: "monster/out/4",
   outOffset: new Vec2(),
   label: "豺狼人巫师",
@@ -172,7 +172,7 @@ monsters.set("4", {
   },
 });
 monsters.set("5", {
-  icon: "monster/icon/5",
+  icon: "monster/icon/5_00000",
   out: "monster/out/5",
   outOffset: new Vec2(),
   label: "狮头人术士",
@@ -193,7 +193,7 @@ monsters.set("5", {
   speedRate: undefined,
 });
 monsters.set("6", {
-  icon: "monster/icon/6",
+  icon: "monster/icon/6_00000",
   out: "monster/out/6",
   outOffset: new Vec2(),
   label: "巨疣蟾蜍",
@@ -214,7 +214,7 @@ monsters.set("6", {
   speedRate: undefined,
 });
 monsters.set("7", {
-  icon: "monster/icon/7",
+  icon: "monster/icon/7_00000",
   out: "monster/out/7",
   outOffset: new Vec2(),
   label: "碎骨残骸",
@@ -235,7 +235,7 @@ monsters.set("7", {
   speedRate: undefined,
 });
 monsters.set("8", {
-  icon: "monster/icon/8",
+  icon: "monster/icon/8_00000",
   out: "monster/out/8",
   outOffset: new Vec2(),
   label: "牛角骷髅将",
@@ -256,7 +256,7 @@ monsters.set("8", {
   speedRate: undefined,
 });
 monsters.set("9", {
-  icon: "monster/icon/9",
+  icon: "monster/icon/9_00000",
   out: "monster/out/9",
   outOffset: new Vec2(),
   label: "骨锤蛮兵",
@@ -277,7 +277,7 @@ monsters.set("9", {
   speedRate: undefined,
 });
 monsters.set("10", {
-  icon: "monster/icon/10",
+  icon: "monster/icon/10_00000",
   out: "monster/out/10",
   outOffset: new Vec2(),
   label: "血赤骷髅",
@@ -298,7 +298,7 @@ monsters.set("10", {
   speedRate: undefined,
 });
 monsters.set("11", {
-  icon: "monster/icon/11",
+  icon: "monster/icon/11_00000",
   out: "monster/out/11",
   outOffset: new Vec2(),
   label: "龟甲忍士",
@@ -319,7 +319,7 @@ monsters.set("11", {
   speedRate: undefined,
 });
 monsters.set("12", {
-  icon: "monster/icon/12",
+  icon: "monster/icon/12_00000",
   out: "monster/out/12",
   outOffset: new Vec2(),
   label: "雪岭野人",
@@ -340,7 +340,7 @@ monsters.set("12", {
   speedRate: undefined,
 });
 monsters.set("13", {
-  icon: "monster/icon/13",
+  icon: "monster/icon/13_00000",
   out: "monster/out/13",
   outOffset: new Vec2(),
   label: "黑猿妖",
@@ -361,7 +361,7 @@ monsters.set("13", {
   speedRate: undefined,
 });
 monsters.set("14", {
-  icon: "monster/icon/14",
+  icon: "monster/icon/14_00000",
   out: "monster/out/14",
   outOffset: new Vec2(),
   label: "猛犸巨象",
@@ -382,7 +382,7 @@ monsters.set("14", {
   speedRate: undefined,
 });
 monsters.set("15", {
-  icon: "monster/icon/15",
+  icon: "monster/icon/15_00000",
   out: "monster/out/15",
   outOffset: new Vec2(),
   label: "黑翼巨蝠",
@@ -403,7 +403,7 @@ monsters.set("15", {
   speedRate: undefined,
 });
 monsters.set("16", {
-  icon: "monster/icon/16",
+  icon: "monster/icon/16_00000",
   out: "monster/out/16",
   outOffset: new Vec2(),
   label: "海螺精",
@@ -424,7 +424,7 @@ monsters.set("16", {
   speedRate: undefined,
 });
 monsters.set("17", {
-  icon: "monster/icon/17",
+  icon: "monster/icon/17_00000",
   out: "monster/out/17",
   outOffset: new Vec2(),
   label: "金甲独角仙",
@@ -445,7 +445,7 @@ monsters.set("17", {
   speedRate: undefined,
 });
 monsters.set("18", {
-  icon: "monster/icon/18",
+  icon: "monster/icon/18_00000",
   out: "monster/out/18",
   outOffset: new Vec2(),
   label: "金翅灵鸟",
@@ -466,7 +466,7 @@ monsters.set("18", {
   speedRate: undefined,
 });
 monsters.set("19", {
-  icon: "monster/icon/19",
+  icon: "monster/icon/19_00000",
   out: "monster/out/19",
   outOffset: new Vec2(),
   label: "沙岗蠕虫",
@@ -487,7 +487,7 @@ monsters.set("19", {
   speedRate: undefined,
 });
 monsters.set("20", {
-  icon: "monster/icon/20",
+  icon: "monster/icon/20_00000",
   out: "monster/out/20",
   outOffset: new Vec2(),
   label: "野狼",
@@ -508,7 +508,7 @@ monsters.set("20", {
   speedRate: undefined,
 });
 monsters.set("21", {
-  icon: "monster/icon/21",
+  icon: "monster/icon/21_00000",
   out: "monster/out/21",
   outOffset: new Vec2(),
   label: "盘角羚羊",
@@ -529,7 +529,7 @@ monsters.set("21", {
   speedRate: undefined,
 });
 monsters.set("22", {
-  icon: "monster/icon/22",
+  icon: "monster/icon/22_00000",
   out: "monster/out/22",
   outOffset: new Vec2(),
   label: "灰壳蛞蝓",
@@ -550,7 +550,7 @@ monsters.set("22", {
   speedRate: undefined,
 });
 monsters.set("23", {
-  icon: "monster/icon/23",
+  icon: "monster/icon/23_00000",
   out: "monster/out/23",
   outOffset: new Vec2(),
   label: "独腿尸兵",
@@ -571,7 +571,7 @@ monsters.set("23", {
   speedRate: undefined,
 });
 monsters.set("24", {
-  icon: "monster/icon/24",
+  icon: "monster/icon/24_00000",
   out: "monster/out/24",
   outOffset: new Vec2(),
   label: "血污行尸",
@@ -592,7 +592,7 @@ monsters.set("24", {
   speedRate: undefined,
 });
 monsters.set("25", {
-  icon: "monster/icon/25",
+  icon: "monster/icon/25_00000",
   out: "monster/out/25",
   outOffset: new Vec2(),
   label: "枯叶飞虫群",
@@ -613,7 +613,7 @@ monsters.set("25", {
   speedRate: undefined,
 });
 monsters.set("26", {
-  icon: "monster/icon/26",
+  icon: "monster/icon/26_00000",
   out: "monster/out/26",
   outOffset: new Vec2(),
   label: "枯行僧尸",
@@ -634,7 +634,7 @@ monsters.set("26", {
   speedRate: undefined,
 });
 monsters.set("27", {
-  icon: "monster/icon/27",
+  icon: "monster/icon/27_00000",
   out: "monster/out/27",
   outOffset: new Vec2(),
   label: "食人妖花",
@@ -655,7 +655,7 @@ monsters.set("27", {
   speedRate: undefined,
 });
 monsters.set("28", {
-  icon: "monster/icon/28",
+  icon: "monster/icon/28_00000",
   out: "monster/out/28",
   outOffset: new Vec2(),
   label: "金环蛇",
@@ -676,7 +676,7 @@ monsters.set("28", {
   speedRate: undefined,
 });
 monsters.set("29", {
-  icon: "monster/icon/29",
+  icon: "monster/icon/29_00000",
   out: "monster/out/29",
   outOffset: new Vec2(),
   label: "赤练蛇",
@@ -697,7 +697,7 @@ monsters.set("29", {
   speedRate: undefined,
 });
 monsters.set("30", {
-  icon: "monster/icon/30",
+  icon: "monster/icon/30_00000",
   out: "monster/out/30",
   outOffset: new Vec2(),
   label: "枯树妖",
@@ -718,7 +718,7 @@ monsters.set("30", {
   speedRate: undefined,
 });
 monsters.set("31", {
-  icon: "monster/icon/31",
+  icon: "monster/icon/31_00000",
   out: "monster/out/31",
   outOffset: new Vec2(),
   label: "蘑菇精",
@@ -739,7 +739,7 @@ monsters.set("31", {
   speedRate: undefined,
 });
 monsters.set("32", {
-  icon: "monster/icon/32",
+  icon: "monster/icon/32_00000",
   out: "monster/out/32",
   outOffset: new Vec2(),
   label: "黄甲多足虫",
@@ -760,7 +760,7 @@ monsters.set("32", {
   speedRate: undefined,
 });
 monsters.set("33", {
-  icon: "monster/icon/33",
+  icon: "monster/icon/33_00000",
   out: "monster/out/33",
   outOffset: new Vec2(),
   label: "铜甲巨蝎",
@@ -781,7 +781,7 @@ monsters.set("33", {
   speedRate: undefined,
 });
 monsters.set("34", {
-  icon: "monster/icon/34",
+  icon: "monster/icon/34_00000",
   out: "monster/out/34",
   outOffset: new Vec2(),
   label: "碎尸爬虫",
@@ -802,7 +802,7 @@ monsters.set("34", {
   speedRate: undefined,
 });
 monsters.set("35", {
-  icon: "monster/icon/35",
+  icon: "monster/icon/35_00000",
   out: "monster/out/35",
   outOffset: new Vec2(),
   label: "赤蜈蚣",
@@ -823,7 +823,7 @@ monsters.set("35", {
   speedRate: undefined,
 });
 monsters.set("36", {
-  icon: "monster/icon/36",
+  icon: "monster/icon/36_00000",
   out: "monster/out/36",
   outOffset: new Vec2(),
   label: "黄蜂妖",
@@ -844,7 +844,7 @@ monsters.set("36", {
   speedRate: undefined,
 });
 monsters.set("37", {
-  icon: "monster/icon/37",
+  icon: "monster/icon/37_00000",
   out: "monster/out/37",
   outOffset: new Vec2(),
   label: "蜣螂精",
@@ -865,7 +865,7 @@ monsters.set("37", {
   speedRate: undefined,
 });
 monsters.set("38", {
-  icon: "monster/icon/38",
+  icon: "monster/icon/38_00000",
   out: "monster/out/38",
   outOffset: new Vec2(),
   label: "虾兵怪",
@@ -886,7 +886,7 @@ monsters.set("38", {
   speedRate: undefined,
 });
 monsters.set("39", {
-  icon: "monster/icon/39",
+  icon: "monster/icon/39_00000",
   out: "monster/out/39",
   outOffset: new Vec2(),
   label: "银甲蝎蛉",
@@ -907,7 +907,7 @@ monsters.set("39", {
   speedRate: undefined,
 });
 monsters.set("40", {
-  icon: "monster/icon/40",
+  icon: "monster/icon/40_00000",
   out: "monster/out/40",
   outOffset: new Vec2(),
   label: "青竹大蜈蚣",
@@ -928,7 +928,7 @@ monsters.set("40", {
   speedRate: undefined,
 });
 monsters.set("41", {
-  icon: "monster/icon/41",
+  icon: "monster/icon/41_00000",
   out: "monster/out/41",
   outOffset: new Vec2(),
   label: "金沙傀儡",
@@ -949,7 +949,7 @@ monsters.set("41", {
   speedRate: undefined,
 });
 monsters.set("42", {
-  icon: "monster/icon/42",
+  icon: "monster/icon/42_00000",
   out: "monster/out/42",
   outOffset: new Vec2(),
   label: "绿袍兽人武者",
@@ -970,7 +970,7 @@ monsters.set("42", {
   speedRate: undefined,
 });
 monsters.set("43", {
-  icon: "monster/icon/43",
+  icon: "monster/icon/43_00000",
   out: "monster/out/43",
   outOffset: new Vec2(),
   label: "牛角兽人斧手",
@@ -991,7 +991,7 @@ monsters.set("43", {
   speedRate: undefined,
 });
 monsters.set("44", {
-  icon: "monster/icon/44",
+  icon: "monster/icon/44_00000",
   out: "monster/out/44",
   outOffset: new Vec2(),
   label: "白衣幽魂",
@@ -1012,7 +1012,7 @@ monsters.set("44", {
   speedRate: undefined,
 });
 monsters.set("45", {
-  icon: "monster/icon/45",
+  icon: "monster/icon/45_00000",
   out: "monster/out/45",
   outOffset: new Vec2(),
   label: "幽冥触手魔",
@@ -1033,7 +1033,7 @@ monsters.set("45", {
   speedRate: undefined,
 });
 monsters.set("46", {
-  icon: "monster/icon/46",
+  icon: "monster/icon/46_00000",
   out: "monster/out/46",
   outOffset: new Vec2(),
   label: "金色海星妖",
@@ -1054,7 +1054,7 @@ monsters.set("46", {
   speedRate: undefined,
 });
 monsters.set("47", {
-  icon: "monster/icon/47",
+  icon: "monster/icon/47_00000",
   out: "monster/out/47",
   outOffset: new Vec2(),
   label: "灰毛猩猩兽",
@@ -1075,7 +1075,7 @@ monsters.set("47", {
   speedRate: undefined,
 });
 monsters.set("48", {
-  icon: "monster/icon/48",
+  icon: "monster/icon/48_00000",
   out: "monster/out/48",
   outOffset: new Vec2(),
   label: "车轮骨妖",
@@ -1096,7 +1096,7 @@ monsters.set("48", {
   speedRate: undefined,
 });
 monsters.set("49", {
-  icon: "monster/icon/49",
+  icon: "monster/icon/49_00000",
   out: "monster/out/49",
   outOffset: new Vec2(),
   label: "链锤夜叉",
@@ -1117,7 +1117,7 @@ monsters.set("49", {
   speedRate: undefined,
 });
 monsters.set("50", {
-  icon: "monster/icon/50",
+  icon: "monster/icon/50_00000",
   out: "monster/out/50",
   outOffset: new Vec2(),
   label: "赤炎小恶魔",
@@ -1138,7 +1138,7 @@ monsters.set("50", {
   speedRate: undefined,
 });
 monsters.set("51", {
-  icon: "monster/icon/51",
+  icon: "monster/icon/51_00000",
   out: "monster/out/51",
   outOffset: new Vec2(),
   label: "双斧狼卫",
@@ -1159,7 +1159,7 @@ monsters.set("51", {
   speedRate: undefined,
 });
 monsters.set("52", {
-  icon: "monster/icon/52",
+  icon: "monster/icon/52_00000",
   out: "monster/out/52",
   outOffset: new Vec2(),
   label: "绿眼飞蛾妖",
@@ -1180,7 +1180,7 @@ monsters.set("52", {
   speedRate: undefined,
 });
 monsters.set("53", {
-  icon: "monster/icon/53",
+  icon: "monster/icon/53_00000",
   out: "monster/out/53",
   outOffset: new Vec2(),
   label: "滑翔飞蜥",
@@ -1201,7 +1201,7 @@ monsters.set("53", {
   speedRate: undefined,
 });
 monsters.set("54", {
-  icon: "monster/icon/54",
+  icon: "monster/icon/54_00000",
   out: "monster/out/54",
   outOffset: new Vec2(),
   label: "坠马骸骑兵",
@@ -1222,7 +1222,7 @@ monsters.set("54", {
   speedRate: undefined,
 });
 monsters.set("55", {
-  icon: "monster/icon/55",
+  icon: "monster/icon/55_00000",
   out: "monster/out/55",
   outOffset: new Vec2(),
   label: "持戟猪首人",
@@ -1243,7 +1243,7 @@ monsters.set("55", {
   speedRate: undefined,
 });
 monsters.set("56", {
-  icon: "monster/icon/56",
+  icon: "monster/icon/56_00000",
   out: "monster/out/56",
   outOffset: new Vec2(),
   label: "雷锤铁卫",
@@ -1264,7 +1264,7 @@ monsters.set("56", {
   speedRate: undefined,
 });
 monsters.set("57", {
-  icon: "monster/icon/57",
+  icon: "monster/icon/57_00000",
   out: "monster/out/57",
   outOffset: new Vec2(),
   label: "赤膊狂猿",
@@ -1285,7 +1285,7 @@ monsters.set("57", {
   speedRate: undefined,
 });
 monsters.set("58", {
-  icon: "monster/icon/58",
+  icon: "monster/icon/58_00000",
   out: "monster/out/58",
   outOffset: new Vec2(),
   label: "黑熊罴怪",
@@ -1306,7 +1306,7 @@ monsters.set("58", {
   speedRate: undefined,
 });
 monsters.set("59", {
-  icon: "monster/icon/59",
+  icon: "monster/icon/59_00000",
   out: "monster/out/59",
   outOffset: new Vec2(),
   label: "赤须龙蜈",
@@ -1327,7 +1327,7 @@ monsters.set("59", {
   speedRate: undefined,
 });
 monsters.set("60", {
-  icon: "monster/icon/60",
+  icon: "monster/icon/60_00000",
   out: "monster/out/60",
   outOffset: new Vec2(),
   label: "黑鳞龙裔",
@@ -1348,7 +1348,7 @@ monsters.set("60", {
   speedRate: undefined,
 });
 monsters.set("61", {
-  icon: "monster/icon/61",
+  icon: "monster/icon/61_00000",
   out: "monster/out/61",
   outOffset: new Vec2(),
   label: "骨角黄巨魔",
@@ -1369,7 +1369,7 @@ monsters.set("61", {
   speedRate: undefined,
 });
 monsters.set("62", {
-  icon: "monster/icon/62",
+  icon: "monster/icon/62_00000",
   out: "monster/out/62",
   outOffset: new Vec2(),
   label: "灰肤巨魔",
@@ -1390,7 +1390,7 @@ monsters.set("62", {
   speedRate: undefined,
 });
 monsters.set("63", {
-  icon: "monster/icon/63",
+  icon: "monster/icon/63_00000",
   out: "monster/out/63",
   outOffset: new Vec2(),
   label: "赤鳞怪胎",
@@ -1411,7 +1411,7 @@ monsters.set("63", {
   speedRate: undefined,
 });
 monsters.set("64", {
-  icon: "monster/icon/64",
+  icon: "monster/icon/64_00000",
   out: "monster/out/64",
   outOffset: new Vec2(),
   label: "青鳞怪胎",
@@ -1432,7 +1432,7 @@ monsters.set("64", {
   speedRate: undefined,
 });
 monsters.set("65", {
-  icon: "monster/icon/65",
+  icon: "monster/icon/65_00000",
   out: "monster/out/65",
   outOffset: new Vec2(),
   label: "紫黑蟹蛛",
@@ -1453,7 +1453,7 @@ monsters.set("65", {
   speedRate: undefined,
 });
 monsters.set("66", {
-  icon: "monster/icon/66",
+  icon: "monster/icon/66_00000",
   out: "monster/out/66",
   outOffset: new Vec2(),
   label: "金斑飞蝎",
@@ -1474,7 +1474,7 @@ monsters.set("66", {
   speedRate: undefined,
 });
 monsters.set("67", {
-  icon: "monster/icon/67",
+  icon: "monster/icon/67_00000",
   out: "monster/out/67",
   outOffset: new Vec2(),
   label: "沙尘鬼",
@@ -1495,7 +1495,7 @@ monsters.set("67", {
   speedRate: undefined,
 });
 monsters.set("68", {
-  icon: "monster/icon/68",
+  icon: "monster/icon/68_00000",
   out: "monster/out/68",
   outOffset: new Vec2(),
   label: "金牛甲士",
@@ -1516,7 +1516,7 @@ monsters.set("68", {
   speedRate: undefined,
 });
 monsters.set("69", {
-  icon: "monster/icon/69",
+  icon: "monster/icon/69_00000",
   out: "monster/out/69",
   outOffset: new Vec2(),
   label: "紫甲双锤兵",
@@ -1537,7 +1537,7 @@ monsters.set("69", {
   speedRate: undefined,
 });
 monsters.set("70", {
-  icon: "monster/icon/70",
+  icon: "monster/icon/70_00000",
   out: "monster/out/70",
   outOffset: new Vec2(),
   label: "黑甲长斧魔",
@@ -1558,7 +1558,7 @@ monsters.set("70", {
   speedRate: undefined,
 });
 monsters.set("71", {
-  icon: "monster/icon/71",
+  icon: "monster/icon/71_00000",
   out: "monster/out/71",
   outOffset: new Vec2(),
   label: "银甲月刃枪卫",
@@ -1579,7 +1579,7 @@ monsters.set("71", {
   speedRate: undefined,
 });
 monsters.set("72", {
-  icon: "monster/icon/72",
+  icon: "monster/icon/72_00000",
   out: "monster/out/72",
   outOffset: new Vec2(),
   label: "红袍蛇杖法老",
@@ -1600,7 +1600,7 @@ monsters.set("72", {
   speedRate: undefined,
 });
 monsters.set("73", {
-  icon: "monster/icon/73",
+  icon: "monster/icon/73_00000",
   out: "monster/out/73",
   outOffset: new Vec2(),
   label: "陷坑野牛魔",
@@ -1621,7 +1621,7 @@ monsters.set("73", {
   speedRate: undefined,
 });
 monsters.set("74", {
-  icon: "monster/icon/74",
+  icon: "monster/icon/74_00000",
   out: "monster/out/74",
   outOffset: new Vec2(),
   label: "土狼妖",
@@ -1642,7 +1642,7 @@ monsters.set("74", {
   speedRate: undefined,
 });
 monsters.set("75", {
-  icon: "monster/icon/75",
+  icon: "monster/icon/75_00000",
   out: "monster/out/75",
   outOffset: new Vec2(),
   label: "青锋刀客",
@@ -1663,7 +1663,7 @@ monsters.set("75", {
   speedRate: undefined,
 });
 monsters.set("76", {
-  icon: "monster/icon/76",
+  icon: "monster/icon/76_00000",
   out: "monster/out/76",
   outOffset: new Vec2(),
   label: "青蛙斗士",
@@ -1684,7 +1684,7 @@ monsters.set("76", {
   speedRate: undefined,
 });
 monsters.set("77", {
-  icon: "monster/icon/77",
+  icon: "monster/icon/77_00000",
   out: "monster/out/77",
   outOffset: new Vec2(),
   label: "独眼触手魔",
@@ -1705,7 +1705,7 @@ monsters.set("77", {
   speedRate: undefined,
 });
 monsters.set("78", {
-  icon: "monster/icon/78",
+  icon: "monster/icon/78_00000",
   out: "monster/out/78",
   outOffset: new Vec2(),
   label: "碧爪蛛母",
@@ -1726,7 +1726,7 @@ monsters.set("78", {
   speedRate: undefined,
 });
 monsters.set("79", {
-  icon: "monster/icon/79",
+  icon: "monster/icon/79_00000",
   out: "monster/out/79",
   outOffset: new Vec2(),
   label: "碎金甲兵",
@@ -1747,7 +1747,7 @@ monsters.set("79", {
   speedRate: undefined,
 });
 monsters.set("80", {
-  icon: "monster/icon/80",
+  icon: "monster/icon/80_00000",
   out: "monster/out/80",
   outOffset: new Vec2(),
   label: "黄袍圣甲虫",
@@ -1768,7 +1768,7 @@ monsters.set("80", {
   speedRate: undefined,
 });
 monsters.set("81", {
-  icon: "monster/icon/81",
+  icon: "monster/icon/81_00000",
   out: "monster/out/81",
   outOffset: new Vec2(),
   label: "黄蜂后",
@@ -1789,7 +1789,7 @@ monsters.set("81", {
   speedRate: undefined,
 });
 monsters.set("82", {
-  icon: "monster/icon/82",
+  icon: "monster/icon/82_00000",
   out: "monster/out/82",
   outOffset: new Vec2(),
   label: "铁壳蝼蛄",
@@ -1810,7 +1810,7 @@ monsters.set("82", {
   speedRate: undefined,
 });
 monsters.set("83", {
-  icon: "monster/icon/83",
+  icon: "monster/icon/83_00000",
   out: "monster/out/83",
   outOffset: new Vec2(),
   label: "犀甲巨蚁",
@@ -1831,7 +1831,7 @@ monsters.set("83", {
   speedRate: undefined,
 });
 monsters.set("84", {
-  icon: "monster/icon/84",
+  icon: "monster/icon/84_00000",
   out: "monster/out/84",
   outOffset: new Vec2(),
   label: "白骨披甲将",
@@ -1852,7 +1852,7 @@ monsters.set("84", {
   speedRate: undefined,
 });
 monsters.set("85", {
-  icon: "monster/icon/85",
+  icon: "monster/icon/85_00000",
   out: "monster/out/85",
   outOffset: new Vec2(),
   label: "焰翅魔将",
@@ -1873,7 +1873,7 @@ monsters.set("85", {
   speedRate: undefined,
 });
 monsters.set("86", {
-  icon: "monster/icon/86",
+  icon: "monster/icon/86_00000",
   out: "monster/out/86",
   outOffset: new Vec2(),
   label: "战旗兽人",
@@ -1894,7 +1894,7 @@ monsters.set("86", {
   speedRate: undefined,
 });
 monsters.set("87", {
-  icon: "monster/icon/87",
+  icon: "monster/icon/87_00000",
   out: "monster/out/87",
   outOffset: new Vec2(),
   label: "碎铁石堆怪",
@@ -1915,7 +1915,7 @@ monsters.set("87", {
   speedRate: undefined,
 });
 monsters.set("88", {
-  icon: "monster/icon/88",
+  icon: "monster/icon/88_00000",
   out: "monster/out/88",
   outOffset: new Vec2(),
   label: "血晶碎块怪",
@@ -1936,7 +1936,7 @@ monsters.set("88", {
   speedRate: undefined,
 });
 monsters.set("89", {
-  icon: "monster/icon/89",
+  icon: "monster/icon/89_00000",
   out: "monster/out/89",
   outOffset: new Vec2(),
   label: "骨翅飞妖",
@@ -1957,7 +1957,7 @@ monsters.set("89", {
   speedRate: undefined,
 });
 monsters.set("90", {
-  icon: "monster/icon/90",
+  icon: "monster/icon/90_00000",
   out: "monster/out/90",
   outOffset: new Vec2(),
   label: "骨爪爬魔",
@@ -1978,7 +1978,7 @@ monsters.set("90", {
   speedRate: undefined,
 });
 monsters.set("91", {
-  icon: "monster/icon/91",
+  icon: "monster/icon/91_00000",
   out: "monster/out/91",
   outOffset: new Vec2(),
   label: "碎石傀儡",
@@ -1999,7 +1999,7 @@ monsters.set("91", {
   speedRate: undefined,
 });
 monsters.set("92", {
-  icon: "monster/icon/92",
+  icon: "monster/icon/92_00000",
   out: "monster/out/92",
   outOffset: new Vec2(),
   label: "妖娆花魁女妖",
@@ -2020,7 +2020,7 @@ monsters.set("92", {
   speedRate: undefined,
 });
 monsters.set("93", {
-  icon: "monster/icon/93",
+  icon: "monster/icon/93_00000",
   out: "monster/out/93",
   outOffset: new Vec2(),
   label: "青翼仙子",
@@ -2041,7 +2041,7 @@ monsters.set("93", {
   speedRate: undefined,
 });
 monsters.set("94", {
-  icon: "monster/icon/94",
+  icon: "monster/icon/94_00000",
   out: "monster/out/94",
   outOffset: new Vec2(),
   label: "金冠飞刀侠",
@@ -2062,7 +2062,7 @@ monsters.set("94", {
   speedRate: undefined,
 });
 monsters.set("95", {
-  icon: "monster/icon/95",
+  icon: "monster/icon/95_00000",
   out: "monster/out/95",
   outOffset: new Vec2(),
   label: "金甲持锤武圣",
@@ -2083,7 +2083,7 @@ monsters.set("95", {
   speedRate: undefined,
 });
 monsters.set("96", {
-  icon: "monster/icon/96",
+  icon: "monster/icon/96_00000",
   out: "monster/out/96",
   outOffset: new Vec2(),
   label: "蓝翼法灵",
@@ -2104,7 +2104,7 @@ monsters.set("96", {
   speedRate: undefined,
 });
 monsters.set("97", {
-  icon: "monster/icon/97",
+  icon: "monster/icon/97_00000",
   out: "monster/out/97",
   outOffset: new Vec2(),
   label: "白甲弓手",
@@ -2125,7 +2125,7 @@ monsters.set("97", {
   speedRate: undefined,
 });
 monsters.set("98", {
-  icon: "monster/icon/98",
+  icon: "monster/icon/98_00000",
   out: "monster/out/98",
   outOffset: new Vec2(),
   label: "银甲白狼灵",
@@ -2146,7 +2146,7 @@ monsters.set("98", {
   speedRate: undefined,
 });
 monsters.set("99", {
-  icon: "monster/icon/99",
+  icon: "monster/icon/99_00000",
   out: "monster/out/99",
   outOffset: new Vec2(),
   label: "枯骨废墟堆",
@@ -2167,7 +2167,7 @@ monsters.set("99", {
   speedRate: undefined,
 });
 monsters.set("100", {
-  icon: "monster/icon/100",
+  icon: "monster/icon/100_00000",
   out: "monster/out/100",
   outOffset: new Vec2(),
   label: "白袍行者",
@@ -2188,7 +2188,7 @@ monsters.set("100", {
   speedRate: undefined,
 });
 monsters.set("101", {
-  icon: "monster/icon/101",
+  icon: "monster/icon/101_00000",
   out: "monster/out/101",
   outOffset: new Vec2(),
   label: "黑铁锁链魔",
@@ -2209,7 +2209,7 @@ monsters.set("101", {
   speedRate: undefined,
 });
 monsters.set("102", {
-  icon: "monster/icon/102",
+  icon: "monster/icon/102_00000",
   out: "monster/out/102",
   outOffset: new Vec2(),
   label: "金斧矮人酋长",
@@ -2230,7 +2230,7 @@ monsters.set("102", {
   speedRate: undefined,
 });
 monsters.set("103", {
-  icon: "monster/icon/103",
+  icon: "monster/icon/103_00000",
   out: "monster/out/103",
   outOffset: new Vec2(),
   label: "白骨蛇",
@@ -2251,7 +2251,7 @@ monsters.set("103", {
   speedRate: undefined,
 });
 monsters.set("104", {
-  icon: "monster/icon/104",
+  icon: "monster/icon/104_00000",
   out: "monster/out/104",
   outOffset: new Vec2(),
   label: "独眼巨魔",
@@ -2272,7 +2272,7 @@ monsters.set("104", {
   speedRate: undefined,
 });
 monsters.set("105", {
-  icon: "monster/icon/105",
+  icon: "monster/icon/105_00000",
   out: "monster/out/105",
   outOffset: new Vec2(),
   label: "骨翼蝠魔",
@@ -2293,7 +2293,7 @@ monsters.set("105", {
   speedRate: undefined,
 });
 monsters.set("106", {
-  icon: "monster/icon/106",
+  icon: "monster/icon/106_00000",
   out: "monster/out/106",
   outOffset: new Vec2(),
   label: "棕毛跳猿兽",
@@ -2314,7 +2314,7 @@ monsters.set("106", {
   speedRate: undefined,
 });
 monsters.set("107", {
-  icon: "monster/icon/107",
+  icon: "monster/icon/107_00000",
   out: "monster/out/107",
   outOffset: new Vec2(),
   label: "白毛狼牙锤怪",
@@ -2335,7 +2335,7 @@ monsters.set("107", {
   speedRate: undefined,
 });
 monsters.set("108", {
-  icon: "monster/icon/108",
+  icon: "monster/icon/108_00000",
   out: "monster/out/108",
   outOffset: new Vec2(),
   label: "电光双鞭将",
@@ -2356,7 +2356,7 @@ monsters.set("108", {
   speedRate: undefined,
 });
 monsters.set("109", {
-  icon: "monster/icon/109",
+  icon: "monster/icon/109_00000",
   out: "monster/out/109",
   outOffset: new Vec2(),
   label: "金冠弯刀卫",
@@ -2377,7 +2377,7 @@ monsters.set("109", {
   speedRate: undefined,
 });
 monsters.set("110", {
-  icon: "monster/icon/110",
+  icon: "monster/icon/110_00000",
   out: "monster/out/110",
   outOffset: new Vec2(),
   label: "血蛛后",
@@ -2399,7 +2399,7 @@ monsters.set("110", {
 });
 
 monsters.set("111", {
-  icon: "monster/icon/111",
+  icon: "monster/icon/111_00000",
   out: "monster/out/111",
   outOffset: new Vec2(),
   label: "碎金残兵堆",
@@ -2420,7 +2420,7 @@ monsters.set("111", {
   speedRate: undefined,
 });
 monsters.set("112", {
-  icon: "monster/icon/112",
+  icon: "monster/icon/112_00000",
   out: "monster/out/112",
   outOffset: new Vec2(),
   label: "骨杖蛮巫",
@@ -2441,7 +2441,7 @@ monsters.set("112", {
   speedRate: undefined,
 });
 monsters.set("113", {
-  icon: "monster/icon/113",
+  icon: "monster/icon/113_00000",
   out: "monster/out/113",
   outOffset: new Vec2(),
   label: "牛角红袍祭司",
@@ -2462,7 +2462,7 @@ monsters.set("113", {
   speedRate: undefined,
 });
 monsters.set("114", {
-  icon: "monster/icon/114",
+  icon: "monster/icon/114_00000",
   out: "monster/out/114",
   outOffset: new Vec2(),
   label: "冰晶翼灵",
@@ -2483,7 +2483,7 @@ monsters.set("114", {
   speedRate: undefined,
 });
 monsters.set("115", {
-  icon: "monster/icon/115",
+  icon: "monster/icon/115_00000",
   out: "monster/out/115",
   outOffset: new Vec2(),
   label: "赤肌血魔",
@@ -2504,7 +2504,7 @@ monsters.set("115", {
   speedRate: undefined,
 });
 monsters.set("116", {
-  icon: "monster/icon/116",
+  icon: "monster/icon/116_00000",
   out: "monster/out/116",
   outOffset: new Vec2(),
   label: "金环武僧",
@@ -2525,7 +2525,7 @@ monsters.set("116", {
   speedRate: undefined,
 });
 monsters.set("117", {
-  icon: "monster/icon/117",
+  icon: "monster/icon/117_00000",
   out: "monster/out/117",
   outOffset: new Vec2(),
   label: "机关木偶",
@@ -2546,7 +2546,7 @@ monsters.set("117", {
   speedRate: undefined,
 });
 monsters.set("118", {
-  icon: "monster/icon/118",
+  icon: "monster/icon/118_00000",
   out: "monster/out/118",
   outOffset: new Vec2(),
   label: "红袍披风鬼将",
@@ -2567,7 +2567,7 @@ monsters.set("118", {
   speedRate: undefined,
 });
 monsters.set("119", {
-  icon: "monster/icon/119",
+  icon: "monster/icon/119_00000",
   out: "monster/out/119",
   outOffset: new Vec2(),
   label: "悬空剑灵",
@@ -2588,7 +2588,7 @@ monsters.set("119", {
   speedRate: undefined,
 });
 monsters.set("120", {
-  icon: "monster/icon/120",
+  icon: "monster/icon/120_00000",
   out: "monster/out/120",
   outOffset: new Vec2(),
   label: "金莲法阵",
@@ -2609,7 +2609,7 @@ monsters.set("120", {
   speedRate: undefined,
 });
 monsters.set("121", {
-  icon: "monster/icon/121",
+  icon: "monster/icon/121_00000",
   out: "monster/out/121",
   outOffset: new Vec2(),
   label: "断戟残卒堆",
@@ -2630,7 +2630,7 @@ monsters.set("121", {
   speedRate: undefined,
 });
 monsters.set("122", {
-  icon: "monster/icon/122",
+  icon: "monster/icon/122_00000",
   out: "monster/out/122",
   outOffset: new Vec2(),
   label: "赤凰翔灵",
@@ -2651,7 +2651,7 @@ monsters.set("122", {
   speedRate: undefined,
 });
 monsters.set("123", {
-  icon: "monster/icon/123",
+  icon: "monster/icon/123_00000",
   out: "monster/out/123",
   outOffset: new Vec2(),
   label: "蓝冰晶簇",
@@ -2672,7 +2672,7 @@ monsters.set("123", {
   speedRate: undefined,
 });
 monsters.set("124", {
-  icon: "monster/icon/124",
+  icon: "monster/icon/124_00000",
   out: "monster/out/124",
   outOffset: new Vec2(),
   label: "金冠法王",
@@ -2693,7 +2693,7 @@ monsters.set("124", {
   speedRate: undefined,
 });
 monsters.set("125", {
-  icon: "monster/icon/125",
+  icon: "monster/icon/125_00000",
   out: "monster/out/125",
   outOffset: new Vec2(),
   label: "藤蔓树魔",
@@ -2714,7 +2714,7 @@ monsters.set("125", {
   speedRate: undefined,
 });
 monsters.set("126", {
-  icon: "monster/icon/126",
+  icon: "monster/icon/126_00000",
   out: "monster/out/126",
   outOffset: new Vec2(),
   label: "缟素女鬼",
@@ -2735,7 +2735,7 @@ monsters.set("126", {
   speedRate: undefined,
 });
 monsters.set("127", {
-  icon: "monster/icon/127",
+  icon: "monster/icon/127_00000",
   out: "monster/out/127",
   outOffset: new Vec2(),
   label: "巨翼骨蝠王",
@@ -2756,7 +2756,7 @@ monsters.set("127", {
   speedRate: undefined,
 });
 monsters.set("128", {
-  icon: "monster/icon/128",
+  icon: "monster/icon/128_00000",
   out: "monster/out/128",
   outOffset: new Vec2(),
   label: "皮甲猎弓手",
@@ -2777,7 +2777,7 @@ monsters.set("128", {
   speedRate: undefined,
 });
 monsters.set("129", {
-  icon: "monster/icon/129",
+  icon: "monster/icon/129_00000",
   out: "monster/out/129",
   outOffset: new Vec2(),
   label: "金甲长枪灵",
@@ -2798,7 +2798,7 @@ monsters.set("129", {
   speedRate: undefined,
 });
 monsters.set("130", {
-  icon: "monster/icon/130",
+  icon: "monster/icon/130_00000",
   out: "monster/out/130",
   outOffset: new Vec2(),
   label: "双锤牛魔",
@@ -2819,7 +2819,7 @@ monsters.set("130", {
   speedRate: undefined,
 });
 monsters.set("131", {
-  icon: "monster/icon/131",
+  icon: "monster/icon/131_00000",
   out: "monster/out/131",
   outOffset: new Vec2(),
   label: "尸骸兵器冢",
@@ -2840,7 +2840,7 @@ monsters.set("131", {
   speedRate: undefined,
 });
 monsters.set("132", {
-  icon: "monster/icon/132",
+  icon: "monster/icon/132_00000",
   out: "monster/out/132",
   outOffset: new Vec2(),
   label: "焰发女妖",
@@ -2861,7 +2861,7 @@ monsters.set("132", {
   speedRate: undefined,
 });
 monsters.set("133", {
-  icon: "monster/icon/133",
+  icon: "monster/icon/133_00000",
   out: "monster/out/133",
   outOffset: new Vec2(),
   label: "金链骷髅阵",
@@ -2882,7 +2882,7 @@ monsters.set("133", {
   speedRate: undefined,
 });
 monsters.set("134", {
-  icon: "monster/icon/134",
+  icon: "monster/icon/134_00000",
   out: "monster/out/134",
   outOffset: new Vec2(),
   label: "粉晶机关兽",
@@ -2903,7 +2903,7 @@ monsters.set("134", {
   speedRate: undefined,
 });
 monsters.set("135", {
-  icon: "monster/icon/135",
+  icon: "monster/icon/135_00000",
   out: "monster/out/135",
   outOffset: new Vec2(),
   label: "金蟾精",
@@ -2924,7 +2924,7 @@ monsters.set("135", {
   speedRate: undefined,
 });
 monsters.set("136", {
-  icon: "monster/icon/136",
+  icon: "monster/icon/136_00000",
   out: "monster/out/136",
   outOffset: new Vec2(),
   label: "冰杖法童",
@@ -2945,7 +2945,7 @@ monsters.set("136", {
   speedRate: undefined,
 });
 monsters.set("137", {
-  icon: "monster/icon/137",
+  icon: "monster/icon/137_00000",
   out: "monster/out/137",
   outOffset: new Vec2(),
   label: "提灯行商怪",
@@ -2966,7 +2966,7 @@ monsters.set("137", {
   speedRate: undefined,
 });
 monsters.set("138", {
-  icon: "monster/icon/138",
+  icon: "monster/icon/138_00000",
   out: "monster/out/138",
   outOffset: new Vec2(),
   label: "绿杖树精",
@@ -2987,7 +2987,7 @@ monsters.set("138", {
   speedRate: undefined,
 });
 monsters.set("139", {
-  icon: "monster/icon/139",
+  icon: "monster/icon/139_00000",
   out: "monster/out/139",
   outOffset: new Vec2(),
   label: "双筒火铳魔",
@@ -3008,7 +3008,7 @@ monsters.set("139", {
   speedRate: undefined,
 });
 monsters.set("140", {
-  icon: "monster/icon/140",
+  icon: "monster/icon/140_00000",
   out: "monster/out/140",
   outOffset: new Vec2(),
   label: "白狐少女妖",
@@ -3029,7 +3029,7 @@ monsters.set("140", {
   speedRate: undefined,
 });
 monsters.set("141", {
-  icon: "monster/icon/141",
+  icon: "monster/icon/141_00000",
   out: "monster/out/141",
   outOffset: new Vec2(),
   label: "金轮骨僧",
@@ -3050,7 +3050,7 @@ monsters.set("141", {
   speedRate: undefined,
 });
 monsters.set("142", {
-  icon: "monster/icon/142",
+  icon: "monster/icon/142_00000",
   out: "monster/out/142",
   outOffset: new Vec2(),
   label: "碧鳞蛟龙",
@@ -3071,7 +3071,7 @@ monsters.set("142", {
   speedRate: undefined,
 });
 monsters.set("143", {
-  icon: "monster/icon/143",
+  icon: "monster/icon/143_00000",
   out: "monster/out/143",
   outOffset: new Vec2(),
   label: "金纹道人",
@@ -3092,7 +3092,7 @@ monsters.set("143", {
   speedRate: undefined,
 });
 monsters.set("144", {
-  icon: "monster/icon/144",
+  icon: "monster/icon/144_00000",
   out: "monster/out/144",
   outOffset: new Vec2(),
   label: "枯骨翼妖",
@@ -3113,7 +3113,7 @@ monsters.set("144", {
   speedRate: undefined,
 });
 monsters.set("145", {
-  icon: "monster/icon/145",
+  icon: "monster/icon/145_00000",
   out: "monster/out/145",
   outOffset: new Vec2(),
   label: "黑棘龙兽",
@@ -3134,7 +3134,7 @@ monsters.set("145", {
   speedRate: undefined,
 });
 monsters.set("146", {
-  icon: "monster/icon/146",
+  icon: "monster/icon/146_00000",
   out: "monster/out/146",
   outOffset: new Vec2(),
   label: "紫电武魂",
@@ -3155,7 +3155,7 @@ monsters.set("146", {
   speedRate: undefined,
 });
 monsters.set("147", {
-  icon: "monster/icon/147",
+  icon: "monster/icon/147_00000",
   out: "monster/out/147",
   outOffset: new Vec2(),
   label: "莲台鲛人",
@@ -3176,7 +3176,7 @@ monsters.set("147", {
   speedRate: undefined,
 });
 monsters.set("148", {
-  icon: "monster/icon/148",
+  icon: "monster/icon/148_00000",
   out: "monster/out/148",
   outOffset: new Vec2(),
   label: "血刃狂魔",
@@ -3197,7 +3197,7 @@ monsters.set("148", {
   speedRate: undefined,
 });
 monsters.set("149", {
-  icon: "monster/icon/149",
+  icon: "monster/icon/149_00000",
   out: "monster/out/149",
   outOffset: new Vec2(),
   label: "骨幡妖将",
@@ -3218,7 +3218,7 @@ monsters.set("149", {
   speedRate: undefined,
 });
 monsters.set("150", {
-  icon: "monster/icon/150",
+  icon: "monster/icon/150_00000",
   out: "monster/out/150",
   outOffset: new Vec2(),
   label: "翠纹飞蜥",
@@ -3239,7 +3239,7 @@ monsters.set("150", {
   speedRate: undefined,
 });
 monsters.set("151", {
-  icon: "monster/icon/151",
+  icon: "monster/icon/151_00000",
   out: "monster/out/151",
   outOffset: new Vec2(),
   label: "血翼蝠群",
@@ -3260,7 +3260,7 @@ monsters.set("151", {
   speedRate: undefined,
 });
 monsters.set("152", {
-  icon: "monster/icon/152",
+  icon: "monster/icon/152_00000",
   out: "monster/out/152",
   outOffset: new Vec2(),
   label: "金鬃瑞狮",
@@ -3281,7 +3281,7 @@ monsters.set("152", {
   speedRate: undefined,
 });
 monsters.set("153", {
-  icon: "monster/icon/153",
+  icon: "monster/icon/153_00000",
   out: "monster/out/153",
   outOffset: new Vec2(),
   label: "独眼锤魔",
@@ -3302,7 +3302,7 @@ monsters.set("153", {
   speedRate: undefined,
 });
 monsters.set("154", {
-  icon: "monster/icon/154",
+  icon: "monster/icon/154_00000",
   out: "monster/out/154",
   outOffset: new Vec2(),
   label: "长尾铁蝎",
@@ -3323,7 +3323,7 @@ monsters.set("154", {
   speedRate: undefined,
 });
 monsters.set("155", {
-  icon: "monster/icon/155",
+  icon: "monster/icon/155_00000",
   out: "monster/out/155",
   outOffset: new Vec2(),
   label: "血羽战鹰",
@@ -3344,7 +3344,7 @@ monsters.set("155", {
   speedRate: undefined,
 });
 monsters.set("156", {
-  icon: "monster/icon/156",
+  icon: "monster/icon/156_00000",
   out: "monster/out/156",
   outOffset: new Vec2(),
   label: "血雾散魂",
@@ -3365,7 +3365,7 @@ monsters.set("156", {
   speedRate: undefined,
 });
 monsters.set("157", {
-  icon: "monster/icon/157",
+  icon: "monster/icon/157_00000",
   out: "monster/out/157",
   outOffset: new Vec2(),
   label: "金甲骁将",
@@ -3386,7 +3386,7 @@ monsters.set("157", {
   speedRate: undefined,
 });
 monsters.set("158", {
-  icon: "monster/icon/158",
+  icon: "monster/icon/158_00000",
   out: "monster/out/158",
   outOffset: new Vec2(),
   label: "赤尾巨蝎",
@@ -3407,7 +3407,7 @@ monsters.set("158", {
   speedRate: undefined,
 });
 monsters.set("159", {
-  icon: "monster/icon/159",
+  icon: "monster/icon/159_00000",
   out: "monster/out/159",
   outOffset: new Vec2(),
   label: "橙腹长脚蛛",
@@ -3428,7 +3428,7 @@ monsters.set("159", {
   speedRate: undefined,
 });
 monsters.set("160", {
-  icon: "monster/icon/160",
+  icon: "monster/icon/160_00000",
   out: "monster/out/160",
   outOffset: new Vec2(),
   label: "缚链石魔",
@@ -3449,7 +3449,7 @@ monsters.set("160", {
   speedRate: undefined,
 });
 monsters.set("161", {
-  icon: "monster/icon/161",
+  icon: "monster/icon/161_00000",
   out: "monster/out/161",
   outOffset: new Vec2(),
   label: "伏地金蟾",
@@ -3470,7 +3470,7 @@ monsters.set("161", {
   speedRate: undefined,
 });
 monsters.set("162", {
-  icon: "monster/icon/162",
+  icon: "monster/icon/162_00000",
   out: "monster/out/162",
   outOffset: new Vec2(),
   label: "吐钱金蟾",
@@ -3491,7 +3491,7 @@ monsters.set("162", {
   speedRate: undefined,
 });
 monsters.set("163", {
-  icon: "monster/icon/163",
+  icon: "monster/icon/163_00000",
   out: "monster/out/163",
   outOffset: new Vec2(),
   label: "倾覆货车怪",
@@ -3512,7 +3512,7 @@ monsters.set("163", {
   speedRate: undefined,
 });
 monsters.set("164", {
-  icon: "monster/icon/164",
+  icon: "monster/icon/164_00000",
   out: "monster/out/164",
   outOffset: new Vec2(),
   label: "翻车货担怪",
@@ -3533,7 +3533,7 @@ monsters.set("164", {
   speedRate: undefined,
 });
 monsters.set("165", {
-  icon: "monster/icon/165",
+  icon: "monster/icon/165_00000",
   out: "monster/out/165",
   outOffset: new Vec2(),
   label: "侧翻车厢怪",
@@ -3554,7 +3554,7 @@ monsters.set("165", {
   speedRate: undefined,
 });
 monsters.set("166", {
-  icon: "monster/icon/166",
+  icon: "monster/icon/166_00000",
   out: "monster/out/166",
   outOffset: new Vec2(),
   label: "攻城战车怪",
@@ -3575,7 +3575,7 @@ monsters.set("166", {
   speedRate: undefined,
 });
 monsters.set("167", {
-  icon: "monster/icon/167",
+  icon: "monster/icon/167_00000",
   out: "monster/out/167",
   outOffset: new Vec2(),
   label: "冲车机关怪",
@@ -3596,7 +3596,7 @@ monsters.set("167", {
   speedRate: undefined,
 });
 monsters.set("168", {
-  icon: "monster/icon/168",
+  icon: "monster/icon/168_00000",
   out: "monster/out/168",
   outOffset: new Vec2(),
   label: "赤羽斗鸡",
@@ -3617,7 +3617,7 @@ monsters.set("168", {
   speedRate: undefined,
 });
 monsters.set("169", {
-  icon: "monster/icon/169",
+  icon: "monster/icon/169_00000",
   out: "monster/out/169",
   outOffset: new Vec2(),
   label: "金斑幼鹿",
@@ -3638,7 +3638,7 @@ monsters.set("169", {
   speedRate: undefined,
 });
 monsters.set("170", {
-  icon: "monster/icon/170",
+  icon: "monster/icon/170_00000",
   out: "monster/out/170",
   outOffset: new Vec2(),
   label: "枯瘦黄衣行者",
@@ -3659,7 +3659,7 @@ monsters.set("170", {
   speedRate: undefined,
 });
 monsters.set("171", {
-  icon: "monster/icon/171",
+  icon: "monster/icon/171_00000",
   out: "monster/out/171",
   outOffset: new Vec2(),
   label: "举臂长毛猿",
@@ -3680,7 +3680,7 @@ monsters.set("171", {
   speedRate: undefined,
 });
 monsters.set("172", {
-  icon: "monster/icon/172",
+  icon: "monster/icon/172_00000",
   out: "monster/out/172",
   outOffset: new Vec2(),
   label: "藤杖猴妖",
@@ -3701,7 +3701,7 @@ monsters.set("172", {
   speedRate: undefined,
 });
 monsters.set("173", {
-  icon: "monster/icon/173",
+  icon: "monster/icon/173_00000",
   out: "monster/out/173",
   outOffset: new Vec2(),
   label: "象鼻地獾",
@@ -3722,7 +3722,7 @@ monsters.set("173", {
   speedRate: undefined,
 });
 monsters.set("174", {
-  icon: "monster/icon/174",
+  icon: "monster/icon/174_00000",
   out: "monster/out/174",
   outOffset: new Vec2(),
   label: "白骨行尸",
@@ -3743,7 +3743,7 @@ monsters.set("174", {
   speedRate: undefined,
 });
 monsters.set("175", {
-  icon: "monster/icon/175",
+  icon: "monster/icon/175_00000",
   out: "monster/out/175",
   outOffset: new Vec2(),
   label: "持斧骷髅卫",
@@ -3764,7 +3764,7 @@ monsters.set("175", {
   speedRate: undefined,
 });
 monsters.set("176", {
-  icon: "monster/icon/176",
+  icon: "monster/icon/176_00000",
   out: "monster/out/176",
   outOffset: new Vec2(),
   label: "持锄白毛猿",
@@ -3785,7 +3785,7 @@ monsters.set("176", {
   speedRate: undefined,
 });
 monsters.set("177", {
-  icon: "monster/icon/177",
+  icon: "monster/icon/177_00000",
   out: "monster/out/177",
   outOffset: new Vec2(),
   label: "血爪夜叉",
@@ -3806,7 +3806,7 @@ monsters.set("177", {
   speedRate: undefined,
 });
 monsters.set("178", {
-  icon: "monster/icon/178",
+  icon: "monster/icon/178_00000",
   out: "monster/out/178",
   outOffset: new Vec2(),
   label: "灰甲蝼蛄",
@@ -3827,7 +3827,7 @@ monsters.set("178", {
   speedRate: undefined,
 });
 monsters.set("179", {
-  icon: "monster/icon/179",
+  icon: "monster/icon/179_00000",
   out: "monster/out/179",
   outOffset: new Vec2(),
   label: "金龟甲虫",
@@ -3848,7 +3848,7 @@ monsters.set("179", {
   speedRate: undefined,
 });
 monsters.set("180", {
-  icon: "monster/icon/180",
+  icon: "monster/icon/180_00000",
   out: "monster/out/180",
   outOffset: new Vec2(),
   label: "金翎鸟灵",
@@ -3869,7 +3869,7 @@ monsters.set("180", {
   speedRate: undefined,
 });
 monsters.set("181", {
-  icon: "monster/icon/181",
+  icon: "monster/icon/181_00000",
   out: "monster/out/181",
   outOffset: new Vec2(),
   label: "黄斑腐尸",
@@ -3890,7 +3890,7 @@ monsters.set("181", {
   speedRate: undefined,
 });
 monsters.set("182", {
-  icon: "monster/icon/182",
+  icon: "monster/icon/182_00000",
   out: "monster/out/182",
   outOffset: new Vec2(),
   label: "破衲行者",
@@ -3911,7 +3911,7 @@ monsters.set("182", {
   speedRate: undefined,
 });
 monsters.set("183", {
-  icon: "monster/icon/183",
+  icon: "monster/icon/183_00000",
   out: "monster/out/183",
   outOffset: new Vec2(),
   label: "螺蛳灰虫",
@@ -3932,7 +3932,7 @@ monsters.set("183", {
   speedRate: undefined,
 });
 monsters.set("184", {
-  icon: "monster/icon/184",
+  icon: "monster/icon/184_00000",
   out: "monster/out/184",
   outOffset: new Vec2(),
   label: "金环灵蛇",
@@ -3953,7 +3953,7 @@ monsters.set("184", {
   speedRate: undefined,
 });
 monsters.set("185", {
-  icon: "monster/icon/185",
+  icon: "monster/icon/185_00000",
   out: "monster/out/185",
   outOffset: new Vec2(),
   label: "赤信蛇妖",
@@ -3974,7 +3974,7 @@ monsters.set("185", {
   speedRate: undefined,
 });
 monsters.set("186", {
-  icon: "monster/icon/186",
+  icon: "monster/icon/186_00000",
   out: "monster/out/186",
   outOffset: new Vec2(),
   label: "金毛鬃兽",
@@ -3995,7 +3995,7 @@ monsters.set("186", {
   speedRate: undefined,
 });
 monsters.set("187", {
-  icon: "monster/icon/187",
+  icon: "monster/icon/187_00000",
   out: "monster/out/187",
   outOffset: new Vec2(),
   label: "黄肚蛙将",
@@ -4016,7 +4016,7 @@ monsters.set("187", {
   speedRate: undefined,
 });
 monsters.set("188", {
-  icon: "monster/icon/188",
+  icon: "monster/icon/188_00000",
   out: "monster/out/188",
   outOffset: new Vec2(),
   label: "骨刺橙蜈蚣",
@@ -4037,7 +4037,7 @@ monsters.set("188", {
   speedRate: undefined,
 });
 monsters.set("189", {
-  icon: "monster/icon/189",
+  icon: "monster/icon/189_00000",
   out: "monster/out/189",
   outOffset: new Vec2(),
   label: "银角仙蜕",
@@ -4058,7 +4058,7 @@ monsters.set("189", {
   speedRate: undefined,
 });
 monsters.set("190", {
-  icon: "monster/icon/190",
+  icon: "monster/icon/190_00000",
   out: "monster/out/190",
   outOffset: new Vec2(),
   label: "白骨团怪",
@@ -4079,7 +4079,7 @@ monsters.set("190", {
   speedRate: undefined,
 });
 monsters.set("191", {
-  icon: "monster/icon/191",
+  icon: "monster/icon/191_00000",
   out: "monster/out/191",
   outOffset: new Vec2(),
   label: "铁甲双钳虫",
@@ -4100,7 +4100,7 @@ monsters.set("191", {
   speedRate: undefined,
 });
 monsters.set("192", {
-  icon: "monster/icon/192",
+  icon: "monster/icon/192_00000",
   out: "monster/out/192",
   outOffset: new Vec2(),
   label: "银针骨虫",
@@ -4121,7 +4121,7 @@ monsters.set("192", {
   speedRate: undefined,
 });
 monsters.set("193", {
-  icon: "monster/icon/193",
+  icon: "monster/icon/193_00000",
   out: "monster/out/193",
   outOffset: new Vec2(),
   label: "泥沼爬行兽",
@@ -4142,7 +4142,7 @@ monsters.set("193", {
   speedRate: undefined,
 });
 monsters.set("194", {
-  icon: "monster/icon/194",
+  icon: "monster/icon/194_00000",
   out: "monster/out/194",
   outOffset: new Vec2(),
   label: "石肤鬼王",
@@ -4163,7 +4163,7 @@ monsters.set("194", {
   speedRate: undefined,
 });
 monsters.set("195", {
-  icon: "monster/icon/195",
+  icon: "monster/icon/195_00000",
   out: "monster/out/195",
   outOffset: new Vec2(),
   label: "持叉狼妖",
@@ -4184,7 +4184,7 @@ monsters.set("195", {
   speedRate: undefined,
 });
 monsters.set("196", {
-  icon: "monster/icon/196",
+  icon: "monster/icon/196_00000",
   out: "monster/out/196",
   outOffset: new Vec2(),
   label: "骨刺链锤魔",
@@ -4205,7 +4205,7 @@ monsters.set("196", {
   speedRate: undefined,
 });
 monsters.set("197", {
-  icon: "monster/icon/197",
+  icon: "monster/icon/197_00000",
   out: "monster/out/197",
   outOffset: new Vec2(),
   label: "血翼魔王",
@@ -4226,7 +4226,7 @@ monsters.set("197", {
   speedRate: undefined,
 });
 monsters.set("198", {
-  icon: "monster/icon/198",
+  icon: "monster/icon/198_00000",
   out: "monster/out/198",
   outOffset: new Vec2(),
   label: "坠马铁骨怪",
@@ -4247,7 +4247,7 @@ monsters.set("198", {
   speedRate: undefined,
 });
 monsters.set("199", {
-  icon: "monster/icon/199",
+  icon: "monster/icon/199_00000",
   out: "monster/out/199",
   outOffset: new Vec2(),
   label: "骨翼小飞龙",
@@ -4268,7 +4268,7 @@ monsters.set("199", {
   speedRate: undefined,
 });
 monsters.set("200", {
-  icon: "monster/icon/200",
+  icon: "monster/icon/200_00000",
   out: "monster/out/200",
   outOffset: new Vec2(),
   label: "长尾跳鼠怪",
@@ -4289,7 +4289,7 @@ monsters.set("200", {
   speedRate: undefined,
 });
 monsters.set("201", {
-  icon: "monster/icon/201",
+  icon: "monster/icon/201_00000",
   out: "monster/out/201",
   outOffset: new Vec2(),
   label: "白骨弓手",
@@ -4310,7 +4310,7 @@ monsters.set("201", {
   speedRate: undefined,
 });
 monsters.set("202", {
-  icon: "monster/icon/202",
+  icon: "monster/icon/202_00000",
   out: "monster/out/202",
   outOffset: new Vec2(),
   label: "铁甲长戟卫",
@@ -4331,7 +4331,7 @@ monsters.set("202", {
   speedRate: undefined,
 });
 monsters.set("203", {
-  icon: "monster/icon/203",
+  icon: "monster/icon/203_00000",
   out: "monster/out/203",
   outOffset: new Vec2(),
   label: "断臂独锤兵",
@@ -4352,7 +4352,7 @@ monsters.set("203", {
   speedRate: undefined,
 });
 monsters.set("204", {
-  icon: "monster/icon/204",
+  icon: "monster/icon/204_00000",
   out: "monster/out/204",
   outOffset: new Vec2(),
   label: "红肤举锤巨人",
@@ -4373,7 +4373,7 @@ monsters.set("204", {
   speedRate: undefined,
 });
 monsters.set("205", {
-  icon: "monster/icon/205",
+  icon: "monster/icon/205_00000",
   out: "monster/out/205",
   outOffset: new Vec2(),
   label: "狼头黑锤妖",
@@ -4394,7 +4394,7 @@ monsters.set("205", {
   speedRate: undefined,
 });
 monsters.set("206", {
-  icon: "monster/icon/206",
+  icon: "monster/icon/206_00000",
   out: "monster/out/206",
   outOffset: new Vec2(),
   label: "铁节钢蜈蚣",
@@ -4415,7 +4415,7 @@ monsters.set("206", {
   speedRate: undefined,
 });
 monsters.set("207", {
-  icon: "monster/icon/207",
+  icon: "monster/icon/207_00000",
   out: "monster/out/207",
   outOffset: new Vec2(),
   label: "雪白羊怪",
@@ -4436,7 +4436,7 @@ monsters.set("207", {
   speedRate: undefined,
 });
 monsters.set("208", {
-  icon: "monster/icon/208",
+  icon: "monster/icon/208_00000",
   out: "monster/out/208",
   outOffset: new Vec2(),
   label: "荆棘刺球兽",
@@ -4457,7 +4457,7 @@ monsters.set("208", {
   speedRate: undefined,
 });
 monsters.set("209", {
-  icon: "monster/icon/209",
+  icon: "monster/icon/209_00000",
   out: "monster/out/209",
   outOffset: new Vec2(),
   label: "土黄瘦狐",
@@ -4478,7 +4478,7 @@ monsters.set("209", {
   speedRate: undefined,
 });
 monsters.set("210", {
-  icon: "monster/icon/210",
+  icon: "monster/icon/210_00000",
   out: "monster/out/210",
   outOffset: new Vec2(),
   label: "白袍布衣道人",
@@ -4499,7 +4499,7 @@ monsters.set("210", {
   speedRate: undefined,
 });
 monsters.set("211", {
-  icon: "monster/icon/211",
+  icon: "monster/icon/211_00000",
   out: "monster/out/211",
   outOffset: new Vec2(),
   label: "血背金龟虫",
@@ -4520,7 +4520,7 @@ monsters.set("211", {
   speedRate: undefined,
 });
 monsters.set("212", {
-  icon: "monster/icon/212",
+  icon: "monster/icon/212_00000",
   out: "monster/out/212",
   outOffset: new Vec2(),
   label: "青绿毛毛虫",
@@ -4541,7 +4541,7 @@ monsters.set("212", {
   speedRate: undefined,
 });
 monsters.set("213", {
-  icon: "monster/icon/213",
+  icon: "monster/icon/213_00000",
   out: "monster/out/213",
   outOffset: new Vec2(),
   label: "白骨腐尸",
@@ -4562,7 +4562,7 @@ monsters.set("213", {
   speedRate: undefined,
 });
 monsters.set("214", {
-  icon: "monster/icon/214",
+  icon: "monster/icon/214_00000",
   out: "monster/out/214",
   outOffset: new Vec2(),
   label: "铁尾黑蝎",
@@ -4583,7 +4583,7 @@ monsters.set("214", {
   speedRate: undefined,
 });
 monsters.set("215", {
-  icon: "monster/icon/215",
+  icon: "monster/icon/215_00000",
   out: "monster/out/215",
   outOffset: new Vec2(),
   label: "褐翼黑蝙蝠",
@@ -4604,7 +4604,7 @@ monsters.set("215", {
   speedRate: undefined,
 });
 monsters.set("216", {
-  icon: "monster/icon/216",
+  icon: "monster/icon/216_00000",
   out: "monster/out/216",
   outOffset: new Vec2(),
   label: "银斧圆盾矮人",
@@ -4625,7 +4625,7 @@ monsters.set("216", {
   speedRate: undefined,
 });
 monsters.set("217", {
-  icon: "monster/icon/217",
+  icon: "monster/icon/217_00000",
   out: "monster/out/217",
   outOffset: new Vec2(),
   label: "绿皮蟾人",
@@ -4646,7 +4646,7 @@ monsters.set("217", {
   speedRate: undefined,
 });
 monsters.set("218", {
-  icon: "monster/icon/218",
+  icon: "monster/icon/218_00000",
   out: "monster/out/218",
   outOffset: new Vec2(),
   label: "金鬃狻猊",
@@ -4667,7 +4667,7 @@ monsters.set("218", {
   speedRate: undefined,
 });
 monsters.set("219", {
-  icon: "monster/icon/219",
+  icon: "monster/icon/219_00000",
   out: "monster/out/219",
   outOffset: new Vec2(),
   label: "铁钩海盗",
@@ -4689,7 +4689,7 @@ monsters.set("219", {
   speedRate: undefined,
 });
 monsters.set("220", {
-  icon: "monster/icon/220",
+  icon: "monster/icon/220_00000",
   out: "monster/out/220",
   outOffset: new Vec2(),
   label: "牛角石肤巨人",
