@@ -1,7 +1,12 @@
 import { ACTION, ActionNeedWeapon, AnimationLength, AnimationSpritesName, DIRECTION } from "../types/animation";
 
-// 方向顺序
-const directions: DIRECTION[] = [DIRECTION.UP, DIRECTION.RIGHT_UP, DIRECTION.RIGHT, DIRECTION.RIGHT_DOWN, DIRECTION.DOWN, DIRECTION.LEFT_DOWN, DIRECTION.LEFT, DIRECTION.LEFT_UP];
+// 方向顺序（outPositions 等按方向配置的数组以下标顺序为准）
+export const directions: DIRECTION[] = [DIRECTION.UP, DIRECTION.RIGHT_UP, DIRECTION.RIGHT, DIRECTION.RIGHT_DOWN, DIRECTION.DOWN, DIRECTION.LEFT_DOWN, DIRECTION.LEFT, DIRECTION.LEFT_UP];
+
+/** 获取方向在按方向配置数组（如 Equipment.outPositions）中的下标 */
+export function getDirectionIndex(direction: DIRECTION): number {
+  return directions.indexOf(direction);
+}
 
 // 角色动作顺序
 const roleActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN, ACTION.TEST1, ACTION.ATTACK_NEAR, ACTION.ATTACK_SKILL_1, ACTION.TEST3, ACTION.ATTACK_FAR, ACTION.INJURED, ACTION.A1, ACTION.DIE];

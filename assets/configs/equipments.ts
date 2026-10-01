@@ -48,7 +48,16 @@ export const clothes: Equipment[] = [
     inScaleX: 1.3,
     inScaleY: 1.3,
     outScale: 1,
-    outPosition: new Vec2(7.3, 34.2),
+    outPositions: [
+      new Vec2(7.3, 34.2), // up
+      new Vec2(7.3, 34.2), // right_up
+      new Vec2(7.3, 34.2), // right
+      new Vec2(7.3, 34.2), // right_down
+      new Vec2(7.3, 34.2), // down
+      new Vec2(7.3, 34.2), // left_down
+      new Vec2(7.3, 34.2), // left
+      new Vec2(7.3, 34.2), // left_up
+    ],
   },
 ];
 
@@ -78,7 +87,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(5.6, 3.1), // up
+      new Vec2(5.6, 3.1), // right_up
+      new Vec2(5.6, 3.1), // right
+      new Vec2(5.6, 3.1), // right_down
+      new Vec2(5.6, 3.1), // down
+      new Vec2(5.6, 3.1), // left_down
+      new Vec2(5.6, 3.1), // left
+      new Vec2(5.6, 3.1), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -104,7 +122,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(-10.0, 75.2), // up
+      new Vec2(-10.0, 75.2), // right_up
+      new Vec2(-10.0, 75.2), // right
+      new Vec2(-10.0, 75.2), // right_down
+      new Vec2(-10.0, 75.2), // down
+      new Vec2(-10.0, 75.2), // left_down
+      new Vec2(-10.0, 75.2), // left
+      new Vec2(-10.0, 75.2), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -130,7 +157,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(7.6, 8.0), // up
+      new Vec2(7.6, 8.0), // right_up
+      new Vec2(7.6, 8.0), // right
+      new Vec2(7.6, 8.0), // right_down
+      new Vec2(7.6, 8.0), // down
+      new Vec2(7.6, 8.0), // left_down
+      new Vec2(7.6, 8.0), // left
+      new Vec2(7.6, 8.0), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -156,7 +192,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(6.6, 50.4), // up
+      new Vec2(6.6, 50.4), // right_up
+      new Vec2(6.6, 50.4), // right
+      new Vec2(6.6, 50.4), // right_down
+      new Vec2(6.6, 50.4), // down
+      new Vec2(6.6, 50.4), // left_down
+      new Vec2(6.6, 50.4), // left
+      new Vec2(6.6, 50.4), // left_up
+    ],
   },
   /**   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -182,7 +227,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(6.6, 50.4), // up
+      new Vec2(6.6, 50.4), // right_up
+      new Vec2(6.6, 50.4), // right
+      new Vec2(6.6, 50.4), // right_down
+      new Vec2(6.6, 50.4), // down
+      new Vec2(6.6, 50.4), // left_down
+      new Vec2(6.6, 50.4), // left
+      new Vec2(6.6, 50.4), // left_up
+    ],
   }, */
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -208,7 +262,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(12.7, 36.5), // up
+      new Vec2(12.7, 36.5), // right_up
+      new Vec2(12.7, 36.5), // right
+      new Vec2(12.7, 36.5), // right_down
+      new Vec2(12.7, 36.5), // down
+      new Vec2(12.7, 36.5), // left_down
+      new Vec2(12.7, 36.5), // left
+      new Vec2(12.7, 36.5), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -234,7 +297,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(6.5, 47.4), // up
+      new Vec2(6.5, 47.4), // right_up
+      new Vec2(6.5, 47.4), // right
+      new Vec2(6.5, 47.4), // right_down
+      new Vec2(6.5, 47.4), // down
+      new Vec2(6.5, 47.4), // left_down
+      new Vec2(6.5, 47.4), // left
+      new Vec2(6.5, 47.4), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -260,7 +332,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(-19.2, 80.2), // up
+      new Vec2(-19.2, 80.2), // right_up
+      new Vec2(-19.2, 80.2), // right
+      new Vec2(-19.2, 80.2), // right_down
+      new Vec2(-19.2, 80.2), // down
+      new Vec2(-19.2, 80.2), // left_down
+      new Vec2(-19.2, 80.2), // left
+      new Vec2(-19.2, 80.2), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -287,7 +368,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(14.0, 4.5), // up
+      new Vec2(14.0, 4.5), // right_up
+      new Vec2(14.0, 4.5), // right
+      new Vec2(14.0, 4.5), // right_down
+      new Vec2(14.0, 4.5), // down
+      new Vec2(14.0, 4.5), // left_down
+      new Vec2(14.0, 4.5), // left
+      new Vec2(14.0, 4.5), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -314,7 +404,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(13.0, -12.8), // up
+      new Vec2(13.0, -12.8), // right_up
+      new Vec2(13.0, -12.8), // right
+      new Vec2(13.0, -12.8), // right_down
+      new Vec2(13.0, -12.8), // down
+      new Vec2(13.0, -12.8), // left_down
+      new Vec2(13.0, -12.8), // left
+      new Vec2(13.0, -12.8), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -340,7 +439,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(14.0, 5.9), // up
+      new Vec2(14.0, 5.9), // right_up
+      new Vec2(14.0, 5.9), // right
+      new Vec2(14.0, 5.9), // right_down
+      new Vec2(14.0, 5.9), // down
+      new Vec2(14.0, 5.9), // left_down
+      new Vec2(14.0, 5.9), // left
+      new Vec2(14.0, 5.9), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -367,7 +475,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(11.5, 4.9), // up
+      new Vec2(11.5, 4.9), // right_up
+      new Vec2(11.5, 4.9), // right
+      new Vec2(11.5, 4.9), // right_down
+      new Vec2(11.5, 4.9), // down
+      new Vec2(11.5, 4.9), // left_down
+      new Vec2(11.5, 4.9), // left
+      new Vec2(11.5, 4.9), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -393,7 +510,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(15.5, -26.9), // up
+      new Vec2(15.5, -26.9), // right_up
+      new Vec2(15.5, -26.9), // right
+      new Vec2(15.5, -26.9), // right_down
+      new Vec2(15.5, -26.9), // down
+      new Vec2(15.5, -26.9), // left_down
+      new Vec2(15.5, -26.9), // left
+      new Vec2(15.5, -26.9), // left_up
+    ],
   },
   /**   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -419,7 +545,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(14.5, 18.3), // up
+      new Vec2(14.5, 18.3), // right_up
+      new Vec2(14.5, 18.3), // right
+      new Vec2(14.5, 18.3), // right_down
+      new Vec2(14.5, 18.3), // down
+      new Vec2(14.5, 18.3), // left_down
+      new Vec2(14.5, 18.3), // left
+      new Vec2(14.5, 18.3), // left_up
+    ],
   }, */
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -446,7 +581,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(-8.5, 70.4), // up
+      new Vec2(-8.5, 70.4), // right_up
+      new Vec2(-8.5, 70.4), // right
+      new Vec2(-8.5, 70.4), // right_down
+      new Vec2(-8.5, 70.4), // down
+      new Vec2(-8.5, 70.4), // left_down
+      new Vec2(-8.5, 70.4), // left
+      new Vec2(-8.5, 70.4), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -473,7 +617,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(-8.6, 71.6), // up
+      new Vec2(-8.6, 71.6), // right_up
+      new Vec2(-8.6, 71.6), // right
+      new Vec2(-8.6, 71.6), // right_down
+      new Vec2(-8.6, 71.6), // down
+      new Vec2(-8.6, 71.6), // left_down
+      new Vec2(-8.6, 71.6), // left
+      new Vec2(-8.6, 71.6), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -499,7 +652,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(7.3, 1.5), // up
+      new Vec2(7.3, 1.5), // right_up
+      new Vec2(7.3, 1.5), // right
+      new Vec2(7.3, 1.5), // right_down
+      new Vec2(7.3, 1.5), // down
+      new Vec2(7.3, 1.5), // left_down
+      new Vec2(7.3, 1.5), // left
+      new Vec2(7.3, 1.5), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -525,7 +687,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(14.5, 18.3), // up
+      new Vec2(14.5, 18.3), // right_up
+      new Vec2(14.5, 18.3), // right
+      new Vec2(14.5, 18.3), // right_down
+      new Vec2(14.5, 18.3), // down
+      new Vec2(14.5, 18.3), // left_down
+      new Vec2(14.5, 18.3), // left
+      new Vec2(14.5, 18.3), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -551,7 +722,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(7.4, 1.2), // up
+      new Vec2(7.4, 1.2), // right_up
+      new Vec2(7.4, 1.2), // right
+      new Vec2(7.4, 1.2), // right_down
+      new Vec2(7.4, 1.2), // down
+      new Vec2(7.4, 1.2), // left_down
+      new Vec2(7.4, 1.2), // left
+      new Vec2(7.4, 1.2), // left_up
+    ],
   },
   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -577,7 +757,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(11.7, 57.2), // up
+      new Vec2(11.7, 57.2), // right_up
+      new Vec2(11.7, 57.2), // right
+      new Vec2(11.7, 57.2), // right_down
+      new Vec2(11.7, 57.2), // down
+      new Vec2(11.7, 57.2), // left_down
+      new Vec2(11.7, 57.2), // left
+      new Vec2(11.7, 57.2), // left_up
+    ],
   },
   /**   {
     type: GOOD_TYPE.EQUIPMENT,
@@ -603,7 +792,16 @@ export const weapons: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(11.2, 56.7), // up
+      new Vec2(11.2, 56.7), // right_up
+      new Vec2(11.2, 56.7), // right
+      new Vec2(11.2, 56.7), // right_down
+      new Vec2(11.2, 56.7), // down
+      new Vec2(11.2, 56.7), // left_down
+      new Vec2(11.2, 56.7), // left
+      new Vec2(11.2, 56.7), // left_up
+    ],
   }, */
 ];
 
@@ -633,7 +831,16 @@ export const rings: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(0.0, 0.0), // up
+      new Vec2(0.0, 0.0), // right_up
+      new Vec2(0.0, 0.0), // right
+      new Vec2(0.0, 0.0), // right_down
+      new Vec2(0.0, 0.0), // down
+      new Vec2(0.0, 0.0), // left_down
+      new Vec2(0.0, 0.0), // left
+      new Vec2(0.0, 0.0), // left_up
+    ],
   },
 ];
 
@@ -663,7 +870,16 @@ export const nicklaces: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(0.0, 0.0), // up
+      new Vec2(0.0, 0.0), // right_up
+      new Vec2(0.0, 0.0), // right
+      new Vec2(0.0, 0.0), // right_down
+      new Vec2(0.0, 0.0), // down
+      new Vec2(0.0, 0.0), // left_down
+      new Vec2(0.0, 0.0), // left
+      new Vec2(0.0, 0.0), // left_up
+    ],
   },
 ];
 
@@ -693,7 +909,16 @@ export const shoes: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(0.0, 0.0), // up
+      new Vec2(0.0, 0.0), // right_up
+      new Vec2(0.0, 0.0), // right
+      new Vec2(0.0, 0.0), // right_down
+      new Vec2(0.0, 0.0), // down
+      new Vec2(0.0, 0.0), // left_down
+      new Vec2(0.0, 0.0), // left
+      new Vec2(0.0, 0.0), // left_up
+    ],
   },
 ];
 
@@ -723,7 +948,16 @@ export const helmets: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(0.0, 0.0), // up
+      new Vec2(0.0, 0.0), // right_up
+      new Vec2(0.0, 0.0), // right
+      new Vec2(0.0, 0.0), // right_down
+      new Vec2(0.0, 0.0), // down
+      new Vec2(0.0, 0.0), // left_down
+      new Vec2(0.0, 0.0), // left
+      new Vec2(0.0, 0.0), // left_up
+    ],
   },
 ];
 
@@ -753,6 +987,15 @@ export const belts: Equipment[] = [
     prefix: "",
     suffix: "",
     outScale: 1,
-    outPosition: new Vec2(),
+    outPositions: [
+      new Vec2(0.0, 0.0), // up
+      new Vec2(0.0, 0.0), // right_up
+      new Vec2(0.0, 0.0), // right
+      new Vec2(0.0, 0.0), // right_down
+      new Vec2(0.0, 0.0), // down
+      new Vec2(0.0, 0.0), // left_down
+      new Vec2(0.0, 0.0), // left
+      new Vec2(0.0, 0.0), // left_up
+    ],
   },
 ];

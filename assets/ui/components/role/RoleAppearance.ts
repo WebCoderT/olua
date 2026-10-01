@@ -2,7 +2,7 @@ import { Animation, Node, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
 import { Equipment } from "../../../types/good";
 import { ACTION, DIRECTION } from "../../../types/animation";
-import { actionNeedWeapon, getAnimationName } from "../../../configs/animation";
+import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
@@ -33,6 +33,9 @@ export default class RoleAppearance {
   private action: ACTION = ACTION.STAND;
   /** 当前朝向 */
   private direction: DIRECTION = DIRECTION.DOWN;
+  /** 当前穿戴的衣服/武器装备（play 里按方向应用外观位置用；未装备时为 null） */
+  private clothEquipment: Equipment | null = null;
+  private weaponEquipment: Equipment | null = null;
 
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
@@ -59,6 +62,9 @@ export default class RoleAppearance {
   play(action: ACTION, direction: DIRECTION) {
     this.action = action;
     this.direction = direction;
+    // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
+    this.applyOutTransform(this.cloth, this.clothEquipment);
+    this.applyOutTransform(this.weapon, this.weaponEquipment);
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
     this.clothAnimate?.crossFade(animationName, 0.2);
@@ -69,8 +75,7 @@ export default class RoleAppearance {
   private reloadClothAnimation(role: Role) {
     const cloth = role.equipments.cloth;
     const src = cloth?.out || ROLE_DEFAULT_CLOTH_OUT;
-    // 外观的大小与位置先应用：只调缩放/偏移（不换外观）时也要立即生效，因此放在动画目录比较之前
-    this.applyOutTransform(this.cloth, cloth);
+    this.clothEquipment = cloth ?? null;
     if (src === this.clothSrc) return;
     this.clothSrc = src;
     this.clothAnimate = this.loadAnimation(this.cloth, src, role);
@@ -80,7 +85,7 @@ export default class RoleAppearance {
   private reloadWeaponAnimation(role: Role) {
     const weapon = role.equipments.weapon;
     const src = weapon?.out ?? "";
-    this.applyOutTransform(this.weapon, weapon);
+    this.weaponEquipment = weapon ?? null;
     if (src === this.weaponSrc) return;
     this.weaponSrc = src;
     this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, role) : null;
@@ -89,12 +94,14 @@ export default class RoleAppearance {
   }
 
   /**
-   * 应用装备配置的外观缩放与位置（outScale / outPosition）
-   * 未装备（或旧存档缺字段）时回到默认值，避免脱下装备后残留上一件的变换
+   * 应用装备配置的外观缩放与按方向的位置（outScale / outPositions）
+   * 位置数组按 configs/animation 的 directions 顺序取当前朝向的下标；
+   * 数组缺该项时回落第一项，旧存档（无该字段）回落到原点，避免脱下装备后残留上一件的变换
    */
   private applyOutTransform(node: Node, equipment: Equipment | null) {
     const scale = equipment?.outScale ?? 1;
-    const offset = equipment?.outPosition ?? Vec2.ZERO;
+    const positions = equipment?.outPositions;
+    const offset = positions?.[getDirectionIndex(this.direction)] ?? positions?.[0] ?? Vec2.ZERO;
     node.setScale(scale, scale, 1);
     node.setPosition(offset.x, offset.y, 0);
   }

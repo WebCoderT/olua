@@ -80,8 +80,13 @@ export interface Equipment extends Good, BattleAttributes {
   inPosition: Vec2;
   /** 外观缩放 */
   outScale: number;
-  /** 外观位置 */
-  outPosition: Vec2;
+  /**
+   * 外观位置（按 8 方向各一个）
+   * 数组下标顺序与 configs/animation 的 directions 一致：
+   * up / right_up / right / right_down / down / left_down / left / left_up
+   * 坐标为相对角色节点原点（脚底锚点）的偏移，y 向上
+   */
+  outPositions: Vec2[];
   // 外观
   out: string;
   /** 标签 */
