@@ -27,3 +27,4 @@ assets/**/**.meta
 assets/resources/
 
 .workbuddy/
+.backup

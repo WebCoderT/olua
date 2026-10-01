@@ -11,20 +11,20 @@ export const statuses = new Map<StatusId, StatusConfig>();
 /** 插入状态数据 */
 statuses.set("2001", {
   label: "护体神盾",
-  icon: "skill/2009",
+  icon: "skill/icon/2009",
   duration: 10,
   source: StatusSource.SKILL,
   description: "护体神盾：释放技能后获得，持续时间内概率格挡伤害；重复释放刷新持续时间",
-  effect: "effect/skill/s_2009@0",
+  effect: "effect/status/s_2004@0",
 });
 
 statuses.set("2002", {
   label: "金刚护体",
-  icon: "skill/1008",
+  icon: "skill/icon/1008",
   duration: 8,
   source: StatusSource.SKILL,
   description: "金刚护体：释放技能后获得，持续时间内提升防御；重复释放刷新持续时间",
-  effect: "effect/skill/s_1008@0",
+  effect: "effect/status/s_1008@0",
 });
 
 /** 技能 -> 状态映射（状态型技能释放成功后按此添加状态；装备/VIP 等来源直接调 StatusManager.apply） */
