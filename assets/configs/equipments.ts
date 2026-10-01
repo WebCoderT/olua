@@ -21,8 +21,8 @@ equipmentSlots.set(EQUIPMENT_TYPE.WRISTBAND, { label: "护腕", imageSrc: "slots
 equipmentSlots.set(EQUIPMENT_TYPE.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
 
 // 衣服
-export const clothes: Equipment[] = [
-  {
+export const clothes = new Map<string, Equipment>([
+  ["cloth_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.CLOTH,
     occupation: OECCUPATION.ALL,
@@ -58,12 +58,12 @@ export const clothes: Equipment[] = [
       new Vec2(7.3, 34.2), // left
       new Vec2(7.3, 34.2), // left_up
     ],
-  },
-];
+  }],
+]);
 
 // 武器（label/description/icon/in/out 按 resources/weapons 的图标与内外观资源拟定，战斗数值待补）
-export const weapons: Equipment[] = [
-  {
+export const weapons = new Map<string, Equipment>([
+  ["weapon_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -97,8 +97,8 @@ export const weapons: Equipment[] = [
       new Vec2(5.6, 3.1), // left
       new Vec2(5.6, 3.1), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_2", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -132,8 +132,8 @@ export const weapons: Equipment[] = [
       new Vec2(-10.0, 75.2), // left
       new Vec2(-10.0, 75.2), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_3", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -167,8 +167,8 @@ export const weapons: Equipment[] = [
       new Vec2(7.6, 8.0), // left
       new Vec2(7.6, 8.0), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_4", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -202,8 +202,8 @@ export const weapons: Equipment[] = [
       new Vec2(6.6, 50.4), // left
       new Vec2(6.6, 50.4), // left_up
     ],
-  },
-  /**   {
+  }],
+  ["weapon_5", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -237,8 +237,8 @@ export const weapons: Equipment[] = [
       new Vec2(6.6, 50.4), // left
       new Vec2(6.6, 50.4), // left_up
     ],
-  }, */
-  {
+  }],
+  ["weapon_6", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -272,8 +272,8 @@ export const weapons: Equipment[] = [
       new Vec2(12.7, 36.5), // left
       new Vec2(12.7, 36.5), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_7", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -307,8 +307,8 @@ export const weapons: Equipment[] = [
       new Vec2(6.5, 47.4), // left
       new Vec2(6.5, 47.4), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_8", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -342,8 +342,8 @@ export const weapons: Equipment[] = [
       new Vec2(-19.2, 80.2), // left
       new Vec2(-19.2, 80.2), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_9", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -378,8 +378,8 @@ export const weapons: Equipment[] = [
       new Vec2(14.0, 4.5), // left
       new Vec2(14.0, 4.5), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_10", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -414,8 +414,8 @@ export const weapons: Equipment[] = [
       new Vec2(13.0, -12.8), // left
       new Vec2(13.0, -12.8), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_11", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -449,8 +449,8 @@ export const weapons: Equipment[] = [
       new Vec2(14.0, 5.9), // left
       new Vec2(14.0, 5.9), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_12", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -485,8 +485,8 @@ export const weapons: Equipment[] = [
       new Vec2(11.5, 4.9), // left
       new Vec2(11.5, 4.9), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_13", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -520,8 +520,8 @@ export const weapons: Equipment[] = [
       new Vec2(15.5, -26.9), // left
       new Vec2(15.5, -26.9), // left_up
     ],
-  },
-  /**   {
+  }],
+  ["weapon_14", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -555,8 +555,8 @@ export const weapons: Equipment[] = [
       new Vec2(14.5, 18.3), // left
       new Vec2(14.5, 18.3), // left_up
     ],
-  }, */
-  {
+  }],
+  ["weapon_15", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -591,8 +591,8 @@ export const weapons: Equipment[] = [
       new Vec2(-8.5, 70.4), // left
       new Vec2(-8.5, 70.4), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_16", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -627,8 +627,8 @@ export const weapons: Equipment[] = [
       new Vec2(-8.6, 71.6), // left
       new Vec2(-8.6, 71.6), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_17", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -662,8 +662,8 @@ export const weapons: Equipment[] = [
       new Vec2(7.3, 1.5), // left
       new Vec2(7.3, 1.5), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_18", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -697,8 +697,8 @@ export const weapons: Equipment[] = [
       new Vec2(14.5, 18.3), // left
       new Vec2(14.5, 18.3), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_19", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -732,8 +732,8 @@ export const weapons: Equipment[] = [
       new Vec2(7.4, 1.2), // left
       new Vec2(7.4, 1.2), // left_up
     ],
-  },
-  {
+  }],
+  ["weapon_20", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -767,8 +767,8 @@ export const weapons: Equipment[] = [
       new Vec2(11.7, 57.2), // left
       new Vec2(11.7, 57.2), // left_up
     ],
-  },
-  /**   {
+  }],
+  ["weapon_21", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
@@ -802,12 +802,12 @@ export const weapons: Equipment[] = [
       new Vec2(11.2, 56.7), // left
       new Vec2(11.2, 56.7), // left_up
     ],
-  }, */
-];
+  }],
+]);
 
 // 戒指
-export const rings: Equipment[] = [
-  {
+export const rings = new Map<string, Equipment>([
+  ["ring_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.RING,
     occupation: OECCUPATION.ALL,
@@ -841,12 +841,12 @@ export const rings: Equipment[] = [
       new Vec2(0.0, 0.0), // left
       new Vec2(0.0, 0.0), // left_up
     ],
-  },
-];
+  }],
+]);
 
 // 项链
-export const nicklaces: Equipment[] = [
-  {
+export const nicklaces = new Map<string, Equipment>([
+  ["necklace_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.NECKLACE,
     occupation: OECCUPATION.ALL,
@@ -880,12 +880,12 @@ export const nicklaces: Equipment[] = [
       new Vec2(0.0, 0.0), // left
       new Vec2(0.0, 0.0), // left_up
     ],
-  },
-];
+  }],
+]);
 
 // 鞋子
-export const shoes: Equipment[] = [
-  {
+export const shoes = new Map<string, Equipment>([
+  ["shoes_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.SHOES,
     occupation: OECCUPATION.ALL,
@@ -919,12 +919,12 @@ export const shoes: Equipment[] = [
       new Vec2(0.0, 0.0), // left
       new Vec2(0.0, 0.0), // left_up
     ],
-  },
-];
+  }],
+]);
 
 // 头盔
-export const helmets: Equipment[] = [
-  {
+export const helmets = new Map<string, Equipment>([
+  ["helmet_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.HELMET,
     occupation: OECCUPATION.ALL,
@@ -958,12 +958,12 @@ export const helmets: Equipment[] = [
       new Vec2(0.0, 0.0), // left
       new Vec2(0.0, 0.0), // left_up
     ],
-  },
-];
+  }],
+]);
 
 // 腰带
-export const belts: Equipment[] = [
-  {
+export const belts = new Map<string, Equipment>([
+  ["belt_1", {
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.BELT,
     occupation: OECCUPATION.ALL,
@@ -997,5 +997,5 @@ export const belts: Equipment[] = [
       new Vec2(0.0, 0.0), // left
       new Vec2(0.0, 0.0), // left_up
     ],
-  },
-];
+  }],
+]);

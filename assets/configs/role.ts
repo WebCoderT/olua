@@ -96,18 +96,17 @@ export const defaultRoleSpeedRate: SpeedRate = {
 
 /** 根据职业与性别获取新手装备 */
 export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipment[] {
-  // 通用装备
-  const equipments = [rings[0], nicklaces[0], shoes[0], helmets[0], belts[0]];
+  // 通用装备（按 key 从各装备 Map 取；缺配置的自动跳过）
+  const equipments: Equipment[] = [rings.get("ring_1"), nicklaces.get("necklace_1"), shoes.get("shoes_1"), helmets.get("helmet_1"), belts.get("belt_1")].filter(
+    (eq): eq is Equipment => !!eq,
+  );
 
   // 根据角色职业，性别获取衣服
-  if (sex === SEX.BOY) {
-    if (occupation === OECCUPATION.ZHAN) equipments.push(clothes[0]);
-  } else {
-    if (occupation === OECCUPATION.ZHAN) equipments.push(clothes[1]);
+  if (occupation === OECCUPATION.ZHAN) {
+    const cloth = sex === SEX.BOY ? clothes.get("cloth_1") : clothes.get("cloth_2");
+    if (cloth) equipments.push(cloth);
   }
-  // 根据角色职业获得武器
-  /** if (occupation === OECCUPATION.ZHAN) equipments.push(weapons[0]); */
   /** 将所有武器放在装备列表中 */
-  equipments.push(...weapons);
+  weapons.forEach((weapon) => equipments.push(weapon));
   return equipments;
 }

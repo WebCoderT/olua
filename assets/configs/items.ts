@@ -5,9 +5,8 @@ import { materials } from "./material";
 
 /**
  * 物品总表：物品 id -> 物品数据
- * 掉落、任务、商店等一律按物品 id 引用物品。
- * 装备在各装备数组里没有显式 id，注册时按「前缀_序号」（cloth_1 / weapon_2 …）生成，
- * 因此调整装备数组顺序会改变这些 id；需要固定 id 时请在配置里显式写 id 字段。
+ * 掉落、任务、商店、背包/装备槽存档等一律按物品 id 引用物品。
+ * 装备的各配置列表是 Map，key 即物品 id（cloth_1 / weapon_2 …），顺序与增删互不影响。
  */
 export const items = new Map<string, Goods>();
 
@@ -23,14 +22,14 @@ export function registerItems(list: Goods[], prefix: string) {
   list.forEach((good, index) => registerItem(good.id ?? `${prefix}_${index + 1}`, good));
 }
 
-// 装备
-registerItems(clothes, "cloth");
-registerItems(weapons, "weapon");
-registerItems(rings, "ring");
-registerItems(nicklaces, "necklace");
-registerItems(shoes, "shoes");
-registerItems(helmets, "helmet");
-registerItems(belts, "belt");
+// 装备（列表是 Map，key 即物品 id）
+clothes.forEach((good, id) => registerItem(id, good));
+weapons.forEach((good, id) => registerItem(id, good));
+rings.forEach((good, id) => registerItem(id, good));
+nicklaces.forEach((good, id) => registerItem(id, good));
+shoes.forEach((good, id) => registerItem(id, good));
+helmets.forEach((good, id) => registerItem(id, good));
+belts.forEach((good, id) => registerItem(id, good));
 // 药品
 registerItems(drugs, "drug");
 // 材料
