@@ -72,12 +72,12 @@ export interface Equipment extends Good, BattleAttributes {
   in: string;
   /** 内观缩放 */
   inScale: number;
-  // 内观偏移
-  inOffset: Vec2;
+  // 内观位置
+  inPosition: Vec2;
   /** 外观缩放 */
   outScale: number;
-  /** 外观偏移 */
-  outOffset: Vec2;
+  /** 外观位置 */
+  outPosition: Vec2;
   // 外观
   out: string;
   /** 标签 */

@@ -99,6 +99,23 @@ const COLLIDER_RANGE_AREA_COLOR = new Color(255, 208, 64);
 
 //#endregion
 
+//#region 装备详情显示常量
+
+/** 装备详情中标签行的尺寸（占名称下方一整行） */
+const GOOD_TAG_ROW_SIZE = new Size(220, 18);
+/** 装备标签文字颜色（与白色正文区分，突出标签） */
+const GOOD_TAG_COLOR = new Color(255, 214, 102);
+/** 装备标签字号 */
+const GOOD_TAG_FONT_SIZE = 11;
+/** 装备标签之间的横向间距 */
+const GOOD_TAG_SPACING = 6;
+/** 单条标签的最小宽度 */
+const GOOD_TAG_MIN_WIDTH = 24;
+/** 单条标签的左右留白 */
+const GOOD_TAG_PADDING_X = 8;
+
+//#endregion
+
 /**
  * 游戏UI零件工厂（静态类）
  * 只提供单个可复用的 UI 零件（货币、按钮、插槽、头像、血条、弹窗、物品等），
@@ -700,8 +717,9 @@ export default class GameUiHelper {
     const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 40));
     // 图标
     const goodImage = UiHelper.createSprite("good_image", good.icon, new Vec2(), new Size(40, 40));
-    // 标题
-    const title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 40));
+    // 标题（装备名称 = 前缀 + 名称 + 后缀；其他物品没有前后缀概念）
+    const titleText = isEquipment(good) ? `${good.prefix ?? ""}${good.label}${good.suffix ?? ""}` : good.label;
+    const title = UiHelper.createLabel("good_detail_title", titleText, Color.WHITE, 14, new Vec2(), new Size(170, 40));
     const titleLabel = title.getComponent(Label);
     titleLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
     titleLabel.verticalAlign = Label.VerticalAlign.TOP;
@@ -713,6 +731,9 @@ export default class GameUiHelper {
 
     contentHeader.addChild(goodImage);
     contentHeader.addChild(title);
+
+    // 标签行（装备专属：显示在名称正下方，与其他物品区分开）
+    const contentTags = isEquipment(good) ? this.createGoodTagRow(good.tags ?? []) : null;
 
     // 介绍
     const contentDescription = UiHelper.createLabel("content_description", good.description, Color.WHITE, 12, new Vec2(), new Size(220, 50));
@@ -732,6 +753,7 @@ export default class GameUiHelper {
     }
 
     dialog.addChild(contentHeader);
+    if (contentTags) dialog.addChild(contentTags);
     dialog.addChild(contentDescription);
     dialog.addChild(contentBody);
 
@@ -789,6 +811,20 @@ export default class GameUiHelper {
   }
 
   /**
+   * 创建装备标签行（标签逐条横排，占名称下方一整行）
+   * 无标签时返回空行：保持"名称下方固定有一行标签"的排版位置不随标签有无而跳动
+   */
+  static createGoodTagRow(tags: string[], size: Size = GOOD_TAG_ROW_SIZE) {
+    const row = UiHelper.createFlexRow("good_tags", GOOD_TAG_SPACING, new Vec2(), size);
+    tags.forEach((tag, index) => {
+      // 每条标签按字数给宽（中文字宽≈字号），避免长标签被 CLAMP 截断
+      const width = Math.max(GOOD_TAG_MIN_WIDTH, tag.length * GOOD_TAG_FONT_SIZE + GOOD_TAG_PADDING_X);
+      row.addChild(UiHelper.createLabel(`good_tag_${index}`, tag, GOOD_TAG_COLOR, GOOD_TAG_FONT_SIZE, new Vec2(), new Size(width, size.height)));
+    });
+    return row;
+  }
+
+  /**
    * 为已有节点施加"角色属性列表"样式并填充属性条目（组件自身即列表容器时使用）
    * 结构：基础属性标题 + 各属性行 + 特殊属性标题
    * @param node 目标节点
@@ -818,22 +854,29 @@ export default class GameUiHelper {
 
   /**
    * 创建角色衣服内观
+   * 内观的大小与位置由装备配置的 inScale / inOffset 决定（基准几何由调用方给出）
    */
   static createRoleClothInShow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    const clothInShow = UiHelper.createSprite("cloth_in_show", "", position, size);
+    const cloth = role.equipments.cloth;
+    const clothInShow = UiHelper.createSprite("cloth_in_show", "", cloth.inPosition, size);
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, role.equipments.cloth.in, 1);
+    const scale = cloth?.inScale ?? 1;
+    clothInShow.setScale(scale, scale, 1);
+    AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, cloth.in, 1);
     return clothInShow;
   }
 
-  /** 创建角色武器内观 */
+  /**
+   * 创建角色武器内观
+   * 内观的大小与位置由装备配置的 inScale / inOffset 决定（基准几何由调用方给出）
+   */
   static createRoleWeaponInshow(role: Role, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    // 内观偏移
-    position.x += role.equipments.weapon.inOffset.x;
-    position.y += role.equipments.weapon.inOffset.y;
-    const weaponInShow = UiHelper.createSprite("weapon_in_show", "", position, size);
+    const weapon = role.equipments.weapon;
+    const weaponInShow = UiHelper.createSprite("weapon_in_show", "", weapon.inPosition, size);
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    AnimationHelper.playLoopWithDir("weapon_in_show", weaponInShow, role.equipments.weapon.in, 1);
+    const scale = weapon?.inScale ?? 1;
+    weaponInShow.setScale(scale, scale, 1);
+    AnimationHelper.playLoopWithDir("weapon_in_show", weaponInShow, weapon.in, 1);
     return weaponInShow;
   }
 

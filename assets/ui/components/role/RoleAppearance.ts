@@ -1,5 +1,6 @@
-import { Animation, Node } from "cc";
+import { Animation, Node, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
+import { Equipment } from "../../../types/good";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { actionNeedWeapon, getAnimationName } from "../../../configs/animation";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../../configs/role";
@@ -66,7 +67,10 @@ export default class RoleAppearance {
 
   /** 重新加载衣服动画：无衣服时回退默认外观，保证角色始终有身体 */
   private reloadClothAnimation(role: Role) {
-    const src = role.equipments.cloth?.out || ROLE_DEFAULT_CLOTH_OUT;
+    const cloth = role.equipments.cloth;
+    const src = cloth?.out || ROLE_DEFAULT_CLOTH_OUT;
+    // 外观的大小与位置先应用：只调缩放/偏移（不换外观）时也要立即生效，因此放在动画目录比较之前
+    this.applyOutTransform(this.cloth, cloth);
     if (src === this.clothSrc) return;
     this.clothSrc = src;
     this.clothAnimate = this.loadAnimation(this.cloth, src, role);
@@ -74,12 +78,25 @@ export default class RoleAppearance {
 
   /** 重新加载武器动画：未装备武器或该武器没有外观时不加载（武器节点整节点隐藏） */
   private reloadWeaponAnimation(role: Role) {
-    const src = role.equipments.weapon?.out ?? "";
+    const weapon = role.equipments.weapon;
+    const src = weapon?.out ?? "";
+    this.applyOutTransform(this.weapon, weapon);
     if (src === this.weaponSrc) return;
     this.weaponSrc = src;
     this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, role) : null;
     // 没有武器外观时必须隐藏：Sprite 会保留上一把武器的最后一帧，不隐藏就会看到残留的旧武器
     this.weapon.active = !!src;
+  }
+
+  /**
+   * 应用装备配置的外观缩放与偏移（outScale / outOffset）
+   * 未装备（或旧存档缺字段）时回到默认值，避免脱下装备后残留上一件的变换
+   */
+  private applyOutTransform(node: Node, equipment: Equipment | null) {
+    const scale = equipment?.outScale ?? 1;
+    const offset = equipment?.outOffset ?? Vec2.ZERO;
+    node.setScale(scale, scale, 1);
+    node.setPosition(offset.x, offset.y, 0);
   }
 
   /** 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调） */

@@ -2,10 +2,6 @@ import { Node, Size, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
-/** 衣服内观布局（弹窗内固定几何） */
-const CLOTH_IN_SHOW_POSITION = new Vec2(-73, -10);
-/** 武器内观布局（弹窗内固定几何） */
-const WEAPON_IN_SHOW_POSITION = new Vec2(-169, 95);
 /** 内观尺寸 */
 const IN_SHOW_SIZE = new Size(400, 400);
 
@@ -31,7 +27,7 @@ export default class RoleInShowView extends Node {
     if (this.clothInShow) this.clothInShow.destroy();
     this.clothInShow = null;
     if (!role.equipments.cloth) return;
-    this.clothInShow = GameUiHelper.createRoleClothInShow(role, CLOTH_IN_SHOW_POSITION, IN_SHOW_SIZE);
+    this.clothInShow = GameUiHelper.createRoleClothInShow(role, new Vec2(), IN_SHOW_SIZE);
     this.addChild(this.clothInShow);
   }
 
@@ -40,7 +36,7 @@ export default class RoleInShowView extends Node {
     if (this.weaponInShow) this.weaponInShow.destroy();
     this.weaponInShow = null;
     if (!role.equipments.weapon) return;
-    this.weaponInShow = GameUiHelper.createRoleWeaponInshow(role, WEAPON_IN_SHOW_POSITION, IN_SHOW_SIZE);
+    this.weaponInShow = GameUiHelper.createRoleWeaponInshow(role, new Vec2(), IN_SHOW_SIZE);
     this.addChild(this.weaponInShow);
   }
 }
