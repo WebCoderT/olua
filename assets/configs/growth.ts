@@ -271,6 +271,18 @@ export const equipmentGrowth = {
 } as const;
 
 /**
+ * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
+ * 普通的 / 强化的 / 精良的 / 极品的 / 超神的
+ */
+export const equipmentPrefixRates = [1, 1.1, 1.2, 1.3, 1.4] as const;
+
+/**
+ * 装备后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）
+ * 人级 / 天级 / 神级
+ */
+export const equipmentSuffixRates = [1, 2, 3] as const;
+
+/**
  * 部位分配权重（每列合计 100）
  * 实际数值 = 同级角色裸属性上限 × (该部位权重 / 100) × equipmentGrowth.setPowerRate
  *

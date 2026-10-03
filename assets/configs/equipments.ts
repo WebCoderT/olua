@@ -1,6 +1,7 @@
-import { Vec2 } from "cc";
-import { Equipment, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } from "../types/good";
-import { equipmentStats } from "./growth";
+import { Color, Vec2 } from "cc";
+import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } from "../types/good";
+import type { BattleAttributes } from "../types/common";
+import { equipmentPrefixRates, equipmentStats, equipmentSuffixRates } from "./growth";
 import { OECCUPATION, SEX } from "../types/role";
 
 /** 装备槽位数据表（角色弹窗用；key 只做关联，与怪物/装备同一约定） */
@@ -28,6 +29,65 @@ for (const slot of equipmentSlotData) {
   equipmentSlots.set(slot.key, slot);
 }
 
+/** 装备前缀文案（下标 = EQUIPMENT_PREFIX 序号） */
+export const equipmentPrefixLabels = ["普通的", "强化的", "精良的", "极品的", "超神的"];
+
+/** 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染 */
+export const equipmentPrefixColors = [
+  new Color("#DDDDDD"), // 普通的：灰白
+  new Color("#6EE86E"), // 强化的：绿
+  new Color("#4DA6FF"), // 精良的：蓝
+  new Color("#C77DFF"), // 极品的：紫
+  new Color("#FFA640"), // 超神的：橙
+];
+
+/** 装备后缀文案（下标 = EQUIPMENT_SUFFIX 序号） */
+export const equipmentSuffixLabels = ["人级", "天级", "神级"];
+
+/** 装备后缀文字颜色（与文案同下标；只用于后缀文字，不影响名称） */
+export const equipmentSuffixColors = [
+  new Color("#B0B0B0"), // 人级：灰
+  new Color("#4DE3FF"), // 天级：青蓝
+  new Color("#FFD700"), // 神级：金
+];
+
+/** 装备名称三段式（详情弹窗按段着色显示：前缀/名称用前缀色，后缀用后缀色） */
+export interface EquipmentNameParts {
+  /** 前缀段（label + 颜色 = 前缀色） */
+  prefix: { label: string; color: Color };
+  /** 名称段（颜色 = 前缀色） */
+  label: string;
+  /** 后缀段（label + 颜色 = 后缀色） */
+  suffix: { label: string; color: Color };
+}
+
+/** 拆装备名称三段（前缀文案、名称、后缀文案 + 各自颜色；异常前后缀回退普通/人级） */
+export function getEquipmentNameParts(equipment: Equipment): EquipmentNameParts {
+  const prefix = equipmentPrefixRates.length > equipment.prefix ? equipment.prefix : EQUIPMENT_PREFIX.NORMAL;
+  const suffix = equipmentSuffixRates.length > equipment.suffix ? equipment.suffix : EQUIPMENT_SUFFIX.MORTAL;
+  return {
+    prefix: { label: equipmentPrefixLabels[prefix], color: equipmentPrefixColors[prefix] },
+    label: equipment.label,
+    suffix: { label: equipmentSuffixLabels[suffix], color: equipmentSuffixColors[suffix] },
+  };
+}
+
+/**
+ * 按前后缀倍率缩放战斗属性（六项攻防区间与 maxHp 逐项相乘后取整）
+ */
+function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): BattleAttributes {
+  const scale = (range: [number, number]): [number, number] => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
+  return {
+    maxHp: Math.round(attributes.maxHp * rate),
+    physicalAttack: scale(attributes.physicalAttack),
+    magicAttack: scale(attributes.magicAttack),
+    taoistAttack: scale(attributes.taoistAttack),
+    physicalDefense: scale(attributes.physicalDefense),
+    magicDefense: scale(attributes.magicDefense),
+    taoistDefense: scale(attributes.taoistDefense),
+  };
+}
+
 /**
  * 装备数据表 → 装备配置 Map
  *
@@ -40,15 +100,33 @@ for (const slot of equipmentSlotData) {
  *   · 想单独给某件装备加特例（例如只加攻击不加防御）→ 直接在条目里覆盖同名字段
  *   · 想整体调强/调弱所有装备 → 改 configs/growth 的 equipmentGrowth.setPowerRate
  *
+ * **前后缀变体**：每件基础装备展开成全部「前缀 × 后缀」组合（5 × 3 = 15 件），
+ * 属性 = 基础属性 × 前缀倍率 × 后缀倍率（倍率见 configs/growth 的 equipmentPrefixRates / equipmentSuffixRates）：
+ * - 「普通的·人级」沿用基础装备的原 key（基础件本身，倍率 1 × 1）
+ * - 其余组合 key 为 `${key}_p${前缀序号}s${后缀序号}`（如 cloth_1_p3s2）
+ * - 基础条目不配置前后缀（类型层已去掉该字段），变体统一由这里生成
+ *
  * 注意：等级同时是「穿戴门槛」（GameHelper.getEquipmentRejectReason 会挡「需要等级 N」），
- * 所以排等级时要想清楚这件装备应该在什么等级被拿到。
+ * 变体与基础件同 level，门槛一致；所以排等级时要想清楚这件装备应该在什么等级被拿到。
  */
 export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment> {
   const map = new Map<string, Equipment>();
   for (const entry of data) {
     const { key, ...rest } = entry; // key 只做关联，不写进最终配置对象
-    // 先展开按等级生成的战斗属性，再让条目本身的字段覆盖（写了属性以条目为准）
-    map.set(key, { ...equipmentStats(rest.level, rest.slot), ...rest });
+    // 基础属性（等级生成值 + 条目特例覆盖），变体在其上乘前后缀倍率
+    const base = { ...equipmentStats(rest.level, rest.slot), ...rest } as Equipment;
+    for (let p = 0; p < equipmentPrefixRates.length; p++) {
+      for (let s = 0; s < equipmentSuffixRates.length; s++) {
+        const rate = equipmentPrefixRates[p] * equipmentSuffixRates[s];
+        const id = p === 0 && s === 0 ? key : `${key}_p${p}s${s}`;
+        map.set(id, {
+          ...base,
+          ...scaleEquipmentAttributes(base, rate),
+          prefix: p as EQUIPMENT_PREFIX,
+          suffix: s as EQUIPMENT_SUFFIX,
+        });
+      }
+    }
   }
   return map;
 }
@@ -70,8 +148,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/005",
     inPosition: new Vec2(-72.5, 48),
     tags: ["第一大陆"],
-    prefix: "葬爱",
-    suffix: "魂级",
     inScaleX: 1.3,
     inScaleY: 1.3,
     outScale: 1,
@@ -101,8 +177,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/010",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -130,8 +204,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/014",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -159,8 +231,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/015",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -188,8 +258,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/017",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -217,8 +285,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/021",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -246,8 +312,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/023",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -275,8 +339,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/026",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -304,8 +366,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/029",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -333,8 +393,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/030",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -362,8 +420,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/031",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -391,8 +447,6 @@ const clothesData: EquipmentData[] = [
     out: "clothes/out/032",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 34.2), // up
@@ -425,8 +479,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/001",
     inPosition: new Vec2(-205.5, 194),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(5.6, 3.1), // up
@@ -454,8 +506,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/002",
     inPosition: new Vec2(-151.5, 111),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(-10.0, 75.2), // up
@@ -483,8 +533,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/003",
     inPosition: new Vec2(-178, 137),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.6, 8.0), // up
@@ -512,8 +560,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/004",
     inPosition: new Vec2(-170.5, 150),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(6.6, 50.4), // up
@@ -541,8 +587,6 @@ const weaponsData: EquipmentData[] = [
     out: "", // resources/weapons/out/005 缺失，暂无外观
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(6.6, 50.4), // up
@@ -570,8 +614,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/006",
     inPosition: new Vec2(-141, 86),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(12.7, 36.5), // up
@@ -599,8 +641,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/007",
     inPosition: new Vec2(-185, 102),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(6.5, 47.4), // up
@@ -628,8 +668,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/008",
     inPosition: new Vec2(-164, 146),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(-19.2, 80.2), // up
@@ -658,8 +696,6 @@ const weaponsData: EquipmentData[] = [
     inPosition: new Vec2(-139, -9.5),
     inRotate: 260,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(14.0, 4.5), // up
@@ -688,8 +724,6 @@ const weaponsData: EquipmentData[] = [
     inPosition: new Vec2(-125, -13.5),
     inRotate: 280,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(13.0, -12.8), // up
@@ -717,8 +751,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/011",
     inPosition: new Vec2(-68, 15.5),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(14.0, 5.9), // up
@@ -747,8 +779,6 @@ const weaponsData: EquipmentData[] = [
     inPosition: new Vec2(-139, 42),
     inRotate: 240,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(11.5, 4.9), // up
@@ -776,8 +806,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/013",
     inPosition: new Vec2(-79, 17),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(15.5, -26.9), // up
@@ -805,8 +833,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/014",
     inPosition: new Vec2(0, 0),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(14.5, 18.3), // up
@@ -835,8 +861,6 @@ const weaponsData: EquipmentData[] = [
     inPosition: new Vec2(-76, 80),
     inRotate: 280,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(-8.5, 70.4), // up
@@ -865,8 +889,6 @@ const weaponsData: EquipmentData[] = [
     inPosition: new Vec2(-80, 80),
     inRotate: 280,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(-8.6, 71.6), // up
@@ -894,8 +916,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/017",
     inPosition: new Vec2(-222, 231),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.3, 1.5), // up
@@ -923,8 +943,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/018",
     inPosition: new Vec2(-80, 48),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(14.5, 18.3), // up
@@ -952,8 +970,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/019",
     inPosition: new Vec2(-225, 230),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(7.4, 1.2), // up
@@ -981,8 +997,6 @@ const weaponsData: EquipmentData[] = [
     out: "weapons/out/020",
     inPosition: new Vec2(-172, 143),
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(11.7, 57.2), // up
@@ -1015,8 +1029,6 @@ const ringsData: EquipmentData[] = [
     icon: "item/2010210",
     sellPirce: 0,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(0.0, 0.0), // up
@@ -1049,8 +1061,6 @@ const nicklacesData: EquipmentData[] = [
     icon: "item/2010310",
     sellPirce: 0,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(0.0, 0.0), // up
@@ -1083,8 +1093,6 @@ const shoesData: EquipmentData[] = [
     icon: "item/2030410",
     sellPirce: 0,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(0.0, 0.0), // up
@@ -1117,8 +1125,6 @@ const helmetsData: EquipmentData[] = [
     icon: "item/2030702",
     sellPirce: 0,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(0.0, 0.0), // up
@@ -1151,8 +1157,6 @@ const beltsData: EquipmentData[] = [
     icon: "item/2030810",
     sellPirce: 0,
     tags: [],
-    prefix: "",
-    suffix: "",
     outScale: 1,
     outPositions: [
       new Vec2(0.0, 0.0), // up

@@ -38,6 +38,7 @@ import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import { markClickThrough } from "../utils/input/UiHit";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
+import { equipmentSlots, getEquipmentNameParts } from "../../configs/equipments";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
@@ -992,20 +993,38 @@ export default class GameUiHelper {
     const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 40));
     // 图标
     const goodImage = UiHelper.createSprite("good_image", good.icon, new Vec2(), new Size(40, 40));
-    // 标题（装备名称 = 前缀 + 名称 + 后缀；其他物品没有前后缀概念）
-    const titleText = isEquipment(good) ? `${good.prefix ?? ""}${good.label}${good.suffix ?? ""}` : good.label;
-    const title = UiHelper.createLabel("good_detail_title", titleText, Color.WHITE, 14, new Vec2(), new Size(170, 40));
-    const titleLabel = title.getComponent(Label);
-    titleLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
-    titleLabel.verticalAlign = Label.VerticalAlign.TOP;
-    titleLabel.enableWrapText = true;
-    titleLabel.isBold = true;
-    titleLabel.isItalic = true;
-    titleLabel.isUnderline = true;
-    titleLabel.lineHeight = 20;
+    // 标题（装备 = 前缀 + 名称 + 后缀 三段着色：前缀/名称用前缀色、后缀用后缀色；其他物品单行白字）
+    let title: Node;
+    if (isEquipment(good)) {
+      const parts = getEquipmentNameParts(good);
+      const titleRow = UiHelper.createFlexRow("good_detail_title", 2, new Vec2(), new Size(170, 40));
+      const mkTitleLabel = (name: string, text: string, color: Color) => {
+        const node = UiHelper.createLabel(name, text, color, 14, new Vec2(), new Size(10, 40), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER);
+        const label = node.getComponent(Label)!;
+        // 宽度随文字自适应（Overflow.NONE），由横向 Layout 依次排开；行高 40 保持与图标垂直居中
+        label.overflow = Label.Overflow.NONE;
+        label.isBold = true;
+        return node;
+      };
+      titleRow.addChild(mkTitleLabel("good_detail_title_prefix", parts.prefix.label, parts.prefix.color));
+      titleRow.addChild(mkTitleLabel("good_detail_title_name", parts.label, parts.prefix.color));
+      titleRow.addChild(mkTitleLabel("good_detail_title_suffix", parts.suffix.label, parts.suffix.color));
+      title = titleRow;
+    } else {
+      title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 40), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+      const titleLabel = title.getComponent(Label)!;
+      titleLabel.enableWrapText = true;
+      titleLabel.lineHeight = 20;
+      titleLabel.isBold = true;
+    }
 
     contentHeader.addChild(goodImage);
     contentHeader.addChild(title);
+
+    // 基础信息行（装备专属：穿戴等级与部位；前后缀变体与基础件同等级，门槛一致）
+    const contentInfo = isEquipment(good)
+      ? UiHelper.createLabel("good_detail_info", `等级 ${good.level} · ${equipmentSlots.get(good.slot)?.label ?? "装备"}`, new Color("#9A9A9A"), 12, new Vec2(), new Size(220, 18), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER)
+      : null;
 
     // 标签行（装备专属：显示在名称正下方，与其他物品区分开）
     const contentTags = isEquipment(good) ? this.createGoodTagRow(good.tags ?? []) : null;
@@ -1028,6 +1047,7 @@ export default class GameUiHelper {
     }
 
     dialog.addChild(contentHeader);
+    if (contentInfo) dialog.addChild(contentInfo);
     if (contentTags) dialog.addChild(contentTags);
     dialog.addChild(contentDescription);
     dialog.addChild(contentBody);

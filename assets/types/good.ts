@@ -33,6 +33,34 @@ export enum EQUIPMENT_TYPE {
   OTHER2 = "other2", // 其他2
 }
 
+/**
+ * 装备前缀（品质）：数值即强度序号。
+ * 属性倍率见 configs/growth 的 equipmentPrefixRates，文案/颜色见 configs/equipments。
+ * 名称与文字颜色随前缀变化（后缀只影响自己的颜色）。
+ */
+export enum EQUIPMENT_PREFIX {
+  /** 普通的（×1.0） */
+  NORMAL = 0,
+  /** 强化的（×1.1） */
+  STRENGTHENED = 1,
+  /** 精良的（×1.2） */
+  FINE = 2,
+  /** 极品的（×1.3） */
+  SUPERB = 3,
+  /** 超神的（×1.4） */
+  GODLY = 4,
+}
+
+/** 装备后缀（阶级）：数值即强度序号，属性倍率见 configs/growth 的 equipmentSuffixRates */
+export enum EQUIPMENT_SUFFIX {
+  /** 人级（×1.0） */
+  MORTAL = 0,
+  /** 天级（×2.0） */
+  HEAVEN = 1,
+  /** 神级（×3.0） */
+  GODLY = 2,
+}
+
 /** 装备槽接口 */
 export interface EquipmentSlot {
   // 名称
@@ -91,10 +119,10 @@ export interface Equipment extends Good, BattleAttributes {
   out: string;
   /** 标签 */
   tags: string[];
-  /** 前缀 */
-  prefix: string;
-  /** 后缀 */
-  suffix: string;
+  /** 前缀（品质，决定名称/前缀文字颜色与属性倍率） */
+  prefix: EQUIPMENT_PREFIX;
+  /** 后缀（阶级，只决定后缀文字颜色，另有独立属性倍率） */
+  suffix: EQUIPMENT_SUFFIX;
 }
 
 /**
@@ -106,8 +134,11 @@ export interface Equipment extends Good, BattleAttributes {
  *
  * 战斗属性是**可选**的：不写就由 equipmentStats(level, slot) 按等级生成，
  * 写了就覆盖生成值（要单独给某件装备加特例时用）。
+ *
+ * prefix/suffix 不在条目里配置：构建时每件基础装备会展开成
+ * 全部「前缀 × 后缀」组合（基础件即「普通的·人级」，沿用原 key），见 configs/equipments。
  */
-export type EquipmentData = Omit<Equipment, keyof BattleAttributes> & Partial<BattleAttributes> & { key: string };
+export type EquipmentData = Omit<Equipment, keyof BattleAttributes | "prefix" | "suffix"> & Partial<BattleAttributes> & { key: string };
 
 /** 药品使用效果（新增效果类型时在此扩展） */
 export interface DrugEffect {
