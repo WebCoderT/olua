@@ -26,23 +26,34 @@ const roleSpriteFrameLength: AnimationLength = {
   [ACTION.TEST1]: 1,
 };
 
-/** 怪物动作顺序 */
-const monsterActions: ACTION[] = [
-  ACTION.STAND,
-  ACTION.WALK,
-  ACTION.RUN,
-  ACTION.TEST1,
-  ACTION.ATTACK_NEAR,
-  ACTION.ATTACK_SKILL_1,
-  ACTION.TEST3,
-  ACTION.ATTACK_FAR,
-  ACTION.INJURED,
-  ACTION.A1,
-  ACTION.DIE,
-];
+/**
+ * 怪物动作帧规格（resources/monster/out/<id> 素材包实测布局，各包统一）：
+ * 帧号公式 = start + 方向下标 × spacing + 帧内下标（方向内连续、方向之间按 spacing 跳开）
+ * - stand: 每方向 4 帧，方向间隔 10（0-79 段，如 0-3 / 10-13 / ...）
+ * - walk / run: 每方向 6 帧，方向间隔 10（80-155 / 160-235 段）
+ * - injured: 每方向 2 帧，方向间隔 2（240-255 段连续排布）
+ * - die: 每方向 10 帧，方向间隔 10（260-339 段）
+ * 素材包没有攻击动作（attack_near 等）与 test/a1 动作的帧，不进映射表——
+ * 播放这些动作时引擎侧没有对应片段，MonsterAI.playAction 会回退成待机；
+ * 个别包缺段（如怪物 27 没有走路段）时该动作同样自动回退
+ */
+interface MonsterActionSpec {
+  action: ACTION;
+  /** 该动作段的起始帧号 */
+  start: number;
+  /** 每方向帧数 */
+  frames: number;
+  /** 方向之间的帧号间隔 */
+  spacing: number;
+}
 
-/** 怪物动画帧长度 */
-const monsterSpriteFrameInterval = 10;
+const monsterActionSpecs: MonsterActionSpec[] = [
+  { action: ACTION.STAND, start: 0, frames: 4, spacing: 10 },
+  { action: ACTION.WALK, start: 80, frames: 6, spacing: 10 },
+  { action: ACTION.RUN, start: 160, frames: 6, spacing: 10 },
+  { action: ACTION.INJURED, start: 240, frames: 2, spacing: 2 },
+  { action: ACTION.DIE, start: 260, frames: 10, spacing: 10 },
+];
 
 /** 获取角色动画名称,实现归一化 */
 export function getAnimationName(action: ACTION, direction: DIRECTION): keyof AnimationSpritesName {
@@ -70,9 +81,17 @@ function fillAnimationMap(animationMap: Map<string, number[]>, actions: ACTION[]
 export const roleAnimationMap = new Map<string, number[]>();
 fillAnimationMap(roleAnimationMap, roleActions, (action) => roleSpriteFrameLength[action] ?? 0);
 
-/** 怪物拥有动画映射 */
+/** 怪物拥有动画映射（按实测帧规格切割，见 monsterActionSpecs） */
 export const monsterAnimation = new Map<string, number[]>();
-fillAnimationMap(monsterAnimation, monsterActions, () => monsterSpriteFrameInterval);
+monsterActionSpecs.forEach((spec) => {
+  directions.forEach((direction, directionIndex) => {
+    const directionStart = spec.start + directionIndex * spec.spacing;
+    monsterAnimation.set(
+      getAnimationName(spec.action, direction),
+      Array.from({ length: spec.frames }, (_, frameIndex) => directionStart + frameIndex),
+    );
+  });
+});
 
 /** 动作是否需要武器 */
 export const actionNeedWeapon: ActionNeedWeapon = {

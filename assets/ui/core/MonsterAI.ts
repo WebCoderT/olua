@@ -18,7 +18,8 @@ const ONCE_ACTIONS: ACTION[] = [ACTION.INJURED];
  * 怪物 AI（静态类）
  * 每帧驱动场上怪物的行为与动画，由组合根在 Game.update 中调用：
  * - 待机：停在原地，不定时更换动作（动作与朝向都随机），并偶尔朝随机方向小走一段
- * - 追击：主动攻击（aggressive）的怪物发现玩家进入检测范围（detectRange）后朝玩家移动
+ * - 追击：主动攻击（aggressive）的怪物发现玩家进入检测范围（detectRange）后朝玩家移动；
+ *   被动怪被玩家打伤后同样进入追击（激怒，见 provoke），追击范围与主动怪一致
  * - 普攻：追到普攻距离站定出手（怪物只会普攻，没有技能），动作播完结算伤害
  * - 击退：被技能推动（push）期间按击退速度位移，普攻被打断
  * 玩家离开检测范围即停在原地（停留点成为原地随机走动的活动中心），不会返回出生点
@@ -86,6 +87,16 @@ export default class MonsterAI {
     return true;
   }
 
+  /**
+   * 激怒怪物（由 MonsterManager 在怪物被玩家打伤时调用）
+   * 被动攻击的怪物受伤后记恨：之后只要玩家进入检测范围（detectRange）就与主动怪一样追击普攻，
+   * 玩家离开范围即停在原地——脱离后标记不清除，玩家再靠近会继续被追（与主动怪的发现/丢失节奏一致）
+   */
+  static provoke(node: Node) {
+    if (!isValid(node)) return;
+    this.getState(node).provoked = true;
+  }
+
   //#region 单个怪物的行为
 
   /** 驱动一只怪物：先打完手上这一击，再按「是否发现玩家」决定追击还是待机 */
@@ -109,9 +120,9 @@ export default class MonsterAI {
       state.attackPending = false;
       this.hitPlayer(node, monster, player);
     }
-    // 感知玩家：只有主动攻击的怪物会追人，其他情况一律待在原地
+    // 感知玩家：主动怪常驻发现；被动怪被激怒后同样发现（其余情况一律待在原地）
     const distance = player ? this.getDistance(node, player) : Infinity;
-    if (monster.aggressive && player && distance <= monster.detectRange) {
+    if ((monster.aggressive || state.provoked) && player && distance <= monster.detectRange) {
       // 追击期间停留点跟着走，玩家一离开范围就停在当前位置
       this.followAnchor(node, state, now);
       this.chase(node, monster, state, animate, player, distance);
@@ -306,6 +317,7 @@ export default class MonsterAI {
       /** 初始动作与 GameUiHelper.createMonsterBody 播的待机动画一致，避免开局多切一次动画 */
       action: ACTION.STAND,
       dead: false,
+      provoked: false,
       direction: DIRECTION.DOWN,
       /** 初始停留点即出生位置 */
       anchor: node.getWorldPosition(),

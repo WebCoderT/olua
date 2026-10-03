@@ -26,10 +26,12 @@ export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   /**
    * 是否主动攻击玩家：
    * true 时玩家进入 detectRange 就追人，追到 attackRange 内站定普攻；
+   * false 时只待机游走，但被玩家打伤后会被激怒（见 MonsterAI.provoke），
+   * 之后与主动怪一样在 detectRange 内追击普攻；
    * 玩家离开 detectRange 就停在原地（不返回出生点），原地待机时会换动作并偶尔小走一下
    */
   aggressive: boolean;
-  /** 检测范围（像素半径，以怪物自身为圆心；只有主动攻击的怪物使用） */
+  /** 检测范围（像素半径，以怪物自身为圆心；主动怪常驻使用，被动怪被激怒后同样使用） */
   detectRange: number;
   /** 怪物技能（未配置则不显示技能） */
   skills?: SkillId[];
@@ -58,6 +60,8 @@ export interface MonsterAIState {
   action: ACTION;
   /** 死亡标记：死亡动画播放期间不再续播/接管任何行为，节点由 MonsterManager 在动画播完后移除 */
   dead: boolean;
+  /** 激怒标记：被动攻击的怪物被玩家打过后置位，之后在检测范围内与主动怪一样追击普攻（主动怪恒为 true 效果） */
+  provoked: boolean;
   /** 当前朝向 */
   direction: DIRECTION;
   /** 停留点（生成位置或失去玩家时的位置，原地随机走动围绕它进行） */

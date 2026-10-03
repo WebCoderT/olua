@@ -164,7 +164,12 @@ export default class MonsterManager {
     GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, monster.hp - damage);
     this.updateHead(target, monster);
-    if (monster.hp > 0) return;
+    if (monster.hp > 0) {
+      // 存活即激怒：被动攻击的怪物被打后记恨攻击者，之后在检测范围内与主动怪一样追击普攻
+      // （怪物伤害来源当前只有玩家，攻击者即玩家；主动怪此调用无副作用）
+      MonsterAI.provoke(target);
+      return;
+    }
     // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
     DropManager.drop(monster.drops, target.getWorldPosition());
