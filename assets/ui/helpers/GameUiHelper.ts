@@ -158,6 +158,11 @@ export default class GameUiHelper {
     return UiHelper.createFlexCol(name, spacing, position, size);
   }
 
+  /** 创建网格排列容器（从左到右排满换行、从上到下；高度为 0 时按内容自适应且锚点顶对齐） */
+  static createGrid(name: string, spacingX: number, spacingY: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
+    return UiHelper.createGrid(name, spacingX, spacingY, position, size);
+  }
+
   /**
    * 为已有节点施加"横向排列容器"样式（组件自身即容器时使用，避免多包一层节点）
    * @returns 该节点的 Layout 组件

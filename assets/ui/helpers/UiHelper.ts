@@ -352,6 +352,45 @@ export default class UiHelper {
     return layout;
   }
 
+  /**
+   * 创建弹性布局-网格（子项从左到右排满一行后换到下一行，从上到下）
+   * @param name 元素名称
+   * @param spacex 横向间距
+   * @param spacey 纵向间距
+   * @param position 位置
+   * @param size 尺寸（高度为 0 时按内容自适应且锚点顶对齐，方便动态增删子项）
+   */
+  static createGrid(name: string, spacex: number = 0, spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) {
+    const node = this.createNode(name, position, size);
+    this.applyGridStyle(node, spacex, spacey, position, size);
+    return node;
+  }
+
+  /**
+   * 为已有节点施加网格布局样式（组件"自身即容器"时使用）
+   * @param node 目标节点
+   * @param spacex 横向间距
+   * @param spacey 纵向间距
+   * @param position 位置
+   * @param size 尺寸（高度为 0 时按内容自适应且锚点顶对齐）
+   * @returns 该节点的 Layout 组件
+   */
+  static applyGridStyle(node: Node, spacex: number = 0, spacey: number = 0, position: Vec2 = new Vec2(0, 0), size: Size = new Size(0, 0)) {
+    const uiTransform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    uiTransform.setContentSize(size);
+    node.setPosition(position.x, position.y, 0);
+    const layout = node.getComponent(Layout) ?? node.addComponent(Layout);
+    layout.type = Layout.Type.GRID;
+    layout.resizeMode = size.height ? Layout.ResizeMode.NONE : Layout.ResizeMode.CONTAINER;
+    if (!size.height) uiTransform.setAnchorPoint(0.5, 1);
+    layout.startAxis = Layout.AxisDirection.HORIZONTAL;
+    layout.horizontalDirection = Layout.HorizontalDirection.LEFT_TO_RIGHT;
+    layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    layout.spacingX = spacex;
+    layout.spacingY = spacey;
+    return layout;
+  }
+
   //#endregion
 
   //#region 进度条与滚动视图
