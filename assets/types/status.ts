@@ -37,6 +37,11 @@ export interface StatusConfig {
    * 播放帧率与挂点偏移统一在 configs/effect 的 statusEffect（所有状态同一口径）
    */
   effect?: string;
+  /**
+   * 身上特效是否「只播一遍并停在尾帧」（缺省 false = 循环播放）。
+   * 适合护体神盾这类播完就是完整形态的驻场特效；循环类特效不要配
+   */
+  effectHoldLast?: boolean;
 }
 
 /** 状态编号 */

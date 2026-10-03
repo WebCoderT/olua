@@ -317,6 +317,26 @@ export default class AnimationHelper {
     this.play(name, node, animate, spriteFrames, duration > 0 ? duration : spriteFrames.length, AnimationClip.WrapMode.Normal);
   }
 
+  /**
+   * 使用已有帧列表播放一次并停在尾帧（图集帧等非目录来源，如状态特效）
+   * 与 playOnceWithFrames 的区别：播完后**不销毁节点**，保留尾帧画面（护体神盾这类「驻场」特效用）
+   * @param name 动画名称
+   * @param node 播放动画的节点
+   * @param spriteFrames 帧列表（顺序即播放顺序）
+   * @param frameRate 每秒帧数（如 12 表示每秒 12 帧，一轮时长 = 帧数 / 帧率）
+   */
+  static playOnceHoldWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], frameRate: number) {
+    if (!spriteFrames.length) return;
+    const animate = this.useAnimation(node);
+    const clip = AnimationClip.createWithSpriteFrames(spriteFrames, this.normalizeFrameRate(frameRate));
+    // Normal 播完停在尾帧（引擎行为）；不注册 FINISHED 销毁，让画面驻留
+    clip.wrapMode = AnimationClip.WrapMode.Normal;
+    clip.enableTrsBlending = false;
+    clip.name = name;
+    animate.addClip(clip, name);
+    animate.play(name);
+  }
+
   /** 帧率合法性归一（非正数视为每秒 1 帧，避免除零） */
   private static normalizeFrameRate(frameRate: number) {
     return frameRate > 0 ? frameRate : 1;

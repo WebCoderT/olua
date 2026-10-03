@@ -124,7 +124,9 @@ export default class StatusManager {
         node.destroy();
         return;
       }
-      AnimationHelper.playLoopWithFrames(node.name, node, frames, statusEffect.frameRate);
+      // 护体神盾这类「播完即完整形态」的特效只播一遍停在尾帧；其余循环播放
+      if (config.effectHoldLast) AnimationHelper.playOnceHoldWithFrames(node.name, node, frames, statusEffect.frameRate);
+      else AnimationHelper.playLoopWithFrames(node.name, node, frames, statusEffect.frameRate);
     });
   }
 

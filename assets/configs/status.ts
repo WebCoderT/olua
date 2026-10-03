@@ -16,6 +16,8 @@ statuses.set("2001", {
   source: StatusSource.SKILL,
   description: "护体神盾：释放技能后获得，持续时间内概率格挡伤害；重复释放刷新持续时间",
   effect: "effect/status/s_2004@0",
+  // 神盾特效播完就是完整形态：只播一遍停在尾帧，不循环
+  effectHoldLast: true,
 });
 
 statuses.set("2002", {
