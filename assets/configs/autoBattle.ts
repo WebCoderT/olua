@@ -29,5 +29,9 @@ export const autoBattle = {
   targetBanDuration: 5000,
   /** 场上没有目标时，隔多久再找一次（毫秒），避免每帧全图扫描 */
   targetSearchInterval: 500,
+  /** 点击寻路（小地图弹窗）的到达判定半径（像素），距目标点进入半径即视为到达 */
+  arriveTolerance: 20,
+  /** 传送落点吸附：落点周围多大范围（格）内找最近可站立位置，避免直接飞进墙里/怪堆里 */
+  teleportSnapRadius: 12,
 };
 

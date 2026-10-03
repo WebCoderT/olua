@@ -117,6 +117,19 @@ export default class PathGrid {
   }
 
   /**
+   * 取世界坐标附近最近的可行走点（传送落点吸附用：点击点落在墙里/障碍里时挪到最近能站的位置）
+   * @param x 世界坐标 x
+   * @param y 世界坐标 y
+   * @param radiusCells 逐圈外扩的最大半径（格），附近全是障碍时返回 null
+   */
+  findNearestWalkablePoint(x: number, y: number, radiusCells: number): Vec2 | null {
+    const cell = this.toCell(x, y);
+    if (!cell) return null;
+    const nearest = this.nearestWalkableCell(cell.col, cell.row, radiusCells);
+    return nearest ? this.cellCenter(nearest) : null;
+  }
+
+  /**
    * 计算从 from 到 to 的行走路径（世界坐标路点，不含起点，已做视线拉直）
    * 目标不可达时返回空数组
    */

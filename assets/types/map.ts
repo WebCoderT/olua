@@ -14,6 +14,15 @@ export interface NPC {
   onClick?: Function;
 }
 
+/**
+ * NPC 数据条目（configs/npc 的 npcData）
+ * id 只做关联（Tiled 对象组里的 id 与它对应），不参与数值计算
+ */
+export interface NpcData extends NPC {
+  /** NPC 编号（唯一） */
+  id: string;
+}
+
 // 地图编号
 export type MapId = "0" | "1" | "2";
 
@@ -43,4 +52,13 @@ export interface MapConfig {
   combat: number;
   /** 进入地图所需战魂等级 */
   soulOfWar: number;
+}
+
+/**
+ * 地图数据条目（configs/map 的 mapData）
+ * id 只做关联（Role.onMap / TMX 文件名与它对应），不参与数值计算
+ */
+export interface MapData extends MapConfig {
+  /** 地图编号（唯一） */
+  id: MapId;
 }

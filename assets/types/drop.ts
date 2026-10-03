@@ -34,6 +34,6 @@ export interface DropResult {
 /**
  * 怪物掉落配置
  * - 字符串：引用具名掉落表（configs/drop 的 dropTables），便于多怪物复用同一掉落
- * - 对象：内联掉落表
+ * - 掉落表对象 / 掉落条目数组：内联掉落（条目数组等价于 { picks: 1, entries: 数组 }）
  */
-export type DropSource = string | DropTable;
+export type DropSource = string | DropTable | DropEntry[];

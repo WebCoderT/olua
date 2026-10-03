@@ -49,12 +49,13 @@ export default class DropManager {
 
   /**
    * 结算一次掉落并在指定位置生成掉落物
-   * @param source 怪物掉落配置（具名掉落表 id 或内联掉落表，缺省用默认掉落表）
+   * @param source 怪物掉落配置（条目数组 / 具名掉落表 id / 内联掉落表，缺省用默认掉落表）
    * @param position 掉落位置（一般取怪物死亡时的世界坐标）
+   * @param picks 抽取次数：仅 source 为条目数组时生效（怪物按定位传 dropPicks）
    * @returns 本次掉落结果（便于日志/统计；为空表示没掉东西）
    */
-  static drop(source: DropSource | undefined, position: Vec3): DropResult[] {
-    const results = rollDropTable(resolveDropTable(source));
+  static drop(source: DropSource | undefined, position: Vec3, picks?: number): DropResult[] {
+    const results = rollDropTable(resolveDropTable(source, picks));
     results.forEach((result, index) => {
       const good = getItem(result.goodId);
       if (!good) {

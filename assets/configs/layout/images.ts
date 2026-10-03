@@ -34,6 +34,8 @@ export const loadingImage = (name: string) => `loading/${name}`;
 export const createRoleImage = (name: string) => `create_role/${name}`;
 /** resources/effect：界面特效图 */
 export const effectImage = (name: string) => `effect/${name}`;
+/** resources/map/<地图id>/preview：地图预览图（小地图弹窗底图，每个地图文件夹下一张） */
+export const mapPreviewImage = (id: string) => `map/${id}/preview`;
 /** resources/avatars：角色头像（按「职业-性别」取图） */
 export const avatarImage = (occupation: string, sex: string) => `avatars/${occupation}-${sex}`;
 /** 选角界面的角色站立帧动画图集（按「职业-性别」取图） */

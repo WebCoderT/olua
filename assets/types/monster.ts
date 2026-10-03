@@ -62,10 +62,12 @@ export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   /** 怪物技能（未配置则不显示技能） */
   skills?: SkillId[];
   /**
-   * 掉落配置：字符串引用具名掉落表（configs/drop 的 dropTables），
-   * 也可直接内联掉落表对象；未配置则使用默认掉落表
+   * 掉落物品列表：默认由 configs/drop.monsterDrops(level, tier) 按等级生成，
+   * 条目里直接写数组（每件物品单独配 weight/chance/count）或具名表 id 即可完全覆盖
    */
   drops?: DropSource;
+  /** 掉落抽取次数（默认按定位 1/2/3，见 monsterDrops；条目里可单独覆盖） */
+  dropPicks?: number;
 }
 
 /** 生成的怪物接口 */

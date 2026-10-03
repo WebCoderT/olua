@@ -35,6 +35,8 @@ export default class AutoBattle {
   private static hangEnabled = false;
   /** 快速攻击的技能（玩家按了 canAuto 技能但没有可打目标时记录，优先于挂机的默认技能） */
   private static pendingSkill: SkillId | null = null;
+  /** 点击寻路的目标点（小地图弹窗下发；静态目标，走到即结束，玩家手动移动可打断） */
+  private static pendingPoint: Vec2 | null = null;
   /** 当前自动战斗目标 */
   private static target: Node | null = null;
   /** 无法接近目标的拉黑记录（节点 -> 解禁时间戳） */
@@ -68,6 +70,7 @@ export default class AutoBattle {
     this.pathIndex = 0;
     this.target = null;
     this.pendingSkill = null;
+    this.pendingPoint = null;
   }
 
   /** 挂机是否开启 */
@@ -116,15 +119,53 @@ export default class AutoBattle {
     return true;
   }
 
+  /**
+   * 请求自动寻路到指定世界坐标点（小地图弹窗左键点击调用）
+   * 优先于战斗：打断当前的快速攻击/追怪走位，挂机开关保持不变，到达（或放弃）后自动恢复挂机选怪
+   * @returns 是否受理（主角未就绪或死亡时不受理）
+   */
+  static requestMoveTo(point: Vec2): boolean {
+    if (!this.roleDisplay || !isValid(this.roleDisplay) || this.roleDisplay.isDead()) return false;
+    this.pendingSkill = null;
+    this.target = null;
+    this.pendingPoint = new Vec2(point.x, point.y);
+    this.path = [];
+    this.pathIndex = 0;
+    this.stuckCount = 0;
+    this.lastRepathAt = 0;
+    return true;
+  }
+
+  /** 当前地图节点（小地图弹窗做世界坐标换算用；未注册或已失效返回 null） */
+  static getMapNode(): Node | null {
+    return this.mapNode && isValid(this.mapNode) ? this.mapNode : null;
+  }
+
+  /**
+   * 取世界坐标附近最近的可行走点（小地图弹窗右键传送的落点吸附：点击点在墙里/障碍里时挪到最近能站的位置）
+   * 网格未就绪时返回 null，调用方退回使用原始点
+   */
+  static findWalkablePoint(point: Vec2): Vec2 | null {
+    const grid = this.ensureGrid();
+    if (!grid) return null;
+    grid.rebuild(MonsterManager.getBlockingRects(null));
+    return grid.findNearestWalkablePoint(point.x, point.y, autoBattle.teleportSnapRadius);
+  }
+
   /** 每帧驱动（组合根在 Game.update 调用；manualMoving 为玩家是否正在手动移动：键盘方向键或鼠标按下操控） */
   static tick(manualMoving: boolean) {
     const roleDisplay = this.roleDisplay;
     if (!roleDisplay || !isValid(roleDisplay)) return;
-    // 没有开启挂机也没有快速攻击请求时零开销返回
-    if (!this.hangEnabled && !this.pendingSkill) return;
-    // 玩家手动移动优先：快速攻击被玩家移动打断直接结束；挂机只是暂停（松开继续）
+    // 没有开启挂机、快速攻击请求与点击寻路时零开销返回
+    if (!this.hangEnabled && !this.pendingSkill && !this.pendingPoint) return;
+    // 玩家手动移动优先：快速攻击/点击寻路被玩家移动打断直接结束；挂机只是暂停（松开继续）
     if (manualMoving) {
-      if (this.pendingSkill) this.cancel();
+      if (this.pendingSkill || this.pendingPoint) this.cancel();
+      return;
+    }
+    // 点击寻路优先于战斗：走向指定点直到到达/放弃，挂机在结束后自动恢复选怪出手
+    if (this.pendingPoint) {
+      this.approachToPoint(roleDisplay);
       return;
     }
     // 出手技能：快速攻击用玩家按下的那个技能，挂机用第一个已学习且可自动释放的技能
@@ -161,7 +202,12 @@ export default class AutoBattle {
       SkillManager.releaseAuto(skillId);
       return;
     }
-    this.approach(roleDisplay, target);
+    // 目标点每次现取（怪会移动）；追怪与小地图点击寻路共用同一套走位机制
+    const toPoint = () => {
+      const to = target.getWorldPosition();
+      return new Vec2(to.x, to.y);
+    };
+    this.advance(roleDisplay, toPoint(), () => this.repathTo(roleDisplay, toPoint()), () => this.giveUpCurrentTarget());
   }
 
   /** 停止自动战斗（清快速攻击请求/目标/路径并停住自动移动；挂机开关状态不动） */
@@ -182,9 +228,10 @@ export default class AutoBattle {
     this.hangStateListener = null;
   }
 
-  /** 清空运行时状态（快速攻击请求/目标/路径/卡住计数），不触碰主角节点 */
+  /** 清空运行时状态（快速攻击请求/点击寻路点/目标/路径/卡住计数），不触碰主角节点 */
   private static clearRuntimeState() {
     this.pendingSkill = null;
+    this.pendingPoint = null;
     this.target = null;
     this.path = [];
     this.pathIndex = 0;
@@ -220,17 +267,44 @@ export default class AutoBattle {
     this.lastRepathAt = 0;
   }
 
-  /** 走位接近目标：卡住检测 → 按需重算路径 → 朝当前路点移动 */
-  private static approach(roleDisplay: RoleDisplay, target: Node) {
+  /** 走向点击寻路的目标点（小地图弹窗）：与追怪共用走位机制（卡住检测/按需重算路径），到达即结束 */
+  private static approachToPoint(roleDisplay: RoleDisplay) {
+    const to = this.pendingPoint as Vec2;
+    const position = roleDisplay.getWorldPosition();
+    if (Math.hypot(position.x - to.x, position.y - to.y) <= autoBattle.arriveTolerance) {
+      this.finishPointMove();
+      return;
+    }
+    // 攻击动作播放中：等动作打完再走（期间不移动，与追怪走位一致）
+    if (roleDisplay.isAttacking()) return;
+    this.advance(roleDisplay, to, () => this.repathTo(roleDisplay, to), () => this.giveUpPointMove());
+  }
+
+  /** 到达点击寻路的目标点：清状态停住并提示（挂机开关不动，下一 tick 自动恢复选怪出手） */
+  private static finishPointMove() {
+    this.clearRuntimeState();
+    this.roleDisplay?.setAutoMove(null);
+    GameUiHelper.createTip("map_move_arrive_tip", "已到达目的地");
+  }
+
+  /** 点击寻路无法到达（连续卡住）：清状态停住并提示 */
+  private static giveUpPointMove() {
+    this.clearRuntimeState();
+    this.roleDisplay?.setAutoMove(null);
+    GameUiHelper.createErrorTip("map_move_unreachable_tip", "无法到达目标位置");
+  }
+
+  /** 朝目标点走位（追怪与点击寻路共用）：卡住检测 → 按需重算路径 → 朝当前路点移动 */
+  private static advance(roleDisplay: RoleDisplay, to: Vec2, repath: () => void, onGiveUp: () => void) {
     const now = Date.now();
     const position = roleDisplay.getWorldPosition();
-    // 卡住检测：一段时间几乎没有位移说明被挡住（怪堆/死角），强制重寻路，连续多次就放弃当前目标
+    // 卡住检测：一段时间几乎没有位移说明被挡住（怪堆/死角），强制重寻路，连续多次就放弃
     if (now - this.lastStuckCheckAt >= autoBattle.stuckInterval) {
       if (this.lastStuckCheckAt > 0 && Math.hypot(position.x - this.lastStuckX, position.y - this.lastStuckY) < autoBattle.stuckDistance) {
         this.stuckCount++;
         this.lastRepathAt = 0;
         if (this.stuckCount >= autoBattle.stuckRetryLimit) {
-          this.giveUpCurrentTarget();
+          onGiveUp();
           return;
         }
       } else {
@@ -240,13 +314,11 @@ export default class AutoBattle {
       this.lastStuckX = position.x;
       this.lastStuckY = position.y;
     }
-    // 路径按间隔重算（目标会移动）；走完现有路径还没进入范围时原地等一小段再重算，避免每帧都搜索
-    if (this.lastRepathAt === 0 || now - this.lastRepathAt >= autoBattle.repathInterval) {
-      this.repath(roleDisplay, target);
-    }
+    // 路径按间隔重算：追怪时目标会移动；点击寻路的点不动，重算是廉价的幂等操作
+    if (this.lastRepathAt === 0 || now - this.lastRepathAt >= autoBattle.repathInterval) repath();
     const waypoint = this.path[this.pathIndex];
     if (!waypoint) {
-      // 无路可走（寻路失败且直线兜底也为空）：原地等待下一轮重算
+      // 无路可走（寻路失败且直线趋近也为空）：原地等待下一轮重算
       roleDisplay.setAutoMove(null);
       return;
     }
@@ -261,19 +333,19 @@ export default class AutoBattle {
     roleDisplay.setAutoMove(direction, autoBattle.moveByRun);
   }
 
-  /** 重算到目标的路径：先烙上动态障碍（场上怪物，目标自身除外），A* 失败时直线趋近兜底 */
-  private static repath(roleDisplay: RoleDisplay, target: Node) {
+  /** 重算到目标点的路径（追怪与点击寻路共用）：先烙上动态障碍（场上怪物，追击目标自身除外），A* 失败时直线趋近兜底 */
+  private static repathTo(roleDisplay: RoleDisplay, to: Vec2) {
     this.lastRepathAt = Date.now();
     this.pathIndex = 0;
-    const to = target.getWorldPosition();
     const grid = this.ensureGrid();
     if (!grid) {
       this.path = [new Vec2(to.x, to.y)];
       return;
     }
-    // 动态障碍每次寻路前重烙：怪物围成的「墙」也会被绕开；目标自身不算障碍，路径才能通到它身边
-    grid.rebuild(MonsterManager.getBlockingRects(target));
-    const path = grid.findPath(new Vec2(roleDisplay.getWorldPosition().x, roleDisplay.getWorldPosition().y), new Vec2(to.x, to.y));
+    // 动态障碍每次寻路前重烙：怪物围成的「墙」也会被绕开；追击目标自身不算障碍，路径才能通到它身边
+    grid.rebuild(MonsterManager.getBlockingRects(this.target));
+    const from = roleDisplay.getWorldPosition();
+    const path = grid.findPath(new Vec2(from.x, from.y), new Vec2(to.x, to.y));
     this.path = path.length > 0 ? path : [new Vec2(to.x, to.y)];
   }
 

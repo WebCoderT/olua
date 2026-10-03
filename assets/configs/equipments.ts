@@ -3,23 +3,30 @@ import { Equipment, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } fr
 import { equipmentStats } from "./growth";
 import { OECCUPATION, SEX } from "../types/role";
 
-// 角色弹窗中装备槽map
+/** 装备槽位数据表（角色弹窗用；key 只做关联，与怪物/装备同一约定） */
+const equipmentSlotData: Array<EquipmentSlot & { key: EQUIPMENT_TYPE }> = [
+  { key: EQUIPMENT_TYPE.OTHER1, label: "其他1", imageSrc: "slots/other", position: "bottom" },
+  { key: EQUIPMENT_TYPE.CLOTH, label: "衣服", imageSrc: "slots/cloth", position: "bottom" },
+  { key: EQUIPMENT_TYPE.OTHER2, label: "其他2", imageSrc: "slots/other", position: "bottom" },
+
+  { key: EQUIPMENT_TYPE.WEAPON, label: "武器", imageSrc: "slots/weapon", position: "left" },
+  { key: EQUIPMENT_TYPE.NECKLACE, label: "项链", imageSrc: "slots/necklace", position: "left" },
+  { key: EQUIPMENT_TYPE.RING, label: "戒指", imageSrc: "slots/ring", position: "left" },
+  { key: EQUIPMENT_TYPE.ACCESSORIES, label: "饰品", imageSrc: "slots/accessories", position: "left" },
+  { key: EQUIPMENT_TYPE.SHINGUARD, label: "护腿", imageSrc: "slots/shinguard", position: "left" },
+
+  { key: EQUIPMENT_TYPE.HELMET, label: "头盔", imageSrc: "slots/helmet", position: "right" },
+  { key: EQUIPMENT_TYPE.SCAPULAR, label: "肩胛", imageSrc: "slots/scapular", position: "right" },
+  { key: EQUIPMENT_TYPE.BELT, label: "腰带", imageSrc: "slots/belt", position: "right" },
+  { key: EQUIPMENT_TYPE.WRISTBAND, label: "护腕", imageSrc: "slots/wristband", position: "right" },
+  { key: EQUIPMENT_TYPE.SHOES, label: "鞋子", imageSrc: "slots/shoes", position: "right" },
+];
+
+/** 装备槽位（槽位 → 槽位配置）：由 equipmentSlotData 统一构建 */
 export const equipmentSlots = new Map<EQUIPMENT_TYPE, EquipmentSlot>();
-equipmentSlots.set(EQUIPMENT_TYPE.OTHER1, { label: "其他1", imageSrc: "slots/other", position: "bottom" });
-equipmentSlots.set(EQUIPMENT_TYPE.CLOTH, { label: "衣服", imageSrc: "slots/cloth", position: "bottom" });
-equipmentSlots.set(EQUIPMENT_TYPE.OTHER2, { label: "其他2", imageSrc: "slots/other", position: "bottom" });
-
-equipmentSlots.set(EQUIPMENT_TYPE.WEAPON, { label: "武器", imageSrc: "slots/weapon", position: "left" });
-equipmentSlots.set(EQUIPMENT_TYPE.NECKLACE, { label: "项链", imageSrc: "slots/necklace", position: "left" });
-equipmentSlots.set(EQUIPMENT_TYPE.RING, { label: "戒指", imageSrc: "slots/ring", position: "left" });
-equipmentSlots.set(EQUIPMENT_TYPE.ACCESSORIES, { label: "饰品", imageSrc: "slots/accessories", position: "left" });
-equipmentSlots.set(EQUIPMENT_TYPE.SHINGUARD, { label: "护腿", imageSrc: "slots/shinguard", position: "left" });
-
-equipmentSlots.set(EQUIPMENT_TYPE.HELMET, { label: "头盔", imageSrc: "slots/helmet", position: "right" });
-equipmentSlots.set(EQUIPMENT_TYPE.SCAPULAR, { label: "肩胛", imageSrc: "slots/scapular", position: "right" });
-equipmentSlots.set(EQUIPMENT_TYPE.BELT, { label: "腰带", imageSrc: "slots/belt", position: "right" });
-equipmentSlots.set(EQUIPMENT_TYPE.WRISTBAND, { label: "护腕", imageSrc: "slots/wristband", position: "right" });
-equipmentSlots.set(EQUIPMENT_TYPE.SHOES, { label: "鞋子", imageSrc: "slots/shoes", position: "right" });
+for (const slot of equipmentSlotData) {
+  equipmentSlots.set(slot.key, slot);
+}
 
 /**
  * 装备数据表 → 装备配置 Map
@@ -1160,3 +1167,41 @@ const beltsData: EquipmentData[] = [
   },
 ];
 export const belts = buildEquipmentMap(beltsData);
+
+/** 各部位装备表（掉落按部位就近取件用） */
+const equipmentBySlot = new Map<EQUIPMENT_TYPE, Map<string, Equipment>>([
+  [EQUIPMENT_TYPE.WEAPON, weapons],
+  [EQUIPMENT_TYPE.CLOTH, clothes],
+  [EQUIPMENT_TYPE.HELMET, helmets],
+  [EQUIPMENT_TYPE.BELT, belts],
+  [EQUIPMENT_TYPE.SHOES, shoes],
+  [EQUIPMENT_TYPE.NECKLACE, nicklaces],
+  [EQUIPMENT_TYPE.RING, rings],
+]);
+
+/**
+ * 按等级就近取一件装备的物品 id（怪物掉落分档用）
+ * 规则：该部位里 level ≤ 指定等级中等级最高的那件；全都超纲时取等级最低的
+ * @param slot 装备部位
+ * @param level 目标等级（一般传怪物等级）
+ * @returns 物品 id；该部位没有任何装备返回 null
+ */
+export function getNearestEquipmentId(slot: EQUIPMENT_TYPE, level: number): string | null {
+  const map = equipmentBySlot.get(slot);
+  if (!map) return null;
+  let best: string | null = null;
+  let bestLevel = -1;
+  let fallback: string | null = null;
+  let fallbackLevel = Infinity;
+  map.forEach((item, id) => {
+    if (item.level <= level && item.level > bestLevel) {
+      best = id;
+      bestLevel = item.level;
+    }
+    if (item.level < fallbackLevel) {
+      fallback = id;
+      fallbackLevel = item.level;
+    }
+  });
+  return best ?? fallback;
+}

@@ -2,6 +2,7 @@ import { Size, Vec2 } from "cc";
 import { ACTION } from "../types/animation";
 import { MonsterConfig, MonsterData } from "../types/monster";
 import { monsterStats } from "./growth";
+import { monsterDropPicks, monsterDrops } from "./drop";
 
 /**
  * 怪物数据表
@@ -60,7 +61,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "common",
     description: "赤焰斗鸡",
     sellPirce: 0,
     contentSize: new Size(100, 100),
@@ -88,7 +88,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "common",
     description: "金斑雄鹿",
     sellPirce: 0,
     contentSize: new Size(100, 100),
@@ -3097,7 +3096,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "长尾跳鼠怪",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3114,7 +3112,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "白骨弓手",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3131,7 +3128,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "铁甲长戟卫",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3148,7 +3144,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "断臂独锤兵",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3165,7 +3160,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "红肤举锤巨人",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3182,7 +3176,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "狼头黑锤妖",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3199,7 +3192,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "铁节钢蜈蚣",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3216,7 +3208,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "雪白羊怪",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3233,7 +3224,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "荆棘刺球兽",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3250,7 +3240,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "土黄瘦狐",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3267,7 +3256,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "白袍布衣道人",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3284,7 +3272,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "血背金龟虫",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3301,7 +3288,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "青绿毛毛虫",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3318,7 +3304,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "白骨腐尸",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3335,7 +3320,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "铁尾黑蝎",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3352,7 +3336,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "褐翼黑蝙蝠",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3369,7 +3352,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "银斧圆盾矮人",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3386,7 +3368,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "绿皮蟾人",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3403,7 +3384,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "金鬃狻猊",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3420,7 +3400,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "elite",
     description: "铁钩海盗",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3437,7 +3416,6 @@ const monsterData: MonsterData[] = [
     moveSpeed: 2,
     aggressive: false,
     detectRange: 200,
-    drops: "boss",
     description: "牛角石肤巨人",
     sellPirce: 0,
     contentSize: new Size(),
@@ -3448,8 +3426,14 @@ const monsterData: MonsterData[] = [
 /** 怪物配置（key → 配置）：等级取自条目里的 level，属性由 monsterStats(level, tier) 按等级生成 */
 export const monsters = new Map<string, MonsterConfig>();
 for (const data of monsterData) {
-  const { key, tier, ...rest } = data;
-  monsters.set(key, { ...monsterStats(data.level, tier), ...rest });
+  const { key, tier, drops, dropPicks, ...rest } = data;
+  monsters.set(key, {
+    ...monsterStats(data.level, tier),
+    ...rest,
+    // 每只怪专属掉落：按等级/定位生成条目数组（条目里写了 drops 则以条目为准）
+    drops: drops ?? monsterDrops(data.level, tier),
+    dropPicks: dropPicks ?? monsterDropPicks(tier),
+  });
 }
 
 export default monsters;

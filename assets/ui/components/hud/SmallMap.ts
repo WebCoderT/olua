@@ -5,6 +5,8 @@ import { uiImages, smallMapImage, smallMapLayout } from "../../../configs/hudLay
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
+import { bindPointerAction } from "../../utils/input/Pointer";
+import MapPreviewDialog from "../dialogs/MapPreviewDialog";
 import type RoleDisplay from "../role/RoleDisplay";
 
 /**
@@ -29,17 +31,25 @@ export default class SmallMap extends Node {
   private dotsGraphics: Graphics;
   /** 主角组件（世界坐标与附近怪物判定的基准） */
   private roleDisplay: RoleDisplay;
+  /** 小地图弹窗（整图预览：左键点击寻路 / 右键点击传送；由本组件驱动点位刷新） */
+  private mapPreviewDialog: MapPreviewDialog;
   /** 上次刷新时间戳 */
   private lastRefreshAt = 0;
 
   constructor(roleDisplay: RoleDisplay) {
     super("small_map");
     this.roleDisplay = roleDisplay;
+    this.mapPreviewDialog = new MapPreviewDialog(roleDisplay);
     // 主体（尺寸与屏幕右上角位置）
     GameUiHelper.applySmallMapBodyStyle(this);
     this.createEntryButtons();
     this.createMapArea();
     this.createBottomInfo();
+  }
+
+  /** 打开小地图弹窗（整图预览：左键寻路 / 右键传送） */
+  private openMapPreviewDialog() {
+    this.mapPreviewDialog.open();
   }
 
   //#region 结构拼装
@@ -55,9 +65,11 @@ export default class SmallMap extends Node {
     const count = layout.entryIcons.length;
     const columnHeight = count * layout.entryIconSize + (count - 1) * layout.entryIconGap;
     const column = GameUiHelper.createColumn("small_map_entry_buttons", layout.entryIconGap, layout.entryColumnPosition, new Size(layout.entryIconSize, columnHeight));
-    // 按钮位置由 Layout 统一排列（点击暂无功能，与底部栏未开放按钮一致先占位）
+    // 按钮位置由 Layout 统一排列；「世界」入口打开小地图弹窗，其余入口暂为占位（与底部栏未开放按钮一致）
     layout.entryIcons.forEach((icon) => {
-      column.addChild(GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, smallMapImage(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize)));
+      const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, smallMapImage(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
+      if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
+      column.addChild(button);
     });
     this.addChild(column);
   }
@@ -75,6 +87,8 @@ export default class SmallMap extends Node {
     // 坐标点绘制层（角色黑点/怪物红点画在内容区尺寸的矩形内，中心与地图中心一致）
     this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(new Vec2(), layout.contentSize);
     this.addChild(this.dotsGraphics.node);
+    // 点击地图区域打开小地图弹窗（整图预览：左键寻路 / 右键传送）；点位层盖在底图上，点击由它接收
+    bindPointerAction(this.dotsGraphics.node, () => this.openMapPreviewDialog(), this);
   }
 
   /** 底部：服务器线路与排行榜（横向布局容器）+ 世界坐标条 */
@@ -98,7 +112,7 @@ export default class SmallMap extends Node {
 
   //#region 实时刷新
 
-  /** 每帧驱动（由组合根调用）：内部按 refreshInterval 节流，只定期重绘文本与坐标点 */
+  /** 每帧驱动（由组合根调用）：内部按 refreshInterval 节流，只定期重绘文本与坐标点；并带动小地图弹窗的点位刷新 */
   update() {
     const now = Date.now();
     if (now - this.lastRefreshAt < smallMapConfig.refreshInterval) return;
@@ -107,6 +121,8 @@ export default class SmallMap extends Node {
     if (!rolePosition) return;
     this.updateLabels(rolePosition);
     this.updateDots(rolePosition);
+    // 小地图弹窗开着时重绘其上的全图点位（弹窗未打开时内部直接跳过；关闭后引用失效自动清理）
+    this.mapPreviewDialog.update();
   }
 
   /** 刷新地图名称与世界坐标文本 */

@@ -179,7 +179,7 @@ export default class MonsterManager {
     if (role) this.awardKillExp(target, monster, role.level);
     // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
-    DropManager.drop(monster.drops, target.getWorldPosition());
+    DropManager.drop(monster.drops, target.getWorldPosition(), monster.dropPicks);
     this.monsterMap.delete(target);
     CursorManager.unregisterHover(target);
     // 头顶血条隐藏（死亡后血量已无意义，留着会一直显示 0 / maxHp）

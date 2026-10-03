@@ -102,6 +102,21 @@ export const mapTeleportDialogLayout = {
 
 //#endregion
 
+//#region 小地图弹窗（当前地图的整图预览）
+
+/** 弹窗尺寸为 dialogFrame.size（600×500） */
+export const mapPreviewDialogLayout = {
+  name: "map_preview_dialog",
+  /** 标题兜底文案（正常显示当前地图名，见 SmallMap 传入） */
+  title: "小地图",
+  /** 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送） */
+  preview: { name: "map_preview", position: new Vec2(0, -18), size: new Size(560, 392) },
+  /** 预览区下方的操作提示 */
+  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: new Color(255, 223, 170) },
+};
+
+//#endregion
+
 //#region 角色信息弹窗
 
 /** 弹窗尺寸为 dialogFrame.size（600×500） */
