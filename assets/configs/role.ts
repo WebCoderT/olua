@@ -3,7 +3,7 @@ import { Equipment } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
 import type { SkillId } from "../types/skill";
 import { Size, Vec2 } from "cc";
-import { belts, clothes, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
+import { belts, clothes, helmets, nicklaces, rings, shoes, weapons, getBaseEquipments } from "./equipments";
 
 /** 角色移动速度-全局 */
 export const ROLE_WALK_SPEED = 2;
@@ -94,15 +94,15 @@ export const defaultRoleSpeedRate: SpeedRate = {
   [ACTION.TEST1]: 1,
 };
 
-/** 根据职业与性别获取新手装备 */
+/** 根据职业与性别获取新手装备（只取各表基础件「普通的·人级」，Map 里其余是前后缀变体不默认发放） */
 export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipment[] {
   // 通用装备（按 key 从各装备 Map 取；缺配置的自动跳过）
   const equipments: Equipment[] = [rings.get("ring_1"), nicklaces.get("necklace_1"), shoes.get("shoes_1"), helmets.get("helmet_1"), belts.get("belt_1")].filter((eq): eq is Equipment => !!eq);
 
-  /** 将所有武器放在装备列表中 */
-  weapons.forEach((weapon) => equipments.push(weapon));
+  /** 将所有基础武器放在装备列表中（背包只有 bagRow×bagCol 格，绝不能把 15 倍变体全塞进来） */
+  getBaseEquipments(weapons).forEach((weapon) => equipments.push(weapon));
 
-  /** 将所有衣服放在装备列表中 */
-  clothes.forEach((weapon) => equipments.push(weapon));
+  /** 将所有基础衣服放在装备列表中 */
+  getBaseEquipments(clothes).forEach((cloth) => equipments.push(cloth));
   return equipments;
 }

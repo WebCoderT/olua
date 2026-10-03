@@ -131,6 +131,16 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
   return map;
 }
 
+/**
+ * 取某装备 Map 的基础件（普通的·人级，prefix/suffix 全 0）
+ * 新手装备、全量列表展示等只应给基础件——Map 里其余 14 个是前后缀变体（key 带 _pXsY），不该默认发放
+ */
+export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
+  return [...map.values()].filter(
+    (eq) => eq.prefix === EQUIPMENT_PREFIX.NORMAL && eq.suffix === EQUIPMENT_SUFFIX.MORTAL,
+  );
+}
+
 // 衣服（按名称强弱排等级 1 → 60；战斗数值由 equipmentStats(level, slot) 生成；内外观位置/缩放逐件手调）
 const clothesData: EquipmentData[] = [
   {

@@ -90,9 +90,12 @@ export class Role implements BattleAttributes {
       }
     }
     // 初始化成功后，获得新手物品（配置对象经 items 注册表带有 id，格子只存 key + 数量）
+    // 防御：无 id 的条目直接跳过；超出背包容量的条目丢弃（绝不能越界写 bag[row]，否则报 Cannot set properties of undefined）
     const equipments = getNewRoleEquipments(occupation, sex);
     equipments.forEach((eq, index) => {
-      this.bag[Math.floor(index / bagCol)][index % bagCol] = eq.id ? { id: eq.id, count: 1 } : null;
+      const row = Math.floor(index / bagCol);
+      if (row >= bagRow || !eq.id) return;
+      this.bag[row][index % bagCol] = { id: eq.id, count: 1 };
     });
   }
 }
