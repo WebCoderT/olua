@@ -50,8 +50,8 @@ export const roleInfoBarLayout = {
   currencyBar: { position: new Vec2(20, 24), size: new Size(200, 14), spacing: 0 },
   /** 战斗力（图标尺寸；数值文本紧随图标右边缘，间隔 labelGap） */
   combat: { position: new Vec2(-38, 1), iconSize: new Size(60, 30), labelGap: 3 },
-  /** 状态图标条（头像正下方，横向布局；图标来源为 configs/status 各状态的 icon） */
-  statusBar: { position: new Vec2(-100, -46), size: new Size(220, 24), spacing: 4, iconSize: new Size(24, 24) },
+  /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；图标来源为 configs/status 各状态的 icon） */
+  statusBar: { position: new Vec2(-109.5, -46), size: new Size(220, 24), spacing: 4, iconSize: new Size(24, 24) },
 };
 
 //#endregion

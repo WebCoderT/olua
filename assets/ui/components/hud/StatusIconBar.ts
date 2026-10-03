@@ -19,7 +19,8 @@ export default class StatusIconBar extends Node {
     const layout = roleInfoBarLayout.statusBar;
     this.addComponent(UITransform).setContentSize(layout.size);
     this.setPosition(layout.position.x, layout.position.y, 0);
-    this.row = GameUiHelper.createRow("status_icons", layout.spacing, new Vec2(), layout.size);
+    // 行容器取单图标尺寸：横向 Layout 从容器左边界起排，首个图标中心正好落在容器原点（头像正下方），后续图标向右排开
+    this.row = GameUiHelper.createRow("status_icons", layout.spacing, new Vec2(), layout.iconSize);
     this.addChild(this.row);
   }
 
