@@ -1,5 +1,5 @@
 import { Animation, isValid, Node } from "cc";
-import { hudImages, tipsLayout } from "../../configs/hudLayout";
+import { uiImages, tipsLayout } from "../../configs/hudLayout";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -15,8 +15,8 @@ interface TipView {
 /**
  * 自动战斗提示（静态控制器）
  * 屏幕中间循环播放的两个图集帧动画提示，互相独立、允许同时出现，均挂在特效层：
- * - 「自动战斗中」（hudImages.autoAttackTip）：自动挂机开启期间一直显示
- * - 「自动寻路中」（hudImages.autoPathTip）：自动战斗走位（A* 寻路移动）期间显示
+ * - 「自动战斗中」（uiImages.autoAttackTip）：自动挂机开启期间一直显示
+ * - 「自动寻路中」（uiImages.autoPathTip）：自动战斗走位（A* 寻路移动）期间显示
  * 屏幕中心即相机中心，相机跟随主角，因此把提示节点世界坐标每帧对齐主角世界坐标即可；
  * 两个提示同时显示时寻路提示向下让位（tipsLayout.autoTipPathOffsetY），避免文字重叠
  * 帧率与让位偏移见 configs/hudLayout.tipsLayout，由组合根在 Game.update 每帧调用 update；
@@ -66,8 +66,8 @@ export default class AutoBattleTips {
     if (this.attackTip && isValid(this.attackTip.node) && this.pathTip && isValid(this.pathTip.node)) return true;
     if (this.preparing) return false;
     this.preparing = true;
-    this.attackTip = this.createTip("auto_battle_attack_tip", hudImages.autoAttackTip);
-    this.pathTip = this.createTip("auto_battle_path_tip", hudImages.autoPathTip);
+    this.attackTip = this.createTip("auto_battle_attack_tip", uiImages.autoAttackTip);
+    this.pathTip = this.createTip("auto_battle_path_tip", uiImages.autoPathTip);
     return false;
   }
 

@@ -8,6 +8,7 @@ import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { getDirectionByVector } from "../../utils/battle/BattleMath";
 import { getSoulLevel } from "../../../configs/soul";
+import { roleShowLayout } from "../../../configs/hudLayout";
 import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
@@ -255,10 +256,11 @@ export default class RoleDisplay extends Node {
     if (!role.soulShow) return;
     const config = getSoulLevel(role.soulOfWar);
     if (!config) return;
-    // 角色锚点 (0.5, 0)、内容 40×70：(26, 62) 约为右上角肩侧；动画帧自带大量透明边距，实际视觉尺寸更小
-    const node = GameUiHelper.createSoulAnimation(config, new Size(72, 72));
+    // 挂件位置与尺寸见 configs/hudLayout.roleShowLayout.soul（角色锚点 (0.5, 0)、内容 40×70，
+    // (26, 62) 约为右上角肩侧；动画帧自带大量透明边距，实际视觉尺寸更小）
+    const node = GameUiHelper.createSoulAnimation(config, roleShowLayout.soul.size);
     node.name = "soul_show";
-    node.setPosition(26, 62);
+    node.setPosition(roleShowLayout.soul.position.x, roleShowLayout.soul.position.y);
     this.addChild(node);
     this.soulShowNode = node;
   }

@@ -1,10 +1,11 @@
-import { _decorator, Component, EditBox, EventHandler, Label, Node, Size, Sprite, ToggleContainer, Vec2 } from "cc";
+import { _decorator, Component, EditBox, EventHandler, Label, Node, Sprite, ToggleContainer, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
 import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
+import { roleSelectorLayout } from "../configs/hudLayout";
 const { ccclass } = _decorator;
 
 /** 选角主视图引用（本组件拼装并持有） */
@@ -26,9 +27,6 @@ interface RoleSelectorCreateView {
   occupationDescription: Node | null;
   occupationPreview: Node | null;
 }
-
-/** 角色预览默认站位（最多3个角色） */
-const rolePositions = [new Vec2(-485, -25), new Vec2(-250, -75), new Vec2(-10, -40)];
 
 @ccclass("RoleSelector")
 export class RoleSelector extends Component {
@@ -52,30 +50,36 @@ export class RoleSelector extends Component {
 
   /** 拼装选角主视图 */
   private createMainView(): RoleSelectorMainView {
+    // 位置/尺寸与用图统一见 configs/hudLayout.roleSelectorLayout
+    const layout = roleSelectorLayout;
     // 背景与底部栏
-    this.node.addChild(GameUiHelper.createFullScreenImage("role_selector_background", "create_role/bg"));
-    const bottomBar = GameUiHelper.createImage("role_selector_bottom_bar", "create_role/bg_bottom", new Vec2(0, -305), new Size(1624, 139));
+    this.node.addChild(GameUiHelper.createFullScreenImage("role_selector_background", layout.background));
+    const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, layout.bottomBar.position, layout.bottomBar.size);
     this.node.addChild(bottomBar);
     // 开始游戏按钮（默认置灰，选中角色后可用）
-    const beginGameButton = GameUiHelper.createTexturedButton("begin_game_button", "create_role/start_btn", "", new Vec2(0, -40), new Size(190, 48));
+    const beginLayout = layout.beginGameButton;
+    const beginGameButton = GameUiHelper.createTexturedButton(beginLayout.name, beginLayout.image, "", beginLayout.position, beginLayout.size);
     beginGameButton.getComponent(Sprite).grayscale = true;
     beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
     bottomBar.addChild(beginGameButton);
     // 创建角色按钮
-    const createRoleButton = GameUiHelper.createTexturedButton("show_create_role_button", "create_role/new_role", "", new Vec2(-740, 300), new Size(75, 79));
+    const createLayout = layout.createRoleButton;
+    const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
     createRoleButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI());
     this.node.addChild(createRoleButton);
     // 管理角色按钮
-    this.node.addChild(GameUiHelper.createTexturedButton("manage_role_button", "create_role/manage", "", new Vec2(-740, 200), new Size(75, 79)));
-    // 选中角色信息框
-    const selectedInfoBox = GameUiHelper.createImage("selected_role_info_background", "create_role/idlv", new Vec2(-435, -335), new Size(345, 26));
-    selectedInfoBox.addChild(GameUiHelper.createText("selected_role_name", "---", 20, new Vec2(-35, 0), new Size(160, 30)));
-    selectedInfoBox.addChild(GameUiHelper.createText("selected_role_level", "-", 16, new Vec2(147, 0), new Size(40, 30)));
+    const manageLayout = layout.manageRoleButton;
+    this.node.addChild(GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size));
+    // 选中角色信息框（名称 + 等级）
+    const infoLayout = layout.selectedInfo;
+    const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
+    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size));
+    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size));
     this.node.addChild(selectedInfoBox);
     return {
       beginGameButton,
-      selectedRoleName: selectedInfoBox.getChildByName("selected_role_name"),
-      selectedRoleLevel: selectedInfoBox.getChildByName("selected_role_level"),
+      selectedRoleName: selectedInfoBox.getChildByName(infoLayout.nameLabel.name),
+      selectedRoleLevel: selectedInfoBox.getChildByName(infoLayout.levelLabel.name),
       ownerRoleNodes: [],
     };
   }
@@ -85,7 +89,7 @@ export class RoleSelector extends Component {
     this.mainView.ownerRoleNodes.forEach((node) => node.destroy());
     this.mainView.ownerRoleNodes.length = 0;
     StorageManager.getRoles().forEach((role, index) => {
-      const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, rolePositions[index] ?? new Vec2(), new Size(200, 360));
+      const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, roleSelectorLayout.rolePositions[index] ?? new Vec2(), roleSelectorLayout.previewSize);
       node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
       this.node.addChild(node);
       this.mainView.ownerRoleNodes.push(node);
@@ -107,29 +111,32 @@ export class RoleSelector extends Component {
     this.createView = this.createCreateRoleView();
   }
 
-  /** 拼装创建角色弹窗视图 */
+  /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/hudLayout.roleSelectorLayout.createDialog） */
   private createCreateRoleView(): RoleSelectorCreateView {
+    const layout = roleSelectorLayout.createDialog;
     // 返回按钮
-    const backButton = GameUiHelper.createTexturedButton("cancel_create_role_button", "create_role/back_btn", "", new Vec2(-740, -210), new Size(75, 79));
+    const backLayout = roleSelectorLayout.backButton;
+    const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
     this.node.addChild(backButton);
     backButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
     // 弹窗主体与标题
-    const dialog = GameUiHelper.createImage("create_role_dialog", "create_role/bg_dialog", new Vec2(630, 35), new Size(320, 580));
+    const dialog = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
     this.node.addChild(dialog);
-    dialog.addChild(GameUiHelper.createImage("create_role_dialog_title", "create_role/label_title", new Vec2(0, 242), new Size(128, 28)));
-    dialog.addChild(GameUiHelper.createImage("gender_label", "create_role/label_1", new Vec2(0, 190), new Size(56, 25)));
+    dialog.addChild(GameUiHelper.createImage(layout.title.name, layout.title.image, layout.title.position, layout.title.size));
+    dialog.addChild(GameUiHelper.createImage(layout.genderLabel.name, layout.genderLabel.image, layout.genderLabel.position, layout.genderLabel.size));
     // 性别开关组
     const sexToggleGroup = GameUiHelper.createSexToggleGroup();
     dialog.addChild(sexToggleGroup);
-    dialog.addChild(GameUiHelper.createImage("occupation_label", "create_role/label_2", new Vec2(0, 100), new Size(56, 25)));
+    dialog.addChild(GameUiHelper.createImage(layout.occupationLabel.name, layout.occupationLabel.image, layout.occupationLabel.position, layout.occupationLabel.size));
     // 职业开关组
     const occupationToggleGroup = GameUiHelper.createOccupationToggleGroup();
     dialog.addChild(occupationToggleGroup);
     // 名称输入框
-    const nameInput = GameUiHelper.createInputField("输入角色名称", new Vec2(0, -26), new Size(240, 60));
+    const nameInput = GameUiHelper.createInputField(layout.nameInput.placeholder, layout.nameInput.position, layout.nameInput.size);
     dialog.addChild(nameInput.node);
     // 创建按钮（默认置灰，输入名称后可用）
-    const createButton = GameUiHelper.createTexturedButton("confirm_create_role_button", "create_role/start_btn", "", new Vec2(0, -238), new Size(190, 48));
+    const createLayout = layout.createButton;
+    const createButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
     createButton.getComponent(Sprite).grayscale = true;
     createButton.on(Node.EventType.TOUCH_END, () => this.createRole());
     dialog.addChild(createButton);
@@ -171,9 +178,11 @@ export class RoleSelector extends Component {
     view.occupationDescription?.destroy();
     view.occupationPreview?.destroy();
 
-    view.occupationDescription = GameUiHelper.createImage("occupation_description", occupation.description, new Vec2(0, -142), occupation.descriptionSize);
+    const descLayout = roleSelectorLayout.createDialog.occupationDescription;
+    view.occupationDescription = GameUiHelper.createImage("occupation_description", occupation.description, descLayout.position, occupation.descriptionSize);
     view.dialog.addChild(view.occupationDescription);
-    view.occupationPreview = GameUiHelper.createRolePreview("role_creation_preview", 0, occupationId, sex, new Vec2(-245, -95), new Size(200, 360));
+    const previewLayout = roleSelectorLayout.createDialog.occupationPreview;
+    view.occupationPreview = GameUiHelper.createRolePreview("role_creation_preview", 0, occupationId, sex, previewLayout.position, previewLayout.size);
     view.dialog.addChild(view.occupationPreview);
   }
 

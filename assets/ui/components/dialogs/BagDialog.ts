@@ -3,9 +3,7 @@ import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
-
-/** 弹窗名称 */
-const DIALOG_NAME = "bag_dialog";
+import { bagDialogLayout } from "../../../configs/hudLayout";
 
 /**
  * 背包弹窗
@@ -33,7 +31,7 @@ export default class BagDialog {
       this.bagGrid = null;
     }
     // 弹窗框与背包格子由通用零件拼装
-    const dialog = GameUiHelper.createDialog(DIALOG_NAME, "背包");
+    const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title);
     this.bagGrid = new BagGridView((row, col, action) => this.onCellAction(row, col, action));
     this.bagGrid.refresh(StorageManager.findOnlineRole());
     dialog.addChild(this.bagGrid);

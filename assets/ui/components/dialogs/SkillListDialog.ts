@@ -1,15 +1,10 @@
-import { ScrollView, Size, Vec2 } from "cc";
+import { ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import { oeccupationSkills } from "../../../configs/skill";
 import SkillShortcutSettingDialog from "./SkillShortcutSettingDialog";
-
-/** 弹窗名称与标题 */
-const DIALOG_NAME = "skill_list_dialog";
-const DIALOG_TITLE = "技能";
-/** 弹窗尺寸 */
-const DIALOG_SIZE = new Size(280, 400);
+import { skillListDialogLayout } from "../../../configs/hudLayout";
 
 /**
  * 技能列表弹窗
@@ -23,7 +18,7 @@ export default class SkillListDialog {
   /** 打开技能列表弹窗 */
   open() {
     const role = StorageManager.findOnlineRole();
-    const dialog = GameUiHelper.createDialog(DIALOG_NAME, DIALOG_TITLE, new Vec2(), DIALOG_SIZE);
+    const dialog = GameUiHelper.createDialog(skillListDialogLayout.name, skillListDialogLayout.title, new Vec2(), skillListDialogLayout.size);
     const skillList = GameUiHelper.createSkillListView();
     const content = skillList.getComponent(ScrollView).content;
     oeccupationSkills.get(role.occupation).forEach((skillId) => {

@@ -1,11 +1,11 @@
 import { Node } from "cc";
-import { hudImages } from "../../../configs/hudLayout";
+import { uiImages } from "../../../configs/hudLayout";
 import AutoBattle from "../../core/AutoBattle";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
 /**
  * 自动挂机开关按钮（自身即按钮，挂在底部栏中段空档）
- * 点击切换 AutoBattle 的挂机状态，图标随状态切换（关闭=收剑 / 开启=举剑，见 hudImages）；
+ * 点击切换 AutoBattle 的挂机状态，图标随状态切换（关闭=收剑 / 开启=举剑，见 uiImages）；
  * 挂机状态由 AutoBattle 回调同步（挂机在别处被关闭时图标也能刷新）
  * 尺寸与位置见 configs/hudLayout.bottomBar.autoFight
  */
@@ -28,6 +28,6 @@ export default class AutoFightButton extends Node {
 
   /** 按挂机状态切换图标 */
   private refresh(enabled: boolean) {
-    GameUiHelper.updateNodeIcon(this, enabled ? hudImages.autoFightOn : hudImages.autoFightOff);
+    GameUiHelper.updateNodeIcon(this, enabled ? uiImages.autoFightOn : uiImages.autoFightOff);
   }
 }

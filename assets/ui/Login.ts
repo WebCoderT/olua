@@ -1,8 +1,9 @@
-import { _decorator, Color, Component, EditBox, Node, Size, Vec2 } from "cc";
+import { _decorator, Component, EditBox, Node } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
+import { loginLayout } from "../configs/hudLayout";
 const { ccclass } = _decorator;
 
 @ccclass("Login")
@@ -13,22 +14,25 @@ export class Login extends Component {
   start() {
     // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
     applyScreenPolicy();
-    // 背景与 logo
-    this.node.addChild(GameUiHelper.createFullScreenImage("login_background", "login/login_bg"));
+    // 控件位置/尺寸与用图统一见 configs/hudLayout.loginLayout
+    const layout = loginLayout;
+    // 背景
+    this.node.addChild(GameUiHelper.createFullScreenImage("login_background", layout.background));
     // 账号输入框
-    const account = GameUiHelper.createInputField("请输入您的游戏账号", new Vec2(0, -20), new Size(600, 80), "login/icon_user");
+    const account = GameUiHelper.createInputField(layout.account.placeholder, layout.account.position, layout.account.size, layout.account.icon);
     this.accountInput = account.input;
     this.node.addChild(account.node);
     // 密码输入框
-    const password = GameUiHelper.createInputField("请输入您的游戏密码", new Vec2(0, -120), new Size(600, 80), "login/icon_pwd", true);
+    const password = GameUiHelper.createInputField(layout.password.placeholder, layout.password.position, layout.password.size, layout.password.icon, layout.password.password);
     this.passwordInput = password.input;
     this.node.addChild(password.node);
     // 登录按钮
-    const loginButton = GameUiHelper.createTexturedButton("login_button", "login/button", "账号登录", new Vec2(0, -260), new Size(300, 80), new Color("#f4fc00"), 30);
+    const button = layout.loginButton;
+    const loginButton = GameUiHelper.createTexturedButton(button.name, button.image, button.text, button.position, button.size, button.textColor, button.fontSize);
     this.node.addChild(loginButton);
     loginButton.on(Node.EventType.TOUCH_END, this.login, this);
     // logo
-    this.node.addChild(GameUiHelper.createImage("game_logo", "logo", new Vec2(0, 200), new Size(600, 300)));
+    this.node.addChild(GameUiHelper.createImage(layout.logo.name, layout.logo.image, layout.logo.position, layout.logo.size));
     // 清空缓存------开发时使用
     StorageManager.clear();
   }

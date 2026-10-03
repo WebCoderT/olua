@@ -1,4 +1,4 @@
-import { Node, Size, Vec2 } from "cc";
+import { Node } from "cc";
 import { Role } from "../../../entities/Role";
 import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import { getItem } from "../../../configs/items";
@@ -6,12 +6,7 @@ import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction, PointerButton } from "../../utils/input/Pointer";
 import { clearChildren } from "../../utils/node/NodeTree";
-
-/** 背包网格布局（弹窗内固定几何） */
-const GRID_POSITION = new Vec2(0, 17);
-const GRID_SIZE = new Size(580, 368);
-/** 行间距：与 createRoleBagCellRow 内的行容器间距一致 */
-const GRID_SPACING = 3;
+import { bagGridLayout } from "../../../configs/hudLayout";
 
 /**
  * 背包格子的操作动作
@@ -35,9 +30,10 @@ export default class BagGridView extends Node {
   private onCellAction: BagCellHandler;
 
   constructor(onCellAction: BagCellHandler) {
-    super("bag_grid");
+    super(bagGridLayout.name);
     this.onCellAction = onCellAction;
-    GameUiHelper.applyColumnStyle(this, GRID_SPACING, GRID_POSITION, GRID_SIZE);
+    // 网格几何见 configs/hudLayout.bagGridLayout（行容器尺寸与格子尺寸决定行列数）
+    GameUiHelper.applyColumnStyle(this, bagGridLayout.rowSpacing, bagGridLayout.position, bagGridLayout.size);
     // 行与格子由零件工厂生成（行容器为格子的 flex row）
     this.cells = GameUiHelper.createRoleBagCellRow(this);
   }

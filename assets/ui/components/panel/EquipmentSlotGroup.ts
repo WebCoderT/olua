@@ -1,4 +1,4 @@
-import { Node, Size, Vec2 } from "cc";
+import { Node } from "cc";
 import { Equipment, EQUIPMENT_TYPE } from "../../../types/good";
 import { equipmentSlots } from "../../../configs/equipments";
 import { getEquipment } from "../../../configs/items";
@@ -7,25 +7,16 @@ import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { bindPointerAction } from "../../utils/input/Pointer";
 import { clearChildren } from "../../utils/node/NodeTree";
+import { equipmentSlotLayout } from "../../../configs/hudLayout";
 
 /** 装备槽分组方向（对应装备槽配置的 position） */
 export type EquipmentSlotSide = "left" | "right" | "bottom";
 
-/** 角色信息弹窗内三个装备槽分组的顺序 */
-export const EQUIPMENT_SLOT_SIDES: EquipmentSlotSide[] = ["left", "right", "bottom"];
+/** 角色信息弹窗内三个装备槽分组的顺序（配置在 configs/hudLayout.equipmentSlotLayout.sides） */
+export const EQUIPMENT_SLOT_SIDES: EquipmentSlotSide[] = equipmentSlotLayout.sides;
 
 /** 装备槽操作回调：右键点击槽位 = 脱下（由弹窗转交数据层判定与提示） */
 export type EquipmentSlotHandler = (type: EQUIPMENT_TYPE) => void;
-
-/** 槽位间距（弹窗内固定几何） */
-const SLOT_SPACING = 10;
-
-/** 各分组布局（弹窗内固定几何） */
-const GROUP_LAYOUT: Record<EquipmentSlotSide, { name: string; position: Vec2; size: Size; horizontal: boolean }> = {
-  left: { name: "equipment_slots_left", position: new Vec2(-240, 40), size: new Size(50, 290), horizontal: false },
-  right: { name: "equipment_slots_right", position: new Vec2(80, 40), size: new Size(50, 290), horizontal: false },
-  bottom: { name: "equipment_slots_bottom", position: new Vec2(-75, -140), size: new Size(170, 50), horizontal: true },
-};
 
 /**
  * 装备槽分组组件（自身即一个方向的槽位容器：左列/右列/底部横排）
@@ -44,11 +35,11 @@ export default class EquipmentSlotGroup extends Node {
    * @param onUnequip 槽位右键操作回调
    */
   constructor(side: EquipmentSlotSide, equipments: { [key in EQUIPMENT_TYPE]: string | null }, onUnequip: EquipmentSlotHandler) {
-    const layout = GROUP_LAYOUT[side];
+    const layout = equipmentSlotLayout.groups[side];
     super(layout.name);
     this.onUnequip = onUnequip;
-    if (layout.horizontal) GameUiHelper.applyRowStyle(this, SLOT_SPACING, layout.position, layout.size);
-    else GameUiHelper.applyColumnStyle(this, SLOT_SPACING, layout.position, layout.size);
+    if (layout.horizontal) GameUiHelper.applyRowStyle(this, equipmentSlotLayout.slotSpacing, layout.position, layout.size);
+    else GameUiHelper.applyColumnStyle(this, equipmentSlotLayout.slotSpacing, layout.position, layout.size);
     equipmentSlots.forEach((slotConfig, type) => {
       // 只生成本方向的槽位，槽位顺序与配置顺序一致
       if (slotConfig.position !== side) return;

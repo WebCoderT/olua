@@ -1,4 +1,4 @@
-import { isValid, Node, Size, Vec2 } from "cc";
+import { isValid, Node } from "cc";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -7,9 +7,7 @@ import { getEquipment } from "../../../configs/items";
 import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlotGroup";
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
-
-/** 弹窗名称 */
-const DIALOG_NAME = "role_info_dialog";
+import { roleInfoDialogLayout } from "../../../configs/hudLayout";
 
 /**
  * 角色信息弹窗
@@ -38,11 +36,13 @@ export default class RoleInfoDialog {
     if (this.dialog && !isValid(this.dialog)) this.reset();
     // 角色信息
     const role = StorageManager.findOnlineRole();
-    // 弹窗框
-    this.dialog = GameUiHelper.createDialog(DIALOG_NAME, "角色信息");
+    // 弹窗框（尺寸与装饰背景见 configs/hudLayout.roleInfoDialogLayout）
+    this.dialog = GameUiHelper.createDialog(roleInfoDialogLayout.name, roleInfoDialogLayout.title);
     // 装饰背景与战斗力图标
-    const bg = GameUiHelper.createImage("role_information_background", "common/personal-information-bg", new Vec2(-78, -19), new Size(431, 452));
-    bg.addChild(GameUiHelper.createImage("combat_icon", "common/combat", new Vec2(-7, -225), new Size(100, 50)));
+    const bgLayout = roleInfoDialogLayout.background;
+    const bg = GameUiHelper.createImage("role_information_background", bgLayout.image, bgLayout.position, bgLayout.size);
+    const combatLayout = roleInfoDialogLayout.combatIcon;
+    bg.addChild(GameUiHelper.createImage("combat_icon", combatLayout.image, combatLayout.position, combatLayout.size));
     this.dialog.addChild(bg);
     // 装备槽分组（左/右/底三个方向），右键槽位脱下装备
     this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) => new EquipmentSlotGroup(side, role.equipments, (type) => StorageManager.unequipToBag(type)));

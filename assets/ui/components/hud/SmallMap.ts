@@ -1,7 +1,7 @@
 import { Graphics, isValid, Label, Node, Size, Vec2, Vec3 } from "cc";
 import { maps } from "../../../configs/map";
 import { smallMapConfig } from "../../../configs/smallMap";
-import { hudImages, smallMapImage, smallMapLayout } from "../../../configs/hudLayout";
+import { uiImages, smallMapImage, smallMapLayout } from "../../../configs/hudLayout";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
@@ -66,9 +66,9 @@ export default class SmallMap extends Node {
   private createMapArea() {
     const layout = smallMapLayout;
     // 地图占位底图（其中心即本组件所有子节点位置的坐标原点）
-    this.addChild(GameUiHelper.createImage("small_map_placeholder", hudImages.smallMapFrame, new Vec2(), layout.mapFrameSize));
+    this.addChild(GameUiHelper.createImage("small_map_placeholder", uiImages.smallMapFrame, new Vec2(), layout.mapFrameSize));
     // 地图名称条：底边与地图内容区上边缘齐平（紧挨着上方）
-    const nameBar = GameUiHelper.createImage("small_map_name_bar", hudImages.smallMapNameBar, layout.nameBar.position, layout.nameBar.size);
+    const nameBar = GameUiHelper.createImage("small_map_name_bar", uiImages.smallMapNameBar, layout.nameBar.position, layout.nameBar.size);
     this.mapNameLabel = GameUiHelper.createText("small_map_name", "", layout.nameBar.fontSize, new Vec2(), layout.nameBar.size, layout.nameBar.color).getComponent(Label);
     nameBar.addChild(this.mapNameLabel.node);
     this.addChild(nameBar);
@@ -84,11 +84,11 @@ export default class SmallMap extends Node {
     // 容器宽度取两颗标签加空档的总宽，从而整体相对地图内容区居中
     const tagRow = layout.tagRow;
     const tags = GameUiHelper.createRow("small_map_tags", tagRow.gap, tagRow.position, new Size(tagRow.size.width * 2 + tagRow.gap, tagRow.size.height));
-    tags.addChild(GameUiHelper.createImage("small_map_ranking_list", hudImages.smallMapRankingList, new Vec2(), tagRow.size));
-    tags.addChild(GameUiHelper.createImage("small_map_server_line", hudImages.smallMapServerLine, new Vec2(), tagRow.size));
+    tags.addChild(GameUiHelper.createImage("small_map_ranking_list", uiImages.smallMapRankingList, new Vec2(), tagRow.size));
+    tags.addChild(GameUiHelper.createImage("small_map_server_line", uiImages.smallMapServerLine, new Vec2(), tagRow.size));
     this.addChild(tags);
     // 世界坐标条：线路/排行榜下方
-    const positionFrame = GameUiHelper.createImage("small_map_position", hudImages.smallMapPosition, layout.positionBar.position, layout.positionBar.size);
+    const positionFrame = GameUiHelper.createImage("small_map_position", uiImages.smallMapPosition, layout.positionBar.position, layout.positionBar.size);
     this.positionLabel = GameUiHelper.createText("small_map_position_text", "", layout.positionBar.fontSize, new Vec2(), layout.positionBar.size).getComponent(Label);
     positionFrame.addChild(this.positionLabel.node);
     this.addChild(positionFrame);

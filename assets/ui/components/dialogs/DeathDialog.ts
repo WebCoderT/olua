@@ -1,6 +1,7 @@
-import { Color, Graphics, Node, Size, UITransform, Vec2 } from "cc";
+import { Graphics, Node, UITransform } from "cc";
 import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import { deathDialogLayout } from "../../../configs/hudLayout";
 
 /** 复活方式回调（由组合根注入，见 ui/Game.reviveRole） */
 interface DeathDialogCallbacks {
@@ -19,20 +20,23 @@ interface DeathDialogCallbacks {
  */
 export default class DeathDialog extends Node {
   constructor(callbacks: DeathDialogCallbacks) {
-    super("death_dialog");
+    // 布局与配色见 configs/hudLayout.deathDialogLayout
+    const layout = deathDialogLayout;
+    super(layout.name);
     const screenSize = UiHelper.getScreenSize();
     this.addComponent(UITransform).setContentSize(screenSize.width, screenSize.height);
     // 黑色半透明遮罩（Graphics 纯色填充，不需要图片资源）
     const mask = new Node("death_mask");
     const graphics = mask.addComponent(Graphics);
-    graphics.fillColor = new Color(0, 0, 0, 160);
+    graphics.fillColor = layout.maskColor;
     graphics.rect(-screenSize.width / 2, -screenSize.height / 2, screenSize.width, screenSize.height);
     graphics.fill();
     this.addChild(mask);
     // 死亡提示与两个复活按钮（居中偏下排布）
-    this.addChild(UiHelper.createLabel("death_title", "您已死亡", Color.WHITE, 36, new Vec2(0, 90), new Size(400, 60)));
-    const reviveInPlaceButton = GameUiHelper.createMiddleButton("revive_in_place_button", "原地复活", new Vec2(-140, -30));
-    const reviveSafeButton = GameUiHelper.createMiddleButton("revive_safe_button", "安全复活", new Vec2(140, -30));
+    const title = layout.title;
+    this.addChild(UiHelper.createLabel("death_title", title.text, title.color, title.fontSize, title.position, title.size));
+    const reviveInPlaceButton = GameUiHelper.createMiddleButton(layout.reviveInPlaceButton.name, layout.reviveInPlaceButton.text, layout.reviveInPlaceButton.position);
+    const reviveSafeButton = GameUiHelper.createMiddleButton(layout.reviveSafeButton.name, layout.reviveSafeButton.text, layout.reviveSafeButton.position);
     reviveInPlaceButton.on(Node.EventType.TOUCH_END, () => callbacks.onReviveInPlace(), this);
     reviveSafeButton.on(Node.EventType.TOUCH_END, () => callbacks.onReviveSafe(), this);
     this.addChild(reviveInPlaceButton);

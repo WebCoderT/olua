@@ -1,28 +1,15 @@
-import { Color, isValid, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc";
+import { Color, isValid, Label, Node, ScrollView, Sprite, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
 import { getSoulLevel, soulLevels, soulMaxLevel } from "../../../configs/soul";
+import { warSoulDialogLayout } from "../../../configs/hudLayout";
 import { clearChildren } from "../../utils/node/NodeTree";
 
-/** 弹窗名称与标题 */
-const DIALOG_NAME = "war_soul_dialog";
-const DIALOG_TITLE = "战魂";
-/** 弹窗尺寸 */
-const DIALOG_SIZE = new Size(880, 560);
-
-/** 布局（子件坐标以弹窗中心为原点） */
-const SOUL_LIST_POSITION = new Vec2(-320, -5);
-const SOUL_LIST_SIZE = new Size(210, 490);
-/** 中间战魂动画与信息 */
-const SOUL_ANIMATION_POSITION = new Vec2(0, 30);
-const SOUL_INFO_POSITION = new Vec2(0, -145);
-/** 右侧属性面板 / 绑定元宝 / 升级按钮 */
-const SOUL_ATTRIBUTE_POSITION = new Vec2(250, 240);
-const SOUL_BIND_GOLD_POSITION = new Vec2(250, -160);
-const SOUL_UPGRADE_BUTTON_POSITION = new Vec2(250, -205);
+/** 弹窗布局（尺寸与各栏位置、配色统一见 configs/hudLayout.warSoulDialogLayout） */
+const layout = warSoulDialogLayout;
 
 /**
  * 战魂弹窗（左中右三栏）
@@ -48,22 +35,22 @@ export default class WarSoulDialog {
     const role = StorageManager.findOnlineRole();
     // 默认预览当前战魂等级（尚未激活时预览 1 阶）
     this.selectedLevel = Math.max(1, role?.soulOfWar ?? 1);
-    const dialog = GameUiHelper.createDialog(DIALOG_NAME, DIALOG_TITLE, new Vec2(), DIALOG_SIZE);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
     // 左：战魂等级列表（可上下滑动）
-    const list = GameUiHelper.createScrollView("soul_list", SOUL_LIST_POSITION, SOUL_LIST_SIZE);
+    const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listContent = list.getComponent(ScrollView).content;
     dialog.addChild(list);
     // 中：战魂动画与信息（槽位节点内容随选中等级重建）
-    this.animationSlot = UiHelper.createGroupNode("soul_animation_slot", SOUL_ANIMATION_POSITION);
+    this.animationSlot = UiHelper.createGroupNode("soul_animation_slot", layout.animation.position);
     dialog.addChild(this.animationSlot);
-    this.infoSlot = UiHelper.createGroupNode("soul_info_slot", SOUL_INFO_POSITION);
+    this.infoSlot = UiHelper.createGroupNode("soul_info_slot", layout.info.position);
     dialog.addChild(this.infoSlot);
     // 右：属性面板 / 绑定元宝 / 升级按钮
-    this.attributeSlot = UiHelper.createGroupNode("soul_attribute_slot", SOUL_ATTRIBUTE_POSITION);
+    this.attributeSlot = UiHelper.createGroupNode("soul_attribute_slot", layout.attribute.position);
     dialog.addChild(this.attributeSlot);
-    this.bindGoldLabel = UiHelper.createLabel("soul_bind_gold", "", Color.WHITE, 12, SOUL_BIND_GOLD_POSITION, new Size(200, 16));
+    this.bindGoldLabel = UiHelper.createLabel("soul_bind_gold", "", Color.WHITE, layout.bindGold.fontSize, layout.bindGold.position, layout.bindGold.size);
     dialog.addChild(this.bindGoldLabel);
-    this.upgradeButton = GameUiHelper.createMiddleButton("soul_upgrade_button", "升 级", SOUL_UPGRADE_BUTTON_POSITION);
+    this.upgradeButton = GameUiHelper.createMiddleButton("soul_upgrade_button", layout.upgradeButton.text, layout.upgradeButton.position);
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
       () => {
@@ -105,13 +92,14 @@ export default class WarSoulDialog {
     if (this.animationNode && isValid(this.animationNode)) this.animationNode.destroy();
     this.animationNode = GameUiHelper.createSoulAnimation(config);
     this.animationSlot.addChild(this.animationNode);
-    // 中间信息：名称 / 描述 / 当前战魂
+    // 中间信息：名称 / 描述 / 当前战魂（位置、尺寸、字号与配色见 layout.info）
     clearChildren(this.infoSlot);
-    this.infoSlot.addChild(UiHelper.createLabel("soul_name", config.label, Color.WHITE, 16, new Vec2(0, 42), new Size(320, 22)));
-    this.infoSlot.addChild(UiHelper.createLabel("soul_desc", config.description, new Color(170, 170, 170), 11, new Vec2(0, 20), new Size(330, 16)));
+    const info = layout.info;
+    this.infoSlot.addChild(UiHelper.createLabel("soul_name", config.label, info.name.color, info.name.fontSize, info.name.position, info.name.size));
+    this.infoSlot.addChild(UiHelper.createLabel("soul_desc", config.description, info.description.color, info.description.fontSize, info.description.position, info.description.size));
     const current = getSoulLevel(role.soulOfWar);
     this.infoSlot.addChild(
-      UiHelper.createLabel("soul_current", current ? `当前战魂：${role.soulOfWar} 阶 · ${current.label}` : "尚未激活战魂", new Color(255, 223, 170), 12, new Vec2(0, -22), new Size(320, 18)),
+      UiHelper.createLabel("soul_current", current ? `当前战魂：${role.soulOfWar} 阶 · ${current.label}` : "尚未激活战魂", info.current.color, info.current.fontSize, info.current.position, info.current.size),
     );
     // 外显勾选框：勾选后把当前等级的战魂动画挂到主角右上角（状态持久在角色数据 role.soulShow）
     // 勾选后立刻刷新主角身上的战魂动画（RoleUIManager → RoleDisplay，后者用前重读角色数据，见 RoleDisplay.updateSoulShow）
@@ -121,7 +109,7 @@ export default class WarSoulDialog {
       RoleUIManager.updateSoulShow();
       this.refresh();
     });
-    showToggle.setPosition(0, -48);
+    showToggle.setPosition(info.toggle.position.x, info.toggle.position.y);
     this.infoSlot.addChild(showToggle);
     // 右侧属性：所选等级属性 + 下一级增量
     clearChildren(this.attributeSlot);
@@ -132,11 +120,11 @@ export default class WarSoulDialog {
       const label = this.upgradeButton.getChildByName("soul_upgrade_button_label")?.getComponent(Label);
       const maxed = role.soulOfWar >= soulMaxLevel;
       const next = getSoulLevel(role.soulOfWar + 1);
-      if (label) label.string = maxed ? "已满级" : "升 级";
+      if (label) label.string = maxed ? layout.upgradeButton.maxedText : layout.upgradeButton.text;
       if (sprite) sprite.grayscale = maxed;
       if (label && !maxed && next) {
         // 按钮下方提示下一级消耗（绑定元宝不足时点击会被 StorageManager 拦下并提示）
-        label.string = "升 级";
+        label.string = layout.upgradeButton.text;
       }
     }
     if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = `绑定元宝：${role.bindGold}`;

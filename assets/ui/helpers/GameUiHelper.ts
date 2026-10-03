@@ -9,7 +9,6 @@ import {
   Label,
   LabelAtlas,
   Layout,
-  math,
   Node,
   ProgressBar,
   resources,
@@ -45,7 +44,25 @@ import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
 import { getAnchoredPosition, getVisibleSize } from "../utils/layout/ScreenLayout";
-import { avatarImage, bottomBarLayout, hudImages, hudSize, monsterInfoPanelLayout, roleInfoBarLayout, smallMapLayout, tipsLayout } from "../../configs/hudLayout";
+import {
+  avatarImage,
+  bottomBarLayout,
+  bagGridLayout,
+  createRolePreviewImage,
+  dialogFrame,
+  equipmentSlotLayout,
+  goodDetailLayout,
+  monsterInfoPanelLayout,
+  roleAttributeListLayout,
+  roleInfoBarLayout,
+  roleSelectorLayout,
+  skillListDialogLayout,
+  smallMapLayout,
+  tipsLayout,
+  uiImages,
+  uiSize,
+  warSoulDialogLayout,
+} from "../../configs/hudLayout";
 
 //#region 类型定义
 
@@ -101,30 +118,10 @@ const COLLIDER_RANGE_AREA_COLOR = new Color(255, 208, 64);
 
 //#endregion
 
-//#region 战魂常量
+//#region 战魂
 
-/** 战魂卡片（左侧列表行）尺寸 */
-const SOUL_CARD_SIZE = new Size(192, 44);
-/** 战魂卡片选中色（金色描边与文字） */
-const SOUL_CARD_SELECTED_COLOR = new Color(255, 214, 102);
-/** 战魂未激活的文字颜色 */
-const SOUL_CARD_LOCKED_COLOR = new Color(140, 140, 140);
-/** 战魂已激活状态文字颜色 */
-const SOUL_CARD_ACTIVE_COLOR = new Color(120, 220, 120);
-/** 战魂属性面板标题颜色 */
-const SOUL_TITLE_COLOR = new Color(255, 214, 102);
-/** 战魂属性行名颜色 */
-const SOUL_ROW_NAME_COLOR = new Color(170, 170, 170);
-/** 战魂下一级增量文字颜色 */
-const SOUL_ROW_DIFF_COLOR = new Color(120, 220, 120);
-/** 战魂属性面板宽度 */
-const SOUL_ATTRIBUTE_WIDTH = 210;
-/** 战魂属性行间距 */
-const SOUL_ATTRIBUTE_SPACING = 6;
-/** 战魂动画节点尺寸 */
-const SOUL_ANIMATION_SIZE = new Size(300, 300);
-/** 外显勾选框尺寸（弹窗中间信息区底部：小方框 + 「外显」文字） */
-const SOUL_SHOW_TOGGLE_SIZE = new Size(90, 22);
+/** 战魂弹窗布局（卡片列表 / 动画 / 信息 / 属性 / 绑定元宝 / 升级按钮，统一见 configs/hudLayout.warSoulDialogLayout） */
+const soul = warSoulDialogLayout;
 
 //#endregion
 
@@ -222,7 +219,7 @@ export default class GameUiHelper {
 
   /** 创建带图标的输入框组（背景 + 可选图标 + 输入框），返回背景节点与输入框节点 */
   static createInputField(placeholder: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 80), icon?: string, password: boolean = false) {
-    const background = UiHelper.createSprite("input_background", "login/input_bg", position, size);
+    const background = UiHelper.createSprite("input_background", uiImages.loginInputBackground, position, size);
     if (icon) background.addChild(UiHelper.createSprite("input_icon", icon, new Vec2(-size.width / 2 + 60, -6), new Size(40, 40)));
     const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, -6), new Vec2(size.width - 200, 60), password);
     background.addChild(input);
@@ -269,12 +266,12 @@ export default class GameUiHelper {
   static createCombatPower(role: Role, position: Vec2 = new Vec2()) {
     const { iconSize, labelGap } = roleInfoBarLayout.combat;
     const node = UiHelper.createNode("combat_power", position);
-    node.addChild(UiHelper.createSprite("combat_icon", hudImages.combatIcon, new Vec2(), iconSize));
+    node.addChild(UiHelper.createSprite("combat_icon", uiImages.combatIcon, new Vec2(), iconSize));
     const labelX = iconSize.width / 2 + labelGap;
     const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(labelX, 0), new Size(200, iconSize.height), Label.HorizontalAlign.LEFT);
     labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const combatLabel = labelNode.getComponent(Label);
-    resources.load(hudImages.combatFont, LabelAtlas, (error, atlas) => {
+    resources.load(uiImages.combatFont, LabelAtlas, (error, atlas) => {
       if (!error && atlas && combatLabel.isValid) combatLabel.font = atlas;
     });
     node.addChild(labelNode);
@@ -292,7 +289,7 @@ export default class GameUiHelper {
   }
 
   /** 创建装备插槽（名称即装备类型，便于按类型查找） */
-  static createEquipmentSlot(type: EQUIPMENT_TYPE, imageSrc: string, size: Size = new Size(50, 50)) {
+  static createEquipmentSlot(type: EQUIPMENT_TYPE, imageSrc: string, size: Size = equipmentSlotLayout.slotSize) {
     const slot = UiHelper.createSprite(`equipment_slot_${type}`, imageSrc, new Vec2(), size);
     slot.name = type;
     return slot;
@@ -326,7 +323,7 @@ export default class GameUiHelper {
     node.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     node.getComponent(Sprite).trim = false;
     const animationPlayer = node.addComponent(AnimationPlayer);
-    animationPlayer.animationName = `create_role/plist/create_role_${occupation}_${sex}_stand@0`;
+    animationPlayer.animationName = createRolePreviewImage(occupation, sex);
     animationPlayer.wrapMode = AnimationClip.WrapMode.Loop;
     animationPlayer.sample = 8;
     role.addChild(node);
@@ -337,26 +334,31 @@ export default class GameUiHelper {
 
   //#region 选角开关组零件
 
-  /** 创建性别选择开关组（选中值为节点名 "1"/"2"） */
-  static createSexToggleGroup(position: Vec2 = new Vec2(0, 148)) {
+  /** 创建性别选择开关组（选中值为节点名 "1"/"2"；位置与开关几何见 configs/hudLayout.roleSelectorLayout.createDialog.sexToggle） */
+  static createSexToggleGroup(position: Vec2 = roleSelectorLayout.createDialog.sexToggle.position) {
+    const { spacing, toggleSize } = roleSelectorLayout.createDialog.sexToggle;
     return UiHelper.createToggleGroup(
       "role_sex_toggle_group",
-      [UiHelper.createToggle("1", "create_role/1_1", "create_role/1_0", new Vec2(), new Size(48, 48)), UiHelper.createToggle("2", "create_role/2_1", "create_role/2_0", new Vec2(), new Size(48, 48))],
-      30,
+      [
+        UiHelper.createToggle("1", uiImages.sexToggle.boy.on, uiImages.sexToggle.boy.off, new Vec2(), toggleSize),
+        UiHelper.createToggle("2", uiImages.sexToggle.girl.on, uiImages.sexToggle.girl.off, new Vec2(), toggleSize),
+      ],
+      spacing,
       position,
     );
   }
 
-  /** 创建职业选择开关组（选中值为 OECCUPATION 枚举） */
-  static createOccupationToggleGroup(position: Vec2 = new Vec2(0, 52)) {
+  /** 创建职业选择开关组（选中值为 OECCUPATION 枚举；位置与开关几何见 configs/hudLayout.roleSelectorLayout.createDialog.occupationToggle） */
+  static createOccupationToggleGroup(position: Vec2 = roleSelectorLayout.createDialog.occupationToggle.position) {
+    const { spacing, toggleSize } = roleSelectorLayout.createDialog.occupationToggle;
     return UiHelper.createToggleGroup(
       "role_occupation_toggle_group",
       [
-        UiHelper.createToggle(OECCUPATION.ZHAN, "create_role/3_1", "create_role/3_0", new Vec2(), new Size(48, 48)),
-        UiHelper.createToggle(OECCUPATION.FA, "create_role/4_1", "create_role/4_0", new Vec2(), new Size(48, 48)),
-        UiHelper.createToggle(OECCUPATION.DAO, "create_role/5_1", "create_role/5_0", new Vec2(), new Size(48, 48)),
+        UiHelper.createToggle(OECCUPATION.ZHAN, uiImages.occupationToggle.zhan.on, uiImages.occupationToggle.zhan.off, new Vec2(), toggleSize),
+        UiHelper.createToggle(OECCUPATION.FA, uiImages.occupationToggle.fa.on, uiImages.occupationToggle.fa.off, new Vec2(), toggleSize),
+        UiHelper.createToggle(OECCUPATION.DAO, uiImages.occupationToggle.dao.on, uiImages.occupationToggle.dao.off, new Vec2(), toggleSize),
       ],
-      30,
+      spacing,
       position,
     );
   }
@@ -391,7 +393,7 @@ export default class GameUiHelper {
   /**
    * 为已有节点施加自动挂机开关按钮样式（组件自身即按钮时使用）
    * 圆形图标随挂机状态切换（关闭=收剑 / 开启=举剑），位置在底部栏中段（快捷键栏与功能按键区之间的空档），
-   * 图标下方带「挂机」文字；图标资源见 hudImages.autoFightOff / autoFightOn，切换由组件调 updateNodeIcon
+   * 图标下方带「挂机」文字；图标资源见 uiImages.autoFightOff / autoFightOn，切换由组件调 updateNodeIcon
    * @param node 目标节点
    */
   static applyAutoFightButtonStyle(node: Node) {
@@ -402,7 +404,7 @@ export default class GameUiHelper {
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     sprite.trim = false;
-    this.updateNodeIcon(node, hudImages.autoFightOff);
+    this.updateNodeIcon(node, uiImages.autoFightOff);
     node.addChild(UiHelper.createLabel("auto_fight_label", layout.label.text, Color.WHITE, layout.label.fontSize, layout.label.position, layout.label.size));
     return sprite;
   }
@@ -420,12 +422,12 @@ export default class GameUiHelper {
    * @return 经验条
    */
   static createExpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    return this.createBar(name, progress, "", hudImages.expBarFill, position, size);
+    return this.createBar(name, progress, "", uiImages.expBarFill, position, size);
   }
 
-  /** 创建血条（底图与填充图见 hudImages.hpBarBackground / hpBarFill） */
+  /** 创建血条（底图与填充图见 uiImages.hpBarBackground / hpBarFill） */
   static createHpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    return this.createBar(name, progress, hudImages.hpBarBackground, hudImages.hpBarFill, position, size, Color.RED);
+    return this.createBar(name, progress, uiImages.hpBarBackground, uiImages.hpBarFill, position, size, Color.RED);
   }
 
   /**
@@ -659,8 +661,8 @@ export default class GameUiHelper {
   /**
    * 创建游戏通用弹窗背景
    */
-  static createDialogBg(name: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
-    const dialog = UiHelper.createSprite(name, "common/popup-bg", position, size);
+  static createDialogBg(name: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
+    const dialog = UiHelper.createSprite(name, dialogFrame.background, position, size);
     dialog.name = name;
     dialog.addComponent(Draggable);
     return dialog;
@@ -669,28 +671,37 @@ export default class GameUiHelper {
   /**
    * 创建游戏通用弹窗标题
    */
-  static createDialogTitle(name: string, title: string, position: Vec2 = new Vec2(0, 228)) {
-    return UiHelper.createLabel(name, title, math.color("#FF8B8B"), 14, position, new Size(300, 30));
+  static createDialogTitle(name: string, title: string, position: Vec2 = dialogFrame.title.defaultPosition) {
+    return UiHelper.createLabel(name, title, dialogFrame.title.color, dialogFrame.title.fontSize, position, dialogFrame.title.defaultSize);
   }
 
   /**
    * 创建游戏通用关闭按钮
    */
-  static createCloseButton(name: string, position: Vec2 = new Vec2(), size: Size = new Size(30, 30)) {
-    return UiHelper.createButton(name, "common/close-button", position, size);
+  static createCloseButton(name: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.closeButton.size) {
+    return UiHelper.createButton(name, dialogFrame.closeImage, position, size);
   }
 
   /**
    * 创建通用弹窗
    */
-  static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 500)) {
+  static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
     // 弹窗
     const dialog = this.createDialogBg(name, position, size);
     // 关闭弹窗按钮
-    const closeButton = UiHelper.createButton(`${name}_close_button`, "common/close-button", new Vec2(size.width / 2 - 15, size.height / 2 - 15), new Size(30, 30));
+    const inset = dialogFrame.closeButton.inset;
+    const closeButton = UiHelper.createButton(`${name}_close_button`, dialogFrame.closeImage, new Vec2(size.width / 2 - inset, size.height / 2 - inset), dialogFrame.closeButton.size);
     dialog.addChild(closeButton);
     // 弹窗标题
-    const dialogTitle = UiHelper.createLabel(`${name}_title`, title, math.color("#FF8B8B"), 14, new Vec2(0, size.height / 2 - 15), new Size(size.width - 60, 30));
+    const titleHeight = dialogFrame.title.height;
+    const dialogTitle = UiHelper.createLabel(
+      `${name}_title`,
+      title,
+      dialogFrame.title.color,
+      dialogFrame.title.fontSize,
+      new Vec2(0, size.height / 2 - dialogFrame.title.insetTop),
+      new Size(size.width - dialogFrame.title.widthPadding, titleHeight),
+    );
     dialog.addChild(dialogTitle);
     // 添加关闭功能
     closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy(), this);
@@ -701,27 +712,27 @@ export default class GameUiHelper {
    * 创建游戏大按钮
    */
   static createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const bigButton = UiHelper.createButton(name, hudImages.bigButtonBackground, position, hudSize.bigButtonSize);
+    const bigButton = UiHelper.createButton(name, uiImages.bigButtonBackground, position, uiSize.bigButtonSize);
     bigButton.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.bigButtonFontSize, new Vec2(), hudSize.bigButtonSize);
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, uiSize.bigButtonFontSize, new Vec2(), uiSize.bigButtonSize);
     bigButton.addChild(label);
     return bigButton;
   }
 
   /** 创建游戏中按钮 */
   static createMiddleButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const middleButton = UiHelper.createButton(name, hudImages.middleButtonBackground, position, hudSize.middleButtonSize);
+    const middleButton = UiHelper.createButton(name, uiImages.middleButtonBackground, position, uiSize.middleButtonSize);
     middleButton.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.middleButtonFontSize, new Vec2(), hudSize.middleButtonSize);
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, uiSize.middleButtonFontSize, new Vec2(), uiSize.middleButtonSize);
     middleButton.addChild(label);
     return middleButton;
   }
 
   /** 创建游戏小按钮 */
   static createSmallButtion(name: string, text: string, position: Vec2 = new Vec2()) {
-    const button = UiHelper.createButton(name, hudImages.smallButtonBackground, position, hudSize.smallButtonSize);
+    const button = UiHelper.createButton(name, uiImages.smallButtonBackground, position, uiSize.smallButtonSize);
     button.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.smallButtonFontSize, new Vec2(), hudSize.smallButtonSize);
+    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, uiSize.smallButtonFontSize, new Vec2(), uiSize.smallButtonSize);
     button.addChild(label);
     return button;
   }
@@ -739,7 +750,7 @@ export default class GameUiHelper {
    */
   static createSoulCard(config: SoulLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
     const activated = config.level <= currentLevel;
-    const card = UiHelper.createNode(`soul_card_${config.level}`, new Vec2(), SOUL_CARD_SIZE);
+    const card = UiHelper.createNode(`soul_card_${config.level}`, new Vec2(), soul.list.cardSize);
     const button = card.addComponent(Button);
     button.transition = Button.Transition.SCALE;
     // 选中描边（后添加绘制在文字之下，故先加描边再加文字）
@@ -747,14 +758,33 @@ export default class GameUiHelper {
       const border = new Node("soul_card_border");
       const graphics = border.addComponent(Graphics);
       graphics.lineWidth = 2;
-      graphics.strokeColor = SOUL_CARD_SELECTED_COLOR;
-      graphics.rect(-SOUL_CARD_SIZE.width / 2, -SOUL_CARD_SIZE.height / 2, SOUL_CARD_SIZE.width, SOUL_CARD_SIZE.height);
+      graphics.strokeColor = soul.list.selectedColor;
+      graphics.rect(-soul.list.cardSize.width / 2, -soul.list.cardSize.height / 2, soul.list.cardSize.width, soul.list.cardSize.height);
       graphics.stroke();
       card.addChild(border);
     }
-    const nameColor = selected ? SOUL_CARD_SELECTED_COLOR : activated ? Color.WHITE : SOUL_CARD_LOCKED_COLOR;
-    card.addChild(UiHelper.createLabel("soul_card_label", `${config.level} 阶 · ${config.label}`, nameColor, 13, new Vec2(-8, 0), new Size(SOUL_CARD_SIZE.width - 70, SOUL_CARD_SIZE.height), Label.HorizontalAlign.LEFT));
-    card.addChild(UiHelper.createLabel("soul_card_state", activated ? "已激活" : "未激活", activated ? SOUL_CARD_ACTIVE_COLOR : SOUL_CARD_LOCKED_COLOR, 11, new Vec2(SOUL_CARD_SIZE.width / 2 - 36, 0), new Size(52, SOUL_CARD_SIZE.height)));
+    const nameColor = selected ? soul.list.selectedColor : activated ? Color.WHITE : soul.list.lockedColor;
+    card.addChild(
+      UiHelper.createLabel(
+        "soul_card_label",
+        `${config.level} 阶 · ${config.label}`,
+        nameColor,
+        soul.list.cardFontSize,
+        new Vec2(-8, 0),
+        new Size(soul.list.cardSize.width - 70, soul.list.cardSize.height),
+        Label.HorizontalAlign.LEFT,
+      ),
+    );
+    card.addChild(
+      UiHelper.createLabel(
+        "soul_card_state",
+        activated ? "已激活" : "未激活",
+        activated ? soul.list.activeColor : soul.list.lockedColor,
+        soul.list.stateFontSize,
+        new Vec2(soul.list.cardSize.width / 2 - 36, 0),
+        new Size(52, soul.list.cardSize.height),
+      ),
+    );
     card.on(Node.EventType.TOUCH_END, onClick, this);
     return card;
   }
@@ -765,8 +795,8 @@ export default class GameUiHelper {
    * @param next 下一级配置（没有传 null，如已满级）
    */
   static createSoulAttributeList(config: SoulLevelConfig, next: SoulLevelConfig | null) {
-    const column = UiHelper.createFlexCol("soul_attribute_list", SOUL_ATTRIBUTE_SPACING, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH, 0));
-    column.addChild(UiHelper.createLabel("soul_attribute_title", `${config.level} 阶 · ${config.label}`, SOUL_TITLE_COLOR, 15, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH, 22)));
+    const column = UiHelper.createFlexCol("soul_attribute_list", soul.attribute.spacing, new Vec2(), new Size(soul.attribute.width, 0));
+    column.addChild(UiHelper.createLabel("soul_attribute_title", `${config.level} 阶 · ${config.label}`, soul.attribute.titleColor, 15, new Vec2(), new Size(soul.attribute.width, 22)));
     const rows: Array<{ label: string; get: (attributes: SoulAttributes) => number | [number, number] }> = [
       { label: "生命", get: (attributes) => attributes.maxHp },
       { label: "物攻", get: (attributes) => attributes.physicalAttack },
@@ -777,13 +807,13 @@ export default class GameUiHelper {
       { label: "道防", get: (attributes) => attributes.taoistDefense },
     ];
     rows.forEach((row, index) => {
-      const line = UiHelper.createFlexRow(`soul_attribute_row_${index}`, 0, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH, 18));
-      line.addChild(UiHelper.createLabel("name", row.label, SOUL_ROW_NAME_COLOR, 12, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
+      const line = UiHelper.createFlexRow(`soul_attribute_row_${index}`, 0, new Vec2(), new Size(soul.attribute.width, 18));
+      line.addChild(UiHelper.createLabel("name", row.label, soul.attribute.rowNameColor, soul.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
       const value = row.get(config.attributes);
       const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
       // 带下一级增量时整行值用绿色（白色 = 当前无增量可看）
       const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
-      const valueLabel = UiHelper.createLabel("value", text, diff ? SOUL_ROW_DIFF_COLOR : Color.WHITE, 12, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH - 40, 18), Label.HorizontalAlign.LEFT);
+      const valueLabel = UiHelper.createLabel("value", text, diff ? soul.attribute.rowDiffColor : Color.WHITE, soul.attribute.fontSize, new Vec2(), new Size(soul.attribute.width - 40, 18), Label.HorizontalAlign.LEFT);
       line.addChild(valueLabel);
       column.addChild(line);
     });
@@ -808,10 +838,10 @@ export default class GameUiHelper {
    * @param config 战魂等级配置
    * @param size 节点尺寸（缺省用弹窗中间展示尺寸；挂到主角身上的外显传小尺寸）
    */
-  static createSoulAnimation(config: SoulLevelConfig, size: Size = SOUL_ANIMATION_SIZE) {
+  static createSoulAnimation(config: SoulLevelConfig, size: Size = soul.animation.size) {
     const node = UiHelper.createNode("soul_animation", new Vec2(), size);
     const sprite = node.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.sizeMode = Sprite.SizeMode.RAW;
     sprite.trim = false;
     AnimationHelper.loadFrames(config.animation).then((frames) => {
       if (!isValid(node) || !frames.length) return;
@@ -825,25 +855,27 @@ export default class GameUiHelper {
    * 勾选状态由调用方传入（弹窗整体刷新式重建，状态以角色数据 role.soulShow 为准）
    */
   static createSoulShowToggle(checked: boolean, onClick: (checked: boolean) => void) {
-    const node = UiHelper.createNode("soul_show_toggle", new Vec2(), SOUL_SHOW_TOGGLE_SIZE);
+    const toggle = soul.info.toggle;
+    const half = toggle.boxSize / 2;
+    const node = UiHelper.createNode("soul_show_toggle", new Vec2(), toggle.size);
     const button = node.addComponent(Button);
     button.transition = Button.Transition.SCALE;
-    // 勾选框（16×16 方框，勾选时填充金色并画对勾）
+    // 勾选框（小方框，勾选时填充金色并画对勾）
     const box = new Node("soul_show_box");
-    box.addComponent(UITransform).setContentSize(16, 16);
-    box.setPosition(-SOUL_SHOW_TOGGLE_SIZE.width / 2 + 8, 0);
+    box.addComponent(UITransform).setContentSize(toggle.boxSize, toggle.boxSize);
+    box.setPosition(-toggle.size.width / 2 + half, 0);
     const graphics = box.addComponent(Graphics);
     graphics.lineWidth = 1.5;
-    graphics.strokeColor = checked ? SOUL_CARD_SELECTED_COLOR : SOUL_CARD_LOCKED_COLOR;
-    graphics.fillColor = checked ? SOUL_CARD_SELECTED_COLOR : Color.WHITE;
-    graphics.rect(-8, -8, 16, 16);
+    graphics.strokeColor = checked ? soul.list.selectedColor : soul.list.lockedColor;
+    graphics.fillColor = checked ? soul.list.selectedColor : Color.WHITE;
+    graphics.rect(-half, -half, toggle.boxSize, toggle.boxSize);
     graphics.fill();
     graphics.stroke();
     if (checked) {
-      box.addChild(UiHelper.createLabel("soul_show_check", "✓", Color.WHITE, 13, new Vec2(), new Size(16, 16)));
+      box.addChild(UiHelper.createLabel("soul_show_check", "✓", Color.WHITE, toggle.fontSize, new Vec2(), new Size(toggle.boxSize, toggle.boxSize)));
     }
     node.addChild(box);
-    node.addChild(UiHelper.createLabel("soul_show_text", "外显", Color.WHITE, 13, new Vec2(18, 0), new Size(60, SOUL_SHOW_TOGGLE_SIZE.height), Label.HorizontalAlign.LEFT));
+    node.addChild(UiHelper.createLabel("soul_show_text", toggle.text, Color.WHITE, toggle.fontSize, new Vec2(toggle.textGap, 0), new Size(60, toggle.size.height), Label.HorizontalAlign.LEFT));
     node.on(Node.EventType.TOUCH_END, () => onClick(!checked), this);
     return node;
   }
@@ -883,7 +915,7 @@ export default class GameUiHelper {
   static createGoodDetailDialog(good: Goods, contentSize: Size, screenPosition: Vec3 = new Vec3()) {
     const screenSize = UiHelper.getScreenSize();
     const position = new Vec2(screenPosition.x - screenSize.width / 2, screenPosition.y - screenSize.height / 2);
-    const dialog = UiHelper.createSprite("good_detail", "common/bg", position, new Size(240, 200));
+    const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, position, goodDetailLayout.size);
 
     dialog.setPosition(position.x, position.y, 0);
     const layout = dialog.addComponent(Layout);
@@ -940,8 +972,8 @@ export default class GameUiHelper {
     dialog.addChild(contentDescription);
     dialog.addChild(contentBody);
 
-    // 脚步图标
-    const footerLogo = UiHelper.createSprite("logo", "logo", new Vec2(), new Size(220, 120));
+    // 脚步图标（图片来源与尺寸见 configs/layout/dialogs.goodDetailLayout.footerLogo）
+    const footerLogo = UiHelper.createSprite("logo", goodDetailLayout.footerLogo.image, new Vec2(), goodDetailLayout.footerLogo.size);
     dialog.addChild(footerLogo);
 
     // 物品在左侧
@@ -980,7 +1012,7 @@ export default class GameUiHelper {
   static createAttributeLabel(key: keyof BattleAttributes, value: string, size: Size = new Size(220, 20)) {
     const attributeLabel = UiHelper.createFlexRow(key, 10, new Vec2(), size);
 
-    const icon = UiHelper.createSprite("icon", "common/dot", new Vec2(), new Size(10, 10));
+    const icon = UiHelper.createSprite("icon", uiImages.dot, new Vec2(), new Size(10, 10));
     attributeLabel.addChild(icon);
 
     const label = UiHelper.createLabel(key, goodShowAttributesLabel.get(key), Color.WHITE, 12, new Vec2(), new Size(50, size.height));
@@ -1016,7 +1048,7 @@ export default class GameUiHelper {
    * @param size 尺寸
    * @returns 该节点的 Layout 组件
    */
-  static applyRoleAttributeListStyle(node: Node, role: Role, position: Vec2 = new Vec2(217, 205), size: Size = new Size(150, 0)) {
+  static applyRoleAttributeListStyle(node: Node, role: Role, position: Vec2 = roleAttributeListLayout.position, size: Size = roleAttributeListLayout.size) {
     const layout = this.applyColumnStyle(node, 5, position, size);
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
     layout.padding = 10;
@@ -1068,7 +1100,7 @@ export default class GameUiHelper {
     const upgrade = UiHelper.createSprite("upgrade_effect", "", new Vec2(0, 90), new Size(284, 380));
     // 升级特效是纯装饰动画，标为点击穿透：不遮挡世界点击
     markClickThrough(upgrade);
-    AnimationHelper.playOnceWithDir("upgrade", upgrade, "effect/upgrade", 1);
+    AnimationHelper.playOnceWithDir("upgrade", upgrade, uiImages.upgradeEffect, 1);
     return upgrade;
   }
 
@@ -1078,7 +1110,7 @@ export default class GameUiHelper {
 
   /** 创建背包格子 */
   static createRoleBagCell(row: number, col: number) {
-    return UiHelper.createSprite(`bag_slot_${row}_${col}`, "common/grid", new Vec2(), new Size(50, 50));
+    return UiHelper.createSprite(`bag_slot_${row}_${col}`, bagGridLayout.cellImage, new Vec2(), bagGridLayout.cellSize);
   }
 
   /** 创建背包格子行（在 parent 下逐行生成格子并返回 [行][列] 索引） */
@@ -1086,7 +1118,7 @@ export default class GameUiHelper {
     const cells = [];
     for (let row = 0; row < bagRow; row++) {
       cells[row] = [];
-      const rowNode = UiHelper.createFlexRow(`bag_row_${row}`, 3, new Vec2(0, 0), new Size(580, 50));
+      const rowNode = UiHelper.createFlexRow(`bag_row_${row}`, bagGridLayout.rowSpacing, new Vec2(0, 0), bagGridLayout.rowSize);
       parent.addChild(rowNode);
       for (let col = 0; col < bagCol; col++) {
         const cell = this.createRoleBagCell(row, col);
@@ -1157,7 +1189,7 @@ export default class GameUiHelper {
   static applyBottomBarBodyStyle(node: Node) {
     node.addComponent(UITransform).setContentSize(bottomBarLayout.size);
     this.setBottomBarPosition(node);
-    node.addChild(UiHelper.createSprite("bottom_nav_bar_background", hudImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
+    node.addChild(UiHelper.createSprite("bottom_nav_bar_background", uiImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
   }
 
   /** 底部栏贴边定位（贴屏幕底部居中；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
@@ -1175,10 +1207,10 @@ export default class GameUiHelper {
   /**
    * 创建圆形血量/魔法值显示零件（底图 + 竖向进度条）
    * 返回底图节点与其内部的进度条节点，位置与尺寸见 hudLayout.bottomBar.hpOrb / mpOrb
-   * 底图见 hudImages.hpOrbBase；填充图缺省为 hudImages.hpOrbFill，魔法球传 hudImages.mpOrbFill
+   * 底图见 uiImages.hpOrbBase；填充图缺省为 uiImages.hpOrbFill，魔法球传 uiImages.mpOrbFill
    */
-  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size, fillImage: string = hudImages.hpOrbFill): { barSprite: Node; hpBar: Node } {
-    const barSprite = UiHelper.createSprite("hp_bar_sprite", hudImages.hpOrbBase, position, size);
+  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size, fillImage: string = uiImages.hpOrbFill): { barSprite: Node; hpBar: Node } {
+    const barSprite = UiHelper.createSprite("hp_bar_sprite", uiImages.hpOrbBase, position, size);
     const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), size);
     const hpProgress = UiHelper.createSprite("hp_bar_progress", fillImage, new Vec2(), size);
     hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
@@ -1369,12 +1401,12 @@ export default class GameUiHelper {
 
   /**
    * 为已有节点施加怪物信息面板主体样式（尺寸、位置与背景见 hudLayout.monsterInfoPanel），节点由面板组件自身充当
-   * 背景资源见 hudImages.monsterInfoBackground
+   * 背景资源见 uiImages.monsterInfoBackground
    */
   static applyMonsterInfoBodyStyle(node: Node) {
     node.addComponent(UITransform).setContentSize(monsterInfoPanelLayout.size);
     node.setPosition(monsterInfoPanelLayout.position.x, monsterInfoPanelLayout.position.y, 0);
-    node.addChild(UiHelper.createSprite("monster_info_background", hudImages.monsterInfoBackground, new Vec2(), monsterInfoPanelLayout.size));
+    node.addChild(UiHelper.createSprite("monster_info_background", uiImages.monsterInfoBackground, new Vec2(), monsterInfoPanelLayout.size));
   }
 
   /** 创建怪物头像（左侧，取怪物图标；位置与尺寸见 hudLayout.monsterInfoPanel.avatar） */
@@ -1450,9 +1482,10 @@ export default class GameUiHelper {
 
   //#region 技能列表
 
-  /** 创建技能列表滚动区 */
+  /** 创建技能列表滚动区（几何见 configs/hudLayout.skillListDialogLayout.list） */
   static createSkillListView(): Node {
-    return UiHelper.createScrollView("skill_list", new Vec2(0, -15), new Size(260, 350));
+    const list = skillListDialogLayout.list;
+    return UiHelper.createScrollView(list.name, list.position, list.size);
   }
 
   /** 创建单个技能行（未学习置灰；已学习点击触发回调） */

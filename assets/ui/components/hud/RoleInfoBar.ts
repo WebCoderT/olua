@@ -4,7 +4,7 @@ import RoleUIManager from "../../core/RoleUIManager";
 import StatusIconBar from "./StatusIconBar";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
-import { hudImages, roleInfoBarLayout } from "../../../configs/hudLayout";
+import { uiImages, roleInfoBarLayout } from "../../../configs/hudLayout";
 import { getAnchoredPosition, getVisibleSize } from "../../utils/layout/ScreenLayout";
 
 /** 货币种数（金币 / 绑定金币 / 银币），用于把货币容器宽度等分给每件 */
@@ -41,7 +41,7 @@ export default class RoleInfoBar extends Node {
     this.addComponent(UITransform).setContentSize(layout.size);
     this.applyAnchorPosition();
     // 背景框
-    this.addChild(GameUiHelper.createImage("role_info_background", hudImages.roleInfoBackground, new Vec2(), layout.backgroundSize));
+    this.addChild(GameUiHelper.createImage("role_info_background", uiImages.roleInfoBackground, new Vec2(), layout.backgroundSize));
     // 名称与等级
     this.nameLabel = GameUiHelper.createText("role_name", role.name, layout.name.fontSize, layout.name.position, layout.name.size, Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
     this.addChild(this.nameLabel.node);
@@ -52,13 +52,13 @@ export default class RoleInfoBar extends Node {
     // 货币区：三种货币放在同一个横向布局容器里，每件占容器宽度的三分之一、内容各自左对齐
     const currencyBar = GameUiHelper.createRow("role_currency_bar", layout.currencyBar.spacing, layout.currencyBar.position, layout.currencyBar.size);
     const itemSize = new Size(layout.currencyBar.size.width / CURRENCY_COUNT, layout.currencyBar.size.height);
-    const gold = GameUiHelper.createCurrencyItem(hudImages.gold, role.gold, new Vec2(), itemSize);
+    const gold = GameUiHelper.createCurrencyItem(uiImages.gold, role.gold, new Vec2(), itemSize);
     this.goldCountLabel = gold.valueLabel;
     currencyBar.addChild(gold.node);
-    const bindGold = GameUiHelper.createCurrencyItem(hudImages.bindGold, role.bindGold, new Vec2(), itemSize);
+    const bindGold = GameUiHelper.createCurrencyItem(uiImages.bindGold, role.bindGold, new Vec2(), itemSize);
     this.bindGoldCountLabel = bindGold.valueLabel;
     currencyBar.addChild(bindGold.node);
-    const silver = GameUiHelper.createCurrencyItem(hudImages.silver, role.silver, new Vec2(), itemSize);
+    const silver = GameUiHelper.createCurrencyItem(uiImages.silver, role.silver, new Vec2(), itemSize);
     this.silverCountLabel = silver.valueLabel;
     currencyBar.addChild(silver.node);
     this.addChild(currencyBar);
