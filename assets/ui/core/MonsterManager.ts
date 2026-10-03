@@ -66,8 +66,9 @@ export default class MonsterManager {
     addMonsterCollider(node);
     // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
     GameUiHelper.showColliderRange(node, monster.label);
-    const head = GameUiHelper.createHead("monster_head", monster.label, monster.hp, monster.maxHp);
-    node.addChild(head);
+    // 头顶只保留血条与血量文字；名称显示在身体正中心（主动攻击红色/被动黄色）
+    node.addChild(GameUiHelper.createMonsterHead(monster));
+    node.addChild(GameUiHelper.createMonsterName(monster));
     return node;
   }
 
@@ -196,13 +197,13 @@ export default class MonsterManager {
     GameUiHelper.showExpGain(target, exp);
   }
 
-  /** 刷新怪物头顶血条与血量文字 */
+  /** 刷新怪物头顶血条与血量文字（monster_head 结构：children[0]=血条 children[1]=血量文字，见 GameUiHelper.createMonsterHead） */
   private static updateHead(node: Node, monster: Monster) {
     const head = node.getChildByName("monster_head");
     if (!head) return;
-    const hpBar = head.children[2]?.getComponent(ProgressBar);
+    const hpBar = head.children[0]?.getComponent(ProgressBar);
     if (hpBar) hpBar.progress = monster.hp / monster.maxHp;
-    const hpText = head.children[3]?.getComponent(Label);
+    const hpText = head.children[1]?.getComponent(Label);
     if (hpText) hpText.string = `${monster.hp} / ${monster.maxHp}`;
   }
 }

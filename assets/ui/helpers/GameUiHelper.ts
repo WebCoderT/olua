@@ -1051,6 +1051,30 @@ export default class GameUiHelper {
     return { node, animate };
   }
 
+  /**
+   * 创建怪物头顶信息栏（只有血条与血量文字；名称单独显示在身体正中心，见 createMonsterName）
+   * 位置在怪物上缘之外一点：怪物节点锚点居中（即身体中心），按 contentSize 高度的一半上移
+   * 结构固定：children[0]=血条 children[1]=血量文字（MonsterManager.updateHead 按此刷新）
+   */
+  static createMonsterHead(monster: Monster) {
+    const head = UiHelper.createFlexCol("monster_head", 3, new Vec2(0, monster.contentSize.height / 2 + 14), new Size(100, 0));
+    head.getComponent(UITransform).setAnchorPoint(0.5, 0);
+    const hpBar = this.createHpBar("monster_hp_bar", monster.hp / monster.maxHp, new Vec2(), new Size(80, 4));
+    head.addChild(hpBar);
+    const hpText = UiHelper.createLabel("monster_hp_text", `${monster.hp} / ${monster.maxHp}`, Color.WHITE, 8, new Vec2(), new Size(100, 8));
+    head.addChild(hpText);
+    return head;
+  }
+
+  /**
+   * 创建怪物名称（显示在怪物正中心：怪物节点锚点居中，名称挂在原点即身体中心）
+   * 主动攻击的怪物红色、不主动攻击的黄色（aggressive，见 types/monster）
+   */
+  static createMonsterName(monster: Monster) {
+    const color = monster.aggressive ? Color.RED : Color.YELLOW;
+    return UiHelper.createLabel("monster_name", monster.label, color, 12, new Vec2(), new Size(120, 14));
+  }
+
   /** 创建NPC节点主体（名字 + 外观动画），位置与点击事件由调用方处理 */
   static createNpcNode(npc: NPC) {
     const npcNode = UiHelper.createFlexCol("npc_node", 0, new Vec2(), new Size(100, 170));
