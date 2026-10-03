@@ -25,6 +25,7 @@ import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
 import StatusManager from "./core/StatusManager";
+import HoverTipManager from "./core/HoverTipManager";
 import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
 const { ccclass, property } = _decorator;
 
@@ -145,6 +146,7 @@ export class Game extends Component {
     CursorManager.destroy();
     AutoBattle.reset();
     AutoBattleTips.reset();
+    HoverTipManager.hide();
     StatusManager.reset();
     RoleUIManager.clearViews();
     // 死亡弹窗随 UI 层一起随场景销毁，这里只释放引用
@@ -187,6 +189,8 @@ export class Game extends Component {
     this.bottomBar?.updateCooldowns();
     // 状态每帧驱动（到期移除 + 身上特效跟随主角）
     StatusManager.tick();
+    // 悬停详情弹窗每帧驱动（剩余时间/冷却剩余刷新；图标销毁或状态到期时收起）
+    HoverTipManager.tick();
     // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）
     RoleUIManager.updateMonsterInfo();
     // 选中指示器跟随目标脚下（目标失效时自动销毁）

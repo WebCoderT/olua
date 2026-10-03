@@ -50,6 +50,7 @@ import {
   dialogFrame,
   equipmentSlotLayout,
   goodDetailLayout,
+  hoverTipLayout,
   monsterInfoPanelLayout,
   roleAttributeListLayout,
   roleInfoBarLayout,
@@ -631,6 +632,61 @@ export default class GameUiHelper {
         expText.destroy();
       })
       .start();
+  }
+
+  //#endregion
+
+  //#region 悬停详情弹窗（状态/技能悬停详情的样式零件，拼装见 ui/components/dialogs/HoverTipDialog）
+
+  /**
+   * 为已有节点施加悬停详情弹窗主体样式（尺寸/背景/内边距见 configs/layout/dialogs 的 hoverTipLayout）
+   * 节点自身即背景精灵（CUSTOM 模式跟随内容尺寸），纵向 Layout 容器按内容自适应高度
+   */
+  static applyHoverTipBodyStyle(node: Node) {
+    const transform = node.addComponent(UITransform);
+    transform.setContentSize(hoverTipLayout.size);
+    const sprite = node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = false;
+    UiHelper.loadSprite(hoverTipLayout.background, (spriteFrame) => {
+      if (!isValid(node) || !sprite.isValid) return;
+      sprite.spriteFrame = spriteFrame;
+    });
+    const layout = node.addComponent(Layout);
+    layout.type = Layout.Type.VERTICAL;
+    layout.resizeMode = Layout.ResizeMode.CONTAINER;
+    layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    layout.padding = hoverTipLayout.padding;
+    layout.spacingY = hoverTipLayout.rowSpacing;
+  }
+
+  /** 创建悬停详情标题行（左图标 + 加粗标题；无图标时标题独占整行） */
+  static createHoverTipTitle(text: string, icon?: string): Node {
+    const layout = hoverTipLayout.title;
+    const header = this.createRow("hover_tip_header", 8, new Vec2(), new Size(hoverTipLayout.row.size.width, layout.iconSize.height));
+    if (icon) header.addChild(UiHelper.createSprite("hover_tip_icon", icon, new Vec2(), layout.iconSize));
+    const iconWidth = icon ? layout.iconSize.width + 8 : 0;
+    const title = UiHelper.createLabel("hover_tip_title", text, Color.WHITE, layout.fontSize, new Vec2(), new Size(hoverTipLayout.row.size.width - iconWidth, layout.iconSize.height), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER);
+    title.getComponent(Label).isBold = true;
+    header.addChild(title);
+    return header;
+  }
+
+  /** 创建悬停详情信息行（「名称：值」单行左对齐） */
+  static createHoverTipRow(text: string): Node {
+    const layout = hoverTipLayout.row;
+    return UiHelper.createLabel("hover_tip_row", text, Color.WHITE, layout.fontSize, new Vec2(), layout.size, Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER);
+  }
+
+  /** 创建悬停详情描述（自动换行，高度按内容自适应） */
+  static createHoverTipDescription(text: string): Node {
+    const layout = hoverTipLayout.description;
+    const node = UiHelper.createLabel("hover_tip_description", text, Color.WHITE, layout.fontSize, new Vec2(), layout.size, Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+    const label = node.getComponent(Label)!;
+    label.lineHeight = layout.lineHeight;
+    label.overflow = Label.Overflow.RESIZE_HEIGHT;
+    label.enableWrapText = true;
+    return node;
   }
 
   //#endregion

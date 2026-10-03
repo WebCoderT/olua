@@ -1,6 +1,7 @@
 import { Node, UITransform, Vec2 } from "cc";
 import { roleInfoBarLayout } from "../../../configs/hudLayout";
 import { StatusBadge } from "../../../types/status";
+import HoverTipManager from "../../core/HoverTipManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { clearChildren } from "../../utils/node/NodeTree";
 
@@ -9,6 +10,7 @@ import { clearChildren } from "../../utils/node/NodeTree";
  * 展示当前进行中的状态图标（横向布局，图标与顺序来自 StatusManager 的徽标列表）：
  * 重建式刷新（每次全量重建图标），数量少（几个到十几个）开销可忽略
  * 位置/尺寸/图标尺寸见 configs/hudLayout 的 roleInfoBarLayout.statusBar
+ * 鼠标悬停图标弹出状态详情（HoverTipManager），图标重建时旧详情随图标销毁自动收起
  */
 export default class StatusIconBar extends Node {
   /** 图标排列容器（横向 Layout） */
@@ -24,9 +26,16 @@ export default class StatusIconBar extends Node {
     this.addChild(this.row);
   }
 
-  /** 状态增删后全量重建图标（StatusManager 经 RoleUIManager 调用） */
+  /** 状态增删后全量重建图标（StatusManager 经 RoleUIManager 调用），并给每个图标绑定悬停详情 */
   updateStatuses(badges: StatusBadge[]) {
     clearChildren(this.row);
-    badges.forEach((badge) => this.row.addChild(GameUiHelper.createStatusIcon(badge)));
+    badges.forEach((badge) => {
+      const icon = GameUiHelper.createStatusIcon(badge);
+      // MOUSE_ENTER/MOUSE_LEAVE 是 DOM 式 enter/leave 语义：移入图标即显示，移出或图标被销毁即收起
+      icon.on(Node.EventType.MOUSE_ENTER, () => HoverTipManager.showStatus(badge, icon), this);
+      icon.on(Node.EventType.MOUSE_LEAVE, () => HoverTipManager.hide(), this);
+      icon.once(Node.EventType.NODE_DESTROYED, () => HoverTipManager.hide(), this);
+      this.row.addChild(icon);
+    });
   }
 }

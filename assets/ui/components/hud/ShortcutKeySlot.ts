@@ -1,5 +1,6 @@
 import { EventKeyboard, Input, input, Label, Node, Sprite } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import HoverTipManager from "../../core/HoverTipManager";
 import SkillManager from "../../core/SkillManager";
 import { SkillId } from "../../../types/skill";
 
@@ -30,13 +31,15 @@ export default class ShortcutKeySlot extends Node {
     this.once(Node.EventType.NODE_DESTROYED, () => this.offKeyDown());
   }
 
-  /** 修改图标（同时更新点击回调与绑定技能） */
+  /** 修改图标（同时更新点击回调、悬停详情与绑定技能） */
   public updateIcon(spriteSrc?: string, onClick?: Function, skillId?: SkillId) {
     this.spriteSrc = spriteSrc;
     this.onClick = onClick;
     this.skillId = skillId;
     // 先移除旧的监听，避免重复注册
     this.off(Node.EventType.TOUCH_END);
+    this.off(Node.EventType.MOUSE_ENTER, this.onHoverEnter, this);
+    this.off(Node.EventType.MOUSE_LEAVE, HoverTipManager.hide, HoverTipManager);
     this.offKeyDown();
     if (!this.spriteSrc) return;
     GameUiHelper.updateNodeIcon(this, this.spriteSrc);
@@ -44,6 +47,16 @@ export default class ShortcutKeySlot extends Node {
       this.on(Node.EventType.TOUCH_END, this.onClick, this);
       input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     }
+    // 悬停技能图标弹出技能详情（skillId 为空说明槽位没绑技能，不弹）
+    if (this.skillId) {
+      this.on(Node.EventType.MOUSE_ENTER, this.onHoverEnter, this);
+      this.on(Node.EventType.MOUSE_LEAVE, HoverTipManager.hide, HoverTipManager);
+    }
+  }
+
+  /** 鼠标移入：弹出绑定技能的详情弹窗 */
+  private onHoverEnter() {
+    if (this.skillId) HoverTipManager.showSkill(this.skillId, this);
   }
 
   /** 刷新冷却显示（由外部每帧驱动）：冷却中图标置灰并居中显示剩余秒数 */

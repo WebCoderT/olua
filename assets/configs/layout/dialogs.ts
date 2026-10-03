@@ -195,3 +195,28 @@ export const goodDetailLayout = {
 };
 
 //#endregion
+
+//#region 悬停详情弹窗（鼠标悬停在状态图标/技能图标上时显示，见 ui/core/HoverTipManager）
+
+/** 悬停详情弹窗布局（宽度固定，高度由内容自适应；坐标为屏幕中心系） */
+export const hoverTipLayout = {
+  name: "hover_tip",
+  /** 初始尺寸（高度只是占位，Layout 会按内容自适应） */
+  size: new Size(240, 40),
+  background: uiImages.goodDetailBackground,
+  /** 内容区内边距与行间距 */
+  padding: 10,
+  rowSpacing: 6,
+  /** 弹窗与锚点图标的间距（上下两侧通用） */
+  anchorGap: 6,
+  /** 弹窗距屏幕边缘的最小边距（夹在屏内用） */
+  screenMargin: 8,
+  /** 标题（名称行，可带图标） */
+  title: { fontSize: 14, iconSize: new Size(28, 28) },
+  /** 信息行（「名称：值」单行） */
+  row: { fontSize: 12, size: new Size(220, 16) },
+  /** 描述（自动换行，高度按内容自适应） */
+  description: { fontSize: 12, lineHeight: 16, size: new Size(220, 0) },
+};
+
+//#endregion

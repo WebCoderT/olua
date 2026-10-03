@@ -416,7 +416,7 @@ const weaponsData: EquipmentData[] = [
     type: GOOD_TYPE.EQUIPMENT,
     slot: EQUIPMENT_TYPE.WEAPON,
     occupation: OECCUPATION.ALL,
-    label: "定海神针",
+    label: "菲奥娜de蓝钢佩剑",
     sex: SEX.ALL,
     description: "东海龙王的宝物，送给新手冒险家的第一件武器。握紧它，开启你的旅程吧！",
     sellPirce: 0,

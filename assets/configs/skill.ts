@@ -18,6 +18,22 @@ oeccupationSkills.set(OECCUPATION.DAO, []);
  */
 export const basicAttackSkillId: SkillId = "1000";
 
+/** 技能类型文案（技能详情弹窗用，见 ui/core/HoverTipManager） */
+export const skillTypeLabels: Record<SkillType, string> = {
+  [SkillType.PROACTIVE]: "主动",
+  [SkillType.PASSIVE]: "被动",
+  [SkillType.STATUS]: "状态",
+  [SkillType.REPLY]: "回复",
+};
+
+/** 技能目标类型文案（技能详情弹窗用） */
+export const skillTargetTypeLabels: Record<SkillTargetType, string> = {
+  [SkillTargetType.PLACE]: "区域",
+  [SkillTargetType.SINGLE]: "单体",
+  [SkillTargetType.MUTIPLE]: "群体",
+  [SkillTargetType.SELF]: "自身",
+};
+
 /**
  * 技能数据表
  * id 只做关联（技能栏/快捷键/AutoBattle 都用它引用），与怪物/装备同一约定。
