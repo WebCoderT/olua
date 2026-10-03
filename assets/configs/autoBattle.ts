@@ -33,5 +33,7 @@ export const autoBattle = {
   arriveTolerance: 20,
   /** 传送落点吸附：落点周围多大范围（格）内找最近可站立位置，避免直接飞进墙里/怪堆里 */
   teleportSnapRadius: 12,
+  /** 突进类技能（十步一杀）的落点吸附半径（像素）：突进距离远，允许在更大范围找回可站立位置 */
+  dashSnapRadius: 60,
 };
 

@@ -31,6 +31,8 @@ export default class CursorManager {
   private static order = 0;
   /** 上次鼠标位置（屏幕坐标，命中检测与 UITransform.hitTest 同一口径，见 utils/input/Pointer.getHitScreenPoint） */
   private static location = new Vec2();
+  /** 是否已收到过鼠标位置（getMouseScreenPoint 的有效性判据） */
+  private static located = false;
   /** 是否需要重新判定（鼠标移动或悬停目标变化时置位） */
   private static dirty = false;
   /** 当前已写入元素的 cursor 取值（值未变化时不再写，避免每帧触碰 DOM 样式） */
@@ -76,7 +78,17 @@ export default class CursorManager {
   /** 上报鼠标位置（由 input 组件在鼠标移动时调用，只记录不判定；坐标为屏幕坐标） */
   static setLocation(screenPoint: Vec2) {
     this.location.set(screenPoint);
+    this.located = true;
     this.dirty = true;
+  }
+
+  /**
+   * 取当前鼠标屏幕坐标（技能按鼠标悬停位置定向用，如 skills/zhan 的十步一杀）
+   * 未收到过鼠标移动（开局没动鼠标）或触屏环境返回 null，调用方自行放弃本次定向
+   */
+  static getMouseScreenPoint(): Vec2 | null {
+    if (!this.located || !HAS_MOUSE) return null;
+    return this.location.clone();
   }
 
   /** 每帧检查（由组合根在 Game.update 调用）：鼠标位置或悬停目标有变化时才重新判定 */

@@ -142,14 +142,15 @@ export default class AutoBattle {
   }
 
   /**
-   * 取世界坐标附近最近的可行走点（小地图弹窗右键传送的落点吸附：点击点在墙里/障碍里时挪到最近能站的位置）
+   * 取世界坐标附近最近的可行走点（小地图弹窗右键传送的落点吸附：点击点在墙里/障碍里时挪到最近能站的位置；
+   * 突进类技能的落点吸附也走这里，传更大的 radius，见 configs/autoBattle 的 dashSnapRadius）
    * 网格未就绪时返回 null，调用方退回使用原始点
    */
-  static findWalkablePoint(point: Vec2): Vec2 | null {
+  static findWalkablePoint(point: Vec2, radius: number = autoBattle.teleportSnapRadius): Vec2 | null {
     const grid = this.ensureGrid();
     if (!grid) return null;
     grid.rebuild(MonsterManager.getBlockingRects(null));
-    return grid.findNearestWalkablePoint(point.x, point.y, autoBattle.teleportSnapRadius);
+    return grid.findNearestWalkablePoint(point.x, point.y, radius);
   }
 
   /** 每帧驱动（组合根在 Game.update 调用；manualMoving 为玩家是否正在手动移动：键盘方向键或鼠标按下操控） */

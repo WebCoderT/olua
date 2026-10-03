@@ -1,4 +1,4 @@
-import { isValid, Node } from "cc";
+import { isValid, Node, Vec2, Vec3 } from "cc";
 import { skillEffect } from "../../configs/effect";
 import { Role } from "../../entities/Role";
 import { SkillConfig } from "../../types/skill";
@@ -31,11 +31,24 @@ export default class EffectManager {
     const onSelf = config.effectIsOnSelf || !target || !isValid(target);
     const owner = onSelf ? caster : (target as Node);
     const offset = onSelf ? skillEffect.selfOffset : skillEffect.targetOffset;
+    // 特效节点与角色外观同一挂点口径（锚点居中），位置取作用对象的世界坐标 + 配置偏移
+    const position = owner.getWorldPosition();
+    this.playAt(config, position, role, offset);
+  }
+
+  /**
+   * 在任意世界坐标播放一次技能特效（特效位置由技能实现决定的场景：
+   * 位移技能的落点特效等，见 skills/zhan 的十步一杀）
+   * @param config 技能配置（effect 为特效图集路径）
+   * @param position 特效中心的世界坐标
+   * @param role 释放时读取的角色数据（动作速度倍率的来源）
+   * @param offset 特效相对 position 的偏移（缺省取释放者挂点偏移）
+   */
+  static playAt(config: SkillConfig, position: Vec3, role: Role, offset: Vec2 = skillEffect.selfOffset) {
+    if (!config.effect) return;
     const name = `skill_effect_${this.effectName(config.effect)}`;
     const node = GameUiHelper.createSkillEffect(name);
     LayerManager.addToEffectLayer(node);
-    // 特效节点与角色外观同一挂点口径（锚点居中），位置取作用对象的世界坐标 + 配置偏移
-    const position = owner.getWorldPosition();
     node.setWorldPosition(position.x + offset.x, position.y + offset.y, position.z);
     AnimationHelper.loadFramesFromAtlas(config.effect).then((frames) => {
       // 场景可能已切换：节点失效就不再装载

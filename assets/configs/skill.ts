@@ -311,8 +311,8 @@ const skillData: Array<SkillConfig & { id: SkillId }> = [
     onClick: skill_1008,
     action: ACTION.ATTACK_FAR,
     canAuto: false,
+    // 区域技能的特效位置由技能实现决定（十步一杀播在突进落点），SkillManager 不代播，见 EffectManager.playAt
     effect: "effect/skill/s_3010@0",
-    effectIsOnSelf: false,
   },
 
   {

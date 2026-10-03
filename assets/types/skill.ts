@@ -59,6 +59,8 @@ export interface SkillCaster extends Node {
    * @param action 技能配置的动作（config.action）
    */
   playSkillAttack(action: ACTION, direction: DIRECTION): boolean;
+  /** 设置角色世界坐标（瞬移/传送，相机同步跟随，见 RoleDisplay.setWorldPositionByTransfer） */
+  setWorldPositionByTransfer(worldPosition: Vec3): void;
 }
 
 /** 怪物管理器为技能提供的能力（由 MonsterManager 实现） */
