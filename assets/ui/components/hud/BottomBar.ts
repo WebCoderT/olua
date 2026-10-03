@@ -84,6 +84,11 @@ export default class BottomBar extends Node {
     this.shortcutKeyBar.updateCooldowns();
   }
 
+  /** 贴边定位（贴屏幕底部居中按可见尺寸重算）——窗口尺寸变化时由组合根调用 */
+  applyAnchorPosition() {
+    GameUiHelper.setBottomBarPosition(this);
+  }
+
   /** 更新指定快捷键槽的图标与绑定技能 */
   updateShortcutIcon(key: ShortcutKeys, icon?: string, onClick?: Function, skillId?: SkillId) {
     this.shortcutKeyBar.updateSlotIcon(key, icon, onClick, skillId);

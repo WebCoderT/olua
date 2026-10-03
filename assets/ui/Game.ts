@@ -25,6 +25,7 @@ import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
 import StatusManager from "./core/StatusManager";
+import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -52,8 +53,12 @@ export class Game extends Component {
   private ready = false;
   /** 魔法值自然回复的结算计时（秒，满 1 秒结算一次） */
   private mpRecoverTimer = 0;
+  /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
+  private offWindowResize: (() => void) | null = null;
 
   async start() {
+    // 屏幕适配：铺满窗口（无黑边），可见宽度随窗口宽高比变化（见 utils/layout/ScreenLayout）
+    applyScreenPolicy();
     // 获取角色信息（旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
     // 初始化图层（含掉落物层/怪物层）
@@ -85,6 +90,16 @@ export class Game extends Component {
     /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
     this.smallMap = new SmallMap(this.roleDisplay);
     LayerManager.addToUILayer(this.smallMap);
+    // 窗口尺寸变化时重排三个常驻区域（角色信息栏贴左上角 / 小地图贴右上角 / 底部栏贴底部居中）
+    // 注意顺序：引擎的 Canvas 在尺寸变化时会把相机世界坐标拽回 Canvas 节点位置（canvas-resize），
+    // 而相机/UI 层本该跟着主角，故重排后必须再把相机与 UI 层重新对齐到主角，否则地图视野会错位
+    this.offWindowResize = onWindowResize(() => {
+      // 相机与 UI 层重新对齐到主角（Canvas 在尺寸变化时会把相机拽回 Canvas 节点位置）
+      if (this.roleDisplay && isValid(this.roleDisplay)) LayerManager.move(this.roleDisplay.getWorldPosition());
+      this.roleInfoBar?.applyAnchorPosition();
+      this.smallMap?.applyAnchorPosition();
+      this.bottomBar?.applyAnchorPosition();
+    });
     /** 怪物信息面板创建器（选中怪物时才动态创建，取消选中即销毁） */
     RoleUIManager.setMonsterInfoFactory((target) => {
       const monsterInfoPanel = new MonsterInfoPanel(target);
@@ -122,6 +137,9 @@ export class Game extends Component {
 
   /** 场景卸载：清理全局监听、动态面板与视图引用（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
   onDestroy() {
+    // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
+    this.offWindowResize?.();
+    this.offWindowResize = null;
     this.screenClickInput?.destroy();
     this.cursorInput?.destroy();
     CursorManager.destroy();

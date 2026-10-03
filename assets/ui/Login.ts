@@ -2,6 +2,7 @@ import { _decorator, Color, Component, EditBox, Node, Size, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
+import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
 const { ccclass } = _decorator;
 
 @ccclass("Login")
@@ -10,6 +11,8 @@ export class Login extends Component {
   passwordInput: Node;
 
   start() {
+    // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
+    applyScreenPolicy();
     // 背景与 logo
     this.node.addChild(GameUiHelper.createFullScreenImage("login_background", "login/login_bg"));
     // 账号输入框

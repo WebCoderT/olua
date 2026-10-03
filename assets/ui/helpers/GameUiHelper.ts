@@ -44,6 +44,7 @@ import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good"
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
+import { getAnchoredPosition, getVisibleSize } from "../utils/layout/ScreenLayout";
 import { avatarImage, bottomBarLayout, hudImages, hudSize, monsterInfoPanelLayout, roleInfoBarLayout, smallMapLayout, tipsLayout } from "../../configs/hudLayout";
 
 //#region 类型定义
@@ -1152,11 +1153,18 @@ export default class GameUiHelper {
 
   //#region 底部栏
 
-  /** 为已有节点施加底部栏主体样式（尺寸、位置与背景见 hudLayout.bottomBar），节点由底部栏组件自身充当 */
+  /** 为已有节点施加底部栏主体样式（尺寸与背景见 hudLayout.bottomBar），节点由底部栏组件自身充当 */
   static applyBottomBarBodyStyle(node: Node) {
     node.addComponent(UITransform).setContentSize(bottomBarLayout.size);
-    node.setPosition(bottomBarLayout.position.x, bottomBarLayout.position.y, 0);
+    this.setBottomBarPosition(node);
     node.addChild(UiHelper.createSprite("bottom_nav_bar_background", hudImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
+  }
+
+  /** 底部栏贴边定位（贴屏幕底部居中；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
+  static setBottomBarPosition(node: Node) {
+    const { anchor } = bottomBarLayout;
+    const position = getAnchoredPosition(bottomBarLayout.size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
+    node.setPosition(position.x, position.y, 0);
   }
 
   /** 创建血量/魔法值文字零件（位置与尺寸见 hudLayout.bottomBar.hpText / mpText） */
@@ -1403,13 +1411,20 @@ export default class GameUiHelper {
   //#region 小地图
 
   /**
-   * 为已有节点施加小地图主体样式（尺寸与屏幕右上角位置见 hudLayout.smallMap），节点由小地图组件自身充当
+   * 为已有节点施加小地图主体样式（尺寸见 hudLayout.smallMap），节点由小地图组件自身充当
    * 尺寸需容纳「左侧功能按钮列 + 名称条/地图/标签/坐标条」整块内容（子节点位置以地图内容区中心为原点）
    */
   static applySmallMapBodyStyle(node: Node) {
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(smallMapLayout.size);
-    node.setPosition(smallMapLayout.position.x, smallMapLayout.position.y, 0);
+    this.setSmallMapPosition(node);
+  }
+
+  /** 小地图贴边定位（贴屏幕右上角；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
+  static setSmallMapPosition(node: Node) {
+    const { anchor } = smallMapLayout;
+    const position = getAnchoredPosition(smallMapLayout.size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
+    node.setPosition(position.x, position.y, 0);
   }
 
   /**

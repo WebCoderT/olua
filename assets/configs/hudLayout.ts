@@ -10,6 +10,24 @@ import { Color, Size, Vec2 } from "cc";
  * 屏幕中间的浮动提示与自动战斗提示；弹窗等临时界面仍由各自组件管理
  */
 
+//#region 贴边布局（常驻 HUD 三区域）
+
+/**
+ * 常驻 HUD 区块的贴边方式
+ * 区块位置不再写死坐标，而是按「贴哪条边 + 边距」由当前可见尺寸实时算出
+ * （计算见 ui/utils/layout/ScreenLayout.getAnchoredPosition，窗口尺寸变化时会重排）
+ */
+export interface HudAnchor {
+  /** 贴哪条边（左上 / 右上 / 底部居中） */
+  edge: "top-left" | "top-right" | "bottom-center";
+  /** 水平边距：区块边缘到屏幕左/右边缘的距离（bottom-center 忽略，恒居中） */
+  marginX: number;
+  /** 垂直边距：top-* 为区块上边缘到屏幕上边缘；bottom-center 为区块中心到屏幕下边缘 */
+  marginY: number;
+}
+
+//#endregion
+
 //#region 图片来源（resources 下的文件夹 → 取图函数）
 
 /** resources/common：通用框、底图、血条底/填充等 */
@@ -29,8 +47,7 @@ export const avatarImage = (occupation: string, sex: string) => `avatars/${occup
 /** resources/buttons：按钮背景 */
 export const buttonImage = (name: string) => `buttons/${name}`;
 
-/** 全局 UI 用到的具体图片（全部由上面的取图函数生成，换图只改这里） */
-export const hudImages = {
+/** 全局 UI 用到的具体图片（全部由上面的取图函数生成，换图只改这里） */export const hudImages = {
   /** 角色信息栏背景框 */
   roleInfoBackground: commonImage("user-info-frame"),
   /** 战斗力图标与其数字图集字体 */
@@ -92,8 +109,8 @@ export const hudSize = {
 export const roleInfoBarLayout = {
   /** 信息栏自身尺寸 */
   size: new Size(300, 70),
-  /** 自己固定在左上角 */
-  selfPosition: new Vec2(-648, 324),
+  /** 自己固定在左上角（贴边方式与边距：按可见尺寸实时计算位置） */
+  anchor: { edge: "top-left", marginX: 19, marginY: 16 } as HudAnchor,
   /** 其他玩家（屏幕中心） */
   otherPosition: new Vec2(0, 0),
   /** 背景框尺寸（与原图一致） */
@@ -120,7 +137,8 @@ export const roleInfoBarLayout = {
 export const bottomBarLayout = {
   /** 底部栏主体 */
   size: new Size(1100, 210),
-  position: new Vec2(0, -324),
+  /** 贴屏幕底部居中（marginY = 主体中心到屏幕下边缘的距离；背景下沿本就溢出屏幕，故按中心定位） */
+  anchor: { edge: "bottom-center", marginX: 0, marginY: 51 } as HudAnchor,
   /** 功能按键区（横向布局容器，按钮排列交给 Layout） */
   navBar: { spacing: 6, position: new Vec2(153.5, -10), size: new Size(400, 40) },
   /** 单个功能按键：图标尺寸 + 右下角快捷键名 */
@@ -164,9 +182,10 @@ export const bottomBarLayout = {
  * （功能入口按钮列贴地图内容区左侧，名称条贴内容区上方，线路/排行榜贴内容区下方）
  */
 export const smallMapLayout = {
-  /** 组件主体（尺寸需容纳整块内容，位置贴屏幕右上角） */
+  /** 组件主体（尺寸需容纳整块内容，位置贴屏幕右上角——按可见尺寸实时计算） */
   size: new Size(280, 250),
-  position: new Vec2(665, 238),
+  /** 贴屏幕右上角（边距为区块边缘到屏幕上/右边缘的距离） */
+  anchor: { edge: "top-right", marginX: 2, marginY: 12 } as HudAnchor,
   /** 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录） */
   entryIcons: ["world", "achievement", "mail", "config", "sound", "屏蔽 副本"],
   entryIconSize: 28,

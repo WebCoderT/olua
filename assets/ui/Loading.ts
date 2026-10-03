@@ -4,6 +4,7 @@ import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
+import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
 
 const { ccclass } = _decorator;
 
@@ -24,6 +25,8 @@ export class Loading extends Component {
   private progressLabel: Label | null = null;
 
   start() {
+    // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
+    applyScreenPolicy();
     // 背景
     this.node.addChild(GameUiHelper.createFullScreenImage("loading_background", "loading/loading_bg"));
     // 一行进度文字（百分比显示）

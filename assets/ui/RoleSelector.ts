@@ -4,6 +4,7 @@ import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
+import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
 const { ccclass } = _decorator;
 
 /** 选角主视图引用（本组件拼装并持有） */
@@ -36,6 +37,8 @@ export class RoleSelector extends Component {
   private ownerRoleSelectedId: string | null = null;
 
   start() {
+    // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
+    applyScreenPolicy();
     this.mainView = this.createMainView();
     this.showOwnerRolesUI();
   }

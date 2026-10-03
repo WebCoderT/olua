@@ -44,6 +44,11 @@ export default class SmallMap extends Node {
 
   //#region 结构拼装
 
+  /** 贴边定位（贴屏幕右上角按可见尺寸重算）——窗口尺寸变化时由组合根调用 */
+  applyAnchorPosition() {
+    GameUiHelper.setSmallMapPosition(this);
+  }
+
   /** 左侧：功能入口按钮（单列竖排的纵向布局容器，整体对齐地图内容区中心） */
   private createEntryButtons() {
     const layout = smallMapLayout;
