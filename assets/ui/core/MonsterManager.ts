@@ -1,5 +1,6 @@
 import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
 import { monsters } from "../../configs/monster";
+import { getKillExp } from "../../configs/level";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
 import { cursorConfig } from "../../configs/cursor";
 import LayerManager from "./LayerManager";
@@ -7,6 +8,7 @@ import CursorManager from "./CursorManager";
 import DropManager from "./DropManager";
 import MonsterAI from "./MonsterAI";
 import GameUiHelper from "../helpers/GameUiHelper";
+import StorageManager from "./StorageManager";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
 
@@ -170,6 +172,10 @@ export default class MonsterManager {
       MonsterAI.provoke(target);
       return;
     }
+    // 死亡：先结算击杀经验（按角色与怪物等级差，等级差 ≥6 无经验，见 configs/level.getKillExp；
+    // 经验结算在数据注销前做，经验飘字要借还活着的节点定位）
+    const role = StorageManager.findOnlineRole();
+    if (role) this.awardKillExp(target, monster, role.level);
     // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
     DropManager.drop(monster.drops, target.getWorldPosition());
@@ -179,6 +185,15 @@ export default class MonsterManager {
     const head = target.getChildByName("monster_head");
     if (head) head.active = false;
     if (!MonsterAI.die(target)) target.destroy();
+  }
+
+  /** 结算击杀经验：按角色与怪物等级差计算（见 configs/level.getKillExp），入账并在击杀位置飘字提示 */
+  private static awardKillExp(target: Node, monster: Monster, roleLevel: number) {
+    const exp = getKillExp(roleLevel, monster.level);
+    if (exp <= 0) return;
+    // 经验入账（升级判定/属性重算/补满血蓝/落盘/UI 刷新都在 StorageManager.onlineRoleGetExp 内完成）
+    StorageManager.onlineRoleGetExp(exp);
+    GameUiHelper.showExpGain(target, exp);
   }
 
   /** 刷新怪物头顶血条与血量文字 */

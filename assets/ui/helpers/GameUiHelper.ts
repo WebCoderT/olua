@@ -564,6 +564,30 @@ export default class GameUiHelper {
       .start();
   }
 
+  /**
+   * 在击杀位置显示经验获取飘字（挂特效层，上浮淡出后自动销毁；经验为 0 时不显示）
+   * @param target 被击杀的怪物节点
+   * @param exp 获得的经验值
+   */
+  static showExpGain(target: Node, exp: number) {
+    if (exp <= 0 || !isValid(target)) return;
+    const expText = UiHelper.createLabel("exp_gain_text", `+${exp} 经验`, Color.GREEN, 14, new Vec2(), new Size(100, 20));
+    LayerManager.addToEffectLayer(expText);
+    // 位置在被击杀怪物头顶
+    const targetPosition = target.getWorldPosition();
+    expText.setWorldPosition(targetPosition.x, targetPosition.y + 40, targetPosition.z);
+    const uiOpacity = expText.addComponent(UIOpacity);
+    tween(expText)
+      .to(0.6, { position: new Vec3(expText.position.x, expText.position.y + 40, 0) })
+      .start();
+    tween(uiOpacity)
+      .to(1, { opacity: 0 })
+      .call(() => {
+        expText.destroy();
+      })
+      .start();
+  }
+
   //#endregion
 
   //#region 掉落物

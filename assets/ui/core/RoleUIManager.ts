@@ -13,9 +13,10 @@ interface BottomBarView {
   updateShortcutIcon: (key: number, icon?: string, onClick?: Function, skillId?: SkillId) => void;
 }
 
-/** 角色外观视图（主角换装刷新） */
+/** 角色外观视图（主角换装刷新 + 头顶信息栏血量实时刷新） */
 interface RoleDisplayView {
   updateOutShow: (role: Role) => void;
+  updateHead: (role: Role) => void;
 }
 
 /** 角色信息弹窗视图（装备变更后刷新内观） */
@@ -207,6 +208,8 @@ export default class RoleUIManager {
   static updateRoleData(role: Role) {
     this.roleInfoBar?.updateRole(role);
     this.bottomBar?.update(role);
+    // 头顶信息栏血量实时刷新（与血球同一时机，覆盖怪物普攻/药品/复活等全部变更来源）
+    this.roleDisplay?.updateHead(role);
   }
 
   /** 更新快捷键图标 */

@@ -1,4 +1,4 @@
-import { BoxCollider2D, isValid, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
+import { BoxCollider2D, isValid, Label, Node, ProgressBar, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
 import { ACTION, DIRECTION } from "../../../types/animation";
@@ -43,6 +43,8 @@ export default class RoleDisplay extends Node {
 
   /** 当前角色数据 */
   private role: Role;
+  /** 头顶信息栏节点（血量实时刷新，见 updateHead；结构由 GameUiHelper.createHead 固定：2=血条 3=血量文字） */
+  private head: Node;
 
   /** 攻击/技能锁：动作动画播放完成前为 true */
   private attacking = false;
@@ -76,7 +78,8 @@ export default class RoleDisplay extends Node {
     /** 角色外观（衣服与武器节点由 RoleAppearance 自建并挂到自身） */
     this.appearance = new RoleAppearance(this as Node, () => this.onAttackFinished());
     /** 角色头部信息栏父节点（最后添加，绘制在角色之上） */
-    this.addChild(GameUiHelper.createHead("role_head", this.role.name, this.role.hp, this.role.maxHp));
+    this.head = GameUiHelper.createHead("role_head", this.role.name, this.role.hp, this.role.maxHp);
+    this.addChild(this.head);
   }
 
   /** 增加碰撞 */
@@ -213,6 +216,18 @@ export default class RoleDisplay extends Node {
   //#endregion
 
   //#region 外观更新
+
+  /**
+   * 头顶信息栏血量实时刷新（由 RoleUIManager.updateRoleData 统一触发，与血球/经验条同一时机）
+   * 血量变更的全部来源（怪物普攻/药品/升级补满/复活）最终都会走 updateUi，覆盖即可做到实时
+   */
+  updateHead(role: Role) {
+    if (!isValid(this) || !this.head) return;
+    const hpBar = this.head.children[2]?.getComponent(ProgressBar);
+    if (hpBar) hpBar.progress = role.maxHp > 0 ? Math.max(0, Math.min(1, role.hp / role.maxHp)) : 0;
+    const hpText = this.head.children[3]?.getComponent(Label);
+    if (hpText) hpText.string = `${Math.max(0, Math.floor(role.hp))} / ${role.maxHp}`;
+  }
 
   /** 更改外观 */
   updateOutShow(role: Role) {

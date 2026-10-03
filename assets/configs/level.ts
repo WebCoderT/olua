@@ -86,3 +86,25 @@ levelMap.set(60, createLevelConfig(36200000, 6000));
 export function getCurrentLevelExpRate(level: number, exp: number): number {
   return exp / levelMap.get(level).exp;
 }
+
+/** 击杀经验获取节奏 */
+export const expGain = {
+  /** 每级基准经验：同等级击杀经验 = (怪物等级 + 1) × 该值 */
+  expPerLevel: 5,
+  /** 角色与怪物等级差达到该值（含）后不再获得经验 */
+  maxLevelGap: 6,
+};
+
+/**
+ * 按角色与怪物的等级差计算一次击杀的经验
+ * 同等级 100%，差值越大经验越少（线性衰减），差值 ≥ maxLevelGap 后无经验
+ * @param roleLevel 角色等级
+ * @param monsterLevel 怪物等级
+ * @returns 获得的经验（无经验返回 0，有经验时至少 1）
+ */
+export function getKillExp(roleLevel: number, monsterLevel: number): number {
+  const gap = Math.abs(roleLevel - monsterLevel);
+  if (gap >= expGain.maxLevelGap) return 0;
+  const base = (monsterLevel + 1) * expGain.expPerLevel;
+  return Math.max(1, Math.round(base * (1 - gap / expGain.maxLevelGap)));
+}
