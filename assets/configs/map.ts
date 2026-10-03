@@ -38,7 +38,7 @@ maps.set("2", { label: "10级地图", src: "map/2", type: MapType.LEVEL, level: 
 
 /** 地图类型分组（传送官弹窗按此顺序分组展示；新增类型或调整顺序/标题只需改这里） */
 export const mapTypeGroups: Array<{ type: MapType; label: string }> = [
-  { type: MapType.NORMAL, label: "普通地图" },
+  { type: MapType.NORMAL, label: "新手村" },
   { type: MapType.LEVEL, label: "等级地图" },
   { type: MapType.COMBAT, label: "战斗力地图" },
   { type: MapType.SOUL_OF_WAR, label: "战魂地图" },
