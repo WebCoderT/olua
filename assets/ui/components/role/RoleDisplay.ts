@@ -50,6 +50,8 @@ export default class RoleDisplay extends Node {
   private attackComplete: (() => void) | null = null;
   /** 兜底解锁定时器（FINISHED 事件未触发时按动作时长解锁） */
   private attackTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** 死亡标记：死亡动画播完停最后一帧，期间锁全部操控与动作切换，直到复活（见 die / revive） */
+  private dead = false;
 
   constructor(role: Role) {
     super("basic_role");
@@ -91,9 +93,9 @@ export default class RoleDisplay extends Node {
 
   //#region 动作与朝向状态机
 
-  /** 操控状态变化（键盘按键/鼠标按下）：攻击/技能锁期间只记录状态，不改变动作与朝向（解锁后恢复移动） */
+  /** 操控状态变化（键盘按键/鼠标按下）：死亡/攻击/技能锁期间只记录状态，不改变动作与朝向（解锁后恢复移动） */
   private refreshMotion() {
-    if (this.attacking) return;
+    if (this.dead || this.attacking) return;
     this.updateAction();
     this.updateDirection();
   }
@@ -134,7 +136,7 @@ export default class RoleDisplay extends Node {
    * 该状态下再去操作动画组件只会报错，且动画已无意义
    */
   private updateAnimationPlay() {
-    if (!isValid(this) || !this.appearance) return;
+    if (!isValid(this) || !this.appearance || this.dead) return;
     this.appearance.play(this.action, this.direction);
   }
 
@@ -166,6 +168,11 @@ export default class RoleDisplay extends Node {
   /** 每帧根据按键状态更新角色位移 */
   updateWorldPosition() {
     const rigidBody = this.getComponent(RigidBody2D);
+    // 死亡期间原地躺尸：速度清零，不接受任何位移
+    if (this.dead) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
     // 攻击/技能锁期间不可移动，立刻停住
     if (this.attacking) {
       rigidBody.linearVelocity = Vec2.ZERO;
@@ -225,7 +232,7 @@ export default class RoleDisplay extends Node {
    * 动画完整播放完成（FINISHED）后解锁并回调 onComplete；FINISHED 未触发时按动作时长兜底解锁
    */
   startAttack(action: ACTION, direction: DIRECTION, onComplete: () => void): boolean {
-    if (this.attacking) return false;
+    if (this.dead || this.attacking) return false;
     this.attacking = true;
     this.direction = direction;
     this.action = action;
@@ -259,6 +266,48 @@ export default class RoleDisplay extends Node {
 
   //#endregion
 
+  //#region 死亡与复活
+
+  /** 是否处于死亡状态（死亡动画播完停最后一帧、操控全锁，直到 revive） */
+  isDead(): boolean {
+    return this.dead;
+  }
+
+  /**
+   * 死亡（由组合根在角色血量归零时调用）
+   * 解除攻击锁（不再恢复动作）、清目标与自动移动、停住位移，
+   * 然后按当前朝向播放死亡动画——播完停最后一帧，之后一直躺尸直到复活
+   * 键盘/鼠标输入、自动移动、技能与普攻在此期间全部被 dead 标记拦住（见各入口的守卫）
+   */
+  die() {
+    if (this.dead) return;
+    this.dead = true;
+    // 攻击锁收尾：清兜底定时器与待结算回调，死亡期间 onAttackFinished 不再恢复动作
+    if (this.attackTimeout !== null) {
+      clearTimeout(this.attackTimeout);
+      this.attackTimeout = null;
+    }
+    this.attacking = false;
+    this.attackComplete = null;
+    this.autoMove = null;
+    this.setTarget(null);
+    const rigidBody = this.getComponent(RigidBody2D);
+    if (rigidBody) rigidBody.linearVelocity = Vec2.ZERO;
+    this.appearance?.die(this.direction);
+  }
+
+  /** 复活（由组合根在补满血量、安全复活传送完成后调用）：解除死亡状态并回到待机 */
+  revive() {
+    if (!this.dead) return;
+    this.dead = false;
+    this.appearance?.revive();
+    // 按当前输入恢复动作（无输入回到待机）
+    this.updateAction();
+    this.updateDirection();
+  }
+
+  //#endregion
+
   //#region 选中目标与操控状态
 
   /** 设置攻击目标（null 表示取消选中），并刷新怪物信息面板 */
@@ -287,6 +336,7 @@ export default class RoleDisplay extends Node {
    * 键盘输入优先于自动移动（玩家随时可接管）；攻击锁期间只记录方向，解锁后由下一帧自动战斗接管
    */
   setAutoMove(direction: Vec2 | null, run: boolean = false) {
+    if (this.dead) return;
     this.autoMove = direction;
     this.autoRun = run;
     if (this.attacking) return;

@@ -50,6 +50,8 @@ export default class MonsterAI {
     const animate = this.getAnimate(node);
     if (!animate) return;
     const state = this.states.get(node);
+    // 死亡动画播完不续播：节点由 MonsterManager 在死亡动画的 FINISHED 里移除
+    if (state?.dead) return;
     const action = state?.action ?? ACTION.STAND;
     const direction = state?.direction ?? DIRECTION.DOWN;
     if (state && ONCE_ACTIONS.indexOf(action) >= 0) {
@@ -60,6 +62,28 @@ export default class MonsterAI {
     }
     const name = getAnimationName(action, direction);
     if (animate.getState(name)) animate.play(name);
+  }
+
+  /**
+   * 播放死亡动画（由 MonsterManager 在怪物血量归零时调用）
+   * 停住位移，按当前朝向播放死亡动作；播完即移除节点（怪物死亡后不再消失于下一帧，而是等动画播完）
+   * 死亡期间 dead 标记会拦住「播完续播」（replayCurrent），动画停帧后节点随即被销毁
+   * @returns 是否已开始播放死亡动画（没有动画组件或缺死亡帧资源时返回 false，调用方直接移除节点）
+   */
+  static die(node: Node): boolean {
+    const animate = this.getAnimate(node);
+    if (!animate) return false;
+    const state = this.getState(node);
+    state.dead = true;
+    this.stopMoving(node);
+    const name = getAnimationName(ACTION.DIE, state.direction);
+    if (!animate.getState(name)) return false;
+    // 死亡动画播完移除节点（createMonsterNode 注册的续播监听会被 dead 标记拦住，不会把死亡动画重播）
+    animate.once(Animation.EventType.FINISHED, () => {
+      if (isValid(node)) node.destroy();
+    }, node);
+    animate.play(name);
+    return true;
   }
 
   //#region 单个怪物的行为
@@ -281,6 +305,7 @@ export default class MonsterAI {
     const state: MonsterAIState = {
       /** 初始动作与 GameUiHelper.createMonsterBody 播的待机动画一致，避免开局多切一次动画 */
       action: ACTION.STAND,
+      dead: false,
       direction: DIRECTION.DOWN,
       /** 初始停留点即出生位置 */
       anchor: node.getWorldPosition(),

@@ -11,6 +11,7 @@ import SmallMap from "./components/hud/SmallMap";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
 import CursorInput from "./components/input/CursorInput";
+import DeathDialog from "./components/dialogs/DeathDialog";
 import GameHelper from "./core/GameHelper";
 import StorageManager from "./core/StorageManager";
 import LayerManager from "./core/LayerManager";
@@ -45,6 +46,8 @@ export class Game extends Component {
   private roleInfoBar: RoleInfoBar | null = null;
   /** 小地图（右上角：地图名称/世界坐标/角色黑点/附近怪物红点） */
   private smallMap: SmallMap | null = null;
+  /** 死亡遮罩弹窗（进入死亡流程时创建、复活后销毁） */
+  private deathDialog: DeathDialog | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
   private ready = false;
   /** 魔法值自然回复的结算计时（秒，满 1 秒结算一次） */
@@ -124,11 +127,15 @@ export class Game extends Component {
     AutoBattleTips.reset();
     StatusManager.reset();
     RoleUIManager.clearViews();
+    // 死亡弹窗随 UI 层一起随场景销毁，这里只释放引用
+    this.deathDialog = null;
   }
 
   update(deltaTime: number) {
     // 资源预加载完成前（start 里在 await）不驱动任何逻辑，避免用到还没创建的组件
     if (!this.ready) return;
+    // 角色死亡检测（怪物普攻把血量扣到 0 即进入死亡流程：死亡动画 + 复活弹窗）
+    this.checkRoleDeath();
     // 鼠标指针样式（每帧最多判定一次：鼠标未移动且悬停目标未变化时不做任何事）
     CursorManager.tick();
     // 自动战斗每帧驱动（快速攻击/自动挂机：写入自动移动方向、按冷却出手；玩家手动移动时由玩家接管）
@@ -148,8 +155,9 @@ export class Game extends Component {
     }
     // 自动战斗提示（屏幕中间循环播放：「自动战斗中」挂机期间 /「自动寻路中」自动走位期间，允许同显，挂特效层）
     AutoBattleTips.update(this.roleDisplay);
-    // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入）
-    MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay);
+    // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入；
+    // 玩家死亡后不再给怪物提供玩家节点——尸体不会被追击与普攻）
+    MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay && !this.roleDisplay.isDead() ? this.roleDisplay : null);
     // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）
     this.smallMap?.update();
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
@@ -164,4 +172,43 @@ export class Game extends Component {
     // 选中指示器跟随目标脚下（目标失效时自动销毁）
     RoleUIManager.updateMonsterSelect();
   }
+
+  //#region 死亡与复活
+
+  /**
+   * 角色死亡检测（每帧校验）：角色血量归零即进入死亡流程——
+   * 停自动战斗 → 播死亡动画并锁全部操控（见 RoleDisplay.die）→ 弹出复活选择弹窗
+   * 血量归零也可能来自上一次会话的存档（死亡时退出游戏），进图后同样会在这里补上死亡流程
+   */
+  private checkRoleDeath() {
+    const role = StorageManager.findOnlineRole();
+    if (!role || role.hp > 0 || !this.roleDisplay || this.roleDisplay.isDead()) return;
+    AutoBattle.cancel();
+    this.roleDisplay.die();
+    this.deathDialog = new DeathDialog({
+      onReviveInPlace: () => this.reviveRole(false),
+      onReviveSafe: () => this.reviveRole(true),
+    });
+    LayerManager.addToUILayer(this.deathDialog);
+  }
+
+  /**
+   * 复活：补满血量与魔法值并落盘刷新视图，然后按复活方式收尾——
+   * 原地复活：留在死亡位置直接起身；安全复活：先传送回当前地图的复活点再起身
+   */
+  private reviveRole(safe: boolean) {
+    const role = StorageManager.findOnlineRole();
+    if (!role) return;
+    role.hp = role.maxHp;
+    role.mp = role.maxMp;
+    StorageManager.updateOnlineRole(role);
+    RoleUIManager.updateRoleData(role);
+    // 安全复活先传送（复活点定位走 GameMap 的 revive 回调，与进图定位同一套换算）
+    if (safe) this.gameMap?.revive();
+    this.roleDisplay?.revive();
+    this.deathDialog?.destroy();
+    this.deathDialog = null;
+  }
+
+  //#endregion
 }

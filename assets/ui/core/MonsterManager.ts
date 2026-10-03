@@ -165,11 +165,15 @@ export default class MonsterManager {
     monster.hp = Math.max(0, monster.hp - damage);
     this.updateHead(target, monster);
     if (monster.hp > 0) return;
-    // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册并移除节点
+    // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
+    // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
     DropManager.drop(monster.drops, target.getWorldPosition());
     this.monsterMap.delete(target);
     CursorManager.unregisterHover(target);
-    target.destroy();
+    // 头顶血条隐藏（死亡后血量已无意义，留着会一直显示 0 / maxHp）
+    const head = target.getChildByName("monster_head");
+    if (head) head.active = false;
+    if (!MonsterAI.die(target)) target.destroy();
   }
 
   /** 刷新怪物头顶血条与血量文字 */

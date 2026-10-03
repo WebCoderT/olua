@@ -70,6 +70,16 @@ export default class GameMap extends Node {
   }
 
   /**
+   * 回到复活点（安全复活）：把主角传送到当前地图的复活点
+   * 进入地图时已定位过一次（setReviveHandler 的立即回调），死亡后选「安全复活」时再次触发
+   * 地图未标复活点时不做任何事（不移动）
+   */
+  revive() {
+    if (!this.reviveWorldPosition) return;
+    this.reviveHandler?.(this.reviveWorldPosition);
+  }
+
+  /**
    * 前往复活点：把复活点的地图坐标换算成世界坐标后交给主角
    * 复活点由 npc 对象组中类为 revive 的点位决定（旧地图用对象名 revive 标记，同样识别）
    * 地图未标复活点时只提示、不打断后续流程（否则会连带阻断地图对象生成）

@@ -56,6 +56,8 @@ export interface Monster extends MonsterConfig {
 export interface MonsterAIState {
   /** 当前动作（动画播完据此续播；缺帧的动作会回退成待机） */
   action: ACTION;
+  /** 死亡标记：死亡动画播放期间不再续播/接管任何行为，节点由 MonsterManager 在动画播完后移除 */
+  dead: boolean;
   /** 当前朝向 */
   direction: DIRECTION;
   /** 停留点（生成位置或失去玩家时的位置，原地随机走动围绕它进行） */

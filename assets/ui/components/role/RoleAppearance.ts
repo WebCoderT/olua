@@ -42,6 +42,8 @@ export default class RoleAppearance {
   private weaponEquipment: Equipment | null = null;
   /** 上次计算的层级关系（null 表示尚未计算；方向没变时不重复调整 sibling） */
   private clothOnTop: boolean | null = null;
+  /** 死亡标记：死亡动画播完停最后一帧，期间不再响应任何动作切换与播完续播，直到复活 */
+  private dead = false;
 
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
@@ -67,6 +69,8 @@ export default class RoleAppearance {
    * 需要武器的动作在未装备武器时不切换（保持当前动画）
    */
   play(action: ACTION, direction: DIRECTION) {
+    // 死亡期间动作切换全部冻结：死亡动画播完后一直停最后一帧，直到复活
+    if (this.dead) return;
     this.action = action;
     this.direction = direction;
     // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
@@ -77,6 +81,28 @@ export default class RoleAppearance {
     const animationName = getAnimationName(action, direction);
     this.clothAnimate?.crossFade(animationName, 0.2);
     this.weaponAnimate?.crossFade(animationName, 0.2);
+  }
+
+  /**
+   * 播放死亡动画（由宿主在角色血量归零时调用，见 RoleDisplay.die）
+   * 按当前朝向播放死亡动作，播完停最后一帧（Normal 模式播完保持末帧，播完续播被 dead 标记拦住）
+   */
+  die(direction: DIRECTION) {
+    this.action = ACTION.DIE;
+    this.direction = direction;
+    this.dead = true;
+    this.applyOutTransform(this.cloth, this.clothEquipment);
+    this.applyOutTransform(this.weapon, this.weaponEquipment);
+    this.updateLayerOrder();
+    const animationName = getAnimationName(ACTION.DIE, direction);
+    this.clothAnimate?.crossFade(animationName, 0.1);
+    this.weaponAnimate?.crossFade(animationName, 0.1);
+  }
+
+  /** 复活（由宿主在回血/传送完成后调用）：解除死亡状态并回到待机 */
+  revive() {
+    this.dead = false;
+    this.play(ACTION.STAND, this.direction);
   }
 
   /**
@@ -133,6 +159,8 @@ export default class RoleAppearance {
     animate.on(
       Animation.EventType.FINISHED,
       (_, { name }: { name: string }) => {
+        // 死亡动画播完停最后一帧：不解除攻击锁、也不续播当前动作
+        if (this.dead) return;
         if (name.includes("attack")) this.onAttackFinished();
         /** 播放完成后更换当前最新动画 */
         animate.play(getAnimationName(this.action, this.direction));
