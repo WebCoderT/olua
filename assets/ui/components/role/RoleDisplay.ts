@@ -260,6 +260,7 @@ export default class RoleDisplay extends Node {
     // (26, 62) 约为右上角肩侧；动画帧自带大量透明边距，实际视觉尺寸更小）
     const node = GameUiHelper.createSoulAnimation(config, roleShowLayout.soul.size);
     node.name = "soul_show";
+    node.setScale(roleShowLayout.soul.scale.x, roleShowLayout.soul.scale.y);
     node.setPosition(roleShowLayout.soul.position.x, roleShowLayout.soul.position.y);
     this.addChild(node);
     this.soulShowNode = node;

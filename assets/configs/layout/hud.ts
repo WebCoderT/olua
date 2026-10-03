@@ -181,7 +181,7 @@ export const tipsLayout = {
  */
 export const roleShowLayout = {
   /** 战魂外显（勾选「外显」时挂载，随主角移动；动画帧自带大量透明边距，实际视觉尺寸更小） */
-  soul: { position: new Vec2(26, 62), size: new Size(72, 72) },
+  soul: { position: new Vec2(26, 62), size: new Size(72, 72), scale: { x: 0.1, y: 0.1 } },
 };
 
 //#endregion
