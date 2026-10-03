@@ -55,9 +55,10 @@ export const roleSelectorLayout = {
     nameLabel: { name: "selected_role_name", text: "---", position: new Vec2(-35, 0), size: new Size(160, 30), fontSize: 20 },
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },
   },
-  /** 已有角色预览：站位（最多 3 个，按角色顺序）与预览尺寸 */
+  /** 已有角色预览：站位（最多 3 个，按角色顺序）、预览尺寸、站立帧动画帧率（每秒帧数） */
   rolePositions: [new Vec2(-485, -25), new Vec2(-250, -75), new Vec2(-10, -40)],
   previewSize: new Size(200, 360),
+  previewFrameRate: 8,
   /** 创建角色弹窗 */
   createDialog: {
     name: "create_role_dialog",
