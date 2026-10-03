@@ -4,6 +4,32 @@ import type { ACTION, DIRECTION, SpeedRate } from "./animation";
 import type { DropSource } from "./drop";
 import type { SkillId } from "./skill";
 
+/**
+ * 怪物定位：决定「同等级」下的强度倍率（倍率数值见 configs/growth 的 monsterTierScale）
+ * - normal 普通怪：曲线基准
+ * - elite  精英怪：更耐打、打人更疼
+ * - boss   首领：同级要打几十刀
+ */
+export type MonsterTier = "normal" | "elite" | "boss";
+
+/**
+ * 怪物配置数据（configs/monster 里的条目形态）
+ *
+ * **key 只做关联**：地图对象组的 id、掉落表、AI 都用它引用同一只怪；
+ * key 可以是任意字符串（不要求是数字，例如 "goblin_chief"），也不参与任何数值计算。
+ * 数值一律按 level（配合 tier）从 configs/growth 的成长曲线派生。
+ *
+ * 战斗属性（maxHp 与六项攻防）是**可选**的：不写就由 monsterStats(level, tier) 按等级生成，
+ * 写了则覆盖生成值（用于法系怪要魔法攻击、特殊怪要更高血量之类的特例）。
+ */
+export type MonsterData = Omit<MonsterConfig, keyof BattleAttributes> &
+  Partial<BattleAttributes> & {
+    /** 关联键（唯一）——地图对象组的 id 就是它，仅用于相互引用 */
+    key: string;
+    /** 定位（不写 = normal，影响同等级下的强度倍率） */
+    tier?: MonsterTier;
+  };
+
 /** 怪物配置接口 */
 export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   /** 图标 */

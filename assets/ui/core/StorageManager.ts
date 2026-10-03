@@ -3,6 +3,7 @@ import RoleUIManager from "./RoleUIManager";
 import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
+import { roleMaxLevel } from "../../configs/growth";
 import { initialShortcutKeys } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
@@ -157,8 +158,8 @@ export default class StorageManager {
     if (role.exp >= levelMap.get(role.level).exp) {
       // 扣除升级所需经验
       role.exp -= levelMap.get(role.level).exp;
-      // 升级
-      if (role.level >= 30) role.level = 30;
+      // 升级（等级上限跟成长曲线走，见 configs/growth 的 roleMaxLevel）
+      if (role.level >= roleMaxLevel) role.level = roleMaxLevel;
       else role.level += 1;
       // 属性重新计算
       Object.assign(role, GameHelper.combatCalc(role));

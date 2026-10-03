@@ -77,7 +77,9 @@ export class Role implements BattleAttributes {
     this.hp = this.maxHp = levelMap.get(this.level).maxHp;
     this.mp = this.maxMp = levelMap.get(this.level).maxMp;
     this.combat = this.maxHp * 10;
-    this.physicalAttack = levelMap.get(this.level).physicalAttack;
+    // 复制一份初始属性（不要直接引用配置里的区间数组，避免运行时改动污染配置表；
+    // 完整属性由 GameHelper.combatCalc 按「等级 + 装备 + 战魂」重算）
+    this.physicalAttack = [...levelMap.get(this.level).physicalAttack];
 
     // 初始化背包数据
     this.bag = [];
