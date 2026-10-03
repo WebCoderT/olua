@@ -25,9 +25,15 @@ import type { MonsterTier } from "../types/monster";
  *    1→60 级全流程约 7000 只怪 ≈ 11 小时。
  *
  * ## 与装备的关系
- * 装备属性**不在这条曲线里**（独立加成层，各装备自己写数值）。
- * 曲线是按「角色裸属性」定标的，所以装备整体应该控制在角色同级裸属性的 30%~100% 区间内，
- * 才不会出现「不穿装备打不动 / 穿满装备一刀秒」的断层。
+ * 装备属性由下面的 equipmentStats(level, slot) 按**装备自己的 level** 生成，
+ * 各装备的条目里不再手写攻防（要特例就写同名字段覆盖）。
+ * 全套装备合计 = 同级角色裸属性的 equipmentGrowth.setPowerRate 倍（当前 2 = 200%，
+ * 即穿满一套后总属性约是裸属性的 3 倍）。
+ *
+ * ⚠ 注意：上面的「打怪节奏 5.5 刀」是按**裸属性**定标的，
+ * 所以穿满一套后同级怪只要约 1.4 刀。如果希望「穿满一套正好 5.5 刀」，
+ * 要么把 setPowerRate 降下来（0.6 左右），要么把怪物血量按穿满装备重新定标
+ * （改 monsterBalance，会让裸装变成约 21 刀）。
  */
 
 /** 一条分段线性曲线的一档：档内按等级线性增长，档间靠 perLevel 跳档 */
@@ -213,6 +219,112 @@ export function monsterStats(level: number, tier: MonsterTier = "normal"): Monst
     physicalDefense: [defense[0], defense[1]],
     magicDefense: [defense[0], defense[1]],
     taoistDefense: [defense[0], defense[1]],
+  };
+}
+
+//#endregion
+
+//#region 装备
+
+/**
+ * 装备部位键（与 types/good 的 EQUIPMENT_TYPE 枚举值一一对应）
+ * 故意写成字面量联合而不是 import 枚举：growth.ts 要保持「只依赖 type 导入、能被 node 直接跑」，
+ * 且拼错部位名时能直接编译报错（字符串枚举成员可赋给这里的字面量类型）
+ */
+export type EquipmentSlotKey =
+  | "cloth"
+  | "weapon"
+  | "helmet"
+  | "belt"
+  | "shoes"
+  | "necklace"
+  | "ring"
+  | "accessories"
+  | "scapular"
+  | "shinguard"
+  | "wristband"
+  | "other1"
+  | "other2";
+
+/** 某部位对三类属性的贡献权重（各列合计 100，含义见 equipmentSlotShare 注释） */
+export interface EquipmentAttributeShare {
+  /** 血量权重 */
+  maxHp: number;
+  /** 攻击权重（三攻同值，取角色同级攻击上限） */
+  attack: number;
+  /** 防御权重（三防同值，取角色同级防御上限） */
+  defense: number;
+}
+
+/** 装备成长参数 */
+export const equipmentGrowth = {
+  /**
+   * 全套装备合计 = 同级角色裸属性的该倍数
+   * 2 表示「每类属性都 +200%」：穿满一套后，血量/攻击/防御都变成裸属性的 3 倍。
+   *
+   * ⚠ 这个值直接决定装备在养成里的分量，也直接改变打怪节奏：
+   *   0.6 → 同级怪约 3.5 刀（装备是锦上添花）
+   *   2.0 → 同级怪约 1.4 刀（装备是主要成长来源，怪很脆）
+   * 想整体调强/调弱装备只改这一个数（各部位之间的分配比例见 equipmentSlotShare）。
+   */
+  setPowerRate: 2,
+} as const;
+
+/**
+ * 部位分配权重（每列合计 100）
+ * 实际数值 = 同级角色裸属性上限 × (该部位权重 / 100) × equipmentGrowth.setPowerRate
+ *
+ * 设计口径：武器只给攻击、衣服是血防主源、首饰偏攻击但血防也有、防具（头盔/腰带/鞋子）血量略高于防御。
+ * 补上「肩胛/护腕/护腿/饰品」等新部位时，从现有部位里匀出权重（保持每列 100），
+ * 否则全套会超过 setPowerRate。
+ */
+export const equipmentSlotShare: Record<EquipmentSlotKey, EquipmentAttributeShare> = {
+  weapon: { maxHp: 0, attack: 52, defense: 8 },
+  cloth: { maxHp: 30, attack: 10, defense: 30 },
+  helmet: { maxHp: 16, attack: 5, defense: 15 },
+  belt: { maxHp: 17, attack: 4, defense: 15 },
+  shoes: { maxHp: 13, attack: 5, defense: 14 },
+  necklace: { maxHp: 12, attack: 12, defense: 9 },
+  ring: { maxHp: 12, attack: 12, defense: 9 },
+  // 以下部位暂无装备：权重留 0，补装备时从上面匀（写 0 而不是缺键，是为了让拼错的部位名编译报错）
+  accessories: { maxHp: 0, attack: 0, defense: 0 },
+  scapular: { maxHp: 0, attack: 0, defense: 0 },
+  shinguard: { maxHp: 0, attack: 0, defense: 0 },
+  wristband: { maxHp: 0, attack: 0, defense: 0 },
+  other1: { maxHp: 0, attack: 0, defense: 0 },
+  other2: { maxHp: 0, attack: 0, defense: 0 },
+};
+
+/** 装备提供的战斗属性（固定值：区间两端同数，与角色的浮动区间区分开） */
+export type EquipmentStats = Pick<BattleAttributes, "maxHp" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense">;
+
+/**
+ * 按**装备等级 + 部位**生成战斗属性（configs/equipments 的每条装备都用它）
+ * 等级取自装备条目自己的 `level` 字段（= 穿戴需求等级），部位取自 `slot` 字段。
+ * 数值是**固定值**（区间两端相同），同名装备数值确定，便于横向比较与手调。
+ * @param level 装备等级（穿戴需求等级）
+ * @param slot 装备部位（决定属性分配比例）
+ */
+export function equipmentStats(level: number, slot: EquipmentSlotKey): EquipmentStats {
+  const share = equipmentSlotShare[slot];
+  const role = getRoleLevelAttributes(level);
+  const rate = equipmentGrowth.setPowerRate / 100;
+
+  // 有份额但算出来 <1 时保底 1（低等级时裸属性很小，四舍五入会把小份额抹成 0）
+  const scale = (maximum: number, weight: number) => (weight > 0 ? Math.max(1, Math.round(maximum * weight * rate)) : 0);
+
+  const maxHp = scale(role.maxHp, share.maxHp);
+  const attack = scale(role.physicalAttack[1], share.attack);
+  const defense = scale(role.physicalDefense[1], share.defense);
+  return {
+    maxHp,
+    // 三攻同值：角色只用自己职业那一项，拉开只会凭空造出职业强弱差（与角色曲线同一口径）
+    physicalAttack: [attack, attack],
+    magicAttack: [attack, attack],
+    taoistAttack: [attack, attack],
+    physicalDefense: [defense, defense],
+    magicDefense: [defense, defense],
+    taoistDefense: [defense, defense],
   };
 }
 

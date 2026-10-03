@@ -97,6 +97,18 @@ export interface Equipment extends Good, BattleAttributes {
   suffix: string;
 }
 
+/**
+ * 装备配置数据（configs/equipments 里的条目形态）
+ *
+ * **key 只做关联**：背包 / 掉落表 / 职业初始装备都用它引用同一件装备；
+ * key 可以是任意字符串（不要求是数字，例如 "cloth_fire"），也不参与任何数值计算。
+ * 数值一律按 level（配合 slot）从 configs/growth 的装备曲线派生。
+ *
+ * 战斗属性是**可选**的：不写就由 equipmentStats(level, slot) 按等级生成，
+ * 写了就覆盖生成值（要单独给某件装备加特例时用）。
+ */
+export type EquipmentData = Omit<Equipment, keyof BattleAttributes> & Partial<BattleAttributes> & { key: string };
+
 /** 药品使用效果（新增效果类型时在此扩展） */
 export interface DrugEffect {
   /** 恢复血量 */

@@ -963,7 +963,7 @@ export default class GameUiHelper {
     contentBody.getComponent(Layout).resizeMode = Layout.ResizeMode.CONTAINER;
     if (isEquipment(good)) {
       (goodShowAttributes.get(good.slot) ?? []).forEach((attr) => {
-        contentBody.addChild(this.createAttributeLabel(attr, good[attr].toString()));
+        contentBody.addChild(this.createAttributeLabel(attr, good[attr]));
       });
     }
 
@@ -1008,8 +1008,9 @@ export default class GameUiHelper {
 
   /**
    * 创建属性标签
+   * @param value 属性值：装备是固定值 [v, v]、角色等级属性是浮动区间 [min, max]
    */
-  static createAttributeLabel(key: keyof BattleAttributes, value: string, size: Size = new Size(220, 20)) {
+  static createAttributeLabel(key: keyof BattleAttributes, value: readonly number[] | number, size: Size = new Size(220, 20)) {
     const attributeLabel = UiHelper.createFlexRow(key, 10, new Vec2(), size);
 
     const icon = UiHelper.createSprite("icon", uiImages.dot, new Vec2(), new Size(10, 10));
@@ -1019,10 +1020,20 @@ export default class GameUiHelper {
     label.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     attributeLabel.addChild(label);
 
-    const attribute = UiHelper.createLabel(key, value.replace(",", " - "), Color.WHITE, 12, new Vec2(), new Size(size.width - 20 - 50 - 10, size.height));
+    const attribute = UiHelper.createLabel(key, this.formatAttributeValue(value), Color.WHITE, 12, new Vec2(), new Size(size.width - 20 - 50 - 10, size.height));
     attributeLabel.addChild(attribute);
 
     return attributeLabel;
+  }
+
+  /**
+   * 属性值格式化
+   * 区间两端相同时只显示一个数（装备是固定值，显示「120 - 120」没有意义），
+   * 两端不同才显示区间（角色等级属性是 [上限×0.7, 上限] 的浮动区间）
+   */
+  static formatAttributeValue(value: readonly number[] | number): string {
+    if (typeof value === "number") return String(value);
+    return value[0] === value[1] ? String(value[0]) : `${value[0]} - ${value[1]}`;
   }
 
   /**
@@ -1057,7 +1068,7 @@ export default class GameUiHelper {
     clearChildren(node);
     node.addChild(this.createText("role_basic_attributes", "基础属性", 14, new Vec2(), new Size(size.width, 14)));
     for (const element of goodShowAttributesLabel.keys()) {
-      node.addChild(this.createAttributeLabel(element, role[element].toString(), new Size(size.width, 20)));
+      node.addChild(this.createAttributeLabel(element, role[element], new Size(size.width, 20)));
     }
     node.addChild(this.createText("role_special_attributes", "特殊属性", 14, new Vec2(), new Size(size.width, 14)));
     return layout;
