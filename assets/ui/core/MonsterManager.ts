@@ -98,10 +98,14 @@ export default class MonsterManager {
 
   //#endregion
 
-  /** 获取被点击的怪物节点 */
+  /**
+   * 获取被点击的怪物节点
+   * 命中用 hitTest（屏幕坐标口径，内部走相机 screenToWorld），与走路换算同一坐标系；
+   * 不能用废弃的 isHit——它吃 UI 空间坐标，窗口尺寸 ≠ 设计分辨率时整体偏移（选不中怪的根因）
+   */
   static getClickedMonster(position: Vec2): Node | null {
     for (const node of this.monsterMap.keys()) {
-      if (isValid(node) && node.getComponent(UITransform).isHit(position)) return node;
+      if (isValid(node) && node.getComponent(UITransform).hitTest(position)) return node;
     }
     return null;
   }

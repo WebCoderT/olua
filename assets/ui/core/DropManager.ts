@@ -112,11 +112,14 @@ export default class DropManager {
     return picked.length;
   }
 
-  /** 获取被点击的掉落物节点（后掉落的节点在上层，优先命中） */
+  /**
+   * 获取被点击的掉落物节点（后掉落的节点在上层，优先命中）
+   * 命中用 hitTest（屏幕坐标口径，与怪物选中/走路换算一致；废弃的 isHit 在窗口非设计分辨率时会偏移）
+   */
   static getClickedDrop(position: Vec2): Node | null {
     const nodes = Array.from(this.dropMap.keys()).reverse();
     for (const node of nodes) {
-      if (isValid(node) && node.getComponent(UITransform)?.isHit(position)) return node;
+      if (isValid(node) && node.getComponent(UITransform)?.hitTest(position)) return node;
     }
     return null;
   }

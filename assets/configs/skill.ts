@@ -1,6 +1,6 @@
 import { OECCUPATION } from "../types/role";
 import { SkillConfig, SkillId, SkillTargetType, SkillType } from "../types/skill";
-import { skill_1000, skill_1001, skill_1010 } from "../skills/zhan";
+import { skill_1000, skill_1001, skill_1008, skill_1010 } from "../skills/zhan";
 import { ACTION } from "../types/animation";
 
 /** 职业技能映射 */
@@ -301,29 +301,17 @@ const skillData: Array<SkillConfig & { id: SkillId }> = [
     icon: "skill/icon/1005",
     cooldown: 1,
     mpCost: 10,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
+    targetType: SkillTargetType.PLACE,
+    oeccupation: OECCUPATION.ALL,
     level: 10,
     description: "高阶专属技能，突进目标后有概率触发麻痹效果，是后期版本中打先手控制的神技",
     type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    onClick: skill_1000,
-    action: ACTION.STAND,
+    damageCoefficients: [],
+    distance: 200,
+    onClick: skill_1008,
+    action: ACTION.ATTACK_FAR,
     canAuto: false,
-    effect: "effect/skill/s_1002@0",
+    effect: "effect/skill/s_3010@0",
     effectIsOnSelf: false,
   },
 

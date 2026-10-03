@@ -96,7 +96,8 @@ export default class CursorManager {
         return;
       }
       if (!node.activeInHierarchy) return;
-      if (!node.getComponent(UITransform)?.isHit(this.location)) return;
+      // location 是屏幕坐标，必须走 hitTest（屏幕口径）；废弃的 isHit 吃 UI 空间坐标，窗口非设计分辨率时偏移
+      if (!node.getComponent(UITransform)?.hitTest(this.location)) return;
       candidates.push(target);
     });
     if (!candidates.length) return cursorConfig.default;

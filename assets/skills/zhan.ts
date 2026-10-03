@@ -25,3 +25,6 @@ export function skill_1001(context: SkillContext) {
 export function skill_1010(context: SkillContext) {
   StatusManager.applyStatusOfSkill("1010");
 }
+
+/** 十步一杀 */
+export function skill_1008() {}
