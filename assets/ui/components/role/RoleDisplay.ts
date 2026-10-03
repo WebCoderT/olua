@@ -7,6 +7,7 @@ import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { getDirectionByVector } from "../../utils/battle/BattleMath";
+import { getSoulLevel } from "../../../configs/soul";
 import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
@@ -45,6 +46,8 @@ export default class RoleDisplay extends Node {
   private role: Role;
   /** 头顶信息栏节点（血量实时刷新，见 updateHead；结构由 GameUiHelper.createHead 固定：2=血条 3=血量文字） */
   private head: Node;
+  /** 战魂外显节点（右上角循环播放当前等级战魂动画，见 updateSoulShow；未勾选外显时为 null） */
+  private soulShowNode: Node | null = null;
 
   /** 攻击/技能锁：动作动画播放完成前为 true */
   private attacking = false;
@@ -235,6 +238,26 @@ export default class RoleDisplay extends Node {
     // 衣服与武器外观（节点已销毁/外观未就绪时跳过，同 updateAnimationPlay）
     if (!isValid(this) || !this.appearance) return;
     this.appearance.updateOutShow(role, this.action, this.direction);
+  }
+
+  /**
+   * 战魂外显（由战魂弹窗勾选开关与升级后、以及进图时调用）
+   * 按角色数据 role.soulShow 重建右上角的战魂动画节点：
+   * 勾选且已激活战魂（soulOfWar > 0）时挂载，否则摘除；挂载的节点随主角移动（作为子节点跟随）
+   */
+  updateSoulShow() {
+    if (!isValid(this)) return;
+    if (this.soulShowNode && isValid(this.soulShowNode)) this.soulShowNode.destroy();
+    this.soulShowNode = null;
+    if (!this.role.soulShow) return;
+    const config = getSoulLevel(this.role.soulOfWar);
+    if (!config) return;
+    // 角色锚点 (0.5, 0)、内容 40×70：(26, 62) 约为右上角肩侧；动画帧自带大量透明边距，实际视觉尺寸更小
+    const node = GameUiHelper.createSoulAnimation(config, new Size(72, 72));
+    node.name = "soul_show";
+    node.setPosition(26, 62);
+    this.addChild(node);
+    this.soulShowNode = node;
   }
 
   //#endregion

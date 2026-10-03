@@ -120,6 +120,7 @@ export default class StorageManager {
     });
     // 战魂等级：旧存档缺失补 0（未激活）
     if (typeof role.soulOfWar !== "number") role.soulOfWar = 0;
+    if (typeof role.soulShow !== "boolean") role.soulShow = false;
   }
 
   /**

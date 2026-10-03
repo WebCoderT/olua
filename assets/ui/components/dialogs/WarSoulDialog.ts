@@ -2,6 +2,7 @@ import { Color, isValid, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc"
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
+import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
 import { getSoulLevel, soulLevels, soulMaxLevel } from "../../../configs/soul";
 import { clearChildren } from "../../utils/node/NodeTree";
@@ -26,7 +27,7 @@ const SOUL_UPGRADE_BUTTON_POSITION = new Vec2(250, -205);
 /**
  * 战魂弹窗（左中右三栏）
  * 左：所有战魂等级卡片的竖向滚动列表（按等级从上到下排列，已激活/未激活/选中三种状态）
- * 中：所选等级的战魂动画 + 名称/描述/当前战魂信息
+ * 中：所选等级的战魂动画 + 名称/描述/当前战魂信息 + 外显勾选框（勾选后当前等级动画挂主角右上角）
  * 右：所选等级的战魂属性（带下一级增量）+ 绑定元宝余额 + 升级按钮
  * 升级消耗绑定元宝（见 configs/soul），成功后整体刷新弹窗
  */
@@ -66,8 +67,11 @@ export default class WarSoulDialog {
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
       () => {
-        // 升级成功后整体刷新（失败时 StorageManager 已弹出原因提示）
-        if (StorageManager.upgradeSoul()) this.refresh();
+        // 升级成功后整体刷新（失败时 StorageManager 已弹出原因提示）；外显已勾选时同步换掉主角身上的战魂动画
+        if (StorageManager.upgradeSoul()) {
+          RoleUIManager.updateSoulShow();
+          this.refresh();
+        }
       },
       this,
     );
@@ -108,6 +112,15 @@ export default class WarSoulDialog {
     const current = getSoulLevel(role.soulOfWar);
     this.infoSlot.addChild(
       UiHelper.createLabel("soul_current", current ? `当前战魂：${role.soulOfWar} 阶 · ${current.label}` : "尚未激活战魂", new Color(255, 223, 170), 12, new Vec2(0, -2), new Size(320, 18)),
+    );
+    // 外显勾选框：勾选后把当前等级的战魂动画挂到主角右上角（状态持久在角色数据 role.soulShow）
+    this.infoSlot.addChild(
+      GameUiHelper.createSoulShowToggle(role.soulShow, () => {
+        role.soulShow = !role.soulShow;
+        StorageManager.updateOnlineRole(role);
+        RoleUIManager.updateSoulShow();
+        this.refresh();
+      }),
     );
     // 右侧属性：所选等级属性 + 下一级增量
     clearChildren(this.attributeSlot);

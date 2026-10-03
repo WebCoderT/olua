@@ -122,6 +122,8 @@ const SOUL_ATTRIBUTE_WIDTH = 210;
 const SOUL_ATTRIBUTE_SPACING = 6;
 /** 战魂动画节点尺寸 */
 const SOUL_ANIMATION_SIZE = new Size(300, 300);
+/** 外显勾选框尺寸（弹窗中间信息区底部：小方框 + 「外显」文字） */
+const SOUL_SHOW_TOGGLE_SIZE = new Size(90, 22);
 
 //#endregion
 
@@ -800,9 +802,13 @@ export default class GameUiHelper {
     return `+${n[0] - c[0]}~+${n[1] - c[1]}`;
   }
 
-  /** 创建战魂动画节点（中间展示；异步加载散图帧目录后循环播放） */
-  static createSoulAnimation(config: SoulLevelConfig) {
-    const node = UiHelper.createNode("soul_animation", new Vec2(), SOUL_ANIMATION_SIZE);
+  /**
+   * 创建战魂动画节点（异步加载散图帧目录后循环播放）
+   * @param config 战魂等级配置
+   * @param size 节点尺寸（缺省用弹窗中间展示尺寸；挂到主角身上的外显传小尺寸）
+   */
+  static createSoulAnimation(config: SoulLevelConfig, size: Size = SOUL_ANIMATION_SIZE) {
+    const node = UiHelper.createNode("soul_animation", new Vec2(), size);
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     sprite.trim = false;
@@ -810,6 +816,34 @@ export default class GameUiHelper {
       if (!isValid(node) || !frames.length) return;
       AnimationHelper.playLoopWithFrames("soul_stand", node, frames, config.animationFrameRate);
     });
+    return node;
+  }
+
+  /**
+   * 创建战魂外显勾选框（小方框 + 对勾 + 「外显」文字；点击回调带回切换后的状态）
+   * 勾选状态由调用方传入（弹窗整体刷新式重建，状态以角色数据 role.soulShow 为准）
+   */
+  static createSoulShowToggle(checked: boolean, onClick: (checked: boolean) => void) {
+    const node = UiHelper.createNode("soul_show_toggle", new Vec2(), SOUL_SHOW_TOGGLE_SIZE);
+    const button = node.addComponent(Button);
+    button.transition = Button.Transition.SCALE;
+    // 勾选框（16×16 方框，勾选时填充金色并画对勾）
+    const box = new Node("soul_show_box");
+    box.addComponent(UITransform).setContentSize(16, 16);
+    box.setPosition(-SOUL_SHOW_TOGGLE_SIZE.width / 2 + 8, 0);
+    const graphics = box.addComponent(Graphics);
+    graphics.lineWidth = 1.5;
+    graphics.strokeColor = checked ? SOUL_CARD_SELECTED_COLOR : SOUL_CARD_LOCKED_COLOR;
+    graphics.fillColor = checked ? SOUL_CARD_SELECTED_COLOR : Color.WHITE;
+    graphics.rect(-8, -8, 16, 16);
+    graphics.fill();
+    graphics.stroke();
+    if (checked) {
+      box.addChild(UiHelper.createLabel("soul_show_check", "✓", Color.WHITE, 13, new Vec2(), new Size(16, 16)));
+    }
+    node.addChild(box);
+    node.addChild(UiHelper.createLabel("soul_show_text", "外显", Color.WHITE, 13, new Vec2(18, 0), new Size(60, SOUL_SHOW_TOGGLE_SIZE.height), Label.HorizontalAlign.LEFT));
+    node.on(Node.EventType.TOUCH_END, () => onClick(!checked), this);
     return node;
   }
 

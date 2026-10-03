@@ -99,6 +99,8 @@ export class Game extends Component {
     });
     // 初始化主角外观动画与键盘操控
     this.roleDisplay.init();
+    // 战魂外显（上次勾选过则进图直接挂上，见 RoleDisplay.updateSoulShow）
+    this.roleDisplay.updateSoulShow();
     // 自动战斗（快速攻击/自动挂机）以主角为载体走位与出手
     AutoBattle.setRoleDisplay(this.roleDisplay);
     // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）

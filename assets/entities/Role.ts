@@ -37,6 +37,8 @@ export class Role implements BattleAttributes {
   combat: number = 0;
   /** 战魂等级（0 = 未激活；升级消耗绑定元宝，见 configs/soul；属性加成计入 combatCalc，也是地图 soulOfWar 进入条件） */
   soulOfWar: number = 0;
+  /** 战魂外显开关（勾选后在主角右上角挂当前等级的战魂动画，见 RoleDisplay.updateSoulShow） */
+  soulShow: boolean = false;
   physicalAttack: [number, number] = [0, 0];
   magicAttack: [number, number] = [0, 0];
   taoistAttack: [number, number] = [0, 0];
