@@ -7,6 +7,8 @@ import { Role } from "../../entities/Role";
 import { levelMap } from "../../configs/level";
 import { getEquipment } from "../../configs/items";
 import { combatCalc as combatAttributeWeights } from "../../configs/battle";
+import { maps } from "../../configs/map";
+import { MapId } from "../../types/map";
 
 /**
  * 游戏工具（静态类）
@@ -43,6 +45,22 @@ export default class GameHelper {
     if (equipment.level > role.level) return `需要等级 ${equipment.level}`;
     if (equipment.sex !== role.sex && equipment.sex !== SEX.ALL) return `${equipment.sex === SEX.BOY ? "男性" : "女性"}角色才能穿戴`;
     if (equipment.occupation !== role.occupation && equipment.occupation !== OECCUPATION.ALL) return "职业不符，无法穿戴";
+    return null;
+  }
+
+  /**
+   * 取进入地图的限制原因（满足条件返回 null）
+   * 判定项与顺序：等级 → 战斗力；返回文案可直接用于提示玩家
+   * （战魂等级要求暂未接入：角色尚无战魂字段，接入后在此补判）
+   * @param mapId 目标地图编号
+   */
+  static getMapEnterRejectReason(mapId: MapId): string | null {
+    const role = StorageManager.findOnlineRole();
+    if (!role) return "角色不存在";
+    const config = maps.get(mapId);
+    if (!config) return "地图不存在";
+    if (config.level > role.level) return `${config.label} 需要等级达到 ${config.level} 级`;
+    if (config.combat > role.combat) return `${config.label} 需要战斗力达到 ${config.combat}`;
     return null;
   }
 

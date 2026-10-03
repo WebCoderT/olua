@@ -350,8 +350,14 @@ export default class StorageManager {
     return true;
   }
 
-  /** 跳转地图 */
+  /** 跳转地图（不满足地图进入条件时提示并放弃，所有传送入口都经过这里） */
   static changeOnMap(mapId: MapId) {
+    // 进入限制校验：等级/战斗力未达标时提示原因，不切换地图
+    const reason = GameHelper.getMapEnterRejectReason(mapId);
+    if (reason) {
+      GameUiHelper.createTip("map_enter_reject_tip", reason);
+      return;
+    }
     // 获取最新信息
     const role = this.findOnlineRole();
     // 更改所在地图
