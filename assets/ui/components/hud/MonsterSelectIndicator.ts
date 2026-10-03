@@ -1,5 +1,6 @@
 import { isValid, Node } from "cc";
 import { selectIndicator } from "../../../configs/effect";
+import MonsterManager from "../../core/MonsterManager";
 import AnimationHelper from "../../helpers/AnimationHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
@@ -43,7 +44,13 @@ export default class MonsterSelectIndicator extends Node {
    * @returns 是否仍需显示：返回 false 表示目标已死亡/移除，指示器将被销毁
    */
   update(): boolean {
+    // 判据与怪物信息面板（MonsterInfoPanel.update）完全一致：节点失效 **或** 怪物数据已消失/血量归零都算失效。
+    // 只判 isValid(节点) 不够——引擎的 isValid 默认不检查「已标记待销毁」(ToDestroy)，
+    // 怪物死亡当帧节点仍算有效，光圈会比信息面板多活一帧；
+    // 那一帧若正好有新目标接管选中，旧光圈就会失去引用被永久留在场上（见 core/RoleUIManager.selectMonster）
     if (!this.target || !isValid(this.target)) return false;
+    const monster = MonsterManager.getMonsterData(this.target);
+    if (!monster || monster.hp <= 0) return false;
     const position = this.target.getWorldPosition();
     this.setWorldPosition(position.x + selectIndicator.offset.x, position.y + selectIndicator.offset.y, position.z);
     return true;

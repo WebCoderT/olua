@@ -142,12 +142,25 @@ export default class RoleDisplay extends Node {
 
   //#region 位置更新
 
-  /** 每帧驱动：选中目标已死亡/移除则取消选中（面板随之销毁），并更新角色位移 */
+  /** 每帧驱动：选中目标已死亡/移除则取消选中（面板与选中光圈随之销毁），并更新角色位移 */
   update() {
     // 选中状态只由鼠标点击改变（点击怪物选中、点击其他位置取消），移动不影响；
     // 但目标本身消失（死亡/移除）时必须同步取消，避免残留无效引用
-    if (this.target && !isValid(this.target)) this.setTarget(null);
+    if (this.target && this.isTargetGone(this.target)) this.setTarget(null);
     this.updateWorldPosition();
+  }
+
+  /**
+   * 选中目标是否已失效（死亡/移除）
+   * 判据与怪物信息面板、选中光圈一致：节点失效 **或** 怪物数据已消失/血量归零都算失效。
+   * 不能只看 isValid(节点)：引擎的 isValid 默认只检查 Destroyed、不检查「已标记待销毁」(ToDestroy)，
+   * 怪物死亡当帧节点仍然算「有效」，只看节点会让选中状态多残留一帧，进而让光圈比面板晚一帧销毁
+   * （那一帧的空档正是「怪物死亡后光圈残留」的成因，见 core/RoleUIManager.selectMonster）
+   */
+  private isTargetGone(target: Node): boolean {
+    if (!isValid(target)) return true;
+    const monster = MonsterManager.getMonsterData(target);
+    return !monster || monster.hp <= 0;
   }
 
   /** 每帧根据按键状态更新角色位移 */

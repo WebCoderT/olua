@@ -133,7 +133,13 @@ export default class RoleUIManager {
     this.monsterSelectFactory = factory;
   }
 
-  /** 选中怪物（null 表示取消选中）：动态创建/销毁怪物信息面板与脚下选中光圈 */
+  /**
+   * 选中怪物（null 表示取消选中）：动态创建/销毁怪物信息面板与脚下选中光圈
+   * 面板与光圈各自独立维护：存活的复用（只切目标，不重建特效），失效/缺失的单独重建。
+   * **绝不能用「面板在 → 光圈一定在」的前提一次性重建两个视图**：怪物死亡当帧面板会因数据消失先销毁、
+   * 光圈要等节点真正销毁才失效，这一帧的空档里若恰好有新目标接管选中，
+   * 旧光圈节点会连同引用一起被丢弃——既不再被更新也不再被销毁，在场上永久残留（就是「怪物死亡后光圈还在」）
+   */
   static selectMonster(target: Node | null) {
     // 取消选中：销毁面板与指示器
     if (!target) {
@@ -141,14 +147,20 @@ export default class RoleUIManager {
       this.destroyMonsterSelect();
       return;
     }
-    // 已有视图则复用（面板重建内容、指示器改跟随目标），否则按需创建
-    if (!this.monsterInfo) {
+    // 面板：存活则切换展示目标，否则先销毁残留引用再新建
+    if (this.monsterInfo && this.monsterInfo.isValidNode()) {
+      this.monsterInfo.select(target);
+    } else {
+      this.destroyMonsterInfo();
       this.monsterInfo = this.monsterInfoFactory ? this.monsterInfoFactory(target) : null;
-      this.monsterSelect = this.monsterSelectFactory ? this.monsterSelectFactory(target) : null;
-      return;
     }
-    this.monsterInfo.select(target);
-    this.monsterSelect?.select(target);
+    // 光圈：同上，两个视图互不依赖
+    if (this.monsterSelect && this.monsterSelect.isValidNode()) {
+      this.monsterSelect.select(target);
+    } else {
+      this.destroyMonsterSelect();
+      this.monsterSelect = this.monsterSelectFactory ? this.monsterSelectFactory(target) : null;
+    }
   }
 
   /** 每帧刷新怪物信息面板（目标已死亡/移除则销毁面板） */
