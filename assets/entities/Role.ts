@@ -35,6 +35,8 @@ export class Role implements BattleAttributes {
   /** 背包：格子只存物品 key 与数量（BagCell），物品数据经 configs/items 实时解析 */
   bag: Array<Array<BagCell | null>>;
   combat: number = 0;
+  /** 战魂等级（0 = 未激活；升级消耗绑定元宝，见 configs/soul；属性加成计入 combatCalc，也是地图 soulOfWar 进入条件） */
+  soulOfWar: number = 0;
   physicalAttack: [number, number] = [0, 0];
   magicAttack: [number, number] = [0, 0];
   taoistAttack: [number, number] = [0, 0];

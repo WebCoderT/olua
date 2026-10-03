@@ -8,6 +8,7 @@ import { levelMap } from "../../configs/level";
 import { getEquipment } from "../../configs/items";
 import { combatCalc as combatAttributeWeights } from "../../configs/battle";
 import { maps } from "../../configs/map";
+import { getSoulLevel } from "../../configs/soul";
 import { MapId } from "../../types/map";
 
 /**
@@ -50,8 +51,7 @@ export default class GameHelper {
 
   /**
    * 取进入地图的限制原因（满足条件返回 null）
-   * 判定项与顺序：等级 → 战斗力；返回文案可直接用于提示玩家
-   * （战魂等级要求暂未接入：角色尚无战魂字段，接入后在此补判）
+   * 判定项与顺序：等级 → 战斗力 → 战魂等级；返回文案可直接用于提示玩家
    * @param mapId 目标地图编号
    */
   static getMapEnterRejectReason(mapId: MapId): string | null {
@@ -61,6 +61,7 @@ export default class GameHelper {
     if (!config) return "地图不存在";
     if (config.level > role.level) return `${config.label} 需要等级达到 ${config.level} 级`;
     if (config.combat > role.combat) return `${config.label} 需要战斗力达到 ${config.combat}`;
+    if (config.soulOfWar > role.soulOfWar) return `${config.label} 需要战魂等级达到 ${config.soulOfWar} 阶`;
     return null;
   }
 
@@ -72,13 +73,17 @@ export default class GameHelper {
     const equipmentList = (Object.keys(role.equipments) as EQUIPMENT_TYPE[])
       .map((slot) => getEquipment(role.equipments[slot]))
       .filter((equipment): equipment is Equipment => equipment !== null);
+    // 战魂按当前等级提供整份属性加成（configs/soul，未激活为 null 不加成）
+    const soul = getSoulLevel(role.soulOfWar);
     const attributeKeys: (keyof Omit<BattleAttributes, "maxHp">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 
-    role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0);
+    role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0) + (soul?.attributes.maxHp ?? 0);
     // 最大魔法值只跟等级走（装备暂不影响魔法值）
     role.maxMp = levelConfig.maxMp;
     for (const key of attributeKeys) {
-      role[key] = this.twoAttributesCalc([levelConfig[key], ...equipmentList.map((equipment) => equipment[key])]);
+      const sources: [number, number][] = [levelConfig[key], ...equipmentList.map((equipment) => equipment[key])];
+      if (soul) sources.push(soul.attributes[key]);
+      role[key] = this.twoAttributesCalc(sources);
     }
 
     role.combat = Array.from(combatAttributeWeights.entries()).reduce((total, [key, weight]) => {

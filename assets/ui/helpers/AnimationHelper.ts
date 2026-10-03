@@ -45,7 +45,8 @@ export default class AnimationHelper {
           resolve([]);
           return;
         }
-        const frames = (spriteFrames ?? []).sort((a, b) => Number(a.name) - Number(b.name));
+        // 目录帧名兼容两种形态：纯数字（0000）与前缀名（sfx_13001_0_0003），统一取末尾连续数字排序
+        const frames = (spriteFrames ?? []).sort((a, b) => this.nameOrder(a.name) - this.nameOrder(b.name));
         this.frameCache.set(dirSrc, frames);
         resolve(frames);
       });
@@ -80,6 +81,12 @@ export default class AnimationHelper {
     let rate = "";
     for (const action in speedRate) rate += `${action}=${speedRate[action]};`;
     return `${kind}|${dirSrc}|${rate}`;
+  }
+
+  /** 目录帧排序序号：取帧名末尾的连续数字（纯数字名与前缀名通用），取不到按 0 处理 */
+  private static nameOrder(name: string) {
+    const match = name.match(/(\d+)$/);
+    return match ? Number(match[1]) : 0;
   }
 
   /** 切割并缓存整包片段（已缓存时直接返回） */
@@ -160,6 +167,24 @@ export default class AnimationHelper {
       if (atlas) this.collectFrames(atlas, frames);
     }
     return frames.length ? this.sortFrames(frames) : this.loadFramesByDir(atlasSrc);
+  }
+
+  /** 图集动作帧缓存：图集路径|动作名 -> 该动作的帧列表（空数组同样缓存以免反复请求） */
+  private static atlasActionFrameCache = new Map<string, SpriteFrame[]>();
+
+  /**
+   * 取一个图集里某个动作的全部帧（帧名含「/动作名/」即命中，如 wing/100001/stand/40000.png）
+   * 图集本身含多套动作（attack/run/stand…），整条播放会串动作，因此按动作过滤；已按帧序号排序
+   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名）
+   * @param action 动作名（图集帧路径里的一段，如 "stand"）
+   */
+  static async loadFramesFromAtlasByAction(atlasSrc: string, action: string): Promise<SpriteFrame[]> {
+    const cacheKey = `${atlasSrc}|${action}`;
+    const cached = this.atlasActionFrameCache.get(cacheKey);
+    if (cached) return cached;
+    const frames = (await this.loadFramesFromAtlas(atlasSrc)).filter((frame) => frame.name.includes(`/${action}/`));
+    this.atlasActionFrameCache.set(cacheKey, frames);
+    return frames;
   }
 
   /**

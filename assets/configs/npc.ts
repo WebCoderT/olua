@@ -1,11 +1,14 @@
 import { Vec3 } from "cc";
 import { NPC } from "../types/map";
 import MapTeleportDialog from "../ui/components/dialogs/MapTeleportDialog";
+import WarSoulDialog from "../ui/components/dialogs/WarSoulDialog";
 
 export const npcs = new Map<string, NPC>();
 
 npcs.set("0001", { label: "大陆传送官(未激活)", src: "npc/npc_2124" });
 npcs.set("0002", { label: "大陆传送官", src: "npc/npc_2125", scale: new Vec3(1.5, 1.5), position: new Vec3(11, 0), onClick: () => new MapTeleportDialog().open() });
+
+npcs.set("9002", { label: "战魂使者", src: "npc/npc_2121", scale: new Vec3(1.5, 1.5), onClick: () => new WarSoulDialog().open() });
 
 npcs.set("1001", { label: "神装使者", src: "npc/npc_2108" });
 npcs.set("1002", { label: "神装使者", src: "npc/npc_2109" });

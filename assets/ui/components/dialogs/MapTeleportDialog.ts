@@ -5,15 +5,11 @@ import StorageManager from "../../core/StorageManager";
 import { mapTypeGroups, maps } from "../../../configs/map";
 import { MapId, MapType } from "../../../types/map";
 
-/** 地图按钮每行个数（网格从左到右排满换行） */
-const MAP_BUTTON_COLUMNS = 4;
-/** 地图按钮横向间距 */
+/** 地图按钮每行 4 个（网格从左到右排满换行）：4 × 123 + 3 × 20 = 552，在 580 容器内水平居中 */
 const MAP_BUTTON_SPACING_X = 20;
 /** 地图按钮纵向间距 */
 const MAP_BUTTON_SPACING_Y = 12;
-/** 分组标题与按钮网格之间的间距 */
-const GROUP_TITLE_SPACING = 8;
-/** 各地图分组之间的间距 */
+/** 各地图分组之间的间距（分组标题与按钮网格同处一个纵向容器，共用该间距） */
 const GROUP_SPACING = 16;
 /** 内容区宽度（弹窗 600，左右各留 10） */
 const CONTENT_WIDTH = 580;

@@ -422,7 +422,7 @@ export default class UiHelper {
     const scrollView = node.addComponent(ScrollView);
     scrollView.inertia = false;
     scrollView.elastic = false;
-    const content = this.createFlexCol(`${name}_content`, 3, new Vec2(position.x, size.height / 2), size);
+    const content = this.createFlexCol(`${name}_content`, 3, new Vec2(0, size.height / 2), size);
     node.addChild(content);
     const layout = content.getComponent(Layout);
     layout.resizeMode = Layout.ResizeMode.CONTAINER;

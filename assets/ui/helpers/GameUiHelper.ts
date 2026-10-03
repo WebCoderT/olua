@@ -36,6 +36,7 @@ import { Monster } from "../../types/monster";
 import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
+import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import { markClickThrough } from "../utils/input/UiHit";
@@ -96,6 +97,31 @@ const COLLIDER_RANGE_OBSTACLE_COLOR = new Color(255, 64, 64);
 const COLLIDER_RANGE_ROLE_COLOR = new Color(64, 255, 128);
 /** 怪物刷怪区域的颜色（无碰撞体，用另一种配色与碰撞体区分） */
 const COLLIDER_RANGE_AREA_COLOR = new Color(255, 208, 64);
+
+//#endregion
+
+//#region 战魂常量
+
+/** 战魂卡片（左侧列表行）尺寸 */
+const SOUL_CARD_SIZE = new Size(192, 44);
+/** 战魂卡片选中色（金色描边与文字） */
+const SOUL_CARD_SELECTED_COLOR = new Color(255, 214, 102);
+/** 战魂未激活的文字颜色 */
+const SOUL_CARD_LOCKED_COLOR = new Color(140, 140, 140);
+/** 战魂已激活状态文字颜色 */
+const SOUL_CARD_ACTIVE_COLOR = new Color(120, 220, 120);
+/** 战魂属性面板标题颜色 */
+const SOUL_TITLE_COLOR = new Color(255, 214, 102);
+/** 战魂属性行名颜色 */
+const SOUL_ROW_NAME_COLOR = new Color(170, 170, 170);
+/** 战魂下一级增量文字颜色 */
+const SOUL_ROW_DIFF_COLOR = new Color(120, 220, 120);
+/** 战魂属性面板宽度 */
+const SOUL_ATTRIBUTE_WIDTH = 210;
+/** 战魂属性行间距 */
+const SOUL_ATTRIBUTE_SPACING = 6;
+/** 战魂动画节点尺寸 */
+const SOUL_ANIMATION_SIZE = new Size(300, 300);
 
 //#endregion
 
@@ -161,6 +187,11 @@ export default class GameUiHelper {
   /** 创建网格排列容器（从左到右排满换行、从上到下；高度为 0 时按内容自适应且锚点顶对齐） */
   static createGrid(name: string, spacingX: number, spacingY: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
     return UiHelper.createGrid(name, spacingX, spacingY, position, size);
+  }
+
+  /** 创建滚动视图（内容纵向排列、可上下滑动） */
+  static createScrollView(name: string, position: Vec2, size: Size) {
+    return UiHelper.createScrollView(name, position, size);
   }
 
   /**
@@ -690,6 +721,96 @@ export default class GameUiHelper {
     const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, hudSize.smallButtonFontSize, new Vec2(), hudSize.smallButtonSize);
     button.addChild(label);
     return button;
+  }
+
+  //#endregion
+
+  //#region 战魂
+
+  /**
+   * 创建战魂等级卡片（左侧列表行）：等级 + 名称 + 激活状态，选中加金色描边
+   * @param config 该等级的战魂配置
+   * @param currentLevel 角色当前战魂等级（决定激活状态）
+   * @param selected 是否为当前选中项
+   * @param onClick 点击回调（切换选中预览）
+   */
+  static createSoulCard(config: SoulLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
+    const activated = config.level <= currentLevel;
+    const card = UiHelper.createNode(`soul_card_${config.level}`, new Vec2(), SOUL_CARD_SIZE);
+    const button = card.addComponent(Button);
+    button.transition = Button.Transition.SCALE;
+    // 选中描边（后添加绘制在文字之下，故先加描边再加文字）
+    if (selected) {
+      const border = new Node("soul_card_border");
+      const graphics = border.addComponent(Graphics);
+      graphics.lineWidth = 2;
+      graphics.strokeColor = SOUL_CARD_SELECTED_COLOR;
+      graphics.rect(-SOUL_CARD_SIZE.width / 2, -SOUL_CARD_SIZE.height / 2, SOUL_CARD_SIZE.width, SOUL_CARD_SIZE.height);
+      graphics.stroke();
+      card.addChild(border);
+    }
+    const nameColor = selected ? SOUL_CARD_SELECTED_COLOR : activated ? Color.WHITE : SOUL_CARD_LOCKED_COLOR;
+    card.addChild(UiHelper.createLabel("soul_card_label", `${config.level} 阶 · ${config.label}`, nameColor, 13, new Vec2(-8, 0), new Size(SOUL_CARD_SIZE.width - 70, SOUL_CARD_SIZE.height), Label.HorizontalAlign.LEFT));
+    card.addChild(UiHelper.createLabel("soul_card_state", activated ? "已激活" : "未激活", activated ? SOUL_CARD_ACTIVE_COLOR : SOUL_CARD_LOCKED_COLOR, 11, new Vec2(SOUL_CARD_SIZE.width / 2 - 36, 0), new Size(52, SOUL_CARD_SIZE.height)));
+    card.on(Node.EventType.TOUCH_END, onClick, this);
+    return card;
+  }
+
+  /**
+   * 创建战魂属性列表（右侧面板）：标题 + 各属性行（有下一级时附带绿色增量）
+   * @param config 展示的战魂等级配置
+   * @param next 下一级配置（没有传 null，如已满级）
+   */
+  static createSoulAttributeList(config: SoulLevelConfig, next: SoulLevelConfig | null) {
+    const column = UiHelper.createFlexCol("soul_attribute_list", SOUL_ATTRIBUTE_SPACING, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH, 0));
+    column.addChild(UiHelper.createLabel("soul_attribute_title", `${config.level} 阶 · ${config.label}`, SOUL_TITLE_COLOR, 15, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH, 22)));
+    const rows: Array<{ label: string; get: (attributes: SoulAttributes) => number | [number, number] }> = [
+      { label: "生命", get: (attributes) => attributes.maxHp },
+      { label: "物攻", get: (attributes) => attributes.physicalAttack },
+      { label: "魔攻", get: (attributes) => attributes.magicAttack },
+      { label: "道攻", get: (attributes) => attributes.taoistAttack },
+      { label: "物防", get: (attributes) => attributes.physicalDefense },
+      { label: "魔防", get: (attributes) => attributes.magicDefense },
+      { label: "道防", get: (attributes) => attributes.taoistDefense },
+    ];
+    rows.forEach((row, index) => {
+      const line = UiHelper.createFlexRow(`soul_attribute_row_${index}`, 0, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH, 18));
+      line.addChild(UiHelper.createLabel("name", row.label, SOUL_ROW_NAME_COLOR, 12, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
+      const value = row.get(config.attributes);
+      const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
+      // 带下一级增量时整行值用绿色（白色 = 当前无增量可看）
+      const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
+      const valueLabel = UiHelper.createLabel("value", text, diff ? SOUL_ROW_DIFF_COLOR : Color.WHITE, 12, new Vec2(), new Size(SOUL_ATTRIBUTE_WIDTH - 40, 18), Label.HorizontalAlign.LEFT);
+      line.addChild(valueLabel);
+      column.addChild(line);
+    });
+    return column;
+  }
+
+  /** 属性值文案：数值直接显示，区间属性显示为「min ~ max」 */
+  private static formatSoulAttributeValue(value: number | [number, number]) {
+    return typeof value === "number" ? `${value}` : `${value[0]} ~ ${value[1]}`;
+  }
+
+  /** 下一级增量文案：数值「+N」，区间「+min~+max」（数值/区间混用时按区间补齐两侧） */
+  private static formatSoulAttributeDiff(current: number | [number, number], next: number | [number, number]) {
+    if (typeof current === "number" && typeof next === "number") return `+${next - current}`;
+    const c = typeof current === "number" ? [current, current] : current;
+    const n = typeof next === "number" ? [next, next] : next;
+    return `+${n[0] - c[0]}~+${n[1] - c[1]}`;
+  }
+
+  /** 创建战魂动画节点（中间展示；异步加载散图帧目录后循环播放） */
+  static createSoulAnimation(config: SoulLevelConfig) {
+    const node = UiHelper.createNode("soul_animation", new Vec2(), SOUL_ANIMATION_SIZE);
+    const sprite = node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = false;
+    AnimationHelper.loadFrames(config.animation).then((frames) => {
+      if (!isValid(node) || !frames.length) return;
+      AnimationHelper.playLoopWithFrames("soul_stand", node, frames, config.animationFrameRate);
+    });
+    return node;
   }
 
   //#endregion

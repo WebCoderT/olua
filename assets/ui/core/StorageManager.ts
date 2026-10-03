@@ -15,6 +15,7 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
 import { getItem } from "../../configs/items";
+import { getSoulLevel } from "../../configs/soul";
 
 /**
  * 存储管理器
@@ -117,6 +118,34 @@ export default class StorageManager {
       const exist = saved.find((i) => i.key === config.key);
       return exist ? { ...config, ...exist } : { ...config };
     });
+    // 战魂等级：旧存档缺失补 0（未激活）
+    if (typeof role.soulOfWar !== "number") role.soulOfWar = 0;
+  }
+
+  /**
+   * 战魂升级（当前在线角色）：消耗下一级配置的绑定元宝升到下一级（见 configs/soul）
+   * @returns 是否升级成功（失败原因已用浮动提示告知）
+   */
+  static upgradeSoul(): boolean {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const next = getSoulLevel(role.soulOfWar + 1);
+    if (!next) {
+      GameUiHelper.createTip("soul_max_tip", "战魂已满级");
+      return false;
+    }
+    if (role.bindGold < next.bindGold) {
+      GameUiHelper.createTip("soul_bind_gold_tip", `绑定元宝不足，升级需要 ${next.bindGold}`);
+      return false;
+    }
+    role.bindGold -= next.bindGold;
+    role.soulOfWar = next.level;
+    // 战魂属性计入角色属性与战斗力，升级后重算
+    Object.assign(role, GameHelper.combatCalc(role));
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    GameUiHelper.createTip("soul_upgrade_tip", `战魂升级成功：${next.level} 阶 · ${next.label}`);
+    return true;
   }
 
   /** 角色获得经验(当前在线角色) */
