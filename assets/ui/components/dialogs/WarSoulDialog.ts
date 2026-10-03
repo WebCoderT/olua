@@ -111,17 +111,18 @@ export default class WarSoulDialog {
     this.infoSlot.addChild(UiHelper.createLabel("soul_desc", config.description, new Color(170, 170, 170), 11, new Vec2(0, 20), new Size(330, 16)));
     const current = getSoulLevel(role.soulOfWar);
     this.infoSlot.addChild(
-      UiHelper.createLabel("soul_current", current ? `当前战魂：${role.soulOfWar} 阶 · ${current.label}` : "尚未激活战魂", new Color(255, 223, 170), 12, new Vec2(0, -2), new Size(320, 18)),
+      UiHelper.createLabel("soul_current", current ? `当前战魂：${role.soulOfWar} 阶 · ${current.label}` : "尚未激活战魂", new Color(255, 223, 170), 12, new Vec2(0, -22), new Size(320, 18)),
     );
     // 外显勾选框：勾选后把当前等级的战魂动画挂到主角右上角（状态持久在角色数据 role.soulShow）
-    this.infoSlot.addChild(
-      GameUiHelper.createSoulShowToggle(role.soulShow, () => {
-        role.soulShow = !role.soulShow;
-        StorageManager.updateOnlineRole(role);
-        RoleUIManager.updateSoulShow();
-        this.refresh();
-      }),
-    );
+    // 勾选后立刻刷新主角身上的战魂动画（RoleUIManager → RoleDisplay，后者用前重读角色数据，见 RoleDisplay.updateSoulShow）
+    const showToggle = GameUiHelper.createSoulShowToggle(role.soulShow, () => {
+      role.soulShow = !role.soulShow;
+      StorageManager.updateOnlineRole(role);
+      RoleUIManager.updateSoulShow();
+      this.refresh();
+    });
+    showToggle.setPosition(0, -48);
+    this.infoSlot.addChild(showToggle);
     // 右侧属性：所选等级属性 + 下一级增量
     clearChildren(this.attributeSlot);
     this.attributeSlot.addChild(GameUiHelper.createSoulAttributeList(config, getSoulLevel(this.selectedLevel + 1)));

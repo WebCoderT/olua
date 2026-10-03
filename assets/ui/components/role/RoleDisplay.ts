@@ -244,13 +244,16 @@ export default class RoleDisplay extends Node {
    * 战魂外显（由战魂弹窗勾选开关与升级后、以及进图时调用）
    * 按角色数据 role.soulShow 重建右上角的战魂动画节点：
    * 勾选且已激活战魂（soulOfWar > 0）时挂载，否则摘除；挂载的节点随主角移动（作为子节点跟随）
+   * 注意：StorageManager 每次读取都是新 JSON.parse 出来的对象（见 getRoles），this.role 只是进图时的快照，
+   *   弹窗改的是另一份实例并落盘，故这里必须用前重读最新数据，否则勾选后要重进游戏才生效
    */
   updateSoulShow() {
     if (!isValid(this)) return;
+    const role = StorageManager.findOnlineRole() ?? this.role;
     if (this.soulShowNode && isValid(this.soulShowNode)) this.soulShowNode.destroy();
     this.soulShowNode = null;
-    if (!this.role.soulShow) return;
-    const config = getSoulLevel(this.role.soulOfWar);
+    if (!role.soulShow) return;
+    const config = getSoulLevel(role.soulOfWar);
     if (!config) return;
     // 角色锚点 (0.5, 0)、内容 40×70：(26, 62) 约为右上角肩侧；动画帧自带大量透明边距，实际视觉尺寸更小
     const node = GameUiHelper.createSoulAnimation(config, new Size(72, 72));
