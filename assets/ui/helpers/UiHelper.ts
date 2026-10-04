@@ -22,6 +22,7 @@ import {
   Mask,
 } from "cc";
 import { uiImages } from "../../configs/hudLayout";
+import { blockClickThrough } from "../utils/input/UiHit";
 
 /**
  * UI基础元素工厂（静态类）
@@ -236,6 +237,9 @@ export default class UiHelper {
     const node = this.createSprite(name, src, position, size);
     const button = node.addComponent(Button);
     button.transition = Button.Transition.SCALE;
+    // 点击逻辑走 Button 自己的 touch 通道；这里在鼠标通道上也登记一次命中拦截，
+    // 否则按钮对 mouse 通道不可见，点击会继续穿透到下层 UI（见 utils/input/UiHit.blockClickThrough）
+    blockClickThrough(node);
     return node;
   }
 
@@ -258,6 +262,8 @@ export default class UiHelper {
     node.addChild(selectedSpriteNode);
     toggle.target = spriteNode;
     toggle.checkMark = selectedSpriteNode.getComponent(Sprite);
+    // 同 createButton：Toggle 也只走 touch 通道，需在鼠标通道补一次命中拦截
+    blockClickThrough(node);
     return node;
   }
 
@@ -420,6 +426,8 @@ export default class UiHelper {
   static createScrollView(name: string, position: Vec2, size: Size) {
     const node = this.createNode(name, position, size);
     node.addComponent(Mask);
+    // 滚动区的拖动与点选同样只在 touch 通道；鼠标通道补一次拦截，滚动区内的点击不穿透到下层 UI
+    blockClickThrough(node);
     const scrollView = node.addComponent(ScrollView);
     scrollView.inertia = false;
     scrollView.elastic = false;

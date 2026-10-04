@@ -37,7 +37,7 @@ import { SkillId } from "../../types/skill";
 import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
-import { markClickThrough } from "../utils/input/UiHit";
+import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 import { equipmentSlots, getEquipmentNameParts } from "../../configs/equipments";
 import { skills } from "../../configs/skill";
@@ -350,6 +350,8 @@ export default class GameUiHelper {
       if (!isValid(node, true)) return;
       AnimationHelper.playLoopWithFrames(animationName, node, frames, roleSelectorLayout.previewFrameRate);
     });
+    // 角色预览本身是可点元素（选角列表点击切换角色），鼠标通道补一次命中拦截
+    blockClickThrough(role);
     return role;
   }
 
@@ -410,6 +412,8 @@ export default class GameUiHelper {
     node.addChild(UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, layout.key.fontSize, layout.key.position, layout.key.size));
     // 判断是否解锁
     if (button.openLevel > role.level) sprite.grayscale = true;
+    // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截，避免点底部栏时穿透到下层 UI
+    blockClickThrough(node);
     return sprite;
   }
 
@@ -429,6 +433,8 @@ export default class GameUiHelper {
     sprite.trim = false;
     this.updateNodeIcon(node, uiImages.autoFightOff);
     node.addChild(UiHelper.createLabel("auto_fight_label", layout.label.text, Color.WHITE, layout.label.fontSize, layout.label.position, layout.label.size));
+    // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截
+    blockClickThrough(node);
     return sprite;
   }
 
@@ -743,6 +749,9 @@ export default class GameUiHelper {
     const dialog = UiHelper.createSprite(name, dialogFrame.background, position, size);
     dialog.name = name;
     dialog.addComponent(Draggable);
+    // 弹窗面板整体在鼠标通道上拦截：弹窗打开时点它任意位置（含空白处）都不再穿透到下层的 HUD
+    // （关闭按钮这类只走 touch 通道的 Button 对 mouse 通道不可见，详见 utils/input/UiHit.blockClickThrough）
+    blockClickThrough(dialog);
     return dialog;
   }
 
@@ -864,6 +873,8 @@ export default class GameUiHelper {
       ),
     );
     card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
+    blockClickThrough(card);
     return card;
   }
 
@@ -955,6 +966,8 @@ export default class GameUiHelper {
     node.addChild(box);
     node.addChild(UiHelper.createLabel("soul_show_text", toggle.text, Color.WHITE, toggle.fontSize, new Vec2(toggle.textGap, 0), new Size(60, toggle.size.height), Label.HorizontalAlign.LEFT));
     node.on(Node.EventType.TOUCH_END, () => onClick(!checked), this);
+    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
+    blockClickThrough(node);
     return node;
   }
 
@@ -1277,6 +1290,8 @@ export default class GameUiHelper {
     const cooldownNode = UiHelper.createLabel("shortcut_key_cooldown", "", Color.WHITE, layout.cooldown.fontSize, layout.cooldown.position, layout.cooldown.size);
     cooldownNode.active = false;
     node.addChild(cooldownNode);
+    // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截
+    blockClickThrough(node);
     return { cooldownLabel: cooldownNode.getComponent(Label) };
   }
 
@@ -1705,7 +1720,11 @@ export default class GameUiHelper {
     const node = UiHelper.createFlexRow(skillId, 5, new Vec2(), new Size(250, 50));
     const skillIcon = UiHelper.createSprite(skillId, skillConfig.icon, new Vec2(), new Size(40, 40));
     if (!role.skills[skillId]) skillIcon.getComponent(Sprite).grayscale = true;
-    if (role.skills[skillId]) skillIcon.on(Node.EventType.TOUCH_END, onOpenShortcutKey, this);
+    if (role.skills[skillId]) {
+      skillIcon.on(Node.EventType.TOUCH_END, onOpenShortcutKey, this);
+      // 可点的技能图标（不走 UiHelper.createButton），鼠标通道补一次命中拦截
+      blockClickThrough(skillIcon);
+    }
     node.addChild(skillIcon);
     const description = UiHelper.createFlexCol(`${skillId}_desc`, 3, new Vec2(), new Size(205, 40));
     const skillLabel = UiHelper.createLabel("skill_label", `${skillConfig.label} (${role.skills[skillId] ? "lv." + role.skills[skillId] : "未学习"})`, Color.WHITE, 12, new Vec2(), new Size(205, 20));

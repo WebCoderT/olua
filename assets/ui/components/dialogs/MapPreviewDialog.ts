@@ -11,7 +11,7 @@ import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
 import { getMapPixelSize, getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld } from "../../utils/map/MapPointMath";
 import { getTiledObjects, getTiledObjectsFrom } from "../../utils/map/TiledObjects";
-import { getHitScreenPoint, getPointerButton, HAS_MOUSE, PointerButton } from "../../utils/input/Pointer";
+import { bindMousePress, getHitScreenPoint, getPointerButton, HAS_MOUSE, PointerButton } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import type RoleDisplay from "../role/RoleDisplay";
 
@@ -213,11 +213,16 @@ export default class MapPreviewDialog {
       this.teleportTo(worldPoint);
     };
     if (HAS_MOUSE) {
-      // PC 只监听鼠标并按左右键区分（引擎会把鼠标事件模拟成 touch，同一节点两套都监听会重复触发）
-      preview.on(Node.EventType.MOUSE_UP, (event: EventMouse) => {
-        const button = getPointerButton(event);
-        if (button) handleClick(button, getHitScreenPoint(event));
-      }, this);
+      // PC 只监听鼠标并按左右键区分（引擎会把鼠标事件模拟成 touch，同一节点两套都监听会重复触发）；
+      // 走 bindMousePress：按下起点在预览图上才响应这次抬起，抬起的结束一律交还世界侧收尾（见 utils/input/Pointer）
+      bindMousePress(
+        preview,
+        (event: EventMouse) => {
+          const button = getPointerButton(event);
+          if (button) handleClick(button, getHitScreenPoint(event));
+        },
+        this,
+      );
       return;
     }
     preview.on(Node.EventType.TOUCH_END, (event: EventTouch) => handleClick("left", event.getLocation()), this);

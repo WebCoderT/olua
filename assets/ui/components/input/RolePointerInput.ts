@@ -3,7 +3,7 @@ import { pointerMove } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import { getDirectionByVector, getVectorByDirection } from "../../utils/battle/BattleMath";
-import { getHitScreenPoint } from "../../utils/input/Pointer";
+import { clearWorldPressRelease, getHitScreenPoint, setWorldPressRelease } from "../../utils/input/Pointer";
 
 /**
  * 角色鼠标操控输入
@@ -17,7 +17,13 @@ import { getHitScreenPoint } from "../../utils/input/Pointer";
  * 角色每帧读 moveDirection/isRunning 决定位移与动画，状态变化时通过构造注入的回调通知宿主刷新动作朝向
  *
  * 不接管的按下：① 落在 UI 元素上（界面操作：开背包/换装/右键使用…）；
- * ② 落在怪物身上（那是选中/攻击，抬起时由 ScreenClickInput 选中，与之一致）
+ * ② 落在世界侧可交互对象上（NPC：点开对话/传送，LayerManager.isPointOnWorldInteractive）；
+ * ③ 落在怪物身上（那是选中/攻击，抬起时由 ScreenClickInput 选中，与之一致）
+ *
+ * 抬起的两条来路：① 全局 MOUSE_UP（正常情况）；② **界面侧拦下抬起后的交还**——
+ * 界面为了让点击不穿透会在鼠标通道上「命中即独占」（utils/input/UiHit.blockClickThrough），
+ * 那条路径上全球监听收不到 MOUSE_UP，所以界面会把这次按压的结束通过 releaseWorldPress 交还过来
+ * （构造时用 setWorldPressRelease 登记收尾回调）。少了这条交还，按住状态不解除，角色会一直走。
  *
  * 死区（指针几乎踩在角色身上）：按下时只记按下状态、方向留空，指针拖出死区后由 MOUSE_MOVE 补上方向；
  * 按住期间指针滑回死区则保持上一次方向（不更新，也不停下），避免拖动经过身体时一停一走；
@@ -34,6 +40,8 @@ export default class RolePointerInput {
   private run = false;
   /** 移动方向（八方向之一的单位向量；零向量表示不移动） */
   private direction: Vec2 = new Vec2();
+  /** 界面交还抬起时的收尾回调（构造时创建一份，销毁时按同一引用注销） */
+  private releaseHandler: () => void = () => this.releasePress();
 
   constructor(host: Node, onStateChanged: () => void) {
     this.host = host;
@@ -42,6 +50,9 @@ export default class RolePointerInput {
     // 按住期间的指针移动必须收：方向要跟着指针走（仅按下时收，松开状态直接返回）
     input.on(Input.EventType.MOUSE_MOVE, this.onMouseMove, this);
     input.on(Input.EventType.MOUSE_UP, this.onMouseUp, this);
+    // 界面拦下抬起时会把这次按压的结束交还过来（见 utils/input/Pointer 的「按压归属」）：
+    // 那条路径上全局监听收不到 MOUSE_UP，没有这条回收，按住状态不解除、角色会一直走
+    setWorldPressRelease(this.releaseHandler);
     // 宿主销毁时自动移除全局监听，避免重进场景后残留对已销毁节点的引用
     host.once(Node.EventType.NODE_DESTROYED, () => this.destroy());
   }
@@ -66,11 +77,12 @@ export default class RolePointerInput {
     input.off(Input.EventType.MOUSE_DOWN, this.onMouseDown, this);
     input.off(Input.EventType.MOUSE_MOVE, this.onMouseMove, this);
     input.off(Input.EventType.MOUSE_UP, this.onMouseUp, this);
+    clearWorldPressRelease(this.releaseHandler);
   }
 
   /**
    * 按下：左键走路、右键跑动，并按当前指针位置定方向
-   * UI 上或怪物身上的按下不接管；死区内按下只记状态（方向留空，等拖出死区再定）
+   * UI 上、世界侧可交互对象（NPC）上、怪物身上的按下都不接管；死区内按下只记状态（方向留空，等拖出死区再定）
    */
   private onMouseDown(event: EventMouse) {
     const button = event.getButton();
@@ -80,6 +92,9 @@ export default class RolePointerInput {
     const screenPoint = getHitScreenPoint(event);
     // 按在 UI 上：交给界面自己处理，世界侧不接管（与「点 UI 不打断角色操作」同一条规则）
     if (LayerManager.isPointOnUi(screenPoint)) return;
+    // 按在 NPC 这类世界侧可交互对象上：那是它自己的交互（点开对话/传送），不走路
+    // （不拦的话按一下就先往 NPC 那边迈步，弹窗出来时角色还在走）
+    if (LayerManager.isPointOnWorldInteractive(screenPoint)) return;
     // 按在怪物身上：那是选中/攻击，不移动（ScreenClickInput 会在抬起时把它选中）
     if (MonsterManager.getClickedMonster(screenPoint)) return;
     this.pressed = true;
@@ -99,6 +114,14 @@ export default class RolePointerInput {
 
   /** 抬起：任何键抬起都停（引擎的 mouseup 挂在 window 上，拖出画布再松开同样收得到） */
   private onMouseUp() {
+    this.releasePress();
+  }
+
+  /**
+   * 结束按住（抬起、或界面拦下抬起后把这次按压交还回来）：清掉按下状态与方向并通知宿主刷新动作
+   * 幂等：世界侧本来就没在按住（这次按压起点在界面上）时什么都不做
+   */
+  private releasePress() {
     if (!this.pressed) return;
     const wasMoving = this.direction.lengthSqr() > 0;
     this.pressed = false;

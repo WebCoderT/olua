@@ -4,6 +4,7 @@ import { StatusBadge } from "../../../types/status";
 import HoverTipManager from "../../core/HoverTipManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { clearChildren } from "../../utils/node/NodeTree";
+import { trackUiPress } from "../../utils/input/Pointer";
 
 /**
  * 状态图标条（角色信息栏头像下方）
@@ -35,6 +36,10 @@ export default class StatusIconBar extends Node {
       icon.on(Node.EventType.MOUSE_ENTER, () => HoverTipManager.showStatus(badge, icon), this);
       icon.on(Node.EventType.MOUSE_LEAVE, () => HoverTipManager.hide(), this);
       icon.once(Node.EventType.NODE_DESTROYED, () => HoverTipManager.hide(), this);
+      // 图标只注册了悬停事件，而它这条链上（状态条 → 角色信息栏）没有别的「按压起点记录点」，
+      // 所以这里自己登记一次：按下图标时把起点记下来，抬起判定才不会拿到上一次按压的旧起点
+      // （见 utils/input/Pointer.trackUiPress）
+      trackUiPress(icon);
       this.row.addChild(icon);
     });
   }

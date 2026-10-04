@@ -1,4 +1,5 @@
 import { _decorator, Component, EventTouch, Node } from "cc";
+import { blockClickThrough } from "../../utils/input/UiHit";
 const { ccclass } = _decorator;
 
 /**
@@ -13,6 +14,9 @@ export class Draggable extends Component {
 
   /** 注册触摸监听 */
   start() {
+    // 可拖拽节点必然是可点元素（弹窗背景），拖拽逻辑走 TOUCH_* 通道；
+    // 这里在鼠标通道补一次命中拦截，避免按住拖动时点击穿透到下层 UI（见 utils/input/UiHit.blockClickThrough）
+    blockClickThrough(this.node);
     this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
     this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);

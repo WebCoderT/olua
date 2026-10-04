@@ -3,6 +3,7 @@ import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../.
 import { npcs } from "../../../configs/npc";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import { markWorldInteractive } from "../../utils/input/UiHit";
 import { getMapPointPosition } from "../../utils/map/MapPointMath";
 import { getTiledObjectsFrom, TiledObject } from "../../utils/map/TiledObjects";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
@@ -69,5 +70,9 @@ export default class MapObjectSpawner {
     npcNode.setWorldPosition(getMapPointPosition(position, this.map));
     LayerManager.addToMapLayer(npcNode);
     npcNode.on(Node.EventType.TOUCH_END, () => npc.onClick && npc.onClick(), this);
+    // 标记为「世界侧可交互对象」：按下它是交互（点开对话/传送），世界侧不接管成「按住走路」、
+    // 点它也不清掉当前攻击目标（见 LayerManager.isPointOnWorldInteractive）。
+    // 标记就打在这个挂了点击监听的节点上：判定范围与它的点击范围天然一致
+    markWorldInteractive(npcNode);
   }
 }

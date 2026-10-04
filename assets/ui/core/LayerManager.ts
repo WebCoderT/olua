@@ -1,5 +1,5 @@
 import { Camera, isValid, Node, Vec2, Vec3 } from "cc";
-import { isPointOnUi as uiHitTest } from "../utils/input/UiHit";
+import { isPointOnUi as uiHitTest, isPointOnWorldInteractive as worldInteractiveHitTest } from "../utils/input/UiHit";
 
 export enum Layer {
   MAP = 1 << 0,
@@ -79,6 +79,11 @@ export default class LayerManager {
     this.MonsterLayer = this.createLayer(scene, "monster_layer", Layer.MONSTER);
     this.EffectLayer = this.createLayer(scene, "effect_layer", Layer.EFFECT);
     this.UILayer = this.createLayer(scene, "ui_layer", Layer.UI);
+    // 注意：UI 根**没有 UITransform**，绝不能在它上面注册任何鼠标事件——
+    // 引擎的 pointer-event-dispatcher 整理鼠标监听节点列表时会读 `trans!.cameraPriority`（非空断言），
+    // 没有 UITransform 的节点会让每次鼠标事件都抛「Cannot read properties of null (reading 'cameraPriority')」，
+    // 整个预览的鼠标交互全废（详见 utils/input/Pointer.ensureMouseHitTestable 的说明）。
+    // 「按压起点」因此改由各个在鼠标通道上有监听的界面元素自己登记（utils/input/Pointer.trackUiPress）。
   }
 
   /** 创建图层容器并挂到场景下 */
@@ -161,5 +166,16 @@ export default class LayerManager {
    */
   static isPointOnUi(screenPoint: Vec2): boolean {
     return uiHitTest(this.UILayer, screenPoint);
+  }
+
+  /**
+   * 屏幕坐标点是否落在「世界侧可交互对象」上（NPC 这类：不在 UI 层，点一下有自己的反应）
+   * 用途：· 按下这类对象属于交互（点开对话/传送），世界侧不接管成「按住走路」；
+   *      · 点它也不改变世界侧的选中目标、不打断正在进行的战斗
+   * 判定细节见 utils/input/UiHit（标记见 markWorldInteractive）
+   * @param screenPoint 屏幕坐标点（EventMouse.getLocation()）
+   */
+  static isPointOnWorldInteractive(screenPoint: Vec2): boolean {
+    return worldInteractiveHitTest(this.MapLayer, screenPoint);
   }
 }

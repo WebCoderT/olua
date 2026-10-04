@@ -18,9 +18,12 @@ import RoleDisplay from "../role/RoleDisplay";
  * 不会清掉当前选中目标、不会打断自动战斗、也不会误拾取界面背后的掉落物
  * （界面自己的右键语义——背包穿戴/脱下装备——因此不会被世界侧抢走）
  *
+ * 点击落在 NPC 这类「世界侧可交互对象」上时也跳过（见 LayerManager.isPointOnWorldInteractive）：
+ * 那是它自己的交互（点开对话/传送），点它同样不该清掉当前选中目标、打断挂机
+ *
  * 拖动走路（按下即走、抬起即停）不在这里：那是 components/input/RolePointerInput 的职责，
- * 两边共用同一套命中判定口径（getHitScreenPoint + isPointOnUi + getClickedMonster）；
- * 按在怪物身上时 RolePointerInput 不接管（既不走路也不跑），正好留给这里的攻击/选中
+ * 两边共用同一套命中判定口径（getHitScreenPoint + isPointOnUi + isPointOnWorldInteractive + getClickedMonster）；
+ * 按在这两类目标上时 RolePointerInput 不接管（既不走路也不跑），正好留给这里的攻击/选中
  */
 export default class ScreenClickInput {
   /** 主角（外部注入） */
@@ -59,6 +62,9 @@ export default class ScreenClickInput {
         return;
       }
     }
+    // 点在世界侧可交互对象（NPC）上：那是它自己的交互（节点上的 TOUCH_END 负责点开对话/传送），
+    // 世界侧既不选中也不取消选中——点 NPC 不该把当前攻击目标清掉、更不该打断挂机
+    if (LayerManager.isPointOnWorldInteractive(screenPoint)) return;
     const clickedNode = MonsterManager.getClickedMonster(screenPoint);
     // 选中/取消选中：左右键都更新（点空地取消选中）
     this.roleDisplay.setTarget(clickedNode);
