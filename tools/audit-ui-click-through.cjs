@@ -23,7 +23,10 @@
  * 本脚本要回答的问题是：
  * 1. **有没有点击元素漏了鼠标通道登记？**（点它会穿透到下层 UI）
  *    扫出所有「touch 点击注册点」，回溯它注册在哪个节点上，判断该节点是否已具备鼠标通道拦截
- *    （直接调了 blockClickThrough，或来自内部已登记的工厂：createButton / createDialog 等）；
+ *    （直接调了 blockClickThrough，或经 bindPointerAction / bindMousePress 登记，
+ *     或来自内部已登记的工厂：createButton / createDialog 等）；
+ *    回调「只把冒泡停住」的登记不算点击元素（容器不让触摸传给外层的可拖动弹窗背景，
+ *    鼠标通道的穿透由它所在的弹窗面板统一负责，见 isStopOnlyHandler）；
  * 2. **有没有 mouse 通道独占点漏了「交还世界侧」？**（会让按住走路卡死）
  *    扫出所有 node.on(Node.EventType.MOUSE_UP/MOUSE_DOWN) 注册点，要求它们都在共用助手里
  *    （bindMousePress / bindPointerAction / blockClickThrough），不要自己裸注册；
@@ -175,7 +178,7 @@ const WIRING = [
   ],
 ];
 
-const RE_TOUCH_CLICK = /([A-Za-z_$][\w.$]*)\.(?:on|once)\(\s*Node\.EventType\.TOUCH_(?:END|START)/g;
+const RE_TOUCH_CLICK = /([A-Za-z_$][\w.$]*)\.(?:on|once)\(\s*Node\.EventType\.TOUCH_(END|START)\s*,\s*([^,)]+)/g;
 const RE_MOUSE_NODE_LISTEN = /([A-Za-z_$][\w.$]*)\.(?:on|once)\(\s*Node\.EventType\.MOUSE_(UP|DOWN|ENTER|LEAVE)/g;
 const RE_INPUT_MOUSE = /Input\.EventType\.MOUSE_(?:UP|DOWN|MOVE)/g;
 const RE_SHIELD_CALL = /blockClickThrough\(([^)]*)\)/g;
@@ -189,6 +192,48 @@ function walk(dir, out = []) {
     else if (entry.name.endsWith(".ts")) out.push(full);
   }
   return out;
+}
+
+/**
+ * 节点是否经「项目统一的指针入口」登记过（bindPointerAction / bindMousePress）
+ *
+ * 这两个入口内部就是：鼠标通道登记 MOUSE_UP（独占抬起时交还世界侧）+ trackUiPress 记按压起点，
+ * 与手工调 blockClickThrough 等价，所以节点上再另外注册 TOUCH_*（点击或拖动手势）时，
+ * 不该被第 1/3 项判成「漏登记」。判定要求变量是**第一个实参**，避免「文件里别处用了入口」
+ * 把同文件的其它节点一起放过（例如「格子用 bindPointerAction 登记」不能替「别的按钮」背书）。
+ */
+function usesPointerHelper(text, varName) {
+  const escaped = varName.replace(/\./g, "\\.");
+  return new RegExp(`(?:bindPointerAction|bindMousePress)\\(\\s*${escaped}\\s*,`).test(text);
+}
+
+/**
+ * 这次 TOUCH_* 登记是不是「只把冒泡停住、不做点击」
+ *
+ * 为什么要有这条：容器类节点（背包网格、以后可能的面板）会在自己的触摸事件里 `propagationStopped = true`，
+ * 为的是不让触摸传给外层 —— 背包弹窗背景挂了 Draggable，不收住的话一拖物品整个弹窗跟着跑。
+ * 这种登记**不是点击元素**：它不响应点击、也没有点击行为可穿透，鼠标通道的穿透拦截由它所在的
+ * 弹窗面板（blockClickThrough）统一负责。若不区分，每加一处这类收尾都会被第 1 项判成漏登记。
+ *
+ * 判定必须严：回调要么是本文件里一个**只写了 `event.propagationStopped = true`** 的方法，
+ * 要么是同样只停冒泡的箭头函数；只要还干了别的事，就仍然按点击元素要求登记。
+ */
+function isStopOnlyHandler(text, callbackExpr) {
+  const expr = callbackExpr.trim();
+  // 箭头函数 / function 表达式：直接看它的函数体
+  const inline = expr.match(/(?:=>|\bfunction\s*\([^)]*\))\s*\{([^}]*)\}/);
+  if (inline) return isStopOnlyBody(inline[1]);
+  // this.xxx：回本文件找同名方法的定义（调用处不会是 `xxx(` 后紧跟 `{`）
+  const named = expr.match(/^this\.([A-Za-z_$][\w$]*)$/);
+  if (!named) return false;
+  const def = text.match(new RegExp(`\\b${named[1]}\\s*\\([^)]*\\)\\s*\\{([^}]*)\\}`));
+  return !!def && isStopOnlyBody(def[1]);
+}
+
+/** 函数体是否只有一句 `xxx.propagationStopped = true`（去掉注释与空白后比对） */
+function isStopOnlyBody(body) {
+  const code = body.replace(/\/\/[^\n]*/g, "").replace(/\s+/g, "");
+  return /^(?:return;?)?[A-Za-z_$][\w$]*\.propagationStopped=true;$/.test(code);
 }
 
 /**
@@ -233,6 +278,8 @@ for (const file of files) {
     const source = varName === "this" ? "self" : findSource(lines, varName, lineNo);
     const shieldDirect = new RegExp(`blockClickThrough\\(\\s*${varName.replace(/\./g, "\\.")}\\s*\\)`).test(text);
     const viaFactory = SHIELD_FACTORIES.some((f) => source.includes(f));
+    const viaPointerHelper = usesPointerHelper(text, varName);
+    const stopOnly = isStopOnlyHandler(text, m[3] ?? "");
     const reviewed = REVIEWED.get(`${rel}#${varName}`);
     touchClicks.push({
       file: rel,
@@ -240,7 +287,17 @@ for (const file of files) {
       varName,
       source,
       reviewed,
-      verdict: shieldDirect ? "直接登记" : viaFactory ? "工厂已登记" : reviewed ? "已核对" : "待确认",
+      verdict: stopOnly
+        ? "仅停冒泡"
+        : shieldDirect
+          ? "直接登记"
+          : viaPointerHelper
+            ? "指针入口已登记"
+            : viaFactory
+              ? "工厂已登记"
+              : reviewed
+                ? "已核对"
+                : "待确认",
     });
   }
 
@@ -249,6 +306,8 @@ for (const file of files) {
   while ((m = RE_MOUSE_NODE_LISTEN.exec(text))) {
     const varName = m[1];
     const tracked = new RegExp(`trackUiPress\\(\\s*${varName.replace(/\./g, "\\.")}\\s*\\)`).test(text);
+    // 经 bindPointerAction / bindMousePress 登记的节点，起点已在入口内部记好（见 usesPointerHelper）
+    const viaPointerHelper = usesPointerHelper(text, varName);
     const reviewed = MOUSE_LISTEN_REVIEWED.get(`${rel}#${varName}`);
     mouseListens.push({
       file: rel,
@@ -256,7 +315,7 @@ for (const file of files) {
       varName,
       kind: m[2],
       reviewed,
-      verdict: PRESS_HELPER_FILES.has(rel) ? "助手自身" : tracked ? "已登记" : reviewed ? "已核对" : "待确认",
+      verdict: PRESS_HELPER_FILES.has(rel) ? "助手自身" : tracked ? "已登记" : viaPointerHelper ? "指针入口已登记" : reviewed ? "已核对" : "待确认",
     });
   }
   // 全局 input 鼠标监听（不是节点监听，不受节点命中影响，仅列出）
@@ -288,11 +347,15 @@ for (const file of files) {
 
 console.log("=== 1. touch 通道点击注册点（点击元素） ===");
 const needReview = touchClicks.filter((c) => c.verdict === "待确认");
+const stopOnlyClicks = touchClicks.filter((c) => c.verdict === "仅停冒泡");
 for (const c of touchClicks) {
   const why = c.reviewed ? `  （${c.reviewed}）` : "";
   console.log(`  [${c.verdict}] ${c.file}:${c.line}  ${c.varName}  <- ${(c.source || "(未找到来源)").slice(0, 70)}${why}`);
 }
 console.log(`  合计 ${touchClicks.length} 处；已覆盖 ${touchClicks.length - needReview.length} 处；待确认 ${needReview.length} 处`);
+if (stopOnlyClicks.length) {
+  console.log(`  其中 ${stopOnlyClicks.length} 处是「仅停冒泡」：不做点击、也没有点击行为可穿透（鼠标通道的穿透由它所在的外层弹窗面板负责），不计为点击元素`);
+}
 
 console.log("\n=== 2. mouse 通道节点监听点（有监听的节点必须同时是「按压起点登记点」） ===");
 const badMouseListens = mouseListens.filter((l) => l.verdict === "待确认");

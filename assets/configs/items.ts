@@ -1,4 +1,4 @@
-import { BagCell, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
+import { BagCell, BagCellPos, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
 import { belts, clothes, equipmentSlotOrder, getRecyclePrice, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { materials } from "./material";
@@ -205,6 +205,111 @@ export function tidyBagGrid(bag: BagCell[][]): BagCell[][] {
     });
     result.push(line);
   });
+  return result;
+}
+
+//#endregion
+
+//#region 背包格子搬运（拖动改变物品所在格子，见 StorageManager.moveBagGood）
+
+/** 一次搬运的结果 */
+export interface BagMoveResult {
+  /** 搬运后的背包（新数组，不改入参；没搬动时是与入参同形的浅拷贝） */
+  bag: BagCell[][];
+  /** 是否真的动了物品（起点为空、起终点是同一格、越界时为 false） */
+  moved: boolean;
+}
+
+/** 取背包某格（越界返回 undefined，与「空格 null」区分开） */
+function getBagCell(bag: BagCell[][], pos: BagCellPos): BagCell | null | undefined {
+  return bag[pos.row]?.[pos.col];
+}
+
+/**
+ * 两格能否合并（同 id 且配置里可叠加）→ 返回单格上限；不能合并返回 0
+ * 认不出的 id（配置表里已下架）一律不能合并：不知道它的叠加规则，就不能替它算数量
+ */
+function getMergeMaxStack(aId: string, bId: string): number {
+  if (aId !== bId) return 0;
+  const good = getItem(aId);
+  if (!good || !good.stackable) return 0;
+  return Math.max(1, good.maxStack ?? 99);
+}
+
+/**
+ * 把一格物品搬到另一格（**纯函数**：不碰存档、不碰 UI，输入输出都是二维背包，便于单测）
+ *
+ * 落点规则（按这个顺序判）：
+ * 1. 起点没东西 / 起终点是同一格 / 越界 → 什么都不动（moved = false）；
+ * 2. 落点是空格 → **整格搬过去**（数量不变）；
+ * 3. 落点是同种**可叠加**物品 → **合并**：按单格上限 maxStack 吃，吃不完的留在原格（部分合并）；
+ * 4. 其余情况（不同种物品 / 装备这类不可叠加 / 配置表里认不出的 id）→ **两格交换**。
+ *
+ * 不变量（单测要盯的）：物品一件不丢（按 id 汇总数量守恒）；除「起点、落点」两格外，
+ * 其余格子一律不动；恒返回新数组，不改入参里的格子对象
+ */
+export function moveBagCellGrid(bag: BagCell[][], from: BagCellPos, to: BagCellPos): BagMoveResult {
+  const result = bag.map((row) => row.slice());
+  if (from.row === to.row && from.col === to.col) return { bag: result, moved: false };
+  const source = getBagCell(bag, from);
+  const target = getBagCell(bag, to);
+  // 起点为空、或落点越界：没得搬
+  if (!source || target === undefined) return { bag: result, moved: false };
+
+  // 2) 落点是空格：整格搬过去
+  if (!target) {
+    result[to.row][to.col] = { id: source.id, count: Math.max(1, source.count) };
+    result[from.row][from.col] = null;
+    return { bag: result, moved: true };
+  }
+
+  // 3) 落点是同种可叠加物：合并（超过单格上限的部分留在原格）
+  const maxStack = getMergeMaxStack(source.id, target.id);
+  if (maxStack > 0) {
+    const total = Math.max(1, source.count) + Math.max(1, target.count);
+    const merged = Math.min(maxStack, total);
+    result[to.row][to.col] = { id: target.id, count: merged };
+    result[from.row][from.col] = total > merged ? { id: source.id, count: total - merged } : null;
+    return { bag: result, moved: true };
+  }
+
+  // 4) 其余情况：两格交换
+  result[from.row][from.col] = { id: target.id, count: Math.max(1, target.count) };
+  result[to.row][to.col] = { id: source.id, count: Math.max(1, source.count) };
+  return { bag: result, moved: true };
+}
+
+/**
+ * 背包网格尺寸对齐（旧存档兼容）：按当前配置的 rows × cols 补齐/裁掉
+ *
+ * 背包在存档里是二维数组，尺寸跟着 configs/role 的 bagRow / bagCol 走。早期版本行列数不同时，
+ * 整理与拖动都会按存档自己的尺寸铺回，而界面格子是按当前配置生成的 —— 两边对不上就会出现
+ * 「物品铺进界面没有的格子」（看着像丢了）或某一行读不到数据的错位。
+ * 所以读档后统一对齐一次：不足的补空格；多余的行/列裁掉并留一条可查日志（正常存档走不到裁剪）
+ */
+export function normalizeBagGrid(bag: BagCell[][], rows: number, cols: number): BagCell[][] {
+  const source: BagCell[][] = Array.isArray(bag) ? bag : [];
+  const result: BagCell[][] = [];
+  let dropped = 0;
+  for (let row = 0; row < rows; row++) {
+    const sourceLine = Array.isArray(source[row]) ? source[row] : [];
+    const line: BagCell[] = [];
+    for (let col = 0; col < cols; col++) {
+      const cell = sourceLine[col];
+      // 只认有 id 的格子（初值缺失的脏数据当空格，数量至少 1）
+      line.push(cell && cell.id ? { id: cell.id, count: Math.max(1, cell.count ?? 1) } : null);
+    }
+    for (let col = cols; col < sourceLine.length; col++) if (sourceLine[col]) dropped += 1;
+    result.push(line);
+  }
+  for (let row = rows; row < source.length; row++) {
+    const line = source[row];
+    if (!Array.isArray(line)) continue;
+    line.forEach((cell) => {
+      if (cell) dropped += 1;
+    });
+  }
+  if (dropped > 0) console.warn(`[items] 背包尺寸与当前配置不符（应为 ${rows}×${cols}），已裁掉 ${dropped} 格超出范围的物品`);
   return result;
 }
 

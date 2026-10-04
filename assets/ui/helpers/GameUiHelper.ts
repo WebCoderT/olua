@@ -1256,6 +1256,66 @@ export default class GameUiHelper {
     return cells;
   }
 
+  /**
+   * 创建拖动时跟随指针的「幽灵」图标（半透明，表示这是被提起来的一个影子）
+   * 标为点击穿透：它跟着指针盖在界面上，不该参与「点是否落在 UI 上」的判定（见 utils/input/UiHit）
+   */
+  static createBagDragGhost(icon: string) {
+    const style = bagGridLayout.drag;
+    const ghost = UiHelper.createSprite("bag_drag_ghost", icon, new Vec2(), style.ghostSize);
+    this.setNodeOpacity(ghost, style.ghostOpacity);
+    markClickThrough(ghost);
+    return ghost;
+  }
+
+  /** 创建拖动落点高亮框（描边空框；拖动中被摆到指针下的格子上，取消/落子后连同节点销毁） */
+  static createBagDragHighlight() {
+    const style = bagGridLayout.drag;
+    const node = UiHelper.createNode("bag_drag_highlight", new Vec2(), style.highlightSize);
+    const graphics = node.addComponent(Graphics);
+    graphics.lineWidth = style.highlightLineWidth;
+    graphics.strokeColor = style.highlightColor;
+    // 描边从尺寸边缘内缩，免得和格子底图的外框重叠
+    const halfWidth = style.highlightSize.width / 2 - style.highlightInset;
+    const halfHeight = style.highlightSize.height / 2 - style.highlightInset;
+    graphics.rect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2);
+    graphics.stroke();
+    markClickThrough(node);
+    return node;
+  }
+
+  /**
+   * 让节点跟随屏幕坐标（把屏幕点换算成 node 父节点坐标系下的位置再赋给 node）
+   * 用于拖动中的幽灵图标：它挂在弹窗（或其子容器）下，而弹窗自己也可能被拖过，所以一律走世界坐标换算
+   * @param node 要跟随的节点（必须已在场景里，即已有父节点）
+   * @param screenPoint 屏幕坐标（与 UITransform.hitTest 同一口径，见 utils/input/Pointer）
+   */
+  static followScreenPoint(node: Node, screenPoint: Vec3) {
+    const parent = node.parent;
+    if (!parent || !isValid(parent)) return;
+    const transform = parent.getComponent(UITransform);
+    if (!transform) return;
+    const local = transform.convertToNodeSpaceAR(GameHelper.screenPositionToWorldPosition(screenPoint), new Vec3());
+    node.setPosition(local.x, local.y);
+  }
+
+  /** 把节点摆到目标节点的位置上（同一父节点坐标系；拖动落点高亮用） */
+  static alignNodeToNode(node: Node, target: Node) {
+    const parent = node.parent;
+    if (!parent || !isValid(target)) return;
+    const transform = parent.getComponent(UITransform);
+    if (!transform) return;
+    const local = transform.convertToNodeSpaceAR(target.getWorldPosition(), new Vec3());
+    node.setPosition(local.x, local.y);
+  }
+
+  /** 设置节点不透明度（没有 UIOpacity 就补一个；拖动压暗源格物品与恢复都用它） */
+  static setNodeOpacity(node: Node | null, opacity: number) {
+    if (!node || !isValid(node)) return;
+    const uiOpacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity);
+    uiOpacity.opacity = opacity;
+  }
+
   //#endregion
 
   //#region 角色/怪物动画

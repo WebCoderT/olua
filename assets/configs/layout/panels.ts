@@ -1,4 +1,4 @@
-import { Size, Vec2 } from "cc";
+import { Color, Size, Vec2 } from "cc";
 import { uiImages } from "./images";
 
 /**
@@ -39,6 +39,30 @@ export const bagGridLayout = {
   /** 单个格子尺寸与底图 */
   cellSize: new Size(50, 50),
   cellImage: uiImages.bagSlotGrid,
+
+  /**
+   * 物品拖动（按住物品拖到别的格子：空格 = 移动、同种可叠加 = 合并、其余 = 交换）
+   *
+   * 手势走 touch 通道（鼠标环境由引擎把 MOUSE_* 模拟成 TOUCH_*，触屏原生就是 TOUCH_*，
+   * 一套代码两种环境通用；为什么不在节点上监听 MOUSE_MOVE，见 ui/utils/input/Pointer 的说明）：
+   * 按下（TOUCH_START）只记起点 → 移动超过 threshold 才算拖动 → 松手（TOUCH_END）用指针位置找落点。
+   * 阈值存在的意义：区分「点一下用掉/穿上」与「拖去别的格子」，手抖几像素不该变成拖动
+   */
+  drag: {
+    /** 触发拖动的位移阈值（屏幕像素；小于它仍按点击处理） */
+    threshold: 10,
+    /** 跟随指针的幽灵图标：尺寸与不透明度（半透明＝这是个提起来的影子） */
+    ghostSize: new Size(50, 50),
+    ghostOpacity: 180,
+    /** 拖动中源格物品压暗到的不透明度，以及松手/取消后恢复的值 */
+    sourceOpacity: 70,
+    restoreOpacity: 255,
+    /** 落点高亮框：尺寸、描边宽度、相对尺寸的内缩与描边颜色 */
+    highlightSize: new Size(50, 50),
+    highlightLineWidth: 2,
+    highlightInset: 3,
+    highlightColor: new Color(255, 214, 102, 255),
+  },
 };
 
 //#endregion

@@ -31,6 +31,19 @@ export default class GameHelper {
     return screenPos;
   }
 
+  /**
+   * 屏幕坐标转世界坐标（与 worldPositionToScreenPosition 对称）
+   * 用途：把指针位置（屏幕坐标）换算到某个 UI 容器的本地坐标，例如拖动中的物品幽灵图标
+   * @param screenPos 屏幕坐标（物理像素，与 EventMouse/EventTouch 的 getLocation 同口径）
+   */
+  static screenPositionToWorldPosition(screenPos: Vec3) {
+    const worldPos = new Vec3();
+    // 相机未就绪（进场景之前）时退回原点，调用方按父节点坐标系摆放即可，不会崩
+    if (!this.camera) return worldPos;
+    this.camera.screenToWorld(screenPos, worldPos);
+    return worldPos;
+  }
+
   /** 角色是否能穿上装备 */
   static checkRoleCanUseEquipment(equipment: Equipment) {
     return this.getEquipmentRejectReason(equipment) === null;

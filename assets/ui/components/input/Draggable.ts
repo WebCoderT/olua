@@ -31,8 +31,20 @@ export class Draggable extends Component {
     this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
   }
 
-  /** 开始拖拽（拦截冒泡，防止 ScrollView 跟着滚） */
+  /**
+   * 开始拖拽（拦截冒泡，防止 ScrollView 跟着滚）
+   *
+   * 按下点**自带拖动手势**时（背包格子的物品拖动、滚动视图、滑条…这类都在自己的节点上注册了
+   * TOUCH_MOVE），这次拖动归它，弹窗不抢：子节点的触摸会冒泡到这里，但「谁有自己的拖动」一望可辨 ——
+   * 注册过 TOUCH_MOVE 的就是。少了这一条，子节点一拖、整个弹窗跟着一起动
+   * （背包那边还会自己把触摸收住，这里是通用兜底，见 components/panel/BagGridView.setupTouchOwnership）。
+   * 判 `!== this.node`：弹窗自己就是拖拽柄，也注册了 TOUCH_MOVE，别把自己也拦掉 ——
+   * 按下点没有命中任何子节点时（弹窗空白处、标题这类没有手势的子节点），弹窗照旧可以拖。
+   */
   private onTouchStart(event: EventTouch) {
+    // 每次按下都从「不拖」开始：上一次的残留状态不该让弹窗跟着动
+    this.dragging = false;
+    if (event.target && event.target !== this.node && event.target.hasEventListener(Node.EventType.TOUCH_MOVE)) return;
     this.dragging = true;
     event.propagationStopped = true;
   }

@@ -187,6 +187,12 @@ export interface BagCell {
   count: number;
 }
 
+/** 背包格子的行列坐标（拖动落点、跨格搬运都用它定位） */
+export interface BagCellPos {
+  row: number;
+  col: number;
+}
+
 /** 是否为装备 */
 export function isEquipment(good: Goods): good is Equipment {
   return good.type === GOOD_TYPE.EQUIPMENT;

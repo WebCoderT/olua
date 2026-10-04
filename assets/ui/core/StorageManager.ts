@@ -4,7 +4,7 @@ import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { roleMaxLevel } from "../../configs/growth";
-import { initialShortcutKeys, maxRoleCount } from "../../configs/role";
+import { initialShortcutKeys, bagRow, bagCol, maxRoleCount } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
@@ -15,7 +15,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
-import { getItem, recycleBagEquipmentGrid, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
+import { getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
 import { getSoulLevel } from "../../configs/soul";
 
 /**
@@ -124,7 +124,7 @@ export default class StorageManager {
       }
     });
     // 背包格子迁移：旧快照（带 type 的完整物品对象）收敛为 { id, count }；新格式原样规整；无法确定 id 的格子丢弃
-    role.bag = role.bag.map((row) =>
+    role.bag = (Array.isArray(role.bag) ? role.bag : []).map((row) =>
       row.map((cell) => {
         if (!cell || typeof cell !== "object") return null;
         const snapshot = cell as Goods & Partial<BagCell>;
@@ -135,6 +135,9 @@ export default class StorageManager {
         return { id, count };
       }),
     );
+    // 背包尺寸对齐当前配置：旧存档的行/列数可能不是 bagRow × bagCol —— 尺寸不符时整理与拖动会按存档尺寸铺回，
+    // 而界面格子是按当前配置生成的，两边对不上就会出现「物品铺进界面没有的格子」（见 configs/items.normalizeBagGrid）
+    role.bag = normalizeBagGrid(role.bag, bagRow, bagCol);
     const saved: NeedSetShortcutKeyConfig[] = Array.isArray(role.shortcutKeys) ? role.shortcutKeys : [];
     role.shortcutKeys = initialShortcutKeys.map((config) => {
       const exist = saved.find((i) => i.key === config.key);
@@ -354,15 +357,15 @@ export default class StorageManager {
   /**
    * 一键整理背包（当前在线角色）
    *
-   * 搬运算法是纯函数 `configs/items.tidyBagGrid`（合并同类可叠加物 → 按等级/部位排序 → 空格沉底），
-   * 这里只负责：取角色 → 调用 → **有变动才落盘刷新**，背包本来就很整齐时不重复写存储
+   * 搬运算法是纯函数 `configs/items.tidyBagGrid`（合并同类可叠加物 → 按等级/部位排序 → **从第一个格子起铺满**），
+   * 这里只负责：取角色 → 调用 → **有变动才落盘刷新**，背包本来就整齐时不重复写存储
    * @returns 是否有变动（无角色/背包为空/整理前后一致时返回 false）
    */
   static tidyBag(): boolean {
     const role = this.findOnlineRole();
     if (!role) return false;
+    if (this.bagIsEmpty(role.bag)) return false;
     const before = this.bagSignature(role.bag);
-    if (!before) return false;
     role.bag = tidyBagGrid(role.bag);
     if (this.bagSignature(role.bag) === before) return false;
     // 保存并刷新背包显示
@@ -372,15 +375,52 @@ export default class StorageManager {
     return true;
   }
 
-  /** 背包内容指纹（整理前后比对用；全空返回空串） */
+  /** 背包是否一件东西都没有（空背包没什么可整理的） */
+  private static bagIsEmpty(bag: BagCell[][]): boolean {
+    return !bag.some((row) => row.some((cell) => !!cell));
+  }
+
+  /**
+   * 背包内容指纹（整理前后比对用）：从第一格起逐格拼接，**空格也占一位**（`·`）
+   *
+   * 空格必须计入：否则「物品顺序没变、只是散着放」的背包（例：把第 3 格的药拖到第 8 格）指纹
+   * 与整理完之后的一模一样，`tidyBag` 会判定「已经很整齐」直接返回 —— 玩家点整理却看不到东西
+   * 回到第一个格子，这就是「整理要从第一个格子重新排列」这条反馈的来源。
+   */
   private static bagSignature(bag: BagCell[][]): string {
     let signature = "";
     bag.forEach((row) =>
       row.forEach((cell) => {
-        if (cell) signature += `${cell.id}x${cell.count},`;
+        signature += cell ? `${cell.id}x${cell.count},` : "·";
       }),
     );
     return signature;
+  }
+
+  //#endregion
+
+  //#region 背包格子搬运（拖动改变物品所在格子）
+
+  /**
+   * 拖动把背包一格里的物品搬到另一格（当前在线角色）
+   *
+   * 落点规则全在纯函数 `configs/items.moveBagCellGrid`：空格 = 移动、同种可叠加 = 合并（超过单格上限的留在原格）、
+   * 其余 = 交换；这里只负责取角色 → 调用 → **真的动了才落盘刷新**。
+   *
+   * 与「整理」同一口径：**不弹提示** —— 拖动的反馈就是物品的位置/数量变化本身，
+   * 每次落子都飘一条字反而吵；无效拖动（拖空格、拖回原格）静默返回 false
+   * @returns 是否有变动（起点为空、起终点相同、越界、无角色时返回 false）
+   */
+  static moveBagGood(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const result = moveBagCellGrid(role.bag, { row: fromRow, col: fromCol }, { row: toRow, col: toCol });
+    if (!result.moved) return false;
+    role.bag = result.bag;
+    // 保存并刷新背包显示
+    this.updateOnlineRole(role);
+    RoleUIManager.refreshBag();
+    return true;
   }
 
   //#endregion

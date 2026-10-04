@@ -7,6 +7,7 @@
  *
  * 盯的不变量（改整理算法后必须全绿）：
  * · 行列数与入参一致          · 物品一件不丢（按 id 汇总数量守恒）
+ * · **从第一个格子（0,0）起连续铺满、空格全部沉到末尾**（"整理 = 全部重排"，不留中间空洞）
  * · 装备排最前、等级降序、同等级按部位顺序（configs/equipments.equipmentSlotOrder）
  * · 非装备按大类顺序（药品 → 材料 → 其他）
  * · 同 id 可叠加物合并成一格、超过 maxStack 才拆堆
@@ -62,6 +63,21 @@ function main() {
   const labelOf = (id) => {
     const good = getItem(id);
     return good ? `${good.label}(lv${good.level}${isEquipment(good) ? "," + good.slot : ""})` : `${id}(无配置)`;
+  };
+  /** 网格第一格（0 行 0 列）——「整理从第一个格子开始」的判据 */
+  const firstCellOf = (grid) => grid[0][0];
+  /** 是否「从第一格起连续铺满、空格一律在末尾」：展平后的前 n 格都有货，后面的格子全空 */
+  const isPackedPrefix = (grid) => {
+    const flat = flatOf(grid);
+    let index = 0;
+    let ok = true;
+    grid.forEach((row) =>
+      row.forEach((cell) => {
+        if ((index < flat.length) !== Boolean(cell)) ok = false;
+        index++;
+      }),
+    );
+    return ok;
   };
 
   /** 装备排最前 + 等级降序 + 同等级按部位顺序 */
@@ -139,6 +155,9 @@ function main() {
     "非装备内部顺序为 药品 → 材料",
     flatA.map((c) => getItem(c.id)?.type ?? "unknown").join(","),
   );
+  // 整理的口径是「全部重新排列」：从第一个格子开始按行连续铺满，空格一律沉到末尾（中间不留空洞）
+  check(firstCellOf(afterA)?.id === flatA[0].id, "第一个格子（0 行 0 列）就是排在最前的物品", `实际 ${firstCellOf(afterA)?.id ?? "空"}`);
+  check(isPackedPrefix(afterA), "物品从第一个格子起连续铺满、空格全部沉到末尾", `前 ${flatA.length} 格有货 / 共 ${afterA.reduce((sum, row) => sum + row.length, 0)} 格`);
   const againA = tidyBagGrid(afterA);
   check(JSON.stringify(againA) === JSON.stringify(afterA), "幂等：再整理一次结果不变");
 
@@ -151,6 +170,8 @@ function main() {
   check(flatB.length === 1 && flatB[0].count === 77, "同种药合并成一格（数量 77）", `占 ${flatB.length} 格`);
   check(totalsEqual(totalsOf(gridB), totalsOf(afterB)), "数量守恒", describe(totalsOf(afterB)));
   check(afterB.length === bagRow && afterB[0].length === bagCol, "行列数不变");
+  check(firstCellOf(afterB)?.count === 77, "合并后的 77 个就落在第一个格子上");
+  check(isPackedPrefix(afterB), "合并后除第一格外全空（不留中间空洞）");
 
   // 场景 C：maxStack 拆堆（合计 250 → 99 / 99 / 52）
   console.log("\n=== 场景 C：超过单格上限要拆堆 ===");
@@ -162,6 +183,8 @@ function main() {
   const flatC = flatOf(afterC);
   check(flatC.length === 3 && flatC.map((c) => c.count).join(",") === "99,99,52", "按 maxStack=99 拆堆", flatC.map((c) => `${c.id}×${c.count}`).join(" , "));
   check(totalsEqual(totalsOf(gridC), totalsOf(afterC)), "拆堆后数量守恒", describe(totalsOf(afterC)));
+  check(afterC[0][0]?.count === 99 && afterC[0][1]?.count === 99 && afterC[0][2]?.count === 52, "三堆从第一格起连续排开（99 / 99 / 52）");
+  check(isPackedPrefix(afterC), "拆堆后同样从第一个格子开始铺，空格都在末尾");
 
   // 场景 D：同等级不同部位 / 同一件装备的前后缀变体
   console.log("\n=== 场景 D：部位顺序 + 前后缀强度 ===");

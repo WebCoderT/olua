@@ -14,7 +14,9 @@ import { getText } from "../../../configs/texts";
  * - 「一键整理」→ StorageManager.tidyBag（合并同类可叠加物 + 按等级/部位重排，规则在数据层与配置表）
  * - 「一键回收」→ StorageManager.recycleBagEquipments（背包里的装备整格换成绑定元宝，**两步确认**）
  * - 「丢弃」→ 开关丢弃模式，开启后点格子里的物品即丢弃该格（**两步确认**，不可恢复）
- * 物品的使用/丢弃规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
+ * - 按住物品拖到别的格子 → StorageManager.moveBagGood（空格=移动 / 同种可叠加=合并 / 其余=交换；
+ *   手势与幽灵图标在 BagGridView 里，落点规则在数据层）
+ * 物品的使用/丢弃/搬运规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
  * 实例由使用方（BottomBar）创建持有，不导出全局单例
  */
 export default class BagDialog {
@@ -108,6 +110,10 @@ export default class BagDialog {
   /** 刷新背包（物品变更后调用，弹窗未打开时忽略） */
   refresh() {
     if (!this.dialog || !isValid(this.dialog) || !this.dialog.active) return;
+    // 背包内容一变，之前「待确认」的两份状态就都不可信了：回收报出的件数/元宝、要丢弃的那一格
+    // （拖动物品可能把目标格的东西换走或挪走），一律先复位 —— 宁可让玩家重点一次，也不误伤
+    this.cancelRecycleConfirm();
+    this.clearDiscardPending();
     this.bagGrid?.refresh(StorageManager.findOnlineRole());
   }
 
@@ -254,6 +260,8 @@ export default class BagDialog {
     // 退出丢弃模式：先清待确认与定时器；节点即将销毁，不必再改按钮文案
     this.clearDiscardPending();
     this.discardMode = false;
+    // 拖动中关弹窗：幽灵与落点高亮挂在弹窗下会随弹窗销毁，这里先让网格把拖动状态收干净
+    this.bagGrid?.cancelDrag();
     this.recycleButton = null;
     this.discardButton = null;
     this.bagGrid = null;
