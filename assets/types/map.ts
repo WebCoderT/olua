@@ -24,7 +24,7 @@ export interface NpcData extends NPC {
 }
 
 // 地图编号
-export type MapId = "0" | "1" | "2";
+export type MapId = "0" | "1" | "2" | "3";
 
 // 地图类型
 export enum MapType {

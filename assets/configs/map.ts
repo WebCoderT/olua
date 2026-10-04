@@ -39,6 +39,7 @@ const mapData: MapData[] = [
   { id: "0", label: "新手村", src: "map/0/0", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
   { id: "1", label: "卧龙城", src: "map/1/1", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
   { id: "2", label: "王城", src: "map/2/2", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "3", label: "雪域高原", src: "map/3/3", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
 ];
 
 /** 地图配置（id → 配置）：由 mapData 统一构建，消费方照旧 maps.get(id) */

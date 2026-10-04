@@ -45,6 +45,16 @@ export default class GameMap extends Node {
     this.getComponent(TiledMap)?.destroy();
     const tiledMap = this.addComponent(TiledMap);
     tiledMap.tmxAsset = mapAsset;
+    // 关闭引擎的瓦片裁剪（TiledMap.enableCulling 默认 true）——这是「传送后整张地图一片黑、动一下才恢复」的根因：
+    // 裁剪范围（可见瓦片行列）由 TiledLayer.updateCulling 在「相机节点 TRANSFORM_CHANGED」时**同步**重算，
+    // 而它用的是相机视图矩阵（camera.screenToWorld），此刻矩阵还没跟上本帧的位置变化（引擎自己也把首次裁剪
+    // 延后一帧，注释即 "delay 1 frame, since camera's matrix data is dirty"）。
+    // 于是瞬移/传送这种跨屏跳变会把裁剪范围算成**跳变前**的位置 → 目标区域整片瓦片不在裁剪矩形内，不渲染（黑屏）；
+    // 之后再移动一下（相机再次变化）才重算出正确范围，画面才恢复。
+    // 引擎文档亦写明「瓦片地图采用了摄像机的话需要手动关闭裁剪，否则渲染会出错」，本工程相机正是跟随角色移动的。
+    // 代价可忽略：本工程地图为 2 层 64×64（每层 4096 格，共 1 个批次/层），关闭后每帧全量提交，
+    // 屏幕外的格子在裁剪阶段被丢弃，实测开销远小于「传送后黑屏」的体验损失。
+    tiledMap.enableCulling = false;
     LayerManager.addToMapLayer(this);
     // 按 npc 对象组生成 NPC（碰撞区与 NPC 的碰撞范围显示都在生成流程内完成）
     const objectSpawner = new MapObjectSpawner(this as Node);
