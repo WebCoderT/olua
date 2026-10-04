@@ -6,6 +6,7 @@ import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
 import { getSoulLevel, soulLevels, soulMaxLevel } from "../../../configs/soul";
 import { warSoulDialogLayout } from "../../../configs/hudLayout";
+import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
 
 /** 弹窗布局（尺寸与各栏位置、配色统一见 configs/hudLayout.warSoulDialogLayout） */
@@ -99,7 +100,7 @@ export default class WarSoulDialog {
     this.infoSlot.addChild(UiHelper.createLabel("soul_desc", config.description, info.description.color, info.description.fontSize, info.description.position, info.description.size));
     const current = getSoulLevel(role.soulOfWar);
     this.infoSlot.addChild(
-      UiHelper.createLabel("soul_current", current ? `当前战魂：${role.soulOfWar} 阶 · ${current.label}` : "尚未激活战魂", info.current.color, info.current.fontSize, info.current.position, info.current.size),
+      UiHelper.createLabel("soul_current", current ? getText("label_soul_current", { level: role.soulOfWar, label: current.label }) : getText("label_soul_none"), info.current.color, info.current.fontSize, info.current.position, info.current.size),
     );
     // 外显勾选框：勾选后把当前等级的战魂动画挂到主角右上角（状态持久在角色数据 role.soulShow）
     // 勾选后立刻刷新主角身上的战魂动画（RoleUIManager → RoleDisplay，后者用前重读角色数据，见 RoleDisplay.updateSoulShow）
@@ -127,6 +128,6 @@ export default class WarSoulDialog {
         label.string = layout.upgradeButton.text;
       }
     }
-    if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = `绑定元宝：${role.bindGold}`;
+    if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = getText("label_bind_gold", { value: role.bindGold });
   }
 }

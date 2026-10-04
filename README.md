@@ -56,7 +56,14 @@
 
 ## 目录结构
 
-- assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/hudLayout 等）
+> 约定：**核心代码只做「怎么跑」，一切可调的东西都在 `assets/configs`**——
+> 数值、文案、布局、配色、时长、资源路径都不写在逻辑里。
+> 自查：`node tools/audit-config-leak.cjs`（扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
+
+- assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status 等）
+  - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）
+  - configs/bottomNav：底部功能入口表（名称 / 图标 / 解锁等级 / 快捷键）
+  - configs/layout：UI 布局与样式（hud / dialogs / panels / scenes / images / sizes / theme）
 - assets/types：纯类型声明（common/role/animation/good/skill/map/monster/drop/status）
 - assets/entities：运行时实体（Role）
 - assets/skills：技能行为实现（技能实现只依赖 SkillContext，不反查全局）
@@ -67,6 +74,7 @@
   - ui/utils：纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/node）
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
+- tools：本地校验脚本（配置外泄审计 / 点击穿透审计 / 背包单测 / 文案单测）
 - public：截图、展示素材与联系方式二维码
 
 ## 技术栈

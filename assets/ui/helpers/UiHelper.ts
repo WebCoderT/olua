@@ -21,7 +21,7 @@ import {
   ScrollView,
   Mask,
 } from "cc";
-import { uiImages } from "../../configs/hudLayout";
+import { uiImages, uiTheme } from "../../configs/hudLayout";
 import { blockClickThrough } from "../utils/input/UiHit";
 
 /**
@@ -99,10 +99,10 @@ export default class UiHelper {
    */
   static createEmptyNode(name: string, position: Vec2 = new Vec2(), size: Size = new Size()) {
     const node = this.createNode(name, position, size);
-    // 添加边框，确认体积
+    // 添加边框，确认体积（线宽与颜色见 configs/hudLayout.uiTheme.emptyNodeBorder）
     const graphics = node.addComponent(Graphics);
-    graphics.lineWidth = 4;
-    graphics.strokeColor = new Color(255, 0, 0, 255);
+    graphics.lineWidth = uiTheme.emptyNodeBorder.lineWidth;
+    graphics.strokeColor = uiTheme.emptyNodeBorder.color;
     graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
     graphics.stroke();
     return node;
@@ -206,7 +206,7 @@ export default class UiHelper {
     }
     editBox.textLabel.fontSize = 24;
     editBox.placeholderLabel.fontSize = 24;
-    editBox.placeholderLabel.color = new Color("#999999");
+    editBox.placeholderLabel.color = uiTheme.inputPlaceholderColor;
     editBox.placeholderLabel.string = placeholder;
     this.setupEditBoxLabel(editBox.textLabel, size);
     this.setupEditBoxLabel(editBox.placeholderLabel, size);

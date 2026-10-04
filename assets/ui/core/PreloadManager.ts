@@ -5,6 +5,7 @@ import { monsters } from "../../configs/monster";
 import { npcs } from "../../configs/npc";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../configs/role";
 import { getEquipment } from "../../configs/items";
+import { getText } from "../../configs/texts";
 import { Role } from "../../entities/Role";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import AnimationHelper from "../helpers/AnimationHelper";
@@ -42,7 +43,7 @@ export default class PreloadManager {
    * @param onProgress 进度回调（可缺省：直接从 Game 场景启动时没有进度界面）
    */
   static async preloadGame(mapSrc: string, role: Role | null, onProgress?: PreloadProgress) {
-    onProgress?.(0, "地图信息");
+    onProgress?.(0, getText("progress_map"));
     const mapAsset = await loadResourceAsync<TiledMapAsset>(mapSrc, TiledMapAsset);
     const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapAsset), ...this.getRoleAnimationTasks(role)]);
     await this.runTasks(tasks, onProgress, loadingConfig.mapRatio);
@@ -103,7 +104,7 @@ export default class PreloadManager {
   private static async runTasks(tasks: PreloadTask[], onProgress: PreloadProgress | undefined, progressStart: number) {
     const total = tasks.length;
     if (!total) {
-      onProgress?.(1, "无需预加载");
+      onProgress?.(1, getText("progress_none"));
       return;
     }
     const queue = tasks.slice();
@@ -112,7 +113,7 @@ export default class PreloadManager {
       for (let task = queue.shift(); task; task = queue.shift()) {
         await AnimationHelper.prepare(task.dir, task.kind, task.speedRate);
         finished++;
-        onProgress?.(progressStart + (1 - progressStart) * (finished / total), `帧动画 ${finished}/${total}`);
+        onProgress?.(progressStart + (1 - progressStart) * (finished / total), getText("progress_frames", { done: finished, total }));
       }
     };
     await Promise.all(Array.from({ length: Math.min(loadingConfig.animationConcurrency, total) }, worker));

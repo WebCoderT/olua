@@ -1,4 +1,4 @@
-import type { SoulLevelConfig } from "../types/soul";
+import type { SoulAttributes, SoulLevelConfig } from "../types/soul";
 import { getRoleLevelAttributes, roleMaxLevel } from "./growth";
 
 /**
@@ -122,6 +122,21 @@ export const soulLevels: SoulLevelConfig[] = soulSources.map((source, index) => 
 
 /** 战魂满级 */
 export const soulMaxLevel = soulLevels.length;
+
+/**
+ * 战魂属性列表的显示名与顺序（战魂弹窗右侧面板）
+ * 用短名（生命/物攻…）：面板窄，且与角色信息弹窗的属性列表（configs/good.goodShowAttributesLabel 全名）互不干扰
+ * 数组即顺序，key 为 SoulAttributes 的字段名
+ */
+export const soulAttributeLabels: { key: keyof SoulAttributes; label: string }[] = [
+  { key: "maxHp", label: "生命" },
+  { key: "physicalAttack", label: "物攻" },
+  { key: "magicAttack", label: "魔攻" },
+  { key: "taoistAttack", label: "道攻" },
+  { key: "physicalDefense", label: "物防" },
+  { key: "magicDefense", label: "魔防" },
+  { key: "taoistDefense", label: "道防" },
+];
 
 /**
  * 取某等级的战魂配置

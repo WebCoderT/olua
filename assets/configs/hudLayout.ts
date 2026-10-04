@@ -8,6 +8,7 @@
  * - layout/scenes.ts   场景界面（登录 / 选角 / 加载）
  * - layout/images.ts   图片与字体地址（取图函数 + 具名图片表 uiImages）
  * - layout/sizes.ts    跨界面复用的尺寸与字号（uiSize）
+ * - layout/theme.ts    通用零件样式（空节点调试边框 / 输入框占位色 / 飘字配色与时长）
  *
  * 约定：组件与零件只引用这里的值，**不在组件里写坐标、尺寸或图片路径**；
  * 要调界面先改这里（改数据不生效的另说，见各块的注释）。
@@ -24,3 +25,4 @@ export * from "./layout/panels";
 export * from "./layout/scenes";
 export * from "./layout/images";
 export * from "./layout/sizes";
+export * from "./layout/theme";

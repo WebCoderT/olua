@@ -11,6 +11,32 @@ export const ROLE_WALK_SPEED = 2;
 export const ROLE_RUN_SPEED = 4;
 
 /**
+ * 角色体型与碰撞盒（显示与物理共用）
+ * 角色锚点在脚下（0.5, 0），所以碰撞盒向上偏移身高的一半才正好罩住身体
+ * 调体型（例如换成更瘦的职业模型）只改这里
+ */
+export const roleBody = {
+  /** 角色显示尺寸（宽 × 高，世界单位） */
+  size: new Size(40, 70),
+  /** 碰撞盒尺寸与相对脚下原点的偏移 */
+  colliderSize: new Size(40, 70),
+  colliderOffset: new Vec2(0, 35),
+};
+
+/**
+ * 角色刚体参数
+ * 角色位移由代码驱动（键盘/鼠标/A* 寻路），刚体只用来参与碰撞检测：
+ * 不施加重力、不允许旋转，否则会被物理仿真推着走
+ */
+export const roleRigid = {
+  gravityScale: 0,
+  fixedRotation: true,
+};
+
+/** 单个账号最多可创建的角色数量（存档上限，创建接口按它拦） */
+export const maxRoleCount = 3;
+
+/**
  * 鼠标操控角色（鼠标左键按住走路、右键按住跑动，抬起即停）
  * 移动方向 = 「指针位置相对角色的方位」按 360° 平分八块取其一（与角色八方向动画、八方向移动一致），
  * 按住期间指针移动会实时改向；由 components/input/RolePointerInput 负责取点与判定，这里只放手感参数

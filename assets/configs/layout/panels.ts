@@ -50,6 +50,14 @@ export const roleAttributeListLayout = {
   name: "role_attributes",
   position: new Vec2(217, 205),
   size: new Size(150, 0),
+  /** 条目纵向间距与容器内边距 */
+  spacing: 5,
+  padding: 10,
+  /** 分组标题（基础属性 / 特殊属性）与属性行的高度 */
+  titleHeight: 14,
+  rowHeight: 20,
+  /** 属性行字号 */
+  rowFontSize: 12,
 };
 
 //#endregion

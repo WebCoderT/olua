@@ -21,7 +21,7 @@ export default class BottomNavButton extends Node {
   /** 点击：未解锁（图标置灰）时提示解锁等级，否则执行功能回调 */
   private onClick() {
     if (this.getComponent(Sprite).grayscale) {
-      GameUiHelper.createErrorTip("feature_locked_tip", `${this.config.label}功能需要在${this.config.openLevel}级后开放`);
+      GameUiHelper.createErrorTip("feature_locked_tip", { feature: this.config.label, level: this.config.openLevel });
       return;
     }
     this.config.onClick();

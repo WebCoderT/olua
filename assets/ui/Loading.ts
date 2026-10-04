@@ -6,6 +6,7 @@ import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
 import { loadingLayout } from "../configs/hudLayout";
+import { getText } from "../configs/texts";
 
 const { ccclass } = _decorator;
 
@@ -56,14 +57,14 @@ export class Loading extends Component {
       director.loadScene(scene);
     } catch (error) {
       console.error("资源加载失败：", error);
-      this.setProgressText("加载失败，请重新进入");
+      this.setProgressText(getText("progress_failed"));
     }
   }
 
   /** 更新进度（ratio 取值 0~1，显示为百分比；tip 为当前阶段的说明，如"帧动画 3/7"） */
   private setProgress(ratio: number, tip?: string) {
     const percent = Math.min(100, Math.floor(ratio));
-    this.setProgressText(tip ? `加载中 ${percent}% · ${tip}` : `加载中 ${percent}%`);
+    this.setProgressText(tip ? getText("progress_loading_tip", { percent, tip }) : getText("progress_loading", { percent }));
   }
 
   /** 设置进度文本 */

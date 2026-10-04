@@ -13,6 +13,7 @@
 - [鼠标一动就报 Cannot read properties of null (reading 'cameraPriority')？](#鼠标一动就报-cannot-read-properties-of-null-reading-camerapriority)
 - [弹窗里的功能突然全都不响应了（穿不上装备、卸不下、地图点不动）？](#弹窗里的功能突然全都不响应了穿不上装备卸不下地图点不动)
 - [掉落想怎么调？](#掉落想怎么调)
+- [界面上的数字/文案想改，到底该动哪个文件？](#界面上的数字文案想改到底该动哪个文件)
 - [背包「一键整理」的排序想改（升序 / 部位先后 / 谁排前面）？](#背包一键整理的排序想改升序--部位先后--谁排前面)
 - [背包「一键回收」的价想调（太贵/太便宜、想单独改某一件）？](#背包一键回收的价想调太贵太便宜想单独改某一件)
 
@@ -107,6 +108,29 @@
 - 装备条目口径：取「level ≤ 怪物等级且不超过 10 级、每部位最多 2 档」的基础装备，每件展开全部 15 个前后缀变体（`_p前缀s后缀`，普通的·人级沿用基础 id），权重按前后缀稀有度衰减（前缀 ×[1, 0.7, 0.45, 0.25, 0.12]、后缀 ×[1, 0.5, 0.22]、部位 ×1 / 0.9 / 0.8）
 - 因此 555 件装备里：武器 / 衣服随各等级段的怪铺开，头盔 / 腰带 / 鞋子 / 项链 / 戒指目前**只有 1 级新手件**，所以只落在低等级怪（≤11 级）的列表里——补齐这些部位的高等级装备后，把 `EQUIP_LEVEL_GAP` 与 `MAX_TIER_PER_SLOT` 放宽重新生成即可覆盖到高等级怪
 - 新增怪物时若忘了铺掉落，会退回 `configs/drop.monsterDrops(level, tier)` 的按等级兜底，不会出现「打死没东西掉」
+
+### 界面上的数字/文案想改，到底该动哪个文件？
+
+一条总原则：**核心代码（`assets/ui`、`assets/skills`、`assets/entities`）只做「怎么跑」，一切可调的东西都在 `assets/configs`**。按你改的东西对号入座：
+
+| 想改什么 | 改哪里 |
+| --- | --- |
+| 数值/成长/掉落/装备/怪物/技能/地图 | 对应域配置 `configs/{growth,drop,equipments,monster,skill,map,…}.ts` |
+| 玩家看到的任何字（提示、校验原因、标签、悬停详情、加载进度） | `configs/texts.ts`（模板写 `{占位符}`，取值用 `getText(key, params)`） |
+| 界面位置/尺寸/图片/字号 | `configs/layout/{hud,dialogs,panels,scenes}.ts`（barrel：`configs/hudLayout`） |
+| 通用零件长相（空节点调试边框、输入框占位色、飘字配色与时长） | `configs/layout/theme.ts`（`uiTheme`） |
+| 碰撞范围可视化的线宽/透明度/配色 | `configs/debug.ts` 的 `rangeStyle` |
+| 底部功能入口（名称/图标/解锁等级/快捷键） | `configs/bottomNav.ts`（点击回调留在组件里，按 `key` 关联） |
+| 角色体型与碰撞盒、刚体参数 | `configs/role.ts` 的 `roleBody` / `roleRigid` |
+| 掉落拾取半径、背包满提示节流、掉落物散开间距 | `configs/drop.ts` 的 `dropRuntime` |
+
+- **文案的取法**：代码里只写 key 与参数，例如 `GameUiHelper.createTip("soul_bind_gold_tip", { need: 1200 })`；模板在 `configs/texts.ts` 里写 `"绑定元宝不足，升级需要 {need}"`。漏传参数会**保留占位符原文**（一眼能看出漏参），key 没登记会返回 key 本身并 `console.warn`
+- **校验类文案不散落**：穿戴/进图校验（`GameHelper.getEquipmentRejectReason` / `getMapEnterRejectReason`）只产出 `TextRef`（`{key, params}`），由提示层统一取文案 —— 所以「为什么不能穿」这类判断里也看不到中文
+- **`configs` 不依赖 UI**：配置只描述数据，回调/分支留在组件（例：`bottomNavItems` 有 `key`，`BottomBar` 里用一张 `Record<key, 回调>` 表接上）
+- **自查（改完跑一下）**：
+  - `node tools/audit-config-leak.cjs` —— 报出「散落在 ui/ 里的可配置项」+ 反向检查「代码引用的文案 key 是否都已在 `configs/texts` 登记」。开发期日志（`console.*`）与内部节点名不算外泄，前者直接跳过，后者登记在 `tools/config-leak-allowlist.json` 并写明原因
+  - `node tools/test-texts.cjs` —— 文案模板单测（占位符替换、漏参保留、未登记 key 兜底）
+- **改配置不生效？** 先看这条是不是「配置改了但代码里又存了一份」：审计脚本的第 1 段就是专门抓这个的，报 0 处才算收敛
 
 ### 背包「一键整理」的排序想改（升序 / 部位先后 / 谁排前面）？
 

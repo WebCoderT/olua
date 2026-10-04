@@ -198,7 +198,7 @@ export default class MapPreviewDialog {
         const sprite = preview.getComponent(Sprite);
         if (sprite) sprite.spriteFrame = spriteFrame;
       })
-      .catch(() => GameUiHelper.createErrorTip("map_preview_load_error_tip", "地图预览图加载失败"));
+      .catch(() => GameUiHelper.createErrorTip("map_preview_load_error_tip"));
   }
 
   /** 绑定预览图点击：左键寻路 / 右键传送（触屏环境没有右键，统一按左键寻路处理） */
@@ -207,7 +207,7 @@ export default class MapPreviewDialog {
       const worldPoint = this.toWorldPoint(preview, screenPoint);
       if (!worldPoint) return;
       if (button === "left") {
-        if (!AutoBattle.requestMoveTo(worldPoint)) GameUiHelper.createTip("map_move_refuse_tip", "当前状态无法寻路");
+        if (!AutoBattle.requestMoveTo(worldPoint)) GameUiHelper.createTip("map_move_refuse_tip");
         return;
       }
       this.teleportTo(worldPoint);
@@ -255,7 +255,7 @@ export default class MapPreviewDialog {
   private teleportTo(worldPoint: Vec2) {
     if (!isValid(this.roleDisplay)) return;
     if (this.roleDisplay.isDead()) {
-      GameUiHelper.createTip("map_teleport_dead_tip", "死亡状态无法传送");
+      GameUiHelper.createTip("map_teleport_dead_tip");
       return;
     }
     const snapped = AutoBattle.findWalkablePoint(worldPoint) ?? worldPoint;

@@ -42,3 +42,17 @@ export interface LevelConfig extends BattleAttributes {
   /** 该等级的最大魔法值 */
   maxMp: number;
 }
+
+/**
+ * 文案引用（核心代码与文案配置之间的契约）
+ *
+ * 核心代码只产出「用哪条文案 + 填什么参数」，具体字符串一律取自 configs/texts，
+ * 因此任何面向玩家的中文都不该出现在 ui/ 里（见 tools/audit-config-leak.cjs）。
+ * key 取自 configs/texts 的 uiTexts，params 用于替换模板里的 {占位符}。
+ */
+export interface TextRef {
+  /** 文案 key（configs/texts 的 uiTexts） */
+  key: string;
+  /** 模板参数（模板里写 {name}，这里给 name 值） */
+  params?: Record<string, string | number>;
+}

@@ -4,7 +4,7 @@ import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { roleMaxLevel } from "../../configs/growth";
-import { initialShortcutKeys } from "../../configs/role";
+import { initialShortcutKeys, maxRoleCount } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
@@ -38,11 +38,11 @@ export default class StorageManager {
   /** 创建新角色 */
   static createRole(name: string, occupation: Role["occupation"], sex: Role["sex"]): void {
     const roles = this.getRoles();
-    if (roles.length < 3) {
+    if (roles.length < maxRoleCount) {
       roles.push(new Role(name, occupation, sex));
       this.setRoles(roles);
     } else {
-      console.error("角色超出3个");
+      console.error(`角色超出上限（最多 ${maxRoleCount} 个）`);
     }
   }
 
@@ -133,11 +133,11 @@ export default class StorageManager {
     if (!role) return false;
     const next = getSoulLevel(role.soulOfWar + 1);
     if (!next) {
-      GameUiHelper.createTip("soul_max_tip", "战魂已满级");
+      GameUiHelper.createTip("soul_max_tip");
       return false;
     }
     if (role.bindGold < next.bindGold) {
-      GameUiHelper.createTip("soul_bind_gold_tip", `绑定元宝不足，升级需要 ${next.bindGold}`);
+      GameUiHelper.createTip("soul_bind_gold_tip", { need: next.bindGold });
       return false;
     }
     role.bindGold -= next.bindGold;
@@ -146,7 +146,7 @@ export default class StorageManager {
     Object.assign(role, GameHelper.combatCalc(role));
     this.updateOnlineRole(role);
     this.updateUi(role);
-    GameUiHelper.createTip("soul_upgrade_tip", `战魂升级成功：${next.level} 阶 · ${next.label}`);
+    GameUiHelper.createTip("soul_upgrade_tip", { level: next.level, label: next.label });
     return true;
   }
 
@@ -193,7 +193,7 @@ export default class StorageManager {
     if (!good) return false;
     if (isEquipment(good)) return this.equipFromBag(row, col);
     if (isDrug(good)) return this.useDrug(row, col);
-    GameUiHelper.createTip("good_unsupported_tip", "该物品暂无可以使用的方式");
+    GameUiHelper.createTip("good_unsupported_tip");
     return false;
   }
 
@@ -212,12 +212,12 @@ export default class StorageManager {
     const good = getItem(cell.id);
     if (!good) return false;
     if (!isEquipment(good)) {
-      GameUiHelper.createTip("equip_unsupported_tip", "该物品不能穿戴");
+      GameUiHelper.createTip("equip_unsupported_tip");
       return false;
     }
     const reason = GameHelper.getEquipmentRejectReason(good);
     if (reason) {
-      GameUiHelper.createTip("equip_reject_tip", reason);
+      GameUiHelper.createTip(reason.key, reason.params);
       return false;
     }
     // 旧装备放回刚腾空的格子：格数守恒，换装不会丢装备（格子存 key，槽位也是 key）
@@ -239,13 +239,13 @@ export default class StorageManager {
     if (!role || !equipmentId) return false;
     const cell = this.findEmptyBagCell(role);
     if (!cell) {
-      GameUiHelper.createTip("bag_full_tip", "背包已满，无法脱下装备");
+      GameUiHelper.createTip("bag_full_tip");
       return false;
     }
     // 从配置确认装备存在后，格子存 key（脱下后槽位清空）
     const equipment = getItem(equipmentId);
     if (!equipment) {
-      GameUiHelper.createTip("equip_missing_tip", "该装备已不存在");
+      GameUiHelper.createTip("equip_missing_tip");
       role.equipments[slot] = null;
       return false;
     }
@@ -300,7 +300,7 @@ export default class StorageManager {
     // 保存并刷新背包显示
     this.updateOnlineRole(role);
     RoleUIManager.refreshBag();
-    GameUiHelper.createTip("bag_tidy_tip", "背包已整理");
+    GameUiHelper.createTip("bag_tidy_tip");
     return true;
   }
 
@@ -344,7 +344,7 @@ export default class StorageManager {
     if (!role) return false;
     const result = recycleBagEquipmentGrid(role.bag);
     if (!result.count) {
-      GameUiHelper.createTip("bag_recycle_empty_tip", "背包里没有可回收的装备");
+      GameUiHelper.createTip("bag_recycle_empty_tip");
       return false;
     }
     role.bag = result.bag;
@@ -353,7 +353,7 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     this.updateUi(role);
     RoleUIManager.refreshBag();
-    GameUiHelper.createTip("bag_recycle_tip", `回收 ${result.count} 件装备，获得 ${result.totalPrice} 绑定元宝`);
+    GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.totalPrice });
     return true;
   }
 
@@ -442,11 +442,11 @@ export default class StorageManager {
     // 当前仅实现回血（mp 等效果待资源字段补齐后在此扩展）
     const heal = good.effects.reduce((sum, effect) => sum + (effect.hp ?? 0), 0);
     if (heal <= 0) {
-      GameUiHelper.createTip("drug_unsupported_tip", "该药品效果暂未开放");
+      GameUiHelper.createTip("drug_unsupported_tip");
       return false;
     }
     if (role.hp >= role.maxHp) {
-      GameUiHelper.createTip("drug_full_tip", "血量已满");
+      GameUiHelper.createTip("drug_full_tip");
       return false;
     }
     role.hp = Math.min(role.maxHp, role.hp + heal);
@@ -464,7 +464,7 @@ export default class StorageManager {
     // 进入限制校验：等级/战斗力未达标时提示原因，不切换地图
     const reason = GameHelper.getMapEnterRejectReason(mapId);
     if (reason) {
-      GameUiHelper.createTip("map_enter_reject_tip", reason);
+      GameUiHelper.createTip(reason.key, reason.params);
       return;
     }
     // 获取最新信息

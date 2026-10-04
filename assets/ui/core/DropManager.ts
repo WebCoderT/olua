@@ -1,7 +1,8 @@
 import { isValid, Node, UITransform, Vec2, Vec3 } from "cc";
-import { resolveDropTable } from "../../configs/drop";
+import { dropRuntime, resolveDropTable } from "../../configs/drop";
 import { getGoodCursorStyle, cursorConfig } from "../../configs/cursor";
 import { getItem } from "../../configs/items";
+import { getText } from "../../configs/texts";
 import type { DropPicks, DropResult, DropSource } from "../../types/drop";
 import type { Goods } from "../../types/good";
 import { scatterDropPositions } from "../utils/drop/DropScatter";
@@ -28,12 +29,11 @@ export default class DropManager {
   /** 已生成掉落物：掉落物节点 -> 掉落数据 */
   private static dropMap = new Map<Node, DropItem>();
   /**
-   * 自动拾取半径：角色节点原点即脚底，与掉落物节点距离小于该值视为踩在物品上
-   * 取值 = 掉落物图标半宽(20) + 脚部容差(20)
+   * 自动拾取半径：角色节点原点即脚底，与掉落物节点距离小于该值视为踩在物品上（见 configs/drop.dropRuntime）
+   * 背包已满的提示间隔同样取自 dropRuntime，避免每帧重复反序列化背包数据
    */
-  private static readonly AUTO_PICKUP_RADIUS = 40;
-  /** 背包已满的提示间隔（毫秒）：同时也是两次入包尝试之间的间隔，避免每帧重复反序列化背包数据 */
-  private static readonly FULL_TIP_INTERVAL = 1500;
+  private static readonly AUTO_PICKUP_RADIUS = dropRuntime.autoPickupRadius;
+  private static readonly FULL_TIP_INTERVAL = dropRuntime.fullTipInterval;
   /** 上次背包已满提示时间戳 */
   private static fullTipTime = 0;
 
@@ -107,7 +107,7 @@ export default class DropManager {
       picked.push(`${drop.good.label} x${drop.count}`);
     });
     // 同一帧拾取的多件物品合并为一条提示，避免互相遮挡
-    if (picked.length) GameUiHelper.createTip("pickup_tip", `拾取 ${picked.join("、")}`);
+    if (picked.length) GameUiHelper.createTip("pickup_tip", { names: picked.join(getText("label_list_separator")) });
     return picked.length;
   }
 
@@ -136,7 +136,7 @@ export default class DropManager {
       if (this.dropMap.has(node)) this.notifyBagFull();
       return false;
     }
-    GameUiHelper.createTip("pickup_tip", `拾取 ${drop.good.label} x${drop.count}`);
+    GameUiHelper.createTip("pickup_tip", { names: getText("label_good_count", { name: drop.good.label, count: drop.count }) });
     return true;
   }
 
@@ -156,6 +156,6 @@ export default class DropManager {
     const now = Date.now();
     if (now - this.fullTipTime < this.FULL_TIP_INTERVAL) return;
     this.fullTipTime = now;
-    GameUiHelper.createTip("pickup_full_tip", "背包已满");
+    GameUiHelper.createTip("pickup_full_tip");
   }
 }

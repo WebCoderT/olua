@@ -24,6 +24,8 @@ import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { Draggable } from "../components/input/Draggable";
 import { debugConfig } from "../../configs/debug";
+import { getText, TextParams } from "../../configs/texts";
+import { BottomNavItem } from "../../configs/bottomNav";
 import { getAnimationName } from "../../configs/animation";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
@@ -40,6 +42,7 @@ import GameHelper from "../core/GameHelper";
 import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 import { equipmentSlots, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
+import { soulAttributeLabels } from "../../configs/soul";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
@@ -62,6 +65,7 @@ import {
   tipsLayout,
   uiImages,
   uiSize,
+  uiTheme,
   warSoulDialogLayout,
 } from "../../configs/hudLayout";
 
@@ -95,18 +99,10 @@ export interface RouteLineStyle {
   endDotRadius: number;
 }
 
-/** 底部功能按钮配置 */
-export interface BottomNavBarButton {
-  /** 功能名称（未解锁时用于提示文案） */
-  label: string;
-  /** 图标资源 */
-  icon: string;
-  /** 解锁等级（角色等级低于该值时置灰并提示） */
-  openLevel: number;
+/** 底部功能按钮（数据见 configs/bottomNav.bottomNavItems，这里补上点击回调——回调是代码不是配置） */
+export interface BottomNavBarButton extends BottomNavItem {
   /** 点击回调 */
   onClick: () => void;
-  /** 显示在图标上的快捷键名（仅展示用） */
-  shortcutKey: string;
 }
 
 /** 碰撞范围显示类别（决定配色：静态障碍 / 角色自身） */
@@ -114,24 +110,10 @@ export type ColliderRangeKind = "obstacle" | "role";
 
 //#endregion
 
-//#region 碰撞范围显示常量（调试用）
+//#region 碰撞范围显示（调试）
 
-/** 碰撞范围框线宽（像素） */
-const COLLIDER_RANGE_LINE_WIDTH = 3;
-/** 碰撞范围填充透明度（低透明度，避免遮挡地图与角色） */
-const COLLIDER_RANGE_FILL_ALPHA = 40;
-/** 碰撞范围名称字号 */
-const COLLIDER_RANGE_NAME_FONT_SIZE = 14;
-/** 碰撞范围名称文本宽度（窄区域下允许超出，保证名称完整可读） */
-const COLLIDER_RANGE_NAME_WIDTH = 260;
-/** 碰撞范围名称文本高度 */
-const COLLIDER_RANGE_NAME_HEIGHT = 18;
-/** 静态障碍的碰撞范围颜色（Tiled 碰撞区 / NPC / 怪物） */
-const COLLIDER_RANGE_OBSTACLE_COLOR = new Color(255, 64, 64);
-/** 角色自身的碰撞范围颜色（与静态障碍区分，便于混杂场景下分辨） */
-const COLLIDER_RANGE_ROLE_COLOR = new Color(64, 255, 128);
-/** 怪物刷怪区域的颜色（无碰撞体，用另一种配色与碰撞体区分） */
-const COLLIDER_RANGE_AREA_COLOR = new Color(255, 208, 64);
+/** 范围标注样式（线宽/填充透明度/名称字号与尺寸 + 三套配色，见 configs/debug 的 rangeStyle） */
+const rangeStyle = debugConfig.rangeStyle;
 
 //#endregion
 
@@ -142,20 +124,10 @@ const soul = warSoulDialogLayout;
 
 //#endregion
 
-//#region 装备详情显示常量
+//#region 装备详情显示
 
-/** 装备详情中标签行的尺寸（占名称下方一整行） */
-const GOOD_TAG_ROW_SIZE = new Size(220, 18);
-/** 装备标签文字颜色（与白色正文区分，突出标签） */
-const GOOD_TAG_COLOR = new Color(255, 214, 102);
-/** 装备标签字号 */
-const GOOD_TAG_FONT_SIZE = 11;
-/** 装备标签之间的横向间距 */
-const GOOD_TAG_SPACING = 6;
-/** 单条标签的最小宽度 */
-const GOOD_TAG_MIN_WIDTH = 24;
-/** 单条标签的左右留白 */
-const GOOD_TAG_PADDING_X = 8;
+/** 详情弹窗内的标签行样式（标签行尺寸/颜色/字号/间距与左右留白，见 configs/hudLayout.goodDetailLayout.tag） */
+const goodTag = goodDetailLayout.tag;
 
 //#endregion
 
@@ -487,7 +459,7 @@ export default class GameUiHelper {
     const roleName = UiHelper.createLabel("role_name", label, Color.WHITE, 10, new Vec2(), new Size(100, 10));
     head.addChild(roleName);
     /** 文字称号 */
-    const roleTitle = UiHelper.createLabel("role_title", "- 战神 * 女武神 -", Color.RED, 10, new Vec2(), new Size(100, 12));
+    const roleTitle = UiHelper.createLabel("role_title", getText("label_role_title"), Color.RED, 10, new Vec2(), new Size(100, 12));
     head.addChild(roleTitle);
     /** 血量进度条 */
     const roleHp = this.createHpBar("", hp / maxHp, new Vec2(), new Size(80, 4));
@@ -503,44 +475,42 @@ export default class GameUiHelper {
   //#region 提示
 
   /**
-   * 创建错误提示
-   * @param error 错误信息
+   * 创建错误提示（红色飘字）
+   * @param name 文案 key（configs/texts 的 uiTexts）
+   * @param params 模板参数（文案里写 {key}，这里给值）
    */
-  static createErrorTip(name: string, error: string) {
-    const errorTip = UiHelper.createTipLabel(name, error, tipsLayout.errorColor, tipsLayout.fontSize, tipsLayout.size);
-    // 飘字是临时装饰（屏幕中间上浮 1~3 秒），标为点击穿透：不遮挡世界点击
-    markClickThrough(errorTip);
-    const uiOpacity = errorTip.addComponent(UIOpacity);
-    tween(errorTip)
-      .to(tipsLayout.errorMoveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
-      .start();
-    tween(uiOpacity)
-      .to(tipsLayout.errorFadeDuration, { opacity: 0 })
-      .call(() => {
-        errorTip.destroy();
-      })
-      .start();
-    LayerManager.addToUILayer(errorTip);
+  static createErrorTip(name: string, params?: TextParams) {
+    this.createFloatingTip(name, params, tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration);
   }
 
   /**
-   * 创建提示
+   * 创建提示（普通飘字）
+   * @param name 文案 key（configs/texts 的 uiTexts）
+   * @param params 模板参数（文案里写 {key}，这里给值）
    */
-  static createTip(name: string, text: string) {
-    const errorTip = UiHelper.createTipLabel(name, text, tipsLayout.messageColor, tipsLayout.fontSize, tipsLayout.size);
+  static createTip(name: string, params?: TextParams) {
+    this.createFloatingTip(name, params, tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration);
+  }
+
+  /**
+   * 飘字公共实现（提示与错误提示只有配色与时长不同）
+   * 文案一律取自 configs/texts（核心代码不写面向玩家的中文）
+   */
+  private static createFloatingTip(name: string, params: TextParams | undefined, color: Color, moveDuration: number, fadeDuration: number) {
+    const tip = UiHelper.createTipLabel(name, getText(name, params), color, tipsLayout.fontSize, tipsLayout.size);
     // 飘字是临时装饰（屏幕中间上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
-    markClickThrough(errorTip);
-    const uiOpacity = errorTip.addComponent(UIOpacity);
-    tween(errorTip)
-      .to(tipsLayout.messageMoveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
+    markClickThrough(tip);
+    const uiOpacity = tip.addComponent(UIOpacity);
+    tween(tip)
+      .to(moveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
       .start();
     tween(uiOpacity)
-      .to(tipsLayout.messageFadeDuration, { opacity: 0 })
+      .to(fadeDuration, { opacity: 0 })
       .call(() => {
-        errorTip.destroy();
+        tip.destroy();
       })
       .start();
-    LayerManager.addToUILayer(errorTip);
+    LayerManager.addToUILayer(tip);
   }
 
   /**
@@ -594,16 +564,19 @@ export default class GameUiHelper {
    */
   static showDamageText(target: Node, damage: number) {
     if (!isValid(target)) return;
-    const damageText = UiHelper.createLabel("damage_text", damage > 0 ? `-${damage}` : "MISS", Color.RED, 18, new Vec2(), new Size(80, 24));
+    const style = uiTheme.floatingText.damage;
+    // 受伤为红色扣血飘字，未命中（伤害 <= 0）为白色 MISS
+    const text = damage > 0 ? getText("label_damage", { value: damage }) : getText("label_damage_miss");
+    const damageText = UiHelper.createLabel("damage_text", text, damage > 0 ? style.color : Color.WHITE, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(damageText);
     // 位置与受伤物体保持一致
     damageText.setWorldPosition(target.getWorldPosition());
     const uiOpacity = damageText.addComponent(UIOpacity);
     tween(damageText)
-      .to(0.6, { position: new Vec3(damageText.position.x, damageText.position.y + 40, 0) })
+      .to(style.riseDuration, { position: new Vec3(damageText.position.x, damageText.position.y + style.riseDistance, 0) })
       .start();
     tween(uiOpacity)
-      .to(0.9, { opacity: 0 })
+      .to(style.fadeDuration, { opacity: 0 })
       .call(() => {
         damageText.destroy();
       })
@@ -617,17 +590,18 @@ export default class GameUiHelper {
    */
   static showSkillTip(caster: Node, skillName: string) {
     if (!isValid(caster)) return;
-    const skillTip = UiHelper.createLabel("skill_tip", `释放${skillName}`, Color.YELLOW, 14, new Vec2(), new Size(120, 20));
+    const style = uiTheme.floatingText.skill;
+    const skillTip = UiHelper.createLabel("skill_tip", getText("label_skill_release", { skill: skillName }), style.color, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(skillTip);
     // 位置在释放者头顶（上移角色身高的一半）
     const casterPosition = caster.getWorldPosition();
-    skillTip.setWorldPosition(casterPosition.x, casterPosition.y + 40, casterPosition.z);
+    skillTip.setWorldPosition(casterPosition.x, casterPosition.y + style.spawnOffsetY, casterPosition.z);
     const uiOpacity = skillTip.addComponent(UIOpacity);
     tween(skillTip)
-      .to(0.6, { position: new Vec3(skillTip.position.x, skillTip.position.y + 30, 0) })
+      .to(style.riseDuration, { position: new Vec3(skillTip.position.x, skillTip.position.y + style.riseDistance, 0) })
       .start();
     tween(uiOpacity)
-      .to(0.9, { opacity: 0 })
+      .to(style.fadeDuration, { opacity: 0 })
       .call(() => {
         skillTip.destroy();
       })
@@ -641,17 +615,18 @@ export default class GameUiHelper {
    */
   static showExpGain(target: Node, exp: number) {
     if (exp <= 0 || !isValid(target)) return;
-    const expText = UiHelper.createLabel("exp_gain_text", `+${exp} 经验`, Color.GREEN, 14, new Vec2(), new Size(100, 20));
+    const style = uiTheme.floatingText.exp;
+    const expText = UiHelper.createLabel("exp_gain_text", getText("label_exp_gain", { exp }), style.color, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(expText);
     // 位置在被击杀怪物头顶
     const targetPosition = target.getWorldPosition();
-    expText.setWorldPosition(targetPosition.x, targetPosition.y + 40, targetPosition.z);
+    expText.setWorldPosition(targetPosition.x, targetPosition.y + style.spawnOffsetY, targetPosition.z);
     const uiOpacity = expText.addComponent(UIOpacity);
     tween(expText)
-      .to(0.6, { position: new Vec3(expText.position.x, expText.position.y + 40, 0) })
+      .to(style.riseDuration, { position: new Vec3(expText.position.x, expText.position.y + style.riseDistance, 0) })
       .start();
     tween(uiOpacity)
-      .to(1, { opacity: 0 })
+      .to(style.fadeDuration, { opacity: 0 })
       .call(() => {
         expText.destroy();
       })
@@ -865,7 +840,7 @@ export default class GameUiHelper {
     card.addChild(
       UiHelper.createLabel(
         "soul_card_state",
-        activated ? "已激活" : "未激活",
+        activated ? getText("label_soul_active") : getText("label_soul_locked"),
         activated ? soul.list.activeColor : soul.list.lockedColor,
         soul.list.stateFontSize,
         new Vec2(soul.list.cardSize.width / 2 - 36, 0),
@@ -886,15 +861,10 @@ export default class GameUiHelper {
   static createSoulAttributeList(config: SoulLevelConfig, next: SoulLevelConfig | null) {
     const column = UiHelper.createFlexCol("soul_attribute_list", soul.attribute.spacing, new Vec2(), new Size(soul.attribute.width, 0));
     column.addChild(UiHelper.createLabel("soul_attribute_title", `${config.level} 阶 · ${config.label}`, soul.attribute.titleColor, 15, new Vec2(), new Size(soul.attribute.width, 22)));
-    const rows: Array<{ label: string; get: (attributes: SoulAttributes) => number | [number, number] }> = [
-      { label: "生命", get: (attributes) => attributes.maxHp },
-      { label: "物攻", get: (attributes) => attributes.physicalAttack },
-      { label: "魔攻", get: (attributes) => attributes.magicAttack },
-      { label: "道攻", get: (attributes) => attributes.taoistAttack },
-      { label: "物防", get: (attributes) => attributes.physicalDefense },
-      { label: "魔防", get: (attributes) => attributes.magicDefense },
-      { label: "道防", get: (attributes) => attributes.taoistDefense },
-    ];
+    const rows: Array<{ label: string; get: (attributes: SoulAttributes) => number | [number, number] }> = soulAttributeLabels.map((item) => ({
+      label: item.label,
+      get: (attributes) => attributes[item.key],
+    }));
     rows.forEach((row, index) => {
       const line = UiHelper.createFlexRow(`soul_attribute_row_${index}`, 0, new Vec2(), new Size(soul.attribute.width, 18));
       line.addChild(UiHelper.createLabel("name", row.label, soul.attribute.rowNameColor, soul.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
@@ -1013,23 +983,23 @@ export default class GameUiHelper {
     layout.type = Layout.Type.GRID;
     layout.alignHorizontal = true;
     layout.resizeMode = Layout.ResizeMode.NONE;
-    layout.spacingY = 8;
+    layout.spacingY = goodDetailLayout.rowSpacing;
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     layout.node.setPosition(position.x, position.y);
-    layout.padding = 10;
+    layout.padding = goodDetailLayout.padding;
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
 
     // 头部
-    const contentHeader = UiHelper.createFlexRow("header", 10, new Vec2(), new Size(220, 40));
+    const contentHeader = UiHelper.createFlexRow("header", goodDetailLayout.headerSpacing, new Vec2(), new Size(220, 40));
     // 图标
     const goodImage = UiHelper.createSprite("good_image", good.icon, new Vec2(), new Size(40, 40));
     // 标题（装备 = 前缀 + 名称 + 后缀 三段着色：前缀/名称用前缀色、后缀用后缀色；其他物品单行白字）
     let title: Node;
     if (isEquipment(good)) {
       const parts = getEquipmentNameParts(good);
-      const titleRow = UiHelper.createFlexRow("good_detail_title", 2, new Vec2(), new Size(170, 40));
+      const titleRow = UiHelper.createFlexRow("good_detail_title", 2, new Vec2(), new Size(goodDetailLayout.title.size.width, goodDetailLayout.title.size.height));
       const mkTitleLabel = (name: string, text: string, color: Color) => {
-        const node = UiHelper.createLabel(name, text, color, 14, new Vec2(), new Size(10, 40), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER);
+        const node = UiHelper.createLabel(name, text, color, goodDetailLayout.title.fontSize, new Vec2(), new Size(10, goodDetailLayout.title.size.height), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER);
         const label = node.getComponent(Label)!;
         // 宽度随文字自适应（Overflow.NONE），由横向 Layout 依次排开；行高 40 保持与图标垂直居中
         label.overflow = Label.Overflow.NONE;
@@ -1041,10 +1011,19 @@ export default class GameUiHelper {
       titleRow.addChild(mkTitleLabel("good_detail_title_suffix", parts.suffix.label, parts.suffix.color));
       title = titleRow;
     } else {
-      title = UiHelper.createLabel("good_detail_title", good.label, Color.WHITE, 14, new Vec2(), new Size(170, 40), Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP);
+      title = UiHelper.createLabel(
+        "good_detail_title",
+        good.label,
+        Color.WHITE,
+        goodDetailLayout.title.fontSize,
+        new Vec2(),
+        new Size(goodDetailLayout.title.size.width, goodDetailLayout.title.size.height),
+        Label.HorizontalAlign.LEFT,
+        Label.VerticalAlign.TOP,
+      );
       const titleLabel = title.getComponent(Label)!;
       titleLabel.enableWrapText = true;
-      titleLabel.lineHeight = 20;
+      titleLabel.lineHeight = goodDetailLayout.title.lineHeight;
       titleLabel.isBold = true;
     }
 
@@ -1052,22 +1031,43 @@ export default class GameUiHelper {
     contentHeader.addChild(title);
 
     // 基础信息行（装备专属：穿戴等级与部位；前后缀变体与基础件同等级，门槛一致）
+    const infoLayout = goodDetailLayout.info;
     const contentInfo = isEquipment(good)
-      ? UiHelper.createLabel("good_detail_info", `等级 ${good.level} · ${equipmentSlots.get(good.slot)?.label ?? "装备"}`, new Color("#9A9A9A"), 12, new Vec2(), new Size(220, 18), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER)
+      ? UiHelper.createLabel(
+          "good_detail_info",
+          getText("label_good_detail_info", { level: good.level, slot: equipmentSlots.get(good.slot)?.label ?? getText("label_good_slot_fallback") }),
+          infoLayout.color,
+          infoLayout.fontSize,
+          new Vec2(),
+          infoLayout.size,
+          Label.HorizontalAlign.LEFT,
+          Label.VerticalAlign.CENTER,
+        )
       : null;
 
     // 回收价行（装备专属：背包「一键回收」按它结算，货币为绑定元宝；前后缀变体的价已随倍率缩放）
+    const recycleLayout = goodDetailLayout.recycle;
     const contentRecycle = isEquipment(good)
-      ? UiHelper.createLabel("good_detail_recycle", `回收价 ${getRecyclePrice(good)} 绑定元宝`, new Color("#FFD700"), 12, new Vec2(), new Size(220, 18), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER)
+      ? UiHelper.createLabel(
+          "good_detail_recycle",
+          getText("label_good_detail_recycle", { price: getRecyclePrice(good) }),
+          recycleLayout.color,
+          recycleLayout.fontSize,
+          new Vec2(),
+          recycleLayout.size,
+          Label.HorizontalAlign.LEFT,
+          Label.VerticalAlign.CENTER,
+        )
       : null;
 
     // 标签行（装备专属：显示在名称正下方，与其他物品区分开）
     const contentTags = isEquipment(good) ? this.createGoodTagRow(good.tags ?? []) : null;
 
     // 介绍
-    const contentDescription = UiHelper.createLabel("content_description", good.description, Color.WHITE, 12, new Vec2(), new Size(220, 50));
+    const descLayout = goodDetailLayout.description;
+    const contentDescription = UiHelper.createLabel("content_description", good.description, Color.WHITE, descLayout.fontSize, new Vec2(), descLayout.size);
     const descLabel = contentDescription.getComponent(Label);
-    descLabel.lineHeight = 16;
+    descLabel.lineHeight = descLayout.lineHeight;
     descLabel.enableWrapText = true;
     descLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
     descLabel.overflow = Label.Overflow.RESIZE_HEIGHT;
@@ -1156,12 +1156,12 @@ export default class GameUiHelper {
    * 创建装备标签行（标签逐条横排，占名称下方一整行）
    * 无标签时返回空行：保持"名称下方固定有一行标签"的排版位置不随标签有无而跳动
    */
-  static createGoodTagRow(tags: string[], size: Size = GOOD_TAG_ROW_SIZE) {
-    const row = UiHelper.createFlexRow("good_tags", GOOD_TAG_SPACING, new Vec2(), size);
+  static createGoodTagRow(tags: string[], size: Size = goodTag.rowSize) {
+    const row = UiHelper.createFlexRow("good_tags", goodTag.spacing, new Vec2(), size);
     tags.forEach((tag, index) => {
       // 每条标签按字数给宽（中文字宽≈字号），避免长标签被 CLAMP 截断
-      const width = Math.max(GOOD_TAG_MIN_WIDTH, tag.length * GOOD_TAG_FONT_SIZE + GOOD_TAG_PADDING_X);
-      row.addChild(UiHelper.createLabel(`good_tag_${index}`, tag, GOOD_TAG_COLOR, GOOD_TAG_FONT_SIZE, new Vec2(), new Size(width, size.height)));
+      const width = Math.max(goodTag.minWidth, tag.length * goodTag.fontSize + goodTag.paddingX);
+      row.addChild(UiHelper.createLabel(`good_tag_${index}`, tag, goodTag.color, goodTag.fontSize, new Vec2(), new Size(width, size.height)));
     });
     return row;
   }
@@ -1176,17 +1176,17 @@ export default class GameUiHelper {
    * @returns 该节点的 Layout 组件
    */
   static applyRoleAttributeListStyle(node: Node, role: Role, position: Vec2 = roleAttributeListLayout.position, size: Size = roleAttributeListLayout.size) {
-    const layout = this.applyColumnStyle(node, 5, position, size);
+    const layout = this.applyColumnStyle(node, roleAttributeListLayout.spacing, position, size);
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
-    layout.padding = 10;
+    layout.padding = roleAttributeListLayout.padding;
     node.getComponent(UITransform).setAnchorPoint(0.5, 1);
     // 重复调用即刷新（装备穿脱等改变属性后重建条目，旧条目真正销毁）
     clearChildren(node);
-    node.addChild(this.createText("role_basic_attributes", "基础属性", 14, new Vec2(), new Size(size.width, 14)));
+    node.addChild(this.createText("role_basic_attributes", getText("label_attributes_base"), 14, new Vec2(), new Size(size.width, roleAttributeListLayout.titleHeight)));
     for (const element of goodShowAttributesLabel.keys()) {
-      node.addChild(this.createAttributeLabel(element, role[element], new Size(size.width, 20)));
+      node.addChild(this.createAttributeLabel(element, role[element], new Size(size.width, roleAttributeListLayout.rowHeight)));
     }
-    node.addChild(this.createText("role_special_attributes", "特殊属性", 14, new Vec2(), new Size(size.width, 14)));
+    node.addChild(this.createText("role_special_attributes", getText("label_attributes_special"), 14, new Vec2(), new Size(size.width, roleAttributeListLayout.titleHeight)));
     return layout;
   }
 
@@ -1466,7 +1466,7 @@ export default class GameUiHelper {
     if (!debugConfig.colliderRange) return null;
     const collider = node.getComponent(BoxCollider2D);
     if (!collider) return null;
-    const color = kind === "role" ? COLLIDER_RANGE_ROLE_COLOR : COLLIDER_RANGE_OBSTACLE_COLOR;
+    const color = kind === "role" ? rangeStyle.roleColor : rangeStyle.obstacleColor;
     return this.drawRange(node, collider.size, collider.offset, color, name ?? node.name);
   }
 
@@ -1482,7 +1482,7 @@ export default class GameUiHelper {
     if (!debugConfig.areaRange) return null;
     const uiTransform = node.getComponent(UITransform);
     if (!uiTransform) return null;
-    return this.drawRange(node, uiTransform.contentSize, new Vec2(), COLLIDER_RANGE_AREA_COLOR, name ?? node.name);
+    return this.drawRange(node, uiTransform.contentSize, new Vec2(), rangeStyle.areaColor, name ?? node.name);
   }
 
   /**
@@ -1498,9 +1498,9 @@ export default class GameUiHelper {
   private static drawRange(node: Node, size: Size, offset: Vec2, color: Color, label: string) {
     /** 范围框：按偏移换算矩形左下角（组件绘制在节点自身，不受子节点布局影响） */
     const graphics = node.addComponent(Graphics);
-    graphics.lineWidth = COLLIDER_RANGE_LINE_WIDTH;
+    graphics.lineWidth = rangeStyle.lineWidth;
     graphics.strokeColor = color;
-    graphics.fillColor = new Color(color.r, color.g, color.b, COLLIDER_RANGE_FILL_ALPHA);
+    graphics.fillColor = new Color(color.r, color.g, color.b, rangeStyle.fillAlpha);
     graphics.rect(offset.x - size.width / 2, offset.y - size.height / 2, size.width, size.height);
     graphics.fill();
     graphics.stroke();
@@ -1516,9 +1516,9 @@ export default class GameUiHelper {
           "collider_range_name",
           `${label} ${Math.round(size.width)}×${Math.round(size.height)}`,
           color,
-          COLLIDER_RANGE_NAME_FONT_SIZE,
+          rangeStyle.nameFontSize,
           new Vec2(),
-          new Size(COLLIDER_RANGE_NAME_WIDTH, COLLIDER_RANGE_NAME_HEIGHT),
+          rangeStyle.nameSize,
         ),
       );
     return view;
@@ -1733,7 +1733,14 @@ export default class GameUiHelper {
     }
     node.addChild(skillIcon);
     const description = UiHelper.createFlexCol(`${skillId}_desc`, 3, new Vec2(), new Size(205, 40));
-    const skillLabel = UiHelper.createLabel("skill_label", `${skillConfig.label} (${role.skills[skillId] ? "lv." + role.skills[skillId] : "未学习"})`, Color.WHITE, 12, new Vec2(), new Size(205, 20));
+    const skillLabel = UiHelper.createLabel(
+      "skill_label",
+      `${skillConfig.label} (${role.skills[skillId] ? getText("label_skill_level", { level: role.skills[skillId] }) : getText("label_skill_unlearned")})`,
+      Color.WHITE,
+      12,
+      new Vec2(),
+      new Size(205, 20),
+    );
     skillLabel.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     description.addChild(skillLabel);
     const skillDesc = UiHelper.createLabel("skill_label", skillConfig.description, Color.WHITE, 10, new Vec2(), new Size(205, 15));

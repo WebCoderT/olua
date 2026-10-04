@@ -244,6 +244,31 @@ export const goodDetailLayout = {
   name: "good_detail",
   size: new Size(240, 200),
   background: uiImages.goodDetailBackground,
+  /** 内容区：纵向网格排版的内边距与行间距（头部 / 基础信息 / 回收价 / 标签 / 介绍依次排） */
+  padding: 10,
+  rowSpacing: 8,
+  /** 头部行间距（图标与名称行） */
+  headerSpacing: 10,
+  /** 基础信息行（等级与部位）：字号与配色（灰字，弱于正文） */
+  info: { fontSize: 12, size: new Size(220, 18), color: new Color("#9A9A9A") },
+  /** 回收价行：字号与配色（金色，与绑定元宝呼应） */
+  recycle: { fontSize: 12, size: new Size(220, 18), color: new Color("#FFD700") },
+  /** 介绍文本 */
+  description: { fontSize: 12, size: new Size(220, 50), lineHeight: 16 },
+  /** 标题（装备为三段着色，其他物品单行可换行） */
+  title: { fontSize: 14, size: new Size(170, 40), lineHeight: 20 },
+  /** 装备标签行（占名称下方一整行；标签按字数给宽，避免被截断） */
+  tag: {
+    rowSize: new Size(220, 18),
+    /** 标签文字颜色（与白色正文区分，突出标签） */
+    color: new Color(255, 214, 102),
+    fontSize: 11,
+    /** 标签之间的横向间距 */
+    spacing: 6,
+    /** 单条标签的最小宽度与左右留白 */
+    minWidth: 24,
+    paddingX: 8,
+  },
   /** 底部装饰 logo（复用游戏 logo 图，尺寸比登录页小一圈） */
   footerLogo: { image: uiImages.gameLogo, size: new Size(220, 120) },
 };

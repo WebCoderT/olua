@@ -51,7 +51,7 @@ export default class BagDialog {
       Node.EventType.TOUCH_END,
       () => {
         // 整理算法不改动存储时会返回 false，这里补一句反馈，免得玩家以为按钮没反应
-        if (!StorageManager.tidyBag()) GameUiHelper.createTip("bag_tidy_noop_tip", "背包已经很整齐了");
+        if (!StorageManager.tidyBag()) GameUiHelper.createTip("bag_tidy_noop_tip");
       },
       this,
     );
@@ -99,15 +99,12 @@ export default class BagDialog {
     if (!this.recyclePending) {
       const summary = StorageManager.getBagRecycleSummary();
       if (!summary.count) {
-        GameUiHelper.createTip("bag_recycle_empty_tip", "背包里没有可回收的装备");
+        GameUiHelper.createTip("bag_recycle_empty_tip");
         return;
       }
       this.recyclePending = true;
       this.setRecycleButtonText(bagDialogLayout.recycleButton.confirmText);
-      GameUiHelper.createTip(
-        "bag_recycle_confirm_tip",
-        `将回收 ${summary.count} 件装备，可得 ${summary.totalPrice} 绑定元宝（再点一次确认）`,
-      );
+      GameUiHelper.createTip("bag_recycle_confirm_tip", { count: summary.count, price: summary.totalPrice });
       this.clearRecycleConfirmTimer();
       // 到点自动复位：免得「确认回收」一直挂着，被玩家无意再点
       this.recycleConfirmTimer = setTimeout(() => this.cancelRecycleConfirm(), bagDialogLayout.recycleButton.confirmTimeout);

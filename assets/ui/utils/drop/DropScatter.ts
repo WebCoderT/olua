@@ -1,4 +1,5 @@
 import { Vec2 } from "cc";
+import { dropRuntime } from "../../../configs/drop";
 
 /**
  * 掉落物散落位置（纯函数模块）
@@ -13,19 +14,12 @@ import { Vec2 } from "cc";
  */
 
 /**
- * 掉落物最小中心间距（像素）
- * 掉落物图标 40×40、脚下还有一行名称，取 52 = 图标宽 + 12 留白，
- * 保证图标之间不会互相压住（名称行在掉落物密集时仍可能部分重叠，属于通用表现，不做强制避让）
- */
-export const DROP_SCATTER_DISTANCE = 52;
-
-/**
  * 计算散落偏移（相对落点的坐标，第 0 件总是落在落点本身）
  * @param count 掉落物数量
- * @param minDistance 最小中心间距，缺省 DROP_SCATTER_DISTANCE
+ * @param minDistance 最小中心间距，缺省 configs/drop.dropRuntime.scatterMinDistance
  * @returns 长度 = count 的偏移数组；count ≤ 0 时返回空数组
  */
-export function scatterDropPositions(count: number, minDistance: number = DROP_SCATTER_DISTANCE): Vec2[] {
+export function scatterDropPositions(count: number, minDistance: number = dropRuntime.scatterMinDistance): Vec2[] {
   const total = Math.max(0, Math.floor(count));
   const positions: Vec2[] = [];
   if (!total) return positions;

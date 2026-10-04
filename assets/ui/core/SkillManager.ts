@@ -67,17 +67,17 @@ export default class SkillManager {
     // 未学习不可释放
     const level = context.role.skills[skillId];
     if (!level) {
-      if (!fromAutoBattle) GameUiHelper.createTip("skill_not_learned_tip", `尚未学习 ${config.label}`);
+      if (!fromAutoBattle) GameUiHelper.createTip("skill_not_learned_tip", { skill: config.label });
       return false;
     }
     // 冷却校验
     if (this.inCooldown(skillId)) {
-      if (!fromAutoBattle) GameUiHelper.createTip("skill_cooldown_tip", `${config.label} 冷却中`);
+      if (!fromAutoBattle) GameUiHelper.createTip("skill_cooldown_tip", { skill: config.label });
       return false;
     }
     // 魔法值校验（每个技能的消耗见配置 mpCost）：不足则本次不释放，手动释放时给出提示
     if (!MpHelper.hasEnough(context.role, config.mpCost)) {
-      if (!fromAutoBattle) GameUiHelper.createErrorTip("skill_mp_tip", `魔法值不足（当前 ${context.role.mp}，需要 ${config.mpCost}）`);
+      if (!fromAutoBattle) GameUiHelper.createErrorTip("skill_mp_tip", { mp: context.role.mp, cost: config.mpCost });
       return false;
     }
     // 单体技能：无选中目标时自动选取施法距离内最近的存活怪物
@@ -87,13 +87,13 @@ export default class SkillManager {
       if (!target) {
         // 可自动释放的技能：交给 AutoBattle 自动选最近的怪物并走位到范围内（快速攻击）
         if (!fromAutoBattle && config.canAuto && AutoBattle.requestSkill(skillId, null)) return true;
-        if (!fromAutoBattle) GameUiHelper.createTip("skill_no_target_tip", `${config.label} 无可攻击目标`);
+        if (!fromAutoBattle) GameUiHelper.createTip("skill_no_target_tip", { skill: config.label });
         return false;
       }
       // 距离校验（distance <= 0 表示不限制距离）：超出时同样交给 AutoBattle 走位接近
       if (config.distance > 0 && !canAttackTarget(target, context.caster, config.distance)) {
         if (!fromAutoBattle && config.canAuto && AutoBattle.requestSkill(skillId, target)) return true;
-        if (!fromAutoBattle) GameUiHelper.createErrorTip("skill_distance_tip", "距离太远，无法攻击！");
+        if (!fromAutoBattle) GameUiHelper.createErrorTip("skill_distance_tip");
         return false;
       }
     }

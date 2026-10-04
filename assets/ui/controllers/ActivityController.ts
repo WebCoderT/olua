@@ -9,7 +9,7 @@ export class ActivityController extends Component {
   autoUpgrade: boolean = false;
   start() {
     if (this.autoUpgrade) {
-      GameUiHelper.createTip("activity_started_tip", "泡点活动已开启，尽情享受吧～");
+      GameUiHelper.createTip("activity_started_tip");
       this.node.addComponent(AutoUpgrade);
     } else {
       console.warn("泡点活动未开启，可前往控制器进行开启。");

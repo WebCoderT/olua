@@ -55,6 +55,13 @@ const monsterActionSpecs: MonsterActionSpec[] = [
   { action: ACTION.DIE, start: 260, frames: 10, spacing: 10 },
 ];
 
+/**
+ * 攻击/施法动画的兜底解锁余量（秒）
+ * 动画 FINISHED 事件没触发时，按「本动作时长（speedRate 即每秒循环数）+ 本余量」强制解锁，
+ * 免得角色一直卡在攻击态（见 ui/components/role/RoleDisplay.startAttack）
+ */
+export const actionFinishTimeoutMarginSeconds = 1;
+
 /** 获取角色动画名称,实现归一化 */
 export function getAnimationName(action: ACTION, direction: DIRECTION): keyof AnimationSpritesName {
   return `${action}_${direction}`;

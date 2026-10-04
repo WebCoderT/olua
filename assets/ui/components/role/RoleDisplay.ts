@@ -1,7 +1,9 @@
-import { BoxCollider2D, isValid, Label, Node, ProgressBar, RigidBody2D, Size, UITransform, Vec2, Vec3 } from "cc";
+import { BoxCollider2D, isValid, Label, Node, ProgressBar, RigidBody2D, UITransform, Vec2, Vec3 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
 import { ACTION, DIRECTION } from "../../../types/animation";
+import { actionFinishTimeoutMarginSeconds } from "../../../configs/animation";
+import { roleBody, roleRigid } from "../../../configs/role";
 import { SkillContextInput } from "../../../types/skill";
 import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
@@ -77,7 +79,7 @@ export default class RoleDisplay extends Node {
   /** 构建角色身体（尺寸/锚点 + 外观节点 + 头部信息栏） */
   private createBody() {
     const uiTransform = this.addComponent(UITransform);
-    uiTransform.setContentSize(40, 70);
+    uiTransform.setContentSize(roleBody.size);
     uiTransform.setAnchorPoint(0.5, 0);
     /** 角色外观（衣服与武器节点由 RoleAppearance 自建并挂到自身） */
     this.appearance = new RoleAppearance(this as Node, () => this.onAttackFinished());
@@ -89,11 +91,11 @@ export default class RoleDisplay extends Node {
   /** 增加碰撞 */
   private addRigid() {
     const rigidBody = this.addComponent(RigidBody2D);
-    rigidBody.gravityScale = 0;
-    rigidBody.fixedRotation = true;
+    rigidBody.gravityScale = roleRigid.gravityScale;
+    rigidBody.fixedRotation = roleRigid.fixedRotation;
     const boxCollider = this.addComponent(BoxCollider2D);
-    boxCollider.size = new Size(40, 70);
-    boxCollider.offset = new Vec2(0, 35);
+    boxCollider.size = roleBody.colliderSize;
+    boxCollider.offset = roleBody.colliderOffset;
     // 碰撞范围显示（调试用，全部碰撞体共用一套开关；角色自身用另一种配色区分于静态障碍）
     GameUiHelper.showColliderRange(this as Node, this.role.name, "role");
   }
@@ -282,8 +284,8 @@ export default class RoleDisplay extends Node {
     this.action = action;
     this.attackComplete = onComplete;
     this.updateAnimationPlay();
-    // 兜底：动作时长（speedRate 为每秒循环数，一段动画时长即该值）+ 1 秒余量后强制解锁
-    this.attackTimeout = setTimeout(() => this.onAttackFinished(), ((this.role.speedRate[action] ?? 1) + 1) * 1000);
+    // 兜底：动作时长（speedRate 为每秒循环数，一段动画时长即该值）+ 余量后强制解锁（余量见 configs/animation）
+    this.attackTimeout = setTimeout(() => this.onAttackFinished(), ((this.role.speedRate[action] ?? 1) + actionFinishTimeoutMarginSeconds) * 1000);
     return true;
   }
 

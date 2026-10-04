@@ -91,7 +91,7 @@ export default class AutoBattle {
   static setHangEnabled(enabled: boolean) {
     if (enabled === this.hangEnabled) return;
     if (enabled && !SkillManager.findAutoSkill()) {
-      GameUiHelper.createTip("auto_battle_no_skill_tip", "没有可自动释放的技能，无法挂机");
+      GameUiHelper.createTip("auto_battle_no_skill_tip");
       return;
     }
     this.hangEnabled = enabled;
@@ -99,10 +99,10 @@ export default class AutoBattle {
       // 挂机接管：清掉快速攻击的技能偏好与旧目标，下一 tick 自动选最近的怪物
       this.pendingSkill = null;
       this.target = null;
-      GameUiHelper.createTip("auto_battle_on_tip", "自动挂机已开启");
+      GameUiHelper.createTip("auto_battle_on_tip");
     } else {
       this.cancel();
-      GameUiHelper.createTip("auto_battle_off_tip", "自动挂机已关闭");
+      GameUiHelper.createTip("auto_battle_off_tip");
     }
     this.hangStateListener?.(enabled);
   }
@@ -314,14 +314,14 @@ export default class AutoBattle {
   private static finishPointMove() {
     this.clearRuntimeState();
     this.roleDisplay?.setAutoMove(null);
-    GameUiHelper.createTip("map_move_arrive_tip", "已到达目的地");
+    GameUiHelper.createTip("map_move_arrive_tip");
   }
 
   /** 点击寻路无法到达（连续卡住）：清状态停住并提示 */
   private static giveUpPointMove() {
     this.clearRuntimeState();
     this.roleDisplay?.setAutoMove(null);
-    GameUiHelper.createErrorTip("map_move_unreachable_tip", "无法到达目标位置");
+    GameUiHelper.createErrorTip("map_move_unreachable_tip");
   }
 
   /** 朝目标点走位（追怪与点击寻路共用）：卡住检测 → 按需重算路径 → 朝当前路点移动 */
@@ -428,6 +428,6 @@ export default class AutoBattle {
       return;
     }
     this.cancel();
-    GameUiHelper.createErrorTip("auto_battle_unreachable_tip", "无法接近目标，已停止自动攻击");
+    GameUiHelper.createErrorTip("auto_battle_unreachable_tip");
   }
 }

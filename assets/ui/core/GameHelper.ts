@@ -1,5 +1,5 @@
 import { Camera, Vec3 } from "cc";
-import { BattleAttributes } from "../../types/common";
+import { BattleAttributes, TextRef } from "../../types/common";
 import { Equipment, EQUIPMENT_TYPE } from "../../types/good";
 import { OECCUPATION, SEX } from "../../types/role";
 import StorageManager from "./StorageManager";
@@ -9,6 +9,7 @@ import { getEquipment } from "../../configs/items";
 import { combatCalc as combatAttributeWeights } from "../../configs/battle";
 import { maps } from "../../configs/map";
 import { getSoulLevel } from "../../configs/soul";
+import { getText, textRef } from "../../configs/texts";
 import { MapId } from "../../types/map";
 
 /**
@@ -37,31 +38,34 @@ export default class GameHelper {
 
   /**
    * 取装备不可穿戴的原因（可穿戴返回 null）
-   * 判定项与顺序：等级 → 性别 → 职业；返回文案可直接用于提示玩家
+   * 判定项与顺序：等级 → 性别 → 职业
+   * 只产出「用哪条文案 + 参数」（TextRef），具体中文取自 configs/texts，方便提示层直接展示
    * @param equipment 待校验装备
    */
-  static getEquipmentRejectReason(equipment: Equipment): string | null {
+  static getEquipmentRejectReason(equipment: Equipment): TextRef | null {
     const role = StorageManager.findOnlineRole();
-    if (!role) return "角色不存在";
-    if (equipment.level > role.level) return `需要等级 ${equipment.level}`;
-    if (equipment.sex !== role.sex && equipment.sex !== SEX.ALL) return `${equipment.sex === SEX.BOY ? "男性" : "女性"}角色才能穿戴`;
-    if (equipment.occupation !== role.occupation && equipment.occupation !== OECCUPATION.ALL) return "职业不符，无法穿戴";
+    if (!role) return textRef("reject_no_role");
+    if (equipment.level > role.level) return textRef("reject_equip_level", { level: equipment.level });
+    if (equipment.sex !== role.sex && equipment.sex !== SEX.ALL) {
+      return textRef("reject_equip_sex", { sex: getText(equipment.sex === SEX.BOY ? "label_sex_boy" : "label_sex_girl") });
+    }
+    if (equipment.occupation !== role.occupation && equipment.occupation !== OECCUPATION.ALL) return textRef("reject_equip_occupation");
     return null;
   }
 
   /**
    * 取进入地图的限制原因（满足条件返回 null）
-   * 判定项与顺序：等级 → 战斗力 → 战魂等级；返回文案可直接用于提示玩家
+   * 判定项与顺序：等级 → 战斗力 → 战魂等级；同样只产出 TextRef（见 getEquipmentRejectReason）
    * @param mapId 目标地图编号
    */
-  static getMapEnterRejectReason(mapId: MapId): string | null {
+  static getMapEnterRejectReason(mapId: MapId): TextRef | null {
     const role = StorageManager.findOnlineRole();
-    if (!role) return "角色不存在";
+    if (!role) return textRef("reject_no_role");
     const config = maps.get(mapId);
-    if (!config) return "地图不存在";
-    if (config.level > role.level) return `${config.label} 需要等级达到 ${config.level} 级`;
-    if (config.combat > role.combat) return `${config.label} 需要战斗力达到 ${config.combat}`;
-    if (config.soulOfWar > role.soulOfWar) return `${config.label} 需要战魂等级达到 ${config.soulOfWar} 阶`;
+    if (!config) return textRef("reject_map_missing");
+    if (config.level > role.level) return textRef("reject_map_level", { map: config.label, level: config.level });
+    if (config.combat > role.combat) return textRef("reject_map_combat", { map: config.label, combat: config.combat });
+    if (config.soulOfWar > role.soulOfWar) return textRef("reject_map_soul", { map: config.label, soul: config.soulOfWar });
     return null;
   }
 

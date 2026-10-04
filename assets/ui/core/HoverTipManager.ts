@@ -1,5 +1,6 @@
 import { isValid, Node } from "cc";
 import { skillTargetTypeLabels, skillTypeLabels, skills } from "../../configs/skill";
+import { getText, uiTexts } from "../../configs/texts";
 import { statuses } from "../../configs/status";
 import { SkillId } from "../../types/skill";
 import { StatusBadge } from "../../types/status";
@@ -36,17 +37,17 @@ export default class HoverTipManager {
     if (!skill) return;
     const role = StorageManager.findOnlineRole();
     const rows = [
-      `类型：${skillTypeLabels[skill.type]}（${skillTargetTypeLabels[skill.targetType]}）`,
-      `开启等级：${skill.level}`,
-      `魔法消耗：${skill.mpCost}`,
-      `冷却时间：${skill.cooldown} 秒`,
-      `使用距离：${skill.distance}`,
-      `熟练等级：${role?.skills[skillId] ? "lv." + role.skills[skillId] : "未学习"}`,
+      getText("hover_skill_type", { type: skillTypeLabels[skill.type], target: skillTargetTypeLabels[skill.targetType] }),
+      getText("hover_skill_level", { level: skill.level }),
+      getText("hover_skill_mp", { cost: skill.mpCost }),
+      getText("hover_skill_cooldown", { seconds: skill.cooldown }),
+      getText("hover_skill_distance", { distance: skill.distance }),
+      getText("hover_skill_mastery", { level: role?.skills[skillId] ? getText("label_skill_level", { level: role.skills[skillId] }) : getText("label_skill_unlearned") }),
     ];
     // 冷却中额外给一条每帧刷新的剩余冷却行（冷却结束改为「就绪」，不收起弹窗）
     const remaining = SkillManager.getCooldownRemaining(skillId);
-    const dynamicRow = remaining > 0 ? `冷却剩余：${remaining.toFixed(1)} 秒` : "冷却剩余：就绪";
-    this.show({ title: skill.label, icon: skill.icon, rows, dynamicRow, description: skill.description }, anchor, () => SkillManager.getCooldownRemaining(skillId), "冷却剩余", false);
+    const dynamicRow = this.remainingRow(uiTexts.hover_prefix_cooldown, remaining);
+    this.show({ title: skill.label, icon: skill.icon, rows, dynamicRow, description: skill.description }, anchor, () => SkillManager.getCooldownRemaining(skillId), uiTexts.hover_prefix_cooldown, false);
   }
 
   /** 显示状态详情弹窗（anchor 为状态图标节点） */
@@ -59,12 +60,12 @@ export default class HoverTipManager {
         title: status.label,
         icon: status.icon,
         rows: [],
-        dynamicRow: `剩余时间：${seconds.toFixed(1)} 秒`,
+        dynamicRow: this.remainingRow(uiTexts.hover_prefix_remaining, seconds),
         description: status.description,
       },
       anchor,
       () => StatusManager.getRemainingSeconds(badge.id),
-      "剩余时间",
+      uiTexts.hover_prefix_remaining,
       true,
     );
   }
@@ -95,10 +96,15 @@ export default class HoverTipManager {
         this.hide();
         return;
       }
-      dialog.updateDynamicText(`${this.dynamicPrefix}：就绪`);
+      dialog.updateDynamicText(getText("hover_row_ready", { prefix: this.dynamicPrefix }));
       return;
     }
-    dialog.updateDynamicText(`${this.dynamicPrefix}：${seconds.toFixed(1)} 秒`);
+    dialog.updateDynamicText(getText("hover_row_seconds", { prefix: this.dynamicPrefix, seconds: seconds.toFixed(1) }));
+  }
+
+  /** 复用的动态行文案（剩 0 秒时为「就绪」，否则为「N 秒」） */
+  private static remainingRow(prefix: string, seconds: number): string {
+    return seconds > 0 ? getText("hover_row_seconds", { prefix, seconds: seconds.toFixed(1) }) : getText("hover_row_ready", { prefix });
   }
 
   /** 弹出详情弹窗（统一入口：重建式显示，先收起旧的再建新的） */

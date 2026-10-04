@@ -13,6 +13,20 @@ import { getNearestEquipmentId } from "./equipments";
  * 3. 怪物条目里的 drops：直接写数组（每件物品单独配 weight/chance/count）
  *    或具名表 id，写了就完全覆盖上述两级；抽取次数独立配 dropPicks（默认 1/2/3）
  */
+/**
+ * 掉落物的运行时参数（拾取半径 / 提示节流 / 散落间距）
+ * 与掉落表无关，只描述「掉落物在地上怎么被捡起来、怎么摆」：
+ * 想调手感（捡得更远、提示更密、掉落物更散）只改这里，不必碰 DropManager / DropScatter
+ */
+export const dropRuntime = {
+  /** 自动拾取半径：角色脚底与掉落物距离小于该值即拾取；取值 = 图标半宽 20 + 脚部容差 20 */
+  autoPickupRadius: 40,
+  /** 背包已满的提示/重试间隔（毫秒）：避免自动拾取时每帧刷屏 */
+  fullTipInterval: 1500,
+  /** 多件掉落物的最小中心间距（像素）：同心环散落，保证图标互不重叠；取值 = 图标 40 + 12 留白 */
+  scatterMinDistance: 52,
+};
+
 const dropData: Array<DropTable & { id: string }> = [
   /** 普通怪物掉落：少量药品/材料，偶出装备 */
   {
