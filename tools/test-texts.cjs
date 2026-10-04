@@ -50,6 +50,8 @@ const checks = [
   ["feature_locked_tip", { feature: "背包", level: 10 }, "背包功能需要在10级后开放"],
   ["label_soul_current", { level: 7, label: "幽魂之翼" }, "当前战魂：7 阶 · 幽魂之翼"],
   ["label_bind_gold", { value: 25000 }, "绑定元宝：25000"],
+  ["role_delete_confirm_tip", { name: "张三" }, "再点一次确认删除角色「张三」，删除后无法恢复"],
+  ["role_delete_done_tip", { name: "李四" }, "角色「李四」已删除"],
   ["label_good_detail_info", { level: 1 }, "等级 1 · {slot}"],
 ];
 

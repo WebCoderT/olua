@@ -51,6 +51,27 @@ export default class StorageManager {
     return this.getRoles().find((i) => i.id === id);
   }
 
+  /**
+   * 删除角色（选角界面「管理」入口调用，见 ui/RoleSelector 的删除按钮）
+   *
+   * 角色数据只存在本地存档的 roles 数组里，删除就是从数组移除并落盘，**不可恢复**。
+   * 删完必须确认 selectedRole 不再指向已不存在的角色：玩家上次进游戏时选中过它，
+   * 残留的选中项会让下一次 findOnlineRole 取到 undefined（进游戏直接卡在取角色那一步）；
+   * 顺手也清掉「本来就指向不存在角色」的脏选中项（例如存档被外部改动过）。
+   * @param id 角色 id（Role.id）
+   * @returns 是否删除成功（角色不存在时返回 false，调用方据此区分提示）
+   */
+  static deleteRole(id: string): boolean {
+    const roles = this.getRoles();
+    const index = roles.findIndex((role) => role.id === id);
+    if (index < 0) return false;
+    roles.splice(index, 1);
+    this.setRoles(roles);
+    const selected = sys.localStorage.getItem("selectedRole");
+    if (selected && !roles.some((role) => role.id === selected)) sys.localStorage.removeItem("selectedRole");
+    return true;
+  }
+
   /** 清空本地所有存储 */
   static clear() {
     sys.localStorage.clear();

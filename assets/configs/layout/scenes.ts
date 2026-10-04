@@ -69,6 +69,24 @@ export const roleSelectorLayout = {
   rolePositions: [new Vec2(-485, -25), new Vec2(-250, -75), new Vec2(-10, -40)],
   previewSize: new Size(200, 360),
   previewFrameRate: 8,
+  /**
+   * 管理角色（删除）：点「管理」按钮进入管理模式后，每个角色站位上方出现一个删除按钮
+   *
+   * 删除按钮挂在**舞台**上（不在角色预览子树里）——预览自己带 TOUCH_END 选中事件，
+   * 按钮若挂它下面，点删除会连带触发选中（事件冒泡）；按钮另有一层好处是位置由站位 + 偏移推导，
+   * 角色数量变化时跟着重建即可。文案见 configs/texts（label_role_delete / label_role_delete_confirm）
+   */
+  manageRole: {
+    /** 删除按钮相对角色站位的位置偏移（放角色头顶上方，避免与预览主体重叠） */
+    deleteButtonOffset: new Vec2(0, 215),
+    /** 删除按钮尺寸与字号 */
+    deleteButtonSize: new Size(96, 40),
+    deleteButtonFontSize: 18,
+    /** 待确认状态的超时（毫秒）：到点自动复位，免得「确认删除」一直挂着被误点（与背包回收同一套两步确认口径） */
+    confirmTimeout: 3000,
+    /** 管理模式的提示条（舞台顶部居中；文字见 configs/texts.label_role_delete_hint） */
+    hint: { name: "role_manage_hint", position: new Vec2(0, 300), size: new Size(700, 40), fontSize: 22, color: new Color("#FFD700") },
+  },
   /** 创建角色弹窗 */
   createDialog: {
     name: "create_role_dialog",

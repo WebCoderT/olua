@@ -113,6 +113,8 @@ export const uiImages = {
   // ---------------- 按钮背景（大/中/小） ----------------
   bigButtonBackground: buttonImage("big"),
   middleButtonBackground: buttonImage("middle"),
+  /** 中按钮·红色（危险操作，如删除角色） */
+  middleRedButtonBackground: buttonImage("middle-red"),
   smallButtonBackground: buttonImage("small"),
 
   // ---------------- 角色信息弹窗 ----------------

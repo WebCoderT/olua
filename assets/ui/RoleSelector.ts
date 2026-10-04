@@ -1,12 +1,16 @@
-import { _decorator, Component, EditBox, EventHandler, isValid, Label, Node, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
 import { applyScreenPolicy, getStageScale, onWindowResize } from "./utils/layout/ScreenLayout";
-import { roleSelectorLayout } from "../configs/hudLayout";
+import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
+import { getText } from "../configs/texts";
 const { ccclass } = _decorator;
+
+/** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
+const DELETE_ROLE_BUTTON_PREFIX = "delete_role_";
 
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
@@ -47,6 +51,16 @@ export class RoleSelector extends Component {
   private stage: Node | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
+  /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
+  private manageMode = false;
+  /** 管理模式的临时节点（提示条 + 各角色的删除按钮）：退出管理模式或刷新列表时统一销毁 */
+  private manageNodes: Node[] = [];
+  /** 待确认删除的角色 id（两步确认的第一步之后有值，见 onDeleteRoleClick） */
+  private pendingDeleteId: string | null = null;
+  /** 待确认删除按钮（复位文案要改它） */
+  private pendingDeleteButton: Node | null = null;
+  /** 待确认状态的超时定时器（到点自动复位） */
+  private deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 
   start() {
     // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
@@ -62,10 +76,11 @@ export class RoleSelector extends Component {
     this.showOwnerRolesUI();
   }
 
-  /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁） */
+  /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁），并清掉待确认定时器 */
   onDestroy() {
     this.offWindowResize?.();
     this.offWindowResize = null;
+    this.cancelDeleteConfirm();
   }
 
   /**
@@ -118,9 +133,11 @@ export class RoleSelector extends Component {
     const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
     createRoleButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI());
     this.stage!.addChild(createRoleButton);
-    // 管理角色按钮
+    // 管理角色按钮（管理模式的开关：开启后各角色站位上方出现删除按钮，见 toggleManageRole）
     const manageLayout = layout.manageRoleButton;
-    this.stage!.addChild(GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size));
+    const manageRoleButton = GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size);
+    manageRoleButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole());
+    this.stage!.addChild(manageRoleButton);
     // 选中角色信息框（名称 + 等级）
     const infoLayout = layout.selectedInfo;
     const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
@@ -145,7 +162,135 @@ export class RoleSelector extends Component {
       this.stage!.addChild(node);
       this.mainView.ownerRoleNodes.push(node);
     });
+    // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
+    if (this.manageMode) this.refreshManageControls();
   }
+
+  //#region 角色管理（删除）
+
+  /**
+   * 「管理」按钮：进入 / 退出管理模式
+   * 管理模式 = 各角色站位上方出现删除按钮（挂舞台，不在角色预览子树里 —— 预览自带 TOUCH_END 选中事件，
+   * 按钮挂在它下面会被冒泡吞掉，点删除会连带选中该角色）
+   */
+  private toggleManageRole() {
+    if (this.manageMode) {
+      this.manageMode = false;
+      this.cancelDeleteConfirm();
+      this.clearManageNodes();
+      return;
+    }
+    this.manageMode = true;
+    this.refreshManageControls();
+    GameUiHelper.createTip("role_delete_mode_tip");
+  }
+
+  /** 按当前角色列表重建管理模式的提示条与删除按钮（进入管理模式、删除角色后刷新列表时调用） */
+  private refreshManageControls() {
+    this.clearManageNodes();
+    if (!this.manageMode || !this.stage) return;
+    const layout = roleSelectorLayout.manageRole;
+    // 提示条（文案见 configs/texts.label_role_delete_hint）
+    const hint = GameUiHelper.createText(layout.hint.name, getText("label_role_delete_hint"), layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color);
+    this.stage.addChild(hint);
+    this.manageNodes.push(hint);
+    // 每个角色站位上方一个删除按钮（位置由站位 + 偏移推导，角色数量变化时跟着重建）
+    StorageManager.getRoles().forEach((role, index) => {
+      const stand = roleSelectorLayout.rolePositions[index];
+      if (!stand) return;
+      const button = GameUiHelper.createTexturedButton(
+        `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
+        uiImages.middleRedButtonBackground,
+        getText("label_role_delete"),
+        new Vec2(stand.x + layout.deleteButtonOffset.x, stand.y + layout.deleteButtonOffset.y),
+        layout.deleteButtonSize,
+        Color.WHITE,
+        layout.deleteButtonFontSize,
+      );
+      button.on(Node.EventType.TOUCH_END, () => this.onDeleteRoleClick(role.id, button), this);
+      this.stage!.addChild(button);
+      this.manageNodes.push(button);
+    });
+  }
+
+  /** 销毁管理模式的临时节点（提示条 + 删除按钮） */
+  private clearManageNodes() {
+    this.manageNodes.forEach((node) => {
+      if (isValid(node)) node.destroy();
+    });
+    this.manageNodes.length = 0;
+  }
+
+  /**
+   * 删除按钮点击：两步确认（与背包「一键回收」同一套口径）
+   *
+   * 删除角色不可恢复，所以不让一次点击就生效：
+   * 1. 第一次点击：不改数据，只把要删的角色名报给玩家，按钮文案变「确认删除」；
+   * 2. 期间再点同一个按钮：真的删除（落盘 → 刷新列表 → 选中态复位）；
+   * 3. 超时（manageRole.confirmTimeout）、点了别的角色的删除按钮、退出管理模式或关场景：文案复位，
+   *    下次点击重新从第 1 步开始。
+   * 不弹确认框的原因与背包回收一致：不新增节点与鼠标监听，也就没有层级与点击穿透的坑
+   */
+  private onDeleteRoleClick(roleId: string, button: Node) {
+    // 点了别的角色的删除按钮 → 先放弃上一个待确认状态（避免两个按钮同时挂着「确认删除」）
+    if (this.pendingDeleteId && this.pendingDeleteId !== roleId) this.cancelDeleteConfirm();
+    if (this.pendingDeleteId !== roleId) {
+      const role = StorageManager.findRoleById(roleId);
+      if (!role) {
+        GameUiHelper.createTip("role_delete_missing_tip");
+        this.refreshManageControls();
+        return;
+      }
+      this.pendingDeleteId = roleId;
+      this.pendingDeleteButton = button;
+      this.setDeleteButtonText(button, getText("label_role_delete_confirm"));
+      GameUiHelper.createTip("role_delete_confirm_tip", { name: role.name });
+      // 到点自动复位：免得「确认删除」一直挂着被无意点掉
+      this.deleteConfirmTimer = setTimeout(() => this.cancelDeleteConfirm(), roleSelectorLayout.manageRole.confirmTimeout);
+      return;
+    }
+    // 第二步：确认删除（先复位按钮与定时器，再改数据）
+    const roleName = StorageManager.findRoleById(roleId)?.name ?? "";
+    this.cancelDeleteConfirm();
+    if (!StorageManager.deleteRole(roleId)) {
+      GameUiHelper.createTip("role_delete_missing_tip");
+      this.refreshManageControls();
+      return;
+    }
+    // 删掉的正是当前选中的角色 → 名称/等级与「开始游戏」按钮一起复位，否则留下一个打不开的选中态
+    if (this.ownerRoleSelectedId === roleId) this.clearSelectedRole();
+    GameUiHelper.createTip("role_delete_done_tip", { name: roleName });
+    this.showOwnerRolesUI();
+  }
+
+  /** 退出待确认状态：清定时器、按钮文案复位（删除成功后按钮已随列表销毁，只清状态） */
+  private cancelDeleteConfirm() {
+    if (this.deleteConfirmTimer !== null) {
+      clearTimeout(this.deleteConfirmTimer);
+      this.deleteConfirmTimer = null;
+    }
+    const button = this.pendingDeleteButton;
+    if (this.pendingDeleteId && button && isValid(button)) this.setDeleteButtonText(button, getText("label_role_delete"));
+    this.pendingDeleteId = null;
+    this.pendingDeleteButton = null;
+  }
+
+  /** 改删除按钮文案（按钮工厂把文字放在 `<按钮名>_label` 子节点上） */
+  private setDeleteButtonText(button: Node, text: string) {
+    const label = button.getChildByName(`${button.name}_label`)?.getComponent(Label);
+    if (label) label.string = text;
+  }
+
+  /** 复位角色选中态：名称/等级回占位文案、「开始游戏」按钮置灰（选中角色被删除后调用） */
+  private clearSelectedRole() {
+    const info = roleSelectorLayout.selectedInfo;
+    this.ownerRoleSelectedId = null;
+    this.mainView.beginGameButton.getComponent(Sprite).grayscale = true;
+    this.mainView.selectedRoleName.getComponent(Label).string = info.nameLabel.text;
+    this.mainView.selectedRoleLevel.getComponent(Label).string = info.levelLabel.text;
+  }
+
+  //#endregion
 
   private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;

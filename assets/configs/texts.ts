@@ -93,6 +93,16 @@ export const uiTexts = {
   /** 功能未解锁（{feature} 功能 · {level} 级开放） */
   feature_locked_tip: "{feature}功能需要在{level}级后开放",
 
+  //#region 浮动提示：选角与角色管理
+  /** 进入管理模式（选角界面「管理」按钮） */
+  role_delete_mode_tip: "点击角色上方的删除按钮可删除角色",
+  /** 删除角色的两步确认（第一次点击，{name} = 角色名） */
+  role_delete_confirm_tip: "再点一次确认删除角色「{name}」，删除后无法恢复",
+  /** 删除成功（{name}） */
+  role_delete_done_tip: "角色「{name}」已删除",
+  /** 待删除的角色已不存在（存档被外部改动等） */
+  role_delete_missing_tip: "角色不存在，无法删除",
+
   //#region 穿戴 / 进图校验（GameHelper 产出 TextRef）
   /** 取不到在线角色 */
   reject_no_role: "角色不存在",
@@ -125,6 +135,11 @@ export const uiTexts = {
   /** 性别文案（校验提示用） */
   label_sex_boy: "男性",
   label_sex_girl: "女性",
+  /** 删除角色按钮（正常态 / 两步确认的待确认态，见 configs/hudLayout.roleSelectorLayout.manageRole） */
+  label_role_delete: "删除",
+  label_role_delete_confirm: "确认删除",
+  /** 管理模式提示条 */
+  label_role_delete_hint: "点击角色上方的删除按钮移除角色",
 
   //#region 界面标签：属性与装备
   /** 属性分组标题 */
