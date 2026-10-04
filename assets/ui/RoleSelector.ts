@@ -1,10 +1,10 @@
-import { _decorator, Component, EditBox, EventHandler, Label, Node, Sprite, ToggleContainer, Vec2 } from "cc";
+import { _decorator, Component, EditBox, EventHandler, isValid, Label, Node, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
-import { applyScreenPolicy } from "./utils/layout/ScreenLayout";
+import { applyScreenPolicy, getStageScale, onWindowResize } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout } from "../configs/hudLayout";
 const { ccclass } = _decorator;
 
@@ -28,17 +28,69 @@ interface RoleSelectorCreateView {
   occupationPreview: Node | null;
 }
 
+/**
+ * 选角场景（登录后的角色列表 + 创建角色弹窗）
+ *
+ * 结构：铺满窗口的背景（始终盖住整个窗口）+ 一块固定设计尺寸的「舞台」，
+ * 其余元素全部挂在舞台下并按设计坐标摆放（坐标以舞台中心为原点）。
+ * 舞台由 applyStageLayout 按当前可见尺寸等比缩放（contain、只缩不放），
+ * 所以窗口宽高比与设计不一致（窄屏会裁左右 / 宽屏会裁上下）时构图依旧完整可见，
+ * 新增元素只需按设计画布摆坐标，不必关心窗口尺寸。
+ * 位置/尺寸/用图统一见 configs/hudLayout.roleSelectorLayout
+ */
 @ccclass("RoleSelector")
 export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
+  /** 舞台容器（除背景外的所有元素都挂这里，整体按可见尺寸等比缩放；见 applyStageLayout） */
+  private stage: Node | null = null;
+  /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
+  private offWindowResize: (() => void) | null = null;
 
   start() {
     // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
     applyScreenPolicy();
+    // 背景（不在舞台内：铺满可见区，始终盖住整个窗口；舞台等比缩小后四周留白由它兜底）
+    this.node.addChild(GameUiHelper.createFullScreenImage("role_selector_background", roleSelectorLayout.background));
+    // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.roleSelectorLayout）
+    this.stage = this.createStage();
     this.mainView = this.createMainView();
+    // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
+    this.applyStageLayout();
+    this.offWindowResize = onWindowResize(() => this.applyStageLayout());
     this.showOwnerRolesUI();
+  }
+
+  /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁） */
+  onDestroy() {
+    this.offWindowResize?.();
+    this.offWindowResize = null;
+  }
+
+  /**
+   * 创建舞台容器：尺寸为设计分辨率，各元素坐标以舞台中心为原点（与布局配置一致）
+   */
+  private createStage() {
+    const stage = new Node("role_selector_stage");
+    stage.addComponent(UITransform).setContentSize(roleSelectorLayout.stageSize);
+    this.node.addChild(stage);
+    return stage;
+  }
+
+  /**
+   * 舞台适配（窗口尺寸变化时可重复调用）：按可见尺寸等比缩放整块舞台并居中
+   *
+   * 铺满窗口的适配策略下，窗口宽高比与设计（1624×750）不一致时必然有一边被裁：
+   * 窗口偏窄（如 1024×768 → 可见区仅 1000×750）会裁掉左右，写死坐标的贴边元素
+   * （左侧创建/管理/返回按钮、右侧创建角色弹窗）就整体跑到屏幕外看不见了；
+   * 这里把整块舞台按 contain 比例缩小（只缩不放），构图恒完整落在可见区内
+   */
+  applyStageLayout() {
+    const stage = this.stage;
+    if (!stage || !isValid(stage, true)) return;
+    const scale = getStageScale(roleSelectorLayout.stageSize);
+    stage.setScale(scale, scale, 1);
   }
 
   beginGame() {
@@ -48,14 +100,13 @@ export class RoleSelector extends Component {
     }
   }
 
-  /** 拼装选角主视图 */
+  /** 拼装选角主视图（元素全部挂舞台，坐标见 configs/hudLayout.roleSelectorLayout） */
   private createMainView(): RoleSelectorMainView {
     // 位置/尺寸与用图统一见 configs/hudLayout.roleSelectorLayout
     const layout = roleSelectorLayout;
-    // 背景与底部栏
-    this.node.addChild(GameUiHelper.createFullScreenImage("role_selector_background", layout.background));
+    // 底部栏
     const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, layout.bottomBar.position, layout.bottomBar.size);
-    this.node.addChild(bottomBar);
+    this.stage!.addChild(bottomBar);
     // 开始游戏按钮（默认置灰，选中角色后可用）
     const beginLayout = layout.beginGameButton;
     const beginGameButton = GameUiHelper.createTexturedButton(beginLayout.name, beginLayout.image, "", beginLayout.position, beginLayout.size);
@@ -66,16 +117,16 @@ export class RoleSelector extends Component {
     const createLayout = layout.createRoleButton;
     const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
     createRoleButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI());
-    this.node.addChild(createRoleButton);
+    this.stage!.addChild(createRoleButton);
     // 管理角色按钮
     const manageLayout = layout.manageRoleButton;
-    this.node.addChild(GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size));
+    this.stage!.addChild(GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size));
     // 选中角色信息框（名称 + 等级）
     const infoLayout = layout.selectedInfo;
     const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
     selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size));
     selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size));
-    this.node.addChild(selectedInfoBox);
+    this.stage!.addChild(selectedInfoBox);
     return {
       beginGameButton,
       selectedRoleName: selectedInfoBox.getChildByName(infoLayout.nameLabel.name),
@@ -91,7 +142,7 @@ export class RoleSelector extends Component {
     StorageManager.getRoles().forEach((role, index) => {
       const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, roleSelectorLayout.rolePositions[index] ?? new Vec2(), roleSelectorLayout.previewSize);
       node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
-      this.node.addChild(node);
+      this.stage!.addChild(node);
       this.mainView.ownerRoleNodes.push(node);
     });
   }
@@ -117,11 +168,11 @@ export class RoleSelector extends Component {
     // 返回按钮
     const backLayout = roleSelectorLayout.backButton;
     const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
-    this.node.addChild(backButton);
+    this.stage!.addChild(backButton);
     backButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
     // 弹窗主体与标题
     const dialog = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
-    this.node.addChild(dialog);
+    this.stage!.addChild(dialog);
     dialog.addChild(GameUiHelper.createImage(layout.title.name, layout.title.image, layout.title.position, layout.title.size));
     dialog.addChild(GameUiHelper.createImage(layout.genderLabel.name, layout.genderLabel.image, layout.genderLabel.position, layout.genderLabel.size));
     // 性别开关组

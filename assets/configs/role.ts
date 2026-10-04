@@ -100,9 +100,14 @@ export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipme
   const equipments: Equipment[] = [rings.get("ring_1"), nicklaces.get("necklace_1"), shoes.get("shoes_1"), helmets.get("helmet_1"), belts.get("belt_1")].filter((eq): eq is Equipment => !!eq);
 
   /** 将所有基础武器放在装备列表中（背包只有 bagRow×bagCol 格，绝不能把 15 倍变体全塞进来） */
-  getBaseEquipments(weapons).forEach((weapon) => equipments.push(weapon));
-
+  const baseWeapons = getBaseEquipments(weapons);
   /** 将所有基础衣服放在装备列表中 */
-  getBaseEquipments(clothes).forEach((cloth) => equipments.push(cloth));
+  const baseClothes = getBaseEquipments(clothes);
+  // 基础件筛选为空说明配置/编译踩坑（例如打包后 Map 遍历失效），此时背包会静默缺装备，留一条可查的日志
+  if (baseWeapons.length === 0 || baseClothes.length === 0) {
+    console.warn(`[role] 新手装备基础件为空（武器 ${baseWeapons.length} / 衣服 ${baseClothes.length}），背包将缺少装备`);
+  }
+  baseWeapons.forEach((weapon) => equipments.push(weapon));
+  baseClothes.forEach((cloth) => equipments.push(cloth));
   return equipments;
 }

@@ -134,11 +134,18 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
 /**
  * 取某装备 Map 的基础件（普通的·人级，prefix/suffix 全 0）
  * 新手装备、全量列表展示等只应给基础件——Map 里其余 14 个是前后缀变体（key 带 _pXsY），不该默认发放
+ *
+ * ⚠️ 这里必须用 `map.forEach`（或 Array.from）而**不能**写 `[...map.values()]`：
+ * 打包时 babel 以 loose 模式编译，会把 `[...迭代器]` 降级成 `[].concat(迭代器)`，
+ * 而 `concat` 只展开数组、不认 Map/Set 迭代器 → 结果是 `[MapIterator]` 这一个元素，
+ * 过滤后恒为空数组（编辑器里不降级，所以只在打包产物上才复现，症状 = 背包/列表静默为空）
  */
 export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
-  return [...map.values()].filter(
-    (eq) => eq.prefix === EQUIPMENT_PREFIX.NORMAL && eq.suffix === EQUIPMENT_SUFFIX.MORTAL,
-  );
+  const result: Equipment[] = [];
+  map.forEach((eq) => {
+    if (eq.prefix === EQUIPMENT_PREFIX.NORMAL && eq.suffix === EQUIPMENT_SUFFIX.MORTAL) result.push(eq);
+  });
+  return result;
 }
 
 // 衣服（按名称强弱排等级 1 → 60；战斗数值由 equipmentStats(level, slot) 生成；内外观位置/缩放逐件手调）

@@ -35,8 +35,18 @@ export const loginLayout = {
 
 //#region 选角场景
 
-/** 选角界面布局（主视图 + 创建角色弹窗，坐标为屏幕中心系） */
+/**
+ * 选角界面布局（主视图 + 创建角色弹窗）
+ *
+ * 坐标为「舞台」坐标系（原点在舞台中心）：所有元素挂在舞台容器下，
+ * 由 RoleSelector.applyStageLayout 按当前可见尺寸把整块舞台等比缩放后再居中
+ * （舞台 = 按本文件坐标摆好的完整构图，缩放算法见 ui/utils/layout/ScreenLayout.getStageScale）。
+ * 于是新增元素只需按这张「设计尺寸的画布」摆坐标，不必关心窗口宽高比；
+ * 背景图不在舞台内（铺满可见区，始终盖住窗口，见 RoleSelector.createBackground）
+ */
 export const roleSelectorLayout = {
+  /** 舞台尺寸（= 设计分辨率 1624×750，见 ScreenLayout.designResolution；改分辨率时两处同步） */
+  stageSize: new Size(1624, 750),
   background: uiImages.roleSelectorBackground,
   /** 底部栏（开始游戏按钮所在容器） */
   bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, position: new Vec2(0, -305), size: new Size(1624, 139) },

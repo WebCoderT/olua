@@ -42,6 +42,18 @@ export function getVisibleSize() {
 }
 
 /**
+ * 计算整屏「舞台」的等比缩放系数（舞台 = 按固定设计尺寸摆好的完整构图，如选角场景）
+ *
+ * 按可见尺寸做 contain 适配：保证整块舞台都落在可见区内；可见区比舞台大时不放大（上限 1）
+ * 用法：把位于屏幕中心的舞台容器节点 setScale(该系数)，即可让任意窗口宽高比下构图都完整可见
+ * （不缩放的话，铺满窗口策略会在某个方向裁掉画面，贴边元素会跑到屏幕外）
+ */
+export function getStageScale(stageSize: Size, visibleSize: Size = getVisibleSize()): number {
+  if (!stageSize.width || !stageSize.height) return 1;
+  return Math.min(1, visibleSize.width / stageSize.width, visibleSize.height / stageSize.height);
+}
+
+/**
  * 监听窗口尺寸变化（Web 与原生均由 screen 派发；平台不支持时静默跳过）
  * @param handler 尺寸变化后的重排回调
  * @returns 取消监听函数（场景销毁前调用）
