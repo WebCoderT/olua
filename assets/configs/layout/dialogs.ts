@@ -172,6 +172,8 @@ export const roleInfoDialogLayout = {
 export const bagDialogLayout = {
   name: "bag_dialog",
   title: "背包",
+  /** 底部「一键整理」按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，按钮落在网格下方） */
+  tidyButton: { name: "bag_tidy_button", text: "一键整理", position: new Vec2(0, -212) },
 };
 
 //#endregion

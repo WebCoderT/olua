@@ -15,7 +15,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
-import { getItem } from "../../configs/items";
+import { getItem, tidyBagGrid } from "../../configs/items";
 import { getSoulLevel } from "../../configs/soul";
 
 /**
@@ -277,6 +277,42 @@ export default class StorageManager {
     RoleUIManager.updateRoleOutShow(role);
     RoleUIManager.updateEquipmentDialog(slot);
     RoleUIManager.refreshBag();
+  }
+
+  //#endregion
+
+  //#region 背包整理
+
+  /**
+   * 一键整理背包（当前在线角色）
+   *
+   * 搬运算法是纯函数 `configs/items.tidyBagGrid`（合并同类可叠加物 → 按等级/部位排序 → 空格沉底），
+   * 这里只负责：取角色 → 调用 → **有变动才落盘刷新**，背包本来就很整齐时不重复写存储
+   * @returns 是否有变动（无角色/背包为空/整理前后一致时返回 false）
+   */
+  static tidyBag(): boolean {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const before = this.bagSignature(role.bag);
+    if (!before) return false;
+    role.bag = tidyBagGrid(role.bag);
+    if (this.bagSignature(role.bag) === before) return false;
+    // 保存并刷新背包显示
+    this.updateOnlineRole(role);
+    RoleUIManager.refreshBag();
+    GameUiHelper.createTip("bag_tidy_tip", "背包已整理");
+    return true;
+  }
+
+  /** 背包内容指纹（整理前后比对用；全空返回空串） */
+  private static bagSignature(bag: BagCell[][]): string {
+    let signature = "";
+    bag.forEach((row) =>
+      row.forEach((cell) => {
+        if (cell) signature += `${cell.id}x${cell.count},`;
+      }),
+    );
+    return signature;
   }
 
   //#endregion

@@ -7,9 +7,10 @@ import { bagDialogLayout } from "../../../configs/hudLayout";
 
 /**
  * 背包弹窗
- * 只负责开关与组装（弹窗框 + 背包格子网格），并把手性格子的操作翻译成数据层调用：
+ * 只负责开关与组装（弹窗框 + 背包格子网格 + 底部一键整理按钮），并把界面操作翻译成数据层调用：
  * - 左键（触屏点击）→ 使用物品：StorageManager.useGood 按物品大类分发（装备穿戴 / 药品服用 / …）
  * - 右键 → 穿戴装备：StorageManager.equipFromBag（非装备会给出提示）
+ * - 「一键整理」→ StorageManager.tidyBag（合并同类可叠加物 + 按等级/部位重排，规则在数据层与配置表）
  * 物品的使用规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
  * 实例由使用方（BottomBar）创建持有，不导出全局单例
  */
@@ -32,6 +33,21 @@ export default class BagDialog {
     }
     // 弹窗框与背包格子由通用零件拼装
     const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title);
+    // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
+    const tidyButton = GameUiHelper.createMiddleButton(
+      bagDialogLayout.tidyButton.name,
+      bagDialogLayout.tidyButton.text,
+      bagDialogLayout.tidyButton.position,
+    );
+    tidyButton.on(
+      Node.EventType.TOUCH_END,
+      () => {
+        // 整理算法不改动存储时会返回 false，这里补一句反馈，免得玩家以为按钮没反应
+        if (!StorageManager.tidyBag()) GameUiHelper.createTip("bag_tidy_noop_tip", "背包已经很整齐了");
+      },
+      this,
+    );
+    dialog.addChild(tidyButton);
     this.bagGrid = new BagGridView((row, col, action) => this.onCellAction(row, col, action));
     this.bagGrid.refresh(StorageManager.findOnlineRole());
     dialog.addChild(this.bagGrid);

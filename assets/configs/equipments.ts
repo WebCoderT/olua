@@ -29,6 +29,17 @@ for (const slot of equipmentSlotData) {
   equipmentSlots.set(slot.key, slot);
 }
 
+/**
+ * 装备部位的整理序号（背包「一键整理」排部位用，见 configs/items 的 compareBagGoods）
+ *
+ * **唯一来源**：不另写一份部位顺序 —— 序号就是 equipmentSlotData 的先后，
+ * 改装备槽位配置的顺序时，装备界面的槽位排列与背包整理顺序一起生效。
+ */
+export const equipmentSlotOrder = new Map<EQUIPMENT_TYPE, number>();
+for (const slot of equipmentSlotData) {
+  equipmentSlotOrder.set(slot.key, equipmentSlotOrder.size);
+}
+
 /** 装备前缀文案（下标 = EQUIPMENT_PREFIX 序号） */
 export const equipmentPrefixLabels = ["普通的", "强化的", "精良的", "极品的", "超神的"];
 
