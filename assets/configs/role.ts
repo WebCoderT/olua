@@ -1,9 +1,9 @@
 import { ACTION, SpeedRate } from "../types/animation";
-import { Equipment } from "../types/good";
+import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
 import type { SkillId } from "../types/skill";
 import { Size, Vec2 } from "cc";
-import { belts, clothes, helmets, nicklaces, rings, shoes, weapons, getBaseEquipments } from "./equipments";
+import { belts, clothes, helmets, nicklaces, rings, shoes, weapons, getBaseEquipments, getEquipmentsByLevel } from "./equipments";
 
 /** 角色移动速度-全局 */
 export const ROLE_WALK_SPEED = 2;
@@ -120,12 +120,30 @@ export const defaultRoleSpeedRate: SpeedRate = {
   [ACTION.TEST1]: 1,
 };
 
-/** 根据职业与性别获取新手装备（只取各表基础件「普通的·人级」，Map 里其余是前后缀变体不默认发放） */
+/**
+ * 新角色背包额外预置：**该等级武器的全部前后缀变体**（每件 15 个）也放进背包
+ *
+ * 1 级只有 weapon_1 一件 → 出生背包里就有 15 个品质各异的同名武器（普通的·人级 → 超神的·神级），
+ * 方便一进游戏就对比不同前缀/后缀的装备外观与边框；设 0 即关闭。
+ *
+ * ⚠️ 背包只有 bagRow × bagCol 格（见上），改大这个等级或再往这里加表之前先算总格数：
+ * 超出的条目会被 entities/Role 构造函数丢弃（那里会打一条 warn）
+ */
+export const newRoleVariantWeaponLevel = 1;
+
+/**
+ * 根据职业与性别获取新手装备
+ *
+ * 组成（顺序即背包里的摆放顺序）：
+ * 1. 通用件：戒指 / 项链 / 鞋 / 头盔 / 腰带（各表的 `*_1`）；
+ * 2. 全部**基础件**（「普通的·人级」）：所有武器 + 所有衣服；
+ * 3. `newRoleVariantWeaponLevel` 那个等级的武器，**补上其余前后缀变体**（基础件已在第 2 步发过，不重复发）。
+ */
 export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipment[] {
   // 通用装备（按 key 从各装备 Map 取；缺配置的自动跳过）
   const equipments: Equipment[] = [rings.get("ring_1"), nicklaces.get("necklace_1"), shoes.get("shoes_1"), helmets.get("helmet_1"), belts.get("belt_1")].filter((eq): eq is Equipment => !!eq);
 
-  /** 将所有基础武器放在装备列表中（背包只有 bagRow×bagCol 格，绝不能把 15 倍变体全塞进来） */
+  /** 将所有基础武器放在装备列表中（背包只有 bagRow×bagCol 格，绝不能把全部装备的 15 倍变体都塞进来） */
   const baseWeapons = getBaseEquipments(weapons);
   /** 将所有基础衣服放在装备列表中 */
   const baseClothes = getBaseEquipments(clothes);
@@ -135,5 +153,13 @@ export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipme
   }
   baseWeapons.forEach((weapon) => equipments.push(weapon));
   baseClothes.forEach((cloth) => equipments.push(cloth));
+
+  // 指定等级的武器：整组前后缀变体一起发（基础件「普通的·人级」上面已发过，这里只补其余 14 个变体）
+  if (newRoleVariantWeaponLevel > 0) {
+    getEquipmentsByLevel(weapons, newRoleVariantWeaponLevel).forEach((weapon) => {
+      if (weapon.prefix === EQUIPMENT_PREFIX.NORMAL && weapon.suffix === EQUIPMENT_SUFFIX.MORTAL) return;
+      equipments.push(weapon);
+    });
+  }
   return equipments;
 }

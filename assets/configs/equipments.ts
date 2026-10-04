@@ -193,6 +193,23 @@ export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
   return result;
 }
 
+/**
+ * 取某装备 Map 中**指定等级**的全部条目（含前后缀变体：一件基础装备 = 15 件同等级变体）
+ *
+ * 用途：把某等级的整组品质变体都发给角色（见 configs/role.getNewRoleEquipments ——
+ * 出生背包里放全 15 个品质的 1 级武器，方便对比外观/边框）。
+ * 「等级」是装备的佩戴门槛，也是唯一的定强入口，因此这里按等级筛而不是按 key 筛。
+ *
+ * ⚠️ 同样必须用 `map.forEach`，理由见 getBaseEquipments（loose 编译会毁掉 `[...map.values()]`）
+ */
+export function getEquipmentsByLevel(map: Map<string, Equipment>, level: number): Equipment[] {
+  const result: Equipment[] = [];
+  map.forEach((eq) => {
+    if (eq.level === level) result.push(eq);
+  });
+  return result;
+}
+
 // 衣服（按名称强弱排等级 1 → 60；战斗数值由 equipmentStats(level, slot) 生成；内外观位置/缩放逐件手调）
 const clothesData: EquipmentData[] = [
   {

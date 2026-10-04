@@ -90,12 +90,16 @@ export class Role implements BattleAttributes {
       }
     }
     // 初始化成功后，获得新手物品（配置对象经 items 注册表带有 id，格子只存 key + 数量）
-    // 防御：无 id 的条目直接跳过；超出背包容量的条目丢弃（绝不能越界写 bag[row]，否则报 Cannot set properties of undefined）
-    const equipments = getNewRoleEquipments(occupation, sex);
-    equipments.forEach((eq, index) => {
-      const row = Math.floor(index / bagCol);
-      if (row >= bagRow || !eq.id) return;
-      this.bag[row][index % bagCol] = { id: eq.id, count: 1 };
+    // 防御：超出背包容量的条目丢弃（绝不能越界写 bag[row]，否则报 Cannot set properties of undefined）；
+    // 静默丢弃会让人以为东西发下去了，所以留一条可查的日志（调整新手物品清单后如果刷这条，说明该精简清单或扩背包）
+    const newRoleItems = getNewRoleEquipments(occupation, sex);
+    const capacity = bagRow * bagCol;
+    if (newRoleItems.length > capacity) {
+      console.warn(`[role] 新手物品 ${newRoleItems.length} 件超出背包容量 ${capacity} 格，末尾 ${newRoleItems.length - capacity} 件已丢弃`);
+    }
+    newRoleItems.slice(0, capacity).forEach((item, index) => {
+      if (!item.id) return; // 无 id（没注册进物品总表）的条目跳过
+      this.bag[Math.floor(index / bagCol)][index % bagCol] = { id: item.id, count: 1 };
     });
   }
 }
