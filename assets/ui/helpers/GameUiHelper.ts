@@ -55,6 +55,7 @@ import {
   createRolePreviewImage,
   dialogFrame,
   equipmentBorderLayout,
+  equipmentDetailBackgroundLayout,
   equipmentSlotLayout,
   goodDetailLayout,
   hoverTipLayout,
@@ -71,6 +72,7 @@ import {
   warSoulDialogLayout,
 } from "../../configs/hudLayout";
 import { borders, getEquipmentBorderKey } from "../../configs/border";
+import { detailBackgrounds, getEquipmentDetailBackgroundKey } from "../../configs/background";
 
 //#region 类型定义
 
@@ -1032,6 +1034,30 @@ export default class GameUiHelper {
   }
 
   /**
+   * 给装备详情弹窗挂上背景动画（仅装备有；前后缀 → 背景的映射与特殊装备的自定义表在 configs/background）
+   *
+   * 背景是循环播放的帧序列目录动画（resources/backgrounds），直接换**弹窗自身**的 spriteFrame：
+   * 不是子节点 —— 弹窗是 Layout 容器，背景若作为子节点会被当成一行参与排版、还会撑高容器；
+   * 换自身帧则完全不吃排版，且弹窗尺寸由内容自适应（ResizeMode.CONTAINER）、
+   * 精灵 sizeMode 为 CUSTOM，背景始终铺满整个面板。
+   * 精灵的 trim 必须保持 createSprite 的缺省 false：这批帧按 auto-trim 导入（裁剪 + 非 0 offset），
+   * trim=false 时引擎按 offset 把裁剪内容贴回原始画布 —— 各帧画布一致（单测有断言）、画面帧间不跳；
+   * 若改成 trim=true 则只画裁剪矩形并拉伸到面板，每帧裁剪范围不同会导致画面抖动。
+   * 加载完成前先显示静态底图（创建时已设），
+   * 未分配到背景的装备（含非装备物品）保持静态底图不变
+   *
+   * @param dialog 详情弹窗节点
+   * @param good 物品数据（非装备或没分配到背景时不显示）
+   */
+  static applyEquipmentDetailBackground(dialog: Node, good: Goods) {
+    if (!isEquipment(good)) return;
+    const backgroundKey = getEquipmentDetailBackgroundKey(good);
+    const resource = backgroundKey ? detailBackgrounds.get(backgroundKey) : null;
+    if (!resource) return;
+    AnimationHelper.playLoopDir(`${equipmentDetailBackgroundLayout.namePrefix}${backgroundKey}`, dialog, resource.dir, equipmentDetailBackgroundLayout.frameRate);
+  }
+
+  /**
    * 创建物品详情弹窗（鼠标悬停在物品上时显示，背包格子与身上装备槽共用）
    *
    * 摆放：位置一律用**屏幕中心系坐标**（锚点世界坐标 − UI 层世界坐标，与 UI 层各常驻组件同口径），
@@ -1048,6 +1074,8 @@ export default class GameUiHelper {
    */
   static createGoodDetailDialog(good: Goods, anchor: Node) {
     const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, new Vec2(), goodDetailLayout.size);
+    // 装备详情背景（前后缀决定的品质背景动画）：换弹窗自身精灵的帧，加载完成前先显示静态底图
+    this.applyEquipmentDetailBackground(dialog, good);
 
     const layout = dialog.addComponent(Layout);
     layout.type = Layout.Type.GRID;

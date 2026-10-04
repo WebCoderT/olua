@@ -341,6 +341,37 @@ export default class AnimationHelper {
   }
 
   /**
+   * 循环播放一个帧序列目录的全部帧 —— 装备详情背景这类「常驻循环」的目录动画用
+   *
+   * 与 playLoopAtlas 的区别：帧来源是**目录**（resources/backgrounds 下逐帧 png，没有图集），
+   * 走 loadFrames 的目录缓存；片段同样进 loopClipCache（键 = 目录|帧率，目录路径与图集路径不会撞键），
+   * 同一背景被反复悬停时共用同一个片段，只在首次加载时付出成本
+   *
+   * @param name 动画名称（addClip 的别名，同一节点内需唯一）
+   * @param node 播放动画的节点（须已有 Sprite：片段按帧替换 sprite.spriteFrame）
+   * @param dirSrc 帧序列目录（resources 下的路径，不含扩展名）
+   * @param frameRate 每秒帧数
+   */
+  static playLoopDir(name: string, node: Node, dirSrc: string, frameRate: number) {
+    const animate = this.useAnimation(node);
+    const cacheKey = `${dirSrc}|${frameRate}`;
+    this.loadFrames(dirSrc).then((spriteFrames) => {
+      // 装载前校验：节点/动画组件可能已被销毁（详情弹窗随鼠标移出即销毁）
+      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      let clip = this.loopClipCache.get(cacheKey);
+      if (!clip) {
+        clip = AnimationClip.createWithSpriteFrames(spriteFrames, this.normalizeFrameRate(frameRate));
+        clip.wrapMode = AnimationClip.WrapMode.Loop;
+        clip.enableTrsBlending = false;
+        clip.name = name;
+        this.loopClipCache.set(cacheKey, clip);
+      }
+      animate.addClip(clip, name);
+      animate.play(name);
+    });
+  }
+
+  /**
    * 使用已有帧列表播放一次后销毁节点（图集帧等非目录来源，如技能特效）
    * @param name 动画名称
    * @param node 播放动画的节点

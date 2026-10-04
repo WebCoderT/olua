@@ -6,6 +6,7 @@ import { npcs } from "../../configs/npc";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../configs/role";
 import { getEquipment } from "../../configs/items";
 import { getAssignedBorders } from "../../configs/border";
+import { getAssignedDetailBackgrounds } from "../../configs/background";
 import { getText } from "../../configs/texts";
 import { Role } from "../../entities/Role";
 import { AnimationKind, SpeedRate } from "../../types/animation";
@@ -49,6 +50,8 @@ export default class PreloadManager {
     // 装备边框图集：只有前后缀映射表里用到的那十几张、都是小图集，不占进度条；
     // 不预加载的话，第一次打开背包/角色弹窗时边框要等一拍才出现（加载一次后进缓存，之后立即复用）
     await this.preloadBorders();
+    // 装备详情背景帧序列：同样只有前后缀映射表里用到的那十几个目录、都是小图，不占进度条
+    await this.preloadDetailBackgrounds();
     const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapAsset), ...this.getRoleAnimationTasks(role)]);
     await this.runTasks(tasks, onProgress, loadingConfig.mapRatio);
   }
@@ -104,6 +107,13 @@ export default class PreloadManager {
     const assigned = getAssignedBorders();
     await Promise.all(assigned.map((resource) => AnimationHelper.loadFramesFromAtlas(resource.atlas)));
     console.log(`[PreloadManager] 装备边框预加载完成（${assigned.length} 张图集）：${assigned.map((resource) => resource.key).join("、")}`);
+  }
+
+  /** 预加载装备详情背景帧序列目录（configs/background 的前后缀映射表用到的全部背景；帧进 AnimationHelper 缓存，重复调用只加载一次） */
+  private static async preloadDetailBackgrounds() {
+    const assigned = getAssignedDetailBackgrounds();
+    await Promise.all(assigned.map((resource) => AnimationHelper.loadFrames(resource.dir)));
+    console.log(`[PreloadManager] 装备详情背景预加载完成（${assigned.length} 个目录）：${assigned.map((resource) => resource.key).join("、")}`);
   }
 
   //#endregion

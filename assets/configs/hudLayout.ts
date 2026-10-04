@@ -6,6 +6,7 @@
  * - layout/dialogs.ts  各类弹窗（通用弹窗框、战魂、大陆传送官、角色信息、背包、技能、快捷键设置、死亡、物品详情）
  * - layout/panels.ts   角色信息弹窗内的面板零件（装备槽分组 / 背包网格 / 属性列表 / 内观）
  * - layout/borders.ts  装备边框显示（外框尺寸与帧率；素材与前后缀映射见 configs/border）
+ * - layout/backgrounds.ts 装备详情背景显示（帧率；素材与前后缀映射见 configs/background）
  * - layout/scenes.ts   场景界面（登录 / 选角 / 加载）
  * - layout/images.ts   图片与字体地址（取图函数 + 具名图片表 uiImages）
  * - layout/sizes.ts    跨界面复用的尺寸与字号（uiSize）
@@ -24,6 +25,7 @@ export * from "./layout/hud";
 export * from "./layout/dialogs";
 export * from "./layout/panels";
 export * from "./layout/borders";
+export * from "./layout/backgrounds";
 export * from "./layout/scenes";
 export * from "./layout/images";
 export * from "./layout/sizes";
