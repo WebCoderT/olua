@@ -171,6 +171,8 @@ export default class AnimationHelper {
 
   /** 图集动作帧缓存：图集路径|动作名 -> 该动作的帧列表（空数组同样缓存以免反复请求） */
   private static atlasActionFrameCache = new Map<string, SpriteFrame[]>();
+  /** 循环图集动画的片段缓存：图集路径|帧率 -> 片段（同一图集的多个节点共用同一个片段） */
+  private static loopClipCache = new Map<string, AnimationClip>();
 
   /**
    * 取一个图集里某个动作的全部帧（帧名含「/动作名/」即命中，如 wing/100001/stand/40000.png）
@@ -250,10 +252,14 @@ export default class AnimationHelper {
     return frames.sort((a, b) => this.frameOrder(a) - this.frameOrder(b));
   }
 
-  /** 帧序号：帧名最后一段去掉扩展名后的数字 */
+  /**
+   * 帧序号：帧名最后一段去掉扩展名后的数字
+   * 帧名没有「/」分段时（如边框图集的 sfx_30123_0_0007）退回按**末尾连续数字**解析：
+   * 整段拿 Number 会得到 NaN（序号前面还挂着图集名），排序全变 0，只能赌图集的原始帧序
+   */
   private static frameOrder(frame: SpriteFrame) {
     const order = Number((frame.name.split("/").pop() ?? "").replace(/\.[^.]*$/, ""));
-    return order > 0 ? order : 0;
+    return order > 0 ? order : this.nameOrder(frame.name);
   }
 
   //#endregion
@@ -301,6 +307,37 @@ export default class AnimationHelper {
     if (!spriteFrames.length) return;
     const animate = this.useAnimation(node);
     this.play(name, node, animate, spriteFrames, spriteFrames.length / this.normalizeFrameRate(frameRate), AnimationClip.WrapMode.Loop);
+  }
+
+  /**
+   * 循环播放一张图集（plist）的全部帧 —— 边框这类「常驻循环」的装饰动画用
+   *
+   * 与 playLoopWithFrames 的区别：帧与**片段**都走缓存（同一图集不重复加载、不重复切片段），
+   * 同一张图集被几十个格子/槽位引用时全部共用同一批帧与同一个片段，只在首次加载时付出成本；
+   * 异步加载完成前节点保持空白（加载失败只报一次错，见 loadFramesFromAtlas 的空结果缓存）
+   *
+   * @param name 动画名称（addClip 的别名，同一节点内需唯一）
+   * @param node 播放动画的节点
+   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名）
+   * @param frameRate 每秒帧数
+   */
+  static playLoopAtlas(name: string, node: Node, atlasSrc: string, frameRate: number) {
+    const animate = this.useAnimation(node);
+    const cacheKey = `${atlasSrc}|${frameRate}`;
+    this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
+      // 装载前校验：节点/动画组件可能已被销毁（背包刷新、弹窗关闭都会重建边框）
+      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      let clip = this.loopClipCache.get(cacheKey);
+      if (!clip) {
+        clip = AnimationClip.createWithSpriteFrames(spriteFrames, this.normalizeFrameRate(frameRate));
+        clip.wrapMode = AnimationClip.WrapMode.Loop;
+        clip.enableTrsBlending = false;
+        clip.name = name;
+        this.loopClipCache.set(cacheKey, clip);
+      }
+      animate.addClip(clip, name);
+      animate.play(name);
+    });
   }
 
   /**

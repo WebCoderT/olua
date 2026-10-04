@@ -66,9 +66,11 @@ function findTsc() {
 /**
  * 编译配置表并返回产物目录（同一进程内重复调用同一名字会重建沙箱）
  * @param {string} sandboxName 沙箱目录名（os.tmpdir() 下），各脚本互不干扰
+ * @param {string[]} [extraEntries] 额外要一起编译的配置入口（assets 下的相对路径，
+ *   如 "configs/border.ts"——不依赖 items.ts 的配置文件，单测要用它就得单独列进来）
  * @returns {string} CommonJS 产物目录（里面有 configs/items.js 等）
  */
-function prepare(sandboxName) {
+function prepare(sandboxName, extraEntries = []) {
   const tscPath = findTsc();
   if (!tscPath) {
     console.error("找不到 tsc：请在工程里装 typescript，或用环境变量指定，例如");
@@ -103,7 +105,10 @@ function prepare(sandboxName) {
           paths: { cc: [path.join(PROJECT_ROOT, "temp/declarations/cc.d.ts")] },
           types: [],
         },
-        files: [path.join(PROJECT_ROOT, "assets/configs/items.ts")],
+        files: [
+          path.join(PROJECT_ROOT, "assets/configs/items.ts"),
+          ...extraEntries.map((entry) => path.join(PROJECT_ROOT, "assets", entry)),
+        ],
       },
       null,
       2,

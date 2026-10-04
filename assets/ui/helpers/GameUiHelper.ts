@@ -14,6 +14,7 @@ import {
   resources,
   Size,
   Sprite,
+  SpriteFrame,
   tween,
   UIOpacity,
   UITransform,
@@ -49,10 +50,11 @@ import { clearChildren } from "../utils/node/NodeTree";
 import { getAnchoredPosition, getVisibleSize } from "../utils/layout/ScreenLayout";
 import {
   avatarImage,
-  bottomBarLayout,
   bagGridLayout,
+  bottomBarLayout,
   createRolePreviewImage,
   dialogFrame,
+  equipmentBorderLayout,
   equipmentSlotLayout,
   goodDetailLayout,
   hoverTipLayout,
@@ -68,6 +70,7 @@ import {
   uiTheme,
   warSoulDialogLayout,
 } from "../../configs/hudLayout";
+import { borders, getEquipmentBorderKey } from "../../configs/border";
 
 //#region 类型定义
 
@@ -949,6 +952,10 @@ export default class GameUiHelper {
   static createGood(cell: Node, good: Goods) {
     const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
     cell.addChild(sprite);
+    // 装备边框（前后缀决定的品质光效，背包与身上装备槽同一入口）：挂在**图标**节点上而不是格子下——
+    // 拖动压暗源格图标时边框一起变暗（边框是图标的子节点、随 UIOpacity 一起变淡），
+    // 格子刷新销毁图标时边框也随子节点一起销毁，不必单独清理
+    this.applyEquipmentBorder(sprite, good);
     sprite.on(
       Node.EventType.MOUSE_ENTER,
       () => {
@@ -968,6 +975,60 @@ export default class GameUiHelper {
       },
       this,
     );
+  }
+
+  /**
+   * 给物品图标挂上装备边框（仅装备有；前后缀 → 边框的映射与特殊装备的自定义表在 configs/border）
+   *
+   * 边框是循环播放的图集帧动画（resources/borders），挂在物品图标节点上、画在图标之上；
+   * 各边框图集的原始尺寸不一（6 个尺寸家族），帧加载完成后按首帧原始宽高把节点缩进统一的外框
+   * （equipmentBorderLayout.size，contain 保持各自宽高比），再交给 playLoopAtlas 循环播放
+   *
+   * @param icon 物品图标节点（边框作为它的子节点：随图标一起被压暗/销毁）
+   * @param good 物品数据（非装备或没分配到边框时不显示）
+   */
+  static applyEquipmentBorder(icon: Node, good: Goods) {
+    if (!isEquipment(good)) return;
+    const borderKey = getEquipmentBorderKey(good);
+    const resource = borderKey ? borders.get(borderKey) : null;
+    if (!resource) return;
+    const border = this.createEquipmentBorder(borderKey);
+    icon.addChild(border);
+    // 帧异步加载：加载完成后先定尺寸再播放（期间节点可能已被销毁——背包刷新、弹窗关闭都会重建边框）
+    AnimationHelper.loadFramesFromAtlas(resource.atlas).then((frames) => {
+      if (!isValid(border) || !frames.length) return;
+      this.fitNodeToBox(border, frames[0], equipmentBorderLayout.size);
+      AnimationHelper.playLoopAtlas(border.name, border, resource.atlas, equipmentBorderLayout.frameRate);
+    });
+  }
+
+  /**
+   * 创建装备边框零件（空精灵 + 动画组件，帧由 applyEquipmentBorder 异步装载）
+   *
+   * trim 必须为 true：这批边框图集「未裁剪但每帧 offset 全部非 0」，而 offset 只在 trim=false 的
+   * 逆向补边路径里生效（引擎 simple 装配器按 trimmedBorder 平移整帧画面，非 0 的 offset 会把
+   * 边框整体挪出节点框）；trim=true 时画面取 rect 全帧、完全不看 offset，未裁剪素材的 rect
+   * 尺寸 == 原始尺寸，正好铺满节点框且不会变形（test-equipment-border.cjs 有断言盯住这一点）
+   */
+  static createEquipmentBorder(borderKey: string) {
+    const border = UiHelper.createSprite(`${equipmentBorderLayout.namePrefix}${borderKey}`, "", new Vec2(), equipmentBorderLayout.size);
+    const sprite = border.getComponent(Sprite)!;
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = true;
+    border.addComponent(Animation);
+    return border;
+  }
+
+  /**
+   * 把节点的内容尺寸按 contain 缩进外框（保持素材宽高比，最长的边贴到外框）
+   * 用于原始尺寸各异的图集动画（边框 6 个尺寸家族共用一个显示口径，见 configs/layout/borders）
+   */
+  static fitNodeToBox(node: Node, frame: SpriteFrame, box: Size) {
+    const source = frame.originalSize;
+    const transform = node.getComponent(UITransform);
+    if (!source.width || !source.height || !transform) return;
+    const scale = Math.min(box.width / source.width, box.height / source.height);
+    transform.setContentSize(source.width * scale, source.height * scale);
   }
 
   /**

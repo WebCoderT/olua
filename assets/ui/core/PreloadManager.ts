@@ -5,6 +5,7 @@ import { monsters } from "../../configs/monster";
 import { npcs } from "../../configs/npc";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../configs/role";
 import { getEquipment } from "../../configs/items";
+import { getAssignedBorders } from "../../configs/border";
 import { getText } from "../../configs/texts";
 import { Role } from "../../entities/Role";
 import { AnimationKind, SpeedRate } from "../../types/animation";
@@ -45,6 +46,9 @@ export default class PreloadManager {
   static async preloadGame(mapSrc: string, role: Role | null, onProgress?: PreloadProgress) {
     onProgress?.(0, getText("progress_map"));
     const mapAsset = await loadResourceAsync<TiledMapAsset>(mapSrc, TiledMapAsset);
+    // 装备边框图集：只有前后缀映射表里用到的那十几张、都是小图集，不占进度条；
+    // 不预加载的话，第一次打开背包/角色弹窗时边框要等一拍才出现（加载一次后进缓存，之后立即复用）
+    await this.preloadBorders();
     const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapAsset), ...this.getRoleAnimationTasks(role)]);
     await this.runTasks(tasks, onProgress, loadingConfig.mapRatio);
   }
@@ -93,6 +97,13 @@ export default class PreloadManager {
       loaded.add(key);
       return true;
     });
+  }
+
+  /** 预加载装备边框图集（configs/border 的前后缀映射表用到的全部边框；帧进 AnimationHelper 缓存，重复调用只加载一次） */
+  private static async preloadBorders() {
+    const assigned = getAssignedBorders();
+    await Promise.all(assigned.map((resource) => AnimationHelper.loadFramesFromAtlas(resource.atlas)));
+    console.log(`[PreloadManager] 装备边框预加载完成（${assigned.length} 张图集）：${assigned.map((resource) => resource.key).join("、")}`);
   }
 
   //#endregion

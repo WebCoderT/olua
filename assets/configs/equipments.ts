@@ -100,6 +100,24 @@ function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): B
 }
 
 /**
+ * 拼装备变体的物品 id（基础件 key + 前后缀序号；变体 key 的**唯一来源**，反解见 getEquipmentBaseKey）
+ * 基础件（普通的·人级，前后缀全 0）沿用原 key，其余组合为 `${key}_p${前缀}s${后缀}`（如 cloth_1_p3s2）
+ */
+export function getEquipmentVariantKey(key: string, prefix: number, suffix: number): string {
+  return prefix === 0 && suffix === 0 ? key : `${key}_p${prefix}s${suffix}`;
+}
+
+/**
+ * 取装备 id 的基础件 key（`getEquipmentVariantKey` 的反解：去掉末尾的 `_pXsY` 变体段，非变体原样返回）
+ * 用途：给「某件装备的全部变体」做统一配置时按基础件 key 命中（如 configs/border 的自定义边框表）
+ */
+export function getEquipmentBaseKey(id: string): string {
+  const match = id.match(/_(p\d+s\d+)$/);
+  // 掐掉的是整段命中（含前面的下划线），不是捕获组 —— 否则会留下一个悬挂的下划线
+  return match ? id.slice(0, -match[0].length) : id;
+}
+
+/**
  * 装备数据表 → 装备配置 Map
  *
  * **key 只做关联**：背包 / 掉落表 / 职业初始装备（configs/role.getNewRoleEquipments）都用它引用，
@@ -134,7 +152,7 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
     for (let p = 0; p < equipmentPrefixRates.length; p++) {
       for (let s = 0; s < equipmentSuffixRates.length; s++) {
         const rate = equipmentPrefixRates[p] * equipmentSuffixRates[s];
-        const id = p === 0 && s === 0 ? key : `${key}_p${p}s${s}`;
+        const id = getEquipmentVariantKey(key, p, s);
         map.set(id, {
           ...base,
           ...scaleEquipmentAttributes(base, rate),
