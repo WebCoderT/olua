@@ -123,6 +123,8 @@
 | 想改什么 | 改哪里 |
 | --- | --- |
 | 数值/成长/掉落/装备/怪物/技能/地图 | 对应域配置 `configs/{growth,drop,equipments,monster,skill,map,…}.ts` |
+| 装备边框（哪个组合用哪张 / 特殊装备自定义） | `configs/border.ts`（`prefixSuffixBorderData` / `customEquipmentBorderData`，显示口径在 `configs/layout/borders.ts`） |
+| 装备详情背景（哪个组合用哪个 / 特殊装备自定义） | `configs/background.ts`（`prefixSuffixDetailBackgroundData` / `customEquipmentDetailBackgroundData`，帧率在 `configs/layout/backgrounds.ts`） |
 | 玩家看到的任何字（提示、校验原因、标签、悬停详情、加载进度） | `configs/texts.ts`（模板写 `{占位符}`，取值用 `getText(key, params)`） |
 | 界面位置/尺寸/图片/字号 | `configs/layout/{hud,dialogs,panels,scenes}.ts`（barrel：`configs/hudLayout`） |
 | 通用零件长相（空节点调试边框、输入框占位色、飘字配色与时长） | `configs/layout/theme.ts`（`uiTheme`） |

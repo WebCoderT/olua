@@ -54,17 +54,21 @@
 
 ![战魂系统](public/war-soul.png)
 
+**装备品质边框与详情背景（背包 15 种前后缀品质边框；悬停详情弹窗显示按品质切换的背景动画）**
+
+![装备品质边框与详情背景](public/border_bg.png)
+
 ## 目录结构
 
 > 约定：**核心代码只做「怎么跑」，一切可调的东西都在 `assets/configs`**——
 > 数值、文案、布局、配色、时长、资源路径都不写在逻辑里。
 > 自查：`node tools/audit-config-leak.cjs`（扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
 
-- assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status 等）
+- assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background 等）
   - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）
   - configs/bottomNav：底部功能入口表（名称 / 图标 / 解锁等级 / 快捷键）
-  - configs/layout：UI 布局与样式（hud / dialogs / panels / scenes / images / sizes / theme）
-- assets/types：纯类型声明（common/role/animation/good/skill/map/monster/drop/status）
+  - configs/layout：UI 布局与样式（hud / dialogs / panels / scenes / borders / backgrounds / images / sizes / theme）
+- assets/types：纯类型声明（common/role/animation/good/skill/map/monster/drop/status/border/background）
 - assets/entities：运行时实体（Role）
 - assets/skills：技能行为实现（技能实现只依赖 SkillContext，不反查全局）
 - assets/ui：界面脚本
