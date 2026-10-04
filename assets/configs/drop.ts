@@ -1,17 +1,17 @@
 import { EQUIPMENT_TYPE } from "../types/good";
-import type { DropEntry, DropSource, DropTable } from "../types/drop";
+import type { DropEntry, DropPicks, DropSource, DropTable } from "../types/drop";
 import type { MonsterTier } from "../types/monster";
 import { getNearestEquipmentId } from "./equipments";
 
 /**
- * 掉落配置
+ * 掉落配置（兜底与具名表）
  *
- * 三层结构：
+ * **实际掉落以 configs/monsterDrops 的「每只怪独立掉落表」为准**，本文件负责：
  * 1. dropData：具名掉落表（字符串 id 引用，适合多怪物复用同一套掉落）
- * 2. monsterDrops(level, tier)：按怪物等级/定位生成**每只怪专属**的掉落条目数组，
- *    药品档位、材料种类、装备就近取件都随等级走
- * 3. 怪物条目里的 drops：直接写数组（每件物品单独配 weight/chance/count，推荐）
- *    或具名表 id，写了就完全覆盖生成的数组；抽取次数独立配 dropPicks（默认 1/2/3）
+ * 2. monsterDrops(level, tier)：按等级/定位**兜底生成**条目数组——只在某只怪既没有
+ *    独立掉落表、条目里也没写 drops 时才会用到（例如新增怪物后还没来得及铺掉落）
+ * 3. 怪物条目里的 drops：直接写数组（每件物品单独配 weight/chance/count）
+ *    或具名表 id，写了就完全覆盖上述两级；抽取次数独立配 dropPicks（默认 1/2/3）
  */
 const dropData: Array<DropTable & { id: string }> = [
   /** 普通怪物掉落：少量药品/材料，偶出装备 */
@@ -65,7 +65,7 @@ for (const table of dropData) {
 
 /** 未配置掉落的怪物使用的默认掉落（保证任何怪物都能掉东西） */
 export const defaultDropTable: DropTable = {
-  picks: 1,
+  picks: [1, 2],
   entries: [
     { goodId: "drug_hp_1", weight: 40, count: [1, 2] },
     { goodId: "material_hide", weight: 30, count: [1, 2] },
@@ -76,10 +76,11 @@ export const defaultDropTable: DropTable = {
 /**
  * 解析怪物掉落配置为掉落表
  * @param source 具名表 id / 掉落表对象 / 掉落条目数组；缺省使用默认掉落表
- * @param picks 抽取次数：仅 source 为条目数组时生效（数组本身不带次数，
- *              按怪物定位的默认次数由 configs/monster 的 dropPicks 传入）
+ * @param picks 掉落件数：数字 = 固定件数，[最小, 最大] = 件数区间；
+ *              仅 source 为条目数组时生效（数组本身不带件数，
+ *              按怪物定位的默认件数由 configs/monster 的 dropPicks 传入）
  */
-export function resolveDropTable(source?: DropSource, picks?: number): DropTable {
+export function resolveDropTable(source?: DropSource, picks?: DropPicks): DropTable {
   if (!source) return defaultDropTable;
   if (typeof source === "string") return dropTables.get(source) ?? defaultDropTable;
   if (Array.isArray(source)) return { picks: picks ?? 1, entries: source };
@@ -87,30 +88,16 @@ export function resolveDropTable(source?: DropSource, picks?: number): DropTable
 }
 
 /**
- * 按怪物等级与定位生成专属掉落表（每只怪一份，条目权重逐条可调）
+ * **兜底**：按怪物等级与定位生成掉落条目数组
  *
- * 分档规则：
- * - 药品：≤20 级小药、21~40 中药、41+ 大药（蓝药只有两档，21+ 用中药）
- * - 材料：兽皮/粗布/药草常掉，铁矿 10 级起、宝石 21 级起（概率掉）
- * - 装备：按怪物等级就近取件（getNearestEquipmentId），定位越高概率与数量越好
- *   · normal：鞋子 3% · elite：武器/头盔 12% · boss：武器/衣服 60%、戒指 40%
- * - 抽取次数：normal 1 / elite 2 / boss 3
- *
- * 想改某只怪的掉落 → 在 configs/monster 该条目里写 drops（数组或具名表 id）完全覆盖；
- * 想整体调节奏（更肝/更欧）→ 改这里的权重与概率。
- */
-/**
- * 生成怪物专属掉落条目数组（每只怪一份，条目权重逐条可调）
+ * 正常流程不会走到这里——每只怪的掉落已逐条配置在 configs/monsterDrops。
+ * 只有「新增了怪物但还没铺独立掉落表」时才用它，保证任何怪都能掉东西。
  *
  * 分档规则：
  * - 药品：≤20 级小药、21~40 中药、41+ 大药（蓝药只有两档，21+ 用中药）
  * - 材料：兽皮/粗布/药草常掉，铁矿 10 级起、宝石 21 级起（概率掉）
  * - 装备：按怪物等级就近取件（getNearestEquipmentId），定位越高概率与权重越高
  *   · normal：鞋子 3% · elite：武器/头盔 12% · boss：武器/衣服 60%、戒指 40%
- *
- * 想改某只怪的掉落 → 在 configs/monster 该条目里写 drops（数组或具名表 id）完全覆盖；
- * 想改抽取次数 → 条目里写 dropPicks（普通/精英/BOSS 默认 1/2/3，见 configs/monster 的 builder）；
- * 想整体调节奏（更肝/更欧）→ 改这里的权重与概率。
  */
 export function monsterDrops(level: number, tier: MonsterTier = "normal"): DropEntry[] {
   const hpDrug = level <= 20 ? "drug_hp_1" : level <= 40 ? "drug_hp_2" : "drug_hp_3";
@@ -145,7 +132,7 @@ export function monsterDrops(level: number, tier: MonsterTier = "normal"): DropE
   return entries;
 }
 
-/** 怪物定位 → 默认掉落抽取次数（普通 1 / 精英 2 / BOSS 3） */
-export function monsterDropPicks(tier: MonsterTier = "normal"): number {
-  return tier === "boss" ? 3 : tier === "elite" ? 2 : 1;
+/** 怪物定位 → 兜底掉落件数区间（普通 1~3 / 精英 2~6 / BOSS 3~10） */
+export function monsterDropPicks(tier: MonsterTier = "normal"): DropPicks {
+  return tier === "boss" ? [3, 10] : tier === "elite" ? [2, 6] : [1, 3];
 }

@@ -1,7 +1,7 @@
 import { Size, Vec2, Vec3 } from "cc";
 import type { BattleAttributes, CommonAttributes } from "./common";
 import type { ACTION, DIRECTION, SpeedRate } from "./animation";
-import type { DropSource } from "./drop";
+import type { DropPicks, DropSource } from "./drop";
 import type { SkillId } from "./skill";
 
 /**
@@ -62,12 +62,15 @@ export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   /** 怪物技能（未配置则不显示技能） */
   skills?: SkillId[];
   /**
-   * 掉落物品列表：默认由 configs/drop.monsterDrops(level, tier) 按等级生成，
-   * 条目里直接写数组（每件物品单独配 weight/chance/count）或具名表 id 即可完全覆盖
+   * 掉落物品列表：**默认取 configs/monsterDrops 里该 key 的独立掉落表**（每只怪一份，
+   * 条目逐条配 weight/chance/count）；条目里直接写数组或具名表 id 可完全覆盖本表
    */
   drops?: DropSource;
-  /** 掉落抽取次数（默认按定位 1/2/3，见 monsterDrops；条目里可单独覆盖） */
-  dropPicks?: number;
+  /**
+   * 掉落件数（= 抽取次数）：数字 = 固定件数，[最小, 最大] = 件数区间（例 [1, 10] 掉 1~10 件，
+   * 每次抽取独立随机、可重复命中同一条目）；默认取独立掉落表里的 picks，写了则覆盖
+   */
+  dropPicks?: DropPicks;
 }
 
 /** 生成的怪物接口 */

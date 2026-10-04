@@ -3,6 +3,7 @@ import { ACTION } from "../types/animation";
 import { MonsterConfig, MonsterData } from "../types/monster";
 import { monsterStats } from "./growth";
 import { monsterDropPicks, monsterDrops } from "./drop";
+import { getMonsterDropConfig } from "./monsterDrops";
 
 /**
  * 怪物数据表
@@ -15,6 +16,9 @@ import { monsterDropPicks, monsterDrops } from "./drop";
  * - 六项攻防与 maxHp：由 monsterStats(level, tier) 按等级生成，不用手写
  *   · 想单独改某只怪（法系怪要魔法攻击、特殊怪要更高血量）→ 直接在条目里覆盖同名字段
  *   · 想整体调手感（怪更耐打 / 打人更疼）→ 改 configs/growth 的 monsterBalance / roleGrowth
+ *
+ * **掉落**：每只怪的掉落列表独立配置在 configs/monsterDrops（key 与这里一一对应，
+ * 条目里逐条配 weight/chance/count）；这里只做「条目里的 drops/dropPicks 覆盖 > 独立掉落表 > 兜底生成」三级取值。
  */
 
 /**
@@ -3427,12 +3431,14 @@ const monsterData: MonsterData[] = [
 export const monsters = new Map<string, MonsterConfig>();
 for (const data of monsterData) {
   const { key, tier, drops, dropPicks, ...rest } = data;
+  // 掉落优先取「每只怪独立掉落表」（configs/monsterDrops）；条目里写了 drops/dropPicks 则再覆盖；
+  // 两者都没有（例如新加的怪还没铺掉落）→ 退回 configs/drop 的按等级兜底生成器
+  const dropConfig = getMonsterDropConfig(key);
   monsters.set(key, {
     ...monsterStats(data.level, tier),
     ...rest,
-    // 每只怪专属掉落：按等级/定位生成条目数组（条目里写了 drops 则以条目为准）
-    drops: drops ?? monsterDrops(data.level, tier),
-    dropPicks: dropPicks ?? monsterDropPicks(tier),
+    drops: drops ?? dropConfig?.entries ?? monsterDrops(data.level, tier),
+    dropPicks: dropPicks ?? dropConfig?.picks ?? monsterDropPicks(tier),
   });
 }
 

@@ -2,8 +2,9 @@ import { isValid, Node, UITransform, Vec2, Vec3 } from "cc";
 import { resolveDropTable } from "../../configs/drop";
 import { getGoodCursorStyle, cursorConfig } from "../../configs/cursor";
 import { getItem } from "../../configs/items";
-import type { DropResult, DropSource } from "../../types/drop";
+import type { DropPicks, DropResult, DropSource } from "../../types/drop";
 import type { Goods } from "../../types/good";
+import { scatterDropPositions } from "../utils/drop/DropScatter";
 import { rollDropTable } from "../utils/drop/DropRoller";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
@@ -26,8 +27,6 @@ interface DropItem {
 export default class DropManager {
   /** 已生成掉落物：掉落物节点 -> 掉落数据 */
   private static dropMap = new Map<Node, DropItem>();
-  /** 一次掉落多件时的散落半径（避免完全重叠，只散开一半高度） */
-  private static readonly SCATTER_RADIUS = 36;
   /**
    * 自动拾取半径：角色节点原点即脚底，与掉落物节点距离小于该值视为踩在物品上
    * 取值 = 掉落物图标半宽(20) + 脚部容差(20)
@@ -51,30 +50,30 @@ export default class DropManager {
    * 结算一次掉落并在指定位置生成掉落物
    * @param source 怪物掉落配置（条目数组 / 具名掉落表 id / 内联掉落表，缺省用默认掉落表）
    * @param position 掉落位置（一般取怪物死亡时的世界坐标）
-   * @param picks 抽取次数：仅 source 为条目数组时生效（怪物按定位传 dropPicks）
+   * @param picks 掉落件数：数字 = 固定件数，[最小, 最大] = 件数区间（例 [1, 10] 掉 1~10 件）；
+   *              仅 source 为条目数组时生效（怪物按自己的掉落配置传 dropPicks）
    * @returns 本次掉落结果（便于日志/统计；为空表示没掉东西）
    */
-  static drop(source: DropSource | undefined, position: Vec3, picks?: number): DropResult[] {
+  static drop(source: DropSource | undefined, position: Vec3, picks?: DropPicks): DropResult[] {
     const results = rollDropTable(resolveDropTable(source, picks));
+    // 先算全部结果，再统一铺散落点：保证任意两件掉落物都不落在同一点上
+    const offsets = scatterDropPositions(results.length);
     results.forEach((result, index) => {
       const good = getItem(result.goodId);
       if (!good) {
         console.warn(`掉落物品不存在：${result.goodId}`);
         return;
       }
-      this.createDropNode(good, result.count, position, index, results.length);
+      this.createDropNode(good, result.count, position, offsets[index]);
     });
     return results;
   }
 
-  /** 生成掉落物节点并挂载到掉落层 */
-  private static createDropNode(good: Goods, count: number, position: Vec3, index: number, total: number) {
+  /** 生成掉落物节点并挂载到掉落层（offset 为相对落点的散落偏移，保证各掉落物不重叠） */
+  private static createDropNode(good: Goods, count: number, position: Vec3, offset: Vec2) {
     const { node } = GameUiHelper.createDropItem(good, count);
     LayerManager.addToDropLayer(node);
-    // 多件掉落时围绕落点均匀散开，单件直接落在落点
-    const radius = total > 1 ? this.SCATTER_RADIUS : 0;
-    const angle = (Math.PI * 2 * index) / Math.max(1, total);
-    node.setWorldPosition(position.x + Math.cos(angle) * radius, position.y + Math.sin(angle) * radius * 0.5, position.z);
+    node.setWorldPosition(position.x + offset.x, position.y + offset.y, position.z);
     this.dropMap.set(node, { good, count });
     // 鼠标移到掉落物上时显示该物品大类对应的指针颜色（拾取/换图时注销，见 takeDrop / reset）
     CursorManager.registerHover(node, cursorConfig.priority.drop, () => getGoodCursorStyle(good.type));
