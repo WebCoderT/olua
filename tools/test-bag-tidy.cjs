@@ -2,10 +2,8 @@
 /**
  * 背包「一键整理」回归单测（跑的是**真实配置表与真实搬运函数**，不是复刻）
  *
- * 做法：把 `assets/configs/items.ts`（连同它依赖的 equipments / drug / material / growth）编译成
- * CommonJS 到临时目录，再用一个只实现 `Vec2` / `Vec3` / `Size` / `Color` 的 `cc` 垫片顶替引擎 ——
- * 配置表只用到这四个纯数据类，没有引擎行为，于是 node 里就能直接调用真实的
- * `getItem` / `compareBagGoods` / `tidyBagGrid` 跑断言。
+ * 编译沙箱（把 configs 编成 CommonJS + cc 垫片）见 tools/lib/configs-sandbox.cjs ——
+ * 于是 node 里就能直接调用真实的 `getItem` / `compareBagGoods` / `tidyBagGrid` 跑断言。
  *
  * 盯的不变量（改整理算法后必须全绿）：
  * · 行列数与入参一致          · 物品一件不丢（按 id 汇总数量守恒）
@@ -18,123 +16,22 @@
  * 用法：node tools/test-bag-tidy.cjs
  * 找不到 tsc 时可用环境变量指定：TSC=/path/to/typescript/bin/tsc node tools/test-bag-tidy.cjs
  */
-const fs = require("fs");
-const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
-
-const PROJECT_ROOT = path.resolve(__dirname, "..");
-const SANDBOX = path.join(os.tmpdir(), "olua-bag-tidy");
-const OUT_DIR = path.join(SANDBOX, "out");
-
-//#region cc 垫片（只给 node 跑 configs 用：四个纯数据类，构造 + 读字段）
-
-const CC_SHIM = `/**
- * cc 运行时垫片（本文件由 tools/test-bag-tidy.cjs 生成，请勿手改）
- * assets/configs 只用 Vec2 / Vec3 / Size / Color 做数据构造，没有任何引擎行为，最小实现即可。
- * Color 要能吃 new Color(255,255,255) 与 new Color("#DDDDDD") 两种写法（配置表两种都用）。
- */
-class Vec2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }
-class Vec3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } }
-class Size { constructor(width = 0, height = 0) { this.width = width; this.height = height; } }
-class Color {
-  constructor(r = 255, g = 255, b = 255, a = 255) {
-    if (typeof r === "string") { this.hex = r; this.r = 0; this.g = 0; this.b = 0; this.a = 255; return; }
-    this.r = r; this.g = g; this.b = b; this.a = a;
-  }
-}
-Color.WHITE = new Color(255, 255, 255, 255);
-Color.BLACK = new Color(0, 0, 0, 255);
-module.exports = { Vec2, Vec3, Size, Color };
-`;
-
-//#endregion
-
-//#region 找 tsc（Cocos 自带的就够用，不必在工程里装 typescript）
-
-function findTsc() {
-  const candidates = [
-    process.env.TSC,
-    path.join(PROJECT_ROOT, "node_modules/typescript/bin/tsc"),
-  ];
-  // Cocos Creator 各版本自带的 typescript
-  for (const creatorRoot of ["/Applications/Cocos/Creator", "/Applications/CocosCreator"]) {
-    if (!fs.existsSync(creatorRoot)) continue;
-    for (const version of fs.readdirSync(creatorRoot)) {
-      const base = path.join(creatorRoot, version, "CocosCreator.app/Contents/Resources/app.asar.unpacked/node_modules/typescript/bin");
-      candidates.push(path.join(base, "tsc"), path.join(base, "tsc.js"));
-    }
-  }
-  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
-}
-
-//#endregion
-
-function prepareSandbox(tscPath) {
-  fs.rmSync(SANDBOX, { recursive: true, force: true });
-  fs.mkdirSync(path.join(SANDBOX, "node_modules/cc"), { recursive: true });
-  fs.writeFileSync(path.join(SANDBOX, "node_modules/cc/index.js"), CC_SHIM);
-  fs.writeFileSync(path.join(SANDBOX, "node_modules/cc/package.json"), JSON.stringify({ name: "cc", main: "index.js" }, null, 2));
-  fs.writeFileSync(
-    path.join(SANDBOX, "tsconfig.json"),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2019",
-          module: "CommonJS",
-          moduleResolution: "node",
-          strict: false,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          experimentalDecorators: true,
-          noEmitOnError: false,
-          rootDir: path.join(PROJECT_ROOT, "assets"),
-          outDir: OUT_DIR,
-          baseUrl: PROJECT_ROOT,
-          // 类型仍用工程自己的声明（只影响编译期），运行期走上面的垫片
-          paths: { cc: [path.join(PROJECT_ROOT, "temp/declarations/cc.d.ts")] },
-          types: [],
-        },
-        files: [path.join(PROJECT_ROOT, "assets/configs/items.ts")],
-      },
-      null,
-      2,
-    ),
-  );
-  const result = spawnSync(process.execPath, [tscPath, "-p", path.join(SANDBOX, "tsconfig.json")], { encoding: "utf8" });
-  if (result.status !== 0) {
-    console.error(result.stdout || "");
-    console.error(result.stderr || "");
-    throw new Error(`配置表编译失败（tsc 退出码 ${result.status}）`);
-  }
-}
-
-//#region 断言
-
-let failed = 0;
-function check(ok, label, detail = "") {
-  if (ok) console.log(`  [OK] ${label}${detail ? " —— " + detail : ""}`);
-  else {
-    failed++;
-    console.log(`  [!!] ${label}${detail ? " —— " + detail : ""}`);
-  }
-}
+const { prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 function main() {
-  const tscPath = findTsc();
-  if (!tscPath) {
-    console.error("找不到 tsc：请在工程里装 typescript，或用环境变量指定，例如");
-    console.error("  TSC=/Applications/Cocos/Creator/3.8.7/CocosCreator.app/Contents/Resources/app.asar.unpacked/node_modules/typescript/bin/tsc node tools/test-bag-tidy.cjs");
-    process.exitCode = 1;
+  let outDir;
+  try {
+    outDir = prepare("olua-bag-tidy");
+  } catch (error) {
+    fail(String(error.message ?? error));
     return;
   }
-  console.log(`tsc: ${tscPath}`);
-  prepareSandbox(tscPath);
 
-  const { getItem, tidyBagGrid, bagTidyTypeOrder } = require(path.join(OUT_DIR, "configs/items.js"));
-  const { equipmentSlotOrder } = require(path.join(OUT_DIR, "configs/equipments.js"));
-  const { bagRow, bagCol } = require(path.join(OUT_DIR, "configs/role.js"));
-  const { GOOD_TYPE, isEquipment } = require(path.join(OUT_DIR, "types/good.js"));
+  const { getItem, tidyBagGrid, bagTidyTypeOrder } = require(path.join(outDir, "configs/items.js"));
+  const { equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
+  const { bagRow, bagCol } = require(path.join(outDir, "configs/role.js"));
+  const { isEquipment } = require(path.join(outDir, "types/good.js"));
 
   const makeGrid = (rows = bagRow, cols = bagCol) => Array.from({ length: rows }, () => new Array(cols).fill(null));
   const put = (grid, row, col, id, count = 1) => {
@@ -300,12 +197,7 @@ function main() {
   check(flatOf(afterE).length === 3, "同 id 装备不合并（三格三件）", `${flatOf(afterE).length} 格`);
   check(totalsEqual(totalsOf(gridE), totalsOf(afterE)), "件数守恒", describe(totalsOf(afterE)));
 
-  console.log(
-    failed
-      ? `\n!! 有 ${failed} 项断言不通过`
-      : "\nPASS：整理后行列不变、物品一件不丢、排序规则正确、无效 id 保留、可叠加物合并与拆堆正常、幂等。",
-  );
-  if (failed) process.exitCode = 1;
+  finish("PASS：整理后行列不变、物品一件不丢、排序规则正确、无效 id 保留、可叠加物合并与拆堆正常、幂等。");
 }
 
 main();

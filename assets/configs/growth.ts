@@ -340,4 +340,31 @@ export function equipmentStats(level: number, slot: EquipmentSlotKey): Equipment
   };
 }
 
+/**
+ * 装备回收价的成长曲线（背包「一键回收」的计价唯一来源，货币 = **绑定元宝**）
+ *
+ * 与装备属性同一口径，**只按装备自己的 level 取基础价**（普通·人级 的价），
+ * 前后缀变体再乘对应倍率（equipmentPrefixRates × equipmentSuffixRates，最高 4.2 倍），
+ * 在 configs/equipments.buildEquipmentMap 里生成。
+ * 想整体调价只改这段曲线，26 件装备的条目里不用逐件写；想单独给某件装备定价，
+ * 在它的条目里写 recyclePrice 覆盖生成值即可。
+ *
+ * 量级参考：升满战魂合计约 527 万绑定元宝（300 × Σn²，n = 1..37，见 configs/soul），
+ * 角色出生带 1 万（configs/role.initialBindGold）。当前曲线下：
+ * 60 级基础装备回收约 4 万（≈ 战魂最后一级的 1/10），1 级装备 10（新手装直接丢掉不心疼）。
+ */
+export const equipmentRecyclePriceCurve: GrowthSegment[] = [
+  { from: 1, to: 10, start: 10, perLevel: 5 }, // 1 级 10 → 10 级 55
+  { from: 11, to: 20, start: 60, perLevel: 20 }, // 20 级 240
+  { from: 21, to: 30, start: 260, perLevel: 70 }, // 30 级 890
+  { from: 31, to: 40, start: 960, perLevel: 270 }, // 40 级 3,390
+  { from: 41, to: 50, start: 3600, perLevel: 840 }, // 50 级 11,160
+  { from: 51, to: 60, start: 12000, perLevel: 3100 }, // 60 级 39,900
+];
+
+/** 取某等级装备的回收基础价（普通·人级；前后缀倍率由 configs/equipments 乘上） */
+export function equipmentRecyclePrice(level: number): number {
+  return Math.max(0, Math.round(sampleGrowth(equipmentRecyclePriceCurve, level)));
+}
+
 //#endregion

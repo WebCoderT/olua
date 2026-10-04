@@ -191,11 +191,20 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** 取某个变量在文件里的赋值来源（首个赋值语句右侧），找不到返回 "" */
-function findSource(lines, varName) {
+/**
+ * 取某个变量在文件里的赋值来源：**注册行之前最近的一次赋值**的右侧，找不到返回 ""
+ *
+ * 必须「最近的在前」（从注册行往前扫）：同一个名字在文件里可能被赋值多次 ——
+ * 例如 `private recycleButton: Node | null = null;` 上面先有一句「场景切换后清理残留引用」的
+ * `this.recycleButton = null`，再在 open() 里由工厂创建。若从头往下取**首个**匹配，
+ * 拿到的是那个 `null`（于是好好的工厂产物被判成「未登记」）。
+ * 从注册行往前取最近一条，拿到的才是真正在用的那个对象。
+ */
+function findSource(lines, varName, beforeLine) {
   const re = new RegExp(`\\b${varName.replace(/\./g, "\\.")}\\s*=\\s*([^;\\n]+)`);
-  for (const line of lines) {
-    const m = line.match(re);
+  const end = typeof beforeLine === "number" ? Math.min(beforeLine - 1, lines.length) : lines.length;
+  for (let i = end - 1; i >= 0; i--) {
+    const m = lines[i].match(re);
     if (m) return m[1].trim();
   }
   return "";
@@ -221,7 +230,7 @@ for (const file of files) {
   while ((m = RE_TOUCH_CLICK.exec(text))) {
     const varName = m[1];
     const lineNo = text.slice(0, m.index).split("\n").length;
-    const source = varName === "this" ? "self" : findSource(lines, varName);
+    const source = varName === "this" ? "self" : findSource(lines, varName, lineNo);
     const shieldDirect = new RegExp(`blockClickThrough\\(\\s*${varName.replace(/\./g, "\\.")}\\s*\\)`).test(text);
     const viaFactory = SHIELD_FACTORIES.some((f) => source.includes(f));
     const reviewed = REVIEWED.get(`${rel}#${varName}`);

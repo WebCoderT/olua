@@ -15,7 +15,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
-import { getItem, tidyBagGrid } from "../../configs/items";
+import { getItem, recycleBagEquipmentGrid, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
 import { getSoulLevel } from "../../configs/soul";
 
 /**
@@ -313,6 +313,48 @@ export default class StorageManager {
       }),
     );
     return signature;
+  }
+
+  //#endregion
+
+  //#region 背包回收
+
+  /**
+   * 背包里可回收装备的结算预览（件数 + 可得绑定元宝）
+   * 回收不可撤销，所以按钮先要一份数给玩家看清楚（见 BagDialog 的二次确认）
+   * 判定与计价都在配置层纯函数里（configs/items.summarizeBagRecycle），这里只取当前角色
+   */
+  static getBagRecycleSummary(): { count: number; totalPrice: number } {
+    const role = this.findOnlineRole();
+    if (!role) return { count: 0, totalPrice: 0 };
+    return summarizeBagRecycle(role.bag);
+  }
+
+  /**
+   * 一键回收背包内的全部装备（当前在线角色）：按件折算**绑定元宝**入账
+   *
+   * 只回收**背包里**的装备 —— 身上穿着的槽位不受影响；药品/材料/解析不出配置的 id 一概不动。
+   * 搬运是纯函数 `configs/items.recycleBagEquipmentGrid`，这里只负责：
+   * 取角色 → 调用 → 按合计价入账 → 落盘 → 刷新（角色信息栏的绑定元宝 + 背包格子）。
+   * 计价口径见 configs/growth.equipmentRecyclePriceCurve（想调价只改那里）
+   * @returns 是否回收成功（背包里没有可回收的装备时返回 false 并提示）
+   */
+  static recycleBagEquipments(): boolean {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const result = recycleBagEquipmentGrid(role.bag);
+    if (!result.count) {
+      GameUiHelper.createTip("bag_recycle_empty_tip", "背包里没有可回收的装备");
+      return false;
+    }
+    role.bag = result.bag;
+    role.bindGold += result.totalPrice;
+    // 保存并刷新（绑定元宝余额 + 背包格子）
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.refreshBag();
+    GameUiHelper.createTip("bag_recycle_tip", `回收 ${result.count} 件装备，获得 ${result.totalPrice} 绑定元宝`);
+    return true;
   }
 
   //#endregion

@@ -1,6 +1,6 @@
 import { BagCell, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
-import { belts, clothes, equipmentSlotOrder, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
+import { belts, clothes, equipmentSlotOrder, getRecyclePrice, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { materials } from "./material";
 
 /**
@@ -206,6 +206,63 @@ export function tidyBagGrid(bag: BagCell[][]): BagCell[][] {
     result.push(line);
   });
   return result;
+}
+
+//#endregion
+
+//#region 背包回收（装备一键回收，见 StorageManager.recycleBagEquipments）
+
+/** 背包回收的结算（件数 + 合计价，货币 = 绑定元宝） */
+export interface BagRecycleSettlement {
+  /** 可回收的装备件数 */
+  count: number;
+  /** 回收可得绑定元宝合计 */
+  totalPrice: number;
+}
+
+/**
+ * 一键回收的搬运（**纯函数**：不碰存档、不碰 UI，输入输出都是二维背包，便于单测）
+ *
+ * 把背包里的**装备**整格取走，其余物品一概不动：
+ * · 药品/材料：原样留在原格（回收只针对装备，见需求「一键回收背包内所有装备」）
+ * · 解析不出配置的 id（已下架）：不认识它，就不替它决定，原样保留
+ *
+ * 计价：逐格按 getRecyclePrice 累加；装备本不可叠加（count 恒 1），
+ * 但这里仍按 count 计价（万一存档里出现叠着的装备，宁可多给钱，也不白拿走玩家的东西）。
+ *
+ * 不变量（单测要盯的）：行列数与入参一致、非装备一件不动、件数与合计价只由装备贡献、
+ * 返回全新数组不改入参；对同一个背包重复调用，第二次必为空结算（幂等）
+ */
+export function recycleBagEquipmentGrid(bag: BagCell[][]): BagRecycleSettlement & { bag: BagCell[][] } {
+  let count = 0;
+  let totalPrice = 0;
+  const result: BagCell[][] = [];
+  bag.forEach((row) => {
+    const line: BagCell[] = [];
+    row.forEach((cell) => {
+      const good = cell ? getItem(cell.id) : null;
+      if (!cell || !good || !isEquipment(good)) {
+        // 非装备 / 空 / 解析不出配置的 id：原样保留（引用与位置都不变）
+        line.push(cell ?? null);
+        return;
+      }
+      const pieces = Math.max(1, cell.count);
+      count += pieces;
+      totalPrice += getRecyclePrice(good) * pieces;
+      line.push(null);
+    });
+    result.push(line);
+  });
+  return { bag: result, count, totalPrice };
+}
+
+/**
+ * 回收前先看数（件数 + 合计价）：直接走一遍搬运、把新背包丢掉
+ * 刻意复用同一个函数而不是另写一份扫描——判定与计价只有一处实现，预览与实际回收不可能对不上
+ */
+export function summarizeBagRecycle(bag: BagCell[][]): BagRecycleSettlement {
+  const { count, totalPrice } = recycleBagEquipmentGrid(bag);
+  return { count, totalPrice };
 }
 
 //#endregion

@@ -1,7 +1,7 @@
 import { Color, Vec2 } from "cc";
 import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } from "../types/good";
 import type { BattleAttributes } from "../types/common";
-import { equipmentPrefixRates, equipmentStats, equipmentSuffixRates } from "./growth";
+import { equipmentPrefixRates, equipmentRecyclePrice, equipmentStats, equipmentSuffixRates } from "./growth";
 import { OECCUPATION, SEX } from "../types/role";
 
 /** 装备槽位数据表（角色弹窗用；key 只做关联，与怪物/装备同一约定） */
@@ -117,6 +117,9 @@ function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): B
  * - 其余组合 key 为 `${key}_p${前缀序号}s${后缀序号}`（如 cloth_1_p3s2）
  * - 基础条目不配置前后缀（类型层已去掉该字段），变体统一由这里生成
  *
+ * **回收价**同理按倍率缩放：基础价 = 条目的 recyclePrice（写了才用）或按 level 从
+ * configs/growth 的回收价曲线取，变体乘同一个 rate（超神·神级 = 基础价 × 4.2）。
+ *
  * 注意：等级同时是「穿戴门槛」（GameHelper.getEquipmentRejectReason 会挡「需要等级 N」），
  * 变体与基础件同 level，门槛一致；所以排等级时要想清楚这件装备应该在什么等级被拿到。
  */
@@ -126,6 +129,8 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
     const { key, ...rest } = entry; // key 只做关联，不写进最终配置对象
     // 基础属性（等级生成值 + 条目特例覆盖），变体在其上乘前后缀倍率
     const base = { ...equipmentStats(rest.level, rest.slot), ...rest } as Equipment;
+    // 回收基础价（普通·人级的价）：条目里写了就用它，否则按等级从回收价曲线取（见 configs/growth）
+    const baseRecyclePrice = entry.recyclePrice ?? equipmentRecyclePrice(rest.level);
     for (let p = 0; p < equipmentPrefixRates.length; p++) {
       for (let s = 0; s < equipmentSuffixRates.length; s++) {
         const rate = equipmentPrefixRates[p] * equipmentSuffixRates[s];
@@ -133,6 +138,8 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
         map.set(id, {
           ...base,
           ...scaleEquipmentAttributes(base, rate),
+          // 回收价与战斗属性同一口径：前后缀越强越值钱（超神·神级 = 基础价 × 4.2）
+          recyclePrice: Math.round(baseRecyclePrice * rate),
           prefix: p as EQUIPMENT_PREFIX,
           suffix: s as EQUIPMENT_SUFFIX,
         });
@@ -140,6 +147,15 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
     }
   }
   return map;
+}
+
+/**
+ * 取某件装备的回收价（货币 = **绑定元宝**；背包「一键回收」按它结算，见 StorageManager.recycleBagEquipments）
+ * 取值已在 buildEquipmentMap 里算好（等级曲线 × 前后缀倍率），这里只做兜底规整
+ */
+export function getRecyclePrice(equipment: Equipment | null | undefined): number {
+  if (!equipment) return 0;
+  return Math.max(0, Math.round(equipment.recyclePrice ?? 0));
 }
 
 /**

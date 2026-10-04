@@ -123,6 +123,14 @@ export interface Equipment extends Good, BattleAttributes {
   prefix: EQUIPMENT_PREFIX;
   /** 后缀（阶级，只决定后缀文字颜色，另有独立属性倍率） */
   suffix: EQUIPMENT_SUFFIX;
+  /**
+   * 回收价格，货币是**绑定元宝**（背包「一键回收」按它结算，见 ui/core/StorageManager.recycleBagEquipments）
+   *
+   * 默认值 = 按装备自己的 level 从配置曲线取（configs/growth.equipmentRecyclePrice），
+   * 再乘前后缀倍率（普通·人级 = 基础价，超神·神级 = 4.2 倍），在 configs/equipments.buildEquipmentMap 里生成。
+   * 想整体调价改那条曲线；想给某件装备单独定价，就在它的条目里写 recyclePrice（覆盖生成值）。
+   */
+  recyclePrice: number;
 }
 
 /**
@@ -135,10 +143,12 @@ export interface Equipment extends Good, BattleAttributes {
  * 战斗属性是**可选**的：不写就由 equipmentStats(level, slot) 按等级生成，
  * 写了就覆盖生成值（要单独给某件装备加特例时用）。
  *
- * prefix/suffix 不在条目里配置：构建时每件基础装备会展开成
- * 全部「前缀 × 后缀」组合（基础件即「普通的·人级」，沿用原 key），见 configs/equipments。
+ * prefix/suffix/recyclePrice 不在条目里配置：
+ * prefix/suffix 由构建时按「前缀 × 后缀」全组合展开（基础件即「普通的·人级」，沿用原 key），见 configs/equipments；
+ * recyclePrice 的缺省值按 level 从 configs/growth 的回收价曲线生成（想给某件装备单独定价才写它）。
  */
-export type EquipmentData = Omit<Equipment, keyof BattleAttributes | "prefix" | "suffix"> & Partial<BattleAttributes> & { key: string };
+export type EquipmentData = Omit<Equipment, keyof BattleAttributes | "prefix" | "suffix" | "recyclePrice"> &
+  Partial<BattleAttributes> & { key: string; recyclePrice?: number };
 
 /** 药品使用效果（新增效果类型时在此扩展） */
 export interface DrugEffect {

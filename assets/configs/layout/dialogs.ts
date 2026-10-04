@@ -172,8 +172,25 @@ export const roleInfoDialogLayout = {
 export const bagDialogLayout = {
   name: "bag_dialog",
   title: "背包",
-  /** 底部「一键整理」按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，按钮落在网格下方） */
-  tidyButton: { name: "bag_tidy_button", text: "一键整理", position: new Vec2(0, -212) },
+  /**
+   * 底部两个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，两钮并排落在网格下方）
+   * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），±70 使两钮间距 17、左右各留 226
+   */
+  tidyButton: { name: "bag_tidy_button", text: "一键整理", position: new Vec2(-70, -212) },
+  /**
+   * 「一键回收」：把背包里的装备整格换成绑定元宝（身上穿着的不算）
+   * 回收不可撤销，所以按钮是**两步确认**：第一次点击先看数（件数 + 可得绑定元宝）并变成「确认回收」，
+   * 再点一次才真的回收；超时或关掉弹窗自动复位（不会误回收，也不需要额外的确认弹窗）
+   */
+  recycleButton: {
+    name: "bag_recycle_button",
+    text: "一键回收",
+    position: new Vec2(70, -212),
+    /** 待确认时的按钮文案 */
+    confirmText: "确认回收",
+    /** 待确认状态保持时间（毫秒），到点自动变回「一键回收」 */
+    confirmTimeout: 3000,
+  },
 };
 
 //#endregion

@@ -39,7 +39,7 @@ import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
-import { equipmentSlots, getEquipmentNameParts } from "../../configs/equipments";
+import { equipmentSlots, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
@@ -1056,6 +1056,11 @@ export default class GameUiHelper {
       ? UiHelper.createLabel("good_detail_info", `等级 ${good.level} · ${equipmentSlots.get(good.slot)?.label ?? "装备"}`, new Color("#9A9A9A"), 12, new Vec2(), new Size(220, 18), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER)
       : null;
 
+    // 回收价行（装备专属：背包「一键回收」按它结算，货币为绑定元宝；前后缀变体的价已随倍率缩放）
+    const contentRecycle = isEquipment(good)
+      ? UiHelper.createLabel("good_detail_recycle", `回收价 ${getRecyclePrice(good)} 绑定元宝`, new Color("#FFD700"), 12, new Vec2(), new Size(220, 18), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER)
+      : null;
+
     // 标签行（装备专属：显示在名称正下方，与其他物品区分开）
     const contentTags = isEquipment(good) ? this.createGoodTagRow(good.tags ?? []) : null;
 
@@ -1078,6 +1083,7 @@ export default class GameUiHelper {
 
     dialog.addChild(contentHeader);
     if (contentInfo) dialog.addChild(contentInfo);
+    if (contentRecycle) dialog.addChild(contentRecycle);
     if (contentTags) dialog.addChild(contentTags);
     dialog.addChild(contentDescription);
     dialog.addChild(contentBody);
