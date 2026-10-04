@@ -4,7 +4,8 @@ import { Color } from "cc";
  * 小地图配置（右上角常驻 HUD）
  * 底图用当前地图文件夹下的 preview.jpg（取图见 configs/layout/images.mapPreviewImage，与小地图弹窗同一张图）；
  * 底图按「内容区 ↔ 世界视野」等比缩放后随角色平移，因此图上任意一点都与世界坐标一一对应：
- * 角色黑点在内容区中心，视野内的怪物按真实相对位置画红点（不显示朝向），视野外的怪物不显示
+ * 角色黑点在内容区中心，视野内的怪物按真实相对位置画红点（不显示朝向），视野外的怪物不显示；
+ * 自动寻路期间还会在小地图上画出路线指示线（与大地图路线同源，白色点状线，见本文件的 route* 几项）
  * 位置、尺寸与图片来源见 configs/layout/hud.smallMapLayout 与同级的 images，本文件只管视野、点位与刷新频率
  */
 export const smallMapConfig = {
@@ -22,6 +23,14 @@ export const smallMapConfig = {
   roleDotColor: Color.BLACK,
   /** 怪物点颜色 */
   monsterDotColor: Color.RED,
+  /** 路线指示线颜色（白色点状线：自动寻路期间画在小地图上的路线；与大地图的 routeLine 同一处路线） */
+  routeColor: new Color(255, 255, 255, 235),
+  /** 路线单个点半径（像素） */
+  routeDotRadius: 1.6,
+  /** 路线相邻点间距（像素） */
+  routeDotGap: 6,
+  /** 路线终点圆点半径（像素）：比途中的点大一圈 */
+  routeEndDotRadius: 4.5,
   /** 刷新间隔（毫秒）：坐标文本与红点的重绘频率（怪物移动平滑度与重绘开销的平衡） */
   refreshInterval: 100,
 };

@@ -21,6 +21,7 @@ import MonsterManager from "./core/MonsterManager";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
+import RouteIndicator from "./core/RouteIndicator";
 import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
@@ -146,6 +147,7 @@ export class Game extends Component {
     CursorManager.destroy();
     AutoBattle.reset();
     AutoBattleTips.reset();
+    RouteIndicator.reset();
     HoverTipManager.hide();
     StatusManager.reset();
     RoleUIManager.clearViews();
@@ -177,6 +179,8 @@ export class Game extends Component {
     }
     // 自动战斗提示（屏幕中间循环播放：「自动战斗中」挂机期间 /「自动寻路中」自动走位期间，允许同显，挂特效层）
     AutoBattleTips.update(this.roleDisplay);
+    // 路线指示线（自动寻路期间在大地图地面上画出「角色 → 目标」的路线；无路线时清空）
+    RouteIndicator.update(this.roleDisplay);
     // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入；
     // 玩家死亡后不再给怪物提供玩家节点——尸体不会被追击与普攻）
     MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay && !this.roleDisplay.isDead() ? this.roleDisplay : null);

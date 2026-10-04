@@ -23,6 +23,7 @@ import SkillManager from "./SkillManager";
  * 走位用 A* 寻路（见 utils/map/PathGrid）绕开障碍：网格以当前地图为基准（GameMap 注册），
  * 静态障碍取 Tiled 碰撞区与 NPC 占位，动态障碍为场上怪物碰撞盒（目标自身除外），每次寻路前重烙；
  * 目标永远取「最近」，被判定无法接近的目标短暂拉黑后自动换下一个，避免卡死
+ * 当前路线对外暴露给路线指示线（getRoutePoints，见 core/RouteIndicator 与 components/hud/SmallMap）
  */
 export default class AutoBattle {
   /** 主角（组合根注册，场景卸载时 reset 清空） */
@@ -139,6 +140,34 @@ export default class AutoBattle {
   /** 当前地图节点（小地图弹窗做世界坐标换算用；未注册或已失效返回 null） */
   static getMapNode(): Node | null {
     return this.mapNode && isValid(this.mapNode) ? this.mapNode : null;
+  }
+
+  /**
+   * 当前寻路路线（世界坐标，供小地图/大地图/预览弹窗画路线指示线）
+   * 从「正在走向的路点」起，依次为后续 A* 路点，最后补上实时目标点
+   * （点击寻路是下发的固定点，追怪时目标会移动，故终点取实时坐标，线的末端始终指着目标）；
+   * 未在自动走位（当前无路径，例如已进入范围内原地出手）时返回空数组
+   */
+  static getRoutePoints(): Vec2[] {
+    if (this.path.length === 0) return [];
+    const points: Vec2[] = [];
+    const from = Math.min(this.pathIndex, this.path.length - 1);
+    for (let i = from; i < this.path.length; i++) points.push(new Vec2(this.path[i].x, this.path[i].y));
+    const destination = this.getDestination();
+    if (destination) points.push(destination);
+    return points;
+  }
+
+  /** 取本次寻路的最终目标点（点击寻路为下发的固定点，追怪为目标怪当前位置，都没有时返回 null） */
+  private static getDestination(): Vec2 | null {
+    const point = this.pendingPoint;
+    if (point) return new Vec2(point.x, point.y);
+    const target = this.target;
+    if (target && isValid(target)) {
+      const position = target.getWorldPosition();
+      return new Vec2(position.x, position.y);
+    }
+    return null;
   }
 
   /**

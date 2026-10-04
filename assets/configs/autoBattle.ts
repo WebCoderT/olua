@@ -1,4 +1,4 @@
-import { Size } from "cc";
+import { Color, Size } from "cc";
 
 /**
  * 自动战斗配置（快速攻击与自动挂机共用）
@@ -35,5 +35,24 @@ export const autoBattle = {
   teleportSnapRadius: 12,
   /** 突进类技能（十步一杀）的落点吸附半径（像素）：突进距离远，允许在更大范围找回可站立位置 */
   dashSnapRadius: 60,
+  /**
+   * 路线指示线（自动寻路期间在大地图地面上画出的路线：起点角色 → A* 路点 → 目标）
+   * 样式为白色点状线：沿路线等距铺一串白色圆点，终点一个更大的白色圆点表示目的地；
+   * 几何单位是世界像素，画在地图层的独立绘制节点上（贴地、在角色与怪物之下）；
+   * 小地图上的同一路线由 configs/smallMap 的 route* 控制、小地图弹窗由 configs/layout/dialogs
+   * 的 mapPreviewDialogLayout.route 控制（均为像素单位，与各自绘制层同口径）
+   */
+  routeLine: {
+    /** 点与终点圆点的颜色（白色半透明，压在地面上不遮挡地形） */
+    color: new Color(255, 255, 255, 220),
+    /** 单个点半径（世界像素） */
+    dotRadius: 3,
+    /** 相邻点间距（世界像素）：点状线的疏密 */
+    dotGap: 22,
+    /** 终点圆点半径（世界像素）：比途中的点大一圈，一眼看出目的地 */
+    endDotRadius: 14,
+    /** 重绘间隔（毫秒）：起点随角色移动，走位期间无需更高频率 */
+    refreshInterval: 33,
+  },
 };
 

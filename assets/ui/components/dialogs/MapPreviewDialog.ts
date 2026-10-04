@@ -22,7 +22,8 @@ import type RoleDisplay from "../role/RoleDisplay";
  * 点击按「预览区 ↔ 地图像素范围」的等比映射换算成世界坐标：
  * - 左键：委托 AutoBattle.requestMoveTo 自动寻路走过去（玩家手动移动即打断，到达/放弃有提示）
  * - 右键：落点吸附到最近可站立位置后直接传送（setWorldPositionByTransfer，与复活传送同一套入口）
- * 预览图上实时绘制角色黑点与全图怪物红点（颜色/半径口径沿用 configs/smallMap，刷新频率同 refreshInterval）
+ * 预览图上实时绘制角色黑点与全图怪物红点（颜色/半径口径沿用 configs/smallMap，刷新频率同 refreshInterval）；
+ * 自动寻路期间还会画出路线指示线（角色 → A* 剩余路点 → 目标，与大地图、常驻小地图同一处路线，样式见 layout.route）
  * 另有**静态文字标记层**（开窗时按地图对象组一次性生成，几何见 layout.marker）：
  * - 每个 NPC 一个白点，白点上方紧挨着显示 NPC 名称
  * - 每个刷怪区中心显示该区怪物名称
@@ -37,6 +38,10 @@ export default class MapPreviewDialog {
   private preview: Node | null = null;
   /** 点位绘制层（预览图的子节点，盖在图上） */
   private dotsGraphics: Graphics | null = null;
+  /** 路线指示线绘制层（预览图的子节点；在点位层之下，自动寻路期间画） */
+  private routeGraphics: Graphics | null = null;
+  /** 路线当前是否已画出（无路线时据此决定是否要清空绘制层） */
+  private routeDrawn = false;
   /** 上次点位重绘时间戳 */
   private lastRefreshAt = 0;
 
@@ -56,12 +61,16 @@ export default class MapPreviewDialog {
     const preview = GameUiHelper.createImage(layout.preview.name, "", layout.preview.position, layout.preview.size);
     dialog.addChild(preview);
     this.preview = preview;
+    // 路线指示线层（预览图的子节点，在点位层之下：自动寻路期间画「角色 → 目标」的路线）
+    this.routeGraphics = GameUiHelper.createSmallMapRouteLayer(new Vec2(), layout.preview.size);
+    preview.addChild(this.routeGraphics.node);
     // 点位绘制层（预览图的子节点：盖在图上，点击事件冒泡到预览节点统一处理）
     this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(new Vec2(), layout.preview.size);
     preview.addChild(this.dotsGraphics.node);
     // 静态标记层（NPC 白点 + 名称、刷怪区怪物名称；盖在动态点之上，只随地图数据建一次）
     const markerLayer = GameUiHelper.createSmallMapMarkerLayer(new Vec2(), layout.preview.size);
     preview.addChild(markerLayer);
+    this.routeDrawn = false;
     this.buildMarkers(markerLayer);
     // 底部操作提示
     dialog.addChild(GameUiHelper.createText("map_preview_hint", layout.hint.text, layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color));
@@ -91,6 +100,36 @@ export default class MapPreviewDialog {
       dots.push({ ...toPreview(position.x, position.y), color: smallMapConfig.monsterDotColor, radius: smallMapConfig.monsterDotRadius });
     });
     GameUiHelper.drawSmallMapDots(this.dotsGraphics, dots);
+    this.updateRoute(toPreview, rolePosition);
+  }
+
+  /**
+   * 重绘路线指示线（自动寻路期间）：起点为角色黑点，之后依次是 A* 剩余路点与目标点
+   * 与点位共用 createPreviewMapper（同一口径），因此路线与点位/底图严格对齐；
+   * 超出地图范围的点由换算器夹到边缘，线不会画出预览区
+   */
+  private updateRoute(toPreview: (worldX: number, worldY: number) => Vec2, rolePosition: Vec3) {
+    const graphics = this.routeGraphics;
+    if (!graphics || !isValid(graphics.node)) return;
+    const route = AutoBattle.getRoutePoints();
+    if (route.length === 0) {
+      // 无路线（到达/被打断/已进入范围）：立刻清空，避免残线留在图上
+      if (this.routeDrawn) {
+        graphics.clear();
+        this.routeDrawn = false;
+      }
+      return;
+    }
+    const points: Vec2[] = [toPreview(rolePosition.x, rolePosition.y)];
+    route.forEach((point) => points.push(toPreview(point.x, point.y)));
+    const style = mapPreviewDialogLayout.route;
+    GameUiHelper.drawRouteLine(graphics, points, {
+      color: style.color,
+      dotRadius: style.dotRadius,
+      dotGap: style.dotGap,
+      endDotRadius: style.endDotRadius,
+    });
+    this.routeDrawn = true;
   }
 
   /**

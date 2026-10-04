@@ -133,6 +133,21 @@ export const mapPreviewDialogLayout = {
     monsterLabelColor: new Color(255, 217, 138),
     monsterLabelFontSize: 12,
   },
+  /**
+   * 预览图上的路线指示线样式（自动寻路期间画出的「角色 → 目标」路线）
+   * 白色点状线，单位是预览区像素（与黑点/红点同一坐标系，见 MapPreviewDialog.createPreviewMapper）；
+   * 预览区比常驻小地图大得多，故点半径/间距单独配置，不共用 configs/smallMap 的 route*
+   */
+  route: {
+    /** 点与终点圆点的颜色 */
+    color: new Color(255, 255, 255, 235),
+    /** 单个点半径（像素） */
+    dotRadius: 2.5,
+    /** 相邻点间距（像素） */
+    dotGap: 12,
+    /** 终点圆点半径（像素）：比途中的点大一圈 */
+    endDotRadius: 7,
+  },
 };
 
 //#endregion

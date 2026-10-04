@@ -79,6 +79,22 @@ export interface SmallMapDot {
   radius: number;
 }
 
+/**
+ * 路线指示线样式（点状线）
+ * 路线不是实线，而是沿折线等距铺一串圆点，终点再画一个更大的圆点表示目的地；
+ * 颜色/半径/间距都由调用方的配置传进来（绘制层坐标单位：大地图是世界像素，小地图/预览是像素）
+ */
+export interface RouteLineStyle {
+  /** 点与终点圆点的颜色 */
+  color: Color;
+  /** 单个点半径 */
+  dotRadius: number;
+  /** 相邻点间距（需大于 2 × dotRadius，否则点会连成一团） */
+  dotGap: number;
+  /** 终点圆点半径（比普通点大一圈，一眼看出目的地） */
+  endDotRadius: number;
+}
+
 /** 底部功能按钮配置 */
 export interface BottomNavBarButton {
   /** 功能名称（未解锁时用于提示文案） */
@@ -1571,6 +1587,62 @@ export default class GameUiHelper {
   }
 
   /**
+   * 创建路线指示线绘制层（自动寻路时的路线；小地图与预览弹窗共用，坐标为相对内容区中心）
+   * 与坐标点层分开：路线每帧变（角色在移动），点位有各自的刷新节奏，两者互不干扰
+   */
+  static createSmallMapRouteLayer(position: Vec2, size: Size) {
+    const node = UiHelper.createNode("small_map_route", position, size);
+    return node.addComponent(Graphics);
+  }
+
+  /**
+   * 在绘制层上重绘路线指示线（传入已换算到本绘制层的坐标点，起点即角色所在点）
+   * 画法为「点状线」：沿折线按弧长等距铺一串圆点，最后在终点画一个更大的圆点；
+   * 跨折点用「余量结转」保证两段交界处的点间距与本段一致，不会在拐角处挤成一坨；
+   * 每个圆点内部自带 moveTo（引擎 helper.ellipse 实现），所以点与点之间不会被连成多边形
+   * @param points 路线坐标点（本绘制层坐标系，至少 1 个点）
+   * @param style 样式（颜色 / 点半径 / 点间距 / 终点半径）
+   */
+  static drawRouteLine(graphics: Graphics, points: Vec2[], style: RouteLineStyle) {
+    graphics.clear();
+    if (points.length === 0) return;
+    const radius = Math.max(0.5, style.dotRadius);
+    // 间距至少为点直径 + 1，避免配置写小了把点状线画成一条实线
+    const gap = Math.max(style.dotGap, radius * 2 + 1);
+    graphics.fillColor = style.color;
+    if (points.length > 1) {
+      /** 本段第一个点距段首的距离（跨段结转，保证折点两侧的点间距均匀） */
+      let carried = 0;
+      for (let i = 1; i < points.length; i++) {
+        const from = points[i - 1];
+        const to = points[i];
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        if (length <= 0) continue;
+        // 本段比待走的距离还短：一个点都放不下，把待走距离扣掉后直接进下一段
+        if (carried > length) {
+          carried -= length;
+          continue;
+        }
+        for (let offset = carried; offset <= length; offset += gap) {
+          const ratio = offset / length;
+          graphics.circle(from.x + dx * ratio, from.y + dy * ratio, radius);
+          graphics.fill();
+        }
+        // 段末距本段最后一个点的余量 → 折算成下一段从段首起多远放点
+        carried = gap - ((length - carried) % gap);
+      }
+    }
+    // 终点圆点：比途中的点大一圈，标出目的地
+    const end = points[points.length - 1];
+    graphics.circle(end.x, end.y, style.endDotRadius);
+    graphics.fill();
+  }
+
+  //#endregion
+
+  /**
    * 创建小地图静态标记层（占满内容区的空节点，作为预览图的子节点）
    * 与坐标点层分开：标记（NPC 白点 + 名称、刷怪区名称）只随地图变化建一次，
    * 坐标点（角色/怪物）每帧节流重绘，互不干扰；标记永远盖在动态点上
@@ -1597,6 +1669,24 @@ export default class GameUiHelper {
    */
   static createSmallMapMapImage(size: Size) {
     return UiHelper.createSprite("small_map_image", "", new Vec2(), size);
+  }
+
+  //#endregion
+
+  //#region 路线指示线（自动寻路）
+
+  /**
+   * 创建大地图上的路线指示线绘制层（自动寻路时画在地面之上的路线）
+   * 挂在地图节点下：本地坐标即地图节点坐标系（见 core/RouteIndicator 的坐标换算），
+   * 画出的线贴在地面上、位于角色与怪物之下（地图层的渲染顺序先于怪物层/特效层），换图时随旧地图节点一起销毁
+   * @param map 地图节点（挂载的宿主）
+   */
+  static createRouteLineLayer(map: Node) {
+    const node = UiHelper.createNode("route_line", new Vec2(), new Size(1, 1));
+    map.addChild(node);
+    // 地图节点挂在 MAP 层，动态新增的子节点要对齐图层才可见（LayerManager 的监听之外再显式一次，避免依赖时序）
+    LayerManager.setNodeToLayer(node, map.layer);
+    return node.addComponent(Graphics);
   }
 
   //#endregion

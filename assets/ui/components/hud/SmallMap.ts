@@ -25,6 +25,7 @@ import type RoleDisplay from "../role/RoleDisplay";
  * 地图区域上实时绘制坐标点：角色黑点固定在内容区中心（底图随之平移，故黑点下方永远是角色真实所在位置），
  * 怪物红点 = 怪物世界坐标与角色的差值 × 缩放，因此红点落在底图上的位置即怪物真实位置，
  * 视野（内容区覆盖的世界范围）之外的怪物不显示；底图与点位共用同一个缩放比例，换图/调视野都不会错位
+ * 自动寻路期间（点击寻路/追怪）还会画上路线指示线（起点为中心的角色黑点，与大地图同一处路线、同一缩放口径）
  * 地图名称与世界坐标文本同样按 smallMapConfig.refreshInterval 节流刷新
  */
 export default class SmallMap extends Node {
@@ -34,6 +35,8 @@ export default class SmallMap extends Node {
   private positionLabel: Label;
   /** 坐标点绘制层 */
   private dotsGraphics: Graphics;
+  /** 路线指示线绘制层（自动寻路期间画在小地图上；在视口内，超出内容区的部分被 Mask 裁掉） */
+  private routeGraphics: Graphics | null = null;
   /** 底图视口（内容区大小的裁剪容器；底图按视野缩放并在其内平移，底图未就绪时露出下面的占位图） */
   private mapView: Node | null = null;
   /** 小地图底图（当前地图 preview.jpg；真实位置对应关系由它的缩放 + 位置决定） */
@@ -46,6 +49,8 @@ export default class SmallMap extends Node {
   private mapPreviewDialog: MapPreviewDialog;
   /** 上次刷新时间戳 */
   private lastRefreshAt = 0;
+  /** 路线当前是否已画出（无路线时据此决定是否要清空绘制层，避免每帧对空层调用 clear） */
+  private routeDrawn = false;
 
   constructor(roleDisplay: RoleDisplay) {
     super("small_map");
@@ -95,6 +100,9 @@ export default class SmallMap extends Node {
     const mapImage = GameUiHelper.createSmallMapMapImage(layout.contentSize);
     this.mapImage = mapImage.getComponent(Sprite);
     this.mapView.addChild(mapImage);
+    // 路线指示线层：放在视口内 → 超出内容区的路线被 Mask 裁掉；在底图之上、坐标点之下
+    this.routeGraphics = GameUiHelper.createSmallMapRouteLayer(new Vec2(), layout.contentSize);
+    this.mapView.addChild(this.routeGraphics.node);
     this.addChild(this.mapView);
     // 地图名称条：底边与地图内容区上边缘齐平（紧挨着上方）
     const nameBar = GameUiHelper.createImage("small_map_name_bar", uiImages.smallMapNameBar, layout.nameBar.position, layout.nameBar.size);
@@ -138,6 +146,7 @@ export default class SmallMap extends Node {
     if (!rolePosition) return;
     this.updateLabels(rolePosition);
     this.updateMapImage(rolePosition);
+    this.updateRoute(rolePosition);
     this.updateDots(rolePosition);
     // 小地图弹窗开着时重绘其上的全图点位（弹窗未打开时内部直接跳过；关闭后引用失效自动清理）
     this.mapPreviewDialog.update();
@@ -189,6 +198,35 @@ export default class SmallMap extends Node {
         image.spriteFrame = spriteFrame;
       })
       .catch(() => console.warn(`[SmallMap] 小地图底图加载失败：${mapId}`));
+  }
+
+  /**
+   * 重绘路线指示线（自动寻路期间）：起点是内容区中心的角色黑点，之后依次为 A* 剩余路点与目标点
+   * 与底图/坐标点同一缩放口径（getSmallMapScale），所以线走的正是底图上的真实路线；
+   * 超出内容区的部分由视口的 Mask 裁掉，无需手工剔除
+   */
+  private updateRoute(rolePosition: Vec3) {
+    const graphics = this.routeGraphics;
+    if (!graphics || !isValid(graphics.node)) return;
+    const route = AutoBattle.getRoutePoints();
+    if (route.length === 0) {
+      // 无路线（到达/被打断/已进入范围）：立刻清空，避免残线留在地图上
+      if (this.routeDrawn) {
+        graphics.clear();
+        this.routeDrawn = false;
+      }
+      return;
+    }
+    const scale = getSmallMapScale(smallMapLayout.contentSize.width);
+    const points: Vec2[] = [new Vec2()];
+    route.forEach((point) => points.push(new Vec2((point.x - rolePosition.x) * scale, (point.y - rolePosition.y) * scale)));
+    GameUiHelper.drawRouteLine(graphics, points, {
+      color: smallMapConfig.routeColor,
+      dotRadius: smallMapConfig.routeDotRadius,
+      dotGap: smallMapConfig.routeDotGap,
+      endDotRadius: smallMapConfig.routeEndDotRadius,
+    });
+    this.routeDrawn = true;
   }
 
   /**
