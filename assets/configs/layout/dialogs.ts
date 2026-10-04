@@ -168,15 +168,18 @@ export const roleInfoDialogLayout = {
 
 //#region 背包弹窗
 
-/** 弹窗尺寸为 dialogFrame.size（600×500） */
+/**
+ * 弹窗尺寸为 dialogFrame.size（600×500）
+ * 底部按钮的文案统一见 configs/texts（label_bag_tidy / label_bag_recycle / label_bag_discard…），这里只放几何与超时
+ */
 export const bagDialogLayout = {
   name: "bag_dialog",
   title: "背包",
   /**
-   * 底部两个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，两钮并排落在网格下方）
-   * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），±70 使两钮间距 17、左右各留 226
+   * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，三钮并排落在网格下方）
+   * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），各错开 140 → 两两间距 17，整体左右各留 98
    */
-  tidyButton: { name: "bag_tidy_button", text: "一键整理", position: new Vec2(-70, -212) },
+  tidyButton: { name: "bag_tidy_button", position: new Vec2(-140, -212) },
   /**
    * 「一键回收」：把背包里的装备整格换成绑定元宝（身上穿着的不算）
    * 回收不可撤销，所以按钮是**两步确认**：第一次点击先看数（件数 + 可得绑定元宝）并变成「确认回收」，
@@ -184,11 +187,22 @@ export const bagDialogLayout = {
    */
   recycleButton: {
     name: "bag_recycle_button",
-    text: "一键回收",
-    position: new Vec2(70, -212),
-    /** 待确认时的按钮文案 */
-    confirmText: "确认回收",
+    position: new Vec2(0, -212),
     /** 待确认状态保持时间（毫秒），到点自动变回「一键回收」 */
+    confirmTimeout: 3000,
+  },
+  /**
+   * 「丢弃」：**开关式**按钮 —— 点一下进入丢弃模式，再点退出（按钮文案随之在「丢弃 / 退出丢弃」间切换）
+   *
+   * 为什么用模式开关而不是「长按物品」「选中格子 + 确认框」：背包没有选中态，也不新增节点与鼠标监听
+   * （确认框盖在弹窗上要处理层级与穿透，见 utils/input 的按压归属）；模式开启后点击目标就是格子本身，最直观。
+   * 丢弃不可恢复，所以仍是**两步确认**：第一次点击只报物品名与数量并记住该格，再点同一格才真的丢；
+   * 超时、点了别的格子、点整理/回收、关弹窗都会放弃待确认状态
+   */
+  discardButton: {
+    name: "bag_discard_button",
+    position: new Vec2(140, -212),
+    /** 待确认状态保持时间（毫秒），到点自动放弃（与回收、删除角色同一套口径） */
     confirmTimeout: 3000,
   },
 };

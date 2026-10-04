@@ -40,6 +40,14 @@ export const uiTexts = {
   bag_recycle_tip: "回收 {count} 件装备，获得 {price} 绑定元宝",
   /** 批量回收二次确认（{count} 件 · {price} 绑定元宝） */
   bag_recycle_confirm_tip: "将回收 {count} 件装备，可得 {price} 绑定元宝（再点一次确认）",
+  /** 进入丢弃模式 */
+  bag_discard_mode_tip: "点击物品即可丢弃（整格丢弃，不可恢复）",
+  /** 丢弃的两步确认（第一次点击，{name} 物品名 · {count} 整格数量） */
+  bag_discard_confirm_tip: "再点一次丢弃「{name}」×{count}，丢弃后无法恢复",
+  /** 丢弃完成（{name} · {count}） */
+  bag_discard_done_tip: "已丢弃「{name}」×{count}",
+  /** 格子里没有可丢弃的物品 */
+  bag_discard_empty_tip: "这里没有可丢弃的物品",
   /** 药品效果未实现 */
   drug_unsupported_tip: "该药品效果暂未开放",
   /** 血量已满 */
@@ -151,6 +159,16 @@ export const uiTexts = {
   label_good_slot_fallback: "装备",
   /** 装备详情：回收价（{price}） */
   label_good_detail_recycle: "回收价 {price} 绑定元宝",
+
+  //#region 界面标签：背包操作按钮（文案在这里，几何见 configs/layout/dialogs.bagDialogLayout）
+  /** 「一键整理」按钮 */
+  label_bag_tidy: "一键整理",
+  /** 「一键回收」按钮（正常态 / 两步确认的待确认态） */
+  label_bag_recycle: "一键回收",
+  label_bag_recycle_confirm: "确认回收",
+  /** 「丢弃」按钮（正常态 / 丢弃模式激活态 —— 点击开关丢弃模式） */
+  label_bag_discard: "丢弃",
+  label_bag_discard_exit: "退出丢弃",
 
   //#region 界面标签：飘字与技能列表
   /** 伤害飘字（{value} = 伤害数值） */

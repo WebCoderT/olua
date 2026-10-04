@@ -4,6 +4,7 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
 import { bagDialogLayout } from "../../../configs/hudLayout";
+import { getText } from "../../../configs/texts";
 
 /**
  * 背包弹窗
@@ -12,7 +13,8 @@ import { bagDialogLayout } from "../../../configs/hudLayout";
  * - 右键 → 穿戴装备：StorageManager.equipFromBag（非装备会给出提示）
  * - 「一键整理」→ StorageManager.tidyBag（合并同类可叠加物 + 按等级/部位重排，规则在数据层与配置表）
  * - 「一键回收」→ StorageManager.recycleBagEquipments（背包里的装备整格换成绑定元宝，**两步确认**）
- * 物品的使用规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
+ * - 「丢弃」→ 开关丢弃模式，开启后点格子里的物品即丢弃该格（**两步确认**，不可恢复）
+ * 物品的使用/丢弃规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
  * 实例由使用方（BottomBar）创建持有，不导出全局单例
  */
 export default class BagDialog {
@@ -24,8 +26,16 @@ export default class BagDialog {
   private recycleButton: Node | null = null;
   /** 回收按钮是否处于「待确认」状态（第二次点击才真的回收） */
   private recyclePending = false;
-  /** 待确认状态的超时定时器（到点自动复位，见 onRecycleClick） */
+  /** 回收待确认的超时定时器（到点自动复位，见 onRecycleClick） */
   private recycleConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 丢弃按钮（开关式：进入/退出丢弃模式时改它的文案） */
+  private discardButton: Node | null = null;
+  /** 是否处于丢弃模式（开启后点击格子 = 丢弃，不再使用/穿戴） */
+  private discardMode = false;
+  /** 待确认丢弃的格子（两步确认的第一步之后有值，见 onDiscardCell） */
+  private pendingDiscard: { row: number; col: number } | null = null;
+  /** 丢弃待确认的超时定时器（到点自动放弃） */
+  private discardConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** 打开/关闭弹窗 */
   open() {
@@ -38,18 +48,25 @@ export default class BagDialog {
       this.dialog = null;
       this.bagGrid = null;
       this.recycleButton = null;
+      this.discardButton = null;
     }
+    // 兜底复位待确认状态与定时器（关弹窗时已清过，这里防场景切换等异常路径残留）
+    this.cancelRecycleConfirm();
+    this.discardMode = false;
+    this.clearDiscardPending();
     // 弹窗框与背包格子由通用零件拼装
     const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title);
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
     const tidyButton = GameUiHelper.createMiddleButton(
       bagDialogLayout.tidyButton.name,
-      bagDialogLayout.tidyButton.text,
+      getText("label_bag_tidy"),
       bagDialogLayout.tidyButton.position,
     );
     tidyButton.on(
       Node.EventType.TOUCH_END,
       () => {
+        // 底部按钮与丢弃模式互斥：先退出丢弃模式，免得整理完再点格子又丢东西
+        this.exitDiscardMode();
         // 整理算法不改动存储时会返回 false，这里补一句反馈，免得玩家以为按钮没反应
         if (!StorageManager.tidyBag()) GameUiHelper.createTip("bag_tidy_noop_tip");
       },
@@ -59,12 +76,28 @@ export default class BagDialog {
     // 底部「一键回收」：回收不可撤销 → 两步确认（见 onRecycleClick）
     const recycleButton = GameUiHelper.createMiddleButton(
       bagDialogLayout.recycleButton.name,
-      bagDialogLayout.recycleButton.text,
+      getText("label_bag_recycle"),
       bagDialogLayout.recycleButton.position,
     );
-    recycleButton.on(Node.EventType.TOUCH_END, () => this.onRecycleClick(), this);
+    recycleButton.on(
+      Node.EventType.TOUCH_END,
+      () => {
+        this.exitDiscardMode();
+        this.onRecycleClick();
+      },
+      this,
+    );
     dialog.addChild(recycleButton);
     this.recycleButton = recycleButton;
+    // 底部「丢弃」：开关式（开启后点格子即丢弃，不可恢复 → 两步确认见 onDiscardCell）
+    const discardButton = GameUiHelper.createMiddleButton(
+      bagDialogLayout.discardButton.name,
+      getText("label_bag_discard"),
+      bagDialogLayout.discardButton.position,
+    );
+    discardButton.on(Node.EventType.TOUCH_END, () => this.toggleDiscardMode(), this);
+    dialog.addChild(discardButton);
+    this.discardButton = discardButton;
     this.bagGrid = new BagGridView((row, col, action) => this.onCellAction(row, col, action));
     this.bagGrid.refresh(StorageManager.findOnlineRole());
     dialog.addChild(this.bagGrid);
@@ -78,11 +111,88 @@ export default class BagDialog {
     this.bagGrid?.refresh(StorageManager.findOnlineRole());
   }
 
-  /** 格子操作：左键使用物品、右键穿戴装备（规则判定与提示都在数据层） */
+  /**
+   * 格子操作：丢弃模式下点格子 = 丢弃；否则左键使用物品、右键穿戴装备
+   * 规则判定与提示都在数据层（本类只做模式分流）
+   */
   private onCellAction(row: number, col: number, action: BagCellAction) {
+    if (this.discardMode) {
+      this.onDiscardCell(row, col);
+      return;
+    }
     if (action === "equip") StorageManager.equipFromBag(row, col);
     else StorageManager.useGood(row, col);
   }
+
+  //#region 丢弃
+
+  /**
+   * 「丢弃」按钮：进入 / 退出丢弃模式
+   *
+   * 用模式开关而不是「长按物品」或「选中格子 + 确认框」：背包没有选中态，也不新增节点与鼠标监听
+   * （确认框盖在弹窗上要处理层级与穿透，见 utils/input 的按压归属）；模式开启后点击目标就是格子本身，
+   * 且按钮文案变「退出丢弃」，当前处于什么状态一眼可见
+   */
+  private toggleDiscardMode() {
+    if (this.discardMode) {
+      this.exitDiscardMode();
+      return;
+    }
+    this.discardMode = true;
+    this.setButtonText(this.discardButton, getText("label_bag_discard_exit"));
+    GameUiHelper.createTip("bag_discard_mode_tip");
+  }
+
+  /** 退出丢弃模式：放弃待确认目标并复位按钮文案（关弹窗时不必调它，见 close） */
+  private exitDiscardMode() {
+    this.clearDiscardPending();
+    if (!this.discardMode) return;
+    this.discardMode = false;
+    this.setButtonText(this.discardButton, getText("label_bag_discard"));
+  }
+
+  /**
+   * 丢弃模式下点击格子：两步确认（与「一键回收」「删除角色」同一套口径）
+   *
+   * 丢弃不可恢复，所以不让一次点击就生效：
+   * 1. 第一次点击：不改数据，只把物品名与整格数量报给玩家，并记住这一格；
+   * 2. 3 秒内再点**同一格**：真的丢弃（数据层置空 → 落盘 → 刷新网格）；
+   * 3. 超时、点了别的格子、退出丢弃模式、点整理/回收或关弹窗：放弃待确认 ——
+   *    其中「点别的格子」直接换成新目标，免得玩家想改丢另一件时还得先等它超时
+   */
+  private onDiscardCell(row: number, col: number) {
+    const preview = StorageManager.getBagDiscardPreview(row, col);
+    if (!preview) {
+      GameUiHelper.createTip("bag_discard_empty_tip");
+      return;
+    }
+    const pending = this.pendingDiscard;
+    if (pending && pending.row === row && pending.col === col) {
+      // 第二步：确认丢弃（先复位待确认状态再改数据 —— 丢弃会刷新网格，格子节点随之重建）
+      this.clearDiscardPending();
+      StorageManager.discardBagGood(row, col);
+      return;
+    }
+    // 第一步：记住这一格（点别的格子 = 换目标，先放弃上一个）
+    this.clearDiscardPending();
+    this.pendingDiscard = { row, col };
+    GameUiHelper.createTip("bag_discard_confirm_tip", { name: preview.label, count: preview.count });
+    // 到点自动放弃：免得「待确认」一直挂着，被玩家无意再点一次丢掉东西
+    this.discardConfirmTimer = setTimeout(() => this.clearDiscardPending(), bagDialogLayout.discardButton.confirmTimeout);
+  }
+
+  /** 放弃待确认丢弃（清定时器 + 忘掉目标格；丢弃模式本身不受影响） */
+  private clearDiscardPending() {
+    if (this.discardConfirmTimer !== null) {
+      clearTimeout(this.discardConfirmTimer);
+      this.discardConfirmTimer = null;
+    }
+    this.pendingDiscard = null;
+  }
+
+  //#endregion
+
+  //#region 回收
 
   /**
    * 「一键回收」点击：两步确认
@@ -103,7 +213,7 @@ export default class BagDialog {
         return;
       }
       this.recyclePending = true;
-      this.setRecycleButtonText(bagDialogLayout.recycleButton.confirmText);
+      this.setButtonText(this.recycleButton, getText("label_bag_recycle_confirm"));
       GameUiHelper.createTip("bag_recycle_confirm_tip", { count: summary.count, price: summary.totalPrice });
       this.clearRecycleConfirmTimer();
       // 到点自动复位：免得「确认回收」一直挂着，被玩家无意再点
@@ -115,12 +225,12 @@ export default class BagDialog {
     StorageManager.recycleBagEquipments();
   }
 
-  /** 退出待确认状态：清定时器、复位文案（弹窗已销毁时只清状态，不碰节点） */
+  /** 退出回收的待确认状态：清定时器、复位文案（弹窗已销毁时只清状态，不碰节点） */
   private cancelRecycleConfirm() {
     this.clearRecycleConfirmTimer();
     if (!this.recyclePending) return;
     this.recyclePending = false;
-    this.setRecycleButtonText(bagDialogLayout.recycleButton.text);
+    this.setButtonText(this.recycleButton, getText("label_bag_recycle"));
   }
 
   private clearRecycleConfirmTimer() {
@@ -129,18 +239,23 @@ export default class BagDialog {
     this.recycleConfirmTimer = null;
   }
 
-  /** 改回收按钮文案（按钮工厂把文字放在 `<按钮名>_label` 子节点上） */
-  private setRecycleButtonText(text: string) {
-    const button = this.recycleButton;
+  //#endregion
+
+  /** 改按钮文案（按钮工厂把文字放在 `<按钮名>_label` 子节点上；按钮已销毁时静默跳过） */
+  private setButtonText(button: Node | null, text: string) {
     if (!button || !isValid(button)) return;
-    const label = button.getChildByName(`${bagDialogLayout.recycleButton.name}_label`)?.getComponent(Label);
+    const label = button.getChildByName(`${button.name}_label`)?.getComponent(Label);
     if (label) label.string = text;
   }
 
   /** 关闭弹窗 */
   close() {
     this.cancelRecycleConfirm();
+    // 退出丢弃模式：先清待确认与定时器；节点即将销毁，不必再改按钮文案
+    this.clearDiscardPending();
+    this.discardMode = false;
     this.recycleButton = null;
+    this.discardButton = null;
     this.bagGrid = null;
     this.dialog?.destroy();
     this.dialog = null;

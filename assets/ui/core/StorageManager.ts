@@ -302,6 +302,53 @@ export default class StorageManager {
 
   //#endregion
 
+  //#region 背包丢弃
+
+  /**
+   * 取背包格子的丢弃预览（物品名 + 整格数量），供「两步确认」的第一次点击报数
+   * 空格子 / 越界返回 null（调用方据此提示「这里没有可丢弃的物品」）；
+   * id 已不在配置表时用 id 兜底当名字（丢弃本来就允许清理认不出的杂物）
+   */
+  static getBagDiscardPreview(row: number, col: number): { label: string; count: number } | null {
+    const role = this.findOnlineRole();
+    const cell = role?.bag[row]?.[col];
+    if (!cell) return null;
+    return { label: getItem(cell.id)?.label ?? cell.id, count: Math.max(1, cell.count) };
+  }
+
+  /**
+   * 丢弃背包指定格子里的**整格**物品（当前在线角色，**不可恢复**）
+   *
+   * 与「一键回收」的分工：回收只吃装备、且折算成绑定元宝；丢弃对任何物品（装备/药品/材料）都生效、**不返还任何东西**，
+   * 用来清理玩家不想要的东西。两者都会跳过身上穿着的装备 —— 槽位里的装备不在背包里，天然不受影响。
+   *
+   * 背包格子存的是 id + 数量，丢弃就是把该格置空：**可叠加物品整格一起丢**（不做「丢几个」的数量选择，
+   * 要支持它得先引入数量输入控件，别在这里悄悄改语义，见 configs/texts.bag_discard_confirm_tip 的文案口径）。
+   *
+   * 规则判定与提示都在本层（界面只上报点击，见 BagDialog 的丢弃模式），丢弃不动属性/战力，故无需 updateUi
+   * @param row 背包行
+   * @param col 背包列
+   * @returns 是否丢弃成功（空格子或越界时返回 false 并提示）
+   */
+  static discardBagGood(row: number, col: number): boolean {
+    const role = this.findOnlineRole();
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) {
+      GameUiHelper.createTip("bag_discard_empty_tip");
+      return false;
+    }
+    const label = getItem(cell.id)?.label ?? cell.id;
+    const count = Math.max(1, cell.count);
+    role.bag[row][col] = null;
+    // 保存并刷新背包显示
+    this.updateOnlineRole(role);
+    RoleUIManager.refreshBag();
+    GameUiHelper.createTip("bag_discard_done_tip", { name: label, count });
+    return true;
+  }
+
+  //#endregion
+
   //#region 背包整理
 
   /**
