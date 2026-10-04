@@ -24,16 +24,13 @@ export default class GameHelper {
     this.camera = camera;
   }
 
-  /** 世界坐标转屏幕坐标 */
-  static worldPositionToScreenPosition(worldPos: Vec3) {
-    const screenPos = new Vec3();
-    this.camera.worldToScreen(worldPos, screenPos);
-    return screenPos;
-  }
-
   /**
-   * 屏幕坐标转世界坐标（与 worldPositionToScreenPosition 对称）
+   * 屏幕坐标转世界坐标
    * 用途：把指针位置（屏幕坐标）换算到某个 UI 容器的本地坐标，例如拖动中的物品幽灵图标
+   * 注意：反方向（世界 → 屏幕）**没有**配对接口，也不该有 —— 相机 worldToScreen 给出的是物理像素口径，
+   * 与 UI 的设计坐标系差一个 view 缩放系数，拿它去摆 UI 会严重偏移（详情弹窗踩过这个坑）：
+   * 要在屏幕中心系里定位一个界面元素，一律用「元素世界坐标 − LayerManager.UILayer 世界坐标」
+   * （见 ui/utils/layout/ScreenLayout.getPopupPosition 与 HoverTipDialog.placeByAnchor）
    * @param screenPos 屏幕坐标（物理像素，与 EventMouse/EventTouch 的 getLocation 同口径）
    */
   static screenPositionToWorldPosition(screenPos: Vec3) {

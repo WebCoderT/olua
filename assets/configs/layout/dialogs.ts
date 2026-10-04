@@ -285,6 +285,17 @@ export const goodDetailLayout = {
   },
   /** 底部装饰 logo（复用游戏 logo 图，尺寸比登录页小一圈） */
   footerLogo: { image: uiImages.gameLogo, size: new Size(220, 120) },
+  /**
+   * 摆放（鼠标悬停在物品上时弹窗的位置，规则见 ui/utils/layout/ScreenLayout.getPopupPosition）
+   * 弹窗锚点恒为 0.5/0.5（内容排版交给自身 Layout），位置按「物品中心 + 这些间距」算：
+   * 竖直与物品同高居中、水平放物品靠屏幕中间那一侧，最后整块夹进可见区
+   */
+  placement: {
+    /** 弹窗边缘与物品格边缘的间距（不遮住物品本身） */
+    gap: 8,
+    /** 弹窗到可见区边缘的最小留白（窗口比设计分辨率小时不会被裁掉） */
+    screenMargin: 8,
+  },
 };
 
 //#endregion

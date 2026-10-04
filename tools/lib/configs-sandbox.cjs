@@ -67,10 +67,12 @@ function findTsc() {
  * 编译配置表并返回产物目录（同一进程内重复调用同一名字会重建沙箱）
  * @param {string} sandboxName 沙箱目录名（os.tmpdir() 下），各脚本互不干扰
  * @param {string[]} [extraEntries] 额外要一起编译的配置入口（assets 下的相对路径，
- *   如 "configs/border.ts"——不依赖 items.ts 的配置文件，单测要用它就得单独列进来）
+ *   如 "configs/border.ts"——不依赖 items.ts 的配置文件，单测要用它就得单独列进来
+ *   或 "ui/utils/layout/ScreenLayout.ts" 这类只依赖 cc 的纯逻辑模块）
+ * @param {string} [ccExtra] 追加到 `cc` 垫片末尾的源码（例如补上 screen / view 让屏幕适配的纯函数可跑）
  * @returns {string} CommonJS 产物目录（里面有 configs/items.js 等）
  */
-function prepare(sandboxName, extraEntries = []) {
+function prepare(sandboxName, extraEntries = [], ccExtra = "") {
   const tscPath = findTsc();
   if (!tscPath) {
     console.error("找不到 tsc：请在工程里装 typescript，或用环境变量指定，例如");
@@ -83,7 +85,7 @@ function prepare(sandboxName, extraEntries = []) {
   const outDir = path.join(sandbox, "out");
   fs.rmSync(sandbox, { recursive: true, force: true });
   fs.mkdirSync(path.join(sandbox, "node_modules/cc"), { recursive: true });
-  fs.writeFileSync(path.join(sandbox, "node_modules/cc/index.js"), CC_SHIM);
+  fs.writeFileSync(path.join(sandbox, "node_modules/cc/index.js"), CC_SHIM + ccExtra);
   fs.writeFileSync(path.join(sandbox, "node_modules/cc/package.json"), JSON.stringify({ name: "cc", main: "index.js" }, null, 2));
   fs.writeFileSync(
     path.join(sandbox, "tsconfig.json"),
@@ -123,6 +125,12 @@ function prepare(sandboxName, extraEntries = []) {
   return outDir;
 }
 
+/** 取沙箱的 `cc` 垫片模块（ccExtra 里导出的可调状态在这里读改，例如屏幕尺寸/缩放） */
+function loadCcShim(outDir) {
+  // outDir = <sandbox>/out，垫片在 <sandbox>/node_modules/cc/index.js
+  return require(path.join(path.dirname(outDir), "node_modules/cc/index.js"));
+}
+
 //#region 断言小工具（各脚本共用，打印风格一致）
 
 let failed = 0;
@@ -154,4 +162,4 @@ function fail(message) {
 
 //#endregion
 
-module.exports = { PROJECT_ROOT, findTsc, prepare, check, finish, fail };
+module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, check, finish, fail };

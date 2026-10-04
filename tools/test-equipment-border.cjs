@@ -137,9 +137,12 @@ check(/frame\.originalSize/.test(helperSource) && /Math\.min\(box\.width \/ sour
 check(/loadFramesFromAtlas/.test(helperSource) && /playLoopAtlas/.test(helperSource), "帧走 AnimationHelper 的图集缓存，播放走图集循环入口");
 
 // 边框相关代码里不许写死手感数值（尺寸/帧率全在 configs/layout/borders）
-const borderMethods = helperSource.slice(helperSource.indexOf("static applyEquipmentBorder"), helperSource.indexOf("static fitNodeToBox") + 800);
-check(!/\b(56|10|255)\b/.test(borderMethods.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "")), "边框显示代码没有写死的尺寸/帧率/透明度（全走 equipmentBorderLayout）");
-check(!/[\u4e00-\u9fa5]/.test(borderMethods.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "")), "边框显示代码没有裸中文文案");
+// 注意：**先剥注释再切片**——直接切原文件的话，切片点落在一条多行注释中间时注释剥不掉，
+// 注释里的中文会被当成「裸中文文案」（加长文档注释就会踩这个假警报）
+const borderCode = helperSource.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+const borderMethods = borderCode.slice(borderCode.indexOf("static applyEquipmentBorder"), borderCode.indexOf("static fitNodeToBox") + 800);
+check(!/\b(56|10|255)\b/.test(borderMethods), "边框显示代码没有写死的尺寸/帧率/透明度（全走 equipmentBorderLayout）");
+check(!/[\u4e00-\u9fa5]/.test(borderMethods), "边框显示代码没有裸中文文案");
 
 check(/loopClipCache/.test(animationSource), "图集循环动画的片段有缓存（几十个格子共用同一片段）");
 check(/createWithSpriteFrames\(spriteFrames, this\.normalizeFrameRate\(frameRate\)\)/.test(animationSource), "片段帧率 = 配置的每秒帧数");

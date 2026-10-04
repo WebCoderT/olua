@@ -47,7 +47,7 @@ import { soulAttributeLabels } from "../../configs/soul";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
-import { getAnchoredPosition, getVisibleSize } from "../utils/layout/ScreenLayout";
+import { getAnchoredPosition, getPopupPosition, getVisibleSize } from "../utils/layout/ScreenLayout";
 import {
   avatarImage,
   bagGridLayout,
@@ -959,8 +959,8 @@ export default class GameUiHelper {
     sprite.on(
       Node.EventType.MOUSE_ENTER,
       () => {
-        const screenPosition = GameHelper.worldPositionToScreenPosition(cell.getWorldPosition());
-        const detailDialog = this.createGoodDetailDialog(good, cell.getComponent(UITransform).contentSize, screenPosition);
+        // 摆放坐标由 createGoodDetailDialog 按「格子世界坐标 − UI 层世界坐标」现算（屏幕中心系）
+        const detailDialog = this.createGoodDetailDialog(good, cell);
         LayerManager.addToUILayer(detailDialog);
         // 鼠标移出、或物品节点被销毁（背包刷新/换装重建）都要销毁详情，
         // 否则图标被销毁时不会触发 MOUSE_LEAVE，详情会永久留在屏幕上并挡住后续点击
@@ -1032,21 +1032,28 @@ export default class GameUiHelper {
   }
 
   /**
-   * 创建物品详情弹窗
+   * 创建物品详情弹窗（鼠标悬停在物品上时显示，背包格子与身上装备槽共用）
+   *
+   * 摆放：位置一律用**屏幕中心系坐标**（锚点世界坐标 − UI 层世界坐标，与 UI 层各常驻组件同口径），
+   * 再交给 `ScreenLayout.getPopupPosition` 算 —— 竖直与物品同高居中、水平放物品靠屏幕中间那一侧、
+   * 最后整块夹进可见区（弹窗比物品大得多，贴外侧摆会被裁掉一半）。
+   * 这里**不能**用相机 worldToScreen 的像素坐标减设计分辨率：两个口径差一个 view 缩放系数，
+   * 算出来的位置会严重偏移（这个 bug 修过一次，见 utils/layout/ScreenLayout.getPopupPosition 的注释）。
+   *
+   * 弹窗自身高度由 Layout 自适应（ResizeMode.CONTAINER），首帧量到的是配置里的占位高度，
+   * 内容撑开后才准，所以尺寸一变就用最终尺寸重算一次位置（幂等，内容稳定后不再动）。
+   *
+   * @param good 物品数据
+   * @param anchor 物品格节点（摆放与尺寸都以它为准）
    */
-  static createGoodDetailDialog(good: Goods, contentSize: Size, screenPosition: Vec3 = new Vec3()) {
-    const screenSize = UiHelper.getScreenSize();
-    const position = new Vec2(screenPosition.x - screenSize.width / 2, screenPosition.y - screenSize.height / 2);
-    const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, position, goodDetailLayout.size);
+  static createGoodDetailDialog(good: Goods, anchor: Node) {
+    const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, new Vec2(), goodDetailLayout.size);
 
-    dialog.setPosition(position.x, position.y, 0);
     const layout = dialog.addComponent(Layout);
     layout.type = Layout.Type.GRID;
     layout.alignHorizontal = true;
-    layout.resizeMode = Layout.ResizeMode.NONE;
     layout.spacingY = goodDetailLayout.rowSpacing;
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
-    layout.node.setPosition(position.x, position.y);
     layout.padding = goodDetailLayout.padding;
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
 
@@ -1153,34 +1160,39 @@ export default class GameUiHelper {
     const footerLogo = UiHelper.createSprite("logo", goodDetailLayout.footerLogo.image, new Vec2(), goodDetailLayout.footerLogo.size);
     dialog.addChild(footerLogo);
 
-    // 物品在左侧
-    if (screenPosition.x < screenSize.width / 2) {
-      position.x += contentSize.width / 2;
-      dialog.getComponent(UITransform).anchorX = 0;
-      contentHeader.getComponent(UITransform).anchorX = 0;
-      contentDescription.getComponent(UITransform).anchorX = 0;
-    }
-    // 物品在右侧
-    if (screenPosition.x > screenSize.width / 2) {
-      dialog.getComponent(UITransform).anchorX = 1;
-      contentHeader.getComponent(UITransform).anchorX = 0.5;
-      contentDescription.getComponent(UITransform).anchorX = 1;
-    }
-    // 物品在上册
-    if (screenPosition.y > screenSize.height / 2) {
-      position.y += contentSize.height / 2;
-      dialog.getComponent(UITransform).anchorY = 1;
-      contentHeader.getComponent(UITransform).anchorY = 0.5;
-      contentDescription.getComponent(UITransform).anchorY = 1;
-    }
-    // 物品在下册
-    if (screenPosition.y < screenSize.height / 2) {
-      position.y -= contentSize.height / 2;
-      dialog.getComponent(UITransform).anchorY = 0;
-      contentHeader.getComponent(UITransform).anchorY = 0;
-      contentDescription.getComponent(UITransform).anchorY = 0;
-    }
+    // 摆放：锚点恒为 0.5/0.5（内容排版交给上面的 Layout，动锚点会让 Layout 按新锚点重排而错位）
+    const anchorWorld = anchor.getWorldPosition();
+    const layerWorld = LayerManager.UILayer.getWorldPosition();
+    const anchorCenter = new Vec2(anchorWorld.x - layerWorld.x, anchorWorld.y - layerWorld.y);
+    const anchorSize = anchor.getComponent(UITransform)?.contentSize ?? goodDetailLayout.size;
+    this.placeGoodDetailDialog(dialog, anchorCenter, anchorSize);
+    // 自适应高度撑开后按最终尺寸复夹一次（可能来两三帧，每次都按当前尺寸重算，内容稳定后不再变）
+    dialog.on(
+      Node.EventType.SIZE_CHANGED,
+      () => {
+        if (isValid(dialog)) this.placeGoodDetailDialog(dialog, anchorCenter, anchorSize);
+      },
+      this,
+    );
     return dialog;
+  }
+
+  /**
+   * 把物品详情弹窗摆到物品旁（尽量靠屏幕中间且整块都在可见区内，规则见 ScreenLayout.getPopupPosition）
+   * 独立成方法是为了「首帧按占位高度摆 + Layout 撑开后再按最终尺寸复夹」两处共用同一套算法
+   */
+  private static placeGoodDetailDialog(dialog: Node, anchorCenter: Vec2, anchorSize: Size) {
+    const transform = dialog.getComponent(UITransform);
+    if (!transform) return;
+    const position = getPopupPosition(
+      anchorCenter,
+      anchorSize,
+      transform.contentSize,
+      getVisibleSize(),
+      goodDetailLayout.placement.gap,
+      goodDetailLayout.placement.screenMargin,
+    );
+    dialog.setPosition(position.x, position.y, 0);
   }
 
   /**
