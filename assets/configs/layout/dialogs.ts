@@ -113,6 +113,26 @@ export const mapPreviewDialogLayout = {
   preview: { name: "map_preview", position: new Vec2(0, -18), size: new Size(560, 392) },
   /** 预览区下方的操作提示 */
   hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: new Color(255, 223, 170) },
+  /**
+   * 预览图上的静态文字标记（开窗时按地图对象组建一次，随预览图一起移动/缩放）
+   * 三类标记：NPC 白点 + 点上方紧挨着的名称、刷怪区中心的怪物名称
+   */
+  marker: {
+    /** 名称文字框尺寸（宽 × 高；宽给足避免名称被截断，各标记居中显示） */
+    labelSize: new Size(140, 16),
+    /** NPC 白点半径（像素） */
+    npcDotRadius: 3,
+    /** NPC 白点颜色 */
+    npcDotColor: Color.WHITE,
+    /** NPC 名称文字颜色与字号 */
+    npcLabelColor: new Color(255, 255, 255),
+    npcLabelFontSize: 12,
+    /** NPC 名称与白点的间距（像素：文字底边到白点边缘的距离） */
+    npcLabelGap: 2,
+    /** 刷怪区怪物名称文字颜色与字号 */
+    monsterLabelColor: new Color(255, 217, 138),
+    monsterLabelFontSize: 12,
+  },
 };
 
 //#endregion

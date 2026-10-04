@@ -1569,6 +1569,15 @@ export default class GameUiHelper {
     });
   }
 
+  /**
+   * 创建小地图静态标记层（占满内容区的空节点，作为预览图的子节点）
+   * 与坐标点层分开：标记（NPC 白点 + 名称、刷怪区名称）只随地图变化建一次，
+   * 坐标点（角色/怪物）每帧节流重绘，互不干扰；标记永远盖在动态点上
+   */
+  static createSmallMapMarkerLayer(position: Vec2, size: Size) {
+    return UiHelper.createNode("small_map_markers", position, size);
+  }
+
   //#endregion
 
   //#region 技能列表

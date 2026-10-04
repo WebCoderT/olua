@@ -36,9 +36,9 @@ export const tiledObjectClasses = {
  * 想新增地图就往 mapData 里加一条（记得同步 MapId 联合类型与 resources/map 目录）。
  */
 const mapData: MapData[] = [
-  { id: "0", label: "第一大陆", src: "map/0/0", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "1", label: "新手地图", src: "map/1", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "2", label: "10级地图", src: "map/2", type: MapType.LEVEL, level: 10, combat: 0, soulOfWar: 0 },
+  { id: "0", label: "新手村", src: "map/0/0", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "1", label: "卧龙城", src: "map/1/1", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "2", label: "王城", src: "map/2/2", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
 ];
 
 /** 地图配置（id → 配置）：由 mapData 统一构建，消费方照旧 maps.get(id) */
@@ -49,7 +49,7 @@ for (const map of mapData) {
 
 /** 地图类型分组（传送官弹窗按此顺序分组展示；新增类型或调整顺序/标题只需改这里） */
 export const mapTypeGroups: Array<{ type: MapType; label: string }> = [
-  { type: MapType.NORMAL, label: "新手村" },
+  { type: MapType.NORMAL, label: "安全地图" },
   { type: MapType.LEVEL, label: "等级地图" },
   { type: MapType.COMBAT, label: "战斗力地图" },
   { type: MapType.SOUL_OF_WAR, label: "战魂地图" },

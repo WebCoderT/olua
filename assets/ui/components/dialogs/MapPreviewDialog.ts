@@ -1,5 +1,7 @@
 import { EventMouse, EventTouch, Graphics, isValid, Node, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { maps } from "../../../configs/map";
+import { maps, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/map";
+import { monsters } from "../../../configs/monster";
+import { npcs } from "../../../configs/npc";
 import { mapPreviewImage, mapPreviewDialogLayout } from "../../../configs/hudLayout";
 import { smallMapConfig } from "../../../configs/smallMap";
 import AutoBattle from "../../core/AutoBattle";
@@ -7,7 +9,8 @@ import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
-import { getMapPixelSize } from "../../utils/map/MapPointMath";
+import { getMapPixelSize, getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld } from "../../utils/map/MapPointMath";
+import { getTiledObjects, getTiledObjectsFrom } from "../../utils/map/TiledObjects";
 import { getHitScreenPoint, getPointerButton, HAS_MOUSE, PointerButton } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import type RoleDisplay from "../role/RoleDisplay";
@@ -20,6 +23,9 @@ import type RoleDisplay from "../role/RoleDisplay";
  * - 左键：委托 AutoBattle.requestMoveTo 自动寻路走过去（玩家手动移动即打断，到达/放弃有提示）
  * - 右键：落点吸附到最近可站立位置后直接传送（setWorldPositionByTransfer，与复活传送同一套入口）
  * 预览图上实时绘制角色黑点与全图怪物红点（颜色/半径口径沿用 configs/smallMap，刷新频率同 refreshInterval）
+ * 另有**静态文字标记层**（开窗时按地图对象组一次性生成，几何见 layout.marker）：
+ * - 每个 NPC 一个白点，白点上方紧挨着显示 NPC 名称
+ * - 每个刷怪区中心显示该区怪物名称
  * 弹窗由 SmallMap 持有并驱动 update（内部按刷新间隔节流）；关闭按钮销毁节点，引用失效自动清理，可反复打开
  */
 export default class MapPreviewDialog {
@@ -53,6 +59,10 @@ export default class MapPreviewDialog {
     // 点位绘制层（预览图的子节点：盖在图上，点击事件冒泡到预览节点统一处理）
     this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(new Vec2(), layout.preview.size);
     preview.addChild(this.dotsGraphics.node);
+    // 静态标记层（NPC 白点 + 名称、刷怪区怪物名称；盖在动态点之上，只随地图数据建一次）
+    const markerLayer = GameUiHelper.createSmallMapMarkerLayer(new Vec2(), layout.preview.size);
+    preview.addChild(markerLayer);
+    this.buildMarkers(markerLayer);
     // 底部操作提示
     dialog.addChild(GameUiHelper.createText("map_preview_hint", layout.hint.text, layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color));
     LayerManager.addToUILayer(dialog);
@@ -69,19 +79,11 @@ export default class MapPreviewDialog {
     if (now - this.lastRefreshAt < smallMapConfig.refreshInterval) return;
     this.lastRefreshAt = now;
     const rolePosition = this.roleDisplay?.getWorldPosition();
-    const map = AutoBattle.getMapNode();
     const transform = this.dotsGraphics.node.getComponent(UITransform);
-    if (!rolePosition || !map || !transform) return;
-    const size = transform.contentSize;
-    if (size.width <= 0 || size.height <= 0) return;
-    const mapSize = getMapPixelSize(map);
-    const mapCenter = map.getWorldPosition();
+    if (!rolePosition || !transform) return;
     // 世界坐标 -> 预览图本地坐标：地图像素范围等比映射到预览区，范围外夹到边缘
-    const toPreview = (worldX: number, worldY: number): Vec2 => {
-      const ratioX = Math.min(1, Math.max(0, (worldX - (mapCenter.x - mapSize.width / 2)) / mapSize.width));
-      const ratioY = Math.min(1, Math.max(0, (worldY - (mapCenter.y - mapSize.height / 2)) / mapSize.height));
-      return new Vec2((ratioX - 0.5) * size.width, (ratioY - 0.5) * size.height);
-    };
+    const toPreview = this.createPreviewMapper(this.dotsGraphics.node);
+    if (!toPreview) return;
     const dots: SmallMapDot[] = [{ ...toPreview(rolePosition.x, rolePosition.y), color: smallMapConfig.roleDotColor, radius: smallMapConfig.roleDotRadius }];
     MonsterManager.getMonsterMap().forEach((monster, node) => {
       if (!isValid(node) || monster.hp <= 0) return;
@@ -89,6 +91,62 @@ export default class MapPreviewDialog {
       dots.push({ ...toPreview(position.x, position.y), color: smallMapConfig.monsterDotColor, radius: smallMapConfig.monsterDotRadius });
     });
     GameUiHelper.drawSmallMapDots(this.dotsGraphics, dots);
+  }
+
+  /**
+   * 世界坐标 -> 预览图本地坐标的换算器（以传入节点的中心为原点，尺寸取该节点内容尺寸）
+   * 地图像素范围等比映射到预览区，范围外夹到 0~1（点落在边缘）；
+   * 地图未就绪 / 尺寸为 0 时返回 null（调用方跳过本次绘制）
+   */
+  private createPreviewMapper(node: Node): ((worldX: number, worldY: number) => Vec2) | null {
+    const map = AutoBattle.getMapNode();
+    const transform = node.getComponent(UITransform);
+    if (!map || !transform) return null;
+    const size = transform.contentSize;
+    if (size.width <= 0 || size.height <= 0) return null;
+    const mapSize = getMapPixelSize(map);
+    const mapCenter = map.getWorldPosition();
+    return (worldX: number, worldY: number): Vec2 => {
+      const ratioX = Math.min(1, Math.max(0, (worldX - (mapCenter.x - mapSize.width / 2)) / mapSize.width));
+      const ratioY = Math.min(1, Math.max(0, (worldY - (mapCenter.y - mapSize.height / 2)) / mapSize.height));
+      return new Vec2((ratioX - 0.5) * size.width, (ratioY - 0.5) * size.height);
+    };
+  }
+
+  /**
+   * 生成预览图上的静态文字标记（开窗时一次性建好，随地图数据固定不变）
+   * - NPC：白点画在标记层的 Graphics 上，名称文字紧贴在白点正上方
+   * - 刷怪区：区域中心显示该区怪物名称（区域不是矩形 / 怪物编号无配置的跳过，与刷怪生成同一套判据）
+   * 坐标一律走 createPreviewMapper（与动态点同一口径），因此标记与红点/黑点位置永远对得上
+   */
+  private buildMarkers(markerLayer: Node) {
+    const map = AutoBattle.getMapNode();
+    if (!map) return;
+    const toPreview = this.createPreviewMapper(markerLayer);
+    if (!toPreview) return;
+    const marker = mapPreviewDialogLayout.marker;
+    const npcDots: SmallMapDot[] = [];
+    // NPC 白点 + 名称（复活点类点位不是 NPC，跳过；名称取 configs/npc 的 label，未配置的跳过）
+    getTiledObjectsFrom(map, tiledGroupNames.npc, tiledGroupNames.legacyObjects).forEach((object) => {
+      if (object.objectClass === tiledObjectClasses.revive || object.name === tiledObjectClasses.revive) return;
+      const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
+      if (!npc) return;
+      const world = getMapPointPositionOnWorld(new Vec3(object.x, object.y), map);
+      const local = toPreview(world.x, world.y);
+      npcDots.push({ x: local.x, y: local.y, color: marker.npcDotColor, radius: marker.npcDotRadius });
+      const labelPosition = new Vec2(local.x, local.y + marker.npcDotRadius + marker.npcLabelGap + marker.labelSize.height / 2);
+      markerLayer.addChild(GameUiHelper.createText(`npc_name_${object.name || npc.id}`, npc.label, marker.npcLabelFontSize, labelPosition, marker.labelSize, marker.npcLabelColor));
+    });
+    GameUiHelper.drawSmallMapDots(markerLayer.addComponent(Graphics), npcDots);
+    // 刷怪区中心的怪物名称
+    getTiledObjects(map, tiledGroupNames.monster).forEach((object) => {
+      if (object.width <= 0 || object.height <= 0) return;
+      const monster = monsters.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
+      if (!monster) return;
+      const center = getMapRectCenterPositionOnWorld(object.x, object.y, object.width, object.height, map);
+      const local = toPreview(center.x, center.y);
+      markerLayer.addChild(GameUiHelper.createText(`monster_area_name_${object.name || monster.label}`, monster.label, marker.monsterLabelFontSize, local, marker.labelSize, marker.monsterLabelColor));
+    });
   }
 
   /** 装载预览图（map/<id>/preview/spriteFrame；失败只提示，弹窗仍可正常使用） */
