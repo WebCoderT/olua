@@ -8,6 +8,7 @@ import {
   Label,
   LabelAtlas,
   Layout,
+  Mask,
   Node,
   ProgressBar,
   resources,
@@ -1576,6 +1577,26 @@ export default class GameUiHelper {
    */
   static createSmallMapMarkerLayer(position: Vec2, size: Size) {
     return UiHelper.createNode("small_map_markers", position, size);
+  }
+
+  /**
+   * 创建小地图底图视口（内容区大小的裁剪容器，常驻 HUD 用）
+   * Mask 的裁剪范围即本节点内容尺寸：底图可远大于内容区（整张地图预览图），
+   * 但只露出角色周围一块，不会溢出到名称条/功能按钮上
+   */
+  static createSmallMapMapView(position: Vec2, size: Size) {
+    const node = UiHelper.createNode("small_map_view", position, size);
+    node.addComponent(Mask);
+    return node;
+  }
+
+  /**
+   * 创建小地图底图（真实地图预览图）
+   * 节点尺寸先按传入值建立，实际显示尺寸由组件按「地图像素尺寸 × 小地图缩放」实时设置，
+   * 因此节点自带 UITransform 且 sprite 为 CUSTOM 尺寸模式，方便逐帧改尺寸与缩放
+   */
+  static createSmallMapMapImage(size: Size) {
+    return UiHelper.createSprite("small_map_image", "", new Vec2(), size);
   }
 
   //#endregion
