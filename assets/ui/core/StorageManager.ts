@@ -17,6 +17,7 @@ import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
 import { getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
 import { getSoulLevel } from "../../configs/soul";
+import { getTitleLevel } from "../../configs/title";
 
 /**
  * 存储管理器
@@ -146,6 +147,8 @@ export default class StorageManager {
     // 战魂等级：旧存档缺失补 0（未激活）
     if (typeof role.soulOfWar !== "number") role.soulOfWar = 0;
     if (typeof role.soulShow !== "boolean") role.soulShow = false;
+    // 称号等级：旧存档缺失补 0（未激活）
+    if (typeof role.title !== "number") role.title = 0;
   }
 
   /**
@@ -171,6 +174,32 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     this.updateUi(role);
     GameUiHelper.createTip("soul_upgrade_tip", { level: next.level, label: next.label });
+    return true;
+  }
+
+  /**
+   * 称号升级/解锁（当前在线角色）：消耗下一级配置的绑定元宝升到下一级（见 configs/title；0 阶升 1 阶即解锁）
+   * @returns 是否升级成功（失败原因已用浮动提示告知）
+   */
+  static upgradeTitle(): boolean {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const next = getTitleLevel(role.title + 1);
+    if (!next) {
+      GameUiHelper.createTip("title_max_tip");
+      return false;
+    }
+    if (role.bindGold < next.bindGold) {
+      GameUiHelper.createTip("title_bind_gold_tip", { need: next.bindGold });
+      return false;
+    }
+    role.bindGold -= next.bindGold;
+    role.title = next.level;
+    // 称号属性计入角色属性与战斗力，升级后重算（头顶名牌动画由调用方经 RoleUIManager.updateTitleShow 刷新）
+    Object.assign(role, GameHelper.combatCalc(role));
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    GameUiHelper.createTip("title_upgrade_tip", { level: next.level, label: next.label });
     return true;
   }
 

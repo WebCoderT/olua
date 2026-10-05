@@ -38,12 +38,14 @@ import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
+import { TitleAttributes, TitleLevelConfig } from "../../types/title";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
 import { equipmentSlots, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
 import { soulAttributeLabels } from "../../configs/soul";
+import { titleAttributeLabels } from "../../configs/title";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
@@ -56,6 +58,7 @@ import {
   dialogFrame,
   equipmentBorderLayout,
   equipmentDetailBackgroundLayout,
+  titleUpgradeDialogLayout,
   equipmentSlotLayout,
   goodDetailLayout,
   hoverTipLayout,
@@ -455,7 +458,10 @@ export default class GameUiHelper {
     return bar;
   }
 
-  /** 创建头部信息 */
+  /**
+   * 创建头部信息（返回纵向弹性容器：角色名称 / 血条 / 血量文字；
+   * 称号名牌动画由 RoleDisplay.updateTitleShow 插进同一个容器的最上方，故后续读件一律按名字而不是按下标）
+   */
   static createHead(name: string, label: string, hp: number, maxHp: number) {
     /** 头部信息栏父节点 */
     const head = UiHelper.createFlexCol(name, 3, new Vec2(0, 100), new Size(100, 0));
@@ -463,14 +469,11 @@ export default class GameUiHelper {
     /** 角色名称显示节点 */
     const roleName = UiHelper.createLabel("role_name", label, Color.WHITE, 10, new Vec2(), new Size(100, 10));
     head.addChild(roleName);
-    /** 文字称号 */
-    const roleTitle = UiHelper.createLabel("role_title", getText("label_role_title"), Color.RED, 10, new Vec2(), new Size(100, 12));
-    head.addChild(roleTitle);
-    /** 血量进度条 */
-    const roleHp = this.createHpBar("", hp / maxHp, new Vec2(), new Size(80, 4));
+    /** 血量进度条（两个字面名与 RoleDisplay.updateHead 的取件口径成对，改动请同步） */
+    const roleHp = this.createHpBar("role_hp_bar", hp / maxHp, new Vec2(), new Size(80, 4));
     head.addChild(roleHp);
     /** 血量文字显示 */
-    const roleHpText = UiHelper.createLabel("role_name", `${hp} / ${maxHp}`, Color.WHITE, 8, new Vec2(), new Size(100, 8));
+    const roleHpText = UiHelper.createLabel("role_hp_text", `${hp} / ${maxHp}`, Color.WHITE, 8, new Vec2(), new Size(100, 8));
     head.addChild(roleHpText);
     return head;
   }
@@ -943,6 +946,105 @@ export default class GameUiHelper {
     node.on(Node.EventType.TOUCH_END, () => onClick(!checked), this);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
     blockClickThrough(node);
+    return node;
+  }
+
+  //#endregion
+
+  //#region 称号
+
+  /**
+   * 创建称号等级卡片（左侧列表行）：等级 + 名称 + 激活状态，选中加金色描边（与战魂卡片同一套样式）
+   * @param config 该等级的称号配置
+   * @param currentLevel 角色当前称号等级（决定激活状态）
+   * @param selected 是否为当前选中项
+   * @param onClick 点击回调（切换选中预览）
+   */
+  static createTitleCard(config: TitleLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
+    const activated = config.level <= currentLevel;
+    const card = UiHelper.createNode(`title_card_${config.level}`, new Vec2(), titleUpgradeDialogLayout.list.cardSize);
+    const button = card.addComponent(Button);
+    button.transition = Button.Transition.SCALE;
+    // 选中描边（后添加绘制在文字之下，故先加描边再加文字）
+    if (selected) {
+      const border = new Node("title_card_border");
+      const graphics = border.addComponent(Graphics);
+      graphics.lineWidth = 2;
+      graphics.strokeColor = titleUpgradeDialogLayout.list.selectedColor;
+      graphics.rect(-titleUpgradeDialogLayout.list.cardSize.width / 2, -titleUpgradeDialogLayout.list.cardSize.height / 2, titleUpgradeDialogLayout.list.cardSize.width, titleUpgradeDialogLayout.list.cardSize.height);
+      graphics.stroke();
+      card.addChild(border);
+    }
+    const nameColor = selected ? titleUpgradeDialogLayout.list.selectedColor : activated ? Color.WHITE : titleUpgradeDialogLayout.list.lockedColor;
+    card.addChild(
+      UiHelper.createLabel(
+        "title_card_label",
+        `${config.level} 阶 · ${config.label}`,
+        nameColor,
+        titleUpgradeDialogLayout.list.cardFontSize,
+        new Vec2(-8, 0),
+        new Size(titleUpgradeDialogLayout.list.cardSize.width - 70, titleUpgradeDialogLayout.list.cardSize.height),
+        Label.HorizontalAlign.LEFT,
+      ),
+    );
+    card.addChild(
+      UiHelper.createLabel(
+        "title_card_state",
+        activated ? getText("label_title_active") : getText("label_title_locked"),
+        activated ? titleUpgradeDialogLayout.list.activeColor : titleUpgradeDialogLayout.list.lockedColor,
+        titleUpgradeDialogLayout.list.stateFontSize,
+        new Vec2(titleUpgradeDialogLayout.list.cardSize.width / 2 - 36, 0),
+        new Size(52, titleUpgradeDialogLayout.list.cardSize.height),
+      ),
+    );
+    card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
+    blockClickThrough(card);
+    return card;
+  }
+
+  /**
+   * 创建称号属性列表（右侧面板）：标题 + 各属性行（有下一级时附带绿色增量），与战魂属性表同一套格式
+   * @param config 展示的称号等级配置
+   * @param next 下一级配置（没有传 null，如已满级）
+   */
+  static createTitleAttributeList(config: TitleLevelConfig, next: TitleLevelConfig | null) {
+    const column = UiHelper.createFlexCol("title_attribute_list", titleUpgradeDialogLayout.attribute.spacing, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width, 0));
+    column.addChild(UiHelper.createLabel("title_attribute_title", `${config.level} 阶 · ${config.label}`, titleUpgradeDialogLayout.attribute.titleColor, 15, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width, 22)));
+    const rows: Array<{ label: string; get: (attributes: TitleAttributes) => number | [number, number] }> = titleAttributeLabels.map((item) => ({
+      label: item.label,
+      get: (attributes) => attributes[item.key],
+    }));
+    rows.forEach((row, index) => {
+      const line = UiHelper.createFlexRow(`title_attribute_row_${index}`, 0, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width, 18));
+      line.addChild(UiHelper.createLabel("name", row.label, titleUpgradeDialogLayout.attribute.rowNameColor, titleUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
+      const value = row.get(config.attributes);
+      const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
+      // 带下一级增量时整行值用绿色（白色 = 当前无增量可看）
+      const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
+      const valueLabel = UiHelper.createLabel("value", text, diff ? titleUpgradeDialogLayout.attribute.rowDiffColor : Color.WHITE, titleUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width - 40, 18), Label.HorizontalAlign.LEFT);
+      line.addChild(valueLabel);
+      column.addChild(line);
+    });
+    return column;
+  }
+
+  /**
+   * 创建称号动画节点（异步加载散图帧目录后循环播放；头顶外显与弹窗中间展示共用）
+   * 名牌帧带字（如「飞龙在天」）且各称号宽窄不一，一律**按素材原始尺寸显示（不缩放）**：
+   * 头顶那份交给头部信息栏的纵向布局排位置，弹窗那份直接放进动画槽位
+   * @param config 称号等级配置
+   * @param size 节点初始尺寸（RAW 模式加载首帧后会被原始尺寸覆盖，仅占位）
+   */
+  static createTitleAnimation(config: TitleLevelConfig, size: Size = titleUpgradeDialogLayout.animation.size) {
+    const node = UiHelper.createNode("title_animation", new Vec2(), size);
+    const sprite = node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.RAW;
+    sprite.trim = false;
+    AnimationHelper.loadFrames(config.animation).then((frames) => {
+      if (!isValid(node) || !frames.length) return;
+      AnimationHelper.playLoopWithFrames("title_loop", node, frames, config.animationFrameRate);
+    });
     return node;
   }
 

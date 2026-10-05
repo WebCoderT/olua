@@ -39,6 +39,8 @@ export class Role implements BattleAttributes {
   soulOfWar: number = 0;
   /** 战魂外显开关（勾选后在主角右上角挂当前等级的战魂动画，见 RoleDisplay.updateSoulShow） */
   soulShow: boolean = false;
+  /** 称号等级（0 = 未激活；解锁/升级消耗绑定元宝，见 configs/title；属性加成计入 combatCalc，解锁后名牌动画常显头顶，见 RoleDisplay.updateTitleShow） */
+  title: number = 0;
   physicalAttack: [number, number] = [0, 0];
   magicAttack: [number, number] = [0, 0];
   taoistAttack: [number, number] = [0, 0];

@@ -86,6 +86,56 @@ export const warSoulDialogLayout = {
 
 //#endregion
 
+//#region 称号升级弹窗
+
+/**
+ * 称号升级弹窗布局（三栏结构与战魂弹窗一致，几何坐标直接沿用；入口在角色信息弹窗的「称号」按钮）
+ * 差异：称号解锁后**常显**头顶，没有「外显」勾选框
+ */
+export const titleUpgradeDialogLayout = {
+  name: "title_upgrade_dialog",
+  title: "称号",
+  size: new Size(880, 560),
+  /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分；34 个称号与战魂 37 个同容器尺寸） */
+  list: {
+    name: "title_list",
+    position: new Vec2(-320, -5),
+    size: new Size(210, 490),
+    cardSize: new Size(192, 44),
+    cardFontSize: 13,
+    stateFontSize: 11,
+    /** 卡片文字颜色：选中 / 未激活 / 已激活 */
+    selectedColor: new Color(255, 214, 102),
+    lockedColor: new Color(140, 140, 140),
+    activeColor: new Color(120, 220, 120),
+  },
+  /** 中：称号动画（名牌帧原始宽 156~245，弹窗内按 RAW 原尺寸展示） */
+  animation: { position: new Vec2(0, 30), size: new Size(300, 300) },
+  /** 中：名称 / 描述 / 当前称号（槽位坐标，子件坐标以槽位中心为原点；比战魂少一行——没有外显勾选框） */
+  info: {
+    position: new Vec2(0, -145),
+    name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
+    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: new Color(170, 170, 170) },
+    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
+  },
+  /** 右：属性列表（含下一级增量） */
+  attribute: {
+    position: new Vec2(250, 240),
+    width: 210,
+    spacing: 6,
+    fontSize: 12,
+    titleColor: new Color(255, 214, 102),
+    rowNameColor: new Color(170, 170, 170),
+    rowDiffColor: new Color(120, 220, 120),
+  },
+  /** 右：绑定元宝余额 */
+  bindGold: { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 },
+  /** 右：升级按钮（满级时文案与置灰） */
+  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级" },
+};
+
+//#endregion
+
 //#region 大陆传送官弹窗
 
 /** 弹窗尺寸为 dialogFrame.size（600×500） */
@@ -162,6 +212,11 @@ export const roleInfoDialogLayout = {
   background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-78, -19), size: new Size(431, 452) },
   /** 战斗力图标（贴在装饰背景左下） */
   combatIcon: { image: uiImages.combatIcon, position: new Vec2(-7, -225), size: new Size(100, 50) },
+  /**
+   * 「称号」入口按钮（右下空区，与底部装备槽 x -160~10 不相交）：点击打开称号升级弹窗
+   * （称号不走 NPC，唯一入口在这里，见 ui/components/dialogs/RoleInfoDialog）
+   */
+  titleButton: { name: "role_title_button", position: new Vec2(200, -215), text: "称 号" },
 };
 
 //#endregion

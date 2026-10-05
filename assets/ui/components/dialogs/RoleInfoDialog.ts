@@ -8,6 +8,7 @@ import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlot
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
 import { roleInfoDialogLayout } from "../../../configs/hudLayout";
+import TitleUpgradeDialog from "./TitleUpgradeDialog";
 
 /**
  * 角色信息弹窗
@@ -53,6 +54,11 @@ export default class RoleInfoDialog {
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
     this.dialog.addChild(this.inShowView);
+    // 「称号」入口按钮（称号不走 NPC，唯一入口在这里；点击打开称号升级弹窗，角色信息弹窗保持打开）
+    const titleButtonLayout = roleInfoDialogLayout.titleButton;
+    const titleButton = GameUiHelper.createMiddleButton(titleButtonLayout.name, titleButtonLayout.text, titleButtonLayout.position);
+    titleButton.on(Node.EventType.TOUCH_END, () => new TitleUpgradeDialog().open(), this);
+    this.dialog.addChild(titleButton);
     LayerManager.addToUILayer(this.dialog);
   }
 

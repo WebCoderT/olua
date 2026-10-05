@@ -9,6 +9,7 @@ import { getEquipment } from "../../configs/items";
 import { combatCalc as combatAttributeWeights } from "../../configs/battle";
 import { maps } from "../../configs/map";
 import { getSoulLevel } from "../../configs/soul";
+import { getTitleLevel } from "../../configs/title";
 import { getText, textRef } from "../../configs/texts";
 import { MapId } from "../../types/map";
 
@@ -89,14 +90,17 @@ export default class GameHelper {
       .filter((equipment): equipment is Equipment => equipment !== null);
     // 战魂按当前等级提供整份属性加成（configs/soul，未激活为 null 不加成）
     const soul = getSoulLevel(role.soulOfWar);
+    // 称号同战魂：当前等级整份加成（configs/title，未激活为 null 不加成）
+    const title = getTitleLevel(role.title);
     const attributeKeys: (keyof Omit<BattleAttributes, "maxHp">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 
-    role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0) + (soul?.attributes.maxHp ?? 0);
+    role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0) + (soul?.attributes.maxHp ?? 0) + (title?.attributes.maxHp ?? 0);
     // 最大魔法值只跟等级走（装备暂不影响魔法值）
     role.maxMp = levelConfig.maxMp;
     for (const key of attributeKeys) {
       const sources: [number, number][] = [levelConfig[key], ...equipmentList.map((equipment) => equipment[key])];
       if (soul) sources.push(soul.attributes[key]);
+      if (title) sources.push(title.attributes[key]);
       role[key] = this.twoAttributesCalc(sources);
     }
 

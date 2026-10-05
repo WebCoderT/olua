@@ -182,6 +182,14 @@ export const tipsLayout = {
 export const roleShowLayout = {
   /** 战魂外显（勾选「外显」时挂载，随主角移动；动画帧自带大量透明边距，实际视觉尺寸更小） */
   soul: { position: new Vec2(26, 62), size: new Size(72, 72), scale: { x: 0.1, y: 0.1 } },
+  /**
+   * 称号名牌（解锁后**常显**头顶，无开关；取代头部信息栏里写死的文字称号占位）。
+   * 节点直接挂在**头部信息栏容器**里（与名称/血条同一个 FlexCol，见 RoleDisplay.updateTitleShow）：
+   * 位置由该容器的纵向布局自动排列 —— 故这里不配坐标、也不缩放（按素材原始尺寸显示，帧原始 156×91 ~ 256×107）。
+   * · siblingIndex：名牌在头部容器里的插入位置（0 = 最上，即排在角色名称之上）
+   * · size：仅加载首帧前的占位尺寸（RAW 模式，帧到达后会被素材原始尺寸覆盖；进图前已预加载，通常一帧内就换掉）
+   */
+  title: { siblingIndex: 0, size: new Size(260, 140) },
 };
 
 //#endregion

@@ -13,11 +13,12 @@ interface BottomBarView {
   updateShortcutIcon: (key: number, icon?: string, onClick?: Function, skillId?: SkillId) => void;
 }
 
-/** 角色外观视图（主角换装刷新 + 头顶信息栏血量实时刷新 + 战魂外显） */
+/** 角色外观视图（主角换装刷新 + 头顶信息栏血量实时刷新 + 战魂/称号外显） */
 interface RoleDisplayView {
   updateOutShow: (role: Role) => void;
   updateHead: (role: Role) => void;
   updateSoulShow: () => void;
+  updateTitleShow: () => void;
 }
 
 /** 角色信息弹窗视图（装备变更后刷新内观） */
@@ -226,6 +227,11 @@ export default class RoleUIManager {
   /** 战魂外显开关/等级变化后刷新主角右上角的战魂动画（按角色数据重建，未勾选即摘除） */
   static updateSoulShow() {
     this.roleDisplay?.updateSoulShow();
+  }
+
+  /** 称号等级变化后刷新主角头顶的名牌动画（按角色数据重建，未激活即摘除） */
+  static updateTitleShow() {
+    this.roleDisplay?.updateTitleShow();
   }
 
   /** 装备变更后刷新角色信息弹窗内观 */

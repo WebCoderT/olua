@@ -118,6 +118,8 @@ export class Game extends Component {
     this.roleDisplay.init();
     // 战魂外显（上次勾选过则进图直接挂上，见 RoleDisplay.updateSoulShow）
     this.roleDisplay.updateSoulShow();
+    // 称号外显（已激活称号则进图直接挂上，见 RoleDisplay.updateTitleShow）
+    this.roleDisplay.updateTitleShow();
     // 自动战斗（快速攻击/自动挂机）以主角为载体走位与出手
     AutoBattle.setRoleDisplay(this.roleDisplay);
     // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）

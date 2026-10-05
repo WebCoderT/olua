@@ -10,6 +10,7 @@ import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { getDirectionByVector } from "../../utils/battle/BattleMath";
 import { getSoulLevel } from "../../../configs/soul";
+import { getTitleLevel } from "../../../configs/title";
 import { roleShowLayout } from "../../../configs/hudLayout";
 import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
@@ -47,10 +48,16 @@ export default class RoleDisplay extends Node {
 
   /** 当前角色数据 */
   private role: Role;
-  /** 头顶信息栏节点（血量实时刷新，见 updateHead；结构由 GameUiHelper.createHead 固定：2=血条 3=血量文字） */
+  /**
+   * 头顶信息栏节点（血量实时刷新，见 updateHead）
+   * 结构由 GameUiHelper.createHead 固定，称号名牌动画会插进同一个容器的最上方（见 updateTitleShow），
+   * 所以取件按名字（role_hp_bar / role_hp_text）而不是按下标
+   */
   private head: Node;
   /** 战魂外显节点（右上角循环播放当前等级战魂动画，见 updateSoulShow；未勾选外显时为 null） */
   private soulShowNode: Node | null = null;
+  /** 称号外显节点（解锁称号后常显头顶名牌动画，见 updateTitleShow；未激活时为 null） */
+  private titleNode: Node | null = null;
 
   /** 攻击/技能锁：动作动画播放完成前为 true */
   private attacking = false;
@@ -229,9 +236,10 @@ export default class RoleDisplay extends Node {
    */
   updateHead(role: Role) {
     if (!isValid(this) || !this.head) return;
-    const hpBar = this.head.children[2]?.getComponent(ProgressBar);
+    // 按名字取件：头部容器里除了名称/血条/血量文字，还会插进称号名牌动画（未激活时摘除），下标不稳定
+    const hpBar = this.head.getChildByName("role_hp_bar")?.getComponent(ProgressBar);
     if (hpBar) hpBar.progress = role.maxHp > 0 ? Math.max(0, Math.min(1, role.hp / role.maxHp)) : 0;
-    const hpText = this.head.children[3]?.getComponent(Label);
+    const hpText = this.head.getChildByName("role_hp_text")?.getComponent(Label);
     if (hpText) hpText.string = `${Math.max(0, Math.floor(role.hp))} / ${role.maxHp}`;
   }
 
@@ -266,6 +274,30 @@ export default class RoleDisplay extends Node {
     node.setPosition(roleShowLayout.soul.position.x, roleShowLayout.soul.position.y);
     this.addChild(node);
     this.soulShowNode = node;
+  }
+
+  /**
+   * 称号外显（由称号升级弹窗升级后、以及进图时调用）
+   * 按角色数据 role.title 重建名牌动画：已激活称号（title > 0）时**常显**（无开关），未激活时摘除。
+   * 节点挂在**头部信息栏容器**里（与角色名称/血条同一个 FlexCol），位置交给该容器的纵向布局、
+   * 不手动定位也**不缩放**（按素材原始尺寸显示）；插入位置见 configs/hudLayout.roleShowLayout.title.siblingIndex
+   * 与 updateSoulShow 同一套「用前重读最新角色数据」的口径（见上）
+   */
+  updateTitleShow() {
+    if (!isValid(this) || !this.head || !isValid(this.head)) return;
+    const role = StorageManager.findOnlineRole() ?? this.role;
+    if (this.titleNode && isValid(this.titleNode)) {
+      // 先摘下再销毁：destroy 当帧内节点仍挂在父节点上，会与新建的名牌同时参与一次布局
+      this.titleNode.removeFromParent();
+      this.titleNode.destroy();
+    }
+    this.titleNode = null;
+    const config = getTitleLevel(role.title);
+    if (!config) return;
+    const node = GameUiHelper.createTitleAnimation(config, roleShowLayout.title.size);
+    node.name = "title_show";
+    this.head.insertChild(node, roleShowLayout.title.siblingIndex);
+    this.titleNode = node;
   }
 
   //#endregion

@@ -4,6 +4,7 @@ import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../c
 import { monsters } from "../../configs/monster";
 import { npcs } from "../../configs/npc";
 import { ROLE_DEFAULT_CLOTH_OUT } from "../../configs/role";
+import { getTitleLevel } from "../../configs/title";
 import { getEquipment } from "../../configs/items";
 import { getAssignedBorders } from "../../configs/border";
 import { getAssignedDetailBackgrounds } from "../../configs/background";
@@ -88,6 +89,9 @@ export default class PreloadManager {
     const tasks: PreloadTask[] = [{ dir: clothOut, kind: "role", speedRate: role.speedRate }];
     const weaponOut = getEquipment(role.equipments.weapon)?.out;
     if (weaponOut) tasks.push({ dir: weaponOut, kind: "role", speedRate: role.speedRate });
+    // 称号名牌动画（已激活时头顶常显，进图即出现；未激活跳过）
+    const title = getTitleLevel(role.title);
+    if (title) tasks.push({ dir: title.animation, kind: "frames" });
     return tasks;
   }
 
