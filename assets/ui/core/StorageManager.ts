@@ -16,6 +16,8 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import { skills } from "../../configs/skill";
 import { getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
+import { getMallPrice } from "../../configs/mall";
+import { getEquipmentNameParts } from "../../configs/equipments";
 import { getSoulLevel } from "../../configs/soul";
 import { getTitleLevel } from "../../configs/title";
 
@@ -492,6 +494,63 @@ export default class StorageManager {
     RoleUIManager.refreshBag();
     GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.totalPrice });
     return true;
+  }
+
+  //#endregion
+
+  //#region 商城
+
+  /**
+   * 商城购买（当前在线角色）：扣**绑定元宝** → 物品入包（第一个空格，可叠加则先合并）
+   * 商品与价格口径见 configs/mall（全场装备，默认 1 绑定元宝/件，特殊定价在那张表里扩展）；
+   * 入包复用统一的 addGood（拾取/奖励同一入口），购买数量恒 1（商城只上架不可叠加的装备）。
+   *
+   * **先扣款落盘、再入包**：addGood 内部会自己取一次在线角色并落盘，若反过来（先入包、再用
+   * 本方法手里的旧实例落盘），刚放进背包的东西会被旧实例覆盖掉 —— 角色对象每次反序列化都是
+   * 新实例，跨调用不能复用（见 findOnlineRole）。背包满时把扣掉的元宝原路退回。
+   * @param id 物品 id（商城只上架装备，见 configs/mall.getMallGoods）
+   * @returns 是否购买成功
+   */
+  static buyMallGood(id: string): boolean {
+    const good = getItem(id);
+    // 只卖装备：非装备 id（或解析不出配置）一律当「已下架」拒绝
+    if (!good || !isEquipment(good)) {
+      GameUiHelper.createTip("mall_good_missing_tip");
+      return false;
+    }
+    const role = this.findOnlineRole();
+    if (!role) {
+      GameUiHelper.createTip("mall_good_missing_tip");
+      return false;
+    }
+    const price = getMallPrice(good);
+    if (role.bindGold < price) {
+      GameUiHelper.createTip("mall_gold_not_enough_tip");
+      return false;
+    }
+    role.bindGold -= price;
+    this.updateOnlineRole(role);
+    if (!this.addGood(good, 1)) {
+      // 背包已满：退款（重新取一次在线角色 —— 旧实例的关系网已被 addGood 的存档替换）
+      const refundRole = this.findOnlineRole();
+      if (refundRole) {
+        refundRole.bindGold += price;
+        this.updateOnlineRole(refundRole);
+      }
+      GameUiHelper.createTip("pickup_full_tip");
+      return false;
+    }
+    const updated = this.findOnlineRole();
+    if (updated) this.updateUi(updated);
+    GameUiHelper.createTip("mall_buy_success_tip", { name: this.getGoodDisplayName(good), price });
+    return true;
+  }
+
+  /** 物品展示名（装备 = 前缀 + 名称 + 后缀，段文案与配色同走 getEquipmentNameParts，与详情/地面掉落一致） */
+  private static getGoodDisplayName(good: Goods): string {
+    if (!isEquipment(good)) return good.label;
+    const parts = getEquipmentNameParts(good);
+    return `${parts.prefix.label}${parts.label}${parts.suffix.label}`;
   }
 
   //#endregion

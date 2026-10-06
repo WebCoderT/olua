@@ -67,7 +67,7 @@
 > 数值、文案、布局、配色、时长、资源路径都不写在逻辑里。
 > 自查：`node tools/audit-config-leak.cjs`（扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
 
-- assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background/title 等）
+- assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background/title/mall 等）
   - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）
   - configs/bottomNav：底部功能入口表（名称 / 图标 / 解锁等级 / 快捷键）
   - configs/layout：UI 布局与样式（hud / dialogs / panels / scenes / borders / backgrounds / images / sizes / theme）
@@ -81,7 +81,7 @@
   - ui/utils：纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/node）
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
-- tools：本地校验脚本（审计：配置外泄 / 点击穿透；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 称号 / 新手背包 / 文案 / 角色删除）+ 边框素材索引图 border-preview.png
+- tools：本地校验脚本（审计：配置外泄 / 点击穿透；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 称号 / 新手背包 / 商城 / 文案 / 角色删除）+ 边框素材索引图 border-preview.png
 - public：截图、展示素材与联系方式二维码
 
 ## 技术栈
@@ -168,6 +168,7 @@
 | 装备数值填写    | 战斗数值逐件调整                                                                         |  ❌  |
 | 背包叠加数量角标  | 格子显示可叠加物品数量                                                                      |  ❌  |
 | 掉落物名称前后缀  | 地面掉落名按「前缀 + 名称 + 后缀」拼全并**三段着色**（前缀/名称用前缀色、后缀用后缀色），与装备详情弹窗**同走一套取色规则**；非装备仍单行白字 |  ✅  |
+| 商城系统       | 底部「商城」入口（M）：**系统内全部装备**（555 件含前后缀变体）上架，默认 1 绑定元宝/件，购买直接进背包（余额不足/背包满不扣钱不改包）；弹窗即商城门面背景（resources/mall/bg），列表**虚拟化**只激活视口附近的行，悬停图标看完整详情；商品与价格见 `configs/mall` |  ✅  |
 
 ### 战斗与技能
 

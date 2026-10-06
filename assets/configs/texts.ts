@@ -75,6 +75,18 @@ export const uiTexts = {
   /** 单件物品的「名称 x数量」写法 */
   label_good_count: "{name} x{count}",
 
+  //#region 浮动提示：商城
+  /** 购买成功（{name} = 物品全名，{price} = 成交价） */
+  mall_buy_success_tip: "购买成功：{name}（{price} 绑定元宝）",
+  /** 绑定元宝不足 */
+  mall_gold_not_enough_tip: "绑定元宝不足，无法购买",
+  /** 商品已下架（id 解析不到配置，或该物品不在商城上架范围） */
+  mall_good_missing_tip: "该商品已下架",
+  /** 商城购买按钮 */
+  label_mall_buy: "购 买",
+  /** 全场统一价说明（{price} = 统一价，见 configs/mall.mallPrice） */
+  mall_price_note: "全场装备统一 {price} 绑定元宝",
+
   //#region 浮动提示：技能
   /** 技能未学习（{skill}） */
   skill_not_learned_tip: "尚未学习 {skill}",

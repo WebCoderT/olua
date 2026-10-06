@@ -7,6 +7,7 @@ import { bottomNavItems } from "../../../configs/bottomNav";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
 import BagDialog from "../dialogs/BagDialog";
+import MallDialog from "../dialogs/MallDialog";
 import SkillListDialog from "../dialogs/SkillListDialog";
 import BottomNavBar from "./BottomNavBar";
 import RoleExpBar from "./RoleExpBar";
@@ -26,6 +27,8 @@ export default class BottomBar extends Node {
   private roleInfoDialog = new RoleInfoDialog();
   /** 背包弹窗 */
   private bagDialog = new BagDialog();
+  /** 商城弹窗 */
+  private mallDialog = new MallDialog();
   /** 技能列表弹窗 */
   private skillListDialog = new SkillListDialog();
   /** 功能按键区 */
@@ -72,6 +75,7 @@ export default class BottomBar extends Node {
     const handlers: Record<string, () => void> = {
       role: () => this.roleInfoDialog.open(),
       bag: () => this.bagDialog.open(),
+      mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
     };
     return bottomNavItems.map((item) => ({ ...item, onClick: handlers[item.key] ?? (() => {}) }));

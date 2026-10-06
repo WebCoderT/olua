@@ -30,6 +30,8 @@ export const buttonImage = (name: string) => `buttons/${name}`;
 export const loginImage = (name: string) => `login/${name}`;
 /** resources/loading：加载界面资源 */
 export const loadingImage = (name: string) => `loading/${name}`;
+/** resources/mall：商城界面资源（背景图） */
+export const mallImage = (name: string) => `mall/${name}`;
 /** resources/create_role：选角 / 创建角色界面资源 */
 export const createRoleImage = (name: string) => `create_role/${name}`;
 /** resources/effect：界面特效图 */
@@ -153,6 +155,10 @@ export const uiImages = {
 
   // ---------------- 加载界面 ----------------
   loadingBackground: loadingImage("loading_bg"),
+
+  // ---------------- 商城 ----------------
+  /** 商城弹窗背景（resources/mall/bg，门面样式底图，商品列表摆它的橱窗开口里） */
+  mallBackground: mallImage("bg"),
 };
 
 //#endregion

@@ -264,6 +264,48 @@ export const bagDialogLayout = {
 
 //#endregion
 
+//#region 商城弹窗
+
+/**
+ * 商城弹窗布局（组件见 ui/components/dialogs/MallDialog）
+ *
+ * 弹窗即商城背景图（resources/mall/bg，门面样式）：商品列表摆在背景图的「橱窗开口」里
+ * （图中暗色门面区域，约 x 170~625 / y 180~428，避开门面两侧的灯笼与龙柱）；
+ * 标题与价格说明压在左右两段屋檐瓦面上，绑定元宝余额落在柜台（橱窗下方）。
+ * 换背景图时：size 要跟着图片实际尺寸改，各部件几何对着新图重新调。
+ */
+export const mallDialogLayout = {
+  name: "mall_dialog",
+  title: "商城",
+  /** 背景图（CUSTOM 按下面的尺寸铺，当前图就是这个尺寸；换图同步改） */
+  background: uiImages.mallBackground,
+  size: new Size(850, 542),
+  /** 标题（左段屋檐瓦面上）与关闭按钮（右上檐角） */
+  titleStyle: { position: new Vec2(-230, 159), size: new Size(220, 26), fontSize: 16, color: new Color("#FFD700") },
+  closeButton: { position: new Vec2(357, 171), size: uiSize.closeButtonSize },
+  /** 全场统一价说明（右段屋檐瓦面上） */
+  priceNote: { position: new Vec2(215, 159), size: new Size(240, 26), fontSize: 12, color: new Color(255, 223, 170) },
+  /** 绑定元宝余额（柜台正中） */
+  bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: new Color(255, 214, 102) },
+  /** 商品滚动列表（橱窗开口内；行节点常驻、只激活视口附近的几行，见 MallDialog 的虚拟化） */
+  list: { name: "mall_list", position: new Vec2(-28, -33), size: new Size(395, 248) },
+  /** 商品行（宽随列表；行内从左到右 = 图标 → 名称 → 购买按钮，几何都由这里推） */
+  row: {
+    height: 34,
+    spacing: 4,
+    paddingX: 10,
+    iconSize: new Size(28, 28),
+    /** 名称（左对齐单行）：与图标的间距、文本框宽度与字号 */
+    name: { gapX: 8, width: 270, fontSize: 12 },
+    /** 购买按钮（小号按钮贴行右缘）：尺寸与字号 */
+    buyButton: { size: new Size(56, 24), fontSize: 12 },
+  },
+  /** 虚拟化缓冲：视口上下各多激活几行，滚动时边缘不露白 */
+  virtualBuffer: 2,
+};
+
+//#endregion
+
 //#region 技能列表弹窗
 
 /** 技能列表弹窗布局 */
