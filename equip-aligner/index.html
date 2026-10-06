@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>装备人工对齐器 · olua</title>
+<style>
+  :root{
+    --bg:#16181c; --panel:#22252a; --panel2:#2a2e35; --line:#383d45;
+    --text:#e6e8ec; --dim:#98a0ad; --accent:#4da6ff; --warn:#ffb648; --ok:#6ee86e; --danger:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    display:flex;flex-direction:column;background:var(--bg);color:var(--text);
+    font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    overflow:hidden;
+  }
+  button,input,select{font:inherit;color:inherit}
+  button{
+    background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+    padding:3px 9px;cursor:pointer;
+  }
+  button:hover{border-color:#566070}
+  button.active{background:#2f5b8a;border-color:#4d8fd6;color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  input[type=text],input[type=number],select,textarea{
+    background:#1b1e22;border:1px solid var(--line);border-radius:4px;padding:3px 6px;
+  }
+  input[type=number]{width:74px}
+  header{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;
+  }
+  header h1{font-size:14px;margin:0 6px 0 0;font-weight:600}
+  header .sep{width:1px;height:18px;background:var(--line)}
+  #status{color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
+  #status b{color:var(--ok);font-weight:600}
+  #status i{color:var(--warn);font-style:normal}
+  main{flex:1;display:flex;min-height:0}
+
+  /* 左：装备列表 */
+  #listPane{
+    width:242px;flex:0 0 auto;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  #listPane .search{padding:7px 8px;border-bottom:1px solid var(--line)}
+  #listPane .search input{width:100%}
+  #list{flex:1;overflow:auto;padding:4px 0 12px}
+  #list .group{padding:7px 10px 3px;color:var(--dim);font-size:11px;letter-spacing:.5px}
+  #list .item{
+    display:flex;align-items:center;gap:8px;padding:4px 10px;cursor:pointer;
+    border-left:2px solid transparent;
+  }
+  #list .item:hover{background:#2a2e35}
+  #list .item.sel{background:#22354a;border-left-color:var(--accent)}
+  #list .item img{width:26px;height:26px;object-fit:contain;image-rendering:pixelated;flex:0 0 auto}
+  #list .item .meta{min-width:0;flex:1}
+  #list .item .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #list .item .sub{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #list .item .badge{font-size:10px;padding:0 4px;border-radius:3px;background:#3c3323;color:var(--warn);flex:0 0 auto}
+  #list .item.noout .nm{color:var(--dim)}
+
+  /* 中：舞台 */
+  #stagePane{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+  #toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+  #toolbar .lab{color:var(--dim)}
+  #dirButtons{display:flex;gap:3px}
+  #dirButtons button{padding:3px 7px;min-width:44px}
+  #dirButtons button.diff::after{content:"•";color:var(--warn);margin-left:3px}
+  #canvasWrap{flex:1;position:relative;min-height:0;background:#101215}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  canvas.dragging{cursor:grabbing}
+  #hint{position:absolute;left:10px;bottom:8px;color:#5f6b7a;font-size:11px;pointer-events:none;line-height:1.7}
+  #footerBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;background:var(--panel);border-top:1px solid var(--line)}
+  #footerBar .lab{color:var(--dim)}
+  #footerBar .grow{flex:1}
+
+  /* 右：导出 */
+  #sidePane{
+    width:272px;flex:0 0 auto;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;padding:8px 10px;gap:8px;
+  }
+  #sidePane h2{font-size:12px;margin:2px 0 0;color:var(--dim);font-weight:600;letter-spacing:.5px}
+  #sidePane .row{display:flex;gap:6px;flex-wrap:wrap}
+  #modList{flex:1;overflow:auto;border:1px solid var(--line);border-radius:4px;background:#1b1e22;min-height:60px}
+  #modList .m{display:flex;align-items:center;gap:6px;padding:3px 7px;border-bottom:1px solid #24272c;font-size:12px}
+  #modList .m:last-child{border-bottom:none}
+  #modList .m .k{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #modList .m .x{cursor:pointer;color:var(--dim)}
+  #modList .m .x:hover{color:var(--danger)}
+  #jsonOut{
+    height:150px;width:100%;resize:none;font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:11px;line-height:1.4;white-space:pre;
+  }
+  .note{color:var(--dim);font-size:11px;line-height:1.6}
+  .note code{background:#1b1e22;border-radius:3px;padding:0 3px}
+</style>
+</head>
+<body>
+<header>
+  <h1>装备人工对齐器</h1>
+  <span class="sep"></span>
+  <span class="lab">资源根</span>
+  <input type="text" id="rootInput" value="../" style="width:56px" title="相对本页面的资源根路径（Live Server 根 = 项目根时保持 ../）" />
+  <button id="reloadBtn">重新载入配置</button>
+  <span class="sep"></span>
+  <label class="lab"><input type="checkbox" id="gridChk" checked /> 网格</label>
+  <span class="lab">间距</span>
+  <input type="number" id="gridSize" value="10" min="1" max="100" step="1" style="width:56px" />
+  <span class="sep"></span>
+  <label class="lab"><input type="checkbox" id="refChk" checked /> 参考外观</label>
+  <span id="status">正在载入…</span>
+</header>
+
+<main>
+  <aside id="listPane">
+    <div class="search"><input type="text" id="search" placeholder="搜索名称 / key / 部位…" /></div>
+    <div id="list"></div>
+  </aside>
+
+  <section id="stagePane">
+    <div id="toolbar">
+      <span class="lab">动作</span>
+      <select id="actionSel"></select>
+      <span class="lab">帧</span>
+      <input type="range" id="frameRange" min="0" max="7" value="0" style="width:120px" />
+      <span id="frameLabel" class="lab">0</span>
+      <span class="sep" style="width:1px;height:18px;background:var(--line)"></span>
+      <span class="lab">方向</span>
+      <div id="dirButtons"></div>
+      <span class="sep" style="width:1px;height:18px;background:var(--line)"></span>
+      <span class="lab">缩放</span>
+      <div id="zoomButtons"></div>
+      <button id="resetViewBtn" title="把原点放回屏幕中央并复位平移">复位视图</button>
+    </div>
+    <div id="canvasWrap">
+      <canvas id="stage"></canvas>
+      <div id="hint">
+        拖动画面 = 移动装备（吸附 0.1）· 滚轮 = 缩放视图 · 右键拖动 = 平移视图<br />
+        方向键 = 微调 1（Shift 10 / Alt 0.1）· 数字键 1~8 = 切换方向 · F = 下一帧
+      </div>
+    </div>
+    <div id="footerBar">
+      <span class="lab">X</span><input type="number" id="posX" step="0.1" />
+      <span class="lab">Y</span><input type="number" id="posY" step="0.1" />
+      <span class="lab">缩放</span><input type="number" id="outScale" step="0.1" min="0.1" />
+      <button id="zeroBtn">归零</button>
+      <button id="applyAllBtn">应用当前方向到全部 8 向</button>
+      <button id="resetOneBtn">重置此装备</button>
+      <span class="grow"></span>
+      <span class="lab" id="selInfo">未选择装备</span>
+    </div>
+  </section>
+
+  <aside id="sidePane">
+    <h2>参考外观（底图）</h2>
+    <div class="row">
+      <select id="refSel" style="flex:1;min-width:0"></select>
+    </div>
+    <div class="row">
+      <input type="text" id="refInput" placeholder="自定义目录，如 clothes/out/005" style="flex:1;min-width:0" />
+      <button id="refApply">应用</button>
+    </div>
+
+    <h2>已修改（<span id="modCount">0</span>）</h2>
+    <div id="modList"></div>
+    <div class="row">
+      <button id="downloadBtn">下载 offsets.json</button>
+      <button id="copyBtn">复制 JSON</button>
+      <button id="clearBtn">清空全部改动</button>
+    </div>
+    <h2>导出预览</h2>
+    <textarea id="jsonOut" readonly></textarea>
+    <div class="note">
+      写入流程：下载 <code>offsets.json</code> → 在项目根执行<br />
+      <code>node equip-aligner/apply-offsets.cjs offsets.json</code><br />
+      改动只落在 <code>assets/configs/equipments.ts</code>（先备份 <code>.bak</code>，可加 <code>--dry-run</code> 预览）。<br />
+      改动实时存在浏览器 localStorage，刷新不丢。
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+
+/* =========================================================================
+ * 装备人工对齐器（纯前端，零依赖）
+ *
+ * 目的：把装备外观（out）帧在 8 个方向下的偏移 outPositions / 缩放 outScale
+ *       用「叠身体拖动」的方式调准，导出 JSON，再由 apply-offsets.cjs 写回
+ *       assets/configs/equipments.ts。
+ *
+ * 与游戏渲染口径对齐的三条关键事实（读源码得出，别凭感觉改）：
+ * 1. 角色节点锚点 (0.5, 0)、原点在脚底中心；衣服/武器是它的子节点，
+ *    位置 = outPositions[方向下标]、缩放 = outScale（见 RoleAppearance.applyOutTransform）。
+ * 2. 外观 Sprite 是 RAW 尺寸 + 默认锚点 (0.5, 0.5)：节点位置 = **帧原始画布的中心**。
+ *    帧被 auto-trim（meta 里 offset 非 0）时，引擎把裁剪内容按 offset 贴回原始画布，
+ *    所以「PNG 全图中心对齐节点位置」与游戏显示完全等价 —— 本工具直接画 PNG 全图即可。
+ * 3. 帧号 = 动作段起始 + 方向下标 × 该动作每方向帧数 + 帧内下标（见 configs/animation
+ *    的 fillAnimationMap）；帧文件名 = 帧号补 5 位 + ".PNG"。
+ *
+ * 配置全部来自项目源码（解析 TS 文本），本文件内不重复维护装备表/动作表，
+ * 改完 configs 点「重新载入配置」即生效。
+ * ========================================================================= */
+
+/* ---------------------------- 1. 源码扫描工具 ---------------------------- */
+
+/** 从 openIdx 处的括号配对到闭合位置（跳过字符串与行/块注释，返回原文下标） */
+function matchBracket(text, openIdx) {
+  const open = text[openIdx];
+  const close = open === "[" ? "]" : open === "{" ? "}" : open === "(" ? ")" : "";
+  if (!close) return -1;
+  let depth = 0;
+  for (let i = openIdx; i < text.length; i++) {
+    const c = text[i];
+    const d = text[i + 1];
+    if (c === "/" && d === "/") { while (i < text.length && text[i] !== "\n") i++; continue; }
+    if (c === "/" && d === "*") { i += 2; while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++; i++; continue; }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c;
+      i++;
+      while (i < text.length) {
+        if (text[i] === "\\") { i += 2; continue; }
+        if (text[i] === quote) break;
+        i++;
+      }
+      continue;
+    }
+    if (c === open) depth++;
+    else if (c === close) { depth--; if (!depth) return i; }
+  }
+  return -1;
+}
+
+/** 取 `const <name> ... = [...]` 的数组体（含注释原文；找不到返回 null） */
+function readArrayBody(text, name) {
+  const re = new RegExp(`const\\s+${name}\\s*(?::[^=]*)?=\\s*\\[`);
+  const m = re.exec(text);
+  if (!m) return null;
+  const open = m.index + m[0].lastIndexOf("[");
+  const close = matchBracket(text, open);
+  return close < 0 ? null : text.slice(open + 1, close);
+}
+
+/** 切出数组体里的顶层对象（`{...}` 文本列表） */
+function topLevelObjects(body) {
+  const objs = [];
+  let i = 0;
+  while (i < body.length) {
+    const c = body[i];
+    if (c === "{") {
+      const end = matchBracket(body, i);
+      if (end < 0) break;
+      objs.push(body.slice(i, end + 1));
+      i = end + 1;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c;
+      i++;
+      while (i < body.length) {
+        if (body[i] === "\\") { i += 2; continue; }
+        if (body[i] === quote) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    i++;
+  }
+  return objs;
+}
+
+/** 取第一个匹配（无匹配返回 undefined） */
+function pick(text, re, index) {
+  const m = re.exec(text);
+  return m ? m[index === undefined ? 1 : index] : undefined;
+}
+
+/** 取第一个匹配的数字（无匹配返回 undefined） */
+function pickNum(text, re) {
+  const value = pick(text, re);
+  return value === undefined ? undefined : parseFloat(value);
+}
+
+/** 取对象文本里的 Vec2 列表 */
+function pickVec2List(objText, field) {
+  const re = new RegExp(`${field}\\s*:\\s*\\[`);
+  const m = re.exec(objText);
+  if (!m) return undefined;
+  const open = objText.indexOf("[", m.index);
+  const close = matchBracket(objText, open);
+  if (close < 0) return undefined;
+  const inner = objText.slice(open + 1, close);
+  const points = [];
+  const pointRe = /new\s+Vec2\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/g;
+  let mm;
+  while ((mm = pointRe.exec(inner))) points.push([parseFloat(mm[1]), parseFloat(mm[2])]);
+  return points;
+}
+
+/** 枚举字面量名 → 值（如 `UP = "up"` → { UP: "up" }） */
+function pickEnum(text, enumName) {
+  const re = new RegExp(`enum\\s+${enumName}\\s*\\{`);
+  const m = re.exec(text);
+  if (!m) return {};
+  const open = text.indexOf("{", m.index + m[0].length - 1);
+  const close = matchBracket(text, open);
+  if (close < 0) return {};
+  const body = text.slice(open + 1, close);
+  const map = {};
+  const itemRe = /(\w+)\s*=\s*"([^"]*)"/g;
+  let mm;
+  while ((mm = itemRe.exec(body))) map[mm[1]] = mm[2];
+  return map;
+}
+
+/** 从数组字面量文本里取出枚举成员名顺序（`[ACTION.STAND, ACTION.WALK]` → ["STAND","WALK"]） */
+function pickEnumNames(text, enumName, arrayRe) {
+  const m = arrayRe.exec(text);
+  if (!m) return [];
+  const names = [];
+  const itemRe = new RegExp(`${enumName}\\.(\\w+)`, "g");
+  let mm;
+  while ((mm = itemRe.exec(m[1]))) names.push(mm[1]);
+  return names;
+}
+
+/* ------------------------------ 2. 状态 ------------------------------ */
+
+const STORAGE_KEY = "olua.equip-aligner.v1";
+
+const state = {
+  root: "../",
+  entries: [],          // 装备条目（基础件）
+  slots: {},            // 部位枚举名 → 中文名
+  slotOrder: [],        // 部位显示顺序（枚举名）
+  directions: [],       // ["up","right_up",...]（顺序即 outPositions 下标）
+  directionLabels: {},  // 方向值 → 中文
+  actionNames: [],      // ACTION 枚举名顺序（动作段顺序）
+  actionValues: {},     // ACTION 名 → 值
+  frameLengths: {},     // 动作值 → 每方向帧数
+  defaultClothOut: "",  // role.ts 的 ROLE_DEFAULT_CLOTH_OUT
+  selectedKey: null,
+  directionIndex: 0,    // 当前方向下标（= outPositions 下标）
+  action: "stand",
+  frameIndex: 0,
+  zoom: 2,
+  panX: 0,
+  panY: 0,
+  showGrid: true,
+  gridSize: 10,
+  showRef: true,
+  refDir: "",           // 当前参考外观目录
+  refDirTried: false,
+  mods: {},             // key → { outScale, outPositions }
+  images: new Map(),    // 路径 → HTMLImageElement | null（null = 加载失败）
+  loadError: "",
+};
+
+/* ---------------------------- 3. 图片加载 ---------------------------- */
+
+/** 按候选路径依次尝试加载图片（失败换下一个；结果缓存，含失败） */
+function loadImage(candidates) {
+  const key = candidates.join("|");
+  if (state.images.has(key)) return Promise.resolve(state.images.get(key));
+  const task = new Promise((resolve) => {
+    let i = 0;
+    const tryNext = () => {
+      if (i >= candidates.length) { resolve(null); return; }
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => tryNext();
+      img.src = state.root + candidates[i++];
+    };
+    tryNext();
+  }).then((img) => {
+    state.images.set(key, img);
+    return img;
+  });
+  state.images.set(key, task);
+  return Promise.resolve(task);
+}
+
+/** 帧图的候选路径（帧号 → `00000.PNG`；扩展名大小写都试）—— 全局唯一入口，缓存 key 才不会分裂 */
+function frameCandidates(dir, frameNo) {
+  const base = `assets/resources/${dir}/${String(frameNo).padStart(5, "0")}`;
+  return [`${base}.PNG`, `${base}.png`, `${base}.jpg`];
+}
+
+/** 图标候选路径（icon 字段无扩展名） */
+function iconCandidates(icon) {
+  return [`assets/resources/${icon}.png`, `assets/resources/${icon}.PNG`];
+}
+
+/**
+ * 取一张已加载好的图（同步）：命中返回图片，未命中/加载中触发加载并返回 null
+ * 加载完成会自动重绘（本工具的绘制是同步的，没加载好就先不画）
+ */
+function imageOf(candidates) {
+  const cached = state.images.get(candidates.join("|"));
+  if (cached instanceof Image) return cached;
+  if (cached === null) return null; // 加载失败过，不再重试
+  loadImage(candidates).then(() => requestDraw());
+  return null;
+}
+
+/** 目录当前帧的图（同步取用） */
+function imageOfDir(dir, frameNo) {
+  if (!dir) return null;
+  return imageOf(frameCandidates(dir, frameNo));
+}
+
+/* ---------------------------- 4. 配置解析 ---------------------------- */
+
+/** 载入并解析项目配置（equipments.ts / animation.ts / role.ts / types） */
+async function loadConfig() {
+  const [equipText, animText, roleText, typesText] = await Promise.all([
+    fetchText("assets/configs/equipments.ts"),
+    fetchText("assets/configs/animation.ts"),
+    fetchText("assets/configs/role.ts"),
+    fetchText("assets/types/animation.ts"),
+  ]);
+  if (!equipText) { setStatus("载入失败：读不到 assets/configs/equipments.ts（确认在项目根启动 Live Server，且资源根路径正确）"); return false; }
+
+  // 方向与动作（枚举值 + 顺序）
+  const directionEnum = typesText ? pickEnum(typesText, "DIRECTION") : {};
+  const actionEnum = typesText ? pickEnum(typesText, "ACTION") : {};
+  const directionNames = pickEnumNames(animText || "", "DIRECTION", /export const directions:\s*DIRECTION\[\]\s*=\s*\[([\s\S]*?)\]/);
+  const actionNames = pickEnumNames(animText || "", "ACTION", /const roleActions:\s*ACTION\[\]\s*=\s*\[([\s\S]*?)\]/);
+  state.directions = directionNames.map((name) => directionEnum[name]).filter(Boolean);
+  state.directionLabels = buildDirectionLabels();
+  state.actionNames = actionNames;
+  state.actionValues = actionEnum;
+
+  // 每方向帧数（`[ACTION.STAND]: 8`）
+  state.frameLengths = {};
+  const lenBlock = /const roleSpriteFrameLength:\s*AnimationLength\s*=\s*\{([\s\S]*?)\n\};/.exec(animText || "");
+  if (lenBlock) {
+    const itemRe = /\[ACTION\.(\w+)\]:\s*(\d+)/g;
+    let mm;
+    while ((mm = itemRe.exec(lenBlock[1]))) {
+      const value = actionEnum[mm[1]];
+      if (value) state.frameLengths[value] = parseInt(mm[2], 10);
+    }
+  }
+  // 默认外观目录（role.ts）
+  state.defaultClothOut = (roleText && pick(roleText, /ROLE_DEFAULT_CLOTH_OUT\s*=\s*"([^"]*)"/)) || "";
+
+  // 部位枚举名 → 中文名 + 显示顺序
+  state.slots = {};
+  state.slotOrder = [];
+  const slotBody = readArrayBody(equipText, "equipmentSlotData");
+  if (slotBody) {
+    topLevelObjects(slotBody).forEach((obj) => {
+      const key = pick(obj, /key:\s*EQUIPMENT_TYPE\.(\w+)/);
+      const label = pick(obj, /label:\s*"([^"]*)"/);
+      if (key && label) { state.slots[key] = label; state.slotOrder.push(key); }
+    });
+  }
+
+  // 装备条目（各 *_Data 数组）
+  const arrayNames = [];
+  const arrayRe = /const\s+(\w+Data)\s*:\s*EquipmentData\[\]\s*=\s*\[/g;
+  let am;
+  while ((am = arrayRe.exec(equipText))) arrayNames.push(am[1]);
+
+  const entries = [];
+  arrayNames.forEach((arrayName) => {
+    const body = readArrayBody(equipText, arrayName);
+    if (!body) return;
+    topLevelObjects(body).forEach((obj) => {
+      const key = pick(obj, /key:\s*"([^"]*)"/);
+      if (!key) return;
+      const slot = pick(obj, /slot:\s*EQUIPMENT_TYPE\.(\w+)/) || "";
+      const out = pick(obj, /out:\s*"([^"]*)"/) || "";
+      const rawPositions = pickVec2List(obj, "outPositions") || [];
+      const outScale = pickNum(obj, /outScale:\s*(-?[\d.]+)/);
+      const entry = {
+        key,
+        label: pick(obj, /label:\s*"([^"]*)"/) || key,
+        level: pickNum(obj, /level:\s*(\d+)/) || 0,
+        slot,
+        slotLabel: state.slots[slot] || slot || "未分类",
+        icon: pick(obj, /icon:\s*"([^"]*)"/) || "",
+        out,
+        outScale: outScale === undefined ? 1 : outScale,
+        outPositions: normalizePositions(rawPositions),
+        group: arrayName,
+      };
+      entries.push(entry);
+    });
+  });
+  state.entries = entries;
+  return entries.length > 0;
+}
+
+/** 补齐到 8 项（对齐游戏口径：缺项依次回退第 0 项、再回退原点） */
+function normalizePositions(list) {
+  const result = [];
+  for (let i = 0; i < 8; i++) {
+    const item = list[i] || list[0] || [0, 0];
+    result.push([Number(item[0]) || 0, Number(item[1]) || 0]);
+  }
+  return result;
+}
+
+/** 8 方向中文名（纯 UI 文案；顺序与值来自 configs/animation.directions） */
+function buildDirectionLabels() {
+  const labels = {
+    up: "上", right_up: "右上", right: "右", right_down: "右下",
+    down: "下", left_down: "左下", left: "左", left_up: "左上",
+  };
+  return labels;
+}
+
+/** 动作中文名（纯 UI 文案） */
+const ACTION_LABELS = {
+  stand: "站立", walk: "走路", run: "跑动", test1: "测试1", attack_near: "近战攻击",
+  attack_skill_1: "技能1", test3: "攻击2", attack_far: "远程攻击", injured: "受伤", a1: "A1", die: "死亡",
+};
+
+async function fetchText(path) {
+  try {
+    const res = await fetch(state.root + path, { cache: "no-store" });
+    if (!res.ok) return "";
+    return await res.text();
+  } catch (err) {
+    return "";
+  }
+}
+
+/* ---------------------------- 5. 取值口径 ---------------------------- */
+
+function entryByKey(key) {
+  return state.entries.find((entry) => entry.key === key) || null;
+}
+
+/** 当前生效的偏移（改过用改动值，否则用配置里的初始值） */
+function offsetsOf(entry) {
+  const mod = state.mods[entry.key];
+  if (mod) return mod;
+  return { outScale: entry.outScale, outPositions: entry.outPositions };
+}
+
+/** 某装备在某方向下的位置（缺项回退第 0 项、再回退原点） */
+function positionOf(entry, dirIndex) {
+  const list = offsetsOf(entry).outPositions;
+  return list[dirIndex] || list[0] || [0, 0];
+}
+
+/** 当前选中装备 */
+function selectedEntry() {
+  return state.selectedKey ? entryByKey(state.selectedKey) : null;
+}
+
+/** 当前动作每方向帧数 */
+function frameLength(action) {
+  return state.frameLengths[action] || 8;
+}
+
+/** 当前动作的段起始帧号（configs/animation 的 fillAnimationMap 公式：前面各动作 × 8 方向 × 帧数） */
+function actionStart(action) {
+  let start = 0;
+  const dirCount = state.directions.length || 8;
+  for (const name of state.actionNames) {
+    const value = state.actionValues[name];
+    if (!value) continue;
+    if (value === action) return start;
+    start += dirCount * frameLength(value);
+  }
+  return 0;
+}
+
+/** 当前帧号（帧文件名去掉补零即此值） */
+function currentFrameNo() {
+  return actionStart(state.action) + state.directionIndex * frameLength(state.action) + state.frameIndex;
+}
+
+/** 当前方向值 */
+function currentDirection() {
+  return state.directions[state.directionIndex] || "down";
+}
+
+/* ---------------------------- 6. 修改与持久化 ---------------------------- */
+
+function round1(value) {
+  return Math.round(value * 10) / 10;
+}
+
+/** 复制一份当前偏移并写入改动表 */
+function mutate(key, mutateFn) {
+  const entry = entryByKey(key);
+  if (!entry) return;
+  const current = offsetsOf(entry);
+  const draft = {
+    outScale: current.outScale,
+    outPositions: current.outPositions.map((point) => [point[0], point[1]]),
+  };
+  mutateFn(draft);
+  const initial = { outScale: entry.outScale, outPositions: entry.outPositions };
+  state.mods[key] = isSameOffsets(draft, initial) ? null : draft;
+  if (!state.mods[key]) delete state.mods[key];
+  saveLocal();
+  renderModList();
+  renderList();
+  syncInputs();
+  requestDraw();
+}
+
+function isSameOffsets(a, b) {
+  if (round1(a.outScale) !== round1(b.outScale)) return false;
+  for (let i = 0; i < 8; i++) {
+    if (round1(a.outPositions[i][0]) !== round1(b.outPositions[i][0])) return false;
+    if (round1(a.outPositions[i][1]) !== round1(b.outPositions[i][1])) return false;
+  }
+  return true;
+}
+
+/** 设置当前方向的位置 */
+function setPosition(x, y) {
+  const entry = selectedEntry();
+  if (!entry) return;
+  mutate(entry.key, (draft) => { draft.outPositions[state.directionIndex] = [round1(x), round1(y)]; });
+}
+
+/** 当前方向位置整体偏移 */
+function nudge(dx, dy) {
+  const entry = selectedEntry();
+  if (!entry) return;
+  const [x, y] = positionOf(entry, state.directionIndex);
+  setPosition(x + dx, y + dy);
+}
+
+/** 把当前方向的值写到全部 8 个方向 */
+function applyToAllDirections() {
+  const entry = selectedEntry();
+  if (!entry) return;
+  mutate(entry.key, (draft) => {
+    const value = draft.outPositions[state.directionIndex];
+    for (let i = 0; i < 8; i++) draft.outPositions[i] = [value[0], value[1]];
+  });
+}
+
+function setOutScale(value) {
+  const entry = selectedEntry();
+  if (!entry || !(value > 0)) return;
+  mutate(entry.key, (draft) => { draft.outScale = round1(value); });
+}
+
+function resetOne() {
+  const entry = selectedEntry();
+  if (!entry) return;
+  delete state.mods[entry.key];
+  saveLocal();
+  renderModList();
+  renderList();
+  syncInputs();
+  requestDraw();
+}
+
+function clearAll() {
+  if (!confirm("清空全部改动？（不影响项目文件，只清浏览器里的草稿）")) return;
+  state.mods = {};
+  saveLocal();
+  renderModList();
+  renderList();
+  syncInputs();
+  requestDraw();
+}
+
+function saveLocal() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      root: state.root,
+      refDir: state.refDir,
+      zoom: state.zoom,
+      gridSize: state.gridSize,
+      showGrid: state.showGrid,
+      showRef: state.showRef,
+      mods: state.mods,
+    }));
+  } catch (err) { /* 隐私模式下写不进去，忽略 */ }
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.root) state.root = data.root;
+    if (data.refDir) state.refDir = data.refDir;
+    if (typeof data.zoom === "number") state.zoom = data.zoom;
+    if (typeof data.gridSize === "number") state.gridSize = data.gridSize;
+    if (typeof data.showGrid === "boolean") state.showGrid = data.showGrid;
+    if (typeof data.showRef === "boolean") state.showRef = data.showRef;
+    if (data.mods && typeof data.mods === "object") state.mods = data.mods;
+  } catch (err) { /* 坏数据当没有 */ }
+}
+
+/* ---------------------------- 7. 绘制 ---------------------------- */
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+let drawQueued = false;
+let viewW = 0;
+let viewH = 0;
+
+function requestDraw() {
+  if (drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; draw(); });
+}
+
+/** 原点在屏幕上的像素坐标（原点 = 角色脚底中心） */
+function originScreen() {
+  return [viewW / 2 + state.panX, viewH * 0.66 + state.panY];
+}
+
+function toScreen(x, y) {
+  const [ox, oy] = originScreen();
+  return [ox + x * state.zoom, oy - y * state.zoom];
+}
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  viewW = canvas.clientWidth;
+  viewH = canvas.clientHeight;
+  if (canvas.width !== Math.round(viewW * dpr) || canvas.height !== Math.round(viewH * dpr)) {
+    canvas.width = Math.round(viewW * dpr);
+    canvas.height = Math.round(viewH * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, viewW, viewH);
+
+  // 背景
+  ctx.fillStyle = "#101215";
+  ctx.fillRect(0, 0, viewW, viewH);
+  drawCheckerboard();
+
+  const [ox, oy] = originScreen();
+
+  if (state.showGrid) drawGrid(ox, oy);
+
+  const entry = selectedEntry();
+  const dirIndex = state.directionIndex;
+  const frameNo = currentFrameNo();
+
+  // 参考外观（底图）
+  if (state.showRef && state.refDir) {
+    const refEntry = state.entries.find((item) => item.out === state.refDir) || null;
+    const refPos = refEntry ? positionOf(refEntry, dirIndex) : [0, 0];
+    const refScale = refEntry ? offsetsOf(refEntry).outScale : 1;
+    const img = imageOfDir(state.refDir, frameNo);
+    if (img) drawSprite(img, refPos[0], refPos[1], refScale, 0.92);
+  }
+
+  // 当前装备
+  if (entry && entry.out) {
+    const [px, py] = positionOf(entry, dirIndex);
+    const scale = offsetsOf(entry).outScale;
+    const img = imageOfDir(entry.out, frameNo);
+    if (img) drawSprite(img, px, py, scale, 1);
+    drawCross(px, py, "#3fd0ff");
+    drawBounds(img, px, py, scale);
+  }
+
+  // 原点（脚底中心）
+  drawCross(0, 0, "#ff5a5a", true);
+  ctx.strokeStyle = "rgba(255,90,90,0.35)";
+  ctx.beginPath();
+  ctx.moveTo(0, oy);
+  ctx.lineTo(viewW, oy);
+  ctx.stroke();
+
+  drawHud(entry, frameNo);
+}
+
+/** 棋盘格底纹（透明区域看得清） */
+function drawCheckerboard() {
+  const size = 12;
+  for (let y = 0; y < viewH; y += size) {
+    for (let x = 0; x < viewW; x += size) {
+      const dark = ((x / size) + (y / size)) % 2 === 0;
+      ctx.fillStyle = dark ? "#141619" : "#181b1f";
+      ctx.fillRect(x, y, size, size);
+    }
+  }
+}
+
+function drawGrid(ox, oy) {
+  const step = state.gridSize * state.zoom;
+  if (step < 4) return;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(120,140,170,0.18)";
+  ctx.beginPath();
+  for (let x = ox % step; x < viewW; x += step) { ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, viewH); }
+  for (let y = oy % step; y < viewH; y += step) { ctx.moveTo(0, Math.round(y) + 0.5); ctx.lineTo(viewW, Math.round(y) + 0.5); }
+  ctx.stroke();
+  // 每 10 格加深一条
+  const major = step * 10;
+  ctx.strokeStyle = "rgba(120,140,170,0.32)";
+  ctx.beginPath();
+  for (let x = ox % major; x < viewW; x += major) { ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, viewH); }
+  for (let y = oy % major; y < viewH; y += major) { ctx.moveTo(0, Math.round(y) + 0.5); ctx.lineTo(viewW, Math.round(y) + 0.5); }
+  ctx.stroke();
+}
+
+/** 画一层外观：图中心对齐 (gx, gy) */
+function drawSprite(img, gx, gy, scale, alpha) {
+  const w = img.naturalWidth * scale * state.zoom;
+  const h = img.naturalHeight * scale * state.zoom;
+  const [sx, sy] = toScreen(gx, gy);
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(img, sx - w / 2, sy - h / 2, w, h);
+  ctx.globalAlpha = 1;
+}
+
+/** 画一层的包围框（虚线） */
+function drawBounds(img, gx, gy, scale) {
+  if (!img) return;
+  const w = img.naturalWidth * scale * state.zoom;
+  const h = img.naturalHeight * scale * state.zoom;
+  const [sx, sy] = toScreen(gx, gy);
+  ctx.save();
+  ctx.setLineDash([4, 3]);
+  ctx.strokeStyle = "rgba(63,208,255,0.5)";
+  ctx.strokeRect(Math.round(sx - w / 2) + 0.5, Math.round(sy - h / 2) + 0.5, Math.round(w), Math.round(h));
+  ctx.restore();
+}
+
+function drawCross(gx, gy, color, big) {
+  const [sx, sy] = toScreen(gx, gy);
+  const r = big ? 9 : 6;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sx - r, sy + 0.5);
+  ctx.lineTo(sx + r, sy + 0.5);
+  ctx.moveTo(sx + 0.5, sy - r);
+  ctx.lineTo(sx + 0.5, sy + r);
+  ctx.stroke();
+}
+
+function drawHud(entry, frameNo) {
+  ctx.fillStyle = "rgba(230,232,236,0.82)";
+  ctx.font = "12px ui-monospace,Menlo,Consolas,monospace";
+  const lines = [];
+  lines.push(`动作 ${state.action}  帧 #${frameNo}（${state.frameIndex}/${frameLength(state.action) - 1}）  方向 ${currentDirection()}`);
+  if (entry) {
+    const [px, py] = positionOf(entry, state.directionIndex);
+    lines.push(`${entry.key}  x=${round1(px)}  y=${round1(py)}  scale=${offsetsOf(entry).outScale}`);
+    lines.push(`out ${entry.out || "(无外观)"}`);
+  } else {
+    lines.push("（左侧选择一件装备）");
+  }
+  if (state.loadError) lines.push(`! ${state.loadError}`);
+  lines.forEach((line, index) => ctx.fillText(line, 10, 18 + index * 16));
+}
+
+/* ---------------------------- 8. 界面渲染 ---------------------------- */
+
+const listEl = document.getElementById("list");
+const modListEl = document.getElementById("modList");
+const statusEl = document.getElementById("status");
+const selInfoEl = document.getElementById("selInfo");
+const dirButtonsEl = document.getElementById("dirButtons");
+const zoomButtonsEl = document.getElementById("zoomButtons");
+const actionSelEl = document.getElementById("actionSel");
+const frameRangeEl = document.getElementById("frameRange");
+const frameLabelEl = document.getElementById("frameLabel");
+const refSelEl = document.getElementById("refSel");
+const posXEl = document.getElementById("posX");
+const posYEl = document.getElementById("posY");
+const outScaleEl = document.getElementById("outScale");
+const jsonOutEl = document.getElementById("jsonOut");
+
+function setStatus(html) {
+  statusEl.innerHTML = html;
+}
+
+function refreshStatus() {
+  if (state.loadError) { setStatus(`<i>${state.loadError}</i>`); return; }
+  const total = state.entries.length;
+  const modified = Object.keys(state.mods).length;
+  setStatus(`装备 ${total} 件 · 已改 <b>${modified}</b> 件 · 参考 <i>${state.refDir || "无"}</i>`);
+}
+
+/** 左侧装备列表（按部位分组） */
+function renderList() {
+  const keyword = document.getElementById("search").value.trim().toLowerCase();
+  const groups = new Map();
+  state.entries.forEach((entry) => {
+    if (keyword) {
+      const hay = `${entry.label} ${entry.key} ${entry.slotLabel}`.toLowerCase();
+      if (hay.indexOf(keyword) < 0) return;
+    }
+    if (!groups.has(entry.slot)) groups.set(entry.slot, []);
+    groups.get(entry.slot).push(entry);
+  });
+  const order = state.slotOrder.filter((slot) => groups.has(slot)).concat(Array.from(groups.keys()).filter((slot) => state.slotOrder.indexOf(slot) < 0));
+
+  listEl.innerHTML = "";
+  order.forEach((slot) => {
+    const title = document.createElement("div");
+    title.className = "group";
+    title.textContent = `${state.slots[slot] || slot}（${groups.get(slot).length}）`;
+    listEl.appendChild(title);
+    groups.get(slot).forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "item" + (entry.key === state.selectedKey ? " sel" : "") + (entry.out ? "" : " noout");
+      const img = document.createElement("img");
+      img.alt = "";
+      if (entry.icon) {
+        // 图标多半是列表刚渲染时才开始加载：没加载完就挂回调，完成后补上（画布层靠整帧重绘天然解决，列表要自己补）
+        const icon = imageOf(iconCandidates(entry.icon));
+        if (icon) img.src = icon.src;
+        else loadImage(iconCandidates(entry.icon)).then((loaded) => { if (loaded) img.src = loaded.src; });
+      }
+      row.appendChild(img);
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const nm = document.createElement("div");
+      nm.className = "nm";
+      nm.textContent = entry.label;
+      const sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = `lv${entry.level} · ${entry.key}`;
+      meta.appendChild(nm);
+      meta.appendChild(sub);
+      row.appendChild(meta);
+      if (state.mods[entry.key]) {
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = "已改";
+        row.appendChild(badge);
+      }
+      row.addEventListener("click", () => selectEntry(entry.key));
+      listEl.appendChild(row);
+    });
+  });
+  refreshStatus();
+}
+
+function renderModList() {
+  const keys = Object.keys(state.mods);
+  document.getElementById("modCount").textContent = String(keys.length);
+  modListEl.innerHTML = "";
+  if (!keys.length) {
+    const empty = document.createElement("div");
+    empty.className = "m";
+    empty.style.color = "#6b7684";
+    empty.textContent = "（还没有改动）";
+    modListEl.appendChild(empty);
+  }
+  keys.forEach((key) => {
+    const row = document.createElement("div");
+    row.className = "m";
+    const name = document.createElement("span");
+    name.className = "k";
+    const entry = entryByKey(key);
+    name.textContent = entry ? entry.label : key;
+    name.title = key;
+    const diff = diffSummary(key);
+    const info = document.createElement("span");
+    info.style.color = diff.mixed ? "#ffb648" : "#6b7684";
+    info.textContent = diff.text;
+    info.title = diff.title;
+    const del = document.createElement("span");
+    del.className = "x";
+    del.textContent = "×";
+    del.title = "丢弃这件装备的改动";
+    del.addEventListener("click", (event) => {
+      event.stopPropagation();
+      delete state.mods[key];
+      saveLocal();
+      renderModList();
+      renderList();
+      syncInputs();
+      requestDraw();
+    });
+    row.appendChild(name);
+    row.appendChild(info);
+    row.appendChild(del);
+    row.addEventListener("click", () => selectEntry(key));
+    modListEl.appendChild(row);
+  });
+  renderJsonPreview();
+}
+
+/** 改动摘要：8 方向是否一致（大多数装备 8 向同值，不一致要显眼） */
+function diffSummary(key) {
+  const mod = state.mods[key];
+  if (!mod) return { mixed: false, text: "", title: "" };
+  const first = mod.outPositions[0];
+  let mixed = false;
+  for (let i = 1; i < 8; i++) {
+    if (round1(mod.outPositions[i][0]) !== round1(first[0]) || round1(mod.outPositions[i][1]) !== round1(first[1])) { mixed = true; break; }
+  }
+  return {
+    mixed,
+    text: mixed ? "8向不同" : `${round1(first[0])}, ${round1(first[1])}`,
+    title: mixed ? "8 个方向的位置不一致（逐个抖过或只调了部分方向）" : "8 个方向同值",
+  };
+}
+
+/** 方向按钮（不一致的方向打点提示） */
+function renderDirectionButtons() {
+  const entry = selectedEntry();
+  dirButtonsEl.innerHTML = "";
+  state.directions.forEach((direction, index) => {
+    const btn = document.createElement("button");
+    btn.textContent = state.directionLabels[direction] || direction;
+    if (index === state.directionIndex) btn.classList.add("active");
+    if (entry) {
+      const [x, y] = positionOf(entry, index);
+      const [x0, y0] = positionOf(entry, 0);
+      if (round1(x) !== round1(x0) || round1(y) !== round1(y0)) btn.classList.add("diff");
+      btn.title = `${round1(x)}, ${round1(y)}`;
+    }
+    btn.addEventListener("click", () => { state.directionIndex = index; afterDirectionChange(); });
+    dirButtonsEl.appendChild(btn);
+  });
+}
+
+function afterDirectionChange() {
+  state.frameIndex = Math.min(state.frameIndex, frameLength(state.action) - 1);
+  frameRangeEl.value = String(state.frameIndex);
+  frameLabelEl.textContent = String(state.frameIndex);
+  renderDirectionButtons();
+  syncInputs();
+  requestDraw();
+}
+
+function renderZoomButtons() {
+  const zoomLevels = [0.5, 1, 2, 4, 8];
+  zoomButtonsEl.innerHTML = "";
+  zoomLevels.forEach((zoom) => {
+    const btn = document.createElement("button");
+    btn.textContent = zoom + "x";
+    if (Math.abs(zoom - state.zoom) < 0.001) btn.classList.add("active");
+    btn.addEventListener("click", () => { state.zoom = zoom; renderZoomButtons(); saveLocal(); requestDraw(); });
+    zoomButtonsEl.appendChild(btn);
+  });
+}
+
+function renderActionSelect() {
+  actionSelEl.innerHTML = "";
+  state.actionNames.forEach((name) => {
+    const value = state.actionValues[name];
+    if (!value) return;
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = `${ACTION_LABELS[value] || value}（${frameLength(value)} 帧/向）`;
+    actionSelEl.appendChild(option);
+  });
+  actionSelEl.value = state.action;
+}
+
+/** 参考外观下拉：所有装备 out 目录 + 默认外观 */
+function renderRefSelect() {
+  const dirs = [];
+  if (state.defaultClothOut && dirs.indexOf(state.defaultClothOut) < 0) dirs.push(state.defaultClothOut);
+  state.entries.forEach((entry) => {
+    if (entry.out && dirs.indexOf(entry.out) < 0) dirs.push(entry.out);
+  });
+  refSelEl.innerHTML = "";
+  dirs.forEach((dir) => {
+    const option = document.createElement("option");
+    option.value = dir;
+    const owner = state.entries.find((entry) => entry.out === dir);
+    option.textContent = owner ? `${dir}（${owner.label}）` : dir;
+    refSelEl.appendChild(option);
+  });
+  if (dirs.indexOf(state.refDir) >= 0) refSelEl.value = state.refDir;
+}
+
+/**
+ * 确认真实可用的参考外观目录：按「当前值 → configs/role 默认外观 → 第一件有外观的装备」逐个试，
+ * 试到能加载出当前帧为止（configs/role 的 ROLE_DEFAULT_CLOTH_OUT 在素材里可能没有对应目录）
+ */
+async function resolveRefDir() {
+  const candidates = [];
+  const push = (dir) => { if (dir && candidates.indexOf(dir) < 0) candidates.push(dir); };
+  push(state.refDir);
+  push(state.defaultClothOut);
+  state.entries.forEach((entry) => push(entry.out));
+  for (const dir of candidates) {
+    const img = await loadImage(frameCandidates(dir, currentFrameNo()));
+    if (img) {
+      if (dir !== state.refDir) {
+        state.refDir = dir;
+        document.getElementById("refInput").value = dir;
+        setStatus(`参考外观自动选用 <b>${dir}</b>（默认外观目录在当前素材里不存在）`);
+      }
+      return dir;
+    }
+  }
+  return "";
+}
+
+function syncInputs() {
+  const entry = selectedEntry();
+  const [x, y] = entry ? positionOf(entry, state.directionIndex) : [0, 0];
+  posXEl.value = String(round1(x));
+  posYEl.value = String(round1(y));
+  outScaleEl.value = String(entry ? offsetsOf(entry).outScale : 1);
+  posXEl.disabled = !entry;
+  posYEl.disabled = !entry;
+  outScaleEl.disabled = !entry;
+  selInfoEl.textContent = entry ? `${entry.slotLabel} · ${entry.label}` : "未选择装备";
+}
+
+function selectEntry(key) {
+  state.selectedKey = key;
+  const entry = entryByKey(key);
+  renderList();
+  renderDirectionButtons();
+  syncInputs();
+  refreshStatus();
+  requestDraw();
+  if (entry && entry.out) {
+    // 预取 8 个方向的当前帧，切方向时无需等待
+    state.directions.forEach((_, index) => {
+      const frameNo = actionStart(state.action) + index * frameLength(state.action) + state.frameIndex;
+      imageOf(frameCandidates(entry.out, frameNo));
+    });
+  }
+}
+
+/* ---------------------------- 9. 交互 ---------------------------- */
+
+let drag = null;   // 左键拖动 = 移动装备
+let pan = null;    // 右键拖动 = 平移视图
+
+canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+canvas.addEventListener("pointerdown", (event) => {
+  canvas.setPointerCapture(event.pointerId);
+  if (event.button === 2) {
+    pan = { id: event.pointerId, sx: event.clientX, sy: event.clientY, px: state.panX, py: state.panY };
+    return;
+  }
+  const entry = selectedEntry();
+  if (!entry) return;
+  const [x, y] = positionOf(entry, state.directionIndex);
+  drag = { id: event.pointerId, sx: event.clientX, sy: event.clientY, ox: x, oy: y };
+  canvas.classList.add("dragging");
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (pan && pan.id === event.pointerId) {
+    state.panX = pan.px + (event.clientX - pan.sx);
+    state.panY = pan.py + (event.clientY - pan.sy);
+    requestDraw();
+    return;
+  }
+  if (!drag || drag.id !== event.pointerId) return;
+  const dx = (event.clientX - drag.sx) / state.zoom;
+  const dy = (event.clientY - drag.sy) / state.zoom;
+  setPosition(drag.ox + dx, drag.oy - dy);
+});
+
+function endPointer(event) {
+  if (pan && pan.id === event.pointerId) { pan = null; saveLocal(); return; }
+  if (drag && drag.id === event.pointerId) {
+    drag = null;
+    canvas.classList.remove("dragging");
+    saveLocal();
+  }
+}
+canvas.addEventListener("pointerup", endPointer);
+canvas.addEventListener("pointercancel", endPointer);
+
+canvas.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = event.clientX - rect.left;
+  const my = event.clientY - rect.top;
+  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const next = Math.min(16, Math.max(0.25, state.zoom * factor));
+  const ratio = next / state.zoom;
+  // 以鼠标位置为中心缩放：让鼠标下方的世界坐标保持不动
+  const [ox, oy] = originScreen();
+  state.panX = mx - (mx - ox) * ratio - viewW / 2;
+  state.panY = my - (my - oy) * ratio - viewH * 0.66;
+  state.zoom = next;
+  saveLocal();
+  renderZoomButtons();
+  requestDraw();
+}, { passive: false });
+
+window.addEventListener("keydown", (event) => {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  if (event.key === "f" || event.key === "F") {
+    state.frameIndex = (state.frameIndex + 1) % frameLength(state.action);
+    frameRangeEl.value = String(state.frameIndex);
+    frameLabelEl.textContent = String(state.frameIndex);
+    requestDraw();
+    return;
+  }
+  if (event.key >= "1" && event.key <= "8") {
+    const index = parseInt(event.key, 10) - 1;
+    if (index < state.directions.length) { state.directionIndex = index; afterDirectionChange(); }
+    return;
+  }
+  const step = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
+  let dx = 0;
+  let dy = 0;
+  if (event.key === "ArrowLeft") dx = -step;
+  else if (event.key === "ArrowRight") dx = step;
+  else if (event.key === "ArrowUp") dy = step;
+  else if (event.key === "ArrowDown") dy = -step;
+  else return;
+  event.preventDefault();
+  nudge(dx, dy);
+});
+
+/* 控件事件 */
+document.getElementById("search").addEventListener("input", renderList);
+document.getElementById("rootInput").addEventListener("change", (event) => {
+  state.root = event.target.value.trim() || "../";
+  state.images.clear();
+  saveLocal();
+  boot();
+});
+document.getElementById("reloadBtn").addEventListener("click", boot);
+document.getElementById("gridChk").addEventListener("change", (event) => { state.showGrid = event.target.checked; saveLocal(); requestDraw(); });
+document.getElementById("gridSize").addEventListener("change", (event) => { state.gridSize = Math.max(1, parseInt(event.target.value, 10) || 10); saveLocal(); requestDraw(); });
+document.getElementById("refChk").addEventListener("change", (event) => { state.showRef = event.target.checked; saveLocal(); requestDraw(); });
+document.getElementById("refSel").addEventListener("change", (event) => { state.refDir = event.target.value; saveLocal(); refreshStatus(); requestDraw(); });
+document.getElementById("refApply").addEventListener("click", () => {
+  const value = document.getElementById("refInput").value.trim();
+  if (!value) return;
+  state.refDir = value;
+  saveLocal();
+  refreshStatus();
+  requestDraw();
+});
+actionSelEl.addEventListener("change", (event) => {
+  state.action = event.target.value;
+  state.frameIndex = 0;
+  frameRangeEl.max = String(frameLength(state.action) - 1);
+  frameRangeEl.value = "0";
+  frameLabelEl.textContent = "0";
+  requestDraw();
+});
+frameRangeEl.addEventListener("input", (event) => {
+  state.frameIndex = parseInt(event.target.value, 10) || 0;
+  frameLabelEl.textContent = String(state.frameIndex);
+  requestDraw();
+});
+posXEl.addEventListener("change", () => { const entry = selectedEntry(); if (entry) setPosition(parseFloat(posXEl.value) || 0, positionOf(entry, state.directionIndex)[1]); });
+posYEl.addEventListener("change", () => { const entry = selectedEntry(); if (entry) setPosition(positionOf(entry, state.directionIndex)[0], parseFloat(posYEl.value) || 0); });
+outScaleEl.addEventListener("change", () => setOutScale(parseFloat(outScaleEl.value) || 1));
+document.getElementById("zeroBtn").addEventListener("click", () => setPosition(0, 0));
+document.getElementById("applyAllBtn").addEventListener("click", applyToAllDirections);
+document.getElementById("resetOneBtn").addEventListener("click", resetOne);
+document.getElementById("clearBtn").addEventListener("click", clearAll);
+document.getElementById("resetViewBtn").addEventListener("click", () => { state.panX = 0; state.panY = 0; saveLocal(); requestDraw(); });
+document.getElementById("downloadBtn").addEventListener("click", downloadJson);
+document.getElementById("copyBtn").addEventListener("click", () => {
+  const text = buildExportText();
+  navigator.clipboard.writeText(text).then(
+    () => setStatus("已复制 JSON 到剪贴板"),
+    () => setStatus("复制失败：浏览器不允许（可手动从预览框复制）"),
+  );
+});
+
+/* ---------------------------- 10. 导出 ---------------------------- */
+
+function buildExport() {
+  const entries = {};
+  Object.keys(state.mods).forEach((key) => {
+    const mod = state.mods[key];
+    const entry = entryByKey(key);
+    entries[key] = {
+      label: entry ? entry.label : "",
+      out: entry ? entry.out : "",
+      outScale: round1(mod.outScale),
+      outPositions: mod.outPositions.map((point) => [round1(point[0]), round1(point[1])]),
+    };
+  });
+  return {
+    tool: "olua-equip-aligner",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    target: "assets/configs/equipments.ts",
+    directions: state.directions,
+    preview: { action: state.action, direction: state.directions[state.directionIndex], refDir: state.refDir, zoom: state.zoom },
+    entries,
+  };
+}
+
+function buildExportText() {
+  return JSON.stringify(buildExport(), null, 2);
+}
+
+function renderJsonPreview() {
+  jsonOutEl.value = buildExportText();
+}
+
+function downloadJson() {
+  const keys = Object.keys(state.mods);
+  if (!keys.length) { setStatus("<i>没有改动可导出</i>"); return; }
+  const blob = new Blob([buildExportText()], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "offsets.json";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  setStatus(`已导出 <b>${keys.length}</b> 件装备的偏移`);
+}
+
+/* ---------------------------- 11. 启动 ---------------------------- */
+
+function syncControls() {
+  document.getElementById("rootInput").value = state.root;
+  document.getElementById("gridChk").checked = state.showGrid;
+  document.getElementById("gridSize").value = String(state.gridSize);
+  document.getElementById("refChk").checked = state.showRef;
+  document.getElementById("refInput").value = state.refDir || "";
+}
+
+async function boot() {
+  setStatus("正在载入配置…");
+  state.images.clear();
+  state.loadError = "";
+  const ok = await loadConfig();
+  if (!ok) { setStatus("<i>载入失败：确认在项目根目录启动 Live Server，且「资源根」路径正确</i>"); return; }
+
+  // 默认动作 = 站立（当前动作若不在表里就换掉）
+  if (!state.frameLengths[state.action]) state.action = state.actionValues.STAND || Object.keys(state.frameLengths)[0] || "stand";
+  renderActionSelect();
+  frameRangeEl.max = String(frameLength(state.action) - 1);
+  state.frameIndex = Math.min(state.frameIndex, frameLength(state.action) - 1);
+  frameRangeEl.value = String(state.frameIndex);
+  frameLabelEl.textContent = String(state.frameIndex);
+
+  // 默认朝向 = 下（游戏默认朝向，正面视图）
+  const downIndex = state.directions.indexOf("down");
+  state.directionIndex = downIndex >= 0 ? downIndex : 0;
+
+  // 默认参考外观：configs/role 的默认外观目录，其次第一件有外观的装备
+  if (!state.refDir) {
+    state.refDir = state.defaultClothOut || (state.entries.find((entry) => entry.out) || {}).out || "";
+  }
+  document.getElementById("refInput").value = state.refDir;
+
+  renderRefSelect();
+  renderList();
+  renderModList();
+  renderZoomButtons();
+  renderDirectionButtons();
+  syncInputs();
+  refreshStatus();
+
+  // 默认选中第一件有外观的装备，省一次点击
+  const first = state.entries.find((entry) => entry.out);
+  if (first) selectEntry(first.key);
+  renderDirectionButtons();
+  // 参考外观：试出真实可用的目录（默认外观目录可能没有素材）
+  await resolveRefDir();
+  renderRefSelect();
+  refreshStatus();
+  requestDraw();
+}
+
+syncControls();
+loadLocal();
+syncControls();
+renderZoomButtons();
+renderDirectionButtons();
+renderModList();
+window.addEventListener("resize", requestDraw);
+if (window.ResizeObserver) new ResizeObserver(() => requestDraw()).observe(document.getElementById("canvasWrap"));
+const bootPromise = boot();
+if (location.hash.indexOf("selftest") >= 0) bootPromise.then(() => setTimeout(runSelfTest, 50));
+
+/* ---------------------------- 12. 自测（URL 带 #selftest 时运行） ---------------------------- */
+
+/**
+ * 无浏览器交互也能回归核心链路：帧号公式 → 选中/改动 → 输入框同步 → 应用 8 向 → 导出 → 持久化 → 重置。
+ * 用法：页面 URL 结尾加 #selftest，结果写进顶部状态栏（自动化测试抓 DOM 即可）。
+ */
+async function runSelfTest() {
+  const results = [];
+  const check = (name, condition, detail) => results.push({ name, pass: !!condition, detail: detail || "" });
+  try {
+    check("帧号公式 stand/down#0 = 32", currentFrameNo() === 32, `实际 ${currentFrameNo()}`);
+    check("方向顺序 8 项", state.directions.length === 8, state.directions.join(","));
+
+    selectEntry("weapon_1");
+    const entry = entryByKey("weapon_1");
+    setPosition(12.3, -4.5);
+    check("改动已记录", !!state.mods.weapon_1, JSON.stringify(state.mods.weapon_1 || null));
+    check("位置写入当前方向", positionOf(entry, state.directionIndex)[0] === 12.3 && positionOf(entry, state.directionIndex)[1] === -4.5);
+    check("输入框同步", posXEl.value === "12.3" && posYEl.value === "-4.5", `${posXEl.value},${posYEl.value}`);
+
+    applyToAllDirections();
+    check("应用到 8 向", offsetsOf(entry).outPositions.every((point) => point[0] === 12.3 && point[1] === -4.5));
+
+    const exported = buildExport();
+    check("导出含 weapon_1", !!exported.entries.weapon_1);
+    check("导出 8 项", exported.entries.weapon_1.outPositions.length === 8, String(exported.entries.weapon_1.outPositions.length));
+    check("导出数值精确", exported.entries.weapon_1.outPositions.every((point) => point[0] === 12.3 && point[1] === -4.5));
+
+    saveLocal();
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    check("localStorage 持久化", !!(saved.mods && saved.mods.weapon_1));
+
+    resetOne();
+    check("重置清空改动", !state.mods.weapon_1);
+    check("重置后回到初始值", positionOf(entry, state.directionIndex)[0] === entry.outPositions[state.directionIndex][0] && positionOf(entry, state.directionIndex)[1] === entry.outPositions[state.directionIndex][1]);
+  } catch (err) {
+    results.push({ name: "自测异常", pass: false, detail: String(err && err.message || err) });
+  }
+  const failed = results.filter((result) => !result.pass);
+  const text = `自测 ${results.length - failed.length}/${results.length} 通过${failed.length ? "：" + failed.map((result) => `${result.name}(${result.detail})`).join("；") : ""}`;
+  setStatus(failed.length ? `<i>${text}</i>` : `<b>${text}</b>`);
+  console.log("[selftest]", text);
+  renderList();
+  renderModList();
+  syncInputs();
+  requestDraw();
+}
+
+if (location.hash.indexOf("selftest") >= 0) setTimeout(runSelfTest, 300);
+
+</script>
+</body>
+</html>
