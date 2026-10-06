@@ -56,6 +56,7 @@ import {
   bottomBarLayout,
   createRolePreviewImage,
   dialogFrame,
+  dropItemLayout,
   equipmentBorderLayout,
   equipmentDetailBackgroundLayout,
   titleUpgradeDialogLayout,
@@ -706,19 +707,51 @@ export default class GameUiHelper {
    * @param good 物品数据
    * @param count 掉落数量
    * @param size 图标尺寸
-   * @return node 掉落物节点、nameLabel 名称文本（供刷新/高亮）
+   * @return node 掉落物节点、nameLabel 名称行里第一段文本（供刷新/高亮）
    */
-  static createDropItem(good: Goods, count: number = 1, size: Size = new Size(40, 40)) {
-    const node = UiHelper.createNode("drop_item", new Vec2(), new Size(size.width, size.height + 14));
-    const icon = UiHelper.createSprite(`drop_icon_${good.type}`, good.icon, new Vec2(0, 7), size);
+  static createDropItem(good: Goods, count: number = 1, size: Size = dropItemLayout.iconSize) {
+    const node = UiHelper.createNode("drop_item", new Vec2(), new Size(size.width, size.height + dropItemLayout.nodeExtraHeight));
+    const icon = UiHelper.createSprite(`drop_icon_${good.type}`, good.icon, new Vec2(0, dropItemLayout.iconOffsetY), size);
     node.addChild(icon);
-    // 名称（可叠加物品带上数量）
-    const name = count > 1 ? `${good.label} x${count}` : good.label;
-    const nameLabel = UiHelper.createLabel("drop_name", name, Color.WHITE, 10, new Vec2(0, -size.height / 2 - 3), new Size(120, 12));
-    // 名称超出图标宽度时靠底部对齐，避免遮挡
-    nameLabel.getComponent(UITransform).setAnchorPoint(0.5, 1);
-    node.addChild(nameLabel);
-    return { node, nameLabel: nameLabel.getComponent(Label) };
+    const { row, nameLabel } = this.createDropNameRow(good, count, size);
+    node.addChild(row);
+    return { node, nameLabel };
+  }
+
+  /**
+   * 创建掉落物名称行：装备 = 前缀 + 名称 + 后缀 三段着色，其余物品单行白字，可叠加物品追加「x{数量}」段
+   *
+   * 装备的段文案与配色**与详情弹窗同源**（同走 configs/equipments.getEquipmentNameParts）：
+   * 前缀/名称用前缀色、后缀用后缀色 —— 地面与详情永远一致，不各写一份色表。
+   * 各段宽度随文字自适应（Overflow.NONE），整行按内容宽度（CONTAINER）在图标正下方居中
+   * @return row 名称行节点、nameLabel 行里第一段文本（可能为 null，供调用方刷新/高亮）
+   */
+  private static createDropNameRow(good: Goods, count: number, iconSize: Size): { row: Node; nameLabel: Label | null } {
+    const layout = dropItemLayout.name;
+    const row = UiHelper.createFlexRow("drop_name", layout.spacing, new Vec2(0, -iconSize.height / 2 - layout.offsetY), new Size(0, layout.lineHeight));
+    // 行宽 = 各段宽度之和（CONTAINER），配合锚点 (0.5, 1) 让整行在图标正下方居中；
+    // 首帧各段还没算出文字宽度，等 Label 定尺后 Layout 会自动重排（它会监听子件 SIZE_CHANGED）
+    row.getComponent(Layout)!.resizeMode = Layout.ResizeMode.CONTAINER;
+    row.getComponent(UITransform)!.setAnchorPoint(0.5, 1);
+    let nameLabel: Label | null = null;
+    const addSegment = (text: string, color: Color) => {
+      const segment = UiHelper.createLabel("drop_name_segment", text, color, layout.fontSize, new Vec2(), new Size(0, layout.lineHeight));
+      const label = segment.getComponent(Label)!;
+      // 宽度随文字自适应：CONTAINER 依赖子件宽度求和，CLAMP 会把宽度压成 0
+      label.overflow = Label.Overflow.NONE;
+      if (!nameLabel) nameLabel = label;
+      row.addChild(segment);
+    };
+    if (isEquipment(good)) {
+      const parts = getEquipmentNameParts(good);
+      addSegment(parts.prefix.label, parts.prefix.color);
+      addSegment(parts.label, parts.prefix.color);
+      addSegment(parts.suffix.label, parts.suffix.color);
+      if (count > 1) addSegment(`x${count}`, dropItemLayout.countColor);
+    } else {
+      addSegment(count > 1 ? `${good.label} x${count}` : good.label, dropItemLayout.nameColor);
+    }
+    return { row, nameLabel };
   }
 
   //#endregion

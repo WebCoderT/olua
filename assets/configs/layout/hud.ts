@@ -150,6 +150,38 @@ export const monsterInfoPanelLayout = {
 
 //#endregion
 
+//#region 地面掉落物（世界内，挂在掉落点上）
+
+/**
+ * 地面掉落物布局（子件坐标以掉落物节点中心为原点；节点锚点即图标中心）
+ *
+ * 名称行由若干「段」横向拼成（拼装见 ui/helpers/GameUiHelper.createDropItem）：
+ * 装备 = 前缀 + 名称 + 后缀 三段着色，其余物品单行白字，可叠加物品再追加「x{数量}」段。
+ * 装备的段文案与配色**与详情弹窗同源**（同走 configs/equipments.getEquipmentNameParts）——
+ * 即前缀/名称用前缀色、后缀用后缀色，两处永远一致，不各写一份色表。
+ */
+export const dropItemLayout = {
+  /** 图标默认尺寸 */
+  iconSize: new Size(40, 40),
+  /** 节点高度 = 图标高度 + 该值（下方多出的空间留给名称行） */
+  nodeExtraHeight: 14,
+  /** 图标相对节点中心的纵向偏移（= nodeExtraHeight / 2：图标偏上、名称落在下方） */
+  iconOffsetY: 7,
+  /** 名称行：位置相对图标下沿再往下偏 offsetY；字号 / 行高 / 各段之间的横向间距 */
+  name: {
+    offsetY: 3,
+    fontSize: 10,
+    lineHeight: 12,
+    spacing: 2,
+  },
+  /** 非装备物品的名称颜色（装备按前后缀着色，见 configs/equipments 的两张配色表） */
+  nameColor: Color.WHITE,
+  /** 数量段颜色（可叠加物品的「x{数量}」） */
+  countColor: Color.WHITE,
+};
+
+//#endregion
+
 //#region 屏幕中间的提示
 
 /** 浮动提示（消息/错误）：居中显示后上浮淡出 */
