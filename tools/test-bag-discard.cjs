@@ -9,6 +9,7 @@
  * - 预览：名字与数量取自配置、空格返回 null
  * - 界面接线：丢弃按钮开关模式、丢弃模式下点格子走丢弃、两步确认只在同一格生效、
  *   超时自动放弃、退出模式/点整理回收/关弹窗清状态、布局与文案配置齐备
+ * - 拖出弹窗销毁：手势上报与物品扣留、全屏确认框（确定销毁 / 取消回原位）的接线与输入独占
  *
  * 用法：node tools/test-bag-discard.cjs
  */
@@ -18,6 +19,8 @@ const { prepareStorage } = require("./lib/storage-sandbox.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const BAG_DIALOG_FILE = path.join(PROJECT_ROOT, "assets/ui/components/dialogs/BagDialog.ts");
+const BAG_GRID_VIEW_FILE = path.join(PROJECT_ROOT, "assets/ui/components/panel/BagGridView.ts");
+const CONFIRM_DIALOG_FILE = path.join(PROJECT_ROOT, "assets/ui/components/dialogs/ConfirmDialog.ts");
 const STORAGE_MANAGER_FILE = path.join(PROJECT_ROOT, "assets/ui/core/StorageManager.ts");
 const DIALOGS_FILE = path.join(PROJECT_ROOT, "assets/configs/layout/dialogs.ts");
 const TEXTS_FILE = path.join(PROJECT_ROOT, "assets/configs/texts.ts");
@@ -230,13 +233,87 @@ check(/isValid\(this\.dialog\)\) \{\s*this\.dialog = null;[\s\S]{0,160}this\.dis
   "bag_discard_confirm_tip",
   "bag_discard_done_tip",
   "bag_discard_empty_tip",
+  "bag_discard_confirm_title",
+  "bag_discard_confirm_text",
   "label_bag_discard",
   "label_bag_discard_exit",
   "label_bag_tidy",
   "label_bag_recycle",
   "label_bag_recycle_confirm",
+  "label_confirm_ok",
+  "label_confirm_cancel",
 ].forEach((key) => check(new RegExp(`^\\s*${key}:`, "m").test(textsSource), `configs/texts 登记了${key}`));
 check(!/[\u4e00-\u9fa5]/.test(dialogSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "BagDialog 里没有裸中文（文案全部走 configs/texts）");
+
+// —— 拖出背包弹窗销毁：手势上报与物品扣留（BagGridView）——
+console.log("— 拖出弹窗销毁：手势上报与物品扣留 —");
+
+const gridSource = fs.readFileSync(BAG_GRID_VIEW_FILE, "utf8");
+const confirmSource = fs.readFileSync(CONFIRM_DIALOG_FILE, "utf8");
+
+check(/export interface BagDropArea \{/.test(gridSource), "BagGridView 暴露 BagDropArea 接口（受理区 + 拖出上报）");
+check(/constructor\(onCellAction: BagCellHandler, dropArea: BagDropArea\)/.test(gridSource), "网格构造接收受理区（由背包弹窗注入）");
+check(/private isOutsideDropArea\(screenPoint: Vec2\): boolean \{/.test(gridSource), "有「松手点在受理区外」的独立判定");
+check(/return !transform\.hitTest\(screenPoint\);/.test(gridSource), "受理区判定用弹窗的 UITransform.hitTest（与格子同一口径）");
+check(
+  /if \(active && !hit && this\.isOutsideDropArea\(point\)\) \{/.test(gridSource),
+  "三个条件齐了才走销毁：拖过阈值 + 没落在格子上 + 落在弹窗外（点击与弹窗内落空都不算）",
+);
+check(
+  /const landing = hit \?\? drag\.target;/.test(gridSource),
+  "弹窗外判定优先（只看松手点本身，不受拖动途中记下的落点影响）；弹窗内才回落到最后一个落点",
+);
+check(/this\.heldGood = drag\.sourceGood;\s*\n\s*this\.endDrag\(true\);/.test(gridSource), "先把物品扣住（保持压暗）再收拖动");
+check(/this\.dropArea\.onDropOutside\(from\);/.test(gridSource), "拖出弹窗外交由弹窗接手（组件不做销毁规则判断）");
+check(/releaseDiscardHold\(\) \{/.test(gridSource), "暴露 releaseDiscardHold 供确认/取消后放开扣留");
+check(/private endDrag\(keepSourceDimmed = false\)/.test(gridSource), "endDrag 支持保留压暗（拖出时物品不被悄悄恢复亮度）");
+check(/if \(!keepSourceDimmed\) GameUiHelper\.setNodeOpacity\(drag\.sourceGood/.test(gridSource), "默认仍恢复透明度（落子/取消照旧）");
+check(/cancelDrag\(\) \{\s*this\.releaseDiscardHold\(\);\s*this\.endDrag\(\);/.test(gridSource), "关弹窗时连扣留一起放开");
+check(/StorageManager\.moveBagGood\(from\.row, from\.col, landing\.row, landing\.col\);/.test(gridSource), "落子路径未受影响（仍走数据层 moveBagGood）");
+check(!/[\u4e00-\u9fa5]/.test(gridSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "BagGridView 里没有裸中文（注释之外）");
+
+// —— 拖出背包弹窗销毁：确认框与弹窗接线 ——
+console.log("— 拖出弹窗销毁：确认框与弹窗接线 —");
+
+check(fs.existsSync(CONFIRM_DIALOG_FILE), "存在通用确认框组件 ConfirmDialog");
+check(fs.existsSync(`${CONFIRM_DIALOG_FILE}.meta`), "新组件带 .meta（新 assets 必带，否则编辑器不认）");
+check(/export default class ConfirmDialog extends Node \{/.test(confirmSource), "确认框自身即节点（构造建 UI，组件约定）");
+check(/getVisibleSize\(\)/.test(confirmSource), "全屏遮罩用「可见区」尺寸（NO_BORDER 下不等于设计分辨率）");
+check(/blockClickThrough\(this\);/.test(confirmSource), "确认框在鼠标通道登记命中拦截（下层 UI 与世界都收不到这次点击）");
+["TOUCH_START", "TOUCH_MOVE", "TOUCH_END", "TOUCH_CANCEL"].forEach((type) =>
+  check(new RegExp(`this\\.on\\(Node\\.EventType\\.${type}, this\\.stopTouchBubble, this\\)`).test(confirmSource), `确认框收住 ${type}（按下遮罩不被下面的背包格子拿走）`),
+);
+check(/event\.propagationStopped = true;/.test(confirmSource), "触摸独占靠 propagationStopped");
+check(/this\.destroy\(\);\s*\n\s*handler\(\);/.test(confirmSource), "确定/取消都先关掉确认框再执行回调（顺便挡住同帧连点两次）");
+check(!/\bmarkClickThrough\(/.test(confirmSource), "遮罩绝不能标成点击穿透（标了就等于没拦住下层）");
+check(/UiHelper\.createSprite\(layout\.panel\.name, layout\.panel\.background/.test(confirmSource), "面板几何与背景图来自配置（组件不写尺寸与图）");
+check(!/[\u4e00-\u9fa5]/.test(confirmSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "ConfirmDialog 里没有裸中文（文案由使用方从 configs/texts 传入）");
+
+check(/\{ area: dialog, onDropOutside: \(from\) => this\.onDropOutside\(from\) \},/.test(dialogSource), "背包弹窗把自身作为受理区、拖出交由 onDropOutside");
+check(/private onDropOutside\(from: BagCellPos\) \{/.test(dialogSource), "BagDialog 有拖出销毁入口");
+check(/if \(!preview\) \{\s*this\.bagGrid\?\.releaseDiscardHold\(\);\s*return;\s*\}/.test(dialogSource), "没有可丢的东西就不弹框（放开扣留安静收场）");
+check(/const confirm = new ConfirmDialog\(\{/.test(dialogSource), "拖出后弹全屏确认框");
+check(/LayerManager\.addToUILayer\(confirm\);/.test(dialogSource), "确认框挂 UI 层顶层（盖在背包弹窗之上）");
+check(/getText\("bag_discard_confirm_text", \{ name: preview\.label, count: preview\.count \}\)/.test(dialogSource), "确认框写明物品名与整格数量（数据取自 getBagDiscardPreview）");
+check(/onConfirm: \(\) => \{[\s\S]{0,120}StorageManager\.discardBagGood\(from\.row, from\.col\);/.test(dialogSource), "点「确定」真的整格丢弃");
+check(/onCancel: \(\) => \{[\s\S]{0,160}this\.bagGrid\?\.releaseDiscardHold\(\);/.test(dialogSource), "点「取消」只放开扣留（数据没动过，物品回原位）");
+check(!/confirm\.on\(Node\.EventType\.TOUCH_END/.test(dialogSource), "按钮逻辑不写在弹窗这层（由 ConfirmDialog 组件负责）");
+check(/private closeDiscardConfirm\(\) \{/.test(dialogSource), "有统一的收框入口");
+check(/close\(\) \{[\s\S]{0,320}this\.closeDiscardConfirm\(\);/.test(dialogSource), "关背包弹窗会收掉确认框（它挂在 UI 层，不随弹窗销毁）");
+check(/this\.bagGrid\?\.releaseDiscardHold\(\);\s*\n\s*this\.bagGrid\?\.refresh\(/.test(dialogSource), "背包一变就放开扣留（refresh 里统一复位待确认状态）");
+check(/this\.closeDiscardConfirm\(\);\s*\n\s*const confirm = new ConfirmDialog/.test(dialogSource), "重复弹之前先收掉上一个（同一时刻只留一个确认框）");
+
+// 确认框布局配置齐备 + 从 hudLayout barrel 可达
+{
+  const start = layoutSource.indexOf("export const confirmDialogLayout");
+  const end = layoutSource.indexOf("//#endregion", start);
+  const block = layoutSource.slice(start, end > start ? end : undefined);
+  check(start > 0, "能定位 confirmDialogLayout 配置块");
+  check(/maskColor: new Color\(0, 0, 0, 160\)/.test(block), "遮罩颜色在配置里（黑色半透明，与死亡遮罩同款）");
+  ["panel", "title", "message", "confirmButton", "cancelButton"].forEach((key) => check(new RegExp(`${key}:`).test(block), `confirmDialogLayout 配了 ${key}`));
+  check(/confirmButton: \{ name: "confirm_ok_button", position: new Vec2\(-90, -58\) \}/.test(block), "「确定」在面板左侧");
+  check(/cancelButton: \{ name: "confirm_cancel_button", position: new Vec2\(90, -58\) \}/.test(block), "「取消」在面板右侧（两钮左右对称、错开 180 > 按钮宽 123）");
+}
 
 void items;
 finish("PASS: 背包丢弃的数据行为、界面接线与配置全部通过");

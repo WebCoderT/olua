@@ -20,6 +20,18 @@ export type BagCellAction = "use" | "equip";
 /** 背包格子操作回调：由弹窗注入（规则判定与提示在数据层，本组件只上报操作） */
 export type BagCellHandler = (row: number, col: number, action: BagCellAction) => void;
 
+/** 背包「受理区」：把物品拖到它外面松手 = 玩家想销毁这件东西（确认流程见 BagDialog） */
+export interface BagDropArea {
+  /** 受理区节点（背包弹窗）：拖出它的矩形范围即视为要丢弃 */
+  area: Node | null;
+  /**
+   * 拖到受理区外面松手
+   * 此时物品已被**扣住**（源格物品保持压暗，让玩家看清是哪一格），
+   * 确认或取消后由弹窗调 BagGridView.releaseDiscardHold 放开
+   */
+  onDropOutside: (from: BagCellPos) => void;
+}
+
 /** 一次拖动的进行中状态（没在按下/拖动时为 null） */
 interface BagDragState {
   /** 起点格 */
@@ -47,7 +59,9 @@ interface BagDragState {
  * 1. 按角色背包数据填充物品图标（左右键操作：左键使用、右键穿戴，规则判定在数据层）；
  * 2. 新增物品时，鼠标移到物品上显示该大类对应的指针颜色；
  * 3. **按住物品拖动改变所在格子**：空格 = 移动、同种可叠加 = 合并、其余 = 交换（规则在数据层
- *    `configs/items.moveBagCellGrid`，本组件只负责手势与表现）。
+ *    `configs/items.moveBagCellGrid`，本组件只负责手势与表现）；
+ *    而**拖到背包弹窗外面**松手 = 玩家想销毁这件东西（物品先被扣住保持压暗，上报弹窗弹确认框，
+ *    确认才丢、取消则原样留在原格；判定与文案在弹窗，见 BagDropArea）。
  *
  * 网格内的触摸归网格自己：弹窗背景是可拖动的（弹窗可以整体搬走），而触摸事件会冒泡，
  * 不把网格区域的触摸收住的话，一拖物品整个弹窗就跟着跑（见 setupTouchOwnership）。
@@ -65,8 +79,15 @@ export default class BagGridView extends Node {
   private cells: Node[][] = [];
   /** 格子操作回调（由弹窗注入） */
   private handleCellAction: BagCellHandler;
+  /** 受理区与「拖出受理区」上报（由弹窗注入） */
+  private dropArea: BagDropArea;
   /** 进行中的拖动（按下后到松手/取消之间才有值） */
   private drag: BagDragState | null = null;
+  /**
+   * 被「扣住」的物品图标：拖到受理区外面松手后，源格物品保持压暗、等销毁确认
+   * 确认或取消后由弹窗调 releaseDiscardHold 恢复（见 BagDropArea.onDropOutside）
+   */
+  private heldGood: Node | null = null;
   /**
    * 本次按压是否已经拖动过物品
    *
@@ -78,9 +99,10 @@ export default class BagGridView extends Node {
   /** 本次按压是不是鼠标右键（touch 通道看不出按键；右键按住只做穿戴，不该拖动物品） */
   private rightPress = false;
 
-  constructor(onCellAction: BagCellHandler) {
+  constructor(onCellAction: BagCellHandler, dropArea: BagDropArea) {
     super(bagGridLayout.name);
     this.handleCellAction = onCellAction;
+    this.dropArea = dropArea;
     // 网格几何见 configs/hudLayout.bagGridLayout（行容器尺寸与格子尺寸决定行列数）
     GameUiHelper.applyColumnStyle(this, bagGridLayout.rowSpacing, bagGridLayout.position, bagGridLayout.size);
     // 行与格子由零件工厂生成（行容器为格子的 flex row）
@@ -172,8 +194,10 @@ export default class BagGridView extends Node {
   /**
    * 取消进行中的拖动（收掉幽灵、高亮与压暗，不动数据）
    * 弹窗关闭前调用：那些临时节点虽然挂在弹窗下会随弹窗销毁，但引用留在这里，先清干净更省心
+   * （含被扣住等确认的物品 —— 确认框还开着时关弹窗，这次销毁就此作废）
    */
   cancelDrag() {
+    this.releaseDiscardHold();
     this.endDrag();
   }
 
@@ -221,20 +245,46 @@ export default class BagGridView extends Node {
   }
 
   /**
-   * 松手：按指针位置找落点并搬过去
-   * 没越过阈值（仍算点击）或没落在任何格子上时不搬 —— 前者交给点击逻辑，后者等于把东西放回原处
+   * 松手：按指针位置定去向
+   * · 落在受理区（背包弹窗）**外面** → 玩家想销毁这件东西：物品先被扣住保持压暗，上报弹窗弹确认框
+   *   （确认才真的丢，取消则由弹窗放开扣留，物品原样留在原格）—— 这条判定**优先**，
+   *   只看松手点本身，不受拖动途中记下的落点影响
+   * · 落在某个格子上 → 搬过去（空格移动 / 同种合并 / 其余交换，规则在数据层）
+   * · 其余情况（没越过阈值仍算点击、落在弹窗内但不在格子上）→ 什么都不做，物品回原位
    */
   private onCellTouchEnd(event: EventTouch) {
     const drag = this.drag;
     if (!drag) return;
     const active = drag.active;
     const from = drag.from;
-    const hit = active ? this.hitCell(event.getLocation()) : null;
-    const target = hit ?? drag.target;
+    // 屏幕坐标必须当下取：判定要用「松手点」，不是拖动中记下的最后一个落点
+    const point = event.getLocation();
+    const hit = active ? this.hitCell(point) : null;
+    // 弹窗外优先判：松手点确实在弹窗矩形外就按销毁走，不受拖动途中记下的落点影响
+    if (active && !hit && this.isOutsideDropArea(point)) {
+      // 扣住物品：endDrag(true) 跳过透明度恢复，压暗留到确认/取消时由 releaseDiscardHold 收
+      this.heldGood = drag.sourceGood;
+      this.endDrag(true);
+      this.dropArea.onDropOutside(from);
+      return;
+    }
+    // 落在弹窗内：以松手点为准，松手点没落在格子上时沿用拖动中记下的最后一个落点
+    // （指针在末尾几帧飘出格子仍按玩家看到的落点处理；弹窗内落空则是 null，等于放回原处）
+    const landing = hit ?? drag.target;
     // 先收干净再落子：搬运会刷新网格（格子节点重建），幽灵与高亮不能留到那之后
     this.endDrag();
-    if (!active || !target) return;
-    StorageManager.moveBagGood(from.row, from.col, target.row, target.col);
+    if (!active || !landing) return;
+    StorageManager.moveBagGood(from.row, from.col, landing.row, landing.col);
+  }
+
+  /**
+   * 放开扣住的物品（确认销毁 / 取消 / 关弹窗后调用）：恢复它的不透明度并忘掉引用
+   * 节点已随背包刷新被销毁时 setNodeOpacity 内部会跳过（isValid 校验），无需调用方判断
+   */
+  releaseDiscardHold() {
+    const good = this.heldGood;
+    this.heldGood = null;
+    GameUiHelper.setNodeOpacity(good, bagGridLayout.drag.restoreOpacity);
   }
 
   /** 进入拖动：压暗源格物品 + 建出幽灵图标与落点高亮框 */
@@ -271,12 +321,15 @@ export default class BagGridView extends Node {
     drag.highlight.active = true;
   }
 
-  /** 收掉拖动：恢复源格物品的透明度并销毁幽灵与高亮（不动数据，落子与取消都走它） */
-  private endDrag() {
+  /**
+   * 收掉拖动：恢复源格物品的透明度并销毁幽灵与高亮（不动数据，落子与取消都走它）
+   * @param keepSourceDimmed 是否保留源格物品的压暗（拖到受理区外时由调用方扣住物品，见 heldGood）
+   */
+  private endDrag(keepSourceDimmed = false) {
     const drag = this.drag;
     this.drag = null;
     if (!drag) return;
-    GameUiHelper.setNodeOpacity(drag.sourceGood, bagGridLayout.drag.restoreOpacity);
+    if (!keepSourceDimmed) GameUiHelper.setNodeOpacity(drag.sourceGood, bagGridLayout.drag.restoreOpacity);
     if (drag.ghost && isValid(drag.ghost)) drag.ghost.destroy();
     if (drag.highlight && isValid(drag.highlight)) drag.highlight.destroy();
   }
@@ -294,6 +347,19 @@ export default class BagGridView extends Node {
       }
     }
     return null;
+  }
+
+  /**
+   * 该屏幕点是否落在受理区（背包弹窗）**外面**
+   * 判定与格子的命中检测同一口径（屏幕坐标 + UITransform.hitTest）；
+   * 受理区节点缺失/已销毁时判 false —— 宁可什么都不发生，也不要凭空弹销毁确认
+   */
+  private isOutsideDropArea(screenPoint: Vec2): boolean {
+    const area = this.dropArea.area;
+    if (!area || !isValid(area)) return false;
+    const transform = area.getComponent(UITransform);
+    if (!transform) return false;
+    return !transform.hitTest(screenPoint);
   }
 
   //#endregion

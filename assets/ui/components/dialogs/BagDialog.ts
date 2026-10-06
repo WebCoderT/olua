@@ -3,8 +3,10 @@ import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
+import ConfirmDialog from "./ConfirmDialog";
 import { bagDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
+import { BagCellPos } from "../../../types/good";
 
 /**
  * 背包弹窗
@@ -13,7 +15,8 @@ import { getText } from "../../../configs/texts";
  * - 右键 → 穿戴装备：StorageManager.equipFromBag（非装备会给出提示）
  * - 「一键整理」→ StorageManager.tidyBag（合并同类可叠加物 + 按等级/部位重排，规则在数据层与配置表）
  * - 「一键回收」→ StorageManager.recycleBagEquipments（背包里的装备整格换成绑定元宝，**两步确认**）
- * - 「丢弃」→ 开关丢弃模式，开启后点格子里的物品即丢弃该格（**两步确认**，不可恢复）
+ * - 「丢弃」按钮 → 开关丢弃模式，开启后点格子里的物品即丢弃该格（**两步确认**，不可恢复）
+ * - **把物品拖到弹窗外面松手** → 弹全屏确认框（确定 = 销毁该格、取消 = 物品回原位，见 onDropOutside）
  * - 按住物品拖到别的格子 → StorageManager.moveBagGood（空格=移动 / 同种可叠加=合并 / 其余=交换；
  *   手势与幽灵图标在 BagGridView 里，落点规则在数据层）
  * 物品的使用/丢弃/搬运规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
@@ -38,6 +41,8 @@ export default class BagDialog {
   private pendingDiscard: { row: number; col: number } | null = null;
   /** 丢弃待确认的超时定时器（到点自动放弃） */
   private discardConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 拖出弹窗后弹出的销毁确认框（全屏模态，挂 UI 层顶层；同一时刻最多一个） */
+  private confirmDialog: ConfirmDialog | null = null;
 
   /** 打开/关闭弹窗 */
   open() {
@@ -56,6 +61,7 @@ export default class BagDialog {
     this.cancelRecycleConfirm();
     this.discardMode = false;
     this.clearDiscardPending();
+    this.closeDiscardConfirm();
     // 弹窗框与背包格子由通用零件拼装
     const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title);
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
@@ -100,7 +106,11 @@ export default class BagDialog {
     discardButton.on(Node.EventType.TOUCH_END, () => this.toggleDiscardMode(), this);
     dialog.addChild(discardButton);
     this.discardButton = discardButton;
-    this.bagGrid = new BagGridView((row, col, action) => this.onCellAction(row, col, action));
+    this.bagGrid = new BagGridView(
+      (row, col, action) => this.onCellAction(row, col, action),
+      // 受理区 = 弹窗自身：把物品拖到它外面松手即「要销毁」（确认框见 onDropOutside）
+      { area: dialog, onDropOutside: (from) => this.onDropOutside(from) },
+    );
     this.bagGrid.refresh(StorageManager.findOnlineRole());
     dialog.addChild(this.bagGrid);
     this.dialog = dialog;
@@ -114,6 +124,8 @@ export default class BagDialog {
     // （拖动物品可能把目标格的东西换走或挪走），一律先复位 —— 宁可让玩家重点一次，也不误伤
     this.cancelRecycleConfirm();
     this.clearDiscardPending();
+    // 拖出弹窗、正等销毁确认的那件物品同理：格子即将重建，先放开扣留（恢复不透明度，之后节点即销毁）
+    this.bagGrid?.releaseDiscardHold();
     this.bagGrid?.refresh(StorageManager.findOnlineRole());
   }
 
@@ -198,6 +210,55 @@ export default class BagDialog {
 
   //#endregion
 
+  //#region 拖出弹窗销毁（全屏确认框）
+
+  /**
+   * 把物品拖到背包弹窗**外面**松手：弹全屏确认框（确定 = 销毁整格，取消 = 物品回原位）
+   *
+   * 与「丢弃」按钮的两步确认目的相同（不可恢复的操作不让一次动作生效），形态不同：
+   * 拖动松手是一次性动作 —— 没有可以再点一次的按钮或格子，只能立一个确认框问清楚。
+   *
+   * 「取消则物品回到原位」不需要任何复原动作：拖动期间**数据从未改过**，
+   * 唯一被改的是源格物品的不透明度（拖动压暗 → 扣留保持压暗），取消时放开扣留即恢复原样。
+   */
+  private onDropOutside(from: BagCellPos) {
+    // 前置校验借数据层的预览（空格 / 越界都返回 null）：没有可丢的东西就把扣留放开，安静收场
+    const preview = StorageManager.getBagDiscardPreview(from.row, from.col);
+    if (!preview) {
+      this.bagGrid?.releaseDiscardHold();
+      return;
+    }
+    // 保险：上一次的确认框还挂着（极端时序）先收掉，同一时刻只留一个
+    this.closeDiscardConfirm();
+    const confirm = new ConfirmDialog({
+      title: getText("bag_discard_confirm_title"),
+      message: getText("bag_discard_confirm_text", { name: preview.label, count: preview.count }),
+      confirmText: getText("label_confirm_ok"),
+      cancelText: getText("label_confirm_cancel"),
+      // 确定：真的丢弃（落盘 + 刷新背包；扣留由 refresh 统一放开）
+      onConfirm: () => {
+        this.confirmDialog = null;
+        StorageManager.discardBagGood(from.row, from.col);
+      },
+      // 取消：数据没动过，放开扣留就是「回到原位」
+      onCancel: () => {
+        this.confirmDialog = null;
+        this.bagGrid?.releaseDiscardHold();
+      },
+    });
+    this.confirmDialog = confirm;
+    // 确认框自身是全屏模态（盖住整个屏幕并独占输入，见 ConfirmDialog）：挂在 UI 层顶层
+    LayerManager.addToUILayer(confirm);
+  }
+
+  /** 关掉销毁确认框（关背包弹窗 / 重复弹出前调用；没开着时什么也不做） */
+  private closeDiscardConfirm() {
+    this.confirmDialog?.destroy();
+    this.confirmDialog = null;
+  }
+
+  //#endregion
+
   //#region 回收
 
   /**
@@ -260,6 +321,8 @@ export default class BagDialog {
     // 退出丢弃模式：先清待确认与定时器；节点即将销毁，不必再改按钮文案
     this.clearDiscardPending();
     this.discardMode = false;
+    // 销毁确认框挂在 UI 层（不随弹窗销毁），必须显式收掉 —— 否则留一个盖住屏幕的模态黑幕
+    this.closeDiscardConfirm();
     // 拖动中关弹窗：幽灵与落点高亮挂在弹窗下会随弹窗销毁，这里先让网格把拖动状态收干净
     this.bagGrid?.cancelDrag();
     this.recycleButton = null;

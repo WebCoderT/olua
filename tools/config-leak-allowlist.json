@@ -33,6 +33,11 @@
       "reason": "new Node(\"death_mask\") 是死亡遮罩节点，本文件自建自用；大小/颜色等真正可调的部分已经走 configs/layout 的死亡弹窗配置。"
     },
     {
+      "file": "ui/components/dialogs/ConfirmDialog.ts",
+      "rule": "nodeName",
+      "reason": "new Node(\"confirm_mask\") 是确认框的遮罩节点，本文件自建自用（与 DeathDialog 的 death_mask 同一款）；尺寸/颜色等真正可调的部分已经走 configs/layout 的 confirmDialogLayout。"
+    },
+    {
       "file": "ui/components/dialogs/WarSoulDialog.ts",
       "rule": "nodeName",
       "reason": "getChildByName(\"soul_upgrade_button_label\") 取的是本弹窗按钮工厂产物里的文字子节点名（工厂与调用方的内部约定），不是可调配置。"

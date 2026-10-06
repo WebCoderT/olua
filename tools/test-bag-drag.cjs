@@ -400,7 +400,7 @@ check(/GameUiHelper\.followScreenPoint\(drag\.ghost/.test(gridViewSource), "幽�
 check(/GameUiHelper\.alignNodeToNode\(drag\.highlight, targetCell\)/.test(gridViewSource), "高亮框摆到指针下的格子上");
 check(/GameUiHelper\.setNodeOpacity\(drag\.sourceGood, bagGridLayout\.drag\.sourceOpacity\)/.test(gridViewSource), "拖动中源格物品压暗");
 check(/GameUiHelper\.setNodeOpacity\(drag\.sourceGood, bagGridLayout\.drag\.restoreOpacity\)/.test(gridViewSource), "松手/取消后恢复透明度");
-check(/StorageManager\.moveBagGood\(from\.row, from\.col, target\.row, target\.col\)/.test(gridViewSource), "落子调数据层 moveBagGood（组件不做规则判断）");
+check(/StorageManager\.moveBagGood\(from\.row, from\.col, landing\.row, landing\.col\)/.test(gridViewSource), "落子调数据层 moveBagGood（组件不做规则判断）");
 
 // 弹窗接线
 check(/this\.bagGrid\?\.cancelDrag\(\);/.test(dialogSource), "关弹窗先把拖动收干净");

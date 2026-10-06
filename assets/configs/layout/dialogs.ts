@@ -306,6 +306,32 @@ export const deathDialogLayout = {
 
 //#endregion
 
+//#region 通用确认框（模态：盖住整个屏幕的「确定 / 取消」二选一）
+
+/**
+ * 通用确认框布局（组件见 ui/components/dialogs/ConfirmDialog，自身即全屏模态节点）
+ *
+ * 与死亡遮罩（deathDialogLayout）同一套做法：全屏黑遮罩 + 居中面板；
+ * 文案不进这里 —— 玩家文案的唯一来源是 configs/texts，由使用方取好后传进组件
+ * （首个使用方是背包的「拖出弹窗销毁」，见 ui/components/dialogs/BagDialog）
+ */
+export const confirmDialogLayout = {
+  name: "confirm_dialog",
+  /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住下层点击；与死亡遮罩同色） */
+  maskColor: new Color(0, 0, 0, 160),
+  /** 居中面板：尺寸与背景图（复用通用弹窗背景） */
+  panel: { name: "confirm_panel", size: new Size(420, 210), background: uiImages.dialogBackground },
+  /** 标题（面板上部，配色与通用弹窗标题一致） */
+  title: { name: "confirm_title", position: new Vec2(0, 68), size: new Size(360, 26), fontSize: 16, color: new Color("#FF8B8B") },
+  /** 正文：宽度固定、高度按内容自适应（可换行，锚点居中故向上下对称撑开） */
+  message: { name: "confirm_message", position: new Vec2(0, 18), width: 340, fontSize: 14, lineHeight: 20, color: Color.WHITE },
+  /** 两个按钮（中号按钮宽 123：x 错开 90 → 间隙 57，整体在面板内居中） */
+  confirmButton: { name: "confirm_ok_button", position: new Vec2(-90, -58) },
+  cancelButton: { name: "confirm_cancel_button", position: new Vec2(90, -58) },
+};
+
+//#endregion
+
 //#region 物品详情弹窗（鼠标悬停在物品图标上时显示）
 
 /** 物品详情弹窗（跟随鼠标，坐标为屏幕中心系） */

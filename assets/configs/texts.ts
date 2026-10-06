@@ -52,6 +52,10 @@ export const uiTexts = {
   bag_discard_mode_tip: "点击物品即可丢弃（整格丢弃，不可恢复）",
   /** 丢弃的两步确认（第一次点击，{name} 物品名 · {count} 整格数量） */
   bag_discard_confirm_tip: "再点一次丢弃「{name}」×{count}，丢弃后无法恢复",
+  /** 销毁确认框标题（拖出背包弹窗时弹出，见 components/dialogs/ConfirmDialog） */
+  bag_discard_confirm_title: "销毁物品",
+  /** 销毁确认框正文（{name} 物品名 · {count} 整格数量） */
+  bag_discard_confirm_text: "确定销毁「{name}」×{count}？销毁后无法恢复。",
   /** 丢弃完成（{name} · {count}） */
   bag_discard_done_tip: "已丢弃「{name}」×{count}",
   /** 格子里没有可丢弃的物品 */
@@ -181,6 +185,12 @@ export const uiTexts = {
   /** 「丢弃」按钮（正常态 / 丢弃模式激活态 —— 点击开关丢弃模式） */
   label_bag_discard: "丢弃",
   label_bag_discard_exit: "退出丢弃",
+
+  //#region 界面标签：通用确认框（几何见 configs/layout/dialogs.confirmDialogLayout）
+  /** 「确定」按钮（确认不可恢复的操作） */
+  label_confirm_ok: "确 定",
+  /** 「取消」按钮（放弃操作，数据保持原样） */
+  label_confirm_cancel: "取 消",
 
   //#region 界面标签：飘字与技能列表
   /** 伤害飘字（{value} = 伤害数值） */
