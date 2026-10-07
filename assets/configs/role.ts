@@ -1,4 +1,5 @@
 import { ACTION, SpeedRate } from "../types/animation";
+import { directions } from "./animation";
 import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
 import type { SkillId } from "../types/skill";
@@ -53,10 +54,43 @@ export const pointerMove = {
 export const mpRecoverPerSecond = 2;
 
 /**
- * 角色默认外观目录（未穿戴衣服时使用）
- * 保证角色始终有身体，同时让"预加载角色外观"与 RoleAppearance 的回退取到同一份资源
+ * 角色默认外观（未穿戴衣服时按性别回退）
+ *
+ * 字段与装备的外观字段同口径（out / outScale / outPositions）—— 于是「穿上衣服」与「脱下衣服回退默认身体」
+ * 在 ui/components/role/RoleAppearance 里走的是同一套变换代码（缩放 + 按方向的位置）。
+ * 目录若与另一套素材共用全局连续编号（如 role/2 的帧号从 600 起），
+ * 帧号基准要去 configs/animation.animationFrameBases 登记，否则整包片段切不出来（外观全空白）。
  */
-export const ROLE_DEFAULT_CLOTH_OUT = "role/1";
+export interface RoleDefaultCloth {
+  /** 外观帧动画目录（resources 下路径） */
+  out: string;
+  /** 外观缩放 */
+  outScale: number;
+  /** 外观位置：按 8 方向各一个，下标顺序同 configs/animation.directions；全为原点 = 与角色节点（脚底锚点）对齐 */
+  outPositions: Vec2[];
+}
+
+/** 默认身体的各方向位置（原点 = 不偏移）；要偏移就用装备人工对齐器调好后替换成显式字面量 */
+function defaultOutPositions(): Vec2[] {
+  return directions.map(() => new Vec2());
+}
+
+/**
+ * 各性别的默认外观（未穿戴衣服时使用）
+ * 保证角色始终有身体，同时让「预加载角色外观」与 RoleAppearance 的回退取到同一份资源
+ */
+export const roleDefaultCloths = new Map<SEX, RoleDefaultCloth>();
+
+roleDefaultCloths.set(SEX.BOY, { out: "role/1", outScale: 1, outPositions: defaultOutPositions() });
+roleDefaultCloths.set(SEX.GRIL, { out: "role/2", outScale: 1, outPositions: defaultOutPositions() });
+
+/**
+ * 取某性别的默认外观
+ * 未登记的性别（SEX.ALL、旧存档里的空值等）回落到男性 —— 角色任何情况下都必须有身体
+ */
+export function getRoleDefaultCloth(sex: SEX): RoleDefaultCloth {
+  return roleDefaultCloths.get(sex) ?? roleDefaultCloths.get(SEX.BOY)!;
+}
 
 /** 职业介绍信息MAP */
 export const occupations = new Map<OECCUPATION, RoleOccupationInfo>();

@@ -1,5 +1,5 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
-import { monsterAnimation, roleAnimationMap } from "../../configs/animation";
+import { getAnimationFrameBase, monsterAnimation, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
 
@@ -72,7 +72,8 @@ export default class AnimationHelper {
     const frames = await this.loadFrames(dirSrc);
     const animationMap = getAnimationMap(kind);
     if (!animationMap || !frames.length) return;
-    this.buildClips(animationMap, frames, this.clipKey(dirSrc, kind, speedRate), speedRate);
+    // 帧号基准按目录取（如 role/2 的帧号从 600 起）：不减基准则一个动作都匹配不上、整包切不出片段
+    this.buildClips(animationMap, frames, this.clipKey(dirSrc, kind, speedRate), speedRate, getAnimationFrameBase(dirSrc));
   }
 
   /**
@@ -86,18 +87,23 @@ export default class AnimationHelper {
     return `${kind}|${dirSrc}|${rate}`;
   }
 
-  /** 切割并缓存整包片段（已缓存时直接返回） */
-  private static buildClips(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], cacheKey: string, speedRate?: SpeedRate) {
+  /**
+   * 切割并缓存整包片段（已缓存时直接返回）
+   * @param frameBase 帧号基准（目录的帧号起点，见 configs/animation.animationFrameBases）：
+   *   素材与另一套共用全局连续编号时（role/2 = role/1 + 600）必须先减去它再匹配动作区间
+   */
+  private static buildClips(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], cacheKey: string, speedRate?: SpeedRate, frameBase = 0) {
     const cached = this.clipCache.get(cacheKey);
     if (cached) return cached;
     const clips = new Map<string, AnimationClip>();
     animationMap.forEach((frameIndexes, name) => {
       // 有效动画帧过滤（帧序号命中该动作，且帧本身不是空图）
       // 帧序号必须经 getFrameIndex 解析：直接 Number(帧名) 在帧名带扩展名时（如外观帧 00000.PNG）
-      // 得到 NaN，indexOf 恒 -1 → 一个片段都切不出来，装备外观整个不显示（内观是静态图不受影响）
+      // 得到 NaN，indexOf 恒 -1 → 一个片段都切不出来，装备外观整个不显示（内观是静态图不受影响）；
+      // 再减帧号基准（frameBase）：role/2 这类从 600 起编号的素材，不减则同样一个片段都切不出来
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => {
         const index = getFrameIndex(spriteFrame.name);
-        return index !== null && frameIndexes.indexOf(index) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1;
+        return index !== null && frameIndexes.indexOf(index - frameBase) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1;
       });
       if (validSpriteFrames.length) clips.set(name, this.createClip(name, validSpriteFrames, this.getFrameTime(name, speedRate)));
     });

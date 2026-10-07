@@ -3,7 +3,7 @@ import { loadingConfig } from "../../configs/loading";
 import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../configs/map";
 import { monsters } from "../../configs/monster";
 import { npcs } from "../../configs/npc";
-import { ROLE_DEFAULT_CLOTH_OUT } from "../../configs/role";
+import { getRoleDefaultCloth } from "../../configs/role";
 import { getTitleLevel } from "../../configs/title";
 import { getEquipment } from "../../configs/items";
 import { getAssignedBorders } from "../../configs/border";
@@ -82,10 +82,10 @@ export default class PreloadManager {
     return tasks;
   }
 
-  /** 角色身上穿戴的帧动画：衣服（未穿戴时用默认外观）+ 武器（未装备或该武器没有外观时跳过） */
+  /** 角色身上穿戴的帧动画：衣服（未穿戴时用**该性别的**默认外观）+ 武器（未装备或该武器没有外观时跳过） */
   private static getRoleAnimationTasks(role: Role | null): PreloadTask[] {
     if (!role) return [];
-    const clothOut = getEquipment(role.equipments.cloth)?.out || ROLE_DEFAULT_CLOTH_OUT;
+    const clothOut = getEquipment(role.equipments.cloth)?.out || getRoleDefaultCloth(role.sex).out;
     const tasks: PreloadTask[] = [{ dir: clothOut, kind: "role", speedRate: role.speedRate }];
     const weaponOut = getEquipment(role.equipments.weapon)?.out;
     if (weaponOut) tasks.push({ dir: weaponOut, kind: "role", speedRate: role.speedRate });

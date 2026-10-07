@@ -53,7 +53,11 @@ export const monsterAI = {
    */
   pushDuration: 200,
 };
-
+/**
+ * 等级分布：
+ * 1-199号怪物，为小怪
+ * 200-220号怪物，为BOSS
+ */
 const monsterData: MonsterData[] = [
   {
     key: "1",

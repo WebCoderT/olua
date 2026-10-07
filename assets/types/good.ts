@@ -87,6 +87,24 @@ export interface Good extends CommonAttributes {
   count?: number;
 }
 
+/**
+ * 外观变换（装备与角色默认外观共用）
+ *
+ * 应用在**外观节点**上的缩放与按方向的位置。Equipment 与 configs/role 的 RoleDefaultCloth 都满足它，
+ * 于是「穿上衣服 / 脱下衣服回退默认身体」在 ui/components/role/RoleAppearance 里走的是同一套代码。
+ */
+export interface OutTransform {
+  /** 外观缩放（缺省 1） */
+  outScale?: number;
+  /**
+   * 外观位置（按 8 方向各一个）
+   * 数组下标顺序与 configs/animation 的 directions 一致：
+   * up / right_up / right / right_down / down / left_down / left / left_up
+   * 坐标为相对角色节点原点（脚底锚点）的偏移，y 向上；缺省原位
+   */
+  outPositions?: Vec2[];
+}
+
 /** 装备 */
 export interface Equipment extends Good, BattleAttributes {
   type: GOOD_TYPE.EQUIPMENT;

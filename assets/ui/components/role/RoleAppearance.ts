@@ -1,10 +1,10 @@
 import { Animation, Node, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
-import { Equipment } from "../../../types/good";
+import { OutTransform } from "../../../types/good";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
 import { getEquipment } from "../../../configs/items";
-import { ROLE_DEFAULT_CLOTH_OUT } from "../../../configs/role";
+import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
 /** 这些朝向下衣服在武器上方（武器在身后）：左 / 左上 / 上 / 左下；其余朝向武器在衣服上方 */
@@ -37,9 +37,14 @@ export default class RoleAppearance {
   private action: ACTION = ACTION.STAND;
   /** 当前朝向 */
   private direction: DIRECTION = DIRECTION.DOWN;
-  /** 当前穿戴的衣服/武器装备（play 里按方向应用外观位置用；未装备时为 null） */
-  private clothEquipment: Equipment | null = null;
-  private weaponEquipment: Equipment | null = null;
+  /**
+   * 当前外观变换（play 里按方向应用缩放与位置用）
+   * 衣服：未穿戴时是**该性别的默认外观**（见 configs/role.roleDefaultCloths），因此恒有值；
+   * 武器：未装备或该武器没有外观时为 null（回落到不缩放、不偏移）
+   * 装备与默认外观都满足 OutTransform，于是两条路走的是同一套变换代码
+   */
+  private clothTransform: OutTransform | null = null;
+  private weaponTransform: OutTransform | null = null;
   /** 上次计算的层级关系（null 表示尚未计算；方向没变时不重复调整 sibling） */
   private clothOnTop: boolean | null = null;
   /** 死亡标记：死亡动画播完停最后一帧，期间不再响应任何动作切换与播完续播，直到复活 */
@@ -74,8 +79,8 @@ export default class RoleAppearance {
     this.action = action;
     this.direction = direction;
     // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
-    this.applyOutTransform(this.cloth, this.clothEquipment);
-    this.applyOutTransform(this.weapon, this.weaponEquipment);
+    this.applyOutTransform(this.cloth, this.clothTransform);
+    this.applyOutTransform(this.weapon, this.weaponTransform);
     this.updateLayerOrder();
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
@@ -91,8 +96,8 @@ export default class RoleAppearance {
     this.action = ACTION.DIE;
     this.direction = direction;
     this.dead = true;
-    this.applyOutTransform(this.cloth, this.clothEquipment);
-    this.applyOutTransform(this.weapon, this.weaponEquipment);
+    this.applyOutTransform(this.cloth, this.clothTransform);
+    this.applyOutTransform(this.weapon, this.weaponTransform);
     this.updateLayerOrder();
     const animationName = getAnimationName(ACTION.DIE, direction);
     this.clothAnimate?.crossFade(animationName, 0.1);
@@ -117,11 +122,13 @@ export default class RoleAppearance {
     else this.weapon.setSiblingIndex(this.cloth.getSiblingIndex() + 1);
   }
 
-  /** 重新加载衣服动画：无衣服时回退默认外观，保证角色始终有身体 */
+  /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
   private reloadClothAnimation(role: Role) {
     const cloth = getEquipment(role.equipments.cloth);
-    const src = cloth?.out || ROLE_DEFAULT_CLOTH_OUT;
-    this.clothEquipment = cloth;
+    // 未穿衣服时按性别取默认身体（男 role/1、女 role/2），外观变换与穿衣服同口径
+    const fallback = getRoleDefaultCloth(role.sex);
+    const src = cloth?.out || fallback.out;
+    this.clothTransform = cloth ?? fallback;
     if (src === this.clothSrc) return;
     this.clothSrc = src;
     this.clothAnimate = this.loadAnimation(this.cloth, src, role);
@@ -131,7 +138,7 @@ export default class RoleAppearance {
   private reloadWeaponAnimation(role: Role) {
     const weapon = getEquipment(role.equipments.weapon);
     const src = weapon?.out ?? "";
-    this.weaponEquipment = weapon;
+    this.weaponTransform = weapon;
     if (src === this.weaponSrc) return;
     this.weaponSrc = src;
     this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, role) : null;
@@ -140,13 +147,13 @@ export default class RoleAppearance {
   }
 
   /**
-   * 应用装备配置的外观缩放与按方向的位置（outScale / outPositions）
+   * 应用外观变换（outScale / outPositions）
    * 位置数组按 configs/animation 的 directions 顺序取当前朝向的下标；
-   * 数组缺该项时回落第一项，旧存档（无该字段）回落到原点，避免脱下装备后残留上一件的变换
+   * 数组缺该项时回落第一项，变换缺省（null）时回落到不缩放、不偏移
    */
-  private applyOutTransform(node: Node, equipment: Equipment | null) {
-    const scale = equipment?.outScale ?? 1;
-    const positions = equipment?.outPositions;
+  private applyOutTransform(node: Node, transform: OutTransform | null) {
+    const scale = transform?.outScale ?? 1;
+    const positions = transform?.outPositions;
     const offset = positions?.[getDirectionIndex(this.direction)] ?? positions?.[0] ?? Vec2.ZERO;
     node.setScale(scale, scale, 1);
     node.setPosition(offset.x, offset.y, 0);
