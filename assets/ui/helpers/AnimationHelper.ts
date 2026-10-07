@@ -1,6 +1,7 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
 import { monsterAnimation, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
+import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
 
 /**
  * 动画助手（静态类）
@@ -45,8 +46,10 @@ export default class AnimationHelper {
           resolve([]);
           return;
         }
-        // 目录帧名兼容两种形态：纯数字（0000）与前缀名（sfx_13001_0_0003），统一取末尾连续数字排序
-        const frames = (spriteFrames ?? []).sort((a, b) => this.nameOrder(a.name) - this.nameOrder(b.name));
+        // 目录帧名兼容三种形态：纯数字（0000）、前缀名（sfx_13001_0_0003）与大写扩展名（00000.PNG ——
+        // 导入器不认大写扩展名，子资源名会整串保留），统一「先去扩展名再取末尾连续数字」；
+        // 排序复制一份，不改引擎返回的子资源列表
+        const frames = Array.from(spriteFrames ?? []).sort((a, b) => getFrameOrder(a.name) - getFrameOrder(b.name));
         this.frameCache.set(dirSrc, frames);
         resolve(frames);
       });
@@ -83,12 +86,6 @@ export default class AnimationHelper {
     return `${kind}|${dirSrc}|${rate}`;
   }
 
-  /** 目录帧排序序号：取帧名末尾的连续数字（纯数字名与前缀名通用），取不到按 0 处理 */
-  private static nameOrder(name: string) {
-    const match = name.match(/(\d+)$/);
-    return match ? Number(match[1]) : 0;
-  }
-
   /** 切割并缓存整包片段（已缓存时直接返回） */
   private static buildClips(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], cacheKey: string, speedRate?: SpeedRate) {
     const cached = this.clipCache.get(cacheKey);
@@ -96,7 +93,12 @@ export default class AnimationHelper {
     const clips = new Map<string, AnimationClip>();
     animationMap.forEach((frameIndexes, name) => {
       // 有效动画帧过滤（帧序号命中该动作，且帧本身不是空图）
-      const validSpriteFrames = spriteFrames.filter((spriteFrame) => frameIndexes.indexOf(Number(spriteFrame.name)) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1);
+      // 帧序号必须经 getFrameIndex 解析：直接 Number(帧名) 在帧名带扩展名时（如外观帧 00000.PNG）
+      // 得到 NaN，indexOf 恒 -1 → 一个片段都切不出来，装备外观整个不显示（内观是静态图不受影响）
+      const validSpriteFrames = spriteFrames.filter((spriteFrame) => {
+        const index = getFrameIndex(spriteFrame.name);
+        return index !== null && frameIndexes.indexOf(index) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1;
+      });
       if (validSpriteFrames.length) clips.set(name, this.createClip(name, validSpriteFrames, this.getFrameTime(name, speedRate)));
     });
     this.clipCache.set(cacheKey, clips);
@@ -245,21 +247,11 @@ export default class AnimationHelper {
   }
 
   /**
-   * 帧序列排序：按帧名末尾的帧序号升序
-   * 帧名形如 "auto_attack/00000" 或 "1002/attack/00000.png"（带扩展名），取不到序号时按 0 处理
+   * 帧序列排序：按帧名末尾的帧序号升序（序号解析统一走 getFrameIndex，见 utils/animation/FrameOrder）
+   * 帧名形如 "auto_attack/00000"、"1002/attack/00000.png" 或 "00000.PNG"（大写扩展名），取不到序号时按 0 处理
    */
   private static sortFrames(frames: SpriteFrame[]) {
-    return frames.sort((a, b) => this.frameOrder(a) - this.frameOrder(b));
-  }
-
-  /**
-   * 帧序号：帧名最后一段去掉扩展名后的数字
-   * 帧名没有「/」分段时（如边框图集的 sfx_30123_0_0007）退回按**末尾连续数字**解析：
-   * 整段拿 Number 会得到 NaN（序号前面还挂着图集名），排序全变 0，只能赌图集的原始帧序
-   */
-  private static frameOrder(frame: SpriteFrame) {
-    const order = Number((frame.name.split("/").pop() ?? "").replace(/\.[^.]*$/, ""));
-    return order > 0 ? order : this.nameOrder(frame.name);
+    return frames.sort((a, b) => getFrameOrder(a.name) - getFrameOrder(b.name));
   }
 
   //#endregion

@@ -147,7 +147,7 @@ check(!/[\u4e00-\u9fa5]/.test(borderMethods), "边框显示代码没有裸中文
 check(/loopClipCache/.test(animationSource), "图集循环动画的片段有缓存（几十个格子共用同一片段）");
 check(/createWithSpriteFrames\(spriteFrames, this\.normalizeFrameRate\(frameRate\)\)/.test(animationSource), "片段帧率 = 配置的每秒帧数");
 check(/AnimationClip\.WrapMode\.Loop/.test(animationSource), "图集循环动画是 Loop 模式");
-check(/return order > 0 \? order : this\.nameOrder\(frame\.name\);/.test(animationSource), "帧序号解析兼容无「/」分段的帧名（否则边框播放顺序只能赌图集原始序）");
+check(/import \{ getFrameIndex, getFrameOrder \} from "\.\.\/utils\/animation\/FrameOrder";/.test(animationSource) && /getFrameOrder\(a\.name\) - getFrameOrder\(b\.name\)/.test(animationSource), "帧序号解析收敛到 FrameOrder 纯函数（先去扩展名再取末尾连续数字，兼容带目录、带大小写扩展名的帧名，边框播放顺序不再赌图集原始序）");
 
 check(/preloadBorders/.test(preloadSource) && /getAssignedBorders\(\)/.test(preloadSource) && /loadFramesFromAtlas/.test(preloadSource), "进图前预加载前后缀映射表用到的边框图集");
 check(/export \* from "\.\/layout\/borders";/.test(barrelSource), "hudLayout barrel 导出边框显示配置");
