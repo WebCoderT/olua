@@ -40,6 +40,13 @@ const mapData: MapData[] = [
   { id: "1", label: "卧龙城", src: "map/1/1", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
   { id: "2", label: "王城", src: "map/2/2", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
   { id: "3", label: "雪域高原", src: "map/3/3", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "4", label: "漠北草原", src: "map/4/4", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "5", label: "大漠戈壁", src: "map/5/5", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "6", label: "破碎神庙", src: "map/6/6", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "7", label: "灼烧之地", src: "map/7/7", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "8", label: "石林峡谷", src: "map/8/8", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "9", label: "水乡泽国", src: "map/9/9", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
+  { id: "10", label: "桃花源溪", src: "map/10/10", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
 ];
 
 /** 地图配置（id → 配置）：由 mapData 统一构建，消费方照旧 maps.get(id) */

@@ -86,6 +86,12 @@ export const uiTexts = {
   label_mall_buy: "购 买",
   /** 全场统一价说明（{price} = 统一价，见 configs/mall.mallPrice） */
   mall_price_note: "全场装备统一 {price} 绑定元宝",
+  /** 商城分页：翻页按钮文案与页码（{page} = 当前页，{total} = 总页数，见 configs/mall.getMallGoods 分页） */
+  label_mall_first_page: "首 页",
+  label_mall_prev_page: "上一页",
+  label_mall_next_page: "下一页",
+  label_mall_last_page: "末 页",
+  mall_page_indicator: "第 {page} / {total} 页",
 
   //#region 浮动提示：技能
   /** 技能未学习（{skill}） */

@@ -269,9 +269,8 @@ export const bagDialogLayout = {
 /**
  * 商城弹窗布局（组件见 ui/components/dialogs/MallDialog）
  *
- * 弹窗即商城背景图（resources/mall/bg，门面样式）：商品列表摆在背景图的「橱窗开口」里
- * （图中暗色门面区域，约 x 170~625 / y 180~428，避开门面两侧的灯笼与龙柱）；
- * 标题与价格说明压在左右两段屋檐瓦面上，绑定元宝余额落在柜台（橱窗下方）。
+ * 弹窗即商城背景图（resources/mall/bg，门面样式）：商品卡片区摆在背景图的「橱窗开口」里
+ * （图中暗色门面区域，避开门面两侧的灯笼与龙柱），分页页脚压在开口下沿，绑定元宝余额落在柜台（橱窗下方）。
  * 换背景图时：size 要跟着图片实际尺寸改，各部件几何对着新图重新调。
  */
 export const mallDialogLayout = {
@@ -282,7 +281,7 @@ export const mallDialogLayout = {
   closeButton: { position: new Vec2(357, 171), size: uiSize.closeButtonSize },
   /** 绑定元宝余额（柜台正中） */
   bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: new Color(255, 214, 102) },
-  /** 商品滚动列表（橱窗开口内；卡片常驻、只激活视口附近的几行，见 MallDialog 的虚拟化） */
+  /** 商品卡片区（橱窗开口内；分页显示，每页只建 columns × rowsPerPage 张卡片） */
   list: { name: "mall_list", position: new Vec2(0, -33), size: new Size(395, 248) },
   /** 商品卡片（一行 columns 张均分列表宽：图标 → 名称 → 前后缀 → 购买按钮，几何都由这里推） */
   card: {
@@ -303,8 +302,24 @@ export const mallDialogLayout = {
     /** 购买按钮（居中）：尺寸、字号与间距 */
     buyButton: { size: new Size(64, 20), fontSize: 12, gapY: 2 },
   },
-  /** 虚拟化缓冲：视口上下各多激活几行，滚动时边缘不露白 */
-  virtualBuffer: 1,
+  /**
+   * 分页：每页行数（每页件数 = columns × rowsPerPage）+ 页脚翻页控件
+   *
+   * 页脚是卡片区的子节点（坐标以卡片区中心为原点，卡片区挪位页脚跟着走）：
+   * 卡片区高 248、2 行卡片占 206，页脚落在下方空当（局部 y = -105：距卡片下缘 11、距区底 7）。
+   * 横向一个整行排满：首/末页贴两侧，上/下一页靠中间，页码居中，相邻间距一律 8
+   * （395 = 19.5 + 56 + 8 + 56 + 8 + 100 + 8 + 56 + 8 + 56 + 19.5）—— 按这个算式改按钮或页码宽度时，位置要一起重算。
+   */
+  pagination: {
+    rowsPerPage: 2,
+    /** 页码（第 X / Y 页） */
+    pageIndicator: { name: "mall_page_indicator", position: new Vec2(0, -105), size: new Size(100, 20), fontSize: 12, color: new Color(255, 214, 102) },
+    /** 四个翻页按钮（首 / 上 / 下 / 末） */
+    firstButton: { name: "mall_first_page_button", position: new Vec2(-150, -105), size: new Size(56, 24), fontSize: 12 },
+    prevButton: { name: "mall_prev_page_button", position: new Vec2(-86, -105), size: new Size(56, 24), fontSize: 12 },
+    nextButton: { name: "mall_next_page_button", position: new Vec2(86, -105), size: new Size(56, 24), fontSize: 12 },
+    lastButton: { name: "mall_last_page_button", position: new Vec2(150, -105), size: new Size(56, 24), fontSize: 12 },
+  },
 };
 
 //#endregion
