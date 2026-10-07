@@ -289,19 +289,27 @@ export const mallDialogLayout = {
   bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: new Color(255, 214, 102) },
   /** 商品滚动列表（橱窗开口内；行节点常驻、只激活视口附近的几行，见 MallDialog 的虚拟化） */
   list: { name: "mall_list", position: new Vec2(-28, -33), size: new Size(395, 248) },
-  /** 商品行（宽随列表；行内从左到右 = 图标 → 名称 → 购买按钮，几何都由这里推） */
-  row: {
-    height: 34,
-    spacing: 4,
-    paddingX: 10,
-    iconSize: new Size(28, 28),
-    /** 名称（左对齐单行）：与图标的间距、文本框宽度与字号 */
-    name: { gapX: 8, width: 270, fontSize: 12 },
-    /** 购买按钮（小号按钮贴行右缘）：尺寸与字号 */
-    buyButton: { size: new Size(56, 24), fontSize: 12 },
+  /** 商品卡片（一行 columns 张均分列表宽：图标 → 名称 → 前后缀 → 购买按钮，几何都由这里推） */
+  card: {
+    columns: 3,
+    gapX: 10,
+    gapY: 6,
+    height: 100,
+    paddingTop: 4,
+    /** 卡片底：Graphics 自绘的填充与金边（橱窗底色深，描一圈细金边出层次；不依赖底图拉伸） */
+    fill: new Color(24, 20, 16, 220),
+    borderColor: new Color("#8A6A2F"),
+    borderWidth: 1,
+    paddingX: 6,
+    iconSize: new Size(40, 40),
+    /** 名称两段式：本体一行（前缀色大字，超长自动缩字）+ 前缀+后缀一行（同色小字）；gapY = 与上一行的间距 */
+    name: { fontSize: 12, lineHeight: 16, gapY: 2 },
+    extra: { fontSize: 10, lineHeight: 12, gapY: 2 },
+    /** 购买按钮（居中）：尺寸、字号与间距 */
+    buyButton: { size: new Size(64, 20), fontSize: 12, gapY: 2 },
   },
   /** 虚拟化缓冲：视口上下各多激活几行，滚动时边缘不露白 */
-  virtualBuffer: 2,
+  virtualBuffer: 1,
 };
 
 //#endregion

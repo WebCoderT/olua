@@ -1,4 +1,4 @@
-import { Color, isValid, Label, Layout, Node, ScrollView, Size, UITransform, Vec2 } from "cc";
+import { Color, Graphics, isValid, Label, Layout, Node, ScrollView, Size, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
@@ -20,14 +20,14 @@ const layout = mallDialogLayout;
  *
  * 商品 = 系统内全部装备（含 15 品质变体，见 configs/mall.getMallGoods），统一 1 绑定元宝/件，
  * 买下直接进背包（第一个空格）。本类只做陈列与交互，商品表/价格/扣款入包都在数据层：
- * - 列表：滚动浏览全部商品，每行 = 图标（鼠标悬停看完整详情）+ 三段名称 + 「购买」按钮
+ * - 列表：滚动浏览全部商品，每行 3 张卡片 = 图标（鼠标悬停看完整详情）+ 名称两段式 + 「购买」按钮
  * - 购买：StorageManager.buyMallGood（余额不足/背包满/商品下架都会给出提示，失败时余额与背包都不动）
  * - 顶部：全场统一价说明 + 绑定元宝余额（购买成功后原地刷新）
  *
  * **列表虚拟化**：商品有几百件，全开会有几千个节点参与渲染与命中判定、滚动会卡；
- * 于是行节点只在开窗时建一次、位置手动摆（固定行距），再按滚动位置只激活视口附近的几行
- * （见 updateVirtualRows）。手动摆位是必须的 —— 行随激活开关增减，交给 Layout 自动排会把
- * 已关闭的行当不存在、整列塌缩。
+ * 于是卡片只在开窗时建一次、位置手动摆（固定行列），再按滚动位置只激活视口附近的几行
+ * （见 updateVirtualRows）。手动摆位是必须的 —— 卡片随激活开关增减，交给 Layout 自动排会把
+ * 已关闭的卡片当不存在、整列塌缩。
  *
  * 实例由使用方（BottomBar）创建持有，不导出全局单例。
  */
@@ -36,8 +36,8 @@ export default class MallDialog {
   private dialog: Node | null = null;
   /** 列表 content（行挂在它下面；虚拟化按它的位置算可见区间） */
   private listContent: Node | null = null;
-  /** 商品行（与 getMallGoods() 一一对应，只激活视口附近的几行） */
-  private rows: Node[] = [];
+  /** 商品卡片（与 getMallGoods() 一一对应，只激活视口附近的几行） */
+  private cards: Node[] = [];
   /** 绑定元宝余额标签（购买成功后刷新） */
   private bindGoldLabel: Node | null = null;
   /** 悬停详情（同一时刻最多一个：换悬停、滚动、关弹窗都会先收掉它） */
@@ -57,7 +57,7 @@ export default class MallDialog {
   /** 关闭弹窗 */
   close() {
     this.closeDetail();
-    this.rows = [];
+    this.cards = [];
     this.listContent = null;
     this.bindGoldLabel = null;
     this.dialog?.destroy();
