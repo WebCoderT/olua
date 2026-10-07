@@ -9,7 +9,7 @@
  * · 购买链路（在沙箱里跑**真实的 StorageManager**）：扣绑定元宝 → 物品进背包第一个空格；
  *   非装备/认不出的 id、余额不足、背包满三种情况都不改数据（不扣钱、不进包）
  * · 界面接线：底部导航「商城」入口 → MallDialog；弹窗无裸中文、几何与图片全走 configs；
- *   列表虚拟化（滚动时只激活视口附近的行）；悬停详情复用统一零件
+ *   卡片网格（一行 3 张）与列表虚拟化（滚动时只激活视口附近的卡片）；悬停详情复用统一零件
  *
  * 用法：node tools/test-mall.cjs
  */
@@ -192,12 +192,15 @@ if (sandbox) {
   check(/closeDetail\(\)/.test(mallSource), "有统一的详情收框入口（滚动/换悬停/关弹窗都收）");
   check(/anchor\.once\(Node\.EventType\.NODE_DESTROYED, \(\) => this\.closeDetail\(\), this\);/.test(mallSource), "图标被销毁也收详情（否则会永久留在屏幕上）");
 
-  // 虚拟化：滚动时只激活视口附近的行
+  // 虚拟化：滚动时只激活视口附近的卡片
   check(/ScrollView\.EventType\.SCROLLING/.test(mallSource), "监听滚动事件（虚拟化按滚动位置重算可见区间）");
-  check(/row\.active = index >= first && index <= last;/.test(mallSource), "只激活可见区间内的行（几百件商品不会全部参与渲染与命中）");
-  check(/contentLayout\.type = Layout\.Type\.NONE;/.test(mallSource), "关掉列表自动排版（行随激活开关增减，交给 Layout 会整列塌缩）");
-  check(/setContentSize\(layout\.list\.size\.width, goods\.length \* pitch\)/.test(mallSource), "内容高度按商品数与行距显式设置（ScrollView 才有滚动范围）");
+  check(/card\.active = index >= first && index <= last;/.test(mallSource), "只激活可见区间内的卡片（几百件商品不会全部参与渲染与命中）");
+  check(/contentLayout\.type = Layout\.Type\.NONE;/.test(mallSource), "关掉列表自动排版（卡片随激活开关增减，交给 Layout 会整列塌缩）");
+  check(/setContentSize\(layout\.list\.size\.width, totalRows \* pitch\)/.test(mallSource), "内容高度按商品行数与行距显式设置（ScrollView 才有滚动范围）");
   check(/trackUiPress\(icon\)/.test(mallSource), "悬停图标登记了按压起点（见 utils/input/Pointer）");
+  // 卡片网格：一行 3 张（几何全由 layout.card 推导）
+  check(/layout\.card\.columns/.test(mallSource) && /layout\.card\.gapX/.test(mallSource), "卡片按 layout.card 的列数与列间距摆位");
+  check(!/layout\.row/.test(mallSource), "不再引用已删除的 layout.row（旧的整行口径已清干净）");
 
   // 文案 key
   ["mall_buy_success_tip", "mall_gold_not_enough_tip", "mall_good_missing_tip", "label_mall_buy", "mall_price_note"].forEach((key) =>
@@ -210,11 +213,13 @@ if (sandbox) {
     const end = dialogsSource.indexOf("//#endregion", start);
     const block = dialogsSource.slice(start, end > start ? end : undefined);
     check(start > 0, "能定位 mallDialogLayout 配置块");
-    ["background", "size", "titleStyle", "closeButton", "priceNote", "bindGold", "list", "row", "virtualBuffer"].forEach((key) =>
+    ["background", "size", "titleStyle", "closeButton", "priceNote", "bindGold", "list", "card", "virtualBuffer"].forEach((key) =>
       check(new RegExp(`${key}:`).test(block), `mallDialogLayout 配了 ${key}`),
     );
-    check(/row: \{[\s\S]{0,400}iconSize: new Size\(28, 28\)/.test(block), "商品行的图标尺寸在配置里");
-    check(/buyButton: \{ size: new Size\(56, 24\), fontSize: 12 \}/.test(block), "购买按钮（小号）几何在配置里");
+    check(/columns: 3/.test(block), "一行 3 张卡片（列数在配置里）");
+    check(/card: \{[\s\S]{0,400}iconSize: new Size\(40, 40\)/.test(block), "商品卡片的图标尺寸在配置里");
+    check(/buyButton: \{ size: new Size\(64, 20\), fontSize: 12, gapY: 2 \}/.test(block), "购买按钮（小号）几何在配置里");
+    check(/fill: new Color\(24, 20, 16, 220\)/.test(block), "卡片底色在配置里（Graphics 自绘，不依赖底图）");
   }
   check(/mallBackground: mallImage\("bg"\)/.test(imagesSource), "商城背景图登记在 uiImages（resources/mall/bg）");
   check(/export const mallImage = \(name: string\) => `mall\/\$\{name\}`;/.test(imagesSource), "取图函数与目录收敛在 layout/images");

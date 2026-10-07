@@ -276,19 +276,14 @@ export const bagDialogLayout = {
  */
 export const mallDialogLayout = {
   name: "mall_dialog",
-  title: "商城",
   /** 背景图（CUSTOM 按下面的尺寸铺，当前图就是这个尺寸；换图同步改） */
   background: uiImages.mallBackground,
   size: new Size(850, 542),
-  /** 标题（左段屋檐瓦面上）与关闭按钮（右上檐角） */
-  titleStyle: { position: new Vec2(-230, 159), size: new Size(220, 26), fontSize: 16, color: new Color("#FFD700") },
   closeButton: { position: new Vec2(357, 171), size: uiSize.closeButtonSize },
-  /** 全场统一价说明（右段屋檐瓦面上） */
-  priceNote: { position: new Vec2(215, 159), size: new Size(240, 26), fontSize: 12, color: new Color(255, 223, 170) },
   /** 绑定元宝余额（柜台正中） */
   bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: new Color(255, 214, 102) },
-  /** 商品滚动列表（橱窗开口内；行节点常驻、只激活视口附近的几行，见 MallDialog 的虚拟化） */
-  list: { name: "mall_list", position: new Vec2(-28, -33), size: new Size(395, 248) },
+  /** 商品滚动列表（橱窗开口内；卡片常驻、只激活视口附近的几行，见 MallDialog 的虚拟化） */
+  list: { name: "mall_list", position: new Vec2(0, -33), size: new Size(395, 248) },
   /** 商品卡片（一行 columns 张均分列表宽：图标 → 名称 → 前后缀 → 购买按钮，几何都由这里推） */
   card: {
     columns: 3,
