@@ -8,6 +8,7 @@ import { getTitleLevel } from "../../configs/title";
 import { getEquipment } from "../../configs/items";
 import { getAssignedBorders } from "../../configs/border";
 import { getAssignedDetailBackgrounds } from "../../configs/background";
+import { getAssignedLights } from "../../configs/light";
 import { getText } from "../../configs/texts";
 import { Role } from "../../entities/Role";
 import { AnimationKind, SpeedRate } from "../../types/animation";
@@ -53,6 +54,8 @@ export default class PreloadManager {
     await this.preloadBorders();
     // 装备详情背景帧序列：同样只有前后缀映射表里用到的那十几个目录、都是小图，不占进度条
     await this.preloadDetailBackgrounds();
+    // 装备光柱帧序列：前缀映射表里用到的 5 个目录（各 14~15 帧、400×400），同样小，不占进度条
+    await this.preloadLights();
     const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapAsset), ...this.getRoleAnimationTasks(role)]);
     await this.runTasks(tasks, onProgress, loadingConfig.mapRatio);
   }
@@ -118,6 +121,13 @@ export default class PreloadManager {
     const assigned = getAssignedDetailBackgrounds();
     await Promise.all(assigned.map((resource) => AnimationHelper.loadFrames(resource.dir)));
     console.log(`[PreloadManager] 装备详情背景预加载完成（${assigned.length} 个目录）：${assigned.map((resource) => resource.key).join("、")}`);
+  }
+
+  /** 预加载装备光柱帧序列目录（configs/light 前缀表用到的全部光柱；帧进 AnimationHelper 缓存，重复调用只加载一次） */
+  private static async preloadLights() {
+    const assigned = getAssignedLights();
+    await Promise.all(assigned.map((resource) => AnimationHelper.loadFrames(resource.dir)));
+    console.log(`[PreloadManager] 装备光柱预加载完成（${assigned.length} 个目录）：${assigned.map((resource) => resource.key).join("、")}`);
   }
 
   //#endregion

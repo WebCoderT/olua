@@ -148,5 +148,5 @@ export function monsterDrops(level: number, tier: MonsterTier = "normal"): DropE
 
 /** 怪物定位 → 兜底掉落件数区间（普通 1~3 / 精英 2~6 / BOSS 3~10） */
 export function monsterDropPicks(tier: MonsterTier = "normal"): DropPicks {
-  return tier === "boss" ? [3, 10] : tier === "elite" ? [2, 6] : [1, 3];
+  return tier === "boss" ? [3, 10] : tier === "elite" ? [2, 6] : [10, 10];
 }
