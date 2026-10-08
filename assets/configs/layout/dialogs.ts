@@ -136,6 +136,71 @@ export const titleUpgradeDialogLayout = {
 
 //#endregion
 
+//#region 军衔进阶弹窗
+
+/**
+ * 军衔进阶弹窗布局（三栏结构与称号/战魂弹窗一致，几何坐标直接沿用；入口在角色信息弹窗的「军衔」按钮）
+ * 差异：军衔**没有素材动画**，中间那栏是一枚「军衔徽记」（文字牌，见 GameUiHelper.createRankBadge）；
+ * 阶数是三条成长线里最多的（100 阶 = 10 大段 × 10 阶），左列表仍用同一套卡片滚动列表。
+ */
+export const rankUpgradeDialogLayout = {
+  name: "rank_upgrade_dialog",
+  title: "军衔",
+  size: new Size(880, 560),
+  /** 左：阶数卡片竖向滚动列表（100 阶从上到下，状态用颜色区分） */
+  list: {
+    name: "rank_list",
+    position: new Vec2(-320, -5),
+    size: new Size(210, 490),
+    cardSize: new Size(192, 44),
+    cardFontSize: 13,
+    stateFontSize: 11,
+    /** 选中项的描边粗细 */
+    borderWidth: 2,
+    /** 卡片文字颜色：选中 / 未授衔 / 已授衔 */
+    selectedColor: new Color(255, 214, 102),
+    lockedColor: new Color(140, 140, 140),
+    activeColor: new Color(120, 220, 120),
+  },
+  /** 中：军衔徽记（文字牌：段名 + 红色军衔名 + 阶数进度） */
+  badge: {
+    position: new Vec2(0, 30),
+    size: new Size(320, 210),
+    fill: new Color(26, 18, 14, 220),
+    borderColor: new Color(255, 214, 102),
+    borderWidth: 2,
+    /** 段名（如「王爵」） */
+    tier: { position: new Vec2(0, 62), size: new Size(290, 22), fontSize: 14, color: new Color(255, 214, 102) },
+    /** 军衔名（红字，与头顶那行同一个色） */
+    label: { position: new Vec2(0, 4), size: new Size(290, 40), fontSize: 26, color: new Color(255, 60, 60) },
+    /** 阶数进度（第 N 阶 / 共 100 阶） */
+    progress: { position: new Vec2(0, -56), size: new Size(290, 18), fontSize: 12, color: new Color(170, 170, 170) },
+  },
+  /** 中：名称 / 描述 / 当前军衔（槽位坐标，子件坐标以槽位中心为原点） */
+  info: {
+    position: new Vec2(0, -145),
+    name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
+    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: new Color(170, 170, 170) },
+    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
+  },
+  /** 右：属性列表（含下一阶增量） */
+  attribute: {
+    position: new Vec2(250, 240),
+    width: 210,
+    spacing: 6,
+    fontSize: 12,
+    titleColor: new Color(255, 214, 102),
+    rowNameColor: new Color(170, 170, 170),
+    rowDiffColor: new Color(120, 220, 120),
+  },
+  /** 右：绑定元宝余额 */
+  bindGold: { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 },
+  /** 右：晋升按钮（满衔时文案与置灰） */
+  upgradeButton: { position: new Vec2(250, -205), text: "晋 升", maxedText: "已满衔" },
+};
+
+//#endregion
+
 //#region 大陆传送官弹窗
 
 /** 弹窗尺寸为 dialogFrame.size（600×500） */
@@ -213,13 +278,15 @@ export const roleInfoDialogLayout = {
   /** 战斗力图标（贴在装饰背景左下） */
   combatIcon: { image: uiImages.combatIcon, position: new Vec2(-7, -225), size: new Size(100, 50) },
   /**
-   * 「称号」「战魂」两个入口按钮（弹窗右侧竖排相邻两格，几何按中号按钮 123×36 推导）：
-   * 称号在右下空区（y -215），战魂紧贴其上一格（-215 + 36 + 10 间距 = -169）；
-   * 两者横坐标同为 x 200 → 按钮占 x 138.5~261.5，与右列装备槽（x 55~105）、底部装备槽（x -160~10）都不相交。
-   * 两个系统都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
+   * 「军衔」「称号」「战魂」三个入口按钮（弹窗右侧竖排相邻三格，几何按中号按钮 123×36 推导）：
+   * 称号在右下空区（y -215），战魂紧贴其上一格（-215 + 36 + 10 间距 = -169），
+   * 军衔再往上一格（-169 + 36 + 10 = -123）；三者横坐标同为 x 200 → 按钮占 x 138.5~261.5，
+   * 与右列装备槽（x 55~105）、底部装备槽（x -160~10）都不相交。
+   * 三个系统都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
    */
   titleButton: { name: "role_title_button", position: new Vec2(200, -215), text: "称 号" },
   soulButton: { name: "role_soul_button", position: new Vec2(200, -169), text: "战 魂" },
+  rankButton: { name: "role_rank_button", position: new Vec2(200, -123), text: "军 衔" },
 };
 
 //#endregion

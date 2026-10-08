@@ -39,6 +39,7 @@ import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
 import { TitleAttributes, TitleLevelConfig } from "../../types/title";
+import { RankAttributes, RankLevelConfig } from "../../types/rank";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
@@ -46,6 +47,7 @@ import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good"
 import { equipmentSlots, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
 import { soulAttributeLabels } from "../../configs/soul";
 import { titleAttributeLabels } from "../../configs/title";
+import { getRankLevel, rankAttributeLabels, rankMaxLevel } from "../../configs/rank";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
@@ -61,6 +63,8 @@ import {
   equipmentDetailBackgroundLayout,
   equipmentLightLayout,
   titleUpgradeDialogLayout,
+  rankUpgradeDialogLayout,
+  roleShowLayout,
   equipmentSlotLayout,
   goodDetailLayout,
   hoverTipLayout,
@@ -462,16 +466,19 @@ export default class GameUiHelper {
   }
 
   /**
-   * 创建头部信息（返回纵向弹性容器：角色名称 / 血条 / 血量文字；
+   * 创建头部信息（返回纵向弹性容器，子节点自上而下：**军衔红字** / 血条 / 血量文字；
    * 称号名牌动画由 RoleDisplay.updateTitleShow 插进同一个容器的最上方，故后续读件一律按名字而不是按下标）
+   * 角色名称不在这里 —— 与怪物名称同一套口径显示在人物区域正中间，见 createRoleName
+   * 军衔红字排在最早就有的那个文字称号占位上（血条之上），样式取自 configs/layout/hud.roleShowLayout.rank
+   * @param rank 当前军衔阶数（0 = 未授衔，红字留空，由 RoleDisplay.updateHead 负责后续填值）
    */
-  static createHead(name: string, label: string, hp: number, maxHp: number) {
+  static createHead(name: string, hp: number, maxHp: number, rank: number) {
     /** 头部信息栏父节点 */
     const head = UiHelper.createFlexCol(name, 3, new Vec2(0, 100), new Size(100, 0));
     head.getComponent(UITransform).setAnchorPoint(0.5, 0);
-    /** 角色名称显示节点 */
-    const roleName = UiHelper.createLabel("role_name", label, Color.WHITE, 10, new Vec2(), new Size(100, 10));
-    head.addChild(roleName);
+    /** 军衔红字（军衔的唯一外显：头顶这一行；未授衔时为空串，不占视觉） */
+    const roleRank = UiHelper.createLabel("role_rank", this.getRankHeadText(rank), roleShowLayout.rank.color, roleShowLayout.rank.fontSize, new Vec2(), roleShowLayout.rank.size);
+    head.addChild(roleRank);
     /** 血量进度条（两个字面名与 RoleDisplay.updateHead 的取件口径成对，改动请同步） */
     const roleHp = this.createHpBar("role_hp_bar", hp / maxHp, new Vec2(), new Size(80, 4));
     head.addChild(roleHp);
@@ -479,6 +486,25 @@ export default class GameUiHelper {
     const roleHpText = UiHelper.createLabel("role_hp_text", `${hp} / ${maxHp}`, Color.WHITE, 8, new Vec2(), new Size(100, 8));
     head.addChild(roleHpText);
     return head;
+  }
+
+  /**
+   * 创建角色名称（显示在**人物区域正中间**：与怪物名称同一套口径，见 createMonsterName，不进头顶信息栏）
+   * 位置/尺寸/字号取自 configs/layout/hud.roleShowLayout.name —— 纵坐标为 roleBody 高度的一半（身体几何中心），
+   * roleBody 改尺寸时自动保持「正中间」；名称创建后不变（角色无改名），无需刷新链路
+   */
+  static createRoleName(role: Role) {
+    const layout = roleShowLayout.name;
+    return UiHelper.createLabel("role_name", role.name, layout.color, layout.fontSize, layout.position, layout.size);
+  }
+
+  /**
+   * 头顶军衔红字的文案（未授衔返回空串；授衔后按 configs/texts 的 label_rank_head 模板套上军衔名）
+   * createHead（建）与 RoleDisplay.updateHead（刷）共用它，两条路径同一个口径
+   */
+  static getRankHeadText(rank: number): string {
+    const config = getRankLevel(rank);
+    return config ? getText("label_rank_head", { rank: config.label }) : "";
   }
 
   //#endregion
@@ -1119,6 +1145,132 @@ export default class GameUiHelper {
       if (!isValid(node) || !frames.length) return;
       AnimationHelper.playLoopWithFrames("title_loop", node, frames, config.animationFrameRate);
     });
+    return node;
+  }
+
+  //#endregion
+
+  //#region 军衔
+
+  /**
+   * 创建军衔阶数卡片（左侧列表行）：阶数 + 衔名 + 授衔状态，选中加金色描边（与称号/战魂卡片同一套样式）
+   * 卡片只在这里建一次（100 阶重建一次代价不小，见弹窗的 buildList），点击切换选中走 updateRankCard 改外观
+   * @param config 该阶的军衔配置
+   * @param currentLevel 角色当前军衔阶数（0 = 未授衔，决定授衔状态）
+   * @param selected 是否为当前选中项
+   * @param onClick 点击回调（切换选中预览）
+   */
+  static createRankCard(config: RankLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
+    const card = UiHelper.createNode(`rank_card_${config.level}`, new Vec2(), rankUpgradeDialogLayout.list.cardSize);
+    const button = card.addComponent(Button);
+    button.transition = Button.Transition.SCALE;
+    card.addChild(
+      UiHelper.createLabel(
+        "rank_card_label",
+        `${config.level} 阶 · ${config.label}`,
+        Color.WHITE,
+        rankUpgradeDialogLayout.list.cardFontSize,
+        new Vec2(-8, 0),
+        new Size(rankUpgradeDialogLayout.list.cardSize.width - 70, rankUpgradeDialogLayout.list.cardSize.height),
+        Label.HorizontalAlign.LEFT,
+      ),
+    );
+    card.addChild(
+      UiHelper.createLabel(
+        "rank_card_state",
+        "",
+        Color.WHITE,
+        rankUpgradeDialogLayout.list.stateFontSize,
+        new Vec2(rankUpgradeDialogLayout.list.cardSize.width / 2 - 36, 0),
+        new Size(52, rankUpgradeDialogLayout.list.cardSize.height),
+      ),
+    );
+    // 选中状态、授衔状态与描边统一交给 updateRankCard（建与刷同一个口径）
+    this.updateRankCard(card, config, currentLevel, selected);
+    card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
+    blockClickThrough(card);
+    return card;
+  }
+
+  /**
+   * 刷新一张已有军衔卡片的选中/授衔外观（切换选中、晋升后重刷状态都走它，不重建卡片）
+   * 只动颜色、文字与「选中描边」这一个子节点，杜绝「点一下重建 100 张卡片」
+   */
+  static updateRankCard(card: Node, config: RankLevelConfig, currentLevel: number, selected: boolean) {
+    // 选中描边：画在文字之下，故插到第 0 位；取消选中时摘除并销毁
+    const border = card.getChildByName("rank_card_border");
+    if (selected && !border) {
+      const node = new Node("rank_card_border");
+      const graphics = node.addComponent(Graphics);
+      const cardSize = rankUpgradeDialogLayout.list.cardSize;
+      graphics.lineWidth = rankUpgradeDialogLayout.list.borderWidth;
+      graphics.strokeColor = rankUpgradeDialogLayout.list.selectedColor;
+      graphics.rect(-cardSize.width / 2, -cardSize.height / 2, cardSize.width, cardSize.height);
+      graphics.stroke();
+      card.insertChild(node, 0);
+    } else if (!selected && border) {
+      border.removeFromParent();
+      border.destroy();
+    }
+    const granted = config.level <= currentLevel;
+    const nameLabel = card.getChildByName("rank_card_label")?.getComponent(Label);
+    if (nameLabel) nameLabel.color = selected ? rankUpgradeDialogLayout.list.selectedColor : granted ? Color.WHITE : rankUpgradeDialogLayout.list.lockedColor;
+    const stateLabel = card.getChildByName("rank_card_state")?.getComponent(Label);
+    if (stateLabel) {
+      stateLabel.string = granted ? getText("label_rank_active") : getText("label_rank_locked");
+      stateLabel.color = granted ? rankUpgradeDialogLayout.list.activeColor : rankUpgradeDialogLayout.list.lockedColor;
+    }
+  }
+
+  /**
+   * 创建军衔属性列表（右侧面板）：标题 + 各属性行（有下一阶时附带绿色增量），与战魂/称号属性表同一套格式
+   * @param config 展示的军衔阶配置
+   * @param next 下一阶配置（没有传 null，如已满衔）
+   */
+  static createRankAttributeList(config: RankLevelConfig, next: RankLevelConfig | null) {
+    const column = UiHelper.createFlexCol("rank_attribute_list", rankUpgradeDialogLayout.attribute.spacing, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width, 0));
+    column.addChild(UiHelper.createLabel("rank_attribute_title", `${config.level} 阶 · ${config.label}`, rankUpgradeDialogLayout.attribute.titleColor, 15, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width, 22)));
+    const rows: Array<{ label: string; get: (attributes: RankAttributes) => number | [number, number] }> = rankAttributeLabels.map((item) => ({
+      label: item.label,
+      get: (attributes) => attributes[item.key],
+    }));
+    rows.forEach((row, index) => {
+      const line = UiHelper.createFlexRow(`rank_attribute_row_${index}`, 0, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width, 18));
+      line.addChild(UiHelper.createLabel("name", row.label, rankUpgradeDialogLayout.attribute.rowNameColor, rankUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
+      const value = row.get(config.attributes);
+      const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
+      // 带下一阶增量时整行值用绿色（白色 = 当前无增量可看）
+      const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
+      const valueLabel = UiHelper.createLabel("value", text, diff ? rankUpgradeDialogLayout.attribute.rowDiffColor : Color.WHITE, rankUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width - 40, 18), Label.HorizontalAlign.LEFT);
+      line.addChild(valueLabel);
+      column.addChild(line);
+    });
+    return column;
+  }
+
+  /**
+   * 创建军衔徽记（弹窗中间那栏的展示物；军衔没有帧动画，徽记就是它的「外观」）
+   * 结构：金色描边的深色牌 → 段名（金色小字）→ 军衔名（红字大字，与头顶那行同一个色）→ 阶数进度（灰色小字）
+   * @param config 展示的军衔阶配置
+   */
+  static createRankBadge(config: RankLevelConfig) {
+    const layout = rankUpgradeDialogLayout.badge;
+    const node = UiHelper.createNode("rank_badge", new Vec2(), layout.size);
+    // 牌底（Graphics 自绘，不依赖底图拉伸）
+    const plate = new Node("rank_badge_plate");
+    const graphics = plate.addComponent(Graphics);
+    graphics.fillColor = layout.fill;
+    graphics.rect(-layout.size.width / 2, -layout.size.height / 2, layout.size.width, layout.size.height);
+    graphics.fill();
+    graphics.lineWidth = layout.borderWidth;
+    graphics.strokeColor = layout.borderColor;
+    graphics.rect(-layout.size.width / 2, -layout.size.height / 2, layout.size.width, layout.size.height);
+    graphics.stroke();
+    node.addChild(plate);
+    node.addChild(UiHelper.createLabel("rank_badge_tier", config.tier, layout.tier.color, layout.tier.fontSize, layout.tier.position, layout.tier.size));
+    node.addChild(UiHelper.createLabel("rank_badge_label", config.label, layout.label.color, layout.label.fontSize, layout.label.position, layout.label.size));
+    node.addChild(UiHelper.createLabel("rank_badge_progress", getText("label_rank_progress", { level: config.level, total: rankMaxLevel }), layout.progress.color, layout.progress.fontSize, layout.progress.position, layout.progress.size));
     return node;
   }
 

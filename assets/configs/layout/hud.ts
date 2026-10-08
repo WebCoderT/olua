@@ -1,4 +1,5 @@
 import { Color, Size, Vec2 } from "cc";
+import { roleBody } from "../role";
 
 /**
  * 常驻 HUD 与游戏内固定表现元素的布局
@@ -208,20 +209,33 @@ export const tipsLayout = {
 //#region 角色身上的挂件（世界内，坐标随角色、不参与屏幕适配）
 
 /**
- * 主角身上的挂件布局（子件坐标以主角节点中心为原点）
- * 主角节点锚点 (0.5, 0)、内容 40×70：(26, 62) 约为右上角肩侧
+ * 主角身上的挂件布局（子件坐标以主角节点原点为原点：锚点 (0.5, 0)、内容 40×70，原点在脚底）
  */
 export const roleShowLayout = {
+  /**
+   * 角色名称：显示在**人物区域正中间**，与怪物名称同一套口径（见 GameUiHelper.createMonsterName /
+   * createRoleName），不进头顶信息栏。纵坐标取 roleBody 高度的一半 = 身体几何中心，
+   * 由推导保证「正中间」；roleBody 改尺寸时自动跟随
+   */
+  name: { position: new Vec2(0, roleBody.size.height / 2), size: new Size(100, 12), fontSize: 10, color: new Color(255, 255, 255) },
   /** 战魂外显（勾选「外显」时挂载，随主角移动；动画帧自带大量透明边距，实际视觉尺寸更小） */
   soul: { position: new Vec2(26, 62), size: new Size(72, 72), scale: { x: 0.1, y: 0.1 } },
-  /**
-   * 称号名牌（解锁后**常显**头顶，无开关；取代头部信息栏里写死的文字称号占位）。
-   * 节点直接挂在**头部信息栏容器**里（与名称/血条同一个 FlexCol，见 RoleDisplay.updateTitleShow）：
-   * 位置由该容器的纵向布局自动排列 —— 故这里不配坐标、也不缩放（按素材原始尺寸显示，帧原始 156×91 ~ 256×107）。
-   * · siblingIndex：名牌在头部容器里的插入位置（0 = 最上，即排在角色名称之上）
-   * · size：仅加载首帧前的占位尺寸（RAW 模式，帧到达后会被素材原始尺寸覆盖；进图前已预加载，通常一帧内就换掉）
-   */
+/**
+ * 称号名牌（解锁后**常显**头顶，无开关；取代头部信息栏里写死的文字称号占位）。
+ * 节点直接挂在**头部信息栏容器**里（与军衔红字/血条同一个 FlexCol，见 RoleDisplay.updateTitleShow；
+ * 角色名称不在这个容器里 —— 它显示在人物区域正中间，见 roleShowLayout.name）：
+ * 位置由该容器的纵向布局自动排列 —— 故这里不配坐标、也不缩放（按素材原始尺寸显示，帧原始 156×91 ~ 256×107）。
+ * · siblingIndex：名牌在头部容器里的插入位置（0 = 最上）
+ * · size：仅加载首帧前的占位尺寸（RAW 模式，帧到达后会被素材原始尺寸覆盖；进图前已预加载，通常一帧内就换掉）
+ */
   title: { siblingIndex: 0, size: new Size(260, 140) },
+  /**
+   * 军衔红字（头顶信息栏里的一行红字，排在血条之上 —— 即最早那版写死的文字称号占位所在的
+   * 位置，见 GameUiHelper.createHead 的子节点顺序）。
+   * 军衔没有素材，头顶这份就是它的全部外观：未授衔（rank = 0）时整行清空、不留视觉。
+   * 颜色刻意用红：军衔是「杀出来的功名」，与白色的角色名称、白色的血量文字区分开。
+   */
+  rank: { fontSize: 10, size: new Size(100, 12), color: new Color(255, 60, 60) },
 };
 
 //#endregion

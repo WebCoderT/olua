@@ -41,6 +41,11 @@ export class Role implements BattleAttributes {
   soulShow: boolean = false;
   /** 称号等级（0 = 未激活；解锁/升级消耗绑定元宝，见 configs/title；属性加成计入 combatCalc，解锁后名牌动画常显头顶，见 RoleDisplay.updateTitleShow） */
   title: number = 0;
+  /**
+   * 军衔阶数（0 = 未授衔；晋升消耗绑定元宝，见 configs/rank，共 100 阶）
+   * 属性加成计入 combatCalc；授衔后军衔名以**红色文字**常显在头顶信息栏血条上方（见 RoleDisplay.updateHead）
+   */
+  rank: number = 0;
   physicalAttack: [number, number] = [0, 0];
   magicAttack: [number, number] = [0, 0];
   taoistAttack: [number, number] = [0, 0];

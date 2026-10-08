@@ -20,6 +20,7 @@ import { getMallPrice } from "../../configs/mall";
 import { getEquipmentNameParts } from "../../configs/equipments";
 import { getSoulLevel } from "../../configs/soul";
 import { getTitleLevel } from "../../configs/title";
+import { getRankLevel } from "../../configs/rank";
 
 /**
  * 存储管理器
@@ -151,6 +152,8 @@ export default class StorageManager {
     if (typeof role.soulShow !== "boolean") role.soulShow = false;
     // 称号等级：旧存档缺失补 0（未激活）
     if (typeof role.title !== "number") role.title = 0;
+    // 军衔阶数：旧存档缺失补 0（未授衔）
+    if (typeof role.rank !== "number") role.rank = 0;
   }
 
   /**
@@ -202,6 +205,34 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     this.updateUi(role);
     GameUiHelper.createTip("title_upgrade_tip", { level: next.level, label: next.label });
+    return true;
+  }
+
+  /**
+   * 军衔晋升/授衔（当前在线角色）：消耗下一阶配置的绑定元宝晋到下一阶（见 configs/rank；0 阶晋 1 阶即授衔）
+   * 军衔的外显就是头顶那行红字，随 updateUi → RoleUIManager.updateRoleData → RoleDisplay.updateHead 自动刷新，
+   * 不需要像称号那样另外调一次外显刷新
+   * @returns 是否晋升成功（失败原因已用浮动提示告知）
+   */
+  static upgradeRank(): boolean {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const next = getRankLevel(role.rank + 1);
+    if (!next) {
+      GameUiHelper.createTip("rank_max_tip");
+      return false;
+    }
+    if (role.bindGold < next.bindGold) {
+      GameUiHelper.createTip("rank_bind_gold_tip", { need: next.bindGold });
+      return false;
+    }
+    role.bindGold -= next.bindGold;
+    role.rank = next.level;
+    // 军衔属性计入角色属性与战斗力，晋升后重算
+    Object.assign(role, GameHelper.combatCalc(role));
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    GameUiHelper.createTip("rank_upgrade_tip", { level: next.level, label: next.label });
     return true;
   }
 

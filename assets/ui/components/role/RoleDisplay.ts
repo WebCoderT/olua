@@ -49,9 +49,9 @@ export default class RoleDisplay extends Node {
   /** 当前角色数据 */
   private role: Role;
   /**
-   * 头顶信息栏节点（血量实时刷新，见 updateHead）
+   * 头顶信息栏节点（军衔红字与血量实时刷新，见 updateHead）
    * 结构由 GameUiHelper.createHead 固定，称号名牌动画会插进同一个容器的最上方（见 updateTitleShow），
-   * 所以取件按名字（role_hp_bar / role_hp_text）而不是按下标
+   * 所以取件按名字（role_hp_bar / role_hp_text）而不是按下标；角色名称不在这个容器里（见 createBody）
    */
   private head: Node;
   /** 战魂外显节点（右上角循环播放当前等级战魂动画，见 updateSoulShow；未勾选外显时为 null） */
@@ -83,15 +83,17 @@ export default class RoleDisplay extends Node {
     this.pointerInput = new RolePointerInput(this as Node, () => this.refreshMotion());
   }
 
-  /** 构建角色身体（尺寸/锚点 + 外观节点 + 头部信息栏） */
+  /** 构建角色身体（尺寸/锚点 + 外观节点 + 名称 + 头部信息栏） */
   private createBody() {
     const uiTransform = this.addComponent(UITransform);
     uiTransform.setContentSize(roleBody.size);
     uiTransform.setAnchorPoint(0.5, 0);
     /** 角色外观（衣服与武器节点由 RoleAppearance 自建并挂到自身） */
     this.appearance = new RoleAppearance(this as Node, () => this.onAttackFinished());
-    /** 角色头部信息栏父节点（最后添加，绘制在角色之上） */
-    this.head = GameUiHelper.createHead("role_head", this.role.name, this.role.hp, this.role.maxHp);
+    /** 角色名称（人物区域正中间，与怪物名称同一套口径；在 appearance 之后添加 → 绘制在角色之上） */
+    this.addChild(GameUiHelper.createRoleName(this.role));
+    /** 角色头部信息栏父节点（最后添加，绘制在角色之上；军衔红字由 createHead 一并建好，见 updateHead） */
+    this.head = GameUiHelper.createHead("role_head", this.role.hp, this.role.maxHp, this.role.rank);
     this.addChild(this.head);
   }
 
@@ -231,16 +233,20 @@ export default class RoleDisplay extends Node {
   //#region 外观更新
 
   /**
-   * 头顶信息栏血量实时刷新（由 RoleUIManager.updateRoleData 统一触发，与血球/经验条同一时机）
-   * 血量变更的全部来源（怪物普攻/药品/升级补满/复活）最终都会走 updateUi，覆盖即可做到实时
+   * 头顶信息栏血量与军衔实时刷新（由 RoleUIManager.updateRoleData 统一触发，与血球/经验条同一时机）
+   * 血量变更的全部来源（怪物普攻/药品/升级补满/复活）最终都会走 updateUi，覆盖即可做到实时；
+   * 军衔红字（军衔的唯一外显）也在这里刷 —— 晋升走 StorageManager.upgradeRank → updateUi → 本方法
    */
   updateHead(role: Role) {
     if (!isValid(this) || !this.head) return;
-    // 按名字取件：头部容器里除了名称/血条/血量文字，还会插进称号名牌动画（未激活时摘除），下标不稳定
+    // 按名字取件：头部容器里除了军衔红字/血条/血量文字，还会插进称号名牌动画（未激活时摘除），下标不稳定
+    // （角色名称不在容器里 —— 它显示在人物区域正中间且创建后不变，见 GameUiHelper.createRoleName）
     const hpBar = this.head.getChildByName("role_hp_bar")?.getComponent(ProgressBar);
     if (hpBar) hpBar.progress = role.maxHp > 0 ? Math.max(0, Math.min(1, role.hp / role.maxHp)) : 0;
     const hpText = this.head.getChildByName("role_hp_text")?.getComponent(Label);
     if (hpText) hpText.string = `${Math.max(0, Math.floor(role.hp))} / ${role.maxHp}`;
+    const rankText = this.head.getChildByName("role_rank")?.getComponent(Label);
+    if (rankText) rankText.string = GameUiHelper.getRankHeadText(role.rank);
   }
 
   /** 更改外观 */

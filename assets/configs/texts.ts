@@ -29,6 +29,14 @@ export const uiTexts = {
   /** 称号升级成功（{level} 阶 · {label}） */
   title_upgrade_tip: "称号升级成功：{level} 阶 · {label}",
 
+  //#region 浮动提示：军衔
+  /** 军衔已到最高阶 */
+  rank_max_tip: "军衔已满衔",
+  /** 绑定元宝不足以晋升（{need} = 所需绑定元宝） */
+  rank_bind_gold_tip: "绑定元宝不足，晋升需要 {need}",
+  /** 军衔晋升成功（{level} 阶 · {label}） */
+  rank_upgrade_tip: "军衔晋升：{level} 阶 · {label}",
+
   //#region 浮动提示：物品与背包
   /** 该物品没有可用的使用方式 */
   good_unsupported_tip: "该物品暂无可以使用的方式",
@@ -172,6 +180,19 @@ export const uiTexts = {
   /** 当前称号（未激活时用 label_title_none） */
   label_title_current: "当前称号：{level} 阶 · {label}",
   label_title_none: "尚未激活称号",
+  /** 军衔卡片状态（已授衔 / 未授衔） */
+  label_rank_active: "已授衔",
+  label_rank_locked: "未授衔",
+  /** 当前军衔（未授衔时用 label_rank_none） */
+  label_rank_current: "当前军衔：{level} 阶 · {label}",
+  label_rank_none: "尚未授衔",
+  /** 军衔徽记上的阶数进度（{level} / {total}） */
+  label_rank_progress: "第 {level} 阶 / 共 {total} 阶",
+  /**
+   * 头顶红字上的军衔（{rank} = 军衔名，如「振威校尉」）
+   * 军衔没有素材动画，头顶这行红字就是它的外显；未授衔时不显示（整行清空）
+   */
+  label_rank_head: "【{rank}】",
   /** 绑定元宝余额（{value}） */
   label_bind_gold: "绑定元宝：{value}",
   /** 性别文案（校验提示用） */

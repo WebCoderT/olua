@@ -48,9 +48,19 @@
       "reason": "getChildByName(\"title_upgrade_button_label\") 取的是本弹窗按钮工厂产物里的文字子节点名（工厂与调用方的内部约定，与 WarSoulDialog 同一款），不是可调配置。"
     },
     {
+      "file": "ui/components/dialogs/RoleInfoDialog.ts",
+      "rule": "nodeName",
+      "reason": "入口按钮（role_rank_button / role_title_button / role_soul_button）的名字来自 configs/layout/dialogs 的按钮配置，本文件只按名拼按钮，没有可调的数。"
+    },
+    {
+      "file": "ui/components/dialogs/RankUpgradeDialog.ts",
+      "rule": "nodeName",
+      "reason": "getChildByName(\"rank_upgrade_button_label\") 取的是本弹窗按钮工厂产物里的文字子节点名（工厂与调用方的内部约定，与 WarSoulDialog / TitleUpgradeDialog 同一款），不是可调配置。"
+    },
+    {
       "file": "ui/components/role/RoleDisplay.ts",
       "rule": "nodeName",
-      "reason": "getChildByName(\"role_hp_bar\") / getChildByName(\"role_hp_text\") 取的是 GameUiHelper.createHead 建出来的头顶信息栏里的血条与血量文字（与 MonsterManager 查 monster_head 同一类「同一套结构的两端」的内部约定）。这里必须按名字取：称号名牌动画会动态插进同一个容器，按下标会漂移。"
+      "reason": "getChildByName(\"role_hp_bar\") / getChildByName(\"role_hp_text\") / getChildByName(\"role_rank\") 取的是 GameUiHelper.createHead 建出来的头顶信息栏里的血条、血量文字与军衔红字（与 MonsterManager 查 monster_head 同一类「同一套结构的两端」的内部约定）。这里必须按名字取：称号名牌动画会动态插进同一个容器，按下标会漂移。"
     }
   ]
 }

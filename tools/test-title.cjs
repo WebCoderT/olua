@@ -186,7 +186,7 @@ check(/title_upgrade_dialog/.test(dialogsLayoutSource) && /titleButton: \{ name:
 
 check(/new WarSoulDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.soulButton/.test(roleInfoSource), "角色信息弹窗的「战魂」按钮打开战魂弹窗（与称号入口相邻）");
 check(/title: \{ siblingIndex: 0, size: new Size/.test(hudSource), "名牌的插入位置/占位尺寸在 configs/layout/hud.roleShowLayout.title");
-check(/this\.head\.insertChild\(node, roleShowLayout\.title\.siblingIndex\)/.test(displaySource), "名牌节点挂在头部信息栏容器里（与名称/血条同一个节点）");
+check(/this\.head\.insertChild\(node, roleShowLayout\.title\.siblingIndex\)/.test(displaySource), "名牌节点挂在头部信息栏容器里（与军衔红字/血条同一个节点；角色名称在人物区域正中间，不在此容器）");
 check(!/roleShowLayout\.title\.(scale|position)/.test(displaySource) && !/title: \{ [^}]*scale/.test(hudSource), "名牌不手动定位也不缩放（位置交给头部容器的纵向布局，按素材原始尺寸显示）");
 check(/getChildByName\("role_hp_bar"\)/.test(displaySource) && /getChildByName\("role_hp_text"\)/.test(displaySource), "头顶血条/血量文字按名字取件（名牌插进同一容器后下标会漂移）");
 check(/"role_hp_bar"/.test(uiHelperSource) && /"role_hp_text"/.test(uiHelperSource), "createHead 给血条/血量文字起了稳定名字（与 updateHead 的取件口径成对）");

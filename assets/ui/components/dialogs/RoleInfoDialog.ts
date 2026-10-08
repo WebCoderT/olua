@@ -10,6 +10,7 @@ import RoleInShowView from "../panel/RoleInShowView";
 import { roleInfoDialogLayout } from "../../../configs/hudLayout";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
+import RankUpgradeDialog from "./RankUpgradeDialog";
 
 /**
  * 角色信息弹窗
@@ -55,9 +56,10 @@ export default class RoleInfoDialog {
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
     this.dialog.addChild(this.inShowView);
-    // 「称号」「战魂」入口按钮（右侧竖排相邻两格，几何见 roleInfoDialogLayout）
-    // 两者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
+    // 「军衔」「称号」「战魂」入口按钮（右侧竖排相邻三格，几何见 roleInfoDialogLayout）
+    // 三者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
     const entryButtons: { layout: { name: string; text: string; position: Vec2 }; open: () => void }[] = [
+      { layout: roleInfoDialogLayout.rankButton, open: () => new RankUpgradeDialog().open() },
       { layout: roleInfoDialogLayout.titleButton, open: () => new TitleUpgradeDialog().open() },
       { layout: roleInfoDialogLayout.soulButton, open: () => new WarSoulDialog().open() },
     ];
