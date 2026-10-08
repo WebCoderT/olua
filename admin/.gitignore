@@ -1,0 +1,9 @@
+node_modules/
+dist/
+
+# 本地环境变量（只提交 .env.example / .env.development / .env.production）
+.env
+.env.local
+.env.*.local
+
+*.log

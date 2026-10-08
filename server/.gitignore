@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 本地配置（含密钥，绝不入库；模板见 .env.example）
+.env
+.env.local
+
+# SQLite 数据文件
+data/
+
+# 日志
+*.log

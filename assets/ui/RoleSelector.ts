@@ -1,12 +1,17 @@
 import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
-import { occupations } from "../configs/role";
+import { maxRoleCount, occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
 import { applyScreenPolicy, getStageScale, onWindowResize } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
+import { Role } from "../entities/Role";
+import { RoleApi } from "./utils/net/Api";
+import type { RoleSummary } from "./utils/net/Api";
+import { describeError } from "./utils/net/ApiError";
+import { installNetwork } from "./utils/net/NetworkSetup";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
@@ -35,6 +40,10 @@ interface RoleSelectorCreateView {
 /**
  * 选角场景（登录后的角色列表 + 创建角色弹窗）
  *
+ * 角色数据**以服务端为准**：进场景拉一次角色列表（概要），选角色时才拉完整数据写进本地缓存
+ * （游戏内各处读角色是同步的，所以必须有一份本地完整数据，见 StorageManager.cacheRole）。
+ * 协议见 ui/utils/net —— 本组件不写路径、不拼地址、不管令牌。
+ *
  * 结构：铺满窗口的背景（始终盖住整个窗口）+ 一块固定设计尺寸的「舞台」，
  * 其余元素全部挂在舞台下并按设计坐标摆放（坐标以舞台中心为原点）。
  * 舞台由 applyStageLayout 按当前可见尺寸等比缩放（contain、只缩不放），
@@ -61,8 +70,14 @@ export class RoleSelector extends Component {
   private pendingDeleteButton: Node | null = null;
   /** 待确认状态的超时定时器（到点自动复位） */
   private deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 服务端返回的角色列表（本场景的展示来源；本地角色缓存只在进游戏时才写） */
+  private roleSummaries: RoleSummary[] = [];
+  /** 是否有请求在途（创建 / 进游戏），避免连点重复提交 */
+  private busy = false;
 
   start() {
+    // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
+    installNetwork();
     // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
     applyScreenPolicy();
     // 背景（不在舞台内：铺满可见区，始终盖住整个窗口；舞台等比缩小后四周留白由它兜底）
@@ -73,7 +88,8 @@ export class RoleSelector extends Component {
     // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
     this.applyStageLayout();
     this.offWindowResize = onWindowResize(() => this.applyStageLayout());
-    this.showOwnerRolesUI();
+    // 角色列表来自服务端（拉取失败由网络层统一提示，列表保持空）
+    void this.loadRoles();
   }
 
   /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁），并清掉待确认定时器 */
@@ -108,10 +124,53 @@ export class RoleSelector extends Component {
     stage.setScale(scale, scale, 1);
   }
 
+  /** 「开始游戏」：把选中角色同步到服务端（成为该账号的在线角色）并拉完整数据，然后进游戏场景 */
   beginGame() {
-    if (this.ownerRoleSelectedId) {
-      StorageManager.onlineRole(this.ownerRoleSelectedId);
+    if (this.ownerRoleSelectedId) void this.enterGame(this.ownerRoleSelectedId);
+  }
+
+  /**
+   * 拉取角色列表（服务端为准）
+   *
+   * 成功时顺手清掉本地缓存里服务端已经没有的角色（例如换账号登录、或在别处被删过），
+   * 避免进游戏时读到一个已不存在的角色；失败时**不清缓存**（网络抖动不该毁本地存档）。
+   */
+  private async loadRoles() {
+    let summaries: RoleSummary[];
+    try {
+      summaries = await RoleApi.list();
+    } catch (error) {
+      console.warn(`[RoleSelector] 角色列表加载失败：${describeError(error)}`);
+      this.roleSummaries = [];
+      this.showOwnerRolesUI();
+      return;
+    }
+    this.roleSummaries = summaries;
+    const ids = summaries.map((item) => item.id);
+    StorageManager.getRoles().forEach((role) => {
+      if (ids.indexOf(role.id) === -1) StorageManager.deleteRole(role.id);
+    });
+    this.showOwnerRolesUI();
+  }
+
+  /**
+   * 进入游戏
+   *
+   * 一次请求做两件事：服务端把该角色记为该账号的在线角色，并返回**完整角色数据**；
+   * 把完整数据写进本地缓存后，游戏内所有同步读取（findOnlineRole/getRoles）照旧可用。
+   */
+  private async enterGame(roleId: string) {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const detail = await RoleApi.select(roleId);
+      StorageManager.cacheRole(detail.data as unknown as Role);
+      StorageManager.onlineRole(roleId);
       SceneManager.loadScene("Game");
+    } catch (error) {
+      console.warn(`[RoleSelector] 进入角色失败：${describeError(error)}`);
+    } finally {
+      this.busy = false;
     }
   }
 
@@ -152,11 +211,13 @@ export class RoleSelector extends Component {
     };
   }
 
-  /** 展示已有角色预览列表 */
+  /** 按服务端角色列表重建站位预览（列表变化：进场景 / 新建 / 删除后调用） */
   showOwnerRolesUI() {
-    this.mainView.ownerRoleNodes.forEach((node) => node.destroy());
+    this.mainView.ownerRoleNodes.forEach((node) => {
+      if (isValid(node)) node.destroy();
+    });
     this.mainView.ownerRoleNodes.length = 0;
-    StorageManager.getRoles().forEach((role, index) => {
+    this.roleSummaries.forEach((role, index) => {
       const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, roleSelectorLayout.rolePositions[index] ?? new Vec2(), roleSelectorLayout.previewSize);
       node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
       this.stage!.addChild(node);
@@ -195,7 +256,7 @@ export class RoleSelector extends Component {
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
     // 每个角色站位上方一个删除按钮（位置由站位 + 偏移推导，角色数量变化时跟着重建）
-    StorageManager.getRoles().forEach((role, index) => {
+    this.roleSummaries.forEach((role, index) => {
       const stand = roleSelectorLayout.rolePositions[index];
       if (!stand) return;
       const button = GameUiHelper.createTexturedButton(
@@ -226,7 +287,7 @@ export class RoleSelector extends Component {
    *
    * 删除角色不可恢复，所以不让一次点击就生效：
    * 1. 第一次点击：不改数据，只把要删的角色名报给玩家，按钮文案变「确认删除」；
-   * 2. 期间再点同一个按钮：真的删除（落盘 → 刷新列表 → 选中态复位）；
+   * 2. 期间再点同一个按钮：调服务端真删（服务端成功后才动本地缓存与列表）；
    * 3. 超时（manageRole.confirmTimeout）、点了别的角色的删除按钮、退出管理模式或关场景：文案复位，
    *    下次点击重新从第 1 步开始。
    * 不弹确认框的原因与背包回收一致：不新增节点与鼠标监听，也就没有层级与点击穿透的坑
@@ -235,8 +296,8 @@ export class RoleSelector extends Component {
     // 点了别的角色的删除按钮 → 先放弃上一个待确认状态（避免两个按钮同时挂着「确认删除」）
     if (this.pendingDeleteId && this.pendingDeleteId !== roleId) this.cancelDeleteConfirm();
     if (this.pendingDeleteId !== roleId) {
-      const role = StorageManager.findRoleById(roleId);
-      if (!role) {
+      const summary = this.roleSummaries.find((item) => item.id === roleId);
+      if (!summary) {
         GameUiHelper.createTip("role_delete_missing_tip");
         this.refreshManageControls();
         return;
@@ -244,23 +305,31 @@ export class RoleSelector extends Component {
       this.pendingDeleteId = roleId;
       this.pendingDeleteButton = button;
       this.setDeleteButtonText(button, getText("label_role_delete_confirm"));
-      GameUiHelper.createTip("role_delete_confirm_tip", { name: role.name });
+      GameUiHelper.createTip("role_delete_confirm_tip", { name: summary.name });
       // 到点自动复位：免得「确认删除」一直挂着被无意点掉
       this.deleteConfirmTimer = setTimeout(() => this.cancelDeleteConfirm(), roleSelectorLayout.manageRole.confirmTimeout);
       return;
     }
-    // 第二步：确认删除（先复位按钮与定时器，再改数据）
-    const roleName = StorageManager.findRoleById(roleId)?.name ?? "";
+    // 第二步：确认删除（先复位按钮与定时器，再发请求）
+    void this.confirmDeleteRole(roleId);
+  }
+
+  /** 真删：服务端成功 → 本地缓存与列表同步更新；失败则列表保持原样（提示由网络层给出） */
+  private async confirmDeleteRole(roleId: string) {
+    const roleName = this.roleSummaries.find((item) => item.id === roleId)?.name ?? "";
     this.cancelDeleteConfirm();
-    if (!StorageManager.deleteRole(roleId)) {
-      GameUiHelper.createTip("role_delete_missing_tip");
+    try {
+      await RoleApi.remove(roleId);
+    } catch (error) {
+      console.warn(`[RoleSelector] 删除角色失败：${describeError(error)}`);
       this.refreshManageControls();
       return;
     }
+    StorageManager.deleteRole(roleId);
     // 删掉的正是当前选中的角色 → 名称/等级与「开始游戏」按钮一起复位，否则留下一个打不开的选中态
     if (this.ownerRoleSelectedId === roleId) this.clearSelectedRole();
     GameUiHelper.createTip("role_delete_done_tip", { name: roleName });
-    this.showOwnerRolesUI();
+    await this.loadRoles();
   }
 
   /** 退出待确认状态：清定时器、按钮文案复位（删除成功后按钮已随列表销毁，只清状态） */
@@ -294,12 +363,12 @@ export class RoleSelector extends Component {
 
   private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;
-    const role = StorageManager.findRoleById(this.ownerRoleSelectedId);
-    if (!role) return;
+    const summary = this.roleSummaries.find((item) => item.id === roleId);
+    if (!summary) return;
     // 开始游戏按钮可用，并更新名字与等级显示
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = false;
-    this.mainView.selectedRoleName.getComponent(Label).string = role.name;
-    this.mainView.selectedRoleLevel.getComponent(Label).string = role.level.toString();
+    this.mainView.selectedRoleName.getComponent(Label).string = summary.name;
+    this.mainView.selectedRoleLevel.getComponent(Label).string = summary.level.toString();
   }
 
   createRoleUI() {
@@ -334,7 +403,7 @@ export class RoleSelector extends Component {
     const createLayout = layout.createButton;
     const createButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
     createButton.getComponent(Sprite).grayscale = true;
-    createButton.on(Node.EventType.TOUCH_END, () => this.createRole());
+    createButton.on(Node.EventType.TOUCH_END, () => void this.createRole());
     dialog.addChild(createButton);
     // 职业/性别变更事件（通过场景组件回调）
     const eventHandler = new EventHandler();
@@ -389,16 +458,37 @@ export class RoleSelector extends Component {
     this.createView = null;
   }
 
-  createRole() {
-    if (!this.createView) return;
+  /**
+   * 创建角色
+   *
+   * 角色数据由**客户端按自身配置**生成（新手装备、初始金币、背包格、快捷键都在 configs/role），
+   * 服务端只校验结构、归属、数量上限与重名 —— 于是游戏侧改配置不必同步改服务端。
+   */
+  async createRole() {
+    if (!this.createView || this.busy) return;
+    // 数量上限：服务端才是权威（server/.env 的 ROLE_MAX_PER_ACCOUNT），这里先拦一道省一次往返
+    // —— 站位只有 roleSelectorLayout.rolePositions 那么几个，超出的角色在界面上根本没地方显示
+    if (this.roleSummaries.length >= maxRoleCount) {
+      GameUiHelper.createTip("role_create_limit_tip", { max: maxRoleCount });
+      return;
+    }
     // 读取表单（职业与性别取自选中开关的节点名称，即枚举值）
     const occupation = (this.createView.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as OECCUPATION;
     const sex = (this.createView.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as SEX;
-    const name = this.createView.nameInput.getComponent(EditBox).string;
+    const name = this.createView.nameInput.getComponent(EditBox).string.trim();
     if (!name) return;
-    StorageManager.createRole(name, occupation, sex);
-    this.cancelCreateRoleUI();
-    this.showOwnerRolesUI();
+    this.busy = true;
+    try {
+      const detail = await RoleApi.create(new Role(name, occupation, sex));
+      StorageManager.cacheRole(detail.data as unknown as Role);
+      GameUiHelper.createTip("role_create_success_tip");
+      this.cancelCreateRoleUI();
+      await this.loadRoles();
+    } catch (error) {
+      console.warn(`[RoleSelector] 创建角色失败：${describeError(error)}`);
+    } finally {
+      this.busy = false;
+    }
   }
 
   update() {

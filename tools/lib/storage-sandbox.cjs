@@ -38,6 +38,10 @@ const STUB_IMPORTS = {
   "./GameHelper": "../../stubs/GameHelper",
   "./LayerManager": "../../stubs/LayerManager",
   "../helpers/GameUiHelper": "../../stubs/GameUiHelper",
+  // 角色落盘会写穿服务端（见 ui/utils/net）：同步请求与场景/飘字无关，
+  // 这里顶成「记账式」替身 —— 只记下安排过同步，真语义由 tools/test-client-net.cjs 验证
+  "../utils/net/RoleSync": "../../stubs/RoleSync",
+  "../utils/net/Session": "../../stubs/Session",
   // configs/skill 会 import skills/zhan → ui/core/*（配置反向依赖 UI 的历史遗留），必须顶掉
   "../../configs/skill": "../../stubs/configs-skill",
 };
@@ -109,6 +113,21 @@ const STUBS = {
   static createUpgradeEffect(): unknown { return null; }
 }
 `,
+  "RoleSync.ts": `/** 替身：只记下「安排过同步」，防抖/静默/失败提示的真语义见 tools/test-client-net.cjs */
+export default class RoleSync {
+  static onFailed: unknown = null;
+  /** 依次记录被安排同步的角色（测试据此断言接线，不依赖真实请求） */
+  static scheduled: unknown[] = [];
+  static schedule(role: unknown): void { this.scheduled.push(role); }
+  static async flush(): Promise<void> {}
+}
+`,
+  "Session.ts": `/** 替身：只记下 clear 次数（会话的真实读写见 tools/test-client-net.cjs） */
+export default class Session {
+  static cleared = 0;
+  static clear(): void { this.cleared += 1; }
+}
+`,
   "configs-skill.ts": `export const skills = new Map<string, any>();
 `,
 };
@@ -147,7 +166,7 @@ function copyDir(fromDir, toDir) {
  * 编译 StorageManager（真实代码，UI 依赖走 stub）并返回可 require 的模块
  * @param {string} sandboxName 沙箱目录名（os.tmpdir() 下）
  * @param {string[]} extraEntries 额外的入口文件（相对 assets/，例如 "ui/core/SkillManager.ts"）
- * @returns {{ StorageManager: any, createRole: (name: string, occupation: string, sex: string) => any, outDir: string }}
+ * @returns {{ StorageManager: any, Role: any, outDir: string, shim: any, RoleSync: any, Session: any }}
  */
 function prepareStorage(sandboxName, extraEntries = []) {
   const tscPath = findTsc();
@@ -224,7 +243,12 @@ function prepareStorage(sandboxName, extraEntries = []) {
   const Role = require(path.join(outDir, "entities/Role.js")).Role ?? require(path.join(outDir, "entities/Role.js")).default;
   // 垫片内存（测试用它直接核对 localStorage 里到底写了什么，而不是从业务接口倒推）
   const shim = require(path.join(sandbox, "node_modules/cc/index.js"));
-  return { StorageManager, Role, outDir, shim };
+  // 网络层替身（测试可断言「落盘是否安排了同步 / 清存档是否连带清会话」这类接线）
+  const stubOf = (name) => {
+    const mod = require(path.join(outDir, `stubs/${name}.js`));
+    return mod.default ?? mod;
+  };
+  return { StorageManager, Role, outDir, shim, RoleSync: stubOf("RoleSync"), Session: stubOf("Session") };
 }
 
 module.exports = { prepareStorage, STUB_IMPORTS, STUBS, CC_SHIM };

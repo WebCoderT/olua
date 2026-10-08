@@ -29,6 +29,10 @@ import SkillManager from "./core/SkillManager";
 import StatusManager from "./core/StatusManager";
 import HoverTipManager from "./core/HoverTipManager";
 import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
+import GameUiHelper from "./helpers/GameUiHelper";
+import RoleSync from "./utils/net/RoleSync";
+import { installNetwork } from "./utils/net/NetworkSetup";
+import { describeError } from "./utils/net/ApiError";
 const { ccclass, property } = _decorator;
 
 @ccclass("Game")
@@ -64,7 +68,13 @@ export class Game extends Component {
   async start() {
     // 屏幕适配：铺满窗口（无黑边），可见宽度随窗口宽高比变化（见 utils/layout/ScreenLayout）
     applyScreenPolicy();
-    // 获取角色信息（旧存档缺失的字段由 StorageManager 在读取时统一补齐）
+    // 网络层接线（幂等，登录场景已调过一次）：令牌失效回登录场景、请求失败统一飘字
+    installNetwork();
+    // 角色进度同步的失败出口：同步请求是静默的（不弹通用提示），
+    // 这里接上「只提示一次」的飘字，避免后端挂了之后打怪期间被刷屏（见 utils/net/RoleSync）
+    RoleSync.onFailed = (error) => GameUiHelper.createErrorTipText(describeError(error));
+    // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
+    // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
     // 初始化图层（含掉落物层/怪物层）
     LayerManager.initLayer(this.node, this.camera);
@@ -150,6 +160,11 @@ export class Game extends Component {
 
   /** 场景卸载：清理全局监听、动态面板与视图引用（图层容器与相机由 LayerManager 在下次 initLayer 重建） */
   onDestroy() {
+    // 把防抖窗口里还没推给服务端的角色进度推掉（切地图/退出都会走到这里销毁本场景，
+    // 不 flush 的话这几秒内的改动会随场景一起丢；失败与否都由 RoleSync 自己处理，不阻塞卸载）
+    void RoleSync.flush();
+    // 场景卸载后飘字出口可能失效（场景根都要没了），先摘掉回调
+    RoleSync.onFailed = null;
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();
     this.offWindowResize = null;

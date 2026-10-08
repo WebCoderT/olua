@@ -4,7 +4,7 @@ import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
 import { levelMap } from "../../configs/level";
 import { roleMaxLevel } from "../../configs/growth";
-import { initialShortcutKeys, bagRow, bagCol, maxRoleCount } from "../../configs/role";
+import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
@@ -21,10 +21,17 @@ import { getEquipmentNameParts } from "../../configs/equipments";
 import { getSoulLevel } from "../../configs/soul";
 import { getTitleLevel } from "../../configs/title";
 import { getRankLevel } from "../../configs/rank";
+import RoleSync from "../utils/net/RoleSync";
+import Session from "../utils/net/Session";
 
 /**
  * 存储管理器
  * 负责本地角色数据的读写，以及数据变更后的属性重算、UI刷新与外观更新
+ *
+ * **本地 roles 是服务端数据的缓存，服务端才是权威**（账号体系见 ui/utils/net）：
+ * - 进游戏前由选角场景拉一次完整数据写进缓存（见 cacheRole），游戏内各处照旧同步读；
+ * - 任何一次落盘（updateOnlineRole）都会经 RoleSync 防抖推回服务端，不再有「只存本地」的改动；
+ * - 账号与令牌不在这里，见 ui/utils/net/Session（clear 会一并清掉会话，避免清了存档还留着登录态）。
  */
 export default class StorageManager {
   /** 获取角色列表 */
@@ -39,15 +46,23 @@ export default class StorageManager {
     sys.localStorage.setItem("roles", JSON.stringify(roles));
   }
 
-  /** 创建新角色 */
-  static createRole(name: string, occupation: Role["occupation"], sex: Role["sex"]): void {
+  /**
+   * 把服务端返回的角色完整数据写进本地缓存（按 id 覆盖）
+   *
+   * 调用时机只有两处，都是「服务端刚给了一份权威数据」的时刻：
+   * 1. 选角场景选中角色（服务端返回完整数据，见 ui/RoleSelector.enterGame）；
+   * 2. 选角场景创建角色（服务端落库后回传完整数据）。
+   *
+   * **不触发**服务端同步：这份数据本来就是从服务端拿的，推回去纯属白跑一趟。
+   * 角色数量上限由服务端把关（server/.env 的 ROLE_MAX_PER_ACCOUNT），本地不再自己拦。
+   * @param role 服务端返回的角色完整数据（服务端存的就是客户端 entities/Role 的快照）
+   */
+  static cacheRole(role: Role) {
     const roles = this.getRoles();
-    if (roles.length < maxRoleCount) {
-      roles.push(new Role(name, occupation, sex));
-      this.setRoles(roles);
-    } else {
-      console.error(`角色超出上限（最多 ${maxRoleCount} 个）`);
-    }
+    const index = roles.findIndex((item) => item.id === role.id);
+    if (index >= 0) roles[index] = role;
+    else roles.push(role);
+    this.setRoles(roles);
   }
 
   /** 根据id获取角色 */
@@ -56,14 +71,16 @@ export default class StorageManager {
   }
 
   /**
-   * 删除角色（选角界面「管理」入口调用，见 ui/RoleSelector 的删除按钮）
+   * 删除角色的**本地缓存**（选角界面「管理」入口调用，见 ui/RoleSelector 的删除按钮）
    *
-   * 角色数据只存在本地存档的 roles 数组里，删除就是从数组移除并落盘，**不可恢复**。
+   * 真删在服务端：选角场景先调 RoleApi.remove，服务端删成功后才来这里清缓存
+   * ——顺序反了会出现「本地没了但服务端还在」，下次拉列表角色又冒出来。
+   * 本地这一步就是从数组移除并落盘，**不可恢复**。
    * 删完必须确认 selectedRole 不再指向已不存在的角色：玩家上次进游戏时选中过它，
    * 残留的选中项会让下一次 findOnlineRole 取到 undefined（进游戏直接卡在取角色那一步）；
    * 顺手也清掉「本来就指向不存在角色」的脏选中项（例如存档被外部改动过）。
    * @param id 角色 id（Role.id）
-   * @returns 是否删除成功（角色不存在时返回 false，调用方据此区分提示）
+   * @returns 是否清理成功（角色不在本地缓存时返回 false，调用方据此区分提示）
    */
   static deleteRole(id: string): boolean {
     const roles = this.getRoles();
@@ -76,12 +93,22 @@ export default class StorageManager {
     return true;
   }
 
-  /** 清空本地所有存储 */
+  /**
+   * 清空本地所有存储（含会话）
+   *
+   * 登录场景启动时调用一次：进登录页一律重新登录，避免上个账号的角色缓存与令牌串到下一个账号。
+   */
   static clear() {
     sys.localStorage.clear();
+    Session.clear();
   }
 
-  /** 选择角色 */
+  /**
+   * 选中角色（本地视角：游戏内 findOnlineRole 认的是它）
+   *
+   * 服务端侧的「在线角色」由选角场景的 `RoleApi.select` 写入（见 ui/RoleSelector.enterGame），
+   * 两者要在同一次进游戏流程里一起写，只写一边会出现「本地进的是 A、服务端记的是 B」。
+   */
   static onlineRole(id: string) {
     sys.localStorage.setItem("selectedRole", id);
   }
@@ -96,7 +123,13 @@ export default class StorageManager {
     return role;
   }
 
-  /** 更新在线角色 */
+  /**
+   * 更新在线角色（**本地落盘的唯一出口**，同时也是写穿服务端的唯一触发点）
+   *
+   * 打怪升级/拾取/买卖/换装/吃药都会走到这里，所以服务端同步必须防抖
+   * （只推最后一份数据、失败不重排，见 utils/net/RoleSync）。
+   * 调用方不需要关心同步结果：本地已经落盘，游戏内读到的永远是这一份。
+   */
   static updateOnlineRole(role: Role) {
     const roles = this.getRoles().map((i) => {
       if (i.id === role.id) {
@@ -105,6 +138,7 @@ export default class StorageManager {
       return i;
     });
     this.setRoles(roles);
+    RoleSync.schedule(role);
   }
 
   /**

@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/* 基础版式：整屏高度 + 深色底（Tailwind 只管工具类，这里放全局兜底） */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #020617; /* slate-950 */
+  color: #e2e8f0; /* slate-200 */
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 细滚动条（默认滚动条在深色底上很突兀） */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #334155;
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-track {
+  background-color: transparent;
+}

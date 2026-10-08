@@ -27,6 +27,16 @@ export const loginLayout = {
     textColor: new Color("#f4fc00"),
     fontSize: 30,
   },
+  /** 注册按钮（与登录共用上方的账号/密码输入框；账号唯一性与格式由服务端校验） */
+  registerButton: {
+    name: "register_button",
+    image: uiImages.middleButtonBackground,
+    text: "注册账号",
+    position: new Vec2(0, -345),
+    size: new Size(240, 56),
+    textColor: new Color("#f4fc00"),
+    fontSize: 24,
+  },
   /** 顶部 logo */
   logo: { name: "game_logo", image: uiImages.gameLogo, position: new Vec2(0, 200), size: new Size(600, 300) },
 };

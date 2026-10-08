@@ -34,7 +34,14 @@ export const roleRigid = {
   fixedRotation: true,
 };
 
-/** 单个账号最多可创建的角色数量（存档上限，创建接口按它拦） */
+/**
+ * 单个账号最多可创建的角色数量
+ *
+ * **权威在服务端**（server/.env 的 ROLE_MAX_PER_ACCOUNT），创建时由服务端把关并拒绝超限请求；
+ * 客户端这一份只做两件事：创建前先拦一道省一次往返、以及和选角界面的站位数量对齐
+ * （configs/layout/scenes.roleSelectorLayout.rolePositions —— 超出的角色界面上没地方放）。
+ * 两边数值要一起改。
+ */
 export const maxRoleCount = 3;
 
 /**

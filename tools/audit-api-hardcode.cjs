@@ -1,0 +1,241 @@
+#!/usr/bin/env node
+/**
+ * 接口地址硬编码审计（api hardcode audit）
+ *
+ * 目的：客户端、管理端、服务端三处都**不允许把接口地址写进代码**，请求也**只能从唯一的那一层发出**。
+ * 地址与请求实现各有唯一来源：
+ *
+ * | 位置 | 地址唯一来源 | 请求唯一出口 | 接口路径唯一来源 |
+ * |------|--------------|--------------|------------------|
+ * | 客户端（assets）   | configs/network.ts      | ui/utils/net/HttpClient.ts | ui/utils/net/ApiRoutes.ts |
+ * | 管理端（admin/src）| admin/.env.* → api/config.ts | api/http.ts           | api/*.api.ts |
+ * | 服务端（server/src）| server/.env → config/configuration.ts | —           | 各自的 @Controller |
+ *
+ * 本脚本按行扫三类 .ts/.tsx（客户端 assets、管理端 admin/src、服务端 server/src），
+ * 命中即报；注释行不算（注释里写示例地址是文档，不是硬编码）。
+ *
+ * 另外做一项环境变量登记检查：管理端 `"VITE_XXX"` / 服务端 `process.env.XXX` 用到的键，
+ * 必须在对应的 `.env.example` 里登记 —— 否则新增配置项时模板会悄悄落后（换环境的人不知道要填什么）。
+ *
+ * 用法：
+ *   node tools/audit-api-hardcode.cjs            # 报告 + 退出码（有命中即 1）
+ *   node tools/audit-api-hardcode.cjs --list     # 只列文件与计数
+ *   node tools/audit-api-hardcode.cjs --json     # 输出 JSON
+ */
+
+const fs = require("fs");
+const path = require("path");
+
+const ROOT = path.resolve(__dirname, "..");
+const args = process.argv.slice(2);
+const MODE = { json: args.includes("--json"), list: args.includes("--list") };
+
+/** 扫描目标（顺序即报告顺序） */
+const TARGETS = [
+  { name: "客户端", dir: path.join(ROOT, "assets"), exts: [".ts"] },
+  { name: "管理端", dir: path.join(ROOT, "admin/src"), exts: [".ts", ".tsx"] },
+  { name: "服务端", dir: path.join(ROOT, "server/src"), exts: [".ts"] },
+];
+
+/** 唯一来源清单（相对仓库根，正斜杠） */
+const ENDPOINT = {
+  clientBaseUrl: "assets/configs/network.ts",
+  clientRequest: "assets/ui/utils/net/HttpClient.ts",
+  clientRoutes: "assets/ui/utils/net/ApiRoutes.ts",
+  adminRoot: "admin/src/api/", // 管理端的请求实现与接口路径都收在这个目录里
+  adminRequest: "admin/src/api/http.ts",
+  adminEnv: "admin/.env.example",
+  serverEnv: "server/.env.example",
+};
+
+/** ---------- 规则 ---------- */
+const RULES = [
+  {
+    id: "url",
+    label: "后端地址字面量（http/https）",
+    test: (line) => /https?:\/\//.test(line),
+    allow: [ENDPOINT.clientBaseUrl],
+    why: `客户端地址只允许写在 ${ENDPOINT.clientBaseUrl}；管理端地址在 admin/.env.*（代码只读 VITE_API_BASE_URL）；服务端在 server/.env（代码只读 process.env）`,
+  },
+  {
+    id: "host",
+    label: "主机/回环地址字面量",
+    test: (line) => /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(line),
+    allow: [ENDPOINT.clientBaseUrl],
+    why: "同上：换后端（局域网 IP / 线上域名）不该改代码",
+  },
+  {
+    id: "requestEntry",
+    label: "请求实现（XMLHttpRequest / fetch）",
+    test: (line) => /new XMLHttpRequest\(/.test(line) || /(^|[^.\w])fetch\(/.test(line),
+    allow: [ENDPOINT.clientRequest, ENDPOINT.adminRequest],
+    why: `请求必须二次封装、统一调度：客户端在 ${ENDPOINT.clientRequest}，管理端在 ${ENDPOINT.adminRequest}`,
+  },
+  {
+    id: "authHeader",
+    label: "令牌头注入（Authorization）",
+    // 只认「真的在写请求头」的三种写法：.Authorization = / "Authorization": / headers 里带它。
+    // 不认文档串（@ApiProperty 描述、Swagger 说明里的 `Authorization: Bearer <token>`）——
+    // 那是给人看的说明，不是注入
+    test: (line) => /\.Authorization\b|["']Authorization["']|headers?[^;]{0,60}Authorization/.test(line),
+    allow: [ENDPOINT.clientRequest, ENDPOINT.adminRequest],
+    why: "令牌只由请求层统一注入（拦截器 / 默认头），业务层不许自己拼",
+  },
+  {
+    id: "apiPath",
+    label: "接口路径字面量",
+    test: (line, rel) => (rel.startsWith("assets/") ? /["'`]\/(auth|roles|health)\b/.test(line) : /["'`]\/admin\//.test(line)),
+    allow: [ENDPOINT.clientRoutes, ENDPOINT.adminRoot],
+    why: `客户端路径集中在 ${ENDPOINT.clientRoutes}；管理端集中在 ${ENDPOINT.adminRoot}（放这里的理由：allow 以 / 结尾即视为目录）`,
+  },
+];
+
+/** ---------- 收集文件 ---------- */
+function walk(dir, exts, out = []) {
+  if (!fs.existsSync(dir)) return out;
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    if (fs.statSync(full).isDirectory()) {
+      if (name === "node_modules" || name === ".git" || name === "dist") continue;
+      walk(full, exts, out);
+    } else if (exts.includes(path.extname(name))) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const relOf = (full) => path.relative(ROOT, full).split(path.sep).join("/");
+
+/**
+ * 整行忽略：注释与日志
+ * - 注释里写「默认是 http://localhost:3100/api」是文档，不是硬编码（项目既有口径：console.* 不算配置）；
+ * - 启动日志里的 `http://localhost:${port}` 是给人看的提示（端口来自配置），不是请求目标。
+ */
+function isIgnorable(line) {
+  if (/^\s*(\/\/|\*|\/\*)/.test(line)) return true;
+  return /\b(console|logger)\.(log|warn|error|debug|verbose)\(/.test(line);
+}
+
+/** allow 项：以 / 结尾 = 目录前缀，否则精确文件 */
+function allowedBy(allow, rel) {
+  return allow.some((item) => (item.endsWith("/") ? rel.startsWith(item) : rel === item));
+}
+
+/** ---------- 扫描 ---------- */
+const findings = [];
+const scanned = [];
+for (const target of TARGETS) {
+  for (const full of walk(target.dir, target.exts)) {
+    const rel = relOf(full);
+    scanned.push(rel);
+    const lines = fs.readFileSync(full, "utf8").split(/\r?\n/);
+    lines.forEach((line, index) => {
+      if (isIgnorable(line)) return;
+      for (const rule of RULES) {
+        if (!rule.test(line, rel)) continue;
+        if (allowedBy(rule.allow, rel)) continue;
+        findings.push({ area: target.name, file: rel, line: index + 1, rule: rule.id, label: rule.label, snippet: line.trim().slice(0, 120), why: rule.why });
+      }
+    });
+  }
+}
+
+/** ---------- 环境变量登记检查 ---------- */
+// 值本身是「数据」（可以出现在唯一来源文件里），但键必须在 .env.example 里登记过
+function checkEnvDocs() {
+  const cases = [
+    {
+      label: "管理端",
+      dir: path.join(ROOT, "admin/src"),
+      exts: [".ts", ".tsx"],
+      example: path.join(ROOT, "admin/.env.example"),
+      pattern: /"(VITE_[A-Z0-9_]+)"/g,
+    },
+    {
+      label: "服务端",
+      dir: path.join(ROOT, "server/src"),
+      exts: [".ts"],
+      example: path.join(ROOT, "server/.env.example"),
+      pattern: /process\.env\.([A-Z0-9_]+)/g,
+    },
+  ];
+  const result = [];
+  for (const item of cases) {
+    const exampleFile = relOf(item.example);
+    if (!fs.existsSync(item.example)) {
+      result.push({ label: item.label, example: exampleFile, keys: [], missing: ["<.env.example 不存在>"] });
+      continue;
+    }
+    const example = fs.readFileSync(item.example, "utf8");
+    const keys = new Set();
+    for (const full of walk(item.dir, item.exts)) {
+      const text = fs.readFileSync(full, "utf8");
+      for (const m of text.matchAll(item.pattern)) keys.add(m[1]);
+    }
+    const missing = [...keys].filter((key) => !new RegExp(`^\\s*#?\\s*${key}\\s*=`, "m").test(example));
+    result.push({ label: item.label, example: exampleFile, keys: [...keys].sort(), missing: missing.sort() });
+  }
+  return result;
+}
+
+const envDocs = checkEnvDocs();
+const envMissing = envDocs.flatMap((item) => item.missing.map((key) => ({ label: item.label, example: item.example, key })));
+const failed = findings.length > 0 || envMissing.length > 0;
+
+/** ---------- 输出 ---------- */
+const byRule = {};
+const byFile = {};
+for (const item of findings) {
+  byRule[item.rule] = (byRule[item.rule] || 0) + 1;
+  byFile[item.file] = (byFile[item.file] || 0) + 1;
+}
+
+if (MODE.json) {
+  console.log(JSON.stringify({ total: findings.length, scanned: scanned.length, byRule, byFile, findings, envDocs }, null, 2));
+  process.exit(failed ? 1 : 0);
+}
+
+console.log("接口地址硬编码审计 / api hardcode audit");
+console.log(`扫描：客户端 assets/、管理端 admin/src/、服务端 server/src/（共 ${scanned.length} 个脚本）`);
+console.log(`唯一来源：地址 ${ENDPOINT.clientBaseUrl} + admin/.env.* + server/.env；请求 ${ENDPOINT.clientRequest} / ${ENDPOINT.adminRequest}；路径 ${ENDPOINT.clientRoutes} / ${ENDPOINT.adminRoot}`);
+console.log("");
+
+if (findings.length) {
+  for (const file of Object.keys(byFile).sort((a, b) => byFile[b] - byFile[a])) {
+    console.log(`- ${file}  (${byFile[file]})`);
+    if (!MODE.list) {
+      for (const item of findings.filter((x) => x.file === file)) {
+        console.log(`    ${String(item.line).padStart(4)} [${item.rule}] ${item.snippet}`);
+      }
+    }
+  }
+  console.log("");
+  console.log("按规则：");
+  for (const [id, count] of Object.entries(byRule).sort((a, b) => b[1] - a[1])) {
+    const rule = RULES.find((item) => item.id === id);
+    console.log(`  ${id.padEnd(13)} ${String(count).padStart(4)}  ${rule ? rule.label : id}`);
+  }
+  console.log("");
+  console.log("怎么改：");
+  for (const rule of RULES) {
+    if (!byRule[rule.id]) continue;
+    console.log(`  [${rule.id}] ${rule.why}`);
+  }
+  console.log("");
+}
+
+console.log("环境变量登记：");
+for (const item of envDocs) {
+  console.log(`  ${item.label}：用到 ${item.keys.length} 个键，${item.example} 未登记 ${item.missing.length} 个`);
+  for (const key of item.missing) console.log(`    ${item.example}  →  ${key}`);
+}
+console.log("");
+
+if (!failed) {
+  console.log("PASS：三端都没有硬编码地址，请求只在唯一出口发出，环境变量都已登记");
+} else {
+  if (findings.length) console.log(`FAIL：${findings.length} 处硬编码/越权请求待处理`);
+  if (envMissing.length) console.log(`FAIL：${envMissing.length} 个环境变量键未登记到 .env.example`);
+}
+process.exit(failed ? 1 : 0);

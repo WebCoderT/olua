@@ -84,10 +84,14 @@
 > 约定：**核心代码只做「怎么跑」，一切可调的东西都在 `assets/configs`**——
 > 数值、文案、布局、配色、时长、资源路径都不写在逻辑里。
 > 自查：`node tools/audit-config-leak.cjs`（扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
+>
+> 另一条铁律：**接口地址不写进代码**（客户端 `configs/network`、管理端 `admin/.env.*`、服务端 `server/.env` 是各自唯一来源），
+> 请求只能从唯一那一层发出。自查：`node tools/audit-api-hardcode.cjs`。
 
 - assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background/title/light/mall 等）
   - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）
   - configs/bottomNav：底部功能入口表（名称 / 图标 / 解锁等级 / 快捷键）
+  - configs/network：**客户端唯一的服务端地址来源**（根地址 / 超时 / 重试 / 角色进度同步防抖间隔）
   - configs/layout：UI 布局与样式（hud / dialogs / panels / scenes / borders / backgrounds / lights / images / sizes / theme）
 - assets/types：纯类型声明（common/role/animation/good/skill/map/monster/drop/status/border/background/title/light）
 - assets/entities：运行时实体（Role）
@@ -97,9 +101,21 @@
   - ui/components：按职责分组（hud/panel/dialogs/role/input/map）
   - ui/helpers：UI 生成（UiHelper 基础封装 / GameUiHelper 零件库 / AnimationHelper 帧动画）
   - ui/utils：纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/node）
+  - ui/utils/net：**对服务端的全部访问**（HttpClient 二次封装与统一调度 / ApiRoutes 路径表 / Api 接口 / Session 会话 / RoleSync 进度同步 / NetworkSetup 接线）
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
-- tools：本地校验脚本（审计：配置外泄 / 点击穿透；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 弹窗层级 / 摇杆 / 称号 / 军衔 / 新手背包 / 商城 / 装备光柱 / 角色默认外观 / 角色帧素材 / 装备外观切片 / 文案 / 角色删除）+ 边框素材索引图 border-preview.png
+- server：**NestJS 服务端**（登录 / 注册 / 角色操作 + 管理端接口，SQLite 落库，Swagger 文档）
+  - src/common：统一响应包裹、业务码、守卫（认证 AuthGuard / 权限 PermissionGuard）、过滤器、拦截器、装饰器
+  - src/common/constants/permission：**权限点与管理员角色的唯一来源**（角色 → 权限映射；文档上的「所需权限」由它反查生成）
+  - src/common/constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
+  - src/database：SQLite 连接与三张表（accounts / roles / admins，含存量补列）的仓储层
+  - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / **管理员**）/ token（JWT）/ health
+  - test/e2e.cjs：端到端用例（真实起服务 + 真实请求，187 条断言：注册登录 / 角色 CRUD / 越权 / 令牌受众隔离 / 管理端全流程 / **文档分组与权限点** / **四级越权与超管保护**）
+- admin：**React + Tailwind 管理端**（登录注册、账号管理、账号下的角色管理、**管理员与权限**）
+  - src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）+ 接口模块
+  - src/pages：登录 / 注册 / 概览 / 账号列表与详情 / 角色列表与详情 / 管理员
+  - 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
+- tools：本地校验脚本（审计：配置外泄 / 点击穿透 / **接口地址硬编码**；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 弹窗层级 / 摇杆 / 称号 / 军衔 / 新手背包 / 商城 / 装备光柱 / 角色默认外观 / 角色帧素材 / 装备外观切片 / 文案 / 角色删除 / **客户端网络层**）+ 边框素材索引图 border-preview.png
 - website：项目官网（纯静态单页：核心特色 / 截图画廊 / 联系方式，logo 与 favicon 在 website/assets/icons）
 - public：截图、展示素材与联系方式二维码
 
@@ -108,8 +124,27 @@
 - Cocos Creator 3.8.7
 - TypeScript
 - Cocos UI / 2D 场景系统 / Box2D 物理（刚体与碰撞体）
+- 服务端：NestJS 12 + `node:sqlite`（Node 22 内置，无原生模块依赖）+ JWT（玩家 / 管理端两套受众）+ Swagger
+- 管理端：React 19 + TypeScript + Vite + Tailwind CSS v4
 
 ## 运行方式
+
+### 1. 服务端（先跑起来，客户端与管理端都依赖它）
+
+```bash
+cd server
+npm install
+cp .env.example .env     # 首次：端口 / 密钥 / 上限都在这里；注释里逐项说明
+npm run dev              # 开发（热编译）；或 npm run start 跑已构建产物
+```
+
+- 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`，可直接喂给 Postman / 代码生成）
+  - 文档按**谁能调**分三组：**公共接口**（无需令牌）/ **客户端**（`player` 令牌）/ **管理端**（`admin` 令牌 + 权限点）
+- 健康检查：`GET http://localhost:3100/api/health`
+- 数据库：默认 `server/data/olua.db`（SQLite，首次启动自动建表，删账号会级联删其角色）
+- 回归：`npm run test:e2e`（真实起服务 + 真实请求，187 条断言）
+
+### 2. 客户端（Cocos）
 
 1. 安装并打开 Cocos Creator 3.8.7。
 2. 通过 Creator 的 “Open” / “Open Project” 打开当前仓库目录。
@@ -117,6 +152,19 @@
 4. 使用预览或播放按钮运行项目。
 
 注意：这个仓库本身不提供 npm start 或 build 脚本，项目依赖 Cocos Creator 编辑器来启动和预览。
+客户端连哪个服务端只由 `assets/configs/network.ts` 的 `baseUrl` 决定（真机调试改成局域网 IP）。
+
+### 3. 管理端（React）
+
+```bash
+cd admin
+npm install
+cp .env.example .env.development   # 首次：接口根地址在这里（VITE_API_BASE_URL）
+npm run dev                        # 开发；npm run build 产出 dist
+```
+
+管理端注册需要在 `server/.env` 里配 `ADMIN_REGISTER_CODE`（留空则开放注册），注册时填同一个注册码。
+**第一个**注册的管理员自动成为超级管理员（全部权限），之后的都是普通管理员，要提权由超管在「管理员」页调整。
 
 
 ## 预览与常见问题
@@ -131,10 +179,15 @@
 
 | 功能           | 说明                                |  状态 |
 | ------------ | --------------------------------- | :-: |
-| 登录 / 角色选择与创建 | 最多 3 个角色，在线角色本地存档                 |  ✅  |
+| 账号注册 / 登录     | 账号存服务端（SQLite），口令 scrypt 加盐摘要；令牌 7 天有效，登录失败不区分「账号不存在」与「密码错误」 |  ✅  |
+| 角色选择与创建      | 每个账号最多 3 个角色，列表与数据都存服务端；创建的新角色按客户端配置生成（新手装备/背包/快捷键） |  ✅  |
+| 游戏进度云端保存     | 角色改动（打怪升级 / 拾取 / 买卖 / 换装 / 吃药）自动写回服务端，**防抖 1.5 秒合并**，切地图与退出前立即补推 |  ✅  |
 | 旧存档自动迁移      | 新增字段/存储格式变更时读取自动补齐（装备/背包 id 引用制等） |  ✅  |
-| 删除角色         | 选角界面「管理」进入管理态，各角色头顶出现删除按钮，两步确认后从存档移除 |  ✅  |
+| 删除角色         | 选角界面「管理」进入管理态，各角色头顶出现删除按钮，两步确认后由服务端删除（不可恢复） |  ✅  |
 | 新角色出生背包     | 通用件 + 全部基础武器/衣服，外加 **1 级武器的全部前后缀变体（15 件品质）** 一起发进背包，出生即可对比外观与边框 |  ✅  |
+| 管理端（React）    | 管理员登录注册、账号分页检索与封禁、查看账号下的每个角色并改属性 / 切换在线 / 删除 |  ✅  |
+| 权限管理          | 管理员分三级（超级管理员 / 管理员 / 只读观察员），权限点粒度到「每个接口」（查看 / 封禁 / 删除 / 改角色…）；权限点唯一来源 + 守卫实时校验，界面按权限显隐；保护最后一个启用中的超级管理员 |  ✅  |
+| 接口文档          | Swagger 抛出（`/api-docs`），按**公共接口 / 客户端 / 管理端**三组展示；每个接口标出令牌要求与所需权限点；统一响应包裹 + 业务码 |  ✅  |
 | 泡点活动         | 持续获得经验，经验条与等级动态更新                 |  ✅  |
 
 ### 地图与场景

@@ -183,7 +183,9 @@ check(/propagationStopped = true/.test(confirmSource), "确认框仍然独占触
 check(/blockClickThrough\(this\)/.test(confirmSource), "确认框仍然独占鼠标通道");
 
 // 不该被卷进来的：HUD / 临时层 / 死亡遮罩 / 升级特效
-check(/LayerManager\.addToUILayer\(tip\)/.test(helperSource), "飘字提示仍是 addToUILayer（临时层保持最上）");
+// 飘字是临时层：游戏内仍挂 UI 图层（保持最上，不参与弹窗置顶排序）；
+// 登录/选角这类没调 initLayer 的场景没有图层容器，改挂场景根（见 GameUiHelper.mountFloatingTip）
+check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /if \(uiLayer && isValid\(uiLayer\) && uiLayer\.scene\)[\s\S]{0,80}LayerManager\.addToUILayer\(tip\)/.test(helperSource), "飘字提示：游戏内仍挂 UI 图层（临时层保持最上），非游戏场景挂场景根");
 check(/LayerManager\.addToUILayer\(detailDialog\)/.test(helperSource), "悬停物品详情仍是 addToUILayer（同上）");
 check(/LayerManager\.addToUILayer\(detail\)/.test(mallSource), "商城的悬停详情仍是 addToUILayer（同上）");
 check(/LayerManager\.addToUILayer\(dialog\)/.test(hoverTipSource), "悬停提示仍是 addToUILayer（同上）");

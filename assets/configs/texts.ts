@@ -271,6 +271,26 @@ export const uiTexts = {
   progress_none: "无需预加载",
   /** 阶段：帧动画（{done}/{total}） */
   progress_frames: "帧动画 {done}/{total}",
+
+  //#region 网络与账号（服务端互动；兜底文案 —— 服务端给了提示语时优先用服务端的）
+  /** 连不上服务端 */
+  net_unreachable_tip: "无法连接服务器，请检查网络后重试",
+  /** 请求超时 */
+  net_timeout_tip: "网络超时，请稍后重试",
+  /** 服务端返回的不是约定格式 */
+  net_parse_tip: "服务器返回数据异常，请稍后重试",
+  /** 其它网络异常兜底 */
+  net_unknown_tip: "网络异常，请稍后重试",
+  /** 登录/注册表单未填写完整 */
+  login_input_empty_tip: "请输入账号和密码",
+  /** 登录成功（{name} = 账号名） */
+  login_success_tip: "登录成功，欢迎 {name}",
+  /** 注册成功（{name} = 账号名） */
+  register_success_tip: "注册成功，欢迎 {name}",
+  /** 角色创建成功（服务端已保存后才提示） */
+  role_create_success_tip: "角色创建成功",
+  /** 角色数量已达上限（{max} = 上限，见 configs/role.maxRoleCount / 服务端 ROLE_MAX_PER_ACCOUNT） */
+  role_create_limit_tip: "最多只能创建 {max} 个角色",
 } as const;
 
 /** 文案 key（uiTexts 的键） */

@@ -3,6 +3,7 @@ import {
   BoxCollider2D,
   Button,
   Color,
+  director,
   Graphics,
   isValid,
   Label,
@@ -519,7 +520,12 @@ export default class GameUiHelper {
    * @param params 模板参数（文案里写 {key}，这里给值）
    */
   static createErrorTip(name: string, params?: TextParams) {
-    this.createFloatingTip(name, params, tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration);
+    this.createFloatingTip(name, getText(name, params), tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration);
+  }
+
+  /** 错误提示（文案直接给定：服务端返回的提示语属于「数据」，不是界面固定文案） */
+  static createErrorTipText(text: string) {
+    this.createFloatingTip("error_tip", text, tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration);
   }
 
   /**
@@ -528,15 +534,22 @@ export default class GameUiHelper {
    * @param params 模板参数（文案里写 {key}，这里给值）
    */
   static createTip(name: string, params?: TextParams) {
-    this.createFloatingTip(name, params, tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration);
+    this.createFloatingTip(name, getText(name, params), tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration);
+  }
+
+  /** 普通提示（文案直接给定：同上，用于服务端返回的提示语） */
+  static createTipText(text: string) {
+    this.createFloatingTip("message_tip", text, tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration);
   }
 
   /**
    * 飘字公共实现（提示与错误提示只有配色与时长不同）
-   * 文案一律取自 configs/texts（核心代码不写面向玩家的中文）
+   *
+   * 文案由调用方传入：登记在 configs/texts 的固定文案走 createTip / createErrorTip（内部 getText 取），
+   * 服务端返回的动态文案走 createTipText / createErrorTipText —— 核心代码里仍然没有面向玩家的中文。
    */
-  private static createFloatingTip(name: string, params: TextParams | undefined, color: Color, moveDuration: number, fadeDuration: number) {
-    const tip = UiHelper.createTipLabel(name, getText(name, params), color, tipsLayout.fontSize, tipsLayout.size);
+  private static createFloatingTip(name: string, text: string, color: Color, moveDuration: number, fadeDuration: number) {
+    const tip = UiHelper.createTipLabel(name, text, color, tipsLayout.fontSize, tipsLayout.size);
     // 飘字是临时装饰（屏幕中间上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
     markClickThrough(tip);
     const uiOpacity = tip.addComponent(UIOpacity);
@@ -549,7 +562,26 @@ export default class GameUiHelper {
         tip.destroy();
       })
       .start();
-    LayerManager.addToUILayer(tip);
+    this.mountFloatingTip(tip);
+  }
+
+  /**
+   * 挂载飘字（**跨场景**：游戏内挂 UI 图层，登录/选角这类没有图层容器的场景挂场景根）
+   *
+   * 游戏场景的图层容器由 LayerManager.initLayer 建在场景里（飘字挂它才有正确的图层位）；
+   * 而登录/选角场景从不调 initLayer —— 那个静态 UILayer 根本没进场景树，直接挂上去的飘字
+   * 既不渲染也不跟随任何东西，玩家看不到任何提示（服务端返回的「账号或密码错误」这类提示会全丢）。
+   * 判据用「容器是否在场景里」而不是「当前是哪个场景」，以后新增场景不必再回来改这里。
+   */
+  private static mountFloatingTip(tip: Node) {
+    const uiLayer = LayerManager.UILayer;
+    if (uiLayer && isValid(uiLayer) && uiLayer.scene) {
+      LayerManager.addToUILayer(tip);
+      return;
+    }
+    // 非游戏场景：挂场景根，图层保持默认（与场景相机的 visibility 一致）
+    const scene = director.getScene();
+    if (scene && isValid(scene)) scene.addChild(tip);
   }
 
   /**

@@ -129,4 +129,25 @@ check(/manageRole:\s*\{[\s\S]*deleteButtonOffset[\s\S]*deleteButtonSize[\s\S]*co
 check(/static deleteRole\(id: string\): boolean \{/.test(storageSource), "StorageManager 暴露了 deleteRole");
 check(/!roles\.some\(\(role\) => role\.id === selected\)/.test(storageSource), "deleteRole 会校验并清掉指向已不存在角色的选中项");
 
+console.log("— 服务端联动：落盘写穿，本地删不推服务端 —");
+
+// 角色数据以服务端为准：本地落盘只是缓存，任何改动都要写穿过去（见 ui/utils/net/RoleSync）；
+// 但「本地清缓存」与「服务端删除」是两件事 —— 真删由选角场景先调 RoleApi.remove，这里不推
+const { RoleSync: roleSyncStub, Session: sessionStub } = sandbox;
+roleSyncStub.scheduled.length = 0;
+seed([makeRole("r1", "张三")], "r1");
+check(roleSyncStub.scheduled.length === 0, "重建存档（setRoles / onlineRole）不推服务端");
+
+StorageManager.updateOnlineRole(StorageManager.findOnlineRole());
+check(roleSyncStub.scheduled.length === 1 && roleSyncStub.scheduled[0].id === "r1", "updateOnlineRole 落盘后安排一次同步（本地落盘唯一出口 = 同步唯一触发点）");
+
+roleSyncStub.scheduled.length = 0;
+StorageManager.deleteRole("r1");
+check(roleSyncStub.scheduled.length === 0, "deleteRole 不推服务端（只清本地缓存，真删由选角场景调服务端接口）");
+
+const clearedBefore = sessionStub.cleared;
+StorageManager.clear();
+check(sessionStub.cleared === clearedBefore + 1, "clear() 连带清掉会话（清存档别留着上个账号的登录态）");
+check(typeof StorageManager.createRole === "undefined", "本地 createRole 已移除（创建必须走服务端，见 RoleSelector.createRole）");
+
 finish("PASS: 角色删除的数据行为与界面接线全部通过");
