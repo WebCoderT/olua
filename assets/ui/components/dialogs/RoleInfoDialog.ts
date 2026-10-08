@@ -1,4 +1,4 @@
-import { isValid, Node } from "cc";
+import { isValid, Node, Vec2 } from "cc";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -9,11 +9,12 @@ import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
 import { roleInfoDialogLayout } from "../../../configs/hudLayout";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
+import WarSoulDialog from "./WarSoulDialog";
 
 /**
  * 角色信息弹窗
  * 只负责开关与组装：弹窗框 + 装饰背景（含战斗力图标）+ 装备槽分组（EquipmentSlotGroup）
- * + 属性列表（RoleAttributeList）+ 内观（RoleInShowView）
+ * + 属性列表（RoleAttributeList）+ 内观（RoleInShowView）+ 称号/战魂两个入口按钮
  * 槽位右键 = 脱下装备：转交数据层处理（脱下后装备进背包、属性重算与四处刷新由数据层统一收尾）
  * 换装后由数据层经 RoleUIManager 调用 updateDialog 刷新对应区块
  */
@@ -54,11 +55,17 @@ export default class RoleInfoDialog {
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
     this.dialog.addChild(this.inShowView);
-    // 「称号」入口按钮（称号不走 NPC，唯一入口在这里；点击打开称号升级弹窗，角色信息弹窗保持打开）
-    const titleButtonLayout = roleInfoDialogLayout.titleButton;
-    const titleButton = GameUiHelper.createMiddleButton(titleButtonLayout.name, titleButtonLayout.text, titleButtonLayout.position);
-    titleButton.on(Node.EventType.TOUCH_END, () => new TitleUpgradeDialog().open(), this);
-    this.dialog.addChild(titleButton);
+    // 「称号」「战魂」入口按钮（右侧竖排相邻两格，几何见 roleInfoDialogLayout）
+    // 两者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
+    const entryButtons: { layout: { name: string; text: string; position: Vec2 }; open: () => void }[] = [
+      { layout: roleInfoDialogLayout.titleButton, open: () => new TitleUpgradeDialog().open() },
+      { layout: roleInfoDialogLayout.soulButton, open: () => new WarSoulDialog().open() },
+    ];
+    entryButtons.forEach(({ layout, open }) => {
+      const button = GameUiHelper.createMiddleButton(layout.name, layout.text, layout.position);
+      button.on(Node.EventType.TOUCH_END, open, this);
+      this.dialog!.addChild(button);
+    });
     LayerManager.addToUILayer(this.dialog);
   }
 

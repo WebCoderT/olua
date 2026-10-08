@@ -213,10 +213,13 @@ export const roleInfoDialogLayout = {
   /** 战斗力图标（贴在装饰背景左下） */
   combatIcon: { image: uiImages.combatIcon, position: new Vec2(-7, -225), size: new Size(100, 50) },
   /**
-   * 「称号」入口按钮（右下空区，与底部装备槽 x -160~10 不相交）：点击打开称号升级弹窗
-   * （称号不走 NPC，唯一入口在这里，见 ui/components/dialogs/RoleInfoDialog）
+   * 「称号」「战魂」两个入口按钮（弹窗右侧竖排相邻两格，几何按中号按钮 123×36 推导）：
+   * 称号在右下空区（y -215），战魂紧贴其上一格（-215 + 36 + 10 间距 = -169）；
+   * 两者横坐标同为 x 200 → 按钮占 x 138.5~261.5，与右列装备槽（x 55~105）、底部装备槽（x -160~10）都不相交。
+   * 两个系统都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
    */
   titleButton: { name: "role_title_button", position: new Vec2(200, -215), text: "称 号" },
+  soulButton: { name: "role_soul_button", position: new Vec2(200, -169), text: "战 魂" },
 };
 
 //#endregion

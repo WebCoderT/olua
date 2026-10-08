@@ -126,6 +126,8 @@ const textsSource = read("assets/configs/texts.ts");
 const npcSource = read("assets/configs/npc.ts");
 const hudSource = read("assets/configs/layout/hud.ts");
 const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
+const sizesSource = read("assets/configs/layout/sizes.ts");
+const panelsSource = read("assets/configs/layout/panels.ts");
 
 check(/title: number = 0;/.test(roleSource) && /称号等级/.test(roleSource), "Role 有 title 字段（0 = 未激活）");
 check(/typeof role\.title !== "number"\) role\.title = 0;/.test(storageSource), "旧存档迁移：title 缺失补 0（ensureRoleDefaults）");
@@ -145,6 +147,44 @@ check(/new WarSoulDialog/.test(npcSource) && !/TitleUpgradeDialog/.test(npcSourc
 check(/createTitleCard|createTitleAttributeList|createTitleAnimation|upgradeTitle\(\)|RoleUIManager\.updateTitleShow/.test(dialogSource), "称号弹窗接线：零件/升级/头顶刷新");
 check(!/soulShow/.test(dialogSource), "称号弹窗没有「外显」勾选框（称号常显头顶）");
 check(/title_upgrade_dialog/.test(dialogsLayoutSource) && /titleButton: \{ name: "role_title_button"/.test(dialogsLayoutSource), "弹窗布局与入口按钮都在 configs/layout/dialogs");
+
+// 称号 / 战魂两个入口在角色信息弹窗里竖排相邻（几何全部从配置算，防止日后挪位撞在一起）
+{
+  const numberPair = (regex) => {
+    const hit = dialogsLayoutSource.match(regex);
+    return hit ? [Number(hit[1]), Number(hit[2])] : null;
+  };
+  const titlePos = numberPair(/titleButton: \{ name: "role_title_button", position: new Vec2\((-?[\d.]+), (-?[\d.]+)\)/);
+  const soulPos = numberPair(/soulButton: \{ name: "role_soul_button", position: new Vec2\((-?[\d.]+), (-?[\d.]+)\)/);
+  const buttonSize = sizesSource.match(/middleButtonSize: new Size\((-?[\d.]+), (-?[\d.]+)\)/);
+  check(!!titlePos && !!soulPos, "称号与战魂入口按钮都在 configs/layout/dialogs 里（soulButton 与 titleButton 成对）");
+  check(!!buttonSize, "能读到中号按钮尺寸（uiSize.middleButtonSize）");
+
+  if (titlePos && soulPos && buttonSize) {
+    const [buttonWidth, buttonHeight] = [Number(buttonSize[1]), Number(buttonSize[2])];
+    const gap = soulPos[1] - titlePos[1] - buttonHeight;
+    check(soulPos[0] === titlePos[0], "战魂按钮与称号按钮同一列（横坐标一致 → 视觉上相邻成组）");
+    check(gap > 0 && gap <= 14, `战魂紧贴称号上方且不重叠（间距 ${gap}px、按钮高 ${buttonHeight}）`);
+
+    // 两个按钮整体范围不能压到装备槽：右列装备槽（竖排）与底部装备槽（横排）
+    const rightGroup = panelsSource.match(/right: \{ name: "equipment_slots_right", position: new Vec2\((-?[\d.]+), (-?[\d.]+)\), size: new Size\((-?[\d.]+), (-?[\d.]+)\)/);
+    const bottomGroup = panelsSource.match(/bottom: \{ name: "equipment_slots_bottom", position: new Vec2\((-?[\d.]+), (-?[\d.]+)\), size: new Size\((-?[\d.]+), (-?[\d.]+)\)/);
+    check(!!rightGroup && !!bottomGroup, "能读到左右/底部装备槽分组几何（configs/layout/panels.equipmentSlotLayout）");
+    if (rightGroup && bottomGroup) {
+      const buttonLeft = titlePos[0] - buttonWidth / 2;
+      const rightGroupRight = Number(rightGroup[1]) + Number(rightGroup[3]) / 2;
+      const bottomGroupRight = Number(bottomGroup[1]) + Number(bottomGroup[3]) / 2;
+      check(buttonLeft > rightGroupRight, `入口按钮在右列装备槽右侧（按钮左缘 ${buttonLeft} > 槽位右缘 ${rightGroupRight}）`);
+      check(buttonLeft > bottomGroupRight, `入口按钮在底部装备槽右侧（按钮左缘 ${buttonLeft} > 槽位右缘 ${bottomGroupRight}）`);
+      // 底部槽位与称号按钮的纵向区间也要错开（两者 x 已分开，这里再加一道保险）
+      const bottomGroupTop = Number(bottomGroup[2]) + Number(bottomGroup[4]) / 2;
+      const titleButtonBottom = titlePos[1] - buttonHeight / 2;
+      check(titleButtonBottom >= bottomGroupTop || buttonLeft > bottomGroupRight, "称号按钮与底部装备槽不同时占据同一区域");
+    }
+  }
+}
+
+check(/new WarSoulDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.soulButton/.test(roleInfoSource), "角色信息弹窗的「战魂」按钮打开战魂弹窗（与称号入口相邻）");
 check(/title: \{ siblingIndex: 0, size: new Size/.test(hudSource), "名牌的插入位置/占位尺寸在 configs/layout/hud.roleShowLayout.title");
 check(/this\.head\.insertChild\(node, roleShowLayout\.title\.siblingIndex\)/.test(displaySource), "名牌节点挂在头部信息栏容器里（与名称/血条同一个节点）");
 check(!/roleShowLayout\.title\.(scale|position)/.test(displaySource) && !/title: \{ [^}]*scale/.test(hudSource), "名牌不手动定位也不缩放（位置交给头部容器的纵向布局，按素材原始尺寸显示）");
