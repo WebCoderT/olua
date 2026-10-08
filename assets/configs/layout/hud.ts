@@ -5,13 +5,13 @@ import { roleBody } from "../role";
  * 常驻 HUD 与游戏内固定表现元素的布局
  *
  * 位置/尺寸的坐标系见各自注释：组件自身坐标以屏幕中心为原点，子件坐标以所在容器中心为原点
- * 常驻 HUD 三区域（左上角色信息栏 / 右上小地图 / 底部栏）不写死坐标，
+ * 常驻 HUD 四区域（左上角色信息栏 / 右上小地图 / 底部栏 / 左下操作摇杆）不写死坐标，
  * 而是按「贴哪条边 + 边距」由当前可见尺寸实时算出（计算见 ui/utils/layout/ScreenLayout）
  *
  * 图片来源见 configs/layout/images（uiImages）；公共尺寸见 configs/layout/sizes（uiSize）
  */
 
-//#region 贴边布局（常驻 HUD 三区域）
+//#region 贴边布局（常驻 HUD 四区域）
 
 /**
  * 常驻 HUD 区块的贴边方式
@@ -19,11 +19,11 @@ import { roleBody } from "../role";
  * （计算见 ui/utils/layout/ScreenLayout.getAnchoredPosition，窗口尺寸变化时会重排）
  */
 export interface HudAnchor {
-  /** 贴哪条边（左上 / 右上 / 底部居中） */
-  edge: "top-left" | "top-right" | "bottom-center";
+  /** 贴哪条边（左上 / 右上 / 左下 / 底部居中） */
+  edge: "top-left" | "top-right" | "bottom-left" | "bottom-center";
   /** 水平边距：区块边缘到屏幕左/右边缘的距离（bottom-center 忽略，恒居中） */
   marginX: number;
-  /** 垂直边距：top-* 为区块上边缘到屏幕上边缘；bottom-center 为区块中心到屏幕下边缘 */
+  /** 垂直边距：top-* 为区块上边缘到屏幕上边缘；bottom-left 为区块下边缘到屏幕下边缘；bottom-center 为区块中心到屏幕下边缘 */
   marginY: number;
 }
 
@@ -96,6 +96,29 @@ export const bottomBarLayout = {
     position: new Vec2(-338, 62),
     label: { text: "挂机", position: new Vec2(0, -14), size: new Size(44, 12), fontSize: 10 },
   },
+};
+
+//#endregion
+
+//#region 操作摇杆（左下角常驻）
+
+/**
+ * 操作摇杆布局（自身坐标以屏幕中心为原点，子件坐标以摇杆中心为原点）
+ *
+ * 结构：底座（背景图）+ 手柄（可拖动手柄，拖动位移被夹在 radius 之内）。
+ * 「拖得少 = 走路、拖得多 = 跑动」的判定见 components/input/RoleJoystickInput，
+ * 两个阈值是**占 radius 的比例**（configs/role.joystickMove）——
+ * 所以 radius 同时是手感的分母，调它要一并复核那两个阈值。
+ */
+export const joystickLayout = {
+  /** 摇杆主体（= 底座底图尺寸，同时也是按下时的命中范围） */
+  size: new Size(175, 172),
+  /** 贴屏幕左下角（边距为区块边缘到屏幕左/下边缘的距离） */
+  anchor: { edge: "bottom-left", marginX: 24, marginY: 18 } as HudAnchor,
+  /** 手柄显示尺寸（素材 98×99 略缩，给拖动留出空间） */
+  handleSize: new Size(72, 73),
+  /** 手柄中心可离底座中心的最大距离（拖动幅度按它归一化；取值使手柄贴到最外圈时恰好不溢出底座） */
+  radius: 48,
 };
 
 //#endregion

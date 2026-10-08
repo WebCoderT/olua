@@ -94,6 +94,9 @@ export const uiImages = {
   /** 挂机开关图标（关=收剑 / 开=举剑） */
   autoFightOff: mainImage("auto_fight_close"),
   autoFightOn: mainImage("auto_fight_open"),
+  /** 操作摇杆：底座底图 / 可拖动手柄 */
+  joystickBackground: mainImage("joystick_bg"),
+  joystickHandle: mainImage("joystick"),
 
   // ---------------- 怪物信息面板 ----------------
   /** 面板背景 */

@@ -8,6 +8,7 @@ import RoleInfoBar from "./components/hud/RoleInfoBar";
 import MonsterInfoPanel from "./components/hud/MonsterInfoPanel";
 import MonsterSelectIndicator from "./components/hud/MonsterSelectIndicator";
 import SmallMap from "./components/hud/SmallMap";
+import Joystick from "./components/hud/Joystick";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
 import CursorInput from "./components/input/CursorInput";
@@ -49,6 +50,8 @@ export class Game extends Component {
   private roleInfoBar: RoleInfoBar | null = null;
   /** 小地图（右上角：地图名称/世界坐标/角色黑点/附近怪物红点） */
   private smallMap: SmallMap | null = null;
+  /** 操作摇杆（左下角常驻，按住拖动即移动；手感参数见 configs/role.joystickMove） */
+  private joystick: Joystick | null = null;
   /** 死亡遮罩弹窗（进入死亡流程时创建、复活后销毁） */
   private deathDialog: DeathDialog | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
@@ -92,7 +95,10 @@ export class Game extends Component {
     /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
     this.smallMap = new SmallMap(this.roleDisplay);
     LayerManager.addToUILayer(this.smallMap);
-    // 窗口尺寸变化时重排三个常驻区域（角色信息栏贴左上角 / 小地图贴右上角 / 底部栏贴底部居中）
+    /** 操作摇杆（左下角常驻；节点归摇杆组件，输入逻辑在下面注入给主角组件） */
+    this.joystick = new Joystick();
+    LayerManager.addToUILayer(this.joystick);
+    // 窗口尺寸变化时重排四个常驻区域（角色信息栏贴左上角 / 小地图贴右上角 / 底部栏贴底部居中 / 摇杆贴左下角）
     // 注意顺序：引擎的 Canvas 在尺寸变化时会把相机世界坐标拽回 Canvas 节点位置（canvas-resize），
     // 而相机/UI 层本该跟着主角，故重排后必须再把相机与 UI 层重新对齐到主角，否则地图视野会错位
     this.offWindowResize = onWindowResize(() => {
@@ -101,6 +107,7 @@ export class Game extends Component {
       this.roleInfoBar?.applyAnchorPosition();
       this.smallMap?.applyAnchorPosition();
       this.bottomBar?.applyAnchorPosition();
+      this.joystick?.applyAnchorPosition();
     });
     /** 怪物信息面板创建器（选中怪物时才动态创建，取消选中即销毁） */
     RoleUIManager.setMonsterInfoFactory((target) => {
@@ -116,6 +123,8 @@ export class Game extends Component {
     });
     // 初始化主角外观动画与键盘操控
     this.roleDisplay.init();
+    // 左下角摇杆操控（摇杆节点在 HUD 层、屏幕空间贴着左下角，故在这里把手感逻辑交给主角组件）
+    this.roleDisplay.setJoystick(this.joystick.stickNode, this.joystick.handleNode);
     // 战魂外显（上次勾选过则进图直接挂上，见 RoleDisplay.updateSoulShow）
     this.roleDisplay.updateSoulShow();
     // 称号外显（已激活称号则进图直接挂上，见 RoleDisplay.updateTitleShow）

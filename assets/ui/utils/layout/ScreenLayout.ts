@@ -67,8 +67,8 @@ export function onWindowResize(handler: () => void): () => void {
   return () => screen.off("window-resize", handler);
 }
 
-/** 贴边方式：左上 / 右上 / 底部居中 */
-export type ScreenEdge = "top-left" | "top-right" | "bottom-center";
+/** 贴边方式：左上 / 右上 / 左下 / 底部居中 */
+export type ScreenEdge = "top-left" | "top-right" | "bottom-left" | "bottom-center";
 
 /**
  * 计算「贴边区块」的中心坐标（坐标系以屏幕中心为原点，与 UI 层各常驻组件一致）
@@ -76,14 +76,24 @@ export type ScreenEdge = "top-left" | "top-right" | "bottom-center";
  * @param visibleSize 当前可见尺寸（getVisibleSize）
  * @param edge 贴哪条边
  * @param marginX 水平边距（区块边缘到屏幕左/右边缘；bottom-center 忽略）
- * @param marginY 垂直边距（top-*：区块上边缘到屏幕上边缘；bottom-center：区块中心到屏幕下边缘）
+ * @param marginY 垂直边距（top-*：区块上边缘到屏幕上边缘；bottom-left：区块下边缘到屏幕下边缘；
+ *   bottom-center：区块中心到屏幕下边缘——底部栏的背景比可视内容高、下沿本就溢出屏幕，故按中心定位）
  */
 export function getAnchoredPosition(blockSize: Size, visibleSize: Size, edge: ScreenEdge, marginX: number, marginY: number): Vec2 {
   const halfWidth = visibleSize.width / 2;
   const halfHeight = visibleSize.height / 2;
-  const x = edge === "top-left" ? -halfWidth + marginX + blockSize.width / 2 : edge === "top-right" ? halfWidth - marginX - blockSize.width / 2 : 0;
-  // 底部栏的背景比可视内容高（下沿本就溢出屏幕），故按「区块中心到屏幕下边缘」定位
-  const y = edge === "bottom-center" ? -halfHeight + marginY : halfHeight - marginY - blockSize.height / 2;
+  const x =
+    edge === "top-right"
+      ? halfWidth - marginX - blockSize.width / 2
+      : edge === "bottom-center"
+        ? 0
+        : -halfWidth + marginX + blockSize.width / 2; // 贴左边（top-left / bottom-left）
+  const y =
+    edge === "bottom-center"
+      ? -halfHeight + marginY
+      : edge === "bottom-left"
+        ? -halfHeight + marginY + blockSize.height / 2
+        : halfHeight - marginY - blockSize.height / 2; // 贴顶边（top-left / top-right）
   return new Vec2(x, y);
 }
 

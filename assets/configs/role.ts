@@ -48,6 +48,21 @@ export const pointerMove = {
 };
 
 /**
+ * 操作摇杆（左下角常驻，按住拖动即移动；由 components/input/RoleJoystickInput 负责取点与判定）
+ *
+ * 两个阈值都是**拖动幅度占「可拖半径」的比例**（0~1，与分辨率无关；可拖半径见
+ * configs/layout/hud.ts 的 joystickLayout.radius）：
+ * 拖得少 = 走路、拖得多 = 跑动，就是这两个阈值划出来的三段。
+ * 方向 = 手柄相对底座中心的方位按 360° 平分八块取其一（与键盘/鼠标操控、角色八方向动画同一口径）
+ */
+export const joystickMove = {
+  /** 死区比例：拖动幅度小于该比例视为「原地」（不定方向、不移动） */
+  deadZone: 0.15,
+  /** 跑动阈值比例：拖动幅度达到该比例即跑动，介于死区与它之间为走路 */
+  runThreshold: 0.6,
+};
+
+/**
  * 角色魔法值自然回复速度（点/秒），设为 0 即关闭自然回复
  * 最大魔法值见 configs/level 的等级配置（maxMp），技能消耗见 configs/skill 的 mpCost
  */

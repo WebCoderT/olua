@@ -18,11 +18,13 @@ import RoleUIManager from "../../core/RoleUIManager";
 import RoleAppearance from "./RoleAppearance";
 import RoleKeyboardInput from "../input/RoleKeyboardInput";
 import RolePointerInput from "../input/RolePointerInput";
+import RoleJoystickInput from "../input/RoleJoystickInput";
 
 /**
  * 角色展示组件（自身即主角节点）
  * 负责主角节点的构建与状态机（动作/朝向）、位移、攻击锁与技能上下文组装
- * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput，鼠标操控 → RolePointerInput
+ * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput，
+ * 鼠标操控 → RolePointerInput，左下角摇杆操控 → RoleJoystickInput（节点在 HUD 层，见 setJoystick）
  * 怪物查询与结算统一走 MonsterManager
  * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间锁定移动，且不接受新的攻击/技能（按下无反应）
  * 怪物推不动角色、角色也推不动怪物（怪物的碰撞盒是传感器，见 addMonsterCollider），
@@ -35,6 +37,11 @@ export default class RoleDisplay extends Node {
   private keyboardInput: RoleKeyboardInput | null = null;
   /** 鼠标操控输入（init 时创建：左键按下走路、右键按下跑动、抬起即停） */
   private pointerInput: RolePointerInput | null = null;
+  /**
+   * 摇杆操控输入（左下角常驻摇杆，由组合根在 HUD 装配完成后注入，见 setJoystick）
+   * 与上面两个不同：摇杆节点在 UI 层（贴屏幕左下角、不随角色移动），所以不在这里自建
+   */
+  private joystickInput: RoleJoystickInput | null = null;
   /** 当前朝向 */
   private direction: DIRECTION = DIRECTION.DOWN;
   /** 当前动作 */
@@ -81,6 +88,16 @@ export default class RoleDisplay extends Node {
     this.updateOutShow(this.role);
     this.keyboardInput = new RoleKeyboardInput(this as Node, () => this.refreshMotion());
     this.pointerInput = new RolePointerInput(this as Node, () => this.refreshMotion());
+  }
+
+  /**
+   * 绑定操作摇杆（由组合根在 HUD 装配完成后调用：摇杆是屏幕常驻 HUD，不属于角色子树，
+   * 所以这里只接管它的输入逻辑，节点仍归 ui/components/hud/Joystick 所有）
+   * 重复调用先销毁旧输入（幂等，重进场景时不会残留对旧摇杆节点的引用）
+   */
+  setJoystick(stick: Node, handle: Node) {
+    this.joystickInput?.destroy();
+    this.joystickInput = new RoleJoystickInput(stick, handle, () => this.refreshMotion());
   }
 
   /** 构建角色身体（尺寸/锚点 + 外观节点 + 名称 + 头部信息栏） */
@@ -137,12 +154,16 @@ export default class RoleDisplay extends Node {
   }
 
   /**
-   * 玩家操控的移动意图：键盘优先（按下即接管），其次鼠标按住的八方向（方向随指针移动实时更新），都没有输入返回 null
+   * 玩家操控的移动意图：键盘优先（按下即接管），其次摇杆（左下角常驻，触屏的主输入手段），
+   * 最后鼠标按住的八方向（方向随指针移动实时更新）；都没有输入返回 null。
+   * 优先级是固定的链条，桌面端鼠标与摇杆不会同时被按住（同一个指针），所以互不干扰。
    * 走跑速度不在这里取（见 updateWorldPosition），这里只回答「往哪走、是否跑」
    */
   private getMoveIntent(): { vector: Vec2; run: boolean } | null {
     const keyboard = this.keyboardInput;
     if (keyboard?.isMoving) return { vector: keyboard.moveDirection, run: keyboard.isSprinting };
+    const joystick = this.joystickInput;
+    if (joystick?.isMoving) return { vector: joystick.moveDirection, run: joystick.isRunning };
     const pointer = this.pointerInput;
     if (pointer?.isMoving) return { vector: pointer.moveDirection, run: pointer.isRunning };
     return null;
@@ -405,9 +426,9 @@ export default class RoleDisplay extends Node {
     return this.target;
   }
 
-  /** 玩家是否正在手动移动（键盘方向键或鼠标按下；自动战斗据此让位：快速攻击结束、挂机暂停） */
+  /** 玩家是否正在手动移动（键盘/摇杆/鼠标按住；自动战斗据此让位：快速攻击结束、挂机暂停） */
   isManualMoving(): boolean {
-    return !!this.keyboardInput?.isMoving || !!this.pointerInput?.isMoving;
+    return !!this.keyboardInput?.isMoving || !!this.joystickInput?.isMoving || !!this.pointerInput?.isMoving;
   }
 
   /** 是否正在自动移动（自动战斗走位中，「自动寻路中」提示的显示依据） */

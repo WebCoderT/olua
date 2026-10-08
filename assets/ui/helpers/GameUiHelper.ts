@@ -69,6 +69,7 @@ import {
   equipmentSlotLayout,
   goodDetailLayout,
   hoverTipLayout,
+  joystickLayout,
   monsterInfoPanelLayout,
   roleAttributeListLayout,
   roleInfoBarLayout,
@@ -1866,6 +1867,33 @@ export default class GameUiHelper {
     hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
     barSprite.addChild(hpBar);
     return { barSprite, hpBar };
+  }
+
+  //#endregion
+
+  //#region 操作摇杆
+
+  /**
+   * 为已有节点施加操作摇杆样式（底座 + 可拖动手柄，尺寸见 hudLayout.joystickLayout）
+   * @param node 摇杆主体节点（由摇杆组件自身充当：尺寸即触摸命中的范围）
+   * @returns 手柄节点（拖动时由输入层摆位，见 components/input/RoleJoystickInput）
+   */
+  static applyJoystickBodyStyle(node: Node): Node {
+    const { size, handleSize } = joystickLayout;
+    node.addComponent(UITransform).setContentSize(size);
+    node.addChild(UiHelper.createSprite("joystick_bg", uiImages.joystickBackground, new Vec2(), size));
+    // 手柄初始停在正中间（拖动位移由输入层写入；锚点在自身中心，位移即相对底座中心）
+    const handle = UiHelper.createSprite("joystick_handle", uiImages.joystickHandle, new Vec2(), handleSize);
+    node.addChild(handle);
+    this.setJoystickPosition(node);
+    return handle;
+  }
+
+  /** 操作摇杆贴边定位（贴屏幕左下角；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
+  static setJoystickPosition(node: Node) {
+    const { size, anchor } = joystickLayout;
+    const position = getAnchoredPosition(size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
+    node.setPosition(position.x, position.y, 0);
   }
 
   //#endregion

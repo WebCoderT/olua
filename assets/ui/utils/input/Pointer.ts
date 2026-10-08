@@ -155,6 +155,21 @@ export function isUiPressWithin(node: Node): boolean {
   return target === node || target.isChildOf(node);
 }
 
+/**
+ * 本次按压的起点是否落在**界面元素**上（不针对某个具体节点）
+ *
+ * 用途：世界侧的点击（选中怪物/拾取掉落物/开打）只认「从世界里按下、再抬起」的按压，
+ * 起点在界面元素上（弹窗/按钮/HUD/摇杆…）的那次抬起，无论松手落在哪都不属于世界侧。
+ * 不补这条会误判一种常见拖动：在左下角摇杆上按住拖动、把指针拖到世界区域才松手 ——
+ * 松手点已经不在任何界面元素上了，只看「抬起点是否在 UI 上」会把它当成一次世界点击
+ * （把当前选中目标清掉、打断自动战斗）。
+ *
+ * 起点在按下那一刻就记好了（见本段开头的「按压归属」），抬起时读它即可，与抬起点在哪里无关。
+ */
+export function isUiPressOnUiElement(): boolean {
+  return !!pressTarget && isValid(pressTarget);
+}
+
 /** 世界侧登记「按住怎么收尾」（RolePointerInput；回调必须幂等：没按住时什么也不做） */
 export function setWorldPressRelease(release: (() => void) | null) {
   worldPressRelease = release;

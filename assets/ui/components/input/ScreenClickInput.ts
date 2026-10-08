@@ -4,7 +4,7 @@ import DropManager from "../../core/DropManager";
 import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import SkillManager from "../../core/SkillManager";
-import { getHitScreenPoint } from "../../utils/input/Pointer";
+import { getHitScreenPoint, isUiPressOnUiElement } from "../../utils/input/Pointer";
 import RoleDisplay from "../role/RoleDisplay";
 
 /**
@@ -17,6 +17,10 @@ import RoleDisplay from "../role/RoleDisplay";
  * 界面操作（开背包/换装备/点挂机…）不该影响世界本身——
  * 不会清掉当前选中目标、不会打断自动战斗、也不会误拾取界面背后的掉落物
  * （界面自己的右键语义——背包穿戴/脱下装备——因此不会被世界侧抢走）
+ *
+ * 另外，**按压起点**落在界面元素上的那次抬起也跳过（见 utils/input/Pointer.isUiPressOnUiElement）：
+ * 拖动可能早已离开界面（典型是左下角摇杆：在摇杆上按住、把指针拖到世界才松手），
+ * 只看「抬起点是否在 UI 上」会把这种拖动的结束误判成一次世界点击
  *
  * 点击落在 NPC 这类「世界侧可交互对象」上时也跳过（见 LayerManager.isPointOnWorldInteractive）：
  * 那是它自己的交互（点开对话/传送），点它同样不该清掉当前选中目标、打断挂机
@@ -54,6 +58,10 @@ export default class ScreenClickInput {
     // 点在 UI 元素上：交给界面自己处理，世界侧不做任何反应
     // （不加这一层的话，点界面会走到下面的 setTarget 把当前攻击目标清掉，角色就停手了）
     if (LayerManager.isPointOnUi(screenPoint)) return;
+    // 本次按压的起点也在界面元素上：这次抬起同样不属于世界侧，无论松手落在哪
+    // （典型是左下角摇杆：在摇杆上按住拖动、拖到世界区域才松手，松手点已不在 UI 上，
+    //   只看上面那条会把拖动结束误判成一次世界点击 —— 清掉选中目标、打断挂机）
+    if (isUiPressOnUiElement()) return;
     // 拾取只认左键（右键是"只选中"，不参与世界操作）；拾取不改变当前选中目标
     if (isAttack) {
       const clickedDrop = DropManager.getClickedDrop(screenPoint);
