@@ -293,7 +293,7 @@ check(/\{ area: dialog, onDropOutside: \(from\) => this\.onDropOutside\(from\) \
 check(/private onDropOutside\(from: BagCellPos\) \{/.test(dialogSource), "BagDialog 有拖出销毁入口");
 check(/if \(!preview\) \{\s*this\.bagGrid\?\.releaseDiscardHold\(\);\s*return;\s*\}/.test(dialogSource), "没有可丢的东西就不弹框（放开扣留安静收场）");
 check(/const confirm = new ConfirmDialog\(\{/.test(dialogSource), "拖出后弹全屏确认框");
-check(/LayerManager\.addToUILayer\(confirm\);/.test(dialogSource), "确认框挂 UI 层顶层（盖在背包弹窗之上）");
+check(/LayerManager\.addDialogToUILayer\(confirm\);/.test(dialogSource), "确认框挂 UI 层顶层并登记为弹窗（盖在背包弹窗之上，见 LayerManager.addDialogToUILayer）");
 check(/getText\("bag_discard_confirm_text", \{ name: preview\.label, count: preview\.count \}\)/.test(dialogSource), "确认框写明物品名与整格数量（数据取自 getBagDiscardPreview）");
 check(/onConfirm: \(\) => \{[\s\S]{0,120}StorageManager\.discardBagGood\(from\.row, from\.col\);/.test(dialogSource), "点「确定」真的整格丢弃");
 check(/onCancel: \(\) => \{[\s\S]{0,160}this\.bagGrid\?\.releaseDiscardHold\(\);/.test(dialogSource), "点「取消」只放开扣留（数据没动过，物品回原位）");

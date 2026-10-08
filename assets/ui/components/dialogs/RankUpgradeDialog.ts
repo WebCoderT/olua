@@ -78,7 +78,7 @@ export default class RankUpgradeDialog {
       this,
     );
     dialog.addChild(this.upgradeButton);
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
     this.refreshDetail();
     this.scrollToSelected();
   }

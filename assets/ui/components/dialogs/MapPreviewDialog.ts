@@ -74,7 +74,7 @@ export default class MapPreviewDialog {
     this.buildMarkers(markerLayer);
     // 底部操作提示
     dialog.addChild(GameUiHelper.createText("map_preview_hint", layout.hint.text, layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color));
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
     // 装载预览图并绑定点击（图没就绪时弹窗也可正常打开/关闭）
     this.loadPreviewImage(role ? role.onMap : "", preview);
     this.bindPreviewClick(preview);

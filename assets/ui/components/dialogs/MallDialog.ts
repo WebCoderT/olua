@@ -93,6 +93,8 @@ export default class MallDialog {
     const dialog = UiHelper.createSprite(layout.name, layout.background, new Vec2(), layout.size);
     dialog.addComponent(Draggable);
     blockClickThrough(dialog);
+    // 同屏多弹窗时，点哪个哪个浮到其它弹窗之上（自有底图没走 createDialogBg，这里补一次）
+    GameUiHelper.bindDialogRaiseOnPress(dialog);
     const closeButton = UiHelper.createButton(`${layout.name}_close_button`, uiImages.closeButton, layout.closeButton.position, layout.closeButton.size);
     closeButton.on(Node.EventType.TOUCH_END, () => this.close(), this);
     dialog.addChild(closeButton);
@@ -110,7 +112,7 @@ export default class MallDialog {
     this.renderPage(0);
     this.refreshBindGold();
     this.dialog = dialog;
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
   }
 
   /**

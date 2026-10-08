@@ -65,7 +65,7 @@ export default class TitleUpgradeDialog {
       this,
     );
     dialog.addChild(this.upgradeButton);
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
     this.refresh();
   }
 

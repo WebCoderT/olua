@@ -68,7 +68,7 @@ export default class RoleInfoDialog {
       button.on(Node.EventType.TOUCH_END, open, this);
       this.dialog!.addChild(button);
     });
-    LayerManager.addToUILayer(this.dialog);
+    LayerManager.addDialogToUILayer(this.dialog);
   }
 
   /** 装备变更后刷新：对应槽位的装备显示、属性数值与对应部位的内观 */

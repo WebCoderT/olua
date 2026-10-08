@@ -35,6 +35,6 @@ export default class SkillListDialog {
       content.addChild(item);
     });
     dialog.addChild(skillList);
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
   }
 }

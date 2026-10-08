@@ -94,6 +94,8 @@ export default class ConfirmDialog extends Node {
   /** 遮罩接管输入：触摸通道独占本次触摸 + 鼠标通道命中即中断（见类注释） */
   private setupInputOwnership() {
     blockClickThrough(this);
+    // 同屏多弹窗时点哪个哪个浮到其它弹窗之上（确认框是全屏模态，本来就在最上，这里与其它弹窗同一套口径）
+    GameUiHelper.bindDialogRaiseOnPress(this);
     this.on(Node.EventType.TOUCH_START, this.stopTouchBubble, this);
     this.on(Node.EventType.TOUCH_MOVE, this.stopTouchBubble, this);
     this.on(Node.EventType.TOUCH_END, this.stopTouchBubble, this);

@@ -42,6 +42,6 @@ export default class MapTeleportDialog {
       content.addChild(grid);
     }
     dialog.addChild(content);
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
   }
 }

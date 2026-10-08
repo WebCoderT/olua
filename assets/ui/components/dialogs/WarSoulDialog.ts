@@ -64,7 +64,7 @@ export default class WarSoulDialog {
       this,
     );
     dialog.addChild(this.upgradeButton);
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
     this.refresh();
   }
 

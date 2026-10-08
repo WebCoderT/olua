@@ -113,8 +113,12 @@ export default class BagDialog {
     );
     this.bagGrid.refresh(StorageManager.findOnlineRole());
     dialog.addChild(this.bagGrid);
+    // 网格区域的触摸被自己收住（拖动不传给弹窗背景，见 BagGridView.setupTouchOwnership），
+    // 于是这次 TOUCH_START 到不了弹窗根 —— 在网格上再挂一次「点到我 = 所属弹窗置顶」
+    // （鼠标通道不受影响：MOUSE_DOWN 照旧冒泡到弹窗根，这里只是把触摸通道补齐）
+    GameUiHelper.bindDialogRaiseOnPress(this.bagGrid);
     this.dialog = dialog;
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
   }
 
   /** 刷新背包（物品变更后调用，弹窗未打开时忽略） */
@@ -248,7 +252,7 @@ export default class BagDialog {
     });
     this.confirmDialog = confirm;
     // 确认框自身是全屏模态（盖住整个屏幕并独占输入，见 ConfirmDialog）：挂在 UI 层顶层
-    LayerManager.addToUILayer(confirm);
+    LayerManager.addDialogToUILayer(confirm);
   }
 
   /** 关掉销毁确认框（关背包弹窗 / 重复弹出前调用；没开着时什么也不做） */

@@ -29,7 +29,7 @@ export default class SkillShortcutSettingDialog {
     });
     dialog.addChild(content);
     this.dialog = dialog;
-    LayerManager.addToUILayer(dialog);
+    LayerManager.addDialogToUILayer(dialog);
   }
 
   /** 关闭弹窗 */
