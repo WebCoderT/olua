@@ -44,7 +44,7 @@ try {
   fail(`沙箱准备失败：${error.message}`);
   return;
 }
-const { HttpClient, ApiError, ApiErrorKind, describeError, Session, Api, ApiRoutes, RoleSync, networkConfig, sys } = net;
+const { HttpClient, ApiError, ApiErrorKind, describeError, Session, Api, ApiRoutes, RoleSync, networkConfig, sys, ROLE_SYNC_BIZ_CODES } = net;
 
 //#region XMLHttpRequest 替身（测试逐条断言发出去的东西）
 
@@ -236,6 +236,63 @@ async function expectFailure(action) {
   check(notified === 2, "中间成功过一次之后，新的失败会重新提示（notified 复位）", `${notified} 次`);
   RoleSync.onFailed = null;
 
+  console.log("— A. 角色进度同步：修订号（乐观锁）—");
+
+  reset();
+  responder = () => ({ kind: "ok", status: 200, text: envelope(0, "ok", { id: "role_1", revision: 9 }) });
+  let savedRevision = null;
+  RoleSync.onSaved = (roleId, revision) => (savedRevision = `${roleId}:${revision}`);
+  const versioned = { id: "role_1", level: 5, revision: 4 };
+  RoleSync.schedule(versioned);
+  await delay(60);
+  check(JSON.parse(requests[0].body).revision === 4, "推送带上本地修订号（服务端据此判冲突）", requests[0].body);
+  check(versioned.revision === 9, "推送成功后把服务端给的新修订号记回本地对象（否则下次会拿旧版本撞自己）", String(versioned.revision));
+  check(savedRevision === "role_1:9", "onSaved 交回角色 id 与新修订号（存储层据此更新基线）", String(savedRevision));
+  RoleSync.onSaved = null;
+
+  reset();
+  responder = () => ({ kind: "ok", status: 200, text: envelope(0, "ok", {}) });
+  RoleSync.schedule({ id: "role_1", level: 2, exp: 10 });
+  await delay(60);
+  check(
+    Object.prototype.hasOwnProperty.call(JSON.parse(requests[0].body), "revision") === false,
+    "版本未知（旧存档里没有 revision）时不带该字段，服务端按旧行为处理（向后兼容）",
+    requests[0].body,
+  );
+
+  console.log("— A. 角色进度同步：后台改动 / 角色被删的自愈 —");
+
+  reset();
+  let conflictFresh = null;
+  let conflictFailed = 0;
+  RoleSync.onConflict = (fresh) => (conflictFresh = fresh);
+  RoleSync.onFailed = () => (conflictFailed += 1);
+  responder = (request) =>
+    request.method === "GET"
+      ? { kind: "ok", status: 200, text: envelope(0, "ok", { id: "role_1", revision: 12, data: { id: "role_1", level: 42 } }) }
+      : { kind: "ok", status: 200, text: envelope(20006, "该角色已在别处被修改，请先同步最新数据", null) };
+  RoleSync.schedule({ id: "role_1", level: 5, revision: 4 });
+  await delay(60);
+  check(requests.length === 2 && requests[1].method === "GET" && requests[1].url.indexOf(ApiRoutes.role.detail("role_1")) !== -1, "撞乐观锁（20006）→ 自动再拉一次角色详情", `${requests.length} 次`);
+  check(conflictFresh && conflictFresh.revision === 12 && conflictFresh.data.level === 42, "把服务端最新数据交给 onConflict（后台改动优先，本地那份丢弃）", JSON.stringify(conflictFresh));
+  check(conflictFailed === 0, "冲突已被接管，不再走普通失败提示（玩家看到的是「已同步最新」而不是报错）", `${conflictFailed} 次`);
+  check(ROLE_SYNC_BIZ_CODES.revisionConflict === 20006, "冲突业务码与服务端约定一致（20006）");
+
+  reset();
+  let missingRoleId = null;
+  let missingFailed = 0;
+  RoleSync.onConflict = null;
+  RoleSync.onMissing = (roleId) => (missingRoleId = roleId);
+  RoleSync.onFailed = () => (missingFailed += 1);
+  responder = () => ({ kind: "ok", status: 200, text: envelope(20002, "角色不存在", null) });
+  RoleSync.schedule({ id: "role_gone", level: 1, revision: 2 });
+  await delay(60);
+  check(missingRoleId === "role_gone", "角色已被删除（20002）→ 交给 onMissing（上层清缓存并回选角场景）", String(missingRoleId));
+  check(missingFailed === 0, "角色不存在也走自愈分支，不当作普通同步失败", `${missingFailed} 次`);
+  check(ROLE_SYNC_BIZ_CODES.missing === 20002, "角色不存在业务码与服务端约定一致（20002）");
+  RoleSync.onMissing = null;
+  RoleSync.onFailed = null;
+
   console.log("— A. 会话存储：读写与脏数据兜底 —");
 
   Session.clear();
@@ -271,13 +328,22 @@ async function expectFailure(action) {
 
   const storageSource = read(FILE.storage);
   check(/static cacheRole\(role: Role\)/.test(storageSource), "StorageManager.cacheRole 存在（服务端完整数据写进本地缓存）");
+  check(
+    /static cacheServerRole\(detail: \{ data: unknown; revision: number \}\)/.test(storageSource) &&
+      /static applyServerRevision\(roleId: string, revision: number\)/.test(storageSource),
+    "StorageManager 提供 cacheServerRole（连修订号一起缓存）与 applyServerRevision（推送成功后对齐基线）",
+  );
   check(/static createRole\(/.test(storageSource) === false, "本地 createRole 已移除（创建必须走服务端）");
   check(/this\.setRoles\(roles\);\s*\n\s*RoleSync\.schedule\(role\);/.test(storageSource), "updateOnlineRole 落盘后安排一次同步（本地落盘唯一出口 = 同步唯一触发点）");
+  check(/const revision = typeof role\.revision === "number" \? role\.revision : i\.revision;/.test(storageSource), "updateOnlineRole 不会被 Object.assign 抹掉已存下的修订号（否则退回无乐观锁）");
   check(/RoleSync\.schedule\(role\)/.test(storageSource) && /Session\.clear\(\)/.test(storageSource), "clear() 同时清掉会话（清存档别留着登录态）");
 
   const selectorSource = read(FILE.selector);
-  check(/await RoleApi\.select\(roleId\)/.test(selectorSource) && /StorageManager\.cacheRole\(detail\.data as unknown as Role\)/.test(selectorSource), "进游戏：服务端 select 返回完整数据 → 写本地缓存");
-  check(/await RoleApi\.create\(new Role\(name, occupation, sex\)\)/.test(selectorSource), "创建角色：完整角色对象交给服务端落库后再写缓存");
+  check(
+    /await RoleApi\.select\(roleId\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource),
+    "进游戏：服务端 select 返回完整数据（含修订号）→ 写本地缓存",
+  );
+  check(/await RoleApi\.create\(new Role\(name, occupation, sex\)\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource), "创建角色：服务端落库后回传的完整数据（含修订号）写进缓存");
   const removeIndex = selectorSource.indexOf("await RoleApi.remove(roleId)");
   const deleteIndex = selectorSource.indexOf("StorageManager.deleteRole(roleId)");
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");
@@ -286,7 +352,40 @@ async function expectFailure(action) {
   const gameSource = read(FILE.game);
   check(/installNetwork\(\)/.test(gameSource), "游戏场景调 installNetwork（令牌失效回登录）");
   check(/RoleSync\.onFailed = \(error\) => GameUiHelper\.createErrorTipText\(describeError\(error\)\)/.test(gameSource), "游戏场景接上进度同步的失败提示");
+  check(
+    /RoleSync\.onSaved = \(roleId, revision\) => StorageManager\.applyServerRevision\(roleId, revision\)/.test(gameSource),
+    "游戏场景接上 onSaved：把服务端的新修订号写回存储（推送成功后的基线）",
+  );
+  check(
+    /RoleSync\.onConflict = \(fresh\) => \{[\s\S]*?StorageManager\.cacheServerRole\(fresh\)[\s\S]*?createTip\("role_sync_conflict_tip"\)/.test(gameSource),
+    "游戏场景接上 onConflict：以后台最新数据为基线 + 提示「已同步最新」（否则后台改动会被旧存档抹掉）",
+  );
+  check(
+    /RoleSync\.onMissing = \(roleId\) => \{[\s\S]*?StorageManager\.deleteRole\(roleId\)[\s\S]*?loadScene\("RoleSelector"\)/.test(gameSource),
+    "游戏场景接上 onMissing：角色被后台删掉时清本地缓存并回选角场景（不卡在永远失败的游戏里）",
+  );
   check(/onDestroy\(\)[\s\S]*?RoleSync\.flush\(\)/.test(gameSource), "场景销毁前 flush 未推送的进度（切地图/退出不丢改动）");
+  check(
+    /onDestroy\(\)[\s\S]*?RoleSync\.onMissing = null/.test(gameSource),
+    "场景销毁时摘掉全部同步回调（场景根都没了，回调里再飘字/切场景会出问题）",
+  );
+
+  const roleSyncSource = read(path.join(ASSETS, "ui/utils/net/RoleSync.ts"));
+  check(/RoleApi\.save\(role\.id, role, true, revision\)/.test(roleSyncSource), "推送时把修订号交给请求层（乐观锁的唯一来源）");
+  check(
+    /ROLE_SYNC_BIZ_CODES\.revisionConflict/.test(roleSyncSource) && /await RoleApi\.detail\(role\.id, true\)/.test(roleSyncSource),
+    "撞乐观锁时先静默拉一次最新数据再交给上层（不重试、不覆盖、不额外弹错误）",
+  );
+  check(/ROLE_SYNC_BIZ_CODES\.missing/.test(roleSyncSource) && /this\.onMissing\?\.\(role\.id\)/.test(roleSyncSource), "角色不存在的分支交给上层自愈");
+
+  const roleEntitySource = read(path.join(ASSETS, "entities/Role.ts"));
+  check(/revision\?: number;/.test(roleEntitySource), "Role 实体有可选的 revision（缺省 = 版本未知，推送时不带）");
+
+  const textsSource = read(path.join(ASSETS, "configs/texts.ts"));
+  check(
+    /role_sync_conflict_tip:/.test(textsSource) && /role_sync_missing_tip:/.test(textsSource),
+    "自愈用的两条文案都登记在 configs/texts（代码里不写中文）",
+  );
 
   const networkSource = read(FILE.network);
   check(/baseUrl:\s*"http/.test(networkSource), "configs/network 是客户端唯一地址来源（自查 tools/audit-api-hardcode.cjs）");

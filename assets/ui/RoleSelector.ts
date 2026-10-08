@@ -164,7 +164,8 @@ export class RoleSelector extends Component {
     this.busy = true;
     try {
       const detail = await RoleApi.select(roleId);
-      StorageManager.cacheRole(detail.data as unknown as Role);
+      // 服务端返回的完整数据（含修订号）写进本地缓存；数据不完整就停在选角界面，别进一个没有角色的游戏
+      if (!StorageManager.cacheServerRole(detail)) return;
       StorageManager.onlineRole(roleId);
       SceneManager.loadScene("Game");
     } catch (error) {
@@ -480,7 +481,7 @@ export class RoleSelector extends Component {
     this.busy = true;
     try {
       const detail = await RoleApi.create(new Role(name, occupation, sex));
-      StorageManager.cacheRole(detail.data as unknown as Role);
+      StorageManager.cacheServerRole(detail);
       GameUiHelper.createTip("role_create_success_tip");
       this.cancelCreateRoleUI();
       await this.loadRoles();

@@ -52,7 +52,13 @@ export class RolesController {
   }
 
   @Put(":id")
-  @ApiPlayerDoc({ summary: "保存角色进度", description: "全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。" })
+  @ApiPlayerDoc({
+    summary: "保存角色进度",
+    description:
+      "全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。\n\n" +
+      "请求体可带 `revision`（客户端上次读到的修订号）：带上即开启**乐观锁**，与服务端当前值不一致时返回 20006 " +
+      "（角色已在别处被修改），客户端应先拉一次详情、以最新数据为基线再继续推；不带则不做冲突校验。",
+  })
   @ApiParam({ name: "id", description: "角色 id" })
   @ApiDataResponse(RoleDto, { description: "保存后的角色" })
   save(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: SaveRoleDto): RoleDto {

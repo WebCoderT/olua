@@ -75,6 +75,15 @@ export class Role implements BattleAttributes {
   shortcutKeys: NeedSetShortcutKeyConfig[] = initialShortcutKeys.map((config) => ({ ...config }));
   /** 速度倍率 */
   speedRate: SpeedRate = { ...defaultRoleSpeedRate };
+  /**
+   * 服务端修订号（乐观锁基线）
+   *
+   * 推送进度时带上它，告诉服务端「这份数据是基于哪一版改的」：对不上说明后台改过这个角色，
+   * 服务端会拒收并要求先同步（见 ui/utils/net/RoleSync）。
+   * 只由 utils/net 与 core/StorageManager 维护，**不参与任何游戏逻辑**；
+   * 旧存档里没有这个字段（undefined）时推送不带它，服务端按旧行为处理。
+   */
+  revision?: number;
 
   constructor(name: string, occupation: OECCUPATION, sex: SEX) {
     this.id = new Date().getTime().toString();

@@ -10,10 +10,20 @@ import { RoleRepository } from "../../database/repositories/role.repository";
 import { AccountRow, AdminRow, RoleRow, RoleWithAccountRow } from "../../database/rows";
 import { AccountDto } from "../auth/dto/account.dto";
 import { AdminRoleDto, RoleSummaryDto } from "../roles/dto/role.dto";
-import { normalizeName, parseRoleData, parseStoredRoleData, ROLE_PATCH_NUMBER_FIELDS } from "../roles/role-data.util";
+import {
+  applyBagCells,
+  normalizeBagCells,
+  normalizeEquipments,
+  normalizeName,
+  normalizeSkills,
+  parseRoleData,
+  parseStoredRoleData,
+  ROLE_PATCH_NUMBER_FIELDS,
+} from "../roles/role-data.util";
+import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
-import { AccountQueryDto, AdminQueryDto, normalizePage, RoleQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
+import { AccountQueryDto, AdminQueryDto, normalizePage, RoleQueryDto, roleFilterOf, UpdateAccountStatusDto } from "./dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "./dto/stats.dto";
 
 /**
@@ -73,14 +83,13 @@ export class AdminService {
 
   //#region 角色
 
-  /** 角色分页检索（keyword 匹配角色名或角色 id；accountId 限定账号） */
+  /** 角色分页检索（keyword 匹配角色名或角色 id；其余条件见 RoleQueryDto） */
   listRoles(query: RoleQueryDto): PageResult<AdminRoleDto> {
     const { page, size } = normalizePage(query);
-    const keyword = query.keyword?.trim() || undefined;
-    const accountId = query.accountId?.trim() || undefined;
+    const filter = roleFilterOf(query);
     return {
-      list: this.roles.list({ page, size, keyword, accountId }).map((row) => this.toAdminRoleDto(row)),
-      total: this.roles.count({ keyword, accountId }),
+      list: this.roles.list({ ...filter, page, size }).map((row) => this.toAdminRoleDto(row)),
+      total: this.roles.count(filter),
       page,
       size,
     };
@@ -92,8 +101,12 @@ export class AdminService {
   }
 
   /**
-   * 修改角色（只开放索引字段 + 常用数值字段，其余字段原样保留）
-   * 数值字段直接写进 data，因此游戏里读到的就是改后的值
+   * 修改角色（只改提交的字段，其余原样保留）
+   *
+   * 三类字段：基础信息 / 常用数值 / 运行时数据（装备、技能、背包，结构化）。
+   * 数值与结构化字段直接写进 data，因此游戏里读到的就是改后的值；
+   * 保存后角色修订号 +1 —— 在线玩家那边的下一次进度推送会撞上乐观锁（20006），
+   * 从而先同步到这里，不会被玩家手上的旧存档覆盖回去。
    */
   patchRole(id: string, dto: AdminPatchRoleDto): AdminRoleDto {
     const row = this.mustRole(id);
@@ -107,6 +120,11 @@ export class AdminService {
 
     if (dto.name !== undefined) {
       const name = normalizeName(dto.name);
+      // 同账号不许重名：玩家侧的创建与保存都拦了，管理端不能开这个口子
+      // （否则客户端选角列表里会出现两个同名角色，玩家自己也没法区分）
+      if (this.roles.findByAccountAndName(row.account_id, name, id)) {
+        throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
+      }
       patch.name = name;
       next.name = name;
     }
@@ -126,6 +144,14 @@ export class AdminService {
       const value = dto[field];
       if (value !== undefined) next[field] = value;
     }
+    // 基础信息里的外观与位置
+    if (dto.fashionCloth !== undefined) next.fashionCloth = dto.fashionCloth;
+    if (dto.avatar !== undefined) next.avatar = dto.avatar;
+    if (dto.onMap !== undefined) next.onMap = dto.onMap;
+    // 运行时数据（结构化；逐项校验在 role-data.util，服务端不认识客户端的配置清单）
+    if (dto.equipments !== undefined) next.equipments = normalizeEquipments(dto.equipments);
+    if (dto.skills !== undefined) next.skills = normalizeSkills(dto.skills);
+    if (dto.bag !== undefined) next.bag = applyBagCells(data.bag, normalizeBagCells(dto.bag));
 
     patch.data = JSON.stringify(next);
     this.roles.updateById(id, patch);
@@ -138,6 +164,56 @@ export class AdminService {
     this.roles.deleteById(id);
     this.accounts.clearOnlineRole(row.account_id, id);
     return null;
+  }
+
+  /**
+   * 批量删除角色（按 id）
+   *
+   * 幂等：已不存在的 id 静默跳过（管理端列表可能已过期，为一条陈旧 id 整体失败更难用）。
+   * 删到某个账号的在线角色时顺带清掉在线标记 —— 与单条删除同一套收尾（见 removeRole）。
+   */
+  batchRemoveRoles(dto: BatchDeleteRolesDto): BatchDeleteResultDto {
+    const ids = [...new Set(dto.ids.map((item) => item.trim()).filter(Boolean))];
+    const found = this.roles.findManyByIds(ids);
+    const clearedOnlineAccountIds = this.clearOnlineMarkers(found);
+    const deleted = this.roles.deleteByIds(found.map((row) => row.id));
+    return {
+      requested: dto.ids.length,
+      deleted,
+      ids: found.map((row) => row.id),
+      clearedOnlineAccountIds,
+    };
+  }
+
+  /** 清空某账号的全部角色（重置玩家存档时用；账号本身保留） */
+  purgeAccountRoles(accountId: string): BatchDeleteResultDto {
+    this.mustAccount(accountId);
+    const rows = this.roles.findByAccount(accountId);
+    const clearedOnlineAccountIds = this.clearOnlineMarkers(rows);
+    const deleted = this.roles.deleteByIds(rows.map((row) => row.id));
+    return {
+      requested: rows.length,
+      deleted,
+      ids: rows.map((row) => row.id),
+      clearedOnlineAccountIds,
+    };
+  }
+
+  /**
+   * 把这些角色恰好是「所属账号的在线角色」的账号标记清掉
+   *
+   * 必须**先清标记再删角色**：清标记的 SQL 带 `AND online_role_id = ?` 条件，
+   * 角色行没了就无法再判断当初指向的是谁。
+   */
+  private clearOnlineMarkers(rows: RoleRow[]): string[] {
+    const cleared: string[] = [];
+    for (const row of rows) {
+      const account = this.accounts.findById(row.account_id);
+      if (!account || account.online_role_id !== row.id) continue;
+      this.accounts.clearOnlineRole(row.account_id, row.id);
+      cleared.push(row.account_id);
+    }
+    return cleared;
   }
 
   /** 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏） */

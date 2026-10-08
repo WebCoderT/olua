@@ -22,6 +22,14 @@ export interface RoleRow {
   level: number;
   /** 角色完整数据（客户端 entities/Role 的 JSON 快照；服务端按不透明文档存取） */
   data: string;
+  /**
+   * 修订号（每次落库 +1）
+   *
+   * 用途是**乐观锁**：客户端推进度时带上它读到的值，服务端发现对不上就拒收（见 BizCode.ROLE_REVISION_CONFLICT）。
+   * 没有它的话，「管理员在后台改角色」与「玩家在游戏里每 1.5 秒推一次存档」会互相覆盖，
+   * 谁最后写谁赢 —— 后台的改动静默丢失。
+   */
+  revision: number;
   created_at: number;
   updated_at: number;
 }

@@ -7,6 +7,7 @@ import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AccountDto } from "../auth/dto/account.dto";
 import { AdminService } from "./admin.service";
+import { BatchDeleteResultDto } from "./dto/batch-role.dto";
 import { AccountQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "./dto/stats.dto";
 
@@ -69,5 +70,19 @@ export class AdminAccountsController {
   @ApiVoidResponse("删除成功（data 为 null）")
   remove(@Param("id") id: string): null {
     return this.adminService.removeAccount(id);
+  }
+
+  @Delete("accounts/:id/roles")
+  @ApiAdminDoc({
+    summary: "清空账号下的全部角色",
+    description:
+      "账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。" +
+      "与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。",
+    permissions: [Permission.ROLE_DELETE],
+  })
+  @ApiParam({ name: "id", description: "账号 id" })
+  @ApiDataResponse(BatchDeleteResultDto, { description: "删除结果（requested / deleted / ids / clearedOnlineAccountIds）" })
+  purgeRoles(@Param("id") id: string): BatchDeleteResultDto {
+    return this.adminService.purgeAccountRoles(id);
   }
 }

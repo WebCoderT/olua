@@ -45,3 +45,21 @@ export const RELOGIN_BIZ_CODES = [
   40102, // 令牌过期
   10004, // 账号被封禁
 ] as const;
+
+/**
+ * 需要**特殊处理**的角色业务码（服务端 common/constants/biz-code.ts 的子集）
+ *
+ * 这两个码意味着「本地存档已经不代表服务端现状」，所以不能当成普通失败提示一下就算了，
+ * 见 utils/net/RoleSync 的处理分支。
+ */
+export const ROLE_SYNC_BIZ_CODES = {
+  /**
+   * 角色已被别处修改（乐观锁冲突）
+   *
+   * 玩家在游戏里、管理员在后台改了这个角色：本地那份存档是「改之前」的基线，
+   * 直接推上去会把后台的改动覆盖掉，所以服务端拒收。
+   */
+  revisionConflict: 20006,
+  /** 角色不存在（被后台删了）：本地还在玩一个已经被删掉的角色 */
+  missing: 20002,
+} as const;

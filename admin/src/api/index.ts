@@ -16,8 +16,20 @@ export type {
   AdminRole,
   AdminStats,
   AdminUpdatePayload,
+  BatchDeleteResult,
   PageResult,
+  RoleBagCell,
+  RoleListQuery,
   RolePatchPayload,
   RoleSummary,
 } from "./types";
-export { ADMIN_ROLE, adminRoleLabel, ADMIN_ROLE_LABELS, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS } from "./types";
+export {
+  ADMIN_ROLE,
+  adminRoleLabel,
+  ADMIN_ROLE_LABELS,
+  formatTime,
+  OCCUPATION_LABELS,
+  PERMISSION,
+  ROLE_BAG_AXIS_MAX,
+  SEX_LABELS,
+} from "./types";

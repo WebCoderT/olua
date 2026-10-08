@@ -291,6 +291,15 @@ export const uiTexts = {
   role_create_success_tip: "角色创建成功",
   /** 角色数量已达上限（{max} = 上限，见 configs/role.maxRoleCount / 服务端 ROLE_MAX_PER_ACCOUNT） */
   role_create_limit_tip: "最多只能创建 {max} 个角色",
+  /**
+   * 角色数据已被后台修改，已自动同步为最新
+   *
+   * 触发场景：玩家在游戏里、管理员在后台改了同一个角色。
+   * 本地那份存档是「改之前」的基线，推上去会把后台改动抹掉，所以以服务端为准（见 utils/net/RoleSync）。
+   */
+  role_sync_conflict_tip: "角色数据已在后台被修改，已同步为最新数据",
+  /** 角色已被后台删除（本地不该继续玩一个不存在的角色，回选角场景重来） */
+  role_sync_missing_tip: "角色已被删除，请重新选择角色",
 } as const;
 
 /** 文案 key（uiTexts 的键） */

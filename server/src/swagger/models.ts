@@ -2,7 +2,8 @@ import { AccountDto } from "../modules/auth/dto/account.dto";
 import { AuthTokenDto } from "../modules/auth/dto/auth-token.dto";
 import { AdminLoginDto, AdminRegisterDto } from "../modules/admin/dto/admin-auth.dto";
 import { AdminDto, AdminTokenDto, AdminUpdateDto } from "../modules/admin/dto/admin.dto";
-import { AdminPatchRoleDto } from "../modules/admin/dto/patch-role.dto";
+import { AdminPatchRoleDto, RoleBagCellDto } from "../modules/admin/dto/patch-role.dto";
+import { BatchDeleteResultDto, BatchDeleteRolesDto } from "../modules/admin/dto/batch-role.dto";
 import { AccountQueryDto, AdminQueryDto, RoleQueryDto, UpdateAccountStatusDto } from "../modules/admin/dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "../modules/admin/dto/stats.dto";
 import { ApiEnvelopeDto, PageQueryDto } from "../common/dto/api-envelope.dto";
@@ -38,6 +39,9 @@ export const SWAGGER_MODELS = [
   AdminStatsDto,
   AdminRoleDto,
   AdminPatchRoleDto,
+  RoleBagCellDto,
+  BatchDeleteRolesDto,
+  BatchDeleteResultDto,
   AdminUpdateDto,
   AccountQueryDto,
   RoleQueryDto,

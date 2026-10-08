@@ -17,6 +17,8 @@ export function AccountDetailPage() {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState(false);
+  const [purging, setPurging] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,21 @@ export function AccountDetailPage() {
     }
   };
 
+  /** 清空该账号的全部角色（账号保留；玩家可以重新创建角色） */
+  const purgeRoles = async () => {
+    setPurging(true);
+    try {
+      const result = await accountsApi.purgeRoles(id);
+      toastSuccess(result.deleted > 0 ? `已清空 ${result.deleted} 个角色` : "该账号本来就没有角色");
+      setPurgeConfirm(false);
+      await load();
+    } catch {
+      /* 统一提示 */
+    } finally {
+      setPurging(false);
+    }
+  };
+
   if (loading && !detail) {
     return (
       <div className="flex items-center gap-2 text-sm text-slate-400">
@@ -103,7 +120,15 @@ export function AccountDetailPage() {
         </Card>
       </div>
 
-      <Card title={`角色（${roles.length}）`} description="等级、金币等可以直接改；背包 / 装备等运行时数据只读预览。">
+      <Card
+        title={`角色（${roles.length}）`}
+        description="基础信息与装备 / 技能 / 背包都能直接改；账号本身不会被删除，清空后玩家可以重新创建角色。"
+        actions={
+          <Button variant="danger" className="px-2.5 py-1 text-xs" disabled={!canDeleteRole || roles.length === 0} onClick={() => setPurgeConfirm(true)}>
+            清空全部角色
+          </Button>
+        }
+      >
         <div className="overflow-x-auto">
           <table className={tableClass}>
             <thead className={theadClass}>
@@ -172,6 +197,16 @@ export function AccountDetailPage() {
         loading={deleting}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={purgeConfirm}
+        title="清空该账号的全部角色"
+        description={`将删除账号「${account.username}」名下的 ${roles.length} 个角色（账号保留），操作不可恢复。`}
+        confirmText="确认清空"
+        loading={purging}
+        onConfirm={() => void purgeRoles()}
+        onCancel={() => setPurgeConfirm(false)}
       />
     </div>
   );

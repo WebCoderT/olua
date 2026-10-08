@@ -65,6 +65,42 @@ export default class StorageManager {
     this.setRoles(roles);
   }
 
+  /**
+   * 把**服务端接口返回的角色数据**（详情 / 创建 / 选中 / 冲突后拉取）写进本地缓存
+   *
+   * 与 cacheRole 的唯一区别：顺手记下服务端修订号（乐观锁基线，见 entities/Role.revision）。
+   * 服务端返回的是统一包裹里的 data + 同级的 revision，映射收在这里，
+   * 免得每个调用点自己拼 `{ ...data, revision }`（漏一处就一直拿旧版本去撞乐观锁）。
+   * @returns 写进缓存的角色；数据不完整（没有 id）时返回 null 并跳过
+   */
+  static cacheServerRole(detail: { data: unknown; revision: number }): Role | null {
+    const source = detail && detail.data && typeof detail.data === "object" ? (detail.data as Role) : null;
+    if (!source || !source.id) {
+      console.warn("[storage] 服务端返回的角色数据不完整，已跳过缓存");
+      return null;
+    }
+    const role: Role = { ...source, revision: detail.revision };
+    this.cacheRole(role);
+    return role;
+  }
+
+  /**
+   * 记下服务端刚给的修订号（推送成功后的基线更新）
+   *
+   * **不触发同步**：这只是把「我是基于哪一版」对齐，数据本身没变，
+   * 推回去纯属白跑一趟（与 cacheRole 同一口径）。
+   */
+  static applyServerRevision(roleId: string, revision: number) {
+    const roles = this.getRoles();
+    let changed = false;
+    roles.forEach((role) => {
+      if (role.id !== roleId || role.revision === revision) return;
+      role.revision = revision;
+      changed = true;
+    });
+    if (changed) this.setRoles(roles);
+  }
+
   /** 根据id获取角色 */
   static findRoleById(id: string) {
     return this.getRoles().find((i) => i.id === id);
@@ -133,7 +169,12 @@ export default class StorageManager {
   static updateOnlineRole(role: Role) {
     const roles = this.getRoles().map((i) => {
       if (i.id === role.id) {
+        // 修订号只信「有的那一边」：内存里的 role 可能是旧存档解析出来的（没有 revision 字段），
+        // 直接 Object.assign 会把已存下的基线抹掉，下一次推送就退回「无乐观锁」的旧行为
+        const revision = typeof role.revision === "number" ? role.revision : i.revision;
         Object.assign(i, role);
+        if (typeof revision === "number") i.revision = revision;
+        else delete i.revision;
       }
       return i;
     });

@@ -6,6 +6,7 @@ import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AdminRoleDto } from "../roles/dto/role.dto";
+import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
 import { RoleQueryDto } from "./dto/query.dto";
 import { AdminService } from "./admin.service";
@@ -19,12 +20,27 @@ export class AdminRolesController {
   @Get()
   @ApiAdminDoc({
     summary: "角色列表",
-    description: "keyword 匹配角色名或角色 id；accountId 限定账号。",
+    description:
+      "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。",
     permissions: [Permission.ROLE_READ],
   })
   @ApiDataResponse(AdminRoleDto, { isArray: true, description: "分页结果在 data 里（list/total/page/size）" })
   list(@Query() query: RoleQueryDto): PageResult<AdminRoleDto> {
     return this.adminService.listRoles(query);
+  }
+
+  @Post("batch-delete")
+  @HttpCode(HttpStatus.OK)
+  @ApiAdminDoc({
+    summary: "批量删除角色",
+    description:
+      "按 id 列表删除（最多 100 条）。已不存在的 id 静默跳过（幂等）；作为某个账号在线角色的会被顺带清掉在线标记。" +
+      "返回实际删除的条数与涉及的账号 id。\n\nPOST 而不是 DELETE 是因为要带请求体；用 200 而不是 201 —— 它不创建资源。",
+    permissions: [Permission.ROLE_DELETE],
+  })
+  @ApiDataResponse(BatchDeleteResultDto, { description: "删除结果（requested / deleted / ids / clearedOnlineAccountIds）" })
+  batchRemove(@Body() dto: BatchDeleteRolesDto): BatchDeleteResultDto {
+    return this.adminService.batchRemoveRoles(dto);
   }
 
   @Get(":id")
@@ -38,7 +54,11 @@ export class AdminRolesController {
   @Patch(":id")
   @ApiAdminDoc({
     summary: "修改角色",
-    description: "只开放角色名 / 职业 / 性别 / 等级 / 金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔；其余字段原样保留。",
+    description:
+      "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、" +
+      "**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、" +
+      "**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n" +
+      "角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。",
     permissions: [Permission.ROLE_WRITE],
   })
   @ApiParam({ name: "id", description: "角色 id" })

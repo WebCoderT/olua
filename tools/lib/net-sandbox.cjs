@@ -173,6 +173,8 @@ function prepareNet(sandboxName) {
     ApiRoutes: routes.ApiRoutes,
     ApiErrorTextKey: routes.ApiErrorTextKey,
     RELOGIN_BIZ_CODES: routes.RELOGIN_BIZ_CODES,
+    /** 角色同步要特殊处理的业务码（乐观锁冲突 / 角色不存在） */
+    ROLE_SYNC_BIZ_CODES: routes.ROLE_SYNC_BIZ_CODES,
     /** 真实的 getText（断言兜底文案时比对，避免测试里写死中文） */
     getText: load("configs/texts.js").getText,
     /** cc 垫片（测试用 __store 清场） */

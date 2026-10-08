@@ -54,6 +54,7 @@ export class DatabaseService implements OnModuleInit {
         sex        TEXT NOT NULL DEFAULT '',
         level      INTEGER NOT NULL DEFAULT 1,
         data       TEXT NOT NULL,
+        revision   INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -73,6 +74,8 @@ export class DatabaseService implements OnModuleInit {
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）
     this.ensureColumn("admins", "role", `TEXT NOT NULL DEFAULT '${AdminRole.ADMIN}'`);
+    // 修订号（乐观锁）：存量库补列后老角色都是 1，客户端读到 1 推回来也是 1，不会误判冲突
+    this.ensureColumn("roles", "revision", "INTEGER NOT NULL DEFAULT 1");
     this.ensureSuperAdmin();
   }
 

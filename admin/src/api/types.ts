@@ -102,6 +102,8 @@ export interface RoleSummary {
   sex: string;
   level: number;
   online: boolean;
+  /** 修订号（每次落库 +1；玩家推进度时用它做乐观锁，管理端只展示） */
+  revision: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -125,12 +127,24 @@ export interface AdminStats {
   adminCount: number;
 }
 
-/** 管理端可编辑的角色字段（与服务端 AdminPatchRoleDto 一致） */
+/**
+ * 管理端可编辑的角色字段（与服务端 AdminPatchRoleDto 一致）
+ *
+ * 分成三组：基础信息 / 常用数值 / 运行时数据（结构化）。
+ * 保存时只提交改动过的字段（见 RoleDetailPage.buildPatch），避免把并发改动覆盖掉。
+ */
 export interface RolePatchPayload {
+  // 基础信息
   name?: string;
   occupation?: string;
   sex?: string;
   level?: number;
+  /** 时装（外观）id；null = 取消时装 */
+  fashionCloth?: number | null;
+  avatar?: number;
+  /** 所在地图 id（客户端 configs/map 的 key） */
+  onMap?: string;
+  // 常用数值
   gold?: number;
   bindGold?: number;
   silver?: number;
@@ -138,6 +152,49 @@ export interface RolePatchPayload {
   soulOfWar?: number;
   title?: number;
   rank?: number;
+  // 运行时数据（结构化）
+  /** 装备穿戴表：槽位名 → 装备 id（null 表示该槽位空着） */
+  equipments?: Record<string, string | null>;
+  /** 技能等级表：技能 id → 等级 */
+  skills?: Record<string, number>;
+  /** 背包格子（稀疏：只报有东西的格子）；空数组 = 清空背包 */
+  bag?: RoleBagCell[];
+}
+
+/** 背包里的一个格子（服务端 RoleBagCellDto） */
+export interface RoleBagCell {
+  row: number;
+  col: number;
+  id: string;
+  count: number;
+}
+
+/**
+ * 角色列表筛选条件（与服务端 RoleQueryDto 一致）
+ *
+ * 刻意写成 type 而不是 interface：请求层的 query 参数类型是个 Record，
+ * 只有对象**类型别名**才会被推断出隐式索引签名（interface 不会，赋值时会报「缺少索引签名」）。
+ */
+export type RoleListQuery = {
+  page?: number;
+  size?: number;
+  /** 同时匹配角色名与角色 id */
+  keyword?: string;
+  accountId?: string;
+  /** "true" 只看在线（账号当前选中的）角色；"false" 只看离线 */
+  online?: string;
+  occupation?: string;
+  sex?: string;
+  minLevel?: number;
+  maxLevel?: number;
+};
+
+/** 批量删除 / 清空角色 的结果 */
+export interface BatchDeleteResult {
+  requested: number;
+  deleted: number;
+  ids: string[];
+  clearedOnlineAccountIds: string[];
 }
 
 /** 管理端改管理员（改角色 / 启停；仅 admin:manage 可调） */
@@ -195,6 +252,13 @@ export function adminRoleLabel(role: string): string {
 
 export const OCCUPATION_LABELS: Record<string, string> = { "1": "战士", "2": "魔法师", "3": "道士", "4": "全职业" };
 export const SEX_LABELS: Record<string, string> = { "1": "男", "2": "女", "3": "全性别" };
+
+/**
+ * 背包格子的行 / 列上限（与服务端 role-data.util.ROLE_BAG_AXIS_MAX 一致）
+ *
+ * 界面用它做输入约束（只是体验，服务端才是权威）。
+ */
+export const ROLE_BAG_AXIS_MAX = 64;
 
 /** 时间戳 → 本地时间文本（空值显示 —） */
 export function formatTime(value: number | null | undefined): string {

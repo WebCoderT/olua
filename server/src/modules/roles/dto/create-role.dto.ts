@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsObject } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsInt, IsObject, IsOptional, Min } from "class-validator";
 
 /**
  * 创建角色入参
@@ -23,4 +23,20 @@ export class SaveRoleDto {
   @ApiProperty({ description: "角色完整数据（全量覆盖）", type: "object", additionalProperties: true })
   @IsObject({ message: "角色数据必须是对象" })
   data: Record<string, unknown>;
+
+  /**
+   * 客户端读到的修订号（可选）
+   *
+   * 带上它 = 开启乐观锁：与服务端当前值不一致时接口会拒收（20006），
+   * 客户端应拉一次角色详情再继续（见客户端 utils/net/RoleSync）。
+   * 不传 = 旧行为（最后写入者胜），给还没升级的客户端留后路。
+   */
+  @ApiPropertyOptional({
+    description: "客户端读到的修订号（带上即开启乐观锁：与服务端不一致时返回 20006，需先拉最新数据）",
+    example: 3,
+  })
+  @IsOptional()
+  @IsInt({ message: "修订号必须是整数" })
+  @Min(0, { message: "修订号不能为负" })
+  revision?: number;
 }

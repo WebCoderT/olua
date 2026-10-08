@@ -1,5 +1,5 @@
 import { http } from "./http";
-import type { Account, AccountDetail, AdminStats, PageResult } from "./types";
+import type { Account, AccountDetail, AdminStats, BatchDeleteResult, PageResult } from "./types";
 
 /** 账号管理接口 */
 export const accountsApi = {
@@ -18,4 +18,7 @@ export const accountsApi = {
 
   /** 删除账号（名下角色级联删除） */
   remove: (id: string) => http.del<null>(`/admin/accounts/${encodeURIComponent(id)}`),
+
+  /** 清空该账号的全部角色（账号保留，重置玩家存档用） */
+  purgeRoles: (id: string) => http.del<BatchDeleteResult>(`/admin/accounts/${encodeURIComponent(id)}/roles`),
 };

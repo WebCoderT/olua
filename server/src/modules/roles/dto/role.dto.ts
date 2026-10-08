@@ -25,6 +25,15 @@ export class RoleSummaryDto {
   @ApiProperty({ description: "是否当前选中（在线）角色" })
   online: boolean;
 
+  /**
+   * 修订号（乐观锁）
+   *
+   * 客户端保存进度时把它读到的值带回来（`SaveRoleDto.revision`），
+   * 对不上说明角色在别处（管理端）被改过 → 服务端拒收并让客户端先拉最新数据。
+   */
+  @ApiProperty({ description: "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）" })
+  revision: number;
+
   @ApiProperty({ description: "创建时间（毫秒）" })
   createdAt: number;
 
@@ -40,6 +49,7 @@ export class RoleSummaryDto {
     dto.sex = row.sex;
     dto.level = row.level;
     dto.online = onlineRoleId === row.id;
+    dto.revision = row.revision;
     dto.createdAt = row.created_at;
     dto.updatedAt = row.updated_at;
     return dto;

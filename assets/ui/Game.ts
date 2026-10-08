@@ -15,6 +15,7 @@ import CursorInput from "./components/input/CursorInput";
 import DeathDialog from "./components/dialogs/DeathDialog";
 import GameHelper from "./core/GameHelper";
 import StorageManager from "./core/StorageManager";
+import SceneManager from "./core/SceneManager";
 import LayerManager from "./core/LayerManager";
 import CursorManager from "./core/CursorManager";
 import DropManager from "./core/DropManager";
@@ -73,6 +74,20 @@ export class Game extends Component {
     // 角色进度同步的失败出口：同步请求是静默的（不弹通用提示），
     // 这里接上「只提示一次」的飘字，避免后端挂了之后打怪期间被刷屏（见 utils/net/RoleSync）
     RoleSync.onFailed = (error) => GameUiHelper.createErrorTipText(describeError(error));
+    // 同步成功：把服务端刚给的修订号记回本地（下一次推送带着它做乐观锁，否则会拿旧版本撞自己）
+    RoleSync.onSaved = (roleId, revision) => StorageManager.applyServerRevision(roleId, revision);
+    // 撞上乐观锁：角色被后台改过 —— 以服务端最新数据为基线（后台改动优先），并告知玩家
+    RoleSync.onConflict = (fresh) => {
+      const role = StorageManager.cacheServerRole(fresh);
+      GameUiHelper.createTip("role_sync_conflict_tip");
+      if (role) RoleUIManager.updateRoleData(role);
+    };
+    // 角色已被后台删除：本地不该继续玩一个不存在的角色（否则会卡在永远同步失败的游戏里）
+    RoleSync.onMissing = (roleId) => {
+      GameUiHelper.createTip("role_sync_missing_tip");
+      StorageManager.deleteRole(roleId);
+      SceneManager.loadScene("RoleSelector");
+    };
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
@@ -165,6 +180,9 @@ export class Game extends Component {
     void RoleSync.flush();
     // 场景卸载后飘字出口可能失效（场景根都要没了），先摘掉回调
     RoleSync.onFailed = null;
+    RoleSync.onSaved = null;
+    RoleSync.onConflict = null;
+    RoleSync.onMissing = null;
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();
     this.offWindowResize = null;

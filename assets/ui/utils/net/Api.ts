@@ -30,6 +30,8 @@ export interface RoleSummary {
   sex: string;
   level: number;
   online: boolean;
+  /** 修订号（每次落库 +1；客户端保存进度时把它带回去做乐观锁） */
+  revision: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -59,15 +61,21 @@ export const RoleApi = {
   list: () => HttpClient.get<RoleSummary[]>(ApiRoutes.role.list),
   /** 创建角色：role 是 new Role(...) 出来的完整对象 */
   create: (role: unknown) => HttpClient.post<RoleDetail>(ApiRoutes.role.create, { data: role }),
-  /** 角色详情（完整数据） */
-  detail: (id: string) => HttpClient.get<RoleDetail>(ApiRoutes.role.detail(id)),
+  /**
+   * 角色详情（完整数据）
+   * @param id 角色 id
+   * @param silent 后台同步用：失败不弹提示（见 utils/net/RoleSync 的冲突自愈）
+   */
+  detail: (id: string, silent = false) => HttpClient.get<RoleDetail>(ApiRoutes.role.detail(id), { silent }),
   /**
    * 保存进度（全量覆盖）
    * @param id 角色 id
    * @param role 角色完整数据（entities/Role 的快照）
    * @param silent 后台同步用：失败不弹提示（由调用方自己决定，见 utils/net/RoleSync）
+   * @param revision 本地这份数据基于的服务端修订号（传了才开启乐观锁；未知版本就别传，见 RoleSync）
    */
-  save: (id: string, role: unknown, silent = false) => HttpClient.put<RoleDetail>(ApiRoutes.role.save(id), { data: role }, { silent }),
+  save: (id: string, role: unknown, silent = false, revision?: number) =>
+    HttpClient.put<RoleDetail>(ApiRoutes.role.save(id), revision === undefined ? { data: role } : { data: role, revision }, { silent }),
   /** 选中（进入）角色：服务端同步在线角色并返回完整数据 */
   select: (id: string) => HttpClient.post<RoleDetail>(ApiRoutes.role.select(id)),
   /** 删除角色 */

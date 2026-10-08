@@ -74,6 +74,7 @@ export class RolesService {
       sex: fields.sex,
       level: fields.level,
       data: JSON.stringify(data),
+      revision: 1,
       created_at: now,
       updated_at: now,
     };
@@ -82,10 +83,20 @@ export class RolesService {
     return RoleDto.from(row, account.online_role_id ?? row.id);
   }
 
-  /** 保存角色进度（全量覆盖；id 以路径参数为准，避免换 id 写别人角色） */
+  /**
+   * 保存角色进度（全量覆盖；id 以路径参数为准，避免换 id 写别人角色）
+   *
+   * **乐观锁**：请求带了 revision 且与服务端当前值不一致时拒收（20006）。
+   * 典型场景是玩家在游戏里、管理员在后台改了这个角色 —— 若直接放行，
+   * 客户端那份「改之前」的存档会把后台的改动整体覆盖掉（谁最后写谁赢，后台改动静默丢失）。
+   * 客户端收到 20006 应拉一次角色详情、以最新数据为基线后再继续推（见 utils/net/RoleSync）。
+   */
   save(accountId: string, roleId: string, dto: SaveRoleDto): RoleDto {
     const account = this.mustAccount(accountId);
     const existing = this.mustOwnRole(accountId, roleId);
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
     const { fields, data } = parseRoleData({ ...dto.data, id: roleId });
 
     if (fields.name !== existing.name && this.roles.findByAccountAndName(accountId, fields.name, roleId)) {
@@ -99,6 +110,9 @@ export class RolesService {
       sex: fields.sex,
       level: fields.level,
       data: JSON.stringify(data),
+      // 与 replace() 里的 `revision = revision + 1` 对齐：SQL 只是落库，这里要给出**落库后**的值，
+      // 否则响应里的 revision 比库里小 1，客户端拿它做基线会立刻撞乐观锁（自锁死循环）
+      revision: existing.revision + 1,
       updated_at: Date.now(),
     };
     this.roles.replace(row);
