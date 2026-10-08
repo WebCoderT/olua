@@ -1891,6 +1891,9 @@ export default class GameUiHelper {
     const node = UiHelper.createNode("monster", new Vec2(), monster.contentSize);
     const animationNode = UiHelper.createNode("monster_animation");
     animationNode.addComponent(Sprite);
+    // 外观偏移：画布中心默认落在节点原点，身体在画布里不居中 → 外观节点按 outOffset 回摆，
+    // 让可见身体中心正好落在节点原点（碰撞盒/点选/头顶血条/名字全都以原点为基准，见 configs/monster）
+    animationNode.setPosition(monster.outOffset.x, monster.outOffset.y, 0);
     const animate = AnimationHelper.useMonsterAnimation(getAnimationName(ACTION.STAND, DIRECTION.DOWN), animationNode, monster.out, monster.speedRate);
     node.addChild(animationNode);
     return { node, animate };

@@ -19,15 +19,18 @@ export type MonsterTier = "normal" | "elite" | "boss";
  * key 可以是任意字符串（不要求是数字，例如 "goblin_chief"），也不参与任何数值计算。
  * 数值一律按 level（配合 tier）从 configs/growth 的成长曲线派生。
  *
- * 战斗属性（maxHp 与六项攻防）是**可选**的：不写就由 monsterStats(level, tier) 按等级生成，
- * 写了则覆盖生成值（用于法系怪要魔法攻击、特殊怪要更高血量之类的特例）。
+ * 战斗属性（maxHp 与六项攻防）与动作速度（speedRate）是**可选**的：
+ * 不写就分别由 monsterStats(level, tier) 与 configs/monster 的 monsterDefaultSpeedRate 生成，
+ * 写了则逐字段覆盖生成值（用于法系怪要魔法攻击、特殊怪要更高血量 / 某只怪动作更慢之类的特例）。
  */
-export type MonsterData = Omit<MonsterConfig, keyof BattleAttributes> &
+export type MonsterData = Omit<MonsterConfig, keyof BattleAttributes | "speedRate"> &
   Partial<BattleAttributes> & {
     /** 关联键（唯一）——地图对象组的 id 就是它，仅用于相互引用 */
     key: string;
     /** 定位（不写 = normal，影响同等级下的强度倍率） */
     tier?: MonsterTier;
+    /** 动作速度覆盖：只写要改的动作，其余沿用 configs/monster 的 monsterDefaultSpeedRate */
+    speedRate?: Partial<SpeedRate>;
   };
 
 /** 怪物配置接口 */
@@ -36,12 +39,20 @@ export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   icon: string;
   // 外观
   out: string;
-  /** 外观偏移 */
+  /**
+   * 外观节点摆放偏移：把**可见身体中心**对准节点原点
+   * （外观画布中心默认落在原点，身体在画布里不居中 → 外观节点按此偏移回摆；
+   * 生成器按基准帧的 auto-trim 实测，消费点 GameUiHelper.createMonsterBody）
+   */
   outOffset: Vec2;
-  /** 怪物选中区域 */
+  /**
+   * 可见身体尺寸（基准帧 auto-trim 实测）：碰撞盒（MonsterCollider）、
+   * 点击选中（UITransform.hitTest）、头顶血条位置都由它决定
+   */
   contentSize: Size;
-  /** 怪物每个动作对应时长
-   * 每一个怪物都不同，没有添加
+  /**
+   * 动作速度（每秒循环数，片段总时长 = 1 / 该值）：运行时由 configs/monster 的
+   * monsterDefaultSpeedRate 打底、条目覆盖合成，全怪共用一套默认（素材帧规格统一）
    */
   speedRate: SpeedRate;
   /**
