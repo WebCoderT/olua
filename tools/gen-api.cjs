@@ -232,7 +232,17 @@ function tsType(schema, doc) {
 
   let base;
   if (schema.allOf) {
-    base = "Record<string, unknown>";
+    // Nest 对「字段类型是另一个 DTO」（`@ApiProperty({ type: XxxDto })`）会写成
+    // `allOf: [{ $ref }]`；这种就该还原成那个类型名，而不是当成匿名对象
+    const refs = schema.allOf.filter((part) => part.$ref);
+    const inline = schema.allOf.filter((part) => !part.$ref && (part.properties || part.required));
+    if (refs.length === 1 && !inline.length) {
+      base = refNameOf(refs[0].$ref);
+    } else {
+      const merged = mergeAllOf(schema.allOf, doc);
+      const entries = Object.entries(merged.properties ?? {});
+      base = entries.length ? `{ ${entries.map(([key, value]) => `${key}: ${tsType(value, doc)}`).join("; ")} }` : "Record<string, unknown>";
+    }
   } else if (Array.isArray(schema.enum) && schema.enum.length) {
     base = schema.enum.map((value) => JSON.stringify(value)).join(" | ");
   } else if (schema.type === "array") {
@@ -292,13 +302,15 @@ function collectOperations(doc) {
         throw new Error(`operationId 的模块段没登记：${moduleKey}（${operationId}）—— 请在 tools/gen-api.cjs 的 MODULES 里补一条`);
       }
 
-      const expectedTarget = rawPath.startsWith(`${API_PREFIX}/admin/`) || rawPath === `${API_PREFIX}/admin` ? "admin" : "client";
+      // 文档路径一般不带全局前缀（服务端 setGlobalPrefix 不会进文档）；带上时也能兼容
+      const fullPath = rawPath.startsWith(API_PREFIX) ? rawPath.slice(API_PREFIX.length) : rawPath;
+      if (!fullPath.startsWith("/")) throw new Error(`路径不合法：${rawPath}`);
+
+      // 归哪一端只看路径：管理端接口全在 /admin 下（与 Swagger 分组的「管理端」一一对应）
+      const expectedTarget = fullPath === "/admin" || fullPath.startsWith("/admin/") ? "admin" : "client";
       if (meta.target !== expectedTarget) {
         throw new Error(`${operationId} 的路径是 ${rawPath}，应归 ${expectedTarget}，但 MODULES 里登记的是 ${meta.target}`);
       }
-
-      const fullPath = rawPath.startsWith(API_PREFIX) ? rawPath.slice(API_PREFIX.length) : rawPath;
-      if (!fullPath.startsWith("/")) throw new Error(`路径不合法：${rawPath}`);
 
       const parameters = op.parameters ?? [];
       const templateParams = [...fullPath.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
@@ -397,6 +409,14 @@ function emitRoutesFile(target, operations) {
 
 //#region 生成：类型
 
+/**
+ * 为什么用 `export type X = {...}` 而不是 `export interface X {...}`
+ *
+ * interface **没有隐式索引签名**，赋给「`Record<string, ...>` 形状的参数」时会被 TS 拒绝
+ * （两端的请求层 query 参数就是这种形状，已有真实报错）。
+ * 对象字面量类型别名则有隐式索引签名，省掉一大批 `as Record<...>` 断言。
+ * 继承关系在文档里本来就被拍平了，用不上 interface 的 extend / 声明合并。
+ */
 function emitModelsFile(target, schemas, extraInterfaces) {
   const lines = [];
   lines.push(...header(target, target.modelsFile));
@@ -413,21 +433,21 @@ function emitModelsFile(target, schemas, extraInterfaces) {
     lines.push("");
     const shape = objectShape(entry.schema, entry.doc);
     const required = new Set(shape.required ?? []);
-    lines.push(`export interface ${name} {`);
+    lines.push(`export type ${name} = {`);
     for (const [prop, propSchema] of Object.entries(shape.properties ?? {})) {
       const propDoc = docLines(propSchema.description);
       if (propDoc.length) lines.push(...emitDoc("  ", propDoc));
       const optional = required.has(prop) ? "" : "?";
       lines.push(`  ${prop}${optional}: ${tsType(propSchema, entry.doc)};`);
     }
-    lines.push("}");
+    lines.push("};");
   }
 
   for (const [name, body] of extraInterfaces) {
     lines.push("");
-    lines.push(`export interface ${name} {`);
+    lines.push(`export type ${name} = {`);
     lines.push(...body);
-    lines.push("}");
+    lines.push("};");
   }
 
   lines.push("");
@@ -556,28 +576,12 @@ function buildOutputs(doc = readDoc()) {
   const outputs = new Map();
   for (const target of Object.values(TARGETS)) {
     const own = operations.filter((op) => op.target === target.key);
+    // 只 import「本文件签名里直接出现」的类型名：模型之间互相引用由 models 文件自己解决，
+    // 多带入的未使用类型会在 `noUnusedLocals` 下报错
     const referenced = new Set();
     for (const op of own) {
       for (const part of [returnTypeOf(op), op.bodyTypeName, op.queryTypeName]) {
         for (const token of tokensOf(part)) if (knownNames.has(token)) referenced.add(token);
-      }
-    }
-    // 被引用类型自己引用到的类型也要一起 import（例如 RolePatchPayload 里的 RoleBagCell）
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const name of [...referenced]) {
-        const entry = schemas.get(name);
-        if (!entry) continue;
-        const shape = objectShape(entry.schema, doc);
-        for (const propSchema of Object.values(shape.properties ?? {})) {
-          for (const token of tokensOf(tsType(propSchema, doc))) {
-            if (knownNames.has(token) && !referenced.has(token)) {
-              referenced.add(token);
-              grew = true;
-            }
-          }
-        }
       }
     }
 
@@ -614,7 +618,7 @@ function header(target, fileName) {
 /** Cocos 需要每个资源有 .meta；这里给缺失的生成物补一个（uuid 由路径派生，多次运行稳定） */
 function ensureMeta(file) {
   const metaFile = `${file}.meta`;
-  if (fs.existsSync(metaFile)) return;
+  if (fs.existsSync(metaFile)) return false;
   const digest = crypto.createHash("md5").update(`olua:${path.relative(ROOT, file)}`).digest("hex");
   const uuid = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
   fs.writeFileSync(
@@ -622,6 +626,7 @@ function ensureMeta(file) {
     `${JSON.stringify({ ver: "4.0.24", importer: "typescript", imported: true, uuid, files: [], subMetas: {}, userData: {} }, null, 2)}\n`,
     "utf8",
   );
+  return true;
 }
 
 function main() {
@@ -633,10 +638,16 @@ function main() {
 
   const results = [];
   const stale = [];
+  const metaRepaired = [];
   for (const [file, content] of outputs) {
     const rel = path.relative(ROOT, file).split(path.sep).join("/");
     const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+    // 只有 Cocos 工程（客户端 assets）需要 .meta；管理端是 Vite 工程，写 .meta 只是垃圾文件
+    const isCocosAsset = file.startsWith(path.join(ROOT, "assets"));
+
     if (current === content) {
+      // 内容没变也要保证 .meta 在：新克隆的仓库、meta 被误删时，光靠「内容变了才补」补不回来
+      if (isCocosAsset && !check && ensureMeta(file)) metaRepaired.push(rel);
       results.push({ file: rel, status: "same" });
       continue;
     }
@@ -646,7 +657,7 @@ function main() {
     }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, content, "utf8");
-    ensureMeta(file);
+    if (isCocosAsset && ensureMeta(file)) metaRepaired.push(rel);
     results.push({ file: rel, status: current === null ? "created" : "updated" });
   }
 
@@ -661,6 +672,7 @@ function main() {
     console.log("接口文件生成 / api codegen");
     console.log(`  server/openapi.json → ${operations.length} 个接口 / ${outputs.size} 个文件`);
     for (const item of results) console.log(`  ${item.status === "same" ? "·" : "✓"} ${item.file}${item.status === "same" ? "（未变）" : ""}`);
+    if (metaRepaired.length) console.log(`  ✓ 补回 ${metaRepaired.length} 个缺失的 .meta：${metaRepaired.join("、")}`);
   }
 
   if (check && stale.length) {

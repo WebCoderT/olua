@@ -1,5 +1,5 @@
 import { getText } from "../../../configs/texts";
-import { ApiErrorTextKey, RELOGIN_BIZ_CODES } from "./ApiRoutes";
+import { ApiErrorTextKey, RELOGIN_BIZ_CODES } from "./ApiCodes";
 
 /** 错误归类 */
 export enum ApiErrorKind {

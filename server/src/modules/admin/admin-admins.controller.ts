@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Query } from "@nestjs/comm
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
+import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
@@ -28,6 +29,7 @@ export class AdminAdminsController {
     description: "keyword 模糊匹配管理员账号名；role 可按角色筛选。",
     permissions: [Permission.ADMIN_READ],
   })
+  @ApiQueryModel(AdminQueryDto)
   @ApiDataResponse(AdminPageDto, { description: "分页结果（list/total/page/size）" })
   list(@Query() query: AdminQueryDto): PageResult<AdminDto> {
     return this.adminService.listAdmins(query);

@@ -125,13 +125,27 @@ function notifyError(error: ApiError, config: RequestConfig): ApiError {
   return error;
 }
 
+/**
+ * 业务侧可传的选项（生成的方法签名里统一是最后一个 `options` 参数）
+ *
+ * `path / method / body` 由生成的接口方法填好，调用方只管这几项开关。
+ */
+export interface HttpOptions {
+  query?: RequestConfig["query"];
+  auth?: boolean;
+  silent?: boolean;
+}
+
 /** 业务侧只认这几个方法 */
 export const http = {
-  get: <T>(path: string, options: { query?: RequestConfig["query"]; auth?: boolean; silent?: boolean } = {}) =>
+  get: <T>(path: string, options: HttpOptions = {}) =>
     request<T>({ method: "GET", path, query: options.query, auth: options.auth ?? true, silent: options.silent }),
-  post: <T>(path: string, body?: unknown, options: { auth?: boolean; silent?: boolean } = {}) =>
+  post: <T>(path: string, body?: unknown, options: HttpOptions = {}) =>
     request<T>({ method: "POST", path, body, auth: options.auth ?? true, silent: options.silent }),
-  put: <T>(path: string, body?: unknown) => request<T>({ method: "PUT", path, body }),
-  patch: <T>(path: string, body?: unknown) => request<T>({ method: "PATCH", path, body }),
-  del: <T>(path: string) => request<T>({ method: "DELETE", path }),
+  put: <T>(path: string, body?: unknown, options: HttpOptions = {}) =>
+    request<T>({ method: "PUT", path, body, auth: options.auth ?? true, silent: options.silent }),
+  patch: <T>(path: string, body?: unknown, options: HttpOptions = {}) =>
+    request<T>({ method: "PATCH", path, body, auth: options.auth ?? true, silent: options.silent }),
+  del: <T>(path: string, options: HttpOptions = {}) =>
+    request<T>({ method: "DELETE", path, auth: options.auth ?? true, silent: options.silent }),
 };

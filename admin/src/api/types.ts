@@ -1,3 +1,14 @@
+/**
+ * 接口层里**手写**的那部分：请求错误、业务码、权限点、展示字典
+ *
+ * 另一半（接口路径 / 接口方法 / 实体类型）由 `tools/gen-api.cjs` 从服务端 OpenAPI 文档生成：
+ * - `./routes`     —— 路径表（唯一来源）
+ * - `./endpoints`  —— 接口方法（authApi / accountsApi / adminsApi / rolesApi）
+ * - `./models`     —— 实体类型（服务端 DTO 的镜像）
+ *
+ * 这里只放**服务端文档里没有的东西**：客户端的错误模型、业务码子集、权限点清单、中文展示字典。
+ */
+
 /** 统一响应包裹（与服务端 common/interfaces/api-envelope.interface 一一对应） */
 export interface ApiEnvelope<T> {
   code: number;
@@ -7,7 +18,13 @@ export interface ApiEnvelope<T> {
   path?: string;
 }
 
-/** 分页结果 */
+/**
+ * 分页结果（与服务端的 `PageMetaDto` + list 结构一致）
+ *
+ * 服务端每个列表接口都有自己的分页 DTO（`AccountPage` / `AdminPage` / `AdminRolePage`），
+ * 结构完全一致；这里留一个泛型别名，页面上写 `PageResult<Account>` 更省事。
+ * 二者结构相同，可以互相赋值。
+ */
 export interface PageResult<T> {
   list: T[];
   total: number;
@@ -59,151 +76,6 @@ export class ApiError extends Error {
     return this.status === 401 || RELOGIN_CODES.includes(this.code);
   }
 }
-
-//#region 业务实体（字段与服务端 DTO 一致）
-
-export interface AdminInfo {
-  id: string;
-  username: string;
-  status: string;
-  /** super_admin / admin / viewer */
-  role: string;
-  /** 角色中文名 */
-  roleLabel: string;
-  /** 权限点清单（服务端权限表的副本，界面据此显隐；服务端仍会独立校验） */
-  permissions: string[];
-  createdAt: number;
-  lastLoginAt: number | null;
-}
-
-export interface AdminAuthResult {
-  token: string;
-  expiresIn: string;
-  admin: AdminInfo;
-}
-
-export interface Account {
-  id: string;
-  username: string;
-  /** active 正常 / disabled 封禁 */
-  status: string;
-  onlineRoleId: string | null;
-  roleCount?: number;
-  createdAt: number;
-  updatedAt: number;
-  lastLoginAt: number | null;
-}
-
-export interface RoleSummary {
-  id: string;
-  accountId: string;
-  name: string;
-  occupation: string;
-  sex: string;
-  level: number;
-  online: boolean;
-  /** 修订号（每次落库 +1；玩家推进度时用它做乐观锁，管理端只展示） */
-  revision: number;
-  createdAt: number;
-  updatedAt: number;
-}
-
-/** 角色完整信息（data 是客户端 entities/Role 的快照） */
-export interface AdminRole extends RoleSummary {
-  accountName: string | null;
-  data: Record<string, unknown>;
-}
-
-export interface AccountDetail {
-  account: Account;
-  roles: RoleSummary[];
-}
-
-export interface AdminStats {
-  accountCount: number;
-  roleCount: number;
-  onlineAccountCount: number;
-  todayNewAccountCount: number;
-  adminCount: number;
-}
-
-/**
- * 管理端可编辑的角色字段（与服务端 AdminPatchRoleDto 一致）
- *
- * 分成三组：基础信息 / 常用数值 / 运行时数据（结构化）。
- * 保存时只提交改动过的字段（见 RoleDetailPage.buildPatch），避免把并发改动覆盖掉。
- */
-export interface RolePatchPayload {
-  // 基础信息
-  name?: string;
-  occupation?: string;
-  sex?: string;
-  level?: number;
-  /** 时装（外观）id；null = 取消时装 */
-  fashionCloth?: number | null;
-  avatar?: number;
-  /** 所在地图 id（客户端 configs/map 的 key） */
-  onMap?: string;
-  // 常用数值
-  gold?: number;
-  bindGold?: number;
-  silver?: number;
-  exp?: number;
-  soulOfWar?: number;
-  title?: number;
-  rank?: number;
-  // 运行时数据（结构化）
-  /** 装备穿戴表：槽位名 → 装备 id（null 表示该槽位空着） */
-  equipments?: Record<string, string | null>;
-  /** 技能等级表：技能 id → 等级 */
-  skills?: Record<string, number>;
-  /** 背包格子（稀疏：只报有东西的格子）；空数组 = 清空背包 */
-  bag?: RoleBagCell[];
-}
-
-/** 背包里的一个格子（服务端 RoleBagCellDto） */
-export interface RoleBagCell {
-  row: number;
-  col: number;
-  id: string;
-  count: number;
-}
-
-/**
- * 角色列表筛选条件（与服务端 RoleQueryDto 一致）
- *
- * 刻意写成 type 而不是 interface：请求层的 query 参数类型是个 Record，
- * 只有对象**类型别名**才会被推断出隐式索引签名（interface 不会，赋值时会报「缺少索引签名」）。
- */
-export type RoleListQuery = {
-  page?: number;
-  size?: number;
-  /** 同时匹配角色名与角色 id */
-  keyword?: string;
-  accountId?: string;
-  /** "true" 只看在线（账号当前选中的）角色；"false" 只看离线 */
-  online?: string;
-  occupation?: string;
-  sex?: string;
-  minLevel?: number;
-  maxLevel?: number;
-};
-
-/** 批量删除 / 清空角色 的结果 */
-export interface BatchDeleteResult {
-  requested: number;
-  deleted: number;
-  ids: string[];
-  clearedOnlineAccountIds: string[];
-}
-
-/** 管理端改管理员（改角色 / 启停；仅 admin:manage 可调） */
-export interface AdminUpdatePayload {
-  role?: string;
-  status?: string;
-}
-
-//#endregion
 
 //#region 权限（与服务端 common/constants/permission.ts 一一对应）
 

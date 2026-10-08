@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { formatTime, OCCUPATION_LABELS, PERMISSION, rolesApi, SEX_LABELS } from "../api";
-import type { AdminRole, PageResult, RoleListQuery } from "../api";
+import type { AdminRole, PageResult, RoleQuery } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -23,7 +23,7 @@ interface RoleFilterForm {
 const EMPTY_FILTER: RoleFilterForm = { keyword: "", online: "", occupation: "", sex: "", minLevel: "", maxLevel: "" };
 
 /** 表单 → 接口查询参数（空值不传；等级只收数字） */
-function toQuery(form: RoleFilterForm, accountId: string, page: number): RoleListQuery {
+function toQuery(form: RoleFilterForm, accountId: string, page: number): RoleQuery {
   const level = (value: string) => {
     const parsed = Number(value);
     return value.trim() !== "" && Number.isInteger(parsed) ? parsed : undefined;
@@ -33,9 +33,10 @@ function toQuery(form: RoleFilterForm, accountId: string, page: number): RoleLis
     size: PAGE_SIZE,
     keyword: form.keyword.trim() || undefined,
     accountId: accountId || undefined,
-    online: form.online || undefined,
-    occupation: form.occupation || undefined,
-    sex: form.sex || undefined,
+    // 表单是受控输入（字符串），这里收口到服务端枚举：取值非法服务端也会拒（40000）
+    online: (form.online || undefined) as RoleQuery["online"],
+    occupation: (form.occupation || undefined) as RoleQuery["occupation"],
+    sex: (form.sex || undefined) as RoleQuery["sex"],
     minLevel: level(form.minLevel),
     maxLevel: level(form.maxLevel),
   };
@@ -124,7 +125,7 @@ export function RolesPage() {
     if (selectedIds.length === 0) return;
     setDeleting(true);
     try {
-      const result = await rolesApi.batchRemove(selectedIds);
+      const result = await rolesApi.batchRemove({ ids: selectedIds });
       toastSuccess(
         result.deleted > 0
           ? `已删除 ${result.deleted} 个角色${result.deleted < result.requested ? `（${result.requested - result.deleted} 个已不存在）` : ""}`

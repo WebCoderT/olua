@@ -831,7 +831,10 @@
         },
         "x-olua-permissions": [
           "account:read"
-        ]
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AccountQueryDto"
+        }
       }
     },
     "/admin/accounts/{id}": {
@@ -1221,7 +1224,10 @@
         },
         "x-olua-permissions": [
           "role:read"
-        ]
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/RoleQueryDto"
+        }
       }
     },
     "/admin/roles/batch-delete": {
@@ -1607,7 +1613,10 @@
         },
         "x-olua-permissions": [
           "admin:read"
-        ]
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AdminQueryDto"
+        }
       }
     },
     "/admin/admins/{id}": {

@@ -70,14 +70,14 @@ export class Login extends Component {
   async login() {
     const credentials = this.readCredentials();
     if (!credentials) return;
-    await this.submit(() => AuthApi.login(credentials.username, credentials.password));
+    await this.submit(() => AuthApi.login({ username: credentials.username, password: credentials.password }));
   }
 
   /** 注册（成功后直接进选角场景，无需再登录一次） */
   async register() {
     const credentials = this.readCredentials();
     if (!credentials) return;
-    await this.submit(() => AuthApi.register(credentials.username, credentials.password));
+    await this.submit(() => AuthApi.register({ username: credentials.username, password: credentials.password }));
   }
 
   /** 读输入框（为空时提示并返回 null） */

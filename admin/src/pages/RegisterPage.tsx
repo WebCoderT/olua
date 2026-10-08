@@ -25,7 +25,8 @@ export function RegisterPage() {
     }
     setLoading(true);
     try {
-      const result = await authApi.register({ username, password, registerCode: registerCode || undefined });
+      // 静默：注册页自己就地展示错误，不需要全局提示再弹一次
+      const result = await authApi.register({ username, password, registerCode: registerCode || undefined }, { silent: true });
       saveSession(result.token, result.admin);
       navigate("/", { replace: true });
     } catch (err) {

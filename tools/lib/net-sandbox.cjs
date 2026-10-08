@@ -30,6 +30,8 @@ const FILES = [
   "configs/texts.ts",
   "types/common.ts",
   "ui/utils/net/ApiRoutes.ts",
+  "ui/utils/net/ApiModels.ts",
+  "ui/utils/net/ApiCodes.ts",
   "ui/utils/net/ApiError.ts",
   "ui/utils/net/Session.ts",
   "ui/utils/net/HttpClient.ts",
@@ -158,6 +160,7 @@ function prepareNet(sandboxName) {
   const load = (rel) => require(path.join(outDir, rel));
   const network = load("configs/network.js");
   const routes = load("ui/utils/net/ApiRoutes.js");
+  const codes = load("ui/utils/net/ApiCodes.js");
   const errors = load("ui/utils/net/ApiError.js");
   return {
     sandbox,
@@ -169,12 +172,15 @@ function prepareNet(sandboxName) {
     describeError: errors.describeError,
     Session: pick(load("ui/utils/net/Session.js")),
     Api: load("ui/utils/net/Api.js"),
+    /** 生成物：服务端 DTO 的镜像 */
+    ApiModels: load("ui/utils/net/ApiModels.js"),
     RoleSync: pick(load("ui/utils/net/RoleSync.js")),
     ApiRoutes: routes.ApiRoutes,
-    ApiErrorTextKey: routes.ApiErrorTextKey,
-    RELOGIN_BIZ_CODES: routes.RELOGIN_BIZ_CODES,
+    /** 请求层常量（OpenAPI 表达不了，手写在 ApiCodes） */
+    ApiErrorTextKey: codes.ApiErrorTextKey,
+    RELOGIN_BIZ_CODES: codes.RELOGIN_BIZ_CODES,
     /** 角色同步要特殊处理的业务码（乐观锁冲突 / 角色不存在） */
-    ROLE_SYNC_BIZ_CODES: routes.ROLE_SYNC_BIZ_CODES,
+    ROLE_SYNC_BIZ_CODES: codes.ROLE_SYNC_BIZ_CODES,
     /** 真实的 getText（断言兜底文案时比对，避免测试里写死中文） */
     getText: load("configs/texts.js").getText,
     /** cc 垫片（测试用 __store 清场） */

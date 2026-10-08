@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
+import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
@@ -26,6 +27,7 @@ export class AdminRolesController {
       "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。",
     permissions: [Permission.ROLE_READ],
   })
+  @ApiQueryModel(RoleQueryDto)
   @ApiDataResponse(AdminRolePageDto, { description: "分页结果（list/total/page/size）" })
   list(@Query() query: RoleQueryDto): PageResult<AdminRoleDto> {
     return this.adminService.listRoles(query);

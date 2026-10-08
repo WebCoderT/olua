@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { adminRoleLabel, adminsApi, ADMIN_ROLE, ADMIN_ROLE_LABELS, formatTime, PERMISSION } from "../api";
-import type { AdminInfo, PageResult } from "../api";
+import type { AdminInfo, AdminQuery, AdminUpdatePayload, PageResult } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -42,7 +42,7 @@ export function AdminsPage() {
           page,
           size: PAGE_SIZE,
           keyword: query.keyword || undefined,
-          role: query.role || undefined,
+          role: (query.role || undefined) as AdminQuery["role"],
         }),
       );
     } catch {
@@ -71,7 +71,8 @@ export function AdminsPage() {
   const changeRole = async (admin: AdminInfo, role: string) => {
     setBusyId(admin.id);
     try {
-      await adminsApi.update(admin.id, { role });
+      // 下拉框给的是字符串，收口到服务端枚举；非法值服务端同样会拒
+      await adminsApi.update(admin.id, { role: role as AdminUpdatePayload["role"] });
       toastSuccess(`已把 ${admin.username} 改为${adminRoleLabel(role)}`);
       await load();
     } catch {

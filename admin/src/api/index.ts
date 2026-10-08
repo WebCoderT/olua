@@ -1,32 +1,26 @@
 /**
  * 接口层统一出口
  *
- * 页面只从这里 import（`import { accountsApi } from "../api"`），
+ * 页面只从这里 import（`import { rolesApi } from "../api"`），
  * 于是「地址从哪来、怎么发、错误怎么归一」永远收在 api/ 目录里。
+ *
+ * 三块内容各有归属：
+ * - **生成物**（禁止手改）：`./endpoints` 接口方法 + `./models` 实体类型 + `./routes` 路径表，
+ *   由 `tools/gen-api.cjs` 从服务端 OpenAPI 文档生成；
+ * - **手写**：`./types` 里的错误模型、业务码、权限点、展示字典（服务端文档描述不了它们）；
+ * - `./config` / `./http`：地址与请求实现，页面不直接碰。
  */
-export { authApi } from "./auth.api";
-export { accountsApi } from "./accounts.api";
-export { adminsApi } from "./admins.api";
-export { rolesApi } from "./roles.api";
+export { authApi, accountsApi, adminsApi, rolesApi } from "./endpoints";
+export { routes } from "./routes";
+export type * from "./models";
+
 export { ApiError } from "./types";
-export type {
-  Account,
-  AccountDetail,
-  AdminInfo,
-  AdminRole,
-  AdminStats,
-  AdminUpdatePayload,
-  BatchDeleteResult,
-  PageResult,
-  RoleBagCell,
-  RoleListQuery,
-  RolePatchPayload,
-  RoleSummary,
-} from "./types";
+export type { ApiEnvelope, PageResult, PermissionValue } from "./types";
 export {
   ADMIN_ROLE,
-  adminRoleLabel,
   ADMIN_ROLE_LABELS,
+  adminRoleLabel,
+  BIZ_CODE,
   formatTime,
   OCCUPATION_LABELS,
   PERMISSION,

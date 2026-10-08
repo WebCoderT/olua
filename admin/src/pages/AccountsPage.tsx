@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { accountsApi, PERMISSION } from "../api";
-import type { Account, PageResult } from "../api";
+import type { Account, AccountQuery, PageResult } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -31,7 +31,7 @@ export function AccountsPage() {
         page,
         size: PAGE_SIZE,
         keyword: query.keyword || undefined,
-        status: query.status || undefined,
+        status: (query.status || undefined) as AccountQuery["status"],
       });
       setData(result);
     } catch {
@@ -61,7 +61,7 @@ export function AccountsPage() {
     const next = account.status === "active" ? "disabled" : "active";
     setBusyId(account.id);
     try {
-      await accountsApi.updateStatus(account.id, next);
+      await accountsApi.updateStatus(account.id, { status: next });
       toastSuccess(next === "disabled" ? `已封禁 ${account.username}` : `已解封 ${account.username}`);
       await load();
     } catch {

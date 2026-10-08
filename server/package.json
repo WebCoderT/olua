@@ -11,10 +11,11 @@
     "start": "node --disable-warning=ExperimentalWarning dist/main.js",
     "dev": "node --disable-warning=ExperimentalWarning -r ts-node/register src/main.ts",
     "test:e2e": "node --disable-warning=ExperimentalWarning test/e2e.cjs",
+    "test:e2e:roles": "node --disable-warning=ExperimentalWarning test/e2e-roles.cjs",
     "swagger:emit": "npm run build && node --disable-warning=ExperimentalWarning dist/swagger/emit.js",
     "gen:api": "npm run swagger:emit && node ../tools/gen-api.cjs",
     "verify:api": "npm run swagger:emit && node ../tools/audit-api-generated.cjs",
-    "verify": "npm run build && npm run test:e2e && npm run verify:api"
+    "verify": "npm run build && npm run test:e2e && npm run test:e2e:roles && npm run verify:api"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

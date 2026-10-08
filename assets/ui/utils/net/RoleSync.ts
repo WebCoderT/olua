@@ -1,15 +1,9 @@
 import { networkConfig } from "../../../configs/network";
 import { Role } from "../../../entities/Role";
 import { RoleApi } from "./Api";
+import type { RoleDetail } from "./Api";
 import ApiError from "./ApiError";
-import { ROLE_SYNC_BIZ_CODES } from "./ApiRoutes";
-
-/** 服务端返回的角色完整数据（只取这个文件用到的字段，不把 API 的类型链拖进来） */
-interface ServerRoleDetail {
-  id: string;
-  revision: number;
-  data: unknown;
-}
+import { ROLE_SYNC_BIZ_CODES } from "./ApiCodes";
 
 /**
  * 角色进度同步（把本地存档写穿到服务端）
@@ -37,7 +31,7 @@ export default class RoleSync {
   /** 推送成功：服务端给了新的修订号（存储层要记下来当下一次的基线） */
   static onSaved: ((roleId: string, revision: number) => void) | null = null;
   /** 撞上乐观锁且已拉到服务端最新数据（后台改过这个角色） */
-  static onConflict: ((fresh: ServerRoleDetail) => void) | null = null;
+  static onConflict: ((fresh: RoleDetail) => void) | null = null;
   /** 角色在服务端已不存在（被后台删了）：本地不该继续玩一个不存在的角色 */
   static onMissing: ((roleId: string) => void) | null = null;
 
@@ -68,7 +62,12 @@ export default class RoleSync {
     // 不带 = 服务端按旧行为处理（最后写入者胜），比拿一个瞎猜的版本号去撞乐观锁强
     const revision = typeof role.revision === "number" ? role.revision : undefined;
     try {
-      const saved = await RoleApi.save(role.id, role, true, revision);
+      const saved = await RoleApi.save(
+        role.id,
+        // 角色对象是 entities/Role 的实例，服务端只把它当不透明文档，所以按记录类型交给请求层
+        { data: role as unknown as Record<string, unknown>, revision },
+        { silent: true },
+      );
       if (saved && typeof saved.revision === "number") {
         role.revision = saved.revision;
         this.onSaved?.(role.id, saved.revision);
@@ -101,7 +100,7 @@ export default class RoleSync {
     try {
       // 静默：这条请求是「自愈流程」的一部分，失败提示由本流程统一给（见下面的 console.warn），
       // 走默认出口会在玩家已经看到「已同步最新」之后又弹一条报错
-      const fresh = (await RoleApi.detail(role.id, true)) as unknown as ServerRoleDetail;
+      const fresh = await RoleApi.detail(role.id, { silent: true });
       console.warn(`[RoleSync] 角色已在后台被修改（${role.id}），已同步到最新数据`);
       this.onConflict?.(fresh);
       this.notified = false;

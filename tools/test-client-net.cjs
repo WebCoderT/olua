@@ -138,7 +138,7 @@ async function expectFailure(action) {
 
   reset();
   responder = () => ({ kind: "ok", status: 200, text: envelope(20005, "角色名称重复", null) });
-  const bizError = await expectFailure(() => Api.RoleApi.create({ id: "role_x", name: "战士甲" }));
+  const bizError = await expectFailure(() => Api.RoleApi.create({ data: { id: "role_x", name: "战士甲" } }));
   check(
     bizError instanceof ApiError && bizError.kind === ApiErrorKind.Business && bizError.code === 20005,
     "业务失败归一成 ApiError(Business) 并带业务码",
@@ -178,19 +178,19 @@ async function expectFailure(action) {
 
   reset();
   Session.clear();
-  await Api.AuthApi.login("user001", "123456");
+  await Api.AuthApi.login({ username: "user001", password: "123456" });
   check(requests[0].headers.Authorization === undefined, "auth:false 的接口不带令牌（登录 / 注册）");
 
   console.log("— A. 静默模式：后台同步失败不刷屏，但令牌失效照样回登录 —");
 
   reset();
   responder = () => ({ kind: "error" });
-  await expectFailure(() => Api.RoleApi.save("role_1", { id: "role_1" }, true));
+  await expectFailure(() => Api.RoleApi.save("role_1", { data: { id: "role_1" } }, { silent: true }));
   check(failures.length === 0, "静默请求失败不弹全局提示（调用方自己决定怎么提示）", `${failures.length} 次`);
 
   reset();
   responder = () => ({ kind: "ok", status: 200, text: envelope(40100, "未登录", null) });
-  await expectFailure(() => Api.RoleApi.save("role_1", { id: "role_1" }, true));
+  await expectFailure(() => Api.RoleApi.save("role_1", { data: { id: "role_1" } }, { silent: true }));
   check(relogins.length === 1, "静默模式下令牌失效仍然回登录场景（闷掉会卡在永远失败的游戏里）", `${relogins.length} 次`);
   check(net.RELOGIN_BIZ_CODES.indexOf(40100) !== -1, "40100 登记在需要重登的业务码里");
 
@@ -343,7 +343,7 @@ async function expectFailure(action) {
     /await RoleApi\.select\(roleId\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource),
     "进游戏：服务端 select 返回完整数据（含修订号）→ 写本地缓存",
   );
-  check(/await RoleApi\.create\(new Role\(name, occupation, sex\)\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource), "创建角色：服务端落库后回传的完整数据（含修订号）写进缓存");
+  check(/await RoleApi\.create\(\{ data: new Role\(name, occupation, sex\) as unknown as Record<string, unknown> \}\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource), "创建角色：服务端落库后回传的完整数据（含修订号）写进缓存");
   const removeIndex = selectorSource.indexOf("await RoleApi.remove(roleId)");
   const deleteIndex = selectorSource.indexOf("StorageManager.deleteRole(roleId)");
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");
@@ -371,9 +371,9 @@ async function expectFailure(action) {
   );
 
   const roleSyncSource = read(path.join(ASSETS, "ui/utils/net/RoleSync.ts"));
-  check(/RoleApi\.save\(role\.id, role, true, revision\)/.test(roleSyncSource), "推送时把修订号交给请求层（乐观锁的唯一来源）");
+  check(/RoleApi\.save\(\s*role\.id,[\s\S]*?\{ data: role as unknown as Record<string, unknown>, revision \},[\s\S]*?\{ silent: true \},?\s*\)/.test(roleSyncSource), "推送时把修订号交给请求层（乐观锁的唯一来源）");
   check(
-    /ROLE_SYNC_BIZ_CODES\.revisionConflict/.test(roleSyncSource) && /await RoleApi\.detail\(role\.id, true\)/.test(roleSyncSource),
+    /ROLE_SYNC_BIZ_CODES\.revisionConflict/.test(roleSyncSource) && /await RoleApi\.detail\(role\.id, \{ silent: true \}\)/.test(roleSyncSource),
     "撞乐观锁时先静默拉一次最新数据再交给上层（不重试、不覆盖、不额外弹错误）",
   );
   check(/ROLE_SYNC_BIZ_CODES\.missing/.test(roleSyncSource) && /this\.onMissing\?\.\(role\.id\)/.test(roleSyncSource), "角色不存在的分支交给上层自愈");

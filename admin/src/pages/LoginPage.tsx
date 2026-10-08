@@ -19,7 +19,8 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const result = await authApi.login({ username, password });
+      // 静默：登录页自己就地展示错误，不需要全局提示再弹一次
+      const result = await authApi.login({ username, password }, { silent: true });
       saveSession(result.token, result.admin);
       navigate("/", { replace: true });
     } catch (err) {

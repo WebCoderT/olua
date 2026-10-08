@@ -87,6 +87,9 @@
 >
 > 另一条铁律：**接口地址不写进代码**（客户端 `configs/network`、管理端 `admin/.env.*`、服务端 `server/.env` 是各自唯一来源），
 > 请求只能从唯一那一层发出。自查：`node tools/audit-api-hardcode.cjs`。
+>
+> 第三条：**两端与接口打交道的文件全部由服务端 Swagger 文档生成，禁止手改**（改接口只改服务端，再重新生成）。
+> 自查：`node tools/audit-api-generated.cjs`。详见 [接口文件由 Swagger 生成](#接口文件由-swagger-生成)。
 
 - assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background/title/light/mall 等）
   - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）
@@ -101,7 +104,9 @@
   - ui/components：按职责分组（hud/panel/dialogs/role/input/map）
   - ui/helpers：UI 生成（UiHelper 基础封装 / GameUiHelper 零件库 / AnimationHelper 帧动画）
   - ui/utils：纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/node）
-  - ui/utils/net：**对服务端的全部访问**（HttpClient 二次封装与统一调度 / ApiRoutes 路径表 / Api 接口 / Session 会话 / RoleSync 进度同步 / NetworkSetup 接线）
+  - ui/utils/net：**对服务端的全部访问**
+    - 生成物（禁止手改）：`ApiRoutes` 路径表 / `ApiModels` 类型（服务端 DTO 的镜像）/ `Api` 接口方法（`HealthApi`·`AuthApi`·`RoleApi`）
+    - 手写：`HttpClient` 二次封装与统一调度 / `ApiCodes` 业务码与文案 key / `ApiError` 错误归一 / `Session` 会话 / `RoleSync` 进度同步 / `NetworkSetup` 接线
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
 - server：**NestJS 服务端**（登录 / 注册 / 角色操作 + 管理端接口，SQLite 落库，Swagger 文档）
@@ -111,14 +116,16 @@
   - src/database：SQLite 连接与三张表（accounts / roles / admins，含存量补列）的仓储层
   - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / **管理员**）/ token（JWT）/ health
   - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
+  - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
+  - openapi.json：机器可读契约（提交进仓库；改接口后必须重新生成，否则两端停在旧契约上）
   - test/e2e.cjs：端到端用例（真实起服务 + 真实请求，187 条断言：注册登录 / 角色 CRUD / 越权 / 令牌受众隔离 / 管理端全流程 / **文档分组与权限点** / **四级越权与超管保护**）
   - test/e2e-roles.cjs：**角色管理专项**用例（76 条断言：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档）
 - admin：**React + Tailwind 管理端**（登录注册、账号管理、账号下的角色管理、**管理员与权限**）
-  - src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）+ 接口模块
+  - src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）
+    + **生成物** `routes.ts` 路径表 / `models.ts` 类型 / `endpoints.ts` 接口方法（`authApi`·`accountsApi`·`adminsApi`·`rolesApi`）+ 手写的 `types.ts`（枚举字典与门面类型）与 `index.ts`（统一出口）
   - src/pages：登录 / 注册 / 概览 / 账号列表与详情（含清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员
   - 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
-  - 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
-- tools：本地校验脚本（审计：配置外泄 / 点击穿透 / **接口地址硬编码**；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 弹窗层级 / 摇杆 / 称号 / 军衔 / 新手背包 / 商城 / 装备光柱 / 角色默认外观 / 角色帧素材 / 装备外观切片 / 文案 / 角色删除 / **客户端网络层**）+ 边框素材索引图 border-preview.png
+- tools：本地校验脚本（代码生成：**`gen-api.cjs` 由 OpenAPI 产出两端接口文件**；审计：配置外泄 / 点击穿透 / 接口地址硬编码 / **生成物一致性**；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 弹窗层级 / 摇杆 / 称号 / 军衔 / 新手背包 / 商城 / 装备光柱 / 角色默认外观 / 角色帧素材 / 装备外观切片 / 文案 / 角色删除 / **客户端网络层**）+ 边框素材索引图 border-preview.png
 - website：项目官网（纯静态单页：核心特色 / 截图画廊 / 联系方式，logo 与 favicon 在 website/assets/icons）
 - public：截图、展示素材与联系方式二维码
 
@@ -146,7 +153,8 @@ npm run dev              # 开发（热编译）；或 npm run start 跑已构�
 - 健康检查：`GET http://localhost:3100/api/health`
 - 数据库：默认 `server/data/olua.db`（SQLite，首次启动自动建表，删账号会级联删其角色）
 - 回归：`npm run test:e2e`（真实起服务 + 真实请求，187 条断言）
-- 角色管理专项：`npm run build && node test/e2e-roles.cjs`（76 条断言，改角色相关接口后先跑它）
+- 角色管理专项：`npm run test:e2e:roles`（76 条断言，改角色相关接口后先跑它）
+- 一条命令全验：`npm run verify`（编译 + 两套 e2e + 生成物一致性）
 
 ### 2. 客户端（Cocos）
 
@@ -169,6 +177,49 @@ npm run dev                        # 开发；npm run build 产出 dist
 
 管理端注册需要在 `server/.env` 里配 `ADMIN_REGISTER_CODE`（留空则开放注册），注册时填同一个注册码。
 **第一个**注册的管理员自动成为超级管理员（全部权限），之后的都是普通管理员，要提权由超管在「管理员」页调整。
+
+### 4. 接口文件由 Swagger 生成
+
+客户端与管理端**不手写任何接口文件**：接口路径、方法名、请求/响应类型全部从服务端的 Swagger 文档产出。
+这样「服务端改一个字段、另外两端忘了改」这类问题会变成**编译报错**，而不是线上出现一个 `undefined`。
+
+```
+server/src（控制器 + DTO + 装饰器）           ← 唯一需要手写的地方
+        │  cd server && npm run swagger:emit
+        ▼
+server/openapi.json（机器可读契约，提交进仓库）
+        │  node tools/gen-api.cjs
+        ▼
+客户端 assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts
+管理端 admin/src/api/{routes,models,endpoints}.ts
+```
+
+**改接口的标准动作**（三步，一条命令也行）：
+
+```bash
+cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
+```
+
+1. 改服务端的控制器 / DTO / 装饰器（每个接口必须有 `operationId`，形如 `role.save`）；
+2. `npm run gen:api` 重新产出文档与两端接口文件；
+3. 两端 `tsc` / `npm run build` —— 有签名不兼容的地方会直接报出来（调用点按报错改）。
+
+**生成器怎么知道该生成什么**（约定都写进文档，不靠猜）：
+
+| 文档里的字段 | 由谁写 | 决定什么 |
+|---|---|---|
+| `operationId`（`<模块>.<方法>`） | `@ApiPublicDoc` / `@ApiPlayerDoc` / `@ApiAdminDoc` 的 `operationId` | 生成到哪个模块的哪个方法 |
+| `x-olua-audience` | 同上（装饰器自动加） | 是否带令牌（`public` → `auth: false`） |
+| `x-olua-data-schema` / `x-olua-data-nullable` | `@ApiDataResponse(...)` | 响应里 `data` 的类型（缺省 = `null`） |
+| `x-olua-query-schema` | `@ApiQueryModel(XxxQueryDto)` | query 参数对应的命名类型 |
+| `x-olua-permissions` | `@ApiAdminDoc({ permissions })` | 生成物注释里的「所需权限」（方便两端对照） |
+
+**生成物禁止手改**，`tools/audit-api-generated.cjs` 会逐条盯着：
+生成物与文档逐字节一致、带头标记没被抹掉、文档里 29 个接口都落到了方法上、
+`import` 的类型不悬空、路径只出现在路径表里、Cocos 侧 `.meta` 齐全。
+`tools/audit-api-hardcode.cjs` 另外确认「唯一来源文件确实是生成物」（标记没了就算硬编码）。
+
+> 在受限环境（例如注入了 `NODE_OPTIONS` 的终端）里跑服务端子进程需要清掉它：`env -u NODE_OPTIONS npm run test:e2e`。
 
 
 ## 预览与常见问题

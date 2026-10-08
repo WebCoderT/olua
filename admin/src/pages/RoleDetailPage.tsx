@@ -152,8 +152,9 @@ function buildPatch(role: AdminRole, form: RoleForm): RolePatchPayload {
   const patch: RolePatchPayload = {};
 
   if (form.name.trim() !== original.name) patch.name = form.name.trim();
-  if (form.occupation !== original.occupation) patch.occupation = form.occupation;
-  if (form.sex !== original.sex) patch.sex = form.sex;
+  // 表单是受控输入（字符串），赋值时收口到服务端枚举；非法值服务端会拒
+  if (form.occupation !== original.occupation) patch.occupation = form.occupation as RolePatchPayload["occupation"];
+  if (form.sex !== original.sex) patch.sex = form.sex as RolePatchPayload["sex"];
   if (form.onMap.trim() !== original.onMap) patch.onMap = form.onMap.trim();
 
   if (form.fashionCloth !== original.fashionCloth) {

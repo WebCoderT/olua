@@ -1,7 +1,7 @@
 import { networkConfig } from "../../../configs/network";
 import type { HttpMethod } from "../../../configs/network";
 import ApiError, { ApiErrorKind } from "./ApiError";
-import { ApiErrorTextKey } from "./ApiRoutes";
+import { ApiErrorTextKey } from "./ApiCodes";
 import Session from "./Session";
 
 /** 统一响应包裹（与服务端一致：{ code, message, data, timestamp }） */

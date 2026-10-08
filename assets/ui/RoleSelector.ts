@@ -480,7 +480,8 @@ export class RoleSelector extends Component {
     if (!name) return;
     this.busy = true;
     try {
-      const detail = await RoleApi.create(new Role(name, occupation, sex));
+      // 角色对象是 entities/Role 的实例；服务端只把它当不透明文档（结构 / 索引字段由服务端校验）
+      const detail = await RoleApi.create({ data: new Role(name, occupation, sex) as unknown as Record<string, unknown> });
       StorageManager.cacheServerRole(detail);
       GameUiHelper.createTip("role_create_success_tip");
       this.cancelCreateRoleUI();

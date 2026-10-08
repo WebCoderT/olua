@@ -1,5 +1,5 @@
 import { STORAGE_KEYS } from "../api/config";
-import type { AdminInfo } from "../api/types";
+import type { AdminInfo } from "../api";
 
 /**
  * 管理端会话（令牌 + 管理员信息）
