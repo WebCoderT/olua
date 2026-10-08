@@ -23,6 +23,7 @@ export class AdminAuthController {
   @Public()
   @Post("register")
   @ApiPublicDoc({
+    operationId: "adminAuth.register",
     summary: "注册管理员",
     description:
       "服务端配置了 `ADMIN_REGISTER_CODE` 时，registerCode 必须一致，否则拒绝注册。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。",
@@ -35,7 +36,7 @@ export class AdminAuthController {
   @Public()
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiPublicDoc({ summary: "管理员登录", description: "成功后把返回的 token 放到 `Authorization: Bearer <token>`。" })
+  @ApiPublicDoc({ operationId: "adminAuth.login", summary: "管理员登录", description: "成功后把返回的 token 放到 `Authorization: Bearer <token>`。" })
   @ApiDataResponse(AdminTokenDto, { description: "登录成功" })
   login(@Body() dto: AdminLoginDto): AdminTokenDto {
     return this.adminAuthService.login(dto);
@@ -43,6 +44,7 @@ export class AdminAuthController {
 
   @Get("me")
   @ApiAdminDoc({
+    operationId: "adminAuth.me",
     summary: "获取当前登录管理员",
     description: "返回当前管理员的角色与**权限点清单** —— 管理端据此显示 / 隐藏菜单与按钮（服务端仍会独立校验，前端隐藏只是体验）。",
   })

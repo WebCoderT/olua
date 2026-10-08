@@ -1,0 +1,2886 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "无需登录；用于客户端 / 管理端确认服务端可达。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "health.check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "服务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/HealthDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "健康检查",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/HealthDto"
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "description": "账号名唯一；注册成功直接返回令牌，无需再登录一次。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "auth.register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuthTokenDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "注册账号",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuthTokenDto"
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "auth.login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuthTokenDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "账号登录",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuthTokenDto"
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "description": "用令牌里的账号 id 查，不接受任何入参指定账号。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "auth.me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前账号",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AccountDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "获取当前登录账号",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AccountDto"
+        }
+      }
+    },
+    "/roles": {
+      "get": {
+        "description": "按创建时间升序；不含 data（选角列表用）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "角色概要列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RoleSummaryDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "角色列表",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/RoleSummaryDto"
+          }
+        }
+      },
+      "post": {
+        "description": "data 由客户端按自身配置生成；服务端校验结构、索引字段、数量上限与重名。第一个角色自动设为在线。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "创建角色",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RoleDto"
+        }
+      }
+    },
+    "/roles/online": {
+      "get": {
+        "description": "未选角色 / 在线角色已删时返回 null。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.online",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "在线角色完整数据，可能为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "当前在线角色",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RoleDto"
+        }
+      }
+    },
+    "/roles/{id}": {
+      "get": {
+        "description": "只能查自己账号下的角色（否则 403）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "角色完整数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "角色详情",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RoleDto"
+        }
+      },
+      "put": {
+        "description": "全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。\n\n请求体可带 `revision`（客户端上次读到的修订号）：带上即开启**乐观锁**，与服务端当前值不一致时返回 20006 （角色已在别处被修改），客户端应先拉一次详情、以最新数据为基线再继续推；不带则不做冲突校验。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.save",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存后的角色",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "保存角色进度",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RoleDto"
+        }
+      },
+      "delete": {
+        "description": "不可恢复；删的正好是在线角色时同时清掉在线标记。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "删除角色",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true
+      }
+    },
+    "/roles/{id}/select": {
+      "post": {
+        "description": "把该角色设为账号的在线角色。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.select",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "被选中的角色",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "选中（进入）角色",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RoleDto"
+        }
+      }
+    },
+    "/admin/auth/register": {
+      "post": {
+        "description": "服务端配置了 `ADMIN_REGISTER_CODE` 时，registerCode 必须一致，否则拒绝注册。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "adminAuth.register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminRegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminTokenDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "注册管理员",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminTokenDto"
+        }
+      }
+    },
+    "/admin/auth/login": {
+      "post": {
+        "description": "成功后把返回的 token 放到 `Authorization: Bearer <token>`。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "adminAuth.login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminTokenDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "管理员登录",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminTokenDto"
+        }
+      }
+    },
+    "/admin/auth/me": {
+      "get": {
+        "description": "返回当前管理员的角色与**权限点清单** —— 管理端据此显示 / 隐藏菜单与按钮（服务端仍会独立校验，前端隐藏只是体验）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）；本接口只操作当前登录管理员自身，不需要额外权限点。",
+        "operationId": "adminAuth.me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前管理员",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "获取当前登录管理员",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminDto"
+        },
+        "x-olua-permissions": []
+      }
+    },
+    "/admin/stats": {
+      "get": {
+        "description": "**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminAccount.stats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统计数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminStatsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "概览统计",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminStatsDto"
+        },
+        "x-olua-permissions": [
+          "stats:read"
+        ]
+      }
+    },
+    "/admin/accounts": {
+      "get": {
+        "description": "keyword 模糊匹配账号名；status 可按状态筛选。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminAccount.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "状态筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "disabled"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AccountPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "账号列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AccountPageDto"
+        },
+        "x-olua-permissions": [
+          "account:read"
+        ]
+      }
+    },
+    "/admin/accounts/{id}": {
+      "get": {
+        "description": "返回账号信息 + 名下角色概要列表。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminAccount.detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "账号详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminAccountDetailDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "账号详情",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminAccountDetailDto"
+        },
+        "x-olua-permissions": [
+          "account:read"
+        ]
+      },
+      "delete": {
+        "description": "名下角色一并删除（外键级联），不可恢复。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:delete`（删除账号；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除账号",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "account:delete"
+        ]
+      }
+    },
+    "/admin/accounts/{id}/status": {
+      "patch": {
+        "description": "改完立刻生效：守卫每次请求都回查账号状态。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "变更后的账号",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AccountDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "封禁 / 解封账号",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AccountDto"
+        },
+        "x-olua-permissions": [
+          "account:status"
+        ]
+      }
+    },
+    "/admin/accounts/{id}/roles": {
+      "delete": {
+        "description": "账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.purgeRoles",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除结果（requested / deleted / ids / clearedOnlineAccountIds）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BatchDeleteResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "清空账号下的全部角色",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BatchDeleteResultDto"
+        },
+        "x-olua-permissions": [
+          "role:delete"
+        ]
+      }
+    },
+    "/admin/roles": {
+      "get": {
+        "description": "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRole.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "限定账号 id（查某账号下的全部角色）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "online",
+            "required": false,
+            "in": "query",
+            "description": "在线状态筛选：true 只看在线（账号当前选中的）角色",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "occupation",
+            "required": false,
+            "in": "query",
+            "description": "职业筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "2",
+                "3",
+                "4"
+              ]
+            }
+          },
+          {
+            "name": "sex",
+            "required": false,
+            "in": "query",
+            "description": "性别筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "2",
+                "3"
+              ]
+            }
+          },
+          {
+            "name": "minLevel",
+            "required": false,
+            "in": "query",
+            "description": "最低等级（含）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 1000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxLevel",
+            "required": false,
+            "in": "query",
+            "description": "最高等级（含）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 1000,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminRolePageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "角色列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminRolePageDto"
+        },
+        "x-olua-permissions": [
+          "role:read"
+        ]
+      }
+    },
+    "/admin/roles/batch-delete": {
+      "post": {
+        "description": "按 id 列表删除（最多 100 条）。已不存在的 id 静默跳过（幂等）；作为某个账号在线角色的会被顺带清掉在线标记。返回实际删除的条数与涉及的账号 id。\n\nPOST 而不是 DELETE 是因为要带请求体；用 200 而不是 201 —— 它不创建资源。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
+        "operationId": "adminRole.batchRemove",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteRolesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "删除结果（requested / deleted / ids / clearedOnlineAccountIds）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BatchDeleteResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "批量删除角色",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BatchDeleteResultDto"
+        },
+        "x-olua-permissions": [
+          "role:delete"
+        ]
+      }
+    },
+    "/admin/roles/{id}": {
+      "get": {
+        "description": "含完整 data（背包 / 装备等原样返回）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRole.detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "角色详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminRoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "角色详情",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminRoleDto"
+        },
+        "x-olua-permissions": [
+          "role:read"
+        ]
+      },
+      "patch": {
+        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
+        "operationId": "adminRole.patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPatchRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改后的角色",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminRoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改角色",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminRoleDto"
+        },
+        "x-olua-permissions": [
+          "role:write"
+        ]
+      },
+      "delete": {
+        "description": "不可恢复；是账号在线角色时一并清掉在线标记。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
+        "operationId": "adminRole.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除角色",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "role:delete"
+        ]
+      }
+    },
+    "/admin/roles/{id}/select": {
+      "post": {
+        "description": "把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:select`（切换在线角色；角色：超级管理员 / 管理员）",
+        "operationId": "adminRole.select",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "被设为在线的角色",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminRoleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "设为在线角色",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminRoleDto"
+        },
+        "x-olua-permissions": [
+          "role:select"
+        ]
+      }
+    },
+    "/admin/admins": {
+      "get": {
+        "description": "keyword 模糊匹配管理员账号名；role 可按角色筛选。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`admin:read`（查看管理员；角色：超级管理员 / 管理员）",
+        "operationId": "adminAdmin.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "description": "角色筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "super_admin",
+                "admin",
+                "viewer"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "管理员列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminPageDto"
+        },
+        "x-olua-permissions": [
+          "admin:read"
+        ]
+      }
+    },
+    "/admin/admins/{id}": {
+      "patch": {
+        "description": "改角色或启停。允许改自己（超管轮值），但**最后一个启用中的超级管理员**不能被降级 / 停用 —— 避免没人能进后台。改完立即生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`admin:manage`（管理管理员；角色：超级管理员）",
+        "operationId": "adminAdmin.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "管理员 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改后的管理员",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改管理员",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminDto"
+        },
+        "x-olua-permissions": [
+          "admin:manage"
+        ]
+      },
+      "delete": {
+        "description": "不可恢复；同样保护最后一个启用中的超级管理员。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`admin:manage`（管理管理员；角色：超级管理员）",
+        "operationId": "adminAdmin.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "管理员 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除管理员",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "admin:manage"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "olua 游戏服务端 API",
+    "description": "olua 客户端与管理端共用的服务端接口。\n\n**接口分三组**（左侧按组展示，顺序即权限层级）：\n1. **公共接口** —— 无需令牌（注册 / 登录 / 健康检查）\n2. **客户端** —— 需要 `player` 令牌（`/api/auth/login` 获取），只能操作自己账号的数据\n3. **管理端** —— 需要 `admin` 令牌（`/api/admin/auth/login` 获取），且每个接口还要求权限点\n\n**统一响应包裹**：所有接口（成功与失败）都是 `{ code, message, data, timestamp }`；\n`code = 0` 表示成功，其余见服务端 `common/constants/biz-code.ts`。\n\n**权限**：管理员分三级 —— 超级管理员 / 管理员 / 只读观察员，\n每个管理端接口的说明里都写了「所需权限」，由 `common/constants/permission.ts` 统一维护。\n请求头一律是 `Authorization: Bearer <token>`。\n\n---\n\n**这份文档是三端接口文件的唯一来源**：客户端 `assets/ui/utils/net/` 与管理端 `admin/src/api/`\n里的路径、类型、接口方法都由 `tools/gen-api.cjs` 从本文件生成，\n所以**改接口先改服务端**，再执行 `cd server && npm run gen:api` 重新生成（禁止手改生成物）。\n生成器读取的机器可读约定：\n- 每个接口的 `operationId` 形如 `<模块>.<方法>`（如 `role.save`），决定生成到哪个模块的哪个方法；\n- `x-olua-audience` 标明调用方（public / player / admin）；\n- `x-olua-permissions` 是管理端接口要求的权限点；\n- `x-olua-data-schema` 是响应里 `data` 的真实类型（没有该扩展 = 该接口无业务数据）。",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "公共接口",
+      "description": "无需令牌：注册、登录、健康检查。任何人都可以调用。"
+    },
+    {
+      "name": "客户端",
+      "description": "需要**客户端令牌**（`player`）。\n\n在 `POST /auth/login` 或 `POST /auth/register` 拿到，请求头 `Authorization: Bearer <token>`。\n\n只能操作令牌所属账号自己的数据 —— 接口路径里没有 accountId，改 id 也动不了别人的角色。"
+    },
+    {
+      "name": "管理端",
+      "description": "需要**管理端令牌**（`admin`）。在 `POST /admin/auth/login` 拿到。\n\n两层校验：① 令牌受众必须是 admin（玩家令牌一律 401）；\n\n② 每个接口还要求一个权限点，由管理员角色决定 —— 见每个接口说明里的「所需权限」。\n\n角色：超级管理员（全部权限）/ 管理员（除「管理管理员」外全部）/ 只读观察员（只能查看）。"
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "player": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "客户端令牌（/api/auth/login 获取）"
+      },
+      "admin": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "管理端令牌（/api/admin/auth/login 获取）"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "游戏账号：3~20 位字母 / 数字 / 下划线",
+            "example": "player001"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码：6~32 位",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "游戏账号",
+            "example": "player001"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "CreateRoleDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON；必须含 id / name / occupation / sex / level）",
+            "additionalProperties": true,
+            "example": {
+              "id": "1760000000000",
+              "name": "小明",
+              "occupation": "1",
+              "sex": "1",
+              "level": 1,
+              "gold": 1000,
+              "bag": []
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "SaveRoleDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（全量覆盖）",
+            "additionalProperties": true
+          },
+          "revision": {
+            "type": "number",
+            "description": "客户端读到的修订号（带上即开启乐观锁：与服务端不一致时返回 20006，需先拉最新数据）",
+            "example": 3
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AdminRegisterDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "管理员账号：3~20 位字母 / 数字 / 下划线",
+            "example": "gm001"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码：6~32 位",
+            "example": "admin123"
+          },
+          "registerCode": {
+            "type": "string",
+            "description": "注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填）",
+            "example": "olua-admin-2026"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "AdminLoginDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "管理员账号",
+            "example": "gm001"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码",
+            "example": "admin123"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "UpdateAccountStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "目标状态",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "example": "disabled"
+          }
+        }
+      },
+      "BatchDeleteRolesDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "要删除的角色 id 列表（最多 100 条）",
+            "example": [
+              "1760000000000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "RoleBagCellDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "格子行号（0 ~ 63）",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "col": {
+            "type": "number",
+            "description": "格子列号（0 ~ 63）",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "id": {
+            "type": "string",
+            "description": "物品 id（客户端 configs/items 的 key）",
+            "example": "1001"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量",
+            "minimum": 1,
+            "maximum": 999999
+          }
+        },
+        "required": [
+          "row",
+          "col",
+          "id",
+          "count"
+        ]
+      },
+      "AdminPatchRoleDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "角色名",
+            "example": "小明"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业（1 战士 / 2 魔法师 / 3 道士 / 4 全职业）",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4"
+            ]
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别（1 男 / 2 女 / 3 全性别）",
+            "enum": [
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "level": {
+            "type": "number",
+            "description": "等级",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "gold": {
+            "type": "number",
+            "description": "金币"
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "绑定元宝"
+          },
+          "silver": {
+            "type": "number",
+            "description": "银两"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验"
+          },
+          "soulOfWar": {
+            "type": "number",
+            "description": "战魂等级"
+          },
+          "title": {
+            "type": "number",
+            "description": "称号等级"
+          },
+          "rank": {
+            "type": "number",
+            "description": "军衔阶数"
+          },
+          "fashionCloth": {
+            "type": "number",
+            "description": "时装（外观）id；null = 取消时装",
+            "nullable": true
+          },
+          "avatar": {
+            "type": "number",
+            "description": "头像编号"
+          },
+          "onMap": {
+            "type": "string",
+            "description": "所在地图 id（客户端 configs/map 的 key）",
+            "example": "0"
+          },
+          "equipments": {
+            "type": "object",
+            "description": "装备穿戴表（槽位名 → 装备 id；null 或空串表示该槽位空着）",
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            },
+            "example": {
+              "WEAPON": "1001",
+              "HELMET": null
+            }
+          },
+          "skills": {
+            "type": "object",
+            "description": "技能等级表（技能 id → 等级）",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "example": {
+              "1001": 3
+            }
+          },
+          "bag": {
+            "description": "背包格子（稀疏：行/列/物品 id/数量）；空数组 = 清空背包",
+            "example": [
+              {
+                "row": 0,
+                "col": 0,
+                "id": "1001",
+                "count": 1
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleBagCellDto"
+            }
+          }
+        }
+      },
+      "AdminUpdateDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "目标角色",
+            "enum": [
+              "super_admin",
+              "admin",
+              "viewer"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "目标状态",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          }
+        }
+      },
+      "ApiEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "number",
+            "description": "业务码，0 = 成功",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息",
+            "example": "ok"
+          },
+          "data": {
+            "type": "object",
+            "description": "业务数据（无数据时为 null）",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "服务端时间戳（毫秒）",
+            "example": 1760000000000
+          },
+          "path": {
+            "type": "string",
+            "description": "出错时的请求路径",
+            "example": "/api/auth/login"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "data",
+          "timestamp"
+        ]
+      },
+      "PageMetaDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size"
+        ]
+      },
+      "PageQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          }
+        }
+      },
+      "AccountDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "账号 id",
+            "example": "6f1c2b1e-3a5d-4c9e-9a1f-2b3c4d5e6f70"
+          },
+          "username": {
+            "type": "string",
+            "description": "账号名",
+            "example": "player001"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：active 正常 / disabled 封禁",
+            "example": "active"
+          },
+          "onlineRoleId": {
+            "type": "string",
+            "description": "当前选中的角色 id（未选角色时为 null）",
+            "nullable": true,
+            "example": null
+          },
+          "roleCount": {
+            "type": "number",
+            "description": "角色数量（列表接口返回）",
+            "example": 2
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "注册时间（毫秒）",
+            "example": 1760000000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）",
+            "example": 1760000000000
+          },
+          "lastLoginAt": {
+            "type": "number",
+            "description": "最近登录时间（毫秒，从未登录为 null）",
+            "nullable": true,
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "status",
+          "onlineRoleId",
+          "createdAt",
+          "updatedAt",
+          "lastLoginAt"
+        ]
+      },
+      "AuthTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "访问令牌（放 Authorization: Bearer <token>）"
+          },
+          "expiresIn": {
+            "type": "string",
+            "description": "令牌有效期（与 JWT_EXPIRES_IN 一致）",
+            "example": "7d"
+          },
+          "account": {
+            "description": "账号信息",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "expiresIn",
+          "account"
+        ]
+      },
+      "RoleSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "RoleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data"
+        ]
+      },
+      "AdminDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "管理员 id"
+          },
+          "username": {
+            "type": "string",
+            "description": "管理员账号名"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：active 正常 / disabled 停用"
+          },
+          "role": {
+            "type": "string",
+            "description": "管理员角色：super_admin 超级管理员 / admin 管理员 / viewer 只读观察员",
+            "enum": [
+              "super_admin",
+              "admin",
+              "viewer"
+            ]
+          },
+          "roleLabel": {
+            "type": "string",
+            "description": "角色中文名（界面直接展示）"
+          },
+          "permissions": {
+            "type": "array",
+            "description": "该角色拥有的权限点（管理端据此显示 / 隐藏按钮；服务端仍会独立校验）",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "stats:read",
+              "account:read"
+            ]
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "lastLoginAt": {
+            "type": "number",
+            "description": "最近登录时间（毫秒，从未登录为 null）",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "status",
+          "role",
+          "roleLabel",
+          "permissions",
+          "createdAt",
+          "lastLoginAt"
+        ]
+      },
+      "AdminTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "访问令牌（放 Authorization: Bearer <token>）"
+          },
+          "expiresIn": {
+            "type": "string",
+            "description": "令牌有效期",
+            "example": "7d"
+          },
+          "admin": {
+            "description": "管理员信息",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "expiresIn",
+          "admin"
+        ]
+      },
+      "AdminAccountDetailDto": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "description": "账号信息",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountDto"
+              }
+            ]
+          },
+          "roles": {
+            "description": "该账号的角色列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "account",
+          "roles"
+        ]
+      },
+      "AdminStatsDto": {
+        "type": "object",
+        "properties": {
+          "accountCount": {
+            "type": "number",
+            "description": "账号总数"
+          },
+          "roleCount": {
+            "type": "number",
+            "description": "角色总数"
+          },
+          "onlineAccountCount": {
+            "type": "number",
+            "description": "已选中在线角色的账号数"
+          },
+          "todayNewAccountCount": {
+            "type": "number",
+            "description": "今日新增账号数"
+          },
+          "adminCount": {
+            "type": "number",
+            "description": "管理员数量"
+          }
+        },
+        "required": [
+          "accountCount",
+          "roleCount",
+          "onlineAccountCount",
+          "todayNewAccountCount",
+          "adminCount"
+        ]
+      },
+      "AccountPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的账号列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AdminPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的管理员列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AdminRoleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "accountName": {
+            "type": "string",
+            "description": "所属账号名",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "accountName"
+        ]
+      },
+      "AdminRolePageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的角色列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminRoleDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "BatchDeleteResultDto": {
+        "type": "object",
+        "properties": {
+          "requested": {
+            "type": "number",
+            "description": "请求删除的条数"
+          },
+          "deleted": {
+            "type": "number",
+            "description": "实际删除的条数（已不存在的 id 不计入）"
+          },
+          "ids": {
+            "description": "实际被删掉的角色 id",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clearedOnlineAccountIds": {
+            "description": "被顺带清掉在线角色标记的账号 id（删的是在线角色时）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "requested",
+          "deleted",
+          "ids",
+          "clearedOnlineAccountIds"
+        ]
+      },
+      "AccountQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态筛选",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          }
+        }
+      },
+      "RoleQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "限定账号 id（查某账号下的全部角色）"
+          },
+          "online": {
+            "type": "string",
+            "description": "在线状态筛选：true 只看在线（账号当前选中的）角色",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业筛选",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4"
+            ]
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别筛选",
+            "enum": [
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "最低等级（含）",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "最高等级（含）",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        }
+      },
+      "AdminQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "role": {
+            "type": "string",
+            "description": "角色筛选",
+            "enum": [
+              "super_admin",
+              "admin",
+              "viewer"
+            ]
+          }
+        }
+      },
+      "HealthDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "服务状态",
+            "example": "ok"
+          },
+          "env": {
+            "type": "string",
+            "description": "运行环境",
+            "example": "development"
+          },
+          "time": {
+            "type": "number",
+            "description": "服务端时间戳（毫秒）"
+          }
+        },
+        "required": [
+          "status",
+          "env",
+          "time"
+        ]
+      }
+    }
+  }
+}

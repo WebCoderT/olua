@@ -17,6 +17,19 @@ import { RequirePermissions } from "./permission.decorator";
  */
 
 interface ApiDocOptions {
+  /**
+   * 接口标识，形如 `角色模块.方法`（如 `role.save` / `adminRole.list`）
+   *
+   * 这一个字段同时是三件事的**唯一来源**：
+   * 1. OpenAPI 的 `operationId`（文档里接口的稳定标识）；
+   * 2. 客户端 `assets/ui/utils/net/Api.ts` 与管理端 `admin/src/api/endpoints.ts` 里的
+   *    **模块名与方法名**（`role.save` → `RoleApi.save()`）—— 这两份接口文件由
+   *    `tools/gen-api.cjs` 从文档生成，改这里就等于改接口签名；
+   * 3. 生成器判断「一个接口归哪个模块」，所以必须全局唯一（生成器会校验重复）。
+   *
+   * 格式约束：`<模块>.<方法>`，两段都是小写开头的驼峰（点号只出现一次）。
+   */
+  operationId: string;
   /** 一句话说明（文档列表里的标题） */
   summary: string;
   /** 补充说明（支持 markdown） */
@@ -39,6 +52,7 @@ export function ApiPublicDoc(options: ApiDocOptions) {
     ApiTags(SWAGGER_TAGS.PUBLIC),
     ApiExtension("x-olua-audience", "public"),
     ApiOperation({
+      operationId: options.operationId,
       summary: options.summary,
       description: withAuthNote(options.description, "**鉴权**：无需令牌，公开接口。"),
     }),
@@ -52,6 +66,7 @@ export function ApiPlayerDoc(options: ApiDocOptions) {
     ApiBearerAuth("player"),
     ApiExtension("x-olua-audience", "player"),
     ApiOperation({
+      operationId: options.operationId,
       summary: options.summary,
       description: withAuthNote(options.description, "**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。"),
     }),
@@ -76,6 +91,7 @@ export function ApiAdminDoc(options: ApiAdminDocOptions) {
     ApiExtension("x-olua-audience", "admin"),
     ApiExtension("x-olua-permissions", permissions),
     ApiOperation({
+      operationId: options.operationId,
       summary: options.summary,
       description: withAuthNote(options.description, authNote),
     }),

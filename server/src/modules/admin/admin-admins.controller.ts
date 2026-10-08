@@ -8,6 +8,7 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AdminService } from "./admin.service";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminQueryDto } from "./dto/query.dto";
+import { AdminPageDto } from "./dto/page-result.dto";
 
 /**
  * 管理端 · 管理员管理（权限管理入口）
@@ -22,17 +23,19 @@ export class AdminAdminsController {
 
   @Get()
   @ApiAdminDoc({
+    operationId: "adminAdmin.list",
     summary: "管理员列表",
     description: "keyword 模糊匹配管理员账号名；role 可按角色筛选。",
     permissions: [Permission.ADMIN_READ],
   })
-  @ApiDataResponse(AdminDto, { isArray: true, description: "分页结果在 data 里（list/total/page/size）" })
+  @ApiDataResponse(AdminPageDto, { description: "分页结果（list/total/page/size）" })
   list(@Query() query: AdminQueryDto): PageResult<AdminDto> {
     return this.adminService.listAdmins(query);
   }
 
   @Patch(":id")
   @ApiAdminDoc({
+    operationId: "adminAdmin.update",
     summary: "修改管理员",
     description:
       "改角色或启停。允许改自己（超管轮值），但**最后一个启用中的超级管理员**不能被降级 / 停用 —— 避免没人能进后台。改完立即生效。",
@@ -46,6 +49,7 @@ export class AdminAdminsController {
 
   @Delete(":id")
   @ApiAdminDoc({
+    operationId: "adminAdmin.remove",
     summary: "删除管理员",
     description: "不可恢复；同样保护最后一个启用中的超级管理员。",
     permissions: [Permission.ADMIN_MANAGE],

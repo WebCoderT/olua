@@ -134,7 +134,7 @@ export class AdminPatchRoleDto {
 
   //#region 基础信息（外观与位置）
 
-  @ApiPropertyOptional({ description: "时装（外观）id；null = 取消时装", nullable: true })
+  @ApiPropertyOptional({ description: "时装（外观）id；null = 取消时装", type: "number", nullable: true })
   @IsOptional()
   @IsInt({ message: "时装 id 必须是整数" })
   @Min(0, { message: "时装 id 不能为负" })

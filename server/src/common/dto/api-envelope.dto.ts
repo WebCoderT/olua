@@ -44,3 +44,22 @@ export class PageQueryDto {
   @IsString({ message: "关键字必须是字符串" })
   keyword?: string;
 }
+
+/**
+ * 分页结果里的公共字段（列表接口的响应模型统一继承它）
+ *
+ * 和 `PageQueryDto` 对称：列表接口**入参**分页、**出参**也分页，
+ * 出参这一侧必须写成 DTO 类（而不是 interface）才能进 OpenAPI ——
+ * 客户端与管理端的接口类型是从文档生成的，文档里没有的东西生成不出来
+ * （此前列表接口在文档里被写成「一个数组」，管理端只能手写分页类型补上）。
+ */
+export class PageMetaDto {
+  @ApiProperty({ description: "总条数", example: 42 })
+  total: number;
+
+  @ApiProperty({ description: "当前页码（从 1 开始）", example: 1 })
+  page: number;
+
+  @ApiProperty({ description: "每页条数", example: 20 })
+  size: number;
+}

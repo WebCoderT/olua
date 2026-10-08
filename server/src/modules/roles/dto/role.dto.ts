@@ -74,7 +74,7 @@ export class RoleDto extends RoleSummaryDto {
 }
 
 /** 管理端列表里的角色（额外带所属账号名） */export class AdminRoleDto extends RoleDto {
-  @ApiProperty({ description: "所属账号名", nullable: true })
+  @ApiProperty({ description: "所属账号名", type: "string", nullable: true })
   accountName: string | null;
 
   static fromRow(row: RoleWithAccountRow, onlineRoleId: string | null): AdminRoleDto {

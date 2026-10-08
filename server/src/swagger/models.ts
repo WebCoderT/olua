@@ -6,7 +6,8 @@ import { AdminPatchRoleDto, RoleBagCellDto } from "../modules/admin/dto/patch-ro
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "../modules/admin/dto/batch-role.dto";
 import { AccountQueryDto, AdminQueryDto, RoleQueryDto, UpdateAccountStatusDto } from "../modules/admin/dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "../modules/admin/dto/stats.dto";
-import { ApiEnvelopeDto, PageQueryDto } from "../common/dto/api-envelope.dto";
+import { AccountPageDto, AdminPageDto, AdminRolePageDto } from "../modules/admin/dto/page-result.dto";
+import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-envelope.dto";
 import { HealthDto } from "../modules/health/dto/health.dto";
 import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto";
 import { AdminRoleDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
@@ -20,6 +21,7 @@ import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
  */
 export const SWAGGER_MODELS = [
   ApiEnvelopeDto,
+  PageMetaDto,
   PageQueryDto,
   // 客户端
   RegisterDto,
@@ -37,6 +39,9 @@ export const SWAGGER_MODELS = [
   AdminTokenDto,
   AdminAccountDetailDto,
   AdminStatsDto,
+  AccountPageDto,
+  AdminPageDto,
+  AdminRolePageDto,
   AdminRoleDto,
   AdminPatchRoleDto,
   RoleBagCellDto,

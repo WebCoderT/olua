@@ -35,7 +35,7 @@ export class AdminDto {
   @ApiProperty({ description: "创建时间（毫秒）" })
   createdAt: number;
 
-  @ApiProperty({ description: "最近登录时间（毫秒，从未登录为 null）", nullable: true })
+  @ApiProperty({ description: "最近登录时间（毫秒，从未登录为 null）", type: "number", nullable: true })
   lastLoginAt: number | null;
 
   static from(row: AdminRow): AdminDto {

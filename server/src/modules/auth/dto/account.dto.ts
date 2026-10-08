@@ -12,7 +12,7 @@ export class AccountDto {
   @ApiProperty({ description: "状态：active 正常 / disabled 封禁", example: "active" })
   status: string;
 
-  @ApiProperty({ description: "当前选中的角色 id（未选角色时为 null）", nullable: true, example: null })
+  @ApiProperty({ description: "当前选中的角色 id（未选角色时为 null）", type: "string", nullable: true, example: null })
   onlineRoleId: string | null;
 
   @ApiProperty({ description: "角色数量（列表接口返回）", required: false, example: 2 })
@@ -24,7 +24,7 @@ export class AccountDto {
   @ApiProperty({ description: "最近更新时间（毫秒）", example: 1760000000000 })
   updatedAt: number;
 
-  @ApiProperty({ description: "最近登录时间（毫秒，从未登录为 null）", nullable: true, example: 1760000000000 })
+  @ApiProperty({ description: "最近登录时间（毫秒，从未登录为 null）", type: "number", nullable: true, example: 1760000000000 })
   lastLoginAt: number | null;
 
   static from(row: AccountRow | AccountWithCountRow): AccountDto {

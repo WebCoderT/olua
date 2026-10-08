@@ -17,7 +17,7 @@ export class HealthController {
 
   @Public()
   @Get()
-  @ApiPublicDoc({ summary: "健康检查", description: "无需登录；用于客户端 / 管理端确认服务端可达。" })
+  @ApiPublicDoc({ operationId: "health.check", summary: "健康检查", description: "无需登录；用于客户端 / 管理端确认服务端可达。" })
   @ApiDataResponse(HealthDto, { description: "服务状态" })
   check(): HealthDto {
     const dto = new HealthDto();
