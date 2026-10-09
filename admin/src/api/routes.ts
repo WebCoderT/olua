@@ -63,7 +63,7 @@ export const routes = {
     /**
      * 概览统计（GET /admin/stats）
      *
-     * **鉴权**：管理端令牌（`admin`）。
+     * 账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。
      */
     stats: "/admin/stats",
   },
@@ -174,5 +174,26 @@ export const routes = {
      * 按 id 列表删除（最多 100 条）。已不存在的 id 静默跳过（幂等）；作为某个账号在线角色的会被顺带清掉在线标记。返回实际删除的条数与涉及的账号 id。
      */
     batchRemove: "/admin/roles/batch-delete",
+  },
+  /** adminStats 模块（3 个接口） */
+  adminStats: {
+    /**
+     * 分布统计（GET /admin/stats/breakdown）
+     *
+     * 等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。
+     */
+    breakdown: "/admin/stats/breakdown",
+    /**
+     * 最近动态（GET /admin/stats/recent）
+     *
+     * 最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。
+     */
+    recent: "/admin/stats/recent",
+    /**
+     * 增长趋势（按天）（GET /admin/stats/trend）
+     *
+     * 返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— 前端可以直接画折线，不用自己补。日期按服务器本地时区。
+     */
+    trend: "/admin/stats/trend",
   },
 } as const;

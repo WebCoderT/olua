@@ -493,9 +493,122 @@ export type AdminStats = {
    */
   todayNewAccountCount: number;
   /**
+   * 今日新增角色数
+   */
+  todayNewRoleCount: number;
+  /**
+   * 当前封禁中的账号数（永久封禁与未到期的临时封禁都算）
+   */
+  bannedAccountCount: number;
+  /**
    * 管理员数量
    */
   adminCount: number;
+};
+
+export type StatsTrendPoint = {
+  /**
+   * 日期（服务器本地时区，YYYY-MM-DD）
+   */
+  day: string;
+  /**
+   * 当日新增账号数
+   */
+  newAccounts: number;
+  /**
+   * 当日新增角色数
+   */
+  newRoles: number;
+};
+
+export type StatsTrend = {
+  /**
+   * 统计天数
+   */
+  days: number;
+  /**
+   * 逐日数据（含没有数据的日期，值为 0）
+   */
+  points: StatsTrendPoint[];
+  /**
+   * 区间内新增账号合计
+   */
+  totalNewAccounts: number;
+  /**
+   * 区间内新增角色合计
+   */
+  totalNewRoles: number;
+};
+
+export type StatsBreakdownItem = {
+  /**
+   * 分组键（等级档起点 / 职业 id / 性别 id / 地图 id；空串表示未知）
+   */
+  key: string;
+  /**
+   * 数量
+   */
+  count: number;
+};
+
+export type StatsBreakdown = {
+  /**
+   * 等级分布（10 级一档，key 为区间起点）
+   */
+  levels: StatsBreakdownItem[];
+  /**
+   * 职业分布（key 为职业 id）
+   */
+  occupations: StatsBreakdownItem[];
+  /**
+   * 性别分布（key 为性别 id）
+   */
+  sexes: StatsBreakdownItem[];
+  /**
+   * 所在地图分布（key 为角色快照里的 onMap）
+   */
+  maps: StatsBreakdownItem[];
+};
+
+export type StatsRecentItem = {
+  /**
+   * 操作时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 操作人账号名（系统事件为 null）
+   */
+  actorName: string | null;
+  /**
+   * 动作（即接口的 operationId）
+   */
+  action: string;
+  /**
+   * 目标类型：account | role | admin
+   */
+  targetType: string | null;
+  /**
+   * 目标 id
+   */
+  targetId: string | null;
+  /**
+   * 是否成功
+   */
+  success: boolean;
+};
+
+export type StatsTrendQuery = {
+  /**
+   * 统计天数（含今天），最多 90 天
+   */
+  days?: number;
+};
+
+export type StatsRecentQuery = {
+  /**
+   * 取多少条
+   */
+  limit?: number;
 };
 
 export type AccountPage = {

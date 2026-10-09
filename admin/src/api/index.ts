@@ -10,7 +10,7 @@
  * - **手写**：`./types` 里的错误模型、业务码、权限点、展示字典（服务端文档描述不了它们）；
  * - `./config` / `./http`：地址与请求实现，页面不直接碰。
  */
-export { authApi, accountsApi, adminsApi, rolesApi, auditApi } from "./endpoints";
+export { authApi, accountsApi, adminsApi, rolesApi, auditApi, statsApi } from "./endpoints";
 export { routes } from "./routes";
 export type * from "./models";
 

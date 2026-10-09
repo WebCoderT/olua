@@ -7,6 +7,7 @@ import { hashPassword } from "../../common/utils/password.util";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { AdminListOptions, AdminRepository } from "../../database/repositories/admin.repository";
+import { AuditRepository } from "../../database/repositories/audit.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { AccountRow, AdminRow, RoleRow, RoleWithAccountRow } from "../../database/rows";
 import { AccountDto } from "../auth/dto/account.dto";
@@ -26,7 +27,15 @@ import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
 import { ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
 import { AccountQueryDto, AdminQueryDto, normalizePage, RoleQueryDto, roleFilterOf, UpdateAccountStatusDto } from "./dto/query.dto";
-import { AdminAccountDetailDto, AdminStatsDto } from "./dto/stats.dto";
+import {
+  AdminAccountDetailDto,
+  AdminStatsDto,
+  StatsBreakdownDto,
+  StatsBreakdownItemDto,
+  StatsRecentItemDto,
+  StatsTrendDto,
+  StatsTrendPointDto,
+} from "./dto/stats.dto";
 
 /**
  * 管理端业务（账号与角色）
@@ -41,6 +50,7 @@ export class AdminService {
     private readonly accounts: AccountRepository,
     private readonly roles: RoleRepository,
     private readonly admins: AdminRepository,
+    private readonly audit: AuditRepository,
   ) {}
 
   //#region 账号
@@ -374,8 +384,75 @@ export class AdminService {
     dto.roleCount = this.roles.countAll();
     dto.onlineAccountCount = this.accounts.countOnline();
     dto.todayNewAccountCount = this.accounts.countCreatedAfter(startOfToday.getTime());
+    dto.todayNewRoleCount = this.roles.countCreatedAfter(startOfToday.getTime());
+    dto.bannedAccountCount = this.accounts.countBanned(Date.now());
     dto.adminCount = this.admins.countAll();
     return dto;
+  }
+
+  /**
+   * 增长趋势（按天）
+   *
+   * 「补齐没有数据的日期」放在服务端做：SQL 的 GROUP BY 只会返回**有数据的那几天**，
+   * 前端拿到稀疏数组还得自己补，补错了折线就会骗人（缺的那天被前后两点连成直线，
+   * 看着就像那天有人在注册）。
+   */
+  statsTrend(days: number): StatsTrendDto {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+    const since = start.getTime();
+
+    const accountsByDay = new Map(this.accounts.countByDaySince(since).map((row) => [row.day, row.total]));
+    const rolesByDay = new Map(this.roles.countByDaySince(since).map((row) => [row.day, row.total]));
+
+    const dto = new StatsTrendDto();
+    dto.days = days;
+    dto.points = [];
+    for (let offset = 0; offset < days; offset += 1) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + offset);
+      const day = localDayKey(date);
+      const point = new StatsTrendPointDto();
+      point.day = day;
+      point.newAccounts = accountsByDay.get(day) ?? 0;
+      point.newRoles = rolesByDay.get(day) ?? 0;
+      dto.points.push(point);
+    }
+    dto.totalNewAccounts = dto.points.reduce((sum, item) => sum + item.newAccounts, 0);
+    dto.totalNewRoles = dto.points.reduce((sum, item) => sum + item.newRoles, 0);
+    return dto;
+  }
+
+  /**
+   * 分布（等级 / 职业 / 性别 / 地图）
+   *
+   * 只给分组键与数量：职业、性别、地图的名字都由管理端按客户端字典翻译
+   * （服务端不复制游戏配置）。等级档的区间起点是通用格式，不涉及游戏配置。
+   */
+  statsBreakdown(): StatsBreakdownDto {
+    const dto = new StatsBreakdownDto();
+    // 等级档：key 存区间起点（bucket 0 -> "1"，代表 1~10 级）
+    dto.levels = this.roles.countByLevelBucket().map((row) => breakdownItem(String(row.bucket * 10 + 1), row.total));
+    dto.occupations = this.roles.countByOccupation().map((row) => breakdownItem(row.key, row.total));
+    dto.sexes = this.roles.countBySex().map((row) => breakdownItem(row.key, row.total));
+    // 快照里没有 onMap 的老数据归到空键
+    dto.maps = this.roles.countByMap().map((row) => breakdownItem(row.key ?? "", row.total));
+    return dto;
+  }
+
+  /** 最近动态（直接复用操作日志表；只挑界面要显示的字段，不外泄请求体） */
+  statsRecent(limit: number): StatsRecentItemDto[] {
+    return this.audit.list({ page: 1, size: limit }).map((row) => {
+      const item = new StatsRecentItemDto();
+      item.createdAt = row.created_at;
+      item.actorName = row.actor_name;
+      item.action = row.action;
+      item.targetType = row.target_type;
+      item.targetId = row.target_id;
+      item.success = row.success === 1;
+      return item;
+    });
   }
 
   //#region 内部
@@ -409,4 +486,23 @@ export class AdminService {
   }
 
   //#endregion
+}
+
+/** 造一个分布项（DTO 的构造样板收在一处） */
+function breakdownItem(key: string, count: number): StatsBreakdownItemDto {
+  const item = new StatsBreakdownItemDto();
+  item.key = key;
+  item.count = count;
+  return item;
+}
+
+/**
+ * 本地日期键（YYYY-MM-DD）
+ *
+ * 格式必须与 SQLite 的 `date(..., 'localtime')` 完全一致 —— 趋势是用它把
+ * 「查询结果」和「补齐的日期序列」对上的，差一个字符就全拼不上（曲线全 0）。
+ */
+function localDayKey(date: Date): string {
+  const pad = (num: number) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

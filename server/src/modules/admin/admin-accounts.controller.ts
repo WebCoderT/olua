@@ -13,8 +13,14 @@ import { AccountDto } from "../auth/dto/account.dto";
 import { AdminService } from "./admin.service";
 import { BatchDeleteResultDto } from "./dto/batch-role.dto";
 import { ResetAccountPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
-import { AccountQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
-import { AdminAccountDetailDto, AdminStatsDto } from "./dto/stats.dto";
+import { AccountQueryDto, StatsRecentQueryDto, StatsTrendQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
+import {
+  AdminAccountDetailDto,
+  AdminStatsDto,
+  StatsBreakdownDto,
+  StatsRecentItemDto,
+  StatsTrendDto,
+} from "./dto/stats.dto";
 import { AccountPageDto } from "./dto/page-result.dto";
 
 /**
@@ -29,10 +35,58 @@ export class AdminAccountsController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get("stats")
-  @ApiAdminDoc({ operationId: "adminAccount.stats", summary: "概览统计", permissions: [Permission.STATS_READ] })
+  @ApiAdminDoc({
+    operationId: "adminAccount.stats",
+    summary: "概览统计",
+    description: "账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。",
+    permissions: [Permission.STATS_READ],
+  })
   @ApiDataResponse(AdminStatsDto, { description: "统计数据" })
   stats(): AdminStatsDto {
     return this.adminService.stats();
+  }
+
+  @Get("stats/trend")
+  @ApiAdminDoc({
+    operationId: "adminStats.trend",
+    summary: "增长趋势（按天）",
+    description:
+      "返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— " +
+      "前端可以直接画折线，不用自己补。日期按服务器本地时区。",
+    permissions: [Permission.STATS_READ],
+  })
+  @ApiQueryModel(StatsTrendQueryDto)
+  @ApiDataResponse(StatsTrendDto, { description: "趋势数据（points 已补齐日期）" })
+  trend(@Query() query: StatsTrendQueryDto): StatsTrendDto {
+    return this.adminService.statsTrend(query.days ?? 7);
+  }
+
+  @Get("stats/breakdown")
+  @ApiAdminDoc({
+    operationId: "adminStats.breakdown",
+    summary: "分布统计",
+    description:
+      "等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。\n\n" +
+      "只返回分组键与数量，**不返回展示名**：职业、性别、地图的字典权威在客户端 `configs`，" +
+      "服务端复制一份就会两边漂移，所以翻译交给管理端。",
+    permissions: [Permission.STATS_READ],
+  })
+  @ApiDataResponse(StatsBreakdownDto, { description: "四组分布" })
+  breakdown(): StatsBreakdownDto {
+    return this.adminService.statsBreakdown();
+  }
+
+  @Get("stats/recent")
+  @ApiAdminDoc({
+    operationId: "adminStats.recent",
+    summary: "最近动态",
+    description: "最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。",
+    permissions: [Permission.STATS_READ],
+  })
+  @ApiQueryModel(StatsRecentQueryDto)
+  @ApiDataResponse(StatsRecentItemDto, { description: "最近动态列表（按时间倒序）", isArray: true })
+  recent(@Query() query: StatsRecentQueryDto): StatsRecentItemDto[] {
+    return this.adminService.statsRecent(query.limit ?? 8);
   }
 
   @Get("accounts")

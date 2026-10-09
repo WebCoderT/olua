@@ -955,7 +955,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAccount.stats",
         "parameters": [],
         "responses": {
@@ -998,6 +998,187 @@
         "x-olua-permissions": [
           "stats:read"
         ]
+      }
+    },
+    "/admin/stats/trend": {
+      "get": {
+        "description": "返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— 前端可以直接画折线，不用自己补。日期按服务器本地时区。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminStats.trend",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "统计天数（含今天），最多 90 天",
+            "schema": {
+              "minimum": 1,
+              "maximum": 90,
+              "default": 7,
+              "example": 7,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "趋势数据（points 已补齐日期）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StatsTrendDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "增长趋势（按天）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/StatsTrendDto"
+        },
+        "x-olua-permissions": [
+          "stats:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/StatsTrendQueryDto"
+        }
+      }
+    },
+    "/admin/stats/breakdown": {
+      "get": {
+        "description": "等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。\n\n只返回分组键与数量，**不返回展示名**：职业、性别、地图的字典权威在客户端 `configs`，服务端复制一份就会两边漂移，所以翻译交给管理端。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminStats.breakdown",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "四组分布",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StatsBreakdownDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "分布统计",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/StatsBreakdownDto"
+        },
+        "x-olua-permissions": [
+          "stats:read"
+        ]
+      }
+    },
+    "/admin/stats/recent": {
+      "get": {
+        "description": "最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminStats.recent",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "取多少条",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 8,
+              "example": 8,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "最近动态列表（按时间倒序）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/StatsRecentItemDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "最近动态",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatsRecentItemDto"
+          }
+        },
+        "x-olua-permissions": [
+          "stats:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/StatsRecentQueryDto"
+        }
       }
     },
     "/admin/accounts": {
@@ -3057,6 +3238,14 @@
             "type": "number",
             "description": "今日新增账号数"
           },
+          "todayNewRoleCount": {
+            "type": "number",
+            "description": "今日新增角色数"
+          },
+          "bannedAccountCount": {
+            "type": "number",
+            "description": "当前封禁中的账号数（永久封禁与未到期的临时封禁都算）"
+          },
           "adminCount": {
             "type": "number",
             "description": "管理员数量"
@@ -3067,8 +3256,189 @@
           "roleCount",
           "onlineAccountCount",
           "todayNewAccountCount",
+          "todayNewRoleCount",
+          "bannedAccountCount",
           "adminCount"
         ]
+      },
+      "StatsTrendPointDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "description": "日期（服务器本地时区，YYYY-MM-DD）",
+            "example": "2026-10-09"
+          },
+          "newAccounts": {
+            "type": "number",
+            "description": "当日新增账号数"
+          },
+          "newRoles": {
+            "type": "number",
+            "description": "当日新增角色数"
+          }
+        },
+        "required": [
+          "day",
+          "newAccounts",
+          "newRoles"
+        ]
+      },
+      "StatsTrendDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "number",
+            "description": "统计天数",
+            "example": 7
+          },
+          "points": {
+            "description": "逐日数据（含没有数据的日期，值为 0）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsTrendPointDto"
+            }
+          },
+          "totalNewAccounts": {
+            "type": "number",
+            "description": "区间内新增账号合计"
+          },
+          "totalNewRoles": {
+            "type": "number",
+            "description": "区间内新增角色合计"
+          }
+        },
+        "required": [
+          "days",
+          "points",
+          "totalNewAccounts",
+          "totalNewRoles"
+        ]
+      },
+      "StatsBreakdownItemDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "分组键（等级档起点 / 职业 id / 性别 id / 地图 id；空串表示未知）",
+            "example": "1"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量"
+          }
+        },
+        "required": [
+          "key",
+          "count"
+        ]
+      },
+      "StatsBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "levels": {
+            "description": "等级分布（10 级一档，key 为区间起点）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsBreakdownItemDto"
+            }
+          },
+          "occupations": {
+            "description": "职业分布（key 为职业 id）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsBreakdownItemDto"
+            }
+          },
+          "sexes": {
+            "description": "性别分布（key 为性别 id）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsBreakdownItemDto"
+            }
+          },
+          "maps": {
+            "description": "所在地图分布（key 为角色快照里的 onMap）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsBreakdownItemDto"
+            }
+          }
+        },
+        "required": [
+          "levels",
+          "occupations",
+          "sexes",
+          "maps"
+        ]
+      },
+      "StatsRecentItemDto": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "number",
+            "description": "操作时间（毫秒）",
+            "example": 1760000000000
+          },
+          "actorName": {
+            "type": "string",
+            "description": "操作人账号名（系统事件为 null）",
+            "nullable": true
+          },
+          "action": {
+            "type": "string",
+            "description": "动作（即接口的 operationId）",
+            "example": "adminAccount.updateStatus"
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型：account | role | admin",
+            "nullable": true
+          },
+          "targetId": {
+            "type": "string",
+            "description": "目标 id",
+            "nullable": true
+          },
+          "success": {
+            "type": "boolean",
+            "description": "是否成功"
+          }
+        },
+        "required": [
+          "createdAt",
+          "actorName",
+          "action",
+          "targetType",
+          "targetId",
+          "success"
+        ]
+      },
+      "StatsTrendQueryDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "number",
+            "description": "统计天数（含今天），最多 90 天",
+            "minimum": 1,
+            "maximum": 90,
+            "default": 7,
+            "example": 7
+          }
+        }
+      },
+      "StatsRecentQueryDto": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "取多少条",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 8,
+            "example": 8
+          }
+        }
       },
       "AccountPageDto": {
         "type": "object",

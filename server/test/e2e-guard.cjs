@@ -551,14 +551,71 @@ async function runMainSuite(baseUrl) {
   checkEqual((await call("GET", "/api/auth/me", { token: backToken })).body.code, 0, "解封后重新登录的令牌可用（收尾）");
 
   //#endregion
+
+  //#region 七、运营看板
+  group("七、运营看板：趋势补日期 / 分布不翻译 / 最近动态不外泄请求体");
+
+  const trend = await call("GET", "/api/admin/stats/trend?days=7", { token: superToken });
+  checkEqual(trend.body.code, 0, "趋势接口可读");
+  checkEqual(trend.body.data.days, 7, "回显统计天数");
+  checkEqual(trend.body.data.points.length, 7, "返回 7 个点（没有数据的那天也要有）");
+  checkEqual(new Set(trend.body.data.points.map((point) => point.day)).size, 7, "日期互不重复");
+  check(/^\d{4}-\d{2}-\d{2}$/.test(trend.body.data.points[0].day), "日期格式为 YYYY-MM-DD（本地时区）");
+  check(
+    trend.body.data.points.every((point) => typeof point.newAccounts === "number" && typeof point.newRoles === "number"),
+    "每个点都带新增账号与新增角色（缺数据的日期给 0，不是缺项）",
+  );
+  checkEqual(
+    trend.body.data.totalNewAccounts,
+    trend.body.data.points.reduce((sum, point) => sum + point.newAccounts, 0),
+    "区间合计等于逐日之和",
+  );
+  check(trend.body.data.points[6].newAccounts >= 1, "今天至少有 1 个新增账号（前面注册过的）");
+
+  const tooManyDays = await call("GET", "/api/admin/stats/trend?days=999", { token: superToken });
+  checkEqual(tooManyDays.status, 400, "统计天数超过上限被拒（400）");
+
+  const breakdown = await call("GET", "/api/admin/stats/breakdown", { token: superToken });
+  checkEqual(breakdown.body.code, 0, "分布接口可读");
+  check(breakdown.body.data.levels.length > 0, "等级分布有数据（前面创建过角色）");
+  check(
+    breakdown.body.data.levels.every((item) => typeof item.key === "string" && typeof item.count === "number"),
+    "分布项只给分组键与数量",
+  );
+  check(
+    breakdown.body.data.levels.every((item) => item.label === undefined),
+    "服务端不返回展示名（职业/性别/地图的翻译交给管理端，避免复制客户端配置）",
+  );
+  check(breakdown.body.data.occupations.length > 0, "职业分布有数据");
+  check(Array.isArray(breakdown.body.data.maps), "地图分布是数组（从角色快照的 onMap 聚合）");
+
+  const recent = await call("GET", "/api/admin/stats/recent?limit=5", { token: superToken });
+  checkEqual(recent.body.code, 0, "最近动态可读");
+  check(recent.body.data.length > 0 && recent.body.data.length <= 5, "最多返回 limit 条");
+  check(
+    recent.body.data.every((item) => typeof item.action === "string" && typeof item.createdAt === "number"),
+    "每条都带动作与时间",
+  );
+  check(
+    recent.body.data.every((item) => item.detail === undefined && item.path === undefined),
+    "不外泄请求体与路径（只给界面要显示的字段）",
+  );
+  checkEqual(recent.body.data[0].action, "adminAccount.updateStatus", "最近一条正是上一步的解封操作");
+
+  const viewerTrend = await call("GET", "/api/admin/stats/trend", { token: viewerToken });
+  checkEqual(viewerTrend.body.code, 0, "只读观察员有 stats:read，可以看趋势");
+  const playerTrend = await call("GET", "/api/admin/stats/trend", { token: backToken });
+  checkEqual(playerTrend.status, 401, "玩家令牌拿不到看板接口（401）");
+
+  //#endregion
 }
 
 //#endregion
 
-//#region 七：第二台服务专测 IP 维度限流
+//#region 八：第二台服务专测 IP 维度限流
 
 async function runIpSuite(baseUrl) {
-  group("七、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
+  group("八、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
 
   const first = await api(baseUrl, "POST", "/api/auth/login", { body: { username: "ip_victim_a", password: "x-pass-1" } });
   checkEqual(first.body.code, 10003, "第一次失败（用户名维度未锁）");
@@ -590,7 +647,7 @@ async function main() {
     main2.kill();
   }
 
-  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁：${passed} 条通过 / ${failed} 条失败`);
+  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板：${passed} 条通过 / ${failed} 条失败`);
   if (failed) {
     console.log("失败项：\n" + failures.map((item) => `  - ${item}`).join("\n"));
     process.exitCode = 1;

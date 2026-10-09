@@ -135,6 +135,16 @@ export class AccountRepository {
     return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE created_at >= ?", [timestamp]);
   }
 
+  /** 按天统计新增账号（时区处理同 RoleRepository.countByDaySince） */
+  countByDaySince(since: number): { day: string; total: number }[] {
+    return this.db.all<{ day: string; total: number }>(
+      `SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day, COUNT(1) AS total
+       FROM accounts WHERE created_at >= ?
+       GROUP BY day ORDER BY day ASC`,
+      [since],
+    );
+  }
+
   /** 当前有在线角色的账号数（概览用） */
   countOnline(): number {
     return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE online_role_id IS NOT NULL");

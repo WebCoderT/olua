@@ -5,8 +5,16 @@ import { AdminDto, AdminTokenDto, AdminUpdateDto } from "../modules/admin/dto/ad
 import { AdminPatchRoleDto, RoleBagCellDto } from "../modules/admin/dto/patch-role.dto";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "../modules/admin/dto/batch-role.dto";
 import { ChangeAdminPasswordDto, ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "../modules/admin/dto/password.dto";
-import { AccountQueryDto, AdminQueryDto, RoleQueryDto, UpdateAccountStatusDto } from "../modules/admin/dto/query.dto";
-import { AdminAccountDetailDto, AdminStatsDto } from "../modules/admin/dto/stats.dto";
+import { AccountQueryDto, AdminQueryDto, RoleQueryDto, StatsRecentQueryDto, StatsTrendQueryDto, UpdateAccountStatusDto } from "../modules/admin/dto/query.dto";
+import {
+  AdminAccountDetailDto,
+  AdminStatsDto,
+  StatsBreakdownDto,
+  StatsBreakdownItemDto,
+  StatsRecentItemDto,
+  StatsTrendDto,
+  StatsTrendPointDto,
+} from "../modules/admin/dto/stats.dto";
 import { AccountPageDto, AdminPageDto, AdminRolePageDto } from "../modules/admin/dto/page-result.dto";
 import { AuditActionListDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "../modules/audit/dto/audit.dto";
 import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-envelope.dto";
@@ -41,6 +49,14 @@ export const SWAGGER_MODELS = [
   AdminTokenDto,
   AdminAccountDetailDto,
   AdminStatsDto,
+  // 运营看板
+  StatsTrendDto,
+  StatsTrendPointDto,
+  StatsBreakdownDto,
+  StatsBreakdownItemDto,
+  StatsRecentItemDto,
+  StatsTrendQueryDto,
+  StatsRecentQueryDto,
   AccountPageDto,
   AdminPageDto,
   AdminRolePageDto,

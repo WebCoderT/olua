@@ -110,6 +110,26 @@ export class UpdateAccountStatusDto {
   durationHours?: number | null;
 }
 
+/** 概览趋势查询 */
+export class StatsTrendQueryDto {
+  @ApiPropertyOptional({ description: "统计天数（含今天），最多 90 天", minimum: 1, maximum: 90, default: 7, example: 7 })
+  @IsOptional()
+  @IsInt({ message: "天数必须是整数" })
+  @Min(1, { message: "天数至少 1 天" })
+  @Max(90, { message: "天数最多 90 天" })
+  days?: number;
+}
+
+/** 概览「最近动态」查询 */
+export class StatsRecentQueryDto {
+  @ApiPropertyOptional({ description: "取多少条", minimum: 1, maximum: 50, default: 8, example: 8 })
+  @IsOptional()
+  @IsInt({ message: "条数必须是整数" })
+  @Min(1, { message: "条数至少 1" })
+  @Max(50, { message: "条数最多 50" })
+  limit?: number;
+}
+
 /** 分页入参规整（page 从 1 开始，size 限 1~100） */
 export function normalizePage(query: PageQueryDto, defaultSize = 20): { page: number; size: number } {
   const page = Math.max(1, Math.floor(Number(query.page ?? 1)) || 1);

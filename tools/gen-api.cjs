@@ -83,6 +83,7 @@ const MODULES = {
   adminAdmin: { target: "admin", export: "adminsApi" },
   adminRole: { target: "admin", export: "rolesApi" },
   adminAudit: { target: "admin", export: "auditApi" },
+  adminStats: { target: "admin", export: "statsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */

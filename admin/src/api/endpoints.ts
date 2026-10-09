@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, ChangeAdminPassword, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, UpdateAccountStatus } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, ChangeAdminPassword, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, UpdateAccountStatus } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, UpdateAccountStatus } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, UpdateAccountStatus } from "./models";
 
 /** adminAccount 模块的接口（8 个，生成） */
 export const accountsApi = {
@@ -89,7 +89,7 @@ export const accountsApi = {
   /**
    * 概览统计（GET /admin/stats）
    *
-   * **鉴权**：管理端令牌（`admin`）。
+   * 账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。
    *
    * 权限点：stats:read
    */
@@ -230,4 +230,32 @@ export const rolesApi = {
    * 权限点：role:delete
    */
   batchRemove: (body: BatchDeleteRoles, options?: Options) => http.post<BatchDeleteResult>(routes.adminRole.batchRemove, body, options),
+};
+
+/** adminStats 模块的接口（3 个，生成） */
+export const statsApi = {
+  /**
+   * 分布统计（GET /admin/stats/breakdown）
+   *
+   * 等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。
+   *
+   * 权限点：stats:read
+   */
+  breakdown: (options?: Options) => http.get<StatsBreakdown>(routes.adminStats.breakdown, options),
+  /**
+   * 最近动态（GET /admin/stats/recent）
+   *
+   * 最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。
+   *
+   * 权限点：stats:read
+   */
+  recent: (query: StatsRecentQuery = {}, options?: Options) => http.get<StatsRecentItem[]>(routes.adminStats.recent, { query, ...options }),
+  /**
+   * 增长趋势（按天）（GET /admin/stats/trend）
+   *
+   * 返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— 前端可以直接画折线，不用自己补。日期按服务器本地时区。
+   *
+   * 权限点：stats:read
+   */
+  trend: (query: StatsTrendQuery = {}, options?: Options) => http.get<StatsTrend>(routes.adminStats.trend, { query, ...options }),
 };

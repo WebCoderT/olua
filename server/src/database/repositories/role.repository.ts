@@ -148,6 +148,67 @@ export class RoleRepository {
     return this.db.count("SELECT COUNT(1) AS total FROM roles");
   }
 
+  /** 统计某时间点之后创建的数量（概览「今日新增角色」用） */
+  countCreatedAfter(timestamp: number): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM roles WHERE created_at >= ?", [timestamp]);
+  }
+
+  //#region 概览看板的聚合查询
+
+  /**
+   * 按天统计新增角色
+   *
+   * 日期用 SQLite 的 `date(..., 'unixepoch', 'localtime')` 分组：直接对毫秒做整除得到的是
+   * **UTC 天**，在东八区会把「早上 8 点前创建的角色」算进前一天，曲线整体左移。
+   */
+  countByDaySince(since: number): { day: string; total: number }[] {
+    return this.db.all<{ day: string; total: number }>(
+      `SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day, COUNT(1) AS total
+       FROM roles WHERE created_at >= ?
+       GROUP BY day ORDER BY day ASC`,
+      [since],
+    );
+  }
+
+  /** 等级分布（10 级一档，bucket 0 = 1~10 级；只返回有数据的档，界面按返回项渲染） */
+  countByLevelBucket(): { bucket: number; total: number }[] {
+    return this.db.all<{ bucket: number; total: number }>(
+      `SELECT CAST((level - 1) / 10 AS INTEGER) AS bucket, COUNT(1) AS total
+       FROM roles GROUP BY bucket ORDER BY bucket ASC`,
+    );
+  }
+
+  /** 按职业统计（不翻译职业名：字典权威在客户端 configs） */
+  countByOccupation(): { key: string; total: number }[] {
+    return this.db.all<{ key: string; total: number }>(
+      "SELECT occupation AS key, COUNT(1) AS total FROM roles GROUP BY key ORDER BY total DESC",
+    );
+  }
+
+  /** 按性别统计 */
+  countBySex(): { key: string; total: number }[] {
+    return this.db.all<{ key: string; total: number }>(
+      "SELECT sex AS key, COUNT(1) AS total FROM roles GROUP BY key ORDER BY total DESC",
+    );
+  }
+
+  /**
+   * 按所在地图统计
+   *
+   * 地图只是角色快照里的一个字段（`onMap`），服务端没有独立列 —— 用 SQLite 内置的
+   * `json_extract` 直接读；`json_valid` 兜底，坏数据不参与统计而不是让整条查询报错。
+   * 老数据里没有该字段的角色会落在 key 为 null 的一组，界面显示「未知」。
+   */
+  countByMap(): { key: string | null; total: number }[] {
+    return this.db.all<{ key: string | null; total: number }>(
+      `SELECT json_extract(data, '$.onMap') AS key, COUNT(1) AS total
+       FROM roles WHERE json_valid(data) = 1
+       GROUP BY key ORDER BY total DESC`,
+    );
+  }
+
+  //#endregion
+
   /** 拼 where（list 与 count 共用；`online` 靠 join 出来的账号在线角色判定） */
   private buildWhere(options: RoleFilter): { clause: string; params: SqlParam[] } {
     const where: string[] = [];
