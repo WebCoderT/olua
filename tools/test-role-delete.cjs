@@ -111,6 +111,19 @@ seed([makeRole("only", "独苗")], "only");
 StorageManager.deleteRole("only");
 check(rawRoles().length === 0 && rawSelected() === null, "删光全部角色后列表为空且选中项清空");
 
+console.log("— 被管理员下线：只清在线标记，绝不能删角色 —");
+
+// 11. clearOnlineRole：清掉 selectedRole，但角色数据必须一个不少
+// （后台「踢下线」清的是服务端的在线角色，本地只该失去「我在线」这个状态；
+//   这里若误用 deleteRole，玩家辛苦练的号就直接没了）
+seed([makeRole("r1", "张三"), makeRole("r2", "李四")], "r1");
+check(rawSelected() === "r1", "下线前本地记着在线角色");
+StorageManager.clearOnlineRole();
+check(rawSelected() === null, "clearOnlineRole 清掉了在线标记（此后不会认为自己还在游戏里）");
+check(rawRoles().map((role) => role.id).join() === "r1,r2", "角色数据一个都没少（被下线 ≠ 被删除）");
+check(StorageManager.findRoleById("r1")?.name === "张三", "被下线的角色仍能按 id 取到（回选角重选就能继续玩）");
+check(StorageManager.findOnlineRole() === undefined, "此后取在线角色得到 undefined（不会直接进游戏）");
+
 console.log("— 界面接线：RoleSelector / 配置 —");
 
 const selectorSource = fs.readFileSync(ROLE_SELECTOR_FILE, "utf8");
@@ -128,6 +141,10 @@ check(/manageRole:\s*\{[\s\S]*deleteButtonOffset[\s\S]*deleteButtonSize[\s\S]*co
 
 check(/static deleteRole\(id: string\): boolean \{/.test(storageSource), "StorageManager 暴露了 deleteRole");
 check(/!roles\.some\(\(role\) => role\.id === selected\)/.test(storageSource), "deleteRole 会校验并清掉指向已不存在角色的选中项");
+check(
+  /static clearOnlineRole\(\) \{[\s\S]{0,160}removeItem\("selectedRole"\)/.test(storageSource),
+  "StorageManager 暴露 clearOnlineRole（被踢下线时只清在线标记，供 Game 的 onKicked 用）",
+);
 
 console.log("— 服务端联动：落盘写穿，本地删不推服务端 —");
 

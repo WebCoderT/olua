@@ -89,6 +89,13 @@ export class Game extends Component {
       StorageManager.deleteRole(roleId);
       SceneManager.loadScene("RoleSelector");
     };
+    // 被管理员下线（后台点了「踢下线」）：角色**还在**，只是账号的在线角色被清了 ——
+    // 只清本地的在线标记，绝不能删角色数据，然后回选角界面让他重选一次（选了会重新认领在线角色）
+    RoleSync.onKicked = () => {
+      GameUiHelper.createTip("role_sync_kicked_tip");
+      StorageManager.clearOnlineRole();
+      SceneManager.loadScene("RoleSelector");
+    };
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
@@ -184,6 +191,7 @@ export class Game extends Component {
     RoleSync.onSaved = null;
     RoleSync.onConflict = null;
     RoleSync.onMissing = null;
+    RoleSync.onKicked = null;
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();
     this.offWindowResize = null;

@@ -300,6 +300,13 @@ export const uiTexts = {
   role_sync_conflict_tip: "角色数据已在后台被修改，已同步为最新数据",
   /** 角色已被后台删除（本地不该继续玩一个不存在的角色，回选角场景重来） */
   role_sync_missing_tip: "角色已被删除，请重新选择角色",
+  /**
+   * 角色已被管理员下线（账号的在线角色被清掉）
+   *
+   * 与「已被删除」分开：角色的存档还在，回选角界面重新选一次就能继续玩
+   * （见 utils/net/RoleSync 的 kicked 分支）。
+   */
+  role_sync_kicked_tip: "你的角色已被管理员下线，请重新选择角色进入游戏",
 } as const;
 
 /** 文案 key（uiTexts 的键） */

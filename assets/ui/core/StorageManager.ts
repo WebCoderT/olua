@@ -150,6 +150,17 @@ export default class StorageManager {
     sys.localStorage.setItem("selectedRole", id);
   }
 
+  /**
+   * 清掉本地「当前在线角色」标记（**不删角色数据**）
+   *
+   * 用在「角色被管理员下线」时（见 utils/net/RoleSync 的 kicked 分支）：角色存档还好好的，
+   * 只是账号在服务端的在线角色被清了 —— 本地如果还认为自己在线，进游戏会一路同步失败（20007）。
+   * 与 deleteRole 的区别：那个是真的删角色，这里只是让人回选角界面重新选一次。
+   */
+  static clearOnlineRole() {
+    sys.localStorage.removeItem("selectedRole");
+  }
+
   /** 获取当前在线角色（每次读取都会补齐旧存档缺失的字段，见 ensureRoleDefaults） */
   static findOnlineRole() {
     const selectedRole = sys.localStorage.getItem("selectedRole");

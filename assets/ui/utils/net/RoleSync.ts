@@ -22,6 +22,9 @@ import { ROLE_SYNC_BIZ_CODES } from "./ApiCodes";
  * 这里改为拉一次最新数据、交给 onConflict（后台改动优先，玩家这 1.5 秒内的改动让位）。
  * 服务端每次落库都会 +1，所以**推成功后必须记住新值**（onSaved），否则下一次推送会拿旧值撞自己。
  *
+ * 另外两类「本地已经不是服务端现状」的失败各走各的出口（见 ApiCodes.ROLE_SYNC_BIZ_CODES）：
+ * 角色被删 → onMissing（本地缓存一并删掉）；角色被管理员下线 → onKicked（**只清在线标记，不删角色**）。
+ *
  * 什么时候必须 flush：会重建/销毁游戏场景的时机（切地图、退出），
  * 否则防抖窗口里那点改动会随场景一起没掉（见 ui/Game.onDestroy）。
  */
@@ -34,6 +37,8 @@ export default class RoleSync {
   static onConflict: ((fresh: RoleDetail) => void) | null = null;
   /** 角色在服务端已不存在（被后台删了）：本地不该继续玩一个不存在的角色 */
   static onMissing: ((roleId: string) => void) | null = null;
+  /** 角色被管理员下线（角色还在，但账号的在线角色已被清）：回选角界面重选一次即可 */
+  static onKicked: ((roleId: string) => void) | null = null;
 
   /** 待同步的数据（只记最后一份） */
   private static pending: Role | null = null;
@@ -84,7 +89,7 @@ export default class RoleSync {
   }
 
   /**
-   * 处理「本地存档已经不代表服务端现状」的两类失败
+   * 处理「本地存档已经不代表服务端现状」的三类失败
    *
    * @returns 是否已被接管（接管了就不再走普通失败提示）
    */
@@ -93,6 +98,13 @@ export default class RoleSync {
       // 角色没了：玩下去只会一路同步失败，交给上层退出到选角场景
       console.warn(`[RoleSync] 角色已不存在（${role.id}），交由上层处理`);
       this.onMissing?.(role.id);
+      return true;
+    }
+    if (error.code === ROLE_SYNC_BIZ_CODES.kicked) {
+      // 被管理员下线：角色还在（别删本地数据），只是账号的在线角色被清了 ——
+      // 玩家重新选一次这个角色就能继续（选角时会调 RoleApi.select 重新认领）
+      console.warn(`[RoleSync] 角色已被管理员下线（${role.id}），交由上层处理`);
+      this.onKicked?.(role.id);
       return true;
     }
     if (error.code !== ROLE_SYNC_BIZ_CODES.revisionConflict) return false;

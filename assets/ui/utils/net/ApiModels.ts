@@ -80,11 +80,29 @@ export type AdminLogin = {
   password: string;
 };
 
+export type ChangeAdminPassword = {
+  /**
+   * 当前密码
+   */
+  oldPassword: string;
+  /**
+   * 新密码（6~32 位）
+   */
+  newPassword: string;
+};
+
 export type UpdateAccountStatus = {
   /**
    * 目标状态
    */
   status?: "active" | "disabled";
+};
+
+export type ResetAccountPassword = {
+  /**
+   * 新密码（6~32 位）
+   */
+  password: string;
 };
 
 export type BatchDeleteRoles = {
@@ -193,6 +211,13 @@ export type AdminUpdatePayload = {
    * 目标状态
    */
   status?: "active" | "disabled";
+};
+
+export type ResetAdminPassword = {
+  /**
+   * 新密码（6~32 位）
+   */
+  password: string;
 };
 
 export type PageMeta = {
@@ -574,6 +599,161 @@ export type BatchDeleteResult = {
    * 被顺带清掉在线角色标记的账号 id（删的是在线角色时）
    */
   clearedOnlineAccountIds: string[];
+};
+
+export type ResetPasswordResult = {
+  /**
+   * 被重置的对象 id
+   */
+  id: string;
+  /**
+   * 被重置的对象名（账号名 / 管理员名，界面直接展示）
+   */
+  name: string;
+  /**
+   * 提示：口令变更后，该对象此前签发的令牌**已全部作废**，需要用它重新登录
+   */
+  revokedTokens?: boolean;
+};
+
+export type AuditLog = {
+  /**
+   * 日志 id
+   */
+  id: string;
+  /**
+   * 操作人管理员 id（匿名事件如登录失败为 null）
+   */
+  actorId: string | null;
+  /**
+   * 操作人账号名（冗余存下来，操作人被删后仍可追溯）
+   */
+  actorName: string | null;
+  /**
+   * 操作人角色（super_admin / admin / viewer）
+   */
+  actorRole: string | null;
+  /**
+   * 动作（即接口标识 operationId，如 adminRole.patch）
+   */
+  action: string;
+  /**
+   * 目标类型：account / role / admin
+   */
+  targetType: string | null;
+  /**
+   * 目标 id
+   */
+  targetId: string | null;
+  /**
+   * 目标**当前**的名字（按 targetType 关联出来；目标已删则为 null，界面退回显示 id）
+   */
+  targetName: string | null;
+  /**
+   * 附加上下文（请求体，已对 password / secret / token / code 一类字段打码；无则 null）
+   */
+  detail: Record<string, unknown> | null;
+  /**
+   * 来源 IP（反向代理下需 TRUST_PROXY=true 才准）
+   */
+  ip: string | null;
+  /**
+   * HTTP 方法
+   */
+  method: string | null;
+  /**
+   * 请求路径
+   */
+  path: string | null;
+  /**
+   * HTTP 状态码
+   */
+  statusCode: number | null;
+  /**
+   * 是否成功
+   */
+  success: boolean;
+  /**
+   * 失败时的业务码
+   */
+  errorCode: number | null;
+  /**
+   * 失败原因（可展示的中文）
+   */
+  errorMessage: string | null;
+  /**
+   * 发生时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type AuditLogPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的操作日志
+   */
+  list: AuditLog[];
+};
+
+export type AuditActionList = {
+  /**
+   * 动作（operationId）列表
+   */
+  actions: string[];
+};
+
+export type AuditQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径
+   */
+  keyword?: string;
+  /**
+   * 只看某个操作人的日志（管理员 id）
+   */
+  actorId?: string;
+  /**
+   * 只看某个动作（operationId，取值见 /admin/audit-logs/actions）
+   */
+  action?: string;
+  /**
+   * 目标类型筛选
+   */
+  targetType?: "account" | "role" | "admin";
+  /**
+   * 只看针对某个目标的日志（目标 id）
+   */
+  targetId?: string;
+  /**
+   * 结果筛选：true 只看成功 / false 只看失败
+   */
+  success?: "true" | "false";
+  /**
+   * 起始时间（毫秒时间戳，含）
+   */
+  from?: number;
+  /**
+   * 结束时间（毫秒时间戳，含）
+   */
+  to?: number;
 };
 
 export type AccountQuery = {

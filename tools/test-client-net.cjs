@@ -290,7 +290,23 @@ async function expectFailure(action) {
   check(missingRoleId === "role_gone", "角色已被删除（20002）→ 交给 onMissing（上层清缓存并回选角场景）", String(missingRoleId));
   check(missingFailed === 0, "角色不存在也走自愈分支，不当作普通同步失败", `${missingFailed} 次`);
   check(ROLE_SYNC_BIZ_CODES.missing === 20002, "角色不存在业务码与服务端约定一致（20002）");
+
+  reset();
+  let kickedRoleId = null;
+  let kickedFailed = 0;
+  let kickedConflict = 0;
   RoleSync.onMissing = null;
+  RoleSync.onKicked = (roleId) => (kickedRoleId = roleId);
+  RoleSync.onConflict = () => (kickedConflict += 1);
+  RoleSync.onFailed = () => (kickedFailed += 1);
+  responder = () => ({ kind: "ok", status: 200, text: envelope(20007, "该角色已被管理员下线，请重新选择角色进入游戏", null) });
+  RoleSync.schedule({ id: "role_kicked", level: 9, revision: 3 });
+  await delay(60);
+  check(kickedRoleId === "role_kicked", "角色被管理员下线（20007）→ 交给 onKicked（回选角重选，而不是当普通失败）", String(kickedRoleId));
+  check(kickedFailed === 0 && kickedConflict === 0, "被下线走独立分支：既不弹通用失败，也不被误当成乐观锁冲突去拉详情", `failed=${kickedFailed} conflict=${kickedConflict}`);
+  check(ROLE_SYNC_BIZ_CODES.kicked === 20007, "被下线业务码与服务端约定一致（20007）");
+  RoleSync.onKicked = null;
+  RoleSync.onConflict = null;
   RoleSync.onFailed = null;
 
   console.log("— A. 会话存储：读写与脏数据兜底 —");
@@ -364,9 +380,19 @@ async function expectFailure(action) {
     /RoleSync\.onMissing = \(roleId\) => \{[\s\S]*?StorageManager\.deleteRole\(roleId\)[\s\S]*?loadScene\("RoleSelector"\)/.test(gameSource),
     "游戏场景接上 onMissing：角色被后台删掉时清本地缓存并回选角场景（不卡在永远失败的游戏里）",
   );
+  check(
+    /RoleSync\.onKicked = \(\) => \{[\s\S]*?createTip\("role_sync_kicked_tip"\)[\s\S]*?StorageManager\.clearOnlineRole\(\)[\s\S]*?loadScene\("RoleSelector"\)/.test(gameSource),
+    "游戏场景接上 onKicked：被管理员下线时清在线标记并回选角场景（角色还在，重选即可继续）",
+  );
+  {
+    // 被下线最容易写错成「照抄 onMissing 把角色也删了」——角色还在，删了就真没了
+    const kickedAt = gameSource.indexOf("RoleSync.onKicked");
+    const kickedBlock = gameSource.slice(kickedAt, kickedAt + 260);
+    check(kickedAt > 0 && !/deleteRole/.test(kickedBlock), "被下线的处理里**不能**出现 deleteRole（20007 与 20002 是两种后果）", kickedBlock.replace(/\s+/g, " ").slice(0, 120));
+  }
   check(/onDestroy\(\)[\s\S]*?RoleSync\.flush\(\)/.test(gameSource), "场景销毁前 flush 未推送的进度（切地图/退出不丢改动）");
   check(
-    /onDestroy\(\)[\s\S]*?RoleSync\.onMissing = null/.test(gameSource),
+    /onDestroy\(\)[\s\S]*?RoleSync\.onMissing = null/.test(gameSource) && /onDestroy\(\)[\s\S]*?RoleSync\.onKicked = null/.test(gameSource),
     "场景销毁时摘掉全部同步回调（场景根都没了，回调里再飘字/切场景会出问题）",
   );
 
@@ -377,14 +403,16 @@ async function expectFailure(action) {
     "撞乐观锁时先静默拉一次最新数据再交给上层（不重试、不覆盖、不额外弹错误）",
   );
   check(/ROLE_SYNC_BIZ_CODES\.missing/.test(roleSyncSource) && /this\.onMissing\?\.\(role\.id\)/.test(roleSyncSource), "角色不存在的分支交给上层自愈");
+  check(/ROLE_SYNC_BIZ_CODES\.kicked/.test(roleSyncSource) && /this\.onKicked\?\.\(role\.id\)/.test(roleSyncSource), "角色被下线的分支单独走 onKicked（与「角色不存在」分开：一个清缓存、一个只清在线标记）");
+  check(/40103/.test(read(path.join(ASSETS, "ui/utils/net/ApiCodes.ts"))), "RELOGIN_BIZ_CODES 含 40103（管理员重置密码后旧令牌立即作废 → 回登录场景）");
 
   const roleEntitySource = read(path.join(ASSETS, "entities/Role.ts"));
   check(/revision\?: number;/.test(roleEntitySource), "Role 实体有可选的 revision（缺省 = 版本未知，推送时不带）");
 
   const textsSource = read(path.join(ASSETS, "configs/texts.ts"));
   check(
-    /role_sync_conflict_tip:/.test(textsSource) && /role_sync_missing_tip:/.test(textsSource),
-    "自愈用的两条文案都登记在 configs/texts（代码里不写中文）",
+    /role_sync_conflict_tip:/.test(textsSource) && /role_sync_missing_tip:/.test(textsSource) && /role_sync_kicked_tip:/.test(textsSource),
+    "自愈用的三条文案都登记在 configs/texts（代码里不写中文）",
   );
 
   const networkSource = read(FILE.network);
