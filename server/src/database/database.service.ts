@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -15,7 +15,7 @@ export type SqlParam = string | number | bigint | null | Uint8Array;
  * 数据文件路径来自配置（DB_PATH），`:memory:` 表示内存库（e2e 测试用）。
  */
 @Injectable()
-export class DatabaseService implements OnModuleInit {
+export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(DatabaseService.name);
   private db!: DatabaseSync;
 
@@ -30,6 +30,25 @@ export class DatabaseService implements OnModuleInit {
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.migrate();
     this.logger.log(`SQLite 就绪：${path}`);
+  }
+
+  /**
+   * 优雅关闭：把 WAL 合并回主文件并关掉连接
+   *
+   * 不这么做的话，进程被 kill 时 `-wal` / `-shm` 会**留在磁盘上**（只有干净的 close 才会
+   * checkpoint 并删掉它们）。它们本身不丢数据，但会让运维分不清「服务是不是还在跑」——
+   * 备份/恢复脚本正是拿这个当信号用的，误报多了那个保护就等于没有。
+   *
+   * 依赖 `main.ts` 里的 `app.enableShutdownHooks()`（否则这个钩子根本不会被调用）。
+   */
+  onApplicationShutdown() {
+    try {
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      this.logger.log("已把 WAL 合并回主文件");
+    } catch (error) {
+      this.logger.warn(`WAL 合并失败（不影响已提交的数据）：${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.db.close();
   }
 
   /** 建表（IF NOT EXISTS，可重复执行；新增字段时在此加 ALTER 并做存在性判断） */

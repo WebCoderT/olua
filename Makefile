@@ -50,7 +50,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-verify gen-api \
+        server-e2e-backup server-verify db-backup db-restore gen-api \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
 
@@ -196,11 +196,21 @@ server-e2e: ## 服务端主 e2e（187 条断言）
 server-e2e-roles: ## 服务端角色管理专项 e2e（77 条）
 	@cd server && $(NPM) run test:e2e:roles
 
-server-e2e-guard: ## 服务端运营与安全底座专项 e2e（91 条）
+server-e2e-guard: ## 服务端运营与安全底座专项 e2e（279 条）
 	@cd server && $(NPM) run test:e2e:guard
 
-server-verify: ## 服务端一条命令全验（编译 + 三套 e2e + 生成物审计）
+server-e2e-backup: ## 服务端备份 / 恢复 e2e（25 条：运行中备份 / 恢复留档 / 保护性拒绝）
+	@cd server && $(NPM) run test:e2e:backup
+
+server-verify: ## 服务端一条命令全验（编译 + 四套 e2e + 生成物审计）
 	@cd server && $(NPM) run verify
+
+db-backup: ## 备份 SQLite 数据文件（VACUUM INTO，服务运行中也能备；默认留最近 7 份）
+	@cd server && $(NPM) run db:backup
+
+db-restore: ## 恢复数据（用法：make db-restore FILE=server/backups/olua-20261009-153000.db，FORCE=1 跳过在跑检查）
+	@if [ -z "$(FILE)" ]; then echo "  用法：make db-restore FILE=<备份文件>（可加 FORCE=1）"; exit 1; fi
+	@cd server && $(NPM) run db:restore -- $(FILE) $(if $(FORCE),--force,)
 
 gen-api: ## 重新生成接口契约（openapi.json + 客户端与管理端生成物）
 	@echo "==> swagger:emit + gen-api"
@@ -262,11 +272,11 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
 
-test: client-test server-e2e server-e2e-roles server-e2e-guard ## 全部测试：客户端 23 套 + 服务端三套 e2e
+test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-backup ## 全部测试：客户端 24 套 + 服务端四套 e2e
 	@echo ""
 	@echo "✓ 测试全部通过"
 
-verify: check server-build test admin-build ## 完整门禁：静态检查 + 三端构建 + 全部测试
+verify: check server-build test admin-build ## 完整门禁：三端静态检查 + 三端构建 + 全部测试（含四套服务端 e2e）
 	@echo ""
 	@echo "✓ 全部门禁通过（提交前跑这个）"
 

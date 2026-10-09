@@ -9,6 +9,11 @@ dist/
 # SQLite 数据文件
 data/
 
+# 备份产物（各自机器上的数据，不进版本库）
+backups/
+*.before-restore-*
+*.restoring
+
 # 日志
 *.log
 

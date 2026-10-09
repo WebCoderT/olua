@@ -30,6 +30,9 @@ async function bootstrap() {
   const corsOrigins = config.get<string[]>("corsOrigins") ?? ["*"];
 
   app.setGlobalPrefix(prefix);
+  // 收到 SIGTERM / SIGINT 时走完整的关闭流程（各模块的 onApplicationShutdown）——
+  // 主要是为了让数据库把 WAL 合并回主文件并干净关连接（见 DatabaseService）
+  app.enableShutdownHooks();
   // 反向代理后面必须开（否则 req.ip 全是代理的地址，登录限流会把所有人当成同一个人一起锁死）；
   // 直连暴露时**不能**开 —— 开着等于允许调用方伪造 X-Forwarded-For 绕过 IP 限流
   app.set("trust proxy", config.get<boolean>("trustProxy") ?? false);
