@@ -1,10 +1,11 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 import { PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { BizCode } from "../../../common/constants/biz-code";
 import { ADMIN_ROLES } from "../../../common/constants/permission";
 import { ENTITY_STATUS } from "../../../common/constants/status";
 import { BizException } from "../../../common/errors/biz.exception";
+import { BAN_DURATION_MAX_HOURS } from "../../../common/utils/ban.util";
 import { RoleFilter } from "../../../database/repositories/role.repository";
 import { ROLE_LEVEL_MAX, ROLE_OCCUPATIONS, ROLE_SEXES } from "../../roles/role-data.util";
 
@@ -72,12 +73,41 @@ export class AdminQueryDto extends PageQueryDto {
   role?: string;
 }
 
-/** 账号状态变更 */
+/** 账号状态变更（封禁时可带原因与时长，解封时封禁字段一并清空） */
 export class UpdateAccountStatusDto {
-  @ApiPropertyOptional({ description: "目标状态", enum: [ENTITY_STATUS.ACTIVE, ENTITY_STATUS.DISABLED], example: ENTITY_STATUS.DISABLED })
+  @ApiPropertyOptional({
+    description: "目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）",
+    enum: [ENTITY_STATUS.ACTIVE, ENTITY_STATUS.DISABLED],
+    example: ENTITY_STATUS.DISABLED,
+  })
   @IsString({ message: "状态必须是字符串" })
   @IsIn([ENTITY_STATUS.ACTIVE, ENTITY_STATUS.DISABLED], { message: "状态取值不合法" })
   status: string;
+
+  @ApiPropertyOptional({ description: "封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里", maxLength: 100, example: "使用外挂" })
+  @IsOptional()
+  @IsString({ message: "封禁原因必须是字符串" })
+  @MaxLength(100, { message: "封禁原因最多 100 个字" })
+  reason?: string;
+
+  /**
+   * 不填 = 永久封禁（`ban_until` 写 null）
+   *
+   * 上限一年：再长在运营上等价于永久，限制住可以避免把「填错一个数字」变成
+   * 「封到 275760 年」这种看不出错的错。
+   */
+  @ApiPropertyOptional({
+    description: "封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义",
+    minimum: 1,
+    maximum: BAN_DURATION_MAX_HOURS,
+    nullable: true,
+    example: 24,
+  })
+  @IsOptional()
+  @IsInt({ message: "封禁时长必须是整数小时" })
+  @Min(1, { message: "封禁时长至少 1 小时" })
+  @Max(BAN_DURATION_MAX_HOURS, { message: `封禁时长最多 ${BAN_DURATION_MAX_HOURS} 小时` })
+  durationHours?: number | null;
 }
 
 /** 分页入参规整（page 从 1 开始，size 限 1~100） */

@@ -217,6 +217,57 @@ export function localInputToMs(text: string): number | undefined {
 
 //#endregion
 
+//#region 封禁（原因 / 时长 / 到期）
+
+/** 封禁时长快选；`null` = 永久。界面只做快选，服务端接收任意 1~8760 的整数小时 */
+export const BAN_DURATION_PRESETS: readonly { hours: number | null; label: string }[] = [
+  { hours: 1, label: "1 小时" },
+  { hours: 6, label: "6 小时" },
+  { hours: 24, label: "1 天" },
+  { hours: 72, label: "3 天" },
+  { hours: 168, label: "7 天" },
+  { hours: 720, label: "30 天" },
+  { hours: null, label: "永久" },
+];
+
+/** 封禁原因长度上限（与服务端 dto/query.dto 的 UpdateAccountStatusDto 一致） */
+export const BAN_REASON_MAX_LENGTH = 100;
+
+/** 封禁时长上限（小时，一年）—— 与服务端 BAN_DURATION_MAX_HOURS 同口径 */
+export const BAN_DURATION_MAX_HOURS = 24 * 365;
+
+/** 毫秒时长 → 人话（口径与后端 humanizeDuration 一致：已经有「天」就不报分钟） */
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.max(1, Math.ceil(ms / 60_000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days} 天`);
+  if (hours > 0) parts.push(`${hours} 小时`);
+  if (minutes > 0 && days === 0) parts.push(`${minutes} 分钟`);
+  return parts.join(" ") || "1 分钟";
+}
+
+/**
+ * 封禁的展示状态
+ *
+ * **不能只看 `status`**：后端为了让「到期自动解封」不依赖定时器，判定一律按时间算，
+ * 于是库里可能出现 `status = disabled` 而 `banUntil` 已经过去的情况（定时器最多晚一分钟扫到）。
+ * 那种账号现在就能登录 —— 界面必须用与后端同一套判据，否则会把一个能玩的号显示成封禁中。
+ */
+export function banStateOf(
+  account: { status: string; banUntil: number | null },
+  now: number = Date.now(),
+): { banned: boolean; expired: boolean; text: string } {
+  if (account.status !== "disabled") return { banned: false, expired: false, text: "正常" };
+  if (account.banUntil !== null && account.banUntil <= now) return { banned: false, expired: true, text: "封禁已到期" };
+  if (account.banUntil === null) return { banned: true, expired: false, text: "永久封禁" };
+  return { banned: true, expired: false, text: `封禁中 · 剩余 ${formatDuration(account.banUntil - now)}` };
+}
+
+//#endregion
+
 //#region 操作日志的展示字典
 
 /** 审计目标类型中文名 */

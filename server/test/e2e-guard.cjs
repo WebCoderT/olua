@@ -17,6 +17,8 @@ const net = require("node:net");
 const path = require("node:path");
 // 限流的判定是纯函数，直接 require 编译产物跑边界值（不必起服务）
 const rateLimit = require(path.join(__dirname, "..", "dist", "common", "utils", "rate-limit.util.js"));
+// 封禁的到期判定同理：纯函数，边界值不必起服务
+const ban = require(path.join(__dirname, "..", "dist", "common", "utils", "ban.util.js"));
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -173,6 +175,40 @@ function runUtilSuite() {
 
   checkEqual(rateLimit.isIdle(rateLimit.afterSuccess(), now), true, "成功后状态回到空闲（内存表可清理）");
   checkEqual(rateLimit.isIdle(state, now), false, "锁定中的状态不会被判为空闲");
+
+  group("零之二、封禁纯函数：到期判定 / 期限文案");
+
+  // 判据是「disabled + 有结束时间 + 已到期」三者同时成立，缺一不可
+  checkEqual(ban.isBanned({ status: "active", ban_until: null }, now), false, "正常账号不算被封");
+  checkEqual(ban.isBanned({ status: "disabled", ban_until: null }, now), true, "disabled 且无到期时间 = 永久封禁");
+  checkEqual(ban.isBanned({ status: "disabled", ban_until: now + 1 }, now), true, "未到期的临时封禁算封禁中");
+  checkEqual(ban.isBanned({ status: "disabled", ban_until: now }, now), false, "到期当刻即解封（边界含等号）");
+  checkEqual(ban.isBanned({ status: "disabled", ban_until: now - 1 }, now), false, "已过期的临时封禁不算被封");
+  checkEqual(
+    ban.isBanExpired({ status: "active", ban_until: now - 1 }, now),
+    false,
+    "正常账号即使带着过去的 ban_until 也不算「封禁到期」（不能只看时间）",
+  );
+
+  checkEqual(ban.humanizeDuration(30_000), "1 分钟", "不足 1 分钟按 1 分钟说");
+  checkEqual(ban.humanizeDuration(3 * 3600_000), "3 小时", "纯小时");
+  checkEqual(ban.humanizeDuration(50 * 3600_000), "2 天 2 小时", "天 + 小时");
+  checkEqual(ban.humanizeDuration(26 * 3600_000), "1 天 2 小时", "跨天后不再拼接分钟");
+
+  checkEqual(
+    ban.describeBan({ status: "disabled", ban_until: null, ban_reason: "使用外挂" }, now),
+    "账号已被封禁：使用外挂（永久封禁，如有疑问请联系客服）",
+    "永久封禁文案带原因",
+  );
+  check(
+    ban.describeBan({ status: "disabled", ban_until: now + 3600_000, ban_reason: null }, now).includes("剩余 1 小时后自动解封"),
+    "临时封禁文案带剩余时长",
+  );
+  checkEqual(
+    ban.describeBan({ status: "disabled", ban_until: null, ban_reason: "   " }, now),
+    "账号已被封禁（永久封禁，如有疑问请联系客服）",
+    "原因全是空白时按未填写处理",
+  );
 }
 
 //#endregion
@@ -457,14 +493,72 @@ async function runMainSuite(baseUrl) {
   checkEqual(saveAgain.body.code, 0, "重新选角后推存档恢复正常");
 
   //#endregion
+
+  //#region 六、封禁闭环
+  group("六、封禁闭环：原因与时长进提示，解封清空封禁信息");
+
+  const banTarget = `/api/admin/accounts/${playerAccountId}/status`;
+
+  // 先让这个账号在线，用来验证「封禁会顺带清掉在线标记」
+  const banCreated = await call("POST", "/api/roles", { token: freshPlayerToken, body: { data: roleData("ban_role", "待封的号", 5) } });
+  const banRoleId = banCreated.body.data.id;
+  check(Boolean(banRoleId), "准备：玩家创建一个在线角色（封禁用例的前置）");
+
+  const banTemp = await call("PATCH", banTarget, {
+    token: superToken,
+    body: { status: "disabled", reason: "使用外挂", durationHours: 24 },
+  });
+  checkEqual(banTemp.body.code, 0, "临时封禁成功");
+  checkEqual(banTemp.body.data.status, "disabled", "状态变为 disabled");
+  checkEqual(banTemp.body.data.banReason, "使用外挂", "封禁原因落库");
+  checkEqual(banTemp.body.data.bannedBy, "guard_super", "记下执行封禁的管理员账号名");
+  checkEqual(banTemp.body.data.banUntil - banTemp.body.data.bannedAt, 24 * 3600_000, "到期时间 = 封禁时刻 + 24 小时");
+  checkEqual(banTemp.body.data.onlineRoleId, null, "封禁会顺带清掉在线标记");
+
+  const banLogin = await call("POST", "/api/auth/login", { body: { username: "guard_player", password: "player-new-pass" } });
+  checkEqual(banLogin.status, 403, "被封的账号登录被拒（403）");
+  checkEqual(banLogin.body.code, 10004, "业务码是账号封禁 10004");
+  check(banLogin.body.message.includes("使用外挂"), "登录被拒的提示里带封禁原因");
+  check(banLogin.body.message.includes("剩余"), "临时封禁的提示里带剩余时长");
+
+  const bannedMe = await call("GET", "/api/auth/me", { token: freshPlayerToken });
+  checkEqual(bannedMe.status, 401, "已登录的令牌下一次请求即被拒（封禁即时生效）");
+
+  const unbanned = await call("PATCH", banTarget, { token: superToken, body: { status: "active" } });
+  checkEqual(unbanned.body.data.status, "active", "解封后状态回到 active");
+  checkEqual(unbanned.body.data.banReason, null, "解封清空封禁原因");
+  checkEqual(unbanned.body.data.banUntil, null, "解封清空到期时间");
+  checkEqual(unbanned.body.data.bannedBy, null, "解封清空执行人");
+  checkEqual(unbanned.body.data.bannedAt, null, "解封清空封禁时间");
+
+  const backLogin = await call("POST", "/api/auth/login", { body: { username: "guard_player", password: "player-new-pass" } });
+  checkEqual(backLogin.body.code, 0, "解封后可以正常登录");
+  const backToken = backLogin.body.data.token;
+
+  // 不传时长 = 永久封禁（ban_until 写 null，「disabled + null」才是永久，不能只看 null）
+  const banForever = await call("PATCH", banTarget, { token: superToken, body: { status: "disabled", reason: "恶意刷屏" } });
+  checkEqual(banForever.body.data.banUntil, null, "不传时长 = 永久封禁（banUntil 为 null）");
+  const foreverLogin = await call("POST", "/api/auth/login", { body: { username: "guard_player", password: "player-new-pass" } });
+  check(foreverLogin.body.message.includes("永久封禁"), "永久封禁的提示里写明「永久」");
+
+  const badDuration = await call("PATCH", banTarget, { token: superToken, body: { status: "disabled", durationHours: 0 } });
+  checkEqual(badDuration.status, 400, "封禁时长小于 1 小时被拒（400）");
+  const badReason = await call("PATCH", banTarget, { token: superToken, body: { status: "disabled", reason: "x".repeat(101) } });
+  checkEqual(badReason.status, 400, "封禁原因超过 100 字被拒（400）");
+
+  // 收尾：解封（本段是 runMainSuite 最后一段，留个正常状态给后面的改动）
+  await call("PATCH", banTarget, { token: superToken, body: { status: "active" } });
+  checkEqual((await call("GET", "/api/auth/me", { token: backToken })).body.code, 0, "解封后重新登录的令牌可用（收尾）");
+
+  //#endregion
 }
 
 //#endregion
 
-//#region 六：第二台服务专测 IP 维度限流
+//#region 七：第二台服务专测 IP 维度限流
 
 async function runIpSuite(baseUrl) {
-  group("六、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
+  group("七、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
 
   const first = await api(baseUrl, "POST", "/api/auth/login", { body: { username: "ip_victim_a", password: "x-pass-1" } });
   checkEqual(first.body.code, 10003, "第一次失败（用户名维度未锁）");
@@ -496,7 +590,7 @@ async function main() {
     main2.kill();
   }
 
-  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线：${passed} 条通过 / ${failed} 条失败`);
+  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁：${passed} 条通过 / ${failed} 条失败`);
   if (failed) {
     console.log("失败项：\n" + failures.map((item) => `  - ${item}`).join("\n"));
     process.exitCode = 1;

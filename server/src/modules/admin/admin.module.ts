@@ -6,6 +6,7 @@ import { AdminAuthController } from "./admin-auth.controller";
 import { AdminAuthService } from "./admin-auth.service";
 import { AdminRolesController } from "./admin-roles.controller";
 import { AdminService } from "./admin.service";
+import { BanSchedulerService } from "./ban-scheduler.service";
 
 /**
  * 管理端模块
@@ -18,6 +19,6 @@ import { AdminService } from "./admin.service";
 @Module({
   imports: [AuditModule],
   controllers: [AdminAuthController, AdminAccountsController, AdminRolesController, AdminAdminsController],
-  providers: [AdminAuthService, AdminService],
+  providers: [AdminAuthService, AdminService, BanSchedulerService],
 })
 export class AdminModule {}

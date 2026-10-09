@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { accountsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, rolesApi } from "../api";
+import { accountsApi, banStateOf, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, rolesApi } from "../api";
 import type { AccountDetail } from "../api";
+import { BanDialog } from "../components/BanDialog";
+import { BanStatus } from "../components/BanStatus";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -13,6 +15,7 @@ export function AccountDetailPage() {
   const canSelect = hasPermission(PERMISSION.ROLE_SELECT);
   const canDeleteRole = hasPermission(PERMISSION.ROLE_DELETE);
   const canResetPassword = hasPermission(PERMISSION.ACCOUNT_PASSWORD);
+  const canStatus = hasPermission(PERMISSION.ACCOUNT_STATUS);
   const { id = "" } = useParams();
   const [detail, setDetail] = useState<AccountDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +26,8 @@ export function AccountDetailPage() {
   const [purging, setPurging] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [kicking, setKicking] = useState(false);
+  const [banOpen, setBanOpen] = useState(false);
+  const [unbanning, setUnbanning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +72,43 @@ export function AccountDetailPage() {
       /* 统一提示 */
     } finally {
       setKicking(false);
+    }
+  };
+
+  /** 封禁（原因与时长由弹窗收集；返回是否成功 —— 失败时弹窗留在原地，不用重填） */
+  const ban = async (payload: { reason: string; durationHours: number | null }): Promise<boolean> => {
+    if (!detail) return false;
+    try {
+      await accountsApi.updateStatus(detail.account.id, {
+        status: "disabled",
+        reason: payload.reason,
+        durationHours: payload.durationHours,
+      });
+      toastSuccess(
+        payload.durationHours === null
+          ? `已永久封禁 ${detail.account.username}`
+          : `已封禁 ${detail.account.username}，${payload.durationHours} 小时后自动解封`,
+      );
+      await load();
+      return true;
+    } catch {
+      /* 统一提示 */
+      return false;
+    }
+  };
+
+  /** 解封（原因、到期时间、执行人一并清空） */
+  const unban = async () => {
+    if (!detail) return;
+    setUnbanning(true);
+    try {
+      await accountsApi.updateStatus(detail.account.id, { status: "active" });
+      toastSuccess(`已解封 ${detail.account.username}`);
+      await load();
+    } catch {
+      /* 统一提示 */
+    } finally {
+      setUnbanning(false);
     }
   };
 
@@ -148,6 +190,15 @@ export function AccountDetailPage() {
           <Button variant="outline" disabled={!canResetPassword} onClick={() => setResetOpen(true)}>
             重置密码
           </Button>
+          {banStateOf(account).banned ? (
+            <Button variant="outline" disabled={!canStatus} loading={unbanning} onClick={() => void unban()}>
+              解封
+            </Button>
+          ) : (
+            <Button variant="danger" disabled={!canStatus} onClick={() => setBanOpen(true)}>
+              封禁
+            </Button>
+          )}
           <Link to="/accounts">
             <Button variant="outline">返回列表</Button>
           </Link>
@@ -156,7 +207,7 @@ export function AccountDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <Card title="账号状态">
-          <p className="text-sm text-slate-200">{account.status === "active" ? <Badge tone="green">正常</Badge> : <Badge tone="red">已封禁</Badge>}</p>
+          <BanStatus account={account} showReason />
         </Card>
         <Card title="注册时间">
           <p className="text-sm text-slate-200">{formatTime(account.createdAt)}</p>
@@ -256,6 +307,13 @@ export function AccountDetailPage() {
         loading={purging}
         onConfirm={() => void purgeRoles()}
         onCancel={() => setPurgeConfirm(false)}
+      />
+
+      <BanDialog
+        open={banOpen}
+        targetName={account.username}
+        onCancel={() => setBanOpen(false)}
+        onSubmit={ban}
       />
 
       <ResetPasswordDialog

@@ -15,6 +15,18 @@ export interface AccountRow {
    * 每次请求回查库比对，才能做到「改完密码旧设备立刻下线」（见 AuthGuard）。
    */
   token_version: number;
+  /**
+   * 封禁闭环（未封禁时四个字段都是 null）
+   *
+   * `ban_until` 与 `status` 的关系：status = disabled 且 ban_until = null 表示永久封禁，
+   * 两个都为 null 之外的组合见 common/utils/ban.util（判定一律走那里，别在业务里手写）。
+   */
+  ban_reason: string | null;
+  /** 封禁到期时间（毫秒）；null 且 status=disabled 表示永久封禁 */
+  ban_until: number | null;
+  /** 执行封禁的管理员账号名（冗余存一份，管理员被删也追得到人） */
+  banned_by: string | null;
+  banned_at: number | null;
   created_at: number;
   updated_at: number;
   last_login_at: number | null;

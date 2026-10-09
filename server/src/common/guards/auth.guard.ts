@@ -7,6 +7,7 @@ import { ENTITY_STATUS } from "../constants/status";
 import { AUDIENCE_KEY } from "../decorators/audience.decorator";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 import { BizException } from "../errors/biz.exception";
+import { describeBan, isBanned } from "../utils/ban.util";
 import { Audience, AuthenticatedUser } from "../interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { AdminRepository } from "../../database/repositories/admin.repository";
@@ -67,7 +68,9 @@ export class AuthGuard implements CanActivate {
 
     const account = this.accounts.findById(payload.sub);
     if (!account) throw BizException.unauthorized(BizCode.ACCOUNT_NOT_FOUND, "账号不存在");
-    if (account.status !== ENTITY_STATUS.ACTIVE) throw BizException.unauthorized(BizCode.ACCOUNT_DISABLED, "账号已被封禁，请联系客服");
+    // 封禁读判不放行；到期的临时封禁按未封禁处理（判定纯函数见 common/utils/ban.util）。
+    // 这里**不回写库** —— 每次请求都写一次状态太重；回写放在登录时（低频）与定时器里。
+    if (isBanned(account)) throw BizException.unauthorized(BizCode.ACCOUNT_DISABLED, describeBan(account));
     if ((account.token_version ?? 0) !== (payload.ver ?? 0)) {
       throw BizException.unauthorized(BizCode.TOKEN_REVOKED, "密码已变更，请重新登录");
     }

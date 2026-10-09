@@ -67,11 +67,53 @@ export class AdminService {
     };
   }
 
-  /** 封禁 / 解封账号（下次请求即生效 —— 守卫每次都回查状态） */
-  updateAccountStatus(id: string, dto: UpdateAccountStatusDto): AccountDto {
-    const account = this.mustAccount(id);
-    this.accounts.updateById(id, { status: dto.status });
-    return AccountDto.from({ ...account, status: dto.status });
+  /**
+   * 封禁 / 解封账号
+   *
+   * 封禁时顺手做两件事：① 清在线标记 —— 否则概览的「在线账号数」虚高，玩家重登
+   * 还会发现自己「还在游戏里」；② 记下原因 / 到期时间 / 执行人（冗余存账号名，
+   * 管理员被删也追得到人）。
+   *
+   * 「临时封禁到期自动解封」**不靠这里**：判定走 common/utils/ban.util（登录与守卫
+   * 每次请求都算），定时器另负责把库里的状态扫回去（见 BanSchedulerService）——
+   * 两者互不依赖，服务端停过一段时间再起来也不会漏掉解封。
+   */
+  updateAccountStatus(id: string, dto: UpdateAccountStatusDto, operator?: string): AccountDto {
+    this.mustAccount(id);
+    const now = Date.now();
+    if (dto.status === ENTITY_STATUS.DISABLED) {
+      const hours = dto.durationHours ?? null;
+      this.accounts.updateById(id, {
+        status: ENTITY_STATUS.DISABLED,
+        online_role_id: null,
+        ban_reason: dto.reason?.trim() || null,
+        ban_until: hours === null ? null : now + hours * 3_600_000,
+        banned_by: operator ?? null,
+        banned_at: now,
+      });
+    } else {
+      // 解封：封禁四件套一起清，避免留下「已解封，原因：xxx」的残影
+      this.accounts.updateById(id, {
+        status: ENTITY_STATUS.ACTIVE,
+        ban_reason: null,
+        ban_until: null,
+        banned_by: null,
+        banned_at: null,
+      });
+    }
+    return AccountDto.from(this.mustAccount(id));
+  }
+
+  /**
+   * 扫描并解封已到期的临时封禁（由 BanSchedulerService 每分钟调用一次）
+   *
+   * 有意**不写操作日志**：`audit_logs` 记的是「谁改了什么」，而这条是系统行为
+   * （actor 为空），写进去只会让「按操作人筛」多出一堆查不到人的记录。
+   */
+  unbanExpired(now: number = Date.now()): string[] {
+    const ids = this.accounts.findExpiredBans(now);
+    for (const id of ids) this.accounts.liftBan(id, now);
+    return ids;
   }
 
   /** 删除账号（其名下角色由外键级联删除） */

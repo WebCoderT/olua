@@ -42,6 +42,10 @@ export class DatabaseService implements OnModuleInit {
         status         TEXT NOT NULL DEFAULT 'active',
         online_role_id TEXT,
         token_version  INTEGER NOT NULL DEFAULT 0,
+        ban_reason     TEXT,
+        ban_until      INTEGER,
+        banned_by      TEXT,
+        banned_at      INTEGER,
         created_at     INTEGER NOT NULL,
         updated_at     INTEGER NOT NULL,
         last_login_at  INTEGER
@@ -103,6 +107,11 @@ export class DatabaseService implements OnModuleInit {
     // 令牌版本号（改密即失效旧令牌）：存量库补列后默认 0，而存量令牌里没有 ver 字段也按 0 处理，两者一致
     this.ensureColumn("accounts", "token_version", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("admins", "token_version", "INTEGER NOT NULL DEFAULT 0");
+    // 封禁闭环：原因 / 到期时间（null = 永久）/ 执行人 / 执行时间
+    this.ensureColumn("accounts", "ban_reason", "TEXT");
+    this.ensureColumn("accounts", "ban_until", "INTEGER");
+    this.ensureColumn("accounts", "banned_by", "TEXT");
+    this.ensureColumn("accounts", "banned_at", "INTEGER");
     this.ensureSuperAdmin();
   }
 

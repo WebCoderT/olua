@@ -93,9 +93,17 @@ export type ChangeAdminPassword = {
 
 export type UpdateAccountStatus = {
   /**
-   * 目标状态
+   * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
    */
   status?: "active" | "disabled";
+  /**
+   * 封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里
+   */
+  reason?: string;
+  /**
+   * 封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义
+   */
+  durationHours?: unknown | null;
 };
 
 export type ResetAccountPassword = {
@@ -260,9 +268,25 @@ export type Account = {
    */
   username: string;
   /**
-   * 状态：active 正常 / disabled 封禁
+   * 状态：active 正常 / disabled 封禁（临时封禁到期后由服务端扫回 active）
    */
   status: string;
+  /**
+   * 封禁原因（未封禁为 null）
+   */
+  banReason: string | null;
+  /**
+   * 封禁到期时间（毫秒）；null 表示未封禁或永久封禁
+   */
+  banUntil: number | null;
+  /**
+   * 执行封禁的管理员账号名（未封禁为 null）
+   */
+  bannedBy: string | null;
+  /**
+   * 封禁时间（毫秒；未封禁为 null）
+   */
+  bannedAt: number | null;
   /**
    * 当前选中的角色 id（未选角色时为 null）
    */

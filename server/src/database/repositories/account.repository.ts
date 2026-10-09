@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ENTITY_STATUS } from "../../common/constants/status";
 import { DatabaseService, SqlParam } from "../database.service";
 import { AccountRow, AccountWithCountRow } from "../rows";
 
@@ -46,6 +47,10 @@ export class AccountRepository {
     if (patch.status !== undefined) assign("status", patch.status);
     if (patch.online_role_id !== undefined) assign("online_role_id", patch.online_role_id);
     if (patch.token_version !== undefined) assign("token_version", patch.token_version);
+    if (patch.ban_reason !== undefined) assign("ban_reason", patch.ban_reason);
+    if (patch.ban_until !== undefined) assign("ban_until", patch.ban_until);
+    if (patch.banned_by !== undefined) assign("banned_by", patch.banned_by);
+    if (patch.banned_at !== undefined) assign("banned_at", patch.banned_at);
     if (patch.last_login_at !== undefined) assign("last_login_at", patch.last_login_at);
     if (fields.length === 0) return this.findById(id) !== undefined;
     assign("updated_at", patch.updated_at ?? Date.now());
@@ -133,5 +138,36 @@ export class AccountRepository {
   /** 当前有在线角色的账号数（概览用） */
   countOnline(): number {
     return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE online_role_id IS NOT NULL");
+  }
+
+  /**
+   * 解封（状态改回正常 + 清空封禁四件套）
+   *
+   * 一次写完：只把 status 改回 active 却留着 ban_reason，后台会一直显示
+   * 「已解封，原因：xxx」这种残影，下次封禁时也容易误读成旧原因。
+   */
+  liftBan(id: string, now: number = Date.now()): void {
+    this.db.run(
+      "UPDATE accounts SET status = ?, ban_reason = NULL, ban_until = NULL, banned_by = NULL, banned_at = NULL, updated_at = ? WHERE id = ?",
+      [ENTITY_STATUS.ACTIVE, now, id],
+    );
+  }
+
+  /** 已到期的临时封禁 id（定时器扫描用；永久封禁 ban_until 为 null，不会被选中） */
+  findExpiredBans(now: number = Date.now()): string[] {
+    return this.db
+      .all<{ id: string }>("SELECT id FROM accounts WHERE status = ? AND ban_until IS NOT NULL AND ban_until <= ?", [
+        ENTITY_STATUS.DISABLED,
+        now,
+      ])
+      .map((row) => row.id);
+  }
+
+  /** 当前封禁中的账号数（概览用；永久封禁与未到期的临时封禁都算，已到期的不算） */
+  countBanned(now: number = Date.now()): number {
+    return this.db.count(
+      "SELECT COUNT(1) AS total FROM accounts WHERE status = ? AND (ban_until IS NULL OR ban_until > ?)",
+      [ENTITY_STATUS.DISABLED, now],
+    );
   }
 }

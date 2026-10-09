@@ -1211,7 +1211,7 @@
     },
     "/admin/accounts/{id}/status": {
       "patch": {
-        "description": "改完立刻生效：守卫每次请求都回查账号状态。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
+        "description": "改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。\n\n**封禁**可带 `reason`（原因，玩家登录时会看到）与 `durationHours`（时长，小时）—— 不填时长即永久封禁。临时封禁**到期自动解封**：判定按时间算，不依赖谁来点解封，\n定时器只负责把库里的状态扫回去。\n\n**解封**（status=active）会把原因、到期时间、执行人、执行时间一并清空。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
         "operationId": "adminAccount.updateStatus",
         "parameters": [
           {
@@ -1236,7 +1236,7 @@
         },
         "responses": {
           "200": {
-            "description": "变更后的账号",
+            "description": "变更后的账号（含封禁信息）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2373,12 +2373,26 @@
         "properties": {
           "status": {
             "type": "string",
-            "description": "目标状态",
+            "description": "目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）",
             "enum": [
               "active",
               "disabled"
             ],
             "example": "disabled"
+          },
+          "reason": {
+            "type": "string",
+            "description": "封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里",
+            "maxLength": 100,
+            "example": "使用外挂"
+          },
+          "durationHours": {
+            "type": "object",
+            "description": "封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义",
+            "minimum": 1,
+            "maximum": 8760,
+            "nullable": true,
+            "example": 24
           }
         }
       },
@@ -2697,8 +2711,32 @@
           },
           "status": {
             "type": "string",
-            "description": "状态：active 正常 / disabled 封禁",
+            "description": "状态：active 正常 / disabled 封禁（临时封禁到期后由服务端扫回 active）",
             "example": "active"
+          },
+          "banReason": {
+            "type": "string",
+            "description": "封禁原因（未封禁为 null）",
+            "nullable": true,
+            "example": null
+          },
+          "banUntil": {
+            "type": "number",
+            "description": "封禁到期时间（毫秒）；null 表示未封禁或永久封禁",
+            "nullable": true,
+            "example": null
+          },
+          "bannedBy": {
+            "type": "string",
+            "description": "执行封禁的管理员账号名（未封禁为 null）",
+            "nullable": true,
+            "example": null
+          },
+          "bannedAt": {
+            "type": "number",
+            "description": "封禁时间（毫秒；未封禁为 null）",
+            "nullable": true,
+            "example": null
           },
           "onlineRoleId": {
             "type": "string",
@@ -2732,6 +2770,10 @@
           "id",
           "username",
           "status",
+          "banReason",
+          "banUntil",
+          "bannedBy",
+          "bannedAt",
           "onlineRoleId",
           "createdAt",
           "updatedAt",

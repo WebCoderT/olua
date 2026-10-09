@@ -5,6 +5,7 @@ import { BizCode } from "../../common/constants/biz-code";
 import { ENTITY_STATUS } from "../../common/constants/status";
 import { BizException } from "../../common/errors/biz.exception";
 import { hashPassword, verifyPassword } from "../../common/utils/password.util";
+import { describeBan, isBanned } from "../../common/utils/ban.util";
 import { LoginThrottleService } from "../../common/security/login-throttle.service";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { AccountRow } from "../../database/rows";
@@ -38,6 +39,10 @@ export class AuthService {
       status: ENTITY_STATUS.ACTIVE,
       online_role_id: null,
       token_version: 0,
+      ban_reason: null,
+      ban_until: null,
+      banned_by: null,
+      banned_at: null,
       created_at: now,
       updated_at: now,
       last_login_at: now,
@@ -72,7 +77,9 @@ export class AuthService {
       });
       throw new BizException(BizCode.PASSWORD_WRONG, "账号或密码错误", HttpStatus.UNAUTHORIZED);
     }
-    if (account.status !== ENTITY_STATUS.ACTIVE) {
+    // 封禁判定：到期的临时封禁会被判为「未封禁」，直接放行（见 ban.util）
+    if (isBanned(account)) {
+      const banMessage = describeBan(account);
       this.audit.recordLoginAttempt({
         action: "auth.login",
         route: "auth/login",
@@ -80,10 +87,20 @@ export class AuthService {
         ip,
         ok: false,
         errorCode: BizCode.ACCOUNT_DISABLED,
-        errorMessage: "账号已被封禁",
+        errorMessage: banMessage,
         statusCode: HttpStatus.FORBIDDEN,
       });
-      throw new BizException(BizCode.ACCOUNT_DISABLED, "账号已被封禁，请联系客服", HttpStatus.FORBIDDEN);
+      throw new BizException(BizCode.ACCOUNT_DISABLED, banMessage, HttpStatus.FORBIDDEN);
+    }
+    // 走到这里说明封禁已到期（临时封禁）：顺手把库里的状态扫回去，
+    // 否则后台列表会一直显示「封禁中」，运营看不出这个号其实已经可以登了。
+    if (account.status !== ENTITY_STATUS.ACTIVE) {
+      this.accounts.liftBan(account.id);
+      account.status = ENTITY_STATUS.ACTIVE;
+      account.ban_reason = null;
+      account.ban_until = null;
+      account.banned_by = null;
+      account.banned_at = null;
     }
     this.throttle.recordSuccess(username, ip);
     account.last_login_at = Date.now();

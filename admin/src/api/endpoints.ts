@@ -81,7 +81,7 @@ export const accountsApi = {
   /**
    * 封禁 / 解封账号（PATCH /admin/accounts/{id}/status）
    *
-   * 改完立刻生效：守卫每次请求都回查账号状态。
+   * 改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。
    *
    * 权限点：account:status
    */

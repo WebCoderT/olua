@@ -5,8 +5,10 @@ import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { AccountDto } from "../auth/dto/account.dto";
 import { AdminService } from "./admin.service";
 import { BatchDeleteResultDto } from "./dto/batch-role.dto";
@@ -59,13 +61,22 @@ export class AdminAccountsController {
   @ApiAdminDoc({
     operationId: "adminAccount.updateStatus",
     summary: "封禁 / 解封账号",
-    description: "改完立刻生效：守卫每次请求都回查账号状态。",
+    description:
+      "改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。\n\n" +
+      "**封禁**可带 `reason`（原因，玩家登录时会看到）与 `durationHours`（时长，小时）—— " +
+      "不填时长即永久封禁。临时封禁**到期自动解封**：判定按时间算，不依赖谁来点解封，\n" +
+      "定时器只负责把库里的状态扫回去。\n\n" +
+      "**解封**（status=active）会把原因、到期时间、执行人、执行时间一并清空。",
     permissions: [Permission.ACCOUNT_STATUS],
   })
   @ApiParam({ name: "id", description: "账号 id" })
-  @ApiDataResponse(AccountDto, { description: "变更后的账号" })
-  updateStatus(@Param("id") id: string, @Body() dto: UpdateAccountStatusDto): AccountDto {
-    return this.adminService.updateAccountStatus(id, dto);
+  @ApiDataResponse(AccountDto, { description: "变更后的账号（含封禁信息）" })
+  updateStatus(
+    @Param("id") id: string,
+    @Body() dto: UpdateAccountStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): AccountDto {
+    return this.adminService.updateAccountStatus(id, dto, user.username);
   }
 
   @Patch("accounts/:id/password")

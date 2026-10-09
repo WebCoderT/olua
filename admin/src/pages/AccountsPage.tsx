@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { accountsApi, PERMISSION } from "../api";
+import { accountsApi, banStateOf, PERMISSION } from "../api";
 import type { Account, AccountQuery, PageResult } from "../api";
+import { BanDialog } from "../components/BanDialog";
+import { BanStatus } from "../components/BanStatus";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { formatTime } from "../api";
 import { hasPermission } from "../store/session";
 import { toastError, toastSuccess } from "../store/toast";
@@ -21,6 +23,7 @@ export function AccountsPage() {
   const [data, setData] = useState<PageResult<Account> | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingBan, setPendingBan] = useState<Account | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -56,13 +59,42 @@ export function AccountsPage() {
     setQuery({ keyword: "", status: "" });
   };
 
-  /** 封禁 / 解封（改完立刻生效：服务端每次请求都回查账号状态） */
-  const toggleStatus = async (account: Account) => {
-    const next = account.status === "active" ? "disabled" : "active";
+  /**
+   * 封禁：原因与时长由弹窗收集（`BanDialog` 保证原因非空）
+   *
+   * 返回是否成功 —— 失败了要让弹窗留在原地，管理员不用重新填一遍。
+   */
+  const ban = async (payload: { reason: string; durationHours: number | null }): Promise<boolean> => {
+    if (!pendingBan) return false;
+    const account = pendingBan;
     setBusyId(account.id);
     try {
-      await accountsApi.updateStatus(account.id, { status: next });
-      toastSuccess(next === "disabled" ? `已封禁 ${account.username}` : `已解封 ${account.username}`);
+      await accountsApi.updateStatus(account.id, {
+        status: "disabled",
+        reason: payload.reason,
+        durationHours: payload.durationHours,
+      });
+      toastSuccess(
+        payload.durationHours === null
+          ? `已永久封禁 ${account.username}`
+          : `已封禁 ${account.username}，${payload.durationHours} 小时后自动解封`,
+      );
+      await load();
+      return true;
+    } catch {
+      /* 统一提示 */
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** 解封（封禁反而要多填原因与时长，所以两者不共用一个按钮） */
+  const unban = async (account: Account) => {
+    setBusyId(account.id);
+    try {
+      await accountsApi.updateStatus(account.id, { status: "active" });
+      toastSuccess(`已解封 ${account.username}`);
       await load();
     } catch {
       /* 统一提示 */
@@ -151,7 +183,7 @@ export function AccountsPage() {
                     {account.onlineRoleId ? <span className="ml-2 text-xs text-slate-500">有在线角色</span> : null}
                   </td>
                   <td className={tdClass}>
-                    {account.status === "active" ? <Badge tone="green">正常</Badge> : <Badge tone="red">已封禁</Badge>}
+                    <BanStatus account={account} />
                   </td>
                   <td className={tdClass}>{account.roleCount ?? 0}</td>
                   <td className={tdClass}>{formatTime(account.createdAt)}</td>
@@ -163,15 +195,27 @@ export function AccountsPage() {
                           查看角色
                         </Button>
                       </Link>
-                      <Button
-                        variant="outline"
-                        className="px-2.5 py-1 text-xs"
-                        disabled={!canStatus}
-                        loading={busyId === account.id}
-                        onClick={() => void toggleStatus(account)}
-                      >
-                        {account.status === "active" ? "封禁" : "解封"}
-                      </Button>
+                      {banStateOf(account).banned ? (
+                        <Button
+                          variant="outline"
+                          className="px-2.5 py-1 text-xs"
+                          disabled={!canStatus}
+                          loading={busyId === account.id}
+                          onClick={() => void unban(account)}
+                        >
+                          解封
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="px-2.5 py-1 text-xs"
+                          disabled={!canStatus}
+                          loading={busyId === account.id}
+                          onClick={() => setPendingBan(account)}
+                        >
+                          封禁
+                        </Button>
+                      )}
                       <Button variant="danger" className="px-2.5 py-1 text-xs" disabled={!canDelete} onClick={() => setPendingDelete(account)}>
                         删除
                       </Button>
@@ -187,6 +231,13 @@ export function AccountsPage() {
 
         <Pagination page={page} size={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
       </Card>
+
+      <BanDialog
+        open={pendingBan !== null}
+        targetName={pendingBan?.username ?? ""}
+        onCancel={() => setPendingBan(null)}
+        onSubmit={ban}
+      />
 
       <ConfirmDialog
         open={pendingDelete !== null}
