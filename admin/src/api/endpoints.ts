@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, UpdateAccountStatus } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, UpdateAccountStatus } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, UpdateAccountStatus } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, UpdateAccountStatus } from "./models";
 
 /** adminAccount 模块的接口（9 个，生成） */
 export const accountsApi = {
@@ -140,7 +140,7 @@ export const adminsApi = {
   resetPassword: (id: string, body: ResetAdminPassword, options?: Options) => http.patch<ResetPasswordResult>(routes.adminAdmin.resetPassword(id), body, options),
 };
 
-/** adminAudit 模块的接口（2 个，生成） */
+/** adminAudit 模块的接口（3 个，生成） */
 export const auditApi = {
   /**
    * 操作日志列表（GET /admin/audit-logs）
@@ -158,6 +158,14 @@ export const auditApi = {
    * 权限点：audit:read
    */
   actions: (options?: Options) => http.get<AuditActionList>(routes.adminAudit.actions, options),
+  /**
+   * 导出操作日志（CSV）（GET /admin/audit-logs/export）
+   *
+   * 筛选条件与列表接口**完全一致**（含 `sort` / `order`，导出即「当前筛选下的全部」）；`page` / `size` 不生效 —— 条数上限取服务端配置 `AUDIT_EXPORT_MAX_ROWS`，超出时返回前 N 条并置 `truncated`。
+   *
+   * 权限点：audit:read
+   */
+  export: (query: AuditQuery = {}, options?: Options) => http.get<AuditExport>(routes.adminAudit.export, { query, ...options }),
 };
 
 /** adminAuth 模块的接口（4 个，生成） */

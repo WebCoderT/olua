@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   adminRoleLabel,
+  ADMIN_ROLE_LABELS,
   auditActionLabel,
   auditApi,
   auditTargetLabel,
@@ -11,13 +12,15 @@ import {
 } from "../api";
 import type { AuditLog, AuditQuery, PageResult } from "../api";
 import { Pagination } from "../components/Pagination";
+import { SortableTh, useSort } from "../components/sortable";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
+import { toastSuccess } from "../store/toast";
 
 const PAGE_SIZE = 20;
 
 /** 空筛选条件（重置时复用同一个对象，避免每次渲染都造新引用把请求打飞） */
-const EMPTY_QUERY = { keyword: "", action: "", targetType: "", targetId: "", success: "", from: "", to: "" };
+const EMPTY_QUERY = { keyword: "", action: "", targetType: "", targetId: "", ip: "", actorRole: "", success: "", from: "", to: "" };
 
 type Draft = typeof EMPTY_QUERY;
 
@@ -41,29 +44,43 @@ export function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [rangeError, setRangeError] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [exporting, setExporting] = useState(false);
+
+  // 初始值与服务端默认（时间倒序）保持一致，免得表头箭头骗人
+  const { sort, order, toggle } = useSort({ initial: { sort: "createdAt", order: "desc" }, onChange: () => setPage(1) });
+
+  /**
+   * 列表与导出**共用同一套条件**
+   *
+   * 各拼一份必然漂移，而「导出的行和界面看到的行不一样」这种错最难发现。
+   */
+  const queryParams = useCallback(
+    (): AuditQuery => ({
+      keyword: query.keyword || undefined,
+      action: query.action || undefined,
+      targetType: (query.targetType || undefined) as AuditQuery["targetType"],
+      targetId: query.targetId || undefined,
+      ip: query.ip || undefined,
+      actorRole: (query.actorRole || undefined) as AuditQuery["actorRole"],
+      success: (query.success || undefined) as AuditQuery["success"],
+      from: localInputToMs(query.from),
+      to: localInputToMs(query.to),
+      sort,
+      order,
+    }),
+    [query, sort, order],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(
-        await auditApi.list({
-          page,
-          size,
-          keyword: query.keyword || undefined,
-          action: query.action || undefined,
-          targetType: (query.targetType || undefined) as AuditQuery["targetType"],
-          targetId: query.targetId || undefined,
-          success: (query.success || undefined) as AuditQuery["success"],
-          from: localInputToMs(query.from),
-          to: localInputToMs(query.to),
-        }),
-      );
+      setData(await auditApi.list({ ...queryParams(), page, size }));
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
       setLoading(false);
     }
-  }, [page, size, query]);
+  }, [page, size, queryParams]);
 
   useEffect(() => {
     void load();
@@ -79,6 +96,36 @@ export function AuditPage() {
         /* 忽略：筛选下拉少几个选项而已 */
       });
   }, [canRead]);
+
+  /**
+   * 导出当前筛选结果
+   *
+   * 服务端给的是 CSV **文本**（响应体仍是统一 JSON 包裹），所以这里自己造 Blob 再触发下载：
+   * 直吐文件会把请求层的 JSON 解析打穿，也拿不到统一的错误提示。
+   */
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const result = await auditApi.export(queryParams());
+      const blob = new Blob([result.content], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename;
+      link.click();
+      // 立刻回收：下载已经开始，留着这个 URL 只会占内存直到刷新页面
+      URL.revokeObjectURL(url);
+      toastSuccess(
+        result.truncated
+          ? `已导出前 ${result.rows} 条（共 ${result.total} 条，超出上限，请缩小筛选范围）`
+          : `已导出 ${result.rows} 条`,
+      );
+    } catch {
+      /* 统一提示 */
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const submitSearch = () => {
     const from = localInputToMs(draft.from);
@@ -153,6 +200,28 @@ export function AuditPage() {
               <option value="false">只看失败</option>
             </Select>
           </div>
+          <div className="w-32">
+            <span className="mb-1.5 block text-xs font-medium text-slate-400">操作人角色</span>
+            <Select value={draft.actorRole} onChange={(event) => setDraft({ ...draft, actorRole: event.target.value })}>
+              <option value="">全部</option>
+              {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="w-44">
+            <span className="mb-1.5 block text-xs font-medium text-slate-400">来源 IP</span>
+            <Input
+              value={draft.ip}
+              placeholder="精确匹配"
+              onChange={(event) => setDraft({ ...draft, ip: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitSearch();
+              }}
+            />
+          </div>
           <div className="w-48">
             <span className="mb-1.5 block text-xs font-medium text-slate-400">起始时间</span>
             <Input type="datetime-local" value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })} />
@@ -180,17 +249,28 @@ export function AuditPage() {
         {rangeError ? <p className="mt-3 rounded-lg border border-rose-500/40 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">{rangeError}</p> : null}
       </Card>
 
-      <Card title="日志" actions={loading ? <Spinner /> : null}>
+      <Card
+        title="日志"
+        actions={
+          <>
+            {loading ? <Spinner /> : null}
+            <Button variant="outline" className="px-2.5 py-1 text-xs" loading={exporting} onClick={() => void exportCsv()}>
+              导出 CSV
+            </Button>
+          </>
+        }
+        description="导出的是当前筛选条件下的全部日志（不受分页与每页条数影响），条数超上限时只给前 N 条。"
+      >
         <div className="overflow-x-auto">
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
-                <th className={thClass}>时间</th>
-                <th className={thClass}>操作人</th>
-                <th className={thClass}>动作</th>
-                <th className={thClass}>目标</th>
-                <th className={thClass}>结果</th>
-                <th className={thClass}>来源 IP</th>
+                <SortableTh label="时间" field="createdAt" sort={sort} order={order} onToggle={toggle} defaultOrder="desc" />
+                <SortableTh label="操作人" field="actorName" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="动作" field="action" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="目标" field="targetType" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="结果" field="success" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="来源 IP" field="ip" sort={sort} order={order} onToggle={toggle} />
                 <th className={`${thClass} text-right`}>请求</th>
               </tr>
             </thead>
@@ -217,7 +297,7 @@ export function AuditPage() {
       </Card>
 
       <p className="text-xs text-slate-500">
-        时间范围按本地时区解释；「目标 id」是精确匹配（想按名字找用关键字）。日志只记管理端的写操作，玩家自己的存档推送不在这里。
+        时间范围按本地时区解释；「目标 id」与「来源 IP」都是精确匹配（想按名字找用关键字）。点表头可换排序，排序由服务端执行。日志只记管理端的写操作，玩家自己的存档推送不在这里。
       </p>
     </div>
   );

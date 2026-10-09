@@ -7,7 +7,7 @@ import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AUDIT_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AuditService } from "./audit.service";
-import { AuditActionListDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "./dto/audit.dto";
+import { AuditActionListDto, AuditExportDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "./dto/audit.dto";
 
 /**
  * 管理端 · 操作日志
@@ -49,5 +49,24 @@ export class AuditController {
   @ApiDataResponse(AuditActionListDto, { description: "动作清单" })
   actions(): AuditActionListDto {
     return { actions: this.auditService.actions() };
+  }
+
+  @Get("export")
+  @ApiAdminDoc({
+    operationId: "adminAudit.export",
+    summary: "导出操作日志（CSV）",
+    description:
+      "筛选条件与列表接口**完全一致**（含 `sort` / `order`，导出即「当前筛选下的全部」）；" +
+      "`page` / `size` 不生效 —— 条数上限取服务端配置 `AUDIT_EXPORT_MAX_ROWS`，超出时返回前 N 条并置 `truncated`。\n\n" +
+      "返回的是**文本**而不是 `text/csv` 响应：三端约定响应体恒为 `{code,message,data,timestamp}`，" +
+      "直吐文件会把两端请求层的 JSON 解析打穿；管理端拿 `content` 自己造 Blob 下载。\n\n" +
+      "内容已带 UTF-8 BOM（Excel 打开中文不乱码）与表头；以 `=` `+` `-` `@` 开头的值会加前导单引号，" +
+      "避免一个叫 `=HYPERLINK(...)` 的账号名在表格软件里被当公式执行。",
+    permissions: [Permission.AUDIT_READ],
+  })
+  @ApiQueryModel(AuditQueryDto)
+  @ApiDataResponse(AuditExportDto, { description: "CSV 文本与统计（filename / content / rows / total / truncated）" })
+  exportCsv(@Query() query: AuditQueryDto): AuditExportDto {
+    return this.auditService.exportCsv(query);
   }
 }

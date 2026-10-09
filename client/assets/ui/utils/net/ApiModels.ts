@@ -896,6 +896,29 @@ export type AuditActionList = {
   actions: string[];
 };
 
+export type AuditExport = {
+  /**
+   * 建议的文件名（含本地时间戳）
+   */
+  filename: string;
+  /**
+   * CSV 文本（已带 UTF-8 BOM 与表头，行尾 CRLF）
+   */
+  content: string;
+  /**
+   * 实际导出的数据行数（不含表头）
+   */
+  rows: number;
+  /**
+   * 当前筛选条件下的总条数（可能大于 rows）
+   */
+  total: number;
+  /**
+   * 是否因达到导出上限被截断（true 时界面要提示先缩小筛选范围）
+   */
+  truncated: boolean;
+};
+
 export type AuditQuery = {
   /**
    * 页码，从 1 开始
@@ -933,6 +956,14 @@ export type AuditQuery = {
    * 只看针对某个目标的日志（目标 id）
    */
   targetId?: string;
+  /**
+   * 只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）
+   */
+  ip?: string;
+  /**
+   * 只看某个操作人角色
+   */
+  actorRole?: "super_admin" | "admin" | "viewer";
   /**
    * 结果筛选：true 只看成功 / false 只看失败
    */

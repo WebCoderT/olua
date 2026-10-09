@@ -17,7 +17,7 @@ import {
   StatsTrendPointDto,
 } from "../modules/admin/dto/stats.dto";
 import { AccountPageDto, AdminPageDto, AdminRolePageDto } from "../modules/admin/dto/page-result.dto";
-import { AuditActionListDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "../modules/audit/dto/audit.dto";
+import { AuditActionListDto, AuditExportDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "../modules/audit/dto/audit.dto";
 import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-envelope.dto";
 import { HealthDto } from "../modules/health/dto/health.dto";
 import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto";
@@ -78,6 +78,7 @@ export const SWAGGER_MODELS = [
   AuditLogDto,
   AuditLogPageDto,
   AuditActionListDto,
+  AuditExportDto,
   AuditQueryDto,
   AccountQueryDto,
   RoleQueryDto,

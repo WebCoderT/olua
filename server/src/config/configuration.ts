@@ -46,6 +46,15 @@ export interface AppConfiguration {
   loginIpLockMs: number;
   /** 操作日志保留条数上限（超出后按时间清理最旧的；0 = 不清理） */
   auditLogMaxRows: number;
+  /**
+   * 操作日志保留天数（早于该天数的日志会被清理；0 = 不按时间清理）
+   *
+   * 与 `auditLogMaxRows` 是**两道各自独立**的闸：条数上限防「刷爆磁盘」，
+   * 天数上限防「量不大但陈年堆积」（一个月只写几百条同样会越攒越多）。
+   */
+  auditRetentionDays: number;
+  /** 一次最多导出多少条操作日志（防止一次「全部条件」导出把几万行塞进内存与响应体） */
+  auditExportMaxRows: number;
 }
 
 export default function configuration(): AppConfiguration {
@@ -69,5 +78,7 @@ export default function configuration(): AppConfiguration {
     loginIpMaxFailures: Number(process.env.LOGIN_IP_MAX_FAILURES ?? 20),
     loginIpLockMs: Number(process.env.LOGIN_IP_LOCK_MS ?? 10 * 60 * 1000),
     auditLogMaxRows: Number(process.env.AUDIT_LOG_MAX_ROWS ?? 20000),
+    auditRetentionDays: Number(process.env.AUDIT_RETENTION_DAYS ?? 90),
+    auditExportMaxRows: Number(process.env.AUDIT_EXPORT_MAX_ROWS ?? 5000),
   };
 }

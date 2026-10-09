@@ -16,6 +16,10 @@ export interface AuditListOptions {
   action?: string;
   targetType?: string;
   targetId?: string;
+  /** 来源 IP（**精确匹配**：想查「这个 IP 干了什么」，用网段/模糊筛出来的噪声比信号多） */
+  ip?: string;
+  /** 操作人角色（super_admin / admin / viewer） */
+  actorRole?: string;
   /** "true" 只看成功 / "false" 只看失败（与角色筛选同一约定：query 用字符串，避免隐式转换把 "false" 变 true） */
   success?: string;
   /** 起始时间（含，毫秒） */
@@ -114,6 +118,15 @@ export class AuditRepository {
     return result.changes;
   }
 
+  /**
+   * 清掉早于某个时刻的日志，返回清掉的条数（0 = 不清理）
+   *
+   * 与 `prune` 是两道各自独立的闸：条数上限防刷爆磁盘，天数上限防陈年堆积。
+   */
+  pruneOlderThan(before: number): number {
+    return this.db.execute("DELETE FROM audit_logs WHERE created_at < ?", [before]).changes;
+  }
+
   /** 条件拼装（list / count 共用，避免两处条件写岔） */
   private where(options: AuditListOptions): { clause: string; params: SqlParam[] } {
     const where: string[] = [];
@@ -142,6 +155,14 @@ export class AuditRepository {
     if (options.targetId) {
       where.push("a.target_id = ?");
       params.push(options.targetId);
+    }
+    if (options.ip) {
+      where.push("a.ip = ?");
+      params.push(options.ip);
+    }
+    if (options.actorRole) {
+      where.push("a.actor_role = ?");
+      params.push(options.actorRole);
     }
     if (options.success) {
       where.push("a.success = ?");

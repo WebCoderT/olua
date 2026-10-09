@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
+import { ADMIN_ROLES } from "../../../common/constants/permission";
 import { AuditLogWithNameRow } from "../../../database/rows";
 
 /** 审计目标类型（查询筛选用） */
@@ -125,6 +126,22 @@ export class AuditQueryDto extends PageQueryDto {
   @IsString({ message: "目标 id 必须是字符串" })
   targetId?: string;
 
+  @ApiPropertyOptional({
+    description: "只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）",
+    maxLength: 45,
+    example: "203.0.113.9",
+  })
+  @IsOptional()
+  @IsString({ message: "来源 IP 必须是字符串" })
+  @MaxLength(45, { message: "来源 IP 过长" })
+  ip?: string;
+
+  @ApiPropertyOptional({ description: "只看某个操作人角色", enum: ADMIN_ROLES })
+  @IsOptional()
+  @IsString({ message: "操作人角色必须是字符串" })
+  @IsIn(ADMIN_ROLES, { message: "操作人角色取值不合法" })
+  actorRole?: string;
+
   /**
    * 只看成功 / 只看失败
    *
@@ -160,6 +177,30 @@ export class AuditLogPageDto extends PageMetaDto {
 export class AuditActionListDto {
   @ApiProperty({ description: "动作（operationId）列表", type: [String] })
   actions: string[];
+}
+
+/**
+ * 导出结果（CSV 文本 + 统计）
+ *
+ * 为什么是「把文本装进统一包裹」而不是直接吐 `text/csv` 响应：三端约定响应体恒为
+ * `{code,message,data,timestamp}`，两端请求层都按 JSON 解析 —— 直吐 CSV 会把请求层打穿，
+ * 出错时的错误提示也一并失效。由管理端拿 `content` 自己造 Blob 下载，两边都干净。
+ */
+export class AuditExportDto {
+  @ApiProperty({ description: "建议的文件名（含本地时间戳）", example: "olua-audit-20261009-153000.csv" })
+  filename: string;
+
+  @ApiProperty({ description: "CSV 文本（已带 UTF-8 BOM 与表头，行尾 CRLF）" })
+  content: string;
+
+  @ApiProperty({ description: "实际导出的数据行数（不含表头）" })
+  rows: number;
+
+  @ApiProperty({ description: "当前筛选条件下的总条数（可能大于 rows）" })
+  total: number;
+
+  @ApiProperty({ description: "是否因达到导出上限被截断（true 时界面要提示先缩小筛选范围）" })
+  truncated: boolean;
 }
 
 /** 宽松解析 detail（存进去的本来就是 JSON，坏数据不该让整页查不出来） */

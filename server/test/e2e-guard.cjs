@@ -13,12 +13,17 @@
  * 用法：npm run test:e2e:guard（前置 npm run build）
  */
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const net = require("node:net");
+const os = require("node:os");
 const path = require("node:path");
+const { DatabaseSync } = require("node:sqlite");
 // 限流的判定是纯函数，直接 require 编译产物跑边界值（不必起服务）
 const rateLimit = require(path.join(__dirname, "..", "dist", "common", "utils", "rate-limit.util.js"));
 // 封禁的到期判定同理：纯函数，边界值不必起服务
 const ban = require(path.join(__dirname, "..", "dist", "common", "utils", "ban.util.js"));
+// CSV 转义同理：导出功能的「防公式注入」就在这里，纯函数验最准
+const csv = require(path.join(__dirname, "..", "dist", "common", "utils", "csv.util.js"));
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -209,6 +214,26 @@ function runUtilSuite() {
     "账号已被封禁（永久封禁，如有疑问请联系客服）",
     "原因全是空白时按未填写处理",
   );
+
+  group("零之三、CSV 纯函数：转义 / 防公式注入 / BOM");
+
+  checkEqual(csv.csvCell(null), '""', "null 落成空单元格");
+  checkEqual(csv.csvCell(undefined), '""', "undefined 同理");
+  checkEqual(csv.csvCell(42), '"42"', "数字转字符串");
+  checkEqual(csv.csvCell('说 "引号" 的事'), '"说 ""引号"" 的事"', "内部引号翻倍（RFC 4180）");
+  checkEqual(csv.csvCell("a,b"), '"a,b"', "逗号被引号包住，不会多切一列");
+  checkEqual(csv.csvCell({ reason: "外挂" }), '"{""reason"":""外挂""}"', "对象按 JSON 落格（内部引号同样翻倍）");
+
+  checkEqual(csv.csvCell("=1+1"), '"\'=1+1"', "以 = 开头的值加前导单引号（防表格软件当公式执行）");
+  checkEqual(csv.csvCell("@SUM(A1)"), '"\'@SUM(A1)"', "+ - @ 同理");
+  checkEqual(csv.csvCell("-2"), '"\'-2"', "负号开头也要挡（`-2+3` 也会被当公式）");
+  checkEqual(csv.csvCell("+86 138"), '"\'+86 138"', "加号开头同理");
+  checkEqual(csv.csvCell("正常文本"), '"正常文本"', "普通文本不加多余的引号前缀");
+
+  const built = csv.buildCsv(["时间", "操作人"], [[1_760_000_000_000, "guard_super"]]);
+  check(built.startsWith(csv.CSV_BOM), "整份 CSV 带 UTF-8 BOM（Excel 打开中文不乱码）");
+  checkEqual(built.slice(csv.CSV_BOM.length).split("\r\n").filter(Boolean).length, 2, "表头 + 1 行数据（CRLF 分行）");
+  check(built.includes('"时间","操作人"'), "表头也走同一套转义");
 }
 
 //#endregion
@@ -725,14 +750,186 @@ async function runMainSuite(baseUrl) {
   );
 
   //#endregion
+
+  //#region 九、审计增强（IP / 角色筛选 + CSV 导出）
+  group("九、审计增强：IP 与角色筛选 / CSV 导出 / 防公式注入");
+
+  // —— 筛选维度：来源 IP 与操作人角色 ——
+  const sample = await call("GET", "/api/admin/audit-logs?keyword=guard_super&size=5", { token: superToken });
+  const sampleIp = sample.body.data.list.find((item) => item.ip)?.ip;
+  check(Boolean(sampleIp), "准备：日志里记到了来源 IP");
+
+  const byIp = await call("GET", `/api/admin/audit-logs?ip=${encodeURIComponent(sampleIp)}&size=50`, { token: superToken });
+  checkEqual(byIp.body.code, 0, "按来源 IP 筛选可读");
+  check(
+    byIp.body.data.list.length > 0 && byIp.body.data.list.every((item) => item.ip === sampleIp),
+    "筛出来的每一条都是该 IP",
+  );
+
+  const noSuchIp = await call("GET", "/api/admin/audit-logs?ip=203.0.113.9", { token: superToken });
+  checkEqual(noSuchIp.body.data.total, 0, "不存在的 IP 筛出 0 条");
+
+  const byRole = await call("GET", "/api/admin/audit-logs?actorRole=super_admin&size=50", { token: superToken });
+  check(
+    byRole.body.data.list.length > 0 && byRole.body.data.list.every((item) => item.actorRole === "super_admin"),
+    "按操作人角色筛选生效",
+  );
+
+  const badRole = await call("GET", "/api/admin/audit-logs?actorRole=root", { token: superToken });
+  checkEqual(badRole.status, 400, "操作人角色取值不在枚举内被拒（400）");
+  const longIp = await call("GET", `/api/admin/audit-logs?ip=${"9".repeat(46)}`, { token: superToken });
+  checkEqual(longIp.status, 400, "来源 IP 过长被拒（400）");
+
+  // —— CSV 导出 ——
+  // 准备：造一个「像公式」的角色名 —— 这种名字一旦被表格软件当公式执行就是真的漏洞
+  const zzzLogin = await call("POST", "/api/auth/login", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } });
+  const csvRole = await call("POST", "/api/roles", {
+    token: zzzLogin.body.data.token,
+    body: { data: roleData("csv_role", "=1+1", 3) },
+  });
+  checkEqual(csvRole.body.code, 0, "准备：创建一个名字像公式的角色");
+  const csvSelect = await call("POST", `/api/admin/roles/${csvRole.body.data.id}/select`, { token: superToken });
+  checkEqual(csvSelect.body.code, 0, "准备：用管理端操作它一次（留下带目标名的日志）");
+
+  const exported = await call("GET", "/api/admin/audit-logs/export", { token: superToken });
+  checkEqual(exported.body.code, 0, "导出接口可读");
+  check(/^olua-audit-\d{8}-\d{6}\.csv$/.test(exported.body.data.filename), "文件名带本地时间戳");
+  check(exported.body.data.content.startsWith("\uFEFF"), "CSV 带 UTF-8 BOM（Excel 打开不乱码）");
+  check(exported.body.data.content.includes('"时间","时间戳(毫秒)","操作人"'), "表头齐全且顺序固定");
+  checkEqual(
+    exported.body.data.rows,
+    exported.body.data.content.slice(1).split("\r\n").filter(Boolean).length - 1,
+    "rows 与 CSV 实际行数一致（行数 = 总行 - 表头）",
+  );
+  check(exported.body.data.total >= exported.body.data.rows, "total 不小于实际导出的条数");
+  checkEqual(exported.body.data.truncated, false, "数据量没到上限，不截断");
+
+  const filtered = await call("GET", "/api/admin/audit-logs/export?action=adminRole.select", { token: superToken });
+  checkEqual(filtered.body.data.total, filtered.body.data.rows, "导出与列表共用同一套筛选条件（按动作导出）");
+  check(filtered.body.data.rows >= 1, "按动作导出有数据");
+  check(filtered.body.data.content.includes("'=1+1"), "以 = 开头的角色名被钉成文本（防 CSV 注入，端到端）");
+
+  const emptyExport = await call("GET", "/api/admin/audit-logs/export?ip=203.0.113.9", { token: superToken });
+  checkEqual(emptyExport.body.data.rows, 0, "筛不到数据时导出只有表头");
+  checkEqual(emptyExport.body.data.total, 0, "空结果的 total 为 0");
+
+  // 导出走 audit:read：普通管理员有、只读观察员**有意没有**（审计日志会暴露「谁做了什么」）
+  const adminLogin = await call("POST", "/api/admin/auth/login", { body: { username: "guard_admin", password: "admin-forced-3" } });
+  const adminExport = await call("GET", "/api/admin/audit-logs/export", { token: adminLogin.body.data.token });
+  checkEqual(adminExport.body.code, 0, "普通管理员（有 audit:read）可以导出");
+  const viewerExport = await call("GET", "/api/admin/audit-logs/export", { token: viewerToken });
+  checkEqual(viewerExport.status, 403, "只读观察员没有 audit:read，导出被拒（403）");
+  checkEqual(viewerExport.body.code, 30006, "导出越权的业务码是 30006");
+  const playerExport = await call("GET", "/api/admin/audit-logs/export", { token: backToken });
+  checkEqual(playerExport.status, 401, "玩家令牌拿不到导出接口（401）");
+
+  //#endregion
 }
 
 //#endregion
 
-//#region 九：第二台服务专测 IP 维度限流
+//#region 十：审计保留策略
+
+/**
+ * 直接往文件库里塞一条 N 天前的日志
+ *
+ * 内存库做不到（外部进程看不见也塞不进），所以这一段单独用文件库 ——
+ * 也只有这样才验得了「陈年日志在启动时被按保留天数清掉」。
+ */
+function seedOldLog(dbPath, days, action) {
+  const db = new DatabaseSync(dbPath);
+  db.prepare(
+    `INSERT INTO audit_logs
+      (id, actor_id, actor_name, actor_role, action, target_type, target_id, detail,
+       ip, method, path, status_code, success, error_code, error_message, created_at)
+     VALUES (?, NULL, NULL, NULL, ?, NULL, NULL, NULL, '127.0.0.1', 'GET', '/seed', 200, 1, NULL, NULL, ?)`,
+  ).run(`seed-${action}-${days}`, action, Date.now() - days * 24 * 3600_000);
+  db.close();
+}
+
+/** 等文件锁松开（服务刚被 kill，进程退出与句柄释放有一小段延迟），成功返回 true */
+async function seedWithRetry(dbPath, days, action) {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    try {
+      seedOldLog(dbPath, days, action);
+      return true;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  return false;
+}
+
+/**
+ * 审计保留策略（配置驱动）
+ *
+ * 保留天数只影响「陈年日志」，靠等是等不出来的 —— 所以用文件库：起一台把表建好，
+ * 手工塞一条 40 天前的日志，再按不同的 `AUDIT_RETENTION_DAYS` 重启，看它还在不在。
+ */
+async function runRetentionSuite() {
+  group("十、审计保留策略：AUDIT_RETENTION_DAYS 生效");
+
+  const dbPath = path.join(os.tmpdir(), `olua-audit-retention-${Date.now()}.db`);
+  const OLD_ACTION = "retention.oldRow";
+
+  // ① 先起一台把表建出来并注册超管（后面几台复用同一个库文件）
+  const setup = await startServer({ DB_PATH: dbPath, AUDIT_LOG_MAX_ROWS: "0", AUDIT_RETENTION_DAYS: "0" });
+  const registered = await api(setup.baseUrl, "POST", "/api/admin/auth/register", {
+    body: { username: "retention_super", password: "retention-pass-1", registerCode: ADMIN_CODE },
+  });
+  checkEqual(registered.body.code, 0, "准备：文件库 + 超管（后续几台复用同一个库）");
+  setup.kill();
+
+  // ② 保留 30 天：塞一条 40 天前的日志，重启后应当被清掉
+  check(await seedWithRetry(dbPath, 40, OLD_ACTION), "准备：往库里塞一条 40 天前的日志");
+
+  const pruneOn = await startServer({ DB_PATH: dbPath, AUDIT_LOG_MAX_ROWS: "0", AUDIT_RETENTION_DAYS: "30" });
+  try {
+    const login = await api(pruneOn.baseUrl, "POST", "/api/admin/auth/login", {
+      body: { username: "retention_super", password: "retention-pass-1" },
+    });
+    const token = login.body.data.token;
+    checkEqual(login.body.code, 0, "重启后超管仍在（同一个库）");
+
+    const old = await api(pruneOn.baseUrl, "GET", `/api/admin/audit-logs?action=${OLD_ACTION}`, { token });
+    checkEqual(old.body.data.total, 0, "启动时按保留天数清掉了陈年日志");
+
+    const recent = await api(pruneOn.baseUrl, "GET", "/api/admin/audit-logs?size=1", { token });
+    check(recent.body.data.total > 0, "保留期内的日志不受影响");
+  } finally {
+    pruneOn.kill();
+  }
+
+  // ③ 保留天数填 0 = 不按时间清理：同样一条陈年日志必须留着
+  check(await seedWithRetry(dbPath, 40, OLD_ACTION), "准备：再塞一条同样陈年的日志");
+
+  const pruneOff = await startServer({ DB_PATH: dbPath, AUDIT_LOG_MAX_ROWS: "0", AUDIT_RETENTION_DAYS: "0" });
+  try {
+    const login = await api(pruneOff.baseUrl, "POST", "/api/admin/auth/login", {
+      body: { username: "retention_super", password: "retention-pass-1" },
+    });
+    const token = login.body.data.token;
+    const kept = await api(pruneOff.baseUrl, "GET", `/api/admin/audit-logs?action=${OLD_ACTION}`, { token });
+    checkEqual(kept.body.data.total, 1, "AUDIT_RETENTION_DAYS=0 = 不按时间清理（陈年日志留着）");
+  } finally {
+    pruneOff.kill();
+  }
+
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    try {
+      fs.rmSync(`${dbPath}${suffix}`, { force: true });
+    } catch {
+      /* 清理失败不影响结论 */
+    }
+  }
+}
+
+//#endregion
+
+//#region 十一：第二台服务专测 IP 维度限流
 
 async function runIpSuite(baseUrl) {
-  group("九、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
+  group("十一、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
 
   const first = await api(baseUrl, "POST", "/api/auth/login", { body: { username: "ip_victim_a", password: "x-pass-1" } });
   checkEqual(first.body.code, 10003, "第一次失败（用户名维度未锁）");
@@ -757,6 +954,8 @@ async function main() {
     main1.kill();
   }
 
+  await runRetentionSuite();
+
   const main2 = await startServer({ LOGIN_MAX_FAILURES: "1000", LOGIN_IP_MAX_FAILURES: "1", LOGIN_IP_LOCK_MS: "600000" });
   try {
     await runIpSuite(main2.baseUrl);
@@ -764,7 +963,9 @@ async function main() {
     main2.kill();
   }
 
-  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表：${passed} 条通过 / ${failed} 条失败`);
+  console.log(
+    `\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表 / 导出：${passed} 条通过 / ${failed} 条失败`,
+  );
   if (failed) {
     console.log("失败项：\n" + failures.map((item) => `  - ${item}`).join("\n"));
     process.exitCode = 1;

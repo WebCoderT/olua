@@ -1,11 +1,12 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { buildCsv, fileStamp, localDateTime } from "../../common/utils/csv.util";
 import { AuditListOptions, AuditRepository } from "../../database/repositories/audit.repository";
 import { AuditLogRow } from "../../database/rows";
 import { normalizePage } from "../admin/dto/query.dto";
-import { AuditLogDto, AuditQueryDto } from "./dto/audit.dto";
+import { AuditExportDto, AuditLogDto, AuditQueryDto } from "./dto/audit.dto";
 
 /** 写日志的入参（除 action 外都可省） */
 export interface AuditEntryInput {
@@ -47,7 +48,7 @@ const PRUNE_EVERY = 200;
  * 也不该让管理员的一次封号操作失败）。
  */
 @Injectable()
-export class AuditService {
+export class AuditService implements OnModuleInit {
   private readonly logger = new Logger(AuditService.name);
   private writeCount = 0;
 
@@ -121,20 +122,7 @@ export class AuditService {
   /** 分页查询 */
   list(query: AuditQueryDto): PageResult<AuditLogDto> {
     const { page, size } = normalizePage(query);
-    const options: AuditListOptions = {
-      page,
-      size,
-      keyword: query.keyword?.trim() || undefined,
-      actorId: query.actorId?.trim() || undefined,
-      action: query.action?.trim() || undefined,
-      targetType: query.targetType,
-      targetId: query.targetId?.trim() || undefined,
-      success: query.success,
-      from: query.from,
-      to: query.to,
-      sort: query.sort,
-      order: query.order,
-    };
+    const options: AuditListOptions = { ...this.optionsOf(query), page, size };
     return {
       list: this.logs.list(options).map((row) => AuditLogDto.from(row)),
       total: this.logs.count(options),
@@ -143,20 +131,126 @@ export class AuditService {
     };
   }
 
+  /**
+   * 导出当前筛选条件下的日志（CSV 文本）
+   *
+   * 与列表**共用同一套筛选条件**（`optionsOf`）—— 各写一份的话，导出的行和界面看到的行
+   * 会对不上，而这种「看着对了其实筛错了」最难被发现。
+   *
+   * 条数上限取配置 `AUDIT_EXPORT_MAX_ROWS`：一次「全部条件都不填」的导出在这种表上
+   * 轻松几万行，直接拼成字符串会把内存和响应体一起撑爆。
+   */
+  exportCsv(query: AuditQueryDto): AuditExportDto {
+    const limit = this.config.get<number>("auditExportMaxRows") ?? 0;
+    const options: AuditListOptions = { ...this.optionsOf(query), page: 1, size: limit > 0 ? limit : 1000 };
+    const total = this.logs.count(options);
+    const rows = this.logs.list(options);
+    const dto = new AuditExportDto();
+    dto.filename = `${fileStamp(new Date(), "olua-audit")}.csv`;
+    dto.content = buildCsv(
+      AUDIT_EXPORT_COLUMNS.map((column) => column.header),
+      rows.map((row) => {
+        const item = AuditLogDto.from(row);
+        return AUDIT_EXPORT_COLUMNS.map((column) => column.pick(item));
+      }),
+    );
+    dto.rows = rows.length;
+    dto.total = total;
+    dto.truncated = total > rows.length;
+    return dto;
+  }
+
   /** 出现过的动作清单（界面筛选下拉用，不写死清单） */
   actions(): string[] {
     return this.logs.distinctActions();
   }
 
-  /** 定期清理超量旧日志（配置 AUDIT_LOG_MAX_ROWS，0 = 不清理） */
+  /**
+   * query → 仓储筛选条件（列表与导出共用）
+   *
+   * 两处各写一份条件必然漂移，而「导出的行和界面看到的行不一样」这种错最难被发现 ——
+   * 所以条件只在这一个地方拼。
+   */
+  private optionsOf(query: AuditQueryDto): Omit<AuditListOptions, "page" | "size"> {
+    return {
+      keyword: query.keyword?.trim() || undefined,
+      actorId: query.actorId?.trim() || undefined,
+      action: query.action?.trim() || undefined,
+      targetType: query.targetType,
+      targetId: query.targetId?.trim() || undefined,
+      ip: query.ip?.trim() || undefined,
+      actorRole: query.actorRole,
+      success: query.success,
+      from: query.from,
+      to: query.to,
+      sort: query.sort,
+      order: query.order,
+    };
+  }
+
+  /**
+   * 启动时先按保留策略清一次
+   *
+   * 否则陈年日志要等到累计写满 `PRUNE_EVERY` 条才被清 —— 一个每天只写十几条的部署
+   * 永远轮不到清理，保留天数就形同虚设。
+   */
+  onModuleInit(): void {
+    this.prune();
+  }
+
+  /** 定期清理（每 PRUNE_EVERY 次写入触发一次） */
   private pruneIfNeeded(): void {
     this.writeCount += 1;
     if (this.writeCount % PRUNE_EVERY !== 0) return;
-    const maxRows = this.config.get<number>("auditLogMaxRows") ?? 0;
-    const removed = this.logs.prune(maxRows);
-    if (removed > 0) this.logger.log(`操作日志超过上限 ${maxRows} 条，已清理最旧的 ${removed} 条`);
+    this.prune();
+  }
+
+  /**
+   * 按保留策略清理：先按天数、再按条数
+   *
+   * 两道闸独立生效（都为 0 = 不清理）：条数上限防刷爆磁盘，天数上限防陈年堆积。
+   * 与 record 一样**吞异常** —— 清理失败不该影响任何主流程，下次触发会再试。
+   */
+  private prune(): void {
+    try {
+      const days = this.config.get<number>("auditRetentionDays") ?? 0;
+      if (days > 0) {
+        const removed = this.logs.pruneOlderThan(Date.now() - days * 24 * 3600_000);
+        if (removed > 0) this.logger.log(`操作日志超过保留期 ${days} 天，已清理 ${removed} 条`);
+      }
+      const maxRows = this.config.get<number>("auditLogMaxRows") ?? 0;
+      const overflow = this.logs.prune(maxRows);
+      if (overflow > 0) this.logger.log(`操作日志超过上限 ${maxRows} 条，已清理最旧的 ${overflow} 条`);
+    } catch (error) {
+      this.logger.warn(`操作日志清理失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
+
+/**
+ * 导出的列定义（表头 → 取值）
+ *
+ * 收成一张表而不是手写一遍 `map`：加字段只改这里，表头与取值顺序天然对齐。
+ * 「时间」给两列是因为给运营看的是可读时间，而进程序处理要的是毫秒（无时区歧义）。
+ */
+const AUDIT_EXPORT_COLUMNS: { header: string; pick: (item: AuditLogDto) => unknown }[] = [
+  { header: "时间", pick: (item) => localDateTime(item.createdAt) },
+  { header: "时间戳(毫秒)", pick: (item) => item.createdAt },
+  { header: "操作人", pick: (item) => item.actorName },
+  { header: "操作人角色", pick: (item) => item.actorRole },
+  { header: "动作", pick: (item) => item.action },
+  { header: "目标类型", pick: (item) => item.targetType },
+  { header: "目标名称", pick: (item) => item.targetName },
+  { header: "目标id", pick: (item) => item.targetId },
+  { header: "结果", pick: (item) => (item.success ? "成功" : "失败") },
+  { header: "业务码", pick: (item) => item.errorCode },
+  { header: "错误信息", pick: (item) => item.errorMessage },
+  { header: "来源IP", pick: (item) => item.ip },
+  { header: "方法", pick: (item) => item.method },
+  { header: "路径", pick: (item) => item.path },
+  { header: "HTTP状态", pick: (item) => item.statusCode },
+  { header: "上下文", pick: (item) => (item.detail === null ? null : JSON.stringify(item.detail)) },
+];
 
 /** 序列化上下文并打码（口令一类字段绝不落库） */
 export function serialize(detail: unknown): string | null {

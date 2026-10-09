@@ -100,7 +100,7 @@ export const routes = {
      */
     resetPassword: (id: string) => `/admin/admins/${encodeURIComponent(id)}/password`,
   },
-  /** adminAudit 模块（2 个接口） */
+  /** adminAudit 模块（3 个接口） */
   adminAudit: {
     /**
      * 操作日志列表（GET /admin/audit-logs）
@@ -114,6 +114,12 @@ export const routes = {
      * 返回日志里出现过的全部动作（接口标识），供界面的「动作」筛选下拉使用 —— 界面不写死动作清单。
      */
     actions: "/admin/audit-logs/actions",
+    /**
+     * 导出操作日志（CSV）（GET /admin/audit-logs/export）
+     *
+     * 筛选条件与列表接口**完全一致**（含 `sort` / `order`，导出即「当前筛选下的全部」）；`page` / `size` 不生效 —— 条数上限取服务端配置 `AUDIT_EXPORT_MAX_ROWS`，超出时返回前 N 条并置 `truncated`。
+     */
+    export: "/admin/audit-logs/export",
   },
   /** adminAuth 模块（4 个接口） */
   adminAuth: {
