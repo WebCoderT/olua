@@ -61,7 +61,7 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 - 资源预加载：进图前预载地图、NPC / 怪物帧动画与角色穿戴外观
 - 操作摇杆：左下角常驻摇杆（底座 + 可拖动手柄），按住拖动即移动 —— **拖得少走路、拖得多跑动**（死区/阈值见 configs/role.joystickMove）；只用触摸通道，桌面端鼠标按住拖动同样可用，摇杆上的按压不穿透、拖动结束也不会误清选中目标
 - 屏幕适配：铺满窗口（NO_BORDER）不留黑边，常驻 HUD 按可见区贴边重排；选角场景整块舞台等比缩放（contain），窗口宽高比与设计不一致时元素也不会跑到屏幕外
-- 服务端：账号注册登录（scrypt 加盐摘要）、角色数据云端保存（防抖合并推送）、修订号乐观锁、两套令牌受众、权限点守卫、登录限流、口令重置与令牌主动作废、操作审计日志、公告发布与全服触达
+- 服务端：账号注册登录（scrypt 加盐摘要）、角色数据云端保存（防抖合并推送）、修订号乐观锁、两套令牌受众、权限点守卫、登录限流、口令重置与令牌主动作废、操作审计日志、公告发布与全服触达、邮件通道（模板 + 投递队列 + 失败重试）
 - 管理端：账号与角色管理（六维筛选 / 结构化编辑 / 批量删除）、管理员与权限、操作日志查询、我的账号
 
 ## 一个纯 AI 编写的项目
@@ -83,7 +83,7 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 - **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 25 套单测、`tools/` 下有 5 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、界面点击会不会穿透到世界，全都有脚本盯着。
 - **一切可调的东西都收进 `client/assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
 - **接口文件全部由服务端 Swagger 文档生成**。三端签名对不上会**编译报错**，而不是线上出现一个 `undefined`。这同样是为了让 AI 改完一端后，另一端在编译期就被拦住。
-- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 77 + 279 + 25 条）+ 两端类型检查 + 25 套单测 + 5 套审计，全绿才算完。
+- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 77 + 279 + 108 + 25 条）+ 两端类型检查 + 25 套单测 + 5 套审计，全绿才算完。
 - **每处理完一个问题就按功能提交一次**。改完一个功能立刻落一次 commit，不留一堆混在一起的未提交改动 —— 这样「哪次改动引入了回归」永远能二分出来。
 - **踩过的坑写进了 FAQ**。每端目录下的 FAQ 收纳该端的具体问题，跨端的机制与环境坑在 [FAQ.md](FAQ.md)；里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
 
@@ -189,22 +189,23 @@ olua/
   - constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
   - interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
   - security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
-- src/database：SQLite 连接与五张表（accounts / roles / admins / audit_logs / announcements，含存量补列）的仓储层
-- src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员 / 口令）/ announcement（公告：公共拉取 + 管理端 CRUD）/ audit（操作日志）/ token（JWT）/ health
+- src/database：SQLite 连接与六张表（accounts / roles / admins / audit_logs / announcements / mail_queue，含存量补列）的仓储层
+- src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员 / 口令）/ announcement（公告：公共拉取 + 管理端 CRUD）/ mail（邮件：模板 + 投递队列 + 后台调度）/ audit（操作日志）/ token（JWT）/ health
 - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
 - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
 - openapi.json：机器可读契约（提交进仓库；改接口后必须重新生成，否则两端停在旧契约上）
 - test/e2e.cjs：端到端用例（真实起服务 + 真实请求，248 条断言：注册登录 / 角色 CRUD / 越权 / 令牌受众隔离 / 管理端全流程 / 文档分组与权限点 / 四级越权与超管保护 / 公告拉取与时间窗）
 - test/e2e-roles.cjs：**角色管理专项**（77 条断言：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档）
 - test/e2e-guard.cjs：**运营与安全底座专项**（279 条断言：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·权限 / 按用户名与按 IP 的登录限流 / 踢下线）
+- test/e2e-mail.cjs：**邮件通道专项**（108 条断言：用可注入的**假发信器**验入队 / 投递 / 重试与用尽上限 / 手动重投 / 未配置 SMTP 时整体禁用；不需要真实 SMTP 服务器）
 - 详见 [server/README.md](server/README.md)，问题见 [server/FAQ.md](server/FAQ.md)
 
 ### admin —— 管理端（React）
 
 - src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）
-  + **生成物** `routes.ts` 路径表 / `models.ts` 类型 / `endpoints.ts` 接口方法（`authApi`·`accountsApi`·`adminsApi`·`rolesApi`·`auditApi`·`announcementsApi`·`statsApi`·`systemApi`）
+  + **生成物** `routes.ts` 路径表 / `models.ts` 类型 / `endpoints.ts` 接口方法（`authApi`·`accountsApi`·`adminsApi`·`rolesApi`·`auditApi`·`announcementsApi`·`mailsApi`·`statsApi`·`systemApi`）
   + 手写的 `types.ts`（业务码 / 权限点 / 动作与目标的中文字典）与 `index.ts`（统一出口）
-- src/pages：登录 / 注册 / 概览 / 账号列表与详情（重置密码 · 踢下线 · 清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员（改角色 · 启停 · 重置密码 · 删除）/ 公告（发布 · 编辑 · 删除 · 启停 + 生效状态列）/ 操作日志（筛选 + 分页 + 请求体展开）/ 我的账号（自助改密）
+- src/pages：登录 / 注册 / 概览 / 账号列表与详情（重置密码 · 踢下线 · 清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员（改角色 · 启停 · 重置密码 · 删除）/ 公告（发布 · 编辑 · 删除 · 启停 + 生效状态列）/ 邮件（发信入队 + 投递记录：状态筛选 · 重试次数 · 失败原因 · 重投）/ 操作日志（筛选 + 分页 + 请求体展开）/ 我的账号（自助改密）
 - 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
 - 详见 [admin/README.md](admin/README.md)，问题见 [admin/FAQ.md](admin/FAQ.md)
 
@@ -243,13 +244,13 @@ make dev            # 同时起服务端 :3100 与管理端 :5173，Ctrl-C 一�
 
 make client-check   # 客户端类型检查（Cocos 自带 tsc，0 错才算过）
 make client-test    # 客户端 25 套单测
-make server-verify  # 服务端一条命令全验（编译 + 四套 e2e + 生成物审计）
+make server-verify  # 服务端一条命令全验（编译 + 五套 e2e + 生成物审计）
 make admin-build    # 管理端类型检查 + 构建
 make gen-api        # 改完接口后重新生成契约与两端接口文件
 make audit          # 4 个跨端审计脚本
 
 make check          # 静态检查：客户端 tsc + 管理端 typecheck + 5 个审计
-make test           # 全部测试：客户端 25 套 + 服务端四套 e2e
+make test           # 全部测试：客户端 25 套 + 服务端五套 e2e
 make verify         # 完整门禁：check + 三端构建 + 全部测试（提交前跑这个）
 ```
 
@@ -275,7 +276,7 @@ npm run dev              # 开发（热编译）；或 npm run start 跑已构�
 
 - 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`）
 - 健康检查：<http://localhost:3100/api/health>
-- 一条命令全验：`npm run verify`（编译 + 四套 e2e + 生成物一致性）
+- 一条命令全验：`npm run verify`（编译 + 五套 e2e + 生成物一致性）
 - 详见 [server/README.md](server/README.md)
 
 ### 2. 客户端（Cocos）
@@ -355,7 +356,7 @@ make verify   # = check + 三端构建 + 全部测试
 # 客户端：25 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 四套 e2e（248 / 77 / 279 / 25）+ 生成物一致性
+# 服务端：编译 + 五套 e2e（248 / 77 / 279 / 108 / 25）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建
@@ -392,6 +393,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | 操作日志          | 管理端**写**操作自动留痕（动作取接口的 `operationId`，新增接口零额外工作；读接口不记）；口令 / 令牌 / 注册码一类字段落库前递归打码；登录成功与**失败**都记（含来源 IP 与尝试的账号名）；带筛选（关键字 / 动作 / 目标 / 结果 / 时间范围）与分页界面；写日志**永不影响主流程**（内部吞异常 + 超量自动清理最旧的） |  ✅  |
 | 权限管理          | 管理员分三级（超级管理员 / 管理员 / 只读观察员），权限点粒度到「每个接口」（查看 / 封禁 / 删除 / 改角色 / 重置口令 / 查日志 / 发公告…）；权限点唯一来源 + 守卫实时校验，界面按权限显隐；保护最后一个启用中的超级管理员 |  ✅  |
 | 公告发布          | 运营在管理端发布「标题 / 正文 / 级别（重要优先展示）」并设定**生效时间窗**（可立即生效 / 不设截止），停用即下架；**「是不是生效中」由服务端判定**（与玩家侧拉取同源），管理端只展示、不拿本地时钟自己算 |  ✅  |
+| 邮件触达          | 运营按模板给玩家发信：**只入队不等投递**（后台调度器发，失败指数退避重试、用尽上限标失败并留原因），投递记录可查状态 / 重试次数 / 失败原因并支持重投；**未配 SMTP 时通道整体禁用**（明确报错而不是静默丢信）；模板是数据、必填变量缺失即拒发 |  ✅  |
 | 接口文档          | Swagger 抛出（`/api-docs`），按**公共接口 / 客户端 / 管理端**三组展示；每个接口标出令牌要求与所需权限点；统一响应包裹 + 业务码 |  ✅  |
 | 泡点活动         | 持续获得经验，经验条与等级动态更新                 |  ✅  |
 

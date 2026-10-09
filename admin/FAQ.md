@@ -34,7 +34,8 @@
 
 - 管理端的**每一处显隐都来自令牌里的权限点**（`store/session` 的 `hasPermission`）。导航项带 `permission` 字段（`Layout` 过滤后再渲染），写操作按钮 `disabled`，页面级用 `App.tsx` 的 `RequirePermission` 外壳
 - **界面显隐只是体验，服务端才是权威**：守卫每次请求都重新判一次，改 Address 硬闯也只有 `403` + 业务码 **30006**
-- 权限点的唯一来源在**服务端** `src/common/constants/permission.ts`（15 个权限点 / 3 种角色）。管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，两边要一一对应
+- 权限点的唯一来源在**服务端** `src/common/constants/permission.ts`（17 个权限点 / 3 种角色）。管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，两边要一一对应
+- **邮件两块的显隐不一样**：`mail:read` **不给只读观察员**（投递记录里有玩家邮箱，属个人信息），而公告的 `announcement:read` 给了（公告是面向全服的公开内容）。所以观察员账号登录后左侧导航会**少一个「邮件」** —— 这不是 bug
 - **脏会话兜底**：如果会话里 `permissions` 缺失（例如旧令牌、手改了 localStorage），`hasPermission` 按**空数组**处理 —— 结果是**最小权限**（菜单几乎全没了），而不是漏判放开
 - 管理员被降权后，**刷新页面即生效**：`Layout` 进来会静默拉一次 `authApi.me()` 把最新角色与权限点写回会话
 
