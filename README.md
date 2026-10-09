@@ -155,7 +155,9 @@ olua/
 
 > 约定：**核心代码只做「怎么跑」，一切可调的东西都在 `assets/configs`** ——
 > 数值、文案、布局、配色、时长、资源路径都不写在逻辑里。
-> 自查：`node tools/audit-config-leak.cjs`（扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
+> 自查：`node tools/audit-config-leak.cjs`（在仓库根跑；扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
+
+> **下列路径均相对 `client/`**（即 `assets/configs` 的完整路径是 `client/assets/configs`）。
 
 - assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background/title/light/mall 等）
   - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）

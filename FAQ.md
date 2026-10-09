@@ -107,7 +107,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 | 端 | 生成物 | 生成来源 | 手改后果 |
 | --- | --- | --- | --- |
-| 客户端 | `assets/ui/utils/net/ApiRoutes.ts` · `ApiModels.ts` · `Api.ts` | `server/openapi.json` + `tools/gen-api.cjs` | 下一轮重新生成被回滚；`audit-api-generated` 判 FAIL |
+| 客户端 | `client/assets/ui/utils/net/ApiRoutes.ts` · `ApiModels.ts` · `Api.ts` | `server/openapi.json` + `tools/gen-api.cjs` | 下一轮重新生成被回滚；`audit-api-generated` 判 FAIL |
 | 管理端 | `src/api/routes.ts` · `models.ts` · `endpoints.ts` | 同上 | 同上 |
 | 服务端 | `openapi.json` | `npm run swagger:emit`（从控制器 / DTO / 装饰器） | 手改立刻被下一次 `swagger:emit` 覆盖；且两端会停在旧契约上 |
 
