@@ -61,14 +61,14 @@ client/                          ← Cocos 工程根（用 Creator 打开这里�
 │   │   ├── network.ts           ← 服务端地址唯一来源
 │   │   ├── layout/              UI 布局与样式（hud/dialogs/panels/scenes/…）
 │   │   ├── growth.ts            成长曲线（等级/装备/怪物/战魂/称号/军衔共用一套分段线性）
-│   │   └── …                    role/monster/skill/equipments/items/drop/map/status/border/background/title/light/mall
+│   │   └── …                    role/monster/skill/equipments/items/drop/map/status/border/background/title/light/mall/announcement
 │   ├── types/                   纯类型声明
 │   ├── entities/                运行时实体（Role）
 │   ├── skills/                  技能行为实现（只依赖 SkillContext，不反查全局）
 │   ├── ui/
 │   │   ├── core/                静态管理器（GameHelper/LayerManager/MonsterManager/MonsterAI/
 │   │   │                        DropManager/SkillManager/StatusManager/EffectManager/AutoBattle/
-│   │   │                        PreloadManager/StorageManager/RoleUIManager/SceneManager）
+│   │   │                        PreloadManager/StorageManager/RoleUIManager/SceneManager/AnnouncementReadStore）
 │   │   ├── components/          按职责分组（hud/panel/dialogs/role/input/map）
 │   │   ├── helpers/             UI 生成（UiHelper 基础封装 / GameUiHelper 零件库 / AnimationHelper 帧动画）
 │   │   ├── utils/               纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/layout/node）
@@ -90,7 +90,7 @@ client/                          ← Cocos 工程根（用 Creator 打开这里�
 > `make client-gen-monster` / `make client-gen-drops` ·
 > `make client-clean-frames[-apply]` · `make client-open`。`make help` 看全部。
 
-### 单测（24 套）
+### 单测（25 套）
 
 脚本自己会去找 Cocos Creator 自带的 `tsc`（`TSC=/path/to/tsc node …` 可手动指定）。
 
@@ -105,7 +105,7 @@ node tools/test-bag-tidy.cjs                                 # 单跑一套
 | 背包 | `test-bag-tidy`（整理排序）· `test-bag-drag`（拖动换格）· `test-bag-recycle`（一键回收）· `test-bag-discard`（丢弃/拖出销毁）· `test-new-role-bag`（新手背包） |
 | 装备与物品 | `test-equipment-appearance`（外观切片）· `test-equipment-border`（品质边框）· `test-equipment-detail-background`（详情背景）· `test-equipment-light`（掉落光柱）· `test-good-detail-placement`（详情弹窗摆放）· `test-drop-name`（掉落物名称） |
 | 成长 | `test-rank`（军衔）· `test-title`（称号）· `test-hp-recover`（每秒回血）· `test-role-default-cloth`（默认身体） |
-| 界面与输入 | `test-dialog-top`（弹窗置顶）· `test-joystick`（操作摇杆） |
+| 界面与输入 | `test-dialog-top`（弹窗置顶）· `test-joystick`（操作摇杆）· `test-scene-stage`（登录 / 选角整屏适配）· `test-announcement`（公告展示：排序 / 未读 / 时间窗 / 登录提醒 / 已读记录） |
 | 配置与素材 | `test-monster-config`（怪物配置与几何）· `test-role-frames`（角色帧素材）· `test-texts`（文案模板） |
 | 网络与存档 | `test-client-net`（网络层：包裹解包 / 令牌 / 静默 / 防抖同步）· `test-role-delete`（删角色与「被踢下线」）· `test-mall`（商城购买链路） |
 

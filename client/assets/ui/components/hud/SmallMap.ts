@@ -2,13 +2,17 @@ import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UITransform,
 import { maps } from "../../../configs/map";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
 import { uiImages, mapPreviewImage, smallMapImage, smallMapLayout } from "../../../configs/hudLayout";
+import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";
 import AutoBattle from "../../core/AutoBattle";
+import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
 import { getMapPixelSize } from "../../utils/map/MapPointMath";
 import { bindPointerAction } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
+import { AnnouncementApi } from "../../utils/net/Api";
+import AnnouncementBoardDialog from "../dialogs/AnnouncementBoardDialog";
 import MapPreviewDialog from "../dialogs/MapPreviewDialog";
 import type RoleDisplay from "../role/RoleDisplay";
 
@@ -47,6 +51,10 @@ export default class SmallMap extends Node {
   private roleDisplay: RoleDisplay;
   /** 小地图弹窗（整图预览：左键点击寻路 / 右键点击传送；由本组件驱动点位刷新） */
   private mapPreviewDialog: MapPreviewDialog;
+  /** 公告板弹窗（左侧「公告」入口打开；它的未读数回调驱动入口红点） */
+  private announcementDialog: AnnouncementBoardDialog;
+  /** 公告入口的未读红点（有未读公告才显示） */
+  private announcementDot: Node | null = null;
   /** 上次刷新时间戳 */
   private lastRefreshAt = 0;
   /** 路线当前是否已画出（无路线时据此决定是否要清空绘制层，避免每帧对空层调用 clear） */
@@ -56,16 +64,47 @@ export default class SmallMap extends Node {
     super("small_map");
     this.roleDisplay = roleDisplay;
     this.mapPreviewDialog = new MapPreviewDialog(roleDisplay);
+    // 公告板自己拉公告；未读数变化通过回调回到这里（红点长什么样是 HUD 的事）
+    this.announcementDialog = new AnnouncementBoardDialog((unread) => this.setAnnouncementUnread(unread));
     // 主体（尺寸与屏幕右上角位置）
     GameUiHelper.applySmallMapBodyStyle(this);
     this.createEntryButtons();
     this.createMapArea();
     this.createBottomInfo();
+    // 进游戏先探一次未读（失败静默：拉不到就不显示红点）
+    void this.refreshAnnouncementUnread();
   }
 
   /** 打开小地图弹窗（整图预览：左键寻路 / 右键传送） */
   private openMapPreviewDialog() {
     this.mapPreviewDialog.open();
+  }
+
+  /** 打开公告板（左侧功能入口里的公告图标） */
+  private openAnnouncementDialog() {
+    this.announcementDialog.open();
+  }
+
+  /**
+   * 探一次未读公告数（进游戏时调一次）
+   *
+   * 之后由公告板自己驱动：打开它就整批标为已读并回调 `setAnnouncementUnread(0)`。
+   * 拉取失败静默 —— 红点只是提示，拉不到就当没有未读，不能因此弹提示打断进游戏。
+   */
+  private async refreshAnnouncementUnread() {
+    try {
+      const list = await AnnouncementApi.active({ silent: true });
+      if (!isValid(this)) return;
+      this.setAnnouncementUnread(countUnread(buildAnnouncementViews(list, AnnouncementReadStore.getReadIds())));
+    } catch {
+      /* 静默：入口不显示红点即可 */
+    }
+  }
+
+  /** 未读红点显隐（红点节点是入口按钮的子节点，随按钮一起排布） */
+  private setAnnouncementUnread(unread: number) {
+    if (!this.announcementDot || !isValid(this.announcementDot)) return;
+    this.announcementDot.active = unread > 0;
   }
 
   //#region 结构拼装
@@ -81,13 +120,25 @@ export default class SmallMap extends Node {
     const count = layout.entryIcons.length;
     const columnHeight = count * layout.entryIconSize + (count - 1) * layout.entryIconGap;
     const column = GameUiHelper.createColumn("small_map_entry_buttons", layout.entryIconGap, layout.entryColumnPosition, new Size(layout.entryIconSize, columnHeight));
-    // 按钮位置由 Layout 统一排列；「世界」入口打开小地图弹窗，其余入口暂为占位（与底部栏未开放按钮一致）
+    // 按钮位置由 Layout 统一排列；「世界」入口打开小地图弹窗，「公告」入口打开公告板，其余入口暂为占位
     layout.entryIcons.forEach((icon) => {
       const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, smallMapImage(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
       if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
+      if (icon === layout.announcementEntry) {
+        bindPointerAction(button, () => this.openAnnouncementDialog(), this);
+        this.announcementDot = this.createAnnouncementDot(button);
+      }
       column.addChild(button);
     });
     this.addChild(column);
+  }
+
+  /** 公告入口的未读红点（常驻子节点，按未读数切显隐；红点图用通用小圆点） */
+  private createAnnouncementDot(button: Node) {
+    const dot = GameUiHelper.createImage(`${button.name}_unread`, uiImages.dot, smallMapLayout.announcementDot.position, smallMapLayout.announcementDot.size);
+    dot.active = false;
+    button.addChild(dot);
+    return dot;
   }
 
   /** 中部：地图名称条（紧贴地图内容区上方）+ 真实地图底图（视口裁剪）+ 坐标点绘制层 */

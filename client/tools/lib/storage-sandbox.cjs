@@ -165,7 +165,9 @@ function copyDir(fromDir, toDir) {
 /**
  * 编译 StorageManager（真实代码，UI 依赖走 stub）并返回可 require 的模块
  * @param {string} sandboxName 沙箱目录名（os.tmpdir() 下）
- * @param {string[]} extraEntries 额外的入口文件（相对 assets/，例如 "ui/core/SkillManager.ts"）
+ * @param {string[]} extraEntries 额外的入口文件（相对 assets/，例如 "ui/core/SkillManager.ts"）；
+ *   不在 configs / types 里、也没被 prepareStorage 显式复制过的文件会被**自动从 assets 复制**过来
+ *   （否则 tsc 只会报 TS6053 找不到文件，产物缺失，测试看起来像「模块不存在」）
  * @returns {{ StorageManager: any, Role: any, outDir: string, shim: any, RoleSync: any, Session: any }}
  */
 function prepareStorage(sandboxName, extraEntries = []) {
@@ -196,6 +198,12 @@ function prepareStorage(sandboxName, extraEntries = []) {
   copy(path.join(ASSETS, "ui/utils/battle/MpHelper.ts"), path.join(srcDir, "ui/utils/battle/MpHelper.ts"));
   copy(path.join(ASSETS, "ui/utils/battle/HpHelper.ts"), path.join(srcDir, "ui/utils/battle/HpHelper.ts"));
   copy(path.join(ASSETS, "ui/core/StorageManager.ts"), path.join(srcDir, "ui/core/StorageManager.ts"), true);
+  // 额外入口：沙箱里还没有的，按原样复制一份（configs / types 已整份复制，不重复拷）
+  extraEntries.forEach((rel) => {
+    const target = path.join(srcDir, rel);
+    if (fs.existsSync(target)) return;
+    copy(path.join(ASSETS, rel), target);
+  });
 
   const entries = [path.join(srcDir, "ui/core/StorageManager.ts"), ...extraEntries.map((rel) => path.join(srcDir, rel))];
   fs.writeFileSync(

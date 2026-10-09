@@ -535,3 +535,81 @@ export const hoverTipLayout = {
 };
 
 //#endregion
+
+//#region 公告（玩家侧展示，见 ui/components/dialogs/Announcement*）
+
+/**
+ * 游戏内公告板（左列表 + 右详情）
+ *
+ * 为什么分两栏而不是把正文摊在列表里：一条公告正文可以到两千字，逐条摊开后
+ * 「到底有哪几条公告」这件事就被淹掉了。左栏固定行高只给「标题 + 级别 · 时间窗」（快速扫），
+ * 右栏展示选中那条的完整正文。
+ */
+export const announcementBoardDialogLayout = {
+  name: "announcement_board_dialog",
+  title: "公告",
+  size: new Size(720, 500),
+  /** 左：公告条目滚动列表（行高固定，正文在右栏） */
+  list: {
+    name: "announcement_list",
+    position: new Vec2(-215, -20),
+    size: new Size(280, 400),
+    itemSize: new Size(268, 58),
+    /** 条目间距（条目内部的两行文字几何见下面两项） */
+    itemGap: 4,
+    itemTitleFontSize: 13,
+    itemMetaFontSize: 11,
+    /** 条目的标题与第二行（左对齐；左侧留出未读圆点的位置，所以左边界不贴条目边） */
+    itemTitle: { position: new Vec2(4, 12), size: new Size(244, 18) },
+    itemMeta: { position: new Vec2(4, -11), size: new Size(244, 16) },
+    /** 未读条目用亮色标题 + 左侧圆点，已读压暗（一眼看出哪几条是新的） */
+    unreadTitleColor: new Color(255, 214, 102),
+    readTitleColor: new Color(150, 150, 150),
+    itemMetaColor: new Color(130, 130, 130),
+    /** 选中条目的底色（Graphics 自绘，不依赖底图） */
+    selectedFill: new Color(70, 60, 44, 220),
+    /** 未读圆点（相对条目中心；用 uiImages.dot） */
+    itemDot: { position: new Vec2(-126, 13), size: new Size(8, 8) },
+  },
+  /** 右：选中公告的详情（标题 / 级别 · 时间窗 / 正文滚动区） */
+  detail: {
+    title: { name: "announcement_detail_title", position: new Vec2(140, 172), size: new Size(368, 24), fontSize: 15, color: new Color(255, 214, 102) },
+    /** 级别 · 时间窗（没有选中公告时这里显示空态 / 失败提示） */
+    meta: { name: "announcement_detail_meta", position: new Vec2(140, 148), size: new Size(368, 18), fontSize: 11, color: new Color(150, 150, 150) },
+    scroll: { name: "announcement_body_scroll", position: new Vec2(140, -28), size: new Size(372, 330) },
+    /** 正文：宽度固定、高度按内容自适应（可换行） */
+    body: { name: "announcement_body", fontSize: 13, lineHeight: 20, width: 364, color: new Color(226, 226, 226) },
+  },
+};
+
+/**
+ * 登录页公告提醒（全屏模态）
+ *
+ * 与公告板的分工：这里只摊开「生效中的重要公告」（停机维护这类玩家进游戏前最需要看到的），
+ * 内容少且是必读，所以直接一篇篇纵向摊开，不做左右分栏。
+ * 尺寸与遮挡口径与确认框一致（见 confirmDialogLayout）：全屏遮罩取可见区，任意窗口比例都盖满。
+ */
+export const announcementNoticeDialogLayout = {
+  name: "announcement_notice_dialog",
+  title: "公告",
+  maskColor: new Color(0, 0, 0, 170),
+  panel: { name: "announcement_notice_panel", size: new Size(640, 460), background: uiImages.dialogBackground },
+  /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
+  titleLabel: { name: "announcement_notice_title", position: new Vec2(0, 200), size: new Size(560, 26), fontSize: 16, color: new Color("#FF8B8B") },
+  /** 公告列表（纵向滚动，每一条自己撑高） */
+  list: { name: "announcement_notice_list", position: new Vec2(0, 20), size: new Size(576, 350) },
+  /** 单条公告：标题 / 级别 · 时间窗 / 正文，纵向排列且高度按内容自适应 */
+  item: {
+    width: 568,
+    /** 条目之间与条目内部的纵向间距 */
+    itemGap: 22,
+    rowGap: 6,
+    title: { fontSize: 15, lineHeight: 21, color: new Color(255, 214, 102) },
+    meta: { fontSize: 11, lineHeight: 16, color: new Color(140, 140, 140) },
+    body: { fontSize: 13, lineHeight: 20, color: new Color(226, 226, 226) },
+  },
+  /** 「我知道了」按钮（中号按钮，面板底部居中） */
+  confirmButton: { name: "announcement_notice_confirm_button", text: "我知道了", position: new Vec2(0, -200) },
+};
+
+//#endregion

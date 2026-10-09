@@ -177,6 +177,36 @@ export default class UiHelper {
   }
 
   /**
+   * 创建一个「宽度固定、高度按内容自适应」的多行文本
+   *
+   * createLabel 的口径是单行 + CLAMP（超出直接裁掉），只适合标题这类定长文本；
+   * 公告正文、长段说明这类长度不定的文本必须换行 + RESIZE_HEIGHT ——
+   * 高度随内容撑开后，父级 Layout（CONTAINER）才量得到它，外层滚动区才知道内容有多长
+   * （同一口径的内联写法见 ui/components/dialogs/ConfirmDialog 的 createMessage）。
+   *
+   * @param width 文本宽度（即换行宽度）；高度不传，由内容决定
+   * @param lineHeight 行高（RESIZE_HEIGHT 下每行占多高完全由它决定）
+   * @param horizontalAlign 水平对齐（默认居中；左对齐的正文传 Label.HorizontalAlign.LEFT）
+   */
+  static createWrappedLabel(
+    name: string,
+    text: string,
+    color: Color,
+    fontSize: number,
+    lineHeight: number,
+    position: Vec2,
+    width: number,
+    horizontalAlign?: Label["horizontalAlign"],
+  ) {
+    const node = this.createLabel(name, text, color, fontSize, position, new Size(width, 0), horizontalAlign, Label.VerticalAlign.TOP);
+    const label = node.getComponent(Label);
+    label.lineHeight = lineHeight;
+    label.overflow = Label.Overflow.RESIZE_HEIGHT;
+    label.enableWrapText = true;
+    return node;
+  }
+
+  /**
    * 创建一个提示文本元素（全局提示的尺寸/字号/颜色见 configs/hudLayout.tipsLayout，由 GameUiHelper 使用）
    * @param name 元素名称
    * @param text 提示文本内容
