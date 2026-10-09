@@ -115,3 +115,31 @@ export interface AuditLogRow {
 export interface AuditLogWithNameRow extends AuditLogRow {
   target_name: string | null;
 }
+
+/**
+ * 公告行
+ *
+ * 时间窗用**两个可空列**表达，而不是「必填的起止时间」：
+ * - `starts_at = null` → 立即生效（发布即上线，运营最常用的路径）
+ * - `ends_at = null` → 长期有效（不设截止）
+ *
+ * 这样「永久公告」「定时公告」「限时公告」是同一条记录的不同取值，不需要额外的状态列 ——
+ * 也就不会出现「状态列说启用、时间窗说早就过期」这种自相矛盾的数据。
+ */
+export interface AnnouncementRow {
+  id: string;
+  title: string;
+  content: string;
+  /** normal | important（见 common/constants/announcement） */
+  level: string;
+  /** 1 启用 / 0 停用（运营手动下线用；与时间窗是两道独立的闸） */
+  enabled: number;
+  /** 生效开始时间（毫秒）；null = 立即生效 */
+  starts_at: number | null;
+  /** 生效结束时间（毫秒，不含）；null = 不设截止 */
+  ends_at: number | null;
+  /** 发布人管理员账号名（冗余存一份，管理员被删后仍可追溯） */
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+}

@@ -8,6 +8,7 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 import { SecurityModule } from "./common/security/security.module";
 import { DatabaseModule } from "./database/database.module";
 import { AdminModule } from "./modules/admin/admin.module";
+import { AnnouncementModule } from "./modules/announcement/announcement.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
@@ -38,6 +39,7 @@ import { TokenModule } from "./modules/token/token.module";
     AdminModule,
     AuditModule,
     SystemModule,
+    AnnouncementModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

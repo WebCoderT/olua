@@ -16,6 +16,15 @@
  * （守卫：`node tools/audit-api-generated.cjs`）。
  */
 export const ApiRoutes = {
+  /** announcement 模块（1 个接口） */
+  announcement: {
+    /**
+     * 当前生效中的公告（GET /announcements/active）
+     *
+     * 只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。
+     */
+    active: "/announcements/active",
+  },
   /** auth 模块（3 个接口） */
   auth: {
     /**

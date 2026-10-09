@@ -273,7 +273,8 @@
               "enum": [
                 "account",
                 "role",
-                "admin"
+                "admin",
+                "announcement"
               ]
             }
           },
@@ -528,7 +529,8 @@
               "enum": [
                 "account",
                 "role",
-                "admin"
+                "admin",
+                "announcement"
               ]
             }
           },
@@ -2805,6 +2807,375 @@
           "system:read"
         ]
       }
+    },
+    "/announcements/active": {
+      "get": {
+        "description": "只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。\n\n排序：**重要在前**，同级按发布时间倒序。无生效公告时返回空数组（不是 null）。\n\n无需令牌 —— 停机维护这类公告在登录页就要能显示。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "announcement.active",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "生效中的公告（可能为空数组）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ActiveAnnouncementDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "当前生效中的公告",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ActiveAnnouncementDto"
+          }
+        }
+      }
+    },
+    "/admin/announcements": {
+      "get": {
+        "description": "`keyword` 模糊匹配标题与正文；`level` / `enabled` / `active` 可筛。\n\n`active=true` 得到的就是「玩家现在能看到的那一批」—— 与公共接口 `GET /announcements/active` 用的是同一段判据，不会出现后台看着已生效、玩家却看不到。`active=false` 是它的补集（含未开始与已过期，也含被停用的）。\n\n**排序**：`sort` 取 `title` / `level` / `enabled` / `startsAt` / `endsAt` / `createdAt` / `updatedAt`，`order` 取 asc / desc（默认 updatedAt 倒序）。同毫秒的多条另有 id 兜底次序，保证翻页稳定。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:read`（查看公告；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminAnnouncement.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配标题与正文",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "description": "级别筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "normal",
+                "important"
+              ]
+            }
+          },
+          {
+            "name": "enabled",
+            "required": false,
+            "in": "query",
+            "description": "启用状态筛选：true 只看启用 / false 只看停用",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "active",
+            "required": false,
+            "in": "query",
+            "description": "生效状态筛选：true 只看生效中 / false 只看不在生效窗口内（含未开始与已过期）",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AnnouncementPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "公告列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AnnouncementPageDto"
+        },
+        "x-olua-permissions": [
+          "announcement:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AnnouncementQueryDto"
+        }
+      },
+      "post": {
+        "description": "不传 `startsAt` = 立即生效，不传 `endsAt` = 不设截止（**不要**为了「长期有效」编一个很远的结束时间）。\n\n发布人取当前登录的管理员账号名，不接受入参指定；`endsAt` 必须晚于 `startsAt`（否则 50002）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
+        "operationId": "adminAnnouncement.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnnouncementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AnnouncementDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "发布公告",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AnnouncementDto"
+        },
+        "x-olua-permissions": [
+          "announcement:write"
+        ]
+      }
+    },
+    "/admin/announcements/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段 —— 列表上的「启用 / 停用」只传 `enabled` 即可，不会覆盖其它字段。\n\n`startsAt` / `endsAt` 传 `null` 表示改为「立即生效」/「不设截止」，不传则保持原值。时间窗按**合并后的结果**校验（只传 `endsAt` 时也会与库里已有的 `startsAt` 比对）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
+        "operationId": "adminAnnouncement.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "公告 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnnouncementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的公告",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AnnouncementDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑公告",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AnnouncementDto"
+        },
+        "x-olua-permissions": [
+          "announcement:write"
+        ]
+      },
+      "delete": {
+        "description": "不可恢复（**没有软删除**）：只是想让它不再对玩家展示，应当用「停用」或设置结束时间。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
+        "operationId": "adminAnnouncement.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "公告 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除公告",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "announcement:write"
+        ]
+      }
     }
   },
   "info": {
@@ -3264,6 +3635,88 @@
         "required": [
           "password"
         ]
+      },
+      "CreateAnnouncementDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "标题",
+            "maxLength": 60,
+            "example": "例行维护公告"
+          },
+          "content": {
+            "type": "string",
+            "description": "正文（纯文本）",
+            "maxLength": 2000
+          },
+          "level": {
+            "type": "string",
+            "description": "级别，默认 normal",
+            "enum": [
+              "normal",
+              "important"
+            ],
+            "default": "normal"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "是否启用，默认 true",
+            "default": true
+          },
+          "startsAt": {
+            "type": "number",
+            "description": "生效开始时间（毫秒时间戳）；不传 = 立即生效",
+            "minimum": 0,
+            "example": 1760000000000
+          },
+          "endsAt": {
+            "type": "number",
+            "description": "生效结束时间（毫秒时间戳，不含）；不传 = 不设截止",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "title",
+          "content"
+        ]
+      },
+      "UpdateAnnouncementDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "标题（不传则不改）",
+            "maxLength": 60
+          },
+          "content": {
+            "type": "string",
+            "description": "正文（不传则不改）",
+            "maxLength": 2000
+          },
+          "level": {
+            "type": "string",
+            "description": "级别（不传则不改）",
+            "enum": [
+              "normal",
+              "important"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "启用 / 停用（不传则不改）"
+          },
+          "startsAt": {
+            "type": "number",
+            "description": "生效开始时间（毫秒）；传 `null` = 改为立即生效，不传则不改",
+            "nullable": true
+          },
+          "endsAt": {
+            "type": "number",
+            "description": "生效结束时间（毫秒，不含）；传 `null` = 改为不设截止，不传则不改",
+            "nullable": true
+          }
+        }
       },
       "ApiEnvelopeDto": {
         "type": "object",
@@ -4213,7 +4666,7 @@
           },
           "targetType": {
             "type": "string",
-            "description": "目标类型：account / role / admin",
+            "description": "目标类型：account / role / admin / announcement",
             "nullable": true
           },
           "targetId": {
@@ -4422,7 +4875,8 @@
             "enum": [
               "account",
               "role",
-              "admin"
+              "admin",
+              "announcement"
             ]
           },
           "targetId": {
@@ -4851,6 +5305,214 @@
           "config",
           "time"
         ]
+      },
+      "ActiveAnnouncementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "公告 id"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题",
+            "example": "例行维护公告"
+          },
+          "content": {
+            "type": "string",
+            "description": "正文（纯文本，换行用 \\n）"
+          },
+          "level": {
+            "type": "string",
+            "description": "级别：normal 普通 / important 重要（重要排在前）",
+            "enum": [
+              "normal",
+              "important"
+            ]
+          },
+          "startsAt": {
+            "type": "number",
+            "description": "生效开始时间（毫秒）；null = 立即生效",
+            "nullable": true
+          },
+          "endsAt": {
+            "type": "number",
+            "description": "生效结束时间（毫秒，不含）；null = 不设截止",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "content",
+          "level",
+          "startsAt",
+          "endsAt"
+        ]
+      },
+      "AnnouncementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "公告 id"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "content": {
+            "type": "string",
+            "description": "正文（纯文本，换行用 \\n）"
+          },
+          "level": {
+            "type": "string",
+            "description": "级别",
+            "enum": [
+              "normal",
+              "important"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "是否启用（手动下线开关；与时间窗是两道独立的闸）"
+          },
+          "startsAt": {
+            "type": "number",
+            "description": "生效开始时间（毫秒）；null = 立即生效",
+            "nullable": true
+          },
+          "endsAt": {
+            "type": "number",
+            "description": "生效结束时间（毫秒，不含）；null = 不设截止",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "发布人管理员账号名（管理员被删后仍可追溯）",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "当前是否生效中（由服务端判定，界面不要自己算）"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "content",
+          "level",
+          "enabled",
+          "startsAt",
+          "endsAt",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "active"
+        ]
+      },
+      "AnnouncementPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的公告",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnouncementDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AnnouncementQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配标题与正文"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "level": {
+            "type": "string",
+            "description": "级别筛选",
+            "enum": [
+              "normal",
+              "important"
+            ]
+          },
+          "enabled": {
+            "type": "string",
+            "description": "启用状态筛选：true 只看启用 / false 只看停用",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "active": {
+            "type": "string",
+            "description": "生效状态筛选：true 只看生效中 / false 只看不在生效窗口内（含未开始与已过期）",
+            "enum": [
+              "true",
+              "false"
+            ]
+          }
+        }
       }
     }
   }

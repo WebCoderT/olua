@@ -526,8 +526,8 @@ async function runSuite(baseUrl) {
   checkEqual(toViewer.body.data.role, "viewer", "已改为只读观察员");
   checkEqual(
     [...toViewer.body.data.permissions].sort().join(","),
-    "account:read,role:read,stats:read",
-    "只读观察员恰好 3 个读权限",
+    "account:read,announcement:read,role:read,stats:read",
+    "只读观察员恰好 4 个读权限",
   );
 
   // 降权当即生效：还是同一枚旧令牌
@@ -546,7 +546,7 @@ async function runSuite(baseUrl) {
   const viewerMe = await call("GET", "/api/admin/auth/me", { token: admin2Token });
   checkEqual(viewerMe.status, 200, "只读观察员可看自己的信息（无需权限点）");
   checkEqual(viewerMe.body.data.role, "viewer", "me 返回最新角色");
-  checkEqual(viewerMe.body.data.permissions.length, 3, "me 返回的权限点与角色一致");
+  checkEqual(viewerMe.body.data.permissions.length, 4, "me 返回的权限点与角色一致");
   checkEqual((await call("PATCH", `/api/admin/accounts/${otherAccountId}/status`, { token: admin2Token, body: { status: "disabled" } })).body.code, 30006, "越权码重复确认");
 
   // 最后一个启用中的超管受保护
@@ -579,6 +579,177 @@ async function runSuite(baseUrl) {
     404,
     "再改被删掉的管理员返回 404",
   );
+
+  //#endregion
+
+  //#region 八、公告（运营触达第一切片）
+  group("公告：公共拉取 / 管理端 CRUD / 权限与审计");
+
+  const now = Date.now();
+
+  // —— 文档归位：公共侧与公共接口同组，写接口在管理端且各自带权限点 ——
+  checkEqual(tagsOf("/api/announcements/active", "get").join(","), "公共接口", "生效公告归入公共接口");
+  checkEqual(securityOf("/api/announcements/active", "get").length, 0, "生效公告不要求令牌");
+  checkEqual(tagsOf("/api/admin/announcements", "get").join(","), "管理端", "管理端公告列表归入管理端");
+  checkEqual(permOf("/api/admin/announcements", "get").join(","), "announcement:read", "列表标注 announcement:read");
+  checkEqual(permOf("/api/admin/announcements", "post").join(","), "announcement:write", "发布标注 announcement:write");
+  checkEqual(permOf("/api/admin/announcements/{id}", "delete").join(","), "announcement:write", "删除标注 announcement:write");
+
+  const activeEmpty = await call("GET", "/api/announcements/active");
+  checkEqual(activeEmpty.status, 200, "公共公告接口无需令牌");
+  check(Array.isArray(activeEmpty.body.data), "无公告时返回空数组（不是 null）");
+  checkEqual(activeEmpty.body.data.length, 0, "初始没有生效中的公告");
+
+  const publishImportant = await call("POST", "/api/admin/announcements", {
+    token: adminToken,
+    body: { title: "开服公告", content: "欢迎来到 olua", level: "important" },
+  });
+  checkEqual(publishImportant.status, 201, "发布重要公告（201）");
+  checkEqual(publishImportant.body.data.active, true, "立即生效 → active = true");
+  checkEqual(publishImportant.body.data.createdBy, "gm001", "发布人取令牌里的管理员账号名");
+  const importantId = publishImportant.body.data.id;
+
+  const publishNormal = await call("POST", "/api/admin/announcements", {
+    token: adminToken,
+    body: { title: "普通公告", content: "普通公告的正文", level: "normal" },
+  });
+  const normalId = publishNormal.body.data.id;
+  checkEqual(publishNormal.body.data.level, "normal", "level 按入参落库");
+
+  const publishFuture = await call("POST", "/api/admin/announcements", {
+    token: adminToken,
+    body: { title: "未开始的公告", content: "x", startsAt: now + 3_600_000 },
+  });
+  const futureId = publishFuture.body.data.id;
+  checkEqual(publishFuture.body.data.active, false, "还没到开始时间 → active = false");
+
+  const publishExpired = await call("POST", "/api/admin/announcements", {
+    token: adminToken,
+    body: { title: "已过期的公告", content: "x", startsAt: now - 7_200_000, endsAt: now - 3_600_000 },
+  });
+  checkEqual(publishExpired.body.data.active, false, "已经过了结束时间 → active = false");
+
+  const publishDisabled = await call("POST", "/api/admin/announcements", {
+    token: adminToken,
+    body: { title: "被停用的公告", content: "x", enabled: false },
+  });
+  const disabledId = publishDisabled.body.data.id;
+  checkEqual(publishDisabled.body.data.active, false, "手动停用 → active = false");
+
+  const activeList = await call("GET", "/api/announcements/active");
+  const activeTitles = activeList.body.data.map((item) => item.title);
+  checkEqual(activeList.body.data.length, 2, "生效中的只剩两条");
+  check(!activeTitles.includes("未开始的公告"), "未到开始时间的公告不出现");
+  check(!activeTitles.includes("已过期的公告"), "已过结束时间的公告不出现");
+  check(!activeTitles.includes("被停用的公告"), "已停用的公告不出现");
+  checkEqual(activeList.body.data[0].title, "开服公告", "重要公告排在普通公告之前");
+  checkEqual(
+    Object.keys(activeList.body.data[0]).sort().join(","),
+    "content,endsAt,id,level,startsAt,title",
+    "公共接口只给展示需要的字段（不含 enabled / createdBy / 时间戳）",
+  );
+
+  const adminList = await call("GET", "/api/admin/announcements?size=50", { token: adminToken });
+  checkEqual(adminList.status, 200, "管理端可读公告列表");
+  checkEqual(adminList.body.data.total, 5, "列表 total = 5");
+  checkEqual(typeof adminList.body.data.list[0].enabled, "boolean", "管理端列表带内部字段 enabled");
+  const byActive = await call("GET", "/api/admin/announcements?active=true&size=50", { token: adminToken });
+  checkEqual(byActive.body.data.total, 2, "active=true 与玩家看到的完全一致");
+  check(byActive.body.data.list.every((item) => item.active === true), "筛选结果里每条的 active 标记都为 true");
+  const byInactive = await call("GET", "/api/admin/announcements?active=false&size=50", { token: adminToken });
+  checkEqual(byInactive.body.data.total, 3, "active=false 是补集（未开始 / 已过期 / 已停用）");
+  check(byInactive.body.data.list.every((item) => item.active === false), "反筛时 active 标记都为 false");
+  checkEqual((await call("GET", "/api/admin/announcements?keyword=过期", { token: adminToken })).body.data.total, 1, "keyword 命中标题");
+  checkEqual((await call("GET", "/api/admin/announcements?level=important", { token: adminToken })).body.data.total, 1, "可按级别筛选");
+  checkEqual((await call("GET", "/api/admin/announcements?enabled=false", { token: adminToken })).body.data.total, 1, "可按启用状态筛选");
+  checkEqual((await call("GET", "/api/admin/announcements?sort=title&order=asc", { token: adminToken })).status, 200, "白名单内的排序可用");
+  checkEqual(
+    (await call("GET", "/api/admin/announcements?sort=id%20DESC;DROP%20TABLE", { token: adminToken })).status,
+    200,
+    "白名单外的排序值静默退回默认（不报错，也不会被拼进 SQL）",
+  );
+
+  const toggled = await call("PATCH", `/api/admin/announcements/${normalId}`, { token: adminToken, body: { enabled: false } });
+  checkEqual(toggled.status, 200, "部分更新成功");
+  checkEqual(toggled.body.data.enabled, false, "enabled 已改为 false");
+  checkEqual(toggled.body.data.content, "普通公告的正文", "只传 enabled 不会清掉正文（部分更新语义）");
+  checkEqual((await call("GET", "/api/announcements/active")).body.data.length, 1, "停用后生效中的只剩 1 条");
+
+  const badRange = await call("PATCH", `/api/admin/announcements/${futureId}`, { token: adminToken, body: { endsAt: now + 1000 } });
+  checkEqual(badRange.status, 400, "结束时间早于开始时间被拒（跨字段校验）");
+  checkEqual(badRange.body.code, 50002, "时间窗业务码 50002");
+  checkEqual(
+    (
+      await call("POST", "/api/admin/announcements", {
+        token: adminToken,
+        body: { title: "t", content: "c", startsAt: now + 10_000, endsAt: now + 5_000 },
+      })
+    ).body.code,
+    50002,
+    "创建时同样校验时间窗",
+  );
+  checkEqual(
+    (await call("PATCH", `/api/admin/announcements/${futureId}`, { token: adminToken, body: { startsAt: null } })).body.data.active,
+    true,
+    "startsAt 传 null = 改为立即生效",
+  );
+  checkEqual((await call("POST", "/api/admin/announcements", { token: adminToken, body: { title: "", content: "c" } })).status, 400, "空标题被拒");
+  checkEqual((await call("POST", "/api/admin/announcements", { token: adminToken, body: { title: "t", content: "" } })).status, 400, "空正文被拒");
+
+  // —— 权限：观察员可读不可写 ——
+  const annViewer = await call("POST", "/api/admin/auth/register", {
+    body: { username: "gm003", password: "admin123", registerCode: ADMIN_CODE },
+  });
+  const annViewerId = annViewer.body.data.admin.id;
+  const annViewerToken = annViewer.body.data.token;
+  checkEqual(
+    (await call("PATCH", `/api/admin/admins/${annViewerId}`, { token: adminToken, body: { role: "viewer" } })).status,
+    200,
+    "把 gm003 降为只读观察员",
+  );
+  checkEqual(
+    (await call("GET", "/api/admin/announcements", { token: annViewerToken })).status,
+    200,
+    "只读观察员可看公告列表（announcement:read）",
+  );
+  const viewerPublish = await call("POST", "/api/admin/announcements", { token: annViewerToken, body: { title: "x", content: "y" } });
+  checkEqual(viewerPublish.status, 403, "只读观察员发公告被拒（403）");
+  checkEqual(viewerPublish.body.code, 30006, "越权业务码 30006");
+  checkEqual(
+    (await call("PATCH", `/api/admin/announcements/${importantId}`, { token: annViewerToken, body: { enabled: false } })).status,
+    403,
+    "只读观察员编辑公告被拒",
+  );
+  checkEqual(
+    (await call("DELETE", `/api/admin/announcements/${importantId}`, { token: annViewerToken })).status,
+    403,
+    "只读观察员删公告被拒",
+  );
+  checkEqual((await call("GET", "/api/admin/announcements", { token })).status, 401, "玩家令牌调管理端公告接口被拒（401）");
+  checkEqual((await call("GET", "/api/admin/announcements")).status, 401, "未登录读管理端公告列表被拒（401）");
+
+  // —— 删除（放在审计断言之前：审计是写操作的**结果**，得先发生） ——
+  checkEqual((await call("DELETE", `/api/admin/announcements/${disabledId}`, { token: adminToken })).status, 200, "删除公告成功");
+  checkEqual(
+    (await call("DELETE", `/api/admin/announcements/${disabledId}`, { token: adminToken })).body.code,
+    50001,
+    "重复删除返回 50001（公告不存在）",
+  );
+
+  // —— 审计留痕：动作取自 operationId，目标名按 targetType 关联回来 ——
+  const annAudit = await call("GET", "/api/admin/audit-logs?targetType=announcement&size=50", { token: adminToken });
+  checkEqual(annAudit.status, 200, "可按 announcement 筛审计日志");
+  check(annAudit.body.data.total >= 5, "公告写操作已自动留痕");
+  checkEqual(annAudit.body.data.list[0].targetType, "announcement", "审计目标类型为 announcement");
+  check(annAudit.body.data.list.some((row) => row.action === "adminAnnouncement.create"), "审计动作就是接口标识");
+  check(annAudit.body.data.list.some((row) => row.targetName === "普通公告"), "审计能按 targetType 关联出公告标题");
+  const removedRow = annAudit.body.data.list.find((row) => row.action === "adminAnnouncement.remove" && row.success);
+  checkEqual(
+    removedRow === undefined ? "审计里没有这次删除" : removedRow.targetName,
+    null,
+    "目标已删的审计记录 targetName 退回 null（targetId 仍在）",
+  );
+  checkEqual((await call("DELETE", `/api/admin/admins/${annViewerId}`, { token: adminToken })).status, 200, "清理：删除 gm003");
 
   //#endregion
 }

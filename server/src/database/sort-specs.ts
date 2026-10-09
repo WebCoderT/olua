@@ -67,6 +67,21 @@ export const AUDIT_SORT: SortSpec<"createdAt" | "actorName" | "action" | "target
   defaultOrder: "desc",
 };
 
+/** 公告列表：默认按更新时间倒序（运营改完一条就能在列表顶部看到） */
+export const ANNOUNCEMENT_SORT: SortSpec<"title" | "level" | "enabled" | "startsAt" | "endsAt" | "createdAt" | "updatedAt"> = {
+  columns: {
+    title: "title",
+    level: "level",
+    enabled: "enabled",
+    startsAt: "starts_at",
+    endsAt: "ends_at",
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
+  default: "updatedAt",
+  defaultOrder: "desc",
+};
+
 /** 把白名单里的字段名拼成一行，供接口文档说明用（`sort` 的取值） */
 export function sortFieldNames<K extends string>(spec: SortSpec<K>): string {
   return Object.keys(spec.columns)

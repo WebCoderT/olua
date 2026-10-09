@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { AdminRole } from "../common/constants/permission";
+import { AnnouncementLevel } from "../common/constants/announcement";
 
 /** 可绑定的参数值（node:sqlite 支持的类型） */
 export type SqlParam = string | number | bigint | null | Uint8Array;
@@ -117,6 +118,21 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id);
       CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
+
+      CREATE TABLE IF NOT EXISTS announcements (
+        id         TEXT PRIMARY KEY,
+        title      TEXT NOT NULL,
+        content    TEXT NOT NULL,
+        level      TEXT NOT NULL DEFAULT '${AnnouncementLevel.NORMAL}',
+        enabled    INTEGER NOT NULL DEFAULT 1,
+        starts_at  INTEGER,
+        ends_at    INTEGER,
+        created_by TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      -- 生效中公告的取数条件就是 (enabled, starts_at, ends_at) 三列，按这个顺序建索引让它走同一棵树
+      CREATE INDEX IF NOT EXISTS idx_announcements_window ON announcements(enabled, starts_at, ends_at);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

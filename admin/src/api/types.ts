@@ -119,6 +119,15 @@ export const PERMISSION = {
   ROLE_WRITE: "role:write",
   ROLE_SELECT: "role:select",
   ROLE_DELETE: "role:delete",
+  /**
+   * 查看公告
+   *
+   * 只读观察员**也给**：公告是面向全服的公开内容，读了不等于能改 ——
+   * 与「操作日志 / 系统信息」那种会暴露人与部署形态的数据不同。
+   */
+  ANNOUNCEMENT_READ: "announcement:read",
+  /** 发布 / 编辑 / 删除公告（会直接推送给全服玩家，属于对外发声） */
+  ANNOUNCEMENT_WRITE: "announcement:write",
   ADMIN_READ: "admin:read",
   ADMIN_MANAGE: "admin:manage",
   /** 查看操作日志（只读观察员没有这一项） */
@@ -145,6 +154,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ROLE_WRITE]: "修改角色",
   [PERMISSION.ROLE_SELECT]: "切换在线角色",
   [PERMISSION.ROLE_DELETE]: "删除角色",
+  [PERMISSION.ANNOUNCEMENT_READ]: "查看公告",
+  [PERMISSION.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
   [PERMISSION.ADMIN_READ]: "查看管理员",
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
@@ -155,6 +166,22 @@ export const PERMISSION_LABELS: Record<string, string> = {
 export function permissionLabel(permission: string): string {
   return PERMISSION_LABELS[permission] ?? permission;
 }
+
+/**
+ * 公告级别（服务端 `common/constants/announcement.ts` 的镜像）
+ *
+ * 与 PERMISSION 同一约定：这份只是**界面展示用的镜像**，权威在服务端 ——
+ * 取值对不上时服务端会按 400 拒掉，不会静默存下一个界面认不出的级别。
+ */
+export const ANNOUNCEMENT_LEVEL = {
+  NORMAL: "normal",
+  IMPORTANT: "important",
+} as const;
+
+export const ANNOUNCEMENT_LEVEL_LABELS: Record<string, string> = {
+  [ANNOUNCEMENT_LEVEL.NORMAL]: "普通",
+  [ANNOUNCEMENT_LEVEL.IMPORTANT]: "重要",
+};
 
 /** 管理员角色 */
 export const ADMIN_ROLE = {
@@ -302,6 +329,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   account: "玩家账号",
   role: "角色",
   admin: "管理员",
+  announcement: "公告",
 };
 
 /** 目标类型中文名（未知类型原样显示） */
@@ -335,6 +363,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "adminRole.remove": "删除角色",
   "adminRole.batchRemove": "批量删除角色",
   "adminRole.select": "设为在线角色",
+  "adminAnnouncement.create": "发布公告",
+  "adminAnnouncement.update": "编辑公告",
+  "adminAnnouncement.remove": "删除公告",
   "role.create": "创建角色",
   "role.save": "保存角色进度",
   "role.remove": "删除角色",

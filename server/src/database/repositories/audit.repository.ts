@@ -186,5 +186,6 @@ const TARGET_NAME_SQL = `CASE a.target_type
   WHEN 'role' THEN (SELECT r.name FROM roles r WHERE r.id = a.target_id)
   WHEN 'account' THEN (SELECT c.username FROM accounts c WHERE c.id = a.target_id)
   WHEN 'admin' THEN (SELECT m.username FROM admins m WHERE m.id = a.target_id)
+  WHEN 'announcement' THEN (SELECT n.title FROM announcements n WHERE n.id = a.target_id)
   ELSE NULL
 END`;

@@ -100,6 +100,33 @@ export const routes = {
      */
     resetPassword: (id: string) => `/admin/admins/${encodeURIComponent(id)}/password`,
   },
+  /** adminAnnouncement 模块（4 个接口） */
+  adminAnnouncement: {
+    /**
+     * 公告列表（GET /admin/announcements）
+     *
+     * `keyword` 模糊匹配标题与正文；`level` / `enabled` / `active` 可筛。
+     */
+    list: "/admin/announcements",
+    /**
+     * 发布公告（POST /admin/announcements）
+     *
+     * 不传 `startsAt` = 立即生效，不传 `endsAt` = 不设截止（**不要**为了「长期有效」编一个很远的结束时间）。
+     */
+    create: "/admin/announcements",
+    /**
+     * 删除公告（DELETE /admin/announcements/{id}）
+     *
+     * 不可恢复（**没有软删除**）：只是想让它不再对玩家展示，应当用「停用」或设置结束时间。
+     */
+    remove: (id: string) => `/admin/announcements/${encodeURIComponent(id)}`,
+    /**
+     * 编辑公告（PATCH /admin/announcements/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段 —— 列表上的「启用 / 停用」只传 `enabled` 即可，不会覆盖其它字段。
+     */
+    update: (id: string) => `/admin/announcements/${encodeURIComponent(id)}`,
+  },
   /** adminAudit 模块（3 个接口） */
   adminAudit: {
     /**

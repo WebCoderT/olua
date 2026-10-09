@@ -1,7 +1,7 @@
 /**
  * 业务码（响应体 code 字段）
  *
- * 约定：0 = 成功；其余按模块分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）。
+ * 约定：0 = 成功；其余按模块分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用 / 5xxxx 公告）。
  * HTTP 状态码照旧语义化，code 只表达「业务上发生了什么」，客户端据 code 决定提示与分支。
  */
 export const BizCode = {
@@ -111,6 +111,17 @@ export const BizCode = {
    * 运维看到 30004 会去翻注册码，看到这个才会去改 `.env`。
    */
   ADMIN_REGISTER_CLOSED: 30012,
+
+  //#region 公告
+  /** 公告不存在（已被删，或 id 传错） */
+  ANNOUNCEMENT_NOT_FOUND: 50001,
+  /**
+   * 公告生效时间窗不合法（结束时间不晚于开始时间）
+   *
+   * 单独给一个码而不是并进「参数校验不通过」（40000）：前者是**跨字段**的组合错误，
+   * 管理端要能把它定位到「时间窗」这一组控件上，而不是丢一句泛泛的「参数不合法」。
+   */
+  ANNOUNCEMENT_TIME_RANGE_INVALID: 50002,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

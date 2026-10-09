@@ -40,6 +40,16 @@ export const Permission = {
   /** 删除角色 */
   ROLE_DELETE: "role:delete",
 
+  /**
+   * 查看公告列表
+   *
+   * 观察员也给：公告是**面向全服的公开内容**，读了不等于能改，
+   * 与「审计日志 / 系统信息」那种会暴露人与部署形态的数据不同。
+   */
+  ANNOUNCEMENT_READ: "announcement:read",
+  /** 发布 / 编辑 / 删除公告（会直接推送给全服玩家，属于对外发声，单列一个权限点） */
+  ANNOUNCEMENT_WRITE: "announcement:write",
+
   /** 查看管理员列表 */
   ADMIN_READ: "admin:read",
   /** 管理管理员（改角色 / 启停 / 删除 / 重置密码） */
@@ -88,8 +98,13 @@ export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
   [AdminRole.SUPER]: ALL_PERMISSIONS,
   /** 管理员：除「管理管理员」外全部 —— 管理员之间不能互相提权 */
   [AdminRole.ADMIN]: ALL_PERMISSIONS.filter((item) => item !== Permission.ADMIN_MANAGE),
-  /** 只读观察员：三个读权限，任何写操作都不行 */
-  [AdminRole.VIEWER]: [Permission.STATS_READ, Permission.ACCOUNT_READ, Permission.ROLE_READ],
+  /** 只读观察员：四个读权限，任何写操作都不行 */
+  [AdminRole.VIEWER]: [
+    Permission.STATS_READ,
+    Permission.ACCOUNT_READ,
+    Permission.ROLE_READ,
+    Permission.ANNOUNCEMENT_READ,
+  ],
 };
 
 /** 中文名（管理端界面与文档都用它） */
@@ -110,6 +125,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ROLE_WRITE]: "修改角色",
   [Permission.ROLE_SELECT]: "切换在线角色",
   [Permission.ROLE_DELETE]: "删除角色",
+  [Permission.ANNOUNCEMENT_READ]: "查看公告",
+  [Permission.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",

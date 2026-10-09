@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, AuthResult, CreateRole, Health, Login, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
+import type { Account, ActiveAnnouncement, AuthResult, CreateRole, Health, Login, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,17 @@ import type { Account, AuthResult, CreateRole, Health, Login, Register, RoleDeta
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountStatus } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountStatus, UpdateAnnouncement } from "./ApiModels";
+
+/** announcement 模块的接口（1 个，生成） */
+export const AnnouncementApi = {
+  /**
+   * 当前生效中的公告（GET /announcements/active）
+   *
+   * 只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。
+   */
+  active: (options?: Options) => HttpClient.get<ActiveAnnouncement[]>(ApiRoutes.announcement.active, { auth: false, ...options }),
+};
 
 /** auth 模块的接口（3 个，生成） */
 export const AuthApi = {

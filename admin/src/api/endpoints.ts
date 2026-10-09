@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, UpdateAccountStatus } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, UpdateAccountStatus, UpdateAnnouncement } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountStatus } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountStatus, UpdateAnnouncement } from "./models";
 
 /** adminAccount 模块的接口（9 个，生成） */
 export const accountsApi = {
@@ -138,6 +138,42 @@ export const adminsApi = {
    * 权限点：admin:manage
    */
   resetPassword: (id: string, body: ResetAdminPassword, options?: Options) => http.patch<ResetPasswordResult>(routes.adminAdmin.resetPassword(id), body, options),
+};
+
+/** adminAnnouncement 模块的接口（4 个，生成） */
+export const announcementsApi = {
+  /**
+   * 公告列表（GET /admin/announcements）
+   *
+   * `keyword` 模糊匹配标题与正文；`level` / `enabled` / `active` 可筛。
+   *
+   * 权限点：announcement:read
+   */
+  list: (query: AnnouncementQuery = {}, options?: Options) => http.get<AnnouncementPage>(routes.adminAnnouncement.list, { query, ...options }),
+  /**
+   * 发布公告（POST /admin/announcements）
+   *
+   * 不传 `startsAt` = 立即生效，不传 `endsAt` = 不设截止（**不要**为了「长期有效」编一个很远的结束时间）。
+   *
+   * 权限点：announcement:write
+   */
+  create: (body: CreateAnnouncement, options?: Options) => http.post<Announcement>(routes.adminAnnouncement.create, body, options),
+  /**
+   * 删除公告（DELETE /admin/announcements/{id}）
+   *
+   * 不可恢复（**没有软删除**）：只是想让它不再对玩家展示，应当用「停用」或设置结束时间。
+   *
+   * 权限点：announcement:write
+   */
+  remove: (id: string, options?: Options) => http.del<null>(routes.adminAnnouncement.remove(id), options),
+  /**
+   * 编辑公告（PATCH /admin/announcements/{id}）
+   *
+   * **部分更新**：只改请求体里出现的字段 —— 列表上的「启用 / 停用」只传 `enabled` 即可，不会覆盖其它字段。
+   *
+   * 权限点：announcement:write
+   */
+  update: (id: string, body: UpdateAnnouncement, options?: Options) => http.patch<Announcement>(routes.adminAnnouncement.update(id), body, options),
 };
 
 /** adminAudit 模块的接口（3 个，生成） */
