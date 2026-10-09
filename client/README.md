@@ -90,7 +90,7 @@ client/                          ← Cocos 工程根（用 Creator 打开这里�
 > `make client-gen-monster` / `make client-gen-drops` ·
 > `make client-clean-frames[-apply]` · `make client-open`。`make help` 看全部。
 
-### 单测（23 套）
+### 单测（24 套）
 
 脚本自己会去找 Cocos Creator 自带的 `tsc`（`TSC=/path/to/tsc node …` 可手动指定）。
 

@@ -80,10 +80,10 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 
 ### 这套做法留在仓库里的痕迹
 
-- **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 23 套单测、`tools/` 下有 4 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、界面点击会不会穿透到世界，全都有脚本盯着。
+- **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 24 套单测、`tools/` 下有 5 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、界面点击会不会穿透到世界，全都有脚本盯着。
 - **一切可调的东西都收进 `client/assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
 - **接口文件全部由服务端 Swagger 文档生成**。三端签名对不上会**编译报错**，而不是线上出现一个 `undefined`。这同样是为了让 AI 改完一端后，另一端在编译期就被拦住。
-- **回归是硬门槛**。每次改动都要跑：服务端 e2e（187 + 77 + 91 条）+ 两端类型检查 + 23 套单测 + 4 套审计，全绿才算完。
+- **回归是硬门槛**。每次改动都要跑：服务端 e2e（187 + 77 + 279 + 25 条）+ 两端类型检查 + 24 套单测 + 5 套审计，全绿才算完。
 - **每处理完一个问题就按功能提交一次**。改完一个功能立刻落一次 commit，不留一堆混在一起的未提交改动 —— 这样「哪次改动引入了回归」永远能二分出来。
 - **踩过的坑写进了 FAQ**。每端目录下的 FAQ 收纳该端的具体问题，跨端的机制与环境坑在 [FAQ.md](FAQ.md)；里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
 
@@ -177,7 +177,7 @@ olua/
     - 手写：`HttpClient` 二次封装与统一调度 / `ApiCodes` 业务码与文案 key / `ApiError` 错误归一 / `Session` 会话 / `RoleSync` 进度同步 / `NetworkSetup` 接线
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
-- tools：**客户端专属脚本**（23 套单测 + `gen-monster-config.cjs` / `gen-monster-drops.cjs` 配置生成器 + `clean-role-empty-frames.cjs` 素材清理 + `lib/` 单测沙箱）
+- tools：**客户端专属脚本**（24 套单测 + `gen-monster-config.cjs` / `gen-monster-drops.cjs` 配置生成器 + `clean-role-empty-frames.cjs` 素材清理 + `lib/` 单测沙箱）
 - settings / profiles / native / package.json / tsconfig.json：Cocos 工程配置（`package.json` 是 Cocos 的工程描述，不是 npm 脚本）
 - library / temp / build：Cocos 缓存与构建产物（不进版本库）
 - 详见 [client/README.md](client/README.md)，问题见 [client/FAQ.md](client/FAQ.md)
@@ -196,7 +196,7 @@ olua/
 - openapi.json：机器可读契约（提交进仓库；改接口后必须重新生成，否则两端停在旧契约上）
 - test/e2e.cjs：端到端用例（真实起服务 + 真实请求，187 条断言：注册登录 / 角色 CRUD / 越权 / 令牌受众隔离 / 管理端全流程 / 文档分组与权限点 / 四级越权与超管保护）
 - test/e2e-roles.cjs：**角色管理专项**（77 条断言：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档）
-- test/e2e-guard.cjs：**运营与安全底座专项**（91 条断言：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·权限 / 按用户名与按 IP 的登录限流 / 踢下线）
+- test/e2e-guard.cjs：**运营与安全底座专项**（279 条断言：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·权限 / 按用户名与按 IP 的登录限流 / 踢下线）
 - 详见 [server/README.md](server/README.md)，问题见 [server/FAQ.md](server/FAQ.md)
 
 ### admin —— 管理端（React）
@@ -242,14 +242,14 @@ make env            # 生成 server/.env（已存在则跳过）
 make dev            # 同时起服务端 :3100 与管理端 :5173，Ctrl-C 一起退出
 
 make client-check   # 客户端类型检查（Cocos 自带 tsc，0 错才算过）
-make client-test    # 客户端 23 套单测
-make server-verify  # 服务端一条命令全验（编译 + 三套 e2e + 生成物审计）
+make client-test    # 客户端 24 套单测
+make server-verify  # 服务端一条命令全验（编译 + 四套 e2e + 生成物审计）
 make admin-build    # 管理端类型检查 + 构建
 make gen-api        # 改完接口后重新生成契约与两端接口文件
 make audit          # 4 个跨端审计脚本
 
-make check          # 静态检查：客户端 tsc + 管理端 typecheck + 4 个审计
-make test           # 全部测试：客户端 23 套 + 服务端三套 e2e
+make check          # 静态检查：客户端 tsc + 管理端 typecheck + 5 个审计
+make test           # 全部测试：客户端 24 套 + 服务端四套 e2e
 make verify         # 完整门禁：check + 三端构建 + 全部测试（提交前跑这个）
 ```
 
@@ -275,7 +275,7 @@ npm run dev              # 开发（热编译）；或 npm run start 跑已构�
 
 - 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`）
 - 健康检查：<http://localhost:3100/api/health>
-- 一条命令全验：`npm run verify`（编译 + 三套 e2e + 生成物一致性）
+- 一条命令全验：`npm run verify`（编译 + 四套 e2e + 生成物一致性）
 - 详见 [server/README.md](server/README.md)
 
 ### 2. 客户端（Cocos）
@@ -352,10 +352,10 @@ make verify   # = check + 三端构建 + 全部测试
 手工跑（等价，不依赖 `make`）：
 
 ```bash
-# 客户端：23 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
+# 客户端：24 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 三套 e2e（187 / 77 / 91）+ 生成物一致性
+# 服务端：编译 + 四套 e2e（187 / 77 / 279 / 25）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建

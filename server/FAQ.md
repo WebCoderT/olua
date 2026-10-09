@@ -26,7 +26,7 @@
 - **启动**：`cd server && npm install && cp .env.example .env && npm run dev`（`npm run start` 跑已构建产物）。默认监听 `3100`、路由前缀 `api`，客户端默认连的就是 `http://localhost:3100/api`
 - **接口文档**：<http://localhost:3100/api-docs>（Swagger UI；JSON 在 `/api-docs-json`）。文档**不带路由前缀**，因为它不是业务接口。所有接口都是「统一响应包裹 + 统一错误出口」，所以文档里每个接口的响应都是 `code / message / data / timestamp` 五件套，`data` 才是业务数据
 - **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs` 四张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
-- **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**187 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护**）。角色相关改动另跑 `npm run test:e2e:roles`（77 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（91 条）。一条命令全验：`npm run verify`
+- **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**187 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护**）。角色相关改动另跑 `npm run test:e2e:roles`（77 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（279 条）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（25 条）。一条命令全验：`npm run verify`
 - **新增接口的规矩**：只改服务端（控制器 + DTO + `operationId`），然后 `npm run gen:api` 重新生成两端的接口文件 —— 见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)。路径、方法名、类型都不允许在两端手写
 
 ### 跑测试时一直「等待服务启动超时」，也不打日志，为什么？
@@ -47,7 +47,7 @@ env -u NODE_OPTIONS npm run verify
 - **三个分组 = 三种调用者**，顺序就是权限层级：
   1. **公共接口** —— 无需令牌：`/health`、玩家注册登录、管理员登录注册（共 5 个）
   2. **客户端** —— 需要 `player` 令牌，只能操作自己账号的数据（共 8 个）
-  3. **管理端** —— 需要 `admin` 令牌，且每个接口还要求权限点（共 22 个）
+  3. **管理端** —— 需要 `admin` 令牌，且每个接口还要求权限点（共 28 个）
 - **分组是按「单个接口」标的，不是按控制器**：认证控制器里 `register/login` 属于「公共接口」、`me` 属于「客户端」，一个类里两种分组都有。所以控制器类上不写 `@ApiTags`，统一用 `common/decorators/api-doc.decorator` 里的组合装饰器（`ApiPublicDoc / ApiPlayerDoc / ApiAdminDoc`）—— 分组、令牌锁图标、权限说明一次到位
 - **踩过的坑**：Nest 的 Swagger 有一个「没有类级 tag 就自动拿控制器类名当分组」的默认行为（`autoTagControllers`，默认开），于是文档里每个接口除了自己的分组还会多挂一个 `Health` / `Auth` / `AdminRoles` 之类的类名分组。已在 `main.ts` 的 `createDocument(..., { autoTagControllers: false })` 关掉；e2e 里钉了「每个接口恰好属于一个分组」的断言
 - **「所需权限」不是手写的**：`ApiAdminDoc({ permissions })` 里传的权限点会①变成运行时校验（守卫真读这份元数据）②由 `ROLE_PERMISSIONS` 反查「哪些角色拥有」写进文档说明 ③以 `x-olua-permissions` 扩展挂在操作上（给机器读）。三者同源，不会出现「文档写了但没拦」或「拦了但文档没写」
@@ -61,15 +61,15 @@ env -u NODE_OPTIONS npm run verify
 | --- | --- |
 | 超级管理员 `super_admin` | 全部权限（含「管理管理员」与「重置管理员密码」） |
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
-| 只读观察员 `viewer` | 只能看：概览 / 账号列表与详情 / 角色列表与详情（**看不到操作日志**） |
+| 只读观察员 `viewer` | 只能看：概览 / 账号列表与详情 / 角色列表与详情（**看不到操作日志，也看不到系统信息**） |
 
-- **权限点**（12 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`role:read`、`role:write`、`role:select`、`role:delete`、`admin:read`、`admin:manage`、`audit:read`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
+- **权限点**（13 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`role:read`、`role:write`、`role:select`、`role:delete`、`admin:read`、`admin:manage`、`audit:read`、`system:read`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
 - `account:password`（重置玩家口令）单独成点、不并进 `account:status`：这是能**接管他人账号**的操作，敏感度高于封禁，值得让「谁能做」单独可调
 - **注册时怎么定角色**：**第一个**注册的管理员自动是超级管理员（否则没人能管管理员），之后一律普通管理员，提权由超管在管理端的「管理员」页改。存量库由 `ensureSuperAdmin()` 兜底
 - **权限不够会怎样**：`403` + 业务码 **30006**，提示会直接写出缺哪个权限（如「当前角色没有该操作权限：封禁 / 解封账号」）。管理端界面会**按权限点隐藏菜单与禁用按钮**，但那只是体验 —— 服务端每次请求都重新判一次，改地址栏硬闯也只有 403
 - **改完立即生效**：守卫每次请求都从库里取管理员的角色（和账号封禁同一套逻辑），降权后旧的令牌下一次请求就受限，不用等令牌过期
 - **两道保护（业务码 30007）**：不能把**最后一个启用中的超级管理员**降级 / 停用 / 删除 —— 否则后台就没人能管了。有第二个超管时自降是允许的（可以用来轮值）
-- 回归：`cd server && npm run test:e2e` 的第七段（只读观察员四处写操作被拒、降权即时生效、超管保护、管理员列表与筛选）；角色相关改动另跑 `npm run test:e2e:roles`（77 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（91 条）
+- 回归：`cd server && npm run test:e2e` 的第七段（只读观察员四处写操作被拒、降权即时生效、超管保护、管理员列表与筛选）；角色相关改动另跑 `npm run test:e2e:roles`（77 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（279 条）
 
 ## 数据模型
 

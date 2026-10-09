@@ -97,7 +97,7 @@ admin/
 
 界面显隐**只是体验**，**服务端才是权威**。
 
-- 权限点唯一来源在**服务端**（`server/src/common/constants/permission.ts`，12 个权限点 / 3 种角色）；管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，一一对应
+- 权限点唯一来源在**服务端**（`server/src/common/constants/permission.ts`，13 个权限点 / 3 种角色）；管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，一一对应
 - 管理员信息随令牌一起在响应里下发，落到 `store/session`；`hasPermission(点)` 直接查这份数组
 - **脏会话兜底**：`admin.permissions` 缺失时按**空数组**处理（最小权限），不会因为会话不完整而放开界面
 - 导航项带 `permission` 字段，`Layout` 过滤后再渲染；`App.tsx` 的 `RequirePermission` 外壳守住直达路由

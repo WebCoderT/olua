@@ -46,9 +46,12 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` —— **重新生成两端接口文件** |
 | `npm run test:e2e` | 主 e2e（187 条断言） |
 | `npm run test:e2e:roles` | 角色管理专项（77 条） |
-| `npm run test:e2e:guard` | 运营与安全底座专项（91 条） |
+| `npm run test:e2e:guard` | 运营与安全底座专项（279 条） |
+| `npm run test:e2e:backup` | 备份 / 恢复专项（25 条） |
+| `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
+| `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 三套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 四套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -117,16 +120,19 @@ server/
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
 │   │   ├── admin/                  管理端：认证 / 账号 / 角色 / 管理员 / 口令
 │   │   ├── audit/                  操作日志查询
+│   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
 │   │   └── health/
 │   └── swagger/
 │       ├── setup.ts                文档挂载（抽成函数，好让测试也生成一次来验分组/权限/悬空 $ref）
 │       ├── models.ts               文档用的响应模型
 │       └── emit.ts                 ← 离线产出 openapi.json
+├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 scripts/lib/db-tooling.cjs）
 ├── test/
 │   ├── e2e.cjs                     187 条断言（真实起服务 + 真实 HTTP 请求）
 │   ├── e2e-roles.cjs               77 条
-│   └── e2e-guard.cjs               91 条
+│   ├── e2e-guard.cjs               279 条
+│   └── backup.cjs                  25 条（运行中备份 / 恢复留档 / 保护性拒绝）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
 └── .env.example · package.json · tsconfig.json · tsconfig.build.json
@@ -157,13 +163,13 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（12 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`（13 个权限点 / 3 种角色）：
 
 | 角色 | 权限 |
 | --- | --- |
 | 超级管理员 `super_admin` | 全部（含「管理管理员」与「重置管理员密码」） |
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
-| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情（**看不到操作日志**） |
+| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情（**看不到操作日志，也看不到系统信息**） |
 
 **加管理端接口必须用 `@ApiAdminDoc({ permissions: [Permission.X] })`** —— 它同时落三处：
 ① 文档说明 ② `x-olua-permissions` 扩展（给机器读）③ `RequirePermissions` 运行时元数据。
@@ -173,13 +179,13 @@ server/
 
 ## 接口与契约
 
-当前 **35 个接口 / 28 条路径 / 39 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **41 个接口 / 34 条路径 / 54 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 5 | 无需令牌（健康检查、玩家注册登录、管理员登录注册） |
 | 客户端 | 8 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 22 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 28 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -255,16 +261,17 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-三套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+四套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
 | `test/e2e.cjs` | **187** | 注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 |
 | `test/e2e-roles.cjs` | **77** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 |
-| `test/e2e-guard.cjs` | **91** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·权限 / 用户名与 IP 双维度限流 / 踢下线 |
+| `test/e2e-guard.cjs` | **279** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·导出 / 用户名与 IP 双维度限流 / 踢下线 / 封禁闭环 / 看板 / 列表排序 / 系统信息与启动自检 |
+| `test/backup.cjs` | **25** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 |
 
 ```bash
-cd server && npm run verify          # 编译 + 三套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 四套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 
