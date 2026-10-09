@@ -82,6 +82,20 @@ export const ANNOUNCEMENT_SORT: SortSpec<"title" | "level" | "enabled" | "starts
   defaultOrder: "desc",
 };
 
+/** 邮件投递队列：默认按创建时间倒序（运营刚点的那封在最上面） */
+export const MAIL_SORT: SortSpec<"toEmail" | "status" | "attempts" | "sentAt" | "createdAt" | "updatedAt"> = {
+  columns: {
+    toEmail: "m.to_email",
+    status: "m.status",
+    attempts: "m.attempts",
+    sentAt: "m.sent_at",
+    createdAt: "m.created_at",
+    updatedAt: "m.updated_at",
+  },
+  default: "createdAt",
+  defaultOrder: "desc",
+};
+
 /** 把白名单里的字段名拼成一行，供接口文档说明用（`sort` 的取值） */
 export function sortFieldNames<K extends string>(spec: SortSpec<K>): string {
   return Object.keys(spec.columns)

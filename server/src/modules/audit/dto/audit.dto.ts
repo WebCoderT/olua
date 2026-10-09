@@ -5,7 +5,7 @@ import { ADMIN_ROLES } from "../../../common/constants/permission";
 import { AuditLogWithNameRow } from "../../../database/rows";
 
 /** 审计目标类型（查询筛选用） */
-export const AUDIT_TARGET_TYPES = ["account", "role", "admin", "announcement"] as const;
+export const AUDIT_TARGET_TYPES = ["account", "role", "admin", "announcement", "mail"] as const;
 
 /** 一条操作日志 */
 export class AuditLogDto {
@@ -24,7 +24,7 @@ export class AuditLogDto {
   @ApiProperty({ description: "动作（即接口标识 operationId，如 adminRole.patch）", example: "adminRole.patch" })
   action: string;
 
-  @ApiProperty({ description: "目标类型：account / role / admin / announcement", type: "string", nullable: true })
+  @ApiProperty({ description: "目标类型：account / role / admin / announcement / mail", type: "string", nullable: true })
   targetType: string | null;
 
   @ApiProperty({ description: "目标 id", type: "string", nullable: true })

@@ -122,6 +122,32 @@ export const BizCode = {
    * 管理端要能把它定位到「时间窗」这一组控件上，而不是丢一句泛泛的「参数不合法」。
    */
   ANNOUNCEMENT_TIME_RANGE_INVALID: 50002,
+
+  //#region 邮件
+  /**
+   * 邮件通道未启用（SMTP 没配齐）
+   *
+   * 单独一个码而不是复用「服务不可用」：运维看到这个码要去配 `.env`，
+   * 看到通用的 500 只会去翻日志。通道未启用是**配置问题**，接口要能把它
+   * 说成人话给界面显示，而不是静默让邮件消失。
+   */
+  MAIL_DISABLED: 50003,
+  /** 收件账号不存在（关联玩家时传了不存在的 accountId） */
+  MAIL_ACCOUNT_NOT_FOUND: 50004,
+  /** 收件邮箱缺失：既没传 `to`，账号上也没有邮箱 */
+  MAIL_ADDRESS_MISSING: 50005,
+  /** 模板不存在 */
+  MAIL_TEMPLATE_NOT_FOUND: 50006,
+  /** 模板必填变量缺失（宁可拒发，也不要发出「亲爱的 ，」这种信） */
+  MAIL_VARIABLE_MISSING: 50007,
+  /** 投递任务不存在 */
+  MAIL_JOB_NOT_FOUND: 50008,
+  /**
+   * 重投的前提不满足（只有最终失败的任务能重投）
+   *
+   * 与 50008 分开：任务不存在是「id 传错了」，这个是「任务在，但当前状态不允许这个动作」。
+   */
+  MAIL_JOB_NOT_RETRYABLE: 50009,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

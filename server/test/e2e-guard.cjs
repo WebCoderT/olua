@@ -879,6 +879,18 @@ const EXPECTED_CONFIG_KEYS = [
   "AUDIT_EXPORT_MAX_ROWS",
   "JWT_SECRET",
   "ADMIN_REGISTER_CODE",
+  // 邮件通道（密码只报形态，值本身在 e2e-mail 里单独断言）
+  "MAIL_ENABLED",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_SECURE",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "SMTP_FROM",
+  "MAIL_TRANSPORT",
+  "MAIL_MAX_ATTEMPTS",
+  "MAIL_RETRY_BASE_MS",
+  "MAIL_POLL_MS",
 ];
 
 /**

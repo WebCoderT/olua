@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, UpdateAccountStatus, UpdateAnnouncement } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, MailJob, MailJobPage, MailQuery, MailTemplate, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, UpdateAccountStatus, UpdateAnnouncement } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountStatus, UpdateAnnouncement } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateRole, Health, Login, MailJob, MailJobPage, MailQuery, MailTemplate, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, SendMail, SendMailResult, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountStatus, UpdateAnnouncement } from "./models";
 
 /** adminAccount 模块的接口（9 个，生成） */
 export const accountsApi = {
@@ -230,6 +230,42 @@ export const authApi = {
    * 注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。
    */
   register: (body: AdminRegister, options?: Options) => http.post<AdminAuthResult>(routes.adminAuth.register, body, { auth: false, ...options }),
+};
+
+/** adminMail 模块的接口（4 个，生成） */
+export const mailsApi = {
+  /**
+   * 邮件投递记录（GET /admin/mails）
+   *
+   * `keyword` 模糊匹配收件邮箱 / 标题 / 收件账号名；`status` 可筛（待发送 / 发送中 / 重试中 / 已发送 / 发送失败）。
+   *
+   * 权限点：mail:read
+   */
+  list: (query: MailQuery = {}, options?: Options) => http.get<MailJobPage>(routes.adminMail.list, { query, ...options }),
+  /**
+   * 发送邮件（POST /admin/mails）
+   *
+   * **入队即返回**（201），不代表已经投递成功 —— 投递由后台调度器完成，结果在投递记录里查。
+   *
+   * 权限点：mail:write
+   */
+  send: (body: SendMail, options?: Options) => http.post<SendMailResult>(routes.adminMail.send, body, options),
+  /**
+   * 重投一封失败的邮件（POST /admin/mails/{id}/retry）
+   *
+   * 只有**最终失败**（重试次数用尽）的任务可以重投：正在发送或已成功的重投会造成重复发信。
+   *
+   * 权限点：mail:write
+   */
+  retry: (id: string, options?: Options) => http.post<MailJob>(routes.adminMail.retry(id), undefined, options),
+  /**
+   * 邮件模板列表（GET /admin/mails/templates）
+   *
+   * 发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。
+   *
+   * 权限点：mail:read
+   */
+  templates: (options?: Options) => http.get<MailTemplate[]>(routes.adminMail.templates, options),
 };
 
 /** adminRole 模块的接口（6 个，生成） */

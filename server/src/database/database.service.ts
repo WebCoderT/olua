@@ -133,6 +133,26 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       -- 生效中公告的取数条件就是 (enabled, starts_at, ends_at) 三列，按这个顺序建索引让它走同一棵树
       CREATE INDEX IF NOT EXISTS idx_announcements_window ON announcements(enabled, starts_at, ends_at);
+
+      -- 邮件投递队列：status + next_retry_at 是调度器挑任务的全部条件（到期未发 & 待重试）
+      CREATE TABLE IF NOT EXISTS mail_queue (
+        id            TEXT PRIMARY KEY,
+        to_email      TEXT NOT NULL,
+        account_id    TEXT,
+        template_key  TEXT NOT NULL,
+        subject       TEXT NOT NULL,
+        body          TEXT NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        attempts      INTEGER NOT NULL DEFAULT 0,
+        next_retry_at INTEGER,
+        last_error    TEXT,
+        created_by    TEXT,
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL,
+        sent_at       INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_mail_queue_due ON mail_queue(status, next_retry_at);
+      CREATE INDEX IF NOT EXISTS idx_mail_queue_created ON mail_queue(created_at DESC);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

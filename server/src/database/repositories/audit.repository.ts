@@ -187,5 +187,7 @@ const TARGET_NAME_SQL = `CASE a.target_type
   WHEN 'account' THEN (SELECT c.username FROM accounts c WHERE c.id = a.target_id)
   WHEN 'admin' THEN (SELECT m.username FROM admins m WHERE m.id = a.target_id)
   WHEN 'announcement' THEN (SELECT n.title FROM announcements n WHERE n.id = a.target_id)
+  -- 邮件任务的名字用标题：id 是一串 uuid，日志里看不出那封信说了什么
+  WHEN 'mail' THEN (SELECT q.subject FROM mail_queue q WHERE q.id = a.target_id)
   ELSE NULL
 END`;

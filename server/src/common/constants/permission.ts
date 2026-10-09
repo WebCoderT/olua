@@ -50,6 +50,19 @@ export const Permission = {
   /** 发布 / 编辑 / 删除公告（会直接推送给全服玩家，属于对外发声，单列一个权限点） */
   ANNOUNCEMENT_WRITE: "announcement:write",
 
+  /**
+   * 查看邮件投递记录
+   *
+   * 与公告的 `announcement:read` **不同，观察员不给**：投递记录里有玩家的**邮箱地址**
+   * （个人信息），而公告是面向全服的公开内容。观察员的定位是看业务数据，
+   * 不该顺手拿到一份可导出的玩家联系方式。
+   *
+   * 这条界线写在注释里是因为它看起来「只是又一个读权限」，很容易顺手加进 viewer。
+   */
+  MAIL_READ: "mail:read",
+  /** 发送邮件（对外投递，可能触达真实用户，与公告同级：写操作单列） */
+  MAIL_WRITE: "mail:write",
+
   /** 查看管理员列表 */
   ADMIN_READ: "admin:read",
   /** 管理管理员（改角色 / 启停 / 删除 / 重置密码） */
@@ -127,6 +140,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ROLE_DELETE]: "删除角色",
   [Permission.ANNOUNCEMENT_READ]: "查看公告",
   [Permission.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
+  [Permission.MAIL_READ]: "查看邮件投递记录",
+  [Permission.MAIL_WRITE]: "发送邮件",
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",
