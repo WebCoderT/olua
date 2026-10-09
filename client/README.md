@@ -85,6 +85,11 @@ client/                          ← Cocos 工程根（用 Creator 打开这里�
 
 全部是**本地校验脚本**，不参与打包；在 `client/` 目录下用 `node` 直接跑。
 
+> 仓库根的 `make` 是这些动作的快捷方式：`make client-check`（类型检查）·
+> `make client-test` · `make client-test-one T=test-bag-tidy` ·
+> `make client-gen-monster` / `make client-gen-drops` ·
+> `make client-clean-frames[-apply]` · `make client-open`。`make help` 看全部。
+
 ### 单测（23 套）
 
 脚本自己会去找 Cocos Creator 自带的 `tsc`（`TSC=/path/to/tsc node …` 可手动指定）。

@@ -38,6 +38,9 @@ npm run dev                        # 开发（默认 5173）；npm run build 产
 | `npm run preview` | 预览已构建产物 |
 | `npm run typecheck` | 只做类型检查（不产出） |
 
+> 仓库根的 `make` 是这些脚本的快捷方式：`make admin-dev` / `make admin-build` /
+> `make admin-typecheck`；`make dev` 还能把服务端与管理端一起起来。`make help` 看全部。
+
 ## 环境变量
 
 全部在 `admin/.env.development`（开发）与 `.env.production`（生产），模板见 `.env.example`。

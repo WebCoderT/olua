@@ -120,7 +120,13 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 回归该怎么跑？哪些必须全绿？
 
-改动合并前至少跑完这三类（全绿才算完）：
+改动合并前至少跑完这三类（全绿才算完）。仓库根有 Makefile，一条命令搞定：
+
+```bash
+make verify   # = check（客户端 tsc + 管理端 typecheck + 4 个审计）+ 三端构建 + 全部测试
+```
+
+手工跑（等价，不依赖 `make`）：
 
 ```bash
 # 客户端：23 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
@@ -154,6 +160,9 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 env -u NODE_OPTIONS npm run dev
 env -u NODE_OPTIONS npm run test:e2e
 ```
+
+> 走仓库根的 `make` 就不用管了：Makefile 里的 `NODE` / `NPM` 已统一带 `env -u NODE_OPTIONS`。
+> 想用原始环境：`make RUN_ENV= <目标>`。
 
 同类环境坑：本机 `curl 127.0.0.1` 可能被代理环境变量打成 502（假故障），加 `--noproxy '*'` 即可。
 

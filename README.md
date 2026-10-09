@@ -232,6 +232,34 @@ olua/
 - 管理端：React 19 + TypeScript + Vite + Tailwind CSS v4
 - 开发方式：**全部由 AI 编写（Vibe Coding）**，人类只提需求与验收 —— 见 [一个纯 AI 编写的项目](#一个纯-ai-编写的项目)
 
+## 常用命令（Makefile）
+
+仓库根有一份 Makefile，把三端的常用动作收在一处（`make` / `make help` 列出全部，`make info` 打印当前工具链与关键路径）：
+
+```bash
+make install        # 首次：装 server / admin 的依赖
+make env            # 生成 server/.env（已存在则跳过）
+make dev            # 同时起服务端 :3100 与管理端 :5173，Ctrl-C 一起退出
+
+make client-check   # 客户端类型检查（Cocos 自带 tsc，0 错才算过）
+make client-test    # 客户端 23 套单测
+make server-verify  # 服务端一条命令全验（编译 + 三套 e2e + 生成物审计）
+make admin-build    # 管理端类型检查 + 构建
+make gen-api        # 改完接口后重新生成契约与两端接口文件
+make audit          # 4 个跨端审计脚本
+
+make check          # 静态检查：客户端 tsc + 管理端 typecheck + 4 个审计
+make test           # 全部测试：客户端 23 套 + 服务端三套 e2e
+make verify         # 完整门禁：check + 三端构建 + 全部测试（提交前跑这个）
+```
+
+- 单跑一套客户端单测：`make client-test-one T=test-bag-tidy`
+- 换机器 / 换 Cocos 版本：`make TSC=/path/to/tsc client-check`
+- 客户端生成器与清理器：`make client-gen-monster` / `make client-clean-frames`（预演）/ `make client-clean-frames-apply`
+- 受限终端（被注入了 `NODE_OPTIONS`）**不用特殊处理** —— Makefile 已统一清掉；想用原始环境：`make RUN_ENV= <目标>`
+
+下面是各端的手工命令，不依赖 `make` 也能跑。三端的详细说明与全部环境变量见各自的 README。
+
 ## 快速开始
 
 三端的详细说明与全部环境变量见各自的 README；这里是「最短跑通路径」。
@@ -315,7 +343,13 @@ server/openapi.json（机器可读契约，提交进仓库）
 
 ### 5. 回归门槛
 
-改动合并前至少跑完这三类（全绿才算完）：
+改动合并前至少跑完这三类（全绿才算完）。装了 `make` 的话就是一条命令：
+
+```bash
+make verify   # = check + 三端构建 + 全部测试
+```
+
+手工跑（等价，不依赖 `make`）：
 
 ```bash
 # 客户端：23 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）

@@ -50,6 +50,10 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
 | `npm run verify` | **一条命令全验**：编译 + 三套 e2e + 生成物审计 |
 
+> 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
+> `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
+> Makefile 已统一处理 `env -u NODE_OPTIONS`，受限终端里不用再手写前缀。
+
 ## 环境变量
 
 全部在 `server/.env`（模板见 `.env.example`，**每一项都有注释说明**）。
