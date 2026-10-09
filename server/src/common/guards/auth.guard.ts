@@ -23,7 +23,8 @@ type AuthenticatedRequest = Request & { user?: AuthenticatedUser };
  * - 通过后把 `{ id, username, kind }` 挂到 request.user，控制器用 `@CurrentUser()` 取
  *
  * 每次请求都回查一次库（而不是只信令牌）：账号被封禁 / 被删除时令牌立即失效，
- * 否则封禁要等令牌过期才生效。
+ * 否则封禁要等令牌过期才生效。顺带比对**令牌版本号** —— 口令被重置或自助修改后，
+ * 此前签发的令牌立刻作废（这是无状态令牌唯一的主动下线手段）。
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -50,6 +51,10 @@ export class AuthGuard implements CanActivate {
       const admin = this.admins.findById(payload.sub);
       if (!admin) throw BizException.unauthorized(BizCode.ADMIN_NOT_FOUND, "管理员账号不存在");
       if (admin.status !== ENTITY_STATUS.ACTIVE) throw BizException.unauthorized(BizCode.ADMIN_DISABLED, "管理员账号已停用");
+      // 口令被重置/修改后，此前签发的令牌立即作废（下一次请求就下线，不用等 7 天有效期）
+      if ((admin.token_version ?? 0) !== (payload.ver ?? 0)) {
+        throw BizException.unauthorized(BizCode.TOKEN_REVOKED, "密码已变更，请重新登录");
+      }
       request.user = {
         id: admin.id,
         username: admin.username,
@@ -63,6 +68,9 @@ export class AuthGuard implements CanActivate {
     const account = this.accounts.findById(payload.sub);
     if (!account) throw BizException.unauthorized(BizCode.ACCOUNT_NOT_FOUND, "账号不存在");
     if (account.status !== ENTITY_STATUS.ACTIVE) throw BizException.unauthorized(BizCode.ACCOUNT_DISABLED, "账号已被封禁，请联系客服");
+    if ((account.token_version ?? 0) !== (payload.ver ?? 0)) {
+      throw BizException.unauthorized(BizCode.TOKEN_REVOKED, "密码已变更，请重新登录");
+    }
     request.user = { id: account.id, username: account.username, kind: "player" } satisfies AuthenticatedUser;
     return true;
   }

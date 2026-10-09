@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
@@ -19,7 +20,8 @@ import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
  * 好断言分组 / 权限标注 / 没有悬空 $ref）。
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { logger: ["log", "warn", "error"] });
+  // 显式声明成 Express 应用：`app.set("trust proxy", ...)` 只有 Express 适配器才有
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ["log", "warn", "error"] });
   const config = app.get(ConfigService);
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
@@ -27,6 +29,9 @@ async function bootstrap() {
   const corsOrigins = config.get<string[]>("corsOrigins") ?? ["*"];
 
   app.setGlobalPrefix(prefix);
+  // 反向代理后面必须开（否则 req.ip 全是代理的地址，登录限流会把所有人当成同一个人一起锁死）；
+  // 直连暴露时**不能**开 —— 开着等于允许调用方伪造 X-Forwarded-For 绕过 IP 限流
+  app.set("trust proxy", config.get<boolean>("trustProxy") ?? false);
   // 跨域：客户端（Cocos Web 预览）与管理端（Vite dev server）都是独立源，必须开
   app.enableCors({ origin: corsOrigins.includes("*") ? true : corsOrigins });
   app.useGlobalPipes(

@@ -52,6 +52,13 @@ export interface JwtPayload {
   username: string;
   /** 受众（player / admin） */
   aud: Audience;
+  /**
+   * 令牌版本号（签发时取自库里的 token_version）
+   *
+   * 改密码会把库里的版本号 +1，守卫回查库发现对不上就拒收 —— 这是「无状态令牌」
+   * 唯一的主动作废手段。存量令牌没有这个字段，一律按 0 处理（存量库的默认值也是 0）。
+   */
+  ver?: number;
   iat?: number;
   exp?: number;
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Ip, Post } from "@nestjs/common";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiPlayerDoc, ApiPublicDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -31,10 +31,16 @@ export class AuthController {
   @Public()
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiPublicDoc({ operationId: "auth.login", summary: "账号登录", description: "账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。" })
+  @ApiPublicDoc({
+    operationId: "auth.login",
+    summary: "账号登录",
+    description:
+      "账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。\n\n" +
+      "**失败限流**：同一用户名连续失败 5 次、或同一 IP 在 10 分钟内失败 20 次，会被临时锁定并返回 429 / 10005（阈值见服务端 `.env` 的 `LOGIN_*`）。",
+  })
   @ApiDataResponse(AuthTokenDto, { description: "登录成功" })
-  login(@Body() dto: LoginDto): AuthTokenDto {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Ip() ip: string): AuthTokenDto {
+    return this.authService.login(dto, ip);
   }
 
   @Get("me")

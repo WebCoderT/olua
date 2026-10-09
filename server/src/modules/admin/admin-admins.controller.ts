@@ -2,12 +2,14 @@ import { Body, Controller, Delete, Get, Param, Patch, Query } from "@nestjs/comm
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
+import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AdminService } from "./admin.service";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
+import { ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
 import { AdminQueryDto } from "./dto/query.dto";
 import { AdminPageDto } from "./dto/page-result.dto";
 
@@ -36,6 +38,7 @@ export class AdminAdminsController {
   }
 
   @Patch(":id")
+  @AuditTarget("admin")
   @ApiAdminDoc({
     operationId: "adminAdmin.update",
     summary: "修改管理员",
@@ -49,7 +52,26 @@ export class AdminAdminsController {
     return this.adminService.updateAdmin(id, dto);
   }
 
+  @Patch(":id/password")
+  @AuditTarget("admin")
+  @ApiAdminDoc({
+    operationId: "adminAdmin.resetPassword",
+    summary: "重置某个管理员的密码",
+    description:
+      "只有超级管理员能做（`admin:manage`）—— 管理员之间不能互相改密码。\n\n" +
+      "**副作用**：对方此前签发的令牌立即作废，他会被踢回登录页，需要用新密码重新登录。" +
+      "不触发「最后一个超管」保护：改密码不会让人失去登录能力，改的也不是身份与状态。" +
+      "管理员想改自己的密码应当走 `PATCH /admin/auth/password`（需要原密码）。",
+    permissions: [Permission.ADMIN_MANAGE],
+  })
+  @ApiParam({ name: "id", description: "管理员 id" })
+  @ApiDataResponse(ResetPasswordResultDto, { description: "重置结果（不回显密码）" })
+  resetPassword(@Param("id") id: string, @Body() dto: ResetAdminPasswordDto): ResetPasswordResultDto {
+    return this.adminService.resetAdminPassword(id, dto);
+  }
+
   @Delete(":id")
+  @AuditTarget("admin")
   @ApiAdminDoc({
     operationId: "adminAdmin.remove",
     summary: "删除管理员",

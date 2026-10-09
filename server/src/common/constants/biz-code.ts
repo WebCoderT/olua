@@ -17,6 +17,14 @@ export const BizCode = {
   TOKEN_INVALID: 40101,
   /** 令牌过期 */
   TOKEN_EXPIRED: 40102,
+  /**
+   * 令牌已被主动作废（口令被重置 / 修改后重新签发）
+   *
+   * 令牌是无状态的，光改密码不会让已签发的旧令牌失效 —— 所以账号与管理员的表里各有
+   * 一个 `token_version`，签发时写进载荷、每次请求回查库比对（见 AuthGuard）。
+   * 收到这个码应当清掉本地令牌、回到登录界面（与 TOKEN_EXPIRED 同样处理）。
+   */
+  TOKEN_REVOKED: 40103,
   /** 无权访问该资源 */
   FORBIDDEN: 40300,
   /** 资源不存在 */
@@ -35,6 +43,8 @@ export const BizCode = {
   PASSWORD_WRONG: 10003,
   /** 账号已被封禁 */
   ACCOUNT_DISABLED: 10004,
+  /** 登录失败次数过多，临时锁定（限流见 common/security/login-throttle.service） */
+  LOGIN_LOCKED: 10005,
 
   //#region 角色
   /** 角色数量已达上限 */
@@ -55,6 +65,14 @@ export const BizCode = {
    * 而不是拿本地旧数据覆盖（否则后台的改动会被玩家的下一次同步抹掉）。
    */
   ROLE_REVISION_CONFLICT: 20006,
+  /**
+   * 角色已被管理员下线（不再是账号当前的在线角色）
+   *
+   * 管理员在后台「踢下线」后清掉 `accounts.online_role_id`，此时客户端手上那份存档
+   * 就不该再写回来了 —— 否则踢了等于没踢（玩家本地缓存还在，会一直推进度）。
+   * 客户端收到它应当提示并回到选角界面。
+   */
+  ROLE_KICKED: 20007,
 
   //#region 管理端
   /** 管理员账号已存在 */
@@ -73,6 +91,12 @@ export const BizCode = {
   ADMIN_PROTECTED: 30007,
   /** 管理员角色不合法 */
   ADMIN_ROLE_INVALID: 30008,
+  /** 管理端登录失败次数过多，临时锁定 */
+  ADMIN_LOGIN_LOCKED: 30009,
+  /** 管理员自助改密时原密码不正确 */
+  ADMIN_OLD_PASSWORD_WRONG: 30010,
+  /** 新密码与当前密码相同 */
+  ADMIN_PASSWORD_SAME: 30011,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

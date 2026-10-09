@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
+import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
@@ -35,6 +36,7 @@ export class AdminRolesController {
 
   @Post("batch-delete")
   @HttpCode(HttpStatus.OK)
+  @AuditTarget("role")
   @ApiAdminDoc({
     operationId: "adminRole.batchRemove",
     summary: "批量删除角色",
@@ -57,6 +59,7 @@ export class AdminRolesController {
   }
 
   @Patch(":id")
+  @AuditTarget("role")
   @ApiAdminDoc({
     operationId: "adminRole.patch",
     summary: "修改角色",
@@ -75,6 +78,7 @@ export class AdminRolesController {
 
   @Post(":id/select")
   @HttpCode(HttpStatus.OK)
+  @AuditTarget("role")
   @ApiAdminDoc({
     operationId: "adminRole.select",
     summary: "设为在线角色",
@@ -88,6 +92,7 @@ export class AdminRolesController {
   }
 
   @Delete(":id")
+  @AuditTarget("role")
   @ApiAdminDoc({
     operationId: "adminRole.remove",
     summary: "删除角色",

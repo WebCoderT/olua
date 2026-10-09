@@ -10,6 +10,8 @@ import { toExpiresIn } from "./jwt-expires.util";
 export interface TokenSubject {
   id: string;
   username: string;
+  /** 令牌版本号（库里的 token_version）；守卫会拿它与库里的当前值比对 */
+  version: number;
 }
 
 /**
@@ -25,10 +27,10 @@ export class TokenService {
     private readonly config: ConfigService,
   ) {}
 
-  /** 签发令牌 */
+  /** 签发令牌（版本号写进载荷，改密码后旧令牌会被守卫拒收） */
   sign(subject: TokenSubject, audience: Audience): string {
     return this.jwt.sign(
-      { username: subject.username, aud: audience },
+      { username: subject.username, aud: audience, ver: subject.version },
       { subject: subject.id, expiresIn: toExpiresIn(this.config.get<string>("jwtExpiresIn")) },
     );
   }

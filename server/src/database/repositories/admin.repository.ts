@@ -61,15 +61,32 @@ export class AdminRepository {
 
   insert(row: AdminRow): void {
     this.db.run(
-      `INSERT INTO admins (id, username, password, status, role, created_at, updated_at, last_login_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.username, row.password, row.status, row.role, row.created_at, row.updated_at, row.last_login_at],
+      `INSERT INTO admins (id, username, password, status, role, token_version, created_at, updated_at, last_login_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.username,
+        row.password,
+        row.status,
+        row.role,
+        row.token_version,
+        row.created_at,
+        row.updated_at,
+        row.last_login_at,
+      ],
     );
   }
 
   updateById(
     id: string,
-    patch: { status?: string; role?: AdminRoleValue; password?: string; last_login_at?: number; updated_at?: number },
+    patch: {
+      status?: string;
+      role?: AdminRoleValue;
+      password?: string;
+      token_version?: number;
+      last_login_at?: number;
+      updated_at?: number;
+    },
   ): boolean {
     const fields: string[] = [];
     const params: (string | number)[] = [];
@@ -85,6 +102,10 @@ export class AdminRepository {
       fields.push("password = ?");
       params.push(patch.password);
     }
+    if (patch.token_version !== undefined) {
+      fields.push("token_version = ?");
+      params.push(patch.token_version);
+    }
     if (patch.last_login_at !== undefined) {
       fields.push("last_login_at = ?");
       params.push(patch.last_login_at);
@@ -94,6 +115,19 @@ export class AdminRepository {
     params.push(patch.updated_at ?? Date.now());
     params.push(id);
     return this.db.execute(`UPDATE admins SET ${fields.join(", ")} WHERE id = ?`, params).changes > 0;
+  }
+
+  /**
+   * 改口令 + 作废已签发令牌（一次写完，避免出现「密码改了但版本号没加」的半截状态）
+   *
+   * 自增写在 SQL 里：并发下「读出来加一再写回」会丢自增。
+   */
+  updatePasswordAndBumpVersion(id: string, password: string): void {
+    this.db.run("UPDATE admins SET password = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?", [
+      password,
+      Date.now(),
+      id,
+    ]);
   }
 
   deleteById(id: string): boolean {

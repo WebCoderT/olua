@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
+import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
@@ -9,6 +10,7 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AccountDto } from "../auth/dto/account.dto";
 import { AdminService } from "./admin.service";
 import { BatchDeleteResultDto } from "./dto/batch-role.dto";
+import { ResetAccountPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
 import { AccountQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "./dto/stats.dto";
 import { AccountPageDto } from "./dto/page-result.dto";
@@ -53,6 +55,7 @@ export class AdminAccountsController {
   }
 
   @Patch("accounts/:id/status")
+  @AuditTarget("account")
   @ApiAdminDoc({
     operationId: "adminAccount.updateStatus",
     summary: "封禁 / 解封账号",
@@ -65,7 +68,43 @@ export class AdminAccountsController {
     return this.adminService.updateAccountStatus(id, dto);
   }
 
+  @Patch("accounts/:id/password")
+  @AuditTarget("account")
+  @ApiAdminDoc({
+    operationId: "adminAccount.resetPassword",
+    summary: "重置玩家账号的密码",
+    description:
+      "玩家忘记密码时用这条（客户端没有找回流程）。\n\n" +
+      "**副作用**：该账号此前签发的全部令牌立即作废（服务端令牌版本号 +1）—— " +
+      "账号被盗后改密码才能真正把对方踢下线，否则他手上那个 7 天有效期的令牌照样能用。\n\n" +
+      "请求体里的密码不会进操作日志（敏感字段自动打码为 `***`）。",
+    permissions: [Permission.ACCOUNT_PASSWORD],
+  })
+  @ApiParam({ name: "id", description: "账号 id" })
+  @ApiDataResponse(ResetPasswordResultDto, { description: "重置结果（不回显密码）" })
+  resetPassword(@Param("id") id: string, @Body() dto: ResetAccountPasswordDto): ResetPasswordResultDto {
+    return this.adminService.resetAccountPassword(id, dto);
+  }
+
+  @Post("accounts/:id/offline")
+  @AuditTarget("account")
+  @ApiAdminDoc({
+    operationId: "adminAccount.kick",
+    summary: "踢下线（清掉账号当前的在线角色）",
+    description:
+      "幂等：本来就不在线时直接返回当前状态。\n\n" +
+      "只清标记是不够的 —— 玩家那台客户端本地缓存还在跑，因此它**下一次推存档会被拒**" +
+      "（业务码 20007 `ROLE_KICKED`），客户端据此提示并回到选角界面。",
+    permissions: [Permission.ROLE_SELECT],
+  })
+  @ApiParam({ name: "id", description: "账号 id" })
+  @ApiDataResponse(AccountDto, { description: "变更后的账号（onlineRoleId 为 null）" })
+  kick(@Param("id") id: string): AccountDto {
+    return this.adminService.kickAccountOffline(id);
+  }
+
   @Delete("accounts/:id")
+  @AuditTarget("account")
   @ApiAdminDoc({
     operationId: "adminAccount.remove",
     summary: "删除账号",
@@ -79,6 +118,7 @@ export class AdminAccountsController {
   }
 
   @Delete("accounts/:id/roles")
+  @AuditTarget("account")
   @ApiAdminDoc({
     operationId: "adminAccount.purgeRoles",
     summary: "清空账号下的全部角色",

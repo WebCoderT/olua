@@ -41,6 +41,7 @@ export class DatabaseService implements OnModuleInit {
         password       TEXT NOT NULL,
         status         TEXT NOT NULL DEFAULT 'active',
         online_role_id TEXT,
+        token_version  INTEGER NOT NULL DEFAULT 0,
         created_at     INTEGER NOT NULL,
         updated_at     INTEGER NOT NULL,
         last_login_at  INTEGER
@@ -66,16 +67,42 @@ export class DatabaseService implements OnModuleInit {
         password      TEXT NOT NULL,
         status        TEXT NOT NULL DEFAULT 'active',
         role          TEXT NOT NULL DEFAULT '${AdminRole.ADMIN}',
+        token_version INTEGER NOT NULL DEFAULT 0,
         created_at    INTEGER NOT NULL,
         updated_at    INTEGER NOT NULL,
         last_login_at INTEGER
       );
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id            TEXT PRIMARY KEY,
+        actor_id      TEXT,
+        actor_name    TEXT,
+        actor_role    TEXT,
+        action        TEXT NOT NULL,
+        target_type   TEXT,
+        target_id     TEXT,
+        detail        TEXT,
+        ip            TEXT,
+        method        TEXT,
+        path          TEXT,
+        status_code   INTEGER,
+        success       INTEGER NOT NULL DEFAULT 1,
+        error_code    INTEGER,
+        error_message TEXT,
+        created_at    INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）
     this.ensureColumn("admins", "role", `TEXT NOT NULL DEFAULT '${AdminRole.ADMIN}'`);
     // 修订号（乐观锁）：存量库补列后老角色都是 1，客户端读到 1 推回来也是 1，不会误判冲突
     this.ensureColumn("roles", "revision", "INTEGER NOT NULL DEFAULT 1");
+    // 令牌版本号（改密即失效旧令牌）：存量库补列后默认 0，而存量令牌里没有 ver 字段也按 0 处理，两者一致
+    this.ensureColumn("accounts", "token_version", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("admins", "token_version", "INTEGER NOT NULL DEFAULT 0");
     this.ensureSuperAdmin();
   }
 

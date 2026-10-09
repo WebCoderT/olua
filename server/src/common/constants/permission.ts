@@ -21,6 +21,13 @@ export const Permission = {
   ACCOUNT_READ: "account:read",
   /** 封禁 / 解封账号 */
   ACCOUNT_STATUS: "account:status",
+  /**
+   * 重置玩家账号的密码
+   *
+   * 单独一个权限点（而不是并进 account:status）：这是能**接管他人账号**的操作，
+   * 敏感度高于封禁，值得让「谁能做」单独可调。
+   */
+  ACCOUNT_PASSWORD: "account:password",
   /** 删除账号（级联删角色，不可恢复） */
   ACCOUNT_DELETE: "account:delete",
 
@@ -35,8 +42,15 @@ export const Permission = {
 
   /** 查看管理员列表 */
   ADMIN_READ: "admin:read",
-  /** 管理管理员（改角色 / 启停 / 删除） */
+  /** 管理管理员（改角色 / 启停 / 删除 / 重置密码） */
   ADMIN_MANAGE: "admin:manage",
+
+  /**
+   * 查看操作日志
+   *
+   * 审计日志会暴露「谁做了什么」，因此只读观察员不给（它的定位是看数据，不是查人）。
+   */
+  AUDIT_READ: "audit:read",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -82,6 +96,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.STATS_READ]: "查看概览",
   [Permission.ACCOUNT_READ]: "查看账号",
   [Permission.ACCOUNT_STATUS]: "封禁 / 解封账号",
+  [Permission.ACCOUNT_PASSWORD]: "重置玩家密码",
   [Permission.ACCOUNT_DELETE]: "删除账号",
   [Permission.ROLE_READ]: "查看角色",
   [Permission.ROLE_WRITE]: "修改角色",
@@ -89,6 +104,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ROLE_DELETE]: "删除角色",
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
+  [Permission.AUDIT_READ]: "查看操作日志",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

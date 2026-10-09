@@ -17,9 +17,19 @@ export class AccountRepository {
 
   insert(row: AccountRow): void {
     this.db.run(
-      `INSERT INTO accounts (id, username, password, status, online_role_id, created_at, updated_at, last_login_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.username, row.password, row.status, row.online_role_id, row.created_at, row.updated_at, row.last_login_at],
+      `INSERT INTO accounts (id, username, password, status, online_role_id, token_version, created_at, updated_at, last_login_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.username,
+        row.password,
+        row.status,
+        row.online_role_id,
+        row.token_version,
+        row.created_at,
+        row.updated_at,
+        row.last_login_at,
+      ],
     );
   }
 
@@ -35,11 +45,27 @@ export class AccountRepository {
     if (patch.password !== undefined) assign("password", patch.password);
     if (patch.status !== undefined) assign("status", patch.status);
     if (patch.online_role_id !== undefined) assign("online_role_id", patch.online_role_id);
+    if (patch.token_version !== undefined) assign("token_version", patch.token_version);
     if (patch.last_login_at !== undefined) assign("last_login_at", patch.last_login_at);
     if (fields.length === 0) return this.findById(id) !== undefined;
     assign("updated_at", patch.updated_at ?? Date.now());
     params.push(id);
     return this.db.execute(`UPDATE accounts SET ${fields.join(", ")} WHERE id = ?`, params).changes > 0;
+  }
+
+  /**
+   * 改口令 + 作废已签发令牌（一次写完）
+   *
+   * 两件事必须一起落：分成两条语句就可能出现「密码改了但版本号没加」的半截状态，
+   * 那样玩家用旧密码登不上、旧令牌却还有效 —— 最糟的一种组合。
+   * 自增写在 SQL 里：并发下「读出来加一再写回」会丢自增。
+   */
+  updatePasswordAndBumpVersion(id: string, password: string): void {
+    this.db.run("UPDATE accounts SET password = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?", [
+      password,
+      Date.now(),
+      id,
+    ]);
   }
 
   /** 删除账号（角色由外键级联删除） */

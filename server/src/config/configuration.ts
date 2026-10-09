@@ -28,6 +28,24 @@ export interface AppConfiguration {
   corsOrigins: string[];
   /** 是否打印详细日志 */
   logRequests: boolean;
+  /**
+   * 是否信任反向代理传来的客户端 IP（`X-Forwarded-For`）
+   *
+   * 生产环境挂在 Nginx / 网关后面时必须开（否则所有请求的来源 IP 都是代理的，
+   * 登录限流会把全部玩家当成同一个人，一起锁死）；**直连暴露时不要开** ——
+   * 开着等于允许调用方随便伪造 `X-Forwarded-For` 绕过 IP 限流。
+   */
+  trustProxy: boolean;
+  /** 登录限流：同一用户名连续失败多少次锁定 */
+  loginMaxFailures: number;
+  /** 登录限流：用户名维度的锁定时长（毫秒） */
+  loginLockMs: number;
+  /** 登录限流：同一 IP 在窗口内失败多少次锁定 */
+  loginIpMaxFailures: number;
+  /** 登录限流：IP 维度的锁定时长（毫秒） */
+  loginIpLockMs: number;
+  /** 操作日志保留条数上限（超出后按时间清理最旧的；0 = 不清理） */
+  auditLogMaxRows: number;
 }
 
 export default function configuration(): AppConfiguration {
@@ -45,5 +63,11 @@ export default function configuration(): AppConfiguration {
       .map((item) => item.trim())
       .filter(Boolean),
     logRequests: (process.env.LOG_REQUESTS ?? "true") === "true",
+    trustProxy: (process.env.TRUST_PROXY ?? "false") === "true",
+    loginMaxFailures: Number(process.env.LOGIN_MAX_FAILURES ?? 5),
+    loginLockMs: Number(process.env.LOGIN_LOCK_MS ?? 10 * 60 * 1000),
+    loginIpMaxFailures: Number(process.env.LOGIN_IP_MAX_FAILURES ?? 20),
+    loginIpLockMs: Number(process.env.LOGIN_IP_LOCK_MS ?? 10 * 60 * 1000),
+    auditLogMaxRows: Number(process.env.AUDIT_LOG_MAX_ROWS ?? 20000),
   };
 }

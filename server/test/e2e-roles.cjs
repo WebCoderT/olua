@@ -277,8 +277,17 @@ function roleData(id, name, occupation, level) {
   const badOnMap = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { onMap: "" } });
   check(badOnMap.code === 40000, "所在地图传空串被拦下（40000）", `${badOnMap.code}`);
 
+  // 「只有账号当前在线的角色才允许推存档」——不在线的角色推回来一律 20007（踢下线语义）。
+  // role_a2 不是账号当前在线角色（先建的是 role_a1），所以这里先验这条判据。
+  const offlineSave = await api("PUT", "roles/role_a2", { token: tokenA, body: { data: { notRole: true } } });
+  check(offlineSave.code === 20007, "非在线角色推存档被拒（20007 ROLE_KICKED）", `${offlineSave.code}`);
+
+  // 切到 role_a2 再验「坏数据照样被拒」（校验顺序：在线 → 乐观锁 → 数据解析）
+  await api("POST", "roles/role_a2/select", { token: tokenA });
   const brokenDoc = await api("PUT", "roles/role_a2", { token: tokenA, body: { data: { notRole: true } } });
   check(brokenDoc.code === 20003, "坏角色数据被拒（不会把背包清空）", `${brokenDoc.code}`);
+  // 切回 role_a1（后面的乐观锁联动用例都围绕它）
+  await api("POST", "roles/role_a1/select", { token: tokenA });
 
   //#endregion
 

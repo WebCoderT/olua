@@ -91,7 +91,7 @@
     },
     "/auth/login": {
       "post": {
-        "description": "账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "description": "账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。\n\n**失败限流**：同一用户名连续失败 5 次、或同一 IP 在 10 分钟内失败 20 次，会被临时锁定并返回 429 / 10005（阈值见服务端 `.env` 的 `LOGIN_*`）。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
         "operationId": "auth.login",
         "parameters": [],
         "requestBody": {
@@ -180,6 +180,212 @@
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/AccountDto"
         }
+      }
+    },
+    "/admin/audit-logs": {
+      "get": {
+        "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
+        "operationId": "adminAudit.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "只看某个操作人的日志（管理员 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "只看某个动作（operationId，取值见 /admin/audit-logs/actions）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetType",
+            "required": false,
+            "in": "query",
+            "description": "目标类型筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "account",
+                "role",
+                "admin"
+              ]
+            }
+          },
+          {
+            "name": "targetId",
+            "required": false,
+            "in": "query",
+            "description": "只看针对某个目标的日志（目标 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "success",
+            "required": false,
+            "in": "query",
+            "description": "结果筛选：true 只看成功 / false 只看失败",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "起始时间（毫秒时间戳，含）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "结束时间（毫秒时间戳，含）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuditLogPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "操作日志列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuditLogPageDto"
+        },
+        "x-olua-permissions": [
+          "audit:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AuditQueryDto"
+        }
+      }
+    },
+    "/admin/audit-logs/actions": {
+      "get": {
+        "description": "返回日志里出现过的全部动作（接口标识），供界面的「动作」筛选下拉使用 —— 界面不写死动作清单。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
+        "operationId": "adminAudit.actions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "动作清单",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuditActionListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "出现过的动作清单",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuditActionListDto"
+        },
+        "x-olua-permissions": [
+          "audit:read"
+        ]
       }
     },
     "/roles": {
@@ -600,7 +806,7 @@
     },
     "/admin/auth/login": {
       "post": {
-        "description": "成功后把返回的 token 放到 `Authorization: Bearer <token>`。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "description": "成功后把返回的 token 放到 `Authorization: Bearer <token>`。\n\n**失败限流**：同一用户名连续失败 5 次、或同一 IP 在 10 分钟内失败 20 次，会被临时锁定并返回 429 / 30009（阈值见服务端 `.env` 的 `LOGIN_*`）。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
         "operationId": "adminAuth.login",
         "parameters": [],
         "requestBody": {
@@ -688,6 +894,61 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/AdminDto"
+        },
+        "x-olua-permissions": []
+      }
+    },
+    "/admin/auth/password": {
+      "patch": {
+        "description": "任何已登录管理员都能改**自己**的密码，需要带上原密码（光有令牌不该能改口令）。\n\n改完直接返回**新的令牌**：库里令牌版本号已 +1，此前签发的令牌全部作废 —— 管理端应当用返回的 token 覆盖本地那一份，否则会被自己的系统踢回登录页。\n\n---\n\n**鉴权**：管理端令牌（`admin`）；本接口只操作当前登录管理员自身，不需要额外权限点。",
+        "operationId": "adminAuth.changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeAdminPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "改密成功（含新令牌）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminTokenDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改自己的密码",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminTokenDto"
         },
         "x-olua-permissions": []
       }
@@ -1012,6 +1273,130 @@
         },
         "x-olua-permissions": [
           "account:status"
+        ]
+      }
+    },
+    "/admin/accounts/{id}/password": {
+      "patch": {
+        "description": "玩家忘记密码时用这条（客户端没有找回流程）。\n\n**副作用**：该账号此前签发的全部令牌立即作废（服务端令牌版本号 +1）—— 账号被盗后改密码才能真正把对方踢下线，否则他手上那个 7 天有效期的令牌照样能用。\n\n请求体里的密码不会进操作日志（敏感字段自动打码为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:password`（重置玩家密码；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.resetPassword",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetAccountPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重置结果（不回显密码）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResetPasswordResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重置玩家账号的密码",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ResetPasswordResultDto"
+        },
+        "x-olua-permissions": [
+          "account:password"
+        ]
+      }
+    },
+    "/admin/accounts/{id}/offline": {
+      "post": {
+        "description": "幂等：本来就不在线时直接返回当前状态。\n\n只清标记是不够的 —— 玩家那台客户端本地缓存还在跑，因此它**下一次推存档会被拒**（业务码 20007 `ROLE_KICKED`），客户端据此提示并回到选角界面。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:select`（切换在线角色；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.kick",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "变更后的账号（onlineRoleId 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AccountDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "踢下线（清掉账号当前的在线角色）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AccountDto"
+        },
+        "x-olua-permissions": [
+          "role:select"
         ]
       }
     },
@@ -1739,6 +2124,73 @@
           "admin:manage"
         ]
       }
+    },
+    "/admin/admins/{id}/password": {
+      "patch": {
+        "description": "只有超级管理员能做（`admin:manage`）—— 管理员之间不能互相改密码。\n\n**副作用**：对方此前签发的令牌立即作废，他会被踢回登录页，需要用新密码重新登录。不触发「最后一个超管」保护：改密码不会让人失去登录能力，改的也不是身份与状态。管理员想改自己的密码应当走 `PATCH /admin/auth/password`（需要原密码）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`admin:manage`（管理管理员；角色：超级管理员）",
+        "operationId": "adminAdmin.resetPassword",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "管理员 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetAdminPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重置结果（不回显密码）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResetPasswordResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重置某个管理员的密码",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ResetPasswordResultDto"
+        },
+        "x-olua-permissions": [
+          "admin:manage"
+        ]
+      }
     }
   },
   "info": {
@@ -1899,6 +2351,23 @@
           "password"
         ]
       },
+      "ChangeAdminPasswordDto": {
+        "type": "object",
+        "properties": {
+          "oldPassword": {
+            "type": "string",
+            "description": "当前密码"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "新密码（6~32 位）"
+          }
+        },
+        "required": [
+          "oldPassword",
+          "newPassword"
+        ]
+      },
       "UpdateAccountStatusDto": {
         "type": "object",
         "properties": {
@@ -1912,6 +2381,19 @@
             "example": "disabled"
           }
         }
+      },
+      "ResetAccountPasswordDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "新密码（6~32 位）",
+            "example": "new-pass-123"
+          }
+        },
+        "required": [
+          "password"
+        ]
       },
       "BatchDeleteRolesDto": {
         "type": "object",
@@ -2100,6 +2582,19 @@
             ]
           }
         }
+      },
+      "ResetAdminPasswordDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "新密码（6~32 位）",
+            "example": "new-pass-123"
+          }
+        },
+        "required": [
+          "password"
+        ]
       },
       "ApiEnvelopeDto": {
         "type": "object",
@@ -2733,6 +3228,246 @@
           "ids",
           "clearedOnlineAccountIds"
         ]
+      },
+      "ResetPasswordResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "被重置的对象 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "被重置的对象名（账号名 / 管理员名，界面直接展示）"
+          },
+          "revokedTokens": {
+            "type": "boolean",
+            "description": "提示：口令变更后，该对象此前签发的令牌**已全部作废**，需要用它重新登录",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "AuditLogDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "日志 id"
+          },
+          "actorId": {
+            "type": "string",
+            "description": "操作人管理员 id（匿名事件如登录失败为 null）",
+            "nullable": true
+          },
+          "actorName": {
+            "type": "string",
+            "description": "操作人账号名（冗余存下来，操作人被删后仍可追溯）",
+            "nullable": true
+          },
+          "actorRole": {
+            "type": "string",
+            "description": "操作人角色（super_admin / admin / viewer）",
+            "nullable": true
+          },
+          "action": {
+            "type": "string",
+            "description": "动作（即接口标识 operationId，如 adminRole.patch）",
+            "example": "adminRole.patch"
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型：account / role / admin",
+            "nullable": true
+          },
+          "targetId": {
+            "type": "string",
+            "description": "目标 id",
+            "nullable": true
+          },
+          "targetName": {
+            "type": "string",
+            "description": "目标**当前**的名字（按 targetType 关联出来；目标已删则为 null，界面退回显示 id）",
+            "nullable": true
+          },
+          "detail": {
+            "type": "object",
+            "description": "附加上下文（请求体，已对 password / secret / token / code 一类字段打码；无则 null）",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "description": "来源 IP（反向代理下需 TRUST_PROXY=true 才准）",
+            "nullable": true
+          },
+          "method": {
+            "type": "string",
+            "description": "HTTP 方法",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "description": "请求路径",
+            "nullable": true
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP 状态码",
+            "nullable": true
+          },
+          "success": {
+            "type": "boolean",
+            "description": "是否成功"
+          },
+          "errorCode": {
+            "type": "number",
+            "description": "失败时的业务码",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "失败原因（可展示的中文）",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "发生时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "actorId",
+          "actorName",
+          "actorRole",
+          "action",
+          "targetType",
+          "targetId",
+          "targetName",
+          "detail",
+          "ip",
+          "method",
+          "path",
+          "statusCode",
+          "success",
+          "errorCode",
+          "errorMessage",
+          "createdAt"
+        ]
+      },
+      "AuditLogPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的操作日志",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditLogDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AuditActionListDto": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "description": "动作（operationId）列表",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "actions"
+        ]
+      },
+      "AuditQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径"
+          },
+          "actorId": {
+            "type": "string",
+            "description": "只看某个操作人的日志（管理员 id）"
+          },
+          "action": {
+            "type": "string",
+            "description": "只看某个动作（operationId，取值见 /admin/audit-logs/actions）"
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型筛选",
+            "enum": [
+              "account",
+              "role",
+              "admin"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "description": "只看针对某个目标的日志（目标 id）"
+          },
+          "success": {
+            "type": "string",
+            "description": "结果筛选：true 只看成功 / false 只看失败",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "from": {
+            "type": "number",
+            "description": "起始时间（毫秒时间戳，含）",
+            "minimum": 0
+          },
+          "to": {
+            "type": "number",
+            "description": "结束时间（毫秒时间戳，含）",
+            "minimum": 0
+          }
+        }
       },
       "AccountQueryDto": {
         "type": "object",

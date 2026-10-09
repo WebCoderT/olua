@@ -1,7 +1,8 @@
-import { applyDecorators } from "@nestjs/common";
+import { applyDecorators, SetMetadata } from "@nestjs/common";
 import { ApiExtension, ApiOperation, ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import { describePermission, PermissionValue } from "../constants/permission";
 import { SWAGGER_TAGS } from "../constants/swagger-tags";
+import { AUDIT_ACTION_KEY } from "./audit-target.decorator";
 import { RequirePermissions } from "./permission.decorator";
 
 /**
@@ -90,6 +91,8 @@ export function ApiAdminDoc(options: ApiAdminDocOptions) {
     RequirePermissions(...permissions),
     ApiExtension("x-olua-audience", "admin"),
     ApiExtension("x-olua-permissions", permissions),
+    // 审计日志的 action 直接取 operationId：不另设一份动作清单，也就不存在两处对齐的问题
+    SetMetadata(AUDIT_ACTION_KEY, options.operationId),
     ApiOperation({
       operationId: options.operationId,
       summary: options.summary,

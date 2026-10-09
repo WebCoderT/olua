@@ -3,6 +3,7 @@ import { BizCode } from "../../common/constants/biz-code";
 import { AdminRole, isAdminRole } from "../../common/constants/permission";
 import { ENTITY_STATUS } from "../../common/constants/status";
 import { BizException } from "../../common/errors/biz.exception";
+import { hashPassword } from "../../common/utils/password.util";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { AdminListOptions, AdminRepository } from "../../database/repositories/admin.repository";
@@ -23,6 +24,7 @@ import {
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
+import { ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
 import { AccountQueryDto, AdminQueryDto, normalizePage, RoleQueryDto, roleFilterOf, UpdateAccountStatusDto } from "./dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "./dto/stats.dto";
 
@@ -77,6 +79,33 @@ export class AdminService {
     this.mustAccount(id);
     this.accounts.deleteById(id);
     return null;
+  }
+
+  /**
+   * 重置玩家账号的密码
+   *
+   * 玩家忘了密码只能靠这一步（客户端没有找回流程）—— 运营最常用的一条。
+   * 会**连带作废该账号已签发的全部令牌**（token_version +1）：否则「账号被盗 → 改密码」
+   * 之后，盗号者手里那个 7 天有效期的令牌照样能用，改密码就白改了。
+   */
+  resetAccountPassword(id: string, dto: ResetAccountPasswordDto): ResetPasswordResultDto {
+    const account = this.mustAccount(id);
+    this.accounts.updatePasswordAndBumpVersion(id, hashPassword(dto.password));
+    return { id, name: account.username, revokedTokens: true };
+  }
+
+  /**
+   * 踢下线（清掉账号当前选中的在线角色）
+   *
+   * 幂等：本来就不在线时直接返回当前状态，不报错（界面可能拿着过期的列表点）。
+   * 玩家侧那台客户端会在下一次推存档时收到 `ROLE_KICKED`（见 RolesService.save），
+   * 才真正被赶回选角界面 —— 只清标记是拦不住本地还在跑的客户端的。
+   */
+  kickAccountOffline(id: string): AccountDto {
+    const account = this.mustAccount(id);
+    if (!account.online_role_id) return AccountDto.from(account);
+    this.accounts.updateById(id, { online_role_id: null });
+    return AccountDto.from({ ...account, online_role_id: null });
   }
 
   //#endregion
@@ -263,6 +292,18 @@ export class AdminService {
     this.mustKeepSuperAdmin(target, { role: null, status: ENTITY_STATUS.DISABLED });
     this.admins.deleteById(id);
     return null;
+  }
+
+  /**
+   * 重置某个管理员的密码（超管专用；管理员之间不能互相改密码，只有超管能）
+   *
+   * 不触发「最后一个超管」保护：改密码不会让人失去登录能力，改的也不是身份与状态。
+   * 同样会作废对方已签发的令牌（他会被踢回登录页，用新密码重登）。
+   */
+  resetAdminPassword(id: string, dto: ResetAdminPasswordDto): ResetPasswordResultDto {
+    const target = this.mustAdmin(id);
+    this.admins.updatePasswordAndBumpVersion(id, hashPassword(dto.password));
+    return { id, name: target.username, revokedTokens: true };
   }
 
   /**

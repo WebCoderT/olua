@@ -94,6 +94,14 @@ export class RolesService {
   save(accountId: string, roleId: string, dto: SaveRoleDto): RoleDto {
     const account = this.mustAccount(accountId);
     const existing = this.mustOwnRole(accountId, roleId);
+    // 已被管理员踢下线（不再是账号当前的在线角色）→ 拒收这次存档
+    //
+    // 为什么必须拦：踢下线只是清掉账号上的在线标记，客户端**本地那份存档还在跑**，
+    // 不拦的话它会一直把进度写回来 —— 踢了等于没踢。客户端收到 20007 应当提示并回选角。
+    // 这条判定要放在乐观锁之前：被踢的玩家需要的是「回选角」，而不是反复重试同一个冲突。
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
     if (dto.revision !== undefined && dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }

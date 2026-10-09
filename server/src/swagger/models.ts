@@ -4,9 +4,11 @@ import { AdminLoginDto, AdminRegisterDto } from "../modules/admin/dto/admin-auth
 import { AdminDto, AdminTokenDto, AdminUpdateDto } from "../modules/admin/dto/admin.dto";
 import { AdminPatchRoleDto, RoleBagCellDto } from "../modules/admin/dto/patch-role.dto";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "../modules/admin/dto/batch-role.dto";
+import { ChangeAdminPasswordDto, ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "../modules/admin/dto/password.dto";
 import { AccountQueryDto, AdminQueryDto, RoleQueryDto, UpdateAccountStatusDto } from "../modules/admin/dto/query.dto";
 import { AdminAccountDetailDto, AdminStatsDto } from "../modules/admin/dto/stats.dto";
 import { AccountPageDto, AdminPageDto, AdminRolePageDto } from "../modules/admin/dto/page-result.dto";
+import { AuditActionListDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "../modules/audit/dto/audit.dto";
 import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-envelope.dto";
 import { HealthDto } from "../modules/health/dto/health.dto";
 import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto";
@@ -48,6 +50,16 @@ export const SWAGGER_MODELS = [
   BatchDeleteRolesDto,
   BatchDeleteResultDto,
   AdminUpdateDto,
+  // 口令管理
+  ResetAccountPasswordDto,
+  ResetAdminPasswordDto,
+  ChangeAdminPasswordDto,
+  ResetPasswordResultDto,
+  // 操作日志
+  AuditLogDto,
+  AuditLogPageDto,
+  AuditActionListDto,
+  AuditQueryDto,
   AccountQueryDto,
   RoleQueryDto,
   AdminQueryDto,

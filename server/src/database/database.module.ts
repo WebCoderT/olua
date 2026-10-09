@@ -2,6 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { DatabaseService } from "./database.service";
 import { AccountRepository } from "./repositories/account.repository";
 import { AdminRepository } from "./repositories/admin.repository";
+import { AuditRepository } from "./repositories/audit.repository";
 import { RoleRepository } from "./repositories/role.repository";
 
 /**
@@ -12,7 +13,7 @@ import { RoleRepository } from "./repositories/role.repository";
  */
 @Global()
 @Module({
-  providers: [DatabaseService, AccountRepository, RoleRepository, AdminRepository],
-  exports: [DatabaseService, AccountRepository, RoleRepository, AdminRepository],
+  providers: [DatabaseService, AccountRepository, RoleRepository, AdminRepository, AuditRepository],
+  exports: [DatabaseService, AccountRepository, RoleRepository, AdminRepository, AuditRepository],
 })
 export class DatabaseModule {}
