@@ -31,8 +31,23 @@ export interface AppConfiguration {
   jwtSecretIsDefault: boolean;
   /** JWT 有效期 */
   jwtExpiresIn: string;
-  /** 管理端注册码（空串 = 管理端开放注册） */
+  /** 管理端注册码（空串 = 未配置；配了就必须带对码才能注册） */
   adminRegisterCode: string;
+  /**
+   * 是否允许**玩家**自助注册
+   *
+   * 默认开（单机 / 内测都靠它开号）。正式服往往要关掉（配合客户端隐藏注册入口），
+   * 关掉后只有已注册账号能登录 —— 这是防批量刷号的第一道闸。
+   */
+  playerRegisterOpen: boolean;
+  /**
+   * 是否开放**管理端**自助注册（**只在未配置 `ADMIN_REGISTER_CODE` 时生效**）
+   *
+   * 默认**关**。原来的行为是「没配注册码 = 人人可注册」，而**第一个注册的管理员自动是超级管理员**
+   * —— 一个忘记配注册码的公网部署，等于把后台拱手让人。所以默认值反过来：
+   * 没配注册码就谁也不许注册，要用 `.env` 里显式打开（或干脆配一个注册码）。
+   */
+  adminRegisterOpen: boolean;
   /** 每个账号的角色上限 */
   roleMaxPerAccount: number;
   /** 允许的跨域来源（["*"] = 全部） */
@@ -80,6 +95,8 @@ export default function configuration(): AppConfiguration {
     jwtSecretIsDefault: jwtSecret === DEFAULT_JWT_SECRET,
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
     adminRegisterCode,
+    playerRegisterOpen: (process.env.PLAYER_REGISTER_OPEN ?? "true") === "true",
+    adminRegisterOpen: (process.env.ADMIN_REGISTER_OPEN ?? "false") === "true",
     roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? 3),
     corsOrigins: (process.env.CORS_ORIGINS ?? "*")
       .split(",")

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from "@nestjs/common";
+import { HttpStatus, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
@@ -22,7 +22,7 @@ import { ChangeAdminPasswordDto } from "./dto/password.dto";
  * 两边都拿不到对方的接口；管理员账号也不能被玩家注册流程撞名。
  */
 @Injectable()
-export class AdminAuthService {
+export class AdminAuthService implements OnModuleInit {
   private readonly logger = new Logger(AdminAuthService.name);
 
   constructor(
@@ -34,18 +34,30 @@ export class AdminAuthService {
   ) {}
 
   /**
+   * 启动自检：一个管理员都没有、注册又是关的
+   *
+   * 这时后台谁也进不去，而且**光看页面看不出来为什么**（登录页只会说账号密码错）。
+   * 所以必须在启动日志里把救回来的办法写清楚 —— 这是默认「关掉开放注册」必须配的服务。
+   */
+  onModuleInit(): void {
+    if (this.admins.countAll() > 0) return;
+    if (this.config.get<string>("adminRegisterCode") || this.config.get<boolean>("adminRegisterOpen")) return;
+    this.logger.warn(
+      "还没有任何管理员，且管理端注册已关闭 —— 在 .env 里设 ADMIN_REGISTER_CODE（或临时 ADMIN_REGISTER_OPEN=true）后重启，即可注册首个超级管理员",
+    );
+  }
+
+  /**
    * 注册管理员
    *
    * 两条规矩：
-   * - 服务端配置了 ADMIN_REGISTER_CODE 时必须带对注册码 —— 否则部署到公网等于人人可开后台
+   * - 注册许可由「注册码 / 开放开关」两件配置决定（见 `assertRegistrationAllowed`），
+   *   默认**不允许**：部署到公网时忘记配注册码，不该等于人人可开后台
    * - **第一个**管理员自动是超级管理员（否则没人能管管理员），之后注册的一律是普通管理员，
    *   要提权得由超管在管理端改（PATCH /admin/admins/:id）
    */
   register(dto: AdminRegisterDto): AdminTokenDto {
-    const requiredCode = this.config.get<string>("adminRegisterCode") ?? "";
-    if (requiredCode && dto.registerCode !== requiredCode) {
-      throw new BizException(BizCode.ADMIN_REGISTER_CODE_WRONG, "注册码不正确", HttpStatus.FORBIDDEN);
-    }
+    this.assertRegistrationAllowed(dto);
     const username = dto.username.trim();
     if (this.admins.findByUsername(username)) throw BizException.conflict(BizCode.ADMIN_EXISTS, "该管理员账号已存在");
 
@@ -155,5 +167,31 @@ export class AdminAuthService {
     dto.expiresIn = this.config.get<string>("jwtExpiresIn") ?? "";
     dto.admin = AdminDto.from(admin);
     return dto;
+  }
+
+  /**
+   * 注册许可判定（两件配置的组合）
+   *
+   * - 配了 `ADMIN_REGISTER_CODE`：一律以注册码为准（带对码即可注册）
+   * - 没配：只有显式打开 `ADMIN_REGISTER_OPEN` 才允许
+   *
+   * 也就是把旧行为「没配注册码 = 谁都能注册」反过来了：那等于把后台交给第一个调注册接口的人
+   * （第一个注册的自动是超管）。现在这两个开关的「默认值组合」是安全的。
+   */
+  private assertRegistrationAllowed(dto: AdminRegisterDto): void {
+    const requiredCode = this.config.get<string>("adminRegisterCode") ?? "";
+    if (requiredCode) {
+      if (dto.registerCode !== requiredCode) {
+        throw new BizException(BizCode.ADMIN_REGISTER_CODE_WRONG, "注册码不正确", HttpStatus.FORBIDDEN);
+      }
+      return;
+    }
+    if (!(this.config.get<boolean>("adminRegisterOpen") ?? false)) {
+      throw new BizException(
+        BizCode.ADMIN_REGISTER_CLOSED,
+        "管理端注册已关闭：请在服务端设置 ADMIN_REGISTER_CODE（或临时把 ADMIN_REGISTER_OPEN 设为 true）后重启",
+        HttpStatus.FORBIDDEN,
+      );
+    }
   }
 }

@@ -13,7 +13,7 @@ export class AdminRegisterDto {
   @Length(6, 32, { message: "密码长度需为 6~32 位" })
   password: string;
 
-  @ApiPropertyOptional({ description: "注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填）", example: "olua-admin-2026" })
+  @ApiPropertyOptional({ description: "注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填；未配置且未开 ADMIN_REGISTER_OPEN 时，管理端注册整体关闭）", example: "olua-admin-2026" })
   @IsOptional()
   @IsString({ message: "注册码必须是字符串" })
   registerCode?: string;

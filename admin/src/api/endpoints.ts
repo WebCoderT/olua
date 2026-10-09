@@ -191,7 +191,7 @@ export const authApi = {
   /**
    * 注册管理员（POST /admin/auth/register）
    *
-   * 服务端配置了 `ADMIN_REGISTER_CODE` 时，registerCode 必须一致，否则拒绝注册。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。
+   * 注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。
    */
   register: (body: AdminRegister, options?: Options) => http.post<AdminAuthResult>(routes.adminAuth.register, body, { auth: false, ...options }),
 };

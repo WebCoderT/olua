@@ -64,7 +64,7 @@ export type AdminRegister = {
    */
   password: string;
   /**
-   * 注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填）
+   * 注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填；未配置且未开 ADMIN_REGISTER_OPEN 时，管理端注册整体关闭）
    */
   registerCode?: string;
 };

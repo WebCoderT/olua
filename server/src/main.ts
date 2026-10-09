@@ -4,6 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
+import { configReader, readConfigSnapshot } from "./config/config-snapshot";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
@@ -47,10 +48,11 @@ async function bootstrap() {
   setupSwagger(app);
 
   const logger = new Logger("Bootstrap");
-  // 默认密钥是**写在代码里**的常量，等于公开；生产忘了替换就等于任何人可自签 admin 令牌。
-  // 这是启动期就该喊出来的事（判据只有 configuration 那一处），管理端「系统信息」页也会标红
-  if (config.get<boolean>("jwtSecretIsDefault")) {
-    logger.warn("JWT_SECRET 仍是内置默认值，生产环境请务必替换，否则令牌可被伪造");
+  // 启动自检：把配置快照里所有「值得注意」的项打出来（内置密钥没换、CORS 全开、
+  // 公网开放注册…）。判据与「系统信息」页**同源**（config/config-snapshot），
+  // 所以启动日志与那一页永远说的是同一件事，不会一边报警一边显示正常
+  for (const item of readConfigSnapshot(configReader(config)).filter((row) => row.warning)) {
+    logger.warn(item.advice ?? `${item.key}：${item.value}`);
   }
 
   await app.listen(port);

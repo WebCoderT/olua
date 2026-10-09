@@ -85,7 +85,7 @@ function freePort() {
   });
 }
 
-/** 起一台服务并等它就绪，返回 { baseUrl, kill } */
+/** 起一台服务并等它就绪，返回 { baseUrl, kill, serverErrors, serverLogs } */
 async function startServer(env) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -106,15 +106,18 @@ async function startServer(env) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   const serverErrors = [];
+  // 启动自检（配置告警）走 Nest 的 Logger，落在 **stdout**，所以这里也要收着 ——
+  // 「启动日志有没有喊出来」是这一套自检唯一能被验证的出口
+  const serverLogs = [];
   child.stderr.on("data", (chunk) => serverErrors.push(String(chunk)));
-  child.stdout.on("data", () => {});
+  child.stdout.on("data", (chunk) => serverLogs.push(String(chunk)));
 
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`服务进程提前退出（code=${child.exitCode}）\n${serverErrors.join("")}`);
     try {
       const response = await fetch(`${baseUrl}/api/health`);
-      if (response.ok) return { baseUrl, kill: () => child.kill("SIGTERM"), serverErrors };
+      if (response.ok) return { baseUrl, kill: () => child.kill("SIGTERM"), serverErrors, serverLogs };
     } catch {
       /* 还没起来 */
     }
@@ -865,6 +868,8 @@ const EXPECTED_CONFIG_KEYS = [
   "LOG_REQUESTS",
   "TRUST_PROXY",
   "CORS_ORIGINS",
+  "PLAYER_REGISTER_OPEN",
+  "ADMIN_REGISTER_OPEN",
   "LOGIN_MAX_FAILURES",
   "LOGIN_LOCK_MS",
   "LOGIN_IP_MAX_FAILURES",
@@ -877,16 +882,19 @@ const EXPECTED_CONFIG_KEYS = [
 ];
 
 /**
- * 系统信息（运维自查）
+ * 系统信息（运维自查）与**启动自检**
  *
- * 分两支：
- * 1. 主服务（`JWT_SECRET` 已自定义）—— 验结构、白名单、权限，以及**密钥原文绝不回显**；
- * 2. 另起一台**配着内置默认密钥**的服务 —— 验「生产忘了换密钥」真的会被标红。
- *    第二支必须真起服务：`warning` 是 SystemService 算的，纯函数测不到这段接线。
+ * 分三支：
+ * 1. 主服务（密钥已自定义、配了注册码、非生产）—— 验结构、白名单、权限、密钥不回显，
+ *    并断言启动日志里**一条告警都没有**（配置正常时不该吵）；
+ * 2. 生产的「危险默认值」组合（默认密钥 + CORS 全开 + 开放注册且无注册码）——
+ *    三条告警要同时出现在启动日志与信息页上，且**判据同源**；
+ * 3. 两个注册开关都是默认值 —— 管理端注册必须直接关死，且启动日志给出补救办法。
  */
-async function runSystemSuite(baseUrl, tokens) {
-  group("十、系统信息：脱敏快照 / 白名单 / 权限 / 密钥告警");
+async function runSystemSuite(server, tokens) {
+  group("十、系统信息 + 启动自检：脱敏快照 / 白名单 / 权限 / 危险默认值");
 
+  const baseUrl = server.baseUrl;
   const read = await api(baseUrl, "GET", "/api/admin/system", { token: tokens.superToken });
   checkEqual(read.body.code, 0, "超级管理员可读系统信息");
   const info = read.body.data;
@@ -921,7 +929,15 @@ async function runSystemSuite(baseUrl, tokens) {
   for (const envKey of ["PATH", "HOME", "NODE_OPTIONS", "TZ"]) {
     check(!keys.includes(envKey), `子进程环境变量 ${envKey} 没有漏进快照`);
   }
-  checkEqual(info.config.find((item) => item.key === "CORS_ORIGINS").warning, true, "CORS 全开（默认 *）→ 标为需注意");
+  // `*` 只在生产算问题（开发时前后端本来就是两个源）；这台是 NODE_ENV=test，所以不该吵
+  checkEqual(info.config.find((item) => item.key === "CORS_ORIGINS").warning, false, "非生产环境 CORS 全开不告警");
+  checkEqual(info.config.find((item) => item.key === "ADMIN_REGISTER_OPEN").warning, false, "配了注册码时「开放注册」开关不告警");
+
+  // 启动自检与信息页同源：配置正常时，启动日志里一条告警都不该有
+  const normalLogs = server.serverLogs.join("");
+  for (const keyword of ["JWT_SECRET", "CORS_ORIGINS", "ADMIN_REGISTER_OPEN"]) {
+    check(!normalLogs.includes(keyword), `配置正常时启动日志没提 ${keyword}`);
+  }
 
   // —— 配置快照：脱敏（最要紧的一条是「值里不能出现原文」）——
   const snapshotText = JSON.stringify(info.config);
@@ -944,21 +960,59 @@ async function runSystemSuite(baseUrl, tokens) {
   const playerRead = await api(baseUrl, "GET", "/api/admin/system", { token: tokens.playerToken });
   checkEqual(playerRead.status, 401, "玩家令牌进不了管理端接口（401）");
 
-  // —— 第二支：配着内置默认密钥时应当标红 ——
-  const weak = await startServer({ JWT_SECRET: DEFAULT_JWT_SECRET });
+  // —— 第二支：生产环境的「危险默认值」组合 ——
+  const risky = await startServer({
+    NODE_ENV: "production",
+    JWT_SECRET: DEFAULT_JWT_SECRET,
+    ADMIN_REGISTER_CODE: "",
+    ADMIN_REGISTER_OPEN: "true",
+    PLAYER_REGISTER_OPEN: "false",
+  });
   try {
-    const registered = await api(weak.baseUrl, "POST", "/api/admin/auth/register", {
-      body: { username: "weak_secret_super", password: "weak-mpvk-7", registerCode: ADMIN_CODE },
-    });
-    checkEqual(registered.body.code, 0, "准备：默认密钥的服务 + 超管");
+    // 启动日志：三条告警必须都喊出来（判据与信息页同源，所以两边只会是一致的）
+    const riskyLogs = risky.serverLogs.join("");
+    check(riskyLogs.includes("JWT_SECRET 仍是内置默认值"), "启动自检喊出「密钥仍是默认值」");
+    check(riskyLogs.includes("CORS_ORIGINS 是 *"), "启动自检喊出「CORS 全开」");
+    check(riskyLogs.includes("ADMIN_REGISTER_OPEN 开着"), "启动自检喊出「公网开放注册」");
 
-    const weakInfo = await api(weak.baseUrl, "GET", "/api/admin/system", { token: registered.body.data.token });
-    const weakJwt = weakInfo.body.data.config.find((item) => item.key === "JWT_SECRET");
-    checkEqual(weakJwt.warning, true, "仍是内置默认密钥 → 标为需注意");
-    check(weakJwt.value.includes("默认"), "默认密钥只报「仍是内置默认值」而不回显原文");
-    check(!JSON.stringify(weakInfo.body.data.config).includes(DEFAULT_JWT_SECRET), "默认密钥原文同样不出现在快照里");
+    // 没配注册码但显式开了开放注册 → 仍然可以注册（这是开发机/内网的逃生口）
+    const registered = await api(risky.baseUrl, "POST", "/api/admin/auth/register", {
+      body: { username: "risky_super", password: "risky-mpvk-7" },
+    });
+    checkEqual(registered.body.code, 0, "没注册码但开了 ADMIN_REGISTER_OPEN → 可以注册");
+
+    const riskyInfo = await api(risky.baseUrl, "GET", "/api/admin/system", { token: registered.body.data.token });
+    const rows = riskyInfo.body.data.config;
+    const rowOf = (key) => rows.find((item) => item.key === key);
+    checkEqual(rowOf("JWT_SECRET").warning, true, "生产 + 默认密钥 → 信息页标红");
+    checkEqual(rowOf("CORS_ORIGINS").warning, true, "生产 + CORS 全开 → 信息页标红");
+    checkEqual(rowOf("ADMIN_REGISTER_OPEN").warning, true, "生产 + 开放注册且无注册码 → 信息页标红");
+    check(rowOf("JWT_SECRET").value.includes("默认"), "默认密钥只报「仍是内置默认值」而不回显原文");
+    check(!JSON.stringify(rows).includes(DEFAULT_JWT_SECRET), "默认密钥原文不出现在快照里");
+    check(!JSON.stringify(rows).includes("risky-mpvk-7"), "口令不可能出现在快照里");
+
+    // 玩家注册开关：关掉后只有已注册账号能登录
+    const closedPlayer = await api(risky.baseUrl, "POST", "/api/auth/register", {
+      body: { username: "risky_player", password: "risky-plyr-1" },
+    });
+    checkEqual(closedPlayer.status, 403, "关了玩家注册后注册被拒（403）");
+    checkEqual(closedPlayer.body.code, 10006, "玩家注册关闭的业务码是 10006");
   } finally {
-    weak.kill();
+    risky.kill();
+  }
+
+  // —— 第三支：两个开关都用默认值（没注册码、没开开放注册）→ 管理端注册直接关死 ——
+  const closed = await startServer({ ADMIN_REGISTER_CODE: "" });
+  try {
+    const denied = await api(closed.baseUrl, "POST", "/api/admin/auth/register", {
+      body: { username: "closed_super", password: "closed-mpvk-7" },
+    });
+    checkEqual(denied.status, 403, "没注册码又没开开关 → 管理端注册被拒（403）");
+    checkEqual(denied.body.code, 30012, "管理端注册关闭的业务码是 30012（与「注册码错误」30004 分开）");
+    // 一个管理员都没有 + 注册关着 = 后台谁也进不去，启动日志必须说清楚怎么救
+    check(closed.serverLogs.join("").includes("还没有任何管理员"), "没有管理员且注册关闭时，启动日志给出补救办法");
+  } finally {
+    closed.kill();
   }
 }
 
@@ -1086,7 +1140,7 @@ async function main() {
   const main1 = await startServer({ LOGIN_MAX_FAILURES: "3", LOGIN_LOCK_MS: "600000", LOGIN_IP_MAX_FAILURES: "1000" });
   try {
     const tokens = await runMainSuite(main1.baseUrl);
-    await runSystemSuite(main1.baseUrl, tokens);
+    await runSystemSuite(main1, tokens);
   } finally {
     main1.kill();
   }

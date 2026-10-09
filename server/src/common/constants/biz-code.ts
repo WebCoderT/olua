@@ -45,6 +45,13 @@ export const BizCode = {
   ACCOUNT_DISABLED: 10004,
   /** 登录失败次数过多，临时锁定（限流见 common/security/login-throttle.service） */
   LOGIN_LOCKED: 10005,
+  /**
+   * 本服已关闭新账号注册
+   *
+   * 与「账号已存在」区分开：前者是运营开关（不该提示玩家换个名字重试），
+   * 后者是重名。客户端只需原样展示服务端文案。
+   */
+  REGISTER_CLOSED: 10006,
 
   //#region 角色
   /** 角色数量已达上限 */
@@ -97,6 +104,13 @@ export const BizCode = {
   ADMIN_OLD_PASSWORD_WRONG: 30010,
   /** 新密码与当前密码相同 */
   ADMIN_PASSWORD_SAME: 30011,
+  /**
+   * 管理端注册已关闭
+   *
+   * 与「注册码不正确」（30004）区分开：那个是「码填错了」，这个是「压根没开注册」——
+   * 运维看到 30004 会去翻注册码，看到这个才会去改 `.env`。
+   */
+  ADMIN_REGISTER_CLOSED: 30012,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

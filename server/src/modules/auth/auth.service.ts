@@ -28,6 +28,10 @@ export class AuthService {
 
   /** 注册（账号名唯一；成功后直接返回令牌，客户端免二次登录） */
   register(dto: RegisterDto): AuthTokenDto {
+    // 注册开关：正式服往往要关（防批量刷号），关掉后只有已注册账号能登录
+    if (!(this.config.get<boolean>("playerRegisterOpen") ?? true)) {
+      throw new BizException(BizCode.REGISTER_CLOSED, "本服已关闭新账号注册", HttpStatus.FORBIDDEN);
+    }
     const username = dto.username.trim();
     if (this.accounts.findByUsername(username)) throw BizException.conflict(BizCode.ACCOUNT_EXISTS, "该账号已被注册");
 
