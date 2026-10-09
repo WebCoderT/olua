@@ -4,6 +4,7 @@ import { AdminLoginDto, AdminRegisterDto } from "../modules/admin/dto/admin-auth
 import { AdminDto, AdminTokenDto, AdminUpdateDto } from "../modules/admin/dto/admin.dto";
 import { AdminPatchRoleDto, RoleBagCellDto } from "../modules/admin/dto/patch-role.dto";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "../modules/admin/dto/batch-role.dto";
+import { BatchStatusResultDto, BatchUpdateAccountStatusDto } from "../modules/admin/dto/batch-account.dto";
 import { ChangeAdminPasswordDto, ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "../modules/admin/dto/password.dto";
 import { AccountQueryDto, AdminQueryDto, RoleQueryDto, StatsRecentQueryDto, StatsTrendQueryDto, UpdateAccountStatusDto } from "../modules/admin/dto/query.dto";
 import {
@@ -65,6 +66,8 @@ export const SWAGGER_MODELS = [
   RoleBagCellDto,
   BatchDeleteRolesDto,
   BatchDeleteResultDto,
+  BatchUpdateAccountStatusDto,
+  BatchStatusResultDto,
   AdminUpdateDto,
   // 口令管理
   ResetAccountPasswordDto,

@@ -184,7 +184,7 @@
     },
     "/admin/audit-logs": {
       "get": {
-        "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
+        "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n**排序**：`sort` 取 `createdAt` / `actorName` / `action` / `targetType` / `success` / `statusCode` / `ip`，`order` 取 asc / desc（默认 createdAt 倒序）。同一毫秒的多条日志另有 id 兜底次序，保证翻页稳定。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
         "operationId": "adminAudit.list",
         "parameters": [
           {
@@ -219,6 +219,30 @@
             "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -1183,7 +1207,7 @@
     },
     "/admin/accounts": {
       "get": {
-        "description": "keyword 模糊匹配账号名；status 可按状态筛选。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "keyword 模糊匹配账号名；status 可按状态筛选。\n\n**排序**：`sort` 取 `username` / `status` / `roleCount` / `createdAt` / `lastLoginAt`，`order` 取 asc / desc（默认 createdAt 倒序）。白名单外的取值**不会报错**，会静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAccount.list",
         "parameters": [
           {
@@ -1218,6 +1242,30 @@
             "description": "关键字（不同接口含义见其说明）",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -1457,6 +1505,63 @@
         ]
       }
     },
+    "/admin/accounts/batch-status": {
+      "post": {
+        "description": "一次最多 100 个账号，字段与单条接口完全一致（原因 / 时长对封禁生效）。\n\n已不存在的 id 静默跳过（幂等）。封禁会清掉在线角色标记，返回的 `clearedOnlineAccountIds` 是因此被踢下线的账号 —— 界面用它提示「有 N 个正在玩的被踢下线」。\n\n日志的目标 id 为空（这条请求没有单一目标），具体改了哪些账号记在请求体的 `ids` 里。POST 而不是 PATCH 是因为要带请求体且没有单一目标 id；用 200 而不是 201 —— 它不创建资源。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.batchStatus",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchUpdateAccountStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果（requested / updated / ids / clearedOnlineAccountIds）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BatchStatusResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "批量封禁 / 解封账号",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BatchStatusResultDto"
+        },
+        "x-olua-permissions": [
+          "account:status"
+        ]
+      }
+    },
     "/admin/accounts/{id}/password": {
       "patch": {
         "description": "玩家忘记密码时用这条（客户端没有找回流程）。\n\n**副作用**：该账号此前签发的全部令牌立即作废（服务端令牌版本号 +1）—— 账号被盗后改密码才能真正把对方踢下线，否则他手上那个 7 天有效期的令牌照样能用。\n\n请求体里的密码不会进操作日志（敏感字段自动打码为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:password`（重置玩家密码；角色：超级管理员 / 管理员）",
@@ -1640,7 +1745,7 @@
     },
     "/admin/roles": {
       "get": {
-        "description": "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。\n\n**排序**：`sort` 取 `name` / `accountName` / `level` / `revision` / `createdAt` / `updatedAt`，`order` 取 asc / desc（默认 updatedAt 倒序）；白名单外的取值静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminRole.list",
         "parameters": [
           {
@@ -1675,6 +1780,30 @@
             "description": "关键字（不同接口含义见其说明）",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -2088,7 +2217,7 @@
     },
     "/admin/admins": {
       "get": {
-        "description": "keyword 模糊匹配管理员账号名；role 可按角色筛选。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`admin:read`（查看管理员；角色：超级管理员 / 管理员）",
+        "description": "keyword 模糊匹配管理员账号名；role 可按角色筛选。\n\n**排序**：`sort` 取 `username` / `role` / `status` / `createdAt` / `updatedAt` / `lastLoginAt`，`order` 取 asc / desc（默认 createdAt 升序，最早注册的在最前）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`admin:read`（查看管理员；角色：超级管理员 / 管理员）",
         "operationId": "adminAdmin.list",
         "parameters": [
           {
@@ -2123,6 +2252,30 @@
             "description": "关键字（不同接口含义见其说明）",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -2577,6 +2730,47 @@
           }
         }
       },
+      "BatchUpdateAccountStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "example": "disabled"
+          },
+          "reason": {
+            "type": "string",
+            "description": "封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里",
+            "maxLength": 100,
+            "example": "使用外挂"
+          },
+          "durationHours": {
+            "type": "object",
+            "description": "封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义",
+            "minimum": 1,
+            "maximum": 8760,
+            "nullable": true,
+            "example": 24
+          },
+          "ids": {
+            "description": "要变更的账号 id 列表（最多 100 条）",
+            "example": [
+              "1760000000000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
       "ResetAccountPasswordDto": {
         "type": "object",
         "properties": {
@@ -2874,6 +3068,20 @@
           "keyword": {
             "type": "string",
             "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
           }
         }
       },
@@ -3641,6 +3849,39 @@
           "clearedOnlineAccountIds"
         ]
       },
+      "BatchStatusResultDto": {
+        "type": "object",
+        "properties": {
+          "requested": {
+            "type": "number",
+            "description": "请求操作的条数（含重复提交的 id）"
+          },
+          "updated": {
+            "type": "number",
+            "description": "实际改到的条数（已不存在的 id 不计入）"
+          },
+          "ids": {
+            "description": "实际改到的账号 id",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clearedOnlineAccountIds": {
+            "description": "因本次封禁被清掉在线角色的账号 id（解封时为空）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "requested",
+          "updated",
+          "ids",
+          "clearedOnlineAccountIds"
+        ]
+      },
       "ResetPasswordResultDto": {
         "type": "object",
         "properties": {
@@ -3840,6 +4081,20 @@
             "type": "string",
             "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径"
           },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
           "actorId": {
             "type": "string",
             "description": "只看某个操作人的日志（管理员 id）"
@@ -3903,6 +4158,20 @@
             "type": "string",
             "description": "关键字（不同接口含义见其说明）"
           },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
           "status": {
             "type": "string",
             "description": "状态筛选",
@@ -3934,6 +4203,20 @@
           "keyword": {
             "type": "string",
             "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
           },
           "accountId": {
             "type": "string",
@@ -4001,6 +4284,20 @@
           "keyword": {
             "type": "string",
             "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
           },
           "role": {
             "type": "string",

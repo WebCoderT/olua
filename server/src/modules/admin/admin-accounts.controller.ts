@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -9,8 +9,10 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
+import { ACCOUNT_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AccountDto } from "../auth/dto/account.dto";
 import { AdminService } from "./admin.service";
+import { BatchStatusResultDto, BatchUpdateAccountStatusDto, ACCOUNT_BATCH_STATUS_MAX } from "./dto/batch-account.dto";
 import { BatchDeleteResultDto } from "./dto/batch-role.dto";
 import { ResetAccountPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
 import { AccountQueryDto, StatsRecentQueryDto, StatsTrendQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
@@ -93,7 +95,10 @@ export class AdminAccountsController {
   @ApiAdminDoc({
     operationId: "adminAccount.list",
     summary: "账号列表",
-    description: "keyword 模糊匹配账号名；status 可按状态筛选。",
+    description:
+      "keyword 模糊匹配账号名；status 可按状态筛选。\n\n" +
+      `**排序**：\`sort\` 取 ${sortFieldNames(ACCOUNT_SORT)}，\`order\` 取 asc / desc（默认 createdAt 倒序）。` +
+      "白名单外的取值**不会报错**，会静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。",
     permissions: [Permission.ACCOUNT_READ],
   })
   @ApiQueryModel(AccountQueryDto)
@@ -131,6 +136,25 @@ export class AdminAccountsController {
     @CurrentUser() user: AuthenticatedUser,
   ): AccountDto {
     return this.adminService.updateAccountStatus(id, dto, user.username);
+  }
+
+  @Post("accounts/batch-status")
+  @HttpCode(HttpStatus.OK)
+  @AuditTarget("account")
+  @ApiAdminDoc({
+    operationId: "adminAccount.batchStatus",
+    summary: "批量封禁 / 解封账号",
+    description:
+      `一次最多 ${ACCOUNT_BATCH_STATUS_MAX} 个账号，字段与单条接口完全一致（原因 / 时长对封禁生效）。\n\n` +
+      "已不存在的 id 静默跳过（幂等）。封禁会清掉在线角色标记，返回的 `clearedOnlineAccountIds` " +
+      "是因此被踢下线的账号 —— 界面用它提示「有 N 个正在玩的被踢下线」。\n\n" +
+      "日志的目标 id 为空（这条请求没有单一目标），具体改了哪些账号记在请求体的 `ids` 里。" +
+      "POST 而不是 PATCH 是因为要带请求体且没有单一目标 id；用 200 而不是 201 —— 它不创建资源。",
+    permissions: [Permission.ACCOUNT_STATUS],
+  })
+  @ApiDataResponse(BatchStatusResultDto, { description: "操作结果（requested / updated / ids / clearedOnlineAccountIds）" })
+  batchStatus(@Body() dto: BatchUpdateAccountStatusDto, @CurrentUser() user: AuthenticatedUser): BatchStatusResultDto {
+    return this.adminService.batchUpdateAccountStatus(dto, user.username);
   }
 
   @Patch("accounts/:id/password")

@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService, SqlParam } from "../database.service";
+import { ROLE_SORT } from "../sort-specs";
+import { resolveSort } from "../sort.util";
 import { RoleRow, RoleWithAccountRow } from "../rows";
 
 /**
@@ -123,13 +125,13 @@ export class RoleRepository {
   }
 
   /** 管理端分页检索（条件见 RoleFilter；一次 join 拿全账号名与账号的在线角色，避免 N+1） */
-  list(options: RoleFilter & { page: number; size: number }): RoleWithAccountRow[] {
+  list(options: RoleFilter & { page: number; size: number; sort?: string; order?: string }): RoleWithAccountRow[] {
     const { clause, params } = this.buildWhere(options);
     return this.db.all<RoleWithAccountRow>(
       `SELECT r.*, a.username AS account_name, a.online_role_id AS account_online_role_id
        FROM roles r LEFT JOIN accounts a ON a.id = r.account_id
        ${clause}
-       ORDER BY r.updated_at DESC
+       ORDER BY ${resolveSort(ROLE_SORT, options.sort, options.order)}
        LIMIT ? OFFSET ?`,
       [...params, options.size, (options.page - 1) * options.size],
     );

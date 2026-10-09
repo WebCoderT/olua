@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 /**
  * 统一响应包裹的 Swagger 描述
@@ -43,6 +43,24 @@ export class PageQueryDto {
   @IsOptional()
   @IsString({ message: "关键字必须是字符串" })
   keyword?: string;
+
+  /**
+   * 排序字段
+   *
+   * 取值**由各接口自己声明**（写在各仓储顶部的白名单里）—— 排序列是拼进 SQL 的，
+   * 服务端只认登记过的键，传了别的值会静默退回该列表的默认排序（不报错）。
+   */
+  @ApiPropertyOptional({ description: "排序字段（取值见各接口说明，未登记的值会退回默认排序）", example: "createdAt" })
+  @IsOptional()
+  @IsString({ message: "排序字段必须是字符串" })
+  @MaxLength(32, { message: "排序字段过长" })
+  sort?: string;
+
+  @ApiPropertyOptional({ description: "排序方向：asc 升序 / desc 降序", enum: ["asc", "desc"], default: "desc" })
+  @IsOptional()
+  @IsString({ message: "排序方向必须是字符串" })
+  @IsIn(["asc", "desc"], { message: "排序方向只能是 asc 或 desc" })
+  order?: string;
 }
 
 /**

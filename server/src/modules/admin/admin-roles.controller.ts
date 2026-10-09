@@ -7,6 +7,7 @@ import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { ROLE_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AdminRoleDto } from "../roles/dto/role.dto";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
@@ -25,7 +26,9 @@ export class AdminRolesController {
     operationId: "adminRole.list",
     summary: "角色列表",
     description:
-      "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。",
+      "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。\n\n" +
+      `**排序**：\`sort\` 取 ${sortFieldNames(ROLE_SORT)}，\`order\` 取 asc / desc（默认 updatedAt 倒序）；` +
+      "白名单外的取值静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。",
     permissions: [Permission.ROLE_READ],
   })
   @ApiQueryModel(RoleQueryDto)

@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService, SqlParam } from "../database.service";
+import { AUDIT_SORT } from "../sort-specs";
+import { resolveSort } from "../sort.util";
 import { AuditLogRow, AuditLogWithNameRow } from "../rows";
 
 /** 操作日志查询条件 */
@@ -22,6 +24,9 @@ export interface AuditListOptions {
   to?: number;
   /** 只看失败事件（登录失败等），等价于 success = "false" */
   onlyFailures?: boolean;
+  /** 排序字段（白名单外的值退回默认） */
+  sort?: string;
+  order?: string;
 }
 
 /**
@@ -62,13 +67,19 @@ export class AuditRepository {
     );
   }
 
-  /** 分页检索（按时间倒序） */
+  /**
+   * 分页检索（默认按时间倒序）
+   *
+   * 末尾固定追加 `a.id DESC` 做**兜底次序**：同一毫秒写入的多条日志（批量操作很常见）
+   * 排序值完全相同，没有兜底键时 SQLite 返回的相对顺序不保证稳定 —— 翻页会出现
+   * 「第 2 页又冒出第 1 页看过的那条」。
+   */
   list(options: AuditListOptions): AuditLogWithNameRow[] {
     const { clause, params } = this.where(options);
     return this.db.all<AuditLogWithNameRow>(
       `SELECT a.*, ${TARGET_NAME_SQL} AS target_name
        FROM audit_logs a ${clause}
-       ORDER BY a.created_at DESC, a.id DESC
+       ORDER BY ${resolveSort(AUDIT_SORT, options.sort, options.order)}, a.id DESC
        LIMIT ? OFFSET ?`,
       [...params, options.size, (options.page - 1) * options.size],
     );

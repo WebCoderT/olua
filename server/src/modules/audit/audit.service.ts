@@ -132,6 +132,8 @@ export class AuditService {
       success: query.success,
       from: query.from,
       to: query.to,
+      sort: query.sort,
+      order: query.order,
     };
     return {
       list: this.logs.list(options).map((row) => AuditLogDto.from(row)),

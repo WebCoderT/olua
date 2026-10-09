@@ -4,6 +4,7 @@ import type { AdminInfo, AdminQuery, AdminUpdatePayload, PageResult } from "../a
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
+import { SortableTh, useSort } from "../components/sortable";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission, readAdmin } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -29,6 +30,7 @@ export function AdminsPage() {
   const [draft, setDraft] = useState({ keyword: "", role: "" });
   const [query, setQuery] = useState({ keyword: "", role: "" });
   const [page, setPage] = useState(1);
+  const [size, setSize] = useState(PAGE_SIZE);
   const [data, setData] = useState<PageResult<AdminInfo> | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -36,15 +38,20 @@ export function AdminsPage() {
   const [deleting, setDeleting] = useState(false);
   const [pendingReset, setPendingReset] = useState<AdminInfo | null>(null);
 
+  // 初始值与服务端默认（创建时间升序）保持一致，免得表头箭头骗人
+  const { sort, order, toggle } = useSort({ initial: { sort: "createdAt", order: "asc" }, onChange: () => setPage(1) });
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       setData(
         await adminsApi.list({
           page,
-          size: PAGE_SIZE,
+          size,
           keyword: query.keyword || undefined,
           role: (query.role || undefined) as AdminQuery["role"],
+          sort,
+          order,
         }),
       );
     } catch {
@@ -52,7 +59,7 @@ export function AdminsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, query]);
+  }, [page, size, query, sort, order]);
 
   useEffect(() => {
     void load();
@@ -182,12 +189,12 @@ export function AdminsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
-                <th className={thClass}>账号</th>
-                <th className={thClass}>角色</th>
+                <SortableTh label="账号" field="username" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="角色" field="role" sort={sort} order={order} onToggle={toggle} />
                 <th className={thClass}>权限点</th>
-                <th className={thClass}>状态</th>
-                <th className={thClass}>创建时间</th>
-                <th className={thClass}>最近登录</th>
+                <SortableTh label="状态" field="status" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="创建时间" field="createdAt" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="最近登录" field="lastLoginAt" sort={sort} order={order} onToggle={toggle} defaultOrder="desc" />
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
             </thead>
@@ -256,7 +263,16 @@ export function AdminsPage() {
 
         {!loading && data && data.list.length === 0 ? <EmptyState title="没有匹配的管理员" description="换个关键字或重置筛选条件试试" /> : null}
 
-        <Pagination page={page} size={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
+        <Pagination
+          page={page}
+          size={size}
+          total={data?.total ?? 0}
+          onChange={setPage}
+          onSizeChange={(value) => {
+            setSize(value);
+            setPage(1);
+          }}
+        />
       </Card>
 
       <ConfirmDialog

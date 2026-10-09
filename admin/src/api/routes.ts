@@ -16,7 +16,7 @@
  * （守卫：`node tools/audit-api-generated.cjs`）。
  */
 export const routes = {
-  /** adminAccount 模块（8 个接口） */
+  /** adminAccount 模块（9 个接口） */
   adminAccount: {
     /**
      * 账号列表（GET /admin/accounts）
@@ -60,6 +60,12 @@ export const routes = {
      * 改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。
      */
     updateStatus: (id: string) => `/admin/accounts/${encodeURIComponent(id)}/status`,
+    /**
+     * 批量封禁 / 解封账号（POST /admin/accounts/batch-status）
+     *
+     * 一次最多 100 个账号，字段与单条接口完全一致（原因 / 时长对封禁生效）。
+     */
+    batchStatus: "/admin/accounts/batch-status",
     /**
      * 概览统计（GET /admin/stats）
      *

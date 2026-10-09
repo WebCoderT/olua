@@ -1,7 +1,21 @@
 import { Injectable } from "@nestjs/common";
 import { ENTITY_STATUS } from "../../common/constants/status";
 import { DatabaseService, SqlParam } from "../database.service";
+import { ACCOUNT_SORT } from "../sort-specs";
+import { resolveSort } from "../sort.util";
 import { AccountRow, AccountWithCountRow } from "../rows";
+
+/** 账号列表查询条件 */
+export interface AccountListOptions {
+  page: number;
+  size: number;
+  /** 模糊匹配账号名 */
+  keyword?: string;
+  status?: string;
+  /** 排序字段（白名单外的值退回默认） */
+  sort?: string;
+  order?: string;
+}
 
 /** 账号数据访问（账号表只被 auth / admin 两个模块用到，SQL 集中在这里） */
 @Injectable()
@@ -87,8 +101,15 @@ export class AccountRepository {
     ]);
   }
 
-  /** 分页检索（keyword 匹配用户名） */
-  list(options: { page: number; size: number; keyword?: string; status?: string }): AccountWithCountRow[] {
+  /** 按 id 批量取（批量封禁 / 解封要先知道这些 id 是否存在、是否在线） */
+  findManyByIds(ids: string[]): AccountRow[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(", ");
+    return this.db.all<AccountRow>(`SELECT * FROM accounts WHERE id IN (${placeholders})`, ids);
+  }
+
+  /** 分页检索（keyword 匹配用户名；排序见 ACCOUNT_SORT 白名单） */
+  list(options: AccountListOptions): AccountWithCountRow[] {
     const where: string[] = [];
     const params: SqlParam[] = [];
     if (options.keyword) {
@@ -103,7 +124,7 @@ export class AccountRepository {
     return this.db.all<AccountWithCountRow>(
       `SELECT a.*, (SELECT COUNT(1) FROM roles r WHERE r.account_id = a.id) AS role_count
        FROM accounts a ${clause}
-       ORDER BY a.created_at DESC
+       ORDER BY ${resolveSort(ACCOUNT_SORT, options.sort, options.order)}
        LIMIT ? OFFSET ?`,
       [...params, options.size, (options.page - 1) * options.size],
     );

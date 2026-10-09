@@ -608,14 +608,131 @@ async function runMainSuite(baseUrl) {
   checkEqual(playerTrend.status, 401, "玩家令牌拿不到看板接口（401）");
 
   //#endregion
+
+  //#region 八、列表体验（排序白名单 / 每页条数 / 批量封禁解封）
+  group("八、列表体验：排序白名单 / 每页条数 / 批量封禁解封");
+
+  // 准备：两个用户名有前后之分的账号（用来验证排序真的换了顺序）
+  const sortA = await call("POST", "/api/auth/register", { body: { username: "guard_aaa", password: "aaa-qzmw-1" } });
+  const sortB = await call("POST", "/api/auth/register", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } });
+  const sortAId = sortA.body.data.account.id;
+  const sortBId = sortB.body.data.account.id;
+  check(Boolean(sortAId) && Boolean(sortBId), "准备：注册两个用户名有前后之分的账号");
+
+  // —— 排序（服务端执行） ——
+  const byNameAsc = await call("GET", "/api/admin/accounts?sort=username&order=asc&size=100", { token: superToken });
+  const ascNames = byNameAsc.body.data.list.map((item) => item.username);
+  check(
+    ascNames.indexOf("guard_aaa") !== -1 && ascNames.indexOf("guard_aaa") < ascNames.indexOf("guard_zzz"),
+    "sort=username&order=asc 生效（aaa 排在 zzz 之前）",
+  );
+  checkEqual(byNameAsc.body.data.size, 100, "每页条数 100 生效（size 回显）");
+  checkEqual(byNameAsc.body.data.list.length, byNameAsc.body.data.total, "每页 100 能装下全部数据（条数 = total）");
+
+  const byNameDesc = await call("GET", "/api/admin/accounts?sort=username&order=desc&size=100", { token: superToken });
+  const descNames = byNameDesc.body.data.list.map((item) => item.username);
+  check(descNames.indexOf("guard_zzz") < descNames.indexOf("guard_aaa"), "order=desc 把顺序反过来");
+
+  // 白名单：sort 是拼进 SQL 的，传白名单外的值必须静默退回默认排序（不报错、更不能拼进语句）
+  const injected = await call("GET", `/api/admin/accounts?sort=${encodeURIComponent("username; DROP TABLE accounts")}&order=asc`, {
+    token: superToken,
+  });
+  checkEqual(injected.body.code, 0, "白名单外的排序字段不报错（静默退回默认排序）");
+  check(injected.body.data.list.length > 0, "退回默认排序后仍然返回数据");
+  const tableAlive = await call("GET", "/api/admin/accounts?size=1", { token: superToken });
+  check(tableAlive.body.data.total >= 3, "accounts 表完好（注入串没有被拼进 SQL）");
+
+  const badOrder = await call("GET", "/api/admin/accounts?sort=username&order=sideways", { token: superToken });
+  checkEqual(badOrder.status, 400, "排序方向只认 asc / desc（其他值 400）");
+  const tooLongSort = await call("GET", `/api/admin/accounts?sort=${"x".repeat(33)}`, { token: superToken });
+  checkEqual(tooLongSort.status, 400, "排序字段过长被拒（400）");
+
+  const rolesSorted = await call("GET", "/api/admin/roles?sort=level&order=desc&size=100", { token: superToken });
+  const levels = rolesSorted.body.data.list.map((item) => item.level);
+  check(levels.length >= 2, "角色列表数据够验证排序");
+  check(levels.every((value, index) => index === 0 || levels[index - 1] >= value), "sort=level&order=desc 生效（等级从高到低）");
+
+  const adminsDefault = await call("GET", "/api/admin/admins?size=100", { token: superToken });
+  const adminsDesc = await call("GET", "/api/admin/admins?sort=username&order=desc&size=100", { token: superToken });
+  checkEqual(
+    adminsDesc.body.data.list.map((item) => item.username).join(","),
+    adminsDefault.body.data.list
+      .map((item) => item.username)
+      .sort()
+      .reverse()
+      .join(","),
+    "管理员列表按用户名倒序（默认仍按创建时间升序）",
+  );
+
+  const auditSorted = await call("GET", "/api/admin/audit-logs?sort=action&order=asc&size=50", { token: superToken });
+  const sortedActions = auditSorted.body.data.list.map((item) => item.action);
+  check(sortedActions.length > 1, "操作日志数据够验证排序");
+  check(sortedActions.every((value, index) => index === 0 || sortedActions[index - 1] <= value), "sort=action&order=asc 生效");
+
+  // —— 批量封禁 / 解封 ——
+  const batchBan = await call("POST", "/api/admin/accounts/batch-status", {
+    token: superToken,
+    body: { ids: [sortAId, sortBId], status: "disabled", reason: "批量测试", durationHours: 6 },
+  });
+  checkEqual(batchBan.body.code, 0, "批量封禁成功");
+  checkEqual(batchBan.body.data.requested, 2, "requested 回显请求条数");
+  checkEqual(batchBan.body.data.updated, 2, "两条都改到了");
+  checkEqual(batchBan.body.data.ids.length, 2, "返回实际改到的 id 列表");
+  checkEqual(batchBan.body.data.clearedOnlineAccountIds.length, 0, "这两个账号没有在线角色，无需踢下线");
+  const batchBanned = await call("POST", "/api/auth/login", { body: { username: "guard_aaa", password: "aaa-qzmw-1" } });
+  checkEqual(batchBanned.body.code, 10004, "被批量封禁的账号登录被拒（10004）");
+  check(batchBanned.body.message.includes("批量测试"), "批量封禁的原因同样进登录提示");
+
+  const ghost = await call("POST", "/api/admin/accounts/batch-status", {
+    token: superToken,
+    body: { ids: [sortAId, "no-such-account-id"], status: "active" },
+  });
+  checkEqual(ghost.body.data.requested, 2, "requested 含已不存在的 id");
+  checkEqual(ghost.body.data.updated, 1, "已不存在的 id 静默跳过（幂等）");
+  checkEqual(
+    (await call("POST", "/api/auth/login", { body: { username: "guard_aaa", password: "aaa-qzmw-1" } })).body.code,
+    0,
+    "批量解封后可以登录",
+  );
+
+  const viewerBatch = await call("POST", "/api/admin/accounts/batch-status", {
+    token: viewerToken,
+    body: { ids: [sortAId], status: "disabled", reason: "越权尝试" },
+  });
+  checkEqual(viewerBatch.status, 403, "只读观察员批量封禁被拒（403）");
+  checkEqual(viewerBatch.body.code, 30006, "越权批量操作的业务码是 30006");
+  checkEqual(
+    (await call("POST", "/api/auth/login", { body: { username: "guard_aaa", password: "aaa-qzmw-1" } })).body.code,
+    0,
+    "被拒的批量封禁没有生效",
+  );
+
+  const tooMany = await call("POST", "/api/admin/accounts/batch-status", {
+    token: superToken,
+    body: { ids: Array.from({ length: 101 }, (_, index) => `id-${index}`), status: "disabled" },
+  });
+  checkEqual(tooMany.status, 400, "一次操作超过 100 个账号被拒（400）");
+  const emptyIds = await call("POST", "/api/admin/accounts/batch-status", { token: superToken, body: { ids: [], status: "disabled" } });
+  checkEqual(emptyIds.status, 400, "空 id 列表被拒（400）");
+
+  // 收尾：把 sortB 解封（上面批量封禁过它，ghost 那步只解了 sortA），留个干净状态
+  const cleanup = await call("POST", "/api/admin/accounts/batch-status", { token: superToken, body: { ids: [sortBId], status: "active" } });
+  checkEqual(cleanup.body.data.updated, 1, "收尾：解封剩余的被封账号");
+  checkEqual(
+    (await call("POST", "/api/auth/login", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } })).body.code,
+    0,
+    "收尾：被批量封禁过的账号解封后可登录",
+  );
+
+  //#endregion
 }
 
 //#endregion
 
-//#region 八：第二台服务专测 IP 维度限流
+//#region 九：第二台服务专测 IP 维度限流
 
 async function runIpSuite(baseUrl) {
-  group("八、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
+  group("九、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
 
   const first = await api(baseUrl, "POST", "/api/auth/login", { body: { username: "ip_victim_a", password: "x-pass-1" } });
   checkEqual(first.body.code, 10003, "第一次失败（用户名维度未锁）");
@@ -647,7 +764,7 @@ async function main() {
     main2.kill();
   }
 
-  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板：${passed} 条通过 / ${failed} 条失败`);
+  console.log(`\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表：${passed} 条通过 / ${failed} 条失败`);
   if (failed) {
     console.log("失败项：\n" + failures.map((item) => `  - ${item}`).join("\n"));
     process.exitCode = 1;

@@ -106,6 +106,25 @@ export type UpdateAccountStatus = {
   durationHours?: unknown | null;
 };
 
+export type BatchUpdateAccountStatus = {
+  /**
+   * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
+   */
+  status?: "active" | "disabled";
+  /**
+   * 封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里
+   */
+  reason?: string;
+  /**
+   * 封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义
+   */
+  durationHours?: unknown | null;
+  /**
+   * 要变更的账号 id 列表（最多 100 条）
+   */
+  ids: string[];
+};
+
 export type ResetAccountPassword = {
   /**
    * 新密码（6~32 位）
@@ -256,6 +275,14 @@ export type PageQuery = {
    * 关键字（不同接口含义见其说明）
    */
   keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
 };
 
 export type Account = {
@@ -738,6 +765,25 @@ export type BatchDeleteResult = {
   clearedOnlineAccountIds: string[];
 };
 
+export type BatchStatusResult = {
+  /**
+   * 请求操作的条数（含重复提交的 id）
+   */
+  requested: number;
+  /**
+   * 实际改到的条数（已不存在的 id 不计入）
+   */
+  updated: number;
+  /**
+   * 实际改到的账号 id
+   */
+  ids: string[];
+  /**
+   * 因本次封禁被清掉在线角色的账号 id（解封时为空）
+   */
+  clearedOnlineAccountIds: string[];
+};
+
 export type ResetPasswordResult = {
   /**
    * 被重置的对象 id
@@ -864,6 +910,14 @@ export type AuditQuery = {
    */
   keyword?: string;
   /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
    * 只看某个操作人的日志（管理员 id）
    */
   actorId?: string;
@@ -907,6 +961,14 @@ export type AccountQuery = {
    */
   keyword?: string;
   /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
    * 状态筛选
    */
   status?: "active" | "disabled";
@@ -925,6 +987,14 @@ export type RoleQuery = {
    * 关键字（不同接口含义见其说明）
    */
   keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
   /**
    * 限定账号 id（查某账号下的全部角色）
    */
@@ -964,6 +1034,14 @@ export type AdminQuery = {
    * 关键字（不同接口含义见其说明）
    */
   keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
   /**
    * 角色筛选
    */

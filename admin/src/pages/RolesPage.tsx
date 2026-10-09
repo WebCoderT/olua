@@ -4,6 +4,8 @@ import { formatTime, OCCUPATION_LABELS, PERMISSION, rolesApi, SEX_LABELS } from 
 import type { AdminRole, PageResult, RoleQuery } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
+import { SortableTh, useSort } from "../components/sortable";
+import type { SortOrder } from "../components/sortable";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -22,23 +24,28 @@ interface RoleFilterForm {
 
 const EMPTY_FILTER: RoleFilterForm = { keyword: "", online: "", occupation: "", sex: "", minLevel: "", maxLevel: "" };
 
-/** 表单 → 接口查询参数（空值不传；等级只收数字） */
-function toQuery(form: RoleFilterForm, accountId: string, page: number): RoleQuery {
+/** 表单 + 分页 / 排序 → 接口查询参数（空值不传；等级只收数字） */
+function toQuery(
+  form: RoleFilterForm,
+  options: { accountId: string; page: number; size: number; sort?: string; order?: SortOrder },
+): RoleQuery {
   const level = (value: string) => {
     const parsed = Number(value);
     return value.trim() !== "" && Number.isInteger(parsed) ? parsed : undefined;
   };
   return {
-    page,
-    size: PAGE_SIZE,
+    page: options.page,
+    size: options.size,
     keyword: form.keyword.trim() || undefined,
-    accountId: accountId || undefined,
+    accountId: options.accountId || undefined,
     // 表单是受控输入（字符串），这里收口到服务端枚举：取值非法服务端也会拒（40000）
     online: (form.online || undefined) as RoleQuery["online"],
     occupation: (form.occupation || undefined) as RoleQuery["occupation"],
     sex: (form.sex || undefined) as RoleQuery["sex"],
     minLevel: level(form.minLevel),
     maxLevel: level(form.maxLevel),
+    sort: options.sort,
+    order: options.order,
   };
 }
 
@@ -51,6 +58,7 @@ export function RolesPage() {
   /** 已提交的筛选条件（表单改动要等「查询」才生效，避免每敲一个字就请求一次） */
   const [applied, setApplied] = useState<RoleFilterForm>(EMPTY_FILTER);
   const [page, setPage] = useState(1);
+  const [size, setSize] = useState(PAGE_SIZE);
   const [data, setData] = useState<PageResult<AdminRole> | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -58,10 +66,13 @@ export function RolesPage() {
   const [batchConfirm, setBatchConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // 排序由服务端执行；初始值与服务端默认（更新时间倒序）保持一致，免得表头箭头骗人
+  const { sort, order, toggle } = useSort({ initial: { sort: "updatedAt", order: "desc" }, onChange: () => setPage(1) });
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await rolesApi.list(toQuery(applied, accountId, page));
+      const result = await rolesApi.list(toQuery(applied, { accountId, page, size, sort, order }));
       setData(result);
       // 列表刷新后清掉选中：翻页 / 换筛选条件之后，上一页的选中项已经不在眼前，留着容易误删
       setSelectedIds([]);
@@ -70,7 +81,7 @@ export function RolesPage() {
     } finally {
       setLoading(false);
     }
-  }, [applied, accountId, page]);
+  }, [applied, accountId, page, size, sort, order]);
 
   useEffect(() => {
     void load();
@@ -243,14 +254,14 @@ export function RolesPage() {
                     onChange={toggleAll}
                   />
                 </th>
-                <th className={thClass}>角色名</th>
-                <th className={thClass}>所属账号</th>
+                <SortableTh label="角色名" field="name" sort={sort} order={order} onToggle={toggle} />
+                <SortableTh label="所属账号" field="accountName" sort={sort} order={order} onToggle={toggle} />
                 <th className={thClass}>职业</th>
                 <th className={thClass}>性别</th>
-                <th className={thClass}>等级</th>
+                <SortableTh label="等级" field="level" sort={sort} order={order} onToggle={toggle} defaultOrder="desc" />
                 <th className={thClass}>状态</th>
-                <th className={thClass}>修订</th>
-                <th className={thClass}>更新时间</th>
+                <SortableTh label="修订" field="revision" sort={sort} order={order} onToggle={toggle} defaultOrder="desc" />
+                <SortableTh label="更新时间" field="updatedAt" sort={sort} order={order} onToggle={toggle} defaultOrder="desc" />
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
             </thead>
@@ -310,7 +321,16 @@ export function RolesPage() {
 
         {!loading && data && data.list.length === 0 ? <EmptyState title="没有匹配的角色" description="换个筛选条件试试" /> : null}
 
-        <Pagination page={page} size={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
+        <Pagination
+          page={page}
+          size={size}
+          total={data?.total ?? 0}
+          onChange={setPage}
+          onSizeChange={(value) => {
+            setSize(value);
+            setPage(1);
+          }}
+        />
       </Card>
 
       <ConfirmDialog

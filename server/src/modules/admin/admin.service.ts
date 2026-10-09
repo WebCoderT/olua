@@ -5,7 +5,7 @@ import { ENTITY_STATUS } from "../../common/constants/status";
 import { BizException } from "../../common/errors/biz.exception";
 import { hashPassword } from "../../common/utils/password.util";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
-import { AccountRepository } from "../../database/repositories/account.repository";
+import { AccountListOptions, AccountRepository } from "../../database/repositories/account.repository";
 import { AdminListOptions, AdminRepository } from "../../database/repositories/admin.repository";
 import { AuditRepository } from "../../database/repositories/audit.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
@@ -23,6 +23,7 @@ import {
   ROLE_PATCH_NUMBER_FIELDS,
 } from "../roles/role-data.util";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
+import { BatchStatusResultDto, BatchUpdateAccountStatusDto } from "./dto/batch-account.dto";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
 import { ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
@@ -55,11 +56,11 @@ export class AdminService {
 
   //#region 账号
 
-  /** 账号分页检索（keyword 匹配账号名） */
+  /** 账号分页检索（keyword 匹配账号名；排序字段白名单见 AccountRepository.ACCOUNT_SORT） */
   listAccounts(query: AccountQueryDto): PageResult<AccountDto> {
     const { page, size } = normalizePage(query);
     const keyword = query.keyword?.trim() || undefined;
-    const options = { page, size, keyword, status: query.status };
+    const options: AccountListOptions = { page, size, keyword, status: query.status, sort: query.sort, order: query.order };
     return {
       list: this.accounts.list(options).map((row) => AccountDto.from(row)),
       total: this.accounts.count({ keyword, status: query.status }),
@@ -90,28 +91,34 @@ export class AdminService {
    */
   updateAccountStatus(id: string, dto: UpdateAccountStatusDto, operator?: string): AccountDto {
     this.mustAccount(id);
-    const now = Date.now();
-    if (dto.status === ENTITY_STATUS.DISABLED) {
-      const hours = dto.durationHours ?? null;
-      this.accounts.updateById(id, {
-        status: ENTITY_STATUS.DISABLED,
-        online_role_id: null,
-        ban_reason: dto.reason?.trim() || null,
-        ban_until: hours === null ? null : now + hours * 3_600_000,
-        banned_by: operator ?? null,
-        banned_at: now,
-      });
-    } else {
-      // 解封：封禁四件套一起清，避免留下「已解封，原因：xxx」的残影
-      this.accounts.updateById(id, {
-        status: ENTITY_STATUS.ACTIVE,
-        ban_reason: null,
-        ban_until: null,
-        banned_by: null,
-        banned_at: null,
-      });
-    }
+    this.accounts.updateById(id, this.statusPatch(dto, operator, Date.now()));
     return AccountDto.from(this.mustAccount(id));
+  }
+
+  /**
+   * 批量封禁 / 解封
+   *
+   * 与单条走**同一套字段**（statusPatch）—— 两处各写一份的话，很容易出现
+   * 「批量封禁忘了清在线标记」这种只在批量路径上才有的差异，而批量正是运营最常用的入口。
+   *
+   * 幂等：已不存在的 id 静默跳过，返回实际改到的条数（与批量删角色同一口径）。
+   */
+  batchUpdateAccountStatus(dto: BatchUpdateAccountStatusDto, operator?: string): BatchStatusResultDto {
+    const ids = [...new Set(dto.ids.map((item) => item.trim()).filter(Boolean))];
+    const patch = this.statusPatch(dto, operator, Date.now());
+    const rows = this.accounts.findManyByIds(ids);
+    const clearedOnlineAccountIds: string[] = [];
+    for (const row of rows) {
+      // 封禁会把在线角色标记清掉，记下来供界面提示「有 N 个正在玩的被踢下线」
+      if (patch.status === ENTITY_STATUS.DISABLED && row.online_role_id) clearedOnlineAccountIds.push(row.id);
+      this.accounts.updateById(row.id, patch);
+    }
+    return {
+      requested: dto.ids.length,
+      updated: rows.length,
+      ids: rows.map((row) => row.id),
+      clearedOnlineAccountIds,
+    };
   }
 
   /**
@@ -160,6 +167,32 @@ export class AdminService {
     return AccountDto.from({ ...account, online_role_id: null });
   }
 
+  /**
+   * 状态变更要写的字段（单条与批量共用）
+   *
+   * 封禁写四件套 + 清在线标记：不清标记则概览的「在线账号数」虚高，
+   * 玩家重登还会发现自己「还在游戏里」。解封把四件套一起清空，
+   * 避免后台一直显示「已解封，原因：xxx」这种残影。
+   */
+  private statusPatch(
+    dto: UpdateAccountStatusDto,
+    operator: string | undefined,
+    now: number,
+  ): Partial<Omit<AccountRow, "id" | "created_at">> {
+    if (dto.status !== ENTITY_STATUS.DISABLED) {
+      return { status: ENTITY_STATUS.ACTIVE, ban_reason: null, ban_until: null, banned_by: null, banned_at: null };
+    }
+    const hours = dto.durationHours ?? null;
+    return {
+      status: ENTITY_STATUS.DISABLED,
+      online_role_id: null,
+      ban_reason: dto.reason?.trim() || null,
+      ban_until: hours === null ? null : now + hours * 3_600_000,
+      banned_by: operator ?? null,
+      banned_at: now,
+    };
+  }
+
   //#endregion
 
   //#region 角色
@@ -169,7 +202,7 @@ export class AdminService {
     const { page, size } = normalizePage(query);
     const filter = roleFilterOf(query);
     return {
-      list: this.roles.list({ ...filter, page, size }).map((row) => this.toAdminRoleDto(row)),
+      list: this.roles.list({ ...filter, page, size, sort: query.sort, order: query.order }).map((row) => this.toAdminRoleDto(row)),
       total: this.roles.count(filter),
       page,
       size,
@@ -312,7 +345,7 @@ export class AdminService {
   listAdmins(query: AdminQueryDto): PageResult<AdminDto> {
     const { page, size } = normalizePage(query);
     const keyword = query.keyword?.trim() || undefined;
-    const options: AdminListOptions = { page, size, keyword, role: query.role };
+    const options: AdminListOptions = { page, size, keyword, role: query.role, sort: query.sort, order: query.order };
     return {
       list: this.admins.list(options).map((row) => AdminDto.from(row)),
       total: this.admins.count({ keyword, role: query.role }),

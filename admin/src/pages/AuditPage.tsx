@@ -35,6 +35,7 @@ export function AuditPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY_QUERY);
   const [query, setQuery] = useState<Draft>(EMPTY_QUERY);
   const [page, setPage] = useState(1);
+  const [size, setSize] = useState(PAGE_SIZE);
   const [data, setData] = useState<PageResult<AuditLog> | null>(null);
   const [actions, setActions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ export function AuditPage() {
       setData(
         await auditApi.list({
           page,
-          size: PAGE_SIZE,
+          size,
           keyword: query.keyword || undefined,
           action: query.action || undefined,
           targetType: (query.targetType || undefined) as AuditQuery["targetType"],
@@ -62,7 +63,7 @@ export function AuditPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, query]);
+  }, [page, size, query]);
 
   useEffect(() => {
     void load();
@@ -203,7 +204,16 @@ export function AuditPage() {
 
         {!loading && data && data.list.length === 0 ? <EmptyState title="没有匹配的日志" description="换个条件或重置筛选试试" /> : null}
 
-        <Pagination page={page} size={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
+        <Pagination
+          page={page}
+          size={size}
+          total={data?.total ?? 0}
+          onChange={setPage}
+          onSizeChange={(value) => {
+            setSize(value);
+            setPage(1);
+          }}
+        />
       </Card>
 
       <p className="text-xs text-slate-500">

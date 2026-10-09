@@ -5,6 +5,7 @@ import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { AUDIT_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AuditService } from "./audit.service";
 import { AuditActionListDto, AuditLogDto, AuditLogPageDto, AuditQueryDto } from "./dto/audit.dto";
 
@@ -27,6 +28,8 @@ export class AuditController {
       "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。" +
       "`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / " +
       "`success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n" +
+      `**排序**：\`sort\` 取 ${sortFieldNames(AUDIT_SORT)}，\`order\` 取 asc / desc（默认 createdAt 倒序）。` +
+      "同一毫秒的多条日志另有 id 兜底次序，保证翻页稳定。\n\n" +
       "`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。",
     permissions: [Permission.AUDIT_READ],
   })

@@ -7,6 +7,7 @@ import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { ADMIN_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AdminService } from "./admin.service";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
@@ -28,7 +29,9 @@ export class AdminAdminsController {
   @ApiAdminDoc({
     operationId: "adminAdmin.list",
     summary: "管理员列表",
-    description: "keyword 模糊匹配管理员账号名；role 可按角色筛选。",
+    description:
+      "keyword 模糊匹配管理员账号名；role 可按角色筛选。\n\n" +
+      `**排序**：\`sort\` 取 ${sortFieldNames(ADMIN_SORT)}，\`order\` 取 asc / desc（默认 createdAt 升序，最早注册的在最前）。`,
     permissions: [Permission.ADMIN_READ],
   })
   @ApiQueryModel(AdminQueryDto)

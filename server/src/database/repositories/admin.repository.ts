@@ -2,6 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { AdminRole, AdminRoleValue } from "../../common/constants/permission";
 import { ENTITY_STATUS } from "../../common/constants/status";
 import { DatabaseService } from "../database.service";
+import { ADMIN_SORT } from "../sort-specs";
+import { resolveSort } from "../sort.util";
 import { AdminRow } from "../rows";
 
 /** 管理员列表查询条件 */
@@ -11,6 +13,9 @@ export interface AdminListOptions {
   /** 模糊匹配管理员账号名 */
   keyword?: string;
   role?: string;
+  /** 排序字段（白名单外的值退回默认） */
+  sort?: string;
+  order?: string;
 }
 
 /** 管理员数据访问（与玩家账号分表：两种身份不共用一张表，避免权限混用） */
@@ -26,7 +31,7 @@ export class AdminRepository {
     return this.db.get<AdminRow>("SELECT * FROM admins WHERE username = ?", [username]);
   }
 
-  /** 分页列表（按创建时间升序） */
+  /** 分页列表（默认按创建时间升序；排序见 ADMIN_SORT 白名单） */
   list(options: AdminListOptions): AdminRow[] {
     const where: string[] = [];
     const params: (string | number)[] = [];
@@ -40,7 +45,10 @@ export class AdminRepository {
     }
     const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
     params.push(options.size, (options.page - 1) * options.size);
-    return this.db.all<AdminRow>(`SELECT * FROM admins ${clause} ORDER BY created_at ASC LIMIT ? OFFSET ?`, params);
+    return this.db.all<AdminRow>(
+      `SELECT * FROM admins ${clause} ORDER BY ${resolveSort(ADMIN_SORT, options.sort, options.order)} LIMIT ? OFFSET ?`,
+      params,
+    );
   }
 
   /** 统计（与 list 用同一套条件） */
