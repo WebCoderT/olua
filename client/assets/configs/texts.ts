@@ -307,6 +307,26 @@ export const uiTexts = {
    * （见 utils/net/RoleSync 的 kicked 分支）。
    */
   role_sync_kicked_tip: "你的角色已被管理员下线，请重新选择角色进入游戏",
+
+  //#region 公告（玩家侧展示；拉取接口见服务端 GET /announcements/active）
+  /** 级别标签：普通 */
+  label_announcement_level_normal: "普通",
+  /** 级别标签：重要 */
+  label_announcement_level_important: "重要",
+  /** 时间窗：开始时间未设（立即生效） */
+  label_announcement_immediate: "立即生效",
+  /** 时间窗：结束时间未设（不设截止） */
+  label_announcement_longterm: "长期有效",
+  /** 时间窗整体（{from} → {to}） */
+  label_announcement_window: "{from} → {to}",
+  /** 列表条目的第二行：级别 · 时间窗（{level} = 级别文案，{window} = 上面的时间窗） */
+  label_announcement_item_meta: "{level} · {window}",
+  /** 公告板：一条公告都没有 */
+  label_announcement_empty: "暂无公告",
+  /** 公告板：拉取失败（列表位置上的兜底说明） */
+  label_announcement_load_failed: "公告加载失败，请稍后再试",
+  /** 公告板：还没选公告时的提示 */
+  label_announcement_pick: "请从左侧选择一条公告",
 } as const;
 
 /** 文案 key（uiTexts 的键） */

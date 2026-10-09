@@ -9,6 +9,7 @@ import type { AuthResult } from "./utils/net/Api";
 import { describeError } from "./utils/net/ApiError";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import Session from "./utils/net/Session";
+import AnnouncementNoticeDialog from "./components/dialogs/AnnouncementNoticeDialog";
 const { ccclass } = _decorator;
 
 /**
@@ -33,6 +34,8 @@ export class Login extends Component {
   private offWindowResize: (() => void) | null = null;
   /** 是否正在提交（登录与注册互斥） */
   private submitting = false;
+  /** 公告提醒弹窗（进登录页时把生效中的重要公告摊开给玩家看，见该类的说明） */
+  private announcementNotice = new AnnouncementNoticeDialog();
 
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
@@ -80,6 +83,10 @@ export class Login extends Component {
     this.offWindowResize = onWindowResize(() => this.applyStageLayout());
     // 清空缓存------开发时使用（含角色缓存与上次会话，进登录页一律重新登录）
     StorageManager.clear();
+    // 公告提醒：拉取「生效中的重要公告」（公共接口，无需令牌），有就弹、没有或拉取失败就静默 ——
+    // 挂在本场景自己的节点上（登录场景没有 UI 图层容器，见 AnnouncementNoticeDialog 的说明），
+    // 不 await：公告不该拖慢登录页的出现，也不阻塞账号密码输入
+    void this.announcementNotice.open(this.node);
   }
 
   /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁） */

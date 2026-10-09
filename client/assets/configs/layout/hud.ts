@@ -137,6 +137,9 @@ export const smallMapLayout = {
   anchor: { edge: "top-right", marginX: 2, marginY: 12 } as HudAnchor,
   /** 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录） */
   entryIcons: ["world", "achievement", "mail", "config", "sound", "屏蔽 副本"],
+  /** 哪个入口开公告板（其余入口仍是占位），以及它的未读红点（有未读公告才显示） */
+  announcementEntry: "mail",
+  announcementDot: { position: new Vec2(9, 9), size: new Size(9, 9) },
   entryIconSize: 28,
   entryIconGap: 6,
   /** 按钮列的位置 */

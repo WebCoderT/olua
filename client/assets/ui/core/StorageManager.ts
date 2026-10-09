@@ -131,12 +131,17 @@ export default class StorageManager {
   }
 
   /**
-   * 清空本地所有存储（含会话）
+   * 清空本地存储（角色缓存 + 当前会话）
    *
    * 登录场景启动时调用一次：进登录页一律重新登录，避免上个账号的角色缓存与令牌串到下一个账号。
+   *
+   * 只删自己管的两个键 + 会话，**不调 `sys.localStorage.clear()`**：那个会把本机所有键一起抹掉，
+   * 包括与账号无关的展示状态（如公告已读记录，见 AnnouncementReadStore）——
+   * 一旦后续有别的模块往本机写东西，全清也会静默带走它们，而这处清缓存的意图只是「换账号重新来」。
    */
   static clear() {
-    sys.localStorage.clear();
+    sys.localStorage.removeItem("roles");
+    sys.localStorage.removeItem("selectedRole");
     Session.clear();
   }
 
