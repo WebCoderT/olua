@@ -9,6 +9,7 @@ import { EmptyState } from "./components/ui";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AdminsPage } from "./pages/AdminsPage";
+import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -105,6 +106,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.ROLE_READ}>
                 <RoleDetailPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="announcements"
+            element={
+              <RequirePermission permission={PERMISSION.ANNOUNCEMENT_READ}>
+                <AnnouncementsPage />
               </RequirePermission>
             }
           />

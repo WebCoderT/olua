@@ -29,6 +29,14 @@ import {
   SystemRuntimeDto,
   SystemTableCountDto,
 } from "../modules/system/dto/system.dto";
+import {
+  ActiveAnnouncementDto,
+  AnnouncementDto,
+  AnnouncementPageDto,
+  AnnouncementQueryDto,
+  CreateAnnouncementDto,
+  UpdateAnnouncementDto,
+} from "../modules/announcement/dto/announcement.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 
 /**
@@ -98,4 +106,11 @@ export const SWAGGER_MODELS = [
   SystemDatabaseDto,
   SystemTableCountDto,
   SystemConfigItemDto,
+  // 公告
+  ActiveAnnouncementDto,
+  AnnouncementDto,
+  AnnouncementPageDto,
+  AnnouncementQueryDto,
+  CreateAnnouncementDto,
+  UpdateAnnouncementDto,
 ];

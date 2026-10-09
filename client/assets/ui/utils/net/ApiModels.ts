@@ -247,6 +247,60 @@ export type ResetAdminPassword = {
   password: string;
 };
 
+export type CreateAnnouncement = {
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本）
+   */
+  content: string;
+  /**
+   * 级别，默认 normal
+   */
+  level?: "normal" | "important";
+  /**
+   * 是否启用，默认 true
+   */
+  enabled?: boolean;
+  /**
+   * 生效开始时间（毫秒时间戳）；不传 = 立即生效
+   */
+  startsAt?: number;
+  /**
+   * 生效结束时间（毫秒时间戳，不含）；不传 = 不设截止
+   */
+  endsAt?: number;
+};
+
+export type UpdateAnnouncement = {
+  /**
+   * 标题（不传则不改）
+   */
+  title?: string;
+  /**
+   * 正文（不传则不改）
+   */
+  content?: string;
+  /**
+   * 级别（不传则不改）
+   */
+  level?: "normal" | "important";
+  /**
+   * 启用 / 停用（不传则不改）
+   */
+  enabled?: boolean;
+  /**
+   * 生效开始时间（毫秒）；传 `null` = 改为立即生效，不传则不改
+   */
+  startsAt?: number | null;
+  /**
+   * 生效结束时间（毫秒，不含）；传 `null` = 改为不设截止，不传则不改
+   */
+  endsAt?: number | null;
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -821,7 +875,7 @@ export type AuditLog = {
    */
   action: string;
   /**
-   * 目标类型：account / role / admin
+   * 目标类型：account / role / admin / announcement
    */
   targetType: string | null;
   /**
@@ -951,7 +1005,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin";
+  targetType?: "account" | "role" | "admin" | "announcement";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -1211,4 +1265,132 @@ export type SystemInfo = {
    * 服务端时间戳（毫秒）
    */
   time: number;
+};
+
+export type ActiveAnnouncement = {
+  /**
+   * 公告 id
+   */
+  id: string;
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本，换行用 \n）
+   */
+  content: string;
+  /**
+   * 级别：normal 普通 / important 重要（重要排在前）
+   */
+  level: "normal" | "important";
+  /**
+   * 生效开始时间（毫秒）；null = 立即生效
+   */
+  startsAt: number | null;
+  /**
+   * 生效结束时间（毫秒，不含）；null = 不设截止
+   */
+  endsAt: number | null;
+};
+
+export type Announcement = {
+  /**
+   * 公告 id
+   */
+  id: string;
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本，换行用 \n）
+   */
+  content: string;
+  /**
+   * 级别
+   */
+  level: "normal" | "important";
+  /**
+   * 是否启用（手动下线开关；与时间窗是两道独立的闸）
+   */
+  enabled: boolean;
+  /**
+   * 生效开始时间（毫秒）；null = 立即生效
+   */
+  startsAt: number | null;
+  /**
+   * 生效结束时间（毫秒，不含）；null = 不设截止
+   */
+  endsAt: number | null;
+  /**
+   * 发布人管理员账号名（管理员被删后仍可追溯）
+   */
+  createdBy: string | null;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 当前是否生效中（由服务端判定，界面不要自己算）
+   */
+  active: boolean;
+};
+
+export type AnnouncementPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的公告
+   */
+  list: Announcement[];
+};
+
+export type AnnouncementQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配标题与正文
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 级别筛选
+   */
+  level?: "normal" | "important";
+  /**
+   * 启用状态筛选：true 只看启用 / false 只看停用
+   */
+  enabled?: "true" | "false";
+  /**
+   * 生效状态筛选：true 只看生效中 / false 只看不在生效窗口内（含未开始与已过期）
+   */
+  active?: "true" | "false";
 };

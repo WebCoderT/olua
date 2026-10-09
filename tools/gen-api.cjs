@@ -77,6 +77,7 @@ const SKIP_SCHEMAS = new Set(["ApiEnvelopeDto"]);
 const MODULES = {
   health: { target: "client", export: "HealthApi" },
   auth: { target: "client", export: "AuthApi" },
+  announcement: { target: "client", export: "AnnouncementApi" },
   role: { target: "client", export: "RoleApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
@@ -85,6 +86,7 @@ const MODULES = {
   adminAudit: { target: "admin", export: "auditApi" },
   adminStats: { target: "admin", export: "statsApi" },
   adminSystem: { target: "admin", export: "systemApi" },
+  adminAnnouncement: { target: "admin", export: "announcementsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */
