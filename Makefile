@@ -46,7 +46,8 @@ CREATOR ?= CocosCreator
 
 .PHONY: help info install env \
         dev dev-server dev-admin \
-        check test verify audit audit-generated audit-hardcode audit-config audit-click \
+        check test verify audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
+        docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
@@ -238,7 +239,7 @@ admin-preview: ## 预览管理端已构建产物（需先 make admin-build）
 #  审计（tools/，跨端静态检查）
 # ==============================================================================
 
-audit: ## 跑 4 个跨端审计（生成物 / 硬编码 / 配置外泄 / 点击穿透）
+audit: ## 跑全部跨端审计（生成物 / 硬编码 / 配置外泄 / 点击穿透 / 部署接线）
 	@echo "==> 跨端审计"
 	@fail=0; \
 	for t in tools/audit-*.cjs; do \
@@ -250,7 +251,7 @@ audit: ## 跑 4 个跨端审计（生成物 / 硬编码 / 配置外泄 / 点击�
 		fi; \
 	done; \
 	if [ $$fail -ne 0 ]; then echo "  失败项见 $(LOGDIR)/olua-audit-*.log"; exit 1; fi; \
-	echo "  4 个审计全部通过"
+	echo "  $$(ls tools/audit-*.cjs | wc -l | tr -d ' ') 个审计全部通过"
 
 audit-generated: ## 生成物与 openapi.json 是否逐字节一致
 	@$(NODE) tools/audit-api-generated.cjs
@@ -264,11 +265,34 @@ audit-config: ## 可配置项有没有外泄到逻辑里
 audit-click: ## 全屏模态是否两条路都拦住了点击穿透
 	@$(NODE) tools/audit-ui-click-through.cjs
 
+audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
+	@$(NODE) tools/audit-deploy.cjs
+
+# ==============================================================================
+#  部署（Docker / docker compose）
+# ==============================================================================
+docker-build: ## 构建服务端与管理端镜像
+	@docker compose build
+
+docker-up: ## 起一套（前置：cp server/.env.example server/.env 并改密钥）
+	@if [ ! -f server/.env ]; then echo "  缺少 server/.env —— 先 cp server/.env.example server/.env 并改 JWT_SECRET / ADMIN_REGISTER_CODE"; exit 1; fi
+	@docker compose up -d --build
+	@echo ""
+	@echo "  管理端：http://localhost:$${OLUA_ADMIN_PORT:-8080}"
+	@echo "  接口文档：http://localhost:$${OLUA_SERVER_PORT:-3100}/api-docs"
+	@echo "  看日志：make docker-logs   收起：make docker-down"
+
+docker-down: ## 停掉并删除容器（数据在具名卷里，不会丢）
+	@docker compose down
+
+docker-logs: ## 跟服务端日志（Ctrl+C 退出）
+	@docker compose logs -f server
+
 # ==============================================================================
 #  组合门禁
 # ==============================================================================
 
-check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc + 管理端 typecheck + 4 个审计
+check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc + 管理端 typecheck + 全部审计
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
 

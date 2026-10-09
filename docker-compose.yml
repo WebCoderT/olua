@@ -1,0 +1,59 @@
+# ==============================================================================
+#  olua 一键起（服务端 + 管理端）
+#
+#  前置（**必须**，compose 用它把密钥与注册码交给服务端）：
+#      cp server/.env.example server/.env
+#      # 然后把 JWT_SECRET 换成随机长串、ADMIN_REGISTER_CODE 换成你自己的
+#
+#  起：docker compose up -d --build      # 或 make docker-up
+#  看：docker compose logs -f server
+#  收：docker compose down               # 数据在具名卷里，不会丢
+#
+#  拓扑：浏览器 → admin(nginx :80) → /api 反代 → server(:3100)
+#        管理端与接口**同源**，所以不需要 CORS；而反代之后服务端必须相信代理给的来源 IP。
+#        这两件事都由本文件的拓扑决定（见下面的 environment），不靠每个 .env 各写一遍。
+# ==============================================================================
+
+name: olua
+
+services:
+  server:
+    build: ./server
+    image: olua-server:local
+    restart: unless-stopped
+    # 密钥 / 注册码 / 限流阈值都在这份文件里；没有它 compose 会直接报错（这是故意的：
+    # 缺配置时宁可起不来，也不要用内置默认密钥悄悄跑起来）
+    env_file:
+      - ./server/.env
+    environment:
+      NODE_ENV: production
+      # 容器内的数据文件路径 —— 必须落在下面挂的卷里
+      DB_PATH: /app/data/olua.db
+      # nginx 转发了 X-Forwarded-For，所以必须信任它：否则 req.ip 全是 nginx 容器的地址，
+      # 登录限流的 IP 维度会把所有人当成同一个人一起锁死
+      TRUST_PROXY: "true"
+      # 管理端与接口同源 → 默认不放行任何跨域来源（空值 = 不配置 CORS）。
+      # 要给别的域名放行：OLUA_CORS_ORIGINS=https://admin.example.com docker compose up -d
+      CORS_ORIGINS: ${OLUA_CORS_ORIGINS:-}
+    volumes:
+      - olua-data:/app/data
+    ports:
+      # 只把接口也映出来是为了方便本地直接用 Swagger 调试；生产可以删掉这一行
+      - "${OLUA_SERVER_PORT:-3100}:3100"
+
+  admin:
+    build:
+      context: ./admin
+      args:
+        # 构建期决定（Vite 会内联）；/api 走下面的同源反代
+        VITE_API_BASE_URL: /api
+    image: olua-admin:local
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "${OLUA_ADMIN_PORT:-8080}:80"
+
+volumes:
+  # 具名卷：`docker compose down` 不会删它，只有 `down -v` 才会
+  olua-data:

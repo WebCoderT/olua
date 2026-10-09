@@ -1,0 +1,5 @@
+# 构建上下文里不该有的东西（.env.production 要留着 —— 它是构建期配置，Vite 会读）
+node_modules
+dist
+.env
+.env.local

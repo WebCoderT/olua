@@ -1,0 +1,16 @@
+# 构建上下文里不该有的东西
+#
+# 最要紧的两条：
+#   .env  —— 密钥绝不能进镜像（层里翻得出来）。运行时用 --env-file / compose 的 env_file 注入
+#   data/ —— 本地数据文件没必要也不应该进镜像
+node_modules
+dist
+data
+backups
+.env
+.env.local
+*.log
+*.before-restore-*
+*.restoring
+# 测试代码不进镜像（tsconfig.build.json 也不编它）
+test
