@@ -5,14 +5,15 @@
 #    client/  Cocos Creator 3.8.7 + TypeScript 客户端（没有 npm 脚本，用编辑器打开）
 #    server/  NestJS 12 + node:sqlite 服务端（同时是接口契约的唯一源头）
 #    admin/   React 19 + Vite + Tailwind v4 管理端
-#    tools/   跨端脚本（gen-api + 4 个 audit）
+#    tools/   跨端脚本（gen-api + 5 个 audit）
 #
 #  常用：
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
-#    make client-test      客户端 23 套单测
-#    make verify           一条命令跑完全部门禁（含三端构建与三套 e2e）
+#    make client-test      客户端 24 套单测（需要本机 Cocos 工程）
+#    make verify           一条命令跑完全部门禁（含三端构建与四套 e2e）
+#    make ci               CI 跑的那一条（服务端 + 管理端 + 审计，不含客户端）
 #
 #  完整清单：make / make help
 # ==============================================================================
@@ -44,9 +45,9 @@ LOGDIR ?= /tmp
 # 用编辑器打开客户端工程时的 App 名（macOS）
 CREATOR ?= CocosCreator
 
-.PHONY: help info install env \
+.PHONY: help info install install-ci env \
         dev dev-server dev-admin \
-        check test verify audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
+        check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open \
@@ -95,6 +96,12 @@ install: ## 安装 server 与 admin 的 npm 依赖
 	@echo "==> 安装管理端依赖"
 	@cd admin && $(NPM) install
 	@echo "==> 完成（客户端是 Cocos 工程，不需要 npm install）"
+
+install-ci: ## 按锁文件精确安装依赖（CI 用；锁文件与 package.json 不一致会直接失败）
+	@echo "==> 按锁文件安装服务端依赖（npm ci）"
+	@cd server && $(NPM) ci
+	@echo "==> 按锁文件安装管理端依赖（npm ci）"
+	@cd admin && $(NPM) ci
 
 env: ## 生成 server/.env（已存在则跳过）
 	@if [ -f server/.env ]; then \
@@ -303,6 +310,19 @@ test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-backup
 verify: check server-build test admin-build ## 完整门禁：三端静态检查 + 三端构建 + 全部测试（含四套服务端 e2e）
 	@echo ""
 	@echo "✓ 全部门禁通过（提交前跑这个）"
+
+# ------------------------------------------------------------------------------
+#  CI（.github/workflows/ci.yml 只调这一条，门禁清单只此一处）
+#
+#  CI 上**没有** Cocos Creator，也**没有** assets/resources 素材（体积大、有意不入库，
+#  见 .gitignore）—— 而 24 套客户端单测里有 10 套是断言素材磁盘内容的。所以客户端门禁
+#  （client-check + 24 套单测）是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
+# ------------------------------------------------------------------------------
+
+ci: install-ci audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-backup ## CI 门禁：服务端四套 e2e + 管理端构建 + 跨端审计（不含客户端）
+	@echo ""
+	@echo "✓ CI 门禁通过"
+	@echo "  未覆盖（本地专属）：make client-check、make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"
 
 # ==============================================================================
 #  清理
