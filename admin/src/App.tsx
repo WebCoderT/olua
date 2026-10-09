@@ -9,8 +9,10 @@ import { EmptyState } from "./components/ui";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AdminsPage } from "./pages/AdminsPage";
+import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
+import { MyAccountPage } from "./pages/MyAccountPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { RoleDetailPage } from "./pages/RoleDetailPage";
 import { RolesPage } from "./pages/RolesPage";
@@ -113,6 +115,16 @@ export function App() {
               </RequirePermission>
             }
           />
+          <Route
+            path="audit-logs"
+            element={
+              <RequirePermission permission={PERMISSION.AUDIT_READ}>
+                <AuditPage />
+              </RequirePermission>
+            }
+          />
+          {/* 我的账号：任何已登录管理员都能进，不需要权限点 */}
+          <Route path="me" element={<MyAccountPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

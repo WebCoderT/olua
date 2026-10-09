@@ -35,9 +35,31 @@ export function readToken(): string | null {
   return safeGet(STORAGE_KEYS.token);
 }
 
+/**
+ * 会话变化订阅（登录态 / 管理员信息变了就通知一次）
+ *
+ * 场景：在「我的账号」里改完自己的密码，服务端会返回**新令牌**（旧令牌当场失效），
+ * 换令牌的同时角色与权限点可能也变了 —— 顶部身份栏要跟着刷新，而不是留到下次刷新页面。
+ * 返回取消订阅函数（组件卸载时调）。
+ */
+type SessionListener = (admin: AdminInfo | null) => void;
+const listeners = new Set<SessionListener>();
+
+export function subscribeSession(listener: SessionListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function emitSession(admin: AdminInfo | null): void {
+  for (const listener of listeners) listener(admin);
+}
+
 export function saveSession(token: string, admin: AdminInfo): void {
   safeSet(STORAGE_KEYS.token, token);
   safeSet(STORAGE_KEYS.profile, JSON.stringify(admin));
+  emitSession(admin);
 }
 
 export function readAdmin(): AdminInfo | null {
@@ -53,6 +75,7 @@ export function readAdmin(): AdminInfo | null {
 export function clearSession(): void {
   safeRemove(STORAGE_KEYS.token);
   safeRemove(STORAGE_KEYS.profile);
+  emitSession(null);
 }
 
 export function isLoggedIn(): boolean {

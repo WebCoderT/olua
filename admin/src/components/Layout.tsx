@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { adminRoleLabel, authApi, PERMISSION } from "../api";
 import { APP_TITLE } from "../api/config";
-import { clearSession, hasPermission, readAdmin, readToken, saveSession } from "../store/session";
+import { clearSession, hasPermission, readAdmin, readToken, saveSession, subscribeSession } from "../store/session";
 import { Badge, Button } from "./ui";
 
 /**
@@ -10,12 +10,14 @@ import { Badge, Button } from "./ui";
  *
  * 没有权限点的（概览）始终显示；其余按当前会话的权限点决定是否出现 ——
  * 与后端的 `@RequirePermissions` 一一对应（见服务端 constants/permission）。
+ * 「我的账号」不做成导航项：它是每个人的私有页面，放在右上角身份栏更顺手。
  */
 const NAV_ITEMS = [
   { to: "/", label: "概览", end: true, permission: PERMISSION.STATS_READ as string | null },
   { to: "/accounts", label: "账号管理", end: false, permission: PERMISSION.ACCOUNT_READ as string },
   { to: "/roles", label: "角色管理", end: false, permission: PERMISSION.ROLE_READ as string },
   { to: "/admins", label: "管理员", end: false, permission: PERMISSION.ADMIN_READ as string },
+  { to: "/audit-logs", label: "操作日志", end: false, permission: PERMISSION.AUDIT_READ as string },
 ];
 
 /**
@@ -45,6 +47,9 @@ export function Layout() {
       alive = false;
     };
   }, []);
+
+  // 会话变化（「我的账号」里改完密码换了新令牌 / 被重置后清会话）→ 顶部身份栏跟着刷新
+  useEffect(() => subscribeSession(setAdmin), []);
 
   const logout = () => {
     clearSession();
@@ -86,9 +91,16 @@ export function Layout() {
               权限点 {(admin?.permissions ?? []).length} 项 · 界面按权限显隐，服务端独立校验
             </p>
           </div>
-          <Button variant="outline" onClick={logout}>
-            退出登录
-          </Button>
+          <div className="flex items-center gap-2">
+            <NavLink to="/me">
+              {({ isActive }) => (
+                <Button variant={isActive ? "primary" : "outline"}>我的账号</Button>
+              )}
+            </NavLink>
+            <Button variant="outline" onClick={logout}>
+              退出登录
+            </Button>
+          </div>
         </header>
         <main className="min-w-0 flex-1 p-6">
           <Outlet />

@@ -3,6 +3,7 @@ import { adminRoleLabel, adminsApi, ADMIN_ROLE, ADMIN_ROLE_LABELS, formatTime, P
 import type { AdminInfo, AdminQuery, AdminUpdatePayload, PageResult } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
+import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission, readAdmin } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -33,6 +34,7 @@ export function AdminsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AdminInfo | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingReset, setPendingReset] = useState<AdminInfo | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,12 +116,29 @@ export function AdminsPage() {
     }
   };
 
+  /**
+   * 重置某个管理员的密码（口令由弹窗生成并展示一次）
+   *
+   * 注意：被重置的人手里那个令牌当场失效 —— 他下一次操作就会被送回登录页。
+   * 所以**不给自己用这个入口**（改自己的密码在「我的账号」里，那边会回一个新令牌续上会话）。
+   */
+  const resetPassword = async (password: string): Promise<boolean> => {
+    if (!pendingReset) return false;
+    try {
+      await adminsApi.resetPassword(pendingReset.id, { password });
+      await load();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-lg font-semibold text-slate-50">管理员</h1>
         <p className="mt-1 text-xs text-slate-500">
-          三级角色：超级管理员（全部权限）/ 管理员（不能管管理员）/ 只读观察员（只能查看）。改角色与启停立即生效，无需对方重新登录。
+          三级角色：超级管理员（全部权限）/ 管理员（不能管管理员）/ 只读观察员（只能查看）。改角色与启停立即生效，无需对方重新登录；重置密码会让对方手里的令牌当场失效（他需要重新登录）。
         </p>
       </div>
 
@@ -208,6 +227,15 @@ export function AdminsPage() {
                         <Button
                           variant="outline"
                           className="px-2.5 py-1 text-xs"
+                          disabled={!canManage || isSelf}
+                          title={isSelf ? "改自己的密码请到「我的账号」" : undefined}
+                          onClick={() => setPendingReset(admin)}
+                        >
+                          重置密码
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="px-2.5 py-1 text-xs"
                           disabled={!canManage}
                           loading={busy}
                           onClick={() => void toggleStatus(admin)}
@@ -239,6 +267,14 @@ export function AdminsPage() {
         loading={deleting}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ResetPasswordDialog
+        open={pendingReset !== null}
+        targetKind="admin"
+        targetName={pendingReset?.username ?? ""}
+        onCancel={() => setPendingReset(null)}
+        onSubmit={resetPassword}
       />
     </div>
   );

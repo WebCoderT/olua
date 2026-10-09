@@ -10,7 +10,7 @@
  * - **手写**：`./types` 里的错误模型、业务码、权限点、展示字典（服务端文档描述不了它们）；
  * - `./config` / `./http`：地址与请求实现，页面不直接碰。
  */
-export { authApi, accountsApi, adminsApi, rolesApi } from "./endpoints";
+export { authApi, accountsApi, adminsApi, rolesApi, auditApi } from "./endpoints";
 export { routes } from "./routes";
 export type * from "./models";
 
@@ -20,10 +20,21 @@ export {
   ADMIN_ROLE,
   ADMIN_ROLE_LABELS,
   adminRoleLabel,
+  AUDIT_ACTION_LABELS,
+  AUDIT_TARGET_LABELS,
+  auditActionLabel,
+  auditTargetLabel,
   BIZ_CODE,
   formatTime,
+  formatTimeFull,
+  localInputToMs,
+  msToLocalInput,
   OCCUPATION_LABELS,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
   PERMISSION,
+  PERMISSION_LABELS,
+  permissionLabel,
   ROLE_BAG_AXIS_MAX,
   SEX_LABELS,
 } from "./types";

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { accountsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, rolesApi } from "../api";
 import type { AccountDetail } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -11,6 +12,7 @@ import { toastSuccess } from "../store/toast";
 export function AccountDetailPage() {
   const canSelect = hasPermission(PERMISSION.ROLE_SELECT);
   const canDeleteRole = hasPermission(PERMISSION.ROLE_DELETE);
+  const canResetPassword = hasPermission(PERMISSION.ACCOUNT_PASSWORD);
   const { id = "" } = useParams();
   const [detail, setDetail] = useState<AccountDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,8 @@ export function AccountDetailPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [purgeConfirm, setPurgeConfirm] = useState(false);
   const [purging, setPurging] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [kicking, setKicking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,6 +38,37 @@ export function AccountDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** 重置玩家口令（口令由弹窗生成并展示一次；这里只管发请求，成功与否回给弹窗决定下一步） */
+  const resetPassword = async (password: string): Promise<boolean> => {
+    try {
+      await accountsApi.resetPassword(id, { password });
+      await load();
+      return true;
+    } catch {
+      /* 统一提示；失败时留在弹窗里让管理员重试 */
+      return false;
+    }
+  };
+
+  /**
+   * 把账号踢下线（清掉在线角色）
+   *
+   * 只清标记是不够的：玩家本地还在跑，靠「存档推送被服务端拒（20007）」把人真正拦下来 ——
+   * 于是客户端会弹提示并回到选角界面（见服务端 RolesService.save 的在线校验）。
+   */
+  const kickOffline = async () => {
+    setKicking(true);
+    try {
+      await accountsApi.kick(id);
+      toastSuccess(`已把「${detail?.account.username ?? ""}」踢下线，玩家需重新选择角色进入游戏`);
+      await load();
+    } catch {
+      /* 统一提示 */
+    } finally {
+      setKicking(false);
+    }
+  };
 
   /** 把某个角色设为该账号的在线角色（等价于玩家在选角界面点它进游戏） */
   const setOnline = async (roleId: string) => {
@@ -100,9 +135,23 @@ export function AccountDetailPage() {
           <h1 className="text-lg font-semibold text-slate-50">{account.username}</h1>
           <p className="mt-1 text-xs text-slate-500">账号 id：{account.id}</p>
         </div>
-        <Link to="/accounts">
-          <Button variant="outline">返回列表</Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={!canSelect || !account.onlineRoleId}
+            loading={kicking}
+            title={account.onlineRoleId ? undefined : "该账号当前没有在线角色"}
+            onClick={() => void kickOffline()}
+          >
+            踢下线
+          </Button>
+          <Button variant="outline" disabled={!canResetPassword} onClick={() => setResetOpen(true)}>
+            重置密码
+          </Button>
+          <Link to="/accounts">
+            <Button variant="outline">返回列表</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -207,6 +256,14 @@ export function AccountDetailPage() {
         loading={purging}
         onConfirm={() => void purgeRoles()}
         onCancel={() => setPurgeConfirm(false)}
+      />
+
+      <ResetPasswordDialog
+        open={resetOpen}
+        targetKind="account"
+        targetName={account.username}
+        onCancel={() => setResetOpen(false)}
+        onSubmit={resetPassword}
       />
     </div>
   );

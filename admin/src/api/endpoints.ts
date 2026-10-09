@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, BatchDeleteResult, BatchDeleteRoles, RolePatchPayload, RoleQuery, UpdateAccountStatus } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, ChangeAdminPassword, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, UpdateAccountStatus } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,9 +26,9 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuthResult, BatchDeleteResult, BatchDeleteRoles, CreateRole, Health, Login, PageMeta, PageQuery, Register, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, UpdateAccountStatus } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRolePage, AdminStats, AdminUpdatePayload, AuditActionList, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, ChangeAdminPassword, CreateRole, Health, Login, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDetail, RolePatchPayload, RoleQuery, RoleSummary, SaveRole, UpdateAccountStatus } from "./models";
 
-/** adminAccount 模块的接口（6 个，生成） */
+/** adminAccount 模块的接口（8 个，生成） */
 export const accountsApi = {
   /**
    * 账号列表（GET /admin/accounts）
@@ -55,6 +55,22 @@ export const accountsApi = {
    */
   detail: (id: string, options?: Options) => http.get<AccountDetail>(routes.adminAccount.detail(id), options),
   /**
+   * 踢下线（清掉账号当前的在线角色）（POST /admin/accounts/{id}/offline）
+   *
+   * 幂等：本来就不在线时直接返回当前状态。
+   *
+   * 权限点：role:select
+   */
+  kick: (id: string, options?: Options) => http.post<Account>(routes.adminAccount.kick(id), undefined, options),
+  /**
+   * 重置玩家账号的密码（PATCH /admin/accounts/{id}/password）
+   *
+   * 玩家忘记密码时用这条（客户端没有找回流程）。
+   *
+   * 权限点：account:password
+   */
+  resetPassword: (id: string, body: ResetAccountPassword, options?: Options) => http.patch<ResetPasswordResult>(routes.adminAccount.resetPassword(id), body, options),
+  /**
    * 清空账号下的全部角色（DELETE /admin/accounts/{id}/roles）
    *
    * 账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。
@@ -80,7 +96,7 @@ export const accountsApi = {
   stats: (options?: Options) => http.get<AdminStats>(routes.adminAccount.stats, options),
 };
 
-/** adminAdmin 模块的接口（3 个，生成） */
+/** adminAdmin 模块的接口（4 个，生成） */
 export const adminsApi = {
   /**
    * 管理员列表（GET /admin/admins）
@@ -106,9 +122,37 @@ export const adminsApi = {
    * 权限点：admin:manage
    */
   update: (id: string, body: AdminUpdatePayload, options?: Options) => http.patch<AdminInfo>(routes.adminAdmin.update(id), body, options),
+  /**
+   * 重置某个管理员的密码（PATCH /admin/admins/{id}/password）
+   *
+   * 只有超级管理员能做（`admin:manage`）—— 管理员之间不能互相改密码。
+   *
+   * 权限点：admin:manage
+   */
+  resetPassword: (id: string, body: ResetAdminPassword, options?: Options) => http.patch<ResetPasswordResult>(routes.adminAdmin.resetPassword(id), body, options),
 };
 
-/** adminAuth 模块的接口（3 个，生成） */
+/** adminAudit 模块的接口（2 个，生成） */
+export const auditApi = {
+  /**
+   * 操作日志列表（GET /admin/audit-logs）
+   *
+   * 按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。
+   *
+   * 权限点：audit:read
+   */
+  list: (query: AuditQuery = {}, options?: Options) => http.get<AuditLogPage>(routes.adminAudit.list, { query, ...options }),
+  /**
+   * 出现过的动作清单（GET /admin/audit-logs/actions）
+   *
+   * 返回日志里出现过的全部动作（接口标识），供界面的「动作」筛选下拉使用 —— 界面不写死动作清单。
+   *
+   * 权限点：audit:read
+   */
+  actions: (options?: Options) => http.get<AuditActionList>(routes.adminAudit.actions, options),
+};
+
+/** adminAuth 模块的接口（4 个，生成） */
 export const authApi = {
   /**
    * 管理员登录（POST /admin/auth/login）
@@ -122,6 +166,12 @@ export const authApi = {
    * 返回当前管理员的角色与**权限点清单** —— 管理端据此显示 / 隐藏菜单与按钮（服务端仍会独立校验，前端隐藏只是体验）。
    */
   me: (options?: Options) => http.get<AdminInfo>(routes.adminAuth.me, options),
+  /**
+   * 修改自己的密码（PATCH /admin/auth/password）
+   *
+   * 任何已登录管理员都能改**自己**的密码，需要带上原密码（光有令牌不该能改口令）。
+   */
+  changePassword: (body: ChangeAdminPassword, options?: Options) => http.patch<AdminAuthResult>(routes.adminAuth.changePassword, body, options),
   /**
    * 注册管理员（POST /admin/auth/register）
    *

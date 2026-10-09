@@ -16,7 +16,7 @@
  * （守卫：`node tools/audit-api-generated.cjs`）。
  */
 export const routes = {
-  /** adminAccount 模块（6 个接口） */
+  /** adminAccount 模块（8 个接口） */
   adminAccount: {
     /**
      * 账号列表（GET /admin/accounts）
@@ -37,6 +37,18 @@ export const routes = {
      */
     detail: (id: string) => `/admin/accounts/${encodeURIComponent(id)}`,
     /**
+     * 踢下线（清掉账号当前的在线角色）（POST /admin/accounts/{id}/offline）
+     *
+     * 幂等：本来就不在线时直接返回当前状态。
+     */
+    kick: (id: string) => `/admin/accounts/${encodeURIComponent(id)}/offline`,
+    /**
+     * 重置玩家账号的密码（PATCH /admin/accounts/{id}/password）
+     *
+     * 玩家忘记密码时用这条（客户端没有找回流程）。
+     */
+    resetPassword: (id: string) => `/admin/accounts/${encodeURIComponent(id)}/password`,
+    /**
      * 清空账号下的全部角色（DELETE /admin/accounts/{id}/roles）
      *
      * 账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。
@@ -55,7 +67,7 @@ export const routes = {
      */
     stats: "/admin/stats",
   },
-  /** adminAdmin 模块（3 个接口） */
+  /** adminAdmin 模块（4 个接口） */
   adminAdmin: {
     /**
      * 管理员列表（GET /admin/admins）
@@ -75,8 +87,29 @@ export const routes = {
      * 改角色或启停。允许改自己（超管轮值），但**最后一个启用中的超级管理员**不能被降级 / 停用 —— 避免没人能进后台。改完立即生效。
      */
     update: (id: string) => `/admin/admins/${encodeURIComponent(id)}`,
+    /**
+     * 重置某个管理员的密码（PATCH /admin/admins/{id}/password）
+     *
+     * 只有超级管理员能做（`admin:manage`）—— 管理员之间不能互相改密码。
+     */
+    resetPassword: (id: string) => `/admin/admins/${encodeURIComponent(id)}/password`,
   },
-  /** adminAuth 模块（3 个接口） */
+  /** adminAudit 模块（2 个接口） */
+  adminAudit: {
+    /**
+     * 操作日志列表（GET /admin/audit-logs）
+     *
+     * 按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。
+     */
+    list: "/admin/audit-logs",
+    /**
+     * 出现过的动作清单（GET /admin/audit-logs/actions）
+     *
+     * 返回日志里出现过的全部动作（接口标识），供界面的「动作」筛选下拉使用 —— 界面不写死动作清单。
+     */
+    actions: "/admin/audit-logs/actions",
+  },
+  /** adminAuth 模块（4 个接口） */
   adminAuth: {
     /**
      * 管理员登录（POST /admin/auth/login）
@@ -90,6 +123,12 @@ export const routes = {
      * 返回当前管理员的角色与**权限点清单** —— 管理端据此显示 / 隐藏菜单与按钮（服务端仍会独立校验，前端隐藏只是体验）。
      */
     me: "/admin/auth/me",
+    /**
+     * 修改自己的密码（PATCH /admin/auth/password）
+     *
+     * 任何已登录管理员都能改**自己**的密码，需要带上原密码（光有令牌不该能改口令）。
+     */
+    changePassword: "/admin/auth/password",
     /**
      * 注册管理员（POST /admin/auth/register）
      *
