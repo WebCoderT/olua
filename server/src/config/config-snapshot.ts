@@ -118,6 +118,58 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
     warning: (read) => read<boolean>("jwtSecretIsDefault"),
     advice: "JWT_SECRET 仍是内置默认值：密钥写在代码里等于公开，任何人都能自签管理员令牌，请换成随机长串",
   },
+  {
+    key: "MAIL_ENABLED",
+    field: "mailEnabled",
+    render: (read) =>
+      read<boolean>("mailEnabled")
+        ? "已启用（SMTP 主机 / 账号 / 密码齐全）"
+        : "未启用（SMTP 未配齐；发信接口直接返回「邮件通道未启用」，不会静默丢信）",
+  },
+  { key: "SMTP_HOST", field: "smtpHost", render: (read) => read<string>("smtpHost") || "未配置" },
+  { key: "SMTP_PORT", field: "smtpPort" },
+  {
+    key: "SMTP_SECURE",
+    field: "smtpSecure",
+    render: (read) => (read<boolean>("smtpSecure") ? "开启（465 隐式 TLS）" : "关闭（587 STARTTLS）"),
+  },
+  { key: "SMTP_USER", field: "smtpUser", render: (read) => read<string>("smtpUser") || "未配置" },
+  {
+    key: "SMTP_PASS",
+    field: "smtpPass",
+    sensitive: true,
+    render: (read) => (read<string>("smtpPass") ? "已设置（不回显原文）" : "未设置"),
+  },
+  { key: "SMTP_FROM", field: "smtpFrom", render: (read) => read<string>("smtpFrom") || "（回退为 SMTP 账号）" },
+  {
+    key: "MAIL_TRANSPORT",
+    field: "mailTransport",
+    render: (read) => {
+      const transport = read<string>("mailTransport");
+      if (transport === "fail") return "fail（不发信，一律失败 —— 只用于回归测试）";
+      if (transport === "fake") return "fake（不发信，一律成功 —— 只用于回归测试）";
+      return "smtp（真实投递）";
+    },
+    // 这两个值存在的唯一意义是让 e2e 不必连真实 SMTP：带着它们上线，邮件要么永远发不出去、
+    // 要么永远假装成功 —— 属于「测试配置漏进生产」这一类，必须在启动日志里喊出来
+    warning: (read) => read<string>("mailTransport") !== "smtp",
+    advice: "MAIL_TRANSPORT 不是 smtp：邮件不会真实投递，请确认这是回归测试环境而不是生产",
+  },
+  {
+    key: "MAIL_MAX_ATTEMPTS",
+    field: "mailMaxAttempts",
+    render: (read) => `${read<number>("mailMaxAttempts")} 次（用尽后标为最终失败）`,
+  },
+  {
+    key: "MAIL_RETRY_BASE_MS",
+    field: "mailRetryBaseMs",
+    render: (read) => describeInterval(read<number>("mailRetryBaseMs"), "立即重试"),
+  },
+  {
+    key: "MAIL_POLL_MS",
+    field: "mailPollMs",
+    render: (read) => describeInterval(read<number>("mailPollMs"), "不扫描（调度器停摆）"),
+  },
 ];
 
 /** 渲染整张快照（顺序即信息页的展示顺序） */
@@ -139,4 +191,14 @@ function describeMs(ms: number): string {
 /** 数值型上限 → 人读（0 = 不限制） */
 function describeLimit(value: number, unit: string): string {
   return value <= 0 ? "不限制" : `${value} ${unit}`;
+}
+
+/**
+ * 毫秒级**间隔** → 人读
+ *
+ * 与 `describeMs` 的区别：那里的 0 表示「关闭该维度」（限流关掉是正当配置），
+ * 这里的 0 表示「间隔为零」，语义是「立刻 / 停摆」，所以要各自给一句话。
+ */
+function describeInterval(ms: number, zeroText: string): string {
+  return ms <= 0 ? zeroText : humanizeDuration(ms);
 }

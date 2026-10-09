@@ -301,6 +301,33 @@ export type UpdateAnnouncement = {
   endsAt?: number | null;
 };
 
+export type SendMail = {
+  /**
+   * 收件邮箱
+   */
+  to: string;
+  /**
+   * 模板 key（custom = 自定义，此时必须传 subject 与 body）
+   */
+  templateKey: "welcome" | "banNotice" | "maintenance" | "custom";
+  /**
+   * 关联的玩家账号 id（可选，仅用于追溯）
+   */
+  accountId?: string;
+  /**
+   * 模板变量（键是模板声明的变量名，如 username / reason）；缺必填变量会直接拒发
+   */
+  variables?: Record<string, string>;
+  /**
+   * 自定义标题（**仅 custom 模板必填**）
+   */
+  subject?: string;
+  /**
+   * 自定义正文（**仅 custom 模板必填**，纯文本）
+   */
+  body?: string;
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -875,7 +902,7 @@ export type AuditLog = {
    */
   action: string;
   /**
-   * 目标类型：account / role / admin / announcement
+   * 目标类型：account / role / admin / announcement / mail
    */
   targetType: string | null;
   /**
@@ -1005,7 +1032,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -1393,4 +1420,163 @@ export type AnnouncementQuery = {
    * 生效状态筛选：true 只看生效中 / false 只看不在生效窗口内（含未开始与已过期）
    */
   active?: "true" | "false";
+};
+
+export type MailJob = {
+  /**
+   * 任务 id
+   */
+  id: string;
+  /**
+   * 收件邮箱
+   */
+  to: string;
+  /**
+   * 关联的玩家账号 id；null = 未关联账号
+   */
+  accountId: string | null;
+  /**
+   * 关联的玩家账号名；账号已被删则为 null
+   */
+  accountName: string | null;
+  /**
+   * 模板 key
+   */
+  templateKey: string;
+  /**
+   * 模板中文名（模板已被删则退回 key）
+   */
+  templateName: string;
+  /**
+   * 渲染后的标题
+   */
+  subject: string;
+  /**
+   * 渲染后的正文（重投时发的仍是这份内容，模板改动不影响已入队的任务）
+   */
+  body: string;
+  /**
+   * 状态
+   */
+  status: "pending" | "sending" | "retrying" | "sent" | "failed";
+  /**
+   * 状态中文名
+   */
+  statusLabel: string;
+  /**
+   * 已尝试次数（成功的那次也计入）
+   */
+  attempts: number;
+  /**
+   * 下一次重试的时刻（毫秒）；待发送与终态为 null
+   */
+  nextRetryAt: number | null;
+  /**
+   * 最近一次失败的原因；成功为 null（界面可直接展示）
+   */
+  lastError: string | null;
+  /**
+   * 发起人管理员账号名（管理员被删后仍可追溯）
+   */
+  createdBy: string | null;
+  /**
+   * 入队时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 投递成功的时刻（毫秒）；未成功为 null
+   */
+  sentAt: number | null;
+};
+
+export type MailJobPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的投递任务
+   */
+  list: MailJob[];
+};
+
+export type MailQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配收件邮箱 / 标题 / 收件账号名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 状态筛选
+   */
+  status?: "pending" | "sending" | "retrying" | "sent" | "failed";
+};
+
+export type MailTemplate = {
+  /**
+   * 模板 key
+   */
+  key: string;
+  /**
+   * 模板中文名
+   */
+  name: string;
+  /**
+   * 用途说明（界面提示运营这封信该填什么）
+   */
+  hint: string;
+  /**
+   * 必填变量名；缺一个就拒发
+   */
+  variables: string[];
+  /**
+   * 标题模板（含 {{变量}} 占位符；custom 为空串）
+   */
+  subject: string;
+  /**
+   * 正文模板（含 {{变量}} 占位符；custom 为空串）
+   */
+  body: string;
+};
+
+export type SendMailResult = {
+  /**
+   * 投递任务 id
+   */
+  id: string;
+  /**
+   * 入队后的状态（恒为 pending：是否真发出去要在投递记录里看）
+   */
+  status: string;
+  /**
+   * 渲染后的标题（可以先看一眼，发错了还来得及在记录里查到）
+   */
+  subject: string;
 };

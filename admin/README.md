@@ -1,6 +1,6 @@
 # admin · 管理端（React）
 
-> 运营后台：账号 / 角色 / 管理员 / 公告 / 操作日志五块。界面按**权限点**显隐，服务端独立校验。
+> 运营后台：账号 / 角色 / 管理员 / 公告 / 邮件 / 操作日志六块。界面按**权限点**显隐，服务端独立校验。
 >
 > 项目总览见 [../README.md](../README.md)；管理端的问题见 [FAQ.md](FAQ.md)；
 > 客户端 / 服务端 / 跨端见 [../client/](../client/) · [../server/](../server/) · [../FAQ.md](../FAQ.md)。
@@ -65,7 +65,7 @@ admin/
 │   │   ├── http.ts                 请求层：拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录
 │   │   ├── routes.ts               ⚠️ 生成物：接口路径表
 │   │   ├── models.ts               ⚠️ 生成物：接口类型（服务端 DTO 的镜像）
-│   │   ├── endpoints.ts            ⚠️ 生成物：接口方法（accountsApi/adminsApi/announcementsApi/auditApi/authApi/rolesApi/statsApi/systemApi）
+│   │   ├── endpoints.ts            ⚠️ 生成物：接口方法（accountsApi/adminsApi/announcementsApi/mailsApi/auditApi/authApi/rolesApi/statsApi/systemApi）
 │   │   ├── types.ts                手写：业务码 / 权限点 / 动作与目标的中文字典 / 时间工具
 │   │   └── index.ts                统一出口（页面只从这里 import）
 │   ├── pages/                      页面（见下表）
@@ -89,6 +89,7 @@ admin/
 | 角色详情 | `/roles/:id` | `role:read` | 改基础信息与常用数值；**装备 / 技能 / 背包结构化编辑**（清单以客户端配置为唯一真相） |
 | 管理员 | `/admins` | `admin:read` | 看管理员列表；改角色 / 启停 / **重置密码** / 删除（写操作另需 `admin:manage`） |
 | 公告 | `/announcements` | `announcement:read` | 发布 / 编辑 / 删除公告、启停、按关键字 / 级别 / 启停 / 生效状态筛选；**「生效中」用服务端返回的 `active` 列**（判据与玩家侧拉取接口同源，不靠本地时钟）（写操作另需 `announcement:write`） |
+| 邮件 | `/mails` | `mail:read` | **发信**（选模板 → 填变量 → 入队）+ **投递记录**（状态 / 关键字筛选 + 分页 + 排序）。投递是**异步**的，所以有「待发送 / 重试中」中间态并自动刷新；只看得到已尝试次数与失败原因（写操作另需 `mail:write`） |
 | 操作日志 | `/audit-logs` | `audit:read` | 7 项筛选（关键字 / 动作 / 目标类型 / 结果 / 起止时间 / 目标 id）+ 分页 + 展开看请求体 |
 | 我的账号 | `/me` | **不需要权限点** | 看自己的身份 / 登录情况 / 权限点；**自助改密**（要验原密码） |
 
@@ -98,7 +99,7 @@ admin/
 
 界面显隐**只是体验**，**服务端才是权威**。
 
-- 权限点唯一来源在**服务端**（`server/src/common/constants/permission.ts`，15 个权限点 / 3 种角色）；管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，一一对应
+- 权限点唯一来源在**服务端**（`server/src/common/constants/permission.ts`，17 个权限点 / 3 种角色）；管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，一一对应
 - 管理员信息随令牌一起在响应里下发，落到 `store/session`；`hasPermission(点)` 直接查这份数组
 - **脏会话兜底**：`admin.permissions` 缺失时按**空数组**处理（最小权限），不会因为会话不完整而放开界面
 - 导航项带 `permission` 字段，`Layout` 过滤后再渲染；`App.tsx` 的 `RequirePermission` 外壳守住直达路由

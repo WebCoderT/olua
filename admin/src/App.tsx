@@ -13,6 +13,7 @@ import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
+import { MailsPage } from "./pages/MailsPage";
 import { MyAccountPage } from "./pages/MyAccountPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { RoleDetailPage } from "./pages/RoleDetailPage";
@@ -114,6 +115,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.ANNOUNCEMENT_READ}>
                 <AnnouncementsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="mails"
+            element={
+              <RequirePermission permission={PERMISSION.MAIL_READ}>
+                <MailsPage />
               </RequirePermission>
             }
           />

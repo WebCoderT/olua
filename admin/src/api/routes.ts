@@ -175,6 +175,33 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
+  /** adminMail 模块（4 个接口） */
+  adminMail: {
+    /**
+     * 邮件投递记录（GET /admin/mails）
+     *
+     * `keyword` 模糊匹配收件邮箱 / 标题 / 收件账号名；`status` 可筛（待发送 / 发送中 / 重试中 / 已发送 / 发送失败）。
+     */
+    list: "/admin/mails",
+    /**
+     * 发送邮件（POST /admin/mails）
+     *
+     * **入队即返回**（201），不代表已经投递成功 —— 投递由后台调度器完成，结果在投递记录里查。
+     */
+    send: "/admin/mails",
+    /**
+     * 重投一封失败的邮件（POST /admin/mails/{id}/retry）
+     *
+     * 只有**最终失败**（重试次数用尽）的任务可以重投：正在发送或已成功的重投会造成重复发信。
+     */
+    retry: (id: string) => `/admin/mails/${encodeURIComponent(id)}/retry`,
+    /**
+     * 邮件模板列表（GET /admin/mails/templates）
+     *
+     * 发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。
+     */
+    templates: "/admin/mails/templates",
+  },
   /** adminRole 模块（6 个接口） */
   adminRole: {
     /**

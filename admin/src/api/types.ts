@@ -128,6 +128,15 @@ export const PERMISSION = {
   ANNOUNCEMENT_READ: "announcement:read",
   /** 发布 / 编辑 / 删除公告（会直接推送给全服玩家，属于对外发声） */
   ANNOUNCEMENT_WRITE: "announcement:write",
+  /**
+   * 查看邮件投递记录
+   *
+   * 与 `ANNOUNCEMENT_READ` **不同，只读观察员不给**：投递记录里有玩家的**邮箱地址**
+   * （个人信息），而公告是面向全服的公开内容。
+   */
+  MAIL_READ: "mail:read",
+  /** 发送邮件（对外投递，可能触达真实用户） */
+  MAIL_WRITE: "mail:write",
   ADMIN_READ: "admin:read",
   ADMIN_MANAGE: "admin:manage",
   /** 查看操作日志（只读观察员没有这一项） */
@@ -156,6 +165,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ROLE_DELETE]: "删除角色",
   [PERMISSION.ANNOUNCEMENT_READ]: "查看公告",
   [PERMISSION.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
+  [PERMISSION.MAIL_READ]: "查看邮件投递记录",
+  [PERMISSION.MAIL_WRITE]: "发送邮件",
   [PERMISSION.ADMIN_READ]: "查看管理员",
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
@@ -330,6 +341,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   role: "角色",
   admin: "管理员",
   announcement: "公告",
+  mail: "邮件",
 };
 
 /** 目标类型中文名（未知类型原样显示） */
@@ -366,6 +378,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "adminAnnouncement.create": "发布公告",
   "adminAnnouncement.update": "编辑公告",
   "adminAnnouncement.remove": "删除公告",
+  "adminMail.send": "发送邮件",
+  "adminMail.retry": "重投邮件",
   "role.create": "创建角色",
   "role.save": "保存角色进度",
   "role.remove": "删除角色",

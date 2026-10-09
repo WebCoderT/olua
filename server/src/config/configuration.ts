@@ -81,6 +81,44 @@ export interface AppConfiguration {
   auditRetentionDays: number;
   /** 一次最多导出多少条操作日志（防止一次「全部条件」导出把几万行塞进内存与响应体） */
   auditExportMaxRows: number;
+
+  //#region 邮件通道
+  /** SMTP 主机（空 = 未配置） */
+  smtpHost: string;
+  /** SMTP 端口 */
+  smtpPort: number;
+  /** 是否走 TLS（465 是隐式 TLS，587 是 STARTTLS） */
+  smtpSecure: boolean;
+  /** SMTP 账号 */
+  smtpUser: string;
+  /** SMTP 密码 / 授权码（**只在配置快照里以「已配置 / 未配置」形态出现**，从不回显原文） */
+  smtpPass: string;
+  /** 发件人地址（不配则回退到 SMTP 账号） */
+  smtpFrom: string;
+  /**
+   * 邮件通道是否可用（**派生字段**：主机 / 账号 / 密码三者都非空才算配齐）
+   *
+   * 与「令牌是否仍是默认值」同理 —— 让「能不能发信」这件事**可被检查**且只有一处判据，
+   * 别处不许再自己比一次空串。未启用时发信接口直接返回 50003，而不是静默吞掉邮件。
+   */
+  mailEnabled: boolean;
+  /**
+   * 发信器实现（**测试注入点**）
+   *
+   * - `smtp`（默认）：真发信
+   * - `fake`：不发信，一律成功 —— e2e 用它验「队列流转到已发送」
+   * - `fail`：不发信，一律失败 —— e2e 用它验「重试与用尽上限后标失败」
+   *
+   * 之所以做成配置而不是在代码里 new：e2e 是**独立进程**起服务，拿不到进程内的对象，
+   * 只能靠环境变量把「外部边界」换成可替换实现（与客户端 net-sandbox 同一思路）。
+   */
+  mailTransport: string;
+  /** 单封邮件的最大投递尝试次数（用尽后标为最终失败） */
+  mailMaxAttempts: number;
+  /** 重试退避基数（毫秒）：第 n 次失败后等待 `base * 2^(n-1)` */
+  mailRetryBaseMs: number;
+  /** 调度器扫描间隔（毫秒） */
+  mailPollMs: number;
 }
 
 export default function configuration(): AppConfiguration {
@@ -111,5 +149,16 @@ export default function configuration(): AppConfiguration {
     auditLogMaxRows: Number(process.env.AUDIT_LOG_MAX_ROWS ?? 20000),
     auditRetentionDays: Number(process.env.AUDIT_RETENTION_DAYS ?? 90),
     auditExportMaxRows: Number(process.env.AUDIT_EXPORT_MAX_ROWS ?? 5000),
+    smtpHost: process.env.SMTP_HOST ?? "",
+    smtpPort: Number(process.env.SMTP_PORT ?? 465),
+    smtpSecure: (process.env.SMTP_SECURE ?? "true") === "true",
+    smtpUser: process.env.SMTP_USER ?? "",
+    smtpPass: process.env.SMTP_PASS ?? "",
+    smtpFrom: process.env.SMTP_FROM ?? "",
+    mailEnabled: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+    mailTransport: process.env.MAIL_TRANSPORT ?? "smtp",
+    mailMaxAttempts: Number(process.env.MAIL_MAX_ATTEMPTS ?? 5),
+    mailRetryBaseMs: Number(process.env.MAIL_RETRY_BASE_MS ?? 60 * 1000),
+    mailPollMs: Number(process.env.MAIL_POLL_MS ?? 15 * 1000),
   };
 }

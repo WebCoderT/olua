@@ -143,3 +143,60 @@ export interface AnnouncementRow {
   created_at: number;
   updated_at: number;
 }
+
+/**
+ * 邮件投递任务行
+ *
+ * 发信**不同步阻塞请求**：接口只负责入队（`pending`），真正的投递由后台调度器按节奏做。
+ * 这样 SMTP 服务器慢 / 不可达时，运营点下「发送」立刻有响应，而不是卡到网关超时。
+ *
+ * ## 为什么要落一张表而不是放内存队列
+ * 内存队列在进程重启后就消失了 —— 于是「运营以为发出去了、玩家永远没收到」这种事
+ * 发生过一次就没人再信这个通道。落表之后每封信都有可查的结局（已发送 / 最终失败 + 原因）。
+ *
+ * ## 为什么存渲染后的 subject / body
+ * 渲染结果**冻在入队那一刻**：模板后来被改了、玩家改名了，重投一封三天前失败的任务
+ * 也仍然发的是当时的内容。存模板 key + 变量、投递时再渲染，会让「重投」发出与当时不同的信。
+ */
+export interface MailQueueRow {
+  id: string;
+  /** 收件邮箱（**唯一投递凭据**：账号表里没有邮箱字段，邮箱由运营在发信时填写） */
+  to_email: string;
+  /**
+   * 关联的玩家账号（可空）
+   *
+   * 只为「这封信是发给谁的」留一条可追溯的线（审计目标名、列表里显示账号名）。
+   * **不是**投递凭据 —— 有没有 accountId 不影响发不发得出去。
+   */
+  account_id: string | null;
+  /** 模板 key（见 modules/mail/mail-templates） */
+  template_key: string;
+  /** 渲染后的标题 */
+  subject: string;
+  /** 渲染后的正文（纯文本，换行用 \n） */
+  body: string;
+  /** 状态：pending / sending / retrying / sent / failed（见 common/constants/mail） */
+  status: string;
+  /** 已尝试次数（成功那一次也计入） */
+  attempts: number;
+  /**
+   * 下一次重试的时刻（毫秒）；`pending` 与终态为 null
+   *
+   * 与「失败次数」分开存：调度器挑任务只看这一列（`next_retry_at <= now`），
+   * 不用在 SQL 里重算指数退避 —— 退避公式只在一处实现。
+   */
+  next_retry_at: number | null;
+  /** 最近一次失败的原因（成功为 null；界面要能直接展示） */
+  last_error: string | null;
+  /** 发起人管理员账号名（冗余存一份，管理员被删后仍可追溯） */
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+  /** 投递成功的时刻（毫秒）；未成功为 null */
+  sent_at: number | null;
+}
+
+/** 邮件任务行 + 关联出来的收件账号名（账号被删则为 null，界面退回显示邮箱） */
+export interface MailQueueWithAccountRow extends MailQueueRow {
+  account_name: string | null;
+}

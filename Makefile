@@ -52,7 +52,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-backup server-verify db-backup db-restore gen-api \
+        server-e2e-mail server-e2e-backup server-verify db-backup db-restore gen-api \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
 
@@ -198,7 +198,7 @@ server-build: ## 编译服务端到 server/dist
 server-start: ## 跑服务端已构建产物（需先 make server-build）
 	@cd server && $(NPM) run start
 
-server-e2e: ## 服务端主 e2e（187 条断言）
+server-e2e: ## 服务端主 e2e（248 条断言）
 	@cd server && $(NPM) run test:e2e
 
 server-e2e-roles: ## 服务端角色管理专项 e2e（77 条）
@@ -210,7 +210,10 @@ server-e2e-guard: ## 服务端运营与安全底座专项 e2e（279 条）
 server-e2e-backup: ## 服务端备份 / 恢复 e2e（25 条：运行中备份 / 恢复留档 / 保护性拒绝）
 	@cd server && $(NPM) run test:e2e:backup
 
-server-verify: ## 服务端一条命令全验（编译 + 四套 e2e + 生成物审计）
+server-e2e-mail: ## 服务端邮件通道专项 e2e（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
+	@cd server && $(NPM) run test:e2e:mail
+
+server-verify: ## 服务端一条命令全验（编译 + 五套 e2e + 生成物审计）
 	@cd server && $(NPM) run verify
 
 db-backup: ## 备份 SQLite 数据文件（VACUUM INTO，服务运行中也能备；默认留最近 7 份）
@@ -303,11 +306,11 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
 
-test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-backup ## 全部测试：客户端 24 套 + 服务端四套 e2e
+test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-backup ## 全部测试：客户端 25 套 + 服务端五套 e2e
 	@echo ""
 	@echo "✓ 测试全部通过"
 
-verify: check server-build test admin-build ## 完整门禁：三端静态检查 + 三端构建 + 全部测试（含四套服务端 e2e）
+verify: check server-build test admin-build ## 完整门禁：三端静态检查 + 三端构建 + 全部测试（含五套服务端 e2e）
 	@echo ""
 	@echo "✓ 全部门禁通过（提交前跑这个）"
 
@@ -315,11 +318,11 @@ verify: check server-build test admin-build ## 完整门禁：三端静态检查
 #  CI（.github/workflows/ci.yml 只调这一条，门禁清单只此一处）
 #
 #  CI 上**没有** Cocos Creator，也**没有** assets/resources 素材（体积大、有意不入库，
-#  见 .gitignore）—— 而 24 套客户端单测里有 10 套是断言素材磁盘内容的。所以客户端门禁
-#  （client-check + 24 套单测）是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
+#  见 .gitignore）—— 而 25 套客户端单测里有 10 套是断言素材磁盘内容的。所以客户端门禁
+#  （client-check + 25 套单测）是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
 # ------------------------------------------------------------------------------
 
-ci: install-ci audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-backup ## CI 门禁：服务端四套 e2e + 管理端构建 + 跨端审计（不含客户端）
+ci: install-ci audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-backup ## CI 门禁：服务端五套 e2e + 管理端构建 + 跨端审计（不含客户端）
 	@echo ""
 	@echo "✓ CI 门禁通过"
 	@echo "  未覆盖（本地专属）：make client-check、make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"

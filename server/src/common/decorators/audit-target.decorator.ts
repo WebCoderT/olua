@@ -10,7 +10,7 @@ export const AUDIT_ACTION_KEY = "olua:audit:action";
 export const AUDIT_TARGET_KEY = "olua:audit:target";
 
 /** 审计目标类型（与 AuditLogRow.target_type 一致；界面按它决定怎么展示目标） */
-export type AuditTargetType = "account" | "role" | "admin" | "announcement";
+export type AuditTargetType = "account" | "role" | "admin" | "announcement" | "mail";
 
 /**
  * 目标 id 从哪来

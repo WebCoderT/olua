@@ -14,12 +14,13 @@
     "test:e2e:roles": "node --disable-warning=ExperimentalWarning test/e2e-roles.cjs",
     "test:e2e:guard": "node --disable-warning=ExperimentalWarning test/e2e-guard.cjs",
     "test:e2e:backup": "node --disable-warning=ExperimentalWarning test/backup.cjs",
+    "test:e2e:mail": "node --disable-warning=ExperimentalWarning test/e2e-mail.cjs",
     "db:backup": "node --disable-warning=ExperimentalWarning scripts/backup.cjs",
     "db:restore": "node --disable-warning=ExperimentalWarning scripts/restore.cjs",
     "swagger:emit": "npm run build && node --disable-warning=ExperimentalWarning dist/swagger/emit.js",
     "gen:api": "npm run swagger:emit && node ../tools/gen-api.cjs",
     "verify:api": "npm run swagger:emit && node ../tools/audit-api-generated.cjs",
-    "verify": "npm run build && npm run test:e2e && npm run test:e2e:roles && npm run test:e2e:guard && npm run test:e2e:backup && npm run verify:api"
+    "verify": "npm run build && npm run test:e2e && npm run test:e2e:roles && npm run test:e2e:guard && npm run test:e2e:mail && npm run test:e2e:backup && npm run verify:api"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",
@@ -30,12 +31,14 @@
     "@nestjs/swagger": "^12.0.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "nodemailer": "^10.0.16",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.20.5",
+    "@types/nodemailer": "^8.0.2",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"
   }

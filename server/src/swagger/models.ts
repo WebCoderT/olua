@@ -38,6 +38,14 @@ import {
   UpdateAnnouncementDto,
 } from "../modules/announcement/dto/announcement.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
+import {
+  MailJobDto,
+  MailJobPageDto,
+  MailQueryDto,
+  MailTemplateDto,
+  SendMailDto,
+  SendMailResultDto,
+} from "../modules/mail/dto/mail.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -113,4 +121,11 @@ export const SWAGGER_MODELS = [
   AnnouncementQueryDto,
   CreateAnnouncementDto,
   UpdateAnnouncementDto,
+  // 邮件
+  MailJobDto,
+  MailJobPageDto,
+  MailQueryDto,
+  MailTemplateDto,
+  SendMailDto,
+  SendMailResultDto,
 ];

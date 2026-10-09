@@ -12,6 +12,7 @@ import { AnnouncementModule } from "./modules/announcement/announcement.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
+import { MailModule } from "./modules/mail/mail.module";
 import { RolesModule } from "./modules/roles/roles.module";
 import { SystemModule } from "./modules/system/system.module";
 import { TokenModule } from "./modules/token/token.module";
@@ -40,6 +41,7 @@ import { TokenModule } from "./modules/token/token.module";
     AuditModule,
     SystemModule,
     AnnouncementModule,
+    MailModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

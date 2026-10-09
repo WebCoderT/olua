@@ -274,7 +274,8 @@
                 "account",
                 "role",
                 "admin",
-                "announcement"
+                "announcement",
+                "mail"
               ]
             }
           },
@@ -530,7 +531,8 @@
                 "account",
                 "role",
                 "admin",
-                "announcement"
+                "announcement",
+                "mail"
               ]
             }
           },
@@ -3176,6 +3178,296 @@
           "announcement:write"
         ]
       }
+    },
+    "/admin/mails/templates": {
+      "get": {
+        "description": "发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
+        "operationId": "adminMail.templates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部模板（顺序即界面展示顺序）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MailTemplateDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "邮件模板列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/MailTemplateDto"
+          }
+        },
+        "x-olua-permissions": [
+          "mail:read"
+        ]
+      }
+    },
+    "/admin/mails": {
+      "get": {
+        "description": "`keyword` 模糊匹配收件邮箱 / 标题 / 收件账号名；`status` 可筛（待发送 / 发送中 / 重试中 / 已发送 / 发送失败）。\n\n`lastError` 是最近一次失败的**原始原因**（SMTP 的报错原文或测试发信器的说明），`attempts` 是已尝试次数 —— 这两个字段合起来回答「这封信为什么没到」。\n\n**排序**：`sort` 取 `toEmail` / `status` / `attempts` / `sentAt` / `createdAt` / `updatedAt`，`order` 取 asc / desc（默认 createdAt 倒序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
+        "operationId": "adminMail.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配收件邮箱 / 标题 / 收件账号名",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "状态筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "sending",
+                "retrying",
+                "sent",
+                "failed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailJobPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "邮件投递记录",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailJobPageDto"
+        },
+        "x-olua-permissions": [
+          "mail:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MailQueryDto"
+        }
+      },
+      "post": {
+        "description": "**入队即返回**（201），不代表已经投递成功 —— 投递由后台调度器完成，结果在投递记录里查。\n\n这样 SMTP 服务器不可达时，运营点下「发送」不会卡到网关超时，也不会不知道邮件到底有没有发出去。\n\n渲染结果**冻在入队那一刻**：模板后来被改了、玩家改名了，重投三天前失败的任务也仍然发当时的内容。\n\n未配置 SMTP 时整体禁用（50003）：不会静默丢信，也不会假装成功。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:write`（发送邮件；角色：超级管理员 / 管理员）",
+        "operationId": "adminMail.send",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已入队（status 恒为 pending）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SendMailResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "发送邮件",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SendMailResultDto"
+        },
+        "x-olua-permissions": [
+          "mail:write"
+        ]
+      }
+    },
+    "/admin/mails/{id}/retry": {
+      "post": {
+        "description": "只有**最终失败**（重试次数用尽）的任务可以重投：正在发送或已成功的重投会造成重复发信。\n\n重投会**把尝试次数归零**而不是续着数 —— 重投的前提是故障已排除，让它重新拿到完整次数。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:write`（发送邮件；角色：超级管理员 / 管理员）",
+        "operationId": "adminMail.retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "投递任务 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "重投后的任务（状态回到 pending）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailJobDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重投一封失败的邮件",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailJobDto"
+        },
+        "x-olua-permissions": [
+          "mail:write"
+        ]
+      }
     }
   },
   "info": {
@@ -3717,6 +4009,55 @@
             "nullable": true
           }
         }
+      },
+      "SendMailDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "收件邮箱",
+            "maxLength": 120,
+            "example": "player@example.com"
+          },
+          "templateKey": {
+            "type": "string",
+            "description": "模板 key（custom = 自定义，此时必须传 subject 与 body）",
+            "enum": [
+              "welcome",
+              "banNotice",
+              "maintenance",
+              "custom"
+            ]
+          },
+          "accountId": {
+            "type": "string",
+            "description": "关联的玩家账号 id（可选，仅用于追溯）"
+          },
+          "variables": {
+            "type": "object",
+            "description": "模板变量（键是模板声明的变量名，如 username / reason）；缺必填变量会直接拒发",
+            "example": {
+              "username": "张三"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": "string",
+            "description": "自定义标题（**仅 custom 模板必填**）",
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "description": "自定义正文（**仅 custom 模板必填**，纯文本）",
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "to",
+          "templateKey"
+        ]
       },
       "ApiEnvelopeDto": {
         "type": "object",
@@ -4666,7 +5007,7 @@
           },
           "targetType": {
             "type": "string",
-            "description": "目标类型：account / role / admin / announcement",
+            "description": "目标类型：account / role / admin / announcement / mail",
             "nullable": true
           },
           "targetId": {
@@ -4876,7 +5217,8 @@
               "account",
               "role",
               "admin",
-              "announcement"
+              "announcement",
+              "mail"
             ]
           },
           "targetId": {
@@ -5513,6 +5855,255 @@
             ]
           }
         }
+      },
+      "MailJobDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "任务 id"
+          },
+          "to": {
+            "type": "string",
+            "description": "收件邮箱"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "关联的玩家账号 id；null = 未关联账号",
+            "nullable": true
+          },
+          "accountName": {
+            "type": "string",
+            "description": "关联的玩家账号名；账号已被删则为 null",
+            "nullable": true
+          },
+          "templateKey": {
+            "type": "string",
+            "description": "模板 key"
+          },
+          "templateName": {
+            "type": "string",
+            "description": "模板中文名（模板已被删则退回 key）"
+          },
+          "subject": {
+            "type": "string",
+            "description": "渲染后的标题"
+          },
+          "body": {
+            "type": "string",
+            "description": "渲染后的正文（重投时发的仍是这份内容，模板改动不影响已入队的任务）"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "enum": [
+              "pending",
+              "sending",
+              "retrying",
+              "sent",
+              "failed"
+            ]
+          },
+          "statusLabel": {
+            "type": "string",
+            "description": "状态中文名"
+          },
+          "attempts": {
+            "type": "number",
+            "description": "已尝试次数（成功的那次也计入）"
+          },
+          "nextRetryAt": {
+            "type": "number",
+            "description": "下一次重试的时刻（毫秒）；待发送与终态为 null",
+            "nullable": true
+          },
+          "lastError": {
+            "type": "string",
+            "description": "最近一次失败的原因；成功为 null（界面可直接展示）",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "发起人管理员账号名（管理员被删后仍可追溯）",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "入队时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "sentAt": {
+            "type": "number",
+            "description": "投递成功的时刻（毫秒）；未成功为 null",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "to",
+          "accountId",
+          "accountName",
+          "templateKey",
+          "templateName",
+          "subject",
+          "body",
+          "status",
+          "statusLabel",
+          "attempts",
+          "nextRetryAt",
+          "lastError",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "sentAt"
+        ]
+      },
+      "MailJobPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的投递任务",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailJobDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "MailQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配收件邮箱 / 标题 / 收件账号名"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态筛选",
+            "enum": [
+              "pending",
+              "sending",
+              "retrying",
+              "sent",
+              "failed"
+            ]
+          }
+        }
+      },
+      "MailTemplateDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "模板 key"
+          },
+          "name": {
+            "type": "string",
+            "description": "模板中文名"
+          },
+          "hint": {
+            "type": "string",
+            "description": "用途说明（界面提示运营这封信该填什么）"
+          },
+          "variables": {
+            "description": "必填变量名；缺一个就拒发",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": "string",
+            "description": "标题模板（含 {{变量}} 占位符；custom 为空串）"
+          },
+          "body": {
+            "type": "string",
+            "description": "正文模板（含 {{变量}} 占位符；custom 为空串）"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "hint",
+          "variables",
+          "subject",
+          "body"
+        ]
+      },
+      "SendMailResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "投递任务 id"
+          },
+          "status": {
+            "type": "string",
+            "description": "入队后的状态（恒为 pending：是否真发出去要在投递记录里看）"
+          },
+          "subject": {
+            "type": "string",
+            "description": "渲染后的标题（可以先看一眼，发错了还来得及在记录里查到）"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "subject"
+        ]
       }
     }
   }
