@@ -90,7 +90,7 @@ const TARGETS = {
   client: {
     key: "client",
     label: "客户端",
-    dir: path.join(ROOT, "assets", "ui", "utils", "net"),
+    dir: path.join(ROOT, "client", "assets", "ui", "utils", "net"),
     routesFile: "ApiRoutes.ts",
     modelsFile: "ApiModels.ts",
     endpointsFile: "Api.ts",
@@ -644,7 +644,7 @@ function main() {
     const rel = path.relative(ROOT, file).split(path.sep).join("/");
     const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
     // 只有 Cocos 工程（客户端 assets）需要 .meta；管理端是 Vite 工程，写 .meta 只是垃圾文件
-    const isCocosAsset = file.startsWith(path.join(ROOT, "assets"));
+    const isCocosAsset = file.startsWith(path.join(ROOT, "client", "assets"));
 
     if (current === content) {
       // 内容没变也要保证 .meta 在：新克隆的仓库、meta 被误删时，光靠「内容变了才补」补不回来

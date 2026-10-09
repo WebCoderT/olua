@@ -3,7 +3,28 @@
 > **本项目是一个纯 AI 编写的项目（Vibe Coding）：仓库里的每一行代码都是 AI 写的，没有一行是人手写的。**
 > 人在这里只做两件事 —— **提需求、看效果**。具体怎么做的、留下了哪些痕迹，见 [一个纯 AI 编写的项目](#一个纯-ai-编写的项目)。
 
-一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型，聚焦登录、角色创建、角色成长、装备系统、地图探索与战斗玩法（打怪 / 掉落 / 技能 / 自动战斗）的交互演示。
+一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型 + 配套的 NestJS 服务端与 React 管理后台，
+聚焦登录、角色创建、角色成长、装备系统、地图探索与战斗玩法（打怪 / 掉落 / 技能 / 自动战斗）的完整三端演示。
+
+## 三个端
+
+仓库按端分成三个**平级目录**，各自有独立的 README 与 FAQ；跨端的约定与机制放在本文件与根 [FAQ.md](FAQ.md)。
+
+| 端 | 是什么 | 技术栈 | 目录 | 文档 |
+| --- | --- | --- | --- | --- |
+| **客户端** | Cocos Creator 游戏（登录 / 选角 / 战斗 / 背包 / 商城…） | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) | [README](client/README.md) · [FAQ](client/FAQ.md) |
+| **服务端** | 账号 / 角色 / 管理接口，SQLite 落库，Swagger 文档 | NestJS 12 + `node:sqlite` + JWT | [`server/`](server/) | [README](server/README.md) · [FAQ](server/FAQ.md) |
+| **管理端** | 运营后台（账号 / 角色 / 管理员 / 操作日志） | React 19 + Vite + Tailwind v4 | [`admin/`](admin/) | [README](admin/README.md) · [FAQ](admin/FAQ.md) |
+
+三端的关系：**客户端**是玩家玩的游戏，**服务端**是它唯一的权威数据源（本地只是缓存），**管理端**给运营改数据。
+接口契约由服务端单向生成到另外两端（见 [接口文件为什么是生成的](FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)）。
+
+```
+client（Cocos）  ─┐
+                  ├─→  server（NestJS + SQLite）  ←─  admin（React）
+admin（React）   ─┘       ↑ 唯一手写接口的地方
+                          └─ swagger:emit → openapi.json → gen-api → 两端接口文件
+```
 
 ## 项目简介
 
@@ -40,11 +61,13 @@
 - 资源预加载：进图前预载地图、NPC / 怪物帧动画与角色穿戴外观
 - 操作摇杆：左下角常驻摇杆（底座 + 可拖动手柄），按住拖动即移动 —— **拖得少走路、拖得多跑动**（死区/阈值见 configs/role.joystickMove）；只用触摸通道，桌面端鼠标按住拖动同样可用，摇杆上的按压不穿透、拖动结束也不会误清选中目标
 - 屏幕适配：铺满窗口（NO_BORDER）不留黑边，常驻 HUD 按可见区贴边重排；选角场景整块舞台等比缩放（contain），窗口宽高比与设计不一致时元素也不会跑到屏幕外
+- 服务端：账号注册登录（scrypt 加盐摘要）、角色数据云端保存（防抖合并推送）、修订号乐观锁、两套令牌受众、权限点守卫、登录限流、口令重置与令牌主动作废、操作审计日志
+- 管理端：账号与角色管理（六维筛选 / 结构化编辑 / 批量删除）、管理员与权限、操作日志查询、我的账号
 
 ## 一个纯 AI 编写的项目
 
 **这个仓库里的每一行代码都是 AI 写的。** 客户端（Cocos Creator）、服务端（NestJS）、管理端（React），
-以及 `tools/` 下的全部单测与审计脚本、`README.md` / `FAQ.md` 这些文档 —— 没有一行出自人手。
+以及 `client/tools/` 与 `tools/` 下的全部单测与审计脚本、`README.md` / `FAQ.md` 这些文档 —— 没有一行出自人手。
 
 这是一个 **Vibe Coding** 项目：人不写代码，人只**用自然语言提需求、跑起来看效果、说哪里不对**，剩下的全部交给 AI。
 
@@ -52,16 +75,17 @@
 
 |            | 人                                | AI                                                     |
 | ---------- | -------------------------------- | ------------------------------------------------------ |
-| 负责什么       | 提需求（「加个军衔系统」「后台要能改角色属性」）、看效果、指出哪里不对、在几个方案里拍板 | 读现有代码 → 设计方案 → 写实现 → 写单测与审计脚本 → 自查回归 → 同步文档 |
+| 负责什么       | 提需求（「加个军衔系统」「后台要能改角色属性」）、看效果、指出哪里不对、在几个方案里拍板 | 读现有代码 → 设计方案 → 写实现 → 写单测与审计脚本 → 自查回归 → 同步文档 → **按功能提交** |
 | 不负责什么      | **不写代码**、不查 API 文档、不手工调格式        | **不拍板** —— 拿不准的方案会先把选项摆出来问       |
 
 ### 这套做法留在仓库里的痕迹
 
-- **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`tools/` 下有 23 套单测 + 4 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、界面点击会不会穿透到世界，全都有脚本盯着。
-- **一切可调的东西都收进 `assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
+- **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 23 套单测、`tools/` 下有 4 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、界面点击会不会穿透到世界，全都有脚本盯着。
+- **一切可调的东西都收进 `client/assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
 - **接口文件全部由服务端 Swagger 文档生成**。三端签名对不上会**编译报错**，而不是线上出现一个 `undefined`。这同样是为了让 AI 改完一端后，另一端在编译期就被拦住。
 - **回归是硬门槛**。每次改动都要跑：服务端 e2e（187 + 77 + 91 条）+ 两端类型检查 + 23 套单测 + 4 套审计，全绿才算完。
-- **踩过的坑写进了 [FAQ.md](FAQ.md)**。里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
+- **每处理完一个问题就按功能提交一次**。改完一个功能立刻落一次 commit，不留一堆混在一起的未提交改动 —— 这样「哪次改动引入了回归」永远能二分出来。
+- **踩过的坑写进了 FAQ**。每端目录下的 FAQ 收纳该端的具体问题，跨端的机制与环境坑在 [FAQ.md](FAQ.md)；里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
 
 ### 期望管理
 
@@ -114,15 +138,24 @@
 
 ## 目录结构
 
-> 约定：**核心代码只做「怎么跑」，一切可调的东西都在 `assets/configs`**——
+```
+olua/
+├── README.md · FAQ.md      # 总览与跨端问题（本文件）
+├── client/                 # 客户端：Cocos Creator 工程（用它打开这个目录）
+├── server/                 # 服务端：NestJS
+├── admin/                  # 管理端：React
+├── tools/                  # 项目级脚本（跨端）
+├── website/                # 项目官网（纯静态单页）
+├── public/                 # 截图与联系方式二维码
+├── docs/                   # 项目文档（简历介绍等）
+└── equip-aligner/          # 装备素材偏移对齐小工具
+```
+
+### client —— 客户端（Cocos Creator 工程）
+
+> 约定：**核心代码只做「怎么跑」，一切可调的东西都在 `assets/configs`** ——
 > 数值、文案、布局、配色、时长、资源路径都不写在逻辑里。
 > 自查：`node tools/audit-config-leak.cjs`（扫出散落在 ui/ 里的可配置项与未登记的文案 key）。
->
-> 另一条铁律：**接口地址不写进代码**（客户端 `configs/network`、管理端 `admin/.env.*`、服务端 `server/.env` 是各自唯一来源），
-> 请求只能从唯一那一层发出。自查：`node tools/audit-api-hardcode.cjs`。
->
-> 第三条：**两端与接口打交道的文件全部由服务端 Swagger 文档生成，禁止手改**（改接口只改服务端，再重新生成）。
-> 自查：`node tools/audit-api-generated.cjs`。详见 [接口文件由 Swagger 生成](#接口文件由-swagger-生成)。
 
 - assets/configs：数值与静态配置（按域一文件：role/monster/skill/equipments/items/drop/map/status/border/background/title/light/mall 等）
   - configs/texts：**面向玩家的全部文案**（浮动提示 / 校验原因 / 界面标签 / 悬停详情 / 加载进度，带 `{占位符}` 模板）
@@ -136,34 +169,57 @@
   - ui/core：静态管理器（GameHelper/LayerManager/MonsterManager/MonsterAI/DropManager/SkillManager/StatusManager/EffectManager/AutoBattle/PreloadManager/StorageManager/RoleUIManager/SceneManager 等）
   - ui/components：按职责分组（hud/panel/dialogs/role/input/map）
   - ui/helpers：UI 生成（UiHelper 基础封装 / GameUiHelper 零件库 / AnimationHelper 帧动画）
-  - ui/utils：纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/node）
+  - ui/utils：纯函数工具，按功能域分目录（battle/drop/map/physics/resource/input/cursor/layout/node）
   - ui/utils/net：**对服务端的全部访问**
     - 生成物（禁止手改）：`ApiRoutes` 路径表 / `ApiModels` 类型（服务端 DTO 的镜像）/ `Api` 接口方法（`HealthApi`·`AuthApi`·`RoleApi`）
     - 手写：`HttpClient` 二次封装与统一调度 / `ApiCodes` 业务码与文案 key / `ApiError` 错误归一 / `Session` 会话 / `RoleSync` 进度同步 / `NetworkSetup` 接线
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
-- server：**NestJS 服务端**（登录 / 注册 / 角色操作 + 管理端接口，SQLite 落库，Swagger 文档）
-  - src/common：统一响应包裹、业务码、守卫（认证 AuthGuard / 权限 PermissionGuard）、过滤器、拦截器、装饰器
-  - src/common/constants/permission：**权限点与管理员角色的唯一来源**（角色 → 权限映射；文档上的「所需权限」由它反查生成）
-  - src/common/constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
-  - src/database：SQLite 连接与四张表（accounts / roles / admins / **audit_logs**，含存量补列）的仓储层
-  - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / **管理员**）/ **audit（操作日志）** / token（JWT）/ health
-  - src/common/security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
-  - src/common/interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
-  - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
-  - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
-  - openapi.json：机器可读契约（提交进仓库；改接口后必须重新生成，否则两端停在旧契约上）
-  - test/e2e.cjs：端到端用例（真实起服务 + 真实请求，187 条断言：注册登录 / 角色 CRUD / 越权 / 令牌受众隔离 / 管理端全流程 / **文档分组与权限点** / **四级越权与超管保护**）
-  - test/e2e-roles.cjs：**角色管理专项**用例（77 条断言：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档）
-  - test/e2e-guard.cjs：**运营与安全底座专项**用例（91 条断言：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·权限 / 按用户名与按 IP 的登录限流 / 踢下线）
-- admin：**React + Tailwind 管理端**（登录注册、账号管理、账号下的角色管理、**管理员与权限**、**操作日志**、**我的账号**）
-  - src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）
-    + **生成物** `routes.ts` 路径表 / `models.ts` 类型 / `endpoints.ts` 接口方法（`authApi`·`accountsApi`·`adminsApi`·`rolesApi`·`auditApi`）+ 手写的 `types.ts`（业务码 / 权限点 / 动作与目标的中文字典）与 `index.ts`（统一出口）
-  - src/pages：登录 / 注册 / 概览 / 账号列表与详情（重置密码 · 踢下线 · 清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员（改角色 · 启停 · 重置密码 · 删除）/ **操作日志**（筛选 + 分页 + 请求体展开）/ **我的账号**（自助改密）
-  - 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
-- tools：本地校验脚本（代码生成：**`gen-api.cjs` 由 OpenAPI 产出两端接口文件**；审计：配置外泄 / 点击穿透 / 接口地址硬编码 / **生成物一致性**；单测：背包整理 / 背包拖动 / 背包回收 / 背包丢弃 / 装备边框 / 装备详情背景 / 掉落名 / 详情弹窗摆放 / 弹窗层级 / 摇杆 / 称号 / 军衔 / 新手背包 / 商城 / 装备光柱 / 角色默认外观 / 角色帧素材 / 装备外观切片 / 文案 / 角色删除 / **客户端网络层**）+ 边框素材索引图 border-preview.png
+- tools：**客户端专属脚本**（23 套单测 + `gen-monster-config.cjs` / `gen-monster-drops.cjs` 配置生成器 + `clean-role-empty-frames.cjs` 素材清理 + `lib/` 单测沙箱）
+- settings / profiles / native / package.json / tsconfig.json：Cocos 工程配置（`package.json` 是 Cocos 的工程描述，不是 npm 脚本）
+- library / temp / build：Cocos 缓存与构建产物（不进版本库）
+- 详见 [client/README.md](client/README.md)，问题见 [client/FAQ.md](client/FAQ.md)
+
+### server —— 服务端（NestJS）
+
+- src/common：统一响应包裹、业务码、守卫（认证 AuthGuard / 权限 PermissionGuard）、过滤器、拦截器、装饰器
+  - constants/permission：**权限点与管理员角色的唯一来源**（角色 → 权限映射；文档上的「所需权限」由它反查生成）
+  - constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
+  - interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
+  - security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
+- src/database：SQLite 连接与四张表（accounts / roles / admins / audit_logs，含存量补列）的仓储层
+- src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员）/ audit（操作日志）/ token（JWT）/ health
+- src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
+- src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
+- openapi.json：机器可读契约（提交进仓库；改接口后必须重新生成，否则两端停在旧契约上）
+- test/e2e.cjs：端到端用例（真实起服务 + 真实请求，187 条断言：注册登录 / 角色 CRUD / 越权 / 令牌受众隔离 / 管理端全流程 / 文档分组与权限点 / 四级越权与超管保护）
+- test/e2e-roles.cjs：**角色管理专项**（77 条断言：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档）
+- test/e2e-guard.cjs：**运营与安全底座专项**（91 条断言：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·权限 / 按用户名与按 IP 的登录限流 / 踢下线）
+- 详见 [server/README.md](server/README.md)，问题见 [server/FAQ.md](server/FAQ.md)
+
+### admin —— 管理端（React）
+
+- src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）
+  + **生成物** `routes.ts` 路径表 / `models.ts` 类型 / `endpoints.ts` 接口方法（`authApi`·`accountsApi`·`adminsApi`·`rolesApi`·`auditApi`）
+  + 手写的 `types.ts`（业务码 / 权限点 / 动作与目标的中文字典）与 `index.ts`（统一出口）
+- src/pages：登录 / 注册 / 概览 / 账号列表与详情（重置密码 · 踢下线 · 清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员（改角色 · 启停 · 重置密码 · 删除）/ 操作日志（筛选 + 分页 + 请求体展开）/ 我的账号（自助改密）
+- 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
+- 详见 [admin/README.md](admin/README.md)，问题见 [admin/FAQ.md](admin/FAQ.md)
+
+### tools —— 项目级脚本（跨端）
+
+- gen-api.cjs：**由 `server/openapi.json` 产出两端接口文件**（唯一的代码生成器，服务端 `npm run gen:api` 调它）
+- audit-api-generated.cjs：生成物与文档逐字节一致 / 头标记 / 接口全覆盖 / 类型不悬空 / 路径只在路径表 / Cocos `.meta` 齐全
+- audit-api-hardcode.cjs：三端有没有硬编码地址、请求是否只在唯一出口发出、环境变量键是否都登记进 `.env.example`
+- audit-config-leak.cjs：客户端核心代码有没有可配置项外泄 + `configs/texts` 的 key 是否都被登记（白名单 `config-leak-allowlist.json`）
+- audit-ui-click-through.cjs：客户端 UI 点击会不会穿透到世界、按压归属的接线是否齐全
+
+### 其它
+
 - website：项目官网（纯静态单页：核心特色 / 截图画廊 / 联系方式，logo 与 favicon 在 website/assets/icons）
 - public：截图、展示素材与联系方式二维码
+- docs：项目文档（`resume.md` 等）
+- equip-aligner：装备素材偏移对齐小工具（自带 README 与自检脚本）
 
 ## 技术栈
 
@@ -174,7 +230,9 @@
 - 管理端：React 19 + TypeScript + Vite + Tailwind CSS v4
 - 开发方式：**全部由 AI 编写（Vibe Coding）**，人类只提需求与验收 —— 见 [一个纯 AI 编写的项目](#一个纯-ai-编写的项目)
 
-## 运行方式
+## 快速开始
+
+三端的详细说明与全部环境变量见各自的 README；这里是「最短跑通路径」。
 
 ### 1. 服务端（先跑起来，客户端与管理端都依赖它）
 
@@ -185,24 +243,21 @@ cp .env.example .env     # 首次：端口 / 密钥 / 上限都在这里；注�
 npm run dev              # 开发（热编译）；或 npm run start 跑已构建产物
 ```
 
-- 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`，可直接喂给 Postman / 代码生成）
-  - 文档按**谁能调**分三组：**公共接口**（无需令牌）/ **客户端**（`player` 令牌）/ **管理端**（`admin` 令牌 + 权限点）
-- 健康检查：`GET http://localhost:3100/api/health`
-- 数据库：默认 `server/data/olua.db`（SQLite，首次启动自动建表，删账号会级联删其角色）
-- 回归：`npm run test:e2e`（真实起服务 + 真实请求，187 条断言）
-- 角色管理专项：`npm run test:e2e:roles`（77 条断言，改角色相关接口后先跑它）
-- 运营与安全底座专项：`npm run test:e2e:guard`（91 条断言，改口令 / 审计 / 限流 / 踢下线后先跑它）
+- 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`）
+- 健康检查：<http://localhost:3100/api/health>
 - 一条命令全验：`npm run verify`（编译 + 三套 e2e + 生成物一致性）
+- 详见 [server/README.md](server/README.md)
 
 ### 2. 客户端（Cocos）
 
 1. 安装并打开 Cocos Creator 3.8.7。
-2. 通过 Creator 的 “Open” / “Open Project” 打开当前仓库目录。
-3. 在编辑器中打开 assets/scenes 下的场景文件。
+2. 通过 Creator 的 “Open” / “Open Project” 打开 **`client/`** 目录（它才是 Cocos 工程根）。
+3. 在编辑器中打开 `client/assets/scenes` 下的场景文件。
 4. 使用预览或播放按钮运行项目。
 
-注意：这个仓库本身不提供 npm start 或 build 脚本，项目依赖 Cocos Creator 编辑器来启动和预览。
-客户端连哪个服务端只由 `assets/configs/network.ts` 的 `baseUrl` 决定（真机调试改成局域网 IP）。
+客户端没有 npm 脚本，依赖 Cocos Creator 编辑器启动与预览。
+连哪个服务端只由 `client/assets/configs/network.ts` 的 `baseUrl` 决定（真机调试改成局域网 IP）。
+详见 [client/README.md](client/README.md)。
 
 ### 3. 管理端（React）
 
@@ -215,11 +270,16 @@ npm run dev                        # 开发；npm run build 产出 dist
 
 管理端注册需要在 `server/.env` 里配 `ADMIN_REGISTER_CODE`（留空则开放注册），注册时填同一个注册码。
 **第一个**注册的管理员自动成为超级管理员（全部权限），之后的都是普通管理员，要提权由超管在「管理员」页调整。
+详见 [admin/README.md](admin/README.md)。
 
-### 4. 接口文件由 Swagger 生成
+### 4. 改接口 = 改服务端 + 重新生成
 
 客户端与管理端**不手写任何接口文件**：接口路径、方法名、请求/响应类型全部从服务端的 Swagger 文档产出。
 这样「服务端改一个字段、另外两端忘了改」这类问题会变成**编译报错**，而不是线上出现一个 `undefined`。
+
+```bash
+cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
+```
 
 ```
 server/src（控制器 + DTO + 装饰器）           ← 唯一需要手写的地方
@@ -228,21 +288,17 @@ server/src（控制器 + DTO + 装饰器）           ← 唯一需要手写的�
 server/openapi.json（机器可读契约，提交进仓库）
         │  node tools/gen-api.cjs
         ▼
-客户端 assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts
+客户端 client/assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts
 管理端 admin/src/api/{routes,models,endpoints}.ts
 ```
 
-**改接口的标准动作**（三步，一条命令也行）：
-
-```bash
-cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
-```
+**改接口的标准动作**：
 
 1. 改服务端的控制器 / DTO / 装饰器（每个接口必须有 `operationId`，形如 `role.save`）；
 2. `npm run gen:api` 重新产出文档与两端接口文件；
 3. 两端 `tsc` / `npm run build` —— 有签名不兼容的地方会直接报出来（调用点按报错改）。
 
-**生成器怎么知道该生成什么**（约定都写进文档，不靠猜）：
+生成器认文档里的这几个字段（约定都写进文档，不靠猜）：
 
 | 文档里的字段 | 由谁写 | 决定什么 |
 |---|---|---|
@@ -252,21 +308,33 @@ cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
 | `x-olua-query-schema` | `@ApiQueryModel(XxxQueryDto)` | query 参数对应的命名类型 |
 | `x-olua-permissions` | `@ApiAdminDoc({ permissions })` | 生成物注释里的「所需权限」（方便两端对照） |
 
-**生成物禁止手改**，`tools/audit-api-generated.cjs` 会逐条盯着：
-生成物与文档逐字节一致、带头标记没被抹掉、文档里 35 个接口都落到了方法上、
-`import` 的类型不悬空、路径只出现在路径表里、Cocos 侧 `.meta` 齐全。
-`tools/audit-api-hardcode.cjs` 另外确认「唯一来源文件确实是生成物」（标记没了就算硬编码）。
+**生成物禁止手改**，`tools/audit-api-generated.cjs` 会逐条盯着。
+契约管线的完整说明见 [FAQ.md](FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)。
 
-> 在受限环境（例如注入了 `NODE_OPTIONS` 的终端）里跑服务端子进程需要清掉它：`env -u NODE_OPTIONS npm run test:e2e`。
+### 5. 回归门槛
 
+改动合并前至少跑完这三类（全绿才算完）：
 
-## 预览与常见问题
+```bash
+# 客户端：23 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
+cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-预览报错排查、常见问题与踩坑记录（输入系统、掉落、背包整理/回收等）已单独成文：**[FAQ.md](FAQ.md)**。
+# 服务端：编译 + 三套 e2e（187 / 77 / 91）+ 生成物一致性
+cd server && npm run verify
+
+# 管理端：类型检查 + 构建
+cd admin && npm run build
+
+# 项目级审计（在仓库根跑）
+node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
+  && node tools/audit-config-leak.cjs && node tools/audit-ui-click-through.cjs
+```
+
+> 在受限环境（例如注入了 `NODE_OPTIONS` 的终端）里跑服务端子进程需要清掉它：`env -u NODE_OPTIONS npm run dev`。详见 [FAQ.md](FAQ.md)。
 
 ## 功能清单
 
-> ✅ 已完成　❌ 未完成
+> ✅ 已完成　❌ 未完成　　服务端与管理端的细粒度能力见各自 README。
 
 ### 账号与角色
 
@@ -278,9 +346,9 @@ cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
 | 旧存档自动迁移      | 新增字段/存储格式变更时读取自动补齐（装备/背包 id 引用制等） |  ✅  |
 | 删除角色         | 选角界面「管理」进入管理态，各角色头顶出现删除按钮，两步确认后由服务端删除（不可恢复） |  ✅  |
 | 新角色出生背包     | 通用件 + 全部基础武器/衣服，外加 **1 级武器的全部前后缀变体（15 件品质）** 一起发进背包，出生即可对比外观与边框 |  ✅  |
-| 管理端（React）    | 管理员登录注册、账号分页检索与封禁、查看账号下的每个角色并改属性 / 切换在线 / 删除、**重置玩家口令**、**踢下线** |  ✅  |
+| 管理端（React）    | 管理员登录注册、账号分页检索与封禁、查看账号下的每个角色并改属性 / 切换在线 / 删除、**重置玩家口令**、**踢下线** → [admin/README.md](admin/README.md) |  ✅  |
 | 后台角色管理        | 六维筛选（关键字 / 在线状态 / 职业 / 性别 / 等级区间 / 账号）；**全部基础信息可改**（名称 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图 + 金币 / 元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）；**装备 / 技能 / 背包结构化编辑**（服务端只校验结构，清单以客户端配置为唯一真相）；多选批量删除、整账号清空角色；改名仍受「同账号不重名」约束 |  ✅  |
-| 后台改动与在线玩家一致 | 角色带**修订号**（每次落库 +1）：玩家推进度时带上它做乐观锁，对不上说明后台改过 —— 服务端拒收、客户端**自动拉最新并以它为基线**（后台改动优先，玩家的旧存档不会覆盖它）；角色被后台删除时客户端自愈回选角场景 |  ✅  |
+| 后台改动与在线玩家一致 | 角色带**修订号**（每次落库 +1）：玩家推进度时带上它做乐观锁，对不上说明后台改过 —— 服务端拒收、客户端**自动拉最新并以它为基线**（后台改动优先，玩家的旧存档不会覆盖它）；角色被后台删除/踢下线时客户端自愈回选角场景 |  ✅  |
 | 口令管理          | 玩家忘记口令只能由客服在后台**重置**（客户端没有找回流程）：重置时前端生成随机口令、**只显示一次**（服务端只存哈希），旧口令与新旧口令相同都会被拒；管理员改**自己**的密码要验证原密码，成功后服务端下发**新令牌**（否则改完立刻被自己踢出后台） |  ✅  |
 | 令牌主动作废        | 改口令会让**此前签发的全部令牌立即失效**（两表各带 `token_version`，签发时写进令牌、守卫每次回查库比对）—— 无状态 JWT 光改口令踢不掉旧令牌，这是补上的那一环 |  ✅  |
 | 登录限流          | 按**用户名**（默认 5 次 / 10 分钟）与**来源 IP**（默认 20 次 / 10 分钟）两个维度计数，超限锁定并告知还要等多久；达阈值后计数归零（正常用户被误锁不会「一错再错」）；阈值与开关都在 `server/.env`，反代的 `TRUST_PROXY` 陷阱有注释说明 |  ✅  |
@@ -368,7 +436,7 @@ cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
 | 死亡动画        | 死亡倒地播完才移除节点，缺帧兜底直接移除     |  ✅  |
 | 怪物地图信息      | 名称居中（主动红/被动黄），头顶血条+血量文字  |  ✅  |
 | 怪物信息面板/选中光圈 | 点击选中，血量/属性实时显示           |  ✅  |
-| 怪物配置全量完善    | 220 只怪的**可见身体尺寸（contentSize）与外观偏移（outOffset）按素材 auto-trim 实测**（`tools/gen-monster-config.cjs` 生成，碰撞盒/点选/血条位置全由它决定，历史上 5~220 号是 0×0 点不中）；动作速度收敛为 `monsterDefaultSpeedRate` 默认表 + 条目可覆盖；主动怪按「BOSS 或身体宽 ≥ 250px」规则铺开（76/220），出售价按等级×定位生成 |  ✅  |
+| 怪物配置全量完善    | 220 只怪的**可见身体尺寸（contentSize）与外观偏移（outOffset）按素材 auto-trim 实测**（`client/tools/gen-monster-config.cjs` 生成，碰撞盒/点选/血条位置全由它决定，历史上 5~220 号是 0×0 点不中）；动作速度收敛为 `monsterDefaultSpeedRate` 默认表 + 条目可覆盖；主动怪按「BOSS 或身体宽 ≥ 250px」规则铺开（76/220），出售价按等级×定位生成 |  ✅  |
 | 怪物定时刷新      | 死亡后按周期补充（当前开图生成一次）       |  ❌  |
 
 ### 死亡与复活
@@ -392,6 +460,17 @@ cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
 | 屏幕适配            | 铺满窗口（NO_BORDER）+ 常驻 HUD 贴边重排；选角场景整块舞台等比缩放，任意窗口宽高比下元素都在可见区内                                                                  |  ✅  |
 | 素材缺口补齐          | 武器每方向后 4 帧、cloth 011/012/013、weapon 005/021 缺失资源                                                                            |  ❌  |
 | 界面布局打磨与命名规范     | 整体视觉与资源命名统一                                                                                                                 |  ❌  |
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [README.md](README.md) | 本文件：项目总览、三端索引、目录结构、快速开始、功能清单 |
+| [FAQ.md](FAQ.md) | **跨端**：地址唯一来源、契约管线、三端联动的机制、环境坑、回归怎么跑 |
+| [client/README.md](client/README.md) · [client/FAQ.md](client/FAQ.md) | 客户端：Cocos 工程怎么打开、客户端架构与约定、预览报错与玩法配置的问题 |
+| [server/README.md](server/README.md) · [server/FAQ.md](server/FAQ.md) | 服务端：启动与环境变量、数据模型、认证与权限、契约生成、限流与审计 |
+| [admin/README.md](admin/README.md) · [admin/FAQ.md](admin/FAQ.md) | 管理端：启动与构建、权限显隐、页面清单、api 层分工 |
+| [docs/resume.md](docs/resume.md) | 简历用项目介绍 |
 
 ## 素材与联系方式
 

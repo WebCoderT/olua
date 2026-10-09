@@ -43,7 +43,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const UI_ROOT = path.resolve(__dirname, "../assets/ui");
+const UI_ROOT = path.resolve(__dirname, "../client/assets/ui");
 
 /** 内部已登记鼠标通道拦截的工厂/工具（点击元素由它们产出即视为覆盖） */
 const SHIELD_FACTORIES = [
@@ -264,7 +264,8 @@ const mousePressPoints = [];
 const fileTexts = new Map();
 
 for (const file of files) {
-  const rel = path.relative(path.resolve(__dirname, ".."), file);
+  // 相对基准取 client/（而非仓库根），白名单键因此保持 "assets/ui/..." 的客户端相对写法
+  const rel = path.relative(path.resolve(__dirname, "../client"), file);
   const text = fs.readFileSync(file, "utf8");
   const lines = text.split("\n");
   fileTexts.set(rel, text);

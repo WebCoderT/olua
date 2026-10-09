@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "ES2015",
+    "moduleResolution": "node",
+    "strict": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "experimentalDecorators": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
+    "types": [
+      "../temp/declarations/cc",
+      "../temp/declarations/cc.custom-macro",
+      "../temp/declarations/jsb",
+      "../temp/declarations/cc.env"
+    ]
+  },
+  "include": ["../assets/**/*.ts"],
+  "exclude": ["../assets/unused/**"]
+}

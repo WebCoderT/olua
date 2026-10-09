@@ -36,16 +36,16 @@ const MODE = { json: args.includes("--json"), list: args.includes("--list") };
 
 /** 扫描目标（顺序即报告顺序） */
 const TARGETS = [
-  { name: "客户端", dir: path.join(ROOT, "assets"), exts: [".ts"] },
+  { name: "客户端", dir: path.join(ROOT, "client/assets"), exts: [".ts"] },
   { name: "管理端", dir: path.join(ROOT, "admin/src"), exts: [".ts", ".tsx"] },
   { name: "服务端", dir: path.join(ROOT, "server/src"), exts: [".ts"] },
 ];
 
 /** 唯一来源清单（相对仓库根，正斜杠） */
 const ENDPOINT = {
-  clientBaseUrl: "assets/configs/network.ts",
-  clientRequest: "assets/ui/utils/net/HttpClient.ts",
-  clientRoutes: "assets/ui/utils/net/ApiRoutes.ts",
+  clientBaseUrl: "client/assets/configs/network.ts",
+  clientRequest: "client/assets/ui/utils/net/HttpClient.ts",
+  clientRoutes: "client/assets/ui/utils/net/ApiRoutes.ts",
   adminRequest: "admin/src/api/http.ts",
   adminRoutes: "admin/src/api/routes.ts",
   adminEnv: "admin/.env.example",
@@ -92,7 +92,7 @@ const RULES = [
   {
     id: "apiPath",
     label: "接口路径字面量",
-    test: (line, rel) => (rel.startsWith("assets/") ? /["'`]\/(auth|roles|health)\b/.test(line) : /["'`]\/admin\//.test(line)),
+    test: (line, rel) => (rel.startsWith("client/assets/") ? /["'`]\/(auth|roles|health)\b/.test(line) : /["'`]\/admin\//.test(line)),
     allow: [ENDPOINT.clientRoutes, ENDPOINT.adminRoutes],
     why: `客户端路径集中在 ${ENDPOINT.clientRoutes}；管理端集中在 ${ENDPOINT.adminRoutes}（两者都是 Swagger 生成物，手改会被 tools/audit-api-generated.cjs 打回）`,
   },

@@ -184,7 +184,7 @@ for (const target of Object.values(TARGETS)) {
 //#region F Cocos meta
 
 for (const target of Object.values(TARGETS)) {
-  if (!path.join(target.dir, "").startsWith(path.join(ROOT, "assets"))) continue;
+  if (!path.join(target.dir, "").startsWith(path.join(ROOT, "client", "assets"))) continue;
   for (const name of [target.routesFile, target.modelsFile, target.endpointsFile]) {
     const file = path.join(target.dir, name);
     if (!fs.existsSync(`${file}.meta`)) fail("F Cocos meta", `${relOf(file)}.meta 缺失（Cocos 不认没有 meta 的脚本）`);

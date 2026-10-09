@@ -1,13 +1,13 @@
 
 #///////////////////////////
-# Cocos Creator 3D Project
+# Cocos Creator 3D Project（客户端在 client/，它才是 Cocos 工程根）
 #///////////////////////////
-library/
-temp/
-local/
-build/
-profiles/
-native
+client/library/
+client/temp/
+client/local/
+client/build/
+client/profiles/
+client/native
 #//////////////////////////
 # NPM
 #//////////////////////////
@@ -23,7 +23,8 @@ node_modules/
 #//////////////////////////
 .idea/
 
-assets/resources/
+# 客户端素材（体积大、不进版本库；删前必备份）
+client/assets/resources/
 
 .workbuddy/
 .backup

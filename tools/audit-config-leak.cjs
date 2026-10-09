@@ -21,7 +21,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const ASSETS = path.join(ROOT, "assets");
+const ASSETS = path.join(ROOT, "client", "assets");
 const SKIP_DIRS = ["configs", "types", "unused"];
 const ALLOW_FILE = path.join(__dirname, "config-leak-allowlist.json");
 
