@@ -44,7 +44,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run start` | 跑已构建产物 |
 | `npm run swagger:emit` | 编译 + 由源码产出 `openapi.json`（契约的唯一来源） |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` —— **重新生成两端接口文件** |
-| `npm run test:e2e` | 主 e2e（187 条断言） |
+| `npm run test:e2e` | 主 e2e（248 条断言） |
 | `npm run test:e2e:roles` | 角色管理专项（77 条） |
 | `npm run test:e2e:guard` | 运营与安全底座专项（279 条） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（25 条） |
@@ -114,11 +114,12 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit 四个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement 六个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
-│   │   ├── admin/                  管理端：认证 / 账号 / 角色 / 管理员 / 口令
+│   │   ├── admin/                  管理端：认证 / 账号 / 角色 / 管理员 / 口令 / 公告
+│   │   ├── announcement/           公告：客户端拉「生效中」（公共）+ 管理端 CRUD
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
@@ -129,7 +130,7 @@ server/
 │       └── emit.ts                 ← 离线产出 openapi.json
 ├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 scripts/lib/db-tooling.cjs）
 ├── test/
-│   ├── e2e.cjs                     187 条断言（真实起服务 + 真实 HTTP 请求）
+│   ├── e2e.cjs                     248 条断言（真实起服务 + 真实 HTTP 请求）
 │   ├── e2e-roles.cjs               77 条
 │   ├── e2e-guard.cjs               279 条
 │   └── backup.cjs                  25 条（运行中备份 / 恢复留档 / 保护性拒绝）
@@ -140,7 +141,7 @@ server/
 
 ## 数据模型
 
-四张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+五张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -148,6 +149,7 @@ server/
 | `roles` | 角色 | `data` 列存客户端 `entities/Role` 的 **JSON 字符串**；索引字段（id/name/occupation/sex/level）另落列；**`revision`** 乐观锁版本；`online_role_id` 由账号侧指向当前在线角色 |
 | `admins` | 管理端账号 | 独立于玩家账号体系；`role`（super_admin / admin / viewer）；**`token_version`** |
 | `audit_logs` | 操作日志 | 动作 = 接口 `operationId`；`detail` 落请求体（已打码）；`success` / `status_code` / `actor_name` / `target_id` / `path` |
+| `announcements` | 公告 | 标题 / 正文 / `level`（`important` 优先展示）/ `enabled`；`starts_at` / `ends_at` 组成生效时间窗，**「生效中」的判据就是这三列**（建了 `idx_announcements_window`） |
 
 **角色数据是「不透明文档」**：服务端**不复制**游戏配置，只校验结构 / 归属 / 数量上限 / 重名，内容原样存。
 原因与代价见 [FAQ.md](FAQ.md#服务端为什么不校验角色数据的内容)。
@@ -163,13 +165,16 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（13 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`（15 个权限点 / 3 种角色）：
 
 | 角色 | 权限 |
 | --- | --- |
 | 超级管理员 `super_admin` | 全部（含「管理管理员」与「重置管理员密码」） |
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
-| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情（**看不到操作日志，也看不到系统信息**） |
+| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表**（**看不到操作日志，也看不到系统信息**） |
+
+> 公告为什么给观察员留了**只读**：它是面向全服的公开内容，读了不等于能改；而「发布 / 编辑」是单列的
+> `announcement:write`（对外发声，会直接推给玩家），观察员拿不到。
 
 **加管理端接口必须用 `@ApiAdminDoc({ permissions: [Permission.X] })`** —— 它同时落三处：
 ① 文档说明 ② `x-olua-permissions` 扩展（给机器读）③ `RequirePermissions` 运行时元数据。
@@ -179,13 +184,13 @@ server/
 
 ## 接口与契约
 
-当前 **41 个接口 / 34 条路径 / 54 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **46 个接口 / 37 条路径 / 60 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
-| 公共接口 | 5 | 无需令牌（健康检查、玩家注册登录、管理员登录注册） |
+| 公共接口 | 6 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、**拉取生效中的公告**） |
 | 客户端 | 8 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 28 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 32 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -265,7 +270,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
-| `test/e2e.cjs` | **187** | 注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 |
+| `test/e2e.cjs` | **248** | 注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 / **公告的公共拉取与生效时间窗** |
 | `test/e2e-roles.cjs` | **77** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 |
 | `test/e2e-guard.cjs` | **279** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·导出 / 用户名与 IP 双维度限流 / 踢下线 / 封禁闭环 / 看板 / 列表排序 / 系统信息与启动自检 |
 | `test/backup.cjs` | **25** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 |
