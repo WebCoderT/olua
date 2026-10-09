@@ -12,6 +12,7 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
 import { RolesModule } from "./modules/roles/roles.module";
+import { SystemModule } from "./modules/system/system.module";
 import { TokenModule } from "./modules/token/token.module";
 
 /**
@@ -36,6 +37,7 @@ import { TokenModule } from "./modules/token/token.module";
     RolesModule,
     AdminModule,
     AuditModule,
+    SystemModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

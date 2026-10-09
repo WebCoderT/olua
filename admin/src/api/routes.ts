@@ -208,4 +208,13 @@ export const routes = {
      */
     trend: "/admin/stats/trend",
   },
+  /** adminSystem 模块（1 个接口） */
+  adminSystem: {
+    /**
+     * 系统信息（GET /admin/system）
+     *
+     * 版本 / Node 版本 / 运行时长 / 内存 / 数据文件路径与体积 / 各表行数 / 脱敏配置快照。
+     */
+    info: "/admin/system",
+  },
 } as const;

@@ -29,6 +29,22 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "guard-admin-code";
 
+/**
+ * 内置的默认 JWT 密钥
+ *
+ * **不抄字面量**：把环境变量摘掉后算一次 `configuration()` 就是它 ——
+ * 服务端换了默认值，这里自动跟着走，不会留下一个「测试还认旧密钥」的假绿。
+ */
+const DEFAULT_JWT_SECRET = (() => {
+  const configuration = require(path.join(SERVER_DIR, "dist", "config", "configuration.js")).default;
+  const saved = process.env.JWT_SECRET;
+  delete process.env.JWT_SECRET;
+  const value = configuration().jwtSecret;
+  if (saved === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = saved;
+  return value;
+})();
+
 //#region 断言小工具
 
 let passed = 0;
@@ -824,11 +840,131 @@ async function runMainSuite(baseUrl) {
   checkEqual(playerExport.status, 401, "玩家令牌拿不到导出接口（401）");
 
   //#endregion
+
+  // 令牌交给后面的「系统信息」段复用：本套用例改过好几个账号的口令，重登不如直接传
+  return { superToken, viewerToken, playerToken };
 }
 
 //#endregion
 
-//#region 十：审计保留策略
+//#region 十：系统信息
+
+/**
+ * 系统信息页允许出现的配置项
+ *
+ * 这是**断言的目标**（写死在这里是刻意的）：白名单的默认行为是「没登记 = 不暴露」，
+ * 所以多出来的键一定是漏了，必须让人看见。服务端新增快照项时这里要跟着加 —— 这一步不能省。
+ */
+const EXPECTED_CONFIG_KEYS = [
+  "NODE_ENV",
+  "PORT",
+  "API_PREFIX",
+  "DB_PATH",
+  "JWT_EXPIRES_IN",
+  "ROLE_MAX_PER_ACCOUNT",
+  "LOG_REQUESTS",
+  "TRUST_PROXY",
+  "CORS_ORIGINS",
+  "LOGIN_MAX_FAILURES",
+  "LOGIN_LOCK_MS",
+  "LOGIN_IP_MAX_FAILURES",
+  "LOGIN_IP_LOCK_MS",
+  "AUDIT_LOG_MAX_ROWS",
+  "AUDIT_RETENTION_DAYS",
+  "AUDIT_EXPORT_MAX_ROWS",
+  "JWT_SECRET",
+  "ADMIN_REGISTER_CODE",
+];
+
+/**
+ * 系统信息（运维自查）
+ *
+ * 分两支：
+ * 1. 主服务（`JWT_SECRET` 已自定义）—— 验结构、白名单、权限，以及**密钥原文绝不回显**；
+ * 2. 另起一台**配着内置默认密钥**的服务 —— 验「生产忘了换密钥」真的会被标红。
+ *    第二支必须真起服务：`warning` 是 SystemService 算的，纯函数测不到这段接线。
+ */
+async function runSystemSuite(baseUrl, tokens) {
+  group("十、系统信息：脱敏快照 / 白名单 / 权限 / 密钥告警");
+
+  const read = await api(baseUrl, "GET", "/api/admin/system", { token: tokens.superToken });
+  checkEqual(read.body.code, 0, "超级管理员可读系统信息");
+  const info = read.body.data;
+
+  // —— 运行时 ——
+  check(typeof info.runtime.version === "string" && info.runtime.version.length > 0, "带服务端版本号（读 package.json）");
+  checkEqual(info.runtime.nodeVersion, process.version, "Node 版本取的是当前进程版本");
+  checkEqual(info.runtime.platform, process.platform, "平台与当前机器一致");
+  checkEqual(info.runtime.env, "test", "运行环境读的是 NODE_ENV");
+  check(info.runtime.uptimeMs > 0 && Boolean(info.runtime.uptimeText), "运行时长带人读文案");
+  check(info.runtime.memoryRssBytes > 0, "带常驻内存");
+  check(Math.abs(info.time - Date.now()) < 60_000, "带服务端采集时间戳");
+
+  // —— 数据库 ——
+  checkEqual(info.database.path, ":memory:", "内存库照实报 :memory:");
+  checkEqual(info.database.sizeBytes, null, "内存库没有文件体积（null，不是 0）");
+  checkEqual(info.database.modifiedAt, null, "内存库没有最后写入时间（null）");
+  const tableNames = info.database.tables.map((item) => item.table);
+  for (const name of ["accounts", "roles", "admins", "audit_logs"]) {
+    check(tableNames.includes(name), `各表行数包含 ${name}（表清单动态枚举 sqlite_master）`);
+  }
+  check(
+    info.database.tables.every((item) => Number.isInteger(item.rows) && item.rows >= 0),
+    "每张表的行数都是非负整数",
+  );
+  check(info.database.tables.find((item) => item.table === "accounts").rows > 0, "accounts 行数反映真实数据");
+
+  // —— 配置快照：白名单 ——
+  const keys = info.config.map((item) => item.key);
+  const unknown = keys.filter((key) => !EXPECTED_CONFIG_KEYS.includes(key));
+  checkEqual(unknown.join(","), "", "配置快照没有白名单之外的项");
+  for (const envKey of ["PATH", "HOME", "NODE_OPTIONS", "TZ"]) {
+    check(!keys.includes(envKey), `子进程环境变量 ${envKey} 没有漏进快照`);
+  }
+  checkEqual(info.config.find((item) => item.key === "CORS_ORIGINS").warning, true, "CORS 全开（默认 *）→ 标为需注意");
+
+  // —— 配置快照：脱敏（最要紧的一条是「值里不能出现原文」）——
+  const snapshotText = JSON.stringify(info.config);
+  check(!snapshotText.includes("e2e-guard-secret"), "JWT_SECRET 原文不出现在快照里");
+  check(!snapshotText.includes(ADMIN_CODE), "ADMIN_REGISTER_CODE 原文不出现在快照里");
+
+  const jwtItem = info.config.find((item) => item.key === "JWT_SECRET");
+  checkEqual(jwtItem.sensitive, true, "JWT_SECRET 标为脱敏项");
+  checkEqual(jwtItem.warning, false, "已自定义过密钥 → 不告警");
+  checkEqual(jwtItem.value, "已自定义", "JWT_SECRET 只报形态（已自定义）");
+
+  const codeItem = info.config.find((item) => item.key === "ADMIN_REGISTER_CODE");
+  checkEqual(codeItem.sensitive, true, "ADMIN_REGISTER_CODE 标为脱敏项");
+  check(codeItem.value.includes("已设置"), "注册码只报「已设置」而不回显原文");
+
+  // —— 权限：这一页暴露部署形态（文件路径、限流与保留阈值），不给只读观察员 ——
+  const viewerRead = await api(baseUrl, "GET", "/api/admin/system", { token: tokens.viewerToken });
+  checkEqual(viewerRead.status, 403, "只读观察员没有 system:read，读不到（403）");
+  checkEqual(viewerRead.body.code, 30006, "越权的业务码是 30006");
+  const playerRead = await api(baseUrl, "GET", "/api/admin/system", { token: tokens.playerToken });
+  checkEqual(playerRead.status, 401, "玩家令牌进不了管理端接口（401）");
+
+  // —— 第二支：配着内置默认密钥时应当标红 ——
+  const weak = await startServer({ JWT_SECRET: DEFAULT_JWT_SECRET });
+  try {
+    const registered = await api(weak.baseUrl, "POST", "/api/admin/auth/register", {
+      body: { username: "weak_secret_super", password: "weak-mpvk-7", registerCode: ADMIN_CODE },
+    });
+    checkEqual(registered.body.code, 0, "准备：默认密钥的服务 + 超管");
+
+    const weakInfo = await api(weak.baseUrl, "GET", "/api/admin/system", { token: registered.body.data.token });
+    const weakJwt = weakInfo.body.data.config.find((item) => item.key === "JWT_SECRET");
+    checkEqual(weakJwt.warning, true, "仍是内置默认密钥 → 标为需注意");
+    check(weakJwt.value.includes("默认"), "默认密钥只报「仍是内置默认值」而不回显原文");
+    check(!JSON.stringify(weakInfo.body.data.config).includes(DEFAULT_JWT_SECRET), "默认密钥原文同样不出现在快照里");
+  } finally {
+    weak.kill();
+  }
+}
+
+//#endregion
+
+//#region 十一：审计保留策略
 
 /**
  * 直接往文件库里塞一条 N 天前的日志
@@ -867,7 +1003,7 @@ async function seedWithRetry(dbPath, days, action) {
  * 手工塞一条 40 天前的日志，再按不同的 `AUDIT_RETENTION_DAYS` 重启，看它还在不在。
  */
 async function runRetentionSuite() {
-  group("十、审计保留策略：AUDIT_RETENTION_DAYS 生效");
+  group("十一、审计保留策略：AUDIT_RETENTION_DAYS 生效");
 
   const dbPath = path.join(os.tmpdir(), `olua-audit-retention-${Date.now()}.db`);
   const OLD_ACTION = "retention.oldRow";
@@ -926,10 +1062,10 @@ async function runRetentionSuite() {
 
 //#endregion
 
-//#region 十一：第二台服务专测 IP 维度限流
+//#region 十二：第二台服务专测 IP 维度限流
 
 async function runIpSuite(baseUrl) {
-  group("十一、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
+  group("十二、登录限流：按 IP 锁定（阈值 1 次，用户名维度放宽）");
 
   const first = await api(baseUrl, "POST", "/api/auth/login", { body: { username: "ip_victim_a", password: "x-pass-1" } });
   checkEqual(first.body.code, 10003, "第一次失败（用户名维度未锁）");
@@ -949,7 +1085,8 @@ async function main() {
 
   const main1 = await startServer({ LOGIN_MAX_FAILURES: "3", LOGIN_LOCK_MS: "600000", LOGIN_IP_MAX_FAILURES: "1000" });
   try {
-    await runMainSuite(main1.baseUrl);
+    const tokens = await runMainSuite(main1.baseUrl);
+    await runSystemSuite(main1.baseUrl, tokens);
   } finally {
     main1.kill();
   }
@@ -964,7 +1101,7 @@ async function main() {
   }
 
   console.log(
-    `\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表 / 导出：${passed} 条通过 / ${failed} 条失败`,
+    `\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表 / 导出 / 系统信息：${passed} 条通过 / ${failed} 条失败`,
   );
   if (failed) {
     console.log("失败项：\n" + failures.map((item) => `  - ${item}`).join("\n"));

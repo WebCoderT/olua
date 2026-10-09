@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { to: "/roles", label: "角色管理", end: false, permission: PERMISSION.ROLE_READ as string },
   { to: "/admins", label: "管理员", end: false, permission: PERMISSION.ADMIN_READ as string },
   { to: "/audit-logs", label: "操作日志", end: false, permission: PERMISSION.AUDIT_READ as string },
+  { to: "/system", label: "系统信息", end: false, permission: PERMISSION.SYSTEM_READ as string },
 ];
 
 /**

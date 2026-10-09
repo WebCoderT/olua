@@ -1,5 +1,8 @@
 import { join } from "node:path";
 
+/** 内置的开发用 JWT 密钥（生产必须换掉；唯一出现处，比较也只用 `jwtSecretIsDefault`） */
+const DEFAULT_JWT_SECRET = "olua-dev-secret-please-change-me";
+
 /**
  * 应用配置（**唯一来源**）
  *
@@ -18,6 +21,14 @@ export interface AppConfiguration {
   dbPath: string;
   /** JWT 签名密钥 */
   jwtSecret: string;
+  /**
+   * JWT 密钥是否仍是内置默认值
+   *
+   * 单独留一个派生字段，是为了让「生产环境忘了改密钥」这件事**可被检查**：
+   * 系统信息页据此报警，启动时也据此打一条警告（见 main.ts）。判据只能有一处，
+   * 所以由这里算好，别处不许再拿默认值字符串比一次。
+   */
+  jwtSecretIsDefault: boolean;
   /** JWT 有效期 */
   jwtExpiresIn: string;
   /** 管理端注册码（空串 = 管理端开放注册） */
@@ -58,14 +69,17 @@ export interface AppConfiguration {
 }
 
 export default function configuration(): AppConfiguration {
+  const jwtSecret = process.env.JWT_SECRET ?? DEFAULT_JWT_SECRET;
+  const adminRegisterCode = process.env.ADMIN_REGISTER_CODE ?? "";
   return {
     env: process.env.NODE_ENV ?? "development",
     port: Number(process.env.PORT ?? 3100),
     apiPrefix: process.env.API_PREFIX ?? "api",
     dbPath: process.env.DB_PATH ?? join(process.cwd(), "data", "olua.db"),
-    jwtSecret: process.env.JWT_SECRET ?? "olua-dev-secret-please-change-me",
+    jwtSecret,
+    jwtSecretIsDefault: jwtSecret === DEFAULT_JWT_SECRET,
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
-    adminRegisterCode: process.env.ADMIN_REGISTER_CODE ?? "",
+    adminRegisterCode,
     roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? 3),
     corsOrigins: (process.env.CORS_ORIGINS ?? "*")
       .split(",")

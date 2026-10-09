@@ -51,6 +51,14 @@ export const Permission = {
    * 审计日志会暴露「谁做了什么」，因此只读观察员不给（它的定位是看数据，不是查人）。
    */
   AUDIT_READ: "audit:read",
+
+  /**
+   * 查看系统信息（版本 / 运行时长 / 数据库体积与行数 / 脱敏配置快照）
+   *
+   * 同样不给只读观察员：这一页暴露部署形态（数据文件路径、限流与保留策略的具体阈值），
+   * 是运维信息而不是业务数据。快照本身走**白名单**，密钥类只报「已配置 / 未配置」。
+   */
+  SYSTEM_READ: "system:read",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -105,6 +113,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",
+  [Permission.SYSTEM_READ]: "查看系统信息",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

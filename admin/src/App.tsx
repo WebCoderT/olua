@@ -16,6 +16,7 @@ import { MyAccountPage } from "./pages/MyAccountPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { RoleDetailPage } from "./pages/RoleDetailPage";
 import { RolesPage } from "./pages/RolesPage";
+import { SystemPage } from "./pages/SystemPage";
 import { clearSession, hasPermission, isLoggedIn } from "./store/session";
 import { toastError } from "./store/toast";
 
@@ -120,6 +121,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.AUDIT_READ}>
                 <AuditPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="system"
+            element={
+              <RequirePermission permission={PERMISSION.SYSTEM_READ}>
+                <SystemPage />
               </RequirePermission>
             }
           />

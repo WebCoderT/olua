@@ -46,9 +46,15 @@ async function bootstrap() {
 
   setupSwagger(app);
 
+  const logger = new Logger("Bootstrap");
+  // 默认密钥是**写在代码里**的常量，等于公开；生产忘了替换就等于任何人可自签 admin 令牌。
+  // 这是启动期就该喊出来的事（判据只有 configuration 那一处），管理端「系统信息」页也会标红
+  if (config.get<boolean>("jwtSecretIsDefault")) {
+    logger.warn("JWT_SECRET 仍是内置默认值，生产环境请务必替换，否则令牌可被伪造");
+  }
+
   await app.listen(port);
 
-  const logger = new Logger("Bootstrap");
   logger.log(`服务已启动：http://localhost:${port}/${prefix}`);
   logger.log(`接口文档：http://localhost:${port}/${SWAGGER_PATH}`);
 }

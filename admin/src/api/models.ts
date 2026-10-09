@@ -1093,3 +1093,122 @@ export type Health = {
    */
   time: number;
 };
+
+export type SystemRuntime = {
+  /**
+   * 服务端版本（读 server/package.json）
+   */
+  version: string;
+  /**
+   * Node 版本
+   */
+  nodeVersion: string;
+  /**
+   * 运行环境（NODE_ENV）
+   */
+  env: string;
+  /**
+   * 进程 id
+   */
+  pid: number;
+  /**
+   * 已运行毫秒数
+   */
+  uptimeMs: number;
+  /**
+   * 已运行时长（人读，如「3 天 2 小时」）
+   */
+  uptimeText: string;
+  /**
+   * 进程启动时刻（毫秒时间戳）
+   */
+  startedAt: number;
+  /**
+   * 操作系统平台
+   */
+  platform: string;
+  /**
+   * 操作系统版本
+   */
+  platformRelease: string;
+  /**
+   * CPU 架构
+   */
+  arch: string;
+  /**
+   * 常驻内存（字节）
+   */
+  memoryRssBytes: number;
+  /**
+   * 堆已用内存（字节）
+   */
+  memoryHeapUsedBytes: number;
+};
+
+export type SystemTableCount = {
+  /**
+   * 表名
+   */
+  table: string;
+  /**
+   * 行数
+   */
+  rows: number;
+};
+
+export type SystemDatabase = {
+  /**
+   * 数据文件路径（`:memory:` = 内存库，无文件）
+   */
+  path: string;
+  /**
+   * 数据文件体积（字节）；内存库为 null
+   */
+  sizeBytes: number | null;
+  /**
+   * 数据文件最后修改时间（毫秒）；内存库为 null
+   */
+  modifiedAt: number | null;
+  /**
+   * 各表行数（动态枚举 sqlite_master，加表不用改这里）
+   */
+  tables: SystemTableCount[];
+};
+
+export type SystemConfigItem = {
+  /**
+   * 配置项（环境变量名）
+   */
+  key: string;
+  /**
+   * 值（或脱敏后的描述）
+   */
+  value: string;
+  /**
+   * 是否是脱敏项（值不是原文，只给形态）
+   */
+  sensitive: boolean;
+  /**
+   * 是否需要运维注意（如仍在使用默认 JWT 密钥）
+   */
+  warning: boolean;
+};
+
+export type SystemInfo = {
+  /**
+   * 运行时信息
+   */
+  runtime: SystemRuntime;
+  /**
+   * 数据库信息
+   */
+  database: SystemDatabase;
+  /**
+   * 脱敏后的配置快照（白名单：不列出 = 不暴露）
+   */
+  config: SystemConfigItem[];
+  /**
+   * 服务端时间戳（毫秒）
+   */
+  time: number;
+};

@@ -2758,6 +2758,53 @@
           "admin:manage"
         ]
       }
+    },
+    "/admin/system": {
+      "get": {
+        "description": "版本 / Node 版本 / 运行时长 / 内存 / 数据文件路径与体积 / 各表行数 / 脱敏配置快照。\n\n**配置快照走白名单**：只有服务端 `CONFIG_SNAPSHOT` 表里登记过的项才会出现，`JWT_SECRET` 与 `ADMIN_REGISTER_CODE` 只报「已配置 / 仍是默认值」这类形态，绝不回显原文 —— 白名单的意义是「将来新增密钥时默认不暴露」，而黑名单要靠人记得去加。\n\n`warning: true` 的项是运维该注意的（内置 JWT 密钥未改、CORS 全开）。只读观察员没有 `system:read`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`system:read`（查看系统信息；角色：超级管理员 / 管理员）",
+        "operationId": "adminSystem.info",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "系统信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SystemInfoDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "系统信息",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SystemInfoDto"
+        },
+        "x-olua-permissions": [
+          "system:read"
+        ]
+      }
     }
   },
   "info": {
@@ -4612,6 +4659,196 @@
         "required": [
           "status",
           "env",
+          "time"
+        ]
+      },
+      "SystemRuntimeDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "服务端版本（读 server/package.json）",
+            "example": "0.1.0"
+          },
+          "nodeVersion": {
+            "type": "string",
+            "description": "Node 版本",
+            "example": "v22.22.2"
+          },
+          "env": {
+            "type": "string",
+            "description": "运行环境（NODE_ENV）",
+            "example": "production"
+          },
+          "pid": {
+            "type": "number",
+            "description": "进程 id"
+          },
+          "uptimeMs": {
+            "type": "number",
+            "description": "已运行毫秒数"
+          },
+          "uptimeText": {
+            "type": "string",
+            "description": "已运行时长（人读，如「3 天 2 小时」）"
+          },
+          "startedAt": {
+            "type": "number",
+            "description": "进程启动时刻（毫秒时间戳）"
+          },
+          "platform": {
+            "type": "string",
+            "description": "操作系统平台",
+            "example": "darwin"
+          },
+          "platformRelease": {
+            "type": "string",
+            "description": "操作系统版本"
+          },
+          "arch": {
+            "type": "string",
+            "description": "CPU 架构",
+            "example": "arm64"
+          },
+          "memoryRssBytes": {
+            "type": "number",
+            "description": "常驻内存（字节）"
+          },
+          "memoryHeapUsedBytes": {
+            "type": "number",
+            "description": "堆已用内存（字节）"
+          }
+        },
+        "required": [
+          "version",
+          "nodeVersion",
+          "env",
+          "pid",
+          "uptimeMs",
+          "uptimeText",
+          "startedAt",
+          "platform",
+          "platformRelease",
+          "arch",
+          "memoryRssBytes",
+          "memoryHeapUsedBytes"
+        ]
+      },
+      "SystemTableCountDto": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "description": "表名",
+            "example": "roles"
+          },
+          "rows": {
+            "type": "number",
+            "description": "行数",
+            "example": 42
+          }
+        },
+        "required": [
+          "table",
+          "rows"
+        ]
+      },
+      "SystemDatabaseDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "数据文件路径（`:memory:` = 内存库，无文件）",
+            "example": "data/olua.db"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "description": "数据文件体积（字节）；内存库为 null",
+            "nullable": true
+          },
+          "modifiedAt": {
+            "type": "number",
+            "description": "数据文件最后修改时间（毫秒）；内存库为 null",
+            "nullable": true
+          },
+          "tables": {
+            "description": "各表行数（动态枚举 sqlite_master，加表不用改这里）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemTableCountDto"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "sizeBytes",
+          "modifiedAt",
+          "tables"
+        ]
+      },
+      "SystemConfigItemDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "配置项（环境变量名）",
+            "example": "LOGIN_MAX_FAILURES"
+          },
+          "value": {
+            "type": "string",
+            "description": "值（或脱敏后的描述）"
+          },
+          "sensitive": {
+            "type": "boolean",
+            "description": "是否是脱敏项（值不是原文，只给形态）"
+          },
+          "warning": {
+            "type": "boolean",
+            "description": "是否需要运维注意（如仍在使用默认 JWT 密钥）"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "sensitive",
+          "warning"
+        ]
+      },
+      "SystemInfoDto": {
+        "type": "object",
+        "properties": {
+          "runtime": {
+            "description": "运行时信息",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemRuntimeDto"
+              }
+            ]
+          },
+          "database": {
+            "description": "数据库信息",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemDatabaseDto"
+              }
+            ]
+          },
+          "config": {
+            "description": "脱敏后的配置快照（白名单：不列出 = 不暴露）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemConfigItemDto"
+            }
+          },
+          "time": {
+            "type": "number",
+            "description": "服务端时间戳（毫秒）"
+          }
+        },
+        "required": [
+          "runtime",
+          "database",
+          "config",
           "time"
         ]
       }

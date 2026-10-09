@@ -22,6 +22,13 @@ import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-env
 import { HealthDto } from "../modules/health/dto/health.dto";
 import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto";
 import { AdminRoleDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
+import {
+  SystemConfigItemDto,
+  SystemDatabaseDto,
+  SystemInfoDto,
+  SystemRuntimeDto,
+  SystemTableCountDto,
+} from "../modules/system/dto/system.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 
 /**
@@ -86,4 +93,9 @@ export const SWAGGER_MODELS = [
   UpdateAccountStatusDto,
   // 系统
   HealthDto,
+  SystemInfoDto,
+  SystemRuntimeDto,
+  SystemDatabaseDto,
+  SystemTableCountDto,
+  SystemConfigItemDto,
 ];

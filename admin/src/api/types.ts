@@ -123,6 +123,13 @@ export const PERMISSION = {
   ADMIN_MANAGE: "admin:manage",
   /** 查看操作日志（只读观察员没有这一项） */
   AUDIT_READ: "audit:read",
+  /**
+   * 查看系统信息（版本 / 运行时长 / 数据库体积与行数 / 脱敏配置快照）
+   *
+   * 同样不给只读观察员：这一页暴露部署形态（数据文件路径、限流与保留策略的阈值），
+   * 是运维信息而不是业务数据。
+   */
+  SYSTEM_READ: "system:read",
 } as const;
 
 export type PermissionValue = (typeof PERMISSION)[keyof typeof PERMISSION];
@@ -141,6 +148,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ADMIN_READ]: "查看管理员",
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
+  [PERMISSION.SYSTEM_READ]: "查看系统信息",
 };
 
 /** 权限点中文名（未登记的原样显示） */
@@ -198,6 +206,25 @@ export function formatTimeFull(value: number | null | undefined): string {
   const date = new Date(value);
   const pad = (num: number) => String(num).padStart(2, "0");
   return `${formatTime(value)}:${pad(date.getSeconds())}`;
+}
+
+/**
+ * 字节 → 人读（`340 B` / `1.2 MB`）
+ *
+ * 内存与数据文件体积的量级跨度很大（几十 KB 到几 GB），统一在这里换算一次，
+ * 界面上就不会出现「12345678 字节」这种要自己数位数的数字。`null`/非有限值显示 —（内存库没有文件体积）。
+ */
+export function formatBytes(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = value / 1024;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[index]}`;
 }
 
 /** 时间戳 → `<input type="datetime-local">` 的值（本地时区，空值给空串） */
