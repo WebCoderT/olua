@@ -4,14 +4,21 @@ import { uiImages } from "./images";
 /**
  * 场景界面（登录 / 选角 / 加载）的布局与用图
  *
- * 坐标系：场景内元素坐标以屏幕中心为原点（进入场景时已应用铺满窗口的适配策略，
- * 见 ui/utils/layout/ScreenLayout.applyScreenPolicy）
+ * 坐标系：场景内元素坐标以「舞台中心」为原点（= 屏幕中心）。登录与选角都采用同一套
+ * 「舞台」适配：全部元素挂在舞台容器下按设计坐标摆放，运行时把整块舞台按可见尺寸
+ * 等比缩放（contain、只缩不放，见 ui/utils/layout/ScreenLayout.getStageScale），
+ * 于是任意窗口宽高比下构图都完整可见；背景图不在舞台内（铺满可见区，始终盖住窗口）
  */
 
 //#region 登录场景
 
 /** 登录界面布局 */
 export const loginLayout = {
+  /**
+   * 舞台尺寸：登录构图的包围盒加少量余量（最宽元素 600；纵向范围 -373 ~ 350）
+   * 设计分辨率（1624×750）下缩放系数恰为 1（不缩放），元素坐标改动过大时这里要同步
+   */
+  stageSize: new Size(680, 750),
   background: uiImages.loginBackground,
   /** 账号输入框 */
   account: { placeholder: "请输入您的游戏账号", position: new Vec2(0, -20), size: new Size(600, 80), icon: uiImages.loginAccountIcon, password: false },
@@ -58,8 +65,13 @@ export const roleSelectorLayout = {
   /** 舞台尺寸（= 设计分辨率 1624×750，见 ScreenLayout.designResolution；改分辨率时两处同步） */
   stageSize: new Size(1624, 750),
   background: uiImages.roleSelectorBackground,
-  /** 底部栏（开始游戏按钮所在容器） */
-  bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, position: new Vec2(0, -305), size: new Size(1624, 139) },
+  /**
+   * 底部栏（开始游戏按钮所在容器）：**不在舞台内** —— 素材是带「开始游戏」牌匾装饰的整图，
+   * 不能拉伸变形，只能等比缩放；作为「框」它要横跨整个可见宽并贴屏幕底边，
+   * 位置/缩放由 RoleSelector.applyStageLayout 按当前可见尺寸实时算（舞台缩放救不了这两件事：
+   * 跟着舞台缩会两侧露背景，且舞台下沿不贴屏幕底边）
+   */
+  bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, size: new Size(1624, 139) },
   /** 开始游戏按钮（默认置灰，选中角色后可用） */
   beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -40), size: new Size(190, 48) },
   /** 创建角色按钮 / 管理角色按钮 / 创建弹窗返回按钮 */

@@ -28,6 +28,11 @@
       "reason": "new Node(\"role_selector_stage\") 是选角场景的舞台根节点（整块构图缩放挂点），创建后只在本文件内作为布局容器使用，无外部按名引用。"
     },
     {
+      "file": "ui/Login.ts",
+      "rule": "nodeName",
+      "reason": "new Node(\"login_stage\") 是登录场景的舞台根节点（整块构图缩放挂点，与 RoleSelector 的 role_selector_stage 同一款），创建后只在本文件内作为布局容器使用，无外部按名引用。"
+    },
+    {
       "file": "ui/components/dialogs/DeathDialog.ts",
       "rule": "nodeName",
       "reason": "new Node(\"death_mask\") 是死亡遮罩节点，本文件自建自用；大小/颜色等真正可调的部分已经走 configs/layout 的死亡弹窗配置。"

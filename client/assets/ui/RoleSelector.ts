@@ -1,10 +1,10 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { maxRoleCount, occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
-import { applyScreenPolicy, getStageScale, onWindowResize } from "./utils/layout/ScreenLayout";
+import { applyScreenPolicy, getAnchoredPosition, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { Role } from "../entities/Role";
@@ -56,8 +56,13 @@ export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
-  /** 舞台容器（除背景外的所有元素都挂这里，整体按可见尺寸等比缩放；见 applyStageLayout） */
+  /** 舞台容器（除背景与底部栏外的所有元素都挂这里，整体按可见尺寸等比缩放；见 applyStageLayout） */
   private stage: Node | null = null;
+  /**
+   * 底部栏（不在舞台内）：横跨可见宽 + 贴屏幕底边，位置/缩放由 applyStageLayout 实时算
+   * （素材带牌匾装饰不可拉伸变形，只能等比缩放；跟舞台缩会两侧露背景、且不贴屏幕底边）
+   */
+  private bottomBar: Node | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
   /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
@@ -110,18 +115,32 @@ export class RoleSelector extends Component {
   }
 
   /**
-   * 舞台适配（窗口尺寸变化时可重复调用）：按可见尺寸等比缩放整块舞台并居中
+   * 舞台与底部栏适配（窗口尺寸变化时可重复调用）
    *
    * 铺满窗口的适配策略下，窗口宽高比与设计（1624×750）不一致时必然有一边被裁：
    * 窗口偏窄（如 1024×768 → 可见区仅 1000×750）会裁掉左右，写死坐标的贴边元素
    * （左侧创建/管理/返回按钮、右侧创建角色弹窗）就整体跑到屏幕外看不见了；
-   * 这里把整块舞台按 contain 比例缩小（只缩不放），构图恒完整落在可见区内
+   * 这里把整块舞台按 contain 比例缩小（只缩不放），构图恒完整落在可见区内。
+   *
+   * 底部栏不进舞台（见 roleSelectorLayout.bottomBar 注释）：它按**可见宽**等比缩放
+   * （素材不可拉伸，等比才不变形；铺满窗口策略下可见宽恒 ≤ 设计宽 1624，系数恒 ≤ 1
+   * 不会放大模糊），再贴屏幕底边 —— 任何分辨率下都横跨整屏、紧贴下边缘
    */
   applyStageLayout() {
     const stage = this.stage;
     if (!stage || !isValid(stage, true)) return;
-    const scale = getStageScale(roleSelectorLayout.stageSize);
+    const visible = getVisibleSize();
+    const scale = getStageScale(roleSelectorLayout.stageSize, visible);
     stage.setScale(scale, scale, 1);
+    const bar = this.bottomBar;
+    if (!bar || !isValid(bar, true)) return;
+    const barLayout = roleSelectorLayout.bottomBar;
+    const barScale = visible.width / barLayout.size.width;
+    const visual = new Size(barLayout.size.width * barScale, barLayout.size.height * barScale);
+    // 贴底：bottom-center 语义 = 区块中心到屏幕下边缘 = 缩放后高度的一半（setPosition 不吃 Vec2，拆开传）
+    const position = getAnchoredPosition(visual, visible, "bottom-center", 0, visual.height / 2);
+    bar.setScale(barScale, barScale, 1);
+    bar.setPosition(position.x, position.y, 0);
   }
 
   /** 「开始游戏」：把选中角色同步到服务端（成为该账号的在线角色）并拉完整数据，然后进游戏场景 */
@@ -179,9 +198,10 @@ export class RoleSelector extends Component {
   private createMainView(): RoleSelectorMainView {
     // 位置/尺寸与用图统一见 configs/hudLayout.roleSelectorLayout
     const layout = roleSelectorLayout;
-    // 底部栏
-    const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, layout.bottomBar.position, layout.bottomBar.size);
-    this.stage!.addChild(bottomBar);
+    // 底部栏（不在舞台内，挂场景根；位置/缩放见 applyStageLayout —— 初次位置由它算，这里不用摆）
+    const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, undefined, layout.bottomBar.size);
+    this.node.addChild(bottomBar);
+    this.bottomBar = bottomBar;
     // 开始游戏按钮（默认置灰，选中角色后可用）
     const beginLayout = layout.beginGameButton;
     const beginGameButton = GameUiHelper.createTexturedButton(beginLayout.name, beginLayout.image, "", beginLayout.position, beginLayout.size);
