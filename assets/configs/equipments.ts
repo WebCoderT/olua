@@ -84,12 +84,14 @@ export function getEquipmentNameParts(equipment: Equipment): EquipmentNameParts 
 }
 
 /**
- * 按前后缀倍率缩放战斗属性（六项攻防区间与 maxHp 逐项相乘后取整）
+ * 按前后缀倍率缩放战斗属性（六项攻防区间、maxHp 与每秒回血逐项相乘后取整）
  */
 function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): BattleAttributes {
   const scale = (range: [number, number]): [number, number] => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
   return {
     maxHp: Math.round(attributes.maxHp * rate),
+    // 回血与血量同一口径缩放：超神·神级的防具回血也是普通·人级的 4.2 倍
+    hpRecover: Math.round(attributes.hpRecover * rate),
     physicalAttack: scale(attributes.physicalAttack),
     magicAttack: scale(attributes.magicAttack),
     taoistAttack: scale(attributes.taoistAttack),
@@ -125,7 +127,8 @@ export function getEquipmentBaseKey(id: string): string {
  * 数值全部按**等级**从 configs/growth 的装备曲线取：
  * - level：该装备的穿戴需求等级，也是**唯一定强入口**（想调强弱就改它）
  * - slot：部位，决定属性怎么分配（见 configs/growth 的 equipmentSlotShare）
- * - 六项攻防与 maxHp：由 equipmentStats(level, slot) 生成，条目里不用手写
+ * - 六项攻防、maxHp 与每秒回血：由 equipmentStats(level, slot) 生成，条目里不用手写
+ *   · 每秒回血只有**防御部位**有（衣服/头盔/腰带/鞋子，见 configs/growth 的 equipmentSlotShare.recover）
  *   · 想单独给某件装备加特例（例如只加攻击不加防御）→ 直接在条目里覆盖同名字段
  *   · 想整体调强/调弱所有装备 → 改 configs/growth 的 equipmentGrowth.setPowerRate
  *

@@ -95,9 +95,20 @@ export default class GameHelper {
     const title = getTitleLevel(role.title);
     // 军衔同战魂/称号：当前阶整份加成（configs/rank，未授衔为 null 不加成）
     const rank = getRankLevel(role.rank);
-    const attributeKeys: (keyof Omit<BattleAttributes, "maxHp">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+    // 区间型属性（maxHp 与 hpRecover 是单值属性，单独相加，不在这里）
+    const attributeKeys: (keyof Omit<BattleAttributes, "maxHp" | "hpRecover">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 
     role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0) + (soul?.attributes.maxHp ?? 0) + (title?.attributes.maxHp ?? 0) + (rank?.attributes.maxHp ?? 0);
+    // 每秒回血与 maxHp 同一份来源清单（等级 / 防御装备 / 战魂 / 称号 / 军衔），口径一致才能保证
+    // 「加血的来源也加回血」；具体结算见 ui/utils/battle/HpHelper.recover。
+    // 它不计入战斗力（configs/battle 的权重表里没有它）：战斗力是地图准入的门槛，
+    // 把持续回复算进去会凭空抬高所有地图的门槛，而回血并不改变伤害输出。
+    role.hpRecover =
+      levelConfig.hpRecover +
+      equipmentList.reduce((total, equipment) => total + equipment.hpRecover, 0) +
+      (soul?.attributes.hpRecover ?? 0) +
+      (title?.attributes.hpRecover ?? 0) +
+      (rank?.attributes.hpRecover ?? 0);
     // 最大魔法值只跟等级走（装备暂不影响魔法值）
     role.maxMp = levelConfig.maxMp;
     for (const key of attributeKeys) {

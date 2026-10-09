@@ -33,6 +33,17 @@ export interface BattleAttributes {
   taoistDefense: [number, number];
   /** 最大血量 */
   maxHp: number;
+  /**
+   * 每秒血量回复量（点/秒）
+   *
+   * 与 maxHp 同级的战斗属性，来源也跟 maxHp 一致：等级曲线、防御装备、战魂、称号、军衔
+   * （汇总见 ui/core/GameHelper.combatCalc）。收到的那一份是**来源自己的额度**，
+   * 结算在 ui/utils/battle/HpHelper.recover：每秒把全部来源之和累加进血量
+   * （不满 1 点的部分留在角色身上的累加器里；死亡与满血时不回复）。
+   *
+   * 怪物不带回血（configs/growth.monsterStats 恒返回 0），所以这个属性只影响玩家。
+   */
+  hpRecover: number;
 }
 
 /** 等级配置 */

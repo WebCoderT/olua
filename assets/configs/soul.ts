@@ -93,6 +93,8 @@ function scaleAttributes(base: ReturnType<typeof getRoleLevelAttributes>, rate: 
   const scale = (range: [number, number]): [number, number] => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
   return {
     maxHp: Math.round(base.maxHp * rate),
+    // 回血与血量同一口径打折：战魂加的血多，回血也就多（结算见 ui/utils/battle/HpHelper）
+    hpRecover: Math.round(base.hpRecover * rate),
     physicalAttack: scale(base.physicalAttack),
     magicAttack: scale(base.magicAttack),
     taoistAttack: scale(base.taoistAttack),
@@ -136,6 +138,7 @@ export const soulAttributeLabels: { key: keyof SoulAttributes; label: string }[]
   { key: "physicalDefense", label: "物防" },
   { key: "magicDefense", label: "魔防" },
   { key: "taoistDefense", label: "道防" },
+  { key: "hpRecover", label: "回血" },
 ];
 
 /**

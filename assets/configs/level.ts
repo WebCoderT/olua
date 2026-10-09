@@ -31,6 +31,8 @@ for (let level = 1; level <= roleMaxLevel; level++) {
     exp: getLevelKills(level) * (level + 1) * expGain.expPerLevel,
     maxHp: attributes.maxHp,
     maxMp: attributes.maxMp,
+    // 每秒回血同样来自曲线（= 最大生命 × attributeRange.hpRecoverRate，见 configs/growth）
+    hpRecover: attributes.hpRecover,
     physicalAttack: attributes.physicalAttack,
     magicAttack: attributes.magicAttack,
     taoistAttack: attributes.taoistAttack,

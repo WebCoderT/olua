@@ -26,6 +26,13 @@ export class Role implements BattleAttributes {
   exp: number = 0;
   maxHp: number;
   hp: number;
+  /**
+   * 每秒血量回复量（点/秒）：等级 + 防御装备 + 战魂 + 称号 + 军衔 五处来源之和，
+   * 由 GameHelper.combatCalc 统一重算；结算在 ui/utils/battle/HpHelper.recover
+   */
+  hpRecover: number;
+  /** 血量自然回复的累积量（不足 1 点的部分，避免低回复速度下被取整丢弃） */
+  hpRecoverAccumulator: number = 0;
   /** 最大魔法值（按等级取自 configs/level） */
   maxMp: number;
   /** 当前魔法值：释放技能扣除（技能消耗见 configs/skill 的 mpCost），读写统一走 ui/utils/battle/MpHelper */
@@ -91,10 +98,11 @@ export class Role implements BattleAttributes {
     this.occupation = occupation;
     this.sex = sex;
     this.hp = this.maxHp = levelMap.get(this.level).maxHp;
+    this.hpRecover = levelMap.get(this.level).hpRecover;
     this.mp = this.maxMp = levelMap.get(this.level).maxMp;
     this.combat = this.maxHp * 10;
     // 复制一份初始属性（不要直接引用配置里的区间数组，避免运行时改动污染配置表；
-    // 完整属性由 GameHelper.combatCalc 按「等级 + 装备 + 战魂」重算）
+    // 完整属性由 GameHelper.combatCalc 按「等级 + 装备 + 战魂 + 称号 + 军衔」重算）
     this.physicalAttack = [...levelMap.get(this.level).physicalAttack];
 
     // 初始化背包数据

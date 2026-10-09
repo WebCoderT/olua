@@ -255,6 +255,8 @@ function getEquivalentAttributes(eqLevel: number): ReturnType<typeof getRoleLeve
   return {
     maxHp: mix(a.maxHp, b.maxHp),
     maxMp: mix(a.maxMp, b.maxMp),
+    // 回血也要按两侧整数等级插值（与 maxHp 同理：裸回血本身由曲线派生，同样有跳档边界）
+    hpRecover: mix(a.hpRecover, b.hpRecover),
     physicalAttack: mixRange(a.physicalAttack, b.physicalAttack),
     magicAttack: mixRange(a.magicAttack, b.magicAttack),
     taoistAttack: mixRange(a.taoistAttack, b.taoistAttack),
@@ -269,6 +271,8 @@ function scaleAttributes(base: ReturnType<typeof getRoleLevelAttributes>, rate: 
   const scale = (range: [number, number]): [number, number] => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
   return {
     maxHp: Math.round(base.maxHp * rate),
+    // 回血与血量同一口径打折（与 configs/soul、configs/title 一致）
+    hpRecover: Math.round(base.hpRecover * rate),
     physicalAttack: scale(base.physicalAttack),
     magicAttack: scale(base.magicAttack),
     taoistAttack: scale(base.taoistAttack),
@@ -318,6 +322,7 @@ export const rankAttributeLabels: { key: keyof RankAttributes; label: string }[]
   { key: "physicalDefense", label: "物防" },
   { key: "magicDefense", label: "魔防" },
   { key: "taoistDefense", label: "道防" },
+  { key: "hpRecover", label: "回血" },
 ];
 
 /**

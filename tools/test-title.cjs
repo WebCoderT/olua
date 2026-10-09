@@ -57,7 +57,7 @@ function expectedAttributes(level) {
   const base = getRoleLevelAttributes(equivalentLevel);
   const rate = titleGrowth.rate * factor;
   const scale = (range) => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
-  return { maxHp: Math.round(base.maxHp * rate), physicalAttack: scale(base.physicalAttack), magicAttack: scale(base.magicAttack), taoistAttack: scale(base.taoistAttack), physicalDefense: scale(base.physicalDefense), magicDefense: scale(base.magicDefense), taoistDefense: scale(base.taoistDefense) };
+  return { maxHp: Math.round(base.maxHp * rate), hpRecover: Math.round(base.hpRecover * rate), physicalAttack: scale(base.physicalAttack), magicAttack: scale(base.magicAttack), taoistAttack: scale(base.taoistAttack), physicalDefense: scale(base.physicalDefense), magicDefense: scale(base.magicDefense), taoistDefense: scale(base.taoistDefense) };
 }
 const mismatched = titleLevels.filter((config) => JSON.stringify(config.attributes) !== JSON.stringify(expectedAttributes(config.level)));
 check(!mismatched.length, "每级属性都严格按「等效等级裸属性 × rate × factor」生成", mismatched.map((config) => config.level).join("、") || "34 级全部命中");
@@ -66,7 +66,7 @@ check(increasing, "maxHp 逐级递增（换系跳档叠加在等级增长之上�
 check(titleLevels[0].attributes.maxHp > 0 && titleLevels[titleLevels.length - 1].attributes.maxHp < getRoleLevelAttributes(roleMaxLevel).maxHp, "1 阶有加成、满阶仍低于 60 级角色裸血（称号是次级成长线，弱于战魂）");
 const attrKeys = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 check(titleLevels.every((config) => attrKeys.every((key) => config.attributes[key][0] <= config.attributes[key][1])), "区间属性下限 ≤ 上限");
-check(JSON.stringify(titleAttributeLabels.map((item) => item.key)) === JSON.stringify(["maxHp", ...attrKeys]), "属性显示顺序表覆盖全部字段且顺序固定");
+check(JSON.stringify(titleAttributeLabels.map((item) => item.key)) === JSON.stringify(["maxHp", ...attrKeys, "hpRecover"]), "属性显示顺序表覆盖全部字段且顺序固定");
 
 console.log("\n— C. 价格曲线 —");
 check(titleLevels.every((config) => config.bindGold === titleUpgradePrice(config.level)), "每级 bindGold 与价格曲线一致");

@@ -62,6 +62,8 @@ function expectedAttributes(level) {
   const mixRange = (x, y) => [mix(x[0], y[0]), mix(x[1], y[1])];
   const base = {
     maxHp: mix(a.maxHp, b.maxHp),
+    // 回血与血量同一口径：也要按两侧整数等级插值（裸回血由曲线派生，有同样的跳档边界）
+    hpRecover: mix(a.hpRecover, b.hpRecover),
     physicalAttack: mixRange(a.physicalAttack, b.physicalAttack),
     magicAttack: mixRange(a.magicAttack, b.magicAttack),
     taoistAttack: mixRange(a.taoistAttack, b.taoistAttack),
@@ -71,7 +73,7 @@ function expectedAttributes(level) {
   };
   const rate = rankGrowth.rate * factorOf(level);
   const scale = (range) => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
-  return { maxHp: Math.round(base.maxHp * rate), physicalAttack: scale(base.physicalAttack), magicAttack: scale(base.magicAttack), taoistAttack: scale(base.taoistAttack), physicalDefense: scale(base.physicalDefense), magicDefense: scale(base.magicDefense), taoistDefense: scale(base.taoistDefense) };
+  return { maxHp: Math.round(base.maxHp * rate), hpRecover: Math.round(base.hpRecover * rate), physicalAttack: scale(base.physicalAttack), magicAttack: scale(base.magicAttack), taoistAttack: scale(base.taoistAttack), physicalDefense: scale(base.physicalDefense), magicDefense: scale(base.magicDefense), taoistDefense: scale(base.taoistDefense) };
 }
 const mismatched = rankLevels.filter((config) => JSON.stringify(config.attributes) !== JSON.stringify(expectedAttributes(config.level)));
 check(!mismatched.length, "每阶属性都严格按「等效等级裸属性 × rate × 大段 factor」生成", mismatched.map((config) => config.level).join("、") || "100 阶全部命中");
@@ -90,7 +92,7 @@ const attrKeys = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefe
 const nonDecreasing = rankLevels.every((config, index) => index === 0 || attrKeys.every((key) => config.attributes[key][1] >= rankLevels[index - 1].attributes[key][1] && config.attributes[key][0] >= rankLevels[index - 1].attributes[key][0]));
 check(nonDecreasing, "六维属性单调不降（低阶时相邻两阶攻防增量不足 1 点、四舍五入会打平，属预期）");
 check(rankLevels.every((config) => attrKeys.every((key) => config.attributes[key][0] <= config.attributes[key][1])), "区间属性下限 ≤ 上限");
-check(JSON.stringify(rankAttributeLabels.map((item) => item.key)) === JSON.stringify(["maxHp", ...attrKeys]), "属性显示顺序表覆盖全部字段且顺序固定");
+check(JSON.stringify(rankAttributeLabels.map((item) => item.key)) === JSON.stringify(["maxHp", ...attrKeys, "hpRecover"]), "属性显示顺序表覆盖全部字段且顺序固定");
 
 // 大段跳档：跨段那一阶的涨幅要明显大于段内相邻阶的涨幅（「换衔」的推进感）
 const boundaryJumps = [];

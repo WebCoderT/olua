@@ -1,6 +1,8 @@
 /** 军衔单阶属性加成（数值为该阶的总额，进阶后整体替换不叠加，与战魂/称号同构） */
 export interface RankAttributes {
   maxHp: number;
+  /** 每秒血量回复量（按等效等级裸回血 × rate × 大段 factor 派生，见 configs/rank） */
+  hpRecover: number;
   physicalAttack: [number, number];
   magicAttack: [number, number];
   taoistAttack: [number, number];

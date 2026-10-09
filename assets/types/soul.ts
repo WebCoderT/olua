@@ -1,6 +1,8 @@
 /** 战魂单级属性加成（数值为该等级的总额，升级后整体替换不叠加） */
 export interface SoulAttributes {
   maxHp: number;
+  /** 每秒血量回复量（按等效等级裸回血 × rate × 系列 factor 派生，见 configs/soul） */
+  hpRecover: number;
   physicalAttack: [number, number];
   magicAttack: [number, number];
   taoistAttack: [number, number];

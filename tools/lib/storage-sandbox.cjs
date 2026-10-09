@@ -194,6 +194,7 @@ function prepareStorage(sandboxName, extraEntries = []) {
   copyDir(path.join(ASSETS, "types"), path.join(srcDir, "types"));
   copy(path.join(ASSETS, "entities/Role.ts"), path.join(srcDir, "entities/Role.ts"));
   copy(path.join(ASSETS, "ui/utils/battle/MpHelper.ts"), path.join(srcDir, "ui/utils/battle/MpHelper.ts"));
+  copy(path.join(ASSETS, "ui/utils/battle/HpHelper.ts"), path.join(srcDir, "ui/utils/battle/HpHelper.ts"));
   copy(path.join(ASSETS, "ui/core/StorageManager.ts"), path.join(srcDir, "ui/core/StorageManager.ts"), true);
 
   const entries = [path.join(srcDir, "ui/core/StorageManager.ts"), ...extraEntries.map((rel) => path.join(srcDir, rel))];

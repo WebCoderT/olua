@@ -1,6 +1,7 @@
 import { _decorator, Camera, Component, isValid } from "cc";
 import { maps } from "../configs/map";
 import MpHelper from "./utils/battle/MpHelper";
+import HpHelper from "./utils/battle/HpHelper";
 import { ActivityController } from "./controllers/ActivityController";
 import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
@@ -61,8 +62,8 @@ export class Game extends Component {
   private deathDialog: DeathDialog | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
   private ready = false;
-  /** 魔法值自然回复的结算计时（秒，满 1 秒结算一次） */
-  private mpRecoverTimer = 0;
+  /** 自然回复（魔法值 / 血量）的结算计时（秒，满 1 秒结算一次） */
+  private recoverTimer = 0;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
 
@@ -211,15 +212,22 @@ export class Game extends Component {
     AutoBattle.tick(this.roleDisplay?.isManualMoving() ?? false);
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
-    // 角色魔法值自然回复（每秒结算一次并落盘：角色数据在存储层是反序列化对象，不落盘下次读取会回滚）
-    this.mpRecoverTimer += deltaTime;
-    if (this.mpRecoverTimer >= 1) {
+    // 角色自然回复（每秒结算一次并落盘：角色数据在存储层是反序列化对象，不落盘下次读取会回滚）
+    // 魔法值按 configs/role.mpRecoverPerSecond 的固定速度；血量按角色的 hpRecover 属性
+    // （等级 / 防御装备 / 战魂 / 称号 / 军衔之和，见 ui/utils/battle/HpHelper）。
+    // 两者共用同一次落盘与刷新：同一秒里先后各写一次存档没有意义，反而把服务端同步的防抖窗口挤掉
+    this.recoverTimer += deltaTime;
+    if (this.recoverTimer >= 1) {
       const role = StorageManager.findOnlineRole();
-      if (role && MpHelper.recover(role, this.mpRecoverTimer * 1000)) {
-        StorageManager.updateOnlineRole(role);
-        RoleUIManager.updateRoleData(role);
+      if (role) {
+        const mpChanged = MpHelper.recover(role, this.recoverTimer * 1000);
+        const hpChanged = HpHelper.recover(role, this.recoverTimer * 1000);
+        if (mpChanged || hpChanged) {
+          StorageManager.updateOnlineRole(role);
+          RoleUIManager.updateRoleData(role);
+        }
       }
-      this.mpRecoverTimer = 0;
+      this.recoverTimer = 0;
     }
     // 自动战斗提示（屏幕中间循环播放：「自动战斗中」挂机期间 /「自动寻路中」自动走位期间，允许同显，挂特效层）
     AutoBattleTips.update(this.roleDisplay);

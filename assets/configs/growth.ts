@@ -21,6 +21,12 @@ import type { MonsterTier } from "../types/monster";
  *    —— 普攻冷却 1 秒，所以是「同级约 5~6 秒一只」。
  * 2. **生存节奏**：角色裸血能扛同级普通怪 8~13 刀（怪普攻 2 秒一次 → 16~26 秒）。
  *    前期偏脆、后期偏肉（见下面的攻击/血量比，从 20% 一路降到 12.7%），装备与战魂用来补前期。
+ *    另有**每秒回血**（每秒回复最大生命的 attributeRange.hpRecoverRate，默认 1%）持续抵消伤害，
+ *    把同级裸血的生存时间再拉长约 1.4 倍（60 级约 13 刀 → 约 18 刀）；想关掉它把率设为 0 即可。
+ *    ⚠ 回血同样来自装备与三条成长线（configs/growth 的 equipmentSlotShare.recover、configs/soul/title/rank），
+ *    所以「穿满防御部位 + 三条线拉满」时合计回血约 4500/秒，已经超过同级普通怪 3700/秒 的输出
+ *    —— 满养成的角色挂机不会被普通怪打死，只有 BOSS（攻击 ×1.5）或围攻才压得住。
+ *    这是「养成到顶」的收益，若觉得太强只调 attributeRange.hpRecoverRate 一个数。
  * 3. **升级节奏**：每升 1 级大约要击杀 10~350 只同级怪（前期少、后期多），
  *    1→60 级全流程约 7000 只怪 ≈ 11 小时。
  *
@@ -122,6 +128,19 @@ export const attributeRange = {
   minRate: 0.7,
   /** 最大魔法值 = 最大生命 × 该值（技能消耗见 configs/skill 的 mpCost） */
   mpRate: 0.5,
+  /**
+   * 每秒血量回复 = 最大生命 × 该值（0.01 = 每秒 1%）
+   *
+   * **回血的唯一强度入口**，只作用在「角色等级的裸回血」上（见 getRoleLevelAttributes），
+   * 装备 / 战魂 / 称号 / 军衔都按自己那份额度再乘各自的折扣（装备走部位权重与 setPowerRate、
+   * 三条成长线走 rate × factor），所以这里调一个数，全套来源同比例跟着变。
+   *
+   * 为什么按「最大生命的比例」而不是给每个来源单拍一个数：
+   * - 前期后期手感一致（1 级 100 血回 1/秒，60 级 9.8 万血回 987/秒），不会出现「满级回血像没回」
+   * - 与 maxMp 同一口径（本文件里 maxMp = maxHp × mpRate），一眼能看懂量级
+   * - 血量上限涨了回血自动跟着涨，不用维护两条曲线
+   */
+  hpRecoverRate: 0.01,
 };
 
 /** 按上限算属性取值区间 */
@@ -142,6 +161,8 @@ export function getRoleLevelAttributes(level: number): RoleLevelAttributes {
   return {
     maxHp,
     maxMp: Math.round(maxHp * attributeRange.mpRate),
+    // 每秒回血按血量上限的比例派生（见 attributeRange.hpRecoverRate 的说明）
+    hpRecover: Math.round(maxHp * attributeRange.hpRecoverRate),
     physicalAttack: [attack[0], attack[1]],
     magicAttack: [attack[0], attack[1]],
     taoistAttack: [attack[0], attack[1]],
@@ -184,8 +205,13 @@ export const monsterBalance = {
   defenseRate: 1,
 };
 
-/** 怪物基础战斗属性（等级相同的怪属性完全一致，只有定位倍率不同；等级由 configs/monster 的 level 字段持有） */
-export type MonsterBaseStats = Pick<BattleAttributes, "maxHp" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense">;
+/**
+ * 怪物基础战斗属性（等级相同的怪属性完全一致，只有定位倍率不同；等级由 configs/monster 的 level 字段持有）
+ *
+ * 带 hpRecover 只是为了跟角色的 BattleAttributes 对齐口径 —— 怪**恒为 0**：
+ * 每秒回血是玩家养成线的收益（等级/装备/战魂/称号/军衔），怪物不回血，否则「磨血」的打法会失效。
+ */
+export type MonsterBaseStats = Pick<BattleAttributes, "maxHp" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense" | "hpRecover">;
 
 /**
  * 按**等级**生成怪物的战斗属性（configs/monster 的每条怪物都用它）
@@ -211,6 +237,8 @@ export function monsterStats(level: number, tier: MonsterTier = "normal"): Monst
   const defense = toAttributeRange(defenseMax);
   return {
     maxHp,
+    // 怪物不回血（见 MonsterBaseStats 的说明）
+    hpRecover: 0,
     // 怪物默认只有物理攻击（法系怪要另配魔法攻击，直接在条目里覆盖 magicAttack）
     physicalAttack: toAttributeRange(attackMax),
     magicAttack: [0, 0],
@@ -246,7 +274,7 @@ export type EquipmentSlotKey =
   | "other1"
   | "other2";
 
-/** 某部位对三类属性的贡献权重（各列合计 100，含义见 equipmentSlotShare 注释） */
+/** 某部位对各类属性的贡献权重（各列合计 100，含义见 equipmentSlotShare 注释） */
 export interface EquipmentAttributeShare {
   /** 血量权重 */
   maxHp: number;
@@ -254,6 +282,8 @@ export interface EquipmentAttributeShare {
   attack: number;
   /** 防御权重（三防同值，取角色同级防御上限） */
   defense: number;
+  /** 每秒回血权重（取角色同级的裸回血，见 attributeRange.hpRecoverRate） */
+  recover: number;
 }
 
 /** 装备成长参数 */
@@ -289,26 +319,30 @@ export const equipmentSuffixRates = [1, 2, 3] as const;
  * 设计口径：武器只给攻击、衣服是血防主源、首饰偏攻击但血防也有、防具（头盔/腰带/鞋子）血量略高于防御。
  * 补上「肩胛/护腕/护腿/饰品」等新部位时，从现有部位里匀出权重（保持每列 100），
  * 否则全套会超过 setPowerRate。
+ *
+ * **回血列只在防御部位**（衣服 / 头盔 / 腰带 / 鞋子）：武器与首饰不提供每秒回血
+ * —— 与「回血是防具的收益」这条口径一致（首饰虽然也加血，但它的详情只列攻击三属性，见 configs/good）。
+ * 因此回血列单独凑 100（衣服 40 是主源，三件防具各 20），穿满防御部位即 setPowerRate 倍的裸回血。
  */
 export const equipmentSlotShare: Record<EquipmentSlotKey, EquipmentAttributeShare> = {
-  weapon: { maxHp: 0, attack: 52, defense: 8 },
-  cloth: { maxHp: 30, attack: 10, defense: 30 },
-  helmet: { maxHp: 16, attack: 5, defense: 15 },
-  belt: { maxHp: 17, attack: 4, defense: 15 },
-  shoes: { maxHp: 13, attack: 5, defense: 14 },
-  necklace: { maxHp: 12, attack: 12, defense: 9 },
-  ring: { maxHp: 12, attack: 12, defense: 9 },
+  weapon: { maxHp: 0, attack: 52, defense: 8, recover: 0 },
+  cloth: { maxHp: 30, attack: 10, defense: 30, recover: 40 },
+  helmet: { maxHp: 16, attack: 5, defense: 15, recover: 20 },
+  belt: { maxHp: 17, attack: 4, defense: 15, recover: 20 },
+  shoes: { maxHp: 13, attack: 5, defense: 14, recover: 20 },
+  necklace: { maxHp: 12, attack: 12, defense: 9, recover: 0 },
+  ring: { maxHp: 12, attack: 12, defense: 9, recover: 0 },
   // 以下部位暂无装备：权重留 0，补装备时从上面匀（写 0 而不是缺键，是为了让拼错的部位名编译报错）
-  accessories: { maxHp: 0, attack: 0, defense: 0 },
-  scapular: { maxHp: 0, attack: 0, defense: 0 },
-  shinguard: { maxHp: 0, attack: 0, defense: 0 },
-  wristband: { maxHp: 0, attack: 0, defense: 0 },
-  other1: { maxHp: 0, attack: 0, defense: 0 },
-  other2: { maxHp: 0, attack: 0, defense: 0 },
+  accessories: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
+  scapular: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
+  shinguard: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
+  wristband: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
+  other1: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
+  other2: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
 };
 
 /** 装备提供的战斗属性（固定值：区间两端同数，与角色的浮动区间区分开） */
-export type EquipmentStats = Pick<BattleAttributes, "maxHp" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense">;
+export type EquipmentStats = Pick<BattleAttributes, "maxHp" | "hpRecover" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense">;
 
 /**
  * 按**装备等级 + 部位**生成战斗属性（configs/equipments 的每条装备都用它）
@@ -328,8 +362,12 @@ export function equipmentStats(level: number, slot: EquipmentSlotKey): Equipment
   const maxHp = scale(role.maxHp, share.maxHp);
   const attack = scale(role.physicalAttack[1], share.attack);
   const defense = scale(role.physicalDefense[1], share.defense);
+  // 回血**不保底 1**：低等级防具只加几十点血，凑不出 1 点/秒是正常的；
+  // 强行保底会让 1 级穿满四件防具的角色白拿 4 点/秒（同级怪打人约 7 点/秒），前期直接无敌
+  const hpRecover = share.recover > 0 ? Math.round(role.hpRecover * share.recover * rate) : 0;
   return {
     maxHp,
+    hpRecover,
     // 三攻同值：角色只用自己职业那一项，拉开只会凭空造出职业强弱差（与角色曲线同一口径）
     physicalAttack: [attack, attack],
     magicAttack: [attack, attack],
