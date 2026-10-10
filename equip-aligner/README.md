@@ -1,5 +1,7 @@
 # 装备人工对齐器
 
+> [English](README.en.md) | 简体中文
+
 给装备外观（out）的 **8 方向偏移 `outPositions` 与缩放 `outScale`** 做可视化对齐的本地小工具：网页里把装备帧叠在参考外观上拖动对齐，导出 JSON，再用脚本写回 `assets/configs/equipments.ts`。纯前端、零依赖、不用构建。
 
 ## 快速开始
