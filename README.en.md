@@ -16,7 +16,7 @@ The repository splits into three **peer directories**, each with its own README 
 | --- | --- | --- | --- | --- |
 | **Client** | The Cocos Creator game (login / character select / combat / bag / mall…) | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) | [README](client/README.md) · [FAQ](client/FAQ.md) |
 | **Server** | Account / character / admin APIs, SQLite persistence, Swagger docs | NestJS 12 + `node:sqlite` + JWT | [`server/`](server/) | [README](server/README.md) · [FAQ](server/FAQ.md) |
-| **Admin** | The operator console (accounts / characters / administrators / audit logs) | React 19 + Vite + Tailwind v4 | [`admin/`](admin/) | [README](admin/README.md) · [FAQ](admin/FAQ.md) |
+| **Admin** | The operator console (accounts / characters / administrators / audit logs) | React 19 + Vite + Tailwind v4 | [`admin/`](admin/) | [README](admin/README.en.md) · [FAQ](admin/FAQ.en.md) |
 
 How they relate: the **client** is the game the player plays, the **server** is its only authoritative data source (local storage is just a cache), and the **admin** lets operators edit data.
 The API contract is generated one-way from the server to the other two sides (see [Why are the API files (paths / types / methods) generated?](FAQ.en.md#why-are-the-api-files-paths--types--methods-generated-what-do-i-touch-to-add-an-endpoint)).
@@ -209,7 +209,7 @@ olua/
   + hand-written `types.ts` (business codes / permission points / action and target dictionaries) and `index.ts` (single entry point)
 - src/pages: login / register / overview / account list and detail (reset password · kick offline · delete every character on the account) / character list (filtering + multi-select batch delete) and detail (basic info / common numbers / structured editing of equipment, skills and bag) / administrators (change role · enable-disable · reset password · delete) / announcements (publish · edit · delete · enable-disable + active status column) / mail (compose into queue + delivery records: status filter · retry count · failure reason · re-deliver) / audit logs (filter + pagination + expandable request body) / my account (self-service password change)
 - Menus and buttons are shown or hidden by the **permission points** in the token (`store/session.hasPermission`); the server still validates independently
-- Details in [admin/README.md](admin/README.md), questions in [admin/FAQ.md](admin/FAQ.md)
+- Details in [admin/README.md](admin/README.en.md), questions in [admin/FAQ.md](admin/FAQ.en.md)
 
 ### tools — project-level scripts (cross-side)
 
@@ -306,7 +306,7 @@ npm run dev                        # development; npm run build produces dist
 
 Admin registration needs `ADMIN_REGISTER_CODE` set in `server/.env` (leave it empty for open registration), and registration asks for the same code.
 The **first** administrator to register becomes the super administrator (all permissions); everyone after that is a regular administrator and needs to be promoted by the super admin on the "Administrators" page.
-Details in [admin/README.md](admin/README.md).
+Details in [admin/README.md](admin/README.en.md).
 
 ### 4. Changing an API = changing the server + regenerating
 
@@ -388,7 +388,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | Old-save auto migration | New fields and storage format changes are backfilled on read (equipment / bag id references etc.) |  ✅  |
 | Delete character | "Manage" on the character selection screen enters management mode, a delete button appears above each character, and after two-step confirmation the server deletes it (irrecoverable) |  ✅  |
 | New character starter bag | Generic items plus every base weapon/chest, and also **all prefix/suffix variants of the level 1 weapon (15 pieces by quality)** straight into the bag, so appearances and borders can be compared from birth |  ✅  |
-| Admin console (React) | Admin login and registration, paginated account search and banning, viewing and editing every character of an account (attributes / online flag / delete), **resetting player passwords**, **kicking offline** → [admin/README.md](admin/README.md) |  ✅  |
+| Admin console (React) | Admin login and registration, paginated account search and banning, viewing and editing every character of an account (attributes / online flag / delete), **resetting player passwords**, **kicking offline** → [admin/README.md](admin/README.en.md) |  ✅  |
 | Console character management | Six-dimension filtering (keyword / online status / class / gender / level range / account); **all basic info editable** (name / class / gender / level / fashion / portrait / current map + gold / ingots / silver / XP / War Soul / Title / Rank); **structured editing of equipment / skills / bag** (the server validates structure only; the client configs are the single truth for item lists); multi-select batch delete, clearing every character on an account; renaming still bound by "no duplicate names per account" |  ✅  |
 | Console edits consistent with online players | Characters carry a **revision** number (incremented by 1 on every write): players send it along to lock optimistically, and a mismatch means the console changed it — the server rejects the push and the client **re-fetches the latest and rebaseline on it** (console edits win; the player's old save never overwrites them); when a character is deleted or kicked by the console, the client self-heals back to character selection |  ✅  |
 | Password management | A player who forgets their password can only have it **reset by support in the console** (no recovery flow in the client): the frontend generates a random password and **shows it exactly once** (the server stores only the hash); reusing the old password is rejected. An administrator changing **their own** password must confirm the current one, and the server issues a **new token** afterwards (otherwise they would kick themselves out right after changing it) |  ✅  |
@@ -514,7 +514,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | [FAQ.en.md](FAQ.en.md) | **Cross-side**: single source of truth for addresses, the contract pipeline, how the three sides interact, environment traps, how to run regression |
 | [client/README.md](client/README.md) · [client/FAQ.md](client/FAQ.md) | Client: how to open the Cocos project, client architecture and conventions, preview errors and gameplay config questions |
 | [server/README.md](server/README.md) · [server/FAQ.md](server/FAQ.md) | Server: startup and environment variables, data model, authentication and permissions, contract generation, throttling and audit |
-| [admin/README.md](admin/README.md) · [admin/FAQ.md](admin/FAQ.md) | Admin: startup and build, permission-driven visibility, page list, division of labour in the api layer |
+| [admin/README.md](admin/README.en.md) · [admin/FAQ.md](admin/FAQ.en.md) | Admin: startup and build, permission-driven visibility, page list, division of labour in the api layer |
 | [docs/resume.md](docs/resume.md) | Project introduction for résumé purposes |
 
 ## Assets and contact

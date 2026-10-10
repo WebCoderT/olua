@@ -1,5 +1,7 @@
 # admin · 管理端（React）
 
+> [English](README.en.md) | 简体中文
+
 > 运营后台：账号 / 角色 / 管理员 / 公告 / 邮件 / 操作日志六块。界面按**权限点**显隐，服务端独立校验。
 >
 > 项目总览见 [../README.md](../README.md)；管理端的问题见 [FAQ.md](FAQ.md)；
