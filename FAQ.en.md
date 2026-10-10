@@ -7,7 +7,7 @@
 > Side-specific questions live in their own directories (English editions land in follow-up issues and will be linked here once available):
 > [client/FAQ.md](client/FAQ.md) (preview errors / engine pitfalls / gameplay config) ·
 > [server/FAQ.md](server/FAQ.md) (startup / data model / permissions / throttling and audit) ·
-> [admin/FAQ.md](admin/FAQ.md) (page usage / permission-driven visibility / build)
+> [admin/FAQ.md](admin/FAQ.en.md) (page usage / permission-driven visibility / build)
 >
 > Project overview and directory layout: [README.en.md](README.en.md).
 
@@ -91,7 +91,7 @@ admin/src/api/{routes,models,endpoints}.ts
   - After a successful push the new `revision` must be written back locally (`RoleSync.onSaved` → `StorageManager.applyServerRevision`); otherwise the next push uses the old version and collides with itself (permanent deadlock).
 - **The character was deleted from the console**: server replies **20002**, client shows "the character has been deleted, please select another" → clears its local cache → returns to character selection (without this the player gets stuck in a game that can never sync again).
 - **The character was kicked offline from the console**: server replies **20007**, client shows "your character has been taken offline by an administrator" → **clears only the local online flag, does not delete the character** → picking it again from character selection is enough.
-  - ⚠️ 20002 and 20007 differ by one code but have opposite consequences: the former means "the character is gone" and the local cache must be dropped; the latter means "the character still exists, you just can't play it right now" and **must never be deleted**. Dedicated guards exist for this: `client/tools/test-role-delete.cjs` asserts "only the flag is cleared, the character stays", and `client/tools/test-client-net.cjs` asserts on a source slice that `deleteRole` must not appear in this handler. Mechanism details: [admin/FAQ.md](admin/FAQ.md), "What does kicking a player offline actually do".
+  - ⚠️ 20002 and 20007 differ by one code but have opposite consequences: the former means "the character is gone" and the local cache must be dropped; the latter means "the character still exists, you just can't play it right now" and **must never be deleted**. Dedicated guards exist for this: `client/tools/test-role-delete.cjs` asserts "only the flag is cleared, the character stays", and `client/tools/test-client-net.cjs` asserts on a source slice that `deleteRole` must not appear in this handler. Mechanism details: [admin/FAQ.md](admin/FAQ.en.md), "What does kicking a player offline actually do".
 - **Old saves stay compatible**: when the local cache has no `revision`, the field is simply not sent (the server falls back to the old "last writer wins" behaviour), and the next successful push adds it automatically — no need to wipe saves.
 
 ## Local save vs server data: which one wins?
