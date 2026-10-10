@@ -330,13 +330,19 @@ async function runEnabledSuite() {
 async function runFailureSuite() {
   group("二、投递失败：重试 → 用尽上限 → 标为失败 → 可重投");
 
+  const MAX_ATTEMPTS = 3;
+  // 退避基数刻意给到**秒级**：中间态是**轮询**观测的，而这条断言钉的是精确的 attempts=1。
+  // 按 retryDelayMs = base × 2^(n-1)，这里是 1000ms / 2000ms —— 窗口远大于一次 HTTP 往返，
+  // 「第一次失败后停在 attempts=1」才是可被稳定观察到的；用 30ms 那种值（总窗口才 90ms，
+  // 比轮询间隔还窄）观测到的 attempts 是 1 还是 2 全看机器快慢，CI 上漂一次就红一次。
+  const RETRY_BASE_MS = 1_000;
   const server = await startServer({
     SMTP_HOST: "smtp.example.test",
     SMTP_USER: "noreply@example.test",
     SMTP_PASS: "e2e-smtp-secret",
     MAIL_TRANSPORT: "fail",
-    MAIL_MAX_ATTEMPTS: "3",
-    MAIL_RETRY_BASE_MS: "30",
+    MAIL_MAX_ATTEMPTS: String(MAX_ATTEMPTS),
+    MAIL_RETRY_BASE_MS: String(RETRY_BASE_MS),
   });
   try {
     const base = server.baseUrl;
@@ -362,12 +368,18 @@ async function runFailureSuite() {
     }
 
     // 终态：次数用尽后标为失败，原因可查
-    const failed = await waitFor("任务最终变成失败", async () => {
-      const job = await mailById(base, token, jobId);
-      return job && job.status === "failed" ? job : null;
-    });
+    // 超时要按上面的退避开销给够（1000 + 2000 ≈ 3s），不能用默认的 5s 硬卡 —— 那点余量
+    // 会在慢机器上变成随机失败，而这种失败只会误导人以为重试逻辑坏了
+    const failed = await waitFor(
+      "任务最终变成失败",
+      async () => {
+        const job = await mailById(base, token, jobId);
+        return job && job.status === "failed" ? job : null;
+      },
+      30_000,
+    );
     checkEqual(failed?.status, "failed", "超过上限后标为最终失败");
-    checkEqual(failed?.attempts, 3, "最终失败时尝试了 3 次（= MAIL_MAX_ATTEMPTS）");
+    checkEqual(failed?.attempts, MAX_ATTEMPTS, `最终失败时尝试了 ${MAX_ATTEMPTS} 次（= MAIL_MAX_ATTEMPTS）`);
     check(failed?.lastError?.includes("测试发信器"), "失败原因可查：写清楚是测试发信器拒收");
     checkEqual(failed?.sentAt, null, "没发出去就不会有发送时间");
 
@@ -387,12 +399,16 @@ async function runFailureSuite() {
     checkEqual(retried.body?.data?.attempts, 0, "重投把尝试次数归零（故障已排除，该重新拿满次数）");
     checkEqual(retried.body?.data?.lastError, null, "重投清掉旧失败原因");
 
-    const failedAgain = await waitFor("重投后再次失败", async () => {
-      const job = await mailById(base, token, jobId);
-      return job && job.status === "failed" ? job : null;
-    });
+    const failedAgain = await waitFor(
+      "重投后再次失败",
+      async () => {
+        const job = await mailById(base, token, jobId);
+        return job && job.status === "failed" ? job : null;
+      },
+      30_000,
+    );
     // 归零的证据：如果续着数，这次只会再试 0 次就到上限；归零后应当又是完整 3 次
-    checkEqual(failedAgain?.attempts, 3, "重投后重新走满 3 次（证明次数真的归零了）");
+    checkEqual(failedAgain?.attempts, MAX_ATTEMPTS, `重投后重新走满 ${MAX_ATTEMPTS} 次（证明次数真的归零了）`);
 
     const notFound = await api(base, "POST", "/api/admin/mails/no-such-job/retry", { token });
     checkEqual(notFound.body?.code, 50008, "重投不存在的任务 → 50008");
