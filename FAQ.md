@@ -123,7 +123,7 @@ admin/src/api/{routes,models,endpoints}.ts
 改动合并前至少跑完这三类（全绿才算完）。仓库根有 Makefile，一条命令搞定：
 
 ```bash
-make verify   # = check（客户端 tsc + 管理端 typecheck + 6 个审计）+ 三端构建 + 全部测试
+make verify   # = check（客户端 tsc + 管理端 typecheck + 7 个审计）+ 三端构建 + 全部测试
 ```
 
 手工跑（等价，不依赖 `make`）：
@@ -144,7 +144,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
   && node tools/audit-deploy.cjs
 ```
 
-按改动范围可以只跑相关的那几套，但**服务端 e2e 与六个审计脚本在提交前都该过一遍** —— 它们盯着的是「静默失效」这类单测抓不到的问题：
+按改动范围可以只跑相关的那几套，但**服务端 e2e 与七个审计脚本在提交前都该过一遍** —— 它们盯着的是「静默失效」这类单测抓不到的问题：
 
 - `audit-api-generated`：生成物与文档是否逐字节一致（防「改了服务端忘了生成」）
 - `audit-api-hardcode`：地址有没有写进代码、环境变量有没有漏登记进 `.env.example`
