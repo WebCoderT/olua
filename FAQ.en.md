@@ -5,7 +5,7 @@
 > This document collects questions that **span all three sides**: the single source of truth for addresses, the API contract pipeline, how the three sides interact, environment gotchas, and how to run regression.
 >
 > Side-specific questions live in their own directories (English editions land in follow-up issues and will be linked here once available):
-> [client/FAQ.md](client/FAQ.md) (preview errors / engine pitfalls / gameplay config) ·
+> [client/FAQ.md](client/FAQ.en.md) (preview errors / engine pitfalls / gameplay config) ·
 > [server/FAQ.md](server/FAQ.md) (startup / data model / permissions / throttling and audit) ·
 > [admin/FAQ.md](admin/FAQ.en.md) (page usage / permission-driven visibility / build)
 >
@@ -103,7 +103,7 @@ admin/src/api/{routes,models,endpoints}.ts
 - Deleting a character requires the server-side `RoleApi.remove` to succeed before the local cache is cleared.
 - But *what goes inside* character data is decided by client configs — the server does not know the game configs, it only validates structure. The split of responsibilities: [What does each side own?](#what-does-each-side-own-where-should-a-change-land).
 
-Sync timing, failure handling and debounce details: [client/FAQ.md](client/FAQ.md), "How is character progress synced to the server".
+Sync timing, failure handling and debounce details: [client/FAQ.md](client/FAQ.en.md), "How is character progress synced to the server".
 
 ## What are the generated artifacts on each side? What happens if I edit them by hand?
 
@@ -174,7 +174,7 @@ A related environment trap: `curl 127.0.0.1` on this machine can be hijacked by 
 
 This project's answer is **turning every pitfall into a script** rather than relying on memory:
 
-1. **Invariants pushed down into pure functions + unit tests**: bag tidy / drag / recycle / discard rules are all pure functions (data in, data out, no UI or storage), so the real code can be asserted in node. The sandbox mechanism is described in [client/FAQ.md](client/FAQ.md), "How do unit tests run real Cocos code in node".
+1. **Invariants pushed down into pure functions + unit tests**: bag tidy / drag / recycle / discard rules are all pure functions (data in, data out, no UI or storage), so the real code can be asserted in node. The sandbox mechanism is described in [client/FAQ.md](client/FAQ.en.md), "How do unit tests run real Cocos code in node".
 2. **Tunables pulled into configs**: changing a number should not touch code; `audit-config-leak` enforces this
 3. **Generated artifacts + guards**: neither consumer writes API files by hand, so an incompatible signature explodes at compile time
 4. **Negative assertions**: not only "the intended thing happened" but also "the forbidden thing did not". E.g. "`deleteRole` must not appear in the kick-offline handler", "the UI root must not register mouse events"

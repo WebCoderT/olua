@@ -14,7 +14,7 @@ The repository splits into three **peer directories**, each with its own README 
 
 | Side | What it is | Tech stack | Directory | Docs |
 | --- | --- | --- | --- | --- |
-| **Client** | The Cocos Creator game (login / character select / combat / bag / mall…) | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) | [README](client/README.md) · [FAQ](client/FAQ.md) |
+| **Client** | The Cocos Creator game (login / character select / combat / bag / mall…) | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) | [README](client/README.en.md) · [FAQ](client/FAQ.en.md) |
 | **Server** | Account / character / admin APIs, SQLite persistence, Swagger docs | NestJS 12 + `node:sqlite` + JWT | [`server/`](server/) | [README](server/README.md) · [FAQ](server/FAQ.md) |
 | **Admin** | The operator console (accounts / characters / administrators / audit logs) | React 19 + Vite + Tailwind v4 | [`admin/`](admin/) | [README](admin/README.en.md) · [FAQ](admin/FAQ.en.md) |
 
@@ -182,7 +182,7 @@ olua/
 - tools: **client-only scripts** (25 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
 - settings / profiles / native / package.json / tsconfig.json: Cocos project configuration (`package.json` describes the Cocos project, not npm scripts)
 - library / temp / build: Cocos cache and build output (not version-controlled)
-- Details in [client/README.md](client/README.md), questions in [client/FAQ.md](client/FAQ.md)
+- Details in [client/README.md](client/README.en.md), questions in [client/FAQ.md](client/FAQ.en.md)
 
 ### server — the NestJS service
 
@@ -293,7 +293,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 The client has no npm scripts; it relies on the Cocos Creator editor to launch and preview.
 Which server it talks to is decided solely by `baseUrl` in `client/assets/configs/network.ts` (use the LAN IP for on-device debugging).
-Details in [client/README.md](client/README.md).
+Details in [client/README.md](client/README.en.md).
 
 ### 3. Admin (React)
 
@@ -512,7 +512,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | --- | --- |
 | [README.en.md](README.en.md) | This file: project overview, index of the three sides, directory structure, quick start, feature list |
 | [FAQ.en.md](FAQ.en.md) | **Cross-side**: single source of truth for addresses, the contract pipeline, how the three sides interact, environment traps, how to run regression |
-| [client/README.md](client/README.md) · [client/FAQ.md](client/FAQ.md) | Client: how to open the Cocos project, client architecture and conventions, preview errors and gameplay config questions |
+| [client/README.md](client/README.en.md) · [client/FAQ.md](client/FAQ.en.md) | Client: how to open the Cocos project, client architecture and conventions, preview errors and gameplay config questions |
 | [server/README.md](server/README.md) · [server/FAQ.md](server/FAQ.md) | Server: startup and environment variables, data model, authentication and permissions, contract generation, throttling and audit |
 | [admin/README.md](admin/README.en.md) · [admin/FAQ.md](admin/FAQ.en.md) | Admin: startup and build, permission-driven visibility, page list, division of labour in the api layer |
 | [docs/resume.md](docs/resume.md) | Project introduction for résumé purposes |

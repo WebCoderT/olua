@@ -1,5 +1,7 @@
 # client · 客户端（Cocos Creator）
 
+> [English](README.en.md) | 简体中文
+
 > 这是 **Cocos Creator 工程的根目录** —— 用 Cocos Creator 打开的就是这个目录，不是仓库根。
 >
 > 项目总览见 [../README.md](../README.md)；客户端的问题见 [FAQ.md](FAQ.md)；
