@@ -229,6 +229,11 @@ gen-api: ## 重新生成接口契约（openapi.json + 客户端与管理端生�
 	@$(NODE) tools/audit-api-generated.cjs > /dev/null && echo "  生成物一致性 ✓"
 	@echo "  下一步：管理端 make admin-build，客户端 make client-check（签名不一致会直接编译报错）"
 
+gen-battle-rules: ## 重新生成服务端战斗规则快照（来源 = client/assets/configs）
+	@echo "==> 编译客户端纯配置 + 快照"
+	@$(NODE) tools/gen-battle-rules.cjs
+	@$(NODE) tools/audit-battle-rules.cjs > /dev/null && echo "  生成物一致性 ✓"
+
 # ==============================================================================
 #  管理端（admin/）
 # ==============================================================================
@@ -277,6 +282,9 @@ audit-click: ## 全屏模态是否两条路都拦住了点击穿透
 
 audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
 	@$(NODE) tools/audit-deploy.cjs
+
+audit-battle-rules: ## 战斗规则快照是否与客户端 configs 逐字节一致（漂移会被攒成难查的 bug）
+	@$(NODE) tools/audit-battle-rules.cjs
 
 # ==============================================================================
 #  部署（Docker / docker compose）
