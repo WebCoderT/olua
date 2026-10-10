@@ -64,7 +64,7 @@ The two entries are deliberately separate because **the verification and the con
 
 - In the admin list, "reset password" is **disabled for your own row** (the `title` hint points you to "My Account") — taking the reset path would invalidate your own current token on the spot and bounce you straight back to the login page
 - Mechanism details (how `token_version` invalidates old tokens, why the change and the version bump have to happen in one SQL statement): [../server/FAQ.md](../server/FAQ.md) (see "what happens if a player forgets the password, and why are they logged out after a reset")
-- What the kicked player sees (`40103` forcing a re-login): [../client/FAQ.md](../client/FAQ.md)
+- What the kicked player sees (`40103` forcing a re-login): [../client/FAQ.md](../client/FAQ.en.md)
 
 ### Where do the permission count and timestamps in the top bar come from?
 
@@ -110,4 +110,4 @@ Ordered by frequency:
 - [README.en.md](README.en.md) — admin overview, page list, environment variables, directory structure
 - [../FAQ.en.md](../FAQ.en.md) — cross-side mechanics (single source of truth for addresses, contract pipeline, three-side interaction, environment gotchas)
 - [../server/FAQ.md](../server/FAQ.md) — the server behind these endpoints: permissions, throttling, audit, passwords
-- [../client/FAQ.md](../client/FAQ.md) — client questions
+- [../client/FAQ.md](../client/FAQ.en.md) — client questions
