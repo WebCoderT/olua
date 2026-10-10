@@ -1,5 +1,7 @@
 # olua
 
+> [English](README.en.md) | 简体中文
+
 > **本项目是一个纯 AI 编写的项目（Vibe Coding）：仓库里的每一行代码都是 AI 写的，没有一行是人手写的。**
 > 人在这里只做两件事 —— **提需求、看效果**。具体怎么做的、留下了哪些痕迹，见 [一个纯 AI 编写的项目](#一个纯-ai-编写的项目)。
 
@@ -250,7 +252,7 @@ make client-test    # 客户端 25 套单测
 make server-verify  # 服务端一条命令全验（编译 + 五套 e2e + 生成物审计）
 make admin-build    # 管理端类型检查 + 构建
 make gen-api        # 改完接口后重新生成契约与两端接口文件
-make audit          # 4 个跨端审计脚本
+make audit          # 7 个跨端审计脚本
 
 make check          # 静态检查：客户端 tsc + 管理端 typecheck + 7 个审计
 make test           # 全部测试：客户端 25 套 + 服务端五套 e2e
