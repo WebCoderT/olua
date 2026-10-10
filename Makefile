@@ -5,7 +5,7 @@
 #    client/  Cocos Creator 3.8.7 + TypeScript 客户端（没有 npm 脚本，用编辑器打开）
 #    server/  NestJS 12 + node:sqlite 服务端（同时是接口契约的唯一源头）
 #    admin/   React 19 + Vite + Tailwind v4 管理端
-#    tools/   跨端脚本（gen-api + 5 个 audit）
+#    tools/   跨端脚本（gen-api + 6 个 gen/audit）
 #
 #  常用：
 #    make install          首次拉仓库：装 server / admin 依赖
@@ -48,6 +48,7 @@ CREATOR ?= CocosCreator
 .PHONY: help info install install-ci env \
         dev dev-server dev-admin \
         check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
+        audit-battle-rules audit-combat-parity \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open \
@@ -254,7 +255,7 @@ admin-preview: ## 预览管理端已构建产物（需先 make admin-build）
 #  审计（tools/，跨端静态检查）
 # ==============================================================================
 
-audit: ## 跑全部跨端审计（生成物 / 硬编码 / 配置外泄 / 点击穿透 / 部署接线）
+audit: ## 跑全部跨端审计（生成物 / 硬编码 / 配置外泄 / 点击穿透 / 部署接线 / 战斗规则两端一致）
 	@echo "==> 跨端审计"
 	@fail=0; \
 	for t in tools/audit-*.cjs; do \
@@ -283,8 +284,11 @@ audit-click: ## 全屏模态是否两条路都拦住了点击穿透
 audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
 	@$(NODE) tools/audit-deploy.cjs
 
-audit-battle-rules: ## 战斗规则快照是否与客户端 configs 逐字节一致（漂移会被攒成难查的 bug）
+audit-battle-rules: ## 战斗规则快照是否与客户端 configs 逐字节一致（数据漂移）
 	@$(NODE) tools/audit-battle-rules.cjs
+
+audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）
+	@$(NODE) tools/audit-combat-parity.cjs
 
 # ==============================================================================
 #  部署（Docker / docker compose）
