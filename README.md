@@ -212,7 +212,7 @@ olua/
 ### tools —— 项目级脚本（跨端）
 
 - gen-api.cjs：**由 `server/openapi.json` 产出两端接口文件**（唯一的代码生成器，服务端 `npm run gen:api` 调它）
-- gen-battle-rules.cjs：**由 `client/assets/configs` 产出服务端战斗规则快照**（战斗权威化的地基，详见 `server/src/modules/combat/`）
+- gen-battle-rules.cjs：**由 `client/assets/configs` 产出服务端战斗规则快照**（战斗权威化的地基，详见 `server/src/modules/combat/`）—— 等级 60 / 战魂 37 / 称号 34 / 军衔 100 + 战斗力权重 7 项 + 装备 555 件（已展开前后缀变体）
 - audit-api-generated.cjs：生成物与文档逐字节一致 / 头标记 / 接口全覆盖 / 类型不悬空 / 路径只在路径表 / Cocos `.meta` 齐全
 - audit-api-hardcode.cjs：三端有没有硬编码地址、请求是否只在唯一出口发出、环境变量键是否都登记进 `.env.example`
 - audit-config-leak.cjs：客户端核心代码有没有可配置项外泄 + `configs/texts` 的 key 是否都被登记（白名单 `config-leak-allowlist.json`）
