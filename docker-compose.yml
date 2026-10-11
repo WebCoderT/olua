@@ -37,9 +37,11 @@ services:
       CORS_ORIGINS: ${OLUA_CORS_ORIGINS:-}
     volumes:
       - olua-data:/app/data
-    ports:
-      # 只把接口也映出来是为了方便本地直接用 Swagger 调试；生产可以删掉这一行
-      - "${OLUA_SERVER_PORT:-3100}:3100"
+    # 接口**不映射到宿主机**：管理端走下面的 compose 内网反代已经够用，
+    # 对外多开一个 3100 只是把签名接口与 Swagger 一并暴露出去，没有收益。
+    # 本地要用 Swagger 调试，把下面四行的注释去掉（或临时 docker run -p 3100:3100）：
+    # ports:
+    #   - "${OLUA_SERVER_PORT:-3100}:3100"
 
   admin:
     build:
@@ -52,7 +54,8 @@ services:
     depends_on:
       - server
     ports:
-      - "${OLUA_ADMIN_PORT:-8080}:80"
+      # 对外只开 80：管理端页面与 /api 都从这里进（**不上 HTTPS**，见 docs/deploy.md）
+      - "${OLUA_ADMIN_PORT:-80}:80"
 
 volumes:
   # 具名卷：`docker compose down` 不会删它，只有 `down -v` 才会

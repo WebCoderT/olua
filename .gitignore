@@ -34,3 +34,10 @@ client/assets/resources/
 
 .workbuddy/
 .backup
+
+#//////////////////////////
+# 部署密钥（**绝不进版本库**：deploy.env 是唯一放服务器 IP / 密钥 / 邀请码的地方，
+# 仓库只提交模板 deploy.env.example；.pem 是服务器登录私钥）
+#//////////////////////////
+deploy.env
+*.pem
