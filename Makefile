@@ -13,7 +13,7 @@
 #    make dev              同时起服务端与管理端开发服务器
 #    make client-test      客户端 24 套单测（需要本机 Cocos 工程）
 #    make verify           一条命令跑完全部门禁（含三端构建与四套 e2e）
-#    make ci               CI 跑的那一条（服务端 + 管理端 + 审计，不含客户端）
+#    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
 #
 #  完整清单：make / make help
 # ==============================================================================
@@ -51,7 +51,7 @@ CREATOR ?= CocosCreator
         audit-battle-rules audit-combat-parity \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
-        client-clean-frames client-clean-frames-apply client-open \
+        client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
         server-e2e-mail server-e2e-backup server-verify db-backup db-restore gen-api \
         admin-dev admin-build admin-typecheck admin-preview \
@@ -103,6 +103,8 @@ install-ci: ## 按锁文件精确安装依赖（CI 用；锁文件与 package.js
 	@cd server && $(NPM) ci
 	@echo "==> 按锁文件安装管理端依赖（npm ci）"
 	@cd admin && $(NPM) ci
+	@echo "==> 按锁文件安装客户端类型检查依赖（npm ci，提供 CI 用的 tsc）"
+	@cd client && $(NPM) ci
 
 env: ## 生成 server/.env（已存在则跳过）
 	@if [ -f server/.env ]; then \
@@ -185,6 +187,10 @@ client-clean-frames-apply: ## 备份并删除 role 空帧（会写到 .workbuddy
 
 client-open: ## 用 Cocos Creator 打开客户端工程（macOS）
 	@open -a "$(CREATOR)" client && echo "  已用 $(CREATOR) 打开 client/"
+
+client-gen-declarations: ## 重新生成 client/types/engine/（升级 Cocos 后用；需先打开过编辑器）
+	@echo "==> 重新生成客户端类型声明（vendoring，去绝对路径）"
+	@$(NODE) client/tools/gen-declarations.cjs
 
 # ==============================================================================
 #  服务端（server/）
@@ -329,15 +335,19 @@ verify: check server-build test admin-build ## 完整门禁：三端静态检查
 # ------------------------------------------------------------------------------
 #  CI（.github/workflows/ci.yml 只调这一条，门禁清单只此一处）
 #
-#  CI 上**没有** Cocos Creator，也**没有** assets/resources 素材（体积大、有意不入库，
-#  见 .gitignore）—— 而 25 套客户端单测里有 10 套是断言素材磁盘内容的。所以客户端门禁
-#  （client-check + 25 套单测）是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
+#  客户端门禁分两半（见根 FAQ「为什么 CI 不覆盖客户端」，决定走路径 B）：
+#   - `make client-check`（全工程 tsc）现已进 CI：Cocos 类型声明被 vendoring 进
+#     client/types/engine/（相对路径、含真实引擎 cc.d.ts），CI 无需 Cocos 编辑器。
+#   - `make client-test` 的 25 套单测里有 10 套断言 assets/resources/ 下的真实素材
+#     （图集/帧序列/怪物帧 .meta），素材体积大、**有意不入库**（见 .gitignore），
+#     所以单测仍是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
 # ------------------------------------------------------------------------------
 
-ci: install-ci audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-backup ## CI 门禁：服务端五套 e2e + 管理端构建 + 跨端审计（不含客户端）
+ci: install-ci client-check audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-backup ## CI 门禁：服务端五套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查
 	@echo ""
 	@echo "✓ CI 门禁通过"
-	@echo "  未覆盖（本地专属）：make client-check、make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"
+	@echo "  未覆盖（本地专属）：make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"
+	@echo "  已覆盖：make client-check（类型声明 vendoring 进 client/types/engine/，无需编辑器）"
 
 # ==============================================================================
 #  清理

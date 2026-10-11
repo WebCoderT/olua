@@ -10,10 +10,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": false,
     "types": [
-      "../temp/declarations/cc",
-      "../temp/declarations/cc.custom-macro",
-      "../temp/declarations/jsb",
-      "../temp/declarations/cc.env"
+      "../types/engine/cc",
+      "../types/engine/cc.custom-macro",
+      "../types/engine/jsb",
+      "../types/engine/cc.env"
     ]
   },
   "include": ["../assets/**/*.ts"],

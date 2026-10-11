@@ -5,13 +5,13 @@
 #   ✓ 管理端：类型检查 + 构建
 #   ✓ 跨端审计：5 个（接口生成物一致性 / 地址唯一来源 / 配置外泄 / 点击穿透 / 部署接线）
 #
-#   ✗ 客户端：**不在 CI 覆盖范围内**，两条独立的原因，都不是「忘了配」：
-#     1. `make client-check`（全工程 tsc）要 `client/temp/declarations/cc.d.ts` ——
-#        那是 Cocos Creator 编辑器产物，内容是指向本机引擎的绝对路径，而 client/temp/ 在 .gitignore 里；
-#     2. `make client-test` 的 24 套单测里有 10 套直接断言 `assets/resources/` 下的真实素材
-#        （图集/帧序列/怪物帧 .meta），而素材体积大、**有意不入库**（见 .gitignore）。
-#        干净 clone 上这些断言不可能成立。
-#   → 客户端门禁是「本地专属」：本机用 Cocos Creator 打开 client/ 后跑 `make check` / `make test`。
+#   ✓ 客户端类型检查（client-check）：**已进 CI**。Cocos 类型声明 vendoring 进
+#     client/types/engine/（相对路径 + 真实引擎 cc.d.ts），CI 无需 Cocos 编辑器，
+#     由 install-ci 装好的 client/node_modules/.bin/tsc 跑（见 #24 路径 B）。
+#   ✗ 客户端单测（client-test）：**仍不在 CI 覆盖范围内**——25 套里有 10 套断言
+#     assets/resources/ 下的真实素材（图集/帧序列/怪物帧 .meta），素材体积大、有意不入库
+#     （见 .gitignore）。干净 clone 上这些断言不可能成立。客户端单测是「本地专属」：
+#     本机用 Cocos Creator 打开 client/ 后跑 `make test`。
 #
 # ## 门禁清单只此一处
 #   这个 workflow 只调 `make ci`，顺序与内容全写在 Makefile 里 —— 本机跑同一条命令即可复现 CI。
@@ -48,9 +48,12 @@ jobs:
           cache-dependency-path: |
             server/package-lock.json
             admin/package-lock.json
+            client/package-lock.json
 
       - name: 打印工具链与工程状态
         run: make info
 
       - name: 跑门禁
-        run: make ci
+        # install-ci 已把 tsc 装进 client/node_modules；client-check 里 `cd client` 后
+        # 相对路径 node_modules/.bin/tsc 正好解析到它，CI 无需 Cocos 编辑器。
+        run: make ci TSC=node_modules/.bin/tsc
