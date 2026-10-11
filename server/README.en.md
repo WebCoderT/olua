@@ -187,7 +187,7 @@ The only source of permission points is `src/common/constants/permission.ts` (17
 > This line looks like "just another read permission" and is easy to add by mistake.
 
 **Adding an admin interface must use `@ApiAdminDoc({ permissions: [Permission.X] })`** — it lands in three places at once:
-① doc description ② the `x-olua-permissions` extension (for machines) ③ `RequirePermissions` runtime metadata.
+(1) doc description (2) the `x-olua-permissions` extension (for machines) (3) `RequirePermissions` runtime metadata.
 **Omitting it is a real pass-through** (we once wrote only docs without enforcement, all permissions open, caught by e2e).
 
 On refusal: no permission `403` + business code **30006**; protective refusal `403` + **30007** (**the last enabled super admin** cannot be demoted / disabled / deleted).
