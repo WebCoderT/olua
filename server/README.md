@@ -1,5 +1,7 @@
 # server · 服务端（NestJS）
 
+> [English](README.en.md) | 简体中文
+
 > 账号 / 角色 / 管理接口的服务端，SQLite 落库，Swagger 文档。
 > **它同时是三端接口契约的唯一源头** —— 客户端的 `ApiRoutes/ApiModels/Api.ts` 与管理端的 `routes/models/endpoints.ts` 都由它的 `openapi.json` 生成。
 >
