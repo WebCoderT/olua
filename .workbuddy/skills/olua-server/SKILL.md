@@ -1,0 +1,219 @@
+---
+name: olua-server
+description: olua 项目服务端（NestJS 12 + node:sqlite + JWT + Swagger）的开发与改接口做法。它同时是「三端接口契约的唯一源头」——控制器 + DTO + 装饰器产出 server/openapi.json，再由 tools/gen-api.cjs 生成客户端与管理端两端的接口文件，所以加接口的唯一正确顺序是「改服务端 → 补 operationId → npm run gen:api → 两端 build」。涵盖：三档分组装饰器 @ApiPublicDoc / @ApiPlayerDoc / @ApiAdminDoc（分组按方法标、控制器禁写类级 @ApiTags、createDocument 必须 autoTagControllers 传 false）、管理端接口必须带 permissions（同时落文档说明 + x-olua-permissions + RequirePermissions 运行时元数据，漏了就是真放行）、@ApiDataResponse 的 x-olua-data-schema 与 x-olua-data-nullable、@ApiQueryModel 的 x-olua-query-schema、两层守卫（AuthGuard 受众每次回查库 + PermissionGuard 权限点注册在其后，业务代码禁写角色判断）、统一响应包裹 code message data timestamp 与业务码分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）、SQLite 四表仓储与 ensureColumn 存量补列、全局 ValidationPipe whitelist 会静默剥掉嵌套裸对象属性（必须带装饰器的 DTO 类加 ValidateNested each true 加 Type 并登记 SWAGGER_MODELS）、分页必须用 PageMetaDto 而非 isArray、同账号角色重名 20005、清在线标记必须早于删角色行、角色修订号 revision 乐观锁、口令管理（重置玩家口令 / 管理员自助改密 / token_version 让旧令牌立即作废 40103）、操作日志（审计拦截器只审写方法、action 复用 operationId、敏感字段递归打码、prune 限容、目标名用相关子查询、keyword 的 LIKE 通配符要转义）、登录限流（纯函数 rate-limit.util + 内存 LoginThrottleService、用户名与 IP 两维度、达阈值计数归零、TRUST_PROXY 双向陷阱）、踢下线（只清在线标记拦不住本地客户端，必须叠加存档写入拒收 20007 且判定放在乐观锁之前）、服务端不认识客户端配置只做结构体量与格式校验、swagger emit 与 gen api 与 verify api 与四套 e2e（e2e / e2e-roles / e2e-guard / backup）与 verify 脚本的写法（真实起服务 + 真实请求 + setupSwagger 生成真文档验分组权限与悬空引用）、每处理完一个问题按功能提交一次代码（改接口的提交必须连 openapi.json 与两端生成物一起提交）。触发场景：用户说"改服务端接口""加一个接口""给接口补权限点""Swagger 分组不对""文档里少了某个接口""服务端校验失败""接口报 500""分页接口文档写成数组""e2e 挂了""数据库加一列""后台改角色""角色改名""乐观锁冲突""前端类型跟服务端对不上""重置密码""改密码""旧令牌还有效吗""操作日志""审计""谁改了什么""登录被锁""限流""踢下线""把玩家踢出去""反代拿不到真实 IP"。
+agent_created: true
+---
+
+# olua 服务端（NestJS）：三端接口契约的唯一源头
+
+`server/` 是三个**平级子工程**之一（另两个：客户端 Cocos 工程在 `client/`，管理端在 `admin/`；仓库根只放总 README / FAQ 与跨端 `tools/`）。
+服务端只做三件事：
+
+1. **鉴权** —— 玩家 / 管理端两套 JWT 受众；
+2. **角色数据落库** —— SQLite，`roles.data` 存客户端 `entities/Role` 的 JSON 快照（**字符串**）；
+3. **产出接口契约** —— Swagger 文档 → 客户端与管理端的接口文件**全部由它生成**。
+
+**最重要的一条心智模型**：服务端**不认识客户端配置**。装备槽位名、技能 id、地图 id、成长曲线……权威定义都在客户端 `client/assets/configs`。
+服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，从不复制一份游戏配置过来。
+
+## 一、目录与职责
+
+```
+server/src
+  main.ts                         启动装配（ValidationPipe / 过滤器 / 拦截器 / setupSwagger / trust proxy）
+  config/configuration.ts         环境变量的**唯一读取处**
+  common/
+    constants/biz-code.ts         业务码（0 成功；1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）
+    constants/permission.ts       权限点 + 管理员角色 + ROLE_PERMISSIONS 映射（**唯一来源**）
+    constants/swagger-tags.ts     文档分组声明（顺序即展示顺序）
+    decorators/api-doc.decorator.ts            @ApiPublicDoc / @ApiPlayerDoc / @ApiAdminDoc（顺带落审计 action）
+    decorators/api-data-response.decorator.ts  @ApiDataResponse
+    decorators/api-query-model.decorator.ts    @ApiQueryModel
+    decorators/audit-target.decorator.ts       @AuditTarget(type, source) 审计目标
+    decorators/{audience,permission,public,current-user}.decorator.ts
+    dto/api-envelope.dto.ts       统一包裹 + PageQueryDto（keyword 是公共字段，含义由各接口覆写说明）
+    guards/auth.guard.ts          受众校验（每次请求回查库 + 比对令牌版本号 ver）
+    guards/permission.guard.ts    权限点校验（注册在 AuthGuard **之后**）
+    security/security.module.ts   @Global()：登录限流服务只在这里 provide / export
+    security/login-throttle.service.ts  内存计数器（用户名 + IP 两维度）
+    interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
+    filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
+  database/
+    database.service.ts           建表 + migrate() 里的 ensureColumn 存量补列
+    repositories/{account,admin,role,audit}.repository.ts
+  modules/
+    auth/    玩家注册登录（限流 + 登录审计）
+    roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
+    admin/   管理端（认证 / 账号 / 角色 / 管理员）
+    audit/   操作日志查询（只读两接口；interceptor 与 service 同模块）
+    token/   JWT        health/  健康检查
+  swagger/
+    models.ts   SWAGGER_MODELS（要出现在文档里的 DTO 必须登记）
+    setup.ts    buildSwaggerDocument() + setupSwagger(app)（main 与自动化测试**共用同一份**）
+    emit.ts     离线产出 openapi.json（npm run swagger:emit）
+openapi.json                     机器可读契约（**提交进仓库**）+ 两端接口文件的唯一输入
+test/e2e.cjs                     全量回归（187 条断言）
+test/e2e-roles.cjs               角色管理专项（77 条断言）
+test/e2e-guard.cjs               口令 / 审计 / 限流 / 踢下线专项（279 条断言，起两台服务各验一轮）
+```
+
+## 二、加 / 改一个接口的标准动作
+
+**顺序不能反**：先改服务端，再由生成器产出两端。
+
+1. **写 DTO**（`modules/<域>/dto/*.dto.ts`）
+   - 每个字段都要 `@ApiProperty` / `@ApiPropertyOptional`；可空字段要 `type` + `nullable: true`（**只写 `nullable` 生成器只能给 `unknown`**）；
+   - **嵌套数组 / 对象必须**是带装饰器的 DTO 类 + `@ValidateNested({ each: true })` + `@Type(() => XxxDto)`（见坑 1，最容易静默出错的地方）；
+   - 新 DTO 登记进 `swagger/models.ts` 的 `SWAGGER_MODELS`；
+   - 分页响应**不要**写 `@ApiDataResponse(X, { isArray: true })`，用 `dto/page-result.dto.ts` 的 `XxxPageDto`（= `PageMetaDto` + list）。
+2. **写控制器方法**，挂三档分组装饰器之一，**必须给 `operationId`**（`<模块>.<方法>`，如 `role.save`）：
+
+   ```ts
+   @ApiAdminDoc({
+     operationId: "adminRole.patch",
+     summary: "修改角色",
+     description: "……",
+     permissions: [Permission.ROLE_WRITE],   // 管理端接口**必带**，漏了就是真放行
+   })
+   @ApiQueryModel(RoleQueryDto)              // 有 query DTO 时（列表接口），否则 query 只能生成成裸对象
+   @ApiDataResponse(RoleDto)                 // 有响应体时；无响应体的接口不写
+   ```
+
+   - 一个控制器里常同时有公共接口与需登录接口 → **控制器不写类级 `@ApiTags`**，分组按**方法**标；
+   - 三档分别落：公共接口（无令牌）/ 客户端（`player` 令牌）/ 管理端（`admin` 令牌 + 权限点）。
+3. **权限点先加在 `common/constants/permission.ts`**：加权限点 → 决定哪些角色拥有它（**只改 `ROLE_PERMISSIONS`**）→ 再在装饰器上引用。**业务代码里禁止写角色判断**。
+4. 跑 **`npm run gen:api`**（= `swagger:emit` + `node ../tools/gen-api.cjs`）重新产出文档与两端接口文件。
+5. 两端跑 `tsc` / `npm run build`，**签名不兼容会直接编译报错**（这正是设计目的），按报错改调用点。
+6. 跑 **`npm run verify`**（编译 + **四套** e2e + 生成物一致性审计）。
+
+> 契约管线的完整细节（`x-olua-*` 扩展对照表、生成器的 `MODULES` 映射、守卫脚本的分段检查）见
+> `references/contract-pipeline.md`。
+
+## 三、权限模型：两层，都在守卫里
+
+| 层 | 谁管 | 解决什么 | 关键实现 |
+|---|---|---|---|
+| **受众** audience | `AuthGuard` | 「谁能进这扇门」 | `aud = player / admin` 两套令牌；**每次请求回查库** → 封禁 / 删除即时生效 |
+| **权限点** permission | `PermissionGuard` | 「进门之后能干什么」 | 注册在 AuthGuard **之后**，直接用 `request.user.role`，不再查库 |
+
+- 管理员账号在**独立 `admins` 表**（注册需 `ADMIN_REGISTER_CODE`；**第一个注册者自动是超管**）；
+- 三级角色：`super_admin`（全给）/ `admin`（除 `admin:manage`）/ `viewer`（`stats:read` + `account:read` + `role:read`）；
+- 权限点是 13 个：`account:password`（重置玩家口令）、`audit:read`（查操作日志）与 `system:read`（看系统信息）是后加的 —— **观察员三个都没有**（它的定位是看数据，不是查人、更不该能接管账号或看部署形态）；
+- 无权限 → `403` + `30006`（message 写出缺哪个权限）；保护性拒绝 → `30007`（**最后一个启用中的超管**不能降级 / 停用 / 删除）；
+- `admins.role` 列由 `ensureColumn` 补 + `ensureSuperAdmin()` 兜底存量库；
+- **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。
+
+## 四、数据层规矩
+
+- **四张表**：`accounts` / `roles` / `admins` / `audit_logs`。删账号**级联删其角色**。
+  - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
+- **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
+- **角色数据是不透明文档**：
+  - 读路径 `decodeStoredRoleData` **容错**（解析失败返回安全默认）；
+  - **编辑路径 `parseStoredRoleData` 解析失败必须报错** —— 用空对象兜底等于**清空玩家背包与装备**；
+  - `parseRoleData` 末尾要 `delete data.revision`（修订号是**索引列**，不留在文档里）。
+- **删除相关**：`accounts.clearOnlineRole` 的 SQL 带 `AND online_role_id = ?`，**清在线标记必须早于删角色行** —— 角色行删掉后就判不出当初指向谁。
+- **修订号 `revision`（乐观锁）**：`roles.revision` 列，每次落库 `revision = revision + 1` **写在 SQL 里**（不读出来加一再写回）；玩家 `PUT /roles/:id` 可选带 `revision`，对不上 → `409` + `20006`；**不带该字段 = 旧行为**（最后写入者胜，兼容旧客户端）。
+- 结构化字段的校验与上限常量集中在 `modules/roles/role-data.util.ts`（`normalizeEquipments` / `normalizeSkills` / `normalizeBagCells` / `applyBagCells`）。**只校验结构与体量，不校验内容清单。**
+
+## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线）
+
+这五件事互相咬合，**改动时基本必须一起看**：
+
+**1. 令牌版本号 = 无状态 JWT 的「主动作废」开关**
+- `accounts` / `admins` 两表各一列 `token_version`；`TokenService.sign` 把 `ver` 写进载荷；`AuthGuard` **每次回查库比对**（admin 与 player 两条路径都要写，漏一条就是那端不作废）；
+- 对不上 → `401` + `40103 TOKEN_REVOKED`；存量令牌没有 `ver` 按 `0` 处理（与 `ensureColumn` 的默认值一致 → 向后兼容）；
+- 改密与版本号自增写在**同一条 SQL**（`updatePasswordAndBumpVersion`，自增在 SQL 里，避免并发丢自增），否则会出现「口令改了但版本号没加」的半截状态。
+
+**2. 口令管理的两个入口，后果完全不同**
+- 后台「重置密码」：前端生成随机口令（**只显示一次**，服务端只存 scrypt 哈希）→ 对方旧令牌当场全废 → 他需要重新登录。**不要给自己用这个入口**（管理端把它在自己那一行置灰）；
+- 「我的账号」自助改密：验原密码 → 拒绝与旧口令相同 → 落新哈希 + 版本号 +1 → **必须回一个新令牌**（`AdminAuthResult`），否则管理员改完自己的密码会立刻被自己踢回登录页。客户端收到后覆盖本地会话。
+
+**3. 登录限流：纯函数判定 + 内存计数**
+- 判定全在 `common/utils/rate-limit.util.ts`（`createAttemptState` / `afterFailure` / `afterSuccess` / `lockedForMs` / `remainingAttempts` / `describeWait` / `isIdle`），**纯函数好测**（e2e 零段直接 require 编译产物跑边界值）；
+- 计数放内存（`LoginThrottleService`，`SecurityModule` 设 `@Global()` 供 auth 与 admin 共用）：这是短命速率状态，落库只带来写放大与垃圾；代价是进程重启归零（单实例 SQLite 可接受）；
+- 两个维度：用户名（`u:<去空格+小写>`）+ IP（`i:<ip>`）；**达阈值时把计数清零**（锁定期满从 0 重新计，正常用户被误锁不会一错再错）；`maxFailures <= 0` = 关闭该维度；
+- 抛 `429` + 传入的业务码（玩家 `10005` / 管理端 `30009`）。
+
+**4. 审计：写接口自动记，动作就是 operationId**
+- `ApiAdminDoc` 里 `SetMetadata(AUDIT_ACTION_KEY, options.operationId)` → 「文档里的接口标识」与「日志里的 action」永远同一个字符串，**新增接口零额外工作**；
+- `AuditInterceptor` 只审写方法（`WRITE_METHODS`），跳过 `@Public()` 与非管理端；**读接口不记**（否则一页列表刷满日志）；
+- 目标与来源用 `@AuditTarget("role")` / `@AuditTarget("admin", "self")` 声明；
+- 登录成功 / 失败走 `AuditService.recordLoginAttempt`（那时还没有已认证的操作人 → actor 留空、账号名放 `detail`）；
+- `maskSensitive` 递归把命中 `/pass(word)?|secret|token|registercode|credential/i` 的值换成 `***`（**宁可多打**）；`record()` 吞掉一切异常（日志写不进去不该让封号失败）；每 200 次写 `prune(AUDIT_LOG_MAX_ROWS)`；
+- 目标**当前**名字用相关子查询（`TARGET_NAME_SQL` 的三段 `CASE`），不是因为性能，是因为一张表打三种目标 JOIN 要写三段 UNION；
+- 关键字查询的 LIKE 参数**必须转义** `\ % _`（否则玩家名里的下划线变成单字符通配符，静默多查出东西）。
+
+**5. 踢下线：只清标记拦不住人**
+- 后台清 `online_role_id` 之后，**本地还在跑的客户端照样会推存档**，所以 `RolesService.save` 必须叠加一道「推上来的角色仍是账号当前在线角色」，否则 `409` + `20007 ROLE_KICKED`；
+- 这道判定要放在**乐观锁之前**：被踢的玩家该看到「回选角」，而不是反复重试「版本冲突」；
+- 客户端侧对应 `RoleSync.onKicked`（**只清在线标记，绝不删角色** —— 那是 `20002` 的处理，写错就把玩家练的号删了）。
+
+## 六、必踩的坑
+
+1. **全局 `ValidationPipe({ whitelist: true })` 会静默剥掉嵌套裸对象的属性**。声明成 `bag?: unknown[]` 时，请求里的 `[{row, col, id, count}]` 到服务层会变成 `[[]]`（静默变空数组，不报任何错）。
+   正解 = 带装饰器的 DTO 类 + `@ValidateNested({ each: true })` + `@Type(() => RoleBagCellDto)`，并登记 `SWAGGER_MODELS`。**任何嵌套数组 / 对象入参都要走这条。**
+   定位手法：起一个探针脚本直接调 `ValidationPipe.transform`，看转换后的值 —— 比读代码猜快得多。
+2. **`createDocument(..., { autoTagControllers: false })` 必须显式传**。默认 `true` 时会拿**控制器类名**当分组，`@ApiTags()` 空标签清不掉 → 文档分组全乱。e2e 钉了「每个接口**恰好**属于一个分组」。
+3. **响应里的 `revision` 必须写 `existing.revision + 1`**。SQL 只管落库，内存对象不会自动加 —— 若返回旧值，客户端拿小 1 的基线做下一次推送会**立刻撞锁，自锁死循环**。
+4. **列表筛选的 `online` 用字符串 `"true" | "false"`，不用 boolean**。class-transformer 的隐式转换会把 `"false"` 变成 `true`（非空字符串 → `Boolean`），表现为**静默筛错**。
+5. **`min > max` 这类区间参数要在 `roleFilterOf` 里拦下来**（抛 `40000`），别让它落到 SQL 里返回空列表 —— 空列表会被当成「真的没有数据」。
+6. **只写 `nullable: true` 不写 `type`** → 生成器只能给 `unknown`，两端类型退化。可空字段一律 `type` + `nullable: true` 一起写。
+7. **新增 DTO 忘了登记 `SWAGGER_MODELS`** → 接口引用了它、文档里却没有 → 生成物出现**悬空 `$ref`**。`audit-api-generated.cjs` 的 D 段会报。
+8. **分页接口写成 `isArray: true`** → 文档里 `data` 是数组，实际返回 `{list, total, page, size}` → 两端类型全错。用 `PageMetaDto` 派生。
+9. **本机（WorkBuddy 环境）跑服务端 / 子进程必须 `env -u NODE_OPTIONS`**：环境注入了 `node-language-shim.cjs`，服务端会**不打日志、不监听端口**地静默起不来，e2e 表现为「等待服务启动超时」。同环境 `HTTP_PROXY` 会把 `curl 127.0.0.1` 打成 **502**（假故障），本机自测加 `--noproxy '*'`。
+10. **业务码 / 权限点改动要同步两端**（客户端 `ApiCodes`、管理端 `types.ts`）。`audit-api-generated.cjs` 会比对两侧码值 —— **数字对不上就是静默失效**。
+11. **新增模块必须登记到 `tools/gen-api.cjs` 的 `MODULES`**（`adminAudit: { target: "admin", export: "auditApi" }`），否则 `gen:api` 直接报「operationId 的模块段没登记」。
+12. **子类覆写基类同名字段要加 `declare`**：`AuditQueryDto` 想给继承来的 `keyword` 换一条更具体的文档描述时，写成 `keyword?: string` 会 `TS2612`（will overwrite the base property）；改成 `declare keyword?: string;` 即可（装饰器照样生效，运行时不多一个字段）。
+13. **`app.set("trust proxy", ...)` 需要 `NestFactory.create<NestExpressApplication>`**：普通 `INestApplication` 上没有 `set`（`TS2339`），而 `trust proxy` 又只对 Express 适配器有意义。
+14. **拦截器要注册在它依赖的服务所在的那个模块**：`AuditInterceptor` 挂在 `AuditModule` 的 `providers` 里（`APP_INTERCEPTOR`）并 export `AuditService` —— 放 `AppModule` 容易出现「拦截器装了但服务没导出」的运行期问题。
+15. **`success` 这类筛选参数同样用字符串 `"true" | "false"`**（与 `online` 同一个坑：class-transformer 会把 `"false"` 变成 `true`）。
+16. **`keyword` 忘了在仓储层实现就是静默无效**：生成物里字段一直都在（继承自 `PageQueryDto`），请求带上它也不报错，只是不筛。要么实现，要么从 DTO 里去掉 —— 别留一个「看起来能用」的空壳参数。
+
+## 七、验证闭环
+
+> 仓库根有 Makefile，这些命令都有等价目标：`make server-verify` / `make server-e2e-guard` / `make gen-api` /
+> `make dev`（三端一起）—— 且已统一 `env -u NODE_OPTIONS`；`make help` 列全部。
+
+```bash
+cd server
+env -u NODE_OPTIONS npm run verify           # build + e2e(187) + e2e:roles(77) + e2e:guard(91) + 生成物审计
+env -u NODE_OPTIONS npm run test:e2e:roles   # 只跑角色管理专项（改角色接口时先跑它）
+env -u NODE_OPTIONS npm run test:e2e:guard   # 只跑口令 / 审计 / 限流 / 踢下线专项
+env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.json + 两端接口文件
+```
+
+**e2e 的写法**（`test/e2e.cjs`、`test/e2e-roles.cjs`、`test/e2e-guard.cjs`）：真实起服务进程 + 真实 HTTP 请求 + **自带内存库**；
+它们会调 `setupSwagger(app)` 生成**真文档**，用来验「分组 / 权限标注 / 悬空 `$ref`」。
+加接口时**同步加断言** —— 这几套是服务端唯一的行为护栏（没有单测框架）。
+
+- `test/e2e-roles.cjs` 的七段结构可直接照抄扩展：修订号 / 筛选 / 结构化字段 / 乐观锁联动 / 批量删除 / 权限 / 文档；
+- `test/e2e-guard.cjs` 是**两段式启动**：第一台服务把 IP 维度放宽（`LOGIN_IP_MAX_FAILURES=1000`）好单独验用户名维度，第二台把它调到 1 专验 IP 维度；零段直接 `require("../dist/common/utils/rate-limit.util.js")` 跑纯函数边界（不必起服务）。
+
+## 八、提交纪律（强制）
+
+**每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
+
+- 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
+- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 四套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端四套 e2e + 管理端构建 + 5 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
+- 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；服务端的端名取 `server`。
+- **改了接口的提交必须连生成物一起提交**（`openapi.json` + 两端接口文件是同一笔改动的一部分，否则另外两端停在旧契约上）。
+- 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。
+
+```bash
+cd /Users/tz/workspace/olua
+git add server tools/gen-api.cjs && git commit -F - <<'EOF'
+feat(server): 操作审计关键字查询补实现（此前是空壳参数）
+
+- audit.repository 补 keyword 四项模糊匹配，LIKE 通配符转义
+- gen:api 重跑：41 接口 / 34 路径 / 54 模型
+- 验证：verify 全绿（e2e 187 / e2e-roles 77 / e2e-guard 91）
+EOF
+```
+
+## 九、相关
+
+- 契约生成链的完整细节：本技能内的 `references/contract-pipeline.md`
+- 客户端怎么消费生成物、怎么自愈乐观锁冲突：skill `olua-client`
+- 管理端怎么消费生成物、怎么按权限渲染：skill `olua-admin`
+- 三端地址 / 请求 / 路径的唯一来源与硬编码审计：`node tools/audit-api-hardcode.cjs`
