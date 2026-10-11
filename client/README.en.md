@@ -14,7 +14,7 @@ plus three growth lines (war soul / title / rank). The server is authoritative f
 
 - **Cocos Creator 3.8.7** (the project uses its bundled `tsc` for typechecking; TypeScript need not be installed separately)
 - Node.js (only for running the local unit tests and config generators under `tools/`; it takes no part in bundling)
-- A running server (see [../server/README.md](../server/README.md)) — login and the character list need it
+- A running server (see [../server/README.md](../server/README.en.md)) — login and the character list need it
 
 ## How to open and preview
 
@@ -165,4 +165,4 @@ Always back up before deleting or editing assets: `assets/resources` is outside 
 - [FAQ.en.md](FAQ.en.md) — preview errors, engine pitfalls, how to tune gameplay config
 - [../README.en.md](../README.en.md) — project overview, directory structure, feature list
 - [../FAQ.en.md](../FAQ.en.md) — cross-side mechanics (single source of truth for addresses, contract pipeline, three-side interaction)
-- [../server/README.md](../server/README.md) — the server the client depends on
+- [../server/README.md](../server/README.en.md) — the server the client depends on

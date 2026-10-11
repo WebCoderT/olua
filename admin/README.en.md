@@ -121,4 +121,4 @@ In the admin list, "reset password" is disabled for your own row (the hint point
 - [FAQ.en.md](FAQ.en.md) — startup, permissions, page usage and the API layer
 - [../FAQ.en.md](../FAQ.en.md) — cross-side mechanics (single source of truth for addresses, contract pipeline, three-side interaction, environment gotchas)
 - [../README.en.md](../README.en.md) — project overview, three-side index, directory structure
-- [../server/README.md](../server/README.md) — the server behind these endpoints
+- [../server/README.md](../server/README.en.md) — the server behind these endpoints

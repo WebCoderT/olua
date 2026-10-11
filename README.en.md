@@ -15,7 +15,7 @@ The repository splits into three **peer directories**, each with its own README 
 | Side | What it is | Tech stack | Directory | Docs |
 | --- | --- | --- | --- | --- |
 | **Client** | The Cocos Creator game (login / character select / combat / bag / mall…) | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) | [README](client/README.en.md) · [FAQ](client/FAQ.en.md) |
-| **Server** | Account / character / admin APIs, SQLite persistence, Swagger docs | NestJS 12 + `node:sqlite` + JWT | [`server/`](server/) | [README](server/README.md) · [FAQ](server/FAQ.md) |
+| **Server** | Account / character / admin APIs, SQLite persistence, Swagger docs | NestJS 12 + `node:sqlite` + JWT | [`server/`](server/) | [README](server/README.en.md) · [FAQ](server/FAQ.en.md) |
 | **Admin** | The operator console (accounts / characters / administrators / audit logs) | React 19 + Vite + Tailwind v4 | [`admin/`](admin/) | [README](admin/README.en.md) · [FAQ](admin/FAQ.en.md) |
 
 How they relate: the **client** is the game the player plays, the **server** is its only authoritative data source (local storage is just a cache), and the **admin** lets operators edit data.
@@ -200,7 +200,7 @@ olua/
 - test/e2e-roles.cjs: **character management focus** (77 assertions: revision-number optimistic locking / six-dimension filtering / structured field validation / batch and whole-account deletion / read-only observer escalation / docs)
 - test/e2e-guard.cjs: **operations and security baseline focus** (279 assertions: password reset and token revocation / self-service password change / audit log persistence, masking, filtering, permissions / login throttling by username and by IP / kicking offline)
 - test/e2e-mail.cjs: **mail channel focus** (108 assertions: verifying enqueue / delivery / retry and exhausting the limit / manual re-delivery / whole-channel disabling when SMTP is unconfigured, using an injectable **fake sender**; no real SMTP server needed)
-- Details in [server/README.md](server/README.md), questions in [server/FAQ.md](server/FAQ.md)
+- Details in [server/README.md](server/README.en.md), questions in [server/FAQ.md](server/FAQ.en.md)
 
 ### admin — the React console
 
@@ -282,7 +282,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
 - Verify everything with one command: `npm run verify` (compile + five e2e suites + generated-artifact consistency)
-- Details in [server/README.md](server/README.md)
+- Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
 
@@ -513,7 +513,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | [README.en.md](README.en.md) | This file: project overview, index of the three sides, directory structure, quick start, feature list |
 | [FAQ.en.md](FAQ.en.md) | **Cross-side**: single source of truth for addresses, the contract pipeline, how the three sides interact, environment traps, how to run regression |
 | [client/README.md](client/README.en.md) · [client/FAQ.md](client/FAQ.en.md) | Client: how to open the Cocos project, client architecture and conventions, preview errors and gameplay config questions |
-| [server/README.md](server/README.md) · [server/FAQ.md](server/FAQ.md) | Server: startup and environment variables, data model, authentication and permissions, contract generation, throttling and audit |
+| [server/README.md](server/README.en.md) · [server/FAQ.md](server/FAQ.en.md) | Server: startup and environment variables, data model, authentication and permissions, contract generation, throttling and audit |
 | [admin/README.md](admin/README.en.md) · [admin/FAQ.md](admin/FAQ.en.md) | Admin: startup and build, permission-driven visibility, page list, division of labour in the api layer |
 | [docs/resume.md](docs/resume.md) | Project introduction for résumé purposes |
 

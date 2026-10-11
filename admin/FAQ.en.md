@@ -63,7 +63,7 @@ The two entries are deliberately separate because **the verification and the con
 | Old tokens | **All revoked**, the other side must log in again | The server **issues a new token**, the frontend overwrites the session |
 
 - In the admin list, "reset password" is **disabled for your own row** (the `title` hint points you to "My Account") — taking the reset path would invalidate your own current token on the spot and bounce you straight back to the login page
-- Mechanism details (how `token_version` invalidates old tokens, why the change and the version bump have to happen in one SQL statement): [../server/FAQ.md](../server/FAQ.md) (see "what happens if a player forgets the password, and why are they logged out after a reset")
+- Mechanism details (how `token_version` invalidates old tokens, why the change and the version bump have to happen in one SQL statement): [../server/FAQ.md](../server/FAQ.en.md) (see "what happens if a player forgets the password, and why are they logged out after a reset")
 - What the kicked player sees (`40103` forcing a re-login): [../client/FAQ.md](../client/FAQ.en.md)
 
 ### Where do the permission count and timestamps in the top bar come from?
@@ -79,7 +79,7 @@ The two entries are deliberately separate because **the verification and the con
 - **What the server does when clicked**: (1) clears the account's `online_role_id`; (2) adds a check on the save path — the character being pushed up must still be the account's current online character, otherwise `409` + business code **20007**. Doing only (1) stops nobody: the game is still running locally and will push the save up 1.5 seconds later anyway
 - **What the player sees**: a floating tip "your character has been taken offline by an administrator" → **only the local online flag is cleared, the character is not deleted** → back to the character selection scene. Selecting the character once more (`POST /roles/:id/select` rewrites the online flag) resumes play
 - ⚠️ 20007 (kicked offline) and 20002 (character deleted) have completely opposite consequences and the client handles them separately: only 20002 deletes the local cache. A dedicated guard covers this (`client/tools/test-client-net.cjs` asserts that `deleteRole` must not appear in this handler)
-- Full mechanism write-up (why the check sits before the optimistic lock, what the side effects are): [../server/FAQ.md](../server/FAQ.md) (see "what does kicking a player offline actually do, why must the character be selected again"); the interaction timeline is in [../FAQ.en.md](../FAQ.en.md#an-admin-edits-a-character--when-does-the-player-see-it)
+- Full mechanism write-up (why the check sits before the optimistic lock, what the side effects are): [../server/FAQ.md](../server/FAQ.en.md) (see "what does kicking a player offline actually do, why must the character be selected again"); the interaction timeline is in [../FAQ.en.md](../FAQ.en.md#an-admin-edits-a-character--when-does-the-player-see-it)
 
 ## API layer
 
@@ -109,5 +109,5 @@ Ordered by frequency:
 
 - [README.en.md](README.en.md) — admin overview, page list, environment variables, directory structure
 - [../FAQ.en.md](../FAQ.en.md) — cross-side mechanics (single source of truth for addresses, contract pipeline, three-side interaction, environment gotchas)
-- [../server/FAQ.md](../server/FAQ.md) — the server behind these endpoints: permissions, throttling, audit, passwords
+- [../server/FAQ.md](../server/FAQ.en.md) — the server behind these endpoints: permissions, throttling, audit, passwords
 - [../client/FAQ.md](../client/FAQ.en.md) — client questions

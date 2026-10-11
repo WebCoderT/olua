@@ -349,5 +349,5 @@ A few conventions:
 
 - [README.en.md](README.en.md) — client overview, opening the project, tool list, typecheck
 - [../FAQ.en.md](../FAQ.en.md) — cross-side mechanics (single source of truth for addresses, contract pipeline, three-side interaction, environment gotchas)
-- [../server/FAQ.md](../server/FAQ.md) — the server (startup, data model, permissions, throttling and audit)
+- [../server/FAQ.md](../server/FAQ.en.md) — the server (startup, data model, permissions, throttling and audit)
 - [../admin/FAQ.en.md](../admin/FAQ.en.md) — the admin console (page usage, permission-driven visibility)
