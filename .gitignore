@@ -32,7 +32,15 @@ client/assets/resources/
 .DS_Store
 ._*
 
-.workbuddy/
+#//////////////////////////
+# .workbuddy：只提交「记忆」与「技能」，其余（临时备份等）仍忽略
+#   - memory/ 项目记忆：长期约定 + 逐日工作日志，跟随版本库走
+#   - skills/ 项目技能：从本项目沉淀的做法与踩坑，跟随版本库走
+#   - backup/ 等其余内容是本机临时产物，不进版本库
+#//////////////////////////
+.workbuddy/*
+!.workbuddy/memory
+!.workbuddy/skills
 .backup
 
 #//////////////////////////
