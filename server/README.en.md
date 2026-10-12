@@ -48,13 +48,14 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` — **regenerate both ends' interface files** |
 | `npm run test:e2e` | Main e2e (248 assertions) |
 | `npm run test:e2e:roles` | Role-management suite (77 assertions) |
-| `npm run test:e2e:guard` | Operations & security base (279 assertions) |
-| `npm run test:e2e:mail` | Mail channel (108 assertions; **fake mailer**, no SMTP server needed) |
-| `npm run test:e2e:backup` | Backup / restore (25 assertions) |
+| `npm run test:e2e:guard` | Operations & security base (283 assertions) |
+| `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
+| `npm run test:e2e:account-email` | Player email field (28 assertions) |
+| `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + five e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + six e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -138,9 +139,10 @@ server/
 ├── test/
 │   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
 │   ├── e2e-roles.cjs               77 assertions
-│   ├── e2e-guard.cjs               279 assertions
+│   ├── e2e-guard.cjs               283 assertions
 │   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
-│   └── backup.cjs                  25 assertions (backup while running / restore archiving / protective refusal)
+│   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
+│   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
 └── .env.example · package.json · tsconfig.json · tsconfig.build.json
@@ -278,18 +280,19 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All five e2e suites are **real server process + real HTTP requests** (not mocks):
+All six e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
 | `test/e2e.cjs` | **248** | register/login / character CRUD and count cap / duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
 | `test/e2e-roles.cjs` | **77** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
-| `test/e2e-guard.cjs` | **279** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
+| `test/e2e-guard.cjs` | **283** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
 | `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
-| `test/backup.cjs` | **25** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal |
+| `test/e2e-account-email.cjs` | **28** | player email field: read-only viewers can neither see nor change it / backfill·view·clear / format validation and same-email dedup (case-insensitive) / mail falls back to the linked account's email / contract permission annotation |
+| `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
-cd server && npm run verify          # compile + five e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + six e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 
