@@ -86,7 +86,9 @@ sync_game() {
   [ -f "$src/index.html" ] || { echo "✗ $src 里没有 index.html（不像完整的 Cocos Web 产物）"; exit 1; }
   echo "  源：$src  体积：$(du -sh "$src" 2>/dev/null | awk '{print $1}')"
   echo "==> rsync 增量同步 → $DEPLOY_DIR/game/（首次全量，之后只传差异）"
-  rsync -az --delete --stats \
+  # 这里**不用 rsync 的 -z**：产物主体是已经压过的 PNG（实测 200MB → gzip 195MB，
+  # 几乎零收益），压缩只会白耗本机与服务器两端 CPU，反而拖慢传输。
+  rsync -a --delete --stats \
     -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     "$src/" "$TARGET:$DEPLOY_DIR/game/" || { echo "✗ rsync 失败"; exit 1; }
   echo "==> 起/更新 game 容器"
