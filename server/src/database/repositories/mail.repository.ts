@@ -21,6 +21,15 @@ export interface MailListOptions {
 const DELIVERABLE = `('${MailStatus.PENDING}', '${MailStatus.RETRYING}')`;
 
 /**
+ * 已经尘埃落定的状态 —— **只有这两种允许被清理**
+ *
+ * 反过来：清掉 `pending` / `retrying` / `sending` 的后果不是「少几条投递记录」，
+ * 而是**这封信再也发不出去，而且连「曾经想发」的痕迹都不剩**。所以下面所有
+ * DELETE 都带这个白名单条件，宁可让历史记录多占一点空间，也不能丢信。
+ */
+const TERMINAL = `('${MailStatus.SENT}', '${MailStatus.FAILED}')`;
+
+/**
  * 邮件投递队列的数据访问
  *
  * 状态流转的**每一次写入都在 SQL 里带 `status` 条件**（`WHERE id = ? AND status IN (…)`）：
@@ -158,6 +167,49 @@ export class MailRepository {
       `UPDATE mail_queue SET status = ?, next_retry_at = ?, updated_at = ? WHERE status = ? AND updated_at < ?`,
       [MailStatus.RETRYING, now, now, MailStatus.SENDING, cutoff],
     ).changes;
+  }
+
+  /**
+   * 终态记录总数（清理判断用：`MAX_ROWS` 这条闸只对终态计数的原因同上面的白名单）
+   */
+  countTerminal(): number {
+    return this.db.count(`SELECT COUNT(1) AS total FROM mail_queue WHERE status IN ${TERMINAL}`);
+  }
+
+  /**
+   * 只保留最新的 `maxRows` 条终态记录，超出部分从最旧的开始删
+   *
+   * 先数再算溢出量，子查询里带**同样的 status 白名单** —— 挡住「按终态去数、却按全体去删」
+   * 这种错：那会在总量超限时顺手删掉没发出去的信。
+   *
+   * @returns 清掉的条数（没到量则为 0）
+   */
+  prune(maxRows: number): number {
+    if (maxRows <= 0) return 0;
+    const total = this.countTerminal();
+    if (total <= maxRows) return 0;
+    const overflow = total - maxRows;
+    return this.db.execute(
+      `DELETE FROM mail_queue
+       WHERE id IN (
+         SELECT id FROM mail_queue WHERE status IN ${TERMINAL}
+         ORDER BY created_at ASC, id ASC LIMIT ?
+       )`,
+      [overflow],
+    ).changes;
+  }
+
+  /**
+   * 清掉早于某个时刻的**终态**记录
+   *
+   * 判据用 `created_at`：投递记录的意义是「某年某月给谁发过什么」，
+   * 删的是**入队时间**够老的那批 —— 换成终态时间会让「重试了两周才成功」的那类
+   * 记录被提前淘汰。这个字段也正好有索引（`idx_mail_queue_created`）。
+   *
+   * @returns 清掉的条数
+   */
+  pruneOlderThan(before: number): number {
+    return this.db.execute(`DELETE FROM mail_queue WHERE status IN ${TERMINAL} AND created_at < ?`, [before]).changes;
   }
 
   /** 分页检索（默认按创建时间倒序） */

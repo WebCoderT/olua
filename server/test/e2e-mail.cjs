@@ -498,6 +498,118 @@ function runContractSuite() {
 
 //#endregion
 
+//#region 五：投递记录的保留策略 —— 超限清最旧，但绝不碰还没发出去的
+
+async function runRetentionSuite() {
+  group("五、投递记录保留：MAIL_QUEUE_MAX_ROWS 只裁掉终态");
+
+  // 上限给到 2：一边生成记录一边观察裁剪，比给个大数字再用大量数据去凑快得多。
+  // MAIL_RETENTION_DAYS=0 是把天数那道闸关掉 —— 两道闸混在一起就分不清是谁生效的。
+  const KEEP = 2;
+  const SENT_COUNT = 4;
+  const server = await startServer({
+    SMTP_HOST: "smtp.example.test",
+    SMTP_USER: "noreply@example.test",
+    SMTP_PASS: "e2e-smtp-secret",
+    MAIL_TRANSPORT: "fake",
+    MAIL_QUEUE_MAX_ROWS: String(KEEP),
+    MAIL_RETENTION_DAYS: "0",
+  });
+  try {
+    const base = server.baseUrl;
+    const token = await registerAdmin(base, "pruneadmin", "PruneAdmin#1");
+
+    const ids = [];
+    for (let index = 1; index <= SENT_COUNT; index += 1) {
+      const res = await api(base, "POST", "/api/admin/mails", {
+        token,
+        body: { to: `cleanup-${index}@example.com`, templateKey: "custom", subject: `清理-${index}`, body: "x" },
+      });
+      const id = res.body?.data?.id;
+      if (id) ids.push(id);
+      // 发一封歇 40ms：让 created_at 拉开。「剩下来的应该是最新的」这条断言要站得住，
+      // 前提是这四条记录的时间戳真的分得出先后（同毫秒时 SQL 只能按 id 兜底排序）
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    checkEqual(ids.length, SENT_COUNT, `入队了 ${SENT_COUNT} 封待投递的邮件`);
+
+    // 裁剪是「每轮 tick 之后顺手做」，所以要等最后几封投递完 —— 窗口给到 10 秒，
+    // 相对于 50ms 一轮的调度宽裕得很，不会像「钉某个精确中间态」那样被机器快慢左右
+    const settled = await waitFor(
+      `记录被裁剪到 ${KEEP} 条`,
+      async () => {
+        const list = await api(base, "GET", `/api/admin/mails?size=100`, { token });
+        return list.body?.data?.total === KEEP ? list.body.data : null;
+      },
+      10_000,
+    );
+    checkEqual(settled?.total, KEEP, `终态记录被裁剪到 MAIL_QUEUE_MAX_ROWS（${KEEP} 条）`);
+
+    const survivors = settled?.list ?? [];
+    check(
+      survivors.every((item) => item.status === "sent"),
+      "留下来的都是已发送（未终态的任务不会被当成历史记录清掉）",
+    );
+    const remainingIds = survivors.map((item) => item.id);
+    check(!remainingIds.includes(ids[0]), "最早入队的那条已经被清理（超限时从最旧的开始删）");
+    check(remainingIds.includes(ids[SENT_COUNT - 1]), "最后入队的那条留了下来");
+  } finally {
+    server.kill();
+  }
+
+  group("五之二、还在重试的记录不算历史：不会被清理");
+
+  // 同样是条数上限 1（比上一个场景更狠），但队列里全是「还没发出去」的任务：
+  // 退避基数给到 1 小时，第一次失败后它们会稳稳停在 retrying —— 这是**稳态**而不是
+  // 需要抢时间的中间态，所以「等一会儿再看它们还在不在」是完全确定的断言。
+  const pendingServer = await startServer({
+    SMTP_HOST: "smtp.example.test",
+    SMTP_USER: "noreply@example.test",
+    SMTP_PASS: "e2e-smtp-secret",
+    MAIL_TRANSPORT: "fail",
+    MAIL_MAX_ATTEMPTS: "5",
+    MAIL_RETRY_BASE_MS: "3600000",
+    MAIL_QUEUE_MAX_ROWS: "1",
+    MAIL_RETENTION_DAYS: "0",
+  });
+  try {
+    const base = pendingServer.baseUrl;
+    const token = await registerAdmin(base, "keepadmin", "KeepAdmin#1");
+
+    const wanted = 3;
+    for (let index = 1; index <= wanted; index += 1) {
+      await api(base, "POST", "/api/admin/mails", {
+        token,
+        body: { to: `retry-${index}@example.com`, templateKey: "custom", subject: `重试-${index}`, body: "x" },
+      });
+    }
+
+    const allRetrying = await waitFor(
+      "三条任务都进入重试中",
+      async () => {
+        const list = await api(base, "GET", "/api/admin/mails?size=100", { token });
+        const rows = list.body?.data?.list ?? [];
+        return rows.length === wanted && rows.every((item) => item.status === "retrying") ? rows : null;
+      },
+      15_000,
+    );
+    checkEqual((allRetrying ?? []).length, wanted, `${wanted} 条未终态任务都在队列里`);
+
+    // 再等若干轮 tick 之后再来看：每一轮都会跑一次清理，MAX_ROWS=1 也没能把它们删掉
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const after = await api(base, "GET", "/api/admin/mails?size=100", { token });
+    checkEqual(after.body?.data?.total, wanted, "队列里还没发出去的信一条没少（清理只认终态）");
+    check(
+      (after.body?.data?.list ?? []).every((item) => item.status === "retrying"),
+      "它们仍停在重试中：不是「被清了又冒出来」，而是从头到尾没被碰过",
+    );
+  } finally {
+    pendingServer.kill();
+  }
+}
+
+//#endregion
+
 async function main() {
   console.log("=== 服务端 e2e：邮件通道 ===");
   runUtilSuite();
@@ -505,6 +617,7 @@ async function main() {
   await runFailureSuite();
   await runDisabledSuite();
   runContractSuite();
+  await runRetentionSuite();
 
   console.log("");
   if (failed > 0) {
