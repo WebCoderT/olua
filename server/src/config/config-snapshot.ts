@@ -172,6 +172,21 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
   },
   { key: "MAIL_RETENTION_DAYS", field: "mailRetentionDays", render: (read) => describeLimit(read<number>("mailRetentionDays"), "天") },
   { key: "MAIL_QUEUE_MAX_ROWS", field: "mailQueueMaxRows", render: (read) => describeLimit(read<number>("mailQueueMaxRows"), "条") },
+  {
+    key: "BACKUP_INTERVAL_HOURS",
+    field: "backupIntervalHours",
+    render: (read) => backupIntervalText(read<number>("backupIntervalHours")),
+    // 线上唯一的数据保命手段被关掉，必须喊：只看桌面端的两行的话，谁也不知道它没在跑
+    warning: (read) => read<number>("backupIntervalHours") <= 0 && read<string>("env") === "production",
+    advice: "BACKUP_INTERVAL_HOURS=0：没有开自动备份，数据只能靠手动 make db-backup，忘了就没得恢复",
+  },
+  { key: "BACKUP_KEEP_COUNT", field: "backupKeepCount", render: (read) => describeLimit(read<number>("backupKeepCount"), "份") },
+  { key: "BACKUP_RETENTION_DAYS", field: "backupRetentionDays", render: (read) => describeLimit(read<number>("backupRetentionDays"), "天") },
+  {
+    key: "BACKUP_DIR",
+    field: "backupDir",
+    render: (read) => read<string>("backupDir") || "（跟随数据文件同级 backups/）",
+  },
 ];
 
 /** 渲染整张快照（顺序即信息页的展示顺序） */
@@ -193,6 +208,12 @@ function describeMs(ms: number): string {
 /** 数值型上限 → 人读（0 = 不限制） */
 function describeLimit(value: number, unit: string): string {
   return value <= 0 ? "不限制" : `${value} ${unit}`;
+}
+
+/** 自动备份间隔（小时）→ 人读；0 = 关闭 */
+function backupIntervalText(hours: number): string {
+  if (!Number.isFinite(hours) || hours <= 0) return "关闭（只手动备份）";
+  return `每 ${humanizeDuration(hours * 3600_000)}`;
 }
 
 /**

@@ -893,6 +893,11 @@ const EXPECTED_CONFIG_KEYS = [
   "MAIL_POLL_MS",
   "MAIL_RETENTION_DAYS",
   "MAIL_QUEUE_MAX_ROWS",
+  // 自动备份（启停与产出的验证在 test/backup.cjs 里单独做，这里只守白名单）
+  "BACKUP_INTERVAL_HOURS",
+  "BACKUP_KEEP_COUNT",
+  "BACKUP_RETENTION_DAYS",
+  "BACKUP_DIR",
 ];
 
 /**
@@ -935,6 +940,14 @@ async function runSystemSuite(server, tokens) {
     "每张表的行数都是非负整数",
   );
   check(info.database.tables.find((item) => item.table === "accounts").rows > 0, "accounts 行数反映真实数据");
+
+  // —— 自动备份：这台是内存库，**必须**是关着的（没有文件可备份）——
+  // 开关语义与.backup.enabled 真正的启停 / 产出 / 失败可见由 test/backup.cjs 包圆，
+  // 这里只盯着「不该跑的时候别跑」：内存库还去拉 VACUUM INTO 会每 tick 失败一次。
+  checkEqual(info.backup.enabled, false, "内存库没有文件可备份 → 自动备份关闭");
+  check(info.backup.reason.includes(":memory:"), "关着的原因如实说明（是内存库，不是开关没配）");
+  checkEqual(info.backup.lastAttemptAt, null, "关着的时候一次都没尝试过（不是试了又失败）");
+  checkEqual(info.backup.dir, null, "内存库没有备份目录");
 
   // —— 配置快照：白名单 ——
   const keys = info.config.map((item) => item.key);
