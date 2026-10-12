@@ -52,6 +52,8 @@ export const BizCode = {
    * 后者是重名。客户端只需原样展示服务端文案。
    */
   REGISTER_CLOSED: 10006,
+  /** 同一邮箱已被别的账号绑定（大小写不敏感；未填写不限） */
+  ACCOUNT_EMAIL_EXISTS: 10007,
 
   //#region 角色
   /** 角色数量已达上限 */

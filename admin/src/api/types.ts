@@ -115,6 +115,8 @@ export const PERMISSION = {
   ACCOUNT_DELETE: "account:delete",
   /** 重置玩家密码（改口令，会让玩家现有令牌失效） */
   ACCOUNT_PASSWORD: "account:password",
+  /** 补录 / 查看玩家邮箱（个人信息，单列权限点：只读观察员没有） */
+  ACCOUNT_EMAIL: "account:email",
   ROLE_READ: "role:read",
   ROLE_WRITE: "role:write",
   ROLE_SELECT: "role:select",
@@ -158,6 +160,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ACCOUNT_READ]: "查看账号",
   [PERMISSION.ACCOUNT_STATUS]: "封禁 / 解封账号",
   [PERMISSION.ACCOUNT_PASSWORD]: "重置玩家密码",
+  [PERMISSION.ACCOUNT_EMAIL]: "补录 / 查看玩家邮箱",
   [PERMISSION.ACCOUNT_DELETE]: "删除账号",
   [PERMISSION.ROLE_READ]: "查看角色",
   [PERMISSION.ROLE_WRITE]: "修改角色",

@@ -1675,6 +1675,73 @@
         ]
       }
     },
+    "/admin/accounts/{id}/email": {
+      "patch": {
+        "description": "玩家邮箱是**个人信息**，单列一个权限点（`account:email`，ADMIN / SUPER 持有，只读观察员没有）。\n\n传非空串 = 补录或改成该邮箱（服务端校验格式并查重，同一邮箱只绑一个账号、大小写不敏感）；\n传空串 = 清空（账号回到「未填写邮箱」状态）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:email`（补录 / 查看玩家邮箱；角色：超级管理员 / 管理员）",
+        "operationId": "adminAccount.updateEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "账号 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "变更后的账号（含邮箱；邮箱仅 account:email 权限可见）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AccountDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "补录 / 修改玩家邮箱",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AccountDto"
+        },
+        "x-olua-permissions": [
+          "account:email"
+        ]
+      }
+    },
     "/admin/accounts/{id}/status": {
       "patch": {
         "description": "改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。\n\n**封禁**可带 `reason`（原因，玩家登录时会看到）与 `durationHours`（时长，小时）—— 不填时长即永久封禁。临时封禁**到期自动解封**：判定按时间算，不依赖谁来点解封，\n定时器只负责把库里的状态扫回去。\n\n**解封**（status=active）会把原因、到期时间、执行人、执行时间一并清空。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
@@ -3645,6 +3712,20 @@
           "newPassword"
         ]
       },
+      "UpdateAccountEmailDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "玩家邮箱；传非空串补录 / 改，传空串清空。同一邮箱只绑一个账号（大小写不敏感）。",
+            "example": "player@example.com",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
       "UpdateAccountStatusDto": {
         "type": "object",
         "properties": {
@@ -4015,7 +4096,7 @@
         "properties": {
           "to": {
             "type": "string",
-            "description": "收件邮箱",
+            "description": "收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。",
             "maxLength": 120,
             "example": "player@example.com"
           },
@@ -4055,7 +4136,6 @@
           }
         },
         "required": [
-          "to",
           "templateKey"
         ]
       },
@@ -4227,6 +4307,12 @@
             "description": "最近登录时间（毫秒，从未登录为 null）",
             "nullable": true,
             "example": 1760000000000
+          },
+          "email": {
+            "type": "string",
+            "description": "玩家邮箱（个人信息，仅 account:email 权限可见；未填写为 null）",
+            "nullable": true,
+            "example": null
           }
         },
         "required": [
@@ -4240,7 +4326,8 @@
           "onlineRoleId",
           "createdAt",
           "updatedAt",
-          "lastLoginAt"
+          "lastLoginAt",
+          "email"
         ]
       },
       "AuthTokenDto": {

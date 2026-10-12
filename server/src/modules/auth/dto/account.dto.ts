@@ -43,7 +43,23 @@ export class AccountDto {
   @ApiProperty({ description: "最近登录时间（毫秒，从未登录为 null）", type: "number", nullable: true, example: 1760000000000 })
   lastLoginAt: number | null;
 
-  static from(row: AccountRow | AccountWithCountRow): AccountDto {
+  /**
+   * 玩家邮箱（个人信息）
+   *
+   * **默认不返回**：只有持 `account:email` 权限的调用方（ADMIN / SUPER）才看得到，
+   * 只读观察员（只有 `account:read`）拿不到 —— 见 `AccountDto.from(row, includeEmail)`。
+   * 玩家侧登录/注册接口也走这个 DTO，但永远不填 email。
+   */
+  @ApiProperty({ description: "玩家邮箱（个人信息，仅 account:email 权限可见；未填写为 null）", type: "string", nullable: true, example: null })
+  email: string | null;
+
+  /**
+   * 账号 → 对外视图
+   *
+   * @param includeEmail 是否带上邮箱字段。默认 false（不暴露个人信息）；
+   *   仅当调用方持 `account:email` 权限时传 true。
+   */
+  static from(row: AccountRow | AccountWithCountRow, includeEmail = false): AccountDto {
     const dto = new AccountDto();
     dto.id = row.id;
     dto.username = row.username;
@@ -56,6 +72,7 @@ export class AccountDto {
     dto.createdAt = row.created_at;
     dto.updatedAt = row.updated_at;
     dto.lastLoginAt = row.last_login_at;
+    if (includeEmail) dto.email = row.email ?? null;
     if ("role_count" in row) dto.roleCount = Number((row as AccountWithCountRow).role_count);
     return dto;
   }

@@ -6,6 +6,7 @@ import { BanDialog } from "../components/BanDialog";
 import { BanStatus } from "../components/BanStatus";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
+import { EmailDialog } from "../components/EmailDialog";
 import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -16,6 +17,7 @@ export function AccountDetailPage() {
   const canDeleteRole = hasPermission(PERMISSION.ROLE_DELETE);
   const canResetPassword = hasPermission(PERMISSION.ACCOUNT_PASSWORD);
   const canStatus = hasPermission(PERMISSION.ACCOUNT_STATUS);
+  const canEmail = hasPermission(PERMISSION.ACCOUNT_EMAIL);
   const { id = "" } = useParams();
   const [detail, setDetail] = useState<AccountDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,7 @@ export function AccountDetailPage() {
   const [kicking, setKicking] = useState(false);
   const [banOpen, setBanOpen] = useState(false);
   const [unbanning, setUnbanning] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +55,19 @@ export function AccountDetailPage() {
       return true;
     } catch {
       /* 统一提示；失败时留在弹窗里让管理员重试 */
+      return false;
+    }
+  };
+
+  /** 补录 / 修改玩家邮箱（空串 = 清空；成功与否回给弹窗决定要不要关掉） */
+  const updateEmail = async (email: string): Promise<boolean> => {
+    try {
+      await accountsApi.updateEmail(id, { email });
+      toastSuccess(email ? `已保存邮箱：${email}` : "已清空邮箱");
+      await load();
+      return true;
+    } catch {
+      /* 统一提示（含格式错误 / 邮箱已被占用） */
       return false;
     }
   };
@@ -190,6 +206,11 @@ export function AccountDetailPage() {
           <Button variant="outline" disabled={!canResetPassword} onClick={() => setResetOpen(true)}>
             重置密码
           </Button>
+          {canEmail ? (
+            <Button variant="outline" onClick={() => setEmailOpen(true)}>
+              补录邮箱
+            </Button>
+          ) : null}
           {banStateOf(account).banned ? (
             <Button variant="outline" disabled={!canStatus} loading={unbanning} onClick={() => void unban()}>
               解封
@@ -218,6 +239,11 @@ export function AccountDetailPage() {
         <Card title="在线角色">
           <p className="text-sm text-slate-200">{roles.find((role) => role.online)?.name ?? "未选角色"}</p>
         </Card>
+        {canEmail ? (
+          <Card title="玩家邮箱">
+            <p className="text-sm text-slate-200">{account.email ?? "未填写"}</p>
+          </Card>
+        ) : null}
       </div>
 
       <Card
@@ -322,6 +348,14 @@ export function AccountDetailPage() {
         targetName={account.username}
         onCancel={() => setResetOpen(false)}
         onSubmit={resetPassword}
+      />
+
+      <EmailDialog
+        open={emailOpen}
+        targetName={account.username}
+        currentEmail={account.email ?? null}
+        onCancel={() => setEmailOpen(false)}
+        onSubmit={updateEmail}
       />
     </div>
   );

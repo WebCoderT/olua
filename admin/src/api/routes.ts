@@ -16,7 +16,7 @@
  * （守卫：`node tools/audit-api-generated.cjs`）。
  */
 export const routes = {
-  /** adminAccount 模块（9 个接口） */
+  /** adminAccount 模块（10 个接口） */
   adminAccount: {
     /**
      * 账号列表（GET /admin/accounts）
@@ -36,6 +36,12 @@ export const routes = {
      * 返回账号信息 + 名下角色概要列表。
      */
     detail: (id: string) => `/admin/accounts/${encodeURIComponent(id)}`,
+    /**
+     * 补录 / 修改玩家邮箱（PATCH /admin/accounts/{id}/email）
+     *
+     * 玩家邮箱是**个人信息**，单列一个权限点（`account:email`，ADMIN / SUPER 持有，只读观察员没有）。
+     */
+    updateEmail: (id: string) => `/admin/accounts/${encodeURIComponent(id)}/email`,
     /**
      * 踢下线（清掉账号当前的在线角色）（POST /admin/accounts/{id}/offline）
      *

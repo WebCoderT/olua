@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { isEmail } from "class-validator";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
@@ -58,6 +59,7 @@ export class MailService {
     if (!template) throw new BizException(BizCode.MAIL_TEMPLATE_NOT_FOUND, "邮件模板不存在");
 
     const accountId = this.resolveAccountId(dto.accountId);
+    const account = accountId ? this.accounts.findById(accountId) : null;
     const variables = this.normalizeVariables(dto.variables);
 
     // 自定义模板没有必填变量，但标题与正文必须由运营当场填
@@ -75,10 +77,22 @@ export class MailService {
     }
 
     const rendered = renderMail(template, variables, { subject: dto.subject, body: dto.body });
+
+    // 收件邮箱：优先用显式填写的 `to`；没填则回退到关联账号的邮箱
+    // （管理端选了账号后通常会自动带出邮箱填进 `to`，这里只是兜底层 —— 账号也没邮箱才报错）。
+    const explicitTo = (dto.to ?? "").trim();
+    if (explicitTo && !isEmail(explicitTo)) {
+      throw new BizException(BizCode.PARAM_INVALID, "收件邮箱格式不正确");
+    }
+    const toEmail = explicitTo || (account?.email ?? null);
+    if (!toEmail) {
+      throw new BizException(BizCode.MAIL_ADDRESS_MISSING, "未填写收件邮箱，且所选账号也没有邮箱，无法投递");
+    }
+
     const now = Date.now();
     const row: MailQueueRow = {
       id: randomUUID(),
-      to_email: dto.to.trim(),
+      to_email: toEmail,
       account_id: accountId,
       template_key: template.key,
       subject: rendered.subject,
