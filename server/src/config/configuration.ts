@@ -119,6 +119,15 @@ export interface AppConfiguration {
   mailRetryBaseMs: number;
   /** 调度器扫描间隔（毫秒） */
   mailPollMs: number;
+  /** 投递记录的保留天数（早于该天数的**终态**记录会被清理；0 = 不按时间清理） */
+  mailRetentionDays: number;
+  /**
+   * 终态投递记录的保留条数上限（超出后清理最旧的；0 = 不清理）
+   *
+   * 与 `mailRetentionDays` 是**两道各自独立**的闸（与操作日志同一口径）：
+   * 条数上限防刷爆磁盘，天数上限防「量不大但陈年堆积」。
+   */
+  mailQueueMaxRows: number;
 }
 
 export default function configuration(): AppConfiguration {
@@ -160,5 +169,7 @@ export default function configuration(): AppConfiguration {
     mailMaxAttempts: Number(process.env.MAIL_MAX_ATTEMPTS ?? 5),
     mailRetryBaseMs: Number(process.env.MAIL_RETRY_BASE_MS ?? 60 * 1000),
     mailPollMs: Number(process.env.MAIL_POLL_MS ?? 15 * 1000),
+    mailRetentionDays: Number(process.env.MAIL_RETENTION_DAYS ?? 90),
+    mailQueueMaxRows: Number(process.env.MAIL_QUEUE_MAX_ROWS ?? 20000),
   };
 }

@@ -83,6 +83,8 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `LOGIN_IP_MAX_FAILURES` | `20` | How many failures from one IP within the lock window before lockout |
 | `LOGIN_IP_LOCK_MS` | `600000` | IP-dimension lock duration |
 | `AUDIT_LOG_MAX_ROWS` | `20000` | Audit-log retention cap (oldest auto-purged beyond it; `0` = never purge) |
+| `MAIL_RETENTION_DAYS` | `90` | Mail-delivery record retention days (older ones auto-purged; `0` = no time-based purge) |
+| `MAIL_QUEUE_MAX_ROWS` | `20000` | Mail-delivery record retention cap (only sent / failed, so undelivered mail is never dropped; `0` = never purge) |
 
 > **The `TRUST_PROXY` two-way trap**: behind Nginx / a gateway you **must set `true`** — otherwise every request's source IP is the proxy's,
 > and login rate limiting would treat all players as one person and lock them all out; conversely, **when exposed directly you must keep it `false`** — leaving it on lets the caller
@@ -137,7 +139,7 @@ server/
 │   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
 │   ├── e2e-roles.cjs               77 assertions
 │   ├── e2e-guard.cjs               279 assertions
-│   ├── e2e-mail.cjs                108 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
+│   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
 │   └── backup.cjs                  25 assertions (backup while running / restore archiving / protective refusal)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -283,7 +285,7 @@ All five e2e suites are **real server process + real HTTP requests** (not mocks)
 | `test/e2e.cjs` | **248** | register/login / character CRUD and count cap / duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
 | `test/e2e-roles.cjs` | **77** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
 | `test/e2e-guard.cjs` | **279** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
-| `test/e2e-mail.cjs` | **108** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
+| `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
 | `test/backup.cjs` | **25** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal |
 
 ```bash

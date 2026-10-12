@@ -170,6 +170,8 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
     field: "mailPollMs",
     render: (read) => describeInterval(read<number>("mailPollMs"), "不扫描（调度器停摆）"),
   },
+  { key: "MAIL_RETENTION_DAYS", field: "mailRetentionDays", render: (read) => describeLimit(read<number>("mailRetentionDays"), "天") },
+  { key: "MAIL_QUEUE_MAX_ROWS", field: "mailQueueMaxRows", render: (read) => describeLimit(read<number>("mailQueueMaxRows"), "条") },
 ];
 
 /** 渲染整张快照（顺序即信息页的展示顺序） */
