@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { configReader, readConfigSnapshot } from "../../config/config-snapshot";
 import { humanizeDuration } from "../../common/utils/ban.util";
 import { SystemRepository } from "../../database/repositories/system.repository";
-import { SystemConfigItemDto, SystemDatabaseDto, SystemInfoDto, SystemRuntimeDto } from "./dto/system.dto";
+import { SystemBackupDto, SystemConfigItemDto, SystemDatabaseDto, SystemInfoDto, SystemRuntimeDto } from "./dto/system.dto";
+import { BackupService } from "./backup.service";
 
 /**
  * 系统信息（管理端「系统信息」页）
@@ -22,12 +23,14 @@ export class SystemService {
   constructor(
     private readonly config: ConfigService,
     private readonly tables: SystemRepository,
+    private readonly backups: BackupService,
   ) {}
 
   info(): SystemInfoDto {
     const dto = new SystemInfoDto();
     dto.runtime = this.runtime();
     dto.database = this.database();
+    dto.backup = Object.assign(new SystemBackupDto(), this.backups.snapshot());
     dto.config = readConfigSnapshot(configReader(this.config)).map((item) => {
       const row = new SystemConfigItemDto();
       row.key = item.key;

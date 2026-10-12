@@ -28,6 +28,10 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# 自动备份是在**服务进程里**拉起 scripts/backup.cjs 做的（与其让 TypeScript 另写一份
+# VACUUM INTO，不如复用 make db-backup 走的那份脚本，两者才不会各自漂移）。
+# 所以运行镜像里必须有这个目录 —— 少了它本机验证一切正常，进了容器却是每次都失败。
+COPY scripts ./scripts
 
 # 数据目录：先把属主给 node 用户，这样具名卷第一次初始化时也带着正确属主
 # （compose 会把卷挂到 /app/data，路径见 docker-compose.yml 的 DB_PATH）

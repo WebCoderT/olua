@@ -66,7 +66,7 @@ export function SystemPage() {
     return <EmptyState title="读取失败" description="没能拿到系统信息，可点「刷新」重试。" />;
   }
 
-  const { runtime, database, config } = info;
+  const { runtime, database, config, backup } = info;
   // 需要运维注意的项（如仍是内置 JWT 密钥、CORS 全开）—— 全放在页面最上面，不用往下翻
   const warnings = config.filter((item) => item.warning);
   const tableRows = database.tables.reduce((sum, item) => sum + item.rows, 0);
@@ -157,6 +157,58 @@ export function SystemPage() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card
+        title="自动备份"
+        description="服务端按 BACKUP_INTERVAL_HOURS 自己跑 VACUUM INTO；失败也会留在这里（失败 ≠ 没显示），不用登机器就能看出它有没有在跑、上一次跑成没跑成"
+      >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {backup.enabled ? (
+            <Badge tone="green">已启用</Badge>
+          ) : (
+            <Badge tone="slate">未启用</Badge>
+          )}
+          {backup.enabled ? (
+            <span className="text-xs text-slate-500">
+              {backup.intervalText}
+              {" · 保留 "}
+              {backup.keepCount > 0 ? `${backup.keepCount} 份` : "不限份数"}
+              {backup.retentionDays > 0 ? ` / ${backup.retentionDays} 天` : ""}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-500">{backup.reason}</span>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <InfoItem label="备份目录" value={backup.dir ?? "—"} />
+          <InfoItem label="目录里备份" value={`${backup.count} 份`} />
+          <InfoItem label="下次备份" value={formatTime(backup.nextAt)} />
+          <InfoItem label="上次尝试" value={formatTime(backup.lastAttemptAt)} />
+          <InfoItem label="上次成功" value={formatTime(backup.lastSuccessAt)} />
+          <InfoItem
+            label="最近一次结果"
+            value={
+              backup.lastOk === null ? (
+                "还没跑过"
+              ) : backup.lastOk ? (
+                <Badge tone="green">成功</Badge>
+              ) : (
+                <Badge tone="red">失败</Badge>
+              )
+            }
+          />
+          <InfoItem label="最近产出文件" value={backup.lastFile ?? "—"} />
+          <InfoItem label="产出体积" value={formatBytes(backup.lastSizeBytes)} />
+          <InfoItem label="耗时" value={backup.lastDurationMs === null ? "—" : `${backup.lastDurationMs} ms`} />
+        </div>
+
+        {backup.lastOk === false ? (
+          <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+            上次备份失败：{backup.lastError}
+          </div>
+        ) : null}
       </Card>
 
       <Card

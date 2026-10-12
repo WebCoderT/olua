@@ -5582,6 +5582,115 @@
           "tables"
         ]
       },
+      "SystemBackupDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "是否开启了自动备份",
+            "example": true
+          },
+          "reason": {
+            "type": "string",
+            "description": "未启用时给人看的原因（内存库 / 开关关了）",
+            "example": ""
+          },
+          "intervalMs": {
+            "type": "number",
+            "description": "备份间隔（毫秒）；0 = 未启用",
+            "example": 86400000
+          },
+          "intervalText": {
+            "type": "string",
+            "description": "备份间隔的人读文案",
+            "example": "每 1 天"
+          },
+          "dir": {
+            "type": "string",
+            "description": "备份目录（绝对路径）；没有可备份的文件时为 null",
+            "nullable": true
+          },
+          "keepCount": {
+            "type": "number",
+            "description": "保留份数（0 = 不按份数淘汰）",
+            "example": 7
+          },
+          "retentionDays": {
+            "type": "number",
+            "description": "保留天数（0 = 不按天数淘汰）",
+            "example": 30
+          },
+          "lastAttemptAt": {
+            "type": "number",
+            "description": "最后一次尝试备份的时刻；null = 从没跑过",
+            "nullable": true
+          },
+          "lastSuccessAt": {
+            "type": "number",
+            "description": "最后一次成功的时刻；null = 从没成功过",
+            "nullable": true
+          },
+          "lastOk": {
+            "type": "boolean",
+            "description": "最后一次的结果；null = 还没跑过",
+            "nullable": true
+          },
+          "lastFile": {
+            "type": "string",
+            "description": "最后一次产出（或上次成功）的文件名",
+            "nullable": true
+          },
+          "lastSizeBytes": {
+            "type": "number",
+            "description": "最后一次产出（或上次成功）的体积（字节）",
+            "nullable": true
+          },
+          "lastDurationMs": {
+            "type": "number",
+            "description": "最后一次耗时（毫秒）",
+            "nullable": true
+          },
+          "lastError": {
+            "type": "string",
+            "description": "最后一次失败的原因；成功或没跑过时为 null",
+            "nullable": true
+          },
+          "count": {
+            "type": "number",
+            "description": "目录里的备份份数",
+            "example": 7
+          },
+          "totalBytes": {
+            "type": "number",
+            "description": "目录里备份的总体积（字节）",
+            "example": 20971520
+          },
+          "nextAt": {
+            "type": "number",
+            "description": "下一次备份的时刻；未启用为 null",
+            "nullable": true
+          }
+        },
+        "required": [
+          "enabled",
+          "reason",
+          "intervalMs",
+          "intervalText",
+          "dir",
+          "keepCount",
+          "retentionDays",
+          "lastAttemptAt",
+          "lastSuccessAt",
+          "lastOk",
+          "lastFile",
+          "lastSizeBytes",
+          "lastDurationMs",
+          "lastError",
+          "count",
+          "totalBytes",
+          "nextAt"
+        ]
+      },
       "SystemConfigItemDto": {
         "type": "object",
         "properties": {
@@ -5629,6 +5738,14 @@
               }
             ]
           },
+          "backup": {
+            "description": "自动备份状态：不用登机器也能看出它有没有在跑、上一次跑成没跑成",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemBackupDto"
+              }
+            ]
+          },
           "config": {
             "description": "脱敏后的配置快照（白名单：不列出 = 不暴露）",
             "type": "array",
@@ -5644,6 +5761,7 @@
         "required": [
           "runtime",
           "database",
+          "backup",
           "config",
           "time"
         ]

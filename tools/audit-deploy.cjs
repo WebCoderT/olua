@@ -13,6 +13,7 @@
  *   - `.dockerignore` 必须排除 `.env` 与 `node_modules`（密钥会被打进镜像层，翻得出来）
  *   - compose 里 `${VAR}` 一律要有默认值（没设就起不来，属于「一键起」的反面）
  *   - 静态站 `location /` 的 try_files 必须带 `$uri/`（不带的话请求 / 会直接 404）
+ *   - 服务端运行镜像必须带着 `scripts/`（自动备份在进程里拉起那个备份脚本）
  *
  * **只做静态接线检查**：本机与 CI 里不一定有 Docker，镜像构建本身不在这里验。
  * 实现上是**锚点匹配**而不是完整 YAML 解析 —— 认的正是我们自己这几个文件的固定形态；
@@ -262,6 +263,25 @@ for (const [label, text] of NGINX_FILES) {
 
 //#endregion
 
+//#region 9. 运行镜像里必须带着备份脚本
+
+// 自动备份是在**服务进程里**拉起 scripts/backup.cjs 完成的（与其再写一份 VACUUM INTO，
+// 不如复用 make db-backup 走的那份，避免两套保留 / 校验口径各自漂移）。
+// 少了这一行，本机怎么跑都正常，进了容器却是「每次备份都失败，而且没人发现」。
+const BACKUP_SCRIPT = "server/scripts/backup.cjs";
+const runtimeStage = /^FROM\s+\S+\s+AS\s+runtime\s*$([\s\S]*)$/m.exec(serverDockerfile);
+if (!exists(BACKUP_SCRIPT)) {
+  fail(`缺少文件：${BACKUP_SCRIPT}（自动备份与 make db-backup 共用它）`);
+} else if (!runtimeStage) {
+  fail("server/Dockerfile 里找不到 runtime 阶段锚点（多阶段构建的形状变了？）");
+} else if (/^\s*COPY\s+scripts\s/m.test(runtimeStage[1])) {
+  ok("运行镜像带着备份脚本", "自动备份依赖 scripts/backup.cjs");
+} else {
+  fail("server/Dockerfile 的 runtime 阶段没有 `COPY scripts` —— 容器里自动备份每次都会失败（本机验不出来）");
+}
+
+//#endregion
+
 console.log("部署接线审计 / deploy wiring audit");
 console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / 两份 nginx.conf / .env.example）`);
 console.log("（只做静态接线检查：本机与 CI 不一定有 Docker，镜像构建本身不在这里验）");
@@ -273,4 +293,4 @@ if (failures.length) {
   console.log(`\nFAIL：${failures.length} 处部署接线有问题`);
   process.exit(1);
 }
-console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index 都接得上");
+console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index / 备份脚本随镜像都接得上");

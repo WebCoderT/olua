@@ -128,6 +128,32 @@ export interface AppConfiguration {
    * 条数上限防刷爆磁盘，天数上限防「量不大但陈年堆积」。
    */
   mailQueueMaxRows: number;
+
+  //#region 自动备份
+  /**
+   * 自动备份间隔（**小时**）；`0` = 关闭自动备份
+   *
+   * 单位用小时而不是毫秒，是因为备份是「每天一次」这种量级的调度，写成
+   * `86400000` 一串零极易手滑少一位 —— 少一位就是每小时备一份。
+   */
+  backupIntervalHours: number;
+  /**
+   * 备份保留份数（超出后清最旧的；`0` = 不按份数清理）
+   *
+   * 淘汰**只在本次备份成功产出之后**才可能发生，且至少留下最新那一份：
+   * 一份备份都没守住，比不清理更糟。
+   */
+  backupKeepCount: number;
+  /**
+   * 备份保留天数（早于该天数的会被清理；`0` = 不按时间清理）
+   *
+   * 与 `backupKeepCount` 又是两道独立的闸：份数防刷爆磁盘，天数防「备份一直在失败、
+   * 目录里躺着一份三个月前的老备份却被当成最新成果」。
+   */
+  backupRetentionDays: number;
+  /** 备份目录（空 = 跟数据文件同级；容器里必须与数据同卷，否则重建即丢） */
+  backupDir: string;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -171,5 +197,9 @@ export default function configuration(): AppConfiguration {
     mailPollMs: Number(process.env.MAIL_POLL_MS ?? 15 * 1000),
     mailRetentionDays: Number(process.env.MAIL_RETENTION_DAYS ?? 90),
     mailQueueMaxRows: Number(process.env.MAIL_QUEUE_MAX_ROWS ?? 20000),
+    backupIntervalHours: Number(process.env.BACKUP_INTERVAL_HOURS ?? 24),
+    backupKeepCount: Number(process.env.BACKUP_KEEP_COUNT ?? 7),
+    backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS ?? 30),
+    backupDir: process.env.BACKUP_DIR ?? "",
   };
 }

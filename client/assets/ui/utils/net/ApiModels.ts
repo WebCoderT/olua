@@ -1256,6 +1256,77 @@ export type SystemDatabase = {
   tables: SystemTableCount[];
 };
 
+export type SystemBackup = {
+  /**
+   * 是否开启了自动备份
+   */
+  enabled: boolean;
+  /**
+   * 未启用时给人看的原因（内存库 / 开关关了）
+   */
+  reason: string;
+  /**
+   * 备份间隔（毫秒）；0 = 未启用
+   */
+  intervalMs: number;
+  /**
+   * 备份间隔的人读文案
+   */
+  intervalText: string;
+  /**
+   * 备份目录（绝对路径）；没有可备份的文件时为 null
+   */
+  dir: string | null;
+  /**
+   * 保留份数（0 = 不按份数淘汰）
+   */
+  keepCount: number;
+  /**
+   * 保留天数（0 = 不按天数淘汰）
+   */
+  retentionDays: number;
+  /**
+   * 最后一次尝试备份的时刻；null = 从没跑过
+   */
+  lastAttemptAt: number | null;
+  /**
+   * 最后一次成功的时刻；null = 从没成功过
+   */
+  lastSuccessAt: number | null;
+  /**
+   * 最后一次的结果；null = 还没跑过
+   */
+  lastOk: boolean | null;
+  /**
+   * 最后一次产出（或上次成功）的文件名
+   */
+  lastFile: string | null;
+  /**
+   * 最后一次产出（或上次成功）的体积（字节）
+   */
+  lastSizeBytes: number | null;
+  /**
+   * 最后一次耗时（毫秒）
+   */
+  lastDurationMs: number | null;
+  /**
+   * 最后一次失败的原因；成功或没跑过时为 null
+   */
+  lastError: string | null;
+  /**
+   * 目录里的备份份数
+   */
+  count: number;
+  /**
+   * 目录里备份的总体积（字节）
+   */
+  totalBytes: number;
+  /**
+   * 下一次备份的时刻；未启用为 null
+   */
+  nextAt: number | null;
+};
+
 export type SystemConfigItem = {
   /**
    * 配置项（环境变量名）
@@ -1284,6 +1355,10 @@ export type SystemInfo = {
    * 数据库信息
    */
   database: SystemDatabase;
+  /**
+   * 自动备份状态：不用登机器也能看出它有没有在跑、上一次跑成没跑成
+   */
+  backup: SystemBackup;
   /**
    * 脱敏后的配置快照（白名单：不列出 = 不暴露）
    */
