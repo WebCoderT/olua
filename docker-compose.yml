@@ -57,6 +57,22 @@ services:
       # 对外只开 80：管理端页面与 /api 都从这里进（**不上 HTTPS**，见 docs/deploy.md）
       - "${OLUA_ADMIN_PORT:-80}:80"
 
+  # 游戏客户端（Web 端）：静态托管 Cocos 构建产物，并把 /api 同源反代到服务端。
+  # **独立端口**而不是塞进上面的 80：Cocos 产物的资源路径相对根目录，放子路径会大面积 404。
+  # 产物由 olua-deploy 技能的 deploy.sh --game 从本机 rsync 上来（素材体量大，见 docs/deploy.md）。
+  game:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    volumes:
+      # 只读：容器不需要写任何东西（游戏没有服务端渲染、也没有上传产物到这里的场景）
+      - ./game:/usr/share/nginx/html:ro
+      - ./deploy/nginx-game.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      # 对外用独立端口 8080：与管理端互不干扰，改端口用 OLUA_GAME_PORT
+      - "${OLUA_GAME_PORT:-8080}:80"
+
 volumes:
   # 具名卷：`docker compose down` 不会删它，只有 `down -v` 才会
   olua-data:

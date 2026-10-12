@@ -6,6 +6,7 @@
 #      bash scripts/deploy.sh                 # 全量：代码 + server/.env + 重建镜像
 #      bash scripts/deploy.sh --no-build      # 只换代码，不重建镜像
 #      bash scripts/deploy.sh --env-only      # 只更新 server/.env 并重启服务端
+#      bash scripts/deploy.sh --game [目录]   # 同步游戏 Web 产物到 :8080（默认 client/build/web-desktop-001）
 #      bash scripts/deploy.sh --verify        # 只做验收检查
 #
 #  前置：
@@ -19,13 +20,17 @@
 set -euo pipefail
 
 MODE="full"
+GAME_SRC=""
 for arg in "$@"; do
   case "$arg" in
     --no-build) MODE="no-build" ;;
     --env-only) MODE="env-only" ;;
+    --game)     MODE="game" ;;
     --verify)   MODE="verify" ;;
-    -h|--help)  sed -n '2,20p' "$0"; exit 0 ;;
-    *) echo "未知参数：$arg"; exit 2 ;;
+    -h|--help)  sed -n '2,22p' "$0"; exit 0 ;;
+    -*) echo "未知参数：$arg"; exit 2 ;;
+    *) [ -z "$GAME_SRC" ] || { echo "多余的源目录参数：$arg"; exit 2; }
+       GAME_SRC="$arg" ;;
   esac
 done
 
@@ -61,16 +66,36 @@ build_env() {
   echo "  已生成 server/.env（$(wc -l < /tmp/olua-server.env) 行）"
 }
 
+GAME_PORT="${GAME_PORT:-8080}"
+
 verify() {
   echo "==> 验收"
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR'
     docker compose ps
-    echo -n 'page: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
-    echo -n 'health: '; curl --noproxy '*' -s --max-time 10 http://127.0.0.1/api/health; echo"
+    echo -n 'admin page: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
+    echo -n 'admin api: ';  curl --noproxy '*' -s --max-time 10 http://127.0.0.1/api/health; echo
+    echo -n 'game page: ';  curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:${GAME_PORT}/
+    echo -n 'game api: ';   curl --noproxy '*' -s --max-time 10 http://127.0.0.1:${GAME_PORT}/api/health; echo"
+}
+
+# 同步游戏 Web 产物：首次全量（2~3G，耗时以小时计），之后只传差异
+sync_game() {
+  local src="${GAME_SRC:-client/build/web-desktop-001}"
+  [ -d "$src" ] || { echo "✗ 找不到构建产物目录：$src"; exit 1; }
+  # 防呆：源不像一份完整产物就直接停——否则 --delete 会把服务器上的游戏清成空目录
+  [ -f "$src/index.html" ] || { echo "✗ $src 里没有 index.html（不像完整的 Cocos Web 产物）"; exit 1; }
+  echo "  源：$src  体积：$(du -sh "$src" 2>/dev/null | awk '{print $1}')"
+  echo "==> rsync 增量同步 → $DEPLOY_DIR/game/（首次全量，之后只传差异）"
+  rsync -az --delete --stats \
+    -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    "$src/" "$TARGET:$DEPLOY_DIR/game/" || { echo "✗ rsync 失败"; exit 1; }
+  echo "==> 起/更新 game 容器"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d game"
 }
 
 case "$MODE" in
   verify) verify; exit 0 ;;
+  game) sync_game; verify; exit 0 ;;
   env-only)
     echo "==> 只更新 server/.env"
     build_env

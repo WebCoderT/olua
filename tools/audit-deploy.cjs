@@ -37,6 +37,7 @@ const FILES = {
   adminDockerfile: "admin/Dockerfile",
   adminIgnore: "admin/.dockerignore",
   adminNginx: "admin/nginx.conf",
+  gameNginx: "deploy/nginx-game.conf",
 };
 
 const failures = [];
@@ -80,6 +81,20 @@ const compose = read(FILES.compose);
 const serverDockerfile = read(FILES.serverDockerfile);
 const adminDockerfile = read(FILES.adminDockerfile);
 const nginx = read(FILES.adminNginx);
+const gameNginx = read(FILES.gameNginx);
+
+/** 所有 nginx 配置（管理端与游戏站），接线检查对每一份都要跑一遍 */
+const NGINX_FILES = [
+  ["admin/nginx.conf", nginx],
+  ["deploy/nginx-game.conf", gameNginx],
+];
+
+/** 取出「带 proxy_pass 的那个 location」（配置里还混着 /assets/、/ 这类静态块） */
+function proxyLocationOf(text) {
+  return [...text.matchAll(/location\s+(=)?\s*(\S+)\s*\{([\s\S]*?)\n {2}\}/g)]
+    .map((match) => ({ path: match[2], body: match[3] }))
+    .find((block) => block.body.includes("proxy_pass"));
+}
 const serverEnvExample = read(FILES.serverEnvExample);
 
 //#endregion
@@ -94,19 +109,24 @@ const serviceNames = servicesBlock
 if (serviceNames.length < 2) fail("compose 里没解析到 services（锚点变了？至少要 server 与 admin 两个服务）");
 ok("compose 服务", serviceNames.join(" / "));
 
-const upstream = /set\s+\$olua_api\s+http:\/\/([a-z0-9-]+):(\d+);/.exec(nginx);
-if (!upstream) {
-  fail("admin/nginx.conf 里没找到上游锚点 `set $olua_api http://<服务名>:<端口>;`（反代配置形状变了？）");
-} else {
+const exposed = /^EXPOSE\s+(\d+)/m.exec(serverDockerfile);
+if (!exposed) fail("server/Dockerfile 里没找到 EXPOSE");
+
+// 管理端与游戏站各自把 /api 反代到服务端，两处都要对得上 compose
+for (const [label, text] of NGINX_FILES) {
+  const upstream = /set\s+\$olua_api\s+http:\/\/([a-z0-9-]+):(\d+);/.exec(text);
+  if (!upstream) {
+    fail(`${label} 里没找到上游锚点 \`set $olua_api http://<服务名>:<端口>;\`（反代配置形状变了？）`);
+    continue;
+  }
   const [, host, port] = upstream;
-  if (serviceNames.includes(host)) ok("nginx 上游服务名", `${host} 在 compose 里存在`);
-  else fail(`nginx 反代到 \`${host}\`，但 compose 里的服务是 ${serviceNames.join(" / ")} —— 改名时漏改了一处`);
+  if (serviceNames.includes(host)) ok(`${label} 上游服务名`, `${host} 在 compose 里存在`);
+  else fail(`${label} 反代到 \`${host}\`，但 compose 里的服务是 ${serviceNames.join(" / ")} —— 改名时漏改了一处`);
 
   // 服务端容器里监听的端口：以 Dockerfile 的 EXPOSE 为准
-  const exposed = /^EXPOSE\s+(\d+)/m.exec(serverDockerfile);
-  if (!exposed) fail("server/Dockerfile 里没找到 EXPOSE");
-  else if (exposed[1] === port) ok("nginx 上游端口", `${port} 与 server/Dockerfile 的 EXPOSE 一致`);
-  else fail(`nginx 反代到 ${port}，但 server/Dockerfile 暴露的是 ${exposed[1]}`);
+  if (!exposed) continue;
+  if (exposed[1] === port) ok(`${label} 上游端口`, `${port} 与 server/Dockerfile 的 EXPOSE 一致`);
+  else fail(`${label} 反代到 ${port}，但 server/Dockerfile 暴露的是 ${exposed[1]}`);
 }
 
 //#endregion
@@ -134,21 +154,21 @@ if (!dbPath) {
 //#region 4. 反代前缀 ↔ API_PREFIX ↔ 管理端构建参数
 
 const prefix = /^\s*#?\s*API_PREFIX\s*=\s*(\S+)\s*$/m.exec(serverEnvExample);
-// 取**带 proxy_pass 的那个** location（nginx.conf 里还有 /assets/ 与 / 两个静态块，
-// 直接取第一个 location 会认到 /assets/ 上）
-const proxyLocation = [...nginx.matchAll(/location\s+(=)?\s*(\S+)\s*\{([\s\S]*?)\n {2}\}/g)]
-  .map((match) => ({ path: match[2], body: match[3] }))
-  .find((block) => block.body.includes("proxy_pass"));
 const buildArg = /VITE_API_BASE_URL:\s*(\S+)/.exec(compose);
 
 if (!prefix) fail("server/.env.example 里没找到 API_PREFIX");
-if (!proxyLocation) fail("admin/nginx.conf 里没找到带 proxy_pass 的 location（反代块）");
 if (!buildArg) fail("compose 里没给 admin 传 VITE_API_BASE_URL 构建参数");
 
-if (prefix && proxyLocation) {
+for (const [label, text] of NGINX_FILES) {
+  const proxyLocation = proxyLocationOf(text);
+  if (!proxyLocation) {
+    fail(`${label} 里没找到带 proxy_pass 的 location（反代块）`);
+    continue;
+  }
+  if (!prefix) continue;
   const expected = `/${prefix[1]}/`;
-  if (proxyLocation.path === expected) ok("反代前缀与 API_PREFIX 一致", expected);
-  else fail(`nginx 反代的是 ${proxyLocation.path}，而服务端 API_PREFIX 是 ${prefix[1]}（应反代 ${expected}）`);
+  if (proxyLocation.path === expected) ok(`${label} 反代前缀与 API_PREFIX 一致`, expected);
+  else fail(`${label} 反代的是 ${proxyLocation.path}，而服务端 API_PREFIX 是 ${prefix[1]}（应反代 ${expected}）`);
 }
 if (prefix && buildArg) {
   const expected = `/${prefix[1]}`;
@@ -218,7 +238,7 @@ if (noDefault.length) {
 //#endregion
 
 console.log("部署接线审计 / deploy wiring audit");
-console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / nginx.conf / .env.example）`);
+console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / 两份 nginx.conf / .env.example）`);
 console.log("（只做静态接线检查：本机与 CI 不一定有 Docker，镜像构建本身不在这里验）");
 console.log("");
 for (const line of notes) console.log(`  ✓ ${line}`);

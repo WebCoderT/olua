@@ -8,10 +8,16 @@
 ## 1. 拓扑：这套部署长什么样
 
 ```
-浏览器 ──► :80  管理端容器(nginx)
-              │   静态页面 + 单页前端路由
-              └─► /api/*  ──► 服务端容器(:3100，仅 compose 内网可达)
-                                 └─► SQLite（具名卷 olua-data）
+浏览器 ──► :80    管理端容器(nginx)
+              │    静态页面 + 单页前端路由
+              └─►  /api/*  ──┐
+
+浏览器 ──► :8080 游戏容器(nginx)
+              │    Cocos Web 构建产物（静态）
+              └─►  /api/*  ──┤
+                             ▼
+                服务端容器(:3100，仅 compose 内网可达)
+                             └─► SQLite（具名卷 olua-data）
 ```
 
 三条设计约束，改动时别破坏：
@@ -182,3 +188,64 @@ docker run --rm -v olua-data:/data -v /opt/olua/backup:/backup \
 | 上传 40M 归档被中断 | `scp` 可能超过前台命令时限，放到后台跑即可，不是网络故障 |
 | `pkill -f "git clone"` 把自己也杀了 | 模式会匹配到自身命令行，写成 `pkill -f "git clon[e]"` |
 | 管理端注册不了 | 配了 `ADMIN_REGISTER_CODE` 就必须带相同邀请码；**留空不等于开放注册**（需显式 `ADMIN_REGISTER_OPEN=true`） |
+
+---
+
+## 9. 游戏客户端（Web 端，:8080）
+
+游戏是**本机 Cocos Creator 构建出来的静态产物**，用 nginx 托管在与管理端**互不干扰的独立端口**。
+
+```
+本机 Cocos Creator（GUI 构建）
+      └─► client/build/web-desktop-001/     ← 不在版本库里（client/build/ 已 gitignore）
+              └─ rsync ──► 服务器 /opt/olua/game/  ← 挂载给 game 容器
+```
+
+### 9.1 产物为什么得在 GUI 里构建
+
+`client/build/` 体积 3G 量级且全是二进制，**有意不入库**；服务器也没有构建环境。
+命令行构建（Cocos Creator CLI）在本机走不通，原因是链式的，每一层都误导过一次排查：
+
+1. Electron 的命令行模式会被环境变量 `ELECTRON_RUN_AS_NODE=1` 劫持成纯 node
+   （表现为 `--help` 吐出 node 的用法说明）→ 需要 `env -u ELECTRON_RUN_AS_NODE` 调用。
+2. 即便如此，Chromium 派生 GPU / 网络子进程会被拒（`sandbox initialization failed`）
+   → GPU 进程连崩 → `FATAL: GPU process isn't usable`。
+3. 用 `--disable-gpu` 绕开，会触发 Sentry 上报的**自激循环**（上报失败抛异常、抛异常又上报），
+   几十万行日志把进程拖死。
+4. 脱离工具沙箱重跑，`sandbox initialization failed` 依旧 —— 是本机环境层面挡的。
+
+所以：**用 Cocos Creator 打开 `client/`，在构建面板构建 `web-desktop` 平台**，产物落在
+`client/build/web-desktop-001/`（有同名目录时会自动加后缀，同步前确认自己要的是哪一份）。
+
+判断是否是一份完整产物：**顶层必须有 `index.html`**。缺了就是构建没跑完或被中断了。
+
+### 9.2 同步到服务器
+
+```bash
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game                       # 默认 web-desktop-001
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-desktop
+```
+
+脚本会：校验源目录有 `index.html`（防把空目录 rsync 上去）→ `rsync -az --delete` 同步 → `docker compose up -d game` → 验收。
+
+### 9.3 体积与耗时（做好心理预期）
+
+| 项 | 事实 |
+| --- | --- |
+| 产物体积 | 约 3G，其中 **99% 是素材**（角色帧序列 / 背景图 / 配置 json），代码只占几 MB |
+| 能不能压小 | **压缩基本无效**：抽样 200MB → gzip 195MB。素材里主要是已经压过的 PNG |
+| 首传耗时 | 约 1 小时（放到后台跑，`scp` 会超时但 rsync 不会） |
+| 之后每次更新 | **很快** —— rsync 只传差异，游戏资源变动通常很小 |
+
+### 9.4 三个容易踩的点
+
+- **接口地址不用为不同环境改**：`client/assets/configs/network.ts` 会按 `location.hostname` 判断，
+  本地（localhost/127.0.0.1）走 `http://localhost:3100/api`，线上走同源 `/api`。**一份产物两处通用**。
+- **缺资源必须报 404**：`deploy/nginx-game.conf` **故意不写** SPA 那种 `try_files $uri /index.html`，
+  否则缺图时会回一段 HTML 给资源加载器，错误极难定位。
+- **缓存策略**：构建没开 `md5Cache`，文件名不带内容哈希 → 资源只能短期缓存（`assets/` 设 1 小时）；
+  `index.html` 完全不缓存，保证发版立刻生效。
+
+### 9.5 防火墙
+
+`:8080` 要在云厂商控制台放行，**这台机器上的 `ufw`/iptables 改不了那层**。
