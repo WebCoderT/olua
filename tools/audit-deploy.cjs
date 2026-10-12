@@ -12,6 +12,7 @@
  *   - Dockerfile 里 `COPY` 的源路径真的存在（改目录名后 build 才失败太晚了）
  *   - `.dockerignore` 必须排除 `.env` 与 `node_modules`（密钥会被打进镜像层，翻得出来）
  *   - compose 里 `${VAR}` 一律要有默认值（没设就起不来，属于「一键起」的反面）
+ *   - 静态站 `location /` 的 try_files 必须带 `$uri/`（不带的话请求 / 会直接 404）
  *
  * **只做静态接线检查**：本机与 CI 里不一定有 Docker，镜像构建本身不在这里验。
  * 实现上是**锚点匹配**而不是完整 YAML 解析 —— 认的正是我们自己这几个文件的固定形态；
@@ -237,6 +238,30 @@ if (noDefault.length) {
 
 //#endregion
 
+//#region 8. 静态站的根路径必须能落到 index 上
+
+// 静态站请求 `/` 时，nginx 的 `$uri` 是**目录**而不是文件。try_files 里少了 `$uri/`
+// 这一项，目录请求就不会回到 index 指令：玩家直接开根端口拿到 404，手打 /index.html
+// 却又是好的 —— 这种残缺只有「记得补全路径」的人才绕得过，所以在这里拦一道。
+for (const [label, text] of NGINX_FILES) {
+  if (!/^\s*index\s+\S+;/m.test(text)) continue; // 纯反代站没有静态入口，跳过
+  const rootBlock = /location\s+\/\s*\{([\s\S]*?)\n {2}\}/.exec(text);
+  if (!rootBlock) {
+    fail(`${label} 里找不到 \`location / {\` 锚点（静态入口的形状变了？）`);
+    continue;
+  }
+  const tries = /try_files\s+([^;]+);/.exec(rootBlock[1]);
+  if (!tries) {
+    fail(`${label} 的 location / 里没有 try_files（不知道命中规则是按什么算的）`);
+    continue;
+  }
+  const args = tries[1].trim().split(/\s+/);
+  if (args.includes("$uri/")) ok(`${label} 根目录请求交给 index`, args.join(" "));
+  else fail(`${label} 的 try_files 是 \`${args.join(" ")}\`：缺 \`$uri/\`，请求 / 会直接 404（index 指令够不着）`);
+}
+
+//#endregion
+
 console.log("部署接线审计 / deploy wiring audit");
 console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / 两份 nginx.conf / .env.example）`);
 console.log("（只做静态接线检查：本机与 CI 不一定有 Docker，镜像构建本身不在这里验）");
@@ -248,4 +273,4 @@ if (failures.length) {
   console.log(`\nFAIL：${failures.length} 处部署接线有问题`);
   process.exit(1);
 }
-console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值都接得上");
+console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index 都接得上");
