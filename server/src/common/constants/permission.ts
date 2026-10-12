@@ -30,6 +30,14 @@ export const Permission = {
   ACCOUNT_PASSWORD: "account:password",
   /** 删除账号（级联删角色，不可恢复） */
   ACCOUNT_DELETE: "account:delete",
+  /**
+   * 补录 / 查看玩家邮箱
+   *
+   * 单独一个权限点（而不是并进 `account:read`）：邮箱是**个人信息**，
+   * 给了只读观察员 `account:read` 不代表该让他看到一串玩家联系方式。
+   * 补录与查看共用这一个权限点 —— 能改就能看（ADMIN / SUPER 持有，VIEWER 不持有）。
+   */
+  ACCOUNT_EMAIL: "account:email",
 
   /** 查看角色列表 / 详情（含完整 data） */
   ROLE_READ: "role:read",
@@ -134,6 +142,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ACCOUNT_STATUS]: "封禁 / 解封账号",
   [Permission.ACCOUNT_PASSWORD]: "重置玩家密码",
   [Permission.ACCOUNT_DELETE]: "删除账号",
+  [Permission.ACCOUNT_EMAIL]: "补录 / 查看玩家邮箱",
   [Permission.ROLE_READ]: "查看角色",
   [Permission.ROLE_WRITE]: "修改角色",
   [Permission.ROLE_SELECT]: "切换在线角色",

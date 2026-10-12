@@ -59,6 +59,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         id             TEXT PRIMARY KEY,
         username       TEXT NOT NULL UNIQUE,
         password       TEXT NOT NULL,
+        email          TEXT,
         status         TEXT NOT NULL DEFAULT 'active',
         online_role_id TEXT,
         token_version  INTEGER NOT NULL DEFAULT 0,
@@ -167,6 +168,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("accounts", "ban_until", "INTEGER");
     this.ensureColumn("accounts", "banned_by", "TEXT");
     this.ensureColumn("accounts", "banned_at", "INTEGER");
+    // 玩家邮箱（个人信息）：可空；大小写不敏感唯一（同一邮箱只绑一个账号，未填写不限）
+    this.ensureColumn("accounts", "email", "TEXT");
+    this.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(LOWER(email)) WHERE email IS NOT NULL;",
+    );
     this.ensureSuperAdmin();
   }
 

@@ -278,6 +278,15 @@ export function MailsPage() {
                       onClick={() => {
                         setAccount(item);
                         setAccountOptions([]);
+                        // 选了关联账号后，自动把它的邮箱带进收件框（服务端也会按账号兜底，这里只是省去手填）
+                        // 注意：邮箱是个人信息，只有持 account:email 权限才查得出来；拿不到时提示手动填，
+                        // 服务端仍会按账号邮箱兜底投递，不影响发送。
+                        if (item.email) {
+                          setTo(item.email);
+                          toastSuccess(`已自动带出邮箱：${item.email}`);
+                        } else {
+                          toastSuccess("未获取到该账号的邮箱，请手动填写收件邮箱");
+                        }
                       }}
                     >
                       {item.username}

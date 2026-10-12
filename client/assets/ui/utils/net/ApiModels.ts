@@ -91,6 +91,13 @@ export type ChangeAdminPassword = {
   newPassword: string;
 };
 
+export type UpdateAccountEmail = {
+  /**
+   * 玩家邮箱；传非空串补录 / 改，传空串清空。同一邮箱只绑一个账号（大小写不敏感）。
+   */
+  email: string;
+};
+
 export type UpdateAccountStatus = {
   /**
    * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
@@ -303,9 +310,9 @@ export type UpdateAnnouncement = {
 
 export type SendMail = {
   /**
-   * 收件邮箱
+   * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
    */
-  to: string;
+  to?: string;
   /**
    * 模板 key（custom = 自定义，此时必须传 subject 与 body）
    */
@@ -415,6 +422,10 @@ export type Account = {
    * 最近登录时间（毫秒，从未登录为 null）
    */
   lastLoginAt: number | null;
+  /**
+   * 玩家邮箱（个人信息，仅 account:email 权限可见；未填写为 null）
+   */
+  email: string | null;
 };
 
 export type AuthResult = {

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsIn, IsObject, IsOptional, IsString, MaxLength } from "class-validator";
 import {
   MAIL_BODY_MAX,
   MAIL_STATUS_LABELS,
@@ -125,11 +125,17 @@ export class MailQueryDto extends PageQueryDto {
  * 这样 SMTP 服务器不可达时，运营点下「发送」不会卡到网关超时。
  */
 export class SendMailDto {
-  @ApiProperty({ description: "收件邮箱", maxLength: MAIL_TO_MAX, example: "player@example.com" })
+  @ApiPropertyOptional({
+    description:
+      "收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。" +
+      "管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。",
+    maxLength: MAIL_TO_MAX,
+    example: "player@example.com",
+  })
+  @IsOptional()
   @IsString({ message: "收件邮箱必须是字符串" })
-  @IsEmail({}, { message: "收件邮箱格式不正确" })
   @MaxLength(MAIL_TO_MAX, { message: `收件邮箱最长 ${MAIL_TO_MAX} 个字符` })
-  to: string;
+  to?: string;
 
   @ApiProperty({ description: "模板 key（custom = 自定义，此时必须传 subject 与 body）", enum: MAIL_TEMPLATE_KEYS })
   @IsString({ message: "模板必须是字符串" })

@@ -15,6 +15,7 @@ import { AdminService } from "./admin.service";
 import { BatchStatusResultDto, BatchUpdateAccountStatusDto, ACCOUNT_BATCH_STATUS_MAX } from "./dto/batch-account.dto";
 import { BatchDeleteResultDto } from "./dto/batch-role.dto";
 import { ResetAccountPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
+import { UpdateAccountEmailDto } from "./dto/account-email.dto";
 import { AccountQueryDto, StatsRecentQueryDto, StatsTrendQueryDto, UpdateAccountStatusDto } from "./dto/query.dto";
 import {
   AdminAccountDetailDto,
@@ -103,16 +104,33 @@ export class AdminAccountsController {
   })
   @ApiQueryModel(AccountQueryDto)
   @ApiDataResponse(AccountPageDto, { description: "分页结果（list/total/page/size）" })
-  list(@Query() query: AccountQueryDto): PageResult<AccountDto> {
-    return this.adminService.listAccounts(query);
+  list(@Query() query: AccountQueryDto, @CurrentUser() user: AuthenticatedUser): PageResult<AccountDto> {
+    return this.adminService.listAccounts(query, user);
   }
 
   @Get("accounts/:id")
   @ApiAdminDoc({ operationId: "adminAccount.detail", summary: "账号详情", description: "返回账号信息 + 名下角色概要列表。", permissions: [Permission.ACCOUNT_READ] })
   @ApiParam({ name: "id", description: "账号 id" })
   @ApiDataResponse(AdminAccountDetailDto, { description: "账号详情" })
-  detail(@Param("id") id: string): AdminAccountDetailDto {
-    return this.adminService.accountDetail(id);
+  detail(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser): AdminAccountDetailDto {
+    return this.adminService.accountDetail(id, user);
+  }
+
+  @Patch("accounts/:id/email")
+  @AuditTarget("account")
+  @ApiAdminDoc({
+    operationId: "adminAccount.updateEmail",
+    summary: "补录 / 修改玩家邮箱",
+    description:
+      "玩家邮箱是**个人信息**，单列一个权限点（`account:email`，ADMIN / SUPER 持有，只读观察员没有）。\n\n" +
+      "传非空串 = 补录或改成该邮箱（服务端校验格式并查重，同一邮箱只绑一个账号、大小写不敏感）；\n" +
+      "传空串 = 清空（账号回到「未填写邮箱」状态）。",
+    permissions: [Permission.ACCOUNT_EMAIL],
+  })
+  @ApiParam({ name: "id", description: "账号 id" })
+  @ApiDataResponse(AccountDto, { description: "变更后的账号（含邮箱；邮箱仅 account:email 权限可见）" })
+  updateEmail(@Param("id") id: string, @Body() dto: UpdateAccountEmailDto): AccountDto {
+    return this.adminService.updateAccountEmail(id, dto);
   }
 
   @Patch("accounts/:id/status")

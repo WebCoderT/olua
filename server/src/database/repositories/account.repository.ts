@@ -30,6 +30,23 @@ export class AccountRepository {
     return this.db.get<AccountRow>("SELECT * FROM accounts WHERE username = ?", [username]);
   }
 
+  /**
+   * 按邮箱查账号（大小写不敏感；用于补录邮箱时去重）
+   *
+   * `excludeId` 传自身 id：补录自己的邮箱时，不与自己冲突（返回 undefined 表示没被别人占用）。
+   * 传 null / 空串直接返回 undefined —— 没东西可查。
+   *
+   * 唯一性由 `idx_accounts_email`（LOWER(email) 的部分唯一索引）在写时兜底，这里只是校验前的预查。
+   */
+  findByEmail(email: string | null | undefined, excludeId?: string): AccountRow | undefined {
+    if (!email) return undefined;
+    const sql = excludeId
+      ? "SELECT * FROM accounts WHERE LOWER(email) = LOWER(?) AND id != ?"
+      : "SELECT * FROM accounts WHERE LOWER(email) = LOWER(?)";
+    const params: SqlParam[] = excludeId ? [email, excludeId] : [email];
+    return this.db.get<AccountRow>(sql, params);
+  }
+
   insert(row: AccountRow): void {
     this.db.run(
       `INSERT INTO accounts (id, username, password, status, online_role_id, token_version, created_at, updated_at, last_login_at)
@@ -65,6 +82,7 @@ export class AccountRepository {
     if (patch.ban_until !== undefined) assign("ban_until", patch.ban_until);
     if (patch.banned_by !== undefined) assign("banned_by", patch.banned_by);
     if (patch.banned_at !== undefined) assign("banned_at", patch.banned_at);
+    if (patch.email !== undefined) assign("email", patch.email);
     if (patch.last_login_at !== undefined) assign("last_login_at", patch.last_login_at);
     if (fields.length === 0) return this.findById(id) !== undefined;
     assign("updated_at", patch.updated_at ?? Date.now());

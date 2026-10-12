@@ -4,6 +4,8 @@ export interface AccountRow {
   id: string;
   username: string;
   password: string;
+  /** 玩家邮箱（个人信息，仅 account:email 权限可见；存量账号为 null，后台可补录） */
+  email: string | null;
   /** active | disabled */
   status: string;
   /** 当前选中（在线）的角色 id */

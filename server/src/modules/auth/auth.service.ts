@@ -40,6 +40,7 @@ export class AuthService {
       id: randomUUID(),
       username,
       password: hashPassword(dto.password),
+      email: null,
       status: ENTITY_STATUS.ACTIVE,
       online_role_id: null,
       token_version: 0,

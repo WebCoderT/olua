@@ -53,7 +53,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-backup server-verify db-backup db-restore gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-backup server-verify db-backup db-restore gen-api \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
 
@@ -219,6 +219,9 @@ server-e2e-backup: ## 服务端备份 / 恢复 e2e（25 条：运行中备份 / 
 
 server-e2e-mail: ## 服务端邮件通道专项 e2e（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
 	@cd server && $(NPM) run test:e2e:mail
+
+server-e2e-account-email: ## 服务端玩家邮箱字段专项 e2e（可见性 / 补录 / 去重 / 发信兜底）
+	@cd server && $(NPM) run test:e2e:account-email
 
 server-verify: ## 服务端一条命令全验（编译 + 五套 e2e + 生成物审计）
 	@cd server && $(NPM) run verify

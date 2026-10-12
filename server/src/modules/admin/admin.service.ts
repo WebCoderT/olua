@@ -1,10 +1,11 @@
 import { Injectable } from "@nestjs/common";
+import { isEmail } from "class-validator";
 import { BizCode } from "../../common/constants/biz-code";
-import { AdminRole, isAdminRole } from "../../common/constants/permission";
+import { AdminRole, isAdminRole, Permission, roleHasPermission } from "../../common/constants/permission";
 import { ENTITY_STATUS } from "../../common/constants/status";
 import { BizException } from "../../common/errors/biz.exception";
 import { hashPassword } from "../../common/utils/password.util";
-import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { AuthenticatedUser, PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AccountListOptions, AccountRepository } from "../../database/repositories/account.repository";
 import { AdminListOptions, AdminRepository } from "../../database/repositories/admin.repository";
 import { AuditRepository } from "../../database/repositories/audit.repository";
@@ -27,6 +28,7 @@ import { BatchStatusResultDto, BatchUpdateAccountStatusDto } from "./dto/batch-a
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
 import { ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
+import { UpdateAccountEmailDto } from "./dto/account-email.dto";
 import { AccountQueryDto, AdminQueryDto, normalizePage, RoleQueryDto, roleFilterOf, UpdateAccountStatusDto } from "./dto/query.dto";
 import {
   AdminAccountDetailDto,
@@ -57,12 +59,14 @@ export class AdminService {
   //#region 账号
 
   /** 账号分页检索（keyword 匹配账号名；排序字段白名单见 AccountRepository.ACCOUNT_SORT） */
-  listAccounts(query: AccountQueryDto): PageResult<AccountDto> {
+  listAccounts(query: AccountQueryDto, user?: AuthenticatedUser): PageResult<AccountDto> {
     const { page, size } = normalizePage(query);
     const keyword = query.keyword?.trim() || undefined;
     const options: AccountListOptions = { page, size, keyword, status: query.status, sort: query.sort, order: query.order };
+    // 邮箱是个人信息：只有持 account:email 权限的角色才在列表里看到（只读观察员看不到）
+    const includeEmail = roleHasPermission(user?.role, Permission.ACCOUNT_EMAIL);
     return {
-      list: this.accounts.list(options).map((row) => AccountDto.from(row)),
+      list: this.accounts.list(options).map((row) => AccountDto.from(row, includeEmail)),
       total: this.accounts.count({ keyword, status: query.status }),
       page,
       size,
@@ -70,12 +74,41 @@ export class AdminService {
   }
 
   /** 账号详情（账号 + 名下角色概要） */
-  accountDetail(id: string): AdminAccountDetailDto {
+  accountDetail(id: string, user?: AuthenticatedUser): AdminAccountDetailDto {
     const account = this.mustAccount(id);
+    // 邮箱是个人信息：只有持 account:email 权限的角色才在详情里看到
+    const includeEmail = roleHasPermission(user?.role, Permission.ACCOUNT_EMAIL);
     return {
-      account: AccountDto.from(account),
+      account: AccountDto.from(account, includeEmail),
       roles: this.roles.findByAccount(id).map((row) => RoleSummaryDto.from(row, account.online_role_id)),
     };
+  }
+
+  /**
+   * 补录 / 修改玩家邮箱
+   *
+   * 单独一个权限点（account:email，ADMIN / SUPER 持有，VIEWER 不持有）：邮箱是个人信息，
+   * 不该跟着 account:read 一起被只读观察员看到，所以补录与查看共用同一道闸。
+   *
+   * 去重：同一邮箱只绑一个账号（大小写不敏感），写时还有 `idx_accounts_email` 部分唯一索引兜底；
+   * 这里先查一遍，冲突时给明确的业务码（而不是等数据库抛唯一约束错误）。
+   * 传空串 = 清空（账号回到「未填写邮箱」）。
+   */
+  updateAccountEmail(id: string, dto: UpdateAccountEmailDto): AccountDto {
+    this.mustAccount(id);
+    const normalized = dto.email.trim();
+    const email = normalized === "" ? null : normalized;
+    if (email !== null && !isEmail(email)) {
+      throw new BizException(BizCode.PARAM_INVALID, "收件邮箱格式不正确");
+    }
+    if (email !== null) {
+      const conflict = this.accounts.findByEmail(email, id);
+      if (conflict) {
+        throw BizException.conflict(BizCode.ACCOUNT_EMAIL_EXISTS, "该邮箱已被别的账号绑定");
+      }
+    }
+    this.accounts.updateById(id, { email });
+    return AccountDto.from(this.mustAccount(id), true);
   }
 
   /**
