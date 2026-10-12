@@ -15,6 +15,13 @@
 ## 仓库形态
 根 = README/FAQ + 跨端 `tools/` + `Makefile`（命令入口，统一 `env -u NODE_OPTIONS`）。`client/` 是 Cocos 工程本体，脚本住 `client/tools/`；审计在根 `tools/audit-*.cjs`（`make audit` 自动发现）。
 
+## 部署（线上，细节见 Skill `olua-deploy`）
+- 三容器：**admin :80**（管理端 SPA）/ **game :8080**（Cocos Web 产物，nginx 静态）/**server 仅内网 3100**（不对外暴露）；game 与 admin 各自把 `/api` 反代到 `server:3100`，所以**游戏站与服务端是同源**，客户端 `baseUrl` 线上解析成 `/api`。
+- 同步游戏产物 `deploy.sh --game`（rsync **增量**、不带 `-z`）；**只改 nginx 配置不必整份重发**：scp 对应 conf 到 `$DEPLOY_DIR/deploy/` 后 `docker exec <容器> nginx -t && nginx -s reload`（bind mount 直通）。
+- **静态站 `location /` 的 try_files 必须含 `$uri/`**（`$uri $uri/ =404`）：不带会让根路径 `/` 404、只有 `/index.html` 能开；`tools/audit-deploy.cjs` 第 8 条守着这条。Cocos 不是 SPA，**不做** `/index.html` 回落，缺失资源如实 404。
+- **Cocos 客户端只能用 GUI 打包**（本机 CLI 走不通，见 2026-10-12 日志）；产物 ~3.1G，首传是硬成本。
+- 站点一上线即刻会被外部扫描/IP 试探（看到 106.55.x 等段在抓 assets 与 `/api/roles`），注册仍靠邀请码兜着。
+
 ## 工程风险（必读）
 - **编辑器周期性回写 assets**：改完 Grep 核对 + `sleep 20` 复检；**工具输出会串扰** → 只信 `git diff`。BSD `grep` 的 `\|` 不是或运算（用 Grep 工具，`-e`）。
 - 服务端/子进程必须 `env -u NODE_OPTIONS`（注入的 shim 会让服务静默不监听端口）；`curl 127.0.0.1` 加 `--noproxy '*'`。

@@ -89,3 +89,25 @@ compose 里删掉 server 的 `ports` 后，`docker compose ps` 显示 server 是
 这是**正确**状态：容器内监听、仅 compose 内网可达。管理端 nginx 用 `set $olua_api http://server:3100`
 + `resolver 127.0.0.11` 解析，与宿主机端口映射无关。
 要本地调试再临时 `docker run -p 3100:3100` 或打开 compose 里注释掉的那两行。
+
+## 13. 静态站根路径 404：`try_files` 少了 `$uri/`
+
+现象：`GET /` 返回 404，而 `GET /index.html` 明明 200（公网/内网都一样）。
+真因：`try_files $uri =404;` 把 `$uri` 当**文件**去命中，请求 `/` 时 `$uri` 是根**目录**，
+匹配不上就落到 `=404`，index 模块根本没机会把请求转给 `index.html`。
+
+**写法**：`location / { try_files $uri $uri/ =404; }`。
+注意这跟 SPA 回落是两回事 —— Cocos 产物**不做** `$uri /index.html` 回落（缺资源要如实 404），
+但 `$uri/` 这条目录分支必须有。`tools/audit-deploy.cjs` 会拦这条（`make audit` 第 8 项）。
+
+## 14. 只改 nginx 配置，不必整份重发
+
+compose 把 `deploy/nginx-*.conf` **bind mount** 进容器，改宿主机上的文件即刻生效：
+
+```bash
+scp -i <key> deploy/nginx-game.conf <user>@<host>:<部署目录>/deploy/nginx-game.conf
+ssh -i <key> <user>@<host> "docker exec <容器名> nginx -t && docker exec <容器名> nginx -s reload"
+```
+
+先 `-t` 再 `-s reload`：语法错的话 reload 会把站点一起带崩。
+用完整发布脚本（`git archive` + `compose up -d --build`）重发一遍会白白重建镜像，没必要。
