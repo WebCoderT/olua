@@ -135,7 +135,7 @@ make verify   # = check（客户端 tsc + 管理端 typecheck + 8 个审计）+ 
 # 客户端：25 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 五套 e2e（248 / 77 / 279 / 108 / 25）+ 生成物一致性
+# 服务端：编译 + 六套 e2e（248 / 77 / 283 / 120 / 87 / 28）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建
@@ -143,21 +143,25 @@ cd admin && npm run build
 
 # 项目级审计（在仓库根跑）
 node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
-  && node tools/audit-config-leak.cjs && node tools/audit-ui-click-through.cjs \
-  && node tools/audit-deploy.cjs
+  && node tools/audit-battle-rules.cjs && node tools/audit-combat-parity.cjs \
+  && node tools/audit-config-leak.cjs && node tools/audit-docs-en.cjs \
+  && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs
 ```
 
 按改动范围可以只跑相关的那几套，但**服务端 e2e 与八个审计脚本在提交前都该过一遍** —— 它们盯着的是「静默失效」这类单测抓不到的问题：
 
 - `audit-api-generated`：生成物与文档是否逐字节一致（防「改了服务端忘了生成」）
 - `audit-api-hardcode`：地址有没有写进代码、环境变量有没有漏登记进 `.env.example`
+- `audit-battle-rules`：服务端战斗规则快照与客户端配置表是否逐字节一致（防数据漂移）
+- `audit-combat-parity`：服务端角色属性算法与客户端真身是否一致（把真的 `GameHelper.combatCalc` 编进 Node 当期望值，防算法漂移）
 - `audit-config-leak`：可调项有没有散落进核心代码、文案 key 有没有漏登记
+- `audit-docs-en`：中英文档的章节与数字有没有在翻译里走漏
 - `audit-ui-click-through`：UI 点击会不会穿透到世界、按压归属接线是否齐全
 - `audit-deploy`：Docker / compose / nginx 的跨文件接线是否对得上（服务名 / 端口 / 卷 / 反代前缀 / 密钥隔离）
 
 ## 为什么 CI 不覆盖客户端？
 
-CI 跑的是 `make ci`（见 `.github/workflows/ci.yml`），它覆盖**服务端五套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查**，但**不跑客户端单测**。这是 2026-10-11 在 #24 里拍板的「路径 B」：
+CI 跑的是 `make ci`（见 `.github/workflows/ci.yml`），它覆盖**服务端六套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查**，但**不跑客户端单测**。这是 2026-10-11 在 #24 里拍板的「路径 B」：
 
 - **客户端类型检查（`make client-check`，全工程 tsc）已进 CI。** Cocos 编辑器生成的 `client/temp/declarations/{cc,cc.custom-macro,jsb,cc.env}.d.ts` 里，shim 的 `/// <reference path="..."/>` 指向**本机 Cocos 安装的绝对路径**，而 `client/temp/` 在 `.gitignore` 里、CI 上也没装 Cocos。所以把这些声明 vendoring 进 `client/types/engine/`（相对路径 + 真实引擎 `cc.d.ts`），CI 用 `install-ci` 装好的 `client/node_modules/.bin/tsc`（与 Cocos 自带的同版本 5.8.2）即可类型检查，**无需编辑器**。
 - **客户端单测（`make client-test`，25 套）仍本地专属。** 其中 10 套直接断言 `assets/resources/` 下的真实素材（图集 / 帧序列 / 怪物帧 `.meta`），而素材 2.8 GB / 168000 文件、**有意不入库**。干净 clone 上这些断言不可能成立，把它们搬上 CI 等于要托管整套素材（路径 C），成本与维护压力都大，当前阶段不值得。

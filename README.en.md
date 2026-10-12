@@ -85,7 +85,7 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 - **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 25 unit-test suites under `client/tools/` and 8 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 77 + 279 + 108 + 25 assertions) + typechecks on two sides + 25 unit-test suites + 8 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 77 + 283 + 120 + 87 + 28 assertions) + typechecks on two sides + 25 unit-test suites + 8 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -198,8 +198,10 @@ olua/
 - openapi.json: the machine-readable contract (committed to the repo; must be regenerated after any API change, or both consumers stay on the old contract)
 - test/e2e.cjs: end-to-end cases (real server + real requests, 248 assertions: registration and login / character CRUD / privilege escalation / token audience isolation / full admin flows / doc grouping and permission points / four-level escalation and super-admin protection / announcement pull and time windows)
 - test/e2e-roles.cjs: **character management focus** (77 assertions: revision-number optimistic locking / six-dimension filtering / structured field validation / batch and whole-account deletion / read-only observer escalation / docs)
-- test/e2e-guard.cjs: **operations and security baseline focus** (279 assertions: password reset and token revocation / self-service password change / audit log persistence, masking, filtering, permissions / login throttling by username and by IP / kicking offline)
-- test/e2e-mail.cjs: **mail channel focus** (108 assertions: verifying enqueue / delivery / retry and exhausting the limit / manual re-delivery / whole-channel disabling when SMTP is unconfigured, using an injectable **fake sender**; no real SMTP server needed)
+- test/e2e-guard.cjs: **operations and security baseline focus** (283 assertions: password reset and token revocation / self-service password change / audit log persistence, masking, filtering, permissions / login throttling by username and by IP / kicking offline)
+- test/e2e-mail.cjs: **mail channel focus** (120 assertions: verifying enqueue / delivery / retry and exhausting the limit / manual re-delivery / whole-channel disabling when SMTP is unconfigured, using an injectable **fake sender**; no real SMTP server needed)
+- test/e2e-account-email.cjs: **player email field focus** (28 assertions: viewers can neither see nor change it / backfill·clear / format and same-email dedup / mail falls back to the account's email)
+- test/backup.cjs: **backup / restore focus** (87 assertions: `VACUUM INTO` consistent snapshot while running / restore archiving / protective refusal / automatic scheduled backup)
 - Details in [server/README.md](server/README.en.md), questions in [server/FAQ.md](server/FAQ.en.md)
 
 ### admin — the React console
@@ -251,13 +253,13 @@ make dev            # start server :3100 and admin :5173 together; Ctrl-C exits 
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
 make client-test    # client's 25 unit-test suites
-make server-verify  # verify the server with one command (compile + five e2e suites + generated-artifact audit)
+make server-verify  # verify the server with one command (compile + six e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 8 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 8 audits
-make test           # all tests: client's 25 suites + server's five e2e suites
+make test           # all tests: client's 25 suites + server's six e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -283,7 +285,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + five e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + six e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -363,7 +365,7 @@ Manual equivalent (no `make` needed):
 # Client: 25 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + five e2e suites (248 / 77 / 279 / 108 / 25) + generated-artifact consistency
+# Server: compile + six e2e suites (248 / 77 / 283 / 120 / 87 / 28) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build
