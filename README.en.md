@@ -216,7 +216,7 @@ olua/
 ### tools — project-level scripts (cross-side)
 
 - gen-api.cjs: **produces both consumers' API files from `server/openapi.json`** (the only code generator; called by the server's `npm run gen:api`)
-- gen-battle-rules.cjs: **produces the server's combat-rules snapshot from `client/assets/configs`** (the foundation of server-authoritative combat, see `server/src/modules/combat/`) — levels 60 / War Soul 37 / Title 34 / Rank 100 + 7 combat-power weights + 555 equipment pieces (prefix/suffix variants already expanded)
+- gen-battle-rules.cjs: **produces the server's combat-rules snapshot from `client/assets/configs`** (the foundation of server-authoritative combat, see `server/src/modules/combat/`) — levels 60 / War Soul 37 / Title 34 / Rank 100 + 7 combat-power weights + 555 equipment pieces (prefix/suffix variants already expanded) + 12 skills (including per-level damage coefficients)
 - audit-api-generated.cjs: generated artifacts byte-identical to the docs / header markers / full endpoint coverage / no dangling types / paths only in the path table / Cocos `.meta` files complete
 - audit-api-hardcode.cjs: no hard-coded addresses on any side, requests leaving only through the single exit, every environment variable key registered in `.env.example`
 - audit-config-leak.cjs: no tunables leaking into client core code, and every key in `configs/texts` registered (allowlist `config-leak-allowlist.json`)
