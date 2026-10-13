@@ -1,11 +1,25 @@
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
+import { ROLE_OCCUPATION_CODES, ROLE_SEX_CODES } from "../../shared/game-data";
 
-/** 允许的职业（与客户端 types/role.OECCUPATION 一致） */
-export const ROLE_OCCUPATIONS = ["1", "2", "3", "4"] as const;
-/** 允许的性别（与客户端 types/role.SEX 一致） */
-export const ROLE_SEXES = ["1", "2", "3"] as const;
-/** 角色名长度上限（与客户端创建角色输入框约定一致） */
+/**
+ * 允许的职业 / 性别
+ *
+ * **取的是公共游戏数据的标签表键**，不是在这里手写一份 `["1","2","3","4"]` ——
+ * 手写的那种要靠人记得「客户端 types/role.ts 加了职业码，服务端也要跟着加」，
+ * 而这两个文件之间没有任何机械连接（忘了改也照样编译过、e2e 过，直到有人用新码建号被拒）。
+ * 现在客户端加了码 → 重生成公共数据 → 这两条清单自动跟着变。
+ */
+export const ROLE_OCCUPATIONS: string[] = ROLE_OCCUPATION_CODES;
+export const ROLE_SEXES: string[] = ROLE_SEX_CODES;
+
+/**
+ * 角色名长度上限（**服务端单方面的规则**，没有「另一份要同步」）
+ *
+ * 客户端**不校验长度**（`RoleSelector.createRole` 只 `trim` 后判空，输入框也没设 `maxLength`），
+ * 超限由这里拒绝、客户端显示服务端返回的提示 —— 所以这个数只在这里定义。
+ * 此前注释写的是「与客户端创建角色输入框约定一致」，实测客户端没有这条规则（#122 顺手改掉）。
+ */
 export const ROLE_NAME_MAX_LENGTH = 12;
 /** 角色 id 长度上限（客户端用时间戳字符串，留足冗余） */
 export const ROLE_ID_MAX_LENGTH = 64;

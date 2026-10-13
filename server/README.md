@@ -135,6 +135,10 @@ server/
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
 │   │   └── health/
+│   ├── shared/
+│   │   ├── game-data.generated.ts  公共游戏数据快照（**三端唯一的游戏数据来源**；@generated，
+│   │   │                           重生成 = node tools/gen-shared-data.cjs）
+│   │   └── game-data.ts            服务端门面（手写）：从上面那份派生职业 / 性别码清单与文档文案
 │   └── swagger/
 │       ├── setup.ts                文档挂载（抽成函数，好让测试也生成一次来验分组/权限/悬空 $ref）
 │       ├── models.ts               文档用的响应模型
