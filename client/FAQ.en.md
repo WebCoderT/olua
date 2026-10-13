@@ -153,6 +153,7 @@ One overall rule: **core code (`assets/ui`, `assets/skills`, `assets/entities`) 
 - **Self-checks (run these after a change)**:
   - `node ../tools/audit-config-leak.cjs` — reports "tunable values scattered inside ui/" plus the reverse check "every text key referenced in code is registered in `configs/texts`". Development logging (`console.*`) and internal node names do not count as leaks: the former is skipped outright, the latter is recorded in `../tools/config-leak-allowlist.json` with the reason written down
   - `node tools/test-texts.cjs` — text template unit tests (placeholder substitution, missing args kept, unregistered key fallback)
+  - `node ../tools/gen-shared-data.cjs` — run it when the change touches a table **shared by all three sides** (levels / battle / War Soul / Title / Rank / equipment / skills / items / maps): it regenerates the shared game data that the server and the admin read, and skipping it is caught by `make audit-shared-data`
 - **Changed a config but nothing happened?** Check whether it is the "config changed but the code keeps its own copy" case: segment 1 of the audit script exists specifically for that, and 0 findings counts as converged
 
 ### I want to change the bag "tidy" ordering (ascending / slot order / what comes first)

@@ -68,7 +68,8 @@ admin/
 │   │   ├── routes.ts               ⚠️ generated: endpoint path table
 │   │   ├── models.ts               ⚠️ generated: endpoint types (mirror of the server DTOs)
 │   │   ├── endpoints.ts            ⚠️ generated: endpoint methods (accountsApi/adminsApi/announcementsApi/mailsApi/auditApi/authApi/rolesApi/statsApi/systemApi)
-│   │   ├── types.ts                hand-written: business codes / permission points / Chinese dictionaries for actions and targets / time helpers
+│   │   ├── types.ts                hand-written: business codes / permission points / Chinese dictionaries for actions and targets / time helpers (**game data is not here**)
+│   │   ├── gameData.ts             game data: re-exports the shared artifact + lookup helpers (every name comes from here)
 │   │   └── index.ts                single entry point (pages import only from here)
 │   ├── pages/                      pages (see the table below)
 │   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
@@ -96,6 +97,26 @@ admin/
 | My account | `/me` | **no permission point** | Own identity / login status / permission points; **self-service password change** (requires the current password) |
 
 Write actions disable their button per permission point (`disabled`) and show "insufficient permission" above the table; typing an address in by hand hits the `RequirePermission` shell, which renders "no access" in place instead of a white screen.
+
+## Where the game data comes from (shared by all three sides)
+
+The names and metadata for equipment / War Soul / Title / Rank / skills / items / maps have **one** authoritative
+definition — the client's `client/assets/configs` (plus the enum comments in `client/assets/types/role.ts`, where the
+"all classes" occupation code and the three gender names live).
+
+The admin does **not** keep a copy: `src/api/gameData.ts` imports the shared artifact by relative path
+(`server/src/shared/game-data.generated.ts`, produced by `tools/gen-shared-data.cjs`) and Vite bundles it directly —
+the server and the admin read the **same file**.
+
+- To change a number or a label → edit the client config → `node tools/gen-shared-data.cjs` (forgetting to regenerate is caught by `make audit-shared-data`);
+- **Never write another dictionary here or in a page**: `make audit-shared-data` scans `admin/src` and fails on any dictionary definition that shares a name with the artifact;
+- Every name in the UI goes through a `gameData.ts` lookup helper (`equipmentText` / `skillText` / `itemText` / `mapText` /
+  `soulText` / `titleText` / `rankText`…). They only look up and fall back to showing the raw id — they never re-derive
+  anything: equipment display names (prefix/suffix included) and slot attribution are computed by the generator on top
+  of the client's own data.
+
+> Dev mode reads a file **outside** the project, so `vite.config.ts` allows the parent directory (`server.fs.allow: [".."]`);
+> the build (rollup) is unaffected.
 
 ## Permission model
 

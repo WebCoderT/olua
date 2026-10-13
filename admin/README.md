@@ -68,7 +68,8 @@ admin/
 │   │   ├── routes.ts               ⚠️ 生成物：接口路径表
 │   │   ├── models.ts               ⚠️ 生成物：接口类型（服务端 DTO 的镜像）
 │   │   ├── endpoints.ts            ⚠️ 生成物：接口方法（accountsApi/adminsApi/announcementsApi/mailsApi/auditApi/authApi/rolesApi/statsApi/systemApi）
-│   │   ├── types.ts                手写：业务码 / 权限点 / 动作与目标的中文字典 / 时间工具
+│   │   ├── types.ts                手写：业务码 / 权限点 / 动作与目标的中文字典 / 时间工具（**游戏数据不在这里**）
+│   │   ├── gameData.ts             游戏数据：引用三端共用的那份生成物 + 查表函数（名字都从这里来）
 │   │   └── index.ts                统一出口（页面只从这里 import）
 │   ├── pages/                      页面（见下表）
 │   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
@@ -96,6 +97,24 @@ admin/
 | 我的账号 | `/me` | **不需要权限点** | 看自己的身份 / 登录情况 / 权限点；**自助改密**（要验原密码） |
 
 写操作会按权限点禁用按钮（`disabled`）并在表格上方提示「当前角色权限不足」；直接改地址栏硬闯，`RequirePermission` 外壳会就地给出「没有访问权限」而不是白屏。
+
+## 游戏数据从哪来（三端共用一份）
+
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字与元数据，**权威定义只有一处** —— 客户端 `client/assets/configs`
+（外加 `client/assets/types/role.ts` 的枚举注释，「全职业」这个职业码与三个性别名只写在那里）。
+
+管理端**不复制**一份：`src/api/gameData.ts` 按相对路径 import 那份公共生成物
+（`server/src/shared/game-data.generated.ts`，由 `tools/gen-shared-data.cjs` 生成），Vite 直接把它打进包里 ——
+服务端与管理端读的是**同一个文件**。
+
+- 改数值 / 改名字 → 改客户端配置 → `node tools/gen-shared-data.cjs`（忘了生成会被 `make audit-shared-data` 逮住）；
+- **不许在这里或页面里再写一份字典**：`make audit-shared-data` 会扫 `admin/src`，出现与生成物同名的字典型定义就 FAIL；
+- 页面上的名字都过 `gameData.ts` 的查表函数（`equipmentText` / `skillText` / `itemText` / `mapText` /
+  `soulText` / `titleText` / `rankText`…）。它们只做「查表 + 查不到就显示原 id」，不拼口径 ——
+  装备显示名（含前后缀）与部位归属是生成器在客户端那份数据上算好的。
+
+> dev 模式要读项目**外**的文件，所以 `vite.config.ts` 里放行了上层目录（`server.fs.allow: [".."]`）；
+> 构建（rollup）不受这条影响。
 
 ## 权限模型
 

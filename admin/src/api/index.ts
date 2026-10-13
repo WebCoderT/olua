@@ -7,6 +7,8 @@
  * 三块内容各有归属：
  * - **生成物**（禁止手改）：`./endpoints` 接口方法 + `./models` 实体类型 + `./routes` 路径表，
  *   由 `tools/gen-api.cjs` 从服务端 OpenAPI 文档生成；
+ * - **公共游戏数据**（也是生成物）：`./gameData` 引用三端共用的那一份快照
+ *   （`server/src/shared/game-data.generated.ts`），职业 / 性别 / 装备 / 技能 / 物品 / 地图的名字都在它那里；
  * - **手写**：`./types` 里的错误模型、业务码、权限点、展示字典（服务端文档描述不了它们）；
  * - `./config` / `./http`：地址与请求实现，页面不直接碰。
  */
@@ -47,12 +49,34 @@ export {
   formatTimeFull,
   localInputToMs,
   msToLocalInput,
-  OCCUPATION_LABELS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   PERMISSION,
   PERMISSION_LABELS,
   permissionLabel,
   ROLE_BAG_AXIS_MAX,
-  SEX_LABELS,
 } from "./types";
+// 游戏数据：三端共用的那一份（生成物 + 查表函数）
+export {
+  EQUIPMENT_DISPLAY_NAMES,
+  EQUIPMENT_SLOTS,
+  EQUIPMENT_SLOT_OF,
+  equipmentText,
+  ITEM_LABELS,
+  itemText,
+  MAP_LABELS,
+  mapText,
+  OCCUPATION_LABELS,
+  occupationLabel,
+  RANK_LABELS,
+  rankText,
+  SEX_LABELS,
+  sexLabel,
+  SKILL_LABELS,
+  skillText,
+  slotLabel,
+  SOUL_LABELS,
+  soulText,
+  TITLE_LABELS,
+  titleText,
+} from "./gameData";

@@ -29,11 +29,27 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 | `endpoints.ts` | **生成** | 接口方法：`authApi` / `accountsApi` / `adminsApi` / `rolesApi` / `auditApi` |
 | `config.ts` | 手写 | 读 `VITE_API_BASE_URL` + `buildUrl` + `API_TIMEOUT`（地址唯一来源） |
 | `http.ts` | 手写 | 请求唯一出口（见下） |
-| `types.ts` | 手写 | **服务端文档里没有的东西**：`ApiEnvelope` / `PageResult<T>` / `ApiError` / `BIZ_CODE` / `RELOGIN_CODES` / `PERMISSION` / 权限点与审计动作的中文名字典 / 时间与输入框换算 |
+| `types.ts` | 手写 | **服务端文档里没有的东西**：`ApiEnvelope` / `PageResult<T>` / `ApiError` / `BIZ_CODE` / `RELOGIN_CODES` / `PERMISSION` / 权限点与审计动作的中文名字典 / 时间与输入框换算。**游戏数据不在这里** |
+| `gameData.ts` | 引用**生成物** | 游戏数据的唯一入口：re-export 三端共用的 `server/src/shared/game-data.generated.ts`（相对路径 import，Vite 打包）+ 查表函数（`equipmentText` / `skillText` / `itemText` / `mapText` / `soulText` / `titleText` / `rankText` / `occupationLabel` / `sexLabel` / `slotLabel`） |
 | `index.ts` | 手写 | barrel —— **页面 import 统一走 `../api`**，换生成物时页面一行都不用改 |
 
 守卫（在**仓库根**跑）：`node tools/audit-api-generated.cjs`（生成物逐字节一致 + 生成标记 + 路径只在路径表）、
-`node tools/audit-api-hardcode.cjs`（地址 / 请求 / 路径的唯一来源，且**唯一来源文件必须带生成标记**）。
+`node tools/audit-api-hardcode.cjs`（地址 / 请求 / 路径的唯一来源，且**唯一来源文件必须带生成标记**）、
+`node tools/audit-shared-data.cjs`（公共游戏数据与客户端 configs 逐字节一致 + 每张表齐全非空 + **扫 `admin/src` 抓手抄的同名字典**）。
+
+### 游戏数据：一份来源，三端共用（用户 2026-10-13 定的硬要求，issue #117~#119）
+
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字与元数据，权威定义只有一处 —— 客户端
+`client/assets/configs`（外加 `client/assets/types/role.ts` 的枚举注释：「全职业」职业码与三个性别名只写在那儿）。
+管理端**不复制**：`api/gameData.ts` 按相对路径 import `server/src/shared/game-data.generated.ts`
+（由 `tools/gen-shared-data.cjs` 生成），**服务端与管理端读的是同一个文件**。
+
+- **此前管理端自己抄过一份** `OCCUPATION_LABELS` / `SEX_LABELS`（写在 `types.ts` 里）—— 客户端改了这边不会知道，
+  已删掉改引用生成物；`audit-shared-data` 现在会扫 `admin/src` 抓「与生成物同名的字典型定义」。
+- 改数值 / 改文案 → 改客户端配置 → `node tools/gen-shared-data.cjs`（`make gen-shared-data`）。
+- 页面显示名字**一律过 `gameData.ts` 的查表函数**，不要自己拼（装备显示名含前后缀、部位归属都是生成器在
+  客户端数据上算好的；三张等级表是「下标 = 等级 - 1」，那一位差也只在 `gameData.ts` 里处理）。
+- **dev 模式**要读项目外的文件，`vite.config.ts` 放行了上层目录（`server.fs.allow: [".."]`）；构建不受影响。
 
 ## 三、请求层口径（`http.ts`）
 
@@ -86,6 +102,9 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 **`RoleDetailPage` 的两条约定**：
 - 结构化字段（装备 / 技能 / 背包）**整体提交**；其余字段**只提交改动项**（`buildPatch`）；
 - 装备与技能的键**按角色自己数据里已有的键渲染，不硬编码清单** —— 服务端不认识客户端配置，硬编码清单一定会漂移。
+  值那一侧现在是**有名字的**：行下面会用 `api/gameData.ts` 的 `equipmentText` / `skillText` / `slotLabel`
+  显示「部位 · 装备名」与技能名，背包格子显示物品名，地图与战魂/称号/军衔也各带一行当前名 ——
+  这些名字全来自三端共用的那份数据，页面不拼口径。
 
 **筛选表单与查询分离**：表单状态与「已应用的查询」分开（`applied`），点「查询」才生效；刷新列表要**清空多选**。
 

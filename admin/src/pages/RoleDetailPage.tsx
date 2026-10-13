@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { formatTime, OCCUPATION_LABELS, PERMISSION, ROLE_BAG_AXIS_MAX, rolesApi, SEX_LABELS } from "../api";
+import {
+  equipmentText,
+  formatTime,
+  itemText,
+  mapText,
+  OCCUPATION_LABELS,
+  PERMISSION,
+  rankText,
+  ROLE_BAG_AXIS_MAX,
+  rolesApi,
+  SEX_LABELS,
+  skillText,
+  slotLabel,
+  soulText,
+  titleText,
+} from "../api";
 import type { AdminRole, AdminRoleDetail, RoleBagCell, RolePatchPayload } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RoleAttributesCard } from "../components/RoleAttributesCard";
@@ -94,6 +109,19 @@ function readBagRows(data: Record<string, unknown>): BagRow[] {
     });
   });
   return rows;
+}
+
+/**
+ * 战魂 / 称号 / 军衔这三个数值字段的「当前是什么」提示
+ *
+ * 名字取自三端共用的公共数据（= 客户端那三张等级表），值本身仍是玩家数据里的数字 ——
+ * 后台不复制一份等级表，也不在这里翻译。
+ */
+function levelNameOf(key: keyof RoleForm, form: RoleForm): string {
+  if (key === "soulOfWar") return soulText(form.soulOfWar) || "0 = 未激活";
+  if (key === "title") return titleText(form.title) || "0 = 未激活";
+  if (key === "rank") return rankText(form.rank) || "0 = 未授衔";
+  return "";
 }
 
 function toForm(role: AdminRole): RoleForm {
@@ -209,6 +237,7 @@ function KeyValueEditor({
   valueLabel,
   keyPlaceholder,
   valuePlaceholder,
+  describe,
   disabled,
   onChange,
 }: {
@@ -217,37 +246,45 @@ function KeyValueEditor({
   valueLabel: string;
   keyPlaceholder: string;
   valuePlaceholder: string;
+  /** 这一行「键 + 值」在游戏里是什么（装备名 / 技能名…）；返回空串就不显示 */
+  describe?: (row: KeyValueRow) => string;
   disabled: boolean;
   onChange: (rows: KeyValueRow[]) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
-      {rows.map((row, index) => (
-        <div key={`${row.key}-${index}`} className="flex items-center gap-2">
-          <Input
-            value={row.key}
-            placeholder={keyPlaceholder}
-            disabled={disabled}
-            aria-label={`${keyLabel} ${index + 1}`}
-            onChange={(event) => onChange(rows.map((item, position) => (position === index ? { ...item, key: event.target.value } : item)))}
-          />
-          <Input
-            value={row.value}
-            placeholder={valuePlaceholder}
-            disabled={disabled}
-            aria-label={`${valueLabel} ${index + 1}`}
-            onChange={(event) => onChange(rows.map((item, position) => (position === index ? { ...item, value: event.target.value } : item)))}
-          />
-          <Button
-            variant="ghost"
-            className="px-2 py-1 text-xs"
-            disabled={disabled}
-            onClick={() => onChange(rows.filter((_, position) => position !== index))}
-          >
-            移除
-          </Button>
-        </div>
-      ))}
+      {rows.map((row, index) => {
+        const hint = describe?.(row) ?? "";
+        return (
+          <div key={`${row.key}-${index}`} className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Input
+                value={row.key}
+                placeholder={keyPlaceholder}
+                disabled={disabled}
+                aria-label={`${keyLabel} ${index + 1}`}
+                onChange={(event) => onChange(rows.map((item, position) => (position === index ? { ...item, key: event.target.value } : item)))}
+              />
+              <Input
+                value={row.value}
+                placeholder={valuePlaceholder}
+                disabled={disabled}
+                aria-label={`${valueLabel} ${index + 1}`}
+                onChange={(event) => onChange(rows.map((item, position) => (position === index ? { ...item, value: event.target.value } : item)))}
+              />
+              <Button
+                variant="ghost"
+                className="px-2 py-1 text-xs"
+                disabled={disabled}
+                onClick={() => onChange(rows.filter((_, position) => position !== index))}
+              >
+                移除
+              </Button>
+            </div>
+            {hint ? <span className="pl-1 text-xs text-slate-500">{hint}</span> : null}
+          </div>
+        );
+      })}
       <div>
         <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={disabled} onClick={() => onChange([...rows, { key: "", value: "" }])}>
           添加一行
@@ -425,7 +462,7 @@ export function RoleDetailPage() {
               onChange={(event) => update("avatar", event.target.value.replace(/[^\d]/g, ""))}
             />
           </Field>
-          <Field label="所在地图" hint="改完玩家重进地图生效">
+          <Field label="所在地图" hint={form.onMap.trim() ? mapText(form.onMap.trim()) : "客户端 configs/map 的 key"}>
             <Input value={form.onMap} placeholder="0" disabled={!canWrite} onChange={(event) => update("onMap", event.target.value)} />
           </Field>
         </div>
@@ -434,7 +471,7 @@ export function RoleDetailPage() {
       <Card title="常用数值" description={readonlyHint}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {NUMBER_FIELDS.filter((item) => item.key !== "level").map(({ key, label }) => (
-            <Field key={key} label={label}>
+            <Field key={key} label={label} hint={levelNameOf(key, form)}>
               <Input
                 inputMode="numeric"
                 disabled={!canWrite}
@@ -452,7 +489,7 @@ export function RoleDetailPage() {
         title="运行时数据"
         description={
           readonlyHint ??
-          "装备槽位与技能 id 的清单来自这个角色自己的数据（权威定义在客户端配置里，后台不复制一份）；背包按「有东西的格子」编辑，清空全部格子即清空背包。"
+          "装备槽位与技能 id 的清单来自这个角色自己的数据；下面的名字（部位 / 装备名 / 技能名 / 物品名）来自三端共用的那份游戏数据（客户端配置的快照），后台没有自己的副本。背包按「有东西的格子」编辑，清空全部格子即清空背包。"
         }
       >
         <div className="flex flex-col gap-6">
@@ -467,6 +504,7 @@ export function RoleDetailPage() {
               valueLabel="装备 id"
               keyPlaceholder="槽位名"
               valuePlaceholder="装备 id"
+              describe={(row) => (row.value.trim() ? equipmentText(row.value.trim()) : slotLabel(row.key.trim()))}
               disabled={!canWrite}
               onChange={(rows) => update("equipments", rows)}
             />
@@ -481,6 +519,7 @@ export function RoleDetailPage() {
               valueLabel="技能等级"
               keyPlaceholder="技能 id"
               valuePlaceholder="等级"
+              describe={(row) => skillText(row.key.trim())}
               disabled={!canWrite}
               onChange={(rows) => update("skills", rows)}
             />
@@ -541,6 +580,7 @@ export function RoleDetailPage() {
                     )
                   }
                 />
+                {row.id.trim() ? <span className="text-xs text-slate-500">{itemText(row.id.trim())}</span> : null}
                 <Input
                   className="w-24"
                   inputMode="numeric"

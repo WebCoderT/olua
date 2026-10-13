@@ -34,6 +34,10 @@
 ## 三端架构（细节全在 Skill）
 - **游戏数据只有一份**（用户 2026-10-13 定的硬要求，issue #117 索引 / #118 生成物与守卫 / #119 管理端接入）：权威定义 = 客户端 `client/assets/configs`；`tools/gen-shared-data.cjs` 把它快照成 `server/src/shared/game-data.generated.ts`（**三端唯一的那份**，管理端 import 同一个文件，Vite 直接打包），`tools/audit-shared-data.cjs` 重生成逐字节比对 + 断言 23 张表齐全非空。原来的 `battle-rules.generated.ts` 已并进去并删除（两份快照并存必然各自漂移）。**算法**一侧仍由 `audit-combat-parity` 锁（把真的 `GameHelper.combatCalc` 编译进 Node 当期望值，不是再抄一版口径）。三张等级表的键 = 来源数组下标，客户端等级从 1 起，**差一位**。包裹 `{code,message,data,timestamp}`，0 成功；`silent` 不弹全局提示。
   - 生成物放 `server/src/shared/` 而不是顶层 `shared/`：服务端 `tsc` 单包编译（`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，连带 7 套 e2e、Dockerfile、deploy 一起改。
+  - **管理端**不复制：`admin/src/api/gameData.ts` 按相对路径 import 同一个生成物（Vite 打包；dev 模式要在
+    `vite.config.ts` 里 `server.fs.allow: [".."]`），页面显示名字一律过它的查表函数（`equipmentText` /
+    `skillText` / `itemText` / `mapText` / `soulText` / `titleText` / `rankText`…）。**性别名与职业码「全职业」
+    只存在于 `client/assets/types/role.ts` 的枚举注释里**，生成器按注释抽（`readEnumLabels`，抓不到就抛错）。
   - 不在范围：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes` 整份被注释，没有活的来源）。
   - **文档约定**：`N 张表` 这个句式归 SQLite 表数（守卫在查）；说生成物里的数据集写 **`N 张数据表`**，否则守卫误判。
 - 权限两层守卫；**加管理端接口必须 `@ApiAdminDoc({permissions})`**（漏 = 真放行）；业务代码禁写角色判断。
@@ -64,4 +68,4 @@
 
 ## 待办 → 全部登记为 GitHub issue（见 `#8~#24`）
 玩法缺口 = #11~#19；服务端 = #20 邮箱字段 / #21 审计与队列清理 / #22 自动备份；工程 = #8 官网上线 / #9 包体积 / #10 在线 demo / #23 `.DS_Store` / #24 CI 是否覆盖客户端。**用户已定保持现状**：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
-后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入**；服务端战斗权威 #25 / #34 伤害上移 / #35~#37 世界权威。
+后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）**；服务端战斗权威 #25 / #34 伤害上移 / #35~#37 世界权威。

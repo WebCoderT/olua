@@ -62,6 +62,7 @@ const REQUIRED_EXPORTS = [
   "SKILLS",
   // 名字与元数据（三端做界面用）
   "OCCUPATION_LABELS",
+  "SEX_LABELS",
   "ITEM_LABELS",
   "ITEM_TYPES",
   "EQUIPMENT_SLOTS",
@@ -117,6 +118,9 @@ function main() {
   } catch (error) {
     failures.push(String(error.message));
   }
+
+  // 消费方自查：两端都不许再手抄一份同名字典
+  failures.push(...findLocalCopies());
 
   if (failures.length > 0) fail(failures.join("\n\n"));
 
@@ -198,6 +202,47 @@ function inspectExports() {
 
   fs.rmSync(work, { recursive: true, force: true });
   return counts;
+}
+
+/**
+ * 扫描两端源码，抓「手抄了一份同名字典」
+ *
+ * 这份生成物存在的意义就是「谁也不许自己维护一份」，而最容易发生的破法恰恰是**复制一张表到本地**
+ * （改起来比引路径方便，然后客户端改了它就静默过期）。文档里写多少遍都不如这里扫一眼。
+ *
+ * 判据是「与生成物**同名**的值定义」（`const X = {` / `const X: Record<...> = {`）。
+ * 转发写法（`export { X } from "…"`）不匹配，所以正解不会被误报。
+ *
+ * 只扫 `.ts` / `.tsx`，跳过 `server/src/shared/`（那里就是生成物本身）与各端的 `dist`。
+ */
+function findLocalCopies() {
+  const roots = [path.join(ROOT, "admin", "src"), path.join(ROOT, "server", "src")];
+  const skipDirs = new Set(["node_modules", "dist", "build", "shared"]);
+  const pattern = new RegExp(`(?:export\\s+)?const\\s+(${REQUIRED_EXPORTS.join("|")})\\s*[:=]`);
+  const problems = [];
+
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (!skipDirs.has(entry.name)) walk(path.join(dir, entry.name));
+        continue;
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue;
+      const file = path.join(dir, entry.name);
+      const source = fs.readFileSync(file, "utf8");
+      const match = pattern.exec(source);
+      if (!match) continue;
+      const line = source.slice(0, match.index).split("\n").length;
+      problems.push(
+        `${path.relative(ROOT, file)}:${line} 自己定义了一份 ${match[1]} —— ` +
+          `游戏数据只有一份（server/src/shared/game-data.generated.ts），` +
+          `要从 admin/src/api/gameData.ts 引用它，不许复制`,
+      );
+    }
+  };
+
+  for (const root of roots) if (fs.existsSync(root)) walk(root);
+  return problems;
 }
 
 function fail(message) {

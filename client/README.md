@@ -50,10 +50,14 @@
    - 文案统一走 `configs/texts`（模板带 `{占位符}`，取值用 `getText(key, params)`），代码里不写中文
    - 布局统一走 `configs/layout/*`，barrel 出口是 `configs/hudLayout`
    - `configs/` 与 `types/` **不依赖 UI 层**（配置只描述数据，回调与分支留在组件里）
+   - 其中**被三端共用的那几张**（等级 / 战斗 / 战魂 / 称号 / 军衔 / 装备 / 技能 / 物品 / 地图，外加 `types/role.ts`
+     的枚举注释）改完要重生成公共数据：`node ../tools/gen-shared-data.cjs` —— 服务端与管理端读的就是它，忘了生成会被 `make audit-shared-data` 逮住
 2. **接口文件是生成的，禁止手改**
    `assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts` 由服务端 Swagger 文档生成（见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)）。
    要加接口 → 改服务端 → `cd server && npm run gen:api` → 按编译报错改调用点。
 3. **可配置项的唯一去处就是 `configs`**，别的地方多存一份必然漂移。`audit-config-leak` 的第 1 段专门抓这个。
+   反过来说：`configs` 里被三端共用的那几张，就是**三端唯一的游戏数据来源**（服务端与管理端读的都是由它生成的
+   `server/src/shared/game-data.generated.ts`）—— 客户端这边改了，记得重生成一次。
 
 ## 目录结构
 
