@@ -536,12 +536,59 @@ function roleData(id, name, occupation, level) {
     JSON.stringify(listForDerived.data.list.map((role) => Object.keys(role).indexOf("derived") !== -1)),
   );
 
+  //#endregion
+
+  //#region 九、玩家上报存档时的比对（写入路径）
+
+  console.log("— 九、玩家上报存档时的比对（写入路径） —");
+
+  // 补丁仍沿用第八段打好的那个（还原挪到本段末尾，两段共用一次打补丁）
+
+  const playerD = await api("POST", "auth/register", { body: { username: "role_player_d", password: "pass1234" } });
+  const tokenD = playerD.data.token;
+  check(!!tokenD, "准备：第四个玩家账号（它的角色要走保存路径）", playerD.message);
+
+  const seededE = await api("POST", "roles", { token: tokenD, body: { data: roleData("role_e1", "报一", "1", 10) } });
+  check(seededE.code === 0, "准备：建一个 10 级角色（自动成为在线角色）", seededE.message);
+
+  // 拿服务端刚算出来的那份当「正确的上报值」——不在测试里重实现一遍算法
+  const reference = await api("GET", "admin/roles/role_e1", { token: adminToken });
+  const rightCombat = reference.data.derived.attributes.combat;
+  const rightMaxHp = reference.data.derived.attributes.maxHp;
+  check(typeof rightCombat === "number", "取到服务端重算的基准值", String(rightCombat));
+
+  // 不一致：照常存进去 + 记一条 warn
+  const beforeBad = warnLines.length;
+  const badSave = await api("PUT", "roles/role_e1", {
+    token: tokenD,
+    body: { data: { ...roleData("role_e1", "报一", "1", 10), combat: rightCombat + 123456, maxHp: rightMaxHp } },
+  });
+  check(badSave.code === 0, "上报值对不上的存档照样存进去（只记不拦，不打断正常玩法）", `${badSave.code}`);
+  check(
+    warnLines.slice(beforeBad).some((line) => line.indexOf("role_e1") !== -1 && line.indexOf("不一致") !== -1),
+    "…并落到一条 warn（写入路径才是全量观测点：每次推进度都会经过）",
+    JSON.stringify(warnLines.slice(beforeBad)),
+  );
+
+  // 一致：不记（每次推进度都刷一条等于没有日志）
+  const beforeGood = warnLines.length;
+  const goodSave = await api("PUT", "roles/role_e1", {
+    token: tokenD,
+    body: { data: { ...roleData("role_e1", "报一", "1", 10), combat: rightCombat, maxHp: rightMaxHp } },
+  });
+  check(goodSave.code === 0, "上报值一致的存档照常保存", `${goodSave.code}`);
+  check(warnLines.length === beforeGood, "一致时一条日志都不打", JSON.stringify(warnLines.slice(beforeGood)));
+
+  // 没有改动存档：存进去什么，取回来就是什么
+  const readBack = await api("GET", "roles/role_e1", { token: tokenD });
+  check(readBack.data.data.combat === rightCombat, "服务端不改写玩家上报的值（存进去什么取回来什么）", String(readBack.data.data.combat));
+
   Logger.prototype.warn = originalWarn;
 
   //#endregion
 
   await app.close();
-  finish("PASS：角色管理（修订号 / 筛选 / 结构化字段 / 批量删除 / 权限 / 派生属性 / 文档）全部通过。");
+  finish("PASS：角色管理（修订号 / 筛选 / 结构化字段 / 批量删除 / 权限 / 派生属性 / 上报比对 / 文档）全部通过。");
 })().catch((error) => {
   console.log(error && error.stack ? error.stack : String(error));
   finish("FAIL：角色管理端到端验证异常终止。");

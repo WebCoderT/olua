@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { RoleRow, RoleWithAccountRow } from "../../../database/rows";
-import { compareRoleAttributes } from "../../combat/role-attribute-comparison";
+import { compareRoleAttributesOfRole } from "../../combat/role-attribute-comparison";
 import { decodeStoredRoleData } from "../role-data.util";
 
 /** 角色概要（列表接口用：不含 data，体量小；画选角列表只需要这几项） */
@@ -165,16 +165,7 @@ export class RoleDerivedDto {
    * 管理端改动也会同步过去的权威值；存档里的那份是客户端写的。
    */
   static from(level: number, data: Record<string, unknown>): RoleDerivedDto {
-    const comparison = compareRoleAttributes(
-      {
-        level,
-        equipments: asEquipmentMap(data.equipments),
-        soulOfWar: numberOrUndefined(data.soulOfWar),
-        title: numberOrUndefined(data.title),
-        rank: numberOrUndefined(data.rank),
-      },
-      { combat: data.combat, maxHp: data.maxHp },
-    );
+    const comparison = compareRoleAttributesOfRole(level, data);
 
     const dto = new RoleDerivedDto();
     dto.attributes = comparison.server;
@@ -204,18 +195,3 @@ export class AdminRoleDetailDto extends AdminRoleDto {
   }
 }
 
-//#region 派生字段的取值小工具
-
-/** 存档里的装备表（槽位 → 装备 id）；形状不对就当没穿（与汇总函数的容错一致） */
-function asEquipmentMap(value: unknown): Record<string, string | null> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, string | null>;
-}
-
-/** 取一个有限数字；不是数字（undefined / 字符串 / NaN）时返回 undefined（交回汇总函数按「未激活」处理） */
-function numberOrUndefined(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-//#endregion

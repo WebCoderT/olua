@@ -92,6 +92,40 @@ export function compareRoleAttributes(source: RoleAttributeSource, reported: Rep
   };
 }
 
+/**
+ * 从**角色存档**直接比对（把「取输入 + 比对」合成一步）
+ *
+ * 两个观测点要的都是这一句：管理端读详情（#93）、玩家推进度（#94）。
+ * 取值的容错逻辑只有这一份 —— 各写一份迟早会漂（一处改了容错，另一处还在旧写法）。
+ *
+ * @param level 取**索引列**（`roles.level`）而不是 `data.level`：前者是服务端维护的权威值
+ * @param data 已解码的角色存档
+ */
+export function compareRoleAttributesOfRole(level: number, data: Record<string, unknown>): RoleAttributeComparison {
+  return compareRoleAttributes(
+    {
+      level,
+      equipments: equipmentMapOf(data.equipments),
+      soulOfWar: numberOrUndefined(data.soulOfWar),
+      title: numberOrUndefined(data.title),
+      rank: numberOrUndefined(data.rank),
+    },
+    { combat: data.combat, maxHp: data.maxHp },
+  );
+}
+
+/** 存档里的装备表（槽位 → 装备 id）；形状不对就当没穿（与汇总函数的容错一致） */
+function equipmentMapOf(value: unknown): Record<string, string | null> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, string | null>;
+}
+
+/** 取一个有限数字；不是数字时返回 undefined（交回汇总函数按「未激活」处理） */
+function numberOrUndefined(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 /** 取一个有限数字，其余形态（undefined / 字符串 / NaN / Infinity）一律当「没有」 */
 function numberOrNull(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
