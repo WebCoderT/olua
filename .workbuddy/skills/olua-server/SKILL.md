@@ -40,14 +40,17 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表 + migrate() 里的 ensureColumn 存量补列
-    repositories/{account,admin,role,audit}.repository.ts
+    database.service.ts           建表（六张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail（七个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
     admin/   管理端（认证 / 账号 / 角色 / 管理员）
+    announcement/ 公告（客户端拉「生效中」的公共接口 + 管理端 CRUD）
+    mail/    邮件通道（模板 + 投递队列 + 后台调度；发信接口只入队）
     realtime/ 实时通道（取票据接口 + Upgrade 握手 + 心跳；状态全在本进程内存里，故是单实例能力）
     audit/   操作日志查询（只读两接口；interceptor 与 service 同模块）
+    system/  系统信息（运行时 / 各表行数 / 脱敏配置快照；快照走白名单，密钥只报形态）
     token/   JWT        health/  健康检查
   swagger/
     models.ts   SWAGGER_MODELS（要出现在文档里的 DTO 必须登记）
@@ -104,14 +107,14 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 
 - 管理员账号在**独立 `admins` 表**（注册需 `ADMIN_REGISTER_CODE`；**第一个注册者自动是超管**）；
 - 三级角色：`super_admin`（全给）/ `admin`（除 `admin:manage`）/ `viewer`（`stats:read` + `account:read` + `role:read`）；
-- 权限点是 13 个：`account:password`（重置玩家口令）、`audit:read`（查操作日志）与 `system:read`（看系统信息）是后加的 —— **观察员三个都没有**（它的定位是看数据，不是查人、更不该能接管账号或看部署形态）；
+- 服务端一共 **18 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）与 `system:read`（看系统信息）都是逐个后加的 —— **观察员只有 4 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
 - 无权限 → `403` + `30006`（message 写出缺哪个权限）；保护性拒绝 → `30007`（**最后一个启用中的超管**不能降级 / 停用 / 删除）；
 - `admins.role` 列由 `ensureColumn` 补 + `ensureSuperAdmin()` 兜底存量库；
 - **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。
 
 ## 四、数据层规矩
 
-- **四张表**：`accounts` / `roles` / `admins` / `audit_logs`。删账号**级联删其角色**。
+- **六张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue`。删账号**级联删其角色**。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
 - **角色数据是不透明文档**：
@@ -122,9 +125,9 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - **修订号 `revision`（乐观锁）**：`roles.revision` 列，每次落库 `revision = revision + 1` **写在 SQL 里**（不读出来加一再写回）；玩家 `PUT /roles/:id` 可选带 `revision`，对不上 → `409` + `20006`；**不带该字段 = 旧行为**（最后写入者胜，兼容旧客户端）。
 - 结构化字段的校验与上限常量集中在 `modules/roles/role-data.util.ts`（`normalizeEquipments` / `normalizeSkills` / `normalizeBagCells` / `applyBagCells`）。**只校验结构与体量，不校验内容清单。**
 
-## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线）
+## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
-这五件事互相咬合，**改动时基本必须一起看**：
+这几件事互相咬合，**改动时基本必须一起看**：
 
 **1. 令牌版本号 = 无状态 JWT 的「主动作废」开关**
 - `accounts` / `admins` 两表各一列 `token_version`；`TokenService.sign` 把 `ver` 写进载荷；`AuthGuard` **每次回查库比对**（admin 与 player 两条路径都要写，漏一条就是那端不作废）；
@@ -154,6 +157,27 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - 后台清 `online_role_id` 之后，**本地还在跑的客户端照样会推存档**，所以 `RolesService.save` 必须叠加一道「推上来的角色仍是账号当前在线角色」，否则 `409` + `20007 ROLE_KICKED`；
 - 这道判定要放在**乐观锁之前**：被踢的玩家该看到「回选角」，而不是反复重试「版本冲突」；
 - 客户端侧对应 `RoleSync.onKicked`（**只清在线标记，绝不删角色** —— 那是 `20002` 的处理，写错就把玩家练的号删了）。
+
+**6. 公告：全服触达只有一条通道，「生效中」是个 SQL 判据**
+- `announcements` 表三列决定一切：`enabled` + `starts_at` + `ends_at`（建了 `idx_announcements_window`）；
+- 客户端拉的是**免令牌**的 `GET /announcements/active`（归「公共接口」组）—— 登录页也要能看到；
+- 已读状态**不进 `StorageManager`**（那是角色同步的状态机，混进去会触发一轮角色同步），单独一个 `AnnouncementReadStore`；
+- 登录 / 选角场景没有 UILayer，弹窗只能挂调用方给的节点。
+
+**7. 邮件通道：发信接口只入队，投递是另一条时间线**
+- 渲染后的标题与正文**冻在入队那一刻**（模板后来改了不影响已入队的信）；
+- 投递由后台调度器做：`status` / `attempts` / `next_retry_at` / `last_error`，指数退避，用尽上限标失败且原因可查；
+- SMTP 走**可注入的传输层**（`MAIL_TRANSPORT=fake|fail`），所以 e2e 不需要真 SMTP —— 断言「有没有按预期调用」而不是「邮件到没到」；
+- 未配置 SMTP 时**整体禁用**（不是「静默不发」）；密钥在系统信息页只报形态。
+
+**8. 自动备份：与数据同卷是硬要求**
+- `VACUUM INTO` 拿一致快照，**服务运行中也能备**；恢复要留档、要拒绝坏文件、要拒绝「服务可能在跑」；
+- 容器部署时 `BACKUP_DIR` 必须挂在**与数据同卷**的路径上，否则容器一重建全丢，而「备份在跑」表面上完全看不出异常；
+- 内存库（`:memory:`）**必须关着**自动备份 —— 没有文件可备份，开着只会每 tick 失败一次。
+
+**9. 派生属性出口：服务端重算，客户端只是上报**
+- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），与客户端 `GameHelper.combatCalc` 的一致性由 `tools/audit-combat-parity.cjs` 锁住（它把真的客户端算法编译进 Node 当期望值，不是再抄一版口径）；
+- 玩家上报存档时（`PUT /roles/:id`）服务端会**比对**上报的派生值与自算值 —— 这条是 #34「伤害结算上移」的地基。
 
 ## 六、必踩的坑
 
@@ -214,8 +238,8 @@ git add server tools/gen-api.cjs && git commit -F - <<'EOF'
 feat(server): 操作审计关键字查询补实现（此前是空壳参数）
 
 - audit.repository 补 keyword 四项模糊匹配，LIKE 通配符转义
-- gen:api 重跑：41 接口 / 34 路径 / 54 模型
-- 验证：verify 全绿（e2e 187 / e2e-roles 77 / e2e-guard 91）
+- gen:api 重跑：<N> 接口 / <N> 路径 / <N> 模型（写实测值，别照抄这里）
+- 验证：verify 全绿（e2e <n> / e2e-roles <n> / e2e-guard <n> … 各套条数）
 EOF
 ```
 

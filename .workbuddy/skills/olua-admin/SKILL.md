@@ -52,7 +52,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 ## 四、按权限渲染
 
-- `api/types.ts` 的 `PERMISSION`（与服务端 `common/constants/permission.ts` **一一对应**，现 13 个：多出 `account:password` 重置玩家口令、`audit:read` 查操作日志与 `system:read` 看系统信息）；
+- `api/types.ts` 的 `PERMISSION`（与服务端 `common/constants/permission.ts` **一一对应**，现 18 个权限点：其中 `account:password` 重置玩家口令、`account:email` 补录 / 查看玩家邮箱、`announcement:*` 公告、`mail:*` 邮件、`audit:read` 查操作日志与 `system:read` 看系统信息是逐个后加的）；
 - `store/session.hasPermission`（**脏会话兜底空数组 = 最小权限**）；
 - 导航项带 `permission` 过滤；写操作用 `disabled`；`App.tsx` 用 `RequirePermission` 外壳包住页面；
 - **不需要权限点的页面**（如「我的账号」）直接挂路由，不进 `NAV_ITEMS`（它是每个人的私有页，放顶部身份栏更顺手）；

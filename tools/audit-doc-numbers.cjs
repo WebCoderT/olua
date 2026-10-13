@@ -19,6 +19,17 @@
  * `continue` 静默放行，等于「加了一套 e2e」永远没人知道。教训两条：
  * **写句式要按「同义写法」想，不是按眼前这一行抄**；**「抓不到」与「通过」必须区分开**。
  *
+ * #115 挖出的是同一类问题的另外三面 —— 这次不是「写法漏了」，是**「哪一类东西压根没查」**
+ * 与**「数字的写法只认一种」**：
+ *   - `server/FAQ.md` / `FAQ.en.md` 写的是 `**权限点**（17 个）`（数字在词**后面**），
+ *     正向正则一条都抓不到 → 两版都写着 17（实际 18）而审计一直打勾；
+ *   - 表数与仓储数**压根没纳入检查** —— 技能里还写着「四张表」「13 个权限点」，
+ *     是把技能加进 `DOCS` 时才顺手发现的；
+ *   - 英文文档（`server/README.en.md` 等）用的几乎全是**词形**（`Six tables`、
+ *     `seven repositories`）—— 只查阿拉伯数字等于**放掉整个英文侧**。
+ * 对策三条：倒装写法单独登记、表数与仓储数纳入实测、词形与阿拉伯数字**共用同一套判定**
+ * （`checkWordNumbers` 与 `checkNumbers` 都走 `report`，避免「一种写法 FAIL、另一种静默通过」）。
+ *
  * ===========================================================================
  * 检查什么（只查「有唯一实测来源」的数字）
  * ===========================================================================
@@ -28,14 +39,21 @@
  *                              ← 各 e2e 脚本的 `EXPECTED_ASSERTIONS`
  *   3. 审计脚本数 / 单测套数 / 回归守卫总数（= 前两者之和）
  *                              ← `tools/audit-*.cjs`、`client/tools/test-*.cjs`
+ *   4. 表数 / 仓储数             ← `database.service.ts` 的建表语句、`repositories/*.repository.ts`
+ *
+ * 数字的**写法**要一起管：阿拉伯数字（`18 个`）、倒装（`权限点（18 个）`）与词形
+ * （`六张表` / `Six tables`、`七个仓储` / `seven repositories`）三种在本仓库文档里都在用。
+ * 只管第一种等于**整个英文侧无人看守** —— 英文里写 `Four tables` 而实际建了六张，
+ * 退出码照样是 0（#115 实测踩到）。
  *
  * **不查**代码行数、文件数（`约 4.9 万行` 这种）—— 它们没有唯一口径（算不算注释、
  * 算不算生成物取决于心情），钉死了只会天天 FAIL。那类数字靠改代码时顺手看一眼。
  *
  * 数字与文本的对应靠**句式**：文档里承诺了口径的写法是固定的
  * （`X 个接口 / Y 条路径 / Z 个模型`、`N 条 e2e`、`X interfaces` …）。
- * 句式集中登记在 `main()` 里（`checkNumbers` / `checkE2eBreakdown` / `checkGroupRow` 的调用处），
- * 新增一种写法就往那儿加一行 —— **加的时候先想同义写法**（量词 / 空格 / 连字符 / 单位）。
+ * 句式集中登记在 `main()` 里（`checkNumbers` / `checkWordNumbers` / `checkE2eBreakdown` /
+ * `checkGroupRow` 的调用处），新增一种写法就往那儿加一行 —— **加的时候先想同义写法**
+ * （量词 / 空格 / 连字符 / 单位 / **语序**），并想一下**中英两版各是怎么写的**。
  *
  * 用法：node tools/audit-doc-numbers.cjs
  * 退出码：全部一致 = 0；任一处对不上 = 1（`make audit` 据此判定 FAIL）
@@ -65,6 +83,14 @@ const DOCS = [
   "client/README.en.md",
   "client/FAQ.md",
   "client/FAQ.en.md",
+  // 项目技能也随仓库提交，而且是**下一轮会话唯一的上下文** —— 里面的数字同样不能漂（#115）。
+  // 技能不在 DOCS 里时，「权限点是 13 个」这种话没人管，一过期就把下一次改动引到错的地方。
+  //
+  // **只登记讲服务端 / 管理端工程事实的技能**。`cocos-*` 那批不能加进来：
+  // 它们说的「三张表」是游戏配置表、「四个仓储」这种话压根不是同一件事 ——
+  // 盲目全量纳入只会换来一堆假 FAIL，而假 FAIL 会让人学会无视这个审计。
+  ".workbuddy/skills/olua-server/SKILL.md",
+  ".workbuddy/skills/olua-admin/SKILL.md",
 ];
 
 /** e2e 脚本清单（顺序即 `docs/resume.md` 里括号中加数的推荐顺序） */
@@ -105,7 +131,36 @@ function measure() {
     audits: countFiles(path.join(ROOT, "tools"), /^audit-.*\.cjs$/),
     unitTests: countFiles(path.join(ROOT, "client", "tools"), /^test-.*\.cjs$/),
     permissions: countPermissionPoints(),
+    tables: countTables(),
+    repositories: countFiles(
+      path.join(ROOT, "server", "src", "database", "repositories"),
+      /\.repository\.ts$/,
+    ),
   };
+}
+
+/**
+ * 表数：`server/src/database/database.service.ts` 里 `CREATE TABLE IF NOT EXISTS <表名> (` 的条数
+ *
+ * 为什么只认「后面紧跟表名和左括号」的写法：同一份文件里还有一句注释
+ * `存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）`，宽松匹配会把它也算成一张表。
+ *
+ * 为什么值得查：**表数漂了不会有任何编译错误、运行时也不会报错** —— 文档会安静地写着
+ * 「六张表」而实际建了七张。#115 就是靠人工比对才发现的（技能里还写着「四张表」）。
+ */
+function countTables() {
+  const relative = "server/src/database/database.service.ts";
+  const full = path.join(ROOT, relative);
+  if (!fs.existsSync(full)) throw new Error(`建表的唯一来源不存在：${relative}`);
+  const source = fs.readFileSync(full, "utf8");
+  const matched = source.match(/CREATE TABLE IF NOT EXISTS\s+[a-z_][a-z0-9_]*\s*\(/gi) ?? [];
+  if (matched.length === 0) {
+    throw new Error(
+      `${relative} 里解析不出建表语句 —— 这个文件的写法变了？\n` +
+        "  表数的唯一来源就是它，解析不到不该静默按 0 处理。",
+    );
+  }
+  return matched.length;
 }
 
 /**
@@ -156,9 +211,20 @@ function countFiles(dir, pattern) {
 const failures = [];
 let passed = 0;
 
-function ok(label) {
+/**
+ * 每一类句式在受管文档里一共匹配到多少处（`label → 次数`）
+ *
+ * 为什么要数：**「一处都没匹配到」与「处处都匹配且都对」在退出码上完全一样**。
+ * 文档换个写法（写成「权限点共 18 个」而不是「18 个权限点」）、或者正则被改坏，
+ * 这一类检查就静默失效，脚本照样打「✔ 与实测一致」—— 这个坑本仓库踩过两次
+ * （#113 的 5 个盲区，以及 #115 差点把「技能里的权限点数」加进 DOCS 却根本匹配不上）。
+ * 数出来 + 给核心句式定个下限（`REQUIRED_PATTERNS`），才能把「抓不到」从「通过」里分出来。
+ */
+const matchCounts = new Map();
+
+function counted(label) {
+  matchCounts.set(label, (matchCounts.get(label) || 0) + 1);
   passed += 1;
-  void label;
 }
 
 function fail(label, detail) {
@@ -166,21 +232,51 @@ function fail(label, detail) {
 }
 
 /**
+ * 一处匹配的通用判定：等于期望值就记账（`counted`），否则 FAIL 并指出行号
+ *
+ * 抽出来是为了让「阿拉伯数字」与「词形数字」两种取数方式共用同一套判定 ——
+ * 两者的差别只在**怎么从匹配里取出数字**，而「取出来之后怎么办」必须一模一样，
+ * 否则迟早出现「一种写法 FAIL、另一种写法静默通过」。
+ */
+function report(doc, source, label, match, value, expected) {
+  if (value === expected) {
+    counted(label);
+    return;
+  }
+  const line = source.slice(0, match.index).split("\n").length;
+  fail(`${doc}:${line} 的「${label}」与实测不一致`, `文档写 ${value}，实测 ${expected}`);
+}
+
+/**
  * 在一份文档里按正则抓所有数字，每一个都必须等于期望值
  *
  * 抓不到不是失败 —— 这份文档可能压根没提这个数（比如 FAQ 不谈模型数）。
- * 但**抓到了就必须对**。
+ * 但**抓到了就必须对**；而某一类句式**在全部文档里一处都抓不到**同样会失败，
+ * 判据在 `REQUIRED_PATTERNS`。
  */
 function checkNumbers(doc, source, label, pattern, expected) {
-  const found = [...source.matchAll(pattern)];
-  for (const match of found) {
-    const value = Number(match[1]);
-    if (value === expected) {
-      ok(`${doc} ${label}`);
-      continue;
-    }
-    const line = source.slice(0, match.index).split("\n").length;
-    fail(`${doc}:${line} 的「${label}」与实测不一致`, `文档写 ${value}，实测 ${expected}`);
+  for (const match of [...source.matchAll(pattern)]) {
+    report(doc, source, label, match, Number(match[1]), expected);
+  }
+}
+
+/**
+ * 词形数字（中文 `六张表` / 英文 `six tables`）—— 正则连不上词形数字，只能按字面扫
+ *
+ * 中英两版文档都大量用词形而不是阿拉伯数字（`六张表` / `Six tables`、`七个仓储` /
+ * `seven repositories`）。只查阿拉伯数字等于**放掉整个英文侧**：英文里写 `Four tables`
+ * 而实际建了六张，退出码照样是 0。
+ */
+const WORD_NUMERALS = {
+  一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+
+function checkWordNumbers(doc, source, label, pattern, expected) {
+  for (const match of [...source.matchAll(pattern)]) {
+    const value = WORD_NUMERALS[match[1].toLowerCase()];
+    if (value === undefined) continue; // 正则已经把取值限死了，这里只是兜底
+    report(doc, source, label, match, value, expected);
   }
 }
 
@@ -212,6 +308,7 @@ function checkE2eBreakdown(doc, source, expected) {
       .map((piece) => Number(piece.trim()))
       .sort((a, b) => a - b);
     const line = source.slice(0, match.index).split("\n").length;
+    counted("e2e 加数串");
     if (counts.length !== expected.e2e.length) {
       fail(
         `${doc}:${line} 的 e2e 加数串项数与实测不一致`,
@@ -222,10 +319,7 @@ function checkE2eBreakdown(doc, source, expected) {
       continue;
     }
     const sum = counts.reduce((total2, value) => total2 + value, 0);
-    if (sum === total && counts.join("+") === expectedCounts) {
-      ok(`${doc} e2e 加数串`);
-      continue;
-    }
+    if (sum === total && counts.join("+") === expectedCounts) continue;
     fail(
       `${doc}:${line} 的 e2e 加数串与实测不一致`,
       `文档写 ${match[1].replace(/\s/g, "")}（和 ${sum}），实测 ${expected.e2e.map((item) => item.count).join(" + ")}（和 ${total}）`,
@@ -247,14 +341,38 @@ function checkGroupRow(doc, source, header, groupLabel, expected) {
   const pattern = new RegExp(`\\|\\s*${header}\\s*\\|\\s*(\\d+)\\s*\\|`, "g");
   for (const match of [...source.matchAll(pattern)]) {
     const value = Number(match[1]);
+    counted(`分组「${groupLabel}」`);
     if (value === want) {
-      ok(`${doc} 分组 ${groupLabel}`);
       continue;
     }
     const line = source.slice(0, match.index).split("\n").length;
     fail(`${doc}:${line} 分组「${groupLabel}」的数量与实测不一致`, `文档写 ${value}，实测 ${want}`);
   }
 }
+
+/**
+ * 必须至少在受管文档里匹配到一次的句式
+ *
+ * 这些是「文档一定会提到」的核心数字。某一条**一处都匹配不到**时，八成不是「文档恰好没提」，
+ * 而是**正则废弃了**或**文档换了写法** —— 那意味着这一类检查已经静默失灵，
+ * 不能让它继续安静地打勾。加新句式时，若它属于「总该出现」的那类，往这里也加一行。
+ */
+const REQUIRED_PATTERNS = [
+  "接口总数",
+  "路径数",
+  "模型数",
+  "权限点数",
+  "表数",
+  "仓储数",
+  "审计脚本数",
+  "单测套数",
+  "回归守卫总数",
+  "e2e 总数",
+  "e2e 加数串",
+  "分组「公共接口」",
+  "分组「客户端」",
+  "分组「管理端」",
+];
 
 //#endregion
 
@@ -277,6 +395,45 @@ function main() {
     checkNumbers(doc, source, "模型数（英文）", /(\d+)\s+models?\b/g, expected.models);
     checkNumbers(doc, source, "权限点数", /(\d+)\s*个权限点/g, expected.permissions);
     checkNumbers(doc, source, "权限点数（英文）", /(\d+)\s+permission\s+points?/gi, expected.permissions);
+    // 倒装写法：`**权限点**（18 个）` / `**Permission points** (18)`
+    // 数字在词**后面**，正向正则一条都抓不到 —— `server/FAQ.md` 与 `server/FAQ.en.md`
+    // 正是这种写法，于是两版都写着 17（实际 18）而审计一直打勾（#115）。
+    // 锚点必须紧贴「权限点」：本文件里还有「每个接口还要求权限点（共 36 个）」，
+    // 那是「需要权限点的管理端接口数」，不是权限点数；`\*{0,2}` 吃掉加粗星号，
+    // 而 `（共 36 个）` 因为 `共` 不是数字自然不匹配。
+    checkNumbers(doc, source, "权限点数（倒装）", /权限点\*{0,2}\s*[（(]\s*(\d+)\s*个/g, expected.permissions);
+    checkNumbers(
+      doc,
+      source,
+      "权限点数（倒装，英文）",
+      /permission\s+points?\*{0,2}\s*[（(]\s*(\d+)\s*[)）]/gi,
+      expected.permissions,
+    );
+
+    // 表数 / 仓储数：数据层的两个「唯一来源」事实，漂了不会有任何报错
+    checkNumbers(doc, source, "表数", /(\d+)\s*张表/g, expected.tables);
+    checkNumbers(doc, source, "表数（英文）", /(\d+)\s+tables?\b/gi, expected.tables);
+    // 词形写法要单独走：`六张表` / `Six tables`。
+    // `(?![打])` 挡掉习语「一张表打三种目标」（那是「同一张表」，不是计数）；计数声明后面
+    // 跟的是标点或列表，习语后面跟的是动词。
+    checkWordNumbers(doc, source, "表数", /([一二三四五六七八九十])张表(?![打])/g, expected.tables);
+    // 英文同款习语要一起挡掉：`one table serves three target kinds`（`一张表打三种目标` 的译本）。
+    checkWordNumbers(
+      doc,
+      source,
+      "表数（英文）",
+      /\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+tables?\b(?!\s+serves)/gi,
+      expected.tables,
+    );
+    checkNumbers(doc, source, "仓储数", /(\d+)\s*个仓储/g, expected.repositories);
+    checkWordNumbers(doc, source, "仓储数", /([一二三四五六七八九十])个仓储/g, expected.repositories);
+    checkWordNumbers(
+      doc,
+      source,
+      "仓储数（英文）",
+      /\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+repositories\b/gi,
+      expected.repositories,
+    );
 
     // 2. 分组表（`| 公共接口 | 6 |`）
     for (const header of ["公共接口", "客户端", "管理端"]) {
@@ -297,6 +454,8 @@ function main() {
     // （`unit-test suites`）—— 就是这么写的，漏认等于没查。
     checkNumbers(doc, source, "审计脚本数（英文）", /(\d+)\s+audits?\b/gi, expected.audits);
     checkNumbers(doc, source, "单测套数（英文）", /(\d+)\s+unit[-\s]tests?\b/gi, expected.unitTests);
+    // 词形写法（`八个审计脚本`）—— 中文数字正则抓不到，走词形通道
+    checkWordNumbers(doc, source, "审计脚本数", /([一二三四五六七八九十])个审计/g, expected.audits);
 
     // 5. 「回归守卫」= 单测套数 + 审计脚本数（一句概括全部自动化守卫的写法）
     checkNumbers(
@@ -315,41 +474,39 @@ function main() {
     );
   }
 
-  // 中文数字写法（「八个审计脚本」）单独校验 —— 正则抓不到，只能按字面找
-  for (const doc of DOCS) {
-    const full = path.join(ROOT, doc);
-    if (!fs.existsSync(full)) continue;
-    const source = fs.readFileSync(full, "utf8");
-    const numerals = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
-    for (const match of [...source.matchAll(/([一二三四五六七八九十])个审计/g)]) {
-      const value = numerals[match[1]];
-      if (value === expected.audits) {
-        ok(`${doc} 「${match[1]}个审计」`);
-        continue;
-      }
-      const line = source.slice(0, match.index).split("\n").length;
-      fail(`${doc}:${line} 的「${match[1]}个审计」与实测不一致`, `文档写 ${value}，实测 ${expected.audits}`);
-    }
+  // 句式覆盖下限：某一条核心句式一处都没匹配到 = 这一类检查静默失灵（见 matchCounts 的注释）
+  for (const label of REQUIRED_PATTERNS) {
+    if ((matchCounts.get(label) || 0) > 0) continue;
+    fail(`「${label}」在全部受管文档里一处都没匹配到`, "文档换写法了、还是正则废了？「抓不到」不等于「通过」");
   }
 
   //#region 汇总
 
   console.log(`实测：${expected.endpoints} 个接口 / ${expected.paths} 条路径 / ${expected.models} 个模型 / ${expected.permissions} 个权限点`);
+  console.log(`      ${expected.tables} 张表 / ${expected.repositories} 个仓储`);
   console.log(
     `      ${expected.unitTests} 套单测 · ${expected.audits} 个审计 · ${expected.e2e.reduce((sum, item) => sum + item.count, 0)} 条 e2e（${expected.e2e
       .map((item) => item.count)
       .join(" + ")}）`,
   );
   for (const [tag, count] of expected.groups) console.log(`      分组「${tag}」${count}`);
+  // 每一类各匹配到多少处 —— 数字掉到 0 就意味着这类句式静默失灵（下限见 REQUIRED_PATTERNS）
+  console.log(
+    `      句式覆盖：${[...matchCounts]
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, times]) => `${label} ${times}`)
+      .join(" · ")}`,
+  );
 
   if (failures.length === 0) {
-    console.log(`\n✔ 文档数字与实测一致（比对 ${passed} 处）`);
+    console.log(`\n✔ 文档数字与实测一致（比对 ${passed} 处，${matchCounts.size} 类句式）`);
     return;
   }
 
-  console.log(`\n✗ 文档里有 ${failures.length} 处数字与实测对不上：\n`);
+  console.log(`\n✗ 文档里有 ${failures.length} 处对不上：\n`);
   failures.forEach((item, index) => console.log(`  ${index + 1}. ${item}`));
-  console.log("\n  修法只有一种：把文档里的数字改成实测值（上面「实测」那几行）。");
+  console.log("\n  数字不一致 → 把文档里的数字改成实测值（上面「实测」那几行）。");
+  console.log("  句式一处都没匹配到 → 先看文档是不是换了写法，再看正则是不是废了。");
   process.exit(1);
 }
 
