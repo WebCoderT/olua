@@ -47,15 +47,16 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run swagger:emit` | Compile + emit `openapi.json` from source (the single source of the contract) |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` — **regenerate both ends' interface files** |
 | `npm run test:e2e` | Main e2e (248 assertions) |
-| `npm run test:e2e:roles` | Role-management suite (77 assertions) |
+| `npm run test:e2e:roles` | Role-management suite (110 assertions) |
 | `npm run test:e2e:guard` | Operations & security base (283 assertions) |
 | `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
 | `npm run test:e2e:account-email` | Player email field (28 assertions) |
+| `npm run test:e2e:realtime` | Realtime channel (50 assertions; **real WebSocket handshake**, no browser needed) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + six e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + seven e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -86,6 +87,8 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `AUDIT_LOG_MAX_ROWS` | `20000` | Audit-log retention cap (oldest auto-purged beyond it; `0` = never purge) |
 | `MAIL_RETENTION_DAYS` | `90` | Mail-delivery record retention days (older ones auto-purged; `0` = no time-based purge) |
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | Mail-delivery record retention cap (only sent / failed, so undelivered mail is never dropped; `0` = never purge) |
+| `REALTIME_TICKET_TTL_MS` | `30000` | Lifetime of a realtime connection ticket (one-shot, burned on use; the ticket can appear in a URL, so it only lives 30 seconds) |
+| `REALTIME_HEARTBEAT_MS` | `30000` | WebSocket liveness-probe interval (the server sends protocol-level pings; the client uses it to pace its application-level `ping`) |
 
 > **The `TRUST_PROXY` two-way trap**: behind Nginx / a gateway you **must set `true`** — otherwise every request's source IP is the proxy's,
 > and login rate limiting would treat all players as one person and lock them all out; conversely, **when exposed directly you must keep it `false`** — leaving it on lets the caller
@@ -127,6 +130,7 @@ server/
 │   │   ├── admin/                  admin console: auth / accounts / characters / admins / passwords / announcements
 │   │   ├── announcement/           announcements: client pulls "active" (public) + admin CRUD
 │   │   ├── mail/                   mail: templates + delivery queue + background scheduler (sending only enqueues)
+│   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
 │   │   ├── token/                  JWT issue & verify (dual audience)
@@ -138,10 +142,11 @@ server/
 ├── scripts/                        backup / restore (VACUUM INTO + five-step restore, see scripts/lib/db-tooling.cjs)
 ├── test/
 │   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
-│   ├── e2e-roles.cjs               77 assertions
+│   ├── e2e-roles.cjs               110 assertions
 │   ├── e2e-guard.cjs               283 assertions
 │   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
 │   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
+│   ├── e2e-realtime.cjs            50 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -198,12 +203,12 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **51 interfaces / 41 paths / 72 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **52 interfaces / 42 paths / 73 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 6 | No token (health check, player register/login, admin login/register, **pull active announcements**) |
-| Client | 8 | `player` token, may only operate its own account's data |
+| Client | 9 | `player` token, may only operate its own account's data |
 | Admin | 37 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
@@ -280,23 +285,24 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All six e2e suites are **real server process + real HTTP requests** (not mocks):
+All seven e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
 | `test/e2e.cjs` | **248** | register/login / character CRUD and count cap / duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
-| `test/e2e-roles.cjs` | **77** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
+| `test/e2e-roles.cjs` | **110** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
 | `test/e2e-guard.cjs` | **283** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
 | `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
 | `test/e2e-account-email.cjs` | **28** | player email field: read-only viewers can neither see nor change it / backfill·view·clear / format validation and same-email dedup (case-insensitive) / mail falls back to the linked account's email / contract permission annotation |
+| `test/e2e-realtime.cjs` | **50** | realtime channel: the ticket is one-shot (burned on use / expired / forged / cross-account all refused) / **a refused handshake answers with an HTTP 401 envelope instead of "connect first, then close"** / application-level ping→pong / one connection per account (a new one evicts the old, close code `4000`) / protocol-level liveness probe / on SIGTERM connections receive `1001` and the process exits immediately |
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
-cd server && npm run verify          # compile + six e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + seven e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 
-Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`),
+Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; realtime channel → `test:e2e:realtime`),
 but **`npm run verify` should pass before committing**.
 
 ## Related docs

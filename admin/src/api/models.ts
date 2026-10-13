@@ -533,6 +533,17 @@ export type RoleDetail = {
   data: Record<string, unknown>;
 };
 
+export type RealtimeTicket = {
+  /**
+   * 一次性票据（拼到 ws 地址的 ticket 查询参数上）
+   */
+  ticket: string;
+  /**
+   * 有效期（毫秒）；过期后必须重新取票
+   */
+  expiresIn: number;
+};
+
 export type AdminInfo = {
   /**
    * 管理员 id

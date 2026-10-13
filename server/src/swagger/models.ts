@@ -38,6 +38,7 @@ import {
   UpdateAnnouncementDto,
 } from "../modules/announcement/dto/announcement.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
+import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import {
   MailJobDto,
   MailJobPageDto,
@@ -66,6 +67,7 @@ export const SWAGGER_MODELS = [
   SaveRoleDto,
   RoleSummaryDto,
   RoleDto,
+  RealtimeTicketDto,
   // 管理端
   AdminRegisterDto,
   AdminLoginDto,

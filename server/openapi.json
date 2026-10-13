@@ -3535,6 +3535,50 @@
           "mail:write"
         ]
       }
+    },
+    "/realtime/ticket": {
+      "post": {
+        "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "realtime.ticket",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "一次性连接票据与它的有效期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RealtimeTicketDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "取实时连接票据",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RealtimeTicketDto"
+        }
+      }
     }
   },
   "info": {
@@ -4475,6 +4519,25 @@
           "createdAt",
           "updatedAt",
           "data"
+        ]
+      },
+      "RealtimeTicketDto": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "description": "一次性票据（拼到 ws 地址的 ticket 查询参数上）",
+            "example": "K3f9…"
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "有效期（毫秒）；过期后必须重新取票",
+            "example": 30000
+          }
+        },
+        "required": [
+          "ticket",
+          "expiresIn"
         ]
       },
       "AdminDto": {

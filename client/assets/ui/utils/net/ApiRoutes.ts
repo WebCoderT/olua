@@ -55,6 +55,15 @@ export const ApiRoutes = {
      */
     check: "/health",
   },
+  /** realtime 模块（1 个接口） */
+  realtime: {
+    /**
+     * 取实时连接票据（POST /realtime/ticket）
+     *
+     * 取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。
+     */
+    ticket: "/realtime/ticket",
+  },
   /** role 模块（7 个接口） */
   role: {
     /**

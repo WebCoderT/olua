@@ -918,6 +918,9 @@ const EXPECTED_CONFIG_KEYS = [
   "BACKUP_KEEP_COUNT",
   "BACKUP_RETENTION_DAYS",
   "BACKUP_DIR",
+  // 实时通道（票据一次性 / 心跳 / 优雅关闭的行为验证在 test/e2e-realtime.cjs 里单独做）
+  "REALTIME_TICKET_TTL_MS",
+  "REALTIME_HEARTBEAT_MS",
 ];
 
 /**

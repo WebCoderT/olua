@@ -154,6 +154,25 @@ export interface AppConfiguration {
   /** 备份目录（空 = 跟数据文件同级；容器里必须与数据同卷，否则重建即丢） */
   backupDir: string;
   //#endregion
+
+  //#region 实时通道（WebSocket）
+  /**
+   * 实时连接票据的有效期（毫秒）
+   *
+   * 票据只活在「取票据 → 握手」这两步之间，**默认 30 秒**：长到足够走完一次往返，
+   * 短到即使被反向代理的访问日志记下来也已经没有价值。这也是不把访问令牌塞 URL 的理由
+   * —— 令牌能用 7 天，票据只能用 30 秒且**用过即焚**。
+   */
+  realtimeTicketTtlMs: number;
+  /**
+   * 实时连接的存活探测间隔（毫秒）
+   *
+   * 服务端每这么久 ping 一次，上一轮没还 pong 的连接直接被断开 —— 没有它，
+   * 拔网线断掉的连接会一直挂在内存里（socket 层不会自己发现对端已经没了）。
+   * 应用层的 `ping`/`pong` 是另一回事：那是给客户端量往返用的（浏览器看不到协议层 ping 帧）。
+   */
+  realtimeHeartbeatMs: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -201,5 +220,7 @@ export default function configuration(): AppConfiguration {
     backupKeepCount: Number(process.env.BACKUP_KEEP_COUNT ?? 7),
     backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS ?? 30),
     backupDir: process.env.BACKUP_DIR ?? "",
+    realtimeTicketTtlMs: Number(process.env.REALTIME_TICKET_TTL_MS ?? 30 * 1000),
+    realtimeHeartbeatMs: Number(process.env.REALTIME_HEARTBEAT_MS ?? 30 * 1000),
   };
 }

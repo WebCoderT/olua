@@ -63,6 +63,7 @@ const E2E_SCRIPTS = [
   ["守卫（口令/审计/限流/封禁/看板）", "server/test/e2e-guard.cjs"],
   ["邮件", "server/test/e2e-mail.cjs"],
   ["账号邮箱", "server/test/e2e-account-email.cjs"],
+  ["实时通道", "server/test/e2e-realtime.cjs"],
   ["备份恢复", "server/test/backup.cjs"],
 ];
 
