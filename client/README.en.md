@@ -38,8 +38,11 @@ plus three growth lines (war soul / title / rank). The server is authoritative f
 
 ## Which server it connects to
 
-**The single source is `baseUrl` in `assets/configs/network.ts`** (default `http://localhost:3100/api`).
-Switch it to a LAN IP for on-device debugging. There is no second address literal anywhere in the code — `node ../tools/audit-api-hardcode.cjs` watches that.
+**The single source is `baseUrl` in `assets/configs/network.ts`**, resolved per environment (see `resolveBaseUrl`):
+loopback addresses and private-network / local domains use `http://localhost:3100/api` (this also covers a Cocos
+preview opened via a LAN IP); only public domains fall back to same-origin `/api`. **On-device debugging is the
+exception** — `localhost` on a phone is the phone itself, so point `DEV_BASE_URL` at your machine's LAN IP.
+There is no second address literal anywhere in the code — `node ../tools/audit-api-hardcode.cjs` watches that.
 
 ## Three iron rules
 
