@@ -350,31 +350,42 @@ async function runAutoBackupSuite() {
     checkEqual(first.lastError, null, "成功时不留错误信息");
 
     // 第二次：证明是**周期性的**，而不是只在启动时备一次
+    //
+    // 等的必须是「尝试时刻往前走了」，**不能**等「文件变了」：
+    // lastFile / lastSuccessAt 每次读快照都会被 syncFromDisk() **按磁盘重写**，而本轮的记账
+    // 要等备份脚本跑完才写 —— 两者之间还隔着一个 await（backup.service.ts:145 → :146-148）。
+    // 轮询正好落在这条缝里就会读到「新文件已在盘上、记账还是上一轮的」这种自相矛盾的半截状态
+    // （CI 上撞出过：lastSuccessAt 比 lastAttemptAt 大 10251ms，正好差一个备份间隔，
+    // 同时 lastAttemptAt 压根没往前走）。
+    //
+    // lastAttemptAt 与 lastSuccessAt / lastFile 在 :146-148 **同一个同步块里连着写**（中间没有
+    // await），所以等到 lastAttemptAt 往前走，这一轮的记账就一定**整体**写完了，快照必然自洽。
     const secondFile = first.lastFile;
     const second = await waitFor(
       () => systemBackup(server.baseUrl, token),
-      (state) => state.lastFile !== secondFile,
+      (state) => state.lastAttemptAt > first.lastAttemptAt,
       30_000,
     );
     check(second.lastFile !== secondFile, "间隔到了之后又自己备了一次（周期性）");
     checkEqual(second.count, 2, "两次产出都在（还没触发份数上限）");
     check(second.lastAttemptAt > first.lastAttemptAt, "最后一次尝试的时刻在往后走");
     // 「成功时刻」与「尝试时刻」**来源不同**，不能判相等：
-    // · lastAttemptAt = runOnce() 入口的 Date.now()（毫秒精度）
-    // · lastSuccessAt 跑完时先赋成同一个值，但每次读快照还会被 syncFromDisk() 用**备份文件名里的
-    //   时间戳**（按秒取整）覆盖 —— 这是设计意图：「上一次成功」按磁盘说话，手工备份也要认
-    // 于是差值 = max(0, floor(scriptNow / 1000) * 1000 − 入口值)，落在 [0, 1000 + 脚本耗时) 内：
-    // 备份脚本是另起的 node 进程（启动 + 拷库），它自己的时刻比入口晚一点，再被向下取整到秒，
-    // 两者跨秒时差值就有几百毫秒。所以「相等」从来就不成立，只是大部分时候碰巧成立（CI 上撞出过 6ms）。
+    // · lastAttemptAt = runOnce() 入口的时刻（毫秒精度）
+    // · lastSuccessAt 会被 syncFromDisk() 用**备份文件名里的时间戳**（按秒取整）覆盖 ——
+    //   这是设计意图（:222-225：「上一次成功」按磁盘说话，手工跑的备份也要认），覆盖逻辑不动。
+    // 于是差值 = max(0, floor(scriptNow / 1000) * 1000 − 入口值)：脚本是另起的 node 进程，它自己的
+    // 时刻比入口晚 δ（启动 + 拷库），再向下取整到秒，跨秒时差值就有几百毫秒 —— 「相等」从来就不
+    // 成立，只是大部分时候碰巧成立（CI 上撞出过 6ms 的差）。
     //
-    // 改成**窗口断言**，守住原本要守的东西：两个时间戳都被刷新、且属于同一次运行。
-    // 上界 5 秒比上界值（1 秒取整 + 脚本启动）宽出余量，又远小于本组的备份间隔 10.8 秒 ——
-    // 要是 lastSuccessAt 压根没刷新、留着上一轮的值，差值就是约 10.8 秒，照样会被抓出来。
-    const SAME_RUN_WINDOW_MS = 5_000;
+    // 也不压一个固定的毫秒窗口：δ 随机器快慢走（慢机器上脚本几秒钟也正常），压窗口只是把 flake
+    // 换个地方。这里比的是**单调性** —— 这才是「记的是这一轮」的真实含义，且与机器快慢无关：
+    // · 比上一轮的成功时刻晚：不是留着旧值没刷新
+    // · 不早于本轮的尝试时刻：成功时刻不会跑到尝试之前
     const drift = second.lastSuccessAt - second.lastAttemptAt;
+    const advanced = second.lastSuccessAt - first.lastSuccessAt;
     check(
-      drift >= 0 && drift < SAME_RUN_WINDOW_MS,
-      `成功时「尝试」与「成功」记的是同一轮（相差 ${drift}ms，窗口 ${SAME_RUN_WINDOW_MS}ms）`,
+      drift >= 0 && advanced > 0,
+      `成功时刻记的是这一轮（比本轮尝试晚 ${drift}ms、比上一轮成功晚 ${advanced}ms）`,
     );
   } finally {
     await stopServer(server.child);
