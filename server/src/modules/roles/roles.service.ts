@@ -26,7 +26,14 @@ export class RolesService {
     private readonly config: ConfigService,
   ) {}
 
-  /** 角色数量上限（与客户端 configs/role.maxRoleCount 对齐，改在服务端 .env） */
+  /**
+   * 角色数量上限（**业务上限只在这一处**）
+   *
+   * 客户端**没有**第二份数字：它那边的「上限」是选角界面的**站位数量**
+   * （`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions`），那是界面容量。
+   * 所以这个值**只能调低** —— 不得超过站位数量，否则玩家能建出界面上没处放的角色
+   * （多出来的取不到站位，会叠在原点）。这条关系由 `tools/audit-shared-data.cjs` 守着。
+   */
   private get maxRoles(): number {
     return this.config.get<number>("roleMaxPerAccount") ?? 3;
   }

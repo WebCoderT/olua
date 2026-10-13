@@ -1,6 +1,6 @@
 import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
-import { maxRoleCount, occupations } from "../configs/role";
+import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
@@ -238,6 +238,13 @@ export class RoleSelector extends Component {
       if (isValid(node)) node.destroy();
     });
     this.mainView.ownerRoleNodes.length = 0;
+    // 角色数超过站位数量 = **服务端上限被配得比界面容量大**（部署那台的 .env，仓库里的守卫看不到）。
+    // 超出的角色取不到站位（下面的 `?? new Vec2()`），会叠在原点 —— 留一条能查的日志，
+    // 别让这件事只剩「看起来像是渲染错了」
+    const stands = roleSelectorLayout.rolePositions.length;
+    if (this.roleSummaries.length > stands) {
+      console.warn(`[RoleSelector] 角色数 ${this.roleSummaries.length} 超过站位 ${stands} 个：多出的角色没有站位、会叠在原点（检查服务端 ROLE_MAX_PER_ACCOUNT 是否大于选区站位数量）`);
+    }
     this.roleSummaries.forEach((role, index) => {
       const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, roleSelectorLayout.rolePositions[index] ?? new Vec2(), roleSelectorLayout.previewSize);
       node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
@@ -487,10 +494,13 @@ export class RoleSelector extends Component {
    */
   async createRole() {
     if (!this.createView || this.busy) return;
-    // 数量上限：服务端才是权威（server/.env 的 ROLE_MAX_PER_ACCOUNT），这里先拦一道省一次往返
-    // —— 站位只有 roleSelectorLayout.rolePositions 那么几个，超出的角色在界面上根本没地方显示
-    if (this.roleSummaries.length >= maxRoleCount) {
-      GameUiHelper.createTip("role_create_limit_tip", { max: maxRoleCount });
+    // 站位满了就先拦一道（省一次往返）：**界面能画几个角色，唯一来源就是布局里的站位数组**，
+    // 客户端没有第二个「上限」数字（见 configs/role 顶部的说明）。
+    // 业务上限在服务端（server/.env 的 ROLE_MAX_PER_ACCOUNT，只能调低、不得超过站位数量）——
+    // 它拒下来的请求会走全局错误提示，用的是服务端自己的数字。
+    const stands = roleSelectorLayout.rolePositions.length;
+    if (this.roleSummaries.length >= stands) {
+      GameUiHelper.createTip("role_create_limit_tip", { max: stands });
       return;
     }
     // 读取表单（职业与性别取自选中开关的节点名称，即枚举值）

@@ -38,7 +38,7 @@
 几条容易搞混的：
 
 - **角色数据的内容（背包里有什么、装备数值）不归服务端管**。服务端只校验结构、归属、上限与重名，内容原样存 —— 因为那套配置的真相在 `client/assets/configs`。详见 [server/FAQ.md](server/FAQ.md#服务端为什么不校验角色数据的内容)。
-- **「角色最多几个」两边都有一份**，且必须一起改：权威在 `server/.env`，客户端 `configs/role.maxRoleCount` 只做提前拦截与界面站位对齐。
+- **「角色最多几个」只有一个数字，但它有两层含义**：**界面容量**是选角布局的站位数组 `roleSelectorLayout.rolePositions`（站几个就画几个），**业务上限**是 `server/.env` 的 `ROLE_MAX_PER_ACCOUNT` —— 后者**只能调低**、不得超过前者（`tools/audit-shared-data.cjs` 把这条钉死）。客户端不再有第二份数字。
 - **地址配置三端各一处**，见下一条。
 
 ## 想换后端地址（局域网 / 线上域名），到底要改哪些文件？
@@ -153,7 +153,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 - `audit-api-generated`：生成物与文档是否逐字节一致（防「改了服务端忘了生成」）
 - `audit-api-hardcode`：地址有没有写进代码、环境变量有没有漏登记进 `.env.example`
-- `audit-shared-data`：三端共用的公共游戏数据与客户端配置表是否逐字节一致，外加每张数据表都在且非空（防数据漂移、防「生成器静默少产一张数据表」）
+- `audit-shared-data`：三端共用的公共游戏数据与客户端配置表是否逐字节一致，外加每张数据表都在且非空（防数据漂移、防「生成器静默少产一张数据表」）；另守一条跨端数值约定 —— 角色上限不得超过选角界面的站位数量
 - `audit-combat-parity`：服务端角色属性算法与客户端真身是否一致（把真的 `GameHelper.combatCalc` 编进 Node 当期望值，防算法漂移）
 - `audit-config-leak`：可调项有没有散落进核心代码、文案 key 有没有漏登记
 - `audit-docs-en`：中英文档的章节与数字有没有在翻译里走漏

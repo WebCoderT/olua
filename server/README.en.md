@@ -75,7 +75,7 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `JWT_SECRET` | dev placeholder | **Must be a random long string in production** |
 | `JWT_EXPIRES_IN` | `7d` | Token lifetime |
 | `ADMIN_REGISTER_CODE` | has value | Admin registration code; empty = open registration |
-| `ROLE_MAX_PER_ACCOUNT` | `3` | Max characters per account (**must match the client's `configs/role.maxRoleCount`**) |
+| `ROLE_MAX_PER_ACCOUNT` | `3` | Max characters per account (**lower only**: must not exceed the character-select UI's stand count `roleSelectorLayout.rolePositions`; a guard enforces this) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins, comma-separated |
 | `NODE_ENV` | `development` | Only affects flags, does not change behavior |
 | `LOG_REQUESTS` | `true` | Whether to log each request (method/path/latency only, **no request body**) |
@@ -93,6 +93,14 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 > **The `TRUST_PROXY` two-way trap**: behind Nginx / a gateway you **must set `true`** — otherwise every request's source IP is the proxy's,
 > and login rate limiting would treat all players as one person and lock them all out; conversely, **when exposed directly you must keep it `false`** — leaving it on lets the caller
 > forge `X-Forwarded-For` to bypass IP limiting. This is also spelled out in `.env.example`.
+
+> **`ROLE_MAX_PER_ACCOUNT` can only go down**: on the client, "how many characters you can have" is the **UI capacity** —
+> the character-select layout `configs/layout/scenes` has `roleSelectorLayout.rolePositions` **stands**, i.e. as many as are drawn,
+> and the client's pre-check is exactly "all stands are taken". So this value must **not exceed the stand count**: raising it would
+> let a player create a character the UI has nowhere to place (the extra one stacks at the origin). The two are no longer "the
+> same thing", so they no longer have to change together — adding stands is layout / art work, while this knob only goes down.
+> The committed defaults are enforced by `tools/audit-shared-data.cjs`; the **deployment's `.env` is not in the repo**, so the guard
+> cannot see it — do not set it above the stand count.
 
 ## Directory structure
 

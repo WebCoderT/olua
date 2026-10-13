@@ -46,6 +46,23 @@
  * 两端的 `ApiModels.ts` / `models.ts` 里本来就镜像着 DTO 描述，那是生成出来的，不是维护的。
  *
  * ===========================================================================
+ * 第三种破法：**同一个数，两端各写一份**
+ * ===========================================================================
+ * 「三端只有一份」不只管数据表。角色数量上限就是同一个数写在两个地方：客户端
+ * `configs/role.ts` 手写 `maxRoleCount = 3`，服务端 `.env` 的 `ROLE_MAX_PER_ACCOUNT` ——
+ * 两者之间只有一句「两边要一起改」的注释（#124）。
+ *
+ * 现在客户端那份**没有数字了**：界面能画几个角色，唯一来源是选角布局的**站位数组**
+ * （`roleSelectorLayout.rolePositions`，有几个站位就画几个），客户端创建前的拦截是
+ * 「站位满了」而不是另一份上限；服务端那个是**业务上限**，它只能**调低** ——
+ * 调过站位数量，玩家就能建出界面上没处放的角色（多出来的取不到站位，会叠在原点）。
+ *
+ * 这一节守的就是这条：仓库里的默认值不大于站位数量，且客户端不许再冒出第二份上限数字。
+ *
+ * **看不到的部分写在明处**：部署那台的 `.env` 是本地文件（不进仓库），守卫读不到 ——
+ * 所以「只能调低」必须写在文档里，客户端另有一条运行期告警兜着（角色数 > 站位数量时打日志）。
+ *
+ * ===========================================================================
  * 与 `audit-combat-parity.cjs` 的分工
  * ===========================================================================
  * 这条守「**数据**没漂移」，parity 那条守「**算法**写得对不对」—— 表一模一样，
@@ -63,6 +80,15 @@ const ROOT = path.resolve(__dirname, "..");
 const SERVER_SRC = path.join(ROOT, "server", "src");
 const GENERATED = path.join(SERVER_SRC, "shared", "game-data.generated.ts");
 const GENERATOR = path.join(ROOT, "tools", "gen-shared-data.cjs");
+
+/** 选角布局（站位数量的唯一来源）与客户端那个「曾经的第二份上限」所在文件 */
+const ASSETS = path.join(ROOT, "client", "assets");
+const CLIENT_LAYOUT = path.join(ASSETS, "configs", "layout", "scenes.ts");
+const CLIENT_ROLE_CONFIG = path.join(ASSETS, "configs", "role.ts");
+
+/** 服务端「角色上限」的两处仓库默认值（运行时的 .env 是部署本地的，读不到） */
+const ENV_EXAMPLE = path.join(ROOT, "server", ".env.example");
+const SERVER_CONFIG = path.join(SERVER_SRC, "config", "configuration.ts");
 
 /**
  * 必须存在的导出 —— 每张表都要在，且至少一条数据
@@ -144,6 +170,15 @@ function main() {
     failures.push(String(error.message));
   }
 
+  // 跨端数值约定：角色数量上限（客户端界面容量 vs 服务端上限）—— 见 #124
+  let roleLimit = null;
+  try {
+    roleLimit = findRoleLimitDrift();
+    failures.push(...roleLimit.problems);
+  } catch (error) {
+    failures.push(String(error.message));
+  }
+
   if (failures.length > 0) fail(failures.join("\n\n"));
 
   // 去掉末尾那个换行再数：直接 split("\n") 会因末尾的空串多算一行，
@@ -152,6 +187,10 @@ function main() {
   const kb = Math.round(fs.statSync(GENERATED).size / 1024);
   console.log(`✔ 公共游戏数据一致（重新生成后逐字节相同，${lines} 行 / ${kb} KB）`);
   console.log(`  表 ${REQUIRED_EXPORTS.length} 张：${counts.join(" · ")}`);
+  if (roleLimit) {
+    const defaults = roleLimit.defaults.map((item) => `${item.label}=${item.value}`).join(" · ");
+    console.log(`  角色上限：服务端默认（${defaults}）≤ 选角站位 ${roleLimit.capacity} 个 ✓`);
+  }
 }
 
 /**
@@ -187,6 +226,21 @@ function compileGenerated() {
     "utf8",
   );
 
+  runTsc(tsconfig, `生成物编译不过（${path.relative(ROOT, GENERATED)} 自己坏了）`);
+
+  const mod = require(path.join(outdir, "shared", "game-data.generated.js"));
+  fs.rmSync(work, { recursive: true, force: true });
+  return mod;
+}
+
+/**
+ * 跑一次 tsc，只把 `error TS` 当失败
+ *
+ * 两个编译单元共用。生成物那个**没有** Cocos 依赖，任何 error TS 都是真错误；
+ * 布局那个 import 了 `cc`（本机没有引擎类型），所以 `Cannot find module 'cc'`
+ * 要放过 —— 与 `gen-shared-data.cjs` 同口径：缺类型不影响 JS 产物，下面要的是运行时的值。
+ */
+function runTsc(tsconfig, failMessage, ignoreMissingCc = false) {
   const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
   if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
 
@@ -196,14 +250,12 @@ function compileGenerated() {
   } catch (error) {
     log = `${error.stdout ?? ""}${error.stderr ?? ""}`;
   }
-  const fatal = log.split("\n").filter((line) => line.includes("error TS"));
+  const fatal = log
+    .split("\n")
+    .filter((line) => line.includes("error TS") && !(ignoreMissingCc && line.includes("Cannot find module 'cc'")));
   if (fatal.length > 0) {
-    throw new Error(`生成物编译不过（${path.relative(ROOT, GENERATED)} 自己坏了）：\n  ${fatal.slice(0, 3).join("\n  ")}`);
+    throw new Error(`${failMessage}：\n  ${fatal.slice(0, 3).join("\n  ")}`);
   }
-
-  const mod = require(path.join(outdir, "shared", "game-data.generated.js"));
-  fs.rmSync(work, { recursive: true, force: true });
-  return mod;
 }
 
 /** 逐表数条目，顺带查「表在不在、空不空」 */
@@ -382,6 +434,145 @@ function findRequiresDerived() {
     }
   }
   return problems;
+}
+
+/**
+ * 跨端数值约定：**角色数量上限**（见 #124、文件头「同一个数两端各写一份」）
+ *
+ * 客户端那边没有「上限」这个数字 —— 界面能画几个角色，唯一来源是选角布局的**站位数组**
+ * `roleSelectorLayout.rolePositions`（站几个就画几个，见 `ui/RoleSelector.createRole`）。
+ * 服务端的 `ROLE_MAX_PER_ACCOUNT` 是**业务上限**，它只能**调低**。
+ *
+ * 判据两条：
+ *   1. 仓库里的服务端默认值（`.env.example` 与 `configuration.ts` 的兜底）**不大于**站位数量；
+ *   2. 客户端不许再冒出第二份上限数字（那个数字一出现，这条关系就又回到「靠记性」了）。
+ *
+ * @returns `{ problems, capacity, defaults }`（后两个只用于成功时把实测值打出来）
+ */
+function findRoleLimitDrift() {
+  const problems = [];
+  const capacity = readRoleStandCapacity();
+  const defaults = readServerRoleLimitDefaults();
+
+  for (const { label, value } of defaults) {
+    if (value > capacity) {
+      problems.push(
+        `${label} 的角色上限是 ${value}，超过了客户端选角界面的站位数量 ${capacity}（` +
+          `${path.relative(ROOT, CLIENT_LAYOUT)} 的 roleSelectorLayout.rolePositions）—— ` +
+          `调大了玩家能建出界面上没处放的角色。要么调回来，要么先去布局里加站位`,
+      );
+    }
+  }
+
+  const source = stripComments(fs.readFileSync(CLIENT_ROLE_CONFIG, "utf8"));
+  const copy = /(?:export\s+)?const\s+(maxRoleCount|MAX_ROLE_COUNT|roleMaxPerAccount)\s*[:=]/.exec(source);
+  if (copy) {
+    problems.push(
+      `${path.relative(ROOT, CLIENT_ROLE_CONFIG)}:${locate(source, copy.index)} 又定义了 ${copy[1]} —— ` +
+        `客户端能画几个角色取决于 roleSelectorLayout.rolePositions（站位有几个就画几个），` +
+        `业务上限在服务端，这里不该有第二个数字`,
+    );
+  }
+
+  return { problems, capacity, defaults };
+}
+
+/**
+ * 读「选角界面能画几个角色」= 站位数组的长度
+ *
+ * **编译后取真值**，不去源码里数 `new Vec2(`：站位数组将来可能由别的数组拼出来，
+ * 数文本就会错。编译单元很小（布局只依赖 `cc` 与 `./images`），代价可以接受。
+ */
+function readRoleStandCapacity() {
+  if (!fs.existsSync(CLIENT_LAYOUT)) {
+    throw new Error(`找不到 ${path.relative(ROOT, CLIENT_LAYOUT)}（改名了？改了就来同步这条判据）`);
+  }
+
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-stands-"));
+  const outdir = path.join(work, "out");
+
+  // 布局 import 了 `cc`（Vec2 / Size / Color 都是在**运行时**构造的），给它一个最小垫片
+  // （`gen-shared-data.cjs` 里那份的同款；放 out/node_modules 是为了让子目录里的 require 找得到）
+  const shim = path.join(outdir, "node_modules", "cc");
+  fs.mkdirSync(shim, { recursive: true });
+  fs.writeFileSync(
+    path.join(shim, "index.js"),
+    "class Color { constructor(value) { this.value = value; } }\n" +
+      "class Vec2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }\n" +
+      "class Size { constructor(width = 0, height = 0) { this.width = width; this.height = height; } }\n" +
+      "module.exports = { Color, Vec2, Size };\n",
+    "utf8",
+  );
+  fs.writeFileSync(path.join(shim, "package.json"), '{"name":"cc","version":"0.0.0","main":"index.js"}', "utf8");
+
+  const tsconfig = path.join(work, "tsconfig.json");
+  fs.writeFileSync(
+    tsconfig,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "CommonJS",
+          moduleResolution: "node",
+          outDir: outdir,
+          rootDir: ASSETS,
+          skipLibCheck: true,
+          esModuleInterop: true,
+          strict: false,
+          noEmitOnError: false,
+        },
+        files: [CLIENT_LAYOUT],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  runTsc(tsconfig, `选角布局编译不过（${path.relative(ROOT, CLIENT_LAYOUT)} 自己坏了）`, true);
+
+  const layout = require(path.join(outdir, "configs", "layout", "scenes.js")).roleSelectorLayout;
+  fs.rmSync(work, { recursive: true, force: true });
+
+  const stands = layout?.rolePositions;
+  if (!Array.isArray(stands) || stands.length === 0) {
+    throw new Error(`roleSelectorLayout.rolePositions 不是非空数组（改结构了？改了就来同步这条判据）`);
+  }
+  return stands.length;
+}
+
+/**
+ * 服务端那两处**提交在仓库里**的默认值
+ *
+ * 两处都要读：`.env.example` 是 `make env` 拷出来那份（部署照它改），
+ * `configuration.ts` 的 `?? N` 是没配 `.env` 时的兜底。任一处调过站位数量，
+ * 超限请求都会被真的放行，所以两处都是判据。
+ *
+ * 读不到就抛错（不是静默跳过）：这属于「上游换写法了」，必须有人来看一眼 ——
+ * 静默跳过等于这条守卫悄悄失效。
+ */
+function readServerRoleLimitDefaults() {
+  const out = [];
+
+  const envSource = fs.readFileSync(ENV_EXAMPLE, "utf8");
+  const envMatch = /^\s*ROLE_MAX_PER_ACCOUNT\s*=\s*(\d+)\s*$/m.exec(envSource);
+  if (!envMatch) {
+    throw new Error(`${path.relative(ROOT, ENV_EXAMPLE)} 里读不到 ROLE_MAX_PER_ACCOUNT（改名或删了？改了就来同步这条判据）`);
+  }
+  out.push({ label: path.relative(ROOT, ENV_EXAMPLE), value: Number(envMatch[1]) });
+
+  const configSource = stripComments(fs.readFileSync(SERVER_CONFIG, "utf8"));
+  const fallback = /roleMaxPerAccount\s*:\s*Number\(\s*process\.env\.ROLE_MAX_PER_ACCOUNT\s*\?\?\s*(\d+)\s*\)/.exec(
+    configSource,
+  );
+  if (!fallback) {
+    throw new Error(
+      `${path.relative(ROOT, SERVER_CONFIG)} 里读不到 roleMaxPerAccount 的兜底值（改写过了？改了就来同步这条判据）`,
+    );
+  }
+  out.push({ label: `${path.relative(ROOT, SERVER_CONFIG)} 兜底`, value: Number(fallback[1]) });
+
+  return out;
 }
 
 const quote = (text) => `"${text}"`;

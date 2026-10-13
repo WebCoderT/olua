@@ -35,14 +35,18 @@ export const roleRigid = {
 };
 
 /**
- * 单个账号最多可创建的角色数量
+ * 角色数量上限**不在这个文件里** —— 这里有意不留数字
  *
- * **权威在服务端**（server/.env 的 ROLE_MAX_PER_ACCOUNT），创建时由服务端把关并拒绝超限请求；
- * 客户端这一份只做两件事：创建前先拦一道省一次往返、以及和选角界面的站位数量对齐
- * （configs/layout/scenes.roleSelectorLayout.rolePositions —— 超出的角色界面上没地方放）。
- * 两边数值要一起改。
+ * 界面上能画几个角色，唯一来源是选角布局的**站位数组**（`configs/layout/scenes` 的
+ * `roleSelectorLayout.rolePositions`）：站位有几个，界面上就能站几个，所以客户端不需要
+ * 第二份「上限」。
+ *
+ * 服务端的 `ROLE_MAX_PER_ACCOUNT`（`server/.env`）是**业务上限**，它只能**调低** ——
+ * 不得超过站位数量，否则玩家能建出界面上没处放的角色（多出来的会叠在原点）。
+ * 这条关系由 `tools/audit-shared-data.cjs` 守着，不再靠「两边一起改」的记性。
+ *
+ * （这里原本有一个手写的 `export const maxRoleCount = 3` —— 它就是那个「第二份数字」，已删掉。）
  */
-export const maxRoleCount = 3;
 
 /**
  * 鼠标操控角色（鼠标左键按住走路、右键按住跑动，抬起即停）
