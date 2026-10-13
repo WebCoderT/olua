@@ -337,6 +337,8 @@ async function runAutoBackupSuite() {
   const autoDir = fs.mkdtempSync(path.join(os.tmpdir(), "olua-auto-backup-"));
   const dbPath = path.join(autoDir, "olua.db");
   const expectedDir = path.join(autoDir, "backups");
+  // 时间线的零点（#110 加的观测）：这一组以前只报「通过 / 不通过」，出了 flake 手里一个数字都没有
+  const suiteAt = Date.now();
 
   const server = await startServer({
     DB_PATH: dbPath,
@@ -345,22 +347,42 @@ async function runAutoBackupSuite() {
     BACKUP_INTERVAL_HOURS: "0.003",
     BACKUP_KEEP_COUNT: "2",
   });
+  const bootMs = Date.now() - suiteAt;
   try {
     await registerAdmin(server.baseUrl);
     const token = await loginAdmin(server.baseUrl);
 
     // 第一次：服务启动后该自己备一份
+    //
+    // 等的是 `lastOk !== null`，**不能**等 `lastAttemptAt !== null`（#110 修的）。
+    //
+    // `snapshot()` 每次都会先跑一遍 `syncFromDisk()`，把磁盘上的产物捞进状态里 —— 它写
+    // `lastFile` / `lastSizeBytes` / `lastSuccessAt` / `lastAttemptAt` 四个字段，但**不碰 `lastOk`**。
+    // 于是「备份脚本已经把文件写到盘上、父进程还没处理完子进程退出」的那条缝里，
+    // `lastAttemptAt !== null` 早就成立而 `lastOk` 还是 null —— 轮询落进这条缝就会拿到一个
+    // 「文件在、账没记完」的半截状态：CI 上撞出过 `lastFile` 是合规文件名、`count` 是 1、
+    // `lastSizeBytes` 却是一份**写到一半的文件**（本机放大复现：44.6MB / 最终 91.3MB），
+    // 而 `lastDurationMs` 还是 null。这条缝有多宽取决于脚本跑多久（本机 22ms、慢机器几百毫秒），
+    // 所以它是个概率很低的偶红。
+    //
+    // `lastOk` 是**只有 `refresh()` 会写**的那个字段（`syncFromDisk()` 与构造函数都不碰它），
+    // 而 `refresh()` 在 `runOnce()` 里是一段没有 await 的同步代码：它一旦戴上值，
+    // lastAttemptAt / lastFile / lastSizeBytes / lastSuccessAt / nextAt 就**整体**写完了，
+    // 快照必然自洽。用它当判据 = 在「一轮跑完」这个原子边界上取样。
     const first = await waitFor(
       () => systemBackup(server.baseUrl, token),
-      (state) => state.lastAttemptAt !== null,
+      (state) => state.lastOk !== null,
     );
+    const firstSettledMs = Date.now() - suiteAt;
     check(first.lastAttemptAt !== null, "服务自己跑了一次备份（全程没敲备份命令）");
     checkEqual(first.enabled, true, "自动备份是开着的状态");
     checkEqual(first.dir, expectedDir, "备份目录跟着数据文件走（容器里才会落在同一个持久卷上）");
     checkEqual(first.lastOk, true, "第一次备份成功");
     check(BACKUP_FILE.test(first.lastFile ?? ""), `产出文件名合规（${first.lastFile}）`);
     check(first.lastSizeBytes > 0, "记下了产出文件的体积");
-    check(first.lastDurationMs >= 0, "记下了耗时（备份越来越慢是数据量在涨的信号）");
+    // 这里要求它是个**正数**而不是 `>= 0`：`null >= 0` 在 JS 里是 true，而半截状态下它恰好是 null
+    // —— 弱断言等于把「记账没写完」这件事放过去。写强了它就是「这一轮的账写完了」的机械判据。
+    check(typeof first.lastDurationMs === "number" && first.lastDurationMs > 0, `记下了耗时（${first.lastDurationMs}ms；备份越来越慢是数据量在涨的信号）`);
     checkEqual(first.intervalMs, 10_800, "间隔按小时换算成毫秒（0.003 小时 = 10.8 秒）");
     check(first.intervalText.includes("每"), `间隔给人话版本（${first.intervalText}）`);
     checkEqual(first.keepCount, 2, "保留份数按配置报出来");
@@ -371,28 +393,39 @@ async function runAutoBackupSuite() {
 
     // 第二次：证明是**周期性的**，而不是只在启动时备一次
     //
-    // 等的必须是「尝试时刻往前走了」，**不能**等「文件变了」：
-    // lastFile / lastSuccessAt 每次读快照都会被 syncFromDisk() **按磁盘重写**，而本轮的记账
-    // 要等备份脚本跑完才写 —— 两者之间还隔着一个 await（backup.service.ts:145 → :146-148）。
-    // 轮询正好落在这条缝里就会读到「新文件已在盘上、记账还是上一轮的」这种自相矛盾的半截状态
-    // （CI 上撞出过：lastSuccessAt 比 lastAttemptAt 大 10251ms，正好差一个备份间隔，
-    // 同时 lastAttemptAt 压根没往前走）。
+    // 判据是「尝试时刻严格往前走」，而不是「文件变了」：lastFile / lastSuccessAt 每次读快照
+    // 都会被 syncFromDisk() **按磁盘重写**（文件一落盘就变），本轮的记账却要等备份脚本跑完才写 ——
+    // 两者之间隔着脚本的执行时间，轮询落进这条缝就会读到「新文件已在盘上、记账还是上一轮的」
+    // 这种自相矛盾的半截状态（CI 上撞出过：lastSuccessAt 比 lastAttemptAt 大 10251ms，正好差
+    // 一个备份间隔，同时 lastAttemptAt 压根没往前走）。
     //
-    // lastAttemptAt 与 lastSuccessAt / lastFile 在 :146-148 **同一个同步块里连着写**（中间没有
-    // await），所以等到 lastAttemptAt 往前走，这一轮的记账就一定**整体**写完了，快照必然自洽。
+    // 这里敢用 lastAttemptAt，前提是**上一轮已经结账完毕**（first 是在 lastOk 戴上值时取的）：
+    // 此后 lastAttemptAt 非 null，syncFromDisk() 那句「只在还没记录时补」就不会再动它，
+    // 剩下的唯一写者就是 refresh() 里那段没有 await 的同步块（它一口气写完 lastAttemptAt /
+    // lastOk / lastFile / lastSizeBytes / lastSuccessAt / nextAt）。于是
+    // 「lastAttemptAt 往前走」⟺「又整轮跑完了」，不可能拿到半截快照。
+    // #110 之前的写法漏了这层前提：first 取自半截状态时，它的 lastAttemptAt 是**按秒取整的文件名戳**，
+    // 而结账会把同名字段回写成更早的 tick 时刻（本机复现：first=文件戳、结账后=−51ms），
+    // 「往前走」于是在同一轮的账里就成立了 —— 那一瞬间 count 还是 1、lastFile 还是旧名字。
+    //
+    // 时间余量（实测，不是猜的）：间隔 10.8 秒，第二轮约在服务启动后 11.4 秒落到账上
+    // （本机 +11388ms / 脚本 42ms；即使脚本慢两个数量级也只到 12 秒出头），30 秒给了 2.5 倍以上。
+    // 而且这个判据是**单调**的（戴上就不退回），窗口宽窄不会换来别的 flake —— 慢机器只是让它到得更晚，
+    // 而「到得更晚」不该被误判成「没发生」，所以没必要为了慢机器把窗口拍得更大。
     const secondFile = first.lastFile;
     const second = await waitFor(
       () => systemBackup(server.baseUrl, token),
       (state) => state.lastAttemptAt > first.lastAttemptAt,
       30_000,
     );
+    const secondSettledMs = Date.now() - suiteAt;
     check(second.lastFile !== secondFile, "间隔到了之后又自己备了一次（周期性）");
     checkEqual(second.count, 2, "两次产出都在（还没触发份数上限）");
     check(second.lastAttemptAt > first.lastAttemptAt, "最后一次尝试的时刻在往后走");
     // 「成功时刻」与「尝试时刻」**来源不同**，不能判相等：
     // · lastAttemptAt = runOnce() 入口的时刻（毫秒精度）
     // · lastSuccessAt 会被 syncFromDisk() 用**备份文件名里的时间戳**（按秒取整）覆盖 ——
-    //   这是设计意图（:222-225：「上一次成功」按磁盘说话，手工跑的备份也要认），覆盖逻辑不动。
+    //   这是设计意图（`syncFromDisk` 的「上一次成功按磁盘说话，手工跑的备份也要认」），覆盖逻辑不动。
     // 于是差值 = max(0, floor(scriptNow / 1000) * 1000 − 入口值)：脚本是另起的 node 进程，它自己的
     // 时刻比入口晚 δ（启动 + 拷库），再向下取整到秒，跨秒时差值就有几百毫秒 —— 「相等」从来就不
     // 成立，只是大部分时候碰巧成立（CI 上撞出过 6ms 的差）。
@@ -406,6 +439,13 @@ async function runAutoBackupSuite() {
     check(
       drift >= 0 && advanced > 0,
       `成功时刻记的是这一轮（比本轮尝试晚 ${drift}ms、比上一轮成功晚 ${advanced}ms）`,
+    );
+
+    // 时间线（#110）：万一以后再偶红，日志里得有「哪一段慢」的数字 —— 窗口该不该改、按什么改，
+    // 得从这些数里看出来，而不是靠猜机器快慢。失败时也无条件打，所以它必须放在断言之后。
+    console.log(
+      `  · 时间线：服务就绪 +${bootMs}ms · 第一轮记账 +${firstSettledMs}ms（脚本 ${first.lastDurationMs}ms）` +
+        ` · 第二轮记账 +${secondSettledMs}ms（脚本 ${second.lastDurationMs}ms，间隔 ${first.intervalMs}ms）`,
     );
   } finally {
     await stopServer(server.child);
