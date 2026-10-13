@@ -49,7 +49,9 @@ function main() {
     );
   }
 
-  const lines = after.split("\n").length;
+  // 去掉末尾那个换行再数：直接 split("\n") 会因末尾的空串多算一行，
+  // 报出来的数会比 wc -l 大 1 —— 而 PR 里报产物行数用的是 wc -l，两个数字对不上就得解释半天
+  const lines = after.replace(/\n$/, "").split("\n").length;
   console.log(`✔ 战斗规则一致（重新生成后逐字节相同，${lines} 行）`);
 }
 
