@@ -225,7 +225,7 @@ olua/
 - audit-combat-parity.cjs: do the character attributes the server computes match the client's `combatCalc` (**algorithm** drift). The expected values are not a copied formula — the real `GameHelper.combatCalc` is compiled into Node and run: 2849 input sets × 10 fields, covering all levels / all equipment / all War Soul, Title and Rank tiers
 - audit-deploy.cjs: do the Docker / compose / nginx cross-file wirings line up (service names / ports / volumes / reverse-proxy prefixes / secret isolation)
 - audit-docs-en.cjs: do the English translations stay in step with the Chinese (coverage / no leftover Chinese / section parity / no dropped numbers / anchors and links reachable / mutual links)
-- audit-doc-numbers.cjs: do the numbers in the docs (endpoints / paths / models / e2e assertions) match what is actually measured — these drift silently, leaving the docs confidently out of date
+- audit-doc-numbers.cjs: do the numbers in the docs (endpoints / paths / models / permission points / tables / e2e assertions) match what is actually measured — these drift silently, leaving the docs confidently out of date (the per-end READMEs and the **project skills** are on the managed list too)
 
 ### Others
 

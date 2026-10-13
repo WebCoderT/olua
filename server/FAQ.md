@@ -65,7 +65,7 @@ env -u NODE_OPTIONS npm run verify
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
 | 只读观察员 `viewer` | 只能看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
 
-- **权限点**（17 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`role:read`、`role:write`、`role:select`、`role:delete`、`announcement:read`、`announcement:write`、`mail:read`、`mail:write`、`admin:read`、`admin:manage`、`audit:read`、`system:read`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
+- **权限点**（18 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`account:email`、`role:read`、`role:write`、`role:select`、`role:delete`、`announcement:read`、`announcement:write`、`mail:read`、`mail:write`、`admin:read`、`admin:manage`、`audit:read`、`system:read`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
 - `account:password`（重置玩家口令）单独成点、不并进 `account:status`：这是能**接管他人账号**的操作，敏感度高于封禁，值得让「谁能做」单独可调
 - `announcement:read` / `announcement:write` 为什么拆开：公告是**面向全服的公开内容**，看看不等于能改，所以观察员给了 `read`；而发布 / 编辑会直接推给全服玩家，属于对外发声，单列 `write`
 - **`mail:read` 为什么不给观察员**（与 `announcement:read` 相反）：投递记录里有玩家的**邮箱地址**，是个人信息而不是公开内容。观察员的定位是看业务数据，不该顺手拿到一份可导出的玩家联系方式 —— 这条界线看起来像「只是又一个读权限」，很容易顺手加错，所以把理由写在这里

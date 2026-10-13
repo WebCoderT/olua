@@ -302,7 +302,7 @@ audit-battle-rules: ## 战斗规则快照是否与客户端 configs 逐字节一
 audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）
 	@$(NODE) tools/audit-combat-parity.cjs
 
-audit-doc-numbers: ## 文档里的接口/路径/模型/e2e 条数是否与实测一致（防「文档自信地写着过期数字」）
+audit-doc-numbers: ## 文档里的接口 / 路径 / 模型 / 权限点 / 表数 / 审计与单测套数 / e2e 条数是否与实测一致（防「文档自信地写着过期数字」）
 	@$(NODE) tools/audit-doc-numbers.cjs
 
 # ==============================================================================
