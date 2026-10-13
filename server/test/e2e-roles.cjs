@@ -11,6 +11,8 @@
  * · 管理端修改：基础信息（含时装 / 头像 / 所在地图）、装备表 / 技能表 / 背包格子（结构化校验）、同账号重名校验
  * · 批量删除：按 id 删（幂等）、清空某账号全部角色、在线标记被顺带清掉
  * · 权限：只读观察员调写接口一律 403 / 30006
+ * · 派生属性：详情带服务端重算的战斗属性；与客户端上报值比对（不一致可观测）；
+ *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级不在曲线里时如实给 null
  * · 文档：新接口落在「管理端」分组且带权限点标注
  *
  * 用法：先 `npm run build`，再 `node test/e2e-roles.cjs`
@@ -374,6 +376,8 @@ function roleData(id, name, occupation, level) {
 
   //#endregion
 
+  //#endregion
+
   //#region 七、文档
 
   console.log("— 七、文档：新接口落在管理端分组且带权限点 —");
@@ -403,11 +407,141 @@ function roleData(id, name, occupation, level) {
   check(!!patchBody, "角色修改接口的请求体已画进文档");
   const schemas = Object.keys(doc.components.schemas);
   check(schemas.indexOf("BatchDeleteRolesDto") !== -1 && schemas.indexOf("BatchDeleteResultDto") !== -1, "批量删除的两个模型都已登记进文档");
+  check(
+    ["AdminRoleDetailDto", "RoleDerivedDto", "RoleDerivedAttributesDto", "RoleReportedAttributesDto"].every((name) => schemas.indexOf(name) !== -1),
+    "派生字段的四个模型都已登记进文档（漏登记 = Swagger 上缺 schema）",
+    JSON.stringify(schemas.filter((name) => name.indexOf("Derived") !== -1)),
+  );
+  const detailResponse = doc.paths["/api/admin/roles/{id}"].get.responses["200"].content["application/json"].schema;
+  const detailRef = JSON.stringify(detailResponse);
+  check(
+    detailRef.indexOf("AdminRoleDetailDto") !== -1,
+    "角色详情的响应模型是 AdminRoleDetailDto（而不是列表那个不含 derived 的）",
+    detailRef,
+  );
+
+  //#region 八、服务端重算的战斗属性（derived 出口）
+
+  console.log("— 八、服务端重算的战斗属性（derived 出口） —");
+
+  // 抓 warn：`mismatch` 是给「看接口的人」的，日志是给「查问题的人」的 —— 两者都要在（issue #93 的验收）
+  // 打补丁而不是开日志等级：`logger: false` 下 isLevelEnabled 是 false，只有绕过它才抓得到
+  const { Logger } = require("@nestjs/common");
+  const warnLines = [];
+  const originalWarn = Logger.prototype.warn;
+  Logger.prototype.warn = function (...args) {
+    warnLines.push(args.map((item) => (typeof item === "string" ? item : JSON.stringify(item))).join(" "));
+    return originalWarn.apply(this, args);
+  };
+
+  const playerC = await api("POST", "auth/register", { body: { username: "role_player_c", password: "pass1234" } });
+  const tokenC = playerC.data.token;
+  check(!!tokenC, "准备：第三个玩家账号（本组的角色都挂在它名下）", playerC.message);
+
+  // 详情接口现在回的是 AdminRoleDetail（比列表多一组派生字段）
+  const seeded = await api("POST", "roles", { token: tokenC, body: { data: roleData("role_d1", "算一", "1", 10) } });
+  check(seeded.code === 0, "准备：建一个 10 级角色", seeded.message);
+
+  const derived1 = await api("GET", "admin/roles/role_d1", { token: adminToken });
+  const d1 = derived1.data.derived;
+  check(!!d1 && !!d1.attributes, "详情带一组服务端重算的战斗属性");
+  check(
+    d1.attributes && typeof d1.attributes.combat === "number" && typeof d1.attributes.maxHp === "number" && Array.isArray(d1.attributes.physicalAttack),
+    "重算结果里有八项属性与战斗力",
+    JSON.stringify(d1.attributes),
+  );
+  check(d1.reported.combat === null && d1.reported.maxHp === null, "存档里没上报这两个值 → reported 为 null", JSON.stringify(d1.reported));
+  check(
+    d1.comparable === true && d1.mismatch === false,
+    "算得出来但没上报值 → comparable=true 且 mismatch=false（没比成与不一致是两回事）",
+    `comparable=${d1.comparable} mismatch=${d1.mismatch}`,
+  );
+  check(d1.unknownEquipmentIds.length === 0, "没穿装备 → 没有查不到的装备 id", JSON.stringify(d1.unknownEquipmentIds));
+
+  // 与服务端口径一致的上报值：拿服务端刚算出来的那份原样上报，就不该判成不一致
+  // （这条是整组的锚：它说明「服务端算的」与「客户端本该上报的」是同一个数）
+  const steadyCombat = d1.attributes.combat;
+  const steadyMaxHp = d1.attributes.maxHp;
+
+  const consistent = await api("POST", "roles", {
+    token: tokenC,
+    body: { data: { ...roleData("role_d2", "算二", "1", 10), combat: steadyCombat, maxHp: steadyMaxHp } },
+  });
+  check(consistent.code === 0, "准备：建一个上报值正确的角色", consistent.message);
+  const derived2 = await api("GET", "admin/roles/role_d2", { token: adminToken });
+  check(derived2.data.derived.mismatch === false, "上报服务端刚算出的那份 → 一致", JSON.stringify(derived2.data.derived.reported));
+  check(derived2.data.derived.reported.combat === steadyCombat, "上报值原样带出来（对照用）", String(derived2.data.derived.reported.combat));
+
+  // 明显不对的上报值
+  const bogus = await api("POST", "roles", {
+    token: tokenC,
+    body: { data: { ...roleData("role_d3", "算三", "1", 10), combat: 999999999, maxHp: 1 } },
+  });
+  check(bogus.code === 0, "准备：建一个上报值离谱的角色", bogus.message);
+  const derived3 = await api("GET", "admin/roles/role_d3", { token: adminToken });
+  check(derived3.data.derived.mismatch === true, "上报值与服务端重算对不上 → mismatch=true", JSON.stringify(derived3.data.derived.reported));
+  check(derived3.data.derived.comparable === true, "对不上时依然是「比过了」的（comparable=true）");
+  check(
+    warnLines.some((line) => line.indexOf("role_d3") !== -1 && line.indexOf("不一致") !== -1),
+    "不一致同时落到服务端日志（可观测，不静默）",
+    JSON.stringify(warnLines.slice(-3)),
+  );
+
+  // 管理端改等级 → derived 立刻跟着变（不等客户端同步），且客户端那份旧上报值当场变成「不一致」
+  const bumped = await api("PATCH", "admin/roles/role_d3", { token: adminToken, body: { level: 30 } });
+  check(
+    bumped.data.derived.attributes.combat !== steadyCombat,
+    "管理端改等级后，服务端重算的战斗力立刻变（不等客户端同步）",
+    `${steadyCombat} → ${bumped.data.derived.attributes.combat}`,
+  );
+  check(bumped.data.derived.mismatch === true, "等级一变，客户端那份旧上报值立刻成了不一致（正是 mismatch 要表达的）");
+  const reread = await api("GET", "admin/roles/role_d3", { token: adminToken });
+  check(
+    reread.data.derived.attributes.combat === bumped.data.derived.attributes.combat,
+    "改完返回的 derived 与重新读一遍一致",
+    `${bumped.data.derived.attributes.combat} vs ${reread.data.derived.attributes.combat}`,
+  );
+
+  // 查不到的装备 id：属性会悄悄少一截，所以要作为可读的证据交出来
+  const unknownEquip = await api("PATCH", "admin/roles/role_d1", {
+    token: adminToken,
+    body: { equipments: { WEAPON: "no_such_equipment", HELMET: null } },
+  });
+  check(
+    unknownEquip.data.derived.unknownEquipmentIds.indexOf("no_such_equipment") !== -1,
+    "查不到属性的装备 id 被交出来（而不是静默当作没穿）",
+    JSON.stringify(unknownEquip.data.derived.unknownEquipmentIds),
+  );
+  check(
+    warnLines.some((line) => line.indexOf("role_d1") !== -1 && line.indexOf("查不到属性") !== -1),
+    "未知装备同样落到服务端日志",
+    JSON.stringify(warnLines.slice(-3)),
+  );
+
+  // 等级不在成长曲线里 → 服务端无处可取旧值，如实给 null，而不是静默算成 0
+  const outOfCurve = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { level: 999 } });
+  check(outOfCurve.data.derived.attributes === null, "等级不在成长曲线里 → attributes 为 null（不静默给 0）", JSON.stringify(outOfCurve.data.derived.attributes));
+  check(
+    outOfCurve.data.derived.comparable === false && outOfCurve.data.derived.mismatch === false,
+    "算不出来时 comparable=false 且 mismatch=false（没比成 ≠ 不一致）",
+    `comparable=${outOfCurve.data.derived.comparable} mismatch=${outOfCurve.data.derived.mismatch}`,
+  );
+
+  // 列表不带派生字段：列表页不展示战斗力，给它算就是白算，还会让响应无谓变胖
+  const listForDerived = await api("GET", "admin/roles?accountId=" + playerC.data.account.id, { token: adminToken });
+  check(listForDerived.data.list.length === 3, "列表按账号筛出本组的三个角色", String(listForDerived.data.list.length));
+  check(
+    listForDerived.data.list.every((role) => role.derived === undefined),
+    "列表**不带** derived（只有详情带）",
+    JSON.stringify(listForDerived.data.list.map((role) => Object.keys(role).indexOf("derived") !== -1)),
+  );
+
+  Logger.prototype.warn = originalWarn;
 
   //#endregion
 
   await app.close();
-  finish("PASS：角色管理（修订号 / 筛选 / 结构化字段 / 批量删除 / 权限 / 文档）全部通过。");
+  finish("PASS：角色管理（修订号 / 筛选 / 结构化字段 / 批量删除 / 权限 / 派生属性 / 文档）全部通过。");
 })().catch((error) => {
   console.log(error && error.stack ? error.stack : String(error));
   finish("FAIL：角色管理端到端验证异常终止。");

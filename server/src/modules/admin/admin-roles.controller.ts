@@ -8,7 +8,7 @@ import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { ROLE_SORT, sortFieldNames } from "../../database/sort-specs";
-import { AdminRoleDto } from "../roles/dto/role.dto";
+import { AdminRoleDetailDto, AdminRoleDto } from "../roles/dto/role.dto";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
 import { RoleQueryDto } from "./dto/query.dto";
@@ -54,10 +54,19 @@ export class AdminRolesController {
   }
 
   @Get(":id")
-  @ApiAdminDoc({ operationId: "adminRole.detail", summary: "角色详情", description: "含完整 data（背包 / 装备等原样返回）。", permissions: [Permission.ROLE_READ] })
+  @ApiAdminDoc({
+    operationId: "adminRole.detail",
+    summary: "角色详情",
+    description:
+      "含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。\n\n" +
+      "derived 不在库里、每次读的时候算，与 `data` 里客户端上报的那份并列给出 —— 服务端算的不一定「对」" +
+      "（玩家在升级与重算之间存档时，客户端那份才是旧的），所以只把两份摆出来，不做自动判定。\n\n" +
+      "`derived.mismatch` 表示两份对不上，**不等于作弊**：配置漂移、存档留着旧装备 id 同样会命中。",
+    permissions: [Permission.ROLE_READ],
+  })
   @ApiParam({ name: "id", description: "角色 id" })
-  @ApiDataResponse(AdminRoleDto, { description: "角色详情" })
-  detail(@Param("id") id: string): AdminRoleDto {
+  @ApiDataResponse(AdminRoleDetailDto, { description: "角色详情（含服务端重算的 derived）" })
+  detail(@Param("id") id: string): AdminRoleDetailDto {
     return this.adminService.roleDetail(id);
   }
 
@@ -70,12 +79,14 @@ export class AdminRolesController {
       "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、" +
       "**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、" +
       "**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n" +
-      "角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。",
+      "角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n" +
+      "返回的 `derived` 是**改完之后**服务端现算的战斗属性：改等级 / 战魂 / 称号 / 军衔 / 装备后，" +
+      "战斗力**立刻**反映新值，不用等客户端同步。",
     permissions: [Permission.ROLE_WRITE],
   })
   @ApiParam({ name: "id", description: "角色 id" })
-  @ApiDataResponse(AdminRoleDto, { description: "修改后的角色" })
-  patch(@Param("id") id: string, @Body() dto: AdminPatchRoleDto): AdminRoleDto {
+  @ApiDataResponse(AdminRoleDetailDto, { description: "修改后的角色（derived 已按新值重算）" })
+  patch(@Param("id") id: string, @Body() dto: AdminPatchRoleDto): AdminRoleDetailDto {
     return this.adminService.patchRole(id, dto);
   }
 
@@ -89,8 +100,8 @@ export class AdminRolesController {
     permissions: [Permission.ROLE_SELECT],
   })
   @ApiParam({ name: "id", description: "角色 id" })
-  @ApiDataResponse(AdminRoleDto, { description: "被设为在线的角色" })
-  select(@Param("id") id: string): AdminRoleDto {
+  @ApiDataResponse(AdminRoleDetailDto, { description: "被设为在线的角色" })
+  select(@Param("id") id: string): AdminRoleDetailDto {
     return this.adminService.selectRole(id);
   }
 

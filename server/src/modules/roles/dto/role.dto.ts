@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { RoleRow, RoleWithAccountRow } from "../../../database/rows";
+import { compareRoleAttributes } from "../../combat/role-attribute-comparison";
 import { decodeStoredRoleData } from "../role-data.util";
 
 /** 角色概要（列表接口用：不含 data，体量小；画选角列表只需要这几项） */
@@ -84,3 +85,137 @@ export class RoleDto extends RoleSummaryDto {
     return dto;
   }
 }
+
+/** 服务端重算出的那八项战斗属性 + 战斗力 */
+export class RoleDerivedAttributesDto {
+  @ApiProperty({ description: "最大生命值" })
+  maxHp: number;
+
+  @ApiProperty({ description: "每秒生命回复（点/秒）" })
+  hpRecover: number;
+
+  @ApiProperty({ description: "最大魔法值（只跟等级走，装备不影响）" })
+  maxMp: number;
+
+  @ApiProperty({ description: "物理攻击 [下限, 上限]", type: [Number] })
+  physicalAttack: [number, number];
+
+  @ApiProperty({ description: "魔法攻击 [下限, 上限]", type: [Number] })
+  magicAttack: [number, number];
+
+  @ApiProperty({ description: "道术攻击 [下限, 上限]", type: [Number] })
+  taoistAttack: [number, number];
+
+  @ApiProperty({ description: "物理防御 [下限, 上限]", type: [Number] })
+  physicalDefense: [number, number];
+
+  @ApiProperty({ description: "魔法防御 [下限, 上限]", type: [Number] })
+  magicDefense: [number, number];
+
+  @ApiProperty({ description: "道术防御 [下限, 上限]", type: [Number] })
+  taoistDefense: [number, number];
+
+  @ApiProperty({ description: "战斗力（八项按配置权重加权求和）" })
+  combat: number;
+}
+
+/** 存档里**客户端上报**的那一份（与服务端重算值对照着看） */
+export class RoleReportedAttributesDto {
+  @ApiProperty({ description: "存档里客户端上报的战斗力；没有或不是数字就是 null", type: "number", nullable: true })
+  combat: number | null;
+
+  @ApiProperty({ description: "存档里客户端上报的最大生命值；没有或不是数字就是 null", type: "number", nullable: true })
+  maxHp: number | null;
+}
+
+/**
+ * 派生字段：服务端重算的战斗属性（**不在库里，每次读的时候现算**）
+ *
+ * 为什么要跟客户端上报的那份一起给出：服务端算的不一定「对」——
+ * 玩家在升级与重算之间存档时，客户端那份才是旧的。这里只把两份摆出来，
+ * **判定权交给看的人**，不做自动纠正（详见 combat/role-attribute-comparison 的文件头）。
+ */
+export class RoleDerivedDto {
+  @ApiProperty({
+    description: "服务端按存档输入现算的战斗属性；等级不在成长曲线里时为 null（服务端无处可取旧值，静默给 0 会被读成「算过了、结果就是 0」）",
+    type: RoleDerivedAttributesDto,
+    nullable: true,
+  })
+  attributes: RoleDerivedAttributesDto | null;
+
+  @ApiProperty({ description: "存档里客户端上报的那份（对照用）", type: RoleReportedAttributesDto })
+  reported: RoleReportedAttributesDto;
+
+  @ApiProperty({
+    description:
+      "两份对不上（口径不一致）。不等于作弊 —— 玩家在升级与重算之间存档也会命中；客户端配置漂移、存档留着旧装备 id 同样会命中。它只表示「这里值得看一眼」",
+  })
+  mismatch: boolean;
+
+  @ApiProperty({ description: "这次到底比成了没有（false = 服务端算不出来，此时 mismatch 无意义）" })
+  comparable: boolean;
+
+  @ApiProperty({ description: "查不到属性的装备 id（客户端删了装备 / 存档留着旧 id 时命中，属性会悄悄少一截）", type: [String] })
+  unknownEquipmentIds: string[];
+
+  /**
+   * 从「索引列的等级 + 已解码的存档」算派生字段
+   *
+   * 等级取**索引列**（`roles.level`）而不是存档里的 `data.level`：那一列是服务端维护的、
+   * 管理端改动也会同步过去的权威值；存档里的那份是客户端写的。
+   */
+  static from(level: number, data: Record<string, unknown>): RoleDerivedDto {
+    const comparison = compareRoleAttributes(
+      {
+        level,
+        equipments: asEquipmentMap(data.equipments),
+        soulOfWar: numberOrUndefined(data.soulOfWar),
+        title: numberOrUndefined(data.title),
+        rank: numberOrUndefined(data.rank),
+      },
+      { combat: data.combat, maxHp: data.maxHp },
+    );
+
+    const dto = new RoleDerivedDto();
+    dto.attributes = comparison.server;
+    dto.reported = { combat: comparison.reported.combat, maxHp: comparison.reported.maxHp };
+    dto.mismatch = comparison.mismatch;
+    dto.comparable = comparison.comparable;
+    dto.unknownEquipmentIds = comparison.unknownEquipmentIds;
+    return dto;
+  }
+}
+
+/**
+ * 管理端**详情**里的角色（比列表多一组派生字段）
+ *
+ * 为什么列表不带：列表页不展示战斗力，给它算就是白算；而且列表已经带着完整 `data`，
+ * 再加一份重算是让响应无谓变胖（详见 issue #93）。
+ */
+export class AdminRoleDetailDto extends AdminRoleDto {
+  @ApiProperty({ description: "服务端重算的战斗属性（派生字段：不在库里，每次读现算）", type: RoleDerivedDto })
+  derived: RoleDerivedDto;
+
+  static fromRow(row: RoleWithAccountRow, onlineRoleId: string | null): AdminRoleDetailDto {
+    const dto = new AdminRoleDetailDto();
+    Object.assign(dto, AdminRoleDto.fromRow(row, onlineRoleId));
+    dto.derived = RoleDerivedDto.from(row.level, decodeStoredRoleData(row.data));
+    return dto;
+  }
+}
+
+//#region 派生字段的取值小工具
+
+/** 存档里的装备表（槽位 → 装备 id）；形状不对就当没穿（与汇总函数的容错一致） */
+function asEquipmentMap(value: unknown): Record<string, string | null> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, string | null>;
+}
+
+/** 取一个有限数字；不是数字（undefined / 字符串 / NaN）时返回 undefined（交回汇总函数按「未激活」处理） */
+function numberOrUndefined(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+//#endregion
