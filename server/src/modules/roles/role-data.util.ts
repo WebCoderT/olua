@@ -13,7 +13,13 @@ import { ROLE_OCCUPATION_CODES, ROLE_SEX_CODES } from "../../shared/game-data";
 export const ROLE_OCCUPATIONS: string[] = ROLE_OCCUPATION_CODES;
 export const ROLE_SEXES: string[] = ROLE_SEX_CODES;
 
-/** 角色名长度上限（与客户端创建角色输入框约定一致） */
+/**
+ * 角色名长度上限（**服务端单方面的规则**，没有「另一份要同步」）
+ *
+ * 客户端**不校验长度**（`RoleSelector.createRole` 只 `trim` 后判空，输入框也没设 `maxLength`），
+ * 超限由这里拒绝、客户端显示服务端返回的提示 —— 所以这个数只在这里定义。
+ * 此前注释写的是「与客户端创建角色输入框约定一致」，实测客户端没有这条规则（#122 顺手改掉）。
+ */
 export const ROLE_NAME_MAX_LENGTH = 12;
 /** 角色 id 长度上限（客户端用时间戳字符串，留足冗余） */
 export const ROLE_ID_MAX_LENGTH = 64;
