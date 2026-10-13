@@ -48,7 +48,7 @@ CREATOR ?= CocosCreator
 .PHONY: help info install install-ci env \
         dev dev-server dev-admin \
         check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
-        audit-battle-rules audit-combat-parity \
+        audit-battle-rules audit-combat-parity audit-doc-numbers \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
@@ -298,6 +298,9 @@ audit-battle-rules: ## 战斗规则快照是否与客户端 configs 逐字节一
 
 audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）
 	@$(NODE) tools/audit-combat-parity.cjs
+
+audit-doc-numbers: ## 文档里的接口/路径/模型/e2e 条数是否与实测一致（防「文档自信地写着过期数字」）
+	@$(NODE) tools/audit-doc-numbers.cjs
 
 # ==============================================================================
 #  部署（Docker / docker compose）
