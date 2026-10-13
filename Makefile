@@ -48,7 +48,7 @@ CREATOR ?= CocosCreator
 .PHONY: help info install install-ci env \
         dev dev-server dev-admin \
         check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
-        audit-battle-rules audit-combat-parity audit-doc-numbers \
+        audit-shared-data audit-combat-parity audit-doc-numbers \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
@@ -242,10 +242,10 @@ gen-api: ## 重新生成接口契约（openapi.json + 客户端与管理端生�
 	@$(NODE) tools/audit-api-generated.cjs > /dev/null && echo "  生成物一致性 ✓"
 	@echo "  下一步：管理端 make admin-build，客户端 make client-check（签名不一致会直接编译报错）"
 
-gen-battle-rules: ## 重新生成服务端战斗规则快照（来源 = client/assets/configs）
+gen-shared-data: ## 重新生成公共游戏数据（战斗数值 + 名字，来源 = client/assets/configs）
 	@echo "==> 编译客户端纯配置 + 快照"
-	@$(NODE) tools/gen-battle-rules.cjs
-	@$(NODE) tools/audit-battle-rules.cjs > /dev/null && echo "  生成物一致性 ✓"
+	@$(NODE) tools/gen-shared-data.cjs
+	@$(NODE) tools/audit-shared-data.cjs > /dev/null && echo "  生成物一致性 ✓"
 
 # ==============================================================================
 #  管理端（admin/）
@@ -296,8 +296,8 @@ audit-click: ## 全屏模态是否两条路都拦住了点击穿透
 audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
 	@$(NODE) tools/audit-deploy.cjs
 
-audit-battle-rules: ## 战斗规则快照是否与客户端 configs 逐字节一致（数据漂移）
-	@$(NODE) tools/audit-battle-rules.cjs
+audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一致 + 表齐全非空（数据漂移）
+	@$(NODE) tools/audit-shared-data.cjs
 
 audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）
 	@$(NODE) tools/audit-combat-parity.cjs

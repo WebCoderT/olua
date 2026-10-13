@@ -6,7 +6,7 @@
 
 ## 提交纪律（用户强制）
 - **所有代码提交都必须有对应的 issue / PR，必须有记录**（用户 2026-10-10 定）：master 上不允许存在没有 issue 追踪的提交。流程 = 开 issue → 开分支（`git checkout -b <type>/<n>-<slug>`）→ 提交（正文带 `Closes #n` / `Refs #n`）→ 推分支开 PR → CI 绿 → squash 合并。**任何直接落在 master 上的提交都算违规**（文档 typo 也不例外，走 docs PR）。
-- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 25 单测 / 服务端六套 e2e / 管理端 build / 8 审计；CI 只跑 `make ci`）。
+- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 26 单测 / 服务端七套 e2e / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
 - **中英双语文档**：中文是主体，英文平铺在同目录成 `X.en.md`（README / FAQ 各一份），两份顶部各一行语言互链；索引 issue **#45**，子 issue #39 守卫 / #40 根 / #41 client / #42 admin / #43 server / #44 equip-aligner。译本 = 不改口径（章节数 / 表格行 / ✅❌ 数 / 数字 multiset 全等），术语表见 #45。
 - **一个 PR = 一个 squash = 一个功能**（分支上攒了两件，就拆成两个分支各开 PR，`git rebase --autostash master` 接最新基）。
 - 格式 `feat|fix|refactor|docs|test|chore(端): 一句话`；改接口必须连 `openapi.json` + 两端生成物一起提交。
@@ -32,7 +32,10 @@
 - **一次性产出大量中文（脚本/issue/PR 正文）会混乱码** → 写完先扫非预期英文串，再落盘发布。
 
 ## 三端架构（细节全在 Skill）
-- 唯一来源还多两条线：**战斗规则** `gen-battle-rules.cjs` 把 `client/assets/configs` 快照成 `server/src/modules/combat/battle-rules.generated.ts`（`audit-battle-rules` 逐字节比对，防**数据**漂移）；**角色属性** `server/src/modules/combat/role-attributes.ts` 由 `audit-combat-parity` 锁住一致性（防**算法**漂移 —— 它把真的 `GameHelper.combatCalc` 编译进 Node 当期望值，不是再抄一版口径）。三张等级表的键 = 来源数组下标，客户端等级从 1 起，**差一位**。包裹 `{code,message,data,timestamp}`，0 成功；`silent` 不弹全局提示。
+- **游戏数据只有一份**（用户 2026-10-13 定的硬要求，issue #117 索引 / #118 生成物与守卫 / #119 管理端接入）：权威定义 = 客户端 `client/assets/configs`；`tools/gen-shared-data.cjs` 把它快照成 `server/src/shared/game-data.generated.ts`（**三端唯一的那份**，管理端 import 同一个文件，Vite 直接打包），`tools/audit-shared-data.cjs` 重生成逐字节比对 + 断言 23 张表齐全非空。原来的 `battle-rules.generated.ts` 已并进去并删除（两份快照并存必然各自漂移）。**算法**一侧仍由 `audit-combat-parity` 锁（把真的 `GameHelper.combatCalc` 编译进 Node 当期望值，不是再抄一版口径）。三张等级表的键 = 来源数组下标，客户端等级从 1 起，**差一位**。包裹 `{code,message,data,timestamp}`，0 成功；`silent` 不弹全局提示。
+  - 生成物放 `server/src/shared/` 而不是顶层 `shared/`：服务端 `tsc` 单包编译（`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，连带 7 套 e2e、Dockerfile、deploy 一起改。
+  - 不在范围：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes` 整份被注释，没有活的来源）。
+  - **文档约定**：`N 张表` 这个句式归 SQLite 表数（守卫在查）；说生成物里的数据集写 **`N 张数据表`**，否则守卫误判。
 - 权限两层守卫；**加管理端接口必须 `@ApiAdminDoc({permissions})`**（漏 = 真放行）；业务代码禁写角色判断。
 - 接口文件必须 `make gen-api` 生成（新模块登记 `MODULES`）；**别记死数字**：生成物 / 权限点 / 表数随时从 `openapi.json` 实测。
 - CI 不覆盖客户端（要编辑器产物）；10 套单测断言真实素材 → 客户端门禁是本地专属。
@@ -44,9 +47,11 @@
 - `ValidationPipe({whitelist:true})` 剥嵌套裸对象属性 → DTO 类 + `@ValidateNested` + `@Type` + 登记 `SWAGGER_MODELS`。
 
 ## 服务端战斗权威化（#25：server-authoritative / 先单进程 / 暂不同步他人）
-- 单一来源链路：`gen-battle-rules.cjs` 编译 `client/assets/configs` → `server/src/modules/combat/battle-rules.generated.ts`；`audit-battle-rules.cjs` 重生成后逐字节比对。已纳入：等级 60 / 权重 7 / 战魂 37 / 称号 34 / 军衔 100 / **装备 555 件**（37 件基础件，不是 7807）。
+- 单一来源链路（#118 后统一为一条）：`gen-shared-data.cjs` 编译 `client/assets/configs` → `server/src/shared/game-data.generated.ts`；`audit-shared-data.cjs` 重生成后逐字节比对。已纳入：等级 60 / 权重 7 / 战魂 37 / 称号 34 / 军衔 100 / **装备 555 件**（37 件基础件，不是 7807）/ 技能 12。
+  - 合并前实测过：新生成物的 9 个战斗导出与旧 `battle-rules.generated.ts` **逐值相同**（`COMBAT_RANGE_KEYS`/`COMBAT_SINGLE_KEYS`/五张等级表/`EQUIPMENT_ATTRIBUTES`/`SKILLS`），所以删旧文件不影响 `audit-combat-parity`（2849 组输入 × 10 项比对仍全绿）。
 - 装备取舍 = **全量快照**：不让服务端现算 `round(基础值×前后缀倍率)`（那等于把进位口径复制出去）；`role.equipments` 存的本来就是展开后的物品 id。
-- 未进链路：**技能**（数值与实现耦合，`skill.ts` import 了运行时实现）、**怪物**（与服务端持有刷怪实例是同一件事）。
+- 显示名与槽位归属也在生成器里算好（复用客户端 `getEquipmentNameParts` 与条目的 `slot`），消费方不做拼接。
+- 未进链路：**怪物**（与服务端持有刷怪实例是同一件事）。**技能已进**（#31 解耦出 `configs/skill-data.ts` 之后）。
 
 ## 线上部署（腾讯云 Ubuntu 24.04 + Docker CE；技能 `olua-deploy`）
 - **IP / SSH 私钥 / 邀请码 / JWT 密钥一律不进记忆、不进版本库**（用户 2026-10-11 定）：只放根目录 `deploy.env`（gitignore），仓库只提交模板 `deploy.env.example`。服务器上 `server/.env` 由它渲染（也被 `server/.gitignore` 排除）。
@@ -59,3 +64,4 @@
 
 ## 待办 → 全部登记为 GitHub issue（见 `#8~#24`）
 玩法缺口 = #11~#19；服务端 = #20 邮箱字段 / #21 审计与队列清理 / #22 自动备份；工程 = #8 官网上线 / #9 包体积 / #10 在线 demo / #23 `.DS_Store` / #24 CI 是否覆盖客户端。**用户已定保持现状**：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
+后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入**；服务端战斗权威 #25 / #34 伤害上移 / #35~#37 世界权威。

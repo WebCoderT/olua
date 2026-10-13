@@ -216,12 +216,12 @@ olua/
 ### tools —— 项目级脚本（跨端）
 
 - gen-api.cjs：**由 `server/openapi.json` 产出两端接口文件**（唯一的代码生成器，服务端 `npm run gen:api` 调它）
-- gen-battle-rules.cjs：**由 `client/assets/configs` 产出服务端战斗规则快照**（战斗权威化的地基，详见 `server/src/modules/combat/`）—— 等级 60 / 战魂 37 / 称号 34 / 军衔 100 + 战斗力权重 7 项 + 装备 555 件（已展开前后缀变体）+ 技能 12 个（含各等级的伤害系数）
+- gen-shared-data.cjs：**由 `client/assets/configs` 产出三端共用的公共游戏数据**（`server/src/shared/game-data.generated.ts`，管理端 import 的是**同一个文件**）—— 战斗数值（等级 60 / 战魂 37 / 称号 34 / 军衔 100 + 战斗力权重 7 项 + 装备 555 件已展开前后缀变体 + 技能 12 个含各等级伤害系数）**加上**名字与元数据（职业 3 / 物品 566 / 槽位 13 / 装备显示名 555 / 技能名 12 / 地图名 11 / 战魂与称号与军衔各级名）。想改数值或文案就改客户端配置，然后重新生成 —— 三端**没有**第二份副本
 - audit-api-generated.cjs：生成物与文档逐字节一致 / 头标记 / 接口全覆盖 / 类型不悬空 / 路径只在路径表 / Cocos `.meta` 齐全
 - audit-api-hardcode.cjs：三端有没有硬编码地址、请求是否只在唯一出口发出、环境变量键是否都登记进 `.env.example`
 - audit-config-leak.cjs：客户端核心代码有没有可配置项外泄 + `configs/texts` 的 key 是否都被登记（白名单 `config-leak-allowlist.json`）
 - audit-ui-click-through.cjs：客户端 UI 点击会不会穿透到世界、按压归属的接线是否齐全
-- audit-battle-rules.cjs：战斗规则快照与客户端 `configs` 是否逐字节一致（**数据**漂移不会报错，只会让两端慢慢算得不一样）
+- audit-shared-data.cjs：公共游戏数据与客户端 `configs` 是否逐字节一致，外加「每张表都在且非空」（**数据**漂移不会报错，只会让两端慢慢算得不一样）
 - audit-combat-parity.cjs：服务端算的角色属性是否与客户端 `combatCalc` 一致（**算法**漂移）。期望值不是抄一份口径，而是把真的 `GameHelper.combatCalc` 编译进 Node 跑一遍 —— 2849 组输入 × 10 项，覆盖全等级 / 全装备 / 全战魂称号军衔
 - audit-deploy.cjs：Docker / compose / nginx 的跨文件接线是否对得上
 - audit-docs-en.cjs：英文文档译本是否与中文版走散（覆盖 / 残留中文 / 章节等价 / 数字不丢 / 锚点与链接可达 / 互链）

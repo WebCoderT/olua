@@ -143,16 +143,17 @@ cd admin && npm run build
 
 # 项目级审计（在仓库根跑）
 node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
-  && node tools/audit-battle-rules.cjs && node tools/audit-combat-parity.cjs \
+  && node tools/audit-shared-data.cjs && node tools/audit-combat-parity.cjs \
   && node tools/audit-config-leak.cjs && node tools/audit-docs-en.cjs \
-  && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs
+  && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs \
+  && node tools/audit-doc-numbers.cjs
 ```
 
 按改动范围可以只跑相关的那几套，但**服务端 e2e 与九个审计脚本在提交前都该过一遍** —— 它们盯着的是「静默失效」这类单测抓不到的问题：
 
 - `audit-api-generated`：生成物与文档是否逐字节一致（防「改了服务端忘了生成」）
 - `audit-api-hardcode`：地址有没有写进代码、环境变量有没有漏登记进 `.env.example`
-- `audit-battle-rules`：服务端战斗规则快照与客户端配置表是否逐字节一致（防数据漂移）
+- `audit-shared-data`：三端共用的公共游戏数据与客户端配置表是否逐字节一致，外加每张数据表都在且非空（防数据漂移、防「生成器静默少产一张数据表」）
 - `audit-combat-parity`：服务端角色属性算法与客户端真身是否一致（把真的 `GameHelper.combatCalc` 编进 Node 当期望值，防算法漂移）
 - `audit-config-leak`：可调项有没有散落进核心代码、文案 key 有没有漏登记
 - `audit-docs-en`：中英文档的章节与数字有没有在翻译里走漏

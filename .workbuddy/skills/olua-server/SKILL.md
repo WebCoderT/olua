@@ -14,8 +14,9 @@ agent_created: true
 3. **产出接口契约** —— Swagger 文档 → 客户端与管理端的接口文件**全部由它生成**；
 4. **实时通道** —— 一条 WebSocket 长连接（目前只做「建连 + 心跳」，业务消息见 #34）。
 
-**最重要的一条心智模型**：服务端**不认识客户端配置**。装备槽位名、技能 id、地图 id、成长曲线……权威定义都在客户端 `client/assets/configs`。
-服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，从不复制一份游戏配置过来。
+**最重要的一条心智模型**：游戏数据（装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图）的权威定义**只有一处** —— 客户端 `client/assets/configs`。
+服务端**不复制**它，而是引用它的引擎无关快照 `src/shared/game-data.generated.ts`（`node tools/gen-shared-data.cjs` 生成，`make audit-shared-data` 逐字节守着重生成必然一致）；管理端 import 的是**同一个文件**。
+三端**没有第二份副本**，谁都不许自己维护一份。服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，从不复制一份游戏配置过来。
 
 ## 一、目录与职责
 
@@ -52,6 +53,9 @@ server/src
     audit/   操作日志查询（只读两接口；interceptor 与 service 同模块）
     system/  系统信息（运行时 / 各表行数 / 脱敏配置快照；快照走白名单，密钥只报形态）
     token/   JWT        health/  健康检查
+  shared/
+    game-data.generated.ts        公共游戏数据快照（**三端唯一的游戏数据来源**；@generated，
+                                  重生成 = node tools/gen-shared-data.cjs，守卫 = tools/audit-shared-data.cjs）
   swagger/
     models.ts   SWAGGER_MODELS（要出现在文档里的 DTO 必须登记）
     setup.ts    buildSwaggerDocument() + setupSwagger(app)（main 与自动化测试**共用同一份**）
@@ -113,6 +117,27 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。
 
 ## 四、数据层规矩
+
+**4.0 游戏数据三端共用一份**（用户 2026-10-13 定的硬要求，见 issue #117~#119）
+
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的权威定义**只有一处**：客户端 `client/assets/configs`。
+服务端**不复制**，引用它的引擎无关快照 `src/shared/game-data.generated.ts`；管理端 import 的是**同一个文件**
+（Vite 按相对路径打包）—— **三端没有第二份副本**。
+
+- **生成** `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）：编客户端纯配置 → 在 Node 里加载 → 快照。
+  改数值 / 改文案都改客户端配置，然后重新生成。产物 ~255 KB / 3401 行 / 23 张数据表。
+- **守卫** `tools/audit-shared-data.cjs`（= `make audit-shared-data`）：重生成后**逐字节**比对，并断言数据表
+  **每张都在且非空** —— 逐字节比对发现不了「生成器自己少产一张数据表」（同一份代码必然一致，而消费方拿到
+  `undefined`：管理端页面空白、服务端查表得 0）。算法一侧另有人守：`audit-combat-parity.cjs` 把**真的**
+  `GameHelper.combatCalc` 编译进 Node 当期望值。
+- **消费**：`modules/combat/role-attributes.ts` 只查表加总，**不做任何自行推算**；管理端拿它把裸 id 变成名字
+  （此前它自己抄了一份职业名与性别名 —— 那正是这条线要消灭的）。装备的**显示名与所属槽位在生成器里算好**
+  （复用客户端的 `getEquipmentNameParts` 与条目自带的 `slot`），消费方不做拼接。
+- **不在范围**：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes`
+  整份被注释，没有活的来源 —— 不凭空造一份）。
+- 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译
+  （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
+  连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
 - **六张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue`。删账号**级联删其角色**。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
@@ -176,7 +201,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - 内存库（`:memory:`）**必须关着**自动备份 —— 没有文件可备份，开着只会每 tick 失败一次。
 
 **9. 派生属性出口：服务端重算，客户端只是上报**
-- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），与客户端 `GameHelper.combatCalc` 的一致性由 `tools/audit-combat-parity.cjs` 锁住（它把真的客户端算法编译进 Node 当期望值，不是再抄一版口径）；
+- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），查的五张数据表来自 4.0 那份公共生成物（等级 / 战魂 / 称号 / 军衔 / 装备属性），与客户端 `GameHelper.combatCalc` 的一致性由 `tools/audit-combat-parity.cjs` 锁住（它把真的客户端算法编译进 Node 当期望值，不是再抄一版口径）；
 - 玩家上报存档时（`PUT /roles/:id`）服务端会**比对**上报的派生值与自算值 —— 这条是 #34「伤害结算上移」的地基。
 
 ## 六、必踩的坑
@@ -213,6 +238,8 @@ env -u NODE_OPTIONS npm run test:e2e:guard   # 只跑口令 / 审计 / 限流 / 
 env -u NODE_OPTIONS npm run test:e2e:realtime # 只跑实时通道专项（改握手 / 票据 / 心跳时先跑它）
 env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.json + 两端接口文件
 ```
+> 改过客户端 `configs` 之后：`node tools/gen-shared-data.cjs` 重新生成公共数据（`make gen-shared-data`），
+> 忘了生成会被 `make audit-shared-data` 逮住。
 
 **e2e 的写法**（`test/e2e.cjs`、`test/e2e-roles.cjs`、`test/e2e-guard.cjs`）：真实起服务进程 + 真实 HTTP 请求 + **自带内存库**；
 它们会调 `setupSwagger(app)` 生成**真文档**，用来验「分组 / 权限标注 / 悬空 `$ref`」。
