@@ -229,7 +229,7 @@ olua/
 
 ### Others
 
-- website: project website (static single page: key features / screenshot gallery / contact info, logo and favicon in website/assets/icons)
+- website: project website (static single page: key features / screenshot gallery / three-tier architecture / engineering / contact info, logo and favicon in website/assets/icons)
 - public: screenshots, showcase assets and the contact QR code
 - docs: project docs (`resume.md` etc.)
 - equip-aligner: small tool for aligning equipment asset offsets (ships with its own README and self-check script)
