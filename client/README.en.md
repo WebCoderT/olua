@@ -92,7 +92,7 @@ All of them are **local verification scripts** that take no part in bundling; ru
 > `make client-gen-monster` / `make client-gen-drops` ·
 > `make client-clean-frames[-apply]` · `make client-open`. `make help` lists everything.
 
-### Unit tests (25 suites)
+### Unit tests (26 suites)
 
 The scripts locate Cocos Creator's bundled `tsc` themselves (`TSC=/path/to/tsc node …` overrides it manually).
 
@@ -108,7 +108,7 @@ node tools/test-bag-tidy.cjs                                 # run one suite
 | Equipment and items | `test-equipment-appearance` (appearance slicing) · `test-equipment-border` (quality border) · `test-equipment-detail-background` (detail background) · `test-equipment-light` (drop light pillar) · `test-good-detail-placement` (detail dialog placement) · `test-drop-name` (drop names) |
 | Growth | `test-rank` (rank) · `test-title` (title) · `test-hp-recover` (health per second) · `test-role-default-cloth` (default body) |
 | Interface and input | `test-dialog-top` (dialog raise to top) · `test-joystick` (movement joystick) · `test-scene-stage` (login / character selection full-screen fit) · `test-announcement` (announcement display: sorting / unread / time window / login notice / read records) |
-| Config and assets | `test-monster-config` (monster config and geometry) · `test-role-frames` (character frame assets) · `test-texts` (text templates) |
+| Config and assets | `test-monster-config` (monster config and geometry) · `test-role-frames` (character frame assets) · `test-texts` (text templates) · `test-skill-decouple` (skill data decoupled from implementations: field-by-field values for all 12 skills / zero engine dependency in the data module / id→implementation identity) |
 | Networking and saves | `test-client-net` (network layer: envelope unwrap / token / silent / debounced sync) · `test-role-delete` (deleting a character and "kicked offline") · `test-mall` (mall purchase chain) |
 
 ### Config generators (output is never hand-edited)

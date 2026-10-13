@@ -138,5 +138,12 @@ export interface SkillConfig {
   effectIsOnSelf?: boolean;
 }
 
+/**
+ * 技能数值数据（= SkillConfig 去掉 onClick）
+ * configs/skill-data.ts 的技能表用它：纯数值 + 文案、零引擎依赖，可被 Node 沙箱直接 require 跑断言；
+ * 释放实现不进来 —— 由 configs/skill.ts 的 skillHandlers 按 id 接回（见 SkillConfig.onClick）
+ */
+export type SkillData = Omit<SkillConfig, "onClick">;
+
 /** 技能ID */
 export type SkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "1006" | "1007" | "1008" | "1009" | "1010" | "1011";
