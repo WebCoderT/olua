@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { formatTime, OCCUPATION_LABELS, PERMISSION, ROLE_BAG_AXIS_MAX, rolesApi, SEX_LABELS } from "../api";
-import type { AdminRole, RoleBagCell, RolePatchPayload } from "../api";
+import type { AdminRole, AdminRoleDetail, RoleBagCell, RolePatchPayload } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { RoleAttributesCard } from "../components/RoleAttributesCard";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -263,7 +264,7 @@ export function RoleDetailPage() {
   const canDelete = hasPermission(PERMISSION.ROLE_DELETE);
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const [role, setRole] = useState<AdminRole | null>(null);
+  const [role, setRole] = useState<AdminRoleDetail | null>(null);
   const [form, setForm] = useState<RoleForm | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -444,6 +445,8 @@ export function RoleDetailPage() {
           ))}
         </div>
       </Card>
+
+      <RoleAttributesCard derived={role.derived} />
 
       <Card
         title="运行时数据"

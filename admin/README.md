@@ -71,7 +71,7 @@ admin/
 │   │   ├── types.ts                手写：业务码 / 权限点 / 动作与目标的中文字典 / 时间工具
 │   │   └── index.ts                统一出口（页面只从这里 import）
 │   ├── pages/                      页面（见下表）
-│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / sortable / charts / ToastHost / ui
+│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
 │   └── store/
 │       ├── session.ts              令牌与管理员的读写（含订阅机制 + hasPermission）
 │       └── toast.ts                全局提示（成功 / 失败）
@@ -88,7 +88,7 @@ admin/
 | 账号管理 | `/accounts` | `account:read` | 分页检索（账号名模糊 + 状态）、封禁 / 解封、删除账号 |
 | 账号详情 | `/accounts/:id` | `account:read` | 看名下角色、**重置玩家口令**、**踢下线**、清空该账号全部角色 |
 | 角色管理 | `/roles` | `role:read` | 六维筛选（关键字 / 在线状态 / 职业 / 性别 / 等级区间 / 账号）、多选批量删除 |
-| 角色详情 | `/roles/:id` | `role:read` | 改基础信息与常用数值；**装备 / 技能 / 背包结构化编辑**（清单以客户端配置为唯一真相） |
+| 角色详情 | `/roles/:id` | `role:read` | 改基础信息与常用数值；**装备 / 技能 / 背包结构化编辑**（清单以客户端配置为唯一真相）；**战斗属性对照卡片**——服务端按存档现算的那份与客户端上报的那份并排摆着，不一致的行标出来（只让它可见，不判定谁对） |
 | 管理员 | `/admins` | `admin:read` | 看管理员列表；改角色 / 启停 / **重置密码** / 删除（写操作另需 `admin:manage`） |
 | 公告 | `/announcements` | `announcement:read` | 发布 / 编辑 / 删除公告、启停、按关键字 / 级别 / 启停 / 生效状态筛选；**「生效中」用服务端返回的 `active` 列**（判据与玩家侧拉取接口同源，不靠本地时钟）（写操作另需 `announcement:write`） |
 | 邮件 | `/mails` | `mail:read` | **发信**（选模板 → 填变量 → 入队）+ **投递记录**（状态 / 关键字筛选 + 分页 + 排序）。投递是**异步**的，所以有「待发送 / 重试中」中间态并自动刷新；只看得到已尝试次数与失败原因（写操作另需 `mail:write`） |
