@@ -416,7 +416,12 @@ async function expectFailure(action) {
   );
 
   const networkSource = read(FILE.network);
-  check(/baseUrl:\s*"http/.test(networkSource), "configs/network 是客户端唯一地址来源（自查 tools/audit-api-hardcode.cjs）");
+  // #60 起 baseUrl 改按运行环境解析（resolveBaseUrl：本地 DEV_BASE_URL / Web 同源 /api），
+  // 铁律不变：地址字面量只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
+  check(
+    /baseUrl:\s*resolveBaseUrl\(\)/.test(networkSource) && /DEV_BASE_URL = "http:\/\/localhost:3100\/api"/.test(networkSource) && /SAME_ORIGIN_BASE_URL = "\/api"/.test(networkSource),
+    "configs/network 是客户端唯一地址来源（baseUrl = resolveBaseUrl()，本地 / Web 两个地址常量都在本文件内）",
+  );
 
   //#endregion
 
