@@ -5,7 +5,7 @@
  * ===========================================================================
  * 为什么必须有这个
  * ===========================================================================
- * `audit-battle-rules.cjs` 只守住了「**数据**没漂移」，守不住「**算法**写得对不对」：
+ * `audit-shared-data.cjs` 只守住了「**数据**没漂移」，守不住「**算法**写得对不对」：
  * 表一模一样，也可能有人在服务端把 `maxHp` 忘了加装备、把战斗力的区间属性取了平均、
  * 或者把战魂的等级当成下标 —— 这些都会让两端静默地算出不同结果。
  *
@@ -161,7 +161,7 @@ function loadServer(work) {
   runTsc(tsconfig, "服务端 role-attributes");
 
   const combat = require(path.join(outdir, "modules", "combat", "role-attributes.js"));
-  const generated = require(path.join(outdir, "modules", "combat", "battle-rules.generated.js"));
+  const generated = require(path.join(outdir, "shared", "game-data.generated.js"));
   return {
     summarizeRoleAttributes: combat.summarizeRoleAttributes,
     summarizeRoleAttributesWithNotes: combat.summarizeRoleAttributesWithNotes,

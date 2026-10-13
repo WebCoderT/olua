@@ -143,16 +143,17 @@ cd admin && npm run build
 
 # Project-level audits (run from the repository root)
 node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
-  && node tools/audit-battle-rules.cjs && node tools/audit-combat-parity.cjs \
+  && node tools/audit-shared-data.cjs && node tools/audit-combat-parity.cjs \
   && node tools/audit-config-leak.cjs && node tools/audit-docs-en.cjs \
-  && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs
+  && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs \
+  && node tools/audit-doc-numbers.cjs
 ```
 
 You may run only the suites relevant to your change, but **the server e2e suites and the nine audit scripts should all pass before every commit** — they watch for "silent failure" problems that unit tests cannot catch:
 
 - `audit-api-generated`: are generated artifacts byte-for-byte identical to the documentation (guards against "changed the server, forgot to regenerate")
 - `audit-api-hardcode`: were addresses written into code, or environment variables forgotten in `.env.example`
-- `audit-battle-rules`: is the server's combat-rules snapshot byte-for-byte identical to the client's config tables (guards against data drift)
+- `audit-shared-data`: is the game data shared by all three sides byte-for-byte identical to the client's config tables, and is every table present and non-empty (guards against data drift and against a generator silently dropping a table)
 - `audit-combat-parity`: does the server's role-attribute algorithm match the client's real one (it compiles the real `GameHelper.combatCalc` into Node as the expected value, guarding against algorithm drift)
 - `audit-config-leak`: have tunables leaked into core code, or text keys been left unregistered
 - `audit-docs-en`: did sections or numbers get lost in translation between the Chinese and English docs

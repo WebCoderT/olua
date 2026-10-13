@@ -199,7 +199,7 @@ function load(work) {
 /** 抽成一个与引擎、与 TS 类型都无关的纯数据快照 */
 function buildSnapshot(cfg) {
   return {
-    // —— 战斗数值（服务端算属性用；口径与 gen-api 时代的 battle-rules 快照一致）——
+    // —— 战斗数值（服务端算属性用；与它之前那份独立的 battle-rules 快照**逐值相同**，已合并）——
     roleLevels: pickMap(cfg.level.levelMap, (value) => {
       const out = pickAttributes(value);
       out.maxMp = round(value.maxMp ?? 0);

@@ -21,6 +21,10 @@
  * 五张表全部取自那份 `@generated` 生成物（单一来源仍是 `client/assets/configs`）。
  * 这里只做查表与相加 —— **不做任何自行推算**。把算法照抄一份到服务端，
  * 正是这条线要消灭的事。
+ *
+ * 生成物住在 `src/shared/`，与它同住的还有名字与元数据（职业 / 物品 / 槽位 / 地图…），
+ * 管理端 import 的是**同一个文件**。此前算属性用的那份 `battle-rules.generated.ts` 已经
+ * 并进它 —— 两份快照并存必然各自漂移，而它们的数据本来就是同一批。
  */
 
 import {
@@ -31,7 +35,7 @@ import {
   ROLE_LEVEL_ATTRIBUTES,
   SOUL_LEVEL_ATTRIBUTES,
   TITLE_LEVEL_ATTRIBUTES,
-} from "./battle-rules.generated";
+} from "../../shared/game-data.generated";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */
 export interface RoleAttributeSource {
