@@ -38,8 +38,10 @@
 
 ## 连哪个服务端
 
-**唯一来源是 `assets/configs/network.ts` 的 `baseUrl`**（默认 `http://localhost:3100/api`）。
-真机调试改成局域网 IP。代码里没有第二处地址字面量 —— 由 `node ../tools/audit-api-hardcode.cjs` 盯着。
+**唯一来源是 `assets/configs/network.ts` 的 `baseUrl`**，它按运行环境解析（见 `resolveBaseUrl`）：
+回环地址与私有网段 / 本地域名走 `http://localhost:3100/api`（以局域网 IP 打开的 Cocos 预览也落在这条），
+公网域名才走同源 `/api`。**真机调试是例外**：手机上的 `localhost` 是手机自己，要把 `DEV_BASE_URL`
+的 host 换成电脑的局域网 IP。代码里没有第二处地址字面量 —— 由 `node ../tools/audit-api-hardcode.cjs` 盯着。
 
 ## 三条铁律
 

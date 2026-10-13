@@ -15,8 +15,31 @@ const DEV_BASE_URL = "http://localhost:3100/api";
 /** 线上同源地址：Web 部署后由 nginx 把 /api 反代到服务端容器（服务端 3100 不对宿主机暴露） */
 const SAME_ORIGIN_BASE_URL = "/api";
 
-/** 页面从这些 host 打开时认定为本地调试（"" 是 file:// 打开预览的情况） */
-const LOCAL_HOSTS = ["localhost", "127.0.0.1", ""];
+/** 回环地址与 file://（拿不到 host）一定是本地调试 */
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1", "[::1]", ""];
+
+/**
+ * 私有网段与本地域名：也算本地调试。
+ *
+ * Cocos 预览经常不是从 localhost 打开的 —— 编辑器要出扫码调试的二维码，预览地址就得用
+ * 能出网的那张网卡的地址（`192.168.x.x` / `10.x.x.x` / `xxx.local`）。这些地址不是
+ * 「线上部署」，接口仍然该打本机服务端。
+ *
+ * 判据用**地址性质**而不是列白名单：本地调试的形态列不完，而线上部署只会落在公网域名 /
+ * 公网 IP 上，反着认更稳（白名单漏一种，就是一次「明明在本地却连不上」）。
+ */
+const PRIVATE_HOST_PATTERNS = [
+  /^10\./, // 10.0.0.0/8
+  /^192\.168\./, // 192.168.0.0/16
+  /^172\.(1[6-9]|2\d|3[01])\./, // 172.16.0.0/12（只有 16~31 是私有段）
+  /^169\.254\./, // 链路本地（没拿到 DHCP 地址时）
+  /\.local$/i, // mDNS 名
+  /\.lan$/i,
+];
+
+function isLocalDebugHost(host: string): boolean {
+  return LOCAL_HOSTS.indexOf(host) >= 0 || PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(host));
+}
 
 /**
  * 解析接口根地址。
@@ -28,7 +51,7 @@ function resolveBaseUrl(): string {
     return DEV_BASE_URL;
   }
   const host = scope.location.hostname || "";
-  return LOCAL_HOSTS.indexOf(host) >= 0 ? DEV_BASE_URL : SAME_ORIGIN_BASE_URL;
+  return isLocalDebugHost(host) ? DEV_BASE_URL : SAME_ORIGIN_BASE_URL;
 }
 
 export const networkConfig = {

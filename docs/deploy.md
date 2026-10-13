@@ -240,7 +240,8 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-des
 ### 9.4 三个容易踩的点
 
 - **接口地址不用为不同环境改**：`client/assets/configs/network.ts` 会按 `location.hostname` 判断，
-  本地（localhost/127.0.0.1）走 `http://localhost:3100/api`，线上走同源 `/api`。**一份产物两处通用**。
+  回环地址与私有网段 / 本地域名（含以局域网 IP 打开的 Cocos 预览）走 `http://localhost:3100/api`，
+  公网域名才走同源 `/api`。**一份产物两处通用**。
 - **缺资源必须报 404**：`deploy/nginx-game.conf` **故意不写** SPA 那种 `try_files $uri /index.html`，
   否则缺图时会回一段 HTML 给资源加载器，错误极难定位。
 - **缓存策略**：构建没开 `md5Cache`，文件名不带内容哈希 → 资源只能短期缓存（`assets/` 设 1 小时）；
