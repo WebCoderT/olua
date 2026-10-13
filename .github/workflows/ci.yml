@@ -8,7 +8,7 @@
 #   ✓ 客户端类型检查（client-check）：**已进 CI**。Cocos 类型声明 vendoring 进
 #     client/types/engine/（相对路径 + 真实引擎 cc.d.ts），CI 无需 Cocos 编辑器，
 #     由 install-ci 装好的 client/node_modules/.bin/tsc 跑（见 #24 路径 B）。
-#   ✗ 客户端单测（client-test）：**仍不在 CI 覆盖范围内**——25 套里有 10 套断言
+#   ✗ 客户端单测（client-test）：**仍不在 CI 覆盖范围内**——26 套里有 10 套断言
 #     assets/resources/ 下的真实素材（图集/帧序列/怪物帧 .meta），素材体积大、有意不入库
 #     （见 .gitignore）。干净 clone 上这些断言不可能成立。客户端单测是「本地专属」：
 #     本机用 Cocos Creator 打开 client/ 后跑 `make test`。
