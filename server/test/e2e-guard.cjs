@@ -47,6 +47,26 @@ const DEFAULT_JWT_SECRET = (() => {
 
 //#region 断言小工具
 
+/**
+ * 期望的断言条数（全绿时必须恰好这么多）
+ *
+ * 为什么要有这个数：`README.md` 与 `docs/resume.md` 里都写着「服务端 N 条 e2e」，
+ * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
+ * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
+ *
+ * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
+ */
+const EXPECTED_ASSERTIONS = 283;
+
+/** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
+function assertExpectedCount(passedCount, failureCount) {
+  if (failureCount !== 0) return;
+  if (passedCount === EXPECTED_ASSERTIONS) return;
+  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  process.exit(1);
+}
+
 let passed = 0;
 let failed = 0;
 const failures = [];
@@ -1181,6 +1201,7 @@ async function main() {
     main2.kill();
   }
 
+  assertExpectedCount(passed, failed);
   console.log(
     `\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表 / 导出 / 系统信息：${passed} 条通过 / ${failed} 条失败`,
   );
