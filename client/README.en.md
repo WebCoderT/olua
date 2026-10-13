@@ -51,10 +51,12 @@ There is no second address literal anywhere in the code — `node ../tools/audit
    - All text goes through `configs/texts` (templates use `{placeholder}`, read them with `getText(key, params)`), and no Chinese is written into code
    - Layout goes through `configs/layout/*`, whose barrel entry is `configs/hudLayout`
    - `configs/` and `types/` **do not depend on the UI layer** (configs describe data only; callbacks and branches stay in components)
+   - The tables **shared by all three sides** (levels / battle / War Soul / Title / Rank / equipment / skills / items / maps, plus the enum comments in `types/role.ts`) must be regenerated after an edit: `node ../tools/gen-shared-data.cjs` — that is what the server and the admin read, and forgetting to regenerate is caught by `make audit-shared-data`
 2. **The API files are generated, never hand-edited**
    `assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts` are generated from the server Swagger document (see [../FAQ.en.md](../FAQ.en.md#why-are-the-api-files-paths--types--methods-generated-what-do-i-touch-to-add-an-endpoint)).
    To add an endpoint → change the server → `cd server && npm run gen:api` → fix call sites by following the compile errors.
 3. **The single home for a tunable value is `configs`**; keeping a second copy anywhere else drifts sooner or later. Segment 1 of `audit-config-leak` exists specifically to catch that.
+   Turned around: the tables in `configs` that all three sides share **are** the game's single data source (the server and the admin read the artifact generated from them, `server/src/shared/game-data.generated.ts`) — change them here, then regenerate once.
 
 ## Directory structure
 

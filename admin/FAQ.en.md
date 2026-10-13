@@ -17,6 +17,8 @@
 - [Why is "My Account" in the top-right corner instead of the left nav?](#why-is-my-account-in-the-top-right-corner-instead-of-the-left-nav)
 - [What does kicking a player offline actually do? Why must the character be selected again?](#what-does-kicking-a-player-offline-actually-do-why-must-the-character-be-selected-again)
 - [Why are there two sets of combat attributes on the detail page? Does a mismatch mean cheating?](#why-are-there-two-sets-of-combat-attributes-on-the-detail-page-does-a-mismatch-mean-cheating)
+- [Can the admin keep its own table of equipment / class names?](#can-the-admin-keep-its-own-table-of-equipment--class-names)
+- [Where do I change an equipment or title name?](#where-do-i-change-an-equipment-or-title-name)
 - [Can the API files be edited by hand? What has to change to add an admin endpoint?](#can-the-api-files-be-edited-by-hand-what-has-to-change-to-add-an-admin-endpoint)
 - [Where do the permission count and timestamps in the top bar come from?](#where-do-the-permission-count-and-timestamps-in-the-top-bar-come-from)
 - [What usually causes a build failure or a type error?](#what-usually-causes-a-build-failure-or-a-type-error)
@@ -89,6 +91,20 @@ The two entries are deliberately separate because **the verification and the con
 - **What the player sees**: a floating tip "your character has been taken offline by an administrator" → **only the local online flag is cleared, the character is not deleted** → back to the character selection scene. Selecting the character once more (`POST /roles/:id/select` rewrites the online flag) resumes play
 - ⚠️ 20007 (kicked offline) and 20002 (character deleted) have completely opposite consequences and the client handles them separately: only 20002 deletes the local cache. A dedicated guard covers this (`client/tools/test-client-net.cjs` asserts that `deleteRole` must not appear in this handler)
 - Full mechanism write-up (why the check sits before the optimistic lock, what the side effects are): [../server/FAQ.md](../server/FAQ.en.md) (see "what does kicking a player offline actually do, why must the character be selected again"); the interaction timeline is in [../FAQ.en.md](../FAQ.en.md#an-admin-edits-a-character--when-does-the-player-see-it)
+
+## Game data
+
+### Can the admin keep its own table of equipment / class names?
+
+**No, and the guard will stop you.** The names for equipment / War Soul / Title / Rank / skills / items / maps have one authoritative definition: the client's `client/assets/configs` (plus the enum comments in `client/assets/types/role.ts` — the "all classes" occupation code and the three gender names live only there). `src/api/gameData.ts` imports the artifact generated from them, `server/src/shared/game-data.generated.ts` — **the same file the server reads**.
+
+Writing another dictionary in `admin/src` that shares a name with the artifact (say `SEX_LABELS = { … }`) makes `make audit-shared-data` fail with the file and line. `types.ts` used to hold a hand-copied class and gender table — the client could change and the admin would never know; that copy is gone.
+
+### Where do I change an equipment or title name?
+
+Edit the client config → run `node tools/gen-shared-data.cjs` from the repository root (= `make gen-shared-data`) → rebuild the admin.
+
+Forgetting to regenerate will not slip through: `make audit-shared-data` reports "artifact is stale". The guard does not ask a human whether an update is needed — the source of truth is the client, and there is no other correct answer here.
 
 ## API layer
 

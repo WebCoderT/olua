@@ -10,6 +10,12 @@ import { defineConfig } from "vite";
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // 开发服务器要允许读**项目外**的文件：游戏数据引用的是 `../server/src/shared/game-data.generated.ts`
+  // （三端共用的那一份，见 src/api/gameData.ts），不放行的话 dev 模式会 403。
+  // 构建（rollup）不受这条限制，它只影响 `npm run dev`。
+  server: {
+    fs: { allow: [".."] },
+  },
   build: {
     outDir: "dist",
     sourcemap: false,

@@ -219,8 +219,10 @@ export function adminRoleLabel(role: string): string {
 
 //#region 展示用的字典
 
-export const OCCUPATION_LABELS: Record<string, string> = { "1": "战士", "2": "魔法师", "3": "道士", "4": "全职业" };
-export const SEX_LABELS: Record<string, string> = { "1": "男", "2": "女", "3": "全性别" };
+// 职业名 / 性别名**不在这里** —— 它们的权威定义在客户端（`configs/role.occupations`
+// 与 `types/role.ts` 的枚举注释），由 `tools/gen-shared-data.cjs` 快照成公共生成物，
+// 本目录的 `./gameData` 直接引用那一份（三端同一个文件，谁都不许自己抄一份）。
+// 此前这里手写过一张 `OCCUPATION_LABELS` / `SEX_LABELS`，客户端改了这边不会知道。
 
 /**
  * 背包格子的行 / 列上限（与服务端 role-data.util.ROLE_BAG_AXIS_MAX 一致）
