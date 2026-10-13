@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, ActiveAnnouncement, AuthResult, CreateRole, Health, Login, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
+import type { Account, ActiveAnnouncement, AuthResult, CreateRole, Health, Login, RealtimeTicket, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,7 @@ import type { Account, ActiveAnnouncement, AuthResult, CreateRole, Health, Login
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateRole, Health, Login, MailJob, MailJobPage, MailQuery, MailTemplate, PageMeta, PageQuery, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateRole, Health, Login, MailJob, MailJobPage, MailQuery, MailTemplate, PageMeta, PageQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement } from "./ApiModels";
 
 /** announcement 模块的接口（1 个，生成） */
 export const AnnouncementApi = {
@@ -69,6 +69,16 @@ export const HealthApi = {
    * 无需登录；用于客户端 / 管理端确认服务端可达。
    */
   check: (options?: Options) => HttpClient.get<Health>(ApiRoutes.health.check, { auth: false, ...options }),
+};
+
+/** realtime 模块的接口（1 个，生成） */
+export const RealtimeApi = {
+  /**
+   * 取实时连接票据（POST /realtime/ticket）
+   *
+   * 取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。
+   */
+  ticket: (options?: Options) => HttpClient.post<RealtimeTicket>(ApiRoutes.realtime.ticket, undefined, options),
 };
 
 /** role 模块的接口（7 个，生成） */

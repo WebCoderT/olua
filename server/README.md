@@ -47,15 +47,16 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run swagger:emit` | 编译 + 由源码产出 `openapi.json`（契约的唯一来源） |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` —— **重新生成两端接口文件** |
 | `npm run test:e2e` | 主 e2e（248 条断言） |
-| `npm run test:e2e:roles` | 角色管理专项（77 条） |
+| `npm run test:e2e:roles` | 角色管理专项（110 条） |
 | `npm run test:e2e:guard` | 运营与安全底座专项（283 条） |
 | `npm run test:e2e:mail` | 邮件通道专项（120 条；**假发信器**，不需要 SMTP 服务器） |
 | `npm run test:e2e:account-email` | 玩家邮箱字段专项（28 条） |
+| `npm run test:e2e:realtime` | 实时通道专项（50 条；**真实 WebSocket 握手**，不需要浏览器） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 六套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 七套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -86,6 +87,8 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `AUDIT_LOG_MAX_ROWS` | `20000` | 操作日志保留上限（超出自动清最旧；`0` = 不清理） |
 | `MAIL_RETENTION_DAYS` | `90` | 投递记录保留天数（早于该天数的自动清理；`0` = 不按时间清理） |
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | 投递记录保留上限（只对已发送 / 已失败生效，避免删掉还没发出去的信；`0` = 不清理） |
+| `REALTIME_TICKET_TTL_MS` | `30000` | 实时连接票据的有效期（一次性、用过即焚；票据可以出现在 URL 里，所以只能活 30 秒） |
+| `REALTIME_HEARTBEAT_MS` | `30000` | WebSocket 存活探测间隔（服务端发协议层 ping；客户端用它决定应用层 `ping` 的节奏） |
 
 > **`TRUST_PROXY` 的双向陷阱**：挂在 Nginx / 网关后面**必须设 `true`** —— 否则所有请求的来源 IP 都是代理的，
 > 登录限流会把全部玩家当成同一个人、一起锁死；反过来**直连暴露时必须保持 `false`** —— 开着等于允许调用方
@@ -127,6 +130,7 @@ server/
 │   │   ├── admin/                  管理端：认证 / 账号 / 角色 / 管理员 / 口令 / 公告
 │   │   ├── announcement/           公告：客户端拉「生效中」（公共）+ 管理端 CRUD
 │   │   ├── mail/                   邮件：模板 + 投递队列 + 后台调度（发信只入队）
+│   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
@@ -138,10 +142,11 @@ server/
 ├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 scripts/lib/db-tooling.cjs）
 ├── test/
 │   ├── e2e.cjs                     248 条断言（真实起服务 + 真实 HTTP 请求）
-│   ├── e2e-roles.cjs               77 条
+│   ├── e2e-roles.cjs               110 条
 │   ├── e2e-guard.cjs               283 条
 │   ├── e2e-mail.cjs                120 条（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
 │   ├── e2e-account-email.cjs       28 条（邮箱可见性 / 补录去重 / 发信按账号兜底）
+│   ├── e2e-realtime.cjs            50 条（票据换连接 / 握手拒连 / 心跳与顶连接 / 优雅关闭）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -198,12 +203,12 @@ server/
 
 ## 接口与契约
 
-当前 **51 个接口 / 41 条路径 / 72 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **52 个接口 / 42 条路径 / 73 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 6 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、**拉取生效中的公告**） |
-| 客户端 | 8 | `player` 令牌，只能操作自己账号的数据 |
+| 客户端 | 9 | `player` 令牌，只能操作自己账号的数据 |
 | 管理端 | 37 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
@@ -280,23 +285,24 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-六套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+七套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
 | `test/e2e.cjs` | **248** | 注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 / **公告的公共拉取与生效时间窗** |
-| `test/e2e-roles.cjs` | **77** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 |
+| `test/e2e-roles.cjs` | **110** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 |
 | `test/e2e-guard.cjs` | **283** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·导出 / 用户名与 IP 双维度限流 / 踢下线 / 封禁闭环 / 看板 / 列表排序 / 系统信息与启动自检 |
 | `test/e2e-mail.cjs` | **120** | 邮件通道：入队即返回 / 后台投递到已发送 / **指数退避重试与用尽上限后标失败**（原因可查）/ 手动重投把次数归零 / 未配置 SMTP 时整体禁用 / 密钥只报形态 / 模板必填变量缺失即拒发。用**可注入的假发信器**（`MAIL_TRANSPORT=fake|fail`），不需要真实 SMTP |
 | `test/e2e-account-email.cjs` | **28** | 玩家邮箱字段：只读观察员看不到也改不了 / 补录·查看·清空 / 格式校验与同邮去重（大小写不敏感）/ 发信按关联账号邮箱兜底 / 契约权限点标注 |
+| `test/e2e-realtime.cjs` | **50** | 实时通道：票据一次性（换完即焚 / 过期 / 伪造 / 串号都拒）/ **握手被拒时回答的是一个 HTTP 401 包裹体而不是「先建连再关」** / 应用层 ping→pong / 一账号一条连接（新连接顶掉旧的，关闭码 `4000`）/ 协议层存活探测 / SIGTERM 时连接收到 `1001` 且进程立刻退出 |
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 
 ```bash
-cd server && npm run verify          # 编译 + 六套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 七套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 
-改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`），
+改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改实时通道 → `test:e2e:realtime`），
 但**提交前 `npm run verify` 都该过一遍**。
 
 ## 相关文档

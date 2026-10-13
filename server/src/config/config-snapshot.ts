@@ -187,6 +187,20 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
     field: "backupDir",
     render: (read) => read<string>("backupDir") || "（跟随数据文件同级 backups/）",
   },
+  {
+    key: "REALTIME_TICKET_TTL_MS",
+    field: "realtimeTicketTtlMs",
+    render: (read) => describeInterval(read<number>("realtimeTicketTtlMs"), "0 秒（票据签出来即过期，谁也连不上）"),
+  },
+  {
+    key: "REALTIME_HEARTBEAT_MS",
+    field: "realtimeHeartbeatMs",
+    render: (read) => describeInterval(read<number>("realtimeHeartbeatMs"), "关闭（不做存活探测）"),
+    // 关掉之后，拔网线 / 进程被杀留下的死连接会一直挂在内存里（socket 层自己发现不了），
+    // 只有重启才收得回来 —— 这类「表面上一切正常」的配置最该在启动日志里喊一声
+    warning: (read) => read<number>("realtimeHeartbeatMs") <= 0,
+    advice: "REALTIME_HEARTBEAT_MS<=0：实时通道不做存活探测，掉线的连接会一直占着内存，只有重启才收得回来",
+  },
 ];
 
 /** 渲染整张快照（顺序即信息页的展示顺序） */
