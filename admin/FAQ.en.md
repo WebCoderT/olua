@@ -16,6 +16,7 @@
 - [What is the difference between resetting a password and changing my own?](#what-is-the-difference-between-resetting-a-password-and-changing-my-own)
 - [Why is "My Account" in the top-right corner instead of the left nav?](#why-is-my-account-in-the-top-right-corner-instead-of-the-left-nav)
 - [What does kicking a player offline actually do? Why must the character be selected again?](#what-does-kicking-a-player-offline-actually-do-why-must-the-character-be-selected-again)
+- [Why are there two sets of combat attributes on the detail page? Does a mismatch mean cheating?](#why-are-there-two-sets-of-combat-attributes-on-the-detail-page-does-a-mismatch-mean-cheating)
 - [Can the API files be edited by hand? What has to change to add an admin endpoint?](#can-the-api-files-be-edited-by-hand-what-has-to-change-to-add-an-admin-endpoint)
 - [Where do the permission count and timestamps in the top bar come from?](#where-do-the-permission-count-and-timestamps-in-the-top-bar-come-from)
 - [What usually causes a build failure or a type error?](#what-usually-causes-a-build-failure-or-a-type-error)
@@ -72,6 +73,14 @@ The two entries are deliberately separate because **the verification and the con
 - Timestamps in tables go through `formatTime` / `formatTimeFull` in `src/api/types.ts` (local time); the audit-log time filter uses `<input type="datetime-local">`, converted to milliseconds by `localInputToMs` before being sent — **the server receives a millisecond timestamp** while the UI displays local time; do not mix the two up
 
 ## Operations
+
+### Why are there two sets of combat attributes on the detail page? Does a mismatch mean cheating?
+
+- **Left column, "server recompute"**: the server recomputes from the **saved** snapshot (level / equipment / war soul / title / rank). It is a derived field, not a stored column, so it is **recomputed on every detail read** — after you change that batch of fields in the console and save, this updates immediately and does not wait for the client's next sync
+- **Right column, "client reported"**: the values the client's `combatCalc` wrote into the snapshot. The server only compares **combat power and max health** (the client writes both on every recompute, and combat power is a weighted total that best represents whether the two sides still agree). The six attack/defense ranges are in the snapshot too, but judging "do these agree" on them is far too noisy (saving between a level-up and a recompute would trip it), so the server does not compare them and this column does not show them — showing numbers nothing validates would suggest they had been checked
+- **The "mismatch" banner**: it only means the two sides **disagree on the formula's output**, and it is **not proof of cheating** — saving between a level-up and a recompute, client config drift, or a stale equipment id left in the snapshot all trip it. The console **does not decide which side is right** (the server side is not automatically correct either: if the player saved between a level-up and a recompute, the client side is the stale one); it only makes the gap visible
+- **"Equipment ids the server cannot resolve"**: tripped when the client deleted that piece of equipment, or the snapshot still holds an old id. The server skips that piece when it cannot find its attributes (matching the client's "unknown means not worn"), but says so — otherwise the attributes quietly come out short while everything looks fine
+- The list page has **no** combat-power column, and that is deliberate: the list endpoint does not carry `derived` (recomputing per row would only bloat the response, and the list does not display it anyway)
 
 ### What does kicking a player offline actually do? Why must the character be selected again?
 

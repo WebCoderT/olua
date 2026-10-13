@@ -71,7 +71,7 @@ admin/
 │   │   ├── types.ts                hand-written: business codes / permission points / Chinese dictionaries for actions and targets / time helpers
 │   │   └── index.ts                single entry point (pages import only from here)
 │   ├── pages/                      pages (see the table below)
-│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / sortable / charts / ToastHost / ui
+│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
 │   └── store/
 │       ├── session.ts              token and admin read/write (subscription mechanism + hasPermission)
 │       └── toast.ts                global toasts (success / failure)
@@ -88,7 +88,7 @@ admin/
 | Accounts | `/accounts` | `account:read` | Paginated search (fuzzy account name + status), ban / unban, delete account |
 | Account detail | `/accounts/:id` | `account:read` | Characters owned, **reset a player password**, **kick offline**, wipe every character on the account |
 | Characters | `/roles` | `role:read` | Six filters (keyword / online status / class / gender / level range / account), multi-select batch delete |
-| Character detail | `/roles/:id` | `role:read` | Edit basic info and common values; **structured editing of equipment / skills / bag** (the client config is the single source of truth for those lists) |
+| Character detail | `/roles/:id` | `role:read` | Edit basic info and common values; **structured editing of equipment / skills / bag** (the client config is the single source of truth for those lists); **combat-attribute comparison card** — the values the server recomputes from the save side by side with the ones the client reported, with differing rows marked (it makes the gap visible; it does not judge which side is right) |
 | Admins | `/admins` | `admin:read` | Admin list; change role / enable-disable / **reset password** / delete (writes additionally need `admin:manage`) |
 | Announcements | `/announcements` | `announcement:read` | Publish / edit / delete announcements, enable-disable, filter by keyword / level / enabled / effective status; **"effective" uses the server-returned `active` column** (same criterion as the player-facing fetch endpoint, not local clock) (writes additionally need `announcement:write`) |
 | Mails | `/mails` | `mail:read` | **Send** (pick template → fill variables → enqueue) + **delivery records** (status / keyword filter + pagination + sorting). Delivery is **asynchronous**, so "pending / retrying" intermediate states exist and refresh automatically; only attempt count and failure reason are visible (writes additionally need `mail:write`) |
