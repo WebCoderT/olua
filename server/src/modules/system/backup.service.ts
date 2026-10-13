@@ -223,6 +223,14 @@ export class BackupService {
    * 所以「上一次成功」应该按磁盘说话，而不是按本进程有没有亲自跑过。
    * `lastAttemptAt`（参与「到点没有」的判定）只在还没有记录时补 —— 它是服务端的记账，
    * 被手工产物一直往后推会让自动备份迟迟不到点。
+   *
+   * ⚠️ **这里是 `lastAttemptAt` 的第二个写者**（另一个是 `runOnce()` 里的 `refresh()`）。
+   * 于是「磁盘上有产物」**不等于**「这一轮跑完了」：备份脚本先把文件写到盘上、父进程才在
+   * `child.on("close")` 里记账，中间这条缝里 `lastFile` / `lastSizeBytes` / `lastAttemptAt`
+   * 已经有值（体积甚至还是一份**写到一半**的文件），而 `lastOk` 还是 null。
+   * 想知道「一轮真的跑完了」，只能看 `lastOk` —— 它**只有 `refresh()` 会写**，且写它的那段
+   * 代码没有 await（同一口气里把 lastAttemptAt / lastFile / lastSizeBytes / lastSuccessAt /
+   * nextAt 全部写完）。e2e 的等待判据就建在这条区分上（见 `server/test/backup.cjs`，#110）。
    */
   private syncFromDisk(): void {
     const dir = this.state.dir;
