@@ -2288,7 +2288,7 @@
     },
     "/admin/roles/{id}": {
       "get": {
-        "description": "含完整 data（背包 / 装备等原样返回）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。\n\nderived 不在库里、每次读的时候算，与 `data` 里客户端上报的那份并列给出 —— 服务端算的不一定「对」（玩家在升级与重算之间存档时，客户端那份才是旧的），所以只把两份摆出来，不做自动判定。\n\n`derived.mismatch` 表示两份对不上，**不等于作弊**：配置漂移、存档留着旧装备 id 同样会命中。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminRole.detail",
         "parameters": [
           {
@@ -2303,7 +2303,7 @@
         ],
         "responses": {
           "200": {
-            "description": "角色详情",
+            "description": "角色详情（含服务端重算的 derived）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2314,7 +2314,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/AdminRoleDto"
+                          "$ref": "#/components/schemas/AdminRoleDetailDto"
                         }
                       }
                     }
@@ -2336,14 +2336,14 @@
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/AdminRoleDto"
+          "$ref": "#/components/schemas/AdminRoleDetailDto"
         },
         "x-olua-permissions": [
           "role:read"
         ]
       },
       "patch": {
-        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
+        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n返回的 `derived` 是**改完之后**服务端现算的战斗属性：改等级 / 战魂 / 称号 / 军衔 / 装备后，战斗力**立刻**反映新值，不用等客户端同步。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
         "operationId": "adminRole.patch",
         "parameters": [
           {
@@ -2368,7 +2368,7 @@
         },
         "responses": {
           "200": {
-            "description": "修改后的角色",
+            "description": "修改后的角色（derived 已按新值重算）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2379,7 +2379,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/AdminRoleDto"
+                          "$ref": "#/components/schemas/AdminRoleDetailDto"
                         }
                       }
                     }
@@ -2401,7 +2401,7 @@
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/AdminRoleDto"
+          "$ref": "#/components/schemas/AdminRoleDetailDto"
         },
         "x-olua-permissions": [
           "role:write"
@@ -2490,7 +2490,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/AdminRoleDto"
+                          "$ref": "#/components/schemas/AdminRoleDetailDto"
                         }
                       }
                     }
@@ -2512,7 +2512,7 @@
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/AdminRoleDto"
+          "$ref": "#/components/schemas/AdminRoleDetailDto"
         },
         "x-olua-permissions": [
           "role:select"
@@ -4975,6 +4975,223 @@
           "page",
           "size",
           "list"
+        ]
+      },
+      "RoleDerivedAttributesDto": {
+        "type": "object",
+        "properties": {
+          "maxHp": {
+            "type": "number",
+            "description": "最大生命值"
+          },
+          "hpRecover": {
+            "type": "number",
+            "description": "每秒生命回复（点/秒）"
+          },
+          "maxMp": {
+            "type": "number",
+            "description": "最大魔法值（只跟等级走，装备不影响）"
+          },
+          "physicalAttack": {
+            "description": "物理攻击 [下限, 上限]",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "magicAttack": {
+            "description": "魔法攻击 [下限, 上限]",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "taoistAttack": {
+            "description": "道术攻击 [下限, 上限]",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "physicalDefense": {
+            "description": "物理防御 [下限, 上限]",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "magicDefense": {
+            "description": "魔法防御 [下限, 上限]",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "taoistDefense": {
+            "description": "道术防御 [下限, 上限]",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "combat": {
+            "type": "number",
+            "description": "战斗力（八项按配置权重加权求和）"
+          }
+        },
+        "required": [
+          "maxHp",
+          "hpRecover",
+          "maxMp",
+          "physicalAttack",
+          "magicAttack",
+          "taoistAttack",
+          "physicalDefense",
+          "magicDefense",
+          "taoistDefense",
+          "combat"
+        ]
+      },
+      "RoleReportedAttributesDto": {
+        "type": "object",
+        "properties": {
+          "combat": {
+            "type": "number",
+            "description": "存档里客户端上报的战斗力；没有或不是数字就是 null",
+            "nullable": true
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "存档里客户端上报的最大生命值；没有或不是数字就是 null",
+            "nullable": true
+          }
+        },
+        "required": [
+          "combat",
+          "maxHp"
+        ]
+      },
+      "RoleDerivedDto": {
+        "type": "object",
+        "properties": {
+          "attributes": {
+            "description": "服务端按存档输入现算的战斗属性；等级不在成长曲线里时为 null（服务端无处可取旧值，静默给 0 会被读成「算过了、结果就是 0」）",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoleDerivedAttributesDto"
+              }
+            ]
+          },
+          "reported": {
+            "description": "存档里客户端上报的那份（对照用）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoleReportedAttributesDto"
+              }
+            ]
+          },
+          "mismatch": {
+            "type": "boolean",
+            "description": "两份对不上（口径不一致）。不等于作弊 —— 玩家在升级与重算之间存档也会命中；客户端配置漂移、存档留着旧装备 id 同样会命中。它只表示「这里值得看一眼」"
+          },
+          "comparable": {
+            "type": "boolean",
+            "description": "这次到底比成了没有（false = 服务端算不出来，此时 mismatch 无意义）"
+          },
+          "unknownEquipmentIds": {
+            "description": "查不到属性的装备 id（客户端删了装备 / 存档留着旧 id 时命中，属性会悄悄少一截）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "attributes",
+          "reported",
+          "mismatch",
+          "comparable",
+          "unknownEquipmentIds"
+        ]
+      },
+      "AdminRoleDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "accountName": {
+            "type": "string",
+            "description": "所属账号名",
+            "nullable": true
+          },
+          "derived": {
+            "description": "服务端重算的战斗属性（派生字段：不在库里，每次读现算）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoleDerivedDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "accountName",
+          "derived"
         ]
       },
       "BatchDeleteResultDto": {

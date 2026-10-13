@@ -225,7 +225,7 @@ export const routes = {
     /**
      * 角色详情（GET /admin/roles/{id}）
      *
-     * 含完整 data（背包 / 装备等原样返回）。
+     * 含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。
      */
     detail: (id: string) => `/admin/roles/${encodeURIComponent(id)}`,
     /**

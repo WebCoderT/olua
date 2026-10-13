@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { isEmail } from "class-validator";
 import { BizCode } from "../../common/constants/biz-code";
 import { AdminRole, isAdminRole, Permission, roleHasPermission } from "../../common/constants/permission";
@@ -12,7 +12,7 @@ import { AuditRepository } from "../../database/repositories/audit.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { AccountRow, AdminRow, RoleRow, RoleWithAccountRow } from "../../database/rows";
 import { AccountDto } from "../auth/dto/account.dto";
-import { AdminRoleDto, RoleSummaryDto } from "../roles/dto/role.dto";
+import { AdminRoleDetailDto, AdminRoleDto, RoleSummaryDto } from "../roles/dto/role.dto";
 import {
   applyBagCells,
   normalizeBagCells,
@@ -49,6 +49,8 @@ import {
  */
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private readonly accounts: AccountRepository,
     private readonly roles: RoleRepository,
@@ -242,9 +244,17 @@ export class AdminService {
     };
   }
 
-  /** 角色详情 */
-  roleDetail(id: string): AdminRoleDto {
-    return this.toAdminRoleDto(this.withAccount(this.mustRole(id)));
+  /**
+   * 角色详情（带**服务端重算**的战斗属性）
+   *
+   * `derived` 不在库里，每次读现算，所以管理端改了 level / 战魂 / 称号 / 军衔 / 装备之后
+   * 这里立刻是新值，**不用等客户端同步**。
+   *
+   * 顺带在这里做「客户端上报值 vs 服务端重算值」的观测：不一致记一条 warn。
+   * 详情接口是**抽查**（要有人点开才发生），真正的全量观测在玩家上报存档那条线上（issue #94）。
+   */
+  roleDetail(id: string): AdminRoleDetailDto {
+    return this.toAdminRoleDetailDto(this.withAccount(this.mustRole(id)));
   }
 
   /**
@@ -255,7 +265,7 @@ export class AdminService {
    * 保存后角色修订号 +1 —— 在线玩家那边的下一次进度推送会撞上乐观锁（20006），
    * 从而先同步到这里，不会被玩家手上的旧存档覆盖回去。
    */
-  patchRole(id: string, dto: AdminPatchRoleDto): AdminRoleDto {
+  patchRole(id: string, dto: AdminPatchRoleDto): AdminRoleDetailDto {
     const row = this.mustRole(id);
     // roles.data 是 JSON 字符串，编辑前先解出来（坏了直接报错，绝不拿空对象覆盖）
     const { data } = parseRoleData(parseStoredRoleData(row.data));
@@ -364,7 +374,7 @@ export class AdminService {
   }
 
   /** 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏） */
-  selectRole(id: string): AdminRoleDto {
+  selectRole(id: string): AdminRoleDetailDto {
     const row = this.mustRole(id);
     this.accounts.updateById(row.account_id, { online_role_id: row.id });
     return this.roleDetail(id);
@@ -549,6 +559,29 @@ export class AdminService {
 
   private toAdminRoleDto(row: RoleWithAccountRow): AdminRoleDto {
     return AdminRoleDto.fromRow(row, row.account_online_role_id);
+  }
+
+  /**
+   * 详情用的 DTO（比列表多一组派生字段）
+   *
+   * 不一致时记一条 warn —— 只记不拦：既存的存档不该因为「口径对不上」被改写，
+   * 而 `mismatch` 也不等于作弊（升级与重算之间存档就会命中，详见比对模块的文件头）。
+   * 所以日志里把两侧数值都带上，让看到的人自己判断。
+   */
+  private toAdminRoleDetailDto(row: RoleWithAccountRow): AdminRoleDetailDto {
+    const dto = AdminRoleDetailDto.fromRow(row, row.account_online_role_id);
+    const { derived } = dto;
+    if (derived.mismatch) {
+      this.logger.warn(
+        `角色 ${row.id}（等级 ${row.level}）战斗属性两端口径不一致：` +
+          `服务端重算 combat=${derived.attributes?.combat} maxHp=${derived.attributes?.maxHp}；` +
+          `客户端上报 combat=${derived.reported.combat} maxHp=${derived.reported.maxHp}`,
+      );
+    }
+    if (derived.unknownEquipmentIds.length > 0) {
+      this.logger.warn(`角色 ${row.id} 有 ${derived.unknownEquipmentIds.length} 个装备 id 查不到属性：${derived.unknownEquipmentIds.join(", ")}`);
+    }
+    return dto;
   }
 
   //#endregion

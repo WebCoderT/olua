@@ -838,6 +838,138 @@ export type AdminRolePage = {
   list: AdminRole[];
 };
 
+export type RoleDerivedAttributes = {
+  /**
+   * 最大生命值
+   */
+  maxHp: number;
+  /**
+   * 每秒生命回复（点/秒）
+   */
+  hpRecover: number;
+  /**
+   * 最大魔法值（只跟等级走，装备不影响）
+   */
+  maxMp: number;
+  /**
+   * 物理攻击 [下限, 上限]
+   */
+  physicalAttack: number[];
+  /**
+   * 魔法攻击 [下限, 上限]
+   */
+  magicAttack: number[];
+  /**
+   * 道术攻击 [下限, 上限]
+   */
+  taoistAttack: number[];
+  /**
+   * 物理防御 [下限, 上限]
+   */
+  physicalDefense: number[];
+  /**
+   * 魔法防御 [下限, 上限]
+   */
+  magicDefense: number[];
+  /**
+   * 道术防御 [下限, 上限]
+   */
+  taoistDefense: number[];
+  /**
+   * 战斗力（八项按配置权重加权求和）
+   */
+  combat: number;
+};
+
+export type RoleReportedAttributes = {
+  /**
+   * 存档里客户端上报的战斗力；没有或不是数字就是 null
+   */
+  combat: number | null;
+  /**
+   * 存档里客户端上报的最大生命值；没有或不是数字就是 null
+   */
+  maxHp: number | null;
+};
+
+export type RoleDerived = {
+  /**
+   * 服务端按存档输入现算的战斗属性；等级不在成长曲线里时为 null（服务端无处可取旧值，静默给 0 会被读成「算过了、结果就是 0」）
+   */
+  attributes: RoleDerivedAttributes | null;
+  /**
+   * 存档里客户端上报的那份（对照用）
+   */
+  reported: RoleReportedAttributes;
+  /**
+   * 两份对不上（口径不一致）。不等于作弊 —— 玩家在升级与重算之间存档也会命中；客户端配置漂移、存档留着旧装备 id 同样会命中。它只表示「这里值得看一眼」
+   */
+  mismatch: boolean;
+  /**
+   * 这次到底比成了没有（false = 服务端算不出来，此时 mismatch 无意义）
+   */
+  comparable: boolean;
+  /**
+   * 查不到属性的装备 id（客户端删了装备 / 存档留着旧 id 时命中，属性会悄悄少一截）
+   */
+  unknownEquipmentIds: string[];
+};
+
+export type AdminRoleDetail = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 所属账号名
+   */
+  accountName: string | null;
+  /**
+   * 服务端重算的战斗属性（派生字段：不在库里，每次读现算）
+   */
+  derived: RoleDerived;
+};
+
 export type BatchDeleteResult = {
   /**
    * 请求删除的条数

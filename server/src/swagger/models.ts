@@ -21,7 +21,7 @@ import { AuditActionListDto, AuditExportDto, AuditLogDto, AuditLogPageDto, Audit
 import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-envelope.dto";
 import { HealthDto } from "../modules/health/dto/health.dto";
 import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto";
-import { AdminRoleDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
+import { AdminRoleDetailDto, AdminRoleDto, RoleDerivedAttributesDto, RoleDerivedDto, RoleReportedAttributesDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
 import {
   SystemConfigItemDto,
   SystemDatabaseDto,
@@ -85,6 +85,10 @@ export const SWAGGER_MODELS = [
   AdminPageDto,
   AdminRolePageDto,
   AdminRoleDto,
+  AdminRoleDetailDto,
+  RoleDerivedDto,
+  RoleDerivedAttributesDto,
+  RoleReportedAttributesDto,
   AdminPatchRoleDto,
   RoleBagCellDto,
   BatchDeleteRolesDto,
