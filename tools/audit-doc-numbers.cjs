@@ -4,7 +4,7 @@
  * ===========================================================================
  * 为什么必须有这个
  * ===========================================================================
- * 文档里的「51 个接口 / 41 条路径 / 72 个模型」「26 套单测 + 9 套审计 + 876 条 e2e」
+ * 文档里的「52 个接口 / 42 条路径 / 73 个模型」「26 套单测 + 9 套审计 + 926 条 e2e」
  * 这类数字**每加一个接口就漂一次**，而且漂了**没有任何一处会报错** ——
  * 读者拿到的是一份自信的、过期的数字。这跟 `battle-rules.generated.ts` 那类快照腐化
  * 是同一类问题，解法也一样：**别靠记性，靠脚本**。
@@ -12,19 +12,30 @@
  * 历史：#81 重刷过 `docs/resume.md`，但没覆盖各端 README —— 于是 `server/README.md`
  * 与 `FAQ.md` 又落后了一两个版本，直到 #93 动接口时才被撞见。
  *
+ * #113 又发现**守卫自己**漏得比想象中多：句式都是照着「当时那一行文本」写的正则，
+ * 于是同一件事换种写法就抓不到 —— `51 个 REST 接口`（`个` 后有空格）、`8 个跨端审计脚本`
+ * （量词是「个」不是「套」）、`9 audits` / `26 unit-test suites`、
+ * `（248 / 110 / …）`（分隔符是斜杠不是加号）全都漏检；加数串**项数不符**时还被
+ * `continue` 静默放行，等于「加了一套 e2e」永远没人知道。教训两条：
+ * **写句式要按「同义写法」想，不是按眼前这一行抄**；**「抓不到」与「通过」必须区分开**。
+ *
  * ===========================================================================
  * 检查什么（只查「有唯一实测来源」的数字）
  * ===========================================================================
- *   1. 接口总数 / 路径数 / 模型数 / 各分组数   ← `server/openapi.json`
- *   2. e2e 总数，以及括号里那串加数             ← 各 e2e 脚本的 `EXPECTED_ASSERTIONS`
- *   3. 审计脚本数 / 单测套数                    ← `tools/audit-*.cjs`、`client/tools/test-*.cjs`
+ *   1. 接口总数 / 路径数 / 模型数 / 各分组数 / 权限点数
+ *                              ← `server/openapi.json`、`common/constants/permission.ts`
+ *   2. e2e 总数，以及括号里那串加数（**和、集合、项数**三者都要对）
+ *                              ← 各 e2e 脚本的 `EXPECTED_ASSERTIONS`
+ *   3. 审计脚本数 / 单测套数 / 回归守卫总数（= 前两者之和）
+ *                              ← `tools/audit-*.cjs`、`client/tools/test-*.cjs`
  *
  * **不查**代码行数、文件数（`约 4.9 万行` 这种）—— 它们没有唯一口径（算不算注释、
  * 算不算生成物取决于心情），钉死了只会天天 FAIL。那类数字靠改代码时顺手看一眼。
  *
  * 数字与文本的对应靠**句式**：文档里承诺了口径的写法是固定的
  * （`X 个接口 / Y 条路径 / Z 个模型`、`N 条 e2e`、`X interfaces` …）。
- * 句式在 CHECKS 里集中登记，新增一种写法就往那儿加一行。
+ * 句式集中登记在 `main()` 里（`checkNumbers` / `checkE2eBreakdown` / `checkGroupRow` 的调用处），
+ * 新增一种写法就往那儿加一行 —— **加的时候先想同义写法**（量词 / 空格 / 连字符 / 单位）。
  *
  * 用法：node tools/audit-doc-numbers.cjs
  * 退出码：全部一致 = 0；任一处对不上 = 1（`make audit` 据此判定 FAIL）
@@ -93,7 +104,30 @@ function measure() {
     e2e: E2E_SCRIPTS.map(([label, file]) => ({ label, file, count: expectedAssertionsOf(file) })),
     audits: countFiles(path.join(ROOT, "tools"), /^audit-.*\.cjs$/),
     unitTests: countFiles(path.join(ROOT, "client", "tools"), /^test-.*\.cjs$/),
+    permissions: countPermissionPoints(),
   };
+}
+
+/**
+ * 权限点数：`server/src/common/constants/permission.ts` 里 `Permission` 对象有几项
+ *
+ * 这个文件的注释自己写着「唯一来源」，`docs/resume.md` 的口径说明也把它列为权限点的出处 ——
+ * 但脚本此前压根没查它，于是 `server/README.md` 写 17、实际 18 这件事没人发现。
+ */
+function countPermissionPoints() {
+  const relative = "server/src/common/constants/permission.ts";
+  const full = path.join(ROOT, relative);
+  if (!fs.existsSync(full)) throw new Error(`权限点的唯一来源不存在：${relative}`);
+  const source = fs.readFileSync(full, "utf8");
+  // 权限点对象的每一项长得像 `  ACCOUNT_READ: "account:read",`（两空格缩进的 `大写键: "资源:动作"`）
+  const matched = source.match(/^ {2}[A-Z][A-Z0-9_]*:\s*"[a-z]+:[a-z]+",$/gm) ?? [];
+  if (matched.length === 0) {
+    throw new Error(
+      `${relative} 里解析不出权限点 —— 这个文件的写法变了？\n` +
+        "  权限点数的唯一来源就是它，解析不到就不该静默按 0 处理（那会让所有文档一起「对」上）。",
+    );
+  }
+  return matched.length;
 }
 
 /** 从一个 e2e 脚本里读它的 `EXPECTED_ASSERTIONS`（那是「实测值」的唯一静态来源） */
@@ -153,11 +187,15 @@ function checkNumbers(doc, source, label, pattern, expected) {
 /**
  * e2e 加数串：括号里 `a + b + c …`，**和**与**集合**都要对得上
  *
- * 两种写法都要认：`服务端 876 条 e2e（248 + …）` 与 `服务端 e2e（248 + … 条）`
- * —— 所以数字串后面还允许跟几个字（单位「条」就落在那里）。
+ * 三种写法都要认（文档里历史上三种都出现过）：
+ *   - `服务端 e2e（248 + 110 + … 条）`   —— 数字串后还跟单位「条」
+ *   - `服务端 876 条 e2e（248 + 110 + …）` —— 总数写在括号外
+ *   - `六套 e2e（248 / 110 / …）`        —— 分隔符是斜杠，不是加号
  *
- * **项数必须恰好等于 e2e 套数**：不加这个约束，文档里任何 `（1 + 2 + 3）`
- * 都会被当成加数串误报。
+ * 两处约束挡住误报：
+ *   1. 括号前 8 字内必须提到 `e2e` —— 否则文档里任何 `（1 + 2 + 3）` 都会被当成加数串；
+ *   2. **项数必须恰好等于 e2e 套数** —— 项数不符同样是漂移（曾经加了一套而没人发现，
+ *      因为旧版实现遇到项数不符直接 `continue` 了，等于放行）。
  */
 function checkE2eBreakdown(doc, source, expected) {
   const total = expected.e2e.reduce((sum, item) => sum + item.count, 0);
@@ -166,19 +204,28 @@ function checkE2eBreakdown(doc, source, expected) {
     .sort((a, b) => a - b)
     .join("+");
 
-  const pattern = /[（(]\s*(\d+(?:\s*\+\s*\d+)+)\s*[^（()）]{0,8}[)）]/g;
+  // 尾部允许 14 字：中文只跟一个「条」，英文要跟「 assertions」。
+  const pattern = /e2e[^（()）\n]{0,10}[（(]\s*(\d+(?:\s*[+/]\s*\d+)+)\s*[^（()）]{0,14}[)）]/gi;
   for (const match of [...source.matchAll(pattern)]) {
     const counts = match[1]
-      .split("+")
+      .split(/[+/]/)
       .map((piece) => Number(piece.trim()))
       .sort((a, b) => a - b);
-    if (counts.length !== expected.e2e.length) continue;
+    const line = source.slice(0, match.index).split("\n").length;
+    if (counts.length !== expected.e2e.length) {
+      fail(
+        `${doc}:${line} 的 e2e 加数串项数与实测不一致`,
+        `文档写 ${counts.length} 项（${match[1].replace(/\s/g, "")}），实测 ${expected.e2e.length} 套（${expected.e2e
+          .map((item) => item.count)
+          .join(" + ")}）`,
+      );
+      continue;
+    }
     const sum = counts.reduce((total2, value) => total2 + value, 0);
     if (sum === total && counts.join("+") === expectedCounts) {
       ok(`${doc} e2e 加数串`);
       continue;
     }
-    const line = source.slice(0, match.index).split("\n").length;
     fail(
       `${doc}:${line} 的 e2e 加数串与实测不一致`,
       `文档写 ${match[1].replace(/\s/g, "")}（和 ${sum}），实测 ${expected.e2e.map((item) => item.count).join(" + ")}（和 ${total}）`,
@@ -220,12 +267,16 @@ function main() {
     const source = fs.readFileSync(full, "utf8");
 
     // 1. 接口 / 路径 / 模型（中英两种句式都认）
-    checkNumbers(doc, source, "接口总数", /(\d+)\s*个(?:REST\s+)?接口/g, expected.endpoints);
+    //    `个\s*` 而不是 `个` —— 文档里既有「51 个接口」也有「51 个 REST 接口」，
+    //    中间那个空格曾经让这条例行长年漏检（`docs/resume.md` 因此一直写着旧数字）。
+    checkNumbers(doc, source, "接口总数", /(\d+)\s*个\s*(?:REST\s+)?接口/g, expected.endpoints);
     checkNumbers(doc, source, "接口总数（英文）", /(\d+)\s+interfaces?\b/g, expected.endpoints);
     checkNumbers(doc, source, "路径数", /(\d+)\s*条路径/g, expected.paths);
     checkNumbers(doc, source, "路径数（英文）", /(\d+)\s+paths?\b/g, expected.paths);
     checkNumbers(doc, source, "模型数", /(\d+)\s*个模型/g, expected.models);
     checkNumbers(doc, source, "模型数（英文）", /(\d+)\s+models?\b/g, expected.models);
+    checkNumbers(doc, source, "权限点数", /(\d+)\s*个权限点/g, expected.permissions);
+    checkNumbers(doc, source, "权限点数（英文）", /(\d+)\s+permission\s+points?/gi, expected.permissions);
 
     // 2. 分组表（`| 公共接口 | 6 |`）
     for (const header of ["公共接口", "客户端", "管理端"]) {
@@ -239,10 +290,29 @@ function main() {
     checkE2eBreakdown(doc, source, expected);
 
     // 4. 审计脚本数 / 单测套数
-    checkNumbers(doc, source, "审计脚本数", /(\d+)\s*套审计(?:脚本)?/g, expected.audits);
+    //    量词两种都认（`9 套审计` / `9 个跨端审计脚本`），`跨端` 是修饰语可省。
+    checkNumbers(doc, source, "审计脚本数", /(\d+)\s*[套个](?:跨端)?审计(?:脚本)?/g, expected.audits);
     checkNumbers(doc, source, "单测套数", /(\d+)\s*套单测/g, expected.unitTests);
-    checkNumbers(doc, source, "审计脚本数（英文）", /(\d+)\s+audit\s+scripts?/gi, expected.audits);
-    checkNumbers(doc, source, "单测套数（英文）", /(\d+)\s+unit\s+tests?/gi, expected.unitTests);
+    // 英文量词两种都认：`9 audit scripts` 与 `9 audits`；单测那份还要容忍连字符
+    // （`unit-test suites`）—— 就是这么写的，漏认等于没查。
+    checkNumbers(doc, source, "审计脚本数（英文）", /(\d+)\s+audits?\b/gi, expected.audits);
+    checkNumbers(doc, source, "单测套数（英文）", /(\d+)\s+unit[-\s]tests?\b/gi, expected.unitTests);
+
+    // 5. 「回归守卫」= 单测套数 + 审计脚本数（一句概括全部自动化守卫的写法）
+    checkNumbers(
+      doc,
+      source,
+      "回归守卫总数",
+      /(\d+)\s*个自动化回归守卫/g,
+      expected.unitTests + expected.audits,
+    );
+    checkNumbers(
+      doc,
+      source,
+      "回归守卫总数（英文）",
+      /(\d+)\s+automated\s+regression\s+guards?/gi,
+      expected.unitTests + expected.audits,
+    );
   }
 
   // 中文数字写法（「八个审计脚本」）单独校验 —— 正则抓不到，只能按字面找
@@ -264,7 +334,7 @@ function main() {
 
   //#region 汇总
 
-  console.log(`实测：${expected.endpoints} 个接口 / ${expected.paths} 条路径 / ${expected.models} 个模型`);
+  console.log(`实测：${expected.endpoints} 个接口 / ${expected.paths} 条路径 / ${expected.models} 个模型 / ${expected.permissions} 个权限点`);
   console.log(
     `      ${expected.unitTests} 套单测 · ${expected.audits} 个审计 · ${expected.e2e.reduce((sum, item) => sum + item.count, 0)} 条 e2e（${expected.e2e
       .map((item) => item.count)

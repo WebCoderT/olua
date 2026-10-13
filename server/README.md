@@ -180,7 +180,7 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（17 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`（18 个权限点 / 3 种角色）：
 
 | 角色 | 权限 |
 | --- | --- |

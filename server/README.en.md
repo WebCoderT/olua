@@ -180,7 +180,7 @@ Two layers, **both in guards; business code must not write role checks**:
    and **re-checks the database on every request** — ban / deletion / password change take effect instantly, no waiting for token expiry
 2. **Permission point** (`PermissionGuard`, registered after `AuthGuard`): uses `request.user.role` directly, no further DB lookup
 
-The only source of permission points is `src/common/constants/permission.ts` (17 permission points / 3 roles):
+The only source of permission points is `src/common/constants/permission.ts` (18 permission points / 3 roles):
 
 | Role | Permissions |
 | --- | --- |

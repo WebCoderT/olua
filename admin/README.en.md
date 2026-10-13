@@ -101,7 +101,7 @@ Write actions disable their button per permission point (`disabled`) and show "i
 
 Interface visibility **is only experience**; **the server is the authority**.
 
-- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 17 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
+- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 18 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
 - Admin info comes down with the token in the response and lands in `store/session`; `hasPermission(point)` looks it up in that array directly
 - **Fallback for a dirty session**: a missing `admin.permissions` is treated as an **empty array** (least privilege) — an incomplete session never opens up the interface
 - Nav items carry a `permission` field and `Layout` filters before rendering; the `RequirePermission` shell in `App.tsx` guards direct route access
