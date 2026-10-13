@@ -10,6 +10,7 @@ import {
   ROLE_OCCUPATIONS,
   ROLE_SEXES,
 } from "../../roles/role-data.util";
+import { OCCUPATION_HINT, SEX_HINT } from "../../../shared/game-data";
 import { ADMIN_NUMBER_FIELD_MAX } from "./query.dto";
 
 /**
@@ -64,13 +65,13 @@ export class AdminPatchRoleDto {
   @Length(1, ROLE_NAME_MAX_LENGTH, { message: `角色名需为 1~${ROLE_NAME_MAX_LENGTH} 个字` })
   name?: string;
 
-  @ApiPropertyOptional({ description: "职业（1 战士 / 2 魔法师 / 3 道士 / 4 全职业）", enum: [...ROLE_OCCUPATIONS] })
+  @ApiPropertyOptional({ description: `职业（${OCCUPATION_HINT}）`, enum: [...ROLE_OCCUPATIONS] })
   @IsOptional()
   @IsString({ message: "职业必须是字符串" })
   @IsIn([...ROLE_OCCUPATIONS], { message: "职业取值不合法" })
   occupation?: string;
 
-  @ApiPropertyOptional({ description: "性别（1 男 / 2 女 / 3 全性别）", enum: [...ROLE_SEXES] })
+  @ApiPropertyOptional({ description: `性别（${SEX_HINT}）`, enum: [...ROLE_SEXES] })
   @IsOptional()
   @IsString({ message: "性别必须是字符串" })
   @IsIn([...ROLE_SEXES], { message: "性别取值不合法" })

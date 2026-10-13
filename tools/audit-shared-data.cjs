@@ -25,6 +25,27 @@
  *   2. **非空**：每张表至少有一条数据（空表几乎一定是抽错了来源数组）。
  *
  * ===========================================================================
+ * 还有一条更难的：**内容被抄进源码**
+ * ===========================================================================
+ * 「谁也不许自己维护一份」这句话，破法有两种：
+ *
+ *   a. **复制一张表到本地**（`const OCCUPATION_LABELS = {`）—— 判据是「与生成物**同名**的定义」，
+ *      转发写法（`export { X } from "…"`）不会误报；
+ *   b. **换个名字把同一份内容写一遍**（手写的 `["1","2","3","4"]` 清单、DTO 描述里那一行
+ *      `1 战士 / 2 魔法师 / …`）—— 同名判据抓不到，而且它**全靠人记得同步**。
+ *
+ * b 才是真正会腐化的那种（#122：服务端的 `ROLE_OCCUPATIONS` 注释里写着「与客户端一致」，
+ * 而这两个文件之间没有任何机械连接）。判据按「短标签表」定：
+ *
+ *   - **完整键列表被写成数组字面量**：`["1", "2", "3", "4"]`；
+ *   - **行文被抄**：同一张表里出现 ≥ 2 条 `码 名`（如 `1 战士`、`2 魔法师`）。
+ *
+ * 只对「键数 ≤ 8 且值全是字符串」的表做这两条：那是枚举清单的形状，
+ * 逐条抄进源码是真实发生过的破法；而物品 / 装备那种几百行的表本来就抄不动，
+ * 硬去匹配只会带来误报。**带 `@generated` 标记的文件一律跳过** ——
+ * 两端的 `ApiModels.ts` / `models.ts` 里本来就镜像着 DTO 描述，那是生成出来的，不是维护的。
+ *
+ * ===========================================================================
  * 与 `audit-combat-parity.cjs` 的分工
  * ===========================================================================
  * 这条守「**数据**没漂移」，parity 那条守「**算法**写得对不对」—— 表一模一样，
@@ -114,13 +135,14 @@ function main() {
   // （在源码上按缩进数条目会连嵌套的 damageCoefficients 一起算进来，那不是「一张表几条」）
   let counts = [];
   try {
-    counts = inspectExports();
+    const mod = compileGenerated();
+    counts = inspectExports(mod);
+    // 消费方自查：两端都不许再手写同一份数据（同名字典 / 清单字面量 / 抄来的文案）
+    failures.push(...findLocalCopies());
+    failures.push(...findHandWrittenData(mod));
   } catch (error) {
     failures.push(String(error.message));
   }
-
-  // 消费方自查：两端都不许再手抄一份同名字典
-  failures.push(...findLocalCopies());
 
   if (failures.length > 0) fail(failures.join("\n\n"));
 
@@ -133,14 +155,12 @@ function main() {
 }
 
 /**
- * 把生成物编译成 JS 再逐表数条目
+ * 把生成物编译成 JS 并 `require` 回来（后面两条检查都要**真的值**，不是源码文本）
  *
  * 这个编译单元**没有** Cocos 依赖（生成物本身不含引擎类型），所以任何 error TS 都是真错误 ——
  * 与 `audit-combat-parity.cjs` 那边要挑错码不同，这里一律当失败。
- *
- * @returns 形如 `["ROLE_LEVEL_ATTRIBUTES=60", …]`
  */
-function inspectExports() {
+function compileGenerated() {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-shared-audit-"));
   const outdir = path.join(work, "out");
   const tsconfig = path.join(work, "tsconfig.json");
@@ -182,7 +202,12 @@ function inspectExports() {
   }
 
   const mod = require(path.join(outdir, "shared", "game-data.generated.js"));
+  fs.rmSync(work, { recursive: true, force: true });
+  return mod;
+}
 
+/** 逐表数条目，顺带查「表在不在、空不空」 */
+function inspectExports(mod) {
   const problems = [];
   const counts = [];
   for (const name of REQUIRED_EXPORTS) {
@@ -199,51 +224,168 @@ function inspectExports() {
     counts.push(`${name}=${rows}`);
   }
   if (problems.length > 0) throw new Error(problems.join("\n"));
-
-  fs.rmSync(work, { recursive: true, force: true });
   return counts;
 }
 
 /**
- * 扫描两端源码，抓「手抄了一份同名字典」
+ * 遍历两端源码（只 `.ts` / `.tsx`），跳过依赖目录与**生成物**
  *
- * 这份生成物存在的意义就是「谁也不许自己维护一份」，而最容易发生的破法恰恰是**复制一张表到本地**
- * （改起来比引路径方便，然后客户端改了它就静默过期）。文档里写多少遍都不如这里扫一眼。
+ * 跳过生成物的判据是文件里有 `@generated` 标记 —— 不能按目录名跳：
+ * `server/src/shared/` 里除了生成物还有手写的门面（`game-data.ts`），那个要扫。
  *
- * 判据是「与生成物**同名**的值定义」（`const X = {` / `const X: Record<...> = {`）。
- * 转发写法（`export { X } from "…"`）不匹配，所以正解不会被误报。
- *
- * 只扫 `.ts` / `.tsx`，跳过 `server/src/shared/`（那里就是生成物本身）与各端的 `dist`。
+ * 给的 `source` 已经**剥掉注释**（见 stripComments）。
  */
-function findLocalCopies() {
-  const roots = [path.join(ROOT, "admin", "src"), path.join(ROOT, "server", "src")];
-  const skipDirs = new Set(["node_modules", "dist", "build", "shared"]);
-  const pattern = new RegExp(`(?:export\\s+)?const\\s+(${REQUIRED_EXPORTS.join("|")})\\s*[:=]`);
-  const problems = [];
+function* eachSource() {
+  const roots = [path.join(ROOT, "admin", "src"), SERVER_SRC];
+  const skipDirs = new Set(["node_modules", "dist", "build"]);
 
-  const walk = (dir) => {
+  function* walk(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        if (!skipDirs.has(entry.name)) walk(path.join(dir, entry.name));
+        if (!skipDirs.has(entry.name)) yield* walk(path.join(dir, entry.name));
         continue;
       }
       if (!/\.tsx?$/.test(entry.name)) continue;
       const file = path.join(dir, entry.name);
-      const source = fs.readFileSync(file, "utf8");
-      const match = pattern.exec(source);
-      if (!match) continue;
-      const line = source.slice(0, match.index).split("\n").length;
-      problems.push(
-        `${path.relative(ROOT, file)}:${line} 自己定义了一份 ${match[1]} —— ` +
-          `游戏数据只有一份（server/src/shared/game-data.generated.ts），` +
-          `要从 admin/src/api/gameData.ts 引用它，不许复制`,
-      );
+      const raw = fs.readFileSync(file, "utf8");
+      if (raw.includes("@generated")) continue;
+      yield { file, rel: path.relative(ROOT, file), source: stripComments(raw) };
     }
-  };
+  }
 
-  for (const root of roots) if (fs.existsSync(root)) walk(root);
+  for (const root of roots) if (fs.existsSync(root)) yield* walk(root);
+}
+
+/**
+ * 剥掉注释（块注释换成等量空格、行注释删到行尾），**行号与列位置不变**
+ *
+ * 为什么必须剥：注释里写反例是正常的 —— 「不要写成 `["1","2","3","4"]`」这种说明
+ * 恰恰应该写在被禁止的地方旁边（本文件头注释与 `game-data.ts` 里就各有一处），
+ * 不剥的话守卫会把说明当成副本，然后逼着人把文档改丑。**真副本在代码与字符串里**：
+ * 手写的清单是代码、DTO 的 `description` 是字符串字面量，剥注释都删不掉。
+ *
+ * 代价（已知，接受）：字符串里出现 `//`（比如 URL）会把该行后面截掉，
+ * 于是那一行不再被扫。这类行里放游戏数据副本的概率可以忽略。
+ */
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "))
+    .replace(/\/\/[^\n]*/g, "");
+}
+
+/** 报错时的落点（`文件:行号`） */
+function locate(source, index) {
+  return source.slice(0, index).split("\n").length;
+}
+
+/**
+ * 抓 a 类：**与生成物同名的字典型定义**（复制一张表到本地）
+ *
+ * 判据是 `const X = {` / `const X: Record<...> = {`（X 与生成物导出同名）。
+ * 转发写法（`export { X } from "…"`）不匹配，所以正解不会被误报。
+ */
+function findLocalCopies() {
+  const pattern = new RegExp(`(?:export\\s+)?const\\s+(${REQUIRED_EXPORTS.join("|")})\\s*[:=]`);
+  const problems = [];
+
+  for (const { rel, source } of eachSource()) {
+    const match = pattern.exec(source);
+    if (!match) continue;
+    problems.push(
+      `${rel}:${locate(source, match.index)} 自己定义了一份 ${match[1]} —— ` +
+        `游戏数据只有一份（server/src/shared/game-data.generated.ts），` +
+        `要从它引用（管理端经 admin/src/api/gameData.ts、服务端经 server/src/shared/game-data.ts），不许复制`,
+    );
+  }
   return problems;
 }
+
+/** 短标签表的键数上限：超过这个数就不是「枚举清单」的形状，逐条抄进源码不现实 */
+const SHORT_TABLE_MAX_KEYS = 8;
+
+/**
+ * 抓 b 类：**换个名字把内容写了一遍**（手写清单 / 抄来的文案）
+ *
+ * 见文件头「内容被抄进源码」一节。只查「键数 ≤ 8 且值全是字符串」的表，
+ * 免得物品 / 装备那种大表把误报引进来。
+ */
+function findHandWrittenData(mod) {
+  const tables = [];
+  for (const [name, value] of Object.entries(mod)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const keys = Object.keys(value);
+    if (keys.length === 0 || keys.length > SHORT_TABLE_MAX_KEYS) continue;
+    if (!Object.values(value).every((item) => typeof item === "string")) continue;
+    tables.push([name, keys, Object.values(value)]);
+  }
+
+  const problems = [];
+  for (const { rel, source } of eachSource()) {
+    for (const [name, keys, values] of tables) {
+      // ① 完整键列表被写成数组字面量（`["1", "2", "3", "4"]`）
+      const listPattern = new RegExp(`\\[\\s*${keys.map(quote).join("\\s*,\\s*")}\\s*\\]`);
+      const list = listPattern.exec(source);
+      if (list) {
+        problems.push(
+          `${rel}:${locate(source, list.index)} 手写了一遍 ${name} 的键清单 —— ` +
+            `这份清单必须从公共数据取（用 Object.keys(…) 取键），否则客户端加了码这边不会知道`,
+        );
+      }
+
+      // ② 行文被抄（`1 战士` / `2 魔法师`：同一张表至少两条才判）
+      const hits = [];
+      for (let index = 0; index < keys.length; index++) {
+        const hit = new RegExp(`${escapeRegExp(keys[index])}\\s*${escapeRegExp(values[index])}`).exec(source);
+        if (hit) hits.push({ index: hit.index, text: `${keys[index]} ${values[index]}` });
+      }
+      if (hits.length >= 2) {
+        problems.push(
+          `${rel}:${locate(source, hits[0].index)} 抄了 ${name} 的行文（${hits.map((hit) => hit.text).join(" / ")}…）—— ` +
+            `这类文案要用 shared/game-data 的枚举一览常量，别手写`,
+        );
+      }
+    }
+  }
+
+  problems.push(...findRequiresDerived());
+  return problems;
+}
+
+/**
+ * ③ 服务端**校验用**的那两条清单必须是从公共数据派生的
+ *
+ * 与 ① 的分工：① 抓「内容被抄了一遍」，这条抓「清单的来源」—— 只要右侧不是从公共数据
+ * 算出来的（写回字面量、或换成别的本地常量），这里就报。它是这三条里唯一读**具体文件**的，
+ * 因为「职业 / 性别的允许值」只有这一处入口，而它正是 #122 那个「注释里写着与客户端一致」
+ * 的现场。
+ */
+function findRequiresDerived() {
+  const file = path.join(SERVER_SRC, "modules", "roles", "role-data.util.ts");
+  if (!fs.existsSync(file)) {
+    throw new Error(`找不到 ${path.relative(ROOT, file)}（改名了？改了就来同步这条判据）`);
+  }
+  const source = fs.readFileSync(file, "utf8");
+  const rel = path.relative(ROOT, file);
+  const problems = [];
+
+  if (!/from\s+"[^"]*shared\/game-data"/.test(source)) {
+    problems.push(`${rel} 没有引用公共游戏数据（shared/game-data）—— 职业 / 性别清单必须从那里取`);
+  }
+  for (const name of ["ROLE_OCCUPATIONS", "ROLE_SEXES"]) {
+    const match = new RegExp(`export const ${name}\\b[^=]*=\\s*([^;\\n]*)`).exec(source);
+    if (!match) {
+      problems.push(`${rel} 里找不到 ${name} 的定义（改名了？改了就来同步这条判据）`);
+      continue;
+    }
+    if (/^\s*\[/.test(match[1])) {
+      problems.push(`${rel} 的 ${name} 又写成字面量清单了：${match[1].trim().slice(0, 40)} —— 要从公共数据取键`);
+    }
+  }
+  return problems;
+}
+
+const quote = (text) => `"${text}"`;
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function fail(message) {
   console.error(`\n✗ ${message}\n`);

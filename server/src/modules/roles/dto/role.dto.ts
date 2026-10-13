@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { RoleRow, RoleWithAccountRow } from "../../../database/rows";
+import { OCCUPATION_HINT, SEX_HINT } from "../../../shared/game-data";
 import { compareRoleAttributesOfRole } from "../../combat/role-attribute-comparison";
 import { decodeStoredRoleData } from "../role-data.util";
 
@@ -14,10 +15,12 @@ export class RoleSummaryDto {
   @ApiProperty({ description: "角色名" })
   name: string;
 
-  @ApiProperty({ description: "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业" })
+  /** 职业码一览由公共游戏数据拼出（见 shared/game-data），不在这里手写 —— 客户端加职业码时它会自己变 */
+  @ApiProperty({ description: `职业：${OCCUPATION_HINT}` })
   occupation: string;
 
-  @ApiProperty({ description: "性别：1 男 / 2 女 / 3 全性别" })
+  /** 性别码一览同理（唯一的来源是客户端 types/role.ts 的 SEX 枚举注释） */
+  @ApiProperty({ description: `性别：${SEX_HINT}` })
   sex: string;
 
   @ApiProperty({ description: "等级" })

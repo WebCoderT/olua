@@ -135,6 +135,10 @@ server/
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
 │   │   ├── token/                  JWT issue & verify (dual audience)
 │   │   └── health/
+│   ├── shared/
+│   │   ├── game-data.generated.ts  shared game-data artifact (**the one source all three sides read**; @generated,
+│   │   │                           regenerate with node tools/gen-shared-data.cjs)
+│   │   └── game-data.ts            server facade (hand-written): derives the occupation / sex code lists and doc text
 │   └── swagger/
 │       ├── setup.ts                doc mounting (factored into a function so tests can also generate once to verify grouping/permissions/dangling $ref)
 │       ├── models.ts               response models for docs

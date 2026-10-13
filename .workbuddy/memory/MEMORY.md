@@ -32,14 +32,22 @@
 - **一次性产出大量中文（脚本/issue/PR 正文）会混乱码** → 写完先扫非预期英文串，再落盘发布。
 
 ## 三端架构（细节全在 Skill）
-- **游戏数据只有一份**（用户 2026-10-13 定的硬要求，issue #117 索引 / #118 生成物与守卫 / #119 管理端接入）：权威定义 = 客户端 `client/assets/configs`；`tools/gen-shared-data.cjs` 把它快照成 `server/src/shared/game-data.generated.ts`（**三端唯一的那份**，管理端 import 同一个文件，Vite 直接打包），`tools/audit-shared-data.cjs` 重生成逐字节比对 + 断言 23 张表齐全非空。原来的 `battle-rules.generated.ts` 已并进去并删除（两份快照并存必然各自漂移）。**算法**一侧仍由 `audit-combat-parity` 锁（把真的 `GameHelper.combatCalc` 编译进 Node 当期望值，不是再抄一版口径）。三张等级表的键 = 来源数组下标，客户端等级从 1 起，**差一位**。包裹 `{code,message,data,timestamp}`，0 成功；`silent` 不弹全局提示。
+- **游戏数据只有一份**（用户 2026-10-13 定的硬要求，issue #117 索引 / #118 生成物与守卫 / #119 管理端接入 / #122 码清单与文案也派生）：权威定义 = 客户端 `client/assets/configs`；`tools/gen-shared-data.cjs` 把它快照成 `server/src/shared/game-data.generated.ts`（**三端唯一的那份**，管理端 import 同一个文件，Vite 直接打包），`tools/audit-shared-data.cjs` 重生成逐字节比对 + 断言 24 张表齐全非空。原来的 `battle-rules.generated.ts` 已并进去并删除（两份快照并存必然各自漂移）。**算法**一侧仍由 `audit-combat-parity` 锁（把真的 `GameHelper.combatCalc` 编译进 Node 当期望值，不是再抄一版口径）。三张等级表的键 = 来源数组下标，客户端等级从 1 起，**差一位**。包裹 `{code,message,data,timestamp}`，0 成功；`silent` 不弹全局提示。
   - 生成物放 `server/src/shared/` 而不是顶层 `shared/`：服务端 `tsc` 单包编译（`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，连带 7 套 e2e、Dockerfile、deploy 一起改。
   - **管理端**不复制：`admin/src/api/gameData.ts` 按相对路径 import 同一个生成物（Vite 打包；dev 模式要在
     `vite.config.ts` 里 `server.fs.allow: [".."]`），页面显示名字一律过它的查表函数（`equipmentText` /
     `skillText` / `itemText` / `mapText` / `soulText` / `titleText` / `rankText`…）。**性别名与职业码「全职业」
     只存在于 `client/assets/types/role.ts` 的枚举注释里**，生成器按注释抽（`readEnumLabels`，抓不到就抛错）。
+  - **服务端门面** `server/src/shared/game-data.ts`（手写，与管理端那个对称）：`ROLE_OCCUPATION_CODES` /
+    `ROLE_SEX_CODES`（`Object.keys` 取标签表键）与 `OCCUPATION_HINT` / `SEX_HINT`（DTO 描述那一行）。
+    `roles/role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES` 引它，两处 DTO 描述插值 hint ——
+    客户端加一个职业码，服务端**一行都不用改**（实测：往生成物的表里注入一个码，清单与文案同时变）。
+    两处 DTO 描述改了，`openapi.json` 却能**逐字节无变化**（派生出来的文案与原手写完全一致）。
+  - 守卫的三条「内容被抄」判据（#122）：①与生成物**同名**的字典定义；②短标签表（键数 ≤ 8、值全字符串）的
+    键清单被写成数组字面量；③抄表的行文（`1 战士`）。**扫前必须剥注释**（注释里写反例是正常的，不剥就会
+    逼着人把文档改丑）、**跳过带 `@generated` 的文件**（两端 `models.ts`/`ApiModels.ts` 镜像着 DTO 描述）。
   - 不在范围：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes` 整份被注释，没有活的来源）。
-  - **文档约定**：`N 张表` 这个句式归 SQLite 表数（守卫在查）；说生成物里的数据集写 **`N 张数据表`**，否则守卫误判。
+  - **文档约定**：`N 张表` 这个句式归 SQLite 表数（守卫在查）；说生成物里的数据集写 **`N 张数据表`**，否则守卫误判。生成物的行数 / KB / 数据表数**没有守卫**（`audit-doc-numbers` 明说不查行数），改了生成器记得顺手改技能 4.0 节（#122 就撞见过一次 23→24 的过期）。
 - 权限两层守卫；**加管理端接口必须 `@ApiAdminDoc({permissions})`**（漏 = 真放行）；业务代码禁写角色判断。
 - 接口文件必须 `make gen-api` 生成（新模块登记 `MODULES`）；**别记死数字**：生成物 / 权限点 / 表数随时从 `openapi.json` 实测。
 - CI 不覆盖客户端（要编辑器产物）；10 套单测断言真实素材 → 客户端门禁是本地专属。

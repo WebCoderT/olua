@@ -18,6 +18,11 @@ agent_created: true
 服务端**不复制**它，而是引用它的引擎无关快照 `src/shared/game-data.generated.ts`（`node tools/gen-shared-data.cjs` 生成，`make audit-shared-data` 逐字节守着重生成必然一致）；管理端 import 的是**同一个文件**。
 三端**没有第二份副本**，谁都不许自己维护一份。服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，从不复制一份游戏配置过来。
 
+**连「码的清单」与「文案」也不许手写**（#122）：`role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES`
+是 `Object.keys(OCCUPATION_LABELS / SEX_LABELS)`，DTO 里那行 `1 战士 / 2 魔法师 / …` 是
+`shared/game-data.ts` 的 `OCCUPATION_HINT` / `SEX_HINT` —— 客户端加一个职业码，这两处**自动跟着变**。
+手动写回字面量（清单或文案）会被 `make audit-shared-data` 咬住。
+
 ## 一、目录与职责
 
 ```
@@ -56,6 +61,10 @@ server/src
   shared/
     game-data.generated.ts        公共游戏数据快照（**三端唯一的游戏数据来源**；@generated，
                                   重生成 = node tools/gen-shared-data.cjs，守卫 = tools/audit-shared-data.cjs）
+    game-data.ts                  服务端门面（**手写**）：只做「派生 + 拼文案」——
+                                  ROLE_OCCUPATION_CODES / ROLE_SEX_CODES（取标签表的键）
+                                  与 OCCUPATION_HINT / SEX_HINT（DTO 描述里那一行）。
+                                  与管理端的 admin/src/api/gameData.ts 对称，数据都在上面那个文件里
   swagger/
     models.ts   SWAGGER_MODELS（要出现在文档里的 DTO 必须登记）
     setup.ts    buildSwaggerDocument() + setupSwagger(app)（main 与自动化测试**共用同一份**）
@@ -118,21 +127,29 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 
 ## 四、数据层规矩
 
-**4.0 游戏数据三端共用一份**（用户 2026-10-13 定的硬要求，见 issue #117~#119）
+**4.0 游戏数据三端共用一份**（用户 2026-10-13 定的硬要求，见 issue #117~#122）
 
 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的权威定义**只有一处**：客户端 `client/assets/configs`。
 服务端**不复制**，引用它的引擎无关快照 `src/shared/game-data.generated.ts`；管理端 import 的是**同一个文件**
 （Vite 按相对路径打包）—— **三端没有第二份副本**。
 
 - **生成** `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）：编客户端纯配置 → 在 Node 里加载 → 快照。
-  改数值 / 改文案都改客户端配置，然后重新生成。产物 ~255 KB / 3401 行 / 23 张数据表。
+  改数值 / 改文案都改客户端配置，然后重新生成。产物 ~255 KB / 3410 行 / 24 张数据表。
 - **守卫** `tools/audit-shared-data.cjs`（= `make audit-shared-data`）：重生成后**逐字节**比对，并断言数据表
   **每张都在且非空** —— 逐字节比对发现不了「生成器自己少产一张数据表」（同一份代码必然一致，而消费方拿到
   `undefined`：管理端页面空白、服务端查表得 0）。算法一侧另有人守：`audit-combat-parity.cjs` 把**真的**
   `GameHelper.combatCalc` 编译进 Node 当期望值。
+- **它还会扫两端源码**，抓「自己维护一份」的三种破法（#122）：①与生成物**同名**的字典定义；②把**短标签表**
+  （键数 ≤ 8、值全是字符串）的键清单写成数组字面量（`["1","2","3","4"]`）；③抄表的**行文**（`1 战士`）。
+  另有第三条专查 `roles/role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES` 必须是从公共数据**派生**的
+  （右侧不得是字面量数组）。扫之前**剥掉注释、跳过带 `@generated` 的文件** —— 注释里写反例是正常的，
+  两端的 `models.ts` / `ApiModels.ts` 本来就镜像着 DTO 描述。
 - **消费**：`modules/combat/role-attributes.ts` 只查表加总，**不做任何自行推算**；管理端拿它把裸 id 变成名字
   （此前它自己抄了一份职业名与性别名 —— 那正是这条线要消灭的）。装备的**显示名与所属槽位在生成器里算好**
   （复用客户端的 `getEquipmentNameParts` 与条目自带的 `slot`），消费方不做拼接。
+  **连「码的清单」与「文案」也派生**：`shared/game-data.ts`（手写门面，与管理端的 `api/gameData.ts` 对称）
+  给出 `ROLE_OCCUPATION_CODES` / `ROLE_SEX_CODES` 与 `OCCUPATION_HINT` / `SEX_HINT` ——
+  客户端加一个职业码，服务端的校验清单与 DTO 里那行 `1 战士 / 2 魔法师 / …` **自动跟着变**（不必改服务端一行）。
 - **不在范围**：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes`
   整份被注释，没有活的来源 —— 不凭空造一份）。
 - 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译
