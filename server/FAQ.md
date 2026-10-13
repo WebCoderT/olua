@@ -87,9 +87,10 @@ env -u NODE_OPTIONS npm run verify
 
 ### 角色数量上限想改，改哪边？
 
-- **权威在服务端**：`server/.env` 的 `ROLE_MAX_PER_ACCOUNT`（默认 3），创建时由服务端拒绝超限请求
-- **客户端也有一份**：`client/assets/configs/role.maxRoleCount` —— 它做两件事：创建前先拦一道省一次往返、以及和选角界面的站位数量对齐（`configs/layout/scenes.roleSelectorLayout.rolePositions` 只有几个站位，超出的角色界面上没地方放）
-- **两边要一起改**，否则会出现「服务端说有 5 个位置但界面只画 3 个」
+- **业务上限在服务端**：`server/.env` 的 `ROLE_MAX_PER_ACCOUNT`（默认 3），创建时由服务端拒绝超限请求 —— 这是**唯一**的那个「上限」数字
+- **界面容量在客户端**：`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions` 数组就是选角界面的**站位**（有几个站位就能画几个角色）。客户端创建前的拦截是「**站位满了**」（省一次往返），不是另一份上限
+- **所以它只能调低**：`ROLE_MAX_PER_ACCOUNT` **不得超过**站位数量 —— 调大会让玩家建出界面上没处放的角色（多出来的取不到站位，会叠在原点，客户端会打一条告警）。改站位是**美术 / 布局**的事（构图要重排），改 `.env` 是**运维**的事（只往下调），两者不再需要「一起改」
+- **守卫**：`tools/audit-shared-data.cjs` 断言仓库里的默认值（`.env.example` 与 `configuration.ts` 的兜底）≤ 站位数量，并禁止客户端再出现第二份上限数字。**运行时**的 `.env` 是部署本地的（不进仓库），守卫看不到 —— 所以这条关系靠上面写清楚 + 客户端那条运行期告警兜着
 
 ## 口令与安全
 

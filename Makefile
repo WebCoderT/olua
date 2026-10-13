@@ -296,7 +296,7 @@ audit-click: ## 全屏模态是否两条路都拦住了点击穿透
 audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
 	@$(NODE) tools/audit-deploy.cjs
 
-audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一致 + 表齐全非空（数据漂移）
+audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一致 + 表齐全非空（数据漂移）+ 角色上限不超过选角站位
 	@$(NODE) tools/audit-shared-data.cjs
 
 audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）

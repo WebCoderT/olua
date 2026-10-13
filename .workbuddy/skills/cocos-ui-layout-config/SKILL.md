@@ -133,7 +133,7 @@ grep -rn -e '"common/' -e '"main/' -e '"money/' -e '"buttons/' -e '"login/' \
 | 通用零件**样式**（占位色、调试边框、飘字配色与时长） | `configs/layout/theme.ts`（barrel 导出 `uiTheme`） | 某界面专属的仍写各自 layout 块 |
 | **调试可视化**的线宽/透明度/配色 | `configs/debug.ts` 的 `rangeStyle` | 与开关同域，关调试不影响 UI 配置 |
 | **校验/拒绝原因**（为什么不能穿/不能进图） | `configs/texts.ts` 的 `reject_*` | 校验函数只产出 `TextRef`，不产出中文 |
-| 玩法**可调数值**（拾取半径、提示节流、散落间距、操作上限、体型） | 对应域配置（`drop.ts` 的 `dropRuntime`、`role.ts` 的 `roleBody`/`roleRigid`/`maxRoleCount`） | 模块级 `const XXX = 40` 一律搬走 |
+| 玩法**可调数值**（拾取半径、提示节流、散落间距、操作上限、体型） | 对应域配置（`drop.ts` 的 `dropRuntime`、`role.ts` 的 `roleBody`/`roleRigid`） | 模块级 `const XXX = 40` 一律搬走 |
 | **入口表**（底部功能按钮：名称/图标/解锁等级/快捷键） | `configs/bottomNav.ts` | 回调留在组件，用 `Record<key, 回调>` 关联 |
 
 ### 文案配置化（本项目已验证的形态）

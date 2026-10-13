@@ -363,7 +363,10 @@ async function expectFailure(action) {
   const removeIndex = selectorSource.indexOf("await RoleApi.remove(roleId)");
   const deleteIndex = selectorSource.indexOf("StorageManager.deleteRole(roleId)");
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");
-  check(/maxRoleCount/.test(selectorSource), "创建前按 configs/role.maxRoleCount 先拦一道（服务端仍是权威）");
+  check(
+    /roleSelectorLayout\.rolePositions\.length/.test(selectorSource) && !/maxRoleCount/.test(selectorSource),
+    "创建前按选角站位数量先拦一道（客户端没有第二个上限数字，服务端仍是业务权威）",
+  );
 
   const gameSource = read(FILE.game);
   check(/installNetwork\(\)/.test(gameSource), "游戏场景调 installNetwork（令牌失效回登录）");

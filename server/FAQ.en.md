@@ -87,9 +87,10 @@ A related environment pitfall: on this machine `curl 127.0.0.1` may be routed th
 
 ### Want to change the role-count limit? Which side do I change?
 
-- **The server is authoritative**: `ROLE_MAX_PER_ACCOUNT` in `server/.env` (default 3); over-limit requests are rejected by the server at creation time.
-- **The client also has a copy**: `client/assets/configs/role.maxRoleCount` — it does two things: pre-blocks before creation to save a round trip, and aligns with the slot count on the character-select UI (`configs/layout/scenes.roleSelectorLayout.rolePositions` has only a few slots, so extra roles have nowhere to be placed).
-- **Change both sides together**, otherwise you get "the server says 5 slots but the UI only draws 3".
+- **The business cap lives on the server**: `ROLE_MAX_PER_ACCOUNT` in `server/.env` (default 3); over-limit requests are rejected by the server at creation time. This is the **only** "limit" number.
+- **The UI capacity lives on the client**: the `roleSelectorLayout.rolePositions` array in `configs/layout/scenes` *is* the character-select UI's **stands** (as many stands as are drawn, that many characters can be shown). The client's pre-creation check simply means "**all stands are taken**" (saving a round trip); it is not a second cap.
+- **So it can only be lowered**: `ROLE_MAX_PER_ACCOUNT` must **not exceed** the stand count — raising it would let a player create a character the UI has nowhere to place (the extra one gets no stand and stacks at the origin, and the client logs a warning). Changing the stands is an **art / layout** job (the composition has to be redone) while changing `.env` is an **ops** job (downwards only), so the two no longer have to change together.
+- **The guard**: `tools/audit-shared-data.cjs` asserts that the committed defaults (`.env.example` and the `configuration.ts` fallback) are ≤ the stand count, and forbids the client from introducing a second limit number. The **runtime** `.env` is deployment-local (not in the repo), so the guard cannot see it — which is why the relationship is spelled out above, backed by the client's runtime warning.
 
 ## Passwords and security
 

@@ -222,7 +222,7 @@ olua/
 - audit-api-hardcode.cjs：三端有没有硬编码地址、请求是否只在唯一出口发出、环境变量键是否都登记进 `.env.example`
 - audit-config-leak.cjs：客户端核心代码有没有可配置项外泄 + `configs/texts` 的 key 是否都被登记（白名单 `config-leak-allowlist.json`）
 - audit-ui-click-through.cjs：客户端 UI 点击会不会穿透到世界、按压归属的接线是否齐全
-- audit-shared-data.cjs：公共游戏数据与客户端 `configs` 是否逐字节一致，外加「每张表都在且非空」（**数据**漂移不会报错，只会让两端慢慢算得不一样）
+- audit-shared-data.cjs：公共游戏数据与客户端 `configs` 是否逐字节一致，外加「每张表都在且非空」（**数据**漂移不会报错，只会让两端慢慢算得不一样）；另守一条跨端数值约定 —— 角色数量上限不得超过选角界面的站位数量（客户端那边没有第二个上限数字）
 - audit-combat-parity.cjs：服务端算的角色属性是否与客户端 `combatCalc` 一致（**算法**漂移）。期望值不是抄一份口径，而是把真的 `GameHelper.combatCalc` 编译进 Node 跑一遍 —— 2849 组输入 × 10 项，覆盖全等级 / 全装备 / 全战魂称号军衔
 - audit-deploy.cjs：Docker / compose / nginx 的跨文件接线是否对得上
 - audit-docs-en.cjs：英文文档译本是否与中文版走散（覆盖 / 残留中文 / 章节等价 / 数字不丢 / 锚点与链接可达 / 互链）

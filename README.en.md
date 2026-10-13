@@ -222,7 +222,7 @@ olua/
 - audit-api-hardcode.cjs: no hard-coded addresses on any side, requests leaving only through the single exit, every environment variable key registered in `.env.example`
 - audit-config-leak.cjs: no tunables leaking into client core code, and every key in `configs/texts` registered (allowlist `config-leak-allowlist.json`)
 - audit-ui-click-through.cjs: do client UI clicks fall through to the world, and is press ownership wired up completely
-- audit-shared-data.cjs: is the shared game data byte-identical to the client's `configs`, and is every table present and non-empty (**data** drift raises no error, it just makes the two sides slowly compute different numbers)
+- audit-shared-data.cjs: is the shared game data byte-identical to the client's `configs`, and is every table present and non-empty (**data** drift raises no error, it just makes the two sides slowly compute different numbers); it also guards one cross-side numeric convention — the character cap must not exceed the character-select stand count, and the client holds no second limit number
 - audit-combat-parity.cjs: do the character attributes the server computes match the client's `combatCalc` (**algorithm** drift). The expected values are not a copied formula — the real `GameHelper.combatCalc` is compiled into Node and run: 2849 input sets × 10 fields, covering all levels / all equipment / all War Soul, Title and Rank tiers
 - audit-deploy.cjs: do the Docker / compose / nginx cross-file wirings line up (service names / ports / volumes / reverse-proxy prefixes / secret isolation)
 - audit-docs-en.cjs: do the English translations stay in step with the Chinese (coverage / no leftover Chinese / section parity / no dropped numbers / anchors and links reachable / mutual links)
