@@ -359,7 +359,23 @@ async function runAutoBackupSuite() {
     check(second.lastFile !== secondFile, "间隔到了之后又自己备了一次（周期性）");
     checkEqual(second.count, 2, "两次产出都在（还没触发份数上限）");
     check(second.lastAttemptAt > first.lastAttemptAt, "最后一次尝试的时刻在往后走");
-    checkEqual(second.lastSuccessAt, second.lastAttemptAt, "成功时「尝试」与「成功」是同一时刻");
+    // 「成功时刻」与「尝试时刻」**来源不同**，不能判相等：
+    // · lastAttemptAt = runOnce() 入口的 Date.now()（毫秒精度）
+    // · lastSuccessAt 跑完时先赋成同一个值，但每次读快照还会被 syncFromDisk() 用**备份文件名里的
+    //   时间戳**（按秒取整）覆盖 —— 这是设计意图：「上一次成功」按磁盘说话，手工备份也要认
+    // 于是差值 = max(0, floor(scriptNow / 1000) * 1000 − 入口值)，落在 [0, 1000 + 脚本耗时) 内：
+    // 备份脚本是另起的 node 进程（启动 + 拷库），它自己的时刻比入口晚一点，再被向下取整到秒，
+    // 两者跨秒时差值就有几百毫秒。所以「相等」从来就不成立，只是大部分时候碰巧成立（CI 上撞出过 6ms）。
+    //
+    // 改成**窗口断言**，守住原本要守的东西：两个时间戳都被刷新、且属于同一次运行。
+    // 上界 5 秒比上界值（1 秒取整 + 脚本启动）宽出余量，又远小于本组的备份间隔 10.8 秒 ——
+    // 要是 lastSuccessAt 压根没刷新、留着上一轮的值，差值就是约 10.8 秒，照样会被抓出来。
+    const SAME_RUN_WINDOW_MS = 5_000;
+    const drift = second.lastSuccessAt - second.lastAttemptAt;
+    check(
+      drift >= 0 && drift < SAME_RUN_WINDOW_MS,
+      `成功时「尝试」与「成功」记的是同一轮（相差 ${drift}ms，窗口 ${SAME_RUN_WINDOW_MS}ms）`,
+    );
   } finally {
     await stopServer(server.child);
   }
