@@ -275,7 +275,7 @@ a { color: inherit; text-decoration: none; }
 .shot:hover figcaption { opacity: 1; transform: translateY(0); }
 
 /* ---------- 工程化 ---------- */
-.grid--eng { grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.grid--eng { grid-template-columns: repeat(3, 1fr); gap: 22px; }
 .eng {
   padding: 26px 22px; border: var(--frame); background: var(--ink-2);
   transition: border-color 0.28s, transform 0.28s;

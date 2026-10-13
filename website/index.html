@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>olua · 2D 角色成长与装备玩法原型</title>
-  <meta name="description" content="olua 是一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型：装备前后缀 15 品质变体、品质边框与详情背景、掉落光柱、商城、战魂与称号成长线、A* 自动战斗。" />
+  <meta name="description" content="olua 是一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型：装备前后缀 15 品质变体、品质边框与详情背景、掉落光柱、商城、战魂 / 称号 / 军衔三条成长线、A* 自动战斗；再往上是一整套 NestJS 服务端与 React 运营后台 —— 契约驱动的三端接口、全服公告与邮件触达、权限双层守卫与操作审计。" />
   <meta property="og:title" content="olua · 2D 角色成长与装备玩法原型" />
-  <meta property="og:description" content="基于 Cocos Creator 3.8.7 的 2D ARPG 玩法原型：555 件装备变体、品质特效、掉落光柱、商城分页、战魂与称号成长线。" />
+  <meta property="og:description" content="基于 Cocos Creator 3.8.7 的 2D ARPG 玩法原型，配套 NestJS 服务端与 React 运营后台：555 件装备变体、品质特效、掉落光柱、商城分页、三条成长线，以及全服公告与邮件触达的运营底座。" />
   <meta property="og:image" content="assets/img/game.jpg" />
   <meta property="og:type" content="website" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -26,6 +26,7 @@
       <nav class="nav__links" id="navLinks">
         <a href="#features">核心特色</a>
         <a href="#gallery">游戏截图</a>
+        <a href="#stack">三端架构</a>
         <a href="#engineering">工程化</a>
         <a href="#contact">联系我们</a>
       </nav>
@@ -41,12 +42,13 @@
     <div class="hero__inner">
       <img class="hero__logo reveal" src="assets/icons/logo-512.png" alt="olua 徽记：金龙缠剑" />
       <h1 class="hero__title reveal">olua</h1>
-      <p class="hero__tagline reveal">2D 角色成长与装备玩法原型</p>
+      <p class="hero__tagline reveal">2D 角色成长玩法与三端工程原型</p>
       <p class="hero__sub reveal">基于 Cocos Creator 3.8.7 · TypeScript 打造的传奇风 ARPG 交互演示<br />
-        从登录、创角到打怪、掉落、穿装、商城，一条完整的成长闭环</p>
+        从登录、创角到打怪、掉落、穿装、商城，一条完整的成长闭环<br />
+        再往上是一整套服务端与运营后台：契约驱动的三端接口、全服公告与邮件触达、权限守卫与操作审计</p>
       <div class="hero__actions reveal">
         <a class="btn btn--gold" href="#gallery">查看游戏截图</a>
-        <a class="btn btn--ghost" href="#contact">联系我们</a>
+        <a class="btn btn--ghost" href="#stack">看三端架构</a>
       </div>
     </div>
     <div class="hero__scroll" aria-hidden="true"></div>
@@ -57,10 +59,10 @@
     <div class="stats__inner">
       <div class="stat reveal"><b>555</b><span>件装备变体</span></div>
       <div class="stat reveal"><b>15</b><span>种品质组合</span></div>
-      <div class="stat reveal"><b>37</b><span>阶战魂成长线</span></div>
-      <div class="stat reveal"><b>34</b><span>阶称号名牌</span></div>
-      <div class="stat reveal"><b>6</b><span>套掉落光柱</span></div>
-      <div class="stat reveal"><b>17</b><span>套自动化单测</span></div>
+      <div class="stat reveal"><b>100</b><span>阶军衔成长线</span></div>
+      <div class="stat reveal"><b>51</b><span>个 REST 接口</span></div>
+      <div class="stat reveal"><b>26</b><span>套自动化单测</span></div>
+      <div class="stat reveal"><b>9</b><span>套跨端审计脚本</span></div>
     </div>
   </section>
 
@@ -132,8 +134,24 @@
         <div class="card__icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9-9c-1.5-3.5 1-7 4.5-7 2 0 3.5 1 4.5 2.5C13 6 14.5 5 16.5 5 20 5 22.5 8.5 21 12c-2 4.5-9 9-9 9z"/></svg>
         </div>
-        <h3>战魂与称号</h3>
-        <p>37 阶战魂 + 34 阶称号名牌两条成长线，绑定元宝升级，属性计入战力与地图进入条件；称号解锁后常显头顶信息栏。</p>
+        <h3>三条成长线</h3>
+        <p>战魂 37 阶 / 称号 34 阶 / 军衔 100 阶，三条同构成长线都消耗绑定元宝、都计入战力与地图进入条件；称号与军衔解锁后常显在头顶信息栏。</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v11H4z"/><path d="M4 9h16M9 5v11"/><path d="M8 20h8"/></svg>
+        </div>
+        <h3>全服公告与邮件触达</h3>
+        <p>公告带生效时间窗，管理端发布后客户端登录弹窗 + 公告板即时可见（已读记录单独存放，不污染角色存档）；邮件走模板配置 + 投递队列 + 指数退避重试，未启用时整体禁用而不是静默失败。</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>运营后台与双层权限</h3>
+        <p>角色运营台支持六维筛选、批量删除与装备 / 技能 / 背包的结构化编辑；18 个权限点 × 3 种管理员角色双层守卫，写操作自动留痕、敏感字段打码，另配口令重置、踢下线与封禁闭环。</p>
       </article>
 
       <article class="card reveal">
@@ -164,6 +182,41 @@
     <div class="gallery" id="galleryGrid"><!-- JS 渲染 --></div>
   </section>
 
+  <!-- ========== 三端架构 ========== -->
+  <section class="section" id="stack">
+    <div class="section__head reveal">
+      <h2 class="section__title">三端架构</h2>
+      <p class="section__sub">客户端只是其中一端；玩法之外还有服务端与运营后台</p>
+    </div>
+    <div class="grid grid--features">
+
+      <article class="card reveal">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <h3>客户端 · Cocos Creator</h3>
+        <p>TypeScript + Cocos UI / 2D，跑在浏览器里的 Cocos Web 产物。玩法、渲染与交互都在这端；数值、文案、布局、配色、资源路径一律收敛进 <code>configs/</code>，代码只做「怎么跑」。</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01"/></svg>
+        </div>
+        <h3>服务端 · NestJS</h3>
+        <p>51 个 REST 接口 / 41 条路径 / 72 个模型，Swagger 文档是唯一契约源；JWT 双受众鉴权（玩家 / 管理员）+ 每次请求回查库，18 个权限点的双层守卫，角色数据走修订号乐观锁与冲突自愈。</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M6 13h6M6 16.5h9"/></svg>
+        </div>
+        <h3>管理后台 · React</h3>
+        <p>角色运营、账号封禁、公告发布、邮件发信与投递记录、操作日志查询；界面按权限点渲染，服务端仍是唯一权威 —— 前端改不出一份越权数据。</p>
+      </article>
+
+    </div>
+  </section>
+
   <!-- ========== 工程化 ========== -->
   <section class="section" id="engineering">
     <div class="section__head reveal">
@@ -176,8 +229,16 @@
         <p>数值、文案、布局、配色、资源路径全部收敛在 <code>configs/</code>，代码只做「怎么跑」；审计脚本自动扫出散落在逻辑里的可配置项与未登记文案。</p>
       </article>
       <article class="eng reveal">
-        <h3>17 套自动化单测</h3>
-        <p>背包整理 / 拖动 / 回收 / 丢弃、装备边框、详情背景、掉落名、光柱、商城、称号、文案、角色帧素材守卫等，全部可在 Node 环境直接运行。</p>
+        <h3>26 套单测 + 9 套审计</h3>
+        <p>单测覆盖背包整理 / 拖动 / 回收 / 丢弃、装备边框、详情背景、掉落名、光柱、商城、称号、成长曲线、文案、角色帧素材守卫等纯函数，全部可在 Node 里直接跑；审计脚本盯的则是单测抓不到的「静默失效」——配置外泄、地址硬编码、生成物漂移、两端口径不一致、文档里的数字过期。</p>
+      </article>
+      <article class="eng reveal">
+        <h3>接口契约代码生成</h3>
+        <p>以服务端 Swagger 文档为唯一契约源，生成客户端与管理端的路径表 / 接口方法 / 实体类型。三端签名对不上会<b>直接编译报错</b>，而不是线上出现一个 undefined；生成物不许手改，有审计逐字节盯着。</p>
+      </article>
+      <article class="eng reveal">
+        <h3>876 条服务端 e2e</h3>
+        <p>六套 e2e 脚本真起服务、真连库，覆盖权限越权、令牌受众隔离、封禁闭环、公告触达、邮件投递、备份恢复等主链路；每套脚本断言自己的条数，少一条就当场失败。</p>
       </article>
       <article class="eng reveal">
         <h3>输入与交互打磨</h3>
@@ -193,6 +254,9 @@
       <span class="tech__item">TypeScript</span>
       <span class="tech__item">Cocos UI / 2D</span>
       <span class="tech__item">Box2D 物理</span>
+      <span class="tech__item">NestJS</span>
+      <span class="tech__item">React + Vite</span>
+      <span class="tech__item">SQLite</span>
       <span class="tech__item">Node 单测沙箱</span>
     </div>
   </section>
@@ -220,7 +284,7 @@
   <!-- ========== 页脚 ========== -->
   <footer class="footer">
     <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
-    <p>olua · 基于 Cocos Creator 3.8.7 构建</p>
+    <p>olua · 客户端 Cocos Creator 3.8.7 · 服务端 NestJS · 后台 React</p>
     <p class="footer__copy">© 2026 olua</p>
   </footer>
 

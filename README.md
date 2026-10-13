@@ -229,7 +229,7 @@ olua/
 
 ### 其它
 
-- website：项目官网（纯静态单页：核心特色 / 截图画廊 / 联系方式，logo 与 favicon 在 website/assets/icons）
+- website：项目官网（纯静态单页：核心特色 / 截图画廊 / 三端架构 / 工程化 / 联系方式，logo 与 favicon 在 website/assets/icons）
 - public：截图、展示素材与联系方式二维码
 - docs：项目文档（`resume.md` 等）
 - equip-aligner：装备素材偏移对齐小工具（自带 README 与自检脚本）
