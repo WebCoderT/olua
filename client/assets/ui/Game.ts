@@ -33,6 +33,7 @@ import HoverTipManager from "./core/HoverTipManager";
 import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
 import GameUiHelper from "./helpers/GameUiHelper";
 import RoleSync from "./utils/net/RoleSync";
+import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import { describeError } from "./utils/net/ApiError";
 const { ccclass, property } = _decorator;
@@ -96,6 +97,18 @@ export class Game extends Component {
       StorageManager.clearOnlineRole();
       SceneManager.loadScene("RoleSelector");
     };
+    // 实时通道（WebSocket）：进游戏才连、离开游戏就断（见 utils/net/RealtimeClient）。
+    // 提示只在「状态真的变了」时发一次 —— 服务端挂掉期间每隔几秒重连失败一次，
+    // 每次都弹就成了刷屏（这就是 RealtimeClient 把 lost / reconnected / willRetry 分开给的原因）
+    RealtimeClient.onStatusChange = (change) => {
+      if (change.status === RealtimeStatus.Connected) {
+        if (change.reconnected) GameUiHelper.createTip("realtime_reconnected_tip");
+        return;
+      }
+      if (change.status !== RealtimeStatus.Disconnected || !change.lost) return;
+      GameUiHelper.createTip(change.willRetry ? "realtime_disconnected_tip" : "realtime_replaced_tip");
+    };
+    RealtimeClient.start();
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
@@ -192,6 +205,9 @@ export class Game extends Component {
     RoleSync.onConflict = null;
     RoleSync.onMissing = null;
     RoleSync.onKicked = null;
+    // 实时通道：离开游戏就断（回选角/登录不该还挂着一条连接；先摘回调再断，避免收尾时又提示一句）
+    RealtimeClient.onStatusChange = null;
+    RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();
     this.offWindowResize = null;

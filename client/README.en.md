@@ -97,7 +97,7 @@ All of them are **local verification scripts** that take no part in bundling; ru
 > `make client-gen-monster` / `make client-gen-drops` ·
 > `make client-clean-frames[-apply]` · `make client-open`. `make help` lists everything.
 
-### Unit tests (26 suites)
+### Unit tests (27 suites)
 
 The scripts locate Cocos Creator's bundled `tsc` themselves (`TSC=/path/to/tsc node …` overrides it manually).
 

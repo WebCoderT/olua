@@ -281,6 +281,12 @@ export const uiTexts = {
   net_parse_tip: "服务器返回数据异常，请稍后重试",
   /** 其它网络异常兜底 */
   net_unknown_tip: "网络异常，请稍后重试",
+  /** 实时通道断了（会自动重连；重连成功另有一条提示） */
+  realtime_disconnected_tip: "与服务器的连接已断开，正在重新连接…",
+  /** 实时通道断线之后又连回来了 */
+  realtime_reconnected_tip: "已重新连接服务器",
+  /** 实时通道被同账号的另一条连接顶掉（服务端一个账号只留一条连接，见 utils/net/RealtimeClient） */
+  realtime_replaced_tip: "账号已在其它窗口登录，本窗口已断开",
   /** 登录/注册表单未填写完整 */
   login_input_empty_tip: "请输入账号和密码",
   /** 登录成功（{name} = 账号名） */
