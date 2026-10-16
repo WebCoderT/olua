@@ -117,14 +117,16 @@ export class RoleSelector extends Component {
   /**
    * 舞台与底部栏适配（窗口尺寸变化时可重复调用）
    *
-   * 铺满窗口的适配策略下，窗口宽高比与设计（1624×750）不一致时必然有一边被裁：
-   * 窗口偏窄（如 1024×768 → 可见区仅 1000×750）会裁掉左右，写死坐标的贴边元素
-   * （左侧创建/管理/返回按钮、右侧创建角色弹窗）就整体跑到屏幕外看不见了；
+   * 铺满窗口的适配策略下，窗口宽高比与设计（竖屏 750×1624）不一致时必然有一边被裁：
+   * 窗口偏矮（如 1024×768 → 可见区仅 750×562）会裁掉上下，写死坐标的贴边元素
+   * （顶部按钮、下部选中信息框与创建弹窗）就整体跑到屏幕外看不见了；
    * 这里把整块舞台按 contain 比例缩小（只缩不放），构图恒完整落在可见区内。
    *
    * 底部栏不进舞台（见 roleSelectorLayout.bottomBar 注释）：它按**可见宽**等比缩放
-   * （素材不可拉伸，等比才不变形；铺满窗口策略下可见宽恒 ≤ 设计宽 1624，系数恒 ≤ 1
-   * 不会放大模糊），再贴屏幕底边 —— 任何分辨率下都横跨整屏、紧贴下边缘
+   * （素材不可拉伸，等比才不变形；铺满窗口策略下可见宽恒 ≤ 设计宽 750，系数恒 ≤ 1
+   * 不会放大模糊），再贴屏幕底边 —— 任何分辨率下都横跨整屏、紧贴下边缘。
+   * 开始游戏按钮不跟底栏一起缩（见 roleSelectorLayout.beginGameButton 注释）：
+   * 反向补偿回设计尺寸并居中，否则竖屏下只有 ~22px 高、点不着
    */
   applyStageLayout() {
     const stage = this.stage;
@@ -141,6 +143,13 @@ export class RoleSelector extends Component {
     const position = getAnchoredPosition(visual, visible, "bottom-center", 0, visual.height / 2);
     bar.setScale(barScale, barScale, 1);
     bar.setPosition(position.x, position.y, 0);
+    // 开始游戏按钮反向补偿：barScale × (1/barScale) = 1，视觉尺寸恒为设计尺寸（190×48）
+    const beginButton = this.mainView?.beginGameButton;
+    if (beginButton && isValid(beginButton, true)) {
+      const compensation = 1 / barScale;
+      beginButton.setScale(compensation, compensation, 1);
+      beginButton.setPosition(roleSelectorLayout.beginGameButton.position.x, roleSelectorLayout.beginGameButton.position.y, 0);
+    }
   }
 
   /** 「开始游戏」：把选中角色同步到服务端（成为该账号的在线角色）并拉完整数据，然后进游戏场景 */

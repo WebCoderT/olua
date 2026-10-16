@@ -62,7 +62,7 @@ The project currently covers:
 - Minimap popup: reads the map directory's `preview.jpg` for a large preview, left-click pathfinds automatically, right-click teleports directly
 - Asset preloading: preloads the map, NPC / monster frame animations and the worn appearance before entering a map
 - Joystick: a persistent joystick at the bottom left (base + draggable handle); hold and drag to move — **drag a little to walk, drag far to run** (dead zone / thresholds in `configs/role.joystickMove`); touch channel only, desktop mouse hold-and-drag works too, presses on the joystick do not fall through, and releasing never clears the selected target by accident
-- Screen adaptation: fills the window (NO_BORDER) with no black bars, persistent HUD re-docked to the edges of the visible area; the character selection stage scales as one block (contain), so elements never leave the screen even when the window aspect ratio differs from the design resolution
+- Screen adaptation: portrait design resolution 750×1624, fills the window (NO_BORDER) with no black bars, persistent HUD re-docked to the edges of the visible area; the character selection stage scales as one block (contain), so elements never leave the screen even when the window aspect ratio differs from the design resolution
 - Server: account registration and login (scrypt salted digest), character data saved to the cloud (debounced merged pushes), revision-number optimistic locking, two token audiences, permission-point guards, login throttling, password reset and proactive token revocation, operator audit logs, announcement publishing with server-wide delivery, mail channel (templates + delivery queue + failure retry), realtime channel (a one-shot ticket exchanges for a WebSocket connection, heartbeat and liveness probing, one connection per account)
 - Admin: account and character management (six-dimension filtering / structured editing / batch delete), administrators and permissions, audit log queries, my account; the character detail page shows equipment / skills / items / maps / War Soul, Title and Rank as **names** (taken from the game data all three sides share — the admin keeps no copy of its own)
 - **There is one copy of the game data**: equipment / War Soul / Title / Rank / skills / items / maps are all defined in the client's `client/assets/configs`, which `tools/gen-shared-data.cjs` snapshots into `server/src/shared/game-data.generated.ts` — the server and the admin read **the same file** (`tools/audit-shared-data.cjs` keeps it byte-identical to the client's configs, asserts every table is present and non-empty, and rejects any second copy: a same-named table, a hand-written code list, or a copied-over Chinese name). Even the server's `occupation / sex` code lists and the `1 <name> / 2 <name> / …` list line in the API docs are **computed** from that data, so adding an occupation code on the client updates all three sides automatically.
@@ -428,7 +428,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | Level attribute growth | Attack / defence ranges generated per level, combat power computed |  ✅  |
 | Kill XP | Decays by the level gap between character and monster (no XP at a gap of 6+ levels), with a floating number at the kill position |  ✅  |
 | Level-up flow | Attributes recomputed, HP and MP refilled, level-up effect |  ✅  |
-| HP / MP | Health and mana orbs, overhead HP refreshing live, natural mana recovery |  ✅  |
+| HP / MP | Overhead HP refreshing live, natural mana recovery (the bottom-bar health/mana orbs were removed in the portrait rework) |  ✅  |
 | War Soul system | A single 37-tier growth line in a three-column popup, upgraded with bound ingots; entry = the "War Soul" button in the character info popup (next to "Title"), the NPC War Soul Envoy still works |  ✅  |
 | War Soul attributes effective | Each tier's attributes count into character attributes and combat power, and act as map entry requirements |  ✅  |
 | War Soul display | Once ticked in the popup, the current tier's animation hangs at the character's top-right and survives map changes and re-login |  ✅  |
@@ -500,14 +500,14 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 | Feature | Description |  Status |
 | --- | --- | :-: |
-| Full HUD | Character info bar / health orb / mana orb / XP bar / hotkey bar (6 slots + cooldown) / minimap |  ✅  |
+| Full HUD | Character info bar / XP bar / hotkey bar (6 slots + cooldown) / auto-fight button / minimap |  ✅  |
 | Hover detail popup | Hovering a status icon shows name / description / remaining time; hovering a skill cell shows name / description / cooldown etc. |  ✅  |
 | Custom mouse cursor | Attack cursor pointing at monsters, colour varies by item category when pointing at items |  ✅  |
 | Asset preloading | Preloads map / NPC / monster / appearance frame animations before entry, cached per directory |  ✅  |
 | UI hit testing | Clicking interface elements does not fall through to the world (no interrupted operations) |  ✅  |
 | UI clicks not falling through (inside the UI) | Elements register on the mouse event channel too, so clicking a popup's close button or a panel never triggers lower HUD (e.g. opening the minimap popup by accident) |  ✅  |
 | World-side press ownership | Press starts movement and release ends it: when the UI swallows the release, ownership is handed back to the world side (so movement never sticks); press start points are registered by each interface element itself (recording the hit target the engine gave, independent of bubbling order), every registration point first screened by `UITransform` (so the engine cannot be crashed by it); clicking NPCs never triggers movement by mistake nor interrupts grinding |  ✅  |
-| Screen adaptation | Fills the window (NO_BORDER) + persistent HUD re-docked to edges; the character selection stage scales as one block, so elements stay inside the visible area at any window aspect ratio |  ✅  |
+| Screen adaptation | Portrait design resolution 750×1624, fills the window (NO_BORDER) + persistent HUD re-docked to edges; the character selection stage scales as one block, so elements stay inside the visible area at any window aspect ratio |  ✅  |
 | Announcement display | **Login page**: entering the login scene pops "important" announcements (important only, not filtered by read state), closed with "Got it"; **in-game**: "Announcements" entry on the minimap plus an unread red dot, board split into two columns (left list layered "important first", ties keeping the server order; right column the body), opening marks the currently active announcements as read (you can still see which ones are new this time) |  ✅  |
 | Asset gaps filled | Missing assets: last 4 frames per weapon direction, cloth 011/012/013, weapon 005/021 |  ❌  |
 | UI polish and naming conventions | Unified overall visuals and asset naming |  ❌  |

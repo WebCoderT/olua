@@ -86,11 +86,8 @@ export const uiImages = {
   /** 通用血条：底图 / 填充 */
   hpBarBackground: commonImage("bg_gray"),
   hpBarFill: commonImage("bg_white"),
-  /** 圆形血球：底图 / 血量填充 */
-  hpOrbBase: commonImage("max"),
-  hpOrbFill: commonImage("hp"),
-  /** 圆形魔法球填充（hp 图的蓝色转色副本：红球直接染蓝色会发黑，故离线转色生成） */
-  mpOrbFill: commonImage("mp"),
+  // 圆形血球/魔法球三张图（max / hp / mp）已随竖屏改造注销（血量/魔法值显示移除，
+  // 见 hud.ts bottomBarLayout 的说明）；素材文件仍在 resources/common，暂不删
   /** 挂机开关图标（关=收剑 / 开=举剑） */
   autoFightOff: mainImage("auto_fight_close"),
   autoFightOn: mainImage("auto_fight_open"),

@@ -82,13 +82,33 @@ export default class UiHelper {
   //#region 节点与图片
 
   /**
-   * 创建全屏背景节点
-   * @param name 元素名称
-   * @param src 图片资源路径
+   * 创建全屏背景节点（cover 铺满：等比缩放到盖住设计画布，多出的部分落在可见区外）
+   *
+   * 节点先按设计分辨率占位（NO_BORDER 下可见区恒在设计区内，占位即可保证不留黑边）；
+   * 图到位后把 contentSize 换成素材原始尺寸、按 cover 比例整体等比放大并保持居中 ——
+   * **竖屏（750×1624）设计画布与横版背景图宽高比不再一致**，直接把图拉伸到设计尺寸会严重变形
+   * （1920×1080 的横图塞进 750×1624 会竖向拉长 ~2.6 倍）。
+   * 背景不参与点击，放大不影响命中；换竖版素材后 cover 比例自然趋近 1，无需改这里
    */
   static createFullScreenNode(name: string, src: string) {
     const screenSize = this.getScreenSize();
-    return this.createSprite(name, src, new Vec2(), new Size(screenSize.width, screenSize.height));
+    const node = this.createNode(name, new Vec2(), new Size(screenSize.width, screenSize.height));
+    const spriteComponent = node.addComponent(Sprite);
+    spriteComponent.sizeMode = Sprite.SizeMode.CUSTOM;
+    spriteComponent.trim = false;
+    src &&
+      this.loadSprite(src, (spriteFrame) => {
+        if (!isValid(node) || !isValid(spriteComponent)) return;
+        spriteComponent.spriteFrame = spriteFrame;
+        const width = spriteFrame.width;
+        const height = spriteFrame.height;
+        if (!width || !height) return;
+        // cover 比例：max(设计宽/素材宽, 设计高/素材高)，恒 ≥ 把两条边都盖住所需的最小值
+        const scale = Math.max(screenSize.width / width, screenSize.height / height);
+        spriteComponent.getComponent(UITransform)!.setContentSize(width, height);
+        node.setScale(scale, scale, 1);
+      });
+    return node;
   }
 
   /**

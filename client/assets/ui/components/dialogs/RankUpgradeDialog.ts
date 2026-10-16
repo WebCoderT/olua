@@ -45,6 +45,8 @@ export default class RankUpgradeDialog {
     // 默认预览当前军衔（尚未授衔时预览 1 阶）
     this.selectedLevel = Math.max(1, role?.rank ?? 1);
     const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    // 竖屏（可见宽 750）下 880 宽弹窗放不下：整体等比缩小兜底（见 GameUiHelper.fitDialogToVisible）
+    GameUiHelper.fitDialogToVisible(dialog, layout.size);
     // 左：军衔阶数列表（可上下滑动，100 阶只建一次）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listView = list.getComponent(ScrollView);

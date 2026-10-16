@@ -40,12 +40,12 @@ Vec2.prototype.length = function () { return Math.sqrt(this.x * this.x + this.y 
 Vec2.prototype.lengthSqr = function () { return this.x * this.x + this.y * this.y; };
 Vec2.prototype.equals = function (other) { return !!other && this.x === other.x && this.y === other.y; };
 
-const __screen = { windowWidth: 1624, windowHeight: 750, scaleX: 1, scaleY: 1 };
+const __screen = { windowWidth: 750, windowHeight: 1624, scaleX: 1, scaleY: 1 };
 const view = {
   getScaleX: () => __screen.scaleX,
   getScaleY: () => __screen.scaleY,
-  getDesignResolutionSize: () => new Size(1624, 750),
-  getVisibleSize: () => new Size(1624, 750),
+  getDesignResolutionSize: () => new Size(750, 1624),
+  getVisibleSize: () => new Size(750, 1624),
   setDesignResolutionSize: () => {},
 };
 const screen = {

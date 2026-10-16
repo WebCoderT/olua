@@ -11,16 +11,17 @@ import MallDialog from "../dialogs/MallDialog";
 import SkillListDialog from "../dialogs/SkillListDialog";
 import BottomNavBar from "./BottomNavBar";
 import RoleExpBar from "./RoleExpBar";
-import RoleHpOrb from "./RoleHpOrb";
-import RoleMpOrb from "./RoleMpOrb";
 import ShortcutKeyBar from "./ShortcutKeyBar";
 import AutoFightButton from "./AutoFightButton";
 
 /**
  * 底部栏组件（底部 HUD 容器）
  * 只负责组装子组件与持有各功能弹窗，本身不产生任何 UI 零件：
- * 背景（GameUiHelper）+ 功能按键区（BottomNavBar）+ 经验条（RoleExpBar）+ 血量显示（RoleHpOrb）+ 魔法值显示（RoleMpOrb）+ 技能快捷键栏（ShortcutKeyBar）
+ * 背景（GameUiHelper）+ 功能按键区（BottomNavBar）+ 经验条（RoleExpBar）+ 技能快捷键栏（ShortcutKeyBar）
  * 子组件添加顺序即绘制层级顺序（背景在最下、技能栏在最上）
+ *
+ * 竖屏（750×1624）改造时移除了血量/魔法值显示（RoleHpOrb/RoleMpOrb，含血量与魔法文字）：
+ * 它们挂在底部栏两端，竖屏下整体跑出屏幕（可见 0~14px），见 configs/layout/hud.ts 的说明
  */
 export default class BottomBar extends Node {
   /** 角色信息弹窗 */
@@ -35,10 +36,6 @@ export default class BottomBar extends Node {
   private navBar: BottomNavBar;
   /** 经验条 */
   private expBar: RoleExpBar;
-  /** 血量显示（血球 + 血量文字） */
-  private hpOrb: RoleHpOrb;
-  /** 魔法值显示（魔法球 + 魔法值文字，仅在底部栏显示） */
-  private mpOrb: RoleMpOrb;
   /** 技能快捷键栏 */
   private shortcutKeyBar: ShortcutKeyBar;
   /** 自动挂机开关按钮 */
@@ -56,10 +53,6 @@ export default class BottomBar extends Node {
     this.addChild(this.navBar);
     this.expBar = new RoleExpBar(role);
     this.addChild(this.expBar);
-    this.hpOrb = new RoleHpOrb(role);
-    this.addChild(this.hpOrb);
-    this.mpOrb = new RoleMpOrb(role);
-    this.addChild(this.mpOrb);
     this.shortcutKeyBar = new ShortcutKeyBar(role);
     this.addChild(this.shortcutKeyBar);
     // 自动挂机开关（图标随挂机状态切换，状态由 AutoBattle 回调同步）
@@ -96,10 +89,8 @@ export default class BottomBar extends Node {
     this.shortcutKeyBar.updateSlotIcon(key, icon, onClick, skillId);
   }
 
-  /** 数据变更后刷新血量、魔法值与经验显示 */
+  /** 数据变更后刷新经验显示（血量/魔法值显示已随竖屏改造移除，见类注释） */
   update(role: Role) {
-    this.hpOrb.update(role);
-    this.mpOrb.update(role);
     this.expBar.update(role);
   }
 }

@@ -35,13 +35,13 @@ const DIALOGS_FILE = path.join(PROJECT_ROOT, "assets/configs/layout/dialogs.ts")
  * 验证「可见区 = 窗口像素 ÷ 缩放」而不是设计分辨率），行为与引擎 NO_BORDER 下的口径一致
  */
 const SCREEN_SHIM = `
-const __screen = { windowWidth: 1624, windowHeight: 750, scaleX: 1, scaleY: 1 };
+const __screen = { windowWidth: 750, windowHeight: 1624, scaleX: 1, scaleY: 1 };
 const view = {
   getScaleX: () => __screen.scaleX,
   getScaleY: () => __screen.scaleY,
-  getDesignResolutionSize: () => new Size(1624, 750),
+  getDesignResolutionSize: () => new Size(750, 1624),
   // 引擎在 NO_BORDER 下 view.getVisibleSize() 恒等于设计分辨率（故真实可见区不能用它算）
-  getVisibleSize: () => new Size(1624, 750),
+  getVisibleSize: () => new Size(750, 1624),
   setDesignResolutionSize: () => {},
 };
 const screen = {
@@ -110,17 +110,17 @@ const finite = (position) => Number.isFinite(position.x) && Number.isFinite(posi
 const describe = (position) => `(${position.x.toFixed(1)}, ${position.y.toFixed(1)})`;
 
 console.log("\n— 可见区口径：窗口像素 ÷ view 缩放，不是设计分辨率 —");
-setWindow(1624, 750);
-check(getVisibleSize().width === 1624 && getVisibleSize().height === 750, "窗口与设计分辨率同尺寸时可见区 = 1624×750", `${getVisibleSize().width}×${getVisibleSize().height}`);
+setWindow(750, 1624);
+check(getVisibleSize().width === 750 && getVisibleSize().height === 1624, "窗口与设计分辨率同尺寸时可见区 = 750×1624", `${getVisibleSize().width}×${getVisibleSize().height}`);
 setWindow(2600, 1200, 2);
-check(getVisibleSize().width === 1300 && getVisibleSize().height === 600, "窗口 2600×1200、缩放 2 → 可见区 1300×600（用设计分辨率就会算出 1624×750 → 弹窗飞出屏幕）", `${getVisibleSize().width}×${getVisibleSize().height}`);
+check(getVisibleSize().width === 1300 && getVisibleSize().height === 600, "窗口 2600×1200、缩放 2 → 可见区 1300×600（用设计分辨率就会算出 750×1624 → 弹窗飞出屏幕）", `${getVisibleSize().width}×${getVisibleSize().height}`);
 setWindow(1152, 520, 0.9);
 check(Math.abs(getVisibleSize().width - 1152 / 0.9) < EPS && Math.abs(getVisibleSize().height - 520 / 0.9) < EPS, "窗口 1152×520、缩放 0.9 → 可见区随缩放换算");
 setWindow(0, 0);
-check(getVisibleSize().width === 1624 && getVisibleSize().height === 750, "引擎未就绪（窗口 0×0）→ 退回设计分辨率，不出现 0 尺寸/除零");
+check(getVisibleSize().width === 750 && getVisibleSize().height === 1624, "引擎未就绪（窗口 0×0）→ 退回设计分辨率，不出现 0 尺寸/除零");
 
 console.log("\n— 竖直：与锚点同高居中 —");
-setWindow(1624, 750);
+setWindow(750, 1624);
 [[0, 0], [-300, 120], [420, -260]].forEach(([ax, ay]) => {
   const position = place(ax, ay);
   check(Math.abs(position.y - ay) < EPS, `锚点 y=${ay} → 弹窗中心与锚点同高`, `y=${position.y.toFixed(1)}`);
@@ -151,7 +151,7 @@ console.log("\n— 锚点贴边：换到有空间的一侧，仍整块可见 —
 
 console.log("\n— 全屏采样：任意锚点都整块可见 —");
 const sizes = [
-  [1624, 750, 1],
+  [750, 1624, 1],
   [2600, 1200, 2],
   [1152, 520, 0.9],
   [900, 620, 1.2],
@@ -188,7 +188,7 @@ const widePlace = place(0, 0, tooWide);
 check(Number.isFinite(widePlace.x) && Math.abs(widePlace.x) < EPS, "弹窗（400）比可见区（200）还宽 → 水平退回屏幕中心", `x=${widePlace.x.toFixed(1)}`);
 
 console.log("\n— 纯函数：不改入参、同入参同结果 —");
-setWindow(1624, 750);
+setWindow(750, 1624);
 const anchorCenter = new Vec2(300, -120);
 const anchorBox = new Size(50, 50);
 const visible = getVisibleSize();
@@ -202,9 +202,9 @@ console.log("\n— 间距与留白来自配置，改配置即生效 —");
 const withGap = (value) => getPopupPosition(new Vec2(0, 0), anchorSize, popupSize, getVisibleSize(), value, screenMargin);
 check(Math.abs(withGap(gap + 12).x - withGap(gap).x - 12) < EPS, "gap 变大 12 → 理想位置同步外移 12（配置真的被用上）");
 const marginValues = [4, 8, 20, 60];
-setWindow(1624, 750);
+setWindow(750, 1624);
 const clamped = marginValues.map((margin) => getPopupPosition(new Vec2(100000, 0), anchorSize, popupSize, getVisibleSize(), gap, margin));
-check(clamped.every((position, index) => Math.abs(position.x - (1624 / 2 - marginValues[index] - popupSize.width / 2)) < EPS), "锚点远在屏幕外 → 弹窗被夹到「可见区边缘 − screenMargin」，留白值直接生效", clamped.map(describe).join(" "));
+check(clamped.every((position, index) => Math.abs(position.x - (750 / 2 - marginValues[index] - popupSize.width / 2)) < EPS), "锚点远在屏幕外 → 弹窗被夹到「可见区边缘 − screenMargin」，留白值直接生效", clamped.map(describe).join(" "));
 
 console.log("\n— 配置：goodDetailLayout.placement —");
 check(gap > 0 && screenMargin > 0, "placement 已登记（gap / screenMargin 均为正）", `gap=${gap}, screenMargin=${screenMargin}`);
