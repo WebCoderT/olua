@@ -62,6 +62,12 @@
  * **看不到的部分写在明处**：部署那台的 `.env` 是本地文件（不进仓库），守卫读不到 ——
  * 所以「只能调低」必须写在文档里，客户端另有一条运行期告警兜着（角色数 > 站位数量时打日志）。
  *
+ * 同一类的还有**实时通道的关闭码**（#111）：协议码只在服务端定义
+ * （`server/src/modules/realtime/realtime.protocol.ts` 的 `REALTIME_CLOSE`），
+ * 客户端要判「被别处顶掉」就得各存一份（`ui/utils/net/ApiCodes.ts` 的手写镜像）。
+ * 两边对不上**不会报错**，只会让行为悄悄变错 —— 比如把 4000 当成普通掉线去抢连，
+ * 于是两个客户端互相踢。判据是**逐键比对**（键名也必须一样，换个名字就失去意义了）。
+ *
  * ===========================================================================
  * 与 `audit-combat-parity.cjs` 的分工
  * ===========================================================================
@@ -89,6 +95,10 @@ const CLIENT_ROLE_CONFIG = path.join(ASSETS, "configs", "role.ts");
 /** 服务端「角色上限」的两处仓库默认值（运行时的 .env 是部署本地的，读不到） */
 const ENV_EXAMPLE = path.join(ROOT, "server", ".env.example");
 const SERVER_CONFIG = path.join(SERVER_SRC, "config", "configuration.ts");
+
+/** 实时通道关闭码的两端所在（服务端是唯一来源，客户端是手写镜像） */
+const REALTIME_PROTOCOL = path.join(SERVER_SRC, "modules", "realtime", "realtime.protocol.ts");
+const CLIENT_API_CODES = path.join(ASSETS, "ui", "utils", "net", "ApiCodes.ts");
 
 /**
  * 必须存在的导出 —— 每张表都要在，且至少一条数据
@@ -179,6 +189,15 @@ function main() {
     failures.push(String(error.message));
   }
 
+  // 跨端数值约定：实时通道的关闭码（服务端定义、客户端手写镜像）—— 见 #111
+  let closeDrift = null;
+  try {
+    closeDrift = findRealtimeCloseDrift();
+    failures.push(...closeDrift.problems);
+  } catch (error) {
+    failures.push(String(error.message));
+  }
+
   if (failures.length > 0) fail(failures.join("\n\n"));
 
   // 去掉末尾那个换行再数：直接 split("\n") 会因末尾的空串多算一行，
@@ -190,6 +209,10 @@ function main() {
   if (roleLimit) {
     const defaults = roleLimit.defaults.map((item) => `${item.label}=${item.value}`).join(" · ");
     console.log(`  角色上限：服务端默认（${defaults}）≤ 选角站位 ${roleLimit.capacity} 个 ✓`);
+  }
+  if (closeDrift) {
+    const pairs = [...closeDrift.codes].map(([key, value]) => `${key}=${value}`).join(" · ");
+    console.log(`  实时关闭码：客户端与 ${path.relative(ROOT, REALTIME_PROTOCOL)} 逐键一致（${pairs}）✓`);
   }
 }
 
@@ -572,6 +595,82 @@ function readServerRoleLimitDefaults() {
   }
   out.push({ label: `${path.relative(ROOT, SERVER_CONFIG)} 兜底`, value: Number(fallback[1]) });
 
+  return out;
+}
+
+/**
+ * 跨端数值约定：**实时通道的关闭码**（见 #111、文件头「同一个数两端各写一份」）
+ *
+ * 协议码只在服务端定义（`REALTIME_CLOSE`），客户端要判「被别处顶掉（4000）」就得各存一份。
+ * 这与角色上限是同一类问题：**两边对不上不会报错，只会让行为悄悄变错** ——
+ * 比如把 4000 当成普通掉线去重连，于是两个客户端互相踢、来回刷。
+ *
+ * 判据：**键名与取值逐项相同**（不是只比数字集合 —— 键名换掉等于这条约定失去意义；
+ * 也不是只比值 —— `GOING_AWAY` 与 `REPLACED` 的值被写反同样要拦）。
+ *
+ * 两边都读不到就抛错（不是静默跳过）：上游改了写法必须有人来看一眼。
+ *
+ * @returns `{ problems, codes }`（`codes` 只用于成功时把实测值打出来）
+ */
+function findRealtimeCloseDrift() {
+  const problems = [];
+  for (const file of [REALTIME_PROTOCOL, CLIENT_API_CODES]) {
+    if (!fs.existsSync(file)) {
+      throw new Error(`找不到 ${path.relative(ROOT, file)}（改名了？改了就来同步这条判据）`);
+    }
+  }
+
+  const server = readNumericEnum(fs.readFileSync(REALTIME_PROTOCOL, "utf8"), "REALTIME_CLOSE");
+  const client = readNumericEnum(fs.readFileSync(CLIENT_API_CODES, "utf8"), "REALTIME_CLOSE");
+  const relServer = path.relative(ROOT, REALTIME_PROTOCOL);
+  const relClient = path.relative(ROOT, CLIENT_API_CODES);
+
+  if (!server) throw new Error(`${relServer} 里找不到 \`export const REALTIME_CLOSE = {…}\`（改写过了？改了就来同步这条判据）`);
+  if (!client) throw new Error(`${relClient} 里找不到 \`export const REALTIME_CLOSE = {…}\`（改写过了？改了就来同步这条判据）`);
+  if (server.size === 0 || client.size === 0) {
+    throw new Error(`REALTIME_CLOSE 解析出来是空的（${relServer} ${server.size} 项 / ${relClient} ${client.size} 项）—— 写法变了？`);
+  }
+
+  for (const [key, value] of server) {
+    if (!client.has(key)) {
+      problems.push(
+        `${relClient} 的 REALTIME_CLOSE 少了 ${key}（服务端是 ${value}）—— ` +
+          `关闭码对不上不会报错，只会让客户端的行为悄悄变错`,
+      );
+      continue;
+    }
+    if (client.get(key) !== value) {
+      problems.push(
+        `REALTIME_CLOSE.${key} 两端不一致：${relServer} 是 ${value}，${relClient} 是 ${client.get(key)}`,
+      );
+    }
+  }
+  for (const key of client.keys()) {
+    if (!server.has(key)) {
+      problems.push(`${relClient} 的 REALTIME_CLOSE 多了 ${key} —— 服务端没有这个码，客户端在判一个不存在的东西`);
+    }
+  }
+
+  return { problems, codes: server };
+}
+
+/**
+ * 从一段源码里抽出 `export const <name> = { … };`（或 `} as const;`）的「键 → 数字」清单
+ *
+ * 先剥注释：这份文件里到处是解释性的注释，注释里出现 `X: 1` 这样的例子完全正常
+ * （写守卫时自己就爱在注释里写反例），不剥就会把文档里的例子当成真的定义。
+ */
+function readNumericEnum(source, name) {
+  const anchor = `export const ${name} = {`;
+  const start = source.indexOf(anchor);
+  if (start === -1) return null;
+  const rest = source.slice(start);
+  const close = /}\s*(?:as\s+const\s*)?;/.exec(rest);
+  if (!close) return null;
+
+  const out = new Map();
+  const body = stripComments(rest.slice(0, close.index));
+  for (const match of body.matchAll(/([A-Za-z_]\w*)\s*:\s*(\d+)\s*,/g)) out.set(match[1], Number(match[2]));
   return out;
 }
 

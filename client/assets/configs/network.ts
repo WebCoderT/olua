@@ -63,6 +63,26 @@ export const networkConfig = {
   retry: 1,
   /** 角色进度同步的防抖间隔（毫秒）：改动停下多久之后才推服务端，避免打怪时每杀一只推一次 */
   roleSyncDelay: 1500,
+  /**
+   * 实时通道（WebSocket）的参数
+   *
+   * 通道的地址**不在这里** —— 它跟 baseUrl 同源（`http→ws` / `https→wss`，见
+   * ui/utils/net/RealtimeClient 的 buildRealtimeUrl），换后端只改上面那一个 baseUrl。
+   * 这里只放时间参数。心跳间隔以**服务端 welcome 给的 `heartbeatMs` 为准**，下面那个只是
+   * 还没收到 welcome 时的兜底（服务端改间隔不必跟着改客户端）。
+   */
+  realtime: {
+    /** 握手超时（毫秒）：连上之后多久没等到 welcome，就认为这条连接不可用 */
+    handshakeTimeout: 10000,
+    /** 应用层心跳间隔的兜底（毫秒）：连上后以服务端 welcome 的 heartbeatMs 为准 */
+    pingInterval: 20000,
+    /** 心跳应答超时（毫秒）：发出 ping 后多久没收到任何一帧就判掉线（要 > 心跳间隔，容忍一次丢包） */
+    pongTimeout: 30000,
+    /** 重连退避的首个间隔（毫秒），此后每失败一次翻倍 */
+    reconnectBaseDelay: 1000,
+    /** 重连退避的封顶间隔（毫秒） */
+    reconnectMaxDelay: 30000,
+  },
 } as const;
 
 /** HTTP 方法（请求层只认这几种） */

@@ -36,6 +36,7 @@
 - [角色进度是怎么同步到服务端的？](#角色进度是怎么同步到服务端的)
 - [角色数量上限想改，改哪边？](#角色数量上限想改改哪边)
 - [登录、选角界面的错误提示为什么看不见？](#登录选角界面的错误提示为什么看不见)
+- [实时通道（WebSocket）是怎么接的？](#实时通道websocket是怎么接的)
 - [单测是怎么在 node 里跑真实 Cocos 代码的？](#单测是怎么在-node-里跑真实-cocos-代码的)
 
 ## 预览报错
@@ -326,6 +327,19 @@
 - **现在怎么做的**：`GameUiHelper.mountFloatingTip` 按「容器是否在当前场景里」选挂载点 —— 游戏内照旧挂 UI 图层（保持临时层在最上，不参与弹窗置顶排序），登录 / 选角这类场景挂**当前场景根**（图层用默认值，与场景相机的 visibility 一致）。判据不是「当前是哪个场景」，以后新增场景不必回来改这里
 - **别退回旧写法**：不要在业务里直接 `LayerManager.addToUILayer(tip)` 建提示 —— 那又只在游戏里可见。统一走 `GameUiHelper.createTip / createErrorTip`（固定文案，key 在 `configs/texts`）与 `createTipText / createErrorTipText`（动态文案，如服务端 message）
 - 回归单测：`node tools/test-dialog-top.cjs`（含这条挂载口径的断言）与 `node tools/test-client-net.cjs`
+
+### 实时通道（WebSocket）是怎么接的？
+
+- **不是拿令牌直连，而是先取一张一次性票据**：WS 握手没有 `Authorization` 头的便利，把长效访问令牌塞进 URL query 又会留在代理日志与浏览器历史里。所以先走普通接口 `POST /api/realtime/ticket`（令牌由请求层统一注入），拿回的一次性票据默认 **30 秒**过期、用掉即删，再用它连 `ws://<host>/api/realtime?ticket=…`
+- **地址不许硬编码**：ws 地址由 `configs/network.baseUrl` 推导（`http→ws` / `https→wss` —— 换成 wss 是硬要求，https 页面里连 ws 会被浏览器直接拦掉）。线上 `baseUrl` 是同源相对地址（`/api`），借当前页面的协议与主机补全；握手路径从生成的 `ApiRoutes.realtime.ticket` **去掉末段**取到，客户端不写第二份路径字面量（`node ../tools/audit-api-hardcode.cjs` 盯着）
+- **心跳是应用层的**：浏览器拿不到协议层的 ping/pong 帧，所以客户端自己按节拍发 `{"type":"ping"}`、等服务端的 `pong`。**间隔以服务端 `welcome` 给的 `heartbeatMs` 为准**（服务端改间隔不必跟着改客户端），`configs/network.realtime.pingInterval` 只是还没收到 welcome 时的兜底；发出去的心跳超过 `pongTimeout` 没有任何一帧回来就判掉线 —— socket 层**不会**自己发现对端没了（拔网线、NAT 表过期都会留下一条「看起来还在」的连接）。同理，连上了却等不到 welcome（半开的连接）也由 `handshakeTimeout` 收掉
+- **两种「连不上」分开处理**：令牌失效（`401` / `40100` 系）→ 请求层把人送回登录场景，并且**停止重连**（重连也取不到票）；票据过期 / 网络抖动 → **只重新取一张票再连**，绝不把玩家踢回登录页（他什么都没做错）
+- **重连是指数退避的**：失败一次翻倍、封顶在 `configs/network.realtime.reconnectMaxDelay`，连上即清零。不打退避的重连在服务端重启时会变成每秒几十次的空转，客户端自己就成了拖住服务端的那只手
+- **被别处顶掉（`close 4000`）不抢回来**：服务端一个账号只留一条连接，新连接把旧的关掉。被顶掉的那条若立刻重连，两个客户端就会互相踢、来回刷 —— 所以收到 `4000` 就停在这里，等下次进游戏再连
+- **提示只报一次**：断线、重连回来、被顶掉各提示一句（文案在 `configs/texts` 的 `realtime_*`）。服务端挂掉期间每隔几秒就重连失败一次，每次都弹就是刷屏 —— 所以状态变化里把「本来连着、刚掉」（`lost`）与「重连失败」（不算 `lost`）分开
+- **本阶段通道上还没有业务消息**，所以断开期间不做补发，只报「已断 / 已连」；战斗指令那类消息属于服务端战斗权威化那条线（见根 FAQ）
+- 生命周期：进游戏场景（`ui/Game.start`）连、离开（`Game.onDestroy`）断 —— 先摘状态回调再断，否则收尾时还会提示一句
+- 回归单测：`node tools/test-realtime.cjs`（地址几种形态 / 取票与令牌失效 / 心跳与应答超时 / 握手超时 / 退避与封顶 / 被顶掉不重连 / 坏帧不断连 / stop 幂等）
 
 ## 单测机制
 

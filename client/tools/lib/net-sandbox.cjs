@@ -2,7 +2,7 @@
 /**
  * 客户端网络层单测的沙箱（client/tools/test-client-net.cjs 用它）
  *
- * 跑的是**真实**请求层：assets/ui/utils/net/{ApiRoutes,ApiError,Session,HttpClient,Api,RoleSync}.ts
+ * 跑的是**真实**请求层：assets/ui/utils/net/{ApiRoutes,ApiError,Session,HttpClient,Api,RoleSync,RealtimeClient}.ts
  * 与 configs/{network,texts}.ts、types/common.ts 一起复制进沙箱编译，只换掉两个与游戏世界的耦合点：
  *
  * 1. `entities/Role`（在 RoleSync 里只当类型用）→ 空壳 stub，
@@ -10,7 +10,8 @@
  * 2. `cc` 垫片只给 `sys.localStorage`（内存 Map，语义照引擎：getItem / setItem / removeItem / clear），
  *    因为 Session 用它存令牌。
  *
- * `XMLHttpRequest` **刻意不垫**：由测试自己注入，好逐条断言发出去的 url / 请求头 / body。
+ * `XMLHttpRequest` 与 `WebSocket` **刻意不垫**：由测试自己注入，
+ * 好逐条断言发出去的 url / 请求头 / body 与收到的帧。
  *
  * 用法：
  *   const { prepareNet } = require("./lib/net-sandbox.cjs");
@@ -37,6 +38,7 @@ const FILES = [
   "ui/utils/net/HttpClient.ts",
   "ui/utils/net/Api.ts",
   "ui/utils/net/RoleSync.ts",
+  "ui/utils/net/RealtimeClient.ts",
 ];
 
 /** 真实 import → 沙箱内的替身模块（键相对 ui/utils/net/） */
@@ -175,12 +177,20 @@ function prepareNet(sandboxName) {
     /** 生成物：服务端 DTO 的镜像 */
     ApiModels: load("ui/utils/net/ApiModels.js"),
     RoleSync: pick(load("ui/utils/net/RoleSync.js")),
+    /** 实时通道客户端（真跑：取票据 / 建连 / 心跳 / 重连退避；WebSocket 由测试注入） */
+    RealtimeClient: pick(load("ui/utils/net/RealtimeClient.js")),
+    /** 实时通道的状态枚举与地址拼装（地址由 configs/network.baseUrl 推导，测试逐种形态断言） */
+    RealtimeStatus: load("ui/utils/net/RealtimeClient.js").RealtimeStatus,
+    buildRealtimeUrl: load("ui/utils/net/RealtimeClient.js").buildRealtimeUrl,
+    realtimePath: load("ui/utils/net/RealtimeClient.js").realtimePath,
     ApiRoutes: routes.ApiRoutes,
     /** 请求层常量（OpenAPI 表达不了，手写在 ApiCodes） */
     ApiErrorTextKey: codes.ApiErrorTextKey,
     RELOGIN_BIZ_CODES: codes.RELOGIN_BIZ_CODES,
     /** 角色同步要特殊处理的业务码（乐观锁冲突 / 角色不存在） */
     ROLE_SYNC_BIZ_CODES: codes.ROLE_SYNC_BIZ_CODES,
+    /** 实时通道的关闭码（服务端 realtime.protocol.ts 的手写镜像） */
+    REALTIME_CLOSE: codes.REALTIME_CLOSE,
     /** 真实的 getText（断言兜底文案时比对，避免测试里写死中文） */
     getText: load("configs/texts.js").getText,
     /** cc 垫片（测试用 __store 清场） */
