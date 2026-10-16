@@ -61,7 +61,11 @@ export const roleInfoBarLayout = {
 
 /** 底部栏布局（自身坐标以屏幕中心为原点，子件坐标以底部栏中心为原点） */
 export const bottomBarLayout = {
-  /** 底部栏主体 */
+  /**
+   * 底部栏主体
+   * 竖屏（750×1624）下可见宽只有 750：主体两端各溢出约 175px，被裁的只有背景装饰图 ——
+   * 全部交互零件（按键区/经验条/快捷键栏/挂机键）都在 ±375 内（坐标见下），不动尺寸以免背景变形
+   */
   size: new Size(1100, 210),
   /** 贴屏幕底部居中（marginY = 主体中心到屏幕下边缘的距离；背景下沿本就溢出屏幕，故按中心定位） */
   anchor: { edge: "bottom-center", marginX: 0, marginY: 51 } as HudAnchor,
@@ -74,15 +78,14 @@ export const bottomBarLayout = {
   },
   /** 经验条 */
   expBar: { position: new Vec2(0, -44.5), size: new Size(724, 8) },
-  /** 血量文字 */
-  hpText: { position: new Vec2(-421, -39), size: new Size(120, 10), fontSize: 12 },
-  /** 圆形血球（底图与填充同尺寸，竖向进度） */
-  hpOrb: { position: new Vec2(-420, 12.5), size: new Size(90, 90) },
-  /** 魔法值文字（与血量文字同款式，镜像到底部栏右侧） */
-  mpText: { position: new Vec2(421, -39), size: new Size(120, 10), fontSize: 12 },
-  /** 圆形魔法球（与血球同款式同尺寸，镜像到底部栏右侧） */
-  mpOrb: { position: new Vec2(420, 12.5), size: new Size(90, 90) },
-  /** 快捷键栏（横向布局容器，6 格 = 6×40 + 5×6 = 270；居中在血球与功能按键区之间的空档） */
+  /**
+   * 血量/魔法值显示（圆形血球/魔法球 + 数值文字）已随**竖屏（750×1624）改造移除**：
+   * 它们挂在底部栏两端（x = ∓420 附近），竖屏可见宽只有 750，整组零件出屏（可见 0~14px）。
+   * 角色血量仍在左上角信息栏与角色头顶血条可见；组件与工厂（RoleHpOrb/RoleMpOrb/
+   * createHpText/createRoundHpBar）已一并删除，用图 uiImages.hpOrbBase 等三张也随之注销
+   * （素材文件仍在 resources/common，回收另说）
+   */
+  /** 快捷键栏（横向布局容器，6 格 = 6×40 + 5×6 = 270；居中在经验条上方、功能按键区左侧的空档） */
   shortcutBar: { spacing: 6, position: new Vec2(-224.7, -9), size: new Size(270, 40) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {

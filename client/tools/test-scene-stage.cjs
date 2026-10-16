@@ -14,9 +14,10 @@
  * 盯的不变量（改适配逻辑后必须全绿）：
  * · 任意窗口尺寸下，登录舞台的全部元素、选角舞台的全部元素（含角色站位 / 删除按钮 / 创建弹窗）
  *   **整块都落在可见区内**（不越界、不被裁）
- * · 设计分辨率（1624×750）下舞台缩放系数恰为 1（不缩放）
+ * · 设计分辨率（750×1624，竖屏）下舞台缩放系数恰为 1（不缩放）
  * · 底部栏：横跨整个可见宽（视觉宽 = 可见宽）、贴屏幕底边（视觉底边 = -可见高/2）、
- *   等比缩放（x/y 同系数，不变形）且系数 ≤ 1（铺满窗口下可见宽恒 ≤ 设计宽，不会放大模糊）
+ *   等比缩放（x/y 同系数，不变形）且系数 ≤ 1（素材原始 1624 宽 > 竖屏可见宽 750，
+ *   任何窗口下都只缩不放）；开始游戏按钮反向补偿回设计尺寸（否则跟着底栏缩只剩 ~22px 高）
  * · 可见区取「窗口像素 ÷ view 缩放」，不是设计分辨率
  * · 舞台缩放接线：Login / RoleSelector 都注册 window-resize 重排、onDestroy 取消；
  *   选角底部栏挂在场景根（不在舞台子树里）
@@ -36,13 +37,13 @@ const ROLE_SELECTOR_FILE = path.join(PROJECT_ROOT, "assets/ui/RoleSelector.ts");
  * 验证「可见区 = 窗口像素 ÷ 缩放」），行为与引擎 NO_BORDER 下的口径一致
  */
 const SCREEN_SHIM = `
-const __screen = { windowWidth: 1624, windowHeight: 750, scaleX: 1, scaleY: 1 };
+const __screen = { windowWidth: 750, windowHeight: 1624, scaleX: 1, scaleY: 1 };
 const view = {
   getScaleX: () => __screen.scaleX,
   getScaleY: () => __screen.scaleY,
-  getDesignResolutionSize: () => new Size(1624, 750),
+  getDesignResolutionSize: () => new Size(750, 1624),
   // 引擎在 NO_BORDER 下 view.getVisibleSize() 恒等于设计分辨率（故真实可见区不能用它算）
-  getVisibleSize: () => new Size(1624, 750),
+  getVisibleSize: () => new Size(750, 1624),
   setDesignResolutionSize: () => {},
 };
 const screen = {
@@ -71,7 +72,7 @@ const cc = loadCcShim(outDir);
 const { Size, Vec2 } = cc;
 
 const EPS = 1e-6;
-const DESIGN = new Size(1624, 750);
+const DESIGN = new Size(750, 1624);
 
 /** 设置当前窗口（像素）与缩放；返回真实可见区（NO_BORDER 公式：scale = max(sw/dw, sh/dh)） */
 function setWindow(width, height) {
@@ -126,18 +127,18 @@ function roleSelectorElements() {
   return elements;
 }
 
-/** 枚举有代表性的窗口：设计分辨率 / 常见桌面宽高比 / 超宽 / 4:3 / 竖屏手机 */
+/** 枚举有代表性的窗口：设计分辨率（竖屏）/ 常见手机 / 平板 / 桌面宽高比 / 超宽 / 方窗 */
 const WINDOWS = [
-  [1624, 750],
-  [1920, 1080],
-  [2560, 1080],
-  [3440, 1440],
-  [1366, 768],
+  [750, 1624],
+  [390, 844],
+  [414, 896],
+  [1080, 1920],
+  [1440, 3120],
+  [768, 1024],
   [1024, 768],
   [1280, 800],
+  [1920, 1080],
   [900, 900],
-  [750, 1334],
-  [390, 844],
 ];
 
 console.log("\n== A. 登录舞台：任意窗口下全部元素落在可见区内 ==");
@@ -161,7 +162,7 @@ for (const [width, height] of WINDOWS) {
 
 console.log("\n== C. 设计分辨率下舞台不缩放 ==");
 {
-  const visible = setWindow(1624, 750);
+  const visible = setWindow(750, 1624);
   check(getStageScale(loginLayout.stageSize, visible) === 1, `登录舞台缩放系数为 1（stageSize ${loginLayout.stageSize.width}×${loginLayout.stageSize.height}）`);
   check(getStageScale(roleSelectorLayout.stageSize, visible) === 1, "选角舞台缩放系数为 1");
 }
@@ -188,6 +189,18 @@ console.log("\n== D. 选角底部栏：横跨可见宽 + 贴底 + 等比不变�
       Math.abs(bottom - -visible.height / 2) < EPS && bottom + visualHeight <= visible.height / 2 + EPS,
       `${width}×${height} 贴屏幕底边（视觉底边 = ${bottom.toFixed(1)}，顶边 ${Math.round(bottom + visualHeight)} 在屏内）`,
     );
+    // 开始游戏按钮：反向补偿（barScale × 1/barScale = 1）后视觉尺寸恒为设计尺寸，且整块落在底栏视觉矩形内
+    const begin = roleSelectorLayout.beginGameButton;
+    const beginScale = barScale * (1 / barScale);
+    const beginHeight = begin.size.height * beginScale;
+    check(
+      Math.abs(begin.size.width * beginScale - begin.size.width) < EPS && Math.abs(beginHeight - begin.size.height) < EPS,
+      `${width}×${height} 开始游戏按钮反向补偿后视觉尺寸恒为设计尺寸 ${begin.size.width}×${begin.size.height}（不跟底栏缩）`,
+    );
+    check(
+      beginHeight <= visualHeight + EPS && begin.size.width * beginScale <= visible.width + EPS,
+      `${width}×${height} 补偿后的按钮（高 ${beginHeight.toFixed(1)}）完整落在底栏视觉矩形内（高 ${visualHeight.toFixed(1)}）`,
+    );
   }
 }
 
@@ -208,6 +221,7 @@ console.log("\n== E. 源码接线断言 ==");
   check(!/this\.stage!\.addChild\(bottomBar\)/.test(selector), "RoleSelector：底部栏不再挂进舞台（否则跟着缩、两侧露背景）");
   check(/const barScale = visible\.width \/ barLayout\.size\.width;/.test(selector), "RoleSelector：底部栏按可见宽等比缩放（素材带牌匾装饰不可拉伸）");
   check(/getAnchoredPosition\(visual, visible, "bottom-center"/.test(selector), "RoleSelector：底部栏贴底走 getAnchoredPosition 的 bottom-center 档");
+  check(/const compensation = 1 \/ barScale;/.test(selector) && /beginButton\.setScale\(compensation, compensation, 1\)/.test(selector), "RoleSelector：开始游戏按钮反向补偿回设计尺寸（竖屏下跟底栏缩只剩 ~22px 高、点不着）");
   check(/applyScreenPolicy\(\);/.test(selector) && /applyScreenPolicy\(\);/.test(login), "两个场景启动时应用铺满窗口策略");
   check(/this\.offWindowResize = onWindowResize\(\(\) => this\.applyStageLayout\(\)\)/.test(selector) && /onDestroy\(\) \{[\s\S]*?this\.offWindowResize\?\.\(\);/.test(selector), "RoleSelector：注册窗口变化重排 + onDestroy 取消");
 }

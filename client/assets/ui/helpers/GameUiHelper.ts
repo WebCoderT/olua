@@ -939,6 +939,20 @@ export default class GameUiHelper {
   }
 
   /**
+   * 弹窗超出可见区时的等比缩小兜底（竖屏 750 宽下 880/850 宽的三栏 / 商城弹窗必然超）
+   *
+   * 只缩弹窗根节点：子件坐标全部跟着等比缩，任何布局配置都不用改；
+   * 拖动也不受影响（Draggable 按 UI 增量改 position，与自身缩放无关）。
+   * 宽与高都看（取 min、只缩不放）——横屏下可见区够大，系数恒为 1、行为不变；
+   * 桌面小窗口（如 1024×768 → 可见区仅 750×562）同样吃到这个兜底
+   */
+  static fitDialogToVisible(dialog: Node, size: Size) {
+    const visible = getVisibleSize();
+    const scale = Math.min(1, visible.width / size.width, visible.height / size.height);
+    if (scale < 1) dialog.setScale(scale, scale, 1);
+  }
+
+  /**
    * 创建游戏大按钮
    */
   static createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
@@ -1875,30 +1889,6 @@ export default class GameUiHelper {
     const { anchor } = bottomBarLayout;
     const position = getAnchoredPosition(bottomBarLayout.size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
     node.setPosition(position.x, position.y, 0);
-  }
-
-  /** 创建血量/魔法值文字零件（位置与尺寸见 hudLayout.bottomBar.hpText / mpText） */
-  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpText.size, name = "hp_text") {
-    return UiHelper.createLabel(name, text, Color.WHITE, bottomBarLayout.hpText.fontSize, position, size);
-  }
-
-  /**
-   * 创建圆形血量/魔法值显示零件（底图 + 竖向进度条）
-   * 返回底图节点与其内部的进度条节点，位置与尺寸见 hudLayout.bottomBar.hpOrb / mpOrb
-   * 底图见 uiImages.hpOrbBase；填充图缺省为 uiImages.hpOrbFill，魔法球传 uiImages.mpOrbFill
-   */
-  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size, fillImage: string = uiImages.hpOrbFill): { barSprite: Node; hpBar: Node } {
-    const barSprite = UiHelper.createSprite("hp_bar_sprite", uiImages.hpOrbBase, position, size);
-    const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), size);
-    const hpProgress = UiHelper.createSprite("hp_bar_progress", fillImage, new Vec2(), size);
-    hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
-    hpProgress.setPosition(0, 0);
-    hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
-    hpBar.addChild(hpProgress);
-    hpBar.getComponent(ProgressBar).barSprite = hpProgress.getComponent(Sprite);
-    hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
-    barSprite.addChild(hpBar);
-    return { barSprite, hpBar };
   }
 
   //#endregion

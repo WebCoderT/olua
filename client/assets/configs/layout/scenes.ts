@@ -16,7 +16,7 @@ import { uiImages } from "./images";
 export const loginLayout = {
   /**
    * 舞台尺寸：登录构图的包围盒加少量余量（最宽元素 600；纵向范围 -373 ~ 350）
-   * 设计分辨率（1624×750）下缩放系数恰为 1（不缩放），元素坐标改动过大时这里要同步
+   * 竖屏设计分辨率（750×1624）下缩放系数恰为 1（不缩放），元素坐标改动过大时这里要同步
    */
   stageSize: new Size(680, 750),
   background: uiImages.loginBackground,
@@ -62,33 +62,52 @@ export const loginLayout = {
  * 背景图不在舞台内（铺满可见区，始终盖住窗口，见 RoleSelector.createBackground）
  */
 export const roleSelectorLayout = {
-  /** 舞台尺寸（= 设计分辨率 1624×750，见 ScreenLayout.designResolution；改分辨率时两处同步） */
-  stageSize: new Size(1624, 750),
+  /**
+   * 舞台尺寸（= 竖屏设计分辨率 750×1624，见 ScreenLayout.designResolution；改分辨率时两处同步）
+   *
+   * 2026-10-15 由横屏 1624×750 **转成竖屏**：舞台就是这张「设计画布」，
+   * 所有元素必须落在画布内（|x| ≤ 375、|y| ≤ 812），否则 contain 缩放也救不回来
+   * （元素越界 = 恒在屏外）。下面各元素的坐标即按竖屏重排的第一版：
+   * 顶部是操作按钮与管理提示条，中部横排三个角色站位，下中是选中信息框，创建弹窗落在下方。
+   * 回归见 client/tools/test-scene-stage.cjs（10 种窗口尺寸下逐个断言元素在屏内）
+   */
+  stageSize: new Size(750, 1624),
   background: uiImages.roleSelectorBackground,
   /**
    * 底部栏（开始游戏按钮所在容器）：**不在舞台内** —— 素材是带「开始游戏」牌匾装饰的整图，
    * 不能拉伸变形，只能等比缩放；作为「框」它要横跨整个可见宽并贴屏幕底边，
    * 位置/缩放由 RoleSelector.applyStageLayout 按当前可见尺寸实时算（舞台缩放救不了这两件事：
-   * 跟着舞台缩会两侧露背景，且舞台下沿不贴屏幕底边）
+   * 跟着舞台缩会两侧露背景，且舞台下沿不贴屏幕底边）。
+   * 素材原始 1624×139，竖屏可见宽 ≤ 750 → 缩放系数 ≤ 0.46、视觉高度只有 ~64px
    */
   bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, size: new Size(1624, 139) },
-  /** 开始游戏按钮（默认置灰，选中角色后可用） */
-  beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -40), size: new Size(190, 48) },
-  /** 创建角色按钮 / 管理角色按钮 / 创建弹窗返回按钮 */
-  createRoleButton: { name: "show_create_role_button", image: uiImages.roleSelectorNewRoleButton, position: new Vec2(-740, 300), size: new Size(75, 79) },
-  manageRoleButton: { name: "manage_role_button", image: uiImages.roleSelectorManageButton, position: new Vec2(-740, 200), size: new Size(75, 79) },
-  backButton: { name: "cancel_create_role_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-740, -210), size: new Size(75, 79) },
-  /** 选中角色信息框（名称 + 等级） */
+  /**
+   * 开始游戏按钮（默认置灰，选中角色后可用）。
+   * 竖屏下底部栏整体缩到 0.46，按钮若跟着缩只剩 ~22px 高、点不着 ——
+   * applyStageLayout 会把它的缩放**反向补偿**回设计尺寸（190×48，恒大于缩后的牌匾，
+   * 恰好整块盖住牌匾上的「开始游戏」槽位），并居中在底栏（缩后的底栏只剩 ~64px 高，
+   * 原本偏下的按钮槽与中心的偏差可忽略）。位置因此固定在底栏中心
+   */
+  beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, 0), size: new Size(190, 48) },
+  /** 创建角色按钮 / 管理角色按钮 / 创建弹窗返回按钮（竖屏：贴着左边缘竖排在上部） */
+  createRoleButton: { name: "show_create_role_button", image: uiImages.roleSelectorNewRoleButton, position: new Vec2(-320, 640), size: new Size(75, 79) },
+  manageRoleButton: { name: "manage_role_button", image: uiImages.roleSelectorManageButton, position: new Vec2(-320, 520), size: new Size(75, 79) },
+  backButton: { name: "cancel_create_role_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-320, -560), size: new Size(75, 79) },
+  /** 选中角色信息框（名称 + 等级；竖屏：横排在角色站位下方居中） */
   selectedInfo: {
     name: "selected_role_info_background",
     image: uiImages.roleSelectorIdleInfo,
-    position: new Vec2(-435, -335),
+    position: new Vec2(0, -210),
     size: new Size(345, 26),
     nameLabel: { name: "selected_role_name", text: "---", position: new Vec2(-35, 0), size: new Size(160, 30), fontSize: 20 },
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },
   },
-  /** 已有角色预览：站位（最多 3 个，按角色顺序）、预览尺寸、站立帧动画帧率（每秒帧数） */
-  rolePositions: [new Vec2(-485, -25), new Vec2(-250, -75), new Vec2(-10, -40)],
+  /**
+   * 已有角色预览：站位（最多 3 个，按角色顺序）、预览尺寸、站立帧动画帧率（每秒帧数）
+   *
+   * 竖屏下一排三个（3 × 200 = 600 < 750），保留原来「略错落」的站姿；y 的错落沿用旧值风格
+   */
+  rolePositions: [new Vec2(-210, 100), new Vec2(0, 40), new Vec2(210, 70)],
   previewSize: new Size(200, 360),
   previewFrameRate: 8,
   /**
@@ -109,11 +128,11 @@ export const roleSelectorLayout = {
     /** 管理模式的提示条（舞台顶部居中；文字见 configs/texts.label_role_delete_hint） */
     hint: { name: "role_manage_hint", position: new Vec2(0, 300), size: new Size(700, 40), fontSize: 22, color: new Color("#FFD700") },
   },
-  /** 创建角色弹窗 */
+  /** 创建角色弹窗（竖屏：落在角色站位下方，不遮住站位；职业预览挂在它左侧，见 occupationPreview） */
   createDialog: {
     name: "create_role_dialog",
     image: uiImages.createRoleDialogBackground,
-    position: new Vec2(630, 35),
+    position: new Vec2(95, -430),
     size: new Size(320, 580),
     title: { name: "create_role_dialog_title", image: uiImages.createRoleTitleLabel, position: new Vec2(0, 242), size: new Size(128, 28) },
     genderLabel: { name: "gender_label", image: uiImages.createRoleGenderLabel, position: new Vec2(0, 190), size: new Size(56, 25) },

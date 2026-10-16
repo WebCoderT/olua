@@ -111,6 +111,8 @@ export default class MallDialog {
     this.pageCount = Math.max(1, Math.ceil(this.goods.length / this.pageSize()));
     this.renderPage(0);
     this.refreshBindGold();
+    // 竖屏（可见宽 750）下 850 宽弹窗放不下：整体等比缩小兜底（见 GameUiHelper.fitDialogToVisible）
+    GameUiHelper.fitDialogToVisible(dialog, layout.size);
     this.dialog = dialog;
     LayerManager.addDialogToUILayer(dialog);
   }
