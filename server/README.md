@@ -75,7 +75,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `JWT_SECRET` | 开发占位值 | **生产必须换成随机长串** |
 | `JWT_EXPIRES_IN` | `7d` | 令牌有效期 |
 | `ADMIN_REGISTER_CODE` | 有值 | 管理端注册码；留空 = 开放注册 |
-| `ROLE_MAX_PER_ACCOUNT` | `3` | 每账号角色上限（**只能调低**：不得超过客户端选角界面的站位数量 `roleSelectorLayout.rolePositions`，守卫在查） |
+| `ROLE_MAX_PER_ACCOUNT` | `1` | 每账号角色上限（**单角色**：客户端选角界面只有一个站位 `roleSelectorLayout.rolePositions`，守卫在查默认值不超它） |
 | `CORS_ORIGINS` | `*` | 允许的跨域来源，逗号分隔 |
 | `NODE_ENV` | `development` | 只影响标记，不改变行为 |
 | `LOG_REQUESTS` | `true` | 是否打印每请求日志（只打方法/路径/耗时，**不打请求体**） |
@@ -94,11 +94,12 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 > 登录限流会把全部玩家当成同一个人、一起锁死；反过来**直连暴露时必须保持 `false`** —— 开着等于允许调用方
 > 随便伪造 `X-Forwarded-For` 绕过 IP 限流。这一条在 `.env.example` 里也写明了。
 
-> **`ROLE_MAX_PER_ACCOUNT` 只能往下降**：「能建几个角色」在客户端那边是**界面容量** ——
-> 选角布局 `configs/layout/scenes` 的 `roleSelectorLayout.rolePositions` 有几个**站位**，界面上就能站几个，
-> 而客户端的提前拦截就是「站位满了」。所以这个值**不得超过站位数量**：调大了玩家能建出界面上没处放的
-> 角色（多出来的会叠在原点）。二者不再是「同一件事」，因此也不需要一起改 ——
-> 加站位是布局 / 美术的活，调这个只往下走。仓库里的默认值由 `tools/audit-shared-data.cjs` 守着；
+> **`ROLE_MAX_PER_ACCOUNT` 只能往下降**：客户端是**单角色**（issue #149）—— 选角界面只有一个站位
+> （中间的大号站立动画），没有角色列表、也没有创建弹窗，所以默认值就是 1。
+> 「能建几个角色」在客户端那边是**界面容量**：选角布局 `configs/layout/scenes` 的
+> `roleSelectorLayout.rolePositions` 有几个**站位**，界面上就能站几个。这个值**不得超过站位数量**：
+> 调大了玩家能建出界面上没处放的角色（客户端会打一条告警）。要放开多角色，先去布局加站位、
+> 再把这里的默认值调上去。仓库里的默认值由 `tools/audit-shared-data.cjs` 守着；
 > **部署那台的 `.env` 不进仓库**，守卫看不到，所以别把它调过站位数量。
 
 ## 目录结构

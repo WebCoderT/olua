@@ -21,6 +21,8 @@ process.env.DB_PATH = ":memory:";
 process.env.ADMIN_REGISTER_CODE = "test-admin-code";
 process.env.JWT_SECRET = "test-secret";
 process.env.LOG_REQUESTS = "false";
+// 本套要在一个账号下造多个角色来测管理端的列表 / 筛选 / 批量删除，
+// 所以显式把上限调到 3（注入配置是测试手段，不改变仓库默认值 1 = 单角色，见 .env.example）
 process.env.ROLE_MAX_PER_ACCOUNT = "3";
 process.env.CORS_ORIGINS = "*";
 

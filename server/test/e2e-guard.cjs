@@ -563,10 +563,9 @@ async function runMainSuite(baseUrl) {
 
   const banTarget = `/api/admin/accounts/${playerAccountId}/status`;
 
-  // 先让这个账号在线，用来验证「封禁会顺带清掉在线标记」
-  const banCreated = await call("POST", "/api/roles", { token: freshPlayerToken, body: { data: roleData("ban_role", "待封的号", 5) } });
-  const banRoleId = banCreated.body.data.id;
-  check(Boolean(banRoleId), "准备：玩家创建一个在线角色（封禁用例的前置）");
+  // 复用上面已创建并重新选中的 kick_role（单角色上限默认 1，这个账号建不出第二个）
+  const banRoleId = kickRoleId;
+  check(Boolean(banRoleId), "准备：玩家有一个在线角色（封禁用例的前置）");
 
   const banTemp = await call("PATCH", banTarget, {
     token: superToken,
@@ -711,6 +710,18 @@ async function runMainSuite(baseUrl) {
   const tooLongSort = await call("GET", `/api/admin/accounts?sort=${"x".repeat(33)}`, { token: superToken });
   checkEqual(tooLongSort.status, 400, "排序字段过长被拒（400）");
 
+  // 角色排序断言需要全库 ≥2 个角色。单角色上限默认 1（#149），本套里 guard_player 只有一个
+  // kick_role，第二个角色用 guard_zzz 的 csv_role（本来就要建，提前到这里；它的「像公式」名字
+  // 同时给后面的 CSV 导出用例当素材）
+  const zzzLogin = await call("POST", "/api/auth/login", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } });
+  const csvRole = await call("POST", "/api/roles", {
+    token: zzzLogin.body.data.token,
+    body: { data: roleData("csv_role", "=1+1", 3) },
+  });
+  checkEqual(csvRole.body.code, 0, "准备：创建一个名字像公式的角色");
+  // 第一个角色创建即自动在线；下面的批量封禁用例要求 guard_zzz 没有在线角色，这里踢掉
+  await call("POST", `/api/admin/accounts/${sortBId}/offline`, { token: superToken });
+
   const rolesSorted = await call("GET", "/api/admin/roles?sort=level&order=desc&size=100", { token: superToken });
   const levels = rolesSorted.body.data.list.map((item) => item.level);
   check(levels.length >= 2, "角色列表数据够验证排序");
@@ -820,13 +831,7 @@ async function runMainSuite(baseUrl) {
   checkEqual(longIp.status, 400, "来源 IP 过长被拒（400）");
 
   // —— CSV 导出 ——
-  // 准备：造一个「像公式」的角色名 —— 这种名字一旦被表格软件当公式执行就是真的漏洞
-  const zzzLogin = await call("POST", "/api/auth/login", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } });
-  const csvRole = await call("POST", "/api/roles", {
-    token: zzzLogin.body.data.token,
-    body: { data: roleData("csv_role", "=1+1", 3) },
-  });
-  checkEqual(csvRole.body.code, 0, "准备：创建一个名字像公式的角色");
+  // csv_role（名字像公式）已在排序断言前创建，这里直接做管理端操作留日志
   const csvSelect = await call("POST", `/api/admin/roles/${csvRole.body.data.id}/select`, { token: superToken });
   checkEqual(csvSelect.body.code, 0, "准备：用管理端操作它一次（留下带目标名的日志）");
 

@@ -189,7 +189,8 @@ export default function configuration(): AppConfiguration {
     adminRegisterCode,
     playerRegisterOpen: (process.env.PLAYER_REGISTER_OPEN ?? "true") === "true",
     adminRegisterOpen: (process.env.ADMIN_REGISTER_OPEN ?? "false") === "true",
-    roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? 3),
+    // 单角色：客户端选角界面只有一个站位，业务上限默认 1（只能调低，见 roles.service.maxRoles）
+    roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? 1),
     corsOrigins: (process.env.CORS_ORIGINS ?? "*")
       .split(",")
       .map((item) => item.trim())

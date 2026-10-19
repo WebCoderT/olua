@@ -126,6 +126,7 @@ async function main() {
       JWT_SECRET: "e2e-secret-key",
       JWT_EXPIRES_IN: "1h",
       ADMIN_REGISTER_CODE: ADMIN_CODE,
+      // 打包产物冒烟不测角色上限；配 3 只是给可能的多次建号留余量（仓库默认 1 = 单角色）
       ROLE_MAX_PER_ACCOUNT: "3",
       LOG_REQUESTS: "false",
     },

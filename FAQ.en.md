@@ -38,7 +38,7 @@ One-line map:
 Things that are easy to mix up:
 
 - **The content of character data (what's in the bag, equipment numbers) is not the server's business.** The server validates structure, ownership, limits and name collisions, and stores the content as-is — because the truth about that data lives in `client/assets/configs`. see [server/FAQ.md](server/FAQ.en.md), "Why doesn't the server validate the content of character data".
-- **"How many characters per account" is a single number with two meanings**: the **UI capacity** is the character-select layout's stand array `roleSelectorLayout.rolePositions` (as many stands as are drawn), and the **business cap** is `ROLE_MAX_PER_ACCOUNT` in `server/.env`, which may only be **lowered** and must never exceed the UI capacity (`tools/audit-shared-data.cjs` pins this down). The client holds no second copy of the number.
+- **"How many characters per account" is a single number with two meanings**: the **UI capacity** is the character-select layout's stand array `roleSelectorLayout.rolePositions` (the client is **single-character**, length 1), and the **business cap** is `ROLE_MAX_PER_ACCOUNT` in `server/.env` (default 1), which may only be **lowered** and must never exceed the UI capacity (`tools/audit-shared-data.cjs` pins this down). The client holds no second copy of the number.
 - **Each side has its own single place for the address** — see the next entry.
 
 ## Switching the backend address (LAN / public domain): which files change?

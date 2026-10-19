@@ -38,7 +38,7 @@
 几条容易搞混的：
 
 - **角色数据的内容（背包里有什么、装备数值）不归服务端管**。服务端只校验结构、归属、上限与重名，内容原样存 —— 因为那套配置的真相在 `client/assets/configs`。详见 [server/FAQ.md](server/FAQ.md#服务端为什么不校验角色数据的内容)。
-- **「角色最多几个」只有一个数字，但它有两层含义**：**界面容量**是选角布局的站位数组 `roleSelectorLayout.rolePositions`（站几个就画几个），**业务上限**是 `server/.env` 的 `ROLE_MAX_PER_ACCOUNT` —— 后者**只能调低**、不得超过前者（`tools/audit-shared-data.cjs` 把这条钉死）。客户端不再有第二份数字。
+- **「角色最多几个」只有一个数字，但它有两层含义**：**界面容量**是选角布局的站位数组 `roleSelectorLayout.rolePositions`（客户端是**单角色**，长度为 1），**业务上限**是 `server/.env` 的 `ROLE_MAX_PER_ACCOUNT`（默认 1）—— 后者**只能调低**、不得超过前者（`tools/audit-shared-data.cjs` 把这条钉死）。客户端没有第二份数字。
 - **地址配置三端各一处**，见下一条。
 
 ## 想换后端地址（局域网 / 线上域名），到底要改哪些文件？

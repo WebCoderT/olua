@@ -37,13 +37,14 @@ export const roleRigid = {
 /**
  * 角色数量上限**不在这个文件里** —— 这里有意不留数字
  *
- * 界面上能画几个角色，唯一来源是选角布局的**站位数组**（`configs/layout/scenes` 的
- * `roleSelectorLayout.rolePositions`）：站位有几个，界面上就能站几个，所以客户端不需要
- * 第二份「上限」。
+ * 客户端现在是**单角色**（issue #149）：选角界面只有一个站位（中间的大号站立动画），
+ * 有角色就只显示动画 + 名称 + 「进入游戏」，没角色就在同一页选职业/性别/名字建号。
+ * 所以「界面上能画几个角色」的唯一来源是选角布局的**站位数组**
+ * （`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions`）—— 现在长度是 1。
  *
- * 服务端的 `ROLE_MAX_PER_ACCOUNT`（`server/.env`）是**业务上限**，它只能**调低** ——
- * 不得超过站位数量，否则玩家能建出界面上没处放的角色（多出来的会叠在原点）。
- * 这条关系由 `tools/audit-shared-data.cjs` 守着，不再靠「两边一起改」的记性。
+ * 服务端的 `ROLE_MAX_PER_ACCOUNT`（`server/.env`）是**业务上限**，默认 1、只能**调低** ——
+ * 不得超过站位数量，否则玩家能建出界面上没处放的角色。这条关系由
+ * `tools/audit-shared-data.cjs` 守着，不再靠「两边一起改」的记性。
  *
  * （这里原本有一个手写的 `export const maxRoleCount = 3` —— 它就是那个「第二份数字」，已删掉。）
  */

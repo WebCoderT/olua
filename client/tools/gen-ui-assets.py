@@ -36,6 +36,25 @@ def interp_columns(img, box, pad=3):
     img.paste(region, (x0, top))
 
 
+def frosted(img, box, radius=26, dim=0.82, feather=36):
+    """毛玻璃处理：把一块烘焙内容重度虚化并压暗，边缘羽化融入四周。
+    用于中央主视觉立绘 —— 单角色后中间直接显示所选角色的**动画**，立绘若整块抹掉
+    （插值）会在天空/山/海的过渡上拉出难看的条纹；虚化成「背景剪影」既保留色彩氛围，
+    又让前景动画成为视觉主体。"""
+    x0, y0, x1, y1 = box
+    region = img.crop(box).filter(ImageFilter.GaussianBlur(radius))
+    region = region.point(lambda v: int(v * dim))
+    w, h = region.size
+    mask = Image.new("L", (w, h), 255)
+    mp = mask.load()
+    for y in range(h):
+        for x in range(w):
+            d = min(x, y, w - 1 - x, h - 1 - y)
+            if d < feather:
+                mp[x, y] = int(255 * d / feather)
+    img.paste(region, (x0, y0), mask)
+
+
 # ---------- 背景修补 ----------
 
 def patch_login(img):
@@ -49,9 +68,12 @@ def patch_login(img):
 
 
 def patch_rs(img):
-    """选角背景：抹掉创建角色竖排字 / 名牌 / 骰子 / 金按钮 / Powered By / 右列菱形钮（活动 UI 重建）。
-    右列（战/法/道/新职业/性别）同样部分落在 750 窗口内，必须修掉。"""
+    """选角背景：抹掉中央主视觉立绘（单角色后中间直接显示所选角色的动画，烘焙立绘会被活动 UI
+    替代，连同样式标签「群攻控场」一起抹掉）/ 创建角色竖排字 / 名牌 / 骰子 / 金按钮 /
+    Powered By / 右列菱形钮（活动 UI 重建）。右列（战/法/道/性别）部分落在 750 窗口内，必须修掉。"""
     img = img.copy()
+    frosted(img, (48, 20, 580, 812))             # 中央主视觉立绘 → 毛玻璃背景剪影（前景是所选角色的动画）
+    interp_columns(img, (252, 790, 448, 906))    # 立绘垂到台面上的腿 / 斗篷（毛玻璃框外的残余，落在底座面上）
     interp_columns(img, (0, 0, 92, 212))         # 左上「创建角色」竖排字
     interp_columns(img, (152, 866, 478, 942))    # 名牌（镖局霸业）
     interp_columns(img, (460, 858, 554, 954))    # 骰子
