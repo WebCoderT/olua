@@ -16,7 +16,7 @@ const DEV_BASE_URL = "http://localhost:3100/api";
 const SAME_ORIGIN_BASE_URL = "/api";
 
 /** 回环地址与 file://（拿不到 host）一定是本地调试 */
-const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1", "[::1]", ""];
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", ""];
 
 /**
  * 私有网段与本地域名：也算本地调试。
@@ -42,12 +42,33 @@ function isLocalDebugHost(host: string): boolean {
 }
 
 /**
+ * Cocos Creator 预览服务的默认端口。
+ *
+ * **这条判据比 host 可靠**：编辑器会按网卡生成预览地址，可能是带方括号的 IPv6
+ * （`[fe80::…]` / `[fd..::]`）、`0.0.0.0`，也可能被改成局域网里的任意地址 ——
+ * 列举 host 形态永远会漏，而「预览页由预览服务提供」这件事是恒定的。
+ *
+ * 预览页永远不是部署站，同源相对地址 `/api` 在那里只会把请求打到预览服务器自己
+ * （拿回 HTML，解析不出统一包裹 → 报「请求失败」）。所以预览端口一律指向本机服务端。
+ */
+const PREVIEW_PORTS = ["7456"];
+
+/**
  * 解析接口根地址。
- * 非 Web 环境（原生壳）拿不到 location，一律回落到本地地址，由宿主另行配置。
+ *
+ * 判据顺序（前一条命中就不再往下判）：
+ * 1. 拿不到 location（原生壳）→ 本机地址，由宿主另行配置
+ * 2. 预览端口 → 本机地址（覆盖任意 host 形态的编辑器预览）
+ * 3. 本地 host（回环 / 私有网段 / 本地域名）→ 本机地址
+ * 4. 其余 → 同源 `/api`（页面由部署站提供，nginx 反代到服务端）
  */
 function resolveBaseUrl(): string {
-  const scope = globalThis as unknown as { location?: { hostname?: string } };
+  const scope = globalThis as unknown as { location?: { hostname?: string; port?: string } };
   if (!scope || !scope.location) {
+    return DEV_BASE_URL;
+  }
+  const port = scope.location.port || "";
+  if (PREVIEW_PORTS.indexOf(port) >= 0) {
     return DEV_BASE_URL;
   }
   const host = scope.location.hostname || "";

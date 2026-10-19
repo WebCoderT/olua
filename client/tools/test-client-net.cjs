@@ -429,12 +429,15 @@ async function expectFailure(action) {
   // #83：光有源码断言不够——#60 的白名单漏了局域网 IP，源码看起来完全正常，跑起来却连不上。
   // 所以这里**真跑一遍** resolveBaseUrl：单独编译一份 configs/network，逐个 host 重新 require
   // （baseUrl 在模块加载时就定死了，换 host 必须清掉 require 缓存重载）。
+  //
+  // #137：判据还多了一条「预览端口」。编辑器预览的 host 是按网卡生成的（IPv6 / 0.0.0.0 /
+  // 甚至看起来像公网地址），光判 host 必然漏；预览服务端口才是恒定的识别点。故帮助函数同时给 host 与 port。
   const networkOutDir = prepare("olua-net-baseurl", ["configs/network.ts"]);
   const networkModule = path.join(networkOutDir, "configs/network.js");
-  const resolveBaseUrlWith = (hostname) => {
+  const resolveBaseUrlWith = (hostname, port = "") => {
     delete require.cache[require.resolve(networkModule)];
     if (hostname === null) delete globalThis.location;
-    else globalThis.location = { hostname };
+    else globalThis.location = { hostname, port };
     const picked = require(networkModule).networkConfig.baseUrl;
     delete require.cache[require.resolve(networkModule)];
     delete globalThis.location;
@@ -468,6 +471,25 @@ async function expectFailure(action) {
   for (const [host, why] of REMOTE_CASES) {
     check(resolveBaseUrlWith(host) === SAME_ORIGIN, `线上部署：${why} → 同源 /api（${host}）`);
   }
+
+  // #137：预览端口优先于 host —— 编辑器按网卡生成的地址（IPv6 / 0.0.0.0 / 长得像公网地址的）
+  // 都不该把请求带到预览服务器自己身上（那会拿回 HTML，解析不出统一包裹，界面报「请求失败」）。
+  const PREVIEW_CASES = [
+    ["localhost", "默认本地预览"],
+    ["192.168.1.20", "局域网地址预览"],
+    ["[fe80::1c2d:3e4f:5a6b:7c8d]", "IPv6 链路本地（Cocos 会按网卡出这种地址）"],
+    ["[fd12:3456:789a::1]", "IPv6 ULA"],
+    ["0.0.0.0", "用 0.0.0.0 打开预览"],
+    ["game.example.com", "域名形式的预览地址"],
+    ["8.8.8.8", "看起来像公网 IP 的预览 host"],
+  ];
+  for (const [host, why] of PREVIEW_CASES) {
+    check(resolveBaseUrlWith(host, "7456") === DEV, `编辑器预览：${why} + 端口 7456 → 本机服务端（${host}）`);
+  }
+  // 端口判据只认预览端口，不能把线上部署打歪（部署的游戏站是 :8080，见 docker-compose）
+  check(resolveBaseUrlWith("game.example.com", "8080") === SAME_ORIGIN, "线上部署：公网域名 + 8080 → 仍走同源 /api");
+  check(resolveBaseUrlWith("game.example.com", "80") === SAME_ORIGIN, "线上部署：公网域名 + 80 → 仍走同源 /api");
+  check(resolveBaseUrlWith("0.0.0.0") === DEV, "本地调试：0.0.0.0（不带预览端口）→ 本机服务端");
 
   //#endregion
 

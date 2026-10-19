@@ -13,6 +13,7 @@
 ## Contents
 
 - [Preview reports reading 'width'](#preview-reports-reading-width)
+- [Every API request fails in the editor preview?](#every-api-request-fails-in-the-editor-preview)
 - [The map goes black after teleporting and only comes back when I move](#the-map-goes-black-after-teleporting-and-only-comes-back-when-i-move)
 - [A new character has no equipment in the bag after a build](#a-new-character-has-no-equipment-in-the-bag-after-a-build)
 - [Clicking a dialog's close button also opens the UI underneath](#clicking-a-dialogs-close-button-also-opens-the-ui-underneath)
@@ -58,6 +59,27 @@ Things worth checking:
 - Has the resolution policy been switched between editor Preview and the real runtime?
 
 If you hit this error, confirm the component relationship and initialization order between Camera and Canvas in the scene first, then rerun the preview.
+
+### Every API request fails in the editor preview?
+
+Look at the `url` in the request log first: if it is a same-origin relative path (something like
+`/api/auth/login`, with no host or port), `resolveBaseUrl` treated the preview page as **the deployed site**.
+Cocos derives its preview address from the network interfaces — bracketed IPv6, `0.0.0.0`, or something that
+looks like a public address — so a hostname-only check always misses. When it misses, the request goes to the
+preview server itself (`:7456`), comes back as HTML, fails to parse the `{code,message,data}` envelope, and the
+UI reports a request failure.
+
+The client now identifies previews by **port**: when the page port is `7456` (the Cocos preview server default)
+it always uses `http://localhost:3100/api`, regardless of the host shape (`PREVIEW_PORTS` in
+`configs/network.ts`).
+
+If it still fails, check three things:
+
+- `url` already reads `http://localhost:3100/api/...` and the failure log says `kind=network`: the server is
+  down or the port is unreachable (`curl --noproxy '*' 127.0.0.1:3100/api/health` to check)
+- `kind=business`: the server was **reached**, so the failure is a business one (unknown account / wrong
+  password) — it cannot be `network` while the server is reachable
+- the preview port was changed in the editor preferences: add the new port to `PREVIEW_PORTS` and a test case
 
 ### The map goes black after teleporting and only comes back when I move
 
