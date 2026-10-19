@@ -73,6 +73,13 @@ The client now identifies previews by **port**: when the page port is `7456` (th
 it always uses `http://localhost:3100/api`, regardless of the host shape (`PREVIEW_PORTS` in
 `configs/network.ts`).
 
+The **in-editor preview** (`PreviewInEditor`) is a different shape: it runs inside the editor's own
+`packages://scene` page, where `protocol` is `packages:` and there is **no port**, so the port rule cannot help
+either; and `/api/...` on such a page resolves to `packages://scene/api/...` (not a valid HTTP address), making
+`xhr.open()` fail immediately (`status=0`). That is why `resolveBaseUrl` has an even more fundamental rule up
+front: **only http(s) pages can be the deployed site**; every other protocol (`packages:` / `file:`) goes to the
+local server.
+
 If it still fails, check three things:
 
 - `url` already reads `http://localhost:3100/api/...` and the failure log says `kind=network`: the server is

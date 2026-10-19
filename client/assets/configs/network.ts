@@ -54,17 +54,34 @@ function isLocalDebugHost(host: string): boolean {
 const PREVIEW_PORTS = ["7456"];
 
 /**
+ * 能以「同源相对地址」工作的页面协议。
+ *
+ * **这条判据比 host 和端口都更根本**：Cocos 的「编辑器内预览」不是普通网页 ——
+ * 它跑在编辑器自己的 `packages://scene` 页面里（protocol = `packages:`，没有 port，
+ * hostname 是 `scene`）。这种页面上 `/api/...` 会被解析成 `packages://scene/api/...`，
+ * 根本不是合法 HTTP 地址，`xhr.open()` 当场失败（`status=0`，界面报「无法连接服务器」）。
+ * `file://` 直接打开产物同理。所以：**只有 http(s) 页面才可能是部署站**。
+ */
+const WEB_PROTOCOLS = ["http:", "https:"];
+
+/**
  * 解析接口根地址。
  *
  * 判据顺序（前一条命中就不再往下判）：
  * 1. 拿不到 location（原生壳）→ 本机地址，由宿主另行配置
- * 2. 预览端口 → 本机地址（覆盖任意 host 形态的编辑器预览）
- * 3. 本地 host（回环 / 私有网段 / 本地域名）→ 本机地址
- * 4. 其余 → 同源 `/api`（页面由部署站提供，nginx 反代到服务端）
+ * 2. 非 http(s) 页面（编辑器内预览 `packages://scene` / `file://`）→ 本机地址
+ * 3. 预览端口 → 本机地址（覆盖任意 host 形态的浏览器预览）
+ * 4. 本地 host（回环 / 私有网段 / 本地域名）→ 本机地址
+ * 5. 其余 → 同源 `/api`（页面由部署站提供，nginx 反代到服务端）
  */
 function resolveBaseUrl(): string {
-  const scope = globalThis as unknown as { location?: { hostname?: string; port?: string } };
+  const scope = globalThis as unknown as { location?: { hostname?: string; port?: string; protocol?: string } };
   if (!scope || !scope.location) {
+    return DEV_BASE_URL;
+  }
+  // protocol 拿不到（老宿主 / 单测垫片）时不作判据，继续往下按 host 判
+  const protocol = scope.location.protocol || "";
+  if (protocol && WEB_PROTOCOLS.indexOf(protocol) < 0) {
     return DEV_BASE_URL;
   }
   const port = scope.location.port || "";

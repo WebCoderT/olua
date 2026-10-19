@@ -39,10 +39,11 @@ plus three growth lines (war soul / title / rank). The server is authoritative f
 ## Which server it connects to
 
 **The single source is `baseUrl` in `assets/configs/network.ts`**, resolved per environment (see `resolveBaseUrl`):
-the editor preview (port `7456`, whatever address it is opened with), loopback addresses and private-network /
-local domains all use `http://localhost:3100/api`; only public domains (the deployed site) fall back to
-same-origin `/api`. **On-device debugging is the exception** — `localhost` on a phone is the phone itself, so
-point `DEV_BASE_URL` at your machine's LAN IP. There is no second address literal anywhere in the code —
+non-http(s) pages (the editor's in-editor preview running on `packages://scene`, or a build opened via `file://`),
+the preview port `7456`, loopback addresses and private-network / local domains all use
+`http://localhost:3100/api`; only public domains (the deployed site) fall back to same-origin `/api`.
+**On-device debugging is the exception** — `localhost` on a phone is the phone itself, so point `DEV_BASE_URL` at
+your machine's LAN IP. There is no second address literal anywhere in the code —
 `node ../tools/audit-api-hardcode.cjs` watches that.
 
 ## Three iron rules

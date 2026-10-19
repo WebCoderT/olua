@@ -29,13 +29,24 @@ export default class ApiError {
   readonly serverMessage: string | null;
   /** 本地兜底文案 key */
   readonly textKey: string;
+  /**
+   * 这次请求的完整地址（诊断用）
+   *
+   * 失败日志里必须带上它：只打 `path` 的话，「打到哪儿了」要靠猜 —— 编辑器预览、
+   * 局域网、线上三种环境解析出的地址完全不同（见 configs/network 的 resolveBaseUrl）。
+   */
+  readonly url: string | null;
 
-  constructor(kind: ApiErrorKind, options: { status?: number; code?: number; serverMessage?: string | null; textKey?: string } = {}) {
+  constructor(
+    kind: ApiErrorKind,
+    options: { status?: number; code?: number; serverMessage?: string | null; textKey?: string; url?: string | null } = {},
+  ) {
     this.kind = kind;
     this.status = options.status ?? 0;
     this.code = options.code ?? -1;
     this.serverMessage = options.serverMessage ?? null;
     this.textKey = options.textKey ?? ApiErrorTextKey.unknown;
+    this.url = options.url ?? null;
   }
 
   /** 网络层失败可以重试（业务失败重试没意义） */
