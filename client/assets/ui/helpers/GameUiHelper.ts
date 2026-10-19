@@ -16,6 +16,7 @@ import {
   Size,
   Sprite,
   SpriteFrame,
+  ToggleContainer,
   tween,
   UIOpacity,
   UITransform,
@@ -36,7 +37,6 @@ import { BattleAttributes } from "../../types/common";
 import { Equipment, EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good";
 import { Monster } from "../../types/monster";
 import { NPC } from "../../types/map";
-import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
 import { TitleAttributes, TitleLevelConfig } from "../../types/title";
@@ -327,14 +327,16 @@ export default class GameUiHelper {
    * @param level 等级（预览动画与等级无关，保留参数以兼容调用方）
    * @param occupation 职业
    * @param sex 性别
+   * @param scale 视觉倍率（帧画布 800×800、角色本体约 216×372；选角大预览用 1.5，见 roleSelectorLayout.previewScale）
    */
-  static createRolePreview(name: string, level: number, occupation: string = "1", sex: string = "1", position: Vec2 = new Vec2(), size: Size = new Size()) {
+  static createRolePreview(name: string, level: number, occupation: string = "1", sex: string = "1", position: Vec2 = new Vec2(), size: Size = new Size(), scale: number = 1) {
     const role = UiHelper.createEmptyNode(name, position, size);
     const animationName = name ? `${name}_animation` : "role_preview_animation";
     const node = UiHelper.createSprite(animationName, "");
     node.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     node.getComponent(Sprite).trim = false;
     role.addChild(node);
+    if (scale !== 1) role.setScale(scale, scale, 1);
     AnimationHelper.loadFramesFromAtlas(createRolePreviewImage(occupation, sex)).then((frames) => {
       // 严格模式判据：角色列表/创建弹窗刷新会销毁旧预览，isValid 默认不查「待销毁」，当帧会漏判
       if (!isValid(node, true)) return;
@@ -347,35 +349,61 @@ export default class GameUiHelper {
 
   //#endregion
 
-  //#region 选角开关组零件
+  //#region 选角选择组零件
 
-  /** 创建性别选择开关组（选中值为节点名 "1"/"2"；位置与开关几何见 configs/hudLayout.roleSelectorLayout.createDialog.sexToggle） */
-  static createSexToggleGroup(position: Vec2 = roleSelectorLayout.createDialog.sexToggle.position) {
-    const { spacing, toggleSize } = roleSelectorLayout.createDialog.sexToggle;
-    return UiHelper.createToggleGroup(
-      "role_sex_toggle_group",
-      [
-        UiHelper.createToggle("1", uiImages.sexToggle.boy.on, uiImages.sexToggle.boy.off, new Vec2(), toggleSize),
-        UiHelper.createToggle("2", uiImages.sexToggle.girl.on, uiImages.sexToggle.girl.off, new Vec2(), toggleSize),
-      ],
-      spacing,
-      position,
+  /**
+   * 创建职业选择组（右侧竖排 3 个菱形钮，选中值 = 节点名 OECCUPATION）
+   *
+   * 单角色改造（issue #149）后「选职业」不再是弹窗里的开关，而是选角主界面右侧的点选组：
+   * 点一下就选中、中间大预览立刻换人。几何（尺寸 / 45° 旋转 / 各钮位置）见
+   * configs/layout/scenes 的 roleSelectorLayout.occupationPicks
+   */
+  static createOccupationPicker(onPick?: (occupation: string) => void) {
+    const picks = roleSelectorLayout.occupationPicks;
+    return this.createPicker(
+      "role_occupation_picker",
+      picks.items.map((item) => ({ key: item.occupation, on: item.on, off: item.off, position: item.position })),
+      picks.size,
+      picks.rotation,
+      onPick,
     );
   }
 
-  /** 创建职业选择开关组（选中值为 OECCUPATION 枚举；位置与开关几何见 configs/hudLayout.roleSelectorLayout.createDialog.occupationToggle） */
-  static createOccupationToggleGroup(position: Vec2 = roleSelectorLayout.createDialog.occupationToggle.position) {
-    const { spacing, toggleSize } = roleSelectorLayout.createDialog.occupationToggle;
-    return UiHelper.createToggleGroup(
-      "role_occupation_toggle_group",
-      [
-        UiHelper.createToggle(OECCUPATION.ZHAN, uiImages.occupationToggle.zhan.on, uiImages.occupationToggle.zhan.off, new Vec2(), toggleSize),
-        UiHelper.createToggle(OECCUPATION.FA, uiImages.occupationToggle.fa.on, uiImages.occupationToggle.fa.off, new Vec2(), toggleSize),
-        UiHelper.createToggle(OECCUPATION.DAO, uiImages.occupationToggle.dao.on, uiImages.occupationToggle.dao.off, new Vec2(), toggleSize),
-      ],
-      spacing,
-      position,
+  /** 创建性别选择组（右侧下方两个钮，选中值 = 节点名 SEX；几何见 roleSelectorLayout.sexPicks） */
+  static createSexPicker(onPick?: (sex: string) => void) {
+    const picks = roleSelectorLayout.sexPicks;
+    return this.createPicker(
+      "role_sex_picker",
+      picks.items.map((item) => ({ key: item.sex, on: item.on, off: item.off, position: item.position })),
+      picks.size,
+      0,
+      onPick,
     );
+  }
+
+  /**
+   * 纵向点选组：容器挂舞台原点、子项**按布局里的舞台坐标**摆放（不加 Layout —— 位置就是写死的那一个）
+   *
+   * 用 ToggleContainer 拿到「单选」语义：点一个，其余自动取消；
+   * 选中值靠节点名（职业码 / 性别码）传给调用方，代码里不出现中文判断。
+   * 点击回调在这里绑：toggle 由 createToggle 产出，鼠标通道拦截已由它内部登记（见 tools/audit-ui-click-through.cjs）
+   */
+  private static createPicker(
+    name: string,
+    items: { key: string; on: string; off: string; position: Vec2 }[],
+    size: Size,
+    rotation: number,
+    onPick?: (key: string) => void,
+  ) {
+    const container = UiHelper.createNode(name, new Vec2(), new Size(size.width, size.height));
+    container.addComponent(ToggleContainer);
+    items.forEach((item) => {
+      const toggle = UiHelper.createToggle(item.key, item.off, item.on, item.position, size);
+      if (rotation) toggle.angle = rotation;
+      if (onPick) toggle.on(Node.EventType.TOUCH_END, () => onPick(item.key));
+      container.addChild(toggle);
+    });
+    return container;
   }
 
   //#endregion

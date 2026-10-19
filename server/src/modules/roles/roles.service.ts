@@ -29,13 +29,13 @@ export class RolesService {
   /**
    * 角色数量上限（**业务上限只在这一处**）
    *
-   * 客户端**没有**第二份数字：它那边的「上限」是选角界面的**站位数量**
-   * （`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions`），那是界面容量。
-   * 所以这个值**只能调低** —— 不得超过站位数量，否则玩家能建出界面上没处放的角色
-   * （多出来的取不到站位，会叠在原点）。这条关系由 `tools/audit-shared-data.cjs` 守着。
+   * 客户端是**单角色**（issue #149）：选角界面只有一个站位（中间的大预览），没有角色列表、
+   * 也没有创建弹窗，所以默认值就是 1。这个值**只能调低** —— 不得超过站位数量
+   * （`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions`），否则玩家能建出界面上
+   * 没处放的角色。这条关系由 `tools/audit-shared-data.cjs` 守着。
    */
   private get maxRoles(): number {
-    return this.config.get<number>("roleMaxPerAccount") ?? 3;
+    return this.config.get<number>("roleMaxPerAccount") ?? 1;
   }
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */

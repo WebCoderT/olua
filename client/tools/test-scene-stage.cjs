@@ -12,7 +12,7 @@
  * 竖屏版没有底部栏，「进入游戏」是舞台内的金板按钮。
  *
  * 盯的不变量（改适配逻辑后必须全绿）：
- * · 任意窗口尺寸下，登录舞台的全部元素、选角舞台的全部元素（含角色站位 / 删除按钮 / 创建弹窗）
+ * · 任意窗口尺寸下，登录舞台的全部元素、选角舞台的全部元素（含角色站位 / 删除按钮 / 右侧选择钮）
  *   **整块都落在可见区内**（不越界、不被裁）
  * · 设计分辨率（750×1624，竖屏）下舞台缩放系数恰为 1（不缩放）
  * · 设计稿纵向映射的锚点不被无意改掉（选服条 / 金按钮 / 名牌的 y）
@@ -114,22 +114,28 @@ function loginElements() {
 function roleSelectorElements() {
   const layout = roleSelectorLayout;
   const elements = [
-    ["创建角色按钮", layout.createRoleButton],
     ["管理角色按钮", layout.manageRoleButton],
-    ["返回按钮", layout.backButton],
     ["选中角色名牌", layout.selectedInfo],
+    ["主按钮", layout.beginGameButton],
+    ["名字输入框", layout.nameInput],
     ["骰子钮", layout.diceButton],
-    ["进入游戏按钮", layout.beginGameButton],
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
-    ["创建角色弹窗", layout.createDialog],
   ];
   // 右侧职业菱形钮（旋转 45°，触达范围按外接圆直径 = 边长 × √2 算，比矩形更保守）
-  layout.occupationShortcuts.items.forEach((item, index) => {
-    elements.push([`职业钮${index + 1}`, { position: item.position, size: { width: layout.occupationShortcuts.size.width * Math.SQRT2, height: layout.occupationShortcuts.size.height * Math.SQRT2 } }]);
+  layout.occupationPicks.items.forEach((item, index) => {
+    elements.push([`职业钮${index + 1}`, { position: item.position, size: { width: layout.occupationPicks.size.width * Math.SQRT2, height: layout.occupationPicks.size.height * Math.SQRT2 } }]);
   });
-  // 角色站位（预览）与管理模式的删除按钮（位置 = 站位 + 偏移）
+  // 右侧下方性别钮（不旋转，按自身尺寸）
+  layout.sexPicks.items.forEach((item, index) => {
+    elements.push([`性别钮${index + 1}`, { position: item.position, size: layout.sexPicks.size }]);
+  });
+  // 角色站位（单角色：只有中间的大预览）与管理模式的删除按钮（位置 = 站位 + 偏移）
   layout.rolePositions.forEach((position, index) => {
-    elements.push([`角色站位${index + 1}`, { position, size: layout.previewSize }]);
+    // 预览节点整体按 previewScale 放大，实际占位按放大后的尺寸算
+    elements.push([
+      `角色站位${index + 1}`,
+      { position, size: { width: layout.previewSize.width * layout.previewScale, height: layout.previewSize.height * layout.previewScale } },
+    ]);
     elements.push([`删除按钮${index + 1}`, { position: new Vec2(position.x + layout.manageRole.deleteButtonOffset.x, position.y + layout.manageRole.deleteButtonOffset.y), size: layout.manageRole.deleteButtonSize }]);
   });
   return elements;
@@ -192,15 +198,30 @@ console.log("\n== D. 设计稿映射与元素分布的关键锚点 ==");
   const rsPlate = roleSelectorLayout.selectedInfo.position;
   check(Math.abs(rsPlate.y - yOf(903)) < 1.5, "选角名牌落在设计稿的纵向位置");
   check(Math.abs(roleSelectorLayout.beginGameButton.position.y - yOf(1014)) < 1.5, "选角金按钮落在设计稿的纵向位置");
+  // 单角色（issue #149）：界面容量只有一个站位，名字输入在主按钮下方
+  check(roleSelectorLayout.rolePositions.length === 1, "选角界面只有一个角色站位（单角色，界面容量 = 1）");
+  check(
+    roleSelectorLayout.nameInput.position.y < roleSelectorLayout.beginGameButton.position.y - 40,
+    "名字输入框在主按钮之下（创建态用，有角色时隐藏）",
+  );
+  // 右侧：职业钮在上、性别钮在下，两组不重叠
+  const lastOccupation = roleSelectorLayout.occupationPicks.items[roleSelectorLayout.occupationPicks.items.length - 1];
+  const firstSex = roleSelectorLayout.sexPicks.items[0];
+  check(
+    lastOccupation.position.y - (roleSelectorLayout.occupationPicks.size.height * Math.SQRT2) / 2 > firstSex.position.y + roleSelectorLayout.sexPicks.size.height / 2,
+    "性别钮在职业钮下方，两组不重叠",
+  );
+  // 中间大预览在名牌之上，不压名牌（按**角色内容**的实际高度算：容器 previewSize ≈ 内容高度，
+  // 画布 800×800 经 previewScale 放大后的透明边框不算 —— 那部分不渲染，不能拿它判遮挡）
+  const stand = roleSelectorLayout.rolePositions[0];
+  const previewContentHalf = roleSelectorLayout.previewSize.height / 2;
+  check(stand.y - previewContentHalf > rsPlate.y + roleSelectorLayout.selectedInfo.size.height / 2, "角色大预览在名牌之上（不压名牌）");
   // 贴边元素收进安全区：舞台半宽 375，任何元素（含外接圆）不得越出
   const maxHalf = Math.max(
-    ...roleSelectorLayout.occupationShortcuts.items.map((item) => (roleSelectorLayout.occupationShortcuts.size.width * Math.SQRT2) / 2 + Math.abs(item.position.x)),
+    ...roleSelectorLayout.occupationPicks.items.map((item) => (roleSelectorLayout.occupationPicks.size.width * Math.SQRT2) / 2 + Math.abs(item.position.x)),
+    ...roleSelectorLayout.sexPicks.items.map((item) => roleSelectorLayout.sexPicks.size.width / 2 + Math.abs(item.position.x)),
   );
-  check(maxHalf <= DESIGN.width / 2 + EPS, `职业菱形钮（含 45° 外接圆）收在安全区内（右缘 ${maxHalf.toFixed(1)} ≤ 375）`);
-  // 返回按钮与管理钮同槽位：弹窗打开时前者顶替后者，绝不同时可见（逻辑见 RoleSelector.toggleMainButtonsVisible）
-  const managePos = roleSelectorLayout.manageRoleButton.position;
-  const backPos = roleSelectorLayout.backButton.position;
-  check(managePos.x === backPos.x && managePos.y === backPos.y, "返回按钮与管理角色按钮同槽位（弹窗打开时顶替，不同时可见）");
+  check(maxHalf <= DESIGN.width / 2 + EPS, `右侧选择钮（含 45° 外接圆）收在安全区内（右缘 ${maxHalf.toFixed(1)} ≤ 375）`);
 }
 
 console.log("\n== E. 源码接线断言 ==");
@@ -222,10 +243,18 @@ console.log("\n== E. 源码接线断言 ==");
   check(/silent: true/.test(login), "Login：自动登录/建号的失败不弹全局提示（本地凭据失效属正常分支，由本页统一提示一次）");
   check(/ACCOUNT_BIZ_CODES\.credentialInvalid/.test(login) && /ACCOUNT_BIZ_CODES\.accountExists/.test(login), "Login：只有「凭据不成立」才重生成，撞名才换号重试");
 
-  check(!/bottomBar/.test(selector), "RoleSelector：竖屏版没有底部栏（进入游戏改为舞台内的金板按钮，2026-10-19 按设计稿重排）");
+  check(!/bottomBar/.test(selector), "RoleSelector：竖屏版没有底部栏（主按钮在舞台内，2026-10-19 按设计稿重排）");
   check(/getStageScale\(roleSelectorLayout\.stageSize/.test(selector), "RoleSelector：舞台缩放系数走 ScreenLayout.getStageScale");
-  check(/toggleMainButtonsVisible\(false\)/.test(selector) && /toggleMainButtonsVisible\(true\)/.test(selector), "RoleSelector：创建弹窗打开时隐藏左上按钮列、关闭时恢复（返回按钮与管理钮同槽位顶替）");
-  check(/angle = shortcuts\.rotation/.test(selector), "RoleSelector：职业菱形钮 = 方钮旋转 45°（设计稿样式，不新切图）");
+  // 单角色（issue #149）：没有创建弹窗、没有角色列表，右侧钮直接选职业/性别
+  check(!/createDialog|createRoleUI|cancelCreateRoleUI/.test(selector), "RoleSelector：没有创建角色弹窗（右侧钮直接选职业/性别）");
+  check(!/roleSummaries/.test(selector), "RoleSelector：不再维护角色列表（单角色只保留 this.role）");
+  check(/GameUiHelper\.createOccupationPicker\(/.test(selector) && /GameUiHelper\.createSexPicker\(/.test(selector), "RoleSelector：职业/性别选择组走 GameUiHelper 的两个工厂");
+  check(/selectOccupation\(/.test(selector) && /selectSex\(/.test(selector), "RoleSelector：点右侧钮 = 改草稿职业/性别（不打开任何弹窗）");
+  check(/createOccupationPicker\(\(key\) => this\.selectOccupation\(key as OECCUPATION\)\)/.test(selector), "RoleSelector：职业钮的点击回调直接接到 selectOccupation（选中值 = 节点名）");
+  check(/createSexPicker\(\(key\) => this\.selectSex\(key as SEX\)\)/.test(selector), "RoleSelector：性别钮的点击回调直接接到 selectSex（选中值 = 节点名）");
+  check(/createRolePreview\("role_preview", 1, occupation, sex, stand, layout\.previewSize, layout\.previewScale\)/.test(selector), "RoleSelector：中间是带倍率的大号站立动画（创建态跟着选择换）");
+  check(/this\.setCreatePartsVisible\(!hasRole\)/.test(selector), "RoleSelector：有角色时隐藏职业/性别/名字输入，只留动画与进入游戏");
+  check(/RoleApi\.create\(/.test(selector) && /SceneManager\.loadScene\("Game"\)/.test(selector), "RoleSelector：创建成功后直接进游戏（不再回列表等第二次点击）");
   check(/applyScreenPolicy\(\);/.test(selector) && /applyScreenPolicy\(\);/.test(login), "两个场景启动时应用铺满窗口策略");
   check(/this\.offWindowResize = onWindowResize\(\(\) => this\.applyStageLayout\(\)\)/.test(selector) && /onDestroy\(\) \{[\s\S]*?this\.offWindowResize\?\.\(\);/.test(selector), "RoleSelector：注册窗口变化重排 + onDestroy 取消");
 }

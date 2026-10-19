@@ -32,7 +32,7 @@ plus three growth lines (war soul / title / rank). The server is authoritative f
 | Scene | What it does |
 | --- | --- |
 | Login | Device-local account auto-generation / auto-login, gets the token from the server (no input fields, no registration entry) |
-| Character selection | Character list and creation, entering the game, deleting a character in manage mode; the complete server data for a character is pulled from here before entering the game |
+| Character selection | **Single character**: with no character yet, pick occupation / sex / name on this screen and create one straight into the game; with one, only the animation and name are shown and "Enter Game" starts directly; "Manage" mode deletes the character to start over |
 | Loading | Map transition (with a progress display) |
 | Game | The main loop: map / combat / HUD / various dialogs |
 

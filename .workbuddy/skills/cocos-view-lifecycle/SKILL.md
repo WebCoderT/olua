@@ -214,7 +214,7 @@ AnimationHelper.loadFramesFromAtlas(atlasSrc).then((frames) => {
 
 - **典型触发场景 = 列表 / 弹窗刷新**：`showXxxUI()` 先 `destroy()` 旧节点、再建新节点，两件事在**同一帧**。
   选角预览、头像、状态图标、怪物列表这类"带帧动画的列表项"都算（本项目实例：`GameUiHelper.createRolePreview`，
-  调用方 `RoleSelector.showOwnerRolesUI` 正是当帧先销毁再重建）。
+  调用方 `RoleSelector.refreshPreview` 正是当帧先销毁再重建）。
 - `playLoopWithFrames` / `playOnceWithFrames` 内部已有 `if (!spriteFrames.length) return;`，回调里不必再判帧数。
 - 组件级同理写 `isValid(animate, true)`；只有确实需要"已销毁"语义时才用默认模式。
 - 别再自建动画组件脚本来播图集帧（本项目已删掉 `assets/scripts/AnimationPlayer.ts`：它就是"图集帧 + 自建 Animation +

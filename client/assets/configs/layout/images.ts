@@ -138,17 +138,12 @@ export const uiImages = {
   /** 右上角功能圆钮（暗球金环，程序化生成；功能名文字运行时叠加） */
   loginCornerButton: loginImage("corner_button"),
 
-  // ---------------- 选角 / 创建角色界面 ----------------
+  // ---------------- 选角界面 ----------------
   /** 背景（design/role_selector.png 修补版：烘焙的创建角色字 / 名牌 / 骰子 / 金按钮已修掉） */
   roleSelectorBackground: createRoleImage("bg"),
-  roleSelectorNewRoleButton: createRoleImage("new_role"),
+  /** 左上「管理」按钮（有角色时才显示；单角色不再有「新建 / 返回」，也没有创建弹窗） */
   roleSelectorManageButton: createRoleImage("manage"),
-  roleSelectorBackButton: createRoleImage("back_btn"),
-  createRoleDialogBackground: createRoleImage("bg_dialog"),
-  createRoleTitleLabel: createRoleImage("label_title"),
-  createRoleGenderLabel: createRoleImage("label_1"),
-  createRoleOccupationLabel: createRoleImage("label_2"),
-  /** 创建角色弹窗的开关：性别 男/女、职业 战/法/道（on = 选中图、off = 未选中图） */
+  /** 职业 / 性别选择钮（on = 选中图、off = 未选中图）：右侧竖排的点选组 */
   sexToggle: {
     boy: { on: createRoleImage("1_1"), off: createRoleImage("1_0") },
     girl: { on: createRoleImage("2_1"), off: createRoleImage("2_0") },
