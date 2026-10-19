@@ -133,10 +133,6 @@ export const uiImages = {
   /** 背景（design/login.png 修补版：烘焙的选服条与金按钮已修掉，见 client/tools/gen-ui-assets.py） */
   loginBackground: loginImage("login_bg"),
   loginInputBackground: loginImage("input_bg"),
-  loginAccountIcon: loginImage("icon_user"),
-  loginPasswordIcon: loginImage("icon_pwd"),
-  /** 暗红描金按钮板（注册入口等次级按钮） */
-  loginButtonPlate: loginImage("button"),
   /** 选服条（暗板金边 + 红宝石，程序化生成；服务器名与「选服」文字运行时叠加） */
   loginServerBar: loginImage("server_bar"),
   /** 右上角功能圆钮（暗球金环，程序化生成；功能名文字运行时叠加） */

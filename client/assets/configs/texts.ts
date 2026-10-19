@@ -287,8 +287,16 @@ export const uiTexts = {
   realtime_reconnected_tip: "已重新连接服务器",
   /** 实时通道被同账号的另一条连接顶掉（服务端一个账号只留一条连接，见 utils/net/RealtimeClient） */
   realtime_replaced_tip: "账号已在其它窗口登录，本窗口已断开",
-  /** 登录/注册表单未填写完整 */
-  login_input_empty_tip: "请输入账号和密码",
+  /** 登录页：正在自动登录 / 首次进入正在建号 */
+  login_connecting_tip: "正在连接服务器…",
+  /** 登录页：本机账号展示（{name} = 自动生成的账号名） */
+  login_device_account_label: "本机账号：{name}",
+  /** 登录页：本机还没有账号（首次进入，点「进入游戏」时自动建） */
+  login_device_account_pending_tip: "首次进入将自动创建账号",
+  /** 登录页：账号来源说明（账号密码都自动生成并存本机，没有注册入口） */
+  login_device_account_hint: "账号密码由本机自动生成并保存，无需注册",
+  /** 登录页：连续撞名导致这套账号没建成（理论上不会发生，兜底提示） */
+  login_account_generate_failed_tip: "账号生成失败，请稍后重试",
   /** 登录页功能圆钮：功能未开放（协议 / 隐私协议） */
   coming_soon_tip: "敬请期待",
   /** 登录页选服条：当前只有一个服 */

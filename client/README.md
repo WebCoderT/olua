@@ -31,7 +31,7 @@
 
 | 场景 | 作用 |
 | --- | --- |
-| 登录 | 账号注册 / 登录，连服务端拿令牌 |
+| 登录 | 本机账号自动生成 / 自动登录，连服务端拿令牌（无输入框、无注册入口） |
 | 角色选择 | 角色列表与创建、进入游戏、管理态删除角色；进游戏前从这里拉服务端完整数据 |
 | Loading | 切图过渡（带进度显示） |
 | 游戏 | 主循环：地图 / 战斗 / HUD / 各种弹窗 |
@@ -116,7 +116,7 @@ node tools/test-bag-tidy.cjs                                 # 单跑一套
 | 成长 | `test-rank`（军衔）· `test-title`（称号）· `test-hp-recover`（每秒回血）· `test-role-default-cloth`（默认身体） |
 | 界面与输入 | `test-dialog-top`（弹窗置顶）· `test-joystick`（操作摇杆）· `test-scene-stage`（登录 / 选角整屏适配）· `test-announcement`（公告展示：排序 / 未读 / 时间窗 / 登录提醒 / 已读记录） |
 | 配置与素材 | `test-monster-config`（怪物配置与几何）· `test-role-frames`（角色帧素材）· `test-texts`（文案模板）· `test-skill-decouple`（技能数值与实现解耦：12 个技能逐字段钉值 / 数据模块零引擎依赖 / id→实现同一性） |
-| 网络与存档 | `test-client-net`（网络层：包裹解包 / 令牌 / 静默 / 防抖同步）· `test-role-delete`（删角色与「被踢下线」）· `test-mall`（商城购买链路） |
+| 网络与存档 | `test-client-net`（网络层：包裹解包 / 令牌 / 静默 / 防抖同步）· `test-role-delete`（删角色与「被踢下线」）· `test-mall`（商城购买链路）· `test-device-account`（本机账号：生成规则 / 存取 / 脏数据兜底） |
 
 ### 配置生成器（产物禁手改）
 

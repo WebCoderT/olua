@@ -21,6 +21,20 @@ export const ApiErrorTextKey = {
   unknown: "net_unknown_tip",
 } as const;
 
+/**
+ * 登录页「本机账号自动生成」需要分支判定的账号业务码（服务端 common/constants/biz-code.ts 的子集）
+ *
+ * 只收客户端要据此**改变动作**的两个码，其余（限流 / 封禁 / 关闭注册）原样展示服务端文案即可：
+ * - 撞名 → 换一个账号名重生成（唯一性由服务端保证，客户端只能重试）；
+ * - 凭据不成立 → 本地这份作废、重新生成（服务端对「账号不存在」与「密码错」回同一个码，本就分不开）。
+ */
+export const ACCOUNT_BIZ_CODES = {
+  /** 账号已存在（自动生成的账号撞名） */
+  accountExists: 10001,
+  /** 账号不存在 / 密码错误（服务端故意回同一句，不暴露账号是否存在） */
+  credentialInvalid: 10003,
+} as const;
+
 /** 需要重新登录的业务码（服务端 common/constants/biz-code.ts 的子集） */
 export const RELOGIN_BIZ_CODES = [
   40100, // 未登录（缺令牌）
