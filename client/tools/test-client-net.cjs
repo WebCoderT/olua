@@ -154,6 +154,11 @@ async function expectFailure(action) {
   check(netError && netError.kind === ApiErrorKind.Network && netError.retryable === true, "连不上 → ApiError(Network) 且标记可重试");
   check(requests.length === networkConfig.retry + 1, "网络层失败按 configs/network.retry 重试", `${requests.length} 次`);
   check(describeError(netError) === net.getText("net_unreachable_tip"), "网络失败用本地兜底文案（服务端给不出话）", describeError(netError));
+  check(
+    netError && netError.url === `${networkConfig.baseUrl}${ApiRoutes.auth.me}`,
+    "失败错误带上完整请求地址（诊断用：只打 path 定位不了打到哪）",
+    netError && netError.url,
+  );
 
   reset();
   responder = () => ({ kind: "timeout" });
@@ -333,6 +338,12 @@ async function expectFailure(action) {
   check(/let installed = false/.test(setupSource) && /if \(installed\) return/.test(setupSource), "installNetwork 幂等（登录/游戏场景都调也只接一次）");
   check(/HttpClient\.setUnauthorizedHandler\(/.test(setupSource) && /Session\.clear\(\)/.test(setupSource) && /loadScene\("Login"\)/.test(setupSource), "重登出口 = 清会话 + 回登录场景");
   check(/HttpClient\.setFailureHandler\(/.test(setupSource) && /createErrorTipText\(describeError\(error\)\)/.test(setupSource), "失败出口 = 统一飘字（文案由 ApiError 归一）");
+  // #140：失败日志必须同时给出「打到哪了」与「页面来源」—— 编辑器内预览 origin 是 packages://scene、
+  // 浏览器预览是 http://host:7456、线上是部署站，三者的 baseUrl 解析完全不同，只报 kind/status 定位不了。
+  check(
+    /url=\$\{error\.url/.test(setupSource) && /origin=\$\{describeOrigin\(\)\}/.test(setupSource),
+    "失败日志同时打完整 url 与页面 origin（否则「打到哪了」只能靠猜）",
+  );
   check(/installNetwork\(\)/.test(read(FILE.login)), "登录场景调 installNetwork");
   check(/installNetwork\(\)/.test(read(FILE.selector)), "选角场景调 installNetwork");
 
@@ -426,18 +437,32 @@ async function expectFailure(action) {
     "configs/network 是客户端唯一地址来源（baseUrl = resolveBaseUrl()，本地 / Web 两个地址常量都在本文件内）",
   );
 
+  // #140：非 http(s) 页面（编辑器内预览 `packages://scene`、file:// 产物）不能走同源相对地址 ——
+  // 这条判据必须排在端口判据**之前**，因为编辑器内预览根本没有端口。顺序反了就等于没加。
+  const protocolAt = networkSource.indexOf("WEB_PROTOCOLS.indexOf(protocol)");
+  const portAt = networkSource.indexOf("PREVIEW_PORTS.indexOf(port)");
+  check(protocolAt > 0 && portAt > protocolAt, "resolveBaseUrl：非 http(s) 页面的判据排在预览端口之前（packages://scene 没有端口）");
+
+  // 排查时临时加的 console.log 不能留在请求层（打的是加工前对象，最容易把人带偏到「path 缺地址」上）
+  const httpSource = read(path.join(ASSETS, "ui/utils/net/HttpClient.ts"));
+  check(!/console\.log/.test(httpSource), "请求层不残留调试用 console.log（诊断信息走失败日志的 url / origin）");
+
+
   // #83：光有源码断言不够——#60 的白名单漏了局域网 IP，源码看起来完全正常，跑起来却连不上。
   // 所以这里**真跑一遍** resolveBaseUrl：单独编译一份 configs/network，逐个 host 重新 require
   // （baseUrl 在模块加载时就定死了，换 host 必须清掉 require 缓存重载）。
   //
   // #137：判据还多了一条「预览端口」。编辑器预览的 host 是按网卡生成的（IPv6 / 0.0.0.0 /
-  // 甚至看起来像公网地址），光判 host 必然漏；预览服务端口才是恒定的识别点。故帮助函数同时给 host 与 port。
+  // 甚至看起来像公网地址），光判 host 必然漏；预览服务端口才是恒定的识别点。
+  // #140：光有端口也不够 —— **编辑器内预览**跑在 `packages://scene` 里（没有 port），
+  // 于是再补一条更根本的判据：非 http(s) 页面不可能是部署站，一律走本机服务端。
+  // 故帮助函数给 host / port / protocol 三项。
   const networkOutDir = prepare("olua-net-baseurl", ["configs/network.ts"]);
   const networkModule = path.join(networkOutDir, "configs/network.js");
-  const resolveBaseUrlWith = (hostname, port = "") => {
+  const resolveBaseUrlWith = (hostname, port = "", protocol = "") => {
     delete require.cache[require.resolve(networkModule)];
     if (hostname === null) delete globalThis.location;
-    else globalThis.location = { hostname, port };
+    else globalThis.location = { hostname, port, protocol };
     const picked = require(networkModule).networkConfig.baseUrl;
     delete require.cache[require.resolve(networkModule)];
     delete globalThis.location;
@@ -489,6 +514,22 @@ async function expectFailure(action) {
   // 端口判据只认预览端口，不能把线上部署打歪（部署的游戏站是 :8080，见 docker-compose）
   check(resolveBaseUrlWith("game.example.com", "8080") === SAME_ORIGIN, "线上部署：公网域名 + 8080 → 仍走同源 /api");
   check(resolveBaseUrlWith("game.example.com", "80") === SAME_ORIGIN, "线上部署：公网域名 + 80 → 仍走同源 /api");
+
+  // #140：编辑器内预览（`packages://scene`）没有 port，host 是 `scene` —— 上述判据全落空，
+  // `/api` 会被解析成 `packages://scene/api/...`（非法 HTTP 地址）→ xhr.open 当场失败 status=0。
+  // 所以非 http(s) 页面必须直接走本机服务端，与 host / port 无关。
+  const NON_WEB_PAGES = [
+    ["scene", "", "packages:", "编辑器内预览（packages://scene，实测 origin）"],
+    ["", "", "file:", "file:// 直接打开产物"],
+    ["game.example.com", "8080", "chrome-extension:", "带公网形态 host 的扩展页（协议仍非 http）"],
+  ];
+  for (const [host, port, protocol, why] of NON_WEB_PAGES) {
+    check(resolveBaseUrlWith(host, port, protocol) === DEV, `非 http(s) 页面：${why} → 本机服务端（protocol=${protocol}）`);
+  }
+  // 反向：http(s) 页面仍按 host / 端口的老规则判，协议判据不能把线上部署也吞掉
+  check(resolveBaseUrlWith("game.example.com", "8080", "https:") === SAME_ORIGIN, "线上部署：https 公网域名 + 8080 → 仍走同源 /api");
+  check(resolveBaseUrlWith("localhost", "7456", "http:") === DEV, "浏览器预览：http + localhost:7456 → 本机服务端");
+  check(resolveBaseUrlWith("game.example.com", "80", "http:") === SAME_ORIGIN, "线上部署：http 公网域名 + 80 → 仍走同源 /api");
   check(resolveBaseUrlWith("0.0.0.0") === DEV, "本地调试：0.0.0.0（不带预览端口）→ 本机服务端");
 
   //#endregion

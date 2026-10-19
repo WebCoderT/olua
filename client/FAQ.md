@@ -70,6 +70,12 @@ IPv6、`0.0.0.0`，也可能长得像公网地址 —— 只按 hostname 判本�
 客户端现在按**预览端口**识别：页面端口是 `7456`（Cocos 预览服务默认端口）就一律走
 `http://localhost:3100/api`，与 host 长什么样无关（`configs/network.ts` 的 `PREVIEW_PORTS`）。
 
+**编辑器内预览**（`PreviewInEditor`）是另一种形态：它跑在编辑器自己的 `packages://scene` 页面里，
+`protocol` 是 `packages:`、**没有 port**，端口判据同样救不了；而那种页面上的 `/api/...` 会被解析成
+`packages://scene/api/...`（不是合法 HTTP 地址），`xhr.open()` 当场失败（`status=0`）。所以
+`resolveBaseUrl` 最前面还有一条更根本的判据：**只有 http(s) 页面才可能是部署站**，其余协议
+（`packages:` / `file:`）一律走本机服务端。
+
 还连不上就分三步看：
 
 - `url` 已经是 `http://localhost:3100/api/...`，而失败日志里 `kind=network`：服务端没起或端口不通

@@ -122,17 +122,26 @@ export default class HttpClient {
       xhr.onload = () => {
         const envelope = HttpClient.parseEnvelope<T>(xhr.responseText);
         if (!envelope) {
-          reject(new ApiError(ApiErrorKind.Http, { status: xhr.status, textKey: ApiErrorTextKey.parse }));
+          reject(new ApiError(ApiErrorKind.Http, { status: xhr.status, textKey: ApiErrorTextKey.parse, url: request.url }));
           return;
         }
         if (envelope.code !== 0) {
-          reject(new ApiError(ApiErrorKind.Business, { status: xhr.status, code: envelope.code, serverMessage: envelope.message }));
+          reject(
+            new ApiError(ApiErrorKind.Business, {
+              status: xhr.status,
+              code: envelope.code,
+              serverMessage: envelope.message,
+              url: request.url,
+            }),
+          );
           return;
         }
         resolve(envelope.data);
       };
-      xhr.onerror = () => reject(new ApiError(ApiErrorKind.Network, { status: xhr.status, textKey: ApiErrorTextKey.unreachable }));
-      xhr.ontimeout = () => reject(new ApiError(ApiErrorKind.Timeout, { status: xhr.status, textKey: ApiErrorTextKey.timeout }));
+      xhr.onerror = () =>
+        reject(new ApiError(ApiErrorKind.Network, { status: xhr.status, textKey: ApiErrorTextKey.unreachable, url: request.url }));
+      xhr.ontimeout = () =>
+        reject(new ApiError(ApiErrorKind.Timeout, { status: xhr.status, textKey: ApiErrorTextKey.timeout, url: request.url }));
       xhr.send(request.body === undefined ? null : JSON.stringify(request.body));
     });
   }
