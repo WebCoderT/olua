@@ -289,6 +289,14 @@ export const uiTexts = {
   realtime_replaced_tip: "账号已在其它窗口登录，本窗口已断开",
   /** 登录/注册表单未填写完整 */
   login_input_empty_tip: "请输入账号和密码",
+  /** 登录页功能圆钮：功能未开放（协议 / 隐私协议） */
+  coming_soon_tip: "敬请期待",
+  /** 登录页选服条：当前只有一个服 */
+  server_single_tip: "当前仅开放 1 服，无需选择",
+  /** 登录页清除缓存完成 */
+  cache_cleared_tip: "本地缓存已清除",
+  /** 骰子掷出随机角色名 */
+  dice_name_tip: "随机名：{name}",
   /** 登录成功（{name} = 账号名） */
   login_success_tip: "登录成功，欢迎 {name}",
   /** 注册成功（{name} = 账号名） */

@@ -49,3 +49,5 @@ client/assets/resources/
 #//////////////////////////
 deploy.env
 *.pem
+
+design/
