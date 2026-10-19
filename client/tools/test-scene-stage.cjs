@@ -98,10 +98,9 @@ function loginElements() {
   const layout = loginLayout;
   const elements = [
     ["选服条", layout.serverBar],
-    ["账号输入框", layout.account],
-    ["密码输入框", layout.password],
+    ["本机账号", layout.account],
+    ["自动登录说明", layout.autoHint],
     ["登录按钮", layout.loginButton],
-    ["注册按钮", layout.registerButton],
   ];
   // 右上角功能圆钮 + 居中文字（文字挂在按钮内，宽 100 要单独算越界）
   layout.cornerButtons.forEach((item, index) => {
@@ -183,12 +182,13 @@ console.log("\n== D. 设计稿映射与元素分布的关键锚点 ==");
   const yOf = (dy) => DESIGN.height / 2 - dy * (DESIGN.height / 1160);
   const loginBar = loginLayout.serverBar.position;
   check(Math.abs(loginBar.y - yOf(810.5)) < 1.5, `登录选服条落在设计稿的纵向位置（${loginBar.y.toFixed(1)} ≈ 812 - 1.4×810.5）`);
-  // 登录金按钮在设计稿位置（yOf(934.5) ≈ -496）的基础上**整体下移**，给账号/密码输入框让位 ——
-  // 钉住「在选服条与注册按钮之间、低于输入框」这个次序，而不是死坐标
+  // 登录金按钮在说明行之下（设计稿位置 yOf(934.5) ≈ -496，因本机账号行整体下移）——
+  // 钉住「在选服条之下的账号行与说明行再往下」这个次序，而不是死坐标
   check(
-    loginLayout.loginButton.position.y < loginLayout.password.position.y - 60 && loginLayout.loginButton.position.y > loginLayout.registerButton.position.y,
-    "登录金按钮位于密码输入框之下、注册按钮之上（设计稿位置因加入输入框整体下移）",
+    loginLayout.loginButton.position.y < loginLayout.autoHint.position.y - 40,
+    "登录金按钮位于本机账号说明行之下（设计稿位置因账号行整体下移）",
   );
+  check(loginLayout.account.position.y < loginBar.y - 40, "本机账号行在选服条之下");
   const rsPlate = roleSelectorLayout.selectedInfo.position;
   check(Math.abs(rsPlate.y - yOf(903)) < 1.5, "选角名牌落在设计稿的纵向位置");
   check(Math.abs(roleSelectorLayout.beginGameButton.position.y - yOf(1014)) < 1.5, "选角金按钮落在设计稿的纵向位置");
@@ -215,6 +215,12 @@ console.log("\n== E. 源码接线断言 ==");
   check(/this\.offWindowResize = onWindowResize\(\(\) => this\.applyStageLayout\(\)\)/.test(login), "Login：注册窗口变化重排");
   check(/onDestroy\(\) \{\s*this\.offWindowResize\?\.\(\);\s*this\.offWindowResize = null;/.test(login), "Login：onDestroy 取消监听（screen 单例不随节点销毁）");
   check(/createFullScreenImage\("login_background"/.test(login) && !/this\.stage\.addChild\(GameUiHelper\.createFullScreenImage/.test(login), "Login：背景挂在场景根（不在舞台内，铺满可见区兜底）");
+  // 本机账号自动生成（issue #146）：登录页不再有输入框与注册入口，凭据走 DeviceAccount
+  check(!/EditBox/.test(login), "Login：没有账号密码输入框（账号由本机自动生成）");
+  check(/DeviceAccount\.load\(\)/.test(login) && /DeviceAccount\.generate\(\)/.test(login) && /DeviceAccount\.save\(/.test(login), "Login：本机凭据读取/生成/落盘都走 DeviceAccount");
+  check(/AuthApi\.login\(/.test(login) && /AuthApi\.register\(/.test(login), "Login：已有账号走登录、本地没有走注册");
+  check(/silent: true/.test(login), "Login：自动登录/建号的失败不弹全局提示（本地凭据失效属正常分支，由本页统一提示一次）");
+  check(/ACCOUNT_BIZ_CODES\.credentialInvalid/.test(login) && /ACCOUNT_BIZ_CODES\.accountExists/.test(login), "Login：只有「凭据不成立」才重生成，撞名才换号重试");
 
   check(!/bottomBar/.test(selector), "RoleSelector：竖屏版没有底部栏（进入游戏改为舞台内的金板按钮，2026-10-19 按设计稿重排）");
   check(/getStageScale\(roleSelectorLayout\.stageSize/.test(selector), "RoleSelector：舞台缩放系数走 ScreenLayout.getStageScale");

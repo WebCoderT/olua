@@ -34,29 +34,24 @@ export const loginLayout = {
     serverName: { name: "login_server_name", text: "打金1服", position: new Vec2(-80, 0), size: new Size(220, 40), fontSize: 26, color: new Color("#F2E4C8") },
     selectServer: { name: "login_server_select", text: "选服", position: new Vec2(155, 0), size: new Size(100, 40), fontSize: 28, color: new Color("#4FD25C") },
   },
-  /** 账号输入框 */
-  account: { placeholder: "请输入您的游戏账号", position: new Vec2(0, -408), size: new Size(470, 64), icon: uiImages.loginAccountIcon, password: false },
-  /** 密码输入框 */
-  password: { placeholder: "请输入您的游戏密码", position: new Vec2(0, -478), size: new Size(470, 64), icon: uiImages.loginPasswordIcon, password: true },
-  /** 进入游戏（金板主按钮，登录入口） */
+  /**
+   * 本机账号（只读展示，替代原来的账号输入框）
+   *
+   * 账号由本机自动生成（见 ui/utils/net/DeviceAccount），玩家不需要输入；亮出来只是让人认得出
+   * 这台设备用的是哪个号（找客服/后台查存档都靠它）。文本由 Login.renderAccount 填，不在这里写死。
+   */
+  account: { name: "login_device_account", position: new Vec2(0, -404), size: new Size(560, 40), fontSize: 24, color: new Color("#F2E4C8") },
+  /** 自动登录说明（原密码输入框位置）：讲清楚「为什么没有输入框、账号存在哪」 */
+  autoHint: { name: "login_auto_hint", position: new Vec2(0, -452), size: new Size(600, 32), fontSize: 20, color: new Color("#9A8663") },
+  /** 进入游戏（金板主按钮，自动登录入口：首次进入会先自动建号） */
   loginButton: {
     name: "login_button",
     image: uiImages.buttonGold,
     text: "进 入 游 戏",
-    position: new Vec2(0, -582),
+    position: new Vec2(0, -570),
     size: new Size(335, 100),
     textColor: new Color("#FFFFFF"),
     fontSize: 42,
-  },
-  /** 注册按钮（与登录共用上方的账号/密码输入框；账号唯一性与格式由服务端校验） */
-  registerButton: {
-    name: "register_button",
-    image: uiImages.loginButtonPlate,
-    text: "注 册 账 号",
-    position: new Vec2(0, -676),
-    size: new Size(230, 54),
-    textColor: new Color("#F2E4C8"),
-    fontSize: 24,
   },
   /**
    * 右上角功能圆钮列（公告 / 协议 / 隐私协议 / 清除缓存）：

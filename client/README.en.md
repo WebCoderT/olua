@@ -31,7 +31,7 @@ plus three growth lines (war soul / title / rank). The server is authoritative f
 
 | Scene | What it does |
 | --- | --- |
-| Login | Account registration / login, gets the token from the server |
+| Login | Device-local account auto-generation / auto-login, gets the token from the server (no input fields, no registration entry) |
 | Character selection | Character list and creation, entering the game, deleting a character in manage mode; the complete server data for a character is pulled from here before entering the game |
 | Loading | Map transition (with a progress display) |
 | Game | The main loop: map / combat / HUD / various dialogs |
@@ -116,7 +116,7 @@ node tools/test-bag-tidy.cjs                                 # run one suite
 | Growth | `test-rank` (rank) · `test-title` (title) · `test-hp-recover` (health per second) · `test-role-default-cloth` (default body) |
 | Interface and input | `test-dialog-top` (dialog raise to top) · `test-joystick` (movement joystick) · `test-scene-stage` (login / character selection full-screen fit) · `test-announcement` (announcement display: sorting / unread / time window / login notice / read records) |
 | Config and assets | `test-monster-config` (monster config and geometry) · `test-role-frames` (character frame assets) · `test-texts` (text templates) · `test-skill-decouple` (skill data decoupled from implementations: field-by-field values for all 12 skills / zero engine dependency in the data module / id→implementation identity) |
-| Networking and saves | `test-client-net` (network layer: envelope unwrap / token / silent / debounced sync) · `test-role-delete` (deleting a character and "kicked offline") · `test-mall` (mall purchase chain) |
+| Networking and saves | `test-client-net` (network layer: envelope unwrap / token / silent / debounced sync) · `test-role-delete` (deleting a character and "kicked offline") · `test-mall` (mall purchase chain) · `test-device-account` (device account: generation rules / storage / dirty-data fallback) |
 
 ### Config generators (output is never hand-edited)
 

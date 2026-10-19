@@ -1,41 +1,53 @@
-import { _decorator, Component, EditBox, Node, UITransform, Vec2, isValid } from "cc";
+import { _decorator, Component, Label, Node, UITransform, Vec2, isValid } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { applyScreenPolicy, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
 import { loginLayout, uiImages } from "../configs/hudLayout";
+import { getText } from "../configs/texts";
 import { AuthApi } from "./utils/net/Api";
 import type { AuthResult } from "./utils/net/Api";
-import { describeError } from "./utils/net/ApiError";
+import ApiError, { describeError } from "./utils/net/ApiError";
+import { ACCOUNT_BIZ_CODES } from "./utils/net/ApiCodes";
+import DeviceAccount from "./utils/net/DeviceAccount";
+import type { DeviceCredentials } from "./utils/net/DeviceAccount";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import { blockClickThrough } from "./utils/input/UiHit";
 import Session from "./utils/net/Session";
 import AnnouncementNoticeDialog from "./components/dialogs/AnnouncementNoticeDialog";
 const { ccclass } = _decorator;
 
+/** 生成账号的重试次数（只为「撞名」准备：唯一性只能由服务端判定，客户端撞了就换一个） */
+const ACCOUNT_GENERATE_ATTEMPTS = 3;
+
 /**
- * 登录场景（账号登录 / 账号注册），视觉按 design/login.png 重排（issue #143）
+ * 登录场景（本机账号自动生成 / 自动登录），视觉按 design/login.png 重排（issue #143、#146）
  *
- * 账号体系统一走服务端（见 ui/utils/net）：登录/注册成功后把令牌存进 Session，
- * 请求层随后自动带上它 —— 客户端不再自己造账号，也不再硬编码任何地址。
- * 登录与注册共用一个 submitting 标记，避免连点重复提交。
+ * **玩家不输账号、也不注册**：账号与密码由 `ui/utils/net/DeviceAccount` 在本机生成并保存，
+ * 点「进入游戏」时：
+ * 1. 本地有凭据 → 直接登录；
+ * 2. 登录回 `10003`（账号不存在与口令错是同一个码）→ 本地这份已不成立，丢掉重新生成；
+ * 3. 没有凭据（首次进入 / 刚清过）→ 生成 → `POST /auth/register`（服务端直接回令牌）→ 进选角；
+ * 4. 网络失败 / 限流 / 封禁 → **保留**本地凭据原样报错（封禁不能靠换号绕过）。
+ *
+ * 凭据先落盘再注册：注册响应丢失时下次进入会先试登录，若服务端其实已建号就能救回来，不会白丢存档。
  *
  * 结构与选角场景同一套：铺满窗口的背景 + 一块固定设计尺寸的「舞台」，
  * 其余元素全部挂在舞台下按设计坐标摆放（坐标以舞台中心为原点，见 configs/layout/scenes.loginLayout），
  * 舞台按可见尺寸等比缩放（contain、只缩不放）—— 任意窗口宽高比下构图都完整可见。
  * 右上角功能圆钮列（公告/协议/隐私协议/清除缓存）与选服条是设计稿带来的入口：
- * 公告重开公告弹窗、清除缓存清本地存储，其余未开放的功能统一「敬请期待」
+ * 公告重开公告弹窗、清除缓存清本地角色缓存，其余未开放的功能统一「敬请期待」
  */
 @ccclass("Login")
 export class Login extends Component {
-  accountInput: Node;
-  passwordInput: Node;
   /** 舞台容器（除背景外的所有元素都挂这里，整体按可见尺寸等比缩放） */
   private stage: Node | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
-  /** 是否正在提交（登录与注册互斥） */
+  /** 是否正在提交（防连点：自动登录与自动注册全程只允许一条请求链） */
   private submitting = false;
+  /** 本机账号展示（只读；文本随「有没有凭据」变化，见 renderAccount） */
+  private accountLabel: Node | null = null;
   /** 公告提醒弹窗（进登录页时摊开重要公告；右上角「公告」圆钮可再次打开） */
   private announcementNotice = new AnnouncementNoticeDialog();
 
@@ -54,42 +66,23 @@ export class Login extends Component {
     this.node.addChild(this.stage);
     // 选服条（装饰 + 入口：服务器名与「选服」都是 Label，点击提示只有一个服）
     this.createServerBar();
-    // 账号输入框
-    const account = GameUiHelper.createInputField(layout.account.placeholder, layout.account.position, layout.account.size, layout.account.icon);
-    this.accountInput = account.input;
-    this.stage.addChild(account.node);
-    // 密码输入框
-    const password = GameUiHelper.createInputField(layout.password.placeholder, layout.password.position, layout.password.size, layout.password.icon, layout.password.password);
-    this.passwordInput = password.input;
-    this.stage.addChild(password.node);
-    // 进入游戏（登录）
+    // 本机账号（只读展示，替代原来的账号 / 密码输入框）
+    this.createAccountLine();
+    // 进入游戏（自动登录；首次进入会先自动建号）
     const button = layout.loginButton;
     const loginButton = GameUiHelper.createTexturedButton(button.name, button.image, button.text, button.position, button.size, button.textColor, button.fontSize);
     this.stage.addChild(loginButton);
-    loginButton.on(Node.EventType.TOUCH_END, () => void this.login());
-    // 注册账号（用同一对输入框；服务端会校验账号唯一与格式）
-    const registerLayout = layout.registerButton;
-    const registerButton = GameUiHelper.createTexturedButton(
-      registerLayout.name,
-      registerLayout.image,
-      registerLayout.text,
-      registerLayout.position,
-      registerLayout.size,
-      registerLayout.textColor,
-      registerLayout.fontSize,
-    );
-    this.stage.addChild(registerButton);
-    registerButton.on(Node.EventType.TOUCH_END, () => void this.register());
+    loginButton.on(Node.EventType.TOUCH_END, () => void this.enterGame());
     // 右上角功能圆钮列（公告 / 协议 / 隐私协议 / 清除缓存）
     this.createCornerButtons();
     // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
     this.applyStageLayout();
     this.offWindowResize = onWindowResize(() => this.applyStageLayout());
-    // 清空缓存------开发时使用（含角色缓存与上次会话，进登录页一律重新登录）
+    // 清角色缓存与会话（进登录页一律重新登录）—— **不动本机凭据**，否则点一次清缓存就换号丢角色
     StorageManager.clear();
     // 公告提醒：拉取「生效中的重要公告」（公共接口，无需令牌），有就弹、没有或拉取失败就静默 ——
     // 挂在本场景自己的节点上（登录场景没有 UI 图层容器，见 AnnouncementNoticeDialog 的说明），
-    // 不 await：公告不该拖慢登录页的出现，也不阻塞账号密码输入
+    // 不 await：公告不该拖慢登录页的出现，也不阻塞自动登录
     void this.announcementNotice.open(this.node);
   }
 
@@ -108,6 +101,28 @@ export class Login extends Component {
     if (!stage || !isValid(stage, true)) return;
     const scale = getStageScale(loginLayout.stageSize, getVisibleSize());
     stage.setScale(scale, scale, 1);
+  }
+
+  /** 本机账号展示行（只读）：有凭据就显示账号名，没有就提示「首次进入自动创建」 */
+  private createAccountLine() {
+    const layout = loginLayout.account;
+    const label = GameUiHelper.createText(layout.name, "", layout.fontSize, layout.position, layout.size, layout.color);
+    this.stage!.addChild(label);
+    this.accountLabel = label;
+    this.renderAccount();
+    // 说明文案（原密码输入框位置）：玩家会疑惑「账号哪来的」，这里一次讲清
+    const hint = loginLayout.autoHint;
+    this.stage!.addChild(GameUiHelper.createText(hint.name, getText("login_device_account_hint"), hint.fontSize, hint.position, hint.size, hint.color));
+  }
+
+  /** 刷新本机账号展示（生成新账号 / 清掉凭据后都要调） */
+  private renderAccount() {
+    const node = this.accountLabel;
+    if (!node || !isValid(node, true)) return;
+    const label = node.getComponent(Label);
+    if (!label) return;
+    const credentials = DeviceAccount.load();
+    label.string = credentials ? getText("login_device_account_label", { name: credentials.username }) : getText("login_device_account_pending_tip");
   }
 
   /** 选服条：底图（含红宝石装饰）+ 服务器名与「选服」文字；点击提示当前只有一个服 */
@@ -144,54 +159,94 @@ export class Login extends Component {
       return;
     }
     if (action === "clear_cache") {
+      // 只清角色缓存与会话，本机账号留着 —— 否则下次进来会变成新号，旧角色再也回不去
       StorageManager.clear();
+      this.renderAccount();
       GameUiHelper.createTip("cache_cleared_tip");
       return;
     }
     GameUiHelper.createTip("coming_soon_tip");
   }
 
-  /** 登录 */
-  async login() {
-    const credentials = this.readCredentials();
-    if (!credentials) return;
-    await this.submit(() => AuthApi.login({ username: credentials.username, password: credentials.password }));
-  }
-
-  /** 注册（成功后直接进选角场景，无需再登录一次） */
-  async register() {
-    const credentials = this.readCredentials();
-    if (!credentials) return;
-    await this.submit(() => AuthApi.register({ username: credentials.username, password: credentials.password }));
-  }
-
-  /** 读输入框（为空时提示并返回 null） */
-  private readCredentials(): { username: string; password: string } | null {
-    const username = this.accountInput.getComponent(EditBox).string.trim();
-    const password = this.passwordInput.getComponent(EditBox).string;
-    if (!username || !password) {
-      GameUiHelper.createTip("login_input_empty_tip");
-      return null;
-    }
-    return { username, password };
-  }
-
   /**
-   * 提交登录 / 注册
-   * 成功后存会话并进选角场景；失败由网络层统一飘字（服务端文案如「账号或密码错误」直接展示）
+   * 进入游戏（自动登录 / 首次自动建号）
+   *
+   * 两条分支的边界很明确：**只有「凭据在服务端不成立」才重新生成**，
+   * 网络问题、登录限流、封禁都保留本地凭据报错 —— 那些情况下换号既解决不了问题，
+   * 还会把玩家已经有的角色永久留在一个他再也拿不到的账号上。
    */
-  private async submit(action: () => Promise<AuthResult>) {
+  private async enterGame() {
     if (this.submitting) return;
     this.submitting = true;
+    GameUiHelper.createTip("login_connecting_tip");
     try {
-      const result = await action();
-      Session.save(result.token, result.account);
-      SceneManager.loadScene("RoleSelector");
+      const saved = DeviceAccount.load();
+      if (saved) {
+        const loggedIn = await this.loginWithSavedAccount(saved);
+        if (loggedIn) return;
+        // 本地账号在服务端已不成立（换库 / 账号被删）：丢掉重生成，否则每次点都撞同一句错误
+        DeviceAccount.clear();
+        this.renderAccount();
+      }
+      await this.createAccountAndEnter();
     } catch (error) {
-      console.warn(`[Login] 提交失败：${describeError(error)}`);
+      // 两条请求都是 silent 的（见下），全局飘字不会响 —— 在这里统一提示一次
+      GameUiHelper.createErrorTipText(describeError(error));
+      console.warn(`[Login] 进入游戏失败：${describeError(error)}`);
     } finally {
       this.submitting = false;
     }
+  }
+
+  /**
+   * 用本机凭据登录
+   *
+   * `silent`：本地凭据失效是**正常分支**（下一步就会重新建号），不该先弹一条「账号或密码错误」吓玩家；
+   * 其余错误由调用方统一提示。
+   * @returns 是否登录成功（true = 已切到选角场景）
+   */
+  private async loginWithSavedAccount(credentials: DeviceCredentials): Promise<boolean> {
+    try {
+      const result = await AuthApi.login({ username: credentials.username, password: credentials.password }, { silent: true });
+      this.enterSelector(result);
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ACCOUNT_BIZ_CODES.credentialInvalid) return false;
+      throw error;
+    }
+  }
+
+  /**
+   * 生成一套新账号并注册（服务端注册成功直接回令牌，不用再登录一次）
+   *
+   * **先落盘再请求**：注册响应可能丢（超时），但服务端已经建了号 —— 下次进入先试登录就能接上，
+   * 不会因为「没收到响应」白白丢掉一对已经有角色的凭据。
+   */
+  private async createAccountAndEnter() {
+    for (let attempt = 0; attempt < ACCOUNT_GENERATE_ATTEMPTS; attempt++) {
+      const credentials = DeviceAccount.generate();
+      DeviceAccount.save(credentials);
+      this.renderAccount();
+      try {
+        const result = await AuthApi.register({ username: credentials.username, password: credentials.password }, { silent: true });
+        this.enterSelector(result);
+        return;
+      } catch (error) {
+        if (error instanceof ApiError && error.code === ACCOUNT_BIZ_CODES.accountExists) continue;
+        // 网络 / 超时 / 关闭注册 / 限流：保留凭据，下次进入先用登录把它接上
+        throw error;
+      }
+    }
+    // 连续撞名（理论上不可能）：清掉这份没注册成功的凭据，别让它一直卡住
+    DeviceAccount.clear();
+    this.renderAccount();
+    GameUiHelper.createTip("login_account_generate_failed_tip");
+  }
+
+  /** 登录 / 注册成功：存会话并进选角场景 */
+  private enterSelector(result: AuthResult) {
+    Session.save(result.token, result.account);
+    SceneManager.loadScene("RoleSelector");
   }
 
   update(deltaTime: number) {}

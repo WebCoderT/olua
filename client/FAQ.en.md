@@ -36,6 +36,7 @@
 - [How does the mall work? Where do I add goods or change prices?](#how-does-the-mall-work-where-do-i-add-goods-or-change-prices)
 - [How is character progress synced to the server?](#how-is-character-progress-synced-to-the-server)
 - [Want to change the character-count limit? Which side?](#want-to-change-the-character-count-limit-which-side)
+- [Where do the account and password come from? What happens on another device or after clearing the cache?](#where-do-the-account-and-password-come-from-what-happens-on-another-device-or-after-clearing-the-cache)
 - [Why can't I see error toasts on the login and character selection screens?](#why-cant-i-see-error-toasts-on-the-login-and-character-selection-screens)
 - [How does the client hook up the realtime (WebSocket) channel?](#how-does-the-client-hook-up-the-realtime-websocket-channel)
 - [How do unit tests run real Cocos code in node?](#how-do-unit-tests-run-real-cocos-code-in-node)
@@ -349,6 +350,16 @@ So a new character starts with `5 + 20 + 12 + 14 = 51` pieces, and that pile of 
 - **The business cap is on the server**: `ROLE_MAX_PER_ACCOUNT` in `server/.env` (default 3); over-limit requests are rejected at creation time. The client's pre-creation check means "**all stands are taken**" (saving a round trip, see `ui/RoleSelector.createRole`) and is not a second cap
 - **So it can only be lowered**: it must not exceed the stand count, otherwise a player can create a character the UI has nowhere to place (the extra one gets no stand and stacks at the origin, with a `console.warn` from the client). Adding stands is **layout / art** work (`rolePositions` is a hand-tuned composition) while changing `.env` is an **ops** task, so the two never have to change together
 - Guard: `tools/audit-shared-data.cjs` asserts the committed defaults are no greater than the stand count and forbids the client from introducing a second limit number
+
+### Where do the account and password come from? What happens on another device or after clearing the cache?
+
+The login screen has no account field and no register button:
+
+- The account and password are generated and stored **on this device** by the client (`ui/utils/net/DeviceAccount`, key `olua.deviceAccount`; the account looks like `olua_` plus a 10-character random segment). "Enter game" calls `POST /auth/register` the first time and `POST /auth/login` afterwards
+- **The credentials live on this device only**: another device, cleared browser data or a reinstall all mean a new account. The old account still exists on the server, but the client can never reach it again — that is the price of "no registration"
+- The top-right "clear cache" button only clears the character cache and the session (`StorageManager.clear`) and **leaves the credentials alone**, so the next entry is the same account
+- When the saved credentials no longer hold on the server (fresh database / deleted account), login returns `10003` and the client drops them and generates a new pair; network failures, login throttling and bans (`10004`) keep the credentials and report the error as-is — a ban must not be escaped by switching accounts
+- Regression test: `node tools/test-device-account.cjs` (generation rules fit the server validation range / save-load round trip / dirty-data fallback / keys kept apart from Session)
 
 ### Why can't I see error toasts on the login and character selection screens?
 
