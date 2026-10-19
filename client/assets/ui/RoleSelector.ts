@@ -1,10 +1,10 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
-import { applyScreenPolicy, getAnchoredPosition, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
+import { applyScreenPolicy, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { Role } from "../entities/Role";
@@ -38,7 +38,7 @@ interface RoleSelectorCreateView {
 }
 
 /**
- * 选角场景（登录后的角色列表 + 创建角色弹窗）
+ * 选角场景（登录后的角色列表 + 创建角色弹窗），视觉按 design/role_selector.png 重排（issue #143）
  *
  * 角色数据**以服务端为准**：进场景拉一次角色列表（概要），选角色时才拉完整数据写进本地缓存
  * （游戏内各处读角色是同步的，所以必须有一份本地完整数据，见 StorageManager.cacheRole）。
@@ -49,20 +49,15 @@ interface RoleSelectorCreateView {
  * 舞台由 applyStageLayout 按当前可见尺寸等比缩放（contain、只缩不放），
  * 所以窗口宽高比与设计不一致（窄屏会裁左右 / 宽屏会裁上下）时构图依旧完整可见，
  * 新增元素只需按设计画布摆坐标，不必关心窗口尺寸。
- * 位置/尺寸/用图统一见 configs/hudLayout.roleSelectorLayout
+ * 位置/尺寸/用图统一见 configs/layout/scenes.roleSelectorLayout
  */
 @ccclass("RoleSelector")
 export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
-  /** 舞台容器（除背景与底部栏外的所有元素都挂这里，整体按可见尺寸等比缩放；见 applyStageLayout） */
+  /** 舞台容器（除背景外的所有元素都挂这里，整体按可见尺寸等比缩放；见 applyStageLayout） */
   private stage: Node | null = null;
-  /**
-   * 底部栏（不在舞台内）：横跨可见宽 + 贴屏幕底边，位置/缩放由 applyStageLayout 实时算
-   * （素材带牌匾装饰不可拉伸变形，只能等比缩放；跟舞台缩会两侧露背景、且不贴屏幕底边）
-   */
-  private bottomBar: Node | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
   /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
@@ -115,41 +110,14 @@ export class RoleSelector extends Component {
   }
 
   /**
-   * 舞台与底部栏适配（窗口尺寸变化时可重复调用）
-   *
-   * 铺满窗口的适配策略下，窗口宽高比与设计（竖屏 750×1624）不一致时必然有一边被裁：
-   * 窗口偏矮（如 1024×768 → 可见区仅 750×562）会裁掉上下，写死坐标的贴边元素
-   * （顶部按钮、下部选中信息框与创建弹窗）就整体跑到屏幕外看不见了；
-   * 这里把整块舞台按 contain 比例缩小（只缩不放），构图恒完整落在可见区内。
-   *
-   * 底部栏不进舞台（见 roleSelectorLayout.bottomBar 注释）：它按**可见宽**等比缩放
-   * （素材不可拉伸，等比才不变形；铺满窗口策略下可见宽恒 ≤ 设计宽 750，系数恒 ≤ 1
-   * 不会放大模糊），再贴屏幕底边 —— 任何分辨率下都横跨整屏、紧贴下边缘。
-   * 开始游戏按钮不跟底栏一起缩（见 roleSelectorLayout.beginGameButton 注释）：
-   * 反向补偿回设计尺寸并居中，否则竖屏下只有 ~22px 高、点不着
+   * 舞台适配（窗口尺寸变化时可重复调用）：按可见尺寸等比缩放整块舞台并居中
+   * （与登录场景同一套做法，缩放算法见 ui/utils/layout/ScreenLayout.getStageScale）
    */
   applyStageLayout() {
     const stage = this.stage;
     if (!stage || !isValid(stage, true)) return;
-    const visible = getVisibleSize();
-    const scale = getStageScale(roleSelectorLayout.stageSize, visible);
+    const scale = getStageScale(roleSelectorLayout.stageSize, getVisibleSize());
     stage.setScale(scale, scale, 1);
-    const bar = this.bottomBar;
-    if (!bar || !isValid(bar, true)) return;
-    const barLayout = roleSelectorLayout.bottomBar;
-    const barScale = visible.width / barLayout.size.width;
-    const visual = new Size(barLayout.size.width * barScale, barLayout.size.height * barScale);
-    // 贴底：bottom-center 语义 = 区块中心到屏幕下边缘 = 缩放后高度的一半（setPosition 不吃 Vec2，拆开传）
-    const position = getAnchoredPosition(visual, visible, "bottom-center", 0, visual.height / 2);
-    bar.setScale(barScale, barScale, 1);
-    bar.setPosition(position.x, position.y, 0);
-    // 开始游戏按钮反向补偿：barScale × (1/barScale) = 1，视觉尺寸恒为设计尺寸（190×48）
-    const beginButton = this.mainView?.beginGameButton;
-    if (beginButton && isValid(beginButton, true)) {
-      const compensation = 1 / barScale;
-      beginButton.setScale(compensation, compensation, 1);
-      beginButton.setPosition(roleSelectorLayout.beginGameButton.position.x, roleSelectorLayout.beginGameButton.position.y, 0);
-    }
   }
 
   /** 「开始游戏」：把选中角色同步到服务端（成为该账号的在线角色）并拉完整数据，然后进游戏场景 */
@@ -203,21 +171,11 @@ export class RoleSelector extends Component {
     }
   }
 
-  /** 拼装选角主视图（元素全部挂舞台，坐标见 configs/hudLayout.roleSelectorLayout） */
+  /** 拼装选角主视图（元素全部挂舞台，坐标见 configs/layout/scenes.roleSelectorLayout） */
   private createMainView(): RoleSelectorMainView {
-    // 位置/尺寸与用图统一见 configs/hudLayout.roleSelectorLayout
+    // 位置/尺寸与用图统一见 configs/layout/scenes.roleSelectorLayout
     const layout = roleSelectorLayout;
-    // 底部栏（不在舞台内，挂场景根；位置/缩放见 applyStageLayout —— 初次位置由它算，这里不用摆）
-    const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, undefined, layout.bottomBar.size);
-    this.node.addChild(bottomBar);
-    this.bottomBar = bottomBar;
-    // 开始游戏按钮（默认置灰，选中角色后可用）
-    const beginLayout = layout.beginGameButton;
-    const beginGameButton = GameUiHelper.createTexturedButton(beginLayout.name, beginLayout.image, "", beginLayout.position, beginLayout.size);
-    beginGameButton.getComponent(Sprite).grayscale = true;
-    beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
-    bottomBar.addChild(beginGameButton);
-    // 创建角色按钮
+    // 左上按钮列：创建角色 / 管理角色（返回按钮不常驻 —— 创建弹窗打开时才顶替管理钮的位置）
     const createLayout = layout.createRoleButton;
     const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
     createRoleButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI());
@@ -227,18 +185,56 @@ export class RoleSelector extends Component {
     const manageRoleButton = GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size);
     manageRoleButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole());
     this.stage!.addChild(manageRoleButton);
-    // 选中角色信息框（名称 + 等级）
+    // 右侧职业菱形钮（设计稿样式：方钮旋转 45°）：点击打开创建弹窗并预选该职业
+    const shortcuts = layout.occupationShortcuts;
+    shortcuts.items.forEach((item) => {
+      const button = GameUiHelper.createTexturedButton(`occupation_shortcut_${item.occupation}`, item.image, "", item.position, shortcuts.size);
+      button.angle = shortcuts.rotation;
+      button.on(Node.EventType.TOUCH_END, () => this.openCreateDialogWith(item.occupation));
+      this.stage!.addChild(button);
+    });
+    // 选中角色名牌（名称 + 等级）
     const infoLayout = layout.selectedInfo;
     const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
-    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size));
-    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size));
+    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size, infoLayout.nameLabel.color));
+    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size, infoLayout.levelLabel.color));
     this.stage!.addChild(selectedInfoBox);
+    // 骰子钮：掷随机角色名填进创建弹窗（弹窗没开就先打开）
+    const diceLayout = layout.diceButton;
+    const diceButton = GameUiHelper.createTexturedButton(diceLayout.name, diceLayout.image, "", diceLayout.position, diceLayout.size);
+    diceButton.on(Node.EventType.TOUCH_END, () => this.rollRandomName());
+    this.stage!.addChild(diceButton);
+    // 进入游戏（金板主按钮，默认置灰，选中角色后可用）
+    const beginLayout = layout.beginGameButton;
+    const beginGameButton = GameUiHelper.createTexturedButton(beginLayout.name, beginLayout.image, beginLayout.text, beginLayout.position, beginLayout.size, beginLayout.textColor, beginLayout.fontSize);
+    beginGameButton.getComponent(Sprite).grayscale = true;
+    beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
+    this.stage!.addChild(beginGameButton);
     return {
       beginGameButton,
       selectedRoleName: selectedInfoBox.getChildByName(infoLayout.nameLabel.name),
       selectedRoleLevel: selectedInfoBox.getChildByName(infoLayout.levelLabel.name),
       ownerRoleNodes: [],
     };
+  }
+
+  /** 骰子：掷一个随机角色名（姓 + 名各随机取一段），填进创建弹窗的名称输入框（弹窗没开就先打开） */
+  private rollRandomName() {
+    const parts = roleSelectorLayout.nameParts;
+    const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
+    const name = `${pick(parts.surnames)}${pick(parts.givens)}`;
+    if (!this.createView) this.createRoleUI();
+    const input = this.createView?.nameInput.getComponent(EditBox);
+    if (input) input.string = name;
+    GameUiHelper.createTip("dice_name_tip", { name });
+  }
+
+  /** 职业菱形钮：打开创建弹窗并预选该职业（弹窗里仍可改） */
+  private openCreateDialogWith(occupation: string) {
+    this.createRoleUI();
+    const group = this.createView?.occupationToggleGroup.getComponent(ToggleContainer);
+    group?.toggleItems.forEach((toggle) => (toggle.isChecked = toggle.node.name === occupation));
+    this.updateOccupationSelection();
   }
 
   /** 按服务端角色列表重建站位预览（列表变化：进场景 / 新建 / 删除后调用） */
@@ -411,12 +407,22 @@ export class RoleSelector extends Component {
   createRoleUI() {
     if (this.createView) return;
     this.createView = this.createCreateRoleView();
+    // 弹窗打开期间隐藏左上按钮列（创建 / 管理），返回按钮顶替管理钮的位置 —— 同一槽位不叠两颗钮
+    this.toggleMainButtonsVisible(false);
   }
 
-  /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/hudLayout.roleSelectorLayout.createDialog） */
+  /** 左上按钮列的显隐（创建弹窗打开时隐藏，关闭时恢复） */
+  private toggleMainButtonsVisible(visible: boolean) {
+    [roleSelectorLayout.createRoleButton.name, roleSelectorLayout.manageRoleButton.name].forEach((name) => {
+      const node = this.stage?.getChildByName(name);
+      if (node) node.active = visible;
+    });
+  }
+
+  /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/layout/scenes.roleSelectorLayout.createDialog） */
   private createCreateRoleView(): RoleSelectorCreateView {
     const layout = roleSelectorLayout.createDialog;
-    // 返回按钮
+    // 返回按钮（位置与被隐藏的管理钮同槽位，见 backButton 布局）
     const backLayout = roleSelectorLayout.backButton;
     const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
     this.stage!.addChild(backButton);
@@ -438,7 +444,7 @@ export class RoleSelector extends Component {
     dialog.addChild(nameInput.node);
     // 创建按钮（默认置灰，输入名称后可用）
     const createLayout = layout.createButton;
-    const createButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
+    const createButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, createLayout.text, createLayout.position, createLayout.size, createLayout.textColor, createLayout.fontSize);
     createButton.getComponent(Sprite).grayscale = true;
     createButton.on(Node.EventType.TOUCH_END, () => void this.createRole());
     dialog.addChild(createButton);
@@ -493,6 +499,7 @@ export class RoleSelector extends Component {
     this.createView.dialog.destroy();
     this.createView.backButton.destroy();
     this.createView = null;
+    this.toggleMainButtonsVisible(true);
   }
 
   /**

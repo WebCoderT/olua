@@ -61,6 +61,12 @@ export const uiImages = {
   dot: commonImage("dot"),
   /** 背包格底图 */
   bagSlotGrid: commonImage("grid"),
+  /** 金板主按钮（程序化生成，见 client/tools/gen-ui-assets.py；文字运行时叠加） */
+  buttonGold: commonImage("button_gold"),
+  /** 名牌底板（暗板金边 + 两端菱形饰，程序化生成；角色名运行时叠加） */
+  namePlate: commonImage("name_plate"),
+  /** 骰子（随机角色名按钮，程序化生成） */
+  dice: commonImage("dice"),
   /** 游戏 logo（resources 根目录） */
   gameLogo: "logo",
   /** 界面特效：升级/强化 */
@@ -124,19 +130,23 @@ export const uiImages = {
   roleInfoDialogBackground: commonImage("personal-information-bg"),
 
   // ---------------- 登录界面 ----------------
+  /** 背景（design/login.png 修补版：烘焙的选服条与金按钮已修掉，见 client/tools/gen-ui-assets.py） */
   loginBackground: loginImage("login_bg"),
   loginInputBackground: loginImage("input_bg"),
   loginAccountIcon: loginImage("icon_user"),
   loginPasswordIcon: loginImage("icon_pwd"),
-  loginButton: loginImage("button"),
+  /** 暗红描金按钮板（注册入口等次级按钮） */
+  loginButtonPlate: loginImage("button"),
+  /** 选服条（暗板金边 + 红宝石，程序化生成；服务器名与「选服」文字运行时叠加） */
+  loginServerBar: loginImage("server_bar"),
+  /** 右上角功能圆钮（暗球金环，程序化生成；功能名文字运行时叠加） */
+  loginCornerButton: loginImage("corner_button"),
 
   // ---------------- 选角 / 创建角色界面 ----------------
+  /** 背景（design/role_selector.png 修补版：烘焙的创建角色字 / 名牌 / 骰子 / 金按钮已修掉） */
   roleSelectorBackground: createRoleImage("bg"),
-  roleSelectorBottomBar: createRoleImage("bg_bottom"),
-  roleSelectorStartButton: createRoleImage("start_btn"),
   roleSelectorNewRoleButton: createRoleImage("new_role"),
   roleSelectorManageButton: createRoleImage("manage"),
-  roleSelectorIdleInfo: createRoleImage("idlv"),
   roleSelectorBackButton: createRoleImage("back_btn"),
   createRoleDialogBackground: createRoleImage("bg_dialog"),
   createRoleTitleLabel: createRoleImage("label_title"),

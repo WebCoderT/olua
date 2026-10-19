@@ -1,28 +1,30 @@
-import { _decorator, Component, EditBox, Node, UITransform, isValid } from "cc";
+import { _decorator, Component, EditBox, Node, UITransform, Vec2, isValid } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { applyScreenPolicy, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
-import { loginLayout } from "../configs/hudLayout";
+import { loginLayout, uiImages } from "../configs/hudLayout";
 import { AuthApi } from "./utils/net/Api";
 import type { AuthResult } from "./utils/net/Api";
 import { describeError } from "./utils/net/ApiError";
 import { installNetwork } from "./utils/net/NetworkSetup";
+import { blockClickThrough } from "./utils/input/UiHit";
 import Session from "./utils/net/Session";
 import AnnouncementNoticeDialog from "./components/dialogs/AnnouncementNoticeDialog";
 const { ccclass } = _decorator;
 
 /**
- * 登录场景（账号登录 / 账号注册）
+ * 登录场景（账号登录 / 账号注册），视觉按 design/login.png 重排（issue #143）
  *
  * 账号体系统一走服务端（见 ui/utils/net）：登录/注册成功后把令牌存进 Session，
  * 请求层随后自动带上它 —— 客户端不再自己造账号，也不再硬编码任何地址。
- * 两个按钮共用一个 submitting 标记，避免连点重复提交。
+ * 登录与注册共用一个 submitting 标记，避免连点重复提交。
  *
  * 结构与选角场景同一套：铺满窗口的背景 + 一块固定设计尺寸的「舞台」，
- * 其余元素全部挂在舞台下按设计坐标摆放（坐标以舞台中心为原点，见 configs hudLayout.loginLayout），
- * 舞台按可见尺寸等比缩放（contain、只缩不放）—— 不缩放的话，铺满窗口策略会在
- * 偏宽窗口裁掉 logo 顶部与注册按钮、窄高窗口（手机竖屏）裁掉输入框两侧
+ * 其余元素全部挂在舞台下按设计坐标摆放（坐标以舞台中心为原点，见 configs/layout/scenes.loginLayout），
+ * 舞台按可见尺寸等比缩放（contain、只缩不放）—— 任意窗口宽高比下构图都完整可见。
+ * 右上角功能圆钮列（公告/协议/隐私协议/清除缓存）与选服条是设计稿带来的入口：
+ * 公告重开公告弹窗、清除缓存清本地存储，其余未开放的功能统一「敬请期待」
  */
 @ccclass("Login")
 export class Login extends Component {
@@ -34,7 +36,7 @@ export class Login extends Component {
   private offWindowResize: (() => void) | null = null;
   /** 是否正在提交（登录与注册互斥） */
   private submitting = false;
-  /** 公告提醒弹窗（进登录页时把生效中的重要公告摊开给玩家看，见该类的说明） */
+  /** 公告提醒弹窗（进登录页时摊开重要公告；右上角「公告」圆钮可再次打开） */
   private announcementNotice = new AnnouncementNoticeDialog();
 
   start() {
@@ -42,14 +44,16 @@ export class Login extends Component {
     installNetwork();
     // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
     applyScreenPolicy();
-    // 位置/尺寸与用图统一见 configs/hudLayout.loginLayout
+    // 位置/尺寸与用图统一见 configs/layout/scenes.loginLayout
     const layout = loginLayout;
     // 背景（不在舞台内：铺满可见区，舞台等比缩小后四周留白由它兜底）
     this.node.addChild(GameUiHelper.createFullScreenImage("login_background", layout.background));
-    // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.loginLayout）
+    // 舞台容器：各元素按设计坐标摆在它下面（见 configs/layout/scenes.loginLayout）
     this.stage = new Node("login_stage");
     this.stage.addComponent(UITransform).setContentSize(layout.stageSize);
     this.node.addChild(this.stage);
+    // 选服条（装饰 + 入口：服务器名与「选服」都是 Label，点击提示只有一个服）
+    this.createServerBar();
     // 账号输入框
     const account = GameUiHelper.createInputField(layout.account.placeholder, layout.account.position, layout.account.size, layout.account.icon);
     this.accountInput = account.input;
@@ -58,12 +62,12 @@ export class Login extends Component {
     const password = GameUiHelper.createInputField(layout.password.placeholder, layout.password.position, layout.password.size, layout.password.icon, layout.password.password);
     this.passwordInput = password.input;
     this.stage.addChild(password.node);
-    // 登录按钮
+    // 进入游戏（登录）
     const button = layout.loginButton;
     const loginButton = GameUiHelper.createTexturedButton(button.name, button.image, button.text, button.position, button.size, button.textColor, button.fontSize);
     this.stage.addChild(loginButton);
     loginButton.on(Node.EventType.TOUCH_END, () => void this.login());
-    // 注册按钮（用同一个账号密码输入框；服务端会校验账号唯一与格式）
+    // 注册账号（用同一对输入框；服务端会校验账号唯一与格式）
     const registerLayout = layout.registerButton;
     const registerButton = GameUiHelper.createTexturedButton(
       registerLayout.name,
@@ -76,8 +80,8 @@ export class Login extends Component {
     );
     this.stage.addChild(registerButton);
     registerButton.on(Node.EventType.TOUCH_END, () => void this.register());
-    // logo
-    this.stage.addChild(GameUiHelper.createImage(layout.logo.name, layout.logo.image, layout.logo.position, layout.logo.size));
+    // 右上角功能圆钮列（公告 / 协议 / 隐私协议 / 清除缓存）
+    this.createCornerButtons();
     // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
     this.applyStageLayout();
     this.offWindowResize = onWindowResize(() => this.applyStageLayout());
@@ -104,6 +108,47 @@ export class Login extends Component {
     if (!stage || !isValid(stage, true)) return;
     const scale = getStageScale(loginLayout.stageSize, getVisibleSize());
     stage.setScale(scale, scale, 1);
+  }
+
+  /** 选服条：底图（含红宝石装饰）+ 服务器名与「选服」文字；点击提示当前只有一个服 */
+  private createServerBar() {
+    const layout = loginLayout.serverBar;
+    const bar = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
+    this.stage!.addChild(bar);
+    bar.addChild(GameUiHelper.createText(layout.serverName.name, layout.serverName.text, layout.serverName.fontSize, layout.serverName.position, layout.serverName.size, layout.serverName.color));
+    const select = GameUiHelper.createText(layout.selectServer.name, layout.selectServer.text, layout.selectServer.fontSize, layout.selectServer.position, layout.selectServer.size, layout.selectServer.color);
+    bar.addChild(select);
+    bar.on(Node.EventType.TOUCH_END, () => GameUiHelper.createTip("server_single_tip"));
+    // 整条可点（选服提示），在 mouse 通道也登记拦截，避免点击穿透到下层
+    blockClickThrough(bar);
+  }
+
+  /** 右上角功能圆钮列：球体底图 + 居中功能名文字；点击按 action 分发（见 onCornerButtonClick） */
+  private createCornerButtons() {
+    const layout = loginLayout;
+    layout.cornerButtons.forEach((item) => {
+      const button = GameUiHelper.createImage(`corner_${item.action}`, uiImages.loginCornerButton, item.position, layout.cornerButtonSize);
+      const labelLayout = layout.cornerButtonLabel;
+      button.addChild(GameUiHelper.createText(`${item.action}_text`, item.label, labelLayout.fontSize, new Vec2(0, 0), labelLayout.size, labelLayout.color));
+      this.stage!.addChild(button);
+      button.on(Node.EventType.TOUCH_END, () => this.onCornerButtonClick(item.action));
+      // 可点元素在 mouse 通道也登记拦截（否则点击会穿透到下层，见 utils/input/UiHit.blockClickThrough）
+      blockClickThrough(button);
+    });
+  }
+
+  /** 功能圆钮分发（action 见 loginLayout.cornerButtons）：公告重开公告弹窗，清除缓存清本地存储，其余未开放 */
+  private onCornerButtonClick(action: string) {
+    if (action === "announcement") {
+      void this.announcementNotice.open(this.node);
+      return;
+    }
+    if (action === "clear_cache") {
+      StorageManager.clear();
+      GameUiHelper.createTip("cache_cleared_tip");
+      return;
+    }
+    GameUiHelper.createTip("coming_soon_tip");
   }
 
   /** 登录 */

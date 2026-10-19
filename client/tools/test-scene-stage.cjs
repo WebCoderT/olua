@@ -6,21 +6,18 @@
  *
  * 背景：两个场景都采用「舞台 contain 缩放」—— 全部元素挂在固定设计尺寸的舞台容器下，
  * 运行时把整块舞台按可见尺寸等比缩小（只缩不放）。不缩放的话，铺满窗口（NO_BORDER）
- * 策略会在偏宽窗口裁掉上下（登录的 logo / 注册按钮、选角的底部元素）、
+ * 策略会在偏宽窗口裁掉上下（登录的选服条 / 金按钮、选角的底部元素）、
  * 窄高窗口裁掉左右（登录输入框、选角两侧按钮）。
- * 选角底部栏**不在舞台内**：素材是带「开始游戏」牌匾装饰的整图、拉伸会变形，
- * 只能等比缩放 —— 它作为「框」要横跨整个可见宽并贴屏幕底边，位置按可见尺寸实时算。
+ * 2026-10-19 按 design/*.png 重排后布局全部来自 configs/layout/scenes（设计稿映射见其头注释）；
+ * 竖屏版没有底部栏，「进入游戏」是舞台内的金板按钮。
  *
  * 盯的不变量（改适配逻辑后必须全绿）：
  * · 任意窗口尺寸下，登录舞台的全部元素、选角舞台的全部元素（含角色站位 / 删除按钮 / 创建弹窗）
  *   **整块都落在可见区内**（不越界、不被裁）
  * · 设计分辨率（750×1624，竖屏）下舞台缩放系数恰为 1（不缩放）
- * · 底部栏：横跨整个可见宽（视觉宽 = 可见宽）、贴屏幕底边（视觉底边 = -可见高/2）、
- *   等比缩放（x/y 同系数，不变形）且系数 ≤ 1（素材原始 1624 宽 > 竖屏可见宽 750，
- *   任何窗口下都只缩不放）；开始游戏按钮反向补偿回设计尺寸（否则跟着底栏缩只剩 ~22px 高）
+ * · 设计稿纵向映射的锚点不被无意改掉（选服条 / 金按钮 / 名牌的 y）
  * · 可见区取「窗口像素 ÷ view 缩放」，不是设计分辨率
- * · 舞台缩放接线：Login / RoleSelector 都注册 window-resize 重排、onDestroy 取消；
- *   选角底部栏挂在场景根（不在舞台子树里）
+ * · 舞台缩放接线：Login / RoleSelector 都注册 window-resize 重排、onDestroy 取消
  *
  * 用法：node client/tools/test-scene-stage.cjs
  * 找不到 tsc 时可用环境变量指定：TSC=/path/to/typescript/bin/tsc node client/tools/test-scene-stage.cjs
@@ -99,13 +96,19 @@ function inside(rect, visible) {
 /** 登录舞台的全部元素（中心 + 尺寸），清单从配置推导 —— 配置加元素后这里自动跟上 */
 function loginElements() {
   const layout = loginLayout;
-  return [
+  const elements = [
+    ["选服条", layout.serverBar],
     ["账号输入框", layout.account],
     ["密码输入框", layout.password],
     ["登录按钮", layout.loginButton],
     ["注册按钮", layout.registerButton],
-    ["logo", layout.logo],
   ];
+  // 右上角功能圆钮 + 居中文字（文字挂在按钮内，宽 100 要单独算越界）
+  layout.cornerButtons.forEach((item, index) => {
+    elements.push([`功能圆钮${index + 1}（${item.label}）`, { position: item.position, size: layout.cornerButtonSize }]);
+    elements.push([`功能圆钮文字${index + 1}`, { position: item.position, size: layout.cornerButtonLabel.size }]);
+  });
+  return elements;
 }
 
 /** 选角舞台的全部元素（中心 + 尺寸），清单从配置推导 */
@@ -115,10 +118,16 @@ function roleSelectorElements() {
     ["创建角色按钮", layout.createRoleButton],
     ["管理角色按钮", layout.manageRoleButton],
     ["返回按钮", layout.backButton],
-    ["选中信息框", layout.selectedInfo],
+    ["选中角色名牌", layout.selectedInfo],
+    ["骰子钮", layout.diceButton],
+    ["进入游戏按钮", layout.beginGameButton],
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
     ["创建角色弹窗", layout.createDialog],
   ];
+  // 右侧职业菱形钮（旋转 45°，触达范围按外接圆直径 = 边长 × √2 算，比矩形更保守）
+  layout.occupationShortcuts.items.forEach((item, index) => {
+    elements.push([`职业钮${index + 1}`, { position: item.position, size: { width: layout.occupationShortcuts.size.width * Math.SQRT2, height: layout.occupationShortcuts.size.height * Math.SQRT2 } }]);
+  });
   // 角色站位（预览）与管理模式的删除按钮（位置 = 站位 + 偏移）
   layout.rolePositions.forEach((position, index) => {
     elements.push([`角色站位${index + 1}`, { position, size: layout.previewSize }]);
@@ -167,41 +176,31 @@ console.log("\n== C. 设计分辨率下舞台不缩放 ==");
   check(getStageScale(roleSelectorLayout.stageSize, visible) === 1, "选角舞台缩放系数为 1");
 }
 
-console.log("\n== D. 选角底部栏：横跨可见宽 + 贴底 + 等比不变形 ==");
+console.log("\n== D. 设计稿映射与元素分布的关键锚点 ==");
 {
-  const barLayout = roleSelectorLayout.bottomBar;
-  check(!("position" in barLayout), "配置不再写死 position（位置由可见尺寸实时算）");
-  for (const [width, height] of WINDOWS) {
-    const visible = setWindow(width, height);
-    // 与 RoleSelector.applyStageLayout 同一套公式（测试里复算，保证「实现 = 公式」时断言才有意义）
-    const barScale = visible.width / barLayout.size.width;
-    const visualHeight = barLayout.size.height * barScale;
-    const bottom = -visible.height / 2;
-    check(
-      barScale <= 1 + EPS,
-      `${width}×${height} 缩放系数 ≤ 1（${barScale.toFixed(3)}，铺满窗口下可见宽恒 ≤ 设计宽）`,
-    );
-    check(
-      Math.abs(barScale * barLayout.size.width - visible.width) < EPS && Math.abs(visualHeight - barLayout.size.height * (visible.width / barLayout.size.width)) < EPS,
-      `${width}×${height} 视觉宽 ${Math.round(barScale * barLayout.size.width)} = 可见宽 ${Math.round(visible.width)}（横跨整屏，等比所以不变形）`,
-    );
-    check(
-      Math.abs(bottom - -visible.height / 2) < EPS && bottom + visualHeight <= visible.height / 2 + EPS,
-      `${width}×${height} 贴屏幕底边（视觉底边 = ${bottom.toFixed(1)}，顶边 ${Math.round(bottom + visualHeight)} 在屏内）`,
-    );
-    // 开始游戏按钮：反向补偿（barScale × 1/barScale = 1）后视觉尺寸恒为设计尺寸，且整块落在底栏视觉矩形内
-    const begin = roleSelectorLayout.beginGameButton;
-    const beginScale = barScale * (1 / barScale);
-    const beginHeight = begin.size.height * beginScale;
-    check(
-      Math.abs(begin.size.width * beginScale - begin.size.width) < EPS && Math.abs(beginHeight - begin.size.height) < EPS,
-      `${width}×${height} 开始游戏按钮反向补偿后视觉尺寸恒为设计尺寸 ${begin.size.width}×${begin.size.height}（不跟底栏缩）`,
-    );
-    check(
-      beginHeight <= visualHeight + EPS && begin.size.width * beginScale <= visible.width + EPS,
-      `${width}×${height} 补偿后的按钮（高 ${beginHeight.toFixed(1)}）完整落在底栏视觉矩形内（高 ${visualHeight.toFixed(1)}）`,
-    );
-  }
+  // 设计稿 652×1160 → 舞台 750×1624 的映射：纵向 1.4 倍、横向裁掉两侧各 81.5
+  // （见 configs/layout/scenes.ts 头注释）。这里钉住几个有代表性的锚点，防止映射被无意改掉：
+  const yOf = (dy) => DESIGN.height / 2 - dy * (DESIGN.height / 1160);
+  const loginBar = loginLayout.serverBar.position;
+  check(Math.abs(loginBar.y - yOf(810.5)) < 1.5, `登录选服条落在设计稿的纵向位置（${loginBar.y.toFixed(1)} ≈ 812 - 1.4×810.5）`);
+  // 登录金按钮在设计稿位置（yOf(934.5) ≈ -496）的基础上**整体下移**，给账号/密码输入框让位 ——
+  // 钉住「在选服条与注册按钮之间、低于输入框」这个次序，而不是死坐标
+  check(
+    loginLayout.loginButton.position.y < loginLayout.password.position.y - 60 && loginLayout.loginButton.position.y > loginLayout.registerButton.position.y,
+    "登录金按钮位于密码输入框之下、注册按钮之上（设计稿位置因加入输入框整体下移）",
+  );
+  const rsPlate = roleSelectorLayout.selectedInfo.position;
+  check(Math.abs(rsPlate.y - yOf(903)) < 1.5, "选角名牌落在设计稿的纵向位置");
+  check(Math.abs(roleSelectorLayout.beginGameButton.position.y - yOf(1014)) < 1.5, "选角金按钮落在设计稿的纵向位置");
+  // 贴边元素收进安全区：舞台半宽 375，任何元素（含外接圆）不得越出
+  const maxHalf = Math.max(
+    ...roleSelectorLayout.occupationShortcuts.items.map((item) => (roleSelectorLayout.occupationShortcuts.size.width * Math.SQRT2) / 2 + Math.abs(item.position.x)),
+  );
+  check(maxHalf <= DESIGN.width / 2 + EPS, `职业菱形钮（含 45° 外接圆）收在安全区内（右缘 ${maxHalf.toFixed(1)} ≤ 375）`);
+  // 返回按钮与管理钮同槽位：弹窗打开时前者顶替后者，绝不同时可见（逻辑见 RoleSelector.toggleMainButtonsVisible）
+  const managePos = roleSelectorLayout.manageRoleButton.position;
+  const backPos = roleSelectorLayout.backButton.position;
+  check(managePos.x === backPos.x && managePos.y === backPos.y, "返回按钮与管理角色按钮同槽位（弹窗打开时顶替，不同时可见）");
 }
 
 console.log("\n== E. 源码接线断言 ==");
@@ -217,13 +216,12 @@ console.log("\n== E. 源码接线断言 ==");
   check(/onDestroy\(\) \{\s*this\.offWindowResize\?\.\(\);\s*this\.offWindowResize = null;/.test(login), "Login：onDestroy 取消监听（screen 单例不随节点销毁）");
   check(/createFullScreenImage\("login_background"/.test(login) && !/this\.stage\.addChild\(GameUiHelper\.createFullScreenImage/.test(login), "Login：背景挂在场景根（不在舞台内，铺满可见区兜底）");
 
-  check(/this\.node\.addChild\(bottomBar\);\s*\n\s*this\.bottomBar = bottomBar;/.test(selector), "RoleSelector：底部栏挂在场景根（不在舞台子树里）");
-  check(!/this\.stage!\.addChild\(bottomBar\)/.test(selector), "RoleSelector：底部栏不再挂进舞台（否则跟着缩、两侧露背景）");
-  check(/const barScale = visible\.width \/ barLayout\.size\.width;/.test(selector), "RoleSelector：底部栏按可见宽等比缩放（素材带牌匾装饰不可拉伸）");
-  check(/getAnchoredPosition\(visual, visible, "bottom-center"/.test(selector), "RoleSelector：底部栏贴底走 getAnchoredPosition 的 bottom-center 档");
-  check(/const compensation = 1 \/ barScale;/.test(selector) && /beginButton\.setScale\(compensation, compensation, 1\)/.test(selector), "RoleSelector：开始游戏按钮反向补偿回设计尺寸（竖屏下跟底栏缩只剩 ~22px 高、点不着）");
+  check(!/bottomBar/.test(selector), "RoleSelector：竖屏版没有底部栏（进入游戏改为舞台内的金板按钮，2026-10-19 按设计稿重排）");
+  check(/getStageScale\(roleSelectorLayout\.stageSize/.test(selector), "RoleSelector：舞台缩放系数走 ScreenLayout.getStageScale");
+  check(/toggleMainButtonsVisible\(false\)/.test(selector) && /toggleMainButtonsVisible\(true\)/.test(selector), "RoleSelector：创建弹窗打开时隐藏左上按钮列、关闭时恢复（返回按钮与管理钮同槽位顶替）");
+  check(/angle = shortcuts\.rotation/.test(selector), "RoleSelector：职业菱形钮 = 方钮旋转 45°（设计稿样式，不新切图）");
   check(/applyScreenPolicy\(\);/.test(selector) && /applyScreenPolicy\(\);/.test(login), "两个场景启动时应用铺满窗口策略");
   check(/this\.offWindowResize = onWindowResize\(\(\) => this\.applyStageLayout\(\)\)/.test(selector) && /onDestroy\(\) \{[\s\S]*?this\.offWindowResize\?\.\(\);/.test(selector), "RoleSelector：注册窗口变化重排 + onDestroy 取消");
 }
 
-finish("场景整屏适配全部通过（登录舞台 / 选角舞台 / 底部栏横跨贴底）");
+finish("场景整屏适配全部通过（登录舞台 / 选角舞台 / 设计稿映射锚点）");
