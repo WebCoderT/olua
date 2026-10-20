@@ -8,9 +8,12 @@ import { Drug, GOOD_TYPE } from "../types/good";
  * 「小药 ≈ 1 级血量的 60%、中药 ≈ 5 级、大药 ≈ 10~20 级」——即**每档药大约回满它对应等级段的一条命**，
  * 越级使用就会明显不够用。改了成长曲线记得回来同步这三档的回复量。
  *
- * 注意：目前只有 1 / 5 / 10 三档，属于前期用药；resources/item 下还留着
+ * 注意：固定值药只有 1 / 5 / 10 三档，属于前期用药；resources/item 下还留着
  * fs_5~fs_7（红）、sz_4~sz_7（蓝）、tz_3~tz_7（太阳水）的图标，
  * 等掉落表能按怪物等级分档之后再补 21 / 31 / 41 / 51 级的高级药。
+ *
+ * 百分比药（强效血药 / 强效蓝药）不参与上述等级分档：回复量按角色 maxHp / maxMp 的
+ * 百分比算，任何等级段都等价好用，因此**所有怪物均可掉落**（见 gen-monster-drops.cjs）。
  */
 export const drugs: Drug[] = [
   {
@@ -89,6 +92,32 @@ export const drugs: Drug[] = [
     stackable: true,
     maxStack: 99,
     effects: [{ hp: 150, mp: 80 }],
+    cooldown: 1,
+  },
+  {
+    id: "drug_hp_pct",
+    type: GOOD_TYPE.DRUG,
+    label: "强效血药",
+    level: 20,
+    description: "使用后恢复 50% 生命值，任何等级服用都等价好用。",
+    icon: "item/drug_hp_pct",
+    sellPirce: 100,
+    stackable: true,
+    maxStack: 99,
+    effects: [{ hpPercent: 50 }],
+    cooldown: 1,
+  },
+  {
+    id: "drug_mp_pct",
+    type: GOOD_TYPE.DRUG,
+    label: "强效蓝药",
+    level: 20,
+    description: "使用后恢复 50% 魔法值，任何等级服用都等价好用。",
+    icon: "item/drug_mp_pct",
+    sellPirce: 100,
+    stackable: true,
+    maxStack: 99,
+    effects: [{ mpPercent: 50 }],
     cooldown: 1,
   },
 ];

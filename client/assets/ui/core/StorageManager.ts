@@ -16,7 +16,7 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
-import { getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
+import { getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
 import { getMallPrice } from "../../configs/mall";
 import { getEquipmentNameParts } from "../../configs/equipments";
 import { getSoulLevel } from "../../configs/soul";
@@ -747,11 +747,11 @@ export default class StorageManager {
   }
 
   /**
-   * 使用药品（当前在线角色）：按 effects 恢复血量并消耗一个
-   * 魔法/增益类效果待角色具备对应资源字段（mp/maxMp）后在此扩展
+   * 使用药品（当前在线角色）：按 effects 恢复血量/魔法并消耗一个
+   * 固定值与百分比（hpPercent/mpPercent）都支持，回复量统一走 resolveDrugRecovery（纯函数，单测盯口径）
    * @param row 背包行
    * @param col 背包列
-   * @returns 是否成功使用（格子为空、非药品、无可生效效果、已满血时返回 false 且不消耗）
+   * @returns 是否成功使用（格子为空、非药品、无可生效效果、血蓝全满时返回 false 且不消耗）
    */
   static useDrug(row: number, col: number): boolean {
     const role = this.findOnlineRole();
@@ -760,20 +760,27 @@ export default class StorageManager {
     // 格子只存物品 key，数据实时解析
     const good = getItem(cell.id);
     if (!good || !isDrug(good)) return false;
-    // 当前仅实现回血（mp 等效果待资源字段补齐后在此扩展）
-    const heal = good.effects.reduce((sum, effect) => sum + (effect.hp ?? 0), 0);
-    if (heal <= 0) {
+    // 期望回复量（未封顶）：没有任何分量的药品等于没实现
+    const recovery = resolveDrugRecovery(good.effects, role.maxHp, role.maxMp);
+    const healsHp = recovery.hp > 0;
+    const healsMp = recovery.mp > 0;
+    if (!healsHp && !healsMp) {
       GameUiHelper.createTip("drug_unsupported_tip");
       return false;
     }
-    if (role.hp >= role.maxHp) {
-      GameUiHelper.createTip("drug_full_tip");
+    // 血蓝都已满（该药对应的资源都回不动）→ 提示且不消耗
+    const hpFull = role.hp >= role.maxHp;
+    const mpFull = role.mp >= role.maxMp;
+    if ((!healsHp || hpFull) && (!healsMp || mpFull)) {
+      GameUiHelper.createTip(healsHp ? "drug_full_tip" : "drug_mp_full_tip");
       return false;
     }
-    role.hp = Math.min(role.maxHp, role.hp + heal);
+    // 各自封顶后生效（血满蓝不满也照用，只回蓝的部分）
+    if (healsHp && !hpFull) role.hp = Math.min(role.maxHp, role.hp + recovery.hp);
+    if (healsMp && !mpFull) role.mp = Math.min(role.maxMp, role.mp + recovery.mp);
     // 消耗一个（复用同一个角色实例，保证消耗结果一起落盘）
     this.consumeBagGood(row, col, role);
-    // 保存并刷新（血量与背包）
+    // 保存并刷新（血蓝与背包）
     this.updateOnlineRole(role);
     this.updateUi(role);
     RoleUIManager.refreshBag();

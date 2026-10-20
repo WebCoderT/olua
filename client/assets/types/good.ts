@@ -170,10 +170,14 @@ export type EquipmentData = Omit<Equipment, keyof BattleAttributes | "prefix" | 
 
 /** 药品使用效果（新增效果类型时在此扩展） */
 export interface DrugEffect {
-  /** 恢复血量 */
+  /** 恢复血量（固定值） */
   hp?: number;
-  /** 恢复魔法 */
+  /** 恢复魔法（固定值） */
   mp?: number;
+  /** 按角色 maxHp 的百分比回复血量（整数，50 = 50%；与 hp 可同条共存，各自生效） */
+  hpPercent?: number;
+  /** 按角色 maxMp 的百分比回复魔法（整数，50 = 50%；与 mp 可同条共存，各自生效） */
+  mpPercent?: number;
   /** 持续时间（秒），增益类效果使用 */
   duration?: number;
 }
