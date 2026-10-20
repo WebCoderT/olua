@@ -177,7 +177,7 @@ export function textRef(key: string, params?: TextParams): TextRef { return { ke
 - **第二个反向检查（最容易漏）**：`configs/**` 不许 `import ... from "../ui/..."`。
   审计天然只朝一个方向扫（扫 `ui/` 里有没有写死配置），于是「配置反过来依赖 UI」永远不会被报出来。
   实测踩到：`configs/npc.ts` 直接 `import MapTeleportDialog from "../ui/components/dialogs/..."` 并在
-  `onClick` 里 `new` 弹窗（`configs/skill.ts` 同理 import `skills/zhan`，而后者又 import `ui/core/*`），
+  `onClick` 里 `new` 弹窗（`configs/skill.ts` 同理 import `skills/warrior`，而后者又 import `ui/core/*`），
   于是 `configs → ui/core → configs` 成环，配置表不再能被单独加载或跑单测（本项目 `tools/lib/configs-sandbox.cjs`
   的沙箱正是靠「配置不碰 UI」才成立）。
   判定：`grep -rn -e 'from "../ui/' -e 'from "../../ui/' configs/`（BSD grep 无 `\|`，用多 `-e`）。

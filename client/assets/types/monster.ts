@@ -90,6 +90,12 @@ export interface Monster extends MonsterConfig {
   id: string;
   /** 当前血量 */
   hp: number;
+  /**
+   * 实例 id：场上每只怪一份（本会话内唯一）。
+   * 怪物还由客户端刷（世界权威前），实例身份只能它给；但伤害结算走服务端（#34），
+   * 服务端靠这个 id 记住「这只怪被我扣到多少血」—— 数值本身来自服务端那份表。
+   */
+  instanceId: string;
 }
 
 /**

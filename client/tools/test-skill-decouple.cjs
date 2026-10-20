@@ -6,14 +6,14 @@
  * A. 纯数据模块（configs/skill-data.ts）：12 个技能的全部数值字段逐一钉死 ——
  *    改数值必须来改这里（有意的摩擦），不允许悄悄漂移；数据模块里不允许出现 onClick
  * B. 模块边界（源码断言）：skill-data.ts 零引擎依赖（import 白名单只有 types/ 三件套），
- *    技能实现只住在 skills/zhan.ts，由接线层 configs/skill.ts 引用
- * C. 接线运行期：单独编译 configs/skill.ts，把编译产物里的 skills/zhan.js 换成命名函数桩，
+ *    技能实现只住在 skills/warrior.ts，由接线层 configs/skill.ts 引用
+ * C. 接线运行期：单独编译 configs/skill.ts，把编译产物里的 skills/warrior.js 换成命名函数桩，
  *    require 后验证 12 个 id 的 onClick 与实现映射一一对应（函数同一性），
  *    且 skills Map 的顺序、数值与数据模块一致
  *
  * 沙箱机制：A 段复用 lib/configs-sandbox.cjs 的 prepare（真实配置表 + cc 垫片）；
  * C 段要编译带引擎依赖的 skill.ts，prepare 的「零错误」门槛迈不过去，故自建沙箱 +
- * 编译后替换产物（tsc 对 zhan 依赖图的报错是预期的，skill.ts 自身必须 0 错）。
+ * 编译后替换产物（tsc 对 warrior 依赖图的报错是预期的，skill.ts 自身必须 0 错）。
  */
 const fs = require("fs");
 const os = require("os");
@@ -96,21 +96,21 @@ check(JSON.stringify(skillTargetTypeLabels) === JSON.stringify({ "0": "区域", 
 //  B. 模块边界（源码断言）
 // ==============================================================================
 
-console.log("\n— B. 模块边界（零引擎依赖 / 实现只住 zhan）—");
+console.log("\n— B. 模块边界（零引擎依赖 / 实现只住 warrior）—");
 
 const dataSource = read("assets/configs/skill-data.ts");
 const skillSource = read("assets/configs/skill.ts");
 
 const importLines = dataSource.split("\n").filter((line) => /^import /.test(line));
 check(importLines.length > 0 && importLines.every((line) => /^import .* from "\.\.\/types\/(role|skill|animation)";$/.test(line)), "skill-data.ts 的 import 只有 types/ 三件套（role / skill / animation）", importLines.join(" | "));
-check(!/from "\.\.\/skills\/zhan"/.test(dataSource), "skill-data.ts 不 import 技能实现（注释里允许提到名字，import 语句不允许）");
+check(!/from "\.\.\/skills\/warrior"/.test(dataSource), "skill-data.ts 不 import 技能实现（注释里允许提到名字，import 语句不允许）");
 check(!/from "\.\.\/ui\//.test(dataSource) && !/from "\.\.\/entities\//.test(dataSource), "skill-data.ts 不引用 ui/ 运行时与 entities/");
-check(/import \{ skill_1000, skill_1001, skill_1008, skill_1010 \} from "\.\.\/skills\/zhan";/.test(skillSource), "skill.ts（接线层）引用 skills/zhan 的 4 个实现");
+check(/import \{ skill_1000, skill_1001, skill_1008, skill_1010 \} from "\.\.\/skills\/warrior";/.test(skillSource), "skill.ts（接线层）引用 skills/warrior 的 4 个实现");
 check(/const skillHandlers: Record<SkillId, \(context: SkillContext\) => void> = \{/.test(skillSource), "接线映射是 Record<SkillId, ...>（tsc 强制 12 个 id 齐全，漏接编译不过）");
 check(/skills\.set\(item\.id, \{ \.\.\.item, onClick: skillHandlers\[item\.id\] \}\);/.test(skillSource), "skills Map 由 spread 合成（数值透传 + onClick 按 id 接上）");
 
 // ==============================================================================
-//  C. 接线运行期（编译 skill.ts → 产物 zhan.js 换命名函数桩 → 同一性）
+//  C. 接线运行期（编译 skill.ts → 产物 warrior.js 换命名函数桩 → 同一性）
 // ==============================================================================
 
 console.log("\n— C. 接线运行期（12 个 id 接到对的实现）—");
@@ -165,15 +165,15 @@ if (!tsc) {
 
     const compiled = spawnSync(process.execPath, [tsc, "-p", path.join(work, "tsconfig.json")], { encoding: "utf8" });
     const log = `${compiled.stdout || ""}${compiled.stderr || ""}`;
-    // zhan 依赖图（cc / ui/core/*）编不过是预期的；skill.ts 与 skill-data.ts 自身必须 0 错
+    // warrior 依赖图（cc / ui/core/*）编不过是预期的；skill.ts 与 skill-data.ts 自身必须 0 错
     const ownErrors = log.split("\n").filter((line) => line.includes("error TS") && /configs\/(skill|skill-data)\.ts/.test(line));
-    check(ownErrors.length === 0, "skill.ts / skill-data.ts 自身编译 0 错（zhan 依赖图报错属预期）", ownErrors.slice(0, 3).join(" | "));
+    check(ownErrors.length === 0, "skill.ts / skill-data.ts 自身编译 0 错（warrior 依赖图报错属预期）", ownErrors.slice(0, 3).join(" | "));
 
-    // 编译产物里的 skills/zhan.js 换成命名函数桩（切断 cc / ui 依赖，保留 4 个导出）
-    const zhanJs = path.join(out, "skills/zhan.js");
-    check(fs.existsSync(zhanJs), "产物里有 skills/zhan.js（替换法成立）");
-    if (fs.existsSync(zhanJs)) {
-      fs.writeFileSync(zhanJs, [
+    // 编译产物里的 skills/warrior.js 换成命名函数桩（切断 cc / ui 依赖，保留 4 个导出）
+    const warriorJs = path.join(out, "skills/warrior.js");
+    check(fs.existsSync(warriorJs), "产物里有 skills/warrior.js（替换法成立）");
+    if (fs.existsSync(warriorJs)) {
+      fs.writeFileSync(warriorJs, [
         '"use strict";',
         'Object.defineProperty(exports, "__esModule", { value: true });',
         "exports.skill_1010 = exports.skill_1008 = exports.skill_1001 = exports.skill_1000 = void 0;",
@@ -188,8 +188,8 @@ if (!tsc) {
       ].join("\n"));
 
       const wired = require(path.join(out, "configs/skill.js"));
-      const stubs = require(zhanJs);
-      /** id → 应接的实现函数名（与 zhan.ts 的导出名一一对应） */
+      const stubs = require(warriorJs);
+      /** id → 应接的实现函数名（与 warrior.ts 的导出名一一对应） */
       const HANDLERS = {
         "1000": "skill_1000", "1001": "skill_1001", "1002": "skill_1000", "1003": "skill_1000",
         "1004": "skill_1000", "1005": "skill_1000", "1006": "skill_1000", "1007": "skill_1000",

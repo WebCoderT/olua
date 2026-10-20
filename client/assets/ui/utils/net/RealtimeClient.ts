@@ -3,6 +3,7 @@ import { ApiRoutes } from "./ApiRoutes";
 import { RealtimeApi } from "./Api";
 import ApiError from "./ApiError";
 import { REALTIME_CLOSE } from "./ApiCodes";
+import CombatChannel from "./CombatChannel";
 import Session from "./Session";
 
 /**
@@ -105,7 +106,7 @@ export function buildRealtimeUrl(ticket: string): string {
 /** 服务端会发过来的帧（只声明本类要认的字段，多出来的原样忽略） */
 interface ServerFrame {
   type?: string;
-  data?: { heartbeatMs?: unknown; userId?: unknown };
+  data?: unknown;
 }
 
 export default class RealtimeClient {
@@ -252,8 +253,9 @@ export default class RealtimeClient {
       const reconnected = this.everConnected;
       this.everConnected = true;
       this.attempts = 0;
-      const heartbeatMs = this.heartbeatMsOf(frame.data?.heartbeatMs);
-      this.userId = typeof frame.data?.userId === "string" ? frame.data.userId : null;
+      const data = (frame.data ?? {}) as { heartbeatMs?: unknown; userId?: unknown };
+      const heartbeatMs = this.heartbeatMsOf(data.heartbeatMs);
+      this.userId = typeof data.userId === "string" ? data.userId : null;
       this.clearHandshakeTimer();
       this.clearPongTimer();
       this.armPing(heartbeatMs);
@@ -261,8 +263,27 @@ export default class RealtimeClient {
       this.emit(RealtimeStatus.Connected, { reconnected });
       return;
     }
+    if (frame.type === "settle") {
+      // 战斗结算（#34）：形状的解释在 CombatChannel，这里只做转发
+      CombatChannel.dispatchSettle(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
+  }
+
+  /**
+   * 发送一条客户端消息（cast / targetsReset 这类业务帧）
+   *
+   * 连接不在 OPEN 态时静默丢弃并返回 false —— 调用方（CombatChannel）的 active 判据
+   * 就以连接状态为准，正常到不了这里；真到了（状态刚刚翻转）丢一条也无妨，
+   * 客户端的出手本来就要以「服务端回的结算」为准。
+   */
+  static send(message: object): boolean {
+    const socket = this.socket;
+    if (!socket || socket.readyState !== SOCKET_OPEN) return false;
+    socket.send(JSON.stringify(message));
+    return true;
   }
 
   /**

@@ -96,3 +96,23 @@ export function calcSkillDamage(attacker: BattleAttributes, victim: BattleAttrib
   const defense = rollAttributeRange(victim[defenseAttributeByAttack[attackAttribute]]);
   return Math.max(0, Math.round(attack - defense));
 }
+
+/**
+ * 一次技能伤害的**合法区间**（#34 双跑对账用）
+ *
+ * 伤害上移服务端后，两端各掷各的随机数 —— 逐次比较必然对不上（这不是 bug，是公式带随机）。
+ * 能比的是「服务端算的值是否落在客户端口径允许的带内」：
+ *   下限 = round(min攻 × rate − max防)，上限 = round(max攻 × rate − min防)，下限截到 0。
+ * 服务端伤害越界说明两端的表或公式漂了，调用方要把它当**可观测的异常**记下来（见 CombatChannel）。
+ */
+export function skillDamageBand(attacker: BattleAttributes, victim: BattleAttributes, attackAttribute: AttackAttribute = "physicalAttack", rate: number = 1): [number, number] {
+  const attack = attacker[attackAttribute];
+  const defense = victim[defenseAttributeByAttack[attackAttribute]];
+  const lowestAttack = Math.min(attack[0], attack[1]);
+  const highestAttack = Math.max(attack[0], attack[1]);
+  const lowestDefense = Math.min(defense[0], defense[1]);
+  const highestDefense = Math.max(defense[0], defense[1]);
+  const low = Math.max(0, Math.round(lowestAttack * rate - highestDefense));
+  const high = Math.max(0, Math.round(highestAttack * rate - lowestDefense));
+  return [low, high];
+}

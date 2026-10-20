@@ -8,7 +8,14 @@ import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { BizCode } from "../../common/constants/biz-code";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
-import { REALTIME_CLOSE, REALTIME_PATH, type RealtimeIdentity, type RealtimeServerMessage } from "./realtime.protocol";
+import { CombatSettlementService } from "./combat-settlement.service";
+import {
+  REALTIME_CLOSE,
+  REALTIME_PATH,
+  type RealtimeIdentity,
+  type RealtimeServerMessage,
+  type RealtimeSettleMessage,
+} from "./realtime.protocol";
 
 /** 一条已经过鉴权的连接（两个字段由本服务自己维护） */
 interface TrackedSocket extends WebSocket {
@@ -77,6 +84,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   constructor(
     private readonly config: ConfigService,
     private readonly adapterHost: HttpAdapterHost,
+    private readonly combat: CombatSettlementService,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -258,7 +266,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     socket.on("error", (error) => this.logger.warn(`实时连接出错（账号 ${identity.id}）：${error.message}`));
     socket.on("close", () => {
       // 只清自己那条：被顶掉的旧连接稍后才走到这里，那时 map 里已经换成新连接了
-      if (this.connections.get(identity.id) === socket) this.connections.delete(identity.id);
+      if (this.connections.get(identity.id) === socket) {
+        this.connections.delete(identity.id);
+        // 断开即清结算上下文（目标登记簿与幂等账）：重连后客户端会重新报目标。
+        // 被顶掉的旧连接**不能**清 —— map 里已经是新连接的天下，别把它刚记的账抹了
+        this.combat.dropAccount(identity.id);
+      }
     });
 
     this.send(socket, {
@@ -275,19 +288,30 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   /**
    * 收到一条消息
    *
-   * 现在只有心跳。**不认识的消息只回 error 帧，不断开连接** —— 通道刚上线时，
-   * 客户端版本比服务端新（或者反过来）是常态，为一条对不上的消息把玩家的连接掐了太粗暴。
+   * 心跳照旧；战斗指令交给结算服务，结果以 `settle` 帧发回（#34）。
+   * **不认识的消息只回 error 帧，不断开连接** —— 通道刚上线时，客户端版本比服务端新
+   * （或者反过来）是常态，为一条对不上的消息把玩家的连接掐了太粗暴。
    */
   private onMessage(socket: TrackedSocket, raw: RawData): void {
-    let parsed: { type?: unknown };
+    let parsed: { type?: unknown; data?: unknown };
     try {
-      parsed = JSON.parse(raw.toString()) as { type?: unknown };
+      parsed = JSON.parse(raw.toString()) as { type?: unknown; data?: unknown };
     } catch {
       this.send(socket, { type: "error", data: { message: "消息不是合法的 JSON" } });
       return;
     }
     if (parsed?.type === "ping") {
       this.send(socket, { type: "pong", data: { serverTime: Date.now() } });
+      return;
+    }
+    if (parsed?.type === "cast") {
+      const data = this.combat.settle(socket.identity.id, parsed.data);
+      const frame: RealtimeSettleMessage = { type: "settle", data };
+      this.send(socket, frame);
+      return;
+    }
+    if (parsed?.type === "targetsReset") {
+      this.combat.resetTargets(socket.identity.id);
       return;
     }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });

@@ -34,6 +34,7 @@ import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
 import GameUiHelper from "./helpers/GameUiHelper";
 import RoleSync from "./utils/net/RoleSync";
 import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
+import CombatChannel from "./utils/net/CombatChannel";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import { describeError } from "./utils/net/ApiError";
 const { ccclass, property } = _decorator;
@@ -108,6 +109,8 @@ export class Game extends Component {
       if (change.status !== RealtimeStatus.Disconnected || !change.lost) return;
       GameUiHelper.createTip(change.willRetry ? "realtime_disconnected_tip" : "realtime_replaced_tip");
     };
+    // 伤害结算上移服务端（#34）：settle 帧的结果由怪物管理器落到目标身上（扣血/飘字/死亡）
+    CombatChannel.onSettle = MonsterManager.applyServerSettle;
     RealtimeClient.start();
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
@@ -206,6 +209,7 @@ export class Game extends Component {
     RoleSync.onMissing = null;
     RoleSync.onKicked = null;
     // 实时通道：离开游戏就断（回选角/登录不该还挂着一条连接；先摘回调再断，避免收尾时又提示一句）
+    CombatChannel.onSettle = null;
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消

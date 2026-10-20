@@ -99,6 +99,8 @@ export type SkillContextInput = Omit<SkillContext, "config" | "level">;
 
 // 技能接口
 export interface SkillConfig {
+  /** 技能 id（数值表条目的 key；多个技能可共用同一份实现，结算必须知道真实 id） */
+  id: SkillId;
   /** 技能名称 */
   label: string;
   /** 技能图标 */

@@ -38,7 +38,7 @@ export default class EffectManager {
 
   /**
    * 在任意世界坐标播放一次技能特效（特效位置由技能实现决定的场景：
-   * 位移技能的落点特效等，见 skills/zhan 的十步一杀）
+   * 位移技能的落点特效等，见 skills/warrior 的十步一杀）
    * @param config 技能配置（effect 为特效图集路径）
    * @param position 特效中心的世界坐标
    * @param role 释放时读取的角色数据（动作速度倍率的来源）

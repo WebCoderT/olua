@@ -101,6 +101,7 @@ const E2E_SCRIPTS = [
   ["邮件", "server/test/e2e-mail.cjs"],
   ["账号邮箱", "server/test/e2e-account-email.cjs"],
   ["实时通道", "server/test/e2e-realtime.cjs"],
+  ["伤害结算", "server/test/e2e-combat.cjs"],
   ["备份恢复", "server/test/backup.cjs"],
 ];
 
