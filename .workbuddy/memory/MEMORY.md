@@ -12,7 +12,7 @@
 
 ## 提交纪律（用户强制）
 - **所有代码提交都必须有对应的 issue / PR，必须有记录**（用户 2026-10-10 定）：master 上不允许存在没有 issue 追踪的提交。流程 = 开 issue → 开分支（`git checkout -b <type>/<n>-<slug>`）→ 提交（正文带 `Closes #n` / `Refs #n`）→ 推分支开 PR → CI 绿 → squash 合并。**任何直接落在 master 上的提交都算违规**（文档 typo 也不例外，走 docs PR）。
-- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 26 单测 / 服务端七套 e2e / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
+- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 29 套单测 / 服务端八套 e2e 949 条 / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
 - **中英双语文档**：中文是主体，英文平铺在同目录成 `X.en.md`（README / FAQ 各一份），两份顶部各一行语言互链；索引 issue **#45**，子 issue #39 守卫 / #40 根 / #41 client / #42 admin / #43 server / #44 equip-aligner。译本 = 不改口径（章节数 / 表格行 / ✅❌ 数 / 数字 multiset 全等），术语表见 #45。
 - **一个 PR = 一个 squash = 一个功能**（分支上攒了两件，就拆成两个分支各开 PR，`git rebase --autostash master` 接最新基）。
 - 格式 `feat|fix|refactor|docs|test|chore(端): 一句话`；改接口必须连 `openapi.json` + 两端生成物一起提交。
@@ -72,7 +72,7 @@
   - 合并前实测过：新生成物的 9 个战斗导出与旧 `battle-rules.generated.ts` **逐值相同**（`COMBAT_RANGE_KEYS`/`COMBAT_SINGLE_KEYS`/五张等级表/`EQUIPMENT_ATTRIBUTES`/`SKILLS`），所以删旧文件不影响 `audit-combat-parity`（2849 组输入 × 10 项比对仍全绿）。
 - 装备取舍 = **全量快照**：不让服务端现算 `round(基础值×前后缀倍率)`（那等于把进位口径复制出去）；`role.equipments` 存的本来就是展开后的物品 id。
 - 显示名与槽位归属也在生成器里算好（复用客户端 `getEquipmentNameParts` 与条目的 `slot`），消费方不做拼接。
-- 未进链路：**怪物**（与服务端持有刷怪实例是同一件事）。**技能已进**（#31 解耦出 `configs/skill-data.ts` 之后）。
+- 已进链路（#34，PR #162）：**怪物战斗数值** = `MONSTER_COMBAT`（220 只怪 maxHp + 攻防六项区间），configs/monster.ts 在 cc 垫片下能干净编译（#44 注记过时）。**技能已进**（#31）。**仍未进：掉落**（configs/monsterDrops 依赖 UI 模块度低但属 #35 范畴）。
 
 ## 线上部署（腾讯云 Ubuntu 24.04 + Docker CE；技能 `olua-deploy`）
 - **IP / SSH 私钥 / 邀请码 / JWT 密钥一律不进记忆、不进版本库**（用户 2026-10-11 定）：只放根目录 `deploy.env`（gitignore），仓库只提交模板 `deploy.env.example`。服务器上 `server/.env` 由它渲染（也被 `server/.gitignore` 排除）。
@@ -85,4 +85,4 @@
 
 ## 待办 → 全部登记为 GitHub issue（见 `#8~#24`）
 玩法缺口 = #11~#19；服务端 = #20 邮箱字段 / #21 审计与队列清理 / #22 自动备份；工程 = #8 官网上线 / #9 包体积 / #10 在线 demo / #23 `.DS_Store` / #24 CI 是否覆盖客户端。**用户已定保持现状**：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
-后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）→ #122 服务端码清单与文案（已做）→ #124 角色上限跨端数值（已做，PR #130）** —— **#117 这条线已收官**；服务端战斗权威 #25 / #34 伤害上移 / #35~#37 世界权威。
+后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）→ #122 服务端码清单与文案（已做）→ #124 角色上限跨端数值（已做，PR #130）** —— **#117 这条线已收官**；服务端战斗权威：#25 / **#34 伤害结算上移（已做，PR #162）** → 下一刀 **#35 掉落与经验上移** → #36 怪打人上移 → #37 世界权威拆进程（最后）。#34 的取舍与坑见 2026-10-21 日志（castId 幂等 / 死亡保留登记 / skillDamageBand 合法带对账 / [combat-parity] 告警文案必须英文）。
