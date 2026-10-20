@@ -8,6 +8,7 @@
 - **master = 横屏线**：回退到竖屏改造之前（`478e658`，#133 实时通道），设计分辨率 **1624×750**。横屏线不再含竖屏那批改动。
 - **portrait = 竖屏线**：**750×1624** + 按 `design/` 重排的登录/选角 + 单角色 + 本机账号（原 #135/#138/#141/#144/#146/#149 与它们的记忆提交都在这条线上）。竖屏相关的改动只进 `portrait`，不回 master。
 - 拆分记录 issue **#152**；本地标签 `pre-rollback-master` 指向拆分前的 master（`7e52900`），作为兜底快照。**两条线的差异约 63 个文件**（`git diff --stat master portrait`），合并两边改动前先跑一次这条命令看范围。
+- **对外说明写在根 `README.md` · `README.en.md` 的「分支」一节**（「三个端」之后，#154 / PR #155）：两分支的分辨率与内容、怎么切、差异怎么看、素材不随分支切换。`design/`（设计稿）与 `client/assets/resources/` 一样已在 `.gitignore` —— 两者都不入库，两条分支共用本机同一份，所以切分支后背景素材仍是上一版（竖屏那轮 `gen-ui-assets.py` 原地改写过 `login/login_bg.png` 与 `create_role/bg.png`）。
 
 ## 提交纪律（用户强制）
 - **所有代码提交都必须有对应的 issue / PR，必须有记录**（用户 2026-10-10 定）：master 上不允许存在没有 issue 追踪的提交。流程 = 开 issue → 开分支（`git checkout -b <type>/<n>-<slug>`）→ 提交（正文带 `Closes #n` / `Refs #n`）→ 推分支开 PR → CI 绿 → squash 合并。**任何直接落在 master 上的提交都算违规**（文档 typo 也不例外，走 docs PR）。
