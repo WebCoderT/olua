@@ -21,6 +21,8 @@
 ## 仓库形态
 根 = README/FAQ + 跨端 `tools/` + `Makefile`（命令入口，统一 `env -u NODE_OPTIONS`）。`client/` 是 Cocos 工程本体，脚本住 `client/tools/`；审计在根 `tools/audit-*.cjs`（`make audit` 自动发现）。
 
+**分支整理判据（2026-10-20 定）**：仓库全是 squash 合并，所以 `git branch --merged` **判不出**短线是否已合并（squash 后没有祖先关系）。正确做法是比树 —— `git merge-tree --write-tree <目标分支> <待判分支>` 的首行若等于 `git rev-parse <目标分支>^{tree}`，说明该分支**没有新内容**；配合 `gh pr list --head <分支> --state all` 核对 PR 已 MERGED 即可删。删掉的提交仍可从 `refs/pull/<n>/head` 取回（`git fetch origin pull/<n>/head`）。
+
 ## 部署（线上，细节见 Skill `olua-deploy`）
 - 三容器：**admin :80**（管理端 SPA）/ **game :8080**（Cocos Web 产物，nginx 静态）/**server 仅内网 3100**（不对外暴露）；game 与 admin 各自把 `/api` 反代到 `server:3100`，所以**游戏站与服务端是同源**，客户端 `baseUrl` 线上解析成 `/api`。
 - 同步游戏产物 `deploy.sh --game`（rsync **增量**、不带 `-z`）；**只改 nginx 配置不必整份重发**：scp 对应 conf 到 `$DEPLOY_DIR/deploy/` 后 `docker exec <容器> nginx -t && nginx -s reload`（bind mount 直通）。
