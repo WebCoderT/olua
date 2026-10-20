@@ -29,6 +29,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // WAL 提升并发读性能；外键打开后删账号会级联删角色
     if (path !== ":memory:") this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
+    // busy_timeout（#35 起服务端有了常驻写）：写操作撞上锁时等一等再报错，而不是立刻抛
+    // SQLITE_BUSY。世界状态的节流落盘与玩家存档防抖推送可能同时写，SQLite 单文件一锁全库，
+    // 没有这个等待的话偶发的并发写就会变成玩家看到的报错。5 秒足够越过一次备份 checkpoint。
+    if (path !== ":memory:") this.db.exec("PRAGMA busy_timeout = 5000;");
     this.migrate();
     this.logger.log(`SQLite 就绪：${path}`);
   }
@@ -154,6 +158,24 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE INDEX IF NOT EXISTS idx_mail_queue_due ON mail_queue(status, next_retry_at);
       CREATE INDEX IF NOT EXISTS idx_mail_queue_created ON mail_queue(created_at DESC);
+
+      -- 世界权威（#35）：服务端持有的怪物实例状态。
+      -- 一行 = 一只场上怪：身份 / 所属地图 / 出生点 / 血量 / 存活与重生时刻。
+      -- 服务端是唯一写者（客户端只通过实时通道间接改它），所以不需要乐观锁列。
+      CREATE TABLE IF NOT EXISTS world_monsters (
+        instance_id TEXT PRIMARY KEY,
+        map_id      TEXT NOT NULL,
+        monster_key TEXT NOT NULL,
+        x           REAL NOT NULL,
+        y           REAL NOT NULL,
+        hp          REAL NOT NULL,
+        max_hp      REAL NOT NULL,
+        alive       INTEGER NOT NULL DEFAULT 1,
+        killed_at   INTEGER,
+        respawn_at  INTEGER,
+        updated_at  INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_world_monsters_map ON world_monsters(map_id);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

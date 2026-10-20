@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { MONSTER_COMBAT, SKILLS } from "../../shared/game-data.generated";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
+import { WorldService } from "../world/world.service";
 import type { RealtimeSettleData } from "./realtime.protocol";
 
 /**
@@ -16,61 +17,38 @@ import type { RealtimeSettleData } from "./realtime.protocol";
  * 输入的每一项都来自服务端那份权威：
  * - 攻击者的六项攻防区间：`summarizeRoleAttributes`（#29/#30 的产物，对齐客户端 combatCalc，
  *   素材来自生成物的等级 / 装备 / 战魂 / 称号 / 军衔表）；
- * - 目标（怪物）的 maxHp 与六项防御：生成物 `MONSTER_COMBAT`（#34 起怪物战斗数值进了
- *   单一来源链路，`monsterStats(level, tier)` 打底 + 条目覆盖已展开）；
+ * - 目标（怪物）：**世界服务持有的实例**（#35 起）—— 身份由服务端发牌（`worldJoin` 的
+ *   instanceId），血量 / 存活都在那里；战斗数值来自生成物 `MONSTER_COMBAT`；
  * - 技能倍率：生成物 `SKILLS`（`damageCoefficients` 下标 = 技能等级）。
  *
  * ===========================================================================
- * 世界权威之前的取舍（#35 会收编的部分）
+ * 目标状态的归属（#35 之后的边界）
  * ===========================================================================
- * 怪物实例**还在客户端**刷（世界状态未上服务端），所以：
- * - 目标的**身份**由客户端给（`targetId` 会话内唯一），但目标的**数值**只认服务端表 ——
- *   客户端报 `monsterKey`，服务端查不到就拒，血量从服务端表的 maxHp 起算；
- * - 死亡由**服务端判**（血量到 0），掉落 / 经验的结算仍在客户端（收到 `killed` 后走既有流程），
- *   这一步挪到服务端要等世界持有掉落表，不与「伤害上移」混在一刀里；
- * - 怪打人（MonsterAI → applyHitDamage）仍走客户端：怪物出手时机由客户端 AI 驱动，
- *   服务端还不知道「这只怪什么时候挥了这一下」—— tick 循环是 #35 的事。
+ * 怪物的血量 / 存活**只在世界服务里**（tick 负责重生、SQLite 负责持久化）——
+ * 本服务不再自留一份账号维度的登记簿（#34 的过渡形态已删）：两份血量必然漂移。
+ * 这里只保留**幂等账**（castId → 上次结果），它是每账号的会话状态，与世界无关。
+ *
+ * 掉落 / 经验的结算仍在客户端（收到 `killed` 后走既有流程）；怪打人（MonsterAI →
+ * applyHitDamage）也仍在客户端 —— 怪物出手时机由客户端 AI 驱动，那是后续刀的事。
  *
  * ===========================================================================
  * 幂等
  * ===========================================================================
  * 同一 `castId` 的重复投递（网络重传 / 客户端重发）**不重复结算**：每个账号记最近
  * `CAST_DEDUPE_CAPACITY` 次结果，重复的原样重发（`duplicate: true`），血量不会扣两次。
- * 序号由客户端按会话单调递增生成；断线重连后从新会话重新计数（服务端清掉旧账）。
- *
- * ===========================================================================
- * 目标登记簿的生命周期
- * ===========================================================================
- * - 首次打到某 `targetId` 时登记（血量 = MONSTER_COMBAT[key].maxHp）；
- * - 死亡后**保留登记**（血量 0）：再打同一个 id 报 `target_dead`，由换图清账 / 断线 / 兜底清理移除；
- * - 换图时客户端发 `targetsReset` 清空（旧图的怪不该再结算）；
- * - 连接断开时整账号清空（重连后会重新报目标）；
- * - 兜底：登记项带最近活跃时间，定时清理长时间没动静的（防泄漏）。
+ * 序号由客户端按会话单调递增生成；断线重连 / 换图（worldJoin）后清掉旧账重新计数。
  */
 @Injectable()
 export class CombatSettlementService {
   private readonly logger = new Logger(CombatSettlementService.name);
 
-  /** 每个账号记着的目标：targetId → 血量与怪物 key */
-  private readonly targets = new Map<string, Map<string, TrackedTarget>>();
   /** 每个账号最近的结算结果（castId → 结果，幂等重发用） */
   private readonly recentSettles = new Map<string, Map<number, RealtimeSettleData>>();
-  /** 兜底清理定时器 */
-  private sweepTimer: NodeJS.Timeout | null = null;
 
-  constructor(private readonly roles: RolesService) {}
-
-  onApplicationBootstrap(): void {
-    // unref：定时器不该成为「进程退不出去」的理由（与 realtime 的心跳同一口径）
-    this.sweepTimer = setInterval(() => this.sweep(), TARGET_SWEEP_INTERVAL_MS).unref();
-  }
-
-  onModuleDestroy(): void {
-    if (this.sweepTimer) clearInterval(this.sweepTimer);
-    this.sweepTimer = null;
-    this.targets.clear();
-    this.recentSettles.clear();
-  }
+  constructor(
+    private readonly roles: RolesService,
+    private readonly world: WorldService,
+  ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
   settle(accountId: string, raw: unknown): RealtimeSettleData {
@@ -90,15 +68,13 @@ export class CombatSettlementService {
     return result;
   }
 
-  /** 换图：本账号记着的目标全部作废（幂等键与结算账也一起清 —— 新图从 0 开始计） */
+  /** 清掉本账号的幂等账（换图 worldJoin / 旧消息 targetsReset 都会走到；世界状态不受影响） */
   resetTargets(accountId: string): void {
-    this.targets.delete(accountId);
     this.recentSettles.delete(accountId);
   }
 
-  /** 连接断开：整账号清空（重连后客户端会重新报目标） */
+  /** 连接断开：清幂等账（世界状态是共享的，不随任何账号的连接断开而清） */
   dropAccount(accountId: string): void {
-    this.targets.delete(accountId);
     this.recentSettles.delete(accountId);
   }
 
@@ -111,16 +87,16 @@ export class CombatSettlementService {
     const skill = SKILLS[cast.skillId as keyof typeof SKILLS];
     if (!skill) return fail("unknown_skill", `技能不存在：${cast.skillId}`);
 
-    // 目标：查战斗数值表 + 取登记簿（首次打到就登记，血量从服务端表的 maxHp 起算）
+    // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，
+    // 伪造的 / 已被卸载图的一律 unknown_target），且 key 与实例登记的一致
     const stats = MONSTER_COMBAT[cast.monsterKey as keyof typeof MONSTER_COMBAT];
     if (!stats) return fail("unknown_target", `目标怪物不存在：${cast.monsterKey}`);
-    const book = this.targets.get(accountId) ?? new Map<string, TrackedTarget>();
-    this.targets.set(accountId, book);
-    const tracked = book.get(cast.targetId);
-    if (tracked && tracked.monsterKey !== cast.monsterKey) {
-      return fail("unknown_target", `目标 ${cast.targetId} 已登记为怪物 ${tracked.monsterKey}，与本次的 ${cast.monsterKey} 不符`);
+    const target = this.world.find(cast.targetId);
+    if (!target) return fail("unknown_target", `目标实例不存在：${cast.targetId}`);
+    if (target.monsterKey !== cast.monsterKey) {
+      return fail("unknown_target", `目标 ${cast.targetId} 是怪物 ${target.monsterKey}，与本次的 ${cast.monsterKey} 不符`);
     }
-    if (tracked && tracked.hp <= 0) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
+    if (!target.alive) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
 
     // 角色：在线角色 + 等级可汇总 + 技能已学习
     const role = this.roles.online(accountId);
@@ -132,27 +108,22 @@ export class CombatSettlementService {
     const coefficient = readDamageCoefficient(skill, skillLevel);
     if (coefficient === null) return fail("bad_request", `技能 ${cast.skillId} 等级 ${skillLevel} 没有伤害系数`);
 
-    // 目标血量：登记簿里有就用（接续扣血），没有就按满血登记
-    const hp = tracked ? tracked.hp : Number(stats.maxHp);
-    const maxHp = Number(stats.maxHp);
-
     // 伤害公式与客户端 BattleMath.calcSkillDamage 同一口径：
     //   round(攻击区间随机值 × 倍率 − 防御区间随机值)，下限 0
     // 攻击用哪项属性以**生成物里系数的 baseType** 为准（不信任客户端传参），防御按同名映射取
     const attack = rollRange(readRange(summary, coefficient.baseType));
     const defense = rollRange(readMonsterRange(stats, coefficient.baseType));
     const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
-    const remaining = Math.max(0, hp - damage);
-    const killed = remaining <= 0;
 
-    // 死亡：血量归零后**保留登记**（后续同一目标的出手报 target_dead），由换图清账 / 断线 / 兜底清理移除
-    book.set(cast.targetId, { monsterKey: cast.monsterKey, hp: remaining, updatedAt: Date.now() });
+    // 扣血与世界状态（血量 / 死亡判定都在世界服务里，这里只拿结果演）
+    const applied = this.world.applyDamage(cast.targetId, damage);
+    if (!applied) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
 
     this.logger.debug(
-      `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${remaining}/${maxHp}${killed ? "，击杀" : ""}`,
+      `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${applied.hp}/${target.maxHp}${applied.killed ? "，击杀" : ""}`,
     );
 
-    return { castId: cast.castId, ok: true, skillId: cast.skillId, targetId: cast.targetId, damage, hp: remaining, maxHp, killed, duplicate: false };
+    return { castId: cast.castId, ok: true, skillId: cast.skillId, targetId: cast.targetId, damage, hp: applied.hp, maxHp: target.maxHp, killed: applied.killed, duplicate: false };
   }
 
   /** 记住一次结算结果（每账号限量，超出挤掉最旧的） */
@@ -169,31 +140,10 @@ export class CombatSettlementService {
     book.set(castId, result);
   }
 
-  /** 兜底清理：长时间没有动静的目标（正常流程里死亡 / 换图 / 断线都会清，这里只防泄漏） */
-  private sweep(): void {
-    const deadline = Date.now() - TARGET_TTL_MS;
-    for (const [accountId, book] of this.targets) {
-      for (const [targetId, target] of book) {
-        if (target.updatedAt < deadline) book.delete(targetId);
-      }
-      if (book.size === 0) this.targets.delete(accountId);
-    }
-  }
-
   //#endregion
 }
 
 //#region 类型与小工具（纯函数，e2e 可对照）
-
-/** 登记簿里的一项目标 */
-interface TrackedTarget {
-  /** 怪物 key（登记时锁定，之后同一 targetId 换 key 视为异常） */
-  monsterKey: string;
-  /** 服务端记着的当前血量 */
-  hp: number;
-  /** 最近活跃时刻（毫秒），兜底清理用 */
-  updatedAt: number;
-}
 
 /** 客户端 cast 消息解析后的形状 */
 interface ParsedCast {
@@ -208,10 +158,6 @@ type AttackAttribute = "physicalAttack" | "magicAttack" | "taoistAttack";
 const ATTACK_ATTRIBUTES: AttackAttribute[] = ["physicalAttack", "magicAttack", "taoistAttack"];
 /** 幂等账本容量：足够盖住任何合理的重传窗口，又不会随游玩时长无限涨 */
 const CAST_DEDUPE_CAPACITY = 256;
-/** 目标登记的兜底存活时间（毫秒）：死亡 / 换图 / 断线之外的最后一道清理 */
-const TARGET_TTL_MS = 30 * 60_000;
-/** 兜底清理周期（毫秒） */
-const TARGET_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 function parseCast(raw: unknown): ParsedCast | null {
   if (!raw || typeof raw !== "object") return null;

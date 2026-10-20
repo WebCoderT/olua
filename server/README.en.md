@@ -56,7 +56,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + eight e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + nine e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -131,7 +131,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           seven repositories: account / admin / role / audit / system / announcement / mail
+│   │   └── repositories/           eight repositories: account / admin / role / audit / system / announcement / mail / world-monster
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -159,7 +159,8 @@ server/
 │   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
 │   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
 │   ├── e2e-realtime.cjs            50 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
-│   ├── e2e-combat.cjs              23 assertions (server-side damage: band check / idempotent replay / death once / reset and disconnect cleanup)
+│   ├── e2e-combat.cjs              32 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
+│   ├── e2e-world.cjs               22 assertions (world authority: seeding & sharing / settlement lands in world / tick respawn / graceful flush / restart recovery)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -168,7 +169,7 @@ server/
 
 ## Data model
 
-Six tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+Seven tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -178,6 +179,7 @@ Six tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT
 | `audit_logs` | operation log | action = interface `operationId`; `detail` holds the request body (masked); `success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | announcements | title / body / `level` (`important` shown first) / `enabled`; `starts_at` / `ends_at` form the effective window, **"active" is judged by exactly these three columns** (built `idx_announcements_window`) |
 | `mail_queue` | mail delivery queue | **rendered** title and body (frozen at enqueue time) / `status` / `attempts` / `next_retry_at` / `last_error`; the send interface only enqueues, delivery is done by the background scheduler |
+| `world_monsters` | world-authority monster instances | **the server owns monster state**: instanceId (`m<mapId>_<n>` issuance, stable across restarts) / mapId / monsterKey / spawn point x,y / hp / alive / killed_at / respawn_at; tick checks respawn + dirty batch flush; client seeding is **adopted only on an empty map** |
 
 **Character data is an "opaque document"**: the server **does not duplicate** game config, only validating structure / ownership / count caps / duplicate names, storing content as-is.
 Reasons and costs: [FAQ.en.md](FAQ.en.md#why-doesnt-the-server-validate-the-role-datas-content).
@@ -298,7 +300,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All eight e2e suites are **real server process + real HTTP requests** (not mocks):
+All nine e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -308,11 +310,12 @@ All eight e2e suites are **real server process + real HTTP requests** (not mocks
 | `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
 | `test/e2e-account-email.cjs` | **28** | player email field: read-only viewers can neither see nor change it / backfill·view·clear / format validation and same-email dedup (case-insensitive) / mail falls back to the linked account's email / contract permission annotation |
 | `test/e2e-realtime.cjs` | **50** | realtime channel: the ticket is one-shot (burned on use / expired / forged / cross-account all refused) / **a refused handshake answers with an HTTP 401 envelope instead of "connect first, then close"** / application-level ping→pong / one connection per account (a new one evicts the old, close code `4000`) / protocol-level liveness probe / on SIGTERM connections receive `1001` and the process exits immediately |
-| `test/e2e-combat.cjs` | **23** | server-side damage settlement: every invalid cast is refused (bad_request / unknown_skill / unknown_target / skill_not_learned) / **damage is computed by the server from snapshot values** (lands inside the formula band, hp arithmetic is self-consistent) / the same castId replays idempotently (duplicate, no re-roll, no extra hp loss) / death is decided by the server (killed exactly once, then target_dead) / map switch and disconnect clear the ledger |
+| `test/e2e-combat.cjs` | **32** | server-side damage settlement (world-authority adaptation): every invalid cast is refused (bad_request / unknown_skill / unknown_target / skill_not_learned) / **damage is computed by the server from snapshot values** (lands inside the formula band, hp arithmetic is self-consistent) / the same castId replays idempotently (duplicate, no re-roll, no extra hp loss) / death is decided by the server (killed exactly once, then target_dead) / **targets resolve to world instances** (unknown instanceIds refused) / resetting the ledger does not revive dead monsters / snapshots carry respawn countdown / map round-trips keep state / rejoin after reconnect does not duplicate |
+| `test/e2e-world.cjs` | **22** | world authority: **seeding only on an empty map** (repeated join does not duplicate, accounts share the same instances) / settlement lands directly in the world (snapshot hp = settled hp, visible to account B) / killing a monster queues a respawn / **tick respawns on time and broadcasts** / graceful shutdown flushes everything / **instance identity and hp restored as-is after restart** (due respawns backfilled at once) |
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
-cd server && npm run verify          # compile + eight e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + nine e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

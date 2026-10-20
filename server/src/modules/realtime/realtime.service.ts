@@ -7,6 +7,7 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { BizCode } from "../../common/constants/biz-code";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
+import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { CombatSettlementService } from "./combat-settlement.service";
 import {
@@ -15,6 +16,7 @@ import {
   type RealtimeIdentity,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
+  type RealtimeWorldMessage,
 } from "./realtime.protocol";
 
 /** 一条已经过鉴权的连接（两个字段由本服务自己维护） */
@@ -85,6 +87,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly config: ConfigService,
     private readonly adapterHost: HttpAdapterHost,
     private readonly combat: CombatSettlementService,
+    private readonly world: WorldService,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -132,6 +135,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 票据的清理有两道：取票时顺手清一次（对付「一直取票」），再加这个兜底（对付「取一堆就停」）
       this.ticketSweepTimer = setInterval(() => this.dropExpiredTickets(), Math.max(sweepMs, TICKET_SWEEP_MIN_MS)).unref();
     }
+    // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
+    this.world.onWorldChanged = (mapId) => this.broadcastWorld(mapId);
 
     this.logger.log(`实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms）`);
   }
@@ -268,9 +273,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 只清自己那条：被顶掉的旧连接稍后才走到这里，那时 map 里已经换成新连接了
       if (this.connections.get(identity.id) === socket) {
         this.connections.delete(identity.id);
-        // 断开即清结算上下文（目标登记簿与幂等账）：重连后客户端会重新报目标。
-        // 被顶掉的旧连接**不能**清 —— map 里已经是新连接的天下，别把它刚记的账抹了
+        // 断开即清结算的幂等账（重连后客户端会重新计数）；世界状态是共享的，不随连接断开而清，
+        // 只把「观看者」退掉（空闲回收的依据）。被顶掉的旧连接**不能**清 —— map 里已经是新连接的天下
         this.combat.dropAccount(identity.id);
+        this.world.leave(identity.id);
       }
     });
 
@@ -314,7 +320,35 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.combat.resetTargets(socket.identity.id);
       return;
     }
+    if (parsed?.type === "worldJoin") {
+      // 进图登记（播种 / 恢复 / 换图都走这里），应答一张权威快照
+      const join = parseWorldJoin(parsed.data);
+      if (!join) {
+        this.send(socket, { type: "error", data: { message: "worldJoin 消息缺 mapId / spawnPlan" } });
+        return;
+      }
+      const snapshot = this.world.join(socket.identity.id, join.mapId, join.spawnPlan);
+      const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
+      this.send(socket, frame);
+      return;
+    }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });
+  }
+
+  /**
+   * 把一张图的权威状态广播给正在看它的人（重生等世界变化时由世界层触发）
+   *
+   * 拿不到快照（图已被卸载）就不发 —— 那只可能发生在观看者集合与世界状态不同步的瞬间，
+   * 而观看者下一个 worldJoin 会拿到全量。
+   */
+  private broadcastWorld(mapId: string): void {
+    const snapshot = this.world.snapshot(mapId);
+    if (!snapshot) return;
+    const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
+    for (const accountId of this.world.viewersOf(mapId)) {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, frame);
+    }
   }
 
   //#endregion
@@ -387,3 +421,21 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
   //#endregion
 }
+
+//#region 消息解析（小工具）
+
+/** worldJoin.data 的解析结果（plan 条目的字段校验在世界层做，这里只保形状） */
+interface ParsedWorldJoin {
+  mapId: string;
+  spawnPlan: Array<{ monsterKey: string; x: number; y: number }>;
+}
+
+function parseWorldJoin(raw: unknown): ParsedWorldJoin | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.mapId !== "string" || !data.mapId) return null;
+  const plan = Array.isArray(data.spawnPlan) ? data.spawnPlan : [];
+  return { mapId: data.mapId, spawnPlan: plan as ParsedWorldJoin["spawnPlan"] };
+}
+
+//#endregion

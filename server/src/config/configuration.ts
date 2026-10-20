@@ -173,6 +173,40 @@ export interface AppConfiguration {
    */
   realtimeHeartbeatMs: number;
   //#endregion
+
+  //#region 世界权威（#35）
+  /**
+   * 世界 tick 的间隔（毫秒）
+   *
+   * tick 只做两件事：检查「该重生的怪」（粒度到秒级足够 —— 重生本来就是几十秒的事），
+   * 以及按持久化节流把脏实例写回 SQLite。**不做怪物移动**：游走 / 追击仍是客户端的
+   * 表现层（坐标不回传），服务端持有的「坐标」是出生点 —— 那是世界里唯一稳定的真相。
+   */
+  worldTickMs: number;
+  /**
+   * 世界状态的落盘节流间隔（毫秒）
+   *
+   * 受击 / 死亡 / 重生只把实例标脏，真正的写库由 tick 按这个间隔批量做 ——
+   * 否则一次出手就是一次 SQLite 写，跟玩家存档的 1.5 秒防抖推送叠在一起，写放大明显。
+   * 优雅关闭时会**全量 flush**，这个间隔只影响「进程被硬杀时最多丢多少秒的世界状态」。
+   */
+  worldPersistMs: number;
+  /**
+   * 怪物死亡后到重生的时间（毫秒）
+   *
+   * 目前是全服统一值（configs/monster 没有重生字段，区域配置也只在客户端的地图文件里）；
+   * 等区域配置进了共享快照，再改成按怪配置。
+   */
+  worldRespawnMs: number;
+  /**
+   * 地图实例的空闲回收时间（毫秒）；`0` = 不回收
+   *
+   * 一张图没有任何账号在看、且持续空闲这么久，就把它的实例从内存卸载（状态已在库里），
+   * 下次有人进图再加载 —— 防止「玩家进过的图」在内存里无限累积。卸载期间不跑重生，
+   * 重新加载时会按当前时刻一次性补上到期未处理的重生。
+   */
+  worldMapIdleMs: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -222,5 +256,9 @@ export default function configuration(): AppConfiguration {
     backupDir: process.env.BACKUP_DIR ?? "",
     realtimeTicketTtlMs: Number(process.env.REALTIME_TICKET_TTL_MS ?? 30 * 1000),
     realtimeHeartbeatMs: Number(process.env.REALTIME_HEARTBEAT_MS ?? 30 * 1000),
+    worldTickMs: Number(process.env.WORLD_TICK_MS ?? 1000),
+    worldPersistMs: Number(process.env.WORLD_PERSIST_MS ?? 5000),
+    worldRespawnMs: Number(process.env.WORLD_RESPAWN_MS ?? 30 * 1000),
+    worldMapIdleMs: Number(process.env.WORLD_MAP_IDLE_MS ?? 10 * 60 * 1000),
   };
 }

@@ -4,6 +4,7 @@ import { AccountRepository } from "./repositories/account.repository";
 import { AdminRepository } from "./repositories/admin.repository";
 import { AuditRepository } from "./repositories/audit.repository";
 import { RoleRepository } from "./repositories/role.repository";
+import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 
 /**
  * 数据层（全局模块）
@@ -13,7 +14,7 @@ import { RoleRepository } from "./repositories/role.repository";
  */
 @Global()
 @Module({
-  providers: [DatabaseService, AccountRepository, RoleRepository, AdminRepository, AuditRepository],
-  exports: [DatabaseService, AccountRepository, RoleRepository, AdminRepository, AuditRepository],
+  providers: [DatabaseService, AccountRepository, RoleRepository, AdminRepository, AuditRepository, WorldMonsterRepository],
+  exports: [DatabaseService, AccountRepository, RoleRepository, AdminRepository, AuditRepository, WorldMonsterRepository],
 })
 export class DatabaseModule {}

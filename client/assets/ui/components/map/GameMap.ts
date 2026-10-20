@@ -24,12 +24,15 @@ export default class GameMap extends Node {
   private reviveWorldPosition: Vec3 | null = null;
   /** 复活点就绪回调（由组合根注入主角的定位方法，见 setReviveHandler） */
   private reviveHandler: ((worldPosition: Vec3) => void) | null = null;
+  /** 本图 id（configs/map 的 key；进图播种 worldJoin 带它） */
+  private onMapId: string;
 
   constructor() {
     super("map");
     const role = StorageManager.findOnlineRole();
     const onMap = maps.get(role.onMap);
     this.name = `map_${role.onMap}`;
+    this.onMapId = role.onMap;
     // 清空上一张地图的怪物与掉落物
     MonsterManager.reset();
     DropManager.reset();
@@ -61,8 +64,9 @@ export default class GameMap extends Node {
     objectSpawner.spawnAll();
     // 按 collision 对象组生成碰撞区域（静态碰撞体 + 名称/区域指示线）
     new CollisionAreaSpawner(this as Node).spawnAll();
-    // 按 monster 对象组生成怪物（每个区域在开图时按其 max 一次性生成，之后不再刷新）
-    new MonsterAreaSpawner(this as Node).spawnAll();
+    // 按 monster 对象组生成怪物（世界权威 #35：世界在线时发进图播种，权威状态由 world 帧回填；
+    // 通道不可用时退回本地按区域一次性生成）
+    new MonsterAreaSpawner(this as Node, this.onMapId).spawnAll();
     // 自动战斗的寻路网格以这张地图为基准（换图后旧网格作废，挂机目标重新选取）
     AutoBattle.setMap(this as Node);
     this.goToRevivePoint(objectSpawner.getRevivePoint());
