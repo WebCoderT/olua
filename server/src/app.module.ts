@@ -17,6 +17,7 @@ import { RealtimeModule } from "./modules/realtime/realtime.module";
 import { RolesModule } from "./modules/roles/roles.module";
 import { SystemModule } from "./modules/system/system.module";
 import { TokenModule } from "./modules/token/token.module";
+import { WorldModule } from "./modules/world/world.module";
 
 /**
  * 应用根模块
@@ -44,6 +45,7 @@ import { TokenModule } from "./modules/token/token.module";
     AnnouncementModule,
     MailModule,
     RealtimeModule,
+    WorldModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

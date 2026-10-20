@@ -29,7 +29,7 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 23;
+const EXPECTED_ASSERTIONS = 32;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -155,10 +155,23 @@ function connect(url) {
     opened: false,
     closed: false,
     settles: [],
+    worlds: [],
     /** 按 castId 等结算帧（幂等重发会来两帧，取最新的） */
     async waitForSettle(castId, timeoutMs = 5_000) {
       return waitFor(`castId=${castId} 的 settle`, async () => {
         const hits = session.settles.filter((frame) => frame.castId === castId);
+        return hits.length > 0 ? hits[hits.length - 1] : null;
+      }, timeoutMs);
+    },
+    /**
+     * 进图登记并等权威快照（#35 起实例 id 由服务端发牌，cast 之前必须先 join）
+     * 只等 join 之后到达的 world 帧（别的推送不该被误当成这次 join 的应答）
+     */
+    async joinWorld(mapId, spawnPlan, timeoutMs = 5_000) {
+      const before = session.worlds.length;
+      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId, spawnPlan } }));
+      return waitFor(`mapId=${mapId} 的 world 帧`, async () => {
+        const hits = session.worlds.slice(before).filter((frame) => frame.mapId === mapId);
         return hits.length > 0 ? hits[hits.length - 1] : null;
       }, timeoutMs);
     },
@@ -170,6 +183,7 @@ function connect(url) {
     try {
       const frame = JSON.parse(raw.toString());
       if (frame.type === "settle") session.settles.push(frame.data);
+      if (frame.type === "world") session.worlds.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -218,6 +232,17 @@ function roleData(id, name, level, skills) {
       return { id, promise: session_.waitForSettle(id) };
     };
 
+    /** 进图播种：地图 1 上两只怪（maxHp 65，物防 [4,6]），拿回服务端发的实例 id */
+    const world = await session.joinWorld("1", [
+      { monsterKey: "1", x: 100, y: 200 },
+      { monsterKey: "1", x: 300, y: 400 },
+    ]);
+    check(world && world.monsters.length === 2, "准备：worldJoin 播种后拿到 2 只权威实例", JSON.stringify(world));
+    const mobA = world && world.monsters[0];
+    const mobB = world && world.monsters[1];
+    check(!!mobA && /^m1_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m1_N 形态）", mobA && mobA.instanceId);
+    check(!!mobA && mobA.hp === 65 && mobA.maxHp === 65 && mobA.alive === true, "准备：实例以服务端表的满血起算");
+
     //#endregion
 
     //#region 一、输入只认服务端那份权威
@@ -233,7 +258,10 @@ function roleData(id, name, level, skills) {
     const unknownMonster = await cast(session, { skillId: "1000", targetId: "t1", monsterKey: "no_such_monster" }).promise;
     check(unknownMonster && unknownMonster.ok === false && unknownMonster.code === "unknown_target", "不存在的怪物 key 被拒（unknown_target）", JSON.stringify(unknownMonster));
 
-    const notLearned = await cast(session, { skillId: "1000", targetId: "t1", monsterKey: "1" }).promise;
+    const fakeTarget = await cast(session, { skillId: "1000", targetId: "m1_999", monsterKey: "1" }).promise;
+    check(fakeTarget && fakeTarget.ok === false && fakeTarget.code === "unknown_target", "不存在的实例 id 被拒（unknown_target，世界权威后 id 由服务端发牌）", JSON.stringify(fakeTarget));
+
+    const notLearned = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
     check(notLearned && notLearned.ok === false && notLearned.code === "skill_not_learned", "未学习的技能被拒（skill_not_learned）", JSON.stringify(notLearned));
 
     //#endregion
@@ -245,7 +273,7 @@ function roleData(id, name, level, skills) {
     check(saved.code === 0, "准备：角色已学会技能 1000", saved.message);
 
     // 怪物 1：maxHp 65 / 物防 [4,6]；1 级角色物攻 [14,20]，技能 1 级倍率 1 → 伤害 ∈ [8, 16]
-    const firstShot = cast(session, { skillId: "1000", targetId: "mob_a", monsterKey: "1" });
+    const firstShot = cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" });
     const first = await firstShot.promise;
     check(!!(first && first.ok), "首次出手结算成功", JSON.stringify(first));
     const firstHp = first && first.ok ? first.hp : -1;
@@ -254,7 +282,7 @@ function roleData(id, name, level, skills) {
     check(first.ok && firstHp === 65 - first.damage, "血量算术自洽（hp = 65 − damage）", `hp=${firstHp}`);
     check(first.ok && first.duplicate === false, "首次结算 duplicate = false");
 
-    const second = await cast(session, { skillId: "1000", targetId: "mob_a", monsterKey: "1" }).promise;
+    const second = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
     check(!!(second && second.ok) && second.hp === firstHp - second.damage, "第二击在第一击的余量上继续扣", `hp=${second.hp}`);
 
     //#endregion
@@ -268,7 +296,7 @@ function roleData(id, name, level, skills) {
     const settleCountBefore = session.settles.length;
     session.socket.send(JSON.stringify({
       type: "cast",
-      data: { castId: firstShot.id, skillId: "1000", targetId: "mob_a", monsterKey: "1" },
+      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
     }));
     const replay = await waitFor(`castId=${firstShot.id} 重投后的新 settle`, async () => {
       const hits = session.settles
@@ -278,7 +306,7 @@ function roleData(id, name, level, skills) {
     });
     check(!!(replay && replay.ok && replay.duplicate === true), "重复的 castId 原样重发并标记 duplicate", JSON.stringify(replay));
     check(!!(replay && replay.ok) && replay.damage === (first.ok ? first.damage : -1), "重发的伤害与首次一致（没有重掷随机数）");
-    const afterReplay = await cast(session, { skillId: "1000", targetId: "mob_a", monsterKey: "1" }).promise;
+    const afterReplay = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
     check(!!(afterReplay && afterReplay.ok) && afterReplay.hp === beforeIdempotent - afterReplay.damage, "重放没有多扣血（第三击只扣一次）", `hp=${afterReplay.hp}`);
 
     //#endregion
@@ -289,7 +317,7 @@ function roleData(id, name, level, skills) {
     let killedCount = 0;
     let deathHp = -1;
     for (let i = 0; i < 60; i++) {
-      const result = await cast(session, { skillId: "1000", targetId: "mob_a", monsterKey: "1" }).promise;
+      const result = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
       if (!result || !result.ok) break;
       if (result.killed) {
         killedCount += 1;
@@ -298,27 +326,47 @@ function roleData(id, name, level, skills) {
     }
     checkEqual(killedCount, 1, "killed 恰好报一次");
     checkEqual(deathHp, 0, "死亡时血量恰好为 0");
-    const deadCast = await cast(session, { skillId: "1000", targetId: "mob_a", monsterKey: "1" }).promise;
+    const deadCast = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
     check(deadCast && deadCast.ok === false && deadCast.code === "target_dead", "死后再打报 target_dead", JSON.stringify(deadCast));
 
     //#endregion
 
-    //#region 五、换图与断线清账
+    //#region 五、幂等账与换图 / 断线（世界状态不随之清）
 
-    group("五、换图 / 断线后结算上下文被清掉");
+    group("五、幂等账被清（换图 / 断线），世界状态保持（共享且持久）");
     session.socket.send(JSON.stringify({ type: "targetsReset" }));
     await sleep(100);
-    const afterReset = await cast(session, { skillId: "1000", targetId: "mob_a", monsterKey: "1" }).promise;
-    check(!!(afterReset && afterReset.ok && afterReset.killed === false), "targetsReset 后同一 targetId 按全新目标重新登记", JSON.stringify(afterReset));
-    check(!!(afterReset && afterReset.ok) && afterReset.hp === 65 - afterReset.damage, "重登记的目标从满血起算");
+    // targetsReset 只清幂等账：重投同 castId 会**重新走一遍校验** —— 而世界状态不被清账影响，
+    // 死掉的怪照旧拒绝（#34 时代「清账后满血重来」的语义随世界权威一起终结）
+    const replayAfterReset = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
+    check(replayAfterReset && replayAfterReset.ok === false && replayAfterReset.code === "target_dead", "targetsReset 后重投被重新校验：死怪不因清账复活", JSON.stringify(replayAfterReset));
+
+    // 世界快照如实：死亡的实例 alive=false 且带重生倒计时，活着的照常
+    const snapshot = await session.joinWorld("1", []);
+    const snapA = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
+    const snapB = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobB ? mobB.instanceId : "m1_2"));
+    check(!!snapA && snapA.alive === false && snapA.hp === 0 && typeof snapA.respawnInMs === "number", "快照里死亡的实例 alive=false 且带重生倒计时", JSON.stringify(snapA));
+    check(!!snapB && snapB.alive === true && snapB.hp === 65, "快照里活着的实例状态不受会话操作影响", JSON.stringify(snapB));
+
+    // 换图 = 发新的 worldJoin：旧图观看者身份移除、幂等账清零，但旧图实例状态原样保留
+    const map2 = await session.joinWorld("2", [{ monsterKey: "3", x: 10, y: 20 }]);
+    check(!!(map2 && map2.monsters.length === 1), "换图 worldJoin 拿到新图的实例", JSON.stringify(map2));
+    const back = await session.joinWorld("1", []);
+    const backA = back && back.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
+    check(!!backA && backA.alive === false && backA.hp === 0, "换图往返后旧图实例状态保持（世界状态不随会话清）");
 
     session.socket.close();
     await waitFor("旧连接断开", async () => (session.closed ? session : null));
     const ticket2 = await api(baseUrl, "POST", "realtime/ticket", { token });
     session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket2.data.ticket)}`);
     await waitFor("重连成功", async () => (session.opened ? session : null));
-    // castSeq 继续往下走；重连后同一 castId 也没人记得它 —— 视为新出手
-    const reconnected = await cast(session, { skillId: "1000", targetId: "mob_b", monsterKey: "1" }).promise;
+    // 重连后重新 join（播种计划为空 —— 实例已存在，不该翻倍），拿回权威状态
+    const rejoined = await session.joinWorld("1", []);
+    check(!!(rejoined && rejoined.monsters.length === 2), "重连后重新 worldJoin 不重复播种（仍是 2 只）", JSON.stringify(rejoined && rejoined.monsters.length));
+    const rejoinA = rejoined && rejoined.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
+    check(!!rejoinA && rejoinA.alive === false && rejoinA.hp === 0, "重连拿回的状态与断线前一致（断线不清世界状态）");
+    // castSeq 继续往下走；重连后同一 castId 也没人记得它 —— 视为新出手（打活着的 mobB）
+    const reconnected = await cast(session, { skillId: "1000", targetId: mobB ? mobB.instanceId : "m1_2", monsterKey: "1" }).promise;
     check(!!(reconnected && reconnected.ok && reconnected.duplicate === false), "重连后结算上下文已清（同 castId 不算重复）", JSON.stringify(reconnected));
 
     //#endregion

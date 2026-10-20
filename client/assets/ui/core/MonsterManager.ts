@@ -14,19 +14,25 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel from "../utils/net/CombatChannel";
+import CombatChannel, { WorldSnapshot } from "../utils/net/CombatChannel";
 
 /**
  * 怪物管理器（静态类）
  * 统一管理怪物数据与怪物节点的映射：
  * 生成（数据+节点+图层挂载）→ 点击/最近目标查询 → 受击结算（扣血/刷血条/死亡移除）→ 换图清空
- * 怪物只在开图时按地图的刷怪区域生成一次，之后不做刷新/补充（数量策略待重新设计）
+ * 怪物在开图时按地图的刷怪区域生成（#35 起由服务端持有状态：进图 worldJoin 播种，
+ * 死亡后由服务端 tick 到点重生并以 world 帧广播，客户端随之补场；通道不可用时退回
+ * 本地按区域一次性生成、不刷新的旧口径）
  * 怪物的行为与动画（待机游走/追击玩家/普攻/被击退）由 MonsterAI 每帧驱动，本类只管数据与生命周期
  * 所有怪物节点一律挂载到 LayerManager 怪物层（Layer.MONSTER）
  *
  * 伤害结算（#34）：玩家打怪的伤害由服务端算（见 utils/net/CombatChannel），本类的
  * applyServerSettle 是结果的落点 —— 扣多少血、死没死都以服务端说的为准，本地只做表现
  * 与合法带对账；实时通道不可用时技能实现会退回 hurt()（本地口径，回滚路径）。
+ *
+ * 世界权威（#35）：进图由 MonsterAreaSpawner 发 worldJoin，本类 applyWorldState 按服务端
+ * 快照做差量合并（实例 id 服务端发牌、出生点以快照为准）；游走/追击仍是本地表现层，
+ * 服务端持有的「坐标」是出生点。断线重连后 CombatChannel 会自动重发进图登记。
  */
 export default class MonsterManager {
   /** 已生成怪物：怪物节点 -> 怪物运行时数据 */
@@ -35,7 +41,7 @@ export default class MonsterManager {
   /** 实例 id -> 怪物节点（服务端结算按 targetId 找落点；换图清场时一起清） */
   private static instanceIndex = new Map<string, Node>();
 
-  /** 实例 id 发牌器（会话内单调递增；怪物的身份由客户端发，数值由服务端算） */
+  /** 实例 id 发牌器（会话内单调递增；世界权威 #35 后只服务回滚路径，正常发牌归服务端） */
   private static instanceSeq = 0;
 
   /** 场上怪物（节点 -> 怪物数据），供 MonsterAI 每帧遍历 */
@@ -56,16 +62,20 @@ export default class MonsterManager {
     CombatChannel.resetTargets();
   }
 
-  /** 生成一只怪物（按配置初始化数据与节点，挂载到怪物层） */
-  static spawn(monsterId: string, position: Vec3) {
+  /** 生成一只怪物（按配置初始化数据与节点，挂载到怪物层）
+   *  @param instanceId 实例 id：**服务端发的牌**（世界权威 #35，来自 world 快照）；
+   *                    缺省 = 本地发牌（回滚路径：通道不可用、怪还在客户端刷）
+   *  @param hp 初始血量：世界权威下用服务端快照的值；缺省按配置满血
+   */
+  static spawn(monsterId: string, position: Vec3, instanceId?: string, hp?: number) {
     const monsterConfig = monsters.get(monsterId);
     if (!monsterConfig) {
       console.warn(`[MonsterManager] 怪物配置不存在：${monsterId}`);
       return;
     }
-    // 数据：由配置派生运行时数据（满血）；实例 id 现场发牌（会话内唯一）
+    // 数据：由配置派生运行时数据；实例 id 服务端牌优先（本地回滚路径现场发牌，会话内唯一）
     this.instanceSeq += 1;
-    const monster: Monster = { ...monsterConfig, id: monsterId, hp: monsterConfig.maxHp, instanceId: `mon_${this.instanceSeq}` };
+    const monster: Monster = { ...monsterConfig, id: monsterId, hp: hp ?? monsterConfig.maxHp, instanceId: instanceId ?? `mon_${this.instanceSeq}` };
     // 节点：创建并挂载到怪物层
     const monsterNode = this.createMonsterNode(monster);
     LayerManager.addToMonsterLayer(monsterNode);
@@ -220,13 +230,43 @@ export default class MonsterManager {
   }
 
   /**
+   * 世界权威快照落场（#35：实例身份与血量以服务端为准，客户端做差量合并）
+   *
+   * 只处理三件事，血量与身份**不回写**到已存在的节点（那是 applyServerSettle 实时在做的事，
+   * 快照可能因为节流而滞后，覆盖反而会造成表现回跳）：
+   * - 快照里有、场上没有 → 按服务端牌生成（含重生的怪：死亡时节点已销毁，广播一到就以新实例落场）；
+   * - 场上有、快照里活着 → 不动（血量走实时结算）；
+   * - 场上有、快照里已死 → 断线期间被队友击杀的兜底：走既有死亡表现清场。
+   */
+  static applyWorldState(snapshot: WorldSnapshot) {
+    const seen = new Set<string>();
+    for (const entry of snapshot.monsters) {
+      seen.add(entry.instanceId);
+      const node = this.instanceIndex.get(entry.instanceId);
+      if (node) {
+        const monster = node ? this.monsterMap.get(node) : null;
+        if (monster && !entry.alive && monster.hp > 0) this.applyDamage(node, monster, 0, 0, true);
+        continue;
+      }
+      if (!entry.alive) continue; // 死亡中的怪不生成；重生广播一到会作为「新增」落场
+      this.spawn(entry.monsterKey, new Vec3(entry.x, entry.y), entry.instanceId, entry.hp);
+    }
+    // 场上有、快照里没有：换图残留之类的兜底，按死亡表现清掉（不演经验与掉落 —— 不是本地击杀）
+    this.instanceIndex.forEach((node, instanceId) => {
+      if (seen.has(instanceId)) return;
+      const monster = this.monsterMap.get(node);
+      if (monster && monster.hp > 0) this.applyDamage(node, monster, 0, 0, true);
+    });
+  }
+
+  /**
    * 把一次伤害落到目标身上（表现与死亡流程的唯一去处，本地口径与服务端结算共用）
    * @param hp 落完后的血量（本地口径传「扣完的值」；服务端结算直接用服务端给的值）
    * @param killed 是否死亡（缺省按 hp <= 0 判 —— 本地口径；服务端结算以服务端判定为准）
    */
   private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean) {
-    // 受伤飘字（需在死亡销毁节点前显示）
-    GameUiHelper.showDamageText(target, damage);
+    // 受伤飘字（需在死亡销毁节点前显示；0 伤不飘 —— 世界快照的兜底清理不是一次真实受击）
+    if (damage > 0) GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, hp);
     this.updateHead(target, monster);
     if (monster.hp > 0 && !killed) {

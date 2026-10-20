@@ -260,12 +260,20 @@ export default class RealtimeClient {
       this.clearPongTimer();
       this.armPing(heartbeatMs);
       console.info(`[realtime] 已连接（账号 ${this.userId ?? "?"}，心跳 ${heartbeatMs}ms）`);
+      // 断线回来后服务端不记得这个观看者了：把最近一次进图登记重发上去，
+      // 否则重生广播与世界状态都到不了客户端（首次连接没有 lastJoin，这里是无操作）
+      if (reconnected) CombatChannel.resendWorldJoin();
       this.emit(RealtimeStatus.Connected, { reconnected });
       return;
     }
     if (frame.type === "settle") {
       // 战斗结算（#34）：形状的解释在 CombatChannel，这里只做转发
       CombatChannel.dispatchSettle(frame.data);
+      return;
+    }
+    if (frame.type === "world") {
+      // 世界快照（#35）：进图应答与重生广播同形，形状的解释在 CombatChannel
+      CombatChannel.dispatchWorld(frame.data);
       return;
     }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据

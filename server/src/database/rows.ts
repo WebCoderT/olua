@@ -202,3 +202,28 @@ export interface MailQueueRow {
 export interface MailQueueWithAccountRow extends MailQueueRow {
   account_name: string | null;
 }
+
+//#region 世界权威（#35）
+
+/** 世界怪物实例行（服务端持有的怪物状态，一行 = 场上一只怪） */
+export interface WorldMonsterRow {
+  /** 实例 id（服务端发牌，如 "m1_3"：地图 1 的第 3 只；全服唯一且跨重启稳定） */
+  instance_id: string;
+  map_id: string;
+  /** 怪物 key（configs/monster 的关联键，战斗数值查 MONSTER_COMBAT 用） */
+  monster_key: string;
+  /** 出生点（世界坐标；重生的落点也是它 —— 区域配置在客户端，服务端只记实例自己的位置） */
+  x: number;
+  y: number;
+  hp: number;
+  max_hp: number;
+  /** 1 = 存活 / 0 = 死亡（等重生） */
+  alive: number;
+  /** 死亡时刻（毫秒）；存活为 null */
+  killed_at: number | null;
+  /** 预定重生的时刻（毫秒）；存活为 null */
+  respawn_at: number | null;
+  updated_at: number;
+}
+
+//#endregion

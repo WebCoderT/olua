@@ -77,7 +77,7 @@ The project currently covers:
 - Asset preloading: preloads the map, NPC / monster frame animations and the worn appearance before entering a map
 - Joystick: a persistent joystick at the bottom left (base + draggable handle); hold and drag to move — **drag a little to walk, drag far to run** (dead zone / thresholds in `configs/role.joystickMove`); touch channel only, desktop mouse hold-and-drag works too, presses on the joystick do not fall through, and releasing never clears the selected target by accident
 - Screen adaptation: fills the window (NO_BORDER) with no black bars, persistent HUD re-docked to the edges of the visible area; the character selection stage scales as one block (contain), so elements never leave the screen even when the window aspect ratio differs from the design resolution
-- Server: account registration and login (scrypt salted digest), character data saved to the cloud (debounced merged pushes), revision-number optimistic locking, two token audiences, permission-point guards, login throttling, password reset and proactive token revocation, operator audit logs, announcement publishing with server-wide delivery, mail channel (templates + delivery queue + failure retry), realtime channel (a one-shot ticket exchanges for a WebSocket connection, heartbeat and liveness probing, one connection per account), **server-side damage settlement** (the server computes monster-damage from the shared snapshot values, castId idempotency, death determination — the client only plays the presentation)
+- Server: account registration and login (scrypt salted digest), character data saved to the cloud (debounced merged pushes), revision-number optimistic locking, two token audiences, permission-point guards, login throttling, password reset and proactive token revocation, operator audit logs, announcement publishing with server-wide delivery, mail channel (templates + delivery queue + failure retry), realtime channel (a one-shot ticket exchanges for a WebSocket connection, heartbeat and liveness probing, one connection per account), **server-side damage settlement** (the server computes monster-damage from the shared snapshot values, castId idempotency, death determination — the client only plays the presentation), **world authority** (monster instances owned by the server: seeding on map entry / shared across accounts / tick-based respawn / state persisted across restarts — the client only plays the presentation and merges deltas)
 - Admin: account and character management (six-dimension filtering / structured editing / batch delete), administrators and permissions, audit log queries, my account; the character detail page shows equipment / skills / items / maps / War Soul, Title and Rank as **names** (taken from the game data all three sides share — the admin keeps no copy of its own)
 - **There is one copy of the game data**: equipment / War Soul / Title / Rank / skills / items / maps are all defined in the client's `client/assets/configs`, which `tools/gen-shared-data.cjs` snapshots into `server/src/shared/game-data.generated.ts` — the server and the admin read **the same file** (`tools/audit-shared-data.cjs` keeps it byte-identical to the client's configs, asserts every table is present and non-empty, and rejects any second copy: a same-named table, a hand-written code list, or a copied-over Chinese name). Even the server's `occupation / sex` code lists and the `1 <name> / 2 <name> / …` list line in the API docs are **computed** from that data, so adding an occupation code on the client updates all three sides automatically.
 
@@ -100,7 +100,7 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 - **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 29 unit-test suites under `client/tools/` and 9 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 23 + 87 assertions) + typechecks on two sides + 29 unit-test suites + 9 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 87 assertions) + typechecks on two sides + 29 unit-test suites + 9 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -206,7 +206,7 @@ olua/
   - constants/swagger-tags: documentation groups (public APIs / client / admin)
   - interceptors/audit.interceptor: **automatic logging of admin write APIs** (action taken from `operationId`, password-like fields masked before persisting)
   - security: pure-function login throttling decisions (`rate-limit.util`) + in-memory counter service (`login-throttle.service`)
-- src/database: SQLite connection and the repository layer for the six tables (accounts / roles / admins / audit_logs / announcements / mail_queue, including backfilling columns in existing databases)
+- src/database: SQLite connection and the repository layer for the seven tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters, including backfilling columns in existing databases)
 - src/modules: auth (player authentication) / roles (characters) / admin (console: auth / accounts / characters / administrators / passwords) / announcement (announcements: public pull + admin CRUD) / mail (mail: templates + delivery queue + background scheduler) / audit (audit logs) / token (JWT) / health
 - src/swagger/setup: documentation mounting (extracted into a function so tests can also generate docs once to verify grouping / permission annotations / dangling `$ref`)
 - src/swagger/emit: **offline production of `openapi.json`** (`npm run swagger:emit`, the only input to both consumers' API files)
@@ -269,13 +269,13 @@ make dev            # start server :3100 and admin :5173 together; Ctrl-C exits 
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
 make client-test    # client's 29 unit-test suites
-make server-verify  # verify the server with one command (compile + eight e2e suites + generated-artifact audit)
+make server-verify  # verify the server with one command (compile + nine e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 9 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 9 audits
-make test           # all tests: client's 29 suites + server's eight e2e suites
+make test           # all tests: client's 29 suites + server's nine e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -301,7 +301,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + eight e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + nine e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -381,7 +381,7 @@ Manual equivalent (no `make` needed):
 # Client: 29 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + eight e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 23 / 87) + generated-artifact consistency
+# Server: compile + nine e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 87) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build
@@ -497,12 +497,13 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | Feature | Description |  Status |
 | --- | --- | :-: |
 | Zone spawning | On map entry, monsters are generated randomly within the map's configured spawn rectangles |  ✅  |
+| World authority (monster state) | **monster instances are owned by the server** (instanceId issuance, hp / alive / respawn time); seeding is adopted only on an empty map, accounts share the same monsters, state persists across restarts; falls back to local spawning without the realtime channel |  ✅  |
 | Monster AI | Idle wandering, aggressive chasing, passive monsters chasing in anger when hurt, basic-attack settlement |  ✅  |
 | Death animation | Nodes are removed only after the death animation finishes; missing frames fall back to removing immediately |  ✅  |
 | Monster map info | Name centred (aggressive red / passive yellow), overhead HP bar plus HP number |  ✅  |
 | Monster info panel / selection halo | Click to select, HP and attributes shown live |  ✅  |
 | Monster configs fully completed | For all 220 monsters, the **visible body size (contentSize) and appearance offset (outOffset) are measured from the assets' auto-trim data** (generated by `client/tools/gen-monster-config.cjs`, which decides collision boxes / hit-testing / HP bar placement; historically numbers 5~220 were 0×0 and unclickable); animation speeds converge on a `monsterDefaultSpeedRate` default table with per-entry overrides; aggressive monsters follow the rule "BOSS or body width ≥ 250px" (76/220); sale prices generated by level × role |  ✅  |
-| Monster respawn timer | Replenished on a cycle after death (currently generated once when the map opens) |  ❌  |
+| Monster respawn timer | **respawned by the server tick when the realtime channel is available** (replenished on a cycle after death and broadcast as world frames); the local fallback still spawns once per map entry |  ✅  |
 
 ### Death and revival
 

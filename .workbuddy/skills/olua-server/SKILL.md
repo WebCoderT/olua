@@ -1,6 +1,6 @@
 ---
 name: olua-server
-description: olua 项目服务端（NestJS 12 + node:sqlite + JWT + Swagger）的开发与改接口做法。它同时是「三端接口契约的唯一源头」——控制器 + DTO + 装饰器产出 server/openapi.json，再由 tools/gen-api.cjs 生成客户端与管理端两端的接口文件，所以加接口的唯一正确顺序是「改服务端 → 补 operationId → npm run gen:api → 两端 build」。涵盖：三档分组装饰器 @ApiPublicDoc / @ApiPlayerDoc / @ApiAdminDoc（分组按方法标、控制器禁写类级 @ApiTags、createDocument 必须 autoTagControllers 传 false）、管理端接口必须带 permissions（同时落文档说明 + x-olua-permissions + RequirePermissions 运行时元数据，漏了就是真放行）、@ApiDataResponse 的 x-olua-data-schema 与 x-olua-data-nullable、@ApiQueryModel 的 x-olua-query-schema、两层守卫（AuthGuard 受众每次回查库 + PermissionGuard 权限点注册在其后，业务代码禁写角色判断）、统一响应包裹 code message data timestamp 与业务码分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）、SQLite 四表仓储与 ensureColumn 存量补列、全局 ValidationPipe whitelist 会静默剥掉嵌套裸对象属性（必须带装饰器的 DTO 类加 ValidateNested each true 加 Type 并登记 SWAGGER_MODELS）、分页必须用 PageMetaDto 而非 isArray、同账号角色重名 20005、清在线标记必须早于删角色行、角色修订号 revision 乐观锁、口令管理（重置玩家口令 / 管理员自助改密 / token_version 让旧令牌立即作废 40103）、操作日志（审计拦截器只审写方法、action 复用 operationId、敏感字段递归打码、prune 限容、目标名用相关子查询、keyword 的 LIKE 通配符要转义）、登录限流（纯函数 rate-limit.util + 内存 LoginThrottleService、用户名与 IP 两维度、达阈值计数归零、TRUST_PROXY 双向陷阱）、踢下线（只清在线标记拦不住本地客户端，必须叠加存档写入拒收 20007 且判定放在乐观锁之前）、服务端不认识客户端配置只做结构体量与格式校验、swagger emit 与 gen api 与 verify api 与八套 e2e（e2e / e2e-roles / e2e-guard / mail / account-email / realtime / combat / backup）与 verify 脚本的写法（真实起服务 + 真实请求 + setupSwagger 生成真文档验分组权限与悬空引用）、实时通道（一次性票据换 WebSocket 连接：握手复用 AuthGuard 的结论而不另写一套校验、拒连时回的是与其余接口同形的 HTTP 401 包裹体而不是先建连再关、协议层 ping/pong 存活探测、一账号一条连接、收连接必须写在 onModuleDestroy 而不是 onApplicationShutdown 否则死锁）、每处理完一个问题按功能提交一次代码（改接口的提交必须连 openapi.json 与两端生成物一起提交）。触发场景：用户说"改服务端接口""加一个接口""给接口补权限点""Swagger 分组不对""文档里少了某个接口""服务端校验失败""接口报 500""分页接口文档写成数组""e2e 挂了""数据库加一列""后台改角色""角色改名""乐观锁冲突""前端类型跟服务端对不上""重置密码""改密码""旧令牌还有效吗""操作日志""审计""谁改了什么""登录被锁""限流""踢下线""把玩家踢出去""反代拿不到真实 IP"。
+description: olua 项目服务端（NestJS 12 + node:sqlite + JWT + Swagger）的开发与改接口做法。它同时是「三端接口契约的唯一源头」——控制器 + DTO + 装饰器产出 server/openapi.json，再由 tools/gen-api.cjs 生成客户端与管理端两端的接口文件，所以加接口的唯一正确顺序是「改服务端 → 补 operationId → npm run gen:api → 两端 build」。涵盖：三档分组装饰器 @ApiPublicDoc / @ApiPlayerDoc / @ApiAdminDoc（分组按方法标、控制器禁写类级 @ApiTags、createDocument 必须 autoTagControllers 传 false）、管理端接口必须带 permissions（同时落文档说明 + x-olua-permissions + RequirePermissions 运行时元数据，漏了就是真放行）、@ApiDataResponse 的 x-olua-data-schema 与 x-olua-data-nullable、@ApiQueryModel 的 x-olua-query-schema、两层守卫（AuthGuard 受众每次回查库 + PermissionGuard 权限点注册在其后，业务代码禁写角色判断）、统一响应包裹 code message data timestamp 与业务码分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）、SQLite 四表仓储与 ensureColumn 存量补列、全局 ValidationPipe whitelist 会静默剥掉嵌套裸对象属性（必须带装饰器的 DTO 类加 ValidateNested each true 加 Type 并登记 SWAGGER_MODELS）、分页必须用 PageMetaDto 而非 isArray、同账号角色重名 20005、清在线标记必须早于删角色行、角色修订号 revision 乐观锁、口令管理（重置玩家口令 / 管理员自助改密 / token_version 让旧令牌立即作废 40103）、操作日志（审计拦截器只审写方法、action 复用 operationId、敏感字段递归打码、prune 限容、目标名用相关子查询、keyword 的 LIKE 通配符要转义）、登录限流（纯函数 rate-limit.util + 内存 LoginThrottleService、用户名与 IP 两维度、达阈值计数归零、TRUST_PROXY 双向陷阱）、踢下线（只清在线标记拦不住本地客户端，必须叠加存档写入拒收 20007 且判定放在乐观锁之前）、服务端不认识客户端配置只做结构体量与格式校验、swagger emit 与 gen api 与 verify api 与九套 e2e（e2e / e2e-roles / e2e-guard / mail / account-email / realtime / combat / world / backup）与 verify 脚本的写法（真实起服务 + 真实请求 + setupSwagger 生成真文档验分组权限与悬空引用）、实时通道（一次性票据换 WebSocket 连接：握手复用 AuthGuard 的结论而不另写一套校验、拒连时回的是与其余接口同形的 HTTP 401 包裹体而不是先建连再关、协议层 ping/pong 存活探测、一账号一条连接、收连接必须写在 onModuleDestroy 而不是 onApplicationShutdown 否则死锁）、每处理完一个问题按功能提交一次代码（改接口的提交必须连 openapi.json 与两端生成物一起提交）。触发场景：用户说"改服务端接口""加一个接口""给接口补权限点""Swagger 分组不对""文档里少了某个接口""服务端校验失败""接口报 500""分页接口文档写成数组""e2e 挂了""数据库加一列""后台改角色""角色改名""乐观锁冲突""前端类型跟服务端对不上""重置密码""改密码""旧令牌还有效吗""操作日志""审计""谁改了什么""登录被锁""限流""踢下线""把玩家踢出去""反代拿不到真实 IP"。
 agent_created: true
 ---
 
@@ -46,8 +46,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（六张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail（七个仓储）
+    database.service.ts           建表（七张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster（八个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -55,6 +55,7 @@ server/src
     announcement/ 公告（客户端拉「生效中」的公共接口 + 管理端 CRUD）
     mail/    邮件通道（模板 + 投递队列 + 后台调度；发信接口只入队）
     realtime/ 实时通道（取票据接口 + Upgrade 握手 + 心跳；状态全在本进程内存里，故是单实例能力）
+    world/   世界权威（怪物实例服务端持有 / tick 重生 / 空闲回收 / dirty 落盘；realtime 的 worldJoin 与 world 帧接它）
     audit/   操作日志查询（只读两接口；interceptor 与 service 同模块）
     system/  系统信息（运行时 / 各表行数 / 脱敏配置快照；快照走白名单，密钥只报形态）
     token/   JWT        health/  健康检查
@@ -76,6 +77,8 @@ test/e2e-guard.cjs               口令 / 审计 / 限流 / 踢下线专项（28
 test/e2e-mail.cjs                邮件通道专项（120 条断言，假发信器）
 test/e2e-account-email.cjs       玩家邮箱字段专项（28 条断言）
 test/e2e-realtime.cjs            实时通道专项（50 条断言，真实 WebSocket 握手）
+test/e2e-combat.cjs              伤害结算专项（32 条断言，世界权威适配）
+test/e2e-world.cjs               世界权威专项（22 条断言，tick / 落盘 / 重启恢复）
 test/backup.cjs                  备份 / 恢复专项（87 条断言）
 ```
 
@@ -106,7 +109,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 3. **权限点先加在 `common/constants/permission.ts`**：加权限点 → 决定哪些角色拥有它（**只改 `ROLE_PERMISSIONS`**）→ 再在装饰器上引用。**业务代码里禁止写角色判断**。
 4. 跑 **`npm run gen:api`**（= `swagger:emit` + `node ../tools/gen-api.cjs`）重新产出文档与两端接口文件。
 5. 两端跑 `tsc` / `npm run build`，**签名不兼容会直接编译报错**（这正是设计目的），按报错改调用点。
-6. 跑 **`npm run verify`**（编译 + **八套** e2e + 生成物一致性审计）。
+6. 跑 **`npm run verify`**（编译 + **九套** e2e + 生成物一致性审计）。
 
 > 契约管线的完整细节（`x-olua-*` 扩展对照表、生成器的 `MODULES` 映射、守卫脚本的分段检查）见
 > `references/contract-pipeline.md`。
@@ -150,13 +153,15 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   **连「码的清单」与「文案」也派生**：`shared/game-data.ts`（手写门面，与管理端的 `api/gameData.ts` 对称）
   给出 `ROLE_OCCUPATION_CODES` / `ROLE_SEX_CODES` 与 `OCCUPATION_HINT` / `SEX_HINT` ——
   客户端加一个职业码，服务端的校验清单与 DTO 里那行 `1 战士 / 2 魔法师 / …` **自动跟着变**（不必改服务端一行）。
-- **不在范围**：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes`
-  整份被注释，没有活的来源 —— 不凭空造一份）。
+- **不在范围**：掉落（`configs/monsterDrops` 依赖 UI 模块，留待后续上移）；时装（`configs/fashionClothes`
+  整份被注释，没有活的来源 —— 不凭空造一份）。怪物战斗数值已进快照（#34，MONSTER_COMBAT）；怪物实例
+  属世界权威（#35，服务端持有状态、客户端进图播种）。
 - 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
-- **六张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue`。删账号**级联删其角色**。
+- **七张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters`。删账号**级联删其角色**。
+  - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
 - **角色数据是不透明文档**：
@@ -271,7 +276,7 @@ env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.
 **每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
 
 - 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
-- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 八套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端八套 e2e + 管理端构建 + 9 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
+- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 九套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端九套 e2e + 管理端构建 + 9 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
 - 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；服务端的端名取 `server`。
 - **改了接口的提交必须连生成物一起提交**（`openapi.json` + 两端接口文件是同一笔改动的一部分，否则另外两端停在旧契约上）。
 - 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。
