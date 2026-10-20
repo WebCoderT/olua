@@ -12,7 +12,7 @@
 
 ## 提交纪律（用户强制）
 - **所有代码提交都必须有对应的 issue / PR，必须有记录**（用户 2026-10-10 定）：master 上不允许存在没有 issue 追踪的提交。流程 = 开 issue → 开分支（`git checkout -b <type>/<n>-<slug>`）→ 提交（正文带 `Closes #n` / `Refs #n`）→ 推分支开 PR → CI 绿 → squash 合并。**任何直接落在 master 上的提交都算违规**（文档 typo 也不例外，走 docs PR）。
-- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 29 套单测 / 服务端八套 e2e 949 条 / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
+- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 29 套单测 / 服务端九套 e2e 980 条 / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
 - **中英双语文档**：中文是主体，英文平铺在同目录成 `X.en.md`（README / FAQ 各一份），两份顶部各一行语言互链；索引 issue **#45**，子 issue #39 守卫 / #40 根 / #41 client / #42 admin / #43 server / #44 equip-aligner。译本 = 不改口径（章节数 / 表格行 / ✅❌ 数 / 数字 multiset 全等），术语表见 #45。
 - **一个 PR = 一个 squash = 一个功能**（分支上攒了两件，就拆成两个分支各开 PR，`git rebase --autostash master` 接最新基）。
 - 格式 `feat|fix|refactor|docs|test|chore(端): 一句话`；改接口必须连 `openapi.json` + 两端生成物一起提交。
@@ -41,7 +41,7 @@
 
 ## 三端架构（细节全在 Skill）
 - **游戏数据只有一份**（用户 2026-10-13 定的硬要求，issue #117 索引 / #118 生成物与守卫 / #119 管理端接入 / #122 码清单与文案也派生）：权威定义 = 客户端 `client/assets/configs`；`tools/gen-shared-data.cjs` 把它快照成 `server/src/shared/game-data.generated.ts`（**三端唯一的那份**，管理端 import 同一个文件，Vite 直接打包），`tools/audit-shared-data.cjs` 重生成逐字节比对 + 断言 24 张表齐全非空。原来的 `battle-rules.generated.ts` 已并进去并删除（两份快照并存必然各自漂移）。**算法**一侧仍由 `audit-combat-parity` 锁（把真的 `GameHelper.combatCalc` 编译进 Node 当期望值，不是再抄一版口径）。三张等级表的键 = 来源数组下标，客户端等级从 1 起，**差一位**。包裹 `{code,message,data,timestamp}`，0 成功；`silent` 不弹全局提示。
-  - 生成物放 `server/src/shared/` 而不是顶层 `shared/`：服务端 `tsc` 单包编译（`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，连带 7 套 e2e、Dockerfile、deploy 一起改。
+  - 生成物放 `server/src/shared/` 而不是顶层 `shared/`：服务端 `tsc` 单包编译（`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，连带九套 e2e、Dockerfile、deploy 一起改。
   - **管理端**不复制：`admin/src/api/gameData.ts` 按相对路径 import 同一个生成物（Vite 打包；dev 模式要在
     `vite.config.ts` 里 `server.fs.allow: [".."]`），页面显示名字一律过它的查表函数（`equipmentText` /
     `skillText` / `itemText` / `mapText` / `soulText` / `titleText` / `rankText`…）。**性别名与职业码「全职业」
@@ -54,12 +54,12 @@
   - 守卫的三条「内容被抄」判据（#122）：①与生成物**同名**的字典定义；②短标签表（键数 ≤ 8、值全字符串）的
     键清单被写成数组字面量；③抄表的行文（`1 战士`）。**扫前必须剥注释**（注释里写反例是正常的，不剥就会
     逼着人把文档改丑）、**跳过带 `@generated` 的文件**（两端 `models.ts`/`ApiModels.ts` 镜像着 DTO 描述）。
-  - 不在范围：怪物 / 掉落（`configs/monster` 依赖 UI 模块，等世界权威 #35~#37）；时装（`configs/fashionClothes` 整份被注释，没有活的来源）。
+  - 不在范围：掉落（`configs/monsterDrops` 依赖 UI 模块，留后续）；时装（`configs/fashionClothes` 整份被注释，没有活的来源）。怪物战斗数值已进（#34）；怪物实例状态归世界权威 #35（不进生成物）。
   - **文档约定**：`N 张表` 这个句式归 SQLite 表数（守卫在查）；说生成物里的数据集写 **`N 张数据表`**，否则守卫误判。生成物的行数 / KB / 数据表数**没有守卫**（`audit-doc-numbers` 明说不查行数），改了生成器记得顺手改技能 4.0 节（#122 就撞见过一次 23→24 的过期）。
   - **跨端数值约定（#124，第三种破法「同一个数两端各写一份」）**：不再靠注释「两边要一起改」，改成**两层含义**——客户端 `roleSelectorLayout.rolePositions.length` = **界面容量/天花板**（站位有几个就能站几个）；服务端 `ROLE_MAX_PER_ACCOUNT` = **业务上限，只能往下降**（不得超容量）。两者不是同一件事，关系由 `audit-shared-data` 的机械判据锁：**编译布局取站位真值**（tsc + `cc` 垫片后 `require`，不数 `new Vec2(`）断言仓库两处默认值（`.env.example` + `configuration.ts` 兜底）≤ 容量，且禁止客户端再出现第二份上限数字。客户端 `maxRoleCount` 已删（`configs/role.ts` 只留指路注释）。**拒绝「服务端下发 + 站位动态化」的关键事实**：`rolePositions` 是手工调的不规则坐标，动态化=重做构图；且「可运维调」价值为空（调大也不放行，真放行第 4 个会因 `?? new Vec2()` 叠原点）。**守卫盲区写在明处**：部署那台 `server/.env` 不进仓库 → 守卫读不到，靠文档 + 客户端运行期 `console.warn` 兜底。
 - 权限两层守卫；**加管理端接口必须 `@ApiAdminDoc({permissions})`**（漏 = 真放行）；业务代码禁写角色判断。
 - 接口文件必须 `make gen-api` 生成（新模块登记 `MODULES`）；**别记死数字**：生成物 / 权限点 / 表数随时从 `openapi.json` 实测。
-- CI 不覆盖客户端（要编辑器产物）；10 套单测断言真实素材 → 客户端门禁是本地专属。
+- CI 不覆盖客户端（要编辑器产物）；29 套单测断言真实素材 → 客户端门禁是本地专属。
 - **e2e 里「轮询 + 精确值」的断言**：先算被观测状态能停多久，窗口 < 轮询间隔 = flake（本机恒绿/CI 偶红）。**但先问一句：我等的这个字段有几个写者**（#110）——`GET /admin/system` 的 `lastAttemptAt` 既被 `syncFromDisk()`（按磁盘回填）写、又被 `refresh()`（本轮结账）写，于是「备份文件一落盘」它就成立而这一轮还没记账（`lastOk` 仍是 null、体积还是半成品）。判据只能用**只由结账路径写的那个字段**（`lastOk`），且必须先拿到一个"已结账"的快照，后续判据才可靠。修法不一定是拉宽窗口：**#110 实测窗口与超时都够，坏的是判据**（CI 上第二轮稳定 +12.2s / 30s 窗口）。本地证伪＝把窗口**放大到必然可见**（造大库拖慢脚本，比 predicate 里塞 sleep 更贴近真机）。
 - 公告：`announcements` 表 → 免令牌 `GET /announcements/active` → 客户端登录页弹窗 + 公告板；已读进独立 `AnnouncementReadStore`（**不混进 StorageManager**，否则触发角色同步）。登录/选角场景没有 UILayer，弹窗挂调用方给的节点。
 - 排序白名单唯一来源 `server/src/database/sort-specs.ts`。
@@ -72,7 +72,15 @@
   - 合并前实测过：新生成物的 9 个战斗导出与旧 `battle-rules.generated.ts` **逐值相同**（`COMBAT_RANGE_KEYS`/`COMBAT_SINGLE_KEYS`/五张等级表/`EQUIPMENT_ATTRIBUTES`/`SKILLS`），所以删旧文件不影响 `audit-combat-parity`（2849 组输入 × 10 项比对仍全绿）。
 - 装备取舍 = **全量快照**：不让服务端现算 `round(基础值×前后缀倍率)`（那等于把进位口径复制出去）；`role.equipments` 存的本来就是展开后的物品 id。
 - 显示名与槽位归属也在生成器里算好（复用客户端 `getEquipmentNameParts` 与条目的 `slot`），消费方不做拼接。
-- 已进链路（#34，PR #162）：**怪物战斗数值** = `MONSTER_COMBAT`（220 只怪 maxHp + 攻防六项区间），configs/monster.ts 在 cc 垫片下能干净编译（#44 注记过时）。**技能已进**（#31）。**仍未进：掉落**（configs/monsterDrops 依赖 UI 模块度低但属 #35 范畴）。
+- 已进链路（#34，PR #162）：**怪物战斗数值** = `MONSTER_COMBAT`（220 只怪 maxHp + 攻防六项区间），configs/monster.ts 在 cc 垫片下能干净编译（#44 注记过时）。**技能已进**（#31）。**仍未进：掉落**。
+
+## 世界权威（#35，PR #164，master = dbe6696）
+- **边界**：服务端持有怪物实例（instanceId/mapId/monsterKey/出生点/hp/alive/respawnAt）；不持有游走移动（表现层）、掉落经验（独立 issue 后续）、刷怪区域（Tiled 素材不入库）。
+- **播种协议**：客户端进图发 `worldJoin`（mapId+spawnPlan），服务端**只在空图采纳**（plan 无身份，逐条补缺=假去重翻倍，踩过坑）；权威快照走 `world` 帧（viewersOf 广播，重生 onWorldChanged）。
+- **节奏**：TICK=1000 / PERSIST=5000（dirty 批量 upsert）/ RESPAWN=30000 / MAP_IDLE=600000；空闲回收重载时 `processRespawns` 补到期重生（**tick 与重载共用同一条纯函数**）。
+- **SQLite**：文件库 `busy_timeout=5000`；**Nest shutdown 跑完会再收一次 SIGTERM 以 signal 退出（exitCode null + signalCode SIGTERM）——设计行为**；instanceId=`m<mapId>_<n>` 从库 max(parseSeq) 续起跨重启稳定。
+- **#34 连锁**：删账号 targets 登记簿 → 结算目标查 WorldService.find()（共享跨账号）；targetsReset 只清幂等账，死怪不因清账复活。
+- **客户端**：applyWorldState 差量合并**不回写已存在节点血量**（settle 实时维护）、0 伤害不飘字、断线重连 resendWorldJoin；实时通道不可用回退本地生成。
 
 ## 线上部署（腾讯云 Ubuntu 24.04 + Docker CE；技能 `olua-deploy`）
 - **IP / SSH 私钥 / 邀请码 / JWT 密钥一律不进记忆、不进版本库**（用户 2026-10-11 定）：只放根目录 `deploy.env`（gitignore），仓库只提交模板 `deploy.env.example`。服务器上 `server/.env` 由它渲染（也被 `server/.gitignore` 排除）。
@@ -85,4 +93,4 @@
 
 ## 待办 → 全部登记为 GitHub issue（见 `#8~#24`）
 玩法缺口 = #11~#19；服务端 = #20 邮箱字段 / #21 审计与队列清理 / #22 自动备份；工程 = #8 官网上线 / #9 包体积 / #10 在线 demo / #23 `.DS_Store` / #24 CI 是否覆盖客户端。**用户已定保持现状**：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
-后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）→ #122 服务端码清单与文案（已做）→ #124 角色上限跨端数值（已做，PR #130）** —— **#117 这条线已收官**；服务端战斗权威：#25 / **#34 伤害结算上移（已做，PR #162）** → 下一刀 **#35 掉落与经验上移** → #36 怪打人上移 → #37 世界权威拆进程（最后）。#34 的取舍与坑见 2026-10-21 日志（castId 幂等 / 死亡保留登记 / skillDamageBand 合法带对账 / [combat-parity] 告警文案必须英文）。
+后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）→ #122 服务端码清单与文案（已做）→ #124 角色上限跨端数值（已做，PR #130）** —— **#117 这条线已收官**；服务端战斗权威：#25 / **#34 伤害结算上移（已做，PR #162）** → **#35 世界权威（已做，PR #164）** → 下一刀 **#36 内部边界治理** → #37 世界权威拆进程（最后）。#34/#35 的取舍与坑见 2026-10-21 日志（castId 幂等 / 死怪不因清账复活 / 播种只在空图采纳 / SIGTERM 双段退出 / [combat-parity] 告警文案必须英文）。
