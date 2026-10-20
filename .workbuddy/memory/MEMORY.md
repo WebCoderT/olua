@@ -4,6 +4,11 @@
 >
 > **技能与记忆都随仓库提交**（用户 2026-10-11 定）：技能在项目级 `.workbuddy/skills/`（22 个，仅 `github` 留用户级），记忆在 `.workbuddy/memory/`；`.gitignore` 用白名单只放开这两个目录，`backup/` 等临时产物仍忽略。改技能/记忆同样是**改动仓库文件**，要按提交纪律走 issue + PR。仓库是 PUBLIC，**写记忆时不得落入服务器 IP / 私钥 / 邀请码 / JWT 密钥实际值**。
 
+## 分支线（用户 2026-10-20 定）
+- **master = 横屏线**：回退到竖屏改造之前（`478e658`，#133 实时通道），设计分辨率 **1624×750**。横屏线不再含竖屏那批改动。
+- **portrait = 竖屏线**：**750×1624** + 按 `design/` 重排的登录/选角 + 单角色 + 本机账号（原 #135/#138/#141/#144/#146/#149 与它们的记忆提交都在这条线上）。竖屏相关的改动只进 `portrait`，不回 master。
+- 拆分记录 issue **#152**；本地标签 `pre-rollback-master` 指向拆分前的 master（`7e52900`），作为兜底快照。**两条线的差异约 63 个文件**（`git diff --stat master portrait`），合并两边改动前先跑一次这条命令看范围。
+
 ## 提交纪律（用户强制）
 - **所有代码提交都必须有对应的 issue / PR，必须有记录**（用户 2026-10-10 定）：master 上不允许存在没有 issue 追踪的提交。流程 = 开 issue → 开分支（`git checkout -b <type>/<n>-<slug>`）→ 提交（正文带 `Closes #n` / `Refs #n`）→ 推分支开 PR → CI 绿 → squash 合并。**任何直接落在 master 上的提交都算违规**（文档 typo 也不例外，走 docs PR）。
 - **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 26 单测 / 服务端七套 e2e / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
