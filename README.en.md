@@ -77,7 +77,7 @@ The project currently covers:
 - Asset preloading: preloads the map, NPC / monster frame animations and the worn appearance before entering a map
 - Joystick: a persistent joystick at the bottom left (base + draggable handle); hold and drag to move — **drag a little to walk, drag far to run** (dead zone / thresholds in `configs/role.joystickMove`); touch channel only, desktop mouse hold-and-drag works too, presses on the joystick do not fall through, and releasing never clears the selected target by accident
 - Screen adaptation: fills the window (NO_BORDER) with no black bars, persistent HUD re-docked to the edges of the visible area; the character selection stage scales as one block (contain), so elements never leave the screen even when the window aspect ratio differs from the design resolution
-- Server: account registration and login (scrypt salted digest), character data saved to the cloud (debounced merged pushes), revision-number optimistic locking, two token audiences, permission-point guards, login throttling, password reset and proactive token revocation, operator audit logs, announcement publishing with server-wide delivery, mail channel (templates + delivery queue + failure retry), realtime channel (a one-shot ticket exchanges for a WebSocket connection, heartbeat and liveness probing, one connection per account)
+- Server: account registration and login (scrypt salted digest), character data saved to the cloud (debounced merged pushes), revision-number optimistic locking, two token audiences, permission-point guards, login throttling, password reset and proactive token revocation, operator audit logs, announcement publishing with server-wide delivery, mail channel (templates + delivery queue + failure retry), realtime channel (a one-shot ticket exchanges for a WebSocket connection, heartbeat and liveness probing, one connection per account), **server-side damage settlement** (the server computes monster-damage from the shared snapshot values, castId idempotency, death determination — the client only plays the presentation)
 - Admin: account and character management (six-dimension filtering / structured editing / batch delete), administrators and permissions, audit log queries, my account; the character detail page shows equipment / skills / items / maps / War Soul, Title and Rank as **names** (taken from the game data all three sides share — the admin keeps no copy of its own)
 - **There is one copy of the game data**: equipment / War Soul / Title / Rank / skills / items / maps are all defined in the client's `client/assets/configs`, which `tools/gen-shared-data.cjs` snapshots into `server/src/shared/game-data.generated.ts` — the server and the admin read **the same file** (`tools/audit-shared-data.cjs` keeps it byte-identical to the client's configs, asserts every table is present and non-empty, and rejects any second copy: a same-named table, a hand-written code list, or a copied-over Chinese name). Even the server's `occupation / sex` code lists and the `1 <name> / 2 <name> / …` list line in the API docs are **computed** from that data, so adding an occupation code on the client updates all three sides automatically.
 
@@ -97,10 +97,10 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 
 ### The traces this way of working left in the repo
 
-- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 28 unit-test suites under `client/tools/` and 9 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world — all of it is watched by scripts.
+- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 29 unit-test suites under `client/tools/` and 9 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 87 assertions) + typechecks on two sides + 28 unit-test suites + 9 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 23 + 87 assertions) + typechecks on two sides + 29 unit-test suites + 9 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -194,7 +194,7 @@ olua/
     - hand-written: `HttpClient` wrapper and shared dispatch / `ApiCodes` business codes and text keys / `ApiError` error normalisation / `Session` / `RoleSync` progress sync / `NetworkSetup` wiring
 - assets/resources: assets (map tmx, frame animations, atlases, icons, UI assets)
 - assets/scenes: login, character selection, loading and game scenes
-- tools: **client-only scripts** (28 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
+- tools: **client-only scripts** (29 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
 - settings / profiles / native / package.json / tsconfig.json: Cocos project configuration (`package.json` describes the Cocos project, not npm scripts)
 - library / temp / build: Cocos cache and build output (not version-controlled)
 - Details in [client/README.md](client/README.en.md), questions in [client/FAQ.md](client/FAQ.en.md)
@@ -231,7 +231,7 @@ olua/
 ### tools — project-level scripts (cross-side)
 
 - gen-api.cjs: **produces both consumers' API files from `server/openapi.json`** (the only code generator; called by the server's `npm run gen:api`)
-- gen-shared-data.cjs: **produces the game data shared by all three sides from `client/assets/configs`** (`server/src/shared/game-data.generated.ts` — the admin imports the *same file*) — combat numbers (levels 60 / War Soul 37 / Title 34 / Rank 100 + 7 combat-power weights + 555 equipment pieces with prefix/suffix variants already expanded + 12 skills with per-level damage coefficients) **plus** names and metadata (3 occupations / 566 items / 13 slots / 555 equipment display names / 12 skill names / 11 map names / every War Soul, Title and Rank tier name). To change a number or a label, edit the client config and regenerate — there is **no** second copy on any side
+- gen-shared-data.cjs: **produces the game data shared by all three sides from `client/assets/configs`** (`server/src/shared/game-data.generated.ts` — the admin imports the *same file*) — combat numbers (levels 60 / War Soul 37 / Title 34 / Rank 100 + 7 combat-power weights + 555 equipment pieces with prefix/suffix variants already expanded + 12 skills with per-level damage coefficients + **220 monsters' maxHp and the six attack/defense ranges**) **plus** names and metadata (3 occupations / 566 items / 13 slots / 555 equipment display names / 12 skill names / 11 map names / every War Soul, Title and Rank tier name). To change a number or a label, edit the client config and regenerate — there is **no** second copy on any side
 - audit-api-generated.cjs: generated artifacts byte-identical to the docs / header markers / full endpoint coverage / no dangling types / paths only in the path table / Cocos `.meta` files complete
 - audit-api-hardcode.cjs: no hard-coded addresses on any side, requests leaving only through the single exit, every environment variable key registered in `.env.example`
 - audit-config-leak.cjs: no tunables leaking into client core code, and every key in `configs/texts` registered (allowlist `config-leak-allowlist.json`)
@@ -268,14 +268,14 @@ make env            # generate server/.env (skipped if it already exists)
 make dev            # start server :3100 and admin :5173 together; Ctrl-C exits both
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
-make client-test    # client's 28 unit-test suites
-make server-verify  # verify the server with one command (compile + seven e2e suites + generated-artifact audit)
+make client-test    # client's 29 unit-test suites
+make server-verify  # verify the server with one command (compile + eight e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 9 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 9 audits
-make test           # all tests: client's 28 suites + server's seven e2e suites
+make test           # all tests: client's 29 suites + server's eight e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -301,7 +301,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + seven e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + eight e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -378,10 +378,10 @@ make verify   # = check + builds on all three sides + all tests
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 28 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
+# Client: 29 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + seven e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 87) + generated-artifact consistency
+# Server: compile + eight e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 23 / 87) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build
@@ -486,6 +486,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | Auto-battle | Quick-attack / grinding toggles, obstacle-avoiding A* pathfinding, retargeting when stuck |  ✅  |
 | Route indicator line | While pathfinding, both the big-map ground and the minimap draw a dotted white route with a big white ring at the destination |  ✅  |
 | Status Buff | Statuses attached by skills, looping effects on the body, icon countdown |  ✅  |
+| Server-side damage settlement | Monster damage is **computed by the server from the shared snapshot values** (castId idempotency prevents double settlement, death is decided by the server); the client cross-checks against the "legal band" and logs a `[combat-parity]` warning on outliers; falls back to the same local formula automatically when the realtime channel is unavailable |  ✅  |
 | Dash skill (Ten Steps One Kill) | Teleport to the mouse position: inside the range it lands exactly there, outside it lands at the farthest point the skill's distance allows, with a landing effect |  ✅  |
 | Status numbers in damage | Numerical effects like block / damage reduction / defence bonus taking part in settlement |  ❌  |
 | Monster skills | Monsters casting configured skills (currently only basic attacks) |  ❌  |

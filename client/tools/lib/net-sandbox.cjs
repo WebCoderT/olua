@@ -2,7 +2,7 @@
 /**
  * 客户端网络层单测的沙箱（client/tools/test-client-net.cjs 用它）
  *
- * 跑的是**真实**请求层：assets/ui/utils/net/{ApiRoutes,ApiError,Session,HttpClient,Api,RoleSync,RealtimeClient}.ts
+ * 跑的是**真实**请求层：assets/ui/utils/net/{ApiRoutes,ApiError,Session,HttpClient,Api,RoleSync,RealtimeClient,CombatChannel}.ts
  * 与 configs/{network,texts}.ts、types/common.ts 一起复制进沙箱编译，只换掉两个与游戏世界的耦合点：
  *
  * 1. `entities/Role`（在 RoleSync 里只当类型用）→ 空壳 stub，
@@ -39,6 +39,7 @@ const FILES = [
   "ui/utils/net/Api.ts",
   "ui/utils/net/RoleSync.ts",
   "ui/utils/net/RealtimeClient.ts",
+  "ui/utils/net/CombatChannel.ts",
 ];
 
 /** 真实 import → 沙箱内的替身模块（键相对 ui/utils/net/） */
@@ -179,6 +180,8 @@ function prepareNet(sandboxName) {
     RoleSync: pick(load("ui/utils/net/RoleSync.js")),
     /** 实时通道客户端（真跑：取票据 / 建连 / 心跳 / 重连退避；WebSocket 由测试注入） */
     RealtimeClient: pick(load("ui/utils/net/RealtimeClient.js")),
+    /** 战斗结算通道（#34：cast 出手 / settle 回帧，settle 帧由 RealtimeClient 转发进来） */
+    CombatChannel: pick(load("ui/utils/net/CombatChannel.js")),
     /** 实时通道的状态枚举与地址拼装（地址由 configs/network.baseUrl 推导，测试逐种形态断言） */
     RealtimeStatus: load("ui/utils/net/RealtimeClient.js").RealtimeStatus,
     buildRealtimeUrl: load("ui/utils/net/RealtimeClient.js").buildRealtimeUrl,

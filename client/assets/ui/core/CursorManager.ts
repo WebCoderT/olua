@@ -83,7 +83,7 @@ export default class CursorManager {
   }
 
   /**
-   * 取当前鼠标屏幕坐标（技能按鼠标悬停位置定向用，如 skills/zhan 的十步一杀）
+   * 取当前鼠标屏幕坐标（技能按鼠标悬停位置定向用，如 skills/warrior 的十步一杀）
    * 未收到过鼠标移动（开局没动鼠标）或触屏环境返回 null，调用方自行放弃本次定向
    */
   static getMouseScreenPoint(): Vec2 | null {

@@ -56,7 +56,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 七套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 八套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -158,6 +158,7 @@ server/
 │   ├── e2e-mail.cjs                120 条（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
 │   ├── e2e-account-email.cjs       28 条（邮箱可见性 / 补录去重 / 发信按账号兜底）
 │   ├── e2e-realtime.cjs            50 条（票据换连接 / 握手拒连 / 心跳与顶连接 / 优雅关闭）
+│   ├── e2e-combat.cjs              23 条（伤害结算上移：服务端算伤 / 幂等重发 / 死亡判定 / 换图断线清账）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -296,7 +297,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-七套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -306,10 +307,11 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-mail.cjs` | **120** | 邮件通道：入队即返回 / 后台投递到已发送 / **指数退避重试与用尽上限后标失败**（原因可查）/ 手动重投把次数归零 / 未配置 SMTP 时整体禁用 / 密钥只报形态 / 模板必填变量缺失即拒发。用**可注入的假发信器**（`MAIL_TRANSPORT=fake|fail`），不需要真实 SMTP |
 | `test/e2e-account-email.cjs` | **28** | 玩家邮箱字段：只读观察员看不到也改不了 / 补录·查看·清空 / 格式校验与同邮去重（大小写不敏感）/ 发信按关联账号邮箱兜底 / 契约权限点标注 |
 | `test/e2e-realtime.cjs` | **50** | 实时通道：票据一次性（换完即焚 / 过期 / 伪造 / 串号都拒）/ **握手被拒时回答的是一个 HTTP 401 包裹体而不是「先建连再关」** / 应用层 ping→pong / 一账号一条连接（新连接顶掉旧的，关闭码 `4000`）/ 协议层存活探测 / SIGTERM 时连接收到 `1001` 且进程立刻退出 |
+| `test/e2e-combat.cjs` | **23** | 伤害结算上移：非法出手全被拒（bad_request / unknown_skill / unknown_target / skill_not_learned）/ **伤害由服务端按快照数值算出**（落点在公式带内、血量算术自洽）/ 同 castId 幂等重发（duplicate、不重掷、不多扣血）/ 死亡由服务端判（killed 恰好一次、之后 target_dead）/ 换图与断线清账 |
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 
 ```bash
-cd server && npm run verify          # 编译 + 七套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 八套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

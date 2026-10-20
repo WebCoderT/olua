@@ -1,5 +1,5 @@
 import { SkillConfig, SkillContext, SkillId } from "../types/skill";
-import { skill_1000, skill_1001, skill_1008, skill_1010 } from "../skills/zhan";
+import { skill_1000, skill_1001, skill_1008, skill_1010 } from "../skills/warrior";
 import { skillData } from "./skill-data";
 
 // 数值数据与文案表原样再导出（消费方照旧 from "../configs/skill"，零改动；#31 只拆文件不动接口）

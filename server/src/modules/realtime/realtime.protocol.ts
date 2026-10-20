@@ -2,15 +2,16 @@
  * 实时通道：协议与常量（**唯一来源**）
  *
  * 这一层刻意做得极薄 —— 它要解决的是「有一条随时能说话的管子」，不是「说话的内容」。
- * 因此协议只有三件事：
+ * 协议由三段组成：
  *
- * 1. 连上先给一句 `welcome`（带上账号与心跳间隔，客户端据此配自己的定时器，
- *    而不是把间隔写死在客户端）；
- * 2. 客户端发 `ping`，服务端回 `pong` —— **应用层**心跳。浏览器拿不到协议层的 ping/pong 帧
- *    （那是 `ws` 自己处理的），客户端要量往返、要判断「多久没响应算掉线」，只能靠自己发；
+ * 1. 通道本身：连上先给一句 `welcome`（带上账号与心跳间隔，客户端据此配自己的定时器，
+ *    而不是把间隔写死在客户端）；客户端发 `ping`，服务端回 `pong` —— **应用层**心跳。
+ *    浏览器拿不到协议层的 ping/pong 帧（那是 `ws` 自己处理的），客户端要量往返、
+ *    要判断「多久没响应算掉线」，只能靠自己发；
+ * 2. 战斗指令（#34）：客户端发 `cast`（我放了什么技能、打向谁），服务端按**自己的属性表**
+ *    算出结算结果回 `settle` —— 客户端从此只是表现层，不再自己决定伤害；
+ *    `targetsReset` 在换图时清空服务端记着的目标（换图后旧目标不该再结算）；
  * 3. 其余一律回 `error` 帧，**不断开连接** —— 一条不认识的消息不该让玩家的通道断掉。
- *
- * 业务消息（战斗指令 / 结算结果等）在这条通道上跑，但协议**不在这里**，见 #34。
  */
 
 /** 实时通道的路径段；HTTP 的取票据接口与 WS 的升级路径共用它（写在一处就不会两边对不上） */
@@ -67,8 +68,79 @@ export interface RealtimeErrorMessage {
   };
 }
 
+//#region 战斗指令（#34：伤害结算上移服务端）
+
+/** 客户端 → 服务端：出手（我放了什么技能、打向谁） */
+export interface RealtimeCastMessage {
+  type: "cast";
+  data: {
+    /**
+     * 出手序号（**幂等键**）：同一次会话内单调递增。
+     * 网络层重传 / 客户端重复投递同一序号时，服务端不重复结算，原样回上一次的结果。
+     */
+    castId: number;
+    /** 技能 id（configs/skill，如 "1000" 基础剑术） */
+    skillId: string;
+    /**
+     * 目标实例 id：客户端给场上每只怪生成的**会话内唯一**标识（世界权威前，怪还在客户端刷，
+     * 实例身份只能它给；怪物的**数值**一律来自服务端的 MONSTER_COMBAT，不信任客户端）
+     */
+    targetId: string;
+    /** 目标怪物 key（configs/monster 的关联键，如 "1"；服务端据此查战斗数值表） */
+    monsterKey: string;
+  };
+}
+
+/** 客户端 → 服务端：本账号记着的目标全部作废（换图时发；旧图的目标不该再结算） */
+export interface RealtimeTargetsResetMessage {
+  type: "targetsReset";
+}
+
+/** 结算结果（ok = 服务端真的算了一次） */
+export interface RealtimeSettleOk {
+  castId: number;
+  ok: true;
+  skillId: string;
+  targetId: string;
+  /** 本次伤害（服务端按自己的属性表算出，overkill 不截断 —— 血量才截断） */
+  damage: number;
+  /** 结算后目标剩余血量（0 = 死亡） */
+  hp: number;
+  maxHp: number;
+  /** 目标是否死亡（由服务端判，客户端据此走死亡表现与掉落） */
+  killed: boolean;
+  /** true = 同一 castId 的重复投递，结果原样重发、未重复结算 */
+  duplicate: boolean;
+}
+
+/** 结算被拒（ok = false；网络层连接不受影响） */
+export interface RealtimeSettleError {
+  castId: number;
+  ok: false;
+  /** 机器可读的拒绝原因（unknown_skill / skill_not_learned / unknown_target / target_dead / no_role / bad_request …） */
+  code: string;
+  message: string;
+}
+
+export type RealtimeSettleData = RealtimeSettleOk | RealtimeSettleError;
+
+/** 服务端 → 客户端：一次出手的结算结果 */
+export interface RealtimeSettleMessage {
+  type: "settle";
+  data: RealtimeSettleData;
+}
+
+//#endregion
+
+/** 客户端会发出的全部消息 */
+export type RealtimeClientMessage = RealtimePingMessage | RealtimeCastMessage | RealtimeTargetsResetMessage;
+
 /** 服务端会发出的全部消息 */
-export type RealtimeServerMessage = RealtimeWelcomeMessage | RealtimePongMessage | RealtimeErrorMessage;
+export type RealtimeServerMessage =
+  | RealtimeWelcomeMessage
+  | RealtimePongMessage
+  | RealtimeErrorMessage
+  | RealtimeSettleMessage;
 
 /**
  * 关闭码

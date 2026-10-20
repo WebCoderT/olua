@@ -1,7 +1,10 @@
 import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
 import { monsters } from "../../configs/monster";
+import { skills } from "../../configs/skill";
 import { getKillExp } from "../../configs/level";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
+import { SkillId } from "../../types/skill";
+import { skillDamageBand } from "../utils/battle/BattleMath";
 import { cursorConfig } from "../../configs/cursor";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
@@ -11,6 +14,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
+import CombatChannel from "../utils/net/CombatChannel";
 
 /**
  * 怪物管理器（静态类）
@@ -19,10 +23,20 @@ import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
  * 怪物只在开图时按地图的刷怪区域生成一次，之后不做刷新/补充（数量策略待重新设计）
  * 怪物的行为与动画（待机游走/追击玩家/普攻/被击退）由 MonsterAI 每帧驱动，本类只管数据与生命周期
  * 所有怪物节点一律挂载到 LayerManager 怪物层（Layer.MONSTER）
+ *
+ * 伤害结算（#34）：玩家打怪的伤害由服务端算（见 utils/net/CombatChannel），本类的
+ * applyServerSettle 是结果的落点 —— 扣多少血、死没死都以服务端说的为准，本地只做表现
+ * 与合法带对账；实时通道不可用时技能实现会退回 hurt()（本地口径，回滚路径）。
  */
 export default class MonsterManager {
   /** 已生成怪物：怪物节点 -> 怪物运行时数据 */
   private static monsterMap = new Map<Node, Monster>();
+
+  /** 实例 id -> 怪物节点（服务端结算按 targetId 找落点；换图清场时一起清） */
+  private static instanceIndex = new Map<string, Node>();
+
+  /** 实例 id 发牌器（会话内单调递增；怪物的身份由客户端发，数值由服务端算） */
+  private static instanceSeq = 0;
 
   /** 场上怪物（节点 -> 怪物数据），供 MonsterAI 每帧遍历 */
   static getMonsterMap() {
@@ -36,7 +50,10 @@ export default class MonsterManager {
       if (isValid(node)) node.destroy();
     });
     this.monsterMap.clear();
+    this.instanceIndex.clear();
     LayerManager.clearMonsterLayer();
+    // 旧图的目标在服务端那边也一并作废（#34：结算上下文不能跨图延续）
+    CombatChannel.resetTargets();
   }
 
   /** 生成一只怪物（按配置初始化数据与节点，挂载到怪物层） */
@@ -46,14 +63,16 @@ export default class MonsterManager {
       console.warn(`[MonsterManager] 怪物配置不存在：${monsterId}`);
       return;
     }
-    // 数据：由配置派生运行时数据（满血）
-    const monster: Monster = { ...monsterConfig, id: monsterId, hp: monsterConfig.maxHp };
+    // 数据：由配置派生运行时数据（满血）；实例 id 现场发牌（会话内唯一）
+    this.instanceSeq += 1;
+    const monster: Monster = { ...monsterConfig, id: monsterId, hp: monsterConfig.maxHp, instanceId: `mon_${this.instanceSeq}` };
     // 节点：创建并挂载到怪物层
     const monsterNode = this.createMonsterNode(monster);
     LayerManager.addToMonsterLayer(monsterNode);
     monsterNode.setWorldPosition(position);
-    // 数据与节点建立映射
+    // 数据与节点建立映射（实例索引给服务端结算找落点用）
     this.monsterMap.set(monsterNode, monster);
+    this.instanceIndex.set(monster.instanceId, monsterNode);
     // 鼠标移到怪物身上时显示攻击指针（死亡/换图时注销，见 hurt / reset）
     CursorManager.registerHover(monsterNode, cursorConfig.priority.monster, cursorConfig.attack);
   }
@@ -163,15 +182,54 @@ export default class MonsterManager {
     MonsterAI.push(target, direction, distance, duration);
   }
 
-  /** 对目标怪物结算一次伤害（特效层显示受伤飘字，刷新血条，死亡结算掉落并移除） */
+  /** 对目标怪物结算一次伤害（**本地口径**，实时通道不可用时的回滚路径） */
   static hurt(target: Node, damage: number) {
     const monster = this.getMonsterData(target);
     if (!monster || monster.hp <= 0) return;
+    this.applyDamage(target, monster, damage, Math.max(0, monster.hp - damage));
+  }
+
+  /**
+   * 服务端结算结果的落点（#34：伤害由服务端算，这里只把它演出来）
+   *
+   * 扣多少血、死没死都以结算帧为准（overkill 不截断伤害数字，血量才截断）；
+   * 同时做一次**合法带对账**：服务端伤害越出客户端口径允许的区间，
+   * 以 `combat-parity` 标签记到 console —— 在删掉客户端旧算法之前，这就是发现口径漂移的地方。
+   */
+  static applyServerSettle(data: { skillId: string; targetId: string; damage: number; hp: number; killed: boolean }) {
+    const node = this.instanceIndex.get(data.targetId);
+    const monster = node ? this.monsterMap.get(node) : null;
+    if (!node || !monster) return; // 换图后到达的迟到结算：目标已不在场，这次出手当作打空
+    if (monster.hp <= 0) return; // 本地已经死了（比如本地口径先判到），不再重复演
+    // 双跑对账：伤害带由「本地角色属性 × 技能倍率 − 本地怪物配置」推出
+    const role = StorageManager.findOnlineRole();
+    const skillId = data.skillId as SkillId;
+    const config = skills.get(skillId);
+    const skillLevel = role ? role.skills[skillId] : 0;
+    if (role && config && skillLevel) {
+      const rate = config.damageCoefficients[skillLevel - 1]?.baseTypeRate ?? 0;
+      const [low, high] = skillDamageBand(role, monster, "physicalAttack", rate);
+      if (data.damage < low || data.damage > high) {
+        console.warn(
+          `[combat-parity] server damage out of band: skill ${data.skillId} target ${data.targetId}(${monster.id}) ` +
+            `server=${data.damage} band=[${low}, ${high}] (attribute tables or formula drifted; check MONSTER_COMBAT / role attributes)`,
+        );
+      }
+    }
+    this.applyDamage(node, monster, data.damage, data.hp, data.killed);
+  }
+
+  /**
+   * 把一次伤害落到目标身上（表现与死亡流程的唯一去处，本地口径与服务端结算共用）
+   * @param hp 落完后的血量（本地口径传「扣完的值」；服务端结算直接用服务端给的值）
+   * @param killed 是否死亡（缺省按 hp <= 0 判 —— 本地口径；服务端结算以服务端判定为准）
+   */
+  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean) {
     // 受伤飘字（需在死亡销毁节点前显示）
     GameUiHelper.showDamageText(target, damage);
-    monster.hp = Math.max(0, monster.hp - damage);
+    monster.hp = Math.max(0, hp);
     this.updateHead(target, monster);
-    if (monster.hp > 0) {
+    if (monster.hp > 0 && !killed) {
       // 存活即激怒：被动攻击的怪物被打后记恨攻击者，之后在检测范围内与主动怪一样追击普攻
       // （怪物伤害来源当前只有玩家，攻击者即玩家；主动怪此调用无副作用）
       MonsterAI.provoke(target);
@@ -185,6 +243,7 @@ export default class MonsterManager {
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
     DropManager.drop(monster.drops, target.getWorldPosition(), monster.dropPicks);
     this.monsterMap.delete(target);
+    this.instanceIndex.delete(monster.instanceId);
     CursorManager.unregisterHover(target);
     // 头顶血条隐藏（死亡后血量已无意义，留着会一直显示 0 / maxHp）
     const head = target.getChildByName("monster_head");

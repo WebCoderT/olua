@@ -1,7 +1,7 @@
 /**
  * 技能数值数据表（#31 从 configs/skill 拆出）
  *
- * 定位：**纯数据模块** —— 只放数值 / 文案 / 映射，零引擎 import（不 import skills/zhan，
+ * 定位：**纯数据模块** —— 只放数值 / 文案 / 映射，零引擎 import（不 import skills/warrior，
  * 也不 import 任何 ui/ 运行时），可被 Node 沙箱直接 require 跑断言（见 client/tools/test-skill-decouple.cjs）。
  * 释放实现不在这里：configs/skill.ts 的 skillHandlers 按 id 接上，合成消费方要的 skills Map。
  */

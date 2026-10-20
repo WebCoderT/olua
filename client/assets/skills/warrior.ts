@@ -5,7 +5,9 @@ import AutoBattle from "../ui/core/AutoBattle";
 import CursorManager from "../ui/core/CursorManager";
 import EffectManager from "../ui/core/EffectManager";
 import LayerManager from "../ui/core/LayerManager";
+import MonsterManager from "../ui/core/MonsterManager";
 import StatusManager from "../ui/core/StatusManager";
+import CombatChannel from "../ui/utils/net/CombatChannel";
 import { calcSkillDamage, getDirectionByVector, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
 import { HAS_MOUSE } from "../ui/utils/input/Pointer";
 
@@ -13,14 +15,20 @@ import { HAS_MOUSE } from "../ui/utils/input/Pointer";
 export function skill_1000(context: SkillContext) {
   const { config, level, role, caster, target, monsters } = context;
   if (!target) return;
-  // 面向目标播放技能配置的动作动画（config.action）
+  // 面向目标播放技能配置的动作动画（config.action）——表现立刻走，不等服务端的往返
   caster.playSkillAttack(config.action, getDirectionToTarget(target, caster));
-  // 物理伤害结算
   const monster = monsters.getMonsterData(target);
   if (!monster) return;
   const rate = config.damageCoefficients[level - 1].baseTypeRate;
+  // 伤害结算上移服务端（#34）：出手打上去，扣血/飘字/死亡等 settle 帧回来后演
+  // （MonsterManager.applyServerSettle 是结果的落点；实时通道不可用时退回本地口径）
+  if (CombatChannel.active) {
+    CombatChannel.sendCast(config.id, monster.instanceId, monster.id);
+    return;
+  }
+  // 本地结算（回滚路径：与上移前同一套公式，关掉开关就回到纯客户端）
   const damage = calcSkillDamage(role, monster, "physicalAttack", rate);
-  monsters.hurt(target, damage);
+  MonsterManager.hurt(target, damage);
 }
 
 /** 烈火剑法：对单体目标造成一次强化物理伤害 */
