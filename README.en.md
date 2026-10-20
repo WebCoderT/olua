@@ -28,6 +28,20 @@ admin (React)    ─┘      ↑ the only hand-written place for APIs
                          └─ swagger:emit → openapi.json → gen-api → generated API files on both consumers
 ```
 
+## Branches: master (landscape) / portrait (portrait)
+
+The repository keeps two long-lived branches — **two screen versions of one codebase**, not old vs new, so never merge them into each other:
+
+| Branch | Design resolution | What it is |
+| --- | --- | --- |
+| `master` | 1624×750 | Main branch: the state right before the portrait conversion; later work continues here |
+| `portrait` | 750×1624 | The portrait version: login and character selection re-laid-out from the `design/` mockups, one character per account, a device-generated account with automatic login; it holds the whole portrait batch and no longer follows master |
+
+- **Switching versions means switching branches**: `git checkout portrait` for portrait, `git checkout master` for landscape;
+- **Scope of the difference**: `git diff --stat master portrait` — changes concentrate in `client/`, and on the server it is only the character cap;
+- **Assets do not follow the branch**: `client/assets/resources/` (the art package) and `design/` (the mockups) are not in the repository, so both branches share the same local copy. On the portrait line, `client/tools/gen-ui-assets.py` **overwrites in place** `login/login_bg.png` and `create_role/bg.png` (the main artwork becomes a frosted silhouette, with no backup taken), so after switching back to landscape those two must be restored from the originals — otherwise what you see is the portrait patch, not the landscape look;
+- **On a fresh clone**, put the assets in place as described in [Quick start](#quick-start) first, then either branch can run.
+
 ## Project overview
 
 The project currently covers:

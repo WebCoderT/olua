@@ -28,6 +28,20 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
                           └─ swagger:emit → openapi.json → gen-api → 两端接口文件
 ```
 
+## 分支：master 横屏 / portrait 竖屏
+
+仓库有两条长期分支，是**同一套代码的两种屏幕版本**（不是新旧关系，也别互相合并）：
+
+| 分支 | 设计分辨率 | 是什么 |
+| --- | --- | --- |
+| `master` | 1624×750 | 主分支：竖屏改造之前的状态，之后的改动都从这条线走 |
+| `portrait` | 750×1624 | 竖屏版本：按 `design/` 设计稿重排的登录与选角、每账号单角色、本机账号自动登录；竖屏那批提交都在这里，不再跟进 master |
+
+- **切版本就是切分支**：`git checkout portrait` 看竖屏，`git checkout master` 看横屏；
+- **差异范围**：`git diff --stat master portrait` —— 改动集中在 `client/`，服务端只有角色上限那一处；
+- **素材不跟着分支走**：`client/assets/resources/`（美术包）与 `design/`（设计稿）都不进版本库，两条分支共用本机同一份。竖屏线的 `client/tools/gen-ui-assets.py` 会**原地改写** `login/login_bg.png` 与 `create_role/bg.png`（主视觉做成毛玻璃，脚本没留备份），所以从竖屏切回横屏时这两张要还原原图 —— 否则看到的是竖屏那版的修补效果，不是横屏的样子；
+- **新克隆的仓库**先按 [快速开始](#快速开始) 放好素材，两条分支才都跑得起来。
+
 ## 项目简介
 
 这个项目目前包含以下几部分：
