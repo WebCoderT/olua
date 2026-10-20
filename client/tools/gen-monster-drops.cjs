@@ -75,6 +75,9 @@ function drugMaterialEntries(level) {
   const rows = [
     [`{ goodId: "${hpDrug}", weight: 30, count: [1, 2] },`, "药品：" + (level <= 20 ? "小" : level <= 40 ? "中" : "大") + "红"],
     [`{ goodId: "${mpDrug}", weight: 18, count: [1, 2] },`, "药品：" + (level <= 20 ? "小" : "中") + "蓝"],
+    // 强效血/蓝药按 maxHp/maxMp 百分比回复，任何等级段都等价好用 → 不分档，所有怪物都可掉落
+    [`{ goodId: "drug_hp_pct", weight: 8, count: [1, 1] },`, "药品：强效血药（全等级）"],
+    [`{ goodId: "drug_mp_pct", weight: 8, count: [1, 1] },`, "药品：强效蓝药（全等级）"],
     [`{ goodId: "material_hide", weight: 10, count: [1, 2] },`, "材料：兽皮"],
     [`{ goodId: "material_cloth", weight: 8, count: [1, 2] },`, "材料：粗布"],
     [`{ goodId: "material_herb", weight: 8, count: [1, 2] },`, "材料：药草"],
@@ -115,7 +118,8 @@ lines.push(" * - 这里的每一条都是显式数据，改某只怪掉什么、
 lines.push(" *");
 lines.push(" * 条目构成（按怪物等级 / 定位自动铺好，可手改）：");
 lines.push(" * 1. 药品 / 材料：按等级分档（≤20 小药、21~40 中药、41+ 大药；铁矿 10 级起、宝石 21 级起），");
-lines.push(" *    红 30 / 蓝 18 / 兽皮 10 / 粗布 8 / 药草 8 / 铁矿 6 / 太阳水 4 / 宝石 4");
+lines.push(" *    强效血/蓝药（百分比回复）不分档，**所有怪物**都可掉落；");
+lines.push(" *    红 30 / 蓝 18 / 强效红 8 / 强效蓝 8 / 兽皮 10 / 粗布 8 / 药草 8 / 铁矿 6 / 太阳水 4 / 宝石 4");
 lines.push(" * 2. 装备：取「本怪等级可及」的部位档位（level ≤ 怪物等级且不超过 10 级，每部位最多 2 档），");
 lines.push(" *    每件基础装备展开全部 15 个前后缀变体（5 前缀 × 3 后缀），**变体 id = 基础 id + _p前缀s后缀**，");
 lines.push(" *    普通的·人级沿用基础 id；权重按稀有度衰减：");

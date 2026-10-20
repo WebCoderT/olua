@@ -1,4 +1,4 @@
-import { BagCell, BagCellPos, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
+import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
 import { belts, clothes, equipmentSlotOrder, getRecyclePrice, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { materials } from "./material";
@@ -34,6 +34,29 @@ belts.forEach((good, id) => registerItem(id, good));
 registerItems(drugs, "drug");
 // 材料
 registerItems(materials, "material");
+
+/**
+ * 按药品效果与角色资源上限计算一次使用的回复量（**纯函数**，给 useDrug 与单测共用）
+ *
+ * 固定值（hp/mp）与百分比（hpPercent/mpPercent，50 = 50%）各自累加后合成：
+ * · 血量分量 = Σhp + ΣhpPercent ÷ 100 × maxHp
+ * · 魔法分量 = Σmp + ΣmpPercent ÷ 100 × maxMp
+ * 返回的是「未封顶」的期望回复量，够不满的资源回满即可，调用方负责 Math.min 封顶；
+ * 负值与缺省一律按 0 处理（配置写错不会倒扣血蓝）
+ */
+export function resolveDrugRecovery(
+  effects: DrugEffect[],
+  maxHp: number,
+  maxMp: number,
+): { hp: number; mp: number } {
+  let hp = 0;
+  let mp = 0;
+  effects.forEach((effect) => {
+    hp += Math.max(0, effect.hp ?? 0) + (Math.max(0, effect.hpPercent ?? 0) / 100) * Math.max(0, maxHp);
+    mp += Math.max(0, effect.mp ?? 0) + (Math.max(0, effect.mpPercent ?? 0) / 100) * Math.max(0, maxMp);
+  });
+  return { hp: Math.round(hp), mp: Math.round(mp) };
+}
 
 /** 按 id 获取物品（返回副本，避免运行时数量等数据污染配置表；无此物品返回 null） */
 export function getItem(id: string): Goods | null {

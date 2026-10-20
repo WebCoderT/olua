@@ -35,6 +35,8 @@ const dropData: Array<DropTable & { id: string }> = [
     entries: [
       { goodId: "drug_hp_1", weight: 30, count: [1, 3] },
       { goodId: "drug_mp_1", weight: 20, count: [1, 2] },
+      { goodId: "drug_hp_pct", weight: 8, count: [1, 1] },
+      { goodId: "drug_mp_pct", weight: 8, count: [1, 1] },
       { goodId: "material_hide", weight: 20, count: [1, 2] },
       { goodId: "material_cloth", weight: 15, count: [1, 2] },
       { goodId: "material_herb", weight: 10, count: [1, 2] },
@@ -49,6 +51,8 @@ const dropData: Array<DropTable & { id: string }> = [
     entries: [
       { goodId: "drug_hp_2", weight: 25, count: [1, 2] },
       { goodId: "drug_mp_2", weight: 20, count: [1, 2] },
+      { goodId: "drug_hp_pct", weight: 8, count: [1, 1] },
+      { goodId: "drug_mp_pct", weight: 8, count: [1, 1] },
       { goodId: "material_gem", weight: 15, chance: 0.6, count: [1, 1] },
       { goodId: "helmet_1", weight: 12, chance: 0.3 },
       { goodId: "belt_1", weight: 12, chance: 0.3 },
@@ -63,6 +67,8 @@ const dropData: Array<DropTable & { id: string }> = [
     entries: [
       { goodId: "drug_sun", weight: 20, count: [2, 5] },
       { goodId: "drug_hp_3", weight: 20, count: [1, 3] },
+      { goodId: "drug_hp_pct", weight: 8, count: [1, 1] },
+      { goodId: "drug_mp_pct", weight: 8, count: [1, 1] },
       { goodId: "material_gem", weight: 20, count: [1, 3] },
       { goodId: "weapon_2", weight: 10, chance: 0.5 },
       { goodId: "cloth_1", weight: 10, chance: 0.5 },
@@ -82,6 +88,8 @@ export const defaultDropTable: DropTable = {
   picks: [1, 2],
   entries: [
     { goodId: "drug_hp_1", weight: 40, count: [1, 2] },
+    { goodId: "drug_hp_pct", weight: 8, count: [1, 1] },
+    { goodId: "drug_mp_pct", weight: 8, count: [1, 1] },
     { goodId: "material_hide", weight: 30, count: [1, 2] },
     { goodId: "material_cloth", weight: 30, count: [1, 2] },
   ],
@@ -108,7 +116,8 @@ export function resolveDropTable(source?: DropSource, picks?: DropPicks): DropTa
  * 只有「新增了怪物但还没铺独立掉落表」时才用它，保证任何怪都能掉东西。
  *
  * 分档规则：
- * - 药品：≤20 级小药、21~40 中药、41+ 大药（蓝药只有两档，21+ 用中药）
+ * - 药品：≤20 级小药、21~40 中药、41+ 大药（蓝药只有两档，21+ 用中药）；
+ *   强效血/蓝药（百分比回复）不分档，任何等级都掉
  * - 材料：兽皮/粗布/药草常掉，铁矿 10 级起、宝石 21 级起（概率掉）
  * - 装备：按怪物等级就近取件（getNearestEquipmentId），定位越高概率与权重越高
  *   · normal：鞋子 3% · elite：武器/头盔 12% · boss：武器/衣服 60%、戒指 40%
@@ -119,6 +128,8 @@ export function monsterDrops(level: number, tier: MonsterTier = "normal"): DropE
   const entries: DropEntry[] = [
     { goodId: hpDrug, weight: 30, count: [1, 2] },
     { goodId: mpDrug, weight: 18, count: [1, 2] },
+    { goodId: "drug_hp_pct", weight: 8, count: [1, 1] },
+    { goodId: "drug_mp_pct", weight: 8, count: [1, 1] },
     { goodId: "material_hide", weight: 10, count: [1, 2] },
     { goodId: "material_cloth", weight: 8, count: [1, 2] },
     { goodId: "material_herb", weight: 8, count: [1, 2] },

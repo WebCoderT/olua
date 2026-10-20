@@ -29,6 +29,9 @@ client/assets/resources/
 # 设计稿（UI 重排的输入：登录 / 选角 / 主界面截图；体积大、属本机设计资料，不进版本库）
 design/
 
+# AI 生图工具的默认输出目录（成品图标人工挑选拷进 resources/ 后，中间底图不留仓库）
+generated-images/
+
 #//////////////////////////
 # macOS 噪声（Finder 元数据 / AppleDouble，不该进版本库）
 #//////////////////////////

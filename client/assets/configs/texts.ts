@@ -72,6 +72,8 @@ export const uiTexts = {
   drug_unsupported_tip: "该药品效果暂未开放",
   /** 血量已满 */
   drug_full_tip: "血量已满",
+  /** 魔法值已满 */
+  drug_mp_full_tip: "魔法值已满",
 
   //#region 浮动提示：拾取
   /** 拾取到物品（{names} = 物品名列表或「名称 x数量」） */
