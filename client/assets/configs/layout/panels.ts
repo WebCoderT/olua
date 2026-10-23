@@ -65,7 +65,9 @@ export const bagGridLayout = {
    *
    * 手势走 touch 通道（鼠标环境由引擎把 MOUSE_* 模拟成 TOUCH_*，触屏原生就是 TOUCH_*，
    * 一套代码两种环境通用；为什么不在节点上监听 MOUSE_MOVE，见 ui/utils/input/Pointer 的说明）：
-   * 按下（TOUCH_START）只记起点 → 移动超过 threshold 才算拖动 → 松手（TOUCH_END）用指针位置找落点。
+   * 按下（TOUCH_START）只记起点 → 移动超过 threshold 才算拖动 → 结束（TOUCH_END；松手在起点格
+   * 之外时引擎会改判成 TOUCH_CANCEL，两者共用同一落子收尾，见 BagGridView.onCellTouchEnd）
+   * 用指针位置找落点。
    * 阈值存在的意义：区分「点一下用掉/穿上」与「拖去别的格子」，手抖几像素不该变成拖动
    */
   drag: {
