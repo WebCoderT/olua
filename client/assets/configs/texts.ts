@@ -236,6 +236,8 @@ export const uiTexts = {
   //#region 界面标签：飘字与技能列表
   /** 伤害飘字（{value} = 伤害数值） */
   label_damage: "-{value}",
+  /** 格挡飘字（{value} = 格挡后实际扣减的伤害） */
+  label_damage_block: "格挡 {value}",
   /** 闪避飘字 */
   label_damage_miss: "MISS",
   /** 技能释放飘字（{skill}） */
@@ -259,6 +261,12 @@ export const uiTexts = {
   /** 动态行取值（{seconds} 保留一位小数） */
   hover_row_seconds: "{prefix}：{seconds} 秒",
   hover_row_ready: "{prefix}：就绪",
+
+  //#region 悬停详情行模板：状态数值（{percent}/{factor}/{multiplier} 来自 configs/status 的 combat 字段）
+  /** 格挡类状态（{percent} = 触发概率百分数，{factor} = 触发时伤害乘的系数） */
+  hover_status_block: "格挡概率 {percent}%，触发时本次伤害 ×{factor}",
+  /** 防御类状态（{multiplier} = 防御乘法系数） */
+  hover_status_defense: "防御 ×{multiplier}",
 
   //#region 加载进度
   /** 加载中（{percent}），无阶段说明时用 */

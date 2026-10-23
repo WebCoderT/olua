@@ -110,10 +110,10 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 
 ### The traces this way of working left in the repo
 
-- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 33 unit-test suites under `client/tools/` and 10 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
+- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 34 unit-test suites under `client/tools/` and 10 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 87 assertions) + typechecks on two sides + 33 unit-test suites + 10 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 87 assertions) + typechecks on two sides + 34 unit-test suites + 10 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -207,7 +207,7 @@ olua/
     - hand-written: `HttpClient` wrapper and shared dispatch / `ApiCodes` business codes and text keys / `ApiError` error normalisation / `Session` / `RoleSync` progress sync / `NetworkSetup` wiring
 - assets/resources: assets (map tmx, frame animations, atlases, icons, UI assets)
 - assets/scenes: login, character selection, loading and game scenes
-- tools: **client-only scripts** (33 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
+- tools: **client-only scripts** (34 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
 - settings / profiles / native / package.json / tsconfig.json: Cocos project configuration (`package.json` describes the Cocos project, not npm scripts)
 - library / temp / build: Cocos cache and build output (not version-controlled)
 - Details in [client/README.md](client/README.en.md), questions in [client/FAQ.md](client/FAQ.en.md)
@@ -285,14 +285,14 @@ make env            # generate server/.env (skipped if it already exists)
 make dev            # start server :3100 and admin :5173 together; Ctrl-C exits both
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
-make client-test    # client's 33 unit-test suites
+make client-test    # client's 34 unit-test suites
 make server-verify  # verify the server with one command (compile + ten e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 10 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 10 audits
-make test           # all tests: client's 33 suites + server's ten e2e suites
+make test           # all tests: client's 34 suites + server's ten e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -395,7 +395,7 @@ make verify   # = check + builds on all three sides + all tests
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 33 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
+# Client: 34 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # Server: compile + ten e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 14 / 87) + generated-artifact consistency
@@ -505,7 +505,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | Status Buff | Statuses attached by skills, looping effects on the body, icon countdown |  ✅  |
 | Server-side damage settlement | Monster damage is **computed by the server from the shared snapshot values** (castId idempotency prevents double settlement, death is decided by the server); the client cross-checks against the "legal band" and logs a `[combat-parity]` warning on outliers; falls back to the same local formula automatically when the realtime channel is unavailable |  ✅  |
 | Dash skill (Ten Steps One Kill) | Teleport to the mouse position: inside the range it lands exactly there, outside it lands at the farthest point the skill's distance allows, with a landing effect |  ✅  |
-| Status numbers in damage | Numerical effects like block / damage reduction / defence bonus taking part in settlement |  ❌  |
+| Status numbers in damage | Block = probability-based half damage / defence boost = multiplicative factor, settled in BattleMath pure functions (rules in client/FAQ.en.md) |  ✅  |
 | Monster skills | Monsters casting configured skills (currently only basic attacks) |  ❌  |
 | Player being-hit feedback | Damage numbers (staggered, no smearing) / hit reaction (never interrupts casting or auto-battle) / hit screen flash |  ✅  |
 
@@ -542,7 +542,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | World-side press ownership | Press starts movement and release ends it: when the UI swallows the release, ownership is handed back to the world side (so movement never sticks); press start points are registered by each interface element itself (recording the hit target the engine gave, independent of bubbling order), every registration point first screened by `UITransform` (so the engine cannot be crashed by it); clicking NPCs never triggers movement by mistake nor interrupts grinding |  ✅  |
 | Screen adaptation | Fills the window (NO_BORDER) + persistent HUD re-docked to edges; the character selection stage scales as one block, so elements stay inside the visible area at any window aspect ratio |  ✅  |
 | Announcement display | **Login page**: entering the login scene pops "important" announcements (important only, not filtered by read state), closed with "Got it"; **in-game**: "Announcements" entry on the minimap plus an unread red dot, board split into two columns (left list layered "important first", ties keeping the server order; right column the body), opening marks the currently active announcements as read (you can still see which ones are new this time) |  ✅  |
-| Asset gaps filled | Missing assets: last 4 frames per weapon direction, cloth 011/012/013, weapon 005/021 |  ❌  |
+| Asset gaps (decision: accepted) | Gaps = last 4 frames per weapon direction, cloth 011/012/013, weapon 021; zero live-config references (fashionClothes fully commented out), runtime degrades silently to valid frames — art will not be added, see #18 closing note |  ✅  |
 | UI polish and naming conventions | Unified overall visuals and asset naming |  ❌  |
 
 ## Documentation

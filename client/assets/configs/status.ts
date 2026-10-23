@@ -14,10 +14,12 @@ statuses.set("2001", {
   icon: "skill/icon/2009",
   duration: 10,
   source: StatusSource.SKILL,
-  description: "护体神盾：释放技能后获得，持续时间内概率格挡伤害；重复释放刷新持续时间",
+  description: "护体神盾：释放技能后获得，持续时间内 30% 概率格挡，格挡时本次受到的伤害减半；重复释放刷新持续时间",
   effect: "effect/status/s_2004@0",
   // 神盾特效播完就是完整形态：只播一遍停在尾帧，不循环
   effectHoldLast: true,
+  // 格挡：30% 概率触发，触发时伤害 ×0.5（口径见 types/status.StatusCombatConfig 与 client/FAQ.md）
+  combat: { blockChance: 0.3, blockFactor: 0.5 },
 });
 
 statuses.set("2002", {
@@ -25,8 +27,10 @@ statuses.set("2002", {
   icon: "skill/icon/1008",
   duration: 8,
   source: StatusSource.SKILL,
-  description: "金刚护体：释放技能后获得，持续时间内提升防御；重复释放刷新持续时间",
+  description: "金刚护体：释放技能后获得，持续时间内防御 ×1.5；重复释放刷新持续时间",
   effect: "effect/status/s_1008@0",
+  // 防御乘法系数：生效于「攻 - 防」的防御项（乘法口径，多状态连乘）
+  combat: { defenseMultiplier: 1.5 },
 });
 
 /** 技能 -> 状态映射（状态型技能释放成功后按此添加状态；装备/VIP 等来源直接调 StatusManager.apply） */

@@ -55,11 +55,20 @@ export default class HoverTipManager {
     const status = statuses.get(badge.id);
     if (!status) return;
     const seconds = StatusManager.getRemainingSeconds(badge.id);
+    // 状态数值行（#14）：把 configs/status 的 combat 语义翻译成「这个状态在数值上意味着什么」
+    const combat = status.combat;
+    const rows: string[] = [];
+    if (combat?.blockChance !== undefined) {
+      rows.push(getText("hover_status_block", { percent: Math.round(combat.blockChance * 100), factor: combat.blockFactor ?? 1 }));
+    }
+    if (combat?.defenseMultiplier !== undefined) {
+      rows.push(getText("hover_status_defense", { multiplier: combat.defenseMultiplier }));
+    }
     this.show(
       {
         title: status.label,
         icon: status.icon,
-        rows: [],
+        rows,
         dynamicRow: this.remainingRow(uiTexts.hover_prefix_remaining, seconds),
         description: status.description,
       },

@@ -59,6 +59,11 @@ export default class StatusManager {
     return this.expireAt.has(statusId);
   }
 
+  /** 当前进行中的状态编号列表（伤害结算经 collectStatusCombatModifiers 汇总防御修正用） */
+  static getActiveIds(): StatusId[] {
+    return Array.from(this.expireAt.keys());
+  }
+
   /** 状态剩余秒数（没有该状态返回 0） */
   static getRemainingSeconds(statusId: StatusId): number {
     const expire = this.expireAt.get(statusId);

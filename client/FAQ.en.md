@@ -30,6 +30,7 @@
 - [How is the background animation of an equipment detail dialog chosen? Where do I swap it or give one piece its own?](#how-is-the-background-animation-of-an-equipment-detail-dialog-chosen-where-do-i-swap-it-or-give-one-piece-its-own)
 - [How are titles unlocked and upgraded? Where do I tune title power / price?](#how-are-titles-unlocked-and-upgraded-where-do-i-tune-title-power--price)
 - [How is health regeneration per second calculated? Where do I make it faster or slower?](#how-is-health-regeneration-per-second-calculated-where-do-i-make-it-faster-or-slower)
+- [How do status effects (block / defence boost) take part in damage settling? Where do I tune chance or strength?](#how-do-status-effects-block--defence-boost-take-part-in-damage-settling-where-do-i-tune-chance-or-strength)
 - [Where does the detail dialog appear when I hover equipment? Why did it used to fall off screen?](#where-does-the-detail-dialog-appear-when-i-hover-equipment-why-did-it-used-to-fall-off-screen)
 - [Why does a new character's bag hold a pile of identically named weapons? How do I change the starting list?](#why-does-a-new-characters-bag-hold-a-pile-of-identically-named-weapons-how-do-i-change-the-starting-list)
 - [How does the mall work? Where do I add goods or change prices?](#how-does-the-mall-work-where-do-i-add-goods-or-change-prices)
@@ -268,6 +269,19 @@ Regeneration is **an ordinary attribute** (`hpRecover`, unit "points/second") si
 - **Old saves**: missing fields are filled with 0 when a character is loaded, via `StorageManager.ensureRoleDefaults → HpHelper.ensureDefaults` (full health falls back to max health); no migration script needed.
 - **Display**: the "base attributes" list in the equipment detail and character info dialogs renders according to `configs/good.goodShowAttributes` (which slots list this entry) and `goodShowAttributesLabel` (label text "regeneration per second" as well as list order); no attribute table is hardcoded in interface code.
 - Regression tests: `node tools/test-hp-recover.cjs` (level curve recomputed level by level, equipment regeneration only on defensive slots with weights totalling 100, monotonicity across the three growth lines, display rules, real `HpHelper` behaviour — full health / dead / cap / remainder / old-save backfill, plus numeric-magnitude probes and source assertions for every wiring)
+
+### How do status effects (block / defence boost) take part in damage settling? Where do I tune chance or strength?
+
+Before #14 a status only had name / icon / duration; it now also carries combat semantics. **To tune one status's strength, edit the `combat` field of its entry in `configs/status.ts`**; to change the settling formula itself, edit `ui/utils/battle/BattleMath.ts` (pure functions).
+
+- **Semantics live in config**: `StatusConfig.combat` (`types/status.ts`) has three optional fields — `blockChance` (block probability 0-1), `blockFactor` (damage multiplier applied when a block triggers, 0.5 = half), `defenseMultiplier` (defence multiplication factor). A status without `combat` is presentation-only and never enters settling
+- **Current values**: Body Shield (2001) = 30% block chance, blocked hits take ×0.5 damage; Diamond Guard (2002) = defence ×1.5
+- **Where it settles**: only on the "player takes monster damage" path (`MonsterAI.hitPlayer → applyHitDamage`) — player health is client-owned, so hooking statuses here never fights server authority; player-to-monster damage moved server-side in #34, and statuses deliberately do not boost outgoing damage
+- **Formula**: defence term = defence range roll × `defenseMultiplier` (rounded), damage = max(0, attack − defence); after a hit lands, one 0-1 roll decides the block — roll < `blockChance` triggers, and the damage is multiplied by `blockFactor` (rounded, never negative)
+- **Stacking several statuses**: block chance takes the **maximum** (probabilities do not stack), block factor takes the **minimum** (the more protective one wins), defence multipliers **multiply** — aggregation lives in `BattleMath.collectStatusCombatModifiers` (pure function)
+- **Randomness**: the block core `resolveIncomingDamage(damage, modifiers, roll)` takes its roll from the caller, so unit tests replay it with a fixed value; at runtime `applyHitDamage` rolls `Math.random`
+- **Display**: the status icon's hover tip lists the numbers ("30% block chance, blocked hit takes ×0.5" / "defence ×1.5", text keys `hover_status_block` / `hover_status_defense`); blocked floating text uses `label_damage_block` ("Block {value}") coloured by `floatingText.damage.blockedColor` in `configs/layout/theme.ts`
+- Regression tests: `node tools/test-status-combat.cjs` (config semantics match their copy, stacking rules, replayable block rolls, defence multiplication really enters the formula, plus wiring source assertions)
 
 ### Where does the detail dialog appear when I hover equipment? Why did it used to fall off screen?
 
