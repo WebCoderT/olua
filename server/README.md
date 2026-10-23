@@ -56,7 +56,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 九套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 十套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -89,6 +89,9 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | 投递记录保留上限（只对已发送 / 已失败生效，避免删掉还没发出去的信；`0` = 不清理） |
 | `REALTIME_TICKET_TTL_MS` | `30000` | 实时连接票据的有效期（一次性、用过即焚；票据可以出现在 URL 里，所以只能活 30 秒） |
 | `REALTIME_HEARTBEAT_MS` | `30000` | WebSocket 存活探测间隔（服务端发协议层 ping；客户端用它决定应用层 `ping` 的节奏） |
+| `REALTIME_EMBEDDED` | `true` | 实时通道是否内嵌主进程；`false` = 独立进程形态（主进程不挂 WS 与取票接口，由 `main.realtime.ts` 单独起实时进程，#37） |
+| `REALTIME_PORT` | `3101` | 实时进程的监听端口（只有独立进程形态会用到；nginx 把 `/api/realtime*` 反代到它） |
+| `REALTIME_KICK_POLL_MS` | `3000` | 踢下线巡检间隔（轮询库里的在线角色标记，发现被清就断开连接；`0` = 关闭） |
 
 > **`TRUST_PROXY` 的双向陷阱**：挂在 Nginx / 网关后面**必须设 `true`** —— 否则所有请求的来源 IP 都是代理的，
 > 登录限流会把全部玩家当成同一个人、一起锁死；反过来**直连暴露时必须保持 `false`** —— 开着等于允许调用方
@@ -160,6 +163,7 @@ server/
 │   ├── e2e-realtime.cjs            50 条（票据换连接 / 握手拒连 / 心跳与顶连接 / 优雅关闭）
 │   ├── e2e-combat.cjs              32 条（伤害结算上移：服务端算伤 / 幂等重发 / 目标查世界实例 / 清账不复活）
 │   ├── e2e-world.cjs               22 条（世界权威：播种与共享 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
+│   ├── e2e-dual.cjs                14 条（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -193,6 +197,21 @@ server/
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
 - **仓储只由全局 `DatabaseModule` 装配**（8 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
+
+## 进程拆分：存档进程与实时进程（#175）
+
+同一份代码、两个入口，按需装配（`AppModule.register({ realtime })`）：
+
+| | 存档进程（`main.ts`） | 实时进程（`main.realtime.ts`） |
+| --- | --- | --- |
+| 端口 | `PORT`（默认 3100） | `REALTIME_PORT`（默认 3101） |
+| 装载 | 全部 HTTP 模块（玩家 / 管理端 / 公告 / 邮件 / 备份） | 实时通道 + 取票 + 世界权威 + 结算 |
+| 默认形态 | `REALTIME_EMBEDDED=true` 时**兼载**实时模块（单进程，本地开发与全部 e2e 的形态） | 只在独立部署时起 |
+
+- **客户端零改动**：取票与 WS 走同一个 `/api/realtime*` 路径前缀，部署时 nginx 按路径把这一段反代到实时进程 —— `configs/network.ts` 的单一来源约定不破；
+- **踢下线跨进程**：管理端在存档进程清 `online_role_id`（库），实时进程按 `REALTIME_KICK_POLL_MS` 巡检发现连接对应的账号已无在线角色 → 主动断开（`4000`）。内嵌形态下同样生效（补上「踢下线不立即断 WS」的欠账）；
+- **令牌作废天然跨进程**：`token_version` 每次请求对库比对，两进程各读各的库就是同一份真相；
+- **存储**：两进程共享同一个 SQLite 文件（WAL + `busy_timeout`，见根 FAQ「为什么选 SQLite」）—— 实时进程写 `world_monsters` 与结算血量，存档进程写账号 / 角色表，各写各的表。
 
 ## 认证与权限
 
@@ -307,7 +326,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-九套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+十套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -319,10 +338,11 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-realtime.cjs` | **50** | 实时通道：票据一次性（换完即焚 / 过期 / 伪造 / 串号都拒）/ **握手被拒时回答的是一个 HTTP 401 包裹体而不是「先建连再关」** / 应用层 ping→pong / 一账号一条连接（新连接顶掉旧的，关闭码 `4000`）/ 协议层存活探测 / SIGTERM 时连接收到 `1001` 且进程立刻退出 |
 | `test/e2e-combat.cjs` | **32** | 伤害结算上移（世界权威适配）：非法出手全被拒（bad_request / unknown_skill / unknown_target / skill_not_learned）/ **伤害由服务端按快照数值算出**（落点在公式带内、血量算术自洽）/ 同 castId 幂等重发（duplicate、不重掷、不多扣血）/ 死亡由服务端判（killed 恰好一次、之后 target_dead）/ **目标查世界实例**（不存在的 instanceId 拒收）/ 清账不复活死怪 / 快照带重生倒计时 / 换图往返状态保持 / 重连 rejoin 不翻倍 |
 | `test/e2e-world.cjs` | **22** | 世界权威：**空图才播种**（重复 join 不翻倍、账号间共享同一实例）/ 结算直接落世界（快照血量 = 结算血量、B 视角同步）/ 打死怪进重生队列 / **tick 到点重生并广播** / 优雅关闭全量落盘 / **重启后实例身份与血量原样恢复**（到期重生一次性补处理） |
+| `test/e2e-dual.cjs` | **14** | 双进程形态（#175）：存档进程（`REALTIME_EMBEDDED=false`）没有实时接口（取票 404）/ 实时进程凭**同一份库**校验令牌（取票 → WS → welcome）/ worldJoin 播种与 cast 结算在实时进程跑通 / 落盘后**测试进程开只读连接可见** `world_monsters`（WAL 承接跨进程写）/ 管理端在存档进程踢下线 → 实时进程巡检间隔内断连（close `4000`）/ 存档进程重置密码 → 旧令牌在实时进程取票被拒（`token_version` 对库比对） |
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 
 ```bash
-cd server && npm run verify          # 编译 + 九套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 十套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

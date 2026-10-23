@@ -89,6 +89,9 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | Mail-delivery record retention cap (only sent / failed, so undelivered mail is never dropped; `0` = never purge) |
 | `REALTIME_TICKET_TTL_MS` | `30000` | Lifetime of a realtime connection ticket (one-shot, burned on use; the ticket can appear in a URL, so it only lives 30 seconds) |
 | `REALTIME_HEARTBEAT_MS` | `30000` | WebSocket liveness-probe interval (the server sends protocol-level pings; the client uses it to pace its application-level `ping`) |
+| `REALTIME_EMBEDDED` | `true` | whether the realtime channel is embedded in the main process; `false` = standalone form (the main process mounts neither the WS channel nor the ticket endpoint; `main.realtime.ts` boots a dedicated realtime process, #37) |
+| `REALTIME_PORT` | `3101` | the realtime process listen port (only used in standalone form; nginx reverse-proxies `/api/realtime*` to it) |
+| `REALTIME_KICK_POLL_MS` | `3000` | kick-offline sweep interval (polls the online-role flag in the database and closes connections once cleared; `0` = off) |
 
 > **The `TRUST_PROXY` two-way trap**: behind Nginx / a gateway you **must set `true`** — otherwise every request's source IP is the proxy's,
 > and login rate limiting would treat all players as one person and lock them all out; conversely, **when exposed directly you must keep it `false`** — leaving it on lets the caller
@@ -161,6 +164,7 @@ server/
 │   ├── e2e-realtime.cjs            50 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
 │   ├── e2e-combat.cjs              32 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
 │   ├── e2e-world.cjs               22 assertions (world authority: seeding & sharing / settlement lands in world / tick respawn / graceful flush / restart recovery)
+│   ├── e2e-dual.cjs                14 assertions (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -194,6 +198,21 @@ Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP tic
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
 - **Repositories are wired only by the global `DatabaseModule`** (all 8 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
+
+## Process split: archive process and realtime process (#175)
+
+One codebase, two entries, assembled on demand (`AppModule.register({ realtime })`):
+
+| | Archive process (`main.ts`) | Realtime process (`main.realtime.ts`) |
+| --- | --- | --- |
+| Port | `PORT` (default 3100) | `REALTIME_PORT` (default 3101) |
+| Mounted | all HTTP modules (player / admin / announcements / mail / backup) | realtime channel + ticket endpoint + world authority + settlement |
+| Default form | with `REALTIME_EMBEDDED=true` it **also** mounts the realtime modules (single process — local dev and all e2e) | only started in standalone deployment |
+
+- **Zero client changes**: the ticket POST and the WS connection share the `/api/realtime*` path prefix; at deployment nginx reverse-proxies exactly that prefix to the realtime process — the single-source convention in `configs/network.ts` survives untouched;
+- **Kick-offline across processes**: the admin kicks on the archive process (clears `online_role_id` in the database); the realtime process sweeps every `REALTIME_KICK_POLL_MS`, and once a connection's account has no online role anymore it closes the socket (`4000`). This also works in the embedded form (paying off the old debt that a kick never closed the WS right away);
+- **Token revocation is cross-process by construction**: `token_version` is compared against the database on every request — both processes reading the same file see the same truth;
+- **Storage**: both processes share one SQLite file (WAL + `busy_timeout`, see the root FAQ "Why SQLite") — the realtime process writes `world_monsters` and settled hp, the archive process writes accounts / roles; each writes its own tables.
 
 ## Auth and permissions
 
@@ -320,6 +339,7 @@ All nine e2e suites are **real server process + real HTTP requests** (not mocks)
 | `test/e2e-realtime.cjs` | **50** | realtime channel: the ticket is one-shot (burned on use / expired / forged / cross-account all refused) / **a refused handshake answers with an HTTP 401 envelope instead of "connect first, then close"** / application-level ping→pong / one connection per account (a new one evicts the old, close code `4000`) / protocol-level liveness probe / on SIGTERM connections receive `1001` and the process exits immediately |
 | `test/e2e-combat.cjs` | **32** | server-side damage settlement (world-authority adaptation): every invalid cast is refused (bad_request / unknown_skill / unknown_target / skill_not_learned) / **damage is computed by the server from snapshot values** (lands inside the formula band, hp arithmetic is self-consistent) / the same castId replays idempotently (duplicate, no re-roll, no extra hp loss) / death is decided by the server (killed exactly once, then target_dead) / **targets resolve to world instances** (unknown instanceIds refused) / resetting the ledger does not revive dead monsters / snapshots carry respawn countdown / map round-trips keep state / rejoin after reconnect does not duplicate |
 | `test/e2e-world.cjs` | **22** | world authority: **seeding only on an empty map** (repeated join does not duplicate, accounts share the same instances) / settlement lands directly in the world (snapshot hp = settled hp, visible to account B) / killing a monster queues a respawn / **tick respawns on time and broadcasts** / graceful shutdown flushes everything / **instance identity and hp restored as-is after restart** (due respawns backfilled at once) |
+| `test/e2e-dual.cjs` | **14** | dual-process form (#175): the archive process (`REALTIME_EMBEDDED=false`) has no realtime endpoints (ticket POST → 404) / the realtime process validates tokens against **the same database** (ticket → WS → welcome) / worldJoin seeding and cast settlement run inside the realtime process / after the persist throttle, the **test process opens a read-only connection and sees** `world_monsters` (WAL carrying cross-process writes) / kicking from the archive process → the realtime process disconnects within one sweep interval (close `4000`) / password reset on the archive process → the old token is refused at the realtime process (`token_version` compared against the database) |
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
