@@ -129,7 +129,8 @@ export default class BagGridView extends Node {
         const good = getItem(bagCell.id);
         if (!good) return;
         const cell = this.cells[rowIndex][colIndex];
-        GameUiHelper.createGood(cell, good);
+        // 传格子数量 → 可叠加物右下角画数量角标（画不画、画多少由 configs/items.getStackBadge 决定）
+        GameUiHelper.createGood(cell, good, bagCell.count);
         // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）
         cell.on(Node.EventType.TOUCH_START, (event: EventTouch) => this.onCellTouchStart(rowIndex, colIndex, event), this);
         cell.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => this.onCellTouchMove(event), this);
