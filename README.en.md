@@ -113,7 +113,7 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 - **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 29 unit-test suites under `client/tools/` and 10 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 87 assertions) + typechecks on two sides + 29 unit-test suites + 10 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 87 assertions) + typechecks on two sides + 29 unit-test suites + 10 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -286,13 +286,13 @@ make dev            # start server :3100 and admin :5173 together; Ctrl-C exits 
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
 make client-test    # client's 29 unit-test suites
-make server-verify  # verify the server with one command (compile + nine e2e suites + generated-artifact audit)
+make server-verify  # verify the server with one command (compile + ten e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 10 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 10 audits
-make test           # all tests: client's 29 suites + server's nine e2e suites
+make test           # all tests: client's 29 suites + server's ten e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -318,7 +318,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + nine e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + ten e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -398,7 +398,7 @@ Manual equivalent (no `make` needed):
 # Client: 29 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + nine e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 87) + generated-artifact consistency
+# Server: compile + ten e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 14 / 87) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build

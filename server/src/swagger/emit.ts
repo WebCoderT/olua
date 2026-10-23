@@ -23,7 +23,7 @@ async function main() {
   process.env.DB_PATH = process.env.DB_PATH ?? ":memory:";
   process.env.LOG_REQUESTS = "false";
 
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule.register({ realtime: true }), { logger: false });
   await app.init();
   const document = buildSwaggerDocument(app);
   await app.close();

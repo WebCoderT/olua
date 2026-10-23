@@ -21,8 +21,14 @@ import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
  * 好断言分组 / 权限标注 / 没有悬空 $ref）。
  */
 async function bootstrap() {
+  // 进程形态（#37）：REALTIME_EMBEDDED=false 时本进程不装载实时模块（WS 通道与取票
+  // 接口由 main.realtime.ts 单独的实时进程承担）。这是**启动期**的依赖图选择，
+  // 所以直接读环境变量而不是等 ConfigService —— 模块工厂必须在配置装载前拿到答案。
+  const realtimeEmbedded = process.env.REALTIME_EMBEDDED !== "false";
   // 显式声明成 Express 应用：`app.set("trust proxy", ...)` 只有 Express 适配器才有
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ["log", "warn", "error"] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule.register({ realtime: realtimeEmbedded }), {
+    logger: ["log", "warn", "error"],
+  });
   const config = app.get(ConfigService);
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
@@ -60,7 +66,7 @@ async function bootstrap() {
 
   await app.listen(port);
 
-  logger.log(`服务已启动：http://localhost:${port}/${prefix}`);
+  logger.log(`服务已启动：http://localhost:${port}/${prefix}（实时通道：${realtimeEmbedded ? "内嵌本进程" : "独立进程（main.realtime）"}）`);
   logger.log(`接口文档：http://localhost:${port}/${SWAGGER_PATH}`);
 }
 

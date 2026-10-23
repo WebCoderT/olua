@@ -124,7 +124,7 @@ function roleData(id, name, occupation, level) {
 }
 
 (async () => {
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule.register({ realtime: true }), { logger: false });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
   app.useGlobalFilters(new AllExceptionsFilter());
