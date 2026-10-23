@@ -8,6 +8,14 @@
 A 2D character-growth and equipment gameplay prototype built on Cocos Creator 3.8.7, together with a companion NestJS server and a React admin console,
 covering login, character creation, character growth, the equipment system, map exploration and combat gameplay (monster fighting / drops / skills / auto-battle) as a complete three-side demo.
 
+## Code lives on GitHub: Gitee is a read-only mirror
+
+The primary repository lives on **GitHub** (`github.com/WebCoderT/olua`); the Gitee project of the same name is its **read-only sync mirror**:
+
+- **Please go to GitHub for everything code-related** — issues, pull requests, commits, commit history and CI all happen on GitHub only;
+- The **Gitee mirror** is fine for browsing the code, cloning / downloading, and the occasional star; it is synced periodically, **may lag behind, and GitHub is always authoritative**;
+- Issues / PRs opened on Gitee **will not be handled** (the mirror takes no collaboration) — please file everything on GitHub instead.
+
 ## The three sides
 
 The repository splits into three **peer directories**, each with its own README and FAQ; cross-side conventions and mechanisms live in this file and the root [FAQ.en.md](FAQ.en.md).
