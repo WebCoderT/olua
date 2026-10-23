@@ -12,7 +12,7 @@
 
 ## 提交纪律（用户强制）
 - **所有代码提交都必须有对应的 issue / PR，必须有记录**（用户 2026-10-10 定）：master 上不允许存在没有 issue 追踪的提交。流程 = 开 issue → 开分支（`git checkout -b <type>/<n>-<slug>`）→ 提交（正文带 `Closes #n` / `Refs #n`）→ 推分支开 PR → CI 绿 → squash 合并。**任何直接落在 master 上的提交都算违规**（文档 typo 也不例外，走 docs PR）。
-- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 29 套单测 / 服务端九套 e2e 980 条 / 管理端 build / 9 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
+- **一个功能一次提交**，不留混合改动；全绿才提交（`make verify` = 客户端 tsc + 29 套单测 / 服务端九套 e2e 980 条 / 管理端 build / 10 审计；CI 只跑 `make ci`）。**别记死数字**，从 `make verify` 与 `node tools/audit-doc-numbers.cjs` 的输出实测。
 - **中英双语文档**：中文是主体，英文平铺在同目录成 `X.en.md`（README / FAQ 各一份），两份顶部各一行语言互链；索引 issue **#45**，子 issue #39 守卫 / #40 根 / #41 client / #42 admin / #43 server / #44 equip-aligner。译本 = 不改口径（章节数 / 表格行 / ✅❌ 数 / 数字 multiset 全等），术语表见 #45。
 - **一个 PR = 一个 squash = 一个功能**（分支上攒了两件，就拆成两个分支各开 PR，`git rebase --autostash master` 接最新基）。
 - 格式 `feat|fix|refactor|docs|test|chore(端): 一句话`；改接口必须连 `openapi.json` + 两端生成物一起提交。
@@ -82,6 +82,12 @@
 - **#34 连锁**：删账号 targets 登记簿 → 结算目标查 WorldService.find()（共享跨账号）；targetsReset 只清幂等账，死怪不因清账复活。
 - **客户端**：applyWorldState 差量合并**不回写已存在节点血量**（settle 实时维护）、0 伤害不飘字、断线重连 resendWorldJoin；实时通道不可用回退本地生成。
 
+## 内部边界（#36，PR #172，master = decb44b）
+- **新审计 `tools/audit-server-boundaries.cjs`**（审计 9→10、回归守卫 38→39）：跨模块 import **deny-by-default**（`ALLOWED_EDGES`/`REPO_EDGES` 白名单，加边=改表）；仓储只许全局 DatabaseModule 装配（业务模块本地注册同名仓储=第二个实例）；combat 纯函数只引基础层；`modules/token|security` 按基础层、`*.module.ts` 互引是接线。
+- 修掉的穿透：normalizePage→`common/utils/page.util.ts`；RoleFilter→`database/rows.ts`（契约类型层）；announcement/system/mail 三仓储收进 DatabaseModule。
+- **取向**：不做大挪目录（e2e 钉着 11 处内部 require），「拆进程=挪目录」的收益留给 #37。
+- **负向验证注入违规时**：注入路径必须与相邻 import 同深度（少 `../` 会解析到不存在路径被静默跳过，看着像测试通过）。
+
 ## 线上部署（腾讯云 Ubuntu 24.04 + Docker CE；技能 `olua-deploy`）
 - **IP / SSH 私钥 / 邀请码 / JWT 密钥一律不进记忆、不进版本库**（用户 2026-10-11 定）：只放根目录 `deploy.env`（gitignore），仓库只提交模板 `deploy.env.example`。服务器上 `server/.env` 由它渲染（也被 `server/.gitignore` 排除）。
 - **更新通道是「本地 `git archive` → scp → 解压 → `compose up -d --build`」，不是 `git pull`**：实测该服务器访问 GitHub 不可用（clone 10 分钟无进展、`curl github.com` 000）。服务器上因此**没有 `.git`**，别在上面跑 git 命令。
@@ -93,4 +99,4 @@
 
 ## 待办 → 全部登记为 GitHub issue（见 `#8~#24`）
 玩法缺口 = #11~#19；服务端 = #20 邮箱字段 / #21 审计与队列清理 / #22 自动备份；工程 = #8 官网上线 / #9 包体积 / #10 在线 demo / #23 `.DS_Store` / #24 CI 是否覆盖客户端。**用户已定保持现状**：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
-后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）→ #122 服务端码清单与文案（已做）→ #124 角色上限跨端数值（已做，PR #130）** —— **#117 这条线已收官**；服务端战斗权威：#25 / **#34 伤害结算上移（已做，PR #162）** → **#35 世界权威（已做，PR #164）** → 下一刀 **#36 内部边界治理** → #37 世界权威拆进程（最后）。#34/#35 的取舍与坑见 2026-10-21 日志（castId 幂等 / 死怪不因清账复活 / 播种只在空图采纳 / SIGTERM 双段退出 / [combat-parity] 告警文案必须英文）。
+后续批次：**#117 索引（全局数据单一来源）→ #118 生成物与守卫（已做）→ #119 管理端接入（已做）→ #122 服务端码清单与文案（已做）→ #124 角色上限跨端数值（已做，PR #130）** —— **#117 这条线已收官**；服务端战斗权威：#25 / **#34 伤害结算上移（已做，PR #162）** → **#35 世界权威（已做，PR #164）** → **#36 内部边界治理（已做，PR #172）** → 下一刀 **#37 世界权威拆进程**（#11 已随 #35 关闭）。#34/#35/#36 的取舍与坑见 2026-10-21 / 2026-10-23 日志（castId 幂等 / 死怪不因清账复活 / 播种只在空图采纳 / SIGTERM 双段退出 / 边界白名单 deny-by-default / [combat-parity] 告警文案必须英文）。
