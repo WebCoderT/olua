@@ -23,6 +23,7 @@
 - [Why doesn't CI cover the client?](#why-doesnt-ci-cover-the-client)
 - [Why does the test hang on "waiting for server startup" with no logs?](#why-does-the-test-hang-on-waiting-for-server-startup-with-no-logs)
 - [AI changed a feature — how do I know it didn't quietly break something else?](#ai-changed-a-feature--how-do-i-know-it-didnt-quietly-break-something-else)
+- [Why SQLite (instead of Postgres)? How do multiple processes share it?](#why-sqlite-instead-of-postgres-how-do-multiple-processes-share-it)
 
 ## What does each side own? Where should a change land?
 
@@ -201,3 +202,13 @@ This project's answer is **turning every pitfall into a script** rather than rel
 3. **Generated artifacts + guards**: neither consumer writes API files by hand, so an incompatible signature explodes at compile time
 4. **Negative assertions**: not only "the intended thing happened" but also "the forbidden thing did not". E.g. "`deleteRole` must not appear in the kick-offline handler", "the UI root must not register mouse events"
 5. **One commit per problem solved**: a change lands in its own commit right after the feature is done, so "which change introduced this regression" can always be bisected — instead of piling everything up and committing it all at once
+
+## Why SQLite (instead of Postgres)? How do multiple processes share it?
+
+This is the storage decision locked in before #37 (process split): **SQLite WAL, one shared file — no Postgres**.
+
+- **Why it is enough**: the deployment is a single server + Docker, and write frequency is naturally low — player saves are throttled, world state is flushed in 5-second batches. The file database runs `journal_mode = WAL` (reads don't block writes) + `busy_timeout = 5000` (a write that hits a lock waits a moment instead of throwing immediately), which comfortably covers multi-process "each writes its own tables" low-frequency concurrency;
+- **Why not Postgres**: switching means one more database container to operate, rewriting the repository SQL dialect, and migrating existing data — for a single-machine deployment the payoff does not justify the cost. Postgres pays off with true multi-instance scaling, which matters only once "write QPS grows / more servers are needed";
+- **When to re-evaluate**: when servers multiply into shards, write QPS rises noticeably, or real horizontal scaling is required — at that point the repository layer (all SQL lives under `repositories/`) is the only layer that changes; business modules never notice.
+
+The process split (a standalone realtime process, path-based routing, cross-process kick-offline) is recorded in [server/README.en.md](server/README.en.md) under "Internal boundaries" and in issue #175.
