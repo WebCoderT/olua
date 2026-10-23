@@ -271,6 +271,10 @@ olua/
 - Admin: React 19 + TypeScript + Vite + Tailwind CSS v4
 - How it is built: **written entirely by AI (Vibe Coding)**, humans only request features and accept the result — see [A project written entirely by AI](#a-project-written-entirely-by-ai)
 
+### Storage and multiple processes: SQLite WAL (the #37 decision)
+
+The storage choice is **one shared SQLite file with WAL**, not Postgres: single-machine deployment with naturally low write frequency (player saves are throttled, world state is flushed in 5-second batches), so a file database running `journal_mode = WAL` + `busy_timeout` comfortably covers multi-process "each writes its own tables" low-frequency concurrency; switching databases would mean one more container to operate, a rewritten SQL dialect, and a data migration — payoff that does not justify the cost. Only when servers multiply or write QPS rises should the switch happen — the repository layer (all SQL lives under `repositories/`) is the only layer that changes. Full reasoning in the [FAQ](FAQ.en.md#why-sqlite-instead-of-postgres-how-do-multiple-processes-share-it); the server process-split design is in issues #175 / #176.
+
 ## Common commands (Makefile)
 
 The repository root ships a Makefile collecting the three sides' routine actions in one place (`make` / `make help` lists everything, `make info` prints the current toolchain and key paths):

@@ -271,6 +271,10 @@ olua/
 - 管理端：React 19 + TypeScript + Vite + Tailwind CSS v4
 - 开发方式：**全部由 AI 编写（Vibe Coding）**，人类只提需求与验收 —— 见 [一个纯 AI 编写的项目](#一个纯-ai-编写的项目)
 
+### 存储与多进程：SQLite WAL（#37 的决策）
+
+存储选 **SQLite WAL 单库共享**，不上 Postgres：单机部署 + 写入天然低频（玩家存档走节流、世界状态 5 秒批量落盘），文件库开 `journal_mode = WAL` + `busy_timeout` 后多进程「各写各的表」的低频并发完全够用；换库要多养一个数据库容器、改 SQL 方言、迁移数据，收益配不上成本。真到了多台服务器 / 写 QPS 明显上涨时再换——仓储层（SQL 全收在 `repositories/` 下）是唯一要动的一层。完整理由见 [FAQ](FAQ.md#为什么选-sqlite而不是-postgres多进程怎么共享它)；服务端拆多进程的设计见 issue #175 / #176。
+
 ## 常用命令（Makefile）
 
 仓库根有一份 Makefile，把三端的常用动作收在一处（`make` / `make help` 列出全部，`make info` 打印当前工具链与关键路径）：
