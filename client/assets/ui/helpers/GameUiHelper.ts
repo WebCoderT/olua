@@ -309,6 +309,29 @@ export default class GameUiHelper {
     return slot;
   }
 
+  /**
+   * 创建装备槽的「更好装备」提示角标（槽位右上角的小圆牌，几何与配色见 configs/layout/panels.equipmentSlotLayout.upgradeHint）
+   * 只负责创建（默认隐藏，显隐由 EquipmentSlotGroup.updateUpgradeHint 控制）：
+   * Graphics 自绘圆底（不依赖底图）+ 文案（configs/texts.label_equip_upgrade_hint）
+   */
+  static createEquipmentUpgradeHint() {
+    const layout = equipmentSlotLayout.upgradeHint;
+    const node = UiHelper.createNode("equipment_upgrade_hint", layout.position, layout.size);
+    const plate = new Node("equipment_upgrade_hint_plate");
+    const graphics = plate.addComponent(Graphics);
+    graphics.fillColor = layout.fill;
+    graphics.circle(0, 0, layout.size.width / 2);
+    graphics.fill();
+    graphics.lineWidth = layout.borderWidth;
+    graphics.strokeColor = layout.borderColor;
+    graphics.circle(0, 0, layout.size.width / 2);
+    graphics.stroke();
+    node.addChild(plate);
+    node.addChild(UiHelper.createLabel("equipment_upgrade_hint_text", getText("label_equip_upgrade_hint"), layout.color, layout.fontSize, new Vec2(), layout.size));
+    node.active = false;
+    return node;
+  }
+
   //#endregion
 
   //#region 过渡场景

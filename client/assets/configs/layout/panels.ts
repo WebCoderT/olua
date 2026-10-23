@@ -16,6 +16,22 @@ export const equipmentSlotLayout = {
   /** 槽位间距与单个槽位尺寸 */
   slotSpacing: 10,
   slotSize: new Size(50, 50),
+  /**
+   * 「更好装备」提示角标（背包里有该槽位更好的可穿装备时显示，点击一键换上）：
+   * 挂在槽位右上角的小圆牌（Graphics 自绘圆底，不依赖底图），文案见 configs/texts.label_equip_upgrade_hint
+   */
+  upgradeHint: {
+    /** 角标中心相对槽位中心的位置（槽位 50×50，往右上角探出 7px，槽位间距 10 不会压到相邻槽位） */
+    position: new Vec2(19, 19),
+    /** 圆牌直径与字号 */
+    size: new Size(24, 24),
+    fontSize: 13,
+    /** 圆底填充与描边（绿 = 变强），文字用白字保对比度 */
+    fill: new Color(30, 120, 60, 235),
+    borderColor: new Color(120, 220, 120),
+    borderWidth: 1.5,
+    color: Color.WHITE,
+  },
   /** 各分组容器（name = 节点名，horizontal = 横排还是竖排） */
   groups: {
     left: { name: "equipment_slots_left", position: new Vec2(-240, 40), size: new Size(50, 290), horizontal: false },

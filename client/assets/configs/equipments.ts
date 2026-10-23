@@ -2,6 +2,7 @@ import { Color, Vec2 } from "cc";
 import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } from "../types/good";
 import type { BattleAttributes } from "../types/common";
 import { equipmentPrefixRates, equipmentRecyclePrice, equipmentStats, equipmentSuffixRates } from "./growth";
+import { combatCalc as combatCalcWeights } from "./battle";
 import { OECCUPATION, SEX } from "../types/role";
 
 /** 装备槽位数据表（角色弹窗用；key 只做关联，与怪物/装备同一约定） */
@@ -180,6 +181,27 @@ export function getRecyclePrice(equipment: Equipment | null | undefined): number
 }
 
 /**
+ * 装备的战斗力贡献（**纯函数**，角色信息弹窗「更好装备」提示的判定口径，见 configs/items.findBagEquipmentUpgrade）
+ *
+ * 与 GameHelper.combatCalc 用同一张权重表（configs/battle.combatCalc）：
+ * 区间型属性取上下限之和、maxHp 取单值、hpRecover 不计（回血不算战斗力，口径两边必须一致，
+ * 否则「提示说更好」与「穿上后战斗力变高」会对不上）。权重表改这里跟着变，没有第二份倍率。
+ */
+export function equipmentCombatValue(equipment: Equipment): number {
+  let total = 0;
+  combatCalcWeights.forEach((weight, key) => {
+    if (key === "maxHp") {
+      total += equipment.maxHp * weight;
+      return;
+    }
+    // 除 maxHp 外都是区间型属性（BattleAttributes 里 maxHp/hpRecover 是单值，其余六项是 [下限, 上限]）
+    const range = equipment[key] as [number, number];
+    total += (range[0] + range[1]) * weight;
+  });
+  return total;
+}
+
+/**
  * 取某装备 Map 的基础件（普通的·人级，prefix/suffix 全 0）
  * 新手装备、全量列表展示等只应给基础件——Map 里其余 14 个是前后缀变体（key 带 _pXsY），不该默认发放
  *
@@ -187,8 +209,7 @@ export function getRecyclePrice(equipment: Equipment | null | undefined): number
  * 打包时 babel 以 loose 模式编译，会把 `[...迭代器]` 降级成 `[].concat(迭代器)`，
  * 而 `concat` 只展开数组、不认 Map/Set 迭代器 → 结果是 `[MapIterator]` 这一个元素，
  * 过滤后恒为空数组（编辑器里不降级，所以只在打包产物上才复现，症状 = 背包/列表静默为空）
- */
-export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
+ */export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
   const result: Equipment[] = [];
   map.forEach((eq) => {
     if (eq.prefix === EQUIPMENT_PREFIX.NORMAL && eq.suffix === EQUIPMENT_SUFFIX.MORTAL) result.push(eq);

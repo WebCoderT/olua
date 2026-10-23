@@ -21,9 +21,10 @@ interface RoleDisplayView {
   updateTitleShow: () => void;
 }
 
-/** 角色信息弹窗视图（装备变更后刷新内观） */
+/** 角色信息弹窗视图（装备变更后刷新内观；背包变动后重算「更好装备」提示） */
 interface RoleInfoDialogView {
   updateDialog: (equipmentType: EQUIPMENT_TYPE) => void;
+  refreshHints: () => void;
 }
 
 /** 背包弹窗视图（物品变更后刷新背包显示） */
@@ -121,9 +122,10 @@ export default class RoleUIManager {
     this.statusIconBar?.updateStatuses(badges);
   }
 
-  /** 物品变更后刷新背包显示（弹窗未打开时忽略） */
+  /** 物品变更后刷新背包显示，并重算角色信息弹窗的「更好装备」提示（弹窗未打开时两边都忽略） */
   static refreshBag() {
     this.bagDialog?.refresh();
+    this.roleInfoDialog?.refreshHints();
   }
 
   /** 设置怪物信息面板创建器（由组合根注入，选中怪物时才真正创建面板） */
