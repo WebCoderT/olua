@@ -7,6 +7,7 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { BizCode } from "../../common/constants/biz-code";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
+import { AccountRepository } from "../../database/repositories/account.repository";
 import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { CombatSettlementService } from "./combat-settlement.service";
@@ -25,6 +26,12 @@ interface TrackedSocket extends WebSocket {
   isAlive: boolean;
   /** 这张票据换来的身份 */
   identity: RealtimeIdentity;
+  /**
+   * 建连那一刻账号的在线角色快照（踢下线巡检的基线）。
+   * `undefined` = 还没查到（异步加载中，巡检跳过）；`null` = 建连时账号本就没有在线角色
+   * （巡检对它永不生效 —— 没有在线角色的账号谈不上「被踢」）。
+   */
+  baselineOnlineRoleId?: string | null;
 }
 
 /** 一张还没被用掉的票据 */
@@ -64,9 +71,11 @@ const SHUTDOWN_GRACE_MS = 1000;
  * - 握手时只是**取 AuthGuard 已经得出的结论**。令牌不在这条路径上出现第二次，
  *   也就不存在「两套校验各自漂移」这件事（#33 明确要求的）。
  *
- * ## 单进程
- * 票据与连接都在本进程内存里，所以这是**单实例**的能力。多实例要共享它们（Redis 之类）是
- * #37 拆进程时的事；在那之前，把状态放在内存里反而是最不容易错的。
+ * ## 单实例
+ * 票据与连接都在本进程内存里，所以这是**单实例**的能力。#37 拆进程后本模块整体
+ * 搬进 `main.realtime.ts` 的实时进程（仍是单实例，只是换了进程）：取票接口与 WS
+ * 走同一个 `/api/realtime*` 路径前缀，nginx 按路径反代，票据不必跨进程共享；
+ * 跨进程只剩「踢下线感知」一件难事，由巡检（sweepKicked）轮询库标记解决。
  */
 @Injectable()
 export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -79,6 +88,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   private httpServer: HttpServer | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private ticketSweepTimer: NodeJS.Timeout | null = null;
+  /** 踢下线巡检定时器（见 sweepKicked；0 = 关闭巡检） */
+  private kickPollTimer: NodeJS.Timeout | null = null;
   /** 握手路径（`/<API_PREFIX>/realtime`），bootstrap 时按前缀算出来 */
   private path = `/${REALTIME_PATH}`;
   private closing = false;
@@ -88,6 +99,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly adapterHost: HttpAdapterHost,
     private readonly combat: CombatSettlementService,
     private readonly world: WorldService,
+    private readonly accounts: AccountRepository,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -135,10 +147,24 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 票据的清理有两道：取票时顺手清一次（对付「一直取票」），再加这个兜底（对付「取一堆就停」）
       this.ticketSweepTimer = setInterval(() => this.dropExpiredTickets(), Math.max(sweepMs, TICKET_SWEEP_MIN_MS)).unref();
     }
+    const kickPollMs = this.kickPollMs();
+    if (kickPollMs > 0) {
+      // 踢下线巡检：跨进程形态下（#37）管理端在本进程之外清在线角色标记，
+      // 这里轮询库把「已被踢 / 已登出」的连接断掉；内嵌形态下它同样生效
+      // （把「踢下线只清标记、连接要等下一次操作才被拒」的欠账一并补上）
+      this.kickPollTimer = setInterval(() => this.sweepKicked(), kickPollMs).unref();
+    }
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
     this.world.onWorldChanged = (mapId) => this.broadcastWorld(mapId);
 
-    this.logger.log(`实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms）`);
+    this.logger.log(
+      `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
+    );
+  }
+
+  /** 踢下线巡检间隔（毫秒；0 = 关闭） */
+  private kickPollMs(): number {
+    return Math.max(0, Number(this.config.get<number>("realtimeKickPollMs") ?? 3000));
   }
 
   /**
@@ -156,9 +182,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   async onModuleDestroy(): Promise<void> {
     this.closing = true;
-    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer]) if (timer) clearInterval(timer);
+    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer]) if (timer) clearInterval(timer);
     this.heartbeatTimer = null;
     this.ticketSweepTimer = null;
+    this.kickPollTimer = null;
     this.tickets.clear();
 
     const sockets = [...this.connections.values()];
@@ -263,6 +290,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       previous.close(REALTIME_CLOSE.REPLACED, "已在别处建立新的连接");
     }
     this.connections.set(identity.id, socket);
+    // 踢下线巡检的基线：建连那一刻账号有没有在线角色（异步查库，查到前巡检跳过这条）
+    void this.loadKickBaseline(socket, identity.id);
 
     socket.on("pong", () => {
       socket.isAlive = true;
@@ -371,6 +400,46 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       socket.isAlive = false;
       socket.ping();
     }
+  }
+
+  /**
+   * 踢下线巡检（#37 拆进程的关键拼图）
+   *
+   * 管理端「踢下线 / 封禁」和玩家「登出」都只写库（清 `online_role_id`），**不会**主动
+   * 碰到本进程的连接 —— 单进程时代如此，拆进程后更是隔着进程边界。所以本进程按
+   * `REALTIME_KICK_POLL_MS` 轮询一次：连接建连时记下账号当时的在线角色（基线），
+   * 巡检发现基线非空、而现在被清空 → 主动断开（复用 4000，客户端的语义正是
+   * 「回选角、不要自动重连」）。
+   *
+   * 刻意**只对「从有到无」生效**：在线角色从 A 换成 B（玩家自己切角色）不断连接 ——
+   * 那是玩家自己的操作，客户端会带着新角色重新走完整建连流程；只有「被清空」
+   * 才是管理端 / 登出的意志。
+   *
+   * 顺带补上单进程时代的欠账：此前踢下线只清标记，WS 连接要等玩家下一次操作
+   * （存档被 20007 拒）才间接失效 —— 现在巡检一跑，连接立即断。
+   */
+  private sweepKicked(): void {
+    if (this.closing || this.connections.size === 0) return;
+    for (const [accountId, socket] of this.connections) {
+      // 基线还没查到（建连后的首次查库在途）→ 本轮跳过；基线为 null = 建连时就没有在线角色，谈不上被踢
+      if (socket.baselineOnlineRoleId === undefined || socket.baselineOnlineRoleId === null) continue;
+      const account = this.accounts.findById(accountId);
+      // 账号都没了（被删）同样视作「该走了」；还在但在线角色已被清 → 被踢 / 已登出
+      if (account && account.online_role_id !== null) continue;
+      this.logger.log(`账号 ${accountId} 的在线角色已被清除，断开其实时连接`);
+      socket.close(REALTIME_CLOSE.REPLACED, "登录状态已变更（被踢下线或已登出），请重新选角");
+      this.connections.delete(accountId);
+      // 与 close 事件的清理同口径：退观看者、清幂等账（世界状态是共享的，不清）
+      this.combat.dropAccount(accountId);
+      this.world.leave(accountId);
+    }
+  }
+
+  /** 建连时查一次在线角色，给巡检当基线（查不到 = 账号不存在，交给心跳自然收尾） */
+  private loadKickBaseline(socket: TrackedSocket, accountId: string): void {
+    const account = this.accounts.findById(accountId);
+    if (this.connections.get(accountId) !== socket) return; // 还没等查完连接就被顶掉了
+    socket.baselineOnlineRoleId = account?.online_role_id ?? null;
   }
 
   //#endregion

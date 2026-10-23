@@ -67,7 +67,14 @@ const ALLOWED_EDGES = [
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
 const REPO_EDGES = {
-  "database/repositories/account.repository.ts": ["modules/auth", "modules/roles", "modules/admin", "modules/mail"],
+  "database/repositories/account.repository.ts": [
+    "modules/auth",
+    "modules/roles",
+    "modules/admin",
+    "modules/mail",
+    // 踢下线巡检（#175）：实时进程轮询 online_role_id 断开被踢连接 —— 只读一行，不写账号
+    "modules/realtime",
+  ],
   "database/repositories/admin.repository.ts": ["modules/admin"],
   "database/repositories/role.repository.ts": ["modules/roles", "modules/admin"],
   "database/repositories/audit.repository.ts": ["modules/audit", "modules/admin"],

@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, type DynamicModule } from "@nestjs/common";
 import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import configuration from "./config/configuration";
@@ -29,28 +29,43 @@ import { WorldModule } from "./modules/world/world.module";
  *
  * 审计拦截器不在这一层注册：它跟 AuditService 绑在一起放在 AuditModule 里
  * （见 modules/audit/audit.module），免得出现「拦截器装了但服务没导出」的运行期问题。
+ *
+ * ## 工厂形态（#37 拆进程）
+ *
+ * `AppModule.register({ realtime })` 决定是否装载实时模块（WS 通道 + 取票接口 + 世界权威）：
+ * - `realtime: true`（默认，`REALTIME_EMBEDDED` 不设或非 `false`）：**单进程形态**，
+ *   全部能力在一个进程里 —— 本地开发与全部既有 e2e 的形态；
+ * - `realtime: false`：**独立进程形态**的存档进程，HTTP API 照常、实时通道不在
+ *   （由 `main.realtime.ts` 单独起实时进程，nginx 按路径把 `/api/realtime*` 反代过去）。
+ *
+ * 为什么用工厂而不是运行期开关：模块装载是启动期的事，拆进程要拆的是**依赖图**
+ * （存档进程压根不该能 new 出 WebSocketServer），不是加个 if 的行为开关。
  */
-@Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: [".env"] }),
-    DatabaseModule,
-    SecurityModule,
-    TokenModule,
-    HealthModule,
-    AuthModule,
-    RolesModule,
-    AdminModule,
-    AuditModule,
-    SystemModule,
-    AnnouncementModule,
-    MailModule,
-    RealtimeModule,
-    WorldModule,
-  ],
-  providers: [
-    { provide: APP_GUARD, useClass: AuthGuard },
-    { provide: APP_GUARD, useClass: PermissionGuard },
-    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
-  ],
-})
-export class AppModule {}
+@Module({})
+export class AppModule {
+  static register(options: { realtime: boolean }): DynamicModule {
+    return {
+      module: AppModule,
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: [".env"] }),
+        DatabaseModule,
+        SecurityModule,
+        TokenModule,
+        HealthModule,
+        AuthModule,
+        RolesModule,
+        AdminModule,
+        AuditModule,
+        SystemModule,
+        AnnouncementModule,
+        MailModule,
+        ...(options.realtime ? [RealtimeModule, WorldModule] : []),
+      ],
+      providers: [
+        { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useClass: PermissionGuard },
+        { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+      ],
+    };
+  }
+}

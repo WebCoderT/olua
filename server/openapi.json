@@ -182,473 +182,6 @@
         }
       }
     },
-    "/admin/audit-logs": {
-      "get": {
-        "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n**排序**：`sort` 取 `createdAt` / `actorName` / `action` / `targetType` / `success` / `statusCode` / `ip`，`order` 取 asc / desc（默认 createdAt 倒序）。同一毫秒的多条日志另有 id 兜底次序，保证翻页稳定。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
-        "operationId": "adminAudit.list",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "description": "页码，从 1 开始",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "example": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "size",
-            "required": false,
-            "in": "query",
-            "description": "每页条数（1~100）",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "example": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "keyword",
-            "required": false,
-            "in": "query",
-            "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "required": false,
-            "in": "query",
-            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
-            "schema": {
-              "example": "createdAt",
-              "type": "string"
-            }
-          },
-          {
-            "name": "order",
-            "required": false,
-            "in": "query",
-            "description": "排序方向：asc 升序 / desc 降序",
-            "schema": {
-              "default": "desc",
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          },
-          {
-            "name": "actorId",
-            "required": false,
-            "in": "query",
-            "description": "只看某个操作人的日志（管理员 id）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "action",
-            "required": false,
-            "in": "query",
-            "description": "只看某个动作（operationId，取值见 /admin/audit-logs/actions）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "targetType",
-            "required": false,
-            "in": "query",
-            "description": "目标类型筛选",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "account",
-                "role",
-                "admin",
-                "announcement",
-                "mail"
-              ]
-            }
-          },
-          {
-            "name": "targetId",
-            "required": false,
-            "in": "query",
-            "description": "只看针对某个目标的日志（目标 id）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "ip",
-            "required": false,
-            "in": "query",
-            "description": "只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）",
-            "schema": {
-              "maxLength": 45,
-              "example": "203.0.113.9",
-              "type": "string"
-            }
-          },
-          {
-            "name": "actorRole",
-            "required": false,
-            "in": "query",
-            "description": "只看某个操作人角色",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "super_admin",
-                "admin",
-                "viewer"
-              ]
-            }
-          },
-          {
-            "name": "success",
-            "required": false,
-            "in": "query",
-            "description": "结果筛选：true 只看成功 / false 只看失败",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "from",
-            "required": false,
-            "in": "query",
-            "description": "起始时间（毫秒时间戳，含）",
-            "schema": {
-              "minimum": 0,
-              "type": "number"
-            }
-          },
-          {
-            "name": "to",
-            "required": false,
-            "in": "query",
-            "description": "结束时间（毫秒时间戳，含）",
-            "schema": {
-              "minimum": 0,
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "分页结果（list/total/page/size）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ApiEnvelopeDto"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/AuditLogPageDto"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "admin": []
-          }
-        ],
-        "summary": "操作日志列表",
-        "tags": [
-          "管理端"
-        ],
-        "x-olua-audience": "admin",
-        "x-olua-data-nullable": false,
-        "x-olua-data-schema": {
-          "$ref": "#/components/schemas/AuditLogPageDto"
-        },
-        "x-olua-permissions": [
-          "audit:read"
-        ],
-        "x-olua-query-schema": {
-          "$ref": "#/components/schemas/AuditQueryDto"
-        }
-      }
-    },
-    "/admin/audit-logs/actions": {
-      "get": {
-        "description": "返回日志里出现过的全部动作（接口标识），供界面的「动作」筛选下拉使用 —— 界面不写死动作清单。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
-        "operationId": "adminAudit.actions",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "动作清单",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ApiEnvelopeDto"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/AuditActionListDto"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "admin": []
-          }
-        ],
-        "summary": "出现过的动作清单",
-        "tags": [
-          "管理端"
-        ],
-        "x-olua-audience": "admin",
-        "x-olua-data-nullable": false,
-        "x-olua-data-schema": {
-          "$ref": "#/components/schemas/AuditActionListDto"
-        },
-        "x-olua-permissions": [
-          "audit:read"
-        ]
-      }
-    },
-    "/admin/audit-logs/export": {
-      "get": {
-        "description": "筛选条件与列表接口**完全一致**（含 `sort` / `order`，导出即「当前筛选下的全部」）；`page` / `size` 不生效 —— 条数上限取服务端配置 `AUDIT_EXPORT_MAX_ROWS`，超出时返回前 N 条并置 `truncated`。\n\n返回的是**文本**而不是 `text/csv` 响应：三端约定响应体恒为 `{code,message,data,timestamp}`，直吐文件会把两端请求层的 JSON 解析打穿；管理端拿 `content` 自己造 Blob 下载。\n\n内容已带 UTF-8 BOM（Excel 打开中文不乱码）与表头；以 `=` `+` `-` `@` 开头的值会加前导单引号，避免一个叫 `=HYPERLINK(...)` 的账号名在表格软件里被当公式执行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
-        "operationId": "adminAudit.export",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "description": "页码，从 1 开始",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "example": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "size",
-            "required": false,
-            "in": "query",
-            "description": "每页条数（1~100）",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "example": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "keyword",
-            "required": false,
-            "in": "query",
-            "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "required": false,
-            "in": "query",
-            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
-            "schema": {
-              "example": "createdAt",
-              "type": "string"
-            }
-          },
-          {
-            "name": "order",
-            "required": false,
-            "in": "query",
-            "description": "排序方向：asc 升序 / desc 降序",
-            "schema": {
-              "default": "desc",
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          },
-          {
-            "name": "actorId",
-            "required": false,
-            "in": "query",
-            "description": "只看某个操作人的日志（管理员 id）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "action",
-            "required": false,
-            "in": "query",
-            "description": "只看某个动作（operationId，取值见 /admin/audit-logs/actions）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "targetType",
-            "required": false,
-            "in": "query",
-            "description": "目标类型筛选",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "account",
-                "role",
-                "admin",
-                "announcement",
-                "mail"
-              ]
-            }
-          },
-          {
-            "name": "targetId",
-            "required": false,
-            "in": "query",
-            "description": "只看针对某个目标的日志（目标 id）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "ip",
-            "required": false,
-            "in": "query",
-            "description": "只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）",
-            "schema": {
-              "maxLength": 45,
-              "example": "203.0.113.9",
-              "type": "string"
-            }
-          },
-          {
-            "name": "actorRole",
-            "required": false,
-            "in": "query",
-            "description": "只看某个操作人角色",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "super_admin",
-                "admin",
-                "viewer"
-              ]
-            }
-          },
-          {
-            "name": "success",
-            "required": false,
-            "in": "query",
-            "description": "结果筛选：true 只看成功 / false 只看失败",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "from",
-            "required": false,
-            "in": "query",
-            "description": "起始时间（毫秒时间戳，含）",
-            "schema": {
-              "minimum": 0,
-              "type": "number"
-            }
-          },
-          {
-            "name": "to",
-            "required": false,
-            "in": "query",
-            "description": "结束时间（毫秒时间戳，含）",
-            "schema": {
-              "minimum": 0,
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "CSV 文本与统计（filename / content / rows / total / truncated）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ApiEnvelopeDto"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/AuditExportDto"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "admin": []
-          }
-        ],
-        "summary": "导出操作日志（CSV）",
-        "tags": [
-          "管理端"
-        ],
-        "x-olua-audience": "admin",
-        "x-olua-data-nullable": false,
-        "x-olua-data-schema": {
-          "$ref": "#/components/schemas/AuditExportDto"
-        },
-        "x-olua-permissions": [
-          "audit:read"
-        ],
-        "x-olua-query-schema": {
-          "$ref": "#/components/schemas/AuditQueryDto"
-        }
-      }
-    },
     "/roles": {
       "get": {
         "description": "按创建时间升序；不含 data（选角列表用）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -2828,6 +2361,473 @@
         "x-olua-permissions": [
           "admin:manage"
         ]
+      }
+    },
+    "/admin/audit-logs": {
+      "get": {
+        "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n**排序**：`sort` 取 `createdAt` / `actorName` / `action` / `targetType` / `success` / `statusCode` / `ip`，`order` 取 asc / desc（默认 createdAt 倒序）。同一毫秒的多条日志另有 id 兜底次序，保证翻页稳定。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
+        "operationId": "adminAudit.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "只看某个操作人的日志（管理员 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "只看某个动作（operationId，取值见 /admin/audit-logs/actions）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetType",
+            "required": false,
+            "in": "query",
+            "description": "目标类型筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "account",
+                "role",
+                "admin",
+                "announcement",
+                "mail"
+              ]
+            }
+          },
+          {
+            "name": "targetId",
+            "required": false,
+            "in": "query",
+            "description": "只看针对某个目标的日志（目标 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ip",
+            "required": false,
+            "in": "query",
+            "description": "只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）",
+            "schema": {
+              "maxLength": 45,
+              "example": "203.0.113.9",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorRole",
+            "required": false,
+            "in": "query",
+            "description": "只看某个操作人角色",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "super_admin",
+                "admin",
+                "viewer"
+              ]
+            }
+          },
+          {
+            "name": "success",
+            "required": false,
+            "in": "query",
+            "description": "结果筛选：true 只看成功 / false 只看失败",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "起始时间（毫秒时间戳，含）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "结束时间（毫秒时间戳，含）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuditLogPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "操作日志列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuditLogPageDto"
+        },
+        "x-olua-permissions": [
+          "audit:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AuditQueryDto"
+        }
+      }
+    },
+    "/admin/audit-logs/actions": {
+      "get": {
+        "description": "返回日志里出现过的全部动作（接口标识），供界面的「动作」筛选下拉使用 —— 界面不写死动作清单。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
+        "operationId": "adminAudit.actions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "动作清单",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuditActionListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "出现过的动作清单",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuditActionListDto"
+        },
+        "x-olua-permissions": [
+          "audit:read"
+        ]
+      }
+    },
+    "/admin/audit-logs/export": {
+      "get": {
+        "description": "筛选条件与列表接口**完全一致**（含 `sort` / `order`，导出即「当前筛选下的全部」）；`page` / `size` 不生效 —— 条数上限取服务端配置 `AUDIT_EXPORT_MAX_ROWS`，超出时返回前 N 条并置 `truncated`。\n\n返回的是**文本**而不是 `text/csv` 响应：三端约定响应体恒为 `{code,message,data,timestamp}`，直吐文件会把两端请求层的 JSON 解析打穿；管理端拿 `content` 自己造 Blob 下载。\n\n内容已带 UTF-8 BOM（Excel 打开中文不乱码）与表头；以 `=` `+` `-` `@` 开头的值会加前导单引号，避免一个叫 `=HYPERLINK(...)` 的账号名在表格软件里被当公式执行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
+        "operationId": "adminAudit.export",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "只看某个操作人的日志（管理员 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "只看某个动作（operationId，取值见 /admin/audit-logs/actions）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetType",
+            "required": false,
+            "in": "query",
+            "description": "目标类型筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "account",
+                "role",
+                "admin",
+                "announcement",
+                "mail"
+              ]
+            }
+          },
+          {
+            "name": "targetId",
+            "required": false,
+            "in": "query",
+            "description": "只看针对某个目标的日志（目标 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ip",
+            "required": false,
+            "in": "query",
+            "description": "只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）",
+            "schema": {
+              "maxLength": 45,
+              "example": "203.0.113.9",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorRole",
+            "required": false,
+            "in": "query",
+            "description": "只看某个操作人角色",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "super_admin",
+                "admin",
+                "viewer"
+              ]
+            }
+          },
+          {
+            "name": "success",
+            "required": false,
+            "in": "query",
+            "description": "结果筛选：true 只看成功 / false 只看失败",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "起始时间（毫秒时间戳，含）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "结束时间（毫秒时间戳，含）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV 文本与统计（filename / content / rows / total / truncated）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AuditExportDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "导出操作日志（CSV）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AuditExportDto"
+        },
+        "x-olua-permissions": [
+          "audit:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AuditQueryDto"
+        }
       }
     },
     "/admin/system": {

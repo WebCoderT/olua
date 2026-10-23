@@ -103,6 +103,7 @@ const E2E_SCRIPTS = [
   ["实时通道", "server/test/e2e-realtime.cjs"],
   ["伤害结算", "server/test/e2e-combat.cjs"],
   ["世界权威", "server/test/e2e-world.cjs"],
+  ["双进程形态", "server/test/e2e-dual.cjs"],
   ["备份恢复", "server/test/backup.cjs"],
 ];
 

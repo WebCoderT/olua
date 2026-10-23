@@ -172,6 +172,25 @@ export interface AppConfiguration {
    * 应用层的 `ping`/`pong` 是另一回事：那是给客户端量往返用的（浏览器看不到协议层 ping 帧）。
    */
   realtimeHeartbeatMs: number;
+  /**
+   * 实时通道是否内嵌在主进程（默认 true）
+   *
+   * `false` = 独立进程形态：主进程**不装载**实时模块（WS 通道与取票接口都不在），
+   * 由 `main.realtime.ts` 单独起一个实时进程。拆进程是 #37 的部署形态：
+   * 本地开发与全部既有 e2e 走默认内嵌，行为零变化。
+   */
+  realtimeEmbedded: boolean;
+  /** 实时进程的监听端口（只有独立进程形态会用到；nginx 把 `/api/realtime*` 反代到它） */
+  realtimePort: number;
+  /**
+   * 踢下线巡检间隔（毫秒；`0` = 关闭巡检）
+   *
+   * 管理端踢下线只写库（清 `online_role_id`），实时进程**轮询库标记**发现
+   * 「连接对应的账号已经没有在线角色」后主动断开（4000）。跨进程没有推送通道
+   * （SQLite 不做通知），轮询是这个形态下最朴素可靠的做法；默认 3 秒，
+   * 意味着踢下线最迟 3 秒 + 一个心跳内生效。
+   */
+  realtimeKickPollMs: number;
   //#endregion
 
   //#region 世界权威（#35）
@@ -256,6 +275,9 @@ export default function configuration(): AppConfiguration {
     backupDir: process.env.BACKUP_DIR ?? "",
     realtimeTicketTtlMs: Number(process.env.REALTIME_TICKET_TTL_MS ?? 30 * 1000),
     realtimeHeartbeatMs: Number(process.env.REALTIME_HEARTBEAT_MS ?? 30 * 1000),
+    realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
+    realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
+    realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
     worldTickMs: Number(process.env.WORLD_TICK_MS ?? 1000),
     worldPersistMs: Number(process.env.WORLD_PERSIST_MS ?? 5000),
     worldRespawnMs: Number(process.env.WORLD_RESPAWN_MS ?? 30 * 1000),
