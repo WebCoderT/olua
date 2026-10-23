@@ -219,7 +219,7 @@ const dialogsSource = fs.readFileSync(DIALOGS_FILE, "utf8");
 check(/getPopupPosition\(/.test(helperCode), "详情弹窗位置走 ScreenLayout.getPopupPosition（摆放算法只有一个来源）");
 check(/getVisibleSize\(\)/.test(helperCode), "夹取用的是真实可见尺寸 getVisibleSize()（不是设计分辨率）");
 check(/anchorWorld\.x - layerWorld\.x/.test(helperCode) && /anchorWorld\.y - layerWorld\.y/.test(helperCode), "锚点坐标取「物品格世界坐标 − UI 层世界坐标」（屏幕中心系）");
-check(/createGoodDetailDialog\(good, cell\)/.test(helperCode), "调用点把物品格节点交给弹窗（坐标与尺寸都由它现算）");
+check(/createGoodDetailDialog\(good, cell[,)]/.test(helperCode), "调用点把物品格节点交给弹窗（坐标与尺寸都由它现算；第三参是对比模式，见 issue #198）");
 check(/getComponent\(UITransform\)\?\.contentSize \?\? goodDetailLayout\.size/.test(helperCode), "物品格尺寸取不到时退回弹窗配置尺寸（不会算出 NaN）");
 check(/Node\.EventType\.SIZE_CHANGED/.test(helperSource) && /placeGoodDetailDialog/.test(helperSource), "Layout 自适应高度撑开后按最终尺寸复夹一次（首帧用的是占位高度）");
 check(/goodDetailLayout\.placement\.gap/.test(helperCode) && /goodDetailLayout\.placement\.screenMargin/.test(helperCode), "间距与留白全从 configs 读，组件不写数值");

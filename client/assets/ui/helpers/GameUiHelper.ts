@@ -25,6 +25,7 @@ import {
 import UiHelper from "./UiHelper";
 import AnimationHelper from "./AnimationHelper";
 import { Draggable } from "../components/input/Draggable";
+import { isCtrlPressed, onCtrlChange } from "../utils/input/ModifierKeys";
 import { debugConfig } from "../../configs/debug";
 import { getText, TextParams } from "../../configs/texts";
 import { BottomNavItem } from "../../configs/bottomNav";
@@ -47,7 +48,7 @@ import GameHelper from "../core/GameHelper";
 import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
 import { ensureMouseHitTestable, HAS_MOUSE, trackUiPress } from "../utils/input/Pointer";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
-import { equipmentSlots, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
+import { equipmentAttributeDiffs, equipmentCombatValue, equipmentSlots, formatSignedAttributeValue, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
 import { soulAttributeLabels } from "../../configs/soul";
 import { titleAttributeLabels } from "../../configs/title";
 import { getRankLevel, rankAttributeLabels, rankMaxLevel } from "../../configs/rank";
@@ -1412,8 +1413,12 @@ export default class GameUiHelper {
 
   //#region 物品
 
-  // 在某个格子上创建物品
-  static createGood(cell: Node, good: Goods, count?: number) {
+  /**
+   * 在某个格子上创建物品
+   * @param options.compareWornProvider 悬停装备时取「身上同槽位穿戴件」的入口（Ctrl 对比的数据源）；
+   *   只传给需要对比的调用方（背包格子）：身上装备槽、商城等悬停不做对比
+   */
+  static createGood(cell: Node, good: Goods, count?: number, options?: { compareWornProvider?: () => Equipment | null }) {
     const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
     cell.addChild(sprite);
     // 装备边框（前后缀决定的品质光效，背包与身上装备槽同一入口）：挂在**图标**节点上而不是格子下——
@@ -1427,16 +1432,32 @@ export default class GameUiHelper {
     sprite.on(
       Node.EventType.MOUSE_ENTER,
       () => {
-        // 摆放坐标由 createGoodDetailDialog 按「格子世界坐标 − UI 层世界坐标」现算（屏幕中心系）
-        const detailDialog = this.createGoodDetailDialog(good, cell);
-        LayerManager.addToUILayer(detailDialog);
+        // 悬停期间按住/松开 Ctrl 要在「带对比 / 不带对比」间实时切换：整窗重建
+        // （对比段插在属性列表后面，穿插增删节点再复算摆放比重建更容易漏状态）
+        let detailDialog: Node | null = null;
+        let closed = false;
+        let unsubscribeCtrl: (() => void) | null = null;
+        const rebuild = () => {
+          detailDialog?.destroy();
+          // 只对装备做对比；身上没穿戴同槽位（或悬停的就是身上那件）时不比（见 issue #198）
+          const worn = options?.compareWornProvider?.() ?? null;
+          const comparable = isEquipment(good) && !!worn && worn.id !== good.id;
+          const holdingCtrl = isCtrlPressed();
+          detailDialog = this.createGoodDetailDialog(good, cell, comparable && holdingCtrl ? worn : comparable ? "hint" : null);
+          LayerManager.addToUILayer(detailDialog);
+        };
+        const handleCtrlChange = () => {
+          if (!closed) rebuild();
+        };
+        rebuild();
+        unsubscribeCtrl = onCtrlChange(handleCtrlChange);
         // 鼠标移出、或物品节点被销毁（背包刷新/换装重建）都要销毁详情，
         // 否则图标被销毁时不会触发 MOUSE_LEAVE，详情会永久留在屏幕上并挡住后续点击
-        let closed = false;
         const closeDetail = () => {
           if (closed) return;
           closed = true;
-          detailDialog.destroy();
+          unsubscribeCtrl?.();
+          detailDialog?.destroy();
         };
         sprite.once(Node.EventType.MOUSE_LEAVE, closeDetail, this);
         sprite.once(Node.EventType.NODE_DESTROYED, closeDetail, this);
@@ -1553,8 +1574,11 @@ export default class GameUiHelper {
    *
    * @param good 物品数据
    * @param anchor 物品格节点（摆放与尺寸都以它为准）
+   * @param compare 对比模式：传装备 = 在属性列表下方追加「与身上穿戴对比」段；
+   *   传 "hint" = 只显示「按住 Ctrl 对比」提示行（身上有穿戴但没按 Ctrl）；
+   *   传 null/缺省 = 不出现对比相关内容（身上没得比、悬停的不是装备、或调用方没接对比）
    */
-  static createGoodDetailDialog(good: Goods, anchor: Node) {
+  static createGoodDetailDialog(good: Goods, anchor: Node, compare: Equipment | "hint" | null = null) {
     const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, new Vec2(), goodDetailLayout.size);
     // 装备详情背景（前后缀决定的品质背景动画）：换弹窗自身精灵的帧，加载完成前先显示静态底图
     this.applyEquipmentDetailBackground(dialog, good);
@@ -1665,6 +1689,9 @@ export default class GameUiHelper {
     if (contentTags) dialog.addChild(contentTags);
     dialog.addChild(contentDescription);
     dialog.addChild(contentBody);
+    // 对比段（仅背包装备悬停 + 接了对比数据源时出现，模式见上方参数说明）
+    if (compare === "hint") dialog.addChild(this.createGoodCompareHintRow());
+    if (compare && compare !== "hint") dialog.addChild(this.createGoodCompareSection(good as Equipment, compare));
 
     // 脚步图标（图片来源与尺寸见 configs/layout/dialogs.goodDetailLayout.footerLogo）
     const footerLogo = UiHelper.createSprite("logo", goodDetailLayout.footerLogo.image, new Vec2(), goodDetailLayout.footerLogo.size);
@@ -1723,6 +1750,74 @@ export default class GameUiHelper {
     attributeLabel.addChild(attribute);
 
     return attributeLabel;
+  }
+
+  /**
+   * 「按住 Ctrl 与身上装备对比」提示行（灰字弱提示：身上有穿戴但没按 Ctrl 时出现在介绍下方）
+   * 让玩家知道有对比能力可按（配置见 configs/layout/dialogs.goodDetailLayout.compare）
+   */
+  private static createGoodCompareHintRow() {
+    const style = goodDetailLayout.compare;
+    const row = UiHelper.createLabel("good_detail_compare_hint", getText("label_good_detail_compare_hint"), style.hintColor, style.hintFontSize, new Vec2(), new Size(220, 16), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER);
+    return row;
+  }
+
+  /**
+   * 「对比 · 身上穿戴」段（悬停背包装备 + 按住左 Ctrl 时出现在属性列表下方）
+   *
+   * 结构：段标题 → 按槽位显示属性逐项「穿戴值 → 候选值（±差）」→ 战斗力对比行。
+   * 差值着色：变强绿 / 变弱红 / 持平灰（配色见 configs/layout/dialogs.goodDetailLayout.compare）；
+   * 行排版复用 createAttributeLabel（图标 + 属性名 50 + 值区），只改值区文字与颜色。
+   *
+   * @param good 悬停的装备（背包里那件，作为「候选」）
+   * @param worn 身上穿戴的同槽位装备（作为「旧值」；同一件装备由调用方排除，这里不判）
+   */
+  private static createGoodCompareSection(good: Equipment, worn: Equipment) {
+    const style = goodDetailLayout.compare;
+    const section = UiHelper.createFlexCol("good_detail_compare", 3, new Vec2(), new Size(220, 20));
+    section.getComponent(Layout).resizeMode = Layout.ResizeMode.CONTAINER;
+    // 段标题（金色，与回收价行同调）
+    section.addChild(UiHelper.createLabel("good_detail_compare_title", getText("label_good_detail_compare_title"), style.titleColor, 12, new Vec2(), new Size(220, 18), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER));
+    // 逐项属性行（顺序与槽位显示属性一致：configs/good.goodShowAttributes）
+    const diffs = equipmentAttributeDiffs(goodShowAttributes.get(good.slot) ?? [], good, worn);
+    diffs.forEach(({ key, worn: wornValue, value, delta }) => {
+      // 装备属性是固定值（区间两端相等），着色看首端差即可；区间不等时首端也是主口径
+      const firstDelta = typeof delta === "number" ? delta : delta[0];
+      const color = firstDelta > 0 ? style.gainColor : firstDelta < 0 ? style.lossColor : style.sameColor;
+      const row = this.createAttributeLabel(key, value);
+      const valueLabel = row.getChildByName(String(key))?.getComponent(Label);
+      if (valueLabel) {
+        valueLabel.string = getText("label_good_detail_compare_row", {
+          worn: this.formatAttributeValue(wornValue),
+          value: this.formatAttributeValue(value),
+          delta: formatSignedAttributeValue(delta),
+        });
+        valueLabel.color = color;
+      }
+      section.addChild(row);
+    });
+    // 战斗力对比行（与「更好装备」提示同一口径：configs/equipments.equipmentCombatValue）
+    const wornCombat = equipmentCombatValue(worn);
+    const goodCombat = equipmentCombatValue(good);
+    const combatDelta = goodCombat - wornCombat;
+    const combatColor = combatDelta > 0 ? style.gainColor : combatDelta < 0 ? style.lossColor : style.sameColor;
+    const combatRow = UiHelper.createFlexRow("good_detail_compare_combat", 10, new Vec2(), new Size(220, 20));
+    combatRow.addChild(UiHelper.createSprite("icon", uiImages.dot, new Vec2(), new Size(10, 10)));
+    combatRow.addChild(UiHelper.createLabel("combat_label", getText("label_combat"), Color.WHITE, 12, new Vec2(), new Size(50, 20), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER));
+    combatRow.addChild(
+      UiHelper.createLabel(
+        "combat_value",
+        getText("label_good_detail_compare_combat", { worn: wornCombat, value: goodCombat, delta: formatSignedAttributeValue(combatDelta) }),
+        combatColor,
+        12,
+        new Vec2(),
+        new Size(140, 20),
+        Label.HorizontalAlign.LEFT,
+        Label.VerticalAlign.CENTER,
+      ),
+    );
+    section.addChild(combatRow);
+    return section;
   }
 
   /**

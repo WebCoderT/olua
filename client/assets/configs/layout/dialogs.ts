@@ -480,6 +480,21 @@ export const goodDetailLayout = {
   recycle: { fontSize: 12, size: new Size(220, 18), color: new Color("#FFD700") },
   /** 介绍文本 */
   description: { fontSize: 12, size: new Size(220, 50), lineHeight: 16 },
+  /**
+   * 「按住 Ctrl 与身上穿戴对比」段（悬停背包装备、按住左 Ctrl 时出现在属性列表下方）
+   * 逐项行的排版沿用上面的属性行（图标 + 属性名 50 + 值区），这里只管配色与提示行
+   */
+  compare: {
+    /** 段标题（「对比 · 身上穿戴」）配色（金色，与回收价行同调） */
+    titleColor: new Color(255, 214, 102),
+    /** 差值着色：变强绿 / 变弱红 / 持平灰（绿与战魂弹窗的增量色一致） */
+    gainColor: new Color(120, 220, 120),
+    lossColor: new Color(255, 80, 80),
+    sameColor: new Color(170, 170, 170),
+    /** 未按 Ctrl 时的发现提示行（灰字，弱于正文） */
+    hintColor: new Color(150, 150, 150),
+    hintFontSize: 11,
+  },
   /** 标题（装备为三段着色，其他物品单行可换行） */
   title: { fontSize: 14, size: new Size(170, 40), lineHeight: 20 },
   /** 装备标签行（占名称下方一整行；标签按字数给宽，避免被截断） */

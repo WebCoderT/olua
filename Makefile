@@ -11,7 +11,7 @@
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
-#    make client-test      客户端 36 套单测（需要本机 Cocos 工程）
+#    make client-test      客户端 37 套单测（需要本机 Cocos 工程）
 #    make verify           一条命令跑完全部门禁（含三端构建与七套 e2e）
 #    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
 #
@@ -342,7 +342,7 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
 
-test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-backup ## 全部测试：客户端 36 套 + 服务端十套 e2e
+test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-backup ## 全部测试：客户端 37 套 + 服务端十套 e2e
 	@echo ""
 	@echo "✓ 测试全部通过"
 
@@ -356,7 +356,7 @@ verify: check server-build test admin-build ## 完整门禁：三端静态检查
 #  客户端门禁分两半（见根 FAQ「为什么 CI 不覆盖客户端」，决定走路径 B）：
 #   - `make client-check`（全工程 tsc）现已进 CI：Cocos 类型声明被 vendoring 进
 #     client/types/engine/（相对路径、含真实引擎 cc.d.ts），CI 无需 Cocos 编辑器。
-#   - `make client-test` 的 36 套单测里有 10 套断言 assets/resources/ 下的真实素材
+#   - `make client-test` 的 37 套单测里有 10 套断言 assets/resources/ 下的真实素材
 #     （图集/帧序列/怪物帧 .meta），素材体积大、**有意不入库**（见 .gitignore），
 #     所以单测仍是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
 # ------------------------------------------------------------------------------

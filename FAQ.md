@@ -133,7 +133,7 @@ make verify   # = check（客户端 tsc + 管理端 typecheck + 10 个审计）+
 手工跑（等价，不依赖 `make`）：
 
 ```bash
-# 客户端：36 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
+# 客户端：37 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # 服务端：编译 + 十套 e2e（248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 14 / 87）+ 生成物一致性
@@ -167,7 +167,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 CI 跑的是 `make ci`（见 `.github/workflows/ci.yml`），它覆盖**服务端十套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查**，但**不跑客户端单测**。这是 2026-10-11 在 #24 里拍板的「路径 B」：
 
 - **客户端类型检查（`make client-check`，全工程 tsc）已进 CI。** Cocos 编辑器生成的 `client/temp/declarations/{cc,cc.custom-macro,jsb,cc.env}.d.ts` 里，shim 的 `/// <reference path="..."/>` 指向**本机 Cocos 安装的绝对路径**，而 `client/temp/` 在 `.gitignore` 里、CI 上也没装 Cocos。所以把这些声明 vendoring 进 `client/types/engine/`（相对路径 + 真实引擎 `cc.d.ts`），CI 用 `install-ci` 装好的 `client/node_modules/.bin/tsc`（与 Cocos 自带的同版本 5.8.2）即可类型检查，**无需编辑器**。
-- **客户端单测（`make client-test`，36 套）仍本地专属。** 其中 10 套直接断言 `assets/resources/` 下的真实素材（图集 / 帧序列 / 怪物帧 `.meta`），而素材 2.8 GB / 168000 文件、**有意不入库**。干净 clone 上这些断言不可能成立，把它们搬上 CI 等于要托管整套素材（路径 C），成本与维护压力都大，当前阶段不值得。
+- **客户端单测（`make client-test`，37 套）仍本地专属。** 其中 10 套直接断言 `assets/resources/` 下的真实素材（图集 / 帧序列 / 怪物帧 `.meta`），而素材 2.8 GB / 168000 文件、**有意不入库**。干净 clone 上这些断言不可能成立，把它们搬上 CI 等于要托管整套素材（路径 C），成本与维护压力都大，当前阶段不值得。
 
 **为什么选 B 而不是 A / C：**
 
