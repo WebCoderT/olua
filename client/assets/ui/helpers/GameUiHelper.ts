@@ -86,6 +86,7 @@ import {
 import { borders, getEquipmentBorderKey } from "../../configs/border";
 import { detailBackgrounds, getEquipmentDetailBackgroundKey } from "../../configs/background";
 import { getEquipmentLightKey, lights } from "../../configs/light";
+import { getStackBadge, StackBadge } from "../../configs/items";
 
 //#region 类型定义
 
@@ -1339,13 +1340,17 @@ export default class GameUiHelper {
   //#region 物品
 
   // 在某个格子上创建物品
-  static createGood(cell: Node, good: Goods) {
+  static createGood(cell: Node, good: Goods, count?: number) {
     const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
     cell.addChild(sprite);
     // 装备边框（前后缀决定的品质光效，背包与身上装备槽同一入口）：挂在**图标**节点上而不是格子下——
     // 拖动压暗源格图标时边框一起变暗（边框是图标的子节点、随 UIOpacity 一起变淡），
     // 格子刷新销毁图标时边框也随子节点一起销毁，不必单独清理
     this.applyEquipmentBorder(sprite, good);
+    // 叠加数量角标（仅背包格子传 count；身上装备槽不传，装备也不可叠加）：
+    // 与边框同挂图标下，压暗/销毁跟着图标走；画什么由 configs/items.getStackBadge 决定（可叠加且数量 > 1 才画）
+    const badge = getStackBadge(good, count);
+    if (badge) sprite.addChild(this.createGoodStackBadge(badge));
     sprite.on(
       Node.EventType.MOUSE_ENTER,
       () => {
@@ -1365,6 +1370,22 @@ export default class GameUiHelper {
       },
       this,
     );
+  }
+
+  /**
+   * 创建物品的叠加数量角标（数字标签，样式见 configs/layout/panels.bagGridLayout.badge）
+   *
+   * · 标为点击穿透：纯展示的小数字，不该参与「点是否落在 UI 上」的判定（见 utils/input/UiHit）；
+   * · 数字右对齐：一位数与三位数都贴着标签框右缘，视觉上贴住格子右下角；
+   * · 满叠（数量达到 maxStack）换 fullColor，提示这堆到顶了
+   *
+   * @param badge 角标内容（configs/items.getStackBadge 的返回值）
+   */
+  static createGoodStackBadge(badge: StackBadge) {
+    const style = bagGridLayout.badge;
+    const node = UiHelper.createLabel("good_stack_badge", badge.text, badge.full ? style.fullColor : style.color, style.fontSize, style.position, style.size, Label.HorizontalAlign.RIGHT, Label.VerticalAlign.CENTER);
+    markClickThrough(node);
+    return node;
   }
 
   /**

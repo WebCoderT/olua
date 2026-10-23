@@ -248,6 +248,12 @@ function getBagCell(bag: BagCell[][], pos: BagCellPos): BagCell | null | undefin
   return bag[pos.row]?.[pos.col];
 }
 
+/** 单种可叠加物品的单格上限（maxStack 缺省 99；不可叠加物品没有「上限」概念，返回 0） */
+export function getStackLimit(good: Goods): number {
+  if (!good || !good.stackable) return 0;
+  return Math.max(1, good.maxStack ?? 99);
+}
+
 /**
  * 两格能否合并（同 id 且配置里可叠加）→ 返回单格上限；不能合并返回 0
  * 认不出的 id（配置表里已下架）一律不能合并：不知道它的叠加规则，就不能替它算数量
@@ -255,8 +261,32 @@ function getBagCell(bag: BagCell[][], pos: BagCellPos): BagCell | null | undefin
 function getMergeMaxStack(aId: string, bId: string): number {
   if (aId !== bId) return 0;
   const good = getItem(aId);
-  if (!good || !good.stackable) return 0;
-  return Math.max(1, good.maxStack ?? 99);
+  return good ? getStackLimit(good) : 0;
+}
+
+/** 背包格子的「叠加数量角标」内容（null = 不画） */
+export interface StackBadge {
+  /** 角标文字（当前数量） */
+  text: string;
+  /** 是否满叠（数量达到单格上限，渲染层据此换色提示「这堆到顶了」） */
+  full: boolean;
+}
+
+/**
+ * 背包格子右下角的「叠加数量角标」该画什么（**纯函数**，渲染在 GameUiHelper.createGood）
+ *
+ * · 不可叠加（装备等，`stackable` 缺省即不可叠加 —— 「可叠加」的唯一来源就是配置字段，
+ *   不靠「数量大于 1」反推）或数量 ≤ 1 → null（一件就是一件，画个 1 是噪音）；
+ * · 可叠加且数量 > 1 → 当前数量；数量达到单格上限时 full = true。
+ *
+ * @param good 物品配置（背包格子只存 id，调用方负责用 getItem 解析；解析不出传 null）
+ * @param count 格子里的数量（缺省按 1 算）
+ */
+export function getStackBadge(good: Goods | null, count: number | undefined): StackBadge | null {
+  if (!good || !good.stackable) return null;
+  const safeCount = Math.max(1, count ?? 1);
+  if (safeCount <= 1) return null;
+  return { text: String(safeCount), full: safeCount >= getStackLimit(good) };
 }
 
 /**
