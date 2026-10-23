@@ -8,7 +8,7 @@ import type { MonsterTier } from "../types/monster";
  * - 角色等级属性：configs/level 拿它生成 1~60 级的 levelMap（key 就是等级本身）
  * - 怪物属性：configs/monster 的每条怪物按**自己的 level 字段**调 monsterStats(level, tier) 拿
  *   （怪物的 key 只做相互关联，可以是任意字符串，不参与任何数值计算）
- * - 战魂属性：configs/soul 按「等效等级」取角色属性再打折
+ * - 战魂属性：configs/soul 的逐级明文表（issue #17 起为手调数据；冻结前曾按「等效等级」从本曲线打折派生）
  * 想调数值一律改这个文件，不要再回各配置里散着改。
  *
  * ## 曲线形态：分段线性

@@ -1,5 +1,4 @@
 import type { SoulAttributes, SoulLevelConfig } from "../types/soul";
-import { getRoleLevelAttributes, roleMaxLevel } from "./growth";
 
 /**
  * 战魂配置（单一成长线）
@@ -9,12 +8,14 @@ import { getRoleLevelAttributes, roleMaxLevel } from "./growth";
  * - sfx_13101~13115 兽魂/魔将系（factor 1.15）
  * - sfx_13200~13201 魔神系（factor 1.35）
  *
- * 属性**不在这里拍数值**，而是按阶映射到一个「等效角色等级」，取该等级的角色裸属性再打折
- * （见下面的 soulGrowth），这样 configs/growth 的等级曲线一改，战魂强度自动跟着走，
- * 不会出现「战魂比角色本人还强」或「升了几十阶毫无感觉」。
+ * 属性与升级消耗是**逐级明文表**（issue #17），不再由运行时公式推导：
+ * 两张表按「等效等级映射」的公式一次性冻结而来（1 阶 ≈ 2 级角色、37 阶 ≈ 60 级角色的
+ * 0.5 × 1.35 ≈ 67.5%，冻结于 2026-10-23，当时的三条成长线排序 称号 39% < 军衔 52.5% < 战魂 67.5% 由此保持），
+ * 之后**想调哪一阶就改哪一行** —— 等级曲线（configs/growth）再怎么改，战魂强度也不会被动漂移。
+ * 全量重导出的旧公式只活在 git 历史里；满阶收益排序的口径见本文件末尾的 soulMaxLevel 注释与 test-soul-growth.cjs。
  */
 
-/** 战魂外观源：resources/war-soul 下的目录编号 + 系列强度系数 */
+/** 战魂外观源：resources/war-soul 下的目录编号 + 系列强度系数（系数只说明系列定位，数值已冻结进属性表） */
 interface SoulSource {
   /** 资源目录编号（目录名 = sfx_编号） */
   id: number;
@@ -67,60 +68,108 @@ const soulSources: SoulSource[] = [
   { id: 13201, factor: 1.35, label: "灭世魔神", description: "战魂的最终形态，紫芒刺破苍穹，世称灭世。" },
 ];
 
+/** 升到 N 阶战魂的消耗（绑定元宝；下标 0 = 升到 1 阶，数组长度 = 满阶） */
+export const soulUpgradeCosts: number[] = [
+  300, // 1 阶 · 烈阳灵体
+  1200, // 2 阶 · 碧波灵体
+  2700, // 3 阶 · 寒霜灵体
+  4800, // 4 阶 · 沧澜灵体
+  7500, // 5 阶 · 紫电灵体
+  10800, // 6 阶 · 烈焰灵体
+  14700, // 7 阶 · 疾风灵体
+  19200, // 8 阶 · 幻海灵体
+  24300, // 9 阶 · 紫霄灵体
+  30000, // 10 阶 · 玄波灵体
+  36300, // 11 阶 · 鎏金灵体
+  43200, // 12 阶 · 沧浪灵体
+  50700, // 13 阶 · 碎冰灵体
+  58800, // 14 阶 · 月华灵体
+  67500, // 15 阶 · 紫微灵体
+  76800, // 16 阶 · 流火灵体
+  86700, // 17 阶 · 霜风灵体
+  97200, // 18 阶 · 天羽灵体
+  108300, // 19 阶 · 紫鸢灵体
+  120000, // 20 阶 · 冥波灵体
+  132300, // 21 阶 · 寒渊魔将
+  145200, // 22 阶 · 碧涛兽魂
+  158700, // 23 阶 · 涌泉精魄
+  172800, // 24 阶 · 深渊魔灵
+  187500, // 25 阶 · 玄波兽魂
+  202800, // 26 阶 · 青藤古灵
+  218700, // 27 阶 · 翠灵
+  235200, // 28 阶 · 紫煞魔灵
+  252300, // 29 阶 · 圣光天使
+  270000, // 30 阶 · 金曜兽魂
+  288300, // 31 阶 · 炎狱兽魂
+  307200, // 32 阶 · 熔金鳞皇
+  326700, // 33 阶 · 赤炎兽魂
+  346800, // 34 阶 · 血煞魔将
+  367500, // 35 阶 · 炽血魔君
+  388800, // 36 阶 · 血翼魔神
+  410700, // 37 阶 · 灭世魔神
+];
+
 /**
- * 战魂强度曲线（战魂属性 = 等效等级的角色裸属性 × rate × 系列 factor）
- * - 1 阶 ≈ 2 级角色（刚激活时只是象征性加成）
- * - 满阶 37 阶 ≈ 60 级角色的 0.5 × 1.35 ≈ 67%，相当于多穿一套满级裸装
- * 想让战魂整体更强/更弱只改 rate；想让成长更陡就把 toLevel 往上顶（等效等级提前拉满）。
+ * 每阶战魂的属性加成（下标 0 = 1 阶；数组长度 = 满阶）
+ * 区间与角色属性同口径：[下限, 上限]
  */
-export const soulGrowth = {
-  /** 1 阶对应的等效角色等级 */
-  fromLevel: 2,
-  /** 满阶对应的等效角色等级 */
-  toLevel: roleMaxLevel,
-  /** 属性折扣率（再乘各系列 factor） */
-  rate: 0.5,
-};
+const soulLevelAttributes: SoulAttributes[] = [
+  { maxHp: 59, physicalAttack: [9, 12], magicAttack: [9, 12], taoistAttack: [9, 12], physicalDefense: [3, 4], magicDefense: [3, 4], taoistDefense: [3, 4], hpRecover: 1 }, // 1 阶 · 烈阳灵体
+  { maxHp: 77, physicalAttack: [11, 16], magicAttack: [11, 16], taoistAttack: [11, 16], physicalDefense: [3, 5], magicDefense: [3, 5], taoistDefense: [3, 5], hpRecover: 1 }, // 2 阶 · 碧波灵体
+  { maxHp: 86, physicalAttack: [13, 18], magicAttack: [13, 18], taoistAttack: [13, 18], physicalDefense: [4, 5], magicDefense: [4, 5], taoistDefense: [4, 5], hpRecover: 1 }, // 3 阶 · 寒霜灵体
+  { maxHp: 104, physicalAttack: [16, 22], magicAttack: [16, 22], taoistAttack: [16, 22], physicalDefense: [4, 6], magicDefense: [4, 6], taoistDefense: [4, 6], hpRecover: 1 }, // 4 阶 · 沧澜灵体
+  { maxHp: 113, physicalAttack: [17, 24], magicAttack: [17, 24], taoistAttack: [17, 24], physicalDefense: [5, 7], magicDefense: [5, 7], taoistDefense: [5, 7], hpRecover: 1 }, // 5 阶 · 紫电灵体
+  { maxHp: 131, physicalAttack: [20, 28], magicAttack: [20, 28], taoistAttack: [20, 28], physicalDefense: [6, 8], magicDefense: [6, 8], taoistDefense: [6, 8], hpRecover: 2 }, // 6 阶 · 烈焰灵体
+  { maxHp: 195, physicalAttack: [26, 37], magicAttack: [26, 37], taoistAttack: [26, 37], physicalDefense: [8, 11], magicDefense: [8, 11], taoistDefense: [8, 11], hpRecover: 2 }, // 7 阶 · 疾风灵体
+  { maxHp: 224, physicalAttack: [30, 42], magicAttack: [30, 42], taoistAttack: [30, 42], physicalDefense: [9, 12], magicDefense: [9, 12], taoistDefense: [9, 12], hpRecover: 2 }, // 8 阶 · 幻海灵体
+  { maxHp: 283, physicalAttack: [37, 53], magicAttack: [37, 53], taoistAttack: [37, 53], physicalDefense: [11, 15], magicDefense: [11, 15], taoistDefense: [11, 15], hpRecover: 3 }, // 9 阶 · 紫霄灵体
+  { maxHp: 342, physicalAttack: [45, 64], magicAttack: [45, 64], taoistAttack: [45, 64], physicalDefense: [13, 18], magicDefense: [13, 18], taoistDefense: [13, 18], hpRecover: 4 }, // 10 阶 · 玄波灵体
+  { maxHp: 372, physicalAttack: [49, 70], magicAttack: [49, 70], taoistAttack: [49, 70], physicalDefense: [14, 20], magicDefense: [14, 20], taoistDefense: [14, 20], hpRecover: 4 }, // 11 阶 · 鎏金灵体
+  { maxHp: 431, physicalAttack: [57, 81], magicAttack: [57, 81], taoistAttack: [57, 81], physicalDefense: [16, 23], magicDefense: [16, 23], taoistDefense: [16, 23], hpRecover: 5 }, // 12 阶 · 沧浪灵体
+  { maxHp: 540, physicalAttack: [65, 92], magicAttack: [65, 92], taoistAttack: [65, 92], physicalDefense: [20, 28], magicDefense: [20, 28], taoistDefense: [20, 28], hpRecover: 6 }, // 13 阶 · 碎冰灵体
+  { maxHp: 732, physicalAttack: [88, 125], magicAttack: [88, 125], taoistAttack: [88, 125], physicalDefense: [27, 38], magicDefense: [27, 38], taoistDefense: [27, 38], hpRecover: 8 }, // 14 阶 · 月华灵体
+  { maxHp: 924, physicalAttack: [111, 158], magicAttack: [111, 158], taoistAttack: [111, 158], physicalDefense: [34, 48], magicDefense: [34, 48], taoistDefense: [34, 48], hpRecover: 9 }, // 15 阶 · 紫微灵体
+  { maxHp: 1020, physicalAttack: [122, 175], magicAttack: [122, 175], taoistAttack: [122, 175], physicalDefense: [37, 53], magicDefense: [37, 53], taoistDefense: [37, 53], hpRecover: 10 }, // 16 阶 · 流火灵体
+  { maxHp: 1212, physicalAttack: [146, 208], magicAttack: [146, 208], taoistAttack: [146, 208], physicalDefense: [44, 63], magicDefense: [44, 63], taoistDefense: [44, 63], hpRecover: 12 }, // 17 阶 · 霜风灵体
+  { maxHp: 1308, physicalAttack: [157, 224], magicAttack: [157, 224], taoistAttack: [157, 224], physicalDefense: [48, 68], magicDefense: [48, 68], taoistDefense: [48, 68], hpRecover: 13 }, // 18 阶 · 天羽灵体
+  { maxHp: 1760, physicalAttack: [193, 275], magicAttack: [193, 275], taoistAttack: [193, 275], physicalDefense: [58, 83], magicDefense: [58, 83], taoistDefense: [58, 83], hpRecover: 18 }, // 19 阶 · 紫鸢灵体
+  { maxHp: 2390, physicalAttack: [263, 375], magicAttack: [263, 375], taoistAttack: [263, 375], physicalDefense: [79, 113], magicDefense: [79, 113], taoistDefense: [79, 113], hpRecover: 24 }, // 20 阶 · 冥波灵体
+  { maxHp: 3111, physicalAttack: [342, 489], magicAttack: [342, 489], taoistAttack: [342, 489], physicalDefense: [103, 147], magicDefense: [103, 147], taoistDefense: [103, 147], hpRecover: 31 }, // 21 阶 · 寒渊魔将
+  { maxHp: 3835, physicalAttack: [423, 604], magicAttack: [423, 604], taoistAttack: [423, 604], physicalDefense: [127, 181], magicDefense: [127, 181], taoistDefense: [127, 181], hpRecover: 39 }, // 22 阶 · 碧涛兽魂
+  { maxHp: 4198, physicalAttack: [463, 661], magicAttack: [463, 661], taoistAttack: [463, 661], physicalDefense: [139, 198], magicDefense: [139, 198], taoistDefense: [139, 198], hpRecover: 42 }, // 23 阶 · 涌泉精魄
+  { maxHp: 4922, physicalAttack: [543, 776], magicAttack: [543, 776], taoistAttack: [543, 776], physicalDefense: [163, 233], magicDefense: [163, 233], taoistDefense: [163, 233], hpRecover: 49 }, // 24 阶 · 深渊魔灵
+  { maxHp: 6612, physicalAttack: [664, 949], magicAttack: [664, 949], taoistAttack: [664, 949], physicalDefense: [200, 285], magicDefense: [200, 285], taoistDefense: [200, 285], hpRecover: 66 }, // 25 阶 · 玄波兽魂
+  { maxHp: 7803, physicalAttack: [781, 1116], magicAttack: [781, 1116], taoistAttack: [781, 1116], physicalDefense: [234, 335], magicDefense: [234, 335], taoistDefense: [234, 335], hpRecover: 78 }, // 26 阶 · 青藤古灵
+  { maxHp: 10183, physicalAttack: [1014, 1449], magicAttack: [1014, 1449], taoistAttack: [1014, 1449], physicalDefense: [304, 435], magicDefense: [304, 435], taoistDefense: [304, 435], hpRecover: 102 }, // 27 阶 · 翠灵
+  { maxHp: 12564, physicalAttack: [1248, 1782], magicAttack: [1248, 1782], taoistAttack: [1248, 1782], physicalDefense: [374, 535], magicDefense: [374, 535], taoistDefense: [374, 535], hpRecover: 126 }, // 28 阶 · 紫煞魔灵
+  { maxHp: 13754, physicalAttack: [1364, 1949], magicAttack: [1364, 1949], taoistAttack: [1364, 1949], physicalDefense: [409, 585], magicDefense: [409, 585], taoistDefense: [409, 585], hpRecover: 137 }, // 29 阶 · 圣光天使
+  { maxHp: 16134, physicalAttack: [1598, 2283], magicAttack: [1598, 2283], taoistAttack: [1598, 2283], physicalDefense: [480, 685], magicDefense: [480, 685], taoistDefense: [480, 685], hpRecover: 162 }, // 30 阶 · 金曜兽魂
+  { maxHp: 17325, physicalAttack: [1715, 2450], magicAttack: [1715, 2450], taoistAttack: [1715, 2450], physicalDefense: [515, 735], magicDefense: [515, 735], taoistDefense: [515, 735], hpRecover: 173 }, // 31 阶 · 炎狱兽魂
+  { maxHp: 25576, physicalAttack: [2278, 3254], magicAttack: [2278, 3254], taoistAttack: [2278, 3254], physicalDefense: [684, 976], magicDefense: [684, 976], taoistDefense: [684, 976], hpRecover: 256 }, // 32 阶 · 熔金鳞皇
+  { maxHp: 33373, physicalAttack: [2970, 4244], magicAttack: [2970, 4244], taoistAttack: [2970, 4244], physicalDefense: [891, 1273], magicDefense: [891, 1273], taoistDefense: [891, 1273], hpRecover: 334 }, // 33 阶 · 赤炎兽魂
+  { maxHp: 37272, physicalAttack: [3317, 4738], magicAttack: [3317, 4738], taoistAttack: [3317, 4738], physicalDefense: [995, 1421], magicDefense: [995, 1421], taoistDefense: [995, 1421], hpRecover: 373 }, // 34 阶 · 血煞魔将
+  { maxHp: 45069, physicalAttack: [4009, 5727], magicAttack: [4009, 5727], taoistAttack: [4009, 5727], physicalDefense: [1203, 1718], magicDefense: [1203, 1718], taoistDefense: [1203, 1718], hpRecover: 451 }, // 35 阶 · 炽血魔君
+  { maxHp: 57483, physicalAttack: [5112, 7304], magicAttack: [5112, 7304], taoistAttack: [5112, 7304], physicalDefense: [1534, 2191], magicDefense: [1534, 2191], taoistDefense: [1534, 2191], hpRecover: 575 }, // 36 阶 · 血翼魔神
+  { maxHp: 66636, physicalAttack: [5925, 8465], magicAttack: [5925, 8465], taoistAttack: [5925, 8465], physicalDefense: [1777, 2539], magicDefense: [1777, 2539], taoistDefense: [1777, 2539], hpRecover: 666 }, // 37 阶 · 灭世魔神
+];
 
-/** 阶 → 等效角色等级（线性映射） */
-function getEquivalentLevel(level: number): number {
-  const span = Math.max(1, soulSources.length - 1);
-  return soulGrowth.fromLevel + ((level - 1) / span) * (soulGrowth.toLevel - soulGrowth.fromLevel);
+// 两张表必须与外观序列一一对齐（错位会让某阶拿不到消耗或属性，在别处表现为 undefined 静默失效）
+if (soulUpgradeCosts.length !== soulSources.length || soulLevelAttributes.length !== soulSources.length) {
+  throw new Error(
+    `soul 配置错位：消耗 ${soulUpgradeCosts.length} 条 / 属性 ${soulLevelAttributes.length} 条 ≠ 外观 ${soulSources.length} 阶（改表时逐阶一起改）`,
+  );
 }
 
-/** 把一份角色属性整体打 rate 折（区间上下限一起打折） */
-function scaleAttributes(base: ReturnType<typeof getRoleLevelAttributes>, rate: number) {
-  const scale = (range: [number, number]): [number, number] => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
-  return {
-    maxHp: Math.round(base.maxHp * rate),
-    // 回血与血量同一口径打折：战魂加的血多，回血也就多（结算见 ui/utils/battle/HpHelper）
-    hpRecover: Math.round(base.hpRecover * rate),
-    physicalAttack: scale(base.physicalAttack),
-    magicAttack: scale(base.magicAttack),
-    taoistAttack: scale(base.taoistAttack),
-    physicalDefense: scale(base.physicalDefense),
-    magicDefense: scale(base.magicDefense),
-    taoistDefense: scale(base.taoistDefense),
-  };
-}
-
-/** 战魂等级序列（level 从 1 开始连续，外观目录在 resources/war-soul 下） */
-export const soulLevels: SoulLevelConfig[] = soulSources.map((source, index) => {
-  const level = index + 1;
-  const factor = source.factor;
-  // 属性：取「等效等级」的角色裸属性整体打折（换个说法：战魂相当于一个低你好几十级的角色在给你加成）
-  const equivalentLevel = Math.round(getEquivalentLevel(level));
-  return {
-    level,
-    label: source.label,
-    description: source.description,
-    // 升级消耗：等级越高越贵（想手调改成字面量即可）
-    bindGold: 300 * level * level,
-    animation: `war-soul/sfx_${source.id}`,
-    animationFrameRate: 10,
-    attributes: scaleAttributes(getRoleLevelAttributes(equivalentLevel), soulGrowth.rate * factor),
-  };
-});
+/** 战魂等级序列（level 从 1 开始连续，外观目录在 resources/war-soul 下；消耗与属性取上面的逐级明文表） */
+export const soulLevels: SoulLevelConfig[] = soulSources.map((source, index) => ({
+  level: index + 1,
+  label: source.label,
+  description: source.description,
+  bindGold: soulUpgradeCosts[index],
+  animation: `war-soul/sfx_${source.id}`,
+  animationFrameRate: 10,
+  attributes: soulLevelAttributes[index],
+}));
 
 /** 战魂满级 */
 export const soulMaxLevel = soulLevels.length;

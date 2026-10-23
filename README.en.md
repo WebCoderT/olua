@@ -110,10 +110,10 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 
 ### The traces this way of working left in the repo
 
-- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 32 unit-test suites under `client/tools/` and 10 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
+- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 33 unit-test suites under `client/tools/` and 10 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 87 assertions) + typechecks on two sides + 32 unit-test suites + 10 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 87 assertions) + typechecks on two sides + 33 unit-test suites + 10 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -207,7 +207,7 @@ olua/
     - hand-written: `HttpClient` wrapper and shared dispatch / `ApiCodes` business codes and text keys / `ApiError` error normalisation / `Session` / `RoleSync` progress sync / `NetworkSetup` wiring
 - assets/resources: assets (map tmx, frame animations, atlases, icons, UI assets)
 - assets/scenes: login, character selection, loading and game scenes
-- tools: **client-only scripts** (32 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
+- tools: **client-only scripts** (33 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
 - settings / profiles / native / package.json / tsconfig.json: Cocos project configuration (`package.json` describes the Cocos project, not npm scripts)
 - library / temp / build: Cocos cache and build output (not version-controlled)
 - Details in [client/README.md](client/README.en.md), questions in [client/FAQ.md](client/FAQ.en.md)
@@ -285,14 +285,14 @@ make env            # generate server/.env (skipped if it already exists)
 make dev            # start server :3100 and admin :5173 together; Ctrl-C exits both
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
-make client-test    # client's 32 unit-test suites
+make client-test    # client's 33 unit-test suites
 make server-verify  # verify the server with one command (compile + ten e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 10 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 10 audits
-make test           # all tests: client's 32 suites + server's ten e2e suites
+make test           # all tests: client's 33 suites + server's ten e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -395,7 +395,7 @@ make verify   # = check + builds on all three sides + all tests
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 32 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
+# Client: 33 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # Server: compile + ten e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 14 / 87) + generated-artifact consistency
@@ -467,7 +467,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 | Title display | Once unlocked, the plate shows **permanently above the character's head bar** (same node as the name / HP bar, native size, unscaled), no toggle, surviving map changes and re-login; entry is the "Title" button in the character info popup (next to "War Soul", no NPC involved) |  ✅  |
 | Rank system | A single **100-tier** (10 major segments × 10 tiers) growth line in a three-column popup with a rank insignia; promotion with bound ingots (price = 30 × N²), attributes generated as "equivalent-level base attributes × rate × major-segment factor" (full rank ≈ 52.5% of base attributes, between Title's 39% and War Soul's 67%) |  ✅  |
 | Rank display | The rank name shows as **red text permanently above the HP bar** in the character's overhead info bar (below the character name; the rank has no assets — that line of red text is its appearance), blank before any rank is granted, updated immediately after promotion, surviving map changes and re-login; entry is the "Rank" button in the character info popup (stacked vertically with "War Soul" and "Title", no NPC involved) |  ✅  |
-| War Soul numbers and costs tuned per tier | Upgrade costs and attributes are formula placeholders, pending per-tier tuning |  ❌  |
+| War Soul numbers and costs tuned per tier | Upgrade costs and attributes are **per-tier literal tables** (37 tiers, one editable row per tier in `soulUpgradeCosts` / `soulLevelAttributes` in `configs/soul`), no longer derived by a runtime formula; full tier ≈ 67.5% of level-60 base attributes, and the three-line ordering Title 39% < Rank 52.5% < War Soul 67.5% is locked by unit tests |  ✅  |
 
 ### Equipment and items
 
