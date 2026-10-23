@@ -14,10 +14,12 @@
 
 浏览器 ──► :8080 游戏容器(nginx)
               │    Cocos Web 构建产物（静态）
-              └─►  /api/*  ──┤
-                             ▼
-                服务端容器(:3100，仅 compose 内网可达)
-                             └─► SQLite（具名卷 olua-data）
+              ├─►  /api/*  ─────────┐
+              └─►  /api/realtime* ──┤（含 WS upgrade 头）
+                             ▼      ▼
+              服务端容器(:3100)   实时进程容器(:3101)
+              （仅 compose 内网可达，同一镜像、不同入口）
+                             └─► SQLite（具名卷 olua-data，WAL 双进程共享）
 ```
 
 三条设计约束，改动时别破坏：
@@ -26,6 +28,7 @@
 | --- | --- |
 | 管理端与接口**同源**（都从 :80 进，`/api` 由 nginx 反代） | 浏览器压根不发跨域请求 → 服务端**不需要配 CORS**，少一处会配错且配错难发现的地方 |
 | 服务端 `:3100` **不映射到宿主机** | 对外多开一个端口只是把签名接口和 Swagger 一并暴露，没有收益。要本地调试就把 `docker-compose.yml` 里那四行注释打开 |
+| 实时进程 `:3101` **同样不映射**（#175 拆进程） | game 容器把 `/api/realtime*` 按路径反代到 `server-realtime`（含 WS upgrade 头），客户端零改动；两进程共享同一个 SQLite 卷（WAL） |
 | **不上 HTTPS**（当前决定） | 先跑通。将来要上就在宿主机加一层 nginx/Caddy 做 TLS 终结、反代到 :80，不动 compose |
 
 数据落在具名卷 `olua-data`，`docker compose down` **不会**删它；只有 `down -v` 才会。
@@ -97,7 +100,8 @@ ssh -i "$DEPLOY_KEY" "$DEPLOY_USER@$DEPLOY_HOST" '
   cd /opt/olua
   docker compose ps
   curl --noproxy "*" -s http://127.0.0.1/api/health
-  curl --noproxy "*" -s -o /dev/null -w "page=%{http_code}\n" http://127.0.0.1/'
+  curl --noproxy "*" -s -o /dev/null -w "page=%{http_code}\n" http://127.0.0.1/
+  curl --noproxy "*" -s -o /dev/null -w "realtime-ticket=%{http_code}\n" -X POST http://127.0.0.1:8080/api/realtime/ticket'
 ```
 
 浏览器打开 `http://<服务器公网IP>` → 管理端注册页，用 `deploy.env` 里的邀请码注册**第一个管理员**（第一个自动成为超管）。
@@ -149,10 +153,12 @@ git archive --format=tar.gz -o /tmp/olua-src.tgz <旧commit>
 
 ```bash
 cd /opt/olua
-docker compose ps                     # 容器状态
-docker compose logs -f server         # 服务端日志（Ctrl-C 退出）
+docker compose ps                     # 容器状态（应有 server / server-realtime / admin / game 四个）
+docker compose logs -f server         # 存档进程日志（Ctrl-C 退出）
+docker compose logs -f server-realtime # 实时进程日志（WS / 世界 / 结算都在这里）
 docker compose logs -f admin          # 管理端 nginx 日志
-docker compose restart server         # 只重启服务端
+docker compose restart server         # 只重启存档进程（实时进程在跑的连接不受影响）
+docker compose restart server-realtime # 只重启实时进程（世界状态会全量落盘后退出，重启恢复）
 docker compose down                   # 收（数据卷保留）
 docker compose down -v                # 收并删卷 —— **会丢库**，别乱用
 docker system prune -a                # 清无用镜像层（磁盘紧张时用）
@@ -183,6 +189,7 @@ docker run --rm -v olua-data:/data -v /opt/olua/backup:/backup \
 | `docker info` 报权限错误 | `ubuntu` 不在 docker 组 → `sudo usermod -aG docker ubuntu`，**重新登录**才生效 |
 | 看起来「Docker 没启动」 | 别只信 `docker info`（它受 socket 权限影响），看 `systemctl status docker` |
 | 管理端 502 | nginx 反代用的 `server:3100` 是 compose 内网域名；`docker compose logs server` 看服务端是否真起来了 |
+| 能登录但实时通道连不上 | `docker compose logs server-realtime` 看实时进程；`/api/realtime*` 必须反代到它且带 WS upgrade 头（`make audit` 会查） |
 | 页面能开但接口 404 | 反代前缀 `/api/` 必须与服务端 `API_PREFIX=api` 一致（`make audit` 会查） |
 | 登录限流把所有人锁死 | `TRUST_PROXY` 必须为 `true`（compose 已设），否则来源 IP 全是 nginx 容器的 |
 | 上传 40M 归档被中断 | `scp` 可能超过前台命令时限，放到后台跑即可，不是网络故障 |
