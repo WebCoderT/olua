@@ -73,6 +73,12 @@ interface BagDragState {
  * 的语义 —— 按下之后不管指针拖到哪儿、松在谁身上，结束事件都回到起点格，落点则用指针位置自己算，
  * 不必担心中途经过别的按钮被抢走事件。反过来，鼠标通道**不能**用来拖动：节点上注册 MOUSE_MOVE
  * 会吞掉全局的指针追踪（光标样式与按住走路都会卡住，见 Pointer/blockClickThrough 的长注释）。
+ *
+ * 「独占」还有一层必须知道的引擎行为（3.8.7 node-event-processor._handleTouchEnd，踩过一次）：
+ * 派发 TOUCH_END 前引擎会对**认领节点自身**再做一次命中测试，松手点不在认领节点上时，
+ * 事件会被**改判成 TOUCH_CANCEL** 再派发 —— 拖到别的格子上松手，起点格收到的恰恰是 CANCEL。
+ * 所以落子收尾必须同时挂在 TOUCH_END 与 TOUCH_CANCEL 上（见 onCellTouchEnd 的说明）；
+ * 只挂 END 的话，物品永远拖不动：松回原格才产生 END，而那是原地点回原地。
  */
 export default class BagGridView extends Node {
   /** 格子节点（[行][列]） */
@@ -131,11 +137,13 @@ export default class BagGridView extends Node {
         const cell = this.cells[rowIndex][colIndex];
         // 传格子数量 → 可叠加物右下角画数量角标（画不画、画多少由 configs/items.getStackBadge 决定）
         GameUiHelper.createGood(cell, good, bagCell.count);
-        // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）
+        // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）。
+        // 结束收尾 END 与 CANCEL 都接到 onCellTouchEnd：引擎把「松手在认领节点之外」改判成
+        // TOUCH_CANCEL（见类注释），只挂 END 的话拖到别的格子松手永远不落子
         cell.on(Node.EventType.TOUCH_START, (event: EventTouch) => this.onCellTouchStart(rowIndex, colIndex, event), this);
         cell.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => this.onCellTouchMove(event), this);
         cell.on(Node.EventType.TOUCH_END, (event: EventTouch) => this.onCellTouchEnd(event), this);
-        cell.on(Node.EventType.TOUCH_CANCEL, () => this.endDrag(), this);
+        cell.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => this.onCellTouchEnd(event), this);
         // 右键按住不该拖动物品：TOUCH_* 事件不带按键，另在鼠标通道记一笔（触屏环境收不到，恒为左键）
         cell.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => this.onCellMouseDown(event), this);
         bindPointerAction(cell, (button) => this.onCellAction(rowIndex, colIndex, this.toAction(button)), this);
@@ -246,7 +254,15 @@ export default class BagGridView extends Node {
   }
 
   /**
-   * 松手：按指针位置定去向
+   * 落子收尾：TOUCH_END 与 TOUCH_CANCEL 共用（见类注释与注册处的说明）
+   *
+   * 为什么 CANCEL 不能当「取消」处理：引擎在松手点不在认领节点上时把 END 改判成 CANCEL——
+   * 而「松手在别的格子上」恰恰是拖动最正常的结果。落到这里的 CANCEL 有两种来源：
+   * · 引擎改判（松手在起点格外）：`event.getLocation()` 仍是准确的松手点，按落子走；
+   * · 真正的系统中断（来电/切后台等）：事件里带的是最后已知指针位置，也按那里落子 ——
+   *   与玩家拖动中的意图一致，且落点规则（空格移动/同种合并/其余交换）本身是安全的。
+   *
+   * 按指针位置定去向：
    * · 落在受理区（背包弹窗）**外面** → 玩家想销毁这件东西：物品先被扣住保持压暗，上报弹窗弹确认框
    *   （确认才真的丢，取消则由弹窗放开扣留，物品原样留在原格）—— 这条判定**优先**，
    *   只看松手点本身，不受拖动途中记下的落点影响

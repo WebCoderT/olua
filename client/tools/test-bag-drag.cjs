@@ -357,7 +357,10 @@ check(/normalizeBagGrid\(role\.bag, bagRow, bagCol\)/.test(storageSource), "读�
 check(/cell\.on\(Node\.EventType\.TOUCH_START,/.test(gridViewSource), "格子注册了 TOUCH_START（记拖动起点）");
 check(/cell\.on\(Node\.EventType\.TOUCH_MOVE,/.test(gridViewSource), "格子注册了 TOUCH_MOVE（跟指针）");
 check(/cell\.on\(Node\.EventType\.TOUCH_END,/.test(gridViewSource), "格子注册了 TOUCH_END（落子）");
-check(/cell\.on\(Node\.EventType\.TOUCH_CANCEL, \(\) => this\.endDrag\(\)/.test(gridViewSource), "TOUCH_CANCEL 会把拖动收干净");
+check(
+  /cell\.on\(Node\.EventType\.TOUCH_CANCEL, \(event: EventTouch\) => this\.onCellTouchEnd\(event\)/.test(gridViewSource),
+  "TOUCH_CANCEL 与 TOUCH_END 共用落子收尾（引擎把「松手在起点格外」改判成 CANCEL，只挂 END 永不落子，#193）",
+);
 check(!/Node\.EventType\.MOUSE_MOVE/.test(gridViewSource), "不在节点上注册 MOUSE_MOVE（会吞掉全局指针追踪）");
 check(/cell\.on\(Node\.EventType\.MOUSE_DOWN,/.test(gridViewSource), "鼠标通道记一笔按键（右键不拖动物品）");
 check(/this\.rightPress = getPointerButton\(event\) === "right";/.test(gridViewSource), "按下时判断是不是右键");
