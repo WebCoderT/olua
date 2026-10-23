@@ -218,6 +218,16 @@ export const uiTexts = {
   label_good_slot_fallback: "装备",
   /** 装备详情：回收价（{price}） */
   label_good_detail_recycle: "回收价 {price} 绑定元宝",
+  /** 装备对比：段标题（悬停背包装备按住 Ctrl 时显示身上穿戴的对比） */
+  label_good_detail_compare_title: "对比 · 身上穿戴",
+  /** 装备对比：逐项行（{worn} 穿戴值 · {value} 候选值 · {delta} 带符号差值） */
+  label_good_detail_compare_row: "{worn} → {value}（{delta}）",
+  /** 装备对比：战斗力行（{worn} · {value} · {delta} 同上口径） */
+  label_good_detail_compare_combat: "战斗力 {worn} → {value}（{delta}）",
+  /** 装备对比：发现提示（该槽位身上有穿戴但未按 Ctrl 时显示） */
+  label_good_detail_compare_hint: "按住 Ctrl 与身上装备对比",
+  /** 装备对比：属性名（战斗力行用，与角色信息弹窗的战斗力图标同一个词） */
+  label_combat: "战斗力",
 
   //#region 界面标签：背包操作按钮（文案在这里，几何见 configs/layout/dialogs.bagDialogLayout）
   /** 「一键整理」按钮 */

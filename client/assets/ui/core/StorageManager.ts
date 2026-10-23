@@ -6,7 +6,7 @@ import { levelMap } from "../../configs/level";
 import { roleMaxLevel } from "../../configs/growth";
 import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
-import { BagCell, EQUIPMENT_TYPE, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
+import { BagCell, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
 import { MapId } from "../../types/map";
 import { NeedSetShortcutKeyConfig } from "../../types/role";
 import { SkillId } from "../../types/skill";
@@ -443,6 +443,15 @@ export default class StorageManager {
       }
     }
     return null;
+  }
+
+  /**
+   * 取身上某槽位穿戴的装备（未穿戴/解析不出返回 null）
+   * 背包悬停详情「按住 Ctrl 对比」的数据源（见 GameUiHelper.createGood 的 compareWornProvider）
+   * @param slot 装备槽位
+   */
+  static getWornEquipment(slot: EQUIPMENT_TYPE): Equipment | null {
+    return getEquipment(this.findOnlineRole()?.equipments[slot] ?? null);
   }
 
   /**

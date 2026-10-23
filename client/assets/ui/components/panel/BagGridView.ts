@@ -2,7 +2,7 @@ import { EventMouse, EventTouch, isValid, Node, Sprite, UITransform, Vec2, Vec3 
 import { Role } from "../../../entities/Role";
 import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import { getItem } from "../../../configs/items";
-import { BagCellPos } from "../../../types/good";
+import { BagCellPos, isEquipment } from "../../../types/good";
 import CursorManager from "../../core/CursorManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -136,7 +136,10 @@ export default class BagGridView extends Node {
         if (!good) return;
         const cell = this.cells[rowIndex][colIndex];
         // 传格子数量 → 可叠加物右下角画数量角标（画不画、画多少由 configs/items.getStackBadge 决定）
-        GameUiHelper.createGood(cell, good, bagCell.count);
+        // compareWornProvider → 悬停装备按住 Ctrl 时与身上同槽位穿戴对比（身上装备槽不传，不对比）
+        GameUiHelper.createGood(cell, good, bagCell.count, {
+          compareWornProvider: () => (isEquipment(good) ? StorageManager.getWornEquipment(good.slot) : null),
+        });
         // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）。
         // 结束收尾 END 与 CANCEL 都接到 onCellTouchEnd：引擎把「松手在认领节点之外」改判成
         // TOUCH_CANCEL（见类注释），只挂 END 的话拖到别的格子松手永远不落子

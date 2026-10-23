@@ -201,6 +201,47 @@ export function equipmentCombatValue(equipment: Equipment): number {
   return total;
 }
 
+/** 装备单条属性的对比结果（候选件 vs 身上穿戴件） */
+export interface EquipmentAttributeDiff {
+  /** 属性 key（configs/good.goodShowAttributesLabel 给显示名） */
+  key: keyof BattleAttributes;
+  /** 穿戴件的属性值（区间或单值） */
+  worn: number[] | number;
+  /** 候选件的属性值（区间或单值） */
+  value: number[] | number;
+  /** 差值（候选 − 穿戴；区间逐端相减，着色与「±」格式化都用它） */
+  delta: number[] | number;
+}
+
+/**
+ * 两件装备的属性逐项对比（**纯函数**，背包悬停详情「按住 Ctrl 对比」的数据源）
+ *
+ * 对比哪些属性由调用方按槽位传入（configs/good.goodShowAttributes 的顺序即显示顺序），
+ * 这里只负责逐项算「候选 − 穿戴」的差值：区间属性逐端相减，单值属性直接相减。
+ *
+ * @param keys 要对比的属性 key（按显示顺序）
+ * @param candidate 候选装备（背包里悬停的那件）
+ * @param worn 身上穿戴的装备（同槽位；不存在时调用方不该发起对比）
+ */
+export function equipmentAttributeDiffs(keys: (keyof BattleAttributes)[], candidate: Equipment, worn: Equipment): EquipmentAttributeDiff[] {
+  return keys.map((key) => {
+    const cand = candidate[key];
+    const old = worn[key];
+    const delta = typeof cand === "number" || typeof old === "number" ? (cand as number) - (old as number) : [cand[0] - old[0], cand[1] - old[1]];
+    return { key, worn: old as number[] | number, value: cand as number[] | number, delta };
+  });
+}
+
+/**
+ * 差值的带符号格式化（**纯函数**）：正数带「+」，0 与负数原样（负号自带）；
+ * 区间逐端加号，两端相同只显示一个数（与 formatAttributeValue 的省略口径一致）
+ */
+export function formatSignedAttributeValue(value: number[] | number): string {
+  const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+  if (typeof value === "number") return signed(value);
+  return value[0] === value[1] ? signed(value[0]) : `${signed(value[0])} / ${signed(value[1])}`;
+}
+
 /**
  * 取某装备 Map 的基础件（普通的·人级，prefix/suffix 全 0）
  * 新手装备、全量列表展示等只应给基础件——Map 里其余 14 个是前后缀变体（key 带 _pXsY），不该默认发放
