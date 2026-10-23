@@ -39,6 +39,9 @@ RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
 EXPOSE 3100
+# 实时进程（dist/main.realtime.js）监听的端口 —— 同一镜像、不同入口（docker-compose.yml
+# 的 server-realtime 服务）。EXPOSE 只是文档：端口真正的权威是各自的配置。
+EXPOSE 3101
 
 # 健康检查用 Node 自带的 fetch：alpine 里没有 curl，也不值得为它多装一个包
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

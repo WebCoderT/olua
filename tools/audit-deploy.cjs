@@ -14,6 +14,9 @@
  *   - compose 里 `${VAR}` 一律要有默认值（没设就起不来，属于「一键起」的反面）
  *   - 静态站 `location /` 的 try_files 必须带 `$uri/`（不带的话请求 / 会直接 404）
  *   - 服务端运行镜像必须带着 `scripts/`（自动备份在进程里拉起那个备份脚本）
+ *   - 实时通道接线（#175 拆进程）：compose 必须有 server-realtime 服务（走 main.realtime
+ *     入口、DB_PATH 落在同一个卷里）；game nginx 必须把 /api/realtime* 反代到它并带
+ *     WS upgrade 头 —— 少任何一边，玩家都是「能登录、连不上实时通道」
  *
  * **只做静态接线检查**：本机与 CI 里不一定有 Docker，镜像构建本身不在这里验。
  * 实现上是**锚点匹配**而不是完整 YAML 解析 —— 认的正是我们自己这几个文件的固定形态；
@@ -282,6 +285,57 @@ if (!exists(BACKUP_SCRIPT)) {
 
 //#endregion
 
+//#region 10. 实时进程接线（#175 拆进程：compose 双服务 + nginx 按路径反代 WS）
+
+// compose 必须有 server-realtime 服务，且入口是 main.realtime
+if (serviceNames.includes("server-realtime")) ok("compose 有实时进程服务", "server-realtime");
+else fail("compose 里没有 server-realtime 服务 —— 独立进程形态（#175）部署后实时通道整个不存在");
+
+const realtimeCommand = /server-realtime:[\s\S]*?command:[\s\S]*?main\.realtime\.js/.exec(compose);
+if (realtimeCommand) ok("实时进程入口", "command 走 dist/main.realtime.js");
+else fail("compose 的 server-realtime 没有 `command: … dist/main.realtime.js` —— 会跟存档进程起成两个一样的实例");
+
+// 实时进程与存档进程必须挂**同一个**卷（同一份 SQLite 文件才共享得起来）
+const realtimeDbPath = /server-realtime:[\s\S]*?DB_PATH:\s*(\S+)/.exec(compose);
+if (realtimeDbPath && dbPath && mount) {
+  if (realtimeDbPath[1] === dbPath[1]) ok("实时进程与存档进程同库", realtimeDbPath[1]);
+  else fail(`server-realtime 的 DB_PATH=${realtimeDbPath[1]} 与 server 的 ${dbPath[1]} 不同 —— 两进程必须共享同一个 SQLite 文件`);
+} else if (!realtimeDbPath) {
+  fail("compose 的 server-realtime 没有显式 DB_PATH —— 实时进程的写会落进容器可写层，容器重建即丢");
+}
+
+// game nginx 必须把 /api/realtime 反代到 server-realtime（上游名 + 端口 + WS upgrade 头）
+const realtimeUpstream = /set\s+\$olua_realtime\s+http:\/\/([a-z0-9-]+):(\d+);/.exec(gameNginx);
+if (!realtimeUpstream) {
+  fail("deploy/nginx-game.conf 里没找到实时上游锚点 `set $olua_realtime http://server-realtime:<端口>;` —— 玩家能登录但连不上实时通道");
+} else {
+  const [, rtHost, rtPort] = realtimeUpstream;
+  if (rtHost === "server-realtime") ok("game nginx 实时上游服务名", rtHost);
+  else fail(`game nginx 实时通道反代到 \`${rtHost}\`，但 compose 里的实时服务叫 server-realtime`);
+
+  if (rtPort === "3101") ok("game nginx 实时上游端口", rtPort);
+  else fail(`game nginx 实时上游端口是 ${rtPort}，应为 3101（与 compose 的 REALTIME_PORT 一致）`);
+
+  const rtLocation = /location\s+\/api\/realtime\s*\{([\s\S]*?)\n {2}\}/.exec(gameNginx);
+  if (!rtLocation) {
+    fail("deploy/nginx-game.conf 里没有 `location /api/realtime` 块 —— 取票与 WS 都会落到存档进程");
+  } else {
+    if (/proxy_set_header\s+Upgrade\s+\$http_upgrade;/.test(rtLocation[1]) && /proxy_set_header\s+Connection\s+"upgrade";/.test(rtLocation[1])) {
+      ok("实时反代带 WS upgrade 头", "Upgrade + Connection");
+    } else {
+      fail("实时反代缺 `Upgrade` / `Connection \"upgrade\"` 头 —— WS 握手会退化成普通 HTTP 请求被拒");
+    }
+    if (/proxy_read_timeout\s+\d+s;/.test(rtLocation[1])) ok("实时反代放宽了读超时", "WS 是长连接，默认 60s 会掐断");
+    else fail("实时反代没有调大 proxy_read_timeout —— WS 会被 nginx 默认 60s 掐断（心跳救不回所有代理）");
+  }
+}
+
+// server/Dockerfile 必须把 3101 也 EXPOSE 出来（文档口径：实时进程端口）
+if (/^EXPOSE\s+3101\s*$/m.test(serverDockerfile)) ok("server/Dockerfile EXPOSE 3101", "实时进程端口已声明");
+else fail("server/Dockerfile 没有 `EXPOSE 3101` —— 实时进程端口的文档口径缺失（镜像不 Mapping，纯文档也要接得上）");
+
+//#endregion
+
 console.log("部署接线审计 / deploy wiring audit");
 console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / 两份 nginx.conf / .env.example）`);
 console.log("（只做静态接线检查：本机与 CI 不一定有 Docker，镜像构建本身不在这里验）");
@@ -293,4 +347,4 @@ if (failures.length) {
   console.log(`\nFAIL：${failures.length} 处部署接线有问题`);
   process.exit(1);
 }
-console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index / 备份脚本随镜像都接得上");
+console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index / 备份脚本随镜像 / 实时进程双服务接线都接得上");
