@@ -186,6 +186,14 @@ server/
 ⚠️ 读写路径态度不同：**读取容错**（坏数据当空对象），**编辑必须严格解析、失败即报错** ——
 用空对象兜底去写会把玩家的背包/装备清空（踩过的坑，e2e 里钉了断言）。
 
+## 内部边界：跨模块调用走白名单边
+
+模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
+
+- **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
+- **仓储只由全局 `DatabaseModule` 装配**（8 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
+
 ## 认证与权限
 
 两层，**都在守卫里，业务代码禁止写角色判断**：

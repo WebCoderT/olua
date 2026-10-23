@@ -1,8 +1,5 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { DatabaseModule } from "../../database/database.module";
-import { AccountRepository } from "../../database/repositories/account.repository";
-import { MailRepository } from "../../database/repositories/mail.repository";
 import { AdminMailController } from "./admin-mail.controller";
 import { FailMailTransport, FakeMailTransport, MAIL_TRANSPORT, MailTransport, SmtpMailTransport } from "./mail-transport";
 import { MailSchedulerService } from "./mail-scheduler.service";
@@ -16,12 +13,9 @@ import { MailService } from "./mail.service";
  * 把外部边界换成「一律成功 / 一律失败」的假发信器（见 `mail-transport` 的说明）。
  */
 @Module({
-  imports: [DatabaseModule],
   controllers: [AdminMailController],
   providers: [
     MailService,
-    MailRepository,
-    AccountRepository,
     MailSchedulerService,
     {
       provide: MAIL_TRANSPORT,

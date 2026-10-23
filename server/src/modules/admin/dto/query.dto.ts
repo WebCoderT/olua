@@ -6,7 +6,7 @@ import { ADMIN_ROLES } from "../../../common/constants/permission";
 import { ENTITY_STATUS } from "../../../common/constants/status";
 import { BizException } from "../../../common/errors/biz.exception";
 import { BAN_DURATION_MAX_HOURS } from "../../../common/utils/ban.util";
-import { RoleFilter } from "../../../database/repositories/role.repository";
+import { RoleFilter } from "../../../database/rows";
 import { ROLE_LEVEL_MAX, ROLE_OCCUPATIONS, ROLE_SEXES } from "../../roles/role-data.util";
 
 /** 账号列表查询 */
@@ -128,14 +128,6 @@ export class StatsRecentQueryDto {
   @Min(1, { message: "条数至少 1" })
   @Max(50, { message: "条数最多 50" })
   limit?: number;
-}
-
-/** 分页入参规整（page 从 1 开始，size 限 1~100） */
-export function normalizePage(query: PageQueryDto, defaultSize = 20): { page: number; size: number } {
-  const page = Math.max(1, Math.floor(Number(query.page ?? 1)) || 1);
-  const raw = Math.floor(Number(query.size ?? defaultSize)) || defaultSize;
-  const size = Math.min(100, Math.max(1, raw));
-  return { page, size };
 }
 
 /**

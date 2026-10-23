@@ -227,3 +227,19 @@ export interface WorldMonsterRow {
 }
 
 //#endregion
+
+//#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
+
+/** 角色筛选条件（管理端列表 / 批量操作共用） */
+export interface RoleFilter {
+  keyword?: string;
+  accountId?: string;
+  /** true 只看在线角色；false 只看离线角色；不传不筛 */
+  online?: boolean;
+  occupation?: string;
+  sex?: string;
+  minLevel?: number;
+  maxLevel?: number;
+}
+
+//#endregion

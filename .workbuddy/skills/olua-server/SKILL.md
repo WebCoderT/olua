@@ -59,6 +59,9 @@ server/src
     audit/   操作日志查询（只读两接口；interceptor 与 service 同模块）
     system/  系统信息（运行时 / 各表行数 / 脱敏配置快照；快照走白名单，密钥只报形态）
     token/   JWT        health/  健康检查
+    ⮑ 内部边界（#36）：跨模块 import 只能走 tools/audit-server-boundaries.cjs 的白名单边
+      （ALLOWED_EDGES / REPO_EDGES）；仓储只由全局 DatabaseModule 装配（业务模块 providers 里
+      再注册同名仓储 = 第二个实例，mail 踩过）；combat 纯函数只许引基础层。
   shared/
     game-data.generated.ts        公共游戏数据快照（**三端唯一的游戏数据来源**；@generated，
                                   重生成 = node tools/gen-shared-data.cjs，守卫 = tools/audit-shared-data.cjs）
@@ -276,7 +279,7 @@ env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.
 **每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
 
 - 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
-- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 九套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端九套 e2e + 管理端构建 + 9 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
+- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 九套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端九套 e2e + 管理端构建 + 10 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
 - 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；服务端的端名取 `server`。
 - **改了接口的提交必须连生成物一起提交**（`openapi.json` + 两端接口文件是同一笔改动的一部分，否则另外两端停在旧契约上）。
 - 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。

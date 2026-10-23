@@ -1,6 +1,4 @@
 import { Module } from "@nestjs/common";
-import { DatabaseModule } from "../../database/database.module";
-import { SystemRepository } from "../../database/repositories/system.repository";
 import { AdminSystemController } from "./admin-system.controller";
 import { BackupSchedulerService } from "./backup-scheduler.service";
 import { BackupService } from "./backup.service";
@@ -17,8 +15,8 @@ import { SystemService } from "./system.service";
  * 必须是同一份脚本、同一个目录、同一套保留策略。
  */
 @Module({
-  imports: [DatabaseModule],
+  // SystemRepository 由全局 DatabaseModule 提供（全部仓储统一装配，模块内不再本地注册）
   controllers: [AdminSystemController],
-  providers: [SystemService, SystemRepository, BackupService, BackupSchedulerService],
+  providers: [SystemService, BackupService, BackupSchedulerService],
 })
 export class SystemModule {}
