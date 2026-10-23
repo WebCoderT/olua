@@ -16,7 +16,10 @@ The primary repository lives on **GitHub** (`github.com/WebCoderT/olua`); [putiw
 - The **Gitee mirror** is fine for browsing the code, cloning / downloading, and the occasional star; it is synced periodically, **may lag behind, and GitHub is always authoritative**;
 - Issues / PRs opened on Gitee **will not be handled** (the mirror takes no collaboration) — please file everything on GitHub instead.
 
-Mirror stats (as of 2026-10-23, see the Gitee page for live numbers): **18 stars · 4 watchers · 8 forks**.
+Live mirror stats (official Gitee badges, generated on each page load):
+
+[![star](https://gitee.com/putiwan/olua/badge/star.svg?theme=gvp)](https://gitee.com/putiwan/olua/stargazers)
+[![fork](https://gitee.com/putiwan/olua/badge/fork.svg?theme=gvp)](https://gitee.com/putiwan/olua/members)
 
 ## The three sides
 

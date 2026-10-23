@@ -16,7 +16,10 @@
 - **Gitee 镜像**适合浏览代码、克隆 / 下载、顺手点个 Star；它是定期同步过来的，**有延迟，以 GitHub 为准**；
 - 在 Gitee 上开的 issue / PR **不会被处理**（镜像不接收协作），请一律到 GitHub 提。
 
-镜像数据（截至 2026-10-23，以 Gitee 页面实时为准）：**Star 18 · Watch 4 · Fork 8**。
+镜像实时数据（Gitee 官方徽章，随页面加载实时生成）：
+
+[![star](https://gitee.com/putiwan/olua/badge/star.svg?theme=gvp)](https://gitee.com/putiwan/olua/stargazers)
+[![fork](https://gitee.com/putiwan/olua/badge/fork.svg?theme=gvp)](https://gitee.com/putiwan/olua/members)
 
 ## 三个端
 
