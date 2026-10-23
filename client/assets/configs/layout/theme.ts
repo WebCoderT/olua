@@ -26,7 +26,11 @@ export const uiTheme = {
    * 每个飘字三个几何参数：出生点相对目标的纵向偏移 spawnOffsetY、上浮距离 riseDistance、上浮/淡出时长
    */
   floatingText: {
-    /** 伤害飘字（颜色按伤害正负由代码决定：受伤红、MISS 白） */
+    /**
+     * 伤害飘字（颜色按伤害正负由代码决定：受伤红、MISS 白）
+     * offsetXs 是连续挨打时的错峰横向偏移（像素，按出场次数轮转取用，见 GameUiHelper.showDamageText）：
+     * 连续命中不会都叠在同一个点上糊成一团；数组只有一项时相当于关闭错峰
+     */
     damage: {
       color: Color.RED,
       fontSize: 18,
@@ -35,6 +39,7 @@ export const uiTheme = {
       riseDuration: 0.6,
       riseDistance: 40,
       fadeDuration: 0.9,
+      offsetXs: [-26, 26, 0],
     },
     /** 技能释放飘字（释放者头顶） */
     skill: {

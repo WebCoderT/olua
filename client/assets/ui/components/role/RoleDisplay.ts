@@ -413,6 +413,24 @@ export default class RoleDisplay extends Node {
 
   //#endregion
 
+  //#region 受击反馈
+
+  /**
+   * 受击动作（怪物普攻命中玩家时由组合根接线触发，见 core/MonsterAI.onPlayerHit 与 Game.start）
+   *
+   * 优先级规则（issue #13：受击不能随便打断玩家正在做的事）：
+   * - 正在施法/普攻（attacking 锁）→ 不播：被小怪碰一下就断技能，比没有反馈更糟；
+   * - 死亡 → 不播（死亡动画播完停最后一帧，期间一切动作切换冻结）；
+   * - 其余情况（待机/走跑/自动战斗走位）→ 播一次性受击动作，动作与位移都不被打断
+   *   （外观播完自动回到当前动作，见 RoleAppearance.playInjured）
+   */
+  playInjured() {
+    if (this.dead || this.attacking) return;
+    this.appearance?.playInjured(this.direction);
+  }
+
+  //#endregion
+
   //#region 选中目标与操控状态
 
   /** 设置攻击目标（null 表示取消选中），并刷新怪物信息面板 */

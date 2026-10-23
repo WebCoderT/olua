@@ -29,6 +29,7 @@ import { debugConfig } from "../../configs/debug";
 import { getText, TextParams } from "../../configs/texts";
 import { BottomNavItem } from "../../configs/bottomNav";
 import { getAnimationName } from "../../configs/animation";
+import { hitScreenFlash } from "../../configs/effect";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
@@ -156,6 +157,11 @@ const goodTag = goodDetailLayout.tag;
  * 页面/弹窗的拼接组装由各组件自身完成，本类不做整页视图生成
  */
 export default class GameUiHelper {
+  /** 伤害飘字的错峰轮转序号（全局累计，见 showDamageText 与 uiTheme.floatingText.damage.offsetXs） */
+  private static damageTextSeq = 0;
+  /** 上一次受击红闪的时刻（毫秒时间戳，见 showHitScreenFlash 与 configs/effect.hitScreenFlash.cooldownMs） */
+  private static lastHitFlashAt = 0;
+
   //#region 通用元素零件
 
   /** 创建一张带资源图的节点 */
@@ -641,8 +647,11 @@ export default class GameUiHelper {
     const text = damage > 0 ? getText("label_damage", { value: damage }) : getText("label_damage_miss");
     const damageText = UiHelper.createLabel("damage_text", text, damage > 0 ? style.color : Color.WHITE, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(damageText);
-    // 位置与受伤物体保持一致
-    damageText.setWorldPosition(target.getWorldPosition());
+    // 位置与受伤物体保持一致；横向按出场次数在 offsetXs 里轮转错峰 ——
+    // 连续挨打时数字不会都叠在同一点上糊成一团（轮转序号是全局的：多个目标同时飘也互相错开）
+    const offsetXs = style.offsetXs.length ? style.offsetXs : [0];
+    const offsetX = offsetXs[this.damageTextSeq++ % offsetXs.length];
+    damageText.setWorldPosition(target.getWorldPosition().x + offsetX, target.getWorldPosition().y, target.getWorldPosition().z);
     const uiOpacity = damageText.addComponent(UIOpacity);
     tween(damageText)
       .to(style.riseDuration, { position: new Vec3(damageText.position.x, damageText.position.y + style.riseDistance, 0) })
@@ -652,6 +661,45 @@ export default class GameUiHelper {
       .call(() => {
         damageText.destroy();
       })
+      .start();
+  }
+
+  /**
+   * 受击屏幕反馈：全屏薄红闪一下（挂特效层、以相机为中心铺满可视区，淡入即淡出后自毁）
+   * 由怪物普攻命中玩家时调用（见 core/MonsterAI 的 onPlayerHit 接线）；
+   * 按配置限频 —— 被围殴时不重触发，避免红屏常驻。参数见 configs/effect.hitScreenFlash
+   */
+  static showHitScreenFlash() {
+    const config = hitScreenFlash;
+    const now = Date.now();
+    if (now - this.lastHitFlashAt < config.cooldownMs) return;
+    this.lastHitFlashAt = now;
+    // 图层容器没进场景（登录/选角这类）或场景正在切换时不闪
+    const effectLayer = LayerManager.EffectLayer;
+    if (!effectLayer || !isValid(effectLayer) || !effectLayer.scene) return;
+    const camera = LayerManager.camera;
+    if (!camera || !isValid(camera.node)) return;
+    const size = getVisibleSize();
+    const flash = new Node("hit_screen_flash");
+    const transform = flash.addComponent(UITransform);
+    const width = size.width * config.overscan;
+    const height = size.height * config.overscan;
+    transform.setContentSize(width, height);
+    const graphics = flash.addComponent(Graphics);
+    graphics.fillColor = config.color;
+    graphics.rect(-width / 2, -height / 2, width, height);
+    graphics.fill();
+    flash.addComponent(UIOpacity);
+    LayerManager.addToEffectLayer(flash);
+    // 屏幕中心即相机中心（与 AutoBattleTips 同一口径），铺在特效层最上但不盖 UI
+    flash.setWorldPosition(camera.node.getWorldPosition());
+    // 临时装饰：不参与点击命中，别让一闪而过的红层挡住世界点击
+    markClickThrough(flash);
+    const opacity = flash.getComponent(UIOpacity)!;
+    tween(opacity)
+      .to(config.fadeIn, { opacity: 255 * config.maxOpacity })
+      .to(config.fadeOut, { opacity: 0 })
+      .call(() => flash.destroy())
       .start();
   }
 

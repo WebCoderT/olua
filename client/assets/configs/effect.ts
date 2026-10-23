@@ -1,4 +1,4 @@
-import { Vec2 } from "cc";
+import { Color, Vec2 } from "cc";
 
 /**
  * 特效配置
@@ -35,4 +35,26 @@ export const selectIndicator = {
   offset: new Vec2(0, -40),
   /** 循环播放帧率（每秒帧数） */
   frameRate: 10,
+};
+
+/**
+ * 玩家受击的屏幕反馈（怪物普攻命中后全屏闪一下红，见 GameUiHelper.showHitScreenFlash）
+ * 挂特效层、以相机为中心铺满可视区，淡入即淡出；无素材依赖（Graphics 画纯色矩形）
+ */
+export const hitScreenFlash = {
+  /** 闪光颜色（配合 UIOpacity 淡入淡出，颜色本身不透明） */
+  color: new Color(255, 0, 0, 255),
+  /** 峰值不透明度（0~1）：只做一层薄红，闪一下提示即可，不能盖住画面 */
+  maxOpacity: 0.16,
+  /** 淡入时长（秒） */
+  fadeIn: 0.05,
+  /** 淡出时长（秒） */
+  fadeOut: 0.25,
+  /**
+   * 限频间隔（毫秒）：连续挨打时不重触发，避免被围殴期间红屏常驻
+   * （一次闪烁从淡入到淡出约 0.3 秒，限频略大于此即可看起来「每波命中闪一次」）
+   */
+  cooldownMs: 400,
+  /** 铺满可视区再放大的倍率（镜头边缘/适配留白时防止四周露出未覆盖的底） */
+  overscan: 1.2,
 };

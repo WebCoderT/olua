@@ -33,6 +33,13 @@ export default class MonsterAI {
   private static states = new WeakMap<Node, MonsterAIState>();
 
   /**
+   * 玩家被普攻命中的反馈出口（由组合根接线，见 Game.start / Game.onDestroy）
+   * 结算命中后调用：受击动作（RoleDisplay.playInjured 的优先级规则在宿主侧）与屏幕红闪都在这里触发；
+   * 怪物 AI 不直接依赖主角组件（避免 core → components 的反向引用），没接线时受击只飘字
+   */
+  static onPlayerHit: ((player: Node) => void) | null = null;
+
+  /**
    * 每帧驱动场上怪物的行为
    * @param monsters 场上怪物（节点 -> 怪物数据，见 MonsterManager.getMonsterMap）
    * @param player 玩家节点（取坐标与飘字用；场上没有玩家时传 null）
@@ -180,6 +187,9 @@ export default class MonsterAI {
     if (!role || role.hp <= 0) return;
     const damage = applyHitDamage(role, monster);
     GameUiHelper.showDamageText(player, damage);
+    // 受击反馈：屏幕红闪（限频见 configs/effect.hitScreenFlash）+ 受击动作（走组合根接线，未接线时只有飘字）
+    GameUiHelper.showHitScreenFlash();
+    this.onPlayerHit?.(player);
     StorageManager.updateOnlineRole(role);
     StorageManager.updateUi(role);
   }
