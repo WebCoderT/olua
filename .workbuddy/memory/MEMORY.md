@@ -7,7 +7,7 @@
 ## 提交纪律（用户强制，2026-10-10 定）
 - 所有提交必须有 issue/PR：开 issue → 分支 `type/n-slug` → 提交（`Closes/Refs #n`）→ PR → CI 绿 → squash 合并；master 不允许无追踪提交（docs 也不例外）。
 - **一个 PR = 一个 squash = 一个功能**；一个 issue 含多功能先拆小 issue。格式 `feat|fix|docs|…(端): 一句话`；改接口必须连 `openapi.json` + 两端生成物一起提交。
-- 全绿才提交：`make verify`（客户端 tsc + 29 套单测 / 服务端十套 e2e / 管理端 build / 10 审计）。**别记死数字**，从命令输出实测。
+- 全绿才提交：`make verify`（客户端 tsc + 35 套单测 / 服务端十套 e2e / 管理端 build / 10 审计）。**别记死数字**，从命令输出实测。
 - 双语文档：中文主体 + 同目录 `X.en.md`，口径全等（索引 #45）。
 
 ## 分支线（2026-10-20 定）
