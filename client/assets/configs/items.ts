@@ -1,6 +1,6 @@
 import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
-import { belts, clothes, equipmentSlotOrder, getRecyclePrice, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
+import { belts, clothes, equipmentCombatValue, equipmentSlotOrder, getRecyclePrice, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
 import { materials } from "./material";
 
 /**
@@ -330,6 +330,58 @@ export function moveBagCellGrid(bag: BagCell[][], from: BagCellPos, to: BagCellP
   result[from.row][from.col] = { id: target.id, count: Math.max(1, target.count) };
   result[to.row][to.col] = { id: source.id, count: Math.max(1, source.count) };
   return { bag: result, moved: true };
+}
+
+/** 背包里更优装备的命中格（格子坐标 + 解析出的装备本体） */
+export interface BagEquipmentUpgrade {
+  /** 背包行 */
+  row: number;
+  /** 背包列 */
+  col: number;
+  /** 更优装备（已按配置表解析） */
+  equipment: Equipment;
+}
+
+/**
+ * 在背包里找某槽位「更好的装备」（**纯函数**，角色信息弹窗的提示角标与一键替换共用这一个判定）
+ *
+ * 口径：
+ * - 只看同槽位的装备；解析不出配置的格子跳过；
+ * - 是否可穿（等级/性别/职业）由调用方注入 canUse 判定 —— 配置层不认识角色；
+ * - 「更好」= 战斗力贡献（configs/equipments.equipmentCombatValue，与战斗力同一张权重表）
+ *   **严格大于**当前穿戴件（相同不提示，避免无意义换装）；
+ *   槽位为空（worn 传 null）时任何可穿的同槽位装备都算提升；
+ * - 多件都更好时取战斗力贡献最高的一件（并列取先扫到的，背包行优先）。
+ *
+ * @param bag 背包格子（{ id, count }，物品数据实时解析）
+ * @param slot 装备槽位
+ * @param canUse 角色可穿判定（GameHelper.checkRoleCanUseEquipment 的注入点）
+ * @param worn 当前穿戴件（未穿戴传 null）
+ */
+export function findBagEquipmentUpgrade(
+  bag: BagCell[][],
+  slot: EQUIPMENT_TYPE,
+  canUse: (equipment: Equipment) => boolean,
+  worn: Equipment | null,
+): BagEquipmentUpgrade | null {
+  let best: BagEquipmentUpgrade | null = null;
+  let bestValue = worn ? equipmentCombatValue(worn) : -1;
+  for (let row = 0; row < bag.length; row++) {
+    const cells = bag[row] ?? [];
+    for (let col = 0; col < cells.length; col++) {
+      const cell = cells[col];
+      if (!cell) continue;
+      const good = getItem(cell.id);
+      if (!good || !isEquipment(good) || good.slot !== slot) continue;
+      if (!canUse(good)) continue;
+      const value = equipmentCombatValue(good);
+      if (value > bestValue) {
+        bestValue = value;
+        best = { row, col, equipment: good };
+      }
+    }
+  }
+  return best;
 }
 
 /**

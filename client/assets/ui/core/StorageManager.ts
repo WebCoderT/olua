@@ -16,7 +16,7 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
-import { getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid } from "../../configs/items";
+import { getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
 import { getMallPrice } from "../../configs/mall";
 import { getEquipmentNameParts } from "../../configs/equipments";
 import { getSoulLevel } from "../../configs/soul";
@@ -443,6 +443,37 @@ export default class StorageManager {
       }
     }
     return null;
+  }
+
+  /**
+   * 背包里某槽位「更好的装备」在哪一格（角色信息弹窗提示角标的数据源）
+   * 判定口径见 configs/items.findBagEquipmentUpgrade：同槽位 + 可穿（等级/性别/职业）+
+   * 战斗力贡献严格大于当前穿戴件（空槽时任何可穿件都算提升）
+   * @param slot 装备槽位
+   * @returns 命中格坐标；没有更好的装备（或无角色）返回 null
+   */
+  static findBetterEquipmentInBag(slot: EQUIPMENT_TYPE): { row: number; col: number } | null {
+    const role = this.findOnlineRole();
+    if (!role) return null;
+    const candidate = findBagEquipmentUpgrade(
+      role.bag,
+      slot,
+      (equipment) => GameHelper.checkRoleCanUseEquipment(equipment),
+      getEquipment(role.equipments[slot]),
+    );
+    return candidate ? { row: candidate.row, col: candidate.col } : null;
+  }
+
+  /**
+   * 一键换上背包里该槽位更好的装备（角色信息弹窗提示角标的点击入口）
+   * 复用 equipFromBag：校验/换装/旧装备回原格/属性重算与各处刷新都是同一条路
+   * @param slot 装备槽位
+   * @returns 是否换上成功（没有更好的装备时返回 false，不打扰）
+   */
+  static equipBetterFromBag(slot: EQUIPMENT_TYPE): boolean {
+    const better = this.findBetterEquipmentInBag(slot);
+    if (!better) return false;
+    return this.equipFromBag(better.row, better.col);
   }
 
   /**

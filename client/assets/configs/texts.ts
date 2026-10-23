@@ -46,6 +46,8 @@ export const uiTexts = {
   bag_full_tip: "背包已满，无法脱下装备",
   /** 槽位里的装备已不在配置表中 */
   equip_missing_tip: "该装备已不存在",
+  /** 装备槽「更好装备」提示角标（点击角标一键换上背包里更好的装备） */
+  label_equip_upgrade_hint: "换",
   /** 整理完成 */
   bag_tidy_tip: "背包已整理",
   /** 背包本身已经整齐，无需整理 */
