@@ -113,7 +113,9 @@ const soulMaxHp = soulLevels[soulLevels.length - 1].attributes.maxHp;
 check(rankMaxHp > titleMaxHp, `满衔强于满阶称号（满衔血量 ${rankMaxHp} > 称号 ${titleMaxHp}）`);
 check(rankMaxHp < soulMaxHp, `满衔弱于满阶战魂（满衔血量 ${rankMaxHp} < 战魂 ${soulMaxHp}）`);
 check(rankMaxHp < bareMaxHp, `满衔仍低于 60 级角色裸血（${rankMaxHp} < ${bareMaxHp}），不会盖过角色本人`);
-check(rankGrowth.rate > titleGrowth.rate && rankGrowth.rate < soulGrowth.rate, `折扣率夹在称号与战魂之间（${titleGrowth.rate} < ${rankGrowth.rate} < ${soulGrowth.rate}）`);
+// 战魂自 #17 起是逐级明文表（没有 rate 常量了）：单阶强度的对比改用「冻结口径」——
+// 战魂冻结时按 等效等级裸属性 × 0.5 × 系列 factor（≤1.35）打折，军衔 rate 0.35 夹在称号 0.3 与战魂 0.5 之间
+check(rankGrowth.rate > titleGrowth.rate && rankGrowth.rate < 0.5, `折扣率夹在称号（${titleGrowth.rate}）与战魂冻结口径（0.5）之间（${rankGrowth.rate}）`);
 
 console.log("\n— C. 价格曲线（晋到 N 阶 = priceBase × N²，货币 = 绑定元宝）—");
 check(rankLevels.every((config) => config.bindGold === rankUpgradePrice(config.level)), "每阶 bindGold 与价格曲线一致");
