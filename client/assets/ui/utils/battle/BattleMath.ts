@@ -1,6 +1,8 @@
 import { BoxCollider2D, Node, Vec2 } from "cc";
 import { DIRECTION } from "../../../types/animation";
 import { BattleAttributes } from "../../../types/common";
+import { statuses } from "../../../configs/status";
+import { StatusId } from "../../../types/status";
 
 /**
  * 战斗数值与判定（纯函数模块）
@@ -19,6 +21,44 @@ const defenseAttributeByAttack: Record<AttackAttribute, DefenseAttribute> = {
   magicAttack: "magicDefense",
   taoistAttack: "taoistDefense",
 };
+
+/** 状态带来的防御修正（从进行中的状态汇总，见 collectStatusCombatModifiers） */
+export interface StatusCombatModifiers {
+  /** 格挡触发概率（0-1） */
+  blockChance: number;
+  /** 格挡触发时伤害乘的系数（0.5 = 减半） */
+  blockFactor: number;
+  /** 防御乘法系数（1.5 = 防御 ×1.5） */
+  defenseMultiplier: number;
+}
+
+/** 无状态时的中性修正值（行为与没有状态系统时完全一致） */
+export const NO_STATUS_MODIFIERS: StatusCombatModifiers = { blockChance: 0, blockFactor: 1, defenseMultiplier: 1 };
+
+/**
+ * 从进行中的状态汇总防御修正（纯函数；状态数值语义在 configs/status 的 combat 字段）
+ * 叠加口径（详见 client/FAQ.md）：格挡概率取最大值（不叠概率）、格挡系数取最小值（取更保护的一个）、防御系数连乘
+ */
+export function collectStatusCombatModifiers(activeStatusIds: readonly string[]): StatusCombatModifiers {
+  const modifiers: StatusCombatModifiers = { ...NO_STATUS_MODIFIERS };
+  activeStatusIds.forEach((statusId) => {
+    const combat = statuses.get(statusId as StatusId)?.combat;
+    if (!combat) return;
+    if (combat.blockChance !== undefined) modifiers.blockChance = Math.max(modifiers.blockChance, combat.blockChance);
+    if (combat.blockFactor !== undefined) modifiers.blockFactor = Math.min(modifiers.blockFactor, combat.blockFactor);
+    if (combat.defenseMultiplier !== undefined) modifiers.defenseMultiplier *= combat.defenseMultiplier;
+  });
+  return modifiers;
+}
+
+/**
+ * 结算一次「格挡与减伤」（纯函数核心；随机数由调用方给，单测给定 roll 即可复现）
+ * roll < blockChance 视为格挡，触发时伤害乘 blockFactor（四舍五入回整数，不为负）
+ */
+export function resolveIncomingDamage(damage: number, modifiers: StatusCombatModifiers, roll: number): { blocked: boolean; damage: number } {
+  const blocked = roll < modifiers.blockChance;
+  return { blocked, damage: blocked ? Math.max(0, Math.round(damage * modifiers.blockFactor)) : damage };
+}
 
 /** 八分象限 -> 八方向（索引 = atan2 角度 / 45°，0 为 +x 方向） */
 const directionByOctant: DIRECTION[] = [DIRECTION.RIGHT, DIRECTION.RIGHT_UP, DIRECTION.UP, DIRECTION.LEFT_UP, DIRECTION.LEFT, DIRECTION.LEFT_DOWN, DIRECTION.DOWN, DIRECTION.RIGHT_DOWN];
@@ -75,16 +115,25 @@ export function getDirectionToTarget(target: Node, self: Node): DIRECTION {
 
 /**
  * 结算一次受击：按「攻击区间随机值 - 防御区间随机值」扣减 self 的血量
- * @returns 本次实际扣除的血量（血量不会被扣成负数）
+ * @param modifiers 状态带来的防御修正（无状态传缺省值，行为与旧口径完全一致）
+ * @returns 本次实际扣除的血量（血量不会被扣成负数）与是否触发了格挡
  */
-export function applyHitDamage(self: BattleAttributes & { hp: number }, enemy: BattleAttributes, attackAttribute: AttackAttribute = "physicalAttack"): number {
+export function applyHitDamage(
+  self: BattleAttributes & { hp: number },
+  enemy: BattleAttributes,
+  attackAttribute: AttackAttribute = "physicalAttack",
+  modifiers: StatusCombatModifiers = NO_STATUS_MODIFIERS,
+): { damage: number; blocked: boolean } {
   const attack = rollAttributeRange(enemy[attackAttribute]);
-  const defense = rollAttributeRange(self[defenseAttributeByAttack[attackAttribute]]);
+  // 防御乘法系数生效于防御项（乘法口径）：先出区间随机值再放大，四舍五入回整数
+  const defense = Math.round(rollAttributeRange(self[defenseAttributeByAttack[attackAttribute]]) * modifiers.defenseMultiplier);
   const damage = Math.max(0, attack - defense);
+  // 格挡判定走纯函数核心（单测给定 roll 可复现）
+  const { damage: finalDamage, blocked } = resolveIncomingDamage(damage, modifiers, Math.random());
   const previousHp = Math.max(0, self.hp);
 
-  self.hp = Math.max(0, previousHp - damage);
-  return previousHp - self.hp;
+  self.hp = Math.max(0, previousHp - finalDamage);
+  return { damage: previousHp - self.hp, blocked };
 }
 
 /**

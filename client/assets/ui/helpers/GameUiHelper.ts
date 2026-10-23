@@ -639,13 +639,15 @@ export default class GameUiHelper {
    * 在受伤物体位置显示受伤飘字（挂特效层，上浮淡出后自动销毁）
    * @param target 受伤物体节点
    * @param damage 受到的伤害数值
+   * @param blocked 是否触发了格挡（#14 状态数值：格挡时文案用 label_damage_block、颜色用 blockedColor）
    */
-  static showDamageText(target: Node, damage: number) {
+  static showDamageText(target: Node, damage: number, blocked = false) {
     if (!isValid(target)) return;
     const style = uiTheme.floatingText.damage;
-    // 受伤为红色扣血飘字，未命中（伤害 <= 0）为白色 MISS
-    const text = damage > 0 ? getText("label_damage", { value: damage }) : getText("label_damage_miss");
-    const damageText = UiHelper.createLabel("damage_text", text, damage > 0 ? style.color : Color.WHITE, style.fontSize, new Vec2(), style.size);
+    // 受伤为红色扣血飘字；格挡为 blockedColor；未命中（伤害 <= 0）为白色 MISS
+    const color = blocked ? style.blockedColor : damage > 0 ? style.color : Color.WHITE;
+    const text = damage > 0 ? getText(blocked ? "label_damage_block" : "label_damage", { value: damage }) : getText("label_damage_miss");
+    const damageText = UiHelper.createLabel("damage_text", text, color, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(damageText);
     // 位置与受伤物体保持一致；横向按出场次数在 offsetXs 里轮转错峰 ——
     // 连续挨打时数字不会都叠在同一点上糊成一团（轮转序号是全局的：多个目标同时飘也互相错开）

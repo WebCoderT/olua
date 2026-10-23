@@ -3,10 +3,11 @@ import { monsterAI } from "../../configs/monster";
 import { getAnimationName } from "../../configs/animation";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterAIState } from "../../types/monster";
-import { applyHitDamage, getDirectionByVector, getDirectionToTarget } from "../utils/battle/BattleMath";
+import { applyHitDamage, collectStatusCombatModifiers, getDirectionByVector, getDirectionToTarget } from "../utils/battle/BattleMath";
 import { getWorldColliderRect, resolveBlockedVelocity } from "../utils/physics/MoveBlocking";
 import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
+import StatusManager from "./StatusManager";
 
 /** 怪物身体内的动画节点名（由 GameUiHelper.createMonsterBody 创建） */
 const MONSTER_ANIMATION_NODE = "monster_animation";
@@ -185,8 +186,9 @@ export default class MonsterAI {
     if (!player || !isValid(player) || this.getDistance(node, player) > monsterAI.attackRange) return;
     const role = StorageManager.findOnlineRole();
     if (!role || role.hp <= 0) return;
-    const damage = applyHitDamage(role, monster);
-    GameUiHelper.showDamageText(player, damage);
+    // 状态数值参与结算（#14）：从进行中的状态汇总防御修正（格挡概率/格挡系数/防御乘法），再进伤害公式
+    const { damage, blocked } = applyHitDamage(role, monster, "physicalAttack", collectStatusCombatModifiers(StatusManager.getActiveIds()));
+    GameUiHelper.showDamageText(player, damage, blocked);
     // 受击反馈：屏幕红闪（限频见 configs/effect.hitScreenFlash）+ 受击动作（走组合根接线，未接线时只有飘字）
     GameUiHelper.showHitScreenFlash();
     this.onPlayerHit?.(player);
