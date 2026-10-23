@@ -10,11 +10,13 @@ covering login, character creation, character growth, the equipment system, map 
 
 ## Code lives on GitHub: Gitee is a read-only mirror
 
-The primary repository lives on **GitHub** (`github.com/WebCoderT/olua`); the Gitee project of the same name is its **read-only sync mirror**:
+The primary repository lives on **GitHub** (`github.com/WebCoderT/olua`); [putiwan/olua](https://gitee.com/putiwan/olua) on Gitee is its **read-only sync mirror**:
 
 - **Please go to GitHub for everything code-related** — issues, pull requests, commits, commit history and CI all happen on GitHub only;
 - The **Gitee mirror** is fine for browsing the code, cloning / downloading, and the occasional star; it is synced periodically, **may lag behind, and GitHub is always authoritative**;
 - Issues / PRs opened on Gitee **will not be handled** (the mirror takes no collaboration) — please file everything on GitHub instead.
+
+Mirror stats (as of 2026-10-23, see the Gitee page for live numbers): **18 stars · 4 watchers · 8 forks**.
 
 ## The three sides
 

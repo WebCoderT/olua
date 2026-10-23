@@ -10,11 +10,13 @@
 
 ## 代码在 GitHub：Gitee 只是同步镜像
 
-本仓库的主仓在 **GitHub**（`github.com/WebCoderT/olua`），Gitee 上的同名项目是它的**只读同步镜像**：
+本仓库的主仓在 **GitHub**（`github.com/WebCoderT/olua`），Gitee 上的 [putiwan/olua](https://gitee.com/putiwan/olua) 是它的**只读同步镜像**：
 
 - **代码相关的一切操作都请前往 GitHub** —— 提 issue、发 PR、提交代码、看 commit 历史与 CI，都只在 GitHub 上进行；
 - **Gitee 镜像**适合浏览代码、克隆 / 下载、顺手点个 Star；它是定期同步过来的，**有延迟，以 GitHub 为准**；
 - 在 Gitee 上开的 issue / PR **不会被处理**（镜像不接收协作），请一律到 GitHub 提。
+
+镜像数据（截至 2026-10-23，以 Gitee 页面实时为准）：**Star 18 · Watch 4 · Fork 8**。
 
 ## 三个端
 
