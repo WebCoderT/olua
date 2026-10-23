@@ -111,6 +111,25 @@ export default class RoleAppearance {
   }
 
   /**
+   * 播放一次性受击动作（由宿主在玩家被普攻命中时调用，见 RoleDisplay.playInjured）
+   *
+   * **不改变** this.action / this.direction：受击动画播完由 loadAnimation 注册的 FINISHED 续播
+   * 自动把画面带回到当前动作（受击 clip 不含 "attack"，不会触发攻击锁回调），
+   * 宿主的动作状态机全程无感 —— 走路/待机不被打断，施法/死亡由宿主的守卫拦在外面进不来；
+   * 已在受击动画中时不重启（连环挨打不至于抖成筛子）；外观没有受击帧（缺段）时静默跳过
+   */
+  playInjured(direction: DIRECTION) {
+    if (this.dead) return;
+    const animationName = getAnimationName(ACTION.INJURED, direction);
+    if (!this.clothAnimate) return;
+    const state = this.clothAnimate.getState(animationName);
+    if (!state) return;
+    if (state.isPlaying) return;
+    this.clothAnimate.crossFade(animationName, 0.1);
+    this.weaponAnimate?.crossFade(animationName, 0.1);
+  }
+
+  /**
    * 按朝向调整衣服与武器的层级：左/左上/上/左下时衣服在武器上方，其余朝向武器在衣服上方
    * 方向没变时不做任何事（play 会在动作切换时频繁调用，避免反复触发 sibling 重排）
    */
