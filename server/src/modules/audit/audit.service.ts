@@ -5,7 +5,7 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { buildCsv, fileStamp, localDateTime } from "../../common/utils/csv.util";
 import { AuditListOptions, AuditRepository } from "../../database/repositories/audit.repository";
 import { AuditLogRow } from "../../database/rows";
-import { normalizePage } from "../admin/dto/query.dto";
+import { normalizePage } from "../../common/utils/page.util";
 import { AuditExportDto, AuditLogDto, AuditQueryDto } from "./dto/audit.dto";
 
 /** 写日志的入参（除 action 外都可省） */

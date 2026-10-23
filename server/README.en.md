@@ -187,6 +187,14 @@ Reasons and costs: [FAQ.en.md](FAQ.en.md#why-doesnt-the-server-validate-the-role
 ⚠️ Read and write paths differ in attitude: **read is tolerant** (bad data → empty object), **edit must parse strictly and error on failure** —
 falling back to an empty object for writing would wipe the player's backpack/equipment (a pit we hit, pinned by an e2e assertion).
 
+## Internal boundaries: cross-module calls go through whitelisted edges
+
+Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
+
+- **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
+- **Repositories are wired only by the global `DatabaseModule`** (all 8 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
+
 ## Auth and permissions
 
 Two layers, **both in guards; business code must not write role checks**:

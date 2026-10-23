@@ -29,7 +29,8 @@ import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
 import { AdminPatchRoleDto } from "./dto/patch-role.dto";
 import { ResetAccountPasswordDto, ResetAdminPasswordDto, ResetPasswordResultDto } from "./dto/password.dto";
 import { UpdateAccountEmailDto } from "./dto/account-email.dto";
-import { AccountQueryDto, AdminQueryDto, normalizePage, RoleQueryDto, roleFilterOf, UpdateAccountStatusDto } from "./dto/query.dto";
+import { AccountQueryDto, AdminQueryDto, RoleQueryDto, roleFilterOf, UpdateAccountStatusDto } from "./dto/query.dto";
+import { normalizePage } from "../../common/utils/page.util";
 import {
   AdminAccountDetailDto,
   AdminStatsDto,

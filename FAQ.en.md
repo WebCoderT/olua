@@ -126,7 +126,7 @@ Their rules are written in the header of each script — re-run the script inste
 Before merging, at least these three categories must run (green means done). The repository root has a Makefile so one command covers it:
 
 ```bash
-make verify   # = check (client tsc + admin typecheck + 9 audits) + builds on all three sides + all tests
+make verify   # = check (client tsc + admin typecheck + 10 audits) + builds on all three sides + all tests
 ```
 
 Manual equivalent (no `make` needed):

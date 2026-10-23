@@ -2,24 +2,10 @@ import { Injectable } from "@nestjs/common";
 import { DatabaseService, SqlParam } from "../database.service";
 import { ROLE_SORT } from "../sort-specs";
 import { resolveSort } from "../sort.util";
-import { RoleRow, RoleWithAccountRow } from "../rows";
+import { RoleFilter, RoleRow, RoleWithAccountRow } from "../rows";
 
-/**
- * 角色筛选条件（管理端列表 / 批量操作共用）
- *
- * `online` 的语义与列表里的「在线」徽章完全一致：**该角色是所属账号当前选中的那个**
- * （账号表的 online_role_id），不是「玩家此刻真的在游戏里」—— 后者需要心跳，本阶段不做。
- */
-export interface RoleFilter {
-  keyword?: string;
-  accountId?: string;
-  /** true 只看在线角色；false 只看离线角色；不传不筛 */
-  online?: boolean;
-  occupation?: string;
-  sex?: string;
-  minLevel?: number;
-  maxLevel?: number;
-}
+/** 角色筛选条件的定义住在 `database/rows.ts`（契约类型层）；这里按旧出口再导出一次，老引用不断 */
+export type { RoleFilter };
 
 /** 角色数据访问 */
 @Injectable()
