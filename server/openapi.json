@@ -3246,6 +3246,372 @@
         ]
       }
     },
+    "/admin/titles": {
+      "get": {
+        "description": "等级序列固定（1..34），**没有创建 / 删除**。`keyword` 模糊匹配名称与描述，`acquireChannel` 按获得渠道筛（upgrade=称号升级 / grant=系统赠送 / unavailable=无法获取；新库 seed 后全部为 unavailable）。\n\n`bindGold` 是「升到该级」消耗的绑定元宝，仅 `upgrade` 渠道实际使用（升级价目表的语义）。\n\n**排序**：`sort` 取 `level` / `label` / `bindGold` / `acquireChannel` / `updatedAt`，`order` 取 asc / desc（默认 level 升序——列表本身就是价目表）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminTitle.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配名称与描述",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "acquireChannel",
+            "required": false,
+            "in": "query",
+            "description": "获得渠道筛选",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "upgrade",
+                "grant",
+                "unavailable"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/TitlePageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "称号配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/TitlePageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/TitleQueryDto"
+        }
+      }
+    },
+    "/admin/titles/{level}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `acquireChannel`：获得渠道（upgrade 称号升级 / grant 系统赠送 / unavailable 无法获取）。**赠送逻辑暂未实现**，标成 grant 只是先把渠道记下来；默认 unavailable。\n- `bindGold`：升级价格，仅渠道为 upgrade 时在玩家侧实际使用；其余渠道数值保留但不展示入口。\n- `attributes`：八项属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。\n- `level` 不存在 → 404（`50010`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminTitle.update",
+        "parameters": [
+          {
+            "name": "level",
+            "required": true,
+            "in": "path",
+            "description": "称号等级（1..34）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTitleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的称号配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/TitleDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑称号配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/TitleDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/souls": {
+      "get": {
+        "description": "阶数序列固定（1..37），**没有创建 / 删除**。`keyword` 模糊匹配名称与描述。\n\n`bindGold` 是「升到该阶」消耗的绑定元宝。\n\n**排序**：`sort` 取 `level` / `label` / `bindGold` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminSoul.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配名称与描述",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SoulPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "战魂配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SoulPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/SoulQueryDto"
+        }
+      }
+    },
+    "/admin/souls/{level}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `bindGold`：升到该阶的消耗（绑定元宝）。\n- `attributes`：八项属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max。\n- `level` 不存在 → 404（`50011`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminSoul.update",
+        "parameters": [
+          {
+            "name": "level",
+            "required": true,
+            "in": "path",
+            "description": "战魂阶数（1..37）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSoulDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的战魂配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SoulDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑战魂配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SoulDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/mails/templates": {
       "get": {
         "description": "发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
@@ -4132,6 +4498,181 @@
             "type": "number",
             "description": "生效结束时间（毫秒，不含）；传 `null` = 改为不设截止，不传则不改",
             "nullable": true
+          }
+        }
+      },
+      "ConfigAttributeRangeDto": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number",
+            "description": "下限",
+            "minimum": 0
+          },
+          "max": {
+            "type": "number",
+            "description": "上限",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ]
+      },
+      "ConfigAttributesDto": {
+        "type": "object",
+        "properties": {
+          "maxHp": {
+            "type": "number",
+            "description": "生命上限加成"
+          },
+          "hpRecover": {
+            "type": "number",
+            "description": "每 5 秒回血"
+          },
+          "physicalAttack": {
+            "description": "物理攻击 [下限, 上限]",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "magicAttack": {
+            "description": "魔法攻击 [下限, 上限]",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "taoistAttack": {
+            "description": "道术攻击 [下限, 上限]",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "physicalDefense": {
+            "description": "物理防御 [下限, 上限]",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "magicDefense": {
+            "description": "魔法防御 [下限, 上限]",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "taoistDefense": {
+            "description": "道术防御 [下限, 上限]",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "maxHp",
+          "hpRecover",
+          "physicalAttack",
+          "magicAttack",
+          "taoistAttack",
+          "physicalDefense",
+          "magicDefense",
+          "taoistDefense"
+        ]
+      },
+      "UpdateTitleDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（不传则不改）",
+            "maxLength": 200
+          },
+          "animation": {
+            "type": "string",
+            "description": "动画资源目录（不传则不改）",
+            "maxLength": 100
+          },
+          "animationFrameRate": {
+            "type": "number",
+            "description": "动画帧率（不传则不改）",
+            "minimum": 1
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "升到该级消耗的绑定元宝（不传则不改）",
+            "minimum": 0
+          },
+          "acquireChannel": {
+            "type": "string",
+            "description": "获得渠道（不传则不改）",
+            "enum": [
+              "upgrade",
+              "grant",
+              "unavailable"
+            ]
+          },
+          "attributes": {
+            "description": "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          }
+        }
+      },
+      "UpdateSoulDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（不传则不改）",
+            "maxLength": 200
+          },
+          "animation": {
+            "type": "string",
+            "description": "动画资源目录（不传则不改）",
+            "maxLength": 100
+          },
+          "animationFrameRate": {
+            "type": "number",
+            "description": "动画帧率（不传则不改）",
+            "minimum": 1
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "升到该阶消耗的绑定元宝（不传则不改）",
+            "minimum": 0
+          },
+          "attributes": {
+            "description": "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
           }
         }
       },
@@ -6589,6 +7130,269 @@
           "status",
           "subject"
         ]
+      },
+      "TitleDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "等级（1 起；序列固定，不可增删行）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "animation": {
+            "type": "string",
+            "description": "动画资源目录（resources 相对路径）"
+          },
+          "animationFrameRate": {
+            "type": "number",
+            "description": "动画帧率"
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "升到该级消耗的绑定元宝（仅 upgrade 渠道实际使用）"
+          },
+          "acquireChannel": {
+            "type": "string",
+            "description": "获得渠道",
+            "enum": [
+              "upgrade",
+              "grant",
+              "unavailable"
+            ]
+          },
+          "attributes": {
+            "description": "八项属性加成",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "level",
+          "label",
+          "description",
+          "animation",
+          "animationFrameRate",
+          "bindGold",
+          "acquireChannel",
+          "attributes",
+          "updatedAt"
+        ]
+      },
+      "TitlePageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的称号配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TitleDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "TitleQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配名称与描述"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "acquireChannel": {
+            "type": "string",
+            "description": "获得渠道筛选",
+            "enum": [
+              "upgrade",
+              "grant",
+              "unavailable"
+            ]
+          }
+        }
+      },
+      "SoulDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "阶数（1 起；序列固定，不可增删行）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "animation": {
+            "type": "string",
+            "description": "动画资源目录（resources 相对路径）"
+          },
+          "animationFrameRate": {
+            "type": "number",
+            "description": "动画帧率"
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "升到该阶消耗的绑定元宝"
+          },
+          "attributes": {
+            "description": "八项属性加成",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "level",
+          "label",
+          "description",
+          "animation",
+          "animationFrameRate",
+          "bindGold",
+          "attributes",
+          "updatedAt"
+        ]
+      },
+      "SoulPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的战魂配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoulDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "SoulQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配名称与描述"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          }
+        }
       }
     }
   }

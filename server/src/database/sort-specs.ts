@@ -96,6 +96,31 @@ export const MAIL_SORT: SortSpec<"toEmail" | "status" | "attempts" | "sentAt" | 
   defaultOrder: "desc",
 };
 
+/** 称号配置列表：默认按等级升序 —— 列表本身就是一张「升级价目表」（1 级在最上面） */
+export const TITLE_SORT: SortSpec<"level" | "label" | "bindGold" | "acquireChannel" | "updatedAt"> = {
+  columns: {
+    level: "level",
+    label: "label",
+    bindGold: "bind_gold",
+    acquireChannel: "acquire_channel",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};
+
+/** 战魂配置列表：默认按阶数升序（同称号的价目表语义） */
+export const SOUL_SORT: SortSpec<"level" | "label" | "bindGold" | "updatedAt"> = {
+  columns: {
+    level: "level",
+    label: "label",
+    bindGold: "bind_gold",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};
+
 /** 把白名单里的字段名拼成一行，供接口文档说明用（`sort` 的取值） */
 export function sortFieldNames<K extends string>(spec: SortSpec<K>): string {
   return Object.keys(spec.columns)

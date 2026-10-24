@@ -22,6 +22,8 @@ export {
   statsApi,
   systemApi,
   mailsApi,
+  soulsApi,
+  titlesApi,
 } from "./endpoints";
 export { routes } from "./routes";
 export type * from "./models";
@@ -29,6 +31,8 @@ export type * from "./models";
 export { ApiError } from "./types";
 export type { ApiEnvelope, PageResult, PermissionValue } from "./types";
 export {
+  ACQUIRE_CHANNEL,
+  ACQUIRE_CHANNEL_LABELS,
   ADMIN_ROLE,
   ADMIN_ROLE_LABELS,
   adminRoleLabel,

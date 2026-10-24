@@ -150,6 +150,12 @@ export const BizCode = {
    * 与 50008 分开：任务不存在是「id 传错了」，这个是「任务在，但当前状态不允许这个动作」。
    */
   MAIL_JOB_NOT_RETRYABLE: 50009,
+
+  //#region 养成配置（称号 / 战魂）
+  /** 称号等级不存在（等级序列固定 1..34，不存在的 level 一定是传错了） */
+  TITLE_NOT_FOUND: 50010,
+  /** 战魂阶数不存在（阶数序列固定 1..37） */
+  SOUL_NOT_FOUND: 50011,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

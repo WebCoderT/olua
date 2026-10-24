@@ -547,8 +547,8 @@ async function runSuite(baseUrl) {
   checkEqual(toViewer.body.data.role, "viewer", "已改为只读观察员");
   checkEqual(
     [...toViewer.body.data.permissions].sort().join(","),
-    "account:read,announcement:read,role:read,stats:read",
-    "只读观察员恰好 4 个读权限",
+    "account:read,announcement:read,gameConfig:read,role:read,stats:read",
+    "只读观察员恰好 5 个读权限（养成配置可读也在内）",
   );
 
   // 降权当即生效：还是同一枚旧令牌
@@ -567,7 +567,7 @@ async function runSuite(baseUrl) {
   const viewerMe = await call("GET", "/api/admin/auth/me", { token: admin2Token });
   checkEqual(viewerMe.status, 200, "只读观察员可看自己的信息（无需权限点）");
   checkEqual(viewerMe.body.data.role, "viewer", "me 返回最新角色");
-  checkEqual(viewerMe.body.data.permissions.length, 4, "me 返回的权限点与角色一致");
+  checkEqual(viewerMe.body.data.permissions.length, 5, "me 返回的权限点与角色一致");
   checkEqual((await call("PATCH", `/api/admin/accounts/${otherAccountId}/status`, { token: admin2Token, body: { status: "disabled" } })).body.code, 30006, "越权码重复确认");
 
   // 最后一个启用中的超管受保护

@@ -150,6 +150,20 @@ export const PERMISSION = {
    * 是运维信息而不是业务数据。
    */
   SYSTEM_READ: "system:read",
+  /**
+   * 查看养成配置（称号 / 战魂的等级序列、属性与价格）
+   *
+   * 只读观察员**也给**：配置表是业务数据（玩家看到的一切数值都出自这里），
+   * 读了不等于能改 —— 改动走 `GAME_CONFIG_WRITE` 单独管控。
+   */
+  GAME_CONFIG_READ: "gameConfig:read",
+  /**
+   * 修改养成配置（称号渠道与升级价格 / 战魂消耗 / 双方属性数值）
+   *
+   * 这份配置直接决定玩家侧数值（战斗属性、升级开销），改错一行全服生效，
+   * 与「改一个角色」不同量级，单列一个权限点。
+   */
+  GAME_CONFIG_WRITE: "gameConfig:write",
 } as const;
 
 export type PermissionValue = (typeof PERMISSION)[keyof typeof PERMISSION];
@@ -174,6 +188,26 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
   [PERMISSION.SYSTEM_READ]: "查看系统信息",
+  [PERMISSION.GAME_CONFIG_READ]: "查看养成配置",
+  [PERMISSION.GAME_CONFIG_WRITE]: "修改养成配置",
+};
+
+/**
+ * 称号的获得渠道（服务端 `common/constants/game-config.ts` 的镜像）
+ *
+ * 与 PERMISSION 同一约定：这份只是界面展示用的镜像，权威在服务端。
+ * `grant`（系统赠送）的发放逻辑暂未实现，标成它只是先把渠道记下来。
+ */
+export const ACQUIRE_CHANNEL = {
+  UPGRADE: "upgrade",
+  GRANT: "grant",
+  UNAVAILABLE: "unavailable",
+} as const;
+
+export const ACQUIRE_CHANNEL_LABELS: Record<string, string> = {
+  [ACQUIRE_CHANNEL.UPGRADE]: "称号升级",
+  [ACQUIRE_CHANNEL.GRANT]: "系统赠送",
+  [ACQUIRE_CHANNEL.UNAVAILABLE]: "无法获取",
 };
 
 /** 权限点中文名（未登记的原样显示） */
@@ -347,6 +381,8 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   admin: "管理员",
   announcement: "公告",
   mail: "邮件",
+  title: "称号配置",
+  soul: "战魂配置",
 };
 
 /** 目标类型中文名（未知类型原样显示） */

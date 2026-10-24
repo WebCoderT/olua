@@ -55,3 +55,4 @@ generated-images/
 #//////////////////////////
 deploy.env
 *.pem
+admin/tsconfig.tsbuildinfo

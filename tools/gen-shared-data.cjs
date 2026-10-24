@@ -222,6 +222,9 @@ function buildSnapshot(cfg) {
     soulLevels: pickList(cfg.soul, (item) => pickAttributes(item.attributes)),
     titleLevels: pickList(cfg.title, (item) => pickAttributes(item.attributes)),
     rankLevels: pickList(cfg.rank, (item) => pickAttributes(item.attributes)),
+    // —— 养成配置元数据（管理端 seed 用：名称之外，还带文案 / 价格 / 动画资源）——
+    soulMeta: pickList(cfg.soul, pickConfigMeta),
+    titleMeta: pickList(cfg.title, pickConfigMeta),
     equipmentAttributes: pickEquipments(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
     monsterCombat: pickMonsterCombat(cfg.monsters),
@@ -423,6 +426,22 @@ function pickList(list, project) {
   return (list || []).map((item, index) => [index, project(item)]);
 }
 
+/**
+ * 养成等级配置的元数据（战魂阶 / 称号等级共用一条形状）
+ *
+ * `attributes` 已由 `pickAttributes` 单独快照，这里只带**管理端要展示与编辑**的
+ * 四个字段：文案、升到该级的价格、动画资源与帧率 —— 全部取自等级条目本身，
+ * 不在这里重算（客户端 configs 怎么写，快照就是什么）。
+ */
+function pickConfigMeta(item) {
+  return {
+    description: String(item.description ?? ""),
+    bindGold: round(item.bindGold ?? 0),
+    animation: String(item.animation ?? ""),
+    animationFrameRate: round(item.animationFrameRate ?? 0),
+  };
+}
+
 const tuple = (value) => (Array.isArray(value) ? [round(value[0]), round(value[1])] : [0, 0]);
 const round = (value) => (Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0);
 
@@ -492,6 +511,8 @@ ${textTable("EQUIPMENT_DISPLAY_NAMES", "装备 id → 显示名（已拼好前�
 ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLOTS 显示部位）", s.equipmentSlotOf)}
 ${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
 ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
+${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}
+${numTable("TITLE_LEVEL_META", "称号等级（下标 + 1 即等级）→ { description 文案, bindGold 升到该级价格, animation 动画资源, animationFrameRate 帧率 }", s.titleMeta)}
 ${numTable("RANK_LABELS", "军衔阶数（下标 + 1 即阶）→ { tier 大段名, label 衔名 }", s.rankLabels)}
 ${textTable("SKILL_LABELS", "技能 id → 技能名", s.skillLabels)}
 ${textTable("MAP_LABELS", "地图 id → 地图名", s.mapLabels)}

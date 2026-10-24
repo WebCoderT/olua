@@ -247,6 +247,21 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
+  /** adminSoul 模块（2 个接口） */
+  adminSoul: {
+    /**
+     * 战魂配置列表（GET /admin/souls）
+     *
+     * 阶数序列固定（1..37），**没有创建 / 删除**。`keyword` 模糊匹配名称与描述。
+     */
+    list: "/admin/souls",
+    /**
+     * 编辑战魂配置（PATCH /admin/souls/{level}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (level: string) => `/admin/souls/${encodeURIComponent(level)}`,
+  },
   /** adminStats 模块（3 个接口） */
   adminStats: {
     /**
@@ -276,5 +291,20 @@ export const routes = {
      * 版本 / Node 版本 / 运行时长 / 内存 / 数据文件路径与体积 / 各表行数 / 脱敏配置快照。
      */
     info: "/admin/system",
+  },
+  /** adminTitle 模块（2 个接口） */
+  adminTitle: {
+    /**
+     * 称号配置列表（GET /admin/titles）
+     *
+     * 等级序列固定（1..34），**没有创建 / 删除**。`keyword` 模糊匹配名称与描述，`acquireChannel` 按获得渠道筛（upgrade=称号升级 / grant=系统赠送 / unavailable=无法获取；新库 seed 后全部为 unavailable）。
+     */
+    list: "/admin/titles",
+    /**
+     * 编辑称号配置（PATCH /admin/titles/{level}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (level: string) => `/admin/titles/${encodeURIComponent(level)}`,
   },
 } as const;
