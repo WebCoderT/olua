@@ -339,6 +339,25 @@ export default class AnimationHelper {
   }
 
   /**
+   * 循环播放一个图集，按**总时长**口径（一轮 = duration 秒）—— 衣服/武器内观这类「固定秒数播完整包」的图集动画用
+   *
+   * 与 playLoopAtlas 的区别：不传帧率，装载后按 帧数 / duration 折算（与 playLoopWithDir 的
+   * 目录版总时长口径一致）；图集帧与 spriteFrame 原始尺寸（= spriteSourceSize）保持 RAW 口径不变形
+   *
+   * @param name 动画名称（addClip 的别名，同一节点内需唯一）
+   * @param node 播放动画的节点（须已有 Sprite：片段按帧替换 sprite.spriteFrame）
+   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名）
+   * @param duration 动画总时长（秒）
+   */
+  static playLoopAtlasWithDuration(name: string, node: Node, atlasSrc: string, duration: number = 1) {
+    const animate = this.useAnimation(node);
+    this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
+      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      this.play(name, node, animate, spriteFrames, duration > 0 ? duration : spriteFrames.length, AnimationClip.WrapMode.Loop);
+    });
+  }
+
+  /**
    * 循环播放一个帧序列目录的全部帧 —— 装备详情背景这类「常驻循环」的目录动画用
    *
    * 与 playLoopAtlas 的区别：帧来源是**目录**（resources/backgrounds 下逐帧 png，没有图集），
