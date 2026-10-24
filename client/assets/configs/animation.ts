@@ -37,7 +37,7 @@ const roleSpriteFrameLength: AnimationLength = {
  * 播放这些动作时引擎侧没有对应片段，MonsterAI.playAction 会回退成待机；
  * 个别包缺段（如怪物 27 没有走路段）时该动作同样自动回退
  */
-interface MonsterActionSpec {
+export interface MonsterActionSpec {
   action: ACTION;
   /** 该动作段的起始帧号 */
   start: number;
@@ -47,7 +47,7 @@ interface MonsterActionSpec {
   spacing: number;
 }
 
-const monsterActionSpecs: MonsterActionSpec[] = [
+export const monsterActionSpecs: MonsterActionSpec[] = [
   { action: ACTION.STAND, start: 0, frames: 4, spacing: 10 },
   { action: ACTION.WALK, start: 80, frames: 6, spacing: 10 },
   { action: ACTION.RUN, start: 160, frames: 6, spacing: 10 },
@@ -117,6 +117,19 @@ animationFrameBases.set("role/2", 600);
 /** 取目录的帧号基准（未登记为 0） */
 export function getAnimationFrameBase(dirSrc: string): number {
   return animationFrameBases.get(dirSrc) ?? 0;
+}
+
+/**
+ * 怪物图集根目录：按动作分 plist 的图集树（monster/atlas/out/<id>/<动作>/<动作>.plist），
+ * 与散帧目录 monster/out/<id> 并存——打包器按「暂存区相对路径镜像输出」落盘，
+ * 暂存区结构见 client/tools/stage-monster-action-frames.py
+ */
+const monsterAtlasRoot = "monster/atlas/out";
+
+/** 取怪物散帧目录对应的图集目录（monster/out/1 → monster/atlas/out/1） */
+export function getMonsterAtlasSrc(outSrc: string): string {
+  const prefix = "monster/out/";
+  return outSrc.startsWith(prefix) ? `${monsterAtlasRoot}/${outSrc.slice(prefix.length)}` : "";
 }
 
 /** 动作是否需要武器 */
