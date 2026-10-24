@@ -300,8 +300,8 @@ a { color: inherit; text-decoration: none; }
 
 /* ---------- 联系我们 ---------- */
 .contact {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 26px;
-  max-width: 780px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 26px;
+  max-width: 980px; margin: 0 auto;
 }
 .contact__card {
   text-align: center; padding: 44px 30px;

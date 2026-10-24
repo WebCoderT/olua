@@ -256,8 +256,7 @@ olua/
 
 ### 其它
 
-- website：项目官网（纯静态单页：核心特色 / 截图画廊 / 三端架构 / 工程化 / 联系方式，logo 与 favicon 在 website/assets/icons）
-- public：截图、展示素材与联系方式二维码
+- website：项目官网（纯静态单页：核心特色 / 截图画廊 / 三端架构 / 工程化 / 联系方式，logo 与 favicon 在 website/assets/icons，群二维码在 website/assets/img）
 - docs：项目文档（`resume.md` 等）
 - equip-aligner：装备素材偏移对齐小工具（自带 README 与自检脚本）
 
@@ -559,4 +558,5 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 > 资源素材过大无法进行版本控制，如果需要请联系我。
 
-![微信二维码](website/assets/img/qrcode.jpg)
+![QQ 群](website/assets/img/qq-group.jpg)
+![微信群](website/assets/img/wechat-group.png)

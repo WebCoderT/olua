@@ -559,4 +559,5 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 > The art assets are too large to keep under version control — contact me if you need them.
 
-![WeChat QR code](website/assets/img/qrcode.jpg)
+![QQ group](website/assets/img/qq-group.jpg)
+![WeChat group](website/assets/img/wechat-group.png)
