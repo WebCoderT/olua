@@ -4,6 +4,8 @@
 
 > **This project is written entirely by AI (Vibe Coding): every line of code in this repository was written by AI — not one line was typed by a human.**
 > Humans do two things here — **request features and look at the result**. How it was built and what traces it left: [A project written entirely by AI](#a-project-written-entirely-by-ai).
+>
+> **This is NOT a game project ready for live operation** — it is a learning / research project built together by people from different backgrounds (development and AI).
 
 A 2D character-growth and equipment gameplay prototype built on Cocos Creator 3.8.7, together with a companion NestJS server and a React admin console,
 covering login, character creation, character growth, the equipment system, map exploration and combat gameplay (monster fighting / drops / skills / auto-battle) as a complete three-side demo.
