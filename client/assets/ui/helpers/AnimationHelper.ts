@@ -1,5 +1,5 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
-import { getAnimationFrameBase, monsterAnimation, roleAnimationMap } from "../../configs/animation";
+import { getAnimationName, getAnimationFrameBase, getMonsterAtlasSrc, directions, monsterActionSpecs, monsterAnimation, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
 
@@ -64,16 +64,69 @@ export default class AnimationHelper {
   /**
    * 预加载一个目录：先取帧序列，再按动画表把整包片段切割并缓存
    * 重复调用是廉价的（已缓存时立即返回）；"frames" 种类只缓存帧序列（整包循环播放的动画如 NPC 外观）
+   * 怪物种类先尝试图集路径（见 prepareMonsterAtlas），目录下没有图集时静默回退散帧目录切割——
+   * 图集按动作分 plist 打包（monster/atlas/out/<id>/<动作>），未打包的目录行为与从前完全一致
    * @param dirSrc 帧动画目录
    * @param kind 动画种类（决定用哪张动画表切割）
    * @param speedRate 速度倍率（role/monster 切割片段用，缺省按每秒 1 帧）
    */
   static async prepare(dirSrc: string, kind: AnimationKind, speedRate?: SpeedRate): Promise<void> {
+    if (kind === "monster" && (await this.prepareMonsterAtlas(dirSrc, speedRate))) return;
     const frames = await this.loadFrames(dirSrc);
     const animationMap = getAnimationMap(kind);
     if (!animationMap || !frames.length) return;
     // 帧号基准按目录取（如 role/2 的帧号从 600 起）：不减基准则一个动作都匹配不上、整包切不出片段
     this.buildClips(animationMap, frames, this.clipKey(dirSrc, kind, speedRate), speedRate, getAnimationFrameBase(dirSrc));
+  }
+
+  /**
+   * 怪物图集路径：按动作分 plist 的图集树（monster/atlas/out/<id>/<动作>/<动作>.plist）
+   * 加载每个动作图集，按帧名 d<方向>_<帧> 分组成 8 方向片段，切片段并缓存——
+   * 图集帧名自描述，不再依赖 configs/animation 的帧号表
+   * 目录下没有图集时返回 false（调用方回退散帧目录路径）；任一动作缺图集只跳过该动作
+   * （与帧号表口径一致：素材包缺段时该动作回退成待机，见 configs/animation 注释）
+   */
+  private static async prepareMonsterAtlas(dirSrc: string, speedRate?: SpeedRate): Promise<boolean> {
+    // 已有片段缓存（无论来自图集还是散帧）都算准备完成，避免重复加载
+    if (this.clipCache.get(this.clipKey(dirSrc, "monster", speedRate))) return true;
+    const atlasDir = getMonsterAtlasSrc(dirSrc);
+    if (!atlasDir) return false;
+    // 同步探测：目录索引里没有任何图集即视为未打包，静默返回（不打错误日志刷屏）
+    if (!resources.getDirWithPath(atlasDir, SpriteAtlas).length) return false;
+    const clips = new Map<string, AnimationClip>();
+    const cacheKey = this.clipKey(dirSrc, "monster", speedRate);
+    for (const spec of monsterActionSpecs) {
+      const frames = await this.loadFramesFromAtlas(`${atlasDir}/${spec.action}`);
+      if (!frames.length) continue;
+      // 帧名 d<方向>_<帧>：按方向分组后组内按帧下标排序（不依赖 loadFramesFromAtlas 的末尾数字排序——
+      // d0_00 与 d1_00 的末尾数字同为 0，跨方向顺序要靠方向下标决定）
+      const byDirection = new Map<number, SpriteFrame[]>();
+      frames.forEach((frame) => {
+        const matched = /^d(\d+)_(\d+)$/.exec(frame.name.replace(/\.png$/i, ""));
+        if (!matched) return;
+        const directionIndex = Number(matched[1]);
+        const list = byDirection.get(directionIndex) ?? [];
+        list.push(frame);
+        byDirection.set(directionIndex, list);
+      });
+      byDirection.forEach((list, directionIndex) => {
+        const direction = directions[directionIndex];
+        if (!direction) return;
+        list.sort((a, b) => this.atlasFrameSlot(a.name) - this.atlasFrameSlot(b.name));
+        const name = getAnimationName(spec.action, direction);
+        clips.set(name, this.createClip(name, list, this.getFrameTime(name, speedRate)));
+      });
+    }
+    // 一个动作都没切出来（图集坏了/帧名不符）→ 返回 false 走散帧目录兜底
+    if (!clips.size) return false;
+    this.clipCache.set(cacheKey, clips);
+    return true;
+  }
+
+  /** 取图集帧名 d<方向>_<帧> 里的帧内下标（组内排序用；格式不符按 0 处理） */
+  private static atlasFrameSlot(name: string) {
+    const matched = /^d\d+_(\d+)$/.exec(name.replace(/\.png$/i, ""));
+    return matched ? Number(matched[1]) : 0;
   }
 
   /**
