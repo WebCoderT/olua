@@ -112,10 +112,14 @@ check(
   "目标索引生命周期：reset 清空、死亡移除（死怪不再接 settle 帧）",
 );
 check(
-  /CombatChannel\.onSettle = MonsterManager\.applyServerSettle;/.test(gameSource) && /CombatChannel\.onSettle = null;/.test(gameSource),
+  /CombatChannel\.onSettle = MonsterManager\.applyServerSettle\.bind\(MonsterManager\);/.test(gameSource) && /CombatChannel\.onSettle = null;/.test(gameSource),
   "Game.ts 接线 onSettle（start 接上、onDestroy 摘掉）",
 );
 check(/CombatChannel\.dispatchSettle\(frame\.data\)/.test(realtimeSource), "RealtimeClient 把 settle 帧转发给 CombatChannel");
+check(
+  /CombatChannel\.onWorld = MonsterManager\.applyWorldState\.bind\(MonsterManager\);/.test(gameSource) && /CombatChannel\.onWorld = null;/.test(gameSource),
+  "Game.ts 接线 onWorld（start 接上、onDestroy 摘掉）——必须 bind：回调经 CombatChannel 方法调用触发，裸赋值会让 this 丢成 CombatChannel（#222）",
+);
 check(/castSeq \+= 1/.test(channelSource), "CombatChannel.castSeq 单调递增（castId 只会更大）");
 check(/id: SkillId;/.test(skillTypeSource), "SkillConfig 声明 id 字段（技能实现 sendCast(config.id) 的来源）");
 
