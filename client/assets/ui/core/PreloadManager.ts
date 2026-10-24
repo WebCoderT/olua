@@ -123,11 +123,11 @@ export default class PreloadManager {
     console.log(`[PreloadManager] 装备详情背景预加载完成（${assigned.length} 个目录）：${assigned.map((resource) => resource.key).join("、")}`);
   }
 
-  /** 预加载装备光柱帧序列目录（configs/light 前缀表用到的全部光柱；帧进 AnimationHelper 缓存，重复调用只加载一次） */
+  /** 预加载装备光柱图集（configs/light 前缀表用到的全部光柱；帧进 AnimationHelper 缓存，重复调用只加载一次） */
   private static async preloadLights() {
     const assigned = getAssignedLights();
-    await Promise.all(assigned.map((resource) => AnimationHelper.loadFrames(resource.dir)));
-    console.log(`[PreloadManager] 装备光柱预加载完成（${assigned.length} 个目录）：${assigned.map((resource) => resource.key).join("、")}`);
+    await Promise.all(assigned.map((resource) => AnimationHelper.loadFramesFromAtlas(resource.atlas)));
+    console.log(`[PreloadManager] 装备光柱预加载完成（${assigned.length} 张图集）：${assigned.map((resource) => resource.key).join("、")}`);
   }
 
   //#endregion

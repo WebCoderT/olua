@@ -3,14 +3,14 @@
  * 装备光柱单测（client/tools/test-equipment-light.cjs）
  *
  * 盯的不变量（加/改光柱后必须全绿）：
- * · 资源表与磁盘一致（resources/effect/light 下每个目录都登记、登记的每个都真实存在、key 唯一）
+ * · 资源表与磁盘一致（resources/effect/light 下每个光柱图集都登记、登记的每个都真实存在、key 唯一）
  * · 前缀 5 档全覆盖、恰好一次，且按强度升序取 1~5 号光柱
  * · 6 号光柱**未被前缀表占用**（预留给特殊装备手动添加）
  * · 取用优先级：自定义表（精确 id → 基础件 key）→ 前缀表 → 不显示；自定义指向未登记光柱时回退前缀表
  * · 全部装备都能取到光柱（掉落物不会出现「有的装备没光柱」）
- * · 素材守卫：目录内帧号连续无缺口、每帧尺寸一致；meta 与 PNG 同口径（raw 尺寸 == PNG 尺寸）
- *   —— 这条是 trim=false 的前提（这批帧 auto-trim 真裁剪 + 非 0 offset，trim=true 会帧间抖动）
- * · 接线：唯一挂点在掉落物零件、光柱排在图标之前（画在图标下层）、目录循环播放、进图前预加载
+ * · 素材守卫：每个光柱的 plist 图集与同名 png 成对存在、帧号连续无缺口、plist 画布尺寸 == PNG 尺寸
+ *   —— 打包时逐帧 alpha 裁剪并以 spriteOffset 保留回贴位置，播放画面与原逐帧版一致（见 #216）
+ * · 接线：唯一挂点在掉落物零件、光柱排在图标之前（画在图标下层）、图集循环播放、进图前预加载
  *
  * 数据层跑在沙箱里（真实的 configs/light + equipments + items，见 lib/configs-sandbox.cjs），
  * 素材与源码断言直接读文件。
@@ -52,20 +52,23 @@ function pngSize(file) {
 }
 
 console.log("\n— A. 光柱资源表与磁盘 —");
-const diskDirs = fs
-  .readdirSync(LIGHT_DIR, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
-  .map((entry) => entry.name)
-  .sort((a, b) => Number(a) - Number(b));
-check(diskDirs.length === LIGHT_COUNT, `磁盘有 ${LIGHT_COUNT} 个光柱目录`, `实际 ${diskDirs.length}：${diskDirs.join("、")}`);
-check(lightResources.length === diskDirs.length, `资源表数量与磁盘一致（${lightResources.length} 个）`);
+const diskAtlases = fs
+  .readdirSync(LIGHT_DIR)
+  .filter((name) => /^light_\d+\.plist$/.test(name))
+  .map((name) => Number(name.match(/^light_(\d+)\.plist$/)[1]))
+  .sort((a, b) => a - b);
+check(diskAtlases.length === LIGHT_COUNT, `磁盘有 ${LIGHT_COUNT} 个光柱图集`, `实际 ${diskAtlases.length}：${diskAtlases.join("、")}`);
+check(lightResources.length === diskAtlases.length, `资源表数量与磁盘一致（${lightResources.length} 个）`);
 check(
-  JSON.stringify(lightResources.map((r) => r.key)) === JSON.stringify(diskDirs.map((dir) => `light/${dir}`)),
-  "资源表与磁盘目录一一对应（无多登 / 漏登 / 写错编号）",
+  JSON.stringify(lightResources.map((r) => r.key)) === JSON.stringify(diskAtlases.map((serial) => `light/${serial}`)),
+  "资源表与磁盘图集一一对应（无多登 / 漏登 / 写错编号）",
 );
 check(new Set(lightResources.map((r) => r.key)).size === lightResources.length, "光柱 key 唯一");
-check(lightResources.every((r) => r.dir === `effect/light/${r.key.split("/")[1]}`), "dir 路径 = effect/light/<编号>（resources 加载口径）");
-check(lightResources.every((r) => fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", r.dir))), "登记的每个光柱目录都真实存在");
+check(lightResources.every((r) => r.atlas === `effect/light/light_${r.key.split("/")[1]}`), "atlas 路径 = effect/light/light_<编号>（resources 加载口径）");
+check(
+  lightResources.every((r) => fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", `${r.atlas}.plist`)) && fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", `${r.atlas}.png`))),
+  "登记的每个光柱图集（plist + png）都真实存在",
+);
 check(lights.size === lightResources.length, "key → 资源 Map 与资源表等长");
 
 console.log("\n— B. 前缀映射表（5 档全覆盖）—");
@@ -134,44 +137,62 @@ customEquipmentLights.set(sample.id, "light/99");
 check(getEquipmentLightKey(sample) === originalPrefixKey, "自定义指向未登记光柱 → 回退前缀表（不显示为空）");
 customEquipmentLights.delete(sample.id);
 
-console.log("\n— E. 素材守卫（帧号连续 / 尺寸一致 / meta 与 PNG 同口径）—");
+console.log("\n— E. 素材守卫（图集成对 / 帧号连续 / 画布口径一致）—");
 const frameStats = [];
+/** 解析 cocos2d-v3 plist（XML）：提取 frames 帧名列表 + metadata 的 textureFileName/textureSize */
+function parsePlist(file) {
+  const xml = fs.readFileSync(file, "utf8");
+  const framesSection = xml.slice(xml.indexOf("<key>frames</key>"), xml.indexOf("<key>metadata</key>"));
+  const frameNames = Array.from(framesSection.matchAll(/<key>([A-Za-z0-9_.\\/]+\.png)<\/key>\s*<dict>/g)).map((m) => m[1]);
+  const metaSection = xml.slice(xml.indexOf("<key>metadata</key>"));
+  const pick = (key) => {
+    const m = metaSection.match(new RegExp(`<key>${key}<\\/key>\\s*<string>([^<]+)<\\/string>`));
+    return m ? m[1] : null;
+  };
+  return {
+    frameNames,
+    textureFileName: pick("textureFileName"),
+    textureSize: pick("size"),
+    sourceSizes: Array.from(framesSection.matchAll(/<key>spriteSourceSize<\/key>\s*<string>\{([^}]+)\}<\/string>/g)).map((m) => m[1]),
+  };
+}
 lightResources.forEach((resource) => {
-  const dirPath = path.join(PROJECT_ROOT, "assets/resources", resource.dir);
-  const pngs = fs
-    .readdirSync(dirPath)
-    .filter((name) => name.toLowerCase().endsWith(".png"))
-    .sort();
-  const indexes = pngs.map((name) => getFrameIndex(name)).filter((index) => index !== null);
-  check(indexes.length === pngs.length, `${resource.key} 每个帧名都能解析出帧号`);
+  const plistPath = path.join(PROJECT_ROOT, "assets/resources", `${resource.atlas}.plist`);
+  const pngPath = path.join(PROJECT_ROOT, "assets/resources", `${resource.atlas}.png`);
+  const plist = parsePlist(plistPath);
+  const frames = plist.frameNames;
+  check(frames.length > 0, `${resource.key} 图集里有帧`, `${frames.length} 帧`);
+
+  // 帧号连续无缺口（帧名保留源目录的 5 位数字命名）
+  const indexes = frames.map((name) => getFrameIndex(name.split("/").pop())).filter((index) => index !== null);
+  check(indexes.length === frames.length, `${resource.key} 每个帧名都能解析出帧号`);
   const sorted = indexes.slice().sort((a, b) => a - b);
   check(
     sorted[sorted.length - 1] - sorted[0] + 1 === sorted.length,
-    `${resource.key} 帧号连续无缺口（缺帧会少画面、空帧占位会报导入错误）`,
+    `${resource.key} 帧号连续无缺口（缺帧会少画面）`,
     `${sorted[0]}~${sorted[sorted.length - 1]} 共 ${sorted.length}`,
   );
-  const sizes = pngs.map((name) => pngSize(path.join(dirPath, name)));
-  const first = sizes[0];
-  check(sizes.every((size) => size.width === first.width && size.height === first.height), `${resource.key} 各帧尺寸一致`, `${first.width}×${first.height}`);
 
-  // meta 口径：导入成功 + 子资源齐 + 原始画布尺寸 == PNG 尺寸
-  // （auto-trim 真裁剪 + 非 0 offset 的这一类素材，必须 trim=false 才不会帧间抖动）
-  const badMetas = [];
-  let trimmedFrames = 0;
-  pngs.forEach((name) => {
-    const meta = JSON.parse(fs.readFileSync(path.join(dirPath, `${name}.meta`), "utf8"));
-    const spriteFrame = meta.subMetas && meta.subMetas.f9941 ? meta.subMetas.f9941 : null;
-    const size = pngSize(path.join(dirPath, name));
-    const data = spriteFrame ? spriteFrame.userData : null;
-    if (!meta.imported || !data || data.rawWidth !== size.width || data.rawHeight !== size.height) badMetas.push(name);
-    if (data && data.trimType === "auto" && (data.width !== data.rawWidth || data.height !== data.rawHeight)) trimmedFrames++;
-  });
-  check(badMetas.length === 0, `${resource.key} 全部帧导入成功且 meta 原始画布 == PNG 尺寸`, badMetas.slice(0, 5).join("、"));
-  check(trimmedFrames > 0, `${resource.key} 属于 auto-trim 真裁剪素材（${trimmedFrames} 帧被裁剪）→ 显示口径必须 trim=false`);
-  frameStats.push({ key: resource.key, count: pngs.length, trimmed: trimmedFrames });
+  // plist 画布口径与 PNG 一致（textureFileName 与 png 同名）
+  const size = pngSize(pngPath);
+  check(
+    plist.textureFileName === `${resource.atlas.split("/").pop()}.png`,
+    `${resource.key} textureFileName 与 png 同名`,
+    plist.textureFileName,
+  );
+  const [textureW, textureH] = (plist.textureSize || "").replace(/[{}]/g, "").split(",").map(Number);
+  check(
+    textureW === size.width && textureH === size.height,
+    `${resource.key} plist 画布尺寸 == PNG 尺寸`,
+    `${plist.textureSize} vs ${size.width}×${size.height}`,
+  );
+  // 每帧的 spriteSourceSize（原始画布）一致，回贴位置由 spriteOffset 保留（播放画面与原逐帧版一致）
+  const sourceSizes = new Set(plist.sourceSizes);
+  check(sourceSizes.size === 1, `${resource.key} 各帧原始画布一致（${Array.from(sourceSizes).join("、")}）`);
+  frameStats.push({ key: resource.key, count: frames.length });
 });
-console.log("      帧数一览（括号内为被裁剪的帧数）：");
-frameStats.forEach((stat) => console.log(`        ${stat.key.padEnd(10, " ")} ${stat.count} 帧（${stat.trimmed} 帧裁剪）`));
+console.log("      帧数一览：");
+frameStats.forEach((stat) => console.log(`        ${stat.key.padEnd(10, " ")} ${stat.count} 帧`));
 
 console.log("\n— F. 接线：挂点唯一、画在图标下层、循环播放、预加载 —");
 check(/this\.applyEquipmentLight\(node, good\)/.test(gameUiSource), "掉落物零件里挂了装备光柱（唯一挂点）");
@@ -183,7 +204,7 @@ check(/this\.applyEquipmentLight\(node, good\)/.test(gameUiSource), "掉落物�
   check(lightIndex >= 0 && iconIndex >= 0 && lightIndex < iconIndex, "光柱在图标之前挂载（画在图标下层，物品本身清晰可辨）");
 }
 check(/if \(!isEquipment\(good\)\) return;/.test(gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"))), "非装备不挂光柱");
-check(/playLoopDir\(/.test(gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"))), "光柱用目录帧循环播放（playLoopDir）");
+check(/playLoopAtlas\(/.test(gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"))), "光柱用图集循环播放（playLoopAtlas）");
 check(/equipmentLightLayout\.frameRate/.test(gameUiSource), "帧率走 configs/layout/lights（界面不写死）");
 check(/equipmentLightLayout\.size/.test(gameUiSource) && /equipmentLightLayout\.namePrefix/.test(gameUiSource), "尺寸与节点名前缀走 configs/layout/lights");
 {
@@ -197,7 +218,10 @@ check(/getAssignedLights/.test(preloadSource) && /preloadLights/.test(preloadSou
 check(/await this\.preloadLights\(\)/.test(preloadSource), "进图流程里调用了光柱预加载（掉落物一生成光柱就在）");
 const assigned = getAssignedLights();
 check(assigned.length === PREFIX_COUNT, `预加载口径 = 前缀表用到的 ${PREFIX_COUNT} 个光柱`, `实际 ${assigned.length}`);
-check(assigned.every((resource) => fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", resource.dir))), "预加载的每个光柱目录都真实存在");
+check(
+  assigned.every((resource) => fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", `${resource.atlas}.plist`)) && fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", `${resource.atlas}.png`))),
+  "预加载的每个光柱图集（plist + png）都真实存在",
+);
 check(assigned.every((resource) => !assignedKeys.has(RESERVED_LIGHT) || resource.key !== RESERVED_LIGHT), "预留光柱不进常规预加载（用到时再按需加载）");
 check(/export const equipmentLightLayout/.test(layoutSource), "configs/layout/lights 导出显示口径");
 check(/export \* from "\.\/layout\/lights"/.test(barrelSource) && /layout\/lights\.ts/.test(barrelSource), "hudLayout barrel 登记了 lights 布局（统一入口）");
