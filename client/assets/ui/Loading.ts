@@ -41,24 +41,38 @@ export class Loading extends Component {
   /** 预加载资源，全部完成后进入目标场景 */
   private async load() {
     const scene = SceneManager.pendingScene ?? "Login";
+    const startedAt = Date.now();
     try {
       // 预加载目标场景资源（0~50）
-      await this.preloadScene(scene, (ratio) => this.setProgress(ratio * Loading.SCENE_PROGRESS_END));
+      await this.timed(`目标场景 ${scene}`, startedAt, () =>
+        this.preloadScene(scene, (ratio) => this.setProgress(ratio * Loading.SCENE_PROGRESS_END)),
+      );
       // 进入游戏场景前预加载游戏资源（50~100）：地图信息 → 地图内 NPC/怪物帧动画 → 角色穿戴的帧动画
       if (scene === "Game") {
         const role = StorageManager.findOnlineRole();
         const map = role && maps.get(role.onMap);
         if (map) {
-          await PreloadManager.preloadGame(map.src, role, (ratio, tip) => this.setProgress(Loading.SCENE_PROGRESS_END + ratio * (100 - Loading.SCENE_PROGRESS_END), tip));
+          await this.timed("游戏资源（地图/帧动画）", startedAt, () =>
+            PreloadManager.preloadGame(map.src, role, (ratio, tip) => this.setProgress(Loading.SCENE_PROGRESS_END + ratio * (100 - Loading.SCENE_PROGRESS_END), tip)),
+          );
         }
       }
       this.setProgress(100);
       SceneManager.pendingScene = null;
       director.loadScene(scene);
+      console.log(`[Loading] 场景 ${scene} 加载总耗时 ${Date.now() - startedAt}ms`);
     } catch (error) {
       console.error("资源加载失败：", error);
       this.setProgressText(getText("progress_failed"));
     }
+  }
+
+  /** 记录阶段耗时（量化加载瓶颈，与 PreloadManager 的阶段耗时日志配套看） */
+  private async timed<T>(name: string, startedAt: number, task: () => Promise<T>): Promise<T> {
+    const begin = Date.now();
+    const result = await task();
+    console.log(`[Loading] ${name}加载耗时 ${Date.now() - begin}ms（自开始加载起 ${Date.now() - startedAt}ms）`);
+    return result;
   }
 
   /** 更新进度（ratio 取值 0~1，显示为百分比；tip 为当前阶段的说明，如"帧动画 3/7"） */

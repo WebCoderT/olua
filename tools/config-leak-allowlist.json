@@ -66,6 +66,30 @@
       "file": "ui/components/role/RoleDisplay.ts",
       "rule": "nodeName",
       "reason": "getChildByName(\"role_hp_bar\") / getChildByName(\"role_hp_text\") / getChildByName(\"role_rank\") 取的是 GameUiHelper.createHead 建出来的头顶信息栏里的血条、血量文字与军衔红字（与 MonsterManager 查 monster_head 同一类「同一套结构的两端」的内部约定）。这里必须按名字取：称号名牌动画会动态插进同一个容器，按下标会漂移。"
+    },
+    {
+      "file": "ui/Loading.ts",
+      "rule": "cn",
+      "match": "await this.timed(`目标场景",
+      "reason": "只进开发者控制台的加载阶段耗时日志（#224 性能量化埋点），玩家不可见、无任何可调含义；不是 UI 文案，不走 texts。"
+    },
+    {
+      "file": "ui/Loading.ts",
+      "rule": "cn",
+      "match": "await this.timed(\"游戏资源",
+      "reason": "同上：控制台诊断日志的阶段名（#224），玩家不可见。"
+    },
+    {
+      "file": "ui/core/PreloadManager.ts",
+      "rule": "cn",
+      "match": "await this.timed(\"地图信息\"",
+      "reason": "控制台诊断日志的阶段名（#224 分阶段耗时埋点），只进开发者控制台、玩家不可见，无任何可调含义。"
+    },
+    {
+      "file": "ui/core/PreloadManager.ts",
+      "rule": "cn",
+      "match": "await this.timed(`帧动画",
+      "reason": "同上：控制台诊断日志的阶段名（#224），玩家不可见。"
     }
   ]
 }

@@ -11,7 +11,8 @@ export const loadingConfig = {
   mapRatio: 0.15,
   /**
    * 帧动画目录的并发加载数
-   * 一帧动画目录动辄几百张图，同时涌入太多解码任务反而更卡（表现为进度卡住不动），故限制并发
+   * 原值 4（担心同时涌入太多解码任务卡住进度）；配合 PreloadManager / Loading 的分阶段耗时日志实测调整：
+   * 调大后若进度条明显卡顿再调回 —— 该值只影响加载期的 CPU 占用节奏，不影响加载结果
    */
-  animationConcurrency: 4,
+  animationConcurrency: 8,
 };
