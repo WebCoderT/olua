@@ -897,10 +897,9 @@ export default class GameUiHelper {
   /**
    * 给地面掉落物挂上装备光柱（仅装备有；前缀 → 光柱的映射与特殊装备的自定义表在 configs/light）
    *
-   * 光柱是循环播放的帧序列目录动画（resources/effect/light，400×400 画布），与详情背景同口径：
-   * 精灵的 trim 必须保持 createSprite 的缺省 false —— 这批帧按 auto-trim 导入（真裁剪 + 非 0 offset），
-   * trim=false 时引擎按 offset 把裁剪内容贴回原始画布，各帧画布一致、画面帧间不跳；
-   * 若改成 trim=true 则只画裁剪矩形再拉伸到节点尺寸，每帧裁剪范围不同会导致光柱抖动。
+   * 光柱是循环播放的 plist 图集动画（resources/effect/light/light_<编号>，400×400 画布），与边框同口径：
+   * 帧偏移由图集的 spriteOffset 保留（打包时逐帧按 alpha 裁剪并记录回贴位置），精灵 trim 保持
+   * createSprite 的缺省 false，各帧画布一致、画面帧间不跳。
    *
    * 光柱排在图标之前（见 createDropItem）→ 画在图标下层；它是掉落物节点的子节点，
    * 随掉落物一起销毁（拾取 / 换图清空都不必单独清理）
@@ -915,12 +914,12 @@ export default class GameUiHelper {
     if (!resource) return;
     const light = this.createEquipmentLight(lightKey);
     node.addChild(light);
-    // 帧已由 PreloadManager 进图前预加载（片段按 目录|帧率 缓存，多个掉落物共用同一个片段）
-    AnimationHelper.playLoopDir(light.name, light, resource.dir, equipmentLightLayout.frameRate);
+    // 帧已由 PreloadManager 进图前预加载（片段按 图集|帧率 缓存，多个掉落物共用同一个片段）
+    AnimationHelper.playLoopAtlas(light.name, light, resource.atlas, equipmentLightLayout.frameRate);
   }
 
   /**
-   * 创建装备光柱零件（空精灵 + 动画组件，帧由 playLoopDir 异步装载）
+   * 创建装备光柱零件（空精灵 + 动画组件，帧由 playLoopAtlas 异步装载）
    *
    * 与图标**同中心**：位置取 dropItemLayout.iconOffsetY（随掉落物布局走，不在这里另配一套坐标）
    */

@@ -5,7 +5,7 @@ import { getEquipmentBaseKey } from "./equipments";
 /**
  * 装备光柱（装备掉在地上时的品质光效）
  *
- * 素材：resources/effect/light 下 6 个帧序列目录（各 14~15 帧循环，400×400 画布），
+ * 素材：resources/effect/light 下 6 张 plist 图集（light_<编号>.plist + 同名 png，各 14~15 帧循环，400×400 画布），
  * 显示在地面掉落物的装备图标上（唯一挂点 = GameUiHelper.createDropItem，见 applyEquipmentLight）——
  * 光柱画在**图标下层**（图标压住光柱中心，光柱从四周透出，物品本身始终清晰可辨）。
  * 光柱的取用优先级：**特殊装备的自定义表 → 前缀表**，都没命中就不显示（非装备一律不显示）。
@@ -17,15 +17,15 @@ import { getEquipmentBaseKey } from "./equipments";
  */
 
 /**
- * 光柱素材目录编号（resources/effect/light/<编号>；与磁盘目录一一对应，
- * 增删光柱改这里，test-equipment-light.cjs 会拿它与磁盘实际目录比对，写错会当场报出来）
+ * 光柱素材图集编号（resources/effect/light/light_<编号>.plist；与磁盘文件一一对应，
+ * 增删光柱改这里，test-equipment-light.cjs 会拿它与磁盘实际文件比对，写错会当场报出来）
  */
 const lightSerials: number[] = [1, 2, 3, 4, 5, 6];
 
-/** 光柱资源表（数组为源 + 尾部建 Map）：key = `light/<编号>`，dir = resources 加载路径 */
+/** 光柱资源表（数组为源 + 尾部建 Map）：key = `light/<编号>`，atlas = resources 加载路径（不含扩展名） */
 export const lightResources: LightResource[] = lightSerials.map((serial) => ({
   key: `light/${serial}`,
-  dir: `effect/light/${serial}`,
+  atlas: `effect/light/light_${serial}`,
 }));
 
 /** 光柱 key → 资源（按 key 查表用；查不到 = 配置写错了，显示层会安静跳过） */
