@@ -35,6 +35,8 @@ export type PreloadProgress = (ratio: number, tip: string) => void;
  * 1. 地图信息（tmx 与其图集依赖）
  * 2. 地图内所有 NPC 与怪物的帧动画（按对象组里的编号查配置得到资源目录）
  * 3. 当前角色身上穿戴的衣服与武器帧动画
+ * 跟进图无关的装饰资源（装备边框图集 / 装备详情背景帧序列）改为**后台**预载，不阻塞进图；
+ * 光柱虽也是装饰，但掉落物落场就要显示，保留在关键路径
  * 由过渡场景 Loading 调用（带进度显示）；直接从 Game 场景启动（编辑器里单独跑 Game）时由 Game 兜底调用一次。
  * 同一目录只加载一次，重复调用（Loading 已加载过、Game 又调一次）不会重复加载：
  * 帧序列与动画片段都缓存在 AnimationHelper，第二次调用直接命中缓存立即返回
@@ -47,17 +49,29 @@ export default class PreloadManager {
    * @param onProgress 进度回调（可缺省：直接从 Game 场景启动时没有进度界面）
    */
   static async preloadGame(mapSrc: string, role: Role | null, onProgress?: PreloadProgress) {
+    const startedAt = Date.now();
     onProgress?.(0, getText("progress_map"));
-    const mapAsset = await loadResourceAsync<TiledMapAsset>(mapSrc, TiledMapAsset);
-    // 装备边框图集：只有前后缀映射表里用到的那十几张、都是小图集，不占进度条；
-    // 不预加载的话，第一次打开背包/角色弹窗时边框要等一拍才出现（加载一次后进缓存，之后立即复用）
-    await this.preloadBorders();
-    // 装备详情背景帧序列：同样只有前后缀映射表里用到的那十几个目录、都是小图，不占进度条
-    await this.preloadDetailBackgrounds();
-    // 装备光柱帧序列：前缀映射表里用到的 5 个目录（各 14~15 帧、400×400），同样小，不占进度条
+    // 装备边框图集与详情背景帧序列：都只在进图**之后**的背包/悬停详情里用，跟"能不能进图"无关 ——
+    // 移出关键路径后台预载（不 await）：没载完就开背包也只是动画晚一拍出现（载完进 AnimationHelper 缓存），
+    // 换来的是进图等待时间直接少掉 40+ 个目录的加载（首进 Game 明显变快）
+    void this.preloadBorders();
+    void this.preloadDetailBackgrounds();
+    const mapAsset = await this.timed("地图信息", startedAt, () => loadResourceAsync<TiledMapAsset>(mapSrc, TiledMapAsset));
+    // 装备光柱帧序列：掉落物落场光柱就要在（进图即可能拾取），保留在关键路径；只有 5 个目录、很小
+    const lightsStartedAt = Date.now();
     await this.preloadLights();
+    console.log(`[PreloadManager] 光柱帧序列完成，耗时 ${Date.now() - lightsStartedAt}ms（自开始预加载起 ${Date.now() - startedAt}ms）`);
     const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapAsset), ...this.getRoleAnimationTasks(role)]);
-    await this.runTasks(tasks, onProgress, loadingConfig.mapRatio);
+    await this.timed(`帧动画 ${tasks.length} 个目录`, startedAt, () => this.runTasks(tasks, onProgress, loadingConfig.mapRatio));
+    console.log(`[PreloadManager] 游戏资源预加载全部完成，总耗时 ${Date.now() - startedAt}ms`);
+  }
+
+  /** 分阶段耗时日志（量化加载瓶颈：控制台按阶段输出毫秒数，据此调整并发数与关键路径取舍） */
+  private static async timed<T>(name: string, startedAt: number, task: () => Promise<T>): Promise<T> {
+    const begin = Date.now();
+    const result = await task();
+    console.log(`[PreloadManager] ${name}完成，耗时 ${Date.now() - begin}ms（自开始预加载起 ${Date.now() - startedAt}ms）`);
+    return result;
   }
 
   //#region 任务收集
@@ -109,14 +123,14 @@ export default class PreloadManager {
     });
   }
 
-  /** 预加载装备边框图集（configs/border 的前后缀映射表用到的全部边框；帧进 AnimationHelper 缓存，重复调用只加载一次） */
+  /** 预加载装备边框图集（configs/border 的前后缀映射表用到的全部边框；帧进 AnimationHelper 缓存，重复调用只加载一次）。后台预载，不阻塞进图 */
   private static async preloadBorders() {
     const assigned = getAssignedBorders();
     await Promise.all(assigned.map((resource) => AnimationHelper.loadFramesFromAtlas(resource.atlas)));
     console.log(`[PreloadManager] 装备边框预加载完成（${assigned.length} 张图集）：${assigned.map((resource) => resource.key).join("、")}`);
   }
 
-  /** 预加载装备详情背景帧序列目录（configs/background 的前后缀映射表用到的全部背景；帧进 AnimationHelper 缓存，重复调用只加载一次） */
+  /** 预加载装备详情背景帧序列目录（configs/background 的前后缀映射表用到的全部背景；帧进 AnimationHelper 缓存，重复调用只加载一次）。后台预载，不阻塞进图 */
   private static async preloadDetailBackgrounds() {
     const assigned = getAssignedDetailBackgrounds();
     await Promise.all(assigned.map((resource) => AnimationHelper.loadFrames(resource.dir)));

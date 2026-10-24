@@ -230,7 +230,7 @@
 - **特殊装备自定义边框**：同一文件里的 `customEquipmentBorderData`，**优先于**前后缀表 —— 写变体 id（`weapon_20_p4s2`）只对那一个变体生效，写基础件 key（`weapon_20`）对**全部变体**生效；剩下的 69 张边框就是留给它的（素材长什么样见 `tools/border-preview.png` 索引图，黄框 = 已分配的 15 张）
 - **全部 84 张边框都登记在系统里**（`configs/border.borderResources`，与磁盘文件一一比对的单测守着），只是暂时只有 15 张被分配
 - **尺寸**：84 张边框分属 6 个原始尺寸家族（91×104 / 200×200 / 80×80 / 98×92 / 89×88），统一按 **contain**（保持各自宽高比）缩进 `configs/layout/borders.equipmentBorderLayout.size`（默认 56×56 = 格子 50 + 两侧各 3 溢出）里；帧率也在这里调
-- **预加载**：进图前 `PreloadManager` 把前后缀表用到的边框图集全部载入（`configs/border.getAssignedBorders`），第一次开背包边框就在，不会晚一拍
+- **预加载**：`PreloadManager` 会把前后缀表用到的边框图集**后台**预载（`configs/border.getAssignedBorders`，不阻塞进图），第一次开背包时多半已就绪，没就绪也只是边框晚一拍出现
 - **一个引擎坑（为什么边框精灵 `trim = true`）**：这批边框图集**未裁剪但每帧 offset 全部非 0**，而 offset 只在 `trim = false` 的逆向补边路径里生效 —— 引擎会按它把整帧画面平移出去（边框整体挪出格子）；`trim = true` 时画面取 rect 全帧、完全不看 offset，未裁剪素材的 rect == 原始尺寸，正好铺满节点框且不变形。单测里守着「每帧 rect == 原始尺寸」这条前提，以后真加进来**裁剪过**的边框素材，记得把那件素材改成 `trim = false` 渲染
 - 回归单测：`node tools/test-equipment-border.cjs`（资源表与磁盘一致、15 组合全覆盖且用前 15 张、取用优先级各分支、真实装备表抽查、帧序号/未裁剪守卫、界面接线源码断言；共 46 项）
 
@@ -241,7 +241,7 @@
 - **特殊装备自定义背景**：同一文件里的 `customEquipmentDetailBackgroundData`，**优先于**前后缀表 —— 写变体 id（`weapon_20_p4s2`）只对那一个变体生效，写基础件 key（`weapon_20`）对**全部变体**生效；剩下的 26 个背景就是留给它的
 - **全部 41 个背景目录都登记在系统里**（`configs/background.detailBackgroundResources`，与磁盘目录一一比对的单测守着），只是暂时只有 15 个被分配
 - **帧率**在 `configs/layout/backgrounds.equipmentDetailBackgroundLayout`（默认 10 帧/秒，与边框同一档）；背景随面板自适应铺满，没有独立尺寸配置
-- **预加载**：进图前 `PreloadManager` 把前后缀表用到的背景目录全部载入（`configs/background.getAssignedDetailBackgrounds`），第一次悬停背景动画就在，不会晚一拍
+- **预加载**：`PreloadManager` 会把前后缀表用到的背景目录**后台**预载（`configs/background.getAssignedDetailBackgrounds`，不阻塞进图），第一次悬停时多半已就绪，没就绪也只是背景动画晚一拍出现
 - **一个引擎坑（为什么背景精灵 `trim = false`，和边框正好相反）**：这批背景帧按 auto-trim 导入（**真裁剪 + 非 0 offset**），`trim = false` 时引擎按 offset 把裁剪内容贴回原始画布 —— 各帧画布一致（单测守着「meta 原始画布 == PNG 尺寸」），画面帧间不跳；若改成 `trim = true` 则每帧只画自己的裁剪矩形并拉伸到面板，每帧裁剪范围不同会导致画面抖动。与边框（未裁剪素材必须 `trim = true`）结论相反，别照搬
 - 回归单测：`node tools/test-equipment-detail-background.cjs`（资源表与磁盘一致、15 组合全覆盖且用前 15 个、取用优先级各分支、真实装备表抽查、帧序号/帧尺寸/画布守卫、界面接线源码断言）
 
