@@ -32,6 +32,9 @@ design/
 # AI 生图工具的默认输出目录（成品图标人工挑选拷进 resources/ 后，中间底图不留仓库）
 generated-images/
 
+# 怪物按动作打包的暂存区（stage-monster-action-frames.py 的产物，打包完即可删）
+client/tools/_stage_monster_atlas/
+
 #//////////////////////////
 # macOS 噪声（Finder 元数据 / AppleDouble，不该进版本库）
 #//////////////////////////
