@@ -110,12 +110,12 @@ export class Game extends Component {
       GameUiHelper.createTip(change.willRetry ? "realtime_disconnected_tip" : "realtime_replaced_tip");
     };
     // 伤害结算上移服务端（#34）：settle 帧的结果由怪物管理器落到目标身上（扣血/飘字/死亡）
-    CombatChannel.onSettle = MonsterManager.applyServerSettle;
+    CombatChannel.onSettle = MonsterManager.applyServerSettle.bind(MonsterManager);
     // 玩家受击反馈（#13）：怪物普攻命中后播受击动作（优先级规则在 RoleDisplay.playInjured：
     // 施法/死亡不播，其余情况一次性抖一下不打断任何事）；屏幕红闪在 MonsterAI 内直接触发
     MonsterAI.onPlayerHit = () => this.roleDisplay?.playInjured();
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
-    CombatChannel.onWorld = MonsterManager.applyWorldState;
+    CombatChannel.onWorld = MonsterManager.applyWorldState.bind(MonsterManager);
     RealtimeClient.start();
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
