@@ -128,43 +128,43 @@ If you want to see how far AI can take a project — the feature list below is t
 
 **Login**
 
-![Login](public/login.png)
+![Login](website/assets/img/login.jpg)
 
 **Character selection and creation**
 
-![Character selection and creation](public/role_selector.png)
+![Character selection and creation](website/assets/img/role_selector.jpg)
 
 **Main game screen (character info / bag / skill popup)**
 
-![Main game screen](public/game.png)
+![Main game screen](website/assets/img/game.jpg)
 
 **Skill list**
 
-![Skill list](public/skill.png)
+![Skill list](website/assets/img/skill.jpg)
 
 **Monsters and combat**
 
-![Monsters and combat](public/monster.png)
+![Monsters and combat](website/assets/img/monster.jpg)
 
 **Equipment drop light pillars (ground drops play quality-based light pillars: 5 tiers Common→Godlike assigned automatically, the 6th reserved for special equipment)**
 
-![Equipment drop light pillars](public/drop-light.png)
+![Equipment drop light pillars](website/assets/img/drop-light.jpg)
 
 **Minimap preview popup (large preview plus monster red dots / NPCs / spawn zones; left-click to pathfind, right-click to teleport)**
 
-![Minimap preview popup](public/small-map.png)
+![Minimap preview popup](website/assets/img/small-map.jpg)
 
 **War Soul system**
 
-![War Soul system](public/war-soul.png)
+![War Soul system](website/assets/img/war-soul.jpg)
 
 **Equipment quality borders and detail backgrounds (15 prefix/suffix quality borders in the bag; the hover detail popup shows a quality-matched background animation)**
 
-![Equipment quality borders and detail backgrounds](public/border_bg.png)
+![Equipment quality borders and detail backgrounds](website/assets/img/border_bg.jpg)
 
 **Mall (the whole equipment catalogue, 3 cards per row and 6 items per page; hover an icon for full details)**
 
-![Mall](public/mall.png)
+![Mall](website/assets/img/mall.jpg)
 
 ## Directory structure
 
@@ -176,7 +176,6 @@ olua/
 ├── admin/                  # admin: React
 ├── tools/                  # project-level scripts (cross-side)
 ├── website/                # project website (static single page)
-├── public/                 # screenshots and contact QR code
 ├── docs/                   # project docs (resume introduction, etc.)
 └── equip-aligner/          # small tool for aligning equipment asset offsets
 ```
@@ -560,4 +559,4 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 > The art assets are too large to keep under version control — contact me if you need them.
 
-![WeChat QR code](public/qrcode.jpg)
+![WeChat QR code](website/assets/img/qrcode.jpg)
