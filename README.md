@@ -128,43 +128,43 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 
 **登录**
 
-![登录](public/login.png)
+![登录](website/assets/img/login.jpg)
 
 **角色选择与创建**
 
-![角色选择与创建](public/role_selector.png)
+![角色选择与创建](website/assets/img/role_selector.jpg)
 
 **游戏主界面（角色信息 / 背包 / 技能弹窗）**
 
-![游戏主界面](public/game.png)
+![游戏主界面](website/assets/img/game.jpg)
 
 **技能列表**
 
-![技能列表](public/skill.png)
+![技能列表](website/assets/img/skill.jpg)
 
 **怪物与战斗**
 
-![怪物与战斗](public/monster.png)
+![怪物与战斗](website/assets/img/monster.jpg)
 
 **装备掉落光柱（地面掉落物按前缀品质播放光柱特效：普通→超神 5 档自动分配，第 6 套预留给特殊装备）**
 
-![装备掉落光柱](public/drop-light.png)
+![装备掉落光柱](website/assets/img/drop-light.jpg)
 
 **小地图预览弹窗（大图预览 + 怪物红点 / NPC / 刷怪区；左键点击自动寻路、右键直接传送）**
 
-![小地图预览弹窗](public/small-map.png)
+![小地图预览弹窗](website/assets/img/small-map.jpg)
 
 **战魂系统**
 
-![战魂系统](public/war-soul.png)
+![战魂系统](website/assets/img/war-soul.jpg)
 
 **装备品质边框与详情背景（背包 15 种前后缀品质边框；悬停详情弹窗显示按品质切换的背景动画）**
 
-![装备品质边框与详情背景](public/border_bg.png)
+![装备品质边框与详情背景](website/assets/img/border_bg.jpg)
 
 **商城（系统内全部装备上架，一行 3 张卡片、每页 6 件分页浏览；悬停图标看完整详情）**
 
-![商城](public/mall.png)
+![商城](website/assets/img/mall.jpg)
 
 ## 目录结构
 
@@ -176,7 +176,6 @@ olua/
 ├── admin/                  # 管理端：React
 ├── tools/                  # 项目级脚本（跨端）
 ├── website/                # 项目官网（纯静态单页）
-├── public/                 # 截图与联系方式二维码
 ├── docs/                   # 项目文档（简历介绍等）
 └── equip-aligner/          # 装备素材偏移对齐小工具
 ```
@@ -560,4 +559,4 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 > 资源素材过大无法进行版本控制，如果需要请联系我。
 
-![微信二维码](public/qrcode.jpg)
+![微信二维码](website/assets/img/qrcode.jpg)
