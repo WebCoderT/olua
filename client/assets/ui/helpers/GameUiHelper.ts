@@ -1880,7 +1880,7 @@ export default class GameUiHelper {
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     clothInShow.setScale(cloth?.inScaleX ?? 1, cloth?.inScaleY ?? 1, 1);
     clothInShow.angle = cloth?.inRotate ?? 0;
-    AnimationHelper.playLoopWithDir("cloth_in_show", clothInShow, cloth.in, 1);
+    AnimationHelper.playLoopAtlasWithDuration("cloth_in_show", clothInShow, cloth.in, 1);
     return clothInShow;
   }
 
@@ -1893,7 +1893,7 @@ export default class GameUiHelper {
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     weaponInShow.setScale(weapon?.inScaleX ?? 1, weapon?.inScaleY ?? 1, 1);
     weaponInShow.angle = weapon?.inRotate ?? 0;
-    AnimationHelper.playLoopWithDir("weapon_in_show", weaponInShow, weapon.in, 1);
+    AnimationHelper.playLoopAtlasWithDuration("weapon_in_show", weaponInShow, weapon.in, 1);
     return weaponInShow;
   }
 
