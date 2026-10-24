@@ -176,6 +176,58 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at  INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_world_monsters_map ON world_monsters(map_id);
+
+      -- 养成配置（#213）：称号 / 战魂的等级序列**固定**（level 是主键，行只能来自 seed，
+      -- 后台只改内容），所以没有 created_at，只有 updated_at。
+      -- 八项属性拍平成 min/max 两列（区间型六项 + 单值两项），避免 JSON 列没法建索引与校验。
+      CREATE TABLE IF NOT EXISTS titles (
+        level                INTEGER PRIMARY KEY,
+        label                TEXT    NOT NULL,
+        description          TEXT    NOT NULL DEFAULT '',
+        animation            TEXT    NOT NULL DEFAULT '',
+        animation_frame_rate INTEGER NOT NULL DEFAULT 10,
+        bind_gold            INTEGER NOT NULL DEFAULT 0,
+        acquire_channel      TEXT    NOT NULL DEFAULT 'unavailable',
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS souls (
+        level                INTEGER PRIMARY KEY,
+        label                TEXT    NOT NULL,
+        description          TEXT    NOT NULL DEFAULT '',
+        animation            TEXT    NOT NULL DEFAULT '',
+        animation_frame_rate INTEGER NOT NULL DEFAULT 10,
+        bind_gold            INTEGER NOT NULL DEFAULT 0,
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

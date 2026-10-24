@@ -37,6 +37,15 @@ import {
   CreateAnnouncementDto,
   UpdateAnnouncementDto,
 } from "../modules/announcement/dto/announcement.dto";
+import {
+  ConfigAttributeRangeDto,
+  ConfigAttributesDto,
+  TitleDto,
+  TitlePageDto,
+  TitleQueryDto,
+  UpdateTitleDto,
+} from "../modules/game-config/dto/title.dto";
+import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import {
@@ -134,4 +143,15 @@ export const SWAGGER_MODELS = [
   MailTemplateDto,
   SendMailDto,
   SendMailResultDto,
+  // 养成配置（称号 / 战魂）
+  TitleDto,
+  TitlePageDto,
+  TitleQueryDto,
+  UpdateTitleDto,
+  SoulDto,
+  SoulPageDto,
+  SoulQueryDto,
+  UpdateSoulDto,
+  ConfigAttributesDto,
+  ConfigAttributeRangeDto,
 ];

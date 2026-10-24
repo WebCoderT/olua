@@ -113,7 +113,7 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 - **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 37 unit-test suites under `client/tools/` and 10 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 87 assertions) + typechecks on two sides + 37 unit-test suites + 10 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 110 + 283 + 120 + 28 + 50 + 32 + 22 + 14 + 44 + 87 assertions) + typechecks on two sides + 37 unit-test suites + 10 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -218,7 +218,7 @@ olua/
   - constants/swagger-tags: documentation groups (public APIs / client / admin)
   - interceptors/audit.interceptor: **automatic logging of admin write APIs** (action taken from `operationId`, password-like fields masked before persisting)
   - security: pure-function login throttling decisions (`rate-limit.util`) + in-memory counter service (`login-throttle.service`)
-- src/database: SQLite connection and the repository layer for the seven tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters, including backfilling columns in existing databases)
+- src/database: SQLite connection and the repository layer for the eleven tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / titles / souls, including backfilling columns in existing databases)
 - src/modules: auth (player authentication) / roles (characters) / admin (console: auth / accounts / characters / administrators / passwords) / announcement (announcements: public pull + admin CRUD) / mail (mail: templates + delivery queue + background scheduler) / audit (audit logs) / token (JWT) / health
 - src/swagger/setup: documentation mounting (extracted into a function so tests can also generate docs once to verify grouping / permission annotations / dangling `$ref`)
 - src/swagger/emit: **offline production of `openapi.json`** (`npm run swagger:emit`, the only input to both consumers' API files)
@@ -228,6 +228,7 @@ olua/
 - test/e2e-guard.cjs: **operations and security baseline focus** (283 assertions: password reset and token revocation / self-service password change / audit log persistence, masking, filtering, permissions / login throttling by username and by IP / kicking offline)
 - test/e2e-mail.cjs: **mail channel focus** (120 assertions: verifying enqueue / delivery / retry and exhausting the limit / manual re-delivery / whole-channel disabling when SMTP is unconfigured, using an injectable **fake sender**; no real SMTP server needed)
 - test/e2e-account-email.cjs: **player email field focus** (28 assertions: viewers can neither see nor change it / backfill·clear / format and same-email dedup / mail falls back to the account's email)
+- test/e2e-game-config.cjs: **game config focus** (44 assertions: title / soul seed identical to client configs / edit-only, no create or delete — POST and DELETE are 404 / partial updates and channel filtering / viewer can read but not write)
 - test/backup.cjs: **backup / restore focus** (87 assertions: `VACUUM INTO` consistent snapshot while running / restore archiving / protective refusal / automatic scheduled backup)
 - Details in [server/README.md](server/README.en.md), questions in [server/FAQ.md](server/FAQ.en.md)
 
@@ -285,13 +286,13 @@ make dev            # start server :3100 and admin :5173 together; Ctrl-C exits 
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
 make client-test    # client's 37 unit-test suites
-make server-verify  # verify the server with one command (compile + ten e2e suites + generated-artifact audit)
+make server-verify  # verify the server with one command (compile + eleven e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 10 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 10 audits
-make test           # all tests: client's 37 suites + server's ten e2e suites
+make test           # all tests: client's 37 suites + server's eleven e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -317,7 +318,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + ten e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + eleven e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -397,7 +398,7 @@ Manual equivalent (no `make` needed):
 # Client: 37 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + ten e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 14 / 87) + generated-artifact consistency
+# Server: compile + eleven e2e suites (248 / 110 / 283 / 120 / 28 / 50 / 32 / 22 / 14 / 44 / 87) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build

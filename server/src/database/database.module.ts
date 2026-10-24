@@ -6,7 +6,9 @@ import { AnnouncementRepository } from "./repositories/announcement.repository";
 import { AuditRepository } from "./repositories/audit.repository";
 import { MailRepository } from "./repositories/mail.repository";
 import { RoleRepository } from "./repositories/role.repository";
+import { SoulRepository } from "./repositories/soul.repository";
 import { SystemRepository } from "./repositories/system.repository";
+import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 
 /**
@@ -29,6 +31,8 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     MailRepository,
     SystemRepository,
     WorldMonsterRepository,
+    TitleRepository,
+    SoulRepository,
   ],
   exports: [
     DatabaseService,
@@ -40,6 +44,8 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     MailRepository,
     SystemRepository,
     WorldMonsterRepository,
+    TitleRepository,
+    SoulRepository,
   ],
 })
 export class DatabaseModule {}

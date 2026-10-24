@@ -1,0 +1,256 @@
+import { Injectable, OnModuleInit } from "@nestjs/common";
+import { BizCode } from "../../common/constants/biz-code";
+import { AcquireChannel } from "../../common/constants/game-config";
+import { BizException } from "../../common/errors/biz.exception";
+import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
+import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
+import { SoulRow, TitleRow } from "../../database/rows";
+import {
+  SOUL_LABELS,
+  SOUL_LEVEL_ATTRIBUTES,
+  SOUL_LEVEL_META,
+  TITLE_LABELS,
+  TITLE_LEVEL_ATTRIBUTES,
+  TITLE_LEVEL_META,
+} from "../../shared/game-data.generated";
+import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
+import {
+  attributesFromRow,
+  ConfigAttributesDto,
+  TitleDto,
+  TitleQueryDto,
+  UpdateTitleDto,
+} from "./dto/title.dto";
+
+/** 列表默认每页条数：34 / 37 行一页装得下，默认就是全量价目表 */
+const DEFAULT_PAGE_SIZE = 100;
+
+/** 区间型属性键（与 ConfigAttributesDto 的六个区间字段一致） */
+const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"] as const;
+
+/**
+ * 养成配置（称号 / 战魂）业务
+ *
+ * **只读 seed、只写更新**：等级序列来自客户端 configs（经 game-data.generated 快照），
+ * 服务启动时 INSERT OR IGNORE 灌进 titles / souls 表 —— 幂等，且**不会覆盖运营已改的值**；
+ * 后台接口只有 list / update，没有 create / remove（序列固定，e2e 固化这一约束）。
+ */
+@Injectable()
+export class GameConfigService implements OnModuleInit {
+  constructor(
+    private readonly titles: TitleRepository,
+    private readonly souls: SoulRepository,
+  ) {}
+
+  /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
+  onModuleInit() {
+    this.seedTitles();
+    this.seedSouls();
+  }
+
+  // —— 称号 ——
+
+  listTitles(query: TitleQueryDto): PageResult<TitleDto> {
+    const options: TitleListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      acquireChannel: query.acquireChannel,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.titles.list(options);
+    const total = this.titles.count(options);
+    return { list: rows.map(TitleDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateTitle(level: number, dto: UpdateTitleDto): TitleDto {
+    const existing = this.requireTitle(level);
+    const attributes = dto.attributes ?? attributesFromRow(existing);
+    assertAttributeRanges(attributes);
+
+    const next: TitleRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      animation: dto.animation ?? existing.animation,
+      animation_frame_rate: dto.animationFrameRate ?? existing.animation_frame_rate,
+      bind_gold: dto.bindGold ?? existing.bind_gold,
+      acquire_channel: dto.acquireChannel ?? existing.acquire_channel,
+      ...attributeColumns(attributes),
+      updated_at: Date.now(),
+    };
+    this.titles.update(next);
+    return TitleDto.from(this.requireTitle(level));
+  }
+
+  // —— 战魂 ——
+
+  listSouls(query: SoulQueryDto): PageResult<SoulDto> {
+    const options: SoulListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.souls.list(options);
+    const total = this.souls.count(options);
+    return { list: rows.map(SoulDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateSoul(level: number, dto: UpdateSoulDto): SoulDto {
+    const existing = this.requireSoul(level);
+    const attributes = dto.attributes ?? attributesFromRow(existing);
+    assertAttributeRanges(attributes);
+
+    const next: SoulRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      animation: dto.animation ?? existing.animation,
+      animation_frame_rate: dto.animationFrameRate ?? existing.animation_frame_rate,
+      bind_gold: dto.bindGold ?? existing.bind_gold,
+      ...attributeColumns(attributes),
+      updated_at: Date.now(),
+    };
+    this.souls.update(next);
+    return SoulDto.from(this.requireSoul(level));
+  }
+
+  // —— 内部 ——
+
+  private requireTitle(level: number): TitleRow {
+    const row = this.titles.findByLevel(level);
+    if (!row) throw BizException.notFound(BizCode.TITLE_NOT_FOUND, `称号等级 ${level} 不存在`);
+    return row;
+  }
+
+  private requireSoul(level: number): SoulRow {
+    const row = this.souls.findByLevel(level);
+    if (!row) throw BizException.notFound(BizCode.SOUL_NOT_FOUND, `战魂阶数 ${level} 不存在`);
+    return row;
+  }
+
+  /**
+   * 称号 seed：TITLE_LABELS（名）/ TITLE_LEVEL_META（文案/价格/动画）/ TITLE_LEVEL_ATTRIBUTES（属性）
+   * 三张表按等级键 zip；渠道默认「无法获取」，由运营逐个开放（赠送逻辑暂未实现）
+   */
+  private seedTitles() {
+    // 属性表是字面量键（"0".."33"）的 Record，用通用形状取值避免逐键字面量索引
+    const attributeTable = TITLE_LEVEL_ATTRIBUTES as Record<string, Record<string, unknown>>;
+    for (const [index, meta] of Object.entries(TITLE_LEVEL_META)) {
+      const attributes = attributeTable[index];
+      this.titles.seedRow({
+        level: Number(index) + 1,
+        label: TITLE_LABELS[index] ?? "",
+        description: meta.description,
+        animation: meta.animation,
+        animation_frame_rate: meta.animationFrameRate,
+        bind_gold: meta.bindGold,
+        acquire_channel: AcquireChannel.UNAVAILABLE,
+        ...flatAttributes(attributes),
+        updated_at: 0,
+      });
+    }
+  }
+
+  /** 战魂 seed：与称号同构（少渠道列） */
+  private seedSouls() {
+    const attributeTable = SOUL_LEVEL_ATTRIBUTES as Record<string, Record<string, unknown>>;
+    for (const [index, meta] of Object.entries(SOUL_LEVEL_META)) {
+      const attributes = attributeTable[index];
+      this.souls.seedRow({
+        level: Number(index) + 1,
+        label: SOUL_LABELS[index] ?? "",
+        description: meta.description,
+        animation: meta.animation,
+        animation_frame_rate: meta.animationFrameRate,
+        bind_gold: meta.bindGold,
+        ...flatAttributes(attributes),
+        updated_at: 0,
+      });
+    }
+  }
+}
+
+/** 生成物的属性形状（{maxHp, physicalAttack:[min,max], ...}）→ 拍平的行属性列 */
+function flatAttributes(attributes: Record<string, unknown>): Pick<TitleRow, AttrColumnNames> {
+  const range = (key: string): [number, number] => {
+    const value = attributes[key];
+    return Array.isArray(value) ? [Number(value[0]) || 0, Number(value[1]) || 0] : [0, 0];
+  };
+  return {
+    max_hp: Number(attributes.maxHp) || 0,
+    hp_recover: Number(attributes.hpRecover) || 0,
+    physical_attack_min: range("physicalAttack")[0],
+    physical_attack_max: range("physicalAttack")[1],
+    magic_attack_min: range("magicAttack")[0],
+    magic_attack_max: range("magicAttack")[1],
+    taoist_attack_min: range("taoistAttack")[0],
+    taoist_attack_max: range("taoistAttack")[1],
+    physical_defense_min: range("physicalDefense")[0],
+    physical_defense_max: range("physicalDefense")[1],
+    magic_defense_min: range("magicDefense")[0],
+    magic_defense_max: range("magicDefense")[1],
+    taoist_defense_min: range("taoistDefense")[0],
+    taoist_defense_max: range("taoistDefense")[1],
+  };
+}
+
+/** 行属性列名（flatAttributes / attributeColumns 共用的键集合） */
+type AttrColumnNames =
+  | "max_hp"
+  | "hp_recover"
+  | "physical_attack_min"
+  | "physical_attack_max"
+  | "magic_attack_min"
+  | "magic_attack_max"
+  | "taoist_attack_min"
+  | "taoist_attack_max"
+  | "physical_defense_min"
+  | "physical_defense_max"
+  | "magic_defense_min"
+  | "magic_defense_max"
+  | "taoist_defense_min"
+  | "taoist_defense_max";
+
+/** 嵌套属性对象 → 拍平行属性列（update 合并后写库用） */
+function attributeColumns(attributes: ConfigAttributesDto): Pick<TitleRow, AttrColumnNames> {
+  const pair = (key: (typeof RANGE_KEYS)[number]): [number, number] => {
+    const value = attributes[key];
+    return [value.min, value.max];
+  };
+  return {
+    max_hp: attributes.maxHp,
+    hp_recover: attributes.hpRecover,
+    physical_attack_min: pair("physicalAttack")[0],
+    physical_attack_max: pair("physicalAttack")[1],
+    magic_attack_min: pair("magicAttack")[0],
+    magic_attack_max: pair("magicAttack")[1],
+    taoist_attack_min: pair("taoistAttack")[0],
+    taoist_attack_max: pair("taoistAttack")[1],
+    physical_defense_min: pair("physicalDefense")[0],
+    physical_defense_max: pair("physicalDefense")[1],
+    magic_defense_min: pair("magicDefense")[0],
+    magic_defense_max: pair("magicDefense")[1],
+    taoist_defense_min: pair("taoistDefense")[0],
+    taoist_defense_max: pair("taoistDefense")[1],
+  };
+}
+
+/**
+ * 区间属性的组合校验（0 ≤ min ≤ max）
+ *
+ * 单字段的「非负 / 整数」交给 DTO；「min ≤ max」是跨字段约束，只有 service
+ * 拿到合并后的完整对象才能判（只传 attributes 一半是判不了的——它本来就是整份替换）。
+ */
+function assertAttributeRanges(attributes: ConfigAttributesDto): void {
+  for (const key of RANGE_KEYS) {
+    const { min, max } = attributes[key];
+    if (min > max) {
+      throw new BizException(BizCode.PARAM_INVALID, "属性下限不能大于上限");
+    }
+  }
+}

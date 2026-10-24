@@ -90,6 +90,21 @@ export const Permission = {
    * 是运维信息而不是业务数据。快照本身走**白名单**，密钥类只报「已配置 / 未配置」。
    */
   SYSTEM_READ: "system:read",
+
+  /**
+   * 查看养成配置（称号 / 战魂的等级序列、属性与价格）
+   *
+   * 与公告同级给观察员：配置表是**业务数据**（玩家看到的一切数值都出自这里），
+   * 读了不等于能改 —— 改动走 `gameConfig:write` 单独管控。
+   */
+  GAME_CONFIG_READ: "gameConfig:read",
+  /**
+   * 修改养成配置（称号渠道与升级价格 / 战魂消耗 / 双方属性数值）
+   *
+   * 这份配置**直接决定玩家侧数值**（战斗属性、升级开销），改错一行全服生效，
+   * 与 `role:write`（改一个角色）不同量级，单列一个权限点。
+   */
+  GAME_CONFIG_WRITE: "gameConfig:write",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -119,12 +134,13 @@ export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
   [AdminRole.SUPER]: ALL_PERMISSIONS,
   /** 管理员：除「管理管理员」外全部 —— 管理员之间不能互相提权 */
   [AdminRole.ADMIN]: ALL_PERMISSIONS.filter((item) => item !== Permission.ADMIN_MANAGE),
-  /** 只读观察员：四个读权限，任何写操作都不行 */
+  /** 只读观察员：读权限，任何写操作都不行 */
   [AdminRole.VIEWER]: [
     Permission.STATS_READ,
     Permission.ACCOUNT_READ,
     Permission.ROLE_READ,
     Permission.ANNOUNCEMENT_READ,
+    Permission.GAME_CONFIG_READ,
   ],
 };
 
@@ -155,6 +171,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",
   [Permission.SYSTEM_READ]: "查看系统信息",
+  [Permission.GAME_CONFIG_READ]: "查看养成配置",
+  [Permission.GAME_CONFIG_WRITE]: "修改养成配置",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

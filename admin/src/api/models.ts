@@ -308,6 +308,110 @@ export type UpdateAnnouncement = {
   endsAt?: number | null;
 };
 
+export type ConfigAttributeRange = {
+  /**
+   * 下限
+   */
+  min: number;
+  /**
+   * 上限
+   */
+  max: number;
+};
+
+export type ConfigAttributes = {
+  /**
+   * 生命上限加成
+   */
+  maxHp: number;
+  /**
+   * 每 5 秒回血
+   */
+  hpRecover: number;
+  /**
+   * 物理攻击 [下限, 上限]
+   */
+  physicalAttack: ConfigAttributeRange;
+  /**
+   * 魔法攻击 [下限, 上限]
+   */
+  magicAttack: ConfigAttributeRange;
+  /**
+   * 道术攻击 [下限, 上限]
+   */
+  taoistAttack: ConfigAttributeRange;
+  /**
+   * 物理防御 [下限, 上限]
+   */
+  physicalDefense: ConfigAttributeRange;
+  /**
+   * 魔法防御 [下限, 上限]
+   */
+  magicDefense: ConfigAttributeRange;
+  /**
+   * 道术防御 [下限, 上限]
+   */
+  taoistDefense: ConfigAttributeRange;
+};
+
+export type UpdateTitle = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 动画资源目录（不传则不改）
+   */
+  animation?: string;
+  /**
+   * 动画帧率（不传则不改）
+   */
+  animationFrameRate?: number;
+  /**
+   * 升到该级消耗的绑定元宝（不传则不改）
+   */
+  bindGold?: number;
+  /**
+   * 获得渠道（不传则不改）
+   */
+  acquireChannel?: "upgrade" | "grant" | "unavailable";
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
+};
+
+export type UpdateSoul = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 动画资源目录（不传则不改）
+   */
+  animation?: string;
+  /**
+   * 动画帧率（不传则不改）
+   */
+  animationFrameRate?: number;
+  /**
+   * 升到该阶消耗的绑定元宝（不传则不改）
+   */
+  bindGold?: number;
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
+};
+
 export type SendMail = {
   /**
    * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
@@ -1808,4 +1912,166 @@ export type SendMailResult = {
    * 渲染后的标题（可以先看一眼，发错了还来得及在记录里查到）
    */
   subject: string;
+};
+
+export type Title = {
+  /**
+   * 等级（1 起；序列固定，不可增删行）
+   */
+  level: number;
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 动画资源目录（resources 相对路径）
+   */
+  animation: string;
+  /**
+   * 动画帧率
+   */
+  animationFrameRate: number;
+  /**
+   * 升到该级消耗的绑定元宝（仅 upgrade 渠道实际使用）
+   */
+  bindGold: number;
+  /**
+   * 获得渠道
+   */
+  acquireChannel: "upgrade" | "grant" | "unavailable";
+  /**
+   * 八项属性加成
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type TitlePage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的称号配置
+   */
+  list: Title[];
+};
+
+export type TitleQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配名称与描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 获得渠道筛选
+   */
+  acquireChannel?: "upgrade" | "grant" | "unavailable";
+};
+
+export type Soul = {
+  /**
+   * 阶数（1 起；序列固定，不可增删行）
+   */
+  level: number;
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 动画资源目录（resources 相对路径）
+   */
+  animation: string;
+  /**
+   * 动画帧率
+   */
+  animationFrameRate: number;
+  /**
+   * 升到该阶消耗的绑定元宝
+   */
+  bindGold: number;
+  /**
+   * 八项属性加成
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type SoulPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的战魂配置
+   */
+  list: Soul[];
+};
+
+export type SoulQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配名称与描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
 };

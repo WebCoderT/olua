@@ -228,6 +228,79 @@ export interface WorldMonsterRow {
 
 //#endregion
 
+//#region 养成配置（称号 / 战魂）
+
+/**
+ * 称号一行（`titles` 表；一行 = 一个等级）
+ *
+ * `level` 是**主键且序列固定**（1..34）：表里永远只有客户端 configs 定义的那 34 行，
+ * 后台只能改内容。`acquire_channel` 的取值域见 common/constants/game-config。
+ * 八项属性按「min / max 两列」拍平（区间型六项 + 单值两项 maxHp / hpRecover）。
+ */
+export interface TitleRow {
+  /** 等级（1 起；主键，不可增删行） */
+  level: number;
+  label: string;
+  description: string;
+  /** 动画资源目录（resources 相对路径，如 titles/sfx_13009） */
+  animation: string;
+  animation_frame_rate: number;
+  /** 升到该级消耗的绑定元宝（仅 `upgrade` 渠道实际使用；其余渠道保留数值但不展示入口） */
+  bind_gold: number;
+  /** 获得渠道：upgrade | grant | unavailable（默认 unavailable） */
+  acquire_channel: string;
+  max_hp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
+/**
+ * 战魂一行（`souls` 表；一行 = 一阶）
+ *
+ * 与 `TitleRow` 同构，只少 `acquire_channel` 一列 —— 战魂没有「获得渠道」需求
+ * （37 阶逐阶购买，渠道语义就是升级本身）。
+ */
+export interface SoulRow {
+  /** 阶数（1 起；主键，不可增删行） */
+  level: number;
+  label: string;
+  description: string;
+  /** 动画资源目录（如 war-soul/sfx_13001） */
+  animation: string;
+  animation_frame_rate: number;
+  /** 升到该阶消耗的绑定元宝 */
+  bind_gold: number;
+  max_hp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

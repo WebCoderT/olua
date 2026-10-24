@@ -10,6 +10,8 @@ import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AdminsPage } from "./pages/AdminsPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
+import { TitlesPage } from "./pages/TitlesPage";
+import { SoulsPage } from "./pages/SoulsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -115,6 +117,22 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.ANNOUNCEMENT_READ}>
                 <AnnouncementsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="titles"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <TitlesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="souls"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <SoulsPage />
               </RequirePermission>
             }
           />
