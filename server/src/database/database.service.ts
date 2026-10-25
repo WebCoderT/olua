@@ -234,6 +234,33 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         upgrade_order        INTEGER,
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 成长曲线（#256）：升级经验 + 分段曲线 + 标量参数，三张表都**只能改内容、不能增删行**
+      -- （行的形状由客户端 configs/growth 定义，seed 时落库）。
+      -- 改曲线会连锁影响军衔等效强度与怪物数值 —— 军衔映射基准（#250）与结算口径都以它为底。
+      CREATE TABLE IF NOT EXISTS level_exps (
+        level      INTEGER PRIMARY KEY,
+        exp        INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS growth_segments (
+        curve       TEXT    NOT NULL,
+        seq         INTEGER NOT NULL,
+        from_level  INTEGER NOT NULL,
+        to_level    INTEGER NOT NULL,
+        start_value INTEGER NOT NULL DEFAULT 0,
+        per_level   INTEGER NOT NULL DEFAULT 0,
+        updated_at  INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (curve, seq)
+      );
+
+      CREATE TABLE IF NOT EXISTS growth_scalars (
+        key         TEXT PRIMARY KEY,
+        value       REAL    NOT NULL,
+        description TEXT    NOT NULL DEFAULT '',
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

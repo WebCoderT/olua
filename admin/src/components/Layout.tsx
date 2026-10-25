@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { to: "/announcements", label: "公告", end: false, permission: PERMISSION.ANNOUNCEMENT_READ as string },
   { to: "/titles", label: "称号配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/souls", label: "战魂配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/growth", label: "成长曲线", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/mails", label: "邮件", end: false, permission: PERMISSION.MAIL_READ as string },
   { to: "/admins", label: "管理员", end: false, permission: PERMISSION.ADMIN_READ as string },
   { to: "/audit-logs", label: "操作日志", end: false, permission: PERMISSION.AUDIT_READ as string },

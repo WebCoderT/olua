@@ -91,6 +91,9 @@ const MODULES = {
   adminMail: { target: "admin", export: "mailsApi" },
   adminTitle: { target: "admin", export: "titlesApi" },
   adminSoul: { target: "admin", export: "soulsApi" },
+  adminLevelExp: { target: "admin", export: "levelExpsApi" },
+  adminGrowthSegment: { target: "admin", export: "growthSegmentsApi" },
+  adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */

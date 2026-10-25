@@ -127,3 +127,40 @@ export function sortFieldNames<K extends string>(spec: SortSpec<K>): string {
     .map((key) => `\`${key}\``)
     .join(" / ");
 }
+
+/** 等级经验列表：默认按等级升序（就是一张「升到下一级要多少经验」的价目表） */
+export const LEVEL_EXP_SORT: SortSpec<"level" | "exp" | "updatedAt"> = {
+  columns: {
+    level: "level",
+    exp: "exp",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};
+
+/** 成长曲线分段列表：默认按曲线键 + 段序升序（同一曲线的分段连成一片） */
+export const GROWTH_SEGMENT_SORT: SortSpec<"curve" | "seq" | "fromLevel" | "toLevel" | "startValue" | "perLevel" | "updatedAt"> = {
+  columns: {
+    curve: "curve",
+    seq: "seq",
+    fromLevel: "from_level",
+    toLevel: "to_level",
+    startValue: "start_value",
+    perLevel: "per_level",
+    updatedAt: "updated_at",
+  },
+  default: "curve",
+  defaultOrder: "asc",
+};
+
+/** 成长标量参数列表：默认按键名升序（同来源的参数排在一起，如 attributeRange.*） */
+export const GROWTH_SCALAR_SORT: SortSpec<"key" | "value" | "updatedAt"> = {
+  columns: {
+    key: "key",
+    value: "value",
+    updatedAt: "updated_at",
+  },
+  default: "key",
+  defaultOrder: "asc",
+};

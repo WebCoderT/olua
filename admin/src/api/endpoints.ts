@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, MailJob, MailJobPage, MailQuery, MailTemplate, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateGrowthScalar, UpdateGrowthSegment, UpdateLevelExp, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateRole, Health, Login, MailJob, MailJobPage, MailQuery, MailTemplate, PageMeta, PageQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateRole, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Health, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, PageMeta, PageQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateGrowthScalar, UpdateGrowthSegment, UpdateLevelExp, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
 
 /** adminAccount 模块的接口（10 个，生成） */
 export const accountsApi = {
@@ -238,6 +238,66 @@ export const authApi = {
    * 注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。
    */
   register: (body: AdminRegister, options?: Options) => http.post<AdminAuthResult>(routes.adminAuth.register, body, { auth: false, ...options }),
+};
+
+/** adminGrowthScalar 模块的接口（2 个，生成） */
+export const growthScalarsApi = {
+  /**
+   * 成长标量参数列表（GET /admin/growth-scalars）
+   *
+   * 可调的数值参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 属性区间倍率 / 经验节奏。
+   *
+   * 权限点：gameConfig:read
+   */
+  list: (query: GrowthScalarQuery = {}, options?: Options) => http.get<GrowthScalarPage>(routes.adminGrowthScalar.list, { query, ...options }),
+  /**
+   * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
+   *
+   * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数）。
+   *
+   * 权限点：gameConfig:write
+   */
+  update: (key: string, body: UpdateGrowthScalar, options?: Options) => http.patch<GrowthScalar>(routes.adminGrowthScalar.update(key), body, options),
+};
+
+/** adminGrowthSegment 模块的接口（2 个，生成） */
+export const growthSegmentsApi = {
+  /**
+   * 成长曲线分段列表（GET /admin/growth-segments）
+   *
+   * 分段线性曲线的段（曲线键 × 段序固定，**没有创建 / 删除**）：`maxHp` / `attack` / `defense` / `killsPerLevel` 四条，每段 {fromLevel, toLevel, startValue, perLevel}，段间必须首尾相接、连续覆盖 1..roleMaxLevel。
+   *
+   * 权限点：gameConfig:read
+   */
+  list: (query: GrowthSegmentQuery = {}, options?: Options) => http.get<GrowthSegmentPage>(routes.adminGrowthSegment.list, { query, ...options }),
+  /**
+   * 编辑曲线分段（PATCH /admin/growth-segments/{curve}/{seq}）
+   *
+   * 四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。
+   *
+   * 权限点：gameConfig:write
+   */
+  update: (curve: string, seq: string, body: UpdateGrowthSegment, options?: Options) => http.patch<GrowthSegment>(routes.adminGrowthSegment.update(curve, seq), body, options),
+};
+
+/** adminLevelExp 模块的接口（2 个，生成） */
+export const levelExpsApi = {
+  /**
+   * 升级经验列表（GET /admin/level-exps）
+   *
+   * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。
+   *
+   * 权限点：gameConfig:read
+   */
+  list: (query: LevelExpQuery = {}, options?: Options) => http.get<LevelExpPage>(routes.adminLevelExp.list, { query, ...options }),
+  /**
+   * 编辑升级经验（PATCH /admin/level-exps/{level}）
+   *
+   * **部分更新**：只改 `exp`（等级本身不可改）。
+   *
+   * 权限点：gameConfig:write
+   */
+  update: (level: string, body: UpdateLevelExp, options?: Options) => http.patch<LevelExp>(routes.adminLevelExp.update(level), body, options),
 };
 
 /** adminMail 模块的接口（4 个，生成） */

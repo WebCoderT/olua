@@ -310,6 +310,47 @@ export interface SoulRow {
 
 //#endregion
 
+//#region 成长曲线（#256）
+
+/** 等级经验一行（`level_exps` 表）：一行 = 一个等级升到下一级所需经验 */
+export interface LevelExpRow {
+  /** 等级（1 起；主键，不可增删行） */
+  level: number;
+  /** 升到下一级所需经验（≥ 1；客户端升级判定读的就是它） */
+  exp: number;
+  updated_at: number;
+}
+
+/** 成长曲线分段一行（`growth_segments` 表）：一行 = 某条曲线的一个分段 */
+export interface GrowthSegmentRow {
+  /** 曲线键（configs/growth 的 roleGrowth 四条：maxHp / attack / defense / killsPerLevel） */
+  curve: string;
+  /** 段序号（1 起；同曲线内不可增删行，只许改内容） */
+  seq: number;
+  /** 起始等级（含） */
+  from_level: number;
+  /** 结束等级（含） */
+  to_level: number;
+  /** 该段起始等级的值 */
+  start_value: number;
+  /** 段内每升一级的增量 */
+  per_level: number;
+  updated_at: number;
+}
+
+/** 成长标量参数一行（`growth_scalars` 表）：一行 = 一个可调的数值参数 */
+export interface GrowthScalarRow {
+  /** 参数键（如 roleMaxLevel / attributeRange.minRate / expGain.expPerLevel） */
+  key: string;
+  /** 参数值（标量；整数或小数由各键的取值域约束） */
+  value: number;
+  /** 参数说明（管理端界面直接展示） */
+  description: string;
+  updated_at: number;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

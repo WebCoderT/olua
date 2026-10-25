@@ -419,6 +419,39 @@ export type UpdateSoul = {
   attributes?: ConfigAttributes;
 };
 
+export type UpdateLevelExp = {
+  /**
+   * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
+   */
+  exp?: number;
+};
+
+export type UpdateGrowthSegment = {
+  /**
+   * 起始等级（含，≥ 1）
+   */
+  fromLevel: number;
+  /**
+   * 结束等级（含，≥ 起始等级）
+   */
+  toLevel: number;
+  /**
+   * 该段起始等级的值（≥ 0）
+   */
+  startValue: number;
+  /**
+   * 段内每升一级的增量（≥ 0）
+   */
+  perLevel: number;
+};
+
+export type UpdateGrowthScalar = {
+  /**
+   * 参数值；整数键（roleMaxLevel / expGain.*）必须是整数，比率键在 [0, 1] 等取值域内
+   */
+  value: number;
+};
+
 export type SendMail = {
   /**
    * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
@@ -2079,6 +2112,201 @@ export type SoulQuery = {
   size?: number;
   /**
    * 关键字：模糊匹配名称与描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type LevelExp = {
+  /**
+   * 等级（1 起；序列固定，不可增删行）
+   */
+  level: number;
+  /**
+   * 升到下一级所需经验
+   */
+  exp: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type LevelExpPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的升级经验
+   */
+  list: LevelExp[];
+};
+
+export type LevelExpQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type GrowthSegment = {
+  /**
+   * 曲线键（maxHp / attack / defense / killsPerLevel）
+   */
+  curve: "maxHp" | "attack" | "defense" | "killsPerLevel";
+  /**
+   * 段序号（1 起；同曲线内不可增删段）
+   */
+  seq: number;
+  /**
+   * 起始等级（含）
+   */
+  fromLevel: number;
+  /**
+   * 结束等级（含）
+   */
+  toLevel: number;
+  /**
+   * 该段起始等级的值
+   */
+  startValue: number;
+  /**
+   * 段内每升一级的增量
+   */
+  perLevel: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type GrowthSegmentPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的曲线分段
+   */
+  list: GrowthSegment[];
+};
+
+export type GrowthSegmentQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按曲线键筛
+   */
+  curve?: "maxHp" | "attack" | "defense" | "killsPerLevel";
+};
+
+export type GrowthScalar = {
+  /**
+   * 参数键（如 roleMaxLevel / attributeRange.minRate）
+   */
+  key: string;
+  /**
+   * 参数值
+   */
+  value: number;
+  /**
+   * 参数说明（改之前先读一遍 —— 每个键的语义都在这里）
+   */
+  description: string;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type GrowthScalarPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的标量参数
+   */
+  list: GrowthScalar[];
+};
+
+export type GrowthScalarQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配参数键与说明
    */
   keyword?: string;
   /**

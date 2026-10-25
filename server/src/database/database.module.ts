@@ -8,6 +8,7 @@ import { MailRepository } from "./repositories/mail.repository";
 import { RoleRepository } from "./repositories/role.repository";
 import { SoulRepository } from "./repositories/soul.repository";
 import { SystemRepository } from "./repositories/system.repository";
+import { GrowthRepository } from "./repositories/growth.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 
@@ -32,6 +33,7 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     SystemRepository,
     WorldMonsterRepository,
     TitleRepository,
+    GrowthRepository,
     SoulRepository,
   ],
   exports: [
@@ -45,6 +47,7 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     SystemRepository,
     WorldMonsterRepository,
     TitleRepository,
+    GrowthRepository,
     SoulRepository,
   ],
 })

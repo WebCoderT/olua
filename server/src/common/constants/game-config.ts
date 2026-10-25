@@ -31,3 +31,50 @@ export const ACQUIRE_CHANNEL_LABELS: Record<AcquireChannelValue, string> = {
 export function isAcquireChannel(value: unknown): value is AcquireChannelValue {
   return typeof value === "string" && ACQUIRE_CHANNELS.includes(value as AcquireChannelValue);
 }
+
+// —— 成长曲线（#256）——
+
+import { GROWTH_CURVES } from "../../shared/game-data.generated";
+
+/**
+ * 成长曲线键清单（**派生**自生成物的 GROWTH_CURVES，不许手写字面量清单 ——
+ * 客户端 configs/growth 增删曲线，这里与服务端校验自动跟着变）
+ */
+export const GROWTH_CURVE_KEYS = Object.keys(GROWTH_CURVES);
+
+/** 是否是合法的曲线键 */
+export function isGrowthCurveKey(value: unknown): value is string {
+  return typeof value === "string" && GROWTH_CURVE_KEYS.includes(value);
+}
+
+/**
+ * 成长标量参数的取值域（键 → 约束）
+ *
+ * `min` / `max` 拦住明显拍错的值（把回血率写成 100、把等级上限写成 0 这类）；
+ * `integer` 标记该键必须是整数。曲线分段自身的连续性校验在 service（跨行约束）。
+ */
+export interface GrowthScalarSpec {
+  min: number;
+  max: number;
+  /** 必须是整数（等级上限、击杀数这类）；小数参数（比率）为 false */
+  integer: boolean;
+}
+
+export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
+  "roleMaxLevel": { min: 1, max: 200, integer: true },
+  "attributeRange.minRate": { min: 0, max: 1, integer: false },
+  "attributeRange.mpRate": { min: 0, max: 10, integer: false },
+  "attributeRange.hpRecoverRate": { min: 0, max: 1, integer: false },
+  "expGain.expPerLevel": { min: 1, max: 100000, integer: true },
+  "expGain.maxLevelGap": { min: 0, max: 100, integer: true },
+};
+
+/** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
+export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
+  "roleMaxLevel": "角色等级上限（四条曲线的最后一段必须正好覆盖到它）",
+  "attributeRange.minRate": "属性取值下限倍率：实际值在 [上限×minRate, 上限] 之间随机",
+  "attributeRange.mpRate": "最大魔法值 = 最大生命 × 该值",
+  "attributeRange.hpRecoverRate": "每秒回血 = 最大生命 × 该值（回血的唯一强度入口）",
+  "expGain.expPerLevel": "每级基准经验：同级击杀经验 = (怪物等级+1) × 该值",
+  "expGain.maxLevelGap": "角色与怪物等级差达到该值（含）后不再获得经验",
+};

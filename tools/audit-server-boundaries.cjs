@@ -86,6 +86,8 @@ const REPO_EDGES = {
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config"],
   "database/repositories/soul.repository.ts": ["modules/game-config"],
+  // 成长曲线（#256）：等级经验 / 曲线分段 / 标量参数同称号 / 战魂，只在 game-config 模块内读写
+  "database/repositories/growth.repository.ts": ["modules/game-config"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

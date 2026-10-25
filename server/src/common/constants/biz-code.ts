@@ -156,6 +156,12 @@ export const BizCode = {
   TITLE_NOT_FOUND: 50010,
   /** 战魂阶数不存在（阶数序列固定 1..37） */
   SOUL_NOT_FOUND: 50011,
+  /** 等级经验不存在（等级序列固定 1..roleMaxLevel） */
+  LEVEL_EXP_NOT_FOUND: 50012,
+  /** 曲线分段不存在（曲线键或段序传错；分段不可增删，只许改内容） */
+  GROWTH_SEGMENT_NOT_FOUND: 50013,
+  /** 标量参数不存在（参数清单由 seed 固定） */
+  GROWTH_SCALAR_NOT_FOUND: 50014,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];
