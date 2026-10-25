@@ -26,7 +26,8 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const MONSTER_TS = path.join(ROOT, "assets/configs/monster.ts");
-const OUT_DIR = path.join(ROOT, "assets/resources/monster/out");
+// 散帧已图集化（#235）移出 assets：原始逐帧素材 + .meta 在仓库根 _loose_frames_archive（gitignored）
+const OUT_DIR = path.join(ROOT, "..", "_loose_frames_archive", "monster", "out");
 
 /** 规则：可见身体宽达到该值（像素）判主动怪（220 只怪身体宽 p75 ≈ 250，即约四分之一大体型 + BOSS 主动） */
 const AGGRESSIVE_BODY_WIDTH = 250;

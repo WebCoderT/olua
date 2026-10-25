@@ -15,7 +15,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = path.join(__dirname, "..", "assets", "resources", "role");
+// 散帧已图集化（#235）移出 assets：role/1、role/2 原始逐帧在仓库根 _loose_frames_archive
+const ROOT = path.join(__dirname, "..", "..", "_loose_frames_archive", "role");
 const APPLY = process.argv.includes("--apply");
 
 /** 判定空帧：文件头是 BMP（42 4d）而不是 PNG 签名 */

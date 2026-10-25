@@ -27,8 +27,9 @@ const path = require("path");
 const { prepare, PROJECT_ROOT, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const HELPER_FILE = path.join(PROJECT_ROOT, "assets/ui/helpers/AnimationHelper.ts");
-const CLOTHES_DIR = path.join(PROJECT_ROOT, "assets/resources/clothes/out");
-const WEAPONS_DIR = path.join(PROJECT_ROOT, "assets/resources/weapons/out");
+// 散帧已图集化（#235）移出 assets：原始逐帧素材在仓库根 _loose_frames_archive（gitignored）
+const CLOTHES_DIR = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "clothes", "out");
+const WEAPONS_DIR = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "weapons", "out");
 
 /** cc 垫片追加：AnimationHelper 还要用 Animation/AnimationClip/SpriteFrame 等（测试只走纯切割，桩够用） */
 const CC_EXTRA = `
@@ -127,7 +128,7 @@ check(outDirs.size > 0, "装备外观目录收集齐", `${outDirs.size} 个目�
 
 let brokenDirs = [];
 outDirs.forEach((outSrc) => {
-  const dir = path.join(PROJECT_ROOT, "assets/resources", outSrc);
+  const dir = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", outSrc);
   if (!fs.existsSync(dir)) {
     brokenDirs.push(`${outSrc} <目录不存在>`);
     return;
@@ -145,7 +146,7 @@ const missingOut = wearables.filter((good) => good.slot === EQUIPMENT_TYPE.CLOTH
 const missingDir = new Set();
 wearables.forEach((good) => {
   if (!good.out) return;
-  if (!fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", good.out))) missingDir.add(good.out);
+  if (!fs.existsSync(path.join(PROJECT_ROOT, "..", "_loose_frames_archive", good.out))) missingDir.add(good.out);
 });
 check(missingOut.length === 0, "每件衣服都配了外观目录", missingOut.join("、"));
 check(missingDir.size === 0, "每件衣服/武器的外观目录在磁盘上存在", Array.from(missingDir).join("、"));

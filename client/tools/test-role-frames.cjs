@@ -25,7 +25,8 @@ const ROLE_DIRS = ["1", "2"];
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-const roleRoot = path.join(PROJECT_ROOT, "assets", "resources", "role");
+// 散帧已图集化（#235）移出 assets：原始逐帧素材在仓库根 _loose_frames_archive（gitignored）
+const roleRoot = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "role");
 if (!fs.existsSync(roleRoot)) {
   fail(`找不到素材目录：${roleRoot}`);
   process.exit();

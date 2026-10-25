@@ -28,6 +28,8 @@ client/assets/resources/
 
 # resources 分发的分卷 zip 产物（make resources-pack 输出；进 GitHub Release，不进仓库）
 resources_dist/
+# 已图集化的散帧归档（#235：从 assets 移出的原始逐帧素材 + .meta，重新打包或回退时用）
+_loose_frames_archive/
 
 # 设计稿（UI 重排的输入：登录 / 选角 / 主界面截图；体积大、属本机设计资料，不进版本库）
 design/

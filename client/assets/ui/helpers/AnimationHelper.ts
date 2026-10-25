@@ -13,6 +13,11 @@ import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
  * 没有预加载的目录仍走异步加载兜底（例如运行中换上的新装备外观）
  * 缓存不释放：工程内没有任何 release/autoRelease 调用（场景 autoReleaseAssets 默认 false），
  * 帧与片段在切场景后依然有效，可以放心复用
+ *
+ * #235 起散帧已全部图集化并把原始逐帧移出 assets（仓库根 _loose_frames_archive，gitignored）：
+ * monster/clothes/weapons 外观与 role 本体走 prepareActionAtlas 动作图集，
+ * npc/背景走 loadLoopFrames 单循环图集；散帧目录路径保留为**保险回退**
+ * （图集缺失时静默回退，本地重新从归档打图集前也不至于整片空白）
  */
 export default class AnimationHelper {
   /** 帧序列缓存：目录 -> 已按帧序号排序的帧列表（空数组表示该目录没有可用帧，同样缓存以免反复请求） */
@@ -110,8 +115,7 @@ export default class AnimationHelper {
       // 会以 1×1 图块进图集，不过滤会造成片段里夹空白闪帧
       const byDirection = new Map<number, SpriteFrame[]>();
       frames.forEach((frame) => {
-        const rect = frame.getRect();
-        if (rect.width <= 1 || rect.height <= 1) return;
+        if (!this.isSolidFrame(frame)) return;
         const matched = /^d(\d+)_(\d+)$/.exec(frame.name.replace(/\.png$/i, ""));
         if (!matched) return;
         const directionIndex = Number(matched[1]);
@@ -139,6 +143,13 @@ export default class AnimationHelper {
     return matched ? Number(matched[1]) : 0;
   }
 
+  /** 空帧判据（三处共用：buildClips / prepareActionAtlas / loadLoopFrames）：
+   * 素材包/图集里的占位空图是 1×1 图块，rect 边长 >1 才算有效帧，否则片段里会夹空白闪帧 */
+  private static isSolidFrame(frame: SpriteFrame): boolean {
+    const rect = frame.getRect();
+    return rect.width > 1 && rect.height > 1;
+  }
+
   /**
    * 单循环目录动画（NPC 外观 / 装备详情背景）的帧来源：目录有对应图集（见 configs.getLoopAtlasDir）时
    * 取图集帧并过滤空帧，否则回退散帧目录——两条路径对调用方完全透明
@@ -151,10 +162,7 @@ export default class AnimationHelper {
       if (resources.getDirWithPath(atlasDir, SpriteAtlas).length) {
         // 图集内 plist 与目录同名：<id>/<id>.plist
         const frames = await this.loadFramesFromAtlas(`${atlasDir}/${atlasDir.split("/").pop()}`);
-        const valid = frames.filter((frame) => {
-          const rect = frame.getRect();
-          return rect.width > 1 && rect.height > 1;
-        });
+        const valid = frames.filter((frame) => this.isSolidFrame(frame));
         if (valid.length) return valid;
       }
     }
@@ -188,7 +196,7 @@ export default class AnimationHelper {
       // 再减帧号基准（frameBase）：role/2 这类从 600 起编号的素材，不减则同样一个片段都切不出来
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => {
         const index = getFrameIndex(spriteFrame.name);
-        return index !== null && frameIndexes.indexOf(index - frameBase) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1;
+        return index !== null && frameIndexes.indexOf(index - frameBase) >= 0 && this.isSolidFrame(spriteFrame);
       });
       if (validSpriteFrames.length) clips.set(name, this.createClip(name, validSpriteFrames, this.getFrameTime(name, speedRate)));
     });

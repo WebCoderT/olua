@@ -29,6 +29,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 RES_ROOT = REPO / "client" / "assets" / "resources"
+# 散帧已图集化（#235）移出 assets：原始逐帧素材归档在仓库根 _loose_frames_archive（gitignored）
+ARCHIVE_ROOT = REPO / "_loose_frames_archive"
 STAGE_ROOT = REPO / "client" / "tools" / "_stage_action_atlas"
 
 DIRECTION_COUNT = 8
@@ -90,9 +92,10 @@ def link_or_copy(src: Path, dst: Path):
 
 
 def stage_one(dir_id: str) -> bool:
-    src_dir = RES_ROOT / dir_id
-    if not src_dir.is_dir():
-        print(f"[跳过] {dir_id} 不存在")
+    # 散帧已在 assets 里的优先（未移除的目录），否则从归档取（#235 移出的原始逐帧）
+    src_dir = next((root / dir_id for root in (RES_ROOT, ARCHIVE_ROOT) if (root / dir_id).is_dir()), None)
+    if src_dir is None:
+        print(f"[跳过] {dir_id} 不存在（assets 与归档都没有）")
         return False
     if is_loop_dir(dir_id):
         # 单循环：不改名原样入暂存区（帧名保持原序号，加载侧按图集帧序排序）
