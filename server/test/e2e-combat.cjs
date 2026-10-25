@@ -16,7 +16,9 @@
  * 用法：npm run test:e2e:combat
  */
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const net = require("node:net");
+const os = require("os");
 const path = require("path");
 const WebSocket = require("ws");
 
@@ -79,8 +81,39 @@ function freePort() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** 起一台服务并等它就绪 */
-async function startServer() {
+/**
+ * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）。
+ * 表先建好再插行，服务端启动时的建表与空表 seed 都不会动它。
+ * 地图 1 一区两只怪物 1（max 2），地图 2 一区一只怪物 3 —— 与旧播种计划等价。
+ */
+function seedSpawnAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id      TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        monster_key TEXT    NOT NULL,
+        min         INTEGER NOT NULL DEFAULT 0,
+        max         INTEGER NOT NULL DEFAULT 0,
+        cx          REAL    NOT NULL,
+        cy          REAL    NOT NULL,
+        w           REAL    NOT NULL,
+        h           REAL    NOT NULL,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );`);
+  const insert = db.prepare(
+    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const now = Date.now();
+  insert.run("1", "1号怪物", "1", 0, 2, 200, 300, 400, 400, now);
+  insert.run("2", "1号怪物", "3", 0, 1, 10, 20, 100, 100, now);
+  db.close();
+}
+
+/** 起一台服务并等它就绪（#295 起 DB 用临时文件库：刷怪区要在启动前插好） */
+async function startServer(dbPath) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", ENTRY], {
@@ -90,7 +123,7 @@ async function startServer() {
       NODE_ENV: "test",
       PORT: String(port),
       API_PREFIX: "api",
-      DB_PATH: ":memory:",
+      DB_PATH: dbPath,
       JWT_SECRET: "e2e-combat-secret",
       JWT_EXPIRES_IN: "1h",
       LOG_REQUESTS: "false",
@@ -167,9 +200,9 @@ function connect(url) {
      * 进图登记并等权威快照（#35 起实例 id 由服务端发牌，cast 之前必须先 join）
      * 只等 join 之后到达的 world 帧（别的推送不该被误当成这次 join 的应答）
      */
-    async joinWorld(mapId, spawnPlan, timeoutMs = 5_000) {
+    async joinWorld(mapId, timeoutMs = 5_000) {
       const before = session.worlds.length;
-      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId, spawnPlan } }));
+      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId } }));
       return waitFor(`mapId=${mapId} 的 world 帧`, async () => {
         const hits = session.worlds.slice(before).filter((frame) => frame.mapId === mapId);
         return hits.length > 0 ? hits[hits.length - 1] : null;
@@ -201,7 +234,9 @@ function roleData(id, name, level, skills) {
 }
 
 (async () => {
-  const server = await startServer();
+  const dbPath = path.join(os.tmpdir(), `olua-e2e-combat-${Date.now()}.db`);
+  seedSpawnAreas(dbPath);
+  const server = await startServer(dbPath);
   try {
     const { baseUrl } = server;
 
@@ -233,10 +268,7 @@ function roleData(id, name, level, skills) {
     };
 
     /** 进图播种：地图 1 上两只怪（maxHp 65，物防 [4,6]），拿回服务端发的实例 id */
-    const world = await session.joinWorld("1", [
-      { monsterKey: "1", x: 100, y: 200 },
-      { monsterKey: "1", x: 300, y: 400 },
-    ]);
+    const world = await session.joinWorld("1");
     check(world && world.monsters.length === 2, "准备：worldJoin 播种后拿到 2 只权威实例", JSON.stringify(world));
     const mobA = world && world.monsters[0];
     const mobB = world && world.monsters[1];
@@ -342,16 +374,16 @@ function roleData(id, name, level, skills) {
     check(replayAfterReset && replayAfterReset.ok === false && replayAfterReset.code === "target_dead", "targetsReset 后重投被重新校验：死怪不因清账复活", JSON.stringify(replayAfterReset));
 
     // 世界快照如实：死亡的实例 alive=false 且带重生倒计时，活着的照常
-    const snapshot = await session.joinWorld("1", []);
+    const snapshot = await session.joinWorld("1");
     const snapA = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     const snapB = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobB ? mobB.instanceId : "m1_2"));
     check(!!snapA && snapA.alive === false && snapA.hp === 0 && typeof snapA.respawnInMs === "number", "快照里死亡的实例 alive=false 且带重生倒计时", JSON.stringify(snapA));
     check(!!snapB && snapB.alive === true && snapB.hp === 65, "快照里活着的实例状态不受会话操作影响", JSON.stringify(snapB));
 
     // 换图 = 发新的 worldJoin：旧图观看者身份移除、幂等账清零，但旧图实例状态原样保留
-    const map2 = await session.joinWorld("2", [{ monsterKey: "3", x: 10, y: 20 }]);
+    const map2 = await session.joinWorld("2");
     check(!!(map2 && map2.monsters.length === 1), "换图 worldJoin 拿到新图的实例", JSON.stringify(map2));
-    const back = await session.joinWorld("1", []);
+    const back = await session.joinWorld("1");
     const backA = back && back.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!backA && backA.alive === false && backA.hp === 0, "换图往返后旧图实例状态保持（世界状态不随会话清）");
 
@@ -361,7 +393,7 @@ function roleData(id, name, level, skills) {
     session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket2.data.ticket)}`);
     await waitFor("重连成功", async () => (session.opened ? session : null));
     // 重连后重新 join（播种计划为空 —— 实例已存在，不该翻倍），拿回权威状态
-    const rejoined = await session.joinWorld("1", []);
+    const rejoined = await session.joinWorld("1");
     check(!!(rejoined && rejoined.monsters.length === 2), "重连后重新 worldJoin 不重复播种（仍是 2 只）", JSON.stringify(rejoined && rejoined.monsters.length));
     const rejoinA = rejoined && rejoined.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!rejoinA && rejoinA.alive === false && rejoinA.hp === 0, "重连拿回的状态与断线前一致（断线不清世界状态）");
@@ -384,5 +416,6 @@ function roleData(id, name, level, skills) {
     server.child.kill("SIGTERM");
     await sleep(200);
     if (server.child.exitCode === null) server.child.kill("SIGKILL");
+    for (const suffix of ["", "-wal", "-shm"]) fs.rmSync(dbPath + suffix, { force: true });
   }
 })();

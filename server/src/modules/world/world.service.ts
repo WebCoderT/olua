@@ -1,8 +1,10 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-area.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { WorldMonsterRow } from "../../database/rows";
+import { SPAWN_AREAS } from "./spawn-areas.generated";
 
 /** 服务端持有的一只怪物实例（权威状态；内存形态，落盘见 WorldMonsterRow） */
 export interface WorldMonster {
@@ -23,13 +25,6 @@ export interface WorldMonster {
   respawnAt: number | null;
   /** 内存里改过还没落盘（tick 按节流批量写库） */
   dirty: boolean;
-}
-
-/** 客户端播种计划里的一只怪 */
-export interface SpawnPlanEntry {
-  monsterKey: string;
-  x: number;
-  y: number;
 }
 
 /** 快照里的一只怪（world 帧的 monsters 列表项，见 realtime.protocol.ts） */
@@ -57,10 +52,11 @@ export interface WorldMonsterSnapshot {
  * **不持有**的东西（边界别越）：
  * - 怪物的游走 / 追击移动 —— 仍是客户端表现层，坐标不回传；服务端记的「坐标」
  *   是出生点，那是世界里唯一稳定的真相；
- * - 掉落 / 经验 —— 仍在客户端结算（各自有独立 issue）；
- * - 刷怪**区域**配置 —— 住在客户端的 Tiled 地图文件里（素材不入库，服务端拿不到）。
- *   所以进图由客户端播种（`worldJoin` 带刷怪计划），服务端把它当建议：
- *   已有实例一概沿用，缺的才创建。
+ * - 掉落 / 经验 —— 仍在客户端结算（各自有独立 issue）。
+ *
+ * 刷怪**区域**配置已归服务端（#295 阶段一）：`map_spawn_areas` 表从 Tiled 导入一次
+ * （tools/import-spawn-areas.cjs 生成 SPAWN_AREAS 快照，启动时空表自动 seed），
+ * 进图 worldJoin 只带 mapId，播种完全由服务端按区域随机落点完成 —— 客户端不再上报计划。
  *
  * ===========================================================================
  * tick 的两件事（频率见配置 WORLD_TICK_MS / WORLD_PERSIST_MS）
@@ -104,12 +100,42 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     private readonly config: ConfigService,
     private readonly worldMonsters: WorldMonsterRepository,
     private readonly monsterConfigs: MonsterRepository,
+    private readonly spawnAreas: MapSpawnAreaRepository,
   ) {}
 
   onApplicationBootstrap(): void {
+    this.seedSpawnAreas();
     const total = this.worldMonsters.countAll();
     this.tickTimer = setInterval(() => this.tick(), this.tickMs()).unref();
     this.logger.log(`世界权威已启动（tick ${this.tickMs()}ms / 落盘节流 ${this.persistMs()}ms / 重生 ${this.respawnMs()}ms，库里已有 ${total} 只怪）`);
+  }
+
+  /**
+   * 刷怪区 seed（#295）：表空时从 SPAWN_AREAS 快照灌入（INSERT OR IGNORE 幂等）。
+   * 快照由导入工具从 Tiled 生成并提交进仓库 —— 部署机没有客户端素材也能 seed。
+   * 非空表不重灌：导入工具 --db 才是整份替换的入口。
+   */
+  private seedSpawnAreas(): void {
+    if (this.spawnAreas.countAll() > 0) return;
+    let count = 0;
+    for (const [mapId, areas] of Object.entries(SPAWN_AREAS)) {
+      for (const area of areas) {
+        this.spawnAreas.seedRow({
+          map_id: mapId,
+          name: area.name,
+          monster_key: area.monsterKey,
+          min: area.min,
+          max: area.max,
+          cx: area.cx,
+          cy: area.cy,
+          w: area.w,
+          h: area.h,
+          updated_at: 0,
+        });
+        count += 1;
+      }
+    }
+    this.logger.log(`map_spawn_areas 空表，已从快照 seed ${count} 个刷怪区`);
   }
 
   /** 优雅关闭：停 tick + 全量落盘（SQLite 连接随后由 DatabaseService 收尾） */
@@ -122,11 +148,11 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   //#region 进图 / 离图
 
   /**
-   * 进图登记：惰性加载该图实例（库里恢复或按播种计划创建），把账号记为观看者，
+   * 进图登记：惰性加载该图实例（库里恢复或按刷怪区播种），把账号记为观看者，
    * 返回权威快照（`world` 帧的 data）。**重复 join 同一图是幂等的**（断线重连走这里拿回状态）。
    */
-  join(accountId: string, mapId: string, spawnPlan: SpawnPlanEntry[]): { mapId: string; monsters: WorldMonsterSnapshot[] } {
-    const map = this.loadMap(mapId, spawnPlan);
+  join(accountId: string, mapId: string): { mapId: string; monsters: WorldMonsterSnapshot[] } {
+    const map = this.loadMap(mapId);
     let viewerSet = this.viewers.get(mapId);
     if (!viewerSet) {
       viewerSet = new Set<string>();
@@ -258,13 +284,13 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   /**
    * 取一张图的实例表（内存 → 库 → 播种，三层兜底）
    *
-   * 播种只发生在**空图**上：库里（或本次恢复）已有实例就一概沿用、plan 整份忽略。
-   * 不做「逐条补缺」—— plan 的条目没有身份（客户端每次进图的落点是随机的），
-   * 拿它对已有实例去重只会得到「看起来能用、实际每次进图都在悄悄加怪」的假去重。
-   * 代价是「客户端改了刷怪配置」不会自动生效（要清这张图的世界状态），这正是
-   * 世界权威的自然结果：服务端的现状不再听任客户端随手改写。
+   * 播种只发生在**空图**上：库里（或本次恢复）已有实例就一概沿用、刷怪区整份忽略。
+   * 不做「逐只补缺」—— 死亡未重生的实例还在库里占位，按区域补会把它顶掉。
+   * 播种来源 = map_spawn_areas（#295 阶段一，从 Tiled 导入）：每区域按 max 展开
+   * 成逐只落点（区域内均匀随机，公式与客户端旧版完全一致），怪 key 对照 monsters 表
+   * （直读库而非生成物快照 —— 管理端改了数值/清单即时生效，#258），不认识的跳过并报警。
    */
-  private loadMap(mapId: string, spawnPlan: SpawnPlanEntry[]): Map<string, WorldMonster> {
+  private loadMap(mapId: string): Map<string, WorldMonster> {
     let map = this.maps.get(mapId);
     if (map) return map;
 
@@ -278,17 +304,21 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     }
     this.instanceSeq.set(mapId, maxSeq);
 
-    // 播种：空图才建。怪 key 存在性对照 monsters 表（不认识的条目跳过并报警；
-    // 直读库而非生成物快照 —— 管理端改了数值/清单即时生效，#258）
     if (rows.length === 0) {
-      for (const entry of spawnPlan) {
-        if (!validPlanEntry(entry)) continue;
-        if (!this.monsterConfigs.findByKey(entry.monsterKey)) {
-          this.logger.warn(`地图 ${mapId} 的播种计划里有不认识的怪物 key（${entry.monsterKey}），跳过`);
+      const areas = this.spawnAreas.listByMap(mapId);
+      let seeded = 0;
+      for (const area of areas) {
+        if (!this.monsterConfigs.findByKey(area.monster_key)) {
+          this.logger.warn(`地图 ${mapId} 刷怪区「${area.name}」的怪物 key（${area.monster_key}）在 monsters 表里不存在，跳过`);
           continue;
         }
-        this.createMonster(mapId, map, entry);
+        for (let index = 0; index < area.max; index += 1) {
+          const point = pickPointInArea(area.cx, area.cy, area.w, area.h);
+          this.createMonster(mapId, map, { monsterKey: area.monster_key, x: point.x, y: point.y });
+          seeded += 1;
+        }
       }
+      if (seeded > 0) this.logger.log(`地图 ${mapId} 空图，按 ${areas.length} 个刷怪区播种 ${seeded} 只怪`);
     }
 
     // 恢复 / 播种之后，把卸载期间到期未处理的重生一次性补上（与 tick 同一条口径）
@@ -301,7 +331,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     return map;
   }
 
-  private createMonster(mapId: string, map: Map<string, WorldMonster>, entry: SpawnPlanEntry): void {
+  private createMonster(mapId: string, map: Map<string, WorldMonster>, entry: { monsterKey: string; x: number; y: number }): void {
     // 直读 monsters 表（#258）：管理端改了 maxHp 即时生效 —— 播种 / 重生都走这里
     const stats = this.monsterConfigs.findByKey(entry.monsterKey);
     if (!stats) {
@@ -422,14 +452,19 @@ function snapshotOf(monster: WorldMonster): WorldMonsterSnapshot {
   };
 }
 
-/** 播种条目的最小校验（key 非空、坐标是有限数；怪 key 存在性由调用方对照 monsters 表） */
-function validPlanEntry(entry: SpawnPlanEntry): boolean {
-  return (
-    typeof entry?.monsterKey === "string" &&
-    entry.monsterKey !== "" &&
-    Number.isFinite(entry.x) &&
-    Number.isFinite(entry.y)
-  );
+/**
+ * 刷怪区内随机取一点（世界坐标）。
+ * 与客户端旧版 MonsterAreaSpawner 完全同一公式：矩形内均匀取值（地图节点未旋转缩放）。
+ * rand 可注入 —— e2e 用固定序列断言落点确定性与边界。
+ */
+export function pickPointInArea(
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  rand: () => number = Math.random,
+): { x: number; y: number } {
+  return { x: cx + (rand() - 0.5) * w, y: cy + (rand() - 0.5) * h };
 }
 
 /** 从 instanceId 解析发牌序号（`m1_3` → 3；解析不出按 0，重启后续号从它之上开始） */

@@ -161,9 +161,9 @@ function connect(url) {
     welcomes: [],
     settles: [],
     worlds: [],
-    async joinWorld(mapId, spawnPlan, timeoutMs = 5_000) {
+    async joinWorld(mapId, timeoutMs = 5_000) {
       const before = session.worlds.length;
-      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId, spawnPlan } }));
+      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId } }));
       return waitFor(`mapId=${mapId} 的 world 帧`, async () => {
         const hits = session.worlds.slice(before).filter((frame) => frame.mapId === mapId);
         return hits.length > 0 ? hits[hits.length - 1] : null;
@@ -197,6 +197,32 @@ function connect(url) {
   return session;
 }
 
+/**
+ * 预先往共享库里插刷怪区（#295）：地图 1 一区一只怪物 1，与旧播种计划等价。
+ * 表先建好再插行，服务端启动时的建表与空表 seed 都不会动它。
+ */
+function seedSpawnAreas(dbPath) {
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id      TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        monster_key TEXT    NOT NULL,
+        min         INTEGER NOT NULL DEFAULT 0,
+        max         INTEGER NOT NULL DEFAULT 0,
+        cx          REAL    NOT NULL,
+        cy          REAL    NOT NULL,
+        w           REAL    NOT NULL,
+        h           REAL    NOT NULL,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );`);
+  db.prepare(
+    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run("1", "1号怪物", "1", 0, 1, 100, 200, 100, 100, Date.now());
+  db.close();
+}
+
 /** 一份最小可建号的角色文档（e2e-combat 同款口径） */
 function roleData(id, name, level, skills) {
   return { id, name, occupation: "1", sex: "1", level, hp: 100, mp: 50, equipments: {}, bag: [], skills };
@@ -204,6 +230,9 @@ function roleData(id, name, level, skills) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-dual-${process.pid}-${Date.now()}.db`);
+  // 预插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）；
+  // 库本来就是先建的文件（双进程共享的前提），起进程前把表和种子插好
+  seedSpawnAreas(dbPath);
   // 两个进程共享同一个库文件；实时进程的巡检间隔调小，踢下线段才不用干等
   const shared = {
     DB_PATH: dbPath,
@@ -256,7 +285,7 @@ function roleData(id, name, level, skills) {
 
     group("二、播种与结算在实时进程跑通；写库对第三方读者可见");
 
-    const world = await session.joinWorld("1", [{ monsterKey: "1", x: 100, y: 200 }]);
+    const world = await session.joinWorld("1");
     const mob = world && world.monsters && world.monsters[0];
     check(mob && /^m1_\d+$/.test(mob.instanceId), "worldJoin 播种 1 只怪（服务端发牌）", JSON.stringify(world));
 

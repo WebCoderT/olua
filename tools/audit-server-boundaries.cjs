@@ -84,6 +84,8 @@ const REPO_EDGES = {
   "database/repositories/mail.repository.ts": ["modules/mail"],
   "database/repositories/system.repository.ts": ["modules/system"],
   "database/repositories/world-monster.repository.ts": ["modules/world"],
+  // 刷怪区（#295）：播种来源表，与世界实例同属 world 模块
+  "database/repositories/map-spawn-area.repository.ts": ["modules/world"],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],
