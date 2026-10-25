@@ -33,6 +33,7 @@
 - 关键不变量：管理端接口必须 `@ApiAdminDoc({permissions})`；接口文件 `make gen-api`；角色数据=不透明文档（编辑解析失败必须报错）；修订号乐观锁 409+20006；`ValidationPipe whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；公告已读走独立 `AnnouncementReadStore`；排序白名单唯一来源 `sort-specs.ts`。
 
 ## 剩余 open（2026-10-25）
-- 管理端收口（epic #259）：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267，master = 11afed5）。剩：#253 药品 → #255 物品材料 → #258 怪物NPC → #251 商城定价（定价行动态增删，与固定序列不同）→ #257 时装（fashionClothes 整份被注释，先处理来源）→ #254 掉落表（最后，引用装备 id 与价值锚点）。#248/#249 客户端对接按用户指令暂缓。当前数字：70 接口 / 60 路径 / 104 模型 / 14 张表 / 13 仓储 / e2e 1160（十一套）。
+- 管理端收口（epic #259）：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267）→ #253 药品 ✓（PR #271）→ #255 物品材料 ✓（PR #272，master = ea83b83）。剩：#258 怪物NPC → #251 商城定价（定价行动态增删，与固定序列不同）→ #257 时装（fashionClothes 整份被注释，先处理来源）→ #254 掉落表（最后，引用装备/药品 id 与价值锚点）。#248/#249 客户端对接按用户指令暂缓。当前数字：74 接口 / 64 路径 / 112 模型 / 16 张表 / 15 仓储 / e2e 1215（十一套）。
+- 配置表 issue 模板已稳定（#252/#253/#255 三连）：生成器 pick+render+audit → 三件套 → DTO/service/controller → e2e region → admin 页 → 文档 perl 批量替换 → make ci → PR；文本主键（id）表用 findByKey，seed 用 INSERT OR IGNORE。
 - 其他：#8 官网 / #9 包体积 3.1G 治理（解锁 #10 Demo）/ #12~#19 玩法素材（#14 待用户确认解冻）。用户已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
 - 本机 make client-test 有 2 套常红（test-action-atlas / test-equipment-light，resources/ 未入库素材缺失），CI 不跑 client-test，门禁以 `make ci` 为准（2026-10-25 确认）。
