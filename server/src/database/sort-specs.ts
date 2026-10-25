@@ -164,3 +164,16 @@ export const GROWTH_SCALAR_SORT: SortSpec<"key" | "value" | "updatedAt"> = {
   default: "key",
   defaultOrder: "asc",
 };
+
+/** 军衔配置列表：默认按阶数升序（同称号的价目表语义） */
+export const RANK_SORT: SortSpec<"level" | "label" | "tier" | "bindGold" | "updatedAt"> = {
+  columns: {
+    level: "level",
+    label: "label",
+    tier: "tier",
+    bindGold: "bind_gold",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};

@@ -9,6 +9,7 @@ import { RoleRepository } from "./repositories/role.repository";
 import { SoulRepository } from "./repositories/soul.repository";
 import { SystemRepository } from "./repositories/system.repository";
 import { GrowthRepository } from "./repositories/growth.repository";
+import { RankRepository } from "./repositories/rank.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 
@@ -33,6 +34,7 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     SystemRepository,
     WorldMonsterRepository,
     TitleRepository,
+    RankRepository,
     GrowthRepository,
     SoulRepository,
   ],
@@ -47,6 +49,7 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     SystemRepository,
     WorldMonsterRepository,
     TitleRepository,
+    RankRepository,
     GrowthRepository,
     SoulRepository,
   ],

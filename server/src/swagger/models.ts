@@ -47,6 +47,7 @@ import {
   UpgradeOrderDto,
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
+import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "../modules/game-config/dto/rank.dto";
 import {
   GrowthScalarDto,
   GrowthScalarPageDto,
@@ -183,4 +184,9 @@ export const SWAGGER_MODELS = [
   GrowthScalarPageDto,
   GrowthScalarQueryDto,
   UpdateGrowthScalarDto,
+  // 养成配置（军衔 #250）
+  RankDto,
+  RankPageDto,
+  RankQueryDto,
+  UpdateRankDto,
 ];

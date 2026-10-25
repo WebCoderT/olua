@@ -383,6 +383,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   mail: "邮件",
   title: "称号配置",
   soul: "战魂配置",
+  rank: "军衔配置",
   levelExp: "升级经验",
   growthSegment: "成长曲线分段",
   growthScalar: "成长曲线参数",

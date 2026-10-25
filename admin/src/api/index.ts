@@ -24,6 +24,7 @@ export {
   mailsApi,
   soulsApi,
   titlesApi,
+  ranksApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,

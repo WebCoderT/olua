@@ -162,6 +162,8 @@ export const BizCode = {
   GROWTH_SEGMENT_NOT_FOUND: 50013,
   /** 标量参数不存在（参数清单由 seed 固定） */
   GROWTH_SCALAR_NOT_FOUND: 50014,
+  /** 军衔阶数不存在（阶数序列固定 1..100） */
+  RANK_NOT_FOUND: 50015,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];
