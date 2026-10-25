@@ -4,10 +4,12 @@ import { AcquireChannel } from "../../common/constants/game-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { RankRepository, RankListOptions } from "../../database/repositories/rank.repository";
+import { EquipmentRepository, EquipmentListOptions } from "../../database/repositories/equipment.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { RankRow, SoulRow, TitleRow } from "../../database/rows";
+import { EquipmentRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
 import {
+  EQUIPMENT_BASES,
   RANK_LABELS,
   RANK_LEVEL_ATTRIBUTES,
   RANK_LEVEL_META,
@@ -18,11 +20,13 @@ import {
   TITLE_LEVEL_ATTRIBUTES,
   TITLE_LEVEL_META,
 } from "../../shared/game-data.generated";
+import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
   attributesFromRow,
   ConfigAttributesDto,
+  SoulRowShape,
   TitleDto,
   TitleQueryDto,
   UpdateTitleDto,
@@ -48,6 +52,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
+    private readonly equipments: EquipmentRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -55,6 +60,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedTitles();
     this.seedSouls();
     this.seedRanks();
+    this.seedEquipments();
   }
 
   // —— 称号 ——
@@ -222,6 +228,40 @@ export class GameConfigService implements OnModuleInit {
     return RankDto.from(this.requireRank(level));
   }
 
+  // —— 装备基础件（#252：id / 部位结构固定，只改数值；变体在客户端按倍率展开）——
+
+  listEquipments(query: EquipmentQueryDto): PageResult<EquipmentDto> {
+    const options: EquipmentListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      slot: query.slot,
+      minLevel: query.minLevel,
+      maxLevel: query.maxLevel,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.equipments.list(options);
+    const total = this.equipments.count(options);
+    return { list: rows.map(EquipmentDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateEquipment(id: string, dto: UpdateEquipmentDto): EquipmentDto {
+    const existing = this.requireEquipment(id);
+    const attributes = dto.attributes ?? attributesFromRow(existing as EquipmentRow & SoulRowShape);
+    assertAttributeRanges(attributes);
+
+    const next: EquipmentRow = {
+      ...existing,
+      level: dto.level ?? existing.level,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      ...attributeColumns(attributes),
+      updated_at: Date.now(),
+    };
+    this.equipments.update(next);
+    return EquipmentDto.from(this.requireEquipment(id));
+  }
+
   // —— 内部 ——
 
   private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
@@ -246,6 +286,27 @@ export class GameConfigService implements OnModuleInit {
     const row = this.ranks.findByLevel(level);
     if (!row) throw BizException.notFound(BizCode.RANK_NOT_FOUND, `军衔阶数 ${level} 不存在`);
     return row;
+  }
+
+  private requireEquipment(id: string): EquipmentRow {
+    const row = this.equipments.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.EQUIPMENT_NOT_FOUND, `装备基础件 ${id} 不存在`);
+    return row;
+  }
+
+  /** 装备基础件 seed：EQUIPMENT_BASES（slot/level/sellPrice/label/属性）直接灌，37 件基础件 */
+  private seedEquipments() {
+    for (const [id, meta] of Object.entries(EQUIPMENT_BASES as Record<string, Record<string, unknown>>)) {
+      this.equipments.seedRow({
+        id,
+        slot: String(meta.slot ?? ""),
+        level: Number(meta.level) || 0,
+        sell_price: Number(meta.sellPrice) || 0,
+        label: String(meta.label ?? ""),
+        ...flatAttributes(meta.attributes as Record<string, unknown>),
+        updated_at: 0,
+      });
+    }
   }
 
   /** 军衔 seed：RANK_LABELS（段名/衔名）/ RANK_LEVEL_META（文案/价格）/ RANK_LEVEL_ATTRIBUTES（属性）三表按阶 zip */

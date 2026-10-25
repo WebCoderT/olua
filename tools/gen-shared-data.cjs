@@ -124,7 +124,7 @@ function main() {
   const count = (rows) => rows.length;
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
-  console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 槽位 ${count(snapshot.equipmentSlots)} 个`);
+  console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
   console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsterCombat)} 只`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
@@ -231,6 +231,9 @@ function buildSnapshot(cfg) {
     // 军衔（#250）：没有动画资源，只带文案与晋升价格
     rankMeta: pickList(cfg.rank, pickRankMeta),
     equipmentAttributes: pickEquipments(cfg.equipmentMaps),
+    // 装备基础件（#252）：普通的·人级那一档，管理端「装备配置」的 seed 来源 ——
+    // 变体（_pXsY）的属性与回收价都是基础件乘倍率展开的，运营只改基础件这一份
+    equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
     monsterCombat: pickMonsterCombat(cfg.monsters),
     // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
@@ -314,6 +317,42 @@ function pickEquipments(maps) {
     });
     void name;
   }
+  return out;
+}
+
+/**
+ * 七个部位的装备 Map → [[基础件 id, 管理端元数据]]（#252）
+ *
+ * 只取**基础件**（普通的·人级，前后缀全 0、沿用原 key）：变体是基础件 × 前后缀倍率
+ * 展开的（展开规则在客户端 configs/equipments.buildEquipmentMap，属代码不是运营数据），
+ * 快照与 seed 都只收基础件这一份，变体不进管理端。
+ *
+ * sellPrice 来自条目的 `sellPirce`（客户端字段名历史上拼成了 Pirce，这里统一规整成
+ * sellPrice，两端生成物与库里都用正确拼写）；回收价是「曲线 × 倍率」的派生值，不进快照。
+ */
+function pickEquipmentBases(maps) {
+  const out = [];
+  const seen = new Set();
+  for (const [name, map] of maps) {
+    map.forEach((item, id) => {
+      if (item.prefix !== 0 || item.suffix !== 0) return; // 只要基础件
+      if (seen.has(id)) throw new Error(`装备基础件 id 重复：${id}`);
+      seen.add(id);
+      if (item.slot === undefined || item.slot === null) throw new Error(`装备 ${id} 没有 slot 字段（配置结构变了？）`);
+      out.push([
+        id,
+        {
+          slot: item.slot,
+          level: round(item.level ?? 0),
+          sellPrice: round(item.sellPirce ?? 0),
+          label: String(item.label ?? ""),
+          attributes: pickAttributes(item),
+        },
+      ]);
+    });
+    void name;
+  }
+  if (out.length === 0) throw new Error("装备基础件一条都没取到（configs/equipments 的 Map 结构变了？）");
   return out;
 }
 
@@ -577,6 +616,7 @@ ${textTable("EQUIPMENT_SLOTS", "装备槽位 → 中文名（如 1 → 衣服）
 ${numTable("EQUIPMENT_SLOT_ORDER", "装备槽位 → 整理序号（背包「一键整理」的部位顺序）", s.equipmentSlotOrder)}
 ${textTable("EQUIPMENT_DISPLAY_NAMES", "装备 id → 显示名（已拼好前后缀，如「精良的·天级 屠龙」）", s.equipmentDisplayNames)}
 ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLOTS 显示部位）", s.equipmentSlotOf)}
+${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
 ${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
 ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
 ${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}

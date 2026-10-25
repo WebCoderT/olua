@@ -3,8 +3,8 @@ import { ACQUIRE_CHANNEL, ACQUIRE_CHANNEL_LABELS } from "../api";
 import type { ConfigAttributes, Rank, Soul, Title } from "../api";
 import { Button, Field, Input, Select } from "./ui";
 
-/** 区间型属性的六项（与 ConfigAttributes 的区间字段一一对应；展示名在这里） */
-const RANGE_FIELDS = [
+/** 区间型属性的六项（与 ConfigAttributes 的区间字段一一对应；展示名在这里。装备配置页共用） */
+export const RANGE_FIELDS = [
   { key: "physicalAttack", label: "物攻" },
   { key: "magicAttack", label: "魔攻" },
   { key: "taoistAttack", label: "道攻" },

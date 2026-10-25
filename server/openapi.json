@@ -4029,6 +4029,209 @@
         ]
       }
     },
+    "/admin/equipments": {
+      "get": {
+        "description": "**只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）不进管理端 —— 它是基础件乘前后缀倍率展开的。id / 部位结构固定，**没有创建 / 删除**。\n\n`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `slot` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipment.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "required": false,
+            "in": "query",
+            "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes；枚举清单派生自客户端配置，不落 schema 以免英文/中文键进两端生成物）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minLevel",
+            "required": false,
+            "in": "query",
+            "description": "等级段下限（含）",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxLevel",
+            "required": false,
+            "in": "query",
+            "description": "等级段上限（含）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备基础件配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/EquipmentQueryDto"
+        }
+      }
+    },
+    "/admin/equipments/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `level`：穿戴需求等级（装备定强的锚点）。\n- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。变体属性 = 基础属性 × 前后缀倍率，改基础件即改全部 15 个变体。\n- `slot` / `label` 不开放编辑（部位结构与文案属客户端资源约定）。\n- `id` 不存在 → 404（`50016`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipment.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "装备基础件 id（如 cloth_1）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEquipmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的装备基础件配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑装备基础件配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/level-exps": {
       "get": {
         "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -5691,6 +5894,31 @@
           },
           "attributes": {
             "description": "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          }
+        }
+      },
+      "UpdateEquipmentDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "穿戴需求等级（不传则不改）",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "attributes": {
+            "description": "八项基础属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）。变体属性 = 基础属性 × 前后缀倍率，在客户端展开",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ConfigAttributesDto"
@@ -8920,6 +9148,135 @@
           "tier": {
             "type": "string",
             "description": "按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）"
+          }
+        }
+      },
+      "EquipmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）"
+          },
+          "slot": {
+            "type": "string",
+            "description": "部位（EQUIPMENT_TYPE 的枚举值，如 cloth）"
+          },
+          "level": {
+            "type": "number",
+            "description": "穿戴需求等级（装备定强的锚点）"
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（seed 自客户端条目，暂不开放编辑）"
+          },
+          "attributes": {
+            "description": "八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "slot",
+          "level",
+          "sellPrice",
+          "label",
+          "attributes",
+          "updatedAt"
+        ]
+      },
+      "EquipmentPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的装备基础件配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "EquipmentQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "slot": {
+            "type": "string",
+            "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes；枚举清单派生自客户端配置，不落 schema 以免英文/中文键进两端生成物）"
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "等级段下限（含）"
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "等级段上限（含）"
           }
         }
       }

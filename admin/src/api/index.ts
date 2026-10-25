@@ -25,6 +25,7 @@ export {
   soulsApi,
   titlesApi,
   ranksApi,
+  equipmentsApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,
