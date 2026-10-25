@@ -33,8 +33,9 @@
 - 关键不变量：管理端接口必须 `@ApiAdminDoc({permissions})`；接口文件 `make gen-api`；角色数据=不透明文档（编辑解析失败必须报错）；修订号乐观锁 409+20006；`ValidationPipe whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；公告已读走独立 `AnnouncementReadStore`；排序白名单唯一来源 `sort-specs.ts`。
 
 ## 剩余 open（2026-10-25）
-- 管理端收口（epic #259）：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267）→ #253 药品 ✓（PR #271）→ #255 物品材料 ✓（PR #272）→ #258 怪物NPC ✓（PR #275，master = fcc2a65）。剩：#251 商城定价（定价行动态增删，与固定序列不同）→ #257 时装（fashionClothes 整份被注释，先处理来源）→ #254 掉落表（最后，引用装备/药品 id 与价值锚点）。#248/#249 客户端对接按用户指令暂缓。当前数字：78 接口 / 68 路径 / 122 模型 / 18 张表 / 17 仓储 / e2e 1265（十一套）。
+- 管理端收口（epic #259）：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267）→ #253 药品 ✓（PR #271）→ #255 物品材料 ✓（PR #272）→ #258 怪物NPC ✓（PR #275）→ #251 商城定价 ✓（PR #278，master = 8504943）。剩：#257 时装（fashionClothes 整份被注释，先处理来源）→ #254 掉落表（最后，引用装备/药品 id 与价值锚点）。#248/#249 客户端对接按用户指令暂缓。当前数字：83 接口 / 71 路径 / 129 模型 / 20 张表 / 18 仓储 / e2e 1300（十一套）。
 - #258 新增：怪物战斗数值**读库**（世界播种+伤害结算直读 monsters 表，双进程共享 SQLite/WAL，改值即时生效）；npc 数据与行为分家（configs/npc-data.ts 纯数据 + npc.ts 接线，生成器加载 UI 链会炸）。DTO 踩坑：emitDecoratorMetadata 类顺序 TDZ（被引用类必须先声明）；whitelist 只认校验装饰器（嵌套属性只挂 @ApiProperty 会被剥掉）。
+- #251 新增：商城定价 = 目录在生成物（555 件装备变体）+ DB 只存价格层（mall_prices 动态增删 + mall_settings 单行）；BizException 默认 400，404 必须 `BizException.notFound()`；快照标量要包成单行表（裸标量被判空表）；nullable @ApiProperty 不带 type → admin 模型 unknown。
 - 配置表 issue 模板已稳定（#252/#253/#255 三连）：生成器 pick+render+audit → 三件套 → DTO/service/controller → e2e region → admin 页 → 文档 perl 批量替换 → make ci → PR；文本主键（id）表用 findByKey，seed 用 INSERT OR IGNORE。
 - 其他：#8 官网 / #9 包体积 3.1G 治理（解锁 #10 Demo）/ #12~#19 玩法素材（#14 待用户确认解冻）。用户已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
 - 本机 make client-test 有 2 套常红（test-action-atlas / test-equipment-light，resources/ 未入库素材缺失），CI 不跑 client-test，门禁以 `make ci` 为准（2026-10-25 确认）。
