@@ -413,6 +413,30 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 > In restricted environments (for example terminals with `NODE_OPTIONS` injected) you need to clear it for server child processes: `env -u NODE_OPTIONS npm run dev`. Details in [FAQ.en.md](FAQ.en.md).
 
+### 6. Resources sync (resources is not committed; how do multiple developers stay in sync)
+
+`client/assets/resources/` is large (raw art files) and **intentionally not committed** (see `.gitignore`). Multi-machine consistency is maintained by "manifest lock + GitHub Release distribution":
+
+- **Manifest**: `resources.manifest.json` is committed to the repo and records the sha1 + size of every resource file (including `.meta` — Cocos uuids live in the meta files, so they must ship with the distribution; regenerating meta per machine drifts uuids and breaks prefab references).
+- **Distribution**: split zips are attached to a GitHub Release (tag = `resources-<version>`), each volume capped at 1900MB (Release assets are limited to 2GiB, so oversized groups roll over into numbered parts automatically).
+
+Daily actions:
+
+```bash
+make resources-verify                      # run after pulling: local resources vs manifest; mismatches are listed
+make resources-download VERSION=<v>        # on mismatch or a fresh machine: download volumes from the Release, extract, verify
+```
+
+Publishing after changing resources (whoever changes resources publishes):
+
+```bash
+make resources-manifest VERSION=<v>        # regenerate the manifest (version is written into it, committed with the code)
+make resources-pack VERSION=<v>            # pack split zips into resources_dist/<v>/
+make resources-upload VERSION=<v>          # upload to the GitHub Release (requires a logged-in gh)
+```
+
+Convention: **merge the PR that carries the new manifest first, then upload** (once others pull the new manifest, `resources-verify` turns red; at that point `make resources-download VERSION=<v>` realigns them). The tool itself is `client/tools/resources_sync.py`.
+
 ## Feature list
 
 > ✅ Done ❌ Not done  Fine-grained server and admin capabilities are listed in their own READMEs.
