@@ -62,3 +62,6 @@ client/tools/_stage_action_atlas/
 deploy.env
 *.pem
 admin/tsconfig.tsbuildinfo
+
+# 散帧归档（~40GB，仅本机留底，永不入库；见 #288）
+_loose_frames_archive/
