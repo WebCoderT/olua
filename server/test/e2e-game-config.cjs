@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 306;
+const EXPECTED_ASSERTIONS = 347;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -864,6 +864,92 @@ async function main() {
     checkEqual(viewerMallPut.status, 403, "观察员设特殊价 → 403");
     const viewerMallDelete = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token: viewerToken });
     checkEqual(viewerMallDelete.status, 403, "观察员删特殊价 → 403");
+
+    //#endregion
+
+    //#region 十四、时装配置（#257）：seed 同源 / 渠道筛 / 只许改 / 资源路径不可编辑
+
+    group("十四、时装配置");
+
+    const fashions = await api(base, "GET", "/api/admin/fashions", { token });
+    checkEqual(fashions.status, 200, "时装列表可读");
+    const fashionCount = Object.keys(shared.FASHIONS).length;
+    checkEqual(fashions.body?.data?.total, fashionCount, `时装行数 = 配置表（${fashionCount}）`);
+    checkEqual(fashions.body?.data?.list?.length, fashionCount, "默认一页装下全部时装");
+    const fashion2 = fashions.body?.data?.list?.find((row) => row.id === "cloth_2");
+    check(Boolean(fashion2), "列表里有时装 cloth_2");
+    checkEqual(fashion2?.label, shared.FASHIONS["cloth_2"].label, "cloth_2 名称与配置一致");
+    checkEqual(fashion2?.description, shared.FASHIONS["cloth_2"].description, "cloth_2 描述与配置一致");
+    checkEqual(fashion2?.icon, shared.FASHIONS["cloth_2"].icon, "cloth_2 图标路径与配置一致");
+    checkEqual(fashion2?.inRes, shared.FASHIONS["cloth_2"].in, "cloth_2 内观路径与配置一致");
+    checkEqual(fashion2?.outRes, shared.FASHIONS["cloth_2"].out, "cloth_2 外观路径与配置一致");
+    checkEqual(fashion2?.sellPrice, 0, "售卖价 seed 为 0（原配置全零）");
+    checkEqual(fashion2?.acquireChannel, "unavailable", "获得渠道 seed 默认无法获取");
+    checkEqual(fashion2?.attributes?.maxHp, 0, "属性嵌套结构返回且 seed 全 0（maxHp）");
+    const fashion12 = fashions.body?.data?.list?.find((row) => row.id === "cloth_12");
+    checkEqual(fashion12?.inRes, "", "cloth_12 无内观（seed 空串）");
+
+    const fashionKeyword = await api(base, "GET", "/api/admin/fashions?keyword=" + encodeURIComponent("巫女"), { token });
+    checkEqual(fashionKeyword.body?.data?.total, 1, "关键字按名称命中妖绯巫女");
+    const fashionsUnavailable = await api(base, "GET", "/api/admin/fashions?acquireChannel=unavailable", { token });
+    checkEqual(fashionsUnavailable.body?.data?.total, fashionCount, "按渠道筛 unavailable：全部时装（seed 默认）");
+    const fashionsGrant = await api(base, "GET", "/api/admin/fashions?acquireChannel=grant", { token });
+    checkEqual(fashionsGrant.body?.data?.total, 0, "按渠道筛 grant：空列表（合法筛选）");
+    const fashionBadSort = await api(base, "GET", "/api/admin/fashions?sort=evil", { token });
+    checkEqual(
+      JSON.stringify(fashionBadSort.body?.data?.list?.[0]?.id),
+      JSON.stringify(fashions.body?.data?.list?.[0]?.id),
+      "白名单外的 sort 退回默认排序（防注入）",
+    );
+
+    const fashionPatched = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
+      token,
+      body: { label: "妖绯巫女（改）", description: "新描述", sellPrice: 188, acquireChannel: "upgrade" },
+    });
+    checkEqual(fashionPatched.status, 200, "PATCH 时装成功（名称/描述/售价/渠道一起改）");
+    checkEqual(fashionPatched.body?.data?.label, "妖绯巫女（改）", "响应里的名称已更新");
+    checkEqual(fashionPatched.body?.data?.description, "新描述", "响应里的描述已更新");
+    checkEqual(fashionPatched.body?.data?.sellPrice, 188, "响应里的售卖价已更新");
+    checkEqual(fashionPatched.body?.data?.acquireChannel, "upgrade", "响应里的获得渠道已更新");
+    const fashionChannelReread = await api(base, "GET", "/api/admin/fashions?acquireChannel=upgrade", { token });
+    checkEqual(fashionChannelReread.body?.data?.total, 1, "渠道改动后按新渠道能筛到");
+
+    const fashionAttrs = fashionPatched.body?.data?.attributes;
+    const fashionAttrPatched = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
+      token,
+      body: { attributes: { ...fashionAttrs, maxHp: 100, physicalAttack: { min: 5, max: 12 } } },
+    });
+    checkEqual(fashionAttrPatched.body?.data?.attributes?.maxHp, 100, "八项属性整份替换生效（maxHp）");
+    checkEqual(fashionAttrPatched.body?.data?.attributes?.physicalAttack?.min, 5, "八项属性整份替换生效（物攻下限）");
+    checkEqual(fashionAttrPatched.body?.data?.sellPrice, 188, "上次改的售卖价保留（合并语义）");
+
+    const fashionBadPrice = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token, body: { sellPrice: -1 } });
+    checkEqual(fashionBadPrice.status, 400, "售卖价负数 → 400");
+    const fashionCrossed = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
+      token,
+      body: { attributes: { ...fashionAttrs, magicDefense: { min: 9, max: 2 } } },
+    });
+    checkEqual(fashionCrossed.status, 400, "属性 min > max → 400（跨字段校验在服务端）");
+    checkEqual(fashionCrossed.body?.code, 40000, "参数越界用 40000");
+    const fashionBadChannel = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token, body: { acquireChannel: "magic" } });
+    checkEqual(fashionBadChannel.status, 400, "渠道取值不合法 → 400");
+    const fashionGhost = await api(base, "PATCH", "/api/admin/fashions/cloth_99", { token, body: { label: "x" } });
+    checkEqual(fashionGhost.status, 404, "改不存在的时装 → 404");
+    checkEqual(fashionGhost.body?.code, 50022, "时装未找到用专属业务码 50022");
+    const fashionStructural = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token, body: { icon: "clothes/icon/999", inRes: "x", outRes: "y" } });
+    checkEqual(fashionStructural.status, 200, "PATCH 资源路径不报错（白名单剥离）");
+    checkEqual(fashionStructural.body?.data?.icon, shared.FASHIONS["cloth_2"].icon, "icon 不可编辑（资源路径属表现层）");
+    checkEqual(fashionStructural.body?.data?.inRes, shared.FASHIONS["cloth_2"].in, "inRes 不可编辑");
+    checkEqual(fashionStructural.body?.data?.outRes, shared.FASHIONS["cloth_2"].out, "outRes 不可编辑");
+    const postFashion = await api(base, "POST", "/api/admin/fashions", { token, body: { id: "cloth_99" } });
+    checkEqual(postFashion.status, 404, "POST 时装 → 404（路由不存在）");
+    const deleteFashion = await api(base, "DELETE", "/api/admin/fashions/cloth_2", { token });
+    checkEqual(deleteFashion.status, 404, "DELETE 时装 → 404（路由不存在）");
+    const viewerFashionRead = await api(base, "GET", "/api/admin/fashions", { token: viewerToken });
+    checkEqual(viewerFashionRead.body?.code, 0, "观察员能看时装配置");
+    const viewerFashionWrite = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token: viewerToken, body: { sellPrice: 1 } });
+    checkEqual(viewerFashionWrite.status, 403, "观察员改时装 → 403");
+    checkEqual(viewerFashionWrite.body?.code, 30006, "观察员改时装 → 30006（权限点不足）");
 
     //#endregion
   } finally {

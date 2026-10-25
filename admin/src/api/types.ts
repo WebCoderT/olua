@@ -390,6 +390,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   monster: "怪物配置",
   npc: "NPC 配置",
   mall: "商城定价",
+  fashion: "时装配置",
   levelExp: "升级经验",
   growthSegment: "成长曲线分段",
   growthScalar: "成长曲线参数",

@@ -46,8 +46,10 @@
  *   「monsterStats(level, tier) 打底 + 条目覆盖」展开后进快照（`MONSTERS`，#258 起带名称）；
  *   NPC 走 `configs/npc-data`（**数据与行为分家**：原 npc.ts 引 UI 弹窗链，Node 加载会炸 ——
  *   实证 `Pointer.js` 的 `sys.hasFeature` 即炸，onClick 接线留在 npc.ts），快照只有 id / label。
- * - **时装**：`configs/fashionClothes.ts` 目前整份被注释掉（零导出），没有活的来源 ——
- *   等它被启用再说，不在这里凭空造一份。
+ * - ~~时装~~：**#257 起已纳入**——`configs/fashionClothes` 恢复为纯数据文件（原整份注释、
+ *   零导出零消费，表现层参数全是常量未随恢复保留，见该文件头），快照 FASHION
+ *   带 id / 名称 / 文案 / 资源路径 / 售卖价 / 属性（当前全 0，管理端可改）。
+ * - **掉落**：掉落结算还没上服务端（等世界权威那一刀），等它被启用再说。
  *
  * 用法：node tools/gen-shared-data.cjs
  */
@@ -67,7 +69,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -127,7 +129,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -211,6 +213,9 @@ function load(work) {
     maps: missing("map.maps", cfg("map").maps),
     monsters: missing("monster.monsters", cfg("monster").monsters),
     npcs: missing("npc-data.npcData", cfg("npc-data").npcData),
+    // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
+    // 售卖价/属性），表现层参数未随恢复保留（见 fashionClothes.ts 文件头）
+    fashions: missing("fashionClothes.fashionData", cfg("fashionClothes").fashionData),
     // 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；
     // 特殊价是运营数据不进快照（动态增删，归 mall_prices 表）
     mallPrice: missing("mall.mallPrice", cfg("mall").mallPrice),
@@ -245,6 +250,7 @@ function buildSnapshot(cfg) {
     skills: pickSkills(cfg.skillData),
     monsters: pickMonsters(cfg.monsters),
     npcs: pickNpcs(cfg.npcs),
+    fashions: pickFashions(cfg.fashions),
     mallDefaultPrice: round(cfg.mallPrice ?? 0),
     // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
     // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
@@ -486,6 +492,36 @@ function pickItemBases(materials) {
 }
 
 /**
+ * 时装表 → [[时装 id, 管理端元数据]]（#257）
+ *
+ * 来源是 `configs/fashionClothes`（#257 恢复为纯数据文件，见文件头）。名称 / 文案 /
+ * 资源路径 / 售卖价 / 属性进快照（sellPrice 来自可选字段，缺省 0）；属性经
+ * pickAttributes 拍平（当前配置全缺省 = 0，管理端可改，客户端消费等穿戴功能）。
+ */
+function pickFashions(fashions) {
+  const out = [];
+  const seen = new Set();
+  for (const item of fashions || []) {
+    if (!item || !item.id) throw new Error("configs/fashionClothes 里有缺 id 的条目");
+    if (seen.has(item.id)) throw new Error(`时装 id 重复：${item.id}`);
+    seen.add(item.id);
+    const row = {
+      label: String(item.label ?? ""),
+      description: String(item.description ?? ""),
+      icon: String(item.icon ?? ""),
+      in: String(item.in ?? ""),
+      out: String(item.out ?? ""),
+      sellPrice: round(item.sellPrice ?? 0),
+      // attributes 全缺省时 pickAttributes(undefined) 会返回 null —— 这里保证拍平形状恒在（全 0）
+      ...pickAttributes(item.attributes ?? {}),
+    };
+    out.push([item.id, row]);
+  }
+  if (out.length === 0) throw new Error("configs/fashionClothes 的 fashionData 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  return out;
+}
+
+/**
  * 技能表 → [[技能 id, 战斗数值]]
  *
  * id 重复同样在这里挡掉（落进 `Record` 就是 TS1117）。
@@ -685,8 +721,7 @@ function render(s) {
  * 装备的键是**展开后**的物品 id（基础件原 key，或带前后缀的 \`_pXsY\`），与客户端
  * \`getEquipment(id)\` 同口径；\`EQUIPMENT_DISPLAY_NAMES\` 里的名字已经拼好，消费方不必自己拼。
  *
- * 不在范围：掉落（掉落结算还没上服务端，等世界权威那一刀）、
- * 时装（\`configs/fashionClothes\` 整份被注释，没有活的来源）。
+ * 不在范围：掉落（掉落结算还没上服务端，等世界权威那一刀）。
  */
 
 /** 六项区间型战斗属性。如 ["physicalAttack","magicAttack",...] */
@@ -706,6 +741,7 @@ ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀
 ${numTable("SKILLS", "技能 id → 战斗数值。damageCoefficients 的下标 = 技能等级，baseType 是取哪种属性当基数", s.skills)}
 ${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）", s.monsters)}
 ${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
+${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
 

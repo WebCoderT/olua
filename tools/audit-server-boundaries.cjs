@@ -103,6 +103,8 @@ const REPO_EDGES = {
   "database/repositories/npc.repository.ts": ["modules/game-config"],
   // 商城定价（#251）：同上，只在 game-config 模块内读写（特殊价行动态增删，商品清单来自生成物）
   "database/repositories/mall.repository.ts": ["modules/game-config"],
+  // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
+  "database/repositories/fashion.repository.ts": ["modules/game-config"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

@@ -561,6 +561,57 @@ export interface MallSettingsRow {
   updated_at: number;
 }
 
+/**
+ * 时装配置（#257）：管理端「时装配置」的行
+ *
+ * 主键是时装 id（configs/fashionClothes，如 "cloth_2"）—— 清单固定，**不可增删行**。
+ * 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS（属性当前全 0），
+ * 运营可改；`icon` / `in_res` / `out_res` 是客户端资源路径（表现层），后台不改。
+ * `acquire_channel` 的取值域复用称号的 AcquireChannel（见 common/constants/game-config，
+ * 默认 unavailable；渠道中文名在管理端按时装语境另配）。
+ */
+export interface FashionRow {
+  /** 时装 id（如 "cloth_2"；主键，不可增删行） */
+  id: string;
+  /** 名称（后台可改） */
+  label: string;
+  /** 描述文案（后台可改） */
+  description: string;
+  /** 图标资源路径（resources 相对路径，后台不改） */
+  icon: string;
+  /** 内观资源路径（空串 = 无；后台不改） */
+  in_res: string;
+  /** 外观资源路径（空串 = 无；后台不改） */
+  out_res: string;
+  /** 售卖价（绑定元宝/件；后台可改） */
+  sell_price: number;
+  /** 获得渠道：upgrade | grant | unavailable（默认 unavailable；后台可改） */
+  acquire_channel: string;
+  /** 最大生命加成 */
+  max_hp: number;
+  /** 每秒回血加成 */
+  hp_recover: number;
+  /** 物理攻击区间 [min, max] */
+  physical_attack_min: number;
+  physical_attack_max: number;
+  /** 魔法攻击区间 */
+  magic_attack_min: number;
+  magic_attack_max: number;
+  /** 道术攻击区间 */
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  /** 物理防御区间 */
+  physical_defense_min: number;
+  physical_defense_max: number;
+  /** 魔法防御区间 */
+  magic_defense_min: number;
+  magic_defense_max: number;
+  /** 道术防御区间 */
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
