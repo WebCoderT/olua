@@ -44,6 +44,7 @@ import {
   TitlePageDto,
   TitleQueryDto,
   UpdateTitleDto,
+  UpgradeOrderDto,
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
@@ -148,6 +149,7 @@ export const SWAGGER_MODELS = [
   TitlePageDto,
   TitleQueryDto,
   UpdateTitleDto,
+  UpgradeOrderDto,
   SoulDto,
   SoulPageDto,
   SoulQueryDto,

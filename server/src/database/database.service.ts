@@ -202,6 +202,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         magic_defense_max    INTEGER NOT NULL DEFAULT 0,
         taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        -- 称号成长列表顺序（#230）：可空；仅 acquire_channel='upgrade' 的行持有（1 起），
+        -- 升级链顺序与等级号解耦，运营拖动成长列表改的就是它；部分唯一索引防重号
+        upgrade_order        INTEGER,
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
@@ -246,6 +249,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("accounts", "email", "TEXT");
     this.db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(LOWER(email)) WHERE email IS NOT NULL;",
+    );
+    // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
+    this.ensureColumn("titles", "upgrade_order", "INTEGER");
+    this.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_upgrade_order ON titles(upgrade_order) WHERE upgrade_order IS NOT NULL;",
     );
     this.ensureSuperAdmin();
   }

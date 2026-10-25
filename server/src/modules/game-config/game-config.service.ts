@@ -21,6 +21,7 @@ import {
   TitleDto,
   TitleQueryDto,
   UpdateTitleDto,
+  UpgradeOrderDto,
 } from "./dto/title.dto";
 
 /** 列表默认每页条数：34 / 37 行一页装得下，默认就是全量价目表 */
@@ -69,6 +70,7 @@ export class GameConfigService implements OnModuleInit {
     const existing = this.requireTitle(level);
     const attributes = dto.attributes ?? attributesFromRow(existing);
     assertAttributeRanges(attributes);
+    const nextChannel = dto.acquireChannel ?? existing.acquire_channel;
 
     const next: TitleRow = {
       ...existing,
@@ -77,12 +79,45 @@ export class GameConfigService implements OnModuleInit {
       animation: dto.animation ?? existing.animation,
       animation_frame_rate: dto.animationFrameRate ?? existing.animation_frame_rate,
       bind_gold: dto.bindGold ?? existing.bind_gold,
-      acquire_channel: dto.acquireChannel ?? existing.acquire_channel,
+      acquire_channel: nextChannel,
+      // 渠道切换时的序号联动（顺序没有直接改的口子 —— 拖动排序只走 reorderUpgradeTitles）：
+      // 切到 upgrade → 追加到成长列表尾（max+1）；切走 → 清空序号（价格保留，切回来重新排到尾）
+      upgrade_order: this.nextUpgradeOrder(existing, nextChannel),
       ...attributeColumns(attributes),
       updated_at: Date.now(),
     };
     this.titles.update(next);
     return TitleDto.from(this.requireTitle(level));
+  }
+
+  /** 称号成长列表：upgrade 渠道按顺序号升序（独立于主列表的「升级链」视图） */
+  listUpgradeTitles(): TitleDto[] {
+    return this.titles.listUpgrade().map(TitleDto.from);
+  }
+
+  /**
+   * 称号成长列表重排（拖动排序的落库口）
+   *
+   * `levels` 必须恰好等于当前 upgrade 渠道的等级集合：缺失说明漏传、多出说明传了
+   * 不在列表里的行、重复说明前端状态脏了 —— 三种都整单拒收，不做增量合并。
+   */
+  reorderUpgradeTitles(dto: UpgradeOrderDto): TitleDto[] {
+    const current = this.titles.listUpgrade();
+    const currentLevels = current.map((row) => row.level).sort((a, b) => a - b);
+    const submitted = [...dto.levels].sort((a, b) => a - b);
+    if (
+      dto.levels.length !== new Set(dto.levels).size ||
+      submitted.length !== currentLevels.length ||
+      submitted.some((value, index) => value !== currentLevels[index])
+    ) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        "levels 必须与当前升级渠道的称号等级集合完全一致（不多、不少、不重复）",
+      );
+    }
+    const orderByLevel = new Map(dto.levels.map((value, index) => [value, index + 1]));
+    this.titles.reassignUpgradeOrders([...orderByLevel].map(([value, order]) => ({ level: value, order })));
+    return this.listUpgradeTitles();
   }
 
   // —— 战魂 ——
@@ -127,6 +162,13 @@ export class GameConfigService implements OnModuleInit {
     return row;
   }
 
+  /** 渠道切换时的成长列表序号走向：渠道不变原样保留；切到 upgrade 追加到尾；切走清空 */
+  private nextUpgradeOrder(existing: TitleRow, nextChannel: string): number | null {
+    if (nextChannel === existing.acquire_channel) return existing.upgrade_order;
+    if (nextChannel === AcquireChannel.UPGRADE) return this.titles.maxUpgradeOrder() + 1;
+    return null;
+  }
+
   private requireSoul(level: number): SoulRow {
     const row = this.souls.findByLevel(level);
     if (!row) throw BizException.notFound(BizCode.SOUL_NOT_FOUND, `战魂阶数 ${level} 不存在`);
@@ -150,6 +192,7 @@ export class GameConfigService implements OnModuleInit {
         animation_frame_rate: meta.animationFrameRate,
         bind_gold: meta.bindGold,
         acquire_channel: AcquireChannel.UNAVAILABLE,
+        upgrade_order: null,
         ...flatAttributes(attributes),
         updated_at: 0,
       });

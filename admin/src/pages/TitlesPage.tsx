@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ACQUIRE_CHANNEL_LABELS, formatTime, PERMISSION, titlesApi } from "../api";
 import type { PageResult, Title, TitleQuery } from "../api";
 import { GameConfigDialog } from "../components/GameConfigDialog";
 import type { GameConfigFormValue } from "../components/GameConfigDialog";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
-import { toastSuccess } from "../store/toast";
+import { toastError, toastSuccess } from "../store/toast";
 
 /** 渠道徽章配色：可升级的绿、赠送的蓝、暂不放出的灰 */
 const CHANNEL_TONE: Record<string, "green" | "indigo" | "slate"> = {
@@ -37,8 +37,70 @@ export function TitlesPage() {
   const [editing, setEditing] = useState<Title | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // —— 称号成长列表（独立于主列表的「升级链」视图：拖动排序 + 行内改价）——
+  const [upgradeItems, setUpgradeItems] = useState<Title[]>([]);
+  const [upgradeLoading, setUpgradeLoading] = useState(true);
+  /** 正在拖动的行下标（dragstart 记下、drop 消费） */
+  const dragFrom = useRef<number | null>(null);
+  /** 行内价格草稿：等级 → 输入框里的字符串（未碰过的行跟随服务端值） */
+  const [priceDraft, setPriceDraft] = useState<Record<number, string>>({});
+  const [savingPriceLevel, setSavingPriceLevel] = useState<number | null>(null);
+
   // 一页 100：34 条全量就是一张「升级价目表」，翻页反而碍事
   const SIZE = 100;
+
+  const loadUpgrade = useCallback(async () => {
+    setUpgradeLoading(true);
+    try {
+      const list = await titlesApi.upgradeList();
+      setUpgradeItems(list);
+      setPriceDraft(Object.fromEntries(list.map((item) => [item.level, String(item.bindGold)])));
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUpgrade();
+  }, [loadUpgrade]);
+
+  /** 拖动落位：本地先换好顺序（乐观更新），再把整串顺序提交服务端；失败回滚重拉 */
+  const handleDrop = async (to: number) => {
+    const from = dragFrom.current;
+    dragFrom.current = null;
+    if (from === null || from === to || !canWrite) return;
+    const next = [...upgradeItems];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setUpgradeItems(next);
+    try {
+      await titlesApi.reorderUpgradeList({ levels: next.map((item) => item.level) });
+      toastSuccess("成长列表顺序已保存");
+    } catch {
+      await loadUpgrade();
+    }
+  };
+
+  /** 行内保存升级价格（走主列表的部分更新接口，只改 bindGold） */
+  const savePrice = async (level: number) => {
+    const value = Number(priceDraft[level]);
+    if (!Number.isInteger(value) || value < 0) {
+      toastError("升级价格必须是不小于 0 的整数");
+      return;
+    }
+    setSavingPriceLevel(level);
+    try {
+      await titlesApi.update(String(level), { bindGold: value });
+      toastSuccess(`等级 ${level} 的升级价格已保存`);
+      await loadUpgrade();
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setSavingPriceLevel(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +152,7 @@ export function TitlesPage() {
       setDialogOpen(false);
       setEditing(null);
       await load();
+      await loadUpgrade();
       return true;
     } catch {
       return false;
@@ -101,10 +164,87 @@ export function TitlesPage() {
       <div>
         <h1 className="text-lg font-semibold text-slate-50">称号配置</h1>
         <p className="mt-1 text-xs text-slate-500">
-          等级序列固定（1..34），只可编辑、不可新增 / 删除。「升级价格」仅渠道为「称号升级」时在玩家侧实际使用；
-          获得渠道默认「无法获取」，由运营逐个开放（系统赠送的发放逻辑暂未实现）。
+          等级序列固定（1..34），只可编辑、不可新增 / 删除。获得渠道默认「无法获取」，由运营逐个开放（系统赠送的发放逻辑暂未实现）：
+          渠道改为「称号升级」的称号会进入上方「称号成长列表」，按拖动的顺序构成玩家的升级链。
         </p>
       </div>
+
+      <Card
+        title="称号成长列表"
+        actions={upgradeLoading ? <Spinner /> : null}
+        description={
+          canWrite
+            ? undefined
+            : "当前角色没有「修改养成配置」权限：可以看顺序与价格，不能拖动或改价。"
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className={tableClass}>
+            <thead className={theadClass}>
+              <tr>
+                <th className={thClass}>顺序</th>
+                <th className={thClass}>等级</th>
+                <th className={thClass}>名称</th>
+                <th className={thClass}>升级价格</th>
+                <th className={`${thClass} text-right`}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {upgradeItems.map((item, index) => (
+                <tr
+                  key={item.level}
+                  draggable={canWrite}
+                  onDragStart={() => {
+                    dragFrom.current = index;
+                  }}
+                  onDragOver={(event) => {
+                    if (canWrite) event.preventDefault();
+                  }}
+                  onDrop={() => void handleDrop(index)}
+                  className={`transition hover:bg-slate-800/30 ${canWrite ? "cursor-grab active:cursor-grabbing" : ""}`}
+                >
+                  <td className={`${tdClass} tabular-nums text-slate-400`}>{index + 1}</td>
+                  <td className={tdClass}>{item.level}</td>
+                  <td className={tdClass}>
+                    <span className="font-medium text-slate-100">{item.label}</span>
+                  </td>
+                  <td className={tdClass}>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={priceDraft[item.level] ?? String(item.bindGold)}
+                        disabled={!canWrite}
+                        className="w-28"
+                        onChange={(event) => setPriceDraft({ ...priceDraft, [item.level]: event.target.value })}
+                      />
+                      <Button
+                        variant="outline"
+                        className="px-2.5 py-1 text-xs"
+                        loading={savingPriceLevel === item.level}
+                        disabled={!canWrite || Number(priceDraft[item.level]) === item.bindGold}
+                        onClick={() => void savePrice(item.level)}
+                      >
+                        保存价格
+                      </Button>
+                    </div>
+                  </td>
+                  <td className={`${tdClass} text-right text-xs text-slate-600`}>
+                    {canWrite ? "拖动整行调整顺序" : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {!upgradeLoading && upgradeItems.length === 0 ? (
+          <EmptyState
+            title="成长列表还是空的"
+            description="在下方称号列表里把某个称号的获得渠道改为「称号升级」，它就会出现在这里"
+          />
+        ) : null}
+      </Card>
 
       <Card>
         <div className="flex flex-wrap items-end gap-3">

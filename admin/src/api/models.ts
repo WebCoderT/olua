@@ -308,6 +308,13 @@ export type UpdateAnnouncement = {
   endsAt?: number | null;
 };
 
+export type UpgradeOrder = {
+  /**
+   * 重排后的称号等级全序列（须与当前 upgrade 渠道的等级集合完全一致）
+   */
+  levels: number[];
+};
+
 export type ConfigAttributeRange = {
   /**
    * 下限
@@ -1943,6 +1950,10 @@ export type Title = {
    * 获得渠道
    */
   acquireChannel: "upgrade" | "grant" | "unavailable";
+  /**
+   * 称号成长列表顺序（仅 upgrade 渠道的行持有，1 起；拖动排序改的就是它）
+   */
+  upgradeOrder: number | null;
   /**
    * 八项属性加成
    */
