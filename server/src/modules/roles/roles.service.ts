@@ -4,11 +4,15 @@ import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
-import { AccountRow, RoleRow } from "../../database/rows";
+import { SoulRepository } from "../../database/repositories/soul.repository";
+import { TitleRepository } from "../../database/repositories/title.repository";
+import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
-import { RoleDto, RoleSummaryDto } from "./dto/role.dto";
-import { parseRoleData } from "./role-data.util";
+import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
+import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
+import { decodeStoredRoleData, parseRoleData } from "./role-data.util";
 
 /**
  * 角色业务（玩家侧）
@@ -24,6 +28,9 @@ export class RolesService {
     private readonly roles: RoleRepository,
     private readonly accounts: AccountRepository,
     private readonly config: ConfigService,
+    private readonly titles: TitleRepository,
+    private readonly souls: SoulRepository,
+    private readonly ranks: RankRepository,
   ) {}
 
   /**
@@ -140,6 +147,94 @@ export class RolesService {
     this.roles.replace(row);
     this.warnIfAttributesMismatch(row.id, row.level, data);
     return RoleDto.from(row, account.online_role_id);
+  }
+
+  /**
+   * 三条成长线在角色存档 data 里的阶位字段（与 ROLE_PATCH_NUMBER_FIELDS 同名）
+   */
+  private static readonly GROWTH_FIELD: Record<GrowthKind, string> = {
+    title: "title",
+    soul: "soulOfWar",
+    rank: "rank",
+  };
+
+  /**
+   * 成长线升级（称号 #248 / 战魂 #249 / 军衔 #250）
+   *
+   * **扣费与阶位推进都在服务端**：客户端只报「哪条线、升到哪阶」，这里算出升级链上的
+   * 下一阶并校验目标一致（防跳级、防并发错位），扣绑定元宝后原子推进（revision +1）。
+   *
+   * 下一阶怎么算（与客户端 configs 的「+1」习惯解耦，以服务端库为准）：
+   * - 称号 / 战魂走 **upgrade_order 成长链**（管理端拖动列表改的就是它）——阶号与顺序解耦；
+   *   链本身只含可升级的行（称号 listUpgrade 已按渠道过滤）。
+   * - 军衔天然按阶，下一阶就是 level + 1。
+   *
+   * 返回值带 `consumed / gainedLevel / gainedLabel`：客户端弹提示、重算战力都要用，
+   * 免得它再回头查一遍配置。
+   */
+  upgradeGrowth(accountId: string, roleId: string, dto: GrowthUpgradeDto): GrowthUpgradeResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与 save 同一纪律：被踢下线的角色不能再推进度（升级也是一种写）
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const field = RolesService.GROWTH_FIELD[dto.kind];
+    const current = Math.max(0, Math.floor(Number(data[field]) || 0));
+    const target = this.resolveGrowthTarget(dto.kind, current);
+    // 链上没有下一阶（已满阶）或目标与算出的下一阶不一致 → 同一个失败语义（目标不合法）
+    if (!target || target.level !== dto.targetLevel) {
+      throw BizException.conflict(
+        BizCode.GROWTH_TARGET_INVALID,
+        target ? `目标阶位不合法：下一阶是 ${target.level} 阶（${target.label}）` : "已处于成长链顶端，没有下一阶",
+      );
+    }
+
+    const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
+    if (bindGold < target.bind_gold) {
+      throw BizException.conflict(BizCode.GROWTH_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${target.bind_gold - bindGold}`);
+    }
+
+    data[field] = target.level;
+    data.bindGold = bindGold - target.bind_gold;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return GrowthUpgradeResultDto.fromRow(row, account.online_role_id, target.bind_gold, target.level, target.label);
+  }
+
+  /**
+   * 算出某条成长线从 current 出发的下一阶
+   *
+   * @returns 下一阶配置行；已满阶返回 null
+   * @throws GROWTH_CHANNEL_LOCKED 称号当前阶不在升级链上（运营把玩家已获得的称号切出了
+   *   upgrade 渠道，upgrade_order 已清空）——此时无法定位下一阶，拒绝续升
+   */
+  private resolveGrowthTarget(kind: GrowthKind, current: number): TitleRow | SoulRow | RankRow | null {
+    if (kind === "rank") {
+      // 军衔天然按阶：下一阶 = level + 1，没有 0 阶行（1 阶即起点）
+      return this.ranks.findByLevel(current + 1) ?? null;
+    }
+    const chain = kind === "title" ? this.titles.listUpgrade() : this.souls.listUpgrade();
+    if (current <= 0) return chain[0] ?? null;
+    const currentIndex = chain.findIndex((row) => row.level === current);
+    if (currentIndex < 0) {
+      throw BizException.conflict(
+        BizCode.GROWTH_CHANNEL_LOCKED,
+        kind === "title" ? "当前称号不在可升级的成长链上，无法续升" : "当前战魂阶不在成长链上，无法续升",
+      );
+    }
+    return chain[currentIndex + 1] ?? null;
   }
 
   /**

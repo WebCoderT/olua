@@ -89,6 +89,27 @@ export class RoleDto extends RoleSummaryDto {
   }
 }
 
+/** 成长线升级结果（升级后的角色 + 本次消耗与到达的阶位，客户端弹提示 / 重算战力直接用） */
+export class GrowthUpgradeResultDto extends RoleDto {
+  @ApiProperty({ description: "本次升级消耗的绑定元宝" })
+  consumed: number;
+
+  @ApiProperty({ description: "到达的阶位" })
+  gainedLevel: number;
+
+  @ApiProperty({ description: "到达阶位的名称（称号名 / 战魂阶名 / 军衔衔名）" })
+  gainedLabel: string;
+
+  static fromRow(row: RoleRow, onlineRoleId: string | null, consumed: number, gainedLevel: number, gainedLabel: string): GrowthUpgradeResultDto {
+    const dto = new GrowthUpgradeResultDto();
+    Object.assign(dto, RoleDto.from(row, onlineRoleId));
+    dto.consumed = consumed;
+    dto.gainedLevel = gainedLevel;
+    dto.gainedLabel = gainedLabel;
+    return dto;
+  }
+}
+
 /** 服务端重算出的那八项战斗属性 + 战斗力 */
 export class RoleDerivedAttributesDto {
   @ApiProperty({ description: "最大生命值" })

@@ -5,7 +5,8 @@ import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
-import { RoleDto, RoleSummaryDto } from "./dto/role.dto";
+import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
+import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { RolesService } from "./roles.service";
 
 /**
@@ -74,6 +75,23 @@ export class RolesController {
   @ApiDataResponse(RoleDto, { description: "被选中的角色" })
   select(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): RoleDto {
     return this.rolesService.select(user.id, id);
+  }
+
+  @Post(":id/growth-upgrade")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.growthUpgrade",
+    summary: "成长线升级（称号 / 战魂 / 军衔）",
+    description:
+      "扣费与阶位推进都在服务端：按库里的成长链（upgrade_order / 军衔阶号）算出下一阶并校验 `targetLevel` 一致，" +
+      "扣绑定元宝后原子推进（revision +1）。\n\n" +
+      "失败路径业务码分段：20008 目标不是下一阶（含已满阶）/ 20009 绑定元宝不足 / 20010 当前称号不在升级链上（渠道被切走）；" +
+      "带上 `revision` 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(GrowthUpgradeResultDto, { description: "升级后的角色（含本次消耗与到达阶位）" })
+  growthUpgrade(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: GrowthUpgradeDto): GrowthUpgradeResultDto {
+    return this.rolesService.upgradeGrowth(user.id, id, dto);
   }
 
   @Delete(":id")

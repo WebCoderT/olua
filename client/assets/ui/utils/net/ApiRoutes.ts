@@ -73,7 +73,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（7 个接口） */
+  /** role 模块（8 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -105,6 +105,12 @@ export const ApiRoutes = {
      * 全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。
      */
     save: (id: string) => `/roles/${encodeURIComponent(id)}`,
+    /**
+     * 成长线升级（称号 / 战魂 / 军衔）（POST /roles/{id}/growth-upgrade）
+     *
+     * 扣费与阶位推进都在服务端：按库里的成长链（upgrade_order / 军衔阶号）算出下一阶并校验 `targetLevel` 一致，扣绑定元宝后原子推进（revision +1）。
+     */
+    growthUpgrade: (id: string) => `/roles/${encodeURIComponent(id)}/growth-upgrade`,
     /**
      * 选中（进入）角色（POST /roles/{id}/select）
      *

@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 429;
+const EXPECTED_ASSERTIONS = 471;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -1135,6 +1135,164 @@ async function main() {
       body: { label: shared.TITLE_LABELS["0"] },
     });
     checkEqual(restore.status, 200, "还原称号名（不污染其他断言）");
+
+    //#endregion
+
+    //#region 十七、成长线升级：称号 / 战魂 / 军衔的扣费与推进在服务端（#248/#249/#250）
+    group("十七、成长线升级：扣费与阶位推进在服务端");
+
+    // 前面 region 玩过称号渠道且未还原 —— 这里把 1/2/3 阶复原为 unavailable，
+    // 让「升级链从空开始成形」的前提成立（也验证渠道即链的开关语义）
+    for (const level of [1, 2, 3]) {
+      const reset = await api(base, "PATCH", `/api/admin/titles/${level}`, { token, body: { acquireChannel: "unavailable" } });
+      checkEqual(reset.status, 200, `前置清理：${level} 阶称号渠道还原为 unavailable`);
+    }
+
+    const growthPlayer = await registerPlayer("growth_player");
+    check(Boolean(growthPlayer), "成长线玩家注册成功");
+    const growthCreate = await api(base, "POST", "/api/roles", {
+      token: growthPlayer,
+      body: {
+        data: {
+          id: "growth_role_1",
+          name: "成长测试员",
+          occupation: "1",
+          sex: "1",
+          level: 1,
+          bindGold: 0,
+          gold: 0,
+          title: 0,
+          soulOfWar: 0,
+          rank: 0,
+        },
+      },
+    });
+    checkEqual(growthCreate.status, 201, "创建成长线测试角色 → 201");
+    const growthRoleId = growthCreate.body?.data?.id;
+    let growthRevision = growthCreate.body?.data?.revision;
+
+    // seed 后全部称号渠道 unavailable → 升级链为空 → 即使 0 阶也没有下一阶
+    const lockedTitle = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 1 },
+    });
+    checkEqual(lockedTitle.status, 409, "称号渠道全未开放时升级 → 409");
+    checkEqual(lockedTitle.body?.code, 20008, "升级链为空 → 20008（目标不合法：没有下一阶）");
+
+    // 运营把 1、2 阶称号切到 upgrade 渠道 → 成长链成形（顺序 = upgrade_order）
+    const open1 = await api(base, "PATCH", `/api/admin/titles/1`, { token, body: { acquireChannel: "upgrade" } });
+    const open2 = await api(base, "PATCH", `/api/admin/titles/2`, { token, body: { acquireChannel: "upgrade" } });
+    checkEqual(open1.status, 200, "运营开放 1 阶称号（upgrade 渠道）");
+    checkEqual(open2.status, 200, "运营开放 2 阶称号（upgrade 渠道）");
+
+    const skipJump = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 2 },
+    });
+    checkEqual(skipJump.status, 409, "跳级升 2 阶 → 409");
+    checkEqual(skipJump.body?.code, 20008, "跳级 → 20008（下一阶是 1 阶，不是 2 阶）");
+
+    const poor = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 1 },
+    });
+    checkEqual(poor.status, 409, "绑定元宝不足时升级 → 409");
+    checkEqual(poor.body?.code, 20009, "元宝不足 → 20009");
+
+    // 充值走既有 role.save（带 revision 基线；同时为乐观锁用例制造一个旧 revision）
+    const rich = await api(base, "PUT", `/api/roles/${growthRoleId}`, {
+      token: growthPlayer,
+      body: { revision: growthRevision, data: { ...growthCreate.body?.data?.data, bindGold: 1000000000 } },
+    });
+    checkEqual(rich.status, 200, "role.save 充值绑定元宝成功");
+    growthRevision = rich.body?.data?.revision;
+
+    const stale = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 1, revision: growthRevision - 1 },
+    });
+    checkEqual(stale.status, 409, "带旧修订号升级 → 409");
+    checkEqual(stale.body?.code, 20006, "乐观锁冲突 → 20006");
+
+    // 价格从管理端列表动态读（不写死 seed 值）
+    const titlesNow = await api(base, "GET", "/api/admin/titles", { token });
+    const price1 = titlesNow.body?.data?.list?.find((row) => row.level === 1)?.bindGold;
+    const price2 = titlesNow.body?.data?.list?.find((row) => row.level === 2)?.bindGold;
+
+    const up1 = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 1, revision: growthRevision },
+    });
+    checkEqual(up1.status, 200, "升 1 阶称号 → 200");
+    checkEqual(up1.body?.data?.consumed, price1, "consumed = 库里 1 阶价格");
+    checkEqual(up1.body?.data?.gainedLevel, 1, "gainedLevel = 1");
+    checkEqual(up1.body?.data?.gainedLabel, shared.TITLE_LABELS["0"], "gainedLabel = 1 阶称号名");
+    checkEqual(up1.body?.data?.data?.title, 1, "存档 title 推进到 1");
+    checkEqual(up1.body?.data?.data?.bindGold, 1000000000 - price1, "存档 bindGold 扣减到位");
+    checkEqual(up1.body?.data?.revision, growthRevision + 1, "revision 原子 +1");
+    growthRevision = up1.body?.data?.revision;
+
+    const up2 = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 2, revision: growthRevision },
+    });
+    checkEqual(up2.status, 200, "升 2 阶称号 → 200");
+    checkEqual(up2.body?.data?.consumed, price2, "consumed = 库里 2 阶价格（升级链按 upgrade_order 前进）");
+    checkEqual(up2.body?.data?.data?.title, 2, "存档 title 推进到 2");
+    growthRevision = up2.body?.data?.revision;
+
+    // 运营把 2 阶称号切出 upgrade 渠道 → 玩家当前阶掉出升级链 → 无法续升
+    const cutOff = await api(base, "PATCH", `/api/admin/titles/2`, { token, body: { acquireChannel: "grant" } });
+    checkEqual(cutOff.status, 200, "运营把 2 阶称号切到 grant 渠道");
+    const offChain = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "title", targetLevel: 3, revision: growthRevision },
+    });
+    checkEqual(offChain.status, 409, "当前阶掉出升级链后升级 → 409");
+    checkEqual(offChain.body?.code, 20010, "称号不在升级链上 → 20010（渠道锁定）");
+    const restore2 = await api(base, "PATCH", `/api/admin/titles/2`, { token, body: { acquireChannel: "upgrade" } });
+    checkEqual(restore2.status, 200, "还原 2 阶称号渠道");
+
+    // 战魂：37 阶全量持序，0 阶升 1 阶
+    // （前面 region 把成长列表重排成了 [2,1,3,...] —— 先还原为阶数序，升级链再从 1 阶起步）
+    const restoreSoulOrder = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token, body: { levels: soulLevels } });
+    checkEqual(restoreSoulOrder.status, 200, "前置清理：战魂成长列表还原为阶数序");
+    const soulPrice = (
+      await api(base, "GET", "/api/admin/souls", { token })
+    ).body?.data?.list?.find((row) => row.level === 1)?.bindGold;
+    const upSoul = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "soul", targetLevel: 1, revision: growthRevision },
+    });
+    checkEqual(upSoul.status, 200, "升 1 阶战魂 → 200");
+    checkEqual(upSoul.body?.data?.consumed, soulPrice, "战魂 consumed = 库里 1 阶价格");
+    checkEqual(upSoul.body?.data?.data?.soulOfWar, 1, "存档 soulOfWar 推进到 1");
+    checkEqual(upSoul.body?.data?.data?.title, 2, "战魂升级不动称号（字段隔离）");
+    growthRevision = upSoul.body?.data?.revision;
+
+    // 军衔：天然按阶（无 upgrade_order 概念），0 阶升 1 阶
+    const rankPrice = (
+      await api(base, "GET", "/api/admin/ranks", { token })
+    ).body?.data?.list?.find((row) => row.level === 1)?.bindGold;
+    const upRank = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "rank", targetLevel: 1, revision: growthRevision },
+    });
+    checkEqual(upRank.status, 200, "升 1 阶军衔 → 200");
+    checkEqual(upRank.body?.data?.consumed, rankPrice, "军衔 consumed = 库里 1 阶价格");
+    checkEqual(upRank.body?.data?.data?.rank, 1, "存档 rank 推进到 1");
+    checkEqual(upRank.body?.data?.data?.soulOfWar, 1, "军衔升级不动战魂（字段隔离）");
+
+    // kind 越界 → DTO 拒收
+    const badKind = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
+      token: growthPlayer,
+      body: { kind: "fashion", targetLevel: 1 },
+    });
+    checkEqual(badKind.status, 400, "kind 越界 → 400（whitelist 拒收）");
+
+    // 还原称号渠道（不污染其他断言的 seed 前提）
+    const restore1 = await api(base, "PATCH", `/api/admin/titles/1`, { token, body: { acquireChannel: "unavailable" } });
+    checkEqual(restore1.status, 200, "还原 1 阶称号渠道（seed 前提复原）");
 
     //#endregion
   } finally {

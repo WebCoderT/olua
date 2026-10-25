@@ -55,9 +55,9 @@ export default class TitleUpgradeDialog {
     this.upgradeButton = GameUiHelper.createMiddleButton("title_upgrade_button", layout.upgradeButton.text, layout.upgradeButton.position);
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
-      () => {
+      async () => {
         // 升级成功后整体刷新（失败时 StorageManager 已弹出原因提示）；称号常显头顶，同步换掉主角头顶的名牌动画
-        if (StorageManager.upgradeTitle()) {
+        if (await StorageManager.upgradeTitle()) {
           RoleUIManager.updateTitleShow();
           this.refresh();
         }

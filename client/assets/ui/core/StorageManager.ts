@@ -24,6 +24,8 @@ import { getTitleLevel } from "../../configs/title";
 import { getRankLevel } from "../../configs/rank";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
+import { RoleApi } from "../utils/net/Api";
+import type { GrowthUpgradeResult } from "../utils/net/ApiModels";
 
 /**
  * 存储管理器
@@ -251,10 +253,50 @@ export default class StorageManager {
   }
 
   /**
-   * 战魂升级（当前在线角色）：消耗下一级配置的绑定元宝升到下一级（见 configs/soul）
+   * 三条成长线（称号 #248 / 战魂 #249 / 军衔 #250）共用的服务端升级流程
+   *
+   * **扣费与阶位推进都在服务端**（role.growthUpgrade）：客户端只报「哪条线、升到哪阶」，
+   * 服务端按库里的成长链算下一阶并校验目标一致，扣绑定元宝后原子推进。
+   * 本地预检（上一层的 max / 元宝不足提示）只做即时 UX —— 服务端结果才是权威，
+   * 预检放行但服务端拒绝时（成长链被运营改过、后台并发改动），服务端的提示会经
+   * 请求层的失败出口弹给玩家。
+   *
+   * 成功后以服务端返回为准刷新本地存档（bindGold / 阶位 / revision），再走既有的
+   * 属性重算 → 落盘 → UI 刷新链路（这次 updateOnlineRole 的防抖推回 revision 与
+   * 服务端一致，不会撞乐观锁；推的是同一份已推进的状态，幂等）。
+   */
+  private static async upgradeGrowthOnServer(
+    role: Role,
+    kind: "title" | "soul" | "rank",
+    nextLevel: number,
+    tipKey: string,
+  ): Promise<boolean> {
+    let result: GrowthUpgradeResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝升级
+      result = await RoleApi.growthUpgrade(role.id, { kind, targetLevel: nextLevel, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    const data = result.data as Record<string, unknown>;
+    role.bindGold = Number(data.bindGold ?? role.bindGold);
+    if (kind === "title") role.title = Number(data.title ?? nextLevel);
+    else if (kind === "soul") role.soulOfWar = Number(data.soulOfWar ?? nextLevel);
+    else role.rank = Number(data.rank ?? nextLevel);
+    role.revision = result.revision;
+    // 属性计入角色属性与战斗力，升级后重算（称号头顶名牌动画由调用方经 RoleUIManager.updateTitleShow 刷新）
+    Object.assign(role, GameHelper.combatCalc(role));
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    GameUiHelper.createTip(tipKey, { level: result.gainedLevel, label: result.gainedLabel });
+    return true;
+  }
+
+  /**
+   * 战魂升级（当前在线角色）：扣费与推进在服务端（见 configs/soul 仅作本地预检）
    * @returns 是否升级成功（失败原因已用浮动提示告知）
    */
-  static upgradeSoul(): boolean {
+  static async upgradeSoul(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
     const next = getSoulLevel(role.soulOfWar + 1);
@@ -266,21 +308,14 @@ export default class StorageManager {
       GameUiHelper.createTip("soul_bind_gold_tip", { need: next.bindGold });
       return false;
     }
-    role.bindGold -= next.bindGold;
-    role.soulOfWar = next.level;
-    // 战魂属性计入角色属性与战斗力，升级后重算
-    Object.assign(role, GameHelper.combatCalc(role));
-    this.updateOnlineRole(role);
-    this.updateUi(role);
-    GameUiHelper.createTip("soul_upgrade_tip", { level: next.level, label: next.label });
-    return true;
+    return this.upgradeGrowthOnServer(role, "soul", next.level, "soul_upgrade_tip");
   }
 
   /**
-   * 称号升级/解锁（当前在线角色）：消耗下一级配置的绑定元宝升到下一级（见 configs/title；0 阶升 1 阶即解锁）
+   * 称号升级/解锁（当前在线角色）：扣费与推进在服务端（configs/title 仅作本地预检；0 阶升 1 阶即解锁）
    * @returns 是否升级成功（失败原因已用浮动提示告知）
    */
-  static upgradeTitle(): boolean {
+  static async upgradeTitle(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
     const next = getTitleLevel(role.title + 1);
@@ -292,23 +327,16 @@ export default class StorageManager {
       GameUiHelper.createTip("title_bind_gold_tip", { need: next.bindGold });
       return false;
     }
-    role.bindGold -= next.bindGold;
-    role.title = next.level;
-    // 称号属性计入角色属性与战斗力，升级后重算（头顶名牌动画由调用方经 RoleUIManager.updateTitleShow 刷新）
-    Object.assign(role, GameHelper.combatCalc(role));
-    this.updateOnlineRole(role);
-    this.updateUi(role);
-    GameUiHelper.createTip("title_upgrade_tip", { level: next.level, label: next.label });
-    return true;
+    return this.upgradeGrowthOnServer(role, "title", next.level, "title_upgrade_tip");
   }
 
   /**
-   * 军衔晋升/授衔（当前在线角色）：消耗下一阶配置的绑定元宝晋到下一阶（见 configs/rank；0 阶晋 1 阶即授衔）
+   * 军衔晋升/授衔（当前在线角色）：扣费与推进在服务端（configs/rank 仅作本地预检；0 阶晋 1 阶即授衔）
    * 军衔的外显就是头顶那行红字，随 updateUi → RoleUIManager.updateRoleData → RoleDisplay.updateHead 自动刷新，
    * 不需要像称号那样另外调一次外显刷新
    * @returns 是否晋升成功（失败原因已用浮动提示告知）
    */
-  static upgradeRank(): boolean {
+  static async upgradeRank(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
     const next = getRankLevel(role.rank + 1);
@@ -320,14 +348,7 @@ export default class StorageManager {
       GameUiHelper.createTip("rank_bind_gold_tip", { need: next.bindGold });
       return false;
     }
-    role.bindGold -= next.bindGold;
-    role.rank = next.level;
-    // 军衔属性计入角色属性与战斗力，晋升后重算
-    Object.assign(role, GameHelper.combatCalc(role));
-    this.updateOnlineRole(role);
-    this.updateUi(role);
-    GameUiHelper.createTip("rank_upgrade_tip", { level: next.level, label: next.label });
-    return true;
+    return this.upgradeGrowthOnServer(role, "rank", next.level, "rank_upgrade_tip");
   }
 
   /** 角色获得经验(当前在线角色) */
