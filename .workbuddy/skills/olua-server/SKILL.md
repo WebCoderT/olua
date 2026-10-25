@@ -128,7 +128,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 
 - 管理员账号在**独立 `admins` 表**（注册需 `ADMIN_REGISTER_CODE`；**第一个注册者自动是超管**）；
 - 三级角色：`super_admin`（全给）/ `admin`（除 `admin:manage`）/ `viewer`（`stats:read` + `account:read` + `role:read`）；
-- 服务端一共 **18 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）与 `system:read`（看系统信息）都是逐个后加的 —— **观察员只有 4 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
+- 服务端一共 **20 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）、`system:read`（看系统信息）与 `gameConfig:read` / `gameConfig:write`（养成配置，#213）都是逐个后加的 —— **观察员只有 5 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read` / `gameConfig:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
 - 无权限 → `403` + `30006`（message 写出缺哪个权限）；保护性拒绝 → `30007`（**最后一个启用中的超管**不能降级 / 停用 / 删除）；
 - `admins.role` 列由 `ensureColumn` 补 + `ensureSuperAdmin()` 兜底存量库；
 - **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。

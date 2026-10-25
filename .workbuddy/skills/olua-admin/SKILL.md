@@ -1,6 +1,6 @@
 ---
 name: olua-admin
-description: olua 项目管理端（React 19 + TypeScript + Vite + Tailwind CSS v4，目录 admin/）的开发做法。核心心智模型：界面按权限显隐只是体验，服务端才是权威；接口路径 / 方法 / 实体类型全部由服务端 Swagger 文档生成，禁止手写。涵盖：api 目录的生成物与手写边界（routes routes.ts 路径表 / models.ts 类型 / endpoints.ts 接口方法 authApi accountsApi adminsApi rolesApi auditApi 都是生成物，config.ts http.ts types.ts index.ts 是手写）、地址唯一来源 admin/.env 的 VITE_API_BASE_URL（代码只读 src/api/config.ts）、请求唯一出口 http.ts（请求与响应拦截器 / AbortController 超时 / 统一包裹解包 / ApiError 归一 / ApiError.needRelogin 触发重新登录 / 错误观察者单槽位 / HttpOptions 的 auth 与 silent）、按权限渲染（api/types.ts 的 PERMISSION 与服务端一一对应 + store/session.hasPermission 脏会话兜底空数组即最小权限 + 导航项带 permission 过滤 + 写按钮 disabled + App.tsx 的 RequirePermission 外壳）、页面结构（Dashboard / Accounts / AccountDetail / Roles / RoleDetail / Admins / Audit / MyAccount / Login / Register）、口令管理（AccountDetailPage 的重置密码 + 踢下线、AdminsPage 的重置密码且对自己置灰、MyAccountPage 的自助改密必须用返回的新令牌覆盖会话）、操作日志页（筛选 + 分页 + 展开请求体、动作中文名走 api/types 的 AUDIT_ACTION_LABELS 字典而动作清单从接口拉）、重置口令弹窗 ResetPasswordDialog 的两阶段（确认时前端生成随机口令、成功后只显示一次）、会话变化订阅 subscribeSession 让顶部身份栏跟着刷新、角色运行时数据编辑（KeyValueEditor 编辑装备与技能、背包稀疏格子编辑器含清空背包、buildPatch 对结构化字段整体提交其余只提交改动项）、业务码与展示字典（BIZ_CODE RELOGIN_CODES ADMIN_ROLE_LABELS PERMISSION_LABELS AUDIT_ACTION_LABELS AUDIT_TARGET_LABELS OCCUPATION_LABELS SEX_LABELS ROLE_BAG_AXIS_MAX PASSWORD_MIN_LENGTH formatTime formatTimeFull msToLocalInput localInputToMs）、枚举字段必须收口（as XxxQuery 字段名）、生成类型必须是 type 不能是 interface、新增页面或接口的标准步骤、验证命令 npm run build 等于 tsc --noEmit 加 vite build、每处理完一个问题按功能提交一次代码。触发场景：用户说"改管理端页面""加一个管理端功能""后台要能改角色属性""加筛选条件""加批量操作""权限按钮不该显示""登录后跳转不对""管理端类型报错""新接口管理端调不到""按权限显隐菜单""后台重置密码""踢下线按钮""操作日志页""看谁改了什么""改自己的密码""管理端登录被锁"。
+description: olua 项目管理端（React 19 + TypeScript + Vite + Tailwind CSS v4，目录 admin/）的开发做法。核心心智模型：界面按权限显隐只是体验，服务端才是权威；接口路径 / 方法 / 实体类型全部由服务端 Swagger 文档生成，禁止手写；页面从共享基件拼装（ui.tsx / Pagination / 弹窗 / Toast），不手写表格样式。涵盖：api 目录的生成物与手写边界（routes.ts 路径表 / models.ts 类型 / endpoints.ts 接口方法 accountsApi adminsApi announcementsApi auditApi authApi mailsApi rolesApi soulsApi statsApi systemApi titlesApi 都是生成物，config.ts http.ts types.ts gameData.ts index.ts 是手写）、地址唯一来源 admin/.env 的 VITE_API_BASE_URL（代码只读 src/api/config.ts）、请求唯一出口 http.ts（请求与响应拦截器 / AbortController 超时 / 统一包裹解包 / ApiError 归一 / ApiError.needRelogin 触发重新登录 / 错误观察者单槽位 / HttpOptions 的 auth 与 silent）、按权限渲染（api/types.ts 的 PERMISSION 现有 20 个权限点与服务端一一对应 + store/session.hasPermission 脏会话兜底空数组即最小权限 + 导航项带 permission 过滤 + 写按钮 disabled + App.tsx 的 RequirePermission 外壳）、共享 UI 组件（ui.tsx 的 Spinner Button Field Input Select Card Badge EmptyState StatCard 与 tableClass 系列、Pagination 服务端分页 10/20/50/100、ConfirmDialog、toastError/toastSuccess）、养成配置页面模式（TitlesPage / SoulsPage：GameConfigDialog 属性整份提交整份替换、价格不进编辑弹窗；GameGrowthListDialog 成长列表弹窗化、KIND_CONF 收敛两种配置的文案与接口适配、拖拽排序乐观更新失败回滚、行内改价；价格唯一显示与修改口 = 成长列表；升级链顺序与等级号解耦）、页面结构（Dashboard / Accounts / AccountDetail / Roles / RoleDetail / Admins / Announcements / Titles / Souls / Mails / Audit / System / MyAccount / Login / Register）、口令管理（AccountDetailPage 的重置密码 + 踢下线、AdminsPage 的重置密码且对自己置灰、MyAccountPage 的自助改密必须用返回的新令牌覆盖会话）、操作日志页（筛选 + 分页 + 展开请求体、动作中文名走 api/types 的 AUDIT_ACTION_LABELS 字典而动作清单从接口拉）、重置口令弹窗 ResetPasswordDialog 的两阶段（确认时前端生成随机口令、成功后只显示一次）、会话变化订阅 subscribeSession 让顶部身份栏跟着刷新、角色运行时数据编辑（KeyValueEditor 编辑装备与技能、背包稀疏格子编辑器含清空背包、buildPatch 对结构化字段整体提交其余只提交改动项）、业务码与展示字典（BIZ_CODE RELOGIN_CODES ADMIN_ROLE_LABELS PERMISSION_LABELS AUDIT_ACTION_LABELS AUDIT_TARGET_LABELS OCCUPATION_LABELS SEX_LABELS ROLE_BAG_AXIS_MAX PASSWORD_MIN_LENGTH formatTime formatTimeFull msToLocalInput localInputToMs）、枚举字段必须收口（as XxxQuery 字段名）、生成类型必须是 type 不能是 interface、接口数 / 管理端导航分组数等是 audit-doc-numbers 的受管数字（改接口必须连文档数字一起改）、新增页面或接口的标准步骤、验证命令 npm run build 等于 tsc --noEmit 加 vite build、提交走 issue + PR + CI 门禁。触发场景：用户说"改管理端页面""加一个管理端功能""后台要能改角色属性""加筛选条件""加批量操作""权限按钮不该显示""登录后跳转不对""管理端类型报错""新接口管理端调不到""按权限显隐菜单""后台重置密码""踢下线按钮""操作日志页""看谁改了什么""改自己的密码""管理端登录被锁""称号配置""战魂配置""成长列表""养成配置""做成分页""改成弹窗""拖拽排序"。
 agent_created: true
 ---
 
@@ -26,7 +26,7 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 |---|---|---|
 | `routes.ts` | **生成**（禁止手改） | 路径表 —— 唯一的接口路径来源 |
 | `models.ts` | **生成** | 实体类型（服务端 DTO 的镜像） |
-| `endpoints.ts` | **生成** | 接口方法：`authApi` / `accountsApi` / `adminsApi` / `rolesApi` / `auditApi` |
+| `endpoints.ts` | **生成** | 接口方法：`accountsApi` / `adminsApi` / `announcementsApi` / `auditApi` / `authApi` / `mailsApi` / `rolesApi` / `soulsApi` / `statsApi` / `systemApi` / `titlesApi`（随服务端控制器自动增减，别背清单，以文件为准） |
 | `config.ts` | 手写 | 读 `VITE_API_BASE_URL` + `buildUrl` + `API_TIMEOUT`（地址唯一来源） |
 | `http.ts` | 手写 | 请求唯一出口（见下） |
 | `types.ts` | 手写 | **服务端文档里没有的东西**：`ApiEnvelope` / `PageResult<T>` / `ApiError` / `BIZ_CODE` / `RELOGIN_CODES` / `PERMISSION` / 权限点与审计动作的中文名字典 / 时间与输入框换算。**游戏数据不在这里** |
@@ -68,7 +68,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 ## 四、按权限渲染
 
-- `api/types.ts` 的 `PERMISSION`（与服务端 `common/constants/permission.ts` **一一对应**，现 18 个权限点：其中 `account:password` 重置玩家口令、`account:email` 补录 / 查看玩家邮箱、`announcement:*` 公告、`mail:*` 邮件、`audit:read` 查操作日志与 `system:read` 看系统信息是逐个后加的）；
+- `api/types.ts` 的 `PERMISSION`（与服务端 `common/constants/permission.ts` **一一对应**，现 20 个权限点；`gameConfig:read/write` 养成配置、`account:password` 重置玩家口令、`account:email` 补录 / 查看玩家邮箱、`announcement:*` 公告、`mail:*` 邮件、`audit:read` 查操作日志与 `system:read` 看系统信息是逐个后加的）；
 - `store/session.hasPermission`（**脏会话兜底空数组 = 最小权限**）；
 - 导航项带 `permission` 过滤；写操作用 `disabled`；`App.tsx` 用 `RequirePermission` 外壳包住页面；
 - **不需要权限点的页面**（如「我的账号」）直接挂路由，不进 `NAV_ITEMS`（它是每个人的私有页，放顶部身份栏更顺手）；
@@ -84,8 +84,12 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `AccountDetailPage` | 账号信息 + 名下角色概要 + **重置密码** + **踢下线** + **清空该账号全部角色** |
 | `RolesPage` | 角色列表：**六维筛选**（关键字 / 账号 / 在线 / 职业 / 性别 / 等级区间）+ 多选 + 批量删除确认框（列出角色名）+「修订」列 |
 | `RoleDetailPage` | 三块卡片：基础信息 / 常用数值 / **运行时数据**（`KeyValueEditor` 编辑装备与技能、背包稀疏格子编辑器含「清空背包」） |
+| `AnnouncementsPage` | 公告列表与发布 / 编辑（`announcement:read` 看见、`announcement:write` 改，编辑走 `AnnouncementDialog`） |
+| `TitlesPage` / `SoulsPage` | **养成配置**（称号 / 战魂，`gameConfig:read/write`）：服务端分页主列表 + 顶部按钮唤起「成长列表」弹窗。见「养成配置页面模式」一节 |
+| `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
+| `SystemPage` | 系统信息（部署形态、版本等，`system:read`） |
 | `MyAccountPage` | **我的账号**：身份 / 权限点 / 自助改密（不需权限点，任何已登录管理员都能进） |
 
 **口令管理的两个入口，别混**（详见 skill `olua-server` 的底座一节）：
@@ -108,6 +112,41 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 **筛选表单与查询分离**：表单状态与「已应用的查询」分开（`applied`），点「查询」才生效；刷新列表要**清空多选**。
 
+## 五点五、共享 UI 组件与页面模式（新页面从这里拼，不手写样式）
+
+**`components/ui.tsx` 是基件**：`Spinner` / `Button`（`tone` + `disabled`）/ `Field`（label + hint 包输入）/ `Input` / `Select` / `Card`（title + description + actions）/ `Badge`（`tone`）/ `EmptyState` / `StatCard`，以及表格类名常量 `tableClass` / `theadClass` / `thClass` / `tdClass`。页面表格统一这套类名，深色主题口径只在 ui.tsx 改一处。
+
+**分页统一走 `Pagination` 组件**（服务端分页：只上报页码与条数，翻页由页面重新拉数据）：
+
+- props：`page` / `size` / `total` / `onChange` / 可选 `onSizeChange`（传了才显示「每页」下拉，`PAGE_SIZE_OPTIONS = [10, 20, 50, 100]`）；
+- 页面自己存 `page` + `size` 两个 state，**改条数要回第一页**（`setSize` 时连 `setPage(1)`）；
+- 「基础数据」类页面（称号 / 战魂）**不要**为了省事一页 100 全量展示——一律接入服务端分页（#239 口径）。
+
+**弹窗模式**：受控开合（`open` + `onClose`），内容自管状态；**每次打开重新初始化**（`useEffect([open, initial])` 重置表单），编辑另一条时不残留上一条；提交回调签名 `Promise<boolean>`，返回 `true` 才由页面关弹窗刷列表。
+
+**提示统一走 Toast**（`store/toast` 的 `toastSuccess` / `toastError` / `toast`），不要页面自己挂浮层；危险操作统一 `ConfirmDialog`。
+
+## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
+
+养成配置 = 服务端启动 seed 的**固定等级序列**（称号 34 级 / 战魂 37 阶），**只能改、不能增删**（POST/DELETE 接口根本不存在）。两页结构完全一致，改一处要想着另一处。
+
+**主列表**：服务端分页（`Pagination`，10/20/50/100）+ 「编辑」按钮弹 `GameConfigDialog` + 顶部「成长列表」按钮弹 `GameGrowthListDialog`。**主列表不显示价格**（#232/#234：价格唯一显示与修改口 = 成长列表）。
+
+**`GameConfigDialog`（编辑弹窗，两 kind 共用）**：
+
+- 属性八项全部展示、全部回填，**整份提交、整份替换**（服务端口径），没有只改一行的快捷路径——避免「以为只改攻击结果把防御清零」；
+- **弹窗不提供价格输入**：提交时价格原样带回当前值（页面侧写死 `bindGold: editing.bindGold`），弹窗保存绝不碰价格；
+- 渠道下拉仅称号出现（战魂没有渠道概念）。
+
+**`GameGrowthListDialog`（成长列表弹窗，两 kind 共用）**：
+
+- 成长列表 = 独立于主列表的「升级链」视图，**顺序与等级号解耦**（后端 `upgrade_order` 列）；称号按渠道进出（改成「称号升级」自动追加尾、切走清序号价格保留），战魂 37 阶全量；
+- 顶部按钮唤起弹窗，**每次打开现拉数据**（不被主列表编辑弄脏），页面只管开关；
+- **拖拽排序**：原生 HTML5 drag（`draggable` 行 + `dragFrom` ref），**乐观更新**——先改本地顺序再调接口，失败回滚重拉；重排接口是**整串提交**（`reorder({ levels })`，levels 必须与集合完全一致）；
+- **行内改价**：每行价格输入框 + 保存按钮（未改动时禁用），保存调 `update(level, { bindGold })`；
+- 观察员（无 `gameConfig:write`）可看顺序与价格，拖动与改价都禁用（`canWrite` 一个开关收敛）；
+- **两种配置的差异收敛在 `KIND_CONF`**：文案（等级/阶数、价格/消耗）+ 三个接口适配函数（`fetch` / `reorder` / `updatePrice`）。新增第三种养成配置时扩展 `KIND_CONF` 即可，弹窗主体不用动。
+
 ## 六、必踩的坑
 
 1. **生成的类型必须是 `type` 不是 `interface`**。`interface` 没有隐式索引签名，赋给请求层的 `Record<string, string | number | null | undefined>`（query 参数）会被 TS 拒。生成器已经统一产出 `export type X = { ... }`，别再手写回 interface。
@@ -120,32 +159,36 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 8. **`ApiError.needRelogin` 判的是 `status === 401 || RELOGIN_CODES`** —— 所以新增的「令牌作废」码（`40103`）即使不加进 `RELOGIN_CODES` 也会回登录页（因为它就是 401）。加进去是为了让意图显式，别把它当唯一开关。
 9. **改自己的密码不能用「重置密码」那套**：服务端会作废旧令牌，所以必须用返回的新令牌覆盖会话（`saveSession(result.token, result.admin)`）；否则请求一发完，下一次点击就把自己送回登录页。
 10. **生成随机口令用 `crypto.getRandomValues`**，别用 `Math.random`；字符集去掉 `0/O`、`1/l/I` 这类念给玩家容易听错的字符（口令是要线下念的）。
+11. **接口数 / 路径数 / 模型数 / 管理端导航分组数是 `tools/audit-doc-numbers.cjs` 的受管数字**：改接口（哪怕只是加一个端点）或加导航项，必须连 README / FAQ 双语 / docs/resume.md / server README 双语里的数字一起改，否则审计红。跑 `node tools/audit-doc-numbers.cjs` 看差在哪。
+12. **中文文案改动可能触发 `tools/audit-docs-en.cjs`**（双语文档口径全等）：页面内提示文案不影响，但若改动被文档引用（页面名、功能名），英文文档要同步。
+13. **数组/对象断言在守卫脚本里不能用 `===`**（比较的是引用），要用 `JSON.stringify` 后比较——server e2e 里踩过。
 
 ## 七、加一个管理端功能的步骤
 
-1. 服务端：写 DTO（含嵌套对象时用带装饰器的 DTO 类 + `@ValidateNested` + `@Type`）+ 控制器方法（`@ApiAdminDoc({ operationId, permissions })` + `@ApiQueryModel` / `@ApiDataResponse`）→ 必要时先在 `permission.ts` 加权限点。
-2. `cd server && npm run gen:api` 重新产出文档与两端接口文件。
-3. 管理端：`npx tsc --noEmit` 看报错，按生成的方法签名改调用点；新增页面走 `RequirePermission` 外壳 + `PERMISSION` 常量。
-4. `npm run build` + 服务端 `npm run verify`。
-5. 仓库根有 Makefile，等价目标：`make admin-build` / `make admin-typecheck` / `make gen-api` / `make verify`（全门禁）；`make help` 列全部。
+1. 服务端：写 DTO（含嵌套对象时用带装饰器的 DTO 类 + `@ValidateNested` + `@Type`）+ 控制器方法（`@ApiAdminDoc({ operationId, permissions })` + `@ApiQueryModel` / `@ApiDataResponse`）→ 必要时先在 `permission.ts` 加权限点。**注意：具名路由必须声明在 `:id` / `:level` 参数路由之前，否则被吞掉**。
+2. `cd server && npm run gen:api` 重新产出文档与两端接口文件（`admin/src/api/endpoints.ts` / `models.ts` / `routes.ts`）。
+3. 管理端：`npx tsc --noEmit` 看报错，按生成的方法签名改调用点；新增页面走 `RequirePermission` 外壳 + `PERMISSION` 常量 + `Layout.tsx` 导航项。
+4. **同步受管文档数字**：接口数 / 路径数 / 模型数 / 管理端分组数变了就改 README / FAQ 双语 / resume / server README（见坑 11）。
+5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 生成物一致性）+ 仓库根 `make audit`（10 项跨端审计）。
+6. 仓库根 Makefile 等价目标：`make admin-build` / `make admin-typecheck` / `make gen-api` / `make verify`（全门禁）；`make help` 列全部。
 
-## 八、提交纪律（强制）
+## 八、提交纪律（强制，与仓库根纪律一致）
 
-**每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
+**所有提交必须有 issue / PR 追踪**：开 issue → 分支 `type/n-slug`（分支号 = issue 号）→ 提交（提交信息带 `Closes #n`）→ 推送开 PR → **CI 全绿才能合并** → squash 合并 → 同步本地 master（`git pull --ff-only`）。
 
-- 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
-- 提交前把该跑的验证跑绿（`npm run build` + 服务端 `npm run verify`），**全绿才提交**。
-- 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；管理端的端名取 `admin`。
+- 一个 PR = 一个 squash = 一个功能；**改完立刻提交，不要攒着**，也不要把多个不相关改动混进一个 PR（「哪次改动引入了回归」永远能二分出来）。
+- 开分支前先 `git fetch` + 同步 master（多机并行开发是常态，master 随时可能被另一台机器推进）；合并后再拉一次确认本地 = 远端。
+- 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（管理端的端名取 `admin`），正文列关键改动与验证结果。
 - 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。
 
 ```bash
 cd /Users/tz/workspace/olua
-git add admin && git commit -F - <<'EOF'
-feat(admin): 操作日志查询页与我的账号自助改密
-
-- AuditPage 7 项筛选 + 展开请求体；MyAccountPage 改密后用新令牌覆盖会话
-- 验证：npm run build 通过（48 modules / gzip 101 kB）
-EOF
+gh issue create -t "feat(admin): 一句话说清做了什么" -b "需求与方案"
+git checkout -b feat/<issue号>-slug
+git add admin && git commit -m "feat(admin): 一句话说清做了什么 (Closes #<issue号>)"
+git push -u origin feat/<issue号>-slug
+gh pr create --fill && gh pr checks --watch && gh pr merge --squash --delete-branch
+git checkout master -q && git pull --ff-only -q
 ```
 
 ## 九、相关

@@ -178,8 +178,10 @@ function countPermissionPoints() {
   const full = path.join(ROOT, relative);
   if (!fs.existsSync(full)) throw new Error(`权限点的唯一来源不存在：${relative}`);
   const source = fs.readFileSync(full, "utf8");
-  // 权限点对象的每一项长得像 `  ACCOUNT_READ: "account:read",`（两空格缩进的 `大写键: "资源:动作"`）
-  const matched = source.match(/^ {2}[A-Z][A-Z0-9_]*:\s*"[a-z]+:[a-z]+",$/gm) ?? [];
+  // 权限点对象的每一项长得像 `  ACCOUNT_READ: "account:read",`（两空格缩进的 `大写键: "资源:动作"`）。
+  // 资源段允许 camelCase（`gameConfig:read`）—— 此前只认 `[a-z]+`，#213 加的两个 gameConfig
+  // 权限点被静默漏数（实测停在 18、实际 20），全仓库文档跟着写错而审计一直打勾。
+  const matched = source.match(/^ {2}[A-Z][A-Z0-9_]*:\s*"[a-z][a-zA-Z]*:[a-z]+",$/gm) ?? [];
   if (matched.length === 0) {
     throw new Error(
       `${relative} 里解析不出权限点 —— 这个文件的写法变了？\n` +

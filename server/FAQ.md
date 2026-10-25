@@ -48,8 +48,8 @@ env -u NODE_OPTIONS npm run verify
 
 - **三个分组 = 三种调用者**，顺序就是权限层级：
   1. **公共接口** —— 无需令牌：`/health`、玩家注册登录、管理员登录注册、**拉取生效中的公告**（共 6 个）
-  2. **客户端** —— 需要 `player` 令牌，只能操作自己账号的数据（共 8 个）
-  3. **管理端** —— 需要 `admin` 令牌，且每个接口还要求权限点（共 36 个）
+  2. **客户端** —— 需要 `player` 令牌，只能操作自己账号的数据（共 9 个）
+  3. **管理端** —— 需要 `admin` 令牌，且每个接口还要求权限点（共 45 个）
 - **分组是按「单个接口」标的，不是按控制器**：认证控制器里 `register/login` 属于「公共接口」、`me` 属于「客户端」，一个类里两种分组都有。所以控制器类上不写 `@ApiTags`，统一用 `common/decorators/api-doc.decorator` 里的组合装饰器（`ApiPublicDoc / ApiPlayerDoc / ApiAdminDoc`）—— 分组、令牌锁图标、权限说明一次到位
 - **踩过的坑**：Nest 的 Swagger 有一个「没有类级 tag 就自动拿控制器类名当分组」的默认行为（`autoTagControllers`，默认开），于是文档里每个接口除了自己的分组还会多挂一个 `Health` / `Auth` / `AdminRoles` 之类的类名分组。已在 `main.ts` 的 `createDocument(..., { autoTagControllers: false })` 关掉；e2e 里钉了「每个接口恰好属于一个分组」的断言
 - **「所需权限」不是手写的**：`ApiAdminDoc({ permissions })` 里传的权限点会①变成运行时校验（守卫真读这份元数据）②由 `ROLE_PERMISSIONS` 反查「哪些角色拥有」写进文档说明 ③以 `x-olua-permissions` 扩展挂在操作上（给机器读）。三者同源，不会出现「文档写了但没拦」或「拦了但文档没写」
@@ -63,9 +63,9 @@ env -u NODE_OPTIONS npm run verify
 | --- | --- |
 | 超级管理员 `super_admin` | 全部权限（含「管理管理员」与「重置管理员密码」） |
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
-| 只读观察员 `viewer` | 只能看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
+| 只读观察员 `viewer` | 只能看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表** / **养成配置列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
 
-- **权限点**（18 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`account:email`、`role:read`、`role:write`、`role:select`、`role:delete`、`announcement:read`、`announcement:write`、`mail:read`、`mail:write`、`admin:read`、`admin:manage`、`audit:read`、`system:read`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
+- **权限点**（20 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`account:email`、`role:read`、`role:write`、`role:select`、`role:delete`、`announcement:read`、`announcement:write`、`mail:read`、`mail:write`、`admin:read`、`admin:manage`、`audit:read`、`system:read`、`gameConfig:read`、`gameConfig:write`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
 - `account:password`（重置玩家口令）单独成点、不并进 `account:status`：这是能**接管他人账号**的操作，敏感度高于封禁，值得让「谁能做」单独可调
 - `announcement:read` / `announcement:write` 为什么拆开：公告是**面向全服的公开内容**，看看不等于能改，所以观察员给了 `read`；而发布 / 编辑会直接推给全服玩家，属于对外发声，单列 `write`
 - **`mail:read` 为什么不给观察员**（与 `announcement:read` 相反）：投递记录里有玩家的**邮箱地址**，是个人信息而不是公开内容。观察员的定位是看业务数据，不该顺手拿到一份可导出的玩家联系方式 —— 这条界线看起来像「只是又一个读权限」，很容易顺手加错，所以把理由写在这里

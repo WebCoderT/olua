@@ -222,13 +222,13 @@ Two layers, **both in guards; business code must not write role checks**:
    and **re-checks the database on every request** — ban / deletion / password change take effect instantly, no waiting for token expiry
 2. **Permission point** (`PermissionGuard`, registered after `AuthGuard`): uses `request.user.role` directly, no further DB lookup
 
-The only source of permission points is `src/common/constants/permission.ts` (18 permission points / 3 roles):
+The only source of permission points is `src/common/constants/permission.ts` (20 permission points / 3 roles):
 
 | Role | Permissions |
 | --- | --- |
 | Super admin `super_admin` | All (including "manage admins" and "reset admin password") |
 | Admin `admin` | All except "manage admins" — admins cannot elevate each other |
-| Read-only viewer `viewer` | Read only: overview / account list & detail / character list & detail / **announcement list** (**cannot see the operation log, system info, or mail delivery records**) |
+| Read-only viewer `viewer` | Read only: overview / account list & detail / role list & detail / **announcement list** / **title & war soul config lists** (**cannot see the operation log, system info, or mail delivery records**) |
 
 > Why the viewer gets announcements **read-only**: they are public content broadcast to the whole server, reading ≠ editing; "publish / edit" is the separate
 > `announcement:write` (speaking outward, pushed straight to players), which the viewer does not get.
