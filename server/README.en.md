@@ -134,13 +134,14 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           22 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop
+│   │   └── repositories/           23 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
 │   │   ├── admin/                  admin console: auth / accounts / characters / admins / passwords / announcements
 │   │   ├── announcement/           announcements: client pulls "active" (public) + admin CRUD
 │   │   ├── mail/                   mail: templates + delivery queue + background scheduler (sending only enqueues)
+│   │   ├── zone/                   zones (#295 phase two): live-zone list (public) / create zone / merge zones
 │   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
@@ -165,6 +166,7 @@ server/
 │   ├── e2e-combat.cjs              32 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
 │   ├── e2e-world.cjs               24 assertions (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
 │   ├── e2e-dual.cjs                14 assertions (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
+│   ├── e2e-zone.cjs                32 assertions (zones: registration zone choice / merge boundaries / per-zone world isolation / merge effect and epoch invalidation)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -173,7 +175,7 @@ server/
 
 ## Data model
 
-24 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+26 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -183,7 +185,9 @@ server/
 | `audit_logs` | operation log | action = interface `operationId`; `detail` holds the request body (masked); `success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | announcements | title / body / `level` (`important` shown first) / `enabled`; `starts_at` / `ends_at` form the effective window, **"active" is judged by exactly these three columns** (built `idx_announcements_window`) |
 | `mail_queue` | mail delivery queue | **rendered** title and body (frozen at enqueue time) / `status` / `attempts` / `next_retry_at` / `last_error`; the send interface only enqueues, delivery is done by the background scheduler |
-| `world_monsters` | world-authority monster instances | **the server owns monster state**: instanceId (`m<mapId>_<n>` issuance, stable across restarts) / mapId / monsterKey / spawn point x,y / hp / alive / killed_at / respawn_at; tick checks respawn + dirty batch flush |
+| `world_monsters` | world-authority monster instances | **the server owns monster state**: instanceId (`m<mapId>_z<zone>_<n>` issuance, zone-segmented, stable across restarts) / zone_id / mapId / monsterKey / spawn point x,y / hp / alive / killed_at / respawn_at; tick checks respawn + dirty batch flush |
+| `zones` | game zones (#295 phase two) | one row = one game zone; accounts pick their zone at registration (`accounts.zone_id` references it); merging stamps the destination into `merged_into` (rows are kept, history is queryable); zone one is always seeded (id=1, the default zone) |
+| `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
 | `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level |
 | `growth_segments` | growth-curve segments (#256) | four piecewise-linear curves x segments; edits must keep the curve covering 1..roleMaxLevel contiguously (cross-row validation) |
@@ -211,7 +215,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 22 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 23 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -237,13 +241,13 @@ Two layers, **both in guards; business code must not write role checks**:
    and **re-checks the database on every request** — ban / deletion / password change take effect instantly, no waiting for token expiry
 2. **Permission point** (`PermissionGuard`, registered after `AuthGuard`): uses `request.user.role` directly, no further DB lookup
 
-The only source of permission points is `src/common/constants/permission.ts` (20 permission points / 3 roles):
+The only source of permission points is `src/common/constants/permission.ts` (22 permission points / 3 roles):
 
 | Role | Permissions |
 | --- | --- |
 | Super admin `super_admin` | All (including "manage admins" and "reset admin password") |
 | Admin `admin` | All except "manage admins" — admins cannot elevate each other |
-| Read-only viewer `viewer` | Read only: overview / account list & detail / role list & detail / **announcement list** / **title & war soul config lists** (**cannot see the operation log, system info, or mail delivery records**) |
+| Read-only viewer `viewer` | Read only: overview / account list & detail / role list & detail / **announcement list** / **title & war soul config lists** / **zone list** (**cannot see the operation log, system info, or mail delivery records**) |
 
 > Why the viewer gets announcements **read-only**: they are public content broadcast to the whole server, reading ≠ editing; "publish / edit" is the separate
 > `announcement:write` (speaking outward, pushed straight to players), which the viewer does not get.
@@ -260,13 +264,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **95 interfaces / 81 paths / 149 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **99 interfaces / 84 paths / 153 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
-| Public | 6 | No token (health check, player register/login, admin login/register, **pull active announcements**) |
+| Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
 | Client | 13 | `player` token, may only operate its own account's data |
-| Admin | 76 | `admin` token + each interface's own permission point |
+| Admin | 79 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;

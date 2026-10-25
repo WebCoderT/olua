@@ -31,6 +31,9 @@ export class AccountDto {
   @ApiProperty({ description: "当前选中的角色 id（未选角色时为 null）", type: "string", nullable: true, example: null })
   onlineRoleId: string | null;
 
+  @ApiProperty({ description: "归属区 id（注册时选定；只随合并区变化）", example: 1 })
+  zoneId: number;
+
   @ApiProperty({ description: "角色数量（列表接口返回）", required: false, example: 2 })
   roleCount?: number;
 
@@ -69,6 +72,7 @@ export class AccountDto {
     dto.bannedBy = row.banned_by;
     dto.bannedAt = row.banned_at;
     dto.onlineRoleId = row.online_role_id;
+    dto.zoneId = row.zone_id ?? 1;
     dto.createdAt = row.created_at;
     dto.updatedAt = row.updated_at;
     dto.lastLoginAt = row.last_login_at;

@@ -47,8 +47,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（24 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop（22 个仓储）
+    database.service.ts           建表（26 张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop（23 个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -128,7 +128,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 
 - 管理员账号在**独立 `admins` 表**（注册需 `ADMIN_REGISTER_CODE`；**第一个注册者自动是超管**）；
 - 三级角色：`super_admin`（全给）/ `admin`（除 `admin:manage`）/ `viewer`（`stats:read` + `account:read` + `role:read`）；
-- 服务端一共 **20 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）、`system:read`（看系统信息）与 `gameConfig:read` / `gameConfig:write`（养成配置，#213）都是逐个后加的 —— **观察员只有 5 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read` / `gameConfig:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
+- 服务端一共 **22 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）、`system:read`（看系统信息）与 `gameConfig:read` / `gameConfig:write`（养成配置，#213）都是逐个后加的 —— **观察员只有 6 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read` / `gameConfig:read` / `zone:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
 - 无权限 → `403` + `30006`（message 写出缺哪个权限）；保护性拒绝 → `30007`（**最后一个启用中的超管**不能降级 / 停用 / 删除）；
 - `admins.role` 列由 `ensureColumn` 补 + `ensureSuperAdmin()` 兜底存量库；
 - **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。
@@ -165,7 +165,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
-- **24 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars`。删账号**级联删其角色**。
+- **26 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。

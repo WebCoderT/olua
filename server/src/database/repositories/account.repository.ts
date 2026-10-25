@@ -49,8 +49,8 @@ export class AccountRepository {
 
   insert(row: AccountRow): void {
     this.db.run(
-      `INSERT INTO accounts (id, username, password, status, online_role_id, token_version, created_at, updated_at, last_login_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO accounts (id, username, password, status, online_role_id, token_version, zone_id, created_at, updated_at, last_login_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.username,
@@ -58,6 +58,7 @@ export class AccountRepository {
         row.status,
         row.online_role_id,
         row.token_version,
+        row.zone_id ?? 1,
         row.created_at,
         row.updated_at,
         row.last_login_at,
@@ -124,6 +125,14 @@ export class AccountRepository {
     if (ids.length === 0) return [];
     const placeholders = ids.map(() => "?").join(", ");
     return this.db.all<AccountRow>(`SELECT * FROM accounts WHERE id IN (${placeholders})`, ids);
+  }
+
+  /**
+   * 整区搬家（#295 阶段二合并区）：把 from 区的全部账号改挂 to 区，一次 UPDATE 完成。
+   * 只在合并区的事务里调用 —— 单独调用没有业务意义（玩家自己换不了区）。
+   */
+  moveAllAccounts(fromZoneId: number, toZoneId: number, now: number): void {
+    this.db.run("UPDATE accounts SET zone_id = ?, updated_at = ? WHERE zone_id = ?", [toZoneId, now, fromZoneId]);
   }
 
   /** 分页检索（keyword 匹配用户名；排序见 ACCOUNT_SORT 白名单） */

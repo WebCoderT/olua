@@ -286,7 +286,7 @@ function roleData(id, name, level, skills) {
     const wA1 = worldA1.monsters.find((m) => m.monsterKey === "1");
     const wA2 = worldA1.monsters.find((m) => m.monsterKey === "3");
     check(!!wA1 && !!wA2, "两只实例分别来自两个刷怪区（monsterKey 对上）", JSON.stringify(worldA1 && worldA1.monsters.map((m) => m.monsterKey)));
-    check(/^m1_\d+$/.test(wA1.instanceId) && /^m1_\d+$/.test(wA2.instanceId) && wA1.instanceId !== wA2.instanceId, "实例 id 由服务端发牌且互不相同", `${wA1.instanceId} / ${wA2.instanceId}`);
+    check(/^m1_z1_\d+$/.test(wA1.instanceId) && /^m1_z1_\d+$/.test(wA2.instanceId) && wA1.instanceId !== wA2.instanceId, "实例 id 由服务端发牌且互不相同（一区区段 z1）", `${wA1.instanceId} / ${wA2.instanceId}`);
     check(wA1.hp === 65 && wA1.maxHp === 65 && wA1.alive === true, "实例按服务端表的满血起算（怪物 1 maxHp 65）", `hp=${wA1.hp}`);
     const inRect = (m, cx, cy, size) => Math.abs(m.x - cx) <= size / 2 && Math.abs(m.y - cy) <= size / 2;
     check(inRect(wA1, 100, 200, 400) && inRect(wA2, 300, 400, 400), "实例落点各自在刷怪区矩形内（服务端随机取点）", `${wA1.x},${wA1.y} / ${wA2.x},${wA2.y}`);

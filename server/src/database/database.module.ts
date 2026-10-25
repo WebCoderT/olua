@@ -22,6 +22,7 @@ import { MonsterDropRepository } from "./repositories/monster-drop.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository";
+import { ZoneRepository } from "./repositories/zone.repository";
 
 /**
  * 数据层（全局模块）
@@ -44,6 +45,7 @@ import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository
     SystemRepository,
     WorldMonsterRepository,
     MapSpawnAreaRepository,
+    ZoneRepository,
     TitleRepository,
     RankRepository,
     EquipmentRepository,
@@ -69,6 +71,7 @@ import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository
     SystemRepository,
     WorldMonsterRepository,
     MapSpawnAreaRepository,
+    ZoneRepository,
     TitleRepository,
     RankRepository,
     EquipmentRepository,

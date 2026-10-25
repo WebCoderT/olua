@@ -23,6 +23,10 @@ export type Register = {
    * 密码：6~32 位
    */
   password: string;
+  /**
+   * 归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）
+   */
+  zoneId?: number;
 };
 
 export type Login = {
@@ -293,6 +297,24 @@ export type ResetAdminPassword = {
    * 新密码（6~32 位）
    */
   password: string;
+};
+
+export type CreateZone = {
+  /**
+   * 区服名（1~20 字，唯一）
+   */
+  name: string;
+};
+
+export type MergeZone = {
+  /**
+   * 被并入的区（from，合并后打上已合并标记）
+   */
+  fromZoneId: number;
+  /**
+   * 并入的目标区（to，必须还是活区）
+   */
+  toZoneId: number;
 };
 
 export type CreateAnnouncement = {
@@ -853,6 +875,10 @@ export type Account = {
    */
   onlineRoleId: string | null;
   /**
+   * 归属区 id（注册时选定；只随合并区变化）
+   */
+  zoneId: number;
+  /**
    * 角色数量（列表接口返回）
    */
   roleCount?: number;
@@ -1161,6 +1187,44 @@ export type RealtimeTicket = {
    * 有效期（毫秒）；过期后必须重新取票
    */
   expiresIn: number;
+};
+
+export type Zone = {
+  /**
+   * 区服 id
+   */
+  id: number;
+  /**
+   * 区服名
+   */
+  name: string;
+};
+
+export type AdminZone = {
+  /**
+   * 区服 id
+   */
+  id: number;
+  /**
+   * 区服名
+   */
+  name: string;
+  /**
+   * 已并入的区服 id（未合并为 null）
+   */
+  mergedInto: number | null;
+  /**
+   * 当前归属本区的账号数
+   */
+  accountCount: number;
+  /**
+   * 开区时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
 };
 
 export type AdminInfo = {

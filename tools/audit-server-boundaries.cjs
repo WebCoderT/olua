@@ -61,6 +61,8 @@ const ALLOWED_EDGES = [
   { from: "modules/roles", to: "modules/combat/role-attribute-comparison.ts", why: "属性比对纯函数" },
   // 商城购买收权（#304）：扣费与入包在存档域，成交价读 game-config 的定价服务（特殊价/统一价同源）
   { from: "modules/roles", to: "modules/game-config/mall-pricing.service.ts", why: "商城购买读成交价" },
+  // 区服（#295）：管理端开区/合并区直接复用 ZoneService 的一份实现（admin 控制器只做鉴权与审计）
+  { from: "modules/admin", to: "modules/zone/", why: "区服管理复用 ZoneService 的开区/合并实现" },
   // realtime（gateway+结算）依赖 world 与存档的公开服务，依赖 combat 纯函数
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
@@ -76,6 +78,8 @@ const REPO_EDGES = {
     "modules/mail",
     // 踢下线巡检（#175）：实时进程轮询 online_role_id 断开被踢连接 —— 只读一行，不写账号
     "modules/realtime",
+    // 合并区（#295）：搬账号在 ZoneService 的合并事务里（SQL 收在仓储，业务不摸 DatabaseService）
+    "modules/zone",
   ],
   "database/repositories/admin.repository.ts": ["modules/admin"],
   "database/repositories/role.repository.ts": ["modules/roles", "modules/admin"],
@@ -83,7 +87,13 @@ const REPO_EDGES = {
   "database/repositories/announcement.repository.ts": ["modules/announcement"],
   "database/repositories/mail.repository.ts": ["modules/mail"],
   "database/repositories/system.repository.ts": ["modules/system"],
-  "database/repositories/world-monster.repository.ts": ["modules/world"],
+  "database/repositories/world-monster.repository.ts": [
+    "modules/world",
+    // 合并区（#295）：重排 from 区世界发牌（instanceId 换 to 区区段）在 ZoneService 事务里
+    "modules/zone",
+  ],
+  // 区服（#295）：注册选区校验活区（auth）、世界代际巡检（world）、开区/合并（zone）
+  "database/repositories/zone.repository.ts": ["modules/zone", "modules/auth", "modules/world"],
   // 刷怪区（#295）：播种来源表，与世界实例同属 world 模块
   "database/repositories/map-spawn-area.repository.ts": ["modules/world"],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走

@@ -76,6 +76,7 @@ import {
 } from "../modules/game-config/dto/growth.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
+import { ZoneDto, AdminZoneDto, CreateZoneDto, MergeZoneDto } from "../modules/zone/dto/zone.dto";
 import {
   MailJobDto,
   MailJobPageDto,
@@ -111,6 +112,11 @@ export const SWAGGER_MODELS = [
   MallPurchaseResultDto,
   DrugUseResultDto,
   RealtimeTicketDto,
+  // 区服（#295 阶段二）
+  ZoneDto,
+  AdminZoneDto,
+  CreateZoneDto,
+  MergeZoneDto,
   // 管理端
   AdminRegisterDto,
   AdminLoginDto,

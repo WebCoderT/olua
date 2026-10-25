@@ -136,4 +136,13 @@ export const ApiRoutes = {
      */
     online: "/roles/online",
   },
+  /** zone 模块（1 个接口） */
+  zone: {
+    /**
+     * 区服列表（活区）（GET /zones）
+     *
+     * 返回全部未合并的区服，按开区顺序排列。注册入参 `zoneId` 从这里选。
+     */
+    list: "/zones",
+  },
 } as const;

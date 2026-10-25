@@ -133,13 +133,14 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop 22 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop 23 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
 │   │   ├── admin/                  管理端：认证 / 账号 / 角色 / 管理员 / 口令 / 公告
 │   │   ├── announcement/           公告：客户端拉「生效中」（公共）+ 管理端 CRUD
 │   │   ├── mail/                   邮件：模板 + 投递队列 + 后台调度（发信只入队）
+│   │   ├── zone/                   区服（#295 阶段二）：活区列表（公共）/ 开区 / 合并区
 │   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
@@ -164,6 +165,7 @@ server/
 │   ├── e2e-combat.cjs              32 条（伤害结算上移：服务端算伤 / 幂等重发 / 目标查世界实例 / 清账不复活）
 │   ├── e2e-world.cjs               24 条（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-dual.cjs                14 条（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
+│   ├── e2e-zone.cjs                32 条（区服：注册选区 / 合并区边界 / 世界按区隔离 / 合并生效与代际失效）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -172,7 +174,7 @@ server/
 
 ## 数据模型
 
-24 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+26 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -182,7 +184,9 @@ server/
 | `audit_logs` | 操作日志 | 动作 = 接口 `operationId`；`detail` 落请求体（已打码）；`success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | 公告 | 标题 / 正文 / `level`（`important` 优先展示）/ `enabled`；`starts_at` / `ends_at` 组成生效时间窗，**「生效中」的判据就是这三列**（建了 `idx_announcements_window`） |
 | `mail_queue` | 邮件投递队列 | **渲染后的**标题与正文（冻在入队那一刻）/ `status` / `attempts` / `next_retry_at` / `last_error`；发信接口只入队，投递由后台调度器做 |
-| `world_monsters` | 世界权威的怪物实例 | **服务端持有怪物状态**：instanceId（`m<mapId>_<n>` 发牌、跨重启稳定）/ mapId / monsterKey / 出生点 x,y / hp / alive / killed_at / respawn_at；tick 检查重生 + dirty 批量落盘 |
+| `world_monsters` | 世界权威的怪物实例 | **服务端持有怪物状态**：instanceId（`m<mapId>_z<zone>_<n>` 发牌、带区段、跨重启稳定）/ zone_id / mapId / monsterKey / 出生点 x,y / hp / alive / killed_at / respawn_at；tick 检查重生 + dirty 批量落盘 |
+| `zones` | 区服（#295 阶段二） | 一行 = 一个游戏区；注册时选定归属区（`accounts.zone_id` 引用）；合并区在 `merged_into` 打去向标记（不删行，历史可查）；一区 seed 恒在（id=1，默认区） |
+| `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一） | **从客户端 Tiled 导入一次后归服务端**：`tools/import-spawn-areas.cjs` 生成 SPAWN_AREAS 快照（提交进仓库），启动时空表自动 seed；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId |
 | `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验 |
 | `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验） |
@@ -210,7 +214,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（22 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（23 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -236,18 +240,18 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（20 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`（22 个权限点 / 3 种角色）：
 
 | 角色 | 权限 |
 | --- | --- |
 | 超级管理员 `super_admin` | 全部（含「管理管理员」与「重置管理员密码」） |
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
-| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表** / **养成配置列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
+| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表** / **养成配置列表** / **区服列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
 
 > 公告为什么给观察员留了**只读**：它是面向全服的公开内容，读了不等于能改；而「发布 / 编辑」是单列的
 > `announcement:write`（对外发声，会直接推给玩家），观察员拿不到。
 >
-> 邮件**反过来**不给观察员（`mail:read` 不在它的四个读权限里）：投递记录里有玩家的**邮箱地址**，
+> 邮件**反过来**不给观察员（`mail:read` 不在它的六个读权限里）：投递记录里有玩家的**邮箱地址**，
 > 属于个人信息 —— 观察员的定位是看业务数据，不该顺手拿到一份可导出的玩家联系方式。
 > 这条界线看起来像「只是又一个读权限」，很容易顺手加错。
 
@@ -259,13 +263,13 @@ server/
 
 ## 接口与契约
 
-当前 **95 个接口 / 81 条路径 / 149 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **99 个接口 / 84 条路径 / 153 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
-| 公共接口 | 6 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、**拉取生效中的公告**） |
+| 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
 | 客户端 | 13 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 76 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 79 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

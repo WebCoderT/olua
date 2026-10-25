@@ -27,7 +27,7 @@
 
 - **启动**：`cd server && npm install && cp .env.example .env && npm run dev`（`npm run start` 跑已构建产物）。默认监听 `3100`、路由前缀 `api`，客户端默认连的就是 `http://localhost:3100/api`
 - **接口文档**：<http://localhost:3100/api-docs>（Swagger UI；JSON 在 `/api-docs-json`）。文档**不带路由前缀**，因为它不是业务接口。所有接口都是「统一响应包裹 + 统一错误出口」，所以文档里每个接口的响应都是 `code / message / data / timestamp` 五件套，`data` 才是业务数据
-- **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / titles / souls / level_exps / growth_segments / growth_scalars / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops` 24 张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
+- **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / level_exps / growth_segments / growth_scalars / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops` 26 张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
 - **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**248 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护** / **公告的公共拉取与生效时间窗**）。角色相关改动另跑 `npm run test:e2e:roles`（110 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）；**邮件通道**相关改动另跑 `npm run test:e2e:mail`（120 条，用可注入的假发信器，不需要 SMTP 服务器）；**玩家邮箱字段**相关改动另跑 `npm run test:e2e:account-email`（28 条）；**实时通道**相关改动另跑 `npm run test:e2e:realtime`（50 条，真实 WebSocket 握手，不需要浏览器）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（87 条）。一条命令全验：`npm run verify`
 - **新增接口的规矩**：只改服务端（控制器 + DTO + `operationId`），然后 `npm run gen:api` 重新生成两端的接口文件 —— 见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)。路径、方法名、类型都不允许在两端手写
 
@@ -65,7 +65,7 @@ env -u NODE_OPTIONS npm run verify
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
 | 只读观察员 `viewer` | 只能看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表** / **养成配置列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
 
-- **权限点**（20 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`account:email`、`role:read`、`role:write`、`role:select`、`role:delete`、`announcement:read`、`announcement:write`、`mail:read`、`mail:write`、`admin:read`、`admin:manage`、`audit:read`、`system:read`、`gameConfig:read`、`gameConfig:write`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
+- **权限点**（22 个）：`stats:read`、`account:read`、`account:status`、`account:password`、`account:delete`、`account:email`、`role:read`、`role:write`、`role:select`、`role:delete`、`announcement:read`、`announcement:write`、`mail:read`、`mail:write`、`admin:read`、`admin:manage`、`audit:read`、`system:read`、`gameConfig:read`、`gameConfig:write`、`zone:read`、`zone:write`。**加权限点只改 `ROLE_PERMISSIONS` 那张表**，不要在业务代码里写 `if (role === "admin")`
 - `account:password`（重置玩家口令）单独成点、不并进 `account:status`：这是能**接管他人账号**的操作，敏感度高于封禁，值得让「谁能做」单独可调
 - `announcement:read` / `announcement:write` 为什么拆开：公告是**面向全服的公开内容**，看看不等于能改，所以观察员给了 `read`；而发布 / 编辑会直接推给全服玩家，属于对外发声，单列 `write`
 - **`mail:read` 为什么不给观察员**（与 `announcement:read` 相反）：投递记录里有玩家的**邮箱地址**，是个人信息而不是公开内容。观察员的定位是看业务数据，不该顺手拿到一份可导出的玩家联系方式 —— 这条界线看起来像「只是又一个读权限」，很容易顺手加错，所以把理由写在这里

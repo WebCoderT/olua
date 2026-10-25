@@ -196,6 +196,16 @@ export const BizCode = {
   DROP_TABLE_NOT_FOUND: 50023,
   /** 怪物掉落配置不存在（key 清单与怪物一一对应，不可增删行） */
   MONSTER_DROP_NOT_FOUND: 50024,
+
+  //#region 区服（多开区 / 合并区）
+  /** 区服不存在（注册选区传了没有的 id；合并的 from / to 传错） */
+  ZONE_NOT_FOUND: 50025,
+  /** 区服已并入其他区（对注册来说是「这个区进不去了」；对合并来说是 from 已经合过） */
+  ZONE_MERGED: 50026,
+  /** 区服名已存在 */
+  ZONE_NAME_EXISTS: 50027,
+  /** 不能把区合并进它自己 */
+  ZONE_MERGE_SAME: 50028,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

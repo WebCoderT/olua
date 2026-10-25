@@ -105,6 +105,21 @@ export const Permission = {
    * 与 `role:write`（改一个角色）不同量级，单列一个权限点。
    */
   GAME_CONFIG_WRITE: "gameConfig:write",
+
+  /**
+   * 查看区服列表
+   *
+   * 与公告同级给观察员：区服清单是业务数据（玩家注册时选的就是它），
+   * 读了不等于能改 —— 开区 / 合并走 `zone:write` 单独管控。
+   */
+  ZONE_READ: "zone:read",
+  /**
+   * 开新区 / 合并区
+   *
+   * 合并区会**整体搬迁玩家数据**（账号换区、世界实例改牌），执行后玩家无感但数据
+   * 面目全非，误操作的代价高 —— 与 `account:delete` 同量级，单列一个权限点。
+   */
+  ZONE_WRITE: "zone:write",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -141,6 +156,7 @@ export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
     Permission.ROLE_READ,
     Permission.ANNOUNCEMENT_READ,
     Permission.GAME_CONFIG_READ,
+    Permission.ZONE_READ,
   ],
 };
 
@@ -173,6 +189,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.SYSTEM_READ]: "查看系统信息",
   [Permission.GAME_CONFIG_READ]: "查看养成配置",
   [Permission.GAME_CONFIG_WRITE]: "修改养成配置",
+  [Permission.ZONE_READ]: "查看区服",
+  [Permission.ZONE_WRITE]: "开区 / 合并区",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

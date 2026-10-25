@@ -9,6 +9,10 @@ import { AnnouncementLevel } from "../common/constants/announcement";
 /** 可绑定的参数值（node:sqlite 支持的类型） */
 export type SqlParam = string | number | bigint | null | Uint8Array;
 
+/** world_monsters.instanceId 的两种格式（#295 阶段二起只有新格式；旧格式只在存量库里出现） */
+const WORLD_INSTANCE_NEW_FORMAT = /^m(.+)_z(\d+)_(\d+)$/;
+const WORLD_INSTANCE_OLD_FORMAT = /^m(.+)_(\d+)$/;
+
 /**
  * SQLite 连接（Node 22 内置 `node:sqlite`，**零原生依赖**）
  *
@@ -160,11 +164,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_mail_queue_created ON mail_queue(created_at DESC);
 
       -- 世界权威（#35）：服务端持有的怪物实例状态。
-      -- 一行 = 一只场上怪：身份 / 所属地图 / 出生点 / 血量 / 存活与重生时刻。
+      -- 一行 = 一只场上怪：身份 / 所属区 + 地图 / 出生点 / 血量 / 存活与重生时刻。
+      -- instanceId 带区段（#295 阶段二：m<mapId>_z<zone>_<n>），同一张图各区各发各的牌。
       -- 服务端是唯一写者（客户端只通过实时通道间接改它），所以不需要乐观锁列。
       CREATE TABLE IF NOT EXISTS world_monsters (
         instance_id TEXT PRIMARY KEY,
         map_id      TEXT NOT NULL,
+        zone_id     INTEGER NOT NULL DEFAULT 1,
         monster_key TEXT NOT NULL,
         x           REAL NOT NULL,
         y           REAL NOT NULL,
@@ -176,6 +182,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at  INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_world_monsters_map ON world_monsters(map_id);
+      CREATE INDEX IF NOT EXISTS idx_world_monsters_zone ON world_monsters(zone_id, map_id);
 
       -- 刷怪区（#295 阶段一）：一行 = Tiled monster 对象组的一个矩形区域，
       -- 从 TMX 导入一次后归服务端（tools/import-spawn-areas.cjs 生成快照，启动时空表自动 seed）。
@@ -196,6 +203,30 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_map_spawn_areas_natural ON map_spawn_areas(map_id, name);
       CREATE INDEX IF NOT EXISTS idx_map_spawn_areas_map ON map_spawn_areas(map_id);
+
+      -- 区服（#295 阶段二）：一行 = 一个游戏区。账号注册时选定归属区，
+      -- 各区的世界（怪物实例）相互独立；合并区后 from 区在此打 merged_into 标记
+      -- （不删行：区号是历史事实，管理端列表还要展示「已并入 X 区」）。
+      -- 名字唯一：区服列表是给玩家选的，重名没有意义。
+      CREATE TABLE IF NOT EXISTS zones (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT    NOT NULL UNIQUE,
+        merged_into INTEGER,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+      );
+      -- 一区恒在（id=1，账号默认区）：seed 在 migrate 里做，CREATE 单独兜底
+      INSERT OR IGNORE INTO zones (id, name, merged_into, created_at, updated_at) VALUES (1, '一区', NULL, 0, 0);
+
+      -- 世界代际（#295 阶段二）：单行表（id 恒为 1），epoch 每次合并区 +1。
+      -- 世界服务的内存态跨「合并区」会变陈旧（instanceId 被改写、账号换了区），
+      -- 而 API 进程与实时进程各持一份内存 —— 跨进程通知靠轮询这张表：
+      -- tick 发现 epoch 变了就把整份内存世界作废（不落盘），下次 join 从库重载。
+      CREATE TABLE IF NOT EXISTS world_meta (
+        id    INTEGER PRIMARY KEY CHECK (id = 1),
+        epoch INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT OR IGNORE INTO world_meta (id, epoch) VALUES (1, 0);
 
       -- 养成配置（#213）：称号 / 战魂的等级序列**固定**（level 是主键，行只能来自 seed，
       -- 后台只改内容），所以没有 created_at，只有 updated_at。
@@ -478,6 +509,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(LOWER(email)) WHERE email IS NOT NULL;",
     );
+    // 区服（#295 阶段二）：存量账号全部归入一区（zone_id=1 与 zones seed 对齐，注册入参可指定）
+    this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    this.migrateWorldMonsterInstanceIds();
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(
@@ -507,6 +542,34 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.logger.log(`存量库没有超级管理员，已把最早创建的管理员提升为超级管理员（${oldest.id}）`);
   }
 
+  /**
+   * world_monsters.instanceId 引入区段（#295 阶段二的一次性改写，幂等）
+   *
+   * 旧格式 `m<mapId>_<n>` → 新格式 `m<mapId>_z<zone>_<n>`。识别口径**先新后旧**：
+   * 新格式（`m1_z1_3`）也能被「旧格式」的正则匹配上（mapId 段读成 `1_z1`），
+   * 所以先按新格式排除，剩下的才当旧格式改写 —— 重启多少次都只改一次。
+   */
+  private migrateWorldMonsterInstanceIds(): void {
+    const rows = this.all<{ instance_id: string; zone_id: number }>("SELECT instance_id, zone_id FROM world_monsters");
+    let migrated = 0;
+    for (const row of rows) {
+      if (WORLD_INSTANCE_NEW_FORMAT.test(row.instance_id)) continue;
+      const match = WORLD_INSTANCE_OLD_FORMAT.exec(row.instance_id);
+      if (!match) {
+        this.logger.warn(`world_monsters 存在无法识别的 instanceId（${row.instance_id}），跳过区段改写`);
+        continue;
+      }
+      const next = `m${match[1]}_z${row.zone_id}_${match[2]}`;
+      if (this.count("SELECT COUNT(1) AS total FROM world_monsters WHERE instance_id = ?", [next]) > 0) {
+        this.logger.warn(`world_monsters 改写目标 id 已存在（${row.instance_id} → ${next}），跳过（理论不可达，报出来便于排查）`);
+        continue;
+      }
+      this.run("UPDATE world_monsters SET instance_id = ? WHERE instance_id = ?", [next, row.instance_id]);
+      migrated += 1;
+    }
+    if (migrated > 0) this.logger.log(`world_monsters 存量 instanceId 已补区段（改写 ${migrated} 行）`);
+  }
+
   /** 给已有表补一列（列已存在则不动；SQLite 的 ADD COLUMN 带 NOT NULL 必须有默认值） */
   private ensureColumn(table: string, column: string, definition: string): void {
     const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[];
@@ -524,6 +587,12 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   execute(sql: string, params: SqlParam[] = []): { changes: number } {
     const result = this.db.prepare(sql).run(...params);
     return { changes: Number(result.changes) };
+  }
+
+  /** 执行插入语句并返回自增主键（zones 这类自增 id 表用；TEXT 主键的表用不到它） */
+  insertReturningId(sql: string, params: SqlParam[] = []): number {
+    const result = this.db.prepare(sql).run(...params);
+    return Number(result.lastInsertRowid);
   }
 
   /** 取一行（无结果返回 undefined） */

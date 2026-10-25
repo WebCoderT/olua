@@ -44,6 +44,8 @@ export const loginLayout = {
     textColor: new Color("#f4fc00"),
     fontSize: 24,
   },
+  /** 区服选择（多开区 #295：文案节点，点按循环切换活区；放在密码框与登录按钮之间） */
+  zoneSelector: { position: new Vec2(0, -190), size: new Size(600, 40), color: new Color("#f4fc00"), fontSize: 22 },
   /** 顶部 logo */
   logo: { name: "game_logo", image: uiImages.gameLogo, position: new Vec2(0, 200), size: new Size(600, 300) },
 };

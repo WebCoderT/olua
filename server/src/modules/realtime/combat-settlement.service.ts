@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { SKILLS } from "../../shared/game-data.generated";
+import { AccountRepository } from "../../database/repositories/account.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
@@ -51,6 +52,7 @@ export class CombatSettlementService {
     private readonly roles: RolesService,
     private readonly world: WorldService,
     private readonly monsterConfigs: MonsterRepository,
+    private readonly accounts: AccountRepository,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -92,6 +94,8 @@ export class CombatSettlementService {
 
     // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，
     // 伪造的 / 已被卸载图的一律 unknown_target），且 key 与实例登记的一致。
+    // 区归属也要对上（#295 阶段二）：instanceId 带区段但毕竟可猜测，
+    // 拿别的区的实例 id 来打必须拒绝 —— 目标区和攻击者账号当前区是同一区才放行。
     // 直读 monsters 表（#258）：管理端改了数值即时生效，不经快照不经缓存
     const stats = this.monsterConfigs.findByKey(cast.monsterKey);
     if (!stats) return fail("unknown_target", `目标怪物不存在：${cast.monsterKey}`);
@@ -99,6 +103,10 @@ export class CombatSettlementService {
     if (!target) return fail("unknown_target", `目标实例不存在：${cast.targetId}`);
     if (target.monsterKey !== cast.monsterKey) {
       return fail("unknown_target", `目标 ${cast.targetId} 是怪物 ${target.monsterKey}，与本次的 ${cast.monsterKey} 不符`);
+    }
+    const attackerZone = this.accounts.findById(accountId)?.zone_id ?? 1;
+    if (target.zoneId !== attackerZone) {
+      return fail("unknown_target", `目标 ${cast.targetId} 不在你所在的世界里`);
     }
     if (!target.alive) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
 
