@@ -37,7 +37,7 @@ const roleSpriteFrameLength: AnimationLength = {
  * 播放这些动作时引擎侧没有对应片段，MonsterAI.playAction 会回退成待机；
  * 个别包缺段（如怪物 27 没有走路段）时该动作同样自动回退
  */
-interface MonsterActionSpec {
+export interface MonsterActionSpec {
   action: ACTION;
   /** 该动作段的起始帧号 */
   start: number;
@@ -47,7 +47,7 @@ interface MonsterActionSpec {
   spacing: number;
 }
 
-const monsterActionSpecs: MonsterActionSpec[] = [
+export const monsterActionSpecs: MonsterActionSpec[] = [
   { action: ACTION.STAND, start: 0, frames: 4, spacing: 10 },
   { action: ACTION.WALK, start: 80, frames: 6, spacing: 10 },
   { action: ACTION.RUN, start: 160, frames: 6, spacing: 10 },
@@ -118,6 +118,37 @@ animationFrameBases.set("role/2", 600);
 export function getAnimationFrameBase(dirSrc: string): number {
   return animationFrameBases.get(dirSrc) ?? 0;
 }
+
+/**
+ * 外观图集根目录：按动作分 plist 的图集树（<树>/atlas/out/<id>/<动作>/<动作>.plist），
+ * 与散帧目录 <树>/out/<id> 并存——打包器按「暂存区相对路径镜像输出」落盘，
+ * 暂存区结构见 client/tools/stage-action-frames.py
+ */
+
+/** 取散帧外观目录对应的按动作图集目录（monster/out/1 → monster/atlas/out/1，clothes/out/001 → clothes/atlas/out/001）。
+ * 只映射三类外观树（monster / clothes / weapons）；role/1、role/2 这类非 out 树返回空串（不试图集，走散帧 + 帧号基准） */
+export function getAtlasSrc(outSrc: string): string {
+  const matched = /^(\w+)\/out\/(.+)$/.exec(outSrc);
+  return matched ? `${matched[1]}/atlas/out/${matched[2]}` : "";
+}
+
+/** 图集按动作切片的动作规格（动作名 + 每方向帧数；打包与加载共用同一张表） */
+export interface ActionAtlasSpec {
+  action: ACTION;
+  /** 每方向帧数 */
+  frames: number;
+}
+
+/** 怪物：帧号表切出动作（帧号 = start + 方向下标 × spacing + 帧内下标，帧号表在 monsterActionSpecs） */
+export const monsterActionAtlas: ActionAtlasSpec[] = monsterActionSpecs.map((spec) => ({ action: spec.action, frames: spec.frames }));
+
+/**
+ * 角色（衣服/武器外观）：顺序布局的动作段（fillAnimationMap：动作段首尾相接，段长 = 8 方向 × 每方向帧数），
+ * 与 client/tools/stage-action-frames.py 的 ROLE_ACTION_SPECS 同源（测试盯住两侧一致）
+ */
+export const roleActionAtlas: ActionAtlasSpec[] = roleActions
+  .map((action) => ({ action, frames: roleSpriteFrameLength[action] ?? 0 }))
+  .filter((spec) => spec.frames > 0);
 
 /** 动作是否需要武器 */
 export const actionNeedWeapon: ActionNeedWeapon = {
