@@ -134,7 +134,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           17 repositories: account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc
+│   │   └── repositories/           18 repositories: account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -173,7 +173,7 @@ server/
 
 ## Data model
 
-18 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+20 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -193,6 +193,8 @@ server/
 | `items` | item & material config (#255) | primary key is the item id (e.g. `material_hide`, referenced by drop tables and scripts); MATERIAL / OTHER types only; label / description / sell price / stack cap; id list fixed, edit-only |
 | `monsters` | monster base data (#258) | primary key is the monster key (configs/monster association key, referenced by spawn points / drop tables); label / level / max HP / six attack-defense ranges; **world seeding and damage settlement read this table directly (changes take effect immediately)**; key list fixed, edit-only |
 | `npcs` | NPC base data (#258) | primary key is the NPC id (Tiled object-group association key); label / dialog text (seeded empty — the client has no dialog data shape yet); id list fixed, edit-only |
+| `mall_prices` | mall special pricing (#251) | primary key is the good id (equipment variant id; the goods catalog comes from the generated snapshot); **the only config table in the database whose rows can be added/removed** (PUT upsert / DELETE back to the unified price); unpriced goods fall back to the unified price in `mall_settings` |
+| `mall_settings` | mall unified price (#251) | single-row table (id always 1); the default price is seeded from the generated `MALL_DEFAULT_PRICE` (the client's configs/mall mallPrice) and is editable |
 
 **Character data is an "opaque document"**: the server **does not duplicate** game config, only validating structure / ownership / count caps / duplicate names, storing content as-is.
 Reasons and costs: [FAQ.en.md](FAQ.en.md#why-doesnt-the-server-validate-the-role-datas-content).
@@ -205,7 +207,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 17 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 18 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -254,13 +256,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **78 interfaces / 68 paths / 122 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **83 interfaces / 71 paths / 129 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 6 | No token (health check, player register/login, admin login/register, **pull active announcements**) |
 | Client | 9 | `player` token, may only operate its own account's data |
-| Admin | 63 | `admin` token + each interface's own permission point |
+| Admin | 68 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;

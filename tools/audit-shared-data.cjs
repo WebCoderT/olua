@@ -119,6 +119,7 @@ const REQUIRED_EXPORTS = [
   "SKILLS",
   "MONSTERS",
   "NPCS",
+  "MALL",
   "GROWTH_CURVES",
   "GROWTH_SCALARS",
   // 名字与元数据（三端做界面用）

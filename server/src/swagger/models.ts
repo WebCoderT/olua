@@ -53,6 +53,7 @@ import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/ga
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
 import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
 import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-config/dto/npc.dto";
+import { MallPriceItemDto, MallPricePageDto, MallPriceQueryDto, MallPriceRemoveDto, MallSettingsDto, PutMallPriceDto, UpdateMallSettingsDto } from "../modules/game-config/dto/mall.dto";
 import {
   GrowthScalarDto,
   GrowthScalarPageDto,
@@ -219,4 +220,12 @@ export const SWAGGER_MODELS = [
   NpcPageDto,
   NpcQueryDto,
   UpdateNpcDto,
+  // 商城定价（#251）
+  MallSettingsDto,
+  MallPriceItemDto,
+  MallPricePageDto,
+  MallPriceQueryDto,
+  UpdateMallSettingsDto,
+  PutMallPriceDto,
+  MallPriceRemoveDto,
 ];

@@ -30,6 +30,7 @@ export {
   itemsApi,
   monstersApi,
   npcsApi,
+  mallApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,

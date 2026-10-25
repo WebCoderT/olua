@@ -373,6 +373,21 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         dialog     TEXT    NOT NULL DEFAULT '',
         updated_at INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 商城特殊定价（#251）：主键是商品 id（装备变体 id）；**允许动态增删** ——
+      -- 定价是运营数据，商品本体（装备清单）来自生成物；不在表里的商品走统一价
+      CREATE TABLE IF NOT EXISTS mall_prices (
+        id         TEXT    PRIMARY KEY,
+        price      INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 商城统一价（#251）：单行表（id 恒为 1），seed 自生成物 MALL_DEFAULT_PRICE，运营可改
+      CREATE TABLE IF NOT EXISTS mall_settings (
+        id            INTEGER PRIMARY KEY CHECK (id = 1),
+        default_price INTEGER NOT NULL DEFAULT 1,
+        updated_at    INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

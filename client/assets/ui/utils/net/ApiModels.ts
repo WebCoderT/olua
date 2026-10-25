@@ -583,6 +583,20 @@ export type UpdateNpc = {
   dialog?: string;
 };
 
+export type UpdateMallSettings = {
+  /**
+   * 全场统一售价（绑定元宝/件）
+   */
+  defaultPrice: number;
+};
+
+export type PutMallPrice = {
+  /**
+   * 特殊售价（绑定元宝/件）
+   */
+  price: number;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -2955,4 +2969,103 @@ export type NpcQuery = {
    * 排序方向：asc 升序 / desc 降序
    */
   order?: "asc" | "desc";
+};
+
+export type MallSettings = {
+  /**
+   * 全场统一售价（绑定元宝/件；特殊价优先于它）
+   */
+  defaultPrice: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type MallPriceItem = {
+  /**
+   * 商品 id（装备变体 id，如 cloth_1_p3s2）
+   */
+  id: string;
+  /**
+   * 显示名（生成物已拼好前后缀）
+   */
+  label: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值）
+   */
+  slot: string;
+  /**
+   * 等级需求（与基础件一致）
+   */
+  level: number;
+  /**
+   * 特殊售价；null = 未定价（走统一价）
+   */
+  price: number | null;
+  /**
+   * 特殊价的最近更新时间；未定价为 null
+   */
+  updatedAt: number | null;
+};
+
+export type MallPricePage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的商品定价视图
+   */
+  list: MallPriceItem[];
+};
+
+export type MallPriceQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配商品 id 与显示名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）
+   */
+  slot?: string;
+  /**
+   * 按定价状态筛：true 只看特殊价，false 只看未定价（走统一价）的商品
+   */
+  priced?: string;
+};
+
+export type MallPriceRemove = {
+  /**
+   * 被删除特殊价的商品 id
+   */
+  id: string;
+  /**
+   * 恒为 true（删除成功）
+   */
+  removed: boolean;
 };

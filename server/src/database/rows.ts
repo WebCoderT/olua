@@ -532,6 +532,35 @@ export interface NpcRow {
   updated_at: number;
 }
 
+/**
+ * 商城特殊定价（#251）：管理端「商城定价」的行
+ *
+ * 主键是商品 id（装备变体 id，如 `cloth_1_p3s2`）——**与配置表相反，这一张允许动态增删**：
+ * 定价是运营数据，商品本体（装备清单）来自生成物，不归这里管。不在表里的商品走统一价
+ * （`mall_settings` 单行）；「取消特殊价」= 删行。
+ */
+export interface MallPriceRow {
+  /** 商品 id（装备变体 id；主键，动态增删） */
+  id: string;
+  /** 特殊售价（绑定元宝/件） */
+  price: number;
+  updated_at: number;
+}
+
+/**
+ * 商城统一价（#251）：单行配置（id 恒为 1）
+ *
+ * 全场默认售价（绑定元宝/件）；seed 自生成物 MALL_DEFAULT_PRICE（客户端 configs/mall 的
+ * mallPrice），运营可改。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。
+ */
+export interface MallSettingsRow {
+  /** 恒为 1（单行表） */
+  id: number;
+  /** 全场统一售价（绑定元宝/件） */
+  default_price: number;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
