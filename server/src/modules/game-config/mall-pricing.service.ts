@@ -113,6 +113,18 @@ export class MallPricingService implements OnModuleInit {
     return { id, removed: true };
   }
 
+  /**
+   * 读一件商品的**成交价**（玩家侧购买用，#304）：特殊价优先，没有特殊价走统一价
+   *
+   * 与管理端列表接口同源（同读 mall_prices / mall_settings），后台改价立即对购买生效。
+   * @throws BizException 商品不在商城目录（只卖装备变体）→ 404 MALL_GOOD_NOT_FOUND
+   */
+  priceOf(id: string): number {
+    this.requireGood(id);
+    const special = this.mall.findByKey(id);
+    return special ? special.price : this.getSettings().defaultPrice;
+  }
+
   // —— 内部 ——
 
   /** 商品 id 必须在生成物的装备清单里（商品本体不归定价管，但没有商品就没有定价） */

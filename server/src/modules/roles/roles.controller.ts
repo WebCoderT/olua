@@ -7,6 +7,7 @@ import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interfac
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
+import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { RolesService } from "./roles.service";
 
 /**
@@ -92,6 +93,22 @@ export class RolesController {
   @ApiDataResponse(GrowthUpgradeResultDto, { description: "升级后的角色（含本次消耗与到达阶位）" })
   growthUpgrade(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: GrowthUpgradeDto): GrowthUpgradeResultDto {
     return this.rolesService.upgradeGrowth(user.id, id, dto);
+  }
+
+  @Post(":id/mall-purchase")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.mallPurchase",
+    summary: "商城购买（扣费与入包都在服务端）",
+    description:
+      "价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。\n" +
+      "扣绑定元宝后物品进背包（存档 bag 网格里找空格，装备每件占一格；没有空格 → 20012）。\n\n" +
+      "失败路径：20011 绑定元宝不足 / 20012 背包已满；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(MallPurchaseResultDto, { description: "购买后的角色（含本次消耗）" })
+  mallPurchase(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: MallPurchaseDto): MallPurchaseResultDto {
+    return this.rolesService.purchaseMallGood(user.id, id, dto);
   }
 
   @Delete(":id")

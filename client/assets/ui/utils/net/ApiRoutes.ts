@@ -73,7 +73,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（8 个接口） */
+  /** role 模块（9 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -111,6 +111,12 @@ export const ApiRoutes = {
      * 扣费与阶位推进都在服务端：按库里的成长链（upgrade_order / 军衔阶号）算出下一阶并校验 `targetLevel` 一致，扣绑定元宝后原子推进（revision +1）。
      */
     growthUpgrade: (id: string) => `/roles/${encodeURIComponent(id)}/growth-upgrade`,
+    /**
+     * 商城购买（扣费与入包都在服务端）（POST /roles/{id}/mall-purchase）
+     *
+     * 价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。
+     */
+    mallPurchase: (id: string) => `/roles/${encodeURIComponent(id)}/mall-purchase`,
     /**
      * 选中（进入）角色（POST /roles/{id}/select）
      *

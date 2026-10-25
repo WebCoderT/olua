@@ -59,6 +59,8 @@ const ALLOWED_EDGES = [
   // roles 的属性汇总口径来自 combat 纯函数（存档返回值要带战斗力）
   { from: "modules/roles", to: "modules/combat/role-attributes.ts", why: "属性汇总纯函数" },
   { from: "modules/roles", to: "modules/combat/role-attribute-comparison.ts", why: "属性比对纯函数" },
+  // 商城购买收权（#304）：扣费与入包在存档域，成交价读 game-config 的定价服务（特殊价/统一价同源）
+  { from: "modules/roles", to: "modules/game-config/mall-pricing.service.ts", why: "商城购买读成交价" },
   // realtime（gateway+结算）依赖 world 与存档的公开服务，依赖 combat 纯函数
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },

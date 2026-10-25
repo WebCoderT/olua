@@ -88,6 +88,10 @@ export const BizCode = {
   GROWTH_GOLD_NOT_ENOUGH: 20009,
   /** 成长线不可经升级获得（称号渠道为 grant / unavailable 时拒绝升级链扣费） */
   GROWTH_CHANNEL_LOCKED: 20010,
+  /** 商城购买绑定元宝不足 */
+  MALL_GOLD_NOT_ENOUGH: 20011,
+  /** 商城购买背包已满（装备不可叠加，每件占一格，网格内没有空格） */
+  MALL_BAG_FULL: 20012,
 
   //#region 管理端
   /** 管理员账号已存在 */

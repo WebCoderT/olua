@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
+import { MallPricingService } from "../game-config/mall-pricing.service";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
@@ -12,6 +13,7 @@ import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
+import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { decodeStoredRoleData, parseRoleData } from "./role-data.util";
 
 /**
@@ -31,6 +33,7 @@ export class RolesService {
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
+    private readonly mallPricing: MallPricingService,
   ) {}
 
   /**
@@ -235,6 +238,70 @@ export class RolesService {
       );
     }
     return chain[currentIndex + 1] ?? null;
+  }
+
+  /**
+   * 商城购买（玩家侧 #304）：扣费与入包都在服务端
+   *
+   * 价格与商城定价管理端**同源**（mall_prices 特殊价优先，未定价走 mall_settings 统一价）——
+   * 后台改价立即对购买生效。商品只卖装备变体（MallPricingService 目录即生成物装备全量），
+   * 非装备 id 一律 404（没有「玩家能买到别的东西」的口子）。
+   *
+   * 入包：存档 `data.bag` 是客户端按配置重塑的**固定尺寸网格**（Array<Array<{id,count}|null>>，
+   * 见客户端 items.normalizeBagGrid），装备不可叠加、每件占一格 —— 行优先找第一个空格放入。
+   * 服务端**不扩容**：网格尺寸归客户端配置管，网格里没有空格就是真的满了（20012）。
+   */
+  purchaseMallGood(accountId: string, roleId: string, dto: MallPurchaseDto): MallPurchaseResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与升级同一纪律：被踢下线的角色不能继续购买
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    // 商品不存在（不在装备目录）→ 404，消息经请求层弹给玩家
+    const price = this.mallPricing.priceOf(dto.goodId);
+
+    const data = decodeStoredRoleData(existing.data);
+    const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
+    if (bindGold < price) {
+      throw BizException.conflict(BizCode.MALL_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${price - bindGold}`);
+    }
+
+    data.bindGold = bindGold - price;
+    this.putGoodIntoBag(data, dto.goodId);
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId);
+  }
+
+  /**
+   * 往存档的背包网格里放一件商品（行优先找第一个空格；装备不可叠加，每件占一格）
+   *
+   * @throws MALL_BAG_FULL 网格里没有空格（或网格结构不合法 —— 结构坏了放东西只会越放越乱，同样拒绝）
+   */
+  private putGoodIntoBag(data: Record<string, unknown>, goodId: string): void {
+    const bag = data.bag;
+    if (!Array.isArray(bag)) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包数据不完整，无法放入商品");
+    for (const line of bag) {
+      if (!Array.isArray(line)) continue;
+      for (let col = 0; col < line.length; col++) {
+        const cell = line[col];
+        if (cell && typeof cell === "object" && (cell as Record<string, unknown>).id) continue;
+        line[col] = { id: goodId, count: 1 };
+        return;
+      }
+    }
+    throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包已满，无法放入商品");
   }
 
   /**
