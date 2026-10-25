@@ -24,6 +24,7 @@ import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto
 import { AdminRoleDetailDto, AdminRoleDto, GrowthUpgradeResultDto, RoleDerivedAttributesDto, RoleDerivedDto, RoleReportedAttributesDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
 import { GrowthUpgradeDto } from "../modules/roles/dto/growth-upgrade.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "../modules/roles/dto/mall-purchase.dto";
+import { DrugUseDto, DrugUseResultDto } from "../modules/roles/dto/drug-use.dto";
 import {
   SystemConfigItemDto,
   SystemDatabaseDto,
@@ -103,10 +104,12 @@ export const SWAGGER_MODELS = [
   SaveRoleDto,
   GrowthUpgradeDto,
   MallPurchaseDto,
+  DrugUseDto,
   RoleSummaryDto,
   RoleDto,
   GrowthUpgradeResultDto,
   MallPurchaseResultDto,
+  DrugUseResultDto,
   RealtimeTicketDto,
   // 管理端
   AdminRegisterDto,

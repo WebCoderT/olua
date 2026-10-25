@@ -94,8 +94,8 @@ const REPO_EDGES = {
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）
   "database/repositories/equipment.repository.ts": ["modules/game-config"],
-  // 药品（#253）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
-  "database/repositories/drug.repository.ts": ["modules/game-config"],
+  // 药品（#253）：game-config 读写；用药收权（#308）后存档域（roles）也读回复量
+  "database/repositories/drug.repository.ts": ["modules/game-config", "modules/roles"],
   // 物品与材料（#255）：同上，只在 game-config 模块内读写
   "database/repositories/item.repository.ts": ["modules/game-config"],
   // 怪物基础数据（#258）：game-config 读写之外，世界播种（world）与伤害结算（realtime）

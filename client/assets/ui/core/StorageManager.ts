@@ -25,7 +25,7 @@ import { getRankLevel } from "../../configs/rank";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
-import type { GrowthUpgradeResult, MallPurchaseResult } from "../utils/net/ApiModels";
+import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult } from "../utils/net/ApiModels";
 
 /**
  * 存储管理器
@@ -386,14 +386,14 @@ export default class StorageManager {
    * @param col 背包列
    * @returns 是否成功使用
    */
-  static useGood(row: number, col: number): boolean {
+  static async useGood(row: number, col: number): Promise<boolean> {
     const role = this.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
     const good = getItem(cell.id);
     if (!good) return false;
     if (isEquipment(good)) return this.equipFromBag(row, col);
-    if (isDrug(good)) return this.useDrug(row, col);
+    if (isDrug(good)) return await this.useDrug(row, col);
     GameUiHelper.createTip("good_unsupported_tip");
     return false;
   }
@@ -818,20 +818,26 @@ export default class StorageManager {
   }
 
   /**
-   * 使用药品（当前在线角色）：按 effects 恢复血量/魔法并消耗一个
-   * 固定值与百分比（hpPercent/mpPercent）都支持，回复量统一走 resolveDrugRecovery（纯函数，单测盯口径）
+   * 使用药品（当前在线角色）：**回复结算与格子扣减都在服务端**（role.drugUse，#308）
+   *
+   * 回复量与药品管理端同源（drugs 表，管理端改回复量即时生效）；maxHp/maxMp 用服务端重算的
+   * 战斗属性。本地预检（空格 / 非药 / 无生效效果 / 血蓝满提示）只做即时 UX —— 服务端结果为准，
+   * 预检放行但服务端拒绝时（管理端并发改动、被踢、乐观锁冲突），提示经请求层失败出口弹给玩家。
+   *
+   * 成功后以服务端返回为准刷新本地存档（hp / mp / bag / revision），再走既有落盘与 UI 链路
+   * （防抖推回 revision 与服务端一致，幂等）。用药不改战斗属性，无需重算。
    * @param row 背包行
    * @param col 背包列
-   * @returns 是否成功使用（格子为空、非药品、无可生效效果、血蓝全满时返回 false 且不消耗）
+   * @returns 是否成功使用（失败原因已用浮动提示告知）
    */
-  static useDrug(row: number, col: number): boolean {
+  static async useDrug(row: number, col: number): Promise<boolean> {
     const role = this.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
     // 格子只存物品 key，数据实时解析
     const good = getItem(cell.id);
     if (!good || !isDrug(good)) return false;
-    // 期望回复量（未封顶）：没有任何分量的药品等于没实现
+    // 本地期望回复量（未封顶）：没有任何分量的药品等于没实现 —— 只做预检，服务端按库里配置算
     const recovery = resolveDrugRecovery(good.effects, role.maxHp, role.maxMp);
     const healsHp = recovery.hp > 0;
     const healsMp = recovery.mp > 0;
@@ -839,18 +845,26 @@ export default class StorageManager {
       GameUiHelper.createTip("drug_unsupported_tip");
       return false;
     }
-    // 血蓝都已满（该药对应的资源都回不动）→ 提示且不消耗
+    // 血蓝都已满（该药对应的资源都回不动）→ 提示且不发请求（与服务端同一判定式）
     const hpFull = role.hp >= role.maxHp;
     const mpFull = role.mp >= role.maxMp;
     if ((!healsHp || hpFull) && (!healsMp || mpFull)) {
       GameUiHelper.createTip(healsHp ? "drug_full_tip" : "drug_mp_full_tip");
       return false;
     }
-    // 各自封顶后生效（血满蓝不满也照用，只回蓝的部分）
-    if (healsHp && !hpFull) role.hp = Math.min(role.maxHp, role.hp + recovery.hp);
-    if (healsMp && !mpFull) role.mp = Math.min(role.maxMp, role.mp + recovery.mp);
-    // 消耗一个（复用同一个角色实例，保证消耗结果一起落盘）
-    this.consumeBagGood(row, col, role);
+    let result: DrugUseResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝用药
+      result = await RoleApi.drugUse(role.id, { row, col, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    const data = result.data as Record<string, unknown>;
+    if (data.hp !== undefined) role.hp = Number(data.hp);
+    if (data.mp !== undefined) role.mp = Number(data.mp);
+    // 服务端已扣减格子：以服务端那份为准整体替换（格子只存 key + 数量，无引用关系）
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    role.revision = result.revision;
     // 保存并刷新（血蓝与背包）
     this.updateOnlineRole(role);
     this.updateUi(role);

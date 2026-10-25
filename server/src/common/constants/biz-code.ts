@@ -92,6 +92,10 @@ export const BizCode = {
   MALL_GOLD_NOT_ENOUGH: 20011,
   /** 商城购买背包已满（装备不可叠加，每件占一格，网格内没有空格） */
   MALL_BAG_FULL: 20012,
+  /** 用药目标不合法（格子为空 / 格子里不是药品 / 药品没有任何生效回复量） */
+  DRUG_USE_TARGET_INVALID: 20013,
+  /** 用药无需进行（血量与魔法值均已满，回复不动任何一项） */
+  DRUG_RESOURCE_FULL: 20014,
 
   //#region 管理端
   /** 管理员账号已存在 */

@@ -677,6 +677,70 @@
         }
       }
     },
+    "/roles/{id}/drug-use": {
+      "post": {
+        "description": "回复量与药品管理端同源（drugs 表，管理端改回复量即时生效）：固定值 + 百分比 × maxHp/maxMp，各自封顶。\nmaxHp/maxMp 用服务端重算的战斗属性；使用后扣减背包格子数量（减到 0 清格）。\n\n失败路径：20013 格子为空 / 非药品 / 无生效回复；20014 血蓝均已满；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.drugUse",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DrugUseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "使用后的角色（含本次回复量）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DrugUseResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "药品使用（回复结算与扣减都在服务端）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DrugUseResultDto"
+        }
+      }
+    },
     "/admin/auth/register": {
       "post": {
         "description": "注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
@@ -7135,6 +7199,34 @@
           "goodId"
         ]
       },
+      "DrugUseDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "背包行",
+            "minimum": 0,
+            "maximum": 99,
+            "example": 0
+          },
+          "col": {
+            "type": "number",
+            "description": "背包列",
+            "minimum": 0,
+            "maximum": 99,
+            "example": 0
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "row",
+          "col"
+        ]
+      },
       "AdminRegisterDto": {
         "type": "object",
         "properties": {
@@ -8806,6 +8898,84 @@
           "data",
           "consumed",
           "goodId"
+        ]
+      },
+      "DrugUseResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "drugId": {
+            "type": "string",
+            "description": "使用的药品 id"
+          },
+          "recoveredHp": {
+            "type": "number",
+            "description": "实际生效的生命回复量（封顶后；0 = 血量本已满）"
+          },
+          "recoveredMp": {
+            "type": "number",
+            "description": "实际生效的魔法回复量（封顶后；0 = 魔法本已满）"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "drugId",
+          "recoveredHp",
+          "recoveredMp"
         ]
       },
       "RealtimeTicketDto": {
