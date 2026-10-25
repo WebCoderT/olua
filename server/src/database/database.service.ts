@@ -286,6 +286,31 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 装备基础件配置（#252）：主键是基础件 id（如 cloth_1），id / 部位结构固定不可增删行；
+      -- 属性列与 titles / souls / ranks 同构（SoulRowShape 十四列），变体不进库
+      CREATE TABLE IF NOT EXISTS equipments (
+        id                   TEXT    PRIMARY KEY,
+        slot                 TEXT    NOT NULL,
+        level                INTEGER NOT NULL DEFAULT 1,
+        sell_price           INTEGER NOT NULL DEFAULT 0,
+        label                TEXT    NOT NULL DEFAULT '',
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

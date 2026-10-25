@@ -48,6 +48,7 @@ import {
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
 import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "../modules/game-config/dto/rank.dto";
+import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, UpdateEquipmentDto } from "../modules/game-config/dto/equipment.dto";
 import {
   GrowthScalarDto,
   GrowthScalarPageDto,
@@ -189,4 +190,9 @@ export const SWAGGER_MODELS = [
   RankPageDto,
   RankQueryDto,
   UpdateRankDto,
+  // 养成配置（装备基础件 #252）
+  EquipmentDto,
+  EquipmentPageDto,
+  EquipmentQueryDto,
+  UpdateEquipmentDto,
 ];

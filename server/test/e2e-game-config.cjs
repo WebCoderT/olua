@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 138;
+const EXPECTED_ASSERTIONS = 166;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -514,6 +514,64 @@ async function main() {
     const viewerRankWrite = await api(base, "PATCH", "/api/admin/ranks/1", { token: viewerToken, body: { bindGold: 1 } });
     checkEqual(viewerRankWrite.status, 403, "观察员改军衔 → 403");
     checkEqual(viewerRankWrite.body?.code, 30006, "观察员改军衔 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 八、装备基础件配置（#252）：seed 同源 / 部位与等级段筛 / 只许改 / 变体不进管理端
+
+    group("八、装备基础件配置");
+
+    const equipments = await api(base, "GET", "/api/admin/equipments", { token });
+    checkEqual(equipments.status, 200, "装备列表可读");
+    const equipmentCount = Object.keys(shared.EQUIPMENT_BASES).length;
+    checkEqual(equipments.body?.data?.total, equipmentCount, `装备行数 = 基础件配置表（${equipmentCount}）`);
+    checkEqual(equipments.body?.data?.list?.length, equipmentCount, "默认一页装下全部基础件");
+    const cloth14 = equipments.body?.data?.list?.find((row) => row.id === "cloth_14");
+    check(Boolean(cloth14), "列表里有基础件 cloth_14");
+    checkEqual(cloth14?.slot, shared.EQUIPMENT_BASES["cloth_14"].slot, "cloth_14 部位与配置一致");
+    checkEqual(cloth14?.level, shared.EQUIPMENT_BASES["cloth_14"].level, "cloth_14 等级需求与配置一致");
+    checkEqual(cloth14?.label, shared.EQUIPMENT_BASES["cloth_14"].label, "cloth_14 名称与配置一致");
+    checkEqual(cloth14?.sellPrice, shared.EQUIPMENT_BASES["cloth_14"].sellPrice, "cloth_14 售卖价与配置一致");
+    checkEqual(cloth14?.attributes?.maxHp, shared.EQUIPMENT_BASES["cloth_14"].attributes.maxHp, "cloth_14 属性与配置一致（嵌套结构）");
+    check(cloth14 && !cloth14.id.includes("_p"), "管理端只收基础件（变体 _pXsY 不进列表）");
+
+    const clothSlotCount = Object.values(shared.EQUIPMENT_BASES).filter((base) => base.slot === "cloth").length;
+    const equipmentSlotFiltered = await api(base, "GET", "/api/admin/equipments?slot=cloth", { token });
+    checkEqual(equipmentSlotFiltered.body?.data?.total, clothSlotCount, `按部位筛：cloth 恰好 ${clothSlotCount} 件`);
+    const levelBandCount = Object.values(shared.EQUIPMENT_BASES).filter((base) => base.level >= 40 && base.level <= 50).length;
+    const equipmentBandFiltered = await api(base, "GET", "/api/admin/equipments?minLevel=40&maxLevel=50", { token });
+    checkEqual(equipmentBandFiltered.body?.data?.total, levelBandCount, `按等级段筛（40..50 含端）：恰好 ${levelBandCount} 件`);
+    const equipmentKeyword = await api(base, "GET", "/api/admin/equipments?keyword=" + encodeURIComponent("青铜"), { token });
+    checkEqual(equipmentKeyword.body?.data?.total, 1, "关键字能命中名称（青铜重甲）");
+
+    const equipmentPriced = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token, body: { sellPrice: 100 } });
+    checkEqual(equipmentPriced.status, 200, "PATCH 装备售卖价成功");
+    checkEqual(equipmentPriced.body?.data?.sellPrice, 100, "响应里的售卖价已更新");
+    const equipmentReread = await api(base, "GET", "/api/admin/equipments?keyword=cloth_14", { token });
+    checkEqual(equipmentReread.body?.data?.list?.[0]?.sellPrice, 100, "重读反映新售卖价");
+
+    const equipmentBadRange = await api(base, "PATCH", "/api/admin/equipments/cloth_14", {
+      token,
+      body: { attributes: { ...cloth14.attributes, physicalAttack: { min: 10, max: 5 } } },
+    });
+    checkEqual(equipmentBadRange.status, 400, "属性下限大于上限 → 400");
+    checkEqual(equipmentBadRange.body?.code, 40000, "属性区间校验用 40000（参数非法）");
+    const equipmentGhost = await api(base, "PATCH", "/api/admin/equipments/cloth_999", { token, body: { level: 1 } });
+    checkEqual(equipmentGhost.status, 404, "改不存在的装备基础件 → 404");
+    checkEqual(equipmentGhost.body?.code, 50016, "装备未找到用专属业务码 50016");
+    const equipmentStructural = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token, body: { slot: "weapon", label: "改名尝试" } });
+    checkEqual(equipmentStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
+    checkEqual(equipmentStructural.body?.data?.slot, "cloth", "slot 不可编辑（部位结构固定）");
+    checkEqual(equipmentStructural.body?.data?.label, shared.EQUIPMENT_BASES["cloth_14"].label, "label 不可编辑");
+    const postEquipment = await api(base, "POST", "/api/admin/equipments", { token, body: { id: "cloth_new" } });
+    checkEqual(postEquipment.status, 404, "POST 装备 → 404（路由不存在）");
+    const deleteEquipment = await api(base, "DELETE", "/api/admin/equipments/cloth_14", { token });
+    checkEqual(deleteEquipment.status, 404, "DELETE 装备 → 404（路由不存在）");
+    const viewerEquipmentRead = await api(base, "GET", "/api/admin/equipments", { token: viewerToken });
+    checkEqual(viewerEquipmentRead.body?.code, 0, "观察员能看装备配置");
+    const viewerEquipmentWrite = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token: viewerToken, body: { sellPrice: 1 } });
+    checkEqual(viewerEquipmentWrite.status, 403, "观察员改装备 → 403");
+    checkEqual(viewerEquipmentWrite.body?.code, 30006, "观察员改装备 → 30006（权限点不足）");
 
     //#endregion
   } finally {

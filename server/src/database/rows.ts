@@ -383,6 +383,41 @@ export interface RankRow {
   updated_at: number;
 }
 
+/**
+ * 装备基础件配置（#252）：管理端「装备配置」的行
+ *
+ * 主键是**装备基础件 id**（如 `cloth_1`，普通的·人级；变体 `_pXsY` 是它乘前后缀倍率
+ * 展开的，不进库）—— id / 部位结构固定，**不可增删行**（与称号 / 战魂 / 军衔同一取向）。
+ * 属性列与 TitleRow / RankRow 同构（`SoulRowShape` 那十四列），可复用同一套转换。
+ */
+export interface EquipmentRow {
+  /** 装备基础件 id（如 `cloth_1`；主键，不可增删行） */
+  id: string;
+  /** 部位（EQUIPMENT_TYPE 的枚举值，如 `cloth`） */
+  slot: string;
+  /** 穿戴需求等级（唯一定强入口的锚点） */
+  level: number;
+  /** 售卖价（客户端条目 `sellPirce` 的 seed 值 —— 客户端字段名历史拼写如此） */
+  sell_price: number;
+  /** 名称（如「青铜重甲」；seed 自客户端条目，暂不开放编辑） */
+  label: string;
+  max_hp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）

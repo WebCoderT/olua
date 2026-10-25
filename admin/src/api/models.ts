@@ -442,6 +442,21 @@ export type UpdateRank = {
   attributes?: ConfigAttributes;
 };
 
+export type UpdateEquipment = {
+  /**
+   * 穿戴需求等级（不传则不改）
+   */
+  level?: number;
+  /**
+   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
+   */
+  sellPrice?: number;
+  /**
+   * 八项基础属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）。变体属性 = 基础属性 × 前后缀倍率，在客户端展开
+   */
+  attributes?: ConfigAttributes;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -2417,4 +2432,89 @@ export type RankQuery = {
    * 按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）
    */
   tier?: string;
+};
+
+export type Equipment = {
+  /**
+   * 装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）
+   */
+  id: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   */
+  slot: string;
+  /**
+   * 穿戴需求等级（装备定强的锚点）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 名称（seed 自客户端条目，暂不开放编辑）
+   */
+  label: string;
+  /**
+   * 八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipmentPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的装备基础件配置
+   */
+  list: Equipment[];
+};
+
+export type EquipmentQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes；枚举清单派生自客户端配置，不落 schema 以免英文/中文键进两端生成物）
+   */
+  slot?: string;
+  /**
+   * 等级段下限（含）
+   */
+  minLevel?: number;
+  /**
+   * 等级段上限（含）
+   */
+  maxLevel?: number;
 };

@@ -86,6 +86,9 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `RoleDetailPage` | 三块卡片：基础信息 / 常用数值 / **运行时数据**（`KeyValueEditor` 编辑装备与技能、背包稀疏格子编辑器含「清空背包」） |
 | `AnnouncementsPage` | 公告列表与发布 / 编辑（`announcement:read` 看见、`announcement:write` 改，编辑走 `AnnouncementDialog`） |
 | `TitlesPage` / `SoulsPage` | **养成配置**（称号 / 战魂，`gameConfig:read/write`）：服务端分页主列表 + 顶部按钮唤起「成长列表」弹窗。见「养成配置页面模式」一节 |
+| `RanksPage` | **养成配置**（军衔 #250）：同上模式，无拖动排序（100 阶天然按阶），主列表带大段 Badge；`GameConfigDialog` kind="rank"（无动画栏、加大段名输入） |
+| `GrowthPage` | **养成配置**（成长曲线 #256）：三卡片（升级经验 / 曲线分段 / 标量参数）+ 共用 `NumberEditDialog`（fields spec 驱动）；分段保存走「先内存校验再落库」口径 |
+| `EquipmentsPage` | **养成配置**（装备基础件 #252）：部位 / 等级段筛选 + 分页；**只收基础件**（37 件，变体在客户端按倍率展开）；编辑弹窗只开放等级 / 售卖价 / 八项属性（页面内 `EquipmentEditDialog`，不复用 GameConfigDialog —— 字段差异太大） |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
@@ -128,7 +131,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 ## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
 
-养成配置 = 服务端启动 seed 的**固定等级序列**（称号 34 级 / 战魂 37 阶），**只能改、不能增删**（POST/DELETE 接口根本不存在）。两页结构完全一致，改一处要想着另一处。
+养成配置 = 服务端启动 seed 的**固定等级序列**（称号 34 级 / 战魂 37 阶 / 军衔 100 阶 / 装备基础件 37 件），**只能改、不能增删**（POST/DELETE 接口根本不存在）。称号与战魂两页结构完全一致，改一处要想着另一处；军衔 / 成长曲线 / 装备各按自身字段形态复用或另起弹窗（见页面表）。
 
 **主列表**：服务端分页（`Pagination`，10/20/50/100）+ 「编辑」按钮弹 `GameConfigDialog` + 顶部「成长列表」按钮弹 `GameGrowthListDialog`。**主列表不显示价格**（#232/#234：价格唯一显示与修改口 = 成长列表）。
 

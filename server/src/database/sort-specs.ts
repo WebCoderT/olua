@@ -177,3 +177,19 @@ export const RANK_SORT: SortSpec<"level" | "label" | "tier" | "bindGold" | "upda
   default: "level",
   defaultOrder: "asc",
 };
+
+/**
+ * 装备基础件列表（#252）：默认按等级升序（等级是装备定强的主轴，同级内按 id 稳定排序）
+ * 注：slot 是 TEXT 列，字典序与客户端槽位顺序无关 —— 部位只作筛选，不参与默认排序。
+ */
+export const EQUIPMENT_SORT: SortSpec<"id" | "slot" | "level" | "sellPrice" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    slot: "slot",
+    level: "level",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};
