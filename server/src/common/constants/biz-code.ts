@@ -82,6 +82,12 @@ export const BizCode = {
    * 客户端收到它应当提示并回到选角界面。
    */
   ROLE_KICKED: 20007,
+  /** 成长线升级目标不合法（不是升级链上当前阶位的下一阶；防跳级/防并发错位） */
+  GROWTH_TARGET_INVALID: 20008,
+  /** 成长线升级绑定元宝不足 */
+  GROWTH_GOLD_NOT_ENOUGH: 20009,
+  /** 成长线不可经升级获得（称号渠道为 grant / unavailable 时拒绝升级链扣费） */
+  GROWTH_CHANNEL_LOCKED: 20010,
 
   //#region 管理端
   /** 管理员账号已存在 */

@@ -64,10 +64,10 @@ export default class RankUpgradeDialog {
     this.upgradeButton = GameUiHelper.createMiddleButton("rank_upgrade_button", layout.upgradeButton.text, layout.upgradeButton.position);
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
-      () => {
+      async () => {
         // 晋升成功后整体刷新（失败时 StorageManager 已弹出原因提示）；
         // 军衔的红字外显随 updateUi 自动刷新（见 StorageManager.upgradeRank），这里只处理弹窗自身
-        if (StorageManager.upgradeRank()) {
+        if (await StorageManager.upgradeRank()) {
           // 选中挪到刚晋上的那一阶，顺势把列表滚过去
           this.selectedLevel = Math.min(rankMaxLevel, Math.max(1, StorageManager.findOnlineRole()?.rank ?? this.selectedLevel));
           this.updateCardStates();

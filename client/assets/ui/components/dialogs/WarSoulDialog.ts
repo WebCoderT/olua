@@ -54,9 +54,9 @@ export default class WarSoulDialog {
     this.upgradeButton = GameUiHelper.createMiddleButton("soul_upgrade_button", layout.upgradeButton.text, layout.upgradeButton.position);
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
-      () => {
+      async () => {
         // 升级成功后整体刷新（失败时 StorageManager 已弹出原因提示）；外显已勾选时同步换掉主角身上的战魂动画
-        if (StorageManager.upgradeSoul()) {
+        if (await StorageManager.upgradeSoul()) {
           RoleUIManager.updateSoulShow();
           this.refresh();
         }

@@ -84,11 +84,11 @@ const REPO_EDGES = {
   "database/repositories/world-monster.repository.ts": ["modules/world"],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
-  "database/repositories/title.repository.ts": ["modules/game-config"],
-  "database/repositories/soul.repository.ts": ["modules/game-config"],
+  "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],
+  "database/repositories/soul.repository.ts": ["modules/game-config", "modules/roles"],
   // 成长曲线（#256）：等级经验 / 曲线分段 / 标量参数同称号 / 战魂，只在 game-config 模块内读写
   "database/repositories/growth.repository.ts": ["modules/game-config"],
-  "database/repositories/rank.repository.ts": ["modules/game-config"],
+  "database/repositories/rank.repository.ts": ["modules/game-config", "modules/roles"],
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）
   "database/repositories/equipment.repository.ts": ["modules/game-config"],
