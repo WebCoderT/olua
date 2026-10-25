@@ -54,6 +54,7 @@ CREATOR ?= CocosCreator
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
         server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-verify db-backup db-restore gen-api \
+        resources-manifest resources-verify resources-pack resources-upload resources-download \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
 
@@ -369,6 +370,37 @@ ci: install-ci client-check audit server-build admin-build server-e2e server-e2e
 	@echo "✓ CI 门禁通过"
 	@echo "  未覆盖（本地专属）：make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"
 	@echo "  已覆盖：make client-check（类型声明 vendoring 进 client/types/engine/，无需编辑器）"
+
+# ==============================================================================
+#  resources 同步（client/assets/resources 不入库，靠清单 + GitHub Release 分发）
+#  流程见根 README「资源同步」节；python 在 Windows 下覆盖：make PY=python ...
+# ==============================================================================
+
+RES_PY ?= python3
+RES_VERSION ?=
+
+resources-manifest: ## 生成/更新 resources.manifest.json：make resources-manifest VERSION=2026-10-25-1
+	@test -n "$(RES_VERSION)" || { echo "用法：make resources-manifest VERSION=<版本号>"; exit 1; }
+	$(RES_PY) client/tools/resources_sync.py manifest --version $(RES_VERSION)
+
+resources-verify: ## 本地资源与清单一致性校验（拉代码后先跑这条）
+	$(RES_PY) client/tools/resources_sync.py verify
+
+resources-pack: ## 打分卷 zip 到 resources_dist/$(RES_VERSION)/：make resources-pack VERSION=...
+	@test -n "$(RES_VERSION)" || { echo "用法：make resources-pack VERSION=<版本号>"; exit 1; }
+	$(RES_PY) client/tools/resources_sync.py pack --version $(RES_VERSION)
+
+resources-upload: ## 上传分卷到 GitHub Release（tag = resources-<VERSION>，需 gh 已登录）
+	@test -n "$(RES_VERSION)" || { echo "用法：make resources-upload VERSION=<版本号>"; exit 1; }
+	gh release create resources-$(RES_VERSION) resources_dist/$(RES_VERSION)/*.zip \
+		--title "resources $(RES_VERSION)" \
+		--notes "client/assets/resources 分发包（清单 resources.manifest.json 对应 version=$(RES_VERSION)）"
+
+resources-download: ## 下载 Release 分卷并解压校验：make resources-download VERSION=...
+	@test -n "$(RES_VERSION)" || { echo "用法：make resources-download VERSION=<版本号>"; exit 1; }
+	mkdir -p resources_dist/$(RES_VERSION)
+	gh release download resources-$(RES_VERSION) --dir resources_dist/$(RES_VERSION)
+	$(RES_PY) client/tools/resources_sync.py extract --dir resources_dist/$(RES_VERSION)
 
 # ==============================================================================
 #  清理

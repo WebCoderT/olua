@@ -412,6 +412,30 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 
 > 在受限环境（例如注入了 `NODE_OPTIONS` 的终端）里跑服务端子进程需要清掉它：`env -u NODE_OPTIONS npm run dev`。详见 [FAQ.md](FAQ.md)。
 
+### 6. 资源同步（resources 不入库，多人怎么保持一致）
+
+`client/assets/resources/` 体积大（素材原文件），**有意不进版本库**（见 `.gitignore`）。多人/多机并行开发靠「清单锁 + GitHub Release 分发」保持一致：
+
+- **清单**：`resources.manifest.json` 提交进仓库，记录每个资源文件的 sha1 + 大小（含 `.meta`——Cocos uuid 绑在 meta 上，meta 必须随包分发，各机自生成会 uuid 漂移、prefab 引用断裂）。
+- **分发**：分卷 zip 挂在 GitHub Release（tag = `resources-<版本号>`），单卷上限 1900MB（Release 单资产上限 2GiB，留余量自动续卷）。
+
+日常动作：
+
+```bash
+make resources-verify                      # 拉代码后先跑：本地资源 vs 清单，不一致会列出缺失/多出/不一致
+make resources-download VERSION=<v>        # 不一致或新机器：从 Release 下载分卷、解压、自动校验
+```
+
+改动资源后的发布动作（谁改资源谁发布）：
+
+```bash
+make resources-manifest VERSION=<v>        # 重新生成清单（版本号写到清单里，随代码提交）
+make resources-pack VERSION=<v>            # 打分卷 zip 到 resources_dist/<v>/
+make resources-upload VERSION=<v>          # 上传到 GitHub Release（需 gh 已登录）
+```
+
+约定：**先合并带新清单的 PR，再跑 upload**（别人拉到新清单后 `resources-verify` 会亮红，此时 `make resources-download VERSION=<v>` 即可对齐）。工具本体是 `client/tools/resources_sync.py`。
+
 ## 功能清单
 
 > ✅ 已完成　❌ 未完成　　服务端与管理端的细粒度能力见各自 README。

@@ -26,6 +26,9 @@ node_modules/
 # 客户端素材（体积大、不进版本库；删前必备份）
 client/assets/resources/
 
+# resources 分发的分卷 zip 产物（make resources-pack 输出；进 GitHub Release，不进仓库）
+resources_dist/
+
 # 设计稿（UI 重排的输入：登录 / 选角 / 主界面截图；体积大、属本机设计资料，不进版本库）
 design/
 
