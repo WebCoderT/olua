@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, ActiveAnnouncement, AuthResult, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, Health, Login, MallPurchase, MallPurchaseResult, RealtimeTicket, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
+import type { Account, ActiveAnnouncement, AuthResult, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, Health, Login, MallPurchase, MallPurchaseResult, RealtimeTicket, Register, RoleDetail, RoleSummary, SaveRole, Zone } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,7 @@ import type { Account, ActiveAnnouncement, AuthResult, CreateRole, DrugUse, Drug
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateRole, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateRole, CreateZone, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
 
 /** announcement 模块的接口（1 个，生成） */
 export const AnnouncementApi = {
@@ -153,4 +153,14 @@ export const RoleApi = {
    * 未选角色 / 在线角色已删时返回 null。
    */
   online: (options?: Options) => HttpClient.get<RoleDetail | null>(ApiRoutes.role.online, options),
+};
+
+/** zone 模块的接口（1 个，生成） */
+export const ZoneApi = {
+  /**
+   * 区服列表（活区）（GET /zones）
+   *
+   * 返回全部未合并的区服，按开区顺序排列。注册入参 `zoneId` 从这里选。
+   */
+  list: (options?: Options) => HttpClient.get<Zone[]>(ApiRoutes.zone.list, { auth: false, ...options }),
 };

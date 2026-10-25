@@ -287,7 +287,7 @@ function roleData(id, name, level, skills) {
 
     const world = await session.joinWorld("1");
     const mob = world && world.monsters && world.monsters[0];
-    check(mob && /^m1_\d+$/.test(mob.instanceId), "worldJoin 播种 1 只怪（服务端发牌）", JSON.stringify(world));
+    check(mob && /^m1_z1_\d+$/.test(mob.instanceId), "worldJoin 播种 1 只怪（服务端发牌，带区段）", JSON.stringify(world));
 
     session.socket.send(JSON.stringify({ type: "cast", data: { castId: 1, skillId: "1000", targetId: mob ? mob.instanceId : "m1_1", monsterKey: "1" } }));
     const settle = await session.waitForSettle(1);

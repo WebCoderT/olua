@@ -1,11 +1,12 @@
-import { _decorator, Component, EditBox, Node, UITransform, isValid } from "cc";
+import { _decorator, Component, EditBox, Label, Node, UITransform, isValid } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { applyScreenPolicy, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
 import { loginLayout } from "../configs/hudLayout";
-import { AuthApi } from "./utils/net/Api";
-import type { AuthResult } from "./utils/net/Api";
+import { getText } from "../configs/texts";
+import { AuthApi, ZoneApi } from "./utils/net/Api";
+import type { AuthResult, Zone } from "./utils/net/Api";
 import { describeError } from "./utils/net/ApiError";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import Session from "./utils/net/Session";
@@ -36,6 +37,12 @@ export class Login extends Component {
   private submitting = false;
   /** 公告提醒弹窗（进登录页时把生效中的重要公告摊开给玩家看，见该类的说明） */
   private announcementNotice = new AnnouncementNoticeDialog();
+  /** 活区列表（注册时从中选一个；拉取失败退化为空 —— 注册不带 zoneId，服务端落一区） */
+  private zones: Zone[] = [];
+  /** 当前选中的区服下标（zones 的下标；tap 循环切换） */
+  private zoneIndex = 0;
+  /** 区服选择文案节点（zones 拉到后创建并刷新） */
+  private zoneLabel: Node | null = null;
 
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
@@ -78,9 +85,15 @@ export class Login extends Component {
     registerButton.on(Node.EventType.TOUCH_END, () => void this.register());
     // logo
     this.stage.addChild(GameUiHelper.createImage(layout.logo.name, layout.logo.image, layout.logo.position, layout.logo.size));
+    // 区服选择（多开区 #295）：先摆一个空文案节点，活区列表拉到后再刷新内容
+    this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, layout.zoneSelector.position, layout.zoneSelector.size, layout.zoneSelector.color);
+    this.stage.addChild(this.zoneLabel);
+    this.zoneLabel.on(Node.EventType.TOUCH_END, () => this.cycleZone());
     // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
     this.applyStageLayout();
     this.offWindowResize = onWindowResize(() => this.applyStageLayout());
+    // 拉活区列表（公共接口，无需令牌；不阻塞登录页出现，失败静默 —— 注册落默认区）
+    void this.loadZones();
     // 清空缓存------开发时使用（含角色缓存与上次会话，进登录页一律重新登录）
     StorageManager.clear();
     // 公告提醒：拉取「生效中的重要公告」（公共接口，无需令牌），有就弹、没有或拉取失败就静默 ——
@@ -113,11 +126,54 @@ export class Login extends Component {
     await this.submit(() => AuthApi.login({ username: credentials.username, password: credentials.password }));
   }
 
-  /** 注册（成功后直接进选角场景，无需再登录一次） */
+  /** 注册（成功后直接进选角场景，无需再登录一次；带上当前选中的区服） */
   async register() {
     const credentials = this.readCredentials();
     if (!credentials) return;
-    await this.submit(() => AuthApi.register({ username: credentials.username, password: credentials.password }));
+    const zone = this.zones[this.zoneIndex];
+    await this.submit(() =>
+      AuthApi.register({
+        username: credentials.username,
+        password: credentials.password,
+        ...(zone ? { zoneId: zone.id } : {}),
+      }),
+    );
+  }
+
+  /**
+   * 拉活区列表（公共接口）：拉到后刷新区服文案；
+   * 只有一个区就不给「点击切换」的提示（切了也是它）。失败静默 —— 老服务端没有这个接口，
+   * 注册不带 zoneId，服务端落默认区，行为与区服上线前完全一致。
+   */
+  private async loadZones() {
+    try {
+      const zones = await ZoneApi.list();
+      if (!isValid(this.zoneLabel, true)) return;
+      this.zones = zones ?? [];
+      this.zoneIndex = 0;
+      this.renderZone();
+    } catch (error) {
+      console.warn(`[Login] 区服列表拉取失败（注册将落默认区）：${describeError(error)}`);
+    }
+  }
+
+  /** 点一下换下一个区（循环；单区时无事发生） */
+  private cycleZone() {
+    if (this.zones.length < 2) return;
+    this.zoneIndex = (this.zoneIndex + 1) % this.zones.length;
+    this.renderZone();
+  }
+
+  /** 刷新区服文案（zones 未拉到时保持空白，不占视觉焦点） */
+  private renderZone() {
+    if (!this.zoneLabel || !isValid(this.zoneLabel, true)) return;
+    const zone = this.zones[this.zoneIndex];
+    if (!zone) {
+      this.zoneLabel.getComponent(Label).string = "";
+      return;
+    }
+    const key = this.zones.length > 1 ? "login_zone_picker" : "login_zone_label";
+    this.zoneLabel.getComponent(Label).string = getText(key, { zone: zone.name });
   }
 
   /** 读输入框（为空时提示并返回 null） */

@@ -272,7 +272,7 @@ function roleData(id, name, level, skills) {
     check(world && world.monsters.length === 2, "准备：worldJoin 播种后拿到 2 只权威实例", JSON.stringify(world));
     const mobA = world && world.monsters[0];
     const mobB = world && world.monsters[1];
-    check(!!mobA && /^m1_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m1_N 形态）", mobA && mobA.instanceId);
+    check(!!mobA && /^m1_z1_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m1_z1_N 形态，带区段）", mobA && mobA.instanceId);
     check(!!mobA && mobA.hp === 65 && mobA.maxHp === 65 && mobA.alive === true, "准备：实例以服务端表的满血起算");
 
     //#endregion

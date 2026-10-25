@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from "../../common/utils/password.util";
 import { describeBan, isBanned } from "../../common/utils/ban.util";
 import { LoginThrottleService } from "../../common/security/login-throttle.service";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import { ZoneRepository } from "../../database/repositories/zone.repository";
 import { AccountRow } from "../../database/rows";
 import { AuditService } from "../audit/audit.service";
 import { TokenService } from "../token/token.service";
@@ -20,6 +21,7 @@ import { LoginDto, RegisterDto } from "./dto/register.dto";
 export class AuthService {
   constructor(
     private readonly accounts: AccountRepository,
+    private readonly zones: ZoneRepository,
     private readonly tokens: TokenService,
     private readonly config: ConfigService,
     private readonly throttle: LoginThrottleService,
@@ -35,6 +37,11 @@ export class AuthService {
     const username = dto.username.trim();
     if (this.accounts.findByUsername(username)) throw BizException.conflict(BizCode.ACCOUNT_EXISTS, "该账号已被注册");
 
+    // 归属区（#295 阶段二）：必须是活区（不存在 / 已合并都进不去）；省略落一区（默认区）
+    const zoneId = dto.zoneId ?? 1;
+    const zone = this.zones.findLiveById(zoneId);
+    if (!zone) throw BizException.notFound(BizCode.ZONE_NOT_FOUND, "所选区服不存在或已合并");
+
     const now = Date.now();
     const account: AccountRow = {
       id: randomUUID(),
@@ -48,6 +55,7 @@ export class AuthService {
       ban_until: null,
       banned_by: null,
       banned_at: null,
+      zone_id: zone.id,
       created_at: now,
       updated_at: now,
       last_login_at: now,

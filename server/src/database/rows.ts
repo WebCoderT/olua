@@ -29,9 +29,31 @@ export interface AccountRow {
   /** 执行封禁的管理员账号名（冗余存一份，管理员被删也追得到人） */
   banned_by: string | null;
   banned_at: number | null;
+  /**
+   * 归属区（#295 阶段二）：注册时选定，之后只随「合并区」变化（合并是管理员操作，
+   * 玩家自己换不了区）。各区只有一行的世界里，账号的世界就是它归属区的世界。
+   */
+  zone_id: number;
   created_at: number;
   updated_at: number;
   last_login_at: number | null;
+}
+
+/** 区服一行（`zones` 表；#295 阶段二：多开区 / 合并区） */
+export interface ZoneRow {
+  id: number;
+  /** 区名（如「一区」；唯一，给玩家注册时选） */
+  name: string;
+  /** 已并入哪个区（合并区的标记；NULL = 还是一个活区） */
+  merged_into: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/** 世界代际一行（`world_meta` 表，单行；epoch 每次合并区 +1） */
+export interface WorldMetaRow {
+  id: number;
+  epoch: number;
 }
 
 export interface RoleRow {
@@ -207,9 +229,11 @@ export interface MailQueueWithAccountRow extends MailQueueRow {
 
 /** 世界怪物实例行（服务端持有的怪物状态，一行 = 场上一只怪） */
 export interface WorldMonsterRow {
-  /** 实例 id（服务端发牌，如 "m1_3"：地图 1 的第 3 只；全服唯一且跨重启稳定） */
+  /** 实例 id（服务端发牌，如 "m1_z1_3"：地图 1、一区的第 3 只；全服唯一且跨重启稳定） */
   instance_id: string;
   map_id: string;
+  /** 归属区（#295 阶段二；同一张图各区各有一份独立世界） */
+  zone_id: number;
   /** 怪物 key（configs/monster 的关联键，战斗数值查 monsters 表） */
   monster_key: string;
   /** 出生点（世界坐标；重生的落点也是它 —— 播种时由服务端在刷怪区内随机取点） */

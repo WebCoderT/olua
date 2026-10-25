@@ -2555,6 +2555,171 @@
         ]
       }
     },
+    "/admin/zones": {
+      "get": {
+        "description": "全部区服（含已合并的，附 `mergedInto` 去向与当前账号数），按开区顺序排列。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:read`（查看区服；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminZone.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "区服列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AdminZoneDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "区服列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AdminZoneDto"
+          }
+        },
+        "x-olua-permissions": [
+          "zone:read"
+        ]
+      },
+      "post": {
+        "description": "区名唯一（1~20 字）。新开的区立即可供注册选择，世界在第一个玩家进图时播种。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
+        "operationId": "adminZone.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateZoneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "新开的区",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminZoneDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "开新区",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminZoneDto"
+        },
+        "x-olua-permissions": [
+          "zone:write"
+        ]
+      }
+    },
+    "/admin/zones/merge": {
+      "post": {
+        "description": "把 from 区整体并入 to 区，一个事务内完成：from 区账号全部改挂 to 区、from 区的世界怪物实例改挂 to 区并重排发牌（instanceId 换成 to 区区段）、from 区打上已合并标记。\n\n**生效方式**：两个进程的世界内存靠代际信号作废 —— 玩家下一次进图就落在 to 区的世界，在线玩家不需要强制下线；合并瞬间各图未落盘的几秒内伤害变化会丢弃（可接受，见 #295）。\n\n边界：from 与 to 必须都是活区（未合并）、不能是同一个区。用户名全局唯一，所以合并永不撞名（#295 的刻意取舍）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
+        "operationId": "adminZone.merge",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeZoneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "合并后的 from 区（含 mergedInto 标记）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminZoneDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "合并区（from 并入 to）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminZoneDto"
+        },
+        "x-olua-permissions": [
+          "zone:write"
+        ]
+      }
+    },
     "/admin/audit-logs": {
       "get": {
         "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n**排序**：`sort` 取 `createdAt` / `actorName` / `action` / `targetType` / `success` / `statusCode` / `ip`，`order` 取 asc / desc（默认 createdAt 倒序）。同一毫秒的多条日志另有 id 兜底次序，保证翻页稳定。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
@@ -6992,6 +7157,51 @@
         ]
       }
     },
+    "/zones": {
+      "get": {
+        "description": "返回全部未合并的区服，按开区顺序排列。注册入参 `zoneId` 从这里选。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "zone.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "活区列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ZoneDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "区服列表（活区）",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ZoneDto"
+          }
+        }
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -7086,6 +7296,11 @@
             "type": "string",
             "description": "密码：6~32 位",
             "example": "123456"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）",
+            "example": 1
           }
         },
         "required": [
@@ -7582,6 +7797,38 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "CreateZoneDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "区服名（1~20 字，唯一）",
+            "example": "二区"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "MergeZoneDto": {
+        "type": "object",
+        "properties": {
+          "fromZoneId": {
+            "type": "number",
+            "description": "被并入的区（from，合并后打上已合并标记）",
+            "example": 2
+          },
+          "toZoneId": {
+            "type": "number",
+            "description": "并入的目标区（to，必须还是活区）",
+            "example": 1
+          }
+        },
+        "required": [
+          "fromZoneId",
+          "toZoneId"
         ]
       },
       "CreateAnnouncementDto": {
@@ -8559,6 +8806,11 @@
             "nullable": true,
             "example": null
           },
+          "zoneId": {
+            "type": "number",
+            "description": "归属区 id（注册时选定；只随合并区变化）",
+            "example": 1
+          },
           "roleCount": {
             "type": "number",
             "description": "角色数量（列表接口返回）",
@@ -8596,6 +8848,7 @@
           "bannedBy",
           "bannedAt",
           "onlineRoleId",
+          "zoneId",
           "createdAt",
           "updatedAt",
           "lastLoginAt",
@@ -8995,6 +9248,69 @@
         "required": [
           "ticket",
           "expiresIn"
+        ]
+      },
+      "ZoneDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "区服 id",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "区服名",
+            "example": "一区"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "AdminZoneDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "区服 id",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "区服名",
+            "example": "一区"
+          },
+          "mergedInto": {
+            "type": "number",
+            "description": "已并入的区服 id（未合并为 null）",
+            "nullable": true,
+            "example": null
+          },
+          "accountCount": {
+            "type": "number",
+            "description": "当前归属本区的账号数",
+            "example": 42
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "开区时间（毫秒）",
+            "example": 1760000000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mergedInto",
+          "accountCount",
+          "createdAt",
+          "updatedAt"
         ]
       },
       "AdminDto": {

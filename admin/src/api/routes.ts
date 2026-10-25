@@ -553,4 +553,25 @@ export const routes = {
      */
     reorderUpgradeList: "/admin/titles/upgrade-order",
   },
+  /** adminZone 模块（3 个接口） */
+  adminZone: {
+    /**
+     * 区服列表（GET /admin/zones）
+     *
+     * 全部区服（含已合并的，附 `mergedInto` 去向与当前账号数），按开区顺序排列。
+     */
+    list: "/admin/zones",
+    /**
+     * 开新区（POST /admin/zones）
+     *
+     * 区名唯一（1~20 字）。新开的区立即可供注册选择，世界在第一个玩家进图时播种。
+     */
+    create: "/admin/zones",
+    /**
+     * 合并区（from 并入 to）（POST /admin/zones/merge）
+     *
+     * 把 from 区整体并入 to 区，一个事务内完成：from 区账号全部改挂 to 区、from 区的世界怪物实例改挂 to 区并重排发牌（instanceId 换成 to 区区段）、from 区打上已合并标记。
+     */
+    merge: "/admin/zones/merge",
+  },
 } as const;

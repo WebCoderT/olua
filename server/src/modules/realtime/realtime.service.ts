@@ -155,7 +155,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.kickPollTimer = setInterval(() => this.sweepKicked(), kickPollMs).unref();
     }
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
-    this.world.onWorldChanged = (mapId) => this.broadcastWorld(mapId);
+    this.world.onWorldChanged = (zoneId, mapId) => this.broadcastWorld(zoneId, mapId);
 
     this.logger.log(
       `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
@@ -350,13 +350,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       return;
     }
     if (parsed?.type === "worldJoin") {
-      // 进图登记（播种 / 恢复 / 换图都走这里），应答一张权威快照
+      // 进图登记（播种 / 恢复 / 换图都走这里），应答一张权威快照。
+      // 区号从账号行现查（#295 阶段二）：账号归哪个区就进哪个区的世界；
+      // 合并区后同一连接不改区，下一次 worldJoin 才按新账号行落位。
       const join = parseWorldJoin(parsed.data);
       if (!join) {
         this.send(socket, { type: "error", data: { message: "worldJoin 消息缺 mapId" } });
         return;
       }
-      const snapshot = this.world.join(socket.identity.id, join.mapId);
+      const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
+      const snapshot = this.world.join(zoneId, socket.identity.id, join.mapId);
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);
       return;
@@ -370,11 +373,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    * 拿不到快照（图已被卸载）就不发 —— 那只可能发生在观看者集合与世界状态不同步的瞬间，
    * 而观看者下一个 worldJoin 会拿到全量。
    */
-  private broadcastWorld(mapId: string): void {
-    const snapshot = this.world.snapshot(mapId);
+  private broadcastWorld(zoneId: number, mapId: string): void {
+    const snapshot = this.world.snapshot(zoneId, mapId);
     if (!snapshot) return;
     const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
-    for (const accountId of this.world.viewersOf(mapId)) {
+    for (const accountId of this.world.viewersOf(zoneId, mapId)) {
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, frame);
     }

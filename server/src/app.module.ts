@@ -19,6 +19,7 @@ import { RolesModule } from "./modules/roles/roles.module";
 import { SystemModule } from "./modules/system/system.module";
 import { TokenModule } from "./modules/token/token.module";
 import { WorldModule } from "./modules/world/world.module";
+import { ZoneModule } from "./modules/zone/zone.module";
 
 /**
  * 应用根模块
@@ -61,6 +62,7 @@ export class AppModule {
         AnnouncementModule,
         GameConfigModule,
         MailModule,
+        ZoneModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

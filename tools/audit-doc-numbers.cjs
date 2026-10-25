@@ -106,6 +106,7 @@ const E2E_SCRIPTS = [
   ["双进程形态", "server/test/e2e-dual.cjs"],
   ["养成配置（称号/战魂）", "server/test/e2e-game-config.cjs"],
   ["备份恢复", "server/test/backup.cjs"],
+  ["区服（多开区/合并区）", "server/test/e2e-zone.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

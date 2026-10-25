@@ -311,6 +311,10 @@ export const uiTexts = {
   realtime_replaced_tip: "账号已在其它窗口登录，本窗口已断开",
   /** 登录/注册表单未填写完整 */
   login_input_empty_tip: "请输入账号和密码",
+  /** 登录页区服选择（{zone} = 当前选中的区服名；只有一个区时显示这个） */
+  login_zone_label: "区服：{zone}",
+  /** 登录页区服选择（多个区时可点击切换，{zone} = 当前选中的区服名） */
+  login_zone_picker: "区服：{zone}（点击切换）",
   /** 登录成功（{name} = 账号名） */
   login_success_tip: "登录成功，欢迎 {name}",
   /** 注册成功（{name} = 账号名） */
