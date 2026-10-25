@@ -298,6 +298,36 @@ export const routes = {
      */
     templates: "/admin/mails/templates",
   },
+  /** adminMonster 模块（2 个接口） */
+  adminMonster: {
+    /**
+     * 怪物基础数据列表（GET /admin/monsters）
+     *
+     * key 清单固定（seed 自客户端 configs/monster 的 220 只），**没有创建 / 删除**。`keyword` 模糊匹配 key / 名称，`tier` 按定位筛。
+     */
+    list: "/admin/monsters",
+    /**
+     * 编辑怪物基础数据（PATCH /admin/monsters/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。改完即时生效（世界播种与伤害结算直读 monsters 表）——已活着的世界实例血量上限沿用出生时的值，重生后用新值。
+     */
+    update: (id: string) => `/admin/monsters/${encodeURIComponent(id)}`,
+  },
+  /** adminNpc 模块（2 个接口） */
+  adminNpc: {
+    /**
+     * NPC 基础数据列表（GET /admin/npcs）
+     *
+     * id 清单固定（seed 自客户端 configs/npc-data 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。
+     */
+    list: "/admin/npcs",
+    /**
+     * 编辑 NPC 基础数据（PATCH /admin/npcs/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/npcs/${encodeURIComponent(id)}`,
+  },
   /** adminRank 模块（2 个接口） */
   adminRank: {
     /**

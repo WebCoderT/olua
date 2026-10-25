@@ -51,6 +51,8 @@ import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "../modules/ga
 import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, UpdateEquipmentDto } from "../modules/game-config/dto/equipment.dto";
 import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/game-config/dto/drug.dto";
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
+import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
+import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-config/dto/npc.dto";
 import {
   GrowthScalarDto,
   GrowthScalarPageDto,
@@ -207,4 +209,14 @@ export const SWAGGER_MODELS = [
   ItemPageDto,
   ItemQueryDto,
   UpdateItemDto,
+  // 养成配置（怪物 #258）
+  MonsterDto,
+  MonsterPageDto,
+  MonsterQueryDto,
+  UpdateMonsterDto,
+  // 养成配置（NPC #258）
+  NpcDto,
+  NpcPageDto,
+  NpcQueryDto,
+  UpdateNpcDto,
 ];

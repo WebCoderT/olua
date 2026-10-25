@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 221;
+const EXPECTED_ASSERTIONS = 271;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -673,6 +673,126 @@ async function main() {
     const viewerItemWrite = await api(base, "PATCH", "/api/admin/items/material_hide", { token: viewerToken, body: { sellPrice: 1 } });
     checkEqual(viewerItemWrite.status, 403, "观察员改物品 → 403");
     checkEqual(viewerItemWrite.body?.code, 30006, "观察员改物品 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 十一、怪物基础数据（#258）：seed 同源 / tier 筛 / 只许改 / 改的是结算直读的表
+
+    group("十一、怪物基础数据");
+
+    const monsters = await api(base, "GET", "/api/admin/monsters", { token });
+    checkEqual(monsters.status, 200, "怪物列表可读");
+    const monsterCount = Object.keys(shared.MONSTERS).length;
+    checkEqual(monsters.body?.data?.total, monsterCount, `怪物行数 = 配置表（${monsterCount}）`);
+    checkEqual(monsters.body?.data?.list?.length, 100, "默认每页 100 条（220 只装不下一页）");
+    const monstersPage2 = await api(base, "GET", "/api/admin/monsters?page=2", { token });
+    checkEqual(monstersPage2.body?.data?.list?.length, 100, "第二页也是满的 100 条");
+    const monstersPage3 = await api(base, "GET", "/api/admin/monsters?page=3", { token });
+    checkEqual(monstersPage3.body?.data?.list?.length, monsterCount - 200, "第三页补齐剩余怪物");
+    checkEqual(monsters.body?.data?.list?.[0]?.level, 1, "默认按等级升序（首行是 1 级怪）");
+
+    const monster1 = monsters.body?.data?.list?.find((row) => row.id === "1");
+    check(Boolean(monster1), "列表里有怪物 key \"1\"");
+    checkEqual(monster1?.label, shared.MONSTERS["1"].label, "怪物 1 名称与配置一致");
+    checkEqual(monster1?.tier, shared.MONSTERS["1"].tier, "怪物 1 定位与配置一致");
+    checkEqual(monster1?.maxHp, shared.MONSTERS["1"].maxHp, "怪物 1 生命上限与配置一致");
+    checkEqual(
+      JSON.stringify([monster1?.attributes?.physicalAttack?.min, monster1?.attributes?.physicalAttack?.max]),
+      JSON.stringify(shared.MONSTERS["1"].physicalAttack),
+      "怪物 1 物攻区间与配置一致（快照数组 → min/max 结构）",
+    );
+
+    const monsterKeyword = await api(base, "GET", "/api/admin/monsters?keyword=" + encodeURIComponent(shared.MONSTERS["1"].label), { token });
+    checkEqual(monsterKeyword.body?.data?.total, 1, "关键字按名称命中怪物 1");
+    const monstersNormal = await api(base, "GET", "/api/admin/monsters?tier=normal", { token });
+    checkEqual(monstersNormal.body?.data?.total, monsterCount, "tier=normal：全部怪物（当前全是普通怪）");
+    const monstersElite = await api(base, "GET", "/api/admin/monsters?tier=elite", { token });
+    checkEqual(monstersElite.body?.data?.total, 0, "tier=elite：空列表（合法筛选）");
+    const monstersBadSort = await api(base, "GET", "/api/admin/monsters?sort=evil", { token });
+    checkEqual(monstersBadSort.body?.data?.list?.[0]?.level, 1, "白名单外的 sort 退回默认排序（防注入）");
+
+    const monsterPatched = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: { label: "赤焰斗鸡（改）", level: 5, maxHp: 500 },
+    });
+    checkEqual(monsterPatched.status, 200, "PATCH 怪物成功（名称/等级/生命一起改）");
+    checkEqual(monsterPatched.body?.data?.label, "赤焰斗鸡（改）", "响应里的名称已更新");
+    checkEqual(monsterPatched.body?.data?.maxHp, 500, "响应里的生命上限已更新");
+    const monsterAttrs = monsterPatched.body?.data?.attributes;
+    const monsterAttrPatched = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: { attributes: { ...monsterAttrs, physicalAttack: { min: 30, max: 88 } } },
+    });
+    checkEqual(
+      JSON.stringify([monsterAttrPatched.body?.data?.attributes?.physicalAttack?.min, monsterAttrPatched.body?.data?.attributes?.physicalAttack?.max]),
+      JSON.stringify([30, 88]),
+      "六项区间整份替换生效",
+    );
+    checkEqual(monsterAttrPatched.body?.data?.maxHp, 500, "上次改的生命上限保留（合并语义）");
+    const monsterBadHp = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { maxHp: 0 } });
+    checkEqual(monsterBadHp.status, 400, "生命上限 0 → 400");
+    const monsterCrossed = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: { attributes: { ...monsterAttrs, magicDefense: { min: 9, max: 2 } } },
+    });
+    checkEqual(monsterCrossed.status, 400, "属性 min > max → 400（跨字段校验在服务端）");
+    checkEqual(monsterCrossed.body?.code, 40000, "参数越界用 40000");
+    const monsterGhost = await api(base, "PATCH", "/api/admin/monsters/nope", { token, body: { label: "x" } });
+    checkEqual(monsterGhost.status, 404, "改不存在的怪物 → 404");
+    checkEqual(monsterGhost.body?.code, 50019, "怪物未找到用专属业务码 50019");
+    const monsterStructural = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { tier: "boss" } });
+    checkEqual(monsterStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
+    checkEqual(monsterStructural.body?.data?.tier, shared.MONSTERS["1"].tier, "tier 不可编辑（已展开数值才是结算依据）");
+    const postMonster = await api(base, "POST", "/api/admin/monsters", { token, body: { id: "999" } });
+    checkEqual(postMonster.status, 404, "POST 怪物 → 404（路由不存在）");
+    const deleteMonster = await api(base, "DELETE", "/api/admin/monsters/1", { token });
+    checkEqual(deleteMonster.status, 404, "DELETE 怪物 → 404（路由不存在）");
+    const viewerMonsterRead = await api(base, "GET", "/api/admin/monsters", { token: viewerToken });
+    checkEqual(viewerMonsterRead.body?.code, 0, "观察员能看怪物配置");
+    const viewerMonsterWrite = await api(base, "PATCH", "/api/admin/monsters/1", { token: viewerToken, body: { maxHp: 1 } });
+    checkEqual(viewerMonsterWrite.status, 403, "观察员改怪物 → 403");
+    checkEqual(viewerMonsterWrite.body?.code, 30006, "观察员改怪物 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 十二、NPC 基础数据（#258）：seed 同源 / keyword 筛 / 只许改 / 对话列后台可维护
+
+    group("十二、NPC 基础数据");
+
+    const npcs = await api(base, "GET", "/api/admin/npcs", { token });
+    checkEqual(npcs.status, 200, "NPC 列表可读");
+    const npcCount = Object.keys(shared.NPCS).length;
+    checkEqual(npcs.body?.data?.total, npcCount, `NPC 行数 = 配置表（${npcCount}）`);
+    checkEqual(npcs.body?.data?.list?.length, npcCount, "默认一页装下全部 NPC");
+    const npc2 = npcs.body?.data?.list?.find((row) => row.id === "0002");
+    check(Boolean(npc2), "列表里有 NPC 0002");
+    checkEqual(npc2?.label, shared.NPCS["0002"].label, "NPC 0002 名称与配置一致");
+    checkEqual(npc2?.dialog, "", "对话文案 seed 为空串（客户端暂无对话数据形态）");
+
+    const npcKeyword = await api(base, "GET", "/api/admin/npcs?keyword=" + encodeURIComponent("传送官"), { token });
+    checkEqual(npcKeyword.body?.data?.total, 2, "关键字按名称命中两个传送官");
+
+    const npcPatched = await api(base, "PATCH", "/api/admin/npcs/0002", {
+      token,
+      body: { label: "大陆传送官（改）", dialog: "要传送去哪张地图？" },
+    });
+    checkEqual(npcPatched.status, 200, "PATCH NPC 成功（名称/对话一起改）");
+    checkEqual(npcPatched.body?.data?.label, "大陆传送官（改）", "响应里的名称已更新");
+    checkEqual(npcPatched.body?.data?.dialog, "要传送去哪张地图？", "响应里的对话已更新");
+    const npcCleared = await api(base, "PATCH", "/api/admin/npcs/0002", { token, body: { dialog: "" } });
+    checkEqual(npcCleared.body?.data?.dialog, "", "对话传空串 = 清空");
+    const npcGhost = await api(base, "PATCH", "/api/admin/npcs/9999", { token, body: { label: "x" } });
+    checkEqual(npcGhost.status, 404, "改不存在的 NPC → 404");
+    checkEqual(npcGhost.body?.code, 50020, "NPC 未找到用专属业务码 50020");
+    const postNpc = await api(base, "POST", "/api/admin/npcs", { token, body: { id: "9999" } });
+    checkEqual(postNpc.status, 404, "POST NPC → 404（路由不存在）");
+    const deleteNpc = await api(base, "DELETE", "/api/admin/npcs/0002", { token });
+    checkEqual(deleteNpc.status, 404, "DELETE NPC → 404（路由不存在）");
+    const viewerNpcRead = await api(base, "GET", "/api/admin/npcs", { token: viewerToken });
+    checkEqual(viewerNpcRead.body?.code, 0, "观察员能看 NPC 配置");
+    const viewerNpcWrite = await api(base, "PATCH", "/api/admin/npcs/0002", { token: viewerToken, body: { label: "x" } });
+    checkEqual(viewerNpcWrite.status, 403, "观察员改 NPC → 403");
+    checkEqual(viewerNpcWrite.body?.code, 30006, "观察员改 NPC → 30006（权限点不足）");
 
     //#endregion
   } finally {

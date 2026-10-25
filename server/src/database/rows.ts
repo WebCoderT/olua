@@ -210,7 +210,7 @@ export interface WorldMonsterRow {
   /** 实例 id（服务端发牌，如 "m1_3"：地图 1 的第 3 只；全服唯一且跨重启稳定） */
   instance_id: string;
   map_id: string;
-  /** 怪物 key（configs/monster 的关联键，战斗数值查 MONSTER_COMBAT 用） */
+  /** 怪物 key（configs/monster 的关联键，战斗数值查 monsters 表） */
   monster_key: string;
   /** 出生点（世界坐标；重生的落点也是它 —— 区域配置在客户端，服务端只记实例自己的位置） */
   x: number;
@@ -472,6 +472,63 @@ export interface ItemRow {
   sell_price: number;
   /** 最大叠加数量 */
   max_stack: number;
+  updated_at: number;
+}
+
+/**
+ * 怪物基础数据（#258）：管理端「怪物配置」的行，也是世界权威 / 战斗结算的数值来源
+ *
+ * 主键是怪物 key（configs/monster 的关联键，如 "1"）—— 清单固定，**不可增删行**
+ * （地图刷怪点 / 掉落表 / 技能引用）。战斗数值 seed 自生成物 MONSTERS
+ * （monsterStats 打底 + 条目覆盖的展开结果）；改这里的值**即时生效** ——
+ * 世界播种与伤害结算都直读本表（两进程共享同一个 SQLite 文件）。
+ */
+export interface MonsterRow {
+  /** 怪物 key（configs/monster 的关联键；主键，不可增删行） */
+  id: string;
+  /** 名称（头顶名牌，后台可改） */
+  label: string;
+  /** 定位（normal / elite / boss；只作标注，已展开数值才是结算依据，不开放编辑） */
+  tier: string;
+  /** 等级（客户端按它排怪显示；可编辑） */
+  level: number;
+  /** 最大生命 */
+  max_hp: number;
+  /** 物理攻击区间 [min, max] */
+  physical_attack_min: number;
+  physical_attack_max: number;
+  /** 魔法攻击区间 */
+  magic_attack_min: number;
+  magic_attack_max: number;
+  /** 道术攻击区间 */
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  /** 物理防御区间 */
+  physical_defense_min: number;
+  physical_defense_max: number;
+  /** 魔法防御区间 */
+  magic_defense_min: number;
+  magic_defense_max: number;
+  /** 道术防御区间 */
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
+/**
+ * NPC 基础数据（#258）：管理端「NPC 配置」的行
+ *
+ * 主键是 NPC id（Tiled 对象组的关联键，如 "0002"）—— 清单固定，**不可增删行**
+ * （地图对象组引用）。`dialog` 是对话文案列：客户端目前没有对话数据形态
+ * （都写死在弹窗组件里），seed 为空串，运营在这里维护，客户端消费等对接。
+ */
+export interface NpcRow {
+  /** NPC id（如 "0002"；主键，不可增删行） */
+  id: string;
+  /** 名称（后台可改） */
+  label: string;
+  /** 对话文案（seed 为空串，客户端消费等 #248/#249） */
+  dialog: string;
   updated_at: number;
 }
 

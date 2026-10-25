@@ -170,6 +170,10 @@ export const BizCode = {
   DRUG_NOT_FOUND: 50017,
   /** 物品不存在（id 清单由客户端配置 seed 固定，不可增删行） */
   ITEM_NOT_FOUND: 50018,
+  /** 怪物不存在（key 清单由客户端配置 seed 固定，不可增删行） */
+  MONSTER_NOT_FOUND: 50019,
+  /** NPC 不存在（id 清单由客户端配置 seed 固定，不可增删行） */
+  NPC_NOT_FOUND: 50020,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

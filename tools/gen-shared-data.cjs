@@ -41,10 +41,11 @@
  * ===========================================================================
  * 不在范围内（以及为什么）
  * ===========================================================================
- * - ~~怪物 / 掉落~~：**#34 起已纳入**——实测 `configs/monster` 在 cc 垫片（Vec2/Size/Vec3/Color）下
+ * - ~~怪物 / NPC~~：**#34 / #258 起已纳入**——实测 `configs/monster` 在 cc 垫片（Vec2/Size/Vec3/Color）下
  *   能干净编译加载（此前记的「依赖 UI 模块」已不成立），战斗数值按
- *   「monsterStats(level, tier) 打底 + 条目覆盖」展开后进快照（`MONSTER_COMBAT`）；
- *   掉落表仍不进（掉落结算还没上服务端，等世界权威那一刀）。
+ *   「monsterStats(level, tier) 打底 + 条目覆盖」展开后进快照（`MONSTERS`，#258 起带名称）；
+ *   NPC 走 `configs/npc-data`（**数据与行为分家**：原 npc.ts 引 UI 弹窗链，Node 加载会炸 ——
+ *   实证 `Pointer.js` 的 `sys.hasFeature` 即炸，onClick 接线留在 npc.ts），快照只有 id / label。
  * - **时装**：`configs/fashionClothes.ts` 目前整份被注释掉（零导出），没有活的来源 ——
  *   等它被启用再说，不在这里凭空造一份。
  *
@@ -66,7 +67,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -106,7 +107,8 @@ const CC_SHIM = `"use strict";
 class Color { constructor(value) { this.value = value; } }
 class Vec2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }
 class Size { constructor(width = 0, height = 0) { this.width = width; this.height = height; } }
-module.exports = { Color, Vec2, Size };
+class Vec3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } }
+module.exports = { Color, Vec2, Size, Vec3 };
 `;
 
 function main() {
@@ -125,7 +127,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsterCombat)} 只 · 药品 ${count(snapshot.drugs)} 种`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -208,6 +210,7 @@ function load(work) {
     items: missing("items", cfg("items").items),
     maps: missing("map.maps", cfg("map").maps),
     monsters: missing("monster.monsters", cfg("monster").monsters),
+    npcs: missing("npc-data.npcData", cfg("npc-data").npcData),
     drugs: missing("drug.drugs", cfg("drug").drugs),
     materials: missing("material.materials", cfg("material").materials),
   };
@@ -237,7 +240,8 @@ function buildSnapshot(cfg) {
     // 变体（_pXsY）的属性与回收价都是基础件乘倍率展开的，运营只改基础件这一份
     equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
-    monsterCombat: pickMonsterCombat(cfg.monsters),
+    monsters: pickMonsters(cfg.monsters),
+    npcs: pickNpcs(cfg.npcs),
     // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
     // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
     drugs: pickDrugs(cfg.drugs),
@@ -372,13 +376,13 @@ function pickEquipmentBases(maps) {
  * 口径复制出去。只留参与伤害结算的字段（maxHp + 六项攻防区间 + 等级 / 定位），
  * 外观 / 几何 / 掉落 / AI 参数都是表现或世界层，不进。
  */
-function pickMonsterCombat(monsters) {
+function pickMonsters(monsters) {
   const out = [];
   const seen = new Set();
   monsters.forEach((item, key) => {
     if (seen.has(key)) throw new Error(`怪物 key 重复：${key}`);
     seen.add(key);
-    const row = { level: round(item.level ?? 0), tier: String(item.tier ?? "normal"), maxHp: round(item.maxHp ?? 0) };
+    const row = { label: String(item.label ?? ""), level: round(item.level ?? 0), tier: String(item.tier ?? "normal"), maxHp: round(item.maxHp ?? 0) };
     for (const key2 of RANGE_KEYS) {
       const value = item[key2];
       if (!Array.isArray(value) || value.length < 2) throw new Error(`怪物 ${key} 缺少区间属性 ${key2}（monsterStats 没铺到？）`);
@@ -386,6 +390,27 @@ function pickMonsterCombat(monsters) {
     }
     out.push([key, row]);
   });
+  return out;
+}
+
+/**
+ * NPC 表 → [[NPC id, 元数据]]（#258）
+ *
+ * 来源是 `configs/npc-data`（数据与行为分家后的纯数据文件，见文件头）。只收
+ * id 与 label：src / scale / position 是表现层资源与几何，不进快照；对话文案
+ * 客户端目前没有数据形态（都写死在弹窗组件里），管理端在 npcs 表上新增
+ * dialog 列运营可改，客户端消费等对接（#248/#249）。
+ */
+function pickNpcs(npcs) {
+  const out = [];
+  const seen = new Set();
+  for (const item of npcs || []) {
+    if (!item || !item.id) throw new Error("configs/npc-data 里有缺 id 的条目");
+    if (seen.has(item.id)) throw new Error(`NPC id 重复：${item.id}`);
+    seen.add(item.id);
+    out.push([item.id, { label: String(item.label ?? "") }]);
+  }
+  if (out.length === 0) throw new Error("configs/npc-data 的 npcData 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 
@@ -675,7 +700,8 @@ ${numTable("TITLE_LEVEL_ATTRIBUTES", "称号等级 → 整份属性加成", s.ti
 ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.rankLevels)}
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 战斗数值。damageCoefficients 的下标 = 技能等级，baseType 是取哪种属性当基数", s.skills)}
-${numTable("MONSTER_COMBAT", "怪物 key → 战斗数值（monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）", s.monsterCombat)}
+${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）", s.monsters)}
+${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
 

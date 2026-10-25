@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { MONSTER_COMBAT, SKILLS } from "../../shared/game-data.generated";
+import { SKILLS } from "../../shared/game-data.generated";
+import { MonsterRepository } from "../../database/repositories/monster.repository";
+import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService } from "../world/world.service";
@@ -18,7 +20,7 @@ import type { RealtimeSettleData } from "./realtime.protocol";
  * - 攻击者的六项攻防区间：`summarizeRoleAttributes`（#29/#30 的产物，对齐客户端 combatCalc，
  *   素材来自生成物的等级 / 装备 / 战魂 / 称号 / 军衔表）；
  * - 目标（怪物）：**世界服务持有的实例**（#35 起）—— 身份由服务端发牌（`worldJoin` 的
- *   instanceId），血量 / 存活都在那里；战斗数值来自生成物 `MONSTER_COMBAT`；
+ *   instanceId），血量 / 存活都在那里；战斗数值来自 monsters 表（#258 起后台可改，即时生效）；
  * - 技能倍率：生成物 `SKILLS`（`damageCoefficients` 下标 = 技能等级）。
  *
  * ===========================================================================
@@ -48,6 +50,7 @@ export class CombatSettlementService {
   constructor(
     private readonly roles: RolesService,
     private readonly world: WorldService,
+    private readonly monsterConfigs: MonsterRepository,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -88,8 +91,9 @@ export class CombatSettlementService {
     if (!skill) return fail("unknown_skill", `技能不存在：${cast.skillId}`);
 
     // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，
-    // 伪造的 / 已被卸载图的一律 unknown_target），且 key 与实例登记的一致
-    const stats = MONSTER_COMBAT[cast.monsterKey as keyof typeof MONSTER_COMBAT];
+    // 伪造的 / 已被卸载图的一律 unknown_target），且 key 与实例登记的一致。
+    // 直读 monsters 表（#258）：管理端改了数值即时生效，不经快照不经缓存
+    const stats = this.monsterConfigs.findByKey(cast.monsterKey);
     if (!stats) return fail("unknown_target", `目标怪物不存在：${cast.monsterKey}`);
     const target = this.world.find(cast.targetId);
     if (!target) return fail("unknown_target", `目标实例不存在：${cast.targetId}`);
@@ -207,10 +211,10 @@ function readRange(source: object, attribute: AttackAttribute): [number, number]
   return [Number(value[0]) || 0, Number(value[1]) || 0];
 }
 
-/** 怪物战斗数值里的攻防区间（攻与防同名：物理攻击对物理防御——客户端 defenseAttributeByAttack 的映射关系） */
-function readMonsterRange(stats: Record<string, unknown>, attribute: AttackAttribute): [number, number] {
-  const defenseKey = attribute === "physicalAttack" ? "physicalDefense" : attribute === "magicAttack" ? "magicDefense" : "taoistDefense";
-  return readRange(stats, defenseKey as AttackAttribute);
+/** 怪物战斗数值里的攻防区间（攻与防同名：物理攻击对物理防御——客户端 defenseAttributeByAttack 的映射关系；行里是拍平的 *_min/*_max 列） */
+function readMonsterRange(stats: MonsterRow, attribute: AttackAttribute): [number, number] {
+  const prefix = attribute === "physicalAttack" ? "physical_defense" : attribute === "magicAttack" ? "magic_defense" : "taoist_defense";
+  return [Number(stats[`${prefix}_min`]) || 0, Number(stats[`${prefix}_max`]) || 0];
 }
 
 /**

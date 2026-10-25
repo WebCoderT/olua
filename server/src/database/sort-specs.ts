@@ -219,3 +219,28 @@ export const ITEM_SORT: SortSpec<"id" | "type" | "label" | "sellPrice" | "update
   default: "id",
   defaultOrder: "asc",
 };
+
+/** 怪物基础数据列表（#258）：默认按等级升序（练级动线从低到高） */
+export const MONSTER_SORT: SortSpec<"id" | "label" | "tier" | "level" | "maxHp" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    label: "label",
+    tier: "tier",
+    level: "level",
+    maxHp: "max_hp",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};
+
+/** NPC 基础数据列表（#258）：默认按 id 升序（id 的分段习惯即功能分组） */
+export const NPC_SORT: SortSpec<"id" | "label" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    label: "label",
+    updatedAt: "updated_at",
+  },
+  default: "id",
+  defaultOrder: "asc",
+};

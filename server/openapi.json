@@ -4593,6 +4593,367 @@
         ]
       }
     },
+    "/admin/monsters": {
+      "get": {
+        "description": "key 清单固定（seed 自客户端 configs/monster 的 220 只），**没有创建 / 删除**。`keyword` 模糊匹配 key / 名称，`tier` 按定位筛。\n\n战斗数值是「monsterStats(level, tier) 打底 + 条目覆盖」的**展开结果**——改这里的值即时生效（世界播种与伤害结算直读 monsters 表）；`level` 是显示用元数据，改它**不会**重算数值。\n\n**排序**：`sort` 取 `id` / `label` / `tier` / `level` / `maxHp` / `updatedAt`，`order` 取 asc / desc（默认等级升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMonster.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "tier",
+            "required": false,
+            "in": "query",
+            "description": "按定位筛（取值：normal / elite / boss；不落 schema 以免枚举键进两端生成物）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "怪物基础数据列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MonsterQueryDto"
+        }
+      }
+    },
+    "/admin/monsters/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。改完即时生效（世界播种与伤害结算直读 monsters 表）——已活着的世界实例血量上限沿用出生时的值，重生后用新值。\n\n- `label`：名称（头顶名牌）。\n- `level`：显示用元数据，改它**不会**重算战斗数值。\n- `maxHp`：生命上限（已展开值，≥1）。\n- `attributes`：六项攻防区间，**整份提交、整份替换**（0 ≤ min ≤ max）。\n- `tier` 不开放编辑（仅作标注，改它不影响已展开数值）。\n- `id` 不存在 → 404（`50019`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMonster.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "怪物 key（configs/monster 的关联键，如 \"1\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMonsterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的怪物基础数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑怪物基础数据",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/npcs": {
+      "get": {
+        "description": "id 清单固定（seed 自客户端 configs/npc-data 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。\n\n`dialog` 是对话文案列：客户端目前没有对话数据形态（都写死在弹窗组件里），seed 为空串，在这里运营可改，客户端消费等对接。\n\n**排序**：`sort` 取 `id` / `label` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminNpc.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/NpcPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "NPC 基础数据列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/NpcPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/NpcQueryDto"
+        }
+      }
+    },
+    "/admin/npcs/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：名称。\n- `dialog`：对话文案（空串 = 清空；≤2000 字）。\n- `id` 不存在 → 404（`50020`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminNpc.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "NPC id（如 \"0002\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNpcDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的 NPC 基础数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/NpcDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑 NPC 基础数据",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/NpcDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/level-exps": {
       "get": {
         "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -6369,6 +6730,129 @@
             "description": "最大叠加数量（不传则不改）",
             "minimum": 1,
             "maximum": 9999
+          }
+        }
+      },
+      "AttributeRange": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number",
+            "description": "下限（含）"
+          },
+          "max": {
+            "type": "number",
+            "description": "上限（含）"
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ]
+      },
+      "MonsterAttributesDto": {
+        "type": "object",
+        "properties": {
+          "physicalAttack": {
+            "description": "物理攻击区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttributeRange"
+              }
+            ]
+          },
+          "magicAttack": {
+            "description": "魔法攻击区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttributeRange"
+              }
+            ]
+          },
+          "taoistAttack": {
+            "description": "道术攻击区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttributeRange"
+              }
+            ]
+          },
+          "physicalDefense": {
+            "description": "物理防御区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttributeRange"
+              }
+            ]
+          },
+          "magicDefense": {
+            "description": "魔法防御区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttributeRange"
+              }
+            ]
+          },
+          "taoistDefense": {
+            "description": "道术防御区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttributeRange"
+              }
+            ]
+          }
+        },
+        "required": [
+          "physicalAttack",
+          "magicAttack",
+          "taoistAttack",
+          "physicalDefense",
+          "magicDefense",
+          "taoistDefense"
+        ]
+      },
+      "UpdateMonsterDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 50
+          },
+          "level": {
+            "type": "number",
+            "description": "等级（显示用元数据，不传则不改）",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "最大生命（不传则不改）",
+            "minimum": 1,
+            "maximum": 2000000000
+          },
+          "attributes": {
+            "description": "六项攻防区间（**整份提交、整份替换**，不传则不改；要求 0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MonsterAttributesDto"
+              }
+            ]
+          }
+        }
+      },
+      "UpdateNpcDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 50
+          },
+          "dialog": {
+            "type": "string",
+            "description": "对话文案（不传则不改；空串 = 清空）",
+            "maxLength": 2000
           }
         }
       },
@@ -9982,6 +10466,225 @@
           "type": {
             "type": "string",
             "description": "按物品大类筛（取值：equipment / drug / material / other；枚举清单派生自客户端配置，不落 schema 以免枚举字面量进两端生成物）"
+          }
+        }
+      },
+      "MonsterDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "怪物 key（configs/monster 的关联键，如 \"1\"）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（头顶名牌，后台可改）"
+          },
+          "tier": {
+            "type": "string",
+            "description": "定位（normal / elite / boss；仅作标注，不开放编辑）"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级（显示用元数据；战斗数值以 maxHp / 六项区间为准）"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "最大生命"
+          },
+          "attributes": {
+            "description": "六项攻防区间（0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MonsterAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "tier",
+          "level",
+          "maxHp",
+          "attributes",
+          "updatedAt"
+        ]
+      },
+      "MonsterPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的怪物基础数据",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "MonsterQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "tier": {
+            "type": "string",
+            "description": "按定位筛（取值：normal / elite / boss；不落 schema 以免枚举键进两端生成物）"
+          }
+        }
+      },
+      "NpcDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "NPC id（Tiled 对象组的关联键，如 \"0002\"）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（后台可改）"
+          },
+          "dialog": {
+            "type": "string",
+            "description": "对话文案（客户端暂无对话数据形态，seed 为空串；消费等 #248/#249）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "dialog",
+          "updatedAt"
+        ]
+      },
+      "NpcPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的 NPC 基础数据",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NpcDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "NpcQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
           }
         }
       }

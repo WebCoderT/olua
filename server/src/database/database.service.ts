@@ -341,6 +341,38 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         max_stack    INTEGER NOT NULL DEFAULT 99,
         updated_at   INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 怪物基础数据（#258）：主键是怪物 key（configs/monster 的关联键），清单固定不可增删行；
+      -- 战斗数值 seed 自生成物 MONSTERS，世界播种与伤害结算直读本表（改值即时生效）
+      CREATE TABLE IF NOT EXISTS monsters (
+        id                   TEXT    PRIMARY KEY,
+        label                TEXT    NOT NULL DEFAULT '',
+        tier                 TEXT    NOT NULL DEFAULT 'normal',
+        level                INTEGER NOT NULL DEFAULT 1,
+        max_hp               INTEGER NOT NULL DEFAULT 1,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- NPC 基础数据（#258）：主键是 NPC id（Tiled 对象组的关联键），清单固定不可增删行；
+      -- dialog 是对话文案列（客户端暂无对话数据形态，seed 为空串，运营可改）
+      CREATE TABLE IF NOT EXISTS npcs (
+        id         TEXT    PRIMARY KEY,
+        label      TEXT    NOT NULL DEFAULT '',
+        dialog     TEXT    NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

@@ -95,6 +95,8 @@ const MODULES = {
   adminEquipment: { target: "admin", export: "equipmentsApi" },
   adminDrug: { target: "admin", export: "drugsApi" },
   adminItem: { target: "admin", export: "itemsApi" },
+  adminMonster: { target: "admin", export: "monstersApi" },
+  adminNpc: { target: "admin", export: "npcsApi" },
   adminLevelExp: { target: "admin", export: "levelExpsApi" },
   adminGrowthSegment: { target: "admin", export: "growthSegmentsApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },

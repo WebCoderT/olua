@@ -86,7 +86,7 @@ export interface RealtimeCastMessage {
     skillId: string;
     /**
      * 目标实例 id：客户端给场上每只怪生成的**会话内唯一**标识（世界权威前，怪还在客户端刷，
-     * 实例身份只能它给；怪物的**数值**一律来自服务端的 MONSTER_COMBAT，不信任客户端）
+     * 实例身份只能它给；怪物的**数值**一律来自服务端的 monsters 表，不信任客户端）
      */
     targetId: string;
     /** 目标怪物 key（configs/monster 的关联键，如 "1"；服务端据此查战斗数值表） */
@@ -154,7 +154,7 @@ export interface RealtimeWorldJoinMessage {
     mapId: string;
     /** 刷怪计划：每只怪一条（数量 = 区域 max，位置为区域内随机落点） */
     spawnPlan: Array<{
-      /** 怪物 key（configs/monster 的关联键；服务端据此查 MONSTER_COMBAT） */
+      /** 怪物 key（configs/monster 的关联键；服务端据此查 monsters 表） */
       monsterKey: string;
       /** 出生点（世界坐标） */
       x: number;
@@ -168,7 +168,7 @@ export interface RealtimeWorldMonster {
   /** 实例 id（**服务端发牌**，全服唯一、跨重启稳定；cast 的 targetId 用它） */
   instanceId: string;
   monsterKey: string;
-  /** 当前血量与上限（来自服务端 MONSTER_COMBAT） */
+  /** 当前血量与上限（来自服务端 monsters 表） */
   hp: number;
   maxHp: number;
   /** 是否存活（false = 死亡等重生，客户端不生成这只怪） */

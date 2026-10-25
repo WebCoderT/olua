@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MONSTER_COMBAT } from "../../shared/game-data.generated";
+import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { WorldMonsterRow } from "../../database/rows";
 
@@ -9,7 +9,7 @@ export interface WorldMonster {
   /** 实例 id（服务端发牌，`m<mapId>_<n>`，跨重启稳定不重号） */
   instanceId: string;
   mapId: string;
-  /** 怪物 key（configs/monster 的关联键，战斗数值查 MONSTER_COMBAT） */
+  /** 怪物 key（configs/monster 的关联键，战斗数值查 monsters 表） */
   monsterKey: string;
   /** 出生点（世界坐标；重生的落点也是它） */
   x: number;
@@ -103,6 +103,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   constructor(
     private readonly config: ConfigService,
     private readonly worldMonsters: WorldMonsterRepository,
+    private readonly monsterConfigs: MonsterRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -277,11 +278,12 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     }
     this.instanceSeq.set(mapId, maxSeq);
 
-    // 播种：空图才建。怪 key 存在性对照 MONSTER_COMBAT（不认识的条目跳过并报警）
+    // 播种：空图才建。怪 key 存在性对照 monsters 表（不认识的条目跳过并报警；
+    // 直读库而非生成物快照 —— 管理端改了数值/清单即时生效，#258）
     if (rows.length === 0) {
       for (const entry of spawnPlan) {
         if (!validPlanEntry(entry)) continue;
-        if (!MONSTER_COMBAT[entry.monsterKey as keyof typeof MONSTER_COMBAT]) {
+        if (!this.monsterConfigs.findByKey(entry.monsterKey)) {
           this.logger.warn(`地图 ${mapId} 的播种计划里有不认识的怪物 key（${entry.monsterKey}），跳过`);
           continue;
         }
@@ -300,7 +302,12 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   private createMonster(mapId: string, map: Map<string, WorldMonster>, entry: SpawnPlanEntry): void {
-    const stats = MONSTER_COMBAT[entry.monsterKey as keyof typeof MONSTER_COMBAT];
+    // 直读 monsters 表（#258）：管理端改了 maxHp 即时生效 —— 播种 / 重生都走这里
+    const stats = this.monsterConfigs.findByKey(entry.monsterKey);
+    if (!stats) {
+      this.logger.warn(`怪物 ${entry.monsterKey} 在 monsters 表里不存在（清库了？），跳过播种`);
+      return;
+    }
     const seq = (this.instanceSeq.get(mapId) ?? 0) + 1;
     this.instanceSeq.set(mapId, seq);
     const instanceId = `m${mapId}_${seq}`;
@@ -310,8 +317,8 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
       monsterKey: entry.monsterKey,
       x: entry.x,
       y: entry.y,
-      hp: Number(stats.maxHp),
-      maxHp: Number(stats.maxHp),
+      hp: Number(stats.max_hp),
+      maxHp: Number(stats.max_hp),
       alive: true,
       killedAt: null,
       respawnAt: null,
@@ -415,7 +422,7 @@ function snapshotOf(monster: WorldMonster): WorldMonsterSnapshot {
   };
 }
 
-/** 播种条目的最小校验（key 非空、坐标是有限数；怪 key 存在性由调用方对照 MONSTER_COMBAT） */
+/** 播种条目的最小校验（key 非空、坐标是有限数；怪 key 存在性由调用方对照 monsters 表） */
 function validPlanEntry(entry: SpawnPlanEntry): boolean {
   return (
     typeof entry?.monsterKey === "string" &&
