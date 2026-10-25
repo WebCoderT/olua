@@ -176,6 +176,8 @@ export const BizCode = {
   NPC_NOT_FOUND: 50020,
   /** 商城商品不存在（商品清单 = 生成物的装备全量，id 不在清单里不能定价） */
   MALL_GOOD_NOT_FOUND: 50021,
+  /** 时装不存在（id 清单由客户端配置 seed 固定，不可增删行） */
+  FASHION_NOT_FOUND: 50022,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

@@ -5305,6 +5305,196 @@
         ]
       }
     },
+    "/admin/fashions": {
+      "get": {
+        "description": "id 清单固定（seed 自客户端 configs/fashionClothes 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；资源路径不开放编辑。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminFashion.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "acquireChannel",
+            "required": false,
+            "in": "query",
+            "description": "按获得渠道筛（不落 schema 以免枚举键进两端生成物）",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "upgrade",
+                "grant",
+                "unavailable"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FashionPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "时装配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/FashionPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/FashionQueryDto"
+        }
+      }
+    },
+    "/admin/fashions/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：名称（≤50 字）。\n- `description`：描述文案（≤500 字）。\n- `sellPrice`：售卖价（绑定元宝/件，0 ≤ 值 ≤ 1 亿）。\n- `acquireChannel`：获得渠道（upgrade / grant / unavailable；渠道语义与称号一致）。\n- `attributes`：八项属性，**整份提交、整份替换**（要求 0 ≤ min ≤ max）。\n- `icon` / `inRes` / `outRes` 不开放编辑（传了会被白名单剥离）。\n- `id` 不存在 → 404（`50022`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminFashion.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "时装 id（如 \"cloth_2\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFashionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的时装配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FashionDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑时装配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/FashionDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/level-exps": {
       "get": {
         "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -7234,6 +7424,44 @@
         "required": [
           "price"
         ]
+      },
+      "UpdateFashionDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 50
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案（不传则不改）",
+            "maxLength": 500
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（绑定元宝/件，不传则不改）",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "acquireChannel": {
+            "type": "string",
+            "description": "获得渠道（不传则不改）",
+            "enum": [
+              "upgrade",
+              "grant",
+              "unavailable"
+            ]
+          },
+          "attributes": {
+            "description": "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          }
+        }
       },
       "UpdateLevelExpDto": {
         "type": "object",
@@ -11218,6 +11446,152 @@
           "id",
           "removed"
         ]
+      },
+      "FashionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "时装 id（configs/fashionClothes，如 \"cloth_2\"；序列固定，不可增删行）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（后台可改）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案（后台可改）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（resources 相对路径；不开放编辑）"
+          },
+          "inRes": {
+            "type": "string",
+            "description": "内观资源路径（空串 = 无；不开放编辑）"
+          },
+          "outRes": {
+            "type": "string",
+            "description": "外观资源路径（空串 = 无；不开放编辑）"
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（绑定元宝/件，后台可改）"
+          },
+          "acquireChannel": {
+            "type": "string",
+            "description": "获得渠道（upgrade / grant / unavailable，默认 unavailable；后台可改）",
+            "enum": [
+              "upgrade",
+              "grant",
+              "unavailable"
+            ]
+          },
+          "attributes": {
+            "description": "八项属性加成（seed 时全 0，后台可改）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "icon",
+          "inRes",
+          "outRes",
+          "sellPrice",
+          "acquireChannel",
+          "attributes",
+          "updatedAt"
+        ]
+      },
+      "FashionPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的时装配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FashionDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "FashionQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "acquireChannel": {
+            "type": "string",
+            "description": "按获得渠道筛（不落 schema 以免枚举键进两端生成物）",
+            "enum": [
+              "upgrade",
+              "grant",
+              "unavailable"
+            ]
+          }
+        }
       }
     }
   }

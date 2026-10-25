@@ -388,6 +388,35 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         default_price INTEGER NOT NULL DEFAULT 1,
         updated_at    INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 时装配置（#257）：主键是时装 id（configs/fashionClothes），清单固定不可增删行；
+      -- 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS，运营可改；
+      -- icon / in / out 是客户端资源路径（表现层），后台不改
+      CREATE TABLE IF NOT EXISTS fashions (
+        id                   TEXT    PRIMARY KEY,
+        label                TEXT    NOT NULL DEFAULT '',
+        description          TEXT    NOT NULL DEFAULT '',
+        icon                 TEXT    NOT NULL DEFAULT '',
+        in_res               TEXT    NOT NULL DEFAULT '',
+        out_res              TEXT    NOT NULL DEFAULT '',
+        sell_price           INTEGER NOT NULL DEFAULT 0,
+        acquire_channel      TEXT    NOT NULL DEFAULT 'unavailable',
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

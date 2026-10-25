@@ -597,6 +597,29 @@ export type PutMallPrice = {
   price: number;
 };
 
+export type UpdateFashion = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述文案（不传则不改）
+   */
+  description?: string;
+  /**
+   * 售卖价（绑定元宝/件，不传则不改）
+   */
+  sellPrice?: number;
+  /**
+   * 获得渠道（不传则不改）
+   */
+  acquireChannel?: "upgrade" | "grant" | "unavailable";
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -3068,4 +3091,93 @@ export type MallPriceRemove = {
    * 恒为 true（删除成功）
    */
   removed: boolean;
+};
+
+export type Fashion = {
+  /**
+   * 时装 id（configs/fashionClothes，如 "cloth_2"；序列固定，不可增删行）
+   */
+  id: string;
+  /**
+   * 名称（后台可改）
+   */
+  label: string;
+  /**
+   * 描述文案（后台可改）
+   */
+  description: string;
+  /**
+   * 图标资源路径（resources 相对路径；不开放编辑）
+   */
+  icon: string;
+  /**
+   * 内观资源路径（空串 = 无；不开放编辑）
+   */
+  inRes: string;
+  /**
+   * 外观资源路径（空串 = 无；不开放编辑）
+   */
+  outRes: string;
+  /**
+   * 售卖价（绑定元宝/件，后台可改）
+   */
+  sellPrice: number;
+  /**
+   * 获得渠道（upgrade / grant / unavailable，默认 unavailable；后台可改）
+   */
+  acquireChannel: "upgrade" | "grant" | "unavailable";
+  /**
+   * 八项属性加成（seed 时全 0，后台可改）
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type FashionPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的时装配置
+   */
+  list: Fashion[];
+};
+
+export type FashionQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按获得渠道筛（不落 schema 以免枚举键进两端生成物）
+   */
+  acquireChannel?: "upgrade" | "grant" | "unavailable";
 };

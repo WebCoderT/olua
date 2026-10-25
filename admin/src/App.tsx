@@ -19,6 +19,7 @@ import { ItemsPage } from "./pages/ItemsPage";
 import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
 import { MallPricingPage } from "./pages/MallPricingPage";
+import { FashionsPage } from "./pages/FashionsPage";
 import { GrowthPage } from "./pages/GrowthPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -197,6 +198,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <MallPricingPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="fashions"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <FashionsPage />
               </RequirePermission>
             }
           />

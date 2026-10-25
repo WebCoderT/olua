@@ -211,6 +211,21 @@ export const routes = {
      */
     update: (id: string) => `/admin/equipments/${encodeURIComponent(id)}`,
   },
+  /** adminFashion 模块（2 个接口） */
+  adminFashion: {
+    /**
+     * 时装配置列表（GET /admin/fashions）
+     *
+     * id 清单固定（seed 自客户端 configs/fashionClothes 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
+     */
+    list: "/admin/fashions",
+    /**
+     * 编辑时装配置（PATCH /admin/fashions/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/fashions/${encodeURIComponent(id)}`,
+  },
   /** adminGrowthScalar 模块（2 个接口） */
   adminGrowthScalar: {
     /**

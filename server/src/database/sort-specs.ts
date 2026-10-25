@@ -244,3 +244,15 @@ export const NPC_SORT: SortSpec<"id" | "label" | "updatedAt"> = {
   default: "id",
   defaultOrder: "asc",
 };
+
+/** 时装配置列表（#257）：默认按 id 升序（配置文件里的声明顺序，即素材编号顺序） */
+export const FASHION_SORT: SortSpec<"id" | "label" | "sellPrice" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    label: "label",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "id",
+  defaultOrder: "asc",
+};

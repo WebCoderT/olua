@@ -17,8 +17,7 @@
  * 装备的键是**展开后**的物品 id（基础件原 key，或带前后缀的 `_pXsY`），与客户端
  * `getEquipment(id)` 同口径；`EQUIPMENT_DISPLAY_NAMES` 里的名字已经拼好，消费方不必自己拼。
  *
- * 不在范围：掉落（掉落结算还没上服务端，等世界权威那一刀）、
- * 时装（`configs/fashionClothes` 整份被注释，没有活的来源）。
+ * 不在范围：掉落（掉落结算还没上服务端，等世界权威那一刀）。
  */
 
 /** 六项区间型战斗属性。如 ["physicalAttack","magicAttack",...] */
@@ -1115,6 +1114,30 @@ export const NPCS: Record<string, unknown> = {
   "7002": {"label":"九莲宝灯"},
   "8001": {"label":"灵魂飞升(未激活)"},
   "8002": {"label":"灵魂飞升"},
+};
+
+/** 时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改） */
+export const FASHIONS: Record<string, unknown> = {
+  "cloth_2": {"label":"妖绯巫女","description":"白红相间的东瀛巫女装束，周身缠绕着妖异的紫雾，据说来自异国的神秘祭司。","icon":"clothes/icon/001","in":"clothes/in/001","out":"clothes/out/001","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_3": {"label":"金棒阔少","description":"金发紫衫的富家公子，扛着鎏金球棒、拎着漆皮宝箱，走路都带风。","icon":"clothes/icon/002","in":"clothes/in/002","out":"clothes/out/002","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_4": {"label":"绯樱刀姬","description":"白裙红缨的女武士，裙摆沾着不灭的火光，太刀出鞘时如樱花绽落。","icon":"clothes/icon/003","in":"clothes/in/003","out":"clothes/out/003","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_5": {"label":"熔岩魔躯","description":"由熔岩凝成的魔神之躯，金角獠牙、鬃毛流火，行走时大地都被烧红。","icon":"clothes/icon/004","in":"clothes/in/004","out":"clothes/out/004","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_6": {"label":"兽首金甲","description":"肩披兽首的金甲战袍，红披风猎猎作响，佩剑燃着熊熊烈焰。","icon":"clothes/icon/006","in":"clothes/in/006","out":"clothes/out/006","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_7": {"label":"双焰鬼将","description":"双手各持一把燃烧魔刀的鬼面战将，双翼喷焰，凶戾无比。","icon":"clothes/icon/007","in":"clothes/in/007","out":"clothes/out/007","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_8": {"label":"红金机甲","description":"传说从异世界掉落的钢铁战衣，胸口能量核心散发着幽蓝的光芒。","icon":"clothes/icon/008","in":"clothes/in/008","out":"clothes/out/008","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_9": {"label":"星盾卫士","description":"身披星条战衣，手持坚不可摧的圆盾，正义感满满的老兵。","icon":"clothes/icon/009","in":"clothes/in/009","out":"clothes/out/009","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_11": {"label":"黄金圣翼","description":"铺展开的金色羽翼如神明降世，金光所照之处皆成圣域。","icon":"clothes/icon/011","in":"clothes/in/011","out":"","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_12": {"label":"英伦军花","description":"笔挺军装的英气女官，站姿标准得像在阅兵场上。","icon":"clothes/icon/012","in":"","out":"clothes/out/012","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_13": {"label":"军装丽人","description":"与军花气质相仿的礼服军装，英姿飒爽，气度不凡。","icon":"clothes/icon/013","in":"","out":"clothes/out/013","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_16": {"label":"暗黑骨甲","description":"由魔兽骨壳拼成的黑甲，浑身上下唯一的亮光是一双幽蓝的眼睛。","icon":"clothes/icon/016","in":"clothes/in/016","out":"clothes/out/016","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_18": {"label":"烈焰神拳","description":"火神附体般的魁梧战躯，双拳燃着不灭之火，头顶金环流焰。","icon":"clothes/icon/018","in":"clothes/in/018","out":"clothes/out/018","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_19": {"label":"赤绒猫娘","description":"红衣猫耳少女，绒爪轻挥也能挠出漫天火花。","icon":"clothes/icon/019","in":"clothes/in/019","out":"clothes/out/019","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_20": {"label":"招财福猪","description":"圆滚滚的福猪财主，怀里抱着吃不完的包子，是财运的象征。","icon":"clothes/icon/020","in":"clothes/in/020","out":"clothes/out/020","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_22": {"label":"蓝雷甲士","description":"头生双角的铠甲武士，全身缠绕着蓝色雷霆，怒目如电。","icon":"clothes/icon/022","in":"clothes/in/022","out":"clothes/out/022","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_24": {"label":"月宫仙子","description":"月下起舞的仙子，紫纱罗裙随风而动，疑似月宫下凡。","icon":"clothes/icon/024","in":"clothes/in/024","out":"clothes/out/024","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_25": {"label":"金翎雀帝","description":"背后展开金焰雀羽的男人，传说是南方神鸟转世。","icon":"clothes/icon/025","in":"clothes/in/025","out":"clothes/out/025","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_27": {"label":"金龙帝袍","description":"金龙盘冠的帝王战袍，举手投足间尽显威仪，似有龙吟环绕。","icon":"clothes/icon/027","in":"clothes/in/027","out":"clothes/out/027","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
+  "cloth_28": {"label":"金身财神","description":"金甲加身的财神爷，周身落满金币与火光，见者发财。","icon":"clothes/icon/028","in":"clothes/in/028","out":"clothes/out/028","sellPrice":0,"maxHp":0,"hpRecover":0,"physicalAttack":[0,0],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[0,0],"magicDefense":[0,0],"taoistDefense":[0,0]},
 };
 
 /** 成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth） */

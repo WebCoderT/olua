@@ -31,6 +31,7 @@ export {
   monstersApi,
   npcsApi,
   mallApi,
+  fashionsApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,

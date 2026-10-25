@@ -6,15 +6,17 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { RankRepository, RankListOptions } from "../../database/repositories/rank.repository";
 import { DrugRepository, DrugListOptions } from "../../database/repositories/drug.repository";
 import { EquipmentRepository, EquipmentListOptions } from "../../database/repositories/equipment.repository";
+import { FashionRepository, FashionListOptions } from "../../database/repositories/fashion.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
 import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { DrugRow, EquipmentRow, ItemRow, MonsterRow, NpcRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
+import { DrugRow, EquipmentRow, FashionRow, ItemRow, MonsterRow, NpcRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
 import {
   DRUGS,
   EQUIPMENT_BASES,
+  FASHIONS,
   ITEM_BASES,
   MONSTERS,
   NPCS,
@@ -30,6 +32,7 @@ import {
 } from "../../shared/game-data.generated";
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
+import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
@@ -38,6 +41,7 @@ import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
   attributesFromRow,
   ConfigAttributesDto,
+  SEED_ACQUIRE_CHANNEL,
   SoulRowShape,
   TitleDto,
   TitleQueryDto,
@@ -69,6 +73,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly items: ItemRepository,
     private readonly monstersRepo: MonsterRepository,
     private readonly npcsRepo: NpcRepository,
+    private readonly fashionsRepo: FashionRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -81,6 +86,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedItems();
     this.seedMonsters();
     this.seedNpcs();
+    this.seedFashions();
   }
 
   // —— 称号 ——
@@ -406,6 +412,39 @@ export class GameConfigService implements OnModuleInit {
     return NpcDto.from(this.requireNpc(id));
   }
 
+  // —— 时装配置（#257：id 清单固定只改文案 / 价格 / 渠道 / 属性；资源路径是表现层不改）——
+
+  listFashions(query: FashionQueryDto): PageResult<FashionDto> {
+    const options: FashionListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      channel: query.acquireChannel,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.fashionsRepo.list(options);
+    const total = this.fashionsRepo.count(options);
+    return { list: rows.map(FashionDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateFashion(id: string, dto: UpdateFashionDto): FashionDto {
+    const existing = this.requireFashion(id);
+    const attributes = dto.attributes ?? attributesFromRow(existing);
+    assertAttributeRanges(attributes);
+    const next: FashionRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      acquire_channel: dto.acquireChannel ?? existing.acquire_channel,
+      ...attributeColumns(attributes),
+      updated_at: Date.now(),
+    };
+    this.fashionsRepo.update(next);
+    return FashionDto.from(this.requireFashion(id));
+  }
+
   // —— 内部 ——
 
   private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
@@ -459,6 +498,12 @@ export class GameConfigService implements OnModuleInit {
   private requireNpc(id: string): NpcRow {
     const row = this.npcsRepo.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.NPC_NOT_FOUND, `NPC ${id} 不存在`);
+    return row;
+  }
+
+  private requireFashion(id: string): FashionRow {
+    const row = this.fashionsRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.FASHION_NOT_FOUND, `时装 ${id} 不存在`);
     return row;
   }
 
@@ -597,6 +642,24 @@ export class GameConfigService implements OnModuleInit {
         id,
         label: String(meta.label ?? ""),
         dialog: "",
+        updated_at: 0,
+      });
+    }
+  }
+
+  /** 时装 seed：FASHIONS 直接灌（名称 / 文案 / 资源路径 / 售卖价 / 属性），20 套；渠道默认 unavailable（#257） */
+  private seedFashions() {
+    for (const [id, meta] of Object.entries(FASHIONS as Record<string, Record<string, unknown>>)) {
+      this.fashionsRepo.seedRow({
+        id,
+        label: String(meta.label ?? ""),
+        description: String(meta.description ?? ""),
+        icon: String(meta.icon ?? ""),
+        in_res: String(meta.in ?? ""),
+        out_res: String(meta.out ?? ""),
+        sell_price: Number(meta.sellPrice) || 0,
+        acquire_channel: SEED_ACQUIRE_CHANNEL,
+        ...flatAttributes(meta),
         updated_at: 0,
       });
     }
