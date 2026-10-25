@@ -3,14 +3,17 @@ import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
+import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import { DrugRepository } from "../../database/repositories/drug.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
-import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
+import { AccountRow, DrugRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
+import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -34,6 +37,7 @@ export class RolesService {
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
     private readonly mallPricing: MallPricingService,
+    private readonly drugs: DrugRepository,
   ) {}
 
   /**
@@ -302,6 +306,111 @@ export class RolesService {
       }
     }
     throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包已满，无法放入商品");
+  }
+
+  /**
+   * 药品使用（玩家侧 #308）：回复结算与格子扣减都在服务端
+   *
+   * 客户端只报「用背包哪一格」，这里完成整条链：格子校验 → 查 drugs 表（管理端改回复量
+   * 即时生效，与 #258 怪物数值读库同一取向）→ 回复量合成 → 血蓝各自封顶 → 扣减格子 →
+   * revision 原子 +1。
+   *
+   * 回复量口径与客户端 `resolveDrugRecovery` 对齐（drugs 表存的是**按键求和后的单值**）：
+   * hp = effect_hp + effect_hp_percent ÷ 100 × maxHp，魔法同理，四舍五入，负值按 0。
+   * maxHp / maxMp 用**服务端重算**的战斗属性（与 combat 比对同源，客户端报多少不算数）；
+   * 等级不在成长曲线里（重算不出）时退回存档里客户端上报的那份 —— 用药是恢复性操作，
+   * 兜底比拒绝更符合玩家预期。
+   *
+   * 失败路径：20013 格子为空 / 非药品 / 无生效回复量；20014 血蓝均已满（回复不动任何一项）。
+   * 冷却（drugs.cooldown）目前仍归客户端快捷键节流管，服务端不计时 —— 与客户端现状一致。
+   */
+  useDrug(accountId: string, roleId: string, dto: DrugUseDto): DrugUseResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与升级 / 购买同一纪律：被踢下线的角色不能继续用药（用药也是写）
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const cell = this.readBagCell(data, dto.row, dto.col);
+    // 格子里必须是药品表里登记过的 id：背包里也可能有装备 / 材料，那些不走用药
+    const drug = this.drugs.findByKey(cell.id);
+    if (!drug) throw BizException.conflict(BizCode.DRUG_USE_TARGET_INVALID, "该格子不是可使用的药品");
+
+    // 有没有可生效的回复分量（配置四项全 0 的药等于没实现）
+    const healsHp = drug.effect_hp > 0 || drug.effect_hp_percent > 0;
+    const healsMp = drug.effect_mp > 0 || drug.effect_mp_percent > 0;
+    if (!healsHp && !healsMp) {
+      throw BizException.conflict(BizCode.DRUG_USE_TARGET_INVALID, "该药品没有任何生效的回复效果");
+    }
+
+    const { maxHp, maxMp } = this.resolveResourceLimits(existing, data);
+    const hp = Math.max(0, Math.floor(Number(data.hp) || 0));
+    const mp = Math.max(0, Math.floor(Number(data.mp) || 0));
+    // 血蓝都已满（该药对应的资源都回不动）→ 拒用不扣药（与客户端预检同一判定式）
+    const hpFull = hp >= maxHp;
+    const mpFull = mp >= maxMp;
+    if ((!healsHp || hpFull) && (!healsMp || mpFull)) {
+      throw BizException.conflict(BizCode.DRUG_RESOURCE_FULL, healsHp ? "血量已满，无需使用" : "魔法值已满，无需使用");
+    }
+
+    // 未封顶期望回复量（负值按 0 —— 配置写错不会倒扣血蓝）
+    const expectHp = healsHp ? Math.max(0, Math.round(drug.effect_hp + (drug.effect_hp_percent / 100) * maxHp)) : 0;
+    const expectMp = healsMp ? Math.max(0, Math.round(drug.effect_mp + (drug.effect_mp_percent / 100) * maxMp)) : 0;
+    // 各自封顶后生效（血满蓝不满也照用，只回蓝的部分）
+    const recoveredHp = healsHp && !hpFull ? Math.min(maxHp, hp + expectHp) - hp : 0;
+    const recoveredMp = healsMp && !mpFull ? Math.min(maxMp, mp + expectMp) - mp : 0;
+    if (healsHp && !hpFull) data.hp = hp + recoveredHp;
+    if (healsMp && !mpFull) data.mp = mp + recoveredMp;
+
+    // 扣减格子数量（药品可叠加，减到 0 清格；格子对象整个换新，避免共享引用）
+    const remaining = Math.max(1, cell.count) - 1;
+    const bagLine = (data.bag as unknown[][])[dto.row] as (Record<string, unknown> | null)[];
+    bagLine[dto.col] = remaining > 0 ? { id: cell.id, count: remaining } : null;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return DrugUseResultDto.fromRow(row, account.online_role_id, drug.id, recoveredHp, recoveredMp);
+  }
+
+  /** 读存档背包网格的指定格子（网格不是数组 / 坐标越界 / 格子为空 → 同一个 20013 失败语义） */
+  private readBagCell(data: Record<string, unknown>, row: number, col: number): { id: string; count: number } {
+    const bag = data.bag;
+    const line = Array.isArray(bag) ? (bag as unknown[])[row] : undefined;
+    const cell = Array.isArray(line) ? (line as unknown[])[col] : undefined;
+    if (!cell || typeof cell !== "object" || typeof (cell as Record<string, unknown>).id !== "string") {
+      throw BizException.conflict(BizCode.DRUG_USE_TARGET_INVALID, "该格子为空，没有可使用的药品");
+    }
+    const record = cell as Record<string, unknown>;
+    return { id: record.id as string, count: Math.max(1, Math.floor(Number(record.count) || 1)) };
+  }
+
+  /**
+   * 用药的资源上限：服务端重算（与 combat 比对同源）优先，重算不出退回存档里客户端上报的值
+   * （等级不在成长曲线里属于旧存档边角情况，恢复性操作走兜底而不是拒绝）
+   */
+  private resolveResourceLimits(existing: RoleRow, data: Record<string, unknown>): { maxHp: number; maxMp: number } {
+    const summary = summarizeRoleAttributes({
+      level: existing.level,
+      equipments: (data.equipments as Record<string, string | null> | undefined) ?? null,
+      soulOfWar: typeof data.soulOfWar === "number" ? data.soulOfWar : undefined,
+      title: typeof data.title === "number" ? data.title : undefined,
+      rank: typeof data.rank === "number" ? data.rank : undefined,
+    });
+    if (summary) return { maxHp: summary.maxHp, maxMp: summary.maxMp };
+    return {
+      maxHp: Math.max(1, Math.floor(Number(data.maxHp) || 0)),
+      maxMp: Math.max(1, Math.floor(Number(data.maxMp) || 0)),
+    };
   }
 
   /**

@@ -5,6 +5,7 @@ import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
+import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -109,6 +110,22 @@ export class RolesController {
   @ApiDataResponse(MallPurchaseResultDto, { description: "购买后的角色（含本次消耗）" })
   mallPurchase(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: MallPurchaseDto): MallPurchaseResultDto {
     return this.rolesService.purchaseMallGood(user.id, id, dto);
+  }
+
+  @Post(":id/drug-use")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.drugUse",
+    summary: "药品使用（回复结算与扣减都在服务端）",
+    description:
+      "回复量与药品管理端同源（drugs 表，管理端改回复量即时生效）：固定值 + 百分比 × maxHp/maxMp，各自封顶。\n" +
+      "maxHp/maxMp 用服务端重算的战斗属性；使用后扣减背包格子数量（减到 0 清格）。\n\n" +
+      "失败路径：20013 格子为空 / 非药品 / 无生效回复；20014 血蓝均已满；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(DrugUseResultDto, { description: "使用后的角色（含本次回复量）" })
+  drugUse(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: DrugUseDto): DrugUseResultDto {
+    return this.rolesService.useDrug(user.id, id, dto);
   }
 
   @Delete(":id")

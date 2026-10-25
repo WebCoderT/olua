@@ -137,13 +137,14 @@ export default class BagDialog {
    * 格子操作：丢弃模式下点格子 = 丢弃；否则左键使用物品、右键穿戴装备
    * 规则判定与提示都在数据层（本类只做模式分流）
    */
-  private onCellAction(row: number, col: number, action: BagCellAction) {
+  private async onCellAction(row: number, col: number, action: BagCellAction) {
     if (this.discardMode) {
       this.onDiscardCell(row, col);
       return;
     }
+    // useGood → useDrug 已收权到服务端（#308），await 等结算完成再返回（调用方不消费返回值）
     if (action === "equip") StorageManager.equipFromBag(row, col);
-    else StorageManager.useGood(row, col);
+    else await StorageManager.useGood(row, col);
   }
 
   //#region 丢弃

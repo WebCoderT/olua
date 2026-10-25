@@ -73,7 +73,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（9 个接口） */
+  /** role 模块（10 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -105,6 +105,12 @@ export const ApiRoutes = {
      * 全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。
      */
     save: (id: string) => `/roles/${encodeURIComponent(id)}`,
+    /**
+     * 药品使用（回复结算与扣减都在服务端）（POST /roles/{id}/drug-use）
+     *
+     * 回复量与药品管理端同源（drugs 表，管理端改回复量即时生效）：固定值 + 百分比 × maxHp/maxMp，各自封顶。
+     */
+    drugUse: (id: string) => `/roles/${encodeURIComponent(id)}/drug-use`,
     /**
      * 成长线升级（称号 / 战魂 / 军衔）（POST /roles/{id}/growth-upgrade）
      *
