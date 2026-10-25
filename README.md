@@ -220,7 +220,7 @@ olua/
   - constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
   - interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
   - security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
-- src/database：SQLite 连接与23 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars，含存量补列）的仓储层
+- src/database：SQLite 连接与24 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars，含存量补列）的仓储层
 - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员 / 口令）/ announcement（公告：公共拉取 + 管理端 CRUD）/ mail（邮件：模板 + 投递队列 + 后台调度）/ audit（操作日志）/ token（JWT）/ health
 - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
 - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
