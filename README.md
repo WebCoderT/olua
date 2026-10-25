@@ -293,7 +293,7 @@ make gen-api        # 改完接口后重新生成契约与两端接口文件
 make audit          # 10 个跨端审计脚本
 
 make check          # 静态检查：客户端 tsc + 管理端 typecheck + 10 个审计
-make test           # 全部测试：客户端 37 套 + 服务端十一套 e2e
+make test           # 全部测试：客户端 38 套 + 服务端十一套 e2e
 make verify         # 完整门禁：check + 三端构建 + 全部测试（提交前跑这个）
 ```
 

@@ -294,7 +294,7 @@ make gen-api        # after changing APIs: regenerate the contract and both cons
 make audit          # 10 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 10 audits
-make test           # all tests: client's 37 suites + server's eleven e2e suites
+make test           # all tests: client's 38 suites + server's eleven e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
