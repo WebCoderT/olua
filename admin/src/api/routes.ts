@@ -247,7 +247,7 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
-  /** adminSoul 模块（2 个接口） */
+  /** adminSoul 模块（4 个接口） */
   adminSoul: {
     /**
      * 战魂配置列表（GET /admin/souls）
@@ -261,6 +261,18 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (level: string) => `/admin/souls/${encodeURIComponent(level)}`,
+    /**
+     * 战魂成长列表（GET /admin/souls/upgrade-list）
+     *
+     * 独立于主列表的「升级链」视图：37 阶**全量**返回（战魂没有渠道语义，全部行都在升级链里），按**成长顺序**升序（顺序由 `upgradeOrder` 决定，与阶数解耦 —— 运营拖动排序改的就是它）。
+     */
+    upgradeList: "/admin/souls/upgrade-list",
+    /**
+     * 战魂成长列表重排（拖动排序）（PATCH /admin/souls/upgrade-order）
+     *
+     * **整串提交**：`levels` 是拖完后的完整阶数顺序。要求**恰好等于全部 37 阶** —— 缺、多、重复都整单拒收（`400` / `40000`），不做增量合并，保证运营看到的顺序就是落库的顺序。
+     */
+    reorderUpgradeList: "/admin/souls/upgrade-order",
   },
   /** adminStats 模块（3 个接口） */
   adminStats: {

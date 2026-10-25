@@ -31,6 +31,9 @@ export class SoulDto {
   @ApiProperty({ description: "升到该阶消耗的绑定元宝" })
   bindGold: number;
 
+  @ApiProperty({ description: "战魂成长列表顺序（1 起；37 阶全量持有，拖动排序改的就是它，与阶数解耦）" })
+  upgradeOrder: number;
+
   @ApiProperty({ description: "八项属性加成", type: ConfigAttributesDto })
   attributes: ConfigAttributesDto;
 
@@ -45,6 +48,7 @@ export class SoulDto {
     dto.animation = row.animation;
     dto.animationFrameRate = row.animation_frame_rate;
     dto.bindGold = row.bind_gold;
+    dto.upgradeOrder = row.upgrade_order ?? 0;
     dto.attributes = attributesFromRow(row);
     dto.updatedAt = row.updated_at;
     return dto;

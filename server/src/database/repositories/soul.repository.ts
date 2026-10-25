@@ -18,7 +18,8 @@ export interface SoulListOptions {
  * 战魂配置数据访问
  *
  * 与 `TitleRepository` 同构，只少 `acquire_channel` 一列 —— 战魂 37 阶逐阶购买，
- * 没有「获得渠道」语义。同样**没有对外的 insert / remove**：行只能来自启动 seed。
+ * 没有「获得渠道」语义；成长列表（#234）与称号同构但**全量行都在列表里**（没有渠道进出）。
+ * 同样**没有对外的 insert / remove**：行只能来自启动 seed。
  */
 @Injectable()
 export class SoulRepository {
@@ -28,11 +29,11 @@ export class SoulRepository {
   seedRow(row: SoulRow): void {
     this.db.run(
       `INSERT OR IGNORE INTO souls
-        (level, label, description, animation, animation_frame_rate, bind_gold,
+        (level, label, description, animation, animation_frame_rate, bind_gold, upgrade_order,
          max_hp, hp_recover, physical_attack_min, physical_attack_max, magic_attack_min, magic_attack_max,
          taoist_attack_min, taoist_attack_max, physical_defense_min, physical_defense_max,
          magic_defense_min, magic_defense_max, taoist_defense_min, taoist_defense_max, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.level,
         row.label,
@@ -40,6 +41,7 @@ export class SoulRepository {
         row.animation,
         row.animation_frame_rate,
         row.bind_gold,
+        row.upgrade_order,
         row.max_hp,
         row.hp_recover,
         row.physical_attack_min,
@@ -62,7 +64,7 @@ export class SoulRepository {
   update(row: SoulRow): { changes: number } {
     return this.db.execute(
       `UPDATE souls SET
-         label = ?, description = ?, animation = ?, animation_frame_rate = ?, bind_gold = ?,
+         label = ?, description = ?, animation = ?, animation_frame_rate = ?, bind_gold = ?, upgrade_order = ?,
          max_hp = ?, hp_recover = ?,
          physical_attack_min = ?, physical_attack_max = ?, magic_attack_min = ?, magic_attack_max = ?,
          taoist_attack_min = ?, taoist_attack_max = ?, physical_defense_min = ?, physical_defense_max = ?,
@@ -75,6 +77,7 @@ export class SoulRepository {
         row.animation,
         row.animation_frame_rate,
         row.bind_gold,
+        row.upgrade_order,
         row.max_hp,
         row.hp_recover,
         row.physical_attack_min,
@@ -97,6 +100,26 @@ export class SoulRepository {
 
   findByLevel(level: number): SoulRow | undefined {
     return this.db.get<SoulRow>("SELECT * FROM souls WHERE level = ?", [level]);
+  }
+
+  /** 战魂成长列表：全部行按顺序号升序（37 阶全量在列表里，无渠道过滤 —— 与称号不同） */
+  listUpgrade(): SoulRow[] {
+    return this.db.all<SoulRow>("SELECT * FROM souls ORDER BY upgrade_order ASC");
+  }
+
+  /**
+   * 重排成长列表（一个事务里落整串新序号）
+   *
+   * 先全部清空再按新序写回：否则交换两行的中间态会撞部分唯一索引（两个同号）。
+   * 调用方（service）负责校验传入集合与全部阶数一致。
+   */
+  reassignUpgradeOrders(orders: { level: number; order: number }[]): void {
+    this.db.transaction(() => {
+      this.db.run("UPDATE souls SET upgrade_order = NULL");
+      for (const { level, order } of orders) {
+        this.db.run("UPDATE souls SET upgrade_order = ? WHERE level = ?", [order, level]);
+      }
+    });
   }
 
   /** 分页检索（默认按阶数升序） */

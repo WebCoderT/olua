@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 64;
+const EXPECTED_ASSERTIONS = 77;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -317,6 +317,59 @@ async function main() {
     const viewerReorder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token: viewerToken, body: { levels: [1, 3, 2] } });
     checkEqual(viewerReorder.status, 403, "观察员重排 → 403");
     checkEqual(viewerReorder.body?.code, 30006, "观察员重排 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 五、战魂成长列表：全量 37 阶 + 拖动排序（整串重排）
+
+    group("五、战魂成长列表");
+
+    const soulLevels = Array.from({ length: Object.keys(shared.SOUL_LEVEL_META).length }, (_, index) => index + 1);
+
+    // seed 后全量在列表里，初值顺序 = 阶数
+    const soulUpgrade1 = await api(base, "GET", "/api/admin/souls/upgrade-list", { token });
+    checkEqual(soulUpgrade1.status, 200, "战魂成长列表可读");
+    checkEqual(
+      JSON.stringify(soulUpgrade1.body?.data?.map((item) => item.level)),
+      JSON.stringify(soulLevels),
+      "seed 后 37 阶全量在成长列表（顺序 = 阶数）",
+    );
+    checkEqual(JSON.stringify(soulUpgrade1.body?.data?.map((item) => item.upgradeOrder)), JSON.stringify(soulLevels), "初值序号 = 阶数");
+
+    // 整串重排（与阶数解耦）：前三位换 [2,1,3]，其余不动
+    const soulReordered = await api(base, "PATCH", "/api/admin/souls/upgrade-order", {
+      token,
+      body: { levels: [2, 1, 3, ...soulLevels.slice(3)] },
+    });
+    checkEqual(soulReordered.status, 200, "整串重排成功");
+    checkEqual(
+      JSON.stringify(soulReordered.body?.data?.map((item) => item.level)),
+      JSON.stringify([2, 1, 3, ...soulLevels.slice(3)]),
+      "重排后成长列表按新顺序返回（与阶数无关）",
+    );
+    checkEqual(
+      JSON.stringify(soulReordered.body?.data?.map((item) => item.upgradeOrder)),
+      JSON.stringify(soulLevels),
+      "重排后序号连续（1 起无空洞）",
+    );
+
+    const soulDup = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token, body: { levels: [2, 2, ...soulLevels.slice(2)] } });
+    checkEqual(soulDup.status, 400, "重排带重复阶数 → 400");
+    const soulMissing = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token, body: { levels: soulLevels.slice(1) } });
+    checkEqual(soulMissing.status, 400, "重排漏了阶数 → 400");
+    const soulExtra = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token, body: { levels: [...soulLevels, 99] } });
+    checkEqual(soulExtra.status, 400, "重排混入不存在的阶数 → 400");
+
+    // 成长列表与主列表同源：上文三改过的 1 阶消耗（888）在这里能看到
+    const soulPriceSeen = soulReordered.body?.data?.find((item) => item.level === 1);
+    checkEqual(soulPriceSeen?.bindGold, 888, "成长列表里的消耗与主列表一致（行内改价走同一份 bindGold）");
+
+    // 观察员：能看列表，不能重排
+    const viewerSoulRead = await api(base, "GET", "/api/admin/souls/upgrade-list", { token: viewerToken });
+    checkEqual(viewerSoulRead.body?.code, 0, "观察员能看战魂成长列表");
+    const viewerSoulReorder = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token: viewerToken, body: { levels: soulLevels } });
+    checkEqual(viewerSoulReorder.status, 403, "观察员重排战魂 → 403");
+    checkEqual(viewerSoulReorder.body?.code, 30006, "观察员重排战魂 → 30006（权限点不足）");
 
     //#endregion
   } finally {

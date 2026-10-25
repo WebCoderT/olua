@@ -154,6 +154,33 @@ export class GameConfigService implements OnModuleInit {
     return SoulDto.from(this.requireSoul(level));
   }
 
+  /** 战魂成长列表：37 阶全量按顺序号升序（升级链视图，顺序与阶数解耦） */
+  listUpgradeSouls(): SoulDto[] {
+    return this.souls.listUpgrade().map(SoulDto.from);
+  }
+
+  /**
+   * 战魂成长列表重排（拖动排序的落库口）
+   *
+   * `levels` 必须恰好等于全部阶数集合：战魂没有渠道进出，37 阶永远全量在列表里 ——
+   * 缺失说明漏传、多出说明传了不存在的阶、重复说明前端状态脏了，三种都整单拒收。
+   */
+  reorderUpgradeSouls(dto: UpgradeOrderDto): SoulDto[] {
+    const current = this.souls.listUpgrade();
+    const currentLevels = current.map((row) => row.level).sort((a, b) => a - b);
+    const submitted = [...dto.levels].sort((a, b) => a - b);
+    if (
+      dto.levels.length !== new Set(dto.levels).size ||
+      submitted.length !== currentLevels.length ||
+      submitted.some((value, index) => value !== currentLevels[index])
+    ) {
+      throw new BizException(BizCode.PARAM_INVALID, "levels 必须与全部战魂阶数集合完全一致（不多、不少、不重复）");
+    }
+    const orderByLevel = new Map(dto.levels.map((value, index) => [value, index + 1]));
+    this.souls.reassignUpgradeOrders([...orderByLevel].map(([value, order]) => ({ level: value, order })));
+    return this.listUpgradeSouls();
+  }
+
   // —— 内部 ——
 
   private requireTitle(level: number): TitleRow {
@@ -211,6 +238,7 @@ export class GameConfigService implements OnModuleInit {
         animation: meta.animation,
         animation_frame_rate: meta.animationFrameRate,
         bind_gold: meta.bindGold,
+        upgrade_order: Number(index) + 1,
         ...flatAttributes(attributes),
         updated_at: 0,
       });
