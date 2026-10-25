@@ -17,8 +17,29 @@ export const mallPrice = 1;
 const customPriceData: Array<{ id: string; price: number }> = [];
 const customPrices = new Map(customPriceData.map((entry) => [entry.id, entry.price]));
 
-/** 取某件物品在商城的售价（绑定元宝 / 件；特殊定价表优先，其余走统一价） */
+/**
+ * 服务端下发的定价覆写（#294 进游戏拉配置快照后设置；null = 未接入，走上面的本地表）
+ * 特殊价优先，未定价商品走服务端统一价 —— 与服务端「特殊价优先于统一价」的口径一致
+ */
+let serverPrices: Map<string, number> | null = null;
+let serverDefaultPrice: number | null = null;
+
+/**
+ * 接入服务端定价（configs/apply-snapshot 调用）：defaultPrice = mall_settings 统一价，
+ * prices = mall_prices 全量目录（price 为 null 的行是未定价，不入 Map）
+ */
+export function applyMallPricing(defaultPrice: number, prices: Array<{ id: string; price: number | null }>): void {
+  const map = new Map<string, number>();
+  prices.forEach((entry) => {
+    if (entry.price != null) map.set(entry.id, entry.price);
+  });
+  serverPrices = map;
+  serverDefaultPrice = defaultPrice;
+}
+
+/** 取某件物品在商城的售价（绑定元宝 / 件；服务端定价优先，未接入快照时走本地表） */
 export function getMallPrice(good: Goods): number {
+  if (serverPrices) return serverPrices.get(good.id ?? "") ?? serverDefaultPrice ?? mallPrice;
   return customPrices.get(good.id ?? "") ?? mallPrice;
 }
 

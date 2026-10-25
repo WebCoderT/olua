@@ -36,6 +36,7 @@ import RoleSync from "./utils/net/RoleSync";
 import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
 import CombatChannel from "./utils/net/CombatChannel";
 import { installNetwork } from "./utils/net/NetworkSetup";
+import { loadGameConfig } from "./utils/net/ConfigLoader";
 import { describeError } from "./utils/net/ApiError";
 const { ccclass, property } = _decorator;
 
@@ -116,6 +117,9 @@ export class Game extends Component {
     MonsterAI.onPlayerHit = () => this.roleDisplay?.playInjured();
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
     CombatChannel.onWorld = MonsterManager.applyWorldState.bind(MonsterManager);
+    // 服务端配置快照（#294）：管理端改的运营配置（成长线文案/价格/属性、商城定价…）进游戏拉一次
+    // 覆写进本地 configs（消费点零改动）；静默失败回落本地静态值，游戏照常能玩
+    void loadGameConfig();
     RealtimeClient.start();
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
