@@ -30,11 +30,11 @@ export class TitleRepository {
   seedRow(row: TitleRow): void {
     this.db.run(
       `INSERT OR IGNORE INTO titles
-        (level, label, description, animation, animation_frame_rate, bind_gold, acquire_channel,
+        (level, label, description, animation, animation_frame_rate, bind_gold, acquire_channel, upgrade_order,
          max_hp, hp_recover, physical_attack_min, physical_attack_max, magic_attack_min, magic_attack_max,
          taoist_attack_min, taoist_attack_max, physical_defense_min, physical_defense_max,
          magic_defense_min, magic_defense_max, taoist_defense_min, taoist_defense_max, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.level,
         row.label,
@@ -43,6 +43,7 @@ export class TitleRepository {
         row.animation_frame_rate,
         row.bind_gold,
         row.acquire_channel,
+        row.upgrade_order,
         row.max_hp,
         row.hp_recover,
         row.physical_attack_min,
@@ -65,7 +66,7 @@ export class TitleRepository {
   update(row: TitleRow): { changes: number } {
     return this.db.execute(
       `UPDATE titles SET
-         label = ?, description = ?, animation = ?, animation_frame_rate = ?, bind_gold = ?, acquire_channel = ?,
+         label = ?, description = ?, animation = ?, animation_frame_rate = ?, bind_gold = ?, acquire_channel = ?, upgrade_order = ?,
          max_hp = ?, hp_recover = ?,
          physical_attack_min = ?, physical_attack_max = ?, magic_attack_min = ?, magic_attack_max = ?,
          taoist_attack_min = ?, taoist_attack_max = ?, physical_defense_min = ?, physical_defense_max = ?,
@@ -79,6 +80,7 @@ export class TitleRepository {
         row.animation_frame_rate,
         row.bind_gold,
         row.acquire_channel,
+        row.upgrade_order,
         row.max_hp,
         row.hp_recover,
         row.physical_attack_min,
@@ -101,6 +103,35 @@ export class TitleRepository {
 
   findByLevel(level: number): TitleRow | undefined {
     return this.db.get<TitleRow>("SELECT * FROM titles WHERE level = ?", [level]);
+  }
+
+  /** 称号成长列表：upgrade 渠道、按顺序号升序（序号与等级号解耦，见 upgrade_order 列注释） */
+  listUpgrade(): TitleRow[] {
+    return this.db.all<TitleRow>(
+      "SELECT * FROM titles WHERE acquire_channel = 'upgrade' ORDER BY upgrade_order ASC",
+    );
+  }
+
+  /** 当前列表里的最大顺序号（空列表返回 0，方便直接 +1 追加） */
+  maxUpgradeOrder(): number {
+    return Number(
+      this.db.get<{ value: number | null }>("SELECT MAX(upgrade_order) AS value FROM titles WHERE upgrade_order IS NOT NULL")?.value ?? 0,
+    );
+  }
+
+  /**
+   * 重排成长列表（一个事务里落整串新序号）
+   *
+   * 先全部清空再按新序写回：否则交换两行的中间态会撞部分唯一索引（两个同号）。
+   * 调用方（service）负责校验传入集合与 upgrade 渠道的行完全一致。
+   */
+  reassignUpgradeOrders(orders: { level: number; order: number }[]): void {
+    this.db.transaction(() => {
+      this.db.run("UPDATE titles SET upgrade_order = NULL WHERE upgrade_order IS NOT NULL");
+      for (const { level, order } of orders) {
+        this.db.run("UPDATE titles SET upgrade_order = ? WHERE level = ?", [order, level]);
+      }
+    });
   }
 
   /** 分页检索（默认按等级升序 —— 称号列表本来就是一张「升级价目表」） */

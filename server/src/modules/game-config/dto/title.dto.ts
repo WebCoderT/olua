@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
+import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { ACQUIRE_CHANNELS, AcquireChannel, AcquireChannelValue } from "../../../common/constants/game-config";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { TitleRow } from "../../../database/rows";
@@ -89,6 +89,13 @@ export class TitleDto {
   @ApiProperty({ description: "获得渠道", enum: [...ACQUIRE_CHANNELS] })
   acquireChannel: string;
 
+  @ApiProperty({
+    description: "称号成长列表顺序（仅 upgrade 渠道的行持有，1 起；拖动排序改的就是它）",
+    nullable: true,
+    type: Number,
+  })
+  upgradeOrder: number | null;
+
   @ApiProperty({ description: "八项属性加成", type: ConfigAttributesDto })
   attributes: ConfigAttributesDto;
 
@@ -104,6 +111,7 @@ export class TitleDto {
     dto.animationFrameRate = row.animation_frame_rate;
     dto.bindGold = row.bind_gold;
     dto.acquireChannel = row.acquire_channel;
+    dto.upgradeOrder = row.upgrade_order;
     dto.attributes = attributesFromRow(row);
     dto.updatedAt = row.updated_at;
     return dto;
@@ -174,6 +182,21 @@ export class TitleQueryDto extends PageQueryDto {
 export class TitlePageDto extends PageMetaDto {
   @ApiProperty({ description: "当前页的称号配置", type: [TitleDto] })
   list: TitleDto[];
+}
+
+/**
+ * 称号成长列表重排入参（**整串提交**）
+ *
+ * `levels` 就是拖完后的完整顺序（按等级号列出，第 1 个是列表第 1 位）。
+ * 服务端要求它**恰好等于**当前 upgrade 渠道的等级集合 —— 多、少、重复、混入非 upgrade
+ * 渠道的等级都拒收：整串提交保证运营看到的顺序就是落库的顺序，没有增量合并的歧义。
+ */
+export class UpgradeOrderDto {
+  @ApiProperty({ description: "重排后的称号等级全序列（须与当前 upgrade 渠道的等级集合完全一致）", type: [Number] })
+  @IsArray({ message: "levels 必须是数组" })
+  @IsInt({ each: true, message: "levels 里必须是整数等级" })
+  @Min(1, { each: true, message: "levels 里的等级从 1 起" })
+  levels: number[];
 }
 
 /**

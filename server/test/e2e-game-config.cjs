@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 44;
+const EXPECTED_ASSERTIONS = 64;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -264,6 +264,59 @@ async function main() {
     const viewerWrite = await api(base, "PATCH", "/api/admin/titles/1", { token: viewerToken, body: { bindGold: 1 } });
     checkEqual(viewerWrite.status, 403, "观察员改配置 → 403");
     checkEqual(viewerWrite.body?.code, 30006, "观察员改配置 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 四、称号成长列表：upgrade 渠道进出 + 拖动排序（整串重排）
+
+    group("四、称号成长列表");
+
+    // 上文三已把 1 级改成 upgrade：它应已在成长列表里，序号 1
+    const upgradeList1 = await api(base, "GET", "/api/admin/titles/upgrade-list", { token });
+    checkEqual(upgradeList1.status, 200, "成长列表可读");
+    checkEqual(JSON.stringify(upgradeList1.body?.data?.map((item) => item.level)), JSON.stringify([1]), "渠道改为 upgrade 的称号已在成长列表");
+    checkEqual(upgradeList1.body?.data?.[0]?.upgradeOrder, 1, "首位序号从 1 起");
+
+    const joinSecond = await api(base, "PATCH", "/api/admin/titles/3", { token, body: { acquireChannel: "upgrade" } });
+    checkEqual(joinSecond.body?.data?.upgradeOrder, 2, "后加入的称号追加到列表尾（3 级 → 序号 2）");
+    const joinThird = await api(base, "PATCH", "/api/admin/titles/2", { token, body: { acquireChannel: "upgrade" } });
+    checkEqual(joinThird.body?.data?.upgradeOrder, 3, "2 级追加到列表尾（序号 3）");
+
+    const reordered = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token, body: { levels: [2, 1, 3] } });
+    checkEqual(reordered.status, 200, "整串重排成功");
+    checkEqual(JSON.stringify(reordered.body?.data?.map((item) => item.level)), JSON.stringify([2, 1, 3]), "重排后成长列表按新顺序返回（与等级号无关）");
+    checkEqual(JSON.stringify(reordered.body?.data?.map((item) => item.upgradeOrder)), JSON.stringify([1, 2, 3]), "重排后序号连续（1 起无空洞）");
+
+    const dupOrder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token, body: { levels: [2, 2, 3] } });
+    checkEqual(dupOrder.status, 400, "重排带重复等级 → 400");
+    const missingOrder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token, body: { levels: [2, 1] } });
+    checkEqual(missingOrder.status, 400, "重排漏了列表里的等级 → 400");
+    const extraOrder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token, body: { levels: [2, 1, 3, 4] } });
+    checkEqual(extraOrder.status, 400, "重排混入不在列表的等级 → 400");
+
+    // 切走：移出成长列表、序号清空，升级价格保留
+    const leaveList = await api(base, "PATCH", "/api/admin/titles/2", { token, body: { acquireChannel: "unavailable" } });
+    checkEqual(leaveList.status, 200, "渠道切走成功");
+    checkEqual(leaveList.body?.data?.upgradeOrder, null, "切走后序号清空");
+    const afterLeave = await api(base, "GET", "/api/admin/titles/upgrade-list", { token });
+    checkEqual(JSON.stringify(afterLeave.body?.data?.map((item) => item.level)), JSON.stringify([1, 3]), "切走后成长列表少一行");
+    const keptPrice = (await api(base, "GET", "/api/admin/titles?acquireChannel=unavailable", { token })).body?.data?.list?.find(
+      (item) => item.level === 2,
+    );
+    checkEqual(keptPrice?.bindGold, shared.TITLE_LEVEL_META[1].bindGold, "切走后升级价格保留（不受进出列表影响）");
+
+    // 再切回来：追加到尾（不恢复旧序号；序号允许留空洞，只保证相对顺序）
+    const rejoin = await api(base, "PATCH", "/api/admin/titles/2", { token, body: { acquireChannel: "upgrade" } });
+    checkEqual(rejoin.body?.data?.upgradeOrder, 4, "重新加入的序号 = 当前最大序号 + 1（空洞不复用）");
+    const afterRejoin = await api(base, "GET", "/api/admin/titles/upgrade-list", { token });
+    checkEqual(JSON.stringify(afterRejoin.body?.data?.map((item) => item.level)), JSON.stringify([1, 3, 2]), "重新加入后列表顺序（追加到尾，不恢复旧位置）");
+
+    // 观察员：能看列表，不能重排
+    const viewerUpgradeRead = await api(base, "GET", "/api/admin/titles/upgrade-list", { token: viewerToken });
+    checkEqual(viewerUpgradeRead.body?.code, 0, "观察员能看成长列表");
+    const viewerReorder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token: viewerToken, body: { levels: [1, 3, 2] } });
+    checkEqual(viewerReorder.status, 403, "观察员重排 → 403");
+    checkEqual(viewerReorder.body?.code, 30006, "观察员重排 → 30006（权限点不足）");
 
     //#endregion
   } finally {

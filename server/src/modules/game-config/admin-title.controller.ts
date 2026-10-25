@@ -9,7 +9,7 @@ import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { TITLE_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
-import { TitleDto, TitlePageDto, TitleQueryDto, UpdateTitleDto } from "./dto/title.dto";
+import { TitleDto, TitlePageDto, TitleQueryDto, UpdateTitleDto, UpgradeOrderDto } from "./dto/title.dto";
 import { ACQUIRE_CHANNEL_LABELS, ACQUIRE_CHANNELS } from "../../common/constants/game-config";
 
 /**
@@ -41,6 +41,37 @@ export class AdminTitleController {
   @ApiDataResponse(TitlePageDto, { description: "分页结果（list/total/page/size）" })
   list(@Query() query: TitleQueryDto): PageResult<TitleDto> {
     return this.gameConfigService.listTitles(query);
+  }
+
+  @Get("upgrade-list")
+  @ApiAdminDoc({
+    operationId: "adminTitle.upgradeList",
+    summary: "称号成长列表",
+    description:
+      "独立于主列表的「升级链」视图：只返回获得渠道为 `upgrade` 的称号，按**成长顺序**升序" +
+      "（顺序由 `upgradeOrder` 决定，与等级号解耦 —— 运营拖动排序改的就是它）。\n\n" +
+      "渠道在主列表 `PATCH /admin/titles/:level` 里改为 `upgrade` 时自动追加到列表尾；切走时移出列表（价格保留）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(TitleDto, { description: "按成长顺序排列的称号配置（数组，无分页）", isArray: true })
+  upgradeList(): TitleDto[] {
+    return this.gameConfigService.listUpgradeTitles();
+  }
+
+  @Patch("upgrade-order")
+  @AuditTarget("title")
+  @ApiAdminDoc({
+    operationId: "adminTitle.reorderUpgradeList",
+    summary: "称号成长列表重排（拖动排序）",
+    description:
+      "**整串提交**：`levels` 就是拖完后的完整顺序（第 1 个是列表第 1 位）。\n\n" +
+      "服务端要求它恰好等于当前 `upgrade` 渠道的等级集合 —— 缺失 / 多出 / 重复 / 混入非 upgrade 渠道 → 400（40000）。" +
+      "响应返回重排后的成长列表。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(TitleDto, { description: "重排后的成长列表", isArray: true })
+  reorderUpgradeList(@Body() dto: UpgradeOrderDto): TitleDto[] {
+    return this.gameConfigService.reorderUpgradeTitles(dto);
   }
 
   @Patch(":level")

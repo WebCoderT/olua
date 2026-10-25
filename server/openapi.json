@@ -3369,6 +3369,122 @@
         }
       }
     },
+    "/admin/titles/upgrade-list": {
+      "get": {
+        "description": "独立于主列表的「升级链」视图：只返回获得渠道为 `upgrade` 的称号，按**成长顺序**升序（顺序由 `upgradeOrder` 决定，与等级号解耦 —— 运营拖动排序改的就是它）。\n\n渠道在主列表 `PATCH /admin/titles/:level` 里改为 `upgrade` 时自动追加到列表尾；切走时移出列表（价格保留）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminTitle.upgradeList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "按成长顺序排列的称号配置（数组，无分页）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TitleDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "称号成长列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TitleDto"
+          }
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/titles/upgrade-order": {
+      "patch": {
+        "description": "**整串提交**：`levels` 就是拖完后的完整顺序（第 1 个是列表第 1 位）。\n\n服务端要求它恰好等于当前 `upgrade` 渠道的等级集合 —— 缺失 / 多出 / 重复 / 混入非 upgrade 渠道 → 400（40000）。响应返回重排后的成长列表。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminTitle.reorderUpgradeList",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重排后的成长列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TitleDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "称号成长列表重排（拖动排序）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TitleDto"
+          }
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/titles/{level}": {
       "patch": {
         "description": "**部分更新**：只改请求体里出现的字段。\n\n- `acquireChannel`：获得渠道（upgrade 称号升级 / grant 系统赠送 / unavailable 无法获取）。**赠送逻辑暂未实现**，标成 grant 只是先把渠道记下来；默认 unavailable。\n- `bindGold`：升级价格，仅渠道为 upgrade 时在玩家侧实际使用；其余渠道数值保留但不展示入口。\n- `attributes`：八项属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。\n- `level` 不存在 → 404（`50010`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
@@ -4500,6 +4616,21 @@
             "nullable": true
           }
         }
+      },
+      "UpgradeOrderDto": {
+        "type": "object",
+        "properties": {
+          "levels": {
+            "description": "重排后的称号等级全序列（须与当前 upgrade 渠道的等级集合完全一致）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "levels"
+        ]
       },
       "ConfigAttributeRangeDto": {
         "type": "object",
@@ -7167,6 +7298,11 @@
               "unavailable"
             ]
           },
+          "upgradeOrder": {
+            "type": "number",
+            "description": "称号成长列表顺序（仅 upgrade 渠道的行持有，1 起；拖动排序改的就是它）",
+            "nullable": true
+          },
           "attributes": {
             "description": "八项属性加成",
             "allOf": [
@@ -7188,6 +7324,7 @@
           "animationFrameRate",
           "bindGold",
           "acquireChannel",
+          "upgradeOrder",
           "attributes",
           "updatedAt"
         ]

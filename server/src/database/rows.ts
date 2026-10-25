@@ -249,6 +249,13 @@ export interface TitleRow {
   bind_gold: number;
   /** 获得渠道：upgrade | grant | unavailable（默认 unavailable） */
   acquire_channel: string;
+  /**
+   * 称号成长列表顺序（1 起；**仅 `upgrade` 渠道的行持有**，其余行为 null）
+   *
+   * 升级链顺序与等级号解耦：运营在后台拖动成长列表就是在改这一列。
+   * 渠道切到 upgrade 时追加到列表尾（max+1）；切走时清空（价格保留）。
+   */
+  upgrade_order: number | null;
   max_hp: number;
   hp_recover: number;
   physical_attack_min: number;

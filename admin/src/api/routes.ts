@@ -292,7 +292,7 @@ export const routes = {
      */
     info: "/admin/system",
   },
-  /** adminTitle 模块（2 个接口） */
+  /** adminTitle 模块（4 个接口） */
   adminTitle: {
     /**
      * 称号配置列表（GET /admin/titles）
@@ -306,5 +306,17 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (level: string) => `/admin/titles/${encodeURIComponent(level)}`,
+    /**
+     * 称号成长列表（GET /admin/titles/upgrade-list）
+     *
+     * 独立于主列表的「升级链」视图：只返回获得渠道为 `upgrade` 的称号，按**成长顺序**升序（顺序由 `upgradeOrder` 决定，与等级号解耦 —— 运营拖动排序改的就是它）。
+     */
+    upgradeList: "/admin/titles/upgrade-list",
+    /**
+     * 称号成长列表重排（拖动排序）（PATCH /admin/titles/upgrade-order）
+     *
+     * **整串提交**：`levels` 就是拖完后的完整顺序（第 1 个是列表第 1 位）。
+     */
+    reorderUpgradeList: "/admin/titles/upgrade-order",
   },
 } as const;
