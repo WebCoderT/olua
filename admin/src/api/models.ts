@@ -69,6 +69,17 @@ export type GrowthUpgrade = {
   revision?: number;
 };
 
+export type MallPurchase = {
+  /**
+   * 商品 id（必须是商城目录里的装备变体）
+   */
+  goodId: string;
+  /**
+   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   */
+  revision?: number;
+};
+
 export type AdminRegister = {
   /**
    * 管理员账号：3~20 位字母 / 数字 / 下划线
@@ -1010,6 +1021,61 @@ export type GrowthUpgradeResult = {
    * 到达阶位的名称（称号名 / 战魂阶名 / 军衔衔名）
    */
   gainedLabel: string;
+};
+
+export type MallPurchaseResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 本次购买消耗的绑定元宝
+   */
+  consumed: number;
+  /**
+   * 买到的商品 id
+   */
+  goodId: string;
 };
 
 export type RealtimeTicket = {

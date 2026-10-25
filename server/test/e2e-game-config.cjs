@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 471;
+const EXPECTED_ASSERTIONS = 494;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -1293,6 +1293,103 @@ async function main() {
     // 还原称号渠道（不污染其他断言的 seed 前提）
     const restore1 = await api(base, "PATCH", `/api/admin/titles/1`, { token, body: { acquireChannel: "unavailable" } });
     checkEqual(restore1.status, 200, "还原 1 阶称号渠道（seed 前提复原）");
+
+    //#endregion
+
+    //#region 十八、商城购买：扣费与入包在服务端（#304）
+    group("十八、商城购买：扣费与入包在服务端");
+
+    const mallPlayer = await registerPlayer("mall_player");
+    check(Boolean(mallPlayer), "商城玩家注册成功");
+    // 满背包网格（bagRow×bagCol 由客户端配置重塑；这里构造全满 4×6）+ 0 元宝
+    const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 6 }, () => ({ id: "cloth_1_p0s0", count: 1 })));
+    const emptyBag = Array.from({ length: 4 }, () => Array.from({ length: 6 }, () => null));
+    const mallCreate = await api(base, "POST", "/api/roles", {
+      token: mallPlayer,
+      body: {
+        data: {
+          id: "mall_role_1",
+          name: "商城测试员",
+          occupation: "1",
+          sex: "1",
+          level: 1,
+          bindGold: 0,
+          gold: 0,
+          bag: fullBag,
+        },
+      },
+    });
+    checkEqual(mallCreate.status, 201, "创建满背包测试角色 → 201");
+    const mallRoleId = mallCreate.body?.data?.id;
+
+    // 商品不在目录（非装备变体）→ 404 复用 50021
+    const badGood = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "drug_hp_small" },
+    });
+    checkEqual(badGood.status, 404, "非装备 id 购买 → 404（商城只卖装备变体）");
+    checkEqual(badGood.body?.code, 50021, "商品不在目录 → 50021");
+
+    // 背包满 → 20012（先于元宝不足：入包前先扣费的设计下顺序是 价→钱→包，但这里钱也不足……先充值再测满包）
+    const richMall = await api(base, "PUT", `/api/roles/${mallRoleId}`, {
+      token: mallPlayer,
+      body: { data: { ...mallCreate.body?.data?.data, bindGold: 1000000000, bag: fullBag } },
+    });
+    checkEqual(richMall.status, 200, "充值并保持满背包");
+    const fullBagBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "cloth_1_p0s1", revision: richMall.body?.data?.revision },
+    });
+    checkEqual(fullBagBuy.status, 409, "满背包购买 → 409");
+    checkEqual(fullBagBuy.body?.code, 20012, "背包已满 → 20012");
+
+    // 腾出背包：换成空网格；统一价是 1（MALL.defaultPrice），0 元宝必不足
+    const emptied = await api(base, "PUT", `/api/roles/${mallRoleId}`, {
+      token: mallPlayer,
+      body: { data: { ...mallCreate.body?.data?.data, bindGold: 0, bag: emptyBag } },
+    });
+    checkEqual(emptied.status, 200, "改为空网格 + 0 元宝（故意不足）");
+    const poorBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "cloth_1_p0s1", revision: emptied.body?.data?.revision },
+    });
+    checkEqual(poorBuy.status, 409, "元宝不足购买 → 409");
+    checkEqual(poorBuy.body?.code, 20011, "绑定元宝不足 → 20011");
+
+    // 管理端给 cloth_1_p0s1 设特殊价 777（改价对购买即时生效的直接证明）
+    const setPrice = await api(base, "PUT", "/api/admin/mall/prices/cloth_1_p0s1", { token, body: { price: 777 } });
+    checkEqual(setPrice.status, 200, "管理端设特殊价 777");
+
+    const recharge = await api(base, "PUT", `/api/roles/${mallRoleId}`, {
+      token: mallPlayer,
+      body: { data: { ...mallCreate.body?.data?.data, bindGold: 1000, bag: emptyBag } },
+    });
+    checkEqual(recharge.status, 200, "充值 1000 元宝");
+    const staleRev = recharge.body?.data?.revision;
+
+    const staleBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "cloth_1_p0s1", revision: staleRev - 1 },
+    });
+    checkEqual(staleBuy.status, 409, "带旧修订号购买 → 409");
+    checkEqual(staleBuy.body?.code, 20006, "乐观锁冲突 → 20006");
+
+    const bought = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "cloth_1_p0s1", revision: staleRev },
+    });
+    checkEqual(bought.status, 200, "购买成功 → 200");
+    checkEqual(bought.body?.data?.consumed, 777, "consumed = 特殊价 777（管理端改价即时生效）");
+    checkEqual(bought.body?.data?.data?.bindGold, 1000 - 777, "存档 bindGold 扣减到位");
+    checkEqual(bought.body?.data?.revision, staleRev + 1, "revision 原子 +1");
+    const bagAfter = bought.body?.data?.data?.bag;
+    check(Array.isArray(bagAfter), "返回存档带 bag 网格");
+    checkEqual(bagAfter?.[0]?.[0]?.id, "cloth_1_p0s1", "物品放在网格首个空格（行优先）");
+    checkEqual(bagAfter?.[0]?.[0]?.count, 1, "放入数量 = 1");
+
+    // 清掉特殊价（还原统一价前提，避免污染后续）
+    const clearPrice = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1_p0s1", { token });
+    checkEqual(clearPrice.status, 200, "清掉特殊价（还原统一价）");
 
     //#endregion
   } finally {

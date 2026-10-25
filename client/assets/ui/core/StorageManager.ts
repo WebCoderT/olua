@@ -25,7 +25,7 @@ import { getRankLevel } from "../../configs/rank";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
-import type { GrowthUpgradeResult } from "../utils/net/ApiModels";
+import type { GrowthUpgradeResult, MallPurchaseResult } from "../utils/net/ApiModels";
 
 /**
  * 存储管理器
@@ -697,9 +697,20 @@ export default class StorageManager {
    * @param id 物品 id（商城只上架装备，见 configs/mall.getMallGoods）
    * @returns 是否购买成功
    */
-  static buyMallGood(id: string): boolean {
+  /**
+   * 商城购买（当前在线角色）：**扣费与入包都在服务端**（role.mallPurchase，#304）
+   *
+   * 价格读服务端（特殊价优先，未定价走统一价——与商城定价管理端同源，后台改价即时生效）；
+   * 物品由服务端放进存档背包网格。本地预检只做即时 UX（下架/余额不足提示），服务端结果为准：
+   * 服务端拒绝时（后台改价、被踢、乐观锁冲突）提示经请求层失败出口弹给玩家。
+   *
+   * 成功后以服务端返回为准刷新本地存档（bindGold / bag / revision），再走既有落盘与 UI 链路
+   * （防抖推回 revision 与服务端一致，幂等）。买装备不改战斗属性，无需重算。
+   * @returns 是否购买成功（失败原因已用浮动提示告知）
+   */
+  static async buyMallGood(id: string): Promise<boolean> {
     const good = getItem(id);
-    // 只卖装备：非装备 id（或解析不出配置）一律当「已下架」拒绝
+    // 只卖装备：非装备 id（或解析不出配置）一律当「已下架」拒绝（本地预检，省一次请求）
     if (!good || !isEquipment(good)) {
       GameUiHelper.createTip("mall_good_missing_tip");
       return false;
@@ -709,26 +720,25 @@ export default class StorageManager {
       GameUiHelper.createTip("mall_good_missing_tip");
       return false;
     }
-    const price = getMallPrice(good);
-    if (role.bindGold < price) {
+    if (role.bindGold < getMallPrice(good)) {
       GameUiHelper.createTip("mall_gold_not_enough_tip");
       return false;
     }
-    role.bindGold -= price;
-    this.updateOnlineRole(role);
-    if (!this.addGood(good, 1)) {
-      // 背包已满：退款（重新取一次在线角色 —— 旧实例的关系网已被 addGood 的存档替换）
-      const refundRole = this.findOnlineRole();
-      if (refundRole) {
-        refundRole.bindGold += price;
-        this.updateOnlineRole(refundRole);
-      }
-      GameUiHelper.createTip("pickup_full_tip");
-      return false;
+    let result: MallPurchaseResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝购买
+      result = await RoleApi.mallPurchase(role.id, { goodId: id, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
     }
-    const updated = this.findOnlineRole();
-    if (updated) this.updateUi(updated);
-    GameUiHelper.createTip("mall_buy_success_tip", { name: this.getGoodDisplayName(good), price });
+    const data = result.data as Record<string, unknown>;
+    role.bindGold = Number(data.bindGold ?? role.bindGold);
+    // 服务端已把物品放进背包网格：以服务端那份为准整体替换（格子只存 key + 数量，无引用关系）
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    role.revision = result.revision;
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    GameUiHelper.createTip("mall_buy_success_tip", { name: this.getGoodDisplayName(good), price: result.consumed });
     return true;
   }
 

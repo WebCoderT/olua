@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, ActiveAnnouncement, AuthResult, CreateRole, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, Health, Login, RealtimeTicket, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
+import type { Account, ActiveAnnouncement, AuthResult, CreateRole, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, Health, Login, MallPurchase, MallPurchaseResult, RealtimeTicket, Register, RoleDetail, RoleSummary, SaveRole } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,7 @@ import type { Account, ActiveAnnouncement, AuthResult, CreateRole, GameConfigSna
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateRole, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateRole, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./ApiModels";
 
 /** announcement 模块的接口（1 个，生成） */
 export const AnnouncementApi = {
@@ -91,7 +91,7 @@ export const RealtimeApi = {
   ticket: (options?: Options) => HttpClient.post<RealtimeTicket>(ApiRoutes.realtime.ticket, undefined, options),
 };
 
-/** role 模块的接口（8 个，生成） */
+/** role 模块的接口（9 个，生成） */
 export const RoleApi = {
   /**
    * 角色列表（GET /roles）
@@ -129,6 +129,12 @@ export const RoleApi = {
    * 扣费与阶位推进都在服务端：按库里的成长链（upgrade_order / 军衔阶号）算出下一阶并校验 `targetLevel` 一致，扣绑定元宝后原子推进（revision +1）。
    */
   growthUpgrade: (id: string, body: GrowthUpgrade, options?: Options) => HttpClient.post<GrowthUpgradeResult>(ApiRoutes.role.growthUpgrade(id), body, options),
+  /**
+   * 商城购买（扣费与入包都在服务端）（POST /roles/{id}/mall-purchase）
+   *
+   * 价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。
+   */
+  mallPurchase: (id: string, body: MallPurchase, options?: Options) => HttpClient.post<MallPurchaseResult>(ApiRoutes.role.mallPurchase(id), body, options),
   /**
    * 选中（进入）角色（POST /roles/{id}/select）
    *

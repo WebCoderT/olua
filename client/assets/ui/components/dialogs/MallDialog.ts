@@ -173,8 +173,8 @@ export default class MallDialog {
     button.addChild(UiHelper.createLabel(`${button.name}_label`, getText("label_mall_buy"), Color.WHITE, layout.card.buyButton.fontSize, new Vec2(), layout.card.buyButton.size));
     button.on(
       Node.EventType.TOUCH_END,
-      () => {
-        if (StorageManager.buyMallGood(good.id ?? "")) this.refreshBindGold();
+      async () => {
+        if (await StorageManager.buyMallGood(good.id ?? "")) this.refreshBindGold();
       },
       this,
     );

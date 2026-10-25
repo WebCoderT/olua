@@ -28,5 +28,7 @@ import { MallPricingService } from "./mall-pricing.service";
 @Module({
   controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
   providers: [GameConfigService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
+  // 商城购买收权（#304）：存档域（roles）读这里的成交价
+  exports: [MallPricingService],
 })
 export class GameConfigModule {}
