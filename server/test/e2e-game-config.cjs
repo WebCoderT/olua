@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 271;
+const EXPECTED_ASSERTIONS = 306;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -793,6 +793,77 @@ async function main() {
     const viewerNpcWrite = await api(base, "PATCH", "/api/admin/npcs/0002", { token: viewerToken, body: { label: "x" } });
     checkEqual(viewerNpcWrite.status, 403, "观察员改 NPC → 403");
     checkEqual(viewerNpcWrite.body?.code, 30006, "观察员改 NPC → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 十三、商城定价（#251）：统一价 seed / 特殊价动态增删 / 商品清单来自生成物 / 未定价走统一价
+
+    group("十三、商城定价");
+
+    const mallGoodsTotal = Object.keys(shared.EQUIPMENT_ATTRIBUTES).length;
+    const mallSettings = await api(base, "GET", "/api/admin/mall/settings", { token });
+    checkEqual(mallSettings.status, 200, "统一价可读");
+    checkEqual(mallSettings.body?.data?.defaultPrice, shared.MALL.defaultPrice, `统一价 seed 与配置一致（${shared.MALL.defaultPrice}）`);
+
+    const mallSettingsPatched = await api(base, "PATCH", "/api/admin/mall/settings", { token, body: { defaultPrice: 3 } });
+    checkEqual(mallSettingsPatched.status, 200, "PATCH 统一价成功");
+    checkEqual(mallSettingsPatched.body?.data?.defaultPrice, 3, "响应里的统一价已更新");
+    const mallSettingsReread = await api(base, "GET", "/api/admin/mall/settings", { token });
+    checkEqual(mallSettingsReread.body?.data?.defaultPrice, 3, "重新读取统一价已是新值");
+    const mallBadPrice = await api(base, "PATCH", "/api/admin/mall/settings", { token, body: { defaultPrice: -1 } });
+    checkEqual(mallBadPrice.status, 400, "统一价负数 → 400");
+
+    const mallPrices = await api(base, "GET", "/api/admin/mall/prices", { token });
+    checkEqual(mallPrices.status, 200, "定价列表可读");
+    checkEqual(mallPrices.body?.data?.total, mallGoodsTotal, `商品数 = 生成物装备全量（${mallGoodsTotal}）`);
+    checkEqual(mallPrices.body?.data?.list?.length, 20, "默认每页 20 条");
+    const mallFirst = mallPrices.body?.data?.list?.[0];
+    checkEqual(mallFirst?.id, "cloth_1", "首行是有货部位里最靠前的商品（部位序 → 等级 → id）");
+    checkEqual(mallFirst?.price, null, "seed 后没有任何特殊价（未定价走统一价）");
+    checkEqual(mallFirst?.updatedAt, null, "未定价的更新时间为 null");
+    checkEqual(mallFirst?.label, shared.EQUIPMENT_DISPLAY_NAMES["cloth_1"], "商品显示名来自生成物（前后缀已拼好）");
+    const mallLastPage = await api(base, "GET", "/api/admin/mall/prices?page=28&size=20", { token });
+    checkEqual(mallLastPage.body?.data?.list?.length, mallGoodsTotal - 27 * 20, "末页补齐剩余商品");
+
+    const mallPut = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token, body: { price: 99 } });
+    checkEqual(mallPut.status, 200, "PUT 单件特殊价成功（upsert 的「增」）");
+    checkEqual(mallPut.body?.data?.price, 99, "响应里的特殊价已设置");
+    check(mallPut.body?.data?.updatedAt !== null, "特殊价的更新时间已落");
+    const mallPriced = await api(base, "GET", "/api/admin/mall/prices?priced=true", { token });
+    checkEqual(mallPriced.body?.data?.total, 1, "priced=true 只看到这一条特殊价");
+    const mallPricedKeyword = await api(base, "GET", "/api/admin/mall/prices?priced=true&keyword=cloth_1", { token });
+    checkEqual(mallPricedKeyword.body?.data?.total, 1, "关键字 + 定价状态组合筛命中");
+    const mallPricedWeapon = await api(base, "GET", "/api/admin/mall/prices?slot=weapon&priced=true", { token });
+    checkEqual(mallPricedWeapon.body?.data?.total, 0, "按部位 + 定价状态组合筛：武器部没有特殊价");
+    const mallPutAgain = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token, body: { price: 88 } });
+    checkEqual(mallPutAgain.status, 200, "再次 PUT 同一商品成功（upsert 的「改」）");
+    checkEqual(mallPutAgain.body?.data?.price, 88, "改价生效");
+    const mallPricedAfterUpsert = await api(base, "GET", "/api/admin/mall/prices?priced=true", { token });
+    checkEqual(mallPricedAfterUpsert.body?.data?.total, 1, "upsert 不会长出第二行");
+
+    const mallPutGhost = await api(base, "PUT", "/api/admin/mall/prices/nope", { token, body: { price: 1 } });
+    checkEqual(mallPutGhost.status, 404, "给清单外的 id 定价 → 404");
+    checkEqual(mallPutGhost.body?.code, 50021, "商品不存在用专属业务码 50021");
+    const mallPutNegative = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token, body: { price: -5 } });
+    checkEqual(mallPutNegative.status, 400, "特殊价负数 → 400");
+
+    const mallDelete = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token });
+    checkEqual(mallDelete.status, 200, "DELETE 特殊价成功（动态增删的「删」）");
+    const mallPricedAfterDelete = await api(base, "GET", "/api/admin/mall/prices?priced=true", { token });
+    checkEqual(mallPricedAfterDelete.body?.data?.total, 0, "删除后回到未定价（走统一价）");
+    const mallDeleteAgain = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token });
+    checkEqual(mallDeleteAgain.status, 404, "删无可删 → 404（不静默成功）");
+    checkEqual(mallDeleteAgain.body?.code, 50021, "删无可删也用 50021");
+
+    const viewerMallSettingsRead = await api(base, "GET", "/api/admin/mall/settings", { token: viewerToken });
+    checkEqual(viewerMallSettingsRead.body?.code, 0, "观察员能看统一价");
+    const viewerMallSettingsWrite = await api(base, "PATCH", "/api/admin/mall/settings", { token: viewerToken, body: { defaultPrice: 9 } });
+    checkEqual(viewerMallSettingsWrite.status, 403, "观察员改统一价 → 403");
+    checkEqual(viewerMallSettingsWrite.body?.code, 30006, "观察员改统一价 → 30006（权限点不足）");
+    const viewerMallPut = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token: viewerToken, body: { price: 9 } });
+    checkEqual(viewerMallPut.status, 403, "观察员设特殊价 → 403");
+    const viewerMallDelete = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token: viewerToken });
+    checkEqual(viewerMallDelete.status, 403, "观察员删特殊价 → 403");
 
     //#endregion
   } finally {

@@ -1136,6 +1136,11 @@ export const GROWTH_SCALARS = {
 };
 
 
+/** 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；特殊价是运营数据不进快照 */
+export const MALL: Record<string, number> = {
+  "defaultPrice": 1,
+};
+
 //#endregion
 
 //#region 名字与元数据（三端做界面用）

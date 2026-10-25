@@ -67,7 +67,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -211,6 +211,9 @@ function load(work) {
     maps: missing("map.maps", cfg("map").maps),
     monsters: missing("monster.monsters", cfg("monster").monsters),
     npcs: missing("npc-data.npcData", cfg("npc-data").npcData),
+    // 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；
+    // 特殊价是运营数据不进快照（动态增删，归 mall_prices 表）
+    mallPrice: missing("mall.mallPrice", cfg("mall").mallPrice),
     drugs: missing("drug.drugs", cfg("drug").drugs),
     materials: missing("material.materials", cfg("material").materials),
   };
@@ -242,6 +245,7 @@ function buildSnapshot(cfg) {
     skills: pickSkills(cfg.skillData),
     monsters: pickMonsters(cfg.monsters),
     npcs: pickNpcs(cfg.npcs),
+    mallDefaultPrice: round(cfg.mallPrice ?? 0),
     // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
     // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
     drugs: pickDrugs(cfg.drugs),
@@ -704,6 +708,11 @@ ${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterSt
 ${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
+
+/** 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；特殊价是运营数据不进快照 */
+export const MALL: Record<string, number> = {
+  "defaultPrice": ${s.mallDefaultPrice},
+};
 
 //#endregion
 

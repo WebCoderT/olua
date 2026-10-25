@@ -298,6 +298,39 @@ export const routes = {
      */
     templates: "/admin/mails/templates",
   },
+  /** adminMall 模块（5 个接口） */
+  adminMall: {
+    /**
+     * 商城定价列表（商品 × 价格合并视图）（GET /admin/mall/prices）
+     *
+     * 商品清单 = 生成物里的装备全量变体（555 件，七部位 × 基础件 × 品质变体），**不在数据库里**；`price` 为 null 表示未定价（走统一价）。按 部位序 → 等级 → id 排序（与客户端商城陈列一致）。
+     */
+    listPrices: "/admin/mall/prices",
+    /**
+     * 删除单件特殊价（回到统一价）（DELETE /admin/mall/prices/{id}）
+     *
+     * **动态增删的「删」半边**：删掉该商品的特殊价行，之后走统一价。
+     */
+    deletePrice: (id: string) => `/admin/mall/prices/${encodeURIComponent(id)}`,
+    /**
+     * 设置单件特殊价（upsert）（PUT /admin/mall/prices/{id}）
+     *
+     * **动态增删的「增/改」半边**：商品已有特殊价则改价，没有则新增一行。
+     */
+    putPrice: (id: string) => `/admin/mall/prices/${encodeURIComponent(id)}`,
+    /**
+     * 查询商城统一价（GET /admin/mall/settings）
+     *
+     * 全场默认售价（绑定元宝/件），seed 自客户端 configs/mall 的 mallPrice。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。
+     */
+    getSettings: "/admin/mall/settings",
+    /**
+     * 修改商城统一价（PATCH /admin/mall/settings）
+     *
+     * 全场默认售价（绑定元宝/件，0 = 免费赠送也合法）；**不影响已设置的特殊价**。
+     */
+    updateSettings: "/admin/mall/settings",
+  },
   /** adminMonster 模块（2 个接口） */
   adminMonster: {
     /**

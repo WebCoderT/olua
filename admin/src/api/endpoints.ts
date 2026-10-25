@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, Monster, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, Rank, RankPage, RankQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMonster, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, Monster, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PutMallPrice, Rank, RankPage, RankQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateRole, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, Monster, MonsterAttributes, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMonster, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateRole, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, Monster, MonsterAttributes, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
 
 /** adminAccount 模块的接口（10 个，生成） */
 export const accountsApi = {
@@ -394,6 +394,50 @@ export const mailsApi = {
    * 权限点：mail:read
    */
   templates: (options?: Options) => http.get<MailTemplate[]>(routes.adminMail.templates, options),
+};
+
+/** adminMall 模块的接口（5 个，生成） */
+export const mallApi = {
+  /**
+   * 商城定价列表（商品 × 价格合并视图）（GET /admin/mall/prices）
+   *
+   * 商品清单 = 生成物里的装备全量变体（555 件，七部位 × 基础件 × 品质变体），**不在数据库里**；`price` 为 null 表示未定价（走统一价）。按 部位序 → 等级 → id 排序（与客户端商城陈列一致）。
+   *
+   * 权限点：gameConfig:read
+   */
+  listPrices: (query: MallPriceQuery = {}, options?: Options) => http.get<MallPricePage>(routes.adminMall.listPrices, { query, ...options }),
+  /**
+   * 删除单件特殊价（回到统一价）（DELETE /admin/mall/prices/{id}）
+   *
+   * **动态增删的「删」半边**：删掉该商品的特殊价行，之后走统一价。
+   *
+   * 权限点：gameConfig:write
+   */
+  deletePrice: (id: string, options?: Options) => http.del<MallPriceRemove>(routes.adminMall.deletePrice(id), options),
+  /**
+   * 设置单件特殊价（upsert）（PUT /admin/mall/prices/{id}）
+   *
+   * **动态增删的「增/改」半边**：商品已有特殊价则改价，没有则新增一行。
+   *
+   * 权限点：gameConfig:write
+   */
+  putPrice: (id: string, body: PutMallPrice, options?: Options) => http.put<MallPriceItem>(routes.adminMall.putPrice(id), body, options),
+  /**
+   * 查询商城统一价（GET /admin/mall/settings）
+   *
+   * 全场默认售价（绑定元宝/件），seed 自客户端 configs/mall 的 mallPrice。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。
+   *
+   * 权限点：gameConfig:read
+   */
+  getSettings: (options?: Options) => http.get<MallSettings>(routes.adminMall.getSettings, options),
+  /**
+   * 修改商城统一价（PATCH /admin/mall/settings）
+   *
+   * 全场默认售价（绑定元宝/件，0 = 免费赠送也合法）；**不影响已设置的特殊价**。
+   *
+   * 权限点：gameConfig:write
+   */
+  updateSettings: (body: UpdateMallSettings, options?: Options) => http.patch<MallSettings>(routes.adminMall.updateSettings, body, options),
 };
 
 /** adminMonster 模块的接口（2 个，生成） */

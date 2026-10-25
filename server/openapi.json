@@ -4954,6 +4954,357 @@
         ]
       }
     },
+    "/admin/mall/settings": {
+      "get": {
+        "description": "全场默认售价（绑定元宝/件），seed 自客户端 configs/mall 的 mallPrice。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMall.getSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一价配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallSettingsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "查询商城统一价",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallSettingsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "全场默认售价（绑定元宝/件，0 = 免费赠送也合法）；**不影响已设置的特殊价**。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMall.updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMallSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的统一价配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallSettingsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改商城统一价",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallSettingsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/mall/prices": {
+      "get": {
+        "description": "商品清单 = 生成物里的装备全量变体（555 件，七部位 × 基础件 × 品质变体），**不在数据库里**；`price` 为 null 表示未定价（走统一价）。按 部位序 → 等级 → id 排序（与客户端商城陈列一致）。\n\n`keyword` 模糊匹配商品 id / 显示名，`slot` 按部位筛，`priced=true/false` 只看特殊价 / 未定价。**注意**：这里的列表接口没有 POST/DELETE 语义约束之外的东西 —— 特殊价的增删就是 PUT / DELETE 两条单件路由。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMall.listPrices",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配商品 id 与显示名",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "required": false,
+            "in": "query",
+            "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "priced",
+            "required": false,
+            "in": "query",
+            "description": "按定价状态筛：true 只看特殊价，false 只看未定价（走统一价）的商品",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallPricePageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "商城定价列表（商品 × 价格合并视图）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallPricePageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MallPriceQueryDto"
+        }
+      }
+    },
+    "/admin/mall/prices/{id}": {
+      "put": {
+        "description": "**动态增删的「增/改」半边**：商品已有特殊价则改价，没有则新增一行。\n\n- 商品 id 必须在生成物的装备清单里，否则 404（`50021`）。\n- 删除特殊价（回到统一价）用 DELETE。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMall.putPrice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "商品 id（装备变体 id，如 cloth_1_p3s2）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutMallPriceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的商品定价视图",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallPriceItemDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "设置单件特殊价（upsert）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallPriceItemDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "**动态增删的「删」半边**：删掉该商品的特殊价行，之后走统一价。\n\n- 商品 id 不在清单里 → 404（`50021`）。\n- 该商品本来就没有特殊价 → 404（`50021`，删无可删不静默成功）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMall.deletePrice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "商品 id（装备变体 id，如 cloth_1_p3s2）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "被删除特殊价的商品 id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallPriceRemoveDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除单件特殊价（回到统一价）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallPriceRemoveDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/level-exps": {
       "get": {
         "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -6855,6 +7206,34 @@
             "maxLength": 2000
           }
         }
+      },
+      "UpdateMallSettingsDto": {
+        "type": "object",
+        "properties": {
+          "defaultPrice": {
+            "type": "number",
+            "description": "全场统一售价（绑定元宝/件）",
+            "minimum": 0,
+            "maximum": 100000000
+          }
+        },
+        "required": [
+          "defaultPrice"
+        ]
+      },
+      "PutMallPriceDto": {
+        "type": "object",
+        "properties": {
+          "price": {
+            "type": "number",
+            "description": "特殊售价（绑定元宝/件）",
+            "minimum": 0,
+            "maximum": 100000000
+          }
+        },
+        "required": [
+          "price"
+        ]
       },
       "UpdateLevelExpDto": {
         "type": "object",
@@ -10687,6 +11066,158 @@
             "default": "desc"
           }
         }
+      },
+      "MallSettingsDto": {
+        "type": "object",
+        "properties": {
+          "defaultPrice": {
+            "type": "number",
+            "description": "全场统一售价（绑定元宝/件；特殊价优先于它）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "defaultPrice",
+          "updatedAt"
+        ]
+      },
+      "MallPriceItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "商品 id（装备变体 id，如 cloth_1_p3s2）"
+          },
+          "label": {
+            "type": "string",
+            "description": "显示名（生成物已拼好前后缀）"
+          },
+          "slot": {
+            "type": "string",
+            "description": "部位（EQUIPMENT_TYPE 的枚举值）"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级需求（与基础件一致）"
+          },
+          "price": {
+            "type": "number",
+            "description": "特殊售价；null = 未定价（走统一价）",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "特殊价的最近更新时间；未定价为 null",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "slot",
+          "level",
+          "price",
+          "updatedAt"
+        ]
+      },
+      "MallPricePageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的商品定价视图",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MallPriceItemDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "MallPriceQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配商品 id 与显示名"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "slot": {
+            "type": "string",
+            "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）"
+          },
+          "priced": {
+            "type": "string",
+            "description": "按定价状态筛：true 只看特殊价，false 只看未定价（走统一价）的商品"
+          }
+        }
+      },
+      "MallPriceRemoveDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "被删除特殊价的商品 id"
+          },
+          "removed": {
+            "type": "boolean",
+            "description": "恒为 true（删除成功）"
+          }
+        },
+        "required": [
+          "id",
+          "removed"
+        ]
       }
     }
   }

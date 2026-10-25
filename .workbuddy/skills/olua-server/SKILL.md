@@ -47,8 +47,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（18 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc（17 个仓储）
+    database.service.ts           建表（20 张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall（18 个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -165,7 +165,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
-- **18 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `level_exps` / `growth_segments` / `growth_scalars`。删账号**级联删其角色**。
+- **20 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `mall_prices` / `mall_settings` / `level_exps` / `growth_segments` / `growth_scalars`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
