@@ -3344,3 +3344,70 @@ export type MonsterDropQuery = {
    */
   source?: "table" | "entries" | "none";
 };
+
+export type GameConfigSnapshot = {
+  /**
+   * 称号配置（34 阶，含渠道与升级链顺序）
+   */
+  titles: Title[];
+  /**
+   * 战魂配置（37 阶，含升级链顺序）
+   */
+  souls: Soul[];
+  /**
+   * 军衔配置（100 阶）
+   */
+  ranks: Rank[];
+  /**
+   * 装备基础件配置（555 件变体由客户端按前后缀倍率展开）
+   */
+  equipments: Equipment[];
+  /**
+   * 药品配置
+   */
+  drugs: Drug[];
+  /**
+   * 物品与材料配置（MATERIAL / OTHER 大类）
+   */
+  items: Item[];
+  /**
+   * 怪物基础数据（名称 / 等级 / 战斗数值）
+   */
+  monsters: Monster[];
+  /**
+   * NPC 基础数据（名称 / 对话文案）
+   */
+  npcs: Npc[];
+  /**
+   * 时装配置
+   */
+  fashions: Fashion[];
+  /**
+   * 升级经验表（一行 = 升到下一级所需经验）
+   */
+  levelExps: LevelExp[];
+  /**
+   * 成长曲线分段
+   */
+  growthSegments: GrowthSegment[];
+  /**
+   * 成长标量参数（键值对）
+   */
+  growthScalars: GrowthScalar[];
+  /**
+   * 商城全部商品定价（price = null 走统一价）
+   */
+  mallPrices: MallPriceItem[];
+  /**
+   * 商城统一价（单行）
+   */
+  mallSettings: MallSettings;
+  /**
+   * 具名掉落表（含 default 兜底）
+   */
+  dropTables: DropTable[];
+  /**
+   * 每怪掉落配置（怪物 key → 三选一来源）
+   */
+  monsterDrops: MonsterDrop[];
+};

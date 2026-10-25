@@ -80,6 +80,7 @@ const MODULES = {
   announcement: { target: "client", export: "AnnouncementApi" },
   role: { target: "client", export: "RoleApi" },
   realtime: { target: "client", export: "RealtimeApi" },
+  gameConfig: { target: "client", export: "GameConfigApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },

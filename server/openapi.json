@@ -6466,6 +6466,50 @@
         ]
       }
     },
+    "/game-config": {
+      "get": {
+        "description": "管理端可改的全部运营配置一次下发（称号 / 战魂 / 军衔 / 装备 / 药品 / 物品 / 怪物 / NPC / 时装 / 升级经验 / 成长曲线与标量 / 商城定价 / 掉落表）。\n\n形状与管理端列表接口一致（camelCase）。需要玩家令牌（配置属于玩法数据，不开放给未登录请求）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameConfig.snapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部运营配置快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GameConfigSnapshotDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "玩家侧配置快照",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GameConfigSnapshotDto"
+        }
+      }
+    },
     "/admin/mails/templates": {
       "get": {
         "description": "发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
@@ -12325,6 +12369,142 @@
             ]
           }
         }
+      },
+      "GameConfigSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "titles": {
+            "description": "称号配置（34 阶，含渠道与升级链顺序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TitleDto"
+            }
+          },
+          "souls": {
+            "description": "战魂配置（37 阶，含升级链顺序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoulDto"
+            }
+          },
+          "ranks": {
+            "description": "军衔配置（100 阶）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RankDto"
+            }
+          },
+          "equipments": {
+            "description": "装备基础件配置（555 件变体由客户端按前后缀倍率展开）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentDto"
+            }
+          },
+          "drugs": {
+            "description": "药品配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DrugDto"
+            }
+          },
+          "items": {
+            "description": "物品与材料配置（MATERIAL / OTHER 大类）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemDto"
+            }
+          },
+          "monsters": {
+            "description": "怪物基础数据（名称 / 等级 / 战斗数值）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterDto"
+            }
+          },
+          "npcs": {
+            "description": "NPC 基础数据（名称 / 对话文案）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NpcDto"
+            }
+          },
+          "fashions": {
+            "description": "时装配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FashionDto"
+            }
+          },
+          "levelExps": {
+            "description": "升级经验表（一行 = 升到下一级所需经验）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LevelExpDto"
+            }
+          },
+          "growthSegments": {
+            "description": "成长曲线分段",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrowthSegmentDto"
+            }
+          },
+          "growthScalars": {
+            "description": "成长标量参数（键值对）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrowthScalarDto"
+            }
+          },
+          "mallPrices": {
+            "description": "商城全部商品定价（price = null 走统一价）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MallPriceItemDto"
+            }
+          },
+          "mallSettings": {
+            "description": "商城统一价（单行）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MallSettingsDto"
+              }
+            ]
+          },
+          "dropTables": {
+            "description": "具名掉落表（含 default 兜底）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropTableDto"
+            }
+          },
+          "monsterDrops": {
+            "description": "每怪掉落配置（怪物 key → 三选一来源）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterDropDto"
+            }
+          }
+        },
+        "required": [
+          "titles",
+          "souls",
+          "ranks",
+          "equipments",
+          "drugs",
+          "items",
+          "monsters",
+          "npcs",
+          "fashions",
+          "levelExps",
+          "growthSegments",
+          "growthScalars",
+          "mallPrices",
+          "mallSettings",
+          "dropTables",
+          "monsterDrops"
+        ]
       }
     }
   }

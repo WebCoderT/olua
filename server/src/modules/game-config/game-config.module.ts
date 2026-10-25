@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AdminDropController } from "./admin-drop.controller";
+import { ClientConfigController } from "./client-config.controller";
+import { ClientConfigService } from "./client-config.service";
 import { AdminDrugController } from "./admin-drug.controller";
 import { AdminEquipmentController } from "./admin-equipment.controller";
 import { AdminFashionController } from "./admin-fashion.controller";
@@ -24,7 +26,7 @@ import { MallPricingService } from "./mall-pricing.service";
  * 重复执行也无副作用）。
  */
 @Module({
-  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController],
-  providers: [GameConfigService, DropConfigService, GrowthConfigService, MallPricingService],
+  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
+  providers: [GameConfigService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
 })
 export class GameConfigModule {}
