@@ -15,10 +15,12 @@ import { getTiledObjects, TiledObject } from "../../utils/map/TiledObjects";
  * 读取 TiledMap 中名为 monster 的对象组，把其中每个矩形区域解析成刷怪区域
  * （自定义属性 id = 怪物编号、min/max = 该区域允许的最少/最多怪物数）：
  *
- * - 世界权威（#35）：把解析出的刷怪计划（每区域 max 只、区域内随机落点）经 CombatChannel
- *   发 worldJoin 播种，权威快照（实例 id / 血量 / 存活）由 world 帧回来后经
- *   MonsterManager.applyWorldState 落场；死亡后的重生由服务端 tick 驱动并广播；
- * - 回滚路径（通道不可用）：照旧由 MonsterManager 按区域一次性生成、不刷新。
+ * - 世界权威（#35 + #295 阶段一）：刷怪区配置已从 Tiled 导入服务端（map_spawn_areas），
+ *   进图只发 worldJoin（仅地图 id），播种完全由服务端按区域随机落点完成；
+ *   权威快照（实例 id / 血量 / 存活）由 world 帧回来后经 MonsterManager.applyWorldState 落场；
+ *   死亡后的重生由服务端 tick 驱动并广播；
+ * - 本类保留 Tiled 解析，只服务两件事：调试期的区域可视化（debugConfig.areaRange）、
+ *   以及通道不可用时的本地回滚路径（照旧由 MonsterManager 按区域一次性生成、不刷新）。
  *
  * 区域中心由 MapPointMath 换算成世界坐标（怪物节点用世界坐标定位），本类不自行翻转 y
  * 地图坐标换算依赖地图节点本身，因此构造时注入地图节点与地图 id（worldJoin 要用）
@@ -34,37 +36,20 @@ export default class MonsterAreaSpawner {
     this.mapId = mapId;
   }
 
-  /** 解析并注册全部刷怪区域（地图没有该对象组时得到空数组，怪物层保持为空） */
+  /** 解析刷怪区域（地图没有该对象组时得到空数组）：世界在线只报图 id；通道不可用才本地生成 */
   spawnAll() {
     const areas = getTiledObjects(this.map, tiledGroupNames.monster)
       .map((object) => this.createArea(object))
       .filter((area): area is MonsterSpawnArea => area !== null);
     if (CombatChannel.active) {
-      // 世界权威：客户端只贡献「哪里刷、刷几只」的播种计划（区域配置在 Tiled 里，服务端拿不到），
-      // 实例的身份 / 血量 / 存活以服务端 world 帧为准（已有实例的图整份沿用，plan 被忽略）
-      CombatChannel.sendWorldJoin(this.mapId, this.buildSpawnPlan(areas));
+      // 世界权威（#295 阶段一）：刷怪区配置在服务端库里（从 Tiled 导入一次），
+      // 实例的身份 / 血量 / 存活 / 出生点全部以服务端 world 帧为准 —— 这里只报地图 id。
+      // areas 仍然解析：调试区域可视化在 createArea 里顺带完成。
+      CombatChannel.sendWorldJoin(this.mapId);
       return;
     }
     // 回滚路径：与上移前同一套本地生成
     MonsterManager.spawnByAreas(areas);
-  }
-
-  /** 把刷怪区域展开成播种计划：每区域按 max 在矩形内随机落点，一条一只 */
-  private buildSpawnPlan(areas: MonsterSpawnArea[]) {
-    const plan: Array<{ monsterKey: string; x: number; y: number }> = [];
-    areas.forEach((area) => {
-      for (let index = 0; index < area.max; index++) {
-        const position = this.getRandomAreaPosition(area);
-        plan.push({ monsterKey: area.monsterId, x: position.x, y: position.y });
-      }
-    });
-    return plan;
-  }
-
-  /** 取区域内随机一点的坐标（地图节点未旋转缩放，在区域矩形内均匀取值即可） */
-  private getRandomAreaPosition(area: MonsterSpawnArea) {
-    const { center, size } = area;
-    return new Vec3(center.x + (Math.random() - 0.5) * size.width, center.y + (Math.random() - 0.5) * size.height);
   }
 
   /** 解析单个区域（点位、多边形、缺属性、怪物编号无配置等无效区域返回 null 并给出提示） */

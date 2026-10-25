@@ -65,7 +65,8 @@ export default class CombatChannel {
   private static castSeq = 0;
 
   /** 最近一次进图登记（断线重连成功后自动重发；null = 本会话还没进过图） */
-  private static lastJoin: { mapId: string; spawnPlan: Array<{ monsterKey: string; x: number; y: number }> } | null = null;
+  /** 最近一次进图的地图 id（断线重连重发用；#295 起播种在服务端，客户端只报图 id） */
+  private static lastJoin: { mapId: string } | null = null;
 
   /** 结算结果出口（组合根接线到 MonsterManager.applyServerSettle；不接时结果被丢弃并告警） */
   static onSettle: ((data: CombatSettleOk) => void) | null = null;
@@ -90,19 +91,19 @@ export default class CombatChannel {
   }
 
   /**
-   * 进图登记（播种 / 恢复 / 换图都走这里）：服务端空图按 plan 建实例，已有实例整份沿用，
-   * 权威快照以 `world` 帧回来（onWorld）。地图 id 与 plan 由 MonsterAreaSpawner 提供
-   * （区域配置住在客户端的 Tiled 地图文件里，服务端拿不到）。
+   * 进图登记（播种 / 恢复 / 换图都走这里）：只带地图 id —— 刷怪区配置已归服务端
+   * （#295，从 Tiled 导入一次），空图播种、实例身份 / 血量 / 存活全部以服务端为准，
+   * 权威快照以 `world` 帧回来（onWorld）。
    */
-  static sendWorldJoin(mapId: string, spawnPlan: Array<{ monsterKey: string; x: number; y: number }>): void {
-    this.lastJoin = { mapId, spawnPlan };
-    RealtimeClient.send({ type: "worldJoin", data: { mapId, spawnPlan } });
+  static sendWorldJoin(mapId: string): void {
+    this.lastJoin = { mapId };
+    RealtimeClient.send({ type: "worldJoin", data: { mapId } });
   }
 
   /** 断线重连成功后重发最近一次进图登记（没有就不发；RealtimeClient 在 welcome 后调用） */
   static resendWorldJoin(): void {
     if (!this.lastJoin) return;
-    RealtimeClient.send({ type: "worldJoin", data: { mapId: this.lastJoin.mapId, spawnPlan: this.lastJoin.spawnPlan } });
+    RealtimeClient.send({ type: "worldJoin", data: { mapId: this.lastJoin.mapId } });
   }
 
   /** 换图前清掉旧图的幂等账（怪物管理器清场时调用；旧图的世界状态不受影响） */

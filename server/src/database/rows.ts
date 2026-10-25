@@ -212,7 +212,7 @@ export interface WorldMonsterRow {
   map_id: string;
   /** 怪物 key（configs/monster 的关联键，战斗数值查 monsters 表） */
   monster_key: string;
-  /** 出生点（世界坐标；重生的落点也是它 —— 区域配置在客户端，服务端只记实例自己的位置） */
+  /** 出生点（世界坐标；重生的落点也是它 —— 播种时由服务端在刷怪区内随机取点） */
   x: number;
   y: number;
   hp: number;
@@ -223,6 +223,35 @@ export interface WorldMonsterRow {
   killed_at: number | null;
   /** 预定重生的时刻（毫秒）；存活为 null */
   respawn_at: number | null;
+  updated_at: number;
+}
+
+/**
+ * 刷怪区一行（`map_spawn_areas` 表；#295 阶段一：刷怪区配置归服务端）
+ *
+ * 一行 = Tiled monster 对象组里的一个矩形区域（从 TMX 导入一次后归服务端）。
+ * 行只能来自启动 seed（`seedRow`，INSERT OR IGNORE 幂等）或导入工具整份替换，
+ * 后台接口暂不开放增删（后续收口成管理页时再补）。
+ */
+export interface MapSpawnAreaRow {
+  id: number;
+  map_id: string;
+  /** 区域名（Tiled 对象名，如「1号怪物」） */
+  name: string;
+  /** 怪物 key（configs/monster 的关联键；播种时对照 monsters 表，不认识的跳过） */
+  monster_key: string;
+  /** 区域允许的最少怪物数（当前播种按 max 展开，min 留给后续动态补怪用） */
+  min: number;
+  /** 区域允许的最多怪物数 */
+  max: number;
+  /** 区域中心 x（世界坐标口径，与快照 x/y 同一坐标系） */
+  cx: number;
+  /** 区域中心 y（世界坐标口径） */
+  cy: number;
+  /** 区域宽 */
+  w: number;
+  /** 区域高 */
+  h: number;
   updated_at: number;
 }
 
