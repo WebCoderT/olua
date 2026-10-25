@@ -515,6 +515,74 @@ export type UpdateItem = {
   maxStack?: number;
 };
 
+export type AttributeRange = {
+  /**
+   * 下限（含）
+   */
+  min: number;
+  /**
+   * 上限（含）
+   */
+  max: number;
+};
+
+export type MonsterAttributes = {
+  /**
+   * 物理攻击区间
+   */
+  physicalAttack: AttributeRange;
+  /**
+   * 魔法攻击区间
+   */
+  magicAttack: AttributeRange;
+  /**
+   * 道术攻击区间
+   */
+  taoistAttack: AttributeRange;
+  /**
+   * 物理防御区间
+   */
+  physicalDefense: AttributeRange;
+  /**
+   * 魔法防御区间
+   */
+  magicDefense: AttributeRange;
+  /**
+   * 道术防御区间
+   */
+  taoistDefense: AttributeRange;
+};
+
+export type UpdateMonster = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 等级（显示用元数据，不传则不改）
+   */
+  level?: number;
+  /**
+   * 最大生命（不传则不改）
+   */
+  maxHp?: number;
+  /**
+   * 六项攻防区间（**整份提交、整份替换**，不传则不改；要求 0 ≤ min ≤ max）
+   */
+  attributes?: MonsterAttributes;
+};
+
+export type UpdateNpc = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 对话文案（不传则不改；空串 = 清空）
+   */
+  dialog?: string;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -2749,4 +2817,142 @@ export type ItemQuery = {
    * 按物品大类筛（取值：equipment / drug / material / other；枚举清单派生自客户端配置，不落 schema 以免枚举字面量进两端生成物）
    */
   type?: string;
+};
+
+export type Monster = {
+  /**
+   * 怪物 key（configs/monster 的关联键，如 "1"）
+   */
+  id: string;
+  /**
+   * 名称（头顶名牌，后台可改）
+   */
+  label: string;
+  /**
+   * 定位（normal / elite / boss；仅作标注，不开放编辑）
+   */
+  tier: string;
+  /**
+   * 等级（显示用元数据；战斗数值以 maxHp / 六项区间为准）
+   */
+  level: number;
+  /**
+   * 最大生命
+   */
+  maxHp: number;
+  /**
+   * 六项攻防区间（0 ≤ min ≤ max）
+   */
+  attributes: MonsterAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type MonsterPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的怪物基础数据
+   */
+  list: Monster[];
+};
+
+export type MonsterQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按定位筛（取值：normal / elite / boss；不落 schema 以免枚举键进两端生成物）
+   */
+  tier?: string;
+};
+
+export type Npc = {
+  /**
+   * NPC id（Tiled 对象组的关联键，如 "0002"）
+   */
+  id: string;
+  /**
+   * 名称（后台可改）
+   */
+  label: string;
+  /**
+   * 对话文案（客户端暂无对话数据形态，seed 为空串；消费等 #248/#249）
+   */
+  dialog: string;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type NpcPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的 NPC 基础数据
+   */
+  list: Npc[];
+};
+
+export type NpcQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
 };

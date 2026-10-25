@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, Rank, RankPage, RankQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, Monster, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, Rank, RankPage, RankQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMonster, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateRole, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, PageMeta, PageQuery, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateRole, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, Monster, MonsterAttributes, MonsterPage, MonsterQuery, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, Rank, RankPage, RankQuery, RealtimeTicket, Register, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDrug, UpdateEquipment, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMonster, UpdateNpc, UpdateRank, UpdateSoul, UpdateTitle, UpgradeOrder } from "./models";
 
 /** adminAccount 模块的接口（10 个，生成） */
 export const accountsApi = {
@@ -394,6 +394,46 @@ export const mailsApi = {
    * 权限点：mail:read
    */
   templates: (options?: Options) => http.get<MailTemplate[]>(routes.adminMail.templates, options),
+};
+
+/** adminMonster 模块的接口（2 个，生成） */
+export const monstersApi = {
+  /**
+   * 怪物基础数据列表（GET /admin/monsters）
+   *
+   * key 清单固定（seed 自客户端 configs/monster 的 220 只），**没有创建 / 删除**。`keyword` 模糊匹配 key / 名称，`tier` 按定位筛。
+   *
+   * 权限点：gameConfig:read
+   */
+  list: (query: MonsterQuery = {}, options?: Options) => http.get<MonsterPage>(routes.adminMonster.list, { query, ...options }),
+  /**
+   * 编辑怪物基础数据（PATCH /admin/monsters/{id}）
+   *
+   * **部分更新**：只改请求体里出现的字段。改完即时生效（世界播种与伤害结算直读 monsters 表）——已活着的世界实例血量上限沿用出生时的值，重生后用新值。
+   *
+   * 权限点：gameConfig:write
+   */
+  update: (id: string, body: UpdateMonster, options?: Options) => http.patch<Monster>(routes.adminMonster.update(id), body, options),
+};
+
+/** adminNpc 模块的接口（2 个，生成） */
+export const npcsApi = {
+  /**
+   * NPC 基础数据列表（GET /admin/npcs）
+   *
+   * id 清单固定（seed 自客户端 configs/npc-data 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。
+   *
+   * 权限点：gameConfig:read
+   */
+  list: (query: NpcQuery = {}, options?: Options) => http.get<NpcPage>(routes.adminNpc.list, { query, ...options }),
+  /**
+   * 编辑 NPC 基础数据（PATCH /admin/npcs/{id}）
+   *
+   * **部分更新**：只改请求体里出现的字段。
+   *
+   * 权限点：gameConfig:write
+   */
+  update: (id: string, body: UpdateNpc, options?: Options) => http.patch<Npc>(routes.adminNpc.update(id), body, options),
 };
 
 /** adminRank 模块的接口（2 个，生成） */

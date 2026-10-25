@@ -7,13 +7,17 @@ import { RankRepository, RankListOptions } from "../../database/repositories/ran
 import { DrugRepository, DrugListOptions } from "../../database/repositories/drug.repository";
 import { EquipmentRepository, EquipmentListOptions } from "../../database/repositories/equipment.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
+import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
+import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { DrugRow, EquipmentRow, ItemRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
+import { DrugRow, EquipmentRow, ItemRow, MonsterRow, NpcRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
 import {
   DRUGS,
   EQUIPMENT_BASES,
   ITEM_BASES,
+  MONSTERS,
+  NPCS,
   RANK_LABELS,
   RANK_LEVEL_ATTRIBUTES,
   RANK_LEVEL_META,
@@ -27,6 +31,8 @@ import {
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
+import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
+import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
@@ -61,6 +67,8 @@ export class GameConfigService implements OnModuleInit {
     private readonly equipments: EquipmentRepository,
     private readonly drugs: DrugRepository,
     private readonly items: ItemRepository,
+    private readonly monstersRepo: MonsterRepository,
+    private readonly npcsRepo: NpcRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -71,6 +79,8 @@ export class GameConfigService implements OnModuleInit {
     this.seedEquipments();
     this.seedDrugs();
     this.seedItems();
+    this.seedMonsters();
+    this.seedNpcs();
   }
 
   // —— 称号 ——
@@ -336,6 +346,66 @@ export class GameConfigService implements OnModuleInit {
     return ItemDto.from(this.requireItem(id));
   }
 
+  // —— 怪物基础数据（#258：key 清单固定只改数值与名称；世界播种 / 伤害结算直读本表）——
+
+  listMonsters(query: MonsterQueryDto): PageResult<MonsterDto> {
+    const options: MonsterListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      tier: query.tier,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.monstersRepo.list(options);
+    const total = this.monstersRepo.count(options);
+    return { list: rows.map(MonsterDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateMonster(id: string, dto: UpdateMonsterDto): MonsterDto {
+    const existing = this.requireMonster(id);
+    const attributes = dto.attributes ?? monsterAttributesFromRow(existing);
+    assertMonsterAttributeRanges(attributes);
+
+    const next: MonsterRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      level: dto.level ?? existing.level,
+      max_hp: dto.maxHp ?? existing.max_hp,
+      ...monsterAttributeColumns(attributes),
+      updated_at: Date.now(),
+    };
+    this.monstersRepo.update(next);
+    return MonsterDto.from(this.requireMonster(id));
+  }
+
+  // —— NPC 基础数据（#258：id 清单固定只改名称与对话；外观资源是表现层不进服务端）——
+
+  listNpcs(query: NpcQueryDto): PageResult<NpcDto> {
+    const options: NpcListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.npcsRepo.list(options);
+    const total = this.npcsRepo.count(options);
+    return { list: rows.map(NpcDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateNpc(id: string, dto: UpdateNpcDto): NpcDto {
+    const existing = this.requireNpc(id);
+    const next: NpcRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      dialog: dto.dialog ?? existing.dialog,
+      updated_at: Date.now(),
+    };
+    this.npcsRepo.update(next);
+    return NpcDto.from(this.requireNpc(id));
+  }
+
   // —— 内部 ——
 
   private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
@@ -377,6 +447,18 @@ export class GameConfigService implements OnModuleInit {
   private requireItem(id: string): ItemRow {
     const row = this.items.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.ITEM_NOT_FOUND, `物品 ${id} 不存在`);
+    return row;
+  }
+
+  private requireMonster(id: string): MonsterRow {
+    const row = this.monstersRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.MONSTER_NOT_FOUND, `怪物 ${id} 不存在`);
+    return row;
+  }
+
+  private requireNpc(id: string): NpcRow {
+    const row = this.npcsRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.NPC_NOT_FOUND, `NPC ${id} 不存在`);
     return row;
   }
 
@@ -491,6 +573,34 @@ export class GameConfigService implements OnModuleInit {
       });
     }
   }
+
+  /** 怪物 seed：MONSTERS 直接灌（名称 + 已展开战斗数值），220 只（#258） */
+  private seedMonsters() {
+    for (const [id, meta] of Object.entries(MONSTERS as Record<string, Record<string, unknown>>)) {
+      const attributes = meta as unknown as MonsterAttributesRowShape;
+      this.monstersRepo.seedRow({
+        id,
+        label: String(meta.label ?? ""),
+        tier: String(meta.tier ?? "normal"),
+        level: Number(meta.level) || 1,
+        max_hp: Number(meta.maxHp) || 1,
+        ...flatMonsterAttributes(attributes),
+        updated_at: 0,
+      });
+    }
+  }
+
+  /** NPC seed：NPCS 直接灌（id + 名称），21 个；对话文案客户端没有数据形态，seed 空串（#258） */
+  private seedNpcs() {
+    for (const [id, meta] of Object.entries(NPCS as Record<string, Record<string, unknown>>)) {
+      this.npcsRepo.seedRow({
+        id,
+        label: String(meta.label ?? ""),
+        dialog: "",
+        updated_at: 0,
+      });
+    }
+  }
 }
 
 /** 生成物的属性形状（{maxHp, physicalAttack:[min,max], ...}）→ 拍平的行属性列 */
@@ -567,6 +677,91 @@ function attributeColumns(attributes: ConfigAttributesDto): Pick<TitleRow, AttrC
 function assertAttributeRanges(attributes: ConfigAttributesDto): void {
   for (const key of RANGE_KEYS) {
     const { min, max } = attributes[key];
+    if (min > max) {
+      throw new BizException(BizCode.PARAM_INVALID, "属性下限不能大于上限");
+    }
+  }
+}
+
+/** 生成物 MONSTERS 条目的属性形状（六项区间数组，无 maxHp / hpRecover —— maxHp 是独立字段） */
+type MonsterAttributesRowShape = Record<string, unknown> & {
+  physicalAttack: number[];
+  magicAttack: number[];
+  taoistAttack: number[];
+  physicalDefense: number[];
+  magicDefense: number[];
+  taoistDefense: number[];
+};
+
+/** 怪物行属性列名（flatMonsterAttributes / monsterAttributeColumns 共用的键集合） */
+type MonsterAttrColumnNames =
+  | "physical_attack_min"
+  | "physical_attack_max"
+  | "magic_attack_min"
+  | "magic_attack_max"
+  | "taoist_attack_min"
+  | "taoist_attack_max"
+  | "physical_defense_min"
+  | "physical_defense_max"
+  | "magic_defense_min"
+  | "magic_defense_max"
+  | "taoist_defense_min"
+  | "taoist_defense_max";
+
+/** 怪物六项区间：DTO 形状（{min,max}）→ 拍平行属性列 */
+function monsterAttributeColumns(attributes: MonsterAttributesDto): Pick<MonsterRow, MonsterAttrColumnNames> {
+  return {
+    physical_attack_min: attributes.physicalAttack.min,
+    physical_attack_max: attributes.physicalAttack.max,
+    magic_attack_min: attributes.magicAttack.min,
+    magic_attack_max: attributes.magicAttack.max,
+    taoist_attack_min: attributes.taoistAttack.min,
+    taoist_attack_max: attributes.taoistAttack.max,
+    physical_defense_min: attributes.physicalDefense.min,
+    physical_defense_max: attributes.physicalDefense.max,
+    magic_defense_min: attributes.magicDefense.min,
+    magic_defense_max: attributes.magicDefense.max,
+    taoist_defense_min: attributes.taoistDefense.min,
+    taoist_defense_max: attributes.taoistDefense.max,
+  };
+}
+
+/** 生成物 MONSTERS 条目（区间数组形状）→ 拍平行属性列（seed 用） */
+function flatMonsterAttributes(attributes: MonsterAttributesRowShape): Pick<MonsterRow, MonsterAttrColumnNames> {
+  const range = (value: number[]): [number, number] =>
+    Array.isArray(value) && value.length >= 2 ? [Number(value[0]) || 0, Number(value[1]) || 0] : [0, 0];
+  return {
+    physical_attack_min: range(attributes.physicalAttack)[0],
+    physical_attack_max: range(attributes.physicalAttack)[1],
+    magic_attack_min: range(attributes.magicAttack)[0],
+    magic_attack_max: range(attributes.magicAttack)[1],
+    taoist_attack_min: range(attributes.taoistAttack)[0],
+    taoist_attack_max: range(attributes.taoistAttack)[1],
+    physical_defense_min: range(attributes.physicalDefense)[0],
+    physical_defense_max: range(attributes.physicalDefense)[1],
+    magic_defense_min: range(attributes.magicDefense)[0],
+    magic_defense_max: range(attributes.magicDefense)[1],
+    taoist_defense_min: range(attributes.taoistDefense)[0],
+    taoist_defense_max: range(attributes.taoistDefense)[1],
+  };
+}
+
+/**
+ * 怪物区间属性的组合校验（0 ≤ min ≤ max）
+ *
+ * 与 assertAttributeRanges 同一口径，但作用于 MonsterAttributesDto（六项、无 maxHp/hpRecover）。
+ * 区间值非负交给 DTO（@Min）；「min ≤ max」是跨字段约束，只有 service 判得了。
+ */
+function assertMonsterAttributeRanges(attributes: MonsterAttributesDto): void {
+  const ranges = [
+    attributes.physicalAttack,
+    attributes.magicAttack,
+    attributes.taoistAttack,
+    attributes.physicalDefense,
+    attributes.magicDefense,
+    attributes.taoistDefense,
+  ];
+  for (const { min, max } of ranges) {
     if (min > max) {
       throw new BizException(BizCode.PARAM_INVALID, "属性下限不能大于上限");
     }

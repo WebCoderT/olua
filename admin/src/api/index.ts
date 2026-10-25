@@ -28,6 +28,8 @@ export {
   equipmentsApi,
   drugsApi,
   itemsApi,
+  monstersApi,
+  npcsApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,

@@ -89,6 +89,8 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `RanksPage` | **养成配置**（军衔 #250）：同上模式，无拖动排序（100 阶天然按阶），主列表带大段 Badge；`GameConfigDialog` kind="rank"（无动画栏、加大段名输入） |
 | `GrowthPage` | **养成配置**（成长曲线 #256）：三卡片（升级经验 / 曲线分段 / 标量参数）+ 共用 `NumberEditDialog`（fields spec 驱动）；分段保存走「先内存校验再落库」口径 |
 | `EquipmentsPage` | **养成配置**（装备基础件 #252）：部位 / 等级段筛选 + 分页；**只收基础件**（37 件，变体在客户端按倍率展开）；编辑弹窗只开放等级 / 售卖价 / 八项属性（页面内 `EquipmentEditDialog`，不复用 GameConfigDialog —— 字段差异太大） |
+| `MonstersPage` | **养成配置**（怪物基础数据 #258）：关键字 / 定位筛选 + 分页；编辑弹窗开放名称 / 等级 / 生命上限 / 六项攻防区间（页面内 `MonsterEditDialog`，区间字段复用 `RANGE_FIELDS`）；**改值即时生效**（世界播种与伤害结算直读 monsters 表） |
+| `NpcsPage` | **养成配置**（NPC 基础数据 #258）：关键字筛选 + 分页；编辑弹窗只有名称 / 对话文案（对话 seed 为空串，客户端暂无消费） |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
