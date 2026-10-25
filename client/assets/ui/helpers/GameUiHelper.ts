@@ -1538,7 +1538,7 @@ export default class GameUiHelper {
   /**
    * 给装备详情弹窗挂上背景动画（仅装备有；前后缀 → 背景的映射与特殊装备的自定义表在 configs/background）
    *
-   * 背景是循环播放的帧序列目录动画（resources/backgrounds），直接换**弹窗自身**的 spriteFrame：
+   * 背景是循环播放的帧序列动画（resources/backgrounds，有图集走图集、没有走散帧目录），直接换**弹窗自身**的 spriteFrame：
    * 不是子节点 —— 弹窗是 Layout 容器，背景若作为子节点会被当成一行参与排版、还会撑高容器；
    * 换自身帧则完全不吃排版，且弹窗尺寸由内容自适应（ResizeMode.CONTAINER）、
    * 精灵 sizeMode 为 CUSTOM，背景始终铺满整个面板。
