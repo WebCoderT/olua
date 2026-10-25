@@ -241,6 +241,21 @@ export const routes = {
      */
     update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
   },
+  /** adminItem 模块（2 个接口） */
+  adminItem: {
+    /**
+     * 物品与材料配置列表（GET /admin/items）
+     *
+     * 只收 **MATERIAL / OTHER** 大类（装备 / 药品各有自己的表），id 清单固定（seed 自客户端 configs/material），**没有创建 / 删除**。
+     */
+    list: "/admin/items",
+    /**
+     * 编辑物品与材料配置（PATCH /admin/items/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/items/${encodeURIComponent(id)}`,
+  },
   /** adminLevelExp 模块（2 个接口） */
   adminLevelExp: {
     /**

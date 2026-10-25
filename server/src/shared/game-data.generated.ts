@@ -3479,6 +3479,15 @@ export const DRUGS: Record<string, unknown> = {
   "drug_mp_pct": {"label":"强效蓝药","description":"使用后恢复 50% 魔法值，任何等级服用都等价好用。","level":20,"sellPrice":100,"maxStack":99,"cooldown":1,"hp":0,"mp":0,"hpPercent":0,"mpPercent":50},
 };
 
+/** 物品 id → { type 物品大类, label, description, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表） */
+export const ITEM_BASES: Record<string, unknown> = {
+  "material_hide": {"type":"material","label":"兽皮","description":"从野兽身上剥下的皮，可用于制作防具。","level":1,"sellPrice":2,"maxStack":99},
+  "material_iron": {"type":"material","label":"铁矿","description":"常见的矿石，可用于打造武器。","level":1,"sellPrice":3,"maxStack":99},
+  "material_cloth": {"type":"material","label":"粗布","description":"粗糙的布料，可用于制作衣物。","level":1,"sellPrice":2,"maxStack":99},
+  "material_gem": {"type":"material","label":"宝石","description":"蕴含灵气的宝石，可用于强化装备。","level":10,"sellPrice":50,"maxStack":99},
+  "material_herb": {"type":"material","label":"药草","description":"常见的草药，可用于炼制药品。","level":1,"sellPrice":2,"maxStack":99},
+};
+
 /** 战魂阶数（下标 + 1 即阶）→ 名 */
 export const SOUL_LABELS: Record<string, string> = {
   "0": "烈阳灵体",

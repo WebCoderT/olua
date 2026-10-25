@@ -133,7 +133,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug 14 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item 15 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -172,7 +172,7 @@ server/
 
 ## 数据模型
 
-15 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+16 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -189,6 +189,7 @@ server/
 | `ranks` | 军衔配置（#250） | 阶数序列固定（1..100），只可改不可增删；衔名 / 大段名 / 晋升价格 / 八项属性 |
 | `equipments` | 装备基础件配置（#252） | 主键是基础件 id（如 `cloth_1`，变体不进库）；部位 / 等级需求 / 售卖价 / 八项属性；id / 部位结构固定，只可改不可增删 |
 | `drugs` | 药品配置（#253） | 主键是药品 id（如 `drug_hp_1`，被掉落表与背包引用）；名称 / 描述 / 售卖价 / 堆叠 / 冷却 / 四项回复量（effects 按键求和）；id 清单固定，只可改不可增删 |
+| `items` | 物品与材料配置（#255） | 主键是物品 id（如 `material_hide`，被掉落表与脚本引用）；只收 MATERIAL / OTHER 大类；名称 / 描述 / 售卖价 / 堆叠；id 清单固定，只可改不可增删 |
 
 **角色数据是「不透明文档」**：服务端**不复制**游戏配置，只校验结构 / 归属 / 数量上限 / 重名，内容原样存。
 原因与代价见 [FAQ.md](FAQ.md#服务端为什么不校验角色数据的内容)。
@@ -201,7 +202,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（14 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（15 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -250,13 +251,13 @@ server/
 
 ## 接口与契约
 
-当前 **72 个接口 / 62 条路径 / 108 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **74 个接口 / 64 条路径 / 112 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 6 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、**拉取生效中的公告**） |
 | 客户端 | 9 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 57 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 59 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

@@ -15,6 +15,7 @@ import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
 import { DrugsPage } from "./pages/DrugsPage";
+import { ItemsPage } from "./pages/ItemsPage";
 import { GrowthPage } from "./pages/GrowthPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -161,6 +162,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <DrugsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="items"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <ItemsPage />
               </RequirePermission>
             }
           />

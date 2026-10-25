@@ -386,6 +386,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   rank: "军衔配置",
   equipment: "装备配置",
   drug: "药品配置",
+  item: "物品配置",
   levelExp: "升级经验",
   growthSegment: "成长曲线分段",
   growthScalar: "成长曲线参数",

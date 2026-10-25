@@ -206,3 +206,16 @@ export const DRUG_SORT: SortSpec<"id" | "label" | "level" | "sellPrice" | "updat
   default: "id",
   defaultOrder: "asc",
 };
+
+/** 物品与材料列表（#255）：默认按 id 升序（物品 id 的字典序即分组习惯） */
+export const ITEM_SORT: SortSpec<"id" | "type" | "label" | "sellPrice" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    type: "type",
+    label: "label",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "id",
+  defaultOrder: "asc",
+};

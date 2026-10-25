@@ -134,7 +134,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           14 repositories: account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug
+│   │   └── repositories/           15 repositories: account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -173,7 +173,7 @@ server/
 
 ## Data model
 
-15 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+16 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -190,6 +190,7 @@ server/
 | `ranks` | rank configuration (#250) | fixed rank sequence (1..100), edit-only; label / tier / promotion price / eight attributes |
 | `equipments` | equipment base-piece config (#252) | primary key is the base-piece id (e.g. `cloth_1`, variants not stored); slot / level requirement / sell price / eight attributes; id & slot structure fixed, edit-only |
 | `drugs` | drug config (#253) | primary key is the drug id (e.g. `drug_hp_1`, referenced by drop tables and backpack); label / description / sell price / stack cap / cooldown / four recovery amounts (effects summed per key); id list fixed, edit-only |
+| `items` | item & material config (#255) | primary key is the item id (e.g. `material_hide`, referenced by drop tables and scripts); MATERIAL / OTHER types only; label / description / sell price / stack cap; id list fixed, edit-only |
 
 **Character data is an "opaque document"**: the server **does not duplicate** game config, only validating structure / ownership / count caps / duplicate names, storing content as-is.
 Reasons and costs: [FAQ.en.md](FAQ.en.md#why-doesnt-the-server-validate-the-role-datas-content).
@@ -202,7 +203,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 14 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 15 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -251,13 +252,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **72 interfaces / 62 paths / 108 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **74 interfaces / 64 paths / 112 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 6 | No token (health check, player register/login, admin login/register, **pull active announcements**) |
 | Client | 9 | `player` token, may only operate its own account's data |
-| Admin | 57 | `admin` token + each interface's own permission point |
+| Admin | 59 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;

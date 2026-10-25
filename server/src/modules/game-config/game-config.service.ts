@@ -6,12 +6,14 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { RankRepository, RankListOptions } from "../../database/repositories/rank.repository";
 import { DrugRepository, DrugListOptions } from "../../database/repositories/drug.repository";
 import { EquipmentRepository, EquipmentListOptions } from "../../database/repositories/equipment.repository";
+import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { DrugRow, EquipmentRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
+import { DrugRow, EquipmentRow, ItemRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
 import {
   DRUGS,
   EQUIPMENT_BASES,
+  ITEM_BASES,
   RANK_LABELS,
   RANK_LEVEL_ATTRIBUTES,
   RANK_LEVEL_META,
@@ -24,6 +26,7 @@ import {
 } from "../../shared/game-data.generated";
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
+import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
@@ -57,6 +60,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly ranks: RankRepository,
     private readonly equipments: EquipmentRepository,
     private readonly drugs: DrugRepository,
+    private readonly items: ItemRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -66,6 +70,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedRanks();
     this.seedEquipments();
     this.seedDrugs();
+    this.seedItems();
   }
 
   // —— 称号 ——
@@ -301,6 +306,36 @@ export class GameConfigService implements OnModuleInit {
     return DrugDto.from(this.requireDrug(id));
   }
 
+  // —— 物品与材料（#255：id 清单固定只改数值；只收 MATERIAL / OTHER 大类）——
+
+  listItems(query: ItemQueryDto): PageResult<ItemDto> {
+    const options: ItemListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      type: query.type,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.items.list(options);
+    const total = this.items.count(options);
+    return { list: rows.map(ItemDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateItem(id: string, dto: UpdateItemDto): ItemDto {
+    const existing = this.requireItem(id);
+    const next: ItemRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      max_stack: dto.maxStack ?? existing.max_stack,
+      updated_at: Date.now(),
+    };
+    this.items.update(next);
+    return ItemDto.from(this.requireItem(id));
+  }
+
   // —— 内部 ——
 
   private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
@@ -336,6 +371,12 @@ export class GameConfigService implements OnModuleInit {
   private requireDrug(id: string): DrugRow {
     const row = this.drugs.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.DRUG_NOT_FOUND, `药品 ${id} 不存在`);
+    return row;
+  }
+
+  private requireItem(id: string): ItemRow {
+    const row = this.items.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.ITEM_NOT_FOUND, `物品 ${id} 不存在`);
     return row;
   }
 
@@ -430,6 +471,22 @@ export class GameConfigService implements OnModuleInit {
         bind_gold: meta.bindGold,
         upgrade_order: Number(index) + 1,
         ...flatAttributes(attributes),
+        updated_at: 0,
+      });
+    }
+  }
+
+  /** 物品与材料 seed：ITEM_BASES 直接灌（只收 MATERIAL / OTHER 大类），5 种 */
+  private seedItems() {
+    for (const [id, meta] of Object.entries(ITEM_BASES as Record<string, Record<string, unknown>>)) {
+      this.items.seedRow({
+        id,
+        type: String(meta.type ?? ""),
+        label: String(meta.label ?? ""),
+        description: String(meta.description ?? ""),
+        level: Number(meta.level) || 0,
+        sell_price: Number(meta.sellPrice) || 0,
+        max_stack: Number(meta.maxStack) || 99,
         updated_at: 0,
       });
     }

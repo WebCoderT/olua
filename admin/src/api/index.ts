@@ -27,6 +27,7 @@ export {
   ranksApi,
   equipmentsApi,
   drugsApi,
+  itemsApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,
