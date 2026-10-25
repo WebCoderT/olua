@@ -144,6 +144,7 @@ check(/if \(!clips\.size\) return false;/.test(helperSource), "一个动作都�
   check(/this\.getFrameTime\(name, speedRate\)/.test(atlasBody), "每帧时长走 getFrameTime（速度倍率口径与散帧路径一致）");
   check(/list\.sort\(/.test(atlasBody), "组内按帧下标排序（d0_00 与 d1_00 末尾数字同为 0，不能依赖 loadFramesFromAtlas 的排序）");
   check(/this\.createClip\(name, list/.test(atlasBody), "片段创建复用 createClip（wrapMode / enableTrsBlending 与散帧路径一致）");
+  check(/rect\.width <= 1 \|\| rect\.height <= 1/.test(atlasBody), "空帧过滤与 buildClips 同口径（1×1 占位图不进片段，避免空白闪帧）");
   check(!/console\.error/.test(atlasBody), "图集缺失路径无 console.error（未打包目录预加载不刷屏）");
 }
 check(/kind === "monster" \? monsterActionAtlas : roleActionAtlas/.test(helperSource), "动作规格按种类取（怪物走帧号表导出，角色走顺序布局动作段）");

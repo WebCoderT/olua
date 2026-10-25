@@ -106,8 +106,12 @@ export default class AnimationHelper {
       if (!frames.length) continue;
       // 帧名 d<方向>_<帧>：按方向分组后组内按帧下标排序（不依赖 loadFramesFromAtlas 的末尾数字排序——
       // d0_00 与 d1_00 的末尾数字同为 0，跨方向顺序要靠方向下标决定）
+      // 空帧过滤与 buildClips 同口径（占位空图 1×1，rect 边长 >1 才算有效帧）：素材包里的空帧
+      // 会以 1×1 图块进图集，不过滤会造成片段里夹空白闪帧
       const byDirection = new Map<number, SpriteFrame[]>();
       frames.forEach((frame) => {
+        const rect = frame.getRect();
+        if (rect.width <= 1 || rect.height <= 1) return;
         const matched = /^d(\d+)_(\d+)$/.exec(frame.name.replace(/\.png$/i, ""));
         if (!matched) return;
         const directionIndex = Number(matched[1]);
