@@ -28,6 +28,7 @@ const ASSETS = path.join(PROJECT_ROOT, "assets");
 /** 需要编进沙箱的真实文件（相对 assets/） */
 const FILES = [
   "configs/network.ts",
+  "configs/env.network.ts",
   "configs/texts.ts",
   "types/common.ts",
   "ui/utils/net/ApiRoutes.ts",

@@ -9,7 +9,12 @@
  * 换环境不用重新构建。
  *
  * 与服务端默认值对应关系：server/.env 的 PORT=3100 + API_PREFIX=api。
+ *
+ * 需要手动指向别的服务端（真机调试 / 指定部署机）时，改 env.network.ts 的覆盖值，
+ * 非空即优先于这里的自动解析。
  */
+import { NETWORK_BASE_URL_OVERRIDE } from "./env.network";
+
 /** 本地开发地址：Cocos 预览 / 从 localhost 打开时使用 */
 const DEV_BASE_URL = "http://localhost:3100/api";
 /** 线上同源地址：Web 部署后由 nginx 把 /api 反代到服务端容器（服务端 3100 不对宿主机暴露） */
@@ -44,8 +49,10 @@ function isLocalDebugHost(host: string): boolean {
 /**
  * 解析接口根地址。
  * 非 Web 环境（原生壳）拿不到 location，一律回落到本地地址，由宿主另行配置。
+ * env.network.ts 的手动覆盖值**非空时优先**（真机调试 / 指定部署机，见该文件头注释）。
  */
 function resolveBaseUrl(): string {
+  if (NETWORK_BASE_URL_OVERRIDE) return NETWORK_BASE_URL_OVERRIDE;
   const scope = globalThis as unknown as { location?: { hostname?: string } };
   if (!scope || !scope.location) {
     return DEV_BASE_URL;

@@ -429,7 +429,7 @@ async function expectFailure(action) {
   // #83：光有源码断言不够——#60 的白名单漏了局域网 IP，源码看起来完全正常，跑起来却连不上。
   // 所以这里**真跑一遍** resolveBaseUrl：单独编译一份 configs/network，逐个 host 重新 require
   // （baseUrl 在模块加载时就定死了，换 host 必须清掉 require 缓存重载）。
-  const networkOutDir = prepare("olua-net-baseurl", ["configs/network.ts"]);
+  const networkOutDir = prepare("olua-net-baseurl", ["configs/network.ts", "configs/env.network.ts"]);
   const networkModule = path.join(networkOutDir, "configs/network.js");
   const resolveBaseUrlWith = (hostname) => {
     delete require.cache[require.resolve(networkModule)];
@@ -460,6 +460,33 @@ async function expectFailure(action) {
     check(resolveBaseUrlWith(host) === DEV, `本地调试：${why} → 本机服务端（${host === "" ? "空 host" : host}）`);
   }
   check(resolveBaseUrlWith(null) === DEV, "本地调试：拿不到 location（原生壳）→ 回落到本机服务端");
+
+  // #262：env.network.ts 手动覆盖值非空时优先于自动解析（改编译产物里的环境文件后重新 require）
+  check(
+    /export const NETWORK_BASE_URL_OVERRIDE = "";/.test(read(path.join(ASSETS, "configs/env.network.ts"))),
+    "env.network 覆盖值缺省为空串（不覆盖，走运行环境自动解析）",
+  );
+  check(/if \(NETWORK_BASE_URL_OVERRIDE\) return NETWORK_BASE_URL_OVERRIDE;/.test(networkSource), "resolveBaseUrl 先看环境文件覆盖值（非空即生效）");
+  {
+    const envModule = path.join(networkOutDir, "configs/env.network.js");
+    const original = fs.readFileSync(envModule, "utf8");
+    try {
+      // 编译产物是 CommonJS：exports.NETWORK_BASE_URL_OVERRIDE = ""（文本形态随 tsc 版本可能变，用通用正则）
+      fs.writeFileSync(envModule, original.replace(/NETWORK_BASE_URL_OVERRIDE\s*=\s*""/, 'NETWORK_BASE_URL_OVERRIDE = "http://192.168.9.9:3100/api"'));
+      // env 模块同样要清缓存：前面 resolveBaseUrlWith 已经 require 过空值版本
+      delete require.cache[require.resolve(envModule)];
+      delete require.cache[require.resolve(networkModule)];
+      globalThis.location = { hostname: "game.example.com" };
+      const overriden = require(networkModule).networkConfig.baseUrl;
+      check(overriden === "http://192.168.9.9:3100/api", "环境文件覆盖值非空 → 即使线上 host 也用它（真机调试/指定部署机）");
+    } finally {
+      // 沙箱产物恢复原样：后面的线上用例还要重新 require，不能带着覆盖值
+      fs.writeFileSync(envModule, original);
+      delete require.cache[require.resolve(envModule)];
+      delete require.cache[require.resolve(networkModule)];
+      delete globalThis.location;
+    }
+  }
   const REMOTE_CASES = [
     ["game.example.com", "公网域名"],
     ["8.8.8.8", "公网 IP"],

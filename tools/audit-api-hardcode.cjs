@@ -44,6 +44,7 @@ const TARGETS = [
 /** 唯一来源清单（相对仓库根，正斜杠） */
 const ENDPOINT = {
   clientBaseUrl: "client/assets/configs/network.ts",
+  clientEnv: "client/assets/configs/env.network.ts",
   clientRequest: "client/assets/ui/utils/net/HttpClient.ts",
   clientRoutes: "client/assets/ui/utils/net/ApiRoutes.ts",
   adminRequest: "admin/src/api/http.ts",
@@ -62,14 +63,14 @@ const RULES = [
     id: "url",
     label: "后端地址字面量（http/https）",
     test: (line) => /https?:\/\//.test(line),
-    allow: [ENDPOINT.clientBaseUrl],
-    why: `客户端地址只允许写在 ${ENDPOINT.clientBaseUrl}；管理端地址在 admin/.env.*（代码只读 VITE_API_BASE_URL）；服务端在 server/.env（代码只读 process.env）`,
+    allow: [ENDPOINT.clientBaseUrl, ENDPOINT.clientEnv],
+    why: `客户端地址只允许写在 ${ENDPOINT.clientBaseUrl} 与手动环境文件 ${ENDPOINT.clientEnv}；管理端地址在 admin/.env.*（代码只读 VITE_API_BASE_URL）；服务端在 server/.env（代码只读 process.env）`,
   },
   {
     id: "host",
     label: "主机/回环地址字面量",
     test: (line) => /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(line),
-    allow: [ENDPOINT.clientBaseUrl],
+    allow: [ENDPOINT.clientBaseUrl, ENDPOINT.clientEnv],
     why: "同上：换后端（局域网 IP / 线上域名）不该改代码",
   },
   {
