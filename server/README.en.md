@@ -259,12 +259,12 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **91 interfaces / 77 paths / 142 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **92 interfaces / 78 paths / 143 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 6 | No token (health check, player register/login, admin login/register, **pull active announcements**) |
-| Client | 9 | `player` token, may only operate its own account's data |
+| Client | 10 | `player` token, may only operate its own account's data |
 | Admin | 76 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).

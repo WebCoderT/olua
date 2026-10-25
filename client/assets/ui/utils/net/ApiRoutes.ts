@@ -46,6 +46,15 @@ export const ApiRoutes = {
      */
     register: "/auth/register",
   },
+  /** gameConfig 模块（1 个接口） */
+  gameConfig: {
+    /**
+     * 玩家侧配置快照（GET /game-config）
+     *
+     * 管理端可改的全部运营配置一次下发（称号 / 战魂 / 军衔 / 装备 / 药品 / 物品 / 怪物 / NPC / 时装 / 升级经验 / 成长曲线与标量 / 商城定价 / 掉落表）。
+     */
+    snapshot: "/game-config",
+  },
   /** health 模块（1 个接口） */
   health: {
     /**

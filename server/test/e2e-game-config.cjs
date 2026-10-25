@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 403;
+const EXPECTED_ASSERTIONS = 429;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -1073,6 +1073,68 @@ async function main() {
     checkEqual(viewerDropWrite.body?.code, 30006, "观察员建具名表 → 30006（权限点不足）");
     const viewerMonsterDropWrite = await api(base, "PATCH", "/api/admin/monster-drops/1", { token: viewerToken, body: { tableId: null, entries: null } });
     checkEqual(viewerMonsterDropWrite.status, 403, "观察员改每怪掉落 → 403");
+
+    //#endregion
+    //#region 十六、玩家侧配置快照（#294）：一次下发全部运营配置 / 管理端改值进快照 / 需要玩家令牌
+
+    group("十六、玩家侧配置快照");
+
+    const registerPlayer = async (name) => {
+      const login = await api(base, "POST", "/api/auth/login", { body: { username: name, password: "pass1234" } });
+      if (login.body?.data?.token) return login.body.data.token;
+      const registered = await api(base, "POST", "/api/auth/register", { body: { username: name, password: "pass1234" } });
+      check(Boolean(registered.body?.data?.token), `注册玩家 ${name}`);
+      return registered.body?.data?.token;
+    };
+
+    const noToken = await api(base, "GET", "/api/game-config");
+    checkEqual(noToken.status, 401, "无令牌拉快照 → 401（配置属于玩法数据，不开放给未登录请求）");
+
+    const playerToken = await registerPlayer("cfgsnap_player");
+    check(Boolean(playerToken), "玩家注册并登录成功");
+
+    const snapshot = await api(base, "GET", "/api/game-config", { token: playerToken });
+    checkEqual(snapshot.status, 200, "玩家令牌拉快照 → 200");
+    const snap = snapshot.body?.data ?? {};
+
+    // 各表行数 = 管理端列表的全量（快照的形状与列表行一致）
+    checkEqual(snap.titles?.length, Object.keys(shared.TITLE_LEVEL_META).length, "快照称号行数 = 配置表");
+    checkEqual(snap.souls?.length, Object.keys(shared.SOUL_LEVEL_META).length, "快照战魂行数 = 配置表");
+    checkEqual(snap.ranks?.length, Object.keys(shared.RANK_LEVEL_META).length, "快照军衔行数 = 配置表（100 阶）");
+    checkEqual(snap.equipments?.length, Object.keys(shared.EQUIPMENT_BASES).length, "快照装备基础件行数 = 生成物");
+    checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
+    checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
+    checkEqual(snap.monsters?.length, Object.keys(shared.MONSTERS).length, "快照怪物行数 = 生成物（220）");
+    checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 生成物");
+    checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20）");
+    checkEqual(snap.levelExps?.length, Object.keys(shared.ROLE_LEVEL_ATTRIBUTES).length, "快照升级经验行数 = 等级数");
+    check(Boolean(Array.isArray(snap.growthSegments) && snap.growthSegments.length > 0), "快照带成长曲线分段");
+    check(Boolean(Array.isArray(snap.growthScalars) && snap.growthScalars.length > 0), "快照带成长标量参数");
+    check(Boolean(snap.mallSettings?.defaultPrice > 0), "快照带商城统一价");
+    check(Boolean(Array.isArray(snap.mallPrices) && snap.mallPrices.length > 0), "快照带商城定价目录");
+    checkEqual(snap.dropTables?.length, seedTableCount, `快照具名掉落表张数 = seed（${seedTableCount}）`);
+    checkEqual(snap.monsterDrops?.length, Object.keys(shared.MONSTER_DROPS).length, "快照每怪掉落行数 = 生成物（220）");
+
+    // 字段形状抽检：camelCase、与管理端列表行同形状（称号渠道不预设值——前面的 region 已改过渠道）
+    const adminTitles = await api(base, "GET", "/api/admin/titles", { token });
+    const firstTitleRow = adminTitles.body?.data?.list?.find((row) => row.level === snap.titles[0].level);
+    checkEqual(snap.titles[0].acquireChannel, firstTitleRow?.acquireChannel, "快照称号渠道字段与列表接口同形状");
+    check(Boolean(snap.monsters?.[0]?.attributes?.physicalAttack?.min !== undefined), "快照怪物行带嵌套区间属性（attributes.physicalAttack.min）");
+    check(Boolean(snap.mallPrices?.[0]?.price === null || typeof snap.mallPrices?.[0]?.price === "number"), "快照定价行带 price（null = 统一价）");
+
+    // 改值进快照：管理端 PATCH 后，重新拉快照反映新值
+    const patchLabel = await api(base, "PATCH", `/api/admin/titles/${snap.titles[0].level}`, {
+      token,
+      body: { label: "快照验证·改名" },
+    });
+    checkEqual(patchLabel.status, 200, "管理端 PATCH 称号名成功");
+    const snapshot2 = await api(base, "GET", "/api/game-config", { token: playerToken });
+    checkEqual(snapshot2.body?.data?.titles?.[0]?.label, "快照验证·改名", "管理端改值后重新拉快照反映新值（改配置对客户端生效的通道）");
+    const restore = await api(base, "PATCH", `/api/admin/titles/${snap.titles[0].level}`, {
+      token,
+      body: { label: shared.TITLE_LABELS["0"] },
+    });
+    checkEqual(restore.status, 200, "还原称号名（不污染其他断言）");
 
     //#endregion
   } finally {
