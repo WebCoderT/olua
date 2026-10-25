@@ -1092,6 +1092,24 @@ export const MONSTER_COMBAT = {
   "220": {"level":60,"tier":"normal","maxHp":272010,"physicalAttack":[13167,18810],"magicAttack":[0,0],"taoistAttack":[0,0],"physicalDefense":[3687,5267],"magicDefense":[3687,5267],"taoistDefense":[3687,5267]},
 };
 
+/** 成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth） */
+export const GROWTH_CURVES: Record<string, unknown> = {
+  "maxHp": [{"from":1,"to":10,"start":100,"perLevel":18},{"from":11,"to":20,"start":330,"perLevel":59},{"from":21,"to":30,"start":1080,"perLevel":192},{"from":31,"to":40,"start":3520,"perLevel":630},{"from":41,"to":50,"start":11500,"perLevel":2070},{"from":51,"to":60,"start":37700,"perLevel":6780}],
+  "attack": [{"from":1,"to":10,"start":20,"perLevel":4},{"from":11,"to":20,"start":62,"perLevel":11},{"from":21,"to":30,"start":184,"perLevel":33},{"from":31,"to":40,"start":550,"perLevel":100},{"from":41,"to":50,"start":1650,"perLevel":290},{"from":51,"to":60,"start":4800,"perLevel":860}],
+  "defense": [{"from":1,"to":10,"start":6,"perLevel":1},{"from":11,"to":20,"start":18,"perLevel":3},{"from":21,"to":30,"start":55,"perLevel":10},{"from":31,"to":40,"start":165,"perLevel":30},{"from":41,"to":50,"start":495,"perLevel":87},{"from":51,"to":60,"start":1440,"perLevel":258}],
+  "killsPerLevel": [{"from":1,"to":10,"start":10,"perLevel":2},{"from":11,"to":20,"start":32,"perLevel":3},{"from":21,"to":30,"start":65,"perLevel":4},{"from":31,"to":40,"start":110,"perLevel":6},{"from":41,"to":50,"start":175,"perLevel":8},{"from":51,"to":60,"start":260,"perLevel":10}],
+};
+
+/** 成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*） */
+export const GROWTH_SCALARS = {
+  "roleMaxLevel": 60,
+  "attributeRange.minRate": 0.7,
+  "attributeRange.mpRate": 0.5,
+  "attributeRange.hpRecoverRate": 0.01,
+  "expGain.expPerLevel": 5,
+  "expGain.maxLevelGap": 6,
+};
+
 
 //#endregion
 

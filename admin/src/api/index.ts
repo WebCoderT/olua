@@ -24,6 +24,9 @@ export {
   mailsApi,
   soulsApi,
   titlesApi,
+  levelExpsApi,
+  growthSegmentsApi,
+  growthScalarsApi,
 } from "./endpoints";
 export { routes } from "./routes";
 export type * from "./models";

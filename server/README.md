@@ -133,7 +133,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul 十个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth 11 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -172,7 +172,7 @@ server/
 
 ## 数据模型
 
-九张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+12 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -183,6 +183,9 @@ server/
 | `announcements` | 公告 | 标题 / 正文 / `level`（`important` 优先展示）/ `enabled`；`starts_at` / `ends_at` 组成生效时间窗，**「生效中」的判据就是这三列**（建了 `idx_announcements_window`） |
 | `mail_queue` | 邮件投递队列 | **渲染后的**标题与正文（冻在入队那一刻）/ `status` / `attempts` / `next_retry_at` / `last_error`；发信接口只入队，投递由后台调度器做 |
 | `world_monsters` | 世界权威的怪物实例 | **服务端持有怪物状态**：instanceId（`m<mapId>_<n>` 发牌、跨重启稳定）/ mapId / monsterKey / 出生点 x,y / hp / alive / killed_at / respawn_at；tick 检查重生 + dirty 批量落盘；客户端进图播种**只在空图采纳** |
+| `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验 |
+| `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验） |
+| `growth_scalars` | 成长标量参数（#256） | 等级上限 / 属性区间倍率 / 经验节奏；各键取值域见服务端常量 |
 
 **角色数据是「不透明文档」**：服务端**不复制**游戏配置，只校验结构 / 归属 / 数量上限 / 重名，内容原样存。
 原因与代价见 [FAQ.md](FAQ.md#服务端为什么不校验角色数据的内容)。
@@ -195,7 +198,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（10 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（11 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -244,13 +247,13 @@ server/
 
 ## 接口与契约
 
-当前 **60 个接口 / 50 条路径 / 84 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **66 个接口 / 56 条路径 / 96 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 6 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、**拉取生效中的公告**） |
 | 客户端 | 9 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 45 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 51 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

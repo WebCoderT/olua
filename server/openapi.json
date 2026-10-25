@@ -3844,6 +3844,564 @@
         ]
       }
     },
+    "/admin/level-exps": {
+      "get": {
+        "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminLevelExp.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelExpPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "升级经验列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelExpPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/LevelExpQueryDto"
+        }
+      }
+    },
+    "/admin/level-exps/{level}": {
+      "patch": {
+        "description": "**部分更新**：只改 `exp`（等级本身不可改）。\n\n- `exp` ≥ 1（0 经验的等级永远升不上去）。\n- 改经验会改变升级节奏；怪物经验产出在客户端 `expGain` 口径里，两边要一起调。\n- 等级不存在 → 404（`50012`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminLevelExp.update",
+        "parameters": [
+          {
+            "name": "level",
+            "required": true,
+            "in": "path",
+            "description": "等级（1 起）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLevelExpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的升级经验",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelExpDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑升级经验",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelExpDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/growth-segments": {
+      "get": {
+        "description": "分段线性曲线的段（曲线键 × 段序固定，**没有创建 / 删除**）：`maxHp` / `attack` / `defense` / `killsPerLevel` 四条，每段 {fromLevel, toLevel, startValue, perLevel}，段间必须首尾相接、连续覆盖 1..roleMaxLevel。\n\n`curve` 按曲线键筛。\n\n**排序**：`sort` 取 `curve` / `seq` / `fromLevel` / `toLevel` / `startValue` / `perLevel` / `updatedAt`，`order` 取 asc / desc（默认 curve + seq 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGrowthSegment.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "curve",
+            "required": false,
+            "in": "query",
+            "description": "按曲线键筛",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "maxHp",
+                "attack",
+                "defense",
+                "killsPerLevel"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GrowthSegmentPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "成长曲线分段列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GrowthSegmentPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/GrowthSegmentQueryDto"
+        }
+      }
+    },
+    "/admin/growth-segments/{curve}/{seq}": {
+      "patch": {
+        "description": "四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。\n\n- 跨行校验：改完后该曲线必须仍然连续覆盖 1..roleMaxLevel（首段 from=1、段间首尾相接、末段 to=roleMaxLevel），否则整单拒收 400（40000）。\n- **改曲线会影响军衔等效强度**（军衔按阶映射角色等级再打折）与怪物数值 —— 保存前想清楚。\n- 曲线或段序不存在 → 404（`50013`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminGrowthSegment.update",
+        "parameters": [
+          {
+            "name": "curve",
+            "required": true,
+            "in": "path",
+            "description": "曲线键（maxHp / attack / defense / killsPerLevel）",
+            "schema": {
+              "enum": [
+                "maxHp",
+                "attack",
+                "defense",
+                "killsPerLevel"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "description": "段序号（1 起）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGrowthSegmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的曲线分段",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GrowthSegmentDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑曲线分段",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GrowthSegmentDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/growth-scalars": {
+      "get": {
+        "description": "可调的数值参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 属性区间倍率 / 经验节奏。\n\n`keyword` 模糊匹配参数键与说明。\n\n**排序**：`sort` 取 `key` / `value` / `updatedAt`，`order` 取 asc / desc（默认 key 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGrowthScalar.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配参数键与说明",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GrowthScalarPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "成长标量参数列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GrowthScalarPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/GrowthScalarQueryDto"
+        }
+      }
+    },
+    "/admin/growth-scalars/{key}": {
+      "patch": {
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数）。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminGrowthScalar.update",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "description": "参数键（见列表接口的行）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGrowthScalarDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的标量参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GrowthScalarDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑标量参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GrowthScalarDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/mails/templates": {
       "get": {
         "description": "发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
@@ -4922,6 +5480,60 @@
             ]
           }
         }
+      },
+      "UpdateLevelExpDto": {
+        "type": "object",
+        "properties": {
+          "exp": {
+            "type": "number",
+            "description": "升到下一级所需经验（≥ 1，0 级经验永远升不上去）",
+            "minimum": 1
+          }
+        }
+      },
+      "UpdateGrowthSegmentDto": {
+        "type": "object",
+        "properties": {
+          "fromLevel": {
+            "type": "number",
+            "description": "起始等级（含，≥ 1）",
+            "minimum": 1
+          },
+          "toLevel": {
+            "type": "number",
+            "description": "结束等级（含，≥ 起始等级）",
+            "minimum": 1
+          },
+          "startValue": {
+            "type": "number",
+            "description": "该段起始等级的值（≥ 0）",
+            "minimum": 0
+          },
+          "perLevel": {
+            "type": "number",
+            "description": "段内每升一级的增量（≥ 0）",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "fromLevel",
+          "toLevel",
+          "startValue",
+          "perLevel"
+        ]
+      },
+      "UpdateGrowthScalarDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number",
+            "description": "参数值；整数键（roleMaxLevel / expGain.*）必须是整数，比率键在 [0, 1] 等取值域内",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "value"
+        ]
       },
       "SendMailDto": {
         "type": "object",
@@ -7635,6 +8247,326 @@
           "keyword": {
             "type": "string",
             "description": "关键字：模糊匹配名称与描述"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          }
+        }
+      },
+      "LevelExpDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "等级（1 起；序列固定，不可增删行）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "升到下一级所需经验"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "level",
+          "exp",
+          "updatedAt"
+        ]
+      },
+      "LevelExpPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的升级经验",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LevelExpDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "LevelExpQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          }
+        }
+      },
+      "GrowthSegmentDto": {
+        "type": "object",
+        "properties": {
+          "curve": {
+            "type": "string",
+            "description": "曲线键（maxHp / attack / defense / killsPerLevel）",
+            "enum": [
+              "maxHp",
+              "attack",
+              "defense",
+              "killsPerLevel"
+            ]
+          },
+          "seq": {
+            "type": "number",
+            "description": "段序号（1 起；同曲线内不可增删段）"
+          },
+          "fromLevel": {
+            "type": "number",
+            "description": "起始等级（含）"
+          },
+          "toLevel": {
+            "type": "number",
+            "description": "结束等级（含）"
+          },
+          "startValue": {
+            "type": "number",
+            "description": "该段起始等级的值"
+          },
+          "perLevel": {
+            "type": "number",
+            "description": "段内每升一级的增量"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "curve",
+          "seq",
+          "fromLevel",
+          "toLevel",
+          "startValue",
+          "perLevel",
+          "updatedAt"
+        ]
+      },
+      "GrowthSegmentPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的曲线分段",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrowthSegmentDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "GrowthSegmentQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "curve": {
+            "type": "string",
+            "description": "按曲线键筛",
+            "enum": [
+              "maxHp",
+              "attack",
+              "defense",
+              "killsPerLevel"
+            ]
+          }
+        }
+      },
+      "GrowthScalarDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "参数键（如 roleMaxLevel / attributeRange.minRate）"
+          },
+          "value": {
+            "type": "number",
+            "description": "参数值"
+          },
+          "description": {
+            "type": "string",
+            "description": "参数说明（改之前先读一遍 —— 每个键的语义都在这里）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "description",
+          "updatedAt"
+        ]
+      },
+      "GrowthScalarPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的标量参数",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrowthScalarDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "GrowthScalarQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配参数键与说明"
           },
           "sort": {
             "type": "string",

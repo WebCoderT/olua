@@ -47,6 +47,20 @@ import {
   UpgradeOrderDto,
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
+import {
+  GrowthScalarDto,
+  GrowthScalarPageDto,
+  GrowthScalarQueryDto,
+  GrowthSegmentDto,
+  GrowthSegmentPageDto,
+  GrowthSegmentQueryDto,
+  LevelExpDto,
+  LevelExpPageDto,
+  LevelExpQueryDto,
+  UpdateGrowthScalarDto,
+  UpdateGrowthSegmentDto,
+  UpdateLevelExpDto,
+} from "../modules/game-config/dto/growth.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import {
@@ -156,4 +170,17 @@ export const SWAGGER_MODELS = [
   UpdateSoulDto,
   ConfigAttributesDto,
   ConfigAttributeRangeDto,
+  // 养成配置（成长曲线 #256）
+  LevelExpDto,
+  LevelExpPageDto,
+  LevelExpQueryDto,
+  UpdateLevelExpDto,
+  GrowthSegmentDto,
+  GrowthSegmentPageDto,
+  GrowthSegmentQueryDto,
+  UpdateGrowthSegmentDto,
+  GrowthScalarDto,
+  GrowthScalarPageDto,
+  GrowthScalarQueryDto,
+  UpdateGrowthScalarDto,
 ];

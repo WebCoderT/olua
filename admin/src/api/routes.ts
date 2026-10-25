@@ -181,6 +181,51 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
+  /** adminGrowthScalar 模块（2 个接口） */
+  adminGrowthScalar: {
+    /**
+     * 成长标量参数列表（GET /admin/growth-scalars）
+     *
+     * 可调的数值参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 属性区间倍率 / 经验节奏。
+     */
+    list: "/admin/growth-scalars",
+    /**
+     * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
+     *
+     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数）。
+     */
+    update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
+  },
+  /** adminGrowthSegment 模块（2 个接口） */
+  adminGrowthSegment: {
+    /**
+     * 成长曲线分段列表（GET /admin/growth-segments）
+     *
+     * 分段线性曲线的段（曲线键 × 段序固定，**没有创建 / 删除**）：`maxHp` / `attack` / `defense` / `killsPerLevel` 四条，每段 {fromLevel, toLevel, startValue, perLevel}，段间必须首尾相接、连续覆盖 1..roleMaxLevel。
+     */
+    list: "/admin/growth-segments",
+    /**
+     * 编辑曲线分段（PATCH /admin/growth-segments/{curve}/{seq}）
+     *
+     * 四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。
+     */
+    update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
+  },
+  /** adminLevelExp 模块（2 个接口） */
+  adminLevelExp: {
+    /**
+     * 升级经验列表（GET /admin/level-exps）
+     *
+     * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。
+     */
+    list: "/admin/level-exps",
+    /**
+     * 编辑升级经验（PATCH /admin/level-exps/{level}）
+     *
+     * **部分更新**：只改 `exp`（等级本身不可改）。
+     */
+    update: (level: string) => `/admin/level-exps/${encodeURIComponent(level)}`,
+  },
   /** adminMail 模块（4 个接口） */
   adminMail: {
     /**

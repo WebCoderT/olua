@@ -66,7 +66,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -126,6 +126,7 @@ function main() {
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 槽位 ${count(snapshot.equipmentSlots)} 个`);
   console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsterCombat)} 只`);
+  console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
 
@@ -194,6 +195,8 @@ function load(work) {
   };
   return {
     level: cfg("level"),
+    // 成长曲线参数（#256）：分段线性曲线本体 + 标量参数，管理端收口成可改数据
+    growth: cfg("growth"),
     battle: cfg("battle"),
     soul: missing("soul", cfg("soul").soulLevels),
     title: missing("title", cfg("title").titleLevels),
@@ -228,6 +231,9 @@ function buildSnapshot(cfg) {
     equipmentAttributes: pickEquipments(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
     monsterCombat: pickMonsterCombat(cfg.monsters),
+    // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
+    growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
+    growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
 
     // —— 名字与元数据（三端做界面用）——
     occupationLabels: pickOccupationLabels(cfg.occupations, TYPES_ROLE),
@@ -442,6 +448,51 @@ function pickConfigMeta(item) {
   };
 }
 
+/**
+ * 成长曲线（#256）→ [[曲线键, 分段数组]]
+ *
+ * curves 键是 configs/growth 的 roleGrowth 四条曲线（maxHp / attack / defense / killsPerLevel），
+ * 每段 {from, to, start, perLevel} 原样快照 —— 分段线性插值的口径留在客户端，
+ * 这里只搬数据，不复制「怎么取样」。
+ */
+function pickGrowthCurves(roleGrowth) {
+  const out = [];
+  for (const [key, segments] of Object.entries(roleGrowth)) {
+    if (!Array.isArray(segments) || segments.length === 0) throw new Error(`成长曲线 ${key} 为空（configs/growth 改坏了？）`);
+    out.push([
+      key,
+      segments.map((segment) => ({
+        from: round(segment.from ?? 0),
+        to: round(segment.to ?? 0),
+        start: round(segment.start ?? 0),
+        perLevel: round(segment.perLevel ?? 0),
+      })),
+    ]);
+  }
+  return out;
+}
+
+/**
+ * 成长标量参数（#256）→ [[键, 数值]]
+ *
+ * 键用「来源.字段」的扁平形状，消费方按字符串取值；管理端 seed 时逐行落库、
+ * 逐行编辑 —— 所以这里必须是**纯数值**，任何结构化的东西都该进 curves。
+ */
+function pickGrowthScalars(growth, expGain) {
+  const out = [];
+  const push = (key, value) => {
+    if (!Number.isFinite(value)) throw new Error(`成长标量 ${key} 不是有限数值（configs 改坏了？）`);
+    out.push([key, round(value)]);
+  };
+  push("roleMaxLevel", growth.roleMaxLevel);
+  push("attributeRange.minRate", growth.attributeRange.minRate);
+  push("attributeRange.mpRate", growth.attributeRange.mpRate);
+  push("attributeRange.hpRecoverRate", growth.attributeRange.hpRecoverRate);
+  push("expGain.expPerLevel", expGain.expPerLevel);
+  push("expGain.maxLevelGap", expGain.maxLevelGap);
+  return out;
+}
+
 const tuple = (value) => (Array.isArray(value) ? [round(value[0]), round(value[1])] : [0, 0]);
 const round = (value) => (Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0);
 
@@ -454,6 +505,11 @@ function render(s) {
       .join("\n")}\n};\n`;
   const textTable = (name, comment, rows) =>
     `/** ${comment} */\nexport const ${name}: Record<string, string> = {\n${rows
+      .map(([key, value]) => `  ${JSON.stringify(String(key))}: ${JSON.stringify(value)},`)
+      .join("\n")}\n};\n`;
+  // 值是任意纯 JSON（如成长曲线的分段数组）时的通用形状
+  const jsonTable = (name, comment, rows) =>
+    `/** ${comment} */\nexport const ${name}: Record<string, unknown> = {\n${rows
       .map(([key, value]) => `  ${JSON.stringify(String(key))}: ${JSON.stringify(value)},`)
       .join("\n")}\n};\n`;
 
@@ -496,6 +552,8 @@ ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.ran
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 战斗数值。damageCoefficients 的下标 = 技能等级，baseType 是取哪种属性当基数", s.skills)}
 ${numTable("MONSTER_COMBAT", "怪物 key → 战斗数值（monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）", s.monsterCombat)}
+${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
+${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
 
 //#endregion
 
