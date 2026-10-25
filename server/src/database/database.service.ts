@@ -417,6 +417,28 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 具名掉落表（#254）：主键是表 id（configs/drop 的 common/elite/boss + 兜底 default）；
+      -- **允许动态增删**（运营自建新表给多怪复用，同 mall_prices 定位），
+      -- 被 monster_drops.table_id 引用中的行在 service 拒删
+      CREATE TABLE IF NOT EXISTS drop_tables (
+        id         TEXT    PRIMARY KEY,
+        picks      TEXT    NOT NULL DEFAULT '1',
+        entries    TEXT    NOT NULL DEFAULT '[]',
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 每怪掉落配置（#254）：主键是怪物 key（= monsters.id，与怪物一一对应不可增删行）；
+      -- source 标注 table / entries / none 三态，seed 自生成物 MONSTER_DROPS（220 只全内联）；
+      -- 后台 PATCH 整份替换，将来的服务端掉落结算直读本表
+      CREATE TABLE IF NOT EXISTS monster_drops (
+        monster_key TEXT    PRIMARY KEY,
+        source      TEXT    NOT NULL DEFAULT 'none',
+        table_id    TEXT,
+        picks       TEXT,
+        entries     TEXT,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

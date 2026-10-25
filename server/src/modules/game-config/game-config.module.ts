@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AdminDropController } from "./admin-drop.controller";
 import { AdminDrugController } from "./admin-drug.controller";
 import { AdminEquipmentController } from "./admin-equipment.controller";
 import { AdminFashionController } from "./admin-fashion.controller";
@@ -11,6 +12,7 @@ import { AdminRankController } from "./admin-rank.controller";
 import { AdminSoulController } from "./admin-soul.controller";
 import { AdminTitleController } from "./admin-title.controller";
 import { GameConfigService } from "./game-config.service";
+import { DropConfigService } from "./drop-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
 
@@ -22,7 +24,7 @@ import { MallPricingService } from "./mall-pricing.service";
  * 重复执行也无副作用）。
  */
 @Module({
-  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminMallController, AdminFashionController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController],
-  providers: [GameConfigService, GrowthConfigService, MallPricingService],
+  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController],
+  providers: [GameConfigService, DropConfigService, GrowthConfigService, MallPricingService],
 })
 export class GameConfigModule {}

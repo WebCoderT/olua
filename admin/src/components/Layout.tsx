@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { to: "/npcs", label: "NPC 配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/mall", label: "商城定价", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/fashions", label: "时装配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/drops", label: "掉落配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/growth", label: "成长曲线", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/mails", label: "邮件", end: false, permission: PERMISSION.MAIL_READ as string },
   { to: "/admins", label: "管理员", end: false, permission: PERMISSION.ADMIN_READ as string },

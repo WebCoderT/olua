@@ -181,6 +181,45 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
+  /** adminDrop 模块（6 个接口） */
+  adminDrop: {
+    /**
+     * 具名掉落表列表（GET /admin/drop-tables）
+     *
+     * 一张表一行（量小不分页）。seed 自 configs/drop 的 common / elite / boss + 兜底表 default；运营可自建（POST）与删除（DELETE，被怪物引用中的拒绝删）。
+     */
+    listTables: "/admin/drop-tables",
+    /**
+     * 创建具名掉落表（POST /admin/drop-tables）
+     *
+     * `id` 由运营自起（小写字母开头的字母/数字/下划线，≤50 字符）；重复 → 400（40000）。
+     */
+    createTable: "/admin/drop-tables",
+    /**
+     * 删除具名掉落表（DELETE /admin/drop-tables/{id}）
+     *
+     * 被怪物引用中的表拒绝删除（400，附引用计数）；先把这些怪改回内联或换表再删。
+     */
+    removeTable: (id: string) => `/admin/drop-tables/${encodeURIComponent(id)}`,
+    /**
+     * 编辑具名掉落表（PATCH /admin/drop-tables/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段（picks / entries）。
+     */
+    updateTable: (id: string) => `/admin/drop-tables/${encodeURIComponent(id)}`,
+    /**
+     * 每怪掉落列表（GET /admin/monster-drops）
+     *
+     * 行与怪物一一对应（key 清单固定），**没有创建 / 删除**。`keyword` 模糊匹配怪物 key，`source` 按来源筛（table / entries / none）。
+     */
+    listMonsterDrops: "/admin/monster-drops",
+    /**
+     * 整份替换一只怪的掉落配置（PATCH /admin/monster-drops/{monsterKey}）
+     *
+     * **三选一**：
+     */
+    updateMonsterDrop: (monsterKey: string) => `/admin/monster-drops/${encodeURIComponent(monsterKey)}`,
+  },
   /** adminDrug 模块（2 个接口） */
   adminDrug: {
     /**

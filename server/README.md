@@ -133,7 +133,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion 19 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop 21 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -172,7 +172,7 @@ server/
 
 ## 数据模型
 
-21 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+23 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -195,6 +195,8 @@ server/
 | `fashions` | 时装配置（#257） | 主键是时装 id（configs/fashionClothes，如 `cloth_2`）；名称 / 描述 / 售卖价 / 获得渠道（复用 AcquireChannel，seed 默认 unavailable）/ 八项属性（seed 全 0）；`icon` / `in_res` / `out_res` 资源路径不开放编辑；id 清单固定，只可改不可增删 |
 | `mall_prices` | 商城特殊定价（#251） | 主键是商品 id（装备变体 id，商品清单来自生成物）；**全库唯一允许动态增删的配置表**（PUT upsert / DELETE 回统一价）；未定价商品走 `mall_settings` 的统一价 |
 | `mall_settings` | 商城统一价（#251） | 单行表（id 恒为 1）；全场默认售价 seed 自生成物 MALL_DEFAULT_PRICE（客户端 configs/mall 的 mallPrice），运营可改 |
+| `drop_tables` | 掉落表（#254） | 主键是表 id（`[a-z][a-z0-9_]{0,49}`）；`picks`（捞取次数）与 `entries`（goodId / 权重 / 概率 / 数量区间）都是 JSON 列，结构校验在 service（goodId 必须在生成物 ITEM_LABELS 里）；**允许动态增删的配置表**（同 mall_prices 定位），被 `monster_drops.table_id` 引用中的行拒删；seed 三张具名表 common / elite / boss + default 兜底 |
+| `monster_drops` | 怪物掉落（#254） | 主键是怪物 key（configs/monster 关联键）；`source` 三选一：`table`（引用 drop_tables）/ `entries`（内联条目 + 必填 picks）/ `none`（清空）；key 与怪物一一对应，只有 list + PATCH 整份替换，不可增删 |
 
 **角色数据是「不透明文档」**：服务端**不复制**游戏配置，只校验结构 / 归属 / 数量上限 / 重名，内容原样存。
 原因与代价见 [FAQ.md](FAQ.md#服务端为什么不校验角色数据的内容)。
@@ -207,7 +209,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（19 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（21 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -256,13 +258,13 @@ server/
 
 ## 接口与契约
 
-当前 **85 个接口 / 73 条路径 / 133 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **91 个接口 / 77 条路径 / 142 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 6 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、**拉取生效中的公告**） |
 | 客户端 | 9 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 70 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 76 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

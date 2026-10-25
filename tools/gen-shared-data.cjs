@@ -69,7 +69,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -129,7 +129,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -216,6 +216,12 @@ function load(work) {
     // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
     // 售卖价/属性），表现层参数未随恢复保留（见 fashionClothes.ts 文件头）
     fashions: missing("fashionClothes.fashionData", cfg("fashionClothes").fashionData),
+    // 掉落（#254）：具名表（common/elite/boss）、兜底表与每怪独立表 —— 管理端
+    // 「掉落配置」的 seed 来源；条目缺省值（weight=1 / chance=1 / count=[1,1]）
+    // 在生成器规整为全显式，消费方不复制缺省规则
+    dropTables: missing("drop.dropTables", cfg("drop").dropTables),
+    dropDefault: missing("drop.defaultDropTable", cfg("drop").defaultDropTable),
+    monsterDropTables: missing("monsterDrops.monsterDropTables", cfg("monsterDrops").monsterDropTables),
     // 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；
     // 特殊价是运营数据不进快照（动态增删，归 mall_prices 表）
     mallPrice: missing("mall.mallPrice", cfg("mall").mallPrice),
@@ -251,6 +257,10 @@ function buildSnapshot(cfg) {
     monsters: pickMonsters(cfg.monsters),
     npcs: pickNpcs(cfg.npcs),
     fashions: pickFashions(cfg.fashions),
+    // —— 掉落（#254：管理端可改的具名表 / 每怪表 / 兜底表）——
+    dropTables: pickDropTables(cfg.dropTables),
+    dropDefault: [["default", pickDropTable("default", cfg.dropDefault)]],
+    monsterDrops: pickMonsterDrops(cfg.monsterDropTables, cfg.monsters),
     mallDefaultPrice: round(cfg.mallPrice ?? 0),
     // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
     // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
@@ -522,6 +532,76 @@ function pickFashions(fashions) {
 }
 
 /**
+ * 掉落条目规整（#254）
+ *
+ * 客户端 DropEntry 的缺省规则（weight=1 / chance=1 / count=[1,1]）在这里**规整成全显式**：
+ * 消费方（服务端校验 / 管理端编辑器回填）不必各自抄一遍「缺省是多少」。weight 保留小数
+ * （monsterDrops 生成的装备权重是 6.29 / 0.63 这类），chance / count 用 round。
+ */
+function pickDropEntry(entry, where) {
+  if (!entry || typeof entry !== "object" || !entry.goodId) throw new Error(`${where} 里有缺 goodId 的掉落条目`);
+  const count = Array.isArray(entry.count) && entry.count.length >= 2 ? [round(entry.count[0]), round(entry.count[1])] : [1, 1];
+  return {
+    goodId: String(entry.goodId),
+    weight: Number.isFinite(entry.weight) ? round(entry.weight) : 1,
+    chance: Number.isFinite(entry.chance) ? round(entry.chance) : 1,
+    count,
+  };
+}
+
+/** 抽取次数规整：数字 = 固定件数；[min, max] = 件数区间（原样快照） */
+function pickDropPicks(picks, where) {
+  if (Array.isArray(picks)) {
+    if (picks.length < 2) throw new Error(`${where} 的 picks 区间不足两位`);
+    return [round(picks[0]), round(picks[1])];
+  }
+  const value = round(picks ?? 1);
+  return value;
+}
+
+/** 单张掉落表 → { picks, entries }（entries 逐条规整，空表报错） */
+function pickDropTable(id, table) {
+  if (!table || !Array.isArray(table.entries)) throw new Error(`掉落表 ${id} 没有 entries 数组（configs/drop 改坏了？）`);
+  if (table.entries.length === 0) throw new Error(`掉落表 ${id} 的 entries 为空（掉不出东西的表不如报错）`);
+  return {
+    picks: pickDropPicks(table.picks, `掉落表 ${id}`),
+    entries: table.entries.map((entry, index) => pickDropEntry(entry, `掉落表 ${id}[${index}]`)),
+  };
+}
+
+/** 具名掉落表 Map → [[表 id, { picks, entries }]]（#254） */
+function pickDropTables(tables) {
+  const out = [];
+  const seen = new Set();
+  tables.forEach((table, id) => {
+    if (seen.has(id)) throw new Error(`具名掉落表 id 重复：${id}`);
+    seen.add(id);
+    out.push([id, pickDropTable(id, table)]);
+  });
+  if (out.length === 0) throw new Error("configs/drop 的 dropTables 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  return out;
+}
+
+/**
+ * 每怪独立掉落表 Map → [[怪物 key, { picks, entries }]]（#254）
+ *
+ * key 必须是 configs/monster 里的怪物（掉落挂在怪身上，key 对不上就是配置漂移，
+ * 在生成器这里挡掉比落到表里再查省一个回合）。
+ */
+function pickMonsterDrops(monsterDropTables, monsters) {
+  const out = [];
+  const seen = new Set();
+  monsterDropTables.forEach((table, key) => {
+    if (seen.has(key)) throw new Error(`怪物掉落 key 重复：${key}`);
+    seen.add(key);
+    if (!monsters.has(key)) throw new Error(`怪物掉落 key ${key} 不在 configs/monster 里（配置漂移，先对齐两份配置）`);
+    out.push([key, pickDropTable(key, table)]);
+  });
+  if (out.length === 0) throw new Error("configs/monsterDrops 的 monsterDropTables 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  return out;
+}
+
+/**
  * 技能表 → [[技能 id, 战斗数值]]
  *
  * id 重复同样在这里挡掉（落进 `Record` 就是 TS1117）。
@@ -742,6 +822,9 @@ ${numTable("SKILLS", "技能 id → 战斗数值。damageCoefficients 的下标 
 ${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）", s.monsters)}
 ${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
+${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}
+${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }（#254；实际掉落以此为准，key 与 MONSTERS 对齐）", s.monsterDrops)}
+${jsonTable("DROP_DEFAULT", "兜底掉落表（#254；怪物既无独立表也没引用具名表时使用）", s.dropDefault)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
 

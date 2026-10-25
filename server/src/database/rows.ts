@@ -562,6 +562,49 @@ export interface MallSettingsRow {
 }
 
 /**
+ * 具名掉落表（#254）：`drop_tables` 表的一行
+ *
+ * 一行 = 一张可被多怪复用的掉落表（seed 自生成物 DROP_TABLES 的 common / elite / boss，
+ * 外加兜底表 default）。**与配置表相反，这一张允许动态增删**（运营自建新表给多怪复用，
+ * 同 mall_prices 的定位）——但被 `monster_drops.table_id` 引用中的行拒绝删除。
+ *
+ * `picks` / `entries` 存 JSON 字符串（生成物里已把 weight / chance / count 规整为全显式；
+ * 结构校验在 service：picks 是数字或 [min, max]，entries 每条 goodId 必须在物品总表里）。
+ */
+export interface DropTableRow {
+  /** 表 id（如 "common"；主键，可动态增删） */
+  id: string;
+  /** 抽取次数 JSON：数字（固定件数）或 [min, max]（件数区间） */
+  picks: string;
+  /** 条目池 JSON：DropEntry[]（{goodId, weight, chance, count:[min,max]} 全显式形状） */
+  entries: string;
+  updated_at: number;
+}
+
+/**
+ * 每怪掉落配置（#254）：`monster_drops` 表的一行
+ *
+ * 主键是怪物 key（= monsters.id，清单固定**不可增删行**，与怪物一一对应）。
+ * `source` 是语义标注：`table` = 引用具名表（`table_id` 非空）；`entries` = 内联条目池
+ * （`entries` 非空）；`none` = 未配置（走兜底表）。picks 只在内联或表引用覆盖件数时非空。
+ * seed 自生成物 MONSTER_DROPS（220 只全内联）；后台 PATCH **整份替换**，改表即时生效
+ * （将来的服务端掉落结算直读本表，与 monsters 表同一读法）。
+ */
+export interface MonsterDropRow {
+  /** 怪物 key（= monsters.id；主键，不可增删行） */
+  monster_key: string;
+  /** 语义标注：table | entries | none */
+  source: string;
+  /** 引用的具名表 id（source = table 时非空） */
+  table_id: string | null;
+  /** 抽取次数 JSON（内联时必填；表引用时可覆盖件数，null = 用表自己的） */
+  picks: string | null;
+  /** 内联条目池 JSON（source = entries 时非空） */
+  entries: string | null;
+  updated_at: number;
+}
+
+/**
  * 时装配置（#257）：管理端「时装配置」的行
  *
  * 主键是时装 id（configs/fashionClothes，如 "cloth_2"）—— 清单固定，**不可增删行**。

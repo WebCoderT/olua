@@ -256,3 +256,17 @@ export const FASHION_SORT: SortSpec<"id" | "label" | "sellPrice" | "updatedAt"> 
   default: "id",
   defaultOrder: "asc",
 };
+
+/**
+ * 每怪掉落列表（#254）：monsterKey 用数值序 —— key 是数字字符串，
+ * TEXT 排序会 1,10,11…乱序，CAST 成整数才与怪物配置页同一动线
+ */
+export const MONSTER_DROP_SORT: SortSpec<"monsterKey" | "source" | "updatedAt"> = {
+  columns: {
+    monsterKey: "CAST(monster_key AS INTEGER)",
+    source: "source",
+    updatedAt: "updated_at",
+  },
+  default: "monsterKey",
+  defaultOrder: "asc",
+};

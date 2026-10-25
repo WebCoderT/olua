@@ -121,6 +121,9 @@ const REQUIRED_EXPORTS = [
   "NPCS",
   "MALL",
   "FASHIONS",
+  "DROP_TABLES",
+  "MONSTER_DROPS",
+  "DROP_DEFAULT",
   "GROWTH_CURVES",
   "GROWTH_SCALARS",
   // 名字与元数据（三端做界面用）
