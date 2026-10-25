@@ -10,6 +10,7 @@ import type { AuthResult, Zone } from "./utils/net/Api";
 import { describeError } from "./utils/net/ApiError";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import Session from "./utils/net/Session";
+import { HAS_MOUSE, bindMousePress } from "./utils/input/Pointer";
 import AnnouncementNoticeDialog from "./components/dialogs/AnnouncementNoticeDialog";
 const { ccclass } = _decorator;
 
@@ -85,10 +86,11 @@ export class Login extends Component {
     registerButton.on(Node.EventType.TOUCH_END, () => void this.register());
     // logo
     this.stage.addChild(GameUiHelper.createImage(layout.logo.name, layout.logo.image, layout.logo.position, layout.logo.size));
-    // 区服选择（多开区 #295）：先摆一个空文案节点，活区列表拉到后再刷新内容
+    // 区服选择（多开区 #295）：先摆一个空文案节点，活区列表拉到后再刷新内容。
+    // 点击换区走统一指针入口（PC 走 bindMousePress 防穿透，触屏走 TOUCH_END）—— 审计 audit-ui-click-through 守这条
     this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, layout.zoneSelector.position, layout.zoneSelector.size, layout.zoneSelector.color);
     this.stage.addChild(this.zoneLabel);
-    this.zoneLabel.on(Node.EventType.TOUCH_END, () => this.cycleZone());
+    this.bindZonePicker();
     // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
     this.applyStageLayout();
     this.offWindowResize = onWindowResize(() => this.applyStageLayout());
@@ -155,6 +157,16 @@ export class Login extends Component {
     } catch (error) {
       console.warn(`[Login] 区服列表拉取失败（注册将落默认区）：${describeError(error)}`);
     }
+  }
+
+  /** 区服选择器的点击接线：PC 走 bindMousePress（按压起点在本节点才响应，防穿透），触屏走 TOUCH_END */
+  private bindZonePicker() {
+    if (!this.zoneLabel) return;
+    if (HAS_MOUSE) {
+      bindMousePress(this.zoneLabel, () => this.cycleZone(), this);
+      return;
+    }
+    this.zoneLabel.on(Node.EventType.TOUCH_END, () => this.cycleZone(), this);
   }
 
   /** 点一下换下一个区（循环；单区时无事发生） */
