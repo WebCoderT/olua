@@ -165,7 +165,8 @@ export function TitlesPage() {
         <h1 className="text-lg font-semibold text-slate-50">称号配置</h1>
         <p className="mt-1 text-xs text-slate-500">
           等级序列固定（1..34），只可编辑、不可新增 / 删除。获得渠道默认「无法获取」，由运营逐个开放（系统赠送的发放逻辑暂未实现）：
-          渠道改为「称号升级」的称号会进入上方「称号成长列表」，按拖动的顺序构成玩家的升级链。
+          渠道改为「称号升级」的称号会进入上方「称号成长列表」，按拖动的顺序构成玩家的升级链；
+          升级价格只在成长列表里显示和修改（本列表与编辑弹窗均不涉及价格）。
         </p>
       </div>
 
@@ -289,7 +290,6 @@ export function TitlesPage() {
                 <th className={thClass}>等级</th>
                 <th className={thClass}>名称 / 描述</th>
                 <th className={thClass}>获得渠道</th>
-                <th className={thClass}>升级价格</th>
                 <th className={thClass}>属性摘要</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
@@ -310,7 +310,6 @@ export function TitlesPage() {
                       {ACQUIRE_CHANNEL_LABELS[item.acquireChannel] ?? item.acquireChannel}
                     </Badge>
                   </td>
-                  <td className={`${tdClass} tabular-nums`}>{item.bindGold.toLocaleString()}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>

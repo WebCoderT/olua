@@ -97,7 +97,8 @@ export function GameConfigDialog({
       description: description.trim(),
       animation: animation.trim(),
       animationFrameRate: Number(frameRate),
-      bindGold: Number(bindGold),
+      // 称号弹窗没有价格输入框：原样带回当前值，绝不因弹窗保存而改动价格（价格唯一修改口在成长列表）
+      bindGold: kind === "title" && initial ? initial.bindGold : Number(bindGold),
       acquireChannel: channel,
       attributes,
     });
@@ -137,7 +138,7 @@ export function GameConfigDialog({
             <Input value={description} onChange={(event) => setDescription(event.target.value)} />
           </Field>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className={kind === "title" ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : "grid grid-cols-1 gap-4 sm:grid-cols-3"}>
             <Field label="动画资源目录" hint="resources 相对路径">
               <Input value={animation} onChange={(event) => setAnimation(event.target.value)} />
             </Field>
@@ -149,9 +150,12 @@ export function GameConfigDialog({
                 onChange={(event) => setFrameRate(event.target.value)}
               />
             </Field>
-            <Field label={kind === "title" ? "升级价格（绑定元宝）" : "升级消耗（绑定元宝）"}>
-              <Input type="number" min={0} value={bindGold} onChange={(event) => setBindGold(event.target.value)} />
-            </Field>
+            {/* 称号的价格只在「称号成长列表」里显示和修改，弹窗不提供；战魂的升级消耗仍在这里改 */}
+            {kind === "soul" ? (
+              <Field label="升级消耗（绑定元宝）">
+                <Input type="number" min={0} value={bindGold} onChange={(event) => setBindGold(event.target.value)} />
+              </Field>
+            ) : null}
           </div>
 
           <div>
