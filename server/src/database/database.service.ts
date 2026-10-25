@@ -328,6 +328,19 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         effect_mp_percent  INTEGER NOT NULL DEFAULT 0,
         updated_at         INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 物品与材料配置（#255）：主键是物品 id（如 material_hide），id 清单固定不可增删行；
+      -- 只收 MATERIAL / OTHER 大类（装备与药品各有自己的表）
+      CREATE TABLE IF NOT EXISTS items (
+        id           TEXT    PRIMARY KEY,
+        type         TEXT    NOT NULL DEFAULT 'material',
+        label        TEXT    NOT NULL DEFAULT '',
+        description  TEXT    NOT NULL DEFAULT '',
+        level        INTEGER NOT NULL DEFAULT 1,
+        sell_price   INTEGER NOT NULL DEFAULT 0,
+        max_stack    INTEGER NOT NULL DEFAULT 99,
+        updated_at   INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

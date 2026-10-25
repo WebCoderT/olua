@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 196;
+const EXPECTED_ASSERTIONS = 221;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -626,6 +626,53 @@ async function main() {
     const viewerDrugWrite = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token: viewerToken, body: { effectHp: 1 } });
     checkEqual(viewerDrugWrite.status, 403, "观察员改药品 → 403");
     checkEqual(viewerDrugWrite.body?.code, 30006, "观察员改药品 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 十、物品与材料配置（#255）：seed 同源 / 大类筛 / 只许改 / 结构字段不可编辑
+
+    group("十、物品与材料配置");
+
+    const items = await api(base, "GET", "/api/admin/items", { token });
+    checkEqual(items.status, 200, "物品列表可读");
+    const itemCount = Object.keys(shared.ITEM_BASES).length;
+    checkEqual(items.body?.data?.total, itemCount, `物品行数 = 配置表（${itemCount}）`);
+    checkEqual(items.body?.data?.list?.length, itemCount, "默认一页装下全部物品");
+    const hide = items.body?.data?.list?.find((row) => row.id === "material_hide");
+    check(Boolean(hide), "列表里有物品 material_hide");
+    checkEqual(hide?.type, shared.ITEM_BASES["material_hide"].type, "material_hide 大类与配置一致");
+    checkEqual(hide?.label, shared.ITEM_BASES["material_hide"].label, "material_hide 名称与配置一致");
+    checkEqual(hide?.sellPrice, shared.ITEM_BASES["material_hide"].sellPrice, "material_hide 售卖价与配置一致");
+    checkEqual(hide?.maxStack, shared.ITEM_BASES["material_hide"].maxStack, "material_hide 堆叠上限与配置一致");
+
+    const itemsTyped = await api(base, "GET", "/api/admin/items?type=material", { token });
+    checkEqual(itemsTyped.body?.data?.total, itemCount, "按大类筛 material：恰好全部物品");
+    const itemsOther = await api(base, "GET", "/api/admin/items?type=other", { token });
+    checkEqual(itemsOther.body?.data?.total, 0, "other 大类当前无条目（合法筛选，空列表）");
+    const itemKeyword = await api(base, "GET", "/api/admin/items?keyword=" + encodeURIComponent("铁矿"), { token });
+    checkEqual(itemKeyword.body?.data?.total, 1, "关键字能命中名称（铁矿）");
+
+    const itemPatched = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { label: "兽皮（改）", sellPrice: 8, maxStack: 500 } });
+    checkEqual(itemPatched.status, 200, "PATCH 物品成功（名称/售价/堆叠一起改）");
+    checkEqual(itemPatched.body?.data?.label, "兽皮（改）", "响应里的名称已更新");
+    checkEqual(itemPatched.body?.data?.sellPrice, 8, "响应里的售卖价已更新");
+    checkEqual(itemPatched.body?.data?.maxStack, 500, "响应里的堆叠上限已更新");
+    const itemGhost = await api(base, "PATCH", "/api/admin/items/material_none", { token, body: { label: "x" } });
+    checkEqual(itemGhost.status, 404, "改不存在的物品 → 404");
+    checkEqual(itemGhost.body?.code, 50018, "物品未找到用专属业务码 50018");
+    const itemStructural = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { type: "drug", level: 99 } });
+    checkEqual(itemStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
+    checkEqual(itemStructural.body?.data?.type, shared.ITEM_BASES["material_hide"].type, "type 不可编辑（大类属客户端结构约定）");
+    checkEqual(itemStructural.body?.data?.level, shared.ITEM_BASES["material_hide"].level, "level 不可编辑");
+    const postItem = await api(base, "POST", "/api/admin/items", { token, body: { id: "material_new" } });
+    checkEqual(postItem.status, 404, "POST 物品 → 404（路由不存在）");
+    const deleteItem = await api(base, "DELETE", "/api/admin/items/material_hide", { token });
+    checkEqual(deleteItem.status, 404, "DELETE 物品 → 404（路由不存在）");
+    const viewerItemRead = await api(base, "GET", "/api/admin/items", { token: viewerToken });
+    checkEqual(viewerItemRead.body?.code, 0, "观察员能看物品配置");
+    const viewerItemWrite = await api(base, "PATCH", "/api/admin/items/material_hide", { token: viewerToken, body: { sellPrice: 1 } });
+    checkEqual(viewerItemWrite.status, 403, "观察员改物品 → 403");
+    checkEqual(viewerItemWrite.body?.code, 30006, "观察员改物品 → 30006（权限点不足）");
 
     //#endregion
   } finally {

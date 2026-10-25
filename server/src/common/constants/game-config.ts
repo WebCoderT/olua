@@ -78,3 +78,10 @@ export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
   "expGain.expPerLevel": "每级基准经验：同级击杀经验 = (怪物等级+1) × 该值",
   "expGain.maxLevelGap": "角色与怪物等级差达到该值（含）后不再获得经验",
 };
+
+/**
+ * 物品大类取值清单（与客户端 types/good.ts 的 GOOD_TYPE 枚举逐值一致；同 AcquireChannel，
+ * 属结构常量住在服务端常量层，不派生自快照 —— 快照 ITEM_TYPES 只反映「配置里出现过的值」，
+ * 而筛选取值域要与客户端枚举全集一致：other 当前无条目，筛它返回空列表是正确行为）
+ */
+export const GOOD_TYPE_VALUES = ["equipment", "drug", "material", "other"];

@@ -66,7 +66,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -209,6 +209,7 @@ function load(work) {
     maps: missing("map.maps", cfg("map").maps),
     monsters: missing("monster.monsters", cfg("monster").monsters),
     drugs: missing("drug.drugs", cfg("drug").drugs),
+    materials: missing("material.materials", cfg("material").materials),
   };
 }
 
@@ -240,6 +241,9 @@ function buildSnapshot(cfg) {
     // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
     // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
     drugs: pickDrugs(cfg.drugs),
+    // 物品与材料（#255）：管理端「物品配置」的 seed 来源 —— 只收 **MATERIAL / OTHER** 大类
+    //（装备 / 药品字段形态不同，各有自己的表与 issue）；type 带上原值，未来 OTHER 条目直接进
+    itemBases: pickItemBases(cfg.materials),
     // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
     growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
     growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
@@ -419,6 +423,36 @@ function pickDrugs(drugs) {
     ]);
   }
   if (out.length === 0) throw new Error("configs/drug 的 drugs 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  return out;
+}
+
+/**
+ * 材料（与未来的其他物品）表 → [[物品 id, 管理端元数据]]（#255）
+ *
+ * 只收 **MATERIAL / OTHER** 大类：装备 / 药品字段形态不同，各有自己的表与 issue。
+ * type 带原值（GOOD_TYPE 的枚举值字符串）；sellPrice 来自条目的 `sellPirce`
+ * （客户端字段名历史拼写如此，与装备 / 药品同一规整口径）。
+ */
+function pickItemBases(materials) {
+  const out = [];
+  const seen = new Set();
+  for (const item of materials || []) {
+    if (!item || !item.id) throw new Error("configs/material 里有缺 id 的条目");
+    if (seen.has(item.id)) throw new Error(`物品 id 重复：${item.id}`);
+    seen.add(item.id);
+    out.push([
+      item.id,
+      {
+        type: String(item.type ?? ""),
+        label: String(item.label ?? ""),
+        description: String(item.description ?? ""),
+        level: round(item.level ?? 0),
+        sellPrice: round(item.sellPirce ?? 0),
+        maxStack: round(item.maxStack ?? 99),
+      },
+    ]);
+  }
+  if (out.length === 0) throw new Error("configs/material 的 materials 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 
@@ -659,6 +693,7 @@ ${textTable("EQUIPMENT_DISPLAY_NAMES", "装备 id → 显示名（已拼好前�
 ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLOTS 显示部位）", s.equipmentSlotOf)}
 ${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
 ${jsonTable("DRUGS", "药品 id → { label, description, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
+${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
 ${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
 ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
 ${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}

@@ -496,6 +496,25 @@ export type UpdateDrug = {
   effectMpPercent?: number;
 };
 
+export type UpdateItem = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
+   */
+  sellPrice?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -2649,4 +2668,85 @@ export type DrugQuery = {
    * 排序方向：asc 升序 / desc 降序
    */
   order?: "asc" | "desc";
+};
+
+export type Item = {
+  /**
+   * 物品 id（如 material_hide；被掉落表与脚本引用，不可增删行）
+   */
+  id: string;
+  /**
+   * 物品大类（GOOD_TYPE 的枚举值，如 material；结构字段不开放编辑）
+   */
+  type: string;
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 等级需求（暂不开放编辑）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 最大叠加数量
+   */
+  maxStack: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type ItemPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的物品配置
+   */
+  list: Item[];
+};
+
+export type ItemQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按物品大类筛（取值：equipment / drug / material / other；枚举清单派生自客户端配置，不落 schema 以免枚举字面量进两端生成物）
+   */
+  type?: string;
 };

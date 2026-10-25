@@ -451,6 +451,30 @@ export interface DrugRow {
   updated_at: number;
 }
 
+/**
+ * 物品与材料配置（#255）：管理端「物品配置」的行
+ *
+ * 主键是物品 id（如 `material_hide`）—— id 清单固定，**不可增删行**（掉落表与脚本引用）。
+ * 只收 **MATERIAL / OTHER** 大类（装备 / 药品字段形态不同，各有自己的表与 issue）。
+ */
+export interface ItemRow {
+  /** 物品 id（如 `material_hide`；主键，不可增删行） */
+  id: string;
+  /** 物品大类（GOOD_TYPE 的枚举值，如 `material`；结构字段不开放编辑） */
+  type: string;
+  /** 名称 */
+  label: string;
+  /** 描述 */
+  description: string;
+  /** 等级需求（seed 自客户端条目，暂不开放编辑） */
+  level: number;
+  /** 售卖价（客户端条目 `sellPirce` 的 seed 值；商城售价归 #251，不在这里） */
+  sell_price: number;
+  /** 最大叠加数量 */
+  max_stack: number;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
