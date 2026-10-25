@@ -133,7 +133,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop 21 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop 22 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -162,7 +162,7 @@ server/
 │   ├── e2e-account-email.cjs       28 条（邮箱可见性 / 补录去重 / 发信按账号兜底）
 │   ├── e2e-realtime.cjs            50 条（票据换连接 / 握手拒连 / 心跳与顶连接 / 优雅关闭）
 │   ├── e2e-combat.cjs              32 条（伤害结算上移：服务端算伤 / 幂等重发 / 目标查世界实例 / 清账不复活）
-│   ├── e2e-world.cjs               22 条（世界权威：播种与共享 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
+│   ├── e2e-world.cjs               24 条（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-dual.cjs                14 条（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
@@ -172,7 +172,7 @@ server/
 
 ## 数据模型
 
-23 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+24 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -182,7 +182,8 @@ server/
 | `audit_logs` | 操作日志 | 动作 = 接口 `operationId`；`detail` 落请求体（已打码）；`success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | 公告 | 标题 / 正文 / `level`（`important` 优先展示）/ `enabled`；`starts_at` / `ends_at` 组成生效时间窗，**「生效中」的判据就是这三列**（建了 `idx_announcements_window`） |
 | `mail_queue` | 邮件投递队列 | **渲染后的**标题与正文（冻在入队那一刻）/ `status` / `attempts` / `next_retry_at` / `last_error`；发信接口只入队，投递由后台调度器做 |
-| `world_monsters` | 世界权威的怪物实例 | **服务端持有怪物状态**：instanceId（`m<mapId>_<n>` 发牌、跨重启稳定）/ mapId / monsterKey / 出生点 x,y / hp / alive / killed_at / respawn_at；tick 检查重生 + dirty 批量落盘；客户端进图播种**只在空图采纳** |
+| `world_monsters` | 世界权威的怪物实例 | **服务端持有怪物状态**：instanceId（`m<mapId>_<n>` 发牌、跨重启稳定）/ mapId / monsterKey / 出生点 x,y / hp / alive / killed_at / respawn_at；tick 检查重生 + dirty 批量落盘 |
+| `map_spawn_areas` | 刷怪区（#295 阶段一） | **从客户端 Tiled 导入一次后归服务端**：`tools/import-spawn-areas.cjs` 生成 SPAWN_AREAS 快照（提交进仓库），启动时空表自动 seed；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId |
 | `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验 |
 | `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验） |
 | `growth_scalars` | 成长标量参数（#256） | 等级上限 / 属性区间倍率 / 经验节奏；各键取值域见服务端常量 |
@@ -209,7 +210,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（21 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（22 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -351,7 +352,7 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-account-email.cjs` | **28** | 玩家邮箱字段：只读观察员看不到也改不了 / 补录·查看·清空 / 格式校验与同邮去重（大小写不敏感）/ 发信按关联账号邮箱兜底 / 契约权限点标注 |
 | `test/e2e-realtime.cjs` | **50** | 实时通道：票据一次性（换完即焚 / 过期 / 伪造 / 串号都拒）/ **握手被拒时回答的是一个 HTTP 401 包裹体而不是「先建连再关」** / 应用层 ping→pong / 一账号一条连接（新连接顶掉旧的，关闭码 `4000`）/ 协议层存活探测 / SIGTERM 时连接收到 `1001` 且进程立刻退出 |
 | `test/e2e-combat.cjs` | **32** | 伤害结算上移（世界权威适配）：非法出手全被拒（bad_request / unknown_skill / unknown_target / skill_not_learned）/ **伤害由服务端按快照数值算出**（落点在公式带内、血量算术自洽）/ 同 castId 幂等重发（duplicate、不重掷、不多扣血）/ 死亡由服务端判（killed 恰好一次、之后 target_dead）/ **目标查世界实例**（不存在的 instanceId 拒收）/ 清账不复活死怪 / 快照带重生倒计时 / 换图往返状态保持 / 重连 rejoin 不翻倍 |
-| `test/e2e-world.cjs` | **22** | 世界权威：**空图才播种**（重复 join 不翻倍、账号间共享同一实例）/ 结算直接落世界（快照血量 = 结算血量、B 视角同步）/ 打死怪进重生队列 / **tick 到点重生并广播** / 优雅关闭全量落盘 / **重启后实例身份与血量原样恢复**（到期重生一次性补处理） |
+| `test/e2e-world.cjs` | **24** | 世界权威：**空图按刷怪区播种**（不认识的怪物 key 跳过、落点在区域矩形内、重复 join 不翻倍、账号间共享同一实例）/ 结算直接落世界（快照血量 = 结算血量、B 视角同步）/ 打死怪进重生队列 / **tick 到点重生并广播** / 优雅关闭全量落盘 / **重启后实例身份与血量原样恢复**（到期重生一次性补处理） |
 | `test/e2e-dual.cjs` | **14** | 双进程形态（#175）：存档进程（`REALTIME_EMBEDDED=false`）没有实时接口（取票 404）/ 实时进程凭**同一份库**校验令牌（取票 → WS → welcome）/ worldJoin 播种与 cast 结算在实时进程跑通 / 落盘后**测试进程开只读连接可见** `world_monsters`（WAL 承接跨进程写）/ 管理端在存档进程踢下线 → 实时进程巡检间隔内断连（close `4000`）/ 存档进程重置密码 → 旧令牌在实时进程取票被拒（`token_version` 对库比对） |
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 

@@ -27,7 +27,7 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 22;
+const EXPECTED_ASSERTIONS = 24;
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -83,6 +83,38 @@ const waitFor = async (label, predicate, timeoutMs = 15_000) => {
   check(false, `${label}（等待超时）`);
   return last;
 };
+
+/**
+ * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）。
+ * 表先建好再插行，服务端启动时 CREATE TABLE IF NOT EXISTS 与空表 seed 都不会动它。
+ * 第三行故意用不存在的怪物 key：验证播种对不认识的 key 跳过不炸。
+ */
+function seedSpawnAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id      TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        monster_key TEXT    NOT NULL,
+        min         INTEGER NOT NULL DEFAULT 0,
+        max         INTEGER NOT NULL DEFAULT 0,
+        cx          REAL    NOT NULL,
+        cy          REAL    NOT NULL,
+        w           REAL    NOT NULL,
+        h           REAL    NOT NULL,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );`);
+  const insert = db.prepare(
+    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const now = Date.now();
+  insert.run("1", "1号怪物", "1", 0, 1, 100, 200, 400, 400, now);
+  insert.run("1", "2号怪物", "3", 0, 1, 300, 400, 400, 400, now);
+  insert.run("1", "幽灵区", "999999", 0, 2, 0, 0, 100, 100, now);
+  db.close();
+}
 
 /**
  * 起一台服务（**文件库**：重启恢复的前提）；tick/落盘/重生阈值都调小，重生段才不用干等 30 秒
@@ -162,9 +194,9 @@ function connect(url) {
       }, timeoutMs);
     },
     /** 只等 join 之后到达的 world 帧（广播与应答同形，按发送时刻切分） */
-    async joinWorld(mapId, spawnPlan, timeoutMs = 5_000) {
+    async joinWorld(mapId, timeoutMs = 5_000) {
       const before = session.worlds.length;
-      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId, spawnPlan } }));
+      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId } }));
       return waitFor(`mapId=${mapId} 的 world 帧`, async () => {
         const hits = session.worlds.slice(before).filter((frame) => frame.mapId === mapId);
         return hits.length > 0 ? hits[hits.length - 1] : null;
@@ -204,6 +236,7 @@ function roleData(id, name, level, skills) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-world-${Date.now()}.db`);
+  seedSpawnAreas(dbPath);
   let server = await startServer(dbPath);
   try {
     // 重启段会换新端口：baseUrl 必须 let，connectAs 闭包每次读当前值
@@ -246,23 +279,23 @@ function roleData(id, name, level, skills) {
 
     //#region 一、进图播种与跨账号共享
 
-    group("一、进图播种：权威快照下发，重复 join 不翻倍，跨账号共享");
-    const plan = [
-      { monsterKey: "1", x: 100, y: 200 },
-      { monsterKey: "3", x: 300, y: 400 },
-    ];
-    const worldA1 = await sessionA.joinWorld("1", plan);
-    check(!!(worldA1 && worldA1.monsters.length === 2), "播种后拿到 2 只权威实例", JSON.stringify(worldA1 && worldA1.monsters.length));
-    const wA1 = worldA1.monsters[0];
-    const wA2 = worldA1.monsters[1];
+    group("一、进图播种：服务端按刷怪区自播种，重复 join 不翻倍，跨账号共享");
+    const worldA1 = await sessionA.joinWorld("1");
+    // 两个有效区各 max 1 只 + 一个不存在的怪物 key 区被跳过 ⇒ 恰好 2 只
+    check(!!(worldA1 && worldA1.monsters.length === 2), "空图按刷怪区播种出 2 只权威实例（幽灵区被跳过）", JSON.stringify(worldA1 && worldA1.monsters.length));
+    const wA1 = worldA1.monsters.find((m) => m.monsterKey === "1");
+    const wA2 = worldA1.monsters.find((m) => m.monsterKey === "3");
+    check(!!wA1 && !!wA2, "两只实例分别来自两个刷怪区（monsterKey 对上）", JSON.stringify(worldA1 && worldA1.monsters.map((m) => m.monsterKey)));
     check(/^m1_\d+$/.test(wA1.instanceId) && /^m1_\d+$/.test(wA2.instanceId) && wA1.instanceId !== wA2.instanceId, "实例 id 由服务端发牌且互不相同", `${wA1.instanceId} / ${wA2.instanceId}`);
-    check(wA1.monsterKey === "1" && wA1.hp === 65 && wA1.maxHp === 65 && wA1.alive === true, "实例按服务端表的满血起算（怪物 1 maxHp 65）", `hp=${wA1.hp}`);
-    check(wA1.x === 100 && wA1.y === 200, "实例位置 = 播种计划的出生点");
+    check(wA1.hp === 65 && wA1.maxHp === 65 && wA1.alive === true, "实例按服务端表的满血起算（怪物 1 maxHp 65）", `hp=${wA1.hp}`);
+    const inRect = (m, cx, cy, size) => Math.abs(m.x - cx) <= size / 2 && Math.abs(m.y - cy) <= size / 2;
+    check(inRect(wA1, 100, 200, 400) && inRect(wA2, 300, 400, 400), "实例落点各自在刷怪区矩形内（服务端随机取点）", `${wA1.x},${wA1.y} / ${wA2.x},${wA2.y}`);
+    check(server.logs().includes("在 monsters 表里不存在"), "不认识的怪物 key 被跳过并留下告警日志（幽灵区）");
 
-    const worldA2 = await sessionA.joinWorld("1", plan);
+    const worldA2 = await sessionA.joinWorld("1");
     check(!!(worldA2 && worldA2.monsters.length === 2), "重复 worldJoin 不翻倍（播种只补缺）", JSON.stringify(worldA2 && worldA2.monsters.length));
 
-    const worldB = await sessionB.joinWorld("1", []);
+    const worldB = await sessionB.joinWorld("1");
     const shared = worldB.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!(worldB && worldB.monsters.length === 2) && !!shared, "账号 B 看到同一份实例（世界跨账号共享，不按账号各发一份）", shared && shared.instanceId);
 
@@ -275,10 +308,10 @@ function roleData(id, name, level, skills) {
     const shot = castA(sessionA, { skillId: "1000", targetId: wA1.instanceId, monsterKey: "1" });
     const settle = await shot.promise;
     check(!!(settle && settle.ok) && settle.damage >= 8 && settle.damage <= 16, "出手结算成功且伤害落带内", JSON.stringify(settle));
-    const afterShot = await sessionA.joinWorld("1", []);
+    const afterShot = await sessionA.joinWorld("1");
     const damaged = afterShot.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!damaged && damaged.hp === (settle.ok ? settle.hp : -1), "世界快照的血量 = settle 返回的血量（同一份状态，不是两本账）", damaged && `hp=${damaged.hp}`);
-    const seenByB = await sessionB.joinWorld("1", []);
+    const seenByB = await sessionB.joinWorld("1");
     const seenDamaged = seenByB.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!seenDamaged && seenDamaged.hp === damaged.hp, "账号 B 看到的血量同步（共享世界）", seenDamaged && `hp=${seenDamaged.hp}`);
 
@@ -293,7 +326,7 @@ function roleData(id, name, level, skills) {
       }
     }
     check(killed, "连打怪物 3 直到被击杀（killed 恰好出现）");
-    const afterKill = await sessionA.joinWorld("1", []);
+    const afterKill = await sessionA.joinWorld("1");
     const corpse = afterKill.monsters.find((m) => m.instanceId === wA2.instanceId);
     check(!!corpse && corpse.alive === false && corpse.hp === 0 && typeof corpse.respawnInMs === "number", "死亡实例 alive=false 且带重生倒计时", JSON.stringify(corpse));
 
@@ -331,7 +364,7 @@ function roleData(id, name, level, skills) {
     server = await startServer(dbPath);
     ({ baseUrl } = server);
     sessionA = await connectAs(tokenA);
-    const rejoined = await sessionA.joinWorld("1", plan);
+    const rejoined = await sessionA.joinWorld("1");
     check(!!(rejoined && rejoined.monsters.length === 2), "重启后 worldJoin 恢复实例（不重新播种翻倍）", JSON.stringify(rejoined && rejoined.monsters.length));
     const restored = rejoined.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!restored, "重启后实例 id 不变（服务端发牌跨重启稳定）", restored && restored.instanceId);

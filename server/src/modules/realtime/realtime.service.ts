@@ -353,10 +353,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 进图登记（播种 / 恢复 / 换图都走这里），应答一张权威快照
       const join = parseWorldJoin(parsed.data);
       if (!join) {
-        this.send(socket, { type: "error", data: { message: "worldJoin 消息缺 mapId / spawnPlan" } });
+        this.send(socket, { type: "error", data: { message: "worldJoin 消息缺 mapId" } });
         return;
       }
-      const snapshot = this.world.join(socket.identity.id, join.mapId, join.spawnPlan);
+      const snapshot = this.world.join(socket.identity.id, join.mapId);
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);
       return;
@@ -493,18 +493,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
 //#region 消息解析（小工具）
 
-/** worldJoin.data 的解析结果（plan 条目的字段校验在世界层做，这里只保形状） */
+/** worldJoin.data 的解析结果（#295 起只带 mapId，播种完全在服务端） */
 interface ParsedWorldJoin {
   mapId: string;
-  spawnPlan: Array<{ monsterKey: string; x: number; y: number }>;
 }
 
 function parseWorldJoin(raw: unknown): ParsedWorldJoin | null {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Record<string, unknown>;
   if (typeof data.mapId !== "string" || !data.mapId) return null;
-  const plan = Array.isArray(data.spawnPlan) ? data.spawnPlan : [];
-  return { mapId: data.mapId, spawnPlan: plan as ParsedWorldJoin["spawnPlan"] };
+  return { mapId: data.mapId };
 }
 
 //#endregion

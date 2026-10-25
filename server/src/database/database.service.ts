@@ -177,6 +177,26 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE INDEX IF NOT EXISTS idx_world_monsters_map ON world_monsters(map_id);
 
+      -- 刷怪区（#295 阶段一）：一行 = Tiled monster 对象组的一个矩形区域，
+      -- 从 TMX 导入一次后归服务端（tools/import-spawn-areas.cjs 生成快照，启动时空表自动 seed）。
+      -- 坐标口径与客户端世界坐标一致（cx/cy 区域中心、w/h 尺寸），播种时区域内随机取点。
+      -- (map_id, name) 唯一：同名区域在一张图里没有并存的意义，重跑导入也幂等。
+      CREATE TABLE IF NOT EXISTS map_spawn_areas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id      TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        monster_key TEXT    NOT NULL,
+        min         INTEGER NOT NULL DEFAULT 0,
+        max         INTEGER NOT NULL DEFAULT 0,
+        cx          REAL    NOT NULL,
+        cy          REAL    NOT NULL,
+        w           REAL    NOT NULL,
+        h           REAL    NOT NULL,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_map_spawn_areas_natural ON map_spawn_areas(map_id, name);
+      CREATE INDEX IF NOT EXISTS idx_map_spawn_areas_map ON map_spawn_areas(map_id);
+
       -- 养成配置（#213）：称号 / 战魂的等级序列**固定**（level 是主键，行只能来自 seed，
       -- 后台只改内容），所以没有 created_at，只有 updated_at。
       -- 八项属性拍平成 min/max 两列（区间型六项 + 单值两项），避免 JSON 列没法建索引与校验。

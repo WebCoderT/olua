@@ -138,12 +138,12 @@ export interface RealtimeSettleMessage {
 //#region 世界权威（#35：地图实例 / 怪物状态 / tick 循环）
 
 /**
- * 客户端 → 服务端：进图登记（播种）
+ * 客户端 → 服务端：进图登记（#295 阶段一：刷怪区归服务端，客户端只报图 id）
  *
- * 刷怪**区域**配置住在客户端的 Tiled 地图文件里（服务端拿不到，素材也不入库），
- * 所以进图时由客户端把解析出的刷怪计划（每只怪的 monsterKey 与出生点）报上来。
- * 播种只发生在**空图**上：该图已有实例（其他账号先播种过 / 上次重启留下的）就整份沿用，
- * plan 被忽略 —— 权威状态（instanceId / hp / 存活）永远以下发的 `world` 帧为准。
+ * 刷怪区域配置已从 Tiled 导入服务端（map_spawn_areas 表），播种完全由服务端完成 ——
+ * 客户端不再解析 Tiled 刷怪组、不再上报计划。播种只发生在**空图**上：该图已有实例
+ * （其他账号先进过 / 上次重启留下的）就整份沿用 —— 权威状态（instanceId / hp / 存活）
+ * 永远以下发的 `world` 帧为准。
  *
  * 换图也走这条消息：同一连接发新的 `worldJoin`，旧图的观看者身份随之移除。
  */
@@ -152,14 +152,6 @@ export interface RealtimeWorldJoinMessage {
   data: {
     /** 地图 id（configs/map 的 key） */
     mapId: string;
-    /** 刷怪计划：每只怪一条（数量 = 区域 max，位置为区域内随机落点） */
-    spawnPlan: Array<{
-      /** 怪物 key（configs/monster 的关联键；服务端据此查 monsters 表） */
-      monsterKey: string;
-      /** 出生点（世界坐标） */
-      x: number;
-      y: number;
-    }>;
   };
 }
 

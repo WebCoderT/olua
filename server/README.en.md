@@ -134,7 +134,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           21 repositories: account / admin / role / audit / system / announcement / mail / world-monster / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop
+│   │   └── repositories/           22 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -163,7 +163,7 @@ server/
 │   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
 │   ├── e2e-realtime.cjs            50 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
 │   ├── e2e-combat.cjs              32 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
-│   ├── e2e-world.cjs               22 assertions (world authority: seeding & sharing / settlement lands in world / tick respawn / graceful flush / restart recovery)
+│   ├── e2e-world.cjs               24 assertions (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
 │   ├── e2e-dual.cjs                14 assertions (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
@@ -173,7 +173,7 @@ server/
 
 ## Data model
 
-23 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+24 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -183,7 +183,8 @@ server/
 | `audit_logs` | operation log | action = interface `operationId`; `detail` holds the request body (masked); `success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | announcements | title / body / `level` (`important` shown first) / `enabled`; `starts_at` / `ends_at` form the effective window, **"active" is judged by exactly these three columns** (built `idx_announcements_window`) |
 | `mail_queue` | mail delivery queue | **rendered** title and body (frozen at enqueue time) / `status` / `attempts` / `next_retry_at` / `last_error`; the send interface only enqueues, delivery is done by the background scheduler |
-| `world_monsters` | world-authority monster instances | **the server owns monster state**: instanceId (`m<mapId>_<n>` issuance, stable across restarts) / mapId / monsterKey / spawn point x,y / hp / alive / killed_at / respawn_at; tick checks respawn + dirty batch flush; client seeding is **adopted only on an empty map** |
+| `world_monsters` | world-authority monster instances | **the server owns monster state**: instanceId (`m<mapId>_<n>` issuance, stable across restarts) / mapId / monsterKey / spawn point x,y / hp / alive / killed_at / respawn_at; tick checks respawn + dirty batch flush |
+| `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
 | `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level |
 | `growth_segments` | growth-curve segments (#256) | four piecewise-linear curves x segments; edits must keep the curve covering 1..roleMaxLevel contiguously (cross-row validation) |
 | `growth_scalars` | growth scalar parameters (#256) | level cap / attribute-range rates / experience pacing; each key has its own value domain |
@@ -210,7 +211,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 21 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 22 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -352,7 +353,7 @@ All nine e2e suites are **real server process + real HTTP requests** (not mocks)
 | `test/e2e-account-email.cjs` | **28** | player email field: read-only viewers can neither see nor change it / backfill·view·clear / format validation and same-email dedup (case-insensitive) / mail falls back to the linked account's email / contract permission annotation |
 | `test/e2e-realtime.cjs` | **50** | realtime channel: the ticket is one-shot (burned on use / expired / forged / cross-account all refused) / **a refused handshake answers with an HTTP 401 envelope instead of "connect first, then close"** / application-level ping→pong / one connection per account (a new one evicts the old, close code `4000`) / protocol-level liveness probe / on SIGTERM connections receive `1001` and the process exits immediately |
 | `test/e2e-combat.cjs` | **32** | server-side damage settlement (world-authority adaptation): every invalid cast is refused (bad_request / unknown_skill / unknown_target / skill_not_learned) / **damage is computed by the server from snapshot values** (lands inside the formula band, hp arithmetic is self-consistent) / the same castId replays idempotently (duplicate, no re-roll, no extra hp loss) / death is decided by the server (killed exactly once, then target_dead) / **targets resolve to world instances** (unknown instanceIds refused) / resetting the ledger does not revive dead monsters / snapshots carry respawn countdown / map round-trips keep state / rejoin after reconnect does not duplicate |
-| `test/e2e-world.cjs` | **22** | world authority: **seeding only on an empty map** (repeated join does not duplicate, accounts share the same instances) / settlement lands directly in the world (snapshot hp = settled hp, visible to account B) / killing a monster queues a respawn / **tick respawns on time and broadcasts** / graceful shutdown flushes everything / **instance identity and hp restored as-is after restart** (due respawns backfilled at once) |
+| `test/e2e-world.cjs` | **24** | world authority: **seeding on an empty map from spawn areas** (unknown monster keys skipped, points inside the area rect, repeated join does not duplicate, accounts share the same instances) / settlement lands directly in the world (snapshot hp = settled hp, visible to account B) / killing a monster queues a respawn / **tick respawns on time and broadcasts** / graceful shutdown flushes everything / **instance identity and hp restored as-is after restart** (due respawns backfilled at once) |
 | `test/e2e-dual.cjs` | **14** | dual-process form (#175): the archive process (`REALTIME_EMBEDDED=false`) has no realtime endpoints (ticket POST → 404) / the realtime process validates tokens against **the same database** (ticket → WS → welcome) / worldJoin seeding and cast settlement run inside the realtime process / after the persist throttle, the **test process opens a read-only connection and sees** `world_monsters` (WAL carrying cross-process writes) / kicking from the archive process → the realtime process disconnects within one sweep interval (close `4000`) / password reset on the archive process → the old token is refused at the realtime process (`token_version` compared against the database) |
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
