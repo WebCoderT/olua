@@ -349,6 +349,40 @@ export interface GrowthScalarRow {
   updated_at: number;
 }
 
+/**
+ * 军衔一行（`ranks` 表；一行 = 一阶，#250）
+ *
+ * 与 `SoulRow` 同构（100 阶全量就是成长链，顺序天然按阶，**没有 upgrade_order 列** ——
+ * 军衔不需要拖动排序，成长列表只做价格与属性视图）；多一个 `tier` 列（大段名，如「校尉」），
+ * 少 animation 两列（军衔外观是头顶一行红字，没有动画资源）。
+ */
+export interface RankRow {
+  /** 阶数（1 起；主键，不可增删行） */
+  level: number;
+  /** 衔名（如「陪戎校尉」） */
+  label: string;
+  /** 大段名（如「校尉」；10 段 × 10 阶） */
+  tier: string;
+  description: string;
+  /** 晋到该阶消耗的绑定元宝（rankUpgradePrice 曲线的 seed 值） */
+  bind_gold: number;
+  max_hp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）

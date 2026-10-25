@@ -3844,6 +3844,191 @@
         ]
       }
     },
+    "/admin/ranks": {
+      "get": {
+        "description": "阶数序列固定（1..100），**没有创建 / 删除**。`keyword` 模糊匹配衔名 / 大段名 / 描述，`tier` 按大段筛（兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话，seed 自客户端配置的 10 大段）。\n\n`bindGold` 是「晋到该阶」消耗的绑定元宝（seed 自晋升价格曲线），管理端成长列表里行内修改。\n\n**排序**：`sort` 取 `level` / `label` / `tier` / `bindGold` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRank.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配衔名 / 大段名 / 描述",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "tier",
+            "required": false,
+            "in": "query",
+            "description": "按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RankPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "军衔配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RankPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/RankQueryDto"
+        }
+      }
+    },
+    "/admin/ranks/{level}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `attributes`：八项属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。\n- `bindGold`：晋升价格；管理端编辑弹窗不带价格输入（提交原样带回当前值），唯一修改口是成长列表。\n- **改属性会影响军衔等效强度**（军衔按阶映射角色等级再打折，#256 的曲线是它的基准）。\n- `level` 不存在 → 404（`50015`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRank.update",
+        "parameters": [
+          {
+            "name": "level",
+            "required": true,
+            "in": "path",
+            "description": "军衔阶数（1..100）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRankDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的军衔配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RankDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑军衔配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RankDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/level-exps": {
       "get": {
         "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -5469,6 +5654,39 @@
           "bindGold": {
             "type": "number",
             "description": "升到该阶消耗的绑定元宝（不传则不改）",
+            "minimum": 0
+          },
+          "attributes": {
+            "description": "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          }
+        }
+      },
+      "UpdateRankDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "衔名（不传则不改）",
+            "maxLength": 20
+          },
+          "tier": {
+            "type": "string",
+            "description": "大段名（不传则不改）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（不传则不改）",
+            "maxLength": 200
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "晋到该阶消耗的绑定元宝（不传则不改；编辑弹窗会原样带回当前值）",
             "minimum": 0
           },
           "attributes": {
@@ -8581,6 +8799,127 @@
               "desc"
             ],
             "default": "desc"
+          }
+        }
+      },
+      "RankDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "阶数（1..100；序列固定，不可增删行）"
+          },
+          "label": {
+            "type": "string",
+            "description": "衔名（如「陪戎校尉」）"
+          },
+          "tier": {
+            "type": "string",
+            "description": "大段名（如「校尉」；10 段 × 10 阶）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "晋到该阶消耗的绑定元宝（价格唯一显示/修改口 = 军衔成长列表）"
+          },
+          "attributes": {
+            "description": "八项属性加成",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "level",
+          "label",
+          "tier",
+          "description",
+          "bindGold",
+          "attributes",
+          "updatedAt"
+        ]
+      },
+      "RankPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的军衔配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RankDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "RankQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配衔名 / 大段名 / 描述"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "tier": {
+            "type": "string",
+            "description": "按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）"
           }
         }
       }

@@ -228,6 +228,8 @@ function buildSnapshot(cfg) {
     // —— 养成配置元数据（管理端 seed 用：名称之外，还带文案 / 价格 / 动画资源）——
     soulMeta: pickList(cfg.soul, pickConfigMeta),
     titleMeta: pickList(cfg.title, pickConfigMeta),
+    // 军衔（#250）：没有动画资源，只带文案与晋升价格
+    rankMeta: pickList(cfg.rank, pickRankMeta),
     equipmentAttributes: pickEquipments(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
     monsterCombat: pickMonsterCombat(cfg.monsters),
@@ -448,6 +450,14 @@ function pickConfigMeta(item) {
   };
 }
 
+/** 军衔阶的元数据（#250）：军衔没有动画，只带文案与晋升价格（rankUpgradePrice 派生的 bindGold） */
+function pickRankMeta(item) {
+  return {
+    description: String(item.description ?? ""),
+    bindGold: round(item.bindGold ?? 0),
+  };
+}
+
 /**
  * 成长曲线（#256）→ [[曲线键, 分段数组]]
  *
@@ -572,6 +582,7 @@ ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.t
 ${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}
 ${numTable("TITLE_LEVEL_META", "称号等级（下标 + 1 即等级）→ { description 文案, bindGold 升到该级价格, animation 动画资源, animationFrameRate 帧率 }", s.titleMeta)}
 ${numTable("RANK_LABELS", "军衔阶数（下标 + 1 即阶）→ { tier 大段名, label 衔名 }", s.rankLabels)}
+${numTable("RANK_LEVEL_META", "军衔阶数（下标 + 1 即阶）→ { description 文案, bindGold 晋到该阶消耗 }", s.rankMeta)}
 ${textTable("SKILL_LABELS", "技能 id → 技能名", s.skillLabels)}
 ${textTable("MAP_LABELS", "地图 id → 地图名", s.mapLabels)}
 

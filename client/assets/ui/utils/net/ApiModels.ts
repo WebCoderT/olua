@@ -419,6 +419,29 @@ export type UpdateSoul = {
   attributes?: ConfigAttributes;
 };
 
+export type UpdateRank = {
+  /**
+   * 衔名（不传则不改）
+   */
+  label?: string;
+  /**
+   * 大段名（不传则不改）
+   */
+  tier?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 晋到该阶消耗的绑定元宝（不传则不改；编辑弹窗会原样带回当前值）
+   */
+  bindGold?: number;
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -2317,4 +2340,81 @@ export type GrowthScalarQuery = {
    * 排序方向：asc 升序 / desc 降序
    */
   order?: "asc" | "desc";
+};
+
+export type Rank = {
+  /**
+   * 阶数（1..100；序列固定，不可增删行）
+   */
+  level: number;
+  /**
+   * 衔名（如「陪戎校尉」）
+   */
+  label: string;
+  /**
+   * 大段名（如「校尉」；10 段 × 10 阶）
+   */
+  tier: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 晋到该阶消耗的绑定元宝（价格唯一显示/修改口 = 军衔成长列表）
+   */
+  bindGold: number;
+  /**
+   * 八项属性加成
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type RankPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的军衔配置
+   */
+  list: Rank[];
+};
+
+export type RankQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配衔名 / 大段名 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）
+   */
+  tier?: string;
 };

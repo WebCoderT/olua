@@ -3,10 +3,14 @@ import { BizCode } from "../../common/constants/biz-code";
 import { AcquireChannel } from "../../common/constants/game-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { RankRepository, RankListOptions } from "../../database/repositories/rank.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { SoulRow, TitleRow } from "../../database/rows";
+import { RankRow, SoulRow, TitleRow } from "../../database/rows";
 import {
+  RANK_LABELS,
+  RANK_LEVEL_ATTRIBUTES,
+  RANK_LEVEL_META,
   SOUL_LABELS,
   SOUL_LEVEL_ATTRIBUTES,
   SOUL_LEVEL_META,
@@ -14,6 +18,7 @@ import {
   TITLE_LEVEL_ATTRIBUTES,
   TITLE_LEVEL_META,
 } from "../../shared/game-data.generated";
+import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
   attributesFromRow,
@@ -42,12 +47,14 @@ export class GameConfigService implements OnModuleInit {
   constructor(
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
+    private readonly ranks: RankRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
   onModuleInit() {
     this.seedTitles();
     this.seedSouls();
+    this.seedRanks();
   }
 
   // —— 称号 ——
@@ -181,10 +188,43 @@ export class GameConfigService implements OnModuleInit {
     return this.listUpgradeSouls();
   }
 
+  // —— 军衔（#250：100 阶全量就是成长链，顺序天然按阶，没有拖动排序）——
+
+  listRanks(query: RankQueryDto): PageResult<RankDto> {
+    const options: RankListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      tier: query.tier,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.ranks.list(options);
+    const total = this.ranks.count(options);
+    return { list: rows.map(RankDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateRank(level: number, dto: UpdateRankDto): RankDto {
+    const existing = this.requireRank(level);
+    const attributes = dto.attributes ?? attributesFromRow(existing);
+    assertAttributeRanges(attributes);
+
+    const next: RankRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      tier: dto.tier ?? existing.tier,
+      description: dto.description ?? existing.description,
+      bind_gold: dto.bindGold ?? existing.bind_gold,
+      ...attributeColumns(attributes),
+      updated_at: Date.now(),
+    };
+    this.ranks.update(next);
+    return RankDto.from(this.requireRank(level));
+  }
+
   // —— 内部 ——
 
-  private requireTitle(level: number): TitleRow {
-    const row = this.titles.findByLevel(level);
+  private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
     if (!row) throw BizException.notFound(BizCode.TITLE_NOT_FOUND, `称号等级 ${level} 不存在`);
     return row;
   }
@@ -200,6 +240,30 @@ export class GameConfigService implements OnModuleInit {
     const row = this.souls.findByLevel(level);
     if (!row) throw BizException.notFound(BizCode.SOUL_NOT_FOUND, `战魂阶数 ${level} 不存在`);
     return row;
+  }
+
+  private requireRank(level: number): RankRow {
+    const row = this.ranks.findByLevel(level);
+    if (!row) throw BizException.notFound(BizCode.RANK_NOT_FOUND, `军衔阶数 ${level} 不存在`);
+    return row;
+  }
+
+  /** 军衔 seed：RANK_LABELS（段名/衔名）/ RANK_LEVEL_META（文案/价格）/ RANK_LEVEL_ATTRIBUTES（属性）三表按阶 zip */
+  private seedRanks() {
+    const attributeTable = RANK_LEVEL_ATTRIBUTES as Record<string, Record<string, unknown>>;
+    const labelTable = RANK_LABELS as Record<string, { tier: string; label: string }>;
+    for (const [index, meta] of Object.entries(RANK_LEVEL_META)) {
+      const rank = labelTable[index] ?? { tier: "", label: "" };
+      this.ranks.seedRow({
+        level: Number(index) + 1,
+        label: rank.label,
+        tier: rank.tier,
+        description: meta.description,
+        bind_gold: meta.bindGold,
+        ...flatAttributes(attributeTable[index]),
+        updated_at: 0,
+      });
+    }
   }
 
   /**

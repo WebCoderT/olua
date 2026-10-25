@@ -261,6 +261,31 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         description TEXT    NOT NULL DEFAULT '',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 军衔配置（#250）：与 titles / souls 同构（100 阶全量就是成长链，顺序天然按阶，
+      -- 没有 upgrade_order 列 —— 军衔不拖动排序）；多 tier 列（大段名），少 animation 两列。
+      CREATE TABLE IF NOT EXISTS ranks (
+        level                INTEGER PRIMARY KEY,
+        label                TEXT    NOT NULL,
+        tier                 TEXT    NOT NULL DEFAULT '',
+        description          TEXT    NOT NULL DEFAULT '',
+        bind_gold            INTEGER NOT NULL DEFAULT 0,
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

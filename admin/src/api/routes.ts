@@ -253,6 +253,21 @@ export const routes = {
      */
     templates: "/admin/mails/templates",
   },
+  /** adminRank 模块（2 个接口） */
+  adminRank: {
+    /**
+     * 军衔配置列表（GET /admin/ranks）
+     *
+     * 阶数序列固定（1..100），**没有创建 / 删除**。`keyword` 模糊匹配衔名 / 大段名 / 描述，`tier` 按大段筛（兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话，seed 自客户端配置的 10 大段）。
+     */
+    list: "/admin/ranks",
+    /**
+     * 编辑军衔配置（PATCH /admin/ranks/{level}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (level: string) => `/admin/ranks/${encodeURIComponent(level)}`,
+  },
   /** adminRole 模块（6 个接口） */
   adminRole: {
     /**

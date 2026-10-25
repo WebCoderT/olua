@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 118;
+const EXPECTED_ASSERTIONS = 138;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -474,6 +474,46 @@ async function main() {
     const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, body: { value: 50 } });
     checkEqual(viewerScalarWrite.status, 403, "观察员改标量参数 → 403");
     checkEqual(viewerScalarWrite.body?.code, 30006, "观察员改标量参数 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 七、军衔配置（#250）：seed 同源 / 大段筛 / 只许改 / 无成长列表重排
+
+    group("七、军衔配置");
+
+    const ranks = await api(base, "GET", "/api/admin/ranks", { token });
+    checkEqual(ranks.status, 200, "军衔列表可读");
+    const rankCount = Object.keys(shared.RANK_LEVEL_META).length;
+    checkEqual(ranks.body?.data?.total, rankCount, `军衔行数 = 配置表（${rankCount}）`);
+    checkEqual(ranks.body?.data?.list?.length, 100, "默认一页装下全部军衔");
+    const firstRank = ranks.body?.data?.list?.[0];
+    checkEqual(firstRank?.level, 1, "首行是 1 阶");
+    checkEqual(firstRank?.label, shared.RANK_LABELS["0"].label, "1 阶衔名与配置一致");
+    checkEqual(firstRank?.tier, shared.RANK_LABELS["0"].tier, "1 阶大段名与配置一致");
+    checkEqual(firstRank?.bindGold, shared.RANK_LEVEL_META[0].bindGold, "1 阶晋升价格与配置一致");
+    check(Boolean(firstRank?.attributes?.maxHp !== undefined), "军衔属性以嵌套结构返回");
+    checkEqual(firstRank?.animation, undefined, "军衔没有动画字段（外观是头顶一行红字）");
+
+    const rankTierFiltered = await api(base, "GET", `/api/admin/ranks?tier=${encodeURIComponent(shared.RANK_LABELS["0"].tier)}`, { token });
+    checkEqual(rankTierFiltered.body?.data?.total, 10, "按大段筛：每段恰好 10 阶");
+
+    const rankPriced = await api(base, "PATCH", "/api/admin/ranks/1", { token, body: { bindGold: 500 } });
+    checkEqual(rankPriced.status, 200, "PATCH 军衔晋升价格成功");
+    checkEqual(rankPriced.body?.data?.bindGold, 500, "响应里的价格已更新");
+    const rankGhost = await api(base, "PATCH", "/api/admin/ranks/101", { token, body: { label: "x" } });
+    checkEqual(rankGhost.status, 404, "改不存在的军衔阶数 → 404");
+    checkEqual(rankGhost.body?.code, 50015, "军衔未找到用专属业务码 50015");
+    const postRank = await api(base, "POST", "/api/admin/ranks", { token, body: { label: "新军衔" } });
+    checkEqual(postRank.status, 404, "POST 军衔 → 404（路由不存在）");
+    const deleteRank = await api(base, "DELETE", "/api/admin/ranks/1", { token });
+    checkEqual(deleteRank.status, 404, "DELETE 军衔 → 404（路由不存在）");
+    const rankUpgradeList = await api(base, "GET", "/api/admin/ranks/upgrade-list", { token });
+    checkEqual(rankUpgradeList.status, 404, "军衔没有成长列表接口（顺序天然按阶，不需要重排）");
+    const viewerRankRead = await api(base, "GET", "/api/admin/ranks", { token: viewerToken });
+    checkEqual(viewerRankRead.body?.code, 0, "观察员能看军衔配置");
+    const viewerRankWrite = await api(base, "PATCH", "/api/admin/ranks/1", { token: viewerToken, body: { bindGold: 1 } });
+    checkEqual(viewerRankWrite.status, 403, "观察员改军衔 → 403");
+    checkEqual(viewerRankWrite.body?.code, 30006, "观察员改军衔 → 30006（权限点不足）");
 
     //#endregion
   } finally {
