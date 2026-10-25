@@ -181,6 +181,21 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
+  /** adminDrug 模块（2 个接口） */
+  adminDrug: {
+    /**
+     * 药品配置列表（GET /admin/drugs）
+     *
+     * id 清单固定（seed 自客户端 configs/drug 的 8 种），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称 / 描述。
+     */
+    list: "/admin/drugs",
+    /**
+     * 编辑药品配置（PATCH /admin/drugs/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/drugs/${encodeURIComponent(id)}`,
+  },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {
     /**

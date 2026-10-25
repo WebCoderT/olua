@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { to: "/souls", label: "战魂配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/ranks", label: "军衔配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/equipments", label: "装备配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/drugs", label: "药品配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/growth", label: "成长曲线", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/mails", label: "邮件", end: false, permission: PERMISSION.MAIL_READ as string },
   { to: "/admins", label: "管理员", end: false, permission: PERMISSION.ADMIN_READ as string },

@@ -66,7 +66,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -125,7 +125,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsterCombat)} 只`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsterCombat)} 只 · 药品 ${count(snapshot.drugs)} 种`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -208,6 +208,7 @@ function load(work) {
     items: missing("items", cfg("items").items),
     maps: missing("map.maps", cfg("map").maps),
     monsters: missing("monster.monsters", cfg("monster").monsters),
+    drugs: missing("drug.drugs", cfg("drug").drugs),
   };
 }
 
@@ -236,6 +237,9 @@ function buildSnapshot(cfg) {
     equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
     monsterCombat: pickMonsterCombat(cfg.monsters),
+    // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
+    // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
+    drugs: pickDrugs(cfg.drugs),
     // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
     growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
     growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
@@ -378,6 +382,43 @@ function pickMonsterCombat(monsters) {
     }
     out.push([key, row]);
   });
+  return out;
+}
+
+/**
+ * 药品表 → [[药品 id, 管理端元数据]]（#253）
+ *
+ * effects 数组按键求和拍平（hp / mp / hpPercent / mpPercent）：客户端
+ * `resolveDrugRecovery` 对多项 effects 逐项累加，当前配置每药至多一条，
+ * 求和与逐项累加严格等价；`duration` 是增益类字段，当前配置没有用到，不进快照。
+ * sellPrice 来自条目的 `sellPirce`（客户端字段名历史拼写如此，与装备同一规整口径）。
+ */
+function pickDrugs(drugs) {
+  const out = [];
+  const seen = new Set();
+  for (const item of drugs || []) {
+    if (!item || !item.id) throw new Error("configs/drug 里有缺 id 的条目");
+    if (seen.has(item.id)) throw new Error(`药品 id 重复：${item.id}`);
+    seen.add(item.id);
+    const effects = Array.isArray(item.effects) ? item.effects : [];
+    const sum = (key) => effects.reduce((acc, effect) => acc + (Number(effect?.[key]) || 0), 0);
+    out.push([
+      item.id,
+      {
+        label: String(item.label ?? ""),
+        description: String(item.description ?? ""),
+        level: round(item.level ?? 0),
+        sellPrice: round(item.sellPirce ?? 0),
+        maxStack: round(item.maxStack ?? 99),
+        cooldown: round(item.cooldown ?? 0),
+        hp: round(sum("hp")),
+        mp: round(sum("mp")),
+        hpPercent: round(sum("hpPercent")),
+        mpPercent: round(sum("mpPercent")),
+      },
+    ]);
+  }
+  if (out.length === 0) throw new Error("configs/drug 的 drugs 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 
@@ -617,6 +658,7 @@ ${numTable("EQUIPMENT_SLOT_ORDER", "装备槽位 → 整理序号（背包「一
 ${textTable("EQUIPMENT_DISPLAY_NAMES", "装备 id → 显示名（已拼好前后缀，如「精良的·天级 屠龙」）", s.equipmentDisplayNames)}
 ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLOTS 显示部位）", s.equipmentSlotOf)}
 ${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
+${jsonTable("DRUGS", "药品 id → { label, description, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
 ${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
 ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
 ${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}

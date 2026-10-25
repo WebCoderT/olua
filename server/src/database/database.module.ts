@@ -11,6 +11,7 @@ import { SystemRepository } from "./repositories/system.repository";
 import { GrowthRepository } from "./repositories/growth.repository";
 import { RankRepository } from "./repositories/rank.repository";
 import { EquipmentRepository } from "./repositories/equipment.repository";
+import { DrugRepository } from "./repositories/drug.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 
@@ -37,6 +38,7 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     TitleRepository,
     RankRepository,
     EquipmentRepository,
+    DrugRepository,
     GrowthRepository,
     SoulRepository,
   ],
@@ -53,6 +55,7 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     TitleRepository,
     RankRepository,
     EquipmentRepository,
+    DrugRepository,
     GrowthRepository,
     SoulRepository,
   ],

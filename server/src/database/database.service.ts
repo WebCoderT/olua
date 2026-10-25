@@ -311,6 +311,23 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 药品配置（#253）：主键是药品 id（如 drug_hp_1），id 清单固定不可增删行；
+      -- effects 数组按键求和拍平成四列（与客户端 resolveDrugRecovery 累加口径等价）
+      CREATE TABLE IF NOT EXISTS drugs (
+        id                 TEXT    PRIMARY KEY,
+        label              TEXT    NOT NULL DEFAULT '',
+        description        TEXT    NOT NULL DEFAULT '',
+        level              INTEGER NOT NULL DEFAULT 1,
+        sell_price         INTEGER NOT NULL DEFAULT 0,
+        max_stack          INTEGER NOT NULL DEFAULT 99,
+        cooldown           INTEGER NOT NULL DEFAULT 0,
+        effect_hp          INTEGER NOT NULL DEFAULT 0,
+        effect_mp          INTEGER NOT NULL DEFAULT 0,
+        effect_hp_percent  INTEGER NOT NULL DEFAULT 0,
+        effect_mp_percent  INTEGER NOT NULL DEFAULT 0,
+        updated_at         INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

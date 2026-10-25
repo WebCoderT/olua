@@ -3467,6 +3467,18 @@ export const EQUIPMENT_BASES: Record<string, unknown> = {
   "belt_1": {"slot":"belt","level":1,"sellPrice":0,"label":"新手腰带","attributes":{"maxHp":34,"hpRecover":0,"physicalAttack":[2,2],"magicAttack":[2,2],"taoistAttack":[2,2],"physicalDefense":[2,2],"magicDefense":[2,2],"taoistDefense":[2,2]}},
 };
 
+/** 药品 id → { label, description, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价） */
+export const DRUGS: Record<string, unknown> = {
+  "drug_hp_1": {"label":"金创药（小）","description":"外伤药，使用后恢复 60 点生命值。","level":1,"sellPrice":5,"maxStack":99,"cooldown":1,"hp":60,"mp":0,"hpPercent":0,"mpPercent":0},
+  "drug_hp_2": {"label":"金创药（中）","description":"外伤药，使用后恢复 250 点生命值。","level":5,"sellPrice":15,"maxStack":99,"cooldown":1,"hp":250,"mp":0,"hpPercent":0,"mpPercent":0},
+  "drug_hp_3": {"label":"金创药（大）","description":"外伤药，使用后恢复 900 点生命值。","level":10,"sellPrice":40,"maxStack":99,"cooldown":1,"hp":900,"mp":0,"hpPercent":0,"mpPercent":0},
+  "drug_mp_1": {"label":"魔法药（小）","description":"使用后恢复 40 点魔法值。","level":1,"sellPrice":5,"maxStack":99,"cooldown":1,"hp":0,"mp":40,"hpPercent":0,"mpPercent":0},
+  "drug_mp_2": {"label":"魔法药（中）","description":"使用后恢复 180 点魔法值。","level":5,"sellPrice":15,"maxStack":99,"cooldown":1,"hp":0,"mp":180,"hpPercent":0,"mpPercent":0},
+  "drug_sun": {"label":"太阳水","description":"使用后同时恢复 150 点生命值与 80 点魔法值。","level":1,"sellPrice":45,"maxStack":99,"cooldown":1,"hp":150,"mp":80,"hpPercent":0,"mpPercent":0},
+  "drug_hp_pct": {"label":"强效血药","description":"使用后恢复 50% 生命值，任何等级服用都等价好用。","level":20,"sellPrice":100,"maxStack":99,"cooldown":1,"hp":0,"mp":0,"hpPercent":50,"mpPercent":0},
+  "drug_mp_pct": {"label":"强效蓝药","description":"使用后恢复 50% 魔法值，任何等级服用都等价好用。","level":20,"sellPrice":100,"maxStack":99,"cooldown":1,"hp":0,"mp":0,"hpPercent":0,"mpPercent":50},
+};
+
 /** 战魂阶数（下标 + 1 即阶）→ 名 */
 export const SOUL_LABELS: Record<string, string> = {
   "0": "烈阳灵体",
