@@ -33,8 +33,9 @@
 - **服务端战斗权威线已收官**（#25/#34/#35/#36/#37 全关）：伤害结算 / 世界权威（播种只在空图、结算落世界、tick 重生、重启恢复）/ 边界审计 `audit-server-boundaries`（deny-by-default 白名单）/ 拆进程（`AppModule.register({realtime})` + `main.realtime.ts` :3101 + 踢下线巡检轮询 `online_role_id`）；e2e-dual 14 条，共十套 994 条。进程内起服要走 `register({realtime:true})`。
 - 关键不变量：管理端接口必须 `@ApiAdminDoc({permissions})`；接口文件 `make gen-api`；角色数据=不透明文档（编辑解析失败必须报错）；修订号乐观锁 409+20006；`ValidationPipe whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；公告已读走独立 `AnnouncementReadStore`；排序白名单唯一来源 `sort-specs.ts`。
 
-## 剩余 open（2026-10-25）
-- 管理端收口（epic #259）**全部完成（2026-10-25）**：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267）→ #253 药品 ✓（PR #271）→ #255 物品材料 ✓（PR #272）→ #258 怪物NPC ✓（PR #275）→ #251 商城定价 ✓（PR #278）→ #257 时装 ✓（PR #282）→ #254 掉落表 ✓（PR #285，master = 4279cd5）。#248/#249 客户端对接按用户指令暂缓。当前数字：91 接口 / 77 路径 / 142 模型 / 23 张表 / 21 仓储 / e2e 1397（十一套）。
+## 剩余 open（2026-10-26）
+- **客户端对接（epic #293，2026-10-26 开线）**：拆刀 ①配置下发通道+运行时配置层 ✓（#294，PR #296 服务端 + #297 客户端）→ ②成长线升级收权 ✓（#248/#249 关闭 + #250 一并，PR #301，master = 6aceca2）→ ③商城购买收权 → ④药品用药收权 → ⑤掉落+经验结算权威切换（#254 真正收益点）→ ⑥时装穿戴系统（新玩法）。**快照覆写扩展**（装备/药品/物品/怪物/NPC/时装/成长曲线）未做。当前数字：93 接口 / 79 路径 / 145 模型 / 23 张表 / 21 仓储 / e2e 1465（十二套）。
+- 管理端收口（epic #259）**全部完成（2026-10-25）**：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267）→ #253 药品 ✓（PR #271）→ #255 物品材料 ✓（PR #272）→ #258 怪物NPC ✓（PR #275）→ #251 商城定价 ✓（PR #278）→ #257 时装 ✓（PR #282）→ #254 掉落表 ✓（PR #285）。
 - #254 新增：掉落两表两种纪律——drop_tables 允许动态增删（被 monster_drops 引用中的行拒删）、monster_drops 与怪物一一对应（PATCH 整份替换三选一 table/entries/none）；picks/entries JSON 列结构校验下沉 service（DTO 只认键）；每怪排序 CAST(monster_key AS INTEGER)；POST 默认 201、DELETE 无 data 用 @ApiVoidResponse；**掉落/经验结算仍在客户端，服务端结算权威切换与客户端对接同刀**。
 - #258 新增：怪物战斗数值**读库**（世界播种+伤害结算直读 monsters 表，双进程共享 SQLite/WAL，改值即时生效）；npc 数据与行为分家（configs/npc-data.ts 纯数据 + npc.ts 接线，生成器加载 UI 链会炸）。DTO 踩坑：emitDecoratorMetadata 类顺序 TDZ（被引用类必须先声明）；whitelist 只认校验装饰器（嵌套属性只挂 @ApiProperty 会被剥掉）。
 - #251 新增：商城定价 = 目录在生成物（555 件装备变体）+ DB 只存价格层（mall_prices 动态增删 + mall_settings 单行）；BizException 默认 400，404 必须 `BizException.notFound()`；快照标量要包成单行表（裸标量被判空表）；nullable @ApiProperty 不带 type → admin 模型 unknown。
