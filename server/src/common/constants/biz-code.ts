@@ -166,6 +166,8 @@ export const BizCode = {
   RANK_NOT_FOUND: 50015,
   /** 装备基础件不存在（id 清单由客户端配置 seed 固定，不可增删行） */
   EQUIPMENT_NOT_FOUND: 50016,
+  /** 药品不存在（id 清单由客户端配置 seed 固定，不可增删行） */
+  DRUG_NOT_FOUND: 50017,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

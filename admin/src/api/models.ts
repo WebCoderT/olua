@@ -457,6 +457,45 @@ export type UpdateEquipment = {
   attributes?: ConfigAttributes;
 };
 
+export type UpdateDrug = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
+   */
+  sellPrice?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+  /**
+   * 使用冷却秒数（不传则不改；0 = 无冷却）
+   */
+  cooldown?: number;
+  /**
+   * 固定回复生命（不传则不改）
+   */
+  effectHp?: number;
+  /**
+   * 固定回复魔法（不传则不改）
+   */
+  effectMp?: number;
+  /**
+   * 按 maxHp 的百分比回复，整数（不传则不改；50 = 50%）
+   */
+  effectHpPercent?: number;
+  /**
+   * 按 maxMp 的百分比回复，整数（不传则不改；50 = 50%）
+   */
+  effectMpPercent?: number;
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -2517,4 +2556,97 @@ export type EquipmentQuery = {
    * 等级段上限（含）
    */
   maxLevel?: number;
+};
+
+export type Drug = {
+  /**
+   * 药品 id（如 drug_hp_1；被掉落表与背包引用，不可增删行）
+   */
+  id: string;
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 使用等级需求（暂不开放编辑）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 最大叠加数量
+   */
+  maxStack: number;
+  /**
+   * 使用冷却（秒，0 = 无冷却）
+   */
+  cooldown: number;
+  /**
+   * 固定回复生命（effects 数组按键求和的结果）
+   */
+  effectHp: number;
+  /**
+   * 固定回复魔法
+   */
+  effectMp: number;
+  /**
+   * 按角色 maxHp 的百分比回复（50 = 50%）
+   */
+  effectHpPercent: number;
+  /**
+   * 按角色 maxMp 的百分比回复（50 = 50%）
+   */
+  effectMpPercent: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type DrugPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的药品配置
+   */
+  list: Drug[];
+};
+
+export type DrugQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
 };

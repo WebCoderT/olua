@@ -418,6 +418,39 @@ export interface EquipmentRow {
   updated_at: number;
 }
 
+/**
+ * 药品配置（#253）：管理端「药品配置」的行
+ *
+ * 主键是药品 id（如 `drug_hp_1`）—— id 清单固定，**不可增删行**（药品 id 被掉落表与
+ * 背包引用）。effects 数组按键**求和**拍平成四列（客户端 resolveDrugRecovery 逐项累加，
+ * 求和严格等价）；`duration` 是增益类字段，当前配置未用，不进表。
+ */
+export interface DrugRow {
+  /** 药品 id（如 `drug_hp_1`；主键，不可增删行） */
+  id: string;
+  /** 名称（如「金创药（小）」） */
+  label: string;
+  /** 描述（运营文案，可编辑） */
+  description: string;
+  /** 使用等级需求（seed 自客户端条目，暂不开放编辑） */
+  level: number;
+  /** 售卖价（客户端条目 `sellPirce` 的 seed 值；商城售价归 #251，不在这里） */
+  sell_price: number;
+  /** 最大叠加数量 */
+  max_stack: number;
+  /** 使用冷却（秒） */
+  cooldown: number;
+  /** 固定回复生命 */
+  effect_hp: number;
+  /** 固定回复魔法 */
+  effect_mp: number;
+  /** 按角色 maxHp 的百分比回复（50 = 50%） */
+  effect_hp_percent: number;
+  /** 按角色 maxMp 的百分比回复（50 = 50%） */
+  effect_mp_percent: number;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）

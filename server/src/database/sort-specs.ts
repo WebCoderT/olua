@@ -193,3 +193,16 @@ export const EQUIPMENT_SORT: SortSpec<"id" | "slot" | "level" | "sellPrice" | "u
   default: "level",
   defaultOrder: "asc",
 };
+
+/** 药品配置列表（#253）：默认按 id 升序（血药组在前、蓝药组在后的分组习惯） */
+export const DRUG_SORT: SortSpec<"id" | "label" | "level" | "sellPrice" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    label: "label",
+    level: "level",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "id",
+  defaultOrder: "asc",
+};

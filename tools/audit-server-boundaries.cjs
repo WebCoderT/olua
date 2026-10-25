@@ -92,6 +92,8 @@ const REPO_EDGES = {
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）
   "database/repositories/equipment.repository.ts": ["modules/game-config"],
+  // 药品（#253）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
+  "database/repositories/drug.repository.ts": ["modules/game-config"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

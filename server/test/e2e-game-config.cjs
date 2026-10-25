@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 166;
+const EXPECTED_ASSERTIONS = 196;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -572,6 +572,60 @@ async function main() {
     const viewerEquipmentWrite = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token: viewerToken, body: { sellPrice: 1 } });
     checkEqual(viewerEquipmentWrite.status, 403, "观察员改装备 → 403");
     checkEqual(viewerEquipmentWrite.body?.code, 30006, "观察员改装备 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 九、药品配置（#253）：seed 同源 / keyword 筛 / 只许改 / 百分比上限
+
+    group("九、药品配置");
+
+    const drugs = await api(base, "GET", "/api/admin/drugs", { token });
+    checkEqual(drugs.status, 200, "药品列表可读");
+    const drugCount = Object.keys(shared.DRUGS).length;
+    checkEqual(drugs.body?.data?.total, drugCount, `药品行数 = 配置表（${drugCount}）`);
+    checkEqual(drugs.body?.data?.list?.length, drugCount, "默认一页装下全部药品");
+    const drugHp1 = drugs.body?.data?.list?.find((row) => row.id === "drug_hp_1");
+    check(Boolean(drugHp1), "列表里有药品 drug_hp_1");
+    checkEqual(drugHp1?.label, shared.DRUGS["drug_hp_1"].label, "drug_hp_1 名称与配置一致");
+    checkEqual(drugHp1?.sellPrice, shared.DRUGS["drug_hp_1"].sellPrice, "drug_hp_1 售卖价与配置一致");
+    checkEqual(drugHp1?.effectHp, shared.DRUGS["drug_hp_1"].hp, "drug_hp_1 固定回复量与配置一致（effects 求和）");
+    checkEqual(drugHp1?.maxStack, shared.DRUGS["drug_hp_1"].maxStack, "drug_hp_1 堆叠上限与配置一致");
+    checkEqual(drugHp1?.cooldown, shared.DRUGS["drug_hp_1"].cooldown, "drug_hp_1 冷却与配置一致");
+    const drugSun = drugs.body?.data?.list?.find((row) => row.id === "drug_sun");
+    checkEqual(drugSun?.effectHp, shared.DRUGS["drug_sun"].hp, "drug_sun 固定回血与配置一致");
+    checkEqual(drugSun?.effectMp, shared.DRUGS["drug_sun"].mp, "drug_sun 固定回蓝与配置一致");
+    const drugPct = drugs.body?.data?.list?.find((row) => row.id === "drug_hp_pct");
+    checkEqual(drugPct?.effectHpPercent, shared.DRUGS["drug_hp_pct"].hpPercent, "drug_hp_pct 百分比回复与配置一致");
+
+    const drugKeywordLabel = await api(base, "GET", "/api/admin/drugs?keyword=" + encodeURIComponent("金创"), { token });
+    checkEqual(drugKeywordLabel.body?.data?.total, 3, "关键字按名称命中三档金创药");
+    const drugKeywordId = await api(base, "GET", "/api/admin/drugs?keyword=drug_mp", { token });
+    checkEqual(drugKeywordId.body?.data?.total, 3, "关键字按 id 命中三档蓝药");
+
+    const drugPatched = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { label: "金创药（小·改）", effectHp: 120, cooldown: 2, maxStack: 999 } });
+    checkEqual(drugPatched.status, 200, "PATCH 药品成功（名称/回复量/冷却/堆叠一起改）");
+    checkEqual(drugPatched.body?.data?.label, "金创药（小·改）", "响应里的名称已更新");
+    checkEqual(drugPatched.body?.data?.effectHp, 120, "响应里的回复量已更新");
+    checkEqual(drugPatched.body?.data?.cooldown, 2, "响应里的冷却已更新");
+    checkEqual(drugPatched.body?.data?.maxStack, 999, "响应里的堆叠上限已更新");
+    const drugBadPercent = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { effectHpPercent: 120 } });
+    checkEqual(drugBadPercent.status, 400, "百分比回复超过 100 → 400");
+    checkEqual(drugBadPercent.body?.code, 40000, "百分比校验用 40000（参数非法）");
+    const drugGhost = await api(base, "PATCH", "/api/admin/drugs/drug_none", { token, body: { label: "x" } });
+    checkEqual(drugGhost.status, 404, "改不存在的药品 → 404");
+    checkEqual(drugGhost.body?.code, 50017, "药品未找到用专属业务码 50017");
+    const drugStructural = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: 99 } });
+    checkEqual(drugStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
+    checkEqual(drugStructural.body?.data?.level, shared.DRUGS["drug_hp_1"].level, "level 不可编辑（使用等级属客户端定标）");
+    const postDrug = await api(base, "POST", "/api/admin/drugs", { token, body: { id: "drug_new" } });
+    checkEqual(postDrug.status, 404, "POST 药品 → 404（路由不存在）");
+    const deleteDrug = await api(base, "DELETE", "/api/admin/drugs/drug_hp_1", { token });
+    checkEqual(deleteDrug.status, 404, "DELETE 药品 → 404（路由不存在）");
+    const viewerDrugRead = await api(base, "GET", "/api/admin/drugs", { token: viewerToken });
+    checkEqual(viewerDrugRead.body?.code, 0, "观察员能看药品配置");
+    const viewerDrugWrite = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token: viewerToken, body: { effectHp: 1 } });
+    checkEqual(viewerDrugWrite.status, 403, "观察员改药品 → 403");
+    checkEqual(viewerDrugWrite.body?.code, 30006, "观察员改药品 → 30006（权限点不足）");
 
     //#endregion
   } finally {

@@ -4,11 +4,13 @@ import { AcquireChannel } from "../../common/constants/game-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { RankRepository, RankListOptions } from "../../database/repositories/rank.repository";
+import { DrugRepository, DrugListOptions } from "../../database/repositories/drug.repository";
 import { EquipmentRepository, EquipmentListOptions } from "../../database/repositories/equipment.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { EquipmentRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
+import { DrugRow, EquipmentRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
 import {
+  DRUGS,
   EQUIPMENT_BASES,
   RANK_LABELS,
   RANK_LEVEL_ATTRIBUTES,
@@ -21,6 +23,7 @@ import {
   TITLE_LEVEL_META,
 } from "../../shared/game-data.generated";
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
+import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
@@ -53,6 +56,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
     private readonly equipments: EquipmentRepository,
+    private readonly drugs: DrugRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -61,6 +65,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedSouls();
     this.seedRanks();
     this.seedEquipments();
+    this.seedDrugs();
   }
 
   // —— 称号 ——
@@ -262,6 +267,40 @@ export class GameConfigService implements OnModuleInit {
     return EquipmentDto.from(this.requireEquipment(id));
   }
 
+  // —— 药品（#253：id 清单固定只改数值；effects 按键求和成四列）——
+
+  listDrugs(query: DrugQueryDto): PageResult<DrugDto> {
+    const options: DrugListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.drugs.list(options);
+    const total = this.drugs.count(options);
+    return { list: rows.map(DrugDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateDrug(id: string, dto: UpdateDrugDto): DrugDto {
+    const existing = this.requireDrug(id);
+    const next: DrugRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      max_stack: dto.maxStack ?? existing.max_stack,
+      cooldown: dto.cooldown ?? existing.cooldown,
+      effect_hp: dto.effectHp ?? existing.effect_hp,
+      effect_mp: dto.effectMp ?? existing.effect_mp,
+      effect_hp_percent: dto.effectHpPercent ?? existing.effect_hp_percent,
+      effect_mp_percent: dto.effectMpPercent ?? existing.effect_mp_percent,
+      updated_at: Date.now(),
+    };
+    this.drugs.update(next);
+    return DrugDto.from(this.requireDrug(id));
+  }
+
   // —— 内部 ——
 
   private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
@@ -292,6 +331,32 @@ export class GameConfigService implements OnModuleInit {
     const row = this.equipments.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.EQUIPMENT_NOT_FOUND, `装备基础件 ${id} 不存在`);
     return row;
+  }
+
+  private requireDrug(id: string): DrugRow {
+    const row = this.drugs.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.DRUG_NOT_FOUND, `药品 ${id} 不存在`);
+    return row;
+  }
+
+  /** 药品 seed：DRUGS 直接灌（effects 已按键求和），8 种 */
+  private seedDrugs() {
+    for (const [id, meta] of Object.entries(DRUGS as Record<string, Record<string, unknown>>)) {
+      this.drugs.seedRow({
+        id,
+        label: String(meta.label ?? ""),
+        description: String(meta.description ?? ""),
+        level: Number(meta.level) || 0,
+        sell_price: Number(meta.sellPrice) || 0,
+        max_stack: Number(meta.maxStack) || 99,
+        cooldown: Number(meta.cooldown) || 0,
+        effect_hp: Number(meta.hp) || 0,
+        effect_mp: Number(meta.mp) || 0,
+        effect_hp_percent: Number(meta.hpPercent) || 0,
+        effect_mp_percent: Number(meta.mpPercent) || 0,
+        updated_at: 0,
+      });
+    }
   }
 
   /** 装备基础件 seed：EQUIPMENT_BASES（slot/level/sellPrice/label/属性）直接灌，37 件基础件 */
