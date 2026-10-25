@@ -303,6 +303,8 @@ export interface SoulRow {
   magic_defense_max: number;
   taoist_defense_min: number;
   taoist_defense_max: number;
+  /** 战魂成长列表顺序（#234）：可空；全部行默认按阶数持有序号（1 起），拖动成长列表改的就是它 —— 升级链顺序与阶数解耦 */
+  upgrade_order: number | null;
   updated_at: number;
 }
 

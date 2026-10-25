@@ -3661,6 +3661,122 @@
         }
       }
     },
+    "/admin/souls/upgrade-list": {
+      "get": {
+        "description": "独立于主列表的「升级链」视图：37 阶**全量**返回（战魂没有渠道语义，全部行都在升级链里），按**成长顺序**升序（顺序由 `upgradeOrder` 决定，与阶数解耦 —— 运营拖动排序改的就是它）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminSoul.upgradeList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "按成长顺序排列的战魂配置数组",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SoulDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "战魂成长列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SoulDto"
+          }
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/souls/upgrade-order": {
+      "patch": {
+        "description": "**整串提交**：`levels` 是拖完后的完整阶数顺序。要求**恰好等于全部 37 阶** —— 缺、多、重复都整单拒收（`400` / `40000`），不做增量合并，保证运营看到的顺序就是落库的顺序。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminSoul.reorderUpgradeList",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重排后的成长列表（按新顺序）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SoulDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "战魂成长列表重排（拖动排序）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SoulDto"
+          }
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/souls/{level}": {
       "patch": {
         "description": "**部分更新**：只改请求体里出现的字段。\n\n- `bindGold`：升到该阶的消耗（绑定元宝）。\n- `attributes`：八项属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max。\n- `level` 不存在 → 404（`50011`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
@@ -7436,6 +7552,10 @@
             "type": "number",
             "description": "升到该阶消耗的绑定元宝"
           },
+          "upgradeOrder": {
+            "type": "number",
+            "description": "战魂成长列表顺序（1 起；37 阶全量持有，拖动排序改的就是它，与阶数解耦）"
+          },
           "attributes": {
             "description": "八项属性加成",
             "allOf": [
@@ -7456,6 +7576,7 @@
           "animation",
           "animationFrameRate",
           "bindGold",
+          "upgradeOrder",
           "attributes",
           "updatedAt"
         ]

@@ -229,6 +229,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         magic_defense_max    INTEGER NOT NULL DEFAULT 0,
         taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        -- 战魂成长列表顺序（#234）：可空；37 阶全量进成长列表，seed/回填都按阶数给初值，
+        -- 升级链顺序与阶数解耦，运营拖动成长列表改的就是它；部分唯一索引防重号
+        upgrade_order        INTEGER,
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
     `);
@@ -254,6 +257,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_upgrade_order ON titles(upgrade_order) WHERE upgrade_order IS NOT NULL;",
+    );
+    // 战魂成长列表顺序（#234）：存量库补列 + 按阶数回填（37 阶全量在成长列表里，初值 = 阶数）；
+    // 正常状态要么全 NULL（新列）、要么全有值（已托管），不会撞部分唯一索引
+    this.ensureColumn("souls", "upgrade_order", "INTEGER");
+    this.db.exec("UPDATE souls SET upgrade_order = level WHERE upgrade_order IS NULL");
+    this.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_souls_upgrade_order ON souls(upgrade_order) WHERE upgrade_order IS NOT NULL;",
     );
     this.ensureSuperAdmin();
   }

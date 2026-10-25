@@ -13,13 +13,12 @@ const RANGE_FIELDS = [
   { key: "taoistDefense", label: "道防" },
 ] as const;
 
-/** 弹窗表单值（channel 仅称号有；soul 传过来时忽略） */
+/** 弹窗表单值（channel 仅称号有；soul 传过来时忽略）。价格不在这里 —— 唯一修改口在成长列表（#232/#234） */
 export interface GameConfigFormValue {
   label: string;
   description: string;
   animation: string;
   animationFrameRate: number;
-  bindGold: number;
   acquireChannel: string;
   attributes: ConfigAttributes;
 }
@@ -31,6 +30,9 @@ export interface GameConfigFormValue {
  * 标题文案 + 渠道下拉是否出现。属性**整份提交、整份替换**（服务端口径），
  * 所以表单里八项全部展示、全部回填 —— 没有只改一行的快捷路径，避免「以为只改了
  * 攻击结果把防御清零」这类事故。
+ *
+ * **价格（升级价格 / 升级消耗）不在这个弹窗里**：唯一显示与修改口是各自的成长列表
+ * （#232/#234），提交时原样带回当前值，绝不因弹窗保存而改动价格。
  *
  * 校验分工：必填与 min ≤ max 在这里做**即时提示**（省一次来回），权威在服务端
  * （DTO 校验 + 50010/50011/40000）。
@@ -53,7 +55,6 @@ export function GameConfigDialog({
   const [description, setDescription] = useState("");
   const [animation, setAnimation] = useState("");
   const [frameRate, setFrameRate] = useState("8");
-  const [bindGold, setBindGold] = useState("0");
   const [channel, setChannel] = useState<string>(ACQUIRE_CHANNEL.UNAVAILABLE);
   const [attributes, setAttributes] = useState<ConfigAttributes | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +66,6 @@ export function GameConfigDialog({
     setDescription(initial?.description ?? "");
     setAnimation(initial?.animation ?? "");
     setFrameRate(String(initial?.animationFrameRate ?? 8));
-    setBindGold(String(initial?.bindGold ?? 0));
     setChannel("acquireChannel" in (initial ?? {}) ? String((initial as Title).acquireChannel) : ACQUIRE_CHANNEL.UNAVAILABLE);
     setAttributes(initial?.attributes ? { ...initial.attributes } : null);
     setSubmitting(false);
@@ -82,7 +82,7 @@ export function GameConfigDialog({
 
   if (!open || !attributes) return null;
 
-  const numbersValid = Number.isInteger(Number(frameRate)) && Number(frameRate) >= 1 && Number.isInteger(Number(bindGold)) && Number(bindGold) >= 0;
+  const numbersValid = Number.isInteger(Number(frameRate)) && Number(frameRate) >= 1;
   const canSubmit = label.trim().length > 0 && animation.trim().length > 0 && numbersValid && crossedKeys.length === 0 && !submitting;
 
   const setRange = (key: (typeof RANGE_FIELDS)[number]["key"], side: "min" | "max", value: string) => {
@@ -97,8 +97,6 @@ export function GameConfigDialog({
       description: description.trim(),
       animation: animation.trim(),
       animationFrameRate: Number(frameRate),
-      // 称号弹窗没有价格输入框：原样带回当前值，绝不因弹窗保存而改动价格（价格唯一修改口在成长列表）
-      bindGold: kind === "title" && initial ? initial.bindGold : Number(bindGold),
       acquireChannel: channel,
       attributes,
     });
@@ -138,7 +136,7 @@ export function GameConfigDialog({
             <Input value={description} onChange={(event) => setDescription(event.target.value)} />
           </Field>
 
-          <div className={kind === "title" ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : "grid grid-cols-1 gap-4 sm:grid-cols-3"}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="动画资源目录" hint="resources 相对路径">
               <Input value={animation} onChange={(event) => setAnimation(event.target.value)} />
             </Field>
@@ -150,12 +148,6 @@ export function GameConfigDialog({
                 onChange={(event) => setFrameRate(event.target.value)}
               />
             </Field>
-            {/* 称号的价格只在「称号成长列表」里显示和修改，弹窗不提供；战魂的升级消耗仍在这里改 */}
-            {kind === "soul" ? (
-              <Field label="升级消耗（绑定元宝）">
-                <Input type="number" min={0} value={bindGold} onChange={(event) => setBindGold(event.target.value)} />
-              </Field>
-            ) : null}
           </div>
 
           <div>
@@ -219,7 +211,7 @@ export function GameConfigDialog({
           ) : null}
           {!numbersValid ? (
             <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              帧率需为 ≥1 的整数；价格 / 消耗需为 ≥0 的整数。
+              帧率需为 ≥1 的整数。
             </p>
           ) : null}
         </div>

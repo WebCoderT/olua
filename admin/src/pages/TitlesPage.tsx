@@ -144,7 +144,8 @@ export function TitlesPage() {
         description: value.description,
         animation: value.animation,
         animationFrameRate: value.animationFrameRate,
-        bindGold: value.bindGold,
+        // 弹窗没有价格输入：原样带回当前值，价格唯一修改口在成长列表（#232）
+        bindGold: editing.bindGold,
         acquireChannel: value.acquireChannel as Title["acquireChannel"],
         attributes: value.attributes,
       });

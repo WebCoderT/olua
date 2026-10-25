@@ -2036,6 +2036,10 @@ export type Soul = {
    */
   bindGold: number;
   /**
+   * 战魂成长列表顺序（1 起；37 阶全量持有，拖动排序改的就是它，与阶数解耦）
+   */
+  upgradeOrder: number;
+  /**
    * 八项属性加成
    */
   attributes: ConfigAttributes;
