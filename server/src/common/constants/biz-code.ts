@@ -178,6 +178,10 @@ export const BizCode = {
   MALL_GOOD_NOT_FOUND: 50021,
   /** 时装不存在（id 清单由客户端配置 seed 固定，不可增删行） */
   FASHION_NOT_FOUND: 50022,
+  /** 具名掉落表不存在（seed 有 common/elite/boss/default，可动态增删） */
+  DROP_TABLE_NOT_FOUND: 50023,
+  /** 怪物掉落配置不存在（key 清单与怪物一一对应，不可增删行） */
+  MONSTER_DROP_NOT_FOUND: 50024,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

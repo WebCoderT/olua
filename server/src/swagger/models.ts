@@ -55,6 +55,7 @@ import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from ".
 import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-config/dto/npc.dto";
 import { MallPriceItemDto, MallPricePageDto, MallPriceQueryDto, MallPriceRemoveDto, MallSettingsDto, PutMallPriceDto, UpdateMallSettingsDto } from "../modules/game-config/dto/mall.dto";
 import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "../modules/game-config/dto/fashion.dto";
+import { CreateDropTableDto, DropEntryDto, DropTableDto, DropTableListDto, MonsterDropDto, MonsterDropPageDto, MonsterDropQueryDto, UpdateDropTableDto, UpdateMonsterDropDto } from "../modules/game-config/dto/drop.dto";
 import {
   GrowthScalarDto,
   GrowthScalarPageDto,
@@ -233,4 +234,13 @@ export const SWAGGER_MODELS = [
   FashionPageDto,
   FashionQueryDto,
   UpdateFashionDto,
+  CreateDropTableDto,
+  DropEntryDto,
+  DropTableDto,
+  DropTableListDto,
+  MonsterDropDto,
+  MonsterDropPageDto,
+  MonsterDropQueryDto,
+  UpdateDropTableDto,
+  UpdateMonsterDropDto,
 ];

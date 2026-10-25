@@ -620,6 +620,66 @@ export type UpdateFashion = {
   attributes?: ConfigAttributes;
 };
 
+export type DropEntry = {
+  /**
+   * 物品 id（物品总表 configs/items 的键，含装备前后缀变体）
+   */
+  goodId: string;
+  /**
+   * 抽取权重（同一表内相对值，缺省 1）
+   */
+  weight?: number;
+  /**
+   * 掉落概率 0~1（抽中后再判定，缺省 1 必掉）
+   */
+  chance?: number;
+  /**
+   * 数量区间 [最小, 最大]（缺省 [1,1]）
+   */
+  count?: number[];
+};
+
+export type CreateDropTable = {
+  /**
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
+   */
+  picks?: unknown;
+  /**
+   * 条目池（goodId 必须在物品总表里；weight/chance/count 缺省 1/1/[1,1]）
+   */
+  entries: DropEntry[];
+  /**
+   * 表 id（小写字母开头的字母/数字/下划线，≤50 字符）
+   */
+  id: string;
+};
+
+export type UpdateDropTable = {
+  /**
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）；不传则不改
+   */
+  picks?: unknown;
+  /**
+   * 条目池（**整份替换**；不传则不改）
+   */
+  entries?: DropEntry[];
+};
+
+export type UpdateMonsterDrop = {
+  /**
+   * 引用的具名表 id（null = 不引用具名表）
+   */
+  tableId?: string | null;
+  /**
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
+   */
+  picks?: unknown;
+  /**
+   * 内联条目池（**整份替换**）
+   */
+  entries?: DropEntry[];
+};
+
 export type UpdateLevelExp = {
   /**
    * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
@@ -3180,4 +3240,107 @@ export type FashionQuery = {
    * 按获得渠道筛（不落 schema 以免枚举键进两端生成物）
    */
   acquireChannel?: "upgrade" | "grant" | "unavailable";
+};
+
+export type DropTable = {
+  /**
+   * 表 id（如 "common"）
+   */
+  id: string;
+  /**
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
+   */
+  picks: unknown;
+  /**
+   * 条目池（全显式形状）
+   */
+  entries: DropEntry[];
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type DropTableList = {
+  /**
+   * 具名掉落表
+   */
+  list: DropTable[];
+  /**
+   * 总张数
+   */
+  total: number;
+};
+
+export type MonsterDrop = {
+  /**
+   * 怪物 key（= monsters.id，与怪物配置页同一键）
+   */
+  monsterKey: string;
+  /**
+   * 来源：table（引用具名表）/ entries（内联条目池）/ none（未配置走兜底）
+   */
+  source: "table" | "entries" | "none";
+  /**
+   * 引用的具名表 id（source = table 时非空）
+   */
+  tableId: string | null;
+  /**
+   * 抽取次数 JSON（内联时必填；表引用时可覆盖件数，null = 用表自己的）
+   */
+  picks: unknown | null;
+  /**
+   * 内联条目池（source = entries 时非空）
+   */
+  entries: DropEntry[] | null;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type MonsterDropPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的每怪掉落配置
+   */
+  list: MonsterDrop[];
+};
+
+export type MonsterDropQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配怪物 key
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按来源筛（不落 schema 以免枚举键进两端生成物）
+   */
+  source?: "table" | "entries" | "none";
 };

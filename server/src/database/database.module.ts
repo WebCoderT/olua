@@ -17,6 +17,8 @@ import { MallRepository } from "./repositories/mall.repository";
 import { MonsterRepository } from "./repositories/monster.repository";
 import { NpcRepository } from "./repositories/npc.repository";
 import { FashionRepository } from "./repositories/fashion.repository";
+import { DropTableRepository } from "./repositories/drop-table.repository";
+import { MonsterDropRepository } from "./repositories/monster-drop.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 
@@ -49,6 +51,8 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     MallRepository,
     NpcRepository,
     FashionRepository,
+    DropTableRepository,
+    MonsterDropRepository,
     GrowthRepository,
     SoulRepository,
   ],
@@ -71,6 +75,8 @@ import { WorldMonsterRepository } from "./repositories/world-monster.repository"
     MallRepository,
     NpcRepository,
     FashionRepository,
+    DropTableRepository,
+    MonsterDropRepository,
     GrowthRepository,
     SoulRepository,
   ],

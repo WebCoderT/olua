@@ -105,6 +105,9 @@ const REPO_EDGES = {
   "database/repositories/mall.repository.ts": ["modules/game-config"],
   // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
   "database/repositories/fashion.repository.ts": ["modules/game-config"],
+  // 掉落配置（#254）：同上，只在 game-config 模块内读写（具名表允许动态增删，每怪行与怪物一一对应）
+  "database/repositories/drop-table.repository.ts": ["modules/game-config"],
+  "database/repositories/monster-drop.repository.ts": ["modules/game-config"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

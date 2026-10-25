@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 347;
+const EXPECTED_ASSERTIONS = 403;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -950,6 +950,129 @@ async function main() {
     const viewerFashionWrite = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token: viewerToken, body: { sellPrice: 1 } });
     checkEqual(viewerFashionWrite.status, 403, "观察员改时装 → 403");
     checkEqual(viewerFashionWrite.body?.code, 30006, "观察员改时装 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 十五、掉落配置（#254）：具名表 CRUD / 引用保护 / 每怪整份替换三选一 / seed 同源
+
+    group("十五、掉落配置");
+
+    const dropTablesList = await api(base, "GET", "/api/admin/drop-tables", { token });
+    checkEqual(dropTablesList.status, 200, "具名掉落表列表可读");
+    const seedTableCount = Object.keys(shared.DROP_TABLES).length + Object.keys(shared.DROP_DEFAULT).length;
+    checkEqual(dropTablesList.body?.data?.total, seedTableCount, `具名表张数 = seed（${seedTableCount}：common/elite/boss + 兜底 default）`);
+    const commonTable = dropTablesList.body?.data?.list?.find((row) => row.id === "common");
+    check(Boolean(commonTable), "列表里有具名表 common");
+    checkEqual(
+      JSON.stringify([commonTable?.picks, commonTable?.entries?.[0]]),
+      JSON.stringify([shared.DROP_TABLES["common"].picks, shared.DROP_TABLES["common"].entries[0]]),
+      "common 表的抽取次数与首条目和配置一致",
+    );
+    check(Boolean(dropTablesList.body?.data?.list?.find((row) => row.id === "default")), "兜底表 default 也在列表里");
+
+    const dropTableCreate = await api(base, "POST", "/api/admin/drop-tables", {
+      token,
+      body: { id: "event_gold", picks: [2, 4], entries: [{ goodId: "material_iron", weight: 10, count: [2, 5] }] },
+    });
+    checkEqual(dropTableCreate.status, 201, "POST 创建具名表成功（201 Created）");
+    checkEqual(dropTableCreate.body?.data?.id, "event_gold", "响应里的表 id 已落");
+    checkEqual(JSON.stringify(dropTableCreate.body?.data?.entries?.[0]), JSON.stringify({ goodId: "material_iron", weight: 10, chance: 1, count: [2, 5] }), "缺省 chance / count 已规整为全显式");
+    const dropTableDuplicate = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_gold", entries: [{ goodId: "material_iron" }] } });
+    checkEqual(dropTableDuplicate.status, 400, "重复 id 创建 → 400");
+    const dropTableBadId = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "Bad_Id!", entries: [{ goodId: "material_iron" }] } });
+    checkEqual(dropTableBadId.status, 400, "非法 id（大写/特殊字符）→ 400");
+    const dropTableBadGood = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_bad", entries: [{ goodId: "no_such_good" }] } });
+    checkEqual(dropTableBadGood.status, 400, "goodId 不在物品总表 → 400");
+    checkEqual(dropTableBadGood.body?.code, 40000, "物品不存在用 40000");
+    const dropTableEmpty = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_empty", entries: [] } });
+    checkEqual(dropTableEmpty.status, 400, "空条目池 → 400");
+    const dropTableBadCount = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_bad2", entries: [{ goodId: "material_iron", count: [5, 2] }] } });
+    checkEqual(dropTableBadCount.status, 400, "count 下限大于上限 → 400");
+    const dropTableBadPicks = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_bad3", picks: "lots", entries: [{ goodId: "material_iron" }] } });
+    checkEqual(dropTableBadPicks.status, 400, "picks 非数字/区间 → 400");
+
+    const dropTablePatched = await api(base, "PATCH", "/api/admin/drop-tables/event_gold", { token, body: { picks: 3 } });
+    checkEqual(dropTablePatched.body?.data?.picks, 3, "PATCH 抽取次数生效");
+    checkEqual(dropTablePatched.body?.data?.entries?.length, 1, "PATCH 不传 entries 时条目保留（合并语义）");
+    const dropTableEntriesPatched = await api(base, "PATCH", "/api/admin/drop-tables/event_gold", {
+      token,
+      body: { entries: [{ goodId: "material_gem", weight: 5, chance: 0.5, count: [1, 2] }] },
+    });
+    checkEqual(dropTableEntriesPatched.body?.data?.entries?.length, 1, "PATCH entries 整份替换");
+    checkEqual(dropTableEntriesPatched.body?.data?.entries?.[0]?.goodId, "material_gem", "替换后的首条目是新物品");
+    const dropTableGhost = await api(base, "PATCH", "/api/admin/drop-tables/nope", { token, body: { picks: 1 } });
+    checkEqual(dropTableGhost.status, 404, "改不存在的具名表 → 404");
+    checkEqual(dropTableGhost.body?.code, 50023, "具名表未找到用专属业务码 50023");
+
+    const dropTableRemoved = await api(base, "DELETE", "/api/admin/drop-tables/event_gold", { token });
+    checkEqual(dropTableRemoved.status, 200, "DELETE 未被引用的具名表成功");
+    const dropTableRemovedAgain = await api(base, "DELETE", "/api/admin/drop-tables/event_gold", { token });
+    checkEqual(dropTableRemovedAgain.status, 404, "再删已删除的表 → 404");
+
+    const monsterDropsList = await api(base, "GET", "/api/admin/monster-drops", { token });
+    checkEqual(monsterDropsList.status, 200, "每怪掉落列表可读");
+    const monsterDropCount = Object.keys(shared.MONSTER_DROPS).length;
+    checkEqual(monsterDropsList.body?.data?.total, monsterDropCount, `每怪行数 = 配置表（${monsterDropCount}）`);
+    checkEqual(monsterDropsList.body?.data?.list?.length, 20, "默认每页 20 条");
+    checkEqual(monsterDropsList.body?.data?.list?.[0]?.monsterKey, "1", "默认按 key 数值升序（首行是怪 1，不是字典序的 \"1\",\"10\"…）");
+    const monsterDrop1 = monsterDropsList.body?.data?.list?.find((row) => row.monsterKey === "1");
+    checkEqual(monsterDrop1?.source, "entries", "seed 全内联（source = entries）");
+    checkEqual(
+      JSON.stringify(monsterDrop1?.entries?.[0]),
+      JSON.stringify(shared.MONSTER_DROPS["1"].entries[0]),
+      "怪 1 的首条目与配置一致",
+    );
+    const monsterDropsBySource = await api(base, "GET", "/api/admin/monster-drops?source=entries", { token });
+    checkEqual(monsterDropsBySource.body?.data?.total, monsterDropCount, "按来源筛 entries：全部怪物（seed 全内联）");
+    const monsterDropsKeyword = await api(base, "GET", "/api/admin/monster-drops?keyword=220", { token });
+    checkEqual(monsterDropsKeyword.body?.data?.total, 1, "关键字精确命中怪 220");
+    const monsterDropsBadSort = await api(base, "GET", "/api/admin/monster-drops?sort=evil", { token });
+    checkEqual(monsterDropsBadSort.body?.data?.list?.[0]?.monsterKey, "1", "白名单外的 sort 退回默认排序（防注入）");
+
+    const monsterDropRef = await api(base, "PATCH", "/api/admin/monster-drops/1", { token, body: { tableId: "common", picks: [2, 5] } });
+    checkEqual(monsterDropRef.status, 200, "PATCH 引用具名表成功（picks 覆盖件数）");
+    checkEqual(monsterDropRef.body?.data?.source, "table", "来源已切到 table");
+    checkEqual(monsterDropRef.body?.data?.tableId, "common", "引用的表 id 已落");
+    checkEqual(monsterDropRef.body?.data?.entries, null, "引用具名表时内联条目清空");
+    const monsterDropsTableOnly = await api(base, "GET", "/api/admin/monster-drops?source=table", { token });
+    checkEqual(monsterDropsTableOnly.body?.data?.total, 1, "按来源筛 table：只有怪 1");
+    const dropTableRemoveReferenced = await api(base, "DELETE", "/api/admin/drop-tables/common", { token });
+    checkEqual(dropTableRemoveReferenced.status, 400, "删除被引用中的具名表 → 400（引用保护）");
+    check(dropTableRemoveReferenced.body?.message?.includes("1 只怪物"), "引用保护的报错带引用计数");
+
+    const monsterDropRefBoth = await api(base, "PATCH", "/api/admin/monster-drops/1", { token, body: { tableId: "common", entries: [{ goodId: "material_iron" }] } });
+    checkEqual(monsterDropRefBoth.status, 400, "tableId 与 entries 同时传 → 400");
+    const monsterDropInline = await api(base, "PATCH", "/api/admin/monster-drops/1", {
+      token,
+      body: { tableId: null, picks: [1, 2], entries: [{ goodId: "drug_hp_2", weight: 40, count: [1, 3] }] },
+    });
+    checkEqual(monsterDropInline.status, 200, "PATCH 换回内联条目成功");
+    checkEqual(monsterDropInline.body?.data?.source, "entries", "来源已切回 entries");
+    checkEqual(monsterDropInline.body?.data?.tableId, null, "表引用已清空");
+    const monsterDropInlineNoPicks = await api(base, "PATCH", "/api/admin/monster-drops/1", { token, body: { tableId: null, entries: [{ goodId: "drug_hp_2" }] } });
+    checkEqual(monsterDropInlineNoPicks.status, 400, "内联条目缺抽取次数 → 400");
+    const monsterDropClear = await api(base, "PATCH", "/api/admin/monster-drops/1", { token, body: { tableId: null, entries: null } });
+    checkEqual(monsterDropClear.body?.data?.source, "none", "清空后来源 = none（走兜底表）");
+    const monsterDropClearWithPicks = await api(base, "PATCH", "/api/admin/monster-drops/1", { token, body: { tableId: null, entries: null, picks: 2 } });
+    checkEqual(monsterDropClearWithPicks.status, 400, "清空时带抽取次数 → 400");
+    const monsterDropBadTable = await api(base, "PATCH", "/api/admin/monster-drops/1", { token, body: { tableId: "nope", picks: 1 } });
+    checkEqual(monsterDropBadTable.status, 404, "引用不存在的具名表 → 404");
+    checkEqual(monsterDropBadTable.body?.code, 50023, "引用的表不存在用 50023");
+    const monsterDropGhost = await api(base, "PATCH", "/api/admin/monster-drops/999", { token, body: { tableId: null, entries: null } });
+    checkEqual(monsterDropGhost.status, 404, "改不存在的怪 → 404");
+    checkEqual(monsterDropGhost.body?.code, 50024, "怪物掉落未找到用专属业务码 50024");
+
+    const postMonsterDrop = await api(base, "POST", "/api/admin/monster-drops", { token, body: { monsterKey: "999" } });
+    checkEqual(postMonsterDrop.status, 404, "POST 每怪掉落 → 404（路由不存在，行与怪物一一对应）");
+    const deleteMonsterDrop = await api(base, "DELETE", "/api/admin/monster-drops/1", { token });
+    checkEqual(deleteMonsterDrop.status, 404, "DELETE 每怪掉落 → 404（路由不存在）");
+    const viewerDropRead = await api(base, "GET", "/api/admin/drop-tables", { token: viewerToken });
+    checkEqual(viewerDropRead.body?.code, 0, "观察员能看具名掉落表");
+    const viewerDropWrite = await api(base, "POST", "/api/admin/drop-tables", { token: viewerToken, body: { id: "nope", entries: [{ goodId: "material_iron" }] } });
+    checkEqual(viewerDropWrite.status, 403, "观察员建具名表 → 403");
+    checkEqual(viewerDropWrite.body?.code, 30006, "观察员建具名表 → 30006（权限点不足）");
+    const viewerMonsterDropWrite = await api(base, "PATCH", "/api/admin/monster-drops/1", { token: viewerToken, body: { tableId: null, entries: null } });
+    checkEqual(viewerMonsterDropWrite.status, 403, "观察员改每怪掉落 → 403");
 
     //#endregion
   } finally {

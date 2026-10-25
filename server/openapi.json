@@ -5495,6 +5495,419 @@
         ]
       }
     },
+    "/admin/drop-tables": {
+      "get": {
+        "description": "一张表一行（量小不分页）。seed 自 configs/drop 的 common / elite / boss + 兜底表 default；运营可自建（POST）与删除（DELETE，被怪物引用中的拒绝删）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminDrop.listTables",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "具名掉落表列表（list/total）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DropTableListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "具名掉落表列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DropTableListDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "post": {
+        "description": "`id` 由运营自起（小写字母开头的字母/数字/下划线，≤50 字符）；重复 → 400（40000）。\n`entries` 每条的 goodId 必须在物品总表里（装备含前后缀变体 / 药品 / 材料）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminDrop.createTable",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDropTableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建后的具名掉落表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DropTableDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "创建具名掉落表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DropTableDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/drop-tables/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段（picks / entries）。\n- `id` 不存在 → 404（`50023`）。\n- `entries` 整份替换，goodId 必须在物品总表里。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminDrop.updateTable",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "具名掉落表 id（如 \"common\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDropTableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的具名掉落表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DropTableDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑具名掉落表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DropTableDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "被怪物引用中的表拒绝删除（400，附引用计数）；先把这些怪改回内联或换表再删。\n`id` 不存在 → 404（`50023`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminDrop.removeTable",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "具名掉落表 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除具名掉落表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/monster-drops": {
+      "get": {
+        "description": "行与怪物一一对应（key 清单固定），**没有创建 / 删除**。`keyword` 模糊匹配怪物 key，`source` 按来源筛（table / entries / none）。\n\n`source = table` 引用具名表（tableId 非空）；`entries` 内联条目池；`none` 未配置走兜底表。\n\n**排序**：`sort` 取 `monsterKey` / `source` / `updatedAt`，`order` 取 asc / desc（默认 key 数值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminDrop.listMonsterDrops",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配怪物 key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "source",
+            "required": false,
+            "in": "query",
+            "description": "按来源筛（不落 schema 以免枚举键进两端生成物）",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "table",
+                "entries",
+                "none"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterDropPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "每怪掉落列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterDropPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MonsterDropQueryDto"
+        }
+      }
+    },
+    "/admin/monster-drops/{monsterKey}": {
+      "patch": {
+        "description": "**三选一**：\n- `tableId` 非空 → 引用具名表（`picks` 可覆盖件数，`entries` 必须不传）；\n- `tableId` 为 null 且 `entries` 非空 → 内联条目池（`picks` 必填）；\n- `tableId` 为 null 且 `entries` 为 null → 清空（走兜底表）。\n\n- `monsterKey` 不存在 → 404（`50024`）；`tableId` 指向的表不存在 → 404（`50023`）。\n- 改完即时生效（服务端掉落结算直读本表）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminDrop.updateMonsterDrop",
+        "parameters": [
+          {
+            "name": "monsterKey",
+            "required": true,
+            "in": "path",
+            "description": "怪物 key（如 \"1\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMonsterDropDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的每怪掉落配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterDropDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "整份替换一只怪的掉落配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterDropDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/level-exps": {
       "get": {
         "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -7460,6 +7873,128 @@
                 "$ref": "#/components/schemas/ConfigAttributesDto"
               }
             ]
+          }
+        }
+      },
+      "DropEntryDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id（物品总表 configs/items 的键，含装备前后缀变体）"
+          },
+          "weight": {
+            "type": "number",
+            "description": "抽取权重（同一表内相对值，缺省 1）",
+            "minimum": 0
+          },
+          "chance": {
+            "type": "number",
+            "description": "掉落概率 0~1（抽中后再判定，缺省 1 必掉）",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "count": {
+            "description": "数量区间 [最小, 最大]（缺省 [1,1]）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "goodId"
+        ]
+      },
+      "CreateDropTableDto": {
+        "type": "object",
+        "properties": {
+          "picks": {
+            "description": "抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            ]
+          },
+          "entries": {
+            "description": "条目池（goodId 必须在物品总表里；weight/chance/count 缺省 1/1/[1,1]）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropEntryDto"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "表 id（小写字母开头的字母/数字/下划线，≤50 字符）",
+            "pattern": "^[a-z][a-z0-9_]{0,49}$"
+          }
+        },
+        "required": [
+          "entries",
+          "id"
+        ]
+      },
+      "UpdateDropTableDto": {
+        "type": "object",
+        "properties": {
+          "picks": {
+            "description": "抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）；不传则不改",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            ]
+          },
+          "entries": {
+            "description": "条目池（**整份替换**；不传则不改）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropEntryDto"
+            }
+          }
+        }
+      },
+      "UpdateMonsterDropDto": {
+        "type": "object",
+        "properties": {
+          "tableId": {
+            "type": "string",
+            "description": "引用的具名表 id（null = 不引用具名表）",
+            "nullable": true
+          },
+          "picks": {
+            "description": "抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            ]
+          },
+          "entries": {
+            "description": "内联条目池（**整份替换**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropEntryDto"
+            }
           }
         }
       },
@@ -11589,6 +12124,204 @@
               "upgrade",
               "grant",
               "unavailable"
+            ]
+          }
+        }
+      },
+      "DropTableDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "表 id（如 \"common\"）"
+          },
+          "picks": {
+            "description": "抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            ]
+          },
+          "entries": {
+            "description": "条目池（全显式形状）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropEntryDto"
+            }
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "picks",
+          "entries",
+          "updatedAt"
+        ]
+      },
+      "DropTableListDto": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "具名掉落表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropTableDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "总张数"
+          }
+        },
+        "required": [
+          "list",
+          "total"
+        ]
+      },
+      "MonsterDropDto": {
+        "type": "object",
+        "properties": {
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key（= monsters.id，与怪物配置页同一键）"
+          },
+          "source": {
+            "type": "string",
+            "description": "来源：table（引用具名表）/ entries（内联条目池）/ none（未配置走兜底）",
+            "enum": [
+              "table",
+              "entries",
+              "none"
+            ]
+          },
+          "tableId": {
+            "type": "string",
+            "description": "引用的具名表 id（source = table 时非空）",
+            "nullable": true
+          },
+          "picks": {
+            "description": "抽取次数 JSON（内联时必填；表引用时可覆盖件数，null = 用表自己的）",
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            ]
+          },
+          "entries": {
+            "description": "内联条目池（source = entries 时非空）",
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropEntryDto"
+            }
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "monsterKey",
+          "source",
+          "tableId",
+          "picks",
+          "entries",
+          "updatedAt"
+        ]
+      },
+      "MonsterDropPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的每怪掉落配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterDropDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "MonsterDropQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配怪物 key"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "source": {
+            "type": "string",
+            "description": "按来源筛（不落 schema 以免枚举键进两端生成物）",
+            "enum": [
+              "table",
+              "entries",
+              "none"
             ]
           }
         }
