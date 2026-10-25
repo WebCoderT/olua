@@ -32,5 +32,7 @@
 - **服务端战斗权威线已收官**（#25/#34/#35/#36/#37 全关）：伤害结算 / 世界权威（播种只在空图、结算落世界、tick 重生、重启恢复）/ 边界审计 `audit-server-boundaries`（deny-by-default 白名单）/ 拆进程（`AppModule.register({realtime})` + `main.realtime.ts` :3101 + 踢下线巡检轮询 `online_role_id`）；e2e-dual 14 条，共十套 994 条。进程内起服要走 `register({realtime:true})`。
 - 关键不变量：管理端接口必须 `@ApiAdminDoc({permissions})`；接口文件 `make gen-api`；角色数据=不透明文档（编辑解析失败必须报错）；修订号乐观锁 409+20006；`ValidationPipe whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；公告已读走独立 `AnnouncementReadStore`；排序白名单唯一来源 `sort-specs.ts`。
 
-## 剩余 open（2026-10-23）
-#8 官网 / #9 包体积 3.1G 治理（解锁 #10 Demo）/ #12~#19 玩法素材（#14 待用户确认解冻）。用户已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
+## 剩余 open（2026-10-25）
+- 管理端收口（epic #259）：#256 成长曲线 ✓（PR #263）→ #250 军衔 ✓（PR #265）→ #252 装备 ✓（PR #267，master = 11afed5）。剩：#253 药品 → #255 物品材料 → #258 怪物NPC → #251 商城定价（定价行动态增删，与固定序列不同）→ #257 时装（fashionClothes 整份被注释，先处理来源）→ #254 掉落表（最后，引用装备 id 与价值锚点）。#248/#249 客户端对接按用户指令暂缓。当前数字：70 接口 / 60 路径 / 104 模型 / 14 张表 / 13 仓储 / e2e 1160（十一套）。
+- 其他：#8 官网 / #9 包体积 3.1G 治理（解锁 #10 Demo）/ #12~#19 玩法素材（#14 待用户确认解冻）。用户已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
+- 本机 make client-test 有 2 套常红（test-action-atlas / test-equipment-light，resources/ 未入库素材缺失），CI 不跑 client-test，门禁以 `make ci` 为准（2026-10-25 确认）。
