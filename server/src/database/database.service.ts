@@ -590,6 +590,25 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         created_at INTEGER NOT NULL,
         PRIMARY KEY (guild_id, role_id)
       );
+
+      -- 社交：好友与敌人（#389）
+      CREATE TABLE IF NOT EXISTS role_friends (
+        role_id    TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        friend_id  TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        -- pending 待处理 / accepted 已互为好友
+        status     TEXT NOT NULL DEFAULT 'pending',
+        -- 这一对是谁发起的（同意 / 拒绝都要知道「谁在等我」）
+        requested_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (role_id, friend_id)
+      );
+      CREATE TABLE IF NOT EXISTS role_enemies (
+        role_id    TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        enemy_id   TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (role_id, enemy_id)
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

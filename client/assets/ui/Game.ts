@@ -22,6 +22,7 @@ import CursorManager from "./core/CursorManager";
 import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
 import OtherPlayerManager from "./core/OtherPlayerManager";
+import SocialStore from "./core/SocialStore";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
@@ -246,6 +247,8 @@ export class Game extends Component {
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();
+    // 社交快照（好友 / 敌人 / 帮会）是「这个角色」的，离开游戏就不该留给下一个角色
+    SocialStore.clear();
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消

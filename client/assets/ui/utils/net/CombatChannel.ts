@@ -129,6 +129,11 @@ export interface PlayerEntry {
   accountId: string;
   /** 显示名（角色名优先，缺省回落账号名） */
   username: string;
+  /** 角色 id（#389：与自己的社交快照比对算出关系；旧服务端不带时按空串） */
+  roleId?: string;
+  /** 所属帮会 id / 名字（#389；空串 = 无帮会。同帮的人名字是蓝的） */
+  guildId?: string;
+  guildName?: string;
   x: number;
   y: number;
   hp: number;

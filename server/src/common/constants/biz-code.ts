@@ -234,4 +234,29 @@ export const BizCode = {
   /** 目标不合法（转让/踢人/审批的对象不是本帮成员，或指向自己） */
   GUILD_TARGET_INVALID: 50108,
   //#endregion
+
+  //#region 社交：好友与敌人（#389）
+
+  /** 按角色名找不到人（好友/敌人都按名字加，不暴露 id 搜索） */
+  SOCIAL_ROLE_NOT_FOUND: 50109,
+  /** 不能对自己做社交动作（加自己好友 / 标自己敌人） */
+  SOCIAL_TARGET_SELF: 50110,
+  /**
+   * 已经是好友，或已有待处理的申请
+   *
+   * 与「加过一次就静默成功」分开：玩家点两次要能看到「已经有了」，
+   * 否则会误以为没加上去而反复点。**唯一例外**是对方也在等我 —— 那种情况直接当成同意。
+   */
+  SOCIAL_ALREADY_FRIEND: 50111,
+  /** 没有这条好友关系（删一个本来就不是好友的人） */
+  SOCIAL_FRIEND_NOT_FOUND: 50112,
+  /** 已经是敌人（重复标记） */
+  SOCIAL_ENEMY_EXISTS: 50113,
+  /** 不是敌人（解除一个本来就没标的） */
+  SOCIAL_ENEMY_NOT_FOUND: 50114,
+  /** 好友数量到达上限 */
+  SOCIAL_FRIEND_FULL: 50115,
+  /** 同名角色不止一个（角色名只在同一账号内唯一），让玩家改从「附近」或帮会成员里加 */
+  SOCIAL_NAME_AMBIGUOUS: 50116,
+  //#endregion
 } as const;

@@ -1090,6 +1090,17 @@ export type AdminUpdateGuild = {
   notice?: string;
 };
 
+export type SocialTarget = {
+  /**
+   * 对方角色 id（「附近」与帮会成员列表用这个：精确且不受重名影响）
+   */
+  roleId?: string;
+  /**
+   * 对方角色名（手动输入时用；角色名只在同一账号内唯一，重名会返回 50116）
+   */
+  name?: string;
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -4477,4 +4488,62 @@ export type AdminGuildDetail = {
    * 成员名单
    */
   members: GuildMember[];
+};
+
+export type SocialEntry = {
+  /**
+   * 对方角色 id
+   */
+  roleId: string;
+  /**
+   * 对方角色名
+   */
+  name: string;
+  /**
+   * 对方等级
+   */
+  level: number;
+  /**
+   * 对方职业（客户端用它显示职业图标）
+   */
+  occupation: string;
+  /**
+   * 关系状态：accepted 已互为好友 / pendingIncoming 别人加我（待我处理）/ pendingOutgoing 我加了别人（等对方处理）
+   */
+  status: string;
+  /**
+   * 建立时间（毫秒；待处理的是发起时间）
+   */
+  createdAt: number;
+};
+
+export type MySocial = {
+  /**
+   * 我的角色 id
+   */
+  myRoleId: string;
+  /**
+   * 我所在帮会 id（空串 = 没有帮会）
+   */
+  guildId: string;
+  /**
+   * 我所在帮会名（空串 = 没有帮会）
+   */
+  guildName: string;
+  /**
+   * 好友（已互为好友）
+   */
+  friends: SocialEntry[];
+  /**
+   * 别人加我、等我处理
+   */
+  incoming: SocialEntry[];
+  /**
+   * 我加别人、等对方处理
+   */
+  outgoing: SocialEntry[];
+  /**
+   * 我标的敌人（单向，对方不知道）
+   */
+  enemies: SocialEntry[];
 };

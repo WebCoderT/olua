@@ -880,6 +880,49 @@ export interface GuildListRow extends GuildRow {
 
 //#endregion
 
+//#region 社交：好友与敌人（#389）
+
+/**
+ * 好友关系一行（`role_friends` 表）
+ *
+ * **镜像两行**：A 加 B 会在库里写 `(A,B)` 与 `(B,A)` 两条，`status` 同步（pending → accepted）。
+ * 为什么不存一行再按方向查：好友列表与「谁在等我」都是一次主键前缀查询，
+ * 不用 `WHERE role_id = ? OR friend_id = ?` 再自己判方向（那种写法还要在代码里拼两半边）。
+ */
+export interface RoleFriendRow {
+  role_id: string;
+  friend_id: string;
+  /** pending 待处理 / accepted 已互为好友（见 common/constants/social.ts 的 FRIEND_STATUS） */
+  status: string;
+  /** 这一对是谁发起的（拒绝时也要知道「拒的是谁」，所以两边都记同一份） */
+  requested_by: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/** 好友关系 + 对方的角色索引字段（列表展示用，join 出来不落盘） */
+export interface RoleFriendWithRoleRow extends RoleFriendRow {
+  friend_name: string;
+  friend_level: number;
+  friend_occupation: string;
+}
+
+/** 敌人一行（`role_enemies` 表，单向：我标我的，对方不知道也不受影响） */
+export interface RoleEnemyRow {
+  role_id: string;
+  enemy_id: string;
+  created_at: number;
+}
+
+/** 敌人 + 对方的角色索引字段 */
+export interface RoleEnemyWithRoleRow extends RoleEnemyRow {
+  enemy_name: string;
+  enemy_level: number;
+  enemy_occupation: string;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

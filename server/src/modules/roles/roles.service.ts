@@ -92,6 +92,21 @@ export class RolesService {
   }
 
   /**
+   * 按角色名找人（社交用：#389）
+   *
+   * 名字只在同一账号内唯一，所以可能返回多个 —— 社交那边据此返回 50116，
+   * 让玩家改从「附近」或帮会成员里加，而不是替他随便挑一个。
+   */
+  idsByName(name: string): string[] {
+    return this.roles.findIdsByName(name.trim());
+  }
+
+  /** 这个角色 id 是否存在（社交按 id 加好友前的存在性校验：#389） */
+  existsById(roleId: string): boolean {
+    return Boolean(this.roles.findById(roleId));
+  }
+
+  /**
    * 创建角色
    *
    * 校验顺序：数量上限 → id 是否已存在 → 同账号是否重名。

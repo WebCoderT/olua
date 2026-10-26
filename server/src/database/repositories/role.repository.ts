@@ -33,6 +33,18 @@ export class RoleRepository {
     return this.db.get<RoleRow>("SELECT * FROM roles WHERE account_id = ? AND name = ?", [accountId, name]);
   }
 
+  /**
+   * 按角色名全库找（社交加好友 / 标敌人用，#389）
+   *
+   * 角色名只在**同一账号内**唯一，所以这里天然可能返回多条 —— 调用方必须处理
+   * 「同名不止一个」（返回 50116 让玩家从「附近」或帮会成员里加，而不是替他随便挑一个）。
+   */
+  findIdsByName(name: string): string[] {
+    return this.db
+      .all<{ id: string }>("SELECT id FROM roles WHERE name = ? ORDER BY created_at ASC", [name])
+      .map((row) => row.id);
+  }
+
   countByAccount(accountId: string): number {
     return this.db.count("SELECT COUNT(1) AS total FROM roles WHERE account_id = ?", [accountId]);
   }

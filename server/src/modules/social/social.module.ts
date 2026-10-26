@@ -3,6 +3,8 @@ import { RolesModule } from "../roles/roles.module";
 import { AdminGuildController } from "./admin-guild.controller";
 import { GuildController } from "./guild.controller";
 import { GuildService } from "./guild.service";
+import { SocialController } from "./social.controller";
+import { SocialService } from "./social.service";
 
 /**
  * 社交（#388 帮会；#389 好友与关系）
@@ -13,7 +15,7 @@ import { GuildService } from "./guild.service";
  */
 @Module({
   imports: [RolesModule],
-  controllers: [GuildController, AdminGuildController],
-  providers: [GuildService],
+  controllers: [GuildController, AdminGuildController, SocialController],
+  providers: [GuildService, SocialService],
 })
 export class SocialModule {}

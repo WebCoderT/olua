@@ -12,7 +12,7 @@ import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
 import RankUpgradeDialog from "./RankUpgradeDialog";
 import FashionDialog from "./FashionDialog";
-import GuildDialog from "./GuildDialog";
+import SocialDialog from "./SocialDialog";
 
 /**
  * 角色信息弹窗
@@ -71,7 +71,7 @@ export default class RoleInfoDialog {
     // 「军衔」「称号」「战魂」「时装」「社交」入口按钮（右侧竖排相邻五格，几何见 roleInfoDialogLayout）
     // 五者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
     const entryButtons: { layout: { name: string; text: string; position: Vec2 }; open: () => void }[] = [
-      { layout: roleInfoDialogLayout.socialButton, open: () => new GuildDialog().open() },
+      { layout: roleInfoDialogLayout.socialButton, open: () => new SocialDialog().open() },
       { layout: roleInfoDialogLayout.fashionButton, open: () => new FashionDialog().open() },
       { layout: roleInfoDialogLayout.rankButton, open: () => new RankUpgradeDialog().open() },
       { layout: roleInfoDialogLayout.titleButton, open: () => new TitleUpgradeDialog().open() },

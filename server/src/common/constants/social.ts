@@ -42,3 +42,23 @@ export const GUILD_MEMBER_LIMIT_DEFAULT = 50;
 
 /** 帮会 id 前缀（`g_` + 时间戳 + 随机段；与账号 / 角色的命名习惯一致，肉眼可辨类型） */
 export const GUILD_ID_PREFIX = "g_";
+
+//#region 好友（#389）
+
+/**
+ * 好友关系状态（`role_friends.status`）
+ *
+ * 只有两态：`pending`（一方发起、等对方处理）与 `accepted`（互为好友）。
+ * **不做「拉黑」**：拉黑是「我不想收到你的消息」，而本项目没有私聊，
+ * 多一态只会让每处查询都要多记一个合法值。想断关系就用删除。
+ */
+export const FRIEND_STATUS = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+} as const;
+export type FriendStatus = (typeof FRIEND_STATUS)[keyof typeof FRIEND_STATUS];
+
+/** 好友上限（拦住「加一千个好友」的刷子；满了好友列表也没法看） */
+export const FRIEND_LIMIT_DEFAULT = 100;
+
+//#endregion

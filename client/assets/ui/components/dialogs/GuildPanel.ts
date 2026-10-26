@@ -1,20 +1,20 @@
 import { Color, EditBox, Graphics, isValid, Node, ScrollView, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
+import SocialStore from "../../core/SocialStore";
 import UiHelper from "../../helpers/UiHelper";
 import { GuildApi } from "../../utils/net/Api";
 import type { GuildApplication, GuildMember, GuildSummary, MyGuild } from "../../utils/net/Api";
 import { guildDialogLayout as layout } from "../../../configs/hudLayout";
 import { GUILD_RANK, guildRules } from "../../../configs/social";
 import { getText } from "../../../configs/texts";
-import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
- * 帮会弹窗（#388，社交弹窗里的「帮会」页）
+ * 帮会页（#388，社交弹窗「帮会」页；#389 起由 SocialDialog 内嵌，自己不再开弹窗）
  *
- * 一个弹窗两种形态，靠 `myGuild` 是否为 null 切换：
+ * 一个页面两种形态，靠 `myGuild` 是否为 null 切换：
  * - **未加入**：创建表单 + 全部帮会列表（每行一个「申请」）
  * - **已加入**：帮会信息 / 公告（可改）/ 成员名单 / 待审批申请 / 退出或解散
  *
@@ -34,10 +34,8 @@ import ConfirmDialog from "./ConfirmDialog";
  * 界面不会出现「操作成功但显示的还是旧名单」；退出 / 解散没有返回值（我已经不在帮会里了），
  * 走 reload() 重新拉一次。
  */
-export default class GuildDialog {
-  /** 弹窗根 */
-  private dialog: Node | null = null;
-  /** 内容容器（每次 render 整块重建，见类注释） */
+export default class GuildPanel {
+  /** 内容容器（由 SocialDialog 提供；每次 render 整块重建，见类注释） */
   private body: Node | null = null;
   /** 当前帮会（null = 未加入） */
   private myGuild: MyGuild | null = null;
@@ -50,27 +48,21 @@ export default class GuildDialog {
   /** 二次确认框（同一时刻只留一个） */
   private confirmDialog: Node | null = null;
 
-  /** 打开/关闭弹窗 */
-  open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title);
-    this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
-    this.dialog.addChild(this.body);
-    // 弹窗整体吃掉点击：否则点在行与行之间的空隙会穿透到下层 UI（createDialog 已登记过，这里幂等）
-    blockClickThrough(this.dialog);
-    LayerManager.addDialogToUILayer(this.dialog);
+  /**
+   * 挂到社交弹窗的「帮会」页上并拉一次状态
+   *
+   * 容器由弹窗提供（切页时清空重挂），页面自己不开弹窗 —— 四个页签共用一个弹窗框，
+   * 关窗 / 切页的销毁由弹窗统一负责。
+   */
+  mount(parent: Node) {
+    this.body = parent;
     void this.reload();
   }
 
-  /** 关闭弹窗（确认框一起收掉） */
-  close() {
+  /** 离开这一页（收掉确认框；快照留着，切回来时 reload 会覆盖） */
+  unmount() {
     this.closeConfirm();
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
+    this.body = null;
   }
 
   /**
@@ -83,8 +75,8 @@ export default class GuildDialog {
     try {
       const mine = await GuildApi.mine();
       const guilds = mine ? [] : await GuildApi.list();
-      // 请求期间弹窗可能已被关掉（或场景切走）：此时一个节点都不该碰
-      if (!this.dialog || !isValid(this.dialog)) return;
+      // 请求期间可能已经切页 / 关窗：此时 body 已不是我们的容器，一个节点都不该碰
+      if (!this.body || !isValid(this.body)) return;
       this.myGuild = mine;
       this.guilds = guilds;
       this.render();
@@ -436,6 +428,8 @@ export default class GuildDialog {
     try {
       await GuildApi.create({ name });
       GameUiHelper.createTipText(layout.texts.createdTip);
+      // 建帮换了我的 guildId：地图上「同帮的人名字是蓝的」判定要立刻跟上（社交快照重拉一次）
+      void SocialStore.refresh();
       await this.reload();
     } catch {
       // 提示已由全局出口弹出（重名 50102 / 已在帮会 50103 等），界面保持不变
@@ -503,6 +497,8 @@ export default class GuildDialog {
     try {
       await GuildApi.leave();
       GameUiHelper.createTipText(layout.texts.leftTip);
+      // 退帮后 guildId 变成空串：原来的「同帮」全部回落到好友 / 普通，名字颜色要立刻重算
+      void SocialStore.refresh();
       await this.reload();
     } catch {
       // 同上
@@ -514,6 +510,7 @@ export default class GuildDialog {
     try {
       await GuildApi.disband();
       GameUiHelper.createTipText(layout.texts.disbandedTip);
+      void SocialStore.refresh();
       await this.reload();
     } catch {
       // 同上
@@ -570,14 +567,4 @@ export default class GuildDialog {
   }
 
   //#endregion
-
-  /** 释放引用（关闭或被场景切换销毁后） */
-  private reset() {
-    this.dialog = null;
-    this.body = null;
-    this.myGuild = null;
-    this.guilds = [];
-    this.appliedGuildIds.clear();
-    this.confirmDialog = null;
-  }
 }

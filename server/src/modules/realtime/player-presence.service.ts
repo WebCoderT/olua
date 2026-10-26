@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { GuildRepository } from "../../database/repositories/guild.repository";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import type { RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
@@ -22,12 +23,19 @@ interface PresenceEntry {
   /** 上报时刻是否在移动（客户端自报） */
   moving: boolean;
   updatedAt: number;
+  /** 角色 id（#389：社交关系按角色记，首见时定下，角色换了连接也换了） */
+  roleId: string;
+  /** 所属帮会 id / 名字（#389：空串 = 无帮会；入帮退帮随外观懒刷新一起对齐） */
+  guildId: string;
+  guildName: string;
   /** 外观（#383：首见读一次，之后按 appearanceRefreshMs 懒刷新 —— 换装最多这么多秒被别人看到） */
   appearance: RealtimePlayerAppearance;
   /** 上次读外观的时刻（懒刷新判据） */
   appearanceAt: number;
   /** 上次广播出去的外观（增量广播的判据；空串保证首帧一定带上） */
   sentAppearance: string;
+  /** 上次广播出去的帮会（#389 的增量判据：入帮 / 退帮 / 帮会改名都要重发） */
+  sentGuild: string;
   /** 上次广播出去的位置 / 移动标记 / 血量 / 血条分母（增量广播的判据） */
   sentX: number;
   sentY: number;
@@ -58,6 +66,9 @@ function worldKey(zoneId: number, mapId: string): string {
  * ===========================================================================
  * 刻意不做的
  * ===========================================================================
+ * - **不算关系**（#389）：好友 / 敌人 / 同帮这些判定放客户端。服务端要为每个观看者
+ *   各算一遍「他对我是什么关系」是 O(n²)，而原料（我的社交快照 + 他的 roleId / guildId）
+ *   本来就在两端各有一份 —— 服务端只负责把原料发全，怎么上色是表现层的事；
  * - **不落盘**：位置是几秒钟的表现层状态，持久真相仍在各自存档的出生定位；
  * - **不做视野裁剪**：单图人数上限远小于「同图观看者」规模，按 mapId 分组已足够
  *   （真实裁剪是四叉树 / AOI 的事，等有需求再说）；
@@ -90,6 +101,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   constructor(
     private readonly config: ConfigService,
     private readonly roles: RolesService,
+    private readonly guilds: GuildRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -119,6 +131,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 显示名：角色名优先（互见看到的是「那个角色」，不是登录账号），缺省回落账号名
       const roleName = typeof role?.data?.name === "string" ? role.data.name : "";
       this.usernames.set(accountId, roleName || username);
+      const roleId = role?.id ?? "";
+      const guild = this.readGuild(roleId);
       this.entries.set(accountId, {
         zoneId,
         mapId,
@@ -128,9 +142,13 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         maxHp,
         moving,
         updatedAt: Date.now(),
+        roleId,
+        guildId: guild.guildId,
+        guildName: guild.guildName,
         appearance: this.readAppearance(role),
         appearanceAt: Date.now(),
         sentAppearance: "",
+        sentGuild: "",
         sentX: NaN,
         sentY: NaN,
         sentMoving: !moving,
@@ -149,11 +167,16 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // 外观 + 血条分母懒刷新（#383）：换装是低频事件，不值得每个 pos 帧查一次库（roles.online 是 DB 读）。
     // 分母顺带对齐的理由：换装 / 升级 / 晋升都会改 maxHp，而它只在首见时算过一次 ——
     // 不同步的话「换了新衣服，别人看到你的血条分母还是旧的」（最多迟一个刷新间隔）
+    // 帮会（#389）搭同一趟车：入帮 / 退帮 / 被踢都走 HTTP 存档，实时进程不会被告知，
+    // 而「同帮的人名字是蓝的」判定要靠他这一份 guildId —— 不刷新就永远停在他首见时的帮会。
     if (existed.updatedAt - existed.appearanceAt > this.appearanceRefreshMs()) {
       const role = this.roles.online(accountId);
       existed.appearance = this.readAppearance(role);
       const summary = role ? summarizeRoleAttributes(role) : null;
       existed.maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, existed.hp);
+      const guild = this.readGuild(role?.id ?? existed.roleId);
+      existed.guildId = guild.guildId;
+      existed.guildName = guild.guildName;
       existed.appearanceAt = existed.updatedAt;
     }
   }
@@ -225,7 +248,10 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 血条分母变了也要广播（#383 顺带修的）：换装 / 升级改了 maxHp 而血量还没动时，
       // 不带这条判据别人的血条分母会一直冻在他首见你的那一刻
       const maxHpChanged = entry.maxHp !== entry.sentMaxHp;
-      if (!moved && !turned && !hurt && !redressed && !maxHpChanged) continue;
+      // 帮会变了也要广播（#389）：入帮 / 退帮的瞬间名字颜色要变（同帮是蓝的），
+      // 而他大概率正站着不动 —— 不带这条判据别人得等他动一下才看见颜色变回来
+      const guildChanged = this.guildKey(entry) !== entry.sentGuild;
+      if (!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged) continue;
       const key = worldKey(entry.zoneId, entry.mapId);
       const list = changed.get(key) ?? [];
       list.push(this.toEntry(accountId, entry));
@@ -236,6 +262,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       entry.sentHp = entry.hp;
       entry.sentMaxHp = entry.maxHp;
       entry.sentAppearance = this.appearanceKey(entry.appearance);
+      entry.sentGuild = this.guildKey(entry);
     }
     for (const [key, players] of changed) {
       const at = key.indexOf(":");
@@ -271,6 +298,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     return {
       accountId,
       username: this.usernameOf(accountId),
+      roleId: entry.roleId,
+      guildId: entry.guildId,
+      guildName: entry.guildName,
       x: Math.round(entry.x * 100) / 100,
       y: Math.round(entry.y * 100) / 100,
       hp: entry.hp,
@@ -279,6 +309,23 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 复制一份再发：在场表里的那份会被下一次懒刷新整份替换，别让广播出去的对象跟着变
       appearance: { ...entry.appearance },
     };
+  }
+
+  /**
+   * 读角色所属帮会（#389）
+   *
+   * 与外观同一档频率调用（首见 + 懒刷新），不每帧查 —— `guildOfRole` 是一次 join 读库，
+   * 4Hz × 同图人数 立刻就是每秒几十次。无角色 / 无帮会统一用空串（客户端据此判「没帮会」）。
+   */
+  private readGuild(roleId: string): { guildId: string; guildName: string } {
+    if (!roleId) return { guildId: "", guildName: "" };
+    const guild = this.guilds.guildOfRole(roleId);
+    return { guildId: guild?.id ?? "", guildName: guild?.name ?? "" };
+  }
+
+  /** 帮会比较键（增量广播判据：帮会改名也要重发，所以 id 与名字都进键） */
+  private guildKey(entry: PresenceEntry): string {
+    return `${entry.guildId}|${entry.guildName}`;
   }
 
   /**

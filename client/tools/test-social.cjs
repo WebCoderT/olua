@@ -1,0 +1,199 @@
+#!/usr/bin/env node
+/**
+ * 社交关系单测（client/tools/test-social.cjs，issue #389）
+ *
+ * 盯的不变量（改关系判定 / 互见帧 / 社交面板后必须全绿）：
+ * A. 判定优先级：敌人 > 同帮 > 好友 > 同地图 > 普通（**跑真函数**，不是复刻一份逻辑）
+ * B. 配色与标签：六种关系都有颜色与中文名；未知关系回落普通
+ * C. 协议两端同形：互见帧带 roleId / guildId / guildName，客户端三项可选
+ * D. 服务端成本：帮会与外观同一趟懒刷新（不每帧查库），帮会变化进增量判据
+ * E. 客户端上色：判定只有一个入口，颜色只在关系变化时才改（不重建节点）
+ * F. 服务端数据纪律：好友镜像两行 + 成对改（事务），敌人单向一行
+ *
+ * 表现层依赖 cc 引擎（Node / Graphics / Label），沙箱起不来 —— 这里跑真实的
+ * `configs/social.ts`（判定与配色是纯函数）+ 源码契约断言，界面行为由真机双窗口验证。
+ */
+const fs = require("fs");
+const path = require("path");
+const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+
+const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
+/** PROJECT_ROOT 是 client/ 目录，服务端与根目录下的文件要往上走一层 */
+const readRepo = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, "..", rel), "utf8");
+
+const SERVER_PROTOCOL = "server/src/modules/realtime/realtime.protocol.ts";
+const SERVER_PRESENCE = "server/src/modules/realtime/player-presence.service.ts";
+const SERVER_SOCIAL_REPO = "server/src/database/repositories/social.repository.ts";
+const SERVER_SOCIAL_SERVICE = "server/src/modules/social/social.service.ts";
+const SERVER_BIZ_CODE = "server/src/common/constants/biz-code.ts";
+const CLIENT_CHANNEL = "assets/ui/utils/net/CombatChannel.ts";
+const CLIENT_MANAGER = "assets/ui/core/OtherPlayerManager.ts";
+const CLIENT_STORE = "assets/ui/core/SocialStore.ts";
+const CLIENT_DIALOG = "assets/ui/components/dialogs/SocialDialog.ts";
+const CLIENT_GUILD_PANEL = "assets/ui/components/dialogs/GuildPanel.ts";
+const CLIENT_ROLE_INFO = "assets/ui/components/dialogs/RoleInfoDialog.ts";
+const CLIENT_DIALOGS_LAYOUT = "assets/configs/layout/dialogs.ts";
+
+/** 从一段源码里抽出某个 interface 的字段名（两空格缩进 + 可选 ?；注释行不匹配） */
+function fieldNames(source, interfaceName) {
+  const block = new RegExp(`export interface ${interfaceName} \\{([\\s\\S]*?)\\n\\}`).exec(source);
+  if (!block) return null;
+  return Array.from(block[1].matchAll(/^ {2}(\w+)\??:/gm)).map((match) => match[1]);
+}
+
+/** 数一个字符串出现次数（写断言时比 match.length 直观） */
+const count = (source, needle) => source.split(needle).length - 1;
+
+try {
+  const outDir = prepare("olua-social", ["configs/social.ts"]);
+  const social = require(path.join(outDir, "configs/social.js"));
+  const { RELATION, RELATION_PRIORITY, relationColors, relationLabels, resolveRelation, getRelationColor } = social;
+
+  //#region A. 判定优先级（跑真函数）
+
+  console.log("\n— A. 判定优先级（敌人 > 同帮 > 好友 > 同地图 > 普通） —");
+
+  const me = { roleId: "r1", guildId: "g1", friendIds: ["r2", "r3"], enemyIds: ["r3"] };
+  const both = { roleId: "r3", guildId: "g1" }; // 既是好友、也是同帮、还被标了敌人
+  check(resolveRelation(me, both, true) === RELATION.ENEMY, "敌人压过同帮与好友（标了敌人就是要看见红名）");
+  const guildMate = { roleId: "r2", guildId: "g1" }; // 好友 + 同帮
+  check(resolveRelation(me, guildMate, true) === RELATION.GUILD, "同帮压过好友（组织关系强于私人交情）");
+  const friendOnly = { roleId: "r2", guildId: "g2" };
+  check(resolveRelation(me, friendOnly, true) === RELATION.FRIEND, "好友压过同地图（好友名字是绿的）");
+  const stranger = { roleId: "r9", guildId: "g2" };
+  check(resolveRelation(me, stranger, true) === RELATION.MAP, "同图陌生人是「同地图」（默认白名）");
+  check(resolveRelation(me, stranger, false) === RELATION.NORMAL, "不同图又没关系是「普通」");
+  check(resolveRelation(me, { roleId: "r1", guildId: "g1" }, true) === RELATION.SELF, "自己优先于一切（互见帧会过滤掉，口径仍要完整）");
+  check(
+    resolveRelation({ roleId: "r1", guildId: "", friendIds: [], enemyIds: [] }, { roleId: "r9", guildId: "" }, true) === RELATION.MAP,
+    "两边都没帮会时不算同帮（空串不等于同帮）",
+  );
+  check(
+    resolveRelation({ roleId: "r1", guildId: "g1", friendIds: [], enemyIds: [] }, { roleId: "r9", guildId: "g1" }, false) === RELATION.GUILD,
+    "不同图也是同帮（帮会关系不依赖看得见）",
+  );
+  check(
+    RELATION_PRIORITY.join(",") === "self,enemy,guild,friend,map,normal",
+    `优先级表的顺序写死（实得 ${RELATION_PRIORITY.join(" > ")}）`,
+  );
+  check(
+    count(read("assets/configs/social.ts"), "if (self.enemyIds.indexOf(target.roleId) >= 0)") === 1,
+    "敌人判定用 indexOf（客户端编译目标是 ES2015，includes 不存在）",
+  );
+
+  //#endregion
+
+  //#region B. 配色与标签
+
+  console.log("\n— B. 配色与标签 —");
+
+  const rgb = (color) => `${color.r},${color.g},${color.b}`;
+  check(rgb(relationColors[RELATION.ENEMY]) === "255,91,91", "敌人 = 红");
+  check(rgb(relationColors[RELATION.GUILD]) === "110,168,255", "同帮 = 蓝");
+  check(rgb(relationColors[RELATION.FRIEND]) === "123,224,123", "好友 = 绿");
+  check(rgb(relationColors[RELATION.MAP]) === "255,255,255", "同地图 = 白（与默认名色一致，陌生人保持现状）");
+  check(rgb(getRelationColor("bogus")) === "200,200,200", "未知关系回落普通色（不炸）");
+  const kinds = Object.keys(RELATION).map((key) => RELATION[key]);
+  check(
+    kinds.every((kind) => !!relationColors[kind] && !!relationLabels[kind]),
+    "六种关系都有配色与中文名（漏一种就是一块没上色的字）",
+  );
+
+  //#endregion
+
+  //#region C. 协议两端同形
+
+  console.log("\n— C. 协议两端同形（互见帧带 roleId / guildId / guildName） —");
+
+  const serverEntry = fieldNames(readRepo(SERVER_PROTOCOL), "RealtimePlayerEntry") ?? [];
+  const clientEntry = fieldNames(read(CLIENT_CHANNEL), "PlayerEntry") ?? [];
+  check(serverEntry.indexOf("roleId") >= 0, "服务端互见条目带 roleId（社交关系按角色记，不是按账号）");
+  check(serverEntry.indexOf("guildId") >= 0 && serverEntry.indexOf("guildName") >= 0, "服务端互见条目带 guildId / guildName");
+  check(clientEntry.indexOf("roleId") >= 0 && clientEntry.indexOf("guildId") >= 0 && clientEntry.indexOf("guildName") >= 0, "客户端同形");
+  const clientSource = read(CLIENT_CHANNEL);
+  check(/roleId\?: string;/.test(clientSource) && /guildId\?: string;/.test(clientSource), "客户端三项都是可选（旧服务端不发时按无帮会处理）");
+
+  //#endregion
+
+  //#region D. 服务端成本
+
+  console.log("\n— D. 服务端成本（帮会搭外观的懒刷新，不每帧查库） —");
+
+  const presence = readRepo(SERVER_PRESENCE);
+  check(count(presence, "this.guilds.guildOfRole(") === 1, "整个在场表只在一处查帮会（readGuild）");
+  check(
+    /const guild = this\.readGuild\(role\?\.id \?\? existed\.roleId\);/.test(presence),
+    "帮会与外观在同一趟懒刷新里读（换装 / 升级 / 入帮共用一个 5 秒窗口）",
+  );
+  check(/private readGuild\(roleId: string\)/.test(presence), "无角色直接回空串（不查库）");
+  check(/const guildChanged = this\.guildKey\(entry\) !== entry\.sentGuild;/.test(presence), "帮会变化进增量判据");
+  check(
+    /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged\) continue;/.test(presence),
+    "入帮 / 退帮站着不动也会广播（否则名字颜色要等他动一下才变）",
+  );
+  check(/return `\$\{entry\.guildId\}\|\$\{entry\.guildName\}`;/.test(presence), "帮会键含名字（帮会改名也要重发）");
+  check(!/resolveRelation/.test(presence), "服务端不算关系（O(n²) 的事放客户端，只下发原料）");
+
+  //#endregion
+
+  //#region E. 客户端上色
+
+  console.log("\n— E. 客户端上色（唯一入口 + 就地重刷） —");
+
+  const manager = read(CLIENT_MANAGER);
+  check(/import SocialStore from "\.\/SocialStore";/.test(manager), "远端玩家从 SocialStore 取「我这一半」快照");
+  check(/resolveRelation\(SocialStore\.relationSelf\(\)/.test(manager), "关系判定走 configs/social 的唯一入口");
+  check(count(manager, "getRelationColor(") >= 2, "名字颜色统一走 getRelationColor（新建与重刷各一处）");
+  check(/if \(relation === view\.relation\) continue;/.test(manager), "关系没变就不动 Label（别每帧刷一遍颜色）");
+  check(/static applyRelations\(\): void \{/.test(manager), "有 applyRelations（社交快照一变就重刷全部名字）");
+  check(/SocialStore\.onChange\(\(\) => this\.applyRelations\(\)\)/.test(manager), "订阅快照变化（加好友 / 标敌人立刻变色）");
+  check(/static nearby\(\): NearbyPlayer\[\]/.test(manager), "附近列表取源 = 当前互见帧（此刻真的看得见的人）");
+  check(!/SocialApi/.test(manager), "远端玩家不直接打 HTTP（快照只由 SocialStore 一处维护）");
+
+  const store = read(CLIENT_STORE);
+  check(/friendIds: snapshot\.friends\.map\(\(entry\) => entry\.roleId\)/.test(store), "快照转判定入参只在这里做一次");
+  check(/if \(this\.loading\) return this\.loading;/.test(store), "并发 refresh 合并成一次请求");
+  check(/\.catch\(\(\) => undefined\)/.test(store), "拉取失败静默（社交是装饰性数据，不该打断进图）");
+
+  const dialog = read(CLIENT_DIALOG);
+  check(/const TABS: SocialTab\[\] = \["guild", "friends", "enemies", "nearby"\];/.test(dialog), "四个页签：帮会 / 好友 / 敌人 / 附近");
+  check(/OtherPlayerManager\.nearby\(\)/.test(dialog), "「附近」页读互见帧内存态");
+  check(/relationLabels\[player\.relation\]/.test(dialog), "关系标签直接用已算好的值（面板里不再判一遍）");
+  check(!/resolveRelation/.test(dialog), "面板不重复判定关系（两处判定迟早显示不一致）");
+  check(/this\.guildPanel\.mount\(body\)/.test(dialog), "帮会页内嵌（#388 的整套逻辑原样复用）");
+  check(!/createDialog\(/.test(read(CLIENT_GUILD_PANEL)), "帮会页自己不再开弹窗（框由 SocialDialog 管）");
+  check(/mount\(parent: Node\)/.test(read(CLIENT_GUILD_PANEL)), "帮会页有 mount / unmount");
+  check(/new SocialDialog\(\)\.open\(\)/.test(read(CLIENT_ROLE_INFO)), "角色信息弹窗第五格打开社交弹窗");
+
+  const layoutSource = read(CLIENT_DIALOGS_LAYOUT);
+  check(/export const socialDialogLayout = \{/.test(layoutSource), "有 socialDialogLayout");
+  check(/size: new Size\(600, 560\)/.test(layoutSource), "社交弹窗加高 60（多出来的一行放页签，帮会页坐标不用挪）");
+  check(/columns: \[-168, -56, 56, 168\]/.test(layoutSource), "四个页签的列位 + texts.tabs 与 TABS 一一对应");
+
+  //#endregion
+
+  //#region F. 服务端数据纪律
+
+  console.log("\n— F. 服务端数据纪律（好友镜像两行 / 敌人单向一行） —");
+
+  const repo = readRepo(SERVER_SOCIAL_REPO);
+  check(count(repo, "this.db.run(sql, [friendId, roleId") >= 2, "发申请 / 同意 / 删除都成对写（镜像两行：两个方向各一次）");
+  check(count(repo, "ON CONFLICT(role_id, friend_id) DO UPDATE") === 1, "重复申请覆盖而不是堆两行");
+  check(/transaction<T>\(work: \(\) => T\): T/.test(repo), "事务开在仓储里（业务层不摸 DatabaseService）");
+  check(count(repo, '"INSERT INTO role_enemies') === 1, "敌人只写一行（单向：我标我的）");
+  check(!/INSERT INTO role_enemies[\s\S]{0,200}enemy_id, role_id/.test(repo), "敌人没有镜像反向行（对方不会知道）");
+  const service = readRepo(SERVER_SOCIAL_SERVICE);
+  check(/this\.social\.transaction\(/.test(service), "业务层用仓储事务包住两行改动");
+  const bizCode = readRepo(SERVER_BIZ_CODE);
+  check(
+    ["50109", "50110", "50111", "50112", "50113", "50114", "50115", "50116"].every((code) => bizCode.indexOf(code) > 0),
+    "社交业务码 50109~50116 齐全（含 50116 重名，让玩家从「附近」点选）",
+  );
+
+  //#endregion
+
+  finish("PASS：社交关系（优先级 / 配色 / 协议同形 / 客户端上色 / 服务端纪律）全部通过");
+} catch (error) {
+  fail(`社交关系单测异常：${error.message}`);
+  process.exitCode = 1;
+}

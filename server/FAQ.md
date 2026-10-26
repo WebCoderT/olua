@@ -16,6 +16,7 @@
 - [服务端为什么不校验角色数据的内容？](#服务端为什么不校验角色数据的内容)
 - [角色数量上限想改，改哪边？](#角色数量上限想改改哪边)
 - [帮会为什么用唯一索引，而不是业务判重？](#帮会为什么用唯一索引而不是业务判重)
+- [好友为什么存两行镜像，而不是一行 + 双向查？](#好友为什么存两行镜像而不是一行--双向查)
 - [玩家忘记密码怎么办？重置之后他为什么被踢出去了？](#玩家忘记密码怎么办重置之后他为什么被踢出去了)
 - [一直被锁在登录页？登录限流是怎么算的？](#一直被锁在登录页登录限流是怎么算的)
 - [后台「踢下线」到底做了什么？为什么玩家非得重选角色？](#后台踢下线到底做了什么为什么玩家非得重选角色)
@@ -28,7 +29,7 @@
 
 - **启动**：`cd server && npm install && cp .env.example .env && npm run dev`（`npm run start` 跑已构建产物）。默认监听 `3100`、路由前缀 `api`，客户端默认连的就是 `http://localhost:3100/api`
 - **接口文档**：<http://localhost:3100/api-docs>（Swagger UI；JSON 在 `/api-docs-json`）。文档**不带路由前缀**，因为它不是业务接口。所有接口都是「统一响应包裹 + 统一错误出口」，所以文档里每个接口的响应都是 `code / message / data / timestamp` 五件套，`data` 才是业务数据
-- **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / level_exps / growth_segments / growth_scalars / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / skills / statuses / monster_skills` 32 张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
+- **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / level_exps / growth_segments / growth_scalars / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / skills / statuses / monster_skills` 34 张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
 - **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**248 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护** / **公告的公共拉取与生效时间窗**）。角色相关改动另跑 `npm run test:e2e:roles`（113 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）；**邮件通道**相关改动另跑 `npm run test:e2e:mail`（120 条，用可注入的假发信器，不需要 SMTP 服务器）；**玩家邮箱字段**相关改动另跑 `npm run test:e2e:account-email`（28 条）；**实时通道**相关改动另跑 `npm run test:e2e:realtime`（50 条，真实 WebSocket 握手，不需要浏览器）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（87 条）。一条命令全验：`npm run verify`
 - **新增接口的规矩**：只改服务端（控制器 + DTO + `operationId`），然后 `npm run gen:api` 重新生成两端的接口文件 —— 见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)。路径、方法名、类型都不允许在两端手写
 
@@ -98,6 +99,14 @@ env -u NODE_OPTIONS npm run verify
 因为「先查有没有帮会、再插成员行」在并发下必漏：同一个人连点两次「申请 → 帮主秒批」，或两个帮主同时批同一个人，两次检查都会通过，成员表里就留下两行 —— 之后 `mine()` 取到哪一行全看排序。所以约束落在库上：`guild_members.role_id` 建了**唯一索引**，业务只负责把这个约束翻译成可读的 `50103`（已经在一个帮会里了）。
 
 同类的还有两处：申请表的 `PRIMARY KEY (guild_id, role_id)` 让「重复申请」天然是覆盖留言而不是堆两条待办；帮主身份的两份记录（`guilds.leader_id` 与 `guild_members.rank='leader'` 那行）在转让时**同一个事务**里改，否则会出现「显示帮主是 A、A 却没有帮主权限」。
+
+### 好友为什么存两行镜像，而不是一行 + 双向查？
+
+因为**每一处查询都会多一个判断方向的机会**。「我的好友 / 谁在等我 / 我加了谁」三种列表，用一行存就要写 `WHERE role_id = ? OR friend_id = ?`，再按 `role_id === me` 推断「这条是我发起的还是他发起的」—— 四处查询就有四处可能写反，而写反的症状很隐蔽（好友列表看起来正常，只是「我发出的申请」里出现了别人发给我的）。
+
+存两行（A→B 与 B→A）之后，所有查询都是**主键前缀查**，`status` 一致即可，方向由 `requested_by` 显式记着。代价是同意 / 拒绝 / 删除必须**成对改**，所以这三个动作一律走 `SocialRepository.transaction()`；e2e 里有一条断言专门盯这个：库里不允许存在「反方向没有同状态行」的孤立好友行。
+
+敌人相反，是**单向一行**：我标我的，对方既不知道也不受影响（没有通知，也不需要事务）。这也是为什么「谁把我当敌人」这种查询天然做不到 —— 那是设计上不提供的视角。
 
 ## 口令与安全
 

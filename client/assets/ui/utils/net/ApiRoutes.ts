@@ -199,6 +199,51 @@ export const ApiRoutes = {
      */
     online: "/roles/online",
   },
+  /** social 模块（7 个接口） */
+  social: {
+    /**
+     * 标为敌人（POST /social/enemies）
+     *
+     * **单向**：只有我自己看得见（互见时对方名字变红），对方既不知道也不受影响。
+     */
+    addEnemy: "/social/enemies",
+    /**
+     * 解除敌人（DELETE /social/enemies/{roleId}）
+     *
+     * 解除我自己标的敌人；本来就没标返回 50114。
+     */
+    removeEnemy: (roleId: string) => `/social/enemies/${encodeURIComponent(roleId)}`,
+    /**
+     * 加好友（POST /social/friends）
+     *
+     * 传 `roleId`（精确）或 `name`（手动输入；角色名只在同一账号内唯一，重名返回 50116）。
+     */
+    addFriend: "/social/friends",
+    /**
+     * 删除好友 / 撤回申请（DELETE /social/friends/{roleId}）
+     *
+     * **双向消失**：我这边删掉，他那边也不再是好友（不需要对方同意）。
+     */
+    removeFriend: (roleId: string) => `/social/friends/${encodeURIComponent(roleId)}`,
+    /**
+     * 同意好友申请（POST /social/friends/{roleId}/accept）
+     *
+     * 只有「他发起、等我处理」的申请能同意；已处理过的返回 50112。
+     */
+    acceptFriend: (roleId: string) => `/social/friends/${encodeURIComponent(roleId)}/accept`,
+    /**
+     * 拒绝好友申请（POST /social/friends/{roleId}/reject）
+     *
+     * 直接删掉这一对关系，不留记录（被拒的人看不到「你被拒绝了」）。
+     */
+    rejectFriend: (roleId: string) => `/social/friends/${encodeURIComponent(roleId)}/reject`,
+    /**
+     * 我的社交快照（GET /social/me）
+     *
+     * 好友（已互为好友）/ 别人加我（待我处理）/ 我加别人（等对方处理）/ 我标的敌人，外加我的角色 id 与所在帮会 —— 客户端拿它与互见帧里的 `roleId`/`guildId` 比对，算出该给谁上什么颜色的名字。
+     */
+    mine: "/social/me",
+  },
   /** zone 模块（1 个接口） */
   zone: {
     /**
