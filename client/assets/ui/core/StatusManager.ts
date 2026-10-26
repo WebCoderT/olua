@@ -1,5 +1,5 @@
 import { isValid, Node } from "cc";
-import { skillStatusMap, statuses } from "../../configs/status";
+import { statuses } from "../../configs/status";
 import { statusEffect } from "../../configs/effect";
 import { StatusBadge, StatusConfig, StatusId } from "../../types/status";
 import AnimationHelper from "../helpers/AnimationHelper";
@@ -15,7 +15,7 @@ import RoleUIManager from "./RoleUIManager";
  * - 身上特效：配置了 effect 的状态在特效层挂一个循环播放的图集帧动画节点，
  *   每帧跟随角色（挂点偏移统一见 configs/effect 的 statusEffect.offset）
  * - 图标：头像下方的状态图标条（见 ui/components/hud/StatusIconBar，经 RoleUIManager 刷新）
- * 技能获得的状态由 configs/status 的 skillStatusMap 映射，技能实现释放成功后调用 applyStatusOfSkill；
+ * 技能获得的状态写在技能配置的 statusId 上（configs/skill-data），技能实现释放成功后自己调 apply；
  * 装备/VIP 等来源直接 apply 对应状态编号即可
  */
 export default class StatusManager {
@@ -69,12 +69,6 @@ export default class StatusManager {
     const expire = this.expireAt.get(statusId);
     if (expire === undefined) return 0;
     return Math.max(0, (expire - Date.now()) / 1000);
-  }
-
-  /** 释放技能后按 configs/status 的 skillStatusMap 添加对应状态（非状态型技能查不到映射，静默跳过） */
-  static applyStatusOfSkill(skillId: string) {
-    const statusId = skillStatusMap[skillId as keyof typeof skillStatusMap];
-    if (statusId) this.apply(statusId);
   }
 
   /** 每帧驱动（组合根 update 调用）：到期移除 + 身上特效跟随角色 */

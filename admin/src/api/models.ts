@@ -505,6 +505,138 @@ export type UpdateRank = {
   attributes?: ConfigAttributes;
 };
 
+export type DamageCoefficient = {
+  /**
+   * 收益基数属性（maxHp / hpRecover / physicalAttack / magicAttack / taoistAttack / physicalDefense / magicDefense / taoistDefense）
+   */
+  baseType: string;
+  /**
+   * 倍率（0 = 该级不造成伤害；上限 100 防止手滑多打两个零）
+   */
+  baseTypeRate: number;
+};
+
+export type UpdateSkill = {
+  /**
+   * 技能名（≤50 字）
+   */
+  label?: string;
+  /**
+   * 图标资源路径（≤200 字；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复
+   */
+  category?: "0" | "1" | "2" | "3";
+  /**
+   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
+   */
+  targetType?: "0" | "1" | "2" | "3";
+  /**
+   * 施法动作（≤50 字；空串 = 不播动作）
+   */
+  action?: string;
+  /**
+   * 技能特效图集路径（≤200 字；空串 = 无特效）
+   */
+  effect?: string;
+  /**
+   * 特效是否播在自己身上
+   */
+  effectOnSelf?: boolean;
+  /**
+   * 冷却（秒，0 = 不限制）
+   */
+  cooldown?: number;
+  /**
+   * 释放消耗魔法值（0 = 不消耗）
+   */
+  mpCost?: number;
+  /**
+   * 施法距离（0 = 不限距离）
+   */
+  distance?: number;
+  /**
+   * 学习 / 开启等级
+   */
+  levelReq?: number;
+  /**
+   * 描述文案（≤500 字）
+   */
+  description?: string;
+  /**
+   * 伤害系数（下标 = 技能等级 - 1，最多 20 级）
+   */
+  damageCoefficients?: DamageCoefficient[];
+  /**
+   * 释放后挂载的状态 id（空串 = 不挂；状态型技能必填）
+   */
+  statusId?: string;
+  /**
+   * 动作锁时长（毫秒；0 = 跟动画时长走）
+   */
+  castLockMs?: number;
+  /**
+   * 是否要求有合法目标
+   */
+  requireTarget?: boolean;
+  /**
+   * 是否可被自动战斗 / 挂机释放
+   */
+  canAuto?: boolean;
+};
+
+export type StatusCombat = {
+  /**
+   * 格挡触发概率 0~1（缺省 = 不参与格挡判定）
+   */
+  blockChance?: number;
+  /**
+   * 格挡触发时本次伤害的乘数（0~1，0.5 = 减半）
+   */
+  blockFactor?: number;
+  /**
+   * 防御乘法系数（≥1，1.5 = 防御 ×1.5；多个状态连乘）
+   */
+  defenseMultiplier?: number;
+};
+
+export type UpdateStatus = {
+  /**
+   * 状态名（≤50 字）
+   */
+  label?: string;
+  /**
+   * 图标资源路径（≤200 字；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 持续时间（秒，>0）
+   */
+  duration?: number;
+  /**
+   * 来源：skill / equipment / privilege / other
+   */
+  source?: "skill" | "equipment" | "privilege" | "other";
+  /**
+   * 描述文案（≤500 字）
+   */
+  description?: string;
+  /**
+   * 身上特效图集路径（≤200 字；空串 = 只在图标栏显示）
+   */
+  effect?: string;
+  /**
+   * 身上特效是否只播一遍停在尾帧
+   */
+  effectHoldLast?: boolean;
+  /**
+   * 战斗数值修正（整份替换：不传则不改）
+   */
+  combat?: StatusCombat;
+};
+
 export type UpdateEquipment = {
   /**
    * 穿戴需求等级（不传则不改）
@@ -3332,6 +3464,228 @@ export type NpcQuery = {
   order?: "asc" | "desc";
 };
 
+export type Skill = {
+  /**
+   * 技能 id（角色技能被技能栏 / 快捷键 / 角色存档引用）
+   */
+  id: string;
+  /**
+   * 归属：role / monster
+   */
+  owner: "role" | "monster";
+  /**
+   * 技能名
+   */
+  label: string;
+  /**
+   * 技能图标资源路径（resources 相对路径，不含扩展名）
+   */
+  icon: string;
+  /**
+   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复（与客户端 SkillType 同值）
+   */
+  category: "0" | "1" | "2" | "3";
+  /**
+   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身（与客户端 SkillTargetType 同值）
+   */
+  targetType: "0" | "1" | "2" | "3";
+  /**
+   * 施法动作（客户端动画动作键，如 attack_near；空串 = 不播动作）
+   */
+  action: string;
+  /**
+   * 技能特效图集路径（空串 = 无特效）
+   */
+  effect: string;
+  /**
+   * 特效是否播在自己身上
+   */
+  effectOnSelf: boolean;
+  /**
+   * 冷却（秒）
+   */
+  cooldown: number;
+  /**
+   * 释放一次消耗的魔法值
+   */
+  mpCost: number;
+  /**
+   * 施法距离（0 = 不限距离）
+   */
+  distance: number;
+  /**
+   * 学习 / 开启等级
+   */
+  levelReq: number;
+  /**
+   * 描述文案
+   */
+  description: string;
+  /**
+   * 伤害系数（下标 = 技能等级 - 1；状态型技能可为空数组）
+   */
+  damageCoefficients: DamageCoefficient[];
+  /**
+   * 释放成功后给自身挂的状态 id（空串 = 不挂）
+   */
+  statusId: string;
+  /**
+   * 释放动作锁时长（毫秒；0 = 跟动画时长走）
+   */
+  castLockMs: number;
+  /**
+   * 是否要求有合法目标（自身 / 状态型技能可关）
+   */
+  requireTarget: boolean;
+  /**
+   * 是否可被自动战斗 / 挂机释放
+   */
+  canAuto: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type SkillPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的技能配置
+   */
+  list: Skill[];
+};
+
+export type SkillQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与技能名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 归属筛选：role / monster（不传 = 两边都要）
+   */
+  owner?: "role" | "monster";
+};
+
+export type Status = {
+  /**
+   * 状态 id（技能 statusId 与将来的装备 / 特权引用它）
+   */
+  id: string;
+  /**
+   * 归属：role / monster
+   */
+  owner: "role" | "monster";
+  /**
+   * 状态名
+   */
+  label: string;
+  /**
+   * 状态图标资源路径（resources 相对路径，不含扩展名）
+   */
+  icon: string;
+  /**
+   * 持续时间（秒；重复获得时从获得时刻重新计时，不叠层）
+   */
+  duration: number;
+  /**
+   * 来源：skill / equipment / privilege / other
+   */
+  source: "skill" | "equipment" | "privilege" | "other";
+  /**
+   * 描述文案
+   */
+  description: string;
+  /**
+   * 身上特效图集路径（空串 = 只在图标栏显示）
+   */
+  effect: string;
+  /**
+   * 身上特效是否只播一遍并停在尾帧（脉冲类特效配 true）
+   */
+  effectHoldLast: boolean;
+  /**
+   * 战斗数值修正（缺省 = 纯表现状态）
+   */
+  combat: StatusCombat;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type StatusPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的状态配置
+   */
+  list: Status[];
+};
+
+export type StatusQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与状态名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 归属筛选：role / monster（不传 = 两边都要）
+   */
+  owner?: "role" | "monster";
+};
+
 export type MallSettings = {
   /**
    * 全场统一售价（绑定元宝/件；特殊价优先于它）
@@ -3688,4 +4042,12 @@ export type GameConfigSnapshot = {
    * 每怪掉落配置（怪物 key → 三选一来源）
    */
   monsterDrops: MonsterDrop[];
+  /**
+   * 技能配置（角色与怪物同表，owner 区分；含释放限制与挂载状态）
+   */
+  skills: Skill[];
+  /**
+   * 状态配置（角色与怪物同表，owner 区分）
+   */
+  statuses: Status[];
 };

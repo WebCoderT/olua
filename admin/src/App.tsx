@@ -18,6 +18,8 @@ import { DrugsPage } from "./pages/DrugsPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
+import { SkillsPage } from "./pages/SkillsPage";
+import { StatusesPage } from "./pages/StatusesPage";
 import { MallPricingPage } from "./pages/MallPricingPage";
 import { FashionsPage } from "./pages/FashionsPage";
 import { DropConfigPage } from "./pages/DropConfigPage";
@@ -192,6 +194,22 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <NpcsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="skills"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <SkillsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="statuses"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <StatusesPage />
               </RequirePermission>
             }
           />

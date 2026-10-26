@@ -336,15 +336,17 @@ export default class RoleDisplay extends Node {
    * 正在攻击（动画未播放完成）时返回 false，按下不产生任何反应
    * 动画完整播放完成（FINISHED）后解锁并回调 onComplete；FINISHED 未触发时按动作时长兜底解锁
    */
-  startAttack(action: ACTION, direction: DIRECTION, onComplete: () => void): boolean {
+  startAttack(action: ACTION, direction: DIRECTION, onComplete: () => void, lockMs: number = 0): boolean {
     if (this.dead || this.attacking) return false;
     this.attacking = true;
     this.direction = direction;
     this.action = action;
     this.attackComplete = onComplete;
     this.updateAnimationPlay();
-    // 兜底：动作时长（speedRate 为每秒循环数，一段动画时长即该值）+ 余量后强制解锁（余量见 configs/animation）
-    this.attackTimeout = setTimeout(() => this.onAttackFinished(), ((this.role.speedRate[action] ?? 1) + actionFinishTimeoutMarginSeconds) * 1000);
+    // 兜底：动作时长（speedRate 为每秒循环数，一段动画时长即该值）+ 余量后强制解锁（余量见 configs/animation）；
+    // 技能配了 castLockMs（#367）时以它为准 —— 它是运营在后台调的「出手硬直」，0 = 跟动画走
+    const animationLockMs = ((this.role.speedRate[action] ?? 1) + actionFinishTimeoutMarginSeconds) * 1000;
+    this.attackTimeout = setTimeout(() => this.onAttackFinished(), lockMs > 0 ? lockMs : animationLockMs);
     return true;
   }
 
@@ -497,8 +499,8 @@ export default class RoleDisplay extends Node {
    * 面向指定方向播放技能配置的动作动画（技能表现），动画播放完成前锁定移动与再次攻击
    * @param action 技能配置的动作（config.action）
    */
-  playSkillAttack(action: ACTION, direction: DIRECTION) {
-    return this.startAttack(action, direction, () => {});
+  playSkillAttack(action: ACTION, direction: DIRECTION, lockMs: number = 0) {
+    return this.startAttack(action, direction, () => {}, lockMs);
   }
 
   //#endregion

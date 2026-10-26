@@ -12,7 +12,9 @@ import type {
   Monster as MonsterRow,
   Npc as NpcRow,
   Rank,
+  Skill as SkillRow,
   Soul,
+  Status as StatusRow,
   Title,
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
@@ -33,13 +35,18 @@ import { monsters } from "./monster";
 import { npcData } from "./npc-data";
 import { fashionData } from "./fashionClothes";
 import { getEquipmentBaseKey, scaleEquipmentAttributes } from "./equipments";
+import { skillData } from "./skill-data";
+import { statuses } from "./status";
+import { SkillTargetType, SkillType } from "../types/skill";
+import { StatusSource } from "../types/status";
+import type { ACTION } from "../types/animation";
 
 /**
  * 服务端配置快照落库（#294 / #361 / #363）
  *
  * 进游戏时拉到 `gameConfig.snapshot` 后，把管理端可改的字段**原地覆写**进本地
  * 配置数据（称号 / 战魂 / 军衔 / 商城定价 / 成长曲线与等级经验 / 装备 / 药品 / 物品 /
- * 怪物 / NPC / 时装）—— 消费方拿到的引用不变、读取函数签名不变，
+ * 怪物 / NPC / 时装 / 技能 / 状态）—— 消费方拿到的引用不变、读取函数签名不变，
  * 所以弹窗 / 战力计算 / 名牌外显 / 背包 / 图鉴零改动即读新值。
  *
  * 覆写是**逐条按 key 对齐**的：快照里没有的行（服务端与本地行数不一致时）保留
@@ -362,6 +369,78 @@ export function applyFashionRows(rows: FashionRow[]): void {
   });
 }
 
+/**
+ * 技能配置覆写（#367）：只认 `owner === "role"` 的行
+ *
+ * 怪物技能与角色技能同表下发，但它们的消费方完全不同（怪物由服务端执行、客户端只演），
+ * 所以这里按 owner 分流 —— 角色行覆写 \`skillData\`，怪物行在 #12 主体那一刀另建一张表。
+ *
+ * **不动 onClick**：技能的释放实现是代码（configs/skill 按 id 接上），数据只描述
+ * 「冷却 / 倍率 / 动作 / 特效 / 释放限制」。覆写后必须调 \`rebuildSkills()\`（见 ConfigLoader），
+ * 否则 skills Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
+ */
+export function applySkillRows(rows: SkillRow[]): void {
+  rows.forEach((row) => {
+    if (row.owner !== "role") return;
+    const config = skillData.find((item) => item.id === row.id);
+    if (!config) return;
+    config.label = row.label;
+    config.icon = row.icon;
+    config.type = row.category as SkillType;
+    config.targetType = row.targetType as SkillTargetType;
+    config.action = row.action as ACTION;
+    config.effect = row.effect || undefined;
+    config.effectIsOnSelf = row.effectOnSelf;
+    config.cooldown = row.cooldown;
+    config.mpCost = row.mpCost;
+    config.distance = row.distance;
+    config.level = row.levelReq;
+    config.description = row.description;
+    config.damageCoefficients = row.damageCoefficients.map((entry) => ({
+      baseType: entry.baseType as keyof BattleAttributes,
+      baseTypeRate: entry.baseTypeRate,
+    }));
+    config.statusId = row.statusId || undefined;
+    config.castLockMs = row.castLockMs;
+    config.requireTarget = row.requireTarget;
+    config.canAuto = row.canAuto;
+  });
+}
+
+/**
+ * 状态配置覆写（#367）：只认 `owner === "role"` 的行
+ *
+ * 覆写的是**注册表本身**（\`statuses\` 这个 Map 的元素内容），所以已经在身上生效的状态
+ * 时长与图标也会跟着变（\`StatusManager\` 只记到期时间戳，读的仍是这份配置）。
+ * 数值修正（combat）的口径在 BattleMath，这里只搬数据。
+ */
+export function applyStatusRows(rows: StatusRow[]): void {
+  rows.forEach((row) => {
+    if (row.owner !== "role") return;
+    const config = statuses.get(row.id);
+    if (!config) return;
+    config.label = row.label;
+    config.icon = row.icon;
+    config.duration = row.duration;
+    config.source = row.source as StatusSource;
+    config.description = row.description;
+    config.effect = row.effect || undefined;
+    config.effectHoldLast = row.effectHoldLast;
+    // 三个维度全缺省 = 纯表现状态（与 StatusCombatConfig 的「缺省不参与」一致）
+    config.combat = {
+      blockChance: row.combat?.blockChance,
+      blockFactor: row.combat?.blockFactor,
+      defenseMultiplier: row.combat?.defenseMultiplier,
+    };
+  });
+}
+
+/** 技能与状态的覆写总入口（#367）：按 owner 分流，缺表跳过 */
+export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
+  if (snapshot.skills) applySkillRows(snapshot.skills);
+  if (snapshot.statuses) applyStatusRows(snapshot.statuses);
+}
+
 /** 内容表的覆写总入口（#363）：六张表各自按 id 对齐，缺表跳过 */
 export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   if (snapshot.equipments) applyEquipmentRows(snapshot.equipments);
@@ -384,4 +463,5 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   }
   applyGrowthSnapshot(snapshot);
   applyContentSnapshot(snapshot);
+  applySkillSnapshot(snapshot);
 }

@@ -196,6 +196,10 @@ export const BizCode = {
   DROP_TABLE_NOT_FOUND: 50023,
   /** 怪物掉落配置不存在（key 清单与怪物一一对应，不可增删行） */
   MONSTER_DROP_NOT_FOUND: 50024,
+  /** 技能不存在（角色技能清单由生成物 seed 固定；怪物技能由 #12 主体那一刀接管增删） */
+  SKILL_NOT_FOUND: 50029,
+  /** 状态不存在（清单 seed 自生成物 STATUSES，不可增删行） */
+  STATUS_NOT_FOUND: 50030,
 
   //#region 区服（多开区 / 合并区）
   /** 区服不存在（注册选区传了没有的 id；合并的 from / to 传错） */

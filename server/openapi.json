@@ -4386,6 +4386,384 @@
         ]
       }
     },
+    "/admin/skills": {
+      "get": {
+        "description": "角色与怪物同一张表，用 `owner` 筛选。\n\nowner：role（角色） / monster（怪物）；category：0（主动） / 1（被动） / 2（状态） / 3（回复）；targetType：0（区域） / 1（单体） / 2（群体） / 3（自身）。\n\n`keyword` 模糊匹配 id / 技能名。\n\n**排序**：`sort` 取 `id` / `owner` / `label` / `levelReq` / `cooldown` / `updatedAt`，`order` 取 asc / desc（默认 id 数值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminSkill.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与技能名",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "owner",
+            "required": false,
+            "in": "query",
+            "description": "归属筛选：role / monster（不传 = 两边都要）",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "role",
+                "monster"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SkillPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "技能配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SkillPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/SkillQueryDto"
+        }
+      }
+    },
+    "/admin/skills/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `damageCoefficients`：**整份替换**（下标 = 技能等级 - 1）；状态型技能可为空数组，主动技能至少一条。\n- `statusId`：释放成功后给自己挂的状态；**状态型技能（category=2）必填**，其它分类填了也生效（回蓝 / 回血类同理）。\n- `castLockMs`：释放动作锁时长，0 = 跟动画时长走；调大 = 出手后硬直更久（本次施法期间锁移动由动作锁统一保证）。\n- `requireTarget`：关掉后自身 / 状态型技能不再要求选中目标。\n- `owner` 与 `id` **不可改**（行身份）；`id` 不存在 → 404（`50029`）；`statusId` 不存在 → 404（`50030`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminSkill.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "技能 id（如 \"1000\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的技能配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SkillDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑技能配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SkillDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/statuses": {
+      "get": {
+        "description": "角色与怪物同一张表，用 `owner` 筛选。\n\nowner：role（角色） / monster（怪物）；source：skill（技能） / equipment（装备） / privilege（特权） / other（其他）。\n\n`keyword` 模糊匹配 id / 状态名。\n\n**排序**：`sort` 取 `id` / `owner` / `label` / `duration` / `updatedAt`，`order` 取 asc / desc（默认 id 数值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminStatus.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与状态名",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "owner",
+            "required": false,
+            "in": "query",
+            "description": "归属筛选：role / monster（不传 = 两边都要）",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "role",
+                "monster"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StatusPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "状态配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/StatusPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/StatusQueryDto"
+        }
+      }
+    },
+    "/admin/statuses/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `combat`：**整份替换**；不传则不改。三个维度全缺省 = 纯表现状态（不参与伤害结算）。\n- `duration`：重复获得时从获得时刻重新计时，不叠层。\n- `id` 不存在 → 404（`50030`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminStatus.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "状态 id（如 \"2001\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的状态配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StatusDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑状态配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/StatusDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/equipments": {
       "get": {
         "description": "**只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）不进管理端 —— 它是基础件乘前后缀倍率展开的。id / 部位结构固定，**没有创建 / 删除**。\n\n`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `slot` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -8131,6 +8509,204 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          }
+        }
+      },
+      "DamageCoefficientDto": {
+        "type": "object",
+        "properties": {
+          "baseType": {
+            "type": "string",
+            "description": "收益基数属性（maxHp / hpRecover / physicalAttack / magicAttack / taoistAttack / physicalDefense / magicDefense / taoistDefense）"
+          },
+          "baseTypeRate": {
+            "type": "number",
+            "description": "倍率（0 = 该级不造成伤害；上限 100 防止手滑多打两个零）",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "baseType",
+          "baseTypeRate"
+        ]
+      },
+      "UpdateSkillDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "技能名（≤50 字）",
+            "maxLength": 50
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（≤200 字；空串 = 不显示图标）",
+            "maxLength": 200
+          },
+          "category": {
+            "type": "string",
+            "description": "分类：0 主动 / 1 被动 / 2 状态 / 3 回复",
+            "enum": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身",
+            "enum": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "description": "施法动作（≤50 字；空串 = 不播动作）",
+            "maxLength": 50
+          },
+          "effect": {
+            "type": "string",
+            "description": "技能特效图集路径（≤200 字；空串 = 无特效）",
+            "maxLength": 200
+          },
+          "effectOnSelf": {
+            "type": "boolean",
+            "description": "特效是否播在自己身上"
+          },
+          "cooldown": {
+            "type": "number",
+            "description": "冷却（秒，0 = 不限制）",
+            "minimum": 0,
+            "maximum": 3600
+          },
+          "mpCost": {
+            "type": "number",
+            "description": "释放消耗魔法值（0 = 不消耗）",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "distance": {
+            "type": "number",
+            "description": "施法距离（0 = 不限距离）",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "levelReq": {
+            "type": "number",
+            "description": "学习 / 开启等级",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案（≤500 字）",
+            "maxLength": 500
+          },
+          "damageCoefficients": {
+            "description": "伤害系数（下标 = 技能等级 - 1，最多 20 级）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageCoefficientDto"
+            }
+          },
+          "statusId": {
+            "type": "string",
+            "description": "释放后挂载的状态 id（空串 = 不挂；状态型技能必填）"
+          },
+          "castLockMs": {
+            "type": "number",
+            "description": "动作锁时长（毫秒；0 = 跟动画时长走）",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "requireTarget": {
+            "type": "boolean",
+            "description": "是否要求有合法目标"
+          },
+          "canAuto": {
+            "type": "boolean",
+            "description": "是否可被自动战斗 / 挂机释放"
+          }
+        }
+      },
+      "StatusCombatDto": {
+        "type": "object",
+        "properties": {
+          "blockChance": {
+            "type": "number",
+            "description": "格挡触发概率 0~1（缺省 = 不参与格挡判定）",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "blockFactor": {
+            "type": "number",
+            "description": "格挡触发时本次伤害的乘数（0~1，0.5 = 减半）",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "defenseMultiplier": {
+            "type": "number",
+            "description": "防御乘法系数（≥1，1.5 = 防御 ×1.5；多个状态连乘）",
+            "minimum": 0,
+            "maximum": 10
+          }
+        }
+      },
+      "UpdateStatusDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "状态名（≤50 字）",
+            "maxLength": 50
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（≤200 字；空串 = 不显示图标）",
+            "maxLength": 200
+          },
+          "duration": {
+            "type": "number",
+            "description": "持续时间（秒，>0）",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "source": {
+            "type": "string",
+            "description": "来源：skill / equipment / privilege / other",
+            "enum": [
+              "skill",
+              "equipment",
+              "privilege",
+              "other"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案（≤500 字）",
+            "maxLength": 500
+          },
+          "effect": {
+            "type": "string",
+            "description": "身上特效图集路径（≤200 字；空串 = 只在图标栏显示）",
+            "maxLength": 200
+          },
+          "effectHoldLast": {
+            "type": "boolean",
+            "description": "身上特效是否只播一遍停在尾帧"
+          },
+          "combat": {
+            "description": "战斗数值修正（整份替换：不传则不改）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusCombatDto"
               }
             ]
           }
@@ -12686,6 +13262,366 @@
           }
         }
       },
+      "SkillDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "技能 id（角色技能被技能栏 / 快捷键 / 角色存档引用）"
+          },
+          "owner": {
+            "type": "string",
+            "description": "归属：role / monster",
+            "enum": [
+              "role",
+              "monster"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "技能名"
+          },
+          "icon": {
+            "type": "string",
+            "description": "技能图标资源路径（resources 相对路径，不含扩展名）"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类：0 主动 / 1 被动 / 2 状态 / 3 回复（与客户端 SkillType 同值）",
+            "enum": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身（与客户端 SkillTargetType 同值）",
+            "enum": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "description": "施法动作（客户端动画动作键，如 attack_near；空串 = 不播动作）"
+          },
+          "effect": {
+            "type": "string",
+            "description": "技能特效图集路径（空串 = 无特效）"
+          },
+          "effectOnSelf": {
+            "type": "boolean",
+            "description": "特效是否播在自己身上"
+          },
+          "cooldown": {
+            "type": "number",
+            "description": "冷却（秒）"
+          },
+          "mpCost": {
+            "type": "number",
+            "description": "释放一次消耗的魔法值"
+          },
+          "distance": {
+            "type": "number",
+            "description": "施法距离（0 = 不限距离）"
+          },
+          "levelReq": {
+            "type": "number",
+            "description": "学习 / 开启等级"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案"
+          },
+          "damageCoefficients": {
+            "description": "伤害系数（下标 = 技能等级 - 1；状态型技能可为空数组）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageCoefficientDto"
+            }
+          },
+          "statusId": {
+            "type": "string",
+            "description": "释放成功后给自身挂的状态 id（空串 = 不挂）"
+          },
+          "castLockMs": {
+            "type": "number",
+            "description": "释放动作锁时长（毫秒；0 = 跟动画时长走）"
+          },
+          "requireTarget": {
+            "type": "boolean",
+            "description": "是否要求有合法目标（自身 / 状态型技能可关）"
+          },
+          "canAuto": {
+            "type": "boolean",
+            "description": "是否可被自动战斗 / 挂机释放"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "label",
+          "icon",
+          "category",
+          "targetType",
+          "action",
+          "effect",
+          "effectOnSelf",
+          "cooldown",
+          "mpCost",
+          "distance",
+          "levelReq",
+          "description",
+          "damageCoefficients",
+          "statusId",
+          "castLockMs",
+          "requireTarget",
+          "canAuto",
+          "updatedAt"
+        ]
+      },
+      "SkillPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的技能配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "SkillQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与技能名"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "owner": {
+            "type": "string",
+            "description": "归属筛选：role / monster（不传 = 两边都要）",
+            "enum": [
+              "role",
+              "monster"
+            ]
+          }
+        }
+      },
+      "StatusDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "状态 id（技能 statusId 与将来的装备 / 特权引用它）"
+          },
+          "owner": {
+            "type": "string",
+            "description": "归属：role / monster",
+            "enum": [
+              "role",
+              "monster"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "状态名"
+          },
+          "icon": {
+            "type": "string",
+            "description": "状态图标资源路径（resources 相对路径，不含扩展名）"
+          },
+          "duration": {
+            "type": "number",
+            "description": "持续时间（秒；重复获得时从获得时刻重新计时，不叠层）"
+          },
+          "source": {
+            "type": "string",
+            "description": "来源：skill / equipment / privilege / other",
+            "enum": [
+              "skill",
+              "equipment",
+              "privilege",
+              "other"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案"
+          },
+          "effect": {
+            "type": "string",
+            "description": "身上特效图集路径（空串 = 只在图标栏显示）"
+          },
+          "effectHoldLast": {
+            "type": "boolean",
+            "description": "身上特效是否只播一遍并停在尾帧（脉冲类特效配 true）"
+          },
+          "combat": {
+            "description": "战斗数值修正（缺省 = 纯表现状态）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusCombatDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "label",
+          "icon",
+          "duration",
+          "source",
+          "description",
+          "effect",
+          "effectHoldLast",
+          "combat",
+          "updatedAt"
+        ]
+      },
+      "StatusPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的状态配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "StatusQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与状态名"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "owner": {
+            "type": "string",
+            "description": "归属筛选：role / monster（不传 = 两边都要）",
+            "enum": [
+              "role",
+              "monster"
+            ]
+          }
+        }
+      },
       "MallSettingsDto": {
         "type": "object",
         "properties": {
@@ -13297,6 +14233,20 @@
             "items": {
               "$ref": "#/components/schemas/MonsterDropDto"
             }
+          },
+          "skills": {
+            "description": "技能配置（角色与怪物同表，owner 区分；含释放限制与挂载状态）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillDto"
+            }
+          },
+          "statuses": {
+            "description": "状态配置（角色与怪物同表，owner 区分）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusDto"
+            }
           }
         },
         "required": [
@@ -13315,7 +14265,9 @@
           "mallPrices",
           "mallSettings",
           "dropTables",
-          "monsterDrops"
+          "monsterDrops",
+          "skills",
+          "statuses"
         ]
       }
     }

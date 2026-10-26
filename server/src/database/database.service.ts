@@ -502,6 +502,49 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         entries     TEXT,
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 技能（#367）：owner 区分角色 / 怪物，同一张表 —— 技能对两边完全同构，
+      -- 拆两张表只会让「同一个技能既给人又给怪」变成复制。
+      -- 角色行 seed 自生成物 SKILLS（id 被技能栏 / 快捷键 / 角色存档引用，不可增删）；
+      -- damage_coefficients 是 JSON（下标 = 技能等级），status_id 非空 = 释放后给自己挂状态。
+      CREATE TABLE IF NOT EXISTS skills (
+        id                  TEXT    PRIMARY KEY,
+        owner               TEXT    NOT NULL DEFAULT 'role',
+        label               TEXT    NOT NULL DEFAULT '',
+        icon                TEXT    NOT NULL DEFAULT '',
+        category            TEXT    NOT NULL DEFAULT 'attack',
+        target_type         TEXT    NOT NULL DEFAULT 'single',
+        action              TEXT    NOT NULL DEFAULT '',
+        effect              TEXT    NOT NULL DEFAULT '',
+        effect_on_self      INTEGER NOT NULL DEFAULT 0,
+        cooldown            REAL    NOT NULL DEFAULT 1,
+        mp_cost             INTEGER NOT NULL DEFAULT 0,
+        distance            REAL    NOT NULL DEFAULT 0,
+        level_req           INTEGER NOT NULL DEFAULT 1,
+        description         TEXT    NOT NULL DEFAULT '',
+        damage_coefficients TEXT    NOT NULL DEFAULT '[]',
+        status_id           TEXT    NOT NULL DEFAULT '',
+        cast_lock_ms        INTEGER NOT NULL DEFAULT 0,
+        require_target      INTEGER NOT NULL DEFAULT 1,
+        can_auto            INTEGER NOT NULL DEFAULT 0,
+        updated_at          INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 状态（#367）：同样 owner 区分角色 / 怪物；combat 是 JSON 数值修正
+      -- （格挡概率 / 格挡系数 / 防御倍率，口径见客户端 types/status 与 BattleMath）
+      CREATE TABLE IF NOT EXISTS statuses (
+        id               TEXT    PRIMARY KEY,
+        owner            TEXT    NOT NULL DEFAULT 'role',
+        label            TEXT    NOT NULL DEFAULT '',
+        icon             TEXT    NOT NULL DEFAULT '',
+        duration         REAL    NOT NULL DEFAULT 0,
+        source           TEXT    NOT NULL DEFAULT 'skill',
+        description      TEXT    NOT NULL DEFAULT '',
+        effect           TEXT    NOT NULL DEFAULT '',
+        effect_hold_last INTEGER NOT NULL DEFAULT 0,
+        combat           TEXT    NOT NULL DEFAULT '{}',
+        updated_at       INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

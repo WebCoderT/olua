@@ -25,6 +25,8 @@ const NAV_ITEMS = [
   { to: "/items", label: "物品配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/monsters", label: "怪物配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/npcs", label: "NPC 配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/skills", label: "技能配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/statuses", label: "状态配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/mall", label: "商城定价", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/fashions", label: "时装配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/drops", label: "掉落配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },

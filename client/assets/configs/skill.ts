@@ -29,6 +29,19 @@ const skillHandlers: Record<SkillId, (context: SkillContext) => void> = {
  * 消费方照旧 skills.get(id)，行为与拆分前一致（数值与 id→实现映射见 test-skill-decouple.cjs 守卫）
  */
 export const skills = new Map<SkillId, SkillConfig>();
-for (const item of skillData) {
-  skills.set(item.id, { ...item, onClick: skillHandlers[item.id] });
+
+/**
+ * 按当前 skillData 重建 skills Map（数值/文案来自数据表，释放实现来自 skillHandlers）
+ *
+ * 为什么要单独一个函数：`skills` 的值是 `{...item, onClick}` 的**副本**，
+ * 配置快照（#367）原地覆写的是 `skillData` 里的对象 —— 不重建的话，消费者从 Map 里
+ * 读到的还是旧数值。ConfigLoader 在 applyConfigSnapshot 之后调它一次。
+ */
+export function rebuildSkills(): void {
+  skills.clear();
+  for (const item of skillData) {
+    skills.set(item.id, { ...item, onClick: skillHandlers[item.id] });
+  }
 }
+
+rebuildSkills();

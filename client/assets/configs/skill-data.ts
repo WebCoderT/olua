@@ -370,6 +370,9 @@ export const skillData: Array<SkillData & { id: SkillId }> = [
     distance: 0,
     action: ACTION.ATTACK_FAR,
     canAuto: false,
+    // 自身状态技能（#367）：挂配置里的状态；不需要选中敌人才能给自己上盾
+    statusId: "2001",
+    requireTarget: false,
   },
 
   {
@@ -399,5 +402,8 @@ export const skillData: Array<SkillData & { id: SkillId }> = [
     distance: 0,
     action: ACTION.ATTACK_FAR,
     canAuto: false,
+    // 自身状态技能（#367）：机制上仍是「给自己挂状态」，不要求有敌人在场
+    statusId: "2002",
+    requireTarget: false,
   },
 ];

@@ -708,6 +708,96 @@ export interface FashionRow {
   updated_at: number;
 }
 
+/**
+ * 技能（#367）：`skills` 表的一行
+ *
+ * **角色与怪物同一张表**，靠 `owner` 区分 —— 技能这件事两边完全同构（一个动作 + 一套倍率 /
+ * 或一段状态），分成两张表只会让「同一个技能既给怪又给人」变成复制。角色行 seed 自客户端
+ * `configs/skill-data`（id 被技能栏 / 快捷键 / 角色存档引用，**不可增删**）；
+ * 怪物行的增删与施放走 #12 主体那一刀（同样不在这里）。
+ *
+ * `damage_coefficients` 存 JSON（`[{baseType, baseTypeRate}]`，下标 = 技能等级）；
+ * `status_id` 非空 = 释放成功后给**自身**挂这个状态（替代客户端原来手写的 skillStatusMap）。
+ * `cast_lock_ms` 是释放动作锁（0 = 跟动画时长，>0 = 覆写），`require_target` 关掉后
+ * 自身 / 状态型技能不再要求选中目标。
+ */
+export interface SkillRow {
+  /** 技能 id（如 "1000"；主键，角色行不可增删） */
+  id: string;
+  /** 归属：role | monster（同一张表，管理端可切换查看） */
+  owner: string;
+  /** 技能名（后台可改） */
+  label: string;
+  /** 技能图标资源路径（resources 相对路径） */
+  icon: string;
+  /** 分类：存客户端 SkillType 原值（"0" 主动 / "1" 被动 / "2" 状态 / "3" 回复） */
+  category: string;
+  /** 目标类型：存客户端 SkillTargetType 原值（"0" 区域 / "1" 单体 / "2" 群体 / "3" 自身） */
+  target_type: string;
+  /** 施法动作（客户端动画动作键，如 attack_near） */
+  action: string;
+  /** 技能特效图集路径（空串 = 无） */
+  effect: string;
+  /** 特效是否播在自己身上（1 = 是） */
+  effect_on_self: number;
+  /** 冷却（秒） */
+  cooldown: number;
+  /** 释放一次消耗的魔法值 */
+  mp_cost: number;
+  /** 施法距离（0 = 不限距离） */
+  distance: number;
+  /** 学习 / 开启等级 */
+  level_req: number;
+  /** 描述文案（后台可改） */
+  description: string;
+  /** 伤害系数 JSON：[{baseType, baseTypeRate}]，下标 = 技能等级 - 1 */
+  damage_coefficients: string;
+  /** 释放成功后给自身挂的状态 id（空串 = 不挂） */
+  status_id: string;
+  /** 释放动作锁时长（毫秒；0 = 跟动画时长） */
+  cast_lock_ms: number;
+  /** 是否要求有合法目标（0 = 自身 / 状态型技能，不需要目标） */
+  require_target: number;
+  /** 是否可被自动战斗 / 挂机释放（1 = 可以） */
+  can_auto: number;
+  updated_at: number;
+}
+
+/**
+ * 状态（#367）：`statuses` 表的一行
+ *
+ * 状态 = 一段持续效果（身上特效 + 图标栏徽标 + 战斗数值修正）。与技能同一取向：
+ * **角色与怪物同表，靠 `owner` 区分** —— 怪物状态要参与服务端伤害结算，角色状态目前
+ * 仍由客户端口径消费（服务端权威化另开一刀）。
+ *
+ * `combat` 存 JSON（`{blockChance, blockFactor, defenseMultiplier}`，见
+ * `client/assets/types/status.StatusCombatConfig`）：状态在数值上意味着什么，
+ * 结算口径的唯一实现在客户端的 BattleMath。
+ */
+export interface StatusRow {
+  /** 状态 id（如 "2001"；主键，角色行不可增删） */
+  id: string;
+  /** 归属：role | monster */
+  owner: string;
+  /** 状态名（后台可改） */
+  label: string;
+  /** 图标资源路径（resources 相对路径） */
+  icon: string;
+  /** 持续时间（秒；重复获得时从头计时） */
+  duration: number;
+  /** 来源：skill | equipment | privilege | other */
+  source: string;
+  /** 描述文案（后台可改） */
+  description: string;
+  /** 身上特效图集路径（空串 = 只在图标栏显示） */
+  effect: string;
+  /** 身上特效是否只播一遍停在尾帧（1 = 是） */
+  effect_hold_last: number;
+  /** 战斗数值修正 JSON（{blockChance, blockFactor, defenseMultiplier}） */
+  combat: string;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）

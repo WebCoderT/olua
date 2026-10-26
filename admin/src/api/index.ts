@@ -30,6 +30,8 @@ export {
   itemsApi,
   monstersApi,
   npcsApi,
+  skillsApi,
+  statusesApi,
   mallApi,
   fashionsApi,
   dropApi,
@@ -72,6 +74,11 @@ export {
   PERMISSION_LABELS,
   permissionLabel,
   ROLE_BAG_AXIS_MAX,
+  SKILL_CATEGORY_LABELS,
+  SKILL_OWNER_LABELS,
+  SKILL_OWNER_OPTIONS,
+  SKILL_TARGET_TYPE_LABELS,
+  STATUS_SOURCE_LABELS,
 } from "./types";
 // 游戏数据：三端共用的那一份（生成物 + 查表函数）
 export {

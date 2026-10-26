@@ -56,6 +56,8 @@ import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/ga
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
 import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
 import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-config/dto/npc.dto";
+import { DamageCoefficientDto, SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "../modules/game-config/dto/skill.dto";
+import { StatusCombatDto, StatusDto, StatusPageDto, StatusQueryDto, UpdateStatusDto } from "../modules/game-config/dto/status.dto";
 import { MallPriceItemDto, MallPricePageDto, MallPriceQueryDto, MallPriceRemoveDto, MallSettingsDto, PutMallPriceDto, UpdateMallSettingsDto } from "../modules/game-config/dto/mall.dto";
 import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "../modules/game-config/dto/fashion.dto";
 import { CreateDropTableDto, DropEntryDto, DropTableDto, DropTableListDto, MonsterDropDto, MonsterDropPageDto, MonsterDropQueryDto, UpdateDropTableDto, UpdateMonsterDropDto } from "../modules/game-config/dto/drop.dto";
@@ -238,6 +240,17 @@ export const SWAGGER_MODELS = [
   NpcPageDto,
   NpcQueryDto,
   UpdateNpcDto,
+  // 养成配置（技能与状态 #367）
+  SkillDto,
+  DamageCoefficientDto,
+  SkillPageDto,
+  SkillQueryDto,
+  UpdateSkillDto,
+  StatusDto,
+  StatusCombatDto,
+  StatusPageDto,
+  StatusQueryDto,
+  UpdateStatusDto,
   // 商城定价（#251）
   MallSettingsDto,
   MallPriceItemDto,

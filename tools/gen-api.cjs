@@ -105,6 +105,8 @@ const MODULES = {
   adminLevelExp: { target: "admin", export: "levelExpsApi" },
   adminGrowthSegment: { target: "admin", export: "growthSegmentsApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
+  adminSkill: { target: "admin", export: "skillsApi" },
+  adminStatus: { target: "admin", export: "statusesApi" },
   adminZone: { target: "admin", export: "zonesApi" },
 };
 
