@@ -265,6 +265,53 @@ export function adminRoleLabel(role: string): string {
 
 //#endregion
 
+//#region 技能 / 状态的展示字典
+
+/**
+ * 技能 / 状态的归属（#367）
+ *
+ * 服务端权威定义在 `common/constants/game-config.ts` 的 `SKILL_OWNER_LABELS`，
+ * 这里只做展示；取值对不上时服务端会按 400 拒掉，不会静默存下一个界面认不出的归属。
+ * 枚举值（分类 / 目标类型）直接沿用客户端的 `SkillType` / `SkillTargetType` 数值，
+ * 少一层映射就少一处漂移。
+ */
+export const SKILL_OWNER_LABELS: Record<string, string> = {
+  role: "角色",
+  monster: "怪物",
+};
+
+/** 归属下拉项（顺序固定：角色在前，怪物在后） */
+export const SKILL_OWNER_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "role", label: SKILL_OWNER_LABELS.role },
+  { value: "monster", label: SKILL_OWNER_LABELS.monster },
+];
+
+/** 技能分类（键 = 客户端 SkillType：0 主动 / 1 被动 / 2 状态 / 3 回复） */
+export const SKILL_CATEGORY_LABELS: Record<string, string> = {
+  "0": "主动",
+  "1": "被动",
+  "2": "状态",
+  "3": "回复",
+};
+
+/** 目标类型（键 = 客户端 SkillTargetType：0 区域 / 1 单体 / 2 群体 / 3 自身） */
+export const SKILL_TARGET_TYPE_LABELS: Record<string, string> = {
+  "0": "区域",
+  "1": "单体",
+  "2": "群体",
+  "3": "自身",
+};
+
+/** 状态来源 */
+export const STATUS_SOURCE_LABELS: Record<string, string> = {
+  skill: "技能",
+  equipment: "装备",
+  privilege: "特权",
+  other: "其他",
+};
+
+//#endregion
+
 //#region 展示用的字典
 
 // 职业名 / 性别名**不在这里** —— 它们的权威定义在客户端（`configs/role.occupations`
@@ -407,6 +454,8 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   fashion: "时装配置",
   dropTable: "掉落表",
   monsterDrop: "怪物掉落",
+  skill: "技能配置",
+  status: "状态配置",
   levelExp: "升级经验",
   growthSegment: "成长曲线分段",
   growthScalar: "成长曲线参数",
