@@ -11,7 +11,7 @@
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
-#    make client-test      客户端 41 套单测（需要本机 Cocos 工程）
+#    make client-test      客户端 43 套单测（需要本机 Cocos 工程）
 #    make verify           一条命令跑完全部门禁（含三端构建与十二套 e2e）
 #    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
 #
