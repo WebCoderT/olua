@@ -37,14 +37,6 @@ export const MAIL_STATUS_LABELS: Record<MailStatusValue, string> = {
   [MailStatus.FAILED]: "发送失败",
 };
 
-/**
- * 可被调度器捡起来投递的状态
- *
- * `sending` 不在里面 —— 它是「有人正在处理」的标记，被中断的 sending 由
- * `recoverStuck` 显式回收（按超时判断），不能让调度器顺手捡走造成重复发信。
- */
-export const MAIL_DELIVERABLE_STATUSES: MailStatusValue[] = [MailStatus.PENDING, MailStatus.RETRYING];
-
 /** 收件邮箱长度上限（邮箱格式校验只做最粗的一道：有且仅有一个 @，且不含空白） */
 export const MAIL_TO_MAX = 120;
 

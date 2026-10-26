@@ -367,9 +367,6 @@ export const uiTexts = {
   label_announcement_pick: "请从左侧选择一条公告",
 } as const;
 
-/** 文案 key（uiTexts 的键） */
-export type TextKey = keyof typeof uiTexts;
-
 /** 文案模板参数 */
 export type TextParams = Record<string, string | number>;
 
@@ -396,11 +393,6 @@ export function getText(key: string, params?: TextParams): string {
     return key;
   }
   return formatTemplate(template, params);
-}
-
-/** 取文案引用（校验层产出 TextRef、展示层消费的桥梁） */
-export function formatText(ref: TextRef): string {
-  return getText(ref.key, ref.params);
 }
 
 /** 造一个文案引用（校验层用，省得到处写对象字面量） */

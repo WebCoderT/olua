@@ -197,9 +197,6 @@ const rankTierSources: RankTierSource[] = [
   },
 ];
 
-/** 每段阶数（10，校验与列表分组都用它） */
-export const rankTierSize = 10;
-
 /**
  * 军衔强度曲线（军衔属性 = 等效等级的角色裸属性 × rate × 大段 factor）
  * - 1 阶「新兵」≈ 2 级角色（刚授衔只是象征性加成）

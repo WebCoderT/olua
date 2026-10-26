@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prune": "ts-prune -p tsconfig.json --ignore \"generated|node_modules\"",
+    "dup": "jscpd src ../admin/src ../client/assets/ui ../client/assets/configs ../tools --min-tokens 120 --reporters consoleFull --silent",
     "start": "node --disable-warning=ExperimentalWarning dist/main.js",
     "dev": "node --disable-warning=ExperimentalWarning -r ts-node/register src/main.ts",
     "test:e2e": "node --disable-warning=ExperimentalWarning test/e2e.cjs",
@@ -48,7 +50,9 @@
     "@types/node": "^22.20.5",
     "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.18.2",
+    "jscpd": "^5.4.2",
     "ts-node": "^10.9.2",
+    "ts-prune": "^0.10.3",
     "typescript": "~5.9.3"
   }
 }

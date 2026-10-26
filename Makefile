@@ -139,6 +139,24 @@ dev-admin: admin-dev ## dev 的别名：只起管理端
 #  客户端（client/）
 # ==============================================================================
 
+code-prune: ## 死代码扫描（ts-prune 三端；输出需人工复核，见 skill olua-code-quality）
+	@echo "==> 死代码扫描（候选 ≠ 必删，逐条复核口径见技能文档）"
+	@cd server && $(NODE) node_modules/ts-prune/lib/index.js -p tsconfig.json --ignore "generated|node_modules" \
+		| grep -v "used in module" \
+		| grep -vE "game-data\.ts|shared/game-data\.generated\.ts|api/models\.ts|ApiModels\.ts|utils/net/Api\.ts" \
+		| grep -vE "configs/(monster|skill-data)\.ts:.*default" \
+		| grep -vE "realtime/realtime\.protocol\.ts" \
+		| grep -v "rate-limit\.util\.ts.*remainingAttempts" \
+		|| true
+	@echo "  已过滤：共享快照 re-export、gen-api 双端生成物、Cocos 场景挂载类 default、"
+	@echo "          协议帧 interface（契约文档）、remainingAttempts（e2e-guard 动态引用）"
+	@echo "  复核口径：候选还要对 e2e(.cjs 动态 require)、场景组件、模块内自用再查一遍"
+
+code-dup: ## 重复代码扫描（jscpd ≥120 token；数据表/DTO 样板/生成物属合理形态）
+	@echo "==> 重复代码扫描"
+	@cd server && ./node_modules/.bin/jscpd src ../admin/src ../client/assets/ui ../client/assets/configs ../tools \
+		--min-tokens 120 --reporters consoleFull --silent 2>&1 | tail -3
+
 client-check: ## 客户端类型检查（Cocos 自带 tsc，0 错才算过）
 	@echo "==> 客户端类型检查"
 	@cd client && $(NODE) "$(TSC)" -p tools/tsconfig.check.json && echo "  0 错"

@@ -207,5 +207,3 @@ export const BizCode = {
   /** 不能把区合并进它自己 */
   ZONE_MERGE_SAME: 50028,
 } as const;
-
-export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];

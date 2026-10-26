@@ -71,15 +71,6 @@ export function getEquipment(id: string | null | undefined): Equipment | null {
   return item && isEquipment(item) ? item : null;
 }
 
-/** 按物品大类获取全部物品 */
-export function getItemsByType(type: GOOD_TYPE): Goods[] {
-  const result: Goods[] = [];
-  items.forEach((item) => {
-    if (item.type === type) result.push(item);
-  });
-  return result;
-}
-
 //#region 背包整理（一键整理的排序规则，见 StorageManager.tidyBag）
 
 /**

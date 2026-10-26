@@ -27,11 +27,6 @@ export const ACQUIRE_CHANNEL_LABELS: Record<AcquireChannelValue, string> = {
   [AcquireChannel.UNAVAILABLE]: "无法获取",
 };
 
-/** 是否是合法的获得渠道 */
-export function isAcquireChannel(value: unknown): value is AcquireChannelValue {
-  return typeof value === "string" && ACQUIRE_CHANNELS.includes(value as AcquireChannelValue);
-}
-
 // —— 成长曲线（#256）——
 
 import { GROWTH_CURVES } from "../../shared/game-data.generated";
@@ -41,11 +36,6 @@ import { GROWTH_CURVES } from "../../shared/game-data.generated";
  * 客户端 configs/growth 增删曲线，这里与服务端校验自动跟着变）
  */
 export const GROWTH_CURVE_KEYS = Object.keys(GROWTH_CURVES);
-
-/** 是否是合法的曲线键 */
-export function isGrowthCurveKey(value: unknown): value is string {
-  return typeof value === "string" && GROWTH_CURVE_KEYS.includes(value);
-}
 
 /**
  * 成长标量参数的取值域（键 → 约束）

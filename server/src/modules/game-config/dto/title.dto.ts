@@ -132,12 +132,6 @@ export function attributesFromRow(row: TitleRow | SoulRowShape): ConfigAttribute
   return out;
 }
 
-/** 嵌套属性 → 拍平行（仅列名不同，两个仓储各自展开） */
-export function rangeOf(attributes: ConfigAttributesDto, key: keyof ConfigAttributesDto): [number, number] {
-  const value = attributes[key] as ConfigAttributeRangeDto;
-  return [value.min, value.max];
-}
-
 function range(min: number, max: number): ConfigAttributeRangeDto {
   const out = new ConfigAttributeRangeDto();
   out.min = min;
