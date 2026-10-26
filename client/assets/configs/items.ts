@@ -71,6 +71,19 @@ export function getEquipment(id: string | null | undefined): Equipment | null {
   return item && isEquipment(item) ? item : null;
 }
 
+/**
+ * 按物品大类取出全部物品（返回副本，顺序 = 注册顺序：装备 → 药品 → 材料）
+ *
+ * 只按大类筛，不带任何界面口径 —— 需要「某部位/某等级」之类的细分由调用方再筛。
+ */
+export function getItemsByType(type: GOOD_TYPE): Goods[] {
+  const list: Goods[] = [];
+  items.forEach((item) => {
+    if (item.type === type) list.push({ ...item });
+  });
+  return list;
+}
+
 //#region 背包整理（一键整理的排序规则，见 StorageManager.tidyBag）
 
 /**

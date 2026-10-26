@@ -42,6 +42,13 @@ const STUB_IMPORTS = {
   // 这里顶成「记账式」替身 —— 只记下安排过同步，真语义由 client/tools/test-client-net.cjs 验证
   "../utils/net/RoleSync": "../../stubs/RoleSync",
   "../utils/net/Session": "../../stubs/Session",
+  // #304 / #308 / #250 之后 StorageManager 也直接调角色接口（购买 / 用药 / 升级收权到服务端）：
+  // Api 顶成记账式替身（默认「未搭桩即拒绝」，测试要成功就自己给 handler）；
+  // CombatChannel / ApiModels 在 StorageManager 里只有 `import type`，运行期会被擦掉，补类型替身即可
+  // （真 CombatChannel 会拉 RealtimeClient 一大串，没必要为本文件的一句类型去编译它）
+  "../utils/net/Api": "../../stubs/Api",
+  "../utils/net/CombatChannel": "../../stubs/CombatChannelTypes",
+  "../utils/net/ApiModels": "../../stubs/ApiModels",
   // configs/skill 会 import skills/zhan → ui/core/*（配置反向依赖 UI 的历史遗留），必须顶掉
   "../../configs/skill": "../../stubs/configs-skill",
 };
@@ -100,6 +107,7 @@ const STUBS = {
   "GameHelper.ts": `export default class GameHelper {
   static combatCalc(_role: unknown): any { return {}; }
   static getEquipmentRejectReason(_equipment: unknown): any { return null; }
+  static checkRoleCanUseEquipment(_equipment: unknown): boolean { return true; }
   static getMapEnterRejectReason(_mapId: unknown): any { return null; }
 }
 `,
@@ -129,6 +137,83 @@ export default class Session {
 }
 `,
   "configs-skill.ts": `export const skills = new Map<string, any>();
+`,
+  "Api.ts": `/**
+ * 替身：角色接口（真实现是 ui/utils/net/Api，自动生成）
+ *
+ * 只做两件事：**记账**（calls，断言「客户端到底发了什么」）与**转交**（handlers）。
+ * 默认「没搭桩就拒绝」—— 服务端答应与否才是权威，静默成功会让测试误以为钱真的扣了。
+ * 要模拟服务端就在测试里给 handler：\`RoleApi.handlers.mallPurchase = (id, body) => ({...})\`。
+ */
+type RoleApiCall = { method: string; args: unknown[] };
+
+const calls: RoleApiCall[] = [];
+const handlers: Record<string, (...args: any[]) => any> = {};
+
+function dispatch(method: string, args: unknown[]): Promise<any> {
+  calls.push({ method, args });
+  const handler = handlers[method];
+  if (!handler) {
+    return Promise.reject(new Error(\`RoleApi.\${method} 未在沙箱里搭桩（RoleApi.handlers.\${method} = …）\`));
+  }
+  try {
+    return Promise.resolve(handler(...args));
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
+export const RoleApi = {
+  calls,
+  handlers,
+  /** 清账（含 handler）：每个用例开始前调，避免跨用例串味 */
+  reset(): void {
+    calls.length = 0;
+    for (const key of Object.keys(handlers)) delete handlers[key];
+  },
+  growthUpgrade(roleId: string, body: any, options?: any): Promise<any> {
+    return dispatch("growthUpgrade", [roleId, body, options]);
+  },
+  mallPurchase(roleId: string, body: any, options?: any): Promise<any> {
+    return dispatch("mallPurchase", [roleId, body, options]);
+  },
+  drugUse(roleId: string, body: any, options?: any): Promise<any> {
+    return dispatch("drugUse", [roleId, body, options]);
+  },
+};
+
+export default { RoleApi };
+`,
+  "ApiModels.ts": `/** 替身：只补 StorageManager 用到的三个结果类型（真定义是 ui/utils/net/ApiModels，自动生成） */
+export type GrowthUpgradeResult = {
+  data: Record<string, unknown>;
+  revision: number;
+  gainedLevel: number;
+  gainedLabel: string;
+};
+
+export type MallPurchaseResult = {
+  data: Record<string, unknown>;
+  revision: number;
+  /** 本次实际扣掉的价格（飘字用） */
+  consumed: number;
+};
+
+export type DrugUseResult = {
+  data: Record<string, unknown>;
+  revision: number;
+};
+`,
+  "CombatChannelTypes.ts": `/** 替身：只补 StorageManager 的 \`import type\`（真定义是 ui/utils/net/CombatChannel，运行期不用） */
+export interface CombatKillReward {
+  exp: number;
+  level: number;
+  expNow: number;
+  expNeed: number;
+  leveledUp: boolean;
+  revision: number;
+  drops: Array<{ goodId: string; count: number }>;
+}
 `,
 };
 
@@ -257,7 +342,16 @@ function prepareStorage(sandboxName, extraEntries = []) {
     const mod = require(path.join(outDir, `stubs/${name}.js`));
     return mod.default ?? mod;
   };
-  return { StorageManager, Role, outDir, shim, RoleSync: stubOf("RoleSync"), Session: stubOf("Session") };
+  return {
+    StorageManager,
+    Role,
+    outDir,
+    shim,
+    RoleSync: stubOf("RoleSync"),
+    Session: stubOf("Session"),
+    /** 角色接口替身（记账 + handlers）：购买 / 用药 / 升级收权后客户端只发请求、以服务端结果为准 */
+    RoleApi: stubOf("Api").RoleApi,
+  };
 }
 
 module.exports = { prepareStorage, STUB_IMPORTS, STUBS, CC_SHIM };

@@ -131,9 +131,12 @@ const panelsSource = read("assets/configs/layout/panels.ts");
 
 check(/title: number = 0;/.test(roleSource) && /称号等级/.test(roleSource), "Role 有 title 字段（0 = 未激活）");
 check(/typeof role\.title !== "number"\) role\.title = 0;/.test(storageSource), "旧存档迁移：title 缺失补 0（ensureRoleDefaults）");
-check(/static upgradeTitle\(\): boolean/.test(storageSource) && /getTitleLevel\(role\.title \+ 1\)/.test(storageSource), "StorageManager.upgradeTitle 按下一级配置升级");
+check(/static async upgradeTitle\(\): Promise<boolean>/.test(storageSource) && /getTitleLevel\(role\.title \+ 1\)/.test(storageSource), "StorageManager.upgradeTitle 按下一级配置预检（预检只是 UX，推进在服务端）");
 check(/title_max_tip|title_bind_gold_tip|title_upgrade_tip/.test(storageSource) === true && /createTip\("title_max_tip"\)/.test(storageSource), "升级失败/成功都走浮动提示（configs/texts）");
-check(/Object\.assign\(role, GameHelper\.combatCalc\(role\)\)/.test(storageSource.split("static upgradeTitle")[1].split("static ")[0]), "升级后重算属性与战斗力");
+// #248：扣费与阶位推进都搬到服务端，客户端走三条成长线共用的 upgradeGrowthOnServer
+const growthBody = storageSource.slice(storageSource.indexOf("private static async upgradeGrowthOnServer"), storageSource.indexOf("static async upgradeSoul"));
+check(/upgradeGrowthOnServer\(role, "title", next\.level, "title_upgrade_tip"\)/.test(storageSource), "升级交给共用的服务端升级流程（本地不再扣费落阶）");
+check(/role\.title = Number\(data\.title \?\? nextLevel\)/.test(growthBody) && /Object\.assign\(role, GameHelper\.combatCalc\(role\)\)/.test(growthBody), "以服务端返回的称号等级为准并重算属性与战斗力");
 check(/getTitleLevel\(role\.title\)/.test(helperSource) && /\(title\?\.attributes\.maxHp \?\? 0\)/.test(helperSource) && /if \(title\) sources\.push\(title\.attributes\[key\]\);/.test(helperSource), "combatCalc 把称号属性计入血量与六维");
 check(/updateTitleShow\(\)/.test(displaySource) && /getTitleLevel\(role\.title\)/.test(displaySource) && /createTitleAnimation\(config, roleShowLayout\.title\.size\)/.test(displaySource), "RoleDisplay.updateTitleShow 按角色数据挂头顶名牌动画");
 check(/updateTitleShow\(\);/.test(gameSource), "进图时挂称号外显（Game 初始化调用）");
