@@ -90,6 +90,20 @@ import { getStackBadge, StackBadge } from "../../configs/items";
 
 //#region 类型定义
 
+/**
+ * 衣服内观的最小数据源（#377）
+ *
+ * 装备（Equipment）与时装（fashionClothes.FashionDataEntry）都满足：时装只有内观资源，
+ * 没有位置/缩放这些几何参数（缺省即不缩放、不旋转、居中），所以这里全部可选。
+ */
+export type ClothInShowSource = {
+  in?: string;
+  inPosition?: Vec2;
+  inScaleX?: number;
+  inScaleY?: number;
+  inRotate?: number;
+};
+
 /** 小地图坐标点（地图内容区本地坐标，调用方负责把世界坐标换算过来） */
 export interface SmallMapDot {
   /** 相对内容区中心的横向偏移 */
@@ -1872,7 +1886,7 @@ export default class GameUiHelper {
    * 创建角色衣服内观
    * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
    */
-  static createRoleClothInShow(cloth: Equipment, size: Size = new Size()) {
+  static createRoleClothInShow(cloth: ClothInShowSource, size: Size = new Size()) {
     const clothInShow = UiHelper.createSprite("cloth_in_show", "", cloth.inPosition, size);
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     clothInShow.setScale(cloth?.inScaleX ?? 1, cloth?.inScaleY ?? 1, 1);

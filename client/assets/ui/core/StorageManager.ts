@@ -18,6 +18,7 @@ import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
 import { getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
 import { getMallPrice } from "../../configs/mall";
+import { getFashion, fashionData } from "../../configs/fashionClothes";
 import { getEquipmentNameParts } from "../../configs/equipments";
 import { getSoulLevel } from "../../configs/soul";
 import { getTitleLevel } from "../../configs/title";
@@ -251,6 +252,10 @@ export default class StorageManager {
     if (typeof role.title !== "number") role.title = 0;
     // 军衔阶数：旧存档缺失补 0（未授衔）
     if (typeof role.rank !== "number") role.rank = 0;
+    // 时装（#377）：旧存档里的 fashionCloth 是历史遗留的数字（从没有人写过），
+    // 或者干脆没有这个字段 —— 一律按「没穿」处理；不是字符串或不在配置表里也按没穿
+    const fashion = role.fashionCloth as unknown;
+    role.fashionCloth = typeof fashion === "string" && getFashion(fashion) ? fashion : null;
   }
 
   /**
@@ -521,6 +526,66 @@ export default class StorageManager {
     this.applyEquipmentChange(role, slot);
     return true;
   }
+
+  //#region 时装（#377：只换外观，不换数值）
+
+  /**
+   * 穿上一件时装（换上 = 覆盖当前时装，不需要先脱）
+   *
+   * 与时装的「拥有」无关：本版是**衣柜口径**（表里 20 套任选），获取渠道（商城/活动/掉落）
+   * 另开一刀；等有了拥有清单，这里只多一道「有没有这件」的校验。
+   * 不校验性别/职业 —— 时装配置没有这两个维度。
+   *
+   * @param fashionId 时装 id（fashions 表主键，如 cloth_2）
+   * @returns 是否穿上（id 不在配置表里返回 false）
+   */
+  static wearFashion(fashionId: string): boolean {
+    const role = this.findOnlineRole();
+    const fashion = getFashion(fashionId);
+    if (!role || !fashion) return false;
+    if (role.fashionCloth === fashion.id) return true;
+    role.fashionCloth = fashion.id;
+    this.applyFashionChange(role);
+    return true;
+  }
+
+  /**
+   * 脱下当前时装（没穿时返回 false，不打扰）
+   * @returns 是否真的脱下了一件
+   */
+  static unwearFashion(): boolean {
+    const role = this.findOnlineRole();
+    if (!role || !role.fashionCloth) return false;
+    role.fashionCloth = null;
+    this.applyFashionChange(role);
+    return true;
+  }
+
+  /**
+   * 时装变更后的统一收尾（与时装无关的数值一概不动）
+   *
+   * 外观有三处要看：地图上的主角（RoleAppearance）、角色信息弹窗的内观（RoleInShowView）、
+   * 下次进图的预载（PreloadManager）。前两处走 RoleUIManager，第三处读的就是 role 本身。
+   * **不重算属性、不改血量** —— 时装只换外观，数值仍由装备决定（这是与「换衣服」最大的区别）。
+   */
+  private static applyFashionChange(role: Role) {
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.updateRoleOutShow(role);
+    RoleUIManager.updateEquipmentDialog(EQUIPMENT_TYPE.CLOTH);
+  }
+
+  /** 当前穿戴的时装（没穿/配置里没有这件 → null） */
+  static getWornFashion() {
+    return getFashion(this.findOnlineRole()?.fashionCloth);
+  }
+
+  /** 衣柜清单（表里全部时装，界面按这个渲染） */
+  static getFashionWardrobe() {
+    return fashionData;
+  }
+
+  //#endregion
 
   /** 找背包的第一个空格（没有空格返回 null） */
   private static findEmptyBagCell(role: Role) {

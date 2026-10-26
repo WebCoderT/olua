@@ -201,3 +201,29 @@ export const fashionData: FashionDataEntry[] = [
     out: "clothes/out/028",
   },
 ];
+
+//#region 读取（#377 穿戴系统：外观取源规则只在这里写一遍）
+
+/** 按 id 取时装（无此 id 返回 null） */
+export function getFashion(id: string | null | undefined): FashionDataEntry | null {
+  if (!id) return null;
+  return fashionData.find((fashion) => fashion.id === id) ?? null;
+}
+
+/**
+ * 时装的**外观**帧目录（没穿时装 / 该时装没有外观资源 → null）
+ *
+ * 取源优先级：**时装 > 装备衣服 > 该性别默认外观**。场景里的主角（RoleAppearance）、
+ * 进图预载（PreloadManager）都走这一条，别各自判一遍 —— 三处口径不一致会变成
+ * 「弹窗里换了衣服、地图上还是旧的」或者「预载漏了、进图第一帧空着」。
+ */
+export function getFashionOut(id: string | null | undefined): string | null {
+  return getFashion(id)?.out || null;
+}
+
+/** 时装的内观资源（没穿 / 该时装没有内观 → null，调用方回落到装备内观） */
+export function getFashionIn(id: string | null | undefined): string | null {
+  return getFashion(id)?.in || null;
+}
+
+//#endregion

@@ -135,12 +135,17 @@ export class AdminPatchRoleDto {
 
   //#region 基础信息（外观与位置）
 
-  @ApiPropertyOptional({ description: "时装（外观）id；null = 取消时装", type: "number", nullable: true })
+  /**
+   * 时装（外观）id（#377）：与 fashions 表主键同形（`cloth_2`），null = 脱掉
+   *
+   * 历史形状是 `number | null`（从没有人写过、客户端也没读过），#377 穿戴系统落地时
+   * 改成 id 形式 —— 数字与任何一张表的键都对不上，留着只会让下一个人去猜「这个 3 指哪件」。
+   */
+  @ApiPropertyOptional({ description: "时装（外观）id，如 cloth_2；null = 脱掉时装", type: "string", nullable: true })
   @IsOptional()
-  @IsInt({ message: "时装 id 必须是整数" })
-  @Min(0, { message: "时装 id 不能为负" })
-  @Max(ADMIN_NUMBER_FIELD_MAX, { message: "时装 id 数值过大" })
-  fashionCloth?: number | null;
+  @IsString({ message: "时装 id 必须是字符串" })
+  @Length(0, ROLE_FIELD_VALUE_MAX_LENGTH, { message: "时装 id 过长" })
+  fashionCloth?: string | null;
 
   @ApiPropertyOptional({ description: "头像编号" })
   @IsOptional()

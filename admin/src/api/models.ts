@@ -256,9 +256,9 @@ export type RolePatchPayload = {
    */
   rank?: number;
   /**
-   * 时装（外观）id；null = 取消时装
+   * 时装（外观）id，如 cloth_2；null = 脱掉时装
    */
-  fashionCloth?: number | null;
+  fashionCloth?: string | null;
   /**
    * 头像编号
    */

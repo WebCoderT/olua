@@ -11,11 +11,12 @@ import { roleInfoDialogLayout } from "../../../configs/hudLayout";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
 import RankUpgradeDialog from "./RankUpgradeDialog";
+import FashionDialog from "./FashionDialog";
 
 /**
  * 角色信息弹窗
  * 只负责开关与组装：弹窗框 + 装饰背景（含战斗力图标）+ 装备槽分组（EquipmentSlotGroup）
- * + 属性列表（RoleAttributeList）+ 内观（RoleInShowView）+ 称号/战魂两个入口按钮
+ * + 属性列表（RoleAttributeList）+ 内观（RoleInShowView）+ 军衔/称号/战魂/时装四个入口按钮
  * 槽位右键 = 脱下装备：转交数据层处理（脱下后装备进背包、属性重算与四处刷新由数据层统一收尾）
  * 槽位角标左键 = 一键换上背包里更好的装备（哪个槽位亮角标由 refreshHints 按背包现算）
  * 换装后由数据层经 RoleUIManager 调用 updateDialog 刷新对应区块；背包变动经 refreshBag 调用 refreshHints
@@ -66,9 +67,10 @@ export default class RoleInfoDialog {
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
     this.dialog.addChild(this.inShowView);
-    // 「军衔」「称号」「战魂」入口按钮（右侧竖排相邻三格，几何见 roleInfoDialogLayout）
-    // 三者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
+    // 「军衔」「称号」「战魂」「时装」入口按钮（右侧竖排相邻四格，几何见 roleInfoDialogLayout）
+    // 四者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
     const entryButtons: { layout: { name: string; text: string; position: Vec2 }; open: () => void }[] = [
+      { layout: roleInfoDialogLayout.fashionButton, open: () => new FashionDialog().open() },
       { layout: roleInfoDialogLayout.rankButton, open: () => new RankUpgradeDialog().open() },
       { layout: roleInfoDialogLayout.titleButton, open: () => new TitleUpgradeDialog().open() },
       { layout: roleInfoDialogLayout.soulButton, open: () => new WarSoulDialog().open() },
