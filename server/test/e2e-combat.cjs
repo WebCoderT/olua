@@ -38,7 +38,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 124;
+const EXPECTED_ASSERTIONS = 126;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -757,6 +757,28 @@ function roleData(id, name, level, skills) {
       !!dressedEntry && dressedEntry.appearance.cloth === "3001" && dressedEntry.appearance.weapon === "4001",
       "H：换装后收到外观变化帧（坐标 / 血量都没变也广播，不用等他动一下）",
       JSON.stringify(dressedEntry && dressedEntry.appearance),
+    );
+
+    // 血条分母跟着存档走：升到 10 级（体力上限 100 → 262），别人看到的分母要跟上 ——
+    // maxHp 只在首见时算过一次，不并进懒刷新就会被冻在那一刻（换装加体力也会撞这条）
+    const maxHpBefore = dressedEntry ? dressedEntry.maxHp : 0;
+    const beforeLevelUp = await api(baseUrl, "GET", `roles/${companion.roleId}`, { token: companion.token });
+    const leveled = await api(baseUrl, "PUT", `roles/${companion.roleId}`, {
+      token: companion.token,
+      body: {
+        revision: beforeLevelUp.data.revision,
+        data: { ...roleData("combat_rpr_r1", "combat_rpr", 10, { 1000: 1 }), equipments: { cloth: "3001", weapon: "4001" } },
+      },
+    });
+    check(leveled.code === 0, "H：等级已改（升到 10 级，体力上限随之变化）", leveled.message);
+    const maxHpFrame = await waitFor("fighter 收到 companion 的血条分母变化", async () => {
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.maxHp !== maxHpBefore)) || null;
+    }, 8_000);
+    const maxHpEntry = maxHpFrame && maxHpFrame.players.find((entry) => entry.accountId === companionAccountId);
+    check(
+      !!maxHpEntry && maxHpEntry.maxHp === 262,
+      `H：血条分母跟着存档走（${maxHpBefore} → ${maxHpEntry && maxHpEntry.maxHp}，不会被冻在首见那一刻）`,
+      JSON.stringify(maxHpEntry),
     );
 
     // —— F. 换图离开：旧图的同伴收到 left（客户端才拆得掉旧节点）——

@@ -119,12 +119,17 @@ try {
     "按间隔重读在线角色（roles.online 是 DB 读，4Hz × 人数会很快放大）",
   );
   check(
-    /if \(!moved && !turned && !hurt && !redressed\) continue;/.test(serverPresence),
+    /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged\) continue;/.test(serverPresence),
     "外观变化进增量判据（否则站着不动换装别人看不到）",
   );
   check(/const redressed = this\.appearanceKey\(entry\.appearance\) !== entry\.sentAppearance;/.test(serverPresence), "换装判据用外观键比较");
   check(/typeof sex === "number" \? String\(sex\)/.test(serverPresence), "性别兼容历史数字形状（旧存档里见过 1/2）");
   check(/typeof data\.fashionCloth === "string" \? data\.fashionCloth : ""/.test(serverPresence), "时装只认字符串（历史的数字一律当没穿）");
+  check(
+    /existed\.maxHp = summary && summary\.maxHp > 0 \? summary\.maxHp : Math\.max\(1, existed\.hp\);/.test(serverPresence),
+    "懒刷新顺带对齐血条分母（换装 / 升级都会改 maxHp，只在首见算一次会冻住）",
+  );
+  check(/const maxHpChanged = entry\.maxHp !== entry\.sentMaxHp;/.test(serverPresence), "分母变化也进增量判据（血量没动时别人也看得到）");
   check(/appearance: \{ \.\.\.entry\.appearance \}/.test(serverPresence), "广播时复制一份外观（在场表里的会被下次懒刷新整份替换）");
   check(/playerAppearanceRefreshMs: Number\(process\.env\.PLAYER_APPEARANCE_REFRESH_MS \?\? 5000\)/.test(serverConfig), "配置默认 5 秒");
   check(/^PLAYER_APPEARANCE_REFRESH_MS=5000$/m.test(serverEnv), ".env.example 已登记");

@@ -17,7 +17,7 @@ interface PresenceEntry {
   x: number;
   y: number;
   hp: number;
-  /** 血条分母（首次见到该玩家时查一次在线角色缓存住；查不到按 1 兜底，血条不炸） */
+  /** 血条分母（首见时算一次；之后随外观懒刷新一起对齐 —— 换装 / 升级 / 晋升都会改它） */
   maxHp: number;
   /** 上报时刻是否在移动（客户端自报） */
   moving: boolean;
@@ -28,11 +28,12 @@ interface PresenceEntry {
   appearanceAt: number;
   /** 上次广播出去的外观（增量广播的判据；空串保证首帧一定带上） */
   sentAppearance: string;
-  /** 上次广播出去的位置 / 移动标记 / 血量（增量广播的判据） */
+  /** 上次广播出去的位置 / 移动标记 / 血量 / 血条分母（增量广播的判据） */
   sentX: number;
   sentY: number;
   sentMoving: boolean;
   sentHp: number;
+  sentMaxHp: number;
 }
 
 function worldKey(zoneId: number, mapId: string): string {
@@ -134,6 +135,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         sentY: NaN,
         sentMoving: !moving,
         sentHp: -1,
+        sentMaxHp: -1,
       });
       return;
     }
@@ -144,9 +146,14 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     existed.hp = hp;
     existed.moving = moving;
     existed.updatedAt = Date.now();
-    // 外观懒刷新（#383）：换装是低频事件，不值得每个 pos 帧查一次库（roles.online 是 DB 读）
+    // 外观 + 血条分母懒刷新（#383）：换装是低频事件，不值得每个 pos 帧查一次库（roles.online 是 DB 读）。
+    // 分母顺带对齐的理由：换装 / 升级 / 晋升都会改 maxHp，而它只在首见时算过一次 ——
+    // 不同步的话「换了新衣服，别人看到你的血条分母还是旧的」（最多迟一个刷新间隔）
     if (existed.updatedAt - existed.appearanceAt > this.appearanceRefreshMs()) {
-      existed.appearance = this.readAppearance(this.roles.online(accountId));
+      const role = this.roles.online(accountId);
+      existed.appearance = this.readAppearance(role);
+      const summary = role ? summarizeRoleAttributes(role) : null;
+      existed.maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, existed.hp);
       existed.appearanceAt = existed.updatedAt;
     }
   }
@@ -215,7 +222,10 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 换装也要广播（#383）：原地站着不动换一身衣服，坐标 / 血量 / 移动标记全没变，
       // 不带这条判据别人就得等他动一下才看得见新外观
       const redressed = this.appearanceKey(entry.appearance) !== entry.sentAppearance;
-      if (!moved && !turned && !hurt && !redressed) continue;
+      // 血条分母变了也要广播（#383 顺带修的）：换装 / 升级改了 maxHp 而血量还没动时，
+      // 不带这条判据别人的血条分母会一直冻在他首见你的那一刻
+      const maxHpChanged = entry.maxHp !== entry.sentMaxHp;
+      if (!moved && !turned && !hurt && !redressed && !maxHpChanged) continue;
       const key = worldKey(entry.zoneId, entry.mapId);
       const list = changed.get(key) ?? [];
       list.push(this.toEntry(accountId, entry));
@@ -224,6 +234,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       entry.sentY = entry.y;
       entry.sentMoving = entry.moving;
       entry.sentHp = entry.hp;
+      entry.sentMaxHp = entry.maxHp;
       entry.sentAppearance = this.appearanceKey(entry.appearance);
     }
     for (const [key, players] of changed) {
