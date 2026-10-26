@@ -372,7 +372,7 @@ export default class MonsterManager {
       if (data.damage < low || data.damage > high) {
         console.warn(
           `[combat-parity] server damage out of band: skill ${data.skillId} target ${data.targetId}(${monster.id}) ` +
-            `server=${data.damage} band=[${low}, ${high}] (attribute tables or formula drifted; check MONSTER_COMBAT / role attributes)`,
+            `server=${data.damage} band=[${low}, ${high}] (attribute tables or formula drifted; check MONSTERS / role attributes)`,
         );
       }
     }

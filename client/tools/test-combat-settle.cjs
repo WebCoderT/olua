@@ -10,8 +10,9 @@
  * B. 出手与结算接线（源码断言）：warrior.ts 通道可用时 sendCast 后 return（不许本地再扣一次），
  *    回滚路径保留；MonsterManager.applyServerSettle 走 skillDamageBand 对账、死亡清索引；
  *    Game.ts 接 onSettle、RealtimeClient 转发 settle 帧、CombatChannel.castSeq 单调
- * C. 服务端快照与守卫：MONSTER_COMBAT 进了生成物（220 只怪）、audit-shared-data 守着这张表、
- *    生成器 SOURCE_FILES 收了 configs/monster；e2e-combat 依赖的怪物 "1" 数值锚在快照上
+ * C. 服务端快照与守卫：MONSTERS 进了生成物（220 只怪，2026-10-25 从 MONSTER_COMBAT 改名并加 label）、
+ *    audit-shared-data 守着这张表、生成器 SOURCE_FILES 收了 configs/monster；
+ *    e2e-combat 依赖的怪物 "1" 数值锚在快照上
  *
  * 沙箱机制：A 段复用 lib/configs-sandbox.cjs 的 prepare（真实 BattleMath + cc 垫片，
  * 只用到 Vec2 的构造，BoxCollider2D/Node 只在不会调用的函数里出现）。
@@ -133,16 +134,18 @@ const generated = read(path.join("..", "server", "src", "shared", "game-data.gen
 const auditSource = read(path.join("..", "tools", "audit-shared-data.cjs"));
 const genSource = read(path.join("..", "tools", "gen-shared-data.cjs"));
 
-check(/export const MONSTER_COMBAT = \{/.test(generated), "生成物导出 MONSTER_COMBAT（怪物数值随快照下发服务端）");
-check(/"MONSTER_COMBAT"/.test(auditSource), "audit-shared-data 的 REQUIRED_EXPORTS 收了 MONSTER_COMBAT（表漂移会被守卫抓）");
+check(/export const MONSTERS: Record<string, unknown> = \{/.test(generated), "生成物导出 MONSTERS（怪物数值随快照下发服务端）");
+check(/"MONSTERS",/.test(auditSource), "audit-shared-data 的 REQUIRED_EXPORTS 收了 MONSTERS（表漂移会被守卫抓）");
 check(/"monster"/.test(genSource), "gen-shared-data 的 SOURCE_FILES 收了 configs/monster（源头在客户端配置）");
 
 {
-  const block = generated.slice(generated.indexOf("export const MONSTER_COMBAT"));
+  const block = generated.slice(generated.indexOf("export const MONSTERS"));
   const body = block.slice(0, block.indexOf("\n};"));
-  const entryCount = (body.match(/\{"level":/g) || []).length;
+  // 每只怪一行、tab 里 key 是数字 id（形状：`  "1": {"label":…,"level":1,…},`）——
+  // 别拿 `{"level":` 当锚，label 排在 level 前面，改名后这个锚永远是 0
+  const entryCount = (body.match(/^ {2}"\d+": \{/gm) || []).length;
   check(entryCount === 220, `快照收录 220 只怪的战斗数值（实得 ${entryCount}）`);
-  check(/"1": \{"level":1,"tier":"normal","maxHp":65,/.test(body), "怪物 \"1\" 的锚点数值在快照里（maxHp 65，e2e-combat 依赖）");
+  check(/"1": \{"label":"[^"]+","level":1,"tier":"normal","maxHp":65,/.test(body), "怪物 \"1\" 的锚点数值在快照里（maxHp 65，e2e-combat 依赖）");
   check(/"1": \{.*"physicalDefense":\[4,6\]/.test(body), "怪物 \"1\" 物防 [4,6]（e2e 区间 [8,16] 的怪侧一半）");
 }
 
