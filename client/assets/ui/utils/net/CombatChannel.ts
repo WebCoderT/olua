@@ -102,6 +102,28 @@ export interface MonsterAiFrame {
   hits: MonsterHitEntry[];
 }
 
+/** 玩家互见广播帧里的一名玩家（#324：协议见 realtime.protocol 的 RealtimePlayerEntry） */
+export interface PlayerEntry {
+  accountId: string;
+  /** 显示名（角色名优先，缺省回落账号名） */
+  username: string;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  moving: boolean;
+}
+
+/** 服务端玩家互见广播帧（协议见 realtime.protocol 的 RealtimePlayersMessage.data） */
+export interface PlayersFrame {
+  mapId: string;
+  /** true = 全量快照（刚进图时拿到，客户端据此重建整个集合） */
+  full: boolean;
+  players: PlayerEntry[];
+  /** 已离开的账号（增量帧用；full 帧里恒为空数组） */
+  left: string[];
+}
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -118,6 +140,9 @@ export default class CombatChannel {
 
   /** 怪物 AI 广播出口（#323；组合根接线到 MonsterManager.applyServerAi，不接时帧被丢弃） */
   static onMonsterAi: ((data: MonsterAiFrame) => void) | null = null;
+
+  /** 玩家互见广播出口（#324；组合根接线到 OtherPlayerManager.applyPlayersFrame，不接时帧被丢弃） */
+  static onPlayers: ((data: PlayersFrame) => void) | null = null;
 
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
@@ -156,17 +181,18 @@ export default class CombatChannel {
   }
 
   /**
-   * 上报自身位置（#323：AI 的目标检测输入；内部按 4Hz 节流，调用方可以每帧调）
+   * 上报自身位置（#323 AI 目标检测输入 + #324 玩家互见数据源；内部按 4Hz 节流，调用方可以每帧调）
    * @param mapId 当前地图 id
    * @param x 玩家世界坐标
    * @param y 玩家世界坐标
    * @param hp 当前血量（服务端用它判断目标是否已死）
+   * @param moving 上报时刻是否在移动（互见的走路/待机演出依据；移动是玩家自己的事，客户端自报）
    */
-  static sendPosition(mapId: string, x: number, y: number, hp: number): void {
+  static sendPosition(mapId: string, x: number, y: number, hp: number, moving = false): void {
     const now = Date.now();
     if (now - this.lastPositionSentAt < this.POSITION_INTERVAL) return;
     this.lastPositionSentAt = now;
-    RealtimeClient.send({ type: "pos", data: { mapId, x, y, hp } });
+    RealtimeClient.send({ type: "pos", data: { mapId, x, y, hp, moving } });
   }
 
   /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */
@@ -215,6 +241,17 @@ export default class CombatChannel {
       return;
     }
     this.onMonsterAi(frame);
+  }
+
+  /** RealtimeClient 收到 players 帧后走这里（#324：互见增量 + 快照兜底 + 离开事件） */
+  static dispatchPlayers(data: unknown): void {
+    const frame = data as PlayersFrame | null;
+    if (!frame || typeof frame !== "object" || !Array.isArray(frame.players) || !Array.isArray(frame.left)) return;
+    if (!this.onPlayers) {
+      // 没接线不告警：旧客户端构建（没接 OtherPlayerManager）收到 players 帧是正常现象
+      return;
+    }
+    this.onPlayers(frame);
   }
 }
 

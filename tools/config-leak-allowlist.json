@@ -18,6 +18,11 @@
       "reason": "getChildByName(\"monster_head\") 查的是怪物节点上由 GameUiHelper.createHead 建好的头顶信息栏（内部结构约定），属于「同一套结构的两端」，不是可调配置。"
     },
     {
+      "file": "ui/core/OtherPlayerManager.ts",
+      "rule": "nodeName",
+      "reason": "getChildByName(\"other_head\" / \"role_hp_bar\" / \"role_hp_text\") 查的是本文件用 GameUiHelper.createHead 建好的头顶信息栏（与 RoleDisplay.updateHead 的取件口径成对，同一套结构的两端），不是可调配置。"
+    },
+    {
       "file": "ui/helpers/GameUiHelper.ts",
       "rule": "nodeName",
       "reason": "new Node(\"soul_card_border\") / new Node(\"soul_show_box\") 是战魂卡片与勾选框内部的分组节点：创建与使用都在本文件内，属于代码结构，不存在「调它」的场景。"

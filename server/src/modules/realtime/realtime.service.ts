@@ -12,11 +12,13 @@ import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
+import { PlayerPresenceService } from "./player-presence.service";
 import {
   REALTIME_CLOSE,
   REALTIME_PATH,
   type RealtimeIdentity,
   type RealtimeMonsterAiMessage,
+  type RealtimePlayersMessage,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
   type RealtimeWorldMessage,
@@ -101,6 +103,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly adapterHost: HttpAdapterHost,
     private readonly combat: CombatSettlementService,
     private readonly monsterAi: MonsterAiService,
+    private readonly presence: PlayerPresenceService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
   ) {}
@@ -166,6 +169,19 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         const socket = this.connections.get(accountId);
         if (socket) this.send(socket, frame);
       }
+    };
+    // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去
+    this.presence.onBroadcast = (zoneId, mapId, data) => {
+      const frame: RealtimePlayersMessage = { type: "players", data };
+      for (const accountId of this.world.viewersOf(zoneId, mapId)) {
+        const socket = this.connections.get(accountId);
+        if (socket) this.send(socket, frame);
+      }
+    };
+    // 快照兜底的定向发送（full 帧只给刚进图的连接自己）
+    this.presence.onSendTo = (accountId, data) => {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, { type: "players", data } satisfies RealtimePlayersMessage);
     };
 
     this.logger.log(
@@ -316,6 +332,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         // 断开即清结算的幂等账（重连后客户端会重新计数）；世界状态是共享的，不随连接断开而清，
         // 只把「观看者」退掉（空闲回收的依据）。被顶掉的旧连接**不能**清 —— map 里已经是新连接的天下
         this.combat.dropAccount(identity.id);
+        this.presence.dropAccount(identity.id);
         this.world.leave(identity.id);
         this.monsterAi.dropAccount(identity.id);
       }
@@ -362,11 +379,21 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       return;
     }
     if (parsed?.type === "pos") {
-      // 位置上报（#323）：AI 的目标检测输入；格式不对就丢掉这条（高频帧，不值得回 error 刷屏）
+      // 位置上报（#323 AI 目标检测输入 + #324 玩家互见数据源）：格式不对就丢掉这条（高频帧，不值得回 error 刷屏）
       const position = parsePosition(parsed.data);
       if (!position) return;
       const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
       this.monsterAi.updatePosition(socket.identity.id, zoneId, position.mapId, position.x, position.y, position.hp);
+      this.presence.updatePosition(
+        socket.identity.id,
+        socket.identity.username,
+        zoneId,
+        position.mapId,
+        position.x,
+        position.y,
+        position.hp,
+        position.moving,
+      );
       return;
     }
     if (parsed?.type === "worldJoin") {
@@ -382,6 +409,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const snapshot = this.world.join(zoneId, socket.identity.id, join.mapId);
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);
+      // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
+      this.presence.join(socket.identity.id, zoneId, join.mapId);
       return;
     }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });
@@ -454,6 +483,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.connections.delete(accountId);
       // 与 close 事件的清理同口径：退观看者、清幂等账、清位置上报（世界状态是共享的，不清）
       this.combat.dropAccount(accountId);
+      this.presence.dropAccount(accountId);
       this.world.leave(accountId);
       this.monsterAi.dropAccount(accountId);
     }
@@ -535,6 +565,8 @@ interface ParsedPosition {
   x: number;
   y: number;
   hp: number;
+  /** 是否在移动（#324：缺省 false，旧客户端不带这个字段） */
+  moving: boolean;
 }
 
 function parsePosition(raw: unknown): ParsedPosition | null {
@@ -544,7 +576,7 @@ function parsePosition(raw: unknown): ParsedPosition | null {
   if (typeof data.x !== "number" || !Number.isFinite(data.x)) return null;
   if (typeof data.y !== "number" || !Number.isFinite(data.y)) return null;
   if (typeof data.hp !== "number" || !Number.isFinite(data.hp)) return null;
-  return { mapId: data.mapId, x: data.x, y: data.y, hp: data.hp };
+  return { mapId: data.mapId, x: data.x, y: data.y, hp: data.hp, moving: data.moving === true };
 }
 
 //#endregion

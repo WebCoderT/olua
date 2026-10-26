@@ -281,6 +281,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchMonsterAi(frame.data);
       return;
     }
+    if (frame.type === "players") {
+      // 玩家互见广播（#324）：同图玩家的位置 / 血量 / 移动标记互见，形状的解释在 CombatChannel
+      CombatChannel.dispatchPlayers(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
   }

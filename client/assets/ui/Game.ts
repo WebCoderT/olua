@@ -21,6 +21,7 @@ import LayerManager from "./core/LayerManager";
 import CursorManager from "./core/CursorManager";
 import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
+import OtherPlayerManager from "./core/OtherPlayerManager";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
@@ -69,6 +70,8 @@ export class Game extends Component {
   private recoverTimer = 0;
   /** 位置上报的累积计时（#323：CombatChannel.sendPosition 内部也节流，这里是帧累计的触发点） */
   private positionReportTimer = 0;
+  /** 上次上报的位置（#324：与本次差量判「是否在移动」，随 pos 帧上报给互见广播） */
+  private lastReportedPosition: { x: number; y: number } | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
 
@@ -122,6 +125,9 @@ export class Game extends Component {
     // 怪物 AI 权威（#323）：monster-ai 帧由怪物管理器落点（位置趋近演出 + 自己的受击事件），
     // 受击的血量入账/飘字/红闪在这里做（服务端已落账，客户端只演）
     CombatChannel.onMonsterAi = MonsterManager.applyServerAi.bind(MonsterManager);
+    // 玩家互见（#324）：players 帧由远端玩家管理器落场（占位节点 + 名字 + 血条，纯演出）；
+    // 自己按账号 id 过滤（广播的收件人是同图观看者，服务端不保证剔除发送者）
+    CombatChannel.onPlayers = (frame) => OtherPlayerManager.applyPlayersFrame(frame, RealtimeClient.onlineUserId ?? "");
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -233,8 +239,10 @@ export class Game extends Component {
     CombatChannel.onSettle = null;
     CombatChannel.onWorld = null;
     CombatChannel.onMonsterAi = null;
+    CombatChannel.onPlayers = null;
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
+    OtherPlayerManager.reset();
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
@@ -292,6 +300,7 @@ export class Game extends Component {
     // 本地只演（向服务端位置趋近）；同时按节流上报自身位置（AI 的目标检测输入）
     if (MonsterManager.serverAuthority) {
       MonsterAI.tick(MonsterManager.getMonsterMap(), null, true);
+      OtherPlayerManager.tick(deltaTime);
       this.reportPosition(deltaTime);
     } else {
       MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay && !this.roleDisplay.isDead() ? this.roleDisplay : null);
@@ -314,8 +323,9 @@ export class Game extends Component {
   }
 
   /**
-   * 上报自身位置给服务端（#323：AI 的目标检测输入；内部按 4Hz 再节流一层）。
+   * 上报自身位置给服务端（#323 AI 目标检测输入 + #324 玩家互见数据源；内部按 4Hz 再节流一层）。
    * 死亡也照报（hp 会是 0，服务端据此停止追击）——「死了还占着位置」比「位置消失」好处理。
+   * 是否在移动按「与上次上报的位置差」判（移动是玩家自己的事，客户端自报；自动战斗走位也算移动）。
    */
   private reportPosition(deltaTime: number) {
     this.positionReportTimer += deltaTime;
@@ -324,7 +334,10 @@ export class Game extends Component {
     const role = StorageManager.findOnlineRole();
     const position = this.roleDisplay?.getWorldPosition();
     if (!role || !position) return;
-    CombatChannel.sendPosition(role.onMap, position.x, position.y, role.hp);
+    const moving = this.lastReportedPosition === null ||
+      Math.hypot(position.x - this.lastReportedPosition.x, position.y - this.lastReportedPosition.y) > 0.5;
+    this.lastReportedPosition = { x: position.x, y: position.y };
+    CombatChannel.sendPosition(role.onMap, position.x, position.y, role.hp, moving);
   }
 
   //#region 死亡与复活
