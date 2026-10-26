@@ -29,6 +29,7 @@ const NAV_ITEMS = [
   { to: "/fashions", label: "时装配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/drops", label: "掉落配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/growth", label: "成长曲线", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/zones", label: "区服管理", end: false, permission: PERMISSION.ZONE_READ as string },
   { to: "/mails", label: "邮件", end: false, permission: PERMISSION.MAIL_READ as string },
   { to: "/admins", label: "管理员", end: false, permission: PERMISSION.ADMIN_READ as string },
   { to: "/audit-logs", label: "操作日志", end: false, permission: PERMISSION.AUDIT_READ as string },
