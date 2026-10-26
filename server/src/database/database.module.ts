@@ -26,6 +26,7 @@ import { ZoneRepository } from "./repositories/zone.repository";
 import { SkillRepository } from "./repositories/skill.repository";
 import { StatusRepository } from "./repositories/status.repository";
 import { MonsterSkillRepository } from "./repositories/monster-skill.repository";
+import { GuildRepository } from "./repositories/guild.repository";
 
 /**
  * 数据层（全局模块）
@@ -65,6 +66,7 @@ import { MonsterSkillRepository } from "./repositories/monster-skill.repository"
     SkillRepository,
     StatusRepository,
     MonsterSkillRepository,
+    GuildRepository,
   ],
   exports: [
     DatabaseService,
@@ -94,6 +96,7 @@ import { MonsterSkillRepository } from "./repositories/monster-skill.repository"
     SkillRepository,
     StatusRepository,
     MonsterSkillRepository,
+    GuildRepository,
   ],
 })
 export class DatabaseModule {}

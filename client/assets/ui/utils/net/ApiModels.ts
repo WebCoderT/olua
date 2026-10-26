@@ -1040,6 +1040,56 @@ export type SendMail = {
   body?: string;
 };
 
+export type CreateGuild = {
+  /**
+   * 帮会名（2~12 字，全局唯一）
+   */
+  name: string;
+  /**
+   * 公告（可选，0~200 字）
+   */
+  notice?: string;
+};
+
+export type ApplyGuild = {
+  /**
+   * 留言（可选，0~50 字）；重复申请会**覆盖**上一条留言
+   */
+  message?: string;
+};
+
+export type ReviewGuildApplication = {
+  /**
+   * true 通过 / false 拒绝（拒绝直接删掉申请，不留记录）
+   */
+  approve: boolean;
+};
+
+export type TransferGuild = {
+  /**
+   * 新帮主的角色 id（必须是本帮成员，且不是自己）
+   */
+  roleId: string;
+};
+
+export type UpdateGuildNotice = {
+  /**
+   * 公告（0~200 字；空字符串表示清空）
+   */
+  notice: string;
+};
+
+export type AdminUpdateGuild = {
+  /**
+   * 帮会名（2~12 字，全局唯一）
+   */
+  name?: string;
+  /**
+   * 公告（0~200 字）
+   */
+  notice?: string;
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -4193,4 +4243,238 @@ export type GameConfigSnapshot = {
    * 状态配置（角色与怪物同表，owner 区分）
    */
   statuses: Status[];
+};
+
+export type GuildSummary = {
+  /**
+   * 帮会 id
+   */
+  id: string;
+  /**
+   * 帮会名
+   */
+  name: string;
+  /**
+   * 帮会公告（列表里也带，便于一行看全）
+   */
+  notice: string;
+  /**
+   * 帮会等级（当前恒为 1：等级业务未做，先占位）
+   */
+  level: number;
+  /**
+   * 当前成员数
+   */
+  memberCount: number;
+  /**
+   * 帮主角色名
+   */
+  leaderName: string;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type GuildMember = {
+  /**
+   * 角色 id
+   */
+  roleId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 角色等级
+   */
+  level: number;
+  /**
+   * 职业（客户端按这张表显示职业图标）
+   */
+  occupation: string;
+  /**
+   * 职位：leader 帮主 / vice 副帮主 / member 成员
+   */
+  rank: string;
+  /**
+   * 职位中文名（服务端给，客户端不另写一套）
+   */
+  rankLabel: string;
+  /**
+   * 入帮时间（毫秒）
+   */
+  joinedAt: number;
+};
+
+export type GuildApplication = {
+  /**
+   * 申请人角色 id
+   */
+  roleId: string;
+  /**
+   * 申请人角色名
+   */
+  name: string;
+  /**
+   * 申请人等级
+   */
+  level: number;
+  /**
+   * 申请留言
+   */
+  message: string;
+  /**
+   * 申请时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type MyGuild = {
+  /**
+   * 帮会 id
+   */
+  id: string;
+  /**
+   * 帮会名
+   */
+  name: string;
+  /**
+   * 帮会公告
+   */
+  notice: string;
+  /**
+   * 帮会等级（当前恒为 1）
+   */
+  level: number;
+  /**
+   * 帮主角色 id
+   */
+  leaderId: string;
+  /**
+   * 帮主角色名
+   */
+  leaderName: string;
+  /**
+   * 当前成员数
+   */
+  memberCount: number;
+  /**
+   * 人数上限（配置驱动，默认 50）
+   */
+  memberLimit: number;
+  /**
+   * 我的角色 id
+   */
+  myRoleId: string;
+  /**
+   * 我的职位：leader / vice / member
+   */
+  myRank: string;
+  /**
+   * 我的职位中文名
+   */
+  myRankLabel: string;
+  /**
+   * 我能不能审批入帮申请（帮主 / 副帮主）
+   */
+  canReview: boolean;
+  /**
+   * 我能不能改公告 / 踢人（帮主 / 副帮主）
+   */
+  canManage: boolean;
+  /**
+   * 我能不能解散（仅帮主）
+   */
+  canDisband: boolean;
+  /**
+   * 成员列表（帮主 → 副帮主 → 成员，同职位按入帮时间）
+   */
+  members: GuildMember[];
+  /**
+   * 待审批申请（**只有干部才拿得到**，普通成员是空数组 —— 非干部不该看到谁在申请）
+   */
+  applicants: GuildApplication[];
+};
+
+export type AdminGuild = {
+  /**
+   * 帮会 id
+   */
+  id: string;
+  /**
+   * 帮会名
+   */
+  name: string;
+  /**
+   * 帮会公告（列表里也带，便于一行看全）
+   */
+  notice: string;
+  /**
+   * 帮会等级（当前恒为 1：等级业务未做，先占位）
+   */
+  level: number;
+  /**
+   * 当前成员数
+   */
+  memberCount: number;
+  /**
+   * 帮主角色名
+   */
+  leaderName: string;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 帮主角色 id
+   */
+  leaderId: string;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type AdminGuildDetail = {
+  /**
+   * 帮会 id
+   */
+  id: string;
+  /**
+   * 帮会名
+   */
+  name: string;
+  /**
+   * 帮会公告（列表里也带，便于一行看全）
+   */
+  notice: string;
+  /**
+   * 帮会等级（当前恒为 1：等级业务未做，先占位）
+   */
+  level: number;
+  /**
+   * 当前成员数
+   */
+  memberCount: number;
+  /**
+   * 帮主角色名
+   */
+  leaderName: string;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 帮主角色 id
+   */
+  leaderId: string;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 成员名单
+   */
+  members: GuildMember[];
 };

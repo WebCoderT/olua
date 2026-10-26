@@ -81,6 +81,20 @@ import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import { ZoneDto, AdminZoneDto, CreateZoneDto, MergeZoneDto } from "../modules/zone/dto/zone.dto";
 import {
+  AdminGuildDetailDto,
+  AdminGuildDto,
+  AdminUpdateGuildDto,
+  ApplyGuildDto,
+  CreateGuildDto,
+  GuildApplicationDto,
+  GuildMemberDto,
+  GuildSummaryDto,
+  MyGuildDto,
+  ReviewGuildApplicationDto,
+  TransferGuildDto,
+  UpdateGuildNoticeDto,
+} from "../modules/social/dto/guild.dto";
+import {
   MailJobDto,
   MailJobPageDto,
   MailQueryDto,
@@ -279,4 +293,17 @@ export const SWAGGER_MODELS = [
   GameConfigSnapshotDto,
   UpdateDropTableDto,
   UpdateMonsterDropDto,
+  // 帮会（#388）
+  GuildSummaryDto,
+  GuildMemberDto,
+  GuildApplicationDto,
+  MyGuildDto,
+  AdminGuildDto,
+  AdminGuildDetailDto,
+  CreateGuildDto,
+  ApplyGuildDto,
+  ReviewGuildApplicationDto,
+  UpdateGuildNoticeDto,
+  TransferGuildDto,
+  AdminUpdateGuildDto,
 ];

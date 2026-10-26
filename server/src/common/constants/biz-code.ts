@@ -210,4 +210,28 @@ export const BizCode = {
   ZONE_NAME_EXISTS: 50027,
   /** 不能把区合并进它自己 */
   ZONE_MERGE_SAME: 50028,
+
+  //#region 社交：帮会（#388）
+  /** 帮会不存在（列表里刚被解散 / id 传错） */
+  GUILD_NOT_FOUND: 50101,
+  /** 帮会名已存在 */
+  GUILD_NAME_EXISTS: 50102,
+  /** 已经在某个帮会里（一个人只能在一个帮会 —— 建帮、申请、入帮都先过这道） */
+  GUILD_ALREADY_IN: 50103,
+  /** 不在任何帮会里（退出 / 改公告 / 审批这类「帮内动作」的前提） */
+  GUILD_NOT_IN: 50104,
+  /**
+   * 职位不够
+   *
+   * 与 `FORBIDDEN`（40300）分开：那是「连这个门都进不去」，这里是「帮内职位不够」——
+   * 客户端要能区分「我不是这个帮的人」和「我是成员但没这个权」。
+   */
+  GUILD_PERMISSION_DENIED: 50105,
+  /** 帮主不能直接退出（先转让或解散）；也不能被踢 */
+  GUILD_LEADER_LOCKED: 50106,
+  /** 帮会人数已满 */
+  GUILD_FULL: 50107,
+  /** 目标不合法（转让/踢人/审批的对象不是本帮成员，或指向自己） */
+  GUILD_TARGET_INVALID: 50108,
+  //#endregion
 } as const;

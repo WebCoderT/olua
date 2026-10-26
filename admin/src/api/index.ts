@@ -36,6 +36,7 @@ export {
   fashionsApi,
   dropApi,
   zonesApi,
+  guildsApi,
   levelExpsApi,
   growthSegmentsApi,
   growthScalarsApi,

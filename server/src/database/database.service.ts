@@ -557,6 +557,39 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at       INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (monster_key, skill_id)
       );
+
+      -- 帮会（#388，社交 epic #387 刀一）：一个角色只能在一个帮会里，
+      -- 这条由 guild_members 的唯一索引约束，不靠业务自觉。
+      -- level / funds 只占位（帮会等级与资金不在这一刀），写业务前先想清楚它们由谁改。
+      CREATE TABLE IF NOT EXISTS guilds (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE,
+        notice     TEXT NOT NULL DEFAULT '',
+        leader_id  TEXT NOT NULL,
+        level      INTEGER NOT NULL DEFAULT 1,
+        funds      INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      -- 成员：复合主键 = 同一个人在同一个帮会里只有一行；role_id 唯一 = 一个人只能在一个帮会
+      CREATE TABLE IF NOT EXISTS guild_members (
+        guild_id  TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        role_id   TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        rank      TEXT NOT NULL DEFAULT 'member',
+        joined_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, role_id)
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_members_role ON guild_members(role_id);
+
+      -- 入帮申请：同一人对同一帮会只留一条（重复申请 = 覆盖留言，不堆积）
+      CREATE TABLE IF NOT EXISTS guild_applications (
+        guild_id   TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        role_id    TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        message    TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, role_id)
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

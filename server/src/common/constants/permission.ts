@@ -120,6 +120,21 @@ export const Permission = {
    * 面目全非，误操作的代价高 —— 与 `account:delete` 同量级，单列一个权限点。
    */
   ZONE_WRITE: "zone:write",
+
+  /**
+   * 查看帮会列表 / 成员 / 申请（#388）
+   *
+   * 与区服同级给观察员：帮会是**玩家自己组织出来的公开信息**（谁在哪个帮、多少人），
+   * 读了不等于能改 —— 改公告与解散走 `guild:write`。
+   */
+  GUILD_READ: "guild:read",
+  /**
+   * 改帮会公告 / 强制解散帮会（#388）
+   *
+   * 解散会**抹掉一整群人的组织关系**（成员表连删），误操作代价与删账号同量级，
+   * 单列一个权限点，只给管理员及以上。
+   */
+  GUILD_WRITE: "guild:write",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -157,6 +172,7 @@ export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
     Permission.ANNOUNCEMENT_READ,
     Permission.GAME_CONFIG_READ,
     Permission.ZONE_READ,
+    Permission.GUILD_READ,
   ],
 };
 
@@ -191,6 +207,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.GAME_CONFIG_WRITE]: "修改养成配置",
   [Permission.ZONE_READ]: "查看区服",
   [Permission.ZONE_WRITE]: "开区 / 合并区",
+  [Permission.GUILD_READ]: "查看帮会",
+  [Permission.GUILD_WRITE]: "改帮会公告 / 解散帮会",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

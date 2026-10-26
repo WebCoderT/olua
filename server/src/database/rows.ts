@@ -819,6 +819,67 @@ export interface MonsterSkillRow {
 
 //#endregion
 
+//#region 社交：帮会（#388）
+
+/** 帮会一行（`guilds` 表） */
+export interface GuildRow {
+  id: string;
+  /** 帮会名（唯一，2~12 字） */
+  name: string;
+  /** 公告（0~200 字） */
+  notice: string;
+  /** 帮主角色 id（与 guild_members.rank='leader' 的那行同一个人） */
+  leader_id: string;
+  /** 帮会等级（占位：本刀没有等级业务，写之前先定义它由谁改） */
+  level: number;
+  /** 帮会资金（同上，占位） */
+  funds: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/** 帮会成员一行（`guild_members` 表；role_id 全表唯一 = 一个人只能在一个帮会） */
+export interface GuildMemberRow {
+  guild_id: string;
+  role_id: string;
+  /** leader | vice | member（见 common/constants/social.ts 的 GUILD_RANK） */
+  rank: string;
+  joined_at: number;
+}
+
+/**
+ * 成员 + 角色索引字段（列表展示用：名字与等级是 `roles` 表上的冗余列）
+ *
+ * 只在查询里 join 出来，不落盘 —— 角色的名字/等级改了就跟着变，不需要同步第二份。
+ */
+export interface GuildMemberWithRoleRow extends GuildMemberRow {
+  role_name: string;
+  role_level: number;
+  role_occupation: string;
+}
+
+/** 入帮申请一行（`guild_applications` 表；(guild_id, role_id) 主键） */
+export interface GuildApplicationRow {
+  guild_id: string;
+  role_id: string;
+  message: string;
+  created_at: number;
+}
+
+/** 申请 + 申请人名字（审批列表展示用） */
+export interface GuildApplicationWithRoleRow extends GuildApplicationRow {
+  role_name: string;
+  role_level: number;
+}
+
+/** 帮会列表一行（帮会 + 人数 + 帮主名；人数用来排序与「满员」判断） */
+export interface GuildListRow extends GuildRow {
+  member_count: number;
+  leader_name: string;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

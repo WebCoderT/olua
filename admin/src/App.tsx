@@ -34,6 +34,7 @@ import { RoleDetailPage } from "./pages/RoleDetailPage";
 import { RolesPage } from "./pages/RolesPage";
 import { SystemPage } from "./pages/SystemPage";
 import { ZonesPage } from "./pages/ZonesPage";
+import { GuildsPage } from "./pages/GuildsPage";
 import { clearSession, hasPermission, isLoggedIn } from "./store/session";
 import { toastError } from "./store/toast";
 
@@ -250,6 +251,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.ZONE_READ}>
                 <ZonesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="guilds"
+            element={
+              <RequirePermission permission={PERMISSION.GUILD_READ}>
+                <GuildsPage />
               </RequirePermission>
             }
           />

@@ -55,6 +55,69 @@ export const ApiRoutes = {
      */
     snapshot: "/game-config",
   },
+  /** guild 模块（10 个接口） */
+  guild: {
+    /**
+     * 帮会列表（GET /guilds）
+     *
+     * 全部帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。
+     */
+    list: "/guilds",
+    /**
+     * 创建帮会（POST /guilds）
+     *
+     * 建帮人自动成为帮主，**免费**；帮会名 2~12 字且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。
+     */
+    create: "/guilds",
+    /**
+     * 申请加入帮会（POST /guilds/{id}/applications）
+     *
+     * 留言 0~50 字。**重复申请只覆盖留言**，不会堆出两条。
+     */
+    apply: (id: string) => `/guilds/${encodeURIComponent(id)}/applications`,
+    /**
+     * 解散帮会（DELETE /guilds/me）
+     *
+     * 仅帮主可用；成员与待审批申请一并清除，**不可恢复**。帮会人数上限见服务端配置（默认 50）。
+     */
+    disband: "/guilds/me",
+    /**
+     * 我的帮会（GET /guilds/me）
+     *
+     * 当前在线角色所在的帮会（成员名单 + 待审批申请 + 我可用的操作）。不在任何帮会时 data 为 null。
+     */
+    mine: "/guilds/me",
+    /**
+     * 审批入帮申请（POST /guilds/me/applications/{roleId}/review）
+     *
+     * 帮主 / 副帮主可用。拒绝时直接删掉申请（不留记录）。通过时再查一次「对方是否已入别的帮、帮会是否已满」。
+     */
+    review: (roleId: string) => `/guilds/me/applications/${encodeURIComponent(roleId)}/review`,
+    /**
+     * 退出帮会（POST /guilds/me/leave）
+     *
+     * 帮主不能直接退出（50106）：先把帮主转让给别人，或者解散帮会。
+     */
+    leave: "/guilds/me/leave",
+    /**
+     * 踢出成员（POST /guilds/me/members/{roleId}/kick）
+     *
+     * 帮主 / 副帮主可用。副帮主不能踢另一位副帮主；帮主不可被踢；不能踢自己。
+     */
+    kick: (roleId: string) => `/guilds/me/members/${encodeURIComponent(roleId)}/kick`,
+    /**
+     * 修改帮会公告（POST /guilds/me/notice）
+     *
+     * 帮主 / 副帮主可用；空字符串表示清空公告。
+     */
+    notice: "/guilds/me/notice",
+    /**
+     * 转让帮主（POST /guilds/me/transfer）
+     *
+     * 仅帮主可用。双方职位互换（我变普通成员，他变帮主），`guilds.leader_id` 同一事务内改。
+     */
+    transfer: "/guilds/me/transfer",
+  },
   /** health 模块（1 个接口） */
   health: {
     /**
