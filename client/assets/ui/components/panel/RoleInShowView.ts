@@ -1,6 +1,7 @@
 import { Node } from "cc";
 import { Role } from "../../../entities/Role";
 import { getEquipment } from "../../../configs/items";
+import { getFashionIn } from "../../../configs/fashionClothes";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { roleInShowLayout } from "../../../configs/hudLayout";
 
@@ -22,13 +23,21 @@ export default class RoleInShowView extends Node {
     this.updateWeapon(role);
   }
 
-  /** 换装后刷新衣服内观 */
+  /**
+   * 换装 / 换时装后刷新衣服内观
+   *
+   * 取源：时装内观 > 装备衣服内观（#377）。时装只有内观资源、没有几何参数，
+   * 所以位置/缩放仍按装备那件走（都没有时用默认值）。
+   */
   updateCloth(role: Role) {
     if (this.clothInShow) this.clothInShow.destroy();
     this.clothInShow = null;
     const cloth = getEquipment(role.equipments.cloth);
-    if (!cloth) return;
-    this.clothInShow = GameUiHelper.createRoleClothInShow(cloth, roleInShowLayout.size);
+    const fashionIn = getFashionIn(role.fashionCloth);
+    if (!cloth && !fashionIn) return;
+    const source = fashionIn ? { ...(cloth ?? {}), in: fashionIn } : cloth;
+    if (!source) return;
+    this.clothInShow = GameUiHelper.createRoleClothInShow(source, roleInShowLayout.size);
     this.addChild(this.clothInShow);
   }
 

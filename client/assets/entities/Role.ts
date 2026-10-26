@@ -17,7 +17,13 @@ export class Role implements BattleAttributes {
   occupation: OECCUPATION;
   sex: SEX;
   level: number = 1;
-  fashionCloth: number | null = null;
+  /**
+   * 时装（外观）id，null = 没穿（#377）
+   *
+   * 与 fashions 表主键同形（`cloth_2` 这类），**只换外观不换数值** —— 属性仍由装备决定；
+   * 历史的 `fashionCloth: number` 字段没人写过、也没人读，已在 #377 改成 id 形式（旧档里是数字或缺失时按 null 处理）。
+   */
+  fashionCloth: string | null = null;
   relationShip: RELATION_SHIP = RELATION_SHIP.SELF;
   avatar: number = 0;
   gold: number = initialGold;

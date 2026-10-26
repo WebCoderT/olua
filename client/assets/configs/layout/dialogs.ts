@@ -287,6 +287,54 @@ export const roleInfoDialogLayout = {
   titleButton: { name: "role_title_button", position: new Vec2(200, -215), text: "称 号" },
   soulButton: { name: "role_soul_button", position: new Vec2(200, -169), text: "战 魂" },
   rankButton: { name: "role_rank_button", position: new Vec2(200, -123), text: "军 衔" },
+  /** 时装（衣柜）入口，继续往上排一格（-123 + 36 + 10 = -77），四格同列等距 */
+  fashionButton: { name: "role_fashion_button", position: new Vec2(200, -77), text: "时 装" },
+};
+
+/**
+ * 时装弹窗（#377，衣柜）
+ *
+ * 弹窗尺寸取 dialogFrame.size（600×500）；卡片 4 列网格、竖向滚动。
+ * 卡片 = 外观图标 + 名称 + 状态角标（已穿戴/点击穿上），点卡片即穿脱。
+ * 「当前穿戴」一行放在列表上方，脱掉入口也在这里（点已穿戴的卡片也会脱）。
+ */
+export const fashionDialogLayout = {
+  name: "fashion_dialog",
+  title: "衣 柜",
+  /** 顶部「当前穿戴」提示 */
+  current: { position: new Vec2(0, 205), fontSize: 16 },
+  /** 列表（卡片区，四列） */
+  list: { name: "fashion_list", position: new Vec2(0, -20), size: new Size(556, 396) },
+  /** 单张卡片（相对列表内容左上角逐格排布） */
+  card: {
+    size: new Size(130, 104),
+    /** 卡片间距（横 / 纵） */
+    gap: new Vec2(12, 10),
+    /** 一行几列 */
+    columns: 4,
+    /** 外观图标（尺寸与在卡片内的位置） */
+    iconSize: new Size(64, 64),
+    iconPosition: new Vec2(0, 16),
+    /** 名称（字号与在卡片内的位置、尺寸） */
+    labelFontSize: 14,
+    labelPosition: new Vec2(0, -38),
+    labelSize: new Size(122, 20),
+    /** 状态角标（已穿戴 / 可穿戴） */
+    stateFontSize: 12,
+    statePosition: new Vec2(0, -56),
+    /** 卡片底色（Graphics 自绘，不依赖底图） */
+    fill: new Color(24, 20, 16, 220),
+    /** 已穿戴卡片的描边色 */
+    activeBorder: new Color(214, 174, 96, 255),
+    /** 普通卡片描边色 */
+    border: new Color(92, 78, 52, 255),
+    /** 未穿戴卡片的角标颜色 */
+    stateColor: new Color(170, 170, 170, 255),
+  },
+  /** 卡片上的状态文案 */
+  stateText: { equipped: "已穿戴", wearable: "点击穿上", unsupported: "无外观" },
+  /** 顶部提示文案（{label} 替换为时装名） */
+  currentText: { worn: "当前穿戴：{label}", none: "当前没有穿时装" },
 };
 
 //#endregion

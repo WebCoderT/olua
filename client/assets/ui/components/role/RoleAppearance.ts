@@ -4,6 +4,7 @@ import { OutTransform } from "../../../types/good";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
 import { getEquipment } from "../../../configs/items";
+import { getFashionOut } from "../../../configs/fashionClothes";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
@@ -146,7 +147,9 @@ export default class RoleAppearance {
     const cloth = getEquipment(role.equipments.cloth);
     // 未穿衣服时按性别取默认身体（男 role/1、女 role/2），外观变换与穿衣服同口径
     const fallback = getRoleDefaultCloth(role.sex);
-    const src = cloth?.out || fallback.out;
+    // 取源：时装 > 装备衣服 > 默认身体（#377）。**只有外观帧目录被换掉** ——
+    // 缩放/偏移仍按装备（或默认身体）那套几何，所以穿时装不会把角色挪位
+    const src = getFashionOut(role.fashionCloth) || cloth?.out || fallback.out;
     this.clothTransform = cloth ?? fallback;
     if (src === this.clothSrc) return;
     this.clothSrc = src;
