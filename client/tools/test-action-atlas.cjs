@@ -29,7 +29,7 @@ try {
   process.exit();
 }
 
-const { getAtlasSrc, monsterActionAtlas, monsterActionSpecs, roleActionAtlas, directions } = require(path.join(outDir, "configs/animation.js"));
+const { getAtlasSrc, getLoopAtlasDir, monsterActionAtlas, monsterActionSpecs, roleActionAtlas, directions } = require(path.join(outDir, "configs/animation.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 const helperSource = read("assets/ui/helpers/AnimationHelper.ts");
@@ -125,9 +125,13 @@ console.log("\n— C. 图集路径映射 —");
 check(getAtlasSrc("monster/out/1") === "monster/atlas/out/1", "monster/out/1 → monster/atlas/out/1");
 check(getAtlasSrc("clothes/out/001") === "clothes/atlas/out/001", "clothes/out/001 → clothes/atlas/out/001");
 check(getAtlasSrc("weapons/out/001") === "weapons/atlas/out/001", "weapons/out/001 → weapons/atlas/out/001");
-check(getAtlasSrc("role/1") === "", "role/1（非 out 树）映射为空串（走散帧 + 帧号基准）");
-check(getAtlasSrc("role/2") === "", "role/2（非 out 树）映射为空串");
+check(getAtlasSrc("role/1") === "role/atlas/1", "role/1 → role/atlas/1");
+check(getAtlasSrc("role/2") === "role/atlas/2", "role/2 → role/atlas/2");
 check(getAtlasSrc("") === "", "空目录映射为空串");
+check(getLoopAtlasDir("npc/npc_2108") === "npc/atlas/npc_2108", "npc/npc_2108 → npc/atlas/npc_2108");
+check(getLoopAtlasDir("backgrounds/sfx_16000") === "backgrounds/atlas/sfx_16000", "backgrounds/sfx_16000 → backgrounds/atlas/sfx_16000");
+check(getLoopAtlasDir("monster/out/1") === "", "外观树不匹配单循环映射");
+check(getLoopAtlasDir("") === "", "空目录单循环映射为空串");
 
 console.log("\n— D. AnimationHelper 接线 —");
 check(/\(kind === "monster" \|\| kind === "role"\) && \(await this\.prepareActionAtlas/.test(helperSource), "prepare 对 monster 与 role 都先试图集路径");
@@ -144,9 +148,96 @@ check(/if \(!clips\.size\) return false;/.test(helperSource), "一个动作都�
   check(/this\.getFrameTime\(name, speedRate\)/.test(atlasBody), "每帧时长走 getFrameTime（速度倍率口径与散帧路径一致）");
   check(/list\.sort\(/.test(atlasBody), "组内按帧下标排序（d0_00 与 d1_00 末尾数字同为 0，不能依赖 loadFramesFromAtlas 的排序）");
   check(/this\.createClip\(name, list/.test(atlasBody), "片段创建复用 createClip（wrapMode / enableTrsBlending 与散帧路径一致）");
-  check(/rect\.width <= 1 \|\| rect\.height <= 1/.test(atlasBody), "空帧过滤与 buildClips 同口径（1×1 占位图不进片段，避免空白闪帧）");
+  check(/this\.isSolidFrame\(frame\)/.test(atlasBody), "空帧过滤走 isSolidFrame（1×1 占位图不进片段，避免空白闪帧）");
   check(!/console\.error/.test(atlasBody), "图集缺失路径无 console.error（未打包目录预加载不刷屏）");
 }
+check(helperSource.split("this.isSolidFrame(").length >= 4 && /private static isSolidFrame/.test(helperSource), "空帧判据收敛为 isSolidFrame（buildClips / prepareActionAtlas / loadLoopFrames 三处共用）");
 check(/kind === "monster" \? monsterActionAtlas : roleActionAtlas/.test(helperSource), "动作规格按种类取（怪物走帧号表导出，角色走顺序布局动作段）");
+{
+  // 单循环接线：playLoopWithDir / playLoopDir 都改走 loadLoopFrames（图集优先 + 空帧过滤 + 散帧回退）
+  const loopBody = helperSource.slice(helperSource.indexOf("private static async loadLoopFrames"), helperSource.indexOf("片段缓存键"));
+  check(/getLoopAtlasDir\(dirSrc\)/.test(loopBody), "单循环路径走 getLoopAtlasDir 取图集目录");
+  check(/resources\.getDirWithPath\(atlasDir, SpriteAtlas\)/.test(loopBody), "单循环图集探测走 getDirWithPath（未打包不报错刷屏）");
+  check(/this\.isSolidFrame\(frame\)/.test(loopBody), "单循环图集空帧过滤与动作路径同口径（isSolidFrame，1×1 占位图不进播放序列）");
+  check(/this\.loadFrames\(dirSrc\)/.test(loopBody), "单循环未打包时回退散帧目录（行为不变）");
+  check(/playLoopWithDir[\s\S]*?this\.loadLoopFrames\(dirSrc\)/.test(helperSource), "playLoopWithDir（NPC 外观）已接入图集优先帧来源");
+  check(/static playLoopDir\([\s\S]*?this\.loadLoopFrames\(dirSrc\)/.test(helperSource), "playLoopDir（装备详情背景）已接入图集优先帧来源");
+}
+
+console.log("\n— E. 单循环图集守卫（npc 外观 / 装备详情背景）—");
+{
+  const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+  // 散帧已移出 assets（#235），源帧数以打包暂存区为准（client/tools/_stage_action_atlas，gitignored）
+  const stageRoot = path.join(PROJECT_ROOT, "tools", "_stage_action_atlas");
+  for (const [srcTree, atlasTree] of [["npc", "npc/atlas"], ["backgrounds", "backgrounds/atlas"]]) {
+    const stageTree = path.join(stageRoot, srcTree);
+    if (!isDir(stageTree)) {
+      console.log(`  [跳过] ${srcTree}：打包暂存区不存在（${stageTree}），跳过帧数比对`);
+      continue;
+    }
+    const sourceDirs = fs.readdirSync(stageTree).filter((name) => isDir(path.join(stageTree, name)));
+    check(sourceDirs.length > 0, `${srcTree} 至少存在一个单循环动画目录`, "0 个");
+    let checked = 0;
+    for (const name of sourceDirs) {
+      const sourceFrames = fs.readdirSync(path.join(stageTree, name)).filter((f) => f.toLowerCase().endsWith(".png")).length;
+      const plistPath = path.join(RES_ROOT, atlasTree, name, `${name}.plist`);
+      const pngPath = path.join(RES_ROOT, atlasTree, name, `${name}.png`);
+      if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) {
+        check(false, `${srcTree}/${name} 单循环图集 plist + png 成对存在`, "缺文件");
+        continue;
+      }
+      const plist = parsePlist(plistPath);
+      check(plist.frameNames.length === sourceFrames, `${srcTree}/${name} 图集帧数 = 打包源帧数（${sourceFrames}）`, `实际 ${plist.frameNames.length}`);
+      const size = pngSize(pngPath);
+      check(plist.textureSize === `{${size.width},${size.height}}`, `${srcTree}/${name} plist 画布尺寸 == PNG 尺寸`, plist.textureSize);
+      checked += 1;
+    }
+    check(checked === sourceDirs.length, `${srcTree} 全部 ${sourceDirs.length} 个目录已图集化`, `实际 ${checked}`);
+  }
+}
+
+console.log("\n— F. role 本体动作图集守卫（role/1、role/2）—");
+{
+  // 空槽位（素材缺帧）允许：组内帧号严格递增、去重后落在 [0, 每方向帧数) 即可；总帧数 = 416（600 槽位 - 184 空槽）
+  for (const roleId of ["1", "2"]) {
+    const atlasDir = path.join(RES_ROOT, getAtlasSrc(`role/${roleId}`));
+    let total = 0;
+    let cursor = 0;
+    for (const spec of roleActionAtlas) {
+      const plistPath = path.join(atlasDir, spec.action, `${spec.action}.plist`);
+      const pngPath = path.join(atlasDir, spec.action, `${spec.action}.png`);
+      if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) {
+        check(false, `role/${roleId} ${spec.action} 图集 plist + png 成对存在`, "缺文件");
+        cursor += DIRECTION_COUNT * spec.frames;
+        continue;
+      }
+      const plist = parsePlist(plistPath);
+      const byDirection = new Map();
+      let malformed = 0;
+      plist.frameNames.map((name) => name.replace(/\.png$/i, "")).forEach((name) => {
+        const m = /^d(\d+)_(\d+)$/.exec(name);
+        if (!m) { malformed += 1; return; }
+        const list = byDirection.get(Number(m[1])) ?? [];
+        list.push(Number(m[2]));
+        byDirection.set(Number(m[1]), list);
+      });
+      check(malformed === 0, `role/${roleId} ${spec.action} 帧名全部符合 d<方向>_<帧> 规约`, `不符 ${malformed} 个`);
+      const badDirections = [];
+      byDirection.forEach((slots, direction) => {
+        const sorted = slots.slice().sort((a, b) => a - b);
+        const monotonic = sorted.every((slot, index) => index === 0 || sorted[index - 1] < slot) && sorted.every((slot) => slot >= 0 && slot < spec.frames);
+        if (!monotonic) badDirections.push(`d${direction}`);
+      });
+      check(badDirections.length === 0, `role/${roleId} ${spec.action} 组内帧号严格递增且不越界（空槽位允许缺口）`, badDirections.join(" "));
+      total += plist.frameNames.length;
+      cursor += DIRECTION_COUNT * spec.frames;
+    }
+    check(cursor === 600, `role/${roleId} 动作段总槽位 = 600（与 configs roleActionAtlas 累计一致）`, `实际 ${cursor}`);
+    check(total === 416, `role/${roleId} 图集有效帧总数 = 416（600 槽位 - 184 空槽）`, `实际 ${total}`);
+    const size = pngSize(path.join(atlasDir, "stand", "stand.png"));
+    const plist = parsePlist(path.join(atlasDir, "stand", "stand.plist"));
+    check(plist.textureSize === `{${size.width},${size.height}}`, `role/${roleId} stand 画布尺寸 == PNG 尺寸`, plist.textureSize);
+  }
+}
 
 finish("PASS：图集素材与帧号表一致、帧名规约成立、路径映射正确、加载接线图集优先且静默回退。");

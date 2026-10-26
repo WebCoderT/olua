@@ -27,7 +27,7 @@ const MONSTER_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/mons
 const HELPER_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"), "utf8");
 const TYPE_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/types/monster.ts"), "utf8");
 const GEN_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "tools/gen-monster-config.cjs"), "utf8");
-const OUT_RES = path.join(PROJECT_ROOT, "assets/resources/monster/out");
+const OUT_RES = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "monster", "out");
 
 /** 主动怪的身体宽阈值（与 gen-monster-config.cjs 头部的 AGGRESSIVE_BODY_WIDTH 同源，改一处要同步另一处） */
 const AGGRESSIVE_BODY_WIDTH = 250;

@@ -125,11 +125,21 @@ export function getAnimationFrameBase(dirSrc: string): number {
  * 暂存区结构见 client/tools/stage-action-frames.py
  */
 
-/** 取散帧外观目录对应的按动作图集目录（monster/out/1 → monster/atlas/out/1，clothes/out/001 → clothes/atlas/out/001）。
- * 只映射三类外观树（monster / clothes / weapons）；role/1、role/2 这类非 out 树返回空串（不试图集，走散帧 + 帧号基准） */
+/** 取散帧外观目录对应的按动作图集目录（monster/out/1 → monster/atlas/out/1，clothes/out/001 → clothes/atlas/out/001，
+ * role/1 → role/atlas/1、role/2 → role/atlas/2）。不在这几类形态里的目录返回空串（不试图集，走散帧路径） */
 export function getAtlasSrc(outSrc: string): string {
   const matched = /^(\w+)\/out\/(.+)$/.exec(outSrc);
-  return matched ? `${matched[1]}/atlas/out/${matched[2]}` : "";
+  if (matched) return `${matched[1]}/atlas/out/${matched[2]}`;
+  const roleMatched = /^role\/(\d+)$/.exec(outSrc);
+  return roleMatched ? `role/atlas/${roleMatched[1]}` : "";
+}
+
+/** 取单循环目录动画（整目录一串循环帧，如 NPC 外观 / 装备详情背景）对应的单 plist 图集目录
+ * （npc/npc_2108 → npc/atlas/npc_2108，backgrounds/sfx_16000 → backgrounds/atlas/sfx_16000）；
+ * 图集内 plist 与目录同名（<id>/<id>.plist）。不匹配返回空串（走散帧目录路径） */
+export function getLoopAtlasDir(dirSrc: string): string {
+  const matched = /^(npc|backgrounds)\/(\w+)$/.exec(dirSrc);
+  return matched ? `${matched[1]}/atlas/${matched[2]}` : "";
 }
 
 /** 图集按动作切片的动作规格（动作名 + 每方向帧数；打包与加载共用同一张表） */

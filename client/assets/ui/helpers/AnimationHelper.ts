@@ -1,5 +1,5 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
-import { getAnimationName, getAnimationFrameBase, getAtlasSrc, directions, monsterActionAtlas, monsterAnimation, roleActionAtlas, roleAnimationMap } from "../../configs/animation";
+import { getAnimationName, getAnimationFrameBase, getAtlasSrc, getLoopAtlasDir, directions, monsterActionAtlas, monsterAnimation, roleActionAtlas, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
 
@@ -13,6 +13,11 @@ import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
  * 没有预加载的目录仍走异步加载兜底（例如运行中换上的新装备外观）
  * 缓存不释放：工程内没有任何 release/autoRelease 调用（场景 autoReleaseAssets 默认 false），
  * 帧与片段在切场景后依然有效，可以放心复用
+ *
+ * #235 起散帧已全部图集化并把原始逐帧移出 assets（仓库根 _loose_frames_archive，gitignored）：
+ * monster/clothes/weapons 外观与 role 本体走 prepareActionAtlas 动作图集，
+ * npc/背景走 loadLoopFrames 单循环图集；散帧目录路径保留为**保险回退**
+ * （图集缺失时静默回退，本地重新从归档打图集前也不至于整片空白）
  */
 export default class AnimationHelper {
   /** 帧序列缓存：目录 -> 已按帧序号排序的帧列表（空数组表示该目录没有可用帧，同样缓存以免反复请求） */
@@ -110,8 +115,7 @@ export default class AnimationHelper {
       // 会以 1×1 图块进图集，不过滤会造成片段里夹空白闪帧
       const byDirection = new Map<number, SpriteFrame[]>();
       frames.forEach((frame) => {
-        const rect = frame.getRect();
-        if (rect.width <= 1 || rect.height <= 1) return;
+        if (!this.isSolidFrame(frame)) return;
         const matched = /^d(\d+)_(\d+)$/.exec(frame.name.replace(/\.png$/i, ""));
         if (!matched) return;
         const directionIndex = Number(matched[1]);
@@ -137,6 +141,32 @@ export default class AnimationHelper {
   private static atlasFrameSlot(name: string) {
     const matched = /^d\d+_(\d+)$/.exec(name.replace(/\.png$/i, ""));
     return matched ? Number(matched[1]) : 0;
+  }
+
+  /** 空帧判据（三处共用：buildClips / prepareActionAtlas / loadLoopFrames）：
+   * 素材包/图集里的占位空图是 1×1 图块，rect 边长 >1 才算有效帧，否则片段里会夹空白闪帧 */
+  private static isSolidFrame(frame: SpriteFrame): boolean {
+    const rect = frame.getRect();
+    return rect.width > 1 && rect.height > 1;
+  }
+
+  /**
+   * 单循环目录动画（NPC 外观 / 装备详情背景）的帧来源：目录有对应图集（见 configs.getLoopAtlasDir）时
+   * 取图集帧并过滤空帧，否则回退散帧目录——两条路径对调用方完全透明
+   * 空帧过滤与 prepareActionAtlas / buildClips 同口径（占位空图 1×1，rect 边长 >1 才算有效帧）
+   */
+  private static async loadLoopFrames(dirSrc: string): Promise<SpriteFrame[]> {
+    const atlasDir = getLoopAtlasDir(dirSrc);
+    if (atlasDir) {
+      // 同步探测：目录索引里没有图集即视为未打包，静默回退散帧目录（不打错误日志刷屏）
+      if (resources.getDirWithPath(atlasDir, SpriteAtlas).length) {
+        // 图集内 plist 与目录同名：<id>/<id>.plist
+        const frames = await this.loadFramesFromAtlas(`${atlasDir}/${atlasDir.split("/").pop()}`);
+        const valid = frames.filter((frame) => this.isSolidFrame(frame));
+        if (valid.length) return valid;
+      }
+    }
+    return this.loadFrames(dirSrc);
   }
 
   /**
@@ -166,7 +196,7 @@ export default class AnimationHelper {
       // 再减帧号基准（frameBase）：role/2 这类从 600 起编号的素材，不减则同样一个片段都切不出来
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => {
         const index = getFrameIndex(spriteFrame.name);
-        return index !== null && frameIndexes.indexOf(index - frameBase) >= 0 && spriteFrame.getRect().width > 1 && spriteFrame.getRect().height > 1;
+        return index !== null && frameIndexes.indexOf(index - frameBase) >= 0 && this.isSolidFrame(spriteFrame);
       });
       if (validSpriteFrames.length) clips.set(name, this.createClip(name, validSpriteFrames, this.getFrameTime(name, speedRate)));
     });
@@ -351,7 +381,7 @@ export default class AnimationHelper {
    */
   static playLoopWithDir(name: string, node: Node, dirSrc: string, duration: number = 1) {
     const animate = this.useAnimation(node);
-    this.loadFrames(dirSrc).then((spriteFrames) => {
+    this.loadLoopFrames(dirSrc).then((spriteFrames) => {
       if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
       this.play(name, node, animate, spriteFrames, duration, AnimationClip.WrapMode.Loop);
     });
@@ -423,8 +453,9 @@ export default class AnimationHelper {
   /**
    * 循环播放一个帧序列目录的全部帧 —— 装备详情背景这类「常驻循环」的目录动画用
    *
-   * 与 playLoopAtlas 的区别：帧来源是**目录**（resources/backgrounds 下逐帧 png，没有图集），
-   * 走 loadFrames 的目录缓存；片段同样进 loopClipCache（键 = 目录|帧率，目录路径与图集路径不会撞键），
+   * 帧来源走 loadLoopFrames：目录有对应单 plist 图集（resources/backgrounds/atlas/<id>，见
+   * configs.getLoopAtlasDir）时取图集帧（过滤空帧），否则回退逐帧 png 目录；
+   * 片段同样进 loopClipCache（键 = 目录|帧率，目录路径与图集路径不会撞键），
    * 同一背景被反复悬停时共用同一个片段，只在首次加载时付出成本
    *
    * @param name 动画名称（addClip 的别名，同一节点内需唯一）
@@ -435,7 +466,7 @@ export default class AnimationHelper {
   static playLoopDir(name: string, node: Node, dirSrc: string, frameRate: number) {
     const animate = this.useAnimation(node);
     const cacheKey = `${dirSrc}|${frameRate}`;
-    this.loadFrames(dirSrc).then((spriteFrames) => {
+    this.loadLoopFrames(dirSrc).then((spriteFrames) => {
       // 装载前校验：节点/动画组件可能已被销毁（详情弹窗随鼠标移出即销毁）
       if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
       let clip = this.loopClipCache.get(cacheKey);

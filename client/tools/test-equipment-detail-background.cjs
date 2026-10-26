@@ -18,7 +18,8 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
 
-const BACKGROUND_DIR = path.join(PROJECT_ROOT, "assets/resources/backgrounds");
+// 散帧已图集化（#235）移出 assets：原始逐帧在仓库根 _loose_frames_archive（gitignored）
+const BACKGROUND_DIR = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "backgrounds");
 const outDir = prepare("olua-equipment-detail-background", ["configs/background.ts"]);
 const {
   detailBackgroundResources,

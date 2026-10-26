@@ -17,7 +17,8 @@ const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
-const roleRoot = path.join(PROJECT_ROOT, "assets/resources/role");
+// 散帧已图集化（#235）移出 assets：role/1、role/2 原始逐帧在仓库根 _loose_frames_archive（gitignored）
+const roleRoot = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "role");
 
 let outDir;
 try {
