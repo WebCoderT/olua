@@ -44,6 +44,17 @@ const RES_ROOT = path.join(ROOT, "client", "assets", "resources");
 /** 扫描引用的源码目录（TS 源码；场景 .scene/.fire 是引擎文件不扫） */
 const SCAN_DIRS = ["client/assets/configs", "client/assets/ui", "client/assets/types", "client/assets/skills"];
 
+/**
+ * resources 不入库（~4G 走 GitHub Release 分发），CI runner 上没有这个目录。
+ * 磁盘核对在本机跑才有意义；CI 上跳过（审计的其他职责——引用抽取逻辑——无法脱离磁盘验证），
+ * 与 client-test 依赖本机素材是同一取舍：门禁以有素材的机器为准。
+ */
+if (!fs.existsSync(RES_ROOT)) {
+  console.log("client/assets/resources 不存在（CI / 未拉取素材的环境）—— 资源引用核对需要磁盘素材，跳过");
+  console.log("本机核对：先 make resources-download RES_VERSION=<版本号>，再跑本审计");
+  process.exit(0);
+}
+
 /** 常见资源扩展名（大小写不敏感比对；素材包里有 00000.PNG 这类大写扩展名） */
 const EXTS = new Set(["png", "jpg", "jpeg", "plist", "ttf", "fnt", "tmx", "tsx", "json", "mp3", "wav"]);
 

@@ -150,7 +150,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
   && node tools/audit-doc-numbers.cjs
 ```
 
-You may run only the suites relevant to your change, but **the server e2e suites and the nine audit scripts should all pass before every commit** — they watch for "silent failure" problems that unit tests cannot catch:
+You may run only the suites relevant to your change, but **the server e2e suites and the 11 audit scripts should all pass before every commit** — they watch for "silent failure" problems that unit tests cannot catch:
 
 - `audit-api-generated`: are generated artifacts byte-for-byte identical to the documentation (guards against "changed the server, forgot to regenerate")
 - `audit-api-hardcode`: were addresses written into code, or environment variables forgotten in `.env.example`

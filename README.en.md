@@ -291,7 +291,7 @@ make client-test    # client's 38 unit-test suites
 make server-verify  # verify the server with one command (compile + twelve e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
-make audit          # 10 cross-side audit scripts
+make audit          # 11 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 11 audits
 make test           # all tests: client's 38 suites + server's twelve e2e suites
