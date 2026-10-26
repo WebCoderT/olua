@@ -131,7 +131,7 @@ function toForm(role: AdminRole): RoleForm {
     occupation: role.occupation,
     sex: role.sex,
     level: String(role.level),
-    fashionCloth: typeof data.fashionCloth === "number" ? String(data.fashionCloth) : "",
+    fashionCloth: typeof data.fashionCloth === "string" ? data.fashionCloth : "",
     avatar: readNumber(data, "avatar"),
     onMap: typeof data.onMap === "string" ? data.onMap : "",
     gold: readNumber(data, "gold"),
@@ -186,9 +186,9 @@ function buildPatch(role: AdminRole, form: RoleForm): RolePatchPayload {
   if (form.sex !== original.sex) patch.sex = form.sex as RolePatchPayload["sex"];
   if (form.onMap.trim() !== original.onMap) patch.onMap = form.onMap.trim();
 
+  // 时装存的是**时装 id**（fashions 表主键，如 cloth_2），#377 起不再是编号；空串 = 脱掉
   if (form.fashionCloth !== original.fashionCloth) {
-    const value = toNumber(form.fashionCloth);
-    patch.fashionCloth = value === undefined ? null : value;
+    patch.fashionCloth = form.fashionCloth.trim() || null;
   }
   for (const { key } of NUMBER_FIELDS) {
     if (form[key] === original[key]) continue;
@@ -444,13 +444,12 @@ export function RoleDetailPage() {
           <Field label="等级">
             <Input inputMode="numeric" value={form.level} disabled={!canWrite} onChange={(event) => update("level", event.target.value.replace(/[^\d]/g, ""))} />
           </Field>
-          <Field label="时装 id" hint="留空 = 没有时装">
+          <Field label="时装 id" hint="填 fashions 表的 id（如 cloth_2），留空 = 不穿">
             <Input
-              inputMode="numeric"
               value={form.fashionCloth}
-              placeholder="无"
+              placeholder="cloth_2"
               disabled={!canWrite}
-              onChange={(event) => update("fashionCloth", event.target.value.replace(/[^\d]/g, ""))}
+              onChange={(event) => update("fashionCloth", event.target.value.replace(/[^A-Za-z0-9_]/g, ""))}
             />
           </Field>
           <Field label="头像编号">

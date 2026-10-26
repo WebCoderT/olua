@@ -42,7 +42,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 110;
+const EXPECTED_ASSERTIONS = 113;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -235,15 +235,23 @@ function roleData(id, name, occupation, level) {
 
   console.log("— 三、管理端：修改角色（基础信息 + 运行时数据） —");
 
+  // 时装：`fashionCloth` 在 #377 从数字改成**时装 id**（fashions 表主键），管理端也只能填字符串
   const patched = await api("PATCH", "admin/roles/role_a2", {
     token: adminToken,
-    body: { name: "甲二改", level: 11, fashionCloth: 3, avatar: 7, onMap: "12", gold: 8888 },
+    body: { name: "甲二改", level: 11, fashionCloth: "cloth_2", avatar: 7, onMap: "12", gold: 8888 },
   });
   check(patched.code === 0, "改基础信息成功", patched.message);
   check(patched.data.name === "甲二改" && patched.data.level === 11, "索引字段同步更新（列表里看到的就是新名字）");
-  check(patched.data.data.fashionCloth === 3 && patched.data.data.avatar === 7 && patched.data.data.onMap === "12", "时装 / 头像 / 所在地图写进角色数据");
+  check(patched.data.data.fashionCloth === "cloth_2" && patched.data.data.avatar === 7 && patched.data.data.onMap === "12", "时装 / 头像 / 所在地图写进角色数据");
   check(patched.data.data.gold === 8888, "数值字段写进角色数据");
   check(patched.data.revision === 2, "管理端改一次，修订号 +1", JSON.stringify(patched.data.revision));
+
+  const numericFashion = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { fashionCloth: 3 } });
+  check(numericFashion.code === 40000 && numericFashion.status === 400, "时装填旧形状的数字被拒（只收时装 id）", `${numericFashion.code}/${numericFashion.status}`);
+  const unknownFashion = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { fashionCloth: "no_such_fashion" } });
+  check(unknownFashion.code === 0 && unknownFashion.data.revision === 3, "任意字符串都收（清单外 id 由客户端按 null 兜底）", JSON.stringify(unknownFashion.data?.revision));
+  const clearedFashion = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { fashionCloth: null } });
+  check(clearedFashion.code === 0 && clearedFashion.data.data.fashionCloth === null, "传 null = 脱下（清空穿戴）");
 
   const duplicateName = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { name: "甲三" } });
   check(duplicateName.code === 20005 && duplicateName.status === 409, "同账号下改名撞车被拒（20005）", `${duplicateName.code}/${duplicateName.status}`);

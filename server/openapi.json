@@ -8321,8 +8321,8 @@
             "description": "军衔阶数"
           },
           "fashionCloth": {
-            "type": "number",
-            "description": "时装（外观）id；null = 取消时装",
+            "type": "string",
+            "description": "时装（外观）id，如 cloth_2；null = 脱掉时装",
             "nullable": true
           },
           "avatar": {
