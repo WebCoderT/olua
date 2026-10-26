@@ -23,6 +23,7 @@
 - squash 仓库判短线是否已合并要用 `git merge-tree --write-tree` 比树（`git branch --merged` 判不出）；旧提交可从 `refs/pull/<n>/head` 取回。
 
 ## 工程风险（必读）
+- **resources 以远程 Release 为唯一来源（用户 2026-10-26 强制）**：不改远程、不发新包、不手工补图；本地与清单不一致就「删本地多余文件 / 改代码适配」。素材一致性守点 = `resources_sync.py verify`（14017 文件 / version=2026-10-25-1）+ `audit-resource-refs`（11 套审计之一，CI 无素材自动跳过）。
 - **Cocos 编辑器周期性回写 assets**：改完 Read/Grep 核对 + `sleep 20` 复检，一次通过不代表稳定；shell grep 输出会串扰且 BSD grep 不支持 `\|` → 只信 Grep 工具与 `git diff`。
 - 服务端/子进程 `env -u NODE_OPTIONS`；`curl 127.0.0.1 --noproxy '*'`；起监听端口进程前先探测是否被用户常驻实例占用，冲突换端口。
 - 打包 babel loose：`[...迭代器]` 恒空 → `Array.from`/`forEach`；`isValid` 要叠数据判据；飘字走 `GameUiHelper.createTip*`；素材扩展名=真实格式；`resources/` 不入库删前备份；客户端 tsc 用 `client/tools/tsconfig.check.json`。
