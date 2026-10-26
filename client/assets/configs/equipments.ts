@@ -86,8 +86,12 @@ export function getEquipmentNameParts(equipment: Equipment): EquipmentNameParts 
 
 /**
  * 按前后缀倍率缩放战斗属性（六项攻防区间、maxHp 与每秒回血逐项相乘后取整）
+ *
+ * 导出是给配置快照覆写用的（#363）：管理端只改**基础件**（普通的·人级）的属性，
+ * 15 个变体要按同一套倍率重算 —— 复算口径必须与 \`buildEquipmentMap\` 完全一致，
+ * 所以两边共用这一个函数，而不是各写一份。
  */
-function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): BattleAttributes {
+export function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): BattleAttributes {
   const scale = (range: [number, number]): [number, number] => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
   return {
     maxHp: Math.round(attributes.maxHp * rate),
