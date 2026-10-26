@@ -276,6 +276,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchWorld(frame.data);
       return;
     }
+    if (frame.type === "monster-ai") {
+      // 怪物 AI 广播（#323）：位置增量 + 普攻命中事件，形状的解释在 CombatChannel
+      CombatChannel.dispatchMonsterAi(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
   }

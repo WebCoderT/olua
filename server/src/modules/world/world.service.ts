@@ -201,6 +201,21 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     return this.viewers.get(worldKey(zoneId, mapId)) ?? [];
   }
 
+  /**
+   * 当前**有人看**的分域列表（#323：怪物 AI tick 只驱动有人看的图 —— 没人看的图
+   * 没有广播对象，纯空转）。怪物实例表是权威状态本体，调用方只读、别改血量。
+   */
+  viewedMaps(): Array<{ zoneId: number; mapId: string; monsters: Map<string, WorldMonster> }> {
+    const out: Array<{ zoneId: number; mapId: string; monsters: Map<string, WorldMonster> }> = [];
+    for (const [key, map] of this.maps) {
+      const viewerSet = this.viewers.get(key);
+      if (!viewerSet || viewerSet.size === 0) continue;
+      const [zoneId, mapId] = splitWorldKey(key);
+      out.push({ zoneId, mapId, monsters: map });
+    }
+    return out;
+  }
+
   //#endregion
 
   //#region 结算入口（#34 的 settle 走这里改世界状态）

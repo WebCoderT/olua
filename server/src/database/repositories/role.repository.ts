@@ -59,9 +59,18 @@ export class RoleRepository {
     );
   }
 
+  /**
+   * 只写存档文档、**不推进修订号**（#323：怪物普攻的玩家受击落账走这里）
+   *
+   * 血量在实时模式下以服务端帧为准、客户端照搬 —— 若每次受击都 +1，战斗期间玩家的
+   * 防抖存档会频繁撞乐观锁。修订号只由「进度型」写入（replace / updateById）推进。
+   */
+  updateDataKeepRevision(id: string, data: string, updatedAt: number): boolean {
+    return this.db.execute(`UPDATE roles SET data = ?, updated_at = ? WHERE id = ?`, [data, updatedAt, id]).changes > 0;
+  }
+
   /** 局部更新（管理端只改某几个字段时用；同样推进修订号） */
-  updateById(
-    id: string,
+  updateById(    id: string,
     patch: { name?: string; occupation?: string; sex?: string; level?: number; data?: string; updated_at?: number },
   ): boolean {
     const fields: string[] = [];

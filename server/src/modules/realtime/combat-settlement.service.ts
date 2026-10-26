@@ -9,6 +9,7 @@ import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService } from "../world/world.service";
+import { MonsterAiService } from "./monster-ai.service";
 import type { RealtimeKillReward, RealtimeSettleData } from "./realtime.protocol";
 
 /**
@@ -56,6 +57,7 @@ export class CombatSettlementService {
   constructor(
     private readonly roles: RolesService,
     private readonly world: WorldService,
+    private readonly monsterAi: MonsterAiService,
     private readonly monsterConfigs: MonsterRepository,
     private readonly accounts: AccountRepository,
     private readonly monsterDrops: MonsterDropRepository,
@@ -138,6 +140,11 @@ export class CombatSettlementService {
     // 扣血与世界状态（血量 / 死亡判定都在世界服务里，这里只拿结果演）
     const applied = this.world.applyDamage(cast.targetId, damage);
     if (!applied) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
+
+    // 怪物 AI（#323）：打伤 = 被动怪记恨这次出手的人（AI 收权后追击由服务端驱动）；
+    // 击杀则清掉它的 AI 运行时（重生回出生点按新一轮游走开始）
+    if (applied.killed) this.monsterAi.onMonsterKilled(cast.targetId);
+    else this.monsterAi.provoke(cast.targetId, accountId);
 
     // 击杀奖励（#316）：经验入账与掉落抽取都在服务端 —— 经验入账失败（打到一半被踢等）
     // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受

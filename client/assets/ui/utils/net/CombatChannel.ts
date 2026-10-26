@@ -76,6 +76,32 @@ export interface WorldSnapshot {
   monsters: WorldMonsterSnapshot[];
 }
 
+/** 怪物 AI 广播帧里的一只怪（#323：只发有变化的；位置 = 服务端模拟出的当前坐标） */
+export interface MonsterAiEntry {
+  instanceId: string;
+  x: number;
+  y: number;
+  /** 是否在移动（客户端据此播走路 / 待机；方向由位移差量自算） */
+  moving: boolean;
+}
+
+/** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果，服务端已落账） */
+export interface MonsterHitEntry {
+  instanceId: string;
+  /** 受击账号（广播给全图观看者；#324 玩家互见之前客户端只演自己的） */
+  accountId: string;
+  damage: number;
+  hp: number;
+  maxHp: number;
+}
+
+/** 服务端怪物 AI 广播帧（协议见 realtime.protocol 的 RealtimeMonsterAiMessage.data） */
+export interface MonsterAiFrame {
+  mapId: string;
+  monsters: MonsterAiEntry[];
+  hits: MonsterHitEntry[];
+}
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -89,6 +115,13 @@ export default class CombatChannel {
 
   /** 世界快照出口（组合根接线到 MonsterManager.applyWorldState；不接时快照被丢弃并告警） */
   static onWorld: ((data: WorldSnapshot) => void) | null = null;
+
+  /** 怪物 AI 广播出口（#323；组合根接线到 MonsterManager.applyServerAi，不接时帧被丢弃） */
+  static onMonsterAi: ((data: MonsterAiFrame) => void) | null = null;
+
+  /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
+  private static POSITION_INTERVAL = 250;
+  private static lastPositionSentAt = 0;
 
   /** 是否走服务端结算（灰度开关 × 通道在线；false 时调用方退回本地结算） */
   static get active(): boolean {
@@ -122,6 +155,25 @@ export default class CombatChannel {
     RealtimeClient.send({ type: "worldJoin", data: { mapId: this.lastJoin.mapId } });
   }
 
+  /**
+   * 上报自身位置（#323：AI 的目标检测输入；内部按 4Hz 节流，调用方可以每帧调）
+   * @param mapId 当前地图 id
+   * @param x 玩家世界坐标
+   * @param y 玩家世界坐标
+   * @param hp 当前血量（服务端用它判断目标是否已死）
+   */
+  static sendPosition(mapId: string, x: number, y: number, hp: number): void {
+    const now = Date.now();
+    if (now - this.lastPositionSentAt < this.POSITION_INTERVAL) return;
+    this.lastPositionSentAt = now;
+    RealtimeClient.send({ type: "pos", data: { mapId, x, y, hp } });
+  }
+
+  /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */
+  static resetPositionThrottle(): void {
+    this.lastPositionSentAt = 0;
+  }
+
   /** 换图前清掉旧图的幂等账（怪物管理器清场时调用；旧图的世界状态不受影响） */
   static resetTargets(): void {
     RealtimeClient.send({ type: "targetsReset" });
@@ -152,6 +204,17 @@ export default class CombatChannel {
       return;
     }
     this.onWorld(snapshot);
+  }
+
+  /** RealtimeClient 收到 monster-ai 帧后走这里（#323：位置增量 + 普攻命中事件） */
+  static dispatchMonsterAi(data: unknown): void {
+    const frame = data as MonsterAiFrame | null;
+    if (!frame || typeof frame !== "object" || !Array.isArray(frame.monsters) || !Array.isArray(frame.hits)) return;
+    if (!this.onMonsterAi) {
+      console.warn("[monster-ai] 收到 AI 广播但没有处理者（onMonsterAi 未接线），帧被丢弃");
+      return;
+    }
+    this.onMonsterAi(frame);
   }
 }
 

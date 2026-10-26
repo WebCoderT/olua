@@ -67,6 +67,8 @@ export class Game extends Component {
   private ready = false;
   /** 自然回复（魔法值 / 血量）的结算计时（秒，满 1 秒结算一次） */
   private recoverTimer = 0;
+  /** 位置上报的累积计时（#323：CombatChannel.sendPosition 内部也节流，这里是帧累计的触发点） */
+  private positionReportTimer = 0;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
 
@@ -117,6 +119,16 @@ export class Game extends Component {
     MonsterAI.onPlayerHit = () => this.roleDisplay?.playInjured();
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
     CombatChannel.onWorld = MonsterManager.applyWorldState.bind(MonsterManager);
+    // 怪物 AI 权威（#323）：monster-ai 帧由怪物管理器落点（位置趋近演出 + 自己的受击事件），
+    // 受击的血量入账/飘字/红闪在这里做（服务端已落账，客户端只演）
+    CombatChannel.onMonsterAi = MonsterManager.applyServerAi.bind(MonsterManager);
+    MonsterManager.onPlayerServerHit = (hit) => {
+      StorageManager.applyMonsterHit(hit);
+      if (!this.roleDisplay) return;
+      GameUiHelper.showDamageText(this.roleDisplay, hit.damage);
+      GameUiHelper.showHitScreenFlash();
+      this.roleDisplay.playInjured();
+    };
     // 服务端配置快照（#294）：管理端改的运营配置（成长线文案/价格/属性、商城定价…）进游戏拉一次
     // 覆写进本地 configs（消费点零改动）；静默失败回落本地静态值，游戏照常能玩
     void loadGameConfig();
@@ -220,6 +232,8 @@ export class Game extends Component {
     // 实时通道：离开游戏就断（回选角/登录不该还挂着一条连接；先摘回调再断，避免收尾时又提示一句）
     CombatChannel.onSettle = null;
     CombatChannel.onWorld = null;
+    CombatChannel.onMonsterAi = null;
+    MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
@@ -273,8 +287,15 @@ export class Game extends Component {
     // 路线指示线（自动寻路期间在大地图地面上画出「角色 → 目标」的路线；无路线时清空）
     RouteIndicator.update(this.roleDisplay);
     // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入；
-    // 玩家死亡后不再给怪物提供玩家节点——尸体不会被追击与普攻）
-    MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay && !this.roleDisplay.isDead() ? this.roleDisplay : null);
+    // 玩家死亡后不再给怪物提供玩家节点——尸体不会被追击与普攻）。
+    // 服务端 AI 权威（#323）：实时通道在线且进过图时，怪物行为 / 位置以 monster-ai 帧为准，
+    // 本地只演（向服务端位置趋近）；同时按节流上报自身位置（AI 的目标检测输入）
+    if (MonsterManager.serverAuthority) {
+      MonsterAI.tick(MonsterManager.getMonsterMap(), null, true);
+      this.reportPosition(deltaTime);
+    } else {
+      MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay && !this.roleDisplay.isDead() ? this.roleDisplay : null);
+    }
     // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）
     this.smallMap?.update();
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
@@ -290,6 +311,20 @@ export class Game extends Component {
     RoleUIManager.updateMonsterInfo();
     // 选中指示器跟随目标脚下（目标失效时自动销毁）
     RoleUIManager.updateMonsterSelect();
+  }
+
+  /**
+   * 上报自身位置给服务端（#323：AI 的目标检测输入；内部按 4Hz 再节流一层）。
+   * 死亡也照报（hp 会是 0，服务端据此停止追击）——「死了还占着位置」比「位置消失」好处理。
+   */
+  private reportPosition(deltaTime: number) {
+    this.positionReportTimer += deltaTime;
+    if (this.positionReportTimer < 0.25) return;
+    this.positionReportTimer = 0;
+    const role = StorageManager.findOnlineRole();
+    const position = this.roleDisplay?.getWorldPosition();
+    if (!role || !position) return;
+    CombatChannel.sendPosition(role.onMap, position.x, position.y, role.hp);
   }
 
   //#region 死亡与复活

@@ -135,6 +135,14 @@ export interface MonsterAIState {
   pushDirection: Vec2;
   /** 击退速度（像素/秒，由击退距离与时长换算，见 MonsterAI.push） */
   pushSpeed: number;
+  /** 服务端权威位置（#323：monster-ai 帧的最新坐标；null = 还没收到过服务端位置） */
+  serverX: number | null;
+  /** 服务端权威位置 y（与 serverX 成对出现） */
+  serverY: number;
+  /** 服务端给的移动标记（true = 在追击或游走，客户端播走路） */
+  serverMoving: boolean;
+  /** 上次向服务端位置趋近的时刻（毫秒，按帧步进用） */
+  serverStepAt: number;
 }
 
 /**

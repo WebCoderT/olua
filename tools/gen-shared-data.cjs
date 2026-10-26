@@ -212,6 +212,8 @@ function load(work) {
     items: missing("items", cfg("items").items),
     maps: missing("map.maps", cfg("map").maps),
     monsters: missing("monster.monsters", cfg("monster").monsters),
+    // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
+    monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
     npcs: missing("npc-data.npcData", cfg("npc-data").npcData),
     // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
     // 售卖价/属性），表现层参数未随恢复保留（见 fashionClothes.ts 文件头）
@@ -255,6 +257,8 @@ function buildSnapshot(cfg) {
     equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
     monsters: pickMonsters(cfg.monsters),
+    // 怪物 AI 节奏参数（#323：服务端 AI tick 与客户端同一套手感数值）
+    monsterAi: pickMonsterAi(cfg.monsterAi),
     npcs: pickNpcs(cfg.npcs),
     fashions: pickFashions(cfg.fashions),
     // —— 掉落（#254：管理端可改的具名表 / 每怪表 / 兜底表）——
@@ -396,13 +400,29 @@ function pickEquipmentBases(maps) {
  * 口径复制出去。只留参与伤害结算的字段（maxHp + 六项攻防区间 + 等级 / 定位），
  * 外观 / 几何 / 掉落 / AI 参数都是表现或世界层，不进。
  */
+/**
+ * 怪物表 → [[key, 行]]（#258 起战斗数值；#323 起补 AI 参数）
+ *
+ * 攻防区间**已在 configs/monster 建 Map 时合成完毕**，服务端不做「按等级现算」——
+ * 那等于把成长曲线的口径复制出去。#323 起 AI 收权到服务端，`aggressive / detectRange /
+ * moveSpeed` 从「表现层参数」变成「行为权威的输入」，一并进快照（几何 / 外观 / 掉落仍不进）。
+ */
 function pickMonsters(monsters) {
   const out = [];
   const seen = new Set();
   monsters.forEach((item, key) => {
     if (seen.has(key)) throw new Error(`怪物 key 重复：${key}`);
     seen.add(key);
-    const row = { label: String(item.label ?? ""), level: round(item.level ?? 0), tier: String(item.tier ?? "normal"), maxHp: round(item.maxHp ?? 0) };
+    const row = {
+      label: String(item.label ?? ""),
+      level: round(item.level ?? 0),
+      tier: String(item.tier ?? "normal"),
+      maxHp: round(item.maxHp ?? 0),
+      // AI 参数（#323）：主动怪判定 / 检测范围 / 移动速度（服务端 tick 按它推进位置）
+      aggressive: Boolean(item.aggressive),
+      detectRange: round(item.detectRange ?? 0),
+      moveSpeed: round(item.moveSpeed ?? 0),
+    };
     for (const key2 of RANGE_KEYS) {
       const value = item[key2];
       if (!Array.isArray(value) || value.length < 2) throw new Error(`怪物 ${key} 缺少区间属性 ${key2}（monsterStats 没铺到？）`);
@@ -411,6 +431,22 @@ function pickMonsters(monsters) {
     out.push([key, row]);
   });
   return out;
+}
+
+/**
+ * 怪物 AI 全局节奏参数（#323）：configs/monster 的 monsterAI 里**服务端 tick 用得到的数值**
+ * （普攻间隔 / 普攻距离 / 待机游走节奏）。动作池与击退时长是纯表现层，不进。
+ */
+function pickMonsterAi(monsterAi) {
+  const picked = {
+    attackInterval: round(monsterAi.attackInterval ?? 0),
+    attackRange: round(monsterAi.attackRange ?? 0),
+    idleMoveInterval: [round(monsterAi.idleMoveInterval?.[0] ?? 0), round(monsterAi.idleMoveInterval?.[1] ?? 0)],
+    idleMoveDuration: [round(monsterAi.idleMoveDuration?.[0] ?? 0), round(monsterAi.idleMoveDuration?.[1] ?? 0)],
+    idleMoveSpeedScale: Number(monsterAi.idleMoveSpeedScale ?? 0.5),
+    wanderRadius: round(monsterAi.wanderRadius ?? 0),
+  };
+  return Object.entries(picked);
 }
 
 /**
@@ -819,7 +855,8 @@ ${numTable("TITLE_LEVEL_ATTRIBUTES", "称号等级 → 整份属性加成", s.ti
 ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.rankLevels)}
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 战斗数值。damageCoefficients 的下标 = 技能等级，baseType 是取哪种属性当基数", s.skills)}
-${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）", s.monsters)}
+${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）", s.monsters)}
+${jsonTable("MONSTER_AI", "怪物 AI 全局节奏参数（#323：普攻间隔/普攻距离/待机游走节奏，服务端 AI tick 与客户端同源）", s.monsterAi)}
 ${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
 ${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}
