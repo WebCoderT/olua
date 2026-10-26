@@ -11,10 +11,12 @@ import { AccountRepository } from "../../database/repositories/account.repositor
 import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { CombatSettlementService } from "./combat-settlement.service";
+import { MonsterAiService } from "./monster-ai.service";
 import {
   REALTIME_CLOSE,
   REALTIME_PATH,
   type RealtimeIdentity,
+  type RealtimeMonsterAiMessage,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
   type RealtimeWorldMessage,
@@ -98,6 +100,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly config: ConfigService,
     private readonly adapterHost: HttpAdapterHost,
     private readonly combat: CombatSettlementService,
+    private readonly monsterAi: MonsterAiService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
   ) {}
@@ -156,6 +159,14 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     }
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
     this.world.onWorldChanged = (zoneId, mapId) => this.broadcastWorld(zoneId, mapId);
+    // 怪物 AI 广播（#323）：AI 服务攒好一帧，这里按观看者集合发出去
+    this.monsterAi.onBroadcast = (zoneId, mapId, data) => {
+      const frame: RealtimeMonsterAiMessage = { type: "monster-ai", data };
+      for (const accountId of this.world.viewersOf(zoneId, mapId)) {
+        const socket = this.connections.get(accountId);
+        if (socket) this.send(socket, frame);
+      }
+    };
 
     this.logger.log(
       `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
@@ -306,6 +317,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         // 只把「观看者」退掉（空闲回收的依据）。被顶掉的旧连接**不能**清 —— map 里已经是新连接的天下
         this.combat.dropAccount(identity.id);
         this.world.leave(identity.id);
+        this.monsterAi.dropAccount(identity.id);
       }
     });
 
@@ -347,6 +359,14 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     }
     if (parsed?.type === "targetsReset") {
       this.combat.resetTargets(socket.identity.id);
+      return;
+    }
+    if (parsed?.type === "pos") {
+      // 位置上报（#323）：AI 的目标检测输入；格式不对就丢掉这条（高频帧，不值得回 error 刷屏）
+      const position = parsePosition(parsed.data);
+      if (!position) return;
+      const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
+      this.monsterAi.updatePosition(socket.identity.id, zoneId, position.mapId, position.x, position.y, position.hp);
       return;
     }
     if (parsed?.type === "worldJoin") {
@@ -432,9 +452,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.logger.log(`账号 ${accountId} 的在线角色已被清除，断开其实时连接`);
       socket.close(REALTIME_CLOSE.REPLACED, "登录状态已变更（被踢下线或已登出），请重新选角");
       this.connections.delete(accountId);
-      // 与 close 事件的清理同口径：退观看者、清幂等账（世界状态是共享的，不清）
+      // 与 close 事件的清理同口径：退观看者、清幂等账、清位置上报（世界状态是共享的，不清）
       this.combat.dropAccount(accountId);
       this.world.leave(accountId);
+      this.monsterAi.dropAccount(accountId);
     }
   }
 
@@ -506,6 +527,24 @@ function parseWorldJoin(raw: unknown): ParsedWorldJoin | null {
   const data = raw as Record<string, unknown>;
   if (typeof data.mapId !== "string" || !data.mapId) return null;
   return { mapId: data.mapId };
+}
+
+/** pos.data 的解析结果（#323：格式不对整条丢弃，高频帧不回 error） */
+interface ParsedPosition {
+  mapId: string;
+  x: number;
+  y: number;
+  hp: number;
+}
+
+function parsePosition(raw: unknown): ParsedPosition | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.mapId !== "string" || !data.mapId) return null;
+  if (typeof data.x !== "number" || !Number.isFinite(data.x)) return null;
+  if (typeof data.y !== "number" || !Number.isFinite(data.y)) return null;
+  if (typeof data.hp !== "number" || !Number.isFinite(data.hp)) return null;
+  return { mapId: data.mapId, x: data.x, y: data.y, hp: data.hp };
 }
 
 //#endregion

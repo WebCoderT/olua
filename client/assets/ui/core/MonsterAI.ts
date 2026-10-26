@@ -44,10 +44,61 @@ export default class MonsterAI {
    * 每帧驱动场上怪物的行为
    * @param monsters 场上怪物（节点 -> 怪物数据，见 MonsterManager.getMonsterMap）
    * @param player 玩家节点（取坐标与飘字用；场上没有玩家时传 null）
+   * @param serverMode 服务端权威模式（#323：怪物行为 / 位置以 monster-ai 帧为准，
+   *                   本地只做「向服务端位置趋近 + 播走路/待机」的演出，不跑本地 AI）
    */
-  static tick(monsters: Map<Node, Monster>, player: Node | null = null) {
+  static tick(monsters: Map<Node, Monster>, player: Node | null = null, serverMode: boolean = false) {
+    if (serverMode) {
+      monsters.forEach((monster, node) => this.stepServer(node, monster));
+      return;
+    }
     const target = player && isValid(player) ? player : null;
     monsters.forEach((monster, node) => this.tickMonster(node, monster, target));
+  }
+
+  /**
+   * 记录一次服务端权威位置（#323：由 MonsterManager 收到 monster-ai 帧后调用）
+   * 首次收到直接吸附（服务端可能已经模拟了一段），之后由 stepServer 按帧趋近
+   */
+  static applyServerState(node: Node, x: number, y: number, moving: boolean) {
+    if (!isValid(node)) return;
+    const state = this.getState(node);
+    if (state.serverX === null) {
+      const position = node.getWorldPosition();
+      node.setWorldPosition(x, y, position.z);
+    }
+    state.serverX = x;
+    state.serverY = y;
+    state.serverMoving = moving;
+  }
+
+  /**
+   * 服务端权威模式下的一帧演出：向服务端最新位置趋近（同速追赶，滞后约一个广播周期），
+   * 按「服务端移动标记 + 是否还有距离」播走路 / 待机；朝向由位移差量自算。
+   * 本地不跑任何行为决策（追击 / 普攻都在服务端），普攻动作由命中事件驱动（MonsterManager）。
+   */
+  private static stepServer(node: Node, monster: Monster) {
+    if (!isValid(node) || monster.hp <= 0) return;
+    const state = this.states.get(node);
+    if (!state || state.serverX === null) return; // 还没收到服务端位置：原地站着等第一帧
+    const animate = this.getAnimate(node);
+    if (!animate) return;
+    const now = Date.now();
+    const position = node.getWorldPosition();
+    const offsetX = state.serverX - position.x;
+    const offsetY = state.serverY - position.y;
+    const distance = Math.hypot(offsetX, offsetY);
+    if (distance > 0.05) {
+      // 与服务端同一速度追赶（moveSpeed 像素/秒），步长按真实帧间隔算
+      const dt = Math.min(0.5, Math.max(0, (now - state.serverStepAt) / 1000));
+      const step = Math.min(distance, monster.moveSpeed * dt);
+      node.setWorldPosition(position.x + (offsetX / distance) * step, position.y + (offsetY / distance) * step, position.z);
+      this.playAction(animate, state, ACTION.WALK, getDirectionByVector(new Vec2(offsetX, offsetY)));
+    } else if (!state.serverMoving) {
+      this.stopMoving(node);
+      this.playAction(animate, state, ACTION.STAND, state.direction);
+    }
+    state.serverStepAt = now;
   }
 
   /**
@@ -343,6 +394,10 @@ export default class MonsterAI {
       pushEndAt: 0,
       pushDirection: new Vec2(),
       pushSpeed: 0,
+      serverX: null,
+      serverY: 0,
+      serverMoving: false,
+      serverStepAt: now,
     };
     this.states.set(node, state);
     return state;

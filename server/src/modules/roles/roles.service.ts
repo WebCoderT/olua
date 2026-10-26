@@ -426,6 +426,35 @@ export class RolesService {
   }
 
   /**
+   * 怪物普攻的玩家受击落账（#323：玩家血量的权威在服务端）
+   *
+   * 结算侧（MonsterAiService）算出伤害后交给这里：扣 `data.hp`、封 0、立即落库。
+   * **刻意不推进 revision** —— 血量在实时模式下以服务端帧为准（客户端收到 hit 帧
+   * 照搬），revision 只由「进度型」写入（升级 / 购买 / 用药 / 击杀经验）推进；
+   * 若每次受击都 +1，战斗期间的防抖存档会频繁撞乐观锁，玩家存档反而不停失败。
+   * 代价是「落库的血量」与「客户端在途存档的血量」有一个防抖窗口的竞态，
+   * 以服务端后续的 hit 帧为准自愈 —— 窗口内旧值回写只影响一拍，不积累。
+   *
+   * @returns 受击后的血量与服务端重算的资源上限；角色不在线 / 已死亡返回 null
+   *          （调用方据此停止追击，不视为错误）
+   */
+  applyMonsterHit(accountId: string, damage: number): { hp: number; maxHp: number } | null {
+    const account = this.accounts.findById(accountId);
+    const existing = account && account.online_role_id ? this.roles.findById(account.online_role_id) : undefined;
+    if (!account || !existing || account.online_role_id !== existing.id) return null;
+
+    const data = decodeStoredRoleData(existing.data);
+    const previous = Math.max(0, Math.floor(Number(data.hp) || 0));
+    if (previous <= 0) return null; // 已经死了：不再扣也不再报
+    const { maxHp } = this.resolveResourceLimits(existing, data);
+    const hp = Math.max(0, previous - Math.max(0, Math.floor(damage)));
+    data.hp = hp;
+    // 不推进修订号（见方法注释）：血量以实时帧为准，revision 留给进度型写入
+    this.roles.updateDataKeepRevision(existing.id, JSON.stringify(data), Date.now());
+    return { hp, maxHp };
+  }
+
+  /**
    * 击杀经验入账（#316：经验的结算在服务端）
    *
    * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **level_exps 表**（#256

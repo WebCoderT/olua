@@ -36,7 +36,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 55;
+const EXPECTED_ASSERTIONS = 69;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -135,6 +135,9 @@ async function startServer(dbPath) {
       // 击杀奖励 region（#316）要等怪重生：把默认 30s 压到 5s（前一组「断线不清世界状态」
       // 的断言都在击杀后 2s 内完成，5s 有三倍余量；后面的等待用显式超时兜住）
       WORLD_RESPAWN_MS: "5000",
+      // 怪物 AI region（#323）：tick 与广播压到最快，命中帧等待才有余量
+      MONSTER_AI_TICK_MS: "50",
+      MONSTER_AI_BROADCAST_MS: "100",
       ADMIN_REGISTER_CODE: ADMIN_CODE,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -205,6 +208,8 @@ function connect(url) {
     closed: false,
     settles: [],
     worlds: [],
+    /** 怪物 AI 广播帧（#323：位置增量 + 普攻命中事件） */
+    ais: [],
     /** 按 castId 等结算帧（幂等重发会来两帧，取最新的） */
     async waitForSettle(castId, timeoutMs = 5_000) {
       return waitFor(`castId=${castId} 的 settle`, async () => {
@@ -233,6 +238,7 @@ function connect(url) {
       const frame = JSON.parse(raw.toString());
       if (frame.type === "settle") session.settles.push(frame.data);
       if (frame.type === "world") session.worlds.push(frame.data);
+      if (frame.type === "monster-ai") session.ais.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -551,6 +557,81 @@ function roleData(id, name, level, skills) {
     check(!!(killedD2 && killedD2.reward) && killedD2.reward.revision === revisionDBefore + 1, "D：无经验不入账（revision 不再推进）", JSON.stringify(killedD2 && killedD2.reward));
     const roleDAfter = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
     check(roleDAfter.code === 0 && !roleDAfter.data.data.exp, "D：存档里没有经验记录（服务端没有多记）", JSON.stringify(roleDAfter.data && roleDAfter.data.data && roleDAfter.data.data.exp));
+
+    //#endregion
+
+    //#region 七、怪物 AI（#323）：目标 / 移动 / 普攻与玩家受击的权威在服务端
+
+    group("七、怪物 AI：普攻与玩家受击由服务端结算（monster-ai 帧）");
+
+    const fighter = await newPlayer("combat_raf");
+    // 地图 2：一只怪物 3（前面的 region 没动过它），拿服务端发的出生点
+    const aiMob = await aliveMonster(fighter, "2");
+    check(!!aiMob, "七：地图 2 有活着的怪（拿服务端发的出生点）", JSON.stringify(aiMob));
+
+    // 出手一次激怒被动怪（结算顺带把「打伤它的人」记给 AI —— 追击由此开始）
+    const provokeShot = await cast(fighter.session, { skillId: "1000", targetId: aiMob.instanceId, monsterKey: aiMob.monsterKey }).promise;
+    check(!!(provokeShot && provokeShot.ok), "七：出手激怒被动怪（结算成功）", JSON.stringify(provokeShot));
+
+    /** 周期上报位置（pos 帧有过期时间，断言窗口比它长就要持续喂） */
+    let posTimer = null;
+    const reportPos = (x, y, hp) => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x, y, hp } }));
+    const hitCount = () => fighter.session.ais.reduce((sum, frame) => sum + (frame.hits ? frame.hits.length : 0), 0);
+
+    // —— A. 激怒后进入普攻距离：服务端出招，玩家受击落账 ——
+    const near = { x: aiMob.x + 10, y: aiMob.y };
+    reportPos(near.x, near.y, 100);
+    posTimer = setInterval(() => reportPos(near.x, near.y, 100), 500);
+    const roleBefore = await api(baseUrl, "GET", `roles/${fighter.roleId}`, { token: fighter.token });
+    const revisionBefore = roleBefore.data ? roleBefore.data.revision : -1;
+
+    const aiHitFrame = await waitFor("monster-ai 命中帧", async () => {
+      return fighter.session.ais.find((frame) => frame.hits && frame.hits.length > 0) || null;
+    }, 8_000);
+    check(!!aiHitFrame, "A：收到 monster-ai 命中帧（服务端按普攻间隔出招）", JSON.stringify(aiHitFrame));
+    const hit = aiHitFrame && aiHitFrame.hits[0];
+    check(!!hit && hit.damage > 0, "A：普攻伤害 > 0（怪物物攻区间 − 玩家物防区间）", JSON.stringify(hit));
+    check(!!hit && hit.hp < 100 && hit.maxHp > 0, "A：受击后血量下降且带资源上限", JSON.stringify(hit));
+    check(!!hit && typeof hit.accountId === "string" && hit.accountId.length > 0, "A：命中事件带受击账号（广播给全图观看者）");
+
+    const roleAfter = await api(baseUrl, "GET", `roles/${fighter.roleId}`, { token: fighter.token });
+    check(!!hit && roleAfter.code === 0 && roleAfter.data.data.hp === hit.hp, "A：受击已落进存档（data.hp = hit.hp）", JSON.stringify({ db: roleAfter.data && roleAfter.data.data && roleAfter.data.data.hp, hit: hit && hit.hp }));
+    check(roleAfter.code === 0 && roleAfter.data.revision === revisionBefore, "A：受击不推进修订号（revision 原样，战斗期间存档不撞乐观锁）", JSON.stringify({ before: revisionBefore, after: roleAfter.data && roleAfter.data.revision }));
+
+    // —— B. 普攻间隔：1.5s 内没有第二击，2.5s 内第二击到来 ——
+    const countAfterFirst = hitCount();
+    await sleep(1_500);
+    check(hitCount() === countAfterFirst, "B：1.5s 内没有第二击（attackInterval = 2000ms 生效）", JSON.stringify({ countAfterFirst, now: hitCount() }));
+    await sleep(1_200);
+    check(hitCount() >= countAfterFirst + 1, "B：2.7s 内第二击到来（间隔后继续出招）", JSON.stringify({ countAfterFirst, now: hitCount() }));
+
+    // —— C. 追击：玩家走出普攻距离但在检测范围内 → 服务端推着怪追 ——
+    const far = { x: aiMob.x + 150, y: aiMob.y };
+    reportPos(far.x, far.y, 100);
+    posTimer && clearInterval(posTimer);
+    posTimer = setInterval(() => reportPos(far.x, far.y, 100), 500);
+    const countBeforeChase = hitCount();
+    const chaseEntry = await waitFor("追击中的位置增量", async () => {
+      return fighter.session.ais.flatMap((frame) => frame.monsters || []).find((entry) => entry.instanceId === aiMob.instanceId && entry.moving === true) || null;
+    }, 3_000);
+    check(!!chaseEntry, "C：收到移动中的位置增量（moving = true）", JSON.stringify(chaseEntry));
+    check(!!chaseEntry && chaseEntry.x < aiMob.x + 150, "C：怪物朝玩家方向移动（x 向目标趋近）", JSON.stringify({ entryX: chaseEntry && chaseEntry.x, spawnX: aiMob.x }));
+
+    // —— D. 丢失目标：走出检测范围 / 玩家死亡都不再被追击 ——
+    reportPos(aiMob.x + 500, aiMob.y, 100);
+    posTimer && clearInterval(posTimer);
+    posTimer = setInterval(() => reportPos(aiMob.x + 500, aiMob.y, 100), 500);
+    const countBeforeFar = hitCount();
+    await sleep(1_500);
+    check(hitCount() === countBeforeFar, "D：走出检测范围后不再被追击（detectRange = 200 生效）", JSON.stringify({ before: countBeforeFar, now: hitCount() }));
+
+    reportPos(near.x, near.y, 0);
+    posTimer && clearInterval(posTimer);
+    posTimer = setInterval(() => reportPos(near.x, near.y, 0), 500);
+    const countBeforeDead = hitCount();
+    await sleep(1_500);
+    check(hitCount() === countBeforeDead, "D：上报血量 0（死亡）后不再被选为目标", JSON.stringify({ before: countBeforeDead, now: hitCount() }));
+    posTimer && clearInterval(posTimer);
 
     //#endregion
 

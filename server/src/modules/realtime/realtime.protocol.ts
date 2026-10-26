@@ -211,12 +211,69 @@ export interface RealtimeWorldMessage {
 
 //#endregion
 
+//#region 怪物 AI（#323：目标选择 / 移动 / 普攻与玩家受击的权威都在服务端）
+
+/**
+ * 客户端 → 服务端：位置上报（节流发送；服务端 AI 用它做目标检测与追击）
+ *
+ * 服务端**不持有玩家位置的权威**（移动预测仍在客户端），但 AI 的检测范围 / 普攻距离
+ * 都要拿「玩家在哪」做输入 —— 这条帧就是那个输入。hp 一并带上：服务端用「上报时刻的
+ * 血量」判断目标是否已死（权威血量以 applyMonsterHit 落账与后续 hit 帧为准）。
+ * 超过 `MONSTER_AI_POS_STALE_MS` 没上报的玩家视作离场，怪物不再追击。
+ */
+export interface RealtimePositionMessage {
+  type: "pos";
+  data: {
+    /** 当前所在地图（AI 按 zone:map 分域找目标候选） */
+    mapId: string;
+    /** 玩家世界坐标 */
+    x: number;
+    y: number;
+    /** 上报时刻的玩家血量（<= 0 视作死亡，不再被选为目标） */
+    hp: number;
+  };
+}
+
+/** 怪物 AI 广播帧里的一只怪（只发有变化的：位置变了或移动标记变了） */
+export interface RealtimeMonsterAiEntry {
+  instanceId: string;
+  /** 服务端模拟出的当前坐标（世界坐标；与 world 帧的出生点同一坐标系） */
+  x: number;
+  y: number;
+  /** 是否在移动（客户端据此播走路 / 待机；方向由客户端按位移差量自算） */
+  moving: boolean;
+}
+
+/** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果） */
+export interface RealtimeMonsterHit {
+  instanceId: string;
+  /** 受击账号（广播给全图观看者；#324 玩家互见之前客户端只演自己的） */
+  accountId: string;
+  damage: number;
+  /** 受击后玩家剩余血量（服务端已落账，客户端照搬） */
+  hp: number;
+  maxHp: number;
+}
+
+/** 服务端 → 客户端：怪物 AI 广播（位置增量 + 普攻命中事件，按地图分发给观看者） */
+export interface RealtimeMonsterAiMessage {
+  type: "monster-ai";
+  data: {
+    mapId: string;
+    monsters: RealtimeMonsterAiEntry[];
+    hits: RealtimeMonsterHit[];
+  };
+}
+
+//#endregion
+
 /** 客户端会发出的全部消息 */
 export type RealtimeClientMessage =
   | RealtimePingMessage
   | RealtimeCastMessage
   | RealtimeTargetsResetMessage
-  | RealtimeWorldJoinMessage;
+  | RealtimeWorldJoinMessage
+  | RealtimePositionMessage;
 
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
@@ -224,7 +281,8 @@ export type RealtimeServerMessage =
   | RealtimePongMessage
   | RealtimeErrorMessage
   | RealtimeSettleMessage
-  | RealtimeWorldMessage;
+  | RealtimeWorldMessage
+  | RealtimeMonsterAiMessage;
 
 /**
  * 关闭码

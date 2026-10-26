@@ -226,6 +226,15 @@ export interface AppConfiguration {
    */
   worldMapIdleMs: number;
   //#endregion
+
+  //#region 怪物 AI（#323：目标 / 移动 / 普攻权威在服务端）
+  /** AI tick 间隔（毫秒）：移动积分与普攻判定的节拍，粒度到百毫秒级（移动观感） */
+  monsterAiTickMs: number;
+  /** AI 广播节流（毫秒）：monster-ai 帧只按这个节奏发（位置增量 + 命中事件） */
+  monsterAiBroadcastMs: number;
+  /** 位置上报的过期时间（毫秒）：超时没上报的玩家视作离场，怪物丢失目标 */
+  monsterAiPosStaleMs: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -282,5 +291,8 @@ export default function configuration(): AppConfiguration {
     worldPersistMs: Number(process.env.WORLD_PERSIST_MS ?? 5000),
     worldRespawnMs: Number(process.env.WORLD_RESPAWN_MS ?? 30 * 1000),
     worldMapIdleMs: Number(process.env.WORLD_MAP_IDLE_MS ?? 10 * 60 * 1000),
+    monsterAiTickMs: Number(process.env.MONSTER_AI_TICK_MS ?? 100),
+    monsterAiBroadcastMs: Number(process.env.MONSTER_AI_BROADCAST_MS ?? 200),
+    monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
   };
 }

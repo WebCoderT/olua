@@ -406,6 +406,21 @@ export default class StorageManager {
     return reward.exp;
   }
 
+  /**
+   * 服务端普攻受击落账（#323：玩家血量的权威在服务端，hit 帧带回的就是落账后的值）
+   *
+   * 血量 / 资源上限照搬服务端给的（本地不再自己扣）；revision **不变**——
+   * 受击不推进修订号（否则战斗期间的防抖存档会频繁撞乐观锁），落库由服务端负责。
+   */
+  static applyMonsterHit(hit: { hp: number; maxHp: number }): void {
+    const role = this.findOnlineRole();
+    if (!role) return;
+    role.hp = Math.max(0, Math.floor(hit.hp));
+    if (hit.maxHp > 0) role.maxHp = hit.maxHp;
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+  }
+
   //#region 背包物品使用
 
   /**

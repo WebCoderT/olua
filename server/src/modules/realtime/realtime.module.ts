@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { RolesModule } from "../roles/roles.module";
 import { WorldModule } from "../world/world.module";
 import { CombatSettlementService } from "./combat-settlement.service";
+import { MonsterAiService } from "./monster-ai.service";
 import { RealtimeController } from "./realtime.controller";
 import { RealtimeService } from "./realtime.service";
 
@@ -12,10 +13,12 @@ import { RealtimeService } from "./realtime.service";
  * —— 归属校验与「不透明文档」的解析都在那一条路上，不在这里另开一条。
  * 世界权威（#35）是另一个模块：结算往世界实例上扣血、进图走 worldJoin，
  * 通道只是世界状态的「喇叭」（广播出口由本模块接线到世界层）。
+ * 怪物 AI（#323）同样住在本模块：结算把「打伤了谁」递给它（记恨），它把受击结果
+ * 与怪物位置通过广播出口发出去 —— AI 的输入（位置上报）与输出（广播帧）都走通道。
  */
 @Module({
   imports: [RolesModule, WorldModule],
   controllers: [RealtimeController],
-  providers: [RealtimeService, CombatSettlementService],
+  providers: [RealtimeService, CombatSettlementService, MonsterAiService],
 })
 export class RealtimeModule {}

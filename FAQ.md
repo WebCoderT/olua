@@ -136,7 +136,7 @@ make verify   # = check（客户端 tsc + 管理端 typecheck + 10 个审计）+
 # 客户端：38 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 十二套 e2e（248 / 110 / 283 / 120 / 28 / 50 / 55 / 24 / 14 / 530 / 87 / 32）+ 生成物一致性
+# 服务端：编译 + 十二套 e2e（248 / 110 / 283 / 120 / 28 / 50 / 69 / 24 / 14 / 530 / 87 / 32）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建

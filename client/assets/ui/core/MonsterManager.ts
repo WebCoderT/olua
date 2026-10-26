@@ -14,7 +14,8 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel, { CombatKillReward, WorldSnapshot } from "../utils/net/CombatChannel";
+import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterHitEntry, WorldSnapshot } from "../utils/net/CombatChannel";
+import RealtimeClient from "../utils/net/RealtimeClient";
 
 /**
  * 怪物管理器（静态类）
@@ -44,6 +45,22 @@ export default class MonsterManager {
   /** 实例 id 发牌器（会话内单调递增；世界权威 #35 后只服务回滚路径，正常发牌归服务端） */
   private static instanceSeq = 0;
 
+  /**
+   * 服务端 AI 权威（#323）：本会话收到过 world 帧（说明实时通道在线且进图登记过）。
+   * 怪物的目标选择 / 移动 / 普攻与玩家受击都改由服务端 monster-ai 帧驱动，
+   * 本地 MonsterAI 停用（组合根据此切换每帧驱动分支）；断线时 CombatChannel.active
+   * 变 false，自动退回本地口径（回滚路径）。
+   */
+  static get serverAuthority(): boolean {
+    return this.worldSeen && CombatChannel.active;
+  }
+
+  /** 本会话是否收到过 world 帧（见 serverAuthority；换图清场时重置） */
+  private static worldSeen = false;
+
+  /** 玩家被服务端 AI 普攻命中的出口（#323；组合根接线：飘字 / 红闪 / 受击动作 / 血量入账） */
+  static onPlayerServerHit: ((hit: MonsterHitEntry) => void) | null = null;
+
   /** 场上怪物（节点 -> 怪物数据），供 MonsterAI 每帧遍历 */
   static getMonsterMap() {
     return this.monsterMap;
@@ -57,9 +74,11 @@ export default class MonsterManager {
     });
     this.monsterMap.clear();
     this.instanceIndex.clear();
+    this.worldSeen = false;
     LayerManager.clearMonsterLayer();
     // 旧图的目标在服务端那边也一并作废（#34：结算上下文不能跨图延续）
     CombatChannel.resetTargets();
+    CombatChannel.resetPositionThrottle();
   }
 
   /** 生成一只怪物（按配置初始化数据与节点，挂载到怪物层）
@@ -200,6 +219,27 @@ export default class MonsterManager {
   }
 
   /**
+   * 服务端 AI 广播的落点（#323）：位置增量交给 MonsterAI 趋近演出，
+   * 命中事件里属于自己的那份交给组合根接线（别人的受击在玩家互见之前不演）。
+   */
+  static applyServerAi(data: MonsterAiFrame) {
+    for (const entry of data.monsters) {
+      const node = this.instanceIndex.get(entry.instanceId);
+      if (!node) continue; // 还没生成的怪（重生广播的 world 帧会先落场），下一帧再对齐
+      MonsterAI.applyServerState(node, entry.x, entry.y, entry.moving);
+    }
+    const myId = RealtimeClient.onlineUserId;
+    for (const hit of data.hits) {
+      if (hit.accountId !== myId) continue;
+      if (!this.onPlayerServerHit) {
+        console.warn("[monster-ai] 玩家被普攻命中但没有处理者（onPlayerServerHit 未接线），事件被丢弃");
+        continue;
+      }
+      this.onPlayerServerHit(hit);
+    }
+  }
+
+  /**
    * 服务端结算结果的落点（#34：伤害由服务端算，这里只把它演出来）
    *
    * 扣多少血、死没死都以结算帧为准（overkill 不截断伤害数字，血量才截断）；
@@ -240,6 +280,7 @@ export default class MonsterManager {
    * - 场上有、快照里已死 → 断线期间被队友击杀的兜底：走既有死亡表现清场。
    */
   static applyWorldState(snapshot: WorldSnapshot) {
+    this.worldSeen = true;
     const seen = new Set<string>();
     for (const entry of snapshot.monsters) {
       seen.add(entry.instanceId);
