@@ -54,8 +54,27 @@ export interface GrowthSegment {
   perLevel: number;
 }
 
-/** 角色等级上限（曲线覆盖到这一级；改曲线时记得同步把 roleGrowth 的最后一段 to 改掉） */
-export const roleMaxLevel = 60;
+/**
+ * 角色等级上限（曲线覆盖到这一级；改曲线时记得同步把 roleGrowth 的最后一段 to 改掉）
+ *
+ * **可变**：管理端能改这个数（`growthScales` 快照里的 `roleMaxLevel`），
+ * 覆写后由 `configs/level.rebuildLevelMap()` 按新上限重建等级表（#361）。
+ * 用 `let` 而不是 getter，是为了让消费方的 `if (role.level >= roleMaxLevel)` 这类写法一行都不用改。
+ * 注意：称号 / 军衔的等级序列在模块加载期就按加载时的上限算好了（序列固定不可增删），
+ * 改大上限不会自动长出新阶 —— 那两条线各自有服务端下发的行做覆写。
+ */
+export let roleMaxLevel = 60;
+
+/**
+ * 改等级上限（**唯一写入口**）
+ *
+ * ESM 的导入绑定是只读的，`apply-snapshot` 不能直接给 `roleMaxLevel` 赋值 ——
+ * 收一个函数在这里，写入点就还是「只有 growth.ts 自己能改这个数」。
+ * 调用方负责在改完之后重建等级表（见 `configs/level.rebuildLevelMap`）。
+ */
+export function setRoleMaxLevel(level: number): void {
+  roleMaxLevel = Math.max(1, Math.floor(level));
+}
 
 /**
  * 在分段线性曲线上取某等级的值

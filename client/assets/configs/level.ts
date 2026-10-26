@@ -19,28 +19,43 @@ export const expGain = {
   maxLevelGap: 6,
 };
 
-for (let level = 1; level <= roleMaxLevel; level++) {
-  const attributes = getRoleLevelAttributes(level);
-  levelMap.set(level, {
-    /**
-     * 升到下一级所需经验
-     * = 该级要击杀的同级怪数量（configs/growth.roleGrowth.killsPerLevel）
-     * × 每只同级怪给的经验（=(等级+1) × expGain.expPerLevel，见下面的 getKillExp）
-     * 两条曲线共用同一个 expPerLevel，所以「每级要打几只」与实际得到的经验永远对得上。
-     */
-    exp: getLevelKills(level) * (level + 1) * expGain.expPerLevel,
-    maxHp: attributes.maxHp,
-    maxMp: attributes.maxMp,
-    // 每秒回血同样来自曲线（= 最大生命 × attributeRange.hpRecoverRate，见 configs/growth）
-    hpRecover: attributes.hpRecover,
-    physicalAttack: attributes.physicalAttack,
-    magicAttack: attributes.magicAttack,
-    taoistAttack: attributes.taoistAttack,
-    physicalDefense: attributes.physicalDefense,
-    magicDefense: attributes.magicDefense,
-    taoistDefense: attributes.taoistDefense,
-  });
+/**
+ * 按当前曲线与上限重建等级表（**清空重填**，`levelMap` 引用不变）
+ *
+ * 模块加载期调一次；服务端配置快照覆写成长曲线 / 标量 / 上限之后再调一次（#361）——
+ * 每级属性与升级经验都是从 `configs/growth` 的曲线派生出来的，
+ * 换了曲线不重建就是旧值留底（属性面板、升级进度都会显示上一个世界的数）。
+ *
+ * 重建只负责「曲线 → levelMap」这段搬运；`exp` 的最终值仍可能被服务端
+ * `levelExps` 覆盖（管理端能直接改经验表，与曲线解耦，见 configs/apply-snapshot）。
+ */
+export function rebuildLevelMap(): void {
+  levelMap.clear();
+  for (let level = 1; level <= roleMaxLevel; level++) {
+    const attributes = getRoleLevelAttributes(level);
+    levelMap.set(level, {
+      /**
+       * 升到下一级所需经验
+       * = 该级要击杀的同级怪数量（configs/growth.roleGrowth.killsPerLevel）
+       * × 每只同级怪给的经验（=(等级+1) × expGain.expPerLevel，见下面的 getKillExp）
+       * 两条曲线共用同一个 expPerLevel，所以「每级要打几只」与实际得到的经验永远对得上。
+       */
+      exp: getLevelKills(level) * (level + 1) * expGain.expPerLevel,
+      maxHp: attributes.maxHp,
+      maxMp: attributes.maxMp,
+      // 每秒回血同样来自曲线（= 最大生命 × attributeRange.hpRecoverRate，见 configs/growth）
+      hpRecover: attributes.hpRecover,
+      physicalAttack: attributes.physicalAttack,
+      magicAttack: attributes.magicAttack,
+      taoistAttack: attributes.taoistAttack,
+      physicalDefense: attributes.physicalDefense,
+      magicDefense: attributes.magicDefense,
+      taoistDefense: attributes.taoistDefense,
+    });
+  }
 }
+
+rebuildLevelMap();
 
 // 计算当前等级经验进度0-1
 export function getCurrentLevelExpRate(level: number, exp: number): number {
