@@ -58,17 +58,3 @@ export const hitScreenFlash = {
   /** 铺满可视区再放大的倍率（镜头边缘/适配留白时防止四周露出未覆盖的底） */
   overscan: 1.2,
 };
-
-/**
- * 远端玩家的占位外显（#324 玩家互见，见 core/OtherPlayerManager）
- * 对方的角色外观（衣服/武器动画）要随互见帧下发穿戴数据才有，此前用这个占位圆表达「这里有个人」；
- * 有外观动画后整段退役
- */
-export const otherPlayerGhost = {
-  /** 占位圆的填充色（与主角 / 怪物的配色区分开） */
-  fillColor: new Color(80, 160, 255, 200),
-  /** 占位圆的描边色 */
-  strokeColor: new Color(255, 255, 255, 255),
-  /** 描边宽（像素） */
-  lineWidth: 1.5,
-};

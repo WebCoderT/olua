@@ -239,6 +239,11 @@ export interface AppConfiguration {
   //#region 玩家互见（#324：同图玩家位置 / 血量 / 移动标记互见）
   /** 互见广播节流（毫秒）：players 帧只按这个节奏发（位置增量 + 离开事件） */
   playerSyncBroadcastMs: number;
+  /**
+   * 外观懒刷新间隔（毫秒，#383）：在场表按这个节奏重读在线角色，
+   * 让「别人换了衣服」最多迟这么久被看到（换装走 HTTP 存档，实时进程不会被告知）
+   */
+  playerAppearanceRefreshMs: number;
   //#endregion
 }
 
@@ -300,5 +305,6 @@ export default function configuration(): AppConfiguration {
     monsterAiBroadcastMs: Number(process.env.MONSTER_AI_BROADCAST_MS ?? 200),
     monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
     playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
+    playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
   };
 }

@@ -38,7 +38,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 121;
+const EXPECTED_ASSERTIONS = 124;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -143,6 +143,9 @@ async function startServer(dbPath) {
       // 位置过期压到 2s：互见 region（#324）的超时离场断言要等它；region 七的窗口都
       // 在持续喂 pos（500ms 间隔），不受影响
       MONSTER_AI_POS_STALE_MS: "2000",
+      // 外观懒刷新压到 1s：互见 region（#383）的换装断言要等在场表重读存档，
+      // 默认 5s 会让这条用例白等四秒（下限就是 1000，再小也压不动）
+      PLAYER_APPEARANCE_REFRESH_MS: "1000",
       ADMIN_REGISTER_CODE: ADMIN_CODE,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -679,6 +682,13 @@ function roleData(id, name, level, skills) {
       JSON.stringify(fullFrame && fullFrame.players[0]),
     );
     check(!!fullFrame && fullFrame.players[0].username === "combat_raf", "A：快照条目带显示名（角色名，服务端首见时查好缓存）", JSON.stringify(fullFrame && fullFrame.players[0]));
+    // #383：外观随互见帧下发 —— 「没穿」用空串（客户端据此回落性别默认身体）
+    const snapshotAppearance = fullFrame && fullFrame.players[0] && fullFrame.players[0].appearance;
+    check(
+      !!snapshotAppearance && snapshotAppearance.sex === "1" && snapshotAppearance.cloth === "" && snapshotAppearance.weapon === "" && snapshotAppearance.fashion === "",
+      "A：快照条目带外观（性别 + 空装备槽原样下发，别人能看到他长什么样）",
+      JSON.stringify(snapshotAppearance),
+    );
 
     // —— B. 增量出现：companion 上报位置后 fighter 收到它 ——
     const companionPos = { x: 200, y: 200, hp: 100, moving: false };
@@ -724,6 +734,30 @@ function roleData(id, name, level, skills) {
       return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.hp === 80)) || null;
     }, 5_000);
     check(!!hurtFrame, "E：血量变化进入增量广播（互见的血条跟着走）", JSON.stringify(hurtFrame));
+
+    // —— H. 换装（#383）：改存档后站在不动也要被别人看到（在场表按 refresh 间隔重读）——
+    const companionDetail = await api(baseUrl, "GET", `roles/${companion.roleId}`, { token: companion.token });
+    const redressed = await api(baseUrl, "PUT", `roles/${companion.roleId}`, {
+      token: companion.token,
+      body: {
+        revision: companionDetail.data.revision,
+        data: { ...roleData("combat_rpr_r1", "combat_rpr", 1, { 1000: 1 }), equipments: { cloth: "3001", weapon: "4001" } },
+      },
+    });
+    check(redressed.code === 0, "H：换装已写进存档（服务端权威数据变了，实时进程没被告知）", redressed.message);
+    const dressedFrame = await waitFor("fighter 收到 companion 的换装帧", async () => {
+      return (
+        fighter.session.players.find((frame) =>
+          frame.players.some((entry) => entry.accountId === companionAccountId && entry.appearance && entry.appearance.cloth === "3001"),
+        ) || null
+      );
+    }, 8_000);
+    const dressedEntry = dressedFrame && dressedFrame.players.find((entry) => entry.accountId === companionAccountId);
+    check(
+      !!dressedEntry && dressedEntry.appearance.cloth === "3001" && dressedEntry.appearance.weapon === "4001",
+      "H：换装后收到外观变化帧（坐标 / 血量都没变也广播，不用等他动一下）",
+      JSON.stringify(dressedEntry && dressedEntry.appearance),
+    );
 
     // —— F. 换图离开：旧图的同伴收到 left（客户端才拆得掉旧节点）——
     await companion.session.joinWorld("1");

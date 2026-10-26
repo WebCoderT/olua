@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { ConfigService } from "@nestjs/config";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
-import type { RealtimePlayerEntry } from "./realtime.protocol";
+import type { RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
 /**
  * 一名在线玩家的在场信息（#324：玩家互见的数据源）
@@ -22,6 +22,12 @@ interface PresenceEntry {
   /** 上报时刻是否在移动（客户端自报） */
   moving: boolean;
   updatedAt: number;
+  /** 外观（#383：首见读一次，之后按 appearanceRefreshMs 懒刷新 —— 换装最多这么多秒被别人看到） */
+  appearance: RealtimePlayerAppearance;
+  /** 上次读外观的时刻（懒刷新判据） */
+  appearanceAt: number;
+  /** 上次广播出去的外观（增量广播的判据；空串保证首帧一定带上） */
+  sentAppearance: string;
   /** 上次广播出去的位置 / 移动标记 / 血量（增量广播的判据） */
   sentX: number;
   sentY: number;
@@ -100,7 +106,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   /**
    * 记录一次玩家位置上报（不校验图是否加载：上报先到、worldJoin 后到是正常时序）
    *
-   * maxHp / 账号名只在首次见到该玩家时查一次库（血条分母不常变，不值得每帧查）。
+   * maxHp / 账号名 / 外观只在首次见到该玩家时查一次库（都不常变，不值得每帧查）；
+   * 外观另有按 `appearanceRefreshMs` 的懒刷新（#383，换装后要能被别人看到）。
    */
   updatePosition(accountId: string, username: string, zoneId: number, mapId: string, x: number, y: number, hp: number, moving: boolean): void {
     const existed = this.entries.get(accountId);
@@ -120,6 +127,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         maxHp,
         moving,
         updatedAt: Date.now(),
+        appearance: this.readAppearance(role),
+        appearanceAt: Date.now(),
+        sentAppearance: "",
         sentX: NaN,
         sentY: NaN,
         sentMoving: !moving,
@@ -134,6 +144,11 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     existed.hp = hp;
     existed.moving = moving;
     existed.updatedAt = Date.now();
+    // 外观懒刷新（#383）：换装是低频事件，不值得每个 pos 帧查一次库（roles.online 是 DB 读）
+    if (existed.updatedAt - existed.appearanceAt > this.appearanceRefreshMs()) {
+      existed.appearance = this.readAppearance(this.roles.online(accountId));
+      existed.appearanceAt = existed.updatedAt;
+    }
   }
 
   /**
@@ -197,7 +212,10 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       const moved = entry.x !== entry.sentX || entry.y !== entry.sentY;
       const turned = entry.moving !== entry.sentMoving;
       const hurt = entry.hp !== entry.sentHp;
-      if (!moved && !turned && !hurt) continue;
+      // 换装也要广播（#383）：原地站着不动换一身衣服，坐标 / 血量 / 移动标记全没变，
+      // 不带这条判据别人就得等他动一下才看得见新外观
+      const redressed = this.appearanceKey(entry.appearance) !== entry.sentAppearance;
+      if (!moved && !turned && !hurt && !redressed) continue;
       const key = worldKey(entry.zoneId, entry.mapId);
       const list = changed.get(key) ?? [];
       list.push(this.toEntry(accountId, entry));
@@ -206,6 +224,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       entry.sentY = entry.y;
       entry.sentMoving = entry.moving;
       entry.sentHp = entry.hp;
+      entry.sentAppearance = this.appearanceKey(entry.appearance);
     }
     for (const [key, players] of changed) {
       const at = key.indexOf(":");
@@ -246,7 +265,34 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       hp: entry.hp,
       maxHp: entry.maxHp,
       moving: entry.moving,
+      // 复制一份再发：在场表里的那份会被下一次懒刷新整份替换，别让广播出去的对象跟着变
+      appearance: { ...entry.appearance },
     };
+  }
+
+  /**
+   * 从在线角色数据里取出外观（#383）
+   *
+   * `data` 是不透明文档（客户端 entities/Role 的 JSON 快照，历史形状不一定听话），
+   * 这里逐个收窄：类型不对一律回落默认值 —— 一个人的外观字段脏了不该让整帧广播失败。
+   */
+  private readAppearance(role: { data?: Record<string, unknown> } | null): RealtimePlayerAppearance {
+    const data = (role?.data ?? {}) as Record<string, unknown>;
+    const equipments = (data.equipments ?? {}) as Record<string, unknown>;
+    // 性别：客户端 SEX 是字符串枚举（"1" 男 / "2" 女），但历史存档里也见过数字 —— 两种都收
+    const sex = data.sex;
+    return {
+      sex: typeof sex === "string" ? sex : typeof sex === "number" ? String(sex) : "1",
+      cloth: typeof equipments.cloth === "string" ? equipments.cloth : "",
+      weapon: typeof equipments.weapon === "string" ? equipments.weapon : "",
+      // 时装历史形状是 number（从没人写过），只认字符串；数字一律当没穿
+      fashion: typeof data.fashionCloth === "string" ? data.fashionCloth : "",
+    };
+  }
+
+  /** 外观比较键（增量广播判据：四个字段拼一串，字符串比较比逐字段比省事） */
+  private appearanceKey(appearance: RealtimePlayerAppearance): string {
+    return `${appearance.sex}|${appearance.cloth}|${appearance.weapon}|${appearance.fashion}`;
   }
 
   private usernameOf(accountId: string): string {
@@ -269,6 +315,17 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
 
   private posStaleMs(): number {
     return Math.max(500, Number(this.config.get<number>("monsterAiPosStaleMs") ?? 3000));
+  }
+
+  /**
+   * 外观懒刷新间隔（毫秒，#383）
+   *
+   * 换装 / 换武器 / 换时装都走存档（HTTP 那侧），实时进程的在场表不会自己知道 ——
+   * 所以按这个间隔重读一次在线角色。取 5 秒的理由：换装是低频操作，迟 5 秒被别人看到
+   * 完全无感；而每帧重读（4Hz × 同图人数）立刻就是每秒几十次 DB 读。
+   */
+  private appearanceRefreshMs(): number {
+    return Math.max(1000, Number(this.config.get<number>("playerAppearanceRefreshMs") ?? 5000));
   }
 
   //#endregion
