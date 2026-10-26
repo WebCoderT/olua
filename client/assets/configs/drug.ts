@@ -9,8 +9,11 @@ import { Drug, GOOD_TYPE } from "../types/good";
  * 越级使用就会明显不够用。改了成长曲线记得回来同步这三档的回复量。
  *
  * 注意：固定值药只有 1 / 5 / 10 三档，属于前期用药；resources/item 下还留着
- * fs_5~fs_7（红）、sz_4~sz_7（蓝）、tz_3~tz_7（太阳水）的图标，
+ * fs_5~fs_6（红）、sz_4~sz_6（蓝）、tz_3~tz_7（太阳水）的图标，
  * 等掉落表能按怪物等级分档之后再补 21 / 31 / 41 / 51 级的高级药。
+ * 百分比药用各系的 7 号图（fs_7 / sz_7，当前红蓝两系最大档）——
+ * 原先的两张自制图 item/drug_hp_pct / drug_mp_pct 不在发布素材包里（2026-10-26 资源引用审计发现），
+ * 以发布包为准改用现有图标，不再保留包外资源。
  *
  * 百分比药（强效血药 / 强效蓝药）不参与上述等级分档：回复量按角色 maxHp / maxMp 的
  * 百分比算，任何等级段都等价好用，因此**所有怪物均可掉落**（见 gen-monster-drops.cjs）。
@@ -100,7 +103,7 @@ export const drugs: Drug[] = [
     label: "强效血药",
     level: 20,
     description: "使用后恢复 50% 生命值，任何等级服用都等价好用。",
-    icon: "item/drug_hp_pct",
+    icon: "item/fs_7",
     sellPirce: 100,
     stackable: true,
     maxStack: 99,
@@ -113,7 +116,7 @@ export const drugs: Drug[] = [
     label: "强效蓝药",
     level: 20,
     description: "使用后恢复 50% 魔法值，任何等级服用都等价好用。",
-    icon: "item/drug_mp_pct",
+    icon: "item/sz_7",
     sellPirce: 100,
     stackable: true,
     maxStack: 99,

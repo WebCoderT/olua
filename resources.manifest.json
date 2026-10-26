@@ -1,5 +1,5 @@
 {
- "version": "2026-10-26-1",
+ "version": "2026-10-25-1",
  "files": [
   [
    "avatars/1-1.png",
@@ -14740,26 +14740,6 @@
    "item/5230510.png.meta",
    "75ae8ead58437456d47243b62f0d90a1691e7c00",
    2872
-  ],
-  [
-   "item/drug_hp_pct.png",
-   "0a929627951c213d2153f5985f8da5358fcf7974",
-   3101
-  ],
-  [
-   "item/drug_hp_pct.png.meta",
-   "895bb8da7dd2684c22893ea259a8b94a78419fa0",
-   2814
-  ],
-  [
-   "item/drug_mp_pct.png",
-   "bc8acd9a6dc1987fe6adb22ca545929a5b770c5b",
-   7112
-  ],
-  [
-   "item/drug_mp_pct.png.meta",
-   "f5e6007f00d48b892febeac222190484555ce37a",
-   2814
   ],
   [
    "item/fs_2.png",
