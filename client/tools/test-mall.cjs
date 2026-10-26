@@ -6,7 +6,8 @@
  * · 商品表 = 系统内全部装备（七个部位的装备 Map 全量，含 15 品质变体），无重复、id 都能解析回同一对象
  * · 排序稳定：部位序 → 等级 → 前缀 → 后缀
  * · 价格：默认统一 mallPrice（= 1 绑定元宝/件），getMallPrice 全场返回它
- * · 购买链路（在沙箱里跑**真实的 StorageManager**）：扣绑定元宝 → 物品进背包第一个空格；
+ * · 购买链路（在沙箱里跑**真实的 StorageManager**）：客户端只发 { goodId, revision }，
+ *   扣款与入包都以**服务端返回的那份**为准（#304 收权后本地不再自算）；
  *   非装备/认不出的 id、余额不足、背包满三种情况都不改数据（不扣钱、不进包）
  * · 界面接线：底部导航「商城」入口 → MallDialog；弹窗无裸中文、几何与图片全走 configs；
  *   分页陈列（每页 3 列 × rowsPerPage 行，翻页整页重建，节点数恒为一页）；悬停详情复用统一零件
@@ -25,7 +26,9 @@ try {
   process.exitCode = 1;
 }
 if (sandbox) {
-  const { StorageManager, Role, outDir } = sandbox;
+  // 购买链路是 async（#304 之后走服务端接口）→ 整段包进 async IIFE，断言里可以 await
+  void (async () => {
+  const { StorageManager, Role, outDir, RoleApi } = sandbox;
   const { getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
   const { getMallGoods, getMallPrice, mallPrice } = require(path.join(outDir, "configs/mall.js"));
   const { equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
@@ -56,8 +59,37 @@ if (sandbox) {
     StorageManager.clear();
     StorageManager.setRoles([role]);
     StorageManager.onlineRole("r1");
+    // 每次重置都把接口替身的账清掉：断言只针对本次用例发出的请求
+    RoleApi.calls.length = 0;
     return role;
   }
+
+  /**
+   * 服务端替身：商城购买的**权威**在服务端（#304 收权），这里按服务端同一套规则演一遍 ——
+   * 认装备 → 扣绑定元宝 → 落第一个空格 → 回整份背包与余额；任何一步不满足就拒绝（客户端只负责把拒绝变成 false）
+   */
+  const equipmentIds = new Set(getItemsByType("equipment").map((good) => good.id));
+  RoleApi.handlers.mallPurchase = (roleId, body) => {
+    const role = StorageManager.findOnlineRole();
+    if (!equipmentIds.has(body.goodId)) throw new Error("已下架");
+    const price = getMallPrice(getItem(body.goodId));
+    if (role.bindGold < price) throw new Error("绑定元宝不足");
+    const bag = role.bag.map((row) => row.map((cell) => (cell ? { ...cell } : null)));
+    let placed = false;
+    bag.forEach((row) =>
+      row.forEach((cell, col) => {
+        if (!cell && !placed) {
+          row[col] = { id: body.goodId, count: 1 };
+          placed = true;
+        }
+      }),
+    );
+    if (!placed) throw new Error("背包已满");
+    return { data: { bindGold: role.bindGold - price, bag }, revision: (role.revision ?? 0) + 1, consumed: price };
+  };
+
+  /** 最近一次购买请求（断言「客户端到底发了什么」） */
+  const lastPurchase = () => RoleApi.calls.filter((call) => call.method === "mallPurchase").pop();
 
   /** 从存储读回（每次都是反序列化的新对象，能真实反映落盘结果） */
   const online = () => StorageManager.findOnlineRole();
@@ -126,22 +158,29 @@ if (sandbox) {
 
   // 1. 正常购买：扣款 + 进背包第一个空格
   seed([], 10);
-  check(StorageManager.buyMallGood(equipment.id) === true, "购买成功返回 true");
+  check(await StorageManager.buyMallGood(equipment.id) === true, "购买成功返回 true");
   check(online().bindGold === 9, "扣掉 1 绑定元宝（10 → 9）");
   check(filledCells().length === 1 && filledCells()[0].id === equipment.id, "商品进了背包");
   check(filledCells()[0].row === 0 && filledCells()[0].col === 0, "优先落在第一个空格 (0,0)");
   check(filledCells()[0].count === 1, "装备不可叠加，数量为 1");
+  {
+    const sent = lastPurchase();
+    check(
+      sent?.args[1]?.goodId === equipment.id && Object.prototype.hasOwnProperty.call(sent?.args[1] ?? {}, "revision"),
+      "只发 { goodId, revision }（价格与入包由服务端算，客户端不自算）",
+    );
+  }
 
   // 2. 连买两次：不可叠加 → 各占一格
   seed([], 2);
-  StorageManager.buyMallGood(equipment.id);
-  StorageManager.buyMallGood(equipment.id);
+  await StorageManager.buyMallGood(equipment.id);
+  await StorageManager.buyMallGood(equipment.id);
   check(filledCells().length === 2, "连买两件不可叠加装备 → 占两格（不会合并）");
   check(online().bindGold === 0, "两次购买共扣 2 绑定元宝");
 
   // 3. 余额不足：不改数据
   seed([], 0);
-  check(StorageManager.buyMallGood(equipment.id) === false, "余额不足时购买失败");
+  check(await StorageManager.buyMallGood(equipment.id) === false, "余额不足时购买失败");
   check(filledCells().length === 0, "余额不足时背包不变");
   check(online().bindGold === 0, "余额不足时不扣钱");
 
@@ -151,20 +190,20 @@ if (sandbox) {
     for (let row = 0; row < 7; row++) for (let col = 0; col < 11; col++) full.push({ row, col, id: drug.id, count: 1 });
     seed(full, 5);
     const before = filledCells().length;
-    check(StorageManager.buyMallGood(equipment.id) === false, "背包已满时购买失败");
+    check(await StorageManager.buyMallGood(equipment.id) === false, "背包已满时购买失败");
     check(filledCells().length === before, "背包已满时物品没被塞进去");
     check(online().bindGold === 5, "背包已满时不扣钱（先扣款后入包，入包失败原路退回）");
   }
 
   // 5. 非装备 / 认不出的 id：都当已下架
   seed([{ row: 0, col: 0, id: drug.id, count: 1 }], 5);
-  check(StorageManager.buyMallGood(drug.id) === false, "非装备（药品）买不了");
-  check(StorageManager.buyMallGood("no_such_good") === false, "认不出的 id 买不了");
+  check(await StorageManager.buyMallGood(drug.id) === false, "非装备（药品）买不了");
+  check(await StorageManager.buyMallGood("no_such_good") === false, "认不出的 id 买不了");
   check(online().bindGold === 5 && filledCells().length === 1, "被拒的购买不改余额与背包");
 
   // 6. 落盘：换一个新对象读回，数据仍在
   seed([], 3);
-  StorageManager.buyMallGood(equipment.id);
+  await StorageManager.buyMallGood(equipment.id);
   const reloaded = StorageManager.findOnlineRole();
   check(reloaded !== null && reloaded.bag[0][0]?.id === equipment.id && reloaded.bindGold === 2, "购买结果已落盘（重新读档可见）");
 
@@ -242,4 +281,8 @@ if (sandbox) {
   //#endregion
 
   finish("PASS: 商城商品表、价格、购买链路与界面接线全部通过");
+  })().catch((error) => {
+    fail(`商城单测异常退出：${error.message}`);
+    process.exitCode = 1;
+  });
 }

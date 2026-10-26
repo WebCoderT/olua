@@ -53,4 +53,4 @@
 - #257 新增：fashionClothes 整份注释直接重写为纯数据文件（零消费无需保形状）；快照 attributes 缺省要 `pickAttributes(x ?? {})`（undefined 返回 null）；perl 批量替换中文全角括号形态要去 \b；复用 title.dto 属性形状时行结构同构即可直接共用 attributesFromRow/attributeColumns。
 - 配置表 issue 模板已稳定（#252/#253/#255 三连）：生成器 pick+render+audit → 三件套 → DTO/service/controller → e2e region → admin 页 → 文档 perl 批量替换 → make ci → PR；文本主键（id）表用 findByKey，seed 用 INSERT OR IGNORE。
 - 其他：#8 官网 / #9 包体积 3.1G 治理（解锁 #10 Demo）/ #12~#19 玩法素材（#14 待用户确认解冻）。用户已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
-- 本机 make client-test 有 2 套常红（test-action-atlas / test-equipment-light，resources/ 未入库素材缺失），CI 不跑 client-test，门禁以 `make ci` 为准（2026-10-25 确认）。
+- 本机 make client-test 基线（2026-10-26 #375 修完）：**36 通过 / 5 失败**，红全是「素材没入库」——`test-equipment-appearance` / `test-equipment-detail-background` / `test-monster-config` / `test-role-frames` / `test-role-default-cloth`（读 `_loose_frames_archive` 与 `resources/role/1|2` 散帧，resources 以远程 Release 为唯一来源，本机未铺）。CI 不跑 client-test，门禁以 `make ci` 为准。**教训**：client-test 长期没人跑 → #304/#308/#250 改完 StorageManager 后沙箱与断言一路飘（13 套静默红），沙箱型单测必须跟着真代码的 import 一起改。

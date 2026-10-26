@@ -19,7 +19,7 @@ const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const outDir = prepare("olua-rank", ["configs/rank.ts", "configs/title.ts", "configs/soul.ts"]);
-const { rankLevels, rankMaxLevel, rankTotal, rankTierSize, rankGrowth, rankUpgradePrice, getRankLevel, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
+const { rankLevels, rankMaxLevel, rankTotal, rankGrowth, rankUpgradePrice, getRankLevel, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
 const { titleLevels, titleGrowth } = require(path.join(outDir, "configs/title.js"));
 const { soulLevels, soulGrowth } = require(path.join(outDir, "configs/soul.js"));
 const { getRoleLevelAttributes } = require(path.join(outDir, "configs/growth.js"));
@@ -42,6 +42,9 @@ rankLevels.forEach((config) => {
   else last.levels.push(config.level);
 });
 check(tiers.length === 10, `大段数量为 10（${tiers.length}）`);
+// 段宽从数据本身量（configs/rank 不再导出 rankTierSize：段配置改成 rankTierSources 之后它只是内部量）
+const rankTierSize = tiers[0]?.levels.length ?? 0;
+check(rankTierSize === 10, `每段 10 阶（实测 ${rankTierSize}）`);
 check(
   tiers.every((item) => item.levels.length === rankTierSize && item.levels[0] - 1 === (tiers.indexOf(item)) * rankTierSize),
   `每段正好 ${rankTierSize} 阶、且按顺序首尾相接（${tiers.map((item) => item.tier).join(" / ")}）`,
@@ -155,10 +158,14 @@ const npcSource = read("assets/configs/npc.ts");
 
 check(/rank: number = 0;/.test(roleSource) && /军衔阶数/.test(roleSource), "Role 有 rank 字段（0 = 未授衔）");
 check(/typeof role\.rank !== "number"\) role\.rank = 0;/.test(storageSource), "旧存档迁移：rank 缺失补 0（ensureRoleDefaults）");
-check(/static upgradeRank\(\): boolean/.test(storageSource) && /getRankLevel\(role\.rank \+ 1\)/.test(storageSource), "StorageManager.upgradeRank 按下一阶配置晋升");
+check(/static async upgradeRank\(\): Promise<boolean>/.test(storageSource) && /getRankLevel\(role\.rank \+ 1\)/.test(storageSource), "StorageManager.upgradeRank 按下一阶配置预检（预检只是 UX，推进在服务端）");
 check(/createTip\("rank_max_tip"\)/.test(storageSource) && /rank_bind_gold_tip/.test(storageSource) && /rank_upgrade_tip/.test(storageSource), "晋升失败/成功都走浮动提示（configs/texts）");
-check(/Object\.assign\(role, GameHelper\.combatCalc\(role\)\)/.test(storageSource.split("static upgradeRank")[1].split("static ")[0]), "晋升后重算属性与战斗力");
-check(/role\.bindGold -= next\.bindGold;/.test(storageSource.split("static upgradeRank")[1].split("static ")[0]) && /role\.rank = next\.level;/.test(storageSource), "晋升走「先扣绑定元宝再落阶」");
+// #250：扣费与落阶都搬到服务端，客户端走三条成长线共用的 upgradeGrowthOnServer
+const growthBody = storageSource.slice(storageSource.indexOf("private static async upgradeGrowthOnServer"), storageSource.indexOf("static async upgradeSoul"));
+check(/upgradeGrowthOnServer\(role, "rank", next\.level, "rank_upgrade_tip"\)/.test(storageSource), "晋升交给共用的服务端升级流程（本地不再扣费落阶）");
+check(/RoleApi\.growthUpgrade\(role\.id, \{ kind, targetLevel: nextLevel, revision: role\.revision \}\)/.test(growthBody), "升级请求带修订号做乐观锁（后台改过 → 20006 被拒）");
+check(/role\.bindGold = Number\(data\.bindGold \?\? role\.bindGold\)/.test(growthBody) && /role\.rank = Number\(data\.rank \?\? nextLevel\)/.test(growthBody), "以服务端返回的余额与阶位为准（客户端那套「先扣钱再落阶」已下线）");
+check(/Object\.assign\(role, GameHelper\.combatCalc\(role\)\)/.test(growthBody), "晋升后重算属性与战斗力（共用流程里做，三条成长线一致）");
 check(/getRankLevel\(role\.rank\)/.test(helperSource) && /\(rank\?\.attributes\.maxHp \?\? 0\)/.test(helperSource) && /if \(rank\) sources\.push\(rank\.attributes\[key\]\);/.test(helperSource), "combatCalc 把军衔属性计入血量与六维");
 check(/createHead\("role_head", this\.role\.hp, this\.role\.maxHp, this\.role\.rank\)/.test(displaySource), "RoleDisplay 建头部信息栏时把军衔一并传进去（进图即显示）");
 check(/this\.addChild\(GameUiHelper\.createRoleName\(this\.role\)\)/.test(displaySource), "RoleDisplay 把名称节点挂在角色身上（在 appearance 之后添加 → 绘制在角色之上）");
