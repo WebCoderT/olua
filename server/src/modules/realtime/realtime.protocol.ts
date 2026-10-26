@@ -231,6 +231,11 @@ export interface RealtimePositionMessage {
     y: number;
     /** 上报时刻的玩家血量（<= 0 视作死亡，不再被选为目标） */
     hp: number;
+    /**
+     * 上报时刻是否在移动（#324：客户端自报，互见广播的「走路 / 待机」演出依据）。
+     * 服务端没有玩家移动的权威，只有客户端自己知道 —— 缺省按未移动处理（旧客户端兼容）。
+     */
+    moving?: boolean;
   };
 }
 
@@ -267,6 +272,49 @@ export interface RealtimeMonsterAiMessage {
 
 //#endregion
 
+//#region 玩家互见（#324：同图玩家的位置 / 血量 / 移动标记互见，纯演出无权威）
+
+/**
+ * 玩家互见广播帧里的一名玩家
+ *
+ * 只发「别人眼里的你」需要的东西：位置（客户端自报的最近一次上报）、血量（血条演出）、
+ * 移动标记（走路 / 待机演出）。账号名在连接建连时就有（RealtimeIdentity.username），
+ * 顺手带上省得客户端再查一次。
+ */
+export interface RealtimePlayerEntry {
+  accountId: string;
+  /** 显示名（角色名优先，缺省回落账号名；服务端首见时查一次缓存住） */
+  username: string;
+  x: number;
+  y: number;
+  hp: number;
+  /** 资源上限（血条分母；服务端在首次见到该玩家时查一次在线角色缓存住） */
+  maxHp: number;
+  /** 是否在移动（客户端自报；方向由位移差量自算） */
+  moving: boolean;
+}
+
+/**
+ * 服务端 → 客户端：玩家互见广播（按地图分发给观看者）
+ *
+ * `full = true` 是快照兜底：worldJoin 应答之后立刻发给**刚进图的连接自己**一份全量
+ * （别人的位置它一无所知，增量帮不上忙）。其余都是增量：只带「有变化的玩家」与
+ * 「刚离开的账号」—— 超时没上报 / 断线 / 换图都会以 left 的形式广播。
+ */
+export interface RealtimePlayersMessage {
+  type: "players";
+  data: {
+    mapId: string;
+    /** true = 全量快照（观看者刚进图，或服务端认为它需要重建集合） */
+    full: boolean;
+    players: RealtimePlayerEntry[];
+    /** 已离开的账号（增量帧用；full 帧里恒为空数组） */
+    left: string[];
+  };
+}
+
+//#endregion
+
 /** 客户端会发出的全部消息 */
 export type RealtimeClientMessage =
   | RealtimePingMessage
@@ -282,7 +330,8 @@ export type RealtimeServerMessage =
   | RealtimeErrorMessage
   | RealtimeSettleMessage
   | RealtimeWorldMessage
-  | RealtimeMonsterAiMessage;
+  | RealtimeMonsterAiMessage
+  | RealtimePlayersMessage;
 
 /**
  * 关闭码

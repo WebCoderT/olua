@@ -235,6 +235,11 @@ export interface AppConfiguration {
   /** 位置上报的过期时间（毫秒）：超时没上报的玩家视作离场，怪物丢失目标 */
   monsterAiPosStaleMs: number;
   //#endregion
+
+  //#region 玩家互见（#324：同图玩家位置 / 血量 / 移动标记互见）
+  /** 互见广播节流（毫秒）：players 帧只按这个节奏发（位置增量 + 离开事件） */
+  playerSyncBroadcastMs: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -294,5 +299,6 @@ export default function configuration(): AppConfiguration {
     monsterAiTickMs: Number(process.env.MONSTER_AI_TICK_MS ?? 100),
     monsterAiBroadcastMs: Number(process.env.MONSTER_AI_BROADCAST_MS ?? 200),
     monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
+    playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
   };
 }

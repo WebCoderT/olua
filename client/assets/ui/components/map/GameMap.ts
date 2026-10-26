@@ -2,6 +2,7 @@ import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
 import LayerManager from "../../core/LayerManager";
 import DropManager from "../../core/DropManager";
 import MonsterManager from "../../core/MonsterManager";
+import OtherPlayerManager from "../../core/OtherPlayerManager";
 import AutoBattle from "../../core/AutoBattle";
 import StorageManager from "../../core/StorageManager";
 import MapObjectSpawner from "./MapObjectSpawner";
@@ -33,9 +34,10 @@ export default class GameMap extends Node {
     const onMap = maps.get(role.onMap);
     this.name = `map_${role.onMap}`;
     this.onMapId = role.onMap;
-    // 清空上一张地图的怪物与掉落物
+    // 清空上一张地图的怪物、掉落物与远端玩家（#324：互见的演出节点不跨图）
     MonsterManager.reset();
     DropManager.reset();
+    OtherPlayerManager.reset();
     LayerManager.clearMapLayer();
     this.loadMap(onMap.src);
   }

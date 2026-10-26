@@ -36,7 +36,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 69;
+const EXPECTED_ASSERTIONS = 81;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -138,6 +138,9 @@ async function startServer(dbPath) {
       // 怪物 AI region（#323）：tick 与广播压到最快，命中帧等待才有余量
       MONSTER_AI_TICK_MS: "50",
       MONSTER_AI_BROADCAST_MS: "100",
+      // 位置过期压到 2s：互见 region（#324）的超时离场断言要等它；region 七的窗口都
+      // 在持续喂 pos（500ms 间隔），不受影响
+      MONSTER_AI_POS_STALE_MS: "2000",
       ADMIN_REGISTER_CODE: ADMIN_CODE,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -210,6 +213,8 @@ function connect(url) {
     worlds: [],
     /** 怪物 AI 广播帧（#323：位置增量 + 普攻命中事件） */
     ais: [],
+    /** 玩家互见广播帧（#324：互见增量 + 快照兜底 + 离开事件） */
+    players: [],
     /** 按 castId 等结算帧（幂等重发会来两帧，取最新的） */
     async waitForSettle(castId, timeoutMs = 5_000) {
       return waitFor(`castId=${castId} 的 settle`, async () => {
@@ -239,6 +244,7 @@ function connect(url) {
       if (frame.type === "settle") session.settles.push(frame.data);
       if (frame.type === "world") session.worlds.push(frame.data);
       if (frame.type === "monster-ai") session.ais.push(frame.data);
+      if (frame.type === "players") session.players.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -632,6 +638,101 @@ function roleData(id, name, level, skills) {
     await sleep(1_500);
     check(hitCount() === countBeforeDead, "D：上报血量 0（死亡）后不再被选为目标", JSON.stringify({ before: countBeforeDead, now: hitCount() }));
     posTimer && clearInterval(posTimer);
+
+    //#endregion
+
+    //#region 八、玩家互见（#324）：同图玩家的位置 / 血量 / 移动标记互见（players 帧）
+
+    group("八、玩家互见：位置 / 血量 / 移动标记由服务端转发（players 帧）");
+
+    const companion = await newPlayer("combat_rpr");
+
+    // fighter 恢复持续上报（region 七末尾已停；互见的在场表以 pos 帧为数据源）。
+    // 先等一拍再让 companion 进图：region 七末尾上报过 hp = 0（死亡路径），
+    // 快照要读到的是恢复后的 hp = 100
+    const selfPos = { x: 100, y: 100 };
+    let fighterPosTimer = setInterval(
+      () => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: selfPos.x, y: selfPos.y, hp: 100 } })),
+      300,
+    );
+    await sleep(500);
+
+    // —— A. 快照兜底：companion 进图立刻拿到一份同图全量 ——
+    await companion.session.joinWorld("2");
+    const fullFrame = await waitFor("companion 的互见快照", async () => {
+      return companion.session.players.find((frame) => frame.full === true) || null;
+    }, 5_000);
+    check(!!fullFrame, "A：进图即收到互见快照（full = true，随 world 应答发出）", JSON.stringify(fullFrame));
+    const fighterAccountId = fullFrame && fullFrame.players.length > 0 ? fullFrame.players[0].accountId : null;
+    check(!!fighterAccountId, "A：快照里带着已在场的 fighter（只列同图观看者）", JSON.stringify(fullFrame));
+    check(
+      !!fullFrame && fullFrame.players[0].hp === 100 && fullFrame.players[0].maxHp > 0,
+      "A：快照条目带血量与资源上限（maxHp 服务端重算，血条分母不用客户端猜）",
+      JSON.stringify(fullFrame && fullFrame.players[0]),
+    );
+    check(!!fullFrame && fullFrame.players[0].username === "combat_raf", "A：快照条目带显示名（角色名，服务端首见时查好缓存）", JSON.stringify(fullFrame && fullFrame.players[0]));
+
+    // —— B. 增量出现：companion 上报位置后 fighter 收到它 ——
+    const companionPos = { x: 200, y: 200, hp: 100, moving: false };
+    const companionPosTimer = setInterval(
+      () => companion.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: companionPos.x, y: companionPos.y, hp: companionPos.hp, moving: companionPos.moving } })),
+      300,
+    );
+    const appearFrame = await waitFor("fighter 收到 companion 出现", async () => {
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId !== fighterAccountId)) || null;
+    }, 5_000);
+    check(!!appearFrame, "B：fighter 收到 companion 的出现帧（首次上报即作为变化广播）", JSON.stringify(appearFrame));
+    const companionEntry = appearFrame && appearFrame.players.find((entry) => entry.accountId !== fighterAccountId);
+    const companionAccountId = companionEntry ? companionEntry.accountId : null;
+
+    // —— C. 超时离场与重现：消失与重现都是显式事件 ——
+    clearInterval(fighterPosTimer);
+    const timeoutLeft = await waitFor("companion 收到 fighter 超时离场", async () => {
+      return companion.session.players.find((frame) => (frame.left || []).includes(fighterAccountId)) || null;
+    }, 8_000);
+    check(!!timeoutLeft, "C：fighter 停止上报后 companion 收到离开事件（超时视作离场）", JSON.stringify(timeoutLeft));
+    fighterPosTimer = setInterval(
+      () => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: selfPos.x, y: selfPos.y, hp: 100 } })),
+      300,
+    );
+    const reappear = await waitFor("companion 再次收到 fighter", async () => {
+      return companion.session.players.find((frame) => frame.players.some((entry) => entry.accountId === fighterAccountId)) || null;
+    }, 5_000);
+    check(!!reappear, "C：fighter 恢复上报后再次出现（重新上报即作为变化广播）", JSON.stringify(reappear));
+
+    // —— D. 移动增量：moving 标记与最新坐标 ——
+    companionPos.x = 260;
+    companionPos.moving = true;
+    const moveFrame = await waitFor("fighter 收到 companion 的移动增量", async () => {
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.moving === true)) || null;
+    }, 5_000);
+    check(!!moveFrame, "D：移动中的上报带 moving 标记（走路的演出依据，客户端自报）", JSON.stringify(moveFrame));
+    const moveEntry = moveFrame && moveFrame.players.find((entry) => entry.accountId === companionAccountId);
+    check(!!moveEntry && moveEntry.x === 260, "D：增量坐标是服务端转发的最新上报值", JSON.stringify(moveEntry));
+
+    // —— E. 血量变化：互见帧里的血量跟着上报走 ——
+    companionPos.hp = 80;
+    const hurtFrame = await waitFor("fighter 收到 companion 的血量变化", async () => {
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.hp === 80)) || null;
+    }, 5_000);
+    check(!!hurtFrame, "E：血量变化进入增量广播（互见的血条跟着走）", JSON.stringify(hurtFrame));
+
+    // —— F. 换图离开：旧图的同伴收到 left（客户端才拆得掉旧节点）——
+    await companion.session.joinWorld("1");
+    const switchLeft = await waitFor("fighter 收到 companion 换图离开", async () => {
+      return fighter.session.players.find((frame) => (frame.left || []).includes(companionAccountId)) || null;
+    }, 5_000);
+    check(!!switchLeft, "F：companion 换图后旧图收到离开事件（不靠「不再出现」让人猜）", JSON.stringify(switchLeft));
+
+    // —— G. 断线离开：立即广播，不等广播节拍 ——
+    companion.session.socket.close();
+    await waitFor("companion 连接已断开", async () => (companion.session.closed ? companion.session : null));
+    const closeLeft = await waitFor("fighter 收到 companion 断线离开", async () => {
+      return fighter.session.players.find((frame) => (frame.left || []).includes(companionAccountId)) || null;
+    }, 5_000);
+    check(!!closeLeft, "G：companion 断线后 fighter 立即收到离开事件", JSON.stringify(closeLeft));
+    clearInterval(fighterPosTimer);
+    clearInterval(companionPosTimer);
 
     //#endregion
 
