@@ -399,8 +399,8 @@ resources-upload: ## 上传分卷到 GitHub Release（tag = resources-<VERSION>�
 		--title "resources $(RES_VERSION)" \
 		--notes "client/assets/resources 分发包（清单 resources.manifest.json 对应 version=$(RES_VERSION)）"
 
-resources-download: ## 下载 Release 分卷并解压校验：make resources-download VERSION=...
-	@test -n "$(RES_VERSION)" || { echo "用法：make resources-download VERSION=<版本号>"; exit 1; }
+resources-download: ## 下载 Release 分卷并解压校验：make resources-download RES_VERSION=...
+	@test -n "$(RES_VERSION)" || { echo "用法：make resources-download RES_VERSION=<版本号>"; exit 1; }
 	mkdir -p resources_dist/$(RES_VERSION)
 	gh release download resources-$(RES_VERSION) --dir resources_dist/$(RES_VERSION)
 	$(RES_PY) client/tools/resources_sync.py extract --dir resources_dist/$(RES_VERSION)

@@ -28,7 +28,7 @@ statuses.set("2002", {
   duration: 8,
   source: StatusSource.SKILL,
   description: "金刚护体：释放技能后获得，持续时间内防御 ×1.5；重复释放刷新持续时间",
-  effect: "effect/status/s_1008@0",
+  effect: "effect/skill/s_1008@0",
   // 防御乘法系数：生效于「攻 - 防」的防御项（乘法口径，多状态连乘）
   combat: { defenseMultiplier: 1.5 },
 });

@@ -39,7 +39,7 @@ export interface StatusCombatConfig {
 export interface StatusConfig {
   /** 状态名称 */
   label: string;
-  /** 状态图标（resources 下的精灵路径，不含 /spriteFrame 后缀，如 "skill/2009"） */
+  /** 状态图标（resources 下的精灵路径，不含 /spriteFrame 后缀，如 "skill/icon/2009"） */
   icon: string;
   /** 持续时间（秒）；重复获得时从获得时刻重新计时 */
   duration: number;
