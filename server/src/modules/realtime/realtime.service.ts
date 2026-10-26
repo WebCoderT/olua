@@ -18,6 +18,7 @@ import {
   REALTIME_PATH,
   type RealtimeIdentity,
   type RealtimeMonsterAiMessage,
+  type RealtimePickedMessage,
   type RealtimePlayersMessage,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
@@ -378,6 +379,19 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.combat.resetTargets(socket.identity.id);
       return;
     }
+    if (parsed?.type === "pick") {
+      // 拾取（#325）：按结算侧的掉落账本格子级入包，结果以 picked 帧发回。
+      // 格式不对回 error 帧（低频操作，值得一次明确告知而不是悄悄丢弃）
+      const request = parsePick(parsed.data);
+      if (!request) {
+        this.send(socket, { type: "error", data: { message: "pick 消息缺 castId / index" } });
+        return;
+      }
+      const data = this.combat.pickDrop(socket.identity.id, request.castId, request.index);
+      const frame: RealtimePickedMessage = { type: "picked", data };
+      this.send(socket, frame);
+      return;
+    }
     if (parsed?.type === "pos") {
       // 位置上报（#323 AI 目标检测输入 + #324 玩家互见数据源）：格式不对就丢掉这条（高频帧，不值得回 error 刷屏）
       const position = parsePosition(parsed.data);
@@ -557,6 +571,22 @@ function parseWorldJoin(raw: unknown): ParsedWorldJoin | null {
   const data = raw as Record<string, unknown>;
   if (typeof data.mapId !== "string" || !data.mapId) return null;
   return { mapId: data.mapId };
+}
+
+/** pick.data 的解析结果（#325：格式不对回 error 帧，低频操作值得明确告知） */
+interface ParsedPick {
+  castId: number;
+  index: number;
+}
+
+function parsePick(raw: unknown): ParsedPick | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  const castId = data.castId;
+  const index = data.index;
+  if (typeof castId !== "number" || !Number.isFinite(castId)) return null;
+  if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return null;
+  return { castId, index };
 }
 
 /** pos.data 的解析结果（#323：格式不对整条丢弃，高频帧不回 error） */

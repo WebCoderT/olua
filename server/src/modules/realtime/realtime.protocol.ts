@@ -15,6 +15,8 @@
  *    怪物实例（hp / 存活 / 出生点，tick 驱动重生）并以 `world` 帧下发权威状态；
  *    实例 id 由服务端发牌，cast 的 targetId 用的就是它；
  * 4. 其余一律回 `error` 帧，**不断开连接** —— 一条不认识的消息不该让玩家的通道断掉。
+ * 掉落拾取（#325）同走这条管子：客户端发 `pick`（拾哪一次击杀的第几件掉落），
+ * 服务端按账本原子入包并以 `picked` 帧回结果。
  */
 
 /** 实时通道的路径段；HTTP 的取票据接口与 WS 的升级路径共用它（写在一处就不会两边对不上） */
@@ -315,6 +317,73 @@ export interface RealtimePlayersMessage {
 
 //#endregion
 
+//#region 掉落拾取（#325：地面掉落物归属击杀者，拾取入包的权威在服务端）
+
+/**
+ * 客户端 → 服务端：拾取一次击杀的掉落
+ *
+ * 掉落内容在 settle 帧的 `reward.drops` 里（只发给击杀者本人 —— 归属天然成立，别
+ * 的账号既看不到也没有账可查），这里用「击杀那次的 castId + drops 数组下标」定位。
+ * 服务端按账本里的那一条做**格子级入包**（药品/材料可叠加、装备占一格），背包放不下
+ * 整份就拒拾（地面掉落物保留）；成功后该下标标记已拾，重复拾取幂等应答、不重复入包。
+ *
+ * 为什么走帧不走 HTTP：settle 的幂等账（掉落账本随之）在**实时进程**的内存里，
+ * HTTP 进程拿不到 —— 跨进程要么落库一张表要么把账本挪走，都比一条帧贵。
+ */
+export interface RealtimePickMessage {
+  type: "pick";
+  data: {
+    /** 击杀那次的出手序号（settle 帧 reward 所在的那条 castId） */
+    castId: number;
+    /** reward.drops 的数组下标 */
+    index: number;
+  };
+}
+
+/** 拾取入包后实际写入的背包格子（叠加进已有堆 = 那一格更新后的形状；装备 = 新占的格子） */
+export interface RealtimePlacedCell {
+  row: number;
+  col: number;
+  id: string;
+  count: number;
+}
+
+/** 拾取成功（含幂等重放：该掉落此前已拾取过，placed 为空、revision 原样） */
+export interface RealtimePickedOk {
+  castId: number;
+  index: number;
+  ok: true;
+  /**
+   * 拾取后的角色修订号：入包推进了 revision，客户端照搬做新基线，
+   * 否则下一次防抖存档就会撞乐观锁。幂等重放时与当前值一致。
+   */
+  revision: number;
+  /** 本次实际写入的格子（幂等重放为空数组） */
+  placed: RealtimePlacedCell[];
+  /** true = 该掉落此前已拾取过（重复拾取的幂等应答，未重复入包） */
+  alreadyPicked: boolean;
+}
+
+/** 拾取被拒（地面掉落物保留，背包满时可稍后再试） */
+export interface RealtimePickedError {
+  castId: number;
+  index: number;
+  ok: false;
+  /** 机器可读的拒绝原因（bad_request / unknown_drop / bag_full / no_role / role_kicked / pick_failed） */
+  code: string;
+  message: string;
+}
+
+export type RealtimePickedData = RealtimePickedOk | RealtimePickedError;
+
+/** 服务端 → 客户端：一次拾取的结果 */
+export interface RealtimePickedMessage {
+  type: "picked";
+  data: RealtimePickedData;
+}
+
+//#endregion
+
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage
@@ -323,7 +392,8 @@ export type RealtimeServerMessage =
   | RealtimeSettleMessage
   | RealtimeWorldMessage
   | RealtimeMonsterAiMessage
-  | RealtimePlayersMessage;
+  | RealtimePlayersMessage
+  | RealtimePickedMessage;
 
 /**
  * 关闭码

@@ -247,7 +247,7 @@ export default class MonsterManager {
    * 同时做一次**合法带对账**：服务端伤害越出客户端口径允许的区间，
    * 以 `combat-parity` 标签记到 console —— 在删掉客户端旧算法之前，这就是发现口径漂移的地方。
    */
-  static applyServerSettle(data: { skillId: string; targetId: string; damage: number; hp: number; killed: boolean; reward?: CombatKillReward }) {
+  static applyServerSettle(data: { castId: number; skillId: string; targetId: string; damage: number; hp: number; killed: boolean; reward?: CombatKillReward }) {
     const node = this.instanceIndex.get(data.targetId);
     const monster = node ? this.monsterMap.get(node) : null;
     if (!node || !monster) return; // 换图后到达的迟到结算：目标已不在场，这次出手当作打空
@@ -267,7 +267,7 @@ export default class MonsterManager {
         );
       }
     }
-    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward);
+    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.castId);
   }
 
   /**
@@ -306,8 +306,9 @@ export default class MonsterManager {
    * @param hp 落完后的血量（本地口径传「扣完的值」；服务端结算直接用服务端给的值）
    * @param killed 是否死亡（缺省按 hp <= 0 判 —— 本地口径；服务端结算以服务端判定为准）
    * @param reward 击杀奖励（#316：服务端结算的入账结果；缺省 = 本地口径，走本地经验与掉落表）
+   * @param castId 结算的出手序号（#325：随掉落物记账，拾取帧靠它定位服务端账本；本地口径没有）
    */
-  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward) {
+  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward, castId?: number) {
     // 受伤飘字（需在死亡销毁节点前显示；0 伤不飘 —— 世界快照的兜底清理不是一次真实受击）
     if (damage > 0) GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, hp);
@@ -327,7 +328,8 @@ export default class MonsterManager {
         StorageManager.applyKillReward(reward);
         GameUiHelper.showExpGain(target, reward.exp);
       }
-      DropManager.spawnResults(reward.drops, target.getWorldPosition());
+      // 掉落铺场时带上 castId（#325）：拾取要拿「castId + 下标」向服务端发 pick 帧
+      DropManager.spawnResults(reward.drops, target.getWorldPosition(), castId);
     } else {
       const role = StorageManager.findOnlineRole();
       if (role) this.awardKillExp(target, monster, role.level);

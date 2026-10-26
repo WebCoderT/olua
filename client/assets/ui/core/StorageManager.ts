@@ -421,6 +421,27 @@ export default class StorageManager {
     this.updateUi(role);
   }
 
+  /**
+   * 服务端拾取落账（#325：入包的权威在服务端，picked 帧带回的就是落账后的格子）
+   *
+   * 把服务端实际写入的格子照搬进本地背包（叠加进已有堆 = 该格更新后的形状，
+   * 新占格 = 原样落位），revision 一并照搬 —— 入包推进了修订号，本地基线不更新的话
+   * 下一次防抖存档就会撞乐观锁（与 applyKillReward 同一纪律）。
+   * 坐标对不上本地网格（两端配置漂了的边角）就丢掉那一格，等全量同步兜底。
+   */
+  static applyPickResult(placed: Array<{ row: number; col: number; id: string; count: number }>, revision: number): void {
+    const role = this.findOnlineRole();
+    if (!role) return;
+    for (const cell of placed) {
+      const line = role.bag[cell.row];
+      if (!line || cell.col < 0 || cell.col >= line.length) continue;
+      line[cell.col] = { id: cell.id, count: cell.count };
+    }
+    role.revision = revision;
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+  }
+
   //#region 背包物品使用
 
   /**

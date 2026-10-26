@@ -128,6 +128,8 @@ export class Game extends Component {
     // 玩家互见（#324）：players 帧由远端玩家管理器落场（占位节点 + 名字 + 血条，纯演出）；
     // 自己按账号 id 过滤（广播的收件人是同图观看者，服务端不保证剔除发送者）
     CombatChannel.onPlayers = (frame) => OtherPlayerManager.applyPlayersFrame(frame, RealtimeClient.onlineUserId ?? "");
+    // 拾取权威（#325）：picked 帧由掉落管理器落账（入包格子照搬 + 收掉地面节点）
+    CombatChannel.onPicked = (data) => DropManager.applyPickedFrame(data);
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -240,6 +242,7 @@ export class Game extends Component {
     CombatChannel.onWorld = null;
     CombatChannel.onMonsterAi = null;
     CombatChannel.onPlayers = null;
+    CombatChannel.onPicked = null;
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();

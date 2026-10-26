@@ -286,6 +286,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchPlayers(frame.data);
       return;
     }
+    if (frame.type === "picked") {
+      // 拾取结果（#325）：格子级入包的应答，形状的解释在 CombatChannel
+      CombatChannel.dispatchPicked(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
   }

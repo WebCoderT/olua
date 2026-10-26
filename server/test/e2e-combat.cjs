@@ -13,6 +13,8 @@
  *   settle 帧带 reward；管理端改 level_exps / monster_drops 即时生效；幂等重发原样带同一份 reward
  * - 换图清账：targetsReset 之后同一 targetId 按全新目标重新登记
  * - 断线清账：重连后同一 castId 视为新出手（结算上下文已随连接断开清掉）
+ * - 掉落拾取（#325）：pick 帧按账本格子级入包（可叠加/装备占格）、背包满拒拾、
+ *   重复拾取幂等、非归属者与未知账拒拾、清账后不可再拾
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:combat
@@ -36,7 +38,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 81;
+const EXPECTED_ASSERTIONS = 102;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -215,6 +217,10 @@ function connect(url) {
     ais: [],
     /** 玩家互见广播帧（#324：互见增量 + 快照兜底 + 离开事件） */
     players: [],
+    /** 拾取结果帧（#325：成功与拒绝都在内） */
+    pickeds: [],
+    /** error 帧（#325：格式不对的 pick 等低频错误） */
+    errors: [],
     /** 按 castId 等结算帧（幂等重发会来两帧，取最新的） */
     async waitForSettle(castId, timeoutMs = 5_000) {
       return waitFor(`castId=${castId} 的 settle`, async () => {
@@ -245,6 +251,8 @@ function connect(url) {
       if (frame.type === "world") session.worlds.push(frame.data);
       if (frame.type === "monster-ai") session.ais.push(frame.data);
       if (frame.type === "players") session.players.push(frame.data);
+      if (frame.type === "picked") session.pickeds.push(frame.data);
+      if (frame.type === "error") session.errors.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -733,6 +741,141 @@ function roleData(id, name, level, skills) {
     check(!!closeLeft, "G：companion 断线后 fighter 立即收到离开事件", JSON.stringify(closeLeft));
     clearInterval(fighterPosTimer);
     clearInterval(companionPosTimer);
+
+    //#endregion
+
+    //#region 九、掉落拾取（#325）：归属与格子级入包（pick 帧）
+
+    group("九、掉落拾取：归属与格子级入包的权威在服务端（pick / picked 帧）");
+
+    // 掉落确定性：怪物 1 改成「必掉 drug_hp_1 x2」（picks 1 × chance 1 × count [2,2]）
+    await api(baseUrl, "PATCH", "admin/monster-drops/1", {
+      token: adminToken,
+      body: { tableId: null, picks: 1, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
+    });
+
+    /** 发一次拾取并等它自己的 picked 帧（只等发送之后到达的：同一 castId 的旧帧不回填） */
+    const pick = (player, castId, index) => {
+      const before = player.session.pickeds.length;
+      player.session.socket.send(JSON.stringify({ type: "pick", data: { castId, index } }));
+      return waitFor(`castId=${castId} index=${index} 的 picked 帧`, async () => {
+        const hits = player.session.pickeds.slice(before).filter((frame) => frame.castId === castId && frame.index === index);
+        return hits.length > 0 ? hits[hits.length - 1] : null;
+      }, 5_000);
+    };
+
+    // —— A. 正常拾取：按账本原子入包，revision 推进，存档可查 ——
+
+    const picker = await newPlayer("combat_rpk");
+    // 服务端不扩容（与商城同一语义）：先把背包存成客户端建号时会有的规范化空网格（4×10）
+    const pickerInitial = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
+    const emptyGrid = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
+    const savedGrid = await api(baseUrl, "PUT", `roles/${picker.roleId}`, {
+      token: picker.token,
+      body: {
+        revision: pickerInitial.data && pickerInitial.data.revision,
+        data: { ...roleData("combat_rpk_r1", "combat_rpk", 1, { 1000: 1 }), bag: emptyGrid },
+      },
+    });
+    check(savedGrid.code === 0, "A：背包已存成规范化空网格（4×10，服务端不扩容语义的前提）", savedGrid.message);
+    const mobK = await aliveMonster(picker, "1");
+    check(!!mobK, "A：等到了活着的怪", JSON.stringify(mobK));
+    const killedK = mobK ? await killMonster(picker, mobK.monsterKey, mobK.instanceId) : null;
+    check(
+      !!(killedK && killedK.reward) && JSON.stringify(killedK.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 2 }]),
+      "A：击杀结算带确定的掉落（drug_hp_1 x2，拾取账本与 settle 帧同源）",
+      JSON.stringify(killedK && killedK.reward && killedK.reward.drops),
+    );
+    const pickedFirst = killedK ? await pick(picker, killedK.castId, 0) : null;
+    check(!!(pickedFirst && pickedFirst.ok && pickedFirst.alreadyPicked === false), "A：首次拾取成功（alreadyPicked = false）", JSON.stringify(pickedFirst));
+    check(
+      !!(pickedFirst && pickedFirst.ok) && JSON.stringify(pickedFirst.placed) === JSON.stringify([{ row: 0, col: 0, id: "drug_hp_1", count: 2 }]),
+      "A：placed 是服务端实际写入的格子（空背包第 0 行第 0 格整份放入）",
+      JSON.stringify(pickedFirst && pickedFirst.ok && pickedFirst.placed),
+    );
+    check(
+      !!(pickedFirst && pickedFirst.ok) && killedK && killedK.reward && pickedFirst.revision === killedK.reward.revision + 1,
+      "A：入包推进修订号（revision = 击杀入账后的 revision + 1）",
+      JSON.stringify({ pick: pickedFirst && pickedFirst.ok && pickedFirst.revision, kill: killedK && killedK.reward && killedK.reward.revision }),
+    );
+    const roleAfterPick = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
+    const firstCell = roleAfterPick.data && roleAfterPick.data.data && Array.isArray(roleAfterPick.data.data.bag) ? roleAfterPick.data.data.bag[0] && roleAfterPick.data.data.bag[0][0] : undefined;
+    check(
+      roleAfterPick.code === 0 && JSON.stringify(firstCell) === JSON.stringify({ id: "drug_hp_1", count: 2 }),
+      "A：掉落已落进存档（data.bag[0][0] = drug_hp_1 x2）",
+      JSON.stringify(firstCell),
+    );
+
+    // —— B. 重复拾取幂等：同一 castId/index 再拾，原样应答不重复入包 ——
+
+    const pickedAgain = killedK ? await pick(picker, killedK.castId, 0) : null;
+    check(!!(pickedAgain && pickedAgain.ok && pickedAgain.alreadyPicked === true), "B：重复拾取幂等应答（alreadyPicked = true）", JSON.stringify(pickedAgain));
+    check(!!(pickedAgain && pickedAgain.ok) && Array.isArray(pickedAgain.placed) && pickedAgain.placed.length === 0, "B：幂等重放没有新的入包格子（placed 为空）");
+    check(
+      !!(pickedAgain && pickedAgain.ok) && pickedFirst && pickedFirst.ok && pickedAgain.revision === pickedFirst.revision,
+      "B：幂等重放不再推进修订号",
+      JSON.stringify({ again: pickedAgain && pickedAgain.ok && pickedAgain.revision, first: pickedFirst && pickedFirst.ok && pickedFirst.revision }),
+    );
+
+    // —— C. 非归属者拒拾：账本按账号隔离，别人的 castId 查不到账 ——
+
+    const outsider = await newPlayer("combat_rpo");
+    const stolenPick = killedK ? await pick(outsider, killedK.castId, 0) : null;
+    check(!!(stolenPick && stolenPick.ok === false && stolenPick.code === "unknown_drop"), "C：非归属者拾取被拒（unknown_drop，归属天然成立）", JSON.stringify(stolenPick));
+
+    // —— D. 未知账拒拾：不存在的 castId / 越界的下标 / 格式不对的消息 ——
+
+    const unknownCast = killedK ? await pick(picker, killedK.castId + 99999, 0) : null;
+    check(!!(unknownCast && unknownCast.ok === false && unknownCast.code === "unknown_drop"), "D：不存在的 castId 被拒（unknown_drop）", JSON.stringify(unknownCast));
+    const unknownIndex = killedK ? await pick(picker, killedK.castId, 9) : null;
+    check(!!(unknownIndex && unknownIndex.ok === false && unknownIndex.code === "unknown_drop"), "D：越界的下标被拒（unknown_drop）", JSON.stringify(unknownIndex));
+    picker.session.socket.send(JSON.stringify({ type: "pick", data: {} }));
+    const badPick = await waitFor("格式不对的 pick 回 error 帧", async () => {
+      return picker.session.errors.find((frame) => typeof frame.message === "string" && frame.message.includes("pick")) || null;
+    }, 5_000);
+    check(!!badPick, "D：格式不对的 pick 回 error 帧且不断开连接", JSON.stringify(badPick));
+
+    // —— E. 背包满拒拾：整份放不下 → 20012，存档与修订号都不动 ——
+
+    const roleBeforeFull = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
+    const revisionBeforeFull = roleBeforeFull.data && roleBeforeFull.data.revision;
+    // 4×10 全塞满 material_iron（可叠加物品堆满每一格：药再也吃不进已有堆，也找不到空格）
+    const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => ({ id: "material_iron", count: 99 })));
+    const savedFull = await api(baseUrl, "PUT", `roles/${picker.roleId}`, {
+      token: picker.token,
+      body: { revision: revisionBeforeFull, data: { ...roleData("combat_rpk_r1", "combat_rpk", 1, { 1000: 1 }), bag: fullBag } },
+    });
+    check(savedFull.code === 0, "E：背包已存成全满（4×10 格 material_iron x99）", savedFull.message);
+
+    const mobFull = await aliveMonster(picker, "1");
+    check(!!mobFull, "E：等到了活着的怪（上一只已按 5s 重生）", JSON.stringify(mobFull));
+    const killedFull = mobFull ? await killMonster(picker, mobFull.monsterKey, mobFull.instanceId) : null;
+    check(!!(killedFull && killedFull.reward && killedFull.reward.drops.length === 1), "E：击杀结算带掉落（拾取要被拒的那份）", JSON.stringify(killedFull && killedFull.reward && killedFull.reward.drops));
+    const pickedFull = killedFull ? await pick(picker, killedFull.castId, 0) : null;
+    check(!!(pickedFull && pickedFull.ok === false && pickedFull.code === "bag_full"), "E：背包满被拒拾（bag_full）", JSON.stringify(pickedFull));
+
+    const roleAfterFull = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
+    const bagAfterFull = roleAfterFull.data && roleAfterFull.data.data && roleAfterFull.data.data.bag;
+    const hasDrug = Array.isArray(bagAfterFull) && bagAfterFull.some((line) => line.some((cell) => cell && cell.id === "drug_hp_1"));
+    check(!hasDrug, "E：拒拾后存档背包一个字节都没动（没有药混进来）", JSON.stringify(bagAfterFull && bagAfterFull[0]));
+    check(
+      roleAfterFull.code === 0 && killedFull && killedFull.reward && roleAfterFull.data.revision === killedFull.reward.revision,
+      "E：修订号与击杀入账后一致（拒拾本身不写库）",
+      JSON.stringify({ kill: killedFull && killedFull.reward && killedFull.reward.revision, after: roleAfterFull.data && roleAfterFull.data.revision }),
+    );
+
+    // —— F. 会话清账：targetsReset 之后掉落账本随幂等账一起清 ——
+
+    picker.session.socket.send(JSON.stringify({ type: "targetsReset" }));
+    await sleep(100);
+    const pickedAfterReset = killedFull ? await pick(picker, killedFull.castId, 0) : null;
+    check(!!(pickedAfterReset && pickedAfterReset.ok === false && pickedAfterReset.code === "unknown_drop"), "F：targetsReset 后账本已清（换图旧掉落不再可拾）", JSON.stringify(pickedAfterReset));
+
+    // 还原怪物 1 的掉落配置（seed 是内联条目池）
+    await api(baseUrl, "PATCH", "admin/monster-drops/1", {
+      token: adminToken,
+      body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
+    });
 
     //#endregion
 
