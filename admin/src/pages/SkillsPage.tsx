@@ -9,7 +9,7 @@ import {
   skillsApi,
   statusesApi,
 } from "../api";
-import type { DamageCoefficient, PageResult, Skill, Status, UpdateSkill } from "../api";
+import type { CreateSkill, DamageCoefficient, PageResult, Skill, Status, UpdateSkill } from "../api";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -113,7 +113,7 @@ function SkillEditDialog({
 }: {
   open: boolean;
   initial: Skill | null;
-  /** 可挂载的状态（来自状态表；只列角色归属，怪物状态等 #12 主体那一刀） */
+  /** 可挂载的状态（来自状态表，**两种归属都列**：怪物技能要挂怪物状态） */
   statusOptions: Status[];
   onCancel: () => void;
   onSubmit: (value: UpdateSkill) => Promise<boolean>;
@@ -193,7 +193,8 @@ function SkillEditDialog({
           <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span>
         </h3>
         <p className="mt-1 text-xs text-slate-500">
-          归属与 id 是行身份，不可改。保存后随配置快照下发客户端；角色技能即时生效，怪物技能等 #12 主体那一刀接上释放。
+          归属与 id 是行身份，不可改。保存后随配置快照下发客户端，实时进程最多 1 秒后用新值
+          （角色技能由本机施法读，怪物技能由服务端 AI 释放读）。
         </p>
 
         <div className="mt-5 flex flex-col gap-4">
@@ -365,14 +366,184 @@ function SkillEditDialog({
   );
 }
 
+/** 新建表单的初值（建行其余的默认值由服务端补：分类 0 / 目标 1 / 等级 1 / 其余 0） */
+function emptyCreateForm() {
+  return {
+    id: "9004",
+    label: "",
+    category: "0",
+    targetType: "1",
+    action: "attack_skill_1",
+    effect: "effect/skill/s_1008@0",
+    cooldown: "8",
+    distance: "80",
+    castLockMs: "800",
+    statusId: "",
+    rate: "1.5",
+  };
+}
+
 /**
- * 技能配置管理（#367，养成配置第九页）
+ * 新建怪物技能（#372）
+ *
+ * 只开放必要字段（建行默认值由服务端补），建出来之后进「编辑」细调。
+ * `id` 限 9000~9999 —— 与 DTO 的 `Matches(/^9\d{3}$/)` 同一口径：角色技能不允许从后台造。
+ */
+function SkillCreateDialog({
+  open,
+  statusOptions,
+  onCancel,
+  onSubmit,
+}: {
+  open: boolean;
+  statusOptions: Status[];
+  onCancel: () => void;
+  onSubmit: (value: CreateSkill) => Promise<boolean>;
+}) {
+  const [form, setForm] = useState(emptyCreateForm);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm(emptyCreateForm());
+    setSubmitting(false);
+  }, [open]);
+
+  if (!open) return null;
+
+  const set = <K extends keyof ReturnType<typeof emptyCreateForm>>(key: K, value: string) => setForm({ ...form, [key]: value });
+
+  const problems: string[] = [];
+  if (!/^9\d{3}$/.test(form.id.trim())) problems.push("id 必须是 9000~9999 的四位数字（怪物技能段）");
+  if (!form.label.trim()) problems.push("技能名不能为空");
+  const stateful = form.category === "2";
+  if (stateful && !form.statusId) problems.push("状态型技能必须指定要挂载的状态");
+  for (const message of [
+    checkNumber(form.cooldown, { name: "冷却", min: 0, max: 3600 }),
+    checkNumber(form.distance, { name: "施法距离", min: 0, max: 100_000 }),
+    checkNumber(form.castLockMs, { name: "动作锁", min: 0, max: 10_000, int: true }),
+    stateful ? null : checkNumber(form.rate, { name: "倍率", min: 0, max: 100 }),
+  ]) {
+    if (message) problems.push(message);
+  }
+
+  const submit = async () => {
+    setSubmitting(true);
+    await onSubmit({
+      id: form.id.trim(),
+      owner: "monster",
+      label: form.label.trim(),
+      category: form.category as CreateSkill["category"],
+      targetType: form.targetType as CreateSkill["targetType"],
+      action: form.action.trim(),
+      effect: form.effect.trim(),
+      effectOnSelf: stateful,
+      cooldown: Number(form.cooldown),
+      distance: Number(form.distance),
+      castLockMs: Number(form.castLockMs),
+      statusId: form.statusId,
+      requireTarget: !stateful,
+      // 状态型不配倍率（服务端 assertSkillConsistency 也只要求主动技能有倍率）
+      damageCoefficients: stateful ? [] : [{ baseType: "physicalAttack", baseTypeRate: Number(form.rate) }],
+    });
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <h3 className="text-base font-semibold text-slate-100">新增怪物技能</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          只能建怪物技能（9000 段）：角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在客户端配置里。
+          建完要去「怪物配置」把它挂到具体的怪，服务端 AI 才会释放。
+        </p>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Field label="id" hint="9000~9999">
+            <Input value={form.id} onChange={(event) => set("id", event.target.value)} />
+          </Field>
+          <Field label="技能名">
+            <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
+          </Field>
+          <Field label="分类" hint="释放后做什么">
+            <Select value={form.category} onChange={(event) => set("category", event.target.value)}>
+              {Object.entries(SKILL_CATEGORY_LABELS).map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="目标类型">
+            <Select value={form.targetType} onChange={(event) => set("targetType", event.target.value)}>
+              {Object.entries(SKILL_TARGET_TYPE_LABELS).map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="施法动作" hint="如 attack_skill_1">
+            <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
+          </Field>
+          <Field label="技能特效" hint="图集路径；空 = 无特效">
+            <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
+          </Field>
+          <Field label="冷却（秒）">
+            <Input value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
+          </Field>
+          <Field label="施法距离" hint="状态型忽略距离">
+            <Input value={form.distance} onChange={(event) => set("distance", event.target.value)} />
+          </Field>
+          <Field label="动作锁（毫秒）" hint="0 = 跟动画">
+            <Input value={form.castLockMs} onChange={(event) => set("castLockMs", event.target.value)} />
+          </Field>
+          <Field label="挂载状态" hint="状态型必填">
+            <Select value={form.statusId} onChange={(event) => set("statusId", event.target.value)}>
+              <option value="">（不挂状态）</option>
+              {statusOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.id} · {item.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="等级 1 倍率" hint="仅伤害型要填；状态型留空">
+            <Input value={form.rate} onChange={(event) => set("rate", event.target.value)} disabled={stateful} />
+          </Field>
+        </div>
+
+        {problems.length > 0 ? (
+          <ul className="mt-4 space-y-1 rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-xs text-amber-300">
+            {problems.map((message) => (
+              <li key={message}>· {message}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="outline" disabled={submitting} onClick={onCancel}>
+            取消
+          </Button>
+          <Button disabled={problems.length > 0 || submitting} loading={submitting} onClick={() => void submit()}>
+            创建
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 技能配置管理（#367 / #372，养成配置第九页）
  *
  * **角色与怪物同一张表**（`owner` 区分）：技能对两边完全同构 —— 一个动作 + 一套倍率，
  * 或一段状态；分表只会让「同一个技能既给人又给怪」变成复制两份并必然漂移。
  *
- * 与称号 / 装备 / 怪物同一取向：**没有「新建」「删除」**，只有「编辑」（角色技能 id
- * 被技能栏 / 快捷键 / 角色存档引用，行清单固定）；怪物技能的增删随 #12 主体开。
+ * 两种纪律（#372 起）：
+ * - **角色技能**：只有「编辑」—— id 被技能栏 / 快捷键 / 角色存档引用，行清单固定；
+ * - **怪物技能**：可「新建」「删除」—— 怪物技能随玩法加，id 限 9000 段；
+ *   删被怪物挂载引用中的技能会被服务端拒绝（先去怪物页解绑）。
  * 写操作要 `gameConfig:write`。
  */
 export function SkillsPage() {
@@ -385,6 +556,10 @@ export function SkillsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Skill | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /** 新建弹窗（只建怪物技能） */
+  const [creating, setCreating] = useState(false);
+  /** 删除中的技能 id（行内按钮 loading，防重复点） */
+  const [removingId, setRemovingId] = useState<string | null>(null);
   /** 可挂载的状态清单（挂载状态下拉用；状态数量很少，一次拉满） */
   const [statusOptions, setStatusOptions] = useState<Status[]>([]);
 
@@ -406,7 +581,7 @@ export function SkillsPage() {
   useEffect(() => {
     let alive = true;
     statusesApi
-      .list({ page: 1, size: 100, owner: "role" })
+      .list({ page: 1, size: 100 })
       .then((result) => {
         if (alive) setStatusOptions(result.list);
       })
@@ -449,13 +624,48 @@ export function SkillsPage() {
     }
   };
 
+  /** 新建怪物技能：成功后就地翻到第 1 页（新 id 未必落在当前页的第几条） */
+  const submitCreate = async (value: CreateSkill): Promise<boolean> => {
+    try {
+      const created = await skillsApi.create(value);
+      toastSuccess(`已新增怪物技能「${created.label}」，去「怪物配置」挂到具体的怪才会释放`);
+      setCreating(false);
+      setPage(1);
+      await load();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * 删除怪物技能
+   *
+   * 两种拒绝由服务端给出（角色技能不可删 / 被怪物挂载引用中不可删），
+   * 这里只做一次二次确认 —— 删掉后客户端快照里就没了，怪物挂载会成为悬空引用。
+   */
+  const removeSkill = async (item: Skill) => {
+    if (!window.confirm(`确定删除技能「${item.label}」（${item.id}）？被怪物挂载引用中的技能会被拒绝，需先在「怪物配置」解绑。`)) return;
+    setRemovingId(item.id);
+    try {
+      await skillsApi.remove(item.id);
+      toastSuccess(`技能「${item.label}」已删除`);
+      await load();
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-lg font-semibold text-slate-50">技能配置</h1>
         <p className="mt-1 text-xs text-slate-500">
-          角色与怪物同一张表（归属区分），只可编辑、不可新增 / 删除；保存后随配置快照下发客户端。
-          释放限制里的动作锁同时锁移动与再次出手；状态型技能必须指定要挂载的状态。
+          角色与怪物同一张表（归属区分）。角色技能只可编辑；怪物技能（9000 段）可新增 / 删除，
+          新建后要在「怪物配置」里挂到具体的怪才会被释放。保存后随配置快照下发客户端 ——
+          动作锁同时锁移动与再次出手，状态型技能必须指定要挂载的状态。
         </p>
       </div>
 
@@ -492,7 +702,14 @@ export function SkillsPage() {
 
       <Card
         title="技能列表"
-        actions={loading ? <Spinner /> : null}
+        actions={
+          <>
+            {loading ? <Spinner /> : null}
+            <Button className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => setCreating(true)}>
+              新增怪物技能
+            </Button>
+          </>
+        }
         description={canWrite ? undefined : "当前角色没有「修改养成配置」权限，列表只读。"}
       >
         <div className="overflow-x-auto">
@@ -537,17 +754,31 @@ export function SkillsPage() {
                     </td>
                     <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                     <td className={`${tdClass} text-right`}>
-                      <Button
-                        variant="outline"
-                        className="px-2.5 py-1 text-xs"
-                        disabled={!canWrite}
-                        onClick={() => {
-                          setEditing(item);
-                          setDialogOpen(true);
-                        }}
-                      >
-                        编辑
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          className="px-2.5 py-1 text-xs"
+                          disabled={!canWrite}
+                          onClick={() => {
+                            setEditing(item);
+                            setDialogOpen(true);
+                          }}
+                        >
+                          编辑
+                        </Button>
+                        {/* 角色技能的行清单固定（被技能栏 / 快捷键 / 存档引用），不给删除入口 */}
+                        {item.owner === "monster" ? (
+                          <Button
+                            variant="ghost"
+                            className="px-2.5 py-1 text-xs text-rose-300"
+                            disabled={!canWrite || removingId === item.id}
+                            loading={removingId === item.id}
+                            onClick={() => void removeSkill(item)}
+                          >
+                            删除
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -570,6 +801,13 @@ export function SkillsPage() {
           setEditing(null);
         }}
         onSubmit={submitDialog}
+      />
+
+      <SkillCreateDialog
+        open={creating}
+        statusOptions={statusOptions}
+        onCancel={() => setCreating(false)}
+        onSubmit={submitCreate}
       />
     </div>
   );

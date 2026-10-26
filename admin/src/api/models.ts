@@ -587,6 +587,85 @@ export type UpdateSkill = {
   canAuto?: boolean;
 };
 
+export type CreateSkill = {
+  /**
+   * 技能名（≤50 字）
+   */
+  label?: string;
+  /**
+   * 图标资源路径（≤200 字；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复
+   */
+  category?: "0" | "1" | "2" | "3";
+  /**
+   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
+   */
+  targetType?: "0" | "1" | "2" | "3";
+  /**
+   * 施法动作（≤50 字；空串 = 不播动作）
+   */
+  action?: string;
+  /**
+   * 技能特效图集路径（≤200 字；空串 = 无特效）
+   */
+  effect?: string;
+  /**
+   * 特效是否播在自己身上
+   */
+  effectOnSelf?: boolean;
+  /**
+   * 冷却（秒，0 = 不限制）
+   */
+  cooldown?: number;
+  /**
+   * 释放消耗魔法值（0 = 不消耗）
+   */
+  mpCost?: number;
+  /**
+   * 施法距离（0 = 不限距离）
+   */
+  distance?: number;
+  /**
+   * 学习 / 开启等级
+   */
+  levelReq?: number;
+  /**
+   * 描述文案（≤500 字）
+   */
+  description?: string;
+  /**
+   * 伤害系数（下标 = 技能等级 - 1，最多 20 级）
+   */
+  damageCoefficients?: DamageCoefficient[];
+  /**
+   * 释放后挂载的状态 id（空串 = 不挂；状态型技能必填）
+   */
+  statusId?: string;
+  /**
+   * 动作锁时长（毫秒；0 = 跟动画时长走）
+   */
+  castLockMs?: number;
+  /**
+   * 是否要求有合法目标
+   */
+  requireTarget?: boolean;
+  /**
+   * 是否可被自动战斗 / 挂机释放
+   */
+  canAuto?: boolean;
+  /**
+   * 技能 id（怪物技能段：9000~9999 的四位数字，如 "9001"）
+   */
+  id: string;
+  /**
+   * 归属：只能 monster（缺省 monster）
+   */
+  owner?: "role" | "monster";
+};
+
 export type StatusCombat = {
   /**
    * 格挡触发概率 0~1（缺省 = 不参与格挡判定）
@@ -600,6 +679,10 @@ export type StatusCombat = {
    * 防御乘法系数（≥1，1.5 = 防御 ×1.5；多个状态连乘）
    */
   defenseMultiplier?: number;
+  /**
+   * 攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）
+   */
+  attackMultiplier?: number;
 };
 
 export type UpdateStatus = {
@@ -765,6 +848,28 @@ export type UpdateMonster = {
    * 六项攻防区间（**整份提交、整份替换**，不传则不改；要求 0 ≤ min ≤ max）
    */
   attributes?: MonsterAttributes;
+};
+
+export type MonsterSkillItem = {
+  /**
+   * 技能 id（必须在 skills 表里存在且 owner=monster；不存在 → 400 40000）
+   */
+  skillId: string;
+  /**
+   * 优先级（越小越先，缺省 0；同优先级按技能 id 排序）
+   */
+  priority?: number;
+  /**
+   * 冷却覆写（秒；不传 = 用技能自身的 cooldown）
+   */
+  cooldown?: number;
+};
+
+export type ReplaceMonsterSkills = {
+  /**
+   * 完整清单（整份替换；空数组 = 清空，AI 回退到普攻）
+   */
+  skills: MonsterSkillItem[];
 };
 
 export type UpdateNpc = {
@@ -3591,6 +3696,44 @@ export type SkillQuery = {
    * 归属筛选：role / monster（不传 = 两边都要）
    */
   owner?: "role" | "monster";
+};
+
+export type MonsterSkill = {
+  /**
+   * 怪物 key（与 monsters 表主键一致）
+   */
+  monsterKey: string;
+  /**
+   * 技能 id（skills 表里 owner=monster 的行）
+   */
+  skillId: string;
+  /**
+   * 技能名（冗余展示用，来源 skills.label）
+   */
+  skillLabel: string;
+  /**
+   * 优先级（越小越先；状态型整体先于伤害型尝试）
+   */
+  priority: number;
+  /**
+   * 冷却覆写（秒；null = 用技能自身的 cooldown）
+   */
+  cooldown: unknown | null;
+  /**
+   * 最后修改时间（毫秒时间戳）
+   */
+  updatedAt: number;
+};
+
+export type MonsterSkillList = {
+  /**
+   * 挂载清单（按优先级升序）
+   */
+  list: MonsterSkill[];
+  /**
+   * 条数
+   */
+  total: number;
 };
 
 export type Status = {
