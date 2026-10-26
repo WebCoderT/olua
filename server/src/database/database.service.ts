@@ -62,6 +62,18 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
 
   /** 建表（IF NOT EXISTS，可重复执行；新增字段时在此加 ALTER 并做存在性判断） */
   private migrate() {
+    // 旧库升级前置（#350）：exec 块里有引用 zone_id 的索引（idx_world_monsters_zone 等），
+    // 而 zone_id 的补列（ALTER）原本排在 exec 之后——旧 schema 的库（无该列）会在建索引时
+    // 直接炸 no such column，起不了服。这里赶在建索引前对「已存在的旧表」补列；
+    // 新库没有这两张表，跳过，exec 后段的 ensureColumn 幂等兜底。
+    for (const [table, definition] of [
+      ["accounts", "INTEGER NOT NULL DEFAULT 1"],
+      ["world_monsters", "INTEGER NOT NULL DEFAULT 1"],
+    ] as const) {
+      const exists =
+        this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = ?", [table]) > 0;
+      if (exists) this.ensureColumn(table, "zone_id", definition);
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS accounts (
         id             TEXT PRIMARY KEY,

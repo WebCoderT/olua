@@ -28,9 +28,14 @@
  *      plist）；role/<n> 对应 role/atlas/<n>；npc/npc_* 对应 npc/atlas/<name>/<name>.plist；
  *      backgrounds/sfx_* 对应 backgrounds/atlas/<name>/<name>.plist。
  *      AnimationHelper 的口径是「图集优先、散帧兜底」，两者全缺 = 该外观整片空白。
+ *   4. 服务端快照核对（管理端 / DB 数据层）：configs → gen-shared-data → 快照 →
+ *      DB seed 是管理端数据的来路；快照里带资源路径的字段（FASHIONS 的 icon/in/out、
+ *      MONSTERS 的 key 拼外观路径）必须同样命中磁盘——客户端 configs 被上面三层守住，
+ *      这一层守服务端与管理端口径，资源换版时管理端数据不会悄悄断链。
  *
  * 不查什么：resources 里存在但代码没引用的素材（噪音大，增删素材不等于要改代码）；
- * manifest 与磁盘的一致性（那是 client/tools/resources_sync.py verify 的职责，单一来源）。
+ * manifest 与磁盘的一致性（那是 client/tools/resources_sync.py verify 的职责，单一来源）；
+ * DB 运行时数据（fashions 等表的存量行是 seed 的镜像 + 运营手改，快照一致则 seed 一致）。
  *
  * 用法：node tools/audit-resource-refs.cjs
  * 退出码：全部命中 = 0；任一断链 = 1（`make audit` 据此判定 FAIL）
@@ -296,6 +301,62 @@ for (const [tree, dirPattern] of [["npc", /^npc_\w+$/], ["backgrounds", /^sfx_\w
     const loose = fs.readdirSync(path.join(root, entry.name)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
     if (loose || fileExists(plist)) passed += 1;
     else failures.push(`单循环动画断链：${tree}/${entry.name} 既无散帧也无图集 plist（${plist}）`);
+  }
+}
+
+//#endregion
+
+//#region 4. 服务端快照核对（管理端 / DB 数据层的资源路径）
+
+// 管理端与 DB 的数据链路：configs → gen-shared-data → 快照（server/src/shared/game-data.generated.ts）
+// → DB fashions 等 seed（INSERT OR IGNORE）。快照里带资源路径的字段必须与新资源磁盘一致，
+// 否则资源换版时管理端数据会悄悄断链（客户端 configs 已被上面 1~3 层守住，这一层守服务端口径）。
+
+const SNAPSHOT_FILE = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
+if (fs.existsSync(SNAPSHOT_FILE)) {
+  const snapshot = fs.readFileSync(SNAPSHOT_FILE, "utf8");
+
+  /** 抓 `export const NAME: Record<string, unknown> = {...};` 字面量（生成物是紧凑 JSON + 尾逗号） */
+  function grabRecord(name) {
+    const matched = new RegExp(`export const ${name}: Record<string, unknown> = (\\{[\\s\\S]*?\\n\\});`).exec(snapshot);
+    if (!matched) return null;
+    return JSON.parse(matched[1].replace(/,(\s*[}\]])/g, "$1"));
+  }
+
+  const fashions = grabRecord("FASHIONS");
+  if (fashions) {
+    for (const [id, row] of Object.entries(fashions)) {
+      for (const field of ["icon", "in", "out"]) {
+        const value = row[field];
+        if (!value) continue;
+        if (resourceExists(value) || (atlasDirOf(value) && dirExists(atlasDirOf(value))) || (loopAtlasPlistOf(value) && fileExists(loopAtlasPlistOf(value)))) {
+          passed += 1;
+        } else {
+          failures.push(`快照时装断链：FASHIONS.${id}.${field} = ${value}（DB fashions seed 同源，管理端时装页会引用）`);
+        }
+      }
+    }
+  }
+
+  const monsters = grabRecord("MONSTERS");
+  if (monsters) {
+    for (const key of Object.keys(monsters)) {
+      // 怪物外观：monster/out/<key> 散帧，或 monster/atlas/out/<key> 图集（新包为纯图集形态，
+      // plist 藏在动作子目录里，任意深度命中即算有图集）
+      if (dirExists(`monster/out/${key}`) || dirExists(`monster/atlas/out/${key}`)) {
+        const hasPlist = [...diskFiles].some(
+          (p) => p.startsWith(`monster/atlas/out/${key.toLowerCase()}/`) && p.endsWith(".plist"),
+        );
+        const hasLoose = [...diskFiles].some(
+          (p) => p.startsWith(`monster/out/${key.toLowerCase()}/`) && EXTS.has(path.extname(p).slice(1)),
+        );
+        if (hasLoose || hasPlist) {
+          passed += 1;
+          continue;
+        }
+      }
+      failures.push(`快照怪物外观断链：MONSTERS key=${key}（monster/out 与 monster/atlas/out 均无内容，客户端按 key 拼外观路径）`);
+    }
   }
 }
 
