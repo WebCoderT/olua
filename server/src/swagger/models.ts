@@ -94,6 +94,7 @@ import {
   TransferGuildDto,
   UpdateGuildNoticeDto,
 } from "../modules/social/dto/guild.dto";
+import { MySocialDto, SocialEntryDto, SocialTargetDto } from "../modules/social/dto/social.dto";
 import {
   MailJobDto,
   MailJobPageDto,
@@ -306,4 +307,8 @@ export const SWAGGER_MODELS = [
   UpdateGuildNoticeDto,
   TransferGuildDto,
   AdminUpdateGuildDto,
+  // 社交（#389：好友与敌人）
+  SocialEntryDto,
+  MySocialDto,
+  SocialTargetDto,
 ];

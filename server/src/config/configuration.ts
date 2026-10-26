@@ -246,13 +246,20 @@ export interface AppConfiguration {
   playerAppearanceRefreshMs: number;
   //#endregion
 
-  //#region 社交（#388：帮会）
+  //#region 社交（#388：帮会 / #389：好友与敌人）
   /**
    * 帮会人数上限（默认 50）
    *
    * 与帮会等级解耦：等级这一刀没有业务，别让它悄悄决定真实容量（见 common/constants/social）。
    */
   guildMemberLimit: number;
+  /**
+   * 好友数量上限（默认 100，#389）
+   *
+   * 与帮会上限同一口径：进配置而不是写死在业务里 —— e2e 把它压小才验得到「满了会拒」，
+   * 而生产环境按需调整时不必改代码。
+   */
+  socialFriendLimit: number;
   //#endregion
 }
 
@@ -316,5 +323,6 @@ export default function configuration(): AppConfiguration {
     playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
+    socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
   };
 }

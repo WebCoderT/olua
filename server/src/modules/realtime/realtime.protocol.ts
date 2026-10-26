@@ -305,6 +305,23 @@ export interface RealtimePlayerEntry {
   accountId: string;
   /** 显示名（角色名优先，缺省回落账号名；服务端首见时查一次缓存住） */
   username: string;
+  /**
+   * 角色 id（#389）
+   *
+   * 客户端拿它跟自己的社交快照（好友 / 敌人里的 roleId）比对，算出「这个人是好友还是敌人」。
+   * 只发账号 id 是不够的：社交关系是按**角色**记的，一个账号可能有多个角色。
+   * 没角色（未选角 / 存档被删）时为空串 —— 那时连名字都只有账号名，不存在关系。
+   */
+  roleId: string;
+  /**
+   * 所属帮会 id（#389；空串 = 无帮会）
+   *
+   * 同帮的人名字是蓝的 —— 判定要「我的 guildId」与「他的 guildId」相等，
+   * 所以两边都得带。帮会名一并下发，社交面板与悬浮提示直接用，不必再查一次。
+   */
+  guildId: string;
+  /** 所属帮会名（#389；空串 = 无帮会） */
+  guildName: string;
   x: number;
   y: number;
   hp: number;

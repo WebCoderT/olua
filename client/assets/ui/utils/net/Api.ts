@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, Login, MallPurchase, MallPurchaseResult, MyGuild, RealtimeTicket, Register, ReviewGuildApplication, RoleDetail, RoleSummary, SaveRole, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
+import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, Login, MallPurchase, MallPurchaseResult, MyGuild, MySocial, RealtimeTicket, Register, ReviewGuildApplication, RoleDetail, RoleSummary, SaveRole, SocialTarget, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,7 @@ import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, 
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, MySocial, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
 
 /** announcement 模块的接口（1 个，生成） */
 export const AnnouncementApi = {
@@ -217,6 +217,52 @@ export const RoleApi = {
    * 未选角色 / 在线角色已删时返回 null。
    */
   online: (options?: Options) => HttpClient.get<RoleDetail | null>(ApiRoutes.role.online, options),
+};
+
+/** social 模块的接口（7 个，生成） */
+export const SocialApi = {
+  /**
+   * 标为敌人（POST /social/enemies）
+   *
+   * **单向**：只有我自己看得见（互见时对方名字变红），对方既不知道也不受影响。
+   */
+  addEnemy: (body: SocialTarget, options?: Options) => HttpClient.post<MySocial>(ApiRoutes.social.addEnemy, body, options),
+  /**
+   * 解除敌人（DELETE /social/enemies/{roleId}）
+   *
+   * 解除我自己标的敌人；本来就没标返回 50114。
+   */
+  removeEnemy: (roleId: string, options?: Options) => HttpClient.del<MySocial>(ApiRoutes.social.removeEnemy(roleId), options),
+  /**
+   * 加好友（POST /social/friends）
+   *
+   * 传 `roleId`（精确）或 `name`（手动输入；角色名只在同一账号内唯一，重名返回 50116）。
+   */
+  addFriend: (body: SocialTarget, options?: Options) => HttpClient.post<MySocial>(ApiRoutes.social.addFriend, body, options),
+  /**
+   * 删除好友 / 撤回申请（DELETE /social/friends/{roleId}）
+   *
+   * **双向消失**：我这边删掉，他那边也不再是好友（不需要对方同意）。
+   */
+  removeFriend: (roleId: string, options?: Options) => HttpClient.del<MySocial>(ApiRoutes.social.removeFriend(roleId), options),
+  /**
+   * 同意好友申请（POST /social/friends/{roleId}/accept）
+   *
+   * 只有「他发起、等我处理」的申请能同意；已处理过的返回 50112。
+   */
+  acceptFriend: (roleId: string, options?: Options) => HttpClient.post<MySocial>(ApiRoutes.social.acceptFriend(roleId), undefined, options),
+  /**
+   * 拒绝好友申请（POST /social/friends/{roleId}/reject）
+   *
+   * 直接删掉这一对关系，不留记录（被拒的人看不到「你被拒绝了」）。
+   */
+  rejectFriend: (roleId: string, options?: Options) => HttpClient.post<MySocial>(ApiRoutes.social.rejectFriend(roleId), undefined, options),
+  /**
+   * 我的社交快照（GET /social/me）
+   *
+   * 好友（已互为好友）/ 别人加我（待我处理）/ 我加别人（等对方处理）/ 我标的敌人，外加我的角色 id 与所在帮会 —— 客户端拿它与互见帧里的 `roleId`/`guildId` 比对，算出该给谁上什么颜色的名字。
+   */
+  mine: (options?: Options) => HttpClient.get<MySocial>(ApiRoutes.social.mine, options),
 };
 
 /** zone 模块的接口（1 个，生成） */

@@ -8559,6 +8559,374 @@
         ]
       }
     },
+    "/social/me": {
+      "get": {
+        "description": "好友（已互为好友）/ 别人加我（待我处理）/ 我加别人（等对方处理）/ 我标的敌人，外加我的角色 id 与所在帮会 —— 客户端拿它与互见帧里的 `roleId`/`guildId` 比对，算出该给谁上什么颜色的名字。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "我的社交快照",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/friends": {
+      "post": {
+        "description": "传 `roleId`（精确）或 `name`（手动输入；角色名只在同一账号内唯一，重名返回 50116）。\n\n**对方也在等我时直接当同意**，不用再点一次「同意」。失败：50109 找不到人 / 50110 不能加自己 / 50111 已是好友或已有待处理申请 / 50115 好友数量上限。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.addFriend",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialTargetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "加好友",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/friends/{roleId}/accept": {
+      "post": {
+        "description": "只有「他发起、等我处理」的申请能同意；已处理过的返回 50112。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.acceptFriend",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "申请人的角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "同意好友申请",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/friends/{roleId}/reject": {
+      "post": {
+        "description": "直接删掉这一对关系，不留记录（被拒的人看不到「你被拒绝了」）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.rejectFriend",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "申请人的角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "拒绝好友申请",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/friends/{roleId}": {
+      "delete": {
+        "description": "**双向消失**：我这边删掉，他那边也不再是好友（不需要对方同意）。\n\n也用于撤回自己发出的申请、或拒绝别人加我 —— 三种情况都只是「删掉这一对关系」，所以共用同一个接口；真正没有这段关系时返回 50112。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.removeFriend",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "对方的角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "删除好友 / 撤回申请",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/enemies": {
+      "post": {
+        "description": "**单向**：只有我自己看得见（互见时对方名字变红），对方既不知道也不受影响。\n\n入参同加好友（`roleId` 或 `name`）。重复标记返回 50113。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.addEnemy",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialTargetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "标为敌人",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/enemies/{roleId}": {
+      "delete": {
+        "description": "解除我自己标的敌人；本来就没标返回 50114。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.removeEnemy",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "对方的角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "解除敌人",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -10455,6 +10823,21 @@
             "type": "string",
             "description": "公告（0~200 字）",
             "example": "公告已重置"
+          }
+        }
+      },
+      "SocialTargetDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "对方角色 id（「附近」与帮会成员列表用这个：精确且不受重名影响）",
+            "example": "role_b2"
+          },
+          "name": {
+            "type": "string",
+            "description": "对方角色名（手动输入时用；角色名只在同一账号内唯一，重名会返回 50116）",
+            "example": "乙二"
           }
         }
       },
@@ -15922,6 +16305,106 @@
           "leaderId",
           "updatedAt",
           "members"
+        ]
+      },
+      "SocialEntryDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "对方角色 id",
+            "example": "role_b2"
+          },
+          "name": {
+            "type": "string",
+            "description": "对方角色名",
+            "example": "乙二"
+          },
+          "level": {
+            "type": "number",
+            "description": "对方等级",
+            "example": 12
+          },
+          "occupation": {
+            "type": "string",
+            "description": "对方职业（客户端用它显示职业图标）",
+            "example": "1"
+          },
+          "status": {
+            "type": "string",
+            "description": "关系状态：accepted 已互为好友 / pendingIncoming 别人加我（待我处理）/ pendingOutgoing 我加了别人（等对方处理）",
+            "example": "accepted"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "建立时间（毫秒；待处理的是发起时间）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "roleId",
+          "name",
+          "level",
+          "occupation",
+          "status",
+          "createdAt"
+        ]
+      },
+      "MySocialDto": {
+        "type": "object",
+        "properties": {
+          "myRoleId": {
+            "type": "string",
+            "description": "我的角色 id",
+            "example": "role_a1"
+          },
+          "guildId": {
+            "type": "string",
+            "description": "我所在帮会 id（空串 = 没有帮会）",
+            "example": "g_1760000000000_ab12"
+          },
+          "guildName": {
+            "type": "string",
+            "description": "我所在帮会名（空串 = 没有帮会）",
+            "example": "听雨阁"
+          },
+          "friends": {
+            "description": "好友（已互为好友）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialEntryDto"
+            }
+          },
+          "incoming": {
+            "description": "别人加我、等我处理",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialEntryDto"
+            }
+          },
+          "outgoing": {
+            "description": "我加别人、等对方处理",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialEntryDto"
+            }
+          },
+          "enemies": {
+            "description": "我标的敌人（单向，对方不知道）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialEntryDto"
+            }
+          }
+        },
+        "required": [
+          "myRoleId",
+          "guildId",
+          "guildName",
+          "friends",
+          "incoming",
+          "outgoing",
+          "enemies"
         ]
       }
     }

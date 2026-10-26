@@ -56,7 +56,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + nine e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + fourteen e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -134,7 +134,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           27 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild
+│   │   └── repositories/           28 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -142,7 +142,7 @@ server/
 │   │   ├── announcement/           announcements: client pulls "active" (public) + admin CRUD
 │   │   ├── mail/                   mail: templates + delivery queue + background scheduler (sending only enqueues)
 │   │   ├── zone/                   zones (#295 phase two): live-zone list (public) / create zone / merge zones
-│   │   ├── social/                 guilds (#388): create / apply / review / members / transfer / disband (admin: rename, force-disband)
+│   │   ├── social/                 social: guilds (#388: create / apply / review / members / transfer / disband, admin rename & force-disband) + friends and enemies (#389)
 │   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
@@ -169,6 +169,7 @@ server/
 │   ├── e2e-dual.cjs                14 assertions (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
 │   ├── e2e-zone.cjs                32 assertions (zones: registration zone choice / merge boundaries / per-zone world isolation / merge effect and epoch invalidation)
 │   ├── e2e-guild.cjs               60 assertions (guilds: creation and duplicate names / application overwrite / review permissions / member limit / kick·transfer·leave / disband cascade)
+│   ├── e2e-social.cjs              47 assertions (social: friend requests and instant accept on mutual add / reject leaves no trace / cancel and delete / one-directional enemies / mirrored rows / presence-frame identity)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -177,7 +178,7 @@ server/
 
 ## Data model
 
-32 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+34 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -192,6 +193,8 @@ server/
 | `guilds` | guilds (#388) | the guild name is **globally unique**; `leader_id` is the leader’s **first identity** (the second is the `guild_members.rank='leader'` row — a transfer must change both in one transaction); `level` / `funds` are placeholders (no level or treasury business yet); the member limit is **not here**, it comes from `GUILD_MEMBER_LIMIT` |
 | `guild_members` | guild members (#388) | `PRIMARY KEY (guild_id, role_id)` plus a **unique index on `role_id`** — “one person, one guild” is a database constraint, not business-level discipline (two concurrent joins would always leave two rows); `rank` (leader / vice / member) |
 | `guild_applications` | join applications (#388) | `PRIMARY KEY (guild_id, role_id)`: **a repeat application only overwrites the message**, never stacks a second todo; reject = delete the row; approve = insert the member row + delete the application + drop the applicant’s applications elsewhere (one transaction) |
+| `role_friends` | friend relations (#389) | **two mirrored rows**: one for A↔B in each direction (`PRIMARY KEY (role_id, friend_id)`), with `status` (pending / accepted) and `requested_by` recording the initiator. Every query is a single primary-key prefix scan — no `OR` across both directions and no guessing the direction; the price is that accept / reject / delete must change **both rows** (always in a transaction). Two states only, **no blocking** (there is no private chat, and an extra state would force every query to remember another legal value) |
+| `role_enemies` | enemy marks (#389) | **one directional row**: `PRIMARY KEY (role_id, enemy_id)` — I mark mine, the other side neither knows nor is affected (no notification, no transaction needed). Hostility outranks same-guild and friendship in the relation priority |
 | `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
 | `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level |
@@ -223,7 +226,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 27 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 28 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -283,12 +286,12 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **121 interfaces / 99 paths / 180 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **128 interfaces / 106 paths / 183 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 23 | `player` token, may only operate its own account's data |
+| Client | 30 | `player` token, may only operate its own account's data |
 | Admin | 91 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
@@ -365,7 +368,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All nine e2e suites are **real server process + real HTTP requests** (not mocks):
+All fourteen e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -381,7 +384,7 @@ All nine e2e suites are **real server process + real HTTP requests** (not mocks)
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
-cd server && npm run verify          # compile + nine e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + fourteen e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

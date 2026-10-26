@@ -134,7 +134,8 @@ const REPO_EDGES = {
   // 怪物技能挂载（#372）：game-config 管挂载清单（整份替换），realtime 的 AI 读它决定放哪些技能
   "database/repositories/monster-skill.repository.ts": ["modules/game-config", "modules/realtime"],
   // 帮会（#388）：社交域独占三张表的读写（管理端控制器也在 social 域内，不额外开边）
-  "database/repositories/guild.repository.ts": ["modules/social"],
+  "database/repositories/guild.repository.ts": ["modules/social", "modules/realtime"],
+  "database/repositories/social.repository.ts": ["modules/social"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

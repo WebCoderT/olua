@@ -1,6 +1,7 @@
 import { isValid, Label, Node, ProgressBar, UITransform, Vec2 } from "cc";
 import { defaultRoleSpeedRate, roleBody } from "../../configs/role";
 import { roleShowLayout } from "../../configs/layout/hud";
+import { RELATION, RelationKind, getRelationColor, resolveRelation } from "../../configs/social";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { SEX } from "../../types/role";
 import RoleAppearance, { RoleOutSource } from "../components/role/RoleAppearance";
@@ -8,6 +9,7 @@ import LayerManager from "./LayerManager";
 import GameUiHelper from "../helpers/GameUiHelper";
 import UiHelper from "../helpers/UiHelper";
 import { getDirectionByVector } from "../utils/battle/BattleMath";
+import SocialStore from "./SocialStore";
 import type { PlayerAppearance, PlayerEntry, PlayersFrame } from "../utils/net/CombatChannel";
 
 /**
@@ -46,12 +48,26 @@ function appearanceKey(appearance: PlayerAppearance): string {
  */
 interface OtherPlayerView {
   node: Node;
+  /** 账号 id（附近列表的行标识；与 node 名字解耦，别从节点名里抠） */
+  accountId: string;
   /** 外观装配器（衣服 + 武器两个子节点由它管理） */
   appearance: RoleAppearance;
   /** 当前外观数据（换装后整份替换） */
   source: RoleOutSource;
   /** 当前外观的比较键（换装判据） */
   appearanceKey: string;
+  /** 头顶名字节点（关系变化时就地改颜色，不重建 —— 见 applyRelations） */
+  nameLabel: Node;
+  /** 显示名（角色改名后要改字，不只是改色） */
+  name: string;
+  /** 角色 id（#389：关系判定的输入；空串 = 对方还没选角 / 旧服务端不带） */
+  roleId: string;
+  /** 对方所在帮会 id（#389：关系判定的输入；空串 = 无帮会） */
+  guildId: string;
+  /** 对方所在帮会名（#389：附近列表里展示） */
+  guildName: string;
+  /** 当前算出的关系（附近列表直接用，重算时一并更新） */
+  relation: RelationKind;
   /** 广播给的最新位置（世界坐标；每帧向它插值，平滑过广播节拍的台阶感） */
   targetX: number;
   targetY: number;
@@ -63,6 +79,15 @@ interface OtherPlayerView {
   direction: DIRECTION;
   /** 当前动作（走 / 站） */
   action: ACTION;
+}
+
+/** 附近列表的一行（社交面板「附近」页用；数据源是当前互见帧的内存态） */
+export interface NearbyPlayer {
+  accountId: string;
+  roleId: string;
+  name: string;
+  guildName: string;
+  relation: RelationKind;
 }
 
 /**
@@ -79,6 +104,13 @@ interface OtherPlayerView {
  * 性别默认身体）、几何变换、层级顺序与主角是**同一份代码** —— 别人穿什么、拿什么、
  * 有没有时装，看到的就是他客户端看到的。
  *
+ * ## 名字颜色（#389：好友 / 敌人 / 同帮一眼可见）
+ * 每个远端玩家头顶的名字按**关系**上色：敌人红 > 同帮蓝 > 好友绿 > 同地图白 > 普通灰
+ * （优先级唯一来源是 `configs/social.resolveRelation`）。判定所需的两半 ——
+ * 我的好友 / 敌人 / 帮会（`SocialStore` 里的快照）与对方的 `roleId` / `guildId`（互见帧）——
+ * 都在本地，所以关系变化是**就地改颜色**：`SocialStore` 一变（加好友、标敌人、入帮）就
+ * `applyRelations()` 重刷一遍，不拆不建节点，也不重新请求任何一个帧。
+ *
  * ## 演出的边界（刻意留着）
  * - **没有战斗动作**：对方放技能 / 挨打 / 倒地都不会在别人屏幕上播 —— 那需要互见帧
  *   再带一条事件流（他在放什么、打谁），是独立的一刀。现在最多看到他在走 / 站。
@@ -88,12 +120,16 @@ interface OtherPlayerView {
 export default class OtherPlayerManager {
   /** 场上的远端玩家：账号 id → 演出视图 */
   private static others = new Map<string, OtherPlayerView>();
+  /** 是否已订阅社交快照（懒注册一次；社交快照一到就重刷名字颜色） */
+  private static watching = false;
 
   /**
    * 落一帧互见广播（组合根接线；自己会被过滤掉 —— 广播的收件人是同图观看者，
    * 但服务端不保证剔除发送者自己，客户端按账号 id 过滤一次最稳）
    */
   static applyPlayersFrame(frame: PlayersFrame, selfAccountId: string): void {
+    // 地图上要按关系上色，就不能等玩家手动打开社交面板：第一次见到别人时顺手拉一次快照
+    this.watchSocial();
     if (frame.full) {
       // 快照兜底：以帧为准重建集合（换图后的第一帧 / 重连后的补偿都走这里）
       const keep = new Set(frame.players.map((entry) => entry.accountId));
@@ -105,6 +141,43 @@ export default class OtherPlayerManager {
     for (const entry of frame.players) {
       if (entry.accountId === selfAccountId) continue;
       this.upsert(entry);
+    }
+  }
+
+  /**
+   * 附近的人（社交面板「附近」页的取源）
+   *
+   * 就是当前场上的远端玩家 —— 互见帧里有的，才是「此刻同图看得见」的；
+   * 关系一并算好（面板直接按它显示标签与颜色，不在面板里再判一遍）。
+   */
+  static nearby(): NearbyPlayer[] {
+    const list: NearbyPlayer[] = [];
+    for (const view of this.others.values()) {
+      list.push({
+        accountId: view.accountId,
+        roleId: view.roleId,
+        name: view.name,
+        guildName: view.guildName,
+        relation: view.relation,
+      });
+    }
+    return list;
+  }
+
+  /**
+   * 重刷所有人的名字颜色（社交快照变化时调用；节点不重建）
+   *
+   * 只改 `Label.color`：一次加好友 / 一次标敌人只该让那个人的名字变色，
+   * 整份重建会把正在走的人的动作打断，也会让头顶血条的进度闪一下。
+   */
+  static applyRelations(): void {
+    for (const view of this.others.values()) {
+      if (!isValid(view.node)) continue;
+      const relation = this.relationOf(view);
+      if (relation === view.relation) continue;
+      view.relation = relation;
+      const label = view.nameLabel.getComponent(Label);
+      if (label) label.color = getRelationColor(relation);
     }
   }
 
@@ -156,6 +229,20 @@ export default class OtherPlayerManager {
     view.targetX = entry.x;
     view.targetY = entry.y;
     view.moving = entry.moving;
+    // 身份 / 帮会（#389）：关系判定的输入变了就重算一次 —— 入帮 / 退帮 / 退帮再入别的帮
+    // 都会在这里体现（服务端 5s 懒刷新一次，客户端不需要自己轮询）
+    const guildId = entry.guildId ?? "";
+    if (view.roleId !== (entry.roleId ?? "") || view.guildId !== guildId || view.name !== entry.username) {
+      view.roleId = entry.roleId ?? "";
+      view.guildId = guildId;
+      view.guildName = entry.guildName ?? "";
+      if (view.name !== entry.username) {
+        view.name = entry.username;
+        const label = view.nameLabel.getComponent(Label);
+        if (label) label.string = entry.username;
+      }
+      this.refreshRelation(view);
+    }
     const appearance = entry.appearance ?? DEFAULT_APPEARANCE;
     const key = appearanceKey(appearance);
     if (key !== view.appearanceKey) {
@@ -191,17 +278,25 @@ export default class OtherPlayerManager {
     const roleAppearance = new RoleAppearance(node, () => {});
     const source = toOutSource(appearance);
     roleAppearance.updateOutShow(source, ACTION.STAND, DIRECTION.DOWN);
-    /** 角色名称（与主角 / 怪物同一套样式口径，见 roleShowLayout.name） */
+    /** 角色名称（颜色由关系决定，先按「同地图」建，随后 refreshRelation 上色） */
     const layout = roleShowLayout.name;
-    node.addChild(UiHelper.createLabel("role_name", entry.username, layout.color, layout.fontSize, layout.position, layout.size));
+    const nameLabel = UiHelper.createLabel("role_name", entry.username, layout.color, layout.fontSize, layout.position, layout.size);
+    node.addChild(nameLabel);
     /** 头顶信息栏（血条 + 血量文字；军衔红字按 0 建立占位，远端玩家的军衔不随互见帧下发，恒为空行） */
     node.addChild(GameUiHelper.createHead("other_head", 1, 1, 0));
     LayerManager.addToGameLayer(node);
-    return {
+    const view: OtherPlayerView = {
       node,
+      accountId: entry.accountId,
       appearance: roleAppearance,
       source,
       appearanceKey: appearanceKey(appearance),
+      nameLabel,
+      name: entry.username,
+      roleId: entry.roleId ?? "",
+      guildId: entry.guildId ?? "",
+      guildName: entry.guildName ?? "",
+      relation: RELATION.MAP,
       targetX: entry.x,
       targetY: entry.y,
       hp: 1,
@@ -210,6 +305,36 @@ export default class OtherPlayerManager {
       direction: DIRECTION.DOWN,
       action: ACTION.STAND,
     };
+    this.refreshRelation(view);
+    return view;
+  }
+
+  /** 重算一个人的关系并上色（新建时 / 身份与帮会变化时） */
+  private static refreshRelation(view: OtherPlayerView): void {
+    if (!isValid(view.node)) return;
+    const relation = this.relationOf(view);
+    view.relation = relation;
+    const label = view.nameLabel.getComponent(Label);
+    if (label) label.color = getRelationColor(relation);
+  }
+
+  /** 我与一名远端玩家的关系（唯一判定入口在 configs/social；互见帧里的人必然同图） */
+  private static relationOf(view: OtherPlayerView): RelationKind {
+    return resolveRelation(SocialStore.relationSelf(), { roleId: view.roleId, guildId: view.guildId }, true);
+  }
+
+  /**
+   * 订阅社交快照（懒注册一次）
+   *
+   * 快照一到 / 一变（加好友、标敌人、入帮退帮）就重刷全部名字颜色 ——
+   * 视野里的人不会重新进图，不主动刷的话要等他走开再回来才看得见新颜色。
+   */
+  private static watchSocial(): void {
+    if (this.watching) return;
+    this.watching = true;
+    SocialStore.onChange(() => this.applyRelations());
+    // 顺手触发一次拉取：还没拉过时是请求，拉过了是空操作
+    SocialStore.ensure();
   }
 
   /** 刷新头顶血条（取件口径与 RoleDisplay.updateHead 成对：role_hp_bar / role_hp_text） */

@@ -785,3 +785,122 @@ export const guildDialogLayout = {
 };
 
 //#endregion
+
+//#region 社交弹窗（#389：帮会 / 好友 / 敌人 / 附近四个页签）
+
+/**
+ * 社交弹窗布局
+ *
+ * **四页共用一个框**：页签在标题下方一行，内容区由 SocialDialog 按页挂载 ——
+ * 「帮会」页沿用 `guildDialogLayout` 的坐标（那份坐标是按 500 高的框调的，
+ * 这里把框加到 560 高，页签正好塞进多出来的 60 里，帮会页一个字都不用挪）。
+ *
+ * 好友页有**三段列表**（别人加我 / 我的好友 / 我发出的），所以每段都给了固定高度；
+ * 行高与帮会列表一致（48），一眼看上去是同一套东西。
+ */
+export const socialDialogLayout = {
+  name: "social_dialog",
+  title: "社 交",
+  /** 比通用弹窗高 60：多出来的一行放页签（帮会页的坐标因此可以原样复用） */
+  size: new Size(600, 560),
+  /** 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」） */
+  tabs: {
+    y: 232,
+    size: new Size(112, 32),
+    columns: [-168, -56, 56, 168],
+    /** 与 texts.tabs 一一对应，别只改一处 */
+    radius: 6,
+    activeFill: new Color(255, 200, 80, 230),
+    activeText: new Color(38, 30, 12, 255),
+    idleFill: new Color(28, 33, 42, 200),
+    idleText: new Color(190, 200, 214, 255),
+    idleBorder: new Color(64, 74, 90, 255),
+    fontSize: 13,
+  },
+  /** 列表行（与帮会列表同一套几何与配色） */
+  row: {
+    size: new Size(556, 48),
+    fill: new Color(22, 26, 34, 190),
+    border: new Color(64, 74, 90, 255),
+    radius: 6,
+    nameFontSize: 14,
+    metaFontSize: 11,
+    metaColor: new Color(160, 172, 190, 255),
+    columns: {
+      name: -180,
+      meta: -40,
+      action: 210,
+      action2: 150,
+    },
+    /** 行内「关系」标签（右对齐的小字，颜色按关系走） */
+    relationSize: new Size(64, 18),
+    relationX: -86,
+  },
+  /** 好友页：三段列表各占一块（标题 + 滚动区） */
+  friends: {
+    incomingTitle: { position: new Vec2(0, 200), size: new Size(560, 20) },
+    incomingList: { name: "social_incoming_list", position: new Vec2(0, 150), size: new Size(556, 96) },
+    listTitle: { position: new Vec2(0, 96), size: new Size(560, 20) },
+    list: { name: "social_friend_list", position: new Vec2(0, 18), size: new Size(556, 148) },
+    outgoingTitle: { position: new Vec2(0, -60), size: new Size(560, 20) },
+    outgoingList: { name: "social_outgoing_list", position: new Vec2(0, -110), size: new Size(556, 96) },
+  },
+  /** 敌人页：一整块列表 */
+  enemies: {
+    title: { position: new Vec2(0, 200), size: new Size(560, 20) },
+    list: { name: "social_enemy_list", position: new Vec2(0, 40), size: new Size(556, 312) },
+  },
+  /** 附近页：一行说明 + 一整块列表（数据源是当前互见帧的内存态） */
+  nearby: {
+    hint: { position: new Vec2(0, 200), size: new Size(560, 20) },
+    list: { name: "social_nearby_list", position: new Vec2(0, 40), size: new Size(556, 312) },
+  },
+  /** 加人/标人一行（好友页与敌人页共用，贴在框底） */
+  addRow: {
+    input: { position: new Vec2(-70, -232), size: new Vec2(400, 30) },
+    button: { position: new Vec2(195, -232) },
+  },
+  /** 小字（段落标题用金色，空态用灰） */
+  titleColor: new Color(255, 214, 102, 255),
+  titleFontSize: 12,
+  /** 文案 */
+  texts: {
+    tabs: ["帮 会", "好 友", "敌 人", "附 近"],
+    friendsTitle: "我的好友（{count}）",
+    friendsEmpty: "（还没有好友：在「附近」点「加好友」，或按名字申请）",
+    incomingTitle: "别人加我（{count}）",
+    incomingEmpty: "（没有等你处理的申请）",
+    outgoingTitle: "我发出的申请（{count}）",
+    outgoingEmpty: "（没有等对方处理的申请）",
+    enemiesTitle: "我标的敌人（{count}）",
+    enemiesEmpty: "（还没标过谁：把名字标成敌人后，你看到他的名字就是红的）",
+    nearbyHint: "附近的人（{count}；同图可见，只显示此刻看得见的人）",
+    nearbyEmpty: "（附近没有其他玩家）",
+    friendInput: "输入角色名加好友",
+    enemyInput: "输入角色名标敌人",
+    addFriend: "加好友",
+    addEnemy: "标敌人",
+    accept: "同意",
+    reject: "拒绝",
+    removeFriend: "删除",
+    removeEnemy: "解除",
+    cancel: "撤回",
+    friendMeta: "{level} 级 · {occupation}",
+    guildMeta: "「{guild}」",
+    noGuild: "无帮会",
+    friendRequestedTip: "好友申请已发出",
+    friendAcceptedTip: "已加为好友",
+    friendRejectedTip: "已拒绝",
+    friendRemovedTip: "已删除好友",
+    enemyAddedTip: "已标为敌人（对方不会收到通知）",
+    enemyRemovedTip: "已解除",
+    ambiguousTip: "有多个同名角色，请在「附近」里点选添加",
+    nameEmptyTip: "先输入角色名",
+    confirmRemoveFriendTitle: "删除好友",
+    confirmRemoveFriendText: "确定删除好友「{name}」吗？对方那边也会同时消失（可以重新加）",
+    confirmRemoveEnemyTitle: "解除敌人",
+    confirmRemoveEnemyText: "确定解除对「{name}」的敌意吗？他的名字会变回普通颜色",
+  },
+};
+
+//#endregion

@@ -83,6 +83,7 @@ const MODULES = {
   gameConfig: { target: "client", export: "GameConfigApi" },
   zone: { target: "client", export: "ZoneApi" },
   guild: { target: "client", export: "GuildApi" },
+  social: { target: "client", export: "SocialApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },
