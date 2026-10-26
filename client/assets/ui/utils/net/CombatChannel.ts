@@ -124,6 +124,38 @@ export interface PlayersFrame {
   left: string[];
 }
 
+/** 拾取入包后实际写入的背包格子（#325：叠加进已有堆 = 那一格更新后的形状；装备 = 新占的格子） */
+export interface PickPlacedCell {
+  row: number;
+  col: number;
+  id: string;
+  count: number;
+}
+
+/** 服务端拾取成功（协议见 realtime.protocol 的 RealtimePickedOk） */
+export interface PickOk {
+  castId: number;
+  index: number;
+  ok: true;
+  /** 拾取后的角色修订号（入包推进了 revision，客户端照搬做新基线防乐观锁） */
+  revision: number;
+  placed: PickPlacedCell[];
+  /** true = 该掉落此前已拾取过（幂等重放，placed 为空） */
+  alreadyPicked: boolean;
+}
+
+/** 服务端拾取被拒（地面掉落物保留；bag_full 时客户端提示背包已满） */
+export interface PickError {
+  castId: number;
+  index: number;
+  ok: false;
+  code: string;
+  message: string;
+}
+
+/** 服务端拾取结果（协议见 realtime.protocol 的 RealtimePickedData） */
+export type PickResult = PickOk | PickError;
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -143,6 +175,9 @@ export default class CombatChannel {
 
   /** 玩家互见广播出口（#324；组合根接线到 OtherPlayerManager.applyPlayersFrame，不接时帧被丢弃） */
   static onPlayers: ((data: PlayersFrame) => void) | null = null;
+
+  /** 拾取结果出口（#325；组合根接线到 DropManager.applyPickedFrame，不接时结果被丢弃并告警） */
+  static onPicked: ((data: PickResult) => void) | null = null;
 
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
@@ -205,6 +240,15 @@ export default class CombatChannel {
     RealtimeClient.send({ type: "targetsReset" });
   }
 
+  /**
+   * 拾取一次击杀的掉落（#325）：castId + drops 下标定位，服务端格子级入包，
+   * 结果以 picked 帧回来（onPicked）。发送失败（连接不在 OPEN 态）返回 false ——
+   * 调用方据此保留地面掉落物，等通道恢复后再试。
+   */
+  static sendPick(castId: number, index: number): boolean {
+    return RealtimeClient.send({ type: "pick", data: { castId, index } });
+  }
+
   /** RealtimeClient 收到 settle 帧后走这里（ok 与拒绝都在内） */
   static dispatchSettle(data: unknown): void {
     const settle = data as CombatSettleOk | CombatSettleError | null;
@@ -252,6 +296,17 @@ export default class CombatChannel {
       return;
     }
     this.onPlayers(frame);
+  }
+
+  /** RealtimeClient 收到 picked 帧后走这里（#325：成功与拒绝都在内） */
+  static dispatchPicked(data: unknown): void {
+    const result = data as PickResult | null;
+    if (!result || typeof result !== "object" || typeof result.ok !== "boolean") return;
+    if (!this.onPicked) {
+      console.warn("[drop] 收到拾取结果但没有处理者（onPicked 未接线），结果被丢弃");
+      return;
+    }
+    this.onPicked(result);
   }
 }
 

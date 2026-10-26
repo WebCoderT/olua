@@ -5,7 +5,7 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { GROWTH_SCALARS } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS, ITEM_BASES, ITEM_TYPES, DRUGS } from "../../shared/game-data.generated";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -28,6 +28,12 @@ export interface KillExpResult {
   expNeed: number;
   leveledUp: boolean;
   revision: number;
+}
+
+/** 一次拾取入包的结果（picked 帧的 ok 应答据此组装） */
+export interface PickDropResult {
+  revision: number;
+  placed: Array<{ row: number; col: number; id: string; count: number }>;
 }
 
 /**
@@ -298,6 +304,116 @@ export class RolesService {
     };
     this.roles.replace(row);
     return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId);
+  }
+
+  /**
+   * 拾取入包（#325：地面掉落物的格子级入包，权威在服务端）
+   *
+   * 与商城购买同一套格子语义，多一层**叠加**：可叠加物品（药品/材料）先吃已有堆
+   * （单格上限 maxStack 封顶，与客户端 StorageManager.addGood / tidyBagGrid 同口径），
+   * 吃不下再占空格；装备不可叠加，每件一格。整份放不下 → 20012 拒拾，
+   * **存档一个字节都不动**（地面掉落物保留，玩家腾出格子后可再拾）。
+   *
+   * 调用方（实时通道的 pick 帧）已按账本校验过归属 —— 账本按账号隔离，别的账号
+   * 既看不到这次掉落也没有账可查；这里只对「当前在线角色」入包。
+   *
+   * @returns 入包后的修订号与实际写入的格子（客户端照搬合并进本地背包 + revision 基线）
+   */
+  pickDrop(accountId: string, goodId: string, count: number): PickDropResult {
+    const account = this.mustAccount(accountId);
+    const roleId = account.online_role_id;
+    if (!roleId) throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法拾取");
+    const existing = this.roles.findById(roleId);
+    if (!existing || existing.account_id !== accountId) {
+      throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法拾取");
+    }
+
+    // 物品类型来自生成物总表：掉落表是管理端可改的数据，里面配上不存在的 id 要在这里拦下
+    const itemType: string | undefined = (ITEM_TYPES as Record<string, string>)[goodId];
+    if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `掉落物品不存在：${goodId}`);
+
+    const data = decodeStoredRoleData(existing.data);
+    const placed = this.placeGoodsIntoBag(data, goodId, itemType, Math.max(1, Math.floor(count)));
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return { revision: row.revision, placed };
+  }
+
+  /**
+   * 往存档的背包网格里放一份物品（叠加优先，行优先占空格）
+   *
+   * 叠加语义与客户端 `StorageManager.addGood` 完全同口径：可叠加物品先找同 id 的
+   * 已有堆吃（单格 maxStack 封顶），吃不下再找空格按 maxStack 分堆；不可叠加每格一件。
+   * 放不下整份时抛 20012 —— data 已被就地修改，但调用方在异常路径上不会落库，
+   * 存档不受影响。
+   *
+   * @throws MALL_BAG_FULL 背包剩余空间放不下整份（或网格结构不合法）
+   */
+  private placeGoodsIntoBag(
+    data: Record<string, unknown>,
+    goodId: string,
+    itemType: string,
+    count: number,
+  ): Array<{ row: number; col: number; id: string; count: number }> {
+    const bag = data.bag;
+    if (!Array.isArray(bag)) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包数据不完整，无法放入物品");
+    // 单格上限：装备没有叠加概念（1）；药品/材料从各自的表读 maxStack（#252/#255 起入库），读不到按 99
+    const stackable = itemType !== "equipment";
+    const stackRow = stackable ? (DRUGS[goodId] ?? ITEM_BASES[goodId]) : undefined;
+    const maxStack = stackable ? Math.max(1, Math.floor(Number(stackRow && (stackRow as Record<string, unknown>).maxStack) || 99)) : 1;
+
+    const placed: Array<{ row: number; col: number; id: string; count: number }> = [];
+    let remaining = count;
+    const grid = bag as unknown[][];
+
+    // 第一轮：吃已有堆（只有可叠加物品走得到）
+    if (stackable) {
+      for (let row = 0; row < grid.length && remaining > 0; row++) {
+        const line = grid[row];
+        if (!Array.isArray(line)) continue;
+        for (let col = 0; col < line.length && remaining > 0; col++) {
+          const cell = line[col];
+          if (!cell || typeof cell !== "object" || (cell as Record<string, unknown>).id !== goodId) continue;
+          const current = Math.max(1, Math.floor(Number((cell as Record<string, unknown>).count) || 1));
+          const room = maxStack - current;
+          if (room <= 0) continue;
+          const take = Math.min(room, remaining);
+          line[col] = { id: goodId, count: current + take };
+          placed.push({ row, col, id: goodId, count: current + take });
+          remaining -= take;
+        }
+      }
+    }
+
+    // 第二轮：占空格（可叠加按 maxStack 分堆，不可叠加每格一件）
+    for (let row = 0; row < grid.length && remaining > 0; row++) {
+      const line = grid[row];
+      if (!Array.isArray(line)) continue;
+      for (let col = 0; col < line.length && remaining > 0; col++) {
+        const cell = line[col];
+        if (cell && typeof cell === "object" && (cell as Record<string, unknown>).id) continue;
+        const take = Math.min(maxStack, remaining);
+        line[col] = { id: goodId, count: take };
+        placed.push({ row, col, id: goodId, count: take });
+        remaining -= take;
+      }
+    }
+
+    if (remaining > 0) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包已满，无法放入物品");
+    return placed;
+  }
+
+  /** 当前在线角色的修订号（不在线返回 null）—— 拾取幂等重放应答要用 */
+  onlineRevision(accountId: string): number | null {
+    const account = this.accounts.findById(accountId);
+    const row = account?.online_role_id ? this.roles.findById(account.online_role_id) : undefined;
+    return row ? row.revision : null;
   }
 
   /**

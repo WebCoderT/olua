@@ -25,6 +25,11 @@ export const dropRuntime = {
   fullTipInterval: 1500,
   /** 多件掉落物的最小中心间距（像素）：同心环散落，保证图标互不重叠；取值 = 图标 40 + 12 留白 */
   scatterMinDistance: 52,
+  /**
+   * 服务端拾取应答的等待上限（毫秒，#325）：pick 帧发出去到 picked 帧回来之间
+   * 该掉落物不再重复请求；超过仍无应答（帧丢失 / 断线）视为本轮失败，允许重新拾取
+   */
+  pickReplyTimeout: 5000,
 };
 
 const dropData: Array<DropTable & { id: string }> = [

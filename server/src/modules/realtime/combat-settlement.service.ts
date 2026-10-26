@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { GROWTH_SCALARS, SKILLS } from "../../shared/game-data.generated";
+import { BizCode } from "../../common/constants/biz-code";
+import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DropTableRepository } from "../../database/repositories/drop-table.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -10,7 +12,7 @@ import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService } from "../world/world.service";
 import { MonsterAiService } from "./monster-ai.service";
-import type { RealtimeKillReward, RealtimeSettleData } from "./realtime.protocol";
+import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from "./realtime.protocol";
 
 /**
  * 伤害结算（#34：客户端发指令，服务端算结果）
@@ -54,6 +56,15 @@ export class CombatSettlementService {
   /** 每个账号最近的结算结果（castId → 结果，幂等重发用） */
   private readonly recentSettles = new Map<string, Map<number, RealtimeSettleData>>();
 
+  /**
+   * 掉落账本（#325）：账号 → castId → 该次击杀的掉落条目（picked 标记是否已拾）
+   *
+   * settle 帧的 reward 只发给击杀者本人 —— 别的账号既看不到这份掉落也没有账可查，
+   * 归属校验因此天然成立（伪造的 castId 在这里查不到账）。账目随幂等账一起清理
+   * （换图 / 断线），容量与幂等账同一上限：掉落长期不拾本来就该消失，内存不能陪它涨。
+   */
+  private readonly dropLedgers = new Map<string, Map<number, Array<{ goodId: string; count: number; picked: boolean }>>>();
+
   constructor(
     private readonly roles: RolesService,
     private readonly world: WorldService,
@@ -86,11 +97,54 @@ export class CombatSettlementService {
   /** 清掉本账号的幂等账（换图 worldJoin / 旧消息 targetsReset 都会走到；世界状态不受影响） */
   resetTargets(accountId: string): void {
     this.recentSettles.delete(accountId);
+    // 掉落账本随之清：换图后旧图的掉落不再可拾（客户端换图也会清掉地面掉落物）
+    this.dropLedgers.delete(accountId);
   }
 
   /** 连接断开：清幂等账（世界状态是共享的，不随任何账号的连接断开而清） */
   dropAccount(accountId: string): void {
     this.recentSettles.delete(accountId);
+    this.dropLedgers.delete(accountId);
+  }
+
+  /**
+   * 拾取一次击杀的掉落（#325：账本校验 + 格子级入包，都在这里编排）
+   *
+   * 流程：账本里找到那条掉落 → 已拾过的幂等应答 → 没拾过的交给 RolesService.pickDrop
+   * 入包 → 入包成功才在账本上标记已拾。**标记放在入包成功之后**：背包满被拒时地面
+   * 掉落物必须还在，玩家腾出格子后同一 castId/index 可以再拾。
+   */
+  pickDrop(accountId: string, castId: number, index: number): RealtimePickedData {
+    const fail = (code: string, message: string): RealtimePickedData => ({ castId, index, ok: false, code, message });
+
+    const ledger = this.dropLedgers.get(accountId)?.get(castId);
+    const entry = ledger && index >= 0 && index < ledger.length ? ledger[index] : undefined;
+    if (!entry) return fail("unknown_drop", `找不到这次掉落（castId=${castId} 第 ${index} 件）：不存在、已随会话清理或不属于你`);
+    if (entry.picked) {
+      const revision = this.roles.onlineRevision(accountId);
+      return revision === null
+        ? fail("no_role", "当前没有在线角色，无法拾取")
+        : { castId, index, ok: true, revision, placed: [], alreadyPicked: true };
+    }
+
+    try {
+      const result = this.roles.pickDrop(accountId, entry.goodId, entry.count);
+      entry.picked = true;
+      return { castId, index, ok: true, revision: result.revision, placed: result.placed, alreadyPicked: false };
+    } catch (error) {
+      // 业务拒绝（背包满 / 角色被踢等）转成 picked 错误帧 —— 连接不断，地面掉落物保留
+      if (error instanceof BizException) {
+        const code = error.code === BizCode.MALL_BAG_FULL
+          ? "bag_full"
+          : error.code === BizCode.ROLE_KICKED
+            ? "role_kicked"
+            : error.code === BizCode.ROLE_NOT_FOUND
+              ? "no_role"
+              : "pick_failed";
+        return fail(code, error.message);
+      }
+      throw error;
+    }
   }
 
   //#region 内部实现
@@ -151,6 +205,8 @@ export class CombatSettlementService {
     let reward: RealtimeKillReward | undefined;
     if (applied.killed) {
       reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey);
+      // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
+      this.rememberDrops(accountId, cast.castId, reward.drops);
     }
 
     this.logger.debug(
@@ -243,6 +299,21 @@ export class CombatSettlementService {
       if (oldest !== undefined) book.delete(oldest);
     }
     book.set(castId, result);
+  }
+
+  /** 记住一次击杀的掉落（#325；容量与幂等账同一上限，超出挤掉最旧的一次击杀） */
+  private rememberDrops(accountId: string, castId: number, drops: Array<{ goodId: string; count: number }>): void {
+    if (!drops.length) return;
+    let book = this.dropLedgers.get(accountId);
+    if (!book) {
+      book = new Map<number, Array<{ goodId: string; count: number; picked: boolean }>>();
+      this.dropLedgers.set(accountId, book);
+    }
+    if (book.size >= CAST_DEDUPE_CAPACITY) {
+      const oldest = book.keys().next().value;
+      if (oldest !== undefined) book.delete(oldest);
+    }
+    book.set(castId, drops.map((drop) => ({ goodId: drop.goodId, count: drop.count, picked: false })));
   }
 
   //#endregion
