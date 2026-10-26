@@ -47,8 +47,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（28 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop（25 个仓储）
+    database.service.ts           建表（29 张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill（26 个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -165,7 +165,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
-- **28 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses`。删账号**级联删其角色**。
+- **29 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
@@ -251,6 +251,9 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 14. **拦截器要注册在它依赖的服务所在的那个模块**：`AuditInterceptor` 挂在 `AuditModule` 的 `providers` 里（`APP_INTERCEPTOR`）并 export `AuditService` —— 放 `AppModule` 容易出现「拦截器装了但服务没导出」的运行期问题。
 15. **`success` 这类筛选参数同样用字符串 `"true" | "false"`**（与 `online` 同一个坑：class-transformer 会把 `"false"` 变成 `true`）。
 16. **`keyword` 忘了在仓储层实现就是静默无效**：生成物里字段一直都在（继承自 `PageQueryDto`），请求带上它也不报错，只是不筛。要么实现，要么从 DTO 里去掉 —— 别留一个「看起来能用」的空壳参数。
+17. **两个进程之间没有通知通道**：管理端在存档进程改表，实时进程（AI / 结算）只能自己回查 —— 所以读「运营能改的配置」一律 **读库 + 短 TTL 缓存**（`MonsterAiService` 的 `SKILL_CACHE_TTL_MS = 1000` 读 skills / statuses / monster_skills 三表）。e2e 断言「改完生效」要留 ≥ TTL 的等待窗口，否则测的是缓存而不是逻辑。
+18. **跨模块复用「JSON 列」的解析函数要放 `common/`**：`common/config-json.ts`（`parseCoefficientsJson` / `parseCombatJson` / `COMBAT_KEYS`）就是为此而生 —— 实时进程要读技能倍率与状态修正，若直接 import `modules/game-config/dto/*` 会被 `audit-server-boundaries.cjs` 判跨域违规（那条边只能靠白名单硬开，而这类纯函数不值得开边）。
+19. **e2e 想收 `monster-ai` 帧必须先 `worldJoin`**：AI 广播按「谁在看这张图」派发（`world.viewedMaps`），只连 WS 不进图的连接一帧都收不到 —— 症状是「明明有怪在打人，测试却等超时」。同理，怪物在测试期间会移动，后续断言要用**快照里的当前坐标**而不是出生点。
 
 ## 七、验证闭环
 
