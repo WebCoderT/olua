@@ -9,10 +9,12 @@ import { EquipmentRepository, EquipmentListOptions } from "../../database/reposi
 import { FashionRepository, FashionListOptions } from "../../database/repositories/fashion.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
+import { SkillRepository, SkillListOptions } from "../../database/repositories/skill.repository";
+import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
 import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { DrugRow, EquipmentRow, FashionRow, ItemRow, MonsterRow, NpcRow, RankRow, SoulRow, TitleRow } from "../../database/rows";
+import { DrugRow, EquipmentRow, FashionRow, ItemRow, MonsterRow, NpcRow, RankRow, SkillRow, SoulRow, StatusRow, TitleRow } from "../../database/rows";
 import {
   DRUGS,
   EQUIPMENT_BASES,
@@ -23,7 +25,9 @@ import {
   RANK_LABELS,
   RANK_LEVEL_ATTRIBUTES,
   RANK_LEVEL_META,
+  SKILLS,
   SOUL_LABELS,
+  STATUSES,
   SOUL_LEVEL_ATTRIBUTES,
   SOUL_LEVEL_META,
   TITLE_LABELS,
@@ -36,6 +40,8 @@ import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from ".
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
+import { parseDamageCoefficients, SkillDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
+import { serializeCombat, StatusDto, StatusQueryDto, UpdateStatusDto } from "./dto/status.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
@@ -74,6 +80,8 @@ export class GameConfigService implements OnModuleInit {
     private readonly monstersRepo: MonsterRepository,
     private readonly npcsRepo: NpcRepository,
     private readonly fashionsRepo: FashionRepository,
+    private readonly skillsRepo: SkillRepository,
+    private readonly statusesRepo: StatusRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -87,6 +95,8 @@ export class GameConfigService implements OnModuleInit {
     this.seedMonsters();
     this.seedNpcs();
     this.seedFashions();
+    this.seedSkills();
+    this.seedStatuses();
   }
 
   // —— 称号 ——
@@ -445,7 +455,126 @@ export class GameConfigService implements OnModuleInit {
     return FashionDto.from(this.requireFashion(id));
   }
 
+  // —— 技能（#367：角色与怪物同表，owner 区分；只有 list / update）——
+
+  listSkills(query: SkillQueryDto): PageResult<SkillDto> {
+    const options: SkillListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      owner: query.owner,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.skillsRepo.list(options);
+    const total = this.skillsRepo.count(options);
+    return { list: rows.map(SkillDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateSkill(id: string, dto: UpdateSkillDto): SkillDto {
+    const existing = this.requireSkill(id);
+    const next: SkillRow = { ...existing };
+    if (dto.label !== undefined) next.label = dto.label;
+    if (dto.icon !== undefined) next.icon = dto.icon;
+    if (dto.category !== undefined) next.category = dto.category;
+    if (dto.targetType !== undefined) next.target_type = dto.targetType;
+    if (dto.action !== undefined) next.action = dto.action;
+    if (dto.effect !== undefined) next.effect = dto.effect;
+    if (dto.effectOnSelf !== undefined) next.effect_on_self = dto.effectOnSelf ? 1 : 0;
+    if (dto.cooldown !== undefined) next.cooldown = dto.cooldown;
+    if (dto.mpCost !== undefined) next.mp_cost = dto.mpCost;
+    if (dto.distance !== undefined) next.distance = dto.distance;
+    if (dto.levelReq !== undefined) next.level_req = dto.levelReq;
+    if (dto.description !== undefined) next.description = dto.description;
+    if (dto.damageCoefficients !== undefined) {
+      next.damage_coefficients = JSON.stringify(
+        dto.damageCoefficients.map((entry) => ({ baseType: entry.baseType, baseTypeRate: entry.baseTypeRate })),
+      );
+    }
+    if (dto.statusId !== undefined) next.status_id = dto.statusId;
+    if (dto.castLockMs !== undefined) next.cast_lock_ms = dto.castLockMs;
+    if (dto.requireTarget !== undefined) next.require_target = dto.requireTarget ? 1 : 0;
+    if (dto.canAuto !== undefined) next.can_auto = dto.canAuto ? 1 : 0;
+    // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态。
+    // 只在本次请求**动了分类 / 倍率 / 状态**时才校验 —— 这三个字段之外的部分（名字、冷却、
+    // 动作锁……）与约束无关；而且库里存在「分类是主动但没配倍率」的历史行（如 1008 十步一杀，
+    // 客户端把它当控制技），按合并后的行无条件校验会让这些行连改名都改不了。
+    const touchesConsistency = dto.category !== undefined || dto.damageCoefficients !== undefined || dto.statusId !== undefined;
+    if (touchesConsistency) this.assertSkillConsistency(next);
+    next.updated_at = Date.now();
+    this.skillsRepo.update(next);
+    return SkillDto.from(this.requireSkill(id));
+  }
+
+  // —— 状态（#367）——
+
+  listStatuses(query: StatusQueryDto): PageResult<StatusDto> {
+    const options: StatusListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      owner: query.owner,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.statusesRepo.list(options);
+    const total = this.statusesRepo.count(options);
+    return { list: rows.map(StatusDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateStatus(id: string, dto: UpdateStatusDto): StatusDto {
+    const existing = this.requireStatus(id);
+    const next: StatusRow = { ...existing };
+    if (dto.label !== undefined) next.label = dto.label;
+    if (dto.icon !== undefined) next.icon = dto.icon;
+    if (dto.duration !== undefined) next.duration = dto.duration;
+    if (dto.source !== undefined) next.source = dto.source;
+    if (dto.description !== undefined) next.description = dto.description;
+    if (dto.effect !== undefined) next.effect = dto.effect;
+    if (dto.effectHoldLast !== undefined) next.effect_hold_last = dto.effectHoldLast ? 1 : 0;
+    if (dto.combat !== undefined) next.combat = serializeCombat(dto.combat);
+    next.updated_at = Date.now();
+    this.statusesRepo.update(next);
+    return StatusDto.from(this.requireStatus(id));
+  }
+
   // —— 内部 ——
+
+  /**
+   * 技能跨字段约束（单字段上下限在 DTO，这里管「字段之间」）
+   *
+   * 三条都是**真实会出事**的组合，不是形式主义：
+   * - 状态型技能没有 statusId → 释放后什么都不发生，玩家会以为技能坏了；
+   * - 主动技能一条倍率都没有 → 结算取 `damageCoefficients[level-1]` 拿到 undefined，伤害恒 0；
+   * - statusId 指向不存在的状态 → 客户端 apply 时打一条 error 日志，玩家看不到任何反馈。
+   *
+   * 调用点只在请求动了「分类 / 倍率 / 挂载状态」时进来（见 `updateSkill`）：库里存在
+   * 「分类是主动但倍率为空」的历史行，按合并后的行无条件校验会让它们连改名都改不了。
+   */
+  private assertSkillConsistency(row: SkillRow): void {
+    const coefficients = parseDamageCoefficients(row.damage_coefficients);
+    if (row.status_id) this.requireStatus(row.status_id);
+    // category "2" = 客户端 SkillType.STATUS
+    if (row.category === "2" && !row.status_id) {
+      throw new BizException(BizCode.PARAM_INVALID, "状态型技能必须配置 statusId（否则释放后什么都不发生）");
+    }
+    // category "0" = 客户端 SkillType.PROACTIVE（要打出伤害的那种）
+    if (row.category === "0" && coefficients.length === 0) {
+      throw new BizException(BizCode.PARAM_INVALID, "主动技能至少要有一条伤害系数（否则伤害恒为 0）");
+    }
+  }
+
+  private requireSkill(id: string): SkillRow {
+    const row = this.skillsRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.SKILL_NOT_FOUND, `技能 ${id} 不存在`);
+    return row;
+  }
+
+  private requireStatus(id: string): StatusRow {
+    const row = this.statusesRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.STATUS_NOT_FOUND, `状态 ${id} 不存在`);
+    return row;
+  }
 
   private requireTitle(level: number): TitleRow {    const row = this.titles.findByLevel(level);
     if (!row) throw BizException.notFound(BizCode.TITLE_NOT_FOUND, `称号等级 ${level} 不存在`);
@@ -660,6 +789,67 @@ export class GameConfigService implements OnModuleInit {
         sell_price: Number(meta.sellPrice) || 0,
         acquire_channel: SEED_ACQUIRE_CHANNEL,
         ...flatAttributes(meta),
+        updated_at: 0,
+      });
+    }
+  }
+
+  /**
+   * 技能 seed（#367）：SKILLS 是**整行**快照（owner/分类/动作/特效/冷却/倍率/挂载状态/释放限制），
+   * 直接按字段灌；damageCoefficients 落库前序列化成 JSON。
+   *
+   * 角色技能行 id 固定（客户端技能栏 / 快捷键 / 角色存档都引用它），所以这里只有 INSERT OR IGNORE。
+   */
+  private seedSkills() {
+    for (const [id, meta] of Object.entries(SKILLS as Record<string, Record<string, unknown>>)) {
+      const coefficients = Array.isArray(meta.damageCoefficients) ? meta.damageCoefficients : [];
+      this.skillsRepo.seedRow({
+        id,
+        owner: String(meta.owner ?? "role"),
+        label: String(meta.label ?? ""),
+        icon: String(meta.icon ?? ""),
+        category: String(meta.category ?? "0"),
+        target_type: String(meta.targetType ?? "1"),
+        action: String(meta.action ?? ""),
+        effect: String(meta.effect ?? ""),
+        effect_on_self: meta.effectOnSelf === true ? 1 : 0,
+        cooldown: Number(meta.cooldown) || 0,
+        mp_cost: Number(meta.mpCost) || 0,
+        distance: Number(meta.distance) || 0,
+        level_req: Number(meta.levelReq) || 1,
+        description: String(meta.description ?? ""),
+        damage_coefficients: JSON.stringify(
+          coefficients.map((entry) => {
+            const item = (entry ?? {}) as Record<string, unknown>;
+            return { baseType: String(item.baseType ?? ""), baseTypeRate: Number(item.baseTypeRate) || 0 };
+          }),
+        ),
+        status_id: String(meta.statusId ?? ""),
+        cast_lock_ms: Number(meta.castLockMs) || 0,
+        require_target: meta.requireTarget === false ? 0 : 1,
+        can_auto: meta.canAuto === true ? 1 : 0,
+        updated_at: 0,
+      });
+    }
+  }
+
+  /**
+   * 状态 seed（#367）：状态 id 被技能（status_id）引用，清单固定，同样只 INSERT OR IGNORE。
+   * combat 落库成 JSON —— 空对象 = 纯表现状态。
+   */
+  private seedStatuses() {
+    for (const [id, meta] of Object.entries(STATUSES as Record<string, Record<string, unknown>>)) {
+      this.statusesRepo.seedRow({
+        id,
+        owner: String(meta.owner ?? "role"),
+        label: String(meta.label ?? ""),
+        icon: String(meta.icon ?? ""),
+        duration: Number(meta.duration) || 0,
+        source: String(meta.source ?? "other"),
+        description: String(meta.description ?? ""),
+        effect: String(meta.effect ?? ""),
+        effect_hold_last: meta.effectHoldLast === true ? 1 : 0,
+        combat: JSON.stringify(meta.combat ?? {}),
         updated_at: 0,
       });
     }

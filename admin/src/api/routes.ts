@@ -469,6 +469,21 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
+  /** adminSkill 模块（2 个接口） */
+  adminSkill: {
+    /**
+     * 技能配置列表（GET /admin/skills）
+     *
+     * 角色与怪物同一张表，用 `owner` 筛选。
+     */
+    list: "/admin/skills",
+    /**
+     * 编辑技能配置（PATCH /admin/skills/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/skills/${encodeURIComponent(id)}`,
+  },
   /** adminSoul 模块（4 个接口） */
   adminSoul: {
     /**
@@ -516,6 +531,21 @@ export const routes = {
      * 返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— 前端可以直接画折线，不用自己补。日期按服务器本地时区。
      */
     trend: "/admin/stats/trend",
+  },
+  /** adminStatus 模块（2 个接口） */
+  adminStatus: {
+    /**
+     * 状态配置列表（GET /admin/statuses）
+     *
+     * 角色与怪物同一张表，用 `owner` 筛选。
+     */
+    list: "/admin/statuses",
+    /**
+     * 编辑状态配置（PATCH /admin/statuses/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/statuses/${encodeURIComponent(id)}`,
   },
   /** adminSystem 模块（1 个接口） */
   adminSystem: {

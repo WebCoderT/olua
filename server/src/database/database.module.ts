@@ -23,11 +23,13 @@ import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
+import { SkillRepository } from "./repositories/skill.repository";
+import { StatusRepository } from "./repositories/status.repository";
 
 /**
  * 数据层（全局模块）
  *
- * 全部仓储（8 个）都在这里 provide + export：业务模块直接注入 Repository，不必逐层 import
+ * 全部仓储都在这里 provide + export：业务模块直接注入 Repository，不必逐层 import
  * 本模块，也**不许在各模块里再本地注册仓储类**（与全局单例同名会造出第二个实例 —— 审计脚本
  * `tools/audit-server-boundaries.cjs` 盯着这条装配口径）。SQL 全部收在 repositories/ 下，
  * 换库时只需改这一层。
@@ -59,6 +61,8 @@ import { ZoneRepository } from "./repositories/zone.repository";
     MonsterDropRepository,
     GrowthRepository,
     SoulRepository,
+    SkillRepository,
+    StatusRepository,
   ],
   exports: [
     DatabaseService,
@@ -85,6 +89,8 @@ import { ZoneRepository } from "./repositories/zone.repository";
     MonsterDropRepository,
     GrowthRepository,
     SoulRepository,
+    SkillRepository,
+    StatusRepository,
   ],
 })
 export class DatabaseModule {}

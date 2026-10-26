@@ -42,6 +42,9 @@ export class ClientConfigService {
       mallSettings: this.mall.getSettings(),
       dropTables: this.drop.listTables().list,
       monsterDrops: this.drop.listMonsterDrops({ ...ALL }).list,
+      // #367：技能与状态的整份配置（角色 + 怪物），客户端按 owner 分流消费
+      skills: this.gameConfig.listSkills({ ...ALL }).list,
+      statuses: this.gameConfig.listStatuses({ ...ALL }).list,
     };
   }
 }

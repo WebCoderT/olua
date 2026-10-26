@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 530;
+const EXPECTED_ASSERTIONS = 599;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -1114,6 +1114,9 @@ async function main() {
     check(Boolean(Array.isArray(snap.mallPrices) && snap.mallPrices.length > 0), "快照带商城定价目录");
     checkEqual(snap.dropTables?.length, seedTableCount, `快照具名掉落表张数 = seed（${seedTableCount}）`);
     checkEqual(snap.monsterDrops?.length, Object.keys(shared.MONSTER_DROPS).length, "快照每怪掉落行数 = 生成物（220）");
+    checkEqual(snap.skills?.length, Object.keys(shared.SKILLS).length, "快照技能行数 = 生成物（含释放限制字段）");
+    checkEqual(snap.statuses?.length, Object.keys(shared.STATUSES).length, "快照状态行数 = 生成物");
+    check(Boolean(snap.skills?.[0]?.castLockMs !== undefined && snap.skills?.[0]?.requireTarget !== undefined), "快照技能行带释放限制（castLockMs / requireTarget）");
 
     // 字段形状抽检：camelCase、与管理端列表行同形状（称号渠道不预设值——前面的 region 已改过渠道）
     const adminTitles = await api(base, "GET", "/api/admin/titles", { token });
@@ -1541,6 +1544,155 @@ async function main() {
     // 还原药品回复量（不污染其他断言的 seed 前提）
     const restoreDrug = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { effectHp: 60 } });
     checkEqual(restoreDrug.status, 200, "还原 drug_hp_1 回复量 60（seed 前提复原）");
+
+    //#endregion
+
+    //#region 二十、技能与状态配置（#367）：同表分归属 / 释放限制 / 跨字段约束 / 下发快照
+
+    group("二十、技能与状态配置");
+
+    const skillTotal = Object.keys(shared.SKILLS).length;
+    const roleSkillTotal = Object.values(shared.SKILLS).filter((row) => row.owner === "role").length;
+    const statusTotal = Object.keys(shared.STATUSES).length;
+
+    const skills = await api(base, "GET", "/api/admin/skills?size=100", { token });
+    checkEqual(skills.status, 200, "技能列表可读");
+    checkEqual(skills.body?.data?.total, skillTotal, `技能行数 = 配置表（${skillTotal}）`);
+    checkEqual(skills.body?.data?.list?.[0]?.id, "1000", "默认按 id 数值升序（角色 1000 段在前）");
+
+    const roleSkills = await api(base, "GET", "/api/admin/skills?owner=role&size=100", { token });
+    checkEqual(roleSkills.body?.data?.total, roleSkillTotal, `owner=role 筛出全部角色技能（${roleSkillTotal}）`);
+    const monsterSkills = await api(base, "GET", "/api/admin/skills?owner=monster", { token });
+    checkEqual(monsterSkills.body?.data?.total, 0, "owner=monster 目前为空（怪物技能随 #12 主体那一刀开）");
+    const badOwner = await api(base, "GET", "/api/admin/skills?owner=boss", { token });
+    checkEqual(badOwner.status, 400, "owner 不在枚举里 → 400");
+
+    const skill1000 = roleSkills.body?.data?.list?.find((row) => row.id === "1000");
+    check(Boolean(skill1000), "列表里有技能 1000");
+    checkEqual(skill1000?.label, shared.SKILLS["1000"].label, "技能 1000 名称与配置一致");
+    checkEqual(skill1000?.castLockMs, shared.SKILLS["1000"].castLockMs, "castLockMs seed 与配置一致");
+    checkEqual(skill1000?.requireTarget, shared.SKILLS["1000"].requireTarget, "requireTarget seed 与配置一致");
+    checkEqual(
+      skill1000?.damageCoefficients?.length,
+      shared.SKILLS["1000"].damageCoefficients.length,
+      "伤害系数条数 = 配置表（下标 = 等级 - 1）",
+    );
+    const skill1010 = roleSkills.body?.data?.list?.find((row) => row.id === "1010");
+    checkEqual(skill1010?.statusId, "2001", "状态型技能 1010 的 statusId 来自配置（不再手写映射表）");
+    checkEqual(skill1010?.requireTarget, false, "状态型技能不要求目标");
+
+    const skillKeyword = await api(base, "GET", "/api/admin/skills?keyword=" + encodeURIComponent("逐日"), { token });
+    checkEqual(skillKeyword.body?.data?.total, 1, "关键字按技能名命中「逐日剑法」");
+
+    // —— 能力边界：没有创建 / 删除，owner 与 id 是行身份 ——
+    const postSkill = await api(base, "POST", "/api/admin/skills", { token, body: { id: "9001", owner: "monster" } });
+    checkEqual(postSkill.status, 404, "POST 技能 → 404（路由不存在）");
+    const deleteSkill = await api(base, "DELETE", "/api/admin/skills/1000", { token });
+    checkEqual(deleteSkill.status, 404, "DELETE 技能 → 404（路由不存在）");
+    const ghostSkill = await api(base, "PATCH", "/api/admin/skills/9999", { token, body: { label: "x" } });
+    checkEqual(ghostSkill.status, 404, "改不存在的技能 → 404");
+    checkEqual(ghostSkill.body?.code, 50029, "技能未找到用专属业务码 50029");
+    const patchOwner = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { owner: "monster" } });
+    checkEqual(patchOwner.status, 200, "请求体里塞 owner 不会报错（白名单直接剥掉）");
+    checkEqual(patchOwner.body?.data?.owner, "role", "owner 是行身份，改不了");
+
+    const badCooldown = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { cooldown: -1 } });
+    checkEqual(badCooldown.status, 400, "冷却为负 → 400（DTO 拦下）");
+    const badCategory = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { category: "9" } });
+    checkEqual(badCategory.status, 400, "分类不在枚举里 → 400（DTO 拦下）");
+
+    // —— 跨字段约束：状态型必须挂状态 / 主动必须能打出伤害 / 状态必须真实存在 ——
+    const statusWithoutId = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { category: "2", statusId: "" } });
+    checkEqual(statusWithoutId.status, 400, "状态型技能不给 statusId → 400");
+    checkEqual(statusWithoutId.body?.code, 40000, "状态型技能缺状态 → 40000（跨字段约束）");
+    const noCoefficients = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { damageCoefficients: [] } });
+    checkEqual(noCoefficients.status, 400, "主动技能把倍率清空 → 400");
+    checkEqual(noCoefficients.body?.code, 40000, "主动技能零倍率 → 40000（伤害会恒为 0）");
+    const ghostStatusRef = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { statusId: "9999" } });
+    checkEqual(ghostStatusRef.status, 404, "statusId 指向不存在的状态 → 404");
+    checkEqual(ghostStatusRef.body?.code, 50030, "状态未找到用专属业务码 50030");
+    // 与约束无关的字段照常可改：1008 是「分类主动但倍率空」的历史行，不该连改名都改不了
+    const patchLock = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { castLockMs: 500 } });
+    checkEqual(patchLock.status, 200, "历史不一致行改释放限制字段不被跨字段约束拦下");
+    checkEqual(patchLock.body?.data?.castLockMs, 500, "动作锁已写入");
+    checkEqual(patchLock.body?.data?.damageCoefficients?.length, 0, "顺带断言：1008 的倍率保持原样（空）");
+
+    // —— 正常更新生效：释放限制三件套 ——
+    const patchSkill = await api(base, "PATCH", "/api/admin/skills/1000", {
+      token,
+      body: { cooldown: 2.5, mpCost: 3, castLockMs: 700, requireTarget: false, canAuto: false },
+    });
+    checkEqual(patchSkill.status, 200, "PATCH 技能成功（冷却 / 耗蓝 / 动作锁 / 目标要求 / 自动释放）");
+    checkEqual(patchSkill.body?.data?.cooldown, 2.5, "响应里的冷却已更新");
+    checkEqual(patchSkill.body?.data?.castLockMs, 700, "响应里的动作锁已更新");
+    checkEqual(patchSkill.body?.data?.requireTarget, false, "响应里的「要求目标」已关掉");
+    const skillReread = await api(base, "GET", "/api/admin/skills?keyword=1000", { token });
+    checkEqual(skillReread.body?.data?.list?.[0]?.cooldown, 2.5, "重新读取冷却已是新值（落库了）");
+
+    // —— 状态表 ——
+    const statuses = await api(base, "GET", "/api/admin/statuses", { token });
+    checkEqual(statuses.status, 200, "状态列表可读");
+    checkEqual(statuses.body?.data?.total, statusTotal, `状态行数 = 配置表（${statusTotal}）`);
+    const status2001 = statuses.body?.data?.list?.find((row) => row.id === "2001");
+    check(Boolean(status2001), "列表里有状态 2001");
+    checkEqual(status2001?.label, shared.STATUSES["2001"].label, "状态 2001 名称与配置一致");
+    checkEqual(status2001?.duration, shared.STATUSES["2001"].duration, "持续时间 seed 与配置一致");
+    checkEqual(status2001?.combat?.blockChance, 0.3, "格挡概率 seed 与配置一致");
+    checkEqual(status2001?.combat?.blockFactor, 0.5, "格挡系数 seed 与配置一致");
+    check(status2001?.combat?.defenseMultiplier === undefined, "没配的维度不出现在 combat 里（不是 0）");
+    const status2002 = statuses.body?.data?.list?.find((row) => row.id === "2002");
+    checkEqual(status2002?.combat?.defenseMultiplier, 1.5, "状态 2002 的防御倍率 seed 与配置一致");
+    checkEqual(status2002?.effectHoldLast, false, "特效不停尾帧（脉冲类才勾）");
+
+    const patchStatus = await api(base, "PATCH", "/api/admin/statuses/2001", {
+      token,
+      body: { duration: 20, combat: { blockChance: 0.4, blockFactor: 0.4, defenseMultiplier: 1.2 } },
+    });
+    checkEqual(patchStatus.status, 200, "PATCH 状态成功（时长 + 三项修正整份替换）");
+    checkEqual(patchStatus.body?.data?.duration, 20, "响应里的持续时间已更新");
+    checkEqual(patchStatus.body?.data?.combat?.blockChance, 0.4, "响应里的格挡概率已更新");
+    checkEqual(patchStatus.body?.data?.combat?.defenseMultiplier, 1.2, "响应里新增的防御倍率已写入");
+    const clearCombat = await api(base, "PATCH", "/api/admin/statuses/2001", { token, body: { combat: {} } });
+    checkEqual(clearCombat.status, 200, "combat 传空对象 → 200");
+    checkEqual(Object.keys(clearCombat.body?.data?.combat ?? {}).length, 0, "空对象 = 纯表现状态（整份替换，不是合并）");
+    const badBlock = await api(base, "PATCH", "/api/admin/statuses/2001", { token, body: { combat: { blockChance: 1.5 } } });
+    checkEqual(badBlock.status, 400, "格挡概率 > 1 → 400（DTO 拦下）");
+    const ghostStatusPatch = await api(base, "PATCH", "/api/admin/statuses/9999", { token, body: { label: "x" } });
+    checkEqual(ghostStatusPatch.status, 404, "改不存在的状态 → 404");
+    checkEqual(ghostStatusPatch.body?.code, 50030, "不存在状态 → 50030");
+    const postStatus = await api(base, "POST", "/api/admin/statuses", { token, body: { id: "3001" } });
+    checkEqual(postStatus.status, 404, "POST 状态 → 404（路由不存在）");
+    const deleteStatus = await api(base, "DELETE", "/api/admin/statuses/2001", { token });
+    checkEqual(deleteStatus.status, 404, "DELETE 状态 → 404（路由不存在）");
+
+    // —— 权限：观察员可读不可写 ——
+    const viewerSkillRead = await api(base, "GET", "/api/admin/skills", { token: viewerToken });
+    checkEqual(viewerSkillRead.body?.code, 0, "观察员能看技能配置");
+    const viewerSkillWrite = await api(base, "PATCH", "/api/admin/skills/1000", { token: viewerToken, body: { label: "x" } });
+    checkEqual(viewerSkillWrite.status, 403, "观察员改技能 → 403");
+    checkEqual(viewerSkillWrite.body?.code, 30006, "观察员改技能 → 30006（权限点不足）");
+
+    // —— 下发通道：管理端改完，客户端快照跟着变 ——
+    const skillSnapshot = await api(base, "GET", "/api/game-config", { token: playerToken });
+    const snapSkill1000 = skillSnapshot.body?.data?.skills?.find((row) => row.id === "1000");
+    checkEqual(snapSkill1000?.cooldown, 2.5, "快照里的技能已是管理端改过的冷却");
+    checkEqual(snapSkill1000?.castLockMs, 700, "快照里的技能带释放动作锁（客户端按它锁出手）");
+    const snapStatus2001 = skillSnapshot.body?.data?.statuses?.find((row) => row.id === "2001");
+    checkEqual(Object.keys(snapStatus2001?.combat ?? {}).length, 0, "快照里的状态修正跟着被清空（改配置对客户端生效的通道）");
+
+    // 还原 seed 前提（不给后续追加的断言留脏数据）
+    const restoreSkill = await api(base, "PATCH", "/api/admin/skills/1000", {
+      token,
+      body: { cooldown: 1, mpCost: 0, castLockMs: 0, requireTarget: true, canAuto: true },
+    });
+    checkEqual(restoreSkill.status, 200, "还原技能 1000 的释放限制");
+    const restoreSkill1008 = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { castLockMs: 0 } });
+    checkEqual(restoreSkill1008.status, 200, "还原技能 1008 的动作锁");
+    const restoreStatus = await api(base, "PATCH", "/api/admin/statuses/2001", {
+      token,
+      body: { duration: shared.STATUSES["2001"].duration, combat: { blockChance: 0.3, blockFactor: 0.5 } },
+    });
+    checkEqual(restoreStatus.status, 200, "还原状态 2001 的时长与修正");
 
     //#endregion
   } finally {

@@ -69,7 +69,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -88,15 +88,6 @@ const EQUIPMENT_MAPS = ["clothes", "weapons", "rings", "nicklaces", "shoes", "he
 /** 参与属性汇总的战斗属性（与 BattleAttributes 对应；hpRecover 是单值，不在六项里） */
 const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 const SINGLE_KEYS = ["maxHp", "hpRecover"];
-
-/**
- * 进快照的技能字段（只留参与战斗计算的）
- *
- * 不进的：`icon` / `description` / `action` / `effect` 是表现层，
- * `push` / `effectIsOnSelf` 是**实现层**参数（击退距离、特效挂谁身上），由客户端技能实现自己解释。
- * `damageCoefficients` 整条数组原样带过来（下标 = 技能等级），不按等级摊平。
- */
-const SKILL_KEYS = ["level", "type", "targetType", "cooldown", "mpCost", "distance"];
 
 /**
  * 最小 Cocos 垫片
@@ -129,7 +120,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -227,6 +218,8 @@ function load(work) {
     // 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；
     // 特殊价是运营数据不进快照（动态增删，归 mall_prices 表）
     mallPrice: missing("mall.mallPrice", cfg("mall").mallPrice),
+    // 状态（#367）：管理端「状态配置」的 seed 来源 —— 角色与怪物同表，owner 区分
+    statuses: missing("status.statuses", cfg("status").statuses),
     drugs: missing("drug.drugs", cfg("drug").drugs),
     materials: missing("material.materials", cfg("material").materials),
   };
@@ -256,6 +249,8 @@ function buildSnapshot(cfg) {
     // 变体（_pXsY）的属性与回收价都是基础件乘倍率展开的，运营只改基础件这一份
     equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
     skills: pickSkills(cfg.skillData),
+    // 状态（#367）：角色状态的数值修正 / 时长 / 图标特效，管理端收口成可改数据
+    statuses: pickStatuses(cfg.statuses),
     monsters: pickMonsters(cfg.monsters),
     // 怪物 AI 节奏参数（#323：服务端 AI tick 与客户端同一套手感数值）
     monsterAi: pickMonsterAi(cfg.monsterAi),
@@ -649,11 +644,62 @@ function pickSkills(list) {
     if (!item || !item.id) throw new Error("configs/skill-data 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`技能 id 重复：${item.id}`);
     seen.add(item.id);
-    const row = {};
-    for (const key of SKILL_KEYS) row[key] = item[key] ?? 0;
-    row.damageCoefficients = (item.damageCoefficients ?? []).map((c) => ({ baseType: c.baseType, baseTypeRate: round(c.baseTypeRate) }));
+    const row = {
+      // #367：归属固定 role —— 怪物技能行不在客户端配置里（它们由管理端自建，#12 主体）
+      owner: "role",
+      label: String(item.label ?? ""),
+      icon: String(item.icon ?? ""),
+      // category 就是客户端的 SkillType（"0" 主动 / "1" 被动 / "2" 状态 / "3" 回复），存原值不另起一套
+      category: String(item.type ?? "0"),
+      targetType: String(item.targetType ?? "1"),
+      action: String(item.action ?? ""),
+      effect: String(item.effect ?? ""),
+      effectOnSelf: item.effectIsOnSelf === true,
+      cooldown: round(item.cooldown ?? 0),
+      mpCost: round(item.mpCost ?? 0),
+      distance: round(item.distance ?? 0),
+      // level 在原表里是「学习/开启等级」，落库叫 level_req（避免与「技能等级」混读）
+      levelReq: round(item.level ?? 1),
+      description: String(item.description ?? ""),
+      damageCoefficients: (item.damageCoefficients ?? []).map((c) => ({ baseType: c.baseType, baseTypeRate: round(c.baseTypeRate) })),
+      statusId: String(item.statusId ?? ""),
+      castLockMs: round(item.castLockMs ?? 0),
+      // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在配置里显式写 false
+      requireTarget: item.requireTarget !== false,
+      canAuto: item.canAuto === true,
+    };
+    if (!Array.isArray(row.damageCoefficients)) throw new Error(`技能 ${item.id} 的 damageCoefficients 不是数组`);
     out.push([item.id, row]);
   }
+  return out;
+}
+
+/**
+ * 状态表 → [[状态 id, 整行]]
+ *
+ * `configs/status` 的 `statuses` 是 `Map<StatusId, StatusConfig>`；source 是枚举字符串，
+ * 原样带过来（服务端 DTO 的取值域与之逐值一致）。
+ */
+function pickStatuses(map) {
+  const out = [];
+  map.forEach((status, id) => {
+    if (!id) throw new Error("configs/status 里有缺 id 的状态");
+    out.push([
+      String(id),
+      {
+        // #367：角色状态固定 role；怪物状态由管理端自建（同表 owner=monster）
+        owner: "role",
+        label: String(status.label ?? ""),
+        icon: String(status.icon ?? ""),
+        duration: round(status.duration ?? 0),
+        source: String(status.source ?? "other"),
+        description: String(status.description ?? ""),
+        effect: String(status.effect ?? ""),
+        effectHoldLast: status.effectHoldLast === true,
+        combat: status.combat ?? {},
+      },
+    ]);
+  });
   return out;
 }
 
@@ -854,7 +900,8 @@ ${numTable("SOUL_LEVEL_ATTRIBUTES", "战魂等级 → 整份属性加成", s.sou
 ${numTable("TITLE_LEVEL_ATTRIBUTES", "称号等级 → 整份属性加成", s.titleLevels)}
 ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.rankLevels)}
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
-${numTable("SKILLS", "技能 id → 战斗数值。damageCoefficients 的下标 = 技能等级，baseType 是取哪种属性当基数", s.skills)}
+${numTable("SKILLS", "技能 id → 整行配置（#367：owner / 分类 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数 / 挂载状态 / 释放限制）。damageCoefficients 的下标 = 技能等级", s.skills)}
+${jsonTable("STATUSES", "状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath", s.statuses)}
 ${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）", s.monsters)}
 ${jsonTable("MONSTER_AI", "怪物 AI 全局节奏参数（#323：普攻间隔/普攻距离/待机游走节奏，服务端 AI tick 与客户端同源）", s.monsterAi)}
 ${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}

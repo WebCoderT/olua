@@ -11,6 +11,8 @@ import { MallPriceItemDto, MallSettingsDto } from "./mall.dto";
 import { MonsterDto } from "./monster.dto";
 import { NpcDto } from "./npc.dto";
 import { RankDto } from "./rank.dto";
+import { SkillDto } from "./skill.dto";
+import { StatusDto } from "./status.dto";
 import { SoulDto } from "./soul.dto";
 import { TitleDto } from "./title.dto";
 
@@ -90,4 +92,12 @@ export class GameConfigSnapshotDto {
   @ApiProperty({ description: "每怪掉落配置（怪物 key → 三选一来源）", type: [MonsterDropDto] })
   @Type(() => MonsterDropDto)
   monsterDrops!: MonsterDropDto[];
+
+  @ApiProperty({ description: "技能配置（角色与怪物同表，owner 区分；含释放限制与挂载状态）", type: [SkillDto] })
+  @Type(() => SkillDto)
+  skills!: SkillDto[];
+
+  @ApiProperty({ description: "状态配置（角色与怪物同表，owner 区分）", type: [StatusDto] })
+  @Type(() => StatusDto)
+  statuses!: StatusDto[];
 }

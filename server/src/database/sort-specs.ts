@@ -270,3 +270,34 @@ export const MONSTER_DROP_SORT: SortSpec<"monsterKey" | "source" | "updatedAt"> 
   default: "monsterKey",
   defaultOrder: "asc",
 };
+
+/**
+ * 技能列表（#367）：默认按 id 的**数值序** —— id 是数字字符串，TEXT 排序会
+ * 1000,1001,1002,1010,1011,9001… 之外还会把 9001 排到 1001 前面；
+ * 角色技能用 1000 段、怪物技能用 9000 段，数值序天然把两边分块（owner 另有筛选）
+ */
+export const SKILL_SORT: SortSpec<"id" | "owner" | "label" | "levelReq" | "cooldown" | "updatedAt"> = {
+  columns: {
+    id: "CAST(id AS INTEGER)",
+    owner: "owner",
+    label: "label",
+    levelReq: "level_req",
+    cooldown: "cooldown",
+    updatedAt: "updated_at",
+  },
+  default: "id",
+  defaultOrder: "asc",
+};
+
+/** 状态列表（#367）：默认按 id 数值序（角色 2000 段 / 怪物 3000 段，与技能同一动线） */
+export const STATUS_SORT: SortSpec<"id" | "owner" | "label" | "duration" | "updatedAt"> = {
+  columns: {
+    id: "CAST(id AS INTEGER)",
+    owner: "owner",
+    label: "label",
+    duration: "duration",
+    updatedAt: "updated_at",
+  },
+  default: "id",
+  defaultOrder: "asc",
+};

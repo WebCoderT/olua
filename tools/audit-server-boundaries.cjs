@@ -124,6 +124,11 @@ const REPO_EDGES = {
   // 两表 —— 管理端改掉落即时生效（具名表允许动态增删，每怪行与怪物一一对应）
   "database/repositories/drop-table.repository.ts": ["modules/game-config", "modules/realtime"],
   "database/repositories/monster-drop.repository.ts": ["modules/game-config", "modules/realtime"],
+  // 技能与状态（#367）：同称号 / 战魂 / 装备，只在 game-config 模块内读写。
+  // 客户端消费走配置快照（client-config.service 在本模块内），怪物侧释放（#12 主体）将来才会
+  // 需要 realtime 那条边 —— 到时候在 ALLOWED_EDGES / REPO_EDGES 里显式加，别顺手 import
+  "database/repositories/skill.repository.ts": ["modules/game-config"],
+  "database/repositories/status.repository.ts": ["modules/game-config"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */
