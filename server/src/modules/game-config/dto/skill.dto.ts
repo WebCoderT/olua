@@ -9,12 +9,14 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
   ValidateNested,
 } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
+import { parseCoefficientsJson } from "../../../common/config-json";
 import {
   DAMAGE_BASE_TYPES,
   SKILL_CATEGORY_VALUES,
@@ -267,19 +269,35 @@ export class UpdateSkillDto {
   canAuto?: boolean;
 }
 
+/**
+ * 新增技能的入参（#372：**只给怪物技能开**）
+ *
+ * 角色技能不提供创建：id 被技能栏 / 快捷键 / 角色存档引用，清单固定在生成物里。
+ * 所以这里把 id 限制在 **9000 段**（怪物技能段位）—— 运营不可能靠这个接口造出一个
+ * 「客户端永远学不会」的 1xxx 技能行。
+ *
+ * 其余字段继承 `UpdateSkillDto`（可选）：没传的走建行默认值（见 service 的 `createSkill`）。
+ */
+export class CreateSkillDto extends UpdateSkillDto {
+  @ApiProperty({ description: "技能 id（怪物技能段：9000~9999 的四位数字，如 \"9001\"）" })
+  @IsString({ message: "技能 id 必须是字符串" })
+  @Matches(/^9\d{3}$/, { message: "怪物技能 id 必须是 9000~9999 的四位数字（角色技能段 1xxx 不开放创建）" })
+  id!: string;
+
+  @ApiPropertyOptional({ description: "归属：只能 monster（缺省 monster）", enum: SKILL_OWNER_VALUES })
+  @IsOptional()
+  @IsIn(SKILL_OWNER_VALUES, { message: `owner 必须是 ${SKILL_OWNER_VALUES.join(" / ")} 之一` })
+  owner?: string;
+}
+
 /** 把落库的 JSON 读成数组（脏数据不炸接口：解析失败按空数组兜底，配置本身还会被下一次写入纠正） */
 export function parseDamageCoefficients(raw: string): DamageCoefficientDto[] {
-  try {
-    const parsed: unknown = JSON.parse(raw || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((item) => {
-      const entry = (item ?? {}) as Record<string, unknown>;
-      const dto = new DamageCoefficientDto();
-      dto.baseType = String(entry.baseType ?? "");
-      dto.baseTypeRate = Number(entry.baseTypeRate) || 0;
-      return dto;
-    });
-  } catch {
-    return [];
-  }
+  // 解析口径下沉在 common/config-json：实时进程的怪物 AI 也要读同一列（#372），
+  // 这里只负责把值包成 DTO（序列化形状在 DTO 上）
+  return parseCoefficientsJson(raw).map((entry) => {
+    const dto = new DamageCoefficientDto();
+    dto.baseType = entry.baseType;
+    dto.baseTypeRate = entry.baseTypeRate;
+    return dto;
+  });
 }

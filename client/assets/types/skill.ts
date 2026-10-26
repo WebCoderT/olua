@@ -146,6 +146,11 @@ export interface SkillConfig {
    */
   statusId?: StatusId;
   /**
+   * 归属（#372）：缺省 role
+   * 怪物技能不在技能栏里，客户端只按它的 action / effect / castLockMs 演服务端广播的释放
+   */
+  owner?: SkillOwner;
+  /**
    * 释放动作锁时长（毫秒；#367，0 / 缺省 = 跟动画时长走）
    * 调大 = 出手后硬直更久，客户端在锁内不接受移动与再次出手
    */
@@ -164,5 +169,22 @@ export interface SkillConfig {
  */
 export type SkillData = Omit<SkillConfig, "onClick">;
 
-/** 技能ID */
-export type SkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "1006" | "1007" | "1008" | "1009" | "1010" | "1011";
+/**
+ * 角色技能 ID（技能栏 / 快捷键 / 角色存档都按它引用，所以清单是固定的）
+ *
+ * 新增角色技能要同时改三处：这里的联合类型、`configs/skill-data` 的数值行、
+ * `configs/skill` 的释放实现 —— 联合类型让漏接实现编译不过。
+ */
+export type RoleSkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "1006" | "1007" | "1008" | "1009" | "1010" | "1011";
+
+/**
+ * 技能 ID
+ *
+ * 角色技能是固定枚举（`RoleSkillId`），怪物技能（9000 段）由管理端增删、走快照下发，
+ * id 不可能在编译期枚举死 —— 所以这里是「枚举 + 任意字符串」的并集。
+ * 客户端不为怪物技能提供释放实现（它们由服务端 AI 执行，客户端只按配置演出）。
+ */
+export type SkillId = RoleSkillId | (string & {});
+
+/** 技能归属：角色技能进技能栏可释放，怪物技能由服务端 AI 释放、客户端只演 */
+export type SkillOwner = "role" | "monster";

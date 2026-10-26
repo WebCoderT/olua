@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Put, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -10,6 +10,7 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { MONSTER_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
 import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "./dto/monster.dto";
+import { MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
 
 /**
  * 管理端 · 怪物基础数据（#258）
@@ -18,7 +19,8 @@ import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from ".
  * 怪物 key 被地图刷怪点 / 掉落表 / 技能引用，清单固定（seed 自客户端 configs/monster 的
  * 220 只），e2e 会固化「POST/DELETE 404」。`tier` 不开放编辑（已展开数值才是结算依据）。
  * **改完即时生效**：世界播种与伤害结算直读 monsters 表（两进程共享同一个 SQLite 文件）。
- * 怪物技能与刷怪点位不在本接口范围（#12 / spawn 属客户端与世界层）；掉落表入口归 #254。
+ * 怪物技能的**挂载**在本控制器（`/monsters/:id/skills`，#372，整份替换）；
+ * 技能行本身在 `/admin/skills`（同表 owner=monster）；刷怪点位属世界层，不在这里。
  * 写操作带 `@AuditTarget("monster")`。
  */
 @ApiAudience("admin")
@@ -65,5 +67,43 @@ export class AdminMonsterController {
   @ApiDataResponse(MonsterDto, { description: "更新后的怪物基础数据" })
   update(@Param("id") id: string, @Body() dto: UpdateMonsterDto): MonsterDto {
     return this.gameConfigService.updateMonster(id, dto);
+  }
+
+  @Get(":id/skills")
+  @ApiAdminDoc({
+    operationId: "adminMonster.listSkills",
+    summary: "怪物技能挂载",
+    description:
+      "一只怪的技能清单（按 priority 升序，同优先级按技能 id）。\n\n" +
+      "挂载与服务端 AI 的关系：AI 在**进入战斗后**先试状态型技能（自己身上的 buff 先上），" +
+      "再试伤害型，同类型内按 priority 升序；冷却取技能自身的 `cooldown`，" +
+      "条目里的 `cooldown` 可覆写。全部不可用才走普攻。\n\n" +
+      "改完最多 1 秒在实时进程生效（AI 侧有 1 秒 TTL 缓存，两进程共享同一个 SQLite）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiParam({ name: "id", description: "怪物 key（如 \"200\"）" })
+  @ApiDataResponse(MonsterSkillListDto, { description: "挂载清单（list/total）" })
+  listSkills(@Param("id") id: string): MonsterSkillListDto {
+    return this.gameConfigService.listMonsterSkills(id);
+  }
+
+  @Put(":id/skills")
+  @AuditTarget("monster")
+  @ApiAdminDoc({
+    operationId: "adminMonster.replaceSkills",
+    summary: "整份替换怪物技能挂载",
+    description:
+      "**整份替换**：请求体里的清单就是这只怪的全部技能，没写到的等于删除（空数组 = 不再放技能）。\n" +
+      "与每怪掉落表同一形态 —— 单条增删会把「删掉中间一条」拆成一串调用，更容易写出半份清单。\n\n" +
+      "- `skillId` 必须在 `skills` 表里存在且 `owner=monster`（角色技能不能挂给怪：它们属于技能栏，不属任何怪物）。\n" +
+      "- 同一只怪不能重复挂同一个技能（400 `40000`）。\n" +
+      "- 一只怪最多 20 个技能。\n" +
+      "- 怪物 key 不存在 → 404（`50019`）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "怪物 key（如 \"200\"）" })
+  @ApiDataResponse(MonsterSkillListDto, { description: "替换后的挂载清单" })
+  replaceSkills(@Param("id") id: string, @Body() dto: ReplaceMonsterSkillsDto): MonsterSkillListDto {
+    return this.gameConfigService.replaceMonsterSkills(id, dto);
   }
 }

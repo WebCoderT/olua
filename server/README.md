@@ -133,7 +133,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status 25 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill 26 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -174,7 +174,7 @@ server/
 
 ## 数据模型
 
-28 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+29 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -197,8 +197,9 @@ server/
 | `items` | 物品与材料配置（#255） | 主键是物品 id（如 `material_hide`，被掉落表与脚本引用）；只收 MATERIAL / OTHER 大类；名称 / 描述 / 售卖价 / 堆叠；id 清单固定，只可改不可增删 |
 | `monsters` | 怪物基础数据（#258） | 主键是怪物 key（configs/monster 的关联键，被地图刷怪点 / 掉落表引用）；名称 / 等级 / 生命 / 六项攻防区间；**世界播种与伤害结算直读本表（改值即时生效）**；key 清单固定，只可改不可增删 |
 | `npcs` | NPC 基础数据（#258） | 主键是 NPC id（Tiled 对象组的关联键）；名称 / 对话文案（seed 为空串，客户端暂无对话数据形态）；id 清单固定，只可改不可增删 |
-| `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；id 清单固定，只可改不可增删（怪物技能的增删随 #12 主体开） |
-| `statuses` | 状态配置（#367） | 主键是状态 id（被 `skills.status_id` 引用）；`owner` 同上分流；时长 / 来源 / 图标 / 身上特效 / `combat`（JSON：格挡概率、格挡系数、防御倍率，缺省 = 该维度不参与，公式在客户端 `BattleMath`）；id 清单固定，只可改不可增删 |
+| `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；**怪物技能（9000 段）可增删**（角色技能清单固定，id 被技能栏 / 快捷键 / 存档引用；被怪物挂载引用中的行拒删） |
+| `statuses` | 状态配置（#367） | 主键是状态 id（被 `skills.status_id` 引用）；`owner` 同上分流；时长 / 来源 / 图标 / 身上特效 / `combat`（JSON：格挡概率、格挡系数、防御倍率、**攻击倍率**，缺省 = 该维度不参与）——**角色侧公式在客户端 `BattleMath`，怪物侧在服务端 `MonsterAiService`**（#372：狂怒乘出手伤害、硬化皮肤乘防御项）；id 清单固定，只可改不可增删 |
+| `monster_skills` | 怪物技能挂载（#372） | 复合主键（`monster_key` + `skill_id`）；一只怪放哪些技能、`priority`（越小越先）、`cooldown`（秒，NULL = 用技能自身的冷却）；**整份替换**（PUT 这份清单就是全部，空数组 = 只普攻）；校验技能必须存在且 `owner=monster`、同怪不重复挂 |
 | `fashions` | 时装配置（#257） | 主键是时装 id（configs/fashionClothes，如 `cloth_2`）；名称 / 描述 / 售卖价 / 获得渠道（复用 AcquireChannel，seed 默认 unavailable）/ 八项属性（seed 全 0）；`icon` / `in_res` / `out_res` 资源路径不开放编辑；id 清单固定，只可改不可增删 |
 | `mall_prices` | 商城特殊定价（#251） | 主键是商品 id（装备变体 id，商品清单来自生成物）；**全库唯一允许动态增删的配置表**（PUT upsert / DELETE 回统一价）；未定价商品走 `mall_settings` 的统一价 |
 | `mall_settings` | 商城统一价（#251） | 单行表（id 恒为 1）；全场默认售价 seed 自生成物 MALL_DEFAULT_PRICE（客户端 configs/mall 的 mallPrice），运营可改 |
@@ -216,7 +217,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（25 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（26 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -233,6 +234,24 @@ server/
 - **踢下线跨进程**：管理端在存档进程清 `online_role_id`（库），实时进程按 `REALTIME_KICK_POLL_MS` 巡检发现连接对应的账号已无在线角色 → 主动断开（`4000`）。内嵌形态下同样生效（补上「踢下线不立即断 WS」的欠账）；
 - **令牌作废天然跨进程**：`token_version` 每次请求对库比对，两进程各读各的库就是同一份真相；
 - **存储**：两进程共享同一个 SQLite 文件（WAL + `busy_timeout`，见根 FAQ「为什么选 SQLite」）—— 实时进程写 `world_monsters` 与结算血量，存档进程写账号 / 角色表，各写各的表。
+
+## 怪物 AI 与技能释放（#323 / #372）
+
+怪物的**行为权威在服务端**（`MonsterAiService`，tick 100ms / 广播按 200ms 节流）：
+目标选择、追击、待机游走、普攻、以及**放技能**都由服务端决定，客户端只做演出。
+
+- **技能从表里来**：`monster_skills` 决定「这只怪放哪些、什么顺序」（先状态型 buff、再伤害型，
+  同类型内 `priority` 升序、同优先级按技能 id 稳定排序），`skills` 提供动作 / 特效 / 倍率 / 距离 /
+  施法硬直，`statuses` 提供状态时长与数值修正。三者都**读库 + 1 秒 TTL 缓存** ——
+  管理端改完最多 1 秒生效（两个进程只能靠共享 SQLite 交换改动，没有通知通道）；
+- **`casts` 帧**：`{ instanceId, skillId, statusId? }`。客户端据它播动作与特效，
+  **不带伤害**（数值权威在 `hits` 帧），所以状态型技能（没有伤害）也能被演出来；
+  普攻没有单独的出手事件，客户端用 `hits` 反推并跳过已被 `casts` 覆盖的实例；
+- **状态在服务端真的生效**：`attackMultiplier` 乘出手伤害、`defenseMultiplier` 乘被玩家打时的防御项
+  （`CombatSettlementService` 调 `defenseMultiplierOf`）；到期惰性清理，同状态刷新不叠层；
+- **施法硬直**：`castLockMs`（0 回落到普攻动作时长）期间既不移动也不出手，普攻间隔一并推后；
+- **刻意不做的**：怪物位置不落盘（持久真相是出生点）、玩家位置不权威（客户端节流上报当 AI 输入）、
+  怪物不消耗魔法值。
 
 ## 认证与权限
 
@@ -265,13 +284,13 @@ server/
 
 ## 接口与契约
 
-当前 **103 个接口 / 88 条路径 / 163 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **107 个接口 / 89 条路径 / 168 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
 | 客户端 | 13 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 83 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 87 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

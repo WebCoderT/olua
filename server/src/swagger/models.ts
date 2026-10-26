@@ -56,7 +56,8 @@ import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/ga
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
 import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
 import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-config/dto/npc.dto";
-import { DamageCoefficientDto, SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "../modules/game-config/dto/skill.dto";
+import { CreateSkillDto, DamageCoefficientDto, SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "../modules/game-config/dto/skill.dto";
+import { MonsterSkillDto, MonsterSkillItemDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "../modules/game-config/dto/monster-skill.dto";
 import { StatusCombatDto, StatusDto, StatusPageDto, StatusQueryDto, UpdateStatusDto } from "../modules/game-config/dto/status.dto";
 import { MallPriceItemDto, MallPricePageDto, MallPriceQueryDto, MallPriceRemoveDto, MallSettingsDto, PutMallPriceDto, UpdateMallSettingsDto } from "../modules/game-config/dto/mall.dto";
 import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "../modules/game-config/dto/fashion.dto";
@@ -246,6 +247,11 @@ export const SWAGGER_MODELS = [
   SkillPageDto,
   SkillQueryDto,
   UpdateSkillDto,
+  CreateSkillDto,
+  MonsterSkillDto,
+  MonsterSkillItemDto,
+  MonsterSkillListDto,
+  ReplaceMonsterSkillsDto,
   StatusDto,
   StatusCombatDto,
   StatusPageDto,

@@ -4506,6 +4506,61 @@
         "x-olua-query-schema": {
           "$ref": "#/components/schemas/SkillQueryDto"
         }
+      },
+      "post": {
+        "description": "**只支持怪物技能**：`id` 必须是 9000~9999 的四位数字，`owner` 只能是 monster。\n角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在生成物里，不能从后台造出来。\n\n没传的字段走建行默认值（分类 0 主动 / 目标类型 1 单体 / 冷却 0 / 开启等级 1）。\n创建时**全量校验跨字段约束**（与编辑不同：新行没有历史包袱）：状态型要有 statusId、主动技能至少一条倍率、statusId 必须真实存在，任一不满足 → 400（`40000`）。\n\n新建的技能还没有任何怪挂载 —— 要在「怪物配置」页给具体的怪挂上技能后才会被释放（挂载接口在怪物控制器里）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminSkill.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建后的技能配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SkillDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新增怪物技能",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SkillDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
       }
     },
     "/admin/skills/{id}": {
@@ -4570,6 +4625,60 @@
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/SkillDto"
         },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "两条拒绝（400 `40000`）：**角色技能不可删**（技能栏 / 存档引用）、**被怪物挂载引用中的技能不可删**（先在该怪的挂载里解绑）。\n`id` 不存在 → 404（`50029`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminSkill.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "技能 id（如 \"9001\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除怪物技能",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
         "x-olua-permissions": [
           "gameConfig:write"
         ]
@@ -5507,6 +5616,128 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/MonsterDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/monsters/{id}/skills": {
+      "get": {
+        "description": "一只怪的技能清单（按 priority 升序，同优先级按技能 id）。\n\n挂载与服务端 AI 的关系：AI 在**进入战斗后**先试状态型技能（自己身上的 buff 先上），再试伤害型，同类型内按 priority 升序；冷却取技能自身的 `cooldown`，条目里的 `cooldown` 可覆写。全部不可用才走普攻。\n\n改完最多 1 秒在实时进程生效（AI 侧有 1 秒 TTL 缓存，两进程共享同一个 SQLite）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMonster.listSkills",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "怪物 key（如 \"200\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "挂载清单（list/total）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterSkillListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "怪物技能挂载",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterSkillListDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "put": {
+        "description": "**整份替换**：请求体里的清单就是这只怪的全部技能，没写到的等于删除（空数组 = 不再放技能）。\n与每怪掉落表同一形态 —— 单条增删会把「删掉中间一条」拆成一串调用，更容易写出半份清单。\n\n- `skillId` 必须在 `skills` 表里存在且 `owner=monster`（角色技能不能挂给怪：它们属于技能栏，不属任何怪物）。\n- 同一只怪不能重复挂同一个技能（400 `40000`）。\n- 一只怪最多 20 个技能。\n- 怪物 key 不存在 → 404（`50019`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMonster.replaceSkills",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "怪物 key（如 \"200\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceMonsterSkillsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "替换后的挂载清单",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterSkillListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "整份替换怪物技能挂载",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterSkillListDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -8636,6 +8867,124 @@
           }
         }
       },
+      "CreateSkillDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "技能名（≤50 字）",
+            "maxLength": 50
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（≤200 字；空串 = 不显示图标）",
+            "maxLength": 200
+          },
+          "category": {
+            "type": "string",
+            "description": "分类：0 主动 / 1 被动 / 2 状态 / 3 回复",
+            "enum": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身",
+            "enum": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "description": "施法动作（≤50 字；空串 = 不播动作）",
+            "maxLength": 50
+          },
+          "effect": {
+            "type": "string",
+            "description": "技能特效图集路径（≤200 字；空串 = 无特效）",
+            "maxLength": 200
+          },
+          "effectOnSelf": {
+            "type": "boolean",
+            "description": "特效是否播在自己身上"
+          },
+          "cooldown": {
+            "type": "number",
+            "description": "冷却（秒，0 = 不限制）",
+            "minimum": 0,
+            "maximum": 3600
+          },
+          "mpCost": {
+            "type": "number",
+            "description": "释放消耗魔法值（0 = 不消耗）",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "distance": {
+            "type": "number",
+            "description": "施法距离（0 = 不限距离）",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "levelReq": {
+            "type": "number",
+            "description": "学习 / 开启等级",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "description": {
+            "type": "string",
+            "description": "描述文案（≤500 字）",
+            "maxLength": 500
+          },
+          "damageCoefficients": {
+            "description": "伤害系数（下标 = 技能等级 - 1，最多 20 级）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageCoefficientDto"
+            }
+          },
+          "statusId": {
+            "type": "string",
+            "description": "释放后挂载的状态 id（空串 = 不挂；状态型技能必填）"
+          },
+          "castLockMs": {
+            "type": "number",
+            "description": "动作锁时长（毫秒；0 = 跟动画时长走）",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "requireTarget": {
+            "type": "boolean",
+            "description": "是否要求有合法目标"
+          },
+          "canAuto": {
+            "type": "boolean",
+            "description": "是否可被自动战斗 / 挂机释放"
+          },
+          "id": {
+            "type": "string",
+            "description": "技能 id（怪物技能段：9000~9999 的四位数字，如 \"9001\"）"
+          },
+          "owner": {
+            "type": "string",
+            "description": "归属：只能 monster（缺省 monster）",
+            "enum": [
+              "role",
+              "monster"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
       "StatusCombatDto": {
         "type": "object",
         "properties": {
@@ -8654,6 +9003,12 @@
           "defenseMultiplier": {
             "type": "number",
             "description": "防御乘法系数（≥1，1.5 = 防御 ×1.5；多个状态连乘）",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "attackMultiplier": {
+            "type": "number",
+            "description": "攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）",
             "minimum": 0,
             "maximum": 10
           }
@@ -8928,6 +9283,45 @@
             ]
           }
         }
+      },
+      "MonsterSkillItemDto": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "description": "技能 id（必须在 skills 表里存在且 owner=monster；不存在 → 400 40000）"
+          },
+          "priority": {
+            "type": "number",
+            "description": "优先级（越小越先，缺省 0；同优先级按技能 id 排序）",
+            "minimum": -9999,
+            "maximum": 9999
+          },
+          "cooldown": {
+            "type": "number",
+            "description": "冷却覆写（秒；不传 = 用技能自身的 cooldown）",
+            "minimum": 0,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "skillId"
+        ]
+      },
+      "ReplaceMonsterSkillsDto": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "description": "完整清单（整份替换；空数组 = 清空，AI 回退到普攻）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterSkillItemDto"
+            }
+          }
+        },
+        "required": [
+          "skills"
+        ]
       },
       "UpdateNpcDto": {
         "type": "object",
@@ -13466,6 +13860,64 @@
             ]
           }
         }
+      },
+      "MonsterSkillDto": {
+        "type": "object",
+        "properties": {
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key（与 monsters 表主键一致）"
+          },
+          "skillId": {
+            "type": "string",
+            "description": "技能 id（skills 表里 owner=monster 的行）"
+          },
+          "skillLabel": {
+            "type": "string",
+            "description": "技能名（冗余展示用，来源 skills.label）"
+          },
+          "priority": {
+            "type": "number",
+            "description": "优先级（越小越先；状态型整体先于伤害型尝试）"
+          },
+          "cooldown": {
+            "type": "object",
+            "description": "冷却覆写（秒；null = 用技能自身的 cooldown）",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒时间戳）"
+          }
+        },
+        "required": [
+          "monsterKey",
+          "skillId",
+          "skillLabel",
+          "priority",
+          "cooldown",
+          "updatedAt"
+        ]
+      },
+      "MonsterSkillListDto": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "挂载清单（按优先级升序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterSkillDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "条数"
+          }
+        },
+        "required": [
+          "list",
+          "total"
+        ]
       },
       "StatusDto": {
         "type": "object",

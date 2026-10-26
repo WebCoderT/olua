@@ -134,7 +134,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           25 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status
+│   │   └── repositories/           26 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -175,7 +175,7 @@ server/
 
 ## Data model
 
-28 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+29 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -198,8 +198,9 @@ server/
 | `items` | item & material config (#255) | primary key is the item id (e.g. `material_hide`, referenced by drop tables and scripts); MATERIAL / OTHER types only; label / description / sell price / stack cap; id list fixed, edit-only |
 | `monsters` | monster base data (#258) | primary key is the monster key (configs/monster association key, referenced by spawn points / drop tables); label / level / max HP / six attack-defense ranges; **world seeding and damage settlement read this table directly (changes take effect immediately)**; key list fixed, edit-only |
 | `npcs` | NPC base data (#258) | primary key is the NPC id (Tiled object-group association key); label / dialog text (seeded empty — the client has no dialog data shape yet); id list fixed, edit-only |
-| `skills` | Skill config (#367) | primary key is the skill id; **roles and monsters share the table**, split and filtered by `owner` (`role` / `monster`); category / target type / action / effect / cooldown / mp cost / distance / level / damage coefficients (JSON, index = level − 1) / attached status `status_id` / **cast limits** (`cast_lock_ms` action lock, `require_target`); cross-field rules live in the service (a status skill must attach a status, a proactive skill needs at least one coefficient, `status_id` must exist); id list fixed, edit-only (monster skill create/delete ships with the #12 main slice) |
-| `statuses` | Status config (#367) | primary key is the status id (referenced by `skills.status_id`); `owner` splits the same way; duration / source / icon / body effect / `combat` (JSON: block chance, block factor, defense multiplier — omitted means "not participating", the formula lives in the client `BattleMath`); id list fixed, edit-only |
+| `skills` | Skill config (#367) | primary key is the skill id; **roles and monsters share the table**, split and filtered by `owner` (`role` / `monster`); category / target type / action / effect / cooldown / mp cost / distance / level / damage coefficients (JSON, index = level − 1) / attached status `status_id` / **cast limits** (`cast_lock_ms` action lock, `require_target`); cross-field rules live in the service (a status skill must attach a status, a proactive skill needs at least one coefficient, `status_id` must exist); **monster skills (9000 range) can be created/deleted** (role skills keep a fixed list: their ids are referenced by the skill bar / hotkeys / saves; a skill still mounted on a monster refuses deletion) |
+| `statuses` | Status config (#367) | primary key is the status id (referenced by `skills.status_id`); `owner` splits the same way; duration / source / icon / body effect / `combat` (JSON: block chance, block factor, defense multiplier, **attack multiplier** — omitted means "not participating") — **the role side is computed in the client `BattleMath`, the monster side in the server `MonsterAiService`** (#372: fury multiplies outgoing damage, hardened skin multiplies the defense term); id list fixed, edit-only |
+| `monster_skills` | monster skill mounts (#372) | composite key (`monster_key` + `skill_id`); which skills a monster casts, `priority` (lower first) and `cooldown` (seconds, NULL = use the skill's own); **whole-list replace** (a PUT is the complete list, an empty array = auto-attack only); validated on write: the skill must exist with `owner=monster`, no duplicates per monster |
 | `fashions` | fashion config (#257) | primary key is the fashion id (configs/fashionClothes, e.g. `cloth_2`); label / description / sell price / acquire channel (reuses AcquireChannel, seeded `unavailable`) / eight attributes (seeded 0); `icon` / `in_res` / `out_res` resource paths are not editable; id list fixed, edit-only |
 | `mall_prices` | mall special pricing (#251) | primary key is the good id (equipment variant id; the goods catalog comes from the generated snapshot); **the only config table in the database whose rows can be added/removed** (PUT upsert / DELETE back to the unified price); unpriced goods fall back to the unified price in `mall_settings` |
 | `mall_settings` | mall unified price (#251) | single-row table (id always 1); the default price is seeded from the generated `MALL_DEFAULT_PRICE` (the client's configs/mall mallPrice) and is editable |
@@ -217,7 +218,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 25 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 26 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -234,6 +235,17 @@ One codebase, two entries, assembled on demand (`AppModule.register({ realtime }
 - **Kick-offline across processes**: the admin kicks on the archive process (clears `online_role_id` in the database); the realtime process sweeps every `REALTIME_KICK_POLL_MS`, and once a connection's account has no online role anymore it closes the socket (`4000`). This also works in the embedded form (paying off the old debt that a kick never closed the WS right away);
 - **Token revocation is cross-process by construction**: `token_version` is compared against the database on every request — both processes reading the same file see the same truth;
 - **Storage**: both processes share one SQLite file (WAL + `busy_timeout`, see the root FAQ "Why SQLite") — the realtime process writes `world_monsters` and settled hp, the archive process writes accounts / roles; each writes its own tables.
+
+## Monster AI and skill casting (#323 / #372)
+
+Monster **behaviour is authoritative on the server** (`MonsterAiService`, tick 100ms / broadcast throttled to 200ms):
+target picking, chasing, idle wandering, auto-attacks and **skill casts** are all decided server-side — the client only plays them back.
+
+- **Skills come from tables**: `monster_skills` says *which* skills a monster casts and in what order (status skills first as buffs, then damage skills; inside a group by ascending `priority`, ties broken by skill id), `skills` supplies action / effect / multipliers / distance / cast lock, `statuses` supplies duration and stat modifiers. All three are **read from the DB with a 1 second TTL cache** — admin edits take effect within 1 second (the two processes can only exchange changes through the shared SQLite file, there is no notification channel);
+- **The `casts` frame**: `{ instanceId, skillId, statusId? }`. The client uses it to play the action and effect; it **carries no damage** (numbers stay authoritative in `hits`), so status skills — which deal no damage — can be shown too. Auto-attacks have no separate swing event: the client infers them from `hits` and skips instances already covered by `casts`;
+- **Statuses really take effect on the server**: `attackMultiplier` scales outgoing damage, `defenseMultiplier` scales the defense term when players hit the monster (`CombatSettlementService` calls `defenseMultiplierOf`); expiry is handled lazily and re-applying the same status refreshes instead of stacking;
+- **Cast lock**: while `castLockMs` is pending (0 falls back to the auto-attack action time) the monster neither moves nor attacks, and the auto-attack interval is pushed back as well;
+- **Deliberately not done**: monster positions are not persisted (the persistent truth is the spawn point), player positions are not authoritative (throttled client reports feed the AI), monsters do not spend mana.
 
 ## Auth and permissions
 
@@ -266,13 +278,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **103 interfaces / 88 paths / 163 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **107 interfaces / 89 paths / 168 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
 | Client | 13 | `player` token, may only operate its own account's data |
-| Admin | 83 | `admin` token + each interface's own permission point |
+| Admin | 87 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;

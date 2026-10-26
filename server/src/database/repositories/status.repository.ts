@@ -74,6 +74,11 @@ export class StatusRepository {
     return this.db.get<StatusRow>("SELECT * FROM statuses WHERE id = ?", [id]);
   }
 
+  /** 全量（服务端 AI 的状态缓存来源，#372：怪物释放状态技能后要按 combat 改伤害） */
+  listAll(): StatusRow[] {
+    return this.db.all<StatusRow>("SELECT * FROM statuses ORDER BY id ASC");
+  }
+
   /** 分页检索（默认按 id 数值序） */
   list(options: StatusListOptions): StatusRow[] {
     const { clause, params } = this.where(options);

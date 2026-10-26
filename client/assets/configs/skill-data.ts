@@ -406,4 +406,84 @@ export const skillData: Array<SkillData & { id: SkillId }> = [
     statusId: "2002",
     requireTarget: false,
   },
+
+  //#region 怪物技能（#372；9000 段，owner = monster）
+  /*
+   * 怪物技能与角色技能**同表**（#367 定的口径）：差别只在 owner 与消费方。
+   * - 客户端不为它们提供释放实现（`configs/skill` 的 handler 表只收角色 id），
+   *   它们由服务端 `MonsterAiService` 按挂载表释放，客户端收到 casts 帧后按这里的
+   *   action / effect / castLockMs 演出；
+   * - 技能等级固定 1（怪物不练级），所以 damageCoefficients 只需要一条；
+   * - 挂载关系（哪只怪放哪些、优先级、冷却覆写）在 `configs/monster-skills`。
+   *
+   * 数值口径：伤害型 = round(怪物物攻区间随机值 × 倍率 − 玩家物防区间随机值)，与角色一致；
+   * 状态型 = 给自己挂 statusId 指向的状态，服务端按 combat 修正后续伤害。
+   */
+  {
+    id: "9001",
+    owner: "monster",
+    label: "跃鼠猛击",
+    icon: "skill/icon/1006",
+    cooldown: 6,
+    mpCost: 0,
+    targetType: SkillTargetType.SINGLE,
+    oeccupation: OECCUPATION.ALL,
+    level: 1,
+    description: "蓄力扑击，对目标造成 1.8 倍物理攻击伤害",
+    type: SkillType.PROACTIVE,
+    damageCoefficients: [{ baseType: "physicalAttack", baseTypeRate: 1.8 }],
+    distance: 90,
+    action: ACTION.ATTACK_SKILL_1,
+    effect: "effect/skill/s_1008@0",
+    effectIsOnSelf: false,
+    // 施法硬直：扑出去之后站定 0.8 秒，比普攻（0.6 秒）更久，给玩家反应窗口
+    castLockMs: 800,
+    canAuto: false,
+  },
+  {
+    id: "9002",
+    owner: "monster",
+    label: "狂怒",
+    icon: "skill/icon/2009",
+    cooldown: 15,
+    mpCost: 0,
+    targetType: SkillTargetType.SELF,
+    oeccupation: OECCUPATION.ALL,
+    level: 1,
+    description: "进入狂怒，持续时间内物理攻击 ×1.5",
+    type: SkillType.STATUS,
+    damageCoefficients: [],
+    distance: 0,
+    action: ACTION.A1,
+    effect: "effect/status/s_2004@0",
+    effectIsOnSelf: true,
+    statusId: "9001",
+    castLockMs: 600,
+    // 状态型不要求目标（但服务端仍要「已在战斗中」才会放，见 MonsterAiService）
+    requireTarget: false,
+    canAuto: false,
+  },
+  {
+    id: "9003",
+    owner: "monster",
+    label: "硬化皮肤",
+    icon: "skill/icon/1008",
+    cooldown: 15,
+    mpCost: 0,
+    targetType: SkillTargetType.SELF,
+    oeccupation: OECCUPATION.ALL,
+    level: 1,
+    description: "皮肤硬化，持续时间内防御 ×1.5",
+    type: SkillType.STATUS,
+    damageCoefficients: [],
+    distance: 0,
+    action: ACTION.A1,
+    effect: "effect/skill/s_1008@0",
+    effectIsOnSelf: true,
+    statusId: "9002",
+    castLockMs: 600,
+    requireTarget: false,
+    canAuto: false,
+  },
+  //#endregion
 ];

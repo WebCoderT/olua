@@ -25,6 +25,7 @@ import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository
 import { ZoneRepository } from "./repositories/zone.repository";
 import { SkillRepository } from "./repositories/skill.repository";
 import { StatusRepository } from "./repositories/status.repository";
+import { MonsterSkillRepository } from "./repositories/monster-skill.repository";
 
 /**
  * 数据层（全局模块）
@@ -63,6 +64,7 @@ import { StatusRepository } from "./repositories/status.repository";
     SoulRepository,
     SkillRepository,
     StatusRepository,
+    MonsterSkillRepository,
   ],
   exports: [
     DatabaseService,
@@ -91,6 +93,7 @@ import { StatusRepository } from "./repositories/status.repository";
     SoulRepository,
     SkillRepository,
     StatusRepository,
+    MonsterSkillRepository,
   ],
 })
 export class DatabaseModule {}

@@ -27,6 +27,13 @@ export interface StatusCombatConfig {
   blockFactor?: number;
   /** 防御乘法系数（>= 1；缺省 1 = 防御不变） */
   defenseMultiplier?: number;
+  /**
+   * 攻击乘法系数（>= 1；缺省 1 = 攻击不变）
+   *
+   * #372 起有真实消费方：怪物状态技能（如「狂怒」）靠它抬高自己的普攻 / 技能伤害，
+   * 由服务端 `MonsterAiService` 在算伤害时连乘；角色侧同一维度也走 BattleMath
+   */
+  attackMultiplier?: number;
 }
 
 /**

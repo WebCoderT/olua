@@ -119,6 +119,7 @@ const REQUIRED_EXPORTS = [
   "SKILLS",
   "STATUSES",
   "MONSTERS",
+  "MONSTER_SKILLS",
   "NPCS",
   "MALL",
   "FASHIONS",
