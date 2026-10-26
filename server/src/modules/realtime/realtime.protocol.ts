@@ -112,8 +112,35 @@ export interface RealtimeSettleOk {
   maxHp: number;
   /** 目标是否死亡（由服务端判，客户端据此走死亡表现与掉落） */
   killed: boolean;
+  /** 击杀奖励（#316 起由服务端结算；仅 killed 时携带——经验入账与掉落内容都以此为准） */
+  reward?: RealtimeKillReward;
   /** true = 同一 castId 的重复投递，结果原样重发、未重复结算 */
   duplicate: boolean;
+}
+
+/**
+ * 一次击杀的奖励（#316：经验与掉落的结算都在服务端）
+ *
+ * - 经验：服务端按自己的成长标量（growth_scalars）与等级经验表（level_exps）算出入账，
+ *   **落账在先**——`level / expNow / revision` 就是入账后的角色状态，客户端照着演即可；
+ * - 掉落：读 monster_drops / drop_tables 表（管理端改值即时生效）按权重/概率/数量抽取，
+ *   客户端只负责把列表铺到地面演拾取，「掉什么、掉多少」不再是客户端的决定。
+ */
+export interface RealtimeKillReward {
+  /** 本次入账的经验（等级差过大无经验时为 0） */
+  exp: number;
+  /** 入账后的角色等级 */
+  level: number;
+  /** 入账后的当前经验（本级进度） */
+  expNow: number;
+  /** 升到下一级所需经验（已满级为 0） */
+  expNeed: number;
+  /** 本次是否升了级（可能连升多级，客户端据此播升级表现） */
+  leveledUp: boolean;
+  /** 经验入账后的角色修订号（exp = 0 时与入账前相同） */
+  revision: number;
+  /** 掉落结果（同一物品已合并数量；可为空数组——这次什么都没掉） */
+  drops: Array<{ goodId: string; count: number }>;
 }
 
 /** 结算被拒（ok = false；网络层连接不受影响） */

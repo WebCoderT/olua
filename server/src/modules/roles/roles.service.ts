@@ -5,8 +5,10 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
+import { GROWTH_SCALARS } from "../../shared/game-data.generated";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
+import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
@@ -18,6 +20,15 @@ import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { decodeStoredRoleData, parseRoleData } from "./role-data.util";
+
+/** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
+export interface KillExpResult {
+  level: number;
+  expNow: number;
+  expNeed: number;
+  leveledUp: boolean;
+  revision: number;
+}
 
 /**
  * 角色业务（玩家侧）
@@ -38,6 +49,7 @@ export class RolesService {
     private readonly ranks: RankRepository,
     private readonly mallPricing: MallPricingService,
     private readonly drugs: DrugRepository,
+    private readonly growth: GrowthRepository,
   ) {}
 
   /**
@@ -411,6 +423,60 @@ export class RolesService {
       maxHp: Math.max(1, Math.floor(Number(data.maxHp) || 0)),
       maxMp: Math.max(1, Math.floor(Number(data.maxMp) || 0)),
     };
+  }
+
+  /**
+   * 击杀经验入账（#316：经验的结算在服务端）
+   *
+   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **level_exps 表**（#256
+   * 管理端可改，即时生效）判定升级、循环升到曲线封顶（`growth_scalars.roleMaxLevel`），
+   * `roles.level` 索引列与 revision 原子推进。
+   *
+   * @returns 入账后的角色状态（level / expNow / expNeed / leveledUp / revision）；
+   *          角色已被踢下线等无法落账的情况返回 null（调用方跳过奖励，不视为错误）
+   */
+  applyKillExp(accountId: string, roleId: string, exp: number): KillExpResult | null {
+    const account = this.accounts.findById(accountId);
+    const existing = account ? this.roles.findById(roleId) : undefined;
+    // 与升级 / 购买同一纪律：被踢下线的角色不能再推进度（结算进行到一半被踢是正常情况）
+    if (!account || !existing || existing.account_id !== accountId || account.online_role_id !== roleId) return null;
+
+    const data = decodeStoredRoleData(existing.data);
+    const gain = Math.max(0, Math.floor(exp));
+    let level = Math.max(1, existing.level);
+    let expNow = Math.max(0, Math.floor(Number(data.exp) || 0)) + gain;
+    let leveledUp = false;
+    const maxLevel = this.roleMaxLevel();
+    let expNeed = this.expNeedOf(level);
+    while (level < maxLevel && expNeed > 0 && expNow >= expNeed) {
+      expNow -= expNeed;
+      level += 1;
+      leveledUp = true;
+      expNeed = this.expNeedOf(level);
+    }
+
+    data.exp = expNow;
+    const row: RoleRow = {
+      ...existing,
+      level,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return { level, expNow, expNeed, leveledUp, revision: row.revision };
+  }
+
+  /** 升到下一级所需经验（level_exps 表；没有该级行 = 曲线没铺到这里，按「不再升级」处理） */
+  private expNeedOf(level: number): number {
+    return Math.max(0, Math.floor(Number(this.growth.findLevelExp(level)?.exp) || 0));
+  }
+
+  /** 等级上限（growth_scalars 表，管理端可改；读不到退回生成物 seed 值） */
+  private roleMaxLevel(): number {
+    const fromDb = Number(this.growth.findScalar("roleMaxLevel")?.value);
+    if (Number.isFinite(fromDb) && fromDb >= 1) return Math.floor(fromDb);
+    return Math.max(1, Math.floor(Number(GROWTH_SCALARS.roleMaxLevel) || 60));
   }
 
   /**

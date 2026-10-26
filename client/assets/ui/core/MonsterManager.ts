@@ -14,7 +14,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel, { WorldSnapshot } from "../utils/net/CombatChannel";
+import CombatChannel, { CombatKillReward, WorldSnapshot } from "../utils/net/CombatChannel";
 
 /**
  * 怪物管理器（静态类）
@@ -203,10 +203,11 @@ export default class MonsterManager {
    * 服务端结算结果的落点（#34：伤害由服务端算，这里只把它演出来）
    *
    * 扣多少血、死没死都以结算帧为准（overkill 不截断伤害数字，血量才截断）；
+   * 击杀奖励（经验 + 掉落）以 reward 为准（#316：结算在服务端，本地只演不掷）；
    * 同时做一次**合法带对账**：服务端伤害越出客户端口径允许的区间，
    * 以 `combat-parity` 标签记到 console —— 在删掉客户端旧算法之前，这就是发现口径漂移的地方。
    */
-  static applyServerSettle(data: { skillId: string; targetId: string; damage: number; hp: number; killed: boolean }) {
+  static applyServerSettle(data: { skillId: string; targetId: string; damage: number; hp: number; killed: boolean; reward?: CombatKillReward }) {
     const node = this.instanceIndex.get(data.targetId);
     const monster = node ? this.monsterMap.get(node) : null;
     if (!node || !monster) return; // 换图后到达的迟到结算：目标已不在场，这次出手当作打空
@@ -226,7 +227,7 @@ export default class MonsterManager {
         );
       }
     }
-    this.applyDamage(node, monster, data.damage, data.hp, data.killed);
+    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward);
   }
 
   /**
@@ -263,8 +264,9 @@ export default class MonsterManager {
    * 把一次伤害落到目标身上（表现与死亡流程的唯一去处，本地口径与服务端结算共用）
    * @param hp 落完后的血量（本地口径传「扣完的值」；服务端结算直接用服务端给的值）
    * @param killed 是否死亡（缺省按 hp <= 0 判 —— 本地口径；服务端结算以服务端判定为准）
+   * @param reward 击杀奖励（#316：服务端结算的入账结果；缺省 = 本地口径，走本地经验与掉落表）
    */
-  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean) {
+  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward) {
     // 受伤飘字（需在死亡销毁节点前显示；0 伤不飘 —— 世界快照的兜底清理不是一次真实受击）
     if (damage > 0) GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, hp);
@@ -275,13 +277,24 @@ export default class MonsterManager {
       MonsterAI.provoke(target);
       return;
     }
-    // 死亡：先结算击杀经验（按角色与怪物等级差，等级差 ≥6 无经验，见 configs/level.getKillExp；
-    // 经验结算在数据注销前做，经验飘字要借还活着的节点定位）
-    const role = StorageManager.findOnlineRole();
-    if (role) this.awardKillExp(target, monster, role.level);
-    // 死亡：先按掉落配置在地面生成掉落物，再注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
+    // 死亡：先结算击杀奖励再注销数据（经验飘字要借还活着的节点定位）——
+    // 服务端结算路径（reward 存在）：经验入账与掉落内容都以服务端给的为准，本地只演；
+    // 本地口径回滚路径（实时通道不可用）：按本地经验公式与掉落配置结算（既有行为）
+    if (reward) {
+      if (reward.exp > 0) {
+        // 经验入账后的状态（level / exp / revision）在服务端已落账，照搬即可
+        StorageManager.applyKillReward(reward);
+        GameUiHelper.showExpGain(target, reward.exp);
+      }
+      DropManager.spawnResults(reward.drops, target.getWorldPosition());
+    } else {
+      const role = StorageManager.findOnlineRole();
+      if (role) this.awardKillExp(target, monster, role.level);
+      // 按掉落配置在地面生成掉落物
+      DropManager.drop(monster.drops, target.getWorldPosition(), monster.dropPicks);
+    }
+    // 注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
-    DropManager.drop(monster.drops, target.getWorldPosition(), monster.dropPicks);
     this.monsterMap.delete(target);
     this.instanceIndex.delete(monster.instanceId);
     CursorManager.unregisterHover(target);
@@ -291,7 +304,7 @@ export default class MonsterManager {
     if (!MonsterAI.die(target)) target.destroy();
   }
 
-  /** 结算击杀经验：按角色与怪物等级差计算（见 configs/level.getKillExp），入账并在击杀位置飘字提示 */
+  /** 结算击杀经验（**本地口径回滚路径**：实时通道不可用时按本地公式入账；服务端结算在线时走 StorageManager.applyKillReward） */
   private static awardKillExp(target: Node, monster: Monster, roleLevel: number) {
     const exp = getKillExp(roleLevel, monster.level);
     if (exp <= 0) return;

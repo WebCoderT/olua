@@ -25,6 +25,7 @@ import { getRankLevel } from "../../configs/rank";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
+import type { CombatKillReward } from "../utils/net/CombatChannel";
 import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult } from "../utils/net/ApiModels";
 
 /**
@@ -374,6 +375,35 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     // 更新UI
     this.updateUi(role);
+  }
+
+  /**
+   * 服务端击杀奖励落账（#316：经验与升级判定都在服务端，这里只把入账后的状态接回来演）
+   *
+   * 经验 / 等级 / 修订号直接以 reward 为准（服务端已落账，带回来的就是入账后的值，
+   * 本地不再自己算「够不够升级」——那正是收权要拿掉的决定）；
+   * 升级表现（属性重算 / 补满血蓝 / 特效）沿用本地习惯，只对 leveledUp 做。
+   * @returns 本次入账的经验（调用方据此决定要不要飘经验字）
+   */
+  static applyKillReward(reward: CombatKillReward): number {
+    const role = this.findOnlineRole();
+    if (!role) return 0;
+    role.exp = reward.expNow;
+    role.level = reward.level;
+    role.revision = reward.revision;
+    if (reward.leveledUp) {
+      // 属性重新计算（等级变了，maxHp / 攻防都跟着曲线走）
+      Object.assign(role, GameHelper.combatCalc(role));
+      // 升级时补满血量与魔法值至最大值
+      role.hp = role.maxHp;
+      role.mp = role.maxMp;
+      // 播放升级特效
+      LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
+    }
+    // 保存并刷新（revision 已与服务端对齐，下一次落盘不会撞乐观锁）
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    return reward.exp;
   }
 
   //#region 背包物品使用
