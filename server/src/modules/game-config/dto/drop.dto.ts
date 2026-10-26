@@ -199,6 +199,3 @@ export class UpdateMonsterDropDto {
   @Type(() => DropEntryDto)
   entries?: DropEntryDto[];
 }
-
-/** 表 id 的最大长度（与 DROP_TABLE_ID_PATTERN 一致，文案用） */
-export const DROP_TABLE_ID_MAX = 50;

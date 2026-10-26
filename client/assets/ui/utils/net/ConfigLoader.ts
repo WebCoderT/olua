@@ -17,11 +17,6 @@ import { applyConfigSnapshot } from "../../../configs/apply-snapshot";
 let loaded = false;
 let loading: Promise<void> | null = null;
 
-/** 快照是否已成功落库（测试与诊断用） */
-export function isGameConfigLoaded(): boolean {
-  return loaded;
-}
-
 /** 拉取并落库配置快照；失败静默回落本地配置（不抛出，调用方无需 catch） */
 export async function loadGameConfig(): Promise<void> {
   if (loaded) return;

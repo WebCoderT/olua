@@ -18,9 +18,6 @@ export const BACKUP_FILE_PATTERN = /^olua-(\d{8})-(\d{6})\.db$/;
 /** 一小时有多少毫秒（配置项以小时为单位，内部一律换算成毫秒再算） */
 export const HOUR_MS = 60 * 60 * 1000;
 
-/** 一天有多少毫秒（保留天数同理） */
-export const DAY_MS = 24 * HOUR_MS;
-
 /**
  * 检查节拍的下限（毫秒）
  *

@@ -315,14 +315,6 @@ export interface RealtimePlayersMessage {
 
 //#endregion
 
-/** 客户端会发出的全部消息 */
-export type RealtimeClientMessage =
-  | RealtimePingMessage
-  | RealtimeCastMessage
-  | RealtimeTargetsResetMessage
-  | RealtimeWorldJoinMessage
-  | RealtimePositionMessage;
-
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage

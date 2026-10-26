@@ -172,6 +172,3 @@ export class UpdateGrowthScalarDto {
   @Min(0, { message: "参数值不能为负" })
   value!: number;
 }
-
-/** 导出标量取值域给文档描述拼装用（避免控制器直接 import 常量文件之外的东西） */
-export const GROWTH_SCALAR_SPEC_LIST = Object.entries(GROWTH_SCALAR_SPECS);

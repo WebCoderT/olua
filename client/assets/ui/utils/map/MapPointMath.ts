@@ -1,4 +1,4 @@
-import { Node, Size, TiledMap, Vec3, view } from "cc";
+import { Node, Size, TiledMap, Vec3 } from "cc";
 
 /**
  * 地图坐标换算（纯函数模块）
@@ -12,13 +12,6 @@ export function getMapPixelSize(map: Node) {
   const mapSize = tiledMap.getMapSize();
   const tileSize = tiledMap.getTileSize();
   return new Size(mapSize.width * tileSize.width, mapSize.height * tileSize.height);
-}
-
-// 获取地图上尺寸偏移
-export function getMapOffset(map: TiledMap) {
-  const width = map.getMapSize().width * map.getTileSize().width;
-  const screenWidth = view.getDesignResolutionSize().width;
-  return new Vec3((width - screenWidth) / 2, 0);
 }
 
 /**
