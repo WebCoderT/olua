@@ -83,6 +83,11 @@ const DOCS = [
   "client/README.en.md",
   "client/FAQ.md",
   "client/FAQ.en.md",
+  // 官网（#332）：它也到处写工程数字，但不在本清单里时没人守 —— 曾经停在 51 接口 /
+  // 876 条 e2e 漂了两天才被人眼尖发现。只收 index.html（没有 en 译本，
+  // audit-docs-en 的双语 parity 不涉及它）；句式照写就行，接口 / 路径 / 模型 /
+  // 权限点 / 审计 / e2e 总数这些现有句式对官网文本天然命中。
+  "website/index.html",
   // 项目技能也随仓库提交，而且是**下一轮会话唯一的上下文** —— 里面的数字同样不能漂（#115）。
   // 技能不在 DOCS 里时，「权限点是 13 个」这种话没人管，一过期就把下一次改动引到错的地方。
   //
@@ -110,6 +115,16 @@ const E2E_SCRIPTS = [
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];
+
+/**
+ * 数字与量词之间的间隔：空白或 HTML 标签（#332）
+ *
+ * 官网数据带的数字夹在标记里 —— `<b>99</b><span>个 REST 接口</span>`，
+ * 现行句式里只有 `\s*`，抓不到就等于官网最显眼的那排数字没人守
+ * （负向实测：把 99 改成 97 审计照样打勾）。md 文档里没有标签，
+ * 加进间隔对它们零影响；`<[^>]+>` 不会跨过普通文本，不会把无关数字桥接进句式。
+ */
+const NUM_GAP = "(?:\\s|<[^>]+>)*";
 
 //#region 实测
 
@@ -391,16 +406,16 @@ function main() {
     if (!fs.existsSync(full)) continue;
     const source = fs.readFileSync(full, "utf8");
 
-    // 1. 接口 / 路径 / 模型（中英两种句式都认）
+    // 1. 接口 / 路径 / 模型（中英两种句式都认；间隔用 NUM_GAP，官网标记见其注释）
     //    `个\s*` 而不是 `个` —— 文档里既有「51 个接口」也有「51 个 REST 接口」，
     //    中间那个空格曾经让这条例行长年漏检（`docs/resume.md` 因此一直写着旧数字）。
-    checkNumbers(doc, source, "接口总数", /(\d+)\s*个\s*(?:REST\s+)?接口/g, expected.endpoints);
+    checkNumbers(doc, source, "接口总数", new RegExp(`(\\d+)${NUM_GAP}个${NUM_GAP}(?:REST\\s+)?接口`, "g"), expected.endpoints);
     checkNumbers(doc, source, "接口总数（英文）", /(\d+)\s+interfaces?\b/g, expected.endpoints);
-    checkNumbers(doc, source, "路径数", /(\d+)\s*条路径/g, expected.paths);
+    checkNumbers(doc, source, "路径数", new RegExp(`(\\d+)${NUM_GAP}条路径`, "g"), expected.paths);
     checkNumbers(doc, source, "路径数（英文）", /(\d+)\s+paths?\b/g, expected.paths);
-    checkNumbers(doc, source, "模型数", /(\d+)\s*个模型/g, expected.models);
+    checkNumbers(doc, source, "模型数", new RegExp(`(\\d+)${NUM_GAP}个模型`, "g"), expected.models);
     checkNumbers(doc, source, "模型数（英文）", /(\d+)\s+models?\b/g, expected.models);
-    checkNumbers(doc, source, "权限点数", /(\d+)\s*个权限点/g, expected.permissions);
+    checkNumbers(doc, source, "权限点数", new RegExp(`(\\d+)${NUM_GAP}个权限点`, "g"), expected.permissions);
     checkNumbers(doc, source, "权限点数（英文）", /(\d+)\s+permission\s+points?/gi, expected.permissions);
     // 倒装写法：`**权限点**（18 个）` / `**Permission points** (18)`
     // 数字在词**后面**，正向正则一条都抓不到 —— `server/FAQ.md` 与 `server/FAQ.en.md`
@@ -453,14 +468,15 @@ function main() {
 
     // 3. e2e 总数与加数串
     const e2eTotal = expected.e2e.reduce((sum, item) => sum + item.count, 0);
-    checkNumbers(doc, source, "e2e 总数", /(\d+)\s*条(?:服务端\s*)?e2e/g, e2eTotal);
+    checkNumbers(doc, source, "e2e 总数", new RegExp(`(\\d+)${NUM_GAP}条(?:服务端\\s*)?e2e`, "g"), e2eTotal);
     checkNumbers(doc, source, "e2e 总数（英文）", /(\d+)\s+(?:server\s+)?e2e\b/gi, e2eTotal);
     checkE2eBreakdown(doc, source, expected);
 
     // 4. 审计脚本数 / 单测套数
     //    量词两种都认（`9 套审计` / `9 个跨端审计脚本`），`跨端` 是修饰语可省。
-    checkNumbers(doc, source, "审计脚本数", /(\d+)\s*[套个](?:跨端)?审计(?:脚本)?/g, expected.audits);
-    checkNumbers(doc, source, "单测套数", /(\d+)\s*套单测/g, expected.unitTests);
+    checkNumbers(doc, source, "审计脚本数", new RegExp(`(\\d+)${NUM_GAP}[套个](?:跨端)?审计(?:脚本)?`, "g"), expected.audits);
+    //    单测的「自动化」修饰语可省（`38 套单测` / 官网的 `38 套自动化单测`，#332）。
+    checkNumbers(doc, source, "单测套数", new RegExp(`(\\d+)${NUM_GAP}套(?:自动化)?单测`, "g"), expected.unitTests);
     // 英文量词两种都认：`9 audit scripts` 与 `9 audits`；单测那份还要容忍连字符
     // （`unit-test suites`）—— 就是这么写的，漏认等于没查。
     checkNumbers(doc, source, "审计脚本数（英文）", /(\d+)\s+audits?\b/gi, expected.audits);
