@@ -7,12 +7,10 @@ import {
   Graphics,
   isValid,
   Label,
-  LabelAtlas,
   Layout,
   Mask,
   Node,
   ProgressBar,
-  resources,
   Size,
   Sprite,
   SpriteFrame,
@@ -283,12 +281,11 @@ export default class GameUiHelper {
     const node = UiHelper.createNode("combat_power", position);
     node.addChild(UiHelper.createSprite("combat_icon", uiImages.combatIcon, new Vec2(), iconSize));
     const labelX = iconSize.width / 2 + labelGap;
+    // 战斗力数字用默认字体（曾引用 fonts/combat 数字图集，素材包里从来没有过这个资源，
+    // 加载恒失败后静默回退——2026-10-26 资源引用审计把它当断链清掉；要上数字图集先补素材）
     const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(labelX, 0), new Size(200, iconSize.height), Label.HorizontalAlign.LEFT);
     labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
     const combatLabel = labelNode.getComponent(Label);
-    resources.load(uiImages.combatFont, LabelAtlas, (error, atlas) => {
-      if (!error && atlas && combatLabel.isValid) combatLabel.font = atlas;
-    });
     node.addChild(labelNode);
     return { node, combatLabel };
   }

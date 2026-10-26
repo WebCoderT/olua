@@ -71,8 +71,6 @@ export const uiImages = {
   roleInfoBackground: commonImage("user-info-frame"),
   /** 战斗力图标 */
   combatIcon: commonImage("combat"),
-  /** 战斗力数字图集字体 */
-  combatFont: "fonts/combat",
   /** 金币 / 绑定金币 / 银币 */
   gold: moneyImage("gold"),
   bindGold: moneyImage("bind-gold"),
