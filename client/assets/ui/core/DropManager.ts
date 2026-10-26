@@ -47,7 +47,8 @@ export default class DropManager {
   }
 
   /**
-   * 结算一次掉落并在指定位置生成掉落物
+   * 结算一次掉落并在指定位置生成掉落物（**本地口径**：实时通道不可用时的回滚路径；
+   * 服务端结算在线时击杀掉落由 settle 帧的 reward 给定，走 spawnResults）
    * @param source 怪物掉落配置（条目数组 / 具名掉落表 id / 内联掉落表，缺省用默认掉落表）
    * @param position 掉落位置（一般取怪物死亡时的世界坐标）
    * @param picks 掉落件数：数字 = 固定件数，[最小, 最大] = 件数区间（例 [1, 10] 掉 1~10 件）；
@@ -55,8 +56,17 @@ export default class DropManager {
    * @returns 本次掉落结果（便于日志/统计；为空表示没掉东西）
    */
   static drop(source: DropSource | undefined, position: Vec3, picks?: DropPicks): DropResult[] {
-    const results = rollDropTable(resolveDropTable(source, picks));
-    // 先算全部结果，再统一铺散落点：保证任意两件掉落物都不落在同一点上
+    return this.spawnResults(rollDropTable(resolveDropTable(source, picks)), position);
+  }
+
+  /**
+   * 把一份**已经结算好**的掉落结果铺到指定位置（#316：掉落内容由服务端决定，这里只演）
+   * @param results 掉落结果列表（goodId + count；可为空数组 —— 什么都没掉就不铺）
+   * @param position 掉落位置（一般取怪物死亡时的世界坐标）
+   * @returns 原样返回 results（便于日志/统计）
+   */
+  static spawnResults(results: DropResult[], position: Vec3): DropResult[] {
+    // 先算全部散落点，再统一铺放：保证任意两件掉落物都不落在同一点上
     const offsets = scatterDropPositions(results.length);
     results.forEach((result, index) => {
       const good = getItem(result.goodId);

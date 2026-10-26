@@ -26,6 +26,20 @@ import { RealtimeStatus } from "./RealtimeClient";
  * 最终由 MonsterManager 与场上节点做差量合并。
  */
 
+/**
+ * 一次击杀的奖励（#316：经验与掉落的结算在服务端，形状见 realtime.protocol 的 RealtimeKillReward）
+ * 经验入账在服务端已完成 —— level / expNow / revision 就是入账后的角色状态，客户端照着演。
+ */
+export interface CombatKillReward {
+  exp: number;
+  level: number;
+  expNow: number;
+  expNeed: number;
+  leveledUp: boolean;
+  revision: number;
+  drops: Array<{ goodId: string; count: number }>;
+}
+
 /** 服务端结算结果里客户端关心的形状（协议见 realtime.protocol 的 RealtimeSettleOk） */
 export interface CombatSettleOk {
   castId: number;
@@ -36,6 +50,8 @@ export interface CombatSettleOk {
   hp: number;
   maxHp: number;
   killed: boolean;
+  /** 击杀奖励（仅 killed 时携带；无此字段 = 旧服务端或本地口径回滚路径） */
+  reward?: CombatKillReward;
   duplicate: boolean;
 }
 

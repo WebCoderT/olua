@@ -9,6 +9,8 @@
  * - 输入只认服务端那份权威：技能不存在 / 未学习、怪物 key 不存在、targetId 换了 key，全被拒
  * - **幂等**：同一 castId 重复投递不重复结算 —— 结果原样重发（duplicate: true），血量不扣两次
  * - 死亡由服务端判：血量到 0 恰好报一次 killed，之后的出手报 target_dead
+ * - 击杀奖励（#316）：经验入账（含升级 / 等级差无经验）与掉落抽取都在服务端，
+ *   settle 帧带 reward；管理端改 level_exps / monster_drops 即时生效；幂等重发原样带同一份 reward
  * - 换图清账：targetsReset 之后同一 targetId 按全新目标重新登记
  * - 断线清账：重连后同一 castId 视为新出手（结算上下文已随连接断开清掉）
  *
@@ -25,13 +27,16 @@ const WebSocket = require("ws");
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
+/** 管理员注册邀请码（与 startServer 的 ADMIN_REGISTER_CODE 同值；击杀奖励 region 要用它改配置表） */
+const ADMIN_CODE = "e2e-combat-admin";
+
 //#region 断言小工具
 
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 32;
+const EXPECTED_ASSERTIONS = 55;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -127,6 +132,10 @@ async function startServer(dbPath) {
       JWT_SECRET: "e2e-combat-secret",
       JWT_EXPIRES_IN: "1h",
       LOG_REQUESTS: "false",
+      // 击杀奖励 region（#316）要等怪重生：把默认 30s 压到 5s（前一组「断线不清世界状态」
+      // 的断言都在击杀后 2s 内完成，5s 有三倍余量；后面的等待用显式超时兜住）
+      WORLD_RESPAWN_MS: "5000",
+      ADMIN_REGISTER_CODE: ADMIN_CODE,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -177,6 +186,13 @@ const waitFor = async (label, predicate, timeoutMs = 5_000) => {
   check(false, `${label}（等待超时）`);
   return last;
 };
+
+/** 注册并登录一个管理员，返回 token（临时库是空的，第一个注册者自动是超级管理员） */
+async function registerAdmin(baseUrl, username, password) {
+  await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  return login.data && login.data.token;
+}
 
 /**
  * 一条会话化的 WS 连接：cast 发出去，按 castId 等它自己的 settle 帧
@@ -400,6 +416,141 @@ function roleData(id, name, level, skills) {
     // castSeq 继续往下走；重连后同一 castId 也没人记得它 —— 视为新出手（打活着的 mobB）
     const reconnected = await cast(session, { skillId: "1000", targetId: mobB ? mobB.instanceId : "m1_2", monsterKey: "1" }).promise;
     check(!!(reconnected && reconnected.ok && reconnected.duplicate === false), "重连后结算上下文已清（同 castId 不算重复）", JSON.stringify(reconnected));
+
+    //#endregion
+
+    //#region 六、击杀奖励（#316）：经验与掉落的结算在服务端
+
+    group("六、击杀奖励：经验与掉落的结算在服务端（settle 帧 reward）");
+
+    const adminToken = await registerAdmin(baseUrl, "combat_admin", "Combat#123");
+    check(!!adminToken, "准备：管理员已登录（击杀奖励要用它改配置表）");
+
+    /** 再来一名带技能的玩家（独立账号 / 角色 / 实时连接），返回 { token, roleId, session } */
+    async function newPlayer(name, level = 1) {
+      const registered = await api(baseUrl, "POST", "auth/register", { body: { username: name, password: "pass1234" } });
+      const playerToken = registered.data && registered.data.token;
+      const createdRole = await api(baseUrl, "POST", "roles", { token: playerToken, body: { data: roleData(`${name}_r1`, name, level, { 1000: 1 }) } });
+      const ticket = await api(baseUrl, "POST", "realtime/ticket", { token: playerToken });
+      const playerSession = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
+      await waitFor(`${name} 握手成功`, async () => (playerSession.opened ? playerSession : null));
+      return { token: playerToken, roleId: createdRole.data && createdRole.data.id, session: playerSession };
+    }
+
+    /** 连续出手直到目标死亡，返回带 killed 的那次结算（打不死 / 被拒返回 null） */
+    async function killMonster(player, monsterKey, instanceId) {
+      for (let i = 0; i < 80; i++) {
+        const result = await cast(player.session, { skillId: "1000", targetId: instanceId, monsterKey }).promise;
+        if (!result || !result.ok) return null;
+        if (result.killed) return result;
+      }
+      return null;
+    }
+
+    /** 等某张图上出现活着的怪（WORLD_RESPAWN_MS = 5s，前面的 region 杀过图 1 的怪） */
+    async function aliveMonster(player, mapId) {
+      return waitFor(`mapId=${mapId} 有活着的怪`, async () => {
+        const snap = await player.session.joinWorld(mapId);
+        return (snap && snap.monsters.find((m) => m.alive)) || null;
+      }, 15_000);
+    }
+
+    // —— A. 正常经验：同级击杀 = (怪物等级 + 1) × expPerLevel，服务端落账（revision 推进）——
+
+    const killerA = await newPlayer("combat_rwa");
+    const mobA2 = await aliveMonster(killerA, "1");
+    check(!!mobA2, "A：等到了活着的怪（前面的击杀已按 5s 重生）", JSON.stringify(mobA2));
+    const killedA = await killMonster(killerA, mobA2.monsterKey, mobA2.instanceId);
+    check(!!(killedA && killedA.ok && killedA.reward), "A：击杀结算带 reward", JSON.stringify(killedA));
+    check(!!(killedA && killedA.reward) && killedA.reward.exp === 10, "A：同级击杀经验 = (1+1)×5 = 10", JSON.stringify(killedA && killedA.reward));
+    check(!!(killedA && killedA.reward) && killedA.reward.leveledUp === false && killedA.reward.level === 1, "A：10 经验不够升级（level 不变 / leveledUp=false）");
+    check(Array.isArray(killedA && killedA.reward && killedA.reward.drops), "A：reward.drops 是数组（内容随掉落表，确定性断言在 C 组）");
+    const roleA = await api(baseUrl, "GET", `roles/${killerA.roleId}`, { token: killerA.token });
+    check(roleA.code === 0 && roleA.data.data.exp === 10, "A：服务端已把经验落进存档（data.exp = 10）", JSON.stringify(roleA.data && roleA.data.exp));
+    check(roleA.code === 0 && roleA.data.revision === (killedA.reward ? killedA.reward.revision : -1), "A：reward.revision 与服务端当前修订号一致（客户端照搬不会撞乐观锁）");
+
+    // —— B. 升级：level_exps 管理端改值即时生效 ——
+
+    const levelExpsBefore = await api(baseUrl, "GET", "admin/level-exps?page=1&size=100", { token: adminToken });
+    const levelOneRow = levelExpsBefore.data && levelExpsBefore.data.list.find((row) => row.level === 1);
+    check(!!levelOneRow, "B：读到 1 级经验 seed 行", JSON.stringify(levelOneRow));
+    await api(baseUrl, "PATCH", "admin/level-exps/1", { token: adminToken, body: { exp: 5 } });
+
+    const killerB = await newPlayer("combat_rwb");
+    const mobB2 = await aliveMonster(killerB, "2");
+    check(!!mobB2, "B：地图 2 等到了活着的怪", JSON.stringify(mobB2));
+    const killedB = await killMonster(killerB, mobB2.monsterKey, mobB2.instanceId);
+    // 怪物 3 是 2 级：1 级角色打它差 1 级 → (2+1)×5×(1−1/6) = 12.5 → 13；1 级升 2 级只需 5（刚被管理端改小）→ 升 1 级剩 8
+    check(!!(killedB && killedB.reward) && killedB.reward.exp === 13, "B：击杀 2 级怪经验 = 15×(1−1/6) = 13", JSON.stringify(killedB && killedB.reward));
+    check(!!(killedB && killedB.reward) && killedB.reward.leveledUp === true && killedB.reward.level === 2 && killedB.reward.expNow === 8, "B：管理端改 level_exps 即时生效（升到 2 级，本级剩 8）", JSON.stringify(killedB && killedB.reward));
+    const roleB = await api(baseUrl, "GET", `roles/${killerB.roleId}`, { token: killerB.token });
+    check(roleB.code === 0 && roleB.data.level === 2 && roleB.data.data.exp === 8, "B：服务端已升级（level 列 = 2，data.exp = 8）", JSON.stringify({ level: roleB.data && roleB.data.level, exp: roleB.data && roleB.data.data && roleB.data.data.exp }));
+    // 还原：把 1 级经验改回 seed 值（本库独立，但保持「测试后还原 seed」的纪律）
+    await api(baseUrl, "PATCH", "admin/level-exps/1", { token: adminToken, body: { exp: levelOneRow.exp } });
+
+    // —— C. 确定性掉落：monster_drops 管理端改值即时生效 ——
+
+    const dropsBefore = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=20", { token: adminToken });
+    const dropRowOne = dropsBefore.data && dropsBefore.data.list.find((row) => row.monsterKey === "1");
+    check(!!dropRowOne, "C：读到怪物 1 的掉落 seed 行", JSON.stringify(dropRowOne && dropRowOne.source));
+    await api(baseUrl, "PATCH", "admin/monster-drops/1", {
+      token: adminToken,
+      body: { tableId: null, picks: 2, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
+    });
+
+    const killerC = await newPlayer("combat_rwc");
+    const mobC = await aliveMonster(killerC, "1");
+    check(!!mobC, "C：等到了活着的怪", JSON.stringify(mobC));
+    const killedC = await killMonster(killerC, mobC.monsterKey, mobC.instanceId);
+    // picks 2 × 每次必掉 2 个 → 合并后恰好 drug_hp_1 x4（权重/概率/数量全确定）
+    check(
+      !!(killedC && killedC.reward) && JSON.stringify(killedC.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 4 }]),
+      "C：掉落按改后的表结算（2 次抽取 × 每次 2 个，合并 = drug_hp_1 x4）",
+      JSON.stringify(killedC && killedC.reward && killedC.reward.drops),
+    );
+    check(!!(killedC && killedC.reward) && killedC.reward.exp === 10 && killedC.reward.leveledUp === false, "C：经验与掉落互不影响（level_exps 已还原，不再升级）");
+
+    // 幂等：重发击杀那次的 castId，reward 原样重发（不重掷掉落、不重复入账）
+    const killedCastId = castSeq; // killMonster 的最后一发就是击杀那发
+    const replayCount = killerC.session.settles.length;
+    killerC.session.socket.send(JSON.stringify({
+      type: "cast",
+      data: { castId: killedCastId, skillId: "1000", targetId: mobC.instanceId, monsterKey: mobC.monsterKey },
+    }));
+    const rewardReplay = await waitFor("击杀 castId 重投后的新 settle", async () => {
+      const hits = killerC.session.settles.slice(replayCount).filter((frame) => frame.castId === killedCastId);
+      return hits.length > 0 ? hits[hits.length - 1] : null;
+    });
+    check(
+      !!(killedC && rewardReplay && rewardReplay.ok && rewardReplay.duplicate === true) &&
+        JSON.stringify(rewardReplay.reward) === JSON.stringify(killedC.reward),
+      "C：重复投递原样重发同一份 reward（不重掷、不重复入账）",
+      JSON.stringify(rewardReplay),
+    );
+    // 还原怪物 1 的掉落配置（seed 是内联条目池）
+    await api(baseUrl, "PATCH", "admin/monster-drops/1", {
+      token: adminToken,
+      body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
+    });
+
+    // —— D. 等级差无经验：差 ≥ maxLevelGap（6）→ exp = 0，不入账不推修订号 ——
+
+    const killerD = await newPlayer("combat_rwd");
+    const roleDBefore = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
+    const revisionDBefore = roleDBefore.data && roleDBefore.data.revision;
+    // 把角色存成 10 级（revision 用最新值；带的还是 1 级技能，结算只看等级差）
+    const savedD = await api(baseUrl, "PUT", `roles/${killerD.roleId}`, {
+      token: killerD.token,
+      body: { revision: revisionDBefore, data: roleData("combat_rwd_r1", "combd", 10, { 1000: 1 }) },
+    });
+    check(savedD.code === 0 && savedD.data.revision === revisionDBefore + 1, "D：角色已存成 10 级（revision 推进一次）", JSON.stringify(savedD.data && savedD.data.revision));
+    const mobD = await aliveMonster(killerD, "1");
+    check(!!mobD, "D：等到了活着的怪", JSON.stringify(mobD));
+    const killedD2 = mobD ? await killMonster(killerD, mobD.monsterKey, mobD.instanceId) : null;
+    check(!!(killedD2 && killedD2.reward) && killedD2.reward.exp === 0, "D：等级差 9 ≥ 6 → 无经验（exp = 0）", JSON.stringify(killedD2 && killedD2.reward));
+    check(!!(killedD2 && killedD2.reward) && killedD2.reward.revision === revisionDBefore + 1, "D：无经验不入账（revision 不再推进）", JSON.stringify(killedD2 && killedD2.reward));
+    const roleDAfter = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
+    check(roleDAfter.code === 0 && !roleDAfter.data.data.exp, "D：存档里没有经验记录（服务端没有多记）", JSON.stringify(roleDAfter.data && roleDAfter.data.data && roleDAfter.data.data.exp));
 
     //#endregion
 

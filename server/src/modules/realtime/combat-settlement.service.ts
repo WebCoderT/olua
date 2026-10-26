@@ -1,12 +1,15 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { SKILLS } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS, SKILLS } from "../../shared/game-data.generated";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import { DropTableRepository } from "../../database/repositories/drop-table.repository";
+import { GrowthRepository } from "../../database/repositories/growth.repository";
+import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService } from "../world/world.service";
-import type { RealtimeSettleData } from "./realtime.protocol";
+import type { RealtimeKillReward, RealtimeSettleData } from "./realtime.protocol";
 
 /**
  * 伤害结算（#34：客户端发指令，服务端算结果）
@@ -31,8 +34,10 @@ import type { RealtimeSettleData } from "./realtime.protocol";
  * 本服务不再自留一份账号维度的登记簿（#34 的过渡形态已删）：两份血量必然漂移。
  * 这里只保留**幂等账**（castId → 上次结果），它是每账号的会话状态，与世界无关。
  *
- * 掉落 / 经验的结算仍在客户端（收到 `killed` 后走既有流程）；怪打人（MonsterAI →
- * applyHitDamage）也仍在客户端 —— 怪物出手时机由客户端 AI 驱动，那是后续刀的事。
+ * 击杀奖励（经验 + 掉落）也在这里结算（#316）：经验入账走存档服务（RolesService.applyKillExp），
+ * 掉落读 monster_drops / drop_tables 表抽取，结果以 settle 帧的 `reward` 发回 ——
+ * 客户端只负责演（经验飘字、升级表现、地面掉落物），不再自己决定掉什么、给多少经验。
+ * 怪打人（MonsterAI → applyHitDamage）仍 由客户端 AI 驱动 —— 那是后续刀的事。
  *
  * ===========================================================================
  * 幂等
@@ -53,6 +58,9 @@ export class CombatSettlementService {
     private readonly world: WorldService,
     private readonly monsterConfigs: MonsterRepository,
     private readonly accounts: AccountRepository,
+    private readonly monsterDrops: MonsterDropRepository,
+    private readonly dropTables: DropTableRepository,
+    private readonly growth: GrowthRepository,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -131,11 +139,89 @@ export class CombatSettlementService {
     const applied = this.world.applyDamage(cast.targetId, damage);
     if (!applied) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
 
+    // 击杀奖励（#316）：经验入账与掉落抽取都在服务端 —— 经验入账失败（打到一半被踢等）
+    // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受
+    let reward: RealtimeKillReward | undefined;
+    if (applied.killed) {
+      reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey);
+    }
+
     this.logger.debug(
-      `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${applied.hp}/${target.maxHp}${applied.killed ? "，击杀" : ""}`,
+      `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${applied.hp}/${target.maxHp}${applied.killed ? "，击杀" : ""}${reward ? `，经验 +${reward.exp}，掉落 ${reward.drops.length} 种` : ""}`,
     );
 
-    return { castId: cast.castId, ok: true, skillId: cast.skillId, targetId: cast.targetId, damage, hp: applied.hp, maxHp: target.maxHp, killed: applied.killed, duplicate: false };
+    const ok: RealtimeSettleData = { castId: cast.castId, ok: true, skillId: cast.skillId, targetId: cast.targetId, damage, hp: applied.hp, maxHp: target.maxHp, killed: applied.killed, duplicate: false };
+    return reward ? { ...ok, reward } : ok;
+  }
+
+  /**
+   * 结算一次击杀的奖励（经验入账 + 掉落抽取，都在服务端）
+   *
+   * 经验公式与客户端 configs/level.getKillExp 同一口径：
+   *   同级 = (怪物等级 + 1) × expGain.expPerLevel，等级差线性衰减，差 ≥ expGain.maxLevelGap 无经验。
+   * 标量读 **growth_scalars 表**（#256 管理端可改，即时生效），读不到退回生成物 seed 值；
+   * 怪物等级来自 monsters 表行（#258 起结算直读库）。
+   */
+  private settleKillReward(accountId: string, roleId: string, roleLevel: number, roleRevision: number, stats: MonsterRow, monsterKey: string): RealtimeKillReward {
+    const exp = this.killExpFor(roleLevel, stats.level);
+    // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
+    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp) : null;
+    if (exp > 0 && !applied) {
+      this.logger.warn(`击杀奖励入账失败：账号 ${accountId} 角色 ${roleId}（可能已被下线），本次经验 ${exp} 未记`);
+      return { exp: 0, level: roleLevel, expNow: 0, expNeed: 0, leveledUp: false, revision: roleRevision, drops: [] };
+    }
+    return {
+      exp,
+      level: applied ? applied.level : roleLevel,
+      expNow: applied ? applied.expNow : 0,
+      expNeed: applied ? applied.expNeed : 0,
+      leveledUp: applied ? applied.leveledUp : false,
+      revision: applied ? applied.revision : roleRevision,
+      drops: this.rollDrops(monsterKey),
+    };
+  }
+
+  /** 击杀经验（与客户端 getKillExp 同口径；角色与怪物等级差为绝对值） */
+  private killExpFor(roleLevel: number, monsterLevel: number): number {
+    const perLevel = this.scalarNumber("expGain.expPerLevel", GROWTH_SCALARS["expGain.expPerLevel"]);
+    const maxGap = this.scalarNumber("expGain.maxLevelGap", GROWTH_SCALARS["expGain.maxLevelGap"]);
+    const gap = Math.abs(roleLevel - monsterLevel);
+    if (gap >= maxGap) return 0;
+    return Math.max(1, Math.round((monsterLevel + 1) * perLevel * (1 - gap / maxGap)));
+  }
+
+  /** 成长标量（growth_scalars 表即时生效；读不到用生成物 seed 值兜底） */
+  private scalarNumber(key: string, fallback: number): number {
+    const fromDb = Number(this.growth.findScalar(key)?.value);
+    return Number.isFinite(fromDb) && fromDb > 0 ? fromDb : fallback;
+  }
+
+  /**
+   * 抽取一次掉落（读库：monster_drops → drop_tables，管理端改值即时生效）
+   *
+   * 三选一与 #254 管理端语义一致：table = 引用具名表（行内 picks 可覆盖件数）、
+   * entries = 内联条目池、none/缺行 = 兜底表 default。抽取算法与客户端 DropRoller
+   * 同一口径：权重随机（可重复命中）、命中后再过概率、数量取区间随机、同物品合并。
+   */
+  private rollDrops(monsterKey: string): Array<{ goodId: string; count: number }> {
+    const row = this.monsterDrops.findByKey(monsterKey);
+    let table: { picks: number | [number, number]; entries: DropEntryRow[] } | null = null;
+    if (row && row.source === "table" && row.table_id) {
+      const referenced = this.dropTables.findByKey(row.table_id);
+      if (referenced) {
+        table = {
+          picks: row.picks ? JSON.parse(row.picks) : JSON.parse(referenced.picks),
+          entries: JSON.parse(referenced.entries),
+        };
+      }
+    } else if (row && row.source === "entries" && row.entries) {
+      table = { picks: row.picks ? JSON.parse(row.picks) : 1, entries: JSON.parse(row.entries) };
+    } else {
+      const fallback = this.dropTables.findByKey("default");
+      table = fallback ? { picks: JSON.parse(fallback.picks), entries: JSON.parse(fallback.entries) } : null;
+    }
+    if (!table) return [];
+    return rollDropTable(table);
   }
 
   /** 记住一次结算结果（每账号限量，超出挤掉最旧的） */
@@ -232,6 +318,56 @@ function rollRange(range: [number, number]): number {
   const minimum = Math.ceil(Math.min(range[0], range[1]));
   const maximum = Math.floor(Math.max(range[0], range[1]));
   return minimum + Math.floor(Math.random() * (maximum - minimum + 1));
+}
+
+/** 掉落条目（drop_tables.entries / monster_drops.entries JSON 解析后的形状；库内已全显式，缺省只为容错） */
+interface DropEntryRow {
+  goodId: string;
+  weight?: number;
+  chance?: number;
+  count?: [number, number];
+}
+
+/** 在 [min, max] 区间随机取整数（含两端、自动纠正颠倒；与客户端 DropRoller.randomInt 同口径） */
+function dropRandomInt(min: number, max: number): number {
+  const minimum = Math.ceil(Math.min(min, max));
+  const maximum = Math.floor(Math.max(min, max));
+  return minimum + Math.floor(Math.random() * (maximum - minimum + 1));
+}
+
+/**
+ * 结算一次掉落表（与客户端 utils/drop/DropRoller.rollDropTable 同一口径）：
+ * 先定抽取次数（数字 = 固定，[min, max] = 区间随机），再按权重独立抽取该次数
+ * （可重复命中同一条目），每次命中后过概率、数量取区间随机，同一物品合并数量。
+ */
+function rollDropTable(table: { picks: number | [number, number]; entries: DropEntryRow[] }): Array<{ goodId: string; count: number }> {
+  const picks = Array.isArray(table.picks)
+    ? Math.max(0, dropRandomInt(table.picks[0], table.picks[1]))
+    : Math.max(0, Math.floor(table.picks ?? 1));
+  if (!picks || !table.entries.length) return [];
+
+  const weighted = table.entries.filter((entry) => (entry.weight ?? 1) > 0);
+  const total = weighted.reduce((sum, entry) => sum + (entry.weight ?? 1), 0);
+  const results: Array<{ goodId: string; count: number }> = [];
+  for (let index = 0; index < picks && weighted.length > 0 && total > 0; index++) {
+    let roll = Math.random() * total;
+    let entry = weighted[weighted.length - 1];
+    for (const candidate of weighted) {
+      roll -= candidate.weight ?? 1;
+      if (roll < 0) {
+        entry = candidate;
+        break;
+      }
+    }
+    // 概率判定（默认必掉）与数量（默认 1）
+    if (Math.random() > (entry.chance ?? 1)) continue;
+    const count = dropRandomInt(entry.count?.[0] ?? 1, entry.count?.[1] ?? 1);
+    if (count <= 0) continue;
+    const existed = results.find((result) => result.goodId === entry.goodId);
+    if (existed) existed.count += count;
+    else results.push({ goodId: entry.goodId, count });
+  }
+  return results;
 }
 
 //#endregion
