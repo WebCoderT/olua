@@ -1,20 +1,25 @@
 import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
 import { monsters } from "../../configs/monster";
-import { skills } from "../../configs/skill";
+import { findSkillConfig, skills } from "../../configs/skill";
+import { statuses } from "../../configs/status";
+import { statusEffect } from "../../configs/effect";
 import { getKillExp } from "../../configs/level";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
 import { SkillId } from "../../types/skill";
+import { ACTION } from "../../types/animation";
 import { skillDamageBand } from "../utils/battle/BattleMath";
 import { cursorConfig } from "../../configs/cursor";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import DropManager from "./DropManager";
 import MonsterAI from "./MonsterAI";
+import EffectManager from "./EffectManager";
+import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterHitEntry, WorldSnapshot } from "../utils/net/CombatChannel";
+import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, WorldSnapshot } from "../utils/net/CombatChannel";
 import RealtimeClient from "../utils/net/RealtimeClient";
 
 /**
@@ -61,6 +66,15 @@ export default class MonsterManager {
   /** 玩家被服务端 AI 普攻命中的出口（#323；组合根接线：飘字 / 红闪 / 受击动作 / 血量入账） */
   static onPlayerServerHit: ((hit: MonsterHitEntry) => void) | null = null;
 
+  /**
+   * 怪物身上的状态特效（#372）：实例 id → statusId → { 节点, 到期时刻 }
+   *
+   * 与角色的 `StatusManager` 分开一套的原因：那边是**单 owner**（主角，`setOwner` 注入），
+   * 图标栏也只有一个。怪物这边只演身上特效，没有图标栏，而且每只怪一份 —— 挂在
+   * 怪物节点下当子节点，随怪物移动 / 销毁，不需要每帧对齐坐标。
+   */
+  private static statusEffects = new Map<string, Map<string, { node: Node; expireAt: number }>>();
+
   /** 场上怪物（节点 -> 怪物数据），供 MonsterAI 每帧遍历 */
   static getMonsterMap() {
     return this.monsterMap;
@@ -74,6 +88,8 @@ export default class MonsterManager {
     });
     this.monsterMap.clear();
     this.instanceIndex.clear();
+    // 状态特效是怪物节点的子节点，上面 destroy 时已经一并销毁；这里只清账，避免下次进图带着旧记录
+    this.statusEffects.clear();
     this.worldSeen = false;
     LayerManager.clearMonsterLayer();
     // 旧图的目标在服务端那边也一并作废（#34：结算上下文不能跨图延续）
@@ -228,14 +244,107 @@ export default class MonsterManager {
       if (!node) continue; // 还没生成的怪（重生广播的 world 帧会先落场），下一帧再对齐
       MonsterAI.applyServerState(node, entry.x, entry.y, entry.moving);
     }
+    // 技能释放（#372）：动作 + 特效 + 自身状态特效，全部由服务端驱动
+    const castIds = new Set<string>();
+    for (const cast of data.casts ?? []) {
+      if (this.playServerCast(cast)) castIds.add(cast.instanceId);
+    }
     const myId = RealtimeClient.onlineUserId;
     for (const hit of data.hits) {
+      // 普攻在服务端没有单独的「出手」事件：命中即代表这只怪刚挥了一下，补播攻击动作
+      // （技能的那一下就由 casts 播过了，同一帧不重复播）
+      if (!castIds.has(hit.instanceId)) this.playServerAttack(hit.instanceId);
       if (hit.accountId !== myId) continue;
       if (!this.onPlayerServerHit) {
         console.warn("[monster-ai] 玩家被普攻命中但没有处理者（onPlayerServerHit 未接线），事件被丢弃");
         continue;
       }
       this.onPlayerServerHit(hit);
+    }
+    this.cleanupStatusEffects();
+  }
+
+  /**
+   * 怪物释放技能的演出（#372）
+   *
+   * 数值全在服务端（伤害走 hits），这里只做三件事：播技能动作、播技能特效、
+   * 状态型技能在怪物身上挂状态特效。配置查不到（技能被删 / 客户端快照落后）时告警跳过 ——
+   * 演不出来可以接受，崩溃不行。
+   */
+  private static playServerCast(cast: MonsterCastEntry): boolean {
+    const node = this.instanceIndex.get(cast.instanceId);
+    if (!node || !isValid(node)) return false; // 半销毁 / 已死亡的怪：静默跳过
+    const monster = this.monsterMap.get(node);
+    if (!monster) return false;
+    const config = findSkillConfig(cast.skillId);
+    if (!config) {
+      console.warn(`[monster-skill] 怪物 ${cast.instanceId} 释放的技能 ${cast.skillId} 不在配置里，无法演出`);
+      return false;
+    }
+    MonsterAI.playServerAction(node, config.action);
+    // effectIsOnSelf / 无目标时退回释放者，与角色侧同一口径
+    EffectManager.play(config, node, null, monster);
+    if (cast.statusId) this.applyStatusEffect(cast.instanceId, node, cast.statusId);
+    return true;
+  }
+
+  /** 补播一次普攻动作（服务端模式下由命中事件驱动） */
+  private static playServerAttack(instanceId: string) {
+    const node = this.instanceIndex.get(instanceId);
+    if (!node || !isValid(node)) return;
+    MonsterAI.playServerAction(node, ACTION.ATTACK_NEAR);
+  }
+
+  /**
+   * 给怪物挂状态特效（#372）
+   *
+   * 同一状态重复获得只刷新到期时间、不重建节点（与 `StatusManager.apply` 同一语义）。
+   * 节点挂成怪物子节点：怪物移动时自动跟随，怪物销毁时一并回收。
+   */
+  private static applyStatusEffect(instanceId: string, node: Node, statusId: string) {
+    const config = statuses.get(statusId);
+    if (!config || !config.effect) return;
+    let map = this.statusEffects.get(instanceId);
+    if (!map) {
+      map = new Map<string, { node: Node; expireAt: number }>();
+      this.statusEffects.set(instanceId, map);
+    }
+    const existing = map.get(statusId);
+    if (existing && isValid(existing.node)) {
+      existing.expireAt = Date.now() + config.duration * 1000;
+      return;
+    }
+    const effectNode = GameUiHelper.createSkillEffect(`monster_status_${statusId}`);
+    effectNode.parent = node;
+    effectNode.setPosition(0, statusEffect.offset.y, 0);
+    const entry = { node: effectNode, expireAt: Date.now() + config.duration * 1000 };
+    map.set(statusId, entry);
+    AnimationHelper.loadFramesFromAtlas(config.effect).then((frames) => {
+      // 场景可能已切换 / 状态已到期：节点失效就不再装载
+      if (!isValid(effectNode)) return;
+      if (!frames.length) {
+        effectNode.destroy();
+        return;
+      }
+      AnimationHelper.playLoopWithFrames(`monster_status_${statusId}`, effectNode, frames, statusEffect.frameRate);
+    });
+  }
+
+  /** 状态到期 / 怪物已离场的清理（每帧到达时做一次，不另起定时器） */
+  private static cleanupStatusEffects() {
+    const now = Date.now();
+    for (const [instanceId, map] of [...this.statusEffects]) {
+      const node = this.instanceIndex.get(instanceId);
+      if (!node || !isValid(node)) {
+        this.statusEffects.delete(instanceId);
+        continue;
+      }
+      for (const [statusId, entry] of [...map]) {
+        if (now < entry.expireAt && isValid(entry.node)) continue;
+        if (isValid(entry.node)) entry.node.destroy();
+        map.delete(statusId);
+      }
+      if (map.size === 0) this.statusEffects.delete(instanceId);
     }
   }
 

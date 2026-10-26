@@ -72,8 +72,29 @@ const EXPECTED = {
   "1011": { id: "1011", label: "金刚护体", icon: "skill/icon/1008", cooldown: 1, mpCost: 15, statusId: "2002", requireTarget: false, targetType: "1", oeccupation: "1", level: 10, description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false },
 };
 
-check(skillData.length === 12, `技能表 12 个（实得 ${skillData.length}）`);
-check(JSON.stringify(skillData.map((s) => s.id)) === JSON.stringify(["1000", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011"]), "id 序列 1000→1011 连续（插入顺序即 Map 顺序）");
+const roleSkills = skillData.filter((item) => item.owner !== "monster");
+const monsterSkills = skillData.filter((item) => item.owner === "monster");
+check(skillData.length === 15, `技能表 15 个 = 角色 12 + 怪物 3（实得 ${skillData.length}）`);
+check(
+  JSON.stringify(roleSkills.map((s) => s.id)) === JSON.stringify(["1000", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011"]),
+  "角色技能 id 序列 1000→1011 连续（插入顺序即 Map 顺序）",
+);
+check(
+  JSON.stringify(monsterSkills.map((s) => s.id)) === JSON.stringify(["9001", "9002", "9003"]),
+  "怪物技能在 9000 段（#372：与角色技能同表，靠 owner 分归属）",
+);
+check(monsterSkills.every((s) => s.owner === "monster"), "怪物技能行都带 owner=monster");
+// 怪物技能的关键锚点：伤害型有倍率、状态型挂状态（服务端按这两个字段执行）
+const monsterNuke = monsterSkills.find((s) => s.id === "9001");
+check(
+  monsterNuke?.type === "0" && monsterNuke?.damageCoefficients?.[0]?.baseTypeRate === 1.8 && !monsterNuke?.statusId,
+  "9001 = 伤害型（1.8 倍物理攻击，不挂状态）",
+  monsterNuke ? `${monsterNuke.type} / ${monsterNuke.damageCoefficients?.[0]?.baseTypeRate}` : "缺失",
+);
+check(
+  monsterSkills.find((s) => s.id === "9002")?.statusId === "9001" && monsterSkills.find((s) => s.id === "9003")?.statusId === "9002",
+  "9002 / 9003 = 状态型，分别挂状态 9001（狂怒）/ 9002（硬化皮肤）",
+);
 check(skillData.every((skill) => !("onClick" in skill)), "数据模块里没有任何 onClick（实现在接线层，不进来）");
 
 for (const [id, expected] of Object.entries(EXPECTED)) {
@@ -106,8 +127,15 @@ check(importLines.length > 0 && importLines.every((line) => /^import .* from "\.
 check(!/from "\.\.\/skills\/warrior"/.test(dataSource), "skill-data.ts 不 import 技能实现（注释里允许提到名字，import 语句不允许）");
 check(!/from "\.\.\/ui\//.test(dataSource) && !/from "\.\.\/entities\//.test(dataSource), "skill-data.ts 不引用 ui/ 运行时与 entities/");
 check(/import \{ skill_1000, skill_1001, skill_1008, skill_1010 \} from "\.\.\/skills\/warrior";/.test(skillSource), "skill.ts（接线层）引用 skills/warrior 的 4 个实现");
-check(/const skillHandlers: Record<SkillId, \(context: SkillContext\) => void> = \{/.test(skillSource), "接线映射是 Record<SkillId, ...>（tsc 强制 12 个 id 齐全，漏接编译不过）");
-check(/skills\.set\(item\.id, \{ \.\.\.item, onClick: skillHandlers\[item\.id\] \}\);/.test(skillSource), "skills Map 由 spread 合成（数值透传 + onClick 按 id 接上）");
+check(
+  /const roleSkillHandlers: Record<RoleSkillId, \(context: SkillContext\) => void> = \{/.test(skillSource),
+  "接线映射是 Record<RoleSkillId, ...>（tsc 强制 12 个角色 id 齐全，漏接编译不过）",
+);
+check(
+  /skills\.set\(item\.id, \{ \.\.\.item, onClick \}\);/.test(skillSource),
+  "skills Map 由 spread 合成（数值透传 + onClick 按 id 接上）",
+);
+check(/if \(!onClick\) continue;/.test(skillSource), "没有本地实现的技能（怪物技能）不进 skills Map —— 误调本地释放更该暴露");
 
 // ==============================================================================
 //  C. 接线运行期（编译 skill.ts → 产物 warrior.js 换命名函数桩 → 同一性）

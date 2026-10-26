@@ -1,7 +1,23 @@
 import { isValid, Node, Vec2, Vec3 } from "cc";
 import { skillEffect } from "../../configs/effect";
-import { Role } from "../../entities/Role";
-import { SkillConfig } from "../../types/skill";
+import type { Role } from "../../entities/Role";
+
+/**
+ * 特效播放需要的宿主能力：只用到动作速度倍率
+ *
+ * #372 起怪物也会播技能特效 —— 怪物不是 Role（没有技能 / 背包），但同样有 speedRate，
+ * 所以这里只要求这一项，角色传 Role 仍然成立。
+ */
+export type SkillEffectActor = Pick<Role, "speedRate">;
+
+/**
+ * 特效播放需要的技能侧配置：只要这三项
+ *
+ * 收窄到 `SkillData` 也能传（#372：怪物技能的配置来自数值表 + 快照，没有本地 release 实现，
+ * 所以没有 `onClick`）；角色侧传完整 `SkillConfig` 仍然成立。
+ */
+export type SkillEffectConfig = Pick<SkillConfig, "effect" | "effectIsOnSelf" | "action">;
+import type { SkillConfig } from "../../types/skill";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
@@ -25,7 +41,7 @@ export default class EffectManager {
    * @param target 本次技能的目标节点（群体/无目标技能为 null）
    * @param role 释放时读取的角色数据（动作速度倍率的来源）
    */
-  static play(config: SkillConfig, caster: Node, target: Node | null, role: Role) {
+  static play(config: SkillEffectConfig, caster: Node, target: Node | null, role: SkillEffectActor) {
     if (!config.effect || !isValid(caster)) return;
     // 目标无效（无选中目标/目标已死亡）时退回释放者身上，避免特效出现在无效位置
     const onSelf = config.effectIsOnSelf || !target || !isValid(target);
@@ -44,7 +60,7 @@ export default class EffectManager {
    * @param role 释放时读取的角色数据（动作速度倍率的来源）
    * @param offset 特效相对 position 的偏移（缺省取释放者挂点偏移）
    */
-  static playAt(config: SkillConfig, position: Vec3, role: Role, offset: Vec2 = skillEffect.selfOffset) {
+  static playAt(config: SkillEffectConfig, position: Vec3, role: SkillEffectActor, offset: Vec2 = skillEffect.selfOffset) {
     if (!config.effect) return;
     const name = `skill_effect_${this.effectName(config.effect)}`;
     const node = GameUiHelper.createSkillEffect(name);
@@ -62,7 +78,7 @@ export default class EffectManager {
   }
 
   /** 技能动作动画的总时长（秒）：与 AnimationHelper 的片段切割同一口径（速度倍率 = 每秒循环数） */
-  private static actionDuration(role: Role, config: SkillConfig) {
+  private static actionDuration(role: SkillEffectActor, config: SkillEffectConfig) {
     const rate = role.speedRate[config.action] ?? 1;
     return 1 / (rate > 0 ? rate : 1);
   }

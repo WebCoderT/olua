@@ -102,6 +102,22 @@ export default class MonsterAI {
   }
 
   /**
+   * 播一次服务端驱动的动作（#372：由 MonsterManager 收到 casts / hits 后调用）
+   *
+   * 服务端权威模式下怪物的行为不在本地决策，动作只能由事件驱动：
+   * 普攻命中 → attack_near；释放技能 → 技能配置的 action。
+   * 半销毁节点、已死亡的怪、还没装载动画的怪一律静默跳过 —— 这是最常见的崩点。
+   */
+  static playServerAction(node: Node, action: ACTION, direction?: DIRECTION) {
+    if (!isValid(node)) return;
+    const animate = this.getAnimate(node);
+    if (!animate) return;
+    const state = this.states.get(node);
+    if (!state || state.dead) return;
+    this.playAction(animate, state, action, direction ?? state.direction);
+  }
+
+  /**
    * 动画播完续播当前动作（由怪物动画节点的 FINISHED 事件触发）
    * 怪物当前动作由本类维护，因此续播也在这里做，否则动作播完会停在最后一帧不再动；
    * 一次性动作（受伤）播完不续播，直接切回待机

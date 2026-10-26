@@ -5,7 +5,7 @@
  * 跑的是**真实配置表与真实覆写函数**（configs-sandbox 编译 CommonJS + cc 垫片），不是复刻。
  * 盯的四条口径：
  * · 技能覆写生效并原地改 —— 名字 / 冷却 / 耗蓝 / 距离 / 等级 / 倍率 / 挂载状态 / 释放限制
- * · 按 owner 分流 —— 只覆写 `owner === "role"` 的行；怪物行留给 #12 主体那一刀
+ * · 怪物技能（#372）—— 同表一起覆写；本地没有的怪物行追加（管理端能新建），角色行仍不追加
  * · 状态覆写生效 —— 时长 / 文案 / 特效 / 三项战斗修正（缺省维度是 undefined，不是 0）
  * · 接线钉死 —— 快照覆写后要重建 skills Map（副本），释放限制三处落点都在
  *
@@ -111,12 +111,24 @@ function main() {
   snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1011", statusId: "" })] });
   check(skill1011.statusId === undefined, "空串清成 undefined（消费方判 `if (config.statusId)` 即可）", String(skill1011.statusId));
 
-  console.log("\n=== 按 owner 分流：怪物行不覆写角色技能 ===");
-  const cooldownBefore = skillData.find((item) => item.id === "1000").cooldown;
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ owner: "monster", cooldown: 99, label: "怪物技能" })] });
-  const afterMonsterRow = skillData.find((item) => item.id === "1000");
-  check(afterMonsterRow.cooldown === cooldownBefore, "owner=monster 的行被跳过（怪物技能等 #12 主体那一刀）", String(afterMonsterRow.cooldown));
-  check(afterMonsterRow.label !== "怪物技能", "名称也没被怪物行改掉", afterMonsterRow.label);
+  console.log("\n=== 怪物技能（#372）：同表一起覆写，本地没有的怪物行追加 ===");
+  // 已有行（9001 在客户端配置里）→ 原地覆写：服务端执行技能，但动作 / 特效 / 施法硬直要看新配置
+  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "9001", owner: "monster", cooldown: 12, label: "改过的猛击" })] });
+  const monsterAfter = skillData.find((item) => item.id === "9001");
+  check(monsterAfter.cooldown === 12 && monsterAfter.label === "改过的猛击", "怪物技能行同样被覆写", `${monsterAfter.cooldown} / ${monsterAfter.label}`);
+  check(monsterAfter.owner === "monster", "覆写后仍带 owner=monster（不被打回 role）", String(monsterAfter.owner));
+
+  // 本地没有的怪物行 → 追加：管理端能新建怪物技能，客户端必须能演新动作
+  const countBeforeMonster = skillData.length;
+  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "9010", owner: "monster", label: "新技能", action: "attack_skill_1" })] });
+  const appended = skillData.find((item) => item.id === "9010");
+  check(skillData.length === countBeforeMonster + 1, "本地没有的怪物技能被追加（管理端新建的技能也能演）", String(skillData.length));
+  check(appended && appended.action === "attack_skill_1", "追加行的动作 / 特效来自快照", appended ? String(appended.action) : "缺失");
+
+  // 本地没有的角色行 → 忽略：角色技能清单固定在配置里，凭空多一行不会有人释放它
+  const countBeforeRole = skillData.length;
+  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1999", owner: "role", label: "不存在的角色技能" })] });
+  check(skillData.length === countBeforeRole, "本地没有的角色技能行被忽略（清单固定在配置里）", String(skillData.length));
 
   console.log("\n=== 状态：时长 / 文案 / 特效 / 三项战斗修正 ===");
   const statusBefore = statuses.get("2001");
@@ -174,8 +186,9 @@ function main() {
   const hpBeforeEmpty = skillData.find((item) => item.id === "1000").cooldown;
   snapshotApi.applySkillSnapshot({});
   check(skillData.find((item) => item.id === "1000").cooldown === hpBeforeEmpty, "空快照保留当前值（旧服务端不下发技能表也不炸）");
+  const countBeforeUnknown = skillData.length;
   snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "不存在的技能" })] });
-  check(skillData.length === 12, "未知 id 被忽略，不新增行", String(skillData.length));
+  check(skillData.length === countBeforeUnknown, "未知 id 被忽略，不新增行", String(skillData.length));
 
   console.log("\n=== 接线钉死（源码断言：这三处不接上，配了也不会生效） ===");
   const configLoader = read("assets/ui/utils/net/ConfigLoader.ts");
@@ -200,6 +213,17 @@ function main() {
   const warrior = read("assets/skills/warrior.ts");
   check(/config\.statusId/.test(warrior), "技能释放实现从配置读 statusId（手写映射表已废除）");
   check(/castLockMs/.test(warrior), "技能释放实现把 castLockMs 传给动作锁");
+
+  // 怪物侧（#372）：服务端广播 → 演出。这三处不接上，怪物放技能在画面上什么都没有
+  const monsterManager = read("assets/ui/core/MonsterManager.ts");
+  check(/data\.casts/.test(monsterManager), "MonsterManager 消费 casts 帧（技能动作 / 特效的入口）");
+  check(/findSkillConfig\(cast\.skillId\)/.test(monsterManager), "技能配置按 id 查（怪物技能不在 skills Map 里）");
+  check(/applyStatusEffect\(cast\.instanceId/.test(monsterManager), "状态型技能挂到怪物身上播特效");
+  const combatChannel = read("assets/ui/utils/net/CombatChannel.ts");
+  check(/casts\?: MonsterCastEntry\[\]/.test(combatChannel), "CombatChannel 的 AI 帧带 casts（旧服务端不带时按空数组）");
+  const serverAi = read("../server/src/modules/realtime/monster-ai.service.ts");
+  check(/pendingCasts/.test(serverAi) && /castSkill\(/.test(serverAi), "服务端 AI 攒 casts 并释放技能");
+  check(/defenseMultiplierOf/.test(serverAi), "服务端按怪物状态修正防御（CombatSettlement 取它）");
 
   finish("技能 / 状态快照覆写：全部断言通过");
 }
