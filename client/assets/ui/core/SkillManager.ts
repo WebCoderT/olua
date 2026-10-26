@@ -81,8 +81,10 @@ export default class SkillManager {
       return false;
     }
     // 单体技能：无选中目标时自动选取施法距离内最近的存活怪物
+    // requireTarget === false（#367，自身 / 状态型技能）时不找目标也不校验距离 ——
+    // 没有敌人在场也该能给自己上盾，否则玩家得先拉到怪才能加 buff
     let target = context.target;
-    if (config.targetType === SkillTargetType.SINGLE) {
+    if (config.targetType === SkillTargetType.SINGLE && config.requireTarget !== false) {
       if (!target || !isValid(target)) target = context.monsters.getNearestMonster(context.caster.getWorldPosition(), config.distance);
       if (!target) {
         // 可自动释放的技能：交给 AutoBattle 自动选最近的怪物并走位到范围内（快速攻击）

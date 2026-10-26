@@ -1,9 +1,9 @@
-import { SkillStatusMap, StatusConfig, StatusId, StatusSource } from "../types/status";
+import { StatusConfig, StatusId, StatusSource } from "../types/status";
 
 /**
  * 状态注册表
  * 所有状态的名称/图标/持续时间/来源/身上特效统一在这里登记，
- * 来源不限：技能释放（见 SkillStatusMap）、装备穿戴、VIP 等增值属性都调 StatusManager.apply 添加，
+ * 来源不限：技能释放（技能配置的 statusId，见 configs/skill-data）、装备穿戴、VIP 等增值属性都调 StatusManager.apply 添加，
  * 配置新增一项状态即可，管理器与视图零改动
  */
 export const statuses = new Map<StatusId, StatusConfig>();
@@ -32,11 +32,3 @@ statuses.set("2002", {
   // 防御乘法系数：生效于「攻 - 防」的防御项（乘法口径，多状态连乘）
   combat: { defenseMultiplier: 1.5 },
 });
-
-/** 技能 -> 状态映射（状态型技能释放成功后按此添加状态；装备/VIP 等来源直接调 StatusManager.apply） */
-export const skillStatusMap: SkillStatusMap = {
-  /** 护体神盾 */
-  "1010": "2001",
-  /** 金刚护体 */
-  "1011": "2002",
-};

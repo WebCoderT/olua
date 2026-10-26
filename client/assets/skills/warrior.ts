@@ -16,7 +16,7 @@ export function skill_1000(context: SkillContext) {
   const { config, level, role, caster, target, monsters } = context;
   if (!target) return;
   // 面向目标播放技能配置的动作动画（config.action）——表现立刻走，不等服务端的往返
-  caster.playSkillAttack(config.action, getDirectionToTarget(target, caster));
+  caster.playSkillAttack(config.action, getDirectionToTarget(target, caster), config.castLockMs);
   const monster = monsters.getMonsterData(target);
   if (!monster) return;
   const rate = config.damageCoefficients[level - 1].baseTypeRate;
@@ -36,9 +36,14 @@ export function skill_1001(context: SkillContext) {
   skill_1000(context);
 }
 
-/** 护体神盾：给自身添加护体神盾状态（身上循环特效 + 头像下方图标；重复释放刷新持续时间，见 core/StatusManager） */
+/**
+ * 状态型技能（护体神盾 / 金刚护体等）：给自身挂技能配置里的 statusId（#367）
+ * 挂哪个状态由配置决定，不再在代码里写死技能 id —— 后台改 statusId 即换状态，
+ * 新增状态型技能也不用改这里。没配 statusId 时什么都不做（配置型技能的合理空缺）。
+ */
 export function skill_1010(context: SkillContext) {
-  StatusManager.applyStatusOfSkill("1010");
+  const statusId = context.config.statusId;
+  if (statusId) StatusManager.apply(statusId);
 }
 
 /**

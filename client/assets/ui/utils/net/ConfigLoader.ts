@@ -1,6 +1,7 @@
 import { GameConfigApi } from "./Api";
 import type { GameConfigSnapshot } from "./ApiModels";
 import { applyConfigSnapshot } from "../../../configs/apply-snapshot";
+import { rebuildSkills } from "../../../configs/skill";
 
 /**
  * 服务端配置快照加载器（#294）
@@ -25,6 +26,9 @@ export async function loadGameConfig(): Promise<void> {
     loading = GameConfigApi.snapshot({ silent: true })
       .then((snapshot: GameConfigSnapshot) => {
         applyConfigSnapshot(snapshot);
+        // 技能与状态覆写的是数据表，而消费者读的是 configs/skill 的 Map ——
+        // 不重建就还是旧副本（#367）
+        rebuildSkills();
         loaded = true;
       })
       .catch(() => {

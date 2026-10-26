@@ -1,5 +1,3 @@
-import type { SkillId } from "./skill";
-
 /**
  * 状态来源（状态如何获得：技能 / 装备 / VIP 等增值属性 / 其他）
  * 状态的添加入口统一是 core/StatusManager.apply，来源只作标记（供后续按来源查询/过滤）
@@ -66,11 +64,13 @@ export interface StatusConfig {
   effectHoldLast?: boolean;
 }
 
-/** 状态编号 */
-export type StatusId = "2001" | "2002";
-
-/** 技能获得状态的映射（skillId -> 状态编号，释放技能后由技能实现据此添加状态；非状态型技能不配） */
-export type SkillStatusMap = Partial<Record<SkillId, StatusId>>;
+/**
+ * 状态编号
+ *
+ * #367 起状态与技能一样由配置表下发（角色 / 怪物同表，`owner` 区分），id 不再是闭集：
+ * 角色状态用 2000 段、怪物状态用 3000 段，运营按段位新增。
+ */
+export type StatusId = string;
 
 /** 图标栏展示用的状态徽标（视图层只依赖这个轻量结构，不反查配置） */
 export interface StatusBadge {

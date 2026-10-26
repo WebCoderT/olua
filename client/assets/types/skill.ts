@@ -4,6 +4,7 @@ import type { ACTION, DIRECTION } from "./animation";
 import type { Monster } from "./monster";
 import type { BattleAttributes } from "./common";
 import type { OECCUPATION } from "./role";
+import type { StatusId } from "./status";
 
 // 技能类型
 export enum SkillType {
@@ -57,8 +58,9 @@ export interface SkillCaster extends Node {
   /**
    * 面向指定方向播放技能配置的动作动画（技能表现），动画播放完成前锁定移动与再次攻击
    * @param action 技能配置的动作（config.action）
+   * @param lockMs 动作锁时长（毫秒；缺省 / 0 = 跟动画时长走，见 config.castLockMs）
    */
-  playSkillAttack(action: ACTION, direction: DIRECTION): boolean;
+  playSkillAttack(action: ACTION, direction: DIRECTION, lockMs?: number): boolean;
   /** 设置角色世界坐标（瞬移/传送，相机同步跟随，见 RoleDisplay.setWorldPositionByTransfer） */
   setWorldPositionByTransfer(worldPosition: Vec3): void;
 }
@@ -138,6 +140,21 @@ export interface SkillConfig {
   effect?: string;
   /** 特效是否在自己身上 */
   effectIsOnSelf?: boolean;
+  /**
+   * 释放成功后给**自己**挂的状态 id（#367：替代原来手写在 configs/status 的 skillStatusMap）
+   * 状态型技能必填；普通伤害技能留空
+   */
+  statusId?: StatusId;
+  /**
+   * 释放动作锁时长（毫秒；#367，0 / 缺省 = 跟动画时长走）
+   * 调大 = 出手后硬直更久，客户端在锁内不接受移动与再次出手
+   */
+  castLockMs?: number;
+  /**
+   * 是否要求有合法目标（#367，缺省 true）
+   * 自身 / 状态型技能配 false：没有敌人时也能给自己上状态
+   */
+  requireTarget?: boolean;
 }
 
 /**
