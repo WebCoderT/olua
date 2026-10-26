@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
-import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
+import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
@@ -15,7 +15,7 @@ import {
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { SKILL_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
-import { SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
+import { CreateSkillDto, SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
 
 /** 归属 / 分类 / 目标类型的中文对照（写进接口文档，省得前端再抄一份） */
 const LABEL_HINT =
@@ -74,5 +74,42 @@ export class AdminSkillController {
   @ApiDataResponse(SkillDto, { description: "更新后的技能配置" })
   update(@Param("id") id: string, @Body() dto: UpdateSkillDto): SkillDto {
     return this.gameConfigService.updateSkill(id, dto);
+  }
+
+  @Post()
+  @AuditTarget("skill")
+  @ApiAdminDoc({
+    operationId: "adminSkill.create",
+    summary: "新增怪物技能",
+    description:
+      "**只支持怪物技能**：`id` 必须是 9000~9999 的四位数字，`owner` 只能是 monster。\n" +
+      "角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在生成物里，不能从后台造出来。\n\n" +
+      "没传的字段走建行默认值（分类 0 主动 / 目标类型 1 单体 / 冷却 0 / 开启等级 1）。\n" +
+      "创建时**全量校验跨字段约束**（与编辑不同：新行没有历史包袱）：状态型要有 statusId、" +
+      "主动技能至少一条倍率、statusId 必须真实存在，任一不满足 → 400（`40000`）。\n\n" +
+      "新建的技能还没有任何怪挂载 —— 要在「怪物配置」页给具体的怪挂上技能后才会被释放（挂载接口在怪物控制器里）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(SkillDto, { description: "创建后的技能配置" })
+  create(@Body() dto: CreateSkillDto): SkillDto {
+    return this.gameConfigService.createSkill(dto);
+  }
+
+  @Delete(":id")
+  @AuditTarget("skill")
+  @ApiAdminDoc({
+    operationId: "adminSkill.remove",
+    summary: "删除怪物技能",
+    description:
+      "两条拒绝（400 `40000`）：**角色技能不可删**（技能栏 / 存档引用）、" +
+      "**被怪物挂载引用中的技能不可删**（先在该怪的挂载里解绑）。\n" +
+      "`id` 不存在 → 404（`50029`）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "技能 id（如 \"9001\"）" })
+  @ApiVoidResponse("删除成功（data 为 null）")
+  remove(@Param("id") id: string): null {
+    this.gameConfigService.deleteSkill(id);
+    return null;
   }
 }

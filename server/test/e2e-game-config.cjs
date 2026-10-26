@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 599;
+const EXPECTED_ASSERTIONS = 639;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -1563,7 +1563,11 @@ async function main() {
     const roleSkills = await api(base, "GET", "/api/admin/skills?owner=role&size=100", { token });
     checkEqual(roleSkills.body?.data?.total, roleSkillTotal, `owner=role 筛出全部角色技能（${roleSkillTotal}）`);
     const monsterSkills = await api(base, "GET", "/api/admin/skills?owner=monster", { token });
-    checkEqual(monsterSkills.body?.data?.total, 0, "owner=monster 目前为空（怪物技能随 #12 主体那一刀开）");
+    checkEqual(
+      monsterSkills.body?.data?.total,
+      skillTotal - roleSkillTotal,
+      `owner=monster 筛出全部怪物技能（${skillTotal - roleSkillTotal} 个，9000 段）`,
+    );
     const badOwner = await api(base, "GET", "/api/admin/skills?owner=boss", { token });
     checkEqual(badOwner.status, 400, "owner 不在枚举里 → 400");
 
@@ -1584,11 +1588,11 @@ async function main() {
     const skillKeyword = await api(base, "GET", "/api/admin/skills?keyword=" + encodeURIComponent("逐日"), { token });
     checkEqual(skillKeyword.body?.data?.total, 1, "关键字按技能名命中「逐日剑法」");
 
-    // —— 能力边界：没有创建 / 删除，owner 与 id 是行身份 ——
-    const postSkill = await api(base, "POST", "/api/admin/skills", { token, body: { id: "9001", owner: "monster" } });
-    checkEqual(postSkill.status, 404, "POST 技能 → 404（路由不存在）");
-    const deleteSkill = await api(base, "DELETE", "/api/admin/skills/1000", { token });
-    checkEqual(deleteSkill.status, 404, "DELETE 技能 → 404（路由不存在）");
+    // —— 能力边界：角色技能清单固定（只可改），怪物技能可增删（#372） ——
+    const postRoleSkill = await api(base, "POST", "/api/admin/skills", { token, body: { id: "1012", owner: "role" } });
+    checkEqual(postRoleSkill.status, 400, "POST 角色技能 → 400（只许建怪物技能）");
+    const deleteRoleSkill = await api(base, "DELETE", "/api/admin/skills/1000", { token });
+    checkEqual(deleteRoleSkill.status, 400, "DELETE 角色技能 → 400（技能栏 / 存档按 id 引用）");
     const ghostSkill = await api(base, "PATCH", "/api/admin/skills/9999", { token, body: { label: "x" } });
     checkEqual(ghostSkill.status, 404, "改不存在的技能 → 404");
     checkEqual(ghostSkill.body?.code, 50029, "技能未找到用专属业务码 50029");
@@ -1693,6 +1697,118 @@ async function main() {
       body: { duration: shared.STATUSES["2001"].duration, combat: { blockChance: 0.3, blockFactor: 0.5 } },
     });
     checkEqual(restoreStatus.status, 200, "还原状态 2001 的时长与修正");
+
+    //#endregion
+
+    //#region 二十一、怪物技能与挂载（#372）：9000 段可增删 / 挂载整份替换 / 攻击倍率
+
+    group("二十一、怪物技能与挂载");
+
+    const mountSeed = shared.MONSTER_SKILLS["200"];
+    const mountList = await api(base, "GET", "/api/admin/monsters/200/skills", { token });
+    checkEqual(mountList.status, 200, "怪物 200 的技能挂载可读");
+    checkEqual(mountList.body?.data?.total, mountSeed.length, `挂载条数 = 配置表（${mountSeed.length} 条）`);
+    checkEqual(mountList.body?.data?.list?.[0]?.skillId, "9002", "按优先级升序（priority 1 的排前）");
+    checkEqual(
+      mountList.body?.data?.list?.map((row) => row.skillId).join(","),
+      "9002,9003,9001",
+      "同优先级按技能 id 升序，priority 2 的 9001 收尾",
+    );
+    checkEqual(mountList.body?.data?.list?.[0]?.skillLabel, shared.SKILLS["9002"].label, "挂载行带技能名（列表不用再查一次技能表）");
+    check(mountList.body?.data?.list?.[0]?.cooldown === null, "没配冷却覆写时是 null（= 回落到技能自身的 cooldown）");
+
+    const ghostMount = await api(base, "GET", "/api/admin/monsters/monster_nope/skills", { token });
+    checkEqual(ghostMount.status, 404, "未知怪物的挂载 → 404");
+    checkEqual(ghostMount.body?.code, 50019, "怪物不存在 → 50019");
+
+    // —— 整份替换：请求体就是全部，没写到等于删除 ——
+    const replaceOne = await api(base, "PUT", "/api/admin/monsters/200/skills", {
+      token,
+      body: { skills: [{ skillId: "9001", priority: 5, cooldown: 3 }] },
+    });
+    checkEqual(replaceOne.status, 200, "PUT 整份替换 → 200");
+    checkEqual(replaceOne.body?.data?.total, 1, "响应就是替换后的清单（1 条）");
+    checkEqual(replaceOne.body?.data?.list?.[0]?.priority, 5, "优先级已写入");
+    checkEqual(replaceOne.body?.data?.list?.[0]?.cooldown, 3, "冷却覆写已写入");
+    const rereadMount = await api(base, "GET", "/api/admin/monsters/200/skills", { token });
+    checkEqual(rereadMount.body?.data?.list?.[0]?.skillId, "9001", "重新读取只剩这一条（原清单被整份换掉）");
+
+    const roleMount = await api(base, "PUT", "/api/admin/monsters/200/skills", {
+      token,
+      body: { skills: [{ skillId: "1000", priority: 1 }] },
+    });
+    checkEqual(roleMount.status, 400, "把角色技能挂给怪 → 400");
+    checkEqual(roleMount.body?.code, 40000, "角色技能没有怪物释放路径 → 40000");
+    const dupMount = await api(base, "PUT", "/api/admin/monsters/200/skills", {
+      token,
+      body: { skills: [{ skillId: "9001", priority: 1 }, { skillId: "9001", priority: 2 }] },
+    });
+    checkEqual(dupMount.status, 400, "同一只怪重复挂同一个技能 → 400");
+    checkEqual(dupMount.body?.code, 40000, "重复挂载 → 40000（会让 AI 白跑一轮冷却）");
+    const ghostSkillMount = await api(base, "PUT", "/api/admin/monsters/200/skills", { token, body: { skills: [{ skillId: "9999" }] } });
+    checkEqual(ghostSkillMount.status, 404, "挂不存在的技能 → 404");
+    checkEqual(ghostSkillMount.body?.code, 50029, "技能不存在 → 50029");
+    const clearMount = await api(base, "PUT", "/api/admin/monsters/200/skills", { token, body: { skills: [] } });
+    checkEqual(clearMount.body?.data?.total, 0, "空数组 = 清空挂载（AI 回退到普攻）");
+
+    // —— 9000 段技能的增删 ——
+    const created = await api(base, "POST", "/api/admin/skills", {
+      token,
+      body: {
+        id: "9004",
+        label: "测试撕咬",
+        category: "0",
+        targetType: "1",
+        damageCoefficients: [{ baseType: "physicalAttack", baseTypeRate: 1.2 }],
+        cooldown: 4,
+        distance: 80,
+      },
+    });
+    checkEqual(created.status, 201, "POST 新建怪物技能 → 201");
+    checkEqual(created.body?.data?.owner, "monster", "新建的行归属怪物");
+    const dupId = await api(base, "POST", "/api/admin/skills", { token, body: { id: "9004", label: "重复" } });
+    checkEqual(dupId.status, 400, "重复 id → 400");
+    checkEqual(dupId.body?.code, 40000, "重复 id → 40000");
+    const outOfRange = await api(base, "POST", "/api/admin/skills", { token, body: { id: "8888", label: "越界" } });
+    checkEqual(outOfRange.status, 400, "id 不在 9000 段 → 400（DTO 拦下，角色技能不许造）");
+    const stateNoStatus = await api(base, "POST", "/api/admin/skills", { token, body: { id: "9005", label: "缺状态", category: "2" } });
+    checkEqual(stateNoStatus.status, 400, "状态型不给状态 → 400");
+    checkEqual(stateNoStatus.body?.code, 40000, "状态型不给状态 → 40000（建行时全量校验）");
+    const mountCreated = await api(base, "PUT", "/api/admin/monsters/200/skills", {
+      token,
+      body: { skills: [{ skillId: "9004", priority: 1 }] },
+    });
+    checkEqual(mountCreated.body?.data?.total, 1, "新建的技能可以挂给怪（挂载只看 owner=monster）");
+    const delReferenced = await api(base, "DELETE", "/api/admin/skills/9004", { token });
+    checkEqual(delReferenced.status, 400, "删被挂载引用中的技能 → 400");
+    checkEqual(delReferenced.body?.code, 40000, "被引用拒删 → 40000（先解绑）");
+    await api(base, "PUT", "/api/admin/monsters/200/skills", { token, body: { skills: [] } });
+    const delOk = await api(base, "DELETE", "/api/admin/skills/9004", { token });
+    checkEqual(delOk.status, 200, "解绑后删除 → 200");
+    check(delOk.body?.data === null, "删除接口 data 为 null（@ApiVoidResponse 口径）");
+    const ghostAfterDelete = await api(base, "GET", "/api/admin/skills?keyword=9004", { token });
+    checkEqual(ghostAfterDelete.body?.data?.total, 0, "删掉后列表里查不到（真的出库了）");
+
+    // —— 攻击倍率：怪物状态真的乘在出手伤害上 ——
+    const allStatuses = await api(base, "GET", "/api/admin/statuses?size=100", { token });
+    const fury = allStatuses.body?.data?.list?.find((row) => row.id === "9001");
+    checkEqual(fury?.combat?.attackMultiplier, 1.5, "狂怒的攻击倍率 seed 与配置一致");
+    const patchFury = await api(base, "PATCH", "/api/admin/statuses/9001", { token, body: { combat: { attackMultiplier: 2 } } });
+    checkEqual(patchFury.body?.data?.combat?.attackMultiplier, 2, "攻击倍率可改（服务端 AI 按它乘出手伤害）");
+    const badFury = await api(base, "PATCH", "/api/admin/statuses/9001", { token, body: { combat: { attackMultiplier: 50 } } });
+    checkEqual(badFury.status, 400, "攻击倍率 > 10 → 400（DTO 拦下）");
+
+    const monsterSnap = await api(base, "GET", "/api/game-config", { token: playerToken });
+    const snapFury = monsterSnap.body?.data?.statuses?.find((row) => row.id === "9001");
+    checkEqual(snapFury?.combat?.attackMultiplier, 2, "快照里的攻击倍率跟着改（客户端与 AI 同一份数值）");
+    const snapMonsterSkill = monsterSnap.body?.data?.skills?.find((row) => row.id === "9003");
+    check(snapMonsterSkill?.owner === "monster", "怪物技能随快照下发（客户端按它播 casts 的动作与特效）");
+
+    // 还原 seed 前提（本节改过状态修正与挂载清单）
+    const restoreFury = await api(base, "PATCH", "/api/admin/statuses/9001", { token, body: { combat: { attackMultiplier: 1.5 } } });
+    checkEqual(restoreFury.status, 200, "还原狂怒的攻击倍率");
+    const restoreMounts = await api(base, "PUT", "/api/admin/monsters/200/skills", { token, body: { skills: mountSeed } });
+    checkEqual(restoreMounts.body?.data?.total, mountSeed.length, "还原怪物 200 的挂载（seed 前提复原）");
 
     //#endregion
   } finally {

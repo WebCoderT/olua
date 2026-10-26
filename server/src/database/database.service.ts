@@ -545,6 +545,18 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         combat           TEXT    NOT NULL DEFAULT '{}',
         updated_at       INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 怪物技能挂载（#372）：哪只怪放哪些技能 + 优先级 + 冷却覆写。
+      -- 与技能表分家的原因：技能行可被多只怪共用（同表 owner=monster），挂载是关系不是属性。
+      -- 复合主键 = 一只怪同一个技能只能挂一次；整份替换时删掉的行就是「不放了」。
+      CREATE TABLE IF NOT EXISTS monster_skills (
+        monster_key      TEXT    NOT NULL,
+        skill_id         TEXT    NOT NULL,
+        priority         INTEGER NOT NULL DEFAULT 0,
+        cooldown         REAL,
+        updated_at       INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (monster_key, skill_id)
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

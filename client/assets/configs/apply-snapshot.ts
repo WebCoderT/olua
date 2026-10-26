@@ -37,8 +37,9 @@ import { fashionData } from "./fashionClothes";
 import { getEquipmentBaseKey, scaleEquipmentAttributes } from "./equipments";
 import { skillData } from "./skill-data";
 import { statuses } from "./status";
-import { SkillTargetType, SkillType } from "../types/skill";
-import { StatusSource } from "../types/status";
+import { SkillData, SkillTargetType, SkillType } from "../types/skill";
+import { OECCUPATION } from "../types/role";
+import { StatusConfig, StatusSource } from "../types/status";
 import type { ACTION } from "../types/animation";
 
 /**
@@ -370,72 +371,104 @@ export function applyFashionRows(rows: FashionRow[]): void {
 }
 
 /**
- * 技能配置覆写（#367）：只认 `owner === "role"` 的行
+ * 技能行（服务端快照）→ 客户端数值配置（不含释放实现）
  *
- * 怪物技能与角色技能同表下发，但它们的消费方完全不同（怪物由服务端执行、客户端只演），
- * 所以这里按 owner 分流 —— 角色行覆写 \`skillData\`，怪物行在 #12 主体那一刀另建一张表。
- *
- * **不动 onClick**：技能的释放实现是代码（configs/skill 按 id 接上），数据只描述
- * 「冷却 / 倍率 / 动作 / 特效 / 释放限制」。覆写后必须调 \`rebuildSkills()\`（见 ConfigLoader），
- * 否则 skills Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
+ * `oeccupation` 不来自服务端：它属于客户端布局（技能栏按 `oeccupationSkills` 列举 id），
+ * 服务端也没有这一列 —— 覆写时保留本地的职业归属，追加时统一给「全职业」。
  */
-export function applySkillRows(rows: SkillRow[]): void {
-  rows.forEach((row) => {
-    if (row.owner !== "role") return;
-    const config = skillData.find((item) => item.id === row.id);
-    if (!config) return;
-    config.label = row.label;
-    config.icon = row.icon;
-    config.type = row.category as SkillType;
-    config.targetType = row.targetType as SkillTargetType;
-    config.action = row.action as ACTION;
-    config.effect = row.effect || undefined;
-    config.effectIsOnSelf = row.effectOnSelf;
-    config.cooldown = row.cooldown;
-    config.mpCost = row.mpCost;
-    config.distance = row.distance;
-    config.level = row.levelReq;
-    config.description = row.description;
-    config.damageCoefficients = row.damageCoefficients.map((entry) => ({
+function skillRowToData(row: SkillRow, oeccupation: OECCUPATION = OECCUPATION.ALL): SkillData {
+  return {
+    id: row.id,
+    owner: row.owner === "monster" ? "monster" : "role",
+    label: row.label,
+    icon: row.icon,
+    cooldown: row.cooldown,
+    mpCost: row.mpCost,
+    targetType: row.targetType as SkillTargetType,
+    oeccupation,
+    level: row.levelReq,
+    description: row.description,
+    type: row.category as SkillType,
+    damageCoefficients: row.damageCoefficients.map((entry) => ({
       baseType: entry.baseType as keyof BattleAttributes,
       baseTypeRate: entry.baseTypeRate,
-    }));
-    config.statusId = row.statusId || undefined;
-    config.castLockMs = row.castLockMs;
-    config.requireTarget = row.requireTarget;
-    config.canAuto = row.canAuto;
-  });
+    })),
+    distance: row.distance,
+    action: row.action as ACTION,
+    effect: row.effect || undefined,
+    effectIsOnSelf: row.effectOnSelf,
+    statusId: row.statusId || undefined,
+    castLockMs: row.castLockMs,
+    requireTarget: row.requireTarget,
+    canAuto: row.canAuto,
+  };
 }
 
-/**
- * 状态配置覆写（#367）：只认 `owner === "role"` 的行
- *
- * 覆写的是**注册表本身**（\`statuses\` 这个 Map 的元素内容），所以已经在身上生效的状态
- * 时长与图标也会跟着变（\`StatusManager\` 只记到期时间戳，读的仍是这份配置）。
- * 数值修正（combat）的口径在 BattleMath，这里只搬数据。
- */
-export function applyStatusRows(rows: StatusRow[]): void {
-  rows.forEach((row) => {
-    if (row.owner !== "role") return;
-    const config = statuses.get(row.id);
-    if (!config) return;
-    config.label = row.label;
-    config.icon = row.icon;
-    config.duration = row.duration;
-    config.source = row.source as StatusSource;
-    config.description = row.description;
-    config.effect = row.effect || undefined;
-    config.effectHoldLast = row.effectHoldLast;
-    // 三个维度全缺省 = 纯表现状态（与 StatusCombatConfig 的「缺省不参与」一致）
-    config.combat = {
+/** 状态行（服务端快照）→ 客户端状态配置 */
+function statusRowToConfig(row: StatusRow): StatusConfig {
+  return {
+    label: row.label,
+    icon: row.icon,
+    duration: row.duration,
+    source: row.source as StatusSource,
+    description: row.description,
+    effect: row.effect || undefined,
+    effectHoldLast: row.effectHoldLast,
+    // 四个维度全缺省 = 纯表现状态（与 StatusCombatConfig 的「缺省不参与」一致）
+    combat: {
       blockChance: row.combat?.blockChance,
       blockFactor: row.combat?.blockFactor,
       defenseMultiplier: row.combat?.defenseMultiplier,
-    };
-  });
+      attackMultiplier: row.combat?.attackMultiplier,
+    },
+  };
 }
 
-/** 技能与状态的覆写总入口（#367）：按 owner 分流，缺表跳过 */
+/**
+ * 技能配置覆写（#367 / #372）
+ *
+ * 角色与怪物**一起覆写**（#372 起怪物技能也要按运营改过的值演出）：
+ * - 本地已有的行 → 原地覆写（消费方拿到的引用不变，`skills` Map 由 `rebuildSkills()` 重建）；
+ * - 本地没有、快照里是**怪物技能** → 追加（管理端能新建怪物技能，客户端必须能演新的动作 / 特效）；
+ * - 本地没有、快照里是角色技能 → 忽略（角色技能清单固定在配置里，多出来的 id 没有实现）。
+ *
+ * **不动 onClick**：技能释放实现是代码（configs/skill 按 id 接上），数据只描述
+ * 「冷却 / 倍率 / 动作 / 特效 / 释放限制」。覆写后必须调 `rebuildSkills()`（见 ConfigLoader），
+ * 否则 skills Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
+ */
+export function applySkillRows(rows: SkillRow[]): void {
+  for (const row of rows) {
+    const config = skillData.find((item) => item.id === row.id);
+    if (!config) {
+      if (row.owner === "monster") skillData.push(skillRowToData(row));
+      continue;
+    }
+    const next = skillRowToData(row, config.oeccupation);
+    Object.assign(config, next);
+  }
+}
+
+/**
+ * 状态配置覆写（#367 / #372）
+ *
+ * 覆写的是**注册表本身**（`statuses` 这个 Map 的元素内容），所以已经在身上生效的状态
+ * 时长与图标也会跟着变（`StatusManager` 只记到期时间戳，读的仍是这份配置）。
+ * 快照里有、本地没有的怪物状态同样追加 —— 服务端会在 `casts` 帧里带 statusId，
+ * 客户端查不到配置就没法在怪物身上播特效。
+ */
+export function applyStatusRows(rows: StatusRow[]): void {
+  for (const row of rows) {
+    const next = statusRowToConfig(row);
+    const config = statuses.get(row.id);
+    if (!config) {
+      if (row.owner === "monster") statuses.set(row.id, next);
+      continue;
+    }
+    Object.assign(config, next);
+  }
+}
+
+/** 技能与状态的覆写总入口（#367）：角色与怪物同表，一起覆写；缺表跳过 */
 export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
   if (snapshot.skills) applySkillRows(snapshot.skills);
   if (snapshot.statuses) applyStatusRows(snapshot.statuses);

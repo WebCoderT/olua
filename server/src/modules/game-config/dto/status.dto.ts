@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
+import { COMBAT_KEYS, parseCombatJson } from "../../../common/config-json";
 import { SKILL_OWNER_VALUES, STATUS_SOURCE_VALUES } from "../../../common/constants/game-config";
 import { StatusRow } from "../../../database/rows";
 
@@ -11,9 +12,9 @@ import { StatusRow } from "../../../database/rows";
  * 状态 = 一段持续效果：身上特效 + 图标栏徽标 + 战斗数值修正。角色与怪物同表（`owner` 区分）。
  *
  * `combat` 的语义是本表最需要说清楚的一块：它**不规定公式**，只声明「这个状态在数值上
- * 意味着什么」（格挡概率 / 格挡系数 / 防御倍率），真正的结算实现在客户端的
- * `ui/utils/battle/BattleMath`（纯函数、可单测）。所以这里只有这三个字段，
- * 加新的修正维度要同时改 BattleMath，否则存了也不生效。
+ * 意味着什么」（格挡概率 / 格挡系数 / 防御倍率 / 攻击倍率），真正的结算实现在
+ * 客户端的 `ui/utils/battle/BattleMath`（角色）与服务端的 `MonsterAiService`（怪物，#372）。
+ * 加新的修正维度要同时改这两处消费方，否则存了也不生效。
  */
 
 /** 状态的战斗数值修正（全部可选，缺省 = 该维度不参与） */
@@ -38,6 +39,13 @@ export class StatusCombatDto {
   @Min(0, { message: "defenseMultiplier 不能小于 0" })
   @Max(10, { message: "defenseMultiplier 不能大于 10" })
   defenseMultiplier?: number;
+
+  @ApiPropertyOptional({ description: "攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）", minimum: 0, maximum: 10 })
+  @IsOptional()
+  @IsNumber({}, { message: "attackMultiplier 必须是数字" })
+  @Min(0, { message: "attackMultiplier 不能小于 0" })
+  @Max(10, { message: "attackMultiplier 不能大于 10" })
+  attackMultiplier?: number;
 }
 
 /** 管理端看到的一条状态配置 */
@@ -169,16 +177,11 @@ export class UpdateStatusDto {
 /** 把落库的 JSON 读成对象（脏数据不炸接口：解析失败按空对象兜底） */
 export function parseCombat(raw: string): StatusCombatDto {
   const dto = new StatusCombatDto();
-  try {
-    const parsed: unknown = JSON.parse(raw || "{}");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return dto;
-    const source = parsed as Record<string, unknown>;
-    for (const key of ["blockChance", "blockFactor", "defenseMultiplier"] as const) {
-      const value = source[key];
-      if (typeof value === "number" && Number.isFinite(value)) dto[key] = value;
-    }
-  } catch {
-    // 坏 JSON：返回空对象（纯表现状态），下一次写入会把坏值纠正掉
+  // 解析口径下沉在 common/config-json：服务端怪物 AI 也读这一列（#372）
+  const value = parseCombatJson(raw);
+  for (const key of COMBAT_KEYS) {
+    const entry = value[key];
+    if (typeof entry === "number") dto[key] = entry;
   }
   return dto;
 }
@@ -187,7 +190,7 @@ export function parseCombat(raw: string): StatusCombatDto {
 export function serializeCombat(combat: StatusCombatDto | undefined): string {
   const entries: Record<string, number> = {};
   if (combat) {
-    for (const key of ["blockChance", "blockFactor", "defenseMultiplier"] as const) {
+    for (const key of COMBAT_KEYS) {
       const value = combat[key];
       if (typeof value === "number") entries[key] = value;
     }

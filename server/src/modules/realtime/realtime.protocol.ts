@@ -262,13 +262,31 @@ export interface RealtimeMonsterHit {
   maxHp: number;
 }
 
-/** 服务端 → 客户端：怪物 AI 广播（位置增量 + 普攻命中事件，按地图分发给观看者） */
+/**
+ * 怪物释放技能（#372）：纯演出指令
+ *
+ * 与 `hits` 分开的原因：状态型技能**不产生伤害**（只给自己挂 buff），
+ * 而伤害型技能的「动作 + 特效」要靠技能配置里的 action / effect 播 ——
+ * 两者都只需要「谁放了什么」，伤害数值仍走 hits（客户端不重算）。
+ *
+ * `statusId` 有值 = 这次释放给怪物自己挂了这个状态（客户端据此在怪物身上播状态特效）；
+ * 服务端已经按状态修正过后续伤害，客户端只演。
+ */
+export interface RealtimeMonsterCast {
+  instanceId: string;
+  skillId: string;
+  statusId?: string;
+}
+
+/** 服务端 → 客户端：怪物 AI 广播（位置增量 + 普攻/技能命中事件 + 技能释放，按地图分发给观看者） */
 export interface RealtimeMonsterAiMessage {
   type: "monster-ai";
   data: {
     mapId: string;
     monsters: RealtimeMonsterAiEntry[];
     hits: RealtimeMonsterHit[];
+    /** #372：这一拍释放的技能（含状态型；没有技能释放时是空数组，不是 undefined） */
+    casts: RealtimeMonsterCast[];
   };
 }
 

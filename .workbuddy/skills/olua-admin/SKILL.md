@@ -155,6 +155,20 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - 观察员（无 `gameConfig:write`）可看顺序与价格，拖动与改价都禁用（`canWrite` 一个开关收敛）；
 - **两种配置的差异收敛在 `KIND_CONF`**：文案（等级/阶数、价格/消耗）+ 三个接口适配函数（`fetch` / `reorder` / `updatePrice`）。新增第三种养成配置时扩展 `KIND_CONF` 即可，弹窗主体不用动。
 
+## 五点七、可增删与「挂载」型页面（SkillsPage / MonstersPage，#372）
+
+养成配置里有两处**不是「只改不增删」**，页面形状因此不同，别照着上面那套硬套：
+
+- **技能页（`SkillsPage`）**：技能同表、按 `owner` 分两种纪律 —— **角色技能只改**（id 被技能栏 / 快捷键 /
+  存档引用），**怪物技能（9000 段）可新增 / 删除**。做法：行内「删除」只对 `owner === "monster"` 渲染，
+  弹窗 id 用 `/^9\d{3}$/` 前端预校验（服务端 DTO 同一口径）；删被怪物挂载引用中的技能会被服务端 400 拒掉
+  （提示只能靠请求层统一报错，页面别自己猜）。
+- **怪物页（`MonstersPage`）的「技能」弹窗**：挂载关系独立于技能表（一个技能可被多只怪共用，挂在技能行上
+  会复制两份并漂移）。**提交是整份替换**（`PUT /admin/monsters/:id/skills`）——弹窗里删掉一行就等于解绑，
+  所以每次打开都现拉 `listSkills` + 候选池 `skillsApi.list({ owner: "monster" })`，候选池 = 全量减已挂。
+- 两个弹窗都遵守同一条：**数字字段用字符串承载**（空串 = 用默认值），提交前统一校验，
+  别让「空输入」静默变 0（`cooldown` 留空要表达的是「用技能自身的冷却」，不是 0 秒）。
+
 ## 六、必踩的坑
 
 1. **生成的类型必须是 `type` 不是 `interface`**。`interface` 没有隐式索引签名，赋给请求层的 `Record<string, string | number | null | undefined>`（query 参数）会被 TS 拒。生成器已经统一产出 `export type X = { ... }`，别再手写回 interface。

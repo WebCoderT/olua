@@ -385,7 +385,7 @@ export const routes = {
      */
     updateSettings: "/admin/mall/settings",
   },
-  /** adminMonster 模块（2 个接口） */
+  /** adminMonster 模块（4 个接口） */
   adminMonster: {
     /**
      * 怪物基础数据列表（GET /admin/monsters）
@@ -399,6 +399,18 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。改完即时生效（世界播种与伤害结算直读 monsters 表）——已活着的世界实例血量上限沿用出生时的值，重生后用新值。
      */
     update: (id: string) => `/admin/monsters/${encodeURIComponent(id)}`,
+    /**
+     * 怪物技能挂载（GET /admin/monsters/{id}/skills）
+     *
+     * 一只怪的技能清单（按 priority 升序，同优先级按技能 id）。
+     */
+    listSkills: (id: string) => `/admin/monsters/${encodeURIComponent(id)}/skills`,
+    /**
+     * 整份替换怪物技能挂载（PUT /admin/monsters/{id}/skills）
+     *
+     * **整份替换**：请求体里的清单就是这只怪的全部技能，没写到的等于删除（空数组 = 不再放技能）。
+     */
+    replaceSkills: (id: string) => `/admin/monsters/${encodeURIComponent(id)}/skills`,
   },
   /** adminNpc 模块（2 个接口） */
   adminNpc: {
@@ -469,7 +481,7 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
-  /** adminSkill 模块（2 个接口） */
+  /** adminSkill 模块（4 个接口） */
   adminSkill: {
     /**
      * 技能配置列表（GET /admin/skills）
@@ -477,6 +489,18 @@ export const routes = {
      * 角色与怪物同一张表，用 `owner` 筛选。
      */
     list: "/admin/skills",
+    /**
+     * 新增怪物技能（POST /admin/skills）
+     *
+     * **只支持怪物技能**：`id` 必须是 9000~9999 的四位数字，`owner` 只能是 monster。
+     */
+    create: "/admin/skills",
+    /**
+     * 删除怪物技能（DELETE /admin/skills/{id}）
+     *
+     * 两条拒绝（400 `40000`）：**角色技能不可删**（技能栏 / 存档引用）、**被怪物挂载引用中的技能不可删**（先在该怪的挂载里解绑）。
+     */
+    remove: (id: string) => `/admin/skills/${encodeURIComponent(id)}`,
     /**
      * 编辑技能配置（PATCH /admin/skills/{id}）
      *

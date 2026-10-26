@@ -38,7 +38,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 102;
+const EXPECTED_ASSERTIONS = 121;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -876,6 +876,133 @@ function roleData(id, name, level, skills) {
       token: adminToken,
       body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
     });
+
+    //#endregion
+
+    //#region 十、怪物技能（#372）：挂载表驱动服务端释放，客户端只收 casts 演
+
+    group("十、怪物技能：挂载表驱动服务端 AI 释放（casts 帧）");
+
+    const casterA = await newPlayer("combat_rsc");
+    const castMob = await aliveMonster(casterA, "2");
+    check(!!castMob, "十：地图 2 有活着的怪（技能释放的宿主）", JSON.stringify(castMob));
+
+    // 原挂载与原攻击区间：region 末尾要还原（不污染 seed 前提与后续断言）
+    const mountBefore = await api(baseUrl, "GET", `admin/monsters/${castMob.monsterKey}/skills`, { token: adminToken });
+    const monsterQuery = await api(baseUrl, "GET", `admin/monsters?keyword=${encodeURIComponent(castMob.monsterKey)}`, { token: adminToken });
+    const monsterRow = monsterQuery.data && monsterQuery.data.list.find((row) => row.id === castMob.monsterKey);
+    check(!!monsterRow, "十：读到这只怪的基础数据（要固定攻击区间）", JSON.stringify(monsterQuery.data && monsterQuery.data.list.slice(0, 1)));
+
+    // 攻击区间固定成 50~50：普攻伤害 ≤ 50，狂怒 ×1.5 之后必然 > 50 —— 倍率有没有生效一眼可辨
+    const fixedAttack = await api(baseUrl, "PATCH", `admin/monsters/${castMob.monsterKey}`, {
+      token: adminToken,
+      body: { attributes: { ...monsterRow.attributes, physicalAttack: { min: 50, max: 50 } } },
+    });
+    check(fixedAttack.code === 0, "十：物攻区间固定成 50~50（让倍率可辨）", fixedAttack.message);
+
+    // —— A. 只挂状态型（狂怒）：服务端释放 → casts 带 statusId → 攻击倍率生效 ——
+
+    const mountStateful = await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, {
+      token: adminToken,
+      body: { skills: [{ skillId: "9002", priority: 1 }] },
+    });
+    check(
+      mountStateful.code === 0 && mountStateful.data.total === 1,
+      "十：挂载整份替换成 1 条（只放狂怒）",
+      JSON.stringify(mountStateful.data),
+    );
+
+    const castNear = { x: castMob.x + 10, y: castMob.y };
+    const reportCastPos = (hp) =>
+      casterA.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: castNear.x, y: castNear.y, hp } }));
+    const provokeCast = await cast(casterA.session, { skillId: "1000", targetId: castMob.instanceId, monsterKey: castMob.monsterKey }).promise;
+    check(!!(provokeCast && provokeCast.ok), "十：出手激怒这只怪（进入战斗才会放技能）", JSON.stringify(provokeCast));
+    reportCastPos(100);
+    const castPosTimer = setInterval(() => reportCastPos(100), 500);
+
+    const castFrame = await waitFor(
+      "casts 帧",
+      async () => casterA.session.ais.find((frame) => (frame.casts || []).some((entry) => entry.instanceId === castMob.instanceId)) || null,
+      10_000,
+    );
+    check(!!castFrame, "十：收到 casts 帧（放不放、放哪个由服务端决定）", JSON.stringify(castFrame));
+    const stateCast = castFrame && (castFrame.casts || []).find((entry) => entry.instanceId === castMob.instanceId);
+    check(!!(stateCast && stateCast.skillId === "9002"), "十：先放状态型技能（狂怒 9002）", JSON.stringify(stateCast));
+    check(!!(stateCast && stateCast.statusId === "9001"), "十：casts 带挂载的状态 id（客户端据此播状态特效）", JSON.stringify(stateCast));
+    check(!!stateCast && stateCast.damage === undefined, "十：casts 不带伤害（数值权威在 hits 帧）", JSON.stringify(stateCast));
+
+    const buffedHit = await waitFor(
+      "狂怒生效后的普攻",
+      async () =>
+        casterA.session.ais.flatMap((frame) => frame.hits || []).find((hit) => hit.instanceId === castMob.instanceId && hit.damage > 50) ||
+        null,
+      10_000,
+    );
+    check(!!buffedHit, "十：狂怒 ×1.5 服务端生效（物攻固定 50，伤害 > 50 只可能乘过倍率）", JSON.stringify(buffedHit));
+
+    // —— B. 同一只怪换成伤害型（跃鼠猛击）：casts 与 hits 同帧，且带倍率伤害 ——
+
+    castPosTimer && clearInterval(castPosTimer);
+    const mountDamaging = await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, {
+      token: adminToken,
+      body: { skills: [{ skillId: "9001", priority: 1 }] },
+    });
+    check(mountDamaging.code === 0 && mountDamaging.data.total === 1, "十：挂载换成 1 条（只放跃鼠猛击）", JSON.stringify(mountDamaging.data));
+
+    const casterB = await newPlayer("combat_rsk");
+    // 必须先 joinWorld：monster-ai 帧按「谁在看这张图」派发，没进图的连接收不到广播
+    const worldB = await casterB.session.joinWorld("2");
+    const mobNow = worldB && worldB.monsters.find((entry) => entry.instanceId === castMob.instanceId);
+    check(!!(mobNow && mobNow.alive), "十：这只怪还活着（阶段 A 只被打过一记，没被打死）", JSON.stringify(mobNow));
+    // 用当前坐标（阶段 A 里它追过玩家，早就离开出生点了）
+    const castNearB = { x: mobNow ? mobNow.x + 10 : castNear.x, y: mobNow ? mobNow.y : castNear.y };
+    const provokeB = await cast(casterB.session, { skillId: "1000", targetId: castMob.instanceId, monsterKey: castMob.monsterKey }).promise;
+    check(!!(provokeB && provokeB.ok), "十：换一名玩家激怒同一只怪（验证挂载改动即时生效）", JSON.stringify(provokeB));
+    const reportBPos = (hp) => casterB.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: castNearB.x, y: castNearB.y, hp } }));
+    reportBPos(100);
+    const castPosTimerB = setInterval(() => reportBPos(100), 500);
+
+    const damagingFrame = await waitFor(
+      "伤害型 casts 帧",
+      async () =>
+        casterB.session.ais.find(
+          (frame) => (frame.casts || []).some((entry) => entry.instanceId === castMob.instanceId && entry.skillId === "9001"),
+        ) || null,
+      12_000,
+    );
+    castPosTimerB && clearInterval(castPosTimerB);
+    check(!!damagingFrame, "十：改成伤害型后服务端改放 9001（挂载改动 1 秒内生效）", JSON.stringify(damagingFrame));
+    const damagingCast = damagingFrame && (damagingFrame.casts || []).find((entry) => entry.skillId === "9001");
+    check(!!damagingCast && damagingCast.statusId === undefined, "十：伤害型 casts 不带 statusId", JSON.stringify(damagingCast));
+    const damagingHit = damagingFrame && (damagingFrame.hits || []).find((hit) => hit.instanceId === castMob.instanceId);
+    check(!!damagingHit, "十：伤害型技能同帧走 hits 下发（动作归 casts，数值归 hits）", JSON.stringify(damagingFrame && damagingFrame.hits));
+    check(
+      !!damagingHit && damagingHit.damage >= 60,
+      "十：技能伤害带倍率（物攻 50 × 1.8 扣物防后仍 > 60）",
+      JSON.stringify(damagingHit),
+    );
+
+    // —— C. 还原：挂载回到原样（seed 的 3 条），攻击区间回到原值 ——
+
+    const restoreMount =
+      mountBefore.data && mountBefore.data.list.length > 0
+        ? await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, {
+            token: adminToken,
+            body: {
+              skills: mountBefore.data.list.map((item) => ({
+                skillId: item.skillId,
+                priority: item.priority,
+                ...(typeof item.cooldown === "number" ? { cooldown: item.cooldown } : {}),
+              })),
+            },
+          })
+        : await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, { token: adminToken, body: { skills: [] } });
+    check(restoreMount.code === 0, "十：还原这只怪的技能挂载", restoreMount.message);
+    const restoreAttack = await api(baseUrl, "PATCH", `admin/monsters/${castMob.monsterKey}`, {
+      token: adminToken,
+      body: { attributes: monsterRow.attributes },
+    });
+    check(restoreAttack.code === 0, "十：还原攻击区间（seed 前提复原）", restoreAttack.message);
 
     //#endregion
 

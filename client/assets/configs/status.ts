@@ -32,3 +32,29 @@ statuses.set("2002", {
   // 防御乘法系数：生效于「攻 - 防」的防御项（乘法口径，多状态连乘）
   combat: { defenseMultiplier: 1.5 },
 });
+
+//#region 怪物状态（#372；9000 段，与怪物技能同时进表）
+/*
+ * 怪物状态与角色状态同表：客户端只负责在怪物身上播 effect、在血条旁不做图标栏，
+ * 数值生效在服务端（MonsterAiService 按 combat 连乘攻防），与角色侧同一套语义。
+ */
+statuses.set("9001", {
+  label: "狂怒",
+  icon: "skill/icon/2009",
+  duration: 10,
+  source: StatusSource.SKILL,
+  description: "狂怒：持续时间内物理攻击 ×1.5，怪物放完这套状态后打人更疼",
+  effect: "effect/status/s_2004@0",
+  combat: { attackMultiplier: 1.5 },
+});
+
+statuses.set("9002", {
+  label: "硬化皮肤",
+  icon: "skill/icon/1008",
+  duration: 10,
+  source: StatusSource.SKILL,
+  description: "硬化皮肤：持续时间内防御 ×1.5，玩家打它更吃力",
+  effect: "effect/skill/s_1008@0",
+  combat: { defenseMultiplier: 1.5 },
+});
+//#endregion

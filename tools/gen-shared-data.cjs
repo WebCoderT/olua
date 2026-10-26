@@ -69,7 +69,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status", "monster-skills"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -120,7 +120,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -220,6 +220,8 @@ function load(work) {
     mallPrice: missing("mall.mallPrice", cfg("mall").mallPrice),
     // 状态（#367）：管理端「状态配置」的 seed 来源 —— 角色与怪物同表，owner 区分
     statuses: missing("status.statuses", cfg("status").statuses),
+    // 怪物技能挂载（#372）：哪只怪放哪些技能、优先级、冷却覆写 —— 服务端 AI 读表
+    monsterSkills: missing("monster-skills.monsterSkills", cfg("monster-skills").monsterSkills),
     drugs: missing("drug.drugs", cfg("drug").drugs),
     materials: missing("material.materials", cfg("material").materials),
   };
@@ -227,6 +229,8 @@ function load(work) {
 
 /** 抽成一个与引擎、与 TS 类型都无关的纯数据快照 */
 function buildSnapshot(cfg) {
+  // 技能行两处要用：快照本身 + 怪物挂载校验（挂的必须是 owner=monster 的技能）
+  const skills = pickSkills(cfg.skillData);
   return {
     // —— 战斗数值（服务端算属性用；与它之前那份独立的 battle-rules 快照**逐值相同**，已合并）——
     roleLevels: pickMap(cfg.level.levelMap, (value) => {
@@ -248,9 +252,11 @@ function buildSnapshot(cfg) {
     // 装备基础件（#252）：普通的·人级那一档，管理端「装备配置」的 seed 来源 ——
     // 变体（_pXsY）的属性与回收价都是基础件乘倍率展开的，运营只改基础件这一份
     equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
-    skills: pickSkills(cfg.skillData),
+    skills,
     // 状态（#367）：角色状态的数值修正 / 时长 / 图标特效，管理端收口成可改数据
     statuses: pickStatuses(cfg.statuses),
+    // 怪物技能挂载（#372）：怪物 key → 技能清单（服务端 AI 的释放依据，管理端可增删改）
+    monsterSkills: pickMonsterSkills(cfg.monsterSkills, cfg.monsters, skills),
     monsters: pickMonsters(cfg.monsters),
     // 怪物 AI 节奏参数（#323：服务端 AI tick 与客户端同一套手感数值）
     monsterAi: pickMonsterAi(cfg.monsterAi),
@@ -645,8 +651,9 @@ function pickSkills(list) {
     if (seen.has(item.id)) throw new Error(`技能 id 重复：${item.id}`);
     seen.add(item.id);
     const row = {
-      // #367：归属固定 role —— 怪物技能行不在客户端配置里（它们由管理端自建，#12 主体）
-      owner: "role",
+      // #372：归属来自配置（角色技能缺省 role，怪物技能显式写 monster）。
+      // 技能行本身对两边同构 —— 分表只会让「同一个技能既给人又给怪」复制两份并漂移
+      owner: item.owner === "monster" ? "monster" : "role",
       label: String(item.label ?? ""),
       icon: String(item.icon ?? ""),
       // category 就是客户端的 SkillType（"0" 主动 / "1" 被动 / "2" 状态 / "3" 回复），存原值不另起一套
@@ -703,6 +710,47 @@ function pickStatuses(map) {
   return out;
 }
 
+/**
+ * 怪物技能挂载 → [[怪物 key, 条目数组]]（#372）
+ *
+ * 三类脏数据在这里挡掉 —— 生成物是唯一 seed 源，坏数据进去就是服务端 AI 每 tick 白跑：
+ * - 挂载的怪物 key 不在怪物表里（世界播种永远碰不到这只怪，等于配了个哑技能）；
+ * - 技能 id 不存在，或该技能 owner 不是 monster（把角色技能挂给怪，客户端演出查不到实现）；
+ * - priority 不是数字（AI 按它排顺序，NaN 会让排序退化成配置顺序）。
+ *
+ * `cooldown` 可选：覆写技能自身的冷却，同一技能给不同怪不同节奏时用。
+ */
+function pickMonsterSkills(map, monsters, skills) {
+  const owners = new Map(skills.map(([id, row]) => [id, row.owner]));
+  const out = [];
+  for (const [monsterKey, entries] of Object.entries(map || {})) {
+    if (!monsters.has(monsterKey)) throw new Error(`configs/monster-skills 里的怪物 ${monsterKey} 不在怪物表里`);
+    if (!Array.isArray(entries) || entries.length === 0) throw new Error(`configs/monster-skills 的怪物 ${monsterKey} 挂载清单为空`);
+    const seen = new Set();
+    const rows = entries.map((entry) => {
+      const skillId = String(entry?.skillId ?? "");
+      if (!skillId) throw new Error(`怪物 ${monsterKey} 的挂载条目缺 skillId`);
+      if (seen.has(skillId)) throw new Error(`怪物 ${monsterKey} 重复挂载技能 ${skillId}`);
+      seen.add(skillId);
+      const owner = owners.get(skillId);
+      if (!owner) throw new Error(`怪物 ${monsterKey} 挂了不存在的技能 ${skillId}`);
+      if (owner !== "monster") throw new Error(`怪物 ${monsterKey} 挂了角色技能 ${skillId}（owner=${owner}）—— 怪物技能必须是 owner=monster`);
+      const priority = Number(entry?.priority ?? 0);
+      if (!Number.isFinite(priority)) throw new Error(`怪物 ${monsterKey} 的技能 ${skillId} 的 priority 不是数字`);
+      const row = { skillId, priority: round(priority) };
+      if (entry?.cooldown !== undefined) {
+        const cooldown = Number(entry.cooldown);
+        if (!Number.isFinite(cooldown) || cooldown < 0) throw new Error(`怪物 ${monsterKey} 的技能 ${skillId} 的 cooldown 非法：${entry.cooldown}`);
+        row.cooldown = round(cooldown);
+      }
+      return row;
+    });
+    out.push([monsterKey, rows]);
+  }
+  if (out.length === 0) throw new Error("configs/monster-skills 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  return out;
+}
+
 /** 技能 id → 技能名 */
 function pickSkillsLabels(list) {
   const out = [];
@@ -715,7 +763,6 @@ function pickSkillsLabels(list) {
   }
   return out;
 }
-
 /**
  * 职业码 → 名
  *
@@ -904,6 +951,7 @@ ${numTable("SKILLS", "技能 id → 整行配置（#367：owner / 分类 / 动�
 ${jsonTable("STATUSES", "状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath", s.statuses)}
 ${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）", s.monsters)}
 ${jsonTable("MONSTER_AI", "怪物 AI 全局节奏参数（#323：普攻间隔/普攻距离/待机游走节奏，服务端 AI tick 与客户端同源）", s.monsterAi)}
+${jsonTable("MONSTER_SKILLS", "怪物 key → 技能挂载清单（#372：skillId / priority / 可选 cooldown 覆写）。服务端 AI 按它释放，管理端可增删改", s.monsterSkills)}
 ${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
 ${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}

@@ -865,12 +865,17 @@ export const SKILLS = {
   "1009": {"owner":"role","label":"半月弯刀","icon":"skill/icon/1004","category":"0","targetType":"1","action":"stand","effect":"effect/skill/s_1002@0","effectOnSelf":true,"cooldown":1,"mpCost":6,"distance":0,"levelReq":10,"description":"扇形范围群攻技能，可同时攻击身前半圆内的多个敌人，挂机清怪效率极高，被围时贴身释放也能快速清场突围","damageCoefficients":[{"baseType":"physicalAttack","baseTypeRate":3},{"baseType":"physicalAttack","baseTypeRate":3.1},{"baseType":"physicalAttack","baseTypeRate":3.2},{"baseType":"physicalAttack","baseTypeRate":3.3},{"baseType":"physicalAttack","baseTypeRate":3.4},{"baseType":"physicalAttack","baseTypeRate":3.5},{"baseType":"physicalAttack","baseTypeRate":3.6},{"baseType":"physicalAttack","baseTypeRate":3.7},{"baseType":"physicalAttack","baseTypeRate":3.8},{"baseType":"physicalAttack","baseTypeRate":3.9},{"baseType":"physicalAttack","baseTypeRate":4}],"statusId":"","castLockMs":0,"requireTarget":true,"canAuto":false},
   "1010": {"owner":"role","label":"‌护体神盾","icon":"skill/icon/2009","category":"2","targetType":"3","action":"attack_far","effect":"","effectOnSelf":false,"cooldown":60,"mpCost":15,"distance":0,"levelReq":1,"description":"被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障","damageCoefficients":[{"baseType":"physicalAttack","baseTypeRate":3},{"baseType":"physicalAttack","baseTypeRate":3.1},{"baseType":"physicalAttack","baseTypeRate":3.2},{"baseType":"physicalAttack","baseTypeRate":3.3},{"baseType":"physicalAttack","baseTypeRate":3.4},{"baseType":"physicalAttack","baseTypeRate":3.5},{"baseType":"physicalAttack","baseTypeRate":3.6},{"baseType":"physicalAttack","baseTypeRate":3.7},{"baseType":"physicalAttack","baseTypeRate":3.8},{"baseType":"physicalAttack","baseTypeRate":3.9},{"baseType":"physicalAttack","baseTypeRate":4}],"statusId":"2001","castLockMs":0,"requireTarget":false,"canAuto":false},
   "1011": {"owner":"role","label":"金刚护体","icon":"skill/icon/1008","category":"2","targetType":"1","action":"attack_far","effect":"","effectOnSelf":false,"cooldown":1,"mpCost":15,"distance":0,"levelReq":10,"description":"主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开","damageCoefficients":[{"baseType":"physicalAttack","baseTypeRate":3},{"baseType":"physicalAttack","baseTypeRate":3.1},{"baseType":"physicalAttack","baseTypeRate":3.2},{"baseType":"physicalAttack","baseTypeRate":3.3},{"baseType":"physicalAttack","baseTypeRate":3.4},{"baseType":"physicalAttack","baseTypeRate":3.5},{"baseType":"physicalAttack","baseTypeRate":3.6},{"baseType":"physicalAttack","baseTypeRate":3.7},{"baseType":"physicalAttack","baseTypeRate":3.8},{"baseType":"physicalAttack","baseTypeRate":3.9},{"baseType":"physicalAttack","baseTypeRate":4}],"statusId":"2002","castLockMs":0,"requireTarget":false,"canAuto":false},
+  "9001": {"owner":"monster","label":"跃鼠猛击","icon":"skill/icon/1006","category":"0","targetType":"1","action":"attack_skill_1","effect":"effect/skill/s_1008@0","effectOnSelf":false,"cooldown":6,"mpCost":0,"distance":90,"levelReq":1,"description":"蓄力扑击，对目标造成 1.8 倍物理攻击伤害","damageCoefficients":[{"baseType":"physicalAttack","baseTypeRate":1.8}],"statusId":"","castLockMs":800,"requireTarget":true,"canAuto":false},
+  "9002": {"owner":"monster","label":"狂怒","icon":"skill/icon/2009","category":"2","targetType":"3","action":"a1","effect":"effect/status/s_2004@0","effectOnSelf":true,"cooldown":15,"mpCost":0,"distance":0,"levelReq":1,"description":"进入狂怒，持续时间内物理攻击 ×1.5","damageCoefficients":[],"statusId":"9001","castLockMs":600,"requireTarget":false,"canAuto":false},
+  "9003": {"owner":"monster","label":"硬化皮肤","icon":"skill/icon/1008","category":"2","targetType":"3","action":"a1","effect":"effect/skill/s_1008@0","effectOnSelf":true,"cooldown":15,"mpCost":0,"distance":0,"levelReq":1,"description":"皮肤硬化，持续时间内防御 ×1.5","damageCoefficients":[],"statusId":"9002","castLockMs":600,"requireTarget":false,"canAuto":false},
 };
 
 /** 状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath */
 export const STATUSES: Record<string, unknown> = {
   "2001": {"owner":"role","label":"护体神盾","icon":"skill/icon/2009","duration":10,"source":"skill","description":"护体神盾：释放技能后获得，持续时间内 30% 概率格挡，格挡时本次受到的伤害减半；重复释放刷新持续时间","effect":"effect/status/s_2004@0","effectHoldLast":true,"combat":{"blockChance":0.3,"blockFactor":0.5}},
   "2002": {"owner":"role","label":"金刚护体","icon":"skill/icon/1008","duration":8,"source":"skill","description":"金刚护体：释放技能后获得，持续时间内防御 ×1.5；重复释放刷新持续时间","effect":"effect/skill/s_1008@0","effectHoldLast":false,"combat":{"defenseMultiplier":1.5}},
+  "9001": {"owner":"role","label":"狂怒","icon":"skill/icon/2009","duration":10,"source":"skill","description":"狂怒：持续时间内物理攻击 ×1.5，怪物放完这套状态后打人更疼","effect":"effect/status/s_2004@0","effectHoldLast":false,"combat":{"attackMultiplier":1.5}},
+  "9002": {"owner":"role","label":"硬化皮肤","icon":"skill/icon/1008","duration":10,"source":"skill","description":"硬化皮肤：持续时间内防御 ×1.5，玩家打它更吃力","effect":"effect/skill/s_1008@0","effectHoldLast":false,"combat":{"defenseMultiplier":1.5}},
 };
 
 /** 怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323） */
@@ -1105,6 +1110,11 @@ export const MONSTER_AI: Record<string, unknown> = {
   "idleMoveDuration": [300,800],
   "idleMoveSpeedScale": 0.5,
   "wanderRadius": 60,
+};
+
+/** 怪物 key → 技能挂载清单（#372：skillId / priority / 可选 cooldown 覆写）。服务端 AI 按它释放，管理端可增删改 */
+export const MONSTER_SKILLS: Record<string, unknown> = {
+  "200": [{"skillId":"9002","priority":1},{"skillId":"9003","priority":1},{"skillId":"9001","priority":2}],
 };
 
 /** NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改） */
@@ -4173,6 +4183,9 @@ export const SKILL_LABELS: Record<string, string> = {
   "1009": "半月弯刀",
   "1010": "‌护体神盾",
   "1011": "金刚护体",
+  "9001": "跃鼠猛击",
+  "9002": "狂怒",
+  "9003": "硬化皮肤",
 };
 
 /** 地图 id → 地图名 */

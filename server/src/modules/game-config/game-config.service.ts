@@ -10,16 +10,31 @@ import { FashionRepository, FashionListOptions } from "../../database/repositori
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
 import { SkillRepository, SkillListOptions } from "../../database/repositories/skill.repository";
+import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
 import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
-import { DrugRow, EquipmentRow, FashionRow, ItemRow, MonsterRow, NpcRow, RankRow, SkillRow, SoulRow, StatusRow, TitleRow } from "../../database/rows";
+import {
+  DrugRow,
+  EquipmentRow,
+  FashionRow,
+  ItemRow,
+  MonsterRow,
+  MonsterSkillRow,
+  NpcRow,
+  RankRow,
+  SkillRow,
+  SoulRow,
+  StatusRow,
+  TitleRow,
+} from "../../database/rows";
 import {
   DRUGS,
   EQUIPMENT_BASES,
   FASHIONS,
   ITEM_BASES,
+  MONSTER_SKILLS,
   MONSTERS,
   NPCS,
   RANK_LABELS,
@@ -40,7 +55,8 @@ import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from ".
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
-import { parseDamageCoefficients, SkillDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
+import { CreateSkillDto, parseDamageCoefficients, SkillDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
+import { MonsterSkillDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
 import { serializeCombat, StatusDto, StatusQueryDto, UpdateStatusDto } from "./dto/status.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
@@ -82,6 +98,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly fashionsRepo: FashionRepository,
     private readonly skillsRepo: SkillRepository,
     private readonly statusesRepo: StatusRepository,
+    private readonly monsterSkillsRepo: MonsterSkillRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -97,6 +114,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedFashions();
     this.seedSkills();
     this.seedStatuses();
+    this.seedMonsterSkills();
   }
 
   // —— 称号 ——
@@ -506,6 +524,114 @@ export class GameConfigService implements OnModuleInit {
     return SkillDto.from(this.requireSkill(id));
   }
 
+  /**
+   * 新增怪物技能（#372）
+   *
+   * **只开给怪物技能**：owner 只能是 monster，id 在 DTO 层就限死在 9000 段。角色技能的 id
+   * 被技能栏 / 快捷键 / 角色存档引用，清单固定在生成物里 —— 在这里放行任何一个 1xxx id，
+   * 都等于造出一行「客户端永远学不会」的技能。
+   *
+   * 校验比 update 更严：新行没有历史包袱，直接按合并后的整行全量校验（不像 update 只看
+   * 请求有没有动「分类 / 倍率 / 挂载状态」）。
+   */
+  createSkill(dto: CreateSkillDto): SkillDto {
+    const owner = dto.owner ?? "monster";
+    if (owner !== "monster") {
+      throw new BizException(BizCode.PARAM_INVALID, "只支持创建怪物技能（角色技能清单固定，被技能栏 / 存档引用）");
+    }
+    if (this.skillsRepo.findByKey(dto.id)) {
+      throw new BizException(BizCode.PARAM_INVALID, `技能 ${dto.id} 已存在`);
+    }
+    const coefficients = dto.damageCoefficients ?? [];
+    const row: SkillRow = {
+      id: dto.id,
+      owner,
+      label: dto.label ?? `怪物技能 ${dto.id}`,
+      icon: dto.icon ?? "",
+      category: dto.category ?? "0",
+      target_type: dto.targetType ?? "1",
+      action: dto.action ?? "",
+      effect: dto.effect ?? "",
+      effect_on_self: dto.effectOnSelf === true ? 1 : 0,
+      cooldown: dto.cooldown ?? 0,
+      mp_cost: dto.mpCost ?? 0,
+      distance: dto.distance ?? 0,
+      level_req: dto.levelReq ?? 1,
+      description: dto.description ?? "",
+      damage_coefficients: JSON.stringify(
+        coefficients.map((entry) => ({ baseType: entry.baseType, baseTypeRate: entry.baseTypeRate })),
+      ),
+      status_id: dto.statusId ?? "",
+      cast_lock_ms: dto.castLockMs ?? 0,
+      require_target: dto.requireTarget === false ? 0 : 1,
+      can_auto: dto.canAuto === true ? 1 : 0,
+      updated_at: Date.now(),
+    };
+    this.assertSkillConsistency(row);
+    this.skillsRepo.insert(row);
+    return SkillDto.from(this.requireSkill(dto.id));
+  }
+
+  /**
+   * 删除怪物技能（#372）
+   *
+   * 两条拒绝，都是真实会出事的组合：
+   * - **角色技能不可删**：技能栏 / 快捷键 / 角色存档按 id 引用，删了就是坏档；
+   * - **被怪物挂载引用中的技能不可删**：与掉落表「被引用中拒删」同一纪律 ——
+   *   先解绑再删，否则 AI 会拿着一个查不到的技能 id 空跑（还看不出来为什么）。
+   */
+  deleteSkill(id: string): { deleted: boolean } {
+    const row = this.requireSkill(id);
+    if (row.owner !== "monster") {
+      throw new BizException(BizCode.PARAM_INVALID, `技能 ${id} 属于角色，不支持删除`);
+    }
+    const refs = this.monsterSkillsRepo.countBySkill(id);
+    if (refs > 0) {
+      throw new BizException(BizCode.PARAM_INVALID, `技能 ${id} 仍被 ${refs} 只怪挂载，先解绑再删`);
+    }
+    this.skillsRepo.remove(id);
+    return { deleted: true };
+  }
+
+  // —— 怪物技能挂载（#372：整份替换，与每怪掉落表同形态）——
+
+  listMonsterSkills(monsterKey: string): MonsterSkillListDto {
+    this.requireMonster(monsterKey);
+    const list = this.monsterSkillsRepo
+      .listByMonster(monsterKey)
+      .map((row) => MonsterSkillDto.from(row, this.skillsRepo.findByKey(row.skill_id)?.label ?? ""));
+    return { list, total: list.length };
+  }
+
+  /**
+   * 整份替换一只怪的挂载清单（空数组 = 不再放技能，AI 回退到普攻）
+   *
+   * 逐条校验：技能必须存在、必须 owner=monster、同一只怪不能重复挂同一个技能。
+   * 这些都是运营在界面上点得出来的组合，进库前挡掉比让 AI 空跑便宜得多。
+   */
+  replaceMonsterSkills(monsterKey: string, dto: ReplaceMonsterSkillsDto): MonsterSkillListDto {
+    this.requireMonster(monsterKey);
+    const seen = new Set<string>();
+    const now = Date.now();
+    const rows: MonsterSkillRow[] = dto.skills.map((item) => {
+      if (seen.has(item.skillId)) throw new BizException(BizCode.PARAM_INVALID, `技能 ${item.skillId} 重复挂载`);
+      seen.add(item.skillId);
+      const skill = this.requireSkill(item.skillId);
+      if (skill.owner !== "monster") {
+        throw new BizException(BizCode.PARAM_INVALID, `技能 ${item.skillId} 属于角色，不能挂给怪物`);
+      }
+      return {
+        monster_key: monsterKey,
+        skill_id: item.skillId,
+        priority: item.priority ?? 0,
+        cooldown: item.cooldown === undefined ? null : item.cooldown,
+        updated_at: now,
+      };
+    });
+    this.monsterSkillsRepo.replaceForMonster(monsterKey, rows);
+    return this.listMonsterSkills(monsterKey);
+  }
+
   // —— 状态（#367）——
 
   listStatuses(query: StatusQueryDto): PageResult<StatusDto> {
@@ -852,6 +978,28 @@ export class GameConfigService implements OnModuleInit {
         combat: JSON.stringify(meta.combat ?? {}),
         updated_at: 0,
       });
+    }
+  }
+
+  /**
+   * 怪物技能挂载 seed（#372）：生成物 `MONSTER_SKILLS` 是 `{怪物 key: 条目数组}`
+   *
+   * 同样只 INSERT OR IGNORE —— 运营在管理端整份替换过的清单不会被重启覆盖回去。
+   * 与其它的差别只在「可增删」：删掉的行重启后会被 seed 补回来（配置是基线），
+   * 想永久删就同时改 `configs/monster-skills`。这条口径写进服务端 README。
+   */
+  private seedMonsterSkills() {
+    const table = MONSTER_SKILLS as Record<string, Array<{ skillId?: string; priority?: number; cooldown?: number }>>;
+    for (const [monsterKey, entries] of Object.entries(table)) {
+      for (const entry of entries ?? []) {
+        this.monsterSkillsRepo.seedRow({
+          monster_key: monsterKey,
+          skill_id: String(entry.skillId ?? ""),
+          priority: Number(entry.priority) || 0,
+          cooldown: entry.cooldown === undefined ? null : Number(entry.cooldown),
+          updated_at: 0,
+        });
+      }
     }
   }
 }

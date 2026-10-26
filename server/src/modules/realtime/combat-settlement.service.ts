@@ -188,7 +188,8 @@ export class CombatSettlementService {
     //   round(攻击区间随机值 × 倍率 − 防御区间随机值)，下限 0
     // 攻击用哪项属性以**生成物里系数的 baseType** 为准（不信任客户端传参），防御按同名映射取
     const attack = rollRange(readRange(summary, coefficient.baseType));
-    const defense = rollRange(readMonsterRange(stats, coefficient.baseType));
+    // 怪物身上的状态修正（#372）：防御 × 状态连乘 —— 没有这条，「硬化皮肤」只是客户端动画
+    const defense = Math.round(rollRange(readMonsterRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(cast.targetId));
     const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
 
     // 扣血与世界状态（血量 / 死亡判定都在世界服务里，这里只拿结果演）

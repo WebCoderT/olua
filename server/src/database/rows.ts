@@ -770,9 +770,9 @@ export interface SkillRow {
  * **角色与怪物同表，靠 `owner` 区分** —— 怪物状态要参与服务端伤害结算，角色状态目前
  * 仍由客户端口径消费（服务端权威化另开一刀）。
  *
- * `combat` 存 JSON（`{blockChance, blockFactor, defenseMultiplier}`，见
+ * `combat` 存 JSON（`{blockChance, blockFactor, defenseMultiplier, attackMultiplier}`，见
  * `client/assets/types/status.StatusCombatConfig`）：状态在数值上意味着什么，
- * 结算口径的唯一实现在客户端的 BattleMath。
+ * 角色侧的结算口径在客户端 BattleMath，怪物侧在 `MonsterAiService`（#372）。
  */
 export interface StatusRow {
   /** 状态 id（如 "2001"；主键，角色行不可增删） */
@@ -793,8 +793,27 @@ export interface StatusRow {
   effect: string;
   /** 身上特效是否只播一遍停在尾帧（1 = 是） */
   effect_hold_last: number;
-  /** 战斗数值修正 JSON（{blockChance, blockFactor, defenseMultiplier}） */
+  /** 战斗数值修正 JSON（{blockChance, blockFactor, defenseMultiplier, attackMultiplier}） */
   combat: string;
+  updated_at: number;
+}
+
+/**
+ * 怪物技能挂载（#372）：`monster_skills` 表的一行
+ *
+ * 「哪只怪放哪些技能」与「技能本身长什么样」分家：技能行在 `skills`（owner=monster），
+ * 这里只存挂载关系。**可动态增删**（怪物技能天然会加，与角色技能清单固定相反）：
+ * 管理端整份替换某只怪的清单，没有的行即删除。
+ */
+export interface MonsterSkillRow {
+  /** 怪物 key（与 monsters 表主键、生成物 MONSTERS 的键一致） */
+  monster_key: string;
+  /** 技能 id（必须在 skills 表里存在且 owner=monster） */
+  skill_id: string;
+  /** 优先级（越小越先；状态型整体先于伤害型尝试） */
+  priority: number;
+  /** 冷却覆写（秒；null = 用技能自身的 cooldown） */
+  cooldown: number | null;
   updated_at: number;
 }
 

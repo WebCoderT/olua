@@ -61,6 +61,44 @@ export class SkillRepository {
     );
   }
 
+  /** 新增一行（#372：只给怪物技能用；重复 id 由调用方先查重，这里不吞异常） */
+  insert(row: SkillRow): void {
+    this.db.run(
+      `INSERT INTO skills
+         (id, owner, label, icon, category, target_type, action, effect, effect_on_self,
+          cooldown, mp_cost, distance, level_req, description, damage_coefficients,
+          status_id, cast_lock_ms, require_target, can_auto, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.owner,
+        row.label,
+        row.icon,
+        row.category,
+        row.target_type,
+        row.action,
+        row.effect,
+        row.effect_on_self,
+        row.cooldown,
+        row.mp_cost,
+        row.distance,
+        row.level_req,
+        row.description,
+        row.damage_coefficients,
+        row.status_id,
+        row.cast_lock_ms,
+        row.require_target,
+        row.can_auto,
+        row.updated_at,
+      ],
+    );
+  }
+
+  /** 删除一行（#372：只给怪物技能用；被挂载引用时由调用方拒绝） */
+  remove(id: string): { changes: number } {
+    return this.db.execute("DELETE FROM skills WHERE id = ?", [id]);
+  }
+
   update(row: SkillRow): { changes: number } {
     return this.db.execute(
       `UPDATE skills SET
@@ -94,6 +132,11 @@ export class SkillRepository {
 
   findByKey(id: string): SkillRow | undefined {
     return this.db.get<SkillRow>("SELECT * FROM skills WHERE id = ?", [id]);
+  }
+
+  /** 全量（服务端 AI 的缓存来源：#372 起怪物技能也从 `skills` 表读，表很小一次读全） */
+  listAll(): SkillRow[] {
+    return this.db.all<SkillRow>("SELECT * FROM skills ORDER BY id ASC");
   }
 
   /** 分页检索（默认按 id 数值序 —— 与后台的展示动线一致） */

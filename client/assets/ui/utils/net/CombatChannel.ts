@@ -100,6 +100,16 @@ export interface MonsterAiFrame {
   mapId: string;
   monsters: MonsterAiEntry[];
   hits: MonsterHitEntry[];
+  /** #372：这一拍怪物释放的技能（含状态型；旧服务端不带该字段时按空数组处理） */
+  casts?: MonsterCastEntry[];
+}
+
+/** 怪物释放技能的演出指令（#372：协议见 realtime.protocol 的 RealtimeMonsterCast） */
+export interface MonsterCastEntry {
+  instanceId: string;
+  skillId: string;
+  /** 有值 = 这次释放给怪物自己挂了这个状态（客户端据此在怪物身上播状态特效） */
+  statusId?: string;
 }
 
 /** 玩家互见广播帧里的一名玩家（#324：协议见 realtime.protocol 的 RealtimePlayerEntry） */

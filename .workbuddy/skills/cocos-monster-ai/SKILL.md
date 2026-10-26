@@ -6,6 +6,23 @@ agent_created: true
 
 # Cocos Creator 怪物 AI（待机游走 / 追击玩家 / 普攻）
 
+> **前置认知（#323 起）**：怪物行为权威已经搬到服务端 `MonsterAiService` —— 客户端**不再跑本地 AI**，
+> 下面的「本地状态机」只剩两个用途：① 理解历史实现的语义（服务端那套是同口径重写）；
+> ② `MonsterAI.stepServer` 做**位置趋近演出**（服务端发什么就走向哪，不做决策）。
+>
+> **#372 起怪物还会放技能**，客户端要做的三件事：
+> - `monster-ai` 帧的 **`casts`**（`{instanceId, skillId, statusId?}`）= 放技能了 → 播动作 + 特效。
+>   动作取技能配置的 `action`（`MonsterManager.playServerCast` → `MonsterAI.playServerAction`），
+>   特效走 `EffectManager.playAt`（`SkillEffectConfig` / `SkillEffectActor` 是 `Pick<>` 收窄过的类型，
+>   让 `SkillData`（没有 `onClick`）也能传）；
+> - **普攻没有单独的出手事件**：用同帧 `hits` 反推，凡是没被 `casts` 覆盖的 instanceId 补播
+>   `ACTION.ATTACK_NEAR`（用 `castIds` 集合去重，别让一次出手播两遍动作）；
+> - **状态型技能**（如狂怒 / 硬化皮肤）没有伤害，只有 `casts.statusId` → 在怪物身上挂一份
+>   循环特效节点（子节点，随怪物移动 / 销毁），台账放 `MonsterManager.statusEffects`，
+>   每帧按 `expireAt` 清理。**不要复用 `StatusManager`**：它是「单 owner + 图标栏」的形状，
+>   怪物需要每只一份且没有图标栏。
+
+
 ## 一、先分好层：数据归管理器，行为归 AI 静态类
 
 - **管理器（如 MonsterManager）只管数据与生命周期**：生成、按区域刷怪、节点↔数据映射（`Map<Node, Monster>`）、查询、受击结算、换图 reset。不要往里塞行为逻辑。
