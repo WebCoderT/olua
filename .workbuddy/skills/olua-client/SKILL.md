@@ -74,6 +74,11 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 
 新增字段不影响旧行为：`revision` 是**可选**的，不带就是「最后写入者胜」。
 
+**角色外观的取源只有一处**：`configs/fashionClothes` 的 `getFashionOut` / `getFashionIn`，优先级 **时装（`role.fashionCloth`，时装 id）> 装备衣服 > 性别默认外观**。
+场景主角（`RoleAppearance`）、进图预载（`PreloadManager`）、弹窗内观（`RoleInShowView`）三处都调它 —— 谁自己判一遍，就会出现「弹窗换了、地图上还是旧的」或「进图第一帧空着」。
+时装**只换外观不换数值**：不重算 `combatCalc`、不动 `hp`；它也没有 `outPositions` / `outScale` 这类几何参数，所以缩放与偏移仍按装备那件（穿时装不会把角色挪位）。
+⚠️ `findOnlineRole()` 每次都从 localStorage 解析**新对象**：改完字段要把**同一个对象**交回 `updateOnlineRole`，写成 `updateOnlineRole(findOnlineRole())` 会把改动丢掉。
+
 ## 六、客户端改动的固定动作
 
 1. **改接口相关** → 先改服务端，`cd server && npm run gen:api`，再改调用点（签名不兼容会**编译报错**）。
