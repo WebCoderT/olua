@@ -20,6 +20,7 @@ import { SystemModule } from "./modules/system/system.module";
 import { TokenModule } from "./modules/token/token.module";
 import { WorldModule } from "./modules/world/world.module";
 import { ZoneModule } from "./modules/zone/zone.module";
+import { SocialModule } from "./modules/social/social.module";
 
 /**
  * 应用根模块
@@ -63,6 +64,7 @@ export class AppModule {
         GameConfigModule,
         MailModule,
         ZoneModule,
+        SocialModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

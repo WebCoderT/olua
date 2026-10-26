@@ -176,6 +176,16 @@ export const PERMISSION = {
    * 稀有运营操作，直接决定账号归属与 worlds 数据，单列一个权限点。
    */
   ZONE_WRITE: "zone:write",
+  /**
+   * 查看帮会（#388，玩家自发组织的公开信息：谁在哪个帮、多少人）
+   *
+   * 只读观察员**也给**：读了不等于能改 —— 改公告 / 解散走 GUILD_WRITE 单独管控。
+   */
+  GUILD_READ: "guild:read",
+  /**
+   * 改帮会公告 / 强制解散（解散会连删成员表，一群人瞬间没有帮会）
+   */
+  GUILD_WRITE: "guild:write",
 } as const;
 
 export type PermissionValue = (typeof PERMISSION)[keyof typeof PERMISSION];
@@ -204,6 +214,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.GAME_CONFIG_WRITE]: "修改养成配置",
   [PERMISSION.ZONE_READ]: "查看区服",
   [PERMISSION.ZONE_WRITE]: "开区 / 合并区",
+  [PERMISSION.GUILD_READ]: "查看帮会",
+  [PERMISSION.GUILD_WRITE]: "改帮会公告 / 解散帮会",
 };
 
 /**
@@ -459,6 +471,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   levelExp: "升级经验",
   growthSegment: "成长曲线分段",
   growthScalar: "成长曲线参数",
+  guild: "帮会",
 };
 
 /** 目标类型中文名（未知类型原样显示） */

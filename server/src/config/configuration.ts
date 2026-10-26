@@ -245,6 +245,15 @@ export interface AppConfiguration {
    */
   playerAppearanceRefreshMs: number;
   //#endregion
+
+  //#region 社交（#388：帮会）
+  /**
+   * 帮会人数上限（默认 50）
+   *
+   * 与帮会等级解耦：等级这一刀没有业务，别让它悄悄决定真实容量（见 common/constants/social）。
+   */
+  guildMemberLimit: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -306,5 +315,6 @@ export default function configuration(): AppConfiguration {
     monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
     playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
+    guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
   };
 }

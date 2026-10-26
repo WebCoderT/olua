@@ -7811,6 +7811,754 @@
         }
       }
     },
+    "/guilds": {
+      "get": {
+        "description": "全部帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "帮会列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/GuildSummaryDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "帮会列表",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/GuildSummaryDto"
+          }
+        }
+      },
+      "post": {
+        "description": "建帮人自动成为帮主，**免费**；帮会名 2~12 字且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGuildDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "刚创建的帮会（含我的职位 = 帮主）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "创建帮会",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      }
+    },
+    "/guilds/me": {
+      "get": {
+        "description": "当前在线角色所在的帮会（成员名单 + 待审批申请 + 我可用的操作）。不在任何帮会时 data 为 null。\n\n`canReview` / `canManage` / `canDisband` 由服务端按职位算好 —— 客户端只显隐按钮，**不要自己再判 rank**。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "我的帮会，可能为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "我的帮会",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      },
+      "delete": {
+        "description": "仅帮主可用；成员与待审批申请一并清除，**不可恢复**。帮会人数上限见服务端配置（默认 50）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.disband",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "帮会已解散",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "解散帮会",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true
+      }
+    },
+    "/guilds/{id}/applications": {
+      "post": {
+        "description": "留言 0~50 字。**重复申请只覆盖留言**，不会堆出两条。\n\n失败：50103 已在别的帮会 / 50101 帮会不存在 / 50107 人满了。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.apply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "帮会 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyGuildDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "申请已提交（等待帮主或副帮主审批）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "申请加入帮会",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true
+      }
+    },
+    "/guilds/me/applications/{roleId}/review": {
+      "post": {
+        "description": "帮主 / 副帮主可用。拒绝时直接删掉申请（不留记录）。通过时再查一次「对方是否已入别的帮、帮会是否已满」。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.review",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "申请人角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewGuildApplicationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "处理后的我的帮会",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "审批入帮申请",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      }
+    },
+    "/guilds/me/members/{roleId}/kick": {
+      "post": {
+        "description": "帮主 / 副帮主可用。副帮主不能踢另一位副帮主；帮主不可被踢；不能踢自己。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.kick",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "被踢成员的角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "处理后的我的帮会",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "踢出成员",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      }
+    },
+    "/guilds/me/transfer": {
+      "post": {
+        "description": "仅帮主可用。双方职位互换（我变普通成员，他变帮主），`guilds.leader_id` 同一事务内改。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.transfer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferGuildDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "转让后的我的帮会（我已是普通成员）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "转让帮主",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      }
+    },
+    "/guilds/me/notice": {
+      "post": {
+        "description": "帮主 / 副帮主可用；空字符串表示清空公告。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.notice",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGuildNoticeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改后的我的帮会",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "修改帮会公告",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      }
+    },
+    "/guilds/me/leave": {
+      "post": {
+        "description": "帮主不能直接退出（50106）：先把帮主转让给别人，或者解散帮会。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.leave",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "已退出帮会",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "退出帮会",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true
+      }
+    },
+    "/admin/guilds": {
+      "get": {
+        "description": "全部帮会（含人数与帮主名），按人数降序。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:read`（查看帮会；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGuild.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "帮会列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AdminGuildDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "帮会列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AdminGuildDto"
+          }
+        },
+        "x-olua-permissions": [
+          "guild:read"
+        ]
+      }
+    },
+    "/admin/guilds/{id}": {
+      "get": {
+        "description": "帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:read`（查看帮会；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGuild.detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "帮会 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "帮会详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminGuildDetailDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "帮会详情",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminGuildDetailDto"
+        },
+        "x-olua-permissions": [
+          "guild:read"
+        ]
+      },
+      "patch": {
+        "description": "两个字段都可选，只传要改的。改名字仍要求全局唯一（50102）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:write`（改帮会公告 / 解散帮会；角色：超级管理员 / 管理员）",
+        "operationId": "adminGuild.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "帮会 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateGuildDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改后的帮会详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminGuildDetailDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改帮会（名字 / 公告）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminGuildDetailDto"
+        },
+        "x-olua-permissions": [
+          "guild:write"
+        ]
+      },
+      "delete": {
+        "description": "成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:write`（改帮会公告 / 解散帮会；角色：超级管理员 / 管理员）",
+        "operationId": "adminGuild.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "帮会 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "帮会已解散",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "强制解散帮会",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "guild:write"
+        ]
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -9627,6 +10375,88 @@
         "required": [
           "templateKey"
         ]
+      },
+      "CreateGuildDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "帮会名（2~12 字，全局唯一）",
+            "example": "听雨阁"
+          },
+          "notice": {
+            "type": "string",
+            "description": "公告（可选，0~200 字）",
+            "example": "新帮会，欢迎加入"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ApplyGuildDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "留言（可选，0~50 字）；重复申请会**覆盖**上一条留言",
+            "example": "每天在线，求收留"
+          }
+        }
+      },
+      "ReviewGuildApplicationDto": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean",
+            "description": "true 通过 / false 拒绝（拒绝直接删掉申请，不留记录）",
+            "example": true
+          }
+        },
+        "required": [
+          "approve"
+        ]
+      },
+      "TransferGuildDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "新帮主的角色 id（必须是本帮成员，且不是自己）",
+            "example": "role_b2"
+          }
+        },
+        "required": [
+          "roleId"
+        ]
+      },
+      "UpdateGuildNoticeDto": {
+        "type": "object",
+        "properties": {
+          "notice": {
+            "type": "string",
+            "description": "公告（0~200 字；空字符串表示清空）",
+            "example": "本帮不收 20 级以下"
+          }
+        },
+        "required": [
+          "notice"
+        ]
+      },
+      "AdminUpdateGuildDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "帮会名（2~12 字，全局唯一）",
+            "example": "听雨阁"
+          },
+          "notice": {
+            "type": "string",
+            "description": "公告（0~200 字）",
+            "example": "公告已重置"
+          }
+        }
       },
       "ApiEnvelopeDto": {
         "type": "object",
@@ -14720,6 +15550,378 @@
           "monsterDrops",
           "skills",
           "statuses"
+        ]
+      },
+      "GuildSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "帮会 id",
+            "example": "g_1760000000000_ab12"
+          },
+          "name": {
+            "type": "string",
+            "description": "帮会名",
+            "example": "听雨阁"
+          },
+          "notice": {
+            "type": "string",
+            "description": "帮会公告（列表里也带，便于一行看全）",
+            "example": "每周三晚八点集合"
+          },
+          "level": {
+            "type": "number",
+            "description": "帮会等级（当前恒为 1：等级业务未做，先占位）",
+            "example": 1
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "当前成员数",
+            "example": 12
+          },
+          "leaderName": {
+            "type": "string",
+            "description": "帮主角色名",
+            "example": "甲一"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "notice",
+          "level",
+          "memberCount",
+          "leaderName",
+          "createdAt"
+        ]
+      },
+      "GuildMemberDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "角色 id",
+            "example": "role_a1"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名",
+            "example": "甲一"
+          },
+          "level": {
+            "type": "number",
+            "description": "角色等级",
+            "example": 12
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业（客户端按这张表显示职业图标）",
+            "example": "1"
+          },
+          "rank": {
+            "type": "string",
+            "description": "职位：leader 帮主 / vice 副帮主 / member 成员",
+            "example": "member"
+          },
+          "rankLabel": {
+            "type": "string",
+            "description": "职位中文名（服务端给，客户端不另写一套）",
+            "example": "成员"
+          },
+          "joinedAt": {
+            "type": "number",
+            "description": "入帮时间（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "roleId",
+          "name",
+          "level",
+          "occupation",
+          "rank",
+          "rankLabel",
+          "joinedAt"
+        ]
+      },
+      "GuildApplicationDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "申请人角色 id",
+            "example": "role_b2"
+          },
+          "name": {
+            "type": "string",
+            "description": "申请人角色名",
+            "example": "乙二"
+          },
+          "level": {
+            "type": "number",
+            "description": "申请人等级",
+            "example": 9
+          },
+          "message": {
+            "type": "string",
+            "description": "申请留言",
+            "example": "带我一个"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "申请时间（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "roleId",
+          "name",
+          "level",
+          "message",
+          "createdAt"
+        ]
+      },
+      "MyGuildDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "帮会 id",
+            "example": "g_1760000000000_ab12"
+          },
+          "name": {
+            "type": "string",
+            "description": "帮会名",
+            "example": "听雨阁"
+          },
+          "notice": {
+            "type": "string",
+            "description": "帮会公告",
+            "example": "每周三晚八点集合"
+          },
+          "level": {
+            "type": "number",
+            "description": "帮会等级（当前恒为 1）",
+            "example": 1
+          },
+          "leaderId": {
+            "type": "string",
+            "description": "帮主角色 id",
+            "example": "role_a1"
+          },
+          "leaderName": {
+            "type": "string",
+            "description": "帮主角色名",
+            "example": "甲一"
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "当前成员数",
+            "example": 12
+          },
+          "memberLimit": {
+            "type": "number",
+            "description": "人数上限（配置驱动，默认 50）",
+            "example": 50
+          },
+          "myRoleId": {
+            "type": "string",
+            "description": "我的角色 id",
+            "example": "role_b2"
+          },
+          "myRank": {
+            "type": "string",
+            "description": "我的职位：leader / vice / member",
+            "example": "member"
+          },
+          "myRankLabel": {
+            "type": "string",
+            "description": "我的职位中文名",
+            "example": "成员"
+          },
+          "canReview": {
+            "type": "boolean",
+            "description": "我能不能审批入帮申请（帮主 / 副帮主）",
+            "example": false
+          },
+          "canManage": {
+            "type": "boolean",
+            "description": "我能不能改公告 / 踢人（帮主 / 副帮主）",
+            "example": false
+          },
+          "canDisband": {
+            "type": "boolean",
+            "description": "我能不能解散（仅帮主）",
+            "example": false
+          },
+          "members": {
+            "description": "成员列表（帮主 → 副帮主 → 成员，同职位按入帮时间）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuildMemberDto"
+            }
+          },
+          "applicants": {
+            "description": "待审批申请（**只有干部才拿得到**，普通成员是空数组 —— 非干部不该看到谁在申请）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuildApplicationDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "notice",
+          "level",
+          "leaderId",
+          "leaderName",
+          "memberCount",
+          "memberLimit",
+          "myRoleId",
+          "myRank",
+          "myRankLabel",
+          "canReview",
+          "canManage",
+          "canDisband",
+          "members",
+          "applicants"
+        ]
+      },
+      "AdminGuildDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "帮会 id",
+            "example": "g_1760000000000_ab12"
+          },
+          "name": {
+            "type": "string",
+            "description": "帮会名",
+            "example": "听雨阁"
+          },
+          "notice": {
+            "type": "string",
+            "description": "帮会公告（列表里也带，便于一行看全）",
+            "example": "每周三晚八点集合"
+          },
+          "level": {
+            "type": "number",
+            "description": "帮会等级（当前恒为 1：等级业务未做，先占位）",
+            "example": 1
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "当前成员数",
+            "example": 12
+          },
+          "leaderName": {
+            "type": "string",
+            "description": "帮主角色名",
+            "example": "甲一"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）",
+            "example": 1760000000000
+          },
+          "leaderId": {
+            "type": "string",
+            "description": "帮主角色 id",
+            "example": "role_a1"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "notice",
+          "level",
+          "memberCount",
+          "leaderName",
+          "createdAt",
+          "leaderId",
+          "updatedAt"
+        ]
+      },
+      "AdminGuildDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "帮会 id",
+            "example": "g_1760000000000_ab12"
+          },
+          "name": {
+            "type": "string",
+            "description": "帮会名",
+            "example": "听雨阁"
+          },
+          "notice": {
+            "type": "string",
+            "description": "帮会公告（列表里也带，便于一行看全）",
+            "example": "每周三晚八点集合"
+          },
+          "level": {
+            "type": "number",
+            "description": "帮会等级（当前恒为 1：等级业务未做，先占位）",
+            "example": 1
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "当前成员数",
+            "example": 12
+          },
+          "leaderName": {
+            "type": "string",
+            "description": "帮主角色名",
+            "example": "甲一"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）",
+            "example": 1760000000000
+          },
+          "leaderId": {
+            "type": "string",
+            "description": "帮主角色 id",
+            "example": "role_a1"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）",
+            "example": 1760000000000
+          },
+          "members": {
+            "description": "成员名单",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuildMemberDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "notice",
+          "level",
+          "memberCount",
+          "leaderName",
+          "createdAt",
+          "leaderId",
+          "updatedAt",
+          "members"
         ]
       }
     }

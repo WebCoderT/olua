@@ -289,6 +289,8 @@ export const roleInfoDialogLayout = {
   rankButton: { name: "role_rank_button", position: new Vec2(200, -123), text: "军 衔" },
   /** 时装（衣柜）入口，继续往上排一格（-123 + 36 + 10 = -77），四格同列等距 */
   fashionButton: { name: "role_fashion_button", position: new Vec2(200, -77), text: "时 装" },
+  /** 社交（帮会 / 好友）入口，再往上排一格（-77 + 36 + 10 = -31），五格同列等距 */
+  socialButton: { name: "role_social_button", position: new Vec2(200, -31), text: "社 交" },
 };
 
 /**
@@ -673,6 +675,113 @@ export const announcementNoticeDialogLayout = {
   },
   /** 「我知道了」按钮（中号按钮，面板底部居中） */
   confirmButton: { name: "announcement_notice_confirm_button", text: "我知道了", position: new Vec2(0, -200) },
+};
+
+//#endregion
+
+//#region 社交 · 帮会（#388）
+
+/**
+ * 帮会弹窗（社交面板的第一页；好友 / 敌人 / 附近在 #389 补成同框多页）
+ *
+ * 两种形态共用一个弹窗，按「有没有帮会」切换：
+ * - **未加入**：创建帮会（输入框 + 按钮）+ 全部帮会列表（每行一个「申请」）
+ * - **已加入**：帮会信息头 + 公告（干部可改）+ 成员名单 + 待审批（干部可见）+ 退出 / 解散
+ *
+ * 列表行是「整行一条」的横排（不是网格）：滚动区 content 自带纵向 Layout，
+ * 直接 addChild 就按行往下排，行内位置以**行中心**为原点（见 row.*）。
+ */
+export const guildDialogLayout = {
+  name: "guild_dialog",
+  title: "社 交",
+  // ---- 未加入帮会 ----
+  guest: {
+    hint: { position: new Vec2(0, 208), size: new Size(560, 22), fontSize: 15, color: new Color(226, 226, 226) },
+    nameInput: { position: new Vec2(-60, 170), size: new Vec2(360, 34), placeholder: "输入帮会名（2~12 字）" },
+    createButton: { name: "guild_create_button", text: "创建帮会", position: new Vec2(195, 170) },
+    listTitle: { position: new Vec2(0, 138), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
+    list: { name: "guild_list", position: new Vec2(0, -56), size: new Size(556, 340) },
+  },
+  // ---- 已加入帮会 ----
+  member: {
+    header: { position: new Vec2(-110, 208), size: new Size(340, 24), fontSize: 16, color: new Color(255, 214, 102) },
+    summary: { position: new Vec2(140, 208), size: new Size(280, 22), fontSize: 12, color: new Color(180, 190, 205) },
+    notice: { position: new Vec2(0, 176), size: new Size(548, 22), fontSize: 12, color: new Color(200, 208, 220) },
+    noticeInput: { position: new Vec2(-60, 146), size: new Vec2(360, 30), placeholder: "输入新公告（0~200 字）" },
+    saveButton: { name: "guild_notice_save_button", text: "保存公告", position: new Vec2(195, 146), small: true },
+    memberTitle: { position: new Vec2(0, 116), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
+    memberList: { name: "guild_member_list", position: new Vec2(0, 14), size: new Size(556, 168) },
+    applicantTitle: { position: new Vec2(0, -88), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
+    applicantList: { name: "guild_applicant_list", position: new Vec2(0, -158), size: new Size(556, 116) },
+    leaveButton: { name: "guild_leave_button", text: "退出帮会", position: new Vec2(-70, -232), small: true },
+    disbandButton: { name: "guild_disband_button", text: "解散帮会", position: new Vec2(70, -232), small: true },
+    /** 只剩一个按钮时（帮主只能解散、成员只能退出）居中摆放，避免偏在一边 */
+    singleButtonPosition: new Vec2(0, -232),
+  },
+  /** 列表行（三种行共用同一套几何与配色） */
+  row: {
+    size: new Size(556, 48),
+    /** 行底色 / 描边 / 自己的那一行的高亮描边 */
+    fill: new Color(22, 26, 34, 190),
+    border: new Color(64, 74, 90, 255),
+    selfBorder: new Color(255, 200, 80, 255),
+    /** 行内文字：主名 / 次要信息 */
+    nameFontSize: 14,
+    metaFontSize: 11,
+    metaColor: new Color(160, 172, 190, 255),
+    radius: 6,
+    /** 行内各列的中心 x（相对行中心） */
+    columns: {
+      name: -180,
+      meta: -40,
+      extra: 90,
+      action: 210,
+      action2: 150,
+    },
+  },
+  /** 文案（状态提示与按钮，集中在这里避免散在组件里） */
+  texts: {
+    guestHint: "你还没有加入帮会：可以自己创建一个，或申请加入下面任意一个",
+    listTitle: "全部帮会（{count}）",
+    listEmpty: "还没有人创建帮会，你可以是第一个",
+    nameRule: "帮会名要 {min}~{max} 个字",
+    rowLeader: "帮主 {leader}",
+    rowMembers: "{count} 人",
+    applyButton: "申请",
+    applyDone: "已申请",
+    memberTitle: "成员（{count}/{limit}）",
+    memberEmpty: "（没有成员）",
+    memberMeta: "{level} 级 · {rank}",
+    applicantTitle: "待审批（{count}）",
+    applicantTitleLocked: "待审批（只有帮主和副帮主能看到）",
+    applicantEmpty: "（没有待审批的申请）",
+    applicantEmptyLocked: "（你的职位看不到申请）",
+    applicantMeta: "{level} 级",
+    applicantMetaWithMessage: "{level} 级 · {message}",
+    noticePrefix: "公告：{notice}",
+    noticeNone: "公告：（暂无）",
+    summary: "{count}/{limit} 人 · 我的职位：{rank}",
+    accept: "通过",
+    reject: "拒绝",
+    kick: "踢出",
+    transfer: "转让",
+    noticeSaved: "公告已更新",
+    createdTip: "帮会创建成功",
+    appliedTip: "申请已提交，等待帮主审批",
+    leftTip: "已退出帮会",
+    disbandedTip: "帮会已解散",
+    kickedTip: "已把对方踢出帮会",
+    transferredTip: "帮主已转让",
+    /** 二次确认（不可恢复 / 影响他人的操作都要先问一句） */
+    confirmLeaveTitle: "退出帮会",
+    confirmLeaveText: "确定退出「{name}」吗？退出后要重新申请才能回来",
+    confirmDisbandTitle: "解散帮会",
+    confirmDisbandText: "确定解散「{name}」吗？成员与待审批申请会一并清除，不可恢复",
+    confirmKickTitle: "踢出成员",
+    confirmKickText: "确定把「{name}」踢出帮会吗？",
+    confirmTransferTitle: "转让帮主",
+    confirmTransferText: "确定把帮主转给「{name}」吗？你会变成普通成员，且自己无法撤回",
+  },
 };
 
 //#endregion

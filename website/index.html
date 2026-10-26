@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>olua · 2D 角色成长与装备玩法原型</title>
-  <meta name="description" content="olua 是一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型：装备前后缀 15 品质变体、品质边框与详情背景、掉落光柱、商城、战魂 / 称号 / 军衔三条成长线、A* 自动战斗；再往上是一整套 NestJS 服务端与 React 运营后台 —— 地图怪物与战斗结算服务端权威、多开区 / 合并区、WebSocket 实时通道、99 个契约驱动的三端接口、22 个权限点的双层守卫与操作审计。" />
+  <meta name="description" content="olua 是一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型：装备前后缀 15 品质变体、品质边框与详情背景、掉落光柱、商城、战魂 / 称号 / 军衔三条成长线、A* 自动战斗；再往上是一整套 NestJS 服务端与 React 运营后台 —— 地图怪物与战斗结算服务端权威、多开区 / 合并区、WebSocket 实时通道、99 个契约驱动的三端接口、24 个权限点的双层守卫与操作审计。" />
   <meta property="og:title" content="olua · 2D 角色成长与装备玩法原型" />
   <meta property="og:description" content="基于 Cocos Creator 3.8.7 的 2D ARPG 玩法原型，配套 NestJS 服务端与 React 运营后台：555 件装备变体、品质特效、掉落光柱、商城分页、三条成长线，地图怪物与结算服务端权威、多开区 / 合并区、WebSocket 实时通道。" />
   <meta property="og:image" content="assets/img/game.jpg" />
@@ -60,7 +60,7 @@
       <div class="stat reveal"><b>555</b><span>件装备变体</span></div>
       <div class="stat reveal"><b>15</b><span>种品质组合</span></div>
       <div class="stat reveal"><b>100</b><span>阶军衔成长线</span></div>
-      <div class="stat reveal"><b>107</b><span>个 REST 接口</span></div>
+      <div class="stat reveal"><b>121</b><span>个 REST 接口</span></div>
       <div class="stat reveal"><b>43</b><span>套自动化单测</span></div>
       <div class="stat reveal"><b>11</b><span>套跨端审计脚本</span></div>
     </div>
@@ -151,7 +151,7 @@
           <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
         </div>
         <h3>运营后台与双层权限</h3>
-        <p>角色运营台支持六维筛选、批量删除与装备 / 技能 / 背包的结构化编辑；装备 / 药品 / 物品 / 怪物 NPC / 商城定价 / 时装 / 掉落表 / 成长曲线 / 军衔全量可调，另有区服管理页（开区 / 合并区）。22 个权限点 × 3 种管理员角色双层守卫，写操作自动留痕、敏感字段打码。</p>
+        <p>角色运营台支持六维筛选、批量删除与装备 / 技能 / 背包的结构化编辑；装备 / 药品 / 物品 / 怪物 NPC / 商城定价 / 时装 / 掉落表 / 成长曲线 / 军衔全量可调，另有区服管理页（开区 / 合并区）。24 个权限点 × 3 种管理员角色双层守卫，写操作自动留痕、敏感字段打码。</p>
       </article>
 
       <article class="card reveal">
@@ -219,7 +219,7 @@
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01"/></svg>
         </div>
         <h3>服务端 · NestJS</h3>
-        <p>107 个 REST 接口 / 89 条路径 / 168 个模型，Swagger 文档是唯一契约源；JWT 双受众鉴权（玩家 / 管理员）+ 每次请求回查库，22 个权限点的双层守卫，角色数据走修订号乐观锁与冲突自愈；旁边还有一条 WebSocket 实时进程，双进程共享同一份 SQLite。</p>
+        <p>121 个 REST 接口 / 99 条路径 / 180 个模型，Swagger 文档是唯一契约源；JWT 双受众鉴权（玩家 / 管理员）+ 每次请求回查库，24 个权限点的双层守卫，角色数据走修订号乐观锁与冲突自愈；旁边还有一条 WebSocket 实时进程，双进程共享同一份 SQLite。</p>
       </article>
 
       <article class="card reveal">
@@ -253,8 +253,8 @@
         <p>以服务端 Swagger 文档为唯一契约源，生成客户端与管理端的路径表 / 接口方法 / 实体类型。三端签名对不上会<b>直接编译报错</b>，而不是线上出现一个 undefined；生成物不许手改，有审计逐字节盯着。</p>
       </article>
       <article class="eng reveal">
-        <h3>1764 条服务端 e2e</h3>
-        <p>十二套 e2e 脚本真起服务、真连库，覆盖权限越权、令牌受众隔离、封禁闭环、公告触达、邮件投递、备份恢复，以及服务端权威化的硬核链路：战斗结算 / 掉落经验 / 商城购买 / 用药收权、世界按区隔离、开区合并事务与代际失效、实时通道踢下线；每套脚本断言自己的条数，少一条就当场失败。</p>
+        <h3>1824 条服务端 e2e</h3>
+        <p>十三套 e2e 脚本真起服务、真连库，覆盖权限越权、令牌受众隔离、封禁闭环、公告触达、邮件投递、备份恢复，以及服务端权威化的硬核链路：战斗结算 / 掉落经验 / 商城购买 / 用药收权、世界按区隔离、开区合并事务与代际失效、实时通道踢下线；每套脚本断言自己的条数，少一条就当场失败。</p>
       </article>
       <article class="eng reveal">
         <h3>输入与交互打磨</h3>

@@ -67,6 +67,9 @@ const ALLOWED_EDGES = [
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
   { from: "modules/realtime", to: "modules/roles/roles.service.ts", why: "结算读写存档走存档服务" },
+  // 社交（#388/#389）：所有帮会 / 好友动作都落在「账号的在线角色」上，
+  // 而哪个角色在线只有存档域知道（accounts.online_role_id）—— 不让社交域自己摸账号表
+  { from: "modules/social", to: "modules/roles/roles.service.ts", why: "社交动作取账号的在线角色" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -130,6 +133,8 @@ const REPO_EDGES = {
   "database/repositories/status.repository.ts": ["modules/game-config", "modules/realtime"],
   // 怪物技能挂载（#372）：game-config 管挂载清单（整份替换），realtime 的 AI 读它决定放哪些技能
   "database/repositories/monster-skill.repository.ts": ["modules/game-config", "modules/realtime"],
+  // 帮会（#388）：社交域独占三张表的读写（管理端控制器也在 social 域内，不额外开边）
+  "database/repositories/guild.repository.ts": ["modules/social"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

@@ -295,6 +295,33 @@ export const routes = {
      */
     update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
   },
+  /** adminGuild 模块（4 个接口） */
+  adminGuild: {
+    /**
+     * 帮会列表（GET /admin/guilds）
+     *
+     * 全部帮会（含人数与帮主名），按人数降序。
+     */
+    list: "/admin/guilds",
+    /**
+     * 强制解散帮会（DELETE /admin/guilds/{id}）
+     *
+     * 成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。
+     */
+    remove: (id: string) => `/admin/guilds/${encodeURIComponent(id)}`,
+    /**
+     * 帮会详情（GET /admin/guilds/{id}）
+     *
+     * 帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。
+     */
+    detail: (id: string) => `/admin/guilds/${encodeURIComponent(id)}`,
+    /**
+     * 修改帮会（名字 / 公告）（PATCH /admin/guilds/{id}）
+     *
+     * 两个字段都可选，只传要改的。改名字仍要求全局唯一（50102）。
+     */
+    update: (id: string) => `/admin/guilds/${encodeURIComponent(id)}`,
+  },
   /** adminItem 模块（2 个接口） */
   adminItem: {
     /**

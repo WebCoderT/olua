@@ -82,6 +82,7 @@ const MODULES = {
   realtime: { target: "client", export: "RealtimeApi" },
   gameConfig: { target: "client", export: "GameConfigApi" },
   zone: { target: "client", export: "ZoneApi" },
+  guild: { target: "client", export: "GuildApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },
@@ -108,6 +109,7 @@ const MODULES = {
   adminSkill: { target: "admin", export: "skillsApi" },
   adminStatus: { target: "admin", export: "statusesApi" },
   adminZone: { target: "admin", export: "zonesApi" },
+  adminGuild: { target: "admin", export: "guildsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */

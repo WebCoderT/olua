@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, ActiveAnnouncement, AuthResult, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, Health, Login, MallPurchase, MallPurchaseResult, RealtimeTicket, Register, RoleDetail, RoleSummary, SaveRole, Zone } from "./ApiModels";
+import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, Login, MallPurchase, MallPurchaseResult, MyGuild, RealtimeTicket, Register, ReviewGuildApplication, RoleDetail, RoleSummary, SaveRole, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,7 @@ import type { Account, ActiveAnnouncement, AuthResult, CreateRole, DrugUse, Drug
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
 
 /** announcement 模块的接口（1 个，生成） */
 export const AnnouncementApi = {
@@ -69,6 +69,70 @@ export const GameConfigApi = {
    * 管理端可改的全部运营配置一次下发（称号 / 战魂 / 军衔 / 装备 / 药品 / 物品 / 怪物 / NPC / 时装 / 升级经验 / 成长曲线与标量 / 商城定价 / 掉落表）。
    */
   snapshot: (options?: Options) => HttpClient.get<GameConfigSnapshot>(ApiRoutes.gameConfig.snapshot, options),
+};
+
+/** guild 模块的接口（10 个，生成） */
+export const GuildApi = {
+  /**
+   * 帮会列表（GET /guilds）
+   *
+   * 全部帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。
+   */
+  list: (options?: Options) => HttpClient.get<GuildSummary[]>(ApiRoutes.guild.list, options),
+  /**
+   * 创建帮会（POST /guilds）
+   *
+   * 建帮人自动成为帮主，**免费**；帮会名 2~12 字且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。
+   */
+  create: (body: CreateGuild, options?: Options) => HttpClient.post<MyGuild>(ApiRoutes.guild.create, body, options),
+  /**
+   * 申请加入帮会（POST /guilds/{id}/applications）
+   *
+   * 留言 0~50 字。**重复申请只覆盖留言**，不会堆出两条。
+   */
+  apply: (id: string, body: ApplyGuild, options?: Options) => HttpClient.post<null>(ApiRoutes.guild.apply(id), body, options),
+  /**
+   * 解散帮会（DELETE /guilds/me）
+   *
+   * 仅帮主可用；成员与待审批申请一并清除，**不可恢复**。帮会人数上限见服务端配置（默认 50）。
+   */
+  disband: (options?: Options) => HttpClient.del<null>(ApiRoutes.guild.disband, options),
+  /**
+   * 我的帮会（GET /guilds/me）
+   *
+   * 当前在线角色所在的帮会（成员名单 + 待审批申请 + 我可用的操作）。不在任何帮会时 data 为 null。
+   */
+  mine: (options?: Options) => HttpClient.get<MyGuild | null>(ApiRoutes.guild.mine, options),
+  /**
+   * 审批入帮申请（POST /guilds/me/applications/{roleId}/review）
+   *
+   * 帮主 / 副帮主可用。拒绝时直接删掉申请（不留记录）。通过时再查一次「对方是否已入别的帮、帮会是否已满」。
+   */
+  review: (roleId: string, body: ReviewGuildApplication, options?: Options) => HttpClient.post<MyGuild>(ApiRoutes.guild.review(roleId), body, options),
+  /**
+   * 退出帮会（POST /guilds/me/leave）
+   *
+   * 帮主不能直接退出（50106）：先把帮主转让给别人，或者解散帮会。
+   */
+  leave: (options?: Options) => HttpClient.post<null>(ApiRoutes.guild.leave, undefined, options),
+  /**
+   * 踢出成员（POST /guilds/me/members/{roleId}/kick）
+   *
+   * 帮主 / 副帮主可用。副帮主不能踢另一位副帮主；帮主不可被踢；不能踢自己。
+   */
+  kick: (roleId: string, options?: Options) => HttpClient.post<MyGuild>(ApiRoutes.guild.kick(roleId), undefined, options),
+  /**
+   * 修改帮会公告（POST /guilds/me/notice）
+   *
+   * 帮主 / 副帮主可用；空字符串表示清空公告。
+   */
+  notice: (body: UpdateGuildNotice, options?: Options) => HttpClient.post<MyGuild>(ApiRoutes.guild.notice, body, options),
+  /**
+   * 转让帮主（POST /guilds/me/transfer）
+   *
+   * 仅帮主可用。双方职位互换（我变普通成员，他变帮主），`guilds.leader_id` 同一事务内改。
+   */
+  transfer: (body: TransferGuild, options?: Options) => HttpClient.post<MyGuild>(ApiRoutes.guild.transfer, body, options),
 };
 
 /** health 模块的接口（1 个，生成） */

@@ -93,6 +93,7 @@ admin/
 | Admins | `/admins` | `admin:read` | Admin list; change role / enable-disable / **reset password** / delete (writes additionally need `admin:manage`) |
 | Announcements | `/announcements` | `announcement:read` | Publish / edit / delete announcements, enable-disable, filter by keyword / level / enabled / effective status; **"effective" uses the server-returned `active` column** (same criterion as the player-facing fetch endpoint, not local clock) (writes additionally need `announcement:write`) |
 | Zones | `/zones` | `zone:read` | Zone list (including merged destinations and account counts); **create zones** and **merge zones** (one transaction moves all source-zone accounts and re-keys world instances; unsaved damage within seconds of the merge is discarded — the confirm dialog spells out the cost; writes additionally need `zone:write`) |
+| Guilds | `/guilds` | `guild:read` | Guild list (sorted by member count, with leader and size) plus the member roster (ranks colour-coded); **rename / edit the notice** (the name stays globally unique) and **force-disband** (members and pending applications are removed with it, irreversible — the confirm dialog spells out the cost; writes also need `guild:write`). Approving applications is the leader’s own backlog, the console does not do it for them |
 | Mails | `/mails` | `mail:read` | **Send** (pick template → fill variables → enqueue) + **delivery records** (status / keyword filter + pagination + sorting). Delivery is **asynchronous**, so "pending / retrying" intermediate states exist and refresh automatically; only attempt count and failure reason are visible (writes additionally need `mail:write`) |
 | Audit logs | `/audit-logs` | `audit:read` | 7 filters (keyword / action / target type / result / start-end time / target id) + pagination + expand to see the request body |
 | My account | `/me` | **no permission point** | Own identity / login status / permission points; **self-service password change** (requires the current password) |
@@ -123,7 +124,7 @@ the server and the admin read the **same file**.
 
 Interface visibility **is only experience**; **the server is the authority**.
 
-- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 22 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
+- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 24 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
 - Admin info comes down with the token in the response and lands in `store/session`; `hasPermission(point)` looks it up in that array directly
 - **Fallback for a dirty session**: a missing `admin.permissions` is treated as an **empty array** (least privilege) — an incomplete session never opens up the interface
 - Nav items carry a `permission` field and `Layout` filters before rendering; the `RequirePermission` shell in `App.tsx` guards direct route access
