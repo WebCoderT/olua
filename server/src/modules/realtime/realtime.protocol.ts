@@ -312,6 +312,32 @@ export interface RealtimePlayerEntry {
   maxHp: number;
   /** 是否在移动（客户端自报；方向由位移差量自算） */
   moving: boolean;
+  /** 外观（#383：对方穿什么、拿什么、有没有时装） */
+  appearance: RealtimePlayerAppearance;
+}
+
+/**
+ * 一名远端玩家的外观（#383）
+ *
+ * 只带「拼出这个人长什么样」的最小集合 —— 与客户端 `entities/Role` 的对应字段同名，
+ * 客户端拿去填一个轻量对象就能直接复用 `RoleAppearance` 的装配逻辑（帧目录取源、
+ * 时装 > 装备衣服 > 性别默认身体的优先级都在那一处）。
+ *
+ * **不含几何**（outPositions / outScale）：那是装备表里的常量，客户端自己查得到，
+ * 不必每人每帧带一份。
+ */
+export interface RealtimePlayerAppearance {
+  /**
+   * 性别（`"1"` 男 / `"2"` 女，与客户端 SEX 枚举同形）：没穿衣服时用它选默认身体。
+   * 历史存档里也可能是数字 1/2，服务端读的时候统一转成字符串
+   */
+  sex: string;
+  /** 衣服装备 id（`""` = 没穿，客户端按性别回落默认身体） */
+  cloth: string;
+  /** 武器装备 id（`""` = 没拿，客户端隐藏武器节点） */
+  weapon: string;
+  /** 时装 id（`""` = 没穿时装；与 fashions 表主键同形，如 cloth_2） */
+  fashion: string;
 }
 
 /**

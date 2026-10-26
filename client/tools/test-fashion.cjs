@@ -119,8 +119,12 @@ if (sandbox) {
   const preloadSource = read("assets/ui/core/PreloadManager.ts");
   const inShowSource = read("assets/ui/components/panel/RoleInShowView.ts");
   check(
-    /getFashionOut\(role\.fashionCloth\) \|\| cloth\?\.out \|\| fallback\.out/.test(appearanceSource),
+    /getFashionOut\(source\.fashionCloth\) \|\| cloth\?\.out \|\| fallback\.out/.test(appearanceSource),
     "场景主角：时装 > 装备衣服 > 默认身体",
+  );
+  check(
+    /export type RoleOutSource = \{[\s\S]*?fashionCloth: string \| null;/.test(appearanceSource),
+    "装配的数据形状是结构化子集（远端玩家复用同一份代码，见 #383）",
   );
   check(
     /getFashionOut\(role\.fashionCloth\) \|\| getEquipment\(role\.equipments\.cloth\)\?\.out \|\| getRoleDefaultCloth\(role\.sex\)\.out/.test(preloadSource),

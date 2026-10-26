@@ -112,6 +112,18 @@ export interface MonsterCastEntry {
   statusId?: string;
 }
 
+/** 一名远端玩家的外观（#383：协议见 realtime.protocol 的 RealtimePlayerAppearance） */
+export interface PlayerAppearance {
+  /** 性别（"1" 男 / "2" 女，与 SEX 枚举同形）：没穿衣服时用它选默认身体 */
+  sex: string;
+  /** 衣服装备 id（"" = 没穿） */
+  cloth: string;
+  /** 武器装备 id（"" = 没拿） */
+  weapon: string;
+  /** 时装 id（"" = 没穿时装） */
+  fashion: string;
+}
+
 /** 玩家互见广播帧里的一名玩家（#324：协议见 realtime.protocol 的 RealtimePlayerEntry） */
 export interface PlayerEntry {
   accountId: string;
@@ -122,6 +134,8 @@ export interface PlayerEntry {
   hp: number;
   maxHp: number;
   moving: boolean;
+  /** 外观（#383；旧服务端可能没有这个字段，客户端按默认外观兜底） */
+  appearance?: PlayerAppearance;
 }
 
 /** 服务端玩家互见广播帧（协议见 realtime.protocol 的 RealtimePlayersMessage.data） */

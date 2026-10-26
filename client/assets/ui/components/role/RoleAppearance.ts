@@ -1,7 +1,7 @@
 import { Animation, Node, Vec2 } from "cc";
-import { Role } from "../../../entities/Role";
 import { OutTransform } from "../../../types/good";
-import { ACTION, DIRECTION } from "../../../types/animation";
+import { ACTION, DIRECTION, SpeedRate } from "../../../types/animation";
+import { SEX } from "../../../types/role";
 import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
 import { getEquipment } from "../../../configs/items";
 import { getFashionOut } from "../../../configs/fashionClothes";
@@ -10,6 +10,24 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 
 /** 这些朝向下衣服在武器上方（武器在身后）：左 / 左上 / 上 / 左下；其余朝向武器在衣服上方 */
 const CLOTH_ON_TOP_DIRECTIONS: DIRECTION[] = [DIRECTION.LEFT, DIRECTION.LEFT_UP, DIRECTION.UP, DIRECTION.LEFT_DOWN];
+
+/**
+ * 装配一套角色外观所需的最小数据（#383）
+ *
+ * 主角（entities/Role，字段齐全）与远端玩家（互见帧只给这几样）都满足它 —— 于是
+ * 「时装 > 装备衣服 > 性别默认身体」的取源优先级、几何变换、衣服/武器层级只在
+ * 这一份代码里，不存在「主角一套、别人一套」的漂移。
+ */
+export type RoleOutSource = {
+  /** 性别：决定没穿衣服时用哪套默认身体（未知值回落男性，见 configs/role.getRoleDefaultCloth） */
+  sex: SEX;
+  /** 已穿戴的衣服 / 武器（槽位只存装备 id，null = 没穿） */
+  equipments: { cloth: string | null; weapon: string | null };
+  /** 时装 id（null = 没穿；只换外观不换数值） */
+  fashionCloth: string | null;
+  /** 动作速度倍率（决定每帧时长；远端玩家取默认值） */
+  speedRate: SpeedRate;
+};
 
 /**
  * 角色外观（衣服 + 武器）
@@ -62,11 +80,11 @@ export default class RoleAppearance {
   }
 
   /** 更新外观（换装后调用）：按当前装备重新加载衣服与武器动画 */
-  updateOutShow(role: Role, action: ACTION, direction: DIRECTION) {
+  updateOutShow(source: RoleOutSource, action: ACTION, direction: DIRECTION) {
     this.action = action;
     this.direction = direction;
-    this.reloadClothAnimation(role);
-    this.reloadWeaponAnimation(role);
+    this.reloadClothAnimation(source);
+    this.reloadWeaponAnimation(source);
     this.play(action, direction);
   }
 
@@ -143,27 +161,27 @@ export default class RoleAppearance {
   }
 
   /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
-  private reloadClothAnimation(role: Role) {
-    const cloth = getEquipment(role.equipments.cloth);
+  private reloadClothAnimation(source: RoleOutSource) {
+    const cloth = getEquipment(source.equipments.cloth);
     // 未穿衣服时按性别取默认身体（男 role/1、女 role/2），外观变换与穿衣服同口径
-    const fallback = getRoleDefaultCloth(role.sex);
+    const fallback = getRoleDefaultCloth(source.sex);
     // 取源：时装 > 装备衣服 > 默认身体（#377）。**只有外观帧目录被换掉** ——
     // 缩放/偏移仍按装备（或默认身体）那套几何，所以穿时装不会把角色挪位
-    const src = getFashionOut(role.fashionCloth) || cloth?.out || fallback.out;
+    const src = getFashionOut(source.fashionCloth) || cloth?.out || fallback.out;
     this.clothTransform = cloth ?? fallback;
     if (src === this.clothSrc) return;
     this.clothSrc = src;
-    this.clothAnimate = this.loadAnimation(this.cloth, src, role);
+    this.clothAnimate = this.loadAnimation(this.cloth, src, source);
   }
 
   /** 重新加载武器动画：未装备武器或该武器没有外观时不加载（武器节点整节点隐藏） */
-  private reloadWeaponAnimation(role: Role) {
-    const weapon = getEquipment(role.equipments.weapon);
+  private reloadWeaponAnimation(source: RoleOutSource) {
+    const weapon = getEquipment(source.equipments.weapon);
     const src = weapon?.out ?? "";
     this.weaponTransform = weapon;
     if (src === this.weaponSrc) return;
     this.weaponSrc = src;
-    this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, role) : null;
+    this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, source) : null;
     // 没有武器外观时必须隐藏：Sprite 会保留上一把武器的最后一帧，不隐藏就会看到残留的旧武器
     this.weapon.active = !!src;
   }
@@ -182,8 +200,8 @@ export default class RoleAppearance {
   }
 
   /** 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调） */
-  private loadAnimation(node: Node, src: string, role: Role) {
-    const animate = GameUiHelper.useRoleAnimation(getAnimationName(this.action, this.direction), node, src, role.speedRate);
+  private loadAnimation(node: Node, src: string, source: RoleOutSource) {
+    const animate = GameUiHelper.useRoleAnimation(getAnimationName(this.action, this.direction), node, src, source.speedRate);
     animate.targetOff(this);
     animate.on(
       Animation.EventType.FINISHED,
