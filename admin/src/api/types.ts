@@ -164,6 +164,18 @@ export const PERMISSION = {
    * 与「改一个角色」不同量级，单列一个权限点。
    */
   GAME_CONFIG_WRITE: "gameConfig:write",
+  /**
+   * 查看区服（区服清单是注册侧的公开信息，运营侧同样要看得见账号分布）
+   *
+   * 只读观察员**也给**：读区服列表不等于能改 —— 开区 / 合并走 `ZONE_WRITE` 单独管控。
+   */
+  ZONE_READ: "zone:read",
+  /**
+   * 开区 / 合并区（合并会把源区账号整体搬进目标区并作废世界内存，不可逆）
+   *
+   * 稀有运营操作，直接决定账号归属与 worlds 数据，单列一个权限点。
+   */
+  ZONE_WRITE: "zone:write",
 } as const;
 
 export type PermissionValue = (typeof PERMISSION)[keyof typeof PERMISSION];
@@ -190,6 +202,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.SYSTEM_READ]: "查看系统信息",
   [PERMISSION.GAME_CONFIG_READ]: "查看养成配置",
   [PERMISSION.GAME_CONFIG_WRITE]: "修改养成配置",
+  [PERMISSION.ZONE_READ]: "查看区服",
+  [PERMISSION.ZONE_WRITE]: "开区 / 合并区",
 };
 
 /**
