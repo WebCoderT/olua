@@ -14,6 +14,7 @@ import { RankDto } from "./rank.dto";
 import { SkillDto } from "./skill.dto";
 import { StatusDto } from "./status.dto";
 import { QuestDto } from "./quest.dto";
+import { AchievementDto } from "./achievement.dto";
 import { SoulDto } from "./soul.dto";
 import { TitleDto } from "./title.dto";
 
@@ -105,4 +106,12 @@ export class GameConfigSnapshotDto {
   @ApiProperty({ description: "任务配置（#396：主线链 / 日常 / 单目标 / 奖励）", type: [QuestDto] })
   @Type(() => QuestDto)
   quests!: QuestDto[];
+
+  @ApiProperty({
+    description:
+      "成就配置（#401：分类 / 条件 / 门槛 / 奖励）。进度与达成状态走 `/achievements/me`，不在配置快照里",
+    type: [AchievementDto],
+  })
+  @Type(() => AchievementDto)
+  achievements!: AchievementDto[];
 }

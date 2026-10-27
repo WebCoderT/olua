@@ -729,11 +729,13 @@ export class RolesService {
   }
 
   /**
-   * 任务交付发奖（#396）：扣收集材料 + 发奖励 + 升级，**一次落库**
+   * 交付类发奖（#396 任务 / #401 成就共用）：扣收集材料 + 发奖励 + 升级，**一次落库**
    *
    * 刻意不复用 `applyKillExp` + `pickDrop` 的组合 —— 那会写两次库、revision +2，
    * 客户端在途存档更容易撞乐观锁。整条链（材料不足 20017 / 背包放不下 20012）
    * 都在校验阶段抛出，异常路径不落库，存档保持原样。
+   *
+   * `consume` 只有任务的 collect 目标会用到（成就没有「要先交东西」的语义，传 null）。
    *
    * @returns 发奖后的角色状态（与 KillExpResult 同形状，外加发奖后的修订号）
    */
@@ -754,7 +756,7 @@ export class RolesService {
     // 2) 奖励物品：逐份入包（放不下 20012，此时还没落库）
     for (const item of rewards.items ?? []) {
       const itemType: string | undefined = (ITEM_TYPES as Record<string, string>)[item.goodId];
-      if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `任务奖励物品不存在：${item.goodId}`);
+      if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `奖励物品不存在：${item.goodId}`);
       this.placeGoodsIntoBag(data, item.goodId, itemType, Math.max(1, Math.floor(item.count)));
     }
 

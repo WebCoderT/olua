@@ -692,6 +692,41 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         PRIMARY KEY (role_id, quest_id)
       );
       CREATE INDEX IF NOT EXISTS idx_quest_progress_quest ON quest_progress(quest_id);
+
+      -- 成就配置（#401，epic #394）：achievements 表是管理端「成就配置」的可改层，
+      -- seed 来自共享快照 ACHIEVEMENTS（INSERT OR IGNORE，运营改过的行不会被重启覆盖）；
+      -- 允许动态增删，被 role_achievements 引用中的行在业务层拒删
+      CREATE TABLE IF NOT EXISTS achievements (
+        id               TEXT    PRIMARY KEY,
+        category         TEXT    NOT NULL DEFAULT 'battle',
+        label            TEXT    NOT NULL DEFAULT '',
+        description      TEXT    NOT NULL DEFAULT '',
+        condition_type   TEXT    NOT NULL DEFAULT 'kill',
+        condition_target TEXT    NOT NULL DEFAULT '',
+        condition_count  INTEGER NOT NULL DEFAULT 1,
+        reward_gold      INTEGER NOT NULL DEFAULT 0,
+        reward_exp       INTEGER NOT NULL DEFAULT 0,
+        reward_items     TEXT    NOT NULL DEFAULT '[]',
+        sort_order       INTEGER NOT NULL DEFAULT 0,
+        hidden           INTEGER NOT NULL DEFAULT 0,
+        updated_at       INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 成就进度（#401）：只有**累计型**条件（kill / quest）在这里落进度 ——
+      -- 状态型（level / combat / collect）每次查询按角色当前状态现算，存投影只会得到
+      -- 「角色变强了进度没动」的死数据。
+      -- achieved_at 非空 = 已达成（可领）；claimed_at 非空 = 已领奖（不可重复领）。
+      -- 不加 REFERENCES achievements(id) 外键：成就下架不该连带抹掉玩家的达成记录
+      CREATE TABLE IF NOT EXISTS role_achievements (
+        role_id        TEXT    NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        achievement_id TEXT    NOT NULL,
+        progress       INTEGER NOT NULL DEFAULT 0,
+        achieved_at    INTEGER,
+        claimed_at     INTEGER,
+        updated_at     INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (role_id, achievement_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_role_achievements_achievement ON role_achievements(achievement_id);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

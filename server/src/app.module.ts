@@ -6,6 +6,7 @@ import { AuthGuard } from "./common/guards/auth.guard";
 import { PermissionGuard } from "./common/guards/permission.guard";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 import { SecurityModule } from "./common/security/security.module";
+import { GameEventsModule } from "./common/events/game-events.module";
 import { DatabaseModule } from "./database/database.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { AnnouncementModule } from "./modules/announcement/announcement.module";
@@ -24,6 +25,7 @@ import { SocialModule } from "./modules/social/social.module";
 import { QuestModule } from "./modules/quest/quest.module";
 import { PartyModule } from "./modules/party/party.module";
 import { LeaderboardModule } from "./modules/leaderboard/leaderboard.module";
+import { AchievementModule } from "./modules/achievement/achievement.module";
 
 /**
  * 应用根模块
@@ -56,6 +58,7 @@ export class AppModule {
         ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: [".env"] }),
         DatabaseModule,
         SecurityModule,
+        GameEventsModule,
         TokenModule,
         HealthModule,
         AuthModule,
@@ -71,6 +74,7 @@ export class AppModule {
         QuestModule,
         PartyModule,
         LeaderboardModule,
+        AchievementModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

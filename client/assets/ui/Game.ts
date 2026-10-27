@@ -26,6 +26,7 @@ import OtherPlayerManager from "./core/OtherPlayerManager";
 import SocialStore from "./core/SocialStore";
 import PartyStore from "./core/PartyStore";
 import LeaderboardStore from "./core/LeaderboardStore";
+import AchievementStore from "./core/AchievementStore";
 import GuideStore from "./core/GuideStore";
 import GuideOverlay from "./components/GuideOverlay";
 import { GUIDE_SPOT } from "../types/guide";
@@ -327,6 +328,8 @@ export class Game extends Component {
     PartyStore.clear();
     // 榜单缓存（#400）：里面存着「我的名次」，换角色后必须重拉，否则底部那行会写上一个角色的名次
     LeaderboardStore.clear();
+    // 成就快照（#401）：达成状态与进度都是「这个角色」的，留着会让下一个角色看到别人的成就墙
+    AchievementStore.clear();
     // 新手引导（#402）：进度是「这个角色走到第几步」，换角色必须重新 start；
     // 遮罩也随 UI 层一起销毁，这里摘掉解析器并释放引用（不清会指向已销毁的 HUD 节点）
     this.guideOverlay?.close();

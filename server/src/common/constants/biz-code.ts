@@ -334,4 +334,19 @@ export const BizCode = {
    */
   PARTY_INVITE_BLOCKED: 50130,
   //#endregion
+
+  //#region 成就（#401）
+
+  /** 成就 id 不存在（配置被运营删了，而客户端还拿着旧快照） */
+  ACHIEVEMENT_NOT_FOUND: 50131,
+  /**
+   * 还没达成，不能领奖
+   *
+   * 与「已领过」分开报：前者是「再去打两只」，后者是「你已经拿过了」——
+   * 合成一个码会让玩家以为成就丢了。
+   */
+  ACHIEVEMENT_NOT_ACHIEVED: 50132,
+  /** 奖励已经领过了（不可重复领） */
+  ACHIEVEMENT_CLAIMED: 50133,
+  //#endregion
 } as const;

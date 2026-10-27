@@ -393,6 +393,113 @@ export type UpdateAnnouncement = {
   endsAt?: number | null;
 };
 
+export type UpdateAchievementCondition = {
+  /**
+   * 条件类型
+   */
+  type?: "kill" | "quest" | "level" | "combat" | "collect";
+  /**
+   * 目标（kill = 怪物 key 或 "*"；collect = 物品 id；其余留空）
+   */
+  target?: string;
+  /**
+   * 门槛值（1~999999）
+   */
+  count?: number;
+};
+
+export type AchievementRewardItem = {
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 数量
+   */
+  count: number;
+};
+
+export type UpdateAchievementRewards = {
+  /**
+   * 金币（≥0）
+   */
+  gold?: number;
+  /**
+   * 经验（≥0）
+   */
+  exp?: number;
+  /**
+   * 物品清单（≤20 条）
+   */
+  items?: AchievementRewardItem[];
+};
+
+export type UpdateAchievement = {
+  /**
+   * 分类
+   */
+  category?: "battle" | "growth" | "explore";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤200 字）
+   */
+  description?: string;
+  /**
+   * 条件（逐字段合并）
+   */
+  condition?: UpdateAchievementCondition;
+  /**
+   * 奖励（逐字段合并）
+   */
+  rewards?: UpdateAchievementRewards;
+  /**
+   * 分类内展示顺序（0~9999）
+   */
+  sortOrder?: number;
+  /**
+   * 未达成时是否默认折叠
+   */
+  hidden?: boolean;
+};
+
+export type CreateAchievement = {
+  /**
+   * 分类
+   */
+  category?: "battle" | "growth" | "explore";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤200 字）
+   */
+  description?: string;
+  /**
+   * 条件（逐字段合并）
+   */
+  condition?: UpdateAchievementCondition;
+  /**
+   * 奖励（逐字段合并）
+   */
+  rewards?: UpdateAchievementRewards;
+  /**
+   * 分类内展示顺序（0~9999）
+   */
+  sortOrder?: number;
+  /**
+   * 未达成时是否默认折叠
+   */
+  hidden?: boolean;
+  /**
+   * 成就 id（唯一；语义串，如 ach_kill_10）
+   */
+  id: string;
+};
+
 export type UpgradeOrder = {
   /**
    * 重排后的称号等级全序列（须与当前 upgrade 渠道的等级集合完全一致）
@@ -1269,6 +1376,13 @@ export type NpcTalk = {
    * 预留字段（v1 无对话分支）
    */
   option?: string;
+};
+
+export type AchievementId = {
+  /**
+   * 成就 id（如 "ach_kill_10"）
+   */
+  achievementId: string;
 };
 
 export type PageMeta = {
@@ -5169,4 +5283,231 @@ export type LeaderboardQuery = {
    * 每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。
    */
   size?: number;
+};
+
+export type AchievementView = {
+  /**
+   * 成就 id
+   */
+  id: string;
+  /**
+   * 分类：battle 战斗 / growth 成长 / explore 探索（面板页签）
+   */
+  category: "battle" | "growth" | "explore";
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述（达成条件的人话说明）
+   */
+  description: string;
+  /**
+   * 条件类型：kill 累计击杀 / quest 累计交付任务（这两类是累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（这三类是状态型，每次查询现算）
+   */
+  conditionType: "kill" | "quest" | "level" | "combat" | "collect";
+  /**
+   * 条件目标：kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串
+   */
+  conditionTarget: string;
+  /**
+   * 当前进度（已按门槛钳制，不会超过 target）
+   */
+  progress: number;
+  /**
+   * 门槛值（来自成就配置，客户端免查快照比对）
+   */
+  target: number;
+  /**
+   * 是否已达成
+   */
+  achieved: boolean;
+  /**
+   * 是否已领奖（已领 = 不可再领）
+   */
+  claimed: boolean;
+  /**
+   * 未达成时是否默认折叠（不剧透条件）
+   */
+  hidden: boolean;
+  /**
+   * 分类内展示顺序（小的在前）
+   */
+  sortOrder: number;
+};
+
+export type AchievementSummary = {
+  /**
+   * 成就总数（配置行数）
+   */
+  total: number;
+  /**
+   * 已达成数
+   */
+  achieved: number;
+  /**
+   * 已领奖数
+   */
+  claimed: number;
+};
+
+export type MyAchievements = {
+  /**
+   * 全部成就（含未达成；客户端按分类自己分组）
+   */
+  achievements: AchievementView[];
+  /**
+   * 统计
+   */
+  summary: AchievementSummary;
+};
+
+export type AchievementClaimResult = {
+  /**
+   * 领取后的成就快照
+   */
+  achievements: AchievementView[];
+  /**
+   * 统计
+   */
+  summary: AchievementSummary;
+  /**
+   * 本次发放的金币
+   */
+  gold: number;
+  /**
+   * 本次发放的经验
+   */
+  exp: number;
+  /**
+   * 本次发放的物品
+   */
+  items: unknown[];
+  /**
+   * 发奖后等级
+   */
+  level: number;
+  /**
+   * 是否升级
+   */
+  leveledUp: boolean;
+};
+
+export type AchievementCondition = {
+  /**
+   * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
+   */
+  type: "kill" | "quest" | "level" | "combat" | "collect";
+  /**
+   * 目标：kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串
+   */
+  target: string;
+  /**
+   * 门槛值（累计型 = 需要多少次，状态型 = 需要到多少）
+   */
+  count: number;
+};
+
+export type AchievementRewards = {
+  /**
+   * 金币
+   */
+  gold: number;
+  /**
+   * 经验
+   */
+  exp: number;
+  /**
+   * 物品清单
+   */
+  items: AchievementRewardItem[];
+};
+
+export type Achievement = {
+  /**
+   * 成就 id（语义串，如 ach_kill_10）
+   */
+  id: string;
+  /**
+   * 分类：battle 战斗 / growth 成长 / explore 探索
+   */
+  category: "battle" | "growth" | "explore";
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 条件
+   */
+  condition: AchievementCondition;
+  /**
+   * 奖励
+   */
+  rewards: AchievementRewards;
+  /**
+   * 分类内展示顺序（小的在前）
+   */
+  sortOrder: number;
+  /**
+   * 未达成时是否默认折叠（不剧透条件）
+   */
+  hidden: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）
+   */
+  recordCount?: number;
+};
+
+export type AchievementPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的成就配置
+   */
+  list: Achievement[];
+};
+
+export type AchievementQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 分类筛选：battle | growth | explore
+   */
+  category?: string;
 };

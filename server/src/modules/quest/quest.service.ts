@@ -1,6 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
+import { GameEventsService, MonsterKilledEvent } from "../../common/events/game-events.service";
 import { NpcRepository } from "../../database/repositories/npc.repository";
 import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { QuestRepository } from "../../database/repositories/quest.repository";
@@ -15,26 +16,29 @@ import {
   QuestSubmitResultDto,
 } from "./dto/quest-state.dto";
 
-/** 击杀事件的形状（CombatSettlementService 在世界权威判定死亡后递进来） */
-export interface QuestKillEvent {
-  accountId: string;
-  roleId: string;
-  monsterKey: string;
-}
+/**
+ * 击杀事件的形状 —— 与总线的 `monster:killed` 同形（#401 起由 `GameEventsService` 分发，
+ * 不再由结算代码直接调本 service）
+ */
+export type QuestKillEvent = MonsterKilledEvent;
 
 /**
  * 任务进度状态机（#396）
  *
  * **结算权威在服务端**：客户端只能「接 / 交 / 对话」，永远不能上报「我完成了」——
- * 击杀进度由 realtime 结算递进来（世界权威判定死亡的那一处），对话进度由 npc-talk
- * 递进来，collect 在交付时查背包。三处写入口都收敛在本 service。
+ * 击杀进度由 realtime 结算发 `monster:killed` 事件递进来（#401 起走总线，任务与成就
+ * 共享同一个采集点），对话进度由 npc-talk 递进来，collect 在交付时查背包。
+ * 三处写入口都收敛在本 service。
  *
  * 进度帧（`quest`）只推给本人连接：`onProgress` 由 RealtimeService 在启动时接线
  * （connections 表是它的私有状态）；HTTP 进程不装 realtime 模块时回调为空，
  * 对话/接取/交付的进度变化由 HTTP 响应自己带回。
+ *
+ * 交付成功后 `emit("quest:claimed")` —— 成就的「累计交付 N 个任务」由此记账，
+ * 任务这边不需要知道有谁在听。
  */
 @Injectable()
-export class QuestService {
+export class QuestService implements OnModuleInit {
   private readonly logger = new Logger(QuestService.name);
 
   /** 进度变化出口（RealtimeService 接线；HTTP 进程为空） */
@@ -45,7 +49,13 @@ export class QuestService {
     private readonly progressRepo: QuestProgressRepository,
     private readonly roles: RolesService,
     private readonly npcsRepo: NpcRepository,
+    private readonly events: GameEventsService,
   ) {}
+
+  /** 订阅击杀事件（结算侧只负责 emit，本 service 是订阅方之一） */
+  onModuleInit(): void {
+    this.events.on("monster:killed", (event) => this.onMonsterKilled(event));
+  }
 
   /** 我的任务快照（可接任务不在内：客户端按快照配置与 claimed 行自己算） */
   mine(accountId: string): MyQuestsDto {
@@ -118,6 +128,9 @@ export class QuestService {
     // daily 删行（可重接、进度清零）；main 保留 claimed 行作链门控
     if (quest.kind === "daily") this.progressRepo.remove(role.id, questId);
     else this.progressRepo.markClaimed(role.id, questId);
+
+    // 交付成功 → 广播（成就的「累计交付 N 个任务」由此记账；订阅方失败不影响本次交付）
+    this.events.emit("quest:claimed", { accountId, roleId: role.id, questId, kind: quest.kind });
 
     const reward: QuestRewardResultDto = {
       gold: rewards.gold,

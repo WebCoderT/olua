@@ -314,3 +314,19 @@ export const QUEST_SORT: SortSpec<"id" | "kind" | "label" | "minLevel" | "update
   default: "id",
   defaultOrder: "asc",
 };
+
+/**
+ * 成就配置列表（#401）：默认按「分类 → 分类内顺序 → id」—— 成就 id 是语义串
+ * （`ach_kill_10`），按 id 排没有意义，运营看的顺序就是面板里的顺序。
+ */
+export const ACHIEVEMENT_SORT: SortSpec<"id" | "category" | "label" | "sortOrder" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    category: "category",
+    label: "label",
+    sortOrder: "sort_order",
+    updatedAt: "updated_at",
+  },
+  default: "sortOrder",
+  defaultOrder: "asc",
+};

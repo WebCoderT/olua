@@ -69,7 +69,7 @@ const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts")
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status", "monster-skills", "quest-data"].map(
+const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "map", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status", "monster-skills", "quest-data", "achievement-data"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -120,7 +120,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -226,6 +226,8 @@ function load(work) {
     materials: missing("material.materials", cfg("material").materials),
     // 任务（#396）：管理端「任务配置」的 seed 来源 —— 单目标（kill/talk/collect）+ 奖励
     questData: missing("quest-data", cfg("quest-data").questData),
+    // 成就（#401）：条件与门槛的纯数据；kill 的 target 引用怪物 key、collect 引用物品 id
+    achievementData: missing("achievement-data", cfg("achievement-data").achievementData),
   };
 }
 
@@ -283,6 +285,9 @@ function buildSnapshot(cfg) {
     growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
     // 任务（#396）：管理端可改的任务配置（主线链 / 日常 / 单目标 / 奖励）
     quests: pickQuests(cfg.questData),
+    // 成就（#401）：累计型（kill / quest）走事件、状态型（level / combat / collect）查询现算，
+    // 配置只声明条件与门槛；target 的引用在生成期就校验（怪物 key / 物品 id 必须真实存在）
+    achievements: pickAchievements(cfg.achievementData, cfg.monsters, cfg.items),
 
     // —— 名字与元数据（三端做界面用）——
     occupationLabels: pickOccupationLabels(cfg.occupations, TYPES_ROLE),
@@ -531,6 +536,73 @@ function pickQuests(quests) {
       throw new Error(`任务 ${row.id} 的 prevQuestId 引用了不存在的任务：${row.prevQuestId}`);
     }
   }
+  return out;
+}
+
+/**
+ * 成就表 → [[成就 id, 整行配置]]（#401）
+ *
+ * 条件与奖励在这里规整为全显式（target 缺省空串 / count ≥ 1 / rewards 全 0 / items 空数组），
+ * 消费方不复制缺省规则。**引用在生成期就校验**：`kill` 的 target 必须是真实怪物 key
+ * （`"*"` 表示任意怪），`collect` 的 target 必须是真实物品 id —— 这两个错在运行时表现为
+ * 「玩家怎么打都不解锁」，比报错难查得多。
+ */
+function pickAchievements(achievements, monsters, items) {
+  const out = [];
+  const seen = new Set();
+  const categories = new Set(["battle", "growth", "explore"]);
+  const types = new Set(["kill", "quest", "level", "combat", "collect"]);
+  // 怪物表与物品总表都是 Map（键 = 怪物 key / 物品 id）；这里只取键做引用校验
+  const monsterKeys = new Set();
+  if (monsters instanceof Map) for (const key of monsters.keys()) monsterKeys.add(String(key));
+  else for (const item of monsters || []) monsterKeys.add(String(item.key));
+  const goodIds = new Set();
+  if (items instanceof Map) for (const key of items.keys()) goodIds.add(String(key));
+  else for (const key of Object.keys(items || {})) goodIds.add(key);
+  for (const item of achievements || []) {
+    if (!item || !item.id) throw new Error("configs/achievement-data 里有缺 id 的条目");
+    if (seen.has(item.id)) throw new Error(`成就 id 重复：${item.id}`);
+    seen.add(item.id);
+    if (!categories.has(item.category)) throw new Error(`成就 ${item.id} 的 category 非法：${item.category}`);
+    const condition = item.condition ?? {};
+    if (!types.has(condition.type)) throw new Error(`成就 ${item.id} 的条件类型非法：${condition.type}`);
+    const target = String(condition.target ?? "");
+    if (condition.type === "kill" && target !== "*" && !monsterKeys.has(target)) {
+      throw new Error(`成就 ${item.id} 的条件怪物 key 不存在：${target}`);
+    }
+    if (condition.type === "collect" && !goodIds.has(target)) {
+      throw new Error(`成就 ${item.id} 的条件物品不存在：${target}`);
+    }
+    const rewards = item.rewards ?? {};
+    const rewardItems = (rewards.items ?? []).map((entry) => ({
+      goodId: String(entry?.goodId ?? ""),
+      count: Math.max(1, round(entry?.count ?? 1)),
+    }));
+    if (rewardItems.some((entry) => !goodIds.has(entry.goodId))) {
+      throw new Error(`成就 ${item.id} 的奖励物品不存在`);
+    }
+    out.push([
+      item.id,
+      {
+        category: item.category,
+        label: String(item.label ?? ""),
+        description: String(item.description ?? ""),
+        condition: {
+          type: condition.type,
+          target,
+          count: Math.max(1, round(condition.count ?? 1)),
+        },
+        rewards: {
+          gold: Math.max(0, round(rewards.gold ?? 0)),
+          exp: Math.max(0, round(rewards.exp ?? 0)),
+          items: rewardItems,
+        },
+        order: round(item.order ?? 0),
+        hidden: Boolean(item.hidden),
+      },
+    ]);
+  }
+  if (out.length === 0) throw new Error("configs/achievement-data 的 achievementData 为空（改名或清空了？）");
   return out;
 }
 
@@ -1067,6 +1139,7 @@ ${jsonTable("DRUGS", "药品 id → { label, description, level 使用等级, se
 ${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
 ${numTable("SELL_PRICES", "物品 id → 出售价（#397；货币 = 绑定元宝/个）。装备取回收价曲线（含前后缀倍率）、其余取 sellPirce；**不在表里 = 不可卖**，服务端结算只认这一份", s.sellPrices)}
 ${jsonTable("QUESTS", "任务 id → { kind main|daily, label, description, prevQuestId 主线链前置, minLevel, npcId 发布 NPC, objective 单目标 kill|talk|collect, rewards { gold, exp, items } }（#396；服务端 quests 表的 seed 来源）", s.quests)}
+${jsonTable("ACHIEVEMENTS", "成就 id → { category battle|growth|explore, label, description, condition { type kill|quest|level|combat|collect, target, count }, rewards { gold, exp, items }, order, hidden }（#401；服务端 achievements 表的 seed 来源。kill/quest 是累计型走事件 +1，level/combat/collect 是状态型每次查询现算）", s.achievements)}
 ${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
 ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
 ${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}

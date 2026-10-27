@@ -3667,6 +3667,300 @@
         ]
       }
     },
+    "/admin/achievements": {
+      "get": {
+        "description": "seed 自客户端 configs/achievement-data，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。\n\n`condition` 分两类：`kill` / `quest` 是**累计型**（进度由事件流落库），`level` / `combat` / `collect` 是**状态型**（每次查询按角色当前状态现算，不落进度）。\n\n**排序**：`sort` 取 `id` / `category` / `label` / `sortOrder` / `updatedAt`，`order` 取 asc / desc（默认分类内顺序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminAchievement.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "分类筛选：battle | growth | explore",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AchievementPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "成就配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AchievementPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/AchievementQueryDto"
+        }
+      },
+      "post": {
+        "description": "id 唯一（重复 → 40000）；跨字段校验与编辑同一套（目标键真实存在 / 奖励物品存在）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminAchievement.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAchievementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的成就配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AchievementDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新建成就",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AchievementDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/achievements/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段（`condition` / `rewards` 逐字段合并，`items` 传了就整份替换）。\n\n- `kill` 的 target 必须是真实怪物 key 或 `*`（任意怪）；\n- `collect` 的 target 必须是真实物品 id；\n- 奖励物品必须存在；\n- `id` 不存在 → 404（`50131`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminAchievement.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "成就 id（如 \"ach_kill_10\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAchievementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的成就配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AchievementDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑成就配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AchievementDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "一条拒删守卫（40000）：仍有玩家成就记录引用（哪怕只是累计进度、未达成）。先清理记录再删。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminAchievement.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "成就 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除成就",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/titles": {
       "get": {
         "description": "等级序列固定（1..34），**没有创建 / 删除**。`keyword` 模糊匹配名称与描述，`acquireChannel` 按获得渠道筛（upgrade=称号升级 / grant=系统赠送 / unavailable=无法获取；新库 seed 后全部为 unavailable）。\n\n`bindGold` 是「升到该级」消耗的绑定元宝，仅 `upgrade` 渠道实际使用（升级价目表的语义）。\n\n**排序**：`sort` 取 `level` / `label` / `bindGold` / `acquireChannel` / `updatedAt`，`order` 取 asc / desc（默认 level 升序——列表本身就是价目表）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -9925,6 +10219,104 @@
         }
       }
     },
+    "/achievements/me": {
+      "get": {
+        "description": "全量成就配置 + 当前角色的状态（含未达成的）。`progress` 已按门槛钳制、`target` 直接给客户端免查快照。\n\n累计型（kill / quest）的进度由服务端事件记账；状态型（level / combat / collect）每次查询现算 —— 所以「角色升到 10 级」这类成就不需要任何同步动作就会自己变达成。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "achievement.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成就快照 + 统计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyAchievementsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "我的成就快照",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyAchievementsDto"
+        }
+      }
+    },
+    "/achievements/claim": {
+      "post": {
+        "description": "未达成 → 50132；已领过 → 50133；成就不存在 → 50131。\n\n发奖走与任务交付同一个入口（金币 / 经验 / 物品一次落库）。**背包放不下 → 20012，且不消耗领取资格** —— 清包后可以再领。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "achievement.claim",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AchievementIdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "领取后的快照 + 本次奖励",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AchievementClaimResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "领取成就奖励",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AchievementClaimResultDto"
+        }
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -10675,6 +11067,166 @@
             "nullable": true
           }
         }
+      },
+      "UpdateAchievementConditionDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "条件类型",
+            "enum": [
+              "kill",
+              "quest",
+              "level",
+              "combat",
+              "collect"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "目标（kill = 怪物 key 或 \"*\"；collect = 物品 id；其余留空）"
+          },
+          "count": {
+            "type": "number",
+            "description": "门槛值（1~999999）"
+          }
+        }
+      },
+      "AchievementRewardItemDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量"
+          }
+        },
+        "required": [
+          "goodId",
+          "count"
+        ]
+      },
+      "UpdateAchievementRewardsDto": {
+        "type": "object",
+        "properties": {
+          "gold": {
+            "type": "number",
+            "description": "金币（≥0）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验（≥0）"
+          },
+          "items": {
+            "description": "物品清单（≤20 条）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementRewardItemDto"
+            }
+          }
+        }
+      },
+      "UpdateAchievementDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "分类",
+            "enum": [
+              "battle",
+              "growth",
+              "explore"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（1~50 字）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（≤200 字）"
+          },
+          "condition": {
+            "description": "条件（逐字段合并）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAchievementConditionDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励（逐字段合并）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAchievementRewardsDto"
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "分类内展示顺序（0~9999）"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "未达成时是否默认折叠"
+          }
+        }
+      },
+      "CreateAchievementDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "分类",
+            "enum": [
+              "battle",
+              "growth",
+              "explore"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（1~50 字）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（≤200 字）"
+          },
+          "condition": {
+            "description": "条件（逐字段合并）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAchievementConditionDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励（逐字段合并）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAchievementRewardsDto"
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "分类内展示顺序（0~9999）"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "未达成时是否默认折叠"
+          },
+          "id": {
+            "type": "string",
+            "description": "成就 id（唯一；语义串，如 ach_kill_10）"
+          }
+        },
+        "required": [
+          "id"
+        ]
       },
       "UpgradeOrderDto": {
         "type": "object",
@@ -12093,6 +12645,18 @@
         },
         "required": [
           "npcId"
+        ]
+      },
+      "AchievementIdDto": {
+        "type": "object",
+        "properties": {
+          "achievementId": {
+            "type": "string",
+            "description": "成就 id（如 \"ach_kill_10\"）"
+          }
+        },
+        "required": [
+          "achievementId"
         ]
       },
       "ApiEnvelopeDto": {
@@ -18384,6 +18948,381 @@
             "default": 20,
             "minimum": 1,
             "maximum": 100
+          }
+        }
+      },
+      "AchievementViewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "成就 id"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类：battle 战斗 / growth 成长 / explore 探索（面板页签）",
+            "enum": [
+              "battle",
+              "growth",
+              "explore"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（达成条件的人话说明）"
+          },
+          "conditionType": {
+            "type": "string",
+            "description": "条件类型：kill 累计击杀 / quest 累计交付任务（这两类是累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（这三类是状态型，每次查询现算）",
+            "enum": [
+              "kill",
+              "quest",
+              "level",
+              "combat",
+              "collect"
+            ]
+          },
+          "conditionTarget": {
+            "type": "string",
+            "description": "条件目标：kill = 怪物 key（\"*\" 任意）/ collect = 物品 id / 其余空串"
+          },
+          "progress": {
+            "type": "number",
+            "description": "当前进度（已按门槛钳制，不会超过 target）"
+          },
+          "target": {
+            "type": "number",
+            "description": "门槛值（来自成就配置，客户端免查快照比对）"
+          },
+          "achieved": {
+            "type": "boolean",
+            "description": "是否已达成"
+          },
+          "claimed": {
+            "type": "boolean",
+            "description": "是否已领奖（已领 = 不可再领）"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "未达成时是否默认折叠（不剧透条件）"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "分类内展示顺序（小的在前）"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "label",
+          "description",
+          "conditionType",
+          "conditionTarget",
+          "progress",
+          "target",
+          "achieved",
+          "claimed",
+          "hidden",
+          "sortOrder"
+        ]
+      },
+      "AchievementSummaryDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "成就总数（配置行数）"
+          },
+          "achieved": {
+            "type": "number",
+            "description": "已达成数"
+          },
+          "claimed": {
+            "type": "number",
+            "description": "已领奖数"
+          }
+        },
+        "required": [
+          "total",
+          "achieved",
+          "claimed"
+        ]
+      },
+      "MyAchievementsDto": {
+        "type": "object",
+        "properties": {
+          "achievements": {
+            "description": "全部成就（含未达成；客户端按分类自己分组）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementViewDto"
+            }
+          },
+          "summary": {
+            "description": "统计",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AchievementSummaryDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "achievements",
+          "summary"
+        ]
+      },
+      "AchievementClaimResultDto": {
+        "type": "object",
+        "properties": {
+          "achievements": {
+            "description": "领取后的成就快照",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementViewDto"
+            }
+          },
+          "summary": {
+            "description": "统计",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AchievementSummaryDto"
+              }
+            ]
+          },
+          "gold": {
+            "type": "number",
+            "description": "本次发放的金币"
+          },
+          "exp": {
+            "type": "number",
+            "description": "本次发放的经验"
+          },
+          "items": {
+            "description": "本次发放的物品",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "level": {
+            "type": "number",
+            "description": "发奖后等级"
+          },
+          "leveledUp": {
+            "type": "boolean",
+            "description": "是否升级"
+          }
+        },
+        "required": [
+          "achievements",
+          "summary",
+          "gold",
+          "exp",
+          "items",
+          "level",
+          "leveledUp"
+        ]
+      },
+      "AchievementConditionDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）",
+            "enum": [
+              "kill",
+              "quest",
+              "level",
+              "combat",
+              "collect"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "目标：kill = 怪物 key（\"*\" 任意）/ collect = 物品 id / 其余空串"
+          },
+          "count": {
+            "type": "number",
+            "description": "门槛值（累计型 = 需要多少次，状态型 = 需要到多少）"
+          }
+        },
+        "required": [
+          "type",
+          "target",
+          "count"
+        ]
+      },
+      "AchievementRewardsDto": {
+        "type": "object",
+        "properties": {
+          "gold": {
+            "type": "number",
+            "description": "金币"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验"
+          },
+          "items": {
+            "description": "物品清单",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementRewardItemDto"
+            }
+          }
+        },
+        "required": [
+          "gold",
+          "exp",
+          "items"
+        ]
+      },
+      "AchievementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "成就 id（语义串，如 ach_kill_10）"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类：battle 战斗 / growth 成长 / explore 探索",
+            "enum": [
+              "battle",
+              "growth",
+              "explore"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "condition": {
+            "description": "条件",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AchievementConditionDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AchievementRewardsDto"
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "分类内展示顺序（小的在前）"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "未达成时是否默认折叠（不剧透条件）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "recordCount": {
+            "type": "number",
+            "description": "已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "label",
+          "description",
+          "condition",
+          "rewards",
+          "sortOrder",
+          "hidden",
+          "updatedAt"
+        ]
+      },
+      "AchievementPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的成就配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AchievementQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类筛选：battle | growth | explore"
           }
         }
       }

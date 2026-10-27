@@ -72,7 +72,7 @@ const ALLOWED_EDGES = [
   { from: "modules/social", to: "modules/roles/roles.service.ts", why: "社交动作取账号的在线角色" },
   // 任务（#396）：接取 / 交付落在账号的在线角色上；交付发奖走存档域的单次落库方法
   { from: "modules/quest", to: "modules/roles/roles.service.ts", why: "任务动作取在线角色与交付发奖" },
-  { from: "modules/quest", to: "modules/game-config/dto/", why: "奖励 JSON 列解析复用（parseRewardItems）" },
+  { from: "modules/quest", to: "modules/game-config/dto/", why: "任务配置 DTO（管理端编辑入参的形状）" },
   // realtime 结算把击杀事件递给任务服务（进度推进 + quest 帧接线，都经 QuestService 公开口）
   { from: "modules/realtime", to: "modules/quest/quest.service.ts", why: "击杀事件推进任务进度" },
   // 队伍（#399）：队伍动作落在「账号的在线角色」上，与社交同一条理由 —— 不让队伍域自己摸账号表；
@@ -85,6 +85,11 @@ const ALLOWED_EDGES = [
   // 排行榜（#400）：榜上的「战力」与角色详情里的战斗力必须是同一个数（否则玩家会看到两个战力），
   // 所以直接引 combat 的纯函数，而不是在榜单域里再复刻一份
   { from: "modules/leaderboard", to: "modules/combat/role-attributes.ts", why: "榜单战力与角色属性同源" },
+  // 成就（#401）：与任务同一套「落在账号的在线角色上」的理由；
+  // 战力类成就的门槛必须与角色详情里的战斗力是同一个数（引 combat 纯函数，不复刻一份）
+  { from: "modules/achievement", to: "modules/roles/roles.service.ts", why: "成就取在线角色、查背包、领取走单次落库发奖" },
+  { from: "modules/achievement", to: "modules/roles/dto/", why: "在线角色的形状（RoleDto）" },
+  { from: "modules/achievement", to: "modules/combat/role-attributes.ts", why: "战力成就的门槛与角色属性同源" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -168,6 +173,10 @@ const REPO_EDGES = {
   // 击杀推进度（realtime 的 QuestService）与删除守卫（game-config 的 deleteQuest）是两条只读例外
   "database/repositories/quest.repository.ts": ["modules/game-config", "modules/quest"],
   "database/repositories/quest-progress.repository.ts": ["modules/quest", "modules/game-config"],
+  // 成就（#401）：配置表读写归 game-config（管理端页 + seed），记录表归 achievement 域；
+  // game-config 只做删除守卫的只读 count（有玩家记录拒删）
+  "database/repositories/achievement.repository.ts": ["modules/game-config", "modules/achievement"],
+  "database/repositories/role-achievement.repository.ts": ["modules/achievement", "modules/game-config"],
   // 队伍（#399）：队伍与成员两表唯一写者是 party 域（PartyService）；
   // realtime 只读（伤害结算要问「击杀者的同图队友」，进图补快照要问「他在哪个队」）
   "database/repositories/party.repository.ts": ["modules/party", "modules/realtime"],

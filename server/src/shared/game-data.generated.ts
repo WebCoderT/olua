@@ -4384,6 +4384,18 @@ export const QUESTS: Record<string, unknown> = {
   "8101": {"kind":"daily","label":"日常巡猎","description":"每日例行：猎杀 10 只金斑雄鹿，维持村郊安宁。","prevQuestId":"","minLevel":1,"npcId":"0002","objective":{"type":"kill","target":"2","count":10},"rewards":{"gold":500,"exp":150,"items":[]}},
 };
 
+/** 成就 id → { category battle|growth|explore, label, description, condition { type kill|quest|level|combat|collect, target, count }, rewards { gold, exp, items }, order, hidden }（#401；服务端 achievements 表的 seed 来源。kill/quest 是累计型走事件 +1，level/combat/collect 是状态型每次查询现算） */
+export const ACHIEVEMENTS: Record<string, unknown> = {
+  "ach_kill_10": {"category":"battle","label":"初露锋芒","description":"累计击杀 10 只怪物。","condition":{"type":"kill","target":"*","count":10},"rewards":{"gold":500,"exp":100,"items":[]},"order":10,"hidden":false},
+  "ach_kill_100": {"category":"battle","label":"百战之身","description":"累计击杀 100 只怪物。","condition":{"type":"kill","target":"*","count":100},"rewards":{"gold":3000,"exp":800,"items":[{"goodId":"material_iron","count":2}]},"order":20,"hidden":false},
+  "ach_kill_chicken": {"category":"battle","label":"斗鸡克星","description":"累计击杀 20 只赤焰斗鸡。","condition":{"type":"kill","target":"1","count":20},"rewards":{"gold":800,"exp":200,"items":[]},"order":30,"hidden":false},
+  "ach_level_10": {"category":"growth","label":"十级入门","description":"角色等级达到 10 级。","condition":{"type":"level","target":"","count":10},"rewards":{"gold":1000,"exp":0,"items":[{"goodId":"material_gem","count":1}]},"order":10,"hidden":false},
+  "ach_level_30": {"category":"growth","label":"三十而立","description":"角色等级达到 30 级。","condition":{"type":"level","target":"","count":30},"rewards":{"gold":5000,"exp":0,"items":[{"goodId":"material_gem","count":3}]},"order":20,"hidden":false},
+  "ach_combat_10000": {"category":"growth","label":"战力破万","description":"角色战力达到 10000。","condition":{"type":"combat","target":"","count":10000},"rewards":{"gold":5000,"exp":1000,"items":[]},"order":30,"hidden":false},
+  "ach_quest_5": {"category":"growth","label":"有求必应","description":"累计交付 5 个任务。","condition":{"type":"quest","target":"","count":5},"rewards":{"gold":2000,"exp":500,"items":[]},"order":40,"hidden":false},
+  "ach_collect_hide": {"category":"explore","label":"皮料收藏家","description":"背包里同时持有 20 张兽皮。","condition":{"type":"collect","target":"material_hide","count":20},"rewards":{"gold":1500,"exp":300,"items":[]},"order":10,"hidden":false},
+};
+
 /** 战魂阶数（下标 + 1 即阶）→ 名 */
 export const SOUL_LABELS: Record<string, string> = {
   "0": "烈阳灵体",

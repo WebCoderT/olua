@@ -32,6 +32,8 @@ import { QuestRepository } from "./repositories/quest.repository";
 import { QuestProgressRepository } from "./repositories/quest-progress.repository";
 import { ReportRepository } from "./repositories/report.repository";
 import { PartyRepository } from "./repositories/party.repository";
+import { AchievementRepository } from "./repositories/achievement.repository";
+import { RoleAchievementRepository } from "./repositories/role-achievement.repository";
 
 /**
  * 数据层（全局模块）
@@ -77,6 +79,8 @@ import { PartyRepository } from "./repositories/party.repository";
     QuestProgressRepository,
     ReportRepository,
     PartyRepository,
+    AchievementRepository,
+    RoleAchievementRepository,
   ],
   exports: [
     DatabaseService,
@@ -112,6 +116,8 @@ import { PartyRepository } from "./repositories/party.repository";
     QuestProgressRepository,
     ReportRepository,
     PartyRepository,
+    AchievementRepository,
+    RoleAchievementRepository,
   ],
 })
 export class DatabaseModule {}

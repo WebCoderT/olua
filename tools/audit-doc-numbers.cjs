@@ -120,6 +120,7 @@ const E2E_SCRIPTS = [
   ["屏蔽与举报（社交安全）", "server/test/e2e-blocks.cjs"],
   ["组队（队伍系统）", "server/test/e2e-party.cjs"],
   ["排行榜（全服榜单）", "server/test/e2e-rank.cjs"],
+  ["成就（累计型记账 / 状态型现算）", "server/test/e2e-achievement.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

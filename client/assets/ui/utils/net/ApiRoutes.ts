@@ -16,6 +16,21 @@
  * （守卫：`node tools/audit-api-generated.cjs`）。
  */
 export const ApiRoutes = {
+  /** achievement 模块（2 个接口） */
+  achievement: {
+    /**
+     * 领取成就奖励（POST /achievements/claim）
+     *
+     * 未达成 → 50132；已领过 → 50133；成就不存在 → 50131。
+     */
+    claim: "/achievements/claim",
+    /**
+     * 我的成就快照（GET /achievements/me）
+     *
+     * 全量成就配置 + 当前角色的状态（含未达成的）。`progress` 已按门槛钳制、`target` 直接给客户端免查快照。
+     */
+    mine: "/achievements/me",
+  },
   /** announcement 模块（1 个接口） */
   announcement: {
     /**
