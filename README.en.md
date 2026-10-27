@@ -113,10 +113,10 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 
 ### The traces this way of working left in the repo
 
-- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 46 unit-test suites under `client/tools/` and 11 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
+- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 47 unit-test suites under `client/tools/` and 11 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 113 + 283 + 120 + 28 + 50 + 126 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50 + 79 assertions) + typechecks on two sides + 46 unit-test suites + 11 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 113 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50 + 79 + 55 assertions) + typechecks on two sides + 47 unit-test suites + 11 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -209,7 +209,7 @@ olua/
     - hand-written: `HttpClient` wrapper and shared dispatch / `ApiCodes` business codes and text keys / `ApiError` error normalisation / `Session` / `RoleSync` progress sync / `NetworkSetup` wiring
 - assets/resources: assets (map tmx, frame animations, atlases, icons, UI assets)
 - assets/scenes: login, character selection, loading and game scenes
-- tools: **client-only scripts** (46 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
+- tools: **client-only scripts** (47 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
 - settings / profiles / native / package.json / tsconfig.json: Cocos project configuration (`package.json` describes the Cocos project, not npm scripts)
 - library / temp / build: Cocos cache and build output (not version-controlled)
 - Details in [client/README.md](client/README.en.md), questions in [client/FAQ.md](client/FAQ.en.md)
@@ -234,6 +234,7 @@ olua/
 - test/e2e-game-config.cjs: **game config focus** (44 assertions: title / soul seed identical to client configs / edit-only, no create or delete — POST and DELETE are 404 / partial updates and channel filtering / viewer can read but not write)
 - test/e2e-blocks.cjs: **block and report focus** (50 assertions: one-way block rows, duplicate and self-block rejection / chat broadcast filtered per recipient and private messages with two different messages per direction / both incremental and full presence frames filtered / re-sending world join after unblocking / blocking also cuts friend and enemy ties / report dedup and invalid categories / read-only admin list and privilege escalation)
 - test/e2e-party.cjs: **party focus** (79 assertions: invite creates the party / accept and decline / full party and duplicate invite / kick, transfer and the permission flip / leader leaving hands over automatically / disband clears all three sides / block wins with two different messages / presence frames carry partyId / exp sharing (killer keeps the full amount, same-map mates get 50%, other-map and level-gap mates get nothing) / dirty config falls back)
+- test/e2e-rank.cjs: **leaderboard focus** (55 assertions: ranks and values checked one by one across three boards / ties share a rank under competition ranking / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages and size clamped to the cap / `me` returns a real rank both inside and outside the page, "no rank" when nothing is active / with the refresh period set to zero the snapshot ignores save changes / an entry has exactly eight fields and carries no accountId, data or online status / the periodic recompute really swaps in a new snapshot)
 - test/backup.cjs: **backup / restore focus** (87 assertions: `VACUUM INTO` consistent snapshot while running / restore archiving / protective refusal / automatic scheduled backup)
 - Details in [server/README.md](server/README.en.md), questions in [server/FAQ.md](server/FAQ.en.md)
 
@@ -290,14 +291,14 @@ make env            # generate server/.env (skipped if it already exists)
 make dev            # start server :3100 and admin :5173 together; Ctrl-C exits both
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
-make client-test    # client's 46 unit-test suites
-make server-verify  # verify the server with one command (compile + nineteen e2e suites + generated-artifact audit)
+make client-test    # client's 47 unit-test suites
+make server-verify  # verify the server with one command (compile + twenty e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 11 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 11 audits
-make test           # all tests: client's 46 suites + server's nineteen e2e suites
+make test           # all tests: client's 46 suites + server's twenty e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -323,7 +324,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + nineteen e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + twenty e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -400,10 +401,10 @@ make verify   # = check + builds on all three sides + all tests
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 46 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
+# Client: 47 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + nineteen e2e suites (248 / 113 / 283 / 120 / 28 / 50 / 126 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50 + 79) + generated-artifact consistency
+# Server: compile + twenty e2e suites (248 / 113 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50 + 79 + 55) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build
@@ -567,6 +568,8 @@ Convention: **merge the PR that carries the new manifest first, then upload** (o
 | Parties (#399) | Invite creates the party (the inviter with no party gets one with themselves as leader) / accept / decline / leave / kick / transfer / disband; **one party per role** is enforced by `party_members.role_id UNIQUE`, the leader is the only writer (no `is_leader` column on members); a leaving leader **hands over** to the earliest joiner; invites live in memory for 30 seconds, party size comes from config (default 4); **blocks win** — blocking him says "lift the block first", being blocked just says "not online" | ✅ |
 | Party exp sharing (#399) | The killer keeps the full amount; every **online, same-map** mate gets `floor(their own level-gap exp × 50%)` (credited on the server and pushed as an `expGain` frame so the client `revision` keeps up); no even split (carrying someone would slow you down) and no bonus (it would invite multi-boxing); each mate's share is computed from their own level gap, so dragging a low-level alt to high-level monsters is stopped by the formula itself; drops and quest progress only credit the killer | ✅ |
 | Party panel | Opened from the bottom bar (G) with two tabs: **Members** (pending invites on top with accept / decline; each row shows level and online / other-map / leader state, and the leader gets transfer / kick on other members) and **Invite** (nearby players, greyed out when already in the party or just invited); state is pushed **on change**, so leaving / being kicked / disbanding all arrive as the same empty snapshot | ✅ |
+| Leaderboards (#400) | Three server-wide boards: **level** (`roles.level`), **combat** (the same number as the character detail, locked by `audit-combat-parity`) and **kills** (a new indexed `roles.kills` column, incremented by 1 on the server by combat settlement and unreachable from the client); **ordering, ranks, truncation and field trimming all happen on the server**, the client only renders. Ranks are **competition ranks** (ties share a rank) with roleId as the tie-breaker, so equal scores never swap places between recomputes; **offline characters are ranked too** (the board reads the save table). Materialisation happens **in-process and is never persisted**: the first request computes it lazily, then it is recomputed every `LEADERBOARD_REFRESH_MS` (default one minute) and the whole array is swapped atomically, so there is no second source of truth; the timer only starts **when someone first opens a board** (`unref`, and setting it to zero disables it). An entry has just eight fields — no accountId, no data and **no online flag** (it would invite camping); v1 is one board for the whole server, and `zoneId` on an entry is for display only | ✅ |
+| Leaderboard panel | Opened from the small map's leaderboard tab (no new art, no room taken from the ten-slot bottom bar); switching tabs **refetches** (a cache would make players think "I levelled up and nothing moved"), and `page` plus `me` are fetched **concurrently from the same snapshot** (fetching them separately lets "I'm 37th" disagree with the 37th row); my own row is highlighted in place; a failed request **keeps the old data** and only shows a notice on top | ✅ |
 | Friends and enemies (#389) | Add a friend (by roleId or by character name; **if the other side is already waiting, the add itself becomes the accept**) / accept / reject (leaves no trace) / cancel / delete (both sides disappear); enemies are **one-directional** — I mark mine and the other side is never told; friendships are stored as **two mirrored rows** (changed in pairs, always in a transaction), the limit comes from config (default 100) | ✅ |
 | Name colours by relation (#389) | Blocked grey > enemy red > **party gold (#399)** > same-guild blue > friend green > same-map white > normal grey; precedence and palette live in exactly one place (`resolveRelation` in `configs/social.ts`), and the presence frame carries `roleId/guildId/guildName` (same 5-second lazy refresh as appearance, no extra queries); when the relation changes, the `Label` colour is updated in place — nodes are never rebuilt | ✅ |
 | Blocks (#398) | A block is **one one-way row**, but the **filtering happens on the server**: world and guild chat drop the recipient, private messages are refused in both directions, presence frames never carry him (including the `full` snapshot) — the client simply never learns who blocked it (deliberately not sent). Blocking also cuts friend and enemy ties (leaving a "friend" label would be harder than the block itself); friend requests are the only channel that could bypass a block, so a hit reuses the "role not found" code | ✅ |

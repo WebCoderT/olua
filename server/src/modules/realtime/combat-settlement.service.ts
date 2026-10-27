@@ -212,6 +212,8 @@ export class CombatSettlementService {
     let reward: RealtimeKillReward | undefined;
     if (applied.killed) {
       reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey, this.roleNameOf(role));
+      // 击杀计数（#400）：排行榜的原料。与经验分开记 —— 等级差过大时经验为 0，但这一杀算数
+      this.roles.recordKill(role.id);
       // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
       this.rememberDrops(accountId, cast.castId, reward.drops);
       // 任务击杀进度（#396）：写库失败不回滚击杀（QuestService 内部已兜成日志）

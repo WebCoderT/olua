@@ -13,6 +13,7 @@ import { bindPointerAction } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { AnnouncementApi } from "../../utils/net/Api";
 import AnnouncementBoardDialog from "../dialogs/AnnouncementBoardDialog";
+import LeaderboardDialog from "../dialogs/LeaderboardDialog";
 import MapPreviewDialog from "../dialogs/MapPreviewDialog";
 import type RoleDisplay from "../role/RoleDisplay";
 
@@ -23,7 +24,7 @@ import type RoleDisplay from "../role/RoleDisplay";
  * - 功能入口按钮：单列竖排的布局容器（Layout 纵向），位于地图内容区左侧
  * - 地图区域：真实小地图——当前地图的 preview.jpg，裁剪在内容区大小（layout.contentSize）的视口内，
  *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）
- * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左）
+ * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开全服榜）
  * - 最下方：世界坐标条
  * 位置、尺寸与图片来源全部来自 configs/hudLayout.smallMap（入口图标按名字走 smallMapImage 取图）
  * 地图区域上实时绘制坐标点：角色黑点固定在内容区中心（底图随之平移，故黑点下方永远是角色真实所在位置），
@@ -53,6 +54,14 @@ export default class SmallMap extends Node {
   private mapPreviewDialog: MapPreviewDialog;
   /** 公告板弹窗（左侧「公告」入口打开；它的未读数回调驱动入口红点） */
   private announcementDialog: AnnouncementBoardDialog;
+  /**
+   * 排行榜弹窗（#400：地图正下方那颗「排行榜」标签打开）
+   *
+   * 入口放这里而不是底部功能栏：底部那一行已经排满（10 个图标贴着血球与快捷栏），
+   * 而小地图下方这颗「排行榜」标签是**美术稿里本来就有的**（`small-map/ranking-list`），
+   * 之前只是装饰图。把它变成可点的，语义与位置都不用再争。
+   */
+  private leaderboardDialog = new LeaderboardDialog();
   /** 公告入口的未读红点（有未读公告才显示） */
   private announcementDot: Node | null = null;
   /** 上次刷新时间戳 */
@@ -174,7 +183,10 @@ export default class SmallMap extends Node {
     // 容器宽度取两颗标签加空档的总宽，从而整体相对地图内容区居中
     const tagRow = layout.tagRow;
     const tags = GameUiHelper.createRow("small_map_tags", tagRow.gap, tagRow.position, new Size(tagRow.size.width * 2 + tagRow.gap, tagRow.size.height));
-    tags.addChild(GameUiHelper.createImage("small_map_ranking_list", uiImages.smallMapRankingList, new Vec2(), tagRow.size));
+    const rankingEntry = GameUiHelper.createImage("small_map_ranking_list", uiImages.smallMapRankingList, new Vec2(), tagRow.size);
+    // 排行榜标签（#400）：原来是纯装饰图，现在点开全服榜（等级 / 战力 / 击杀）
+    bindPointerAction(rankingEntry, () => this.leaderboardDialog.open(), this);
+    tags.addChild(rankingEntry);
     tags.addChild(GameUiHelper.createImage("small_map_server_line", uiImages.smallMapServerLine, new Vec2(), tagRow.size));
     this.addChild(tags);
     // 世界坐标条：线路/排行榜下方

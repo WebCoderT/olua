@@ -131,6 +131,8 @@ export class RolesService {
       occupation: fields.occupation,
       sex: fields.sex,
       level: fields.level,
+      // 新角色的击杀数从 0 起（#400）：这一列只由结算路径 +1，创建时不给客户端任何话语权
+      kills: 0,
       data: JSON.stringify(data),
       revision: 1,
       created_at: now,
@@ -652,6 +654,21 @@ export class RolesService {
     // 不推进修订号（见方法注释）：血量以实时帧为准，revision 留给进度型写入
     this.roles.updateDataKeepRevision(existing.id, JSON.stringify(data), Date.now());
     return { hp, maxHp };
+  }
+
+  /**
+   * 击杀计数 +1（#400：排行榜的原料）
+   *
+   * 与 `applyKillExp` **分开调**，因为两者的判定不同：
+   * - 经验会因等级差过大而记 0（`settleKillReward` 里 `exp > 0` 才入账）；
+   * - 击杀数不看过不过期 —— 杀了就是杀了，哪怕一分经验没有。
+   *
+   * 刻意不做「在线校验」：玩家刚好在击杀那一瞬被踢下线，这只怪也是他杀的。
+   * 也不推进 `revision`（见仓储 `incrementKills` 的注释）—— 客户端存档里没有这一列，
+   * 推进修订号只会制造一次假的乐观锁冲突。
+   */
+  recordKill(roleId: string): void {
+    this.roles.incrementKills(roleId);
   }
 
   /**

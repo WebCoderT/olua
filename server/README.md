@@ -53,11 +53,13 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:account-email` | 玩家邮箱字段专项（28 条） |
 | `npm run test:e2e:realtime` | 实时通道专项（50 条；**真实 WebSocket 握手**，不需要浏览器） |
 | `npm run test:e2e:blocks` | 屏蔽与举报专项（50 条；拉黑单向 / 聊天与互见服务端过滤 / 举报落库与去重） |
+| `npm run test:e2e:party` | 队伍专项（79 条；邀请即建队 / 转让与移交 / 经验分成 / 屏蔽优先） |
+| `npm run test:e2e:rank` | 排行榜专项（55 条；三榜名次与数值 / 并列竞赛排名 / 分页与 `me` / 快照与定时重算） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 十八套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 二十套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -148,6 +150,8 @@ server/
 │   │   ├── social/                 社交：帮会（#388：创建 / 申请 / 审批 / 成员 / 转让 / 解散，管理端改名与强制解散）+ 好友与敌人（#389）+ 屏蔽与举报（#398：拉黑单向一行 / 举报只落库 + 管理端只读列表 + `report:read`）
 │   │   ├── party/                  队伍（#399）：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出自动移交 / 解散；
 │   │   │                           队伍与成员两表落库（一人一队由 `role_id UNIQUE` 兜底），邀请存内存 30 秒过期
+│   │   ├── leaderboard/            排行榜（#400）：等级 / 战力 / 击杀三榜，进程内物化按周期重算，
+│   │   │                           排序·名次·截断·字段裁剪全在服务端（击杀数读 `roles.kills` 索引列）
 │   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭 / 聊天转发（#395：世界=同图 / 帮会 / 私聊，限频与长度上限在服务端；#398 起聊天与互见都按 `role_blocks` 逐收件人剔除）
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
@@ -179,6 +183,8 @@ server/
 │   ├── e2e-quest.cjs               48 条（任务：接取门控 / talk·kill·collect 三目标推进 / 交付发奖一次落库 / 日常领奖后可重接）
 │   ├── e2e-sell.cjs                24 条（出售：快照价结算 / 同 id 多格合并 / 客户端报价无效 / 不可卖 / 整单拒绝 / 乐观锁 / 越权）
 │   ├── e2e-blocks.cjs              50 条（屏蔽与举报：单向拉黑 / 聊天与互见服务端过滤 / 举报去重与落库 / 管理端只读列表）
+│   ├── e2e-party.cjs               79 条（队伍：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出移交 / 解散 / 经验分成 / 屏蔽优先）
+│   ├── e2e-rank.cjs                55 条（排行榜：三榜名次与数值 / 并列竞赛排名 / 分页与 size 夹上限 / me 榜外名次 / 快照与定时重算 / 条目八字段）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -304,12 +310,12 @@ server/
 
 ## 接口与契约
 
-当前 **141 个接口 / 117 条路径 / 208 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **143 个接口 / 119 条路径 / 212 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
-| 客户端 | 38 | `player` 令牌，只能操作自己账号的数据 |
+| 客户端 | 40 | `player` 令牌，只能操作自己账号的数据 |
 | 管理端 | 96 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
@@ -386,7 +392,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+二十套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -400,14 +406,15 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-world.cjs` | **24** | 世界权威：**空图按刷怪区播种**（不认识的怪物 key 跳过、落点在区域矩形内、重复 join 不翻倍、账号间共享同一实例）/ 结算直接落世界（快照血量 = 结算血量、B 视角同步）/ 打死怪进重生队列 / **tick 到点重生并广播** / 优雅关闭全量落盘 / **重启后实例身份与血量原样恢复**（到期重生一次性补处理） |
 | `test/e2e-dual.cjs` | **14** | 双进程形态（#175）：存档进程（`REALTIME_EMBEDDED=false`）没有实时接口（取票 404）/ 实时进程凭**同一份库**校验令牌（取票 → WS → welcome）/ worldJoin 播种与 cast 结算在实时进程跑通 / 落盘后**测试进程开只读连接可见** `world_monsters`（WAL 承接跨进程写）/ 管理端在存档进程踢下线 → 实时进程巡检间隔内断连（close `4000`）/ 存档进程重置密码 → 旧令牌在实时进程取票被拒（`token_version` 对库比对） |
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
+| `test/e2e-rank.cjs` | **55** | 排行榜（#400）：**三个榜（等级 / 战力 / 击杀）的名次与数值逐个对** / 并列时同名次（竞赛排名，同分再按 roleId 升序）/ 战力榜与等级榜不同序（证明不是照抄等级）/ 分页切片、空页、`size` 夹上限与非法分页 `/ `me` 榜内榜外名次都真实、当前无在线角色时返回「没有名次」、未登录被拒 / 刷新周期设为零时快照不随存档变、`computedAt` 不动 / 条目恰好八个字段且不带 `accountId`·`data`·在线状态 / 周期定时重算真的换了一份 |
 
 
 ```bash
-cd server && npm run verify          # 编译 + 十八套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 二十套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 
-改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改实时通道 → `test:e2e:realtime`），
+改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改排行榜 → `test:e2e:rank`；改实时通道 → `test:e2e:realtime`），
 但**提交前 `npm run verify` 都该过一遍**。
 
 ## 相关文档
