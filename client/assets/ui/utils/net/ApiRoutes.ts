@@ -157,6 +157,39 @@ export const ApiRoutes = {
      */
     me: (board: string) => `/leaderboards/${encodeURIComponent(board)}/me`,
   },
+  /** gameMail 模块（5 个接口） */
+  gameMail: {
+    /**
+     * 删除邮件（DELETE /mails/{id}）
+     *
+     * **附件没领不能删**（50143）—— 删了等于替玩家扔掉奖励。已领或无附件的邮件可以删。
+     */
+    remove: (id: string) => `/mails/${encodeURIComponent(id)}`,
+    /**
+     * 领取附件（POST /mails/{id}/claim）
+     *
+     * 金币 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。
+     */
+    claim: (id: string) => `/mails/${encodeURIComponent(id)}/claim`,
+    /**
+     * 标为已读（POST /mails/{id}/read）
+     *
+     * 重复标不改写已读时刻（第一次看到的时间才有意义）。邮件不存在 → 50141；别人的邮件一律当作不存在（不做越权探测口）。
+     */
+    read: (id: string) => `/mails/${encodeURIComponent(id)}/read`,
+    /**
+     * 一键领取（POST /mails/claim-all）
+     *
+     * 按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。
+     */
+    claimAll: "/mails/claim-all",
+    /**
+     * 我的收件箱（GET /mails/me）
+     *
+     * 整份收件箱（新的在前）+ 未读数 + 未领数。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。
+     */
+    mine: "/mails/me",
+  },
   /** quest 模块（4 个接口） */
   quest: {
     /**

@@ -47,23 +47,24 @@ export default class AchievementStore {
    * 失败只把 `busyId` 清掉、状态原样保留 —— 背包满（20012）时玩家清完格子
    * 直接再点一次就行，界面不该因为一次失败就变成空列表。
    *
-   * @returns 成功与否 + 业务码（0 = 成功；20012 = 背包放不下），由调用方决定飘什么字
+   * @returns 成功与否 + 业务码（0 = 成功）+ 背包满时转入的邮件 id，由调用方决定飘什么字
    */
-  static async claim(achievementId: string): Promise<{ ok: boolean; code: number }> {
-    if (this.state.busyId) return { ok: false, code: 0 };
+  static async claim(achievementId: string): Promise<{ ok: boolean; code: number; mailId: string | null }> {
+    if (this.state.busyId) return { ok: false, code: 0, mailId: null };
     this.state = { ...this.state, busyId: achievementId };
     this.emit();
     try {
       const data = await AchievementApi.claim({ achievementId });
       this.state = { data: data ?? this.state.data, loading: false, failed: false, busyId: "" };
       this.emit();
-      return { ok: true, code: 0 };
+      // 背包满时服务端把奖励转成邮件：返回 mailId，客户端据此换成「去邮箱领」的提示
+      return { ok: true, code: 0, mailId: data?.mailId ?? null };
     } catch (error) {
       // 业务码在 ApiError 上（20012 = 背包放不下）；拿不到就当一般失败
       const code = (error as { code?: number }).code ?? 0;
       this.state = { ...this.state, busyId: "" };
       this.emit();
-      return { ok: false, code };
+      return { ok: false, code, mailId: null };
     }
   }
 

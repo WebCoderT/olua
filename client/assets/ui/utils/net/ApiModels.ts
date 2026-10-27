@@ -4733,6 +4733,79 @@ export type MonsterDropQuery = {
   source?: "table" | "entries" | "none";
 };
 
+export type AchievementCondition = {
+  /**
+   * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
+   */
+  type: "kill" | "quest" | "level" | "combat" | "collect";
+  /**
+   * 目标：kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串
+   */
+  target: string;
+  /**
+   * 门槛值（累计型 = 需要多少次，状态型 = 需要到多少）
+   */
+  count: number;
+};
+
+export type AchievementRewards = {
+  /**
+   * 金币
+   */
+  gold: number;
+  /**
+   * 经验
+   */
+  exp: number;
+  /**
+   * 物品清单
+   */
+  items: AchievementRewardItem[];
+};
+
+export type Achievement = {
+  /**
+   * 成就 id（语义串，如 ach_kill_10）
+   */
+  id: string;
+  /**
+   * 分类：battle 战斗 / growth 成长 / explore 探索
+   */
+  category: "battle" | "growth" | "explore";
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 条件
+   */
+  condition: AchievementCondition;
+  /**
+   * 奖励
+   */
+  rewards: AchievementRewards;
+  /**
+   * 分类内展示顺序（小的在前）
+   */
+  sortOrder: number;
+  /**
+   * 未达成时是否默认折叠（不剧透条件）
+   */
+  hidden: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）
+   */
+  recordCount?: number;
+};
+
 export type GameConfigSnapshot = {
   /**
    * 称号配置（34 阶，含渠道与升级链顺序）
@@ -4810,6 +4883,10 @@ export type GameConfigSnapshot = {
    * 任务配置（#396：主线链 / 日常 / 单目标 / 奖励）
    */
   quests: Quest[];
+  /**
+   * 成就配置（#401：分类 / 条件 / 门槛 / 奖励）。进度与达成状态走 `/achievements/me`，不在配置快照里
+   */
+  achievements: Achievement[];
 };
 
 export type GuildSummary = {
@@ -5391,79 +5468,10 @@ export type AchievementClaimResult = {
    * 是否升级
    */
   leveledUp: boolean;
-};
-
-export type AchievementCondition = {
   /**
-   * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
+   * 背包满时奖励转入的邮件 id（null = 直接进了背包）
    */
-  type: "kill" | "quest" | "level" | "combat" | "collect";
-  /**
-   * 目标：kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串
-   */
-  target: string;
-  /**
-   * 门槛值（累计型 = 需要多少次，状态型 = 需要到多少）
-   */
-  count: number;
-};
-
-export type AchievementRewards = {
-  /**
-   * 金币
-   */
-  gold: number;
-  /**
-   * 经验
-   */
-  exp: number;
-  /**
-   * 物品清单
-   */
-  items: AchievementRewardItem[];
-};
-
-export type Achievement = {
-  /**
-   * 成就 id（语义串，如 ach_kill_10）
-   */
-  id: string;
-  /**
-   * 分类：battle 战斗 / growth 成长 / explore 探索
-   */
-  category: "battle" | "growth" | "explore";
-  /**
-   * 名称
-   */
-  label: string;
-  /**
-   * 描述
-   */
-  description: string;
-  /**
-   * 条件
-   */
-  condition: AchievementCondition;
-  /**
-   * 奖励
-   */
-  rewards: AchievementRewards;
-  /**
-   * 分类内展示顺序（小的在前）
-   */
-  sortOrder: number;
-  /**
-   * 未达成时是否默认折叠（不剧透条件）
-   */
-  hidden: boolean;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-  /**
-   * 已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）
-   */
-  recordCount?: number;
+  mailId: string | null;
 };
 
 export type AchievementPage = {
@@ -5510,4 +5518,151 @@ export type AchievementQuery = {
    * 分类筛选：battle | growth | explore
    */
   category?: string;
+};
+
+export type MailAttachment = {
+  /**
+   * 物品 id（客户端拿共享快照换名字与图标）
+   */
+  goodId: string;
+  /**
+   * 数量
+   */
+  count: number;
+};
+
+export type MailView = {
+  /**
+   * 邮件 id
+   */
+  id: string;
+  /**
+   * 来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励
+   */
+  kind: string;
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本，换行用 \n）
+   */
+  body: string;
+  /**
+   * 附件金币（0 = 没有）
+   */
+  gold: number;
+  /**
+   * 附件经验（0 = 没有）
+   */
+  exp: number;
+  /**
+   * 附件物品
+   */
+  attachments: MailAttachment[];
+  /**
+   * 是否已读
+   */
+  read: boolean;
+  /**
+   * 附件是否已领（已领 = 不可再领，且可以删）
+   */
+  claimed: boolean;
+  /**
+   * 收到时间（毫秒时间戳）
+   */
+  createdAt: number;
+};
+
+export type MailBox = {
+  /**
+   * 全部邮件（新的在前）
+   */
+  mails: MailView[];
+  /**
+   * 未读封数（入口红点用）
+   */
+  unread: number;
+  /**
+   * 未领封数（「一键领取」按钮用）
+   */
+  unclaimed: number;
+};
+
+export type MailClaimResult = {
+  /**
+   * 领取后的收件箱
+   */
+  mails: MailView[];
+  /**
+   * 未读封数
+   */
+  unread: number;
+  /**
+   * 未领封数
+   */
+  unclaimed: number;
+  /**
+   * 本次到手的金币
+   */
+  gold: number;
+  /**
+   * 本次到手的经验
+   */
+  exp: number;
+  /**
+   * 本次到手的物品
+   */
+  items: MailAttachment[];
+  /**
+   * 领取后的等级（经验可能触发升级）
+   */
+  level: number;
+  /**
+   * 本次是否升级了
+   */
+  leveledUp: boolean;
+};
+
+export type MailClaimAllResult = {
+  /**
+   * 领取后的收件箱
+   */
+  mails: MailView[];
+  /**
+   * 未读封数
+   */
+  unread: number;
+  /**
+   * 未领封数
+   */
+  unclaimed: number;
+  /**
+   * 本次成功领取的封数
+   */
+  claimedCount: number;
+  /**
+   * 本次到手的金币合计
+   */
+  gold: number;
+  /**
+   * 本次到手的经验合计
+   */
+  exp: number;
+  /**
+   * 本次到手的物品合计（同 id 已合并）
+   */
+  items: MailAttachment[];
+  /**
+   * 领取后的等级
+   */
+  level: number;
+  /**
+   * 本次是否升级了
+   */
+  leveledUp: boolean;
+  /**
+   * 是否因为背包满而提前停下（true = 还有没领的）
+   */
+  stoppedByBag: boolean;
 };

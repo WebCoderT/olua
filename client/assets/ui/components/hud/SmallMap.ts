@@ -11,10 +11,11 @@ import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
 import { getMapPixelSize } from "../../utils/map/MapPointMath";
 import { bindPointerAction } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
-import { AnnouncementApi } from "../../utils/net/Api";
+import { AnnouncementApi, GameMailApi } from "../../utils/net/Api";
 import AnnouncementBoardDialog from "../dialogs/AnnouncementBoardDialog";
 import LeaderboardDialog from "../dialogs/LeaderboardDialog";
 import AchievementDialog from "../dialogs/AchievementDialog";
+import MailDialog from "../dialogs/MailDialog";
 import MapPreviewDialog from "../dialogs/MapPreviewDialog";
 import type RoleDisplay from "../role/RoleDisplay";
 
@@ -70,8 +71,22 @@ export default class SmallMap extends Node {
    * 用现成的入口图，既不新增素材，也不用在挤满的底部功能栏里再塞一格。
    */
   private achievementDialog = new AchievementDialog();
-  /** 公告入口的未读红点（有未读公告才显示） */
-  private announcementDot: Node | null = null;
+  /**
+   * 消息中心（#429：邮件面板，公告板从面板里进）
+   *
+   * 之前这颗 `mail` 图标只开公告板；现在它是「消息中心」——邮件与公告都是消息，
+   * 一颗图标两个入口比在小地图上再挤一颗图标干净（左侧竖排每加一颗都要挪整列）。
+   */
+  private mailDialog = new MailDialog({
+    onUnreadChange: (unread) => this.setMailUnread(unread),
+    onOpenAnnouncement: () => this.openAnnouncementDialog(),
+  });
+  /** 入口红点（未读邮件 + 未领附件 + 未读公告，有任一项才显示） */
+  private entryDot: Node | null = null;
+  /** 邮件侧待处理数（未读 + 未领，由邮件面板与进游戏时的一次探测维护） */
+  private mailUnread = 0;
+  /** 公告侧未读数（由公告板与进游戏时的一次探测维护） */
+  private announcementUnread = 0;
   /** 上次刷新时间戳 */
   private lastRefreshAt = 0;
   /** 路线当前是否已画出（无路线时据此决定是否要清空绘制层，避免每帧对空层调用 clear） */
@@ -90,6 +105,7 @@ export default class SmallMap extends Node {
     this.createBottomInfo();
     // 进游戏先探一次未读（失败静默：拉不到就不显示红点）
     void this.refreshAnnouncementUnread();
+    void this.refreshMailUnread();
   }
 
   /** 打开小地图弹窗（整图预览：左键寻路 / 右键传送） */
@@ -97,7 +113,7 @@ export default class SmallMap extends Node {
     this.mapPreviewDialog.open();
   }
 
-  /** 打开公告板（左侧功能入口里的公告图标） */
+  /** 打开公告板（入口在邮件面板里：消息中心 > 公告） */
   private openAnnouncementDialog() {
     this.announcementDialog.open();
   }
@@ -118,10 +134,39 @@ export default class SmallMap extends Node {
     }
   }
 
-  /** 未读红点显隐（红点节点是入口按钮的子节点，随按钮一起排布） */
+  /**
+   * 探一次邮件待处理数（进游戏时调一次）
+   *
+   * 「未读 + 未领」都算要处理：只有未领的邮件（已读过但没领）同样值得一个红点 ——
+   * 那正是玩家最需要被提醒的一类（东西还在邮箱里没拿）。
+   * 之后由邮件面板自己驱动（打开时回调未读数）。失败静默，与公告同一口径。
+   */
+  private async refreshMailUnread() {
+    try {
+      const box = await GameMailApi.mine({ silent: true });
+      if (!isValid(this)) return;
+      this.setMailUnread(box ? box.unread + box.unclaimed : 0);
+    } catch {
+      /* 静默：入口不显示红点即可 */
+    }
+  }
+
+  /** 公告未读数变化 */
   private setAnnouncementUnread(unread: number) {
-    if (!this.announcementDot || !isValid(this.announcementDot)) return;
-    this.announcementDot.active = unread > 0;
+    this.announcementUnread = unread;
+    this.refreshEntryDot();
+  }
+
+  /** 邮件侧待处理数变化（由邮件面板回调） */
+  private setMailUnread(unread: number) {
+    this.mailUnread = unread;
+    this.refreshEntryDot();
+  }
+
+  /** 红点显隐：两路相加（红点节点是入口按钮的子节点，随按钮一起排布） */
+  private refreshEntryDot() {
+    if (!this.entryDot || !isValid(this.entryDot)) return;
+    this.entryDot.active = this.mailUnread + this.announcementUnread > 0;
   }
 
   //#region 结构拼装
@@ -137,23 +182,24 @@ export default class SmallMap extends Node {
     const count = layout.entryIcons.length;
     const columnHeight = count * layout.entryIconSize + (count - 1) * layout.entryIconGap;
     const column = GameUiHelper.createColumn("small_map_entry_buttons", layout.entryIconGap, layout.entryColumnPosition, new Size(layout.entryIconSize, columnHeight));
-    // 按钮位置由 Layout 统一排列；「世界」打开小地图弹窗、「成就」打开成就面板、「公告」打开公告板，其余入口暂为占位
+    // 按钮位置由 Layout 统一排列；「世界」打开小地图弹窗、「成就」打开成就面板、
+    // 「邮件」打开消息中心（邮件 + 公告入口，见 mailDialog），其余入口暂为占位
     layout.entryIcons.forEach((icon) => {
       const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, smallMapImage(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
       if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
       if (icon === "achievement") bindPointerAction(button, () => this.achievementDialog.open(), this);
-      if (icon === layout.announcementEntry) {
-        bindPointerAction(button, () => this.openAnnouncementDialog(), this);
-        this.announcementDot = this.createAnnouncementDot(button);
+      if (icon === layout.mailEntry) {
+        bindPointerAction(button, () => this.mailDialog.open(), this);
+        this.entryDot = this.createEntryDot(button);
       }
       column.addChild(button);
     });
     this.addChild(column);
   }
 
-  /** 公告入口的未读红点（常驻子节点，按未读数切显隐；红点图用通用小圆点） */
-  private createAnnouncementDot(button: Node) {
-    const dot = GameUiHelper.createImage(`${button.name}_unread`, uiImages.dot, smallMapLayout.announcementDot.position, smallMapLayout.announcementDot.size);
+  /** 消息入口的未读红点（常驻子节点，按未读数切显隐；红点图用通用小圆点） */
+  private createEntryDot(button: Node) {
+    const dot = GameUiHelper.createImage(`${button.name}_unread`, uiImages.dot, smallMapLayout.entryDot.position, smallMapLayout.entryDot.size);
     dot.active = false;
     button.addChild(dot);
     return dot;

@@ -727,6 +727,26 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         PRIMARY KEY (role_id, achievement_id)
       );
       CREATE INDEX IF NOT EXISTS idx_role_achievements_achievement ON role_achievements(achievement_id);
+
+      -- 游戏内邮件（#429）：与上面的 mail_queue（外发 SMTP 投递队列）**不是一回事** ——
+      -- 那张表是「把信发到玩家注册邮箱」，这张表是「玩家在游戏里打开的收件箱」。
+      -- 附件（gold / exp / attachments）在**领取时**才入包：先领后删，未领的邮件带着附件留在箱里。
+      CREATE TABLE IF NOT EXISTS role_mails (
+        id          TEXT    PRIMARY KEY,
+        role_id     TEXT    NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        kind        TEXT    NOT NULL DEFAULT 'system',
+        title       TEXT    NOT NULL DEFAULT '',
+        body        TEXT    NOT NULL DEFAULT '',
+        gold        INTEGER NOT NULL DEFAULT 0,
+        exp         INTEGER NOT NULL DEFAULT 0,
+        attachments TEXT    NOT NULL DEFAULT '[]',
+        read_at     INTEGER,
+        claimed_at  INTEGER,
+        created_at  INTEGER NOT NULL DEFAULT 0
+      );
+      -- 收件箱永远按「这个角色 + 时间倒序」取，未领数也用得上 claimed_at
+      CREATE INDEX IF NOT EXISTS idx_role_mails_box ON role_mails(role_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_role_mails_unclaimed ON role_mails(role_id, claimed_at);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

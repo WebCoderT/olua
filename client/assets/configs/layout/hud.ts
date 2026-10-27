@@ -137,9 +137,14 @@ export const smallMapLayout = {
   anchor: { edge: "top-right", marginX: 2, marginY: 12 } as HudAnchor,
   /** 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录） */
   entryIcons: ["world", "achievement", "mail", "config", "sound", "屏蔽 副本"],
-  /** 哪个入口开公告板（其余入口仍是占位），以及它的未读红点（有未读公告才显示） */
-  announcementEntry: "mail",
-  announcementDot: { position: new Vec2(9, 9), size: new Size(9, 9) },
+  /**
+   * 哪个入口开消息中心（邮件面板，公告板在面板里；#429 之前这颗只开公告板）
+   *
+   * 其余入口仍是占位。红点跟这颗图标走，口径是「未读邮件 + 未领附件 + 未读公告 > 0」——
+   * 两路都是「有东西要处理」，分成两个红点反而要玩家去猜哪个更急。
+   */
+  mailEntry: "mail",
+  entryDot: { position: new Vec2(9, 9), size: new Size(9, 9) },
   entryIconSize: 28,
   entryIconGap: 6,
   /** 按钮列的位置 */

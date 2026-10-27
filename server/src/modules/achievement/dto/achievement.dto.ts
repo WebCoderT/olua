@@ -104,6 +104,13 @@ export class AchievementClaimResultDto {
 
   @ApiProperty({ description: "是否升级" })
   leveledUp: boolean;
+
+  @ApiProperty({
+    description: "背包满时奖励转入的邮件 id（null = 直接进了背包）",
+    nullable: true,
+    type: String,
+  })
+  mailId: string | null;
 }
 
 /** 领奖入参 */

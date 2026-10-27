@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
-import { BizException } from "../../common/errors/biz.exception";
+import { BizException, isBizCode } from "../../common/errors/biz.exception";
 import {
   GameEventsService,
   MonsterKilledEvent,
@@ -12,6 +12,7 @@ import { AchievementRow, RoleAchievementRow } from "../../database/rows";
 import { parseRewardItems } from "../../common/utils/reward-items.util";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RoleDto } from "../roles/dto/role.dto";
+import { GameMailService } from "../game-mail/game-mail.service";
 import { RolesService } from "../roles/roles.service";
 import {
   AchievementClaimResultDto,
@@ -36,8 +37,9 @@ const CUMULATIVE_TYPES = new Set(["kill", "quest"]);
  * ## 达成与领奖是两件事
  * `achieved_at` 非空 = 达成（可领）；`claimed_at` 非空 = 已领。**不自动发奖**：
  * 上线瞬间给全员背包塞东西是事故，而且背包满时自动发奖只能丢。
- * 领取走 `RolesService.grantQuestRewards`（与任务交付同一发奖入口，一次落库）：
- * 背包放不下 → 20012，**且不写 `claimed_at`**，清包后还能再领。
+ * 领取走 `RolesService.grantQuestRewards`（与任务交付同一发奖入口，一次落库）。
+ * **背包放不下（20012）时不再把玩家堵在这里**（#429）：整份奖励转成一封邮件，
+ * 照常记 `claimed_at`，接口回 `mailId` —— 玩家去收件箱领，不用先猜是哪件东西放不下。
  *
  * ## 状态型的达成时刻
  * 累计型的 `achieved_at` 是真实时刻（事件驱动，写下那一刻就是达成那一刻）；
@@ -54,6 +56,7 @@ export class AchievementService implements OnModuleInit {
     private readonly records: RoleAchievementRepository,
     private readonly roles: RolesService,
     private readonly events: GameEventsService,
+    private readonly mails: GameMailService,
   ) {}
 
   /** 订阅两条累计型事件（结算侧只 emit，不认识成就） */
@@ -91,11 +94,28 @@ export class AchievementService implements OnModuleInit {
     }
 
     const items = parseRewardItems(row.reward_items);
-    const settled = this.roles.grantQuestRewards(accountId, role.id, null, {
-      gold: row.reward_gold,
-      exp: row.reward_exp,
-      items,
-    });
+    let settled: { level: number; leveledUp: boolean };
+    let mailId: string | null = null;
+    try {
+      settled = this.roles.grantQuestRewards(accountId, role.id, null, {
+        gold: row.reward_gold,
+        exp: row.reward_exp,
+        items,
+      });
+    } catch (error) {
+      // 背包满：整份奖励（金币 / 经验 / 物品）转邮件，而不是让玩家先去猜是哪件东西放不下（#429）
+      if (!isBizCode(error, BizCode.MALL_BAG_FULL)) throw error;
+      const mail = this.mails.sendReward(role.id, {
+        kind: "achievement",
+        title: `成就奖励：${row.label}`,
+        body: `「${row.label}」的奖励因背包已满转入邮箱，清理背包后在这里领取即可。`,
+        gold: row.reward_gold,
+        exp: row.reward_exp,
+        items,
+      });
+      mailId = mail.id;
+      settled = { level: role.level, leveledUp: false };
+    }
 
     // 状态型的 achieved_at 在这里补写（它没有单一达成时刻，见类注释）
     if (!record || record.achieved_at === null) this.records.markAchieved(role.id, achievementId);
@@ -110,6 +130,7 @@ export class AchievementService implements OnModuleInit {
       items,
       level: settled.level,
       leveledUp: settled.leveledUp,
+      mailId,
     };
   }
 

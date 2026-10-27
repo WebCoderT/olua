@@ -37,3 +37,14 @@ export class BizException extends HttpException {
     return new BizException(code, message, HttpStatus.FORBIDDEN);
   }
 }
+
+/**
+ * 判断异常是不是某个业务码
+ *
+ * 用在「同一个失败要分两种处理」的地方（例如成就领奖：背包满 20012 转邮件，
+ * 其余异常照原样抛）。写成工具函数是为了让判据只有一份 —— 各处手写
+ * `error instanceof BizException && error.code === …` 迟早漏掉一处 instance 判断。
+ */
+export function isBizCode(error: unknown, code: number): boolean {
+  return error instanceof BizException && error.code === code;
+}

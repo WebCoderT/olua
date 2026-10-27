@@ -193,13 +193,13 @@ if (sandbox) {
 
     // 游戏内：小地图「公告」入口 + 未读红点
     check(/import AnnouncementBoardDialog from "\.\.\/dialogs\/AnnouncementBoardDialog";/.test(smallMapSource), "小地图引了公告板弹窗");
-    check(/icon === layout\.announcementEntry/.test(smallMapSource), "「公告」入口由配置指定（layout.announcementEntry）");
-    check(/bindPointerAction\(button, \(\) => this\.openAnnouncementDialog\(\), this\)/.test(smallMapSource), "公告入口接线到公告板");
+    check(/icon === layout\.mailEntry/.test(smallMapSource), "消息入口由配置指定（layout.mailEntry，#429 起邮件面板承载公告入口）");
+    check(/onOpenAnnouncement: \(\) => this\.openAnnouncementDialog\(\)/.test(smallMapSource), "公告入口挂在邮件面板上（消息中心 > 公告）");
     check(/this\.announcementDialog\.open\(\)/.test(smallMapSource), "公告入口真的打开公告板");
-    check(/this\.announcementDot = this\.createAnnouncementDot\(button\)/.test(smallMapSource), "公告入口上挂了未读红点节点");
+    check(/this\.entryDot = this\.createEntryDot\(button\)/.test(smallMapSource), "消息入口上挂了未读红点节点");
     check(/AnnouncementApi\.active\(\{ silent: true \}\)/.test(smallMapSource), "进游戏探未读走静默请求（拉不到不弹提示）");
     check(/countUnread\(buildAnnouncementViews\(list, AnnouncementReadStore\.getReadIds\(\)\)\)/.test(smallMapSource), "未读红点用与公告板同一套口径（已读记录 + 渲染数据）");
-    check(/this\.announcementDot\.active = unread > 0/.test(smallMapSource), "红点按未读数显隐");
+    check(/this\.entryDot\.active = this\.mailUnread \+ this\.announcementUnread > 0/.test(smallMapSource), "红点按「邮件待处理 + 未读公告」合计显隐");
 
     // 公告板：拉取 → 渲染 → 整批标已读 → 回调未读数
     check(/import \{ AnnouncementApi \} from "\.\.\/\.\.\/utils\/net\/Api";/.test(boardSource), "公告板走统一请求层（生成物里的 AnnouncementApi）");
@@ -262,9 +262,9 @@ if (sandbox) {
     check(/item: \{[\s\S]{0,400}itemGap: 22/.test(noticeBlock), "条目间距在配置里（提醒弹窗一条条纵向摊开）");
 
     // 小地图入口与红点
-    check(/announcementEntry: "mail"/.test(hudSource), "公告入口指定为 small-map 的 mail 图标（素材已存在，不新增资源）");
+    check(/mailEntry: "mail"/.test(hudSource), "消息入口指定为 small-map 的 mail 图标（素材已存在，不新增资源）");
     check(/entryIcons: \["world", "achievement", "mail", "config", "sound", "屏蔽 副本"\]/.test(hudSource), "mail 本来就在入口图标列表里");
-    check(/announcementDot: \{ position: new Vec2\(9, 9\), size: new Size\(9, 9\) \}/.test(hudSource), "未读红点几何在配置里");
+    check(/entryDot: \{ position: new Vec2\(9, 9\), size: new Size\(9, 9\) \}/.test(hudSource), "未读红点几何在配置里");
     check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/small-map/mail.png")), "公告入口素材存在（resources/small-map/mail.png）");
 
     // 新增脚本都带 .meta（进 Cocos 工程的前提）

@@ -27,6 +27,8 @@ export const achievementTexts = {
   emptyList: "这一类还没有成就",
   /** 领取反馈 */
   claimSuccess: "成就奖励已领取",
+  /** 背包满时服务端把整份奖励转成邮件（#429），这里只负责告诉玩家去哪儿拿 */
+  claimMail: "背包已满，奖励已发至邮箱",
   claimBagFull: "背包放不下，先清出格子再来领",
   claimFailed: "领取失败，稍后再试",
   /** 分类页签名（顺序与 achievementCategories 一致） */
