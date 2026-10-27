@@ -100,6 +100,19 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **「队友分到的经验」必须照搬 `revision`**：那份经验是服务端直接入账的，`StorageManager.applyPartyExpGain` 只改 `exp / level / revision`，**不碰血量**（队友打怪不是我在挨打），不更新基线的话下一次防抖存档必撞 20006。
 - 新增一条帧的固定动作：`CombatChannel` 加类型 + `onXxx` 出口 + `dispatchXxx`（形状校验）→ `RealtimeClient.onFrame` 加一条 `if` → `Game.ts` 接线并在 `onDestroy` 置 null → Store + 界面订阅。
 
+## 五之三、HTTP 拉的榜 vs 帧推的状态（#400 排行榜）
+
+榜**不开帧**：一分钟才变一次，开面板时拉一次就够；开成帧只会让「谁在什么时候看到哪一版榜」变得随机。
+但它仍要一个 Store（`ui/core/LeaderboardStore.ts`），因为**多个界面要读同一份数据**、且要跨「打开/关闭弹窗」活。
+
+- **`page` 与 `me` 必须并发拉同一份快照**：两个接口的 `computedAt` 相同，分开拉会有窗口期让「我第 37 名」和列表第 37 名不是同一个人 —— 那是这个面板最刺眼的不一致。写成 `Promise.all([page(...), me(...)])`，别写成「先列表、再补自己」。
+- **切页签就 `reload`，不读缓存**：玩家打开榜就是想看新的；缓存会让他怀疑「我升级了怎么没动」。仓里**故意没有** `ensure`（「有数据就不拉」的语义留着就会让人以为切页能省一次请求）。
+- **请求失败不清旧数据**：只置 `failed`，界面顶部提示一句，旧那份继续显示 —— 一次网络抖动不该把玩家正在看的榜擦成空白。
+- **`clear()` 在 `Game.onDestroy` 里调**（跟 `PartyStore.clear()` 并列）：榜里的「我的名次」属于上一个角色，带过去会写错名字。
+- **入口挂现成的装饰图**：底部功能栏十格已排满，排行榜用的是小地图本来就有的 `small-map/ranking-list`；`bindPointerAction` 绑上去即可，不新增素材。
+- **`padStart` 用不了**（客户端 tsconfig 的 lib 没到 ES2017）：名次补零手写 `rank < 10 ? "0" + rank : String(rank)` 这类判断。
+- 阈值/时长这类数字**别散在组件里**：`row.topRankThreshold`、`summary.freshMs` 放 `configs/layout/dialogs.ts`（`audit-config-leak` 会把裸比较打回）。
+
 ## 六、客户端改动的固定动作
 
 1. **改接口相关** → 先改服务端，`cd server && npm run gen:api`，再改调用点（签名不兼容会**编译报错**）。
@@ -130,7 +143,7 @@ node /Applications/Cocos/Creator/3.8.7/CocosCreator.app/Contents/Resources/app.a
 node tools/test-client-net.cjs          # 请求层单测（含自愈链五个回调与接线断言）
 node tools/test-role-delete.cjs         # 角色删除 + clearOnlineRole（只清在线标记不删角色）
 node tools/test-texts.cjs               # 文案 key 覆盖率
-# 其余 22 套 tools/test-*.cjs（背包 / 装备 / 摇杆 / 弹窗层级…）
+# 其余 tools/test-*.cjs 全跑一遍（背包 / 装备 / 摇杆 / 弹窗层级 / 排行榜…；套数以 ls 为准，别在文档里写死）
 for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # ② 在仓库根：跨端审计（它们同时扫客户端 / 服务端 / 管理端）
