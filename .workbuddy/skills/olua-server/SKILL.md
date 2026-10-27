@@ -92,6 +92,8 @@ test/e2e-chat.cjs                聊天专项（35 条断言，世界同图广�
 test/e2e-quest.cjs               任务专项（48 条断言，四写入口 / 日常重接）
 test/e2e-sell.cjs                出售专项（24 条断言，快照价结算 / 整单拒绝）
 test/e2e-party.cjs               队伍专项（79 条断言，邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
+test/e2e-achievement.cjs         成就专项（39 条断言，累计 / 状态两种存储 / 背包满转邮件）
+test/e2e-game-mail.cjs           游戏内邮件专项（39 条断言，附件领取 / 拒删 / 一键领取到背包满）
 test/backup.cjs                  备份 / 恢复专项（87 条断言）
 ```
 
@@ -223,11 +225,32 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （上线瞬间给全员背包塞东西是事故，且背包满时自动发奖只能丢）；
 - **状态型的 `achieved_at` 在领取时补写**：它没有单一达成时刻；**GET 绝不写库** ——
   读接口顺手改数据会让「刷新一下进度变了」永远解释不完；
-- **进度钳到门槛**（`Math.min(raw, target)`）：累计型堆到 137/100 没有意义，客户端也不必自己夹。
+- **进度钳到门槛**（`Math.min(raw, target)`）：累计型堆到 137/100 没有意义，客户端也不必自己夹；
+- **状态型的两列必须 upsert**：它们没有进度行，`UPDATE … WHERE achieved_at IS NULL` 一行都改不到 →
+  `achieved_at` / `claimed_at` 永远落不进库 → **每次 claim 都过校验，能无限刷奖励**（#429 的 e2e 抓到的真 bug）。
+  仓储层 `markAchieved` / `markClaimed` 用 `INSERT … ON CONFLICT … DO UPDATE`，时间列写 `COALESCE(旧值, 新值)`
+  —— 达成时刻只认第一次。
 
 引用校验要有两道：生成期（`tools/gen-shared-data.cjs` 的 `pickAchievements`，`kill` 目标必须是真实怪物 key 或 `"*"`、
 `collect` 必须是真实物品、奖励物品必须存在）+ 管理端保存时（`assertAchievementConsistency`）。
 原因是这些错**不会报错**，只会让某条成就永远解锁不了。
+
+### 四之七、游戏内邮件 = 奖励的第二出口（#429）
+
+`role_mails` 是玩家收件箱；`mail_queue` 是**外发 SMTP 投递队列**（模板 + 尝试次数 + 后台调度）。
+两者没有任何代码关系，**不要因为名字像就复用**。
+
+- **附件在「领取」那一刻才入包**，且必须走 `RolesService.grantQuestRewards` —— 任务交付 / 成就领奖 / 邮件附件
+  共用同一个发奖入口（一次落库 + revision +1），否则「邮件里的东西」与「背包里的东西」会出现差额；
+- **未领附件的邮件不能删**（`MAIL_UNCLAIMED 50143`）：删了等于替玩家扔掉奖励。已领或本来就没附件才可删；
+- **没有奖励的邮件不碰角色存档**：否则读一封公告也会顶 revision，客户端下一次保存撞乐观锁；
+- **幂等写进 SQL**，不要先查再写：`UPDATE … WHERE id = ? AND claimed_at IS NULL`，`changes > 0` 才算真领到
+  （并发点两次只发一份）；已读同理 `WHERE read_at IS NULL` —— 只留第一次看到的时刻；
+- **一键领取逐封发，不合并**：遇 `MALL_BAG_FULL` 停下并如实回报 `stoppedByBag`，已领的照常落库 ——
+  不是整单失败，也不是整单回滚；
+- **成就的背包满兜底**：捕获 20012 → 整份奖励（金币 / 经验 / 物品）转一封 `kind: "achievement"` 邮件、
+  **照常写 `claimed_at`**、返回 `mailId`。不写 `claimed_at` 就能反复点领取刷邮件。
+  判业务码统一用 `isBizCode(error, code)`（`common/errors/biz.exception.ts`），不要各处手写 `instanceof`。
 
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 

@@ -164,6 +164,26 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **入口用现成素材**：小地图左侧竖排第二颗 `small-map/achievement` 美术稿本来就有，之前是纯占位。
 - `Game.onDestroy` 里 `AchievementStore.clear()`（成就墙是「这个角色」的，不能带给下一个角色）。
 
+## 五之六、消息中心：一颗图标装两件事（#429）
+
+小地图左侧的 `mail` 图标不再单指公告，而是**消息中心**：邮件面板里带公告入口
+（`MailDialog` 的 `onOpenAnnouncement` 回调）。理由是竖排每加一颗图标都要挪整列，
+而「邮件 + 公告」本来就同属「消息」。
+
+- **红点口径 `unread + unclaimed`**：面板每渲染一次就把合计回吐给 `SmallMap`
+  （`onUnreadChange?.(box.unread + box.unclaimed)`），红点 = 邮件未读 + 未领附件 + 未读公告，任一 > 0 就亮。
+  配置里叫 `mailEntry` / `entryDot`（原 `announcementEntry` / `announcementDot`）—— 名字跟着语义走。
+- **单列列表，不做左右两栏**：一屏能看全，每行「标题 / 附件摘要 / 领取 / 删除」一条线走到底。
+  附件摘要用快照物品表 `items.get(goodId)?.label`，不硬编码名字。
+- **删除按钮的可点条件写进渲染**（`row.claimed || hasNoAttachment(row)`）：附件没领就不能删，
+  点了只飘一句 `removeUnclaimed`（服务端还有 50143 兜一层，但客户端不该让玩家点到才被拒）。
+- **`MailStore` 的 `busyId: "*"`** 让「一键领取」与「单封领取」互斥 —— 同一封邮件被两条路径同时发奖
+  是完全可避免的；单封领取用邮件 id 占位，判据只有 `if (this.state.busyId) return`。
+- **领取结果用返回值覆盖整份 `MailBox`**（`toBox(result)`），失败只清 `busyId`；
+  `claimAll` 返回 `claimedCount` + `stoppedByBag`，飘字据此分「全部领完 / 背包满停下」两句。
+- 文案与几何全在 `configs/mail.ts`（`mailTexts` + `mailDialogLayout`，节点名 `mail_*`）——
+  面板里不许出现字面量。
+
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 
 - `client/tools/lib/net-sandbox.cjs`：把 `configs/network` + `types/common` + `ui/utils/net/*` 编成 CommonJS 塞进沙箱，**`XMLHttpRequest` 由测试注入**，返回 `{ Api, HttpError, Session, RoleSync, ApiRoutes, ApiErrorTextKey, RELOGIN_BIZ_CODES, ROLE_SYNC_BIZ_CODES, getText, sys }`。
