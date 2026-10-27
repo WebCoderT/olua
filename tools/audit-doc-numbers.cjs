@@ -118,6 +118,7 @@ const E2E_SCRIPTS = [
   ["任务（接取/推进/交付）", "server/test/e2e-quest.cjs"],
   ["出售 / 回收（经济出口）", "server/test/e2e-sell.cjs"],
   ["屏蔽与举报（社交安全）", "server/test/e2e-blocks.cjs"],
+  ["组队（队伍系统）", "server/test/e2e-party.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

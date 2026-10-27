@@ -24,6 +24,7 @@ import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
 import OtherPlayerManager from "./core/OtherPlayerManager";
 import SocialStore from "./core/SocialStore";
+import PartyStore from "./core/PartyStore";
 import ChatStore from "./core/ChatStore";
 import ChatBubbles from "./core/ChatBubbles";
 import QuestStore from "./core/QuestStore";
@@ -39,6 +40,7 @@ import StatusManager from "./core/StatusManager";
 import HoverTipManager from "./core/HoverTipManager";
 import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
 import GameUiHelper from "./helpers/GameUiHelper";
+import { partyDialogLayout } from "../configs/hudLayout";
 import RoleSync from "./utils/net/RoleSync";
 import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
 import CombatChannel from "./utils/net/CombatChannel";
@@ -146,6 +148,31 @@ export class Game extends Component {
     // 任务（#396）：quest 帧只推给本人，落进 QuestStore（追踪栏 / 弹窗 / NPC 标记都读它）
     CombatChannel.onQuest = (frame) =>
       QuestStore.applyState({ questId: frame.questId, status: frame.status as "accepted" | "ready", progress: frame.progress, target: frame.target });
+    // 队伍（#399）：三条帧都落进 PartyStore（面板 / 队友名字上色 / 队标都读它）。
+    // 进队与离队各飘一句 —— 服务端只在**变化时**推快照，前后一比就知道是不是刚发生的事。
+    CombatChannel.onParty = (snapshot) => {
+      const before = PartyStore.partyId();
+      PartyStore.applySnapshot(snapshot);
+      const after = PartyStore.partyId();
+      if (!before && after) {
+        const leader = (PartyStore.current()?.members ?? []).find((member) => member.leader);
+        // 队长那一行理论上一定在（服务端每份快照都标了 leader），找不到就退回「队长」这个词
+        GameUiHelper.createTipText(partyDialogLayout.texts.joinedTip.split("{name}").join(leader ? leader.name : partyDialogLayout.texts.stateLeader));
+      } else if (before && !after) {
+        GameUiHelper.createTipText(partyDialogLayout.texts.endedTip);
+      }
+    };
+    CombatChannel.onPartyInvite = (invite) => {
+      PartyStore.applyInvite(invite);
+      // 面板开着就不飘字（邀请行已经顶在成员页最上面了，再飘一句是重复提示）
+      if (this.bottomBar?.isPartyOpen()) return;
+      GameUiHelper.createTipText(partyDialogLayout.texts.inviteReceivedTip.split("{name}").join(invite.fromName));
+    };
+    // 队友击杀分到的那一份经验：服务端已入账，这里只把经验条 / 修订号接上（不碰血量）
+    CombatChannel.onExpGain = (gain) => {
+      const exp = StorageManager.applyPartyExpGain(gain);
+      if (exp > 0) GameUiHelper.createTipText(partyDialogLayout.texts.expGainTip.split("{exp}").join(`${exp}`));
+    };
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -270,11 +297,16 @@ export class Game extends Component {
     CombatChannel.onPicked = null;
     CombatChannel.onChat = null;
     CombatChannel.onQuest = null;
+    CombatChannel.onParty = null;
+    CombatChannel.onPartyInvite = null;
+    CombatChannel.onExpGain = null;
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();
     // 社交快照（好友 / 敌人 / 帮会）是「这个角色」的，离开游戏就不该留给下一个角色
     SocialStore.clear();
+    // 队伍同理（#399）：队伍是「这个角色此刻」的状态，留着只会让下一角色看到别人的队友
+    PartyStore.clear();
     // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
     ChatStore.reset();
     ChatBubbles.reset();

@@ -138,7 +138,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           31 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report
+│   │   └── repositories/           32 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -147,6 +147,8 @@ server/
 │   │   ├── mail/                   mail: templates + delivery queue + background scheduler (sending only enqueues)
 │   │   ├── zone/                   zones (#295 phase two): live-zone list (public) / create zone / merge zones
 │   │   ├── social/                 social: guilds (#388: create / apply / review / members / transfer / disband, admin rename & force-disband) + friends and enemies (#389) + blocks and reports (#398: a block is one one-way row / reports are stored only, with a read-only admin list and a `report:read` point)
+│   │   ├── party/                  parties (#399): invite creates the party / accept, decline / kick, transfer / a leaving leader hands over / disband;
+│   │   │                           parties and members are persisted (one party per role via `role_id UNIQUE`), invites live in memory for 30 seconds
 │   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server; since #398 both chat and presence drop blocked recipients)
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
@@ -186,7 +188,7 @@ server/
 
 ## Data model
 
-38 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+40 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -236,7 +238,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 31 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 32 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)

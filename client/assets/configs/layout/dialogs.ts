@@ -1144,3 +1144,123 @@ export const questDialogLayout = {
 };
 
 //#endregion
+
+//#region 队伍弹窗（#399）
+
+/**
+ * 队伍弹窗布局（与聊天 / 任务弹窗同框：600×560）
+ *
+ * 两个页签：**成员**（含待处理邀请）与**邀请**（附近的人）。
+ * 「成员」页是默认页 —— 打开队伍面板的人十次有九次是想看「队里现在有谁、谁不在线」，
+ * 而不是来拉人；邀请是主动动作，翻一页的成本可以接受。
+ *
+ * 行内按钮的数量随身份变（队长多「转让」「踢人」两枚），几何在这里定死，
+ * 组件只决定画哪几枚 —— 这样队长与队员的行高一致，列表不会跳。
+ */
+export const partyDialogLayout = {
+  name: "party_dialog",
+  title: "队 伍",
+  size: new Size(600, 560),
+  /** 页签（两枚，与任务弹窗同宽） */
+  tabs: {
+    y: 232,
+    size: new Size(140, 32),
+    columns: [-76, 76],
+    radius: 6,
+    activeFill: new Color(255, 200, 80, 230),
+    activeText: new Color(38, 30, 12, 255),
+    idleFill: new Color(28, 33, 42, 200),
+    idleText: new Color(190, 200, 214, 255),
+    idleBorder: new Color(64, 74, 90, 255),
+    fontSize: 13,
+  },
+  /** 顶部小结（「3 / 4 人 · 同图 2 人」；没队伍时显示一句引导） */
+  summary: { position: new Vec2(0, 200), size: new Size(556, 20), fontSize: 12, color: new Color(160, 172, 190, 255) },
+  /** 成员 / 候选列表（框体主体） */
+  list: { name: "party_member_list", position: new Vec2(0, -8), size: new Size(556, 392) },
+  /** 成员行：名字 + 等级/状态（左）+ 动作按钮（右，最多两枚） */
+  row: {
+    size: new Size(552, 56),
+    fill: new Color(22, 26, 34, 150),
+    border: new Color(64, 74, 90, 255),
+    radius: 6,
+    nameFontSize: 13,
+    metaFontSize: 11,
+    nameColor: new Color(232, 238, 246, 255),
+    metaColor: new Color(160, 172, 190, 255),
+    leaderColor: new Color(255, 209, 102, 255),
+    offlineColor: new Color(140, 148, 162, 255),
+    /** 动作按钮的水平中心（两枚时左右各一；一枚时用 actionX） */
+    actionX: 196,
+    action2X: 252,
+    nameX: -180,
+    nameSize: new Size(320, 20),
+    metaX: -180,
+    metaSize: new Size(320, 18),
+  },
+  /** 邀请行（队伍页顶部的「某人邀请你」，高一点点放两枚按钮） */
+  inviteRow: {
+    size: new Size(552, 52),
+    fill: new Color(38, 33, 22, 190),
+    border: new Color(120, 100, 52, 255),
+    radius: 6,
+    acceptX: 150,
+    declineX: 232,
+    nameX: -180,
+    nameSize: new Size(320, 20),
+    textFontSize: 12,
+  },
+  /** 底部按钮（邀请 / 退出 / 解散；不是队长的「解散」不画） */
+  footer: {
+    invite: new Vec2(-150, -244),
+    leave: new Vec2(0, -244),
+    disband: new Vec2(150, -244),
+  },
+  titleColor: new Color(255, 214, 102, 255),
+  titleFontSize: 12,
+  /** 文案 */
+  texts: {
+    tabs: ["队 员", "邀 请"],
+    /** 顶部小结：{count} / {limit} 人 · 同图 {sameMap} 人 */
+    summary: "{count} / {limit} 人 · 同图 {sameMap} 人",
+    /** 没队伍时的一句引导（面板空着也要说清「怎么开始」） */
+    solo: "你还没有队伍：去「邀请」拉一个人，顺手就建队",
+    /** 成员行第二行：Lv{level} · 状态 */
+    memberMeta: "Lv {level} · {state}",
+    stateLeader: "队长",
+    stateOnline: "在线",
+    stateOffline: "离线",
+    stateOtherMap: "异图",
+    memberEmpty: "（队伍里只有你一个人：去「邀请」再拉几个）",
+    inviteEmpty: "（附近没有别的玩家 —— 同图的人才拉得到）",
+    /** 候选行第二行：只有关系（互见帧不下发对方等级，写死一个 Lv 会骗人） */
+    inviteMeta: "{relation}",
+    /** 邀请行：{name} 邀请你加入队伍（{count}/{limit}） */
+    inviteTitle: "{name} 邀请你加入队伍（{count}/{limit}）",
+    inviteHint: "同意后就能一起打怪分经验（30 秒内有效）",
+    accept: "同 意",
+    decline: "拒 绝",
+    invite: "邀 请",
+    invited: "已邀请",
+    kick: "踢 出",
+    transfer: "转 让",
+    leave: "退出队伍",
+    disband: "解散队伍",
+    /** 飘字 / 提示 */
+    invitedTip: "已邀请「{name}」",
+    inviteReceivedTip: "「{name}」邀请你组队（G 键查看）",
+    expGainTip: "队友击杀 +{exp} 经验",
+    joinTip: "「{name}」加入了队伍",
+    leaveTip: "你已退出队伍",
+    /** 进队 / 离队的通用提示（离队的那一条服务端不下发原因：被踢、解散、自己退都是一份空快照） */
+    joinedTip: "已加入「{name}」的队伍",
+    endedTip: "你已不在队伍中",
+    kickedTip: "你被移出了队伍",
+    disbandedTip: "队伍已解散",
+    fullTip: "队伍已满（{limit} 人）",
+    transferTip: "队长已转给「{name}」",
+    disconnectedTip: "实时通道未连接，暂时不能组队",
+  },
+};
+
+//#endregion

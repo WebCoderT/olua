@@ -137,7 +137,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report 31 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party 32 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -146,6 +146,8 @@ server/
 │   │   ├── mail/                   邮件：模板 + 投递队列 + 后台调度（发信只入队）
 │   │   ├── zone/                   区服（#295 阶段二）：活区列表（公共）/ 开区 / 合并区
 │   │   ├── social/                 社交：帮会（#388：创建 / 申请 / 审批 / 成员 / 转让 / 解散，管理端改名与强制解散）+ 好友与敌人（#389）+ 屏蔽与举报（#398：拉黑单向一行 / 举报只落库 + 管理端只读列表 + `report:read`）
+│   │   ├── party/                  队伍（#399）：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出自动移交 / 解散；
+│   │   │                           队伍与成员两表落库（一人一队由 `role_id UNIQUE` 兜底），邀请存内存 30 秒过期
 │   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭 / 聊天转发（#395：世界=同图 / 帮会 / 私聊，限频与长度上限在服务端；#398 起聊天与互见都按 `role_blocks` 逐收件人剔除）
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
@@ -185,7 +187,7 @@ server/
 
 ## 数据模型
 
-38 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+40 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -235,7 +237,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（31 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（32 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）

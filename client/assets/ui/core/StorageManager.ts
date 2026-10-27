@@ -412,6 +412,34 @@ export default class StorageManager {
   }
 
   /**
+   * 队友击杀分到的那一份经验（#399：服务端直接入账，`expGain` 帧带回入账后的状态）
+   *
+   * 与 `applyKillReward` 的差别只有一处：**这条路径不碰血量** —— 队友打怪不是我在挨打，
+   * 顺手把 hp 补成 maxHp（或按升级重算）会让客户端血量与服务端悄悄分开。
+   * 升级时属性照样重算（等级变了攻防跟着曲线走），但**不补满血蓝**：那是击杀者侧的惯例，
+   * 我这里只是「经验条涨了一点」，真正的血量由下一次受击 / 存档同步带回。
+   *
+   * `revision` 必须照搬：这份经验在服务端已经推进了修订号，本地基线不更新的话，
+   * 下一次防抖存档必撞乐观锁（20006）—— 与 `applyPickResult` 同一条纪律。
+   *
+   * @returns 本次入账的经验（调用方据此飘字）
+   */
+  static applyPartyExpGain(gain: { exp: number; level: number; expNow: number; revision: number; leveledUp: boolean }): number {
+    const role = this.findOnlineRole();
+    if (!role) return 0;
+    role.exp = gain.expNow;
+    role.level = gain.level;
+    role.revision = gain.revision;
+    if (gain.leveledUp) {
+      Object.assign(role, GameHelper.combatCalc(role));
+      LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
+    }
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    return gain.exp;
+  }
+
+  /**
    * 服务端普攻受击落账（#323：玩家血量的权威在服务端，hit 帧带回的就是落账后的值）
    *
    * 血量 / 资源上限照搬服务端给的（本地不再自己扣）；revision **不变**——

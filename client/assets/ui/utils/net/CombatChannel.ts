@@ -134,6 +134,8 @@ export interface PlayerEntry {
   /** 所属帮会 id / 名字（#389；空串 = 无帮会。同帮的人名字是蓝的） */
   guildId?: string;
   guildName?: string;
+  /** 所在队伍 id（#399；空串 = 没队伍。同队的人名字是金色的，还会挂队标） */
+  partyId?: string;
   x: number;
   y: number;
   hp: number;
@@ -221,6 +223,78 @@ export interface QuestProgressFrame {
   target: number;
 }
 
+/**
+ * 队伍动作（#399：与 server `PARTY_ACTION` 同值）
+ *
+ * 七个动作共用一条 `party` 帧 —— 分开七种帧类型只会让协议表变长，
+ * 而它们走的是同一个服务（同一次落库 / 同一份快照广播）。
+ */
+export const PARTY_ACTION = {
+  INVITE: "invite",
+  ACCEPT: "accept",
+  DECLINE: "decline",
+  LEAVE: "leave",
+  KICK: "kick",
+  TRANSFER: "transfer",
+  DISBAND: "disband",
+} as const;
+
+export type PartyAction = (typeof PARTY_ACTION)[keyof typeof PARTY_ACTION];
+
+/** 队伍快照里的一名成员（协议见 realtime.protocol 的 RealtimePartyMember） */
+export interface PartyMemberEntry {
+  roleId: string;
+  name: string;
+  level: number;
+  /** 有连接 = 在线；离线队友仍在队里，只是收不到帧 */
+  online: boolean;
+  /** 是否与我同图（不同图的队友拿不到击杀经验） */
+  sameMap: boolean;
+  leader: boolean;
+}
+
+/**
+ * 我的队伍现状（协议见 realtime.protocol 的 RealtimePartySnapshot）
+ *
+ * `partyId` 空串 = 我不在任何队伍 —— 离队 / 被踢 / 解散收到的都是这一份空快照，
+ * 客户端不需要第二条「你被踢了」的帧。
+ */
+export interface PartySnapshot {
+  partyId: string;
+  /** 队长角色 id（空串 = 没有队伍） */
+  leaderRoleId: string;
+  limit: number;
+  members: PartyMemberEntry[];
+  /** 我是不是队长（踢人 / 转让 / 解散只对队长亮） */
+  isLeader: boolean;
+}
+
+/** 有人邀请我组队（协议见 realtime.protocol 的 RealtimePartyInviteMessage） */
+export interface PartyInvite {
+  partyId: string;
+  fromRoleId: string;
+  fromName: string;
+  fromLevel: number;
+  /** 邀请时队伍已有几人 / 上限 */
+  memberCount: number;
+  limit: number;
+  /** 过期时刻（服务端时钟的毫秒） */
+  expiresAt: number;
+}
+
+/** 队友击杀后我分到的经验（协议见 realtime.protocol 的 RealtimeExpGainMessage） */
+export interface PartyExpGain {
+  exp: number;
+  level: number;
+  expNow: number;
+  expNeed: number;
+  leveledUp: boolean;
+  /** 入账后的修订号（照搬做新基线，否则下一次防抖存档撞 20006） */
+  revision: number;
+  /** 谁打死的（飘一句「队友击杀 +经验」用） */
+  from: { roleId: string; username: string };
+}
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -249,6 +323,15 @@ export default class CombatChannel {
 
   /** 任务进度出口（#396；组合根接线到 QuestStore.applyState，不接时帧被丢弃——进度靠打开面板时重拉） */
   static onQuest: ((data: QuestProgressFrame) => void) | null = null;
+
+  /** 队伍快照出口（#399；组合根接线到 PartyStore.applySnapshot，不接时帧被丢弃——面板打开时重拉不到） */
+  static onParty: ((data: PartySnapshot) => void) | null = null;
+
+  /** 组队邀请出口（#399；组合根接线到 PartyStore.applyInvite，不接时邀请被静默丢弃） */
+  static onPartyInvite: ((data: PartyInvite) => void) | null = null;
+
+  /** 队友击杀分到的经验出口（#399；组合根接线到 StorageManager.applyPartyExpGain，不接时经验条不涨） */
+  static onExpGain: ((data: PartyExpGain) => void) | null = null;
 
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
@@ -403,6 +486,45 @@ export default class CombatChannel {
     if (typeof frame.status !== "string") return;
     if (!this.onQuest) return;
     this.onQuest(frame);
+  }
+
+  /**
+   * 发一个队伍动作（#399）
+   *
+   * 队伍交互**只走帧不走 HTTP**：邀请必须即时送达，而 HTTP 落在存档进程、
+   * WS 在实时进程 —— 存档进程推不到别人的通道上。返回 false = 连接不在 OPEN 态
+   * （调用方据此提示「通道未连接」，别把动作当成已发出）。
+   */
+  static sendParty(action: PartyAction, roleId?: string): boolean {
+    return RealtimeClient.send({ type: "party", data: roleId ? { action, roleId } : { action } });
+  }
+
+  /** RealtimeClient 收到 party 帧后走这里（#399：成员 / 队长 / 人数变化，空 partyId = 我不在队伍） */
+  static dispatchParty(data: unknown): void {
+    const snapshot = data as PartySnapshot | null;
+    if (!snapshot || typeof snapshot !== "object" || typeof snapshot.partyId !== "string") return;
+    if (!Array.isArray(snapshot.members)) return;
+    if (!this.onParty) {
+      console.warn("[party] 收到队伍快照但没有处理者（onParty 未接线），快照被丢弃");
+      return;
+    }
+    this.onParty(snapshot);
+  }
+
+  /** RealtimeClient 收到 partyInvite 帧后走这里（#399） */
+  static dispatchPartyInvite(data: unknown): void {
+    const invite = data as PartyInvite | null;
+    if (!invite || typeof invite !== "object" || typeof invite.fromRoleId !== "string" || !invite.fromRoleId) return;
+    if (!this.onPartyInvite) return;
+    this.onPartyInvite(invite);
+  }
+
+  /** RealtimeClient 收到 expGain 帧后走这里（#399：队友击杀，我分到的那一份已经入账） */
+  static dispatchExpGain(data: unknown): void {
+    const gain = data as PartyExpGain | null;
+    if (!gain || typeof gain !== "object" || typeof gain.exp !== "number" || typeof gain.revision !== "number") return;
+    if (!this.onExpGain) return;
+    this.onExpGain(gain);
   }
 }
 

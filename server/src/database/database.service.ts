@@ -638,6 +638,25 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_role_reports_created ON role_reports(created_at);
       CREATE INDEX IF NOT EXISTS idx_role_reports_pair ON role_reports(role_id, target_role_id);
 
+      -- 队伍（#399）：两张表 —— 队伍本体（谁建的 / 谁是队长）与成员表（谁在队里）
+      -- 与聊天 / 拾取那种纯内存账本不同，队伍**落库**：实时进程一重启就把所有人的队伍清空
+      -- 说不过去（重连回来还在同一个队才符合预期），而且存档进程也要能读到它。
+      -- 队长的唯一写者就是 parties.leader_role_id（成员表不存 is_leader，否则两个写者会漂）
+      CREATE TABLE IF NOT EXISTS parties (
+        id             TEXT PRIMARY KEY,
+        leader_role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        created_at     INTEGER NOT NULL
+      );
+      -- role_id UNIQUE = 一个角色只能在一个队里：把「一人一队」交给数据库，
+      -- 业务代码就不用每次并发加入前先查一遍再写（查了也会被并发穿过去）
+      CREATE TABLE IF NOT EXISTS party_members (
+        party_id  TEXT NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+        role_id   TEXT NOT NULL UNIQUE REFERENCES roles(id) ON DELETE CASCADE,
+        joined_at INTEGER NOT NULL,
+        PRIMARY KEY (party_id, role_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_party_members_party ON party_members(party_id);
+
       -- 任务配置（#396，epic #394）：quests 表是管理端「任务配置」的可改层，
       -- seed 来自共享快照 QUESTS（INSERT OR IGNORE，运营改过的行不会被重启覆盖）；
       -- 允许动态增删，被 quest_progress 引用中的行在业务层拒删

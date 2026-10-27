@@ -9,10 +9,12 @@ import { Color } from "cc";
  * 各算一遍（那是 O(n²)），客户端拿自己的快照一比即可。
  *
  * ## 优先级是**唯一一处**，改这里就全改
- * 拉黑 > 敌人 > 同帮 > 好友 > 同地图 > 普通：
+ * 拉黑 > 敌人 > 同队 > 同帮 > 好友 > 同地图 > 普通：
  * - **拉黑最高**：被拉黑的人本来就不该出现在我屏幕上（服务端也会把他的聊天与位置滤掉），
  *   万一有残帧漏进来（拉黑前已在场），也要按「拉黑」处理而不是按旧关系上色；
  * - 敌意覆盖其余一切 —— 把一个人标成敌人，就是要不管他是不是我好友/同帮都看得见红名；
+ * - **同队强于同帮强于好友**（#399）：组队是「此刻一起打怪」的临时关系，比组织与私交都更即时 ——
+ *   一个好友进了我的队，我要看得到「他是我队友」，而不是继续显示好友绿；
  * - 帮会身份强于私人好友 —— 同帮派是「组织关系」，比「我们互加了好友」更能说明立场。
  *
  * 判定的入口只有 `resolveRelation`：别在别处再写一遍 if/else，否则改优先级时必然漏一处
@@ -27,6 +29,8 @@ export const RELATION = {
   BLOCK: "block",
   /** 敌人：我把他标成了敌人（后续 PvP 击杀也会自动入列） */
   ENEMY: "enemy",
+  /** 同队（#399）：partyId 相同且不为空 —— 此刻一起打怪的人，名字是金色的 */
+  PARTY: "party",
   /** 同帮派：guildId 相同且不为空 */
   GUILD: "guild",
   /** 好友：双向好友关系（服务端两行都 accepted） */
@@ -44,6 +48,7 @@ export const RELATION_PRIORITY: RelationKind[] = [
   RELATION.SELF,
   RELATION.BLOCK,
   RELATION.ENEMY,
+  RELATION.PARTY,
   RELATION.GUILD,
   RELATION.FRIEND,
   RELATION.MAP,
@@ -61,6 +66,8 @@ export const relationColors: Record<RelationKind, Color> = {
   // 拉黑用暗灰：正常情况下根本看不到这个人（服务端已过滤），这个颜色只用在名单里
   [RELATION.BLOCK]: new Color(120, 126, 138, 255),
   [RELATION.ENEMY]: new Color(255, 91, 91, 255),
+  // 同队用金色（#399）：比同帮的蓝更暖、比好友的绿更亮，满屏里一眼能挑出「自己人」
+  [RELATION.PARTY]: new Color(255, 209, 102, 255),
   [RELATION.GUILD]: new Color(110, 168, 255, 255),
   [RELATION.FRIEND]: new Color(123, 224, 123, 255),
   [RELATION.MAP]: new Color(255, 255, 255, 255),
@@ -72,6 +79,7 @@ export const relationLabels: Record<RelationKind, string> = {
   [RELATION.SELF]: "自己",
   [RELATION.BLOCK]: "已拉黑",
   [RELATION.ENEMY]: "敌人",
+  [RELATION.PARTY]: "同队",
   [RELATION.GUILD]: "同帮",
   [RELATION.FRIEND]: "好友",
   [RELATION.MAP]: "同地图",
@@ -83,6 +91,13 @@ export interface RelationTarget {
   roleId: string;
   /** 所属帮会 id（空串 = 无帮会） */
   guildId: string;
+  /**
+   * 所在队伍 id（#399；空串 / 不传 = 没队伍）
+   *
+   * 可选：好友列表、聊天记录这类「他此刻可能不在线」的地方拿不到队伍 ——
+   * 没队伍就等同于「不同队」，判定结果落回同帮 / 好友那一档。
+   */
+  partyId?: string;
 }
 
 /** 我的社交快照（登录后 / 社交面板操作后刷新；只存 id，不含名字） */
@@ -104,6 +119,8 @@ export function resolveRelation(self: RelationSelf, target: RelationTarget, same
   // 用 indexOf 而不是 includes：客户端编译目标是 ES2015，includes 要 ES2016 的 lib
   if (self.blockIds.indexOf(target.roleId) >= 0) return RELATION.BLOCK;
   if (self.enemyIds.indexOf(target.roleId) >= 0) return RELATION.ENEMY;
+  // 同队（#399）：两边都有 partyId 且相同才算 —— 空串相等不能算「都叫没队伍的人」是一队
+  if (self.partyId && target.partyId && self.partyId === target.partyId) return RELATION.PARTY;
   if (self.guildId && target.guildId && self.guildId === target.guildId) return RELATION.GUILD;
   if (self.friendIds.indexOf(target.roleId) >= 0) return RELATION.FRIEND;
   return sameMap ? RELATION.MAP : RELATION.NORMAL;

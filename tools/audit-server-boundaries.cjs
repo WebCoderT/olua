@@ -75,6 +75,13 @@ const ALLOWED_EDGES = [
   { from: "modules/quest", to: "modules/game-config/dto/", why: "奖励 JSON 列解析复用（parseRewardItems）" },
   // realtime 结算把击杀事件递给任务服务（进度推进 + quest 帧接线，都经 QuestService 公开口）
   { from: "modules/realtime", to: "modules/quest/quest.service.ts", why: "击杀事件推进任务进度" },
+  // 队伍（#399）：队伍动作落在「账号的在线角色」上，与社交同一条理由 —— 不让队伍域自己摸账号表；
+  // 队伍帧的形状（party / partyInvite / expGain）与实时通道共用一份类型，所以引 realtime 的协议文件
+  { from: "modules/party", to: "modules/roles/roles.service.ts", why: "队伍动作取账号的在线角色与名字" },
+  { from: "modules/party", to: "modules/realtime/realtime.protocol.ts", why: "队伍帧形状与实时通道同源" },
+  // realtime → party：击杀者的同图队友要分经验（CombatSettlement 调 sharePartyExp），
+  // 进图补快照与互见帧的 partyId 也经 PartyService 的只读口
+  { from: "modules/realtime", to: "modules/party/party.service.ts", why: "队友分经验 + 队伍快照 + 互见 partyId" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -154,6 +161,9 @@ const REPO_EDGES = {
   // 击杀推进度（realtime 的 QuestService）与删除守卫（game-config 的 deleteQuest）是两条只读例外
   "database/repositories/quest.repository.ts": ["modules/game-config", "modules/quest"],
   "database/repositories/quest-progress.repository.ts": ["modules/quest", "modules/game-config"],
+  // 队伍（#399）：队伍与成员两表唯一写者是 party 域（PartyService）；
+  // realtime 只读（伤害结算要问「击杀者的同图队友」，进图补快照要问「他在哪个队」）
+  "database/repositories/party.repository.ts": ["modules/party", "modules/realtime"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

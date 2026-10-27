@@ -11,6 +11,7 @@ import { AccountRepository } from "../../database/repositories/account.repositor
 import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { BlockService } from "./block.service";
+import { PartyService } from "../party/party.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
@@ -116,6 +117,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly presence: PlayerPresenceService,
     private readonly chat: ChatService,
     private readonly blocks: BlockService,
+    private readonly party: PartyService,
     private readonly quests: QuestService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
@@ -216,6 +218,17 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     };
     // 私聊的在线判据：连接表是本服务的私产，给 ChatService 一个布尔答案就够
     this.chat.isConnected = (accountId) => this.connections.has(accountId);
+    // 队伍（#399）：三根线 —— 发帧、查在线位置、查屏蔽。
+    // 队伍态在库里、缓存在 PartyService，但「谁在线 / 在线的人在哪张图」只有通道知道。
+    this.party.sendTo = (accountId, frame) => {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, frame);
+    };
+    this.party.locationOf = (roleId) => this.presence.locateRole(roleId);
+    this.party.blockedFrom = (aRoleId, bRoleId) => this.blocks.hiddenFor(aRoleId, bRoleId);
+    // 在场表的队伍标记：组队 / 退队要立刻反映到别人的屏幕上（金色名字 + 队标），
+    // 所以每个广播节拍现查一次内存索引，而不是等外观懒刷新（5 秒）
+    this.presence.partyOfRole = (roleId) => this.party.partyIdOfRole(roleId);
     // 任务进度帧（#396）：只推给本人连接（击杀是唯一发生在 HTTP 之外的进度变化）
     this.quests.onProgress = (accountId, data) => {
       const socket = this.connections.get(accountId);
@@ -440,6 +453,31 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.chat.say(socket.identity.id, request);
       return;
     }
+    if (parsed?.type === "party") {
+      // 队伍（#399）：全部七个动作走同一条帧。身份取在场表（还没进图的人没有角色 / 地图，
+      // 组队对他就没有意义 —— 队伍要的「同图」和名字都依赖进图后的身份）
+      if (!parsed.data || typeof parsed.data !== "object") {
+        this.send(socket, { type: "error", data: { message: "party 消息缺 data" } });
+        return;
+      }
+      const identity = this.presence.identityOf(socket.identity.id);
+      if (!identity || !identity.roleId) {
+        this.send(socket, { type: "error", data: { message: "还没进图，先进入游戏地图再组队" } });
+        return;
+      }
+      const data = parsed.data as { action?: unknown; roleId?: unknown };
+      this.party.handle(
+        {
+          accountId: socket.identity.id,
+          roleId: identity.roleId,
+          name: identity.username,
+          mapId: identity.mapId,
+        },
+        data.action,
+        data.roleId,
+      );
+      return;
+    }
     if (parsed?.type === "pos") {
       // 位置上报（#323 AI 目标检测输入 + #324 玩家互见数据源）：格式不对就丢掉这条（高频帧，不值得回 error 刷屏）
       const position = parsePosition(parsed.data);
@@ -473,6 +511,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.send(socket, frame);
       // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
       this.presence.join(socket.identity.id, zoneId, join.mapId);
+      // 队伍（#399）：快照只在变化时发，重连 / 换图的人错过了那些变化 —— 进图补一份。
+      // 角色 id 取**账号行**的在线角色（不是在场表）：进图这一刻 pos 帧可能还没到，
+      // 而在场表里没条目就查不到「这个角色挂在谁的连接上」，队伍状态会假死到下一次变化
+      const onlineRoleId = this.accounts.findById(socket.identity.id)?.online_role_id ?? "";
+      if (onlineRoleId) this.party.pushSnapshotToAccount(socket.identity.id, onlineRoleId, join.mapId);
       return;
     }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });

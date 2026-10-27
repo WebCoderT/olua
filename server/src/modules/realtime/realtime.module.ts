@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { RolesModule } from "../roles/roles.module";
 import { QuestModule } from "../quest/quest.module";
+import { PartyModule } from "../party/party.module";
 import { WorldModule } from "../world/world.module";
 import { BlockService } from "./block.service";
 import { ChatService } from "./chat.service";
@@ -22,11 +23,13 @@ import { RealtimeService } from "./realtime.service";
  * 玩家互见（#324）是同一模式的第三个消费者：pos 帧喂出在场表，players 帧发出去。
  * 聊天（#395）是第四个：chat 帧进来，ChatService 按频道选好收件人列表，
  * 广播出口照旧由本模块接线（世界频道复用互见的观看者集合）。
+ * 队伍（#399）反过来：队伍态住 `PartyModule`（存档进程也要读），实时进程只是它的
+ * **收发口**（帧、连接位置、屏蔽判定三根线在本模块接上去）—— 经验分成也在结算侧调用它。
  * 屏蔽（#398）不是消费者而是**过滤器**：聊天投递与互见帧都要先问它「这个收件人拉黑了对方吗」，
  * 缓存（`BlockService`）住在本模块 —— 只有实时进程需要它，放社交模块会让 HTTP 进程也养一份。
  */
 @Module({
-  imports: [RolesModule, QuestModule, WorldModule],
+  imports: [RolesModule, QuestModule, WorldModule, PartyModule],
   controllers: [RealtimeController],
   providers: [RealtimeService, CombatSettlementService, MonsterAiService, PlayerPresenceService, ChatService, BlockService],
 })

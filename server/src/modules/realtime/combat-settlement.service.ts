@@ -11,8 +11,10 @@ import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { QuestService } from "../quest/quest.service";
+import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
 import { MonsterAiService } from "./monster-ai.service";
+import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from "./realtime.protocol";
 
 /**
@@ -76,6 +78,8 @@ export class CombatSettlementService {
     private readonly dropTables: DropTableRepository,
     private readonly growth: GrowthRepository,
     private readonly quests: QuestService,
+    private readonly party: PartyService,
+    private readonly presence: PlayerPresenceService,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -207,7 +211,7 @@ export class CombatSettlementService {
     // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受
     let reward: RealtimeKillReward | undefined;
     if (applied.killed) {
-      reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey);
+      reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey, this.roleNameOf(role));
       // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
       this.rememberDrops(accountId, cast.castId, reward.drops);
       // 任务击杀进度（#396）：写库失败不回滚击杀（QuestService 内部已兜成日志）
@@ -230,7 +234,15 @@ export class CombatSettlementService {
    * 标量读 **growth_scalars 表**（#256 管理端可改，即时生效），读不到退回生成物 seed 值；
    * 怪物等级来自 monsters 表行（#258 起结算直读库）。
    */
-  private settleKillReward(accountId: string, roleId: string, roleLevel: number, roleRevision: number, stats: MonsterRow, monsterKey: string): RealtimeKillReward {
+  private settleKillReward(
+    accountId: string,
+    roleId: string,
+    roleLevel: number,
+    roleRevision: number,
+    stats: MonsterRow,
+    monsterKey: string,
+    killerName: string,
+  ): RealtimeKillReward {
     const exp = this.killExpFor(roleLevel, stats.level);
     // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
     const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp) : null;
@@ -238,6 +250,9 @@ export class CombatSettlementService {
       this.logger.warn(`击杀奖励入账失败：账号 ${accountId} 角色 ${roleId}（可能已被下线），本次经验 ${exp} 未记`);
       return { exp: 0, level: roleLevel, expNow: 0, expNeed: 0, leveledUp: false, revision: roleRevision, drops: [] };
     }
+    // 队友分成（#399）：与击杀者的入账分开走 —— 击杀者那份照旧全额，
+    // 队友那份按他自己的等级差算，失败也不该影响击杀者的这一笔
+    this.sharePartyExp(accountId, roleId, stats.level, killerName);
     return {
       exp,
       level: applied ? applied.level : roleLevel,
@@ -247,6 +262,51 @@ export class CombatSettlementService {
       revision: applied ? applied.revision : roleRevision,
       drops: this.rollDrops(monsterKey),
     };
+  }
+
+  /**
+   * 队友经验分成（#399）
+   *
+   * 规则（写进 #399 认领留言的第 4 条）：**同图在线的队友**每人得
+   * `floor(killExp(他自己的等级, 怪物等级) × PARTY_EXP_MATE_SHARE)`，击杀者拿全额。
+   *
+   * - 不均分：击杀者不该因为带人变慢（那会让「组队」变成一种惩罚）；
+   * - 不加成：加成会引出「多开小号刷经验」，而这一刀没有反多开的机制；
+   * - 队友那份走**他自己的等级差**：高等级带小号打高级怪时，小号对那只怪的基数是 0，
+   *   乘任何比例还是 0 —— 拉小号这件事被公式本身挡住，不需要另加规则；
+   * - 离线 / 不同图 / 等级差过大的队友**不发帧**（没有经验可演），也不写库。
+   */
+  private sharePartyExp(killerAccountId: string, killerRoleId: string, monsterLevel: number, killerName: string): void {
+    const share = this.party.expMateShare();
+    if (share <= 0) return;
+    const mapId = this.presence.identityOf(killerAccountId)?.mapId ?? "";
+    const mates = this.party.sameMapMates(killerRoleId, mapId);
+    if (mates.length === 0) return;
+    for (const mate of mates) {
+      const role = this.roles.online(mate.accountId);
+      // 在线角色不是他（切角色 / 连接还没换过来）就跳过：入账必须落在**当前在线角色**上
+      if (!role || role.id !== mate.roleId) continue;
+      const gain = Math.floor(this.killExpFor(role.level, monsterLevel) * share);
+      if (gain <= 0) continue;
+      const applied = this.roles.applyKillExp(mate.accountId, mate.roleId, gain);
+      if (!applied) continue;
+      this.party.notifyExpGain(mate.accountId, {
+        exp: gain,
+        level: applied.level,
+        expNow: applied.expNow,
+        expNeed: applied.expNeed,
+        leveledUp: applied.leveledUp,
+        // revision 一并给：队友客户端照搬做新基线，否则下一次防抖存档会撞乐观锁（20006）
+        revision: applied.revision,
+        from: { roleId: killerRoleId, username: killerName },
+      });
+    }
+  }
+
+  /** 击杀者的显示名（`from` 字段用；取不到就空串，客户端飘字会退化成「队友击杀」） */
+  private roleNameOf(role: { data?: Record<string, unknown> }): string {
+    const name = role?.data?.name;
+    return typeof name === "string" ? name : "";
   }
 
   /** 击杀经验（与客户端 getKillExp 同口径；角色与怪物等级差为绝对值） */
