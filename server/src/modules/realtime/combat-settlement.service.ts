@@ -10,6 +10,7 @@ import { MonsterRepository } from "../../database/repositories/monster.repositor
 import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
+import { QuestService } from "../quest/quest.service";
 import { WorldService } from "../world/world.service";
 import { MonsterAiService } from "./monster-ai.service";
 import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from "./realtime.protocol";
@@ -74,6 +75,7 @@ export class CombatSettlementService {
     private readonly monsterDrops: MonsterDropRepository,
     private readonly dropTables: DropTableRepository,
     private readonly growth: GrowthRepository,
+    private readonly quests: QuestService,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -208,6 +210,8 @@ export class CombatSettlementService {
       reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey);
       // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
       this.rememberDrops(accountId, cast.castId, reward.drops);
+      // 任务击杀进度（#396）：写库失败不回滚击杀（QuestService 内部已兜成日志）
+      this.quests.onMonsterKilled({ accountId, roleId: role.id, monsterKey: cast.monsterKey });
     }
 
     this.logger.debug(

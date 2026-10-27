@@ -70,6 +70,11 @@ const ALLOWED_EDGES = [
   // 社交（#388/#389）：所有帮会 / 好友动作都落在「账号的在线角色」上，
   // 而哪个角色在线只有存档域知道（accounts.online_role_id）—— 不让社交域自己摸账号表
   { from: "modules/social", to: "modules/roles/roles.service.ts", why: "社交动作取账号的在线角色" },
+  // 任务（#396）：接取 / 交付落在账号的在线角色上；交付发奖走存档域的单次落库方法
+  { from: "modules/quest", to: "modules/roles/roles.service.ts", why: "任务动作取在线角色与交付发奖" },
+  { from: "modules/quest", to: "modules/game-config/dto/", why: "奖励 JSON 列解析复用（parseRewardItems）" },
+  // realtime 结算把击杀事件递给任务服务（进度推进 + quest 帧接线，都经 QuestService 公开口）
+  { from: "modules/realtime", to: "modules/quest/quest.service.ts", why: "击杀事件推进任务进度" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -122,8 +127,9 @@ const REPO_EDGES = {
   // 怪物基础数据（#258）：game-config 读写之外，世界播种（world）与伤害结算（realtime）
   // 也直读本表 —— 管理端改数值即时生效（快照只作 seed 来源，结算不走生成物）
   "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime"],
-  // NPC 基础数据（#258）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
-  "database/repositories/npc.repository.ts": ["modules/game-config"],
+  // NPC 基础数据（#258）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；
+  // 任务（#396）的 npc-talk 也读（对话文案 + 存在性校验）
+  "database/repositories/npc.repository.ts": ["modules/game-config", "modules/quest"],
   // 商城定价（#251）：同上，只在 game-config 模块内读写（特殊价行动态增删，商品清单来自生成物）
   "database/repositories/mall.repository.ts": ["modules/game-config"],
   // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
@@ -141,6 +147,10 @@ const REPO_EDGES = {
   // 帮会（#388）：社交域独占三张表的读写（管理端控制器也在 social 域内，不额外开边）
   "database/repositories/guild.repository.ts": ["modules/social", "modules/realtime"],
   "database/repositories/social.repository.ts": ["modules/social"],
+  // 任务（#396）：配置表读写归 game-config（管理端页 + seed），进度表归 quest 域；
+  // 击杀推进度（realtime 的 QuestService）与删除守卫（game-config 的 deleteQuest）是两条只读例外
+  "database/repositories/quest.repository.ts": ["modules/game-config", "modules/quest"],
+  "database/repositories/quest-progress.repository.ts": ["modules/quest", "modules/game-config"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

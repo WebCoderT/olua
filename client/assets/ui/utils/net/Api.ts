@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, Login, MallPurchase, MallPurchaseResult, MyGuild, MySocial, RealtimeTicket, Register, ReviewGuildApplication, RoleDetail, RoleSummary, SaveRole, SocialTarget, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
+import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, CreateRole, DrugUse, DrugUseResult, GameConfigSnapshot, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, Login, MallPurchase, MallPurchaseResult, MyGuild, MyQuests, MySocial, NpcTalk, NpcTalkResult, QuestId, QuestSubmitResult, RealtimeTicket, Register, ReviewGuildApplication, RoleDetail, RoleSummary, SaveRole, SocialTarget, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -27,7 +27,7 @@ import type { Account, ActiveAnnouncement, ApplyGuild, AuthResult, CreateGuild, 
 type Options = Omit<RequestOptions, "method" | "path" | "body">;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, MySocial, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateQuest, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, MyQuests, MySocial, Npc, NpcPage, NpcQuery, NpcTalk, NpcTalkResult, PageMeta, PageQuery, PutMallPrice, Quest, QuestId, QuestObjective, QuestPage, QuestQuery, QuestRewardItem, QuestRewardResult, QuestRewards, QuestState, QuestSubmitResult, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateQuest, UpdateQuestObjective, UpdateQuestRewards, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./ApiModels";
 
 /** announcement 模块的接口（1 个，生成） */
 export const AnnouncementApi = {
@@ -143,6 +143,34 @@ export const HealthApi = {
    * 无需登录；用于客户端 / 管理端确认服务端可达。
    */
   check: (options?: Options) => HttpClient.get<Health>(ApiRoutes.health.check, { auth: false, ...options }),
+};
+
+/** quest 模块的接口（4 个，生成） */
+export const QuestApi = {
+  /**
+   * 接取任务（POST /quests/accept）
+   *
+   * 等级（20016）与主线链前置（20015）在服务端复核；重复接取（含已完成的主线）返回 20015。接取成功返回最新快照。
+   */
+  accept: (body: QuestId, options?: Options) => HttpClient.post<MyQuests>(ApiRoutes.quest.accept, body, options),
+  /**
+   * 我的任务快照（GET /quests/me）
+   *
+   * 当前角色的全部进度行（accepted / ready / claimed）。**可接任务不在内**：客户端按配置快照（quests）与 claimed 行自己算「哪些能接」（等级 / 前置链都是纯读计算）。
+   */
+  mine: (options?: Options) => HttpClient.get<MyQuests>(ApiRoutes.quest.mine, options),
+  /**
+   * 与 NPC 对话（POST /quests/npc-talk）
+   *
+   * talk 型目标的进度入口：推进进行中的对话任务（到量转 ready）；同时带回该 NPC 名下全部任务的状态（含可接但未接的 `available`）与管理端配置的对话文案。NPC 不存在返回 50020。
+   */
+  npcTalk: (body: NpcTalk, options?: Options) => HttpClient.post<NpcTalkResult>(ApiRoutes.quest.npcTalk, body, options),
+  /**
+   * 交付任务并领奖（POST /quests/submit）
+   *
+   * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（金币 / 经验 / 物品）与扣材料**一次落库**；日常（daily）领奖后删行可重接，主线（main）保留 claimed 行作链门控。返回最新快照与奖励结算。
+   */
+  submit: (body: QuestId, options?: Options) => HttpClient.post<QuestSubmitResult>(ApiRoutes.quest.submit, body, options),
 };
 
 /** realtime 模块的接口（1 个，生成） */

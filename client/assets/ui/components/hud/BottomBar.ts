@@ -10,6 +10,7 @@ import BagDialog from "../dialogs/BagDialog";
 import MallDialog from "../dialogs/MallDialog";
 import SkillListDialog from "../dialogs/SkillListDialog";
 import ChatDialog from "../dialogs/ChatDialog";
+import QuestDialog from "../dialogs/QuestDialog";
 import BottomNavBar from "./BottomNavBar";
 import RoleExpBar from "./RoleExpBar";
 import RoleHpOrb from "./RoleHpOrb";
@@ -34,6 +35,8 @@ export default class BottomBar extends Node {
   private skillListDialog = new SkillListDialog();
   /** 聊天弹窗（#395：世界 / 帮会 / 私聊） */
   private chatDialog = new ChatDialog();
+  /** 任务弹窗（#396：进行中 / 可接，接取与交付都在这里） */
+  private questDialog = new QuestDialog();
   /** 功能按键区 */
   private navBar: BottomNavBar;
   /** 经验条 */
@@ -79,6 +82,7 @@ export default class BottomBar extends Node {
       role: () => this.roleInfoDialog.open(),
       bag: () => this.bagDialog.open(),
       chat: () => this.chatDialog.open(),
+      task: () => this.questDialog.open(),
       mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
     };
@@ -88,6 +92,11 @@ export default class BottomBar extends Node {
   /** 每帧刷新快捷键冷却显示（由组合根驱动） */
   updateCooldowns() {
     this.shortcutKeyBar.updateCooldowns();
+  }
+
+  /** 打开任务面板（任务追踪栏点一下就走这里，见 Game 里的 QuestTracker 接线） */
+  openQuests() {
+    this.questDialog.open();
   }
 
   /** 贴边定位（贴屏幕底部居中按可见尺寸重算）——窗口尺寸变化时由组合根调用 */

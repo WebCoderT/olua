@@ -45,6 +45,8 @@ export class ClientConfigService {
       // #367：技能与状态的整份配置（角色 + 怪物），客户端按 owner 分流消费
       skills: this.gameConfig.listSkills({ ...ALL }).list,
       statuses: this.gameConfig.listStatuses({ ...ALL }).list,
+      // #396：任务配置（主线链 / 日常 / 单目标 / 奖励）
+      quests: this.gameConfig.listQuests({ ...ALL }).list,
     };
   }
 }

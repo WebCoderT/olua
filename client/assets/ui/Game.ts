@@ -9,6 +9,7 @@ import RoleInfoBar from "./components/hud/RoleInfoBar";
 import MonsterInfoPanel from "./components/hud/MonsterInfoPanel";
 import MonsterSelectIndicator from "./components/hud/MonsterSelectIndicator";
 import SmallMap from "./components/hud/SmallMap";
+import QuestTracker from "./components/hud/QuestTracker";
 import Joystick from "./components/hud/Joystick";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
@@ -25,6 +26,8 @@ import OtherPlayerManager from "./core/OtherPlayerManager";
 import SocialStore from "./core/SocialStore";
 import ChatStore from "./core/ChatStore";
 import ChatBubbles from "./core/ChatBubbles";
+import QuestStore from "./core/QuestStore";
+import QuestNpcMarks from "./core/QuestNpcMarks";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
@@ -39,6 +42,7 @@ import GameUiHelper from "./helpers/GameUiHelper";
 import RoleSync from "./utils/net/RoleSync";
 import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
 import CombatChannel from "./utils/net/CombatChannel";
+import { QuestApi } from "./utils/net/Api";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import { loadGameConfig } from "./utils/net/ConfigLoader";
 import { describeError } from "./utils/net/ApiError";
@@ -63,6 +67,8 @@ export class Game extends Component {
   private roleInfoBar: RoleInfoBar | null = null;
   /** 小地图（右上角：地图名称/世界坐标/角色黑点/附近怪物红点） */
   private smallMap: SmallMap | null = null;
+  /** 任务追踪栏（左侧常驻，进行中的任务与进度；点一下开任务面板） */
+  private questTracker: QuestTracker | null = null;
   /** 操作摇杆（左下角常驻，按住拖动即移动；手感参数见 configs/role.joystickMove） */
   private joystick: Joystick | null = null;
   /** 死亡遮罩弹窗（进入死亡流程时创建、复活后销毁） */
@@ -137,6 +143,9 @@ export class Game extends Component {
     // 气泡订阅同一个仓；弹窗开着时它自己挂起气泡并增量上屏
     ChatStore.setSelf(RealtimeClient.onlineUserId ?? "");
     CombatChannel.onChat = (entry) => ChatStore.applyEntry(entry);
+    // 任务（#396）：quest 帧只推给本人，落进 QuestStore（追踪栏 / 弹窗 / NPC 标记都读它）
+    CombatChannel.onQuest = (frame) =>
+      QuestStore.applyState({ questId: frame.questId, status: frame.status as "accepted" | "ready", progress: frame.progress, target: frame.target });
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -151,6 +160,12 @@ export class Game extends Component {
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
+    // 任务（#396）：等级用于「可接」判定（服务端只下发有进度行的任务），
+    // 进图拉一次全量进度；之后的变化走 quest 帧（打怪 / 对话）与面板里的接取/交付响应
+    QuestStore.setLevel(role?.level ?? 0);
+    void QuestApi.mine()
+      .then((snapshot) => QuestStore.applyStates(snapshot.quests))
+      .catch(() => undefined);
     // 初始化图层（含掉落物层/怪物层）
     LayerManager.initLayer(this.node, this.camera);
     // 预加载：地图信息 → 地图内 NPC/怪物帧动画 → 当前角色穿戴的帧动画（见 core/PreloadManager）
@@ -177,6 +192,9 @@ export class Game extends Component {
     this.roleInfoBar = new RoleInfoBar(role);
     LayerManager.addToUILayer(this.roleInfoBar);
     RoleUIManager.registerRoleInfoBar(this.roleInfoBar);
+    /** 任务追踪栏（左侧常驻；点一下开任务面板 —— 面板归底部栏持有，这里只给回调） */
+    this.questTracker = new QuestTracker(() => this.bottomBar?.openQuests());
+    LayerManager.addToUILayer(this.questTracker);
     /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
     this.smallMap = new SmallMap(this.roleDisplay);
     LayerManager.addToUILayer(this.smallMap);
@@ -251,6 +269,7 @@ export class Game extends Component {
     CombatChannel.onPlayers = null;
     CombatChannel.onPicked = null;
     CombatChannel.onChat = null;
+    CombatChannel.onQuest = null;
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();
@@ -259,6 +278,11 @@ export class Game extends Component {
     // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
     ChatStore.reset();
     ChatBubbles.reset();
+    // 任务同理（进度行不跨角色；NPC 头顶标记挂在地图层，随场景一起清）
+    this.questTracker?.dispose();
+    this.questTracker = null;
+    QuestStore.reset();
+    QuestNpcMarks.reset();
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消

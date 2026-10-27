@@ -28,6 +28,8 @@ import { StatusRepository } from "./repositories/status.repository";
 import { MonsterSkillRepository } from "./repositories/monster-skill.repository";
 import { GuildRepository } from "./repositories/guild.repository";
 import { SocialRepository } from "./repositories/social.repository";
+import { QuestRepository } from "./repositories/quest.repository";
+import { QuestProgressRepository } from "./repositories/quest-progress.repository";
 
 /**
  * 数据层（全局模块）
@@ -69,6 +71,8 @@ import { SocialRepository } from "./repositories/social.repository";
     MonsterSkillRepository,
     GuildRepository,
     SocialRepository,
+    QuestRepository,
+    QuestProgressRepository,
   ],
   exports: [
     DatabaseService,
@@ -100,6 +104,8 @@ import { SocialRepository } from "./repositories/social.repository";
     MonsterSkillRepository,
     GuildRepository,
     SocialRepository,
+    QuestRepository,
+    QuestProgressRepository,
   ],
 })
 export class DatabaseModule {}

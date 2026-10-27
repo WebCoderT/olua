@@ -296,6 +296,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchChat(frame.data);
       return;
     }
+    if (frame.type === "quest") {
+      // 任务进度（#396）：只推给本人，形状的解释在 CombatChannel
+      CombatChannel.dispatchQuest(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
   }

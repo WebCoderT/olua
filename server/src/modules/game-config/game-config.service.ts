@@ -13,6 +13,8 @@ import { SkillRepository, SkillListOptions } from "../../database/repositories/s
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
 import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
+import { QuestRepository, QuestListOptions } from "../../database/repositories/quest.repository";
+import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
 import {
@@ -23,6 +25,7 @@ import {
   MonsterRow,
   MonsterSkillRow,
   NpcRow,
+  QuestRow,
   RankRow,
   SkillRow,
   SoulRow,
@@ -37,6 +40,8 @@ import {
   MONSTER_SKILLS,
   MONSTERS,
   NPCS,
+  QUESTS,
+  ITEM_TYPES,
   RANK_LABELS,
   RANK_LEVEL_ATTRIBUTES,
   RANK_LEVEL_META,
@@ -55,6 +60,7 @@ import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from ".
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
+import { CreateQuestDto, parseRewardItems, QuestDto, QuestObjectiveDto, QuestQueryDto, QuestRewardsDto, UpdateQuestDto } from "./dto/quest.dto";
 import { CreateSkillDto, parseDamageCoefficients, SkillDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
 import { MonsterSkillDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
 import { serializeCombat, StatusDto, StatusQueryDto, UpdateStatusDto } from "./dto/status.dto";
@@ -99,6 +105,8 @@ export class GameConfigService implements OnModuleInit {
     private readonly skillsRepo: SkillRepository,
     private readonly statusesRepo: StatusRepository,
     private readonly monsterSkillsRepo: MonsterSkillRepository,
+    private readonly questsRepo: QuestRepository,
+    private readonly questProgressRepo: QuestProgressRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -115,6 +123,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedSkills();
     this.seedStatuses();
     this.seedMonsterSkills();
+    this.seedQuests();
   }
 
   // —— 称号 ——
@@ -664,6 +673,98 @@ export class GameConfigService implements OnModuleInit {
     return StatusDto.from(this.requireStatus(id));
   }
 
+  // —— 任务配置（#396：允许动态增删；被进度 / 链前置引用中的行拒删）——
+
+  listQuests(query: QuestQueryDto): PageResult<QuestDto> {
+    const options: QuestListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      kind: query.kind,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.questsRepo.list(options);
+    const total = this.questsRepo.count(options);
+    return { list: rows.map(QuestDto.from), total, page: options.page, size: options.size };
+  }
+
+  updateQuest(id: string, dto: UpdateQuestDto): QuestDto {
+    const existing = this.requireQuest(id);
+    // objective / rewards 逐字段合并（items 传了就整份替换）——比「传了就整份替换」宽松一档：
+    // 管理端只改金币时不至于把物品清单静默清空
+    const objective = dto.objective ?? {};
+    const rewards = dto.rewards ?? {};
+    const next: QuestRow = {
+      ...existing,
+      kind: dto.kind ?? existing.kind,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      prev_quest_id: dto.prevQuestId ?? existing.prev_quest_id,
+      min_level: dto.minLevel ?? existing.min_level,
+      npc_id: dto.npcId ?? existing.npc_id,
+      objective_type: objective.type ?? existing.objective_type,
+      objective_target: objective.target ?? existing.objective_target,
+      objective_count: objective.count ?? existing.objective_count,
+      reward_gold: rewards.gold ?? existing.reward_gold,
+      reward_exp: rewards.exp ?? existing.reward_exp,
+      reward_items: JSON.stringify(
+        (rewards.items ?? parseRewardItems(existing.reward_items)).map((item) => ({ goodId: item.goodId, count: item.count })),
+      ),
+      updated_at: Date.now(),
+    };
+    this.assertQuestConsistency(next);
+    this.questsRepo.update(next);
+    return QuestDto.from(this.requireQuest(id));
+  }
+
+  /** 新建任务（id 唯一；跨字段校验与 update 同一套） */
+  createQuest(dto: CreateQuestDto): QuestDto {
+    if (this.questsRepo.findByKey(dto.id)) {
+      throw new BizException(BizCode.PARAM_INVALID, `任务 ${dto.id} 已存在`);
+    }
+    const row: QuestRow = {
+      id: dto.id,
+      kind: dto.kind ?? "main",
+      label: dto.label ?? `任务 ${dto.id}`,
+      description: dto.description ?? "",
+      prev_quest_id: dto.prevQuestId ?? "",
+      min_level: dto.minLevel ?? 1,
+      npc_id: dto.npcId ?? "",
+      objective_type: dto.objective?.type ?? "kill",
+      objective_target: dto.objective?.target ?? "",
+      objective_count: dto.objective?.count ?? 1,
+      reward_gold: dto.rewards?.gold ?? 0,
+      reward_exp: dto.rewards?.exp ?? 0,
+      reward_items: JSON.stringify(
+        (dto.rewards?.items ?? []).map((item) => ({ goodId: item.goodId, count: item.count })),
+      ),
+      updated_at: Date.now(),
+    };
+    this.assertQuestConsistency(row);
+    this.questsRepo.insert(row);
+    return QuestDto.from(this.requireQuest(dto.id));
+  }
+
+  /**
+   * 删除任务 —— 两条拒绝，与掉落表「被引用中拒删」同一纪律：
+   * - 有玩家进度（哪怕只是 accepted）→ 先清进度再删，否则那些角色永远卡在一个不存在的任务上；
+   * - 被别的任务当主线链前置 → 先解开那条链再删，否则后继任务永远接不了。
+   */
+  deleteQuest(id: string): { deleted: boolean } {
+    this.requireQuest(id);
+    const progress = this.questProgressRepo.countByQuest(id);
+    if (progress > 0) {
+      throw new BizException(BizCode.PARAM_INVALID, `任务 ${id} 仍被 ${progress} 个角色的进度引用，先清理进度再删`);
+    }
+    const followers = this.questsRepo.listAll().filter((row) => row.prev_quest_id === id);
+    if (followers.length > 0) {
+      throw new BizException(BizCode.PARAM_INVALID, `任务 ${id} 是 ${followers.map((row) => row.id).join("、")} 的主线链前置，先解除引用再删`);
+    }
+    this.questsRepo.remove(id);
+    return { deleted: true };
+  }
+
   // —— 内部 ——
 
   /**
@@ -754,6 +855,62 @@ export class GameConfigService implements OnModuleInit {
     const row = this.npcsRepo.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.NPC_NOT_FOUND, `NPC ${id} 不存在`);
     return row;
+  }
+
+  private requireQuest(id: string): QuestRow {
+    const row = this.questsRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.QUEST_NOT_FOUND, `任务 ${id} 不存在`);
+    return row;
+  }
+
+  /**
+   * 任务跨字段约束（单字段上下限在 DTO，这里管「字段之间」）——
+   * 四条都是真实会出事的组合：
+   * - 目标键指向不存在的怪物 / NPC / 物品 → 任务永远做不完；
+   * - 发布 NPC 不存在 → 客户端头顶标记没有落点；
+   * - prevQuestId 指向不存在的任务或成环 → 后继任务永远接不了；
+   * - 奖励物品不存在 → 交付时才炸，玩家看着「可交付」按钮点不出结果。
+   */
+  private assertQuestConsistency(row: QuestRow): void {
+    if (row.objective_type === "kill") {
+      if (!(String(row.objective_target) in (MONSTERS as Record<string, unknown>))) {
+        throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的击杀目标 ${row.objective_target} 不是已配置的怪物`);
+      }
+    } else if (row.objective_type === "talk") {
+      if (!(row.objective_target in (NPCS as Record<string, unknown>))) {
+        throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的对话目标 ${row.objective_target} 不是已配置的 NPC`);
+      }
+    } else if (!(row.objective_target in (ITEM_TYPES as Record<string, unknown>))) {
+      throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的收集目标 ${row.objective_target} 不是已配置的物品`);
+    }
+    if (row.npc_id && !(row.npc_id in (NPCS as Record<string, unknown>))) {
+      throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的发布 NPC ${row.npc_id} 不是已配置的 NPC`);
+    }
+    if (row.prev_quest_id) {
+      if (row.prev_quest_id === row.id) {
+        throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的前置不能是自己`);
+      }
+      const chain = new Map(this.questsRepo.listAll().map((item) => [item.id, item.prev_quest_id]));
+      if (!chain.has(row.prev_quest_id)) {
+        throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的前置 ${row.prev_quest_id} 不存在`);
+      }
+      // 沿前置链向上走：走回自己 = 成环（链上任何一环成环都会让后继永远接不了）
+      chain.set(row.id, row.prev_quest_id);
+      const seen = new Set<string>([row.id]);
+      let cursor = row.prev_quest_id;
+      while (cursor) {
+        if (seen.has(cursor)) {
+          throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的前置链成环（经过 ${cursor}）`);
+        }
+        seen.add(cursor);
+        cursor = chain.get(cursor) ?? "";
+      }
+    }
+    for (const item of parseRewardItems(row.reward_items)) {
+      if (!(item.goodId in (ITEM_TYPES as Record<string, unknown>))) {
+        throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的奖励物品 ${item.goodId} 不存在`);
+      }
+    }
   }
 
   private requireFashion(id: string): FashionRow {
@@ -897,6 +1054,35 @@ export class GameConfigService implements OnModuleInit {
         id,
         label: String(meta.label ?? ""),
         dialog: "",
+        updated_at: 0,
+      });
+    }
+  }
+
+  /** 任务 seed（#396）：QUESTS 整行快照直接灌；reward_items 落库前序列化成 JSON */
+  private seedQuests() {
+    for (const [id, meta] of Object.entries(QUESTS as Record<string, Record<string, unknown>>)) {
+      const objective = (meta.objective ?? {}) as Record<string, unknown>;
+      const rewards = (meta.rewards ?? {}) as Record<string, unknown>;
+      this.questsRepo.seedRow({
+        id,
+        kind: String(meta.kind ?? "main"),
+        label: String(meta.label ?? ""),
+        description: String(meta.description ?? ""),
+        prev_quest_id: String(meta.prevQuestId ?? ""),
+        min_level: Number(meta.minLevel) || 1,
+        npc_id: String(meta.npcId ?? ""),
+        objective_type: String(objective.type ?? "kill"),
+        objective_target: String(objective.target ?? ""),
+        objective_count: Number(objective.count) || 1,
+        reward_gold: Number(rewards.gold) || 0,
+        reward_exp: Number(rewards.exp) || 0,
+        reward_items: JSON.stringify(
+          (Array.isArray(rewards.items) ? rewards.items : []).map((item) => {
+            const entry = (item ?? {}) as Record<string, unknown>;
+            return { goodId: String(entry.goodId ?? ""), count: Number(entry.count) || 1 };
+          }),
+        ),
         updated_at: 0,
       });
     }

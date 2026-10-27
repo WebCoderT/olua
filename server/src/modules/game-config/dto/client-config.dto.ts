@@ -13,6 +13,7 @@ import { NpcDto } from "./npc.dto";
 import { RankDto } from "./rank.dto";
 import { SkillDto } from "./skill.dto";
 import { StatusDto } from "./status.dto";
+import { QuestDto } from "./quest.dto";
 import { SoulDto } from "./soul.dto";
 import { TitleDto } from "./title.dto";
 
@@ -100,4 +101,8 @@ export class GameConfigSnapshotDto {
   @ApiProperty({ description: "状态配置（角色与怪物同表，owner 区分）", type: [StatusDto] })
   @Type(() => StatusDto)
   statuses!: StatusDto[];
+
+  @ApiProperty({ description: "任务配置（#396：主线链 / 日常 / 单目标 / 奖励）", type: [QuestDto] })
+  @Type(() => QuestDto)
+  quests!: QuestDto[];
 }

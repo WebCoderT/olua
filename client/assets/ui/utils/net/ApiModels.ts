@@ -883,6 +883,121 @@ export type UpdateNpc = {
   dialog?: string;
 };
 
+export type UpdateQuestObjective = {
+  /**
+   * 目标类型
+   */
+  type?: "kill" | "talk" | "collect";
+  /**
+   * 目标键（非空）
+   */
+  target?: string;
+  /**
+   * 目标数量（1~9999）
+   */
+  count?: number;
+};
+
+export type QuestRewardItem = {
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 数量
+   */
+  count: number;
+};
+
+export type UpdateQuestRewards = {
+  /**
+   * 金币（≥0）
+   */
+  gold?: number;
+  /**
+   * 经验（≥0）
+   */
+  exp?: number;
+  /**
+   * 物品清单（≤20 条；goodId 非空、count 1~9999）
+   */
+  items?: QuestRewardItem[];
+};
+
+export type UpdateQuest = {
+  /**
+   * 类型
+   */
+  kind?: "main" | "daily";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤500 字）
+   */
+  description?: string;
+  /**
+   * 主线链前置任务 id（空串 = 无前置）
+   */
+  prevQuestId?: string;
+  /**
+   * 接取最低等级（1~999）
+   */
+  minLevel?: number;
+  /**
+   * 发布 NPC id
+   */
+  npcId?: string;
+  /**
+   * 目标（传了就整份替换）
+   */
+  objective?: UpdateQuestObjective;
+  /**
+   * 奖励（传了就整份替换）
+   */
+  rewards?: UpdateQuestRewards;
+};
+
+export type CreateQuest = {
+  /**
+   * 类型
+   */
+  kind?: "main" | "daily";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤500 字）
+   */
+  description?: string;
+  /**
+   * 主线链前置任务 id（空串 = 无前置）
+   */
+  prevQuestId?: string;
+  /**
+   * 接取最低等级（1~999）
+   */
+  minLevel?: number;
+  /**
+   * 发布 NPC id
+   */
+  npcId?: string;
+  /**
+   * 目标（传了就整份替换）
+   */
+  objective?: UpdateQuestObjective;
+  /**
+   * 奖励（传了就整份替换）
+   */
+  rewards?: UpdateQuestRewards;
+  /**
+   * 任务 id（唯一；建议主线 8000 段 / 日常 8100 段）
+   */
+  id: string;
+};
+
 export type UpdateMallSettings = {
   /**
    * 全场统一售价（绑定元宝/件）
@@ -1099,6 +1214,24 @@ export type SocialTarget = {
    * 对方角色名（手动输入时用；角色名只在同一账号内唯一，重名会返回 50116）
    */
   name?: string;
+};
+
+export type QuestId = {
+  /**
+   * 任务 id
+   */
+  questId: string;
+};
+
+export type NpcTalk = {
+  /**
+   * NPC id
+   */
+  npcId: string;
+  /**
+   * 预留字段（v1 无对话分支）
+   */
+  option?: string;
 };
 
 export type PageMeta = {
@@ -3890,6 +4023,196 @@ export type StatusQuery = {
   owner?: "role" | "monster";
 };
 
+export type QuestObjective = {
+  /**
+   * 目标类型：kill 击杀怪物 / talk 与 NPC 对话 / collect 收集物品
+   */
+  type: "kill" | "talk" | "collect";
+  /**
+   * 目标键：kill = 怪物 key / talk = NPC id / collect = 物品 id
+   */
+  target: string;
+  /**
+   * 目标数量
+   */
+  count: number;
+};
+
+export type QuestRewards = {
+  /**
+   * 金币
+   */
+  gold: number;
+  /**
+   * 经验
+   */
+  exp: number;
+  /**
+   * 物品清单
+   */
+  items: QuestRewardItem[];
+};
+
+export type Quest = {
+  /**
+   * 任务 id（主线 8000 段 / 日常 8100 段）
+   */
+  id: string;
+  /**
+   * 类型：main 主线（一次性）/ daily 日常（领奖后可重接）
+   */
+  kind: "main" | "daily";
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 主线链前置任务 id（空串 = 无前置）
+   */
+  prevQuestId: string;
+  /**
+   * 接取最低等级
+   */
+  minLevel: number;
+  /**
+   * 发布 NPC id
+   */
+  npcId: string;
+  /**
+   * 目标（单目标，v1 边界）
+   */
+  objective: QuestObjective;
+  /**
+   * 奖励
+   */
+  rewards: QuestRewards;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type QuestPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的任务配置
+   */
+  list: Quest[];
+};
+
+export type QuestQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 类型筛选：main | daily
+   */
+  kind?: string;
+};
+
+export type QuestState = {
+  /**
+   * 任务 id
+   */
+  questId: string;
+  /**
+   * 状态：available 可接（无进度行）/ accepted 进行中 / ready 可交付 / claimed 已领奖
+   */
+  status: "available" | "accepted" | "ready" | "claimed";
+  /**
+   * 当前进度（kill/talk 为累计次数；collect 为背包持有量与目标取小）
+   */
+  progress: number;
+  /**
+   * 目标数量（来自任务配置，客户端免查快照比对）
+   */
+  target: number;
+};
+
+export type MyQuests = {
+  /**
+   * 全部进度行（可接的任务不在内 —— 可接态由客户端按快照配置与 claimed 行计算）
+   */
+  quests: QuestState[];
+};
+
+export type QuestRewardResult = {
+  /**
+   * 金币
+   */
+  gold: number;
+  /**
+   * 经验
+   */
+  exp: number;
+  /**
+   * 物品清单
+   */
+  items: unknown[];
+  /**
+   * 发奖后等级
+   */
+  level: number;
+  /**
+   * 是否升级
+   */
+  leveledUp: boolean;
+};
+
+export type QuestSubmitResult = {
+  /**
+   * 交付后的任务快照
+   */
+  quests: QuestState[];
+  /**
+   * 本次奖励结算
+   */
+  reward: QuestRewardResult;
+};
+
+export type NpcTalkResult = {
+  /**
+   * 对话文案（管理端 npcs 表的 dialog 列，空串 = 未配置）
+   */
+  dialog: string;
+  /**
+   * 该 NPC 名下全部任务在当前角色上的状态（含可接但未接的）
+   */
+  quests: QuestState[];
+};
+
 export type MallSettings = {
   /**
    * 全场统一售价（绑定元宝/件；特殊价优先于它）
@@ -4254,6 +4577,10 @@ export type GameConfigSnapshot = {
    * 状态配置（角色与怪物同表，owner 区分）
    */
   statuses: Status[];
+  /**
+   * 任务配置（#396：主线链 / 日常 / 单目标 / 奖励）
+   */
+  quests: Quest[];
 };
 
 export type GuildSummary = {

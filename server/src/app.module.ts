@@ -21,6 +21,7 @@ import { TokenModule } from "./modules/token/token.module";
 import { WorldModule } from "./modules/world/world.module";
 import { ZoneModule } from "./modules/zone/zone.module";
 import { SocialModule } from "./modules/social/social.module";
+import { QuestModule } from "./modules/quest/quest.module";
 
 /**
  * 应用根模块
@@ -65,6 +66,7 @@ export class AppModule {
         MailModule,
         ZoneModule,
         SocialModule,
+        QuestModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

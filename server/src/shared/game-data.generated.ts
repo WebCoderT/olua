@@ -3803,6 +3803,15 @@ export const ITEM_BASES: Record<string, unknown> = {
   "material_herb": {"type":"material","label":"药草","description":"常见的草药，可用于炼制药品。","level":1,"sellPrice":2,"maxStack":99},
 };
 
+/** 任务 id → { kind main|daily, label, description, prevQuestId 主线链前置, minLevel, npcId 发布 NPC, objective 单目标 kill|talk|collect, rewards { gold, exp, items } }（#396；服务端 quests 表的 seed 来源） */
+export const QUESTS: Record<string, unknown> = {
+  "8001": {"kind":"main","label":"初入大陆","description":"拜访大陆传送官，了解这片大陆的现状。","prevQuestId":"","minLevel":1,"npcId":"0002","objective":{"type":"talk","target":"0002","count":1},"rewards":{"gold":500,"exp":100,"items":[]}},
+  "8002": {"kind":"main","label":"除鸡令","description":"村外的赤焰斗鸡扰民已久，替传送官清理 5 只。","prevQuestId":"8001","minLevel":1,"npcId":"0002","objective":{"type":"kill","target":"1","count":5},"rewards":{"gold":800,"exp":200,"items":[{"goodId":"material_hide","count":2}]}},
+  "8003": {"kind":"main","label":"皮料筹措","description":"传送官要修补货车，交付 3 张兽皮（material_hide）。","prevQuestId":"8002","minLevel":1,"npcId":"0002","objective":{"type":"collect","target":"material_hide","count":3},"rewards":{"gold":1000,"exp":300,"items":[{"goodId":"material_iron","count":1}]}},
+  "8004": {"kind":"main","label":"战魂之门","description":"带着铁料去见战魂使者，开启战魂之路。","prevQuestId":"8003","minLevel":1,"npcId":"9002","objective":{"type":"talk","target":"9002","count":1},"rewards":{"gold":1500,"exp":500,"items":[]}},
+  "8101": {"kind":"daily","label":"日常巡猎","description":"每日例行：猎杀 10 只金斑雄鹿，维持村郊安宁。","prevQuestId":"","minLevel":1,"npcId":"0002","objective":{"type":"kill","target":"2","count":10},"rewards":{"gold":500,"exp":150,"items":[]}},
+};
+
 /** 战魂阶数（下标 + 1 即阶）→ 名 */
 export const SOUL_LABELS: Record<string, string> = {
   "0": "烈阳灵体",

@@ -923,6 +923,53 @@ export interface RoleEnemyWithRoleRow extends RoleEnemyRow {
 
 //#endregion
 
+//#region 任务（#396）
+
+/** 任务配置一行（`quests` 表；seed 来自共享快照 QUESTS，管理端可改可增删） */
+export interface QuestRow {
+  id: string;
+  /** main 主线（一次性，prev_quest_id 链门控）/ daily 日常（领奖后删行可重接） */
+  kind: string;
+  label: string;
+  description: string;
+  /** 主线链前置任务 id（空串 = 无前置） */
+  prev_quest_id: string;
+  /** 接取最低等级 */
+  min_level: number;
+  /** 发布 NPC（npcs 表的 id；客户端头顶标记与对话入口的依据） */
+  npc_id: string;
+  /** kill | talk | collect（单目标，v1 边界） */
+  objective_type: string;
+  /** kill = monster key / talk = npc id / collect = 物品 id */
+  objective_target: string;
+  objective_count: number;
+  reward_gold: number;
+  reward_exp: number;
+  /** JSON：[{ goodId, count }] */
+  reward_items: string;
+  updated_at: number;
+}
+
+/**
+ * 任务进度一行（`quest_progress` 表；(role_id, quest_id) 主键）
+ *
+ * 状态机：可接 = 无行 → accepted 进行中 → ready 可交付 → claimed 已领奖。
+ * collect 任务没有独立 ready 态：交付时查背包判定，够就一步到 claimed。
+ * daily 领奖后**整行删除**（可重接、进度清零）；main 保留 claimed 行作链门控。
+ */
+export interface QuestProgressRow {
+  role_id: string;
+  quest_id: string;
+  /** accepted | ready | claimed */
+  status: string;
+  progress: number;
+  claimed_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

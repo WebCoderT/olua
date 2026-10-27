@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateDropTable, CreateSkill, CreateZone, DropTable, DropTableList, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, MergeZone, Monster, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkillList, Npc, NpcPage, NpcQuery, PutMallPrice, Rank, RankPage, RankQuery, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, Status, StatusPage, StatusQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CreateAnnouncement, CreateDropTable, CreateQuest, CreateSkill, CreateZone, DropTable, DropTableList, Drug, DrugPage, DrugQuery, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, MergeZone, Monster, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkillList, Npc, NpcPage, NpcQuery, PutMallPrice, Quest, QuestPage, QuestQuery, Rank, RankPage, RankQuery, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, Status, StatusPage, StatusQuery, SystemInfo, Title, TitlePage, TitleQuery, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateQuest, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, AdminAuthResult
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, MySocial, Npc, NpcPage, NpcQuery, PageMeta, PageQuery, PutMallPrice, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, ApplyGuild, AttributeRange, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, ConfigAttributeRange, ConfigAttributes, CreateAnnouncement, CreateDropTable, CreateGuild, CreateQuest, CreateRole, CreateSkill, CreateZone, DamageCoefficient, DropEntry, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, Equipment, EquipmentPage, EquipmentQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthSegment, GrowthSegmentPage, GrowthSegmentQuery, GrowthUpgrade, GrowthUpgradeResult, GuildApplication, GuildMember, GuildSummary, Health, Item, ItemPage, ItemQuery, LevelExp, LevelExpPage, LevelExpQuery, Login, MailJob, MailJobPage, MailQuery, MailTemplate, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallPurchase, MallPurchaseResult, MallSettings, MergeZone, Monster, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MyGuild, MyQuests, MySocial, Npc, NpcPage, NpcQuery, NpcTalk, NpcTalkResult, PageMeta, PageQuery, PutMallPrice, Quest, QuestId, QuestObjective, QuestPage, QuestQuery, QuestRewardItem, QuestRewardResult, QuestRewards, QuestState, QuestSubmitResult, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReplaceMonsterSkills, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, SaveRole, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusPage, StatusQuery, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UpdateAccountEmail, UpdateAccountStatus, UpdateAnnouncement, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateFashion, UpdateGrowthScalar, UpdateGrowthSegment, UpdateGuildNotice, UpdateItem, UpdateLevelExp, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateQuest, UpdateQuestObjective, UpdateQuestRewards, UpdateRank, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./models";
 
 /** adminAccount 模块的接口（10 个，生成） */
 export const accountsApi = {
@@ -602,6 +602,42 @@ export const npcsApi = {
    * 权限点：gameConfig:write
    */
   update: (id: string, body: UpdateNpc, options?: Options) => http.patch<Npc>(routes.adminNpc.update(id), body, options),
+};
+
+/** adminQuest 模块的接口（4 个，生成） */
+export const questsApi = {
+  /**
+   * 任务配置列表（GET /admin/quests）
+   *
+   * seed 自客户端 configs/quest-data（主线 8000 段 / 日常 8100 段），允许动态增删。`kind` 筛 main / daily，`keyword` 模糊匹配 id / 名称。
+   *
+   * 权限点：gameConfig:read
+   */
+  list: (query: QuestQuery = {}, options?: Options) => http.get<QuestPage>(routes.adminQuest.list, { query, ...options }),
+  /**
+   * 新建任务（POST /admin/quests）
+   *
+   * id 唯一（重复 → 40000）；跨字段校验与编辑同一套（目标键真实存在 / 链不成环 / 奖励物品存在）。
+   *
+   * 权限点：gameConfig:write
+   */
+  create: (body: CreateQuest, options?: Options) => http.post<Quest>(routes.adminQuest.create, body, options),
+  /**
+   * 删除任务（DELETE /admin/quests/{id}）
+   *
+   * 两条拒删守卫（40000）：仍有玩家进度引用；仍被别的任务当主线链前置。先清理再删。
+   *
+   * 权限点：gameConfig:write
+   */
+  remove: (id: string, options?: Options) => http.del<null>(routes.adminQuest.remove(id), options),
+  /**
+   * 编辑任务配置（PATCH /admin/quests/{id}）
+   *
+   * **部分更新**：只改请求体里出现的字段（`objective` / `rewards` 逐字段合并，`items` 传了就整份替换）。
+   *
+   * 权限点：gameConfig:write
+   */
+  update: (id: string, body: UpdateQuest, options?: Options) => http.patch<Quest>(routes.adminQuest.update(id), body, options),
 };
 
 /** adminRank 模块的接口（2 个，生成） */

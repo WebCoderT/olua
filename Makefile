@@ -53,7 +53,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-verify db-backup db-restore gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-verify db-backup db-restore gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
@@ -269,7 +269,10 @@ server-e2e-social: ## 服务端社交专项 e2e（47 条：好友申请与互加
 server-e2e-chat: ## 服务端聊天专项 e2e（35 条：世界同图广播 / 净化 / 限频 / 帮会准入 / 私聊与离线拒绝）
 	@cd server && $(NPM) run test:e2e:chat
 
-server-verify: ## 服务端一条命令全验（编译 + 十五套 e2e + 生成物审计）
+server-e2e-quest: ## 服务端任务专项 e2e（48 条：接取门控 / talk·kill·collect 三目标推进 / daily 删行重接 / 配置守卫）
+	@cd server && $(NPM) run test:e2e:quest
+
+server-verify: ## 服务端一条命令全验（编译 + 十六套 e2e + 生成物审计）
 	@cd server && $(NPM) run verify
 
 db-backup: ## 备份 SQLite 数据文件（VACUUM INTO，服务运行中也能备；默认留最近 7 份）
@@ -376,7 +379,7 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
 
-test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat ## 全部测试：客户端 45 套 + 服务端十五套 e2e
+test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest ## 全部测试：客户端 45 套 + 服务端十六套 e2e
 	@echo ""
 	@echo "✓ 测试全部通过"
 
@@ -395,7 +398,7 @@ verify: check server-build test admin-build ## 完整门禁：三端静态检查
 #     所以单测仍是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
 # ------------------------------------------------------------------------------
 
-ci: install-ci client-check audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat ## CI 门禁：服务端十五套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查
+ci: install-ci client-check audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest ## CI 门禁：服务端十六套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查
 	@echo ""
 	@echo "✓ CI 门禁通过"
 	@echo "  未覆盖（本地专属）：make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"

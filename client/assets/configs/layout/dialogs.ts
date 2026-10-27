@@ -1001,3 +1001,77 @@ export const chatDialogLayout = {
 };
 
 //#endregion
+
+//#region 任务弹窗（#396）
+
+/**
+ * 任务弹窗布局（与聊天弹窗同框：600×560）
+ *
+ * 两个页签（进行中 / 可接）—— 「已完成」不列：主线领奖后只是链门控的一行数据，
+ * 日常领奖即删行，玩家真正要看的是「现在能做什么」。
+ *
+ * 行内左侧是任务名 + 进度 / 目标描述，右侧一枚动作按钮（接取 / 交付 / 灰掉）。
+ */
+export const questDialogLayout = {
+  name: "quest_dialog",
+  title: "任 务",
+  size: new Size(600, 560),
+  /** 页签（两枚，比聊天弹窗的三枚更宽一点） */
+  tabs: {
+    y: 232,
+    size: new Size(140, 32),
+    columns: [-76, 76],
+    radius: 6,
+    activeFill: new Color(255, 200, 80, 230),
+    activeText: new Color(38, 30, 12, 255),
+    idleFill: new Color(28, 33, 42, 200),
+    idleText: new Color(190, 200, 214, 255),
+    idleBorder: new Color(64, 74, 90, 255),
+    fontSize: 13,
+  },
+  /** 任务列表（框体主体） */
+  list: { name: "quest_list", position: new Vec2(0, -6), size: new Size(556, 420) },
+  /** 任务行：名称 + 进度（左）+ 动作按钮（右） */
+  row: {
+    size: new Size(552, 56),
+    fill: new Color(22, 26, 34, 150),
+    border: new Color(64, 74, 90, 255),
+    radius: 6,
+    nameFontSize: 13,
+    textFontSize: 11,
+    nameColor: new Color(232, 238, 246, 255),
+    metaColor: new Color(160, 172, 190, 255),
+    readyColor: new Color(120, 220, 140, 255),
+    nameX: -180,
+    nameSize: new Size(360, 20),
+    metaX: -180,
+    metaSize: new Size(360, 18),
+    buttonX: 214,
+  },
+  /** 页签角标（可交付数 / 可接数）用的小字 */
+  titleColor: new Color(255, 214, 102, 255),
+  titleFontSize: 12,
+  /** 文案 */
+  texts: {
+    tabs: ["进行中", "可 接"],
+    activeEmpty: "（没有进行中的任务：去「可接」看一眼）",
+    availableEmpty: "（暂时没有能接的任务：升级或先完成前置）",
+    accept: "接 取",
+    submit: "交 付",
+    accepted: "进行中",
+    ready: "可交付",
+    /** 进度行：{done} / {total} */
+    progress: "进度 {done}/{total}",
+    /** 目标行：{type} · {target} ×{count} */
+    objective: "{type} · {target} ×{count}",
+    /** 交接奖励行 */
+    rewards: "奖励：金币 {gold} · 经验 {exp}",
+    /** 接取 / 交付失败的兜底提示（服务端的错误文案更具体，走请求层统一提示） */
+    acceptFailed: "接取失败",
+    submitFailed: "交付失败",
+    /** 接取成功的飘字（{name} = 任务名） */
+    acceptedTip: "已接取「{name}」",
+  },
+};
+
+//#endregion

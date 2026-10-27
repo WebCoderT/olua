@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { RolesModule } from "../roles/roles.module";
+import { QuestModule } from "../quest/quest.module";
 import { WorldModule } from "../world/world.module";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
@@ -22,7 +23,7 @@ import { RealtimeService } from "./realtime.service";
  * 广播出口照旧由本模块接线（世界频道复用互见的观看者集合）。
  */
 @Module({
-  imports: [RolesModule, WorldModule],
+  imports: [RolesModule, QuestModule, WorldModule],
   controllers: [RealtimeController],
   providers: [RealtimeService, CombatSettlementService, MonsterAiService, PlayerPresenceService, ChatService],
 })

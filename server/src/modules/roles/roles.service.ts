@@ -627,6 +627,134 @@ export class RolesService {
     return { level, expNow, expNeed, leveledUp, revision: row.revision };
   }
 
+  /**
+   * 背包里某物品的总数（collect 型任务交付判定与进度展示用）
+   *
+   * 只读不写：数量够不够由任务侧判断，这里的职责就是把存档网格数清楚。
+   * 没有在线角色返回 0（不抛 —— 进度展示不该因「刚被踢下线」炸掉）。
+   */
+  countGoodInBag(accountId: string, goodId: string): number {
+    const account = this.accounts.findById(accountId);
+    const roleId = account?.online_role_id;
+    const existing = roleId ? this.roles.findById(roleId) : undefined;
+    if (!account || !roleId || !existing || existing.account_id !== accountId) return 0;
+    const data = decodeStoredRoleData(existing.data);
+    return this.countGoods(data, goodId);
+  }
+
+  /**
+   * 任务交付发奖（#396）：扣收集材料 + 发奖励 + 升级，**一次落库**
+   *
+   * 刻意不复用 `applyKillExp` + `pickDrop` 的组合 —— 那会写两次库、revision +2，
+   * 客户端在途存档更容易撞乐观锁。整条链（材料不足 20017 / 背包放不下 20012）
+   * 都在校验阶段抛出，异常路径不落库，存档保持原样。
+   *
+   * @returns 发奖后的角色状态（与 KillExpResult 同形状，外加发奖后的修订号）
+   */
+  grantQuestRewards(
+    accountId: string,
+    roleId: string,
+    consume: { goodId: string; count: number } | null,
+    rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+  ): KillExpResult {
+    const existing = this.onlineRoleOrThrow(accountId, roleId);
+    const data = decodeStoredRoleData(existing.data);
+
+    // 1) collect 材料：先点数再扣（不够整单拒绝，不做部分扣除）
+    if (consume) {
+      this.takeGoodsFromBag(data, consume.goodId, Math.max(1, Math.floor(consume.count)));
+    }
+
+    // 2) 奖励物品：逐份入包（放不下 20012，此时还没落库）
+    for (const item of rewards.items ?? []) {
+      const itemType: string | undefined = (ITEM_TYPES as Record<string, string>)[item.goodId];
+      if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `任务奖励物品不存在：${item.goodId}`);
+      this.placeGoodsIntoBag(data, item.goodId, itemType, Math.max(1, Math.floor(item.count)));
+    }
+
+    // 3) 金币（都在 data JSON 里，没有专用列）
+    data.gold = Math.max(0, Math.floor(Number(data.gold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
+
+    // 4) 经验 + 升级（与 applyKillExp 同一算法：level_exps 表判定、循环升到曲线封顶）
+    let level = Math.max(1, existing.level);
+    let expNow = Math.max(0, Math.floor(Number(data.exp) || 0)) + Math.max(0, Math.floor(rewards.exp ?? 0));
+    let leveledUp = false;
+    const maxLevel = this.roleMaxLevel();
+    let expNeed = this.expNeedOf(level);
+    while (level < maxLevel && expNeed > 0 && expNow >= expNeed) {
+      expNow -= expNeed;
+      level += 1;
+      leveledUp = true;
+      expNeed = this.expNeedOf(level);
+    }
+    data.exp = expNow;
+
+    const row: RoleRow = {
+      ...existing,
+      level,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return { level, expNow, expNeed, leveledUp, revision: row.revision };
+  }
+
+  /** 背包网格里某物品的总数 */
+  private countGoods(data: Record<string, unknown>, goodId: string): number {
+    const bag = data.bag;
+    if (!Array.isArray(bag)) return 0;
+    let total = 0;
+    for (const line of bag) {
+      if (!Array.isArray(line)) continue;
+      for (const cell of line) {
+        if (cell && typeof cell === "object" && (cell as Record<string, unknown>).id === goodId) {
+          total += Math.max(0, Math.floor(Number((cell as Record<string, unknown>).count) || 0));
+        }
+      }
+    }
+    return total;
+  }
+
+  /**
+   * 从背包网格扣走一份物品（先点数后扣，不够抛 20017）
+   *
+   * @throws QUEST_MATERIAL_SHORT 材料不足
+   */
+  private takeGoodsFromBag(data: Record<string, unknown>, goodId: string, count: number): void {
+    if (this.countGoods(data, goodId) < count) {
+      throw BizException.conflict(BizCode.QUEST_MATERIAL_SHORT, "材料不足，无法交付任务");
+    }
+    let remaining = count;
+    const bag = data.bag as unknown[][];
+    for (let row = 0; row < bag.length && remaining > 0; row++) {
+      const line = bag[row];
+      if (!Array.isArray(line)) continue;
+      for (let col = 0; col < line.length && remaining > 0; col++) {
+        const cell = line[col];
+        if (!cell || typeof cell !== "object" || (cell as Record<string, unknown>).id !== goodId) continue;
+        const current = Math.max(1, Math.floor(Number((cell as Record<string, unknown>).count) || 1));
+        const take = Math.min(current, remaining);
+        if (take >= current) line[col] = null;
+        else line[col] = { id: goodId, count: current - take };
+        remaining -= take;
+      }
+    }
+  }
+
+  /** 当前在线的那份角色行（交付 / 发奖的公共前置：没在线角色或角色不属于该账号一律拒绝） */
+  private onlineRoleOrThrow(accountId: string, roleId: string): RoleRow {
+    const account = this.mustAccount(accountId);
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线");
+    }
+    const existing = this.roles.findById(roleId);
+    if (!existing || existing.account_id !== accountId) {
+      throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色");
+    }
+    return existing;
+  }
+
   /** 升到下一级所需经验（level_exps 表；没有该级行 = 曲线没铺到这里，按「不再升级」处理） */
   private expNeedOf(level: number): number {
     return Math.max(0, Math.floor(Number(this.growth.findLevelExp(level)?.exp) || 0));

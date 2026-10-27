@@ -84,6 +84,7 @@ const MODULES = {
   zone: { target: "client", export: "ZoneApi" },
   guild: { target: "client", export: "GuildApi" },
   social: { target: "client", export: "SocialApi" },
+  quest: { target: "client", export: "QuestApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },
@@ -111,6 +112,7 @@ const MODULES = {
   adminStatus: { target: "admin", export: "statusesApi" },
   adminZone: { target: "admin", export: "zonesApi" },
   adminGuild: { target: "admin", export: "guildsApi" },
+  adminQuest: { target: "admin", export: "questsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */
