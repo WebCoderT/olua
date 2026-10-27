@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { RolesModule } from "../roles/roles.module";
 import { WorldModule } from "../world/world.module";
+import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
@@ -17,10 +18,12 @@ import { RealtimeService } from "./realtime.service";
  * 怪物 AI（#323）同样住在本模块：结算把「打伤了谁」递给它（记恨），它把受击结果
  * 与怪物位置通过广播出口发出去 —— AI 的输入（位置上报）与输出（广播帧）都走通道。
  * 玩家互见（#324）是同一模式的第三个消费者：pos 帧喂出在场表，players 帧发出去。
+ * 聊天（#395）是第四个：chat 帧进来，ChatService 按频道选好收件人列表，
+ * 广播出口照旧由本模块接线（世界频道复用互见的观看者集合）。
  */
 @Module({
   imports: [RolesModule, WorldModule],
   controllers: [RealtimeController],
-  providers: [RealtimeService, CombatSettlementService, MonsterAiService, PlayerPresenceService],
+  providers: [RealtimeService, CombatSettlementService, MonsterAiService, PlayerPresenceService, ChatService],
 })
 export class RealtimeModule {}

@@ -904,3 +904,100 @@ export const socialDialogLayout = {
 };
 
 //#endregion
+
+//#region 聊天弹窗（#395）
+
+/**
+ * 聊天弹窗布局（世界 / 帮会 / 私聊三页签）
+ *
+ * 框体与社交弹窗同尺寸（600×560）：同一套框、同一套页签几何，看起来是同一个应用里的东西。
+ * 消息列表占框体主体，输入行贴框底（与社交弹窗的「加人一行」同一个位置——玩家的肌肉记忆只有一套）。
+ *
+ * 气泡（bubbles）不是弹窗的一部分：它是屏幕左上角的常驻演出（弹窗关着的时候新消息往上冒），
+ * 布局放在这里只是因为「聊天的长相关什么」都归这一块管。
+ */
+export const chatDialogLayout = {
+  name: "chat_dialog",
+  title: "聊 天",
+  size: new Size(600, 560),
+  /** 页签（三个：世界 / 帮会 / 私聊；几何与社交弹窗同款） */
+  tabs: {
+    y: 232,
+    size: new Size(112, 32),
+    columns: [-112, 0, 112],
+    radius: 6,
+    activeFill: new Color(255, 200, 80, 230),
+    activeText: new Color(38, 30, 12, 255),
+    idleFill: new Color(28, 33, 42, 200),
+    idleText: new Color(190, 200, 214, 255),
+    idleBorder: new Color(64, 74, 90, 255),
+    fontSize: 13,
+  },
+  /** 消息列表（框体主体） */
+  list: { name: "chat_message_list", position: new Vec2(0, 8), size: new Size(556, 412) },
+  /** 消息行：发送者名（按关系上色）+ 正文 */
+  row: {
+    size: new Size(552, 32),
+    fill: new Color(22, 26, 34, 150),
+    border: new Color(64, 74, 90, 255),
+    radius: 6,
+    nameFontSize: 12,
+    textFontSize: 12,
+    metaColor: new Color(160, 172, 190, 255),
+    /** 名字列（含帮会名前缀；文本列吃剩下的宽度） */
+    nameX: -185,
+    nameSize: new Size(140, 20),
+    textX: 75,
+    textSize: new Size(360, 22),
+  },
+  /** 输入行（贴框底；私聊有对象时旁边多一枚「返回」） */
+  inputRow: {
+    input: { position: new Vec2(-70, -232), size: new Vec2(400, 30) },
+    send: { position: new Vec2(195, -232) },
+    back: { position: new Vec2(255, -232) },
+  },
+  /** 私聊选人页：一行说明 + 候选列表（聊天记录里出现过的 + 附近的人） */
+  privatePick: {
+    hint: { position: new Vec2(0, 200), size: new Size(560, 20) },
+    list: { name: "chat_private_pick_list", position: new Vec2(0, 8), size: new Size(556, 400) },
+  },
+  /** 屏幕气泡（弹窗关着时新消息在左上角冒一下；最多同时三条，逐条下移） */
+  bubbles: {
+    /** 首条气泡位置（横屏 1624×750，屏幕坐标原点在中心） */
+    position: new Vec2(-660, 290),
+    size: new Size(430, 30),
+    spacing: 34,
+    maxCount: 3,
+    fontSize: 12,
+    fill: new Color(16, 20, 26, 200),
+    border: new Color(64, 74, 90, 255),
+    radius: 6,
+    /** 停留毫秒（到了自己消失；新消息来了重置计时） */
+    lifetimeMs: 6000,
+    /** 正文截断（气泡里只求「知道有人说话」，全量在面板里看） */
+    textMaxLength: 40,
+  },
+  /** 小字 */
+  titleColor: new Color(255, 214, 102, 255),
+  titleFontSize: 12,
+  /** 文案 */
+  texts: {
+    tabs: ["世 界", "帮 会", "私 聊"],
+    worldEmpty: "（还没有人说第一句——输入框在下面）",
+    guildEmpty: "（帮会频道还没有消息；没有帮会时发不出去）",
+    privateEmpty: "（还没有私聊：先点「选人」挑一个对象）",
+    inputWorld: "对同图的人说点什么…",
+    inputGuild: "对帮会的伙伴说点什么…",
+    inputPrivate: "对「{name}」说…",
+    send: "发送",
+    back: "返回",
+    pickHint: "选择私聊对象（聊过的 + 附近的人）",
+    pickEmpty: "（附近没有其他玩家，也还没聊过天）",
+    privateChat: "私 聊",
+    disconnectedTip: "实时通道未连接，暂时不能发言",
+    guildPrefix: "［{guild}］",
+    privateTo: "→ {name}",
+  },
+};
+
+//#endregion

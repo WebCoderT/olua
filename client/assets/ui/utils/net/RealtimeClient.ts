@@ -291,6 +291,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchPicked(frame.data);
       return;
     }
+    if (frame.type === "chat") {
+      // 聊天广播（#395）：世界 / 帮会 / 私聊同形，形状的解释在 CombatChannel
+      CombatChannel.dispatchChat(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
   }

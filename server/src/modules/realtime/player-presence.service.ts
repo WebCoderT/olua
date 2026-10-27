@@ -222,6 +222,34 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     this.broadcastLeave(entry.zoneId, entry.mapId, accountId);
   }
 
+  /**
+   * 一个账号当前的身份快照（#395 聊天用；不修改任何状态）
+   *
+   * 返回 null = 这条连接还没进过图（worldJoin 之前）：聊天对它不可用 ——
+   * 连自己在哪张图都不知道，谈不上「广播给同图的人」。
+   * 帮会身份读的是缓存值（最多滞后一个懒刷新周期）：频道准入**不**用这个值
+   * （ChatService 自己查库），这里只填展示用的 guildName。
+   */
+  identityOf(accountId: string): {
+    zoneId: number;
+    mapId: string;
+    roleId: string;
+    guildId: string;
+    guildName: string;
+    username: string;
+  } | null {
+    const entry = this.entries.get(accountId);
+    if (!entry) return null;
+    return {
+      zoneId: entry.zoneId,
+      mapId: entry.mapId,
+      roleId: entry.roleId,
+      guildId: entry.guildId,
+      guildName: entry.guildName,
+      username: this.usernameOf(accountId),
+    };
+  }
+
   //#endregion
 
   //#region 广播

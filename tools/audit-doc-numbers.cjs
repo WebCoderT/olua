@@ -114,6 +114,7 @@ const E2E_SCRIPTS = [
   ["区服（多开区/合并区）", "server/test/e2e-zone.cjs"],
   ["帮会（建帮/申请/审批/转让/解散）", "server/test/e2e-guild.cjs"],
   ["社交（好友/敌人/互见身份）", "server/test/e2e-social.cjs"],
+  ["聊天（世界/帮会/私聊）", "server/test/e2e-chat.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

@@ -165,6 +165,17 @@ export default class OtherPlayerManager {
   }
 
   /**
+   * 按账号查关系（#395 聊天名字上色用；场上没有这个人时返回 null）
+   *
+   * 关系在这里算好缓存（互见帧进来 / 快照变化时重算），聊天面板**只读缓存不再判一遍**
+   * —— 判定的唯一入口仍是 configs/social.resolveRelation，这里只是它的缓存出口。
+   */
+  static relationOfAccount(accountId: string): RelationKind | null {
+    const view = this.others.get(accountId);
+    return view ? view.relation : null;
+  }
+
+  /**
    * 重刷所有人的名字颜色（社交快照变化时调用；节点不重建）
    *
    * 只改 `Label.color`：一次加好友 / 一次标敌人只该让那个人的名字变色，
