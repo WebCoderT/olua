@@ -84,6 +84,28 @@ export type MallPurchase = {
   revision?: number;
 };
 
+export type SellEntry = {
+  /**
+   * 物品 id（必须在共享快照的出售价表里，否则 20018）
+   */
+  goodId: string;
+  /**
+   * 要卖的件数（≥1；超过背包持有量整单拒绝 20019）
+   */
+  count: number;
+};
+
+export type SellGoods = {
+  /**
+   * 要卖的东西（一次最多 200 条，够一键回收把整包装备报上来）。同 id 的多条会先合并再扣，重复报同一格不构成两次出售。
+   */
+  entries: SellEntry[];
+  /**
+   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   */
+  revision?: number;
+};
+
 export type DrugUse = {
   /**
    * 背包行
@@ -1548,6 +1570,84 @@ export type MallPurchaseResult = {
    * 买到的商品 id
    */
   goodId: string;
+};
+
+export type SellLine = {
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 卖出的件数（同 id 已合并）
+   */
+  count: number;
+  /**
+   * 单价（绑定元宝/件，来自共享快照）
+   */
+  unitPrice: number;
+  /**
+   * 这一行的合计（unitPrice × count）
+   */
+  total: number;
+};
+
+export type SellGoodsResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 逐行结算明细
+   */
+  sold: SellLine[];
+  /**
+   * 卖出的总件数
+   */
+  count: number;
+  /**
+   * 本次获得的绑定元宝合计
+   */
+  total: number;
 };
 
 export type DrugUseResult = {

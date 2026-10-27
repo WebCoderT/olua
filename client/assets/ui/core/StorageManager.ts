@@ -16,7 +16,7 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
-import { getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, recycleBagEquipmentGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
+import { getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
 import { getMallPrice } from "../../configs/mall";
 import { getFashion, fashionData } from "../../configs/fashionClothes";
 import { getEquipmentNameParts } from "../../configs/equipments";
@@ -27,7 +27,7 @@ import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import type { CombatKillReward } from "../utils/net/CombatChannel";
-import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult } from "../utils/net/ApiModels";
+import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
 
 /**
  * 存储管理器
@@ -790,27 +790,60 @@ export default class StorageManager {
    * 一键回收背包内的全部装备（当前在线角色）：按件折算**绑定元宝**入账
    *
    * 只回收**背包里**的装备 —— 身上穿着的槽位不受影响；药品/材料/解析不出配置的 id 一概不动。
-   * 搬运是纯函数 `configs/items.recycleBagEquipmentGrid`，这里只负责：
-   * 取角色 → 调用 → 按合计价入账 → 落盘 → 刷新（角色信息栏的绑定元宝 + 背包格子）。
-   * 计价口径见 configs/growth.equipmentRecyclePriceCurve（想调价只改那里）
+   *
+   * **结算在服务端**（#397）：本地只负责「把要卖的东西列出来」（goodId + 件数），
+   * 价格与扣物都由 `role.sellGoods` 说了算 —— 客户端报的价一概不看，改存档也改不出钱。
+   * 服务端返回的 bag / bindGold / revision 直接覆盖本地（与商城购买同一套手法，
+   * 见 buyMallGood）：本地不再自己算「扣掉哪几格」，两边各算一套必然有一天对不上。
+   *
+   * 计价口径见共享快照的出售价表（装备 = configs/growth 的回收价曲线 × 前后缀倍率），
+   * 与按钮上「可得多少」的预览同一个来源（configs/items.summarizeBagRecycle）。
    * @returns 是否回收成功（背包里没有可回收的装备时返回 false 并提示）
    */
-  static recycleBagEquipments(): boolean {
+  static async recycleBagEquipments(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
-    const result = recycleBagEquipmentGrid(role.bag);
-    if (!result.count) {
+    const entries = this.collectBagEquipmentEntries(role.bag);
+    const count = entries.reduce((sum, entry) => sum + entry.count, 0);
+    if (!count) {
       GameUiHelper.createTip("bag_recycle_empty_tip");
       return false;
     }
-    role.bag = result.bag;
-    role.bindGold += result.totalPrice;
-    // 保存并刷新（绑定元宝余额 + 背包格子）
+    let result: SellGoodsResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝出售
+      result = await RoleApi.sellGoods(role.id, { entries, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    const data = result.data as Record<string, unknown>;
+    role.bindGold = Number(data.bindGold ?? role.bindGold);
+    // 服务端已经扣完格子：以它那份为准整体替换（格子只存 key + 数量，无引用关系）
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    role.revision = result.revision;
     this.updateOnlineRole(role);
     this.updateUi(role);
     RoleUIManager.refreshBag();
-    GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.totalPrice });
+    GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.total });
     return true;
+  }
+
+  /**
+   * 背包里的装备清单（回收请求的入参）：同 id 合并件数
+   *
+   * 只挑**装备**：与 `configs/items.recycleBagEquipmentGrid` 同一口径；
+   * 解析不出配置的 id 不动（不认识的东西不替玩家决定）。服务端仍会按快照价复核。
+   */
+  private static collectBagEquipmentEntries(bag: BagCell[][]): Array<{ goodId: string; count: number }> {
+    const merged = new Map<string, number>();
+    bag.forEach((row) => {
+      row.forEach((cell) => {
+        const good = cell ? getItem(cell.id) : null;
+        if (!cell || !good || !isEquipment(good) || !cell.id) return;
+        merged.set(cell.id, (merged.get(cell.id) ?? 0) + Math.max(1, cell.count));
+      });
+    });
+    return Array.from(merged, ([goodId, count]) => ({ goodId, count }));
   }
 
   //#endregion

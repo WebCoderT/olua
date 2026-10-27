@@ -212,6 +212,18 @@ export const BizCode = {
   QUEST_MATERIAL_SHORT: 20017,
   //#endregion
 
+  //#region 经济：出售 / 回收（#397）
+  /**
+   * 该物品不可出售（配置里没有价签）
+   *
+   * 「不可卖」是**数据决定**的：共享快照 `SELL_PRICES` 里没有这个 id 就卖不了 ——
+   * 任务物、关键道具靠这条拦住。与「物品不存在」（40400）分开：前者是规则，后者是入参写错。
+   */
+  SELL_NOT_SELLABLE: 20018,
+  /** 背包里的数量不够卖（整单拒绝，不做部分扣除） */
+  SELL_NOT_ENOUGH: 20019,
+  //#endregion
+
   //#region 区服（多开区 / 合并区）
   /** 区服不存在（注册选区传了没有的 id；合并的 from / to 传错） */
   ZONE_NOT_FOUND: 50025,

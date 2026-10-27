@@ -120,7 +120,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   fs.rmSync(work, { recursive: true, force: true });
 }
@@ -275,6 +275,9 @@ function buildSnapshot(cfg) {
     // 物品与材料（#255）：管理端「物品配置」的 seed 来源 —— 只收 **MATERIAL / OTHER** 大类
     //（装备 / 药品字段形态不同，各有自己的表与 issue）；type 带上原值，未来 OTHER 条目直接进
     itemBases: pickItemBases(cfg.materials),
+    // 出售价（#397）：整张物品总表一遍过 —— 装备按回收价曲线（配置层建表时已算好 recyclePrice），
+    // 其余物品取 sellPirce；0 与缺省 = 不可卖。服务端照这份表结算，**不信任客户端报的价**
+    sellPrices: pickSellPrices(cfg.items),
     // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
     growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
     growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
@@ -595,6 +598,28 @@ function pickItemBases(materials) {
     ]);
   }
   if (out.length === 0) throw new Error("configs/material 的 materials 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  return out;
+}
+
+/**
+ * 物品总表 → [[物品 id, 出售价]]（#397）
+ *
+ * 价格来源刻意**分两条**，因为两条本来就在客户端各自成立：
+ * · 装备：`configs/equipments` 建表时按等级曲线算好的 `recyclePrice`（含前后缀倍率），
+ *   与背包「一键回收」的展示价同源 —— 换一份算法就等于让预览和结算对不上；
+ * · 其余（材料 / 药品 / 时装）：条目里的 `sellPirce`（客户端历史拼写，别改名，改了要动全部配置）。
+ *
+ * 价 ≤ 0 的物品**不进快照** = 不可卖（任务物、关键道具就靠这个拦住），服务端见到没有价签的 id
+ * 直接拒绝 —— 与「物品种类只许按配置增减」同一口径：白名单在数据里，不在代码里。
+ */
+function pickSellPrices(items) {
+  const out = [];
+  items.forEach((good, id) => {
+    const raw = good.recyclePrice ?? good.sellPirce ?? good.sellPrice ?? 0;
+    const price = round(raw);
+    if (price > 0) out.push([id, price]);
+  });
+  if (out.length === 0) throw new Error("物品总表里没有任何可卖物品（价签全为 0？生成物少一张表比报错危险得多）");
   return out;
 }
 
@@ -1040,6 +1065,7 @@ ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLO
 ${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
 ${jsonTable("DRUGS", "药品 id → { label, description, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
 ${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
+${numTable("SELL_PRICES", "物品 id → 出售价（#397；货币 = 绑定元宝/个）。装备取回收价曲线（含前后缀倍率）、其余取 sellPirce；**不在表里 = 不可卖**，服务端结算只认这一份", s.sellPrices)}
 ${jsonTable("QUESTS", "任务 id → { kind main|daily, label, description, prevQuestId 主线链前置, minLevel, npcId 发布 NPC, objective 单目标 kill|talk|collect, rewards { gold, exp, items } }（#396；服务端 quests 表的 seed 来源）", s.quests)}
 ${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
 ${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
