@@ -265,6 +265,25 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - e2e 坑：**跨连接的帧到达顺序没有保证**（邀请 A→B 与同意 B→服务端是两条连接），测「同意」前必须先 `waitFor` 邀请真的到达，
   而且邀请数组是累积的、要用 mark 取增量，别取 `[length - 1]`（会命中上一组的旧邀请 → 偶发 50126）。
 
+**12. 排行榜（#400）：榜是 `roles` 的派生数据，物化在进程内、不落库**
+- 三个榜（`level` / `combat` / `kills`）**不各写一套排序**：`scoreOfBoard` 一个 switch 决定比什么，`compare` 只做「分数降序 → `roleId` 升序」。
+  同分二次键**不是可选项**：没有它，两次重算之间同分者会互换位置，玩家看到名次上下抖而实际什么都没变；
+- **名次是竞赛排名**（并列同名次）：`if (previous === null || score !== previous) rank = index + 1` —— 名次按下标 +1 起算，遇到分数变化才换名次；
+- **击杀数是 `roles` 行上的索引列**（`roles.kills`，`ensureColumn` 补，默认 0），不单开表：单列的表要多写一整套仓储 + 多一次 join，而这行本来就在同一笔结算里被读。
+  唯一写者是 `RolesService.recordKill`（战斗结算在服务端 +1）；客户端 `PUT /roles/:id` 全量覆盖的是 `data`，`replace()` 的 SQL 原样保留 `kills`，**改不到**；
+- `incrementKills` **不推 `revision`、不动 `updated_at`**：击杀数不是进度、客户端存档里没有它的基线，推修订号只会让玩家的防抖存档白撞 20006；
+- **击杀数与经验分开记**：等级差过大时 `settleKillReward` 给的经验是 0（`exp > 0` 才入账），但这一杀算数；
+- **物化不落库**：`BoardSnapshot { entries, byRole, computedAt }` 存进程内，首次请求惰性算一份，之后按 `LEADERBOARD_REFRESH_MS` 重算并**整份换引用**（读者永远看到完整一份，不撕裂）。
+  落物化表就多出第二个真相（角色变了快照没变，谁对？）；重启代价只是「第一分钟要现算」，而首次请求本来就是惰性算的；
+- **定时器第一次有人看榜才起**（`snapshotOf` 里 `startTimer`）：模块在 API 与实时两个进程都装载，但只有 API 进程收 HTTP —— 放 `onApplicationBootstrap` 起定时器等于让实时进程白扫全表。
+  `setInterval(...).unref()` 不阻止进程退出（e2e `child.kill()` 要能立刻退），`LEADERBOARD_REFRESH_MS=0` = 不起定时器（e2e 用）；
+- **名次在全量排序里算**：`byRole` 存全部角色，`entries` 只是截到 `topN` 的同一批对象切片 —— 所以排在很后面的人 `me` 也拿得到真实名次，不必把 `topN` 拉大；
+  没有在线角色时 `rank = 0`（`LEADERBOARD_NO_RANK`，**不是 404**：榜本身是好的，只是这个人没名次）；
+- **`size` 超 `LEADERBOARD_TOP_N` 夹到上限**（不报错）；非法 `board` 走 `assertBoard` 抛 40000 并**列出可选值**（干巴巴一句「参数错误」等于让人猜）；
+- **条目只有八个字段**：不带 `accountId`、不带 `data`、**不带在线状态** —— 榜上标「在线」等于给人蹲点；
+- **战力算不出来给 0**：等级超出成长曲线 / 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数，`audit-combat-parity` 锁着），**不许在榜里另算一版**；
+- 边界审计：`modules/leaderboard` 要读 `modules/combat/role-attributes.ts` 与 `role`/`account` 仓储 → 在 `tools/audit-server-boundaries.cjs` 的 `ALLOWED_EDGES` / `REPO_EDGES` 各补一条边（带注释说明为什么必须是同一个数）。
+
 ## 六、必踩的坑
 
 1. **全局 `ValidationPipe({ whitelist: true })` 会静默剥掉嵌套裸对象的属性**。声明成 `bag?: unknown[]` 时，请求里的 `[{row, col, id, count}]` 到服务层会变成 `[[]]`（静默变空数组，不报任何错）。
@@ -291,6 +310,9 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 
 20. **带缓存的过滤逻辑，e2e 必须把 TTL 压到 0**：`SOCIAL_BLOCK_CACHE_MS=0`（`chat` 类用 `CHAT_RATE_LIMIT` 同法放宽）。留默认 2 秒时「拉黑后立刻发不出」测的是缓存而不是逻辑，且会随机红。
 21. **`EXPECTED_ASSERTIONS` 与实际条数差一条，最后那条「条数变了」就会把绿变红**（#396 / #397 / #398 都踩过）：加断言时同一次改完常量，别留着下次再补。
+22. **没有 HTTP 出口的列，e2e 用 `node:sqlite` 直读**：#400 的 `roles.kills` 只在榜接口里以「排序结果」出现，没法断言「这一杀到底记没记」——
+   `e2e-combat.cjs` 的 `readKills(dbPath, roleId)` 开只读连接直查该列，才有「打死一只 +1、再打死一只变 2」这种精确断言。
+   同理：**别为了测试给正式接口开一个只有测试用的出口**。
 
 ## 七、验证闭环
 
