@@ -20,6 +20,7 @@ import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { StatusesPage } from "./pages/StatusesPage";
+import { QuestsPage } from "./pages/QuestsPage";
 import { MallPricingPage } from "./pages/MallPricingPage";
 import { FashionsPage } from "./pages/FashionsPage";
 import { DropConfigPage } from "./pages/DropConfigPage";
@@ -211,6 +212,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <StatusesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="quests"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <QuestsPage />
               </RequirePermission>
             }
           />

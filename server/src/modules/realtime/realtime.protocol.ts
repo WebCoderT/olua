@@ -504,6 +504,29 @@ export interface RealtimeChatBroadcast {
 
 //#endregion
 
+//#region 任务（#396）
+
+/**
+ * 服务端 → 客户端：任务进度变化（**只推给本人连接**）
+ *
+ * 击杀结算推进度后立刻推（这是唯一发生在 HTTP 之外的进度变化 —— 对话 / 接取 / 交付
+ * 都走 HTTP，响应自带最新快照，不需要帧）。客户端拿它刷新追踪栏与 NPC 标记；
+ * 接取 / 交付后的全量对账走 `GET /quests/me`。
+ */
+export interface RealtimeQuestMessage {
+  type: "quest";
+  data: {
+    questId: string;
+    /** accepted 进行中 / ready 可交付 */
+    status: string;
+    progress: number;
+    /** 目标数量（客户端免查快照比对） */
+    target: number;
+  };
+}
+
+//#endregion
+
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage
@@ -514,7 +537,8 @@ export type RealtimeServerMessage =
   | RealtimeMonsterAiMessage
   | RealtimePlayersMessage
   | RealtimePickedMessage
-  | RealtimeChatBroadcast;
+  | RealtimeChatBroadcast
+  | RealtimeQuestMessage;
 
 /**
  * 关闭码

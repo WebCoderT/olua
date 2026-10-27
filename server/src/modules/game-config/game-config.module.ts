@@ -10,6 +10,7 @@ import { AdminItemController } from "./admin-item.controller";
 import { AdminMallController } from "./admin-mall.controller";
 import { AdminMonsterController } from "./admin-monster.controller";
 import { AdminNpcController } from "./admin-npc.controller";
+import { AdminQuestController } from "./admin-quest.controller";
 import { AdminRankController } from "./admin-rank.controller";
 import { AdminSkillController } from "./admin-skill.controller";
 import { AdminStatusController } from "./admin-status.controller";
@@ -29,7 +30,7 @@ import { MallPricingService } from "./mall-pricing.service";
  * 重复执行也无副作用）。
  */
 @Module({
-  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
+  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
   providers: [GameConfigService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   exports: [MallPricingService],

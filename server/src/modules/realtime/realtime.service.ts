@@ -14,6 +14,7 @@ import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
+import { QuestService } from "../quest/quest.service";
 import {
   CHAT_CHANNELS,
   REALTIME_CLOSE,
@@ -25,6 +26,7 @@ import {
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
   type RealtimePlayersMessage,
+  type RealtimeQuestMessage,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
   type RealtimeWorldMessage,
@@ -111,6 +113,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly monsterAi: MonsterAiService,
     private readonly presence: PlayerPresenceService,
     private readonly chat: ChatService,
+    private readonly quests: QuestService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
   ) {}
@@ -206,6 +209,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     };
     // 私聊的在线判据：连接表是本服务的私产，给 ChatService 一个布尔答案就够
     this.chat.isConnected = (accountId) => this.connections.has(accountId);
+    // 任务进度帧（#396）：只推给本人连接（击杀是唯一发生在 HTTP 之外的进度变化）
+    this.quests.onProgress = (accountId, data) => {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, { type: "quest", data } satisfies RealtimeQuestMessage);
+    };
 
     this.logger.log(
       `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,

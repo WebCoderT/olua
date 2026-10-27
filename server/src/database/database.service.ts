@@ -609,6 +609,41 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         created_at INTEGER NOT NULL,
         PRIMARY KEY (role_id, enemy_id)
       );
+
+      -- 任务配置（#396，epic #394）：quests 表是管理端「任务配置」的可改层，
+      -- seed 来自共享快照 QUESTS（INSERT OR IGNORE，运营改过的行不会被重启覆盖）；
+      -- 允许动态增删，被 quest_progress 引用中的行在业务层拒删
+      CREATE TABLE IF NOT EXISTS quests (
+        id              TEXT    PRIMARY KEY,
+        kind            TEXT    NOT NULL DEFAULT 'main',
+        label           TEXT    NOT NULL DEFAULT '',
+        description     TEXT    NOT NULL DEFAULT '',
+        prev_quest_id   TEXT    NOT NULL DEFAULT '',
+        min_level       INTEGER NOT NULL DEFAULT 1,
+        npc_id          TEXT    NOT NULL DEFAULT '',
+        objective_type  TEXT    NOT NULL DEFAULT 'kill',
+        objective_target TEXT   NOT NULL DEFAULT '',
+        objective_count INTEGER NOT NULL DEFAULT 1,
+        reward_gold     INTEGER NOT NULL DEFAULT 0,
+        reward_exp      INTEGER NOT NULL DEFAULT 0,
+        reward_items    TEXT    NOT NULL DEFAULT '[]',
+        updated_at      INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 任务进度状态机（#396）：可接 = 无行；accepted 进行中 → ready 可交付 → claimed 已领奖。
+      -- daily 领奖后整行删除（可重接、进度清零）；main 保留 claimed 行作链门控。
+      -- 不加 REFERENCES quests(id) 外键：任务下架不该连带抹掉玩家进度历史
+      CREATE TABLE IF NOT EXISTS quest_progress (
+        role_id    TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        quest_id   TEXT NOT NULL,
+        status     TEXT NOT NULL DEFAULT 'accepted',
+        progress   INTEGER NOT NULL DEFAULT 0,
+        claimed_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (role_id, quest_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_quest_progress_quest ON quest_progress(quest_id);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

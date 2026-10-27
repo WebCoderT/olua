@@ -11,6 +11,7 @@ import type {
   MallPriceItem,
   Monster as MonsterRow,
   Npc as NpcRow,
+  Quest as QuestRow,
   Rank,
   Skill as SkillRow,
   Soul,
@@ -33,6 +34,9 @@ import { items } from "./items";
 import { drugs } from "./drug";
 import { monsters } from "./monster";
 import { npcData } from "./npc-data";
+import { questData } from "./quest-data";
+import type { QuestData } from "./quest-data";
+import { rebuildQuests } from "./quest";
 import { fashionData } from "./fashionClothes";
 import { getEquipmentBaseKey, scaleEquipmentAttributes } from "./equipments";
 import { skillData } from "./skill-data";
@@ -342,6 +346,49 @@ export function applyNpcRows(rows: NpcRow[]): void {
 }
 
 /**
+ * 覆写任务配置（#396）
+ *
+ * 三种情况都要处理：
+ * - 本地有的行 → 原地覆写（消费方拿到的引用不变，`quests` Map 由 `rebuildQuests()` 重建）；
+ * - 本地没有、快照里有 → **追加**（管理端能新建任务，目标类型只有 kill / talk / collect 三种，
+ *   新的行不需要客户端代码配合就能跑）；
+ * - 快照里没有、本地有 → 保留（服务端还没 seed 时用本地兜底，与其它表同口径）。
+ *
+ * 奖励物品只认 `goodId / count` 两个字段：物品名与图标由物品总表解析，任务表不复制一份。
+ */
+export function applyQuestRows(rows: QuestRow[]): void {
+  if (!rows.length) return;
+  for (const row of rows) {
+    const next = questRowToConfig(row);
+    const config = questData.find((item) => item.id === row.id);
+    if (config) Object.assign(config, next);
+    else questData.push(next);
+  }
+  rebuildQuests();
+}
+
+/** 任务行（服务端快照）→ 客户端任务配置（奖励物品只认 goodId / count） */
+function questRowToConfig(row: QuestRow): QuestData {
+  const objective = row.objective ?? { type: "kill", target: "", count: 1 };
+  const type = objective.type === "talk" || objective.type === "collect" ? objective.type : "kill";
+  return {
+    id: row.id,
+    kind: row.kind === "daily" ? "daily" : "main",
+    label: row.label,
+    description: row.description,
+    prevQuestId: row.prevQuestId ?? "",
+    minLevel: Math.max(1, Math.floor(row.minLevel || 1)),
+    npcId: row.npcId ?? "",
+    objective: { type, target: `${objective.target ?? ""}`, count: Math.max(1, Math.floor(objective.count || 1)) },
+    rewards: {
+      gold: Math.max(0, Math.floor(row.rewards?.gold ?? 0)),
+      exp: Math.max(0, Math.floor(row.rewards?.exp ?? 0)),
+      items: (row.rewards?.items ?? []).map((entry) => ({ goodId: `${entry.goodId ?? ""}`, count: Math.max(1, Math.floor(entry.count || 1)) })),
+    },
+  };
+}
+
+/**
  * 覆写时装（名称 / 描述 / 价格 / 八项属性）
  *
  * **icon / in / out 不覆写**：资源路径以发布素材包为准（与 resources 纪律一致），
@@ -481,6 +528,7 @@ export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   if (snapshot.items) applyItemRows(snapshot.items);
   if (snapshot.monsters) applyMonsterRows(snapshot.monsters);
   if (snapshot.npcs) applyNpcRows(snapshot.npcs);
+  if (snapshot.quests) applyQuestRows(snapshot.quests);
   if (snapshot.fashions) applyFashionRows(snapshot.fashions);
 }
 

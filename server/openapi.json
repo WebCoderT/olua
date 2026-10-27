@@ -5920,6 +5920,300 @@
         ]
       }
     },
+    "/admin/quests": {
+      "get": {
+        "description": "seed 自客户端 configs/quest-data（主线 8000 段 / 日常 8100 段），允许动态增删。`kind` 筛 main / daily，`keyword` 模糊匹配 id / 名称。\n\n`objective` 是单目标（kill = 怪物 key / talk = NPC id / collect = 物品 id）；`rewards` 的 items 落库为 JSON 列。\n\n**排序**：`sort` 取 `id` / `kind` / `label` / `minLevel` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminQuest.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "类型筛选：main | daily",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/QuestPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "任务配置列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/QuestPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/QuestQueryDto"
+        }
+      },
+      "post": {
+        "description": "id 唯一（重复 → 40000）；跨字段校验与编辑同一套（目标键真实存在 / 链不成环 / 奖励物品存在）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminQuest.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的任务配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/QuestDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新建任务",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/QuestDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/quests/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段（`objective` / `rewards` 逐字段合并，`items` 传了就整份替换）。\n\n- 目标键必须指向真实数据：kill → 怪物 key、talk → NPC id、collect → 物品 id；\n- `prevQuestId` 链不许成环、不许指向不存在的任务；\n- `id` 不存在 → 404（`50031`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminQuest.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "任务 id（如 \"8001\"）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateQuestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的任务配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/QuestDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑任务配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/QuestDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "两条拒删守卫（40000）：仍有玩家进度引用；仍被别的任务当主线链前置。先清理再删。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminQuest.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "任务 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功（data 为 null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除任务",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/mall/settings": {
       "get": {
         "description": "全场默认售价（绑定元宝/件），seed 自客户端 configs/mall 的 mallPrice。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -8927,6 +9221,212 @@
         }
       }
     },
+    "/quests/me": {
+      "get": {
+        "description": "当前角色的全部进度行（accepted / ready / claimed）。**可接任务不在内**：客户端按配置快照（quests）与 claimed 行自己算「哪些能接」（等级 / 前置链都是纯读计算）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "quest.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "我的任务快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyQuestsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "我的任务快照",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyQuestsDto"
+        }
+      }
+    },
+    "/quests/accept": {
+      "post": {
+        "description": "等级（20016）与主线链前置（20015）在服务端复核；重复接取（含已完成的主线）返回 20015。接取成功返回最新快照。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "quest.accept",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestIdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "接取后的任务快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyQuestsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "接取任务",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyQuestsDto"
+        }
+      }
+    },
+    "/quests/submit": {
+      "post": {
+        "description": "kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（金币 / 经验 / 物品）与扣材料**一次落库**；日常（daily）领奖后删行可重接，主线（main）保留 claimed 行作链门控。返回最新快照与奖励结算。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "quest.submit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestIdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "交付结果（快照 + 奖励结算）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/QuestSubmitResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "交付任务并领奖",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/QuestSubmitResultDto"
+        }
+      }
+    },
+    "/quests/npc-talk": {
+      "post": {
+        "description": "talk 型目标的进度入口：推进进行中的对话任务（到量转 ready）；同时带回该 NPC 名下全部任务的状态（含可接但未接的 `available`）与管理端配置的对话文案。NPC 不存在返回 50020。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "quest.npcTalk",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NpcTalkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "对话结果（文案 + 任务状态）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/NpcTalkResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "与 NPC 对话",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/NpcTalkResultDto"
+        }
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -10454,6 +10954,170 @@
           }
         }
       },
+      "UpdateQuestObjectiveDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "目标类型",
+            "enum": [
+              "kill",
+              "talk",
+              "collect"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "目标键（非空）"
+          },
+          "count": {
+            "type": "number",
+            "description": "目标数量（1~9999）"
+          }
+        }
+      },
+      "QuestRewardItemDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量"
+          }
+        },
+        "required": [
+          "goodId",
+          "count"
+        ]
+      },
+      "UpdateQuestRewardsDto": {
+        "type": "object",
+        "properties": {
+          "gold": {
+            "type": "number",
+            "description": "金币（≥0）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验（≥0）"
+          },
+          "items": {
+            "description": "物品清单（≤20 条；goodId 非空、count 1~9999）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestRewardItemDto"
+            }
+          }
+        }
+      },
+      "UpdateQuestDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "类型",
+            "enum": [
+              "main",
+              "daily"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（1~50 字）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（≤500 字）"
+          },
+          "prevQuestId": {
+            "type": "string",
+            "description": "主线链前置任务 id（空串 = 无前置）"
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "接取最低等级（1~999）"
+          },
+          "npcId": {
+            "type": "string",
+            "description": "发布 NPC id"
+          },
+          "objective": {
+            "description": "目标（传了就整份替换）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateQuestObjectiveDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励（传了就整份替换）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateQuestRewardsDto"
+              }
+            ]
+          }
+        }
+      },
+      "CreateQuestDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "类型",
+            "enum": [
+              "main",
+              "daily"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（1~50 字）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（≤500 字）"
+          },
+          "prevQuestId": {
+            "type": "string",
+            "description": "主线链前置任务 id（空串 = 无前置）"
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "接取最低等级（1~999）"
+          },
+          "npcId": {
+            "type": "string",
+            "description": "发布 NPC id"
+          },
+          "objective": {
+            "description": "目标（传了就整份替换）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateQuestObjectiveDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励（传了就整份替换）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateQuestRewardsDto"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "任务 id（唯一；建议主线 8000 段 / 日常 8100 段）"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
       "UpdateMallSettingsDto": {
         "type": "object",
         "properties": {
@@ -10840,6 +11504,34 @@
             "example": "乙二"
           }
         }
+      },
+      "QuestIdDto": {
+        "type": "object",
+        "properties": {
+          "questId": {
+            "type": "string",
+            "description": "任务 id"
+          }
+        },
+        "required": [
+          "questId"
+        ]
+      },
+      "NpcTalkDto": {
+        "type": "object",
+        "properties": {
+          "npcId": {
+            "type": "string",
+            "description": "NPC id"
+          },
+          "option": {
+            "type": "string",
+            "description": "预留字段（v1 无对话分支）"
+          }
+        },
+        "required": [
+          "npcId"
+        ]
       },
       "ApiEnvelopeDto": {
         "type": "object",
@@ -15287,6 +15979,329 @@
           }
         }
       },
+      "QuestObjectiveDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "目标类型：kill 击杀怪物 / talk 与 NPC 对话 / collect 收集物品",
+            "enum": [
+              "kill",
+              "talk",
+              "collect"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "目标键：kill = 怪物 key / talk = NPC id / collect = 物品 id"
+          },
+          "count": {
+            "type": "number",
+            "description": "目标数量"
+          }
+        },
+        "required": [
+          "type",
+          "target",
+          "count"
+        ]
+      },
+      "QuestRewardsDto": {
+        "type": "object",
+        "properties": {
+          "gold": {
+            "type": "number",
+            "description": "金币"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验"
+          },
+          "items": {
+            "description": "物品清单",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestRewardItemDto"
+            }
+          }
+        },
+        "required": [
+          "gold",
+          "exp",
+          "items"
+        ]
+      },
+      "QuestDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "任务 id（主线 8000 段 / 日常 8100 段）"
+          },
+          "kind": {
+            "type": "string",
+            "description": "类型：main 主线（一次性）/ daily 日常（领奖后可重接）",
+            "enum": [
+              "main",
+              "daily"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "prevQuestId": {
+            "type": "string",
+            "description": "主线链前置任务 id（空串 = 无前置）"
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "接取最低等级"
+          },
+          "npcId": {
+            "type": "string",
+            "description": "发布 NPC id"
+          },
+          "objective": {
+            "description": "目标（单目标，v1 边界）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuestObjectiveDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuestRewardsDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "description",
+          "prevQuestId",
+          "minLevel",
+          "npcId",
+          "objective",
+          "rewards",
+          "updatedAt"
+        ]
+      },
+      "QuestPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的任务配置",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "QuestQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "kind": {
+            "type": "string",
+            "description": "类型筛选：main | daily"
+          }
+        }
+      },
+      "QuestStateDto": {
+        "type": "object",
+        "properties": {
+          "questId": {
+            "type": "string",
+            "description": "任务 id"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：available 可接（无进度行）/ accepted 进行中 / ready 可交付 / claimed 已领奖",
+            "enum": [
+              "available",
+              "accepted",
+              "ready",
+              "claimed"
+            ]
+          },
+          "progress": {
+            "type": "number",
+            "description": "当前进度（kill/talk 为累计次数；collect 为背包持有量与目标取小）"
+          },
+          "target": {
+            "type": "number",
+            "description": "目标数量（来自任务配置，客户端免查快照比对）"
+          }
+        },
+        "required": [
+          "questId",
+          "status",
+          "progress",
+          "target"
+        ]
+      },
+      "MyQuestsDto": {
+        "type": "object",
+        "properties": {
+          "quests": {
+            "description": "全部进度行（可接的任务不在内 —— 可接态由客户端按快照配置与 claimed 行计算）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestStateDto"
+            }
+          }
+        },
+        "required": [
+          "quests"
+        ]
+      },
+      "QuestRewardResultDto": {
+        "type": "object",
+        "properties": {
+          "gold": {
+            "type": "number",
+            "description": "金币"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验"
+          },
+          "items": {
+            "description": "物品清单",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "level": {
+            "type": "number",
+            "description": "发奖后等级"
+          },
+          "leveledUp": {
+            "type": "boolean",
+            "description": "是否升级"
+          }
+        },
+        "required": [
+          "gold",
+          "exp",
+          "items",
+          "level",
+          "leveledUp"
+        ]
+      },
+      "QuestSubmitResultDto": {
+        "type": "object",
+        "properties": {
+          "quests": {
+            "description": "交付后的任务快照",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestStateDto"
+            }
+          },
+          "reward": {
+            "description": "本次奖励结算",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuestRewardResultDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "quests",
+          "reward"
+        ]
+      },
+      "NpcTalkResultDto": {
+        "type": "object",
+        "properties": {
+          "dialog": {
+            "type": "string",
+            "description": "对话文案（管理端 npcs 表的 dialog 列，空串 = 未配置）"
+          },
+          "quests": {
+            "description": "该 NPC 名下全部任务在当前角色上的状态（含可接但未接的）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestStateDto"
+            }
+          }
+        },
+        "required": [
+          "dialog",
+          "quests"
+        ]
+      },
       "MallSettingsDto": {
         "type": "object",
         "properties": {
@@ -15912,6 +16927,13 @@
             "items": {
               "$ref": "#/components/schemas/StatusDto"
             }
+          },
+          "quests": {
+            "description": "任务配置（#396：主线链 / 日常 / 单目标 / 奖励）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestDto"
+            }
           }
         },
         "required": [
@@ -15932,7 +16954,8 @@
           "dropTables",
           "monsterDrops",
           "skills",
-          "statuses"
+          "statuses",
+          "quests"
         ]
       },
       "GuildSummaryDto": {

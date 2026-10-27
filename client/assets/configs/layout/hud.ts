@@ -265,3 +265,63 @@ export const roleShowLayout = {
 };
 
 //#endregion
+
+//#region 任务追踪栏（#396：左侧常驻，进行中的任务最多三条）
+
+/**
+ * 任务追踪栏布局
+ *
+ * 位置固定在屏幕左侧、角色信息栏（左上）与聊天气泡（左上偏内）之下的空档：
+ * 聊天气泡从 y=290 往下每条 -34 最多三条（到 222），追踪栏从 190 往下排，
+ * 两者不会叠。行数上限三条 —— 再多就盖住地图了，剩下的去任务面板看。
+ */
+export const questTrackerLayout = {
+  /** 首行位置（屏幕坐标原点在中心） */
+  position: new Vec2(-640, 190),
+  /** 命中区宽度（文字左对齐铺满） */
+  width: 300,
+  /** 每行高度（行间不再另加间距） */
+  rowHeight: 22,
+  /** 最多显示几条（超出部分不显示：「还有 N 条」提示） */
+  maxRows: 3,
+  fontSize: 12,
+  /** 任务名颜色 / 进度颜色（可交付时整行转绿） */
+  nameColor: new Color(255, 226, 150, 255),
+  progressColor: new Color(170, 182, 198, 255),
+  readyColor: new Color(120, 220, 140, 255),
+  /** 超出提示（{count} = 还有几条没显示） */
+  moreText: "还有 {count} 条任务，打开任务面板查看",
+  moreColor: new Color(150, 160, 175, 255),
+  /** 空态不显示任何东西（追踪栏占位也不留） */
+  texts: {
+    /** 进度格式：{done}/{total} */
+    progress: "{done}/{total}",
+    /** 可交付标记 */
+    ready: "可交付",
+  },
+};
+
+//#endregion
+
+//#region NPC 头顶任务标记（#396：可接 ! / 可交付 ?）
+
+/**
+ * NPC 头顶的任务标记
+ *
+ * 不挂在 NPC 节点里：那个节点是纵向 FlexCol（名字 + 立绘），塞进去会被布局重排。
+ * 做法是在地图层单独放一个标签节点，位置 = NPC 世界坐标 + offset（NPC 节点高 170，
+ * 名字在最上面一行，标记再抬一点）。
+ */
+export const questNpcMarkLayout = {
+  name: "quest_npc_mark",
+  /** 相对 NPC 节点原点的偏移（NPC 静止不动，故不需要跟随） */
+  offset: new Vec2(0, 96),
+  size: new Size(40, 26),
+  fontSize: 20,
+  availableColor: new Color(255, 214, 102, 255),
+  readyColor: new Color(120, 220, 140, 255),
+  /** 标记字符（! 可接 / ? 可交付；两个都没有就整块隐藏） */
+  texts: { available: "!", ready: "?" },
+};
+
+//#endregion

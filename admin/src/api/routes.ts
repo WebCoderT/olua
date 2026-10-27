@@ -454,6 +454,33 @@ export const routes = {
      */
     update: (id: string) => `/admin/npcs/${encodeURIComponent(id)}`,
   },
+  /** adminQuest 模块（4 个接口） */
+  adminQuest: {
+    /**
+     * 任务配置列表（GET /admin/quests）
+     *
+     * seed 自客户端 configs/quest-data（主线 8000 段 / 日常 8100 段），允许动态增删。`kind` 筛 main / daily，`keyword` 模糊匹配 id / 名称。
+     */
+    list: "/admin/quests",
+    /**
+     * 新建任务（POST /admin/quests）
+     *
+     * id 唯一（重复 → 40000）；跨字段校验与编辑同一套（目标键真实存在 / 链不成环 / 奖励物品存在）。
+     */
+    create: "/admin/quests",
+    /**
+     * 删除任务（DELETE /admin/quests/{id}）
+     *
+     * 两条拒删守卫（40000）：仍有玩家进度引用；仍被别的任务当主线链前置。先清理再删。
+     */
+    remove: (id: string) => `/admin/quests/${encodeURIComponent(id)}`,
+    /**
+     * 编辑任务配置（PATCH /admin/quests/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段（`objective` / `rewards` 逐字段合并，`items` 传了就整份替换）。
+     */
+    update: (id: string) => `/admin/quests/${encodeURIComponent(id)}`,
+  },
   /** adminRank 模块（2 个接口） */
   adminRank: {
     /**

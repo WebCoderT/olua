@@ -211,6 +211,16 @@ export interface ChatEntry {
   };
 }
 
+/** 任务进度帧（#396：协议见 realtime.protocol 的 RealtimeQuestMessage，只推给本人） */
+export interface QuestProgressFrame {
+  questId: string;
+  /** accepted 进行中 / ready 可交付 */
+  status: string;
+  progress: number;
+  /** 目标数量（客户端免查快照比对） */
+  target: number;
+}
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -236,6 +246,9 @@ export default class CombatChannel {
 
   /** 聊天广播出口（#395；组合根接线到 ChatStore.applyEntry，不接时帧被丢弃——聊天不上屏） */
   static onChat: ((data: ChatEntry) => void) | null = null;
+
+  /** 任务进度出口（#396；组合根接线到 QuestStore.applyState，不接时帧被丢弃——进度靠打开面板时重拉） */
+  static onQuest: ((data: QuestProgressFrame) => void) | null = null;
 
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
@@ -381,6 +394,15 @@ export default class CombatChannel {
     if (!entry || typeof entry !== "object" || !entry.from || typeof entry.text !== "string") return;
     if (!this.onChat) return;
     this.onChat(entry);
+  }
+
+  /** RealtimeClient 收到 quest 帧后走这里（#396：只推给本人，进度变化即上屏） */
+  static dispatchQuest(data: unknown): void {
+    const frame = data as QuestProgressFrame | null;
+    if (!frame || typeof frame !== "object" || typeof frame.questId !== "string" || !frame.questId) return;
+    if (typeof frame.status !== "string") return;
+    if (!this.onQuest) return;
+    this.onQuest(frame);
   }
 }
 

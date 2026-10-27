@@ -59,6 +59,8 @@ import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-c
 import { CreateSkillDto, DamageCoefficientDto, SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "../modules/game-config/dto/skill.dto";
 import { MonsterSkillDto, MonsterSkillItemDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "../modules/game-config/dto/monster-skill.dto";
 import { StatusCombatDto, StatusDto, StatusPageDto, StatusQueryDto, UpdateStatusDto } from "../modules/game-config/dto/status.dto";
+import { CreateQuestDto, QuestDto, QuestObjectiveDto, QuestPageDto, QuestQueryDto, QuestRewardItemDto, QuestRewardsDto, UpdateQuestDto } from "../modules/game-config/dto/quest.dto";
+import { MyQuestsDto, NpcTalkDto, NpcTalkResultDto, QuestIdDto, QuestRewardResultDto, QuestStateDto, QuestSubmitResultDto } from "../modules/quest/dto/quest-state.dto";
 import { MallPriceItemDto, MallPricePageDto, MallPriceQueryDto, MallPriceRemoveDto, MallSettingsDto, PutMallPriceDto, UpdateMallSettingsDto } from "../modules/game-config/dto/mall.dto";
 import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "../modules/game-config/dto/fashion.dto";
 import { CreateDropTableDto, DropEntryDto, DropTableDto, DropTableListDto, MonsterDropDto, MonsterDropPageDto, MonsterDropQueryDto, UpdateDropTableDto, UpdateMonsterDropDto } from "../modules/game-config/dto/drop.dto";
@@ -272,6 +274,23 @@ export const SWAGGER_MODELS = [
   StatusPageDto,
   StatusQueryDto,
   UpdateStatusDto,
+  // 任务配置（#396）
+  QuestDto,
+  QuestObjectiveDto,
+  QuestRewardsDto,
+  QuestRewardItemDto,
+  QuestPageDto,
+  QuestQueryDto,
+  UpdateQuestDto,
+  CreateQuestDto,
+  // 任务（#396 玩家侧）
+  MyQuestsDto,
+  QuestStateDto,
+  QuestSubmitResultDto,
+  QuestRewardResultDto,
+  NpcTalkResultDto,
+  QuestIdDto,
+  NpcTalkDto,
   // 商城定价（#251）
   MallSettingsDto,
   MallPriceItemDto,

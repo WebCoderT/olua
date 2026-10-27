@@ -32,6 +32,7 @@ export {
   npcsApi,
   skillsApi,
   statusesApi,
+  questsApi,
   mallApi,
   fashionsApi,
   dropApi,

@@ -201,6 +201,17 @@ export const BizCode = {
   /** 状态不存在（清单 seed 自生成物 STATUSES，不可增删行） */
   STATUS_NOT_FOUND: 50030,
 
+  //#region 任务（#396）
+  /** 任务不存在（配置表里没有这个 id） */
+  QUEST_NOT_FOUND: 50031,
+  /** 任务当前状态不允许这个动作（未接取就交付 / 重复接取 / 进度未满就交付 / 主线前置未完成等） */
+  QUEST_STATE_INVALID: 20015,
+  /** 任务等级不够（低于 minLevel 接不了） */
+  QUEST_LEVEL_LOW: 20016,
+  /** 收集型任务材料不足（交付时背包里没有足够的目标物品） */
+  QUEST_MATERIAL_SHORT: 20017,
+  //#endregion
+
   //#region 区服（多开区 / 合并区）
   /** 区服不存在（注册选区传了没有的 id；合并的 from / to 传错） */
   ZONE_NOT_FOUND: 50025,
