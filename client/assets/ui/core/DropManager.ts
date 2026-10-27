@@ -13,6 +13,8 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import StorageManager from "./StorageManager";
+import GuideStore from "./GuideStore";
+import { GUIDE_EVENT } from "../../types/guide";
 
 /** 掉落物运行时数据（节点 -> 物品与数量） */
 interface DropItem {
@@ -219,6 +221,9 @@ export default class DropManager {
       return;
     }
     StorageManager.applyPickResult(data.placed, data.revision);
+    // 新手引导（#402）：「捡起来」那一步的判据是**服务端应答 ok**（包里真的多了东西），
+    // 不是「走到掉落物上」—— 背包满了被拒的那次不该算学会
+    GuideStore.notify(GUIDE_EVENT.PICKUP);
     if (!node) return; // 节点已不在（换图清场等）：入包已应用，没有地面部分要收
     const drop = this.dropMap.get(node);
     this.removeDropNode(node);

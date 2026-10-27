@@ -113,6 +113,16 @@ export default class BottomBar extends Node {
     return this.partyDialog.isOpen();
   }
 
+  /** 按入口 key 取底部按钮（引导高亮用；`bag` / `skill` / `chat` 这几个 key 见 configs/bottomNav） */
+  navNode(key: string): Node | null {
+    return this.navBar.nodeOf(key);
+  }
+
+  /** 技能快捷键栏节点（引导「打怪」那一步指这里 —— 怪会跑，画个洞没意义） */
+  shortcutNode(): Node | null {
+    return this.shortcutKeyBar;
+  }
+
   /** 贴边定位（贴屏幕底部居中按可见尺寸重算）——窗口尺寸变化时由组合根调用 */
   applyAnchorPosition() {
     GameUiHelper.setBottomBarPosition(this);

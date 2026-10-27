@@ -17,6 +17,8 @@ import EffectManager from "./EffectManager";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
+import GuideStore from "./GuideStore";
+import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
 import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, WorldSnapshot } from "../utils/net/CombatChannel";
@@ -450,6 +452,9 @@ export default class MonsterManager {
     this.monsterMap.delete(target);
     this.instanceIndex.delete(monster.instanceId);
     CursorManager.unregisterHover(target);
+    // 新手引导（#402）：「打一只怪」那一步的判据是**真的打倒了一只**（经验为 0 也算数），
+    // 所以放在死亡分支里、而不是「拿到经验」的地方
+    GuideStore.notify(GUIDE_EVENT.KILL);
     // 头顶血条隐藏（死亡后血量已无意义，留着会一直显示 0 / maxHp）
     const head = target.getChildByName("monster_head");
     if (head) head.active = false;

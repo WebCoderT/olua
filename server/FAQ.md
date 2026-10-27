@@ -30,7 +30,7 @@
 - **启动**：`cd server && npm install && cp .env.example .env && npm run dev`（`npm run start` 跑已构建产物）。默认监听 `3100`、路由前缀 `api`，客户端默认连的就是 `http://localhost:3100/api`
 - **接口文档**：<http://localhost:3100/api-docs>（Swagger UI；JSON 在 `/api-docs-json`）。文档**不带路由前缀**，因为它不是业务接口。所有接口都是「统一响应包裹 + 统一错误出口」，所以文档里每个接口的响应都是 `code / message / data / timestamp` 五件套，`data` 才是业务数据
 - **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / level_exps / growth_segments / growth_scalars / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / skills / statuses / monster_skills / parties / party_members / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress` 40 张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
-- **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**248 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护** / **公告的公共拉取与生效时间窗**）。角色相关改动另跑 `npm run test:e2e:roles`（113 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）；**邮件通道**相关改动另跑 `npm run test:e2e:mail`（120 条，用可注入的假发信器，不需要 SMTP 服务器）；**玩家邮箱字段**相关改动另跑 `npm run test:e2e:account-email`（28 条）；**实时通道**相关改动另跑 `npm run test:e2e:realtime`（50 条，真实 WebSocket 握手，不需要浏览器）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（87 条）。一条命令全验：`npm run verify`
+- **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**248 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护** / **公告的公共拉取与生效时间窗**）。角色相关改动另跑 `npm run test:e2e:roles`（120 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）；**邮件通道**相关改动另跑 `npm run test:e2e:mail`（120 条，用可注入的假发信器，不需要 SMTP 服务器）；**玩家邮箱字段**相关改动另跑 `npm run test:e2e:account-email`（28 条）；**实时通道**相关改动另跑 `npm run test:e2e:realtime`（50 条，真实 WebSocket 握手，不需要浏览器）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（87 条）。一条命令全验：`npm run verify`
 - **新增接口的规矩**：只改服务端（控制器 + DTO + `operationId`），然后 `npm run gen:api` 重新生成两端的接口文件 —— 见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)。路径、方法名、类型都不允许在两端手写
 
 ### 跑测试时一直「等待服务启动超时」，也不打日志，为什么？
@@ -75,7 +75,7 @@ env -u NODE_OPTIONS npm run verify
 - **权限不够会怎样**：`403` + 业务码 **30006**，提示会直接写出缺哪个权限（如「当前角色没有该操作权限：封禁 / 解封账号」）。管理端界面会**按权限点隐藏菜单与禁用按钮**，但那只是体验 —— 服务端每次请求都重新判一次，改地址栏硬闯也只有 403
 - **改完立即生效**：守卫每次请求都从库里取管理员的角色（和账号封禁同一套逻辑），降权后旧的令牌下一次请求就受限，不用等令牌过期
 - **两道保护（业务码 30007）**：不能把**最后一个启用中的超级管理员**降级 / 停用 / 删除 —— 否则后台就没人能管了。有第二个超管时自降是允许的（可以用来轮值）
-- 回归：`cd server && npm run test:e2e` 的第七段（只读观察员四处写操作被拒、降权即时生效、超管保护、管理员列表与筛选）；角色相关改动另跑 `npm run test:e2e:roles`（113 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）
+- 回归：`cd server && npm run test:e2e` 的第七段（只读观察员四处写操作被拒、降权即时生效、超管保护、管理员列表与筛选）；角色相关改动另跑 `npm run test:e2e:roles`（120 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）
 
 ## 数据模型
 

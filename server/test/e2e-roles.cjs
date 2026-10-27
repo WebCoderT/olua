@@ -42,7 +42,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 113;
+const EXPECTED_ASSERTIONS = 120;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -185,6 +185,35 @@ function roleData(id, name, occupation, level) {
 
   const crossAccount = await api("GET", "roles/role_a1", { token: tokenB });
   check(crossAccount.code === 40300 && crossAccount.status === 403, "别的账号读不到该角色（越权 403）", `${crossAccount.code}/${crossAccount.status}`);
+
+  //#endregion
+
+  //#region 一之二、新手引导进度（#402）：服务端只校验结构 + 体量
+
+  console.log("— 一之二、新手引导进度：结构 + 体量校验，不认客户端的步骤含义 —");
+
+  const guidedData = { ...roleData("role_a1", "甲一", "1", 7), guide: { step: 2, done: false, skipped: false } };
+  const guideSaved = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: guidedData, revision: 3 } });
+  check(guideSaved.code === 0 && guideSaved.data.data.guide.step === 2, "指南进度原样落库（step 2）", JSON.stringify(guideSaved.data.data && guideSaved.data.data.guide));
+  const guideRead = await api("GET", "roles/role_a1", { token: tokenA });
+  check(guideRead.data.data.guide.done === false && guideRead.data.data.guide.skipped === false, "三个标记原样读回（done / skipped）", JSON.stringify(guideRead.data.data && guideRead.data.data.guide));
+
+  const guideOverflow = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 65, done: false, skipped: false } }, revision: 4 } });
+  check(guideOverflow.code === 20003, "步数越界被拒（20003，不是静默夹取）", `${guideOverflow.code}`);
+
+  const guideFraction = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 1.5, done: false, skipped: false } }, revision: 4 } });
+  check(guideFraction.code === 20003, "步数不是整数被拒（20003）", `${guideFraction.code}`);
+
+  const guideBadFlag = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 1, done: "yes", skipped: false } }, revision: 4 } });
+  check(guideBadFlag.code === 20003, "done 不是布尔被拒（20003）", `${guideBadFlag.code}`);
+
+  const guideExtra = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 3, done: false, skipped: true, evil: "x" } }, revision: 4 } });
+  check(guideExtra.code === 0 && guideExtra.data.data.guide.evil === undefined && guideExtra.data.data.guide.skipped === true, "多余字段被丢弃、三个已知字段保留", JSON.stringify(guideExtra.data.data && guideExtra.data.data.guide));
+
+  // 老档（没有 guide 字段）照样能存，且**服务端不会凭空补一个** ——
+  // 客户端正是靠「文档里有没有这个字段」区分老号与新号（无字段 = 引导上线前就在的角色）
+  const legacySaved = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 7) } });
+  check(legacySaved.code === 0 && legacySaved.data.data.guide === undefined, "没有 guide 字段的老档照常保存，服务端不补默认值", JSON.stringify(legacySaved.data.data && legacySaved.data.data.guide));
 
   //#endregion
 

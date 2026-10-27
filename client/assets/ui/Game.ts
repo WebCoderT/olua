@@ -1,4 +1,4 @@
-import { _decorator, Camera, Component, isValid } from "cc";
+import { _decorator, Camera, Component, isValid, Node, Vec3 } from "cc";
 import { maps } from "../configs/map";
 import MpHelper from "./utils/battle/MpHelper";
 import HpHelper from "./utils/battle/HpHelper";
@@ -26,6 +26,10 @@ import OtherPlayerManager from "./core/OtherPlayerManager";
 import SocialStore from "./core/SocialStore";
 import PartyStore from "./core/PartyStore";
 import LeaderboardStore from "./core/LeaderboardStore";
+import GuideStore from "./core/GuideStore";
+import GuideOverlay from "./components/GuideOverlay";
+import { GUIDE_SPOT } from "../types/guide";
+import type { GuideSpot } from "../types/guide";
 import ChatStore from "./core/ChatStore";
 import ChatBubbles from "./core/ChatBubbles";
 import QuestStore from "./core/QuestStore";
@@ -86,6 +90,10 @@ export class Game extends Component {
   private lastReportedPosition: { x: number; y: number } | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
+  /** 新手引导遮罩（#402；挂在 UI 层最上面，只在有步骤可显示时 active） */
+  private guideOverlay: GuideOverlay | null = null;
+  /** 上一帧的主角世界坐标（引导「先动起来」按实际走过的距离判，不看按键） */
+  private guideLastPosition: Vec3 | null = null;
 
   async start() {
     // 屏幕适配：铺满窗口（无黑边），可见宽度随窗口宽高比变化（见 utils/layout/ScreenLayout）
@@ -229,6 +237,13 @@ export class Game extends Component {
     /** 操作摇杆（左下角常驻；节点归摇杆组件，输入逻辑在下面注入给主角组件） */
     this.joystick = new Joystick();
     LayerManager.addToUILayer(this.joystick);
+    // 新手引导（#402）：遮罩最后加 → 盖在 HUD 之上；进度从存档读（老档补成「已完成」，不会弹）。
+    // 位置解析交给本类（摇杆与底部按钮都在这里持有），所以先注册 provider 再 open
+    GuideStore.start(role);
+    this.guideOverlay = new GuideOverlay();
+    GuideOverlay.setSpotProvider((spot) => this.resolveGuideSpot(spot));
+    LayerManager.addToUILayer(this.guideOverlay);
+    if (GuideStore.visible()) this.guideOverlay.open();
     // 窗口尺寸变化时重排四个常驻区域（角色信息栏贴左上角 / 小地图贴右上角 / 底部栏贴底部居中 / 摇杆贴左下角）
     // 注意顺序：引擎的 Canvas 在尺寸变化时会把相机世界坐标拽回 Canvas 节点位置（canvas-resize），
     // 而相机/UI 层本该跟着主角，故重排后必须再把相机与 UI 层重新对齐到主角，否则地图视野会错位
@@ -239,6 +254,8 @@ export class Game extends Component {
       this.smallMap?.applyAnchorPosition();
       this.bottomBar?.applyAnchorPosition();
       this.joystick?.applyAnchorPosition();
+      // 引导遮罩是按屏幕尺寸挖洞的，尺寸一变就得重算（气泡的贴边夹取同理）
+      this.guideOverlay?.refresh();
     });
     /** 怪物信息面板创建器（选中怪物时才动态创建，取消选中即销毁） */
     RoleUIManager.setMonsterInfoFactory((target) => {
@@ -310,6 +327,13 @@ export class Game extends Component {
     PartyStore.clear();
     // 榜单缓存（#400）：里面存着「我的名次」，换角色后必须重拉，否则底部那行会写上一个角色的名次
     LeaderboardStore.clear();
+    // 新手引导（#402）：进度是「这个角色走到第几步」，换角色必须重新 start；
+    // 遮罩也随 UI 层一起销毁，这里摘掉解析器并释放引用（不清会指向已销毁的 HUD 节点）
+    this.guideOverlay?.close();
+    this.guideOverlay = null;
+    this.guideLastPosition = null;
+    GuideOverlay.setSpotProvider(null);
+    GuideStore.reset();
     // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
     ChatStore.reset();
     ChatBubbles.reset();
@@ -385,6 +409,14 @@ export class Game extends Component {
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
     const rolePosition = this.roleDisplay?.getWorldPosition();
     if (rolePosition) DropManager.autoPickup(rolePosition);
+    // 新手引导（#402）：「先动起来」按**实际走过的距离**判，不看按键 ——
+    // 摇杆、方向键、点地面走的都算（这些都是「我在移动」的同一种事实）
+    if (rolePosition) {
+      if (this.guideLastPosition) {
+        GuideStore.notifyMove(Vec3.distance(rolePosition, this.guideLastPosition));
+      }
+      this.guideLastPosition = rolePosition.clone();
+    }
     // 快捷键冷却显示
     this.bottomBar?.updateCooldowns();
     // 状态每帧驱动（到期移除 + 身上特效跟随主角）
@@ -402,6 +434,30 @@ export class Game extends Component {
    * 死亡也照报（hp 会是 0，服务端据此停止追击）——「死了还占着位置」比「位置消失」好处理。
    * 是否在移动按「与上次上报的位置差」判（移动是玩家自己的事，客户端自报；自动战斗走位也算移动）。
    */
+  /**
+   * 引导「语义位」→ 真实节点（#402）
+   *
+   * 写死坐标在贴边重排的 HUD 上必然错位，所以 `configs/guide` 里存的是语义位，
+   * 由这里换成节点；**取不到就返回 null**（`GuideOverlay` 会退化成只显示气泡），
+   * 不该因为某个入口还没建出来就让引导整层不显示。
+   */
+  private resolveGuideSpot(spot: GuideSpot): Node | null {
+    switch (spot) {
+      case GUIDE_SPOT.JOYSTICK:
+        return this.joystick;
+      case GUIDE_SPOT.NAV_BAG:
+        return this.bottomBar?.navNode("bag") ?? null;
+      case GUIDE_SPOT.NAV_SKILL:
+        return this.bottomBar?.navNode("skill") ?? null;
+      case GUIDE_SPOT.NAV_CHAT:
+        return this.bottomBar?.navNode("chat") ?? null;
+      case GUIDE_SPOT.SHORTCUT:
+        return this.bottomBar?.shortcutNode() ?? null;
+      default:
+        return null;
+    }
+  }
+
   private reportPosition(deltaTime: number) {
     this.positionReportTimer += deltaTime;
     if (this.positionReportTimer < 0.25) return;
