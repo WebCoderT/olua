@@ -186,7 +186,7 @@ export const ApiRoutes = {
     /**
      * 我的收件箱（GET /mails/me）
      *
-     * 整份收件箱（新的在前）+ 未读数 + 未领数。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。
+     * 整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。
      */
     mine: "/mails/me",
   },

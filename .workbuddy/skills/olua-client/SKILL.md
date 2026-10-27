@@ -188,6 +188,22 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - 文案与几何全在 `configs/mail.ts`（`mailTexts` + `mailDialogLayout`，节点名 `mail_*`）——
   面板里不许出现字面量。
 
+### 五之六·补：频道页签只筛不请求（#436）
+
+面板顶部多了一行五个页签（`mailChannels`：全部 / 系统 / 奖励 / 社交 / 战斗），
+**页签是纯本地筛选，不是请求参数**：
+
+- `MailStore.visible(state)` 是唯一筛选口（`all` 原样返回，其余 `filter(mail => mail.channel === ...)`），
+  面板里取行用它、**不要**直接用 `box.mails`；
+- **切页签不发请求**（`setChannel` 只改本地 state + emit，同值直接 return 不重绘）：
+  服务端一次给全量 + 四栏角标，切页签若重拉就会闪加载态、还会出现「切回全部要重拉」；
+- **红点与顶部小结永远按全量**（`unread + unclaimed`），角标画在页签右上角（`>9` 显示 `9+`）；
+- **一键领取跟着页签走**：`MailStore.claimAll()` 把当前频道带给 `GameMailApi.claimAll({ channel })`，
+  「全部」页签才是不带参数；可点判据也换成当前栏的 `unclaimedIn(channel)`（别拿全量数字点亮它）；
+- **两种空态分开写**：整箱为空 `emptyList`，这一栏为空 `emptyChannel`（后者切到「全部」还有别的邮件）；
+- 页签几何在 `mailDialogLayout.tabs`（宽度 / 间距 / 选中态 / 角标偏移），整行居中按 `mailChannels.length` 算 ——
+  加第六个页签不用手调坐标。
+
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 
 - `client/tools/lib/net-sandbox.cjs`：把 `configs/network` + `types/common` + `ui/utils/net/*` 编成 CommonJS 塞进沙箱，**`XMLHttpRequest` 由测试注入**，返回 `{ Api, HttpError, Session, RoleSync, ApiRoutes, ApiErrorTextKey, RELOGIN_BIZ_CODES, ROLE_SYNC_BIZ_CODES, getText, sys }`。

@@ -10,6 +10,8 @@
  * 四、删除：**附件没领不能删**（50143），已领的可以删
  * 五、一键领取：逐封领到背包满为止 —— 已领的照常落库，`stoppedByBag` 说明还有剩
  * 六、成就兜底：领奖时背包满 → 整份奖励转成一封邮件、成就照常记已领，清包后从邮件领到手
+ * 七、频道（#436）：四个频道角标固定且与列表一致、按频道一键领取不越界、非法频道 40000、
+ *     好友申请落社交频道、BOSS 击杀落战斗频道（普通怪不落）
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:game-mail
@@ -18,13 +20,15 @@ const { spawn } = require("node:child_process");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+// 实时通道用 ws 包（Node 内置的 WebSocket 只有 addEventListener，没有 .on）
+const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
 //#region 断言小工具（与 e2e-achievement 同款口径）
 
-const EXPECTED_ASSERTIONS = 39;
+const EXPECTED_ASSERTIONS = 51;
 
 let passed = 0;
 let failed = 0;
@@ -61,6 +65,67 @@ function checkEqual(actual, expected, label) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** 轮询等一个条件成立（WS 帧是异步到的，只能等） */
+const waitFor = async (label, predicate, timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await predicate();
+    if (last) return last;
+    await sleep(20);
+  }
+  check(false, `${label}（等待超时）`);
+  return last;
+};
+
+/** 一条会话化的 WS 连接：击杀组只需要 world 帧与 settle 帧 */
+function connect(url) {
+  const socket = new WebSocket(url);
+  const session = {
+    socket,
+    opened: false,
+    settles: [],
+    worlds: [],
+    async waitForSettle(castId, timeoutMs = 5_000) {
+      return waitFor(
+        `castId=${castId} 的 settle`,
+        async () => {
+          const hits = session.settles.filter((frame) => frame.castId === castId);
+          return hits.length > 0 ? hits[hits.length - 1] : null;
+        },
+        timeoutMs,
+      );
+    },
+    async joinWorld(mapId, timeoutMs = 5_000) {
+      const before = session.worlds.length;
+      session.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId } }));
+      return waitFor(
+        `mapId=${mapId} 的 world 帧`,
+        async () => {
+          const hits = session.worlds.slice(before).filter((frame) => frame.mapId === mapId);
+          return hits.length > 0 ? hits[hits.length - 1] : null;
+        },
+        timeoutMs,
+      );
+    },
+  };
+  socket.on("open", () => {
+    session.opened = true;
+  });
+  socket.on("message", (raw) => {
+    try {
+      const frame = JSON.parse(raw.toString());
+      if (frame.type === "settle") session.settles.push(frame.data);
+      if (frame.type === "world") session.worlds.push(frame.data);
+    } catch {
+      /* 非 JSON 帧不记 */
+    }
+  });
+  socket.on("close", () => {});
+  socket.on("error", () => {});
+  return session;
+}
+
 /** 取一个空闲端口（避免与开发中的服务撞端口） */
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -89,6 +154,7 @@ async function startServer(dbPath) {
       JWT_SECRET: "e2e-game-mail-secret",
       JWT_EXPIRES_IN: "1h",
       LOG_REQUESTS: "false",
+      WORLD_RESPAWN_MS: "1500",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -148,11 +214,12 @@ function insertMail(dbPath, mail) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   db.prepare(
-    `INSERT INTO role_mails (id, role_id, kind, title, body, gold, exp, attachments, read_at, claimed_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO role_mails (id, role_id, channel, kind, title, body, gold, exp, attachments, read_at, claimed_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     mail.id,
     mail.roleId,
+    mail.channel ?? "system",
     mail.kind ?? "system",
     mail.title ?? "系统邮件",
     mail.body ?? "",
@@ -163,6 +230,55 @@ function insertMail(dbPath, mail) {
     mail.claimedAt ?? null,
     mail.createdAt ?? Date.now(),
   );
+  db.close();
+}
+
+/** 清空这个角色的收件箱（频道组要一个干净起点，才谈得上「只领了这一栏」） */
+function clearMails(dbPath, roleId) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.prepare("DELETE FROM role_mails WHERE role_id = ?").run(roleId);
+  db.close();
+}
+
+/** 把一只怪调成「一击必死」：血量 1、三种防御清零（BOSS 血量几万，不这么做打不动） */
+function makeFrail(dbPath, monsterKey) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.prepare(
+    `UPDATE monsters
+        SET max_hp = 1,
+            physical_defense_min = 0, physical_defense_max = 0,
+            magic_defense_min = 0, magic_defense_max = 0,
+            taoist_defense_min = 0, taoist_defense_max = 0
+      WHERE id = ?`,
+  ).run(monsterKey);
+  db.close();
+}
+
+/** 预先往临时库里插刷怪区（boss 201 与普通怪 1 各一区，击杀组用） */
+function seedSpawnAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id      TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        monster_key TEXT    NOT NULL,
+        min         INTEGER NOT NULL DEFAULT 0,
+        max         INTEGER NOT NULL DEFAULT 0,
+        cx          REAL    NOT NULL,
+        cy          REAL    NOT NULL,
+        w           REAL    NOT NULL,
+        h           REAL    NOT NULL,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );`);
+  const insert = db.prepare(
+    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  insert.run("1", "BOSS 区", "201", 0, 1, 200, 300, 400, 400, Date.now());
+  insert.run("1", "杂兵区", "1", 0, 2, 700, 300, 400, 400, Date.now());
   db.close();
 }
 
@@ -196,11 +312,15 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-game-mail-${Date.now()}.db`);
+  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
   let serverChild = null;
   try {
     const { baseUrl } = server;
     serverChild = server.child;
+    // 击杀组要能一击打死（BOSS 本身几万血）；改库必须赶在 joinWorld 播种之前
+    makeFrail(dbPath, "201");
+    makeFrail(dbPath, "1");
 
     //#region 准备
 
@@ -388,11 +508,103 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
     checkEqual(fallbackClaim && fallbackClaim.data && fallbackClaim.data.items.length, 1, "成就的物品附件真的进了背包");
 
     //#endregion
+
+    //#region 八、频道
+
+    group("八、频道：四条角标 / 按栏领取 / 社交与战斗投递");
+    const channelKeys = (achievementMail.data.channels || []).map((item) => item.channel);
+    checkEqual(channelKeys.join(","), "system,reward,social,combat", "四条频道角标固定且顺序稳定");
+    const rewardSummary = (achievementMail.data.channels || []).find((item) => item.channel === "reward");
+    const rewardMails = achievementMail.data.mails.filter((row) => row.channel === "reward");
+    check(
+      !!rewardSummary && rewardSummary.total === rewardMails.length && rewardMails.every((row) => row.kind === "achievement"),
+      "「奖励」栏角标与列表一致（成就兜底那封归在 reward）",
+      JSON.stringify(rewardSummary),
+    );
+
+    clearMails(dbPath, roleId);
+    const emptyBox = await api(baseUrl, "GET", "mails/me", { token });
+    check(
+      emptyBox.data.mails.length === 0 && emptyBox.data.channels.every((item) => item.total === 0 && item.unread === 0),
+      "清空后四条角标全 0（没有消息的频道也要出现）",
+      JSON.stringify(emptyBox.data.channels),
+    );
+
+    // 社交频道：另一个号加我 → 我这条消息落 social / friend
+    const other = await api(baseUrl, "POST", "auth/register", { body: { username: "mail_other", password: "pass1234" } });
+    const otherToken = other.data && other.data.token;
+    const otherRole = await api(baseUrl, "POST", "roles", { token: otherToken, body: { data: roleData("mail_r2", "加人的人") } });
+    const friendRequest = await api(baseUrl, "POST", "social/friends", { token: otherToken, body: { roleId } });
+    checkEqual(friendRequest && friendRequest.code, 0, "另一个号发出好友申请");
+    const socialBox = await api(baseUrl, "GET", "mails/me", { token });
+    const socialMail = socialBox.data.mails.find((row) => row.channel === "social");
+    check(
+      !!socialMail && socialMail.kind === "friend" && socialMail.body.includes("加人的人"),
+      "好友申请落进社交频道（kind = friend，正文带申请人名字）",
+      JSON.stringify(socialMail),
+    );
+
+    // 按频道一键领取：reward 栏领掉，system 栏原样
+    clearMails(dbPath, roleId);
+    insertMail(dbPath, { id: "mail_ch_reward", roleId, channel: "reward", kind: "reward", title: "奖励栏", gold: 100 });
+    insertMail(dbPath, { id: "mail_ch_system", roleId, channel: "system", kind: "system", title: "系统栏", gold: 200 });
+    const scoped = await api(baseUrl, "POST", "mails/claim-all?channel=reward", { token });
+    checkEqual(scoped && scoped.data && scoped.data.claimedCount, 1, "按频道一键领取只领了「奖励」这一栏");
+    checkEqual(scoped && scoped.data && scoped.data.gold, 100, "到手金币只算奖励栏那封");
+    checkEqual(scoped && scoped.data && scoped.data.unclaimed, 1, "系统栏那封仍在待领（没被顺手动到）");
+    const badChannel = await api(baseUrl, "POST", "mails/claim-all?channel=nope", { token });
+    checkEqual(badChannel && badChannel.code, 40000, "非法频道 → 40000（不静默当成「全部」）");
+
+    // 战斗频道：真打一只 BOSS 与一只普通怪
+    const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
+    const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
+    await waitFor("握手成功", async () => (session.opened ? session : null));
+    let castSeq = 0;
+    const castAt = async (mob) => {
+      castSeq += 1;
+      const castId = castSeq;
+      session.socket.send(
+        JSON.stringify({ type: "cast", data: { castId, skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey } }),
+      );
+      return session.waitForSettle(castId);
+    };
+    const killByKey = async (monsterKey, attempts = 20) => {
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const snap = await session.joinWorld("1");
+        const mob = snap && snap.monsters.find((m) => m.alive && m.monsterKey === monsterKey);
+        if (mob) {
+          const result = await castAt(mob);
+          if (result && result.ok && result.killed) return result;
+        }
+        await sleep(200);
+      }
+      return null;
+    };
+    const bossKill = await killByKey("201");
+    check(!!(bossKill && bossKill.killed), "准备：打死一只 BOSS（白骨弓手）");
+    const combatBox = await api(baseUrl, "GET", "mails/me", { token });
+    const combatMail = combatBox.data.mails.find((row) => row.channel === "combat");
+    check(
+      !!combatMail && combatMail.kind === "boss" && combatMail.title.includes("白骨弓手"),
+      "BOSS 击杀落进战斗频道（kind = boss，标题带怪物名）",
+      JSON.stringify(combatMail),
+    );
+    const combatBefore = combatBox.data.mails.filter((row) => row.channel === "combat").length;
+    await killByKey("1");
+    const afterTrash = await api(baseUrl, "GET", "mails/me", { token });
+    checkEqual(
+      afterTrash.data.mails.filter((row) => row.channel === "combat").length,
+      combatBefore,
+      "普通怪击杀不落战斗频道（否则一次扫图几十条）",
+    );
+
+    //#endregion
   } catch (error) {
     failed += 1;
     failures.push(String(error && error.stack ? error.stack : error));
     console.log(`\n✗ 未捕获异常：${error && error.stack ? error.stack : error}`);
   } finally {
+    if (process.env.E2E_DEBUG === "1") console.log(`\n--- 服务端日志 ---\n${server.logs()}`);
     if (serverChild) serverChild.kill("SIGKILL");
   }
 

@@ -35,6 +35,14 @@ export type MonsterData = Omit<MonsterConfig, keyof BattleAttributes | "speedRat
 
 /** 怪物配置接口 */
 export interface MonsterConfig extends CommonAttributes, BattleAttributes {
+  /**
+   * 定位（normal / elite / boss）
+   *
+   * 数值倍率在 `monsterStats(level, tier)` 里已经展开进六项攻防与 maxHp，但**这个标签本身也要留着**：
+   * 服务端要按它 seed `monsters.tier`（管理端「怪物配置」的那一列、战斗频道的 BOSS 判定都读它），
+   * 掉落 / 技能也在配置层按它分流。曾经在建 Map 时把它解构掉了，结果快照里 220 只怪全是 normal。
+   */
+  tier?: MonsterTier;
   /** 图标 */
   icon: string;
   // 外观

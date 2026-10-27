@@ -11,6 +11,10 @@ export interface MonsterKilledEvent {
   roleId: string;
   /** 怪物 key（不是实例 id：任务与成就都按种类判） */
   monsterKey: string;
+  /** 怪物名（战斗频道写消息用 —— 订阅方不必为了一个名字再查一次库） */
+  monsterLabel: string;
+  /** 定位：normal / elite / boss（战斗频道只对 boss 落一条，普通怪不刷屏） */
+  monsterTier: string;
 }
 
 export interface QuestClaimedEvent {

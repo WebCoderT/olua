@@ -705,7 +705,17 @@ async function main() {
     const monsterKeyword = await api(base, "GET", "/api/admin/monsters?keyword=" + encodeURIComponent(shared.MONSTERS["1"].label), { token });
     checkEqual(monsterKeyword.body?.data?.total, 1, "关键字按名称命中怪物 1");
     const monstersNormal = await api(base, "GET", "/api/admin/monsters?tier=normal", { token });
-    checkEqual(monstersNormal.body?.data?.total, monsterCount, "tier=normal：全部怪物（当前全是普通怪）");
+    const monstersBoss = await api(base, "GET", "/api/admin/monsters?tier=boss", { token });
+    // 分档口径从快照现算（#436）：这条以前写的是「全部怪物，当前全是普通怪」——
+    // 那是 `configs/monster.ts` 建 Map 时把 tier 解构掉又没放回的 bug 留下的印记，
+    // tier 修好后 220 只怪里只有 199 只是普通怪，照抄老数字会立刻假红。
+    const normalCount = Object.values(shared.MONSTERS).filter((row) => row.tier === "normal").length;
+    const bossCount = Object.values(shared.MONSTERS).filter((row) => row.tier === "boss").length;
+    checkEqual(
+      `${monstersNormal.body?.data?.total}/${monstersBoss.body?.data?.total}`,
+      `${normalCount}/${bossCount}`,
+      `tier 筛：普通怪 ${normalCount} 只 / BOSS ${bossCount} 只（档位按快照分，不是「全是普通怪」）`,
+    );
     const monstersElite = await api(base, "GET", "/api/admin/monsters?tier=elite", { token });
     checkEqual(monstersElite.body?.data?.total, 0, "tier=elite：空列表（合法筛选）");
     const monstersBadSort = await api(base, "GET", "/api/admin/monsters?sort=evil", { token });

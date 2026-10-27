@@ -157,7 +157,9 @@ server/
 │   │   ├── achievement/            achievements (#401): cumulative kinds (kill / quest) counted +1 from events, state kinds
 │   │   │                           (level / combat / collect) evaluated on read without storing progress; achieving and claiming are separate (`achieved_at` / `claimed_at`), admin CRUD on config
 │   │   ├── game-mail/              in-game mail (#429): player inbox with attachment claiming (same grant entry as quests / achievements);
-│   │   │                           unclaimed attachments cannot be deleted; a full bag on an achievement claim turns the reward into a mail (server-side fallback)
+│   │   │                           unclaimed attachments cannot be deleted; a full bag on an achievement claim turns the reward into a mail (server-side fallback);
+│   │   │                           #436 channels: `channel` enum + per-channel badges (no server-side filtering), per-channel claim-all,
+│   │   │                           the combat channel subscribes to `monster:killed` (boss kills only)
 │   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server; since #398 both chat and presence drop blocked recipients)
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
@@ -192,7 +194,7 @@ server/
 │   ├── e2e-party.cjs               79 assertions (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
 │   ├── e2e-rank.cjs                55 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
 │   ├── e2e-achievement.cjs         39 assertions (achievements: snapshot delivery / cumulative kinds counted from events / state kinds evaluated on read with no stored progress / claiming and a full bag turning into mail / admin config and delete refusal)
-│   ├── e2e-game-mail.cjs           39 assertions (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail)
+│   ├── e2e-game-mail.cjs           51 assertions (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail / channels: four fixed badges · per-channel claim · unknown channel 40000 · social and combat delivery)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -222,7 +224,7 @@ server/
 | `quest_progress` | player quest progress (#396) | `PRIMARY KEY (role_id, quest_id)`; `status` (accepted / ready / claimed) + `progress`. kill is emitted by the realtime process as `monster:killed` and written by the quest service (the bus since #401), talk by NPC dialogue, collect by inspecting the bag at turn-in; main keeps a `claimed` row as the chain gate, daily deletes the row |
 | `achievements` | achievement configs (#401) | condition (`condition_type` / `target` / `count`) + rewards (gold / exp / items JSON column) + `category` / `sort_order` / `hidden`; seeded from the client's `configs/achievement-data` snapshot, admin-editable, **deletion refused once player records exist** |
 | `role_achievements` | player achievement records (#401) | `PRIMARY KEY (role_id, achievement_id)`; **only cumulative kinds write `progress`** (state kinds are computed on read, so a missing row is normal); `achieved_at` non-null = claimable, `claimed_at` non-null = claimed; counting stops once achieved and rows are never deleted on achievement |
-| `role_mails` | in-game mail (#429) | `id` primary key + `role_id` (cascade); `kind` / `title` / `body` / attachments (`gold` / `exp` / `attachments` JSON column) + `read_at` / `claimed_at`. **Unrelated to `mail_queue`** (that one is the outbound SMTP queue). Attachments only enter the bag on claim; rows with unclaimed attachments are refused deletion; indexes `(role_id, created_at DESC)` for the box and `(role_id, claimed_at)` for the unclaimed count |
+| `role_mails` | in-game mail (#429 / channels #436) | `id` primary key + `role_id` (cascade); `channel` (four-value enum: system / reward / social / combat, default system, kept apart from the source tag `kind`) / `kind` / `title` / `body` / attachments (`gold` / `exp` / `attachments` JSON column) + `read_at` / `claimed_at`. **Unrelated to `mail_queue`** (that one is the outbound SMTP queue). Attachments only enter the bag on claim; rows with unclaimed attachments are refused deletion; indexes `(role_id, created_at DESC)` for the box and `(role_id, claimed_at)` for the unclaimed count |
 | `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
 | `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level |
@@ -319,7 +321,7 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **154 interfaces / 128 paths / 232 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **154 interfaces / 128 paths / 233 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |

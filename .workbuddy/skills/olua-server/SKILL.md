@@ -93,7 +93,7 @@ test/e2e-quest.cjs               任务专项（48 条断言，四写入口 / �
 test/e2e-sell.cjs                出售专项（24 条断言，快照价结算 / 整单拒绝）
 test/e2e-party.cjs               队伍专项（79 条断言，邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
 test/e2e-achievement.cjs         成就专项（39 条断言，累计 / 状态两种存储 / 背包满转邮件）
-test/e2e-game-mail.cjs           游戏内邮件专项（39 条断言，附件领取 / 拒删 / 一键领取到背包满）
+test/e2e-game-mail.cjs           游戏内邮件专项（51 条断言，附件领取 / 拒删 / 一键领取到背包满 / 频道与两处投递）
 test/backup.cjs                  备份 / 恢复专项（87 条断言）
 ```
 
@@ -252,9 +252,32 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （并发点两次只发一份）；已读同理 `WHERE read_at IS NULL` —— 只留第一次看到的时刻；
 - **一键领取逐封发，不合并**：遇 `MALL_BAG_FULL` 停下并如实回报 `stoppedByBag`，已领的照常落库 ——
   不是整单失败，也不是整单回滚；
-- **成就的背包满兜底**：捕获 20012 → 整份奖励（金币 / 经验 / 物品）转一封 `kind: "achievement"` 邮件、
+- **成就的背包满兜底**：捕获 20012 → 整份奖励（金币 / 经验 / 物品）转一封 `channel: "reward"` / `kind: "achievement"` 的邮件、
   **照常写 `claimed_at`**、返回 `mailId`。不写 `claimed_at` 就能反复点领取刷邮件。
   判业务码统一用 `isBizCode(error, code)`（`common/errors/biz.exception.ts`），不要各处手写 `instanceof`。
+
+### 四之八、消息频道：`channel` 是分类，`kind` 是来源（#436）
+
+四个频道收敛在 `game-mail/mail-channel.ts` 的 `MAIL_CHANNELS`（system / reward / social / combat），
+**新增只能改这里** —— 客户端页签也按它对齐（`client/tools/test-mail.cjs` 逐项比对两端顺序）。
+
+- **`channel` 与 `kind` 是两件事**：`channel` 是玩家视角的分类（必须收敛，否则消息会落进没有页签能装下的栏），
+  `kind` 是来源标签（`achievement` / `friend` / `boss`，自由扩展，只用于日志与排查）。
+  典型错位：`kind: "achievement"` 属于 `channel: "reward"` —— 玩家不关心它是哪个玩法发的；
+- **接口不做频道过滤**：`GET /mails/me` 一次给全量 + `channels: [{channel, unread, unclaimed, total}]` 四栏角标，
+  客户端本地筛。切页签零请求、红点与小结算永远按全量，不会「切回全部要重拉」；
+- **四条角标必须固定出现**（`MAIL_CHANNELS.map`）：没消息的频道也要有条目，否则客户端切过去看不到「那栏有几条没看」；
+- **非法频道报 `PARAM_INVALID 40000`，不能静默当「全部」**：这是发奖路径，玩家以为只领了一栏、实际整箱都领了 ——
+  「宽容」在这里比报错危险（`scopeOf()` 是唯一收窄口）；
+- **`send` 的 `channel` 必填**，落库前过 `toMailChannel()`（认不出的归 system，绝不丢消息）；
+- **一键领取跟着页签走**：`claimAll(accountId, channel?)` → `listUnclaimed(roleId, channel)`，筛选下推 SQL；
+- **战斗频道走订阅，不在结算里直接发信**：`GameMailEventsService` 订阅 `monster:killed`（事件载荷已带
+  `monsterLabel` / `monsterTier`），**只对 boss 落消息** —— 普通怪一天几百只，每条一封就是把频道当日志。
+  启动时打一条「订阅方 N 个」的日志：这类订阅少一个不报错，只会静默不生效；
+- **社交消息是通知不是状态**：好友申请仍以 `social` 表的 `incomingRequests` 为准，邮件只是「不开面板也知道」；
+  投递失败**只打日志**（关系已落库，为一条通知把接口打成 500 会让人重试并撞「已经发过申请了」）；
+- **迁移**：`ensureColumn` 补 `channel`（默认 system）+ 一次性回填
+  `UPDATE role_mails SET channel = 'reward' WHERE kind = 'achievement' AND channel = 'system'`（幂等）。
 
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 

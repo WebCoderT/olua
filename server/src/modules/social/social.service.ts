@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
@@ -12,6 +12,8 @@ import { BizException } from "../../common/errors/biz.exception";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { ReportRepository } from "../../database/repositories/report.repository";
 import { SocialRepository } from "../../database/repositories/social.repository";
+import { GameMailService } from "../game-mail/game-mail.service";
+import { RoleDto } from "../roles/dto/role.dto";
 import { RolesService } from "../roles/roles.service";
 import { CreateReportDto, MySocialDto, SocialTargetDto } from "./dto/social.dto";
 
@@ -34,12 +36,15 @@ import { CreateReportDto, MySocialDto, SocialTargetDto } from "./dto/social.dto"
  */
 @Injectable()
 export class SocialService {
+  private readonly logger = new Logger(SocialService.name);
+
   constructor(
     private readonly social: SocialRepository,
     private readonly reports: ReportRepository,
     private readonly guilds: GuildRepository,
     private readonly roles: RolesService,
     private readonly config: ConfigService,
+    private readonly mails: GameMailService,
   ) {}
 
   //#region 查询
@@ -104,7 +109,33 @@ export class SocialService {
     }
     const now = Date.now();
     this.social.transaction(() => this.social.upsertRequest(me.id, targetId, me.id, now));
+    this.notifyFriendRequest(me, targetId);
     return this.mine(accountId);
+  }
+
+  /**
+   * 给被加的人留一条社交消息（#436）
+   *
+   * 只做**通知**，不替代状态：待处理申请仍然在 `GET /social/me` 的 `incomingRequests` 里，
+   * 消息中心那条只是让他在不打开社交面板的时候也知道有人加他。
+   *
+   * 失败只打日志：好友申请已经落库了，为了「一条通知」把接口打成 500 会让玩家重试，
+   * 而重试只会撞上「已经发过申请了」—— 关系成功、操作报错，是最难解释的一种状态。
+   * 屏蔽已经在上游挡过（被拉黑的人这里根本走不到），不必再判一次。
+   */
+  private notifyFriendRequest(me: RoleDto, targetRoleId: string): void {
+    try {
+      this.mails.send(targetRoleId, {
+        channel: "social",
+        kind: "friend",
+        title: "好友申请",
+        body: `${me.name}（Lv${me.level}）请求加你为好友，去社交面板处理。`,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `好友申请消息投递失败：${me.id} → ${targetRoleId}（${error instanceof Error ? error.message : String(error)}）`,
+      );
+    }
   }
 
   /** 同意别人加我（只有「他发起、等我这边的」才能同意） */

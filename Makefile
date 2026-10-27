@@ -292,8 +292,8 @@ server-e2e-achievement: ## 服务端成就专项 e2e（39 条：累计型事件�
 	@echo "==> 服务端成就 e2e（39 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:achievement
 
-server-e2e-game-mail: ## 服务端游戏内邮件专项 e2e（39 条：收件箱与未读未领 / 领取与三种错误码 / 附件没领拒删 / 一键领取 / 成就兜底）
-	@echo "==> 服务端游戏内邮件 e2e（39 条）"
+server-e2e-game-mail: ## 服务端游戏内邮件专项 e2e（51 条：收件箱与未读未领 / 领取与三种错误码 / 附件没领拒删 / 一键领取 / 成就兜底 / 频道与社交·战斗投递）
+	@echo "==> 服务端游戏内邮件 e2e（51 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:game-mail
 
 server-verify: ## 服务端一条命令全验（编译 + 二十二套 e2e + 生成物审计）

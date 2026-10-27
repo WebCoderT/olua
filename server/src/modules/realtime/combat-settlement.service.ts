@@ -218,7 +218,13 @@ export class CombatSettlementService {
       this.rememberDrops(accountId, cast.castId, reward.drops);
       // 击杀事件（#401 起走总线）：任务进度与成就进度都是订阅方，各自兜异常 ——
       // 任何一方写库失败都不回滚这次击杀（世界状态是权威，少记一笔进度可接受）
-      this.events.emit("monster:killed", { accountId, roleId: role.id, monsterKey: cast.monsterKey });
+      this.events.emit("monster:killed", {
+        accountId,
+        roleId: role.id,
+        monsterKey: cast.monsterKey,
+        monsterLabel: stats.label,
+        monsterTier: stats.tier,
+      });
     }
 
     this.logger.debug(

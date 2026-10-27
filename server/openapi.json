@@ -10319,7 +10319,7 @@
     },
     "/mails/me": {
       "get": {
-        "description": "整份收件箱（新的在前）+ 未读数 + 未领数。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。\n\n不做频道过滤：一次给全量，客户端本地按 `channel` 筛 —— 切页签不发请求，角标也永远按全量算。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameMail.mine",
         "parameters": [],
         "responses": {
@@ -10471,9 +10471,19 @@
     },
     "/mails/claim-all": {
       "post": {
-        "description": "按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。\n\n`channel` 可选：传了就只领这一栏（面板在「奖励」页签点一键领取时，不该顺手动到社交栏），不传 = 全部频道；传了非法值 → 40000。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameMail.claimAll",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "channel",
+            "required": false,
+            "in": "query",
+            "description": "只领这一栏：system / reward / social / combat（不传 = 全部）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "领取后的收件箱 + 本次合计",
@@ -19614,9 +19624,13 @@
             "type": "string",
             "description": "邮件 id"
           },
+          "channel": {
+            "type": "string",
+            "description": "频道：system 系统 / reward 奖励 / social 社交 / combat 战斗"
+          },
           "kind": {
             "type": "string",
-            "description": "来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励"
+            "description": "来源标签（比频道更细）：system / achievement / friend / boss …"
           },
           "title": {
             "type": "string",
@@ -19656,6 +19670,7 @@
         },
         "required": [
           "id",
+          "channel",
           "kind",
           "title",
           "body",
@@ -19667,11 +19682,38 @@
           "createdAt"
         ]
       },
+      "MailChannelSummaryDto": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "description": "频道：system / reward / social / combat"
+          },
+          "unread": {
+            "type": "number",
+            "description": "未读数"
+          },
+          "unclaimed": {
+            "type": "number",
+            "description": "未领附件数"
+          },
+          "total": {
+            "type": "number",
+            "description": "总封数"
+          }
+        },
+        "required": [
+          "channel",
+          "unread",
+          "unclaimed",
+          "total"
+        ]
+      },
       "MailBoxDto": {
         "type": "object",
         "properties": {
           "mails": {
-            "description": "全部邮件（新的在前）",
+            "description": "全部邮件（新的在前，含所有频道；频道筛选在客户端做）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MailViewDto"
@@ -19684,12 +19726,20 @@
           "unclaimed": {
             "type": "number",
             "description": "未领封数（「一键领取」按钮用）"
+          },
+          "channels": {
+            "description": "每个频道的角标（固定四条，没有邮件的频道也会出现）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailChannelSummaryDto"
+            }
           }
         },
         "required": [
           "mails",
           "unread",
-          "unclaimed"
+          "unclaimed",
+          "channels"
         ]
       },
       "MailClaimResultDto": {
@@ -19709,6 +19759,13 @@
           "unclaimed": {
             "type": "number",
             "description": "未领封数"
+          },
+          "channels": {
+            "description": "每个频道的角标",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailChannelSummaryDto"
+            }
           },
           "gold": {
             "type": "number",
@@ -19738,6 +19795,7 @@
           "mails",
           "unread",
           "unclaimed",
+          "channels",
           "gold",
           "exp",
           "items",
@@ -19762,6 +19820,13 @@
           "unclaimed": {
             "type": "number",
             "description": "未领封数"
+          },
+          "channels": {
+            "description": "每个频道的角标",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailChannelSummaryDto"
+            }
           },
           "claimedCount": {
             "type": "number",
@@ -19799,6 +19864,7 @@
           "mails",
           "unread",
           "unclaimed",
+          "channels",
           "claimedCount",
           "gold",
           "exp",
