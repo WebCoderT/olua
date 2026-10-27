@@ -235,6 +235,10 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 `collect` 必须是真实物品、奖励物品必须存在）+ 管理端保存时（`assertAchievementConsistency`）。
 原因是这些错**不会报错**，只会让某条成就永远解锁不了。
 
+**改成就数据之后必须先 `npm run build` 再跑 e2e**：`e2e-achievement.cjs` 起的是 `dist/`，
+不重建就是拿旧快照在测（症状是「明明改了配置，快照还是 8 条」）。当前规模 24 条
+（battle 10 / growth 8 / explore 6，含 3 条隐藏）；同分类内 `order` 按难度递增、奖励随之上抬。
+
 ### 四之七、游戏内邮件 = 奖励的第二出口（#429）
 
 `role_mails` 是玩家收件箱；`mail_queue` 是**外发 SMTP 投递队列**（模板 + 尝试次数 + 后台调度）。

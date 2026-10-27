@@ -163,6 +163,10 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
   已领与未达成都不该有响应，比点了弹一句「不能领」干净。
 - **入口用现成素材**：小地图左侧竖排第二颗 `small-map/achievement` 美术稿本来就有，之前是纯占位。
 - `Game.onDestroy` 里 `AchievementStore.clear()`（成就墙是「这个角色」的，不能带给下一个角色）。
+- **规模 24 条**（battle 10 / growth 8 / explore 6，含 3 条隐藏，#428）：扩容只改
+  `configs/achievement-data.ts` 这一份纯数据，`gen-shared-data` 一跑服务端 seed / 管理端 / 客户端同到位。
+  条数断言有三处（`test-achievement.cjs` 的配置条数、`e2e-achievement.cjs` 的快照条数与「管理端列表条数」），
+  改数据必同改。同分类内 `order` 按难度递增、奖励随之上抬 —— 不允许「后一条奖励不如前一条」。
 
 ## 五之六、消息中心：一颗图标装两件事（#429）
 
