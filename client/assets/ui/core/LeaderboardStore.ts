@@ -37,8 +37,8 @@ export interface LeaderboardBoardState {
  * 开面板时拉一次就够，没必要为它开一条帧 —— 那只会让「谁在什么时候看到哪一版榜」变得随机。
  *
  * ## 缓存口径
- * - 按榜缓存（切页签不重新请求），但**每次打开面板都会重拉**（`reload`）：玩家打开榜
- *   就是想看新的，缓存十分钟只会让他怀疑「我升级了怎么没动」；
+ * - 切页签**就重拉**（`reload`），不走「有数据就不拉」的缓存：玩家打开榜就是想看新的，
+ *   缓存只会让他怀疑「我升级了怎么没动」；
  * - 请求带 `size=50`：榜本身最多 `LEADERBOARD_TOP_N`（默认 100）条，五十条足够玩家
  *   往下翻一段；再往后的人看的是底部那条「我的名次」，不是榜的尾巴。
  *
@@ -55,14 +55,7 @@ export default class LeaderboardStore {
     return this.states.get(board) ?? { page: null, self: null, loading: false, failed: false };
   }
 
-  /** 还没取过就拉一次（已经取过或正在拉都是空操作） */
-  static ensure(board: LeaderboardBoard): void {
-    const state = this.state(board);
-    if (state.loading || state.page) return;
-    void this.load(board);
-  }
-
-  /** 强制重拉（每次打开面板都走这里） */
+  /** 强制重拉（每次打开面板、每次切页签都走这里；正在拉的同一榜不叠加请求） */
   static reload(board: LeaderboardBoard): void {
     if (this.state(board).loading) return;
     void this.load(board);

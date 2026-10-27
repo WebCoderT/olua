@@ -76,8 +76,8 @@ try {
 
   console.log("\n— B. 切页就重拉：榜单是分钟级快照，不能读缓存 —");
 
-  check(/LeaderboardStore\.reload\(board\)/.test(dialog), "切页签时强制重拉（reload 而不是 ensure）");
-  check(!/LeaderboardStore\.ensure\(/.test(dialog), "弹窗里不用 ensure（那是「没数据才拉」的语义，会把旧榜一直留着）");
+  check(/LeaderboardStore\.reload\(board\)/.test(dialog), "切页签时强制重拉（reload，不读缓存）");
+  check(!/LeaderboardStore\.ensure\(/.test(store), "仓里没有「有数据就不拉」的 ensure（留着它会让人以为切页可以省一次请求）");
   check(/size: 50/.test(store), "一次拉 50 条（榜本身最多 LEADERBOARD_TOP_N 条，尾巴靠「我的名次」）");
 
   console.log("\n— C. 打开订阅 / 关闭退订 —");
@@ -105,7 +105,7 @@ try {
 
   check(/Promise\.all\(\[/.test(store), "列表与「我的名次」并发拉（两者必须是同一份快照）");
   check(/failed: true \}\)/.test(store) && /\.\.\.this\.state\(board\), loading: false, failed: true/.test(store), "请求失败只置 failed，**不清旧数据**");
-  check(/if \(state\.loading \|\| state\.page\) return;/.test(store), "ensure 在已有数据或正在请求时是空操作（防重复打接口）");
+  check(/if \(this\.state\(board\)\.loading\) return;/.test(store), "正在拉的同一榜不叠加请求（防连点把接口打穿）");
   check(/static clear\(\): void \{[\s\S]{0,80}this\.states\.clear\(\);/.test(store), "clear 清掉三个榜的状态");
 
   console.log("\n— G. 服务端口径与接口 —");
