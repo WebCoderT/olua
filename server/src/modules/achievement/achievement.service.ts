@@ -105,7 +105,8 @@ export class AchievementService implements OnModuleInit {
     } catch (error) {
       // 背包满：整份奖励（金币 / 经验 / 物品）转邮件，而不是让玩家先去猜是哪件东西放不下（#429）
       if (!isBizCode(error, BizCode.MALL_BAG_FULL)) throw error;
-      const mail = this.mails.sendReward(role.id, {
+      const mail = this.mails.send(role.id, {
+        channel: "reward",
         kind: "achievement",
         title: `成就奖励：${row.label}`,
         body: `「${row.label}」的奖励因背包已满转入邮箱，清理背包后在这里领取即可。`,

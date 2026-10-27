@@ -1,5 +1,5 @@
-import { Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from "@nestjs/common";
-import { ApiParam } from "@nestjs/swagger";
+import { Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query } from "@nestjs/common";
+import { ApiParam, ApiQuery } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -23,8 +23,9 @@ export class GameMailController {
     operationId: "gameMail.mine",
     summary: "我的收件箱",
     description:
-      "整份收件箱（新的在前）+ 未读数 + 未领数。附件的 `gold` / `exp` / `attachments` 是" +
-      "**还没到手**的那份奖励，点领取之后才进角色存档。",
+      "整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `gold` / `exp` / `attachments` 是" +
+      "**还没到手**的那份奖励，点领取之后才进角色存档。\n\n" +
+      "不做频道过滤：一次给全量，客户端本地按 `channel` 筛 —— 切页签不发请求，角标也永远按全量算。",
   })
   @ApiDataResponse(MailBoxDto, { description: "收件箱快照" })
   mine(@CurrentUser() user: AuthenticatedUser): MailBoxDto {
@@ -67,11 +68,18 @@ export class GameMailController {
     operationId: "gameMail.claimAll",
     summary: "一键领取",
     description:
-      "按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。",
+      "按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。\n\n" +
+      "`channel` 可选：传了就只领这一栏（面板在「奖励」页签点一键领取时，不该顺手动到社交栏），" +
+      "不传 = 全部频道；传了非法值 → 40000。",
+  })
+  @ApiQuery({
+    name: "channel",
+    required: false,
+    description: "只领这一栏：system / reward / social / combat（不传 = 全部）",
   })
   @ApiDataResponse(MailClaimAllResultDto, { description: "领取后的收件箱 + 本次合计" })
-  claimAll(@CurrentUser() user: AuthenticatedUser): MailClaimAllResultDto {
-    return this.gameMailService.claimAll(user.id);
+  claimAll(@CurrentUser() user: AuthenticatedUser, @Query("channel") channel?: string): MailClaimAllResultDto {
+    return this.gameMailService.claimAll(user.id, channel);
   }
 
   @Delete(":id")

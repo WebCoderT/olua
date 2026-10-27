@@ -4,7 +4,8 @@ import LayerManager from "../../core/LayerManager";
 import MailStore from "../../core/MailStore";
 import UiHelper from "../../helpers/UiHelper";
 import { items } from "../../../configs/items";
-import { mailDialogLayout as layout, mailTexts as texts } from "../../../configs/mail";
+import { mailChannels, mailDialogLayout as layout, mailTexts as texts } from "../../../configs/mail";
+import type { MailChannelKey } from "../../../configs/mail";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { MailView } from "../../utils/net/ApiModels";
@@ -23,12 +24,19 @@ export interface MailDialogOptions {
 }
 
 /**
- * 邮件面板（#429）
+ * 邮件面板（#429，频道化 #436）
  *
  * ## 一行一封，不做「左列表 + 右详情」
  * 邮件的正文通常就一两句（系统通知 / 成就奖励说明），附件也能压成一行摘要 ——
  * 再拆成左右两栏只会让「领取」这一件事多两次点击。列表里做三件事就够：
  * 点行标已读、点「领取」领附件、点「删除」删掉。
+ *
+ * ## 频道页签只筛不请求
+ * 服务端一次给全量 + 每个频道的角标，切页签是纯本地动作（见 `MailStore.setChannel`）：
+ * 不闪加载态、不会「切回全部要重拉」。角标画在页签右上角，红点口径与入口一致（全量）。
+ *
+ * ## 一键领取跟着页签走
+ * 在「奖励」页签点一键领取只领奖励那栏 —— 玩家清包时只想清奖励，不该顺手动到社交消息。
  *
  * ## 领取失败不清列表
  * 背包满（20012）时只飘一句「先清出格子」，邮件原样留着；玩家清完再点一次即可。
@@ -90,18 +98,26 @@ export default class MailDialog {
     clearChildren(body);
     const state = MailStore.get();
     const box = state.data;
-    // 红点跟着这一份走（未读 + 未领都算「有东西要处理」）
+    // 红点跟着这一份走（未读 + 未领都算「有东西要处理」，永远是全量而不是当前频道）
     this.options.onUnreadChange?.(box ? box.unread + box.unclaimed : 0);
     this.renderHeader(body, box ? box.unclaimed : 0);
+    this.renderTabs(body);
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     body.addChild(list);
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
     const layoutComponent = content.getComponent(Layout);
     if (layoutComponent) layoutComponent.spacingY = layout.row.gap;
-    const rows = box ? box.mails : [];
+    const rows = MailStore.visible(state);
     if (rows.length === 0) {
-      const text = state.loading ? texts.loading : state.failed ? texts.failed : texts.emptyList;
+      // 两种空要分开：整箱为空 vs 这一栏为空（后者切到「全部」还能看到别的）
+      const text = state.loading
+        ? texts.loading
+        : state.failed
+          ? texts.failed
+          : box && box.mails.length > 0
+            ? texts.emptyChannel
+            : texts.emptyList;
       content.addChild(
         UiHelper.createLabel(
           "mail_empty_text",
@@ -117,9 +133,78 @@ export default class MailDialog {
     for (const row of rows) content.addChild(this.createRow(row, state.busyId === row.id || state.busyId === "*"));
   }
 
-  /** 顶部：小结 + 一键领取 + 公告入口 */
+  /** 频道页签行（五个，横排居中；带未读角标） */
+  private renderTabs(body: Node) {
+    const config = layout.tabs;
+    const state = MailStore.get();
+    const counts = new Map<string, number>();
+    for (const summary of state.data?.channels ?? []) counts.set(summary.channel, summary.unread);
+    const total = state.data?.unread ?? 0;
+    // 整行居中：n 个页签 + (n-1) 个间距
+    const count = mailChannels.length;
+    const rowWidth = count * config.width + (count - 1) * config.gap;
+    const startX = -rowWidth / 2 + config.width / 2;
+    mailChannels.forEach((channel, index) => {
+      const unread = channel.key === "all" ? total : (counts.get(channel.key) ?? 0);
+      body.addChild(this.createTab(channel.key, channel.label, unread, startX + index * (config.width + config.gap)));
+    });
+  }
+
+  /** 单个页签：底色区分选中态，右上角挂未读角标 */
+  private createTab(key: MailChannelKey, text: string, unread: number, x: number) {
+    const config = layout.tabs;
+    const active = MailStore.get().channel === key;
+    const node = UiHelper.createNode(`mail_tab_${key}`, new Vec2(x, config.y), new Size(config.width, config.height));
+    const size = new Size(config.width, config.height);
+    const graphics = node.addComponent(Graphics);
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, config.radius);
+    graphics.fillColor = active ? config.activeFill : config.fill;
+    graphics.fill();
+    node.addChild(
+      UiHelper.createLabel(
+        `mail_tab_label_${key}`,
+        text,
+        active ? config.activeTextColor : config.textColor,
+        config.fontSize,
+        new Vec2(),
+        size,
+      ),
+    );
+    if (unread > 0) node.addChild(this.createDot(key, unread));
+    node.on(Node.EventType.TOUCH_END, () => MailStore.setChannel(key), this);
+    blockClickThrough(node);
+    return node;
+  }
+
+  /** 未读角标（>9 显示 9+：两位数会把小圆点撑变形） */
+  private createDot(key: MailChannelKey, unread: number) {
+    const config = layout.tabs;
+    const node = UiHelper.createNode(
+      `mail_tab_dot_${key}`,
+      config.dotOffset,
+      new Size(config.dotRadius * 2, config.dotRadius * 2),
+    );
+    const graphics = node.addComponent(Graphics);
+    graphics.circle(0, 0, config.dotRadius);
+    graphics.fillColor = config.dotFill;
+    graphics.fill();
+    node.addChild(
+      UiHelper.createLabel(
+        `mail_tab_dot_label_${key}`,
+        unread > config.dotCap ? texts.dotOverflow : `${unread}`,
+        config.dotTextColor,
+        config.dotFontSize,
+        new Vec2(),
+        new Size(config.dotRadius * 2, config.dotRadius * 2),
+      ),
+    );
+    return node;
+  }
+
+  /** 顶部：小结（全量）+ 一键领取（当前频道）+ 公告入口 */
   private renderHeader(body: Node, unclaimed: number) {
-    const box = MailStore.get().data;
+    const state = MailStore.get();
+    const box = state.data;
     const summary = texts.summary
       .split("{unread}")
       .join(`${box ? box.unread : 0}`)
@@ -135,10 +220,20 @@ export default class MailDialog {
         layout.summary.size,
       ),
     );
-    body.addChild(this.createButton("mail_claim_all", texts.claimAll, layout.claimAll, unclaimed > 0, () => void this.onClaimAll()));
+    // 一键领取只对「当前这一栏」生效：没有待领就别把它画成能点
+    const pending = this.unclaimedIn(state.channel);
+    body.addChild(this.createButton("mail_claim_all", texts.claimAll, layout.claimAll, pending > 0, () => void this.onClaimAll()));
     body.addChild(
       this.createButton("mail_announcement", texts.announcement, layout.announcement, true, () => this.options.onOpenAnnouncement?.()),
     );
+  }
+
+  /** 当前页签下有多少封待领（`all` 用全局数字） */
+  private unclaimedIn(channel: MailChannelKey): number {
+    const box = MailStore.get().data;
+    if (!box) return 0;
+    if (channel === "all") return box.unclaimed;
+    return box.channels.find((item) => item.channel === channel)?.unclaimed ?? 0;
   }
 
   /** 一封邮件：标题（未读更亮）+ 附件摘要 / 正文 + 领取 + 删除 */

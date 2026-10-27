@@ -734,6 +734,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE TABLE IF NOT EXISTS role_mails (
         id          TEXT    PRIMARY KEY,
         role_id     TEXT    NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        -- 玩家看到的频道（#436）：system / reward / social / combat，四个枚举必须收敛
+        channel     TEXT    NOT NULL DEFAULT 'system',
         kind        TEXT    NOT NULL DEFAULT 'system',
         title       TEXT    NOT NULL DEFAULT '',
         body        TEXT    NOT NULL DEFAULT '',
@@ -769,6 +771,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 区服（#295 阶段二）：存量账号全部归入一区（zone_id=1 与 zones seed 对齐，注册入参可指定）
     this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
     this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    // 消息频道（#436）：存量邮件按 kind 回填一次 —— 成就兜底的邮件属于「奖励」频道，
+    // 其余留在「系统」。幂等：只动「还是默认值且来源已明确」的行
+    this.ensureColumn("role_mails", "channel", "TEXT NOT NULL DEFAULT 'system'");
+    this.db.exec("UPDATE role_mails SET channel = 'reward' WHERE kind = 'achievement' AND channel = 'system'");
     // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");

@@ -1,5 +1,6 @@
 import { GameMailApi } from "../utils/net/Api";
-import type { MailBox } from "../utils/net/ApiModels";
+import type { MailBox, MailView } from "../utils/net/ApiModels";
+import type { MailChannelKey } from "../../configs/mail";
 
 /** 邮件仓的本地状态 */
 export interface MailState {
@@ -11,6 +12,8 @@ export interface MailState {
   failed: boolean;
   /** 正在处理的邮件 id（防连点；空串 = 空闲） */
   busyId: string;
+  /** 当前页签（`all` = 不筛；只影响显示，不影响请求） */
+  channel: MailChannelKey;
 }
 
 /** 一次「有反馈」的操作结果（弹窗据此决定飘什么字） */
@@ -35,13 +38,37 @@ export interface MailClaimAllOutcome extends MailActionResult {
  *
  * 失败路径反过来：**只清 `busyId`，状态原样保留**。背包满（20012）时玩家清完格子
  * 直接再点一次就行，界面不该因为一次失败变成空列表 —— 那会让人以为邮件丢了。
+ *
+ * ## 频道不参与请求（#436）
+ * 服务端一次给全量 + 每个频道的角标，`channel` 只是本地筛选条件：切页签**不发请求**、
+ * 不会「切回全部要重拉」、红点与小结永远按全量算。唯一的例外是「一键领取」——
+ * 它把当前频道带给服务端（在「奖励」页签点领取，不该顺手动到社交栏）。
  */
 export default class MailStore {
-  private static state: MailState = { data: null, loading: false, failed: false, busyId: "" };
+  private static state: MailState = {
+    data: null,
+    loading: false,
+    failed: false,
+    busyId: "",
+    channel: "all",
+  };
   private static listeners: Array<() => void> = [];
 
   static get(): MailState {
     return this.state;
+  }
+
+  /** 当前页签下要显示的邮件（`all` = 全部） */
+  static visible(state: MailState = MailStore.state): MailView[] {
+    const mails = state.data?.mails ?? [];
+    return state.channel === "all" ? mails : mails.filter((mail) => mail.channel === state.channel);
+  }
+
+  /** 切页签（纯本地，不请求；重复点同一个 tab 不重绘） */
+  static setChannel(channel: MailChannelKey): void {
+    if (this.state.channel === channel) return;
+    this.state = { ...this.state, channel };
+    this.emit();
   }
 
   /** 重拉（打开面板 / 领取后补一次都走这里；正在拉的请求不叠加） */
@@ -66,17 +93,18 @@ export default class MailStore {
   }
 
   /**
-   * 一键领取
+   * 一键领取（只领当前频道；`all` 页签 = 领全部）
    *
    * `busyId` 用 `"*"` 占位：它和单封操作互斥（同一封邮件被两条路径同时发奖是完全可以避免的）。
    */
   static async claimAll(): Promise<MailClaimAllOutcome> {
     if (this.state.busyId) return { ok: false, code: 0, claimedCount: 0, stoppedByBag: false };
+    const channel = this.state.channel === "all" ? undefined : this.state.channel;
     this.state = { ...this.state, busyId: "*" };
     this.emit();
     try {
-      const result = await GameMailApi.claimAll();
-      this.state = { data: toBox(result), loading: false, failed: false, busyId: "" };
+      const result = await GameMailApi.claimAll(channel ? { channel } : {});
+      this.state = { ...this.state, data: toBox(result), loading: false, failed: false, busyId: "" };
       this.emit();
       return { ok: true, code: 0, claimedCount: result.claimedCount, stoppedByBag: result.stoppedByBag };
     } catch (error) {
@@ -86,9 +114,9 @@ export default class MailStore {
     }
   }
 
-  /** 切角色 / 回登录：收件箱是「这个角色的」 */
+  /** 切角色 / 回登录：收件箱是「这个角色的」（页签回到「全部」） */
   static clear(): void {
-    this.state = { data: null, loading: false, failed: false, busyId: "" };
+    this.state = { data: null, loading: false, failed: false, busyId: "", channel: "all" };
     this.emit();
   }
 
@@ -107,7 +135,7 @@ export default class MailStore {
     this.emit();
     try {
       const result = await call();
-      this.state = { data: toBox(result), loading: false, failed: false, busyId: "" };
+      this.state = { ...this.state, data: toBox(result), loading: false, failed: false, busyId: "" };
       this.emit();
       return { ok: true, code: 0 };
     } catch (error) {
@@ -122,7 +150,7 @@ export default class MailStore {
     this.emit();
     try {
       const data = await GameMailApi.mine();
-      this.state = { data: data ?? null, loading: false, failed: false, busyId: "" };
+      this.state = { ...this.state, data: data ?? null, loading: false, failed: false, busyId: "" };
     } catch {
       this.state = { ...this.state, loading: false, failed: true };
     }
@@ -134,22 +162,30 @@ export default class MailStore {
   }
 }
 
-/** 领取结果比收件箱多几个字段，但「箱子」那三个字段一直在 —— 只取这三个 */
+/** 领取结果比收件箱多几个字段，但「箱子」那四个字段一直在 —— 只取这四个 */
 interface MailClaimResultLike {
   mails: MailBox["mails"];
   unread: number;
   unclaimed: number;
+  channels: MailBox["channels"];
 }
 
 /**
  * 各种响应形状 → 收件箱快照
  *
- * 领取接口返回的是「箱子 + 本次到手」，`mails` / `unread` / `unclaimed` 三个字段
- * 与 `GET /mails/me` 完全一致；这里只挑这三个，免得本地多出一份「本次领了多少」
+ * 领取接口返回的是「箱子 + 本次到手」，`mails` / `unread` / `unclaimed` / `channels` 四个字段
+ * 与 `GET /mails/me` 完全一致；这里只挑这四个，免得本地多出一份「本次领了多少」
  * 的临时状态 —— 那是弹窗飘字用的，不该进仓。
+ *
+ * `channels` 一定带过来：它是页签角标的唯一来源，丢了角标就会「领完还是红的」。
  */
 function toBox(result: MailBox | MailClaimResultLike): MailBox {
-  return { mails: result.mails, unread: result.unread, unclaimed: result.unclaimed };
+  return {
+    mails: result.mails,
+    unread: result.unread,
+    unclaimed: result.unclaimed,
+    channels: result.channels ?? [],
+  };
 }
 
 /** 业务码在 ApiError 上；拿不到就当一般失败（0） */

@@ -137,7 +137,7 @@ Manual equivalent (no `make` needed):
 # Client: 37 test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + twenty-two e2e suites (248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 79 / 55 / 39 / 39) + generated-artifact consistency
+# Server: compile + twenty-two e2e suites (248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 79 / 55 / 39 / 51) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build

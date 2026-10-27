@@ -9,14 +9,22 @@ import { RolesService } from "../roles/roles.service";
 import {
   MailAttachmentDto,
   MailBoxDto,
+  MailChannelSummaryDto,
   MailClaimAllResultDto,
   MailClaimResultDto,
   MailViewDto,
 } from "./dto/game-mail.dto";
+import { MAIL_CHANNELS, MailChannel, isMailChannel, toMailChannel } from "./mail-channel";
 
-/** 发一封带奖励的邮件（成就背包满兜底、系统补发都走这里） */
-export interface SendRewardMailInput {
-  /** 来源标注：system / achievement / reward */
+/**
+ * 发一条消息（成就兜底、好友申请、BOSS 战报、运营补发都走这里）
+ *
+ * `channel` 必填：发送方必须想清楚「这条消息玩家会在哪一栏找它」——
+ * 让它默认落到「系统」，等于把分类责任推给玩家。
+ */
+export interface SendMailInput {
+  channel: MailChannel;
+  /** 更细的来源标签（achievement / friend / boss …），只用于日志与排查 */
   kind: string;
   title: string;
   body?: string;
@@ -40,6 +48,11 @@ export interface SendRewardMailInput {
  *   玩家清包后能再领；`claimAll` 则领到满为止（已领的照常落库，`stoppedByBag` 说明还有剩）。
  *
  * 与 `MailModule`（外发 SMTP 投递队列）没有任何代码关系，两者只是中文都叫「邮件」。
+ *
+ * ## 频道（#436）
+ * 每条消息带一个 `channel`（system / reward / social / combat），玩家在消息中心按栏查看。
+ * **接口不做频道过滤**：一次给全量 + 每个频道的角标，客户端本地筛 —— 切页签不发请求、
+ * 不会「切回全部要重拉」、红点口径天然一致。唯一带频道参数的是 `claimAll`（只领当前这一栏）。
  */
 @Injectable()
 export class GameMailService {
@@ -87,6 +100,7 @@ export class GameMailService {
     result.mails = box.mails;
     result.unread = box.unread;
     result.unclaimed = box.unclaimed;
+    result.channels = box.channels;
     result.gold = mail.gold;
     result.exp = mail.exp;
     result.items = items;
@@ -100,10 +114,14 @@ export class GameMailService {
    *
    * 逐封发奖而不是合并成一次：每封邮件是独立的奖励来源（可能来自不同玩法），
    * 合并会让「哪封进了背包」变得无法回溯，也让背包满时的中断点变得随意。
+   *
+   * `channel` 传了就只领这一栏（面板在「奖励」页签点一键领取时，不该把社交栏的消息也动了）；
+   * 不传 = 全部频道。
    */
-  claimAll(accountId: string): MailClaimAllResultDto {
+  claimAll(accountId: string, channel?: string): MailClaimAllResultDto {
     const role = this.requireOnlineRole(accountId);
-    const pending = this.mails.listUnclaimed(role.id);
+    const scope = this.scopeOf(channel);
+    const pending = this.mails.listUnclaimed(role.id, scope);
 
     const lines: Array<{ gold: number; exp: number; items: RewardItem[] }> = [];
     let claimedCount = 0;
@@ -134,6 +152,7 @@ export class GameMailService {
     result.mails = box.mails;
     result.unread = box.unread;
     result.unclaimed = box.unclaimed;
+    result.channels = box.channels;
     result.claimedCount = claimedCount;
     result.gold = lines.reduce((sum, line) => sum + line.gold, 0);
     result.exp = lines.reduce((sum, line) => sum + line.exp, 0);
@@ -156,15 +175,16 @@ export class GameMailService {
   }
 
   /**
-   * 发一封带奖励的邮件（给成就领奖的「背包满兜底」用）
+   * 发一条消息（不给奖励也能发：好友申请、BOSS 战报都是纯文本 + 一个分类）
    *
    * 不做合并 / 去重：同一份奖励被发两次就应该是两封（要不要去重是调用方的事，
-   * 而这里的调用方是「一次领取动作」，本来就不会重复）。
+   * 而这里的调用方都是「一次具体动作」，本来就不会重复）。
    */
-  sendReward(roleId: string, input: SendRewardMailInput): RoleMailRow {
+  send(roleId: string, input: SendMailInput): RoleMailRow {
     const row: RoleMailRow = {
       id: `mail_${Date.now()}_${randomUUID().slice(0, 8)}`,
       role_id: roleId,
+      channel: toMailChannel(input.channel),
       kind: input.kind,
       title: input.title,
       body: input.body ?? "",
@@ -181,14 +201,43 @@ export class GameMailService {
 
   //#region 内部
 
-  /** 收件箱快照（未读数 / 未领数从同一份列表算，避免两次 COUNT 与列表不一致） */
+  /**
+   * 收件箱快照（未读数 / 未领数 / 频道角标都从同一份列表算）
+   *
+   * 一次取回再本地聚合，而不是发几条 COUNT：多次查询之间可能插进新消息，
+   * 「列表里 5 封未读、角标写 4」这种自相矛盾比多一次遍历难查得多。
+   */
   private boxOf(roleId: string): MailBoxDto {
     const rows = this.mails.listByRole(roleId);
     const dto = new MailBoxDto();
     dto.mails = rows.map((row) => MailViewDto.of(row));
     dto.unread = rows.filter((row) => row.read_at === null).length;
     dto.unclaimed = rows.filter((row) => row.claimed_at === null).length;
+    // 四个频道固定出现（没有消息的频道也要有条目，客户端才能画出 0 角标的页签）
+    dto.channels = MAIL_CHANNELS.map((channel) => {
+      const summary = new MailChannelSummaryDto();
+      summary.channel = channel;
+      const own = rows.filter((row) => row.channel === channel);
+      summary.total = own.length;
+      summary.unread = own.filter((row) => row.read_at === null).length;
+      summary.unclaimed = own.filter((row) => row.claimed_at === null).length;
+      return summary;
+    });
     return dto;
+  }
+
+  /**
+   * 频道参数收窄
+   *
+   * 传了就必须是合法频道：静默当成「全部」会让人以为只领了这一栏，实际把整个箱子都领了 ——
+   * 这种「宽容」在发奖路径上是危险的。不传 = 全部频道（「全部」页签的一键领取）。
+   */
+  private scopeOf(channel?: string): MailChannel | undefined {
+    if (channel === undefined || channel === "") return undefined;
+    if (!isMailChannel(channel)) {
+      throw new BizException(BizCode.PARAM_INVALID, `不认识的消息频道：${channel}`);
+    }
+    return channel;
   }
 
   /** 取一封属于该角色的邮件（别人的邮件一律当作不存在，不做越权探测口） */

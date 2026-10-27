@@ -5537,7 +5537,11 @@ export type MailView = {
    */
   id: string;
   /**
-   * 来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励
+   * 频道：system 系统 / reward 奖励 / social 社交 / combat 战斗
+   */
+  channel: string;
+  /**
+   * 来源标签（比频道更细）：system / achievement / friend / boss …
    */
   kind: string;
   /**
@@ -5574,9 +5578,28 @@ export type MailView = {
   createdAt: number;
 };
 
+export type MailChannelSummary = {
+  /**
+   * 频道：system / reward / social / combat
+   */
+  channel: string;
+  /**
+   * 未读数
+   */
+  unread: number;
+  /**
+   * 未领附件数
+   */
+  unclaimed: number;
+  /**
+   * 总封数
+   */
+  total: number;
+};
+
 export type MailBox = {
   /**
-   * 全部邮件（新的在前）
+   * 全部邮件（新的在前，含所有频道；频道筛选在客户端做）
    */
   mails: MailView[];
   /**
@@ -5587,6 +5610,10 @@ export type MailBox = {
    * 未领封数（「一键领取」按钮用）
    */
   unclaimed: number;
+  /**
+   * 每个频道的角标（固定四条，没有邮件的频道也会出现）
+   */
+  channels: MailChannelSummary[];
 };
 
 export type MailClaimResult = {
@@ -5602,6 +5629,10 @@ export type MailClaimResult = {
    * 未领封数
    */
   unclaimed: number;
+  /**
+   * 每个频道的角标
+   */
+  channels: MailChannelSummary[];
   /**
    * 本次到手的金币
    */
@@ -5638,6 +5669,10 @@ export type MailClaimAllResult = {
    */
   unclaimed: number;
   /**
+   * 每个频道的角标
+   */
+  channels: MailChannelSummary[];
+  /**
    * 本次成功领取的封数
    */
   claimedCount: number;
@@ -5665,4 +5700,11 @@ export type MailClaimAllResult = {
    * 是否因为背包满而提前停下（true = 还有没领的）
    */
   stoppedByBag: boolean;
+};
+
+export type GameMailClaimAllQuery = {
+  /**
+   * 只领这一栏：system / reward / social / combat（不传 = 全部）
+   */
+  channel?: string;
 };

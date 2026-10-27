@@ -20,11 +20,12 @@ export class RoleMailRepository {
   insert(row: RoleMailRow): void {
     this.db.run(
       `INSERT INTO role_mails
-         (id, role_id, kind, title, body, gold, exp, attachments, read_at, claimed_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, role_id, channel, kind, title, body, gold, exp, attachments, read_at, claimed_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.role_id,
+        row.channel,
         row.kind,
         row.title,
         row.body,
@@ -60,11 +61,21 @@ export class RoleMailRepository {
     return this.db.count("SELECT COUNT(*) AS n FROM role_mails WHERE role_id = ? AND claimed_at IS NULL", [roleId]);
   }
 
-  /** 一键领取的候选（按发出的时间正序：先来的先领，背包满时停下的是最新的那几封） */
-  listUnclaimed(roleId: string): RoleMailRow[] {
+  /**
+   * 一键领取的候选（按发出的时间正序：先来的先领，背包满时停下的是最新的那几封）
+   *
+   * 传 `channel` 就只领这一栏（面板按频道一键领取的口径）；不传 = 全部频道。
+   */
+  listUnclaimed(roleId: string, channel?: string): RoleMailRow[] {
+    if (!channel) {
+      return this.db.all<RoleMailRow>(
+        "SELECT * FROM role_mails WHERE role_id = ? AND claimed_at IS NULL ORDER BY created_at ASC, id ASC",
+        [roleId],
+      );
+    }
     return this.db.all<RoleMailRow>(
-      "SELECT * FROM role_mails WHERE role_id = ? AND claimed_at IS NULL ORDER BY created_at ASC, id ASC",
-      [roleId],
+      "SELECT * FROM role_mails WHERE role_id = ? AND channel = ? AND claimed_at IS NULL ORDER BY created_at ASC, id ASC",
+      [roleId, channel],
     );
   }
 

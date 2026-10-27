@@ -22,7 +22,10 @@ export class MailViewDto {
   @ApiProperty({ description: "邮件 id" })
   id: string;
 
-  @ApiProperty({ description: "来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励" })
+  @ApiProperty({ description: "频道：system 系统 / reward 奖励 / social 社交 / combat 战斗" })
+  channel: string;
+
+  @ApiProperty({ description: "来源标签（比频道更细）：system / achievement / friend / boss …" })
   kind: string;
 
   @ApiProperty({ description: "标题" })
@@ -52,6 +55,7 @@ export class MailViewDto {
   static of(row: RoleMailRow): MailViewDto {
     const dto = new MailViewDto();
     dto.id = row.id;
+    dto.channel = row.channel;
     dto.kind = row.kind;
     dto.title = row.title;
     dto.body = row.body;
@@ -65,9 +69,31 @@ export class MailViewDto {
   }
 }
 
+/**
+ * 一个频道的角标
+ *
+ * 三个数字分开给：`unread` 是「有没有新的」（点开就减），`unclaimed` 是「有没有要处理的」
+ * （领了才减），`total` 是这一栏一共几封。客户端拿它画面板上的页签角标 ——
+ * 服务端**永远按全量算**这几个数（哪怕客户端当前只看某一栏），否则切到别的页签就看不到
+ * 「那一栏有几条没看」了。
+ */
+export class MailChannelSummaryDto {
+  @ApiProperty({ description: "频道：system / reward / social / combat" })
+  channel: string;
+
+  @ApiProperty({ description: "未读数" })
+  unread: number;
+
+  @ApiProperty({ description: "未领附件数" })
+  unclaimed: number;
+
+  @ApiProperty({ description: "总封数" })
+  total: number;
+}
+
 /** 收件箱快照（查 / 已读 / 删除都返回这一份） */
 export class MailBoxDto {
-  @ApiProperty({ description: "全部邮件（新的在前）", type: [MailViewDto] })
+  @ApiProperty({ description: "全部邮件（新的在前，含所有频道；频道筛选在客户端做）", type: [MailViewDto] })
   mails: MailViewDto[];
 
   @ApiProperty({ description: "未读封数（入口红点用）" })
@@ -75,6 +101,9 @@ export class MailBoxDto {
 
   @ApiProperty({ description: "未领封数（「一键领取」按钮用）" })
   unclaimed: number;
+
+  @ApiProperty({ description: "每个频道的角标（固定四条，没有邮件的频道也会出现）", type: [MailChannelSummaryDto] })
+  channels: MailChannelSummaryDto[];
 }
 
 /** 单封领取结果 */
@@ -87,6 +116,9 @@ export class MailClaimResultDto {
 
   @ApiProperty({ description: "未领封数" })
   unclaimed: number;
+
+  @ApiProperty({ description: "每个频道的角标", type: [MailChannelSummaryDto] })
+  channels: MailChannelSummaryDto[];
 
   @ApiProperty({ description: "本次到手的金币" })
   gold: number;
@@ -119,6 +151,9 @@ export class MailClaimAllResultDto {
 
   @ApiProperty({ description: "未领封数" })
   unclaimed: number;
+
+  @ApiProperty({ description: "每个频道的角标", type: [MailChannelSummaryDto] })
+  channels: MailChannelSummaryDto[];
 
   @ApiProperty({ description: "本次成功领取的封数" })
   claimedCount: number;

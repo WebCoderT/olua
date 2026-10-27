@@ -1138,7 +1138,9 @@ export interface RoleAchievementRow {
 export interface RoleMailRow {
   id: string;
   role_id: string;
-  /** 来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励 */
+  /** 玩家看到的频道（#436）：system / reward / social / combat（四个枚举，见 `mail-channel.ts`） */
+  channel: string;
+  /** 更细的来源标签：system 系统 / achievement 成就兜底 / friend 好友申请 / boss 击杀… */
   kind: string;
   title: string;
   body: string;

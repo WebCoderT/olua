@@ -3192,6 +3192,9 @@ for (const data of monsterData) {
   monsters.set(key, {
     ...monsterStats(data.level, tier),
     ...rest,
+    // 定位标签要跟着走：数值虽已由 monsterStats 展开，但服务端 seed（管理端「怪物配置」那一列）
+    // 与战斗频道的 BOSS 判定读的都是这个字段 —— 只解构不放回，快照里 220 只怪就全是 normal
+    tier,
     // 动作速度：默认表打底，条目里写了 speedRate 则逐动作覆盖（见 monsterDefaultSpeedRate）
     speedRate: { ...monsterDefaultSpeedRate, ...data.speedRate },
     drops: drops ?? dropConfig?.entries ?? monsterDrops(data.level, tier),
