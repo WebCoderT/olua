@@ -81,6 +81,25 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 时装**只换外观不换数值**：不重算 `combatCalc`、不动 `hp`；它也没有 `outPositions` / `outScale` 这类几何参数，所以缩放与偏移仍按装备那件（穿时装不会把角色挪位）。
 ⚠️ `findOnlineRole()` 每次都从 localStorage 解析**新对象**：改完字段要把**同一个对象**交回 `updateOnlineRole`，写成 `updateOnlineRole(findOnlineRole())` 会把改动丢掉。
 
+## 五之二、实时帧的落点：一条帧 → 一个 Store → 只演不算
+
+服务端推下来的东西（互见 / 怪物 AI / 结算 / 拾取 / 聊天 / 任务 / **队伍**）都走同一条链路：
+`RealtimeClient.onFrame` 按 `type` 分发 → `CombatChannel.dispatchXxx`（只做形状校验）→ **一个静态 Store** → 界面订阅 Store。
+**别在组件里直接吃帧**：帧是「变化事件」，界面是「当前状态」，中间少一层就会到处补「关掉弹窗后状态还在吗」这种逻辑。
+
+| 帧 | 落点 | 谁读 |
+|---|---|---|
+| `players` | `OtherPlayerManager`（互见视图）+ `SocialStore`/`PartyStore`（关系原料） | 地图上的名字颜色、社交面板「附近」 |
+| `chat` | `ChatStore` | 聊天弹窗与屏幕气泡 |
+| `quest` | `QuestStore` | 追踪栏 / 任务弹窗 / NPC 头顶标记 |
+| `party` / `partyInvite` / `expGain` | `PartyStore` | 队伍弹窗、队友金名、经验条 |
+
+- **关系判定只有一个入口**：`configs/social.resolveRelation`，优先级 **拉黑 > 敌人 > 同队 > 同帮 > 好友 > 同地图 > 普通**（同队是 #399 插进去的，队友金）。判定要的两半 —— 我这一半 `SocialStore.relationSelf()`（其中 `partyId` 取自 `PartyStore`）、对方那一半来自互见帧 —— 都在本地，所以关系一变就 `applyRelations()` 就地改 `Label` 颜色，**不重建节点**。
+- **Store 的 `clear()` 不拆订阅**：`OtherPlayerManager` 的「关系一变就重刷」是长期订阅，清订阅的症状是「换角色回来队友名字永远是白的」（`SocialStore.clear` / `PartyStore.clear` 都是这个口径，而 `QuestStore.reset` 因为弹窗自己订阅/退订才清 listen）。
+- **服务端时钟的字段要换算**：`partyInvite.expiresAt` 是服务端毫秒，直接和本机 `Date.now()` 比会在两端差几分钟时「刚收到就过期」；收到时先算 `expiresAt - 现在` 折成本机到期时刻。
+- **「队友分到的经验」必须照搬 `revision`**：那份经验是服务端直接入账的，`StorageManager.applyPartyExpGain` 只改 `exp / level / revision`，**不碰血量**（队友打怪不是我在挨打），不更新基线的话下一次防抖存档必撞 20006。
+- 新增一条帧的固定动作：`CombatChannel` 加类型 + `onXxx` 出口 + `dispatchXxx`（形状校验）→ `RealtimeClient.onFrame` 加一条 `if` → `Game.ts` 接线并在 `onDestroy` 置 null → Store + 界面订阅。
+
 ## 六、客户端改动的固定动作
 
 1. **改接口相关** → 先改服务端，`cd server && npm run gen:api`，再改调用点（签名不兼容会**编译报错**）。
