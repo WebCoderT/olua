@@ -116,6 +116,7 @@ const E2E_SCRIPTS = [
   ["社交（好友/敌人/互见身份）", "server/test/e2e-social.cjs"],
   ["聊天（世界/帮会/私聊）", "server/test/e2e-chat.cjs"],
   ["任务（接取/推进/交付）", "server/test/e2e-quest.cjs"],
+  ["出售 / 回收（经济出口）", "server/test/e2e-sell.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

@@ -56,7 +56,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 十六套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 十七套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -174,6 +174,7 @@ server/
 │   ├── e2e-social.cjs              47 条（社交：好友申请与互加直接同意 / 拒绝不留痕 / 撤回与删除 / 敌人单向 / 镜像行 / 互见帧身份）
 │   ├── e2e-chat.cjs                35 条（聊天：世界同图广播 / 正文净化 / 限频读配置 / 帮会准入查库 / 私聊校验与离线整条拒绝）
 │   ├── e2e-quest.cjs               48 条（任务：接取门控 / talk·kill·collect 三目标推进 / 交付发奖一次落库 / 日常领奖后可重接）
+│   ├── e2e-sell.cjs                24 条（出售：快照价结算 / 同 id 多格合并 / 客户端报价无效 / 不可卖 / 整单拒绝 / 乐观锁 / 越权）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -299,12 +300,12 @@ server/
 
 ## 接口与契约
 
-当前 **136 个接口 / 112 条路径 / 200 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **137 个接口 / 113 条路径 / 204 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
-| 客户端 | 34 | `player` 令牌，只能操作自己账号的数据 |
+| 客户端 | 35 | `player` 令牌，只能操作自己账号的数据 |
 | 管理端 | 95 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
@@ -381,7 +382,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-十六套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+十七套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -398,7 +399,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 
 ```bash
-cd server && npm run verify          # 编译 + 十六套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 十七套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

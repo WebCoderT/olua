@@ -9,6 +9,7 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { SellGoodsDto, SellGoodsResultDto } from "./dto/sell-goods.dto";
 import { RolesService } from "./roles.service";
 
 /**
@@ -110,6 +111,23 @@ export class RolesController {
   @ApiDataResponse(MallPurchaseResultDto, { description: "购买后的角色（含本次消耗）" })
   mallPurchase(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: MallPurchaseDto): MallPurchaseResultDto {
     return this.rolesService.purchaseMallGood(user.id, id, dto);
+  }
+
+  @Post(":id/sell")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.sellGoods",
+    summary: "出售 / 回收物品（扣物与入账都在服务端）",
+    description:
+      "价格只认共享快照的出售价表（装备 = 回收价曲线含前后缀倍率，材料 / 药品 = 条目价签），" +
+      "**客户端报「卖什么、卖几件」，不报价**。同 id 的多条先合并；整单结算，任一条不合法都不落库。\n\n" +
+      "失败路径：20018 该物品不可出售（快照里没有价签 —— 任务物 / 关键道具）/ 20019 背包数量不够卖；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(SellGoodsResultDto, { description: "出售后的角色（含逐行结算明细）" })
+  sellGoods(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: SellGoodsDto): SellGoodsResultDto {
+    return this.rolesService.sellGoods(user.id, id, dto);
   }
 
   @Post(":id/drug-use")

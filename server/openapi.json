@@ -677,6 +677,70 @@
         }
       }
     },
+    "/roles/{id}/sell": {
+      "post": {
+        "description": "价格只认共享快照的出售价表（装备 = 回收价曲线含前后缀倍率，材料 / 药品 = 条目价签），**客户端报「卖什么、卖几件」，不报价**。同 id 的多条先合并；整单结算，任一条不合法都不落库。\n\n失败路径：20018 该物品不可出售（快照里没有价签 —— 任务物 / 关键道具）/ 20019 背包数量不够卖；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.sellGoods",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellGoodsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "出售后的角色（含逐行结算明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SellGoodsResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "出售 / 回收物品（扣物与入账都在服务端）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SellGoodsResultDto"
+        }
+      }
+    },
     "/roles/{id}/drug-use": {
       "post": {
         "description": "回复量与药品管理端同源（drugs 表，管理端改回复量即时生效）：固定值 + 百分比 × maxHp/maxMp，各自封顶。\nmaxHp/maxMp 用服务端重算的战斗属性；使用后扣减背包格子数量（减到 0 清格）。\n\n失败路径：20013 格子为空 / 非药品 / 无生效回复；20014 血蓝均已满；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -9639,6 +9703,46 @@
           "goodId"
         ]
       },
+      "SellEntryDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id（必须在共享快照的出售价表里，否则 20018）",
+            "example": "material_hide"
+          },
+          "count": {
+            "type": "number",
+            "description": "要卖的件数（≥1；超过背包持有量整单拒绝 20019）",
+            "example": 3,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "goodId",
+          "count"
+        ]
+      },
+      "SellGoodsDto": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "description": "要卖的东西（一次最多 200 条，够一键回收把整包装备报上来）。同 id 的多条会先合并再扣，重复报同一格不构成两次出售。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellEntryDto"
+            }
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "entries"
+        ]
+      },
       "DrugUseDto": {
         "type": "object",
         "properties": {
@@ -12026,6 +12130,114 @@
           "data",
           "consumed",
           "goodId"
+        ]
+      },
+      "SellLineDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id"
+          },
+          "count": {
+            "type": "number",
+            "description": "卖出的件数（同 id 已合并）"
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "单价（绑定元宝/件，来自共享快照）"
+          },
+          "total": {
+            "type": "number",
+            "description": "这一行的合计（unitPrice × count）"
+          }
+        },
+        "required": [
+          "goodId",
+          "count",
+          "unitPrice",
+          "total"
+        ]
+      },
+      "SellGoodsResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "sold": {
+            "description": "逐行结算明细",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellLineDto"
+            }
+          },
+          "count": {
+            "type": "number",
+            "description": "卖出的总件数"
+          },
+          "total": {
+            "type": "number",
+            "description": "本次获得的绑定元宝合计"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "sold",
+          "count",
+          "total"
         ]
       },
       "DrugUseResultDto": {

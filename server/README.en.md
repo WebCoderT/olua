@@ -175,6 +175,7 @@ server/
 │   ├── e2e-social.cjs              47 assertions (social: friend requests and instant accept on mutual add / reject leaves no trace / cancel and delete / one-directional enemies / mirrored rows / presence-frame identity)
 │   ├── e2e-chat.cjs                35 assertions (chat: same-map world broadcast / text sanitisation / config-driven rate limit / guild admission from the database / private-chat validation and full rejection when offline)
 │   ├── e2e-quest.cjs               48 assertions (quests: accept gating / talk, kill and collect objectives / turn-in rewards in a single write / daily re-acceptable after claiming)
+│   ├── e2e-sell.cjs                24 assertions (selling: snapshot pricing / same-id cells merged / client price ignored / not sellable / all-or-nothing / optimistic lock / foreign role)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -293,12 +294,12 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **136 interfaces / 112 paths / 200 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **137 interfaces / 113 paths / 204 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 34 | `player` token, may only operate its own account's data |
+| Client | 35 | `player` token, may only operate its own account's data |
 | Admin | 95 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).

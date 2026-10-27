@@ -294,7 +294,7 @@ export default class BagDialog {
     }
     // 确认回收：先复位按钮（回收会刷新背包网格，但按钮不在网格里，只是保持状态干净），再真的搬
     this.cancelRecycleConfirm();
-    StorageManager.recycleBagEquipments();
+    void StorageManager.recycleBagEquipments();
   }
 
   /** 退出回收的待确认状态：清定时器、复位文案（弹窗已销毁时只清状态，不碰节点） */

@@ -5,7 +5,7 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { GROWTH_SCALARS, ITEM_BASES, ITEM_TYPES, DRUGS } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS, ITEM_BASES, ITEM_TYPES, DRUGS, SELL_PRICES } from "../../shared/game-data.generated";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -19,6 +19,7 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
 import { decodeStoredRoleData, parseRoleData } from "./role-data.util";
 
 /** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
@@ -319,6 +320,74 @@ export class RolesService {
     };
     this.roles.replace(row);
     return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId);
+  }
+
+  /**
+   * 出售 / 回收（玩家侧 #397，epic #394）：扣物与入账都在服务端
+   *
+   * 价格只认共享快照 `SELL_PRICES`（装备 = 回收价曲线已含前后缀倍率，其余 = 条目价签）——
+   * 客户端报多少都无效，它只报「卖什么、卖几件」。快照里没有价签的 id 就是**不可卖**
+   * （任务物 / 关键道具靠这条拦住，20018），与商城「目录之外的 id 一律 404」同口径：
+   * 白名单在数据里，不在代码里。
+   *
+   * **整单结算**：任何一条不合法（不可卖 / 数量不够）都不落库，不存在「卖了一半」的存档
+   * （与 grantQuestRewards 的校验期抛错语义一致）。同 id 的多条先合并 —— 一键回收会把
+   * 同一件装备的多个格子拆成多条报上来。
+   */
+  sellGoods(accountId: string, roleId: string, dto: SellGoodsDto): SellGoodsResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与购买 / 升级同一纪律：被踢下线的角色不能继续结算
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const wanted = new Map<string, number>();
+    for (const entry of dto.entries) {
+      const count = Math.max(1, Math.floor(entry.count));
+      wanted.set(entry.goodId, (wanted.get(entry.goodId) ?? 0) + count);
+    }
+
+    // 1) 计价：价签读快照，客户端报的价一概不看
+    const sold: SellLineDto[] = [];
+    let total = 0;
+    for (const [goodId, count] of wanted) {
+      const unitPrice = Math.max(0, Math.floor(Number((SELL_PRICES as Record<string, number>)[goodId]) || 0));
+      if (unitPrice <= 0) {
+        throw BizException.conflict(BizCode.SELL_NOT_SELLABLE, `该物品不可出售：${goodId}`);
+      }
+      const line = new SellLineDto();
+      line.goodId = goodId;
+      line.count = count;
+      line.unitPrice = unitPrice;
+      line.total = unitPrice * count;
+      sold.push(line);
+      total += line.total;
+    }
+
+    // 2) 扣物：先点数后扣，任何一条不够都整单拒绝（异常路径不落库）
+    for (const line of sold) {
+      this.takeGoodsFromBag(data, line.goodId, line.count, {
+        code: BizCode.SELL_NOT_ENOUGH,
+        message: `背包里的物品不够出售：${line.goodId}`,
+      });
+    }
+
+    // 3) 入账（绑定元宝，与背包「一键回收」的展示口径一致）
+    data.bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0)) + total;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return SellGoodsResultDto.fromRow(row, account.online_role_id, sold, total);
   }
 
   /**
@@ -717,13 +786,21 @@ export class RolesService {
   }
 
   /**
-   * 从背包网格扣走一份物品（先点数后扣，不够抛 20017）
+   * 从背包网格扣走一份物品（先点数后扣）
    *
-   * @throws QUEST_MATERIAL_SHORT 材料不足
+   * 判据与搬运只有这一处实现：任务交付（collect 材料）与出售（#397）都调它，
+   * 只是「不够」的业务码与文案不同（默认 20017 材料不足，出售传 20019）。
+   *
+   * @throws 由 `lack` 指定（默认 QUEST_MATERIAL_SHORT 材料不足）
    */
-  private takeGoodsFromBag(data: Record<string, unknown>, goodId: string, count: number): void {
+  private takeGoodsFromBag(
+    data: Record<string, unknown>,
+    goodId: string,
+    count: number,
+    lack: { code: number; message: string } = { code: BizCode.QUEST_MATERIAL_SHORT, message: "材料不足，无法交付任务" },
+  ): void {
     if (this.countGoods(data, goodId) < count) {
-      throw BizException.conflict(BizCode.QUEST_MATERIAL_SHORT, "材料不足，无法交付任务");
+      throw BizException.conflict(lack.code, lack.message);
     }
     let remaining = count;
     const bag = data.bag as unknown[][];

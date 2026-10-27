@@ -163,7 +163,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（10 个接口） */
+  /** role 模块（11 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -219,6 +219,12 @@ export const ApiRoutes = {
      * 把该角色设为账号的在线角色。
      */
     select: (id: string) => `/roles/${encodeURIComponent(id)}/select`,
+    /**
+     * 出售 / 回收物品（扣物与入账都在服务端）（POST /roles/{id}/sell）
+     *
+     * 价格只认共享快照的出售价表（装备 = 回收价曲线含前后缀倍率，材料 / 药品 = 条目价签），**客户端报「卖什么、卖几件」，不报价**。同 id 的多条先合并；整单结算，任一条不合法都不落库。
+     */
+    sellGoods: (id: string) => `/roles/${encodeURIComponent(id)}/sell`,
     /**
      * 当前在线角色（GET /roles/online）
      *

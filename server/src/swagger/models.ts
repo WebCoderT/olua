@@ -24,6 +24,7 @@ import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto
 import { AdminRoleDetailDto, AdminRoleDto, GrowthUpgradeResultDto, RoleDerivedAttributesDto, RoleDerivedDto, RoleReportedAttributesDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
 import { GrowthUpgradeDto } from "../modules/roles/dto/growth-upgrade.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "../modules/roles/dto/mall-purchase.dto";
+import { SellEntryDto, SellGoodsDto, SellGoodsResultDto, SellLineDto } from "../modules/roles/dto/sell-goods.dto";
 import { DrugUseDto, DrugUseResultDto } from "../modules/roles/dto/drug-use.dto";
 import {
   SystemConfigItemDto,
@@ -130,6 +131,10 @@ export const SWAGGER_MODELS = [
   RoleDto,
   GrowthUpgradeResultDto,
   MallPurchaseResultDto,
+  SellGoodsDto,
+  SellEntryDto,
+  SellLineDto,
+  SellGoodsResultDto,
   DrugUseResultDto,
   RealtimeTicketDto,
   // 区服（#295 阶段二）

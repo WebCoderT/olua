@@ -424,7 +424,7 @@ export function normalizeBagGrid(bag: BagCell[][], rows: number, cols: number): 
 
 //#endregion
 
-//#region 背包回收（装备一键回收，见 StorageManager.recycleBagEquipments）
+//#region 背包回收（结算在服务端 #397：这里只做「卖什么 + 预览价」，见 StorageManager.recycleBagEquipments）
 
 /** 背包回收的结算（件数 + 合计价，货币 = 绑定元宝） */
 export interface BagRecycleSettlement {
@@ -472,7 +472,10 @@ export function recycleBagEquipmentGrid(bag: BagCell[][]): BagRecycleSettlement 
 
 /**
  * 回收前先看数（件数 + 合计价）：直接走一遍搬运、把新背包丢掉
- * 刻意复用同一个函数而不是另写一份扫描——判定与计价只有一处实现，预览与实际回收不可能对不上
+ *
+ * 刻意复用同一个函数而不是另写一份扫描 —— 判定与计价只有一处实现。
+ * **注意预览不是结算**（#397）：真正扣物与入账由服务端 `role.sellGoods` 做，价签读共享快照；
+ * 这里只保证「按钮上看到的件数与价钱」与要报给服务端的清单同源，两边不会各算一套。
  */
 export function summarizeBagRecycle(bag: BagCell[][]): BagRecycleSettlement {
   const { count, totalPrice } = recycleBagEquipmentGrid(bag);
