@@ -183,7 +183,14 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   - `parseRoleData` 末尾要 `delete data.revision`（修订号是**索引列**，不留在文档里）。
 - **删除相关**：`accounts.clearOnlineRole` 的 SQL 带 `AND online_role_id = ?`，**清在线标记必须早于删角色行** —— 角色行删掉后就判不出当初指向谁。
 - **修订号 `revision`（乐观锁）**：`roles.revision` 列，每次落库 `revision = revision + 1` **写在 SQL 里**（不读出来加一再写回）；玩家 `PUT /roles/:id` 可选带 `revision`，对不上 → `409` + `20006`；**不带该字段 = 旧行为**（最后写入者胜，兼容旧客户端）。
-- 结构化字段的校验与上限常量集中在 `modules/roles/role-data.util.ts`（`normalizeEquipments` / `normalizeSkills` / `normalizeBagCells` / `applyBagCells`）。**只校验结构与体量，不校验内容清单。**
+- 结构化字段的校验与上限常量集中在 `modules/roles/role-data.util.ts`（`normalizeEquipments` / `normalizeSkills` / `normalizeBagCells` / `applyBagCells` / `normalizeGuide`）。**只校验结构与体量，不校验内容清单。**
+  - **「不透明」唯一的例外是 `guide`（新手引导进度，`{ step, done, skipped }`）**：它确实是客户端体验状态，
+    服务端也不该懂它的含义 —— 但完全不管就成了「随便存什么」。所以只把关**结构与体量**：
+    `step` 必须是 `0 ~ ROLE_GUIDE_STEP_MAX(64)` 的**整数**（`Number.isInteger`，别用 `Number.isFinite`，否则 `1.5` 会过关）、
+    `done` / `skipped` 必须是布尔、多余字段丢弃、结构不对一律 `BizCode.ROLE_DATA_INVALID`(20003)。
+    **不校验步数与客户端配置是否一致** —— 配置会变，服务端一跟上就得跟着发布，`ROLE_GUIDE_STEP_MAX` 是体量上限（与 `ROLE_LEVEL_MAX` 同性质），不是步数。
+  - **`guide` 没有字段就 `delete data.guide`，绝不补默认值**：客户端区分老号 / 新号靠的正是「文档里有没有 `guide`」
+    （`normalizeGuideProgress(undefined)` → 已完成）。服务端一补默认值，**所有老号会被弹一脸引导**。这条比校验更容易踩。
 
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 

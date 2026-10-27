@@ -113,7 +113,31 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **`padStart` 用不了**（客户端 tsconfig 的 lib 没到 ES2017）：名次补零手写 `rank < 10 ? "0" + rank : String(rank)` 这类判断。
 - 阈值/时长这类数字**别散在组件里**：`row.topRankThreshold`、`summary.freshMs` 放 `configs/layout/dialogs.ts`（`audit-config-leak` 会把裸比较打回）。
 
-## 六、客户端改动的固定动作
+## 五之四、事件驱动式引导（#402，后续成就 / 图鉴 / 任务提示都复用这套）
+
+新手引导（`configs/guide.ts` 六步 + `ui/utils/guide/guide-progress.ts` 纯函数 + `ui/core/GuideStore.ts` + `ui/components/GuideOverlay.ts`）
+定型了几条与「引导」本身无关、但凡是**引导类 UI** 都适用的做法：
+
+- **推进靠事件，不靠点「下一步」**：六个触发 `move`/`kill`/`pickup`/`openBag`/`openSkill`/`openChat`（`GUIDE_EVENT`），
+  **只有当前步的 `trigger` 命中才前进**，别的事件一律不越级 —— 否则「先点背包」会把「走路 / 打怪 / 拾取」三步一起吃掉，
+  玩家一句话没看就通关了。代价是每步都得有可观测触发点，所以步骤表是**有限触发集合**的配置，加步不改代码、加新触发方式才改代码。
+- **移动按实际位移判**：`Game.update` 里 `Vec3.distance(当前, 上一帧)` 累计到 `tuning.moveDistance(260)` 才算一次。
+  摇杆 / 方向键 / 点地面走都是「我在移动」的同一件事，别去监听某一个输入源。
+- **高亮用语义位，不写坐标**：`GUIDE_SPOT`（`joystick` / `nav:bag` / `nav:skill` / `nav:chat` / `shortcut`）由组合根注册的
+  `spotProvider` 换成真实节点。HUD 是贴边重排的，写死坐标换宽高比就偏；**取不到节点要退化成「只显示气泡」**，
+  不能让整层不显示（少个高亮是小事，引导消失是事故）。
+- **遮罩不拦点击、不锁移动**，只有跳过按钮是按钮（单测直接断言 `!/blockClickThrough|addComponent\(Button\)/`）。
+  引导卡住比「玩家没看完」严重得多。
+- **遮罩用四块矩形拼，不用 `Mask` 也不贴图**：洞的矩形取目标 `getBoundingBoxToWorld()` 的**两个对角点**分别
+  `convertToNodeSpaceAR` 再算宽高 —— 父层带缩放时「中心 + 世界宽高」算出来会偏，而 HUD 正是带缩放的。
+- **气泡贴边夹取**：洞在上半屏就放下面，反之放上面，再按 `screenMargin` 与自身尺寸四向夹，保证不出屏。
+- **状态落盘走标准路径**：`GuideStore.apply` → `role.guide = next` → `StorageManager.updateOnlineRole(role)`。
+  属性重算 / UI 刷新 / `RoleSync` 防抖都归它；**不开「只写本地」的旁路**，否则与服务端漂移。
+- **`skipped` 是显式选择**：跳过落存档后不再弹也不再自动开始；「已跳过」与「走完了」是两条路，飘字必须分开。
+- 老号判据是**「存档里有没有 `guide` 字段」**（`normalizeGuideProgress(undefined)` → 已完成），不是等级也不是建号时间。
+- 组件里的节点名 / 颜色 / 阈值全部进 `configs/guide.ts`（`audit-config-leak` 会把它们打回，本刀被拦了 21 处）。
+
+
 
 1. **改接口相关** → 先改服务端，`cd server && npm run gen:api`，再改调用点（签名不兼容会**编译报错**）。
 2. **新增脚本 / 资源** → **必须补 `.meta`**（uuid 由路径派生即可，`importer` 用 `typescript`、`ver` 照抄同目录既有文件），否则 Cocos 不导入、运行时报找不到模块。生成物由生成器自动补。
