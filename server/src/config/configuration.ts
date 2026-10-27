@@ -274,6 +274,22 @@ export interface AppConfiguration {
    * 而生产环境按需调整时不必改代码。
    */
   socialFriendLimit: number;
+
+  /**
+   * 黑名单上限（默认 100，#398）
+   *
+   * 拉黑只影响自己，设上限是为了防刷表（脚本给全服每人写一行）。
+   */
+  socialBlockLimit: number;
+
+  /**
+   * 屏蔽过滤缓存的刷新间隔（毫秒，默认 2000，#398）
+   *
+   * 实时进程把 `role_blocks` 整表缓存在内存里（聊天投递与互见帧都要按它过滤，
+   * 200ms 的互见节拍上没法逐次查库）。这个值决定「拉黑多久生效」：
+   * 被拉黑的人在他视野里最多还会出现这么久。
+   */
+  socialBlockCacheMs: number;
   //#endregion
 }
 
@@ -341,5 +357,7 @@ export default function configuration(): AppConfiguration {
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
     socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
+    socialBlockLimit: Number(process.env.SOCIAL_BLOCK_LIMIT ?? 100),
+    socialBlockCacheMs: Number(process.env.SOCIAL_BLOCK_CACHE_MS ?? 2000),
   };
 }

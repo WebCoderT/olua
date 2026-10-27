@@ -116,7 +116,7 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 - **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 46 unit-test suites under `client/tools/` and 11 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 113 + 283 + 120 + 28 + 50 + 126 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 assertions) + typechecks on two sides + 46 unit-test suites + 11 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 113 + 283 + 120 + 28 + 50 + 126 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50 assertions) + typechecks on two sides + 46 unit-test suites + 11 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -221,7 +221,7 @@ olua/
   - constants/swagger-tags: documentation groups (public APIs / client / admin)
   - interceptors/audit.interceptor: **automatic logging of admin write APIs** (action taken from `operationId`, password-like fields masked before persisting)
   - security: pure-function login throttling decisions (`rate-limit.util`) + in-memory counter service (`login-throttle.service`)
-- src/database: SQLite connection and the repository layer for 36 tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / quests / quest_progress, including backfilling columns in existing databases)
+- src/database: SQLite connection and the repository layer for 38 tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress, including backfilling columns in existing databases)
 - src/modules: auth (player authentication) / roles (characters) / admin (console: auth / accounts / characters / administrators / passwords) / announcement (announcements: public pull + admin CRUD) / mail (mail: templates + delivery queue + background scheduler) / audit (audit logs) / token (JWT) / health
 - src/swagger/setup: documentation mounting (extracted into a function so tests can also generate docs once to verify grouping / permission annotations / dangling `$ref`)
 - src/swagger/emit: **offline production of `openapi.json`** (`npm run swagger:emit`, the only input to both consumers' API files)
@@ -232,6 +232,7 @@ olua/
 - test/e2e-mail.cjs: **mail channel focus** (120 assertions: verifying enqueue / delivery / retry and exhausting the limit / manual re-delivery / whole-channel disabling when SMTP is unconfigured, using an injectable **fake sender**; no real SMTP server needed)
 - test/e2e-account-email.cjs: **player email field focus** (28 assertions: viewers can neither see nor change it / backfill·clear / format and same-email dedup / mail falls back to the account's email)
 - test/e2e-game-config.cjs: **game config focus** (44 assertions: title / soul seed identical to client configs / edit-only, no create or delete — POST and DELETE are 404 / partial updates and channel filtering / viewer can read but not write)
+- test/e2e-blocks.cjs: **block and report focus** (50 assertions: one-way block rows, duplicate and self-block rejection / chat broadcast filtered per recipient and private messages with two different messages per direction / both incremental and full presence frames filtered / re-sending world join after unblocking / blocking also cuts friend and enemy ties / report dedup and invalid categories / read-only admin list and privilege escalation)
 - test/backup.cjs: **backup / restore focus** (87 assertions: `VACUUM INTO` consistent snapshot while running / restore archiving / protective refusal / automatic scheduled backup)
 - Details in [server/README.md](server/README.en.md), questions in [server/FAQ.md](server/FAQ.en.md)
 
@@ -240,7 +241,7 @@ olua/
 - src/api: address config (single source `config.ts`) + request layer `http.ts` (interceptors / timeout / envelope unwrapping / error normalisation / redirect to login on 401)
   + **generated** `routes.ts` path table / `models.ts` types / `endpoints.ts` methods (`authApi`·`accountsApi`·`adminsApi`·`rolesApi`·`auditApi`·`announcementsApi`·`mailsApi`·`statsApi`·`systemApi`)
   + hand-written `types.ts` (business codes / permission points / action and target dictionaries) and `index.ts` (single entry point)
-- src/pages: login / register / overview / account list and detail (reset password · kick offline · delete every character on the account) / character list (filtering + multi-select batch delete) and detail (basic info / common numbers / structured editing of equipment, skills and bag) / administrators (change role · enable-disable · reset password · delete) / announcements (publish · edit · delete · enable-disable + active status column) / mail (compose into queue + delivery records: status filter · retry count · failure reason · re-deliver) / audit logs (filter + pagination + expandable request body) / my account (self-service password change)
+- src/pages: login / register / overview / account list and detail (reset password · kick offline · delete every character on the account) / character list (filtering + multi-select batch delete) and detail (basic info / common numbers / structured editing of equipment, skills and bag) / administrators (change role · enable-disable · reset password · delete) / announcements (publish · edit · delete · enable-disable + active status column) / mail (compose into queue + delivery records: status filter · retry count · failure reason · re-deliver) / audit logs (filter + pagination + expandable request body) / player reports (filter · pagination · row-expanded evidence, read-only) / my account (self-service password change)
 - Menus and buttons are shown or hidden by the **permission points** in the token (`store/session.hasPermission`); the server still validates independently
 - Details in [admin/README.md](admin/README.en.md), questions in [admin/FAQ.md](admin/FAQ.en.md)
 
@@ -289,13 +290,13 @@ make dev            # start server :3100 and admin :5173 together; Ctrl-C exits 
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
 make client-test    # client's 46 unit-test suites
-make server-verify  # verify the server with one command (compile + sixteen e2e suites + generated-artifact audit)
+make server-verify  # verify the server with one command (compile + seventeen e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 11 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 11 audits
-make test           # all tests: client's 46 suites + server's sixteen e2e suites
+make test           # all tests: client's 46 suites + server's seventeen e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -321,7 +322,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + sixteen e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + seventeen e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -401,7 +402,7 @@ Manual equivalent (no `make` needed):
 # Client: 46 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + sixteen e2e suites (248 / 113 / 283 / 120 / 28 / 50 / 126 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24) + generated-artifact consistency
+# Server: compile + seventeen e2e suites (248 / 113 / 283 / 120 / 28 / 50 / 126 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build
@@ -563,8 +564,11 @@ Convention: **merge the PR that carries the new manifest first, then upload** (o
 | --- | --- | :-: |
 | Guilds (#388) | Create / apply / review / roster / kick / transfer leadership / leave / disband; **one person can only be in one guild**, enforced by a unique index rather than business-level discipline; the leader has two identities (`guilds.leader_id` and the member row) changed in one transaction; the member limit comes from config (default 50, decoupled from guild level) | ✅ |
 | Friends and enemies (#389) | Add a friend (by roleId or by character name; **if the other side is already waiting, the add itself becomes the accept**) / accept / reject (leaves no trace) / cancel / delete (both sides disappear); enemies are **one-directional** — I mark mine and the other side is never told; friendships are stored as **two mirrored rows** (changed in pairs, always in a transaction), the limit comes from config (default 100) | ✅ |
-| Name colours by relation (#389) | Enemy red > same-guild blue > friend green > same-map white > normal grey; precedence and palette live in exactly one place (`resolveRelation` in `configs/social.ts`), and the presence frame carries `roleId/guildId/guildName` (same 5-second lazy refresh as appearance, no extra queries); when the relation changes, the `Label` colour is updated in place — nodes are never rebuilt | ✅ |
-| Social dialog | The fifth slot of the character-info dialog, four tabs: **Guild** (not in a guild = create form + full guild list; in a guild = info / notice / roster / pending applications / leave or disband), **Friends** (incoming / accepted / outgoing requests + add by name), **Enemies** (marked + mark by name), **Nearby** (whoever is visible on this map right now — sourced from presence frames, not a server roster); **which buttons appear is decided by `canReview/canManage/canDisband` from the server** — the client never re-derives ranks itself | ✅ |
+| Name colours by relation (#389) | Blocked grey > enemy red > same-guild blue > friend green > same-map white > normal grey; precedence and palette live in exactly one place (`resolveRelation` in `configs/social.ts`), and the presence frame carries `roleId/guildId/guildName` (same 5-second lazy refresh as appearance, no extra queries); when the relation changes, the `Label` colour is updated in place — nodes are never rebuilt | ✅ |
+| Blocks (#398) | A block is **one one-way row**, but the **filtering happens on the server**: world and guild chat drop the recipient, private messages are refused in both directions, presence frames never carry him (including the `full` snapshot) — the client simply never learns who blocked it (deliberately not sent). Blocking also cuts friend and enemy ties (leaving a "friend" label would be harder than the block itself); friend requests are the only channel that could bypass a block, so a hit reuses the "role not found" code | ✅ |
+| Reports (#398) | Four fixed categories (abuse / cheat / name / other) plus a 200-character note; one pending report per (me → him) pair (50120); stored only, no penalty; the table has **no foreign keys** (evidence must outlive a deleted account) and names are joined at query time | ✅ |
+| Social dialog | The fifth slot of the character-info dialog, five tabs: **Guild** (not in a guild = create form + full guild list; in a guild = info / notice / roster / pending applications / leave or disband), **Friends** (incoming / accepted / outgoing requests + add by name), **Enemies** (marked + mark by name), **Nearby** (whoever is visible on this map right now — sourced from presence frames, not a server roster), **Blocked** (who I blocked, block by name, unblock; each row also exposes report); **which buttons appear is decided by `canReview/canManage/canDisband` from the server** — the client never re-derives ranks itself | ✅ |
+| Admin reports page | Player report list: keyword / category / status filters + pagination + row-expanded description and both role ids; **read-only in this release** (handling needs the full trail of who changed what and why, and a half-built button is worse than none); `report:read` is not granted to the viewer | ✅ |
 | Admin guild page | Guild list (by member count desc) and roster; rename / edit notice / force-disband (members and pending applications go with it, the confirm dialog spells out the cost); the read-only viewer can look but not change | ✅ |
 
 ### UI and others

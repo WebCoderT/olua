@@ -3,12 +3,14 @@
  * 社交关系单测（client/tools/test-social.cjs，issue #389）
  *
  * 盯的不变量（改关系判定 / 互见帧 / 社交面板后必须全绿）：
- * A. 判定优先级：敌人 > 同帮 > 好友 > 同地图 > 普通（**跑真函数**，不是复刻一份逻辑）
+ * A. 判定优先级：拉黑 > 敌人 > 同帮 > 好友 > 同地图 > 普通（**跑真函数**，不是复刻一份逻辑）
  * B. 配色与标签：六种关系都有颜色与中文名；未知关系回落普通
  * C. 协议两端同形：互见帧带 roleId / guildId / guildName，客户端三项可选
  * D. 服务端成本：帮会与外观同一趟懒刷新（不每帧查库），帮会变化进增量判据
  * E. 客户端上色：判定只有一个入口，颜色只在关系变化时才改（不重建节点）
  * F. 服务端数据纪律：好友镜像两行 + 成对改（事务），敌人单向一行
+ * G. 屏蔽与举报（#398）：拉黑单向成行、过滤在服务端（聊天 + 互见）、隐私口径（不下发「谁拉黑了我」）、
+ *    举报只落库且管理端只读
  *
  * 表现层依赖 cc 引擎（Node / Graphics / Label），沙箱起不来 —— 这里跑真实的
  * `configs/social.ts`（判定与配色是纯函数）+ 源码契约断言，界面行为由真机双窗口验证。
@@ -33,6 +35,8 @@ const CLIENT_DIALOG = "assets/ui/components/dialogs/SocialDialog.ts";
 const CLIENT_GUILD_PANEL = "assets/ui/components/dialogs/GuildPanel.ts";
 const CLIENT_ROLE_INFO = "assets/ui/components/dialogs/RoleInfoDialog.ts";
 const CLIENT_DIALOGS_LAYOUT = "assets/configs/layout/dialogs.ts";
+const CLIENT_DIALOGS_REPORT = "assets/ui/components/dialogs/SocialDialog.ts";
+const CLIENT_DIALOGS_REPORT_DIALOG = "assets/ui/components/dialogs/ReportDialog.ts";
 
 /** 从一段源码里抽出某个 interface 的字段名（两空格缩进 + 可选 ?；注释行不匹配） */
 function fieldNames(source, interfaceName) {
@@ -53,7 +57,7 @@ try {
 
   console.log("\n— A. 判定优先级（敌人 > 同帮 > 好友 > 同地图 > 普通） —");
 
-  const me = { roleId: "r1", guildId: "g1", friendIds: ["r2", "r3"], enemyIds: ["r3"] };
+  const me = { roleId: "r1", guildId: "g1", friendIds: ["r2", "r3"], enemyIds: ["r3"], blockIds: ["r4"] };
   const both = { roleId: "r3", guildId: "g1" }; // 既是好友、也是同帮、还被标了敌人
   check(resolveRelation(me, both, true) === RELATION.ENEMY, "敌人压过同帮与好友（标了敌人就是要看见红名）");
   const guildMate = { roleId: "r2", guildId: "g1" }; // 好友 + 同帮
@@ -65,17 +69,24 @@ try {
   check(resolveRelation(me, stranger, false) === RELATION.NORMAL, "不同图又没关系是「普通」");
   check(resolveRelation(me, { roleId: "r1", guildId: "g1" }, true) === RELATION.SELF, "自己优先于一切（互见帧会过滤掉，口径仍要完整）");
   check(
-    resolveRelation({ roleId: "r1", guildId: "", friendIds: [], enemyIds: [] }, { roleId: "r9", guildId: "" }, true) === RELATION.MAP,
+    resolveRelation({ roleId: "r1", guildId: "", friendIds: [], enemyIds: [], blockIds: [] }, { roleId: "r9", guildId: "" }, true) === RELATION.MAP,
     "两边都没帮会时不算同帮（空串不等于同帮）",
   );
   check(
-    resolveRelation({ roleId: "r1", guildId: "g1", friendIds: [], enemyIds: [] }, { roleId: "r9", guildId: "g1" }, false) === RELATION.GUILD,
+    resolveRelation({ roleId: "r1", guildId: "g1", friendIds: [], enemyIds: [], blockIds: [] }, { roleId: "r9", guildId: "g1" }, false) === RELATION.GUILD,
     "不同图也是同帮（帮会关系不依赖看得见）",
   );
   check(
-    RELATION_PRIORITY.join(",") === "self,enemy,guild,friend,map,normal",
+    RELATION_PRIORITY.join(",") === "self,block,enemy,guild,friend,map,normal",
     `优先级表的顺序写死（实得 ${RELATION_PRIORITY.join(" > ")}）`,
   );
+  // 拉黑是最高优先（#398）：既是敌人又是同帮的好友，一旦拉黑就必须算「已拉黑」
+  const blockedAndEnemy = { roleId: "r4", guildId: "g1" };
+  check(
+    resolveRelation({ ...me, friendIds: ["r4"], enemyIds: ["r4"] }, blockedAndEnemy, true) === RELATION.BLOCK,
+    "拉黑压过敌人 / 同帮 / 好友（残帧漏进来也不能按旧关系上色）",
+  );
+  check(resolveRelation(me, { roleId: "r4", guildId: "g2" }, false) === RELATION.BLOCK, "拉黑关系不依赖同图（名单里也是这个标签）");
   check(
     count(read("assets/configs/social.ts"), "if (self.enemyIds.indexOf(target.roleId) >= 0)") === 1,
     "敌人判定用 indexOf（客户端编译目标是 ES2015，includes 不存在）",
@@ -96,8 +107,9 @@ try {
   const kinds = Object.keys(RELATION).map((key) => RELATION[key]);
   check(
     kinds.every((kind) => !!relationColors[kind] && !!relationLabels[kind]),
-    "六种关系都有配色与中文名（漏一种就是一块没上色的字）",
+    "七种关系都有配色与中文名（漏一种就是一块没上色的字）",
   );
+  check(rgb(relationColors[RELATION.BLOCK]) === "120,126,138", "拉黑 = 暗灰（正常看不到这个人，颜色只出现在名单里）");
 
   //#endregion
 
@@ -156,7 +168,10 @@ try {
   check(/\.catch\(\(\) => undefined\)/.test(store), "拉取失败静默（社交是装饰性数据，不该打断进图）");
 
   const dialog = read(CLIENT_DIALOG);
-  check(/const TABS: SocialTab\[\] = \["guild", "friends", "enemies", "nearby"\];/.test(dialog), "四个页签：帮会 / 好友 / 敌人 / 附近");
+  check(
+    /const TABS: SocialTab\[\] = \["guild", "friends", "enemies", "nearby", "blocks"\];/.test(dialog),
+    "五个页签：帮会 / 好友 / 敌人 / 附近 / 黑名单（#398）",
+  );
   check(/OtherPlayerManager\.nearby\(\)/.test(dialog), "「附近」页读互见帧内存态");
   check(/relationLabels\[player\.relation\]/.test(dialog), "关系标签直接用已算好的值（面板里不再判一遍）");
   check(!/resolveRelation/.test(dialog), "面板不重复判定关系（两处判定迟早显示不一致）");
@@ -168,7 +183,7 @@ try {
   const layoutSource = read(CLIENT_DIALOGS_LAYOUT);
   check(/export const socialDialogLayout = \{/.test(layoutSource), "有 socialDialogLayout");
   check(/size: new Size\(600, 560\)/.test(layoutSource), "社交弹窗加高 60（多出来的一行放页签，帮会页坐标不用挪）");
-  check(/columns: \[-168, -56, 56, 168\]/.test(layoutSource), "四个页签的列位 + texts.tabs 与 TABS 一一对应");
+  check(/columns: \[-208, -104, 0, 104, 208\]/.test(layoutSource), "五个页签的列位 + texts.tabs 与 TABS 一一对应");
 
   //#endregion
 
@@ -192,7 +207,55 @@ try {
 
   //#endregion
 
-  finish("PASS：社交关系（优先级 / 配色 / 协议同形 / 客户端上色 / 服务端纪律）全部通过");
+  //#region G. 屏蔽与举报（#398）
+
+  console.log("\n— G. 屏蔽与举报（单向 / 服务端过滤 / 隐私口径） —");
+
+  const blockService = readRepo("server/src/modules/realtime/block.service.ts");
+  check(/allBlockPairs\(\)/.test(blockService), "过滤缓存整表读一次（200ms 互见节拍上不可能逐人查库）");
+  check(/socialBlockCacheMs/.test(blockService), "缓存过期时间走配置（生产 2 秒，e2e 压到 0 = 立即生效）");
+  check(/this\.logger\.warn\(/.test(blockService) && /沿用上一次的过滤快照/.test(blockService), "读库失败保留旧缓存（屏蔽读失败不该让聊天与互见整体停摆）");
+
+  const chat = readRepo("server/src/modules/realtime/chat.service.ts");
+  check(/private reachable\(/.test(chat) && count(chat, "this.reachable(") === 2, "世界 / 帮会两条频道都逐收件人过滤拉黑");
+  check(/blocks\.hiddenFor\(target\.id, identity\.roleId\)/.test(chat), "私聊：被拉黑的一方只看到「不在线」（不暴露屏蔽）");
+  check(/blocks\.hiddenFor\(identity\.roleId, target\.id\)/.test(chat), "私聊：拉黑者这边明说原因（那是自己的设置）");
+
+  const realtime = readRepo("server/src/modules/realtime/realtime.service.ts");
+  check(/private visiblePlayers\(/.test(realtime) && count(realtime, "this.visiblePlayers(") === 2, "互见的增量与 full 快照都过屏蔽过滤");
+  check(/不滤 `left`/.test(realtime), "left 事件不过滤（漏发会留一个幽灵节点）");
+
+  check(/blocked_role_id/.test(repo) && !/INSERT INTO role_blocks[\s\S]{0,160}blocked_role_id, role_id/.test(repo), "拉黑只写一行（单向，没有镜像反向行）");
+  check(/allBlockPairs\(\)/.test(repo), "仓储给实时进程开了整表读（allBlockPairs）");
+
+  check(/blocks: SocialEntryDto\[\]/.test(readRepo("server/src/modules/social/dto/social.dto.ts")), "社交快照带 blocks（我拉黑的人）");
+  check(/blockedBy|whoBlockedMe/.test(readRepo("server/src/modules/social/dto/social.dto.ts")) === false, "快照**不**下发「谁拉黑了我」（下发等于把屏蔽变成可观测信号）");
+  check(/findBlock\(targetId, me\.id\)/.test(service), "他拉黑我时好友申请被挡（唯一能绕过屏蔽送达的通道）");
+  check(/this\.social\.removePair\(me\.id, targetId\)/.test(service), "拉黑会剪掉好友关系（两行一起删，走事务）");
+
+  const reportRepo = readRepo("server/src/database/repositories/report.repository.ts");
+  check(/LEFT JOIN roles/.test(reportRepo), "举报双方名字查询时关联（角色删了显示 id，记录不随人消失）");
+  const reportTable = readRepo("server/src/database/database.service.ts").split("CREATE TABLE IF NOT EXISTS role_reports")[1].split("CREATE INDEX")[0];
+  check(/REFERENCES/.test(reportTable) === false, "举报表不加外来键（证据不该随被举报人删号消失）");
+  check(/onlyRead|只读/.test(readRepo("server/src/modules/social/admin-report.controller.ts")), "管理端举报只有读接口（处置是后续一整刀）");
+  check(
+    ["50117", "50118", "50119", "50120"].every((code) => bizCode.indexOf(code) > 0),
+    "屏蔽 / 举报业务码 50117~50120 齐全",
+  );
+
+  const storeSource = read(CLIENT_STORE);
+  check(/isBlocked\(roleId: string\)/.test(storeSource), "SocialStore 有 isBlocked（附近行据此置灰按钮）");
+  check(/blockIds: snapshot\.blocks\.map/.test(storeSource), "快照转判定入参带上 blockIds");
+  check(/relation === RELATION\.BLOCK/.test(manager) && /this\.remove\(accountId\)/.test(manager), "拉黑后本地摘掉那个人的节点（服务端已不发他的帧，留着就是一个雕像）");
+  const socialDialog = read(CLIENT_DIALOGS_REPORT);
+  check(/ReportDialog\.open\(/.test(socialDialog) && /blockById\(/.test(socialDialog), "附近行能拉黑与举报（拉黑走二次确认，举报开独立弹窗）");
+  const reportDialog = read(CLIENT_DIALOGS_REPORT_DIALOG);
+  check(/SocialApi\.report\(/.test(reportDialog), "举报走生成的 SocialApi（不手写路径）");
+  check(!/resolveRelation/.test(reportDialog), "举报框不参与关系判定（两件事不该纠缠）");
+
+  //#endregion
+
+  finish("PASS：社交关系（优先级 / 配色 / 协议同形 / 客户端上色 / 服务端纪律 / 屏蔽与举报）全部通过");
 } catch (error) {
   fail(`社交关系单测异常：${error.message}`);
   process.exitCode = 1;

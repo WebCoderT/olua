@@ -146,7 +146,10 @@ const REPO_EDGES = {
   "database/repositories/monster-skill.repository.ts": ["modules/game-config", "modules/realtime"],
   // 帮会（#388）：社交域独占三张表的读写（管理端控制器也在 social 域内，不额外开边）
   "database/repositories/guild.repository.ts": ["modules/social", "modules/realtime"],
-  "database/repositories/social.repository.ts": ["modules/social"],
+  // 屏蔽（#398）：社交域读写；实时进程的 BlockService 整表缓存它做过滤（聊天投递 / 互见帧）
+  "database/repositories/social.repository.ts": ["modules/social", "modules/realtime"],
+  // 举报（#398）：只在大陆侧社交模块内读写（管理端只读列表也在 social 域内）
+  "database/repositories/report.repository.ts": ["modules/social"],
   // 任务（#396）：配置表读写归 game-config（管理端页 + seed），进度表归 quest 域；
   // 击杀推进度（realtime 的 QuestService）与删除守卫（game-config 的 deleteQuest）是两条只读例外
   "database/repositories/quest.repository.ts": ["modules/game-config", "modules/quest"],

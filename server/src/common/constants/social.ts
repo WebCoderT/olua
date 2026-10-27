@@ -49,8 +49,9 @@ export const GUILD_ID_PREFIX = "g_";
  * 好友关系状态（`role_friends.status`）
  *
  * 只有两态：`pending`（一方发起、等对方处理）与 `accepted`（互为好友）。
- * **不做「拉黑」**：拉黑是「我不想收到你的消息」，而本项目没有私聊，
- * 多一态只会让每处查询都要多记一个合法值。想断关系就用删除。
+ * **不放「拉黑」**：屏蔽是「我不想再收到你的任何东西」，与好友关系正交（拉黑一个陌生人
+ * 不需要先加好友），所以它是独立一张表（`role_blocks`，#398）。往这里塞第三态的话，
+ * 每一处查好友的代码都要多认一个合法值。
  */
 export const FRIEND_STATUS = {
   PENDING: "pending",
@@ -60,5 +61,63 @@ export type FriendStatus = (typeof FRIEND_STATUS)[keyof typeof FRIEND_STATUS];
 
 /** 好友上限（拦住「加一千个好友」的刷子；满了好友列表也没法看） */
 export const FRIEND_LIMIT_DEFAULT = 100;
+
+//#endregion
+
+//#region 屏蔽与举报（#398）
+
+/**
+ * 屏蔽上限（默认值；可用 `SOCIAL_BLOCK_LIMIT` 覆盖）
+ *
+ * 拉黑只影响自己（对方不知道、也不受影响），所以上限的作用不是「防骚扰」而是
+ * 「防刷表」：没有上限时一个脚本可以给全服每个角色写一行。100 与好友上限同档 ——
+ * 一个人真有必要屏蔽上百人时，问题不在这个上限上。
+ */
+export const BLOCK_LIMIT_DEFAULT = 100;
+
+/**
+ * 举报类别（`role_reports.category`）
+ *
+ * 固定四种：**不开放自由文本**作为类别 —— 自由文本没法在管理端做筛选，
+ * 而「其他」已经兜住了所有没覆盖到的情况（详细说明走 `reason`）。
+ */
+export const REPORT_CATEGORY = {
+  /** 骚扰 / 辱骂（聊天里的攻击性内容） */
+  ABUSE: "abuse",
+  /** 使用外挂 / 刷资源 */
+  CHEAT: "cheat",
+  /** 角色名 / 帮会名违规 */
+  NAME: "name",
+  /** 其他（在 reason 里说明） */
+  OTHER: "other",
+} as const;
+export type ReportCategory = (typeof REPORT_CATEGORY)[keyof typeof REPORT_CATEGORY];
+
+export const REPORT_CATEGORIES: ReportCategory[] = Object.values(REPORT_CATEGORY);
+
+/** 举报类别的中文名（管理端列表直接用，不再自己映射一遍） */
+export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
+  [REPORT_CATEGORY.ABUSE]: "骚扰辱骂",
+  [REPORT_CATEGORY.CHEAT]: "外挂刷资源",
+  [REPORT_CATEGORY.NAME]: "名字违规",
+  [REPORT_CATEGORY.OTHER]: "其他",
+};
+
+/** 举报理由长度上限（可空） */
+export const REPORT_REASON_MAX = 200;
+
+/**
+ * 举报状态（`role_reports.status`）
+ *
+ * `pending` 待处理 / `handled` 已处理 / `dismissed` 已驳回。
+ * v1 **只写 pending**：管理端是只读列表，状态流转与处罚体系是后续刀（issue #398 边界）。
+ * 常量先定下来，是为了让后续刀不用改表结构。
+ */
+export const REPORT_STATUS = {
+  PENDING: "pending",
+  HANDLED: "handled",
+  DISMISSED: "dismissed",
+} as const;
+export type ReportStatusValue = (typeof REPORT_STATUS)[keyof typeof REPORT_STATUS];
 
 //#endregion

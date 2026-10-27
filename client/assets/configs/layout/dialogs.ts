@@ -806,8 +806,8 @@ export const socialDialogLayout = {
   /** 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」） */
   tabs: {
     y: 232,
-    size: new Size(112, 32),
-    columns: [-168, -56, 56, 168],
+    size: new Size(104, 32),
+    columns: [-208, -104, 0, 104, 208],
     /** 与 texts.tabs 一一对应，别只改一处 */
     radius: 6,
     activeFill: new Color(255, 200, 80, 230),
@@ -829,8 +829,11 @@ export const socialDialogLayout = {
     columns: {
       name: -180,
       meta: -40,
+      /** 行尾按钮，从右往左：主动作 210 → 150 → 90 → 30（小按钮宽 56.5，间隙 3.5） */
       action: 210,
       action2: 150,
+      action3: 90,
+      action4: 30,
     },
     /** 行内「关系」标签（右对齐的小字，颜色按关系走） */
     relationSize: new Size(64, 18),
@@ -855,6 +858,11 @@ export const socialDialogLayout = {
     hint: { position: new Vec2(0, 200), size: new Size(560, 20) },
     list: { name: "social_nearby_list", position: new Vec2(0, 40), size: new Size(556, 312) },
   },
+  /** 黑名单页（#398）：与敌人页同构 —— 一整块列表 + 底部「按名拉黑」 */
+  blocks: {
+    title: { position: new Vec2(0, 200), size: new Size(560, 20) },
+    list: { name: "social_block_list", position: new Vec2(0, 40), size: new Size(556, 312) },
+  },
   /** 加人/标人一行（好友页与敌人页共用，贴在框底） */
   addRow: {
     input: { position: new Vec2(-70, -232), size: new Vec2(400, 30) },
@@ -865,7 +873,7 @@ export const socialDialogLayout = {
   titleFontSize: 12,
   /** 文案 */
   texts: {
-    tabs: ["帮 会", "好 友", "敌 人", "附 近"],
+    tabs: ["帮 会", "好 友", "敌 人", "附 近", "黑名单"],
     friendsTitle: "我的好友（{count}）",
     friendsEmpty: "（还没有好友：在「附近」点「加好友」，或按名字申请）",
     incomingTitle: "别人加我（{count}）",
@@ -876,6 +884,21 @@ export const socialDialogLayout = {
     enemiesEmpty: "（还没标过谁：把名字标成敌人后，你看到他的名字就是红的）",
     nearbyHint: "附近的人（{count}；同图可见，只显示此刻看得见的人）",
     nearbyEmpty: "（附近没有其他玩家）",
+    blocksTitle: "黑名单（{count}）",
+    blocksEmpty: "（黑名单是空的：在「附近」点「拉黑」，屏蔽他的人与消息）",
+    blockInput: "输入角色名拉黑",
+    addBlock: "拉黑",
+    removeBlock: "解除",
+    block: "拉黑",
+    blocked: "已拉黑",
+    report: "举报",
+    blockAddedTip: "已拉黑（他的消息与位置不再出现，对方不会收到通知）",
+    blockRemovedTip: "已解除拉黑",
+    reportSubmittedTip: "举报已提交，管理端会人工处理",
+    confirmBlockTitle: "拉黑",
+    confirmBlockText: "确定拉黑「{name}」吗？拉黑后你收不到他的聊天、看不到他的位置；他那边不会收到任何提示",
+    confirmRemoveBlockTitle: "解除拉黑",
+    confirmRemoveBlockText: "确定解除对「{name}」的拉黑吗？他的消息与位置会重新出现",
     friendInput: "输入角色名加好友",
     enemyInput: "输入角色名标敌人",
     addFriend: "加好友",
@@ -900,6 +923,52 @@ export const socialDialogLayout = {
     confirmRemoveFriendText: "确定删除好友「{name}」吗？对方那边也会同时消失（可以重新加）",
     confirmRemoveEnemyTitle: "解除敌人",
     confirmRemoveEnemyText: "确定解除对「{name}」的敌意吗？他的名字会变回普通颜色",
+  },
+};
+
+//#endregion
+
+//#region 举报弹窗（#398）
+
+/**
+ * 举报弹窗布局
+ *
+ * 与确认框同款（全屏遮罩 + 居中面板），但多三样东西：**类别选择**（四个小按钮，选中变金）、
+ * 补充说明输入框、提交按钮。为什么不做成「几个文件对话框套娃」：
+ * 举报是一次性的低频操作，弹一次、填完就走，不需要常驻面板。
+ */
+export const reportDialogLayout = {
+  name: "report_dialog",
+  maskColor: new Color(0, 0, 0, 170),
+  panel: { name: "report_panel", size: new Size(460, 320), background: uiImages.dialogBackground },
+  title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: 16, color: new Color("#FF8B8B") },
+  /** 提示行（被举报人 + 一句话说明举报只落库） */
+  hint: { name: "report_hint", position: new Vec2(0, 86), size: new Size(400, 20), fontSize: 13, color: new Color("#C8C8C8") },
+  /** 类别小按钮：一行四个（中心 x 从 -135 到 135，间隔 90） */
+  category: {
+    y: 44,
+    columns: [-135, -45, 45, 135],
+    size: new Size(84, 28),
+    activeFill: new Color(255, 200, 80, 230),
+    activeText: new Color(38, 30, 12, 255),
+    idleFill: new Color(28, 33, 42, 220),
+    idleText: new Color(190, 200, 214, 255),
+    idleBorder: new Color(64, 74, 90, 255),
+    radius: 6,
+    fontSize: 13,
+  },
+  /** 补充说明输入框（单行，200 字上限在服务端 DTO 里） */
+  reason: { name: "report_reason", position: new Vec2(0, -14), size: new Vec2(400, 30) },
+  /** 底部两个按钮（与确认框同位） */
+  submitButton: { name: "report_submit_button", position: new Vec2(-90, -110) },
+  cancelButton: { name: "report_cancel_button", position: new Vec2(90, -110) },
+  texts: {
+    title: "举报「{name}」",
+    hint: "举报只提交给管理端人工处理，不会通知对方",
+    reasonPlaceholder: "补充说明（可留空）",
+    submit: "提交举报",
+    cancel: "取消",
+    categories: ["骚扰辱骂", "外挂刷资源", "名字违规", "其他"],
   },
 };
 

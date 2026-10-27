@@ -610,6 +610,34 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         PRIMARY KEY (role_id, enemy_id)
       );
 
+      -- 屏蔽 / 拉黑（#398）：单向一行（同 role_enemies 口径）——我拉黑我的，对方既不知道
+      -- 也不受影响。过滤由服务端做（聊天投递前剔除、互见帧按观看者剔除），客户端拿不到
+      -- 「谁拉黑了我」这层信息，也就没法据此反制
+      CREATE TABLE IF NOT EXISTS role_blocks (
+        role_id         TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        blocked_role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        created_at      INTEGER NOT NULL,
+        PRIMARY KEY (role_id, blocked_role_id)
+      );
+      -- 反查「谁拉黑了我」：聊天 / 互见的过滤只看正向（我拉黑了谁），
+      -- 这个索引留给好友申请的准入判定（他不该看到我拉黑他的人发来的申请）
+      CREATE INDEX IF NOT EXISTS idx_role_blocks_blocked ON role_blocks(blocked_role_id);
+
+      -- 举报（#398）：只落库 + 管理端只读列表，**不做自动处罚**（判定交给人）
+      -- 刻意不加角色外键：被举报的人 / 举报的人被删号后，这条记录仍要能查（证据不该随人消失），
+      -- 名字在查询时 LEFT JOIN 出来，查不到就显示 id
+      CREATE TABLE IF NOT EXISTS role_reports (
+        id               TEXT PRIMARY KEY,
+        role_id          TEXT NOT NULL,
+        target_role_id   TEXT NOT NULL,
+        category         TEXT NOT NULL DEFAULT 'other',
+        reason           TEXT NOT NULL DEFAULT '',
+        status           TEXT NOT NULL DEFAULT 'pending',
+        created_at       INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_role_reports_created ON role_reports(created_at);
+      CREATE INDEX IF NOT EXISTS idx_role_reports_pair ON role_reports(role_id, target_role_id);
+
       -- 任务配置（#396，epic #394）：quests 表是管理端「任务配置」的可改层，
       -- seed 来自共享快照 QUESTS（INSERT OR IGNORE，运营改过的行不会被重启覆盖）；
       -- 允许动态增删，被 quest_progress 引用中的行在业务层拒删

@@ -923,6 +923,49 @@ export interface RoleEnemyWithRoleRow extends RoleEnemyRow {
 
 //#endregion
 
+//#region 屏蔽与举报（#398）
+
+/**
+ * 屏蔽一行（`role_blocks` 表，单向：我拉黑我的）
+ *
+ * 与 `role_enemies` 同构，但语义更硬：**服务端按它过滤内容**（聊天投递、互见帧），
+ * 敌人只影响名字颜色。
+ */
+export interface RoleBlockRow {
+  role_id: string;
+  blocked_role_id: string;
+  created_at: number;
+}
+
+/** 屏蔽 + 对方的角色索引字段（黑名单列表展示用） */
+export interface RoleBlockWithRoleRow extends RoleBlockRow {
+  blocked_name: string;
+  blocked_level: number;
+  blocked_occupation: string;
+}
+
+/** 举报一行（`role_reports` 表） */
+export interface RoleReportRow {
+  id: string;
+  /** 举报人角色 id（不加外键：删号后记录仍要能查） */
+  role_id: string;
+  target_role_id: string;
+  /** abuse / cheat / name / other（见 common/constants/social.ts 的 REPORT_CATEGORY） */
+  category: string;
+  reason: string;
+  /** pending / handled / dismissed（v1 只写 pending） */
+  status: string;
+  created_at: number;
+}
+
+/** 举报 + 双方当前的角色名（LEFT JOIN：任一方被删则为 null，界面退回显示 id） */
+export interface RoleReportWithNameRow extends RoleReportRow {
+  role_name: string | null;
+  target_name: string | null;
+}
+
+//#endregion
+
 //#region 任务（#396）
 
 /** 任务配置一行（`quests` 表；seed 来自共享快照 QUESTS，管理端可改可增删） */

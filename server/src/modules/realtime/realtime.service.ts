@@ -10,6 +10,7 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
+import { BlockService } from "./block.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
@@ -25,6 +26,7 @@ import {
   type RealtimeIdentity,
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
+  type RealtimePlayerEntry,
   type RealtimePlayersMessage,
   type RealtimeQuestMessage,
   type RealtimeServerMessage,
@@ -113,6 +115,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly monsterAi: MonsterAiService,
     private readonly presence: PlayerPresenceService,
     private readonly chat: ChatService,
+    private readonly blocks: BlockService,
     private readonly quests: QuestService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
@@ -180,18 +183,22 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         if (socket) this.send(socket, frame);
       }
     };
-    // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去
+    // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去；
+    // 屏蔽（#398）在这里逐观看者剔一次 —— 一个帧发给多人时，收件人的过滤条件各不相同，
+    // 「谁能看谁」只能由持有连接与身份的通道来判（在场表只认识「谁在哪张图」）
     this.presence.onBroadcast = (zoneId, mapId, data) => {
-      const frame: RealtimePlayersMessage = { type: "players", data };
       for (const accountId of this.world.viewersOf(zoneId, mapId)) {
         const socket = this.connections.get(accountId);
-        if (socket) this.send(socket, frame);
+        if (!socket) continue;
+        this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
       }
     };
-    // 快照兜底的定向发送（full 帧只给刚进图的连接自己）
+    // 快照兜底的定向发送（full 帧只给刚进图的连接自己）：同样过一次屏蔽过滤
     this.presence.onSendTo = (accountId, data) => {
       const socket = this.connections.get(accountId);
-      if (socket) this.send(socket, { type: "players", data } satisfies RealtimePlayersMessage);
+      if (socket) {
+        this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
+      }
     };
     // 聊天投递（#395）：ChatService 选好收件人列表，这里对着连接表发；
     // from.accountId 在 ChatService 侧已组好，帧到这里就是成品
@@ -485,6 +492,27 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, frame);
     }
+  }
+
+  /**
+   * 按观看者的屏蔽关系过滤一帧互见数据（#398）
+   *
+   * **不滤 `left`**：离开事件是「他走了」，漏发反而会把一个已经不在场的人留在屏幕上。
+   * 多看一条无用的 left 什么也不会坏（客户端删一个不存在的节点是空操作），
+   * 少发一条就会留一个幽灵。
+   *
+   * `full` 快照同样要滤：刚进图的人拿着全量，里面不该有他拉黑的人
+   * （否则「拉黑后消失」在重进图的那一刻又冒出来）。
+   */
+  private visiblePlayers(
+    viewerAccountId: string,
+    data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] },
+  ): { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] } {
+    const viewerRoleId = this.presence.identityOf(viewerAccountId)?.roleId ?? "";
+    if (!viewerRoleId) return data;
+    const players = data.players.filter((entry) => !this.blocks.hiddenFor(viewerRoleId, entry.roleId ?? ""));
+    // 没有要滤掉的条目时原样返回：这条路径每 200ms 跑一遍，能少建一个对象就少建一个
+    return players.length === data.players.length ? data : { ...data, players };
   }
 
   //#endregion

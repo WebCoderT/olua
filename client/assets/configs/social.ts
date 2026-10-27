@@ -9,18 +9,22 @@ import { Color } from "cc";
  * 各算一遍（那是 O(n²)），客户端拿自己的快照一比即可。
  *
  * ## 优先级是**唯一一处**，改这里就全改
- * 敌人 > 同帮 > 好友 > 同地图 > 普通：
- * - 敌意覆盖一切 —— 把一个人标成敌人，就是要不管他是不是我好友/同帮都看得见红名；
+ * 拉黑 > 敌人 > 同帮 > 好友 > 同地图 > 普通：
+ * - **拉黑最高**：被拉黑的人本来就不该出现在我屏幕上（服务端也会把他的聊天与位置滤掉），
+ *   万一有残帧漏进来（拉黑前已在场），也要按「拉黑」处理而不是按旧关系上色；
+ * - 敌意覆盖其余一切 —— 把一个人标成敌人，就是要不管他是不是我好友/同帮都看得见红名；
  * - 帮会身份强于私人好友 —— 同帮派是「组织关系」，比「我们互加了好友」更能说明立场。
  *
  * 判定的入口只有 `resolveRelation`：别在别处再写一遍 if/else，否则改优先级时必然漏一处
  * （典型症状：地图上名字是蓝的，社交面板里写着「好友」）。
  */
 
-/** 关系种类（对外展示的六种） */
+/** 关系种类（对外展示的七种） */
 export const RELATION = {
   /** 自己（互见帧里会被过滤掉，留着是为了判定函数的口径完整） */
   SELF: "self",
+  /** 已拉黑（#398）：他的聊天与位置由服务端过滤，本地见到也一律不显示 */
+  BLOCK: "block",
   /** 敌人：我把他标成了敌人（后续 PvP 击杀也会自动入列） */
   ENEMY: "enemy",
   /** 同帮派：guildId 相同且不为空 */
@@ -38,6 +42,7 @@ export type RelationKind = (typeof RELATION)[keyof typeof RELATION];
 /** 判定优先级（**从高到低**；`resolveRelation` 按这个顺序取第一个命中的） */
 export const RELATION_PRIORITY: RelationKind[] = [
   RELATION.SELF,
+  RELATION.BLOCK,
   RELATION.ENEMY,
   RELATION.GUILD,
   RELATION.FRIEND,
@@ -53,6 +58,8 @@ export const RELATION_PRIORITY: RelationKind[] = [
  */
 export const relationColors: Record<RelationKind, Color> = {
   [RELATION.SELF]: new Color(255, 255, 255, 255),
+  // 拉黑用暗灰：正常情况下根本看不到这个人（服务端已过滤），这个颜色只用在名单里
+  [RELATION.BLOCK]: new Color(120, 126, 138, 255),
   [RELATION.ENEMY]: new Color(255, 91, 91, 255),
   [RELATION.GUILD]: new Color(110, 168, 255, 255),
   [RELATION.FRIEND]: new Color(123, 224, 123, 255),
@@ -63,6 +70,7 @@ export const relationColors: Record<RelationKind, Color> = {
 /** 关系中文名（社交面板每行右侧的标签） */
 export const relationLabels: Record<RelationKind, string> = {
   [RELATION.SELF]: "自己",
+  [RELATION.BLOCK]: "已拉黑",
   [RELATION.ENEMY]: "敌人",
   [RELATION.GUILD]: "同帮",
   [RELATION.FRIEND]: "好友",
@@ -81,6 +89,8 @@ export interface RelationTarget {
 export interface RelationSelf extends RelationTarget {
   friendIds: string[];
   enemyIds: string[];
+  /** 我拉黑的人（#398；单向，只会有「我拉黑的」，不会有「谁拉黑了我」） */
+  blockIds: string[];
 }
 
 /**
@@ -92,6 +102,7 @@ export interface RelationSelf extends RelationTarget {
 export function resolveRelation(self: RelationSelf, target: RelationTarget, sameMap: boolean): RelationKind {
   if (self.roleId === target.roleId) return RELATION.SELF;
   // 用 indexOf 而不是 includes：客户端编译目标是 ES2015，includes 要 ES2016 的 lib
+  if (self.blockIds.indexOf(target.roleId) >= 0) return RELATION.BLOCK;
   if (self.enemyIds.indexOf(target.roleId) >= 0) return RELATION.ENEMY;
   if (self.guildId && target.guildId && self.guildId === target.guildId) return RELATION.GUILD;
   if (self.friendIds.indexOf(target.roleId) >= 0) return RELATION.FRIEND;

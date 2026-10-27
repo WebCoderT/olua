@@ -1,6 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsOptional, IsString, Length } from "class-validator";
-import { RoleEnemyWithRoleRow, RoleFriendWithRoleRow } from "../../../database/rows";
+import { IsIn, IsOptional, IsString, Length } from "class-validator";
+import { REPORT_CATEGORIES, REPORT_REASON_MAX } from "../../../common/constants/social";
+import { RoleBlockWithRoleRow, RoleEnemyWithRoleRow, RoleFriendWithRoleRow } from "../../../database/rows";
 
 /** 角色名长度上限（按名加好友/敌人的入参长度；与客户端存档的角色名长度同一档） */
 const NAME_MAX = 20;
@@ -67,6 +68,14 @@ export class MySocialDto {
   @ApiProperty({ description: "我标的敌人（单向，对方不知道）", type: [SocialEntryDto] })
   enemies: SocialEntryDto[];
 
+  @ApiProperty({
+    description:
+      "我拉黑的人（单向；**不含「谁拉黑了我」** —— 被拉黑对本人完全不可见，" +
+      "否则等于告诉骚扰者「他怕了」，反而成了继续骚扰的信号）",
+    type: [SocialEntryDto],
+  })
+  blocks: SocialEntryDto[];
+
   static fromFriend(row: RoleFriendWithRoleRow, status: string): SocialEntryDto {
     const dto = new SocialEntryDto();
     dto.roleId = row.friend_id;
@@ -85,6 +94,17 @@ export class MySocialDto {
     dto.level = row.enemy_level;
     dto.occupation = row.enemy_occupation;
     dto.status = "enemy";
+    dto.createdAt = row.created_at;
+    return dto;
+  }
+
+  static fromBlock(row: RoleBlockWithRoleRow): SocialEntryDto {
+    const dto = new SocialEntryDto();
+    dto.roleId = row.blocked_role_id;
+    dto.name = row.blocked_name;
+    dto.level = row.blocked_level;
+    dto.occupation = row.blocked_occupation;
+    dto.status = "blocked";
     dto.createdAt = row.created_at;
     return dto;
   }
@@ -115,4 +135,35 @@ export class SocialTargetDto {
   @IsString()
   @Length(1, NAME_MAX)
   name?: string;
+}
+
+/**
+ * 举报一个人（#398）
+ *
+ * **只有 `roleId`，没有按名字举报**：举报是「我此刻看到他在干什么」，
+ * 入口在「附近」列表里（那里本来就有 id）；按名字举报会多一条重名歧义的路，
+ * 而举报本来就不该靠玩家手打一个名字。
+ */
+export class CreateReportDto {
+  @ApiProperty({ description: "被举报的角色 id（「附近」列表里点选）", example: "role_b2" })
+  @IsString()
+  @Length(1, 64)
+  roleId: string;
+
+  @ApiProperty({
+    description: `举报类别：${REPORT_CATEGORIES.join(" / ")}（固定枚举，不开放自由分类）`,
+    example: "abuse",
+  })
+  @IsIn(REPORT_CATEGORIES)
+  category: string;
+
+  @ApiProperty({
+    description: "补充说明（可空；只在 category 说不清时写清楚发生了什么）",
+    required: false,
+    example: "在世界频道连续刷屏辱骂",
+  })
+  @IsOptional()
+  @IsString()
+  @Length(0, REPORT_REASON_MAX)
+  reason?: string;
 }

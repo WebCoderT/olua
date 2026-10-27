@@ -1238,6 +1238,21 @@ export type SocialTarget = {
   name?: string;
 };
 
+export type CreateReport = {
+  /**
+   * 被举报的角色 id（「附近」列表里点选）
+   */
+  roleId: string;
+  /**
+   * 举报类别：abuse / cheat / name / other（固定枚举，不开放自由分类）
+   */
+  category: string;
+  /**
+   * 补充说明（可空；只在 category 说不清时写清楚发生了什么）
+   */
+  reason?: string;
+};
+
 export type QuestId = {
   /**
    * 任务 id
@@ -4973,4 +4988,101 @@ export type MySocial = {
    * 我标的敌人（单向，对方不知道）
    */
   enemies: SocialEntry[];
+  /**
+   * 我拉黑的人（单向；**不含「谁拉黑了我」** —— 被拉黑对本人完全不可见，否则等于告诉骚扰者「他怕了」，反而成了继续骚扰的信号）
+   */
+  blocks: SocialEntry[];
+};
+
+export type Report = {
+  /**
+   * 举报 id
+   */
+  id: string;
+  /**
+   * 举报人角色 id
+   */
+  roleId: string;
+  /**
+   * 举报人角色名（已删号为 null）
+   */
+  roleName: string | null;
+  /**
+   * 被举报角色 id
+   */
+  targetRoleId: string;
+  /**
+   * 被举报角色名（已删号为 null）
+   */
+  targetName: string | null;
+  /**
+   * 类别：abuse / cheat / name / other
+   */
+  category: string;
+  /**
+   * 类别中文名（界面直接显示，不必自己映射）
+   */
+  categoryLabel: string;
+  /**
+   * 补充说明（可空）
+   */
+  reason: string;
+  /**
+   * 状态：pending / handled / dismissed（v1 只会是 pending）
+   */
+  status: string;
+  /**
+   * 举报时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type ReportPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的举报
+   */
+  list: Report[];
+};
+
+export type ReportQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配双方角色名或角色 id
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 类别：abuse / cheat / name / other
+   */
+  category?: string;
+  /**
+   * 状态：pending / handled / dismissed
+   */
+  status?: string;
 };

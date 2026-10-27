@@ -1,10 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "../database.service";
 import { FRIEND_STATUS } from "../../common/constants/social";
-import { RoleEnemyWithRoleRow, RoleFriendRow, RoleFriendWithRoleRow } from "../rows";
+import { RoleBlockRow, RoleBlockWithRoleRow, RoleEnemyWithRoleRow, RoleFriendRow, RoleFriendWithRoleRow } from "../rows";
 
 /**
- * 好友与敌人数据访问（#389）
+ * 好友与敌人数据访问（#389）+ 屏蔽（#398）
  *
  * ## 好友是**镜像两行**，不是一行 + 双向查
  * A 加 B 时同时写 `(A,B)` 与 `(B,A)`，`status` 保持一致（pending → accepted）。
@@ -17,6 +17,10 @@ import { RoleEnemyWithRoleRow, RoleFriendRow, RoleFriendWithRoleRow } from "../r
  *
  * ## 敌人是**单向一行**
  * 我标我的，对方既不知道也不受影响（没有通知，也不需要事务）。
+ *
+ * ## 屏蔽也是**单向一行**（#398），但差别在「谁会看这张表」
+ * 敌人只影响我屏幕上的名字颜色；屏蔽要被**服务端**拿去过滤内容（聊天投递、互见帧），
+ * 所以本仓储多一个 `allBlockPairs()` 给实时进程做缓存（见 realtime/block.service.ts）。
  *
  * 列表都要展示对方的角色名与等级：查询里 join `roles`（索引列上的冗余），不落第二份快照。
  */
@@ -158,6 +162,64 @@ export class SocialRepository {
   /** 角色被删时清掉「他标的」与「别人标他的」 */
   removeAllEnemiesOfRole(roleId: string): void {
     this.db.run("DELETE FROM role_enemies WHERE role_id = ? OR enemy_id = ?", [roleId, roleId]);
+  }
+
+  //#endregion
+
+  //#region 屏蔽（#398）
+
+  /** 我拉黑的人（新拉黑的在前） */
+  blocks(roleId: string): RoleBlockWithRoleRow[] {
+    return this.db.all<RoleBlockWithRoleRow>(
+      `SELECT b.*, r.name AS blocked_name, r.level AS blocked_level, r.occupation AS blocked_occupation
+         FROM role_blocks b
+         JOIN roles r ON r.id = b.blocked_role_id
+        WHERE b.role_id = ?
+        ORDER BY b.created_at DESC`,
+      [roleId],
+    );
+  }
+
+  findBlock(roleId: string, blockedRoleId: string): RoleBlockRow | undefined {
+    return this.db.get<RoleBlockRow>("SELECT * FROM role_blocks WHERE role_id = ? AND blocked_role_id = ?", [
+      roleId,
+      blockedRoleId,
+    ]);
+  }
+
+  /** 我拉黑了多少人（上限判定用） */
+  countBlocks(roleId: string): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM role_blocks WHERE role_id = ?", [roleId]);
+  }
+
+  insertBlock(roleId: string, blockedRoleId: string, now: number): void {
+    this.db.run("INSERT INTO role_blocks (role_id, blocked_role_id, created_at) VALUES (?, ?, ?)", [
+      roleId,
+      blockedRoleId,
+      now,
+    ]);
+  }
+
+  removeBlock(roleId: string, blockedRoleId: string): void {
+    this.db.run("DELETE FROM role_blocks WHERE role_id = ? AND blocked_role_id = ?", [roleId, blockedRoleId]);
+  }
+
+  /** 角色被删时清掉「他拉黑的」与「拉黑他的」 */
+  removeAllBlocksOfRole(roleId: string): void {
+    this.db.run("DELETE FROM role_blocks WHERE role_id = ? OR blocked_role_id = ?", [roleId, roleId]);
+  }
+
+  /**
+   * 全表的屏蔽对（实时进程的过滤缓存用）
+   *
+   * 为什么整表取而不是按人查：聊天 / 互见都是**每个收件人**都要判一次，逐人查库在
+   * 200ms 的互见节拍上就是每秒几十次；而这张表本身受 BLOCK_LIMIT 约束（每人最多 100 行），
+   * 整表读一次的成本远低于逐人查。缓存侧按 `SOCIAL_BLOCK_CACHE_MS` 懒刷新。
+   */
+  allBlockPairs(): Array<{ role_id: string; blocked_role_id: string }> {
+    return this.db.all<{ role_id: string; blocked_role_id: string }>(
+      "SELECT role_id, blocked_role_id FROM role_blocks",
+    );
   }
 
   //#endregion

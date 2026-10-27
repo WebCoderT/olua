@@ -9285,6 +9285,294 @@
         }
       }
     },
+    "/social/blocks": {
+      "post": {
+        "description": "**单向**：对方既不知道也不受影响。拉黑之后：\n\n- 世界 / 帮会频道里他发的消息你收不到；私聊双向都发不出去（对面看到的是「不在线」）；\n- 同图互见里你不再收到他的位置（他那边还看得见你 —— 单向，不会变成「你被屏蔽了」的提示）；\n- 若你与他是好友 / 敌人，这两条关系会被清掉（拉黑之后还顶着「好友」标签毫无意义）。\n\n过滤由服务端执行，生效时间最多滞后 `SOCIAL_BLOCK_CACHE_MS`（默认 2 秒）。\n入参同加好友（`roleId` 或 `name`）。重复拉黑 50117 / 黑名单满 50119。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.addBlock",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialTargetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "拉黑（屏蔽）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/blocks/{roleId}": {
+      "delete": {
+        "description": "解除我自己拉黑的人；本来就没拉黑返回 50118。解除后他的消息与位置会重新出现。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.removeBlock",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "对方的角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作后的我的社交快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MySocialDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "解除拉黑",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MySocialDto"
+        }
+      }
+    },
+    "/social/reports": {
+      "post": {
+        "description": "只落库供管理端人工处理，**不做自动处罚、也不通知被举报人**（通知等于把举报人卖了）。\n\n同一对「我 → 他」只留一条待处理的举报：重复举报返回 50120；举报自己 50110；查无此人 50109。\n\n`category` 取 abuse（骚扰辱骂）/ cheat（外挂刷资源）/ name（名字违规）/ other（其他），细节写 `reason`（最长 200 字，可空）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "social.report",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "举报已提交",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "举报一个人",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": true
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "description": "按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。\n\n`category` 取 abuse / cheat / name / other，`status` 取 pending / handled / dismissed（v1 只会是 pending），`keyword` 模糊匹配双方角色名或角色 id。条件之间是「与」的关系。\n\n`roleName` / `targetName` 是**查询时**关联出来的当前角色名：角色已删则为 null，界面退回显示 id。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`report:read`（查看玩家举报；角色：超级管理员 / 管理员）",
+        "operationId": "adminReport.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配双方角色名或角色 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "类别：abuse / cheat / name / other",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "状态：pending / handled / dismissed",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ReportPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "举报列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ReportPageDto"
+        },
+        "x-olua-permissions": [
+          "report:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/ReportQueryDto"
+        }
+      }
+    },
     "/quests/me": {
       "get": {
         "description": "当前角色的全部进度行（accepted / ready / claimed）。**可接任务不在内**：客户端按配置快照（quests）与 claimed 行自己算「哪些能接」（等级 / 前置链都是纯读计算）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -11608,6 +11896,30 @@
             "example": "乙二"
           }
         }
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "被举报的角色 id（「附近」列表里点选）",
+            "example": "role_b2"
+          },
+          "category": {
+            "type": "string",
+            "description": "举报类别：abuse / cheat / name / other（固定枚举，不开放自由分类）",
+            "example": "abuse"
+          },
+          "reason": {
+            "type": "string",
+            "description": "补充说明（可空；只在 category 说不清时写清楚发生了什么）",
+            "example": "在世界频道连续刷屏辱骂"
+          }
+        },
+        "required": [
+          "roleId",
+          "category"
+        ]
       },
       "QuestIdDto": {
         "type": "object",
@@ -17630,6 +17942,13 @@
             "items": {
               "$ref": "#/components/schemas/SocialEntryDto"
             }
+          },
+          "blocks": {
+            "description": "我拉黑的人（单向；**不含「谁拉黑了我」** —— 被拉黑对本人完全不可见，否则等于告诉骚扰者「他怕了」，反而成了继续骚扰的信号）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialEntryDto"
+            }
           }
         },
         "required": [
@@ -17639,8 +17958,151 @@
           "friends",
           "incoming",
           "outgoing",
-          "enemies"
+          "enemies",
+          "blocks"
         ]
+      },
+      "ReportDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "举报 id"
+          },
+          "roleId": {
+            "type": "string",
+            "description": "举报人角色 id"
+          },
+          "roleName": {
+            "type": "string",
+            "description": "举报人角色名（已删号为 null）",
+            "nullable": true
+          },
+          "targetRoleId": {
+            "type": "string",
+            "description": "被举报角色 id"
+          },
+          "targetName": {
+            "type": "string",
+            "description": "被举报角色名（已删号为 null）",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "description": "类别：abuse / cheat / name / other",
+            "example": "abuse"
+          },
+          "categoryLabel": {
+            "type": "string",
+            "description": "类别中文名（界面直接显示，不必自己映射）",
+            "example": "骚扰辱骂"
+          },
+          "reason": {
+            "type": "string",
+            "description": "补充说明（可空）"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：pending / handled / dismissed（v1 只会是 pending）",
+            "example": "pending"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "举报时间（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "id",
+          "roleId",
+          "roleName",
+          "targetRoleId",
+          "targetName",
+          "category",
+          "categoryLabel",
+          "reason",
+          "status",
+          "createdAt"
+        ]
+      },
+      "ReportPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的举报",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "ReportQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配双方角色名或角色 id"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "category": {
+            "type": "string",
+            "description": "类别：abuse / cheat / name / other"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：pending / handled / dismissed"
+          }
+        }
       }
     }
   }

@@ -52,11 +52,12 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:mail` | 邮件通道专项（120 条；**假发信器**，不需要 SMTP 服务器） |
 | `npm run test:e2e:account-email` | 玩家邮箱字段专项（28 条） |
 | `npm run test:e2e:realtime` | 实时通道专项（50 条；**真实 WebSocket 握手**，不需要浏览器） |
+| `npm run test:e2e:blocks` | 屏蔽与举报专项（50 条；拉黑单向 / 聊天与互见服务端过滤 / 举报落库与去重） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 十七套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 十八套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -136,7 +137,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social 30 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report 31 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -144,8 +145,8 @@ server/
 │   │   ├── announcement/           公告：客户端拉「生效中」（公共）+ 管理端 CRUD
 │   │   ├── mail/                   邮件：模板 + 投递队列 + 后台调度（发信只入队）
 │   │   ├── zone/                   区服（#295 阶段二）：活区列表（公共）/ 开区 / 合并区
-│   │   ├── social/                 社交：帮会（#388：创建 / 申请 / 审批 / 成员 / 转让 / 解散，管理端改名与强制解散）+ 好友与敌人（#389）
-│   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭 / 聊天转发（#395：世界=同图 / 帮会 / 私聊，限频与长度上限在服务端）
+│   │   ├── social/                 社交：帮会（#388：创建 / 申请 / 审批 / 成员 / 转让 / 解散，管理端改名与强制解散）+ 好友与敌人（#389）+ 屏蔽与举报（#398：拉黑单向一行 / 举报只落库 + 管理端只读列表 + `report:read`）
+│   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭 / 聊天转发（#395：世界=同图 / 帮会 / 私聊，限频与长度上限在服务端；#398 起聊天与互见都按 `role_blocks` 逐收件人剔除）
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
@@ -175,6 +176,7 @@ server/
 │   ├── e2e-chat.cjs                35 条（聊天：世界同图广播 / 正文净化 / 限频读配置 / 帮会准入查库 / 私聊校验与离线整条拒绝）
 │   ├── e2e-quest.cjs               48 条（任务：接取门控 / talk·kill·collect 三目标推进 / 交付发奖一次落库 / 日常领奖后可重接）
 │   ├── e2e-sell.cjs                24 条（出售：快照价结算 / 同 id 多格合并 / 客户端报价无效 / 不可卖 / 整单拒绝 / 乐观锁 / 越权）
+│   ├── e2e-blocks.cjs              50 条（屏蔽与举报：单向拉黑 / 聊天与互见服务端过滤 / 举报去重与落库 / 管理端只读列表）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -183,7 +185,7 @@ server/
 
 ## 数据模型
 
-36 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+38 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -233,7 +235,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（30 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（31 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -277,13 +279,13 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（24 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`（25 个权限点 / 3 种角色）：
 
 | 角色 | 权限 |
 | --- | --- |
 | 超级管理员 `super_admin` | 全部（含「管理管理员」与「重置管理员密码」） |
 | 管理员 `admin` | 除「管理管理员」外全部 —— 管理员之间不能互相提权 |
-| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表** / **养成配置列表** / **区服列表** / **帮会列表**（**看不到操作日志、系统信息，也看不到邮件投递记录**） |
+| 只读观察员 `viewer` | 只看：概览 / 账号列表与详情 / 角色列表与详情 / **公告列表** / **养成配置列表** / **区服列表** / **帮会列表**（**看不到操作日志、系统信息，也看不到邮件投递记录与玩家举报**） |
 
 > 公告为什么给观察员留了**只读**：它是面向全服的公开内容，读了不等于能改；而「发布 / 编辑」是单列的
 > `announcement:write`（对外发声，会直接推给玩家），观察员拿不到。
@@ -300,13 +302,13 @@ server/
 
 ## 接口与契约
 
-当前 **137 个接口 / 113 条路径 / 204 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **141 个接口 / 117 条路径 / 208 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
-| 客户端 | 35 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 95 | `admin` 令牌 + 每个接口各自的权限点 |
+| 客户端 | 38 | `player` 令牌，只能操作自己账号的数据 |
+| 管理端 | 96 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -382,7 +384,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-十七套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -399,11 +401,11 @@ admin/src/api/{routes,models,endpoints}.ts
 
 
 ```bash
-cd server && npm run verify          # 编译 + 十七套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 十八套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 
-改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改实时通道 → `test:e2e:realtime`），
+改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改实时通道 → `test:e2e:realtime`），
 但**提交前 `npm run verify` 都该过一遍**。
 
 ## 相关文档

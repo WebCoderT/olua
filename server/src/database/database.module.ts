@@ -30,6 +30,7 @@ import { GuildRepository } from "./repositories/guild.repository";
 import { SocialRepository } from "./repositories/social.repository";
 import { QuestRepository } from "./repositories/quest.repository";
 import { QuestProgressRepository } from "./repositories/quest-progress.repository";
+import { ReportRepository } from "./repositories/report.repository";
 
 /**
  * 数据层（全局模块）
@@ -73,6 +74,7 @@ import { QuestProgressRepository } from "./repositories/quest-progress.repositor
     SocialRepository,
     QuestRepository,
     QuestProgressRepository,
+    ReportRepository,
   ],
   exports: [
     DatabaseService,
@@ -106,6 +108,7 @@ import { QuestProgressRepository } from "./repositories/quest-progress.repositor
     SocialRepository,
     QuestRepository,
     QuestProgressRepository,
+    ReportRepository,
   ],
 })
 export class DatabaseModule {}

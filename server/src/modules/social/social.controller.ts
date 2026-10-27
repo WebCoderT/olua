@@ -1,10 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
-import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
+import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
-import { MySocialDto, SocialTargetDto } from "./dto/social.dto";
+import { CreateReportDto, MySocialDto, SocialTargetDto } from "./dto/social.dto";
 import { SocialService } from "./social.service";
 
 /**
@@ -116,5 +116,51 @@ export class SocialController {
   @ApiDataResponse(MySocialDto, { description: "操作后的我的社交快照" })
   removeEnemy(@CurrentUser() user: AuthenticatedUser, @Param("roleId") roleId: string): MySocialDto {
     return this.socialService.removeEnemy(user.id, roleId);
+  }
+
+  @Post("blocks")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "social.addBlock",
+    summary: "拉黑（屏蔽）",
+    description:
+      "**单向**：对方既不知道也不受影响。拉黑之后：\n\n" +
+      "- 世界 / 帮会频道里他发的消息你收不到；私聊双向都发不出去（对面看到的是「不在线」）；\n" +
+      "- 同图互见里你不再收到他的位置（他那边还看得见你 —— 单向，不会变成「你被屏蔽了」的提示）；\n" +
+      "- 若你与他是好友 / 敌人，这两条关系会被清掉（拉黑之后还顶着「好友」标签毫无意义）。\n\n" +
+      "过滤由服务端执行，生效时间最多滞后 `SOCIAL_BLOCK_CACHE_MS`（默认 2 秒）。\n" +
+      "入参同加好友（`roleId` 或 `name`）。重复拉黑 50117 / 黑名单满 50119。",
+  })
+  @ApiDataResponse(MySocialDto, { description: "操作后的我的社交快照" })
+  addBlock(@CurrentUser() user: AuthenticatedUser, @Body() dto: SocialTargetDto): MySocialDto {
+    return this.socialService.addBlock(user.id, dto);
+  }
+
+  @Delete("blocks/:roleId")
+  @ApiPlayerDoc({
+    operationId: "social.removeBlock",
+    summary: "解除拉黑",
+    description: "解除我自己拉黑的人；本来就没拉黑返回 50118。解除后他的消息与位置会重新出现。",
+  })
+  @ApiParam({ name: "roleId", description: "对方的角色 id" })
+  @ApiDataResponse(MySocialDto, { description: "操作后的我的社交快照" })
+  removeBlock(@CurrentUser() user: AuthenticatedUser, @Param("roleId") roleId: string): MySocialDto {
+    return this.socialService.removeBlock(user.id, roleId);
+  }
+
+  @Post("reports")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "social.report",
+    summary: "举报一个人",
+    description:
+      "只落库供管理端人工处理，**不做自动处罚、也不通知被举报人**（通知等于把举报人卖了）。\n\n" +
+      "同一对「我 → 他」只留一条待处理的举报：重复举报返回 50120；举报自己 50110；查无此人 50109。\n\n" +
+      "`category` 取 abuse（骚扰辱骂）/ cheat（外挂刷资源）/ name（名字违规）/ other（其他），" +
+      "细节写 `reason`（最长 200 字，可空）。",
+  })
+  @ApiVoidResponse("举报已提交")
+  report(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateReportDto): void {
+    this.socialService.report(user.id, dto);
   }
 }
