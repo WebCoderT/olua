@@ -25,6 +25,7 @@ import MonsterManager from "./core/MonsterManager";
 import OtherPlayerManager from "./core/OtherPlayerManager";
 import SocialStore from "./core/SocialStore";
 import PartyStore from "./core/PartyStore";
+import LeaderboardStore from "./core/LeaderboardStore";
 import ChatStore from "./core/ChatStore";
 import ChatBubbles from "./core/ChatBubbles";
 import QuestStore from "./core/QuestStore";
@@ -307,6 +308,8 @@ export class Game extends Component {
     SocialStore.clear();
     // 队伍同理（#399）：队伍是「这个角色此刻」的状态，留着只会让下一角色看到别人的队友
     PartyStore.clear();
+    // 榜单缓存（#400）：里面存着「我的名次」，换角色后必须重拉，否则底部那行会写上一个角色的名次
+    LeaderboardStore.clear();
     // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
     ChatStore.reset();
     ChatBubbles.reset();

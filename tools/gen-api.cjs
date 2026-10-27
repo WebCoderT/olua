@@ -85,6 +85,8 @@ const MODULES = {
   guild: { target: "client", export: "GuildApi" },
   social: { target: "client", export: "SocialApi" },
   quest: { target: "client", export: "QuestApi" },
+  // 排行榜（#400）：与军衔（adminRank）不同 —— 那个是 rank 字段的配置表，这个是全服榜单
+  leaderboard: { target: "client", export: "LeaderboardApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },

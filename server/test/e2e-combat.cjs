@@ -38,7 +38,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 126;
+const EXPECTED_ASSERTIONS = 130;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -87,6 +87,20 @@ function freePort() {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 直读角色的击杀计数（#400）
+ *
+ * 这一列没有 HTTP 出口（它只喂排行榜），所以断言只能走库。`node:sqlite` 是
+ * Node 内置的同步驱动，读一行就关 —— 与 `seedSpawnAreas` 同一套用法。
+ */
+function readKills(dbPath, roleId) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const row = db.prepare("SELECT kills FROM roles WHERE id = ?").get(roleId);
+  db.close();
+  return row ? row.kills : null;
+}
 
 /**
  * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）。
@@ -491,6 +505,15 @@ function roleData(id, name, level, skills) {
     const roleA = await api(baseUrl, "GET", `roles/${killerA.roleId}`, { token: killerA.token });
     check(roleA.code === 0 && roleA.data.data.exp === 10, "A：服务端已把经验落进存档（data.exp = 10）", JSON.stringify(roleA.data && roleA.data.exp));
     check(roleA.code === 0 && roleA.data.revision === (killedA.reward ? killedA.reward.revision : -1), "A：reward.revision 与服务端当前修订号一致（客户端照搬不会撞乐观锁）");
+
+    // —— A2. 击杀计数（#400）：独立于经验，一次一加 ——
+
+    checkEqual(readKills(dbPath, killerA.roleId), 1, "A：击杀计数 +1（roles.kills = 1，#400 排行榜的原料）");
+    const mobA3 = await aliveMonster(killerA, "1");
+    check(!!mobA3, "A：等到第二只活着的怪（验击杀计数是累加而不是覆盖）", JSON.stringify(mobA3));
+    const killedA2 = mobA3 ? await killMonster(killerA, mobA3.monsterKey, mobA3.instanceId) : null;
+    check(!!(killedA2 && killedA2.killed), "A：第二只也打死了");
+    checkEqual(readKills(dbPath, killerA.roleId), 2, "A：击杀计数累加到 2（不是被后一次覆盖成 1）");
 
     // —— B. 升级：level_exps 管理端改值即时生效 ——
 

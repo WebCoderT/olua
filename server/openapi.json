@@ -9779,6 +9779,152 @@
         }
       }
     },
+    "/leaderboards/{board}/me": {
+      "get": {
+        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）（下同）。\n\n取的是**当前在线角色**：玩家在游戏里看榜，关心的是「我这个角色第几」。\n没有在线角色（还没进游戏 / 被踢下线）时返回 `rank = 0` 与 `entry = null` —— **不是 404**：界面上「你还没有名次」是正常状态，客户端不必为它写错误分支。\n\n名次在**全量排序**里算，所以即使玩家排在上榜条数（`LEADERBOARD_TOP_N`）之外，这里也能拿到真实名次。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "leaderboard.me",
+        "parameters": [
+          {
+            "name": "board",
+            "required": true,
+            "in": "path",
+            "description": "榜单：`level`（等级） / `combat`（战力） / `kills`（击杀）",
+            "schema": {
+              "enum": [
+                "level",
+                "combat",
+                "kills"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "我的名次（未上榜时 rank=0、entry=null）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LeaderboardSelfDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "我在某个榜上的名次",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LeaderboardSelfDto"
+        }
+      }
+    },
+    "/leaderboards/{board}": {
+      "get": {
+        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。\n\n**排序是固定的**（等级 / 战力 / 击杀各自降序），所以没有 `sort` / `keyword` 参数 —— 名次一旦能改排序就没有意义了。\n\n**并列规则**：同分同名次（竞赛排名，1、2、2、4），同分之间按角色 id 升序，两次重算之间次序不抖。\n\n**离线也上榜**：榜读的是角色存档，不要求在线。\n\n`size` 超过上榜条数（`LEADERBOARD_TOP_N`，默认 100）时会被**夹到上限**而不是报错 —— 榜本来只有这么长。\n\n响应里的 `computedAt` 是这份快照算出来的时刻：榜单默认每分钟重算一次，刚升级的玩家最多等一分钟才看到自己往上挪。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "leaderboard.page",
+        "parameters": [
+          {
+            "name": "board",
+            "required": true,
+            "in": "path",
+            "description": "榜单：`level`（等级） / `combat`（战力） / `kills`（击杀）",
+            "schema": {
+              "enum": [
+                "level",
+                "combat",
+                "kills"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size + computedAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LeaderboardPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "榜单分页",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LeaderboardPageDto"
+        },
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/LeaderboardQueryDto"
+        }
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -18101,6 +18247,143 @@
           "status": {
             "type": "string",
             "description": "状态：pending / handled / dismissed"
+          }
+        }
+      },
+      "LeaderboardEntryDto": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "number",
+            "description": "名次（并列同分同名次：1、2、2、4）",
+            "example": 1
+          },
+          "roleId": {
+            "type": "string",
+            "description": "角色 id（点进去看详情 / 加好友用）"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业码"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "combat": {
+            "type": "number",
+            "description": "战斗力（与客户端 combatCalc 同源）"
+          },
+          "kills": {
+            "type": "number",
+            "description": "击杀数（服务端结算路径累加）"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "归属区服 id（榜是全服单榜，这一项只用于展示「来自 X 区」）"
+          }
+        },
+        "required": [
+          "rank",
+          "roleId",
+          "name",
+          "occupation",
+          "level",
+          "combat",
+          "kills",
+          "zoneId"
+        ]
+      },
+      "LeaderboardPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "本页条目（按名次升序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntryDto"
+            }
+          },
+          "computedAt": {
+            "type": "number",
+            "description": "这份快照算出来的时刻（毫秒）。榜单是**物化**的（默认每分钟重算一次），客户端据此告诉玩家「每分钟更新」，而不是让人以为刚升级就该立刻跳名次。",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list",
+          "computedAt"
+        ]
+      },
+      "LeaderboardSelfDto": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "number",
+            "description": "我的名次；**0 = 没有名次**（没有在线角色，或角色不在这份快照里）",
+            "example": 37
+          },
+          "entry": {
+            "description": "我在榜上的那一条（`rank = 0` 时为 null）",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LeaderboardEntryDto"
+              }
+            ]
+          },
+          "computedAt": {
+            "type": "number",
+            "description": "这份快照算出来的时刻（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "rank",
+          "entry",
+          "computedAt"
+        ]
+      },
+      "LeaderboardQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
           }
         }
       }

@@ -82,6 +82,9 @@ const ALLOWED_EDGES = [
   // realtime → party：击杀者的同图队友要分经验（CombatSettlement 调 sharePartyExp），
   // 进图补快照与互见帧的 partyId 也经 PartyService 的只读口
   { from: "modules/realtime", to: "modules/party/party.service.ts", why: "队友分经验 + 队伍快照 + 互见 partyId" },
+  // 排行榜（#400）：榜上的「战力」与角色详情里的战斗力必须是同一个数（否则玩家会看到两个战力），
+  // 所以直接引 combat 的纯函数，而不是在榜单域里再复刻一份
+  { from: "modules/leaderboard", to: "modules/combat/role-attributes.ts", why: "榜单战力与角色属性同源" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -95,6 +98,8 @@ const REPO_EDGES = {
     "modules/realtime",
     // 合并区（#295）：搬账号在 ZoneService 的合并事务里（SQL 收在仓储，业务不摸 DatabaseService）
     "modules/zone",
+    // 排行榜（#400）：`me` 要知道「当前在线的是哪个角色」，这是 accounts 行上的事实
+    "modules/leaderboard",
   ],
   "database/repositories/admin.repository.ts": ["modules/admin"],
   "database/repositories/role.repository.ts": [
@@ -102,6 +107,8 @@ const REPO_EDGES = {
     "modules/admin",
     // 聊天（#395）：帮会频道把成员角色映射成账号（findManyByIds）、私聊按 roleId 找收件人
     "modules/realtime",
+    // 排行榜（#400）：物化时一次读全表（等级 / 击杀是索引列，战力从存档现算）
+    "modules/leaderboard",
   ],
   "database/repositories/audit.repository.ts": ["modules/audit", "modules/admin"],
   "database/repositories/announcement.repository.ts": ["modules/announcement"],

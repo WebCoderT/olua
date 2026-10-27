@@ -63,6 +63,14 @@ export interface RoleRow {
   occupation: string;
   sex: string;
   level: number;
+  /**
+   * 击杀数（#400）
+   *
+   * 与 `level` 一样是**索引列**：等级从存档里的 `exp` 推出来，击杀数无处可推 ——
+   * 所以由服务端结算路径自己数（`RolesService.recordKill`，唯一写者）。
+   * 玩家保存进度走 `replace()`，那条 SQL 不碰这一列，客户端上报什么都改不到它。
+   */
+  kills: number;
   /** 角色完整数据（客户端 entities/Role 的 JSON 快照；服务端按不透明文档存取） */
   data: string;
   /**
@@ -101,6 +109,27 @@ export interface AccountWithCountRow extends AccountRow {
 export interface RoleWithAccountRow extends RoleRow {
   account_name: string | null;
   account_online_role_id: string | null;
+}
+
+/**
+ * 排行榜候选行（#400）
+ *
+ * 只取三个榜要用的东西：等级 / 击杀数是索引列，战力得靠 `data` 里的装备与养成项
+ * 现算（`summarizeRoleAttributes`）。`zone_id` 来自账号行 —— 榜是「全服单榜」，
+ * 区服只作为展示字段带出去（将来分区时不用再改查询）。
+ *
+ * **刻意不带 `account_id`**：榜单是对外数据，账号 id 属于没必要暴露的关联键。
+ */
+export interface RoleLeaderboardRow {
+  id: string;
+  name: string;
+  occupation: string;
+  level: number;
+  kills: number;
+  /** 角色存档（算战力用；解析失败的角色跳过，不让它把整次重算带崩） */
+  data: string;
+  /** 归属区（账号行上的 zone_id；join 不到时为 1，与账号默认值同口径） */
+  zone_id: number;
 }
 
 /**

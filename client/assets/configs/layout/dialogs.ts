@@ -1264,3 +1264,102 @@ export const partyDialogLayout = {
 };
 
 //#endregion
+
+//#region 排行榜弹窗（#400）
+
+/**
+ * 排行榜弹窗布局（与聊天 / 任务 / 队伍同框：600×560）
+ *
+ * 三个页签就是三个榜（等级 / 战力 / 击杀）—— 它们是同一份数据的三种排法，
+ * 分成三个弹窗会让玩家在打开之前就得先想清楚「我要看哪个」。
+ *
+ * 底部固定一条「我的名次」：榜只留前 N 条（默认 100），排在后面的人翻不到自己，
+ * 那一行是**唯一**能让人确认「我到底第几」的地方。
+ */
+export const leaderboardDialogLayout = {
+  name: "leaderboard_dialog",
+  title: "排 行 榜",
+  size: new Size(600, 560),
+  /** 页签（三枚，与任务 / 队伍弹窗同款式） */
+  tabs: {
+    y: 232,
+    size: new Size(120, 32),
+    columns: [-130, 0, 130],
+    radius: 6,
+    activeFill: new Color(255, 200, 80, 230),
+    activeText: new Color(38, 30, 12, 255),
+    idleFill: new Color(28, 33, 42, 200),
+    idleText: new Color(190, 200, 214, 255),
+    idleBorder: new Color(64, 74, 90, 255),
+    fontSize: 13,
+  },
+  /** 顶部小结（共几人上榜 + 这份快照的时刻） */
+  summary: {
+    position: new Vec2(0, 200),
+    size: new Size(556, 20),
+    fontSize: 12,
+    color: new Color(160, 172, 190, 255),
+    /** 「刚刚更新」的界线（毫秒）：快照比这个还新就不写时分 */
+    freshMs: 60_000,
+  },
+  /** 榜单列表（可滚动） */
+  list: { name: "leaderboard_list", position: new Vec2(0, 6), size: new Size(556, 372) },
+  /** 一条名次：名次（左）+ 名字 + 关键数值（右） */
+  row: {
+    size: new Size(552, 44),
+    fill: new Color(22, 26, 34, 150),
+    border: new Color(64, 74, 90, 255),
+    radius: 6,
+    rankX: -252,
+    rankSize: new Size(44, 20),
+    rankFontSize: 14,
+    rankColor: new Color(160, 172, 190, 255),
+    /** 前三名的名次数字用金色（一眼看出榜头） */
+    topRankColor: new Color(255, 209, 102, 255),
+    /** 金色名次的界线：名次 ≤ 这个数就用金色（第 4 名开始是普通灰） */
+    topRankThreshold: 3,
+    nameX: -186,
+    nameSize: new Size(220, 20),
+    nameFontSize: 13,
+    nameColor: new Color(232, 238, 246, 255),
+    metaX: 134,
+    metaSize: new Size(240, 18),
+    metaFontSize: 11,
+    metaColor: new Color(160, 172, 190, 255),
+    /** 我自己那一行的底色与边框（滚到哪都认得出来） */
+    selfFill: new Color(46, 40, 24, 210),
+    selfBorder: new Color(255, 200, 80, 255),
+  },
+  /** 底部固定的「我的名次」条 */
+  selfRow: {
+    position: new Vec2(0, -238),
+    size: new Size(552, 40),
+    fill: new Color(32, 30, 22, 220),
+    border: new Color(120, 100, 52, 255),
+    radius: 6,
+    textFontSize: 12,
+    textColor: new Color(255, 214, 102, 255),
+  },
+  /** 文案 */
+  texts: {
+    tabs: ["等 级", "战 力", "击 杀"],
+    /** 顶部小结：共 {total} 人上榜 · {updated} 更新 */
+    summary: "共 {total} 人上榜 · {updated} 更新",
+    /** 我的名次：第 {rank} 名 */
+    selfIn: "我的名次：第 {rank} 名",
+    /** 没有名次（没有在线角色 / 还没上榜） */
+    selfOut: "你还没有名次 —— 进游戏后自动上榜",
+    /** 三个榜各自的数值行（同一行里展示另外两个维度，免得玩家来回切页） */
+    levelMeta: "Lv {level} · 战力 {combat} · 击杀 {kills}",
+    combatMeta: "战力 {combat} · Lv {level} · 击杀 {kills}",
+    killsMeta: "{kills} 杀 · Lv {level} · 战力 {combat}",
+    emptyList: "（榜上还没有人 —— 先去打两只怪）",
+    loading: "正在取榜…",
+    failed: "榜单没取到，稍后再试",
+    /** 时刻格式：{time} 更新（今天）/ 不是今天就不显示时分，只写「刚刚更新」 */
+    updatedNow: "刚刚",
+    updatedAt: "{time}",
+  },
+};
+
+//#endregion

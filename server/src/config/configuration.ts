@@ -315,6 +315,27 @@ export interface AppConfiguration {
    */
   partyExpMateShare: number;
   //#endregion
+
+  //#region 排行榜（#400）
+
+  /**
+   * 榜单重算周期（毫秒，默认 60000，`LEADERBOARD_REFRESH_MS`）
+   *
+   * 榜单是**物化**的（一次重算读全表 + 算战力 + 三个排序），不是每次请求现算。
+   * 一分钟是「玩家能接受的名次延迟」与「重算成本」之间的折中：升一级之后最多等一分钟
+   * 才看到自己往上挪。压到 0 表示**不启用定时器**（只在首次请求时算一次）——
+   * e2e 用它验「快照语义」。
+   */
+  leaderboardRefreshMs: number;
+
+  /**
+   * 物化保留的条数（默认 100，`LEADERBOARD_TOP_N`）
+   *
+   * 既是「榜有多长」，也是分页 `size` 的实际上限：留 100 条意味着玩家最多翻到第 100 名。
+   * 要做到「全服都看得到自己」靠的是 `me` 接口（名次在全量排序里取），不是把 topN 拉大。
+   */
+  leaderboardTopN: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -386,5 +407,7 @@ export default function configuration(): AppConfiguration {
     partyMemberLimit: Number(process.env.PARTY_MEMBER_LIMIT ?? 4),
     partyInviteTtlMs: Number(process.env.PARTY_INVITE_TTL_MS ?? 30000),
     partyExpMateShare: Number(process.env.PARTY_EXP_MATE_SHARE ?? 0.5),
+    leaderboardRefreshMs: Number(process.env.LEADERBOARD_REFRESH_MS ?? 60000),
+    leaderboardTopN: Number(process.env.LEADERBOARD_TOP_N ?? 100),
   };
 }

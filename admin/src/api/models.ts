@@ -5086,3 +5086,87 @@ export type ReportQuery = {
    */
   status?: string;
 };
+
+export type LeaderboardEntry = {
+  /**
+   * 名次（并列同分同名次：1、2、2、4）
+   */
+  rank: number;
+  /**
+   * 角色 id（点进去看详情 / 加好友用）
+   */
+  roleId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业码
+   */
+  occupation: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 战斗力（与客户端 combatCalc 同源）
+   */
+  combat: number;
+  /**
+   * 击杀数（服务端结算路径累加）
+   */
+  kills: number;
+  /**
+   * 归属区服 id（榜是全服单榜，这一项只用于展示「来自 X 区」）
+   */
+  zoneId: number;
+};
+
+export type LeaderboardPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 本页条目（按名次升序）
+   */
+  list: LeaderboardEntry[];
+  /**
+   * 这份快照算出来的时刻（毫秒）。榜单是**物化**的（默认每分钟重算一次），客户端据此告诉玩家「每分钟更新」，而不是让人以为刚升级就该立刻跳名次。
+   */
+  computedAt: number;
+};
+
+export type LeaderboardSelf = {
+  /**
+   * 我的名次；**0 = 没有名次**（没有在线角色，或角色不在这份快照里）
+   */
+  rank: number;
+  /**
+   * 我在榜上的那一条（`rank = 0` 时为 null）
+   */
+  entry: LeaderboardEntry | null;
+  /**
+   * 这份快照算出来的时刻（毫秒）
+   */
+  computedAt: number;
+};
+
+export type LeaderboardQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。
+   */
+  size?: number;
+};

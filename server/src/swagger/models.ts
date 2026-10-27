@@ -21,6 +21,7 @@ import { AuditActionListDto, AuditExportDto, AuditLogDto, AuditLogPageDto, Audit
 import { ApiEnvelopeDto, PageMetaDto, PageQueryDto } from "../common/dto/api-envelope.dto";
 import { HealthDto } from "../modules/health/dto/health.dto";
 import { CreateRoleDto, SaveRoleDto } from "../modules/roles/dto/create-role.dto";
+import { LeaderboardEntryDto, LeaderboardPageDto, LeaderboardQueryDto, LeaderboardSelfDto } from "../modules/leaderboard/dto/leaderboard.dto";
 import { AdminRoleDetailDto, AdminRoleDto, GrowthUpgradeResultDto, RoleDerivedAttributesDto, RoleDerivedDto, RoleReportedAttributesDto, RoleDto, RoleSummaryDto } from "../modules/roles/dto/role.dto";
 import { GrowthUpgradeDto } from "../modules/roles/dto/growth-upgrade.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "../modules/roles/dto/mall-purchase.dto";
@@ -340,4 +341,9 @@ export const SWAGGER_MODELS = [
   ReportDto,
   ReportPageDto,
   ReportQueryDto,
+  // 排行榜（#400）
+  LeaderboardEntryDto,
+  LeaderboardPageDto,
+  LeaderboardSelfDto,
+  LeaderboardQueryDto,
 ];

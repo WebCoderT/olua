@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { DatabaseService, SqlParam } from "../database.service";
 import { ROLE_SORT } from "../sort-specs";
 import { resolveSort } from "../sort.util";
-import { RoleFilter, RoleRow, RoleWithAccountRow } from "../rows";
+import { RoleFilter, RoleLeaderboardRow, RoleRow, RoleWithAccountRow } from "../rows";
 
 /** 角色筛选条件的定义住在 `database/rows.ts`（契约类型层）；这里按旧出口再导出一次，老引用不断 */
 export type { RoleFilter };
@@ -51,9 +51,33 @@ export class RoleRepository {
 
   insert(row: RoleRow): void {
     this.db.run(
-      `INSERT INTO roles (id, account_id, name, occupation, sex, level, data, revision, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.account_id, row.name, row.occupation, row.sex, row.level, row.data, row.revision, row.created_at, row.updated_at],
+      `INSERT INTO roles (id, account_id, name, occupation, sex, level, kills, data, revision, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.account_id, row.name, row.occupation, row.sex, row.level, row.kills, row.data, row.revision, row.created_at, row.updated_at],
+    );
+  }
+
+  /**
+   * 击杀数 +1（#400）
+   *
+   * 一条 UPDATE 走完，不读不写整份存档 —— **不推进 `revision`**：击杀数不是玩家进度，
+   * 客户端那份存档里没有它（也没有它的基线），推进修订号只会让玩家的防抖存档白撞 20006。
+   * `updated_at` 也不动：它表示「存档最后被写过」，而这一列的变化由排行榜自己按秒级节拍看。
+   */
+  incrementKills(id: string): boolean {
+    return this.db.execute("UPDATE roles SET kills = kills + 1 WHERE id = ?", [id]).changes > 0;
+  }
+
+  /**
+   * 排行榜候选（#400：全表 + 账号的区服）
+   *
+   * 全表读是有意的：物化每 `LEADERBOARD_REFRESH_MS` 才跑一次，而「按分页现排序」
+   * 要把整表读 N 遍。倒过来做的代价是「角色数上万时一次重算占几十毫秒」—— 见服务注释。
+   */
+  listForLeaderboard(): RoleLeaderboardRow[] {
+    return this.db.all<RoleLeaderboardRow>(
+      `SELECT r.id, r.name, r.occupation, r.level, r.kills, r.data, COALESCE(a.zone_id, 1) AS zone_id
+       FROM roles r LEFT JOIN accounts a ON a.id = r.account_id`,
     );
   }
 

@@ -99,6 +99,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         occupation TEXT NOT NULL DEFAULT '',
         sex        TEXT NOT NULL DEFAULT '',
         level      INTEGER NOT NULL DEFAULT 1,
+        kills      INTEGER NOT NULL DEFAULT 0,
         data       TEXT NOT NULL,
         revision   INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
@@ -713,6 +714,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 区服（#295 阶段二）：存量账号全部归入一区（zone_id=1 与 zones seed 对齐，注册入参可指定）
     this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
     this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
+    // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
+    this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");
     this.migrateWorldMonsterInstanceIds();
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");

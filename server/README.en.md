@@ -53,11 +53,13 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:account-email` | Player email field (28 assertions) |
 | `npm run test:e2e:realtime` | Realtime channel (50 assertions; **real WebSocket handshake**, no browser needed) |
 | `npm run test:e2e:blocks` | Blocks and reports (50 assertions; one-way rows / server-side chat and presence filtering / report persistence and dedup) |
+| `npm run test:e2e:party` | Parties (79 assertions; invite creates the party / transfer and hand-over / exp sharing / blocks win) |
+| `npm run test:e2e:rank` | Leaderboards (55 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + eighteen e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + twenty e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -148,7 +150,9 @@ server/
 │   │   ├── zone/                   zones (#295 phase two): live-zone list (public) / create zone / merge zones
 │   │   ├── social/                 social: guilds (#388: create / apply / review / members / transfer / disband, admin rename & force-disband) + friends and enemies (#389) + blocks and reports (#398: a block is one one-way row / reports are stored only, with a read-only admin list and a `report:read` point)
 │   │   ├── party/                  parties (#399): invite creates the party / accept, decline / kick, transfer / a leaving leader hands over / disband;
-│   │   │                           parties and members are persisted (one party per role via `role_id UNIQUE`), invites live in memory for 30 seconds
+│   │   │                           parties and members are two persisted tables (one party per role via `role_id UNIQUE`), invites live in memory for 30 seconds
+│   │   ├── leaderboard/            leaderboards (#400): level / combat / kills boards, materialised in-process and recomputed on a period,
+│   │   │                           ordering, ranks, truncation and field trimming all on the server (kills come from the indexed `roles.kills` column)
 │   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server; since #398 both chat and presence drop blocked recipients)
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
@@ -180,6 +184,8 @@ server/
 │   ├── e2e-quest.cjs               48 assertions (quests: accept gating / talk, kill and collect objectives / turn-in rewards in a single write / daily re-acceptable after claiming)
 │   ├── e2e-sell.cjs                24 assertions (selling: snapshot pricing / same-id cells merged / client price ignored / not sellable / all-or-nothing / optimistic lock / foreign role)
 │   ├── e2e-blocks.cjs              50 assertions (blocks and reports: one-way rows / server-side filtering of chat and presence / report dedup and persistence / read-only admin list)
+│   ├── e2e-party.cjs               79 assertions (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
+│   ├── e2e-rank.cjs                55 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -298,12 +304,12 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **141 interfaces / 117 paths / 208 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **143 interfaces / 119 paths / 212 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 38 | `player` token, may only operate its own account's data |
+| Client | 40 | `player` token, may only operate its own account's data |
 | Admin | 96 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
@@ -380,7 +386,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All eighteen e2e suites are **real server process + real HTTP requests** (not mocks):
+All twenty e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -394,13 +400,14 @@ All eighteen e2e suites are **real server process + real HTTP requests** (not mo
 | `test/e2e-world.cjs` | **24** | world authority: **seeding on an empty map from spawn areas** (unknown monster keys skipped, points inside the area rect, repeated join does not duplicate, accounts share the same instances) / settlement lands directly in the world (snapshot hp = settled hp, visible to account B) / killing a monster queues a respawn / **tick respawns on time and broadcasts** / graceful shutdown flushes everything / **instance identity and hp restored as-is after restart** (due respawns backfilled at once) |
 | `test/e2e-dual.cjs` | **14** | dual-process form (#175): the archive process (`REALTIME_EMBEDDED=false`) has no realtime endpoints (ticket POST → 404) / the realtime process validates tokens against **the same database** (ticket → WS → welcome) / worldJoin seeding and cast settlement run inside the realtime process / after the persist throttle, the **test process opens a read-only connection and sees** `world_monsters` (WAL carrying cross-process writes) / kicking from the archive process → the realtime process disconnects within one sweep interval (close `4000`) / password reset on the archive process → the old token is refused at the realtime process (`token_version` compared against the database) |
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
+| `test/e2e-rank.cjs` | **55** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
 
 ```bash
-cd server && npm run verify          # compile + eighteen e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + twenty e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 
-Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; blocks / reports → `test:e2e:blocks`; realtime channel → `test:e2e:realtime`),
+Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; blocks / reports → `test:e2e:blocks`; leaderboards → `test:e2e:rank`; realtime channel → `test:e2e:realtime`),
 but **`npm run verify` should pass before committing**.
 
 ## Related docs

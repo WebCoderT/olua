@@ -119,6 +119,7 @@ const E2E_SCRIPTS = [
   ["出售 / 回收（经济出口）", "server/test/e2e-sell.cjs"],
   ["屏蔽与举报（社交安全）", "server/test/e2e-blocks.cjs"],
   ["组队（队伍系统）", "server/test/e2e-party.cjs"],
+  ["排行榜（全服榜单）", "server/test/e2e-rank.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

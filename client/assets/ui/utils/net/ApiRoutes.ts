@@ -127,6 +127,21 @@ export const ApiRoutes = {
      */
     check: "/health",
   },
+  /** leaderboard 模块（2 个接口） */
+  leaderboard: {
+    /**
+     * 榜单分页（GET /leaderboards/{board}）
+     *
+     * `board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。
+     */
+    page: (board: string) => `/leaderboards/${encodeURIComponent(board)}`,
+    /**
+     * 我在某个榜上的名次（GET /leaderboards/{board}/me）
+     *
+     * `board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）（下同）。
+     */
+    me: (board: string) => `/leaderboards/${encodeURIComponent(board)}/me`,
+  },
   /** quest 模块（4 个接口） */
   quest: {
     /**
