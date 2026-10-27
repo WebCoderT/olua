@@ -90,6 +90,9 @@ const ALLOWED_EDGES = [
   { from: "modules/achievement", to: "modules/roles/roles.service.ts", why: "成就取在线角色、查背包、领取走单次落库发奖" },
   { from: "modules/achievement", to: "modules/roles/dto/", why: "在线角色的形状（RoleDto）" },
   { from: "modules/achievement", to: "modules/combat/role-attributes.ts", why: "战力成就的门槛与角色属性同源" },
+  // 邮件（#429）：成就领奖背包满时把整份奖励转成邮件（服务端内部降级，客户端不需多一步）
+  { from: "modules/achievement", to: "modules/game-mail/game-mail.service.ts", why: "成就领奖背包满 → 整份奖励转邮件" },
+  { from: "modules/game-mail", to: "modules/roles/roles.service.ts", why: "附件领取走与任务 / 成就同一个单次落库发奖入口" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -177,6 +180,8 @@ const REPO_EDGES = {
   // game-config 只做删除守卫的只读 count（有玩家记录拒删）
   "database/repositories/achievement.repository.ts": ["modules/game-config", "modules/achievement"],
   "database/repositories/role-achievement.repository.ts": ["modules/achievement", "modules/game-config"],
+  // 游戏内邮件（#429）：收件箱只归 game-mail 域读写（成就只通过 GameMailService 发信，不碰表）
+  "database/repositories/role-mail.repository.ts": ["modules/game-mail"],
   // 队伍（#399）：队伍与成员两表唯一写者是 party 域（PartyService）；
   // realtime 只读（伤害结算要问「击杀者的同图队友」，进图补快照要问「他在哪个队」）
   "database/repositories/party.repository.ts": ["modules/party", "modules/realtime"],

@@ -26,6 +26,7 @@ import { QuestModule } from "./modules/quest/quest.module";
 import { PartyModule } from "./modules/party/party.module";
 import { LeaderboardModule } from "./modules/leaderboard/leaderboard.module";
 import { AchievementModule } from "./modules/achievement/achievement.module";
+import { GameMailModule } from "./modules/game-mail/game-mail.module";
 
 /**
  * 应用根模块
@@ -75,6 +76,7 @@ export class AppModule {
         PartyModule,
         LeaderboardModule,
         AchievementModule,
+        GameMailModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

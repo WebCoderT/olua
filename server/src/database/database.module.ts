@@ -34,6 +34,7 @@ import { ReportRepository } from "./repositories/report.repository";
 import { PartyRepository } from "./repositories/party.repository";
 import { AchievementRepository } from "./repositories/achievement.repository";
 import { RoleAchievementRepository } from "./repositories/role-achievement.repository";
+import { RoleMailRepository } from "./repositories/role-mail.repository";
 
 /**
  * 数据层（全局模块）
@@ -81,6 +82,7 @@ import { RoleAchievementRepository } from "./repositories/role-achievement.repos
     PartyRepository,
     AchievementRepository,
     RoleAchievementRepository,
+    RoleMailRepository,
   ],
   exports: [
     DatabaseService,
@@ -118,6 +120,7 @@ import { RoleAchievementRepository } from "./repositories/role-achievement.repos
     PartyRepository,
     AchievementRepository,
     RoleAchievementRepository,
+    RoleMailRepository,
   ],
 })
 export class DatabaseModule {}

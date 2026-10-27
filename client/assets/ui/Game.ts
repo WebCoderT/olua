@@ -27,6 +27,7 @@ import SocialStore from "./core/SocialStore";
 import PartyStore from "./core/PartyStore";
 import LeaderboardStore from "./core/LeaderboardStore";
 import AchievementStore from "./core/AchievementStore";
+import MailStore from "./core/MailStore";
 import GuideStore from "./core/GuideStore";
 import GuideOverlay from "./components/GuideOverlay";
 import { GUIDE_SPOT } from "../types/guide";
@@ -330,6 +331,8 @@ export class Game extends Component {
     LeaderboardStore.clear();
     // 成就快照（#401）：达成状态与进度都是「这个角色」的，留着会让下一个角色看到别人的成就墙
     AchievementStore.clear();
+    // 收件箱（#429）：邮件是发给具体角色的，换角色后不清会把上一个角色的信显示给下一个
+    MailStore.clear();
     // 新手引导（#402）：进度是「这个角色走到第几步」，换角色必须重新 start；
     // 遮罩也随 UI 层一起销毁，这里摘掉解析器并释放引用（不清会指向已销毁的 HUD 节点）
     this.guideOverlay?.close();

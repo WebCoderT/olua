@@ -89,6 +89,8 @@ const MODULES = {
   leaderboard: { target: "client", export: "LeaderboardApi" },
   // 成就（#401）：玩家侧「查 / 领」；管理端配置页是 adminAchievement
   achievement: { target: "client", export: "AchievementApi" },
+  // 游戏内邮件（#429）：玩家侧收件箱；与管理端 adminMail（外发 SMTP 队列）不是同一件事
+  gameMail: { target: "client", export: "GameMailApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },

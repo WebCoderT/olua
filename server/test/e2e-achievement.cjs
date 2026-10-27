@@ -30,7 +30,7 @@ const ADMIN_CODE = "e2e-achievement-admin";
 
 //#region 断言小工具（与 e2e-quest 同款口径）
 
-const EXPECTED_ASSERTIONS = 36;
+const EXPECTED_ASSERTIONS = 39;
 
 let passed = 0;
 let failed = 0;
@@ -384,26 +384,32 @@ function setRoleLevel(dbPath, roleId, level) {
 
     //#endregion
 
-    //#region 六、背包满：20012 且不消耗领取资格
+    //#region 六、背包满：整份奖励转邮件（#429）
 
-    group("六、背包满：20012 且不消耗领取资格（清一格后还能再领）");
+    group("六、背包满：整份奖励转邮件，成就照常记已领（#429）");
     // 背包格子格式是 { id, count }（与 RolesService.placeGoodsIntoBag 同一口径）
     const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => ({ id: "material_hide", count: 99 })));
     const stuffed = await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: { ...roleDoc, level: 10, bag: fullBag } } });
     checkEqual(stuffed && stuffed.code, 0, "准备：背包塞满（40 格兽皮）");
     const bagFull = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_level_10" } });
-    checkEqual(bagFull && bagFull.code, 20012, "背包放不下 → 20012");
-    const stillClaimable = recordOf(dbPath, roleId, "ach_level_10");
+    checkEqual(bagFull && bagFull.code, 0, "背包满时成就也能领（不再堵在 20012）");
+    check(!!(bagFull && bagFull.data && bagFull.data.mailId), "返回 mailId：整份奖励转进了邮箱");
+    const claimedRow = recordOf(dbPath, roleId, "ach_level_10");
+    check(claimedRow && claimedRow.claimed_at !== null, "成就照常记已领（状态型成就第一次领奖就把行建出来）");
+    const againAfterFull = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_level_10" } });
+    checkEqual(againAfterFull && againAfterFull.code, 50133, "再领一次被拒（50133）—— 状态型成就不能反复刷奖励");
+    const mailBox = await api(baseUrl, "GET", "mails/me", { token });
+    const rewardMail = (mailBox.data.mails || []).find((row) => row.id === (bagFull.data && bagFull.data.mailId));
     check(
-      stillClaimable === null || stillClaimable.claimed_at === null,
-      "失败路径不写 claimed_at —— 领取资格没被消耗",
-      JSON.stringify(stillClaimable),
+      !!rewardMail && rewardMail.kind === "achievement" && rewardMail.gold === 1000 && rewardMail.attachments.length === 1,
+      "邮件内容是那份成就奖励（kind = achievement / 金币 1000 / 1 条物品）",
+      JSON.stringify(rewardMail),
     );
     const oneFree = emptyBag();
     oneFree[0][0] = { id: "material_hide", count: 99 };
     await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: { ...roleDoc, level: 10, bag: oneFree } } });
-    const claimedAfter = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_level_10" } });
-    checkEqual(claimedAfter && claimedAfter.code, 0, "清出一格后同一个成就还能再领");
+    const claimedAfter = await api(baseUrl, "POST", `mails/${rewardMail && rewardMail.id}/claim`, { token });
+    checkEqual(claimedAfter && claimedAfter.code, 0, "清出一格后从邮箱领到手上");
     checkEqual(claimedAfter && claimedAfter.data && claimedAfter.data.items && claimedAfter.data.items.length, 1, "物品奖励到账（1 条）");
 
     //#endregion

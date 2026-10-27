@@ -39,7 +39,8 @@ export class AchievementController {
     description:
       "未达成 → 50132；已领过 → 50133；成就不存在 → 50131。\n\n" +
       "发奖走与任务交付同一个入口（金币 / 经验 / 物品一次落库）。" +
-      "**背包放不下 → 20012，且不消耗领取资格** —— 清包后可以再领。",
+      "**背包放不下时整份奖励转成一封邮件**（#429）：照常记已领，返回的 `mailId` 非空，" +
+      "玩家去收件箱领 —— 不再出现「清包之前这条奖励一直卡在这里」。",
   })
   @ApiDataResponse(AchievementClaimResultDto, { description: "领取后的快照 + 本次奖励" })
   claim(@CurrentUser() user: AuthenticatedUser, @Body() dto: AchievementIdDto): AchievementClaimResultDto {

@@ -10265,7 +10265,7 @@
     },
     "/achievements/claim": {
       "post": {
-        "description": "未达成 → 50132；已领过 → 50133；成就不存在 → 50131。\n\n发奖走与任务交付同一个入口（金币 / 经验 / 物品一次落库）。**背包放不下 → 20012，且不消耗领取资格** —— 清包后可以再领。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "未达成 → 50132；已领过 → 50133；成就不存在 → 50131。\n\n发奖走与任务交付同一个入口（金币 / 经验 / 物品一次落库）。**背包放不下时整份奖励转成一封邮件**（#429）：照常记已领，返回的 `mailId` 非空，玩家去收件箱领 —— 不再出现「清包之前这条奖励一直卡在这里」。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "achievement.claim",
         "parameters": [],
         "requestBody": {
@@ -10314,6 +10314,256 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/AchievementClaimResultDto"
+        }
+      }
+    },
+    "/mails/me": {
+      "get": {
+        "description": "整份收件箱（新的在前）+ 未读数 + 未领数。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameMail.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "收件箱快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailBoxDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "我的收件箱",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailBoxDto"
+        }
+      }
+    },
+    "/mails/{id}/read": {
+      "post": {
+        "description": "重复标不改写已读时刻（第一次看到的时间才有意义）。邮件不存在 → 50141；别人的邮件一律当作不存在（不做越权探测口）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameMail.read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "邮件 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "标已读后的收件箱",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailBoxDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "标为已读",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailBoxDto"
+        }
+      }
+    },
+    "/mails/{id}/claim": {
+      "post": {
+        "description": "金币 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。\n\n失败路径：50141 邮件不存在 / 50142 已经领过 / **20012 背包已满（邮件原样留着，清包后能再领）**。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameMail.claim",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "邮件 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "领取后的收件箱 + 本次到手的奖励",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailClaimResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "领取附件",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailClaimResultDto"
+        }
+      }
+    },
+    "/mails/claim-all": {
+      "post": {
+        "description": "按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameMail.claimAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "领取后的收件箱 + 本次合计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailClaimAllResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "一键领取",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailClaimAllResultDto"
+        }
+      }
+    },
+    "/mails/{id}": {
+      "delete": {
+        "description": "**附件没领不能删**（50143）—— 删了等于替玩家扔掉奖励。已领或无附件的邮件可以删。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameMail.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "邮件 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除后的收件箱",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailBoxDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "删除邮件",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailBoxDto"
         }
       }
     },
@@ -18032,6 +18282,129 @@
           }
         }
       },
+      "AchievementConditionDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）",
+            "enum": [
+              "kill",
+              "quest",
+              "level",
+              "combat",
+              "collect"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "目标：kill = 怪物 key（\"*\" 任意）/ collect = 物品 id / 其余空串"
+          },
+          "count": {
+            "type": "number",
+            "description": "门槛值（累计型 = 需要多少次，状态型 = 需要到多少）"
+          }
+        },
+        "required": [
+          "type",
+          "target",
+          "count"
+        ]
+      },
+      "AchievementRewardsDto": {
+        "type": "object",
+        "properties": {
+          "gold": {
+            "type": "number",
+            "description": "金币"
+          },
+          "exp": {
+            "type": "number",
+            "description": "经验"
+          },
+          "items": {
+            "description": "物品清单",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementRewardItemDto"
+            }
+          }
+        },
+        "required": [
+          "gold",
+          "exp",
+          "items"
+        ]
+      },
+      "AchievementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "成就 id（语义串，如 ach_kill_10）"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类：battle 战斗 / growth 成长 / explore 探索",
+            "enum": [
+              "battle",
+              "growth",
+              "explore"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "condition": {
+            "description": "条件",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AchievementConditionDto"
+              }
+            ]
+          },
+          "rewards": {
+            "description": "奖励",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AchievementRewardsDto"
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "分类内展示顺序（小的在前）"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "未达成时是否默认折叠（不剧透条件）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "recordCount": {
+            "type": "number",
+            "description": "已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "label",
+          "description",
+          "condition",
+          "rewards",
+          "sortOrder",
+          "hidden",
+          "updatedAt"
+        ]
+      },
       "GameConfigSnapshotDto": {
         "type": "object",
         "properties": {
@@ -18168,6 +18541,13 @@
             "items": {
               "$ref": "#/components/schemas/QuestDto"
             }
+          },
+          "achievements": {
+            "description": "成就配置（#401：分类 / 条件 / 门槛 / 奖励）。进度与达成状态走 `/achievements/me`，不在配置快照里",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AchievementDto"
+            }
           }
         },
         "required": [
@@ -18189,7 +18569,8 @@
           "monsterDrops",
           "skills",
           "statuses",
-          "quests"
+          "quests",
+          "achievements"
         ]
       },
       "GuildSummaryDto": {
@@ -19116,6 +19497,11 @@
           "leveledUp": {
             "type": "boolean",
             "description": "是否升级"
+          },
+          "mailId": {
+            "type": "string",
+            "description": "背包满时奖励转入的邮件 id（null = 直接进了背包）",
+            "nullable": true
           }
         },
         "required": [
@@ -19125,130 +19511,8 @@
           "exp",
           "items",
           "level",
-          "leveledUp"
-        ]
-      },
-      "AchievementConditionDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "description": "类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）",
-            "enum": [
-              "kill",
-              "quest",
-              "level",
-              "combat",
-              "collect"
-            ]
-          },
-          "target": {
-            "type": "string",
-            "description": "目标：kill = 怪物 key（\"*\" 任意）/ collect = 物品 id / 其余空串"
-          },
-          "count": {
-            "type": "number",
-            "description": "门槛值（累计型 = 需要多少次，状态型 = 需要到多少）"
-          }
-        },
-        "required": [
-          "type",
-          "target",
-          "count"
-        ]
-      },
-      "AchievementRewardsDto": {
-        "type": "object",
-        "properties": {
-          "gold": {
-            "type": "number",
-            "description": "金币"
-          },
-          "exp": {
-            "type": "number",
-            "description": "经验"
-          },
-          "items": {
-            "description": "物品清单",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AchievementRewardItemDto"
-            }
-          }
-        },
-        "required": [
-          "gold",
-          "exp",
-          "items"
-        ]
-      },
-      "AchievementDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "成就 id（语义串，如 ach_kill_10）"
-          },
-          "category": {
-            "type": "string",
-            "description": "分类：battle 战斗 / growth 成长 / explore 探索",
-            "enum": [
-              "battle",
-              "growth",
-              "explore"
-            ]
-          },
-          "label": {
-            "type": "string",
-            "description": "名称"
-          },
-          "description": {
-            "type": "string",
-            "description": "描述"
-          },
-          "condition": {
-            "description": "条件",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AchievementConditionDto"
-              }
-            ]
-          },
-          "rewards": {
-            "description": "奖励",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AchievementRewardsDto"
-              }
-            ]
-          },
-          "sortOrder": {
-            "type": "number",
-            "description": "分类内展示顺序（小的在前）"
-          },
-          "hidden": {
-            "type": "boolean",
-            "description": "未达成时是否默认折叠（不剧透条件）"
-          },
-          "updatedAt": {
-            "type": "number",
-            "description": "最近更新时间（毫秒）"
-          },
-          "recordCount": {
-            "type": "number",
-            "description": "已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）"
-          }
-        },
-        "required": [
-          "id",
-          "category",
-          "label",
-          "description",
-          "condition",
-          "rewards",
-          "sortOrder",
-          "hidden",
-          "updatedAt"
+          "leveledUp",
+          "mailId"
         ]
       },
       "AchievementPageDto": {
@@ -19325,6 +19589,224 @@
             "description": "分类筛选：battle | growth | explore"
           }
         }
+      },
+      "MailAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id（客户端拿共享快照换名字与图标）"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量"
+          }
+        },
+        "required": [
+          "goodId",
+          "count"
+        ]
+      },
+      "MailViewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "邮件 id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "body": {
+            "type": "string",
+            "description": "正文（纯文本，换行用 \\n）"
+          },
+          "gold": {
+            "type": "number",
+            "description": "附件金币（0 = 没有）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "附件经验（0 = 没有）"
+          },
+          "attachments": {
+            "description": "附件物品",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachmentDto"
+            }
+          },
+          "read": {
+            "type": "boolean",
+            "description": "是否已读"
+          },
+          "claimed": {
+            "type": "boolean",
+            "description": "附件是否已领（已领 = 不可再领，且可以删）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "收到时间（毫秒时间戳）"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "gold",
+          "exp",
+          "attachments",
+          "read",
+          "claimed",
+          "createdAt"
+        ]
+      },
+      "MailBoxDto": {
+        "type": "object",
+        "properties": {
+          "mails": {
+            "description": "全部邮件（新的在前）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailViewDto"
+            }
+          },
+          "unread": {
+            "type": "number",
+            "description": "未读封数（入口红点用）"
+          },
+          "unclaimed": {
+            "type": "number",
+            "description": "未领封数（「一键领取」按钮用）"
+          }
+        },
+        "required": [
+          "mails",
+          "unread",
+          "unclaimed"
+        ]
+      },
+      "MailClaimResultDto": {
+        "type": "object",
+        "properties": {
+          "mails": {
+            "description": "领取后的收件箱",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailViewDto"
+            }
+          },
+          "unread": {
+            "type": "number",
+            "description": "未读封数"
+          },
+          "unclaimed": {
+            "type": "number",
+            "description": "未领封数"
+          },
+          "gold": {
+            "type": "number",
+            "description": "本次到手的金币"
+          },
+          "exp": {
+            "type": "number",
+            "description": "本次到手的经验"
+          },
+          "items": {
+            "description": "本次到手的物品",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachmentDto"
+            }
+          },
+          "level": {
+            "type": "number",
+            "description": "领取后的等级（经验可能触发升级）"
+          },
+          "leveledUp": {
+            "type": "boolean",
+            "description": "本次是否升级了"
+          }
+        },
+        "required": [
+          "mails",
+          "unread",
+          "unclaimed",
+          "gold",
+          "exp",
+          "items",
+          "level",
+          "leveledUp"
+        ]
+      },
+      "MailClaimAllResultDto": {
+        "type": "object",
+        "properties": {
+          "mails": {
+            "description": "领取后的收件箱",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailViewDto"
+            }
+          },
+          "unread": {
+            "type": "number",
+            "description": "未读封数"
+          },
+          "unclaimed": {
+            "type": "number",
+            "description": "未领封数"
+          },
+          "claimedCount": {
+            "type": "number",
+            "description": "本次成功领取的封数"
+          },
+          "gold": {
+            "type": "number",
+            "description": "本次到手的金币合计"
+          },
+          "exp": {
+            "type": "number",
+            "description": "本次到手的经验合计"
+          },
+          "items": {
+            "description": "本次到手的物品合计（同 id 已合并）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachmentDto"
+            }
+          },
+          "level": {
+            "type": "number",
+            "description": "领取后的等级"
+          },
+          "leveledUp": {
+            "type": "boolean",
+            "description": "本次是否升级了"
+          },
+          "stoppedByBag": {
+            "type": "boolean",
+            "description": "是否因为背包满而提前停下（true = 还有没领的）"
+          }
+        },
+        "required": [
+          "mails",
+          "unread",
+          "unclaimed",
+          "claimedCount",
+          "gold",
+          "exp",
+          "items",
+          "level",
+          "leveledUp",
+          "stoppedByBag"
+        ]
       }
     }
   }

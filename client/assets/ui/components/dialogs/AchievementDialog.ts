@@ -269,7 +269,8 @@ export default class AchievementDialog {
     const result = await AchievementStore.claim(achievementId);
     if (!this.isOpen()) return;
     if (result.ok) {
-      GameUiHelper.createTipText(texts.claimSuccess);
+      // 背包满时奖励进了邮箱（服务端把整份转成邮件），提示要指路，不然玩家以为没拿到
+      GameUiHelper.createTipText(result.mailId ? texts.claimMail : texts.claimSuccess);
       return;
     }
     GameUiHelper.createTipText(result.code === CODE_BAG_FULL ? texts.claimBagFull : texts.claimFailed);

@@ -47,20 +47,41 @@ export class RoleAchievementRepository {
     );
   }
 
-  /** 达成（`achieved_at` 只写一次：已经有了就不再盖，保住「第一次达成的时刻」） */
+  /**
+   * 达成（`achieved_at` 只写一次：已经有了就不再盖，保住「第一次达成的时刻」）
+   *
+   * **必须是 upsert 而不是 UPDATE**：状态型成就（level / combat / collect）从来不写进度，
+   * 也就没有行可更新 —— 早先这里是纯 UPDATE，结果状态型成就的 `achieved_at` / `claimed_at`
+   * 一直落不进库，表现出来是「领过奖励但按钮还是可领」，**能无限刷**（#429 的 e2e 抓到的）。
+   * `progress` 补 0：状态型的进度是现算的，行里那一列没有意义。
+   */
   markAchieved(roleId: string, achievementId: string): void {
+    const now = Date.now();
     this.db.run(
-      `UPDATE role_achievements SET achieved_at = ?, updated_at = ?
-       WHERE role_id = ? AND achievement_id = ? AND achieved_at IS NULL`,
-      [Date.now(), Date.now(), roleId, achievementId],
+      `INSERT INTO role_achievements (role_id, achievement_id, progress, achieved_at, claimed_at, updated_at)
+       VALUES (?, ?, 0, ?, NULL, ?)
+       ON CONFLICT(role_id, achievement_id) DO UPDATE SET
+         achieved_at = COALESCE(role_achievements.achieved_at, excluded.achieved_at),
+         updated_at = excluded.updated_at`,
+      [roleId, achievementId, now, now],
     );
   }
 
-  /** 领奖（调用方先确认 `achieved_at` 非空且 `claimed_at` 为空） */
+  /**
+   * 领奖（调用方先确认 `achieved_at` 非空且 `claimed_at` 为空）
+   *
+   * 同样必须是 upsert：状态型成就第一次领奖时就该把行建出来，
+   * 否则「已领」这件事没有任何地方记得住。
+   */
   markClaimed(roleId: string, achievementId: string): void {
+    const now = Date.now();
     this.db.run(
-      "UPDATE role_achievements SET claimed_at = ?, updated_at = ? WHERE role_id = ? AND achievement_id = ?",
-      [Date.now(), Date.now(), roleId, achievementId],
+      `INSERT INTO role_achievements (role_id, achievement_id, progress, achieved_at, claimed_at, updated_at)
+       VALUES (?, ?, 0, ?, ?, ?)
+       ON CONFLICT(role_id, achievement_id) DO UPDATE SET
+         claimed_at = excluded.claimed_at,
+         updated_at = excluded.updated_at`,
+      [roleId, achievementId, now, now, now],
     );
   }
 

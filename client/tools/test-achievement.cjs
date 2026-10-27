@@ -219,7 +219,10 @@ try {
     /return \(\) => \{[\s\S]{0,120}this\.listeners\.filter\(\(item\) => item !== listener\)/.test(store),
     "onChange 返回真能退订的函数（弹窗关掉就摘掉）",
   );
-  check(/if \(this\.state\.busyId\) return \{ ok: false, code: 0 \};/.test(store), "领取中再点直接返回（不重复提交）");
+  check(
+    /if \(this\.state\.busyId\) return \{ ok: false, code: 0, mailId: null \};/.test(store),
+    "领取中再点直接返回（不重复提交）",
+  );
 
   //#endregion
 

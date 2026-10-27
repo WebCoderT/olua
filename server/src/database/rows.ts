@@ -1126,6 +1126,35 @@ export interface RoleAchievementRow {
 
 //#endregion
 
+//#region 游戏内邮件（#429）
+
+/**
+ * 玩家收件箱里的一封邮件
+ *
+ * 与 `MailQueueRow`（外发 SMTP 投递队列）没有任何关系：那是「发到注册邮箱」，
+ * 这是「游戏里打开的箱子」。附件在**领取时**才入包，所以 `claimed_at` 为空的行
+ * 带着一份还没到手的奖励 —— 删除接口因此只允许删「已领或无附件」的行。
+ */
+export interface RoleMailRow {
+  id: string;
+  role_id: string;
+  /** 来源：system 系统 / achievement 成就奖励兜底 / reward 其他奖励 */
+  kind: string;
+  title: string;
+  body: string;
+  gold: number;
+  exp: number;
+  /** 物品附件（JSON 列，`[{ goodId, count }]`） */
+  attachments: string;
+  /** 已读时刻（null = 未读） */
+  read_at: number | null;
+  /** 领取时刻（null = 附件还没领；无附件的邮件也走领取，语义是「已处理」） */
+  claimed_at: number | null;
+  created_at: number;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

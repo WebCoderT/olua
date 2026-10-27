@@ -349,4 +349,14 @@ export const BizCode = {
   /** 奖励已经领过了（不可重复领） */
   ACHIEVEMENT_CLAIMED: 50133,
   //#endregion
+
+  //#region 游戏内邮件（#429）
+
+  /** 邮件不存在（被删了 / id 抄错；也可能是别人的邮件 —— 不区分，免得成了越权探测口） */
+  MAIL_NOT_FOUND: 50141,
+  /** 这封邮件的附件已经领过了 */
+  MAIL_ALREADY_CLAIMED: 50142,
+  /** 附件还没领，不能删（删了等于替玩家扔掉奖励） */
+  MAIL_UNCLAIMED: 50143,
+  //#endregion
 } as const;
