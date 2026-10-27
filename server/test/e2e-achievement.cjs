@@ -280,8 +280,8 @@ function setRoleLevel(dbPath, roleId, level) {
     const snapshot = await api(baseUrl, "GET", "game-config", { token });
     const snapAch = (snapshot.data && snapshot.data.achievements) || [];
     check(
-      snapshot.code === 0 && snapAch.length === 8 && snapAch.some((row) => row.id === "ach_kill_10") && snapAch.some((row) => row.id === "ach_level_10"),
-      "快照带 achievements 全量（8 条，含累计型与状态型）",
+      snapshot.code === 0 && snapAch.length === 24 && snapAch.some((row) => row.id === "ach_kill_10") && snapAch.some((row) => row.id === "ach_level_10"),
+      "快照带 achievements 全量（24 条，含累计型与状态型）",
       JSON.stringify(snapAch.length),
     );
     const snapKill = snapAch.find((row) => row.id === "ach_kill_10");
@@ -418,7 +418,7 @@ function setRoleLevel(dbPath, roleId, level) {
 
     group("七、管理端配置：列表 / 编辑 / 新建 / 目标键校验 / 删除守卫");
     const list = await api(baseUrl, "GET", "admin/achievements?page=1&size=50", { token: adminToken });
-    checkEqual(list && list.data && list.data.list.length, 8, "管理端列表 seed 了 8 条成就");
+    checkEqual(list && list.data && list.data.list.length, 24, "管理端列表 seed 了 24 条成就");
     const updated = await api(baseUrl, "PATCH", "admin/achievements/ach_collect_hide", {
       token: adminToken,
       body: { label: "皮料大亨" },

@@ -78,7 +78,7 @@ try {
 
   console.log("\n— A. 配置表：引用必须真实存在（写错的表现是「怎么打都不解锁」） —");
 
-  check(Array.isArray(achievementData) && achievementData.length === 8, `配置表有 8 条成就（实得 ${achievementData.length}）`);
+  check(Array.isArray(achievementData) && achievementData.length === 24, `配置表有 24 条成就（实得 ${achievementData.length}）`);
   check(monsterKeys.size > 0 && itemKeys.size > 0, `快照里能取到怪物（${monsterKeys.size}）与物品（${itemKeys.size}）的 key`);
 
   const ids = achievementData.map((item) => item.id);
