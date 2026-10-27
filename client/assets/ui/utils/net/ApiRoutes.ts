@@ -232,8 +232,20 @@ export const ApiRoutes = {
      */
     online: "/roles/online",
   },
-  /** social 模块（7 个接口） */
+  /** social 模块（10 个接口） */
   social: {
+    /**
+     * 拉黑（屏蔽）（POST /social/blocks）
+     *
+     * **单向**：对方既不知道也不受影响。拉黑之后：
+     */
+    addBlock: "/social/blocks",
+    /**
+     * 解除拉黑（DELETE /social/blocks/{roleId}）
+     *
+     * 解除我自己拉黑的人；本来就没拉黑返回 50118。解除后他的消息与位置会重新出现。
+     */
+    removeBlock: (roleId: string) => `/social/blocks/${encodeURIComponent(roleId)}`,
     /**
      * 标为敌人（POST /social/enemies）
      *
@@ -276,6 +288,12 @@ export const ApiRoutes = {
      * 好友（已互为好友）/ 别人加我（待我处理）/ 我加别人（等对方处理）/ 我标的敌人，外加我的角色 id 与所在帮会 —— 客户端拿它与互见帧里的 `roleId`/`guildId` 比对，算出该给谁上什么颜色的名字。
      */
     mine: "/social/me",
+    /**
+     * 举报一个人（POST /social/reports）
+     *
+     * 只落库供管理端人工处理，**不做自动处罚、也不通知被举报人**（通知等于把举报人卖了）。
+     */
+    report: "/social/reports",
   },
   /** zone 模块（1 个接口） */
   zone: {

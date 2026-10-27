@@ -113,6 +113,7 @@ const MODULES = {
   adminZone: { target: "admin", export: "zonesApi" },
   adminGuild: { target: "admin", export: "guildsApi" },
   adminQuest: { target: "admin", export: "questsApi" },
+  adminReport: { target: "admin", export: "reportsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */

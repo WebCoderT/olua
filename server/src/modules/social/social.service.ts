@@ -1,12 +1,19 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
-import { FRIEND_LIMIT_DEFAULT, FRIEND_STATUS } from "../../common/constants/social";
+import {
+  BLOCK_LIMIT_DEFAULT,
+  FRIEND_LIMIT_DEFAULT,
+  FRIEND_STATUS,
+  REPORT_STATUS,
+} from "../../common/constants/social";
 import { BizException } from "../../common/errors/biz.exception";
 import { GuildRepository } from "../../database/repositories/guild.repository";
+import { ReportRepository } from "../../database/repositories/report.repository";
 import { SocialRepository } from "../../database/repositories/social.repository";
 import { RolesService } from "../roles/roles.service";
-import { MySocialDto, SocialTargetDto } from "./dto/social.dto";
+import { CreateReportDto, MySocialDto, SocialTargetDto } from "./dto/social.dto";
 
 /**
  * 好友与敌人业务（#389）
@@ -29,6 +36,7 @@ import { MySocialDto, SocialTargetDto } from "./dto/social.dto";
 export class SocialService {
   constructor(
     private readonly social: SocialRepository,
+    private readonly reports: ReportRepository,
     private readonly guilds: GuildRepository,
     private readonly roles: RolesService,
     private readonly config: ConfigService,
@@ -52,6 +60,7 @@ export class SocialService {
       .outgoingRequests(role.id)
       .map((row) => MySocialDto.fromFriend(row, "pendingOutgoing"));
     dto.enemies = this.social.enemies(role.id).map((row) => MySocialDto.fromEnemy(row));
+    dto.blocks = this.social.blocks(role.id).map((row) => MySocialDto.fromBlock(row));
     return dto;
   }
 
@@ -68,6 +77,14 @@ export class SocialService {
   addFriend(accountId: string, dto: SocialTargetDto): MySocialDto {
     const me = this.onlineRole(accountId);
     const targetId = this.resolveTarget(me.id, dto);
+    // 他把我拉黑了 → 用「找不到这个人」挡回去（#398）
+    //
+    // 刻意复用 50109 而不是新开一个「你已被拉黑」：一旦告诉对方「你被拉黑了」，
+    // 拉黑就从「看不见」变成了「明确信号」，换个号再来的人反而被引导了。
+    // 挡住的理由是「好友申请会出现在他的待处理列表里」—— 那是唯一能绕过屏蔽送达的通道。
+    if (this.social.findBlock(targetId, me.id)) {
+      throw BizException.notFound(BizCode.SOCIAL_ROLE_NOT_FOUND, "没有找到这个角色名");
+    }
     const existing = this.social.findFriend(me.id, targetId);
 
     if (existing && existing.status === FRIEND_STATUS.ACCEPTED) {
@@ -152,6 +169,78 @@ export class SocialService {
 
   //#endregion
 
+  //#region 屏蔽（#398）
+
+  /**
+   * 拉黑一个人（单向：只有我自己看得见，对方既不知道也不受影响）
+   *
+   * **过滤不在这里做**（这条只写库）：实时进程的 `BlockService` 按这张表缓存过滤，
+   * 聊天投递与互见帧各判一次。写在这里只会变成「HTTP 进程的一套口径 + 实时进程的另一套」。
+   */
+  addBlock(accountId: string, dto: SocialTargetDto): MySocialDto {
+    const me = this.onlineRole(accountId);
+    const targetId = this.resolveTarget(me.id, dto);
+    if (this.social.findBlock(me.id, targetId)) {
+      throw BizException.conflict(BizCode.SOCIAL_BLOCK_EXISTS, "你已经拉黑他了");
+    }
+    if (this.social.countBlocks(me.id) >= this.blockLimit()) {
+      throw BizException.conflict(BizCode.SOCIAL_BLOCK_FULL, `黑名单上限 ${this.blockLimit()} 人，先解除几个`);
+    }
+    this.social.insertBlock(me.id, targetId, Date.now());
+    // 顺带把「好友」与「敌人」清掉：拉黑之后还留着他的一句「好友」标签毫无意义，
+    // 而名字颜色若按敌人红名走，反而更难从人群里忽略他
+    if (this.social.findFriend(me.id, targetId)) this.social.transaction(() => this.social.removePair(me.id, targetId));
+    if (this.social.findEnemy(me.id, targetId)) this.social.removeEnemy(me.id, targetId);
+    return this.mine(accountId);
+  }
+
+  /** 解除拉黑 */
+  removeBlock(accountId: string, targetRoleId: string): MySocialDto {
+    const me = this.onlineRole(accountId);
+    if (!this.social.findBlock(me.id, targetRoleId)) {
+      throw BizException.notFound(BizCode.SOCIAL_BLOCK_NOT_FOUND, "你没有拉黑他");
+    }
+    this.social.removeBlock(me.id, targetRoleId);
+    return this.mine(accountId);
+  }
+
+  //#endregion
+
+  //#region 举报（#398）
+
+  /**
+   * 举报一个人（只落库，供管理端人工处理）
+   *
+   * 三件事刻意不做：**不自动处罚**（判定交给人）、**不通知被举报人**（通知等于把举报人卖了）、
+   * **不回传被举报人是否已被处理**。同一对「我 → 他」只留一条待处理的举报，
+   * 连点不会让人更快被处理，只会让列表里全是同一个人。
+   */
+  report(accountId: string, dto: CreateReportDto): void {
+    const me = this.onlineRole(accountId);
+    const targetId = (dto.roleId ?? "").trim();
+    if (!targetId) throw BizException.notFound(BizCode.SOCIAL_ROLE_NOT_FOUND, "没有找到这个角色");
+    if (targetId === me.id) {
+      throw BizException.conflict(BizCode.SOCIAL_TARGET_SELF, "不能举报自己");
+    }
+    if (!this.roles.existsById(targetId)) {
+      throw BizException.notFound(BizCode.SOCIAL_ROLE_NOT_FOUND, "这个角色不存在（可能已被删除）");
+    }
+    if (this.reports.findOpen(me.id, targetId, REPORT_STATUS.PENDING)) {
+      throw BizException.conflict(BizCode.SOCIAL_REPORT_EXISTS, "已经举报过了，等管理端处理后再试");
+    }
+    this.reports.insert({
+      id: randomUUID(),
+      role_id: me.id,
+      target_role_id: targetId,
+      category: dto.category,
+      reason: (dto.reason ?? "").trim(),
+      status: REPORT_STATUS.PENDING,
+      created_at: Date.now(),
+    });
+  }
+
+  //#endregion
+
   //#region 内部
 
   /**
@@ -163,6 +252,12 @@ export class SocialService {
   private friendLimit(): number {
     const value = Number(this.config.get<number>("socialFriendLimit") ?? FRIEND_LIMIT_DEFAULT);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : FRIEND_LIMIT_DEFAULT;
+  }
+
+  /** 黑名单上限（与 friendLimit 同一口径：脏值回落默认，免得一个 0 把功能关死） */
+  private blockLimit(): number {
+    const value = Number(this.config.get<number>("socialBlockLimit") ?? BLOCK_LIMIT_DEFAULT);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : BLOCK_LIMIT_DEFAULT;
   }
 
   /** 账号当前在线角色（社交动作都落在它身上） */

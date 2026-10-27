@@ -135,6 +135,15 @@ export const Permission = {
    * 单列一个权限点，只给管理员及以上。
    */
   GUILD_WRITE: "guild:write",
+
+  /**
+   * 查看玩家举报（#398）
+   *
+   * **不给只读观察员**：举报里有「谁指控谁」与具体描述（玩家之间的冲突），
+   * 与邮件投递记录里的邮箱同属个人信息一档 —— 观察员的定位是看业务数据，不是查人。
+   * 这一刀只有读（没有处置写接口），所以也只加一个点。
+   */
+  REPORT_READ: "report:read",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -209,6 +218,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ZONE_WRITE]: "开区 / 合并区",
   [Permission.GUILD_READ]: "查看帮会",
   [Permission.GUILD_WRITE]: "改帮会公告 / 解散帮会",
+  [Permission.REPORT_READ]: "查看玩家举报",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

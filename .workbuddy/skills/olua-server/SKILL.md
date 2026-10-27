@@ -47,8 +47,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（36 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress（30 个仓储）
+    database.service.ts           建表（38 张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report（31 个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -84,6 +84,10 @@ test/e2e-realtime.cjs            实时通道专项（50 条断言，真实 WebS
 test/e2e-combat.cjs              伤害结算专项（32 条断言，世界权威适配）
 test/e2e-world.cjs               世界权威专项（22 条断言，tick / 落盘 / 重启恢复）
 test/e2e-dual.cjs                双进程形态专项（14 条断言，存档与实时分进程 / 踢下线巡检断连）
+test/e2e-blocks.cjs              屏蔽与举报专项（50 条断言，聊天与互见按 role_blocks 过滤）
+test/e2e-chat.cjs                聊天专项（35 条断言，世界同图广播 / 私聊 / 限频）
+test/e2e-quest.cjs               任务专项（48 条断言，四写入口 / 日常重接）
+test/e2e-sell.cjs                出售专项（24 条断言，快照价结算 / 整单拒绝）
 test/backup.cjs                  备份 / 恢复专项（87 条断言）
 ```
 
@@ -128,7 +132,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 
 - 管理员账号在**独立 `admins` 表**（注册需 `ADMIN_REGISTER_CODE`；**第一个注册者自动是超管**）；
 - 三级角色：`super_admin`（全给）/ `admin`（除 `admin:manage`）/ `viewer`（`stats:read` + `account:read` + `role:read`）；
-- 服务端一共 **24 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）、`system:read`（看系统信息）与 `gameConfig:read` / `gameConfig:write`（养成配置，#213）都是逐个后加的 —— **观察员只有 6 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read` / `gameConfig:read` / `zone:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
+- 服务端一共 **25 个权限点**：`account:password`（重置玩家口令）、`account:email`（补录 / 查看玩家邮箱）、`announcement:write`（发公告）、`mail:read` / `mail:write`（投递记录与发信）、`audit:read`（查操作日志）、`system:read`（看系统信息）与 `gameConfig:read` / `gameConfig:write`（养成配置，#213）都是逐个后加的 —— **观察员只有 6 个读权限（`stats:read` / `account:read` / `role:read` / `announcement:read` / `gameConfig:read` / `zone:read`），上面这些一个都没有**（它只看业务数据，不该能接管账号、拿玩家联系方式或看部署形态；公告是面向全服的公开内容所以给它读，**投递记录里有玩家邮箱所以不给** —— 这条界线很容易被顺手抹掉）；
 - 无权限 → `403` + `30006`（message 写出缺哪个权限）；保护性拒绝 → `30007`（**最后一个启用中的超管**不能降级 / 停用 / 删除）；
 - `admins.role` 列由 `ensureColumn` 补 + `ensureSuperAdmin()` 兜底存量库；
 - **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。
@@ -165,7 +169,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
-- **36 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies`。删账号**级联删其角色**。
+- **38 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
@@ -231,6 +235,13 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），查的五张数据表来自 4.0 那份公共生成物（等级 / 战魂 / 称号 / 军衔 / 装备属性），与客户端 `GameHelper.combatCalc` 的一致性由 `tools/audit-combat-parity.cjs` 锁住（它把真的客户端算法编译进 Node 当期望值，不是再抄一版口径）；
 - 玩家上报存档时（`PUT /roles/:id`）服务端会**比对**上报的派生值与自算值 —— 这条是 #34「伤害结算上移」的地基。
 
+**10. 屏蔽与举报（#398）：过滤必须在服务端，且不下发「谁拉黑了我」**
+- `role_blocks` **单向一行**（`PRIMARY KEY (role_id, blocked_role_id)`），与 `role_enemies` 同形但语义更硬：敌人只影响名字颜色，屏蔽要由**服务端**拿去过滤内容；
+- `BlockService`（`modules/realtime/block.service.ts`）把整表读进内存 `Map<roleId, Set<roleId>>`，按 `SOCIAL_BLOCK_CACHE_MS`（生产 2s，**e2e 设 0 立即生效**）懒刷新；每人最多 100 行，整表一次远比「每收件人查一次」便宜，何况过滤是双向判断（我拉黑他 / 他拉黑我）；
+- 过滤点三处：`ChatService` 世界与帮会按收件人剔除、私聊**两个方向两种说法**（他拉黑我→只说「对方不在线」，把屏蔽当信号会引导换号再来；我拉黑他→明说「先解除」）、`RealtimeService` 的互见增量与 **full 快照**（不滤 `left`，漏发会留幽灵节点）；
+- 社交快照只下发 `blocks`（我拉黑的人），**不下发 blockedBy**；好友申请是唯一能绕过屏蔽送达的通道，`addFriend` 里命中被拉黑就抛 `SOCIAL_ROLE_NOT_FOUND`（50109，刻意复用「找不到人」）；
+- 举报 `role_reports` **不加外键**（证据不该随删号消失），名字 `LEFT JOIN` 查询时关联；同一对「我→他」只留一条 pending（50120）；管理端**只读**（处置需要「谁改的、凭什么改、能不能申诉」一整套，半成品按钮比没有更糟），`report:read` 不给观察员。
+
 ## 六、必踩的坑
 
 1. **全局 `ValidationPipe({ whitelist: true })` 会静默剥掉嵌套裸对象的属性**。声明成 `bag?: unknown[]` 时，请求里的 `[{row, col, id, count}]` 到服务层会变成 `[[]]`（静默变空数组，不报任何错）。
@@ -254,6 +265,9 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 17. **两个进程之间没有通知通道**：管理端在存档进程改表，实时进程（AI / 结算）只能自己回查 —— 所以读「运营能改的配置」一律 **读库 + 短 TTL 缓存**（`MonsterAiService` 的 `SKILL_CACHE_TTL_MS = 1000` 读 skills / statuses / monster_skills 三表）。e2e 断言「改完生效」要留 ≥ TTL 的等待窗口，否则测的是缓存而不是逻辑。
 18. **跨模块复用「JSON 列」的解析函数要放 `common/`**：`common/config-json.ts`（`parseCoefficientsJson` / `parseCombatJson` / `COMBAT_KEYS`）就是为此而生 —— 实时进程要读技能倍率与状态修正，若直接 import `modules/game-config/dto/*` 会被 `audit-server-boundaries.cjs` 判跨域违规（那条边只能靠白名单硬开，而这类纯函数不值得开边）。
 19. **e2e 想收 `monster-ai` 帧必须先 `worldJoin`**：AI 广播按「谁在看这张图」派发（`world.viewedMaps`），只连 WS 不进图的连接一帧都收不到 —— 症状是「明明有怪在打人，测试却等超时」。同理，怪物在测试期间会移动，后续断言要用**快照里的当前坐标**而不是出生点。
+
+20. **带缓存的过滤逻辑，e2e 必须把 TTL 压到 0**：`SOCIAL_BLOCK_CACHE_MS=0`（`chat` 类用 `CHAT_RATE_LIMIT` 同法放宽）。留默认 2 秒时「拉黑后立刻发不出」测的是缓存而不是逻辑，且会随机红。
+21. **`EXPECTED_ASSERTIONS` 与实际条数差一条，最后那条「条数变了」就会把绿变红**（#396 / #397 / #398 都踩过）：加断言时同一次改完常量，别留着下次再补。
 
 ## 七、验证闭环
 

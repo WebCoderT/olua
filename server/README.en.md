@@ -52,11 +52,12 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
 | `npm run test:e2e:account-email` | Player email field (28 assertions) |
 | `npm run test:e2e:realtime` | Realtime channel (50 assertions; **real WebSocket handshake**, no browser needed) |
+| `npm run test:e2e:blocks` | Blocks and reports (50 assertions; one-way rows / server-side chat and presence filtering / report persistence and dedup) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + sixteen e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + eighteen e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -137,7 +138,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           30 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress
+│   │   └── repositories/           31 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -145,8 +146,8 @@ server/
 │   │   ├── announcement/           announcements: client pulls "active" (public) + admin CRUD
 │   │   ├── mail/                   mail: templates + delivery queue + background scheduler (sending only enqueues)
 │   │   ├── zone/                   zones (#295 phase two): live-zone list (public) / create zone / merge zones
-│   │   ├── social/                 social: guilds (#388: create / apply / review / members / transfer / disband, admin rename & force-disband) + friends and enemies (#389)
-│   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server)
+│   │   ├── social/                 social: guilds (#388: create / apply / review / members / transfer / disband, admin rename & force-disband) + friends and enemies (#389) + blocks and reports (#398: a block is one one-way row / reports are stored only, with a read-only admin list and a `report:read` point)
+│   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server; since #398 both chat and presence drop blocked recipients)
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
 │   │   ├── token/                  JWT issue & verify (dual audience)
@@ -176,6 +177,7 @@ server/
 │   ├── e2e-chat.cjs                35 assertions (chat: same-map world broadcast / text sanitisation / config-driven rate limit / guild admission from the database / private-chat validation and full rejection when offline)
 │   ├── e2e-quest.cjs               48 assertions (quests: accept gating / talk, kill and collect objectives / turn-in rewards in a single write / daily re-acceptable after claiming)
 │   ├── e2e-sell.cjs                24 assertions (selling: snapshot pricing / same-id cells merged / client price ignored / not sellable / all-or-nothing / optimistic lock / foreign role)
+│   ├── e2e-blocks.cjs              50 assertions (blocks and reports: one-way rows / server-side filtering of chat and presence / report dedup and persistence / read-only admin list)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -184,7 +186,7 @@ server/
 
 ## Data model
 
-36 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+38 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -234,7 +236,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 30 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 31 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -271,13 +273,13 @@ Two layers, **both in guards; business code must not write role checks**:
    and **re-checks the database on every request** — ban / deletion / password change take effect instantly, no waiting for token expiry
 2. **Permission point** (`PermissionGuard`, registered after `AuthGuard`): uses `request.user.role` directly, no further DB lookup
 
-The only source of permission points is `src/common/constants/permission.ts` (24 permission points / 3 roles):
+The only source of permission points is `src/common/constants/permission.ts` (25 permission points / 3 roles):
 
 | Role | Permissions |
 | --- | --- |
 | Super admin `super_admin` | All (including "manage admins" and "reset admin password") |
 | Admin `admin` | All except "manage admins" — admins cannot elevate each other |
-| Read-only viewer `viewer` | Read only: overview / account list & detail / role list & detail / **announcement list** / **title & war soul config lists** / **zone list** / **guild list** (**cannot see the operation log, system info, or mail delivery records**) |
+| Read-only viewer `viewer` | Read only: overview / account list & detail / role list & detail / **announcement list** / **title & war soul config lists** / **zone list** / **guild list** ((**cannot see the operation log, system info, mail delivery records, or player reports**)) |
 
 > Why the viewer gets announcements **read-only**: they are public content broadcast to the whole server, reading ≠ editing; "publish / edit" is the separate
 > `announcement:write` (speaking outward, pushed straight to players), which the viewer does not get.
@@ -294,13 +296,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **137 interfaces / 113 paths / 204 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **141 interfaces / 117 paths / 208 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 35 | `player` token, may only operate its own account's data |
-| Admin | 95 | `admin` token + each interface's own permission point |
+| Client | 38 | `player` token, may only operate its own account's data |
+| Admin | 96 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;
@@ -376,7 +378,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All sixteen e2e suites are **real server process + real HTTP requests** (not mocks):
+All eighteen e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -392,11 +394,11 @@ All sixteen e2e suites are **real server process + real HTTP requests** (not moc
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
-cd server && npm run verify          # compile + sixteen e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + eighteen e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 
-Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; realtime channel → `test:e2e:realtime`),
+Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; blocks / reports → `test:e2e:blocks`; realtime channel → `test:e2e:realtime`),
 but **`npm run verify` should pass before committing**.
 
 ## Related docs

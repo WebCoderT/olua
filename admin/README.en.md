@@ -2,7 +2,7 @@
 
 > [简体中文](README.md) | English
 
-> Operations backend covering six areas: accounts / characters / admins / announcements / mails / audit logs. The interface shows and hides by **permission point**, and the server validates independently.
+> Operations backend covering seven areas: accounts / characters / admins / announcements / mails / audit logs / player reports. The interface shows and hides by **permission point**, and the server validates independently.
 >
 > Project overview: [../README.en.md](../README.en.md); admin questions: [FAQ.en.md](FAQ.en.md);
 > root cross-side FAQ: [../FAQ.en.md](../FAQ.en.md). The English editions of the client and server documents land in follow-up issues and will be linked here once available.
@@ -96,6 +96,7 @@ admin/
 | Guilds | `/guilds` | `guild:read` | Guild list (sorted by member count, with leader and size) plus the member roster (ranks colour-coded); **rename / edit the notice** (the name stays globally unique) and **force-disband** (members and pending applications are removed with it, irreversible — the confirm dialog spells out the cost; writes also need `guild:write`). Approving applications is the leader’s own backlog, the console does not do it for them |
 | Mails | `/mails` | `mail:read` | **Send** (pick template → fill variables → enqueue) + **delivery records** (status / keyword filter + pagination + sorting). Delivery is **asynchronous**, so "pending / retrying" intermediate states exist and refresh automatically; only attempt count and failure reason are visible (writes additionally need `mail:write`) |
 | Audit logs | `/audit-logs` | `audit:read` | 7 filters (keyword / action / target type / result / start-end time / target id) + pagination + expand to see the request body |
+| Player reports | `/reports` | `report:read` | Browse player reports (keyword / category / status filters + pagination + row-expanded description and both role ids). **Read-only in this release**: handling needs the full trail of who changed what and why, and a half-built button is worse than none |
 | My account | `/me` | **no permission point** | Own identity / login status / permission points; **self-service password change** (requires the current password) |
 
 Write actions disable their button per permission point (`disabled`) and show "insufficient permission" above the table; typing an address in by hand hits the `RequirePermission` shell, which renders "no access" in place instead of a white screen.
@@ -124,7 +125,7 @@ the server and the admin read the **same file**.
 
 Interface visibility **is only experience**; **the server is the authority**.
 
-- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 24 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
+- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 25 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
 - Admin info comes down with the token in the response and lands in `store/session`; `hasPermission(point)` looks it up in that array directly
 - **Fallback for a dirty session**: a missing `admin.permissions` is treated as an **empty array** (least privilege) — an incomplete session never opens up the interface
 - Nav items carry a `permission` field and `Layout` filters before rendering; the `RequirePermission` shell in `App.tsx` guards direct route access

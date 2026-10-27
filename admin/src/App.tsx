@@ -21,6 +21,7 @@ import { NpcsPage } from "./pages/NpcsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { StatusesPage } from "./pages/StatusesPage";
 import { QuestsPage } from "./pages/QuestsPage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { MallPricingPage } from "./pages/MallPricingPage";
 import { FashionsPage } from "./pages/FashionsPage";
 import { DropConfigPage } from "./pages/DropConfigPage";
@@ -276,6 +277,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.MAIL_READ}>
                 <MailsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="reports"
+            element={
+              <RequirePermission permission={PERMISSION.REPORT_READ}>
+                <ReportsPage />
               </RequirePermission>
             }
           />

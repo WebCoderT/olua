@@ -15,6 +15,10 @@ import type { RelationSelf } from "../../configs/social";
  * - 社交弹窗每次切页 / 每次写操作后用响应里的 `MySocial` 覆盖（写接口都返回最新快照）；
  * - 帮会页的操作（建帮 / 入帮 / 退帮 / 解散）也会改 `guildId`，所以由弹窗统一在切页时重拉。
  *
+ * ## 屏蔽名单（#398）
+ * 快照里的 `blocks` 也在这里：地图上「这个人该不该出现」判断要用它。
+ * 注意它只有**我拉黑的人** —— 「谁拉黑了我」服务端不下发（下发等于把屏蔽变成可观测信号）。
+ *
  * ## 不落盘
  * 这是服务端状态的镜像，不是权威。掉线重连后重新拉一次即可；本地缓存只会制造
  * 「好友已经删了我这边还显示是好友」这类漂移。
@@ -80,12 +84,13 @@ export default class SocialStore {
    */
   static relationSelf(): RelationSelf {
     const snapshot = this.snapshot;
-    if (!snapshot) return { roleId: "", guildId: "", friendIds: [], enemyIds: [] };
+    if (!snapshot) return { roleId: "", guildId: "", friendIds: [], enemyIds: [], blockIds: [] };
     return {
       roleId: snapshot.myRoleId,
       guildId: snapshot.guildId,
       friendIds: snapshot.friends.map((entry) => entry.roleId),
       enemyIds: snapshot.enemies.map((entry) => entry.roleId),
+      blockIds: snapshot.blocks.map((entry) => entry.roleId),
     };
   }
 
@@ -101,6 +106,13 @@ export default class SocialStore {
     const snapshot = this.snapshot;
     if (!snapshot || !roleId) return false;
     return snapshot.enemies.some((entry) => entry.roleId === roleId);
+  }
+
+  /** 是否已拉黑（#398：「附近」行据此把按钮换成「已拉黑」，避免点一下拿 50117） */
+  static isBlocked(roleId: string): boolean {
+    const snapshot = this.snapshot;
+    if (!snapshot || !roleId) return false;
+    return snapshot.blocks.some((entry) => entry.roleId === roleId);
   }
 
   /** 是否有「等我处理」的申请（入口按钮上的小红点之类；现在只有面板里用） */

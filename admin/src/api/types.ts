@@ -186,6 +186,13 @@ export const PERMISSION = {
    * 改帮会公告 / 强制解散（解散会连删成员表，一群人瞬间没有帮会）
    */
   GUILD_WRITE: "guild:write",
+  /**
+   * 查看玩家举报（#398）
+   *
+   * **不给只读观察员**：举报里有「谁指控谁」与具体描述，属于个人信息一档 ——
+   * 观察员的定位是看业务数据，不是查人。
+   */
+  REPORT_READ: "report:read",
 } as const;
 
 export type PermissionValue = (typeof PERMISSION)[keyof typeof PERMISSION];
@@ -216,6 +223,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ZONE_WRITE]: "开区 / 合并区",
   [PERMISSION.GUILD_READ]: "查看帮会",
   [PERMISSION.GUILD_WRITE]: "改帮会公告 / 解散帮会",
+  [PERMISSION.REPORT_READ]: "查看玩家举报",
 };
 
 /**

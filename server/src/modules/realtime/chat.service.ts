@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { WorldService } from "../world/world.service";
+import { BlockService } from "./block.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeChatEntry, RealtimeChatMessage } from "./realtime.protocol";
 
@@ -34,6 +35,10 @@ interface SpeakerIdentity {
  *   后续刀）。收件人不在线时整条拒绝（含发送者回显）——「发出去了但对面永远收不到」
  *   比「发不出去」更伤体验。
  *
+ * ## 屏蔽过滤（#398）
+ * 世界 / 帮会在投递前逐收件人判一次「他有没有拉黑发送者」，拉黑了就不发（`reachable`）。
+ * 过滤**必须在服务端**：客户端根本不知道「谁拉黑了我」，让它过滤等于让它猜。
+ *
  * ## 回显
  * 发送者自己也会收到这条帧（与收件人同形）：客户端只在收到帧时把消息上屏，
  * **不在发送时本地追加** —— 顺序、成功与否、帮会名都以服务端回的为准，两端不会各说各话。
@@ -62,6 +67,7 @@ export class ChatService implements OnApplicationShutdown {
     private readonly world: WorldService,
     private readonly guilds: GuildRepository,
     private readonly roles: RoleRepository,
+    private readonly blocks: BlockService,
   ) {}
 
   onApplicationShutdown(): void {
@@ -114,7 +120,7 @@ export class ChatService implements OnApplicationShutdown {
 
   /** 世界频道：同图观看者（发送者也在观看者集合里，天然带回显） */
   private sayWorld(accountId: string, identity: SpeakerIdentity, text: string): void {
-    this.deliver([...this.world.viewersOf(identity.zoneId, identity.mapId)], accountId, identity, {
+    this.deliver(this.reachable([...this.world.viewersOf(identity.zoneId, identity.mapId)], accountId, identity), accountId, identity, {
       channel: "world",
       text,
       from: { guildName: identity.guildName },
@@ -130,7 +136,7 @@ export class ChatService implements OnApplicationShutdown {
     }
     const roleIds = this.guilds.members(guild.id).map((member) => member.role_id);
     const accountIds = this.roles.findManyByIds(roleIds).map((role) => role.account_id);
-    this.deliver(accountIds, accountId, identity, {
+    this.deliver(this.reachable(accountIds, accountId, identity), accountId, identity, {
       channel: "guild",
       text,
       from: { guildName: guild.name },
@@ -152,6 +158,18 @@ export class ChatService implements OnApplicationShutdown {
       this.reject(accountId, "不能私聊自己");
       return;
     }
+    // 屏蔽（#398）：两个方向都挡，但**说法不一样**
+    // - 他拉黑了我 → 说「不在线」：告诉他「你被拉黑了」等于把屏蔽变成一条可观测的信号，
+    //   换个号再来的人反而被引导了；
+    // - 我拉黑了他 → 明说：这是我自己的设置，玩家需要知道「为什么发不出去」以及怎么解除。
+    if (this.blocks.hiddenFor(target.id, identity.roleId)) {
+      this.reject(accountId, "对方不在线，消息没有送达");
+      return;
+    }
+    if (this.blocks.hiddenFor(identity.roleId, target.id)) {
+      this.reject(accountId, "你已把对方拉黑，先解除才能私聊");
+      return;
+    }
     // 仅在线可达（issue #395 的口径）：收件人不在线整条拒绝（含发送者回显）——
     // 「发出去了但对面永远收不到」比「发不出去」更伤体验；离线转 mail 是后续刀
     if (!this.isConnected || !this.isConnected(target.account_id)) {
@@ -169,6 +187,23 @@ export class ChatService implements OnApplicationShutdown {
   //#endregion
 
   //#region 内部
+
+  /**
+   * 从收件人里剔掉「拉黑了发送者」的账号（#398）
+   *
+   * 只认一个方向：**收件人拉黑了发送者 → 他收不到**。反过来（发送者拉黑了收件人）
+   * 不在这里处理 —— 那时发送者自己要不要看到回显是另一件事（私聊里显式判了）。
+   * 拿不到在场身份（还没 worldJoin 的旁观者）按「没拉黑」处理：宁可多送一帧，
+   * 也不要把一个缺字段的人静音。
+   */
+  private reachable(accountIds: string[], senderAccountId: string, sender: SpeakerIdentity): string[] {
+    return accountIds.filter((id) => {
+      // 发送者自己的回显永远发（他拉黑了谁不影响「我这条发出去了」这件事）
+      if (id === senderAccountId) return true;
+      const viewerRoleId = this.presence.identityOf(id)?.roleId ?? "";
+      return !this.blocks.hiddenFor(viewerRoleId, sender.roleId);
+    });
+  }
 
   /**
    * 投递一帧（组好完整的 entry 交给出口；接收方是否真的连着由 RealtimeService 判）

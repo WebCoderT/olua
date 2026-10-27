@@ -282,4 +282,21 @@ export const BizCode = {
   /** 同名角色不止一个（角色名只在同一账号内唯一），让玩家改从「附近」或帮会成员里加 */
   SOCIAL_NAME_AMBIGUOUS: 50116,
   //#endregion
+
+  //#region 屏蔽与举报（#398）
+
+  /** 已经拉黑过这个人（重复拉黑） */
+  SOCIAL_BLOCK_EXISTS: 50117,
+  /** 没有这条屏蔽（解除一个本来就没拉黑的） */
+  SOCIAL_BLOCK_NOT_FOUND: 50118,
+  /** 屏蔽名单满了（防刷表；见 common/constants/social.ts 的 BLOCK_LIMIT_DEFAULT） */
+  SOCIAL_BLOCK_FULL: 50119,
+  /**
+   * 已经举报过这个人、还没处理完
+   *
+   * 同一对「我 → 他」只留一条 pending：举报是给人工处理用的证据，
+   * 连点二十次不会让人更快被处理，只会让列表里全是同一个人。
+   */
+  SOCIAL_REPORT_EXISTS: 50120,
+  //#endregion
 } as const;

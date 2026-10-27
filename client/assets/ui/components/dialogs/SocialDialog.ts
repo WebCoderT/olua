@@ -12,19 +12,21 @@ import { getRelationColor, relationLabels } from "../../../configs/social";
 import { getText } from "../../../configs/texts";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
+import CombatChannel from "../../utils/net/CombatChannel";
 import ConfirmDialog from "./ConfirmDialog";
+import ReportDialog from "./ReportDialog";
 import GuildPanel from "./GuildPanel";
 
-/** 社交弹窗的四个页签 */
-type SocialTab = "guild" | "friends" | "enemies" | "nearby";
+/** 社交弹窗的五个页签 */
+type SocialTab = "guild" | "friends" | "enemies" | "nearby" | "blocks";
 
 /** 页签顺序（与 layout.tabs.columns / layout.texts.tabs 一一对应，改这里就三处一起改） */
-const TABS: SocialTab[] = ["guild", "friends", "enemies", "nearby"];
+const TABS: SocialTab[] = ["guild", "friends", "enemies", "nearby", "blocks"];
 
 /**
- * 社交弹窗（#389：帮会 / 好友 / 敌人 / 附近）
+ * 社交弹窗（#389：帮会 / 好友 / 敌人 / 附近；#398：黑名单）
  *
- * ## 为什么是一个弹窗四个页签
+ * ## 为什么是一个弹窗五个页签
  * 这四件事是同一个问题（「我跟别人的关系」）的四个切面：帮会是组织、好友是双向契约、
  * 敌人是我的单向标记、附近是此刻看得见谁。分成四个入口等于让玩家自己在脑子里拼，
  * 而它们要的原料是同一份 —— 一次快照、一份互见帧。
@@ -33,7 +35,9 @@ const TABS: SocialTab[] = ["guild", "friends", "enemies", "nearby"];
  * - **好友 / 敌人 / 我的帮会**：`SocialApi.mine()`（写接口都返回同一形状），拿到就塞进
  *   `SocialStore` —— 地图上的名字颜色与这个面板读的是同一份，不会出现两边不一致；
  * - **附近**：`OtherPlayerManager.nearby()`（当前互见帧的内存态）。所以「附近」里的人是
- *   **此刻真的看得见的**，不是服务端按地图列出来的名单 —— 关掉面板走两步再打开就变了。
+ *   **此刻真的看得见的**，不是服务端按地图列出来的名单 —— 关掉面板走两步再打开就变了；
+ * - **黑名单**（#398）：快照里的 `blocks`。名单里只有**我拉黑的人** —— 服务端不下发
+ *   「谁拉黑了我」（那等于告诉对方「他怕了」）。
  *
  * ## 帮会页是内嵌的
  * 「帮会」页由 `GuildPanel` 画（#388 的整套逻辑原样复用），本类只负责把内容区交给它、
@@ -191,6 +195,7 @@ export default class SocialDialog {
     }
     if (this.tab === "friends") this.renderFriends();
     else if (this.tab === "enemies") this.renderEnemies();
+    else if (this.tab === "blocks") this.renderBlocks();
     else this.renderNearby();
   }
 
@@ -299,6 +304,38 @@ export default class SocialDialog {
 
   //#endregion
 
+  //#region 黑名单页（#398）
+
+  /** 黑名单页：我拉黑的人 + 按名拉黑 */
+  private renderBlocks() {
+    const body = this.body;
+    if (!body) return;
+    const snapshot = SocialStore.get();
+    const page = layout.blocks;
+    const texts = layout.texts;
+    body.addChild(this.createSectionTitle("social_block_title", this.text(texts.blocksTitle, { count: snapshot?.blocks.length ?? 0 }), page.title));
+    const list = GameUiHelper.createScrollView(page.list.name, page.list.position, page.list.size);
+    body.addChild(list);
+    const content = list.getComponent(ScrollView)?.content;
+    if (content) {
+      if (!snapshot || snapshot.blocks.length === 0) content.addChild(this.createEmptyLabel("social_block_empty", texts.blocksEmpty));
+      else snapshot.blocks.forEach((entry) => content.addChild(this.createBlockRow(entry)));
+    }
+    this.addAddRow(body, texts.blockInput, texts.addBlock, "social_add_block", (name) => this.addBlockByName(name));
+  }
+
+  /** 黑名单行：名字（暗灰）/ 等级 · 职业 / 解除 */
+  private createBlockRow(entry: SocialEntry) {
+    const node = this.createRowNode(`social_block_row_${entry.roleId}`);
+    this.addRowMeta(node, `social_block_row_meta_${entry.roleId}`, entry, getRelationColor("block"));
+    const removeButton = GameUiHelper.createSmallButtion(`social_block_remove_${entry.roleId}`, layout.texts.removeBlock, new Vec2(layout.row.columns.action, 0));
+    removeButton.on(Node.EventType.TOUCH_END, () => this.askRemoveBlock(entry), this);
+    node.addChild(removeButton);
+    return node;
+  }
+
+  //#endregion
+
   //#region 附近页
 
   /** 附近页：此刻同图看得见的人（取源是互见帧，不是服务端名单） */
@@ -384,6 +421,27 @@ export default class SocialDialog {
       this.dimButton(enemyButton);
     }
     node.addChild(enemyButton);
+    // 拉黑（#398）：已拉黑就置灰（正常也看不到他，这条只兜住「拉黑前已在场」的残帧）
+    const isBlocked = SocialStore.isBlocked(player.roleId);
+    const blockButton = GameUiHelper.createSmallButtion(
+      `social_nearby_block_${player.accountId}`,
+      isBlocked ? layout.texts.blocked : layout.texts.block,
+      new Vec2(layout.row.columns.action3, 0),
+    );
+    if (!isBlocked && !!player.roleId) {
+      blockButton.on(Node.EventType.TOUCH_END, () => this.askBlockById(player), this);
+    } else if (isBlocked) {
+      this.dimButton(blockButton);
+    }
+    node.addChild(blockButton);
+    // 举报：总是可用（包括已拉黑的人 —— 拉黑是「别让我看见」，举报是「请官方看看」）
+    const reportButton = GameUiHelper.createSmallButtion(
+      `social_nearby_report_${player.accountId}`,
+      layout.texts.report,
+      new Vec2(layout.row.columns.action4, 0),
+    );
+    if (player.roleId) reportButton.on(Node.EventType.TOUCH_END, () => this.openReport(player), this);
+    node.addChild(reportButton);
     return node;
   }
 
@@ -487,6 +545,63 @@ export default class SocialDialog {
     }
   }
 
+  /** 按名拉黑 */
+  private async addBlockByName(name: string) {
+    if (!name) {
+      GameUiHelper.createErrorTipText(layout.texts.nameEmptyTip);
+      return;
+    }
+    try {
+      SocialStore.set(await SocialApi.addBlock({ name }));
+      GameUiHelper.createTipText(layout.texts.blockAddedTip);
+      this.render();
+    } catch {
+      // 50117 已拉黑 / 50119 名单满 / 50116 重名：提示已由全局出口弹出
+    }
+  }
+
+  /**
+   * 拉黑一个人（roleId 精确）
+   *
+   * 拉黑成功后 `SocialStore.set` 会通知 `OtherPlayerManager.applyRelations`，
+   * 场上那个人的节点当场摘掉 —— 不必等下一次互见帧（服务端已经不给我发他的帧了）。
+   */
+  private async blockById(roleId: string) {
+    try {
+      SocialStore.set(await SocialApi.addBlock({ roleId }));
+      GameUiHelper.createTipText(layout.texts.blockAddedTip);
+      this.render();
+    } catch {
+      // 同上
+    }
+  }
+
+  /** 解除拉黑（解除后重发一次进图登记，把「本该看得见的人」的全量快照拉回来） */
+  private async removeBlock(entry: SocialEntry) {
+    try {
+      SocialStore.set(await SocialApi.removeBlock(entry.roleId));
+      GameUiHelper.createTipText(layout.texts.blockRemovedTip);
+      this.render();
+      // 解除后对方不会「自己冒出来」（互见帧只发变化），所以要一份全量：
+      // 重发 worldJoin 是最省的一条路（服务端会回一帧 full 的 players，且进图本身是幂等的）
+      CombatChannel.resendWorldJoin();
+    } catch {
+      // 50118 本来就没拉黑：同上
+    }
+  }
+
+  /** 打开举报框（类别 + 可选说明；提交成功后刷新当前页） */
+  private openReport(player: NearbyPlayer) {
+    ReportDialog.open({
+      targetRoleId: player.roleId,
+      targetName: player.name,
+      onSubmitted: () => {
+        GameUiHelper.createTipText(layout.texts.reportSubmittedTip);
+        this.render();
+      },
+    });
+  }
+
   //#endregion
 
   //#region 行与公共零件
@@ -569,7 +684,7 @@ export default class SocialDialog {
 
   //#endregion
 
-  //#region 二次确认（删好友 / 解除敌人：影响对方或影响自己的视野，先问一句）
+  //#region 二次确认（删好友 / 解除敌人 / 拉黑：影响对方或影响自己的视野，先问一句）
 
   private askRemoveFriend(entry: SocialEntry) {
     this.confirm(
@@ -584,6 +699,23 @@ export default class SocialDialog {
       layout.texts.confirmRemoveEnemyTitle,
       this.text(layout.texts.confirmRemoveEnemyText, { name: entry.name }),
       () => void this.removeEnemy(entry),
+    );
+  }
+
+  /** 拉黑要问一句（会剪掉好友 / 敌人关系，且对方的位置立刻从屏幕上消失） */
+  private askBlockById(player: NearbyPlayer) {
+    this.confirm(
+      layout.texts.confirmBlockTitle,
+      this.text(layout.texts.confirmBlockText, { name: player.name }),
+      () => void this.blockById(player.roleId),
+    );
+  }
+
+  private askRemoveBlock(entry: SocialEntry) {
+    this.confirm(
+      layout.texts.confirmRemoveBlockTitle,
+      this.text(layout.texts.confirmRemoveBlockText, { name: entry.name }),
+      () => void this.removeBlock(entry),
     );
   }
 

@@ -180,16 +180,26 @@ export default class OtherPlayerManager {
    *
    * 只改 `Label.color`：一次加好友 / 一次标敌人只该让那个人的名字变色，
    * 整份重建会把正在走的人的动作打断，也会让头顶血条的进度闪一下。
+   *
+   * **拉黑是例外，要删节点**（#398）：拉黑之后服务端就不再给我发他的帧了，
+   * 留在场上的是一个永远不会再更新位置的「雕像」—— 比看不见更吓人。
+   * 所以关系算成 `block` 的一律摘掉（先收集、循环外再删，边遍历边改 Map 是未定义行为）。
    */
   static applyRelations(): void {
-    for (const view of this.others.values()) {
+    const blocked: string[] = [];
+    for (const [accountId, view] of this.others) {
       if (!isValid(view.node)) continue;
       const relation = this.relationOf(view);
+      if (relation === RELATION.BLOCK) {
+        blocked.push(accountId);
+        continue;
+      }
       if (relation === view.relation) continue;
       view.relation = relation;
       const label = view.nameLabel.getComponent(Label);
       if (label) label.color = getRelationColor(relation);
     }
+    for (const accountId of blocked) this.remove(accountId);
   }
 
   /** 每帧驱动：向广播位置插值 + 按位移差量定朝向 / 动作（Game.update 的 serverAuthority 分支里调用） */

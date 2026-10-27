@@ -496,6 +496,15 @@ export const routes = {
      */
     update: (level: string) => `/admin/ranks/${encodeURIComponent(level)}`,
   },
+  /** adminReport 模块（1 个接口） */
+  adminReport: {
+    /**
+     * 举报列表（GET /admin/reports）
+     *
+     * 按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。
+     */
+    list: "/admin/reports",
+  },
   /** adminRole 模块（6 个接口） */
   adminRole: {
     /**
