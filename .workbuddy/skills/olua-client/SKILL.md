@@ -144,6 +144,25 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 3. **改完 `client/assets/` 下任何文件** → `grep` 核对磁盘 + **sleep 20 秒后复检指纹**（本机编辑器会周期性回写覆盖外部修改）。
 4. **批量转换只用 `Array.from` / `forEach`**：打包用 babel loose 模式，`[...迭代器]` 会被编译成 `[].concat()`，**结果是恒空数组**。
 
+## 五之五、成就面板：进度由服务端算，客户端只画（#401）
+
+成就（`configs/achievement.ts` + `ui/core/AchievementStore.ts` + `ui/components/dialogs/AchievementDialog.ts`）
+与排行榜同一取向（HTTP 拉，不开帧），但多一条更容易踩的纪律：
+
+- **进度与达成判定一律来自服务端**：服务端给的是**已经钳到门槛**的 `progress` / `target` 与 `achieved`。
+  客户端**不要再算一遍** —— 累计型的进度来自事件记账、状态型是查询时按「等级 / 战力 / 背包持有量」现算的，
+  本地复算必然与服务端漂移（最典型：「背包里刚好有 20 张兽皮」）。面板只负责画。
+- **切页签就 `reload`，不做「有数据就不拉」**：状态型的进度取决于角色当前状态，缓存一份十秒前的只会显示旧进度。
+- **领取成功用返回值覆盖整份快照**（服务端返回的就是最新全量），不在本地拼装；**失败只清 `busyId`、保留旧数据** ——
+  背包满（20012）时玩家清完格子直接再点一次，界面不该因为一次失败变成空列表。
+- **业务码从 `ApiError.code` 取**，只对 `20012` 单独飘字（「先清出格子」），其余走通用失败文案。
+- **`busyId` 防连点**：`claim` 里先判 `if (this.state.busyId) return`，再置忙。
+- **隐藏成就未达成时不剧透**：描述换成一句静态提示（`texts.hiddenHint`），条件只在达成后才可见。
+- **按钮三态各走各的底色**（可领 / 已领 / 未达成），且**只有「可领且不在领取中」才绑点击** ——
+  已领与未达成都不该有响应，比点了弹一句「不能领」干净。
+- **入口用现成素材**：小地图左侧竖排第二颗 `small-map/achievement` 美术稿本来就有，之前是纯占位。
+- `Game.onDestroy` 里 `AchievementStore.clear()`（成就墙是「这个角色」的，不能带给下一个角色）。
+
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 
 - `client/tools/lib/net-sandbox.cjs`：把 `configs/network` + `types/common` + `ui/utils/net/*` 编成 CommonJS 塞进沙箱，**`XMLHttpRequest` 由测试注入**，返回 `{ Api, HttpError, Session, RoleSync, ApiRoutes, ApiErrorTextKey, RELOGIN_BIZ_CODES, ROLE_SYNC_BIZ_CODES, getText, sys }`。
