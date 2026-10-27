@@ -193,6 +193,20 @@ export interface AppConfiguration {
   realtimeKickPollMs: number;
   //#endregion
 
+  //#region 聊天（#395）
+  /**
+   * 单条聊天消息的最大长度（字符）
+   *
+   * 服务端为准——客户端的校验只是省一次往返。净化（trim + 折叠空白）之后才量长度，
+   * 所以纯空白的消息活不过「不能为空」那一关，用不着为它再立一条规则。
+   */
+  chatMaxLength: number;
+  /** 限频窗口内的最大发言条数（滑窗；超限回 error 帧，不做静默丢弃——玩家得知道为什么没发出去） */
+  chatRateLimit: number;
+  /** 限频窗口宽度（毫秒；下限 1000，防把窗口配成 0 等于关掉限频） */
+  chatRateWindowMs: number;
+  //#endregion
+
   //#region 世界权威（#35）
   /**
    * 世界 tick 的间隔（毫秒）
@@ -313,6 +327,9 @@ export default function configuration(): AppConfiguration {
     realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
+    chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 120),
+    chatRateLimit: Number(process.env.CHAT_RATE_LIMIT ?? 5),
+    chatRateWindowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 10 * 1000),
     worldTickMs: Number(process.env.WORLD_TICK_MS ?? 1000),
     worldPersistMs: Number(process.env.WORLD_PERSIST_MS ?? 5000),
     worldRespawnMs: Number(process.env.WORLD_RESPAWN_MS ?? 30 * 1000),

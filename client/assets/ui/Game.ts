@@ -23,6 +23,8 @@ import DropManager from "./core/DropManager";
 import MonsterManager from "./core/MonsterManager";
 import OtherPlayerManager from "./core/OtherPlayerManager";
 import SocialStore from "./core/SocialStore";
+import ChatStore from "./core/ChatStore";
+import ChatBubbles from "./core/ChatBubbles";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
@@ -131,6 +133,10 @@ export class Game extends Component {
     CombatChannel.onPlayers = (frame) => OtherPlayerManager.applyPlayersFrame(frame, RealtimeClient.onlineUserId ?? "");
     // 拾取权威（#325）：picked 帧由掉落管理器落账（入包格子照搬 + 收掉地面节点）
     CombatChannel.onPicked = (data) => DropManager.applyPickedFrame(data);
+    // 聊天（#395）：chat 帧只喂 ChatStore（回显即成功——自己的消息也从服务端回来），
+    // 气泡订阅同一个仓；弹窗开着时它自己挂起气泡并增量上屏
+    ChatStore.setSelf(RealtimeClient.onlineUserId ?? "");
+    CombatChannel.onChat = (entry) => ChatStore.applyEntry(entry);
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -244,11 +250,15 @@ export class Game extends Component {
     CombatChannel.onMonsterAi = null;
     CombatChannel.onPlayers = null;
     CombatChannel.onPicked = null;
+    CombatChannel.onChat = null;
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();
     // 社交快照（好友 / 敌人 / 帮会）是「这个角色」的，离开游戏就不该留给下一个角色
     SocialStore.clear();
+    // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
+    ChatStore.reset();
+    ChatBubbles.reset();
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消

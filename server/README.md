@@ -56,7 +56,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 十四套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 十五套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -92,6 +92,9 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `REALTIME_EMBEDDED` | `true` | 实时通道是否内嵌主进程；`false` = 独立进程形态（主进程不挂 WS 与取票接口，由 `main.realtime.ts` 单独起实时进程，#37） |
 | `REALTIME_PORT` | `3101` | 实时进程的监听端口（只有独立进程形态会用到；nginx 把 `/api/realtime*` 反代到它） |
 | `REALTIME_KICK_POLL_MS` | `3000` | 踢下线巡检间隔（轮询库里的在线角色标记，发现被清就断开连接；`0` = 关闭） |
+| `CHAT_MAX_LENGTH` | `120` | 单条聊天消息的最大长度（字符；服务端净化后量长度，客户端校验只是省往返） |
+| `CHAT_RATE_LIMIT` | `5` | 限频窗口内的最大发言条数（滑窗；超限回 error 帧而不是静默丢弃） |
+| `CHAT_RATE_WINDOW_MS` | `10000` | 限频窗口宽度（毫秒；下限 1000，防把窗口配成零等于关掉限频） |
 
 > **`TRUST_PROXY` 的双向陷阱**：挂在 Nginx / 网关后面**必须设 `true`** —— 否则所有请求的来源 IP 都是代理的，
 > 登录限流会把全部玩家当成同一个人、一起锁死；反过来**直连暴露时必须保持 `false`** —— 开着等于允许调用方
@@ -142,7 +145,7 @@ server/
 │   │   ├── mail/                   邮件：模板 + 投递队列 + 后台调度（发信只入队）
 │   │   ├── zone/                   区服（#295 阶段二）：活区列表（公共）/ 开区 / 合并区
 │   │   ├── social/                 社交：帮会（#388：创建 / 申请 / 审批 / 成员 / 转让 / 解散，管理端改名与强制解散）+ 好友与敌人（#389）
-│   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭
+│   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭 / 聊天转发（#395：世界=同图 / 帮会 / 私聊，限频与长度上限在服务端）
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
@@ -169,6 +172,7 @@ server/
 │   ├── e2e-zone.cjs                32 条（区服：注册选区 / 合并区边界 / 世界按区隔离 / 合并生效与代际失效）
 │   ├── e2e-guild.cjs               60 条（帮会：建帮与重名 / 申请覆盖 / 审批权限 / 人数上限 / 踢人转让退出 / 解散级联）
 │   ├── e2e-social.cjs              47 条（社交：好友申请与互加直接同意 / 拒绝不留痕 / 撤回与删除 / 敌人单向 / 镜像行 / 互见帧身份）
+│   ├── e2e-chat.cjs                35 条（聊天：世界同图广播 / 正文净化 / 限频读配置 / 帮会准入查库 / 私聊校验与离线整条拒绝）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -374,7 +378,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-十四套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+十五套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -390,7 +394,7 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 
 ```bash
-cd server && npm run verify          # 编译 + 十四套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 十五套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

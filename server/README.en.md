@@ -56,7 +56,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + fourteen e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + fifteen e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -92,6 +92,9 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `REALTIME_EMBEDDED` | `true` | whether the realtime channel is embedded in the main process; `false` = standalone form (the main process mounts neither the WS channel nor the ticket endpoint; `main.realtime.ts` boots a dedicated realtime process, #37) |
 | `REALTIME_PORT` | `3101` | the realtime process listen port (only used in standalone form; nginx reverse-proxies `/api/realtime*` to it) |
 | `REALTIME_KICK_POLL_MS` | `3000` | kick-offline sweep interval (polls the online-role flag in the database and closes connections once cleared; `0` = off) |
+| `CHAT_MAX_LENGTH` | `120` | maximum length of a single chat message in characters (measured after server-side sanitisation; client checks are just a round-trip saver) |
+| `CHAT_RATE_LIMIT` | `5` | maximum messages per sliding rate-limit window (rejected with an error frame, never silently dropped) |
+| `CHAT_RATE_WINDOW_MS` | `10000` | rate-limit window width in milliseconds (floor 1000 so a misconfigured zero cannot switch the limiter off) |
 
 > **The `TRUST_PROXY` two-way trap**: behind Nginx / a gateway you **must set `true`** — otherwise every request's source IP is the proxy's,
 > and login rate limiting would treat all players as one person and lock them all out; conversely, **when exposed directly you must keep it `false`** — leaving it on lets the caller
@@ -143,7 +146,7 @@ server/
 │   │   ├── mail/                   mail: templates + delivery queue + background scheduler (sending only enqueues)
 │   │   ├── zone/                   zones (#295 phase two): live-zone list (public) / create zone / merge zones
 │   │   ├── social/                 social: guilds (#388: create / apply / review / members / transfer / disband, admin rename & force-disband) + friends and enemies (#389)
-│   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown
+│   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server)
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
 │   │   ├── token/                  JWT issue & verify (dual audience)
@@ -170,6 +173,7 @@ server/
 │   ├── e2e-zone.cjs                32 assertions (zones: registration zone choice / merge boundaries / per-zone world isolation / merge effect and epoch invalidation)
 │   ├── e2e-guild.cjs               60 assertions (guilds: creation and duplicate names / application overwrite / review permissions / member limit / kick·transfer·leave / disband cascade)
 │   ├── e2e-social.cjs              47 assertions (social: friend requests and instant accept on mutual add / reject leaves no trace / cancel and delete / one-directional enemies / mirrored rows / presence-frame identity)
+│   ├── e2e-chat.cjs                35 assertions (chat: same-map world broadcast / text sanitisation / config-driven rate limit / guild admission from the database / private-chat validation and full rejection when offline)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -368,7 +372,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All fourteen e2e suites are **real server process + real HTTP requests** (not mocks):
+All fifteen e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -384,7 +388,7 @@ All fourteen e2e suites are **real server process + real HTTP requests** (not mo
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 
 ```bash
-cd server && npm run verify          # compile + fourteen e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + fifteen e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

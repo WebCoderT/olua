@@ -85,7 +85,12 @@ const REPO_EDGES = {
     "modules/zone",
   ],
   "database/repositories/admin.repository.ts": ["modules/admin"],
-  "database/repositories/role.repository.ts": ["modules/roles", "modules/admin"],
+  "database/repositories/role.repository.ts": [
+    "modules/roles",
+    "modules/admin",
+    // 聊天（#395）：帮会频道把成员角色映射成账号（findManyByIds）、私聊按 roleId 找收件人
+    "modules/realtime",
+  ],
   "database/repositories/audit.repository.ts": ["modules/audit", "modules/admin"],
   "database/repositories/announcement.repository.ts": ["modules/announcement"],
   "database/repositories/mail.repository.ts": ["modules/mail"],

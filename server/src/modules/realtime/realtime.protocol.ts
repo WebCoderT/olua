@@ -445,6 +445,65 @@ export interface RealtimePickedMessage {
 
 //#endregion
 
+//#region 聊天（#395：世界 / 帮会 / 私聊，权威在服务端的转发与限流）
+
+/** 聊天频道（协议里的取值就这三个；客户端 configs/chat 的频道口径与这里同形） */
+export const CHAT_CHANNELS = ["world", "guild", "private"] as const;
+export type ChatChannel = (typeof CHAT_CHANNELS)[number];
+
+/**
+ * 客户端 → 服务端：发一条聊天消息
+ *
+ * 三种频道共用一条消息：
+ * - `world`：广播给**同图观看者**（复用互见的观看者集合，见 #395 issue 里的口径决定）；
+ * - `guild`：转发给帮会全部**在线**成员（帮会成员身份以库为准，不信任客户端自称）；
+ * - `private`：定向发给 `toRoleId` 对应账号（**仅在线可达**，不落库——离线转 mail 是后续刀）。
+ *
+ * 限频 / 长度上限 / 敏感词过滤都在服务端做（见 ChatService），客户端的校验只是省一次往返。
+ */
+export interface RealtimeChatMessage {
+  type: "chat";
+  data: {
+    channel: ChatChannel;
+    /** 消息正文（服务端 trim 后判空与上限） */
+    text: string;
+    /** 私聊收件人的角色 id（仅 private 频道需要；其余频道忽略） */
+    toRoleId?: string;
+  };
+}
+
+/** 广播帧里的一条聊天消息 */
+export interface RealtimeChatEntry {
+  channel: ChatChannel;
+  text: string;
+  /** 服务端转发时刻（毫秒）；客户端只做展示排序，不做时钟校准 */
+  ts: number;
+  /** 发送者（客户端拿 roleId 与社交快照比对可给名字上色，与互见帧同一套关系判定） */
+  from: {
+    accountId: string;
+    /** 角色 id（未进图/无角色时聊天本来就发不出去，这里恒非空） */
+    roleId: string;
+    /** 显示名（角色名） */
+    username: string;
+    /** 帮会名（空串 = 无帮会；世界频道顺手带上有用，客户端不必再查） */
+    guildName: string;
+  };
+  /** 私聊才有：收件人（发送者与收件人收到的是同一条帧） */
+  to?: {
+    accountId: string;
+    roleId: string;
+    username: string;
+  };
+}
+
+/** 服务端 → 客户端：一条聊天消息（世界 / 帮会 / 私聊同形；发送者自己也会收到回显） */
+export interface RealtimeChatBroadcast {
+  type: "chat";
+  data: RealtimeChatEntry;
+}
+
+//#endregion
+
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage
@@ -454,7 +513,8 @@ export type RealtimeServerMessage =
   | RealtimeWorldMessage
   | RealtimeMonsterAiMessage
   | RealtimePlayersMessage
-  | RealtimePickedMessage;
+  | RealtimePickedMessage
+  | RealtimeChatBroadcast;
 
 /**
  * 关闭码

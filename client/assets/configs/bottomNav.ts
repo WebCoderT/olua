@@ -25,6 +25,7 @@ export interface BottomNavItem {
 export const bottomNavItems: BottomNavItem[] = [
   { key: "role", label: "角色", icon: bottomNavImage("role"), openLevel: 1, shortcutKey: "C" },
   { key: "bag", label: "背包", icon: bottomNavImage("bag"), openLevel: 1, shortcutKey: "B" },
+  { key: "chat", label: "聊天", icon: bottomNavImage("friend"), openLevel: 1, shortcutKey: "Enter" },
   { key: "friend", label: "好友", icon: bottomNavImage("friend"), openLevel: 10, shortcutKey: "F" },
   { key: "group", label: "组队", icon: bottomNavImage("group"), openLevel: 10, shortcutKey: "G" },
   { key: "task", label: "任务", icon: bottomNavImage("task"), openLevel: 1, shortcutKey: "Q" },

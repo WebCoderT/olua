@@ -185,6 +185,32 @@ export interface PickError {
 /** 服务端拾取结果（协议见 realtime.protocol 的 RealtimePickedData） */
 export type PickResult = PickOk | PickError;
 
+/** 聊天频道（#395：与 server realtime.protocol 的 CHAT_CHANNELS 同形） */
+export const CHAT_CHANNELS = ["world", "guild", "private"] as const;
+export type ChatChannel = (typeof CHAT_CHANNELS)[number];
+
+/** 服务端聊天广播帧里的一条消息（协议见 realtime.protocol 的 RealtimeChatEntry） */
+export interface ChatEntry {
+  channel: ChatChannel;
+  text: string;
+  /** 服务端转发时刻（毫秒）；客户端只做展示排序，不做时钟校准 */
+  ts: number;
+  /** 发送者（roleId 可与社交快照比对给名字上色，与互见帧同一套关系判定） */
+  from: {
+    accountId: string;
+    roleId: string;
+    username: string;
+    /** 帮会名（空串 = 无帮会） */
+    guildName: string;
+  };
+  /** 私聊才有：收件人（发送者与收件人收到的是同一条帧） */
+  to?: {
+    accountId: string;
+    roleId: string;
+    username: string;
+  };
+}
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -207,6 +233,9 @@ export default class CombatChannel {
 
   /** 拾取结果出口（#325；组合根接线到 DropManager.applyPickedFrame，不接时结果被丢弃并告警） */
   static onPicked: ((data: PickResult) => void) | null = null;
+
+  /** 聊天广播出口（#395；组合根接线到 ChatStore.applyEntry，不接时帧被丢弃——聊天不上屏） */
+  static onChat: ((data: ChatEntry) => void) | null = null;
 
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
@@ -267,6 +296,14 @@ export default class CombatChannel {
   /** 换图前清掉旧图的幂等账（怪物管理器清场时调用；旧图的世界状态不受影响） */
   static resetTargets(): void {
     RealtimeClient.send({ type: "targetsReset" });
+  }
+
+  /**
+   * 发一条聊天消息（#395）。连接不在 OPEN 态返回 false —— 调用方据此提示「通道未连接」，
+   * 而不是把消息塞进本地列表假装发成功（回显才是成功）。
+   */
+  static sendChat(channel: ChatChannel, text: string, toRoleId?: string): boolean {
+    return RealtimeClient.send({ type: "chat", data: { channel, text, toRoleId } });
   }
 
   /**
@@ -336,6 +373,14 @@ export default class CombatChannel {
       return;
     }
     this.onPicked(result);
+  }
+
+  /** RealtimeClient 收到 chat 帧后走这里（#395：含发送者自己的回显） */
+  static dispatchChat(data: unknown): void {
+    const entry = data as ChatEntry | null;
+    if (!entry || typeof entry !== "object" || !entry.from || typeof entry.text !== "string") return;
+    if (!this.onChat) return;
+    this.onChat(entry);
   }
 }
 

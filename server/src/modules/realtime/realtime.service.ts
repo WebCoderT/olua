@@ -10,12 +10,17 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { WorldService } from "../world/world.service";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
+import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import {
+  CHAT_CHANNELS,
   REALTIME_CLOSE,
   REALTIME_PATH,
+  type ChatChannel,
+  type RealtimeChatBroadcast,
+  type RealtimeChatMessage,
   type RealtimeIdentity,
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
@@ -105,6 +110,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly combat: CombatSettlementService,
     private readonly monsterAi: MonsterAiService,
     private readonly presence: PlayerPresenceService,
+    private readonly chat: ChatService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
   ) {}
@@ -184,6 +190,22 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, { type: "players", data } satisfies RealtimePlayersMessage);
     };
+    // 聊天投递（#395）：ChatService 选好收件人列表，这里对着连接表发；
+    // from.accountId 在 ChatService 侧已组好，帧到这里就是成品
+    this.chat.onDeliver = (accountIds, entry) => {
+      const frame: RealtimeChatBroadcast = { type: "chat", data: entry };
+      for (const id of new Set(accountIds)) {
+        const socket = this.connections.get(id);
+        if (socket) this.send(socket, frame);
+      }
+    };
+    // 聊天拒绝：走通用 error 帧（低频操作，明确告知比悄悄丢弃好）
+    this.chat.onReject = (accountId, message) => {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, { type: "error", data: { message } });
+    };
+    // 私聊的在线判据：连接表是本服务的私产，给 ChatService 一个布尔答案就够
+    this.chat.isConnected = (accountId) => this.connections.has(accountId);
 
     this.logger.log(
       `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
@@ -336,6 +358,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.presence.dropAccount(identity.id);
         this.world.leave(identity.id);
         this.monsterAi.dropAccount(identity.id);
+        this.chat.dropAccount(identity.id);
       }
     });
 
@@ -390,6 +413,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const data = this.combat.pickDrop(socket.identity.id, request.castId, request.index);
       const frame: RealtimePickedMessage = { type: "picked", data };
       this.send(socket, frame);
+      return;
+    }
+    if (parsed?.type === "chat") {
+      // 聊天（#395）：格式不对回 error 帧（低频操作，值得一次明确告知而不是悄悄丢弃）
+      const request = parseChat(parsed.data);
+      if (!request) {
+        this.send(socket, { type: "error", data: { message: "chat 消息缺 channel / text" } });
+        return;
+      }
+      this.chat.say(socket.identity.id, request);
       return;
     }
     if (parsed?.type === "pos") {
@@ -500,6 +533,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.presence.dropAccount(accountId);
       this.world.leave(accountId);
       this.monsterAi.dropAccount(accountId);
+      this.chat.dropAccount(accountId);
     }
   }
 
@@ -587,6 +621,21 @@ function parsePick(raw: unknown): ParsedPick | null {
   if (typeof castId !== "number" || !Number.isFinite(castId)) return null;
   if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return null;
   return { castId, index };
+}
+
+/** chat.data 的解析结果（#395：格式不对回 error 帧，低频操作值得明确告知） */
+function parseChat(raw: unknown): RealtimeChatMessage["data"] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.channel !== "string") return null;
+  if (!(CHAT_CHANNELS as readonly string[]).includes(data.channel)) return null;
+  if (typeof data.text !== "string") return null;
+  const toRoleId = typeof data.toRoleId === "string" ? data.toRoleId : undefined;
+  return {
+    channel: data.channel as ChatChannel,
+    text: data.text,
+    toRoleId,
+  };
 }
 
 /** pos.data 的解析结果（#323：格式不对整条丢弃，高频帧不回 error） */

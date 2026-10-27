@@ -9,6 +9,7 @@ import RoleInfoDialog from "../dialogs/RoleInfoDialog";
 import BagDialog from "../dialogs/BagDialog";
 import MallDialog from "../dialogs/MallDialog";
 import SkillListDialog from "../dialogs/SkillListDialog";
+import ChatDialog from "../dialogs/ChatDialog";
 import BottomNavBar from "./BottomNavBar";
 import RoleExpBar from "./RoleExpBar";
 import RoleHpOrb from "./RoleHpOrb";
@@ -31,6 +32,8 @@ export default class BottomBar extends Node {
   private mallDialog = new MallDialog();
   /** 技能列表弹窗 */
   private skillListDialog = new SkillListDialog();
+  /** 聊天弹窗（#395：世界 / 帮会 / 私聊） */
+  private chatDialog = new ChatDialog();
   /** 功能按键区 */
   private navBar: BottomNavBar;
   /** 经验条 */
@@ -75,6 +78,7 @@ export default class BottomBar extends Node {
     const handlers: Record<string, () => void> = {
       role: () => this.roleInfoDialog.open(),
       bag: () => this.bagDialog.open(),
+      chat: () => this.chatDialog.open(),
       mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
     };
