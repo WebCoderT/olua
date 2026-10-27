@@ -281,14 +281,24 @@ function progressRows(dbPath, roleId, questId) {
       session.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
       return { id, promise: session.waitForSettle(id) };
     };
-    const killOne = async () => {
-      const snap = await session.joinWorld("1");
-      const mob = snap && snap.monsters.find((m) => m.alive);
-      if (!mob) return null;
-      for (let i = 0; i < 80; i++) {
-        const result = await cast({ skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey }).promise;
-        if (!result || !result.ok) return null;
-        if (result.killed) return result;
+    /**
+     * 连续出手直到目标死亡，返回带 killed 的那次结算（实在打不到才返回 null）。
+     * **必须自带重试**：刷怪区只有 2 个槽、重生 `1500ms`，刚连杀完 5 只时可能两只都在冷却，
+     * 只取一次快照会「没有活着的怪」直接空手返回（CI 上就这样抖过一次：六组拿不到击杀，
+     * 后面 6 条断言连环假红）。同理出手被拒（目标在快照与出手之间被别人打死）也要重取快照。
+     */
+    const killOne = async (attempts = 30) => {
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const snap = await session.joinWorld("1");
+        const mob = snap && snap.monsters.find((m) => m.alive);
+        if (mob) {
+          for (let i = 0; i < 80; i++) {
+            const result = await cast({ skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey }).promise;
+            if (!result || !result.ok) break;
+            if (result.killed) return result;
+          }
+        }
+        await sleep(200);
       }
       return null;
     };
