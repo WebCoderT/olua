@@ -47,7 +47,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run swagger:emit` | Compile + emit `openapi.json` from source (the single source of the contract) |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` — **regenerate both ends' interface files** |
 | `npm run test:e2e` | Main e2e (248 assertions) |
-| `npm run test:e2e:roles` | Role-management suite (110 assertions) |
+| `npm run test:e2e:roles` | Role-management suite (120 assertions) |
 | `npm run test:e2e:guard` | Operations & security base (283 assertions) |
 | `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
 | `npm run test:e2e:account-email` | Player email field (28 assertions) |
@@ -169,7 +169,7 @@ server/
 ├── scripts/                        backup / restore (VACUUM INTO + five-step restore, see scripts/lib/db-tooling.cjs)
 ├── test/
 │   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
-│   ├── e2e-roles.cjs               110 assertions
+│   ├── e2e-roles.cjs               120 assertions
 │   ├── e2e-guard.cjs               283 assertions
 │   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
 │   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
@@ -235,6 +235,11 @@ server/
 
 **Character data is an "opaque document"**: the server **does not duplicate** game config, only validating structure / ownership / count caps / duplicate names, storing content as-is.
 Reasons and costs: [FAQ.en.md](FAQ.en.md#why-doesnt-the-server-validate-the-role-datas-content).
+
+The one field with its own validation is the **tutorial progress** (`guide`, #402): `step` must be an integer within a volume cap
+(`ROLE_GUIDE_STEP_MAX`, same nature as the level cap — **not "how many steps the client config has"**), `done` / `skipped`
+must be booleans, and unknown keys are dropped; **when the field is absent the server does not invent one** — the client relies on
+"does the document have `guide`" to tell existing characters (treated as finished, no tutorial) from new ones.
 
 ⚠️ Read and write paths differ in attitude: **read is tolerant** (bad data → empty object), **edit must parse strictly and error on failure** —
 falling back to an empty object for writing would wipe the player's backpack/equipment (a pit we hit, pinned by an e2e assertion).
@@ -391,7 +396,7 @@ All twenty e2e suites are **real server process + real HTTP requests** (not mock
 | Script | Assertions | Coverage |
 | --- | --- | --- |
 | `test/e2e.cjs` | **248** | register/login / character CRUD and count cap / duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
-| `test/e2e-roles.cjs` | **110** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
+| `test/e2e-roles.cjs` | **120** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
 | `test/e2e-guard.cjs` | **283** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
 | `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
 | `test/e2e-account-email.cjs` | **28** | player email field: read-only viewers can neither see nor change it / backfill·view·clear / format validation and same-email dedup (case-insensitive) / mail falls back to the linked account's email / contract permission annotation |

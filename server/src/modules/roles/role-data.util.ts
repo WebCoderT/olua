@@ -53,6 +53,14 @@ export const ROLE_BAG_AXIS_MAX = 64;
 export const ROLE_FIELD_KEY_MAX_LENGTH = 64;
 export const ROLE_FIELD_VALUE_MAX_LENGTH = 128;
 
+/**
+ * 引导进度的步数上限（#402）
+ *
+ * 这是**体量上限**，不是「客户端的引导配置有几步」—— 服务端仍然不认识那份配置
+ * （与 `ROLE_LEVEL_MAX` 同性质）。客户端加一百步也不用动这个数。
+ */
+export const ROLE_GUIDE_STEP_MAX = 64;
+
 /** 背包格子（管理端提交的稀疏格式：只报「哪一格放了什么」） */
 export interface BagCellInput {
   row: number;
@@ -203,6 +211,11 @@ export function parseRoleData(input: unknown): { fields: RoleIndexFields; data: 
 
   // 规整后的索引字段回写进 data，保证「列表里看到的名字」与「详情里的名字」永远一致
   const data: Record<string, unknown> = { ...source, id, name, occupation, sex, level };
+  // 引导进度（#402）：有就规整成三项，没有就**不要凭空补一个** ——
+  // 「文档里有没有这个字段」正是客户端判定「老号 / 新号」的依据
+  const guide = normalizeGuide(source.guide);
+  if (guide) data.guide = guide;
+  else delete data.guide;
   // revision 是服务端的索引列（乐观锁），客户端把它一起带在快照里 —— 落库前剔掉，
   // 免得文档里留一份与列不同步的旧值（下一句读回来时以列为准，见 RoleDto.from）
   delete data.revision;
@@ -237,8 +250,35 @@ export function parseStoredRoleData(raw: string): Record<string, unknown> {
   return parsed;
 }
 
-/** 角色名规整（去空白 + 长度校验） */export function normalizeName(value: unknown): string {
-  const name = typeof value === "string" ? value.trim() : "";
+/**
+ * 规整新手引导进度（#402）
+ *
+ * 引导是**纯客户端的体验状态**（没有奖励、没有结算），进度就存在角色文档里：
+ * 服务端只做「结构 + 体量」校验，**不做业务判定** —— 它不知道也不该知道客户端第几步是什么。
+ *
+ * - 没有这个字段（引导上线前的老角色）→ 原样不写，客户端读不到会按「已完成」处理；
+ * - 结构不对 / 步数越界 → 直接拒收（这种脏值只可能来自改包，静默夹取会掩盖问题）；
+ * - **只保留这三项**：文档里塞别的键没有意义，还占空间。
+ */
+export function normalizeGuide(input: unknown): { step: number; done: boolean; skipped: boolean } | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new BizException(BizCode.ROLE_DATA_INVALID, "引导进度格式不正确");
+  }
+  const source = input as Record<string, unknown>;
+  const step = Number(source.step);
+  if (!Number.isInteger(step) || step < 0 || step > ROLE_GUIDE_STEP_MAX) {
+    throw new BizException(BizCode.ROLE_DATA_INVALID, `引导步数需为 0 ~ ${ROLE_GUIDE_STEP_MAX} 之间的整数`);
+  }
+  for (const field of ["done", "skipped"] as const) {
+    if (source[field] !== undefined && typeof source[field] !== "boolean") {
+      throw new BizException(BizCode.ROLE_DATA_INVALID, `引导标记 ${field} 需为布尔值`);
+    }
+  }
+  return { step, done: source.done === true, skipped: source.skipped === true };
+}
+
+/** 角色名规整（去空白 + 长度校验） */export function normalizeName(value: unknown): string {  const name = typeof value === "string" ? value.trim() : "";
   if (!name) throw new BizException(BizCode.ROLE_DATA_INVALID, "角色名称不能为空");
   if (name.length > ROLE_NAME_MAX_LENGTH) throw new BizException(BizCode.ROLE_DATA_INVALID, `角色名称最多 ${ROLE_NAME_MAX_LENGTH} 个字`);
   return name;

@@ -282,6 +282,8 @@ function prepareStorage(sandboxName, extraEntries = []) {
   copy(path.join(ASSETS, "entities/Role.ts"), path.join(srcDir, "entities/Role.ts"));
   copy(path.join(ASSETS, "ui/utils/battle/MpHelper.ts"), path.join(srcDir, "ui/utils/battle/MpHelper.ts"));
   copy(path.join(ASSETS, "ui/utils/battle/HpHelper.ts"), path.join(srcDir, "ui/utils/battle/HpHelper.ts"));
+  // 引导进度的纯逻辑（#402）：StorageManager 的旧档补齐要过它，属于它的直接依赖
+  copy(path.join(ASSETS, "ui/utils/guide/guide-progress.ts"), path.join(srcDir, "ui/utils/guide/guide-progress.ts"));
   copy(path.join(ASSETS, "ui/core/StorageManager.ts"), path.join(srcDir, "ui/core/StorageManager.ts"), true);
   // 额外入口：沙箱里还没有的，按原样复制一份（configs / types 已整份复制，不重复拷）
   extraEntries.forEach((rel) => {

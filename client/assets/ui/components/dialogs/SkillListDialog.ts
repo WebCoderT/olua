@@ -6,6 +6,8 @@ import StorageManager from "../../core/StorageManager";
 import { oeccupationSkills } from "../../../configs/skill";
 import SkillShortcutSettingDialog from "./SkillShortcutSettingDialog";
 import { skillListDialogLayout } from "../../../configs/hudLayout";
+import GuideStore from "../../core/GuideStore";
+import { GUIDE_EVENT } from "../../../types/guide";
 
 /**
  * 技能列表弹窗
@@ -19,6 +21,8 @@ export default class SkillListDialog {
 
   /** 打开技能列表弹窗 */
   open() {
+    // 引导（#402）：「认识技能」那一步就是「打开过技能列表」
+    GuideStore.notify(GUIDE_EVENT.OPEN_SKILL);
     const role = StorageManager.findOnlineRole();
     const dialog = GameUiHelper.createDialog(skillListDialogLayout.name, skillListDialogLayout.title, new Vec2(), skillListDialogLayout.size);
     const skillList = GameUiHelper.createSkillListView();

@@ -7,6 +7,8 @@ import ConfirmDialog from "./ConfirmDialog";
 import { bagDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { BagCellPos } from "../../../types/good";
+import GuideStore from "../../core/GuideStore";
+import { GUIDE_EVENT } from "../../../types/guide";
 
 /**
  * 背包弹窗
@@ -50,6 +52,9 @@ export default class BagDialog {
       this.close();
       return;
     }
+    // 引导（#402）：「看看背包」那一步就是「打开过背包」—— 事件在**真打开**之后发，
+    // 上面的切换关闭不该算一次（玩家关窗不该被当成学会了）
+    GuideStore.notify(GUIDE_EVENT.OPEN_BAG);
     // 弹窗已在场景切换中被销毁时清理残留引用
     if (this.dialog && !isValid(this.dialog)) {
       this.dialog = null;

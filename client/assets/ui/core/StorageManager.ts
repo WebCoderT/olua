@@ -28,6 +28,8 @@ import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import type { CombatKillReward } from "../utils/net/CombatChannel";
 import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
+import { normalizeGuideProgress } from "../utils/guide/guide-progress";
+import { guideStepCount } from "../../configs/guide";
 
 /**
  * 存储管理器
@@ -256,6 +258,9 @@ export default class StorageManager {
     // 或者干脆没有这个字段 —— 一律按「没穿」处理；不是字符串或不在配置表里也按没穿
     const fashion = role.fashionCloth as unknown;
     role.fashionCloth = typeof fashion === "string" && getFashion(fashion) ? fashion : null;
+    // 新手引导（#402）：读不到 guide 的存档 = 引导上线前就在的角色 → 补成「已完成」，
+    // 老号不该突然被弹一脸引导；新角色的 guide 由 Role 构造函数写入第 0 步
+    role.guide = normalizeGuideProgress(role.guide, guideStepCount());
   }
 
   /**

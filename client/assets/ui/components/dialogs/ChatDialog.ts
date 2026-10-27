@@ -13,6 +13,8 @@ import { chatDialogLayout as layout } from "../../../configs/hudLayout";
 import { getRelationColor } from "../../../configs/social";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
+import GuideStore from "../../core/GuideStore";
+import { GUIDE_EVENT } from "../../../types/guide";
 
 /** 聊天弹窗的三个页签（与协议频道同名，切换零映射） */
 type ChatTab = ChatChannel;
@@ -62,6 +64,8 @@ export default class ChatDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
+    // 引导（#402）：「别一个人玩」那一步就是「打开过聊天」—— 同样只在真打开之后发
+    GuideStore.notify(GUIDE_EVENT.OPEN_CHAT);
     this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
     blockClickThrough(this.dialog);
     LayerManager.addDialogToUILayer(this.dialog);

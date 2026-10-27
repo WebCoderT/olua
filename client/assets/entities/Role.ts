@@ -4,6 +4,7 @@ import { EQUIPMENT_TYPE, BagCell } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../types/role";
 import { SkillId } from "../types/skill";
 import { MapId } from "../types/map";
+import type { GuideProgress } from "../types/guide";
 import { bagCol, bagRow, defaultRoleSpeedRate, getNewRoleEquipments, initialBindGold, initialGold, initialShortcutKeys, initialSilver, initialSkills } from "../configs/role";
 import { levelMap } from "../configs/level";
 
@@ -97,6 +98,15 @@ export class Role implements BattleAttributes {
    * 旧存档里没有这个字段（undefined）时推送不带它，服务端按旧行为处理。
    */
   revision?: number;
+  /**
+   * 新手引导进度（#402）
+   *
+   * 新角色在构造时就带一份「第 0 步」，所以**新号天然会弹引导**；
+   * 旧存档里根本没有这个字段 —— `StorageManager.ensureRoleDefaults` 会把它补成「已完成」，
+   * 于是老号不会被突然弹一脸引导（判据是「有没有这个字段」，不是等级或建号时间）。
+   * 推进与跳过的判定在 `ui/utils/guide/guide-progress`（纯函数）。
+   */
+  guide: GuideProgress = { step: 0, done: false, skipped: false };
 
   constructor(name: string, occupation: OECCUPATION, sex: SEX) {
     this.id = new Date().getTime().toString();

@@ -119,7 +119,7 @@ try {
     "按间隔重读在线角色（roles.online 是 DB 读，4Hz × 人数会很快放大）",
   );
   check(
-    /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged\) continue;/.test(serverPresence),
+    /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged && !partyChanged\) continue;/.test(serverPresence),
     "外观变化进增量判据（否则站着不动换装别人看不到）",
   );
   check(/const redressed = this\.appearanceKey\(entry\.appearance\) !== entry\.sentAppearance;/.test(serverPresence), "换装判据用外观键比较");
