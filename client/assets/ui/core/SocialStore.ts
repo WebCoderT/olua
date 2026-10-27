@@ -1,6 +1,7 @@
 import { SocialApi } from "../utils/net/Api";
 import type { MySocial } from "../utils/net/Api";
 import type { RelationSelf } from "../../configs/social";
+import PartyStore from "./PartyStore";
 
 /**
  * 社交快照（#389：好友 / 敌人 / 我的帮会）
@@ -81,13 +82,18 @@ export default class SocialStore {
    *
    * 未拉过快照时给一个空壳：`roleId` 为空、没有任何好友 / 敌人 / 帮会 ——
    * `resolveRelation` 于是把所有人算成「同地图 / 普通」，与拉取前的显示一致。
+   *
+   * 队伍 id（#399）不在社交快照里：它来自实时通道的 `party` 帧，住在 `PartyStore`。
+   * 两边都指向同一个判定入口 —— 「面板说我是队长」与「地图上队友名字是金色」用的是同一个 partyId。
    */
   static relationSelf(): RelationSelf {
+    const partyId = PartyStore.partyId();
     const snapshot = this.snapshot;
-    if (!snapshot) return { roleId: "", guildId: "", friendIds: [], enemyIds: [], blockIds: [] };
+    if (!snapshot) return { roleId: "", guildId: "", partyId, friendIds: [], enemyIds: [], blockIds: [] };
     return {
       roleId: snapshot.myRoleId,
       guildId: snapshot.guildId,
+      partyId,
       friendIds: snapshot.friends.map((entry) => entry.roleId),
       enemyIds: snapshot.enemies.map((entry) => entry.roleId),
       blockIds: snapshot.blocks.map((entry) => entry.roleId),

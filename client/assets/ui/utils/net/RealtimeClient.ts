@@ -301,6 +301,21 @@ export default class RealtimeClient {
       CombatChannel.dispatchQuest(frame.data);
       return;
     }
+    if (frame.type === "party") {
+      // 队伍快照（#399）：只在变化时发，空 partyId = 我此刻不在队伍
+      CombatChannel.dispatchParty(frame.data);
+      return;
+    }
+    if (frame.type === "partyInvite") {
+      // 组队邀请（#399）：只发给被邀请人
+      CombatChannel.dispatchPartyInvite(frame.data);
+      return;
+    }
+    if (frame.type === "expGain") {
+      // 队友击杀我分到的经验（#399）：服务端已入账，这里只负责让经验条与基线上跟上
+      CombatChannel.dispatchExpGain(frame.data);
+      return;
+    }
     // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
     this.clearPongTimer();
   }

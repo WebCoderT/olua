@@ -121,3 +121,58 @@ export const REPORT_STATUS = {
 export type ReportStatusValue = (typeof REPORT_STATUS)[keyof typeof REPORT_STATUS];
 
 //#endregion
+
+//#region 队伍（#399）
+
+/**
+ * 队伍人数上限（默认值；可用 `PARTY_MEMBER_LIMIT` 覆盖）
+ *
+ * 4 人是「一屏之内能互相照应」的规模：单图人数本来就少，队伍再大就没有「配合」只剩「人数」；
+ * 而且上限越小，满员 / 拒绝这些边界在 e2e 里越好压。
+ */
+export const PARTY_MEMBER_LIMIT_DEFAULT = 4;
+
+/** 队伍 id 前缀（`p_` + 时间戳 + 随机段；与帮会 `g_` / 账号的命名习惯一致，肉眼可辨类型） */
+export const PARTY_ID_PREFIX = "p_";
+
+/**
+ * 邀请有效期（默认 30 秒；可用 `PARTY_INVITE_TTL_MS` 覆盖）
+ *
+ * 邀请存**内存不落库**：它是一次性的瞬态，30 秒后自动作废；落库就得配对一套清理任务，
+ * 而进程重启丢掉邀请的代价只是「再拉一次」。有效期短的理由是「等人」这件事不该挂一整天 ——
+ * 三十秒没回应，邀请人大概率已经自己打了。
+ */
+export const PARTY_INVITE_TTL_MS_DEFAULT = 30_000;
+
+/**
+ * 队友经验分成比例（默认 0.5；可用 `PARTY_EXP_MATE_SHARE` 覆盖）
+ *
+ * 队友拿「按**他自己**的等级差算出的击杀经验」的这个比例，取整向下。
+ * 刻意**不均分**（击杀者不该因为带人变慢）、**不加成**（加成会引出多开刷经验）；
+ * 队友那份走他自己的等级差，所以「高等级带小号刷高级怪」被公式本身挡住 ——
+ * 小号对那只怪的等级差太大，基数是 0，乘任何比例还是 0。
+ */
+export const PARTY_EXP_MATE_SHARE_DEFAULT = 0.5;
+
+/** 队伍各动作（协议 `party` 帧的 action；协议与服务的合法值同源，别在别处再写一遍） */
+export const PARTY_ACTION = {
+  /** 邀请某人入队（邀请人没队伍时顺手建一支） */
+  INVITE: "invite",
+  /** 同意最近一条邀请（邀请本身就是「谁邀请我」的记录） */
+  ACCEPT: "accept",
+  /** 拒绝最近一条邀请 */
+  DECLINE: "decline",
+  /** 退出队伍（队长退出自动移交） */
+  LEAVE: "leave",
+  /** 踢人（仅队长） */
+  KICK: "kick",
+  /** 转让队长（仅队长） */
+  TRANSFER: "transfer",
+  /** 解散（仅队长） */
+  DISBAND: "disband",
+} as const;
+export type PartyAction = (typeof PARTY_ACTION)[keyof typeof PARTY_ACTION];
+
+export const PARTY_ACTIONS: PartyAction[] = Object.values(PARTY_ACTION);
+
+//#endregion

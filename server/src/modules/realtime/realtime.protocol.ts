@@ -70,6 +70,13 @@ export interface RealtimeErrorMessage {
   type: "error";
   data: {
     message: string;
+    /**
+     * 业务码（#399 起带上）
+     *
+     * 只有需要客户端分辨「哪一种拒绝」的帧才带（队伍：满员 50122 / 只有队长能踢 50124…）——
+     * 客户端拿码决定提示语，拿不到就只用 message。老客户端忽略这个字段即可。
+     */
+    code?: number;
   };
 }
 
@@ -322,6 +329,14 @@ export interface RealtimePlayerEntry {
   guildId: string;
   /** 所属帮会名（#389；空串 = 无帮会） */
   guildName: string;
+  /**
+   * 所属队伍 id（#399；空串 = 没队伍）
+   *
+   * 客户端拿它跟自己的 `partyId` 比对，算出「这个人是队友」——队友的名字是金色的，
+   * 与敌人 / 同帮 / 好友同一套关系判定（优先级里队伍高于帮会、低于敌人）。
+   * 队伍 id 是**随机串**，不泄露任何「这队有几个人 / 队长是谁」的信息。
+   */
+  partyId: string;
   x: number;
   y: number;
   hp: number;
@@ -527,6 +542,109 @@ export interface RealtimeQuestMessage {
 
 //#endregion
 
+//#region 队伍（#399：队伍态落库，交互走帧）
+
+/**
+ * 客户端 → 服务端：一次队伍操作
+ *
+ * 为什么队伍不做 HTTP 接口：**邀请必须即时送达**，而 HTTP 走存档进程、WS 在实时进程，
+ * 存档进程推不到别人的通道；队伍快照本来也要跟互见帧一起变（队标、队友名字配色）。
+ *
+ * `action` 的合法值见 `common/constants/social.ts` 的 `PARTY_ACTION`；`roleId` 只有
+ * invite / kick / transfer 需要（**邀请靠 roleId 不靠名字**：名字不唯一，而同屏可见的人
+ * 在附近列表里本来就有 roleId —— 少一条「同名怎么办」的分支）。
+ */
+export interface RealtimePartyMessage {
+  type: "party";
+  data: {
+    action: string;
+    /** invite / kick / transfer 的目标角色 id */
+    roleId?: string;
+  };
+}
+
+/** 队伍快照里的一名成员（快照只在变化时发，所以字段可以给全） */
+export interface RealtimePartyMember {
+  roleId: string;
+  /** 显示名（角色名；角色被删则为 id 的兜底见 settle 侧） */
+  name: string;
+  level: number;
+  /** 是否在线（有连接 = 在线；离线队友仍在队里，只是收不到帧） */
+  online: boolean;
+  /** 是否与我同图（不同图的队友拿不到击杀经验，面板上要能看出来） */
+  sameMap: boolean;
+  /** 是否队长 */
+  leader: boolean;
+}
+
+/**
+ * 服务端 → 客户端：我的队伍现状（**只在变化时发**）
+ *
+ * `partyId` 为空串 = 我不在任何队伍（离队 / 被踢 / 解散都会收到这一份空快照）——
+ * 客户端据此关面板、清掉队友标记，不需要第二条「你被踢了」的帧。
+ */
+export interface RealtimePartySnapshot {
+  partyId: string;
+  /** 队长角色 id（空串 = 没有队伍） */
+  leaderRoleId: string;
+  /** 队伍上限（客户端显示「3 / 4」；上限在服务端配置里） */
+  limit: number;
+  members: RealtimePartyMember[];
+  /** 我是不是队长（客户端据此显示踢人 / 转让 / 解散） */
+  isLeader: boolean;
+}
+
+export interface RealtimePartySnapshotMessage {
+  type: "party";
+  data: RealtimePartySnapshot;
+}
+
+/**
+ * 服务端 → 客户端：有人邀请我组队
+ *
+ * 只发给**被邀请人**。邀请本身存内存（30 秒过期），所以这条帧丢了不会留下悬空状态 ——
+ * 客户端不弹窗，邀请人看到「邀请已发出」但没人进队，再拉一次即可。
+ */
+export interface RealtimePartyInviteMessage {
+  type: "partyInvite";
+  data: {
+    partyId: string;
+    fromRoleId: string;
+    fromName: string;
+    fromLevel: number;
+    /** 邀请时队伍已有几人 / 上限（被邀请人据此判断还有没有位置） */
+    memberCount: number;
+    limit: number;
+    /** 过期时刻（毫秒，服务端时钟） */
+    expiresAt: number;
+  };
+}
+
+/**
+ * 服务端 → 客户端：**队友**击杀怪物后我分到的经验
+ *
+ * 为什么需要这条帧：`settle` 只回给击杀者（掉落与经验归属都只认他），可队友那一份是
+ * 服务端直接入账的 —— 不推这一条，队友的经验条不涨、`revision` 也停在上一次存档的基线，
+ * 下一次防抖存档就会撞乐观锁（20006）。
+ */
+export interface RealtimeExpGainMessage {
+  type: "expGain";
+  data: {
+    /** 本次入账的经验（服务端已落库；0 表示等级差过大没有经验，此时不会发这条帧） */
+    exp: number;
+    level: number;
+    expNow: number;
+    expNeed: number;
+    leveledUp: boolean;
+    /** 入账后的角色修订号（客户端照搬做新基线） */
+    revision: number;
+    /** 谁打死的（客户端飘一句「队友击杀 +经验」用） */
+    from: { roleId: string; username: string };
+  };
+}
+
+//#endregion
+
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage
@@ -538,7 +656,10 @@ export type RealtimeServerMessage =
   | RealtimePlayersMessage
   | RealtimePickedMessage
   | RealtimeChatBroadcast
-  | RealtimeQuestMessage;
+  | RealtimeQuestMessage
+  | RealtimePartySnapshotMessage
+  | RealtimePartyInviteMessage
+  | RealtimeExpGainMessage;
 
 /**
  * 关闭码

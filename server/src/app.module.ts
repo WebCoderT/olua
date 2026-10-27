@@ -22,6 +22,7 @@ import { WorldModule } from "./modules/world/world.module";
 import { ZoneModule } from "./modules/zone/zone.module";
 import { SocialModule } from "./modules/social/social.module";
 import { QuestModule } from "./modules/quest/quest.module";
+import { PartyModule } from "./modules/party/party.module";
 
 /**
  * 应用根模块
@@ -67,6 +68,7 @@ export class AppModule {
         ZoneModule,
         SocialModule,
         QuestModule,
+        PartyModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

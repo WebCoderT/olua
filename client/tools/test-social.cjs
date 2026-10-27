@@ -3,7 +3,7 @@
  * 社交关系单测（client/tools/test-social.cjs，issue #389）
  *
  * 盯的不变量（改关系判定 / 互见帧 / 社交面板后必须全绿）：
- * A. 判定优先级：拉黑 > 敌人 > 同帮 > 好友 > 同地图 > 普通（**跑真函数**，不是复刻一份逻辑）
+ * A. 判定优先级：拉黑 > 敌人 > 同队 > 同帮 > 好友 > 同地图 > 普通（**跑真函数**，不是复刻一份逻辑）
  * B. 配色与标签：六种关系都有颜色与中文名；未知关系回落普通
  * C. 协议两端同形：互见帧带 roleId / guildId / guildName，客户端三项可选
  * D. 服务端成本：帮会与外观同一趟懒刷新（不每帧查库），帮会变化进增量判据
@@ -11,6 +11,7 @@
  * F. 服务端数据纪律：好友镜像两行 + 成对改（事务），敌人单向一行
  * G. 屏蔽与举报（#398）：拉黑单向成行、过滤在服务端（聊天 + 互见）、隐私口径（不下发「谁拉黑了我」）、
  *    举报只落库且管理端只读
+ * H. 队伍仓（#399）：同队优先级、邀请合并与过期、空快照 = 不在队伍、清空不拆订阅
  *
  * 表现层依赖 cc 引擎（Node / Graphics / Label），沙箱起不来 —— 这里跑真实的
  * `configs/social.ts`（判定与配色是纯函数）+ 源码契约断言，界面行为由真机双窗口验证。
@@ -49,13 +50,14 @@ function fieldNames(source, interfaceName) {
 const count = (source, needle) => source.split(needle).length - 1;
 
 try {
-  const outDir = prepare("olua-social", ["configs/social.ts"]);
+  // PartyStore 只 import type（CombatChannel 的帧形状），编译后没有依赖 —— 可以直接跑真函数
+  const outDir = prepare("olua-social", ["configs/social.ts", "ui/core/PartyStore.ts"]);
   const social = require(path.join(outDir, "configs/social.js"));
   const { RELATION, RELATION_PRIORITY, relationColors, relationLabels, resolveRelation, getRelationColor } = social;
 
   //#region A. 判定优先级（跑真函数）
 
-  console.log("\n— A. 判定优先级（敌人 > 同帮 > 好友 > 同地图 > 普通） —");
+  console.log("\n— A. 判定优先级（拉黑 > 敌人 > 同队 > 同帮 > 好友 > 同地图 > 普通） —");
 
   const me = { roleId: "r1", guildId: "g1", friendIds: ["r2", "r3"], enemyIds: ["r3"], blockIds: ["r4"] };
   const both = { roleId: "r3", guildId: "g1" }; // 既是好友、也是同帮、还被标了敌人
@@ -76,8 +78,25 @@ try {
     resolveRelation({ roleId: "r1", guildId: "g1", friendIds: [], enemyIds: [], blockIds: [] }, { roleId: "r9", guildId: "g1" }, false) === RELATION.GUILD,
     "不同图也是同帮（帮会关系不依赖看得见）",
   );
+  // 同队（#399）：队伍是「此刻一起打怪」的临时关系，比组织（帮会）与私交（好友）都更即时
+  const partyMe = { ...me, partyId: "p1" };
+  check(resolveRelation(partyMe, { roleId: "r2", guildId: "g1", partyId: "p1" }, true) === RELATION.PARTY, "同队压过同帮与好友（好友进队就该显示队友金）");
+  check(resolveRelation(partyMe, { roleId: "r3", guildId: "g1", partyId: "p1" }, true) === RELATION.ENEMY, "敌人仍压过同队（标了敌人就是红名）");
+  check(resolveRelation(partyMe, { roleId: "r9", guildId: "g2", partyId: "p2" }, true) === RELATION.MAP, "两个不同的队不算同队");
   check(
-    RELATION_PRIORITY.join(",") === "self,block,enemy,guild,friend,map,normal",
+    resolveRelation(
+      { roleId: "r1", guildId: "", partyId: "", friendIds: [], enemyIds: [], blockIds: [] },
+      { roleId: "r9", guildId: "", partyId: "" },
+      true,
+    ) === RELATION.MAP,
+    "两边都没队伍时不算同队（空串不等于同一支队）",
+  );
+  check(
+    resolveRelation(partyMe, { roleId: "r9", guildId: "g2" }, true) === RELATION.MAP,
+    "对方没带 partyId（好友列表 / 聊天记录里的旧帧）按不同队处理",
+  );
+  check(
+    RELATION_PRIORITY.join(",") === "self,block,enemy,party,guild,friend,map,normal",
     `优先级表的顺序写死（实得 ${RELATION_PRIORITY.join(" > ")}）`,
   );
   // 拉黑是最高优先（#398）：既是敌人又是同帮的好友，一旦拉黑就必须算「已拉黑」
@@ -107,8 +126,10 @@ try {
   const kinds = Object.keys(RELATION).map((key) => RELATION[key]);
   check(
     kinds.every((kind) => !!relationColors[kind] && !!relationLabels[kind]),
-    "七种关系都有配色与中文名（漏一种就是一块没上色的字）",
+    "八种关系都有配色与中文名（漏一种就是一块没上色的字）",
   );
+  check(rgb(relationColors[RELATION.PARTY]) === "255,209,102", "同队 = 金（满屏里一眼能挑出自己人）");
+  check(relationLabels[RELATION.PARTY] === "同队", "同队的中文标签");
   check(rgb(relationColors[RELATION.BLOCK]) === "120,126,138", "拉黑 = 暗灰（正常看不到这个人，颜色只出现在名单里）");
 
   //#endregion
@@ -124,6 +145,8 @@ try {
   check(clientEntry.indexOf("roleId") >= 0 && clientEntry.indexOf("guildId") >= 0 && clientEntry.indexOf("guildName") >= 0, "客户端同形");
   const clientSource = read(CLIENT_CHANNEL);
   check(/roleId\?: string;/.test(clientSource) && /guildId\?: string;/.test(clientSource), "客户端三项都是可选（旧服务端不发时按无帮会处理）");
+  check(serverEntry.indexOf("partyId") >= 0, "服务端互见条目带 partyId（#399：队标与队友金的原料）");
+  check(clientEntry.indexOf("partyId") >= 0, "客户端互见条目同形（可选，旧服务端不发时按没队伍）");
 
   //#endregion
 
@@ -140,8 +163,16 @@ try {
   check(/private readGuild\(roleId: string\)/.test(presence), "无角色直接回空串（不查库）");
   check(/const guildChanged = this\.guildKey\(entry\) !== entry\.sentGuild;/.test(presence), "帮会变化进增量判据");
   check(
-    /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged\) continue;/.test(presence),
+    /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged && !partyChanged\) continue;/.test(presence),
     "入帮 / 退帮站着不动也会广播（否则名字颜色要等他动一下才变）",
+  );
+  check(
+    /const partyChanged = partyId !== entry\.sentParty;/.test(presence) && /entry\.sentParty = entry\.partyId;/.test(presence),
+    "组队 / 退队同样进增量判据（#399：队友金与队标要立刻变，不等他动一下）",
+  );
+  check(
+    /partyId: this\.partyOfRole\?\.\(roleId\) \?\? ""/.test(presence),
+    "队伍 id 每个节拍现算（一次内存 Map 查询，不走 5 秒的外观懒刷新）",
   );
   check(/return `\$\{entry\.guildId\}\|\$\{entry\.guildName\}`;/.test(presence), "帮会键含名字（帮会改名也要重发）");
   check(!/resolveRelation/.test(presence), "服务端不算关系（O(n²) 的事放客户端，只下发原料）");
@@ -154,7 +185,13 @@ try {
 
   const manager = read(CLIENT_MANAGER);
   check(/import SocialStore from "\.\/SocialStore";/.test(manager), "远端玩家从 SocialStore 取「我这一半」快照");
-  check(/resolveRelation\(SocialStore\.relationSelf\(\)/.test(manager), "关系判定走 configs/social 的唯一入口");
+  check(/resolveRelation\(\s*SocialStore\.relationSelf\(\)/.test(manager), "关系判定走 configs/social 的唯一入口");
+  check(/partyId: view\.partyId/.test(manager), "队伍 id 也进判定入参（#399：队友金）");
+  check(/PartyStore\.onChange\(\(\) => this\.applyRelations\(\)\)/.test(manager), "队伍一变也重刷名字颜色（刚组队立刻变金）");
+  check(
+    /import PartyStore from "\.\/PartyStore";/.test(read(CLIENT_STORE)) && /const partyId = PartyStore\.partyId\(\);/.test(read(CLIENT_STORE)),
+    "「我这一半」的 partyId 从 PartyStore 取（面板与上色同一个数）",
+  );
   check(count(manager, "getRelationColor(") >= 2, "名字颜色统一走 getRelationColor（新建与重刷各一处）");
   check(/if \(relation === view\.relation\) continue;/.test(manager), "关系没变就不动 Label（别每帧刷一遍颜色）");
   check(/static applyRelations\(\): void \{/.test(manager), "有 applyRelations（社交快照一变就重刷全部名字）");
@@ -252,6 +289,59 @@ try {
   const reportDialog = read(CLIENT_DIALOGS_REPORT_DIALOG);
   check(/SocialApi\.report\(/.test(reportDialog), "举报走生成的 SocialApi（不手写路径）");
   check(!/resolveRelation/.test(reportDialog), "举报框不参与关系判定（两件事不该纠缠）");
+
+  //#endregion
+
+  //#region H. 队伍仓（#399：邀请过期 / 同一人合并 / 清空不拆订阅）
+
+  console.log("\n— H. 队伍仓（PartyStore） —");
+
+  const { default: PartyStore } = require(path.join(outDir, "ui/core/PartyStore.js"));
+  let notified = 0;
+  const off = PartyStore.onChange(() => (notified += 1));
+
+  const snapshotOf = (partyId, members, isLeader = false) => ({
+    partyId,
+    leaderRoleId: members.length > 0 ? members[0].roleId : "",
+    limit: 4,
+    members,
+    isLeader,
+  });
+  const member = (roleId, extra = {}) => ({ roleId, name: roleId, level: 1, online: true, sameMap: true, leader: false, ...extra });
+
+  PartyStore.applySnapshot(snapshotOf("p1", [member("r1", { leader: true }), member("r2", { sameMap: false })], true));
+  check(PartyStore.partyId() === "p1" && PartyStore.inParty(), "落一份快照后 partyId 与「在队伍」都成立");
+  check(PartyStore.isLeader(), "isLeader 照快照走（服务端说我是队长才是）");
+  check(PartyStore.has("r2") && !PartyStore.has("r9"), "has() 只认名单里的人");
+  check(PartyStore.sameMapCount() === 1, "sameMapCount 只数同图队友（异图的拿不到击杀经验）");
+  check(PartyStore.limit() === 4, "上限照快照走（面板显示 2 / 4）");
+
+  const invite = (fromRoleId, expiresIn) => ({
+    partyId: "p1",
+    fromRoleId,
+    fromName: fromRoleId,
+    fromLevel: 1,
+    memberCount: 1,
+    limit: 4,
+    expiresAt: Date.now() + expiresIn,
+  });
+  PartyStore.applyInvite(invite("r5", 30_000));
+  PartyStore.applyInvite(invite("r5", 30_000));
+  check(PartyStore.pendingInvites().length === 1, "同一个人重复邀请只留一条（面板不叠同名行）");
+  PartyStore.applyInvite(invite("r6", -1_000));
+  check(PartyStore.pendingInvites().map((item) => item.fromRoleId).join(",") === "r5", "过期邀请读的时候就扔掉（留一条点不动的僵尸更糟）");
+  PartyStore.dropInvite("r5");
+  check(PartyStore.pendingInvites().length === 0, "同意 / 拒绝后能摘掉那条邀请（同一条不能点两次）");
+
+  PartyStore.applySnapshot(snapshotOf("", [], false));
+  check(!PartyStore.inParty() && PartyStore.partyId() === "", "空快照 = 不在队伍（退队 / 被踢 / 解散都是这一份）");
+
+  const before = notified;
+  PartyStore.clear();
+  check(notified === before + 1, "清空会通知订阅者（界面跟着清）");
+  PartyStore.applySnapshot(snapshotOf("p2", [member("r1", { leader: true })], true));
+  check(notified > before + 1 && PartyStore.inParty(), "清空**不拆订阅**：换角色回来后仍然收得到变化（否则队友名字永远是白的）");
+  off();
 
   //#endregion
 

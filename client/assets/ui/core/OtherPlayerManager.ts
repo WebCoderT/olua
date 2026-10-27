@@ -10,6 +10,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import UiHelper from "../helpers/UiHelper";
 import { getDirectionByVector } from "../utils/battle/BattleMath";
 import SocialStore from "./SocialStore";
+import PartyStore from "./PartyStore";
 import type { PlayerAppearance, PlayerEntry, PlayersFrame } from "../utils/net/CombatChannel";
 
 /**
@@ -66,6 +67,8 @@ interface OtherPlayerView {
   guildId: string;
   /** 对方所在帮会名（#389：附近列表里展示） */
   guildName: string;
+  /** 对方所在队伍 id（#399：关系判定的输入；空串 = 没队伍。同队名字是金的） */
+  partyId: string;
   /** 当前算出的关系（附近列表直接用，重算时一并更新） */
   relation: RelationKind;
   /** 广播给的最新位置（世界坐标；每帧向它插值，平滑过广播节拍的台阶感） */
@@ -104,12 +107,13 @@ export interface NearbyPlayer {
  * 性别默认身体）、几何变换、层级顺序与主角是**同一份代码** —— 别人穿什么、拿什么、
  * 有没有时装，看到的就是他客户端看到的。
  *
- * ## 名字颜色（#389：好友 / 敌人 / 同帮一眼可见）
- * 每个远端玩家头顶的名字按**关系**上色：敌人红 > 同帮蓝 > 好友绿 > 同地图白 > 普通灰
+ * ## 名字颜色（#389：好友 / 敌人 / 同帮一眼可见；#399 加了队友金）
+ * 每个远端玩家头顶的名字按**关系**上色：敌人红 > 队友金 > 同帮蓝 > 好友绿 > 同地图白 > 普通灰
  * （优先级唯一来源是 `configs/social.resolveRelation`）。判定所需的两半 ——
- * 我的好友 / 敌人 / 帮会（`SocialStore` 里的快照）与对方的 `roleId` / `guildId`（互见帧）——
- * 都在本地，所以关系变化是**就地改颜色**：`SocialStore` 一变（加好友、标敌人、入帮）就
- * `applyRelations()` 重刷一遍，不拆不建节点，也不重新请求任何一个帧。
+ * 我的好友 / 敌人 / 帮会 / 队伍（`SocialStore` 与 `PartyStore`）与对方的
+ * `roleId` / `guildId` / `partyId`（互见帧）—— 都在本地，所以关系变化是**就地改颜色**：
+ * 两个仓任一变（加好友、标敌人、入帮、组队、退队）就 `applyRelations()` 重刷一遍，
+ * 不拆不建节点，也不重新请求任何一个帧。
  *
  * ## 演出的边界（刻意留着）
  * - **没有战斗动作**：对方放技能 / 挨打 / 倒地都不会在别人屏幕上播 —— 那需要互见帧
@@ -250,13 +254,20 @@ export default class OtherPlayerManager {
     view.targetX = entry.x;
     view.targetY = entry.y;
     view.moving = entry.moving;
-    // 身份 / 帮会（#389）：关系判定的输入变了就重算一次 —— 入帮 / 退帮 / 退帮再入别的帮
-    // 都会在这里体现（服务端 5s 懒刷新一次，客户端不需要自己轮询）
+    // 身份 / 帮会 / 队伍（#389/#399）：关系判定的输入变了就重算一次 —— 入帮 / 退帮 / 组队 /
+    // 退队都会在这里体现（身份与帮会是服务端 5s 懒刷新，队伍是变化即推）
     const guildId = entry.guildId ?? "";
-    if (view.roleId !== (entry.roleId ?? "") || view.guildId !== guildId || view.name !== entry.username) {
+    const partyId = entry.partyId ?? "";
+    if (
+      view.roleId !== (entry.roleId ?? "") ||
+      view.guildId !== guildId ||
+      view.partyId !== partyId ||
+      view.name !== entry.username
+    ) {
       view.roleId = entry.roleId ?? "";
       view.guildId = guildId;
       view.guildName = entry.guildName ?? "";
+      view.partyId = partyId;
       if (view.name !== entry.username) {
         view.name = entry.username;
         const label = view.nameLabel.getComponent(Label);
@@ -317,6 +328,7 @@ export default class OtherPlayerManager {
       roleId: entry.roleId ?? "",
       guildId: entry.guildId ?? "",
       guildName: entry.guildName ?? "",
+      partyId: entry.partyId ?? "",
       relation: RELATION.MAP,
       targetX: entry.x,
       targetY: entry.y,
@@ -341,19 +353,25 @@ export default class OtherPlayerManager {
 
   /** 我与一名远端玩家的关系（唯一判定入口在 configs/social；互见帧里的人必然同图） */
   private static relationOf(view: OtherPlayerView): RelationKind {
-    return resolveRelation(SocialStore.relationSelf(), { roleId: view.roleId, guildId: view.guildId }, true);
+    return resolveRelation(
+      SocialStore.relationSelf(),
+      { roleId: view.roleId, guildId: view.guildId, partyId: view.partyId },
+      true,
+    );
   }
 
   /**
-   * 订阅社交快照（懒注册一次）
+   * 订阅社交快照与队伍快照（懒注册一次）
    *
-   * 快照一到 / 一变（加好友、标敌人、入帮退帮）就重刷全部名字颜色 ——
+   * 快照一到 / 一变（加好友、标敌人、入帮退帮、组队退队）就重刷全部名字颜色 ——
    * 视野里的人不会重新进图，不主动刷的话要等他走开再回来才看得见新颜色。
    */
   private static watchSocial(): void {
     if (this.watching) return;
     this.watching = true;
     SocialStore.onChange(() => this.applyRelations());
+    // 队伍变化（#399）同样要重刷：刚组队的人名字要立刻变金、退队要立刻变回
+    PartyStore.onChange(() => this.applyRelations());
     // 顺手触发一次拉取：还没拉过时是请求，拉过了是空操作
     SocialStore.ensure();
   }

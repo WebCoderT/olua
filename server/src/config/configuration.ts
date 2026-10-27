@@ -291,6 +291,30 @@ export interface AppConfiguration {
    */
   socialBlockCacheMs: number;
   //#endregion
+
+  //#region 队伍（#399）
+
+  /**
+   * 队伍人数上限（默认 4，可用 `PARTY_MEMBER_LIMIT` 覆盖）
+   *
+   * 脏值（非数字 / 小于 2）回落默认：上限读错不该让「组队」变成「一个人也算满」。
+   */
+  partyMemberLimit: number;
+
+  /**
+   * 邀请有效期（毫秒，默认 30000，#399）
+   *
+   * 邀请本身存内存（不落库），过期即作废：三十秒没回应，邀请人大概率已经自己打了。
+   */
+  partyInviteTtlMs: number;
+
+  /**
+   * 队友经验分成比例（默认 0.5，#399）
+   *
+   * 队友拿「按他自己的等级差算出的击杀经验」的这个比例（向下取整）。0 = 只组队不分经验。
+   */
+  partyExpMateShare: number;
+  //#endregion
 }
 
 export default function configuration(): AppConfiguration {
@@ -359,5 +383,8 @@ export default function configuration(): AppConfiguration {
     socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
     socialBlockLimit: Number(process.env.SOCIAL_BLOCK_LIMIT ?? 100),
     socialBlockCacheMs: Number(process.env.SOCIAL_BLOCK_CACHE_MS ?? 2000),
+    partyMemberLimit: Number(process.env.PARTY_MEMBER_LIMIT ?? 4),
+    partyInviteTtlMs: Number(process.env.PARTY_INVITE_TTL_MS ?? 30000),
+    partyExpMateShare: Number(process.env.PARTY_EXP_MATE_SHARE ?? 0.5),
   };
 }

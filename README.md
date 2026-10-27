@@ -116,7 +116,7 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 - **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 46 套单测、`tools/` 下有 11 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、战斗规则快照有没有漂移、服务端算的属性与客户端是不是同一份、界面点击会不会穿透到世界、模块边界有没有被绕过，全都有脚本盯着。
 - **一切可调的东西都收进 `client/assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
 - **接口文件全部由服务端 Swagger 文档生成**。三端签名对不上会**编译报错**，而不是线上出现一个 `undefined`。这同样是为了让 AI 改完一端后，另一端在编译期就被拦住。
-- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 113 + 283 + 120 + 28 + 50 + 126 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50 条）+ 两端类型检查 + 46 套单测 + 11 套审计，全绿才算完。
+- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 113 + 283 + 120 + 28 + 50 + 126 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50 + 79 条）+ 两端类型检查 + 46 套单测 + 11 套审计，全绿才算完。
 - **每处理完一个问题就按功能提交一次**。改完一个功能立刻落一次 commit，不留一堆混在一起的未提交改动 —— 这样「哪次改动引入了回归」永远能二分出来。
 - **踩过的坑写进了 FAQ**。每端目录下的 FAQ 收纳该端的具体问题，跨端的机制与环境坑在 [FAQ.md](FAQ.md)；里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
 
@@ -221,7 +221,7 @@ olua/
   - constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
   - interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
   - security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
-- src/database：SQLite 连接与 38 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress，含存量补列）的仓储层
+- src/database：SQLite 连接与 40 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / parties / party_members，含存量补列）的仓储层
 - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员 / 口令）/ announcement（公告：公共拉取 + 管理端 CRUD）/ mail（邮件：模板 + 投递队列 + 后台调度）/ audit（操作日志）/ token（JWT）/ health
 - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
 - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
@@ -233,6 +233,7 @@ olua/
 - test/e2e-account-email.cjs：**玩家邮箱字段专项**（28 条断言：观察员看不到也改不了 / 补录·清空 / 格式与同邮去重 / 发信按账号邮箱兜底）
 - test/e2e-game-config.cjs：**养成配置专项**（44 条断言：称号 / 战魂 seed 与客户端配置同源 / 只许改不许增删（POST、DELETE 404）/ 部分更新与渠道筛选 / 观察员可读不可写）
 - test/e2e-blocks.cjs：**屏蔽与举报专项**（50 条断言：拉黑单向一行与重复·自拉黑挡回 / 聊天广播逐收件人剔除与私聊两个方向两种说法 / 互见增量与 full 快照都过滤 / 解除后重发进图 / 拉黑剪好友与敌人 / 举报去重与非法类别 / 管理端只读列表与越权）
+- test/e2e-party.cjs：**队伍专项**（79 条断言：邀请即建队 / 同意与拒绝 / 满员与重复邀请 / 踢人转让与权限翻转 / 队长退出自动移交 / 解散三端清空 / 屏蔽优先（两种说法）/ 互见帧带 partyId / 经验分成（击杀者全额·同图队友 50%·异图与等级差过大分不到）/ 上限脏值回落）
 - test/backup.cjs：**备份 / 恢复专项**（87 条断言：运行中 `VACUUM INTO` 一致快照 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 - 详见 [server/README.md](server/README.md)，问题见 [server/FAQ.md](server/FAQ.md)
 
@@ -289,13 +290,13 @@ make dev            # 同时起服务端 :3100 与管理端 :5173，Ctrl-C 一�
 
 make client-check   # 客户端类型检查（Cocos 自带 tsc，0 错才算过）
 make client-test    # 客户端 46 套单测
-make server-verify  # 服务端一条命令全验（编译 + 十八套 e2e + 生成物审计）
+make server-verify  # 服务端一条命令全验（编译 + 十九套 e2e + 生成物审计）
 make admin-build    # 管理端类型检查 + 构建
 make gen-api        # 改完接口后重新生成契约与两端接口文件
 make audit          # 11 个跨端审计脚本
 
 make check          # 静态检查：客户端 tsc + 管理端 typecheck + 11 个审计
-make test           # 全部测试：客户端 46 套 + 服务端十八套 e2e
+make test           # 全部测试：客户端 46 套 + 服务端十九套 e2e
 make verify         # 完整门禁：check + 三端构建 + 全部测试（提交前跑这个）
 ```
 
@@ -321,7 +322,7 @@ npm run dev              # 开发（热编译）；或 npm run start 跑已构�
 
 - 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`）
 - 健康检查：<http://localhost:3100/api/health>
-- 一条命令全验：`npm run verify`（编译 + 十八套 e2e + 生成物一致性）
+- 一条命令全验：`npm run verify`（编译 + 十九套 e2e + 生成物一致性）
 - 详见 [server/README.md](server/README.md)
 
 ### 2. 客户端（Cocos）
@@ -401,7 +402,7 @@ make verify   # = check + 三端构建 + 全部测试
 # 客户端：46 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 十八套 e2e（248 / 113 / 283 / 120 / 28 / 50 / 126 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50）+ 生成物一致性
+# 服务端：编译 + 十九套 e2e（248 / 113 / 283 / 120 / 28 / 50 / 126 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50 + 79）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建
@@ -562,8 +563,11 @@ make resources-upload VERSION=<v>          # 上传到 GitHub Release（需 gh �
 | 功能 | 说明 | 状态 |
 | --- | --- | :-: |
 | 帮会（#388） | 创建 / 申请 / 审批 / 成员名单 / 踢人 / 转让帮主 / 退出 / 解散；**一个人只能在一个帮会**由库唯一索引兜底，帮主身份两处（`guilds.leader_id` 与成员行）同一事务改；人数上限走配置（默认 50，与等级解耦） | ✅ |
+| 队伍（#399） | 邀请即建队（邀请人没队伍时顺手建一支并自任队长）/ 同意 / 拒绝 / 退出 / 踢人 / 转让 / 解散；**一人一队**由 `party_members.role_id UNIQUE` 兜底，队长是唯一写者（成员表不存 is_leader）；队长退出**自动移交**给最早加入的剩余成员；邀请存内存 30 秒过期、上限走配置（默认 4）；**屏蔽优先**——我拉黑他明说「先解除」，他拉黑我只说「对方不在线」 | ✅ |
+| 组队分经验（#399） | 击杀者拿全额，**同图在线**队友每人得 `floor(他自己等级差经验 × 50%)`（服务端直接入账 + `expGain` 帧推进本地 `revision`）；不均分（带人变慢会劝退邀请）、不加成（会引出多开刷经验）；队友那份走他自己的等级差，所以拉小号刷高级怪被公式本身挡住；掉落与任务进度只记击杀者 | ✅ |
+| 队伍面板 | 底部「组队」（G）打开，两个页签：**成员**（待处理邀请在最上面，带「同意 / 拒绝」；成员行显示等级与在线 / 异图 / 队长状态，队长对别人多「转让」「踢出」）与**邀请**（附近的人，已在队里或刚邀请过的自动置灰）；队伍状态由服务端**变化即推**，退队 / 被踢 / 解散收到的都是同一份空快照 | ✅ |
 | 好友与敌人（#389） | 加好友（按 roleId 或按角色名；**对方也在等我时自动成为好友**）/ 同意 / 拒绝（不留痕）/ 撤回 / 删好友（双向消失）；敌人**单向**——我标我的，对方不知道；好友存**镜像两行**（成对改，一律事务），上限走配置（默认 100） | ✅ |
-| 名字按关系配色（#389） | 拉黑灰 > 敌人红 > 同帮蓝 > 好友绿 > 同地图白 > 普通灰；判定与配色集中在 `configs/social.ts` 一处（`resolveRelation`），互见帧带 `roleId/guildId/guildName`（与外观同一份 5 秒懒刷新，不额外查库）；关系一变就地改 `Label` 颜色，不重建节点 | ✅ |
+| 名字按关系配色（#389） | 拉黑灰 > 敌人红 > **队友金（#399）** > 同帮蓝 > 好友绿 > 同地图白 > 普通灰；判定与配色集中在 `configs/social.ts` 一处（`resolveRelation`），互见帧带 `roleId/guildId/guildName`（与外观同一份 5 秒懒刷新，不额外查库）；关系一变就地改 `Label` 颜色，不重建节点 | ✅ |
 | 屏蔽（#398） | 拉黑**单向一行**，但**过滤在服务端**：聊天世界/帮会按收件人剔除、私聊双向拒绝、互见帧不发他的帧（含 `full` 快照）——客户端根本不知道「谁拉黑了我」（服务端刻意不下发）；拉黑顺带剪掉好友与敌人（留一条「好友」标签比拉黑还硬）；好友申请是唯一能绕过屏蔽送达的通道，命中就复用「找不到人」的码挡回 | ✅ |
 | 举报（#398） | 四个固定类别（辱骂 / 外挂 / 昵称 / 其他）+ 200 字说明；同一对「我→他」只留一条待处理（50120）；只落库、不处罚；举报表**不加外键**（证据不该随删号消失），名字查询时 `LEFT JOIN` | ✅ |
 | 社交弹窗 | 角色信息弹窗第五格「社 交」，五个页签：**帮会**（未加入 = 创建表单 + 全部帮会列表，已加入 = 信息 / 公告 / 成员 / 待审批 / 退出或解散）、**好友**（别人加我 / 我的好友 / 我发出的申请 + 按名加好友）、**敌人**（我标的 / 按名标敌人）、**附近**（此刻同图看得见的人，取源是互见帧而非服务端名单）、**黑名单**（我拉黑的人 + 按名拉黑 + 解除；行内还有「举报」入口）；**权限按钮显隐由服务端下发的 `canReview/canManage/canDisband` 决定**，客户端不自己判职位 | ✅ |

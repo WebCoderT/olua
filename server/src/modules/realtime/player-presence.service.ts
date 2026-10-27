@@ -28,6 +28,14 @@ interface PresenceEntry {
   /** 所属帮会 id / 名字（#389：空串 = 无帮会；入帮退帮随外观懒刷新一起对齐） */
   guildId: string;
   guildName: string;
+  /**
+   * 所属队伍 id（#399；空串 = 没队伍）
+   *
+   * 与帮会不同，它**每个广播节拍现算**（`partyOfRole` 是一次内存 Map 查询）：
+   * 组队 / 退队 / 被踢要立刻反映到别人的屏幕上（队友是金色的），等 5 秒的外观懒刷新
+   * 会让「刚组队却还是白名」变成常态。
+   */
+  partyId: string;
   /** 外观（#383：首见读一次，之后按 appearanceRefreshMs 懒刷新 —— 换装最多这么多秒被别人看到） */
   appearance: RealtimePlayerAppearance;
   /** 上次读外观的时刻（懒刷新判据） */
@@ -36,6 +44,8 @@ interface PresenceEntry {
   sentAppearance: string;
   /** 上次广播出去的帮会（#389 的增量判据：入帮 / 退帮 / 帮会改名都要重发） */
   sentGuild: string;
+  /** 上次广播出去的队伍（#399 的增量判据：组队 / 退队 / 换队都要重发） */
+  sentParty: string;
   /** 上次广播出去的位置 / 移动标记 / 血量 / 血条分母（增量广播的判据） */
   sentX: number;
   sentY: number;
@@ -98,6 +108,14 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    */
   onSendTo: ((accountId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] }) => void) | null = null;
 
+  /**
+   * 队伍查询出口（#399，RealtimeService 启动时接线到 `PartyService.partyIdOfRole`）
+   *
+   * 用函数而不是注入 PartyService：`RealtimeModule` 依赖 `PartyModule`，
+   * 反过来注入就成环。这里要的只是「一次内存查询」，函数足够。
+   */
+  partyOfRole: ((roleId: string) => string) | null = null;
+
   constructor(
     private readonly config: ConfigService,
     private readonly roles: RolesService,
@@ -145,10 +163,12 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         roleId,
         guildId: guild.guildId,
         guildName: guild.guildName,
+        partyId: this.partyOfRole?.(roleId) ?? "",
         appearance: this.readAppearance(role),
         appearanceAt: Date.now(),
         sentAppearance: "",
         sentGuild: "",
+        sentParty: "",
         sentX: NaN,
         sentY: NaN,
         sentMoving: !moving,
@@ -250,6 +270,23 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     };
   }
 
+  /**
+   * 按角色找在线连接（#399：队伍快照的「在线 / 同图」与队友经验分成的「同图才分」都要它）
+   *
+   * 线性扫一遍在线表：队伍最多 4 人、每次击杀查一次，这个规模上完全够。
+   * 为它维护一张反向索引，就得在「首见 / 换图 / 断线 / 超时」四条路径上同步 ——
+   * 多出来的只是漂移的机会。
+   *
+   * 返回 null = 这个角色此刻不在线（没进图 / 断线 / 位置超时被清）。
+   */
+  locateRole(roleId: string): { accountId: string; mapId: string } | null {
+    if (!roleId) return null;
+    for (const [accountId, entry] of this.entries) {
+      if (entry.roleId === roleId) return { accountId, mapId: entry.mapId };
+    }
+    return null;
+  }
+
   //#endregion
 
   //#region 广播
@@ -279,7 +316,12 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 帮会变了也要广播（#389）：入帮 / 退帮的瞬间名字颜色要变（同帮是蓝的），
       // 而他大概率正站着不动 —— 不带这条判据别人得等他动一下才看见颜色变回来
       const guildChanged = this.guildKey(entry) !== entry.sentGuild;
-      if (!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged) continue;
+      // 队伍变了也要广播（#399）：组队 / 退队 / 被踢的瞬间名字颜色与队标要变，
+      // 而他大概率正站着不动 —— 不带这条判据就得等他动一下才看得见
+      const partyId = this.partyOfRole?.(entry.roleId) ?? "";
+      const partyChanged = partyId !== entry.sentParty;
+      entry.partyId = partyId;
+      if (!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged && !partyChanged) continue;
       const key = worldKey(entry.zoneId, entry.mapId);
       const list = changed.get(key) ?? [];
       list.push(this.toEntry(accountId, entry));
@@ -291,6 +333,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       entry.sentMaxHp = entry.maxHp;
       entry.sentAppearance = this.appearanceKey(entry.appearance);
       entry.sentGuild = this.guildKey(entry);
+      entry.sentParty = entry.partyId;
     }
     for (const [key, players] of changed) {
       const at = key.indexOf(":");
@@ -329,6 +372,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       roleId: entry.roleId,
       guildId: entry.guildId,
       guildName: entry.guildName,
+      partyId: entry.partyId,
       x: Math.round(entry.x * 100) / 100,
       y: Math.round(entry.y * 100) / 100,
       hp: entry.hp,

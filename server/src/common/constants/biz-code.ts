@@ -299,4 +299,39 @@ export const BizCode = {
    */
   SOCIAL_REPORT_EXISTS: 50120,
   //#endregion
+
+  //#region 队伍（#399）
+
+  /** 你还没加入任何队伍（离开 / 解散 / 踢人时） */
+  PARTY_NOT_FOUND: 50121,
+  /** 队伍已满（上限见 PARTY_MEMBER_LIMIT） */
+  PARTY_FULL: 50122,
+  /** 已经在队伍里（自己建队 / 邀请一个已经有队的人） */
+  PARTY_ALREADY_IN: 50123,
+  /** 只有队长能做这件事（踢人 / 转让 / 解散） */
+  PARTY_NOT_LEADER: 50124,
+  /** 目标不在你的队伍里（踢人 / 转让队长） */
+  PARTY_NOT_MEMBER: 50125,
+  /**
+   * 没有这条邀请（或已过期）
+   *
+   * 过期与「本来就没有」不分开报：对玩家来说结果一样（得让人重新邀请），
+   * 分开报只会让客户端多写一个分支。
+   */
+  PARTY_INVITE_NOT_FOUND: 50126,
+  /** 已经邀请过这个人、还没过期（重复邀请） */
+  PARTY_INVITE_EXISTS: 50127,
+  /** 对方不在线（邀请必须即时送达，离线收不到帧） */
+  PARTY_TARGET_OFFLINE: 50128,
+  /** 不能邀请自己 */
+  PARTY_INVITE_SELF: 50129,
+  /**
+   * 我拉黑了对方，不能邀他入队
+   *
+   * 只有「我拉黑他」这一个方向会报这个码：那是**我自己的设置**，说清楚才能解除。
+   * 反方向（他拉黑我）一律回 `PARTY_TARGET_OFFLINE` —— 说破等于把屏蔽变成可观测信号
+   * （与 #398 私聊同一纪律）。
+   */
+  PARTY_INVITE_BLOCKED: 50130,
+  //#endregion
 } as const;

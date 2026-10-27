@@ -11,6 +11,7 @@ import MallDialog from "../dialogs/MallDialog";
 import SkillListDialog from "../dialogs/SkillListDialog";
 import ChatDialog from "../dialogs/ChatDialog";
 import QuestDialog from "../dialogs/QuestDialog";
+import PartyDialog from "../dialogs/PartyDialog";
 import BottomNavBar from "./BottomNavBar";
 import RoleExpBar from "./RoleExpBar";
 import RoleHpOrb from "./RoleHpOrb";
@@ -37,6 +38,8 @@ export default class BottomBar extends Node {
   private chatDialog = new ChatDialog();
   /** 任务弹窗（#396：进行中 / 可接，接取与交付都在这里） */
   private questDialog = new QuestDialog();
+  /** 队伍弹窗（#399：成员 / 邀请 / 退出 / 解散；底部「组队」入口与邀请提示都落到它） */
+  private partyDialog = new PartyDialog();
   /** 功能按键区 */
   private navBar: BottomNavBar;
   /** 经验条 */
@@ -83,6 +86,7 @@ export default class BottomBar extends Node {
       bag: () => this.bagDialog.open(),
       chat: () => this.chatDialog.open(),
       task: () => this.questDialog.open(),
+      group: () => this.partyDialog.open(),
       mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
     };
@@ -97,6 +101,16 @@ export default class BottomBar extends Node {
   /** 打开任务面板（任务追踪栏点一下就走这里，见 Game 里的 QuestTracker 接线） */
   openQuests() {
     this.questDialog.open();
+  }
+
+  /** 打开队伍面板（收到组队邀请时 Game 也会走这里，让玩家直接看到「同意 / 拒绝」） */
+  openParty() {
+    this.partyDialog.open();
+  }
+
+  /** 队伍面板是否开着（邀请提示据此决定是顶到面板上还是只飘一句） */
+  isPartyOpen(): boolean {
+    return this.partyDialog.isOpen();
   }
 
   /** 贴边定位（贴屏幕底部居中按可见尺寸重算）——窗口尺寸变化时由组合根调用 */

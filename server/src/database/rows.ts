@@ -966,6 +966,40 @@ export interface RoleReportWithNameRow extends RoleReportRow {
 
 //#endregion
 
+//#region 队伍（#399）
+
+/**
+ * 队伍本体一行（`parties` 表）
+ *
+ * **队长只有一个写者**：`leader_role_id`。成员表刻意不存 `is_leader` ——
+ * 两份「谁是队长」在转让时必然会漂一次，而漂的表现是「两个人都能踢人」。
+ */
+export interface PartyRow {
+  id: string;
+  leader_role_id: string;
+  created_at: number;
+}
+
+/** 队伍成员一行（`party_members` 表；`role_id` 唯一 = 一人一队，交给数据库约束） */
+export interface PartyMemberRow {
+  party_id: string;
+  role_id: string;
+  joined_at: number;
+}
+
+/**
+ * 成员 + 角色当前的名字 / 等级（队伍快照展示用，读时 JOIN）
+ *
+ * 名字 / 等级不冗余进成员表：改名与升级是常态，冗余一份就得在每个改名 / 升级路径上同步，
+ * 而队伍快照是低频帧（只在变化时发一次），JOIN 一次读库完全够。
+ */
+export interface PartyMemberWithRoleRow extends PartyMemberRow {
+  role_name: string | null;
+  level: number | null;
+}
+
+//#endregion
+
 //#region 任务（#396）
 
 /** 任务配置一行（`quests` 表；seed 来自共享快照 QUESTS，管理端可改可增删） */
