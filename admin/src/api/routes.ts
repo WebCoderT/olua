@@ -79,6 +79,33 @@ export const routes = {
      */
     stats: "/admin/stats",
   },
+  /** adminAchievement 模块（4 个接口） */
+  adminAchievement: {
+    /**
+     * 成就配置列表（GET /admin/achievements）
+     *
+     * seed 自客户端 configs/achievement-data，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
+     */
+    list: "/admin/achievements",
+    /**
+     * 新建成就（POST /admin/achievements）
+     *
+     * id 唯一（重复 → 40000）；跨字段校验与编辑同一套（目标键真实存在 / 奖励物品存在）。
+     */
+    create: "/admin/achievements",
+    /**
+     * 删除成就（DELETE /admin/achievements/{id}）
+     *
+     * 一条拒删守卫（40000）：仍有玩家成就记录引用（哪怕只是累计进度、未达成）。先清理记录再删。
+     */
+    remove: (id: string) => `/admin/achievements/${encodeURIComponent(id)}`,
+    /**
+     * 编辑成就配置（PATCH /admin/achievements/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段（`condition` / `rewards` 逐字段合并，`items` 传了就整份替换）。
+     */
+    update: (id: string) => `/admin/achievements/${encodeURIComponent(id)}`,
+  },
   /** adminAdmin 模块（4 个接口） */
   adminAdmin: {
     /**

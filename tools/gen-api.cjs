@@ -87,6 +87,8 @@ const MODULES = {
   quest: { target: "client", export: "QuestApi" },
   // 排行榜（#400）：与军衔（adminRank）不同 —— 那个是 rank 字段的配置表，这个是全服榜单
   leaderboard: { target: "client", export: "LeaderboardApi" },
+  // 成就（#401）：玩家侧「查 / 领」；管理端配置页是 adminAchievement
+  achievement: { target: "client", export: "AchievementApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },
@@ -116,6 +118,7 @@ const MODULES = {
   adminGuild: { target: "admin", export: "guildsApi" },
   adminQuest: { target: "admin", export: "questsApi" },
   adminReport: { target: "admin", export: "reportsApi" },
+  adminAchievement: { target: "admin", export: "achievementsApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */

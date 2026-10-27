@@ -59,7 +59,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + twenty e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + twenty-one e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -126,6 +126,7 @@ server/
 │   │   ├── constants/status.ts         status constants
 │   │   ├── decorators/                 api-doc / api-data-response / api-query-model /
 │   │   │                               audience / audit-target / current-user / permission / public
+│   │   ├── events/                  game event bus (#401: monster:killed / quest:claimed, in-process synchronous dispatch + per-subscriber error isolation)
 │   │   ├── dto/api-envelope.dto.ts     unified response envelope
 │   │   ├── errors/biz.exception.ts     business exception
 │   │   ├── filters/all-exceptions.filter.ts   unified error sink
@@ -140,7 +141,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           32 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party
+│   │   └── repositories/           34 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -153,6 +154,8 @@ server/
 │   │   │                           parties and members are two persisted tables (one party per role via `role_id UNIQUE`), invites live in memory for 30 seconds
 │   │   ├── leaderboard/            leaderboards (#400): level / combat / kills boards, materialised in-process and recomputed on a period,
 │   │   │                           ordering, ranks, truncation and field trimming all on the server (kills come from the indexed `roles.kills` column)
+│   │   ├── achievement/            achievements (#401): cumulative kinds (kill / quest) counted +1 from events, state kinds
+│   │   │                           (level / combat / collect) evaluated on read without storing progress; achieving and claiming are separate (`achieved_at` / `claimed_at`), admin CRUD on config
 │   │   ├── realtime/               realtime: ticket exchanges for a WebSocket connection / heartbeat / graceful shutdown / chat relay (#395: world = same-map / guild / private, rate limit and length cap on the server; since #398 both chat and presence drop blocked recipients)
 │   │   ├── audit/                  operation-log query
 │   │   ├── system/                 system info (runtime / per-table row counts / masked config snapshot)
@@ -186,6 +189,7 @@ server/
 │   ├── e2e-blocks.cjs              50 assertions (blocks and reports: one-way rows / server-side filtering of chat and presence / report dedup and persistence / read-only admin list)
 │   ├── e2e-party.cjs               79 assertions (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
 │   ├── e2e-rank.cjs                55 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
+│   ├── e2e-achievement.cjs         36 assertions (achievements: snapshot delivery / cumulative kinds counted from events / state kinds evaluated on read with no stored progress / claiming and full bag / admin config and delete refusal)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -194,7 +198,7 @@ server/
 
 ## Data model
 
-40 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+42 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -212,7 +216,9 @@ server/
 | `role_friends` | friend relations (#389) | **two mirrored rows**: one for A↔B in each direction (`PRIMARY KEY (role_id, friend_id)`), with `status` (pending / accepted) and `requested_by` recording the initiator. Every query is a single primary-key prefix scan — no `OR` across both directions and no guessing the direction; the price is that accept / reject / delete must change **both rows** (always in a transaction). Two states only, **no blocking** (there is no private chat, and an extra state would force every query to remember another legal value) |
 | `role_enemies` | enemy marks (#389) | **one directional row**: `PRIMARY KEY (role_id, enemy_id)` — I mark mine, the other side neither knows nor is affected (no notification, no transaction needed). Hostility outranks same-guild and friendship in the relation priority |
 | `quests` | quest configs (#396) | one objective (kill / talk / collect) + rewards (gold / exp / items JSON column); `kind` splits main (one-shot) from daily (row deleted on claim, re-acceptable); `prev_quest_id` forms a linear chain whose cycle check lives in the service (`assertQuestConsistency`); admin-editable and pushed down with the config snapshot |
-| `quest_progress` | player quest progress (#396) | `PRIMARY KEY (role_id, quest_id)`; `status` (accepted / ready / claimed) + `progress`. kill is written by the realtime process inside combat settlement, talk by NPC dialogue, collect by inspecting the bag at turn-in; main keeps a `claimed` row as the chain gate, daily deletes the row |
+| `quest_progress` | player quest progress (#396) | `PRIMARY KEY (role_id, quest_id)`; `status` (accepted / ready / claimed) + `progress`. kill is emitted by the realtime process as `monster:killed` and written by the quest service (the bus since #401), talk by NPC dialogue, collect by inspecting the bag at turn-in; main keeps a `claimed` row as the chain gate, daily deletes the row |
+| `achievements` | achievement configs (#401) | condition (`condition_type` / `target` / `count`) + rewards (gold / exp / items JSON column) + `category` / `sort_order` / `hidden`; seeded from the client's `configs/achievement-data` snapshot, admin-editable, **deletion refused once player records exist** |
+| `role_achievements` | player achievement records (#401) | `PRIMARY KEY (role_id, achievement_id)`; **only cumulative kinds write `progress`** (state kinds are computed on read, so a missing row is normal); `achieved_at` non-null = claimable, `claimed_at` non-null = claimed; counting stops once achieved and rows are never deleted on achievement |
 | `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
 | `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level |
@@ -249,7 +255,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 32 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 34 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -309,13 +315,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **143 interfaces / 119 paths / 212 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **149 interfaces / 123 paths / 227 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 40 | `player` token, may only operate its own account's data |
-| Admin | 96 | `admin` token + each interface's own permission point |
+| Client | 42 | `player` token, may only operate its own account's data |
+| Admin | 100 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;
@@ -391,7 +397,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All twenty e2e suites are **real server process + real HTTP requests** (not mocks):
+All twenty-one e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -408,7 +414,7 @@ All twenty e2e suites are **real server process + real HTTP requests** (not mock
 | `test/e2e-rank.cjs` | **55** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
 
 ```bash
-cd server && npm run verify          # compile + twenty e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + twenty-one e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

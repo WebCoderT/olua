@@ -14,6 +14,7 @@ import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { AnnouncementApi } from "../../utils/net/Api";
 import AnnouncementBoardDialog from "../dialogs/AnnouncementBoardDialog";
 import LeaderboardDialog from "../dialogs/LeaderboardDialog";
+import AchievementDialog from "../dialogs/AchievementDialog";
 import MapPreviewDialog from "../dialogs/MapPreviewDialog";
 import type RoleDisplay from "../role/RoleDisplay";
 
@@ -62,6 +63,13 @@ export default class SmallMap extends Node {
    * 之前只是装饰图。把它变成可点的，语义与位置都不用再争。
    */
   private leaderboardDialog = new LeaderboardDialog();
+  /**
+   * 成就面板（#401：左侧竖排入口的第二颗图标「成就」）
+   *
+   * 这颗图标美术稿里本来就有（`small-map/achievement`），之前是纯占位 ——
+   * 用现成的入口图，既不新增素材，也不用在挤满的底部功能栏里再塞一格。
+   */
+  private achievementDialog = new AchievementDialog();
   /** 公告入口的未读红点（有未读公告才显示） */
   private announcementDot: Node | null = null;
   /** 上次刷新时间戳 */
@@ -129,10 +137,11 @@ export default class SmallMap extends Node {
     const count = layout.entryIcons.length;
     const columnHeight = count * layout.entryIconSize + (count - 1) * layout.entryIconGap;
     const column = GameUiHelper.createColumn("small_map_entry_buttons", layout.entryIconGap, layout.entryColumnPosition, new Size(layout.entryIconSize, columnHeight));
-    // 按钮位置由 Layout 统一排列；「世界」入口打开小地图弹窗，「公告」入口打开公告板，其余入口暂为占位
+    // 按钮位置由 Layout 统一排列；「世界」打开小地图弹窗、「成就」打开成就面板、「公告」打开公告板，其余入口暂为占位
     layout.entryIcons.forEach((icon) => {
       const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, smallMapImage(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
       if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
+      if (icon === "achievement") bindPointerAction(button, () => this.achievementDialog.open(), this);
       if (icon === layout.announcementEntry) {
         bindPointerAction(button, () => this.openAnnouncementDialog(), this);
         this.announcementDot = this.createAnnouncementDot(button);

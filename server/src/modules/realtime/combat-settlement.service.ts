@@ -10,7 +10,7 @@ import { MonsterRepository } from "../../database/repositories/monster.repositor
 import { MonsterRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
-import { QuestService } from "../quest/quest.service";
+import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
 import { MonsterAiService } from "./monster-ai.service";
@@ -77,7 +77,7 @@ export class CombatSettlementService {
     private readonly monsterDrops: MonsterDropRepository,
     private readonly dropTables: DropTableRepository,
     private readonly growth: GrowthRepository,
-    private readonly quests: QuestService,
+    private readonly events: GameEventsService,
     private readonly party: PartyService,
     private readonly presence: PlayerPresenceService,
   ) {}
@@ -216,8 +216,9 @@ export class CombatSettlementService {
       this.roles.recordKill(role.id);
       // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
       this.rememberDrops(accountId, cast.castId, reward.drops);
-      // 任务击杀进度（#396）：写库失败不回滚击杀（QuestService 内部已兜成日志）
-      this.quests.onMonsterKilled({ accountId, roleId: role.id, monsterKey: cast.monsterKey });
+      // 击杀事件（#401 起走总线）：任务进度与成就进度都是订阅方，各自兜异常 ——
+      // 任何一方写库失败都不回滚这次击杀（世界状态是权威，少记一笔进度可接受）
+      this.events.emit("monster:killed", { accountId, roleId: role.id, monsterKey: cast.monsterKey });
     }
 
     this.logger.debug(

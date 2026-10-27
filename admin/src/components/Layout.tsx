@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { to: "/skills", label: "技能配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/statuses", label: "状态配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/quests", label: "任务配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/achievements", label: "成就配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/mall", label: "商城定价", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/fashions", label: "时装配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/drops", label: "掉落配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AdminAchievementController } from "./admin-achievement.controller";
 import { AdminDropController } from "./admin-drop.controller";
 import { ClientConfigController } from "./client-config.controller";
 import { ClientConfigService } from "./client-config.service";
@@ -30,7 +31,7 @@ import { MallPricingService } from "./mall-pricing.service";
  * 重复执行也无副作用）。
  */
 @Module({
-  controllers: [AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
   providers: [GameConfigService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   exports: [MallPricingService],

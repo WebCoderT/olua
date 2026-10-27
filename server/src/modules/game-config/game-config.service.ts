@@ -14,6 +14,11 @@ import { MonsterSkillRepository } from "../../database/repositories/monster-skil
 import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
 import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
 import { QuestRepository, QuestListOptions } from "../../database/repositories/quest.repository";
+import {
+  AchievementRepository,
+  AchievementListOptions,
+} from "../../database/repositories/achievement.repository";
+import { RoleAchievementRepository } from "../../database/repositories/role-achievement.repository";
 import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
@@ -26,6 +31,7 @@ import {
   MonsterSkillRow,
   NpcRow,
   QuestRow,
+  AchievementRow,
   RankRow,
   SkillRow,
   SoulRow,
@@ -33,6 +39,7 @@ import {
   TitleRow,
 } from "../../database/rows";
 import {
+  ACHIEVEMENTS,
   DRUGS,
   EQUIPMENT_BASES,
   FASHIONS,
@@ -61,6 +68,12 @@ import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 import { CreateQuestDto, parseRewardItems, QuestDto, QuestObjectiveDto, QuestQueryDto, QuestRewardsDto, UpdateQuestDto } from "./dto/quest.dto";
+import {
+  AchievementDto,
+  AchievementQueryDto,
+  CreateAchievementDto,
+  UpdateAchievementDto,
+} from "./dto/achievement.dto";
 import { CreateSkillDto, parseDamageCoefficients, SkillDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
 import { MonsterSkillDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
 import { serializeCombat, StatusDto, StatusQueryDto, UpdateStatusDto } from "./dto/status.dto";
@@ -107,6 +120,8 @@ export class GameConfigService implements OnModuleInit {
     private readonly monsterSkillsRepo: MonsterSkillRepository,
     private readonly questsRepo: QuestRepository,
     private readonly questProgressRepo: QuestProgressRepository,
+    private readonly achievementsRepo: AchievementRepository,
+    private readonly roleAchievementsRepo: RoleAchievementRepository,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -124,6 +139,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedStatuses();
     this.seedMonsterSkills();
     this.seedQuests();
+    this.seedAchievements();
   }
 
   // —— 称号 ——
@@ -765,6 +781,96 @@ export class GameConfigService implements OnModuleInit {
     return { deleted: true };
   }
 
+  // —— 成就配置（#401：允许动态增删；被玩家成就记录引用中的行拒删）——
+
+  listAchievements(query: AchievementQueryDto): PageResult<AchievementDto> {
+    const options: AchievementListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      category: query.category,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.achievementsRepo.list(options);
+    const total = this.achievementsRepo.count(options);
+    return { list: rows.map((row) => AchievementDto.from(row)), total, page: options.page, size: options.size };
+  }
+
+  updateAchievement(id: string, dto: UpdateAchievementDto): AchievementDto {
+    const existing = this.requireAchievement(id);
+    const condition = dto.condition ?? {};
+    const rewards = dto.rewards ?? {};
+    const next: AchievementRow = {
+      ...existing,
+      category: dto.category ?? existing.category,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      condition_type: condition.type ?? existing.condition_type,
+      condition_target: condition.target ?? existing.condition_target,
+      condition_count: condition.count ?? existing.condition_count,
+      reward_gold: rewards.gold ?? existing.reward_gold,
+      reward_exp: rewards.exp ?? existing.reward_exp,
+      reward_items: JSON.stringify(
+        (rewards.items ?? parseRewardItems(existing.reward_items)).map((item) => ({
+          goodId: item.goodId,
+          count: item.count,
+        })),
+      ),
+      sort_order: dto.sortOrder ?? existing.sort_order,
+      hidden: dto.hidden === undefined ? existing.hidden : dto.hidden ? 1 : 0,
+      updated_at: Date.now(),
+    };
+    this.assertAchievementConsistency(next);
+    this.achievementsRepo.update(next);
+    return AchievementDto.from(this.requireAchievement(id));
+  }
+
+  /** 新建成就（id 唯一；跨字段校验与编辑同一套） */
+  createAchievement(dto: CreateAchievementDto): AchievementDto {
+    if (this.achievementsRepo.findByKey(dto.id)) {
+      throw new BizException(BizCode.PARAM_INVALID, `成就 ${dto.id} 已存在`);
+    }
+    const row: AchievementRow = {
+      id: dto.id,
+      category: dto.category ?? "battle",
+      label: dto.label ?? `成就 ${dto.id}`,
+      description: dto.description ?? "",
+      condition_type: dto.condition?.type ?? "kill",
+      condition_target: dto.condition?.target ?? "",
+      condition_count: dto.condition?.count ?? 1,
+      reward_gold: dto.rewards?.gold ?? 0,
+      reward_exp: dto.rewards?.exp ?? 0,
+      reward_items: JSON.stringify(
+        (dto.rewards?.items ?? []).map((item) => ({ goodId: item.goodId, count: item.count })),
+      ),
+      sort_order: dto.sortOrder ?? 0,
+      hidden: dto.hidden ? 1 : 0,
+      updated_at: Date.now(),
+    };
+    this.assertAchievementConsistency(row);
+    this.achievementsRepo.insert(row);
+    return AchievementDto.from(this.requireAchievement(dto.id));
+  }
+
+  /**
+   * 删除成就 —— 一条拒绝，与任务配置「被引用中拒删」同一纪律：
+   * 有玩家记录（哪怕只是累计进度、没达成）就不能删 —— 那些角色的成就墙上会留一条
+   * 指向不存在成就的空记录，而客户端拿不到配置就只能显示一个 id。
+   */
+  deleteAchievement(id: string): { deleted: boolean } {
+    this.requireAchievement(id);
+    const records = this.roleAchievementsRepo.countByAchievement(id);
+    if (records > 0) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `成就 ${id} 仍被 ${records} 个角色的成就记录引用，先清理记录再删`,
+      );
+    }
+    this.achievementsRepo.remove(id);
+    return { deleted: true };
+  }
+
   // —— 内部 ——
 
   /**
@@ -855,6 +961,41 @@ export class GameConfigService implements OnModuleInit {
     const row = this.npcsRepo.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.NPC_NOT_FOUND, `NPC ${id} 不存在`);
     return row;
+  }
+
+  private requireAchievement(id: string): AchievementRow {
+    const row = this.achievementsRepo.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.ACHIEVEMENT_NOT_FOUND, `成就 ${id} 不存在`);
+    return row;
+  }
+
+  /**
+   * 成就跨字段约束（单字段上下限在 DTO，这里管「字段之间」）——
+   * 两类错都会让玩家「怎么打都不解锁」：
+   * - `kill` 的 target 既不是 `"*"` 也不是已配置怪物 → 永远不命中；
+   * - `collect` 的 target 不是真实物品 → 背包里永远数不出来；
+   * - 奖励物品不存在 → 领取时才炸，而那时玩家已经以为领到了。
+   *
+   * `level` / `combat` / `quest` 不看 target（门槛只在 count），传什么都忽略。
+   */
+  private assertAchievementConsistency(row: AchievementRow): void {
+    const target = String(row.condition_target ?? "");
+    if (row.condition_type === "kill" && target !== "*") {
+      if (!(target in (MONSTERS as Record<string, unknown>))) {
+        throw new BizException(
+          BizCode.PARAM_INVALID,
+          `成就 ${row.id} 的击杀目标 ${target || "(空)"} 不是已配置的怪物（任意怪请写 *）`,
+        );
+      }
+    }
+    if (row.condition_type === "collect" && !(target in (ITEM_TYPES as Record<string, unknown>))) {
+      throw new BizException(BizCode.PARAM_INVALID, `成就 ${row.id} 的持有目标 ${target || "(空)"} 不是已配置的物品`);
+    }
+    for (const item of parseRewardItems(row.reward_items)) {
+      if (!(item.goodId in (ITEM_TYPES as Record<string, unknown>))) {
+        throw new BizException(BizCode.PARAM_INVALID, `成就 ${row.id} 的奖励物品 ${item.goodId} 不存在`);
+      }
+    }
   }
 
   private requireQuest(id: string): QuestRow {
@@ -1083,6 +1224,34 @@ export class GameConfigService implements OnModuleInit {
             return { goodId: String(entry.goodId ?? ""), count: Number(entry.count) || 1 };
           }),
         ),
+        updated_at: 0,
+      });
+    }
+  }
+
+  /** 成就 seed（#401）：ACHIEVEMENTS 整行快照直接灌；reward_items 落库前序列化成 JSON */
+  private seedAchievements() {
+    for (const [id, meta] of Object.entries(ACHIEVEMENTS as Record<string, Record<string, unknown>>)) {
+      const condition = (meta.condition ?? {}) as Record<string, unknown>;
+      const rewards = (meta.rewards ?? {}) as Record<string, unknown>;
+      this.achievementsRepo.seedRow({
+        id,
+        category: String(meta.category ?? "battle"),
+        label: String(meta.label ?? ""),
+        description: String(meta.description ?? ""),
+        condition_type: String(condition.type ?? "kill"),
+        condition_target: String(condition.target ?? ""),
+        condition_count: Number(condition.count) || 1,
+        reward_gold: Number(rewards.gold) || 0,
+        reward_exp: Number(rewards.exp) || 0,
+        reward_items: JSON.stringify(
+          (Array.isArray(rewards.items) ? rewards.items : []).map((item) => {
+            const entry = (item ?? {}) as Record<string, unknown>;
+            return { goodId: String(entry.goodId ?? ""), count: Number(entry.count) || 1 };
+          }),
+        ),
+        sort_order: Number(meta.order) || 0,
+        hidden: meta.hidden ? 1 : 0,
         updated_at: 0,
       });
     }

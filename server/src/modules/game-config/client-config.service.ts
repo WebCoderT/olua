@@ -47,6 +47,8 @@ export class ClientConfigService {
       statuses: this.gameConfig.listStatuses({ ...ALL }).list,
       // #396：任务配置（主线链 / 日常 / 单目标 / 奖励）
       quests: this.gameConfig.listQuests({ ...ALL }).list,
+      // #401：成就配置（条件 / 门槛 / 奖励）；进度与达成状态走 /achievements/me，不在配置快照里
+      achievements: this.gameConfig.listAchievements({ ...ALL }).list,
     };
   }
 }

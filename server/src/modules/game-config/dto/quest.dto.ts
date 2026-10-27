@@ -65,20 +65,13 @@ export class QuestRewardsDto {
   }
 }
 
-/** 奖励物品 JSON 列解析（坏数据在此显式报错，不静默吞） */
-export function parseRewardItems(json: string): QuestRewardItemDto[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    throw new Error(`reward_items 不是合法 JSON：${json}`);
-  }
-  if (!Array.isArray(parsed)) throw new Error(`reward_items 必须是数组：${json}`);
-  return parsed.map((entry) => {
-    const item = (entry ?? {}) as Record<string, unknown>;
-    return { goodId: String(item.goodId ?? ""), count: Math.max(1, Math.floor(Number(item.count) || 1)) };
-  });
-}
+/**
+ * 奖励物品 JSON 列解析 —— 实现住在 `common/utils/reward-items.util.ts`，
+ * 任务与成就共用（同一个列格式只该有一个解析器），这里只做转出。
+ */
+import { parseRewardItems } from "../../../common/utils/reward-items.util";
+
+export { parseRewardItems };
 
 /** 管理端看到的一条任务配置 */
 export class QuestDto {

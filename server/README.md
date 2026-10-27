@@ -59,7 +59,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 二十套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 二十一套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -125,6 +125,7 @@ server/
 │   │   ├── constants/status.ts         状态常量
 │   │   ├── decorators/                 api-doc / api-data-response / api-query-model /
 │   │   │                               audience / audit-target / current-user / permission / public
+│   │   ├── events/                  游戏事件总线（#401：monster:killed / quest:claimed，进程内同步分发 + 订阅方异常隔离）
 │   │   ├── dto/api-envelope.dto.ts     统一响应包裹
 │   │   ├── errors/biz.exception.ts     业务异常
 │   │   ├── filters/all-exceptions.filter.ts   统一错误出口
@@ -139,7 +140,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party 32 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement 34 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -152,6 +153,8 @@ server/
 │   │   │                           队伍与成员两表落库（一人一队由 `role_id UNIQUE` 兜底），邀请存内存 30 秒过期
 │   │   ├── leaderboard/            排行榜（#400）：等级 / 战力 / 击杀三榜，进程内物化按周期重算，
 │   │   │                           排序·名次·截断·字段裁剪全在服务端（击杀数读 `roles.kills` 索引列）
+│   │   ├── achievement/            成就（#401）：累计型（kill / quest）由事件 +1 记账、状态型（level / combat / collect）
+│   │   │                           查询现算不落进度；达成与领取分离（`achieved_at` / `claimed_at`），管理端配置 CRUD
 │   │   ├── realtime/               实时通道：票据换 WebSocket 连接 / 心跳 / 优雅关闭 / 聊天转发（#395：世界=同图 / 帮会 / 私聊，限频与长度上限在服务端；#398 起聊天与互见都按 `role_blocks` 逐收件人剔除）
 │   │   ├── audit/                  操作日志查询
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
@@ -185,6 +188,7 @@ server/
 │   ├── e2e-blocks.cjs              50 条（屏蔽与举报：单向拉黑 / 聊天与互见服务端过滤 / 举报去重与落库 / 管理端只读列表）
 │   ├── e2e-party.cjs               79 条（队伍：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出移交 / 解散 / 经验分成 / 屏蔽优先）
 │   ├── e2e-rank.cjs                55 条（排行榜：三榜名次与数值 / 并列竞赛排名 / 分页与 size 夹上限 / me 榜外名次 / 快照与定时重算 / 条目八字段）
+│   ├── e2e-achievement.cjs         36 条（成就：快照下发 / 累计型事件记账 / 状态型现算不落进度 / 领取与背包满 / 管理端配置与拒删）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -193,7 +197,7 @@ server/
 
 ## 数据模型
 
-40 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+42 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -211,7 +215,9 @@ server/
 | `role_friends` | 好友关系（#389） | **镜像两行**：A↔B 各一行（`PRIMARY KEY (role_id, friend_id)`），`status`（pending / accepted）+ `requested_by` 记发起人。所有查询都是一次主键前缀查，不必 `OR` 两方向再判方向；代价是同意 / 拒绝 / 删除要**成对改**（一律走事务）。只有两态，**没有拉黑**（本项目无私聊，多一态只会让每处查询多记一个合法值） |
 | `role_enemies` | 敌人标记（#389） | **单向一行**：`PRIMARY KEY (role_id, enemy_id)`，我标我的，对方既不知道也不受影响（没有通知、不需要事务）。关系优先级里敌意压过同帮与好友 |
 | `quests` | 任务配置（#396） | 单目标（kill / talk / collect）+ 奖励（金币 / 经验 / 物品 JSON 列）；`kind` 分主线（一次性）与日常（领奖删行可重接）；`prev_quest_id` 组线性链，环检测在 service（`assertQuestConsistency`）。管理端可增删改，改完随配置快照下发 |
-| `quest_progress` | 玩家任务进度（#396） | `PRIMARY KEY (role_id, quest_id)`；`status`（accepted / ready / claimed）+ `progress`。kill 由实时进程在击杀结算时直写，talk 由 NPC 对话推进，collect 在交付时查背包；主线领奖后留 `claimed` 行作链门控，日常领奖删行 |
+| `quest_progress` | 玩家任务进度（#396） | `PRIMARY KEY (role_id, quest_id)`；`status`（accepted / ready / claimed）+ `progress`。kill 由实时进程发 `monster:killed`、任务服务订阅后写（#401 起走总线），talk 由 NPC 对话推进，collect 在交付时查背包；主线领奖后留 `claimed` 行作链门控，日常领奖删行 |
+| `achievements` | 成就配置（#401） | 条件（`condition_type` / `target` / `count`）+ 奖励（金币 / 经验 / 物品 JSON 列）+ `category` / `sort_order` / `hidden`；seed 来自客户端 `configs/achievement-data` 的快照，管理端可增删改，**有玩家记录拒删** |
+| `role_achievements` | 玩家成就记录（#401） | `PRIMARY KEY (role_id, achievement_id)`；**只有累计型写 `progress`**（状态型查询时现算，故没有行也正常）；`achieved_at` 非空 = 可领、`claimed_at` 非空 = 已领；达成后不再累加，行不会因达成而删除 |
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一） | **从客户端 Tiled 导入一次后归服务端**：`tools/import-spawn-areas.cjs` 生成 SPAWN_AREAS 快照（提交进仓库），启动时空表自动 seed；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId |
 | `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验 |
@@ -248,7 +254,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（32 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（34 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -315,13 +321,13 @@ server/
 
 ## 接口与契约
 
-当前 **143 个接口 / 119 条路径 / 212 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **149 个接口 / 123 条路径 / 227 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
-| 客户端 | 40 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 96 | `admin` 令牌 + 每个接口各自的权限点 |
+| 客户端 | 42 | `player` 令牌，只能操作自己账号的数据 |
+| 管理端 | 100 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -397,7 +403,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-二十套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+二十一套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -415,7 +421,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 
 ```bash
-cd server && npm run verify          # 编译 + 二十套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 二十一套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

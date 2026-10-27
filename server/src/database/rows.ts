@@ -1074,6 +1074,56 @@ export interface QuestProgressRow {
   updated_at: number;
 }
 
+/**
+ * 成就配置一行（`achievements` 表，主键 id）
+ *
+ * 条件与奖励的形状与 `QuestRow` 同规格（单条件 + 三件套奖励），
+ * 但**条件分两类**：
+ * - 累计型（kill / quest）→ 需要 `role_achievements.progress` 记账；
+ * - 状态型（level / combat / collect）→ 查询时按角色当前状态现算，不落进度。
+ */
+export interface AchievementRow {
+  id: string;
+  /** battle 战斗 / growth 成长 / explore 探索（面板页签） */
+  category: string;
+  label: string;
+  description: string;
+  /** kill 累计击杀 / quest 累计交付任务 / level 等级 / combat 战力 / collect 持有物品 */
+  condition_type: string;
+  /** kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串 */
+  condition_target: string;
+  /** 门槛值（累计型 = 需要多少次，状态型 = 需要到多少） */
+  condition_count: number;
+  reward_gold: number;
+  reward_exp: number;
+  /** JSON：[{ goodId, count }] */
+  reward_items: string;
+  /** 分类内展示顺序（小的在前） */
+  sort_order: number;
+  /** 1 = 未达成时默认折叠（不剧透条件） */
+  hidden: number;
+  updated_at: number;
+}
+
+/**
+ * 成就进度一行（`role_achievements` 表；(role_id, achievement_id) 主键）
+ *
+ * 只有累计型条件会写 `progress`；状态型条件这一列恒 0（读的时候现算，不读它）。
+ * 行**不会因为达成而删除**：`achieved_at` / `claimed_at` 就是玩家的成就墙，
+ * 删掉等于「领完就忘了自己拿过」。
+ */
+export interface RoleAchievementRow {
+  role_id: string;
+  achievement_id: string;
+  /** 累计型条件的计数（状态型恒 0） */
+  progress: number;
+  /** 达成时刻（null = 未达成） */
+  achieved_at: number | null;
+  /** 领奖时刻（null = 未领） */
+  claimed_at: number | null;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
