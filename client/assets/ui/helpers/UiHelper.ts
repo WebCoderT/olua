@@ -244,13 +244,17 @@ export default class UiHelper {
 
   /**
    * 创建一个输入框
+   *
+   * `fontSize` 默认 24 是给登录页 / 各弹窗的大输入条用的；聊天窗那种 26 高的窄输入框必须显式传小字号
+   * —— 24px 中文字形本身就 24 高，塞进 26 高的框里会顶着上下边缘往外溢（#477 顺带发现）。
    * @param name 元素名称
    * @param placeholder 占位符文本
    * @param position 位置
    * @param size 尺寸
    * @param isPassword 是否密码输入
+   * @param fontSize 文字与占位符字号（默认 24）
    */
-  static createInputBox(name: string, placeholder: string, position: Vec2, size: Vec2, isPassword: boolean = false) {
+  static createInputBox(name: string, placeholder: string, position: Vec2, size: Vec2, isPassword: boolean = false, fontSize: number = 24) {
     const node = this.createNode(name, position, size);
     const editBox = node.addComponent(EditBox);
     editBox.inputMode = EditBox.InputMode.SINGLE_LINE;
@@ -258,8 +262,8 @@ export default class UiHelper {
     if (isPassword) {
       editBox.inputFlag = EditBox.InputFlag.PASSWORD;
     }
-    editBox.textLabel.fontSize = 24;
-    editBox.placeholderLabel.fontSize = 24;
+    editBox.textLabel.fontSize = fontSize;
+    editBox.placeholderLabel.fontSize = fontSize;
     editBox.placeholderLabel.color = uiTheme.inputPlaceholderColor;
     editBox.placeholderLabel.string = placeholder;
     this.setupEditBoxLabel(editBox.textLabel, size);

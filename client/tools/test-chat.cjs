@@ -245,6 +245,15 @@ try {
     check(inputLeft >= -L.size.width / 2 + L.box.padding, `输入框左缘在窗内（${inputLeft.toFixed(1)} ≥ ${(-L.size.width / 2 + L.box.padding).toFixed(1)}）`);
     check(inputRight <= sendLeft - 4, `输入框与「发送」不相交（间隙 ${(sendLeft - inputRight).toFixed(1)}px ≥ 4）`);
     check(backRight <= L.size.width / 2 - L.box.padding, `「返回」不出窗右缘（余量 ${(L.size.width / 2 - L.box.padding - backRight).toFixed(1)}px ≥ 0）`);
+
+    // 输入条字号：createInputBox 默认 24 号，字形本身就 24 高，塞进 26 高的窄框会顶出上下边
+    // 贴到窗体边框上（#477 顺带发现：占位文字看着像飘在窗底的一行大字）
+    const field = L.inputRow.input;
+    check(field.fontSize <= field.size.y - 8, `输入条字号不顶边（${field.fontSize} ≤ ${field.size.y} − 8）`);
+    check(
+      13 * field.fontSize <= field.size.x - 12,
+      `输入条放得下最长占位符「对某某说点什么」（13 字 × ${field.fontSize} ≤ ${field.size.x} − 12）`,
+    );
   });
 
   //#endregion
