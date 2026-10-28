@@ -137,7 +137,9 @@ export default class OtherPlayerManager {
     if (frame.full) {
       // 快照兜底：以帧为准重建集合（换图后的第一帧 / 重连后的补偿都走这里）
       const keep = new Set(frame.players.map((entry) => entry.accountId));
-      for (const accountId of [...this.others.keys()]) {
+      // Array.from 而不是 `[...keys()]`：babel loose 下展开迭代器会变成 `[].concat(迭代器)`，
+      // concat 不展开非数组 → 拿到的是迭代器本身，`remove()` 于是一个都没删掉（#471）
+      for (const accountId of Array.from(this.others.keys())) {
         if (!keep.has(accountId)) this.remove(accountId);
       }
     }
@@ -240,7 +242,8 @@ export default class OtherPlayerManager {
 
   /** 清空所有远端玩家（切换地图时调用，与怪物 / 掉落物同一口径） */
   static reset(): void {
-    for (const accountId of [...this.others.keys()]) this.remove(accountId);
+    // 同上：babel loose 下 `[...keys()]` 只剩迭代器本身，清不干净（#471）
+    for (const accountId of Array.from(this.others.keys())) this.remove(accountId);
   }
 
   //#region 内部：增删与节点构建

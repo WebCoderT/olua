@@ -41,7 +41,8 @@ export default class QuestNpcMarks {
 
   /** 清掉全部标记（切图 / 退出游戏：Game.destroy 调用） */
   static reset(): void {
-    for (const npcId of [...this.marks.keys()]) this.detach(npcId);
+    // Array.from 而不是 `[...keys()]`：babel loose 下展开迭代器等于不展开（#471）
+    for (const npcId of Array.from(this.marks.keys())) this.detach(npcId);
   }
 
   /** 按当前状态刷新一个 NPC 的标记 */

@@ -89,7 +89,10 @@ export default class ChatStore {
         peers.set(other.roleId, { accountId: other.accountId, roleId: other.roleId, username: other.username });
       }
     }
-    return [...peers.values()];
+    // 必须 Array.from，不能 `[...peers.values()]`：打包走 babel loose，展开迭代器被转成
+    // `[].concat(迭代器)`，而 concat 不展开非数组 —— 返回值会变成「装着迭代器本身的数组」，
+    // 调用方拿到的每一条都不是 peer（#471：私聊选人页因此多出一行空名字的幽灵行）
+    return Array.from(peers.values());
   }
 
   /** 某频道未读数 */
