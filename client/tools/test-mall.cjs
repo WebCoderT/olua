@@ -243,12 +243,44 @@ if (sandbox) {
   check(/layout\.card\.columns/.test(mallSource) && /layout\.card\.gapX/.test(mallSource), "卡片按 layout.card 的列数与列间距摆位");
   check(!/layout\.row/.test(mallSource), "不再引用已删除的 layout.row（旧的整行口径已清干净）");
 
+  // 价格必须画在卡片上（#491）：玩家点「购买」之前得先看到要花多少
+  check(/getMallPrice\(good\)/.test(mallSource), "卡片价格取 configs/mall.getMallPrice（特殊价优先、未定价走统一价，卡片不自己算钱）");
+  check(/getText\("mall_price", \{ value: getMallPrice\(good\) \}\)/.test(mallSource), "价格文案走 configs/texts 的 mall_price（带「绑元」单位，裸数字会被读成数量）");
+  check(/mall_card_price_\$\{good\.id\}/.test(mallSource), "每张卡片都建价格节点（mall_card_price_<id>）");
+  check(/Label\.HorizontalAlign\.RIGHT/.test(mallSource), "价格右对齐贴卡片右缘（与左对齐的品质行分列两侧）");
+  check(/layout\.card\.price\.reserve/.test(mallSource), "品质行让出的宽度来自 layout.card.price.reserve（不写死像素）");
+  {
+    // 几何自洽：品质行 + 价格预留不能超过卡片内宽，品质行还要放得下最长的品质文案
+    const cardBlock = dialogsSource.slice(dialogsSource.indexOf("export const mallDialogLayout"));
+    const readNum = (re, label) => {
+      const hit = re.exec(cardBlock);
+      check(Boolean(hit), `能解析 ${label}`);
+      return hit ? Number(hit[1]) : NaN;
+    };
+    const listWidth = readNum(/list: \{ name: "mall_list",[\s\S]{0,80}?size: new Size\((\d+(?:\.\d+)?), \d+(?:\.\d+)?\)/, "商品区宽度");
+    const columns = readNum(/card: \{[\s\S]{0,60}?columns: (\d+)/, "卡片列数");
+    const gapX = readNum(/gapX: (\d+)/, "卡片列间距");
+    const paddingX = readNum(/paddingX: (\d+)/, "卡片内边距");
+    const extraFontSize = readNum(/extra: \{ fontSize: (\d+),/, "品质行字号");
+    const priceReserve = readNum(/price: \{ fontSize: \d+, reserve: (\d+),/, "价格预留宽度");
+    const cardWidth = (listWidth - (columns - 1) * gapX) / columns;
+    const textWidth = cardWidth - paddingX * 2;
+    const extraWidth = textWidth - priceReserve;
+    check(extraWidth > 0, "品质行 + 价格预留没有超出卡片内宽", `内宽 ${textWidth} / 品质 ${extraWidth} + 价格 ${priceReserve}`);
+    // 最长品质文案「普通的人级」= 5 个全角字（全角宽度 ≈ 字号）
+    check(extraWidth >= extraFontSize * 5, "品质行放得下最长的「普通的人级」5 个字", `可用 ${extraWidth} / 需要 ${extraFontSize * 5}`);
+    // 价格预留要放得下「9999 绑元」（4 位数字 ≈ 4×0.55 字号 + 空格 + 2 个全角字，见 ui/helpers/TextLayout）
+    const priceNeeded = Math.ceil(extraFontSize * 0.55 * 4 + extraFontSize / 2 + extraFontSize * 2);
+    check(priceReserve >= priceNeeded, "价格预留放得下「9999 绑元」", `预留 ${priceReserve} / 需要 ${priceNeeded}`);
+  }
+
   // 文案 key
   [
     "mall_buy_success_tip",
     "mall_gold_not_enough_tip",
     "mall_good_missing_tip",
     "label_mall_buy",
+    "mall_price",
     "label_mall_first_page",
     "label_mall_prev_page",
     "label_mall_next_page",
@@ -268,6 +300,7 @@ if (sandbox) {
     check(/columns: 3/.test(block), "一行 3 张卡片（列数在配置里）");
     check(/card: \{[\s\S]{0,400}iconSize: new Size\(40, 40\)/.test(block), "商品卡片的图标尺寸在配置里");
     check(/buyButton: \{ size: new Size\(64, 20\), fontSize: 12, gapY: 2 \}/.test(block), "购买按钮（小号）几何在配置里");
+    check(/price: \{ fontSize: 10, reserve: 50, color: new Color\(255, 214, 102\) \}/.test(block), "价格行（字号 / 预留宽度 / 金色）在配置里");
     check(/fill: new Color\(24, 20, 16, 220\)/.test(block), "卡片底色在配置里（Graphics 自绘，不依赖底图）");
     check(/rowsPerPage: 2/.test(block), "每页 2 行（每页 3 × 2 = 6 件）");
     check(/pageIndicator: \{ name: "mall_page_indicator", position: new Vec2\(0, -105\)/.test(block), "页码几何在配置里（居中于卡片区）");

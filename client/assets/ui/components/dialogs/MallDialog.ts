@@ -7,7 +7,7 @@ import { Draggable } from "../input/Draggable";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { trackUiPress } from "../../utils/input/Pointer";
 import { mallDialogLayout, uiImages } from "../../../configs/hudLayout";
-import { getMallGoods } from "../../../configs/mall";
+import { getMallGoods, getMallPrice } from "../../../configs/mall";
 import { getEquipmentNameParts } from "../../../configs/equipments";
 import { getText } from "../../../configs/texts";
 import { Equipment } from "../../../types/good";
@@ -158,14 +158,32 @@ export default class MallDialog {
     );
     nameLabel.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
     card.addChild(nameLabel);
+    // 品质行与价格同行：品质左对齐、价格右贴边（卡片没有第二行空间，算法见 layout.card.price 注释）
+    const priceReserve = layout.card.price.reserve;
+    const extraWidth = textWidth - priceReserve;
+    const leftEdge = -width / 2 + layout.card.paddingX;
+    const extraLabel = UiHelper.createLabel(
+      `mall_card_extra_${good.id}`,
+      `${parts.prefix.label}${parts.suffix.label}`,
+      parts.prefix.color,
+      layout.card.extra.fontSize,
+      new Vec2(leftEdge + extraWidth / 2, extraY),
+      new Size(extraWidth, layout.card.extra.lineHeight),
+      Label.HorizontalAlign.LEFT,
+    );
+    // 缩字而不是溢出：品质文案变长时不许压到价格上（价格那一侧宽度是预留死的）
+    extraLabel.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
+    card.addChild(extraLabel);
+    // 价格：玩家点「购买」之前必须看得到要花多少；扣款在服务端，这里展示同一套取价结果（getMallPrice）
     card.addChild(
       UiHelper.createLabel(
-        `mall_card_extra_${good.id}`,
-        `${parts.prefix.label}${parts.suffix.label}`,
-        parts.prefix.color,
-        layout.card.extra.fontSize,
-        new Vec2(0, extraY),
-        new Size(textWidth, layout.card.extra.lineHeight),
+        `mall_card_price_${good.id}`,
+        getText("mall_price", { value: getMallPrice(good) }),
+        layout.card.price.color,
+        layout.card.price.fontSize,
+        new Vec2(width / 2 - layout.card.paddingX - priceReserve / 2, extraY),
+        new Size(priceReserve, layout.card.extra.lineHeight),
+        Label.HorizontalAlign.RIGHT,
       ),
     );
     // 购买：规则判定与提示都在数据层（余额不足/背包满/下架都不会改数据），成功后只刷余额

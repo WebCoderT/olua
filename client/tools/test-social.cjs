@@ -343,6 +343,29 @@ try {
   check(notified > before + 1 && PartyStore.inParty(), "清空**不拆订阅**：换角色回来后仍然收得到变化（否则队友名字永远是白的）");
   off();
 
+  // 队伍弹窗空态文案（#491）：没队伍时不能复用 memberEmpty ——
+  // memberEmpty 说的是「队伍里只有你一个人」，和顶部 solo 的「你还没有队伍」同屏就是两句互相打脸
+  {
+    const partySource = read("assets/ui/components/dialogs/PartyDialog.ts");
+    const branchStart = partySource.indexOf("if (!snapshot)");
+    check(branchStart > 0, "能找到 renderMembers 的「没队伍」分支");
+    const branch = partySource.slice(branchStart, branchStart + 400);
+    check(/texts\.noPartyEmpty/.test(branch), "没队伍时成员区占位用 noPartyEmpty");
+    check(!/texts\.memberEmpty/.test(branch), "没队伍分支不渲染 memberEmpty（否则与 solo 自相矛盾）");
+    check(/texts\.memberEmpty/.test(partySource), "memberEmpty 仍用于「在队里但只有自己」（不删，语义另一条）");
+
+    const textOf = (key) => {
+      const hit = new RegExp(`${key}: "([^"]+)"`).exec(layoutSource);
+      return hit ? hit[1] : "";
+    };
+    const solo = textOf("solo");
+    const memberEmpty = textOf("memberEmpty");
+    const noPartyEmpty = textOf("noPartyEmpty");
+    check(Boolean(solo) && Boolean(memberEmpty) && Boolean(noPartyEmpty), "三句空态文案都在 partyDialogLayout.texts 里");
+    check(new Set([solo, memberEmpty, noPartyEmpty]).size === 3, "三句空态文案互不相同（没队伍 / 只有自己 / 占位）");
+    check(!/只有你一个人|你的队伍/.test(noPartyEmpty), "noPartyEmpty 是中性占位，不宣称任何队伍状态");
+  }
+
   //#endregion
 
   finish("PASS：社交关系（优先级 / 配色 / 协议同形 / 客户端上色 / 服务端纪律 / 屏蔽与举报）全部通过");

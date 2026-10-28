@@ -96,6 +96,12 @@ export const uiTexts = {
   mall_good_missing_tip: "该商品已下架",
   /** 商城购买按钮 */
   label_mall_buy: "购 买",
+  /**
+   * 商城卡片上的价格（{value} = configs/mall.getMallPrice 的结果）
+   *
+   * 带单位：卡片右侧孤零零一个数字会被读成「数量」而不是「要花多少」。
+   */
+  mall_price: "{value} 绑元",
   /** 全场统一价说明（{price} = 统一价，见 configs/mall.mallPrice） */
   mall_price_note: "全场装备统一 {price} 绑定元宝",
   /** 商城分页：翻页按钮文案与页码（{page} = 当前页，{total} = 总页数，见 configs/mall.getMallGoods 分页） */
