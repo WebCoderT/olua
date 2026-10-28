@@ -84,6 +84,7 @@ client/                          ← Cocos 工程根（用 Creator 打开这里�
 │   ├── resources/               资源目录（地图 tmx、帧动画、图集、图标、UI 素材，不进版本库）
 │   └── scenes/                  登录、角色选择、Loading、游戏
 ├── tools/                       客户端专属脚本（见下）
+├── build-templates/web-desktop/ 构建模板覆盖：画布铺满窗口、去掉固定框（见 FAQ「画面为什么不跟着窗口缩放」）
 ├── settings/ · profiles/ · native/ · .creator/   Cocos 工程配置
 ├── package.json · tsconfig.json                 Cocos 工程描述（不是 npm 脚本）
 └── library/ · temp/ · build/                    Cocos 缓存与构建产物（不进版本库）

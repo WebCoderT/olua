@@ -212,4 +212,27 @@ console.log("\n== E. 源码接线断言 ==");
   check(/this\.offWindowResize = onWindowResize\(\(\) => this\.applyStageLayout\(\)\)/.test(selector) && /onDestroy\(\) \{[\s\S]*?this\.offWindowResize\?\.\(\);/.test(selector), "RoleSelector：注册窗口变化重排 + onDestroy 取消");
 }
 
-finish("场景整屏适配全部通过（登录舞台 / 选角舞台 / 底部栏横跨贴底）");
+console.log("\n== F. 构建模板：画布铺满窗口（页面层自适应） ==");
+{
+  // 前五组是「游戏内部坐标系」的自适应；这一组管页面层 —— 画布元素本身多大。
+  // 引擎自带的 web-desktop 模板把 #GameDiv 写成固定 1920×1080 的框，窗口缩放它不变，
+  // 于是前五组再对，玩家看到的仍是页面中间一个固定大小的框（见 client/FAQ.md「屏幕适配」）。
+  const tplDir = path.join(PROJECT_ROOT, "build-templates/web-desktop");
+  const tplIndex = path.join(tplDir, "index.ejs");
+  const tplStyle = path.join(tplDir, "style.css");
+  check(fs.existsSync(tplIndex) && fs.existsSync(tplStyle), "存在自定义构建模板（index.ejs + style.css，构建时覆盖同名文件）");
+
+  const html = fs.readFileSync(tplIndex, "utf8");
+  const css = fs.readFileSync(tplStyle, "utf8");
+  check(/id="GameDiv"/.test(html) && !/id="GameDiv"[^>]*style="[^"]*width:/.test(html), "index.ejs 不给 #GameDiv 写死宽高（引擎默认模板正是死在这一行）");
+  check(/<%-\s*include\(cocosTemplate/.test(html), "index.ejs 保留 cocosTemplate 注入（删掉就没有引擎启动脚本）");
+  check(/<canvas id="GameCanvas"/.test(html) && !/oncontextmenu/.test(html), "canvas 不挂 oncontextmenu（右键寻路 / 传送要用）");
+  check(
+    /#GameDiv,\s*#Cocos3dGameContainer,\s*#GameCanvas\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%/.test(css),
+    "style.css 让三层容器都铺满视口（screen-adapter 读 #GameDiv 的 clientWidth/clientHeight）",
+  );
+  check(/html,\s*body\s*\{[^}]*overflow:\s*hidden/.test(css), "html/body 不留滚动条（否则 clientWidth 比窗口小，可见区口径就对不上）");
+  check(/--safe-top/.test(css), "保留安全区 CSS 变量（引擎 safeAreaEdge 读它们）");
+}
+
+finish("场景整屏适配全部通过（登录舞台 / 选角舞台 / 底部栏横跨贴底 / 构建模板铺满窗口）");

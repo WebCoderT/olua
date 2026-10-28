@@ -83,6 +83,7 @@ client/                          ← Cocos project root (open this in Creator)
 │   ├── resources/               asset directory (map tmx, frame animations, atlases, icons, UI art; not version controlled)
 │   └── scenes/                  login, character selection, Loading, game
 ├── tools/                       client-only scripts (see below)
+├── build-templates/web-desktop/ build-template override: canvas fills the window, no fixed frame (see the FAQ entry on why the view used to ignore the window)
 ├── settings/ · profiles/ · native/ · .creator/   Cocos project configuration
 ├── package.json · tsconfig.json                 Cocos project description (not npm scripts)
 └── library/ · temp/ · build/                    Cocos cache and build output (not version controlled)

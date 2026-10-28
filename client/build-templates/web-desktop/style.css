@@ -1,0 +1,81 @@
+/*
+ * 游戏页面的「外壳」样式（Cocos 构建模板，覆盖引擎自带的 build-templates/web-desktop/style.css）
+ *
+ * 目标：**画布永远等于窗口**。
+ * 引擎自带的桌面模板把 #GameDiv 写成固定 1920×1080 的框（inline style + 黑色边框 + 阴影 +
+ * 页面上下各一行 "olua" / "Created with Cocos Creator"），浏览器窗口怎么缩放它都不变。
+ * 这里把外壳压成「铺满视口、无边框、无滚动条」，配合 index.ejs 去掉写死的宽高。
+ *
+ * 链路（引擎 3.8.7 pal/screen-adapter/web）：
+ *   窗口 resize → screen 派发 window-resize → screenAdapter._updateFrame()
+ *   → 读 #GameDiv 的 clientWidth/clientHeight（exactFitScreen 为 false，即 SubFrame 口径）
+ *   → 重设 canvas 像素尺寸 → view 重算缩放 → 游戏里 onWindowResize 重排贴边 HUD
+ * 所以这里必须是「真的铺满」：html/body/#GameDiv 三层都要 100%，
+ * 任何一层漏掉或被 inline style 覆盖，画布就只跟那一层走（这是原来固定框的成因）。
+ *
+ * 注意：不要给 body 加 padding / 边框 / display:flex 居中 —— 那会让 clientWidth 比窗口小，
+ * 画布与「可见区」口径就对不上了（ScreenLayout.getVisibleSize 用的是窗口像素 ÷ view 缩放）。
+ */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  overflow: hidden;
+  /* 页面底色：画布还没起来时不要闪白 */
+  background-color: #000;
+}
+
+body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  cursor: default;
+  color: #888;
+  text-align: center;
+  font-family: Helvetica, Verdana, Arial, sans-serif;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -webkit-touch-callout: none;
+}
+
+body,
+canvas,
+div {
+  outline: none;
+}
+
+/* Remove spin of input type number */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+canvas {
+  display: block;
+  background-color: rgba(0, 0, 0, 0);
+}
+
+/* 三层都铺满：引擎会把 #GameDiv 设成 flex 容器居中子元素，尺寸仍以这里为准 */
+#GameDiv,
+#Cocos3dGameContainer,
+#GameCanvas {
+  width: 100%;
+  height: 100%;
+}
+
+:root {
+  --safe-top: env(safe-area-inset-top);
+  --safe-right: env(safe-area-inset-right);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left);
+}
