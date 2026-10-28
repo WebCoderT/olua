@@ -208,7 +208,10 @@ export default class ChatDialog {
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
     if (entries.length === 0) {
-      content.addChild(this.createEmptyLabel(layout.texts[`${this.tab}Empty` as const]));
+      // 私聊会话页不能复用选人页的 privateEmpty（那句是「先点选人挑一个对象」，
+      // 这里对象已经挑好了 —— #495）
+      const emptyText = this.tab === "private" && this.privatePeer ? layout.texts.privateChatEmpty : layout.texts[`${this.tab}Empty` as const];
+      content.addChild(this.createEmptyLabel(emptyText));
     } else {
       entries.forEach((entry) => content.addChild(this.createMessageRow(entry)));
     }
