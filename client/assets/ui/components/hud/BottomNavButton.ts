@@ -12,7 +12,10 @@ export default class BottomNavButton extends Node {
   private config: BottomNavBarButton;
 
   constructor(config: BottomNavBarButton, role: Role) {
-    super(`bottom_nav_${config.icon.replace(/\//g, "_")}`);
+    // 节点名用**稳定的 key**，不用图标路径：图标是外观、会换（聊天入口的图标等 #468 接入），
+    // 而「聊天」与「好友」当前共用 `friend` 图 —— 按图标命名会让两个节点同名，
+    // 按名字找按钮的代码（引导、验收脚本、自动化点击）会命中错的那一个（#486）
+    super(`bottom_nav_${config.key}`);
     this.config = config;
     GameUiHelper.applyBottomNavBarButtonStyle(this, config, role);
     this.on(Node.EventType.TOUCH_END, this.onClick, this);
