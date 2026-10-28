@@ -335,13 +335,15 @@ export default class MonsterManager {
   /** 状态到期 / 怪物已离场的清理（每帧到达时做一次，不另起定时器） */
   private static cleanupStatusEffects() {
     const now = Date.now();
-    for (const [instanceId, map] of [...this.statusEffects]) {
+    // Array.from 而不是 `[...map]`：babel loose 下展开 Map 只剩迭代器本身，
+    // 这个循环会一次都不执行 —— 状态特效永远不清（#471）
+    for (const [instanceId, map] of Array.from(this.statusEffects)) {
       const node = this.instanceIndex.get(instanceId);
       if (!node || !isValid(node)) {
         this.statusEffects.delete(instanceId);
         continue;
       }
-      for (const [statusId, entry] of [...map]) {
+      for (const [statusId, entry] of Array.from(map)) {
         if (now < entry.expireAt && isValid(entry.node)) continue;
         if (isValid(entry.node)) entry.node.destroy();
         map.delete(statusId);

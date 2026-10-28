@@ -57,17 +57,23 @@ export default class ChatDialog {
   /** ChatStore 订阅（打开期间有效；关闭时退订） */
   private unsubscribe: (() => void) | null = null;
 
-  /** 打开/关闭弹窗 */
-  open() {
+  /**
+   * 打开/关闭聊天窗（#469 起为常驻左下角小窗）
+   *
+   * @param auto **自动开**（进游戏 / 引导走完时组合根调）：只开不关，且**不推进引导** ——
+   *   「别一个人玩」那一步要的是玩家自己点开聊天，程序代开不算学会
+   */
+  open(auto = false) {
     if (this.dialog && isValid(this.dialog) && this.dialog.active) {
+      if (auto) return;
       this.close();
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    // 引导（#402）：「别一个人玩」那一步就是「打开过聊天」—— 同样只在真打开之后发
-    GuideStore.notify(GUIDE_EVENT.OPEN_CHAT);
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
-    blockClickThrough(this.dialog);
+    // 引导（#402）：「别一个人玩」那一步就是「打开过聊天」—— 同样只在真打开之后发；
+    // 自动开窗（auto）不算（见上）
+    if (!auto) GuideStore.notify(GUIDE_EVENT.OPEN_CHAT);
+    this.dialog = GameUiHelper.createChatBox();
     LayerManager.addDialogToUILayer(this.dialog);
     this.createTabs();
     this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
@@ -90,6 +96,11 @@ export default class ChatDialog {
     ChatBubbles.setSuppressed(false);
     if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
     this.reset();
+  }
+
+  /** 窗口尺寸变化时重贴左下角（组合根的 onWindowResize 调；关着时是 no-op） */
+  refreshDock() {
+    if (this.dialog && isValid(this.dialog)) GameUiHelper.placeChatBox(this.dialog);
   }
 
   //#region 页签
@@ -280,6 +291,8 @@ export default class ChatDialog {
       graphics.strokeColor = row.border;
       graphics.roundRect(-row.size.width / 2, -row.size.height / 2, row.size.width, row.size.height, row.radius);
       graphics.stroke();
+      // 名字列用 pickRow（比消息行的名字列宽一倍：行里只有名字 + 按钮，名字给足才不被裁）
+      const pickRow = layout.pickRow;
       node.addChild(
         UiHelper.createLabel(
           `chat_pick_name_${peer.roleId}`,
@@ -288,12 +301,12 @@ export default class ChatDialog {
             ? getRelationColor(OtherPlayerManager.relationOfAccount(peer.accountId)!)
             : row.metaColor,
           row.nameFontSize,
-          new Vec2(row.nameX, 0),
-          row.nameSize,
+          new Vec2(pickRow.nameX, 0),
+          pickRow.nameSize,
           Label.HorizontalAlign.LEFT,
         ),
       );
-      const chatButton = GameUiHelper.createSmallButtion(`chat_pick_open_${peer.roleId}`, layout.texts.privateChat, new Vec2(layout.inputRow.send.position.x, 0));
+      const chatButton = GameUiHelper.createSmallButtion(`chat_pick_open_${peer.roleId}`, layout.texts.privateChat, new Vec2(pickRow.buttonX, 0));
       chatButton.on(Node.EventType.TOUCH_END, () => {
         this.privatePeer = peer;
         this.render();

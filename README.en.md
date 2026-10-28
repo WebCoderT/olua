@@ -113,10 +113,10 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 
 ### The traces this way of working left in the repo
 
-- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 50 unit-test suites under `client/tools/` and 11 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
+- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 50 unit-test suites under `client/tools/` and 12 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 79 + 55 + 39 + 51 assertions) + typechecks on two sides + 50 unit-test suites + 11 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 79 + 55 + 39 + 51 assertions) + typechecks on two sides + 50 unit-test suites + 12 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -297,9 +297,9 @@ make client-test    # client's 50 unit-test suites
 make server-verify  # verify the server with one command (compile + twenty-two e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
-make audit          # 11 cross-side audit scripts
+make audit          # 12 cross-side audit scripts
 
-make check          # static checks: client tsc + admin typecheck + 11 audits
+make check          # static checks: client tsc + admin typecheck + 12 audits
 make test           # all tests: client's 50 suites + server's twenty-two e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```

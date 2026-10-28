@@ -92,6 +92,8 @@ export class Game extends Component {
   private lastReportedPosition: { x: number; y: number } | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
   private offWindowResize: (() => void) | null = null;
+  /** 引导进度订阅（#469：走完/跳过的那一刻补开聊天窗；离场退订） */
+  private offGuideChange: (() => void) | null = null;
   /** 新手引导遮罩（#402；挂在 UI 层最上面，只在有步骤可显示时 active） */
   private guideOverlay: GuideOverlay | null = null;
   /** 上一帧的主角世界坐标（引导「先动起来」按实际走过的距离判，不看按键） */
@@ -253,7 +255,17 @@ export class Game extends Component {
     this.guideOverlay = new GuideOverlay();
     GuideOverlay.setSpotProvider((spot) => this.resolveGuideSpot(spot));
     LayerManager.addToUILayer(this.guideOverlay);
-    if (GuideStore.visible()) this.guideOverlay.open();
+    if (GuideStore.visible()) {
+      this.guideOverlay.open();
+    } else {
+      // 引导已走完/跳过：聊天窗常驻左下角（#469，用户口径「其他网游都放在屏幕左下角」）；
+      // auto=true 只开不关、不推进引导（「别一个人玩」那步仍要玩家自己点）
+      this.bottomBar?.openChatBox(true);
+    }
+    // 引导在本次会话里走完/跳过的那一刻也补开（新号引导结束不该等到下次进游戏才有聊天窗）
+    this.offGuideChange = GuideStore.onChange(() => {
+      if (!GuideStore.visible()) this.bottomBar?.openChatBox(true);
+    });
     // 窗口尺寸变化时重排四个常驻区域（角色信息栏贴左上角 / 小地图贴右上角 / 底部栏贴底部居中 / 摇杆贴左下角）
     // 注意顺序：引擎的 Canvas 在尺寸变化时会把相机世界坐标拽回 Canvas 节点位置（canvas-resize），
     // 而相机/UI 层本该跟着主角，故重排后必须再把相机与 UI 层重新对齐到主角，否则地图视野会错位
@@ -263,6 +275,7 @@ export class Game extends Component {
       this.roleInfoBar?.applyAnchorPosition();
       this.smallMap?.applyAnchorPosition();
       this.bottomBar?.applyAnchorPosition();
+      this.bottomBar?.refreshChatBoxDock();
       this.joystick?.applyAnchorPosition();
       // 引导遮罩是按屏幕尺寸挖洞的，尺寸一变就得重算（气泡的贴边夹取同理）
       this.guideOverlay?.refresh();
@@ -361,6 +374,9 @@ export class Game extends Component {
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();
     this.offWindowResize = null;
+    // 引导进度订阅同理（GuideStore 不随场景销毁，挂着的回调会指向已销毁的 bottomBar）
+    this.offGuideChange?.();
+    this.offGuideChange = null;
     this.screenClickInput?.destroy();
     this.cursorInput?.destroy();
     CursorManager.destroy();

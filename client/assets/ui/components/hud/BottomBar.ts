@@ -103,6 +103,19 @@ export default class BottomBar extends Node {
     this.questDialog.open();
   }
 
+  /**
+   * 开/关聊天小窗（#469：常驻左下角）
+   * @param auto true = 只开不关且不推进引导（进游戏自动弹出用）；false = 玩家点入口/Enter 的开关
+   */
+  openChatBox(auto = false) {
+    this.chatDialog.open(auto);
+  }
+
+  /** 窗口尺寸变化时聊天小窗重贴左下角（关着时是 no-op，见 ChatDialog.refreshDock） */
+  refreshChatBoxDock() {
+    this.chatDialog.refreshDock();
+  }
+
   /** 打开队伍面板（收到组队邀请时 Game 也会走这里，让玩家直接看到「同意 / 拒绝」） */
   openParty() {
     this.partyDialog.open();

@@ -59,6 +59,7 @@ import {
   avatarImage,
   bagGridLayout,
   bottomBarLayout,
+  chatDialogLayout,
   createRolePreviewImage,
   dialogFrame,
   dropItemLayout,
@@ -997,6 +998,38 @@ export default class GameUiHelper {
   //#endregion
 
   //#region 弹窗与按钮
+
+  /**
+   * 创建常驻聊天小窗的壳（#469）：半透明深色圆角底板 + 金色细边，贴 `chatDialogLayout.dock` 指定的角
+   *
+   * 与 createDialogBg 的差别：没有 ornate 大框、没有标题栏、不可拖拽 —— 常驻窗要的是「在但不抢戏」；
+   * 尺寸 / 配色 / 停靠边距全在 `configs/layout/dialogs.chatDialogLayout`。
+   */
+  static createChatBox(): Node {
+    const node = UiHelper.createNode(chatDialogLayout.name, new Vec2(), chatDialogLayout.size);
+    const graphics = node.addComponent(Graphics);
+    const half = chatDialogLayout.size;
+    const box = chatDialogLayout.box;
+    const path = () => graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, box.radius);
+    graphics.fillColor = box.fill;
+    path();
+    graphics.fill();
+    graphics.lineWidth = box.borderWidth;
+    graphics.strokeColor = box.border;
+    path();
+    graphics.stroke();
+    // 窗体整体拦截指针：聊天窗底下是可点地的世界，盖住的区域不该再把点击漏给寻路
+    blockClickThrough(node);
+    this.placeChatBox(node);
+    return node;
+  }
+
+  /** 聊天小窗重贴停靠角（窗口尺寸变化时由组合根调；关着的时候调用是 no-op，由调用方判空） */
+  static placeChatBox(node: Node) {
+    const { size, dock } = chatDialogLayout;
+    const position = getAnchoredPosition(size, getVisibleSize(), dock.edge, dock.marginX, dock.marginY);
+    node.setPosition(position.x, position.y, 0);
+  }
 
   /**
    * 创建游戏通用弹窗背景

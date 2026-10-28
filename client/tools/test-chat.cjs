@@ -203,6 +203,50 @@ try {
   check(/relationOfAccount/.test(clientDialog), "消息名字颜色读 OtherPlayerManager 的关系缓存（判定唯一入口仍是 resolveRelation）");
   check(/privatePeers\(\)/.test(clientDialog) && /nearby\(\)/.test(clientDialog), "私聊候选 = 聊过的 + 附近的人（两个天然来源）");
 
+  // #469：聊天窗常驻左下角
+  check(/open\(auto = false\)/.test(clientDialog) && /if \(!auto\) GuideStore\.notify/.test(clientDialog), "自动开窗不推进引导（程序代开不算「学会聊天」）");
+  check(/refreshDock/.test(clientDialog) && /placeChatBox/.test(clientDialog), "窗口缩放时聊天窗重贴左下角（停靠不漂移）");
+  check(/openChatBox\(true\)/.test(clientGame) && /offGuideChange/.test(clientGame), "组合根：引导不可见时自动开聊天窗，走完/跳过引导补开，离场退订");
+
+  //#endregion
+
+  //#region E. 窗内几何（跑真配置：改这几处数字若把字挤出窗，这里先红）
+
+  console.log("\n— E. 布局几何：选人行 / 输入行都在窗内且互不压 —");
+
+  const layoutOut = prepare("olua-chat-layout", ["configs/layout/dialogs.ts"]);
+  const { chatDialogLayout: L } = require(path.join(layoutOut, "configs/layout/dialogs.js"));
+  const { uiSize } = require(path.join(layoutOut, "configs/layout/sizes.js"));
+
+  guard(() => {
+    const rowHalf = L.row.size.width / 2;
+    const nameLeft = L.pickRow.nameX - L.pickRow.nameSize.width / 2;
+    const nameRight = L.pickRow.nameX + L.pickRow.nameSize.width / 2;
+    const buttonHalf = uiSize.smallButtonSize.width / 2;
+
+    // #471 复盘：名字列曾经沿用消息行的窄列（120 宽、贴到行左缘 4px），
+    // 而 UiHelper.createLabel 是 CLAMP + 左对齐 → 长名字被裁
+    check(nameLeft >= -rowHalf + 8, `选人行名字不贴行左缘（左距 ${(nameLeft + rowHalf).toFixed(1)}px ≥ 8）`);
+    check(L.pickRow.nameSize.width >= 12 * L.row.nameFontSize, `选人行名字列放得下 12 字角色名（${L.pickRow.nameSize.width} ≥ ${12 * L.row.nameFontSize}）`);
+    check(
+      L.pickRow.buttonX - buttonHalf >= nameRight + 4,
+      `选人行名字与「私聊」按钮不相交（间隙 ${(L.pickRow.buttonX - buttonHalf - nameRight).toFixed(1)}px ≥ 4）`,
+    );
+    check(
+      L.pickRow.buttonX + buttonHalf <= rowHalf - 4,
+      `选人行按钮不出行右缘（余量 ${(rowHalf - L.pickRow.buttonX - buttonHalf).toFixed(1)}px ≥ 4）`,
+    );
+
+    // 输入行：输入框 / 发送 / 返回三件都在窗内（窗宽含 padding），且从左到右不叠
+    const inputLeft = L.inputRow.input.position.x - L.inputRow.input.size.x / 2;
+    const inputRight = L.inputRow.input.position.x + L.inputRow.input.size.x / 2;
+    const sendLeft = L.inputRow.send.position.x - buttonHalf;
+    const backRight = L.inputRow.back.position.x + buttonHalf;
+    check(inputLeft >= -L.size.width / 2 + L.box.padding, `输入框左缘在窗内（${inputLeft.toFixed(1)} ≥ ${(-L.size.width / 2 + L.box.padding).toFixed(1)}）`);
+    check(inputRight <= sendLeft - 4, `输入框与「发送」不相交（间隙 ${(sendLeft - inputRight).toFixed(1)}px ≥ 4）`);
+    check(backRight <= L.size.width / 2 - L.box.padding, `「返回」不出窗右缘（余量 ${(L.size.width / 2 - L.box.padding - backRight).toFixed(1)}px ≥ 0）`);
+  });
+
   //#endregion
 } catch (error) {
   fail(error);

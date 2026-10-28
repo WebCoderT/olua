@@ -1,0 +1,10 @@
+{
+  "_comment": "tools/audit-iterator-spread.cjs 的例外清单：只有「确实在展开数组」的写法才能登记，每条必须写原因。file 是仓库相对路径，snippet 是该行原文里能唯一定位的一小段。",
+  "entries": [
+    {
+      "file": "client/assets/ui/components/dialogs/HoverTipDialog.ts",
+      "snippet": "const rows = [...data.rows, ...(data.dynamicRow",
+      "reason": "data.rows 是悬停详情的数据行数组（HoverTipData.rows: HoverTipRow[]），不是 Map/Set；后面那一段展开的是三元表达式产出的临时数组"
+    }
+  ]
+}

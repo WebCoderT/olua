@@ -26,7 +26,9 @@ rebuildQuests();
 
 /** 全部任务（配置顺序：主线 8000 段在前、日常 8100 段在后） */
 export function allQuests(): QuestData[] {
-  return [...quests.values()];
+  // Array.from 而不是 `[...quests.values()]`：web 包走 babel loose，展开迭代器只剩迭代器本身，
+  // 调用方拿到的每一条都不是任务（#471）。守卫：tools/audit-iterator-spread.cjs
+  return Array.from(quests.values());
 }
 
 /** 目标的中文名（客户端只显示三种；配置里出现未知类型时原样显示） */
