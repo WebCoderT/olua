@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { PARTY_MIN_LEVEL_DEFAULT } from "../common/constants/social";
 
 /** 内置的开发用 JWT 密钥（生产必须换掉；唯一出现处，比较也只用 `jwtSecretIsDefault`） */
 const DEFAULT_JWT_SECRET = "olua-dev-secret-please-change-me";
@@ -314,6 +315,15 @@ export interface AppConfiguration {
    * 队友拿「按他自己的等级差算出的击杀经验」的这个比例（向下取整）。0 = 只组队不分经验。
    */
   partyExpMateShare: number;
+
+  /**
+   * 组队的最低等级（默认 10，`PARTY_MIN_LEVEL`）
+   *
+   * 与客户端底部导航「组队」入口的 `openLevel` 必须相等（`tools/audit-party-level.cjs`
+   * 盯着）：入口按等级锁着，服务端却放行邀请的话，被邀请的低级号连面板都打不开。
+   * 脏值（非数字 / 小于 1）回落默认 —— 门槛读错不该让「所有人都不能组队」。
+   */
+  partyMinLevel: number;
   //#endregion
 
   //#region 排行榜（#400）
@@ -407,6 +417,7 @@ export default function configuration(): AppConfiguration {
     partyMemberLimit: Number(process.env.PARTY_MEMBER_LIMIT ?? 4),
     partyInviteTtlMs: Number(process.env.PARTY_INVITE_TTL_MS ?? 30000),
     partyExpMateShare: Number(process.env.PARTY_EXP_MATE_SHARE ?? 0.5),
+    partyMinLevel: Number(process.env.PARTY_MIN_LEVEL ?? PARTY_MIN_LEVEL_DEFAULT),
     leaderboardRefreshMs: Number(process.env.LEADERBOARD_REFRESH_MS ?? 60000),
     leaderboardTopN: Number(process.env.LEADERBOARD_TOP_N ?? 100),
   };

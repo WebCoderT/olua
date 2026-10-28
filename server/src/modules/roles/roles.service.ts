@@ -108,6 +108,18 @@ export class RolesService {
   }
 
   /**
+   * 某角色的等级（`roles.level` 索引列；角色不存在返回 0）
+   *
+   * 给「按等级判门槛」用（#497 组队邀请）：调用方要的是**一个数字**，不是整份存档 ——
+   * 只读索引列，不解析 data JSON。0 同时代表「不存在」和「0 级」，两者在门槛判定里
+   * 都是「不够级」，调用方不需要区分（要区分存在的先调 `existsById`）。
+   */
+  levelOf(roleId: string): number {
+    const row = this.roles.findById(roleId);
+    return row ? Math.max(0, Math.floor(Number(row.level) || 0)) : 0;
+  }
+
+  /**
    * 创建角色
    *
    * 校验顺序：数量上限 → id 是否已存在 → 同账号是否重名。

@@ -280,8 +280,8 @@ server-e2e-sell: ## 服务端出售专项 e2e（24 条：快照价结算 / 同 i
 server-e2e-quest: ## 服务端任务专项 e2e（48 条：接取门控 / talk·kill·collect 三目标推进 / daily 删行重接 / 配置守卫）
 	@cd server && $(NPM) run test:e2e:quest
 
-server-e2e-party: ## 服务端队伍专项 e2e（79 条：邀请即建队 / 满员与重复 / 权限与转让 / 队长退出移交 / 屏蔽优先 / 互见 partyId / 经验分成）
-	@echo "==> 服务端队伍 e2e（79 条）"
+server-e2e-party: ## 服务端队伍专项 e2e（87 条：邀请即建队 / 满员与重复 / 权限与转让 / 队长退出移交 / 屏蔽优先 / 互见 partyId / 经验分成 / 等级门槛）
+	@echo "==> 服务端队伍 e2e（87 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:party
 
 server-e2e-rank: ## 服务端排行榜专项 e2e（55 条：名次与数值 / 并列同名次 1·2·2·4 / 战力独立排序 / 分页边界 / me 榜内榜外 / 快照语义 / 定时重算）

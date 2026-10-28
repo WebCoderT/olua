@@ -7,6 +7,7 @@ import {
   PARTY_ID_PREFIX,
   PARTY_INVITE_TTL_MS_DEFAULT,
   PARTY_MEMBER_LIMIT_DEFAULT,
+  PARTY_MIN_LEVEL_DEFAULT,
 } from "../../common/constants/social";
 import { PartyRepository } from "../../database/repositories/party.repository";
 import { PartyMemberWithRoleRow, PartyRow } from "../../database/rows";
@@ -232,6 +233,14 @@ export class PartyService implements OnApplicationBootstrap {
       this.fail(actor, BizCode.PARTY_INVITE_SELF, "不能邀请自己");
       return;
     }
+    // 等级门槛（#497）：客户端「组队」入口按 openLevel 锁着（现在是 10），服务端必须同口径 ——
+    // 否则改包就能让一个 1 级号去邀请别人，而对方收到邀请后连面板都打不开，邀请只能烂在那儿。
+    // 先卡发起人（自己不够级，后面查目标都没意义）
+    const minLevel = this.minLevel();
+    if (this.roles.levelOf(actor.roleId) < minLevel) {
+      this.fail(actor, BizCode.PARTY_LEVEL_TOO_LOW, `需要 ${minLevel} 级才能组队`);
+      return;
+    }
     if (!this.roles.existsById(targetRoleId)) {
       this.fail(actor, BizCode.SOCIAL_ROLE_NOT_FOUND, "找不到这个角色");
       return;
@@ -250,6 +259,12 @@ export class PartyService implements OnApplicationBootstrap {
     const targetLocation = this.locationOf?.(targetRoleId) ?? null;
     if (!targetLocation) {
       this.fail(actor, BizCode.PARTY_TARGET_OFFLINE, "对方不在线");
+      return;
+    }
+    // 目标等级（#497）：等级不够的号收到邀请也打不开面板（入口锁着），不如现在就说清
+    const targetLevel = this.roles.levelOf(targetRoleId);
+    if (targetLevel < minLevel) {
+      this.fail(actor, BizCode.PARTY_LEVEL_TOO_LOW, `对方还没到 ${minLevel} 级（当前 ${targetLevel} 级），暂时不能组队`);
       return;
     }
     if (this.partyIdOfRole(targetRoleId)) {
@@ -623,6 +638,17 @@ export class PartyService implements OnApplicationBootstrap {
   private inviteTtlMs(): number {
     const raw = Number(this.config.get<number>("partyInviteTtlMs"));
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : PARTY_INVITE_TTL_MS_DEFAULT;
+  }
+
+  /**
+   * 组队的最低等级（脏值回落默认）
+   *
+   * 与客户端 `bottomNav` 里 group 入口的 `openLevel` 是同一个门槛（审计
+   * `tools/audit-party-level.cjs` 比默认值与客户端配置）。
+   */
+  minLevel(): number {
+    const raw = Number(this.config.get<number>("partyMinLevel"));
+    return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : PARTY_MIN_LEVEL_DEFAULT;
   }
 
   /** 队友经验分成比例（0~1；脏值回落 0.5） */

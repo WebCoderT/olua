@@ -216,6 +216,15 @@ function main() {
     failures.push(String(error.message));
   }
 
+  // 跨端数值约定：组队的最低等级（客户端入口锁 vs 服务端门槛）—— 见 #497
+  let partyLevel = null;
+  try {
+    partyLevel = findPartyMinLevelDrift();
+    failures.push(...partyLevel.problems);
+  } catch (error) {
+    failures.push(String(error.message));
+  }
+
   if (failures.length > 0) fail(failures.join("\n\n"));
 
   // 去掉末尾那个换行再数：直接 split("\n") 会因末尾的空串多算一行，
@@ -232,6 +241,64 @@ function main() {
     const pairs = [...closeDrift.codes].map(([key, value]) => `${key}=${value}`).join(" · ");
     console.log(`  实时关闭码：客户端与 ${path.relative(ROOT, REALTIME_PROTOCOL)} 逐键一致（${pairs}）✓`);
   }
+  if (partyLevel && typeof partyLevel.server === "number") {
+    console.log(`  组队等级门槛：服务端 ${partyLevel.server} 级 = 客户端入口 openLevel ${partyLevel.client} ✓`);
+  }
+}
+
+/**
+ * 跨端数值约定：组队的最低等级（#497）
+ *
+ * 同一个门槛写在两处：
+ *   - 客户端 `bottomNav.ts` 里组队入口的 `openLevel` —— 界面按它锁入口，
+ *     并提示「组队功能需要在 N 级后开放」；
+ *   - 服务端 `PARTY_MIN_LEVEL_DEFAULT`（可 `PARTY_MIN_LEVEL` 覆盖）—— 真正拦得住的那个。
+ *
+ * 两边不等的两种事故方向：
+ *   - **客户端比服务端高**：服务端放行一次邀请，对方收到后打不开面板（入口锁着），
+ *     邀请烂在对方那里，两边都不知道发生了什么（就是 #497 本身）；
+ *   - **客户端比服务端低**：界面允许进、服务端一律拒绝，玩家只会觉得「组队坏了」。
+ *
+ * 判据是等号 + 默认值不许在 configuration.ts 里再写一遍字面量。
+ */
+function findPartyMinLevelDrift() {
+  const socialFile = path.join(SERVER_SRC, "common", "constants", "social.ts");
+  const navFile = path.join(ASSETS, "configs", "bottomNav.ts");
+  const problems = [];
+
+  const serverMatch = fs.readFileSync(socialFile, "utf8").match(/export const PARTY_MIN_LEVEL_DEFAULT\s*=\s*(\d+)\s*;/);
+  if (!serverMatch) {
+    problems.push(`找不到 PARTY_MIN_LEVEL_DEFAULT（${path.relative(ROOT, socialFile)}）—— 组队门槛的唯一来源没了`);
+    return { problems };
+  }
+
+  // 按 key 定位组队那一条，避免命中别的入口（各入口的 openLevel 不同）
+  const groupLine = fs
+    .readFileSync(navFile, "utf8")
+    .split("\n")
+    .find((line) => line.includes('key: "group"'));
+  const clientMatch = groupLine && groupLine.match(/openLevel:\s*(\d+)/);
+  if (!clientMatch) {
+    problems.push(`找不到组队入口的 openLevel（${path.relative(ROOT, navFile)} 里 key: "group" 那一行）`);
+    return { problems };
+  }
+
+  const server = Number(serverMatch[1]);
+  const client = Number(clientMatch[1]);
+  if (server !== client) {
+    problems.push(
+      "组队等级门槛两端不一致（#497）：\n" +
+        `  服务端 PARTY_MIN_LEVEL_DEFAULT = ${server}\n` +
+        `  客户端 bottomNav「组队」openLevel = ${client}\n` +
+        "  两边必须相等：客户端高了，服务端放行的邀请对方打不开面板；客户端低了，玩家能进却一律被拒。",
+    );
+  }
+
+  if (!/partyMinLevel:\s*Number\(\s*process\.env\.PARTY_MIN_LEVEL\s*\?\?\s*PARTY_MIN_LEVEL_DEFAULT\s*\)/.test(fs.readFileSync(SERVER_CONFIG, "utf8"))) {
+    problems.push("configuration.ts 的 partyMinLevel 默认值必须引用 PARTY_MIN_LEVEL_DEFAULT（不许再写一份字面量）");
+  }
+
+  return { problems, server, client };
 }
 
 /**
