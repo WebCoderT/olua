@@ -21,6 +21,8 @@
 - **「防呆静默跳过」会把证据吞掉**：判据不能问「有没有调防呆」，要问「它需要的前提在不在」——#443 里审计因 `blockClickThrough(this)` 那行判绿，而同一节点的 `TOUCH_END` 一直在崩。
 - **画面自适应分三层，别只改中间那层**（#447）：页面层 = `client/build-templates/web-desktop/`（引擎自带 web-desktop 模板把 `#GameDiv` 写死 1920×1080，窗口缩放它不变；`exactFitScreen=false` 时画布取它的 `clientWidth/clientHeight`）；设计分辨率层 = `ScreenLayout.applyScreenPolicy()` 的 `NO_BORDER`；场景层 = `getVisibleSize()` + `getAnchoredPosition` 贴边 + `getStageScale` contain。守点 = `client/tools/test-scene-stage.cjs` 的 F 组。模板只在 GUI 构建时生效，预览器验不出来。
 - **飘字跨场景**（#451）：非游戏场景（登录/选角，从不调 `initLayer`）挂**场景里的 `Canvas` 节点**，不是场景根 —— 挂载点对了不等于位置对了，飘字坐标以屏幕中心为原点（游戏内成立是因为 `UILayer` 被 `move` 到角色位置），挂场景根会落在世界原点 = 屏幕左下角顶点外，症状是「控制台有报错、界面一个字没有」。`tip.layer` 贴合宿主别指望相机 visibility。守点 = `test-client-net` / `test-dialog-top`（含反向断言）。
+- **真机浏览器验证**（#455~#463 起有一套现成的）：真实 Chrome（`headless:false`，headless 拿不到 GPU）+ playwright-core + 注入探针；**自适应只能测真实窗口**（`--window-size` + `viewport:null`，`setViewportSize` 不触发引擎 resize）；**游戏内坐标一律以相机为准**（世界原点 ≠ 屏幕左下角）；**瞬态 UI 单独脚本抓**（同名截图连拍会覆盖）。判定口径 = 可见(`Mask` 祖链) / 没被挡(最上层**可交互**节点) / 点击真触发(全局+节点双路计数)。工程在 `.workbuddy/verify/`（不入库），结论与坑见 `.workbuddy/verify/report.md`。
+- **UI 三件套坑**（#455~#463）：① 背景「铺满」= **等比 cover**（`UiHelper.createCoverNode/fitCoverNode`，溢出裁在画布外），素材本身比例不对只能换图、不能拉歪；② `Label` 用 `RESIZE_HEIGHT` 且锚点在中心时，高度增长会**向上下两头长**（气泡标题压正文），必须 `setAnchorPoint(0.5, 1)` 从顶部往下排；③ 平台门控用 **`sys.isMobile`**，别用「web 构建就不显示摇杆」（手机浏览器同样没有键盘）。另：`configs/debug.ts` 的 `colliderRange`/`areaRange` 默认必须 `false`。
 - e2e 纪律：先算轮询窗口 vs 过期时间；问**字段有几个写者**，判据用只有目标路径写的字段；**错误断言必须精确匹配文案**（泛判据会被无关路径满足、掩盖功能缺失）；**重试写在被测助手内部**（#396 `killOne` 只取一次世界快照 → CI 上 6 条连环假红）；**带缓存的逻辑 e2e 要把 TTL 压到 0**（#398 `SOCIAL_BLOCK_CACHE_MS=0`，否则测的是缓存不是逻辑）；`EXPECTED_ASSERTIONS` 与条数差一条就会把绿变红。
 
 ## 部署要点（细节 Skill `olua-deploy`）
