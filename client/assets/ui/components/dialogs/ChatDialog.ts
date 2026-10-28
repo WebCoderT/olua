@@ -320,14 +320,27 @@ export default class ChatDialog {
 
   //#region 输入行
 
-  /** 输入行：输入框 + 发送（私聊会话态多一枚「返回」） */
+  /** 输入行：输入条 + 发送（私聊会话态多一枚「返回」） */
   private addInputRow(body: Node) {
     const placeholder = this.tab === "private" && this.privatePeer
       ? layout.texts.inputPrivate.split("{name}").join(this.privatePeer.username)
       : this.tab === "guild"
         ? layout.texts.inputGuild
         : layout.texts.inputWorld;
-    this.input = UiHelper.createInputBox("chat_input", placeholder, layout.inputRow.input.position, layout.inputRow.input.size);
+    const field = layout.inputRow.input;
+    // 输入条底板：没有它，占位文字就是「飘在窗体上的一行字」，看不出哪里能点（#477 顺带发现）
+    const frame = UiHelper.createNode("chat_input_frame", field.position, field.size);
+    const frameGraphics = frame.addComponent(Graphics);
+    const framePath = () => frameGraphics.roundRect(-field.size.x / 2, -field.size.y / 2, field.size.x, field.size.y, field.radius);
+    frameGraphics.fillColor = field.fill;
+    framePath();
+    frameGraphics.fill();
+    frameGraphics.lineWidth = 1;
+    frameGraphics.strokeColor = field.border;
+    framePath();
+    frameGraphics.stroke();
+    body.addChild(frame);
+    this.input = UiHelper.createInputBox("chat_input", placeholder, field.position, field.size, false, field.fontSize);
     body.addChild(this.input);
     const send = GameUiHelper.createSmallButtion("chat_send", layout.texts.send, layout.inputRow.send.position);
     send.on(Node.EventType.TOUCH_END, () => this.send(), this);

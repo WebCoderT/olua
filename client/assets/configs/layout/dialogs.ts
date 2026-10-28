@@ -1025,15 +1025,31 @@ export const chatDialogLayout = {
     nameFontSize: 11,
     textFontSize: 11,
     metaColor: new Color(160, 172, 190, 255),
-    /** 名字列（含帮会名前缀；文本列吃剩下的宽度） */
-    nameX: -130,
+    /**
+     * 名字列 / 正文列（文本列吃剩下的宽度）。
+     * 两列都左对齐，bbox 左缘 = 中心 x − 宽/2 必须落在行内（留白 16，半宽 194 → 限 −178），
+     * 且名字 bbox 右缘与正文 bbox 左缘衔接不重叠（守卫：test-dialog-row-bounds.cjs）：
+     *   名字 −178..−58（nameX −118 / 宽 120），正文 −58..178（textX 60 / 宽 236）
+     */
+    nameX: -118,
     nameSize: new Size(120, 18),
-    textX: 45,
-    textSize: new Size(280, 20),
+    textX: 60,
+    textSize: new Size(236, 20),
   },
   /** 输入行（贴窗底；私聊有对象时旁边多一枚「返回」） */
   inputRow: {
-    input: { position: new Vec2(-85, -122), size: new Vec2(220, 26) },
+    /**
+     * 输入条：26 高的窄框必须有底板 + 小字号 —— 默认 24 号字的字形就 24 高，
+     * 在 26 高的框里会顶出上下边、贴到窗体边框上（#477 顺带发现）
+     */
+    input: {
+      position: new Vec2(-85, -122),
+      size: new Vec2(220, 26),
+      fontSize: 13,
+      fill: new Color(10, 13, 20, 220),
+      border: new Color(64, 74, 90, 255),
+      radius: 6,
+    },
     send: { position: new Vec2(65, -122) },
     back: { position: new Vec2(130, -122) },
   },
@@ -1133,9 +1149,15 @@ export const questDialogLayout = {
     nameColor: new Color(232, 238, 246, 255),
     metaColor: new Color(160, 172, 190, 255),
     readyColor: new Color(120, 220, 140, 255),
-    nameX: -180,
+    /**
+     * 两行文字的 x 是**文本框中心**，且 `UiHelper.createLabel` 是 CLAMP + 左对齐 → 文字从
+     * 文本框左缘（nameX − 宽/2）起排。所以 x 必须让「左缘 = 行左缘 + 16」：
+     * 行宽 552（半宽 276）→ 左缘 −260 → 宽 360 时 x = −80。
+     * 曾经写 −180（左缘 −360，跑出行外 84px），被 ScrollView 遮罩裁掉，任务名整行看不见（#477）。
+     */
+    nameX: -80,
     nameSize: new Size(360, 20),
-    metaX: -180,
+    metaX: -80,
     metaSize: new Size(360, 18),
     buttonX: 214,
   },
@@ -1212,12 +1234,16 @@ export const partyDialogLayout = {
     metaColor: new Color(160, 172, 190, 255),
     leaderColor: new Color(255, 209, 102, 255),
     offlineColor: new Color(140, 148, 162, 255),
-    /** 动作按钮的水平中心（两枚时左右各一；一枚时用 actionX） */
-    actionX: 196,
-    action2X: 252,
-    nameX: -180,
+    /**
+     * 动作按钮的水平中心（两枚时左右各一；一枚时用 actionX）
+     * 小按钮宽 56.5：184 / 244 → 155.75~212.25 与 215.75~272.25，两枚间距 3.5、右缘留 3.75 不越行（#477）
+     */
+    actionX: 184,
+    action2X: 244,
+    /** 名字 / 次行的 x 见 quest 行的注释：文本框左缘 + 16 = 行内左缘（552 宽 → x = −100，宽 320） */
+    nameX: -100,
     nameSize: new Size(320, 20),
-    metaX: -180,
+    metaX: -100,
     metaSize: new Size(320, 18),
   },
   /** 邀请行（队伍页顶部的「某人邀请你」，高一点点放两枚按钮） */
@@ -1228,7 +1254,8 @@ export const partyDialogLayout = {
     radius: 6,
     acceptX: 150,
     declineX: 232,
-    nameX: -180,
+    /** 同上：文本框左缘 + 16 = 行内左缘（x = −100，宽 320），两枚小按钮落在 121.75~260.25 不越行 */
+    nameX: -100,
     nameSize: new Size(320, 20),
     textFontSize: 12,
   },
@@ -1340,7 +1367,11 @@ export const leaderboardDialogLayout = {
     topRankColor: new Color(255, 209, 102, 255),
     /** 金色名次的界线：名次 ≤ 这个数就用金色（第 4 名开始是普通灰） */
     topRankThreshold: 3,
-    nameX: -186,
+    /**
+     * 名次列（−274~−230）之后接名字列：名字 bbox 从 −222 起（留 8px 间隙），宽 220 → x = −112；
+     * 再往右是数值列（14~254）。原来写 −186（bbox 左缘 −296，跑出行外 20px，被遮罩裁掉，见 #477）
+     */
+    nameX: -112,
     nameSize: new Size(220, 20),
     nameFontSize: 13,
     nameColor: new Color(232, 238, 246, 255),
