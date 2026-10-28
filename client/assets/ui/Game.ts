@@ -1,4 +1,4 @@
-import { _decorator, Camera, Component, isValid, Node, Vec3 } from "cc";
+import { _decorator, Camera, Component, isValid, Node, sys, Vec3 } from "cc";
 import { maps } from "../configs/map";
 import MpHelper from "./utils/battle/MpHelper";
 import HpHelper from "./utils/battle/HpHelper";
@@ -236,9 +236,17 @@ export class Game extends Component {
     /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
     this.smallMap = new SmallMap(this.roleDisplay);
     LayerManager.addToUILayer(this.smallMap);
-    /** 操作摇杆（左下角常驻；节点归摇杆组件，输入逻辑在下面注入给主角组件） */
-    this.joystick = new Joystick();
-    LayerManager.addToUILayer(this.joystick);
+    /**
+     * 操作摇杆（左下角常驻；节点归摇杆组件，输入逻辑在下面注入给主角组件）
+     *
+     * **只在触屏设备上创建**（sys.isMobile）：web-desktop 构建在电脑浏览器里跑，
+     * 移动走键盘/鼠标，摇杆是纯摆设还占掉一块屏幕；手机浏览器打开同一构建时
+     * 没有键盘，摇杆必须还在（#462）。
+     */
+    if (sys.isMobile) {
+      this.joystick = new Joystick();
+      LayerManager.addToUILayer(this.joystick);
+    }
     // 新手引导（#402）：遮罩最后加 → 盖在 HUD 之上；进度从存档读（老档补成「已完成」，不会弹）。
     // 位置解析交给本类（摇杆与底部按钮都在这里持有），所以先注册 provider 再 open
     GuideStore.start(role);
@@ -273,8 +281,8 @@ export class Game extends Component {
     });
     // 初始化主角外观动画与键盘操控
     this.roleDisplay.init();
-    // 左下角摇杆操控（摇杆节点在 HUD 层、屏幕空间贴着左下角，故在这里把手感逻辑交给主角组件）
-    this.roleDisplay.setJoystick(this.joystick.stickNode, this.joystick.handleNode);
+    // 摇杆操控（触屏设备才有摇杆节点；桌面端键盘/鼠标直接操控，见 components/input）
+    if (this.joystick) this.roleDisplay.setJoystick(this.joystick.stickNode, this.joystick.handleNode);
     // 战魂外显（上次勾选过则进图直接挂上，见 RoleDisplay.updateSoulShow）
     this.roleDisplay.updateSoulShow();
     // 称号外显（已激活称号则进图直接挂上，见 RoleDisplay.updateTitleShow）
