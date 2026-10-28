@@ -16,7 +16,6 @@ import {
   Toggle,
   Layout,
   ToggleContainer,
-  Graphics,
   ProgressBar,
   ScrollView,
   Mask,
@@ -89,23 +88,6 @@ export default class UiHelper {
   static createFullScreenNode(name: string, src: string) {
     const screenSize = this.getScreenSize();
     return this.createSprite(name, src, new Vec2(), new Size(screenSize.width, screenSize.height));
-  }
-
-  /**
-   * 创建一个空节点（仅 UITransform，可用于确认选择体积）
-   * @param name 名称
-   * @param position 位置，默认原点
-   * @param size 尺寸，默认零尺寸
-   */
-  static createEmptyNode(name: string, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    const node = this.createNode(name, position, size);
-    // 添加边框，确认体积（线宽与颜色见 configs/hudLayout.uiTheme.emptyNodeBorder）
-    const graphics = node.addComponent(Graphics);
-    graphics.lineWidth = uiTheme.emptyNodeBorder.lineWidth;
-    graphics.strokeColor = uiTheme.emptyNodeBorder.color;
-    graphics.rect(-size.width / 2, -size.height / 2, size.width, size.height);
-    graphics.stroke();
-    return node;
   }
 
   /**
