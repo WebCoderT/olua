@@ -36,6 +36,9 @@
  * 4. **UI 根有没有被误挂鼠标事件？**（会直接把引擎打崩）
  * 5. 关键接线是否还在（世界侧登记收尾回调、界面独占抬起时交还、记的是命中目标、判定含子树、
  *    UITransform 防呆、世界侧跳过 NPC 按压），以及列出 mouse 通道监听点供人工核对。
+ * 6. **「自己就是按钮」的 Node 子类（`class Xxx extends Node` 且在自己身上注册 TOUCH_* / MOUSE_*）
+ *    自身有没有 UITransform？** 漏了就是「鼠标一动就抛 cameraPriority 空指针」，
+ *    而且第 1 段会被那句 `blockClickThrough(this)` 骗过去 —— 防呆吞掉了证据（QuestTracker 就栽在这）。
  *
  * 用法：node tools/audit-ui-click-through.cjs
  */
@@ -166,6 +169,11 @@ const WIRING = [
     "状态图标只注册了悬停事件、链路上没有别的登记点，必须自己登记（否则它的按下会被记成上一次按压的起点）",
   ],
   [
+    "assets/ui/components/hud/QuestTracker.ts",
+    /addComponent\(UITransform\)[\s\S]{0,400}blockClickThrough\(\s*this\s*\)/,
+    "追踪栏是 Node 子类（自身即按钮）：必须先补 UITransform 再登记指针事件 —— 顺序反了防呆会静默跳过鼠标登记（点它会穿透到世界），而 TOUCH 监听照样注册（引擎读 trans!.cameraPriority 抛空指针）",
+  ],
+  [
     "assets/ui/components/map/MapObjectSpawner.ts",
     /markWorldInteractive\s*\(/,
     "NPC 节点标记为世界侧可交互对象（没有它前面的跳过判定就永远不成立）",
@@ -177,6 +185,20 @@ const WIRING = [
     true,
   ],
 ];
+
+/**
+ * 「自己就是按钮」的 Node 子类免检白名单（键 = 相对路径）
+ *
+ * 这类文件里 `this` 就是按钮节点，UITransform 常由某个助手在构造时施加（`applyXxxStyle(this)`）。
+ * 值班 = [助手方法名, 助手所在文件]，脚本会核对助手还在、且那个文件确实补过 UITransform / Sprite
+ * （Sprite 带 @requireComponent(UITransform)）。核不到就按「缺失」处理，不许白名单烂在库里。
+ */
+const SELF_HIT_REVIEWED = new Map([
+  ["assets/ui/components/hud/AutoFightButton.ts", ["applyAutoFightButtonStyle", "assets/ui/helpers/GameUiHelper.ts"]],
+  ["assets/ui/components/hud/BottomNavButton.ts", ["applyBottomNavBarButtonStyle", "assets/ui/helpers/GameUiHelper.ts"]],
+  ["assets/ui/components/hud/ShortcutKeySlot.ts", ["applyShortcutKeyStyle", "assets/ui/helpers/GameUiHelper.ts"]],
+  ["assets/ui/components/panel/BagGridView.ts", ["applyFlexColStyle", "assets/ui/helpers/UiHelper.ts"]],
+]);
 
 const RE_TOUCH_CLICK = /([A-Za-z_$][\w.$]*)\.(?:on|once)\(\s*Node\.EventType\.TOUCH_(END|START)\s*,\s*([^,)]+)/g;
 const RE_MOUSE_NODE_LISTEN = /([A-Za-z_$][\w.$]*)\.(?:on|once)\(\s*Node\.EventType\.MOUSE_(UP|DOWN|ENTER|LEAVE)/g;
@@ -346,6 +368,40 @@ for (const file of files) {
   }
 }
 
+/**
+ * 6. 「自己就是按钮」的 Node 子类：自身必须有 UITransform
+ *
+ * 为什么单列一段：这类文件一定会写 `blockClickThrough(this)`，而它的防呆（ensureMouseHitTestable）
+ * 发现没有 UITransform 只是**跳过鼠标登记 + 打一条 warn**，紧接着的
+ * `this.on(Node.EventType.TOUCH_END, ...)` 却照旧注册 —— 触摸通道同样要进引擎那张监听列表，
+ * `_sortPointerEventProcessorList` 读 `trans!.cameraPriority`（非空断言）立刻抛空指针，
+ * 每次指针事件刷一次、整个游戏输入全废。第 1 段只看「有没有 blockClickThrough」，会被那行骗过去
+ * （防呆吞掉了证据）—— `QuestTracker` 就是这么炸的，所以这里单独盯 UITransform 本体。
+ */
+const selfHitNodes = [];
+for (const [rel, text] of fileTexts) {
+  const isNodeSubclass = /class\s+\w+\s+extends\s+Node\b/.test(text);
+  const selfPointer = /this\.(?:on|once)\(\s*Node\.EventType\.(?:TOUCH_|MOUSE_)/.test(text) || /blockClickThrough\(\s*this\s*\)/.test(text);
+  if (!isNodeSubclass || !selfPointer) continue;
+  if (/addComponent\(UITransform\)/.test(text)) {
+    selfHitNodes.push({ file: rel, verdict: "自身已加", why: "" });
+    continue;
+  }
+  const reviewed = SELF_HIT_REVIEWED.get(rel);
+  if (reviewed) {
+    const [helper, helperFile] = reviewed;
+    const helperText = fileTexts.get(helperFile) || "";
+    const helperOk = new RegExp(`static\\s+${helper}\\s*\\(`).test(helperText) && /addComponent\((?:UITransform|Sprite)\)/.test(helperText);
+    selfHitNodes.push({
+      file: rel,
+      verdict: helperOk ? "助手已施加" : "待确认",
+      why: helperOk ? `${helperFile} 的 ${helper}` : `白名单指向的助手 ${helper} 不在了（或它没补 UITransform）`,
+    });
+    continue;
+  }
+  selfHitNodes.push({ file: rel, verdict: "待确认", why: "节点自己在监听指针事件，却没有 UITransform" });
+}
+
 console.log("=== 1. touch 通道点击注册点（点击元素） ===");
 const needReview = touchClicks.filter((c) => c.verdict === "待确认");
 const stopOnlyClicks = touchClicks.filter((c) => c.verdict === "仅停冒泡");
@@ -391,6 +447,13 @@ for (const [file, re, why, mustNotMatch] of WIRING) {
   console.log(`  [${ok ? "OK" : "缺失"}] ${file}  —— ${mustNotMatch ? "不得出现：" : ""}${why}`);
 }
 
+console.log("\n=== 6. 自己就是按钮的 Node 子类（自身注册 TOUCH_* / MOUSE_*，必须有 UITransform） ===");
+const badSelfHit = selfHitNodes.filter((n) => n.verdict === "待确认");
+for (const n of selfHitNodes) {
+  console.log(`  [${n.verdict}] ${n.file}${n.why ? `  —— ${n.why}` : ""}`);
+}
+console.log(`  合计 ${selfHitNodes.length} 处；已具备 ${selfHitNodes.length - badSelfHit.length} 处；待确认 ${badSelfHit.length} 处`);
+
 console.log("\n=== 结论 ===");
 if (needReview.length) {
   console.log("!! 以下点击元素未在鼠标通道登记，点在它上面时可能穿透到下层 UI：");
@@ -405,9 +468,13 @@ if (badMouseListens.length) {
   for (const l of badMouseListens) console.log(`   ${l.file}:${l.line}  ${l.varName}.on(MOUSE_${l.kind})  —— 加 Pointer.trackUiPress(${l.varName})，或给它所在容器补 blockClickThrough`);
 }
 if (wiringBad) console.log(`!! 有 ${wiringBad} 项关键接线缺失：按住走路卡死 / 弹窗内点击全废 / 鼠标交互被引擎打崩 三者之一会重现`);
+if (badSelfHit.length) {
+  console.log("!! 以下 Node 子类在自己身上注册了指针事件、自己却没有 UITransform（鼠标一动就抛 cameraPriority 空指针，整个输入全废）：");
+  for (const n of badSelfHit) console.log(`   ${n.file}  —— 构造时先 addComponent(UITransform)，再 blockClickThrough(this) / this.on(TOUCH_*)`);
+}
 
-if (needReview.length || badPressPoints.length || badMouseListens.length || wiringBad) {
+if (needReview.length || badPressPoints.length || badMouseListens.length || wiringBad || badSelfHit.length) {
   process.exitCode = 1;
 } else {
-  console.log("PASS：touch 点击元素都在鼠标通道登记；mouse 通道独占点都走共用助手（抬起都会交还世界侧）；有鼠标监听的节点都登记了按压起点；UI 根未被挂鼠标事件；关键接线齐全。");
+  console.log("PASS：touch 点击元素都在鼠标通道登记；mouse 通道独占点都走共用助手（抬起都会交还世界侧）；有鼠标监听的节点都登记了按压起点；UI 根未被挂鼠标事件；自己的按钮自己有 UITransform；关键接线齐全。");
 }

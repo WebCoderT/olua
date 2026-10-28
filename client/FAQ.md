@@ -108,6 +108,8 @@
 - 外层判断是 `if (node._uiProps)`，而 `_uiProps` 在 `Node` 构造函数里就 `new` 出来了（`node.ts` 的字段初始化），**对任何节点都成立**；里面那个 `trans!` 又是非空断言（同一文件 `_sortByPriority` 反而老老实实判了空）—— 于是没有 `UITransform` 的节点一进监听列表就必崩，而且每个鼠标事件刷一次，整个预览的鼠标交互全废
 - 这类节点本来也命不中（`_handleMouseDown` 拿不到 comp 直接 `return false`），在它上面注册鼠标事件没有任何意义，纯粹是踩雷
 - 防呆：`Pointer.ensureMouseHitTestable(node, api)` 在所有注册入口（`trackUiPress` / `bindMousePress` / `blockClickThrough`）先检查，拿不到 `UITransform` 就跳过注册并 `console.warn` 打出是谁在注册
+- **防呆只拦得住鼠标通道，拦不住 `TOUCH_*`，别以为写了 `blockClickThrough` 就安全**：引擎 `dispatchEventTouch` 也会先 `_sortPointerEventProcessorList`，触摸监听同样在那张表里。所以「自己就是按钮」的 `Node` 子类（`class Xxx extends Node`，构造里 `blockClickThrough(this)` + `this.on(TOUCH_END, …)`）一旦漏了 `UITransform`：`blockClickThrough` 只**静默跳过**（还留一条 warn），紧随其后的 `TOUCH_END` 照旧注册 → 每次指针事件都抛。`QuestTracker`（#396 的任务追踪栏）就是这么炸的，症状是**整个游戏鼠标一动就报错、什么点不动**
+- 自查口径：审计脚本第 6 段专盯这类文件 —— `class Xxx extends Node` 且在自己身上注册 `TOUCH_*/MOUSE_*` 的，文件里必须有 `addComponent(UITransform)`；由助手施加的要写进白名单并核对助手还在（`applyAutoFightButtonStyle` / `applyBottomNavBarButtonStyle` / `applyShortcutKeyStyle` / `applyFlexColStyle` 这四个）
 - 因此「本次按压起点」**不能**挂在 UI 根上（前一版就是这么写的），只能由**每个在鼠标通道上有监听的界面元素**自己登记（见上一条 FAQ）
 - 复查手法：审计脚本第 5 段有一条「UI 根不得出现 `trackUiPress` / `Node.EventType.MOUSE_`」的负向检查；模拟脚本 `press-bubble-sim.cjs` 第 0 段复刻了这段引擎排序，能直接复现「挂 UI 根 → 抛错」「同样写法但走防呆 → 被拦下、不崩」
 
