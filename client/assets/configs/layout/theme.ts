@@ -21,6 +21,21 @@ export const uiTheme = {
   inputPlaceholderColor: new Color("#999999"),
 
   /**
+   * 输入框内层 EditBox 的几何（UiHelper.createInputBox 的调用方按它算宽高）
+   * - iconInset：带图标时的左右留白（登录页：左侧图标 + 文字起始位）
+   * - plainInset：不带图标时只留边距（创建角色弹窗）
+   * - height：EditBox 高度（比背景条略矮，上下各留一点，避免文字贴边）
+   *
+   * 这两个 inset 之前是写死在 `createInputField` 里的一个 200：弹窗的 240 宽背景条减完
+   * 只剩 40，背景看着是整条、实际只有右端一小截能点（#457）
+   */
+  inputField: {
+    iconInset: 200,
+    plainInset: 24,
+    height: 60,
+  },
+
+  /**
    * 飘字（挂特效层、上浮淡出后自动销毁的临时文本）
    * 文案本身见 configs/texts（label_damage / label_skill_release / label_exp_gain）
    * 每个飘字三个几何参数：出生点相对目标的纵向偏移 spawnOffsetY、上浮距离 riseDistance、上浮/淡出时长
