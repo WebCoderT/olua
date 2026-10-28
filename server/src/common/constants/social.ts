@@ -154,7 +154,21 @@ export const PARTY_INVITE_TTL_MS_DEFAULT = 30_000;
  */
 export const PARTY_EXP_MATE_SHARE_DEFAULT = 0.5;
 
-/** 队伍各动作（协议 `party` 帧的 action；协议与服务的合法值同源，别在别处再写一遍） */
+/**
+ * 组队的最低等级（默认 10；可用 `PARTY_MIN_LEVEL` 覆盖）
+ *
+ * **这也是客户端底部导航「组队」入口的解锁等级**（`client/assets/configs/bottomNav.ts`
+ * 里 `group.openLevel`）—— 两处必须相等，`tools/audit-party-level.cjs` 盯着。
+ *
+ * 为什么服务端要管这件事：门槛只写在客户端等于没有。玩家可以改包邀请一个 1 级小号，
+ * 对方收到邀请却**打不开面板**（客户端会拦「组队功能需要在10级后开放」），邀请永远悬空，
+ * 两边都不知道发生了什么。真正能拦住的是这里。
+ */
+export const PARTY_MIN_LEVEL_DEFAULT = 10;
+
+/**
+ * 队伍各动作（协议 `party` 帧的 action；协议与服务的合法值同源，别在别处再写一遍）
+ */
 export const PARTY_ACTION = {
   /** 邀请某人入队（邀请人没队伍时顺手建一支） */
   INVITE: "invite",

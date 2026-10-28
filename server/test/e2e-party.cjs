@@ -13,7 +13,9 @@
  * 八、互见帧带 partyId：组队立刻反映到别人的屏幕上（队友金色名字 + 队标），解散后变回空串
  * 九、经验分成：击杀者全额（settle.reward）、同图队友 50%（expGain 帧 + revision）、
  *     异图队友与等级差过大的队友都分不到（没有帧）、击杀者自己不会收到 expGain
- * 十、上限脏值回落（直接 new 服务类验，不起第二台服务）
+ * 十、上限脏值回落（直接 new 服务类验，不起第二台服务）+ 门槛脏值回落
+ * 十一、等级门槛（#497）：默认 10 级下，低等级发起 / 邀请低等级目标都拒 50144，
+ *      被拒的邀请不送达、够级的照常组队（独立进程 + 默认配置，主进程把门槛压成 1）
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:party
@@ -35,7 +37,7 @@ const PARTY_LIMIT = 3;
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 79;
+const EXPECTED_ASSERTIONS = 87;
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -125,8 +127,8 @@ function seedSpawnAreas(dbPath) {
   db.close();
 }
 
-/** 起一台服务（文件库） */
-async function startServer(dbPath) {
+/** 起一台服务（文件库）；`extraEnv` 覆盖单条配置（如 `PARTY_MIN_LEVEL`） */
+async function startServer(dbPath, extraEnv = {}) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", ENTRY], {
@@ -146,6 +148,7 @@ async function startServer(dbPath) {
       SOCIAL_BLOCK_CACHE_MS: "0",
       // 本套靠 mapId 判「同图分经验」，位置过期线拉长到 60 秒（waitFor 的空档会跨过默认 3 秒）
       MONSTER_AI_POS_STALE_MS: "60000",
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -292,7 +295,12 @@ function snap(snapshot) {
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-party-${Date.now()}.db`);
   seedSpawnAreas(dbPath);
-  const server = await startServer(dbPath);
+  const server = await startServer(dbPath, {
+    // 组队门槛压到 1（#497）：本套的队伍动作全用 **1 级角色** —— 因为经验分成那组要
+    // 「1 级打 1 级怪」才凑得出等级差 0 的干净数值。门槛留在默认 10 会让 79 条全变成
+    // 「等级不足」。门槛本身（默认 10）由第十一组用**独立进程 + 默认配置**验。
+    PARTY_MIN_LEVEL: "1",
+  });
   try {
     const { baseUrl } = server;
     const wsBase = baseUrl.replace("http", "ws");
@@ -685,6 +693,69 @@ function snap(snapshot) {
     checkEqual(dirtyConfig("abc").memberLimit(), 4, "非数字上限回落默认 4（不让组队变成「一个人就算满」）");
     checkEqual(dirtyConfig(1).memberLimit(), 4, "小于 2 的上限回落默认");
     checkEqual(dirtyConfig("6").memberLimit(), 6, "合法值（含数字字符串）照配置走");
+    checkEqual(dirtyConfig(undefined).minLevel(), 10, "门槛未配置回落默认 10（与客户端入口 openLevel 同值）");
+    checkEqual(dirtyConfig(0).minLevel(), 10, "小于 1 的门槛回落默认（读错不该让「所有人都不能组队」）");
+    checkEqual(dirtyConfig("12").minLevel(), 12, "合法门槛（含数字字符串）照配置走");
+
+    //#endregion
+
+    //#region 十一、等级门槛（默认 10 级，独立进程）
+
+    // 主进程把门槛压到 1 了，所以门槛**本身**得另起一台用默认配置验（#497）。
+    // 这不是第十组那种纯数学：要验的是「真实链路上低等级会被拒」，必须走真的服务。
+    group("十一、等级门槛：低等级发起 / 邀请低等级目标都拒（默认 10 级，独立进程）");
+    const levelDbPath = path.join(os.tmpdir(), `olua-e2e-party-level-${Date.now()}.db`);
+    const levelServer = await startServer(levelDbPath);
+    try {
+      const levelBase = levelServer.baseUrl;
+      const levelWs = levelBase.replace("http", "ws");
+      const low = await preparePlayer(levelBase, "party_level_low", "party_level_low", "低级号", 1);
+      const highA = await preparePlayer(levelBase, "party_level_high_a", "party_level_high_a", "高级甲", 10);
+      const highB = await preparePlayer(levelBase, "party_level_high_b", "party_level_high_b", "高级乙", 10);
+      const levelTickets = await Promise.all(
+        [low, highA, highB].map((player) => api(levelBase, "POST", "realtime/ticket", { token: player.token })),
+      );
+      const [sLow, sHighA, sHighB] = levelTickets.map((ticket) =>
+        connect(`${levelWs}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`),
+      );
+      const levelWelcomed = await waitFor(
+        "等级组三条连接都收到 welcome",
+        async () => ([sLow, sHighA, sHighB].every((session) => session.welcomes.length > 0) ? true : null),
+      );
+      check(!!levelWelcomed, "等级组三条实时连接都握手成功");
+      // 进图 + 位置上报：邀请要看「在线」（在场表里得有位置）
+      for (const session of [sLow, sHighA, sHighB]) {
+        session.send("worldJoin", { mapId: "1" });
+        session.send("pos", { mapId: "1", x: 100, y: 200, hp: 100, moving: false });
+      }
+      await sleep(200);
+
+      // 1) 低等级发起：客户端入口锁着，改包也打不进来
+      const lowInvite = await expectError(sLow, () => sLow.partyAction("invite", highA.roleId), "低级号发起邀请被拒");
+      check(
+        !!lowInvite && lowInvite.code === 50144 && lowInvite.message === "需要 10 级才能组队",
+        "低等级发起邀请被拒：50144「需要 10 级才能组队」",
+        JSON.stringify(lowInvite),
+      );
+      // 2) 拒了就是不成立：对方一条邀请帧都不该有（否则他打不开面板，邀请只能烂在那儿）
+      await sleep(200);
+      checkEqual(sHighA.invites.length, 0, "被拒的邀请不会送达对方（对方打不开面板，邀请会悬空）");
+      // 3) 高等级邀请低等级：同样拒，且说清是「对方」不够级
+      const highInvite = await expectError(sHighA, () => sHighA.partyAction("invite", low.roleId), "邀请低级号被拒");
+      check(
+        !!highInvite && highInvite.code === 50144 && highInvite.message.includes("对方还没到 10 级"),
+        "邀请低等级目标被拒：50144 且文案指明是「对方」",
+        JSON.stringify(highInvite),
+      );
+      // 4) 门槛不误伤：两个够级的照常组队
+      sHighA.partyAction("invite", highB.roleId);
+      await waitInvite(sHighB, "高级乙收到邀请");
+      const paired = await expectSnapshot(sHighB, () => sHighB.partyAction("accept"), "高级乙入队");
+      check(!!paired && paired.members.length === 2, "两个够级的角色照常组队（门槛不误伤）", snap(paired));
+    } finally {
+      levelServer.child.kill("SIGKILL");
+      await sleep(100);
+    }
 
     //#endregion
   } finally {
