@@ -140,8 +140,14 @@ export const guideConfig = {
     spotPadding: 10,
     /** 高亮框线宽 */
     spotBorderWidth: 3,
-    /** 气泡宽度 / 高度 / 内边距 / 与高亮框的间距 / 离屏幕边缘的安全边距 */
-    bubbleWidth: 520,
+    /**
+     * 气泡宽度 / 高度 / 内边距 / 与高亮框的间距 / 离屏幕边缘的安全边距
+     *
+     * 宽度按**最长一句正文能一行放下**定：正文可用宽 = bubbleWidth − padding×2 = 520，
+     * 最长那句 24 个汉字 × 20 号 ≈ 480 —— 原来 520 宽（可用 480）配 22 号放不下，
+     * 末行只剩「手。」（#466）。
+     */
+    bubbleWidth: 560,
     bubbleHeight: 190,
     bubblePadding: 20,
     bubbleGap: 18,
@@ -150,7 +156,7 @@ export const guideConfig = {
     screenMargin: 24,
     /** 气泡里的三档字号 */
     titleFontSize: 26,
-    descFontSize: 22,
+    descFontSize: 20,
     progressFontSize: 20,
   },
   /** 文案（分步文案在 guideSteps 里，这里只放全局的） */

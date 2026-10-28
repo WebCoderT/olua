@@ -67,10 +67,15 @@ export const bottomBarLayout = {
   anchor: { edge: "bottom-center", marginX: 0, marginY: 51 } as HudAnchor,
   /** 功能按键区（横向布局容器，按钮排列交给 Layout） */
   navBar: { spacing: 6, position: new Vec2(153.5, -10), size: new Size(400, 40) },
-  /** 单个功能按键：图标尺寸 + 右下角快捷键名 */
+  /**
+   * 单个功能按键：图标尺寸 + 快捷键字母
+   *
+   * 字母放**右上角**：`bottom-nav-bar/*.png` 这些图标素材把中文名（角色/背包/好友…）画在图底部，
+   * 原来放在右下方 (15,-15) 正好压住最后一个字（真机上是「好友F」「组队G」这种，见 #466）。
+   */
   navButton: {
     size: new Size(40, 40),
-    key: { position: new Vec2(15, -15), size: new Size(20, 20), fontSize: 10 },
+    key: { position: new Vec2(14, 16), size: new Size(20, 20), fontSize: 10 },
   },
   /** 经验条 */
   expBar: { position: new Vec2(0, -44.5), size: new Size(724, 8) },

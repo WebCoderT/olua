@@ -196,4 +196,25 @@ check(/normalizeGuide\(source\.guide\)/.test(read(ROLE_DATA_UTIL)), "服务端�
 
 //#endregion
 
-finish("新手引导（#402）：步骤表 / 推进 / 老档 / 续走 / 跳过 / 接线");
+//#region G. 气泡排版自洽
+
+console.log("— G. 气泡排版：正文放得下、折两行也不压底部行 —");
+
+const bubble = guideConfig.guideConfig.layout;
+const innerWidth = bubble.bubbleWidth - bubble.bubblePadding * 2;
+// 最长那句正文 24 个汉字，20 号字约 480 —— 可用宽必须比它宽，否则末行只剩「手。」（#466）
+check(innerWidth >= 500, "正文可用宽 ≥ 500（放得下最长那句）", `bubbleWidth ${bubble.bubbleWidth} − padding ${bubble.bubblePadding}×2 = ${innerWidth}`);
+// 正文锚点在顶边（#462）：起点在标题占位下方，高度按「折两行」估
+const descTop = bubble.bubbleHeight / 2 - bubble.bubblePadding - bubble.titleFontSize * 1.4 - bubble.descGap;
+const descBottom = descTop - bubble.descFontSize * 1.5 * 2;
+// 底部行 = 进度文字（中心 y 与盒高见 GuideOverlay.createBubble）
+const progressTop = -bubble.bubbleHeight / 2 + bubble.bubblePadding + bubble.progressFontSize / 2 + (bubble.progressFontSize * 1.4) / 2;
+check(
+  descBottom > progressTop,
+  "正文折两行时仍高于底部进度行（否则最后一行会压在「新手引导 x/6」上）",
+  `正文底 ${descBottom.toFixed(1)} vs 进度顶 ${progressTop.toFixed(1)}`,
+);
+
+//#endregion
+
+finish("新手引导（#402）：步骤表 / 推进 / 老档 / 续走 / 跳过 / 接线 / 排版");
