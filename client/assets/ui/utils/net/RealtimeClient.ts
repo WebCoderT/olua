@@ -260,9 +260,10 @@ export default class RealtimeClient {
       this.clearPongTimer();
       this.armPing(heartbeatMs);
       console.info(`[realtime] 已连接（账号 ${this.userId ?? "?"}，心跳 ${heartbeatMs}ms）`);
-      // 断线回来后服务端不记得这个观看者了：把最近一次进图登记重发上去，
-      // 否则重生广播与世界状态都到不了客户端（首次连接没有 lastJoin，这里是无操作）
-      if (reconnected) CombatChannel.resendWorldJoin();
+      // 补发最近一次进图登记：断线回来服务端不记得这个观看者了；
+      // **首次连接也要发** —— 建图常比连接快（#493），那时 spawnAll 已经把图 id 记进 lastJoin
+      // 但没有通道可发，只能在这里补上。没有 lastJoin（还没进过图）时是无操作。
+      CombatChannel.resendWorldJoin();
       this.emit(RealtimeStatus.Connected, { reconnected });
       return;
     }
