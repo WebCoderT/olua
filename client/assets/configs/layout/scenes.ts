@@ -125,8 +125,14 @@ export const roleSelectorLayout = {
     occupationToggle: { position: new Vec2(0, 52), spacing: 30, toggleSize: new Size(48, 48) },
     /** 名称输入框 */
     nameInput: { placeholder: "输入角色名称", position: new Vec2(0, -26), size: new Size(240, 60) },
-    /** 创建按钮（默认置灰，输入名称后可用） */
-    createButton: { name: "confirm_create_role_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -238), size: new Size(190, 48) },
+    /**
+     * 创建按钮（默认置灰，输入名称后可用）
+     *
+     * 用通用红底按钮 + 文字（文案见 configs/texts.label_role_create）：
+     * 原来复用的是"开始游戏"牌匾图（create_role/start_btn.png），字是画在图里的，
+     * 于是弹窗里那颗键写着「开始游戏」——图与功能对不上，也没法改文案。
+     */
+    createButton: { name: "confirm_create_role_button", image: uiImages.middleRedButtonBackground, position: new Vec2(0, -238), size: new Size(190, 48), fontSize: 18 },
     /** 职业说明图（尺寸取职业配置的 descriptionSize）与角色预览 */
     occupationDescription: { position: new Vec2(0, -142) },
     occupationPreview: { position: new Vec2(-245, -95), size: new Size(200, 360) },

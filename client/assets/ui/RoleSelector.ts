@@ -79,6 +79,15 @@ export class RoleSelector extends Component {
   private roleSummaries: RoleSummary[] = [];
   /** 是否有请求在途（创建 / 进游戏），避免连点重复提交 */
   private busy = false;
+  /**
+   * 背景节点与它的素材原始尺寸
+   *
+   * 背景是**等比铺满（cover）**、不是拉伸：素材是 650×1154 的竖图，设计分辨率是 1624×750，
+   * 直接铺会在横竖两轴上都变形（纵横比差 3.87 倍，整屏糊）。cover 只缩放、多出的部分落在屏外，
+   * 窗口尺寸变化时要按新可见区重算（见 fitBackground）。
+   */
+  private background: Node | null = null;
+  private backgroundTexture: Size | null = null;
 
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
@@ -86,15 +95,28 @@ export class RoleSelector extends Component {
     // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
     applyScreenPolicy();
     // 背景（不在舞台内：铺满可见区，始终盖住整个窗口；舞台等比缩小后四周留白由它兜底）
-    this.node.addChild(GameUiHelper.createFullScreenImage("role_selector_background", roleSelectorLayout.background));
+    this.background = GameUiHelper.createCoverImage("role_selector_background", roleSelectorLayout.background, (textureSize) => {
+      this.backgroundTexture = textureSize;
+      this.fitBackground();
+    });
+    this.node.addChild(this.background);
     // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.roleSelectorLayout）
     this.stage = this.createStage();
     this.mainView = this.createMainView();
-    // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
+    // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排（背景是 cover，也要跟着重算）
     this.applyStageLayout();
-    this.offWindowResize = onWindowResize(() => this.applyStageLayout());
+    this.offWindowResize = onWindowResize(() => {
+      this.applyStageLayout();
+      this.fitBackground();
+    });
     // 角色列表来自服务端（拉取失败由网络层统一提示，列表保持空）
     void this.loadRoles();
+  }
+
+  /** 按当前可见区把背景铺满（等比，素材尺寸未知时什么都不做——加载完会再调一次） */
+  private fitBackground() {
+    if (!this.background || !isValid(this.background, true) || !this.backgroundTexture) return;
+    GameUiHelper.fitCover(this.background, this.backgroundTexture);
   }
 
   /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁），并清掉待确认定时器 */
@@ -427,9 +449,17 @@ export class RoleSelector extends Component {
     // 名称输入框
     const nameInput = GameUiHelper.createInputField(layout.nameInput.placeholder, layout.nameInput.position, layout.nameInput.size);
     dialog.addChild(nameInput.node);
-    // 创建按钮（默认置灰，输入名称后可用）
+    // 创建按钮（默认置灰，输入名称后可用）；文案见 configs/texts.label_role_create
     const createLayout = layout.createButton;
-    const createButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
+    const createButton = GameUiHelper.createTexturedButton(
+      createLayout.name,
+      createLayout.image,
+      getText("label_role_create"),
+      createLayout.position,
+      createLayout.size,
+      Color.WHITE,
+      createLayout.fontSize,
+    );
     createButton.getComponent(Sprite).grayscale = true;
     createButton.on(Node.EventType.TOUCH_END, () => void this.createRole());
     dialog.addChild(createButton);
@@ -516,6 +546,9 @@ export class RoleSelector extends Component {
       GameUiHelper.createTip("role_create_success_tip");
       this.cancelCreateRoleUI();
       await this.loadRoles();
+      // 新建完直接选中它：否则玩家会看着自己刚建的角色站在原地，底部还是「角色 ---」、
+      // 「开始游戏」按不动（还得先点一下角色才算选中，这一步没有任何信息量）
+      this.onlineRole(detail.id);
     } catch (error) {
       console.warn(`[RoleSelector] 创建角色失败：${describeError(error)}`);
     } finally {

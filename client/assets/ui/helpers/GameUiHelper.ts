@@ -188,6 +188,24 @@ export default class GameUiHelper {
     return UiHelper.createFullScreenNode(name, src);
   }
 
+  /**
+   * 创建「等比铺满」的背景图（cover：只缩放不拉伸，溢出部分由画布裁掉）
+   *
+   * 用于**构图可裁**的底图（选角背景：一整幅天空+地面，没有必须完整可见的 logo/文字）。
+   * 登录与加载背景不在此列 —— 那两张的构图里有 logo 与合规文字，裁掉就是内容缺失。
+   * @param name 元素名称
+   * @param src 图片资源路径
+   * @param onTextureLoaded 素材原始尺寸回调（窗口尺寸变化时要拿它重算，见 fitCover）
+   */
+  static createCoverImage(name: string, src: string, onTextureLoaded?: (textureSize: Size) => void) {
+    return UiHelper.createCoverNode(name, src, onTextureLoaded);
+  }
+
+  /** 窗口尺寸变化后按可见区重算该背景的尺寸（cover），保证任何窗口比例下都铺满且不变形 */
+  static fitCover(node: Node, textureSize: Size) {
+    UiHelper.fitCoverNode(node, textureSize);
+  }
+
   /** 创建文本 */
   static createText(
     name: string,

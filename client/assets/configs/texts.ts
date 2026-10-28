@@ -205,6 +205,8 @@ export const uiTexts = {
   /** 删除角色按钮（正常态 / 两步确认的待确认态，见 configs/hudLayout.roleSelectorLayout.manageRole） */
   label_role_delete: "删除",
   label_role_delete_confirm: "确认删除",
+  /** 创建角色弹窗的确认按钮（用通用红底图 + 这行字，见 configs/hudLayout.roleSelectorLayout.createDialog.createButton） */
+  label_role_create: "创建",
   /** 管理模式提示条 */
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
 
