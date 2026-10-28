@@ -398,7 +398,35 @@ async function connectOk(heartbeatMs = 600000) {
   check(RealtimeClient.status === RealtimeStatus.Idle, "stop 幂等（离开场景可能被调多次）");
   restore();
 
-  console.log("\n— M. 源码断言：接线齐、参数不进代码 —");
+  console.log("\n— M. 进图早于连接：worldJoin 在首次 welcome 补发（#493） —");
+
+  {
+    // 真实时序：Game.onLoad 里 RealtimeClient.start() 要取票据 + 握手，建图（spawnAll）常常先跑完，
+    // 那时通道还没连上。旧实现只在 `active` 时才登记图 id，于是 lastJoin 永远是空的，
+    // welcome 里「只在重连时补发」永远发不出 —— 玩家一直不在世界里（发言被拒、无互见、怪物走本地口径）。
+    const { CombatChannel } = net;
+    reset();
+    // 1) 未连接时登记图 id：只记账，不能抛也不能发
+    CombatChannel.sendWorldJoin("map_newbie");
+    check(sockets.length === 0, "未连接时登记图 id 不建连（只是记账）");
+    // 2) 首次建连（不是重连）→ welcome 后应把这条 worldJoin 补发出去
+    const lateSocket = await connectOk();
+    await delay(0);
+    const frames = lateSocket.sent.map((raw) => {
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        return { type: "unparsable" };
+      }
+    });
+    const joins = frames.filter((frame) => frame.type === "worldJoin");
+    check(joins.length === 1, "首次 welcome 补发进图登记（这条时序下才有救）", `发了 ${joins.length} 条 worldJoin`);
+    check(joins.length === 1 && joins[0].data && joins[0].data.mapId === "map_newbie", "补发的就是先前登记的那张图");
+    check(changes[changes.length - 1].reconnected === false, "这次仍是「首连」而不是重连（补发不再依赖 reconnected）");
+    RealtimeClient.stop();
+  }
+
+  console.log("\n— N. 源码断言：接线齐、参数不进代码 —");
 
   const game = read("ui/Game.ts");
   check(/RealtimeClient\.start\(\)/.test(game) && /RealtimeClient\.stop\(\)/.test(game), "游戏场景进出各接一次（进游戏才连、离开就断）");
@@ -411,6 +439,13 @@ async function connectOk(heartbeatMs = 600000) {
 
   const codes = read("ui/utils/net/ApiCodes.ts");
   check(/export const REALTIME_CLOSE/.test(codes) && /REPLACED:\s*4000/.test(codes), "关闭码登记在 ApiCodes（服务端常量的手写镜像，跨端逐键比对见 audit-shared-data）");
+
+  // #493：建图时**无条件**登记图 id（连接可能比进图晚，登记要早于 active 判断）
+  const spawner = read("ui/components/map/MonsterAreaSpawner.ts");
+  check(
+    /CombatChannel\.sendWorldJoin\(this\.mapId\);[\s\S]{0,600}?if \(CombatChannel\.active\)/.test(spawner),
+    "spawnAll 先无条件 sendWorldJoin 再判 active（否则进图早于连接时 lastJoin 永远是空的）",
+  );
 
   finish("全部通过：取票 / 建连 / 心跳 / 退避 / 顶替处理都符合预期");
 })();

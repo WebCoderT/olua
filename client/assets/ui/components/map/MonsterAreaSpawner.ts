@@ -41,14 +41,20 @@ export default class MonsterAreaSpawner {
     const areas = getTiledObjects(this.map, tiledGroupNames.monster)
       .map((object) => this.createArea(object))
       .filter((area): area is MonsterSpawnArea => area !== null);
+    // 图 id **无条件**登记（#493）：RealtimeClient.start() 是异步的（取票据 → 握手 → welcome），
+    // 建图常常比它快。早先只在 `CombatChannel.active` 时才发 worldJoin，赶上这个时序就连
+    // 「我在哪张图」都没记下来，welcome 里那句补发也就永远无事可做 —— 玩家从此不在世界里
+    // （发言被拒、看不到别人、怪物走本地口径）。sendWorldJoin 内部是先记 lastJoin 再发，
+    // 未连接时发送是 no-op，连接上来后由 RealtimeClient 的 welcome 补发。
+    CombatChannel.sendWorldJoin(this.mapId);
     if (CombatChannel.active) {
       // 世界权威（#295 阶段一）：刷怪区配置在服务端库里（从 Tiled 导入一次），
       // 实例的身份 / 血量 / 存活 / 出生点全部以服务端 world 帧为准 —— 这里只报地图 id。
       // areas 仍然解析：调试区域可视化在 createArea 里顺带完成。
-      CombatChannel.sendWorldJoin(this.mapId);
       return;
     }
-    // 回滚路径：与上移前同一套本地生成
+    // 回滚路径：与上移前同一套本地生成（迟到的 world 帧会把本地这批按「快照里没有」清掉，
+    // 换成服务端发牌的实例，见 MonsterManager.applyWorldState）
     MonsterManager.spawnByAreas(areas);
   }
 
