@@ -419,6 +419,17 @@ export const mallDialogLayout = {
     /** 名称两段式：本体一行（前缀色大字，超长自动缩字）+ 前缀+后缀一行（同色小字）；gapY = 与上一行的间距 */
     name: { fontSize: 12, lineHeight: 16, gapY: 2 },
     extra: { fontSize: 10, lineHeight: 12, gapY: 2 },
+    /**
+     * 价格（与「前缀+后缀」同一行，右侧贴边、金色）
+     *
+     * 卡片上没有第二行空间（高 100 = 4 + 40 图标 + 2 + 16 名称 + 2 + 12 品质 + 2 + 20 按钮 + 4），
+     * 所以价格挤在品质行右侧：品质行让出 `reserve` 宽给价格，两段互不重叠（`client/tools/test-mall.cjs` 算过）。
+     * 取价一律走 `configs/mall.getMallPrice`（特殊价优先、未定价走统一价），**卡片不自己算钱**。
+     * `reserve` 50 = 4 位数字 + 空格 + 2 个全角「绑元」（10 号字 ≈ 22 + 5 + 20 = 47，留 3 余量），
+     * 光秃秃一个数字会被误读成数量，所以带单位。
+     */
+    price: { fontSize: 10, reserve: 50, color: new Color(255, 214, 102) },
+
     /** 购买按钮（居中）：尺寸、字号与间距 */
     buyButton: { size: new Size(64, 20), fontSize: 12, gapY: 2 },
   },
@@ -1307,6 +1318,13 @@ export const partyDialogLayout = {
     stateOffline: "离线",
     stateOtherMap: "异图",
     memberEmpty: "（队伍里只有你一个人：去「邀请」再拉几个）",
+    /**
+     * 没队伍时成员区的占位（**不要**复用 memberEmpty）
+     *
+     * memberEmpty 说的是「队伍里只有你一个人」—— 没队伍时它和顶部的 solo（「你还没有队伍」）
+     * 同屏出现就是自相矛盾（#491）。这里只做中性说明，不宣称任何队伍状态。
+     */
+    noPartyEmpty: "（队伍成员会显示在这里）",
     inviteEmpty: "（附近没有别的玩家 —— 同图的人才拉得到）",
     /** 候选行第二行：只有关系（互见帧不下发对方等级，写死一个 Lv 会骗人） */
     inviteMeta: "{relation}",

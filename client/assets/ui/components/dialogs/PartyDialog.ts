@@ -206,7 +206,9 @@ export default class PartyDialog {
     const snapshot = PartyStore.current();
     if (!snapshot) {
       if (invites.length === 0) {
-        content.addChild(this.createEmpty(layout.name, layout.texts.memberEmpty));
+        // 没队伍时用 noPartyEmpty（中性占位）：memberEmpty 说的是「队伍里只有你一个人」，
+        // 和顶部 solo 的「你还没有队伍」同屏就是两句互相打脸（#491）
+        content.addChild(this.createEmpty(layout.name, layout.texts.noPartyEmpty));
       }
       return;
     }
