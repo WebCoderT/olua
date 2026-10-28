@@ -134,7 +134,7 @@ make verify   # = check（客户端 tsc + 管理端 typecheck + 12 个审计）+
 手工跑（等价，不依赖 `make`）：
 
 ```bash
-# 客户端：55 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
+# 客户端：56 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # 服务端：编译 + 二十二套 e2e（248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 87 / 55 / 39 / 51）+ 生成物一致性

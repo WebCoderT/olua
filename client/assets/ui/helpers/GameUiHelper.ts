@@ -29,7 +29,7 @@ import { isCtrlPressed, onCtrlChange } from "../utils/input/ModifierKeys";
 import { debugConfig } from "../../configs/debug";
 import { getText, TextParams } from "../../configs/texts";
 import { BottomNavItem } from "../../configs/bottomNav";
-import { getAnimationName } from "../../configs/animation";
+import { BLANK_FRAME_MAX_AREA, getAnimationName } from "../../configs/animation";
 import { hitScreenFlash } from "../../configs/effect";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
@@ -1976,28 +1976,51 @@ export default class GameUiHelper {
 
   /**
    * 创建角色衣服内观
-   * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
+   * 大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
+   * @param onReady 素材就绪（首帧已落到 Sprite 上）后回调 —— 对齐要读帧几何，必须等这一刻
    */
-  static createRoleClothInShow(cloth: ClothInShowSource, size: Size = new Size()) {
+  static createRoleClothInShow(cloth: ClothInShowSource, size: Size = new Size(), onReady?: () => void) {
     const clothInShow = UiHelper.createSprite("cloth_in_show", "", cloth.inPosition, size);
     clothInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     clothInShow.setScale(cloth?.inScaleX ?? 1, cloth?.inScaleY ?? 1, 1);
     clothInShow.angle = cloth?.inRotate ?? 0;
-    AnimationHelper.playLoopAtlasWithDuration("cloth_in_show", clothInShow, cloth.in, 1);
+    void AnimationHelper.playLoopAtlasWithDuration("cloth_in_show", clothInShow, cloth.in, 1).then(() => onReady?.());
     return clothInShow;
   }
 
   /**
    * 创建角色武器内观
-   * 内观的大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
+   * 大小、旋转与位置由装备配置的 inScaleX / inScaleY / inRotate / inPosition 决定（缺省不缩放、不旋转）
+   * @param onReady 素材就绪（首帧已落到 Sprite 上）后回调 —— 对齐要读帧几何，必须等这一刻
    */
-  static createRoleWeaponInshow(weapon: Equipment, size: Size = new Size()) {
+  static createRoleWeaponInshow(weapon: Equipment, size: Size = new Size(), onReady?: () => void) {
     const weaponInShow = UiHelper.createSprite("weapon_in_show", "", weapon.inPosition, size);
     weaponInShow.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
     weaponInShow.setScale(weapon?.inScaleX ?? 1, weapon?.inScaleY ?? 1, 1);
     weaponInShow.angle = weapon?.inRotate ?? 0;
-    AnimationHelper.playLoopAtlasWithDuration("weapon_in_show", weaponInShow, weapon.in, 1);
+    void AnimationHelper.playLoopAtlasWithDuration("weapon_in_show", weaponInShow, weapon.in, 1).then(() => onReady?.());
     return weaponInShow;
+  }
+
+  /**
+   * 读一个精灵节点**当前帧**的内容 bbox（节点本地坐标，y 向上）
+   *
+   * 帧是裁剪过的（TexturePacker 的 spriteOffset → 引擎 SpriteFrame.offset，两者同号同值，
+   * 2026-10-29 真机实测），所以「内容中心」不等于节点中心：要按裁剪偏移还原，
+   * 否则所有「把 X 摆到 Y」的对齐都会随素材留白量漂移。
+   * @returns 没有 Sprite / 帧还没加载时返回 null（调用方按「素材未就绪」处理，不要拿 (0,0) 硬算）
+   */
+  static spriteContentBox(node: Node | null): { cx: number; cy: number; w: number; h: number } | null {
+    if (!node || !isValid(node)) return null;
+    const frame = node.getComponent(Sprite)?.spriteFrame;
+    if (!frame) return null;
+    const rect = frame.getRect();
+    const offset = frame.offset;
+    // 占位空帧与「还没拿到帧」一样处理：拿它算出来的中心会把武器甩到天上去
+    // （图集里的空帧由 AnimationHelper.isSolidFrame 在切片时滤掉，但 Sprite 上仍可能短暂停留；
+    //   判据与那边同口径——阈值见 configs/animation.BLANK_FRAME_MAX_AREA，武器空帧是 2×2，边长判据会漏过）
+    if (rect.width * rect.height <= BLANK_FRAME_MAX_AREA) return null;
+    return { cx: offset.x, cy: offset.y, w: rect.width, h: rect.height };
   }
 
   /**

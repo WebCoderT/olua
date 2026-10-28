@@ -134,7 +134,7 @@ make verify   # = check (client tsc + admin typecheck + 12 audits) + builds on a
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 55 unit-test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
+# Client: 56 unit-test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # Server: compile + twenty-two e2e suites (248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 87 / 55 / 39 / 51) + generated-artifact consistency

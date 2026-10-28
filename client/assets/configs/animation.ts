@@ -8,6 +8,16 @@ export function getDirectionIndex(direction: DIRECTION): number {
   return directions.indexOf(direction);
 }
 
+/**
+ * 占位空帧的面积上限（像素²，≤ 该值视为「素材未就绪/空槽位」）
+ *
+ * 素材包的空槽位会以极小图块进图集：2026-10-29 普查 8513 个空帧，尺寸只有 1×1（衣服全部、武器多数）
+ * 与 **2×2**（武器 184 个）；判据必须按**面积**——按边长 `> 1` 会放过 2×2（武器片段里夹着它 →
+ * 武器每轮消失一半时间），按边长 `> 2` 又会误伤 2×174 这类薄武器帧。
+ * 特效里的 3×3 / 4×4 是真实小图（共 42 个，面积 9 / 16），不会被误滤。
+ */
+export const BLANK_FRAME_MAX_AREA = 4;
+
 // 角色动作顺序
 const roleActions: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN, ACTION.TEST1, ACTION.ATTACK_NEAR, ACTION.ATTACK_SKILL_1, ACTION.TEST3, ACTION.ATTACK_FAR, ACTION.INJURED, ACTION.A1, ACTION.DIE];
 
