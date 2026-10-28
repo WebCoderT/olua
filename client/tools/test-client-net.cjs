@@ -337,8 +337,16 @@ async function expectFailure(action) {
   check(/installNetwork\(\)/.test(read(FILE.selector)), "选角场景调 installNetwork");
 
   const helperSource = read(FILE.helper);
-  check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /uiLayer\.scene/.test(helperSource), "飘字挂载点跨场景可用（游戏内走 UI 图层，登录/选角挂场景根）");
-  check(/director\.getScene\(\)/.test(helperSource), "非游戏场景的兜底挂载点是当前场景根");
+  check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /uiLayer\.scene/.test(helperSource), "飘字挂载点跨场景可用（游戏内走 UI 图层，登录/选角挂场景里的 Canvas）");
+  check(
+    /scene\.children\.find\(\(child\) => !!child\.getComponent\(Canvas\)\) \?\? scene/.test(helperSource),
+    "非游戏场景挂 Canvas 下：Canvas 原点就是屏幕中心，飘字坐标（configs/layout/hud.tipsLayout）才对得上",
+  );
+  check(
+    !/if \(scene && isValid\(scene\)\) scene\.addChild\(tip\)/.test(helperSource),
+    "不许退回「直接挂场景根」：场景根的 (0,0) 是世界原点，飘字会压到屏幕左下角顶点、大半个在屏外（服务端文案等于没提示）",
+  );
+  check(/tip\.layer = host\.layer/.test(helperSource), "飘字图层跟随宿主（新建节点恒为 DEFAULT，别指望相机 visibility 恰好带着它）");
 
   console.log("— B. 客户端：角色数据以服务端为准 —");
 

@@ -340,10 +340,12 @@
 
 ### 登录、选角界面的错误提示为什么看不见？
 
-- **原因**：飘字（含服务端返回的「账号或密码错误」这类文案）原来一律挂到 `LayerManager.UILayer`。但那个图层容器是 `LayerManager.initLayer` 在**游戏场景**里建的；登录 / 选角场景从不调它 —— 于是飘字挂到了一个**不在场景树里**的静态节点上，既不渲染也不跟随，玩家什么提示都看不到
-- **现在怎么做的**：`GameUiHelper.mountFloatingTip` 按「容器是否在当前场景里」选挂载点 —— 游戏内照旧挂 UI 图层（保持临时层在最上，不参与弹窗置顶排序），登录 / 选角这类场景挂**当前场景根**（图层用默认值，与场景相机的 visibility 一致）。判据不是「当前是哪个场景」，以后新增场景不必回来改这里
+- **两层坑，都踩过**：飘字（含服务端返回的「该账号已被注册」「账号或密码错误」这类文案）原先一律挂到 `LayerManager.UILayer`。但那个图层容器是 `LayerManager.initLayer` 在**游戏场景**里建的；登录 / 选角场景从不调它 —— 于是飘字挂到了一个**不在场景树里**的静态节点上，既不渲染也不跟随，玩家什么提示都看不到
+- **挂载点怎么选**：`GameUiHelper.mountFloatingTip` 按「容器是否在当前场景里」判断 —— 游戏内照旧挂 UI 图层（保持临时层在最上，不参与弹窗置顶排序），登录 / 选角这类场景挂**场景里的 `Canvas` 节点**。判据不是「当前是哪个场景」，以后新增场景不必回来改这里
+- **为什么是 `Canvas`、不是场景根**（第二次踩的坑，只修了挂载点没修坐标系）：飘字的坐标**以屏幕中心为原点**（`configs/layout/hud.tipsLayout`：起点 `(0, 0)`、上浮到 `(0, risePositionY)`）—— 游戏内成立是因为 `UILayer` 被 `LayerManager.move` 搬到了角色位置（= 屏幕中心）。挂**场景根**时局部 `(0, 0)` 是**世界原点**，而这两张场景的 UI 相机是 `Canvas` 的子节点、世界位置在 `Canvas` 中心（设计分辨率 1624×750 → 约 `(812, 375)`）—— 飘字正好压在**屏幕左下角顶点**上，300×20 / 字号 12 的 Label 大半个在屏外。**症状：控制台里有 `[net] 请求失败`，界面一个字都没有**（飘字确实建出来了，只是看不见）。挂 `Canvas` 就对了：它的原点就是屏幕中心，且 `alignCanvasWithScreen` 会随窗口重设自身位置与尺寸，窗口缩放后飘字仍然居中
+- **图层跟着宿主走**：`tip.layer` 显式对齐宿主节点。新建节点恒为 `DEFAULT`，能看见只是碰巧场景相机的 `visibility` 里带着它（登录 / 选角是 `DEFAULT | UI_2D | UI_3D`），跟 `Canvas`（`UI_2D`）对齐就不必赌这件事
 - **别退回旧写法**：不要在业务里直接 `LayerManager.addToUILayer(tip)` 建提示 —— 那又只在游戏里可见。统一走 `GameUiHelper.createTip / createErrorTip`（固定文案，key 在 `configs/texts`）与 `createTipText / createErrorTipText`（动态文案，如服务端 message）
-- 回归单测：`node tools/test-dialog-top.cjs`（含这条挂载口径的断言）与 `node tools/test-client-net.cjs`
+- 回归单测：`node tools/test-dialog-top.cjs` 与 `node tools/test-client-net.cjs`（都含挂载点 + 图层跟随的断言）
 
 ### 实时通道（WebSocket）是怎么接的？
 
