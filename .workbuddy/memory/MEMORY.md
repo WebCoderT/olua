@@ -17,6 +17,8 @@
 - Cocos 编辑器周期性回写 assets：改完 `sleep 20` 复检；只信 Grep 工具与 `git diff`（BSD grep 不吃 `\|`）；批量替换用 `perl -pi -e`，改完必须 `make client-check`。
 - 服务端/子进程 `env -u NODE_OPTIONS`；`curl 127.0.0.1 --noproxy '*'`；起监听端口前先探测占用。
 - 打包 babel loose：`[...迭代器]` 恒空 → `Array.from`；飘字走 `GameUiHelper.createTip*`；客户端 tsc 用 `client/tools/tsconfig.check.json`。
+- **引擎 3.8.7 指针监听硬坑**：任何注册了指针事件（`TOUCH_*` 也算，`dispatchEventTouch` 与鼠标同走 `_sortPointerEventProcessorList`）却没有 `UITransform` 的节点，会让每次指针派发抛 `cameraPriority` 空指针、整个输入全废。`class Xxx extends Node` 自己当按钮的最容易漏（`blockClickThrough(this)` 的防呆只静默跳过、不阻止紧随其后的 `this.on(TOUCH_*)`）。守点 = `audit-ui-click-through` 第 6 段 + 第 5 段的顺序接线（#443）。
+- **「防呆静默跳过」会把证据吞掉**：判据不能问「有没有调防呆」，要问「它需要的前提在不在」——#443 里审计因 `blockClickThrough(this)` 那行判绿，而同一节点的 `TOUCH_END` 一直在崩。
 - e2e 纪律：先算轮询窗口 vs 过期时间；问**字段有几个写者**，判据用只有目标路径写的字段；**错误断言必须精确匹配文案**（泛判据会被无关路径满足、掩盖功能缺失）；**重试写在被测助手内部**（#396 `killOne` 只取一次世界快照 → CI 上 6 条连环假红）；**带缓存的逻辑 e2e 要把 TTL 压到 0**（#398 `SOCIAL_BLOCK_CACHE_MS=0`，否则测的是缓存不是逻辑）；`EXPECTED_ASSERTIONS` 与条数差一条就会把绿变红。
 
 ## 部署要点（细节 Skill `olua-deploy`）
