@@ -366,13 +366,16 @@ export default class GameUiHelper {
    * 创建角色预览效果（选角界面的站立帧动画，图集帧循环播放；帧率见 layouts/scenes 的 roleSelectorLayout.previewFrameRate）
    * 帧动画走 AnimationHelper：素材是 TexturePacker 图集（plist），按帧名末尾序号排序后循环播放
    * 帧加载是异步的（已缓存时微任务内即完成），装载完成时节点已销毁/已标记销毁则静默跳过
+   *
+   * 容器用**普通节点**（不是 `UiHelper.createEmptyNode`）：后者是核对体积用的调试节点，
+   * 会无条件画一圈纯红 4px 边框，挂到选角界面上就是角色四周一个去不掉的红框（#455）。
    * @param name 预览名（同时作为动画节点名前缀）
    * @param level 等级（预览动画与等级无关，保留参数以兼容调用方）
    * @param occupation 职业
    * @param sex 性别
    */
   static createRolePreview(name: string, level: number, occupation: string = "1", sex: string = "1", position: Vec2 = new Vec2(), size: Size = new Size()) {
-    const role = UiHelper.createEmptyNode(name, position, size);
+    const role = UiHelper.createNode(name, position, size);
     const animationName = name ? `${name}_animation` : "role_preview_animation";
     const node = UiHelper.createSprite(animationName, "");
     node.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;

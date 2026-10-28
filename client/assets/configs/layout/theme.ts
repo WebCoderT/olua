@@ -11,12 +11,6 @@ import { Color, Size } from "cc";
  * 约定：核心代码只引用这里的值，**不在零件里写颜色/字号/时长**。
  */
 export const uiTheme = {
-  /** 空节点调试边框（UiHelper.createEmptyNode：用于确认选择体积） */
-  emptyNodeBorder: {
-    lineWidth: 4,
-    color: new Color(255, 0, 0, 255),
-  },
-
   /** 输入框占位符颜色（UiHelper.createInputBox） */
   inputPlaceholderColor: new Color("#999999"),
 
