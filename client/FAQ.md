@@ -388,6 +388,41 @@ TSC=/path/to/tsc node tools/test-bag-tidy.cjs   # 手动指定 tsc
 - 单测里**不能比较对象身份**（`StorageManager.getItem` 返回副本），要比内容
 - 断言不只看「该做的做了」，也看「不该做的没做」（例如「被踢下线的处理里不许出现 `deleteRole`」）
 
+## 屏幕适配
+
+### 游戏画面为什么不跟着窗口缩放？想让它随窗口自适应改哪里？
+
+「画面自适应」是**三层**的事，缺任何一层都会看到「固定大小的框」或者黑边：
+
+| 层 | 管什么 | 本工程的做法 |
+| --- | --- | --- |
+| 页面层 | 画布元素本身多大 | `build-templates/web-desktop/`（覆盖引擎模板）：`#GameDiv` / `#Cocos3dGameContainer` / `#GameCanvas` 都铺满视口，去掉边框、阴影与页面上下那两行文字 |
+| 设计分辨率层 | 游戏内部坐标系怎么映射到像素 | 四个场景 `start()` 都调 `ScreenLayout.applyScreenPolicy()` → `setDesignResolutionSize(1624, 750, NO_BORDER)`：等比缩放**铺满**窗口、不留黑边 |
+| 场景布局层 | 各类元素摆在坐标系里的哪 | 常驻 HUD（角色栏 / 小地图 / 底部栏 / 摇杆）用 `getAnchoredPosition(尺寸, getVisibleSize(), 贴哪条边, 边距)` 现算；`Game.ts` 注册 `onWindowResize` 统一重排；登录 / 选角整块舞台按 `getStageScale` 等比 contain 缩放 |
+
+**为什么以前是一个固定大小的框**：引擎自带的 web-desktop 模板把尺寸写死在内联样式里 ——
+`<div id="GameDiv" style="width: 1920px; height: 1080px">`，还带 5px 黑边与阴影、页面上下各一行文字。
+窗口怎么缩放它都不变，于是画布永远 1920×1080。本工程用 `client/build-templates/web-desktop/`
+覆盖了同名的 `index.ejs` 与 `style.css`（自定义构建模板就是在 `build-templates/<平台>/` 放同名文件，
+构建时覆盖到产物目录），把外壳改成「铺满视口、无边框、无滚动条」。
+
+**改成铺满之后，窗口缩放是怎么传导到画面的**：
+`window resize` → 引擎 `screen` 派发 `window-resize` → `screenAdapter` 重读 `#GameDiv` 的
+`clientWidth/clientHeight`（`exactFitScreen` 为 false 时走这个 SubFrame 口径；为 true 时直接用
+`window.innerWidth/innerHeight`，连 CSS 都不看）→ 重设 canvas 像素尺寸 → `view` 重算缩放 →
+游戏里 `onWindowResize` 把贴边 HUD 重排一次。所以「页面层没铺满」时，后面两层再对也只能画在一个固定框里。
+
+两个容易踩的点：
+
+- **算可见区不能用 `view.getVisibleSize()`**：NO_BORDER 下引擎把视口放大到超出画布再裁掉溢出部分，
+  `_visibleRect` 恒等于设计分辨率，贴边元素会被排到屏幕外。统一用 `ScreenLayout.getVisibleSize()`
+  （窗口像素 ÷ `view.getScaleX/getScaleY`，与相机 orthoHeight 同一个公式）。
+- **不要为了自适应换 `web-mobile` 平台**：它的模板给 canvas 挂了 `oncontextmenu="event.preventDefault()"`，
+  右键寻路 / 传送会被吃掉。要铺满就覆盖桌面模板，别换平台。
+
+改完怎么验证：在 Cocos Creator 里重新构建（模板只在构建时生效，预览用的是预览器自己的页面），
+构建后拖浏览器窗口，画面与 HUD 应同步缩放 / 重排；改 `client/build-templates/` 下的文件不需要动 `assets/`。
+
 ## 相关文档
 
 - [README.md](README.md) —— 客户端概览、工程怎么打开、工具清单、类型检查

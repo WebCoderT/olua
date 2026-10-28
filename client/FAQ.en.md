@@ -388,6 +388,37 @@ A few conventions:
 - In tests you **cannot compare object identity** (`StorageManager.getItem` returns a copy); compare contents
 - Assertions check not only "what should happen happened" but also "what should not happen did not" (for example, "`deleteRole` must not appear in the kicked-offline handler")
 
+## Screen adaptation
+
+### Why doesn't the game view follow the window? Where do I change it?
+
+"Adapting to the window" is a **three-layer** thing; miss any layer and you see a fixed-size box or black bars:
+
+| Layer | What it controls | What this project does |
+| --- | --- | --- |
+| Page layer | How big the canvas element itself is | `build-templates/web-desktop/` (overriding the engine template): `#GameDiv` / `#Cocos3dGameContainer` / `#GameCanvas` all fill the viewport, with the border, the shadow and the two lines of text above and below the page removed |
+| Design-resolution layer | How the in-game coordinate system maps to pixels | All four scenes call `ScreenLayout.applyScreenPolicy()` in `start()` → `setDesignResolutionSize(1624, 750, NO_BORDER)`: scale proportionally to **fill** the window without letterboxing |
+| Scene-layout layer | Where elements sit inside that coordinate system | The persistent HUD (role bar / minimap / bottom bar / joystick) computes its position from `getAnchoredPosition(size, getVisibleSize(), which edge, margin)`; `Game.ts` registers `onWindowResize` and relayouts them together; the login and character-selection stage scales as a whole through `getStageScale` (contain) |
+
+**Why it used to be a fixed-size box**: the engine's web-desktop template hardcodes the size in an inline style —
+`<div id="GameDiv" style="width: 1920px; height: 1080px">`, plus a 5px border, a shadow and a line of text above and below.
+It never changed with the window, so the canvas stayed 1920×1080 forever. This project overrides the same-named
+`index.ejs` and `style.css` under `client/build-templates/web-desktop/` (a custom build template is just same-named files
+under `build-templates/<platform>/`, copied over the build output), turning the shell into "fill the viewport, no border, no scrollbars".
+
+**How a window resize reaches the picture once the page fills the window**:
+`window resize` → the engine's `screen` emits `window-resize` → `screenAdapter` re-reads `#GameDiv`'s
+`clientWidth/clientHeight` (the SubFrame path taken when `exactFitScreen` is false; when it is true the adapter uses
+`window.innerWidth/innerHeight` directly and ignores CSS) → the canvas pixel size is reset → `view` recomputes the scale →
+`onWindowResize` relayouts the edge-anchored HUD. So while the page layer is a fixed box, the other two layers can be perfect and you still draw into a frame.
+
+Two easy traps:
+
+- **Do not compute the visible area with `view.getVisibleSize()`**: under NO_BORDER the engine enlarges the viewport past the canvas and lets the canvas clip the overflow, so `_visibleRect` always equals the design resolution and edge-anchored elements land off-screen. Use `ScreenLayout.getVisibleSize()` instead (window pixels ÷ `view.getScaleX/getScaleY`, the same formula as the camera's orthoHeight).
+- **Do not switch to the `web-mobile` platform just to get a full-screen canvas**: its template puts `oncontextmenu="event.preventDefault()"` on the canvas, which swallows right-click pathing and teleporting. Override the desktop template instead of changing platforms.
+
+To verify: rebuild in Cocos Creator (the template only takes effect at build time; preview uses the previewer's own page), then drag the browser window — the picture and the HUD must scale and relayout together. Editing files under `client/build-templates/` requires no changes under `assets/`.
+
 ## Related documents
 
 - [README.en.md](README.en.md) — client overview, opening the project, tool list, typecheck
