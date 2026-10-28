@@ -209,7 +209,15 @@ console.log("\n== E. 源码接线断言 ==");
   check(/const barScale = visible\.width \/ barLayout\.size\.width;/.test(selector), "RoleSelector：底部栏按可见宽等比缩放（素材带牌匾装饰不可拉伸）");
   check(/getAnchoredPosition\(visual, visible, "bottom-center"/.test(selector), "RoleSelector：底部栏贴底走 getAnchoredPosition 的 bottom-center 档");
   check(/applyScreenPolicy\(\);/.test(selector) && /applyScreenPolicy\(\);/.test(login), "两个场景启动时应用铺满窗口策略");
-  check(/this\.offWindowResize = onWindowResize\(\(\) => this\.applyStageLayout\(\)\)/.test(selector) && /onDestroy\(\) \{[\s\S]*?this\.offWindowResize\?\.\(\);/.test(selector), "RoleSelector：注册窗口变化重排 + onDestroy 取消");
+  check(
+    /this\.offWindowResize = onWindowResize\(\(\) => \{[\s\S]{0,120}?\}\);/.test(selector) && /onDestroy\(\) \{[\s\S]*?this\.offWindowResize\?\.\(\);/.test(selector),
+    "RoleSelector：注册窗口变化重排 + onDestroy 取消",
+  );
+  check(/this\.offWindowResize = onWindowResize\(\(\) => \{\s*this\.applyStageLayout\(\);\s*this\.fitBackground\(\);/.test(selector), "RoleSelector：窗口变化时舞台重排 + 背景按 cover 重算（#456）");
+  check(
+    /createCoverImage\("role_selector_background"/.test(selector) && !/createFullScreenImage\("role_selector_background"/.test(selector),
+    "RoleSelector：背景走等比铺满（cover），不再 CUSTOM 拉伸（竖图铺横屏会拉歪 3.87 倍）",
+  );
 }
 
 console.log("\n== F. 构建模板：画布铺满窗口（页面层自适应） ==");

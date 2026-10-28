@@ -22,6 +22,7 @@ import {
 } from "cc";
 import { uiImages, uiTheme } from "../../configs/hudLayout";
 import { blockClickThrough } from "../utils/input/UiHit";
+import { getVisibleSize } from "../utils/layout/ScreenLayout";
 
 /**
  * UI基础元素工厂（静态类）
@@ -88,6 +89,47 @@ export default class UiHelper {
   static createFullScreenNode(name: string, src: string) {
     const screenSize = this.getScreenSize();
     return this.createSprite(name, src, new Vec2(), new Size(screenSize.width, screenSize.height));
+  }
+
+  /**
+   * 创建「等比铺满」的背景节点（cover）：按素材自身比例缩放、铺满可见区，多出的部分落在屏外
+   *
+   * 与 `createFullScreenNode` 的区别：那个把节点尺寸直接设成设计分辨率（CUSTOM 拉伸），
+   * 素材比例与屏幕比例不一致时会把整张图画歪（如 650×1154 的竖图铺到 1624×750 上，
+   * 纵横比被拉歪近 4 倍，整屏糊）；这个只缩放不拉伸，代价是构图被裁。
+   * 所以**只用在"构图可裁"的底图上**；带 logo / 合规文字的整图（登录、加载）不能用。
+   *
+   * 素材尺寸要等加载完才知道，故通过回调把原始尺寸给调用方；窗口尺寸变化时
+   * 由调用方拿这个尺寸再调 `fitCoverNode` 重算（本方法不挂监听）。
+   */
+  static createCoverNode(name: string, src: string, onTextureLoaded?: (textureSize: Size) => void) {
+    const node = this.createNode(name, new Vec2(), this.getScreenSize());
+    const sprite = node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.trim = false;
+    this.loadSprite(src, (frame) => {
+      if (!isValid(node) || !isValid(sprite)) return;
+      sprite.spriteFrame = frame;
+      const textureSize = new Size(frame.rect.width, frame.rect.height);
+      if (!textureSize.width || !textureSize.height) return;
+      this.fitCoverNode(node, textureSize);
+      onTextureLoaded?.(textureSize);
+    });
+    return node;
+  }
+
+  /**
+   * 按素材尺寸把节点铺满当前可见区（cover）
+   * @param node 目标节点（需带 UITransform）
+   * @param textureSize 素材原始像素尺寸
+   */
+  static fitCoverNode(node: Node, textureSize: Size) {
+    const transform = node.getComponent(UITransform);
+    if (!transform || !textureSize.width || !textureSize.height) return;
+    const visible = getVisibleSize();
+    // 取两轴较大的缩放系数：短边刚好铺满，长边溢出屏外（由画布裁掉）—— 等比，永不变形
+    const scale = Math.max(visible.width / textureSize.width, visible.height / textureSize.height);
+    transform.setContentSize(textureSize.width * scale, textureSize.height * scale);
   }
 
   /**
