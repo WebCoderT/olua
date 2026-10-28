@@ -83,10 +83,17 @@ export const achievementDialogLayout = {
     nameColor: new Color(238, 240, 246, 255),
     descFontSize: 12,
     descColor: new Color(150, 156, 170, 255),
-    /** 名称 / 描述 / 进度 / 按钮各自的横向位置 */
-    namePosition: new Vec2(-150, 12),
+    /**
+     * 名称 / 描述 / 进度 / 按钮各自的横向位置。
+     *
+     * 名称与描述都是**左对齐**的 label —— 文字从文本框左缘起排，而这里给的是文本框中心 x：
+     * 行宽 480（半宽 240），`nameSize` 宽 280，中心 x 必须 ≥ −224 + 140 = −84 才不越出左缘。
+     * 原来写 −150 → bbox 左缘 −290，越界 50px，真机上只剩名称最后一个字（#483）。
+     * 现在：名称/描述 bbox −224..56，进度 80..160，按钮 160..232（行内留白 16 / 8）。
+     */
+    namePosition: new Vec2(-84, 12),
     nameSize: new Size(280, 20),
-    descPosition: new Vec2(-150, -12),
+    descPosition: new Vec2(-84, -12),
     descSize: new Size(280, 18),
     progressPosition: new Vec2(120, 0),
     progressSize: new Size(80, 20),
