@@ -78,7 +78,11 @@ export default class BottomBar extends Node {
 
   /**
    * 底部功能入口（数据见 configs/bottomNav.bottomNavItems）
-   * 这里只补「点击做什么」——回调是代码不是配置，按入口 key 关联；未实现的功能留空回调
+   * 这里只补「点击做什么」——回调是代码不是配置，按入口 key 关联
+   *
+   * 还没做的入口（`comingSoon`）与漏接回调的入口都给一句「正在开发中」的飘字：
+   * 静默无反应最糟，玩家会以为 UI 坏了（#485）。等级不够置灰的走 BottomNavButton 自己的
+   * `feature_locked_tip`，两种说法不能混。
    */
   private get bottomNavBarButtons(): BottomNavBarButton[] {
     const handlers: Record<string, () => void> = {
@@ -90,7 +94,10 @@ export default class BottomBar extends Node {
       mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
     };
-    return bottomNavItems.map((item) => ({ ...item, onClick: handlers[item.key] ?? (() => {}) }));
+    return bottomNavItems.map((item) => {
+      const comingSoon = () => GameUiHelper.createTip("feature_coming_soon", { feature: item.label });
+      return { ...item, onClick: item.comingSoon ? comingSoon : (handlers[item.key] ?? comingSoon) };
+    });
   }
 
   /** 每帧刷新快捷键冷却显示（由组合根驱动） */

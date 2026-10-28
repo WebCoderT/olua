@@ -142,6 +142,13 @@ export const uiTexts = {
   activity_started_tip: "泡点活动已开启，尽情享受吧～",
   /** 功能未解锁（{feature} 功能 · {level} 级开放） */
   feature_locked_tip: "{feature}功能需要在{level}级后开放",
+  /**
+   * 入口已放出但功能还没做（{feature} = 入口名）
+   *
+   * 与上一条要分开：`feature_locked_tip` 是「等级不够、练级就能用」，
+   * 这条是「还没做」。两者混用会让玩家以为练级能解锁一个根本不存在的功能（#485）
+   */
+  feature_coming_soon: "{feature}功能正在开发中",
 
   //#region 浮动提示：选角与角色管理
   /** 进入管理模式（选角界面「管理」按钮） */

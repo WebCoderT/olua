@@ -20,17 +20,25 @@ export interface BottomNavItem {
   openLevel: number;
   /** 显示在图标上的快捷键名（仅展示用） */
   shortcutKey: string;
+  /**
+   * 功能是否还没做（入口先放出来占位）
+   *
+   * 这条是**给玩家看的承诺**：`true` 时点击飘字「{功能}功能正在开发中」，
+   * 而不是静默无反应 —— 静默最糟，玩家会以为 UI 坏了（#485）。
+   * 接上回调后把它改成 `false`；`client/tools/test-bottom-nav.cjs` 会核对这份名单。
+   */
+  comingSoon: boolean;
 }
 
 export const bottomNavItems: BottomNavItem[] = [
-  { key: "role", label: "角色", icon: bottomNavImage("role"), openLevel: 1, shortcutKey: "C" },
-  { key: "bag", label: "背包", icon: bottomNavImage("bag"), openLevel: 1, shortcutKey: "B" },
-  { key: "chat", label: "聊天", icon: bottomNavImage("friend"), openLevel: 1, shortcutKey: "Enter" },
-  { key: "friend", label: "好友", icon: bottomNavImage("friend"), openLevel: 10, shortcutKey: "F" },
-  { key: "group", label: "组队", icon: bottomNavImage("group"), openLevel: 10, shortcutKey: "G" },
-  { key: "task", label: "任务", icon: bottomNavImage("task"), openLevel: 1, shortcutKey: "Q" },
-  { key: "skill", label: "技能", icon: bottomNavImage("skill"), openLevel: 1, shortcutKey: "K" },
-  { key: "horse", label: "坐骑", icon: bottomNavImage("horse"), openLevel: 1, shortcutKey: "T" },
-  { key: "mall", label: "商城", icon: bottomNavImage("mall"), openLevel: 1, shortcutKey: "M" },
-  { key: "config", label: "设置", icon: bottomNavImage("config"), openLevel: 1, shortcutKey: "/" },
+  { key: "role", label: "角色", icon: bottomNavImage("role"), openLevel: 1, shortcutKey: "C", comingSoon: false },
+  { key: "bag", label: "背包", icon: bottomNavImage("bag"), openLevel: 1, shortcutKey: "B", comingSoon: false },
+  { key: "chat", label: "聊天", icon: bottomNavImage("friend"), openLevel: 1, shortcutKey: "Enter", comingSoon: false },
+  { key: "friend", label: "好友", icon: bottomNavImage("friend"), openLevel: 10, shortcutKey: "F", comingSoon: true },
+  { key: "group", label: "组队", icon: bottomNavImage("group"), openLevel: 10, shortcutKey: "G", comingSoon: false },
+  { key: "task", label: "任务", icon: bottomNavImage("task"), openLevel: 1, shortcutKey: "Q", comingSoon: false },
+  { key: "skill", label: "技能", icon: bottomNavImage("skill"), openLevel: 1, shortcutKey: "K", comingSoon: false },
+  { key: "horse", label: "坐骑", icon: bottomNavImage("horse"), openLevel: 1, shortcutKey: "T", comingSoon: true },
+  { key: "mall", label: "商城", icon: bottomNavImage("mall"), openLevel: 1, shortcutKey: "M", comingSoon: false },
+  { key: "config", label: "设置", icon: bottomNavImage("config"), openLevel: 1, shortcutKey: "/", comingSoon: true },
 ];
