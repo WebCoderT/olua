@@ -263,11 +263,19 @@ export default class GameUiHelper {
     return button;
   }
 
-  /** 创建带图标的输入框组（背景 + 可选图标 + 输入框），返回背景节点与输入框节点 */
+  /**
+   * 创建带图标的输入框组（背景 + 可选图标 + 输入框），返回背景节点与输入框节点
+   *
+   * 内层 EditBox 的宽度 = 背景宽 − 左右留白。留白按**有没有图标**取（见 uiTheme.inputField）：
+   * 带图标的（登录页，左侧图标 + 文字起始位）要留 200；不带图标的（创建角色弹窗）只留边距。
+   * 原来这里对两种情况都写死减 200，弹窗的 240 宽背景减完只剩 40 —— 背景条看着是整条，
+   * 实际只有右端一小截能点（真机点左半边拿不到焦点，见 #457）。
+   */
   static createInputField(placeholder: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 80), icon?: string, password: boolean = false) {
     const background = UiHelper.createSprite("input_background", uiImages.loginInputBackground, position, size);
     if (icon) background.addChild(UiHelper.createSprite("input_icon", icon, new Vec2(-size.width / 2 + 60, -6), new Size(40, 40)));
-    const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, -6), new Vec2(size.width - 200, 60), password);
+    const inset = icon ? uiTheme.inputField.iconInset : uiTheme.inputField.plainInset;
+    const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, -6), new Vec2(size.width - inset, uiTheme.inputField.height), password);
     background.addChild(input);
     return { node: background, input };
   }
@@ -614,6 +622,14 @@ export default class GameUiHelper {
    */
   private static createFloatingTip(name: string, text: string, color: Color, moveDuration: number, fadeDuration: number) {
     const tip = UiHelper.createTipLabel(name, text, color, tipsLayout.fontSize, tipsLayout.size);
+    // 描边：飘字落在屏幕中心，那里常压着深色/同色面板（登录页那条深红装饰板），
+    // 不加描边的纯色小字基本读不出来（见 tipsLayout.outline 与 #457）
+    const label = tip.getComponent(Label);
+    if (label) {
+      label.enableOutline = true;
+      label.outlineWidth = tipsLayout.outline.width;
+      label.outlineColor = tipsLayout.outline.color;
+    }
     // 飘字是临时装饰（屏幕中间上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
     markClickThrough(tip);
     const uiOpacity = tip.addComponent(UIOpacity);

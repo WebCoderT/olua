@@ -135,8 +135,16 @@ export const smallMapLayout = {
   size: new Size(280, 250),
   /** 贴屏幕右上角（边距为区块边缘到屏幕上/右边缘的距离） */
   anchor: { edge: "top-right", marginX: 2, marginY: 12 } as HudAnchor,
-  /** 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录） */
-  entryIcons: ["world", "achievement", "mail", "config", "sound", "屏蔽 副本"],
+  /**
+   * 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录）
+   *
+   * **每一项都必须在 `resources/small-map/` 有同名图**：这里写名字、图缺失时引擎只在控制台报一句
+   * `Bundle resources doesn't contain ...`，界面上表现为那一格是空的（不会报错、也不会挡住别的）。
+   * 原来末尾那颗占位 `"屏蔽 副本"` 就是这样 —— 配置写的是正常中文名，而 Release 包里的文件名
+   * 已是乱码（`灞忚斀 鍓?湰.png`），每次进游戏必报一条 error、入口列少一颗（#457）。
+   * 要加入口先确认素材已随 Release 分发、且文件名是合法 UTF-8。
+   */
+  entryIcons: ["world", "achievement", "mail", "config", "sound"],
   /**
    * 哪个入口开消息中心（邮件面板，公告板在面板里；#429 之前这颗只开公告板）
    *
@@ -218,8 +226,16 @@ export const dropItemLayout = {
 
 /** 浮动提示（消息/错误）：居中显示后上浮淡出 */
 export const tipsLayout = {
-  size: new Size(300, 20),
-  fontSize: 12,
+  size: new Size(480, 24),
+  fontSize: 16,
+  /**
+   * 描边（Label 自带的 outline）
+   *
+   * 飘字最常见的落点是**屏幕中心**，而那里常常压着深色或同色系的面板
+   * （登录页输入框之间那条深红装饰板就是典型）：纯红 12 号字直接贴上去几乎读不出来。
+   * 统一加深色描边 + 提字号，任何底色上都读得清（#457）
+   */
+  outline: { width: 2, color: new Color(0, 0, 0, 255) },
   /** 上浮目标位置（纵坐标）与上浮时长（秒） */
   risePositionY: 40,
   messageMoveDuration: 0.5,
