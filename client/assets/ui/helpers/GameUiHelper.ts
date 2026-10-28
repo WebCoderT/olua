@@ -2,6 +2,7 @@ import {
   Animation,
   BoxCollider2D,
   Button,
+  Canvas,
   Color,
   director,
   Graphics,
@@ -608,11 +609,24 @@ export default class GameUiHelper {
   }
 
   /**
-   * 挂载飘字（**跨场景**：游戏内挂 UI 图层，登录/选角这类没有图层容器的场景挂场景根）
+   * 挂载飘字（**跨场景**：游戏内挂 UI 图层，登录/选角这类没有图层容器的场景挂场景里的 Canvas）
    *
    * 游戏场景的图层容器由 LayerManager.initLayer 建在场景里（飘字挂它才有正确的图层位）；
    * 而登录/选角场景从不调 initLayer —— 那个静态 UILayer 根本没进场景树，直接挂上去的飘字
    * 既不渲染也不跟随任何东西，玩家看不到任何提示（服务端返回的「账号或密码错误」这类提示会全丢）。
+   *
+   * 但只换挂载点还不够，**坐标口径是第二层坑**：飘字的坐标以**屏幕中心为原点**设计
+   * （见 configs/layout/hud.tipsLayout：起点 (0, 0)、上浮到 (0, risePositionY)），这套口径在游戏内成立
+   * 是因为 UILayer 被 LayerManager.move 搬到角色位置上（= 屏幕中心）。挂在**场景根**上时局部 (0, 0)
+   * 是**世界原点**，而登录 / 选角的 UI 相机是 Canvas 的子节点、世界位置在 Canvas 中心（约设计尺寸的一半），
+   * 于是飘字被摆到相对相机中心偏了「半个屏幕」的地方 —— 正好压在屏幕左下角顶点上，大半个在屏外。
+   * 症状就是：控制台里有 [net] 请求失败，界面却一个字都没有（飘字其实建出来了，只是看不见）。
+   *
+   * 所以非游戏场景挂 **Canvas 节点**：它的原点就是屏幕中心（与游戏内的坐标口径一致），
+   * 且 alignCanvasWithScreen 会随窗口重设自身位置与尺寸，窗口缩放后飘字仍然居中，不必自己跟 resize。
+   * 顺手把图层对齐宿主：新建节点恒为 DEFAULT，能看见只是碰巧场景相机的 visibility 里带着 DEFAULT，
+   * 显式跟随宿主（Canvas 是 UI_2D）就不必赌这件事。
+   *
    * 判据用「容器是否在场景里」而不是「当前是哪个场景」，以后新增场景不必再回来改这里。
    */
   private static mountFloatingTip(tip: Node) {
@@ -621,9 +635,12 @@ export default class GameUiHelper {
       LayerManager.addToUILayer(tip);
       return;
     }
-    // 非游戏场景：挂场景根，图层保持默认（与场景相机的 visibility 一致）
     const scene = director.getScene();
-    if (scene && isValid(scene)) scene.addChild(tip);
+    if (!scene || !isValid(scene)) return;
+    // 非游戏场景：脚本挂载之前场景里已经有 Canvas（引擎的 UI 根），按结构找它，找不到才退回场景根
+    const host = scene.children.find((child) => !!child.getComponent(Canvas)) ?? scene;
+    tip.layer = host.layer;
+    host.addChild(tip);
   }
 
   /**

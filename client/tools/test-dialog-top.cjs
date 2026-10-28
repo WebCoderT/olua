@@ -184,8 +184,10 @@ check(/blockClickThrough\(this\)/.test(confirmSource), "确认框仍然独占鼠
 
 // 不该被卷进来的：HUD / 临时层 / 死亡遮罩 / 升级特效
 // 飘字是临时层：游戏内仍挂 UI 图层（保持最上，不参与弹窗置顶排序）；
-// 登录/选角这类没调 initLayer 的场景没有图层容器，改挂场景根（见 GameUiHelper.mountFloatingTip）
-check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /if \(uiLayer && isValid\(uiLayer\) && uiLayer\.scene\)[\s\S]{0,80}LayerManager\.addToUILayer\(tip\)/.test(helperSource), "飘字提示：游戏内仍挂 UI 图层（临时层保持最上），非游戏场景挂场景根");
+// 登录/选角这类没调 initLayer 的场景没有图层容器，改挂场景里的 Canvas —— 注意不是场景根：
+// Canvas 的原点才是屏幕中心，挂场景根会把飘字摆到世界原点（= 屏幕左下角顶点外），见 GameUiHelper.mountFloatingTip
+check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /if \(uiLayer && isValid\(uiLayer\) && uiLayer\.scene\)[\s\S]{0,80}LayerManager\.addToUILayer\(tip\)/.test(helperSource), "飘字提示：游戏内仍挂 UI 图层（临时层保持最上），非游戏场景挂 Canvas");
+check(/getComponent\(Canvas\)\) \?\? scene/.test(helperSource) && /host\.addChild\(tip\)/.test(helperSource), "非游戏场景的飘字挂在 Canvas 下（原点 = 屏幕中心），不是场景根");
 check(/LayerManager\.addToUILayer\(detailDialog\)/.test(helperSource), "悬停物品详情仍是 addToUILayer（同上）");
 check(/LayerManager\.addToUILayer\(detail\)/.test(mallSource), "商城的悬停详情仍是 addToUILayer（同上）");
 check(/LayerManager\.addToUILayer\(dialog\)/.test(hoverTipSource), "悬停提示仍是 addToUILayer（同上）");
