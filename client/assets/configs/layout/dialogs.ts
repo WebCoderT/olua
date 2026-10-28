@@ -974,61 +974,83 @@ export const reportDialogLayout = {
 
 //#endregion
 
-//#region 聊天弹窗（#395）
+//#region 聊天窗（#395；#469 起为常驻左下角小窗）
 
 /**
- * 聊天弹窗布局（世界 / 帮会 / 私聊三页签）
+ * 聊天窗布局（世界 / 帮会 / 私聊三页签）
  *
- * 框体与社交弹窗同尺寸（600×560）：同一套框、同一套页签几何，看起来是同一个应用里的东西。
- * 消息列表占框体主体，输入行贴框底（与社交弹窗的「加人一行」同一个位置——玩家的肌肉记忆只有一套）。
+ * **#469 起不再是居中大弹窗**：按主流网游的习惯改成**常驻左下角的小窗**（440×280），
+ * 进游戏自动打开（引导进行中除外），底部入口 / Enter 仍是开关。
  *
- * 气泡（bubbles）不是弹窗的一部分：它是屏幕左上角的常驻演出（弹窗关着的时候新消息往上冒），
+ * 停靠位置算过两侧邻居：左下角摇杆 175×172（margin 24/18，顶到 y=-185），
+ * 任务追踪栏三行到 y=124 —— 本窗 marginY 205（下缘 y=-170）到 y=110，两头都不叠。
+ *
+ * 气泡（bubbles）不是窗体的一部分：它是屏幕左上角的常驻演出（窗关着的时候新消息往上冒），
  * 布局放在这里只是因为「聊天的长相关什么」都归这一块管。
  */
 export const chatDialogLayout = {
-  name: "chat_dialog",
-  title: "聊 天",
-  size: new Size(600, 560),
-  /** 页签（三个：世界 / 帮会 / 私聊；几何与社交弹窗同款） */
+  name: "chat_box",
+  size: new Size(440, 280),
+  /** 常驻停靠：贴屏幕左下角（边距为窗体边缘到屏幕左/下边缘的距离，见 getAnchoredPosition） */
+  dock: { edge: "bottom-left", marginX: 24, marginY: 205 } as const,
+  /** 窗体底板（半透明深色 + 金色细边；颜色必须在配置里，组件不写字面量） */
+  box: {
+    fill: new Color(16, 20, 32, 215),
+    border: new Color(255, 214, 102, 170),
+    radius: 10,
+    borderWidth: 1.5,
+    padding: 20,
+  },
+  /** 页签（三个：世界 / 帮会 / 私聊；贴窗顶一排） */
   tabs: {
-    y: 232,
-    size: new Size(112, 32),
-    columns: [-112, 0, 112],
+    y: 116,
+    size: new Size(124, 26),
+    columns: [-136, 0, 136],
     radius: 6,
     activeFill: new Color(255, 200, 80, 230),
     activeText: new Color(38, 30, 12, 255),
     idleFill: new Color(28, 33, 42, 200),
     idleText: new Color(190, 200, 214, 255),
     idleBorder: new Color(64, 74, 90, 255),
-    fontSize: 13,
+    fontSize: 12,
   },
-  /** 消息列表（框体主体） */
-  list: { name: "chat_message_list", position: new Vec2(0, 8), size: new Size(556, 412) },
+  /** 消息列表（窗体主体） */
+  list: { name: "chat_message_list", position: new Vec2(0, 2), size: new Size(392, 196) },
   /** 消息行：发送者名（按关系上色）+ 正文 */
   row: {
-    size: new Size(552, 32),
+    size: new Size(388, 26),
     fill: new Color(22, 26, 34, 150),
     border: new Color(64, 74, 90, 255),
     radius: 6,
-    nameFontSize: 12,
-    textFontSize: 12,
+    nameFontSize: 11,
+    textFontSize: 11,
     metaColor: new Color(160, 172, 190, 255),
     /** 名字列（含帮会名前缀；文本列吃剩下的宽度） */
-    nameX: -185,
-    nameSize: new Size(140, 20),
-    textX: 75,
-    textSize: new Size(360, 22),
+    nameX: -130,
+    nameSize: new Size(120, 18),
+    textX: 45,
+    textSize: new Size(280, 20),
   },
-  /** 输入行（贴框底；私聊有对象时旁边多一枚「返回」） */
+  /** 输入行（贴窗底；私聊有对象时旁边多一枚「返回」） */
   inputRow: {
-    input: { position: new Vec2(-70, -232), size: new Vec2(400, 30) },
-    send: { position: new Vec2(195, -232) },
-    back: { position: new Vec2(255, -232) },
+    input: { position: new Vec2(-85, -122), size: new Vec2(220, 26) },
+    send: { position: new Vec2(65, -122) },
+    back: { position: new Vec2(130, -122) },
   },
   /** 私聊选人页：一行说明 + 候选列表（聊天记录里出现过的 + 附近的人） */
   privatePick: {
-    hint: { position: new Vec2(0, 200), size: new Size(560, 20) },
-    list: { name: "chat_private_pick_list", position: new Vec2(0, 8), size: new Size(556, 400) },
+    hint: { position: new Vec2(0, 84), size: new Size(380, 18) },
+    list: { name: "chat_private_pick_list", position: new Vec2(0, -10), size: new Size(392, 170) },
+  },
+  /**
+   * 选人行的行内几何（行高 / 底色 / 描边复用上面的 row，只是名字列不同）：
+   * 选人行只有「名字 + 一枚按钮」，名字列按消息行的窄列摆会几乎贴到行左缘，
+   * 且 120 宽装不下最长 12 字的角色名 —— 这里把名字列居中放宽到 220，按钮挪到行尾
+   */
+  pickRow: {
+    nameX: -70,
+    nameSize: new Size(220, 18),
+    buttonX: 140,
   },
   /** 屏幕气泡（弹窗关着时新消息在左上角冒一下；最多同时三条，逐条下移） */
   bubbles: {
