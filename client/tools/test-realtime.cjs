@@ -426,11 +426,38 @@ async function connectOk(heartbeatMs = 600000) {
     RealtimeClient.stop();
   }
 
-  console.log("\n— N. 源码断言：接线齐、参数不进代码 —");
+  console.log("\n— N. 服务端拒绝：error 帧必须到达组合根（#495） —");
 
+  {
+    reset();
+    const { CombatChannel } = net;
+    const shown = [];
+    CombatChannel.onServerError = (error) => shown.push(error);
+    const rejected = await connectOk();
+    rejected.deliver({ type: "error", data: { code: 20012, message: "背包已满" } });
+    await delay(0);
+    check(
+      shown.length === 1 && shown[0].code === 20012 && shown[0].message === "背包已满",
+      "error 帧被转成一条可见提示（旧实现整条帧被吞掉，玩家只看到点了没反应）",
+      JSON.stringify(shown),
+    );
+    const before = shown.length;
+    rejected.deliver({ type: "error", data: { code: 1 } });
+    rejected.deliver({ type: "error", data: null });
+    rejected.deliver({ type: "error" });
+    await delay(0);
+    check(shown.length === before, "没有 message 的 error 帧不弹空提示（只打日志）");
+    check(RealtimeClient.status === RealtimeStatus.Connected, "error 帧不影响连接状态（对端还在说话）");
+    CombatChannel.onServerError = null;
+    RealtimeClient.stop();
+  }
+
+  console.log("\n— O. 源码断言：接线齐、参数不进代码 —");
   const game = read("ui/Game.ts");
   check(/RealtimeClient\.start\(\)/.test(game) && /RealtimeClient\.stop\(\)/.test(game), "游戏场景进出各接一次（进游戏才连、离开就断）");
   check(/RealtimeClient\.onStatusChange\s*=\s*null/.test(game), "场景卸载时先摘掉状态回调（否则收尾时又提示一句）");
+  check(/CombatChannel\.onServerError = \(error\) => GameUiHelper\.createTipText\(error\.message\)/.test(game), "组合根把服务端拒绝接成一句飘字（#495）");
+  check(/CombatChannel\.onServerError = null/.test(game), "离场时摘掉拒绝回调（不跨场景留悬挂闭包）");
   check(/realtime_disconnected_tip/.test(game) && /realtime_reconnected_tip/.test(game) && /realtime_replaced_tip/.test(game), "断线 / 重连 / 被顶掉三种提示都接了文案 key");
 
   const source = read("ui/utils/net/RealtimeClient.ts");

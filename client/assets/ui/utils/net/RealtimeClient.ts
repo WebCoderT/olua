@@ -317,7 +317,14 @@ export default class RealtimeClient {
       CombatChannel.dispatchExpGain(frame.data);
       return;
     }
-    // pong 是心跳应答、error 说明对端还在说话 —— 两种都算「这条连接活着」，撤掉超时判据
+    if (frame.type === "error") {
+      // 服务端的拒绝（聊天限频 / 组队失败 / 参数不合法…）：**必须让玩家看见**，
+      // 否则点完按钮什么都不发生，只能反复点（#495）。形状的解释在 CombatChannel。
+      CombatChannel.dispatchServerError(frame.data);
+      this.clearPongTimer(); // error 说明对端还在说话，同样算「连接活着」
+      return;
+    }
+    // pong 是心跳应答 —— 算「这条连接活着」，撤掉超时判据（error 同理，但它在上面单列了一支）
     this.clearPongTimer();
   }
 

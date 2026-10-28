@@ -186,6 +186,9 @@ export class Game extends Component {
       const exp = StorageManager.applyPartyExpGain(gain);
       if (exp > 0) GameUiHelper.createTipText(partyDialogLayout.texts.expGainTip.split("{exp}").join(`${exp}`));
     };
+    // 服务端拒绝（#495：聊天限频 / 组队失败 / 参数不合法…）：把服务端给的原因飘出来。
+    // 不接这条的话动作被拒等于没反应（玩家只会反复点），所以文案直接用服务端的 message。
+    CombatChannel.onServerError = (error) => GameUiHelper.createTipText(error.message);
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -341,6 +344,7 @@ export class Game extends Component {
     CombatChannel.onParty = null;
     CombatChannel.onPartyInvite = null;
     CombatChannel.onExpGain = null;
+    CombatChannel.onServerError = null;
     MonsterManager.onPlayerServerHit = null;
     MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();

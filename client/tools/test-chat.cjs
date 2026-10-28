@@ -203,6 +203,25 @@ try {
   check(/relationOfAccount/.test(clientDialog), "消息名字颜色读 OtherPlayerManager 的关系缓存（判定唯一入口仍是 resolveRelation）");
   check(/privatePeers\(\)/.test(clientDialog) && /nearby\(\)/.test(clientDialog), "私聊候选 = 聊过的 + 附近的人（两个天然来源）");
 
+  // #495：会话页空态不能复用选人页文案（「先点选人挑一个对象」在会话页里自相矛盾）
+  check(/texts\.privateChatEmpty/.test(clientDialog), "私聊会话页空态用 privateChatEmpty");
+  check(
+    /this\.tab === "private" && this\.privatePeer \? layout\.texts\.privateChatEmpty/.test(clientDialog),
+    "会话页（已挑好对象）才用 privateChatEmpty，选人页仍用 privateEmpty",
+  );
+  {
+    const dialogs = read("assets/configs/layout/dialogs.ts");
+    const textOf = (key) => {
+      const hit = new RegExp(`${key}: "([^"]+)"`).exec(dialogs);
+      return hit ? hit[1] : "";
+    };
+    const pickEmpty = textOf("privateEmpty");
+    const convEmpty = textOf("privateChatEmpty");
+    check(Boolean(pickEmpty) && Boolean(convEmpty), "两句私聊空态文案都登记在 chatDialogLayout.texts");
+    check(pickEmpty !== convEmpty, "选人页与会话页的空态文案互不相同");
+    check(!/选人/.test(convEmpty), "会话页空态不再要求玩家「去选人」（对象已经挑好了）");
+  }
+
   // #469：聊天窗常驻左下角
   check(/open\(auto = false\)/.test(clientDialog) && /if \(!auto\) GuideStore\.notify/.test(clientDialog), "自动开窗不推进引导（程序代开不算「学会聊天」）");
   check(/refreshDock/.test(clientDialog) && /placeChatBox/.test(clientDialog), "窗口缩放时聊天窗重贴左下角（停靠不漂移）");

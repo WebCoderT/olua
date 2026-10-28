@@ -333,6 +333,13 @@ export default class CombatChannel {
   /** 队友击杀分到的经验出口（#399；组合根接线到 StorageManager.applyPartyExpGain，不接时经验条不涨） */
   static onExpGain: ((data: PartyExpGain) => void) | null = null;
 
+  /**
+   * 服务端拒绝出口（#495；组合根接线到一句飘字）
+   *
+   * 与消息帧不同，**没接线时打日志而不是静默**：拒绝看不见比日志吵更糟（见 dispatchServerError）。
+   */
+  static onServerError: ((error: { code: number; message: string }) => void) | null = null;
+
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
   private static lastPositionSentAt = 0;
@@ -525,6 +532,29 @@ export default class CombatChannel {
     if (!gain || typeof gain !== "object" || typeof gain.exp !== "number" || typeof gain.revision !== "number") return;
     if (!this.onExpGain) return;
     this.onExpGain(gain);
+  }
+
+  /**
+   * 服务端拒绝（#495）：`{ type: "error", data: { code, message } }`
+   *
+   * 聊天限频 / 组队失败 / 参数不合法都走这条帧。之前客户端没有这个分支，
+   * 帧被直接吞掉 —— 玩家点完按钮什么都不发生，只能反复点。这里只做两件事：
+   * 形状校验 + 交给组合根飘一句；**没接线时打日志**（不要像消息帧那样静默返回：
+   * 拒绝看不见比日志吵更糟）。
+   */
+  static dispatchServerError(data: unknown): void {
+    const payload = (data ?? {}) as { code?: unknown; message?: unknown };
+    const code = typeof payload.code === "number" ? payload.code : 0;
+    const message = typeof payload.message === "string" ? payload.message.trim() : "";
+    if (!message) {
+      console.warn(`[realtime] 服务端拒绝了请求（业务码 ${code}），但没有给出原因`);
+      return;
+    }
+    if (!this.onServerError) {
+      console.warn(`[realtime] 服务端拒绝：${message}（业务码 ${code}，界面未接线）`);
+      return;
+    }
+    this.onServerError({ code, message });
   }
 }
 
