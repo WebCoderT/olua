@@ -1,4 +1,4 @@
-import { Color, Label, Node, Size, Vec2, isValid } from "cc";
+import { Color, Label, Node, Size, UITransform, Vec2, isValid } from "cc";
 import QuestStore from "../../core/QuestStore";
 import type { QuestView } from "../../core/QuestStore";
 import UiHelper from "../../helpers/UiHelper";
@@ -31,6 +31,16 @@ export default class QuestTracker extends Node {
     super("quest_tracker");
     this.onOpen = onOpen;
     this.setPosition(layout.position.x, layout.position.y);
+    // 命中区：**必须先有 UITransform，再注册任何指针事件**。
+    // 追踪栏是自己代码拼出来的 HUD（没有走 UiHelper.createNode），这个节点原本光秃秃的 —— 没有 UITransform，
+    // 而引擎在每次指针派发前整理监听列表时会读 `trans!.cameraPriority`（非空断言），
+    // 于是「节点在监听列表里 + 没有 UITransform」= 每次鼠标移动/点击都抛
+    // `Cannot read properties of null (reading 'cameraPriority')`，整个游戏输入全部失效。
+    // 尺寸按行数展开（行从原点往下排），锚点上对齐：命中区正好罩住最多 maxRows 行。
+    // 参考 client/FAQ.md「鼠标一动就报 cameraPriority」。
+    const hitArea = this.addComponent(UITransform);
+    hitArea.setContentSize(layout.width, layout.rowHeight * layout.maxRows);
+    hitArea.setAnchorPoint(0.5, 1);
     // 点追踪栏 = 开任务面板（不穿透到世界，否则会顺带走一步）
     blockClickThrough(this);
     this.on(Node.EventType.TOUCH_END, () => this.onOpen(), this);
@@ -52,6 +62,9 @@ export default class QuestTracker extends Node {
     clearChildren(this);
     const views = QuestStore.active();
     const rows = views.slice(0, layout.maxRows);
+    // 一条可显示的都没有就整块收起来：命中区（上面那块 UITransform）是常驻的，
+    // 节点还活动着就会让「点屏幕左侧那片空白」也打开任务面板（空态本来什么都不该留）
+    this.active = rows.length > 0;
     rows.forEach((view, index) => this.addRow(view, index));
     const overflow = views.length - rows.length;
     if (overflow > 0) {

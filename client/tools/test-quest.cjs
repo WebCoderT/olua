@@ -232,6 +232,12 @@ try {
     const tracker = read(CLIENT_TRACKER);
     check(tracker.includes("QuestStore.onChange"), "追踪栏订阅任务仓（状态变即重画）");
     check(tracker.includes("layout.maxRows"), "追踪栏有行数上限（不盖住地图）");
+    check(tracker.includes("addComponent(UITransform)"), "追踪栏自己是按钮，必须自己有 UITransform（否则引擎读 trans!.cameraPriority 抛空指针，整个游戏的指针事件全废）");
+    check(
+      /addComponent\(UITransform\)[\s\S]{0,400}blockClickThrough\(\s*this\s*\)/.test(tracker),
+      "顺序：先补 UITransform 再 blockClickThrough（反了防呆会静默跳过鼠标登记，点追踪栏会穿透到世界）",
+    );
+    check(tracker.includes("this.active = rows.length > 0"), "没有任务时整块收起来（命中区常驻，留着活动会让点左侧空白也开面板）");
   });
 
   //#endregion
