@@ -107,17 +107,27 @@ export const bagGridLayout = {
 
 //#region 属性列表
 
-/** 属性列表布局（尺寸高度 0 = 由内容自适应） */
+/**
+ * 属性列表布局（尺寸高度 0 = 由内容自适应）
+ *
+ * 高度是**算过的**：列表锚点在顶边 y=205，内容一路向下长，而弹窗右侧那列功能按钮
+ * （称号 / 战魂 / 军衔 / 时装 / 社交，见 dialogs.roleInfoDialogLayout）最上面一枚占 -49~-13。
+ * 排完 8 行基础属性后的底边必须留在 -13 之上，否则文字会压到按钮上（#470）。
+ * 公式（1 个标题 + N 行，行数取 `goodShowAttributesLabel` 的条目数）：
+ *   高度 = 2×padding + titleHeight + N×rowHeight + N×spacing
+ * 当前 2×8 + 14 + 8×18 + 8×4 = 206 → 底边 y=-1，离按钮顶边还有 12px。
+ * **改这里的任何一个数，都要重算这条**（`client/tools/test-role-attr-list.cjs` 会判定）。
+ */
 export const roleAttributeListLayout = {
   name: "role_attributes",
   position: new Vec2(217, 205),
   size: new Size(150, 0),
   /** 条目纵向间距与容器内边距 */
-  spacing: 5,
-  padding: 10,
-  /** 分组标题（基础属性 / 特殊属性）与属性行的高度 */
+  spacing: 4,
+  padding: 8,
+  /** 分组标题与属性行的高度 */
   titleHeight: 14,
-  rowHeight: 20,
+  rowHeight: 18,
   /** 属性行字号 */
   rowFontSize: 12,
 };

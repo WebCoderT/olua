@@ -211,9 +211,8 @@ export const uiTexts = {
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
 
   //#region 界面标签：属性与装备
-  /** 属性分组标题 */
+  /** 属性分组标题（特殊属性暂未接入，等有行可填时再加回来，见 GameUiHelper.applyRoleAttributeListStyle 的注释） */
   label_attributes_base: "基础属性",
-  label_attributes_special: "特殊属性",
   /** 装备详情：等级与部位（{level} · {slot}） */
   label_good_detail_info: "等级 {level} · {slot}",
   /** 装备详情：部位兜底名（配置里查不到槽位时） */

@@ -1943,7 +1943,12 @@ export default class GameUiHelper {
 
   /**
    * 为已有节点施加"角色属性列表"样式并填充属性条目（组件自身即列表容器时使用）
-   * 结构：基础属性标题 + 各属性行 + 特殊属性标题
+   * 结构：基础属性标题 + 各属性行
+   *
+   * **不再有「特殊属性」分节标题**（#470）：那一节从来没有行跟着（全仓只有这一处
+   * 调用 `createAttributeLabel`），空标题白占一行高度，还正好压在最上面那枚功能按钮上。
+   * 等特殊属性真的接入（幸运 / 准确之类）时再加标题 —— 加的时候同步 `roleAttributeListLayout`
+   * 的高度上限，见那份配置的注释。
    * @param node 目标节点
    * @param role 角色数据
    * @param position 位置
@@ -1961,7 +1966,6 @@ export default class GameUiHelper {
     for (const element of goodShowAttributesLabel.keys()) {
       node.addChild(this.createAttributeLabel(element, role[element], new Size(size.width, roleAttributeListLayout.rowHeight)));
     }
-    node.addChild(this.createText("role_special_attributes", getText("label_attributes_special"), 14, new Vec2(), new Size(size.width, roleAttributeListLayout.titleHeight)));
     return layout;
   }
 
