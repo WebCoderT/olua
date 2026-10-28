@@ -456,7 +456,8 @@ async function connectOk(heartbeatMs = 600000) {
   const game = read("ui/Game.ts");
   check(/RealtimeClient\.start\(\)/.test(game) && /RealtimeClient\.stop\(\)/.test(game), "游戏场景进出各接一次（进游戏才连、离开就断）");
   check(/RealtimeClient\.onStatusChange\s*=\s*null/.test(game), "场景卸载时先摘掉状态回调（否则收尾时又提示一句）");
-  check(/CombatChannel\.onServerError = \(error\) => GameUiHelper\.createTipText\(error\.message\)/.test(game), "组合根把服务端拒绝接成一句飘字（#495）");
+  // 服务端拒绝用**错误色**（#498）：绿色提示色和「经验 +N」这类普通提示分不开
+  check(/CombatChannel\.onServerError = \(error\) => GameUiHelper\.createErrorTipText\(error\.message\)/.test(game), "组合根把服务端拒绝接成一句错误飘字（#495 / 颜色见 #498）");
   check(/CombatChannel\.onServerError = null/.test(game), "离场时摘掉拒绝回调（不跨场景留悬挂闭包）");
   check(/realtime_disconnected_tip/.test(game) && /realtime_reconnected_tip/.test(game) && /realtime_replaced_tip/.test(game), "断线 / 重连 / 被顶掉三种提示都接了文案 key");
 

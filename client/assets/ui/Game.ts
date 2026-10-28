@@ -169,8 +169,13 @@ export class Game extends Component {
       const after = PartyStore.partyId();
       if (!before && after) {
         const leader = (PartyStore.current()?.members ?? []).find((member) => member.leader);
-        // 队长那一行理论上一定在（服务端每份快照都标了 leader），找不到就退回「队长」这个词
-        GameUiHelper.createTipText(partyDialogLayout.texts.joinedTip.split("{name}").join(leader ? leader.name : partyDialogLayout.texts.stateLeader));
+        // 队长是**我自己** = 这支队是我刚建的（邀请别人时顺手建队）→ 不飘「已加入」：
+        // 那等于对自己说「你加入了你的队伍」，而邀请成功的「已邀请」已经给了反馈（#498 同族）
+        const myRoleId = SocialStore.get()?.myRoleId ?? "";
+        if (!leader || leader.roleId !== myRoleId) {
+          // 队长那一行理论上一定在（服务端每份快照都标了 leader），找不到就退回「队长」这个词
+          GameUiHelper.createTipText(partyDialogLayout.texts.joinedTip.split("{name}").join(leader ? leader.name : partyDialogLayout.texts.stateLeader));
+        }
       } else if (before && !after) {
         GameUiHelper.createTipText(partyDialogLayout.texts.endedTip);
       }
@@ -188,7 +193,8 @@ export class Game extends Component {
     };
     // 服务端拒绝（#495：聊天限频 / 组队失败 / 参数不合法…）：把服务端给的原因飘出来。
     // 不接这条的话动作被拒等于没反应（玩家只会反复点），所以文案直接用服务端的 message。
-    CombatChannel.onServerError = (error) => GameUiHelper.createTipText(error.message);
+    // 用**错误色**（#498）：拒绝不是普通提示，绿色小字和「已邀请」「经验 +N」混在一起分不出来。
+    CombatChannel.onServerError = (error) => GameUiHelper.createErrorTipText(error.message);
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
