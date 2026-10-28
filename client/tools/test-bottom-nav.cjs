@@ -42,8 +42,7 @@ try {
     check(dup.length === 0, "key 不重复", dup.join(", "));
   }
 
-  console.log("\n— B. 「未做」名单与登记一致 —");
-  {
+  console.log("\n— B. 「未做」名单与登记一致 —");  {
     const actual = bottomNavItems.filter((item) => item.comingSoon === true).map((item) => item.key);
     check(
       JSON.stringify(actual.slice().sort()) === JSON.stringify(EXPECTED_COMING_SOON.slice().sort()),
@@ -52,6 +51,26 @@ try {
     // 反向：登记了但数据里没标 → 说明有人删了入口却忘了改名单
     const ghost = EXPECTED_COMING_SOON.filter((key) => !bottomNavItems.some((item) => item.key === key));
     check(ghost.length === 0, "登记名单里没有已删除的入口", ghost.join(", "));
+  }
+
+  console.log("\n— C. 按钮节点名唯一（按 key 命名，不按图标） —");
+  {
+    // `BottomNavButton` 的节点名是 `bottom_nav_${key}`。**曾经按图标路径命名**，
+    // 而「聊天」与「好友」共用 `friend` 图 → 两个同名节点，按名字找按钮的代码会命中错的那个（#486）。
+    // 这里两种命名都算一遍：按 key 必须唯一；顺便把「按图标会重名」的事实打印出来（防止有人改回去）。
+    const byKey = bottomNavItems.map((item) => `bottom_nav_${item.key}`);
+    const dupKey = byKey.filter((name, i, all) => all.indexOf(name) !== i);
+    check(dupKey.length === 0, "按 key 命名的节点名两两不同", dupKey.join(", "));
+
+    const byIcon = bottomNavItems.map((item) => `bottom_nav_${item.icon.replace(/\//g, "_")}`);
+    const dupIcon = byIcon.filter((name, i, all) => all.indexOf(name) !== i);
+    // 这里只**提示**不判红：共用图标的入口一定会撞名（现在「聊天」与「好友」都还是 friend 图，
+    // #468 接入聊天自己的图标后就不撞了）。写成断言的话，那天会因为「状况变好」而假红。
+    console.log(
+      dupIcon.length
+        ? `  [--] 提醒：按图标命名当前会撞 ${JSON.stringify([...new Set(dupIcon)])} —— 命名只能用 key`
+        : "  [--] 提醒：当前没有共用图标，但命名仍必须用 key（图标是外观、会换）",
+    );
   }
 } catch (error) {
   fail(error);
