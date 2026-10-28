@@ -145,6 +145,8 @@ export const guideConfig = {
     bubbleHeight: 190,
     bubblePadding: 20,
     bubbleGap: 18,
+    /** 标题占位底部与正文顶部的间距（正文锚点在顶边向下长，见 GuideOverlay.createBubble） */
+    descGap: 8,
     screenMargin: 24,
     /** 气泡里的三档字号 */
     titleFontSize: 26,

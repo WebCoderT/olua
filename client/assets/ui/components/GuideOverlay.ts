@@ -245,10 +245,22 @@ export default class GuideOverlay extends Node {
         Label.VerticalAlign.CENTER,
       ),
     );
-    // 正文（多行、宽度固定、高度随内容）
-    bubble.addChild(
-      UiHelper.createWrappedLabel("guide_desc", "", guideOverlayStyle.colors.desc, layout.descFontSize, layout.descFontSize * 1.5, new Vec2(0, height / 2 - layout.bubblePadding - layout.titleFontSize * 2.2), inner, Label.HorizontalAlign.LEFT),
+    // 正文（多行、宽度固定、高度随内容；**锚点在顶边** —— RESIZE_HEIGHT 的高度增长以锚点为基准，
+    // 锚点在中心时两行以上的正文会向上下两个方向长，向上就顶进标题区，真机上就是
+    // 「标题压在正文第一行上」（#462）。顶部起点 = 标题占位（titleFontSize*1.4）+ 一段间距，
+    // 间距进 layout，不写死在组件里）
+    const desc = UiHelper.createWrappedLabel(
+      "guide_desc",
+      "",
+      guideOverlayStyle.colors.desc,
+      layout.descFontSize,
+      layout.descFontSize * 1.5,
+      new Vec2(0, height / 2 - layout.bubblePadding - layout.titleFontSize * 1.4 - layout.descGap),
+      inner,
+      Label.HorizontalAlign.LEFT,
     );
+    desc.getComponent(UITransform)?.setAnchorPoint(0.5, 1);
+    bubble.addChild(desc);
     // 进度（左下）
     bubble.addChild(
       UiHelper.createLabel(
