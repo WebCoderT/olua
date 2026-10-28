@@ -1343,6 +1343,13 @@ export const partyDialogLayout = {
     decline: "拒 绝",
     invite: "邀 请",
     invited: "已邀请",
+    /**
+     * 已经邀请过、等对方回应（候选行右侧的**灰字**状态）
+     *
+     * 不能复用 `invite`（「邀 请」）：那和旁边真正可点的按钮长得一模一样，
+     * 玩家分不清「这个还能点」和「已经发出去在等」（#498 顺带发现的）。
+     */
+    invitePending: "等待回应",
     kick: "踢 出",
     transfer: "转 让",
     leave: "退出队伍",
@@ -1352,8 +1359,12 @@ export const partyDialogLayout = {
     inviteReceivedTip: "「{name}」邀请你组队（G 键查看）",
     expGainTip: "队友击杀 +{exp} 经验",
     joinTip: "「{name}」加入了队伍",
-    leaveTip: "你已退出队伍",
-    /** 进队 / 离队的通用提示（离队的那一条服务端不下发原因：被踢、解散、自己退都是一份空快照） */
+    /**
+     * 进队 / 离队的通用提示（离队那一句服务端不下发原因：被踢、解散、自己退都是一份空快照）
+     *
+     * 没有单独的「你已退出队伍」了（#498）：退队的提示统一由 `endedTip` 承担 ——
+     * 它由**服务端快照变化**驱动，天然不会在「退队被拒」时说假话；两处都写就是一句重复飘字。
+     */
     joinedTip: "已加入「{name}」的队伍",
     endedTip: "你已不在队伍中",
     kickedTip: "你被移出了队伍",

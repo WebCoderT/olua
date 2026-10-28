@@ -50,6 +50,22 @@ export default class PartyDialog {
   private unsubscribe: (() => void) | null = null;
   /** 我这一页里已经邀请过的人（30 秒内不重复发；面板关掉就清） */
   private invited = new Set<string>();
+  /**
+   * 在途的邀请（**等服务端的队伍快照来确认**）
+   *
+   * #498：邀请是乐观 UI 的高危区 —— 帧发出去不等于服务端接受（等级不够 / 已满 / 拉黑…），
+   * 而原先在发送成功的**同一刻**就飘「已邀请」并把候选行改成「等待」，被拒后两者都不撤回，
+   * 于是「已邀请「xxx」」和「对方还没到 10 级」同屏打脸。
+   *
+   * 服务端的行为正好能当确认信号：**成功一定给发起人回一份队伍快照**
+   * （`invite()` 末尾的 `sendSnapshotTo([actor.roleId])`），所有拒绝分支都直接 return、不发快照。
+   * 所以这里先只记「在途」，快照到了才宣布成功。
+   *
+   * 只允许一份在途邀请：这样「快照 ↔ 邀请」是一对一的，不会出现「一个快照把两条邀请都确认了」。
+   */
+  private pendingInvite: { roleId: string; name: string; at: number } | null = null;
+  /** 在途邀请的确认窗口（毫秒）：超窗的快照算别的原因引起的队伍变化，不当确认 */
+  private static readonly INVITE_CONFIRM_MS = 1500;
 
   /** 打开 / 关闭弹窗（重复点即关闭） */
   open() {
@@ -66,6 +82,8 @@ export default class PartyDialog {
     this.dialog.addChild(this.body);
     this.paintFooter();
     this.unsubscribe = PartyStore.onChange(() => {
+      // 顺序有意义：先确认在途邀请（可能要飘一句「已邀请」），再按最新数据重画
+      this.confirmPendingInvite();
       this.refreshTabCaptions();
       this.render();
     });
@@ -323,8 +341,9 @@ export default class PartyDialog {
         UiHelper.createLabel(`party_candidate_in_${player.roleId}`, layout.texts.invited, row.metaColor, row.metaFontSize, new Vec2(row.actionX, 0), new Size(80, 20)),
       );
     } else if (this.invited.has(player.roleId)) {
+      // 灰字「等待回应」而不是「邀 请」：后者和旁边真按钮长得一样，玩家会以为还能再点（#498）
       node.addChild(
-        UiHelper.createLabel(`party_candidate_wait_${player.roleId}`, layout.texts.invite, row.metaColor, row.metaFontSize, new Vec2(row.actionX, 0), new Size(80, 20)),
+        UiHelper.createLabel(`party_candidate_wait_${player.roleId}`, layout.texts.invitePending, row.metaColor, row.metaFontSize, new Vec2(row.actionX, 0), new Size(80, 20)),
       );
     } else {
       node.addChild(this.createAction(`party_invite_${player.roleId}`, layout.texts.invite, new Vec2(row.actionX, 0), () => this.invite(player.roleId, player.name)));
@@ -361,13 +380,32 @@ export default class PartyDialog {
 
   //#region 动作
 
-  /** 邀请一个人（顺手建队由服务端做：邀请人没队伍时自动建一支并自任队长） */
+  /**
+   * 邀请一个人（顺手建队由服务端做：邀请人没队伍时自动建一支并自任队长）
+   *
+   * 这里**只发帧**：成功与否由服务端说了算，等它回的快照来确认（见 `pendingInvite`）。
+   * 发送失败（通道没连上）由 `send` 自己提示，不假装成功。
+   */
   private invite(roleId: string, name: string): void {
+    // 已有一份在途邀请就不再发：既防连点，也保证「快照 ↔ 邀请」一对一
+    if (this.pendingInvite) return;
     if (!this.send(PARTY_ACTION.INVITE, roleId)) return;
-    this.invited.add(roleId);
-    GameUiHelper.createTipText(layout.texts.invitedTip.split("{name}").join(name));
-    this.refreshTabCaptions();
-    this.render();
+    this.pendingInvite = { roleId, name, at: Date.now() };
+  }
+
+  /**
+   * 快照到了 → 在途的邀请成立（服务端只在**成功**时回快照）
+   *
+   * 超窗口的快照不算（队伍因别的原因变化时也会来快照），此时静默丢弃在途记录：
+   * 候选行从头到尾都是「邀请」按钮，玩家可以再点一次，屏幕上只会留下服务端给的拒绝原因。
+   */
+  private confirmPendingInvite(): void {
+    const pending = this.pendingInvite;
+    if (!pending) return;
+    this.pendingInvite = null;
+    if (Date.now() - pending.at > PartyDialog.INVITE_CONFIRM_MS) return;
+    this.invited.add(pending.roleId);
+    GameUiHelper.createTipText(layout.texts.invitedTip.split("{name}").join(pending.name));
   }
 
   /** 同意一条邀请（成功与否看服务端：满员 / 已在别的队都会被拒） */
@@ -382,9 +420,15 @@ export default class PartyDialog {
     PartyStore.dropInvite(invite.fromRoleId);
   }
 
+  /**
+   * 退出队伍
+   *
+   * 不在这里抢答「你已退出队伍」（原先是乐观飘字）：退队成功服务端会推一份空快照，
+   * 组合根 `onParty` 已经按「before 有队、after 没队」飘了「你已不在队伍中」——
+   * 两处都飘是重复；而失败时（比如服务端不认为你在队里）抢答的那句就是假话（#498 同一类）。
+   */
   private leave(): void {
-    if (!this.send(PARTY_ACTION.LEAVE)) return;
-    GameUiHelper.createTipText(layout.texts.leaveTip);
+    this.send(PARTY_ACTION.LEAVE);
   }
 
   private kick(member: PartyMemberEntry): void {
@@ -471,6 +515,8 @@ export default class PartyDialog {
     this.footer = null;
     this.tab = "members";
     this.invited.clear();
+    // 在途邀请也一并作废：面板关掉之后快照才到，不该再飘一句「已邀请」（玩家已经不在这个上下文里）
+    this.pendingInvite = null;
     this.tabNodes.clear();
     this.tabLabels.clear();
   }

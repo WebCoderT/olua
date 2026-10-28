@@ -366,6 +366,75 @@ try {
     check(!/只有你一个人|你的队伍/.test(noPartyEmpty), "noPartyEmpty 是中性占位，不宣称任何队伍状态");
   }
 
+  // 主动作不能乐观宣布成功（#498）：邀请「帧发出去了」≠「服务端接受了」。
+  // 原先 invite() 在发送成功的同一刻就飘「已邀请」并把候选行改成「等待」，被拒后两者都不撤回
+  // → 屏幕上「已邀请「xxx」」和「对方还没到 10 级」同屏打脸。
+  // 现在的约定：服务端**成功才回快照**（`invite()` 末尾无条件 sendSnapshotTo），拒绝直接 return，
+  // 所以客户端只记「在途」，快照到了才宣布成功。
+  {
+    const partySource = read("assets/ui/components/dialogs/PartyDialog.ts");
+    /** 取某个方法体（到下一个 `private xxx(` 为止；这些方法里没有嵌套的 private 声明） */
+    const methodOf = (name) => {
+      const start = partySource.indexOf(`private ${name}(`);
+      if (start < 0) return "";
+      const rest = partySource.slice(start + 10);
+      const next = rest.search(/\n  private [a-zA-Z]+\(/);
+      return next < 0 ? rest : rest.slice(0, next);
+    };
+
+    const inviteBody = methodOf("invite");
+    check(Boolean(inviteBody), "能找到 invite() 方法体");
+    check(!/texts\.invitedTip/.test(inviteBody), "invite() 不乐观飘「已邀请」（服务端可能拒绝，说了就是假话）");
+    check(/pendingInvite = \{/.test(inviteBody), "invite() 只把这次邀请记成「在途」");
+    check(/if \(this\.pendingInvite\) return/.test(inviteBody), "在途时不再发第二次（防连点 + 保证「快照 ↔ 邀请」一对一）");
+
+    // 等待态的灰字不能是「邀 请」：那和旁边真按钮一模一样，玩家分不清能不能再点
+    const waitStart = partySource.indexOf("party_candidate_wait_");
+    const waitEnd = partySource.indexOf("new Size(80, 20)", waitStart);
+    const waitRow = waitStart >= 0 && waitEnd > waitStart ? partySource.slice(waitStart, waitEnd) : "";
+    check(Boolean(waitRow), "能找到「已邀请等待中」那一行的渲染代码");
+    check(/texts\.invitePending/.test(waitRow), "已邀请等待中的行用 invitePending（「等待回应」）");
+    check(!/texts\.invite[,)]/.test(waitRow), "等待中的行不复用按钮文案 invite（否则和可点按钮视觉相同）");
+    {
+      const inviteText = new RegExp(`invite: "([^"]+)"`).exec(layoutSource);
+      const pendingText = new RegExp(`invitePending: "([^"]+)"`).exec(layoutSource);
+      check(
+        Boolean(inviteText) && Boolean(pendingText) && inviteText[1] !== pendingText[1],
+        "「邀 请」与「等待回应」两句话术不同（可点 / 已发出必须能分辨）",
+      );
+    }
+
+    const confirmBody = methodOf("confirmPendingInvite");
+    check(Boolean(confirmBody), "有 confirmPendingInvite()：快照到了才宣布成功");
+    check(/texts\.invitedTip/.test(confirmBody), "「已邀请」只在快照确认之后飘（服务端成功才回快照）");
+    check(/INVITE_CONFIRM_MS/.test(confirmBody), "超窗口的快照不当确认（队伍因别的原因变化时也会来快照）");
+
+    const onChangeStart = partySource.indexOf("PartyStore.onChange(");
+    const onChangeBody = partySource.slice(onChangeStart, onChangeStart + 400);
+    check(
+      onChangeBody.indexOf("confirmPendingInvite()") >= 0 &&
+        onChangeBody.indexOf("confirmPendingInvite()") < onChangeBody.indexOf("this.render()"),
+      "onChange 里先确认在途邀请、再重画（顺序反了会画在旧状态上）",
+    );
+
+    const leaveBody = methodOf("leave");
+    check(!/createTipText/.test(leaveBody), "leave() 不抢答「你已退出队伍」（离队提示由组合根按快照变化飘）");
+    check(!/leaveTip/.test(partySource), "PartyDialog 不再引用 leaveTip（文案已删：重复且会说谎）");
+    check(!/leaveTip:/.test(layoutSource), "layout 里没有 leaveTip（离队统一由 endedTip 承担）");
+
+    const gameSource = read("assets/ui/Game.ts");
+    check(
+      /CombatChannel\.onServerError = \(error\) => GameUiHelper\.createErrorTipText\(error\.message\)/.test(gameSource),
+      "服务端拒绝用错误色飘字（绿色提示色和「经验 +N」这类普通提示分不开）",
+    );
+    check(/PartyStore\.onChange|onParty = \(snapshot\)/.test(gameSource), "组合根仍按快照变化飘「已加入 / 已不在队伍中」");
+    // 自己建的队（邀请别人时顺手建）不能飘「已加入自己的队伍」：队长的名字就是玩家自己
+    check(
+      /leader\.roleId !== myRoleId/.test(gameSource) && /SocialStore\.get\(\)\?\.myRoleId/.test(gameSource),
+      "「已加入「X」的队伍」只在队长不是我时飘（自己建队说「已加入」是假话）",
+    );
+  }
+
   //#endregion
 
   finish("PASS：社交关系（优先级 / 配色 / 协议同形 / 客户端上色 / 服务端纪律 / 屏蔽与举报）全部通过");
