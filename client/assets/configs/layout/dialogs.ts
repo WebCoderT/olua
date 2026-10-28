@@ -453,6 +453,32 @@ export const skillListDialogLayout = {
   size: new Size(280, 400),
   /** 技能滚动列表（子件坐标以弹窗中心为原点） */
   list: { name: "skill_list", position: new Vec2(0, -15), size: new Size(260, 350) },
+  /**
+   * 技能行：图标 + （名称 / 说明）两行文字。
+   *
+   * 说明必须**换行**：205 宽 × 10 号字一行只放得下 ~20 字，而 `configs/skill-data.ts` 里的说明
+   * 普遍 40~73 字 —— 单行 CLAMP 会把后半句直接切掉（#481，真机上看就是「说到一半」）。
+   * 行高按估算行数自适应（`TextLayout.wrappedHeight`），最多 `maxLines` 行（实测最长 73 字 → 4 行）。
+   */
+  row: {
+    /** 行宽 = 图标 + 间距 + 说明列（250 = 40 + 5 + 205） */
+    width: 250,
+    iconSize: 40,
+    gap: 5,
+    desc: {
+      /** 说明列宽（= 行宽 − 图标 − 间距） */
+      width: 205,
+      /** 名称行与说明之间的间距 */
+      gap: 3,
+      nameHeight: 20,
+      nameFontSize: 12,
+      fontSize: 10,
+      lineHeight: 14,
+      maxLines: 4,
+      /** 行上下内边距（行高 = 名称 + 间距 + 说明高度 + 2×padding，且不小于图标边长） */
+      paddingY: 3,
+    },
+  },
 };
 
 //#endregion

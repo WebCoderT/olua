@@ -22,6 +22,7 @@ import {
   Vec3,
 } from "cc";
 import UiHelper from "./UiHelper";
+import { wrappedHeight } from "./TextLayout";
 import AnimationHelper from "./AnimationHelper";
 import { Draggable } from "../components/input/Draggable";
 import { isCtrlPressed, onCtrlChange } from "../utils/input/ModifierKeys";
@@ -2589,11 +2590,36 @@ export default class GameUiHelper {
     return UiHelper.createScrollView(list.name, list.position, list.size);
   }
 
-  /** 创建单个技能行（未学习置灰；已学习点击触发回调） */
+  /**
+   * 创建单个技能行（未学习置灰；已学习点击触发回调）
+   *
+   * 说明是**多行**的：`createLabel` 默认单行 CLAMP，205 宽只有 ~20 字，而说明普遍 40~73 字，
+   * 单行会把后半句切掉（#481）。这里按 `skillListDialogLayout.row.desc` 的宽度换行、
+   * 用 `TextLayout.wrappedHeight` 估算行高，行高随字数变高（列在 ScrollView 里，变高只是滚动变长）。
+   *
+   * **行内不用水平 Layout**：行高变成 40~82 之后，Layout 会把图标和说明列垂直居中，
+   * 图标就浮在行中间、看起来像属于上一条技能。这里手动摆：图标与说明列都**贴行顶**。
+   */
   static createSkillItem(role: Role, skillId: SkillId, onOpenShortcutKey: () => void): Node {
     const skillConfig = skills.get(skillId);
-    const node = UiHelper.createFlexRow(skillId, 5, new Vec2(), new Size(250, 50));
-    const skillIcon = UiHelper.createSprite(skillId, skillConfig.icon, new Vec2(), new Size(40, 40));
+    const rowCfg = skillListDialogLayout.row;
+    const descCfg = rowCfg.desc;
+    const descText = skillConfig.description ?? "";
+    const descHeight = wrappedHeight(descText, descCfg.width, descCfg.fontSize, descCfg.lineHeight, descCfg.maxLines);
+    const rowHeight = Math.max(
+      rowCfg.iconSize,
+      descCfg.nameHeight + descCfg.gap + descHeight + descCfg.paddingY * 2,
+    );
+    const node = UiHelper.createNode(skillId, new Vec2(), new Size(rowCfg.width, rowHeight));
+    const left = -rowCfg.width / 2;
+    const top = rowHeight / 2;
+    const iconCenterX = left + rowCfg.iconSize / 2;
+    const skillIcon = UiHelper.createSprite(
+      skillId,
+      skillConfig.icon,
+      new Vec2(iconCenterX, top - descCfg.paddingY - rowCfg.iconSize / 2),
+      new Size(rowCfg.iconSize, rowCfg.iconSize),
+    );
     if (!role.skills[skillId]) skillIcon.getComponent(Sprite).grayscale = true;
     if (role.skills[skillId]) {
       skillIcon.on(Node.EventType.TOUCH_END, onOpenShortcutKey, this);
@@ -2601,19 +2627,36 @@ export default class GameUiHelper {
       blockClickThrough(skillIcon);
     }
     node.addChild(skillIcon);
-    const description = UiHelper.createFlexCol(`${skillId}_desc`, 3, new Vec2(), new Size(205, 40));
+    // 说明列：锚点 (0.5, 1)、高度按内容自适应 → 位置直接给「左上角」
+    const descLeft = left + rowCfg.iconSize + rowCfg.gap;
+    const description = UiHelper.createFlexCol(
+      `${skillId}_desc`,
+      descCfg.gap,
+      new Vec2(descLeft + descCfg.width / 2, top - descCfg.paddingY),
+      new Size(descCfg.width, 0),
+    );
     const skillLabel = UiHelper.createLabel(
       "skill_label",
       `${skillConfig.label} (${role.skills[skillId] ? getText("label_skill_level", { level: role.skills[skillId] }) : getText("label_skill_unlearned")})`,
       Color.WHITE,
-      12,
+      descCfg.nameFontSize,
       new Vec2(),
-      new Size(205, 20),
+      new Size(descCfg.width, descCfg.nameHeight),
     );
     skillLabel.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     description.addChild(skillLabel);
-    const skillDesc = UiHelper.createLabel("skill_label", skillConfig.description, Color.WHITE, 10, new Vec2(), new Size(205, 15));
-    skillDesc.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+    const skillDesc = UiHelper.createLabel(
+      `${skillId}_desc_text`,
+      descText,
+      Color.WHITE,
+      descCfg.fontSize,
+      new Vec2(),
+      new Size(descCfg.width, descHeight),
+    );
+    const descLabel = skillDesc.getComponent(Label);
+    descLabel.horizontalAlign = Label.HorizontalAlign.LEFT;
+    descLabel.enableWrapText = true;
+    descLabel.lineHeight = descCfg.lineHeight;
     description.addChild(skillDesc);
     node.addChild(description);
     return node;
