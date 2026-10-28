@@ -7,9 +7,20 @@ import { getEquipment } from "../../../configs/items";
 import { getFashionOut } from "../../../configs/fashionClothes";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import { EQUIP_ALIGN, placeWeaponOnHand } from "../../../configs/equipAlign";
 
 /** 这些朝向下衣服在武器上方（武器在身后）：左 / 左上 / 上 / 左下；其余朝向武器在衣服上方 */
 const CLOTH_ON_TOP_DIRECTIONS: DIRECTION[] = [DIRECTION.LEFT, DIRECTION.LEFT_UP, DIRECTION.UP, DIRECTION.LEFT_DOWN];
+
+/**
+ * 武器握持点：面向哪些朝向时武器在观众**左侧**
+ *
+ * 角色右手持械 —— 面向观众（down）时右手在观众左边；转身背对（up）时换到右边。
+ * 左右斜向跟各自的主朝向一致，右向的两个朝向右、左向的两个朝向左。
+ */
+const WEAPON_ON_LEFT: DIRECTION[] = [DIRECTION.DOWN, DIRECTION.LEFT, DIRECTION.LEFT_DOWN, DIRECTION.LEFT_UP];
+
+
 
 /**
  * 装配一套角色外观所需的最小数据（#383）
@@ -68,6 +79,11 @@ export default class RoleAppearance {
   private clothOnTop: boolean | null = null;
   /** 死亡标记：死亡动画播完停最后一帧，期间不再响应任何动作切换与播完续播，直到复活 */
   private dead = false;
+  /**
+   * 武器对齐的重试计数（素材是异步装上去的：首帧还没落到 Sprite 上时读不到内容 bbox，
+   * 这时候不能拿 (0,0) 硬算，否则武器会先出现在脚底再跳上去）
+   */
+  private alignRetry = 0;
 
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
@@ -99,7 +115,7 @@ export default class RoleAppearance {
     this.direction = direction;
     // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
     this.applyOutTransform(this.cloth, this.clothTransform);
-    this.applyOutTransform(this.weapon, this.weaponTransform);
+    this.applyWeaponTransform();
     this.updateLayerOrder();
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
@@ -116,7 +132,7 @@ export default class RoleAppearance {
     this.direction = direction;
     this.dead = true;
     this.applyOutTransform(this.cloth, this.clothTransform);
-    this.applyOutTransform(this.weapon, this.weaponTransform);
+    this.applyWeaponTransform();
     this.updateLayerOrder();
     const animationName = getAnimationName(ACTION.DIE, direction);
     this.clothAnimate?.crossFade(animationName, 0.1);
@@ -197,6 +213,49 @@ export default class RoleAppearance {
     const offset = positions?.[getDirectionIndex(this.direction)] ?? positions?.[0] ?? Vec2.ZERO;
     node.setScale(scale, scale, 1);
     node.setPosition(offset.x, offset.y, 0);
+  }
+
+  /**
+   * 武器位置：贴到「当前身体帧」的握持点
+   *
+   * 为什么不直接用手调的 outPositions：素材的裁剪留白与画布尺寸每件都不一样（武器画布 245×234 ~ 570×608，
+   * 身体 142×112 ~ 480×480），写死的偏移只对作者当初那件身体成立 —— 换一件衣服武器就飘走。
+   * 这里改成读**当前帧的内容 bbox**（裁剪偏移已由 SpriteFrame.offset 还原）：
+   *   手部锚点 = 身体内容 bbox 的侧边 × 0.52、纵向 52%（角色右手）
+   *   武器位置 = 手部锚点 − 武器内容中心的缩放偏移
+   * 于是任何身体尺寸、任何武器都自动对齐。outPositions 保留为**微调**（默认 0，逐件微调不碰公式）。
+   * 素材未就绪（帧还没落到 Sprite 上）时保持不动 —— 下一帧的 play 会再算一次。
+   */
+  private applyWeaponTransform() {
+    const weaponBox = GameUiHelper.spriteContentBox(this.weapon);
+    const clothBox = GameUiHelper.spriteContentBox(this.cloth);
+    const scale = this.weaponTransform?.outScale ?? 1;
+    this.weapon.setScale(scale, scale, 1);
+    if (!weaponBox || !clothBox) {
+      this.retryAlign();
+      return;
+    }
+    this.alignRetry = 0;
+    // 身体内容 bbox（宿主坐标系：衣服节点自身带着它的 outPositions，且可能带 outScale）
+    const clothPos = this.cloth.position;
+    const clothScale = this.cloth.scale.x;
+    const body = {
+      cx: clothPos.x + clothBox.cx * clothScale,
+      cy: clothPos.y + clothBox.cy * clothScale,
+      w: clothBox.w * clothScale,
+      h: clothBox.h * clothScale,
+    };
+    // 逐件微调（outPositions 按方向下标；缺省 0）
+    const nudge = this.weaponTransform?.outPositions?.[getDirectionIndex(this.direction)] ?? Vec2.ZERO;
+    const pos = placeWeaponOnHand(body, weaponBox, scale, nudge, WEAPON_ON_LEFT.indexOf(this.direction) !== -1);
+    this.weapon.setPosition(pos.x, pos.y, 0);
+  }
+
+  /** 素材未就绪：下一帧再算一次（上限与间隔见 configs/equipAlign.EQUIP_ALIGN，避免素材真的缺帧时无限重排） */
+  private retryAlign() {
+    if (this.alignRetry >= EQUIP_ALIGN.alignRetryTimes) return;
+    this.alignRetry += 1;
+    setTimeout(() => this.applyWeaponTransform(), EQUIP_ALIGN.alignRetryDelayMs);
   }
 
   /** 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调） */

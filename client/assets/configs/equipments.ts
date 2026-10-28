@@ -611,6 +611,14 @@ const clothesData: EquipmentData[] = [
 export const clothes = buildEquipmentMap(clothesData);
 
 // 武器（按名称强弱排等级：weapon_1 是新手的定海神针 = 1 级，weapon_20 焚世巨剑 = 60 级）
+//
+// **几何字段（inPosition / outPositions / inScale*）一律留 0，位置由运行时按素材算**（2026-10-29）：
+// 素材的画布与裁剪留白每件都不同（武器画布 245×234 ~ 570×608，身体 142×112 ~ 480×480），
+// 写死偏移只能对上一件身体 —— 换衣服就飘。现在：
+//   - 外观（场景）：RoleAppearance.applyWeaponTransform 读「当前身体帧 + 武器帧」的内容 bbox，
+//     把手部锚点（身体侧边 0.52、纵向 52%）当握持点；
+//   - 内观（角色弹窗）：RoleInShowView.alignWeapon 把武器贴到身体内观的左手位，并缩放到身体高度的 1.15 倍。
+// 下面的 outPositions 只当**逐件微调**用（默认 0，确实要挪 1~2 px 才填），不要再写手调绝对值。
 const weaponsData: EquipmentData[] = [
   {
     key: "weapon_1",
@@ -625,18 +633,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/001",
     in: "weapons/in/001",
     out: "weapons/out/001",
-    inPosition: new Vec2(-205.5, 194),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(5.6, 3.1), // up
-      new Vec2(5.6, 3.1), // right_up
-      new Vec2(5.6, 3.1), // right
-      new Vec2(5.6, 3.1), // right_down
-      new Vec2(5.6, 3.1), // down
-      new Vec2(5.6, 3.1), // left_down
-      new Vec2(5.6, 3.1), // left
-      new Vec2(5.6, 3.1), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -652,18 +660,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/002",
     in: "weapons/in/002",
     out: "weapons/out/002",
-    inPosition: new Vec2(-151.5, 111),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(-10.0, 75.2), // up
-      new Vec2(-10.0, 75.2), // right_up
-      new Vec2(-10.0, 75.2), // right
-      new Vec2(-10.0, 75.2), // right_down
-      new Vec2(-10.0, 75.2), // down
-      new Vec2(-10.0, 75.2), // left_down
-      new Vec2(-10.0, 75.2), // left
-      new Vec2(-10.0, 75.2), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -679,18 +687,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/003",
     in: "weapons/in/003",
     out: "weapons/out/003",
-    inPosition: new Vec2(-178, 137),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(7.6, 8.0), // up
-      new Vec2(7.6, 8.0), // right_up
-      new Vec2(7.6, 8.0), // right
-      new Vec2(7.6, 8.0), // right_down
-      new Vec2(7.6, 8.0), // down
-      new Vec2(7.6, 8.0), // left_down
-      new Vec2(7.6, 8.0), // left
-      new Vec2(7.6, 8.0), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -706,18 +714,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/004",
     in: "weapons/in/004",
     out: "weapons/out/004",
-    inPosition: new Vec2(-170.5, 150),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(6.6, 50.4), // up
-      new Vec2(6.6, 50.4), // right_up
-      new Vec2(6.6, 50.4), // right
-      new Vec2(6.6, 50.4), // right_down
-      new Vec2(6.6, 50.4), // down
-      new Vec2(6.6, 50.4), // left_down
-      new Vec2(6.6, 50.4), // left
-      new Vec2(6.6, 50.4), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -737,14 +745,14 @@ const weaponsData: EquipmentData[] = [
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(6.6, 50.4), // up
-      new Vec2(6.6, 50.4), // right_up
-      new Vec2(6.6, 50.4), // right
-      new Vec2(6.6, 50.4), // right_down
-      new Vec2(6.6, 50.4), // down
-      new Vec2(6.6, 50.4), // left_down
-      new Vec2(6.6, 50.4), // left
-      new Vec2(6.6, 50.4), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -760,18 +768,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/006",
     in: "weapons/in/006",
     out: "weapons/out/006",
-    inPosition: new Vec2(-141, 86),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(12.7, 36.5), // up
-      new Vec2(12.7, 36.5), // right_up
-      new Vec2(12.7, 36.5), // right
-      new Vec2(12.7, 36.5), // right_down
-      new Vec2(12.7, 36.5), // down
-      new Vec2(12.7, 36.5), // left_down
-      new Vec2(12.7, 36.5), // left
-      new Vec2(12.7, 36.5), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -787,18 +795,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/007",
     in: "weapons/in/007",
     out: "weapons/out/007",
-    inPosition: new Vec2(-185, 102),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(6.5, 47.4), // up
-      new Vec2(6.5, 47.4), // right_up
-      new Vec2(6.5, 47.4), // right
-      new Vec2(6.5, 47.4), // right_down
-      new Vec2(6.5, 47.4), // down
-      new Vec2(6.5, 47.4), // left_down
-      new Vec2(6.5, 47.4), // left
-      new Vec2(6.5, 47.4), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -814,18 +822,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/008",
     in: "weapons/in/008",
     out: "weapons/out/008",
-    inPosition: new Vec2(-164, 146),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(-19.2, 80.2), // up
-      new Vec2(-19.2, 80.2), // right_up
-      new Vec2(-19.2, 80.2), // right
-      new Vec2(-19.2, 80.2), // right_down
-      new Vec2(-19.2, 80.2), // down
-      new Vec2(-19.2, 80.2), // left_down
-      new Vec2(-19.2, 80.2), // left
-      new Vec2(-19.2, 80.2), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -841,19 +849,19 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/009",
     in: "weapons/in/009",
     out: "weapons/out/009",
-    inPosition: new Vec2(-139, -9.5),
+    inPosition: new Vec2(0, 0),
     inRotate: 260,
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(14.0, 4.5), // up
-      new Vec2(14.0, 4.5), // right_up
-      new Vec2(14.0, 4.5), // right
-      new Vec2(14.0, 4.5), // right_down
-      new Vec2(14.0, 4.5), // down
-      new Vec2(14.0, 4.5), // left_down
-      new Vec2(14.0, 4.5), // left
-      new Vec2(14.0, 4.5), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -869,19 +877,19 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/010",
     in: "weapons/in/010",
     out: "weapons/out/010",
-    inPosition: new Vec2(-125, -13.5),
+    inPosition: new Vec2(0, 0),
     inRotate: 280,
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(13.0, -12.8), // up
-      new Vec2(13.0, -12.8), // right_up
-      new Vec2(13.0, -12.8), // right
-      new Vec2(13.0, -12.8), // right_down
-      new Vec2(13.0, -12.8), // down
-      new Vec2(13.0, -12.8), // left_down
-      new Vec2(13.0, -12.8), // left
-      new Vec2(13.0, -12.8), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -897,18 +905,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/011",
     in: "weapons/in/011",
     out: "weapons/out/011",
-    inPosition: new Vec2(-68, 15.5),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(14.0, 5.9), // up
-      new Vec2(14.0, 5.9), // right_up
-      new Vec2(14.0, 5.9), // right
-      new Vec2(14.0, 5.9), // right_down
-      new Vec2(14.0, 5.9), // down
-      new Vec2(14.0, 5.9), // left_down
-      new Vec2(14.0, 5.9), // left
-      new Vec2(14.0, 5.9), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -924,19 +932,19 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/012",
     in: "weapons/in/012",
     out: "weapons/out/012",
-    inPosition: new Vec2(-139, 42),
+    inPosition: new Vec2(0, 0),
     inRotate: 240,
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(11.5, 4.9), // up
-      new Vec2(11.5, 4.9), // right_up
-      new Vec2(11.5, 4.9), // right
-      new Vec2(11.5, 4.9), // right_down
-      new Vec2(11.5, 4.9), // down
-      new Vec2(11.5, 4.9), // left_down
-      new Vec2(11.5, 4.9), // left
-      new Vec2(11.5, 4.9), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -952,18 +960,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/013",
     in: "weapons/in/013",
     out: "weapons/out/013",
-    inPosition: new Vec2(-79, 17),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(15.5, -26.9), // up
-      new Vec2(15.5, -26.9), // right_up
-      new Vec2(15.5, -26.9), // right
-      new Vec2(15.5, -26.9), // right_down
-      new Vec2(15.5, -26.9), // down
-      new Vec2(15.5, -26.9), // left_down
-      new Vec2(15.5, -26.9), // left
-      new Vec2(15.5, -26.9), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -983,14 +991,14 @@ const weaponsData: EquipmentData[] = [
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(14.5, 18.3), // up
-      new Vec2(14.5, 18.3), // right_up
-      new Vec2(14.5, 18.3), // right
-      new Vec2(14.5, 18.3), // right_down
-      new Vec2(14.5, 18.3), // down
-      new Vec2(14.5, 18.3), // left_down
-      new Vec2(14.5, 18.3), // left
-      new Vec2(14.5, 18.3), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -1006,19 +1014,19 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/015",
     in: "weapons/in/015",
     out: "weapons/out/015",
-    inPosition: new Vec2(-76, 80),
+    inPosition: new Vec2(0, 0),
     inRotate: 280,
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(-8.5, 70.4), // up
-      new Vec2(-8.5, 70.4), // right_up
-      new Vec2(-8.5, 70.4), // right
-      new Vec2(-8.5, 70.4), // right_down
-      new Vec2(-8.5, 70.4), // down
-      new Vec2(-8.5, 70.4), // left_down
-      new Vec2(-8.5, 70.4), // left
-      new Vec2(-8.5, 70.4), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -1034,19 +1042,19 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/016",
     in: "weapons/in/016",
     out: "weapons/out/016",
-    inPosition: new Vec2(-80, 80),
+    inPosition: new Vec2(0, 0),
     inRotate: 280,
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(-8.6, 71.6), // up
-      new Vec2(-8.6, 71.6), // right_up
-      new Vec2(-8.6, 71.6), // right
-      new Vec2(-8.6, 71.6), // right_down
-      new Vec2(-8.6, 71.6), // down
-      new Vec2(-8.6, 71.6), // left_down
-      new Vec2(-8.6, 71.6), // left
-      new Vec2(-8.6, 71.6), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -1062,18 +1070,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/017",
     in: "weapons/in/017",
     out: "weapons/out/017",
-    inPosition: new Vec2(-222, 231),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(7.3, 1.5), // up
-      new Vec2(7.3, 1.5), // right_up
-      new Vec2(7.3, 1.5), // right
-      new Vec2(7.3, 1.5), // right_down
-      new Vec2(7.3, 1.5), // down
-      new Vec2(7.3, 1.5), // left_down
-      new Vec2(7.3, 1.5), // left
-      new Vec2(7.3, 1.5), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -1089,18 +1097,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/018",
     in: "weapons/in/018",
     out: "weapons/out/018",
-    inPosition: new Vec2(-80, 48),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(14.5, 18.3), // up
-      new Vec2(14.5, 18.3), // right_up
-      new Vec2(14.5, 18.3), // right
-      new Vec2(14.5, 18.3), // right_down
-      new Vec2(14.5, 18.3), // down
-      new Vec2(14.5, 18.3), // left_down
-      new Vec2(14.5, 18.3), // left
-      new Vec2(14.5, 18.3), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -1116,18 +1124,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/019",
     in: "weapons/in/019",
     out: "weapons/out/019",
-    inPosition: new Vec2(-225, 230),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(7.4, 1.2), // up
-      new Vec2(7.4, 1.2), // right_up
-      new Vec2(7.4, 1.2), // right
-      new Vec2(7.4, 1.2), // right_down
-      new Vec2(7.4, 1.2), // down
-      new Vec2(7.4, 1.2), // left_down
-      new Vec2(7.4, 1.2), // left
-      new Vec2(7.4, 1.2), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
   {
@@ -1143,18 +1151,18 @@ const weaponsData: EquipmentData[] = [
     icon: "weapons/icon/020",
     in: "weapons/in/020",
     out: "weapons/out/020",
-    inPosition: new Vec2(-172, 143),
+    inPosition: new Vec2(0, 0),
     tags: [],
     outScale: 1,
     outPositions: [
-      new Vec2(11.7, 57.2), // up
-      new Vec2(11.7, 57.2), // right_up
-      new Vec2(11.7, 57.2), // right
-      new Vec2(11.7, 57.2), // right_down
-      new Vec2(11.7, 57.2), // down
-      new Vec2(11.7, 57.2), // left_down
-      new Vec2(11.7, 57.2), // left
-      new Vec2(11.7, 57.2), // left_up
+      new Vec2(0, 0), // up
+      new Vec2(0, 0), // right_up
+      new Vec2(0, 0), // right
+      new Vec2(0, 0), // right_down
+      new Vec2(0, 0), // down
+      new Vec2(0, 0), // left_down
+      new Vec2(0, 0), // left
+      new Vec2(0, 0), // left_up
     ],
   },
 ];

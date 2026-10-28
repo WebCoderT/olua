@@ -122,7 +122,12 @@ export interface Equipment extends Good, BattleAttributes {
   inScaleY?: number;
   /** 内观旋转角度（度，缺省 0） */
   inRotate?: number;
-  // 内观位置
+  /**
+   * 内观位置（衣服 = 身体在弹窗里的落点）
+   *
+   * 武器**不读这里**：它的内观位置由 RoleInShowView 按「身体内观的内容 bbox」现算（2026-10-29），
+   * 因为每件素材的画布与裁剪留白都不一样，写死一个坐标只能对上一件身体。
+   */
   inPosition: Vec2;
   /** 外观缩放 */
   outScale: number;
@@ -130,7 +135,8 @@ export interface Equipment extends Good, BattleAttributes {
    * 外观位置（按 8 方向各一个）
    * 数组下标顺序与 configs/animation 的 directions 一致：
    * up / right_up / right / right_down / down / left_down / left / left_up
-   * 坐标为相对角色节点原点（脚底锚点）的偏移，y 向上
+   * 衣服：相对角色节点原点（脚底锚点）的偏移，y 向上 —— **身体站哪儿就是它**；
+   * 武器：只当**微调**（默认 0），实际位置由 RoleAppearance.applyWeaponTransform 贴着当前身体帧现算。
    */
   outPositions: Vec2[];
   // 外观

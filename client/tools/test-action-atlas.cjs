@@ -29,7 +29,7 @@ try {
   process.exit();
 }
 
-const { getAtlasSrc, getLoopAtlasDir, monsterActionAtlas, monsterActionSpecs, roleActionAtlas, directions } = require(path.join(outDir, "configs/animation.js"));
+const { BLANK_FRAME_MAX_AREA, getAtlasSrc, getLoopAtlasDir, monsterActionAtlas, monsterActionSpecs, roleActionAtlas, directions } = require(path.join(outDir, "configs/animation.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 const helperSource = read("assets/ui/helpers/AnimationHelper.ts");
@@ -148,17 +148,26 @@ check(/if \(!clips\.size\) return false;/.test(helperSource), "一个动作都�
   check(/this\.getFrameTime\(name, speedRate\)/.test(atlasBody), "每帧时长走 getFrameTime（速度倍率口径与散帧路径一致）");
   check(/list\.sort\(/.test(atlasBody), "组内按帧下标排序（d0_00 与 d1_00 末尾数字同为 0，不能依赖 loadFramesFromAtlas 的排序）");
   check(/this\.createClip\(name, list/.test(atlasBody), "片段创建复用 createClip（wrapMode / enableTrsBlending 与散帧路径一致）");
-  check(/this\.isSolidFrame\(frame\)/.test(atlasBody), "空帧过滤走 isSolidFrame（1×1 占位图不进片段，避免空白闪帧）");
+  check(/this\.isSolidFrame\(frame\)/.test(atlasBody), "空帧过滤走 isSolidFrame（占位空图不进片段，避免空白闪帧）");
   check(!/console\.error/.test(atlasBody), "图集缺失路径无 console.error（未打包目录预加载不刷屏）");
 }
-check(helperSource.split("this.isSolidFrame(").length >= 4 && /private static isSolidFrame/.test(helperSource), "空帧判据收敛为 isSolidFrame（buildClips / prepareActionAtlas / loadLoopFrames 三处共用）");
+check(helperSource.split("this.isSolidFrame(").length >= 5 && /private static isSolidFrame/.test(helperSource), "空帧判据收敛为 isSolidFrame（buildClips / prepareActionAtlas / loadLoopFrames / playLoopAtlasWithDuration 共用）");
+{
+  // 判据必须按面积：2026-10-29 普查 8513 个空帧，武器除 1×1 外还有 184 个 2×2，
+  // 旧判据（边长 > 1）把它们放进片段 → 武器每轮消失一半时间；按边长 > 2 判又会误伤 2×174 这类薄武器帧
+  const solidBody = helperSource.slice(helperSource.indexOf("private static isSolidFrame"), helperSource.indexOf("private static isSolidFrame") + 400);
+  check(/rect\.width \* rect\.height > BLANK_FRAME_MAX_AREA/.test(solidBody), "空帧判据按面积且阈值取自配置（rect.width × rect.height > BLANK_FRAME_MAX_AREA），边长判据会漏过 2×2 占位块");
+  check(BLANK_FRAME_MAX_AREA === 4, `空帧面积阈值 BLANK_FRAME_MAX_AREA = ${BLANK_FRAME_MAX_AREA}（普查结论：1×1 与 2×2 是占位，3×3 起是真实小图）`);
+  const durationBody = helperSource.slice(helperSource.indexOf("static playLoopAtlasWithDuration"), helperSource.indexOf("static playLoopDir"));
+  check(/filter\(\(frame\) => this\.isSolidFrame\(frame\)\)/.test(durationBody), "内观图集（playLoopAtlasWithDuration）同样过滤空帧，衣服内观不再周期闪空");
+}
 check(/kind === "monster" \? monsterActionAtlas : roleActionAtlas/.test(helperSource), "动作规格按种类取（怪物走帧号表导出，角色走顺序布局动作段）");
 {
   // 单循环接线：playLoopWithDir / playLoopDir 都改走 loadLoopFrames（图集优先 + 空帧过滤 + 散帧回退）
   const loopBody = helperSource.slice(helperSource.indexOf("private static async loadLoopFrames"), helperSource.indexOf("片段缓存键"));
   check(/getLoopAtlasDir\(dirSrc\)/.test(loopBody), "单循环路径走 getLoopAtlasDir 取图集目录");
   check(/resources\.getDirWithPath\(atlasDir, SpriteAtlas\)/.test(loopBody), "单循环图集探测走 getDirWithPath（未打包不报错刷屏）");
-  check(/this\.isSolidFrame\(frame\)/.test(loopBody), "单循环图集空帧过滤与动作路径同口径（isSolidFrame，1×1 占位图不进播放序列）");
+  check(/this\.isSolidFrame\(frame\)/.test(loopBody), "单循环图集空帧过滤与动作路径同口径（isSolidFrame，占位空图不进播放序列）");
   check(/this\.loadFrames\(dirSrc\)/.test(loopBody), "单循环未打包时回退散帧目录（行为不变）");
   check(/playLoopWithDir[\s\S]*?this\.loadLoopFrames\(dirSrc\)/.test(helperSource), "playLoopWithDir（NPC 外观）已接入图集优先帧来源");
   check(/static playLoopDir\([\s\S]*?this\.loadLoopFrames\(dirSrc\)/.test(helperSource), "playLoopDir（装备详情背景）已接入图集优先帧来源");

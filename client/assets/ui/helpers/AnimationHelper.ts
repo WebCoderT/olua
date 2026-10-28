@@ -1,5 +1,5 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
-import { getAnimationName, getAnimationFrameBase, getAtlasSrc, getLoopAtlasDir, directions, monsterActionAtlas, monsterAnimation, roleActionAtlas, roleAnimationMap } from "../../configs/animation";
+import { BLANK_FRAME_MAX_AREA, getAnimationName, getAnimationFrameBase, getAtlasSrc, getLoopAtlasDir, directions, monsterActionAtlas, monsterAnimation, roleActionAtlas, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
 
@@ -143,11 +143,14 @@ export default class AnimationHelper {
     return matched ? Number(matched[1]) : 0;
   }
 
-  /** 空帧判据（三处共用：buildClips / prepareActionAtlas / loadLoopFrames）：
-   * 素材包/图集里的占位空图是 1×1 图块，rect 边长 >1 才算有效帧，否则片段里会夹空白闪帧 */
+  /** 空帧判据（四处共用：buildClips / prepareActionAtlas / loadLoopFrames / playLoopAtlasWithDuration）：
+   * 素材包里的占位空图会以极小图块进图集，判据按**面积**（阈值见 configs/animation.BLANK_FRAME_MAX_AREA）——
+   * 2026-10-29 普查 8513 个空帧：衣服全是 1×1，武器 1×1 之外还有 184 个 **2×2**
+   * （边长判据 >1 会放过 2×2，武器片段里夹着它 → 武器每轮消失一半时间）；
+   * 同时不能按边长 `> 2` 判——真实武器帧可能很薄（如 2×174），按面积才不会误伤 */
   private static isSolidFrame(frame: SpriteFrame): boolean {
     const rect = frame.getRect();
-    return rect.width > 1 && rect.height > 1;
+    return rect.width * rect.height > BLANK_FRAME_MAX_AREA;
   }
 
   /**
@@ -444,9 +447,12 @@ export default class AnimationHelper {
    */
   static playLoopAtlasWithDuration(name: string, node: Node, atlasSrc: string, duration: number = 1) {
     const animate = this.useAnimation(node);
-    this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
-      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
-      this.play(name, node, animate, spriteFrames, duration > 0 ? duration : spriteFrames.length, AnimationClip.WrapMode.Loop);
+    return this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
+      // 空帧过滤与切片路径同口径（isSolidFrame）：内观图集里同样夹着占位空图
+      // （clothes/in 有 1×1），不滤掉会让内观的衣服/武器周期性闪空
+      const valid = spriteFrames.filter((frame) => this.isSolidFrame(frame));
+      if (!isValid(node) || !isValid(animate) || !valid.length) return;
+      this.play(name, node, animate, valid, duration > 0 ? duration : valid.length, AnimationClip.WrapMode.Loop);
     });
   }
 
