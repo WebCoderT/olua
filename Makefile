@@ -5,13 +5,13 @@
 #    client/  Cocos Creator 3.8.7 + TypeScript 客户端（没有 npm 脚本，用编辑器打开）
 #    server/  NestJS 12 + node:sqlite 服务端（同时是接口契约的唯一源头）
 #    admin/   React 19 + Vite + Tailwind v4 管理端
-#    tools/   跨端脚本（gen-api + 6 个 gen/audit）
+#    tools/   跨端脚本（接口生成 + 数据快照生成 + 13 项审计 + e2e 辅助）
 #
 #  常用：
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
-#    make client-test      客户端 50 套单测（需要本机 Cocos 工程）
+#    make client-test      客户端 56 套单测（需要本机 Cocos 工程）
 #    make verify           一条命令跑完全部门禁（含三端构建与二十二套 e2e）
 #    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
 #
@@ -48,7 +48,7 @@ CREATOR ?= CocosCreator
 .PHONY: help info install install-ci env \
         dev dev-server dev-admin \
         check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
-        audit-shared-data audit-combat-parity audit-doc-numbers \
+        audit-shared-data audit-combat-parity audit-doc-numbers audit-equip-align-catalog \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
@@ -337,7 +337,7 @@ admin-preview: ## 预览管理端已构建产物（需先 make admin-build）
 #  审计（tools/，跨端静态检查）
 # ==============================================================================
 
-audit: ## 跑全部跨端审计（生成物 / 硬编码 / 配置外泄 / 点击穿透 / 部署接线 / 战斗规则两端一致）
+audit: ## 跑全部跨端审计（生成物 / 硬编码 / 配置外泄 / 点击穿透 / 部署接线 / 战斗规则两端一致 / 装备对齐清单）
 	@echo "==> 跨端审计"
 	@fail=0; \
 	for t in tools/audit-*.cjs; do \
@@ -371,6 +371,9 @@ audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一�
 
 audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）
 	@$(NODE) tools/audit-combat-parity.cjs
+
+audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据源）是否与客户端 configs 逐字节一致 + 无展开变体 / 缺方向 / 缩成点
+	@$(NODE) tools/audit-equip-align-catalog.cjs
 
 audit-doc-numbers: ## 文档里的接口 / 路径 / 模型 / 权限点 / 表数 / 审计与单测套数 / e2e 条数是否与实测一致（防「文档自信地写着过期数字」）
 	@$(NODE) tools/audit-doc-numbers.cjs

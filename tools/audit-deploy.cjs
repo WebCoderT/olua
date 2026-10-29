@@ -95,10 +95,22 @@ const NGINX_FILES = [
 ];
 
 /** 取出「带 proxy_pass 的那个 location」（配置里还混着 /assets/、/ 这类静态块） */
-function proxyLocationOf(text) {
-  return [...text.matchAll(/location\s+(=)?\s*(\S+)\s*\{([\s\S]*?)\n {2}\}/g)]
+/**
+ * 取「反代到服务端」的那个 location
+ *
+ * 一个 nginx.conf 里可能有多段 proxy_pass：除了 `/api/`，管理端还有 `/game-resources/`
+ * （装备对齐工作台读素材，见 #509）。所以不能简单取第一个，要按想要的前缀找，
+ * 找不到再退回第一个（配置文件里只写了一段反代的旧情况）。
+ */
+function proxyLocationOf(text, wanted) {
+  const blocks = [...text.matchAll(/location\s+(=)?\s*(\S+)\s*\{([\s\S]*?)\n {2}\}/g)]
     .map((match) => ({ path: match[2], body: match[3] }))
-    .find((block) => block.body.includes("proxy_pass"));
+    .filter((block) => block.body.includes("proxy_pass"));
+  if (wanted) {
+    const wantedBlock = blocks.find((block) => block.path === wanted);
+    if (wantedBlock) return wantedBlock;
+  }
+  return blocks[0];
 }
 const serverEnvExample = read(FILES.serverEnvExample);
 
@@ -165,7 +177,7 @@ if (!prefix) fail("server/.env.example 里没找到 API_PREFIX");
 if (!buildArg) fail("compose 里没给 admin 传 VITE_API_BASE_URL 构建参数");
 
 for (const [label, text] of NGINX_FILES) {
-  const proxyLocation = proxyLocationOf(text);
+  const proxyLocation = proxyLocationOf(text, prefix ? `/${prefix[1]}/` : null);
   if (!proxyLocation) {
     fail(`${label} 里没找到带 proxy_pass 的 location（反代块）`);
     continue;

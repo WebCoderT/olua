@@ -34,7 +34,6 @@ const ROOT = path.resolve(__dirname, "..");
 const PAIRS = [
   ["README.md", "README.en.md"],
   ["FAQ.md", "FAQ.en.md"],
-  ["equip-aligner/README.md", "equip-aligner/README.en.md"],
   ["admin/README.md", "admin/README.en.md"],
   ["admin/FAQ.md", "admin/FAQ.en.md"],
   ["client/README.md", "client/README.en.md"],
@@ -44,7 +43,7 @@ const PAIRS = [
 ];
 
 // 已知文档目录（用于孤儿检测，非递归即可，受管文档都直接落在这些目录里）
-const DOC_DIRS = [".", "client", "admin", "server", "equip-aligner"];
+const DOC_DIRS = [".", "client", "admin", "server"];
 
 // GitHub 的锚点算法：标点去掉后，每个空格各换成一个连字符（不合并连续空格）
 const slug = (s) =>
