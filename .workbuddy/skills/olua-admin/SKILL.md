@@ -206,6 +206,29 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
   `AUDIT_TARGET_TYPES` 是唯一来源，`@AuditTarget` 的类型与查询筛选的 `@IsIn` 都从它推导 ——
   加新类型只改那个数组（曾经两处各写一份，查询侧停在 5 种，后面全筛不出来）。
 
+## 五点九、内观工作台（EquipInAlignPage，#523）：同一套路，两个不同的基准
+
+角色信息弹窗里那**一个**朝向（不是 8 方向）。形状复用五点八，差异只在基准与数据：
+
+- **一张大视图 + 叠层，不是 8 宫格**：内观只有一个朝向，格子的概念在这里没有意义。
+  逻辑拆成 `pages/equipAlignIn/{model,render,saved}.ts`，`atlas.ts` / `assets.ts` / `model.ts` 的
+  通用部分从 `equipAlign/` 复用 —— 别把两套几何算法抄成两份。
+- **衣服的基准是弹窗背景上的圆盘**：底图画真实 `personal-information-bg`，圆盘中心 / 半径由清单
+  下发（`inShow.plate`，从原图 858×908 实测换算，`center (-82.5,-149.5) / r 90`）。
+  这组值是**量出来的**，注释里必须写「换背景图要重测」—— 没有任何守点能替你验它。
+- **武器的基准是第一件衣服**（`inShow.baseClothKey`，实为 `cloth_1`）：调武器时固定叠一件 0.5 透明
+  的参照层 + 它的轮廓与手位十字，不跟当前选中项变。初值按轮廓算握持点（0.52/0.52）、高度 ×1.15，
+  与客户端 `placeInShowWeapon` 同口径但用 alpha>200 的不透明轮廓（影子不参与）。
+- **两张表两套接口，不要合并**（`equip_in_aligns` / `/admin/equip-in-aligns`）：字段形状不同只是表象，
+  真正的理由是**重置必须互不牵连**（e2e 钉住「存外观 → 重置内观 → 外观行还在」）。
+- **`inManual` 是短路开关，不是备用值**：内观武器的位置原本由 `alignWeapon()` 按当前衣服现算，
+  直接写绝对值等于「保存完就被算法覆盖」。勾了才走绝对位置 —— 缺省仍自动，渐进不砸存量。
+- **内观图集是另一种拼法**：外观是 `<dir>/stand/stand.{png,plist}`，内观是 `<dir>/in.{png,plist}`
+  （路径本身即基名）。`assets.ts` 里 `inAtlasUrls` / `loadInAtlas` 与外观那套并列，别硬套 `/stand/stand`。
+  取帧用 `firstFrameName()`（按名字排序取第一个**非空**帧 —— 空帧是 1×1 占位）。
+- **没有裸模内观素材**：未穿衣服时客户端不画身体，所以 id 形态里没有 `role:*`（服务端用
+  `equipInAlignId` 正则挡掉，e2e 用 `role:1` → 400 钉住）。
+
 ## 六、必踩的坑
 
 1. **生成的类型必须是 `type` 不是 `interface`**。`interface` 没有隐式索引签名，赋给请求层的 `Record<string, string | number | null | undefined>`（query 参数）会被 TS 拒。生成器已经统一产出 `export type X = { ... }`，别再手写回 interface。
