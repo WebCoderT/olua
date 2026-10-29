@@ -267,6 +267,24 @@ export function EquipInAlignPage() {
     [activeItem, baseOf, clearError],
   );
 
+  /**
+   * 人动过 = 你在给**绝对值**：武器顺手把「手调」打开
+   *
+   * 不这么做的话，拖完点保存，服务端存下的是一份**客户端根本不会读**的数字 ——
+   * `inManual = false` 时 `RoleInShowView.alignWeapon()` 仍按当前衣服的内容 bbox 现算，
+   * 症状就是「保存了但内观没动」，而且从页面到接口都看不出哪里错（#527 的起因）。
+   * 衣服没有运行时算法，`manual` 对它无意义，所以只对武器生效。
+   */
+  const patchUserGeometry = useCallback(
+    (updater: (current: InGeometry) => InGeometry) => {
+      patchGeometry((current) => {
+        const next = updater(current);
+        return activeItem.kind === "weapon" && next.manual !== true ? { ...next, manual: true } : next;
+      });
+    },
+    [patchGeometry, activeItem.kind],
+  );
+
   // ---- 画布 ----
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -364,7 +382,7 @@ export function EquipInAlignPage() {
     const point = localPoint(event);
     const dx = (point[0] - active.startX) / k;
     const dy = (point[1] - active.startY) / k;
-    patchGeometry((current) => ({
+    patchUserGeometry((current) => ({
       ...current,
       inPosition: [round2(active.pos[0] + dx), round2(active.pos[1] - dy)],
     }));
@@ -378,7 +396,7 @@ export function EquipInAlignPage() {
 
   const onWheel = (event: ReactWheelEvent<HTMLCanvasElement>) => {
     event.preventDefault();
-    patchGeometry((current) => scaleBy(current, -Math.sign(event.deltaY) * 0.02));
+    patchUserGeometry((current) => scaleBy(current, -Math.sign(event.deltaY) * 0.02));
   };
 
   // ---- 键盘 ----
@@ -398,14 +416,14 @@ export function EquipInAlignPage() {
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       const step = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
       const actions: Record<string, () => void> = {
-        ArrowLeft: () => patchGeometry((current) => nudgeGeometry(current, -step, 0)),
-        ArrowRight: () => patchGeometry((current) => nudgeGeometry(current, step, 0)),
-        ArrowUp: () => patchGeometry((current) => nudgeGeometry(current, 0, step)),
-        ArrowDown: () => patchGeometry((current) => nudgeGeometry(current, 0, -step)),
+        ArrowLeft: () => patchUserGeometry((current) => nudgeGeometry(current, -step, 0)),
+        ArrowRight: () => patchUserGeometry((current) => nudgeGeometry(current, step, 0)),
+        ArrowUp: () => patchUserGeometry((current) => nudgeGeometry(current, 0, step)),
+        ArrowDown: () => patchUserGeometry((current) => nudgeGeometry(current, 0, -step)),
         "[": () => stepItem(-1),
         "]": () => stepItem(1),
-        "-": () => patchGeometry((current) => scaleBy(current, -0.02)),
-        "=": () => patchGeometry((current) => scaleBy(current, 0.02)),
+        "-": () => patchUserGeometry((current) => scaleBy(current, -0.02)),
+        "=": () => patchUserGeometry((current) => scaleBy(current, 0.02)),
       };
       const action = actions[event.key];
       if (action) {
@@ -415,7 +433,7 @@ export function EquipInAlignPage() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [patchGeometry, stepItem]);
+  }, [patchUserGeometry, stepItem]);
 
   // ---- 操作 ----
   const dropDraft = (id: string) => {
@@ -700,7 +718,7 @@ export function EquipInAlignPage() {
                   step="0.1"
                   value={currentPos[0]}
                   onChange={(event) =>
-                    patchGeometry((current) => ({ ...current, inPosition: [Number(event.target.value) || 0, current.inPosition[1]] }))
+                    patchUserGeometry((current) => ({ ...current, inPosition: [Number(event.target.value) || 0, current.inPosition[1]] }))
                   }
                 />
               </Field>
@@ -711,7 +729,7 @@ export function EquipInAlignPage() {
                   step="0.1"
                   value={currentPos[1]}
                   onChange={(event) =>
-                    patchGeometry((current) => ({ ...current, inPosition: [current.inPosition[0], Number(event.target.value) || 0] }))
+                    patchUserGeometry((current) => ({ ...current, inPosition: [current.inPosition[0], Number(event.target.value) || 0] }))
                   }
                 />
               </Field>
@@ -722,7 +740,7 @@ export function EquipInAlignPage() {
                   step="0.02"
                   value={geometry.inScaleX}
                   onChange={(event) =>
-                    patchGeometry((current) => ({ ...current, inScaleX: Math.max(0.05, Number(event.target.value) || 1) }))
+                    patchUserGeometry((current) => ({ ...current, inScaleX: Math.max(0.05, Number(event.target.value) || 1) }))
                   }
                 />
               </Field>
@@ -733,7 +751,7 @@ export function EquipInAlignPage() {
                   step="0.02"
                   value={geometry.inScaleY}
                   onChange={(event) =>
-                    patchGeometry((current) => ({ ...current, inScaleY: Math.max(0.05, Number(event.target.value) || 1) }))
+                    patchUserGeometry((current) => ({ ...current, inScaleY: Math.max(0.05, Number(event.target.value) || 1) }))
                   }
                 />
               </Field>
@@ -758,7 +776,12 @@ export function EquipInAlignPage() {
                 />
                 <span>
                   使用手调的绝对位置
-                  <span className="block text-slate-500">关掉 = 客户端按当前衣服的内容 bbox 自动算，这里的位置不生效。</span>
+                  <span className="block text-slate-500">
+                    拖动 / 改数值会自动勾上。没勾时客户端按当前衣服的内容 bbox 自动算 —— 这里的位置不生效（保存也会按手调存）。
+                  </span>
+                  <span className="block text-slate-500">
+                    想彻底回到自动算：用「还原本件」删掉这行，别只把勾去掉。
+                  </span>
                 </span>
               </label>
             ) : null}

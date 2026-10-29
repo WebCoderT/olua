@@ -128,8 +128,7 @@ function main() {
   check(inSnapshot(cloth) + inSnapshot(weapon) === once, "两次结果一致（不会因为「先还原再覆写」越叠越离谱）");
   applyApi.applyEquipInAlignRows([]);
 
-  console.log("\n=== 七、接线钉死（这几处不接上，保存了也不会生效） ===");
-  const applySnapshot = read("assets/configs/apply-snapshot.ts");
+  console.log("\n=== 七、接线钉死（这几处不接上，保存了也不会生效） ===");  const applySnapshot = read("assets/configs/apply-snapshot.ts");
   check(
     /export function applyEquipInAlignRows[\s\S]{0,160}?resetEquipInAlignRows\(\)/.test(applySnapshot),
     "applyEquipInAlignRows 先还原出厂值再覆写（否则删行在重开弹窗后仍是旧位置）",
@@ -151,6 +150,24 @@ function main() {
   const roleInShow = read("assets/ui/components/panel/RoleInShowView.ts");
   check(/this\.weaponManual = weapon\.inManual === true;/.test(roleInShow), "weaponManual 取自配置的 inManual");
   check(/if \(this\.weaponManual\) return;/.test(roleInShow), "手调过的武器在 alignWeapon 里直接返回（否则保存会被自动算法当场覆盖）");
+
+  console.log("\n=== 八、开弹窗就再拉一次（#527：不重进地图也要看到保存结果） ===");
+  check(/export function refreshInAlign\(\): Promise<void>/.test(configLoader), "ConfigLoader 导出 refreshInAlign（弹窗打开时调）");
+  check(
+    /export function refreshInAlign[\s\S]{0,320}?return fetchInAlignGeometry\(\);/.test(configLoader) &&
+      !/export function refreshInAlign[\s\S]{0,320}?inAlignLoading/.test(configLoader),
+    "refreshInAlign 永远发新请求（被「进图那次」的 Promise 顶掉就等于没拉）",
+  );
+  check(
+    /catch\(\(error: unknown\) => \{[\s\S]{0,420}?console\.warn\("\[config\] 内观几何拉取失败/.test(configLoader),
+    "内观拉取失败要 warn（静默跳过会让「服务端旧版本 404」看起来像「保存没生效」）",
+  );
+  const roleInfo = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
+  check(/import \{ refreshInAlign \} from "\.\.\/\.\.\/utils\/net\/ConfigLoader";/.test(roleInfo), "RoleInfoDialog 引入了 refreshInAlign");
+  check(
+    /refreshInAlign\(\)\.then\([\s\S]{0,700}?this\.inShowView\?\.updateCloth\([\s\S]{0,220}?this\.inShowView\?\.updateWeapon\(/.test(roleInfo),
+    "拉到新几何后就地重建内观（衣服 + 武器都刷，否则只有一半生效）",
+  );
 
   const good = read("assets/types/good.ts");
   check(/inManual\?: boolean;/.test(good), "Equipment 上有 inManual 字段（几何覆写要能写进去）");

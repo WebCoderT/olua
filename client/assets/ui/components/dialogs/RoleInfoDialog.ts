@@ -7,6 +7,7 @@ import { getEquipment } from "../../../configs/items";
 import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlotGroup";
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
+import { refreshInAlign } from "../../utils/net/ConfigLoader";
 import { roleInfoDialogLayout } from "../../../configs/hudLayout";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
@@ -68,6 +69,16 @@ export default class RoleInfoDialog {
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
     this.dialog.addChild(this.inShowView);
+    // 内观几何「开弹窗就再拉一次」（#527）：玩家保存完的第一反应是再点开这个弹窗看一眼，
+    // 那时人还在同一张图里、场景没重载 —— 只靠进图拉一次必然「看不到变化」。
+    // 先把弹窗按当前配置建出来（不卡交互），拉到新值后再就地重建内观节点。
+    void refreshInAlign().then(() => {
+      if (!isValid(this.dialog) || !this.dialog?.active) return;
+      const latest = StorageManager.findOnlineRole();
+      if (!latest) return;
+      this.inShowView?.updateCloth(latest);
+      this.inShowView?.updateWeapon(latest);
+    });
     // 「军衔」「称号」「战魂」「时装」「社交」入口按钮（右侧竖排相邻五格，几何见 roleInfoDialogLayout）
     // 五者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
     const entryButtons: { layout: { name: string; text: string; position: Vec2 }; open: () => void }[] = [

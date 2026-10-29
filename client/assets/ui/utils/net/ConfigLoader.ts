@@ -15,6 +15,14 @@ import { rebuildSkills } from "../../../configs/skill";
  *   而装备外观 / 内观几何是「人眼调一版、立刻要看效果」的东西，验收动作就是**退回选角再进图**
  *   （场景重载，JS 上下文不重来）。只拉一次的话，那种重进看不到新位置，
  *   会被当成「保存没生效」—— 33 行 / 31 行的小接口，每次进图拉一次不值得省。
+ * - **内观几何还多一次「开弹窗就拉」**（#527）：外观看的是场景里的角色，重进图必然重画；
+ *   而内观只在角色信息弹窗里出现，玩家保存完的第一反应是**再点开弹窗看一眼**，
+ *   那时人还在同一张图里、场景没重载 —— 只靠进图拉一次就必然「看不到变化」。
+ *   于是 `refreshInAlign()` 在每次开弹窗时再拉一次（1 个请求，几百字节），
+ *   代价是「弹窗先按旧值建、拉到新值再重建」（见 RoleInfoDialog.open）。
+ * - **失败要出声**（#527）：早先几何失败一律 `catch(() => {})`，于是一个 404
+ *   （服务端还是旧版本、没有这个接口）表现成「保存没生效」，而日志里一个字都没有。
+ *   现在仍然不挡进游戏，但要 `console.warn` —— 静默跳过等于吞掉证据。
  * - **去重并发**：同一次进图的重复调用共享同一个 Promise。
  *
  * 三个接口**并行**拉：串行会平白多两个 RTT，而这些 RTT 卡在「进游戏」的路径上。
@@ -39,8 +47,10 @@ function loadAlignEveryEntry(): Promise<void> {
       // 内部会先把上次覆写的值还原成出厂值，所以「管理端删了行」也能在重进时回到默认
       applyEquipAlignRows(rows.list);
     })
-    .catch(() => {
-      // 几何失败不致命：按客户端配置里的几何画（也就是「工作台还没调过的样子」）
+    .catch((error: unknown) => {
+      // 几何失败不致命：按客户端配置里的几何画（也就是「工作台还没调过的样子」）。
+      // 但同样要出声 —— 404（服务端旧版本）与「保存没生效」长得一模一样（#527）
+      console.warn("[config] 外观几何拉取失败，按客户端配置画：", error);
     })
     .then(() => {
       alignLoading = null;
@@ -51,17 +61,34 @@ function loadAlignEveryEntry(): Promise<void> {
 /** 内观几何：同样每次进图都拉（理由同上；它是弹窗里的位置，重进游戏才能看到新值） */
 function loadInAlignEveryEntry(): Promise<void> {
   if (inAlignLoading) return inAlignLoading;
-  inAlignLoading = GameConfigApi.equipInAlign({ silent: true })
+  inAlignLoading = fetchInAlignGeometry().then(() => {
+    inAlignLoading = null;
+  }) as Promise<void>;
+  return inAlignLoading;
+}
+
+/**
+ * 只刷内观几何（角色信息弹窗每次打开前调一次，#527）
+ *
+ * 不复用 `inAlignLoading` 那次去重：那是「同一瞬进图」的合并，这里是**用户动作**要的
+ * 新鲜数据，被上一次的 Promise 顶掉就等于没拉。永远发新请求、失败出声、永不抛。
+ * @returns 应用完成（成功或失败）后 resolve —— 调用方要在这之后重建内观节点
+ */
+export function refreshInAlign(): Promise<void> {
+  return fetchInAlignGeometry();
+}
+
+/** 拉一次内观几何并覆写本地配置（失败 warn，不抛 —— 兜底是「按客户端配置画」） */
+function fetchInAlignGeometry(): Promise<void> {
+  return GameConfigApi.equipInAlign({ silent: true })
     .then((rows: EquipInAlignList) => {
       applyEquipInAlignRows(rows.list);
     })
-    .catch(() => {
-      // 内观失败只影响弹窗里的站位：按客户端配置画，不该拖累进游戏
-    })
-    .then(() => {
-      inAlignLoading = null;
-    }) as Promise<void>;
-  return inAlignLoading;
+    .catch((error: unknown) => {
+      // 内观失败只影响弹窗里的站位，不该拖累进游戏 —— 但要留证据：
+      // 少了这一行，「服务端还是旧版本（404）」会表现成「保存没生效」且日志空白（#527）
+      console.warn("[config] 内观几何拉取失败，按客户端配置画：", error);
+    });
 }
 
 /** 快照拉一次就够（十几张表，只跟服务端版本有关） */
