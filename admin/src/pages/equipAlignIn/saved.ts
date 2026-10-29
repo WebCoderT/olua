@@ -58,6 +58,21 @@ export interface InAlignStore {
  *
  * 保存 / 重置都是**单条**操作（工作台的节奏是「调一件、存一件」）；批量保存由页面循环调用。
  */
+/**
+ * 武器保存时强制 `inManual = true`（衣服不动）
+ *
+ * 为什么必须在写库这一层兜：`inManual = false` 的武器行，客户端**根本不会读** ——
+ * `RoleInShowView.alignWeapon()` 会按当前衣服的内容 bbox 现算。于是「拖好了、点保存、
+ * 服务端也有行」，但游戏里一动不动，而且从页面到接口的每一层都看不出来（#527）。
+ *
+ * 想回到自动算的语义只有一种：**删行**（`还原本件`），不是存一份 `inManual = false`。
+ * 所以这里不是「忽略用户意图」，而是「把用户意图翻译成客户端真会读的那一种」。
+ */
+function withManualForWeapon(id: string, geometry: InGeometry): InGeometry {
+  if (!id.startsWith("weapon:") || geometry.manual === true) return geometry;
+  return { ...geometry, manual: true };
+}
+
 export function useInAlignStore(): InAlignStore {
   const [saved, setSaved] = useState<SavedInMap>({});
   const [loading, setLoading] = useState(true);
@@ -85,7 +100,7 @@ export function useInAlignStore(): InAlignStore {
   const save = useCallback(async (id: string, geometry: InGeometry): Promise<boolean> => {
     setPending(id);
     try {
-      const row = await equipInAlignsApi.save(id, toPayload(geometry));
+      const row = await equipInAlignsApi.save(id, toPayload(withManualForWeapon(id, geometry)));
       setSaved((prev) => ({ ...prev, [id]: fromRow(row) }));
       return true;
     } catch (reason) {

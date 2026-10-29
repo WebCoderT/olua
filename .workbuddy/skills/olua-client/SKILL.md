@@ -81,6 +81,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 时装**只换外观不换数值**：不重算 `combatCalc`、不动 `hp`；它也没有 `outPositions` / `outScale` 这类几何参数，所以缩放与偏移仍按装备那件（穿时装不会把角色挪位）。
 **外观位置的锚点是「画布中心」，不是「脚下」**：衣服 / 武器 / 裸模三个节点都是默认 `anchor 0.5/0.5` 的 Sprite，`outPositions = 0` 的语义是「**画布中心**落在角色脚下」；而美术画布底部还留着 25~66 单位的空白，所以全 0 会把外观整体沉到地面以下（裸模曾因此沉 31 —— 开着 `debug.colliderRange` 时一眼能看到身体落在碰撞盒的下半部分，看着像「锚点跑到人物身体正中间」）。踩地面的偏移只能按素材量：出厂值见 `configs/role`，其余件归管理端「装备对齐」（`/equip-align` 的「脚底贴地」按 alpha>200 的轮廓算）。别在运行时按内容 bbox 猜 —— 裁剪框里混着影子和光晕，按它算永远差几个像素。
 **内观是另一套几何**（`in_position` + 两轴缩放 + `inManual`）：弹窗里只有一个朝向，衣服对背景图上的**圆盘**、武器对**第一件衣服**（管理端 `/equip-in-align`）。几何下发走 `apply-snapshot.ts` 的**第二处显式例外**（`applyEquipInAlignRows`，与外观那处并列；仍是「先还原出厂值再覆写」，且 `ConfigLoader` 每次进图都拉），所以别在别处再写一份覆盖逻辑。武器的 `inManual` 为真时 `RoleInShowView.alignWeapon()` **首行就短路**、用配置绝对值 —— 否则运行时算法会把刚保存的值当场覆盖（没勾的继续自动算）。
+**内观几何还要「开弹窗就再拉一次」**（#527）：外观看的是场景里的角色，重进图必然重画；内观只在角色信息弹窗里出现，玩家保存完的第一反应是**再点开弹窗看一眼**，那时场景没重载 —— 只靠进图拉一次必然「看不到变化」。`ConfigLoader.refreshInAlign()` 每次开弹窗拉一次（1 个请求、几百字节），拉到后由 `RoleInfoDialog.open()` 就地重建内观节点；它**不复用**进图那次去重的 `inAlignLoading`（被上个 Promise 顶掉 = 没拉）。另外两套几何的 `catch` 都改成 `console.warn`：一个 404（服务端旧版本）与「保存没生效」长得一模一样，静默吞掉就是吞掉证据。
 ⚠️ `findOnlineRole()` 每次都从 localStorage 解析**新对象**：改完字段要把**同一个对象**交回 `updateOnlineRole`，写成 `updateOnlineRole(findOnlineRole())` 会把改动丢掉。
 
 ## 五之二、实时帧的落点：一条帧 → 一个 Store → 只演不算
