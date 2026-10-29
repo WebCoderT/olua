@@ -84,6 +84,14 @@ interface CatalogRole {
 interface Catalog {
   generatedBy: string;
   directions: string[];
+  /** 角色体型 / 碰撞盒（工作台画「碰撞盒」参考框用；与客户端 roleBody 同一份） */
+  body?: {
+    width: number;
+    height: number;
+    colliderWidth: number;
+    colliderHeight: number;
+    colliderOffset: Vec2;
+  };
   role: CatalogRole[];
   clothes: CatalogEntry[];
   weapons: CatalogEntry[];
@@ -132,7 +140,7 @@ const KIND_LABELS: Record<Kind, string> = { role: "裸模", cloth: "衣服", wea
 const DRAFT_KEY = "olua.equipAlign.drafts.v1";
 const PREFS_KEY = "olua.equipAlign.prefs.v1";
 
-const DEFAULT_GUIDES: Guides = { canvas: true, content: false, solid: true, feet: true, hands: true, origin: true };
+const DEFAULT_GUIDES: Guides = { canvas: true, content: false, solid: true, feet: true, hands: true, origin: true, frame: true };
 
 interface Prefs {
   resRoot: string;
@@ -288,6 +296,14 @@ export function EquipAlignPage() {
 
   const geometry = drafts[activeItem.id] ?? baseOf(activeItem);
   const baseRoleGeometry = drafts[roleItem.id] ?? baseOf(roleItem);
+  /**
+   * 基准裸模**已提交**的几何（服务端 > catalog）
+   *
+   * 调裸模自己时，幽灵不能跟着目标一起走（那样重叠成一张图，看不出挪了多少），也不能像
+   * 以前那样硬写 0 —— 画布中心不是脚下，「幽灵在原点」会把人往「位置 0 就对了」上带。
+   * 这里让它停在已提交的位置上，地面线（原点）另行画。
+   */
+  const committedRoleGeometry = baseOf(roleItem);
   /** 当前件相对「服务端那份」有未保存改动 */
   const unsaved = isDirty(geometry, baseOf(activeItem));
 
@@ -394,19 +410,21 @@ export function EquipAlignPage() {
           origin,
           k: zoom,
           roleAtlas,
-          roleGeometry: isRoleTarget ? { outScale: 1, outPositions: normalizePositions(Array(8).fill([0, 0] as Vec2)), manual: true } : baseRoleGeometry,
+          // 调裸模自己时，幽灵停在**已提交**的位置（不是原点，也不是跟着目标一起动）
+          roleGeometry: isRoleTarget ? committedRoleGeometry : baseRoleGeometry,
           itemAtlas,
           itemGeometry: itemAtlas ? geometry : null,
           selected: index === direction,
           hovered: hovered === index,
           roleAlpha: isRoleTarget ? 0.32 : 1,
+          body: CATALOG.body,
         },
         prefs.guides,
         roleSolid,
         itemSolid,
       );
     }
-  }, [width, layout, zoom, roleAtlas, itemAtlas, baseRoleGeometry, geometry, direction, hovered, prefs.guides, isRoleTarget, version]);
+  }, [width, layout, zoom, roleAtlas, itemAtlas, baseRoleGeometry, committedRoleGeometry, geometry, direction, hovered, prefs.guides, isRoleTarget, version]);
 
   /** 屏幕坐标（相对 canvas） */
   const localPoint = (event: { clientX: number; clientY: number }): Vec2 => {
@@ -516,11 +534,81 @@ export function EquipAlignPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [nudge, patchGeometry, stepItem]);
 
+  /**
+   * 某一方向「可见轮廓底边」相对地面（宿主原点）的偏移
+   *
+   * 正 = 悬空、负 = 陷进地里；0 附近才算「踩在脚下」。量的是 alpha>200 的轮廓而不是裁剪框 ——
+   * 裁剪框里混着影子与光晕，按它算永远差几个像素。
+   */
+  const feetDeltaOf = useCallback(
+    (atlas: Atlas | null, geo: Geometry, index: number): number | null => {
+      if (!atlas) return null;
+      const name = frameNameOf(index, 0);
+      const frame = atlas.frames.get(name);
+      if (!frame) return null;
+      const solid = measureSolid(atlas, name);
+      if (!solid) return null;
+      const origin = originOfCell(layout.cells[index]);
+      const content = contentRect(frame, origin, geo.outPositions[index] ?? [0, 0], geo.outScale, zoom);
+      const rect = solidScreenRect(solid, content, geo.outScale * zoom);
+      return (origin[1] - (rect.y + rect.h)) / zoom;
+    },
+    [layout, zoom],
+  );
+
+  /**
+   * 基准裸模里偏得最狠的那个方向（没有素材时 null）
+   *
+   * 拿来做顶部提醒：裸模沉下去 30 时，所有「拿它当基准」的判断都跟着偏 30，
+   * 但页面上看起来却只是「衣服飘了」—— 这个提示就是防止抓错方向。
+   */
+  const roleFeetWorst = useMemo(() => {
+    let worst: { index: number; delta: number } | null = null;
+    for (let index = 0; index < 8; index++) {
+      const delta = feetDeltaOf(roleAtlas, baseRoleGeometry, index);
+      if (delta == null) continue;
+      if (!worst || Math.abs(delta) > Math.abs(worst.delta)) worst = { index, delta };
+    }
+    return worst;
+  }, [feetDeltaOf, roleAtlas, baseRoleGeometry, version]);
+
   // ---- 操作 ----
   const applyToAll = () => {
     const pos = geometry.outPositions[direction] ?? [0, 0];
     patchGeometry((current) => ({ ...current, outPositions: Array.from({ length: 8 }, () => [pos[0], pos[1]] as Vec2) }));
     setNotice("已把当前方向的位置复制到 8 个方向");
+  };
+
+  /**
+   * 脚底贴地：把**可见轮廓**的底边按到地面上（8 个方向各算一次）
+   *
+   * 为什么需要这个按钮：外观节点的锚点是**画布中心**，而美术画布底部留着 25~66 单位不等的
+   * 空白 —— 所以「位置 0」并不等于「脚在地上」。裸模就踩过这个坑（全 0 → 身体沉 31，
+   * 看起来像「锚点跑到身体正中间」）。换素材、改缩放之后按一下，比手算 y 靠谱。
+   *
+   * 武器不适用（它挂在手上），所以只在裸模 / 衣服上给这个按钮。
+   */
+  const snapFeetToGround = () => {
+    const positions = geometry.outPositions.map((pos) => [pos[0], pos[1]] as Vec2);
+    let moved = 0;
+    let missing = 0;
+    for (let index = 0; index < 8; index++) {
+      const delta = feetDeltaOf(itemAtlas, geometry, index);
+      if (delta == null) {
+        missing += 1;
+        continue;
+      }
+      if (Math.abs(delta) < 0.05) continue;
+      // delta = 轮廓底边相对地面的屏幕位移（正 = 悬空），补偿量取反号
+      positions[index] = [positions[index][0], round2(positions[index][1] - delta)];
+      moved += 1;
+    }
+    if (!moved && !missing) {
+      setNotice("8 个方向的脚底都已经在地面上");
+      return;
+    }
+    patchGeometry((current) => ({ ...current, outPositions: positions }));
+    setNotice(`已把 ${moved} 个方向的脚底贴到地面${missing ? `（${missing} 个方向没有帧，跳过）` : ""}`);
   };
 
   /** 只清掉浏览器里的临时改动（不碰服务端） */
@@ -755,6 +843,27 @@ export function EquipAlignPage() {
         </div>
       ) : null}
 
+      {roleFeetWorst && Math.abs(roleFeetWorst.delta) > 2 ? (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-xs text-amber-300">
+          <span className="flex-1">
+            基准裸模「{roleItem.label}」在 {DIRECTION_LABELS[DIRECTIONS[roleFeetWorst.index]]} 方向脚底离地面{" "}
+            {roleFeetWorst.delta > 0 ? "+" : ""}
+            {roleFeetWorst.delta.toFixed(1)}（正 = 悬空、负 = 陷进地里）—— 拿它当基准的话，所有位置都会跟着偏。
+            选中裸模后点「脚底贴地」再存一次。
+          </span>
+          <button
+            className="shrink-0 underline"
+            onClick={() => {
+              setKind("role");
+              setActiveId(roleItem.id);
+              setDirection(roleFeetWorst.index);
+            }}
+          >
+            去修裸模
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-3 xl:flex-row">
         {/* 左栏：条目 */}
         <aside className="w-full shrink-0 xl:w-52">
@@ -834,7 +943,7 @@ export function EquipAlignPage() {
               />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-              {(["canvas", "content", "solid", "feet", "hands", "origin"] as (keyof Guides)[]).map((key) => (
+              {(["canvas", "content", "solid", "feet", "frame", "hands", "origin"] as (keyof Guides)[]).map((key) => (
                 <label key={key} className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
@@ -845,7 +954,8 @@ export function EquipAlignPage() {
                     canvas: "画布框",
                     content: "裁剪框",
                     solid: "轮廓框",
-                    feet: "脚底线",
+                    feet: "地面线",
+                    frame: "碰撞盒",
                     hands: "手位",
                     origin: "原点",
                   }[key]}
@@ -910,7 +1020,12 @@ export function EquipAlignPage() {
               <Button variant="primary" onClick={saveActive} loading={pending === activeItem.id} disabled={Boolean(pending) || loadingSaved}>
                 保存本件{unsaved ? " ●" : ""}
               </Button>
-              <Button variant="outline" onClick={autoAlign}>
+              {activeItem.kind !== "weapon" ? (
+                <Button variant="outline" onClick={snapFeetToGround}>
+                  脚底贴地（8 向）
+                </Button>
+              ) : null}
+              <Button variant="outline" onClick={autoAlign} disabled={activeItem.kind === "role"}>
                 按裸模给初值
               </Button>
               <Button variant="outline" onClick={applyToAll}>

@@ -79,6 +79,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 `RoleAppearance` 收的是**结构化子集** `RoleOutSource`（`sex` / `equipments.cloth|weapon` / `fashionCloth` / `speedRate`）而不是 `Role`：远端玩家拿互见帧那四样字段拼个轻量对象就能复用同一份装配。**要加装配逻辑就加在这里**，别在别处再写一份（#383 之前远端玩家是自绘的蓝色占位圆，就是这个坑）。
 服务端那侧的对应口径：互见帧 `appearance` 的「没穿」用**空串**，客户端 `toOutSource` 转成 `null`；外观与血条分母都按 `PLAYER_APPEARANCE_REFRESH_MS`（默认 5s）懒刷新 —— 换装 / 升级走 HTTP 存档，实时进程不会被告知。
 时装**只换外观不换数值**：不重算 `combatCalc`、不动 `hp`；它也没有 `outPositions` / `outScale` 这类几何参数，所以缩放与偏移仍按装备那件（穿时装不会把角色挪位）。
+**外观位置的锚点是「画布中心」，不是「脚下」**：衣服 / 武器 / 裸模三个节点都是默认 `anchor 0.5/0.5` 的 Sprite，`outPositions = 0` 的语义是「**画布中心**落在角色脚下」；而美术画布底部还留着 25~66 单位的空白，所以全 0 会把外观整体沉到地面以下（裸模曾因此沉 31 —— 开着 `debug.colliderRange` 时一眼能看到身体落在碰撞盒的下半部分，看着像「锚点跑到人物身体正中间」）。踩地面的偏移只能按素材量：出厂值见 `configs/role`，其余件归管理端「装备对齐」（`/equip-align` 的「脚底贴地」按 alpha>200 的轮廓算）。别在运行时按内容 bbox 猜 —— 裁剪框里混着影子和光晕，按它算永远差几个像素。
 ⚠️ `findOnlineRole()` 每次都从 localStorage 解析**新对象**：改完字段要把**同一个对象**交回 `updateOnlineRole`，写成 `updateOnlineRole(findOnlineRole())` 会把改动丢掉。
 
 ## 五之二、实时帧的落点：一条帧 → 一个 Store → 只演不算

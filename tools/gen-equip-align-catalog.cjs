@@ -193,6 +193,20 @@ function buildCatalog({ equipments, role, animation }) {
   return {
     generatedBy: "tools/gen-equip-align-catalog.cjs",
     directions,
+    /**
+     * 角色的体型与碰撞盒（来自 `configs/role.roleBody`）
+     *
+     * 工作台要在格子里画出**和客户端 `debug.colliderRange` 同一个框** —— 用户就是拿它
+     * 判断「身体有没有踩在脚下」的。把那两个数字写死在页面里等于造第二份真值，
+     * 所以跟着清单一起下发；改了 roleBody，重生成清单即可。
+     */
+    body: {
+      width: Number(role.roleBody?.size?.width) || 0,
+      height: Number(role.roleBody?.size?.height) || 0,
+      colliderWidth: Number(role.roleBody?.colliderSize?.width) || 0,
+      colliderHeight: Number(role.roleBody?.colliderSize?.height) || 0,
+      colliderOffset: vec(role.roleBody?.colliderOffset),
+    },
     role: roleEntries,
     clothes: map(equipments.clothes, "cloth"),
     weapons: map(equipments.weapons, "weapon"),
