@@ -8,6 +8,7 @@ import { loadAtlas, probeAtlas } from "./equipAlign/assets";
 import type { Geometry, ScreenRect, Vec2 } from "./equipAlign/model";
 import {
   adjustedDirections,
+  clampPosition,
   contentRect,
   DIRECTIONS,
   DIRECTION_LABELS,
@@ -349,9 +350,11 @@ export function EquipAlignPage() {
   const nudge = useCallback(
     (dx: number, dy: number) => {
       const pos = geometry.outPositions[direction] ?? [0, 0];
-      setPosition(direction, snap(pos[0] + dx), snap(pos[1] + dy));
+      // 与拖动同一个夹紧口径：键盘也不该把东西挪出可见范围（存量里飞天的那格靠它一次拉回）
+      const limit = prefs.viewSpan ?? 190;
+      setPosition(direction, clampPosition(snap(pos[0] + dx), limit), clampPosition(snap(pos[1] + dy), limit));
     },
-    [direction, geometry.outPositions, setPosition],
+    [direction, geometry.outPositions, prefs.viewSpan, setPosition],
   );
 
   // ---- 画布 ----
@@ -460,8 +463,19 @@ export function EquipAlignPage() {
     if (index < 0) return;
     setDirection(index);
     const content = itemContentAt(index);
-    const inside = content && point[0] >= content.x && point[0] <= content.x + content.w && point[1] >= content.y && point[1] <= content.y + content.h;
-    if (!inside) return;
+    if (!content) return;
+    const cell = layout.cells[index];
+    const inside = point[0] >= content.x && point[0] <= content.x + content.w && point[1] >= content.y && point[1] <= content.y + content.h;
+    /**
+     * 内容还看得见（与格子有交集）时必须点中它才拖 —— 格子里空白处误拖不该改数值。
+     *
+     * **整个飞出格子时反而允许点格子就拖**：那时用户根本点不到它（这正是一次拖太远之后
+     * 「再也拖不回来」的原因，见 `clampPosition` 的注释）。此时按住格子任意位置，
+     * 位移仍相对它当前的位置算，一拖就把它带回来了。
+     */
+    const visible =
+      content.x < cell.x + cell.w && content.x + content.w > cell.x && content.y < cell.y + cell.h && content.y + content.h > cell.y;
+    if (!inside && visible) return;
     const pos = geometry.outPositions[index] ?? [0, 0];
     drag.current = { index, startX: point[0], startY: point[1], pos: [pos[0], pos[1]] };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -477,7 +491,13 @@ export function EquipAlignPage() {
     }
     const dx = (point[0] - active.startX) / zoom;
     const dy = (point[1] - active.startY) / zoom;
-    setPosition(active.index, snap(active.pos[0] + dx), snap(active.pos[1] - dy));
+    // 夹在一屏可见范围内：指针移出画布时 dx/dy 会一路累加，不夹就会把东西甩到格子外抓不回来
+    const limit = prefs.viewSpan ?? 190;
+    setPosition(
+      active.index,
+      clampPosition(snap(active.pos[0] + dx), limit),
+      clampPosition(snap(active.pos[1] - dy), limit),
+    );
   };
 
   const endDrag = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -611,9 +631,36 @@ export function EquipAlignPage() {
     setNotice(`已把 ${moved} 个方向的脚底贴到地面${missing ? `（${missing} 个方向没有帧，跳过）` : ""}`);
   };
 
+  /**
+   * 基准裸模的脚底一键贴地**并存库**（顶部横幅上的动作）
+   *
+   * 与 `snapFeetToGround` 的区别是「不看当前选中的是谁」：横幅是在提醒**基准**歪了，
+   * 而那时用户正在调衣服/武器。原来只把他切到裸模，还得自己再点一次按钮、再点保存 ——
+   * 三次操作里任何一次漏掉，看到的都是「基准还是歪的」。这里一次做完。
+   */
+  const fixBaseRoleFeet = async () => {
+    if (!roleAtlas || pending) return;
+    const base = drafts[roleItem.id] ?? baseOf(roleItem);
+    const positions = base.outPositions.map((pos) => [pos[0], pos[1]] as Vec2);
+    let moved = 0;
+    for (let index = 0; index < 8; index++) {
+      const delta = feetDeltaOf(roleAtlas, base, index);
+      if (delta == null || Math.abs(delta) < 0.05) continue;
+      positions[index] = [positions[index][0], round2(positions[index][1] - delta)];
+      moved += 1;
+    }
+    if (!moved) {
+      setNotice("基准裸模 8 个方向的脚底都已经在地面上");
+      return;
+    }
+    const ok = await saveAlign(roleItem.id, { ...base, outPositions: normalizePositions(positions) });
+    if (!ok) return;
+    dropDraft(roleItem.id);
+    setNotice(`已把基准裸模 ${moved} 个方向的脚底贴回地面并存库`);
+  };
+
   /** 只清掉浏览器里的临时改动（不碰服务端） */
-  const dropDraft = (id: string) => {
-    setDrafts((prev) => {
+  const dropDraft = (id: string) => {    setDrafts((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
@@ -849,7 +896,7 @@ export function EquipAlignPage() {
             基准裸模「{roleItem.label}」在 {DIRECTION_LABELS[DIRECTIONS[roleFeetWorst.index]]} 方向脚底离地面{" "}
             {roleFeetWorst.delta > 0 ? "+" : ""}
             {roleFeetWorst.delta.toFixed(1)}（正 = 悬空、负 = 陷进地里）—— 拿它当基准的话，所有位置都会跟着偏。
-            选中裸模后点「脚底贴地」再存一次。
+            点「一键贴地并存库」直接修好（不必先切到裸模）。
           </span>
           <button
             className="shrink-0 underline"
@@ -859,7 +906,10 @@ export function EquipAlignPage() {
               setDirection(roleFeetWorst.index);
             }}
           >
-            去修裸模
+            去看那一格
+          </button>
+          <button className="shrink-0 underline" onClick={fixBaseRoleFeet}>
+            一键贴地并存库
           </button>
         </div>
       ) : null}
