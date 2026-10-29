@@ -3,12 +3,13 @@
  * 装备外观几何下发（#513）单测：管理端「保存 → 客户端重新加载即见」的客户端半边
  *
  * 跑的是**真实配置表与真实覆写函数**（configs-sandbox 编译 CommonJS + cc 垫片），不是复刻。
- * 盯的七组口径：
+ * 盯的八组口径：
  * · 覆写命中 —— 衣服 / 武器按基础件命中**全部 15 个变体**（只改基础件会「背包预览对了、穿上身还歪」）
  * · 只碰几何 —— 资源路径（icon / in / out）一个都不动（这是快照纪律里唯一开口的地方）
  * · 裸模按性别 —— role:1 只改男、role:2 只改女
  * · 重置 = 删行 —— 空列表 / 显式还原都要回到出厂值，否则「管理端重置了」在重进游戏后仍显示旧位置
  * · 接线钉死 —— 几何**每次进图都拉**（快照只拉一次），且覆写前必先还原出厂值
+ * · 出厂几何踩地 —— 裸模的 outPositions 不能是全 0（锚点是画布中心，全 0 = 身体沉到地面以下）
  *
  * 用法：node client/tools/test-equip-align-apply.cjs
  */
@@ -156,6 +157,17 @@ function main() {
 
   const game = read("assets/ui/Game.ts");
   check(/void loadGameConfig\(\)/.test(game), "Game 场景启动时调 loadGameConfig（每次进图都走一遍）");
+
+  console.log("\n=== 八、裸模出厂几何必须真的踩在地面上 ===");
+  // 坑：外观节点是默认 anchor 0.5/0.5 的 Sprite，位置的语义是「**画布中心**落在脚下」，
+  // 而美术画布底部留着 25~66 单位的空白 —— 全 0 会让身体沉到地面以下 26~31 个单位
+  // （客户端开着 debug.colliderRange 时表现为「锚点跑到人物身体正中间」）。
+  // 这里只钉「补偿还在」：具体数值由管理端「装备对齐 / 脚底贴地」调，量图得到的出厂值见 configs/role.ts。
+  const boyYs = boy.outPositions.map((point) => point.y);
+  const girlYs = girl.outPositions.map((point) => point.y);
+  check(boyYs.length === 8 && girlYs.length === 8, "两套裸模都是 8 个方向（缺项会回落到第 0 项，整件歪掉）", `${boyYs.length}/${girlYs.length}`);
+  check(boyYs.every((y) => y >= 20), "男裸模 8 个方向都带着「画布留白」的补偿（全 0 = 身体沉到地面以下）", boyYs.join(","));
+  check(girlYs.every((y) => y >= 20), "女裸模同口径", girlYs.join(","));
 
   finish("装备外观几何下发：全部断言通过");
 }

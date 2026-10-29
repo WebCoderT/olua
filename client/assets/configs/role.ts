@@ -92,13 +92,37 @@ export interface RoleDefaultCloth {
   out: string;
   /** 外观缩放 */
   outScale: number;
-  /** 外观位置：按 8 方向各一个，下标顺序同 configs/animation.directions；全为原点 = 与角色节点（脚底锚点）对齐 */
+  /**
+   * 外观位置：按 8 方向各一个，下标顺序同 configs/animation.directions
+   * （上 / 右上 / 右 / 右下 / 下 / 左下 / 左 / 左上）
+   *
+   * **全为 0 不等于「贴在脚下」** —— 详见下面 roleGroundPositions 的说明，那是这一层最容易踩的坑。
+   */
   outPositions: Vec2[];
 }
 
-/** 默认身体的各方向位置（原点 = 不偏移）；要偏移就用装备人工对齐器调好后替换成显式字面量 */
-function defaultOutPositions(): Vec2[] {
-  return directions.map(() => new Vec2());
+/**
+ * 让一帧的**可见轮廓**踩到地面、并横向对到锚点上所需的偏移
+ *
+ * 口径（2026-10-29 施工时逐帧量图确认）：
+ *   - 锚点 = 画布中心（Cocos 里外观节点是默认 anchor 0.5/0.5 的 Sprite），
+ *     所以位置 (0,0) 的语义是「**画布中心**落在角色脚下」，不是「脚落在角色脚下」；
+ *   - 美术画布底部还留着 25~66 单位不等的空白（role/1 画布 150×132、身体只有 71 高），
+ *     于是「全 0」会把裸模整体沉到地面以下：role/1 脚底 -31、role/2 脚底 -26；
+ *   - 客户端开着 `configs/debug.colliderRange` 时最明显：碰撞盒从脚下往上 70
+ *     （见 roleBody.colliderOffset），而身体落在碰撞盒的下半部分 —— 看起来就是
+ *     「人物外观的锚点跑到了身体正中间」。
+ *
+ * 衣服/武器的几何里一直带着 +34 一类的补偿（每件素材画布留白不同，见 equipments.ts），
+ * 所以裸模缺这份补偿时的症状是**衣服站得住、身体沉下去**，很容易被误判成「衣服飘了」。
+ *
+ * 这组数值是「轮廓底边到 y=0、轮廓中心到 x=0」的偏移（四舍五入到 0.5），只作为出厂值：
+ * 管理端「装备对齐」里可以点「脚底贴地」重算、也可以手拖后保存，服务端存的值会覆盖这里。
+ */
+function roleGroundPositions(points: Array<[number, number]>): Vec2[] {
+  // 长度必须与 directions 对齐：少了方向会在 RoleAppearance 里回落到第 0 项（整件歪掉）
+  if (points.length !== directions.length) throw new Error(`裸模默认外观需要 ${directions.length} 个方向的位置`);
+  return points.map(([x, y]) => new Vec2(x, y));
 }
 
 /**
@@ -107,8 +131,34 @@ function defaultOutPositions(): Vec2[] {
  */
 export const roleDefaultCloths = new Map<SEX, RoleDefaultCloth>();
 
-roleDefaultCloths.set(SEX.BOY, { out: "role/1", outScale: 1, outPositions: defaultOutPositions() });
-roleDefaultCloths.set(SEX.GRIL, { out: "role/2", outScale: 1, outPositions: defaultOutPositions() });
+roleDefaultCloths.set(SEX.BOY, {
+  out: "role/1",
+  outScale: 1,
+  outPositions: roleGroundPositions([
+    [1, 31], // up
+    [-0.5, 31], // right_up
+    [-1.5, 31], // right
+    [0.5, 30], // right_down
+    [0, 31], // down
+    [-1.5, 32], // left_down
+    [-1, 32], // left
+    [1.5, 31], // left_up
+  ]),
+});
+roleDefaultCloths.set(SEX.GRIL, {
+  out: "role/2",
+  outScale: 1,
+  outPositions: roleGroundPositions([
+    [-6, 26.5], // up
+    [-8, 27.5], // right_up
+    [-8.5, 27.5], // right
+    [-5.5, 25.5], // right_down
+    [-6, 26.5], // down
+    [-8, 28.5], // left_down
+    [-8.5, 27.5], // left
+    [-6.5, 25.5], // left_up
+  ]),
+});
 
 /**
  * 取某性别的默认外观

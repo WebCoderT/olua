@@ -25,12 +25,32 @@ export interface Guides {
   content: boolean;
   /** 真实轮廓（alpha>200，亮绿） */
   solid: boolean;
-  /** 脚底线 */
+  /**
+   * 地面线（宿主原点 y = 0）
+   *
+   * **画在原点，不画在裸模自己的轮廓底边**：轮廓底边跟着裸模的几何走，裸模一旦沉下去，
+   * 「脚底线」就跟着沉下去 —— 那条线本来是用来判断「有没有沉」的，跟着跑就等于没有。
+   */
   feet: boolean;
   /** 左右手位十字 */
   hands: boolean;
   /** 格子中心十字（宿主原点） */
   origin: boolean;
+  /**
+   * 碰撞盒（= 客户端 `debug.colliderRange` 画的那个框，尺寸取 `configs/role.roleBody`）
+   *
+   * 这是「身体到底踩在脚下没有」的唯一硬判据：盒子是从原点往上 `colliderHeight`，
+   * 角色脚底应该正好落在盒子的下边缘。
+   */
+  frame: boolean;
+}
+
+/** 角色体型 / 碰撞盒（来自 catalog.body，与客户端 roleBody 同一份） */
+export interface BodyBox {
+  colliderWidth: number;
+  colliderHeight: number;
+  /** 相对脚下的偏移（角色锚点在脚下，所以盒子要往上抬身高的一半） */
+  colliderOffset: Vec2;
 }
 
 /** 一格的绘制数据 */
@@ -53,6 +73,8 @@ export interface CellSpec {
    * 半透明的「原点位置」正好当参照，能直接看出偏移了多少。
    */
   roleAlpha?: number;
+  /** 角色体型 / 碰撞盒（画「碰撞盒」参考框用；清单没给就画不出来，其余照旧） */
+  body?: BodyBox;
 }
 
 const COLORS = {
@@ -67,10 +89,13 @@ const COLORS = {
   canvasBox: "rgba(150,170,200,0.35)",
   contentBox: "rgba(150,170,200,0.18)",
   solid: "rgba(110,232,110,0.75)",
-  feet: "rgba(255,182,72,0.55)",
   hand: "rgba(255,90,90,0.9)",
   originCross: "rgba(120,160,220,0.5)",
   itemBox: "rgba(120,200,255,0.5)",
+  collider: "rgba(90,200,255,0.45)",
+  ground: "rgba(255,182,72,0.9)",
+  feetOk: "rgba(150,164,180,0.9)",
+  feetBad: "rgba(255,120,120,0.95)",
 };
 
 function frameOf(atlas: Atlas, direction: number): SpriteFrameInfo | null {
@@ -178,16 +203,35 @@ export function drawCell(ctx: CanvasRenderingContext2D, spec: CellSpec, guides: 
   }
 
   // 参考标记（画在图像之上，否则会被身体盖住）
-  if (guides.feet && roleSolidRect) {
+  //
+  // 地面线画在**宿主原点**上：原点就是角色脚下（`RoleDisplay` 把宿主 UITransform 的锚点设成
+  // 0.5/0），所以「轮廓底边和这条线重合」= 站得住。以前这条线跟着裸模自己的轮廓底边走，
+  // 裸模沉下去时线也沉，等于把判据交回给被测对象。
+  if (guides.feet) {
     ctx.save();
-    ctx.strokeStyle = COLORS.feet;
+    ctx.strokeStyle = COLORS.ground;
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
-    ctx.moveTo(rect.x, Math.round(roleSolidRect.y + roleSolidRect.h) + 0.5);
-    ctx.lineTo(rect.x + rect.w, Math.round(roleSolidRect.y + roleSolidRect.h) + 0.5);
+    ctx.moveTo(rect.x, Math.round(origin[1]) + 0.5);
+    ctx.lineTo(rect.x + rect.w, Math.round(origin[1]) + 0.5);
     ctx.stroke();
     ctx.restore();
+  }
+  if (guides.frame && spec.body && spec.body.colliderWidth > 0) {
+    const { colliderWidth, colliderHeight, colliderOffset } = spec.body;
+    strokeRect(
+      ctx,
+      {
+        x: origin[0] + (colliderOffset[0] - colliderWidth / 2) * k,
+        y: origin[1] - (colliderOffset[1] + colliderHeight / 2) * k,
+        w: colliderWidth * k,
+        h: colliderHeight * k,
+      },
+      COLORS.collider,
+      [],
+      1.5,
+    );
   }
   if (guides.hands && roleSolidRect) {
     const hx = roleSolidRect.w * 0.1;
@@ -219,6 +263,15 @@ export function drawCell(ctx: CanvasRenderingContext2D, spec: CellSpec, guides: 
     ctx.fillText(`${pos[0].toFixed(1)}, ${pos[1].toFixed(1)}`, rect.x + rect.w - 8, rect.y + 6);
     ctx.textAlign = "left";
   }
+  // 裸模脚底离地面多少（正 = 悬空，负 = 陷进地里）
+  //
+  // 这是「锚点在脚下没有」的数字化判据：0 附近才对，差 30 就是这一格整件沉了半个身子。
+  if (roleSolidRect) {
+    const delta = (origin[1] - (roleSolidRect.y + roleSolidRect.h)) / k;
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = Math.abs(delta) > 2 ? COLORS.feetBad : COLORS.feetOk;
+    ctx.fillText(`脚底 ${delta >= 0 ? "+" : ""}${delta.toFixed(1)}`, rect.x + 8, rect.y + rect.h - 6);
+  }
   ctx.restore();
 }
 
@@ -247,7 +300,13 @@ export function layoutCells(width: number, gap = 8, padding = 10): { cells: Scre
   return { cells, cellSize, height };
 }
 
-/** 格子内的宿主原点（中线偏下 12%） */
+/**
+ * 格子内的宿主原点（中线偏下）
+ *
+ * 0.56 是按「身体以画布中心压着原点」定的老位置；现在裸模真的**站在**原点上，
+ * 头顶到地面有 71 个单位、举起来的武器还能再高 20，原点再往下挪一点才不至于顶到格子边。
+ * 这一处只影响构图，拖动与命中都读同一个函数，不会错位。
+ */
 export function originOfCell(cell: ScreenRect): Vec2 {
-  return [cell.x + cell.w / 2, cell.y + cell.h * 0.56];
+  return [cell.x + cell.w / 2, cell.y + cell.h * 0.62];
 }
