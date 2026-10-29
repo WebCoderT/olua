@@ -96,6 +96,8 @@ const COLORS = {
   ground: "rgba(255,182,72,0.9)",
   feetOk: "rgba(150,164,180,0.9)",
   feetBad: "rgba(255,120,120,0.95)",
+  /** 位置已飞出格子（这一格里看不到东西，只有数字能说明它在哪） */
+  textWarn: "rgba(255,182,72,0.95)",
 };
 
 function frameOf(atlas: Atlas, direction: number): SpriteFrameInfo | null {
@@ -258,9 +260,16 @@ export function drawCell(ctx: CanvasRenderingContext2D, spec: CellSpec, guides: 
   ctx.fillText(`${spec.index + 1} · ${dirName}`, rect.x + 8, rect.y + 6);
   if (spec.itemGeometry) {
     const pos = spec.itemGeometry.outPositions[spec.index] ?? [0, 0];
-    ctx.fillStyle = "rgba(150,164,180,0.75)";
+    /**
+     * 位置超出「一格的可见范围」时标琥珀：那意味着这一格里的东西已经跑到格子外面
+     * （`up` 方向曾存着 `y = 199.7`，格子里是空的，看起来像「这一格没有裸模」）。
+     * 数字是唯一能把这件事说清楚的地方 —— 画面上它就是不在，没有别的线索。
+     */
+    const span = rect.w / k;
+    const offGrid = Math.abs(pos[0]) > span || Math.abs(pos[1]) > span;
+    ctx.fillStyle = offGrid ? COLORS.textWarn : "rgba(150,164,180,0.75)";
     ctx.textAlign = "right";
-    ctx.fillText(`${pos[0].toFixed(1)}, ${pos[1].toFixed(1)}`, rect.x + rect.w - 8, rect.y + 6);
+    ctx.fillText(offGrid ? `${pos[0].toFixed(1)}, ${pos[1].toFixed(1)} 出格` : `${pos[0].toFixed(1)}, ${pos[1].toFixed(1)}`, rect.x + rect.w - 8, rect.y + 6);
     ctx.textAlign = "left";
   }
   // 裸模脚底离地面多少（正 = 悬空，负 = 陷进地里）

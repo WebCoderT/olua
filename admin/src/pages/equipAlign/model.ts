@@ -115,6 +115,18 @@ export function snap(value: number, step = 0.1): number {
   return Math.round(value / step) * step;
 }
 
+/**
+ * 把位置夹在「一屏可见范围」内（防止一次拖动把物品甩出格子）
+ *
+ * 为什么需要：`up` 方向曾经存着 `y = 199.7`（脚底悬空 +168.7）—— 那次拖动时指针移出画布，
+ * 位移按 `(指针 - 起点) / zoom` 一路累计，松手时人已经飞到格子外面。之后在画布上**抓不到它**
+ * （拖动要求点中内容矩形），只能在右栏一格一格按方向键挪回来，于是看起来像「改不了」。
+ * 夹紧的代价只是「不能把东西拖到格子外」，而格子外本来也没法用肉眼判断。
+ */
+export function clampPosition(value: number, limit: number): number {
+  return Math.min(limit, Math.max(-limit, value));
+}
+
 /** 把浮点规整到 2 位小数（导出的 JSON 才好看） */
 export function round2(value: number): number {
   return Math.round(value * 100) / 100;
