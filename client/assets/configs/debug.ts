@@ -13,7 +13,7 @@ export const debugConfig = {
    * 是否显示碰撞体的碰撞范围（范围框 + 名称 + 尺寸）
    * 覆盖全部碰撞体：Tiled collision 对象组 / NPC / 怪物 / 角色自身
    */
-  colliderRange: true,
+  colliderRange: false,
   /**
    * 是否显示怪物刷怪区域的范围（区域框 + 名称 + 尺寸 + 怪物编号与数量区间）
    * 刷怪区域本身没有碰撞体，只作为怪物落点范围使用
