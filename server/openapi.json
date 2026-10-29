@@ -2877,7 +2877,29 @@
                 "role",
                 "admin",
                 "announcement",
-                "mail"
+                "mail",
+                "title",
+                "soul",
+                "rank",
+                "equipment",
+                "drug",
+                "item",
+                "monster",
+                "npc",
+                "mall",
+                "fashion",
+                "dropTable",
+                "monsterDrop",
+                "levelExp",
+                "growthSegment",
+                "growthScalar",
+                "skill",
+                "status",
+                "zone",
+                "guild",
+                "quest",
+                "achievement",
+                "equipAlign"
               ]
             }
           },
@@ -3134,7 +3156,29 @@
                 "role",
                 "admin",
                 "announcement",
-                "mail"
+                "mail",
+                "title",
+                "soul",
+                "rank",
+                "equipment",
+                "drug",
+                "item",
+                "monster",
+                "npc",
+                "mall",
+                "fashion",
+                "dropTable",
+                "monsterDrop",
+                "levelExp",
+                "growthSegment",
+                "growthScalar",
+                "skill",
+                "status",
+                "zone",
+                "guild",
+                "quest",
+                "achievement",
+                "equipAlign"
               ]
             }
           },
@@ -5429,6 +5473,174 @@
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/EquipmentDto"
         },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/equip-aligns": {
+      "get": {
+        "description": "全部**已保存**的对齐几何（不分页：12 件衣服 + 19 把武器 + 2 套裸模，量很小）。\n\n**没有行 = 用客户端配置里的值**（`client/assets/configs/equipments.ts` / `role.ts`）—— 所以「哪些调过」就是这份列表的 id 集合，不需要另存默认值副本。\n\n`outPositions` 是 8 个方向的位移（顺序见客户端 `configs/animation` 的 `directions`）；`outManual=true` 表示它是绝对位置（工作台手调过），false 表示运行时按身体帧自动算、只当微调。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipAlign.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部已保存的对齐几何",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipAlignListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备对齐几何列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipAlignListDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/equip-aligns/{id}": {
+      "put": {
+        "description": "**整份覆盖**，不是部分更新：位置 / 缩放 / 是否用绝对值是联动的一组状态，分字段更新会让「只想改缩放」的请求留下上一次的位置，页面上表现为「改完缩放位置也跟着变了」。\n\n- `outPositions` **必须正好 8 个**（多一个少一个都说明页面与配置已经错位）；\n- `outScale` 必须在 0.05 ~ 10 之间；\n- `outManual` 只对武器有意义：true = `outPositions` 是绝对位置，false = 运行时自动算。\n\n**只有外观**：内观（角色弹窗里转盘上的位置）是客户端运行时按身体内容 bbox 现算的，没有可以手调的常量，所以这里没有对应字段。\n\n`id` 只校验形态（`cloth:<基础件>` / `weapon:<基础件>` / `role:<1|2>`），**不校验存在性** —— 装备清单在客户端配置里，服务端硬编一份会漂移，而且会让「新增一件衣服得先发服务端」成为发布依赖。\n\n同 id 重复保存是幂等的（UPSERT），不会报 409。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipAlign.save",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "对齐目标：`cloth:cloth_1` / `weapon:weapon_1` / `role:1`",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveEquipAlignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存后的对齐几何",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipAlignDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "保存一条对齐几何（整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipAlignDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "删掉这条覆盖，客户端下次拉快照时就用 `configs/equipments.ts` / `role.ts` 里的值。\n\n**幂等**：这条本来就没保存过也返回成功 —— 它表达的是「这件回到默认」这个状态，工作台上「还原本件」连点两次不该第二次报错。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipAlign.reset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "对齐目标：`cloth:cloth_1` / `weapon:weapon_1` / `role:1`",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已重置（无返回体）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重置为客户端配置里的值（删行）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
         "x-olua-permissions": [
           "gameConfig:write"
         ]
@@ -8086,7 +8298,7 @@
     },
     "/game-config": {
       "get": {
-        "description": "管理端可改的全部运营配置一次下发（称号 / 战魂 / 军衔 / 装备 / 药品 / 物品 / 怪物 / NPC / 时装 / 升级经验 / 成长曲线与标量 / 商城定价 / 掉落表）。\n\n形状与管理端列表接口一致（camelCase）。需要玩家令牌（配置属于玩法数据，不开放给未登录请求）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "管理端可改的全部运营配置一次下发（称号 / 战魂 / 军衔 / 装备 / 药品 / 物品 / 怪物 / NPC / 时装 / 升级经验 / 成长曲线与标量 / 商城定价 / 掉落表）。\n\n形状与管理端列表接口一致（camelCase）。需要玩家令牌（配置属于玩法数据，不开放给未登录请求）。\n\n**注意**：装备外观的几何（位置 / 缩放）**不在**这份快照里 —— 它不受「只覆写管理端能改的数值字段」这条约束，走下面的 `GET /game-config/equip-align` 单独下发。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameConfig.snapshot",
         "parameters": [],
         "responses": {
@@ -8125,6 +8337,50 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/GameConfigSnapshotDto"
+        }
+      }
+    },
+    "/game-config/equip-align": {
+      "get": {
+        "description": "管理端「装备对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`。\n\n**列表里没有的 id = 用客户端配置里的值**，所以客户端是「按 id 对齐、缺省不动」，不是整份替换。\n\n`outPositions` 是 8 个方向的外观位移（顺序见客户端 `configs/animation` 的 `directions`，y 向上为正）；`outManual=true` 表示它是绝对位置，false / 缺省表示运行时按身体帧自动算、`outPositions` 只当微调（只对武器有意义）。\n\n需要玩家令牌（与快照同口径：配置属于玩法数据）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameConfig.equipAlign",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部已保存的对齐几何",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipAlignListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "装备外观几何（对齐工作台的产物）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipAlignListDto"
         }
       }
     },
@@ -12058,6 +12314,51 @@
           }
         }
       },
+      "EquipAlignPointDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "横向（游戏单位，向右为正）"
+          },
+          "y": {
+            "type": "number",
+            "description": "纵向（游戏单位，**向上为正**；与页面画布的 y 向下相反）"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "SaveEquipAlignDto": {
+        "type": "object",
+        "properties": {
+          "outScale": {
+            "type": "number",
+            "description": "外观缩放",
+            "minimum": 0.05,
+            "maximum": 10
+          },
+          "outPositions": {
+            "description": "8 个方向的外观位移（**必须正好 8 个**，顺序见客户端 directions）",
+            "minItems": 8,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipAlignPointDto"
+            }
+          },
+          "outManual": {
+            "type": "boolean",
+            "description": "true = `outPositions` 是绝对位置；false / 缺省 = 运行时按身体帧自动算（只对武器有意义）"
+          }
+        },
+        "required": [
+          "outScale",
+          "outPositions"
+        ]
+      },
       "UpdateDrugDto": {
         "type": "object",
         "properties": {
@@ -14727,7 +15028,29 @@
               "role",
               "admin",
               "announcement",
-              "mail"
+              "mail",
+              "title",
+              "soul",
+              "rank",
+              "equipment",
+              "drug",
+              "item",
+              "monster",
+              "npc",
+              "mall",
+              "fashion",
+              "dropTable",
+              "monsterDrop",
+              "levelExp",
+              "growthSegment",
+              "growthScalar",
+              "skill",
+              "status",
+              "zone",
+              "guild",
+              "quest",
+              "achievement",
+              "equipAlign"
             ]
           },
           "targetId": {
@@ -19872,6 +20195,56 @@
           "level",
           "leveledUp",
           "stoppedByBag"
+        ]
+      },
+      "EquipAlignDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "目标 id：`cloth:<基础件>` / `weapon:<基础件>` / `role:<1|2>`（裸模按性别）"
+          },
+          "outScale": {
+            "type": "number",
+            "description": "外观缩放"
+          },
+          "outPositions": {
+            "description": "8 个方向的外观位移（顺序见客户端 configs/animation 的 directions）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipAlignPointDto"
+            }
+          },
+          "outManual": {
+            "type": "boolean",
+            "description": "true = `outPositions` 是**绝对位置**（工作台手调的结果）；false = 运行时按身体帧自动算，`outPositions` 只当微调。武器的渐进语义，见 configs/equipAlign"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "outScale",
+          "outPositions",
+          "outManual",
+          "updatedAt"
+        ]
+      },
+      "EquipAlignListDto": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "全部已保存的对齐几何（**没有行 = 用客户端配置里的值**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipAlignDto"
+            }
+          }
+        },
+        "required": [
+          "list"
         ]
       }
     }

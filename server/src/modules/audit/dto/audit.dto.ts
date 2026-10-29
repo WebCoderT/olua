@@ -2,10 +2,17 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { ADMIN_ROLES } from "../../../common/constants/permission";
+import { AUDIT_TARGET_TYPES } from "../../../common/decorators/audit-target.decorator";
 import { AuditLogWithNameRow } from "../../../database/rows";
 
-/** 审计目标类型（查询筛选用） */
-export const AUDIT_TARGET_TYPES = ["account", "role", "admin", "announcement", "mail"] as const;
+/**
+ * 审计目标类型（查询筛选用）
+ *
+ * **从 `@AuditTarget` 那一份派生**（`common/decorators/audit-target.decorator`），
+ * 这里不再维护第二份清单 —— 之前两处各写一份，查询这侧就停在最早的 5 种，
+ * 后面加的装备 / 称号 / 帮会 / 对齐全部筛不出来（而且不报错，只是筛不到）。
+ */
+export { AUDIT_TARGET_TYPES };
 
 /** 一条操作日志 */
 export class AuditLogDto {

@@ -26,6 +26,7 @@ export {
   titlesApi,
   ranksApi,
   equipmentsApi,
+  equipAlignsApi,
   drugsApi,
   itemsApi,
   monstersApi,

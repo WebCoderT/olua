@@ -1155,6 +1155,26 @@ export interface RoleMailRow {
   created_at: number;
 }
 
+/**
+ * 装备对齐几何行（#513）
+ *
+ * 一件衣服 / 一把武器 / 一套裸模的**外观**几何。`id` 形如 `cloth:cloth_1` /
+ * `weapon:weapon_1` / `role:1`；**没有行 = 用客户端配置里的值**（所以没有"默认值"副本，
+ * 重置就是删行）。`out_positions` 存 8 个方向的 `[x, y]`（方向顺序见 configs/animation 的 directions）。
+ *
+ * 只有外观：内观（弹窗转盘上的位置）是运行时按身体内容 bbox 现算的，没有可手调的常量。
+ */
+export interface EquipAlignRow {
+  id: string;
+  out_scale: number;
+  out_positions: string;
+  /** 1 = out_positions 是绝对位置；0 = 运行时按身体帧自动算（武器的渐进语义） */
+  out_manual: number;
+  /** 最后修改人（管理员账号名；账号被删后仍可追溯） */
+  updated_by: string | null;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）

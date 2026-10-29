@@ -61,7 +61,7 @@ export const ApiRoutes = {
      */
     register: "/auth/register",
   },
-  /** gameConfig 模块（1 个接口） */
+  /** gameConfig 模块（2 个接口） */
   gameConfig: {
     /**
      * 玩家侧配置快照（GET /game-config）
@@ -69,6 +69,12 @@ export const ApiRoutes = {
      * 管理端可改的全部运营配置一次下发（称号 / 战魂 / 军衔 / 装备 / 药品 / 物品 / 怪物 / NPC / 时装 / 升级经验 / 成长曲线与标量 / 商城定价 / 掉落表）。
      */
     snapshot: "/game-config",
+    /**
+     * 装备外观几何（对齐工作台的产物）（GET /game-config/equip-align）
+     *
+     * 管理端「装备对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`。
+     */
+    equipAlign: "/game-config/equip-align",
   },
   /** guild 模块（10 个接口） */
   guild: {

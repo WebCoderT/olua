@@ -241,6 +241,23 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       INSERT OR IGNORE INTO world_meta (id, epoch) VALUES (1, 0);
 
+      -- 装备对齐几何（#513）：一行 = 一件衣服 / 一把武器 / 一套裸模的外观几何。
+      -- 为什么进库而不是只留在客户端配置：位置要能"管理端调完立刻生效"，而客户端配置是
+      -- 打包进 bundle 的（改一行要重打 3G 的包）。所以把"布局覆盖"也当配置下发，客户端进游戏
+      -- 时套一遍（configs/apply-snapshot 的 applyEquipAlignRows）。
+      -- id 形如 cloth:cloth_1 / weapon:weapon_1 / role:1（裸模按性别）；**没有行 = 用客户端配置里的值**，
+      -- 所以"重置"就是删行，不需要存一份"默认值"的副本。
+      -- out_positions 是 8 个方向的 [x, y]（顺序见 configs/animation 的 directions）。
+      -- 只有外观：内观（弹窗里那个转盘上的位置）是运行时按身体内容 bbox 现算的，没有可以手调的常量。
+      CREATE TABLE IF NOT EXISTS equip_aligns (
+        id            TEXT    PRIMARY KEY,
+        out_scale     REAL    NOT NULL DEFAULT 1,
+        out_positions TEXT    NOT NULL,
+        out_manual    INTEGER NOT NULL DEFAULT 0,
+        updated_by    TEXT,
+        updated_at    INTEGER NOT NULL
+      );
+
       -- 养成配置（#213）：称号 / 战魂的等级序列**固定**（level 是主键，行只能来自 seed，
       -- 后台只改内容），所以没有 created_at，只有 updated_at。
       -- 八项属性拍平成 min/max 两列（区间型六项 + 单值两项），避免 JSON 列没法建索引与校验。

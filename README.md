@@ -113,10 +113,10 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 
 ### 这套做法留在仓库里的痕迹
 
-- **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 56 套单测、`tools/` 下有 13 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、战斗规则快照有没有漂移、服务端算的属性与客户端是不是同一份、界面点击会不会穿透到世界、模块边界有没有被绕过，全都有脚本盯着。
+- **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 57 套单测、`tools/` 下有 13 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、战斗规则快照有没有漂移、服务端算的属性与客户端是不是同一份、界面点击会不会穿透到世界、模块边界有没有被绕过，全都有脚本盯着。
 - **一切可调的东西都收进 `client/assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
 - **接口文件全部由服务端 Swagger 文档生成**。三端签名对不上会**编译报错**，而不是线上出现一个 `undefined`。这同样是为了让 AI 改完一端后，另一端在编译期就被拦住。
-- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55 + 39 + 51 条）+ 两端类型检查 + 56 套单测 + 13 套审计，全绿才算完。
+- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55 + 39 + 51 + 67 条）+ 两端类型检查 + 57 套单测 + 13 套审计，全绿才算完。
 - **每处理完一个问题就按功能提交一次**。改完一个功能立刻落一次 commit，不留一堆混在一起的未提交改动 —— 这样「哪次改动引入了回归」永远能二分出来。
 - **踩过的坑写进了 FAQ**。每端目录下的 FAQ 收纳该端的具体问题，跨端的机制与环境坑在 [FAQ.md](FAQ.md)；里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
 
@@ -209,7 +209,7 @@ olua/
     - 手写：`HttpClient` 二次封装与统一调度 / `ApiCodes` 业务码与文案 key / `ApiError` 错误归一 / `Session` 会话 / `RoleSync` 进度同步 / `NetworkSetup` 接线
 - assets/resources：资源目录（地图 tmx、帧动画、图集、图标、UI 素材）
 - assets/scenes：登录、角色选择、加载和游戏场景
-- tools：**客户端专属脚本**（56 套单测 + `gen-monster-config.cjs` / `gen-monster-drops.cjs` 配置生成器 + `clean-role-empty-frames.cjs` 素材清理 + `lib/` 单测沙箱）
+- tools：**客户端专属脚本**（57 套单测 + `gen-monster-config.cjs` / `gen-monster-drops.cjs` 配置生成器 + `clean-role-empty-frames.cjs` 素材清理 + `lib/` 单测沙箱）
 - settings / profiles / native / package.json / tsconfig.json：Cocos 工程配置（`package.json` 是 Cocos 的工程描述，不是 npm 脚本）
 - library / temp / build：Cocos 缓存与构建产物（不进版本库）
 - 详见 [client/README.md](client/README.md)，问题见 [client/FAQ.md](client/FAQ.md)
@@ -221,7 +221,7 @@ olua/
   - constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
   - interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
   - security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
-- src/database：SQLite 连接与 43 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / parties / party_members / achievements / role_achievements，含存量补列）的仓储层
+- src/database：SQLite 连接与 44 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / parties / party_members / achievements / role_achievements / equip_aligns，含存量补列）的仓储层
 - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员 / 口令）/ announcement（公告：公共拉取 + 管理端 CRUD）/ mail（邮件：模板 + 投递队列 + 后台调度）/ audit（操作日志）/ token（JWT）/ health
 - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
 - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
@@ -245,7 +245,7 @@ olua/
 - src/api：地址配置（唯一来源 `config.ts`）+ 请求层 `http.ts`（拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录）
   + **生成物** `routes.ts` 路径表 / `models.ts` 类型 / `endpoints.ts` 接口方法（`authApi`·`rolesApi`·`questsApi`·`achievementsApi` 等，一个接口一个方法，页面只 import 名字）
   + 手写的 `types.ts`（业务码 / 权限点 / 动作与目标的中文字典）与 `index.ts`（统一出口）
-- src/pages：登录 / 注册 / 概览 / 账号列表与详情（重置密码 · 踢下线 · 清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员（改角色 · 启停 · 重置密码 · 删除）/ 公告（发布 · 编辑 · 删除 · 启停 + 生效状态列）/ 邮件（发信入队 + 投递记录：状态筛选 · 重试次数 · 失败原因 · 重投）/ 操作日志（筛选 + 分页 + 请求体展开）/ 玩家举报（筛选 · 分页 · 行展开证据，只读）/ 我的账号（自助改密）/ **装备对齐**（8 方向比对工作台：以裸模为唯一基准，把每件衣服与武器在每个朝向上拖到位，导出 JSON 由脚本写回客户端配置）
+- src/pages：登录 / 注册 / 概览 / 账号列表与详情（重置密码 · 踢下线 · 清空该账号全部角色）/ 角色列表（筛选 + 多选批量删除）与详情（基础信息 / 常用数值 / 装备·技能·背包结构化编辑）/ 管理员（改角色 · 启停 · 重置密码 · 删除）/ 公告（发布 · 编辑 · 删除 · 启停 + 生效状态列）/ 邮件（发信入队 + 投递记录：状态筛选 · 重试次数 · 失败原因 · 重投）/ 操作日志（筛选 + 分页 + 请求体展开）/ 玩家举报（筛选 · 分页 · 行展开证据，只读）/ 我的账号（自助改密）/ **装备对齐**（8 方向比对工作台：以裸模为唯一基准，把每件衣服与武器在每个朝向上拖到位；**保存直接落库**，客户端重进游戏即生效（不再需要导出 JSON + 跑脚本）
 - 界面按令牌里的**权限点**显隐菜单与按钮（`store/session.hasPermission`），服务端仍独立校验
 - 详见 [admin/README.md](admin/README.md)，问题见 [admin/FAQ.md](admin/FAQ.md)
 
@@ -263,8 +263,8 @@ olua/
 - audit-docs-en.cjs：英文文档译本是否与中文版走散（覆盖 / 残留中文 / 章节等价 / 数字不丢 / 锚点与链接可达 / 互链）
 - audit-doc-numbers.cjs：文档里「几个接口 / 几条路径 / 几个模型 / 几个权限点 / 几张表 / 多少条 e2e」这类数字是否与实测一致（这类数字漂了**不会报错**，只会让文档自信地写着过期的数；各端 README 与**项目技能**都在受管清单里）
 - gen-equip-align-catalog.cjs：由客户端 `configs` 产出**装备对齐工作台**的只读清单（裸模 2 / 衣服 12 / 武器 19 × 8 方向 + 每件当前几何），派生快照，不手改
-- audit-equip-align-catalog.cjs：那份清单是否与 `configs` 逐字节一致（不钉住的话，工作台会拿旧位置给你调、导出再写回，**第二次悄悄覆盖第一次的成果**），外加展开变体混入 / 方向缺一个 / `outScale` 为 0 这类「页面画歪但不报错」的形态
-- apply-equip-align.cjs：把工作台导出的 JSON 写回 `client/assets/configs/equipments.ts` 与 `role.ts`（只改几何字段，注释与缩进保留）
+- audit-equip-align-catalog.cjs：那份清单是否与 `configs` 逐字节一致（不钉住的话，工作台会拿旧位置给你调、保存又覆盖一次，**第二次悄悄覆盖第一次的成果**），外加展开变体混入 / 方向缺一个 / `outScale` 为 0 这类「页面画歪但不报错」的形态
+- apply-equip-align.cjs：把工作台导出的 JSON 写回 `client/assets/configs/equipments.ts` 与 `role.ts`（只改几何字段，注释与缩进保留）。**日常保存不需要它** —— 工作台的「保存」直接落 `equip_aligns` 表、客户端重进游戏即生效；这个脚本只用于备份与「把定稿烧进出厂配置」（例如全新装的客户端连不上服务端时也要位置正确）
 
 ### 其它
 
@@ -294,14 +294,14 @@ make env            # 生成 server/.env（已存在则跳过）
 make dev            # 同时起服务端 :3100 与管理端 :5173，Ctrl-C 一起退出
 
 make client-check   # 客户端类型检查（Cocos 自带 tsc，0 错才算过）
-make client-test    # 客户端 56 套单测
-make server-verify  # 服务端一条命令全验（编译 + 二十二套 e2e + 生成物审计）
+make client-test    # 客户端 57 套单测
+make server-verify  # 服务端一条命令全验（编译 + 二十三套 e2e + 生成物审计）
 make admin-build    # 管理端类型检查 + 构建
 make gen-api        # 改完接口后重新生成契约与两端接口文件
 make audit          # 13 个跨端审计脚本
 
 make check          # 静态检查：客户端 tsc + 管理端 typecheck + 13 个审计
-make test           # 全部测试：客户端 56 套 + 服务端二十二套 e2e
+make test           # 全部测试：客户端 57 套 + 服务端二十三套 e2e
 make verify         # 完整门禁：check + 三端构建 + 全部测试（提交前跑这个）
 ```
 
@@ -327,7 +327,7 @@ npm run dev              # 开发（热编译）；或 npm run start 跑已构�
 
 - 接口文档（Swagger）：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`）
 - 健康检查：<http://localhost:3100/api/health>
-- 一条命令全验：`npm run verify`（编译 + 二十二套 e2e + 生成物一致性）
+- 一条命令全验：`npm run verify`（编译 + 二十三套 e2e + 生成物一致性）
 - 详见 [server/README.md](server/README.md)
 
 ### 2. 客户端（Cocos）
@@ -404,10 +404,10 @@ make verify   # = check + 三端构建 + 全部测试
 手工跑（等价，不依赖 `make`）：
 
 ```bash
-# 客户端：56 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
+# 客户端：57 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 二十二套 e2e（248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55 + 39 + 51）+ 生成物一致性
+# 服务端：编译 + 二十三套 e2e（248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建
