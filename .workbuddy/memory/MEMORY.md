@@ -1,60 +1,31 @@
-# olua 项目长期记忆（精简版）
+# olua 长期记忆（索引，细节见 skills 与 2026-*.md）
 
-> 细节见 Skill `olua-server`/`olua-client`/`olua-admin`/`olua-deploy` 与 `cocos-*`；客户端约定主笔记 `PROJECT-NOTES.md`；逐日见 `2026-*.md`（已收官史诗的逐刀细节都在日志里，本文件只留索引与仍生效的约定）。
-> **技能与记忆都随仓库提交**（用户 2026-10-11 定）：`.gitignore` 白名单只放 `.workbuddy/memory` 与 `.workbuddy/skills`；改技能/记忆 = 改仓库文件，走 issue + PR。仓库 PUBLIC：**服务器 IP / 私钥 / 邀请码 / JWT 实际值不进记忆不进库**。
+> 纪律：一切提交走 issue → 分支 `type/n-slug` → PR（`Closes #n`）→ CI 绿 → squash；docs/记忆同样；写日志前先切分支。一个 PR = 一个功能；全绿才提交（`make ci`，数字实测）。记忆/技能随仓库提交，走同样流程；仓库 PUBLIC —— **IP / 私钥 / 邀请码 / JWT 不进记忆**。
+> master = 横屏 1624×750；portrait = 竖屏 750×1624（竖屏只进 portrait）。
 
-## 提交纪律（用户强制）
-- 所有提交必须有 issue/PR：开 issue → 认领留痕（谁/哪台机器/分支）→ 分支 `type/n-slug` → 提交（`Closes #n`）→ PR → CI 绿 → squash 合并；docs 也不例外；写日志前先切分支（极易顺手 commit 到 master）。
-- 一个 PR = 一个 squash = 一个功能；接口改动连 `openapi.json` + 两端生成物同刀提交；全绿才提交（`make ci`，数字从命令输出实测）。双语文档：中文主体 + 同目录 `X.en.md` 口径全等。
-- issue 状态纪律：动手前先查评论/分支/PR（有人在做就不碰）；状态变更即评论；**禁止**「悄悄做完不关 issue」与「issue 开着但已放弃」。
-- 多机并行（Windows+Mac）：改动前后都必须 `git fetch` + 同步 master。
+## 会再犯的坑（守点 = 脚本，细节见对应 skill / 日志）
+- **环境相关不进生成物**：`resources/` 是 gitignore（只从 Release 来），清单带 `hasAsset` 会让逐字节守点在 CI 必然假红 → 改运行时 `HEAD` 探测（403/404/410 才算缺）。
+- 只信 Grep 工具（BSD grep 不吃 `\|`，恒空≠已改完）；批量替换 `perl -pi -e`；改完看行尾（`GameUiHelper.ts` 是 CRLF）与 `make client-check`；编辑器回写要 `sleep 20` 复检。
+- 服务端/子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof` 探占用。
+- **代码生成/快照**：一份数据只能有一个来源（`configs` → `game-data.generated.ts`；管理端工作台用 `equip-align.catalog.json`），守点是「重生成 + 逐字节 + 结构断言」。派生清单不钉住会静默毁数据（旧值调完再写回 = 覆盖上一次成果）。
+- **babel loose**：`[...map.values()]` 装的是迭代器不是内容 → Map/Set 一律 `Array.from`（守点 `audit-iterator-spread`）。
+- **指针事件必须配 `UITransform`**（3.8.7）：否则每次派发抛 `cameraPriority` 空指针、输入全废；防呆静默跳过会吞证据，判据要问「前提在不在」。
+- **自适应分三层**（模板 / `applyScreenPolicy` / 场景贴边），模板只在 GUI 构建生效；游戏内坐标一律以相机为准。
+- **飘字**跨场景挂场景里的 `Canvas`（不是场景根）；行内文字按 bbox 验（CLAMP + 左对齐从框左缘起排），单行 CLAMP 装不下要 `enableWrapText` + 行高自适应。
+- **几何**：位置类按帧内容 bbox 运行时算、配置只当微调（内容中心 = 节点中心 + `offset`，y 向上；衣服节点缩放要乘；空帧按面积判 `BLANK_FRAME_MAX_AREA = 4`；轮廓按 alpha>200，裁剪框含影子）；plist `spriteSourceSize` 只有 2 个数。改语义要渐进（如 `outManual` 勾了才用绝对值）。
+- **假绿 > 漏检**：扫描器吞异常会「扫 0 个模块也全绿」（必须断言模块数）；期望值与被测代码可能各错一半；错误断言要精确匹配文案；重试写进被测助手；缓存逻辑把 TTL 压 0；压配置别压掉被测语义。
+- **节点名用 key 不用图标**（同名节点 `find()[0]` 会拿错）；空态/等待态文案不能跨状态复用；服务端 `{type:"error"}` 是拒绝的唯一出口，客户端少接 = 静默拒绝；乐观 UI 要用服务端既有信号确认。
+- **文档数字**：加审计/单测会连坐 README/FAQ/resume/官网/skills（`audit-doc-numbers` 给行号），双语还要数字出现次数相等（`audit-docs-en`）。
+- 真机验证：真实 Chrome `headless:false` + playwright-core；自适应只测真实窗口（`viewport:null`）；`window.__cc` 只在 `__v.ready()` 后存在，`reload` 后要重新 `ready()`。
 
-## 分支线
-- **master = 横屏线 1624×750**；**portrait = 竖屏线 750×1624**（竖屏改动只进 portrait，拆分 #152）。squash 仓库判短线是否已合并用 `git merge-tree --write-tree` 比树；旧提交从 `refs/pull/<n>/head` 取回。
+## 架构不变量（细节 skill `olua-server` / `olua-admin` / `olua-client`）
+- 服务端权威：伤害/掉落/经验/进度/金币一律服务端算，客户端只演。
+- 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据是不透明文档（`guide` 例外：只校验结构、**不补默认值**）；修订号乐观锁 409+20006；`whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；文本主键 `findByKey`；`BizException` 默认 400。
+- 部署：compose 四服务（admin:80 / game:8080 / server:3100 / realtime:3101），`/api` 与 `/game-resources/` 都反代到内网；密钥只在 `deploy.env`；先合 master 再发布；Cocos 只能 GUI 打包。
+- 本机 client-test 基线 **56 套 / 51 过 5 红**（红全是素材未入库）；CI 不跑它，门禁看 `make ci`。
 
-## 工程风险（必读）
-- **resources 以远程 Release 为唯一来源（2026-10-26 强制）**：不改远程、不手工补图；不一致就删本地/改代码适配。守点 = `resources_sync.py verify` + `audit-resource-refs`（CI 无素材自动跳过）。
-- Cocos 编辑器周期性回写 assets：改完 `sleep 20` 复检；只信 Grep 工具与 `git diff`（BSD grep 不吃 `\|`）；批量替换用 `perl -pi -e`，改完必须 `make client-check`。
-- 服务端/子进程 `env -u NODE_OPTIONS`；`curl 127.0.0.1 --noproxy '*'`；起监听端口前先探测占用。
-- 打包 babel loose：**`[...迭代器]` 不是「恒空」而是「装着迭代器」**（`[].concat(map.values())`，concat 不展开非数组）→ 调用方拿到的是迭代器本身、字段全 undefined；Map/Set 一律 `Array.from`。守点 = `tools/audit-iterator-spread.cjs`（`.keys()/.values()/.entries()` 与 `new Map/Set` 硬错误，裸字段走 `iterator-spread-allowlist.json`）。飘字走 `GameUiHelper.createTip*`；客户端 tsc 用 `client/tools/tsconfig.check.json`。
-- **引擎 3.8.7 指针监听硬坑**：任何注册了指针事件（`TOUCH_*` 也算，`dispatchEventTouch` 与鼠标同走 `_sortPointerEventProcessorList`）却没有 `UITransform` 的节点，会让每次指针派发抛 `cameraPriority` 空指针、整个输入全废。`class Xxx extends Node` 自己当按钮的最容易漏（`blockClickThrough(this)` 的防呆只静默跳过、不阻止紧随其后的 `this.on(TOUCH_*)`）。守点 = `audit-ui-click-through` 第 6 段 + 第 5 段的顺序接线（#443）。
-- **「防呆静默跳过」会把证据吞掉**：判据不能问「有没有调防呆」，要问「它需要的前提在不在」——#443 里审计因 `blockClickThrough(this)` 那行判绿，而同一节点的 `TOUCH_END` 一直在崩。
-- **画面自适应分三层，别只改中间那层**（#447）：页面层 = `client/build-templates/web-desktop/`（引擎自带 web-desktop 模板把 `#GameDiv` 写死 1920×1080，窗口缩放它不变；`exactFitScreen=false` 时画布取它的 `clientWidth/clientHeight`）；设计分辨率层 = `ScreenLayout.applyScreenPolicy()` 的 `NO_BORDER`；场景层 = `getVisibleSize()` + `getAnchoredPosition` 贴边 + `getStageScale` contain。守点 = `client/tools/test-scene-stage.cjs` 的 F 组。模板只在 GUI 构建时生效，预览器验不出来。
-- **飘字跨场景**（#451）：非游戏场景（登录/选角，从不调 `initLayer`）挂**场景里的 `Canvas` 节点**，不是场景根 —— 挂载点对了不等于位置对了，飘字坐标以屏幕中心为原点（游戏内成立是因为 `UILayer` 被 `move` 到角色位置），挂场景根会落在世界原点 = 屏幕左下角顶点外，症状是「控制台有报错、界面一个字没有」。`tip.layer` 贴合宿主别指望相机 visibility。守点 = `test-client-net` / `test-dialog-top`（含反向断言）。
-- **真机浏览器验证**（#455~#463 起有一套现成的）：真实 Chrome（`headless:false`，headless 拿不到 GPU）+ playwright-core + 注入探针；**自适应只能测真实窗口**（`--window-size` + `viewport:null`，`setViewportSize` 不触发引擎 resize）；**游戏内坐标一律以相机为准**（世界原点 ≠ 屏幕左下角）；**瞬态 UI 单独脚本抓**（同名截图连拍会覆盖）。判定口径 = 可见(`Mask` 祖链) / 没被挡(最上层**可交互**节点) / 点击真触发(全局+节点双路计数)。工程在 `.workbuddy/verify/`（不入库），结论与坑见 `.workbuddy/verify/report.md`。
-- **UI 三件套坑**（#455~#463）：① 背景「铺满」= **等比 cover**（`UiHelper.createCoverNode/fitCoverNode`，溢出裁在画布外），素材本身比例不对只能换图、不能拉歪；② `Label` 用 `RESIZE_HEIGHT` 且锚点在中心时，高度增长会**向上下两头长**（气泡标题压正文），必须 `setAnchorPoint(0.5, 1)` 从顶部往下排；③ 平台门控用 **`sys.isMobile`**，别用「web 构建就不显示摇杆」（手机浏览器同样没有键盘）。另：`configs/debug.ts` 的 `colliderRange`/`areaRange` 默认必须 `false`。
-- e2e 纪律：先算轮询窗口 vs 过期时间；问**字段有几个写者**，判据用只有目标路径写的字段；**错误断言必须精确匹配文案**（泛判据会被无关路径满足、掩盖功能缺失）；**重试写在被测助手内部**（#396 `killOne` 只取一次世界快照 → CI 上 6 条连环假红）；**带缓存的逻辑 e2e 要把 TTL 压到 0**（#398 `SOCIAL_BLOCK_CACHE_MS=0`，否则测的是缓存不是逻辑）；`EXPECTED_ASSERTIONS` 与条数差一条就会把绿变红。
-
-## 部署要点（细节 Skill `olua-deploy`）
-- compose 四服务：admin :80 / game :8080 / server 内网 3100 / server-realtime :3101；`/api` 反代 server 同源，`/api/realtime*` 带 Upgrade 头反代实时进程。
-- 密钥只在 gitignore 的 `deploy.env`；更新 = `git archive` → scp → `compose up -d --build`（服务器连不上 GitHub）；**先合并 master 再发布**；Cocos 只能 GUI 打包（~3.1G）；静态站 try_files 必须含 `$uri/`。
-
-## 架构不变量（细节 Skill）
-- 游戏数据单一来源：`client/assets/configs` → `gen-shared-data.cjs` → `server/src/shared/game-data.generated.ts`（三端唯一），`audit-shared-data` 锁；装备/药品/物品/怪物/NPC/时装/掉落/skills/statuses/怪AI/任务 均已进快照。
-- 服务端权威：伤害 / 掉落 / 经验 / 进度 / 金币一律服务端结算，客户端只演（#396 任务四写入口全在 `QuestService`；#395 聊天转发不存储）。
-- 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据=不透明文档（解析失败必须报错；唯一例外是 `guide` 引导进度：只校验结构与体量，**无字段不补默认值**）；修订号乐观锁 409+20006；`ValidationPipe whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单唯一来源 `sort-specs.ts`；受击落账不推 revision（`updateDataKeepRevision`）；进程内起服走 `register({realtime:true})`；JSON 列解析下沉 `common/config-json.ts`；`BizException` 默认 400，404 用 `notFound()`；文本主键表 `findByKey`，seed 用 `INSERT OR IGNORE`。
-- DTO / 快照坑：emitDecoratorMetadata 类顺序 TDZ；whitelist 只认校验装饰器；快照标量要包成单行表；nullable `@ApiProperty` 不带 type → admin 模型 unknown。
-- 本机 client-test 基线：**50 通过 / 5 失败**（55 套；红全是素材没入库，resources 未铺：`equipment-appearance` / `equipment-detail-background` / `monster-config` / `role-default-cloth` / `role-frames`）；CI 不跑 client-test，门禁以 `make ci` 为准；沙箱型单测跟着真代码 import 改，源码正则断言会因改名而红。
-- **行内文字必须按 bbox 验，不能按数据验**（#477）：`createLabel` 是 CLAMP + 左对齐 → 文字从**文本框左缘**起排，布局给的却是**中心 x**；超出行宽的部分被 ScrollView 遮罩裁掉，而节点/文字都还在（数据 e2e 与 dump 全绿、重叠审计也看不出）。守点 = `client/tools/test-dialog-row-bounds.cjs`。同源第二例：`createInputBox` 字号写死 24，26 高的窄框必然外溢 —— 组件默认值只对一种尺寸成立时要显式参数化。
-
-## 主线进度（细节见逐日日志）
-- 已收官：服务端战斗权威线 #25~#37 · 管理端收口 epic #259（九张配置表）· 快照覆写扩展 #361/#363 · 客户端对接 epic #293（九刀，PR #296~#384）· 社交线 #387（#388 帮会 / #389 好友敌人）。
-- **玩法补全 epic #394（2026-10-27 开线）**：① 聊天 #395 ✓（PR #404，bca0ae5）→ ② 任务 #396 ✓（PR #407，b449455：quests/quest_progress 两表 + accept/submit/npcTalk/onMonsterKilled 四写入口 + 可接态客户端算 + daily 删行可重接 + `quest` 帧只推本人）→ ③ 经济 #397 ✓（PR #410，7c6b869：`POST /roles/:id/sell`，价格只认快照 `SELL_PRICES`、客户端只报「卖什么几件」、同 id 合并、整单结算；一键回收改服务端结算）→ ④ 屏蔽与举报 #398 ✓（PR #413，7a28fe8：`role_blocks`/`role_reports` 两表 + `BlockService` 整表缓存 + 聊天与互见三处服务端过滤 + **不下发 blockedBy** + 举报只落库/管理端只读 + `report:read`）→ ⑤ 组队 #399 ✓（PR #416，4ea3205：`parties`/`party_members` 两表 + 七个动作全走 WS 帧 + 队长退出自动移交 + 同图队友 50% 经验（`expGain` 带 revision）+ 互见帧 `partyId` + 屏蔽优先两种说法；客户端 `RELATION.PARTY` 队友金 + `PartyStore` + 队伍弹窗）→ ⑥ 排行榜 #400 ✓（PR #419，3d92b44：`GET /leaderboards/:board` + `/me`，等级/战力/击杀三榜；排序·名次·截断·裁剪全在服务端；竞赛排名（并列同名次 + roleId 二次键）、离线也上榜、物化在进程内不落库按 `LEADERBOARD_REFRESH_MS` 整份换引用、定时器首次有人看榜才起；`me` 在全量排序里算名次（榜外也真实，无活跃角色 rank=0）；条目八字段不带 accountId/data/在线状态；击杀数 = `roles.kills` 索引列，服务端 +1 且不推 revision；客户端 `LeaderboardStore` 并发拉 page+me、切页就重拉、入口挂小地图现成图）→ ⑦ 新手引导 #402 ✓（PR #422，755c5e6：进度存角色存档 `role.guide = { step, done, skipped }`，**不新开表**（无奖励无结算，换设备/重连自然续走）；服务端只校验结构与体量（`step` 为 0~64 的整数、两标记为布尔、多余字段丢弃），**没有字段就不补默认值**（客户端靠「有没有 guide」分老号/新号）；推进靠六个事件（move/kill/pickup/openBag/openSkill/openChat）且**只有当前步命中才前进**、不越级；移动按 `Vec3.distance` 累计 260 判定；遮罩不拦点击不锁移动、只有跳过按钮是按钮；高亮用语义位 `GUIDE_SPOT` 由组合根换真实节点（取不到退化为只有气泡）；四块矩形挖洞（两对角点算宽高）+ 气泡贴边夹取；`skipped` 是显式选择、与走完两句不同飘字；落盘走 `updateOnlineRole` 不开旁路）→ ⑧ 成就 #401 ✓（PR #425，60cc742：`achievements`/`role_achievements` 两表 + **条件分两类**（累计型 `kill`/`quest` 事件记账落 progress、状态型 `level`/`combat`/`collect` **不落进度查询现算**）+ 击杀采集点收成 `GameEventsService`（`@Global`，同步分发 + 订阅方异常隔离，结算只 emit）+ **达成与领取分离**（`achieved_at` 可领 / `claimed_at` 已领、不自动发奖、背包满 20012 不消耗资格、状态型 achieved_at 领取时补写、GET 不写库）+ 生成期与管理端两道引用校验 + 有记录拒删 + 客户端 `AchievementStore`/三分类面板挂小地图现成入口）→ ⑨ 游戏内邮件 #429 ✓（PR #430，e4d234e：`role_mails` 表 + 收/读/领/一键领/删五接口 + **附件领取那刻才入包且复用 `grantQuestRewards`**（三玩法一个发奖入口）+ 未领附件不能删（50143）+ 幂等写进 SQL（`claimed_at IS NULL`）+ 一键领取逐封领到背包满（`stoppedByBag`）+ **成就 20012 → 整份奖励转邮件且照常记已领**；顺带修真 bug：状态型成就的 `achieved_at`/`claimed_at` 纯 UPDATE 改不到不存在的行 → 改成 upsert，否则能无限刷；客户端 `MailStore`+`MailDialog`，小地图 `mail` 入口变消息中心，红点 = 未读+未领+公告）→ ⑩ 成就扩容 #428 ✓（PR #433，f54ab58：8 → **24 条**，battle 10 / growth 8 / explore 6，3 条隐藏分落三类；只改 `configs/achievement-data.ts` 纯数据 + 重跑 `gen-shared-data`，三端同到位；同分类 `order` 按难度递增、奖励随之上抬；条数断言三处需同改；**改完必须先 `npm run build` 再跑 e2e**，e2e 起的是 `dist/`）→ ⑪ 消息频道 #436 ✓（PR #440，5357421：`role_mails` 加 `channel`（四枚举收敛在 `game-mail/mail-channel.ts`，默认 system + `ensureColumn` + 一次性回填 achievement→reward）；`MailBoxDto.channels` 四栏角标**固定出现且永远按全量**；**接口不做频道过滤**（一次给全量、客户端本地筛，切页签零请求）；`sendReward`→`send` 且 `channel` 必填；`claimAll(channel?)` 只领一栏、**非法频道 40000**（发奖路径上「宽容」比报错危险）；三投递点 reward / social（失败只 warn）/ combat（`GameMailEventsService` 订阅 `monster:killed`，**只对 boss 落**）；客户端五页签 + 未读角标（上限进配置）+ `MailStore.visible/setChannel` + 空态两种说法；**顺带修真 bug：`configs/monster.ts` 建 Map 把 `tier` 解构掉又没放回 → 快照 220 只怪全是 normal**（管理端 tier 列 / `monsters.tier` seed / BOSS 判定全错），补回后 199 普通 + 21 BOSS，`e2e-game-config` 里那条「当前全是普通怪」的断言随之改成按快照现算）→ 剩余 #403 帮会战。
-- **窗体感收尾（2026-10-29）**：⑫ 聊天窗改常驻左下角 #469 ✓（PR #472，761bfc8：440×280 dock bottom-left，位置按摇杆/追踪栏量出来；`open(auto)` 自动开窗不推进引导；`GameUiHelper.createChatBox` 不走 ornate 大框；缩放 `refreshDock`）→ 顺带修 #471 babel loose 迭代器（六处 `Array.from` + 新审计）→ 角色面板属性列表压按钮列 #470 ✓（PR #473，8273843：删空分节标题「特殊属性」+ 行高/间距收紧，列表高 258→206；新单测 `test-role-attr-list`）→ 底部「聊天」图标 #468 已入库待打包（`art/pending/`，1 次生成 + 宋体重排文字，Release 重打后改 `configs/bottomNav.ts` 一行）→ 行内文字越界 #477 ✓（PR #478：四处行按「bbox 左缘 = 行左缘 + 16」重算，聊天消息行/输入条顺带修，新单测 `test-dialog-row-bounds`）。
-- 其他 open：#8 官网 / #9 包体积 3.1G 治理 / #12~#19 玩法素材 / #295 阶段三（管理端区服页）。用户已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
-- **真机验证循环第三轮（2026-10-29）**：#491 商城卡片补价格 + 组队空态 ✓（PR #492）→ #493 worldJoin 时序（进图早于实时连接、玩家「不在世界里」）✓（PR #494）→ #495 error 帧接成可见飘字 + 私聊会话页空态 ✓（PR #496）→ #497 组队邀请等级门槛（`PARTY_MIN_LEVEL`=10 + 两端审计 + e2e 79→87）✓（PR #499）→ 新发现 #498（乐观 UI 不撤回）✓（PR #502）→ ④ 装备/武器位置对齐 #505 ✓（PR #506，d3a75a8：`configs/equipAlign.ts` + 20 把武器几何归零 + 空帧判据按面积）。细节见 `2026-10-29.md`。
-- **数字基线（#505 后）**：**154 接口 / 128 路径 / 233 模型 / 25 权限点 / 43 表 / 35 仓储**；e2e **2271（二十二套，队伍 87）**；客户端单测 **56 套**（本机 51 过 / 5 红，红全是素材未入库）；回归守卫 68；12 项审计（脚本 12 个）。
-- **同一个「文字画不下」有三种死法，别只防一种**：① 文本框跑出行外被遮罩裁（#477/#483，守点 `test-layout-row-bbox.cjs` 全量扫描）；② 文本框在行内但**单行 CLAMP** 装不下长文本、后半句直接不画且无省略号（#481，窄容器要 `enableWrapText` + 行高按估算行数自适应，估算纯函数 `TextLayout.wrappedLineCount`）；③ 行高变成「随内容」后，行内水平 Layout 会把图标垂直居中、看起来像属于上一行（Layout 的 `alignVertical` 是布尔、不提供顶对齐 → 手动摆放贴顶）。
-- **按名字取节点前先数同名节点**（#486）：底部导航曾按**图标**命名，聊天/好友共用 `friend` 图 → 两个同名节点，`find(...)[0]` 静默拿到错的按钮，几乎把「等级门槛」误判成失效。节点名要用 **key**（身份），图标是外观、会换。`test-bottom-nav.cjs` 断言按 key 唯一。
-- **假绿比漏检更危险**（#483 扫描器教训）：把 `require` 异常 try/catch 吞掉后，「扫了 0 个模块」也会打印全绿。扫描类脚本必须同时断言「模块数 = 预期数」。
-- **`window.__cc` 只在 `window.__v.ready()` 之后才存在**（#493~#497 三次踩）：真机脚本 `goto`/`reload` 之后必须**重新 `ready()`**，否则 `waitForFunction(() => window.__cc && …)` 永远超时。曾据超时误判「静态服务挂了 / 浏览器 flaky」，做了整轮无谓排查（pkill、性能、版本）。判据顺序改成：先 `evaluate(() => typeof window.__cc)`，别先怀疑环境。
-- **聊天窗是常驻自动打开的**（#469 之后）：进游戏就已经在左下角；脚本里再点 `bottom_nav_chat` 是把它**关掉**。验聊天先轮询 `chat_box` 在场，别点入口。
-- **服务端拒绝必须有可见出口**（#495）：`{type:"error", data:{code,message}}` 是服务端所有 `fail()` / `reject()` 的唯一出口（聊天限频、组队失败、参数不合法）；`RealtimeClient.onFrame` 少一个 `error` 分支 = 拒绝静默，玩家只会反复点。形状校验：没有 `message` 只打日志、不弹空提示；没接线时 `console.warn` 而非静默。
-- **乐观 UI 与服务端权威的冲突**（#498 ✓ PR #502）：客户端「帧发出去了」≠「服务端接受了」。`PartyDialog.invite()` 曾先飘「已邀请」并把候选行改「等待」，被拒后两者都不撤回 → 同屏两句互相打脸（「已邀请」+「对方还没到 10 级」）。**修法不必改协议**：找服务端已有的语义当确认信号 —— 组队邀请**成功必回 `party` 快照、拒绝必不回**（`invite()` 末尾无条件 `sendSnapshotTo`，所有 reject 直接 return），于是客户端只记「在途」（单份，保证快照↔邀请一对一），快照到了才宣布成功。同族三处一起修：拒绝要用 `createErrorTipText`（`error_tip` 节点、错误色，别和「经验 +N」混）；等待态别复用按钮文案（`invitePending`「等待回应」）；自己建的队别飘「已加入「我」的队伍」。
-- **门槛常量是「同一个数两端各写一份」的第三种破法**（#497）：`PARTY_MIN_LEVEL_DEFAULT`（服务端拦得住的那个）与 `bottomNav.group.openLevel`（客户端入口锁）必须相等 —— `audit-shared-data` 现在比这一对，并禁止 `configuration.ts` 再写一份字面量。后果不对称：客户端高了 = 放出的邀请对方打不开面板（邀请悬空）、低了 = 能进却一律被拒。
-- **e2e 里压配置不能压掉被测语义**（#497）：party 套 79 条全靠 1 级角色（经验分成要「1 级打 1 级怪」凑等级差 0），所以主进程 `PARTY_MIN_LEVEL=1` 保住原语义，门槛本身另起一台**默认配置**的独立进程验（第十一组 5 条）。`startServer(dbPath, extraEnv)` 支持逐项覆盖。
-- **空态文案不能跨状态复用**（#491 / #495 同一个错犯两次）：组队没队伍时复用「队伍成员会显示在这里」、私聊会话页复用选人页的「先点选人挑一个对象」—— 判据是「这句话对**当前**状态成立吗」，不是「它看起来像空态就该通用」。
-- **位置类几何一律运行时按帧内容 bbox 算，配置只当微调**（#505 / PR #506）：素材画布与裁剪留白每件不同（武器外观 245×234 ~ 570×608、身体内容 77×86 ~ 252×206，差 3 倍且全在掉落表里），手调 `inPosition` / `outPositions` 只对一具身体成立 —— 20 把武器攒出 20 组互不相干的数字。现方案 = `configs/equipAlign.ts`（唯一来源）：握持点 = 身体内容 bbox 横向 0.52 半宽 + 纵向 52% 高（朝左下换边），外观把武器内容中心放上去、内观再缩到身体高 ×1.15。三个必记细节：① **内容中心 ≠ 节点中心**（`SpriteFrame.rect` + `offset`，plist `spriteOffset` 与引擎 `offset` 同号同值、y 向上，走 `GameUiHelper.spriteContentBox`）；② 衣服节点可能带缩放（`cloth_1` 内观 1.3 倍），身体 bbox 要乘节点缩放；③ 「素材就绪」回调里帧常常还没落到 Sprite 上 → 按 `EQUIP_ALIGN.alignRetryDelayMs / alignRetryTimes` 重试。守点 = `test-equip-align.cjs` + 真机 `equip-align-check.cjs`。
-- **空帧判据要按面积，不能按边长**（#505 顺带修真 bug）：素材包占位空帧实际是 1×1 **和 2×2**（普查 8513 个，武器有 184 个 2×2）；旧判据「边长 > 1」漏过 2×2 → 武器片段里夹透明帧、**每轮循环消失一半时间**；而「边长 > 2」又会误伤 2×174 这类薄武器帧。结局口径 `BLANK_FRAME_MAX_AREA = 4`（`configs/animation.ts`），特效里的 3×3/4×4 是真实小图不受影响；内观路径 `playLoopAtlasWithDuration` 此前**完全不过滤**空帧。
-- **改文件前先看行尾**：`GameUiHelper.ts` 是 **CRLF**，Edit 工具会整文件改写成 LF → 5355 行假 diff。提交前 `git diff --numstat` 复查，必要时 `perl -pi -e 's/\r?\n/\r\n/'` 还原。
-- **判据与被测代码可能各错一半**（#505）：`checkAligned` 的期望值一开始也没乘衣服缩放，正好和漏乘的被测代码对上，全绿但都是错的 —— 写断言时先问「这个期望值本身是怎么来的」。
+## 进度（细节见 2026-*.md）
+- 已收官：战斗权威 #25~#37 · 管理端 epic #259 · 客户端对接 #293 · 社交 #387 · **玩法补全 #394 十二刀全收**（聊天/任务/经济/屏蔽举报/组队/排行榜/成就/引导/邮件/成就扩容/频道）。
+- 2026-10-29：窗体感收尾 → 真机验证第三轮（#491~#498）→ 装备位置对齐 #505/#506 → **管理端对齐工作台 #509/#510**（`/equip-align`，裸模为唯一基准 8 方向，导出 JSON 由 `tools/apply-equip-align.cjs` 写回）。
+- open：#8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战。已定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。
+- 数字基线（#510 后）：154 接口 / 128 路径 / 233 模型 / 25 权限点 / 43 表 / 35 仓储；e2e 2271（22 套）；单测 56；回归守卫 69；审计 13。
