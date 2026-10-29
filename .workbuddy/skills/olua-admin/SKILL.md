@@ -169,6 +169,30 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - 两个弹窗都遵守同一条：**数字字段用字符串承载**（空串 = 用默认值），提交前统一校验，
   别让「空输入」静默变 0（`cooldown` 留空要表达的是「用技能自身的冷却」，不是 0 秒）。
 
+## 五点八、可视化比对工作台（EquipAlignPage，#509）
+
+不是「表单页」也不是「配置页」：它把一批**图片按语义叠在一张 canvas 上**给人眼比对，再把结果导出成
+配置。形状与纪律都跟前面几节不同：
+
+- **数据从哪来**：客户端的 `configs`（管理端 import 不了那些 .ts，它们 `import { Vec2 } from "cc"`）→
+  `tools/gen-equip-align-catalog.cjs` 用 cc 垫片 + tsc 编译出值，快照成
+  `admin/src/data/equip-align.catalog.json`。**这是派生清单，不手改**；`audit-equip-align-catalog.cjs`
+  重生成后逐字节比对（清单过期 = 页面拿旧值给你调、导出写回，第二次悄悄覆盖第一次）。
+- **几何必须与游戏同一套语义**：节点框 = `spriteSourceSize`（锚点居中），内容 = `textureRect`，
+  内容中心 = 节点中心 + `spriteOffset·scale`（plist 与引擎 `SpriteFrame.offset` 同号同值、y 向上），
+  屏幕 y 向下取反。页面自己发明第二种摆法 = 「页面调好了、游戏里歪」。
+- **素材要同源**：`getImageData` 量轮廓（alpha>200 的真实轮廓，不是裁剪框 —— 裁剪框含影子）要求
+  plist/png 与页面同源。生产走 `admin/nginx.conf` 的 `/game-resources/` 反代 game 容器，开发走
+  `vite.config.ts` 的 `gameResources()` 中间件；**同一个 URL 前缀**，页面里不要写环境分支。
+- **`fetch` 只能出现在 `src/pages/equipAlign/assets.ts`**：`audit-api-hardcode` 只放行这一个文件
+  （读静态素材），页面里直接写 fetch 会被判成「请求绕开 `http.ts`」。
+- **「本机上有什么」不许进生成物**：`client/assets/resources/` 是 gitignore 的，清单带 `hasAsset`
+  会让逐字节守点在 CI 上必然假红 → 运行时 `probeAtlas`（HEAD，只有 403/404/410 才算缺）。
+- **改语义要渐进**：武器的 `outPositions` 原本是「对自动算法的微调」，工作台直接写绝对值等于把它们
+  全推到原点 → 加 `outManual` 标记，勾了才走绝对位置，没勾继续走运行时算法。
+- **导出 → 写回**：导出的 JSON 由 `tools/apply-equip-align.cjs` 写回 `client/assets/configs`
+  （只改几何字段、注释缩进保留、2 位小数、数值等价时不改文本）。页面只改配置，**不碰角色存档**。
+
 ## 六、必踩的坑
 
 1. **生成的类型必须是 `type` 不是 `interface`**。`interface` 没有隐式索引签名，赋给请求层的 `Record<string, string | number | null | undefined>`（query 参数）会被 TS 拒。生成器已经统一产出 `export type X = { ... }`，别再手写回 interface。
@@ -191,7 +215,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 2. `cd server && npm run gen:api` 重新产出文档与两端接口文件（`admin/src/api/endpoints.ts` / `models.ts` / `routes.ts`）。
 3. 管理端：`npx tsc --noEmit` 看报错，按生成的方法签名改调用点；新增页面走 `RequirePermission` 外壳 + `PERMISSION` 常量 + `Layout.tsx` 导航项。
 4. **同步受管文档数字**：接口数 / 路径数 / 模型数 / 管理端分组数变了就改 README / FAQ 双语 / resume / server README（见坑 11）。
-5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 生成物一致性）+ 仓库根 `make audit`（10 项跨端审计）。
+5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 生成物一致性）+ 仓库根 `make audit`（13 项跨端审计）。
 6. 仓库根 Makefile 等价目标：`make admin-build` / `make admin-typecheck` / `make gen-api` / `make verify`（全门禁）；`make help` 列全部。
 
 ## 八、提交纪律（强制，与仓库根纪律一致）
