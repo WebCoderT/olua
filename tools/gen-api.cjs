@@ -104,6 +104,8 @@ const MODULES = {
   adminSoul: { target: "admin", export: "soulsApi" },
   adminRank: { target: "admin", export: "ranksApi" },
   adminEquipment: { target: "admin", export: "equipmentsApi" },
+  // 装备对齐几何（#513）：工作台的读写口；与 adminEquipment（数值配置）不是同一件事
+  adminEquipAlign: { target: "admin", export: "equipAlignsApi" },
   adminDrug: { target: "admin", export: "drugsApi" },
   adminItem: { target: "admin", export: "itemsApi" },
   adminMonster: { target: "admin", export: "monstersApi" },

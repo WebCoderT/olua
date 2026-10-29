@@ -111,6 +111,7 @@ import {
   SendMailDto,
   SendMailResultDto,
 } from "../modules/mail/dto/mail.dto";
+import { EquipAlignDto, EquipAlignListDto, EquipAlignPointDto, SaveEquipAlignDto } from "../modules/game-config/dto/equip-align.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -370,4 +371,9 @@ export const SWAGGER_MODELS = [
   MailChannelSummaryDto,
   MailClaimResultDto,
   MailClaimAllResultDto,
+  // 装备对齐几何（#513）
+  EquipAlignPointDto,
+  EquipAlignDto,
+  EquipAlignListDto,
+  SaveEquipAlignDto,
 ];

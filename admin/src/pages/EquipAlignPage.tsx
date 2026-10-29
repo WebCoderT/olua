@@ -21,18 +21,29 @@ import {
 } from "./equipAlign/model";
 import type { Guides } from "./equipAlign/render";
 import { drawCell, layoutCells, originOfCell } from "./equipAlign/render";
+import { useAlignStore } from "./equipAlign/saved";
 
 /**
- * 装备对齐工作台（#509）
+ * 装备对齐工作台（#509 / #513）
  *
  * ===========================================================================
  * 这个页面解决什么
  * ===========================================================================
  * 装备位置长期靠「手写一组绝对坐标」+「运行时按身体 bbox 猜」两套混着来，前者只对某一件
  * 身体成立、后者被影子和素材留白带偏（真机逐帧比对见 `.workbuddy/verify/report.md` §9）。
- * 这里把判断权交回人眼：**以裸模为唯一基准**，8 个朝向上把衣服/武器拖到位，
- * 数值直接落成 `outPositions` / `outScale`，导出成 JSON 由 `tools/apply-equip-align.cjs`
- * 写回客户端配置。
+ * 这里把判断权交回人眼：**以裸模为唯一基准**，8 个朝向上把衣服/武器拖到位。
+ *
+ * ===========================================================================
+ * 保存直接落库（#513）
+ * ===========================================================================
+ * 位置存服务端（`equip_aligns` 表），客户端进游戏时拉一次并覆盖本地几何
+ * （`configs/apply-snapshot` 的 `applyEquipAlignRows`）—— 所以流程是
+ * **调 → 保存 → 刷新客户端**，不再需要导出 JSON + 在项目根跑脚本 + 重新打包。
+ *
+ * 三份数据的优先级（少一层就会把上次调好的位置当成没调过）：
+ *   页面临时改动（localStorage）> 服务端已保存 > catalog.json（出厂值）
+ * 「导出 / 导入 JSON」保留下来只做备份与「把定稿烧进出厂配置」，
+ * 那条路仍是 `tools/apply-equip-align.cjs`。
  *
  * ===========================================================================
  * 三条设计约束（都是为了「页面上看到的就是游戏里看到的」）
@@ -210,6 +221,23 @@ export function EquipAlignPage() {
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState("");
 
+  /**
+   * 服务端已保存的对齐（#513）
+   *
+   * 页面基线 = `saved[id] ?? catalog.base`。少了 `saved` 这一层，第二次进页面会把上次
+   * 调好的位置当成出厂值显示，看起来像「保存没成功」。
+   */
+  const {
+    saved,
+    loading: loadingSaved,
+    error: savedError,
+    pending,
+    save: saveAlign,
+    reset: resetAlign,
+    reload: reloadSaved,
+    clearError,
+  } = useAlignStore();
+
   const { request, version, failed } = useAtlases(prefs.resRoot);
 
   /**
@@ -254,28 +282,41 @@ export function EquipAlignPage() {
 
   const activeItem = useMemo(() => ALL_ITEMS.find((item) => item.id === activeId) ?? ALL_ITEMS[0], [activeId]);
   const roleItem = useMemo(() => ALL_ITEMS.find((item) => item.id === `role:${prefs.baseRoleId}`) ?? ALL_ITEMS[0], [prefs.baseRoleId]);
-  const geometry = drafts[activeItem.id] ?? activeItem.base;
-  const baseRoleGeometry = drafts[roleItem.id] ?? roleItem.base;
+
+  /** 某件的当前基线：服务端存过就用服务端的，否则用 catalog.json 的出厂值 */
+  const baseOf = useCallback((item: WorkItem): Geometry => saved[item.id] ?? item.base, [saved]);
+
+  const geometry = drafts[activeItem.id] ?? baseOf(activeItem);
+  const baseRoleGeometry = drafts[roleItem.id] ?? baseOf(roleItem);
+  /** 当前件相对「服务端那份」有未保存改动 */
+  const unsaved = isDirty(geometry, baseOf(activeItem));
 
   const roleAtlas = request(roleItem.atlas);
   const itemAtlas = request(activeItem.atlas);
   const isRoleTarget = activeItem.kind === "role";
 
+  /** 「已调 N / 全部」按**出厂值**算：用户关心的是这件调过没有，不是它有没有未保存 */
   const dirtyCount = useMemo(
-    () => ALL_ITEMS.filter((item) => isDirty(drafts[item.id] ?? item.base, item.base)).length,
-    [drafts],
+    () => ALL_ITEMS.filter((item) => isDirty(drafts[item.id] ?? saved[item.id] ?? item.base, item.base)).length,
+    [drafts, saved],
+  );
+  /** 未保存的件数（顶部保存按钮上的角标） */
+  const unsavedIds = useMemo(
+    () => ALL_ITEMS.filter((item) => isDirty(drafts[item.id] ?? saved[item.id] ?? item.base, saved[item.id] ?? item.base)).map((item) => item.id),
+    [drafts, saved],
   );
 
   /** 改当前条目的几何（唯一写入口，保证 8 项长度与吸附一致） */
   const patchGeometry = useCallback(
     (updater: (current: Geometry) => Geometry) => {
       setDrafts((prev) => {
-        const current = prev[activeItem.id] ?? activeItem.base;
+        const current = prev[activeItem.id] ?? baseOf(activeItem);
         const next = updater(current);
         return { ...prev, [activeItem.id]: { ...next, outPositions: normalizePositions(next.outPositions) } };
       });
+      clearError();
     },
-    [activeItem],
+    [activeItem, baseOf, clearError],
   );
 
   const setPosition = useCallback(
@@ -482,13 +523,62 @@ export function EquipAlignPage() {
     setNotice("已把当前方向的位置复制到 8 个方向");
   };
 
-  const resetItem = () => {
+  /** 只清掉浏览器里的临时改动（不碰服务端） */
+  const dropDraft = (id: string) => {
     setDrafts((prev) => {
       const next = { ...prev };
-      delete next[activeItem.id];
+      delete next[id];
       return next;
     });
-    setNotice("已还原成配置里的值");
+  };
+
+  /** 保存当前件 —— 主流程的出口：调完按这个，客户端重进游戏就看到了 */
+  const saveActive = async () => {
+    if (pending) return;
+    const ok = await saveAlign(activeItem.id, geometry);
+    if (!ok) return;
+    dropDraft(activeItem.id);
+    setNotice(`已保存「${activeItem.label}」—— 客户端重进游戏即生效`);
+  };
+
+  /**
+   * 还原本件
+   *
+   * 服务端有记录就删掉（回到出厂值），没有就只清临时改动。**顺序不能反**：
+   * 先删服务端、再清本地，反过来会有一瞬间「本地没了但服务端还在」，刷新页面那件又跳回旧位置。
+   */
+  const resetItem = async () => {
+    if (pending) return;
+    if (saved[activeItem.id]) {
+      const ok = await resetAlign(activeItem.id);
+      if (!ok) return;
+    }
+    dropDraft(activeItem.id);
+    setNotice(`已把「${activeItem.label}」还原成出厂值`);
+  };
+
+  /**
+   * 保存全部未保存的件（逐条提交）
+   *
+   * 逐条而不是一个批量接口：一条失败不拖累其它（失败清单要能指名道姓），
+   * 而且工作台的真实节奏本来就是「调一件存一件」，批量只是顺手。
+   */
+  const saveAll = async () => {
+    if (pending || !unsavedIds.length) return;
+    let done = 0;
+    const failed: string[] = [];
+    for (const id of unsavedIds) {
+      const item = ALL_ITEMS.find((entry) => entry.id === id);
+      if (!item) continue;
+      const ok = await saveAlign(id, drafts[id] ?? baseOf(item));
+      if (ok) {
+        done += 1;
+        dropDraft(id);
+      } else {
+        failed.push(id);
+      }
+    }
+    setNotice(failed.length ? `已保存 ${done} 件，失败 ${failed.length} 件：${failed.join("、")}` : `已保存 ${done} 件`);
   };
 
   /**
@@ -537,10 +627,17 @@ export function EquipAlignPage() {
     setNotice("已按裸模轮廓给出初值，再微调到顺眼");
   };
 
+  /**
+   * 导出成 JSON（**备份用**，不是主流程）
+   *
+   * 主流程是「保存本件」直接落库；这份导出还留着是因为它还有一个用途：
+   * 把定稿烧进出厂配置（`tools/apply-equip-align.cjs` 写 `equipments.ts` / `role.ts`），
+   * 这样全新装的客户端即使连不上服务端，位置也是对的。
+   */
   const exportJson = () => {
     const entries: Record<string, { outScale: number; outPositions: Vec2[]; manual: boolean }> = {};
     for (const item of ALL_ITEMS) {
-      const geo = drafts[item.id] ?? item.base;
+      const geo = drafts[item.id] ?? saved[item.id] ?? item.base;
       entries[item.id] = {
         outScale: round2(geo.outScale),
         outPositions: geo.outPositions.map((pos) => [round2(pos[0]), round2(pos[1])] as Vec2),
@@ -549,7 +646,7 @@ export function EquipAlignPage() {
     }
     const payload = { version: 1, generatedBy: "admin/equip-align", generatedAt: new Date().toISOString(), entries };
     download("equip-align.json", `${JSON.stringify(payload, null, 2)}\n`);
-    setNotice("已导出 equip-align.json —— 在项目根执行 node tools/apply-equip-align.cjs <路径> 写回配置");
+    setNotice("已导出 equip-align.json（备份 / 烧进出厂配置：node tools/apply-equip-align.cjs <路径>）");
   };
 
   const importJson = (file: File) => {
@@ -605,11 +702,18 @@ export function EquipAlignPage() {
             }
           />
         </Field>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500">
-            已调 {dirtyCount} / {ALL_ITEMS.length} 件
+            已保存 {Object.keys(saved).length} 件 · 调过 {dirtyCount} / {ALL_ITEMS.length}
+            {unsavedIds.length ? <span className="ml-1 text-amber-400">· {unsavedIds.length} 件未保存</span> : null}
           </span>
-          <Button variant="outline" onClick={exportJson}>
+          <Button variant="primary" onClick={saveAll} loading={Boolean(pending)} disabled={!unsavedIds.length || loadingSaved}>
+            {`保存全部${unsavedIds.length ? `（${unsavedIds.length}）` : ""}`}
+          </Button>
+          <Button variant="outline" onClick={reloadSaved} disabled={loadingSaved || Boolean(pending)}>
+            重新读取
+          </Button>
+          <Button variant="ghost" onClick={exportJson}>
             导出 JSON
           </Button>
           <label className="cursor-pointer rounded-lg border border-slate-700 px-3.5 py-2 text-sm text-slate-200 hover:border-slate-500">
@@ -627,6 +731,21 @@ export function EquipAlignPage() {
           </label>
         </div>
       </section>
+
+      {savedError ? (
+        <div className="flex items-start gap-3 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+          <span className="flex-1">{savedError}</span>
+          <button className="shrink-0 underline" onClick={clearError}>
+            知道了
+          </button>
+        </div>
+      ) : null}
+
+      {loadingSaved ? (
+        <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2 text-xs text-slate-400">
+          <Spinner className="h-3 w-3" /> 正在读取服务端已保存的对齐…
+        </div>
+      ) : null}
 
       {failures.length ? (
         <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
@@ -660,9 +779,11 @@ export function EquipAlignPage() {
             <Input placeholder="搜索名称 / key" value={search} onChange={(event) => setSearch(event.target.value)} />
             <div className="mt-2 max-h-[520px] overflow-auto">
               {visibleItems.map((item) => {
-                const geo = drafts[item.id] ?? item.base;
+                const base = saved[item.id] ?? item.base;
+                const geo = drafts[item.id] ?? base;
                 const adjusted = adjustedDirections(geo, item.base);
                 const active = item.id === activeItem.id;
+                const dirtyLocal = isDirty(geo, base);
                 return (
                   <button
                     key={item.id}
@@ -676,6 +797,7 @@ export function EquipAlignPage() {
                       <span className="ml-1 text-slate-500">{item.key}</span>
                     </span>
                     {missing.has(item.atlas) ? <span className="text-amber-400">缺素材</span> : null}
+                    {dirtyLocal ? <span className="text-amber-400" title="有未保存的改动">●</span> : null}
                     {isDirty(geo, item.base) ? <span className="text-emerald-400">{adjusted}/8</span> : null}
                   </button>
                 );
@@ -785,15 +907,22 @@ export function EquipAlignPage() {
             ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="primary" onClick={saveActive} loading={pending === activeItem.id} disabled={Boolean(pending) || loadingSaved}>
+                保存本件{unsaved ? " ●" : ""}
+              </Button>
               <Button variant="outline" onClick={autoAlign}>
                 按裸模给初值
               </Button>
               <Button variant="outline" onClick={applyToAll}>
                 当前方向 → 8 向
               </Button>
-              <Button variant="outline" onClick={resetItem}>
+              <Button variant="outline" onClick={resetItem} disabled={Boolean(pending) || loadingSaved}>
                 还原本件
               </Button>
+            </div>
+
+            <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+              {unsaved ? "有未保存的改动 —— 按「保存本件」才写进服务端。" : "已与服务端一致；改动会实时存浏览器，刷新不丢。"}
             </div>
 
             <div className="mt-4 space-y-1 border-t border-slate-800 pt-3 text-[11px] leading-relaxed text-slate-500">

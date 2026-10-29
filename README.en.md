@@ -113,10 +113,10 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 
 ### The traces this way of working left in the repo
 
-- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 56 unit-test suites under `client/tools/` and 13 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
+- **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 57 unit-test suites under `client/tools/` and 13 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55 + 39 + 51 assertions) + typechecks on two sides + 56 unit-test suites + 13 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67 assertions) + typechecks on two sides + 57 unit-test suites + 13 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -209,7 +209,7 @@ olua/
     - hand-written: `HttpClient` wrapper and shared dispatch / `ApiCodes` business codes and text keys / `ApiError` error normalisation / `Session` / `RoleSync` progress sync / `NetworkSetup` wiring
 - assets/resources: assets (map tmx, frame animations, atlases, icons, UI assets)
 - assets/scenes: login, character selection, loading and game scenes
-- tools: **client-only scripts** (56 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
+- tools: **client-only scripts** (57 unit-test suites + config generators `gen-monster-config.cjs` / `gen-monster-drops.cjs` + asset cleaner `clean-role-empty-frames.cjs` + the `lib/` unit-test sandbox)
 - settings / profiles / native / package.json / tsconfig.json: Cocos project configuration (`package.json` describes the Cocos project, not npm scripts)
 - library / temp / build: Cocos cache and build output (not version-controlled)
 - Details in [client/README.md](client/README.en.md), questions in [client/FAQ.md](client/FAQ.en.md)
@@ -221,7 +221,7 @@ olua/
   - constants/swagger-tags: documentation groups (public APIs / client / admin)
   - interceptors/audit.interceptor: **automatic logging of admin write APIs** (action taken from `operationId`, password-like fields masked before persisting)
   - security: pure-function login throttling decisions (`rate-limit.util`) + in-memory counter service (`login-throttle.service`)
-- src/database: SQLite connection and the repository layer for 43 tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / achievements / role_achievements / role_mails, including backfilling columns in existing databases)
+- src/database: SQLite connection and the repository layer for 44 tables (accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / achievements / role_achievements / role_mails / equip_aligns, including backfilling columns in existing databases)
 - src/modules: auth (player authentication) / roles (characters) / admin (console: auth / accounts / characters / administrators / passwords) / announcement (announcements: public pull + admin CRUD) / mail (mail: templates + delivery queue + background scheduler) / audit (audit logs) / token (JWT) / health
 - src/swagger/setup: documentation mounting (extracted into a function so tests can also generate docs once to verify grouping / permission annotations / dangling `$ref`)
 - src/swagger/emit: **offline production of `openapi.json`** (`npm run swagger:emit`, the only input to both consumers' API files)
@@ -245,7 +245,7 @@ olua/
 - src/api: address config (single source `config.ts`) + request layer `http.ts` (interceptors / timeout / envelope unwrapping / error normalisation / redirect to login on 401)
   + **generated** `routes.ts` path table / `models.ts` types / `endpoints.ts` methods (`authApi`·`rolesApi`·`questsApi`·`achievementsApi` and more — one method per endpoint; pages only import the name)
   + hand-written `types.ts` (business codes / permission points / action and target dictionaries) and `index.ts` (single entry point)
-- src/pages: login / register / overview / account list and detail (reset password · kick offline · delete every character on the account) / character list (filtering + multi-select batch delete) and detail (basic info / common numbers / structured editing of equipment, skills and bag) / administrators (change role · enable-disable · reset password · delete) / announcements (publish · edit · delete · enable-disable + active status column) / mail (compose into queue + delivery records: status filter · retry count · failure reason · re-deliver) / audit logs (filter + pagination + expandable request body) / player reports (filter · pagination · row-expanded evidence, read-only) / my account (self-service password change) / **equipment alignment** (an eight-direction comparison workbench: with the bare model as the only reference, drag each garment and weapon into place in all 8 facings and export JSON that a script writes back into the client configs)
+- src/pages: login / register / overview / account list and detail (reset password · kick offline · delete every character on the account) / character list (filtering + multi-select batch delete) and detail (basic info / common numbers / structured editing of equipment, skills and bag) / administrators (change role · enable-disable · reset password · delete) / announcements (publish · edit · delete · enable-disable + active status column) / mail (compose into queue + delivery records: status filter · retry count · failure reason · re-deliver) / audit logs (filter + pagination + expandable request body) / player reports (filter · pagination · row-expanded evidence, read-only) / my account (self-service password change) / **equipment alignment** (an eight-direction comparison workbench: with the bare model as the only reference, drag each garment and weapon into place in all 8 facings and **save straight to the server**, so the client sees it on its next load (no more exporting JSON and running a script)
 - Menus and buttons are shown or hidden by the **permission points** in the token (`store/session.hasPermission`); the server still validates independently
 - Details in [admin/README.md](admin/README.en.md), questions in [admin/FAQ.md](admin/FAQ.en.md)
 
@@ -263,8 +263,8 @@ olua/
 - audit-docs-en.cjs: do the English translations stay in step with the Chinese (coverage / no leftover Chinese / section parity / no dropped numbers / anchors and links reachable / mutual links)
 - audit-doc-numbers.cjs: do the numbers in the docs (endpoints / paths / models / permission points / tables / e2e assertions) match what is actually measured — these drift silently, leaving the docs confidently out of date (the per-end READMEs and the **project skills** are on the managed list too)
 - gen-equip-align-catalog.cjs: produces the **equipment alignment workbench**'s read-only catalog from the client `configs` (2 bare models / 12 garments / 19 weapons × 8 directions, plus each item's current geometry) — a derived snapshot, never edited by hand
-- audit-equip-align-catalog.cjs: is that catalog byte-for-byte identical to `configs` (without it the workbench hands you stale positions, you adjust and export, and the **second write silently overwrites the first result**), plus shapes that draw wrong without any error — expanded variants leaking in, a missing direction, an `outScale` of 0
-- apply-equip-align.cjs: writes the JSON exported by the workbench back into `client/assets/configs/equipments.ts` and `role.ts` (geometry fields only, comments and indentation preserved)
+- audit-equip-align-catalog.cjs: is that catalog byte-for-byte identical to `configs` (without it the workbench hands you stale positions, you adjust and save, and the **second save silently overwrites the first result**), plus shapes that draw wrong without any error — expanded variants leaking in, a missing direction, an `outScale` of 0
+- apply-equip-align.cjs: writes the JSON exported by the workbench back into `client/assets/configs/equipments.ts` and `role.ts` (geometry fields only, comments and indentation preserved). **Day-to-day saving does not need it** — the workbench writes straight to the `equip_aligns` table and the client applies it on its next load; this script is only for backups and for baking the final values into the shipped config
 
 ### Others
 
@@ -295,14 +295,14 @@ make env            # generate server/.env (skipped if it already exists)
 make dev            # start server :3100 and admin :5173 together; Ctrl-C exits both
 
 make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
-make client-test    # client's 56 unit-test suites
-make server-verify  # verify the server with one command (compile + twenty-two e2e suites + generated-artifact audit)
+make client-test    # client's 57 unit-test suites
+make server-verify  # verify the server with one command (compile + twenty-three e2e suites + generated-artifact audit)
 make admin-build    # admin typecheck + build
 make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
 make audit          # 13 cross-side audit scripts
 
 make check          # static checks: client tsc + admin typecheck + 13 audits
-make test           # all tests: client's 56 suites + server's twenty-two e2e suites
+make test           # all tests: client's 57 suites + server's twenty-three e2e suites
 make verify         # full gate: check + builds on all three sides + all tests (run this before committing)
 ```
 
@@ -328,7 +328,7 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs (Swagger): <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
-- Verify everything with one command: `npm run verify` (compile + twenty-two e2e suites + generated-artifact consistency)
+- Verify everything with one command: `npm run verify` (compile + twenty-three e2e suites + generated-artifact consistency)
 - Details in [server/README.md](server/README.en.md)
 
 ### 2. Client (Cocos)
@@ -405,10 +405,10 @@ make verify   # = check + builds on all three sides + all tests
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 56 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
+# Client: 57 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + twenty-two e2e suites (248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55 + 39 + 51) + generated-artifact consistency
+# Server: compile + twenty-three e2e suites (248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build

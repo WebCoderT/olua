@@ -9,8 +9,45 @@ import { SetMetadata } from "@nestjs/common";
 export const AUDIT_ACTION_KEY = "olua:audit:action";
 export const AUDIT_TARGET_KEY = "olua:audit:target";
 
+/**
+ * 审计目标类型的**唯一来源**（运行时数组）
+ *
+ * 类型层（`AuditTargetType`）与查询层的 `@IsIn` 校验都从这里派生 —— 之前两处各写一份，
+ * 结果查询那侧停在最早的 5 种（account / role / admin / announcement / mail），
+ * 后面加的装备 / 称号 / 帮会 / 对齐…全筛不出来。加新类型只改这个数组。
+ */
+export const AUDIT_TARGET_TYPES = [
+  "account",
+  "role",
+  "admin",
+  "announcement",
+  "mail",
+  "title",
+  "soul",
+  "rank",
+  "equipment",
+  "drug",
+  "item",
+  "monster",
+  "npc",
+  "mall",
+  "fashion",
+  "dropTable",
+  "monsterDrop",
+  "levelExp",
+  "growthSegment",
+  "growthScalar",
+  "skill",
+  "status",
+  "zone",
+  "guild",
+  "quest",
+  "achievement",
+  "equipAlign",
+] as const;
+
 /** 审计目标类型（与 AuditLogRow.target_type 一致；界面按它决定怎么展示目标） */
-export type AuditTargetType = "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement";
+export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 /**
  * 目标 id 从哪来

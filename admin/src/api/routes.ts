@@ -262,6 +262,27 @@ export const routes = {
      */
     update: (id: string) => `/admin/drugs/${encodeURIComponent(id)}`,
   },
+  /** adminEquipAlign 模块（3 个接口） */
+  adminEquipAlign: {
+    /**
+     * 装备对齐几何列表（GET /admin/equip-aligns）
+     *
+     * 全部**已保存**的对齐几何（不分页：12 件衣服 + 19 把武器 + 2 套裸模，量很小）。
+     */
+    list: "/admin/equip-aligns",
+    /**
+     * 重置为客户端配置里的值（删行）（DELETE /admin/equip-aligns/{id}）
+     *
+     * 删掉这条覆盖，客户端下次拉快照时就用 `configs/equipments.ts` / `role.ts` 里的值。
+     */
+    reset: (id: string) => `/admin/equip-aligns/${encodeURIComponent(id)}`,
+    /**
+     * 保存一条对齐几何（整份覆盖）（PUT /admin/equip-aligns/{id}）
+     *
+     * **整份覆盖**，不是部分更新：位置 / 缩放 / 是否用绝对值是联动的一组状态，分字段更新会让「只想改缩放」的请求留下上一次的位置，页面上表现为「改完缩放位置也跟着变了」。
+     */
+    save: (id: string) => `/admin/equip-aligns/${encodeURIComponent(id)}`,
+  },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {
     /**

@@ -1,7 +1,9 @@
+import { Vec2 } from "cc";
 import type {
   ConfigAttributes,
   Drug as DrugRow,
   Equipment as EquipmentRow,
+  EquipAlign,
   Fashion as FashionRow,
   GameConfigSnapshot,
   GrowthScalar,
@@ -20,7 +22,7 @@ import type {
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
-import type { DrugEffect } from "../types/good";
+import type { DrugEffect, OutTransform } from "../types/good";
 import type { RankAttributes, RankLevelConfig } from "../types/rank";
 import type { SoulAttributes, SoulLevelConfig } from "../types/soul";
 import type { TitleAttributes, TitleLevelConfig } from "../types/title";
@@ -39,10 +41,11 @@ import type { QuestData } from "./quest-data";
 import { rebuildQuests } from "./quest";
 import { fashionData } from "./fashionClothes";
 import { getEquipmentBaseKey, scaleEquipmentAttributes } from "./equipments";
+import { roleDefaultCloths } from "./role";
 import { skillData } from "./skill-data";
 import { statuses } from "./status";
 import { SkillData, SkillTargetType, SkillType } from "../types/skill";
-import { OECCUPATION } from "../types/role";
+import { OECCUPATION, SEX } from "../types/role";
 import { StatusConfig, StatusSource } from "../types/status";
 import type { ACTION } from "../types/animation";
 
@@ -62,6 +65,10 @@ import type { ACTION } from "../types/animation";
  * AI 参数一律**不覆写** —— 它们属于发布素材与客户端布局，服务端那份只是 seed 时的镜像。
  * 这条不是偷懒：resources 以远程发布包为唯一来源（见仓库 README 的素材纪律），
  * 让服务端下发路径就能把客户端指到一张不存在的图上。
+ *
+ * **唯一的例外**是装备外观几何（#513，见文件末尾的 `applyEquipAlignRows`）：
+ * 那是管理端「装备对齐」工作台现场调出来的结果，如果不覆写，页面调完就只能靠重新打 3G 的包才生效。
+ * 例外只开在「外观缩放 + 8 方向位置」上，资源路径依然一个都不动。
  *
  * ⚠ 消费方注意：覆写发生在进游戏后的异步时刻，模块加载期的读取（如资源预加载）
  * 仍用本地数据 —— 这正是设计意图：预加载走本地资源路径，玩法数值走服务端。
@@ -546,3 +553,90 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyContentSnapshot(snapshot);
   applySkillSnapshot(snapshot);
 }
+
+//#region 装备外观几何（#513）
+
+/**
+ * 覆写装备外观几何（#513）
+ *
+ * 与这个文件里其它所有覆写不同，这一条**故意打破**开头那条「几何一律不覆写」的纪律 ——
+ * 管理端「装备对齐」工作台产出的就是几何，不下发它，页面上调完就只能靠重新打 3G 的包生效，
+ * 「保存 → 刷新客户端即见」这件事根本不成立。打破面严格限制在
+ * 「外观缩放 + 8 方向位置 + 位置语义」三样：资源路径（icon / in / out）**仍然一个都不动**。
+ *
+ * 四条口径：
+ * - **按 id 对齐、缺省不动**：列表里没有的目标保留客户端配置值 ——
+ *   所以服务端「重置」的实现就是删行，不需要存一份默认值副本；
+ * - **衣服 / 武器按基础件命中全部变体**：工作台调的是 `cloth_1`，穿在身上的是 `cloth_1_p3s2`
+ *   （`buildEquipmentMap` 从同一份条目浅拷贝出 15 个变体）。只覆盖基础件会让
+ *   「背包里预览对了、穿上身还是歪」，而且这种 bug 看起来像素材问题；
+ *   注意浅拷贝只共享 `outPositions` **数组引用**，`outScale` / `outManual` 是各变体自己的，
+ *   所以这里必须逐变体赋值（原地推坐标才会自动传到别的变体，但那样没有回落基线可用）；
+ * - **裸模按性别**：`role:1` → 男、`role:2` → 女。改的是 `roleDefaultCloths` 里的对象本身
+ *   （引用不变），`RoleAppearance.play` 每次按方向现读，不需要额外通知；
+ * - **每次覆写前先还原出厂值**（`resetEquipAlignRows`）：进游戏是可以重进的，
+ *   不还原的话「管理端把某件重置了」在重进之后仍然显示上次覆写的值 ——
+ *   删行与「从没调过」必须长得一模一样，否则重置按钮只在刷新页面时才生效。
+ *
+ * 失败方式也有讲究：**逐条 try**，一条坏数据只丢一条（形态不对的行直接跳过），
+ * 不让整份对齐表因为某个 id 拼错而全部失效 —— 那会让所有调好的衣服武器一起回到默认位置。
+ */
+export function applyEquipAlignRows(rows: EquipAlign[]): void {
+  resetEquipAlignRows();
+  if (!rows) return;
+  for (const row of rows) applyEquipAlignRow(row);
+}
+
+/** 被覆写过的目标的**出厂几何**（改之前的值），「重置」与「重进游戏重拉」都靠它回落 */
+const alignBaselines: Array<{ target: OutTransform; outScale: number; outPositions: Vec2[]; outManual: boolean }> = [];
+
+/** 记下目标的出厂值（只记第一次 —— 之后再记记到的就是上次覆写的结果了） */
+function rememberBaseline(target: OutTransform): void {
+  // 变体的几何是各自的对象（`{ ...base }` 只共享 outPositions 数组），所以要按引用逐个记
+  if (alignBaselines.some((entry) => entry.target === target)) return;
+  alignBaselines.push({
+    target,
+    outScale: target.outScale,
+    // 深拷贝：覆写是整份换掉 outPositions，但以后若有人改成就地写，浅拷贝的基线会跟着一起变
+    outPositions: (target.outPositions ?? []).map((point) => new Vec2(point.x, point.y)),
+    outManual: target.outManual === true,
+  });
+}
+
+/** 把覆写过的目标全部还原成客户端配置里的值，并清空基线（下次覆写重新记录） */
+export function resetEquipAlignRows(): void {
+  for (const entry of alignBaselines) {
+    entry.target.outScale = entry.outScale;
+    entry.target.outPositions = entry.outPositions.map((point) => new Vec2(point.x, point.y));
+    entry.target.outManual = entry.outManual;
+  }
+  alignBaselines.length = 0;
+}
+
+function applyEquipAlignRow(row: EquipAlign): void {
+  if (!row || typeof row.id !== "string") return;
+  if (row.id === "role:1" || row.id === "role:2") {
+    const cloth = roleDefaultCloths.get(row.id === "role:2" ? SEX.GRIL : SEX.BOY);
+    if (cloth) applyOutGeometry(cloth, row);
+    return;
+  }
+  // 服务端只校验 id 形态、不校验存在性（装备清单在客户端配置里），所以这里对形态再兜一层
+  const separator = row.id.indexOf(":");
+  if (separator <= 0) return;
+  const baseKey = row.id.slice(separator + 1);
+  items.forEach((good, id) => {
+    if (good.type !== GOOD_TYPE.EQUIPMENT) return;
+    if (getEquipmentBaseKey(id) !== baseKey) return;
+    applyOutGeometry(good, row);
+  });
+}
+
+/** 把一条对齐几何写到目标上（外观缩放 + 8 方向位置 + 位置语义） */
+function applyOutGeometry(target: OutTransform, row: EquipAlign): void {
+  rememberBaseline(target);
+  target.outScale = row.outScale > 0 ? row.outScale : 1;
+  target.outPositions = row.outPositions.map((point) => new Vec2(point.x, point.y));
+  target.outManual = row.outManual;
+}
+
+//#endregion

@@ -59,7 +59,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + twenty-two e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + twenty-three e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -141,7 +141,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           35 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail
+│   │   └── repositories/           36 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -203,7 +203,7 @@ server/
 
 ## Data model
 
-43 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+44 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -224,6 +224,7 @@ server/
 | `quest_progress` | player quest progress (#396) | `PRIMARY KEY (role_id, quest_id)`; `status` (accepted / ready / claimed) + `progress`. kill is emitted by the realtime process as `monster:killed` and written by the quest service (the bus since #401), talk by NPC dialogue, collect by inspecting the bag at turn-in; main keeps a `claimed` row as the chain gate, daily deletes the row |
 | `achievements` | achievement configs (#401) | condition (`condition_type` / `target` / `count`) + rewards (gold / exp / items JSON column) + `category` / `sort_order` / `hidden`; seeded from the client's `configs/achievement-data` snapshot, admin-editable, **deletion refused once player records exist** |
 | `role_achievements` | player achievement records (#401) | `PRIMARY KEY (role_id, achievement_id)`; **only cumulative kinds write `progress`** (state kinds are computed on read, so a missing row is normal); `achieved_at` non-null = claimable, `claimed_at` non-null = claimed; counting stops once achieved and rows are never deleted on achievement |
+| `equip_aligns` | equipment appearance alignment (#513) | one row = the **outward** geometry of a garment / weapon / bare model: `id` looks like `cloth:cloth_1` / `weapon:weapon_1` / `role:1`; `out_positions` is the 8-direction `[x, y]` JSON; `out_manual = 1` means absolute positions (the gradual semantics for weapons); **no row = use the value in the client config**, which is why "reset" is just deleting the row |
 | `role_mails` | in-game mail (#429 / channels #436) | `id` primary key + `role_id` (cascade); `channel` (four-value enum: system / reward / social / combat, default system, kept apart from the source tag `kind`) / `kind` / `title` / `body` / attachments (`gold` / `exp` / `attachments` JSON column) + `read_at` / `claimed_at`. **Unrelated to `mail_queue`** (that one is the outbound SMTP queue). Attachments only enter the bag on claim; rows with unclaimed attachments are refused deletion; indexes `(role_id, created_at DESC)` for the box and `(role_id, claimed_at)` for the unclaimed count |
 | `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
@@ -261,7 +262,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 35 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 36 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -321,13 +322,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **154 interfaces / 128 paths / 233 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **158 interfaces / 131 paths / 237 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 47 | `player` token, may only operate its own account's data |
-| Admin | 100 | `admin` token + each interface's own permission point |
+| Client | 48 | `player` token, may only operate its own account's data |
+| Admin | 103 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;
@@ -403,7 +404,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All twenty-two e2e suites are **real server process + real HTTP requests** (not mocks):
+All twenty-three e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -420,7 +421,7 @@ All twenty-two e2e suites are **real server process + real HTTP requests** (not 
 | `test/e2e-rank.cjs` | **55** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
 
 ```bash
-cd server && npm run verify          # compile + twenty-two e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + twenty-three e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

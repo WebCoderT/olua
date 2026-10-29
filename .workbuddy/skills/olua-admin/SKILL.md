@@ -190,8 +190,21 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
   会让逐字节守点在 CI 上必然假红 → 运行时 `probeAtlas`（HEAD，只有 403/404/410 才算缺）。
 - **改语义要渐进**：武器的 `outPositions` 原本是「对自动算法的微调」，工作台直接写绝对值等于把它们
   全推到原点 → 加 `outManual` 标记，勾了才走绝对位置，没勾继续走运行时算法。
-- **导出 → 写回**：导出的 JSON 由 `tools/apply-equip-align.cjs` 写回 `client/assets/configs`
-  （只改几何字段、注释缩进保留、2 位小数、数值等价时不改文本）。页面只改配置，**不碰角色存档**。
+- **保存直连服务端**（#513）：位置存 `equip_aligns`（`PUT /admin/equip-aligns/:id` 整份覆盖、
+  `DELETE` = 回到出厂值且**幂等**），客户端进游戏拉 `GET /game-config/equip-align` 后按 id 覆盖本地几何。
+  所以流程是**调 → 保存 → 刷新客户端**，不需要重新打包。
+- **三份数据的优先级**：页面临时改动（localStorage）> 服务端已保存 > `catalog.json`（出厂值）。
+  少了中间那层，第二次进页面会把上次调好的位置当成没调过；`baseOf(item) = saved[id] ?? item.base`
+  是页面里唯一的基线来源（`equipAlign/saved.ts` 的 `useAlignStore`）。
+- **`fetch` 只有两个口子**：`equipAlign/assets.ts`（读静态素材 plist/png）与 `equipAlign/saved.ts`
+  （走生成的 `equipAlignsApi`）。`audit-api-hardcode` 按文件放行，页面里直接写 fetch 会被判成
+  「请求绕开 `http.ts`」。
+- **导出 JSON 只剩一个用途**：备份 / 把定稿烧进出厂配置（`tools/apply-equip-align.cjs` 写
+  `client/assets/configs`，只改几何字段、注释缩进保留、2 位小数）。**它不是主流程** ——
+  别再把「导出再跑脚本」写进用户文档。页面只改配置，**不碰角色存档**。
+- **审计目标类型是派生来的**：`common/decorators/audit-target.decorator.ts` 的
+  `AUDIT_TARGET_TYPES` 是唯一来源，`@AuditTarget` 的类型与查询筛选的 `@IsIn` 都从它推导 ——
+  加新类型只改那个数组（曾经两处各写一份，查询侧停在 5 种，后面全筛不出来）。
 
 ## 六、必踩的坑
 

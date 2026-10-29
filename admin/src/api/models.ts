@@ -864,6 +864,32 @@ export type UpdateEquipment = {
   attributes?: ConfigAttributes;
 };
 
+export type EquipAlignPoint = {
+  /**
+   * 横向（游戏单位，向右为正）
+   */
+  x: number;
+  /**
+   * 纵向（游戏单位，**向上为正**；与页面画布的 y 向下相反）
+   */
+  y: number;
+};
+
+export type SaveEquipAlign = {
+  /**
+   * 外观缩放
+   */
+  outScale: number;
+  /**
+   * 8 个方向的外观位移（**必须正好 8 个**，顺序见客户端 directions）
+   */
+  outPositions: EquipAlignPoint[];
+  /**
+   * true = `outPositions` 是绝对位置；false / 缺省 = 运行时按身体帧自动算（只对武器有意义）
+   */
+  outManual?: boolean;
+};
+
 export type UpdateDrug = {
   /**
    * 名称（不传则不改）
@@ -2529,7 +2555,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -5700,6 +5726,36 @@ export type MailClaimAllResult = {
    * 是否因为背包满而提前停下（true = 还有没领的）
    */
   stoppedByBag: boolean;
+};
+
+export type EquipAlign = {
+  /**
+   * 目标 id：`cloth:<基础件>` / `weapon:<基础件>` / `role:<1|2>`（裸模按性别）
+   */
+  id: string;
+  /**
+   * 外观缩放
+   */
+  outScale: number;
+  /**
+   * 8 个方向的外观位移（顺序见客户端 configs/animation 的 directions）
+   */
+  outPositions: EquipAlignPoint[];
+  /**
+   * true = `outPositions` 是**绝对位置**（工作台手调的结果）；false = 运行时按身体帧自动算，`outPositions` 只当微调。武器的渐进语义，见 configs/equipAlign
+   */
+  outManual: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipAlignList = {
+  /**
+   * 全部已保存的对齐几何（**没有行 = 用客户端配置里的值**）
+   */
+  list: EquipAlign[];
 };
 
 export type GameMailClaimAllQuery = {

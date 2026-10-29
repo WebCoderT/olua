@@ -72,6 +72,7 @@ admin/
 │   │   ├── gameData.ts             游戏数据：引用三端共用的那份生成物 + 查表函数（名字都从这里来）
 │   │   └── index.ts                统一出口（页面只从这里 import）
 │   ├── pages/                      页面（见下表）
+│   │   └── equipAlign/             对齐工作台的纯逻辑：atlas（plist+轮廓）/ model（几何）/ render（8 宫格）/ assets（素材 fetch）/ saved（服务端读写）
 │   ├── data/equip-align.catalog.json  ⚠️ 生成物：装备对齐清单（`tools/gen-equip-align-catalog.cjs` 产出，`audit-equip-align-catalog` 守）
 │   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
 │   └── store/
@@ -99,7 +100,7 @@ admin/
 | 操作日志 | `/audit-logs` | `audit:read` | 7 项筛选（关键字 / 动作 / 目标类型 / 结果 / 起止时间 / 目标 id）+ 分页 + 展开看请求体 |
 | 玩家举报 | `/reports` | `report:read` | 看玩家举报（关键字 / 类别 / 状态筛选 + 分页 + 行展开看描述与双方 id）。**这一版只有读**：处置需要「谁改的、凭什么改、能不能申诉」一整套，半成品按钮比没有更糟 |
 | 我的账号 | `/me` | **不需要权限点** | 看自己的身份 / 登录情况 / 权限点；**自助改密**（要验原密码） |
-| 装备对齐 | `/equip-align` | `game-config:read` | **8 方向比对工作台**：以裸模为唯一基准，把每件衣服 / 武器（以及裸模自己）在每个朝向上拖到位。参考框可开关（画布框 / 内容框 / **不透明轮廓** / 脚底线 / 手位 / 原点）；拖动吸附 0.1、方向键 1、`Shift` 10、`Alt` 0.1、滚轮改缩放；结果存 localStorage 并可导出 JSON，由 `tools/apply-equip-align.cjs` 写回 `client/assets/configs`。**页面只改配置，不碰角色存档** |
+| 装备对齐 | `/equip-align` | `game-config:read` | **8 方向比对工作台**：以裸模为唯一基准，把每件衣服 / 武器（以及裸模自己）在每个朝向上拖到位。参考框可开关（画布框 / 内容框 / **不透明轮廓** / 脚底线 / 手位 / 原点）；拖动吸附 0.1、方向键 1、`Shift` 10、`Alt` 0.1、滚轮改缩放；「保存本件」直接写服务端（`equip_aligns` 表），客户端进游戏拉一次即覆盖本地几何；改动也实时存 localStorage，刷新不丢。导出 JSON 仍保留，只用于备份与「烧进出厂配置」（`tools/apply-equip-align.cjs`）。**页面只改配置，不碰角色存档** |
 
 写操作会按权限点禁用按钮（`disabled`）并在表格上方提示「当前角色权限不足」；直接改地址栏硬闯，`RequirePermission` 外壳会就地给出「没有访问权限」而不是白屏。
 
