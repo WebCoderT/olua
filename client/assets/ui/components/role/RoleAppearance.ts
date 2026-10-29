@@ -225,8 +225,16 @@ export default class RoleAppearance {
    *   武器位置 = 手部锚点 − 武器内容中心的缩放偏移
    * 于是任何身体尺寸、任何武器都自动对齐。outPositions 保留为**微调**（默认 0，逐件微调不碰公式）。
    * 素材未就绪（帧还没落到 Sprite 上）时保持不动 —— 下一帧的 play 会再算一次。
+   *
+   * **`outManual` 为 true 时整段跳过**（#509）：那件武器是在管理端「装备对齐」工作台里、
+   * 以裸模为基准逐方向手调过的绝对值，再叠一层自动算法只会把人的判断改掉。
    */
   private applyWeaponTransform() {
+    // 手调过的武器与衣服同一套摆法（缩放 + 8 方向绝对位置），差异只在数据来源
+    if (this.weaponTransform?.outManual) {
+      this.applyOutTransform(this.weapon, this.weaponTransform);
+      return;
+    }
     const weaponBox = GameUiHelper.spriteContentBox(this.weapon);
     const clothBox = GameUiHelper.spriteContentBox(this.cloth);
     const scale = this.weaponTransform?.outScale ?? 1;

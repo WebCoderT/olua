@@ -128,7 +128,7 @@ Their rules are written in the header of each script — re-run the script inste
 Before merging, at least these three categories must run (green means done). The repository root has a Makefile so one command covers it:
 
 ```bash
-make verify   # = check (client tsc + admin typecheck + 12 audits) + builds on all three sides + all tests
+make verify   # = check (client tsc + admin typecheck + 13 audits) + builds on all three sides + all tests
 ```
 
 Manual equivalent (no `make` needed):
@@ -151,7 +151,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
   && node tools/audit-doc-numbers.cjs
 ```
 
-You may run only the suites relevant to your change, but **the server e2e suites and the 12 audit scripts should all pass before every commit** — they watch for "silent failure" problems that unit tests cannot catch:
+You may run only the suites relevant to your change, but **the server e2e suites and the 13 audit scripts should all pass before every commit** — they watch for "silent failure" problems that unit tests cannot catch:
 
 - `audit-api-generated`: are generated artifacts byte-for-byte identical to the documentation (guards against "changed the server, forgot to regenerate")
 - `audit-api-hardcode`: were addresses written into code, or environment variables forgotten in `.env.example`

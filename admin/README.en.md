@@ -72,6 +72,7 @@ admin/
 │   │   ├── gameData.ts             game data: re-exports the shared artifact + lookup helpers (every name comes from here)
 │   │   └── index.ts                single entry point (pages import only from here)
 │   ├── pages/                      pages (see the table below)
+│   ├── data/equip-align.catalog.json  ⚠️ generated: the equipment-alignment catalog (produced by `tools/gen-equip-align-catalog.cjs`, guarded by `audit-equip-align-catalog`)
 │   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
 │   └── store/
 │       ├── session.ts              token and admin read/write (subscription mechanism + hasPermission)
@@ -98,6 +99,7 @@ admin/
 | Audit logs | `/audit-logs` | `audit:read` | 7 filters (keyword / action / target type / result / start-end time / target id) + pagination + expand to see the request body |
 | Player reports | `/reports` | `report:read` | Browse player reports (keyword / category / status filters + pagination + row-expanded description and both role ids). **Read-only in this release**: handling needs the full trail of who changed what and why, and a half-built button is worse than none |
 | My account | `/me` | **no permission point** | Own identity / login status / permission points; **self-service password change** (requires the current password) |
+| Equipment alignment | `/equip-align` | `game-config:read` | **Eight-direction comparison workbench**: with the bare model as the only reference, drag every garment / weapon (and the bare models themselves) into place in all 8 facings. Toggleable guides (canvas box / content box / **opaque outline** / foot line / hand anchors / origin); drag snaps to 0.1, arrow keys 1, `Shift` 10, `Alt` 0.1, wheel changes scale; results live in localStorage and export as JSON that `tools/apply-equip-align.cjs` writes back into `client/assets/configs`. **The page only touches configs, never character saves** |
 
 Write actions disable their button per permission point (`disabled`) and show "insufficient permission" above the table; typing an address in by hand hits the `RequirePermission` shell, which renders "no access" in place instead of a white screen.
 

@@ -101,13 +101,21 @@ try {
   const NUDGE_LIMIT = 4;
   const baseWeapons = [...weapons.entries()].filter(([key]) => /^weapon_\d+$/.test(key));
   check(baseWeapons.length >= 20, `武器基础条目数 ${baseWeapons.length}（按 weapon_<id> 取）`);
+  // `outManual` 的武器是管理端「装备对齐」工作台以裸模为基准手调过的绝对值（#509），
+  // 它们的数值本来就该是几十上百 —— 这条只约束**仍走自动算法**的那些。
   const offenders = [];
+  const manualWeapons = [];
   for (const [key, weapon] of baseWeapons) {
+    if (weapon.outManual) {
+      manualWeapons.push(key);
+      continue;
+    }
     const values = [weapon.inPosition.x, weapon.inPosition.y, ...weapon.outPositions.flatMap((p) => [p.x, p.y])];
     const bad = values.filter((v) => Math.abs(v) > NUDGE_LIMIT);
     if (bad.length) offenders.push(`${key}(${bad.map((v) => v.toFixed(1)).join(",")})`);
   }
-  check(offenders.length === 0, "没有武器再写手调绝对坐标（位置由运行时按素材算）", offenders.slice(0, 5).join(" "));
+  check(offenders.length === 0, "没有「自动算法」的武器写手调绝对坐标（手调过的必须置 outManual）", offenders.slice(0, 5).join(" "));
+  console.log(`  · 已手调（outManual）的武器：${manualWeapons.length ? manualWeapons.join(", ") : "暂无（等工作台产出）"}`);
   check(
     baseWeapons.every(([, weapon]) => weapon.outPositions.length === 8),
     "每把武器的 outPositions 仍是 8 个方向（下标与 configs/animation.directions 对齐）",
@@ -126,14 +134,20 @@ try {
   check(/placeWeaponOnHand\(/.test(appearance), "RoleAppearance 用 placeWeaponOnHand 算武器位置");
   check(!/handSideRatio|handHeightRatio/.test(appearance), "RoleAppearance 里没有另写一份手部比例");
   check(/applyWeaponTransform\(\)/.test(appearance), "武器走独立的 applyWeaponTransform（衣服仍走 applyOutTransform）");
-  const clothCallSite = /applyOutTransform\(this\.cloth/.test(appearance);
-  const weaponNotInGeneric = !/applyOutTransform\(this\.weapon/.test(appearance);
-  check(clothCallSite && weaponNotInGeneric, "通用 applyOutTransform 只服务衣服，武器不再吃配置里的绝对偏移");
+  check(/applyOutTransform\(this\.cloth/.test(appearance), "衣服走 applyOutTransform（恒为绝对位置）");
+  const manualBranch = /if \(this\.weaponTransform\?\.outManual\) \{\s*this\.applyOutTransform\(this\.weapon, this\.weaponTransform\);\s*return;\s*\}/.test(appearance);
+  check(manualBranch, "outManual 的武器直接摆到绝对位置并提前返回（不再叠一层自动算法）");
   check(/spriteContentBox\(this\.weapon\)/.test(appearance) && /spriteContentBox\(this\.cloth\)/.test(appearance), "位置由「武器帧 + 身体帧」两边的内容 bbox 推出来");
   check(/const clothScale = this\.cloth\.scale\.x/.test(appearance), "身体 bbox 按衣服节点缩放换算（衣服带 outScale 时握持点不能少乘）");
   check(/retryAlign\(\)/.test(appearance), "素材未就绪时有重试（首帧还没落到 Sprite 上时不能拿 (0,0) 硬算）");
   check(/EQUIP_ALIGN\.alignRetryTimes/.test(appearance) && /EQUIP_ALIGN\.alignRetryDelayMs/.test(inShow), "重试次数与间隔取自配置 EQUIP_ALIGN（不在组件里写魔法数字）");
   check(EQUIP_ALIGN.alignRetryTimes > 0 && EQUIP_ALIGN.alignRetryDelayMs > 0, `重试配置有效：${EQUIP_ALIGN.alignRetryTimes} 次 × ${EQUIP_ALIGN.alignRetryDelayMs}ms`);
+
+  const goodTypes = read("assets/types/good.ts");
+  check(/outManual\?:\s*boolean/.test(goodTypes), "OutTransform 上有 outManual 开关（武器绝对位置语义）");
+  // 写回脚本在**仓库根**的 tools/ 下（本文件的 read() 相对 client/）
+  const applyTool = fs.readFileSync(path.join(PROJECT_ROOT, "..", "tools", "apply-equip-align.cjs"), "utf8");
+  check(/roleDefaultCloths/.test(applyTool) && /EQUIPMENTS_FILE/.test(applyTool), "写回脚本同时覆盖 equipments.ts 与 role.ts（裸模也能调）");
 
   check(/placeInShowWeapon\(/.test(inShow), "RoleInShowView 用 placeInShowWeapon 算内观位置与缩放");
   check(/const clothScale = this\.clothInShow\.scale\.x/.test(inShow), "内观身体 bbox 按衣服节点缩放换算（cloth_5 的 inScaleX = 1.3）");
