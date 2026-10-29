@@ -1,32 +1,34 @@
 import { GameConfigApi } from "./Api";
-import type { EquipAlignList, GameConfigSnapshot } from "./ApiModels";
-import { applyConfigSnapshot, applyEquipAlignRows } from "../../../configs/apply-snapshot";
+import type { EquipAlignList, EquipInAlignList, GameConfigSnapshot } from "./ApiModels";
+import { applyConfigSnapshot, applyEquipAlignRows, applyEquipInAlignRows } from "../../../configs/apply-snapshot";
 import { rebuildSkills } from "../../../configs/skill";
 
 /**
- * 服务端配置快照加载器（#294 / #513）
+ * 服务端配置快照加载器（#294 / #513 / #523）
  *
- * 进游戏拉 `gameConfig.snapshot` + `gameConfig.equipAlign`，把管理端可改的配置覆写进本地
- * configs（见 configs/apply-snapshot）。设计要点：
+ * 进游戏拉 `gameConfig.snapshot` + `gameConfig.equipAlign` + `gameConfig.equipInAlign`，
+ * 把管理端可改的配置覆写进本地 configs（见 configs/apply-snapshot）。设计要点：
  * - **静默失败**：任何一个拉不到（网络抖动 / 服务端旧版本）就整体回落本地静态配置，
  *   游戏照常能玩 —— 配置是「运营调优」不是「必需依赖」，不该因为它挡住进入游戏。
- * - **快照只拉一次、对齐几何每次进图都拉**（#513）：
+ * - **快照只拉一次，两套几何每次进图都拉**（#513 / #523）：
  *   快照十几张表、只跟版本有关，进程内重复拉纯浪费 RTT；
- *   而装备外观几何是「人眼调一版、立刻要看效果」的东西，验收动作就是**退回选角再进图**
+ *   而装备外观 / 内观几何是「人眼调一版、立刻要看效果」的东西，验收动作就是**退回选角再进图**
  *   （场景重载，JS 上下文不重来）。只拉一次的话，那种重进看不到新位置，
- *   会被当成「保存没生效」—— 33 行的小接口，每次进图拉一次不值得省。
+ *   会被当成「保存没生效」—— 33 行 / 31 行的小接口，每次进图拉一次不值得省。
  * - **去重并发**：同一次进图的重复调用共享同一个 Promise。
  *
- * 两个接口**并行**拉：串行会平白多一个 RTT，而这个 RTT 卡在「进游戏」的路径上。
+ * 三个接口**并行**拉：串行会平白多两个 RTT，而这些 RTT 卡在「进游戏」的路径上。
+ * 三者的失败互相独立 —— 内观挂了不影响外观，反之亦然（各自 catch 自己的）。
  */
 
 let snapshotLoaded = false;
 let snapshotLoading: Promise<void> | null = null;
 let alignLoading: Promise<void> | null = null;
+let inAlignLoading: Promise<void> | null = null;
 
-/** 拉取并落库配置快照 + 外观几何；失败静默回落本地配置（不抛出，调用方无需 catch） */
+/** 拉取并落库配置快照 + 外观几何 + 内观几何；失败静默回落本地配置（不抛出，调用方无需 catch） */
 export async function loadGameConfig(): Promise<void> {
-  await Promise.all([loadSnapshotOnce(), loadAlignEveryEntry()]);
+  await Promise.all([loadSnapshotOnce(), loadAlignEveryEntry(), loadInAlignEveryEntry()]);
 }
 
 /** 外观几何：每次进图都拉（见文件头「为什么它和快照的缓存期不一样」） */
@@ -44,6 +46,22 @@ function loadAlignEveryEntry(): Promise<void> {
       alignLoading = null;
     }) as Promise<void>;
   return alignLoading;
+}
+
+/** 内观几何：同样每次进图都拉（理由同上；它是弹窗里的位置，重进游戏才能看到新值） */
+function loadInAlignEveryEntry(): Promise<void> {
+  if (inAlignLoading) return inAlignLoading;
+  inAlignLoading = GameConfigApi.equipInAlign({ silent: true })
+    .then((rows: EquipInAlignList) => {
+      applyEquipInAlignRows(rows.list);
+    })
+    .catch(() => {
+      // 内观失败只影响弹窗里的站位：按客户端配置画，不该拖累进游戏
+    })
+    .then(() => {
+      inAlignLoading = null;
+    }) as Promise<void>;
+  return inAlignLoading;
 }
 
 /** 快照拉一次就够（十几张表，只跟服务端版本有关） */

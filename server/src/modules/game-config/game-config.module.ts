@@ -6,6 +6,7 @@ import { ClientConfigService } from "./client-config.service";
 import { AdminDrugController } from "./admin-drug.controller";
 import { AdminEquipmentController } from "./admin-equipment.controller";
 import { AdminEquipAlignController } from "./admin-equip-align.controller";
+import { AdminEquipInAlignController } from "./admin-equip-in-align.controller";
 import { AdminFashionController } from "./admin-fashion.controller";
 import { AdminGrowthScalarController, AdminGrowthSegmentController, AdminLevelExpController } from "./admin-growth.controller";
 import { AdminItemController } from "./admin-item.controller";
@@ -19,6 +20,7 @@ import { AdminStatusController } from "./admin-status.controller";
 import { AdminSoulController } from "./admin-soul.controller";
 import { AdminTitleController } from "./admin-title.controller";
 import { EquipAlignService } from "./equip-align.service";
+import { EquipInAlignService } from "./equip-in-align.service";
 import { GameConfigService } from "./game-config.service";
 import { DropConfigService } from "./drop-config.service";
 import { GrowthConfigService } from "./growth-config.service";
@@ -33,8 +35,8 @@ import { MallPricingService } from "./mall-pricing.service";
  * 重复执行也无副作用）。
  */
 @Module({
-  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
-  providers: [GameConfigService, EquipAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
+  providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   exports: [MallPricingService],
 })

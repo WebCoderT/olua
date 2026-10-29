@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { to: "/ranks", label: "军衔配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/equipments", label: "装备配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/equip-align", label: "装备对齐", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
+  { to: "/equip-in-align", label: "内观对齐", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/drugs", label: "药品配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/items", label: "物品配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },
   { to: "/monsters", label: "怪物配置", end: false, permission: PERMISSION.GAME_CONFIG_READ as string },

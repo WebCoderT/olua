@@ -61,7 +61,7 @@ export const ApiRoutes = {
      */
     register: "/auth/register",
   },
-  /** gameConfig 模块（2 个接口） */
+  /** gameConfig 模块（3 个接口） */
   gameConfig: {
     /**
      * 玩家侧配置快照（GET /game-config）
@@ -75,6 +75,12 @@ export const ApiRoutes = {
      * 管理端「装备对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`。
      */
     equipAlign: "/game-config/equip-align",
+    /**
+     * 装备内观几何（内观对齐工作台的产物）（GET /game-config/equip-in-align）
+     *
+     * 管理端「内观对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1`。
+     */
+    equipInAlign: "/game-config/equip-in-align",
   },
   /** guild 模块（10 个接口） */
   guild: {

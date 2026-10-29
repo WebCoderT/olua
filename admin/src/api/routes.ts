@@ -283,6 +283,27 @@ export const routes = {
      */
     save: (id: string) => `/admin/equip-aligns/${encodeURIComponent(id)}`,
   },
+  /** adminEquipInAlign 模块（3 个接口） */
+  adminEquipInAlign: {
+    /**
+     * 装备内观几何列表（GET /admin/equip-in-aligns）
+     *
+     * 全部**已保存**的内观几何（不分页：12 件衣服 + 19 把武器，量很小）。
+     */
+    list: "/admin/equip-in-aligns",
+    /**
+     * 重置为客户端配置里的值（删行）（DELETE /admin/equip-in-aligns/{id}）
+     *
+     * 删掉这条覆盖，客户端下次打开弹窗就用 `configs/equipments.ts` 里的值。
+     */
+    reset: (id: string) => `/admin/equip-in-aligns/${encodeURIComponent(id)}`,
+    /**
+     * 保存一条内观几何（整份覆盖）（PUT /admin/equip-in-aligns/{id}）
+     *
+     * **整份覆盖**，不是部分更新：位置与两轴缩放是联动的一组状态，分字段更新会让「只想改缩放」的请求留下上一次的位置。
+     */
+    save: (id: string) => `/admin/equip-in-aligns/${encodeURIComponent(id)}`,
+  },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {
     /**

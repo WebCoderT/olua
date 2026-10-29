@@ -248,7 +248,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- id 形如 cloth:cloth_1 / weapon:weapon_1 / role:1（裸模按性别）；**没有行 = 用客户端配置里的值**，
       -- 所以"重置"就是删行，不需要存一份"默认值"的副本。
       -- out_positions 是 8 个方向的 [x, y]（顺序见 configs/animation 的 directions）。
-      -- 只有外观：内观（弹窗里那个转盘上的位置）是运行时按身体内容 bbox 现算的，没有可以手调的常量。
+      -- 只有**外观**：内观（角色信息弹窗里站在圆盘上那套）走下面单独一张表 ——
+      -- 两者字段形状完全不同（8 向 vs 单帧、位置 vs 缩放），混在一行会让「只调了外观」
+      -- 和「只调了内观」都要存一份对方字段的副本。
       CREATE TABLE IF NOT EXISTS equip_aligns (
         id            TEXT    PRIMARY KEY,
         out_scale     REAL    NOT NULL DEFAULT 1,
@@ -256,6 +258,23 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         out_manual    INTEGER NOT NULL DEFAULT 0,
         updated_by    TEXT,
         updated_at    INTEGER NOT NULL
+      );
+
+      -- 装备内观几何（#523）：一行 = 一件衣服 / 一把武器在角色信息弹窗里的位置与缩放。
+      -- 与 equip_aligns 分开的理由见上一条注释；两表的 id 形态也略窄（内观没有裸模）。
+      -- in_position 拍成两列而不是 JSON：内观只有**一个**位置，塞 JSON 只是给自己加解析负担。
+      -- in_manual 只对武器有意义：true = 用手调的绝对位置（工作台调过），
+      -- false/缺省 = 客户端仍按「当前衣服的内容 bbox」自动算（#505 的算法），渐进替换。
+      -- **没有行 = 用客户端配置里的值**，所以"重置"就是删行。
+      CREATE TABLE IF NOT EXISTS equip_in_aligns (
+        id          TEXT    PRIMARY KEY,
+        in_scale_x  REAL    NOT NULL DEFAULT 1,
+        in_scale_y  REAL    NOT NULL DEFAULT 1,
+        in_x        REAL    NOT NULL DEFAULT 0,
+        in_y        REAL    NOT NULL DEFAULT 0,
+        in_manual   INTEGER NOT NULL DEFAULT 0,
+        updated_by  TEXT,
+        updated_at  INTEGER NOT NULL
       );
 
       -- 养成配置（#213）：称号 / 战魂的等级序列**固定**（level 是主键，行只能来自 seed，

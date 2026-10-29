@@ -1162,7 +1162,7 @@ export interface RoleMailRow {
  * `weapon:weapon_1` / `role:1`；**没有行 = 用客户端配置里的值**（所以没有"默认值"副本，
  * 重置就是删行）。`out_positions` 存 8 个方向的 `[x, y]`（方向顺序见 configs/animation 的 directions）。
  *
- * 只有外观：内观（弹窗转盘上的位置）是运行时按身体内容 bbox 现算的，没有可手调的常量。
+ * 只有外观：内观（弹窗转盘上的位置）走 `EquipInAlignRow`，两者形状不同（8 向 vs 单帧）。
  */
 export interface EquipAlignRow {
   id: string;
@@ -1170,6 +1170,31 @@ export interface EquipAlignRow {
   out_positions: string;
   /** 1 = out_positions 是绝对位置；0 = 运行时按身体帧自动算（武器的渐进语义） */
   out_manual: number;
+  /** 最后修改人（管理员账号名；账号被删后仍可追溯） */
+  updated_by: string | null;
+  updated_at: number;
+}
+
+/**
+ * 装备内观几何行（#523）
+ *
+ * 一件衣服 / 一把武器的**内观**几何（角色信息弹窗里站在圆盘上的那份）。`id` 形如
+ * `cloth:cloth_1` / `weapon:weapon_1`；**没有行 = 用客户端配置里的值**（重置 = 删行）。
+ *
+ * 与 `EquipAlignRow` 分开存：外观是「8 个方向 + 一个缩放」，内观是「一个位置 + 两轴缩放」，
+ * 字段对不上；混在一行会让「只调了外观」也要存一份内观副本（反之亦然）。
+ */
+export interface EquipInAlignRow {
+  id: string;
+  /** 内观横向缩放（客户端 `inScaleX`，缺省 1） */
+  in_scale_x: number;
+  /** 内观纵向缩放（客户端 `inScaleY`，缺省 1） */
+  in_scale_y: number;
+  /** 内观位置（弹窗坐标系，y 向上） */
+  in_x: number;
+  in_y: number;
+  /** 1 = 用手调绝对位置；0 = 客户端按当前衣服的内容 bbox 自动算（只对武器有意义） */
+  in_manual: number;
   /** 最后修改人（管理员账号名；账号被删后仍可追溯） */
   updated_by: string | null;
   updated_at: number;

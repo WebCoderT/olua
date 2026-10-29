@@ -3,8 +3,10 @@ import { ApiDataResponse } from "../../common/decorators/api-data-response.decor
 import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { ClientConfigService } from "./client-config.service";
 import { EquipAlignService } from "./equip-align.service";
+import { EquipInAlignService } from "./equip-in-align.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
 import { EquipAlignListDto } from "./dto/equip-align.dto";
+import { EquipInAlignListDto } from "./dto/equip-in-align.dto";
 
 /**
  * 客户端 · 配置快照
@@ -18,6 +20,7 @@ export class ClientConfigController {
   constructor(
     private readonly clientConfig: ClientConfigService,
     private readonly equipAlign: EquipAlignService,
+    private readonly equipInAlign: EquipInAlignService,
   ) {}
 
   @Get()
@@ -60,5 +63,28 @@ export class ClientConfigController {
   @ApiDataResponse(EquipAlignListDto, { description: "全部已保存的对齐几何" })
   equipAlignList(): EquipAlignListDto {
     return this.equipAlign.list();
+  }
+
+  /**
+   * 装备**内观**几何（#523）
+   *
+   * 与外观几何分开下发，理由同上一条：两者是两组数据（8 向 vs 单帧），混在一个接口里
+   * 会让「只想改内观」也重新拉一遍 8 向数组。量更小（31 行），同样失败不致命。
+   */
+  @Get("equip-in-align")
+  @ApiPlayerDoc({
+    operationId: "gameConfig.equipInAlign",
+    summary: "装备内观几何（内观对齐工作台的产物）",
+    description:
+      "管理端「内观对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1`。\n\n" +
+      "**列表里没有的 id = 用客户端配置里的值**，客户端是「按 id 对齐、缺省不动」。\n\n" +
+      "`inPosition` 是弹窗坐标系里的一个点（原点 = 弹窗中心，y 向上）；`inScaleX` / `inScaleY` 是两轴缩放；" +
+      "`inManual=true` 表示武器的位置与缩放用这份绝对值，false / 缺省表示客户端仍按「当前衣服的内容 bbox」自动算" +
+      "（衣服不看这个字段：它一直是绝对位置）。\n\n" +
+      "需要玩家令牌（与快照同口径）。",
+  })
+  @ApiDataResponse(EquipInAlignListDto, { description: "全部已保存的内观几何" })
+  equipInAlignList(): EquipInAlignListDto {
+    return this.equipInAlign.list();
   }
 }

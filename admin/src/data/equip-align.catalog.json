@@ -20,6 +20,27 @@
       35
     ]
   },
+  "inShow": {
+    "background": {
+      "image": "common/personal-information-bg",
+      "position": [
+        -78,
+        -19
+      ],
+      "size": [
+        431,
+        452
+      ]
+    },
+    "plate": {
+      "center": [
+        -82.5,
+        -149.5
+      ],
+      "radius": 90
+    },
+    "baseClothKey": "cloth_1"
+  },
   "role": [
     {
       "id": "1",

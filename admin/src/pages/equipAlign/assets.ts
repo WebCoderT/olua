@@ -11,6 +11,10 @@
  *
  * 另外它承担「资源根」的拼接：生产走 admin nginx 的 `/game-resources/`（同源反代到 game 容器），
  * 开发走 vite 中间件（`admin/vite.config.ts`），两边是同一个 URL 前缀。
+ *
+ * 两种图集（#523 起）：
+ * - **外观**（`clothes/atlas/out/005`）：按方向排的站立帧，固定拼 `/stand/stand`；
+ * - **内观**（`clothes/in/005`）：循环动画帧（`00000.PNG`…），路径本身就是文件基名，**没有子目录**。
  */
 
 import type { Atlas, SolidBox } from "./atlas";
@@ -19,9 +23,25 @@ import { parseAtlasPlist } from "./atlas";
 /** 服务端明确答复「没有这个文件」的三种状态（其它失败一律当环境问题，不标缺素材） */
 const MISSING_STATUS = new Set([403, 404, 410]);
 
+function joinBase(resRoot: string, subPath: string): string {
+  return `${resRoot.replace(/\/+$/, "")}/${subPath.replace(/^\/+/, "")}`;
+}
+
 /** 把资源根与图集目录拼成站立的 plist / png 地址 */
 export function atlasUrls(resRoot: string, atlasPath: string): { plist: string; png: string } {
-  const base = `${resRoot.replace(/\/+$/, "")}/${atlasPath.replace(/^\/+/, "")}/stand/stand`;
+  const base = `${joinBase(resRoot, atlasPath)}/stand/stand`;
+  return { plist: `${base}.plist`, png: `${base}.png` };
+}
+
+/**
+ * 内观图集的地址（#523）
+ *
+ * 内观素材是**一个路径对应一对文件**（`clothes/in/005` + `.plist` / `.png`），没有
+ * `stand/stand` 这层目录 —— 它是循环动画的一串帧（`00000.PNG`、`00001.PNG`…），
+ * 不是按方向排的站立帧。拼法必须和客户端 `AnimationHelper.playLoopAtlasWithDuration` 一致。
+ */
+export function inAtlasUrls(resRoot: string, inPath: string): { plist: string; png: string } {
+  const base = joinBase(resRoot, inPath);
   return { plist: `${base}.plist`, png: `${base}.png` };
 }
 
@@ -40,8 +60,18 @@ export function atlasUrls(resRoot: string, atlasPath: string): { plist: string; 
  */
 export async function probeAtlas(resRoot: string, atlasPath: string): Promise<boolean> {
   if (!atlasPath) return false;
+  return probeUrl(atlasUrls(resRoot, atlasPath).plist);
+}
+
+/** 探一张内观图集在不在（规则同 `probeAtlas`，只是路径拼法不同） */
+export async function probeInAtlas(resRoot: string, inPath: string): Promise<boolean> {
+  if (!inPath) return false;
+  return probeUrl(inAtlasUrls(resRoot, inPath).plist);
+}
+
+async function probeUrl(url: string): Promise<boolean> {
   try {
-    const response = await fetch(atlasUrls(resRoot, atlasPath).plist, { method: "HEAD", cache: "no-store" });
+    const response = await fetch(url, { method: "HEAD", cache: "no-store" });
     return !MISSING_STATUS.has(response.status);
   } catch {
     return true;
@@ -50,7 +80,15 @@ export async function probeAtlas(resRoot: string, atlasPath: string): Promise<bo
 
 /** 加载一张站立图集（plist 与 png 并行取） */
 export async function loadAtlas(resRoot: string, atlasPath: string): Promise<Atlas> {
-  const { plist, png } = atlasUrls(resRoot, atlasPath);
+  return loadAtlasFrom(atlasUrls(resRoot, atlasPath));
+}
+
+/** 加载一张内观图集（单个 plist + png，帧名是 `00000.PNG` 这种循环动画帧） */
+export async function loadInAtlas(resRoot: string, inPath: string): Promise<Atlas> {
+  return loadAtlasFrom(inAtlasUrls(resRoot, inPath));
+}
+
+async function loadAtlasFrom({ plist, png }: { plist: string; png: string }): Promise<Atlas> {
   const [plistText, image] = await Promise.all([
     fetch(plist).then((response) => {
       if (!response.ok) throw new Error(`读取 ${plist} 失败（HTTP ${response.status}）`);

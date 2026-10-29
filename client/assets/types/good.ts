@@ -134,10 +134,20 @@ export interface Equipment extends Good, BattleAttributes {
   /**
    * 内观位置（衣服 = 身体在弹窗里的落点）
    *
-   * 武器**不读这里**：它的内观位置由 RoleInShowView 按「身体内观的内容 bbox」现算（2026-10-29），
-   * 因为每件素材的画布与裁剪留白都不一样，写死一个坐标只能对上一件身体。
+   * 弹窗坐标系（原点 = 弹窗中心，y 向上），锚点是**节点中心**（画布中心，见 `inScaleX` 的说明）。
+   * 衣服一直读它；武器只在 `inManual = true` 时读它，否则由 RoleInShowView 按身体内容 bbox 现算
+   * （历史原因：20 把武器 20 组手调数字对不上任何一件身体，见 #505 的比对结论）。
+   * 这两条数字都可以由管理端「内观对齐」工作台（#523）覆盖，客户端进游戏时拉一次。
    */
   inPosition: Vec2;
+  /**
+   * 武器内观的位置语义（#523）：true = `inPosition` / `inScaleX` / `inScaleY` 是**最终值**，
+   * false / 缺省 = 运行时按当前衣服的内容 bbox 自动算（#505 的算法）
+   *
+   * 与外观的 `outManual` 同一个套路：工作台调过的武器置 true，没调的继续走自动算 ——
+   * 渐进替换，不会一次把 19 把武器全部推到原点。衣服不看这个字段（它一直是绝对位置）。
+   */
+  inManual?: boolean;
   /** 外观缩放 */
   outScale: number;
   /**
