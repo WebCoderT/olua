@@ -44,6 +44,7 @@ export const AUDIT_TARGET_TYPES = [
   "quest",
   "achievement",
   "equipAlign",
+  "equipInAlign",
 ] as const;
 
 /** 审计目标类型（与 AuditLogRow.target_type 一致；界面按它决定怎么展示目标） */

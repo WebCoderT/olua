@@ -36,6 +36,7 @@ import { AchievementRepository } from "./repositories/achievement.repository";
 import { RoleAchievementRepository } from "./repositories/role-achievement.repository";
 import { RoleMailRepository } from "./repositories/role-mail.repository";
 import { EquipAlignRepository } from "./repositories/equip-align.repository";
+import { EquipInAlignRepository } from "./repositories/equip-in-align.repository";
 
 /**
  * 数据层（全局模块）
@@ -85,6 +86,7 @@ import { EquipAlignRepository } from "./repositories/equip-align.repository";
     RoleAchievementRepository,
     RoleMailRepository,
     EquipAlignRepository,
+    EquipInAlignRepository,
   ],
   exports: [
     DatabaseService,
@@ -124,6 +126,7 @@ import { EquipAlignRepository } from "./repositories/equip-align.repository";
     RoleAchievementRepository,
     RoleMailRepository,
     EquipAlignRepository,
+    EquipInAlignRepository,
   ],
 })
 export class DatabaseModule {}

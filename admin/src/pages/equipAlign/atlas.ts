@@ -176,3 +176,21 @@ export function measureSolid(atlas: Atlas, frameName: string): SolidBox | null {
 export function frameNameOf(directionIndex: number, frameIndex = 0): string {
   return `d${directionIndex}_${String(frameIndex).padStart(2, "0")}.png`;
 }
+
+/**
+ * 内观取首帧：图集里按名字排序的第一个**非空**帧（#523）
+ *
+ * 内观素材是循环动画（`00000.PNG`、`00001.PNG`…，没有方向下标），对齐只需要一帧 ——
+ * 同一组图集里各帧的 `spriteSourceSize`（画布）是一样的，所以挑哪一帧都不影响位置语义；
+ * 取第一帧是因为它最接近「站定」的姿势，看起来不会像在挥手。
+ *
+ * 跳过空帧（1×1 占位）：拿它算内容 bbox 会得到 0×0，后面所有「按轮廓对齐」的按钮都会失灵。
+ */
+export function firstFrameName(atlas: Atlas): string {
+  const names = Array.from(atlas.frames.keys()).sort();
+  for (const name of names) {
+    const frame = atlas.frames.get(name);
+    if (frame && !isBlankFrame(frame)) return name;
+  }
+  return names[0] ?? "";
+}

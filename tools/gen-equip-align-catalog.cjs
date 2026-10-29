@@ -44,7 +44,11 @@ const ROOT = path.resolve(__dirname, "..");
 const ASSETS = path.join(ROOT, "client", "assets");
 const OUT = process.env.EQUIP_ALIGN_OUT || path.join(ROOT, "admin", "src", "data", "equip-align.catalog.json");
 
-const SOURCE_FILES = ["equipments", "role", "animation"].map((name) => path.join(ASSETS, "configs", `${name}.ts`));
+const SOURCE_FILES = [
+  ...["equipments", "role", "animation"].map((name) => path.join(ASSETS, "configs", `${name}.ts`)),
+  // 内观视图的底座（#523）：角色信息弹窗的背景图与尺寸在 layout/dialogs，别在页面里抄第二份
+  path.join(ASSETS, "configs", "layout", "dialogs.ts"),
+];
 
 /** cc 垫片：配置层只用到这几个表现层类（与 gen-shared-data 完全一致） */
 const CC_SHIM = `
@@ -127,7 +131,12 @@ function compile(work) {
 function load(work) {
   const dir = path.join(work, "out", "configs");
   const requireCfg = (name) => require(path.join(dir, `${name}.js`));
-  return { equipments: requireCfg("equipments"), role: requireCfg("role"), animation: requireCfg("animation") };
+  return {
+    equipments: requireCfg("equipments"),
+    role: requireCfg("role"),
+    animation: requireCfg("animation"),
+    dialogs: require(path.join(dir, "layout", "dialogs.js")),
+  };
 }
 
 /** `clothes/out/005` → `clothes/atlas/out/005`（与客户端 `configs/animation.getAtlasSrc` 同一条规则） */
@@ -153,7 +162,7 @@ function geometryOf(item) {
   };
 }
 
-function buildCatalog({ equipments, role, animation }) {
+function buildCatalog({ equipments, role, animation, dialogs }) {
   const directions = animation.directions.map((value) => String(value).toLowerCase());
 
   const roleEntries = [...role.roleDefaultCloths.entries()].map(([sex, cloth]) => {
@@ -190,6 +199,10 @@ function buildCatalog({ equipments, role, animation }) {
         };
       });
 
+  const clothes = map(equipments.clothes, "cloth");
+  const weapons = map(equipments.weapons, "weapon");
+  const dialogBg = dialogs.roleInfoDialogLayout?.background ?? {};
+
   return {
     generatedBy: "tools/gen-equip-align-catalog.cjs",
     directions,
@@ -207,9 +220,30 @@ function buildCatalog({ equipments, role, animation }) {
       colliderHeight: Number(role.roleBody?.colliderSize?.height) || 0,
       colliderOffset: vec(role.roleBody?.colliderOffset),
     },
+    /**
+     * 内观视图的底座（#523）
+     *
+     * 内观工作台画的是**角色信息弹窗里那块区域**：背景图（含圆盘）+ 内观节点。
+     * - `background` 取自 `configs/layout/dialogs.roleInfoDialogLayout.background`（唯一真值，
+     *   页面不许自己写坐标）；
+     * - `plate` 是**实测值**：背景图 858×908（@2x）上金色圆盘外缘约 x 240~600、y 640~790，
+     *   换算到弹窗坐标就是中心 (-82.5, -149.5)、半径 90。它不是配置里的东西 ——
+     *   **换背景图就要重测**（这也是它只在这里出现一次的原因）；
+     * - `baseClothKey` 是「第一件衣服」：调武器时的参照系（19 把武器共用同一个参照，
+     *   而不是跟着当前选中的衣服漂）。取配置里的第一件，避免页面自己猜。
+     */
+    inShow: {
+      background: {
+        image: String(dialogBg.image ?? ""),
+        position: vec(dialogBg.position),
+        size: [Number(dialogBg.size?.width) || 0, Number(dialogBg.size?.height) || 0],
+      },
+      plate: { center: [-82.5, -149.5], radius: 90 },
+      baseClothKey: clothes.length ? clothes[0].key : "",
+    },
     role: roleEntries,
-    clothes: map(equipments.clothes, "cloth"),
-    weapons: map(equipments.weapons, "weapon"),
+    clothes,
+    weapons,
   };
 }
 

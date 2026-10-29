@@ -2899,7 +2899,8 @@
                 "guild",
                 "quest",
                 "achievement",
-                "equipAlign"
+                "equipAlign",
+                "equipInAlign"
               ]
             }
           },
@@ -3178,7 +3179,8 @@
                 "guild",
                 "quest",
                 "achievement",
-                "equipAlign"
+                "equipAlign",
+                "equipInAlign"
               ]
             }
           },
@@ -5600,6 +5602,174 @@
             "required": true,
             "in": "path",
             "description": "对齐目标：`cloth:cloth_1` / `weapon:weapon_1` / `role:1`",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已重置（无返回体）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重置为客户端配置里的值（删行）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": true,
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/equip-in-aligns": {
+      "get": {
+        "description": "全部**已保存**的内观几何（不分页：12 件衣服 + 19 把武器，量很小）。\n\n**没有行 = 用客户端配置里的值**（`client/assets/configs/equipments.ts` 的 `inPosition` / `inScaleX` / `inScaleY`），所以「哪些调过」就是这份列表的 id 集合。\n\n内观只有一个朝向（弹窗里角色正面站着），因此没有方向数组：`inPosition` 是一个点，`inScaleX` / `inScaleY` 是两轴缩放（衣服常有 `inScaleX ≠ inScaleY` 的素材）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipInAlign.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部已保存的内观几何",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipInAlignListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备内观几何列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipInAlignListDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/equip-in-aligns/{id}": {
+      "put": {
+        "description": "**整份覆盖**，不是部分更新：位置与两轴缩放是联动的一组状态，分字段更新会让「只想改缩放」的请求留下上一次的位置。\n\n- `inScaleX` / `inScaleY` 各自在 0.05 ~ 10 之间（素材画布差异大，两轴不一定相等）；\n- `inPosition` 是弹窗坐标系里的点（原点 = 弹窗中心，y 向上）；\n- `inManual` 只对武器有意义：true = 用这个绝对位置；false = 客户端仍按「当前衣服的内容 bbox」自动算。\n\n**没有旋转**：`inRotate` 不在契约里 —— 工作台不调它，存了也没人读（与「不做存了没人读的字段」一致）。\n\n`id` 只校验形态（`cloth:<基础件>` / `weapon:<基础件>`），**不校验存在性**；同 id 重复保存是幂等的（UPSERT），不会报 409。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipInAlign.save",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "内观目标：`cloth:cloth_1` / `weapon:weapon_1`",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveEquipInAlignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存后的内观几何",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipInAlignDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "保存一条内观几何（整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipInAlignDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "删掉这条覆盖，客户端下次打开弹窗就用 `configs/equipments.ts` 里的值。\n\n**幂等**：这条本来就没保存过也返回成功（「还原本件」连点两次不该第二次报错）。\n\n**只删内观**：外观的 `equip_aligns` 不受影响，两张表是独立的两份覆盖。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipInAlign.reset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "内观目标：`cloth:cloth_1` / `weapon:weapon_1`",
             "schema": {
               "type": "string"
             }
@@ -8381,6 +8551,50 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/EquipAlignListDto"
+        }
+      }
+    },
+    "/game-config/equip-in-align": {
+      "get": {
+        "description": "管理端「内观对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1`。\n\n**列表里没有的 id = 用客户端配置里的值**，客户端是「按 id 对齐、缺省不动」。\n\n`inPosition` 是弹窗坐标系里的一个点（原点 = 弹窗中心，y 向上）；`inScaleX` / `inScaleY` 是两轴缩放；`inManual=true` 表示武器的位置与缩放用这份绝对值，false / 缺省表示客户端仍按「当前衣服的内容 bbox」自动算（衣服不看这个字段：它一直是绝对位置）。\n\n需要玩家令牌（与快照同口径）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameConfig.equipInAlign",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部已保存的内观几何",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipInAlignListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "装备内观几何（内观对齐工作台的产物）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipInAlignListDto"
         }
       }
     },
@@ -12359,6 +12573,57 @@
           "outPositions"
         ]
       },
+      "EquipInAlignPointDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "横向（弹窗坐标，向右为正）"
+          },
+          "y": {
+            "type": "number",
+            "description": "纵向（弹窗坐标，**向上为正**；与页面画布的 y 向下相反）"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "SaveEquipInAlignDto": {
+        "type": "object",
+        "properties": {
+          "inScaleX": {
+            "type": "number",
+            "description": "内观横向缩放",
+            "minimum": 0.05,
+            "maximum": 10
+          },
+          "inScaleY": {
+            "type": "number",
+            "description": "内观纵向缩放",
+            "minimum": 0.05,
+            "maximum": 10
+          },
+          "inPosition": {
+            "description": "内观位置（弹窗坐标系，y 向上）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EquipInAlignPointDto"
+              }
+            ]
+          },
+          "inManual": {
+            "type": "boolean",
+            "description": "true = 用绝对位置；false / 缺省 = 客户端自动算（只对武器有意义）"
+          }
+        },
+        "required": [
+          "inScaleX",
+          "inScaleY",
+          "inPosition"
+        ]
+      },
       "UpdateDrugDto": {
         "type": "object",
         "properties": {
@@ -15050,7 +15315,8 @@
               "guild",
               "quest",
               "achievement",
-              "equipAlign"
+              "equipAlign",
+              "equipInAlign"
             ]
           },
           "targetId": {
@@ -20240,6 +20506,62 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/EquipAlignDto"
+            }
+          }
+        },
+        "required": [
+          "list"
+        ]
+      },
+      "EquipInAlignDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "目标 id：`cloth:<基础件>` / `weapon:<基础件>`"
+          },
+          "inScaleX": {
+            "type": "number",
+            "description": "内观横向缩放（客户端 `inScaleX`）"
+          },
+          "inScaleY": {
+            "type": "number",
+            "description": "内观纵向缩放（客户端 `inScaleY`）"
+          },
+          "inPosition": {
+            "description": "内观位置（弹窗坐标系，y 向上）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EquipInAlignPointDto"
+              }
+            ]
+          },
+          "inManual": {
+            "type": "boolean",
+            "description": "true = 用手调的绝对位置（工作台调过）；false = 客户端按当前衣服的内容 bbox 自动算，`inPosition` 不参与（只对武器有意义，衣服恒为 true）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "inScaleX",
+          "inScaleY",
+          "inPosition",
+          "inManual",
+          "updatedAt"
+        ]
+      },
+      "EquipInAlignListDto": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "全部已保存的内观几何（**没有行 = 用客户端配置里的值**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipInAlignDto"
             }
           }
         },

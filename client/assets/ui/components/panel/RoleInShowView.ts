@@ -12,16 +12,27 @@ import { EQUIP_ALIGN, placeInShowWeapon } from "../../../configs/equipAlign";
  * 换装时对应内观按新装备重建（未装备则移除）
  * 装备槽只存 id，每次刷新都经 configs/items 实时解析，改配置后重开弹窗即生效
  *
- * **武器位置为什么是算出来的**（2026-10-29）：素材内观画布 212×375 ~ 420×420、身体 100×100 ~ 400×400，
+ * **武器位置默认是算出来的**（2026-10-29）：素材内观画布 212×375 ~ 420×420、身体 100×100 ~ 400×400，
  * 写死一个 inPosition 只能对上一件。改成「读身体内观当前帧的内容 bbox，把武器缩放到它的 1.15 倍、
  * 贴到它的左手位」（算法唯一来源见 configs/equipAlign）—— 换任何衣服都成立，新增武器也不必手调数字。
  * 帧是异步落到 Sprite 上的，所以对齐挂在素材就绪回调里；两件素材谁后到都能触发一次重算。
+ *
+ * **手调优先**（#523）：管理端「内观对齐」工作台按**第一件衣服**调过的武器会带 `inManual = true`，
+ * 那时位置与缩放就是配置里的绝对值（= 服务端下发的内观几何），这里**不再重算** ——
+ * 否则工作台上看得见的那次保存会被这行代码当场覆盖掉，症状是「保存了但没生效」。
  */
 export default class RoleInShowView extends Node {
   /** 衣服内观节点 */
   private clothInShow: Node | null = null;
   /** 武器内观节点 */
   private weaponInShow: Node | null = null;
+  /**
+   * 当前武器是否用**手调**的内观几何（#523）
+   *
+   * 只看配置，不看节点 —— 节点上的位置可能是上一次自动算的结果，
+   * 拿它反推会把「刚换成手调」的武器当成自动的。
+   */
+  private weaponManual = false;
   /**
    * 对齐重试计数
    *
@@ -61,16 +72,26 @@ export default class RoleInShowView extends Node {
     if (this.weaponInShow) this.weaponInShow.destroy();
     this.weaponInShow = null;
     const weapon = getEquipment(role.equipments.weapon);
-    if (!weapon) return;
+    if (!weapon) {
+      this.weaponManual = false;
+      return;
+    }
+    // 手调过的武器：位置与缩放由 createRoleWeaponInshow 按配置落好，这里只记标志
+    this.weaponManual = weapon.inManual === true;
     this.weaponInShow = GameUiHelper.createRoleWeaponInshow(weapon, roleInShowLayout.size, () => this.alignWeapon());
     this.addChild(this.weaponInShow);
   }
 
   /**
    * 把武器内观对齐到身体的握持点（算法见 configs/equipAlign.placeInShowWeapon）
-   * 素材还没就绪（帧为 null）时什么都不做 —— 就绪回调会再来一次
+   *
+   * 两种情况直接返回、什么都不做：
+   * - **手调过的武器**（`inManual`，#523）：它的位置是工作台对着第一件衣服定的绝对值，
+   *   再按当前衣服重算就等于把那次保存覆盖掉；
+   * - 素材还没就绪（帧为 null）：就绪回调会再来一次。
    */
   private alignWeapon() {
+    if (this.weaponManual) return;
     const clothBox = GameUiHelper.spriteContentBox(this.clothInShow);
     const weaponBox = GameUiHelper.spriteContentBox(this.weaponInShow);
     if (!clothBox || !weaponBox || !this.weaponInShow || !this.clothInShow) {

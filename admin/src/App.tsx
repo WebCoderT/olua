@@ -15,6 +15,7 @@ import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
+import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { MonstersPage } from "./pages/MonstersPage";
@@ -175,6 +176,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <EquipAlignPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="equip-in-align"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <EquipInAlignPage />
               </RequirePermission>
             }
           />

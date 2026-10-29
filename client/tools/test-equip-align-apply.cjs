@@ -146,8 +146,8 @@ function main() {
   const configLoader = read("assets/ui/utils/net/ConfigLoader.ts");
   check(/GameConfigApi\.equipAlign\(/.test(configLoader), "ConfigLoader 拉的是 gameConfig.equipAlign");
   check(
-    /Promise\.all\(\[loadSnapshotOnce\(\), loadAlignEveryEntry\(\)\]\)/.test(configLoader),
-    "快照与几何并行拉（串行会平白多一个 RTT，而这个 RTT 卡在进游戏路径上）",
+    /Promise\.all\(\[loadSnapshotOnce\(\), loadAlignEveryEntry\(\), loadInAlignEveryEntry\(\)\]\)/.test(configLoader),
+    "快照与两套几何并行拉（串行会平白多两个 RTT，而这些 RTT 卡在进游戏路径上）",
   );
   check(
     /if \(snapshotLoaded\) return Promise\.resolve\(\)/.test(configLoader) &&

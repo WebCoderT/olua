@@ -106,6 +106,8 @@ const MODULES = {
   adminEquipment: { target: "admin", export: "equipmentsApi" },
   // 装备对齐几何（#513）：工作台的读写口；与 adminEquipment（数值配置）不是同一件事
   adminEquipAlign: { target: "admin", export: "equipAlignsApi" },
+  // 装备内观几何（#523）：与上面同形，但字段是「单点位置 + 两轴缩放」，两张表互不影响
+  adminEquipInAlign: { target: "admin", export: "equipInAlignsApi" },
   adminDrug: { target: "admin", export: "drugsApi" },
   adminItem: { target: "admin", export: "itemsApi" },
   adminMonster: { target: "admin", export: "monstersApi" },

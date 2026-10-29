@@ -4,6 +4,7 @@ import type {
   Drug as DrugRow,
   Equipment as EquipmentRow,
   EquipAlign,
+  EquipInAlign,
   Fashion as FashionRow,
   GameConfigSnapshot,
   GrowthScalar,
@@ -66,9 +67,11 @@ import type { ACTION } from "../types/animation";
  * 这条不是偷懒：resources 以远程发布包为唯一来源（见仓库 README 的素材纪律），
  * 让服务端下发路径就能把客户端指到一张不存在的图上。
  *
- * **唯一的例外**是装备外观几何（#513，见文件末尾的 `applyEquipAlignRows`）：
- * 那是管理端「装备对齐」工作台现场调出来的结果，如果不覆写，页面调完就只能靠重新打 3G 的包才生效。
- * 例外只开在「外观缩放 + 8 方向位置」上，资源路径依然一个都不动。
+ * **例外只有两处，都是「管理端调出来的几何」**（再多一处就该重审这条纪律了）：
+ * - 装备**外观**几何（#513，见文件末尾的 `applyEquipAlignRows`）：8 方向位置 + 缩放；
+ * - 装备**内观**几何（#523，见 `applyEquipInAlignRows`）：弹窗圆盘上的位置 + 两轴缩放。
+ * 两者都只覆写「位置 / 缩放 / 手调开关」，**资源路径依然一个都不动** ——
+ * 否则服务端能把客户端指到一张不存在的图上。
  *
  * ⚠ 消费方注意：覆写发生在进游戏后的异步时刻，模块加载期的读取（如资源预加载）
  * 仍用本地数据 —— 这正是设计意图：预加载走本地资源路径，玩法数值走服务端。
@@ -637,6 +640,99 @@ function applyOutGeometry(target: OutTransform, row: EquipAlign): void {
   target.outScale = row.outScale > 0 ? row.outScale : 1;
   target.outPositions = row.outPositions.map((point) => new Vec2(point.x, point.y));
   target.outManual = row.outManual;
+}
+
+//#endregion
+
+//#region 装备内观几何（#523）
+
+/** 内观可覆写的字段（`Equipment` 与「时装借装备几何」那条路都满足） */
+interface InTransform {
+  inScaleX?: number;
+  inScaleY?: number;
+  inPosition: Vec2;
+  /** 武器的位置语义：true = 下面这三个字段就是最终值，false/缺省 = 运行时按当前衣服现算 */
+  inManual?: boolean;
+}
+
+/**
+ * 覆写装备内观几何（#523）
+ *
+ * 内观 = 角色信息弹窗里站在圆盘上的那套（衣服 + 武器）。它是 `apply-snapshot` 的第二处、
+ * 也是最后一处「覆写几何」的例外（第一处是外观，见上面的 `applyEquipAlignRows`）：
+ * 工作台里对着圆盘调好的位置，如果不下发，就只能靠重新打包才生效。
+ *
+ * 三条口径与外观一致：
+ * - **按 id 对齐、缺省不动** → 服务端「重置」就是删行；
+ * - **按基础件命中全部变体**：工作台调 `cloth_1`，玩家身上可能是 `cloth_1_p3s2`
+ *   （`buildEquipmentMap` 的浅拷贝只共享数组引用，`inScaleX` / `inScaleY` / `inPosition`
+ *   是各自的原语与对象 → 必须逐变体赋值）；
+ * - **每次覆写前先还原出厂值**（`resetEquipInAlignRows`）：不还原的话，管理端删了行，
+ *   重进游戏仍显示上次的位置 —— 「删行」与「从没调过」必须长得一模一样。
+ *
+ * 失败方式同样是**逐条 try**：一条坏 id 只丢它自己，不让整张表失效
+ * （否则所有调好的衣服武器会一起回到出厂位置，看起来像「保存全没了」）。
+ */
+export function applyEquipInAlignRows(rows: EquipInAlign[]): void {
+  resetEquipInAlignRows();
+  if (!rows) return;
+  for (const row of rows) applyEquipInAlignRow(row);
+}
+
+/** 被覆写过的目标的出厂内观几何（「重置」与「重进游戏重拉」都靠它回落） */
+const inAlignBaselines: Array<{
+  target: InTransform;
+  inScaleX: number;
+  inScaleY: number;
+  inPosition: Vec2;
+  inManual: boolean;
+}> = [];
+
+function rememberInBaseline(target: InTransform): void {
+  if (inAlignBaselines.some((entry) => entry.target === target)) return;
+  const position = target.inPosition ?? new Vec2();
+  inAlignBaselines.push({
+    target,
+    inScaleX: target.inScaleX ?? 1,
+    inScaleY: target.inScaleY ?? 1,
+    // 深拷贝：覆写是整份换掉 inPosition，但基线不能共享同一个 Vec2 引用
+    inPosition: new Vec2(position.x, position.y),
+    inManual: target.inManual === true,
+  });
+}
+
+/** 把覆写过的目标全部还原成客户端配置里的值，并清空基线（下次覆写重新记录） */
+export function resetEquipInAlignRows(): void {
+  for (const entry of inAlignBaselines) {
+    entry.target.inScaleX = entry.inScaleX;
+    entry.target.inScaleY = entry.inScaleY;
+    entry.target.inPosition = new Vec2(entry.inPosition.x, entry.inPosition.y);
+    entry.target.inManual = entry.inManual;
+  }
+  inAlignBaselines.length = 0;
+}
+
+function applyEquipInAlignRow(row: EquipInAlign): void {
+  if (!row || typeof row.id !== "string") return;
+  // 服务端只校验 id 形态（`cloth:*` / `weapon:*`），这里对形态再兜一层
+  const separator = row.id.indexOf(":");
+  if (separator <= 0) return;
+  const baseKey = row.id.slice(separator + 1);
+  items.forEach((good, id) => {
+    if (good.type !== GOOD_TYPE.EQUIPMENT) return;
+    if (getEquipmentBaseKey(id) !== baseKey) return;
+    applyInGeometry(good, row);
+  });
+}
+
+/** 把一条内观几何写到目标上（两轴缩放 + 位置 + 手调开关） */
+function applyInGeometry(target: InTransform, row: EquipInAlign): void {
+  rememberInBaseline(target);
+  // 0 / 负数缩放在客户端等于「这个节点消失」，所以坏值一律回 1
+  target.inScaleX = row.inScaleX > 0 ? row.inScaleX : 1;
+  target.inScaleY = row.inScaleY > 0 ? row.inScaleY : 1;
+  target.inPosition = new Vec2(row.inPosition.x, row.inPosition.y);
+  target.inManual = row.inManual === true;
 }
 
 //#endregion

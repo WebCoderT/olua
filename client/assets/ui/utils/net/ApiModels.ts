@@ -890,6 +890,36 @@ export type SaveEquipAlign = {
   outManual?: boolean;
 };
 
+export type EquipInAlignPoint = {
+  /**
+   * 横向（弹窗坐标，向右为正）
+   */
+  x: number;
+  /**
+   * 纵向（弹窗坐标，**向上为正**；与页面画布的 y 向下相反）
+   */
+  y: number;
+};
+
+export type SaveEquipInAlign = {
+  /**
+   * 内观横向缩放
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放
+   */
+  inScaleY: number;
+  /**
+   * 内观位置（弹窗坐标系，y 向上）
+   */
+  inPosition: EquipInAlignPoint;
+  /**
+   * true = 用绝对位置；false / 缺省 = 客户端自动算（只对武器有意义）
+   */
+  inManual?: boolean;
+};
+
 export type UpdateDrug = {
   /**
    * 名称（不传则不改）
@@ -2555,7 +2585,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -5756,6 +5786,40 @@ export type EquipAlignList = {
    * 全部已保存的对齐几何（**没有行 = 用客户端配置里的值**）
    */
   list: EquipAlign[];
+};
+
+export type EquipInAlign = {
+  /**
+   * 目标 id：`cloth:<基础件>` / `weapon:<基础件>`
+   */
+  id: string;
+  /**
+   * 内观横向缩放（客户端 `inScaleX`）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（客户端 `inScaleY`）
+   */
+  inScaleY: number;
+  /**
+   * 内观位置（弹窗坐标系，y 向上）
+   */
+  inPosition: EquipInAlignPoint;
+  /**
+   * true = 用手调的绝对位置（工作台调过）；false = 客户端按当前衣服的内容 bbox 自动算，`inPosition` 不参与（只对武器有意义，衣服恒为 true）
+   */
+  inManual: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipInAlignList = {
+  /**
+   * 全部已保存的内观几何（**没有行 = 用客户端配置里的值**）
+   */
+  list: EquipInAlign[];
 };
 
 export type GameMailClaimAllQuery = {
