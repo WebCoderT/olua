@@ -4,9 +4,11 @@
  * 每个格子 = 一个朝向：裸模站在宿主原点上，当前装备叠上去。
  * 绘制的几何全部来自 `model.ts`（与游戏同一套语义），这里只负责把矩形画出来。
  *
- * 两个容易画错、但直接影响判断的细节：
- *   1. **遮挡顺序**：背对观众的朝向下武器在身体后面（客户端 `CLOTH_ON_TOP_DIRECTIONS` 同一张表）；
- *   2. **参考框画在图像之上**：画在下面会被不透明的身体完全盖住，等于没有。
+ * 三个容易画错、但直接影响判断的细节：
+ *   1. **遮挡顺序**：置顶开关打开时装备永远在最上面；关掉才按游戏内层序
+ *      （背对观众的朝向下武器在身体后面，与客户端 `CLOTH_ON_TOP_DIRECTIONS` 同一张表）；
+ *   2. **参考框画在图像之上**：画在下面会被不透明的身体 / 装备完全盖住，等于没有；
+ *   3. 所以参考框统一在**所有图像之后**画，顺序与遮挡无关。
  */
 
 import type { Atlas, SolidBox, SpriteFrameInfo } from "./atlas";
@@ -25,6 +27,14 @@ export interface Guides {
   content: boolean;
   /** 真实轮廓（alpha>200，亮绿） */
   solid: boolean;
+  /**
+   * 装备画在裸模**之上**（默认开）
+   *
+   * 4 个背对朝向在游戏里是「身体压着装备」，衣服整件被挡住 —— 看不见就没法用眼睛判断
+   * 「对上没有」，只能盯着数字盲调。工作台的用途是比对位置，不是复核遮挡层次，
+   * 所以默认置顶；要核对「背对时武器在身后」这种层次时把这一项关掉（关 = 按游戏遮挡）。
+   */
+  itemTop: boolean;
   /**
    * 地面线（宿主原点 y = 0）
    *
@@ -176,24 +186,23 @@ export function drawCell(ctx: CanvasRenderingContext2D, spec: CellSpec, guides: 
   const roleSolidRect = roleFrame ? solidOf(solidOfRole, roleFrame, origin, rolePos, spec.roleGeometry.outScale, k) : null;
   const itemContent = itemFrame && spec.itemGeometry ? contentRect(itemFrame, origin, itemPos, spec.itemGeometry.outScale, k) : null;
 
-  // 身体 / 装备的绘制顺序（背对时武器在身后）
-  const bodyOnTop = BODY_ON_TOP.has(dirName);
+  // 身体 / 装备的绘制顺序
+  //
+  // 置顶（默认）：装备永远最后画。背对朝向里身体原本压在装备上，衣服被挡得只剩一条边，
+  //   而这一屏的全部意义就是「用眼睛看衣服落在哪」——看不见等于没画。
+  // 关闭置顶：按游戏内层序（背对时武器在身后），用来复核层次。
+  const bodyOnTop = !guides.itemTop && BODY_ON_TOP.has(dirName);
   const drawBody = () => {
-    if (roleFrame && roleContent) {
-      const alpha = spec.roleAlpha ?? 1;
-      ctx.save();
-      if (alpha < 1) ctx.globalAlpha = alpha;
-      drawSprite(ctx, spec.roleAtlas, roleFrame, roleContent);
-      ctx.restore();
-      if (guides.canvas) strokeRect(ctx, nodeRect(roleFrame, origin, rolePos, spec.roleGeometry.outScale, k), COLORS.canvasBox, [4, 3]);
-      if (guides.content) strokeRect(ctx, roleContent, COLORS.contentBox, []);
-      if (guides.solid && roleSolidRect) strokeRect(ctx, roleSolidRect, COLORS.solid, [], 1.5);
-    }
+    if (!roleFrame || !roleContent) return;
+    const alpha = spec.roleAlpha ?? 1;
+    ctx.save();
+    if (alpha < 1) ctx.globalAlpha = alpha;
+    drawSprite(ctx, spec.roleAtlas, roleFrame, roleContent);
+    ctx.restore();
   };
   const drawItem = () => {
-    if (!itemFrame || !spec.itemAtlas || !itemContent || !spec.itemGeometry) return;
-    drawSprite(ctx, spec.itemAtlas!, itemFrame, itemContent);
-    if (guides.content) strokeRect(ctx, itemContent, COLORS.itemBox, [2, 2]);
+    if (!itemFrame || !spec.itemAtlas || !itemContent) return;
+    drawSprite(ctx, spec.itemAtlas, itemFrame, itemContent);
   };
 
   if (bodyOnTop) {
@@ -203,6 +212,17 @@ export function drawCell(ctx: CanvasRenderingContext2D, spec: CellSpec, guides: 
     drawBody();
     drawItem();
   }
+
+  // 参考框：统一压在所有图像之上
+  //
+  // 以前这些框跟着各自的图像画（身体的框画完身体就画），身体在下面时会被装备整块盖住 ——
+  // 而框正是「对上没有」的判据，被盖住等于把判据交给被测对象。所以抽到图像之后统一画。
+  if (roleFrame && roleContent) {
+    if (guides.canvas) strokeRect(ctx, nodeRect(roleFrame, origin, rolePos, spec.roleGeometry.outScale, k), COLORS.canvasBox, [4, 3]);
+    if (guides.content) strokeRect(ctx, roleContent, COLORS.contentBox, []);
+    if (guides.solid && roleSolidRect) strokeRect(ctx, roleSolidRect, COLORS.solid, [], 1.5);
+  }
+  if (itemFrame && itemContent && guides.content) strokeRect(ctx, itemContent, COLORS.itemBox, [2, 2]);
 
   // 参考标记（画在图像之上，否则会被身体盖住）
   //

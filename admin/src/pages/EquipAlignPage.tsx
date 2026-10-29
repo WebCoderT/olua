@@ -141,7 +141,7 @@ const KIND_LABELS: Record<Kind, string> = { role: "裸模", cloth: "衣服", wea
 const DRAFT_KEY = "olua.equipAlign.drafts.v1";
 const PREFS_KEY = "olua.equipAlign.prefs.v1";
 
-const DEFAULT_GUIDES: Guides = { canvas: true, content: false, solid: true, feet: true, hands: true, origin: true, frame: true };
+const DEFAULT_GUIDES: Guides = { canvas: true, content: false, solid: true, itemTop: true, feet: true, hands: true, origin: true, frame: true };
 
 interface Prefs {
   resRoot: string;
@@ -161,6 +161,22 @@ function readJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * 读偏好
+ *
+ * `guides` 必须**逐项**与默认值合并：用过这个页面的人 localStorage 里是旧结构，
+ * `readJson` 的浅合并会把整个 `guides` 换成旧对象 → 新增的开关读出来是 `undefined`，
+ * 表现为「未勾选」且逻辑走 falsy —— 新功能在老浏览器上静默失效，看起来像没做。
+ */
+function readPrefs(): Prefs {
+  const stored = readJson<Partial<Prefs>>(PREFS_KEY, {});
+  return {
+    ...DEFAULT_PREFS,
+    ...stored,
+    guides: { ...DEFAULT_GUIDES, ...(stored.guides ?? {}) },
+  };
 }
 
 /**
@@ -221,7 +237,7 @@ function download(filename: string, text: string) {
 }
 
 export function EquipAlignPage() {
-  const [prefs, setPrefs] = useState<Prefs>(() => readJson(PREFS_KEY, DEFAULT_PREFS));
+  const [prefs, setPrefs] = useState<Prefs>(() => readPrefs());
   const [drafts, setDrafts] = useState<Record<string, Geometry>>(() => readJson(DRAFT_KEY, {} as Record<string, Geometry>));
   const [kind, setKind] = useState<Kind>("cloth");
   const [activeId, setActiveId] = useState<string>("cloth:cloth_1");
@@ -993,7 +1009,7 @@ export function EquipAlignPage() {
               />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-              {(["canvas", "content", "solid", "feet", "frame", "hands", "origin"] as (keyof Guides)[]).map((key) => (
+              {(["canvas", "content", "solid", "feet", "frame", "hands", "origin", "itemTop"] as (keyof Guides)[]).map((key) => (
                 <label key={key} className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
@@ -1008,6 +1024,7 @@ export function EquipAlignPage() {
                     frame: "碰撞盒",
                     hands: "手位",
                     origin: "原点",
+                    itemTop: "装备置顶",
                   }[key]}
                 </label>
               ))}
