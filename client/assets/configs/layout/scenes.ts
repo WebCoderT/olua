@@ -113,6 +113,11 @@ export const roleSelectorLayout = {
   previewSize: new Size(200, 360),
   previewFrameRate: 8,
   /**
+   * 角色名牌（脚下）：显示「名字 Lv.等级」，位置由站位 + 偏移推导，随角色列表一起重建。
+   * 放脚下而不是头顶 —— 头顶留给管理模式的删除按钮（见 manageRole.deleteButtonOffset），两层不叠
+   */
+  namePlate: { offset: new Vec2(0, -200), size: new Size(200, 36), fontSize: 20, color: new Color("#FFFFFF") },
+  /**
    * 管理角色（删除）：点「管理」按钮进入管理模式后，每个角色站位上方出现一个删除按钮
    *
    * 删除按钮挂在**舞台**上（不在角色预览子树里）——预览自己带 TOUCH_END 选中事件，

@@ -273,12 +273,16 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(/this\.zoneState = "ready";/.test(login) && /this\.zoneState = "unreachable";/.test(login), "Login：loadZones 拉到置 ready、拉不到置 unreachable（两个分支都刷新区服文案）");
   const texts = fs.readFileSync(TEXTS_FILE, "utf8");
   check(/login_zone_connecting: "连接中…"/.test(texts) && /login_zone_unreachable: "暂时无法连接服务器"/.test(texts), "texts：连接中 / 无法连接两条文案存在（区服位置不再是空白）");
+  // 已有登录态直接进选角：误刷新不重输账号密码；未登录才清缓存（保留登录态刷新时的角色缓存）
+  check(/if \(Session\.isLoggedIn\) \{\s*\n\s*SceneManager\.loadScene\("RoleSelector"\);\s*\n\s*return;/.test(login), "Login：已有登录态直接跳选角（误刷新不用重输，令牌过期由 401 兜底送回登录）");
+  check(/StorageManager\.clear\(\);/.test(login), "Login：未登录才清本地缓存（有登录态的刷新不动角色缓存）");
 
   check(/this\.node\.addChild\(bottomBar\);\s*\n\s*this\.bottomBar = bottomBar;/.test(selector), "RoleSelector：底部栏挂在场景根（不在舞台子树里）");
   check(!/this\.stage!\.addChild\(bottomBar\)/.test(selector), "RoleSelector：底部栏不挂进舞台（否则跟着舞台走、两侧露背景）");
   check(!/setScale/.test(selector), "RoleSelector：舞台与底部栏都不 setScale（尺寸在配置里按 1080p 定死）");
   check(/getAnchoredPosition\(size, "bottom-center"/.test(selector), "RoleSelector：底部栏贴底走 getAnchoredPosition 的 bottom-center 档");
   check(/dockBottomBar\(\)/.test(selector), "RoleSelector：底部栏位置由 dockBottomBar 算");
+  check(/NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /namePlate\.offset/.test(selector), "RoleSelector：每个站位脚下有名字与等级名牌（文案走 texts、偏移走配置，随列表重建）");
   check(
     /createCoverImage\("role_selector_background"/.test(selector) && !/createFullScreenImage\("role_selector_background"/.test(selector),
     "RoleSelector：背景走等比铺满（cover），不再 CUSTOM 拉伸（竖图铺横屏会拉歪 3.87 倍）",

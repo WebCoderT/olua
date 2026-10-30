@@ -55,6 +55,12 @@ export class Login extends Component {
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
+    // 已有登录态（页面被误刷新 / 意外重载）→ 直接回选角，不让人重输账号密码。
+    // 令牌若已过期，选角场景的请求会吃 401 → 网络层清会话并送回本场景，过期会话自然兜底
+    if (Session.isLoggedIn) {
+      SceneManager.loadScene("RoleSelector");
+      return;
+    }
     // 位置/尺寸与用图统一见 configs/layout/scenes.loginLayout
     const layout = loginLayout;
     // 背景（不在舞台内：铺满整个屏幕）
@@ -110,7 +116,8 @@ export class Login extends Component {
     }
     // 拉活区列表（公共接口，无需令牌；不阻塞登录页出现，失败静默 —— 注册落默认区）
     void this.loadZones();
-    // 清空缓存------开发时使用（含角色缓存与上次会话，进登录页一律重新登录）
+    // 走到这里必然没有登录态（上方已拦截直接跳选角）：清掉上个账号的角色缓存与选中标记，
+    // 避免换账号时串号 —— 有登录态的刷新不动缓存，回来还在原账号上
     StorageManager.clear();
     // 公告提醒：拉取「生效中的重要公告」（公共接口，无需令牌），有就弹、没有或拉取失败就静默 ——
     // 挂在本场景自己的节点上（登录场景没有 UI 图层容器，见 AnnouncementNoticeDialog 的说明），

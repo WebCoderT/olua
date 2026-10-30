@@ -17,6 +17,9 @@ const { ccclass } = _decorator;
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
 const DELETE_ROLE_BUTTON_PREFIX = "delete_role_";
 
+/** 角色名牌的节点名前缀（节点名带角色 id 便于排查） */
+const NAME_PLATE_PREFIX = "role_name_plate_";
+
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
   beginGameButton: Node;
@@ -243,10 +246,23 @@ export class RoleSelector extends Component {
       console.warn(`[RoleSelector] 角色数 ${this.roleSummaries.length} 超过站位 ${stands} 个：多出的角色没有站位、会叠在原点（检查服务端 ROLE_MAX_PER_ACCOUNT 是否大于选区站位数量）`);
     }
     this.roleSummaries.forEach((role, index) => {
-      const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, roleSelectorLayout.rolePositions[index] ?? new Vec2(), roleSelectorLayout.previewSize);
+      const stand = roleSelectorLayout.rolePositions[index] ?? new Vec2();
+      const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, stand, roleSelectorLayout.previewSize);
       node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
       this.stage!.addChild(node);
       this.mainView.ownerRoleNodes.push(node);
+      // 名字与等级挂在脚下（随列表一起重建销毁；位置由站位 + 偏移推导，见 roleSelectorLayout.namePlate ——
+      // 头顶留给管理模式的删除按钮，两层不叠）
+      const plate = GameUiHelper.createText(
+        `${NAME_PLATE_PREFIX}${role.id}`,
+        getText("label_role_name_plate", { name: role.name, level: role.level }),
+        roleSelectorLayout.namePlate.fontSize,
+        new Vec2(stand.x + roleSelectorLayout.namePlate.offset.x, stand.y + roleSelectorLayout.namePlate.offset.y),
+        roleSelectorLayout.namePlate.size,
+        roleSelectorLayout.namePlate.color,
+      );
+      this.stage!.addChild(plate);
+      this.mainView.ownerRoleNodes.push(plate);
     });
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
