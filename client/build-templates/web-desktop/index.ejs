@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes"/>
     <meta name="mobile-web-app-capable" content="yes"/>
     <meta name="full-screen" content="yes"/>
-    <!-- 本工程是横屏构图（设计分辨率 1624×750），与引擎默认的 portrait 相反 -->
+    <!-- 本工程是横屏构图（设计分辨率 1920×1080），与引擎默认的 portrait 相反 -->
     <meta name="screen-orientation" content="landscape"/>
     <meta name="x5-fullscreen" content="true"/>
     <meta name="360-fullscreen" content="true"/>
@@ -28,7 +28,7 @@
       浏览器窗口怎么缩放它都不变（这就是「游戏画面不跟着窗口变」的根因）。
       这里改成由 style.css 铺满整个视口；引擎的 screen-adapter 在每次 window-resize 时
       读 #GameDiv 的 clientWidth/clientHeight 重设画布，于是画布永远等于窗口。
-      详见 client/FAQ.md「画面为什么只有一个固定大小的框」。
+      游戏内部坐标固定 1920×1080（见 client/FAQ.md「屏幕适配」），页面层只负责把画布铺满窗口。
     -->
     <div id="GameDiv" cc_exact_fit_screen="false">
       <div id="Cocos3dGameContainer">

@@ -82,7 +82,7 @@ export default class GuideOverlay extends Node {
     this.active = false;
   }
 
-  /** 窗口尺寸变了要重画：遮罩按屏幕尺寸算，气泡也要重新夹边 */
+  /** 重画遮罩与气泡（屏幕尺寸是常量，打开 / 换步骤时调） */
   refresh(): void {
     if (this.active) this.render();
   }

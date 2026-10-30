@@ -4,7 +4,7 @@ import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
-import { applyScreenPolicy, getAnchoredPosition, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
+import { getAnchoredPosition } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { Role } from "../entities/Role";
@@ -44,11 +44,10 @@ interface RoleSelectorCreateView {
  * （游戏内各处读角色是同步的，所以必须有一份本地完整数据，见 StorageManager.cacheRole）。
  * 协议见 ui/utils/net —— 本组件不写路径、不拼地址、不管令牌。
  *
- * 结构：铺满窗口的背景（始终盖住整个窗口）+ 一块固定设计尺寸的「舞台」，
- * 其余元素全部挂在舞台下并按设计坐标摆放（坐标以舞台中心为原点）。
- * 舞台由 applyStageLayout 按当前可见尺寸等比缩放（contain、只缩不放），
- * 所以窗口宽高比与设计不一致（窄屏会裁左右 / 宽屏会裁上下）时构图依旧完整可见，
- * 新增元素只需按设计画布摆坐标，不必关心窗口尺寸。
+ * 结构：铺满屏幕的背景（始终盖住整个窗口）+ 一块「舞台」，
+ * 其余元素全部挂在舞台下并按设计坐标摆放（坐标以舞台中心为原点，画布 = 1920×1080）。
+ * 舞台不缩放 —— 本作只有 1920×1080 一个分辨率，1 设计像素 = 1 屏幕像素
+ * （见 ScreenLayout.designResolution），新增元素按 1080p 画布摆坐标即可。
  * 位置/尺寸/用图统一见 configs/hudLayout.roleSelectorLayout
  */
 @ccclass("RoleSelector")
@@ -56,15 +55,13 @@ export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
-  /** 舞台容器（除背景与底部栏外的所有元素都挂这里，整体按可见尺寸等比缩放；见 applyStageLayout） */
+  /** 舞台容器（除背景与底部栏外的所有元素都挂这里，不缩放；见 dockBottomBar） */
   private stage: Node | null = null;
   /**
-   * 底部栏（不在舞台内）：横跨可见宽 + 贴屏幕底边，位置/缩放由 applyStageLayout 实时算
-   * （素材带牌匾装饰不可拉伸变形，只能等比缩放；跟舞台缩会两侧露背景、且不贴屏幕底边）
+   * 底部栏（不在舞台内）：横跨整屏 + 贴屏幕底边，位置由 dockBottomBar 算
+   * （素材带牌匾装饰是整图，尺寸在配置里按 1080p 画布定死，跟舞台走会两侧露背景）
    */
   private bottomBar: Node | null = null;
-  /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
-  private offWindowResize: (() => void) | null = null;
   /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
   private manageMode = false;
   /** 管理模式的临时节点（提示条 + 各角色的删除按钮）：退出管理模式或刷新列表时统一销毁 */
@@ -82,9 +79,9 @@ export class RoleSelector extends Component {
   /**
    * 背景节点与它的素材原始尺寸
    *
-   * 背景是**等比铺满（cover）**、不是拉伸：素材是 650×1154 的竖图，设计分辨率是 1624×750，
-   * 直接铺会在横竖两轴上都变形（纵横比差 3.87 倍，整屏糊）。cover 只缩放、多出的部分落在屏外，
-   * 窗口尺寸变化时要按新可见区重算（见 fitBackground）。
+   * 背景是**等比铺满（cover）**、不是拉伸：素材是 650×1154 的竖图，画布是 1920×1080，
+   * 直接铺会在横竖两轴上都变形（纵横比差 3.87 倍，整屏糊）。cover 只缩放、多出的部分落在屏外
+   * （尺寸在素材加载完后算一次，见 fitBackground）。
    */
   private background: Node | null = null;
   private backgroundTexture: Size | null = null;
@@ -92,9 +89,7 @@ export class RoleSelector extends Component {
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
-    // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
-    applyScreenPolicy();
-    // 背景（不在舞台内：铺满可见区，始终盖住整个窗口；舞台等比缩小后四周留白由它兜底）
+    // 背景（不在舞台内：铺满整个屏幕，始终盖住整个窗口）
     this.background = GameUiHelper.createCoverImage("role_selector_background", roleSelectorLayout.background, (textureSize) => {
       this.backgroundTexture = textureSize;
       this.fitBackground();
@@ -103,26 +98,20 @@ export class RoleSelector extends Component {
     // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.roleSelectorLayout）
     this.stage = this.createStage();
     this.mainView = this.createMainView();
-    // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排（背景是 cover，也要跟着重算）
-    this.applyStageLayout();
-    this.offWindowResize = onWindowResize(() => {
-      this.applyStageLayout();
-      this.fitBackground();
-    });
+    // 底部栏贴底（位置是常量，见 dockBottomBar）
+    this.dockBottomBar();
     // 角色列表来自服务端（拉取失败由网络层统一提示，列表保持空）
     void this.loadRoles();
   }
 
-  /** 按当前可见区把背景铺满（等比，素材尺寸未知时什么都不做——加载完会再调一次） */
+  /** 把背景铺满整个屏幕（等比；素材尺寸未知时什么都不做——加载完会再调一次） */
   private fitBackground() {
     if (!this.background || !isValid(this.background, true) || !this.backgroundTexture) return;
     GameUiHelper.fitCover(this.background, this.backgroundTexture);
   }
 
-  /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁），并清掉待确认定时器 */
+  /** 场景卸载：清掉待确认定时器 */
   onDestroy() {
-    this.offWindowResize?.();
-    this.offWindowResize = null;
     this.cancelDeleteConfirm();
   }
 
@@ -137,31 +126,17 @@ export class RoleSelector extends Component {
   }
 
   /**
-   * 舞台与底部栏适配（窗口尺寸变化时可重复调用）
+   * 底部栏贴底（贴屏幕下边缘、整条居中）
    *
-   * 铺满窗口的适配策略下，窗口宽高比与设计（1624×750）不一致时必然有一边被裁：
-   * 窗口偏窄（如 1024×768 → 可见区仅 1000×750）会裁掉左右，写死坐标的贴边元素
-   * （左侧创建/管理/返回按钮、右侧创建角色弹窗）就整体跑到屏幕外看不见了；
-   * 这里把整块舞台按 contain 比例缩小（只缩不放），构图恒完整落在可见区内。
-   *
-   * 底部栏不进舞台（见 roleSelectorLayout.bottomBar 注释）：它按**可见宽**等比缩放
-   * （素材不可拉伸，等比才不变形；铺满窗口策略下可见宽恒 ≤ 设计宽 1624，系数恒 ≤ 1
-   * 不会放大模糊），再贴屏幕底边 —— 任何分辨率下都横跨整屏、紧贴下边缘
+   * 只有位置要算：尺寸是配置里的常量（= 1080p 画布宽），单分辨率下这里没有任何
+   * 「按窗口尺寸推导缩放」的余地 —— 那正是本次删掉的东西。
    */
-  applyStageLayout() {
-    const stage = this.stage;
-    if (!stage || !isValid(stage, true)) return;
-    const visible = getVisibleSize();
-    const scale = getStageScale(roleSelectorLayout.stageSize, visible);
-    stage.setScale(scale, scale, 1);
+  dockBottomBar() {
     const bar = this.bottomBar;
     if (!bar || !isValid(bar, true)) return;
-    const barLayout = roleSelectorLayout.bottomBar;
-    const barScale = visible.width / barLayout.size.width;
-    const visual = new Size(barLayout.size.width * barScale, barLayout.size.height * barScale);
-    // 贴底：bottom-center 语义 = 区块中心到屏幕下边缘 = 缩放后高度的一半（setPosition 不吃 Vec2，拆开传）
-    const position = getAnchoredPosition(visual, visible, "bottom-center", 0, visual.height / 2);
-    bar.setScale(barScale, barScale, 1);
+    const { size } = roleSelectorLayout.bottomBar;
+    // 贴底：bottom-center 语义 = 区块中心到屏幕下边缘 = 高度的一半（setPosition 不吃 Vec2，拆开传）
+    const position = getAnchoredPosition(size, "bottom-center", 0, size.height / 2);
     bar.setPosition(position.x, position.y, 0);
   }
 
@@ -220,7 +195,7 @@ export class RoleSelector extends Component {
   private createMainView(): RoleSelectorMainView {
     // 位置/尺寸与用图统一见 configs/hudLayout.roleSelectorLayout
     const layout = roleSelectorLayout;
-    // 底部栏（不在舞台内，挂场景根；位置/缩放见 applyStageLayout —— 初次位置由它算，这里不用摆）
+    // 底部栏（不在舞台内，挂场景根；位置见 dockBottomBar —— 初次位置由它算，这里不用摆）
     const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, undefined, layout.bottomBar.size);
     this.node.addChild(bottomBar);
     this.bottomBar = bottomBar;

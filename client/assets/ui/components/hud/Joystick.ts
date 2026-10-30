@@ -6,7 +6,7 @@ import GameUiHelper from "../../helpers/GameUiHelper";
  *
  * 自身只负责组装零件（底座底图 + 可拖动手柄）与贴边定位，不含任何「手感」逻辑：
  * 拖动判定、手柄位移与走/跑解释都在 components/input/RoleJoystickInput，由组合根（ui/Game）
- * 把底座与手柄两个节点交给主角组件 —— 摇杆是**屏幕常驻 HUD**、坐标以屏幕中心为原点且随窗口尺寸贴边，
+ * 把底座与手柄两个节点交给主角组件 —— 摇杆是**屏幕常驻 HUD**、坐标以屏幕中心为原点且贴屏幕左下角，
  * 不属于角色子树，所以不能像键盘/鼠标操控那样在主角组件里自建（那两个输入的宿主就是角色节点）。
  *
  * 尺寸/边距见 configs/hudLayout.joystickLayout，图片来源见 uiImages（joystickBackground / joystickHandle）。
@@ -31,7 +31,7 @@ export default class Joystick extends Node {
     return this.handle;
   }
 
-  /** 贴边定位（贴屏幕左下角按可见尺寸重算）——窗口尺寸变化时由组合根调用 */
+  /** 贴边定位（贴屏幕左下角；坐标是常量，创建时调一次） */
   applyAnchorPosition() {
     GameUiHelper.setJoystickPosition(this);
   }

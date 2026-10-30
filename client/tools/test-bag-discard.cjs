@@ -278,7 +278,7 @@ console.log("— 拖出弹窗销毁：确认框与弹窗接线 —");
 check(fs.existsSync(CONFIRM_DIALOG_FILE), "存在通用确认框组件 ConfirmDialog");
 check(fs.existsSync(`${CONFIRM_DIALOG_FILE}.meta`), "新组件带 .meta（新 assets 必带，否则编辑器不认）");
 check(/export default class ConfirmDialog extends Node \{/.test(confirmSource), "确认框自身即节点（构造建 UI，组件约定）");
-check(/getVisibleSize\(\)/.test(confirmSource), "全屏遮罩用「可见区」尺寸（NO_BORDER 下不等于设计分辨率）");
+check(/designResolution/.test(confirmSource), "全屏遮罩用固定画布尺寸 designResolution（单分辨率，正好盖满）");
 check(/blockClickThrough\(this\);/.test(confirmSource), "确认框在鼠标通道登记命中拦截（下层 UI 与世界都收不到这次点击）");
 ["TOUCH_START", "TOUCH_MOVE", "TOUCH_END", "TOUCH_CANCEL"].forEach((type) =>
   check(new RegExp(`this\\.on\\(Node\\.EventType\\.${type}, this\\.stopTouchBubble, this\\)`).test(confirmSource), `确认框收住 ${type}（按下遮罩不被下面的背包格子拿走）`),

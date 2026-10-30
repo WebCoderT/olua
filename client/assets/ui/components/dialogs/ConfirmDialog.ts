@@ -3,7 +3,7 @@ import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { confirmDialogLayout } from "../../../configs/hudLayout";
 import { blockClickThrough } from "../../utils/input/UiHit";
-import { getVisibleSize } from "../../utils/layout/ScreenLayout";
+import { designResolution } from "../../utils/layout/ScreenLayout";
 
 /** 确认框的文案与回调（文案由使用方从 configs/texts 取，见 BagDialog 的拖出销毁） */
 export interface ConfirmDialogOptions {
@@ -32,7 +32,7 @@ export interface ConfirmDialogOptions {
  * · 触摸通道：面板/遮罩自身注册 TOUCH_* 并在回调里停冒泡，按下遮罩即独占本次触摸 ——
  *   否则一次按下会穿过遮罩落到下面的背包格子（格子注册了 TOUCH_START，会开始拖物品）；
  * · 鼠标通道：blockClickThrough 命中即中断，下层 UI（背包按钮）与世界（点地面走路）都收不到这次点击。
- * 全屏尺寸取「可见区」而不是设计分辨率（见 ScreenLayout.getVisibleSize），任意窗口宽高比都盖满屏幕。
+ * 全屏尺寸 = 设计分辨率（见 ScreenLayout.designResolution）：本作只有一个分辨率，遮罩正好盖满屏幕。
  *
  * 点遮罩空白处**不做任何事**：销毁类操作必须明确选择，别让「随手点一下」被当成取消/确定。
  */
@@ -48,8 +48,8 @@ export default class ConfirmDialog extends Node {
     super(layout.name);
     this.handleConfirm = options.onConfirm;
     this.handleCancel = options.onCancel;
-    // 全屏遮罩：覆盖整个可见区（黑色半透明，兼作下层点击的拦截层）
-    const screenSize = getVisibleSize();
+    // 全屏遮罩：覆盖整个屏幕（黑色半透明，兼作下层点击的拦截层）
+    const screenSize = designResolution;
     this.addComponent(UITransform).setContentSize(screenSize.width, screenSize.height);
     const mask = new Node("confirm_mask");
     const graphics = mask.addComponent(Graphics);

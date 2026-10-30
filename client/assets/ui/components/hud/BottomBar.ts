@@ -118,7 +118,7 @@ export default class BottomBar extends Node {
     this.chatDialog.open(auto);
   }
 
-  /** 窗口尺寸变化时聊天小窗重贴左下角（关着时是 no-op，见 ChatDialog.refreshDock） */
+  /** 开聊天小窗时重贴左下角（关着时是 no-op，见 ChatDialog.refreshDock） */
   refreshChatBoxDock() {
     this.chatDialog.refreshDock();
   }
@@ -143,7 +143,7 @@ export default class BottomBar extends Node {
     return this.shortcutKeyBar;
   }
 
-  /** 贴边定位（贴屏幕底部居中按可见尺寸重算）——窗口尺寸变化时由组合根调用 */
+  /** 贴边定位（贴屏幕底部居中；坐标是常量，创建时调一次） */
   applyAnchorPosition() {
     GameUiHelper.setBottomBarPosition(this);
   }

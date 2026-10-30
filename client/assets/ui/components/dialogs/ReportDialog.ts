@@ -5,7 +5,7 @@ import LayerManager from "../../core/LayerManager";
 import { reportDialogLayout as layout } from "../../../configs/hudLayout";
 import { SocialApi } from "../../utils/net/Api";
 import { blockClickThrough } from "../../utils/input/UiHit";
-import { getVisibleSize } from "../../utils/layout/ScreenLayout";
+import { designResolution } from "../../utils/layout/ScreenLayout";
 
 /** 类别顺序（与 layout.texts.categories 一一对应；值必须与服务端 REPORT_CATEGORIES 同集） */
 const CATEGORIES = ["abuse", "cheat", "name", "other"];
@@ -51,7 +51,7 @@ export default class ReportDialog extends Node {
     this.targetRoleId = options.targetRoleId;
     this.onSubmitted = options.onSubmitted;
 
-    const screen = getVisibleSize();
+    const screen = designResolution;
     this.addComponent(UITransform).setContentSize(screen.width, screen.height);
     const mask = new Node(`${layout.name}_mask`);
     const graphics = mask.addComponent(Graphics);
