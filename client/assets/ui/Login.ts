@@ -61,7 +61,6 @@ export class Login extends Component {
     stageLayout.resizeMode = Layout.ResizeMode.CONTAINER;
     stageLayout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     stageLayout.spacingY = layout.spacingY;
-    stageLayout.paddingTop = layout.paddingTop;
     stageLayout.paddingBottom = layout.paddingBottom;
     this.node.addChild(this.stage);
     // 账号输入框（坐标不用给 —— 纵向位置由 Layout 统一排，这里只关心文案/尺寸/图标）

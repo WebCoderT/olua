@@ -275,9 +275,9 @@ export default class GameUiHelper {
    */
   static createInputField(placeholder: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 80), icon?: string, password: boolean = false) {
     const background = UiHelper.createSprite("input_background", uiImages.loginInputBackground, position, size);
-    if (icon) background.addChild(UiHelper.createSprite("input_icon", icon, new Vec2(-size.width / 2 + 60, -6), new Size(40, 40)));
+    if (icon) background.addChild(UiHelper.createSprite("input_icon", icon, new Vec2(-size.width / 2 + 60, 0), new Size(40, 40)));
     const inset = icon ? uiTheme.inputField.iconInset : uiTheme.inputField.plainInset;
-    const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, -6), new Vec2(size.width - inset, uiTheme.inputField.height), password);
+    const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, 0), new Vec2(size.width - inset, uiTheme.inputField.height), password);
     background.addChild(input);
     return { node: background, input };
   }

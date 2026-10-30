@@ -33,8 +33,6 @@ export const loginLayout = {
   width: 1080,
   /** 相邻元素的统一间距（Layout.spacingY） */
   spacingY: 30,
-  /** 第一项与舞台顶边的距离（Layout.paddingTop） */
-  paddingTop: 75,
   /** 最后一项与舞台底边的距离（Layout.paddingBottom） */
   paddingBottom: 0,
   /**
@@ -44,7 +42,7 @@ export const loginLayout = {
   order: ["logo", "account", "password", "zoneSelector", "loginButton", "registerButton"],
   background: uiImages.loginBackground,
 
-/** 账号输入框 */
+  /** 账号输入框 */
   account: { placeholder: "请输入您的游戏账号", size: new Size(600, 80), icon: uiImages.loginAccountIcon, password: false },
   /** 密码输入框 */
   password: { placeholder: "请输入您的游戏密码", size: new Size(600, 80), icon: uiImages.loginPasswordIcon, password: true },
@@ -60,7 +58,7 @@ export const loginLayout = {
   /** 注册按钮（与登录共用上方的账号/密码输入框；账号唯一性与格式由服务端校验） */
   registerButton: {
     name: "register_button",
-    image: uiImages.middleButtonBackground,
+    image: uiImages.smallButtonBackground,
     text: "注册账号",
     size: new Size(240, 56),
     textColor: new Color("#f4fc00"),
