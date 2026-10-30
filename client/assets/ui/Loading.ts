@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Label, Sprite } from "cc";
+import { _decorator, Component, director, Label, Mask, Node, UITransform, Vec2 } from "cc";
 import { maps } from "../configs/map";
 import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
@@ -28,8 +28,8 @@ export class Loading extends Component {
 
   /** 进度文本 */
   private progressLabel: Label | null = null;
-  /** 进度条填充图（Sprite FILLED 横向，fillRange 跟进度走） */
-  private progressFill: Sprite | null = null;
+  /** 进度条填充的 Mask（宽度跟进度走，从内条左缘起裁切 —— 图不拉伸，见 configs bar.fillArea 注释） */
+  private progressFillMask: UITransform | null = null;
 
   start() {
     // 背景与进度文字（位置、字号与用图见 configs/hudLayout.loadingLayout）
@@ -39,15 +39,25 @@ export class Loading extends Component {
     const animation = GameUiHelper.createImage("loading_animation", "", animLayout.position, animLayout.size);
     AnimationHelper.playLoopAtlas("loading_animation", animation, animLayout.atlas, animLayout.frameRate);
     this.node.addChild(animation);
-    // 底部正中的进度条（底图在下、填充图在上；填充按进度横向裁切）
+    // 底部进度条：底图 + 填充图。填充图挂 Mask 下，Mask 锚点在内条左缘、宽度 = 进度 × 内条宽 ——
+    // 填充区坐标全部按条显示尺寸从素材占比现算（fillArea 是素材原生占比，条改大小不用改这里）
     const barLayout = loadingLayout.bar;
+    const fillArea = barLayout.fillArea;
     this.node.addChild(GameUiHelper.createImage("loading_bar_background", barLayout.background, barLayout.position, barLayout.size));
-    const fill = GameUiHelper.createImage("loading_bar_fill", barLayout.fill, barLayout.position, barLayout.size);
-    this.progressFill = fill.getComponent(Sprite);
-    this.progressFill.fillType = Sprite.FillType.HORIZONTAL;
-    this.progressFill.fillStart = 0;
-    this.progressFill.fillRange = 0;
-    this.node.addChild(fill);
+    // 内条左缘 / 纵心相对**条中心**的偏移（由素材占比 × 条显示尺寸现算）
+    const relLeft = (fillArea.leftFrac - 0.5) * barLayout.size.width;
+    const relOffsetY = -(fillArea.yCenterFrac - 0.5) * barLayout.size.height;
+    // Mask 锚点 (0,0.5) 定在内条左缘：舞台坐标 = 条坐标 + 相对偏移
+    const fillMask = new Node("loading_bar_fill_mask");
+    this.progressFillMask = fillMask.addComponent(UITransform);
+    this.progressFillMask.setAnchorPoint(0, 0.5);
+    fillMask.setPosition(barLayout.position.x + relLeft, barLayout.position.y + relOffsetY, 0);
+    this.progressFillMask.setContentSize(0, fillArea.heightFrac * barLayout.size.height); // 初始进度 0 → 宽 0
+    fillMask.addComponent(Mask);
+    // 填充图与底图对齐：子节点（锚点 0.5,0.5）摆在「条中心相对 Mask 锚点」的局部坐标 = 负的相对偏移
+    const fill = GameUiHelper.createImage("loading_bar_fill", barLayout.fill, new Vec2(-relLeft, -relOffsetY), barLayout.size);
+    fillMask.addChild(fill);
+    this.node.addChild(fillMask);
     // 一行小字：进度条右下角（位置 / 字号见 configs loadingLayout.progress）
     const progress = GameUiHelper.createLoadingProgress(loadingLayout.progress.text, loadingLayout.progress.position, loadingLayout.progress.fontSize);
     this.progressLabel = progress.progressLabel;
@@ -98,10 +108,13 @@ export class Loading extends Component {
     return result;
   }
 
-  /** 更新进度（ratio 取值 0~100；进度条填充图 + 百分比小字同步；tip 为当前阶段的说明，如"帧动画 3/7"） */
+  /** 更新进度（ratio 取值 0~100；填充 Mask 宽度 + 百分比小字同步；tip 为当前阶段的说明，如"帧动画 3/7"） */
   private setProgress(ratio: number, tip?: string) {
     const percent = Math.min(100, Math.floor(ratio));
-    if (this.progressFill) this.progressFill.fillRange = Math.min(1, ratio / 100);
+    if (this.progressFillMask) {
+      const fillArea = loadingLayout.bar.fillArea;
+      this.progressFillMask.width = Math.max(0, Math.min(1, ratio / 100)) * fillArea.widthFrac * loadingLayout.bar.size.width;
+    }
     this.setProgressText(tip ? getText("progress_loading_tip", { percent, tip }) : getText("progress_loading", { percent }));
   }
 

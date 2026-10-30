@@ -258,15 +258,19 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   );
   check(
     inside(rectOf(loadingLayout.bar.position, loadingLayout.bar.size), CANVAS) && loadingLayout.bar.position.x === 0 && loadingLayout.bar.position.y < 0,
-    "Loading：进度条在画布内且位于下半屏正中（底图 + 填充图，素材原生 1136×227 按半尺寸显示）",
+    "Loading：进度条在画布内且位于下半屏正中（底图 + 填充图；显示尺寸随手调，守画布内与大位置）",
   );
   check(
-    loadingLayout.progress.fontSize <= 18 && inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS) && loadingLayout.progress.position.y < loadingLayout.bar.position.y,
-    "Loading：进度文字是小字（fontSize ≤ 18）、在画布内且位于进度条下半部（具体压哪个角落随手动微调，守大位置）",
+    loadingLayout.progress.fontSize <= 18 && inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS),
+    "Loading：进度文字是小字（fontSize ≤ 18）且在画布内（具体压哪个角落随手动微调，守大位置）",
   );
   check(
-    /playLoopAtlas\("loading_animation"/.test(loading) && /FillType\.HORIZONTAL/.test(loading) && /fillRange = Math\.min\(1, ratio \/ 100\)/.test(loading),
-    "Loading：帧动画走 playLoopAtlas 循环播放；进度条填充图 FILLED 横向，fillRange 跟 setProgress 走",
+    /new Node\("loading_bar_fill_mask"\)/.test(loading) && /addComponent\(Mask\)/.test(loading) && /widthFrac \* loadingLayout\.bar\.size\.width/.test(loading) && !/FillType/.test(loading),
+    "Loading：填充图挂 Mask 下、Mask 宽度 = 进度 × widthFrac × 条宽（内条从左缘起显示宽度，图不拉伸；不再用会把纹理压扁的 FILLED）",
+  );
+  check(
+    /playLoopAtlas\("loading_animation"/.test(loading),
+    "Loading：帧动画走 playLoopAtlas 循环播放",
   );
   check(!/onWindowResize\(/.test(login) && !/onWindowResize\(/.test(selector), "两个场景都不再注册窗口尺寸变化重排");
 

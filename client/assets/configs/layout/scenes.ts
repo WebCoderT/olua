@@ -213,14 +213,20 @@ export const loadingLayout = {
   /** 居中的加载帧动画（图集 7 帧循环；显示尺寸 / 位置 / 帧率在这里调） */
   loadingAnimation: { atlas: uiImages.loadingAnimationAtlas, position: new Vec2(-45, 0), size: new Size(240, 240), frameRate: 8 },
   /**
-   * 底部正中的进度条：底图 + 填充图，填充图按进度横向 FILLED 裁切（fillRange 跟进度走）。
-   * 两张图素材原生 1136×227，这里按半尺寸显示；位置 / 尺寸在这里调
+   * 底部正中的进度条：底图 + 填充图。填充图挂 Mask 下，**Mask 宽度跟进度走**（从内条左缘起裁切，
+   * 图不拉伸 —— Sprite 的 FILLED 是把整张纹理压扁，不适合这种带透明边距的填充条）。
+   * 显示尺寸在这里调（当前 1920×300 是拉满全宽的）
    */
   bar: {
     position: new Vec2(0, -390),
-    size: new Size(1920 , 300),
+    size: new Size(1920, 300),
     background: uiImages.loadingProgressBackground,
     fill: uiImages.loadingProgressFill,
+    /**
+     * 填充区（**素材原生占比**，从 fill 图实测：不透明内条占整图 x[28,1067] y[60,188]，整图 1136×227）。
+     * 用占比而非显示坐标 —— 条改大小这里不用动，显示尺寸在代码里按条宽/高现算；换素材才要重测
+     */
+    fillArea: { leftFrac: 28 / 1136, widthFrac: 1039 / 1136, yCenterFrac: 124 / 227, heightFrac: 128 / 227 },
   },
   /** 加载进度文字：一行小字放进度条右下角（坐标相对画布中心） */
   progress: { text: "加载中 0%", position: new Vec2(0, -100), fontSize: 12 },
