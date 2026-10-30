@@ -1,4 +1,4 @@
-import { _decorator, Component, EditBox, Label, Node, UITransform, isValid } from "cc";
+import { _decorator, Component, EditBox, Label, Layout, Node, UITransform, Vec2, isValid } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
@@ -20,17 +20,20 @@ const { ccclass } = _decorator;
  * 请求层随后自动带上它 —— 客户端不再自己造账号，也不再硬编码任何地址。
  * 两个按钮共用一个 submitting 标记，避免连点重复提交。
  *
- * 结构与选角场景同一套：铺满整个屏幕的背景 + 一块固定尺寸的「舞台」，
- * 其余元素全部挂在舞台下按设计坐标摆放（坐标以舞台中心为原点，见 configs hudLayout.loginLayout）。
- * 本作只有 1920×1080 一个分辨率（见 ui/utils/layout/ScreenLayout）：舞台**不缩放**，
- * 坐标写多少屏幕上就是多少（1 设计像素 = 1 屏幕像素）
+ * 结构与选角场景不同：铺满屏幕的背景 + 一块 **cc.Layout 垂直布局的「舞台」**，
+ * 其余元素全部挂在舞台下从上到下排 —— 顺序见 configs/layout/scenes.loginLayout.order，
+ * 间距只有 spacingY 一个数（Layout.spacingY），高度随内容自动变、宽度固定（引擎在
+ * VERTICAL 下只写容器高度）。舞台不缩放 —— 本作只有 1920×1080 一个分辨率，
+ * 1 设计像素 = 1 屏幕像素（见 ScreenLayout.designResolution）
  */
 @ccclass("Login")
 export class Login extends Component {
   accountInput: Node;
   passwordInput: Node;
-  /** 舞台容器（除背景外的所有元素都挂这里；尺寸按配置定死，不缩放） */
+  /** 舞台容器（cc.Layout 垂直布局：宽度固定 loginLayout.width，高度随内容自动变） */
   private stage: Node | null = null;
+  /** 舞台内的元素（键 = loginLayout.order 里的 key；纵向位置由 Layout 统一排） */
+  private widgets: Record<string, Node> = {};
   /** 是否正在提交（登录与注册互斥） */
   private submitting = false;
   /** 公告提醒弹窗（进登录页时把生效中的重要公告摊开给玩家看，见该类的说明） */
@@ -45,26 +48,31 @@ export class Login extends Component {
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
-    // 位置/尺寸与用图统一见 configs/hudLayout.loginLayout
+    // 位置/尺寸与用图统一见 configs/layout/scenes.loginLayout
     const layout = loginLayout;
-    // 背景（不在舞台内：铺满整个屏幕，始终盖住窗口）
+    // 背景（不在舞台内：铺满整个屏幕）
     this.node.addChild(GameUiHelper.createFullScreenImage("login_background", layout.background));
-    // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.loginLayout）
+    // 舞台容器：cc.Layout 垂直布局 —— 元素从上到下排、间距只有 spacingY 一个数；
+    // 高度随内容自动变（CONTAINER），宽度固定（引擎在 VERTICAL 布局下只写容器高度、不碰宽度）
     this.stage = new Node("login_stage");
-    this.stage.addComponent(UITransform).setContentSize(layout.stageSize);
+    this.stage.addComponent(UITransform).setContentSize(layout.width, 0);
+    const stageLayout = this.stage.addComponent(Layout);
+    stageLayout.type = Layout.Type.VERTICAL;
+    stageLayout.resizeMode = Layout.ResizeMode.CONTAINER;
+    stageLayout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    stageLayout.spacingY = layout.spacingY;
+    stageLayout.paddingTop = layout.paddingTop;
+    stageLayout.paddingBottom = layout.paddingBottom;
     this.node.addChild(this.stage);
-    // 账号输入框
-    const account = GameUiHelper.createInputField(layout.account.placeholder, layout.account.position, layout.account.size, layout.account.icon);
+    // 账号输入框（坐标不用给 —— 纵向位置由 Layout 统一排，这里只关心文案/尺寸/图标）
+    const account = GameUiHelper.createInputField(layout.account.placeholder, new Vec2(), layout.account.size, layout.account.icon);
     this.accountInput = account.input;
-    this.stage.addChild(account.node);
     // 密码输入框
-    const password = GameUiHelper.createInputField(layout.password.placeholder, layout.password.position, layout.password.size, layout.password.icon, layout.password.password);
+    const password = GameUiHelper.createInputField(layout.password.placeholder, new Vec2(), layout.password.size, layout.password.icon, layout.password.password);
     this.passwordInput = password.input;
-    this.stage.addChild(password.node);
     // 登录按钮
     const button = layout.loginButton;
-    const loginButton = GameUiHelper.createTexturedButton(button.name, button.image, button.text, button.position, button.size, button.textColor, button.fontSize);
-    this.stage.addChild(loginButton);
+    const loginButton = GameUiHelper.createTexturedButton(button.name, button.image, button.text, new Vec2(), button.size, button.textColor, button.fontSize);
     loginButton.on(Node.EventType.TOUCH_END, () => void this.login());
     // 注册按钮（用同一个账号密码输入框；服务端会校验账号唯一与格式）
     const registerLayout = layout.registerButton;
@@ -72,20 +80,26 @@ export class Login extends Component {
       registerLayout.name,
       registerLayout.image,
       registerLayout.text,
-      registerLayout.position,
+      new Vec2(),
       registerLayout.size,
       registerLayout.textColor,
       registerLayout.fontSize,
     );
-    this.stage.addChild(registerButton);
     registerButton.on(Node.EventType.TOUCH_END, () => void this.register());
     // logo
-    this.stage.addChild(GameUiHelper.createImage(layout.logo.name, layout.logo.image, layout.logo.position, layout.logo.size));
+    const logo = GameUiHelper.createImage(layout.logo.name, layout.logo.image, new Vec2(), layout.logo.size);
     // 区服选择（多开区 #295）：先摆一个空文案节点，活区列表拉到后再刷新内容。
     // 点击换区走统一指针入口（PC 走 bindMousePress 防穿透，触屏走 TOUCH_END）—— 审计 audit-ui-click-through 守这条
-    this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, layout.zoneSelector.position, layout.zoneSelector.size, layout.zoneSelector.color);
-    this.stage.addChild(this.zoneLabel);
+    this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, new Vec2(), layout.zoneSelector.size, layout.zoneSelector.color);
     this.bindZonePicker();
+    // 元素按 key 登记，按 loginLayout.order 的顺序挂进舞台（挂载顺序 = 屏幕顺序，Layout 照它排）
+    this.widgets = { logo, account: account.node, password: password.node, zoneSelector: this.zoneLabel, loginButton, registerButton };
+    for (const key of layout.order) {
+      const widget = this.widgets[key];
+      // 配置里写了但没建节点 = 元素被漏掉，登录页会少一块且位置对不上 —— 当场报出来，别静默跳过
+      if (!widget) throw new Error(`login_stage is missing widget "${key}" (see loginLayout.order in configs/layout/scenes)`);
+      this.stage.addChild(widget);
+    }
     // 拉活区列表（公共接口，无需令牌；不阻塞登录页出现，失败静默 —— 注册落默认区）
     void this.loadZones();
     // 清空缓存------开发时使用（含角色缓存与上次会话，进登录页一律重新登录）

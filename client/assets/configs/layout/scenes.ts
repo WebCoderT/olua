@@ -8,28 +8,51 @@ import { uiImages } from "./images";
  * 本作只有 **1920×1080** 一个分辨率（见 ui/utils/layout/ScreenLayout.designResolution）：
  * 1 设计像素 = 1 屏幕像素，舞台**不缩放**，这里写多少屏幕上就是多少，没有「按窗口尺寸换算」。
  * 背景图不在舞台内（铺满整个屏幕，始终盖住窗口）
+ *
+ * 两者的排版方式不同，别混用：
+ * - 登录：元素**纵向从上到下排**（cc.Layout 垂直布局，间距只有 spacingY 一个数，顺序见 order）；
+ * - 选角：仍是手工坐标（构图是「两侧按钮 + 中间站位」的二维布局，纵向流式排不出来）
  */
 
 //#region 登录场景
 
-/** 登录界面布局 */
+/**
+ * 登录界面布局
+ *
+ * 舞台就是一个 **cc.Layout 垂直布局容器**（Login.ts 里 addComponent(Layout)）：
+ * - 元素**不写坐标**：纵向位置由 Layout 统一排（从上到下，间距全部 = `spacingY` 这一个数），
+ *   水平方向一律居中（元素建在 x=0，Layout 的 VERTICAL 不动 x）；
+ * - **高度随内容自动变**（resizeMode = CONTAINER：= paddingTop + 各元素高 + (n-1)×spacingY + paddingBottom），
+ *   **宽度固定不变**（引擎在 VERTICAL 布局下只写容器高度、不碰宽度）；
+ * - 屏幕顺序 = `order` 数组顺序（元素加进舞台的顺序）；加/删/换元素改 order 一行即可。
+ *
+ * 想调「元素之间的距离」只改 `spacingY`，想调「整块离顶/离底多远」改 paddingTop / paddingBottom。
+ */
 export const loginLayout = {
+  /** 舞台宽度（固定值；高度由 Layout 按内容算，不在这里配） */
+  width: 1080,
+  /** 相邻元素的统一间距（Layout.spacingY） */
+  spacingY: 30,
+  /** 第一项与舞台顶边的距离（Layout.paddingTop） */
+  paddingTop: 75,
+  /** 最后一项与舞台底边的距离（Layout.paddingBottom） */
+  paddingBottom: 0,
   /**
-   * 舞台尺寸：登录构图的包围盒加少量余量（最宽元素 600；纵向范围 -373 ~ 350）
-   * 舞台不缩放（1:1），这里只是个容器尺寸，元素坐标改动过大时这里要同步
+   * 纵向排列顺序（从上到下）：元素按这个顺序挂进舞台，Layout 按挂载顺序排。
+   * 每一项必须在下面有对应的元素定义（Login.ts 会校验，缺了当场报错）
    */
-  stageSize: new Size(680, 750),
+  order: ["logo", "account", "password", "zoneSelector", "loginButton", "registerButton"],
   background: uiImages.loginBackground,
-  /** 账号输入框 */
-  account: { placeholder: "请输入您的游戏账号", position: new Vec2(0, -20), size: new Size(600, 80), icon: uiImages.loginAccountIcon, password: false },
+
+/** 账号输入框 */
+  account: { placeholder: "请输入您的游戏账号", size: new Size(600, 80), icon: uiImages.loginAccountIcon, password: false },
   /** 密码输入框 */
-  password: { placeholder: "请输入您的游戏密码", position: new Vec2(0, -120), size: new Size(600, 80), icon: uiImages.loginPasswordIcon, password: true },
+  password: { placeholder: "请输入您的游戏密码", size: new Size(600, 80), icon: uiImages.loginPasswordIcon, password: true },
   /** 登录按钮 */
   loginButton: {
     name: "login_button",
     image: uiImages.loginButton,
     text: "账号登录",
-    position: new Vec2(0, -260),
     size: new Size(300, 80),
     textColor: new Color("#f4fc00"),
     fontSize: 30,
@@ -39,15 +62,14 @@ export const loginLayout = {
     name: "register_button",
     image: uiImages.middleButtonBackground,
     text: "注册账号",
-    position: new Vec2(0, -345),
     size: new Size(240, 56),
     textColor: new Color("#f4fc00"),
     fontSize: 24,
   },
-  /** 区服选择（多开区 #295：文案节点，点按循环切换活区；放在密码框与登录按钮之间） */
-  zoneSelector: { position: new Vec2(0, -190), size: new Size(600, 40), color: new Color("#f4fc00"), fontSize: 22 },
+  /** 区服选择（多开区 #295：文案节点，点按循环切换活区；排在密码框与登录按钮之间） */
+  zoneSelector: { size: new Size(600, 40), color: new Color("#f4fc00"), fontSize: 22 },
   /** 顶部 logo */
-  logo: { name: "game_logo", image: uiImages.gameLogo, position: new Vec2(0, 200), size: new Size(600, 300) },
+  logo: { name: "game_logo", image: uiImages.gameLogo, size: new Size(600, 200) },
 };
 
 //#endregion
