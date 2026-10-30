@@ -96,14 +96,18 @@ export const roleSelectorLayout = {
   /** 开始游戏按钮（默认置灰，选中角色后可用） */
   beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -40), size: new Size(190, 48) },
   /** 创建角色按钮 / 管理角色按钮 / 创建弹窗返回按钮 */
-  createRoleButton: { name: "show_create_role_button", image: uiImages.roleSelectorNewRoleButton, position: new Vec2(-740, 300), size: new Size(75, 79) },
-  manageRoleButton: { name: "manage_role_button", image: uiImages.roleSelectorManageButton, position: new Vec2(-740, 200), size: new Size(75, 79) },
-  backButton: { name: "cancel_create_role_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-740, -210), size: new Size(75, 79) },
-  /** 选中角色信息框（名称 + 等级） */
+  createRoleButton: { name: "show_create_role_button", image: uiImages.roleSelectorNewRoleButton, position: new Vec2(-884, 455), size: new Size(75, 79) },
+  manageRoleButton: { name: "manage_role_button", image: uiImages.roleSelectorManageButton, position: new Vec2(-884, 355), size: new Size(75, 79) },
+  backButton: { name: "cancel_create_role_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-884, -370), size: new Size(75, 79) },
+  /**
+   * 选中角色信息框（名称 + 等级）：挂在**底部栏**下（role_selector_bottom_bar 的子节点），
+   * position 相对底部栏中心 —— 底部栏贴屏幕底边（中心在画布 (0, -540 + 82)），
+   * 配置里的 y 比底部栏半高（82）大就是在栏体上方。子节点 name/level 的坐标相对信息框中心
+   */
   selectedInfo: {
     name: "selected_role_info_background",
     image: uiImages.roleSelectorIdleInfo,
-    position: new Vec2(-435, -335),
+    position: new Vec2(-435, -35),
     size: new Size(345, 26),
     nameLabel: { name: "selected_role_name", text: "---", position: new Vec2(-35, 0), size: new Size(160, 30), fontSize: 20 },
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },

@@ -218,12 +218,13 @@ export class RoleSelector extends Component {
     const manageRoleButton = GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size);
     manageRoleButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole());
     this.stage!.addChild(manageRoleButton);
-    // 选中角色信息框（名称 + 等级）
+    // 选中角色信息框（名称 + 等级）：挂在**底部栏**下（它本来就是底部栏的一部分），
+    // position 相对底部栏中心（见 configs 里 selectedInfo 的注释）
     const infoLayout = layout.selectedInfo;
     const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
     selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size));
     selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size));
-    this.stage!.addChild(selectedInfoBox);
+    bottomBar.addChild(selectedInfoBox);
     return {
       beginGameButton,
       selectedRoleName: selectedInfoBox.getChildByName(infoLayout.nameLabel.name),

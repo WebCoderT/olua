@@ -113,11 +113,14 @@ function loginElements() {
 /** 选角舞台的全部元素（中心 + 尺寸），清单从配置推导 */
 function roleSelectorElements() {
   const layout = roleSelectorLayout;
+  // 底部栏贴屏幕底边 → 其中心在画布 (0, -画布高/2 + 栏高/2)；挂在它下面的元素配置坐标相对这个中心
+  const barCenterY = -CANVAS.height / 2 + layout.bottomBar.size.height / 2;
   const elements = [
     ["创建角色按钮", layout.createRoleButton],
     ["管理角色按钮", layout.manageRoleButton],
     ["返回按钮", layout.backButton],
-    ["选中信息框", layout.selectedInfo],
+    // 选中信息框挂在底部栏下（见 RoleSelector.createMainView）：换算回舞台坐标再判画布包含
+    ["选中信息框", { position: { x: layout.selectedInfo.position.x, y: layout.selectedInfo.position.y + barCenterY }, size: layout.selectedInfo.size }],
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
     ["创建角色弹窗", layout.createDialog],
   ];
@@ -282,6 +285,10 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(!/setScale/.test(selector), "RoleSelector：舞台与底部栏都不 setScale（尺寸在配置里按 1080p 定死）");
   check(/getAnchoredPosition\(size, "bottom-center"/.test(selector), "RoleSelector：底部栏贴底走 getAnchoredPosition 的 bottom-center 档");
   check(/dockBottomBar\(\)/.test(selector), "RoleSelector：底部栏位置由 dockBottomBar 算");
+  check(
+    /bottomBar\.addChild\(selectedInfoBox\)/.test(selector) && !/this\.stage!\.addChild\(selectedInfoBox\)/.test(selector),
+    "RoleSelector：选中信息框挂在底部栏下（selected_role_info_background 是 role_selector_bottom_bar 的子节点）",
+  );
   check(/NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /namePlate\.offset/.test(selector), "RoleSelector：每个站位脚下有名字与等级名牌（文案走 texts、偏移走配置，随列表重建）");
   check(
     /createCoverImage\("role_selector_background"/.test(selector) && !/createFullScreenImage\("role_selector_background"/.test(selector),
