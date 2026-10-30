@@ -36,7 +36,7 @@ export const roleRigid = {
 
 /**
  * 角色数量**不设上限** —— 服务端不拦（创建只校验结构与重名），客户端也不拦（选角界面按
- * `roleSelectorLayout.roleScroll` 滚动网格排列：一排 7 个、排满一行自动换行、超出视口上下滚动）。
+ * `roleSelectorLayout.roleScroll` 滚动网格排列：一排 6 个、排满一行自动换行、超出视口上下滚动）。
  *
  * （这里原本有两份上限数字：手写的 `maxRoleCount` 与服务端 `.env` 的 `ROLE_MAX_PER_ACCOUNT`，
  *   靠「两边一起改」的记性维持 —— 都已删掉，见 #124 的教训：同一个数写两份必然漂移。）

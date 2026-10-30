@@ -125,12 +125,12 @@ function roleSelectorElements() {
     ["创建角色弹窗", layout.createDialog],
   ];
   // 角色滚动网格：视口是一块画布内的矩形（行列交给引擎 Layout 排，行数多了在视口里滚，
-  // 所以只判视口本身在画布内，不逐个判单元格）。每排个数由视口宽与单元格/间距推导，守点是 7。
+  // 所以只判视口本身在画布内，不逐个判单元格）。每排个数由视口宽与单元格/间距推导，守点是 6。
   const scroll = layout.roleScroll;
   elements.push(["角色滚动视口", { position: scroll.position, size: scroll.viewSize }]);
   const availableWidth = scroll.viewSize.width - scroll.paddingX * 2;
   const perRow = Math.floor((availableWidth - scroll.cell.width) / (scroll.cell.width + scroll.spacingX)) + 1;
-  check(perRow === 7, `角色滚动网格每排 ${perRow} 个（= (视口宽 − paddingX×2 − 单元格宽) ÷ (单元格宽 + spacingX) + 1，期望 7）`);
+  check(perRow === 6, `角色滚动网格每排 ${perRow} 个（= (视口宽 − paddingX×2 − 单元格宽) ÷ (单元格宽 + spacingX) + 1，期望 6）`);
   return elements;
 }
 
@@ -300,6 +300,10 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(
     /roleScrollContent\?\.getChildByName/.test(selector) && /cell\.addChild\(button\)/.test(selector),
     "RoleSelector：管理模式删除按钮挂单元格下（躲开预览的选中冒泡，又跟着滚动区走不与角色错位）",
+  );
+  check(
+    /sexToggleGroup\.children\[0\]\.getComponent\(Toggle\)\.isChecked = true/.test(selector) && /occupationToggleGroup\.children\[0\]\.getComponent\(Toggle\)\.isChecked = true/.test(selector),
+    "RoleSelector：创建弹窗默认选中第一项性别与职业（描述与预览打开即显示，不用手动点一次才出来）",
   );
   check(
     /bottomBar\.addChild\(backToLoginButton\)/.test(selector) && /returnToLogin\(\)/.test(selector),

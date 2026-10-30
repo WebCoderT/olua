@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Layout, Node, ScrollView, Size, Sprite, Toggle, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
@@ -308,12 +308,12 @@ export class RoleSelector extends Component {
 
   /**
    * 造一个角色的「单元格」：预览（点击选中）+ 脚下名牌，装进滚动网格由 Layout 排布。
-   * 预览贴单元格底部，顶部留出删除按钮的位置（尺寸见 roleScroll.cell 的注释）；
+   * 预览贴单元格底部（预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2，见 roleScroll.cell 的注释）；
    * 名牌挂在单元格下而不是预览下，与预览是兄弟节点 —— 预览只管选中，别的东西不进它的子树。
    */
   private createRoleCell(role: RoleSummary): Node {
     const { cell: cellSize } = roleSelectorLayout.roleScroll;
-    const previewSize = roleSelectorLayout.previewSize;
+      const previewSize = roleSelectorLayout.previewSize;
     // 预览贴底：预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2
     const previewY = -(cellSize.height - previewSize.height) / 2;
     const cell = new Node(`${ROLE_CELL_PREFIX}${role.id}`);
@@ -338,7 +338,7 @@ export class RoleSelector extends Component {
 
   /**
    * 「管理」按钮：进入 / 退出管理模式
-   * 管理模式 = 各角色头顶上方出现删除按钮（挂单元格下、预览的兄弟节点 —— 预览自带 TOUCH_END 选中事件，
+   * 管理模式 = 每个角色正中间出现删除按钮（挂单元格下、预览的兄弟节点 —— 预览自带 TOUCH_END 选中事件，
    * 按钮挂在它下面会被冒泡吞掉，点删除会连带选中该角色）
    */
   private toggleManageRole() {
@@ -362,14 +362,14 @@ export class RoleSelector extends Component {
     const hint = GameUiHelper.createText(layout.hint.name, getText("label_role_delete_hint"), layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color);
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
-    // 每个角色头顶上方一个删除按钮：挂在**单元格**下（预览的兄弟节点，躲开预览的选中冒泡），
+    // 每个角色正中间一个删除按钮（偏移 (0,0) = 预览中心，见 manageRole.deleteButtonOffset）：挂在**单元格**下（预览的兄弟节点，躲开预览的选中冒泡），
     // 跟着滚动内容走 —— 挂舞台上的话，滚动后按钮就与角色错位了
     this.roleSummaries.forEach((role) => {
       const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${role.id}`);
       if (!cell) return;
       // 偏移相对**预览中心**（见 manageRole.deleteButtonOffset 的注释）；预览贴单元格底部，先换算回单元格局部
       const { cell: cellSize } = roleSelectorLayout.roleScroll;
-    const previewSize = roleSelectorLayout.previewSize;
+      const previewSize = roleSelectorLayout.previewSize;
       const previewY = -(cellSize.height - previewSize.height) / 2;
       const button = GameUiHelper.createTexturedButton(
         `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
@@ -532,6 +532,11 @@ export class RoleSelector extends Component {
     eventHandler.handler = "onOccupationChanged";
     occupationToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
     sexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
+    // 默认选中第一项性别与职业：开关组出厂全不选，弹窗一打开 updateOccupationSelection 拿不到
+    // activeToggles 就空手而归，描述与预览要手动点一次才出现。直接置 isChecked（不触发 checkEvents），
+    // 默认内容由下面那次 updateOccupationSelection 统一画
+    sexToggleGroup.children[0].getComponent(Toggle).isChecked = true;
+    occupationToggleGroup.children[0].getComponent(Toggle).isChecked = true;
 
     const view: RoleSelectorCreateView = {
       backButton,

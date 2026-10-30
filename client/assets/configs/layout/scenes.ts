@@ -119,16 +119,16 @@ export const roleSelectorLayout = {
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },
   },
   /**
-   * 已有角色预览：**滚动网格** —— 一排 7 个，排满一行自动换行，行数超出视口在滚动区里上下滚。
+   * 已有角色预览：**滚动网格** —— 一排 6 个，排满一行自动换行，行数超出视口在滚动区里上下滚。
    * 排布交给引擎 Layout（GRID + 横向起始轴 + CONTAINER）：换行点 = 内容宽度，CONTAINER 只撑高
    * 不改宽（见 cocos/ui/layout.ts），所以「每排几个」由 viewSize.width − paddingX×2 推导：
-   * 这里 1680 − 40 = 1640 的可用宽装 (200 + 30) × 6 + 200 = 1580，第 8 个越界自动换行 = 7 个一排。
+   * 这里 1680 − 40 = 1640 的可用宽装 (200 + 80) × 5 + 200 = 1600，第 7 个越界自动换行 = 6 个一排。
    * 调每排个数就调 viewSize.width / paddingX / spacingX；预览 + 名牌 + （管理模式）删除按钮
    * 装进同一个「单元格」节点，随内容一起滚。
    */
   roleScroll: {
     name: "role_scroll_view",
-    /** 视口在舞台上的位置（视口中心；视口顶 = y + viewSize.height/2 = 405，底 = -515，都留在画布内） */
+    /** 视口在舞台上的位置（视口中心；视口顶 = y + viewSize.height/2 = 475，底 = -405，都留在画布内） */
     position: new Vec2(30, 35),
     /** 视口尺寸：宽同时是滚动内容宽（换行基准），高决定一屏能看到几行 */
     viewSize: new Size(1680, 880),
@@ -170,7 +170,7 @@ export const roleSelectorLayout = {
   createDialog: {
     name: "create_role_dialog",
     image: uiImages.createRoleDialogBackground,
-    position: new Vec2(630, 35),
+    position: new Vec2(770, -125),
     size: new Size(320, 580),
     title: { name: "create_role_dialog_title", image: uiImages.createRoleTitleLabel, position: new Vec2(0, 242), size: new Size(128, 28) },
     genderLabel: { name: "gender_label", image: uiImages.createRoleGenderLabel, position: new Vec2(0, 190), size: new Size(56, 25) },

@@ -385,7 +385,7 @@ async function expectFailure(action) {
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");
   check(
     /ROLE_CELL_PREFIX|role_cell_/.test(selectorSource) && /Layout\.Type\.GRID/.test(selectorSource) && !/role_create_limit_tip/.test(selectorSource),
-    "角色数量不设上限：站位按滚动网格 Layout 排（一排 7 个、排满换行、超出滚动），创建前不再拦截",
+    "角色数量不设上限：站位按滚动网格 Layout 排（一排 6 个、排满换行、超出滚动），创建前不再拦截",
   );
 
   const gameSource = read(FILE.game);
