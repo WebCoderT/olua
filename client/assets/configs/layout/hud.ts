@@ -62,7 +62,7 @@ export const roleInfoBarLayout = {
 /** 底部栏布局（自身坐标以屏幕中心为原点，子件坐标以底部栏中心为原点） */
 export const bottomBarLayout = {
   /** 底部栏主体 */
-  size: new Size(1100, 210),
+  size: new Size(970, 134),
   /** 贴屏幕底部居中（marginY = 主体中心到屏幕下边缘的距离；背景下沿本就溢出屏幕，故按中心定位） */
   anchor: { edge: "bottom-center", marginX: 0, marginY: 51 } as HudAnchor,
   /** 功能按键区（横向布局容器，按钮排列交给 Layout） */
