@@ -194,6 +194,18 @@ async function expectFailure(action) {
   check(relogins.length === 1, "静默模式下令牌失效仍然回登录场景（闷掉会卡在永远失败的游戏里）", `${relogins.length} 次`);
   check(net.RELOGIN_BIZ_CODES.indexOf(40100) !== -1, "40100 登记在需要重登的业务码里");
 
+  console.log("— A. 登录密码错误：401 只在会话类业务码才重登 —");
+
+  // 服务端对「账号或密码错误」回 HTTP 401 + 业务码 10003（防账号枚举，见 server auth.service）。
+  // needRelogin 若看 status 401 就重登，登录页会被整页重载、错误提示刚建出来就被销毁
+  reset();
+  responder = () => ({ kind: "ok", status: 401, text: envelope(10003, "账号或密码错误", null) });
+  const wrongPassword = await expectFailure(() => Api.AuthApi.login({ username: "user001", password: "bad" }));
+  check(relogins.length === 0, "登录密码错误（HTTP 401 + 业务码 10003）不回登录场景 —— 提示即可，整页重载会把错误提示销毁", `${relogins.length} 次`);
+  check(failures.length === 1, "登录密码错误仍走全局提示出口（玩家看得到「账号或密码错误」）", `${failures.length} 次`);
+  check(wrongPassword.describe() === "账号或密码错误", "错误文案直接用服务端的（防枚举文案原样展示）");
+  check(wrongPassword.needRelogin === false, "needRelogin 只认业务码（401 不再单独触发重登）");
+
   console.log("— A. 角色进度同步：防抖 / flush / 失败只提示一次 —");
 
   networkConfig.roleSyncDelay = 20; // as const 只是类型约束；这里缩短等待，不改配置默认值
@@ -427,56 +439,12 @@ async function expectFailure(action) {
   );
 
   const networkSource = read(FILE.network);
-  // #60 起 baseUrl 改按运行环境解析（resolveBaseUrl：本地 DEV_BASE_URL / Web 同源 /api），
+  // baseUrl 直接写成常量（本地开发指向本机服务端；上 Web 部署时改成同源 /api）。
   // 铁律不变：地址字面量只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
   check(
-    /baseUrl:\s*resolveBaseUrl\(\)/.test(networkSource) && /DEV_BASE_URL = "http:\/\/localhost:3100\/api"/.test(networkSource) && /SAME_ORIGIN_BASE_URL = "\/api"/.test(networkSource),
-    "configs/network 是客户端唯一地址来源（baseUrl = resolveBaseUrl()，本地 / Web 两个地址常量都在本文件内）",
+    /baseUrl:\s*"http:\/\/localhost:3100\/api"/.test(networkSource) && !/resolveBaseUrl/.test(networkSource),
+    "configs/network 是客户端唯一地址来源（baseUrl 写死在本文件，环境切换改这一处）",
   );
-
-  // #83：光有源码断言不够——#60 的白名单漏了局域网 IP，源码看起来完全正常，跑起来却连不上。
-  // 所以这里**真跑一遍** resolveBaseUrl：单独编译一份 configs/network，逐个 host 重新 require
-  // （baseUrl 在模块加载时就定死了，换 host 必须清掉 require 缓存重载）。
-  const networkOutDir = prepare("olua-net-baseurl", ["configs/network.ts"]);
-  const networkModule = path.join(networkOutDir, "configs/network.js");
-  const resolveBaseUrlWith = (hostname) => {
-    delete require.cache[require.resolve(networkModule)];
-    if (hostname === null) delete globalThis.location;
-    else globalThis.location = { hostname };
-    const picked = require(networkModule).networkConfig.baseUrl;
-    delete require.cache[require.resolve(networkModule)];
-    delete globalThis.location;
-    return picked;
-  };
-  const DEV = "http://localhost:3100/api";
-  const SAME_ORIGIN = "/api";
-  const LOCAL_CASES = [
-    ["localhost", "回环名"],
-    ["127.0.0.1", "回环地址"],
-    ["", "file:// 打开（拿不到 host）"],
-    ["::1", "IPv6 回环"],
-    ["[::1]", "IPv6 回环（带方括号）"],
-    ["192.168.1.20", "私有网段 192.168.*（Cocos 扫码调试的常见形态）"],
-    ["10.0.0.5", "私有网段 10.*"],
-    ["172.16.0.1", "私有网段 172.16~31.* 的下界"],
-    ["172.31.255.254", "私有网段 172.16~31.* 的上界"],
-    ["169.254.10.1", "链路本地"],
-    ["tzs-mbp.local", "mDNS 名"],
-    ["office.lan", "本地域名"],
-  ];
-  for (const [host, why] of LOCAL_CASES) {
-    check(resolveBaseUrlWith(host) === DEV, `本地调试：${why} → 本机服务端（${host === "" ? "空 host" : host}）`);
-  }
-  check(resolveBaseUrlWith(null) === DEV, "本地调试：拿不到 location（原生壳）→ 回落到本机服务端");
-  const REMOTE_CASES = [
-    ["game.example.com", "公网域名"],
-    ["8.8.8.8", "公网 IP"],
-    ["172.32.0.1", "172.32 已出私有段（172.16~31 才是）"],
-  ];
-  for (const [host, why] of REMOTE_CASES) {
-    check(resolveBaseUrlWith(host) === SAME_ORIGIN, `线上部署：${why} → 同源 /api（${host}）`);
-  }
-
   //#endregion
 
   finish("PASS：客户端网络层（包裹解包 / 令牌 / 静默 / 防抖同步 / 接线）行为与接线全部通过。");

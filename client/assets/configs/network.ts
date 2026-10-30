@@ -4,9 +4,8 @@
  * 铁律：客户端代码里不允许再出现任何服务端地址字面量
  * （自查 `node tools/audit-api-hardcode.cjs`）。
  *
- * baseUrl 不是写死的常量，而是按运行环境解析（见 resolveBaseUrl）：
- * 本地调试走本机服务端，Web 部署走同源 /api。**一份构建产物两种场景通用**，
- * 换环境不用重新构建。
+ * baseUrl 直接写成常量（本地开发指向本机服务端）；上 Web 部署时改成同源 /api（nginx
+ * 把 /api 反代到服务端容器）。地址只有这一处，换环境改这里 —— 不在别的文件里写地址字面量。
  *
  * 与服务端默认值对应关系：server/.env 的 PORT=3100 + API_PREFIX=api。
  */
