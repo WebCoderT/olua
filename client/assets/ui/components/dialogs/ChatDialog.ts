@@ -98,7 +98,7 @@ export default class ChatDialog {
     this.reset();
   }
 
-  /** 窗口尺寸变化时重贴左下角（组合根的 onWindowResize 调；关着时是 no-op） */
+  /** 重贴左下角（开小窗时由组合根调；关着时是 no-op） */
   refreshDock() {
     if (this.dialog && isValid(this.dialog)) GameUiHelper.placeChatBox(this.dialog);
   }

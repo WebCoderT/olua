@@ -2,7 +2,6 @@ import { _decorator, Component, EditBox, Label, Node, UITransform, isValid } fro
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
-import { applyScreenPolicy, getStageScale, getVisibleSize, onWindowResize } from "./utils/layout/ScreenLayout";
 import { loginLayout } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { AuthApi, ZoneApi } from "./utils/net/Api";
@@ -21,19 +20,17 @@ const { ccclass } = _decorator;
  * 请求层随后自动带上它 —— 客户端不再自己造账号，也不再硬编码任何地址。
  * 两个按钮共用一个 submitting 标记，避免连点重复提交。
  *
- * 结构与选角场景同一套：铺满窗口的背景 + 一块固定设计尺寸的「舞台」，
- * 其余元素全部挂在舞台下按设计坐标摆放（坐标以舞台中心为原点，见 configs hudLayout.loginLayout），
- * 舞台按可见尺寸等比缩放（contain、只缩不放）—— 不缩放的话，铺满窗口策略会在
- * 偏宽窗口裁掉 logo 顶部与注册按钮、窄高窗口（手机竖屏）裁掉输入框两侧
+ * 结构与选角场景同一套：铺满整个屏幕的背景 + 一块固定尺寸的「舞台」，
+ * 其余元素全部挂在舞台下按设计坐标摆放（坐标以舞台中心为原点，见 configs hudLayout.loginLayout）。
+ * 本作只有 1920×1080 一个分辨率（见 ui/utils/layout/ScreenLayout）：舞台**不缩放**，
+ * 坐标写多少屏幕上就是多少（1 设计像素 = 1 屏幕像素）
  */
 @ccclass("Login")
 export class Login extends Component {
   accountInput: Node;
   passwordInput: Node;
-  /** 舞台容器（除背景外的所有元素都挂这里，整体按可见尺寸等比缩放） */
+  /** 舞台容器（除背景外的所有元素都挂这里；尺寸按配置定死，不缩放） */
   private stage: Node | null = null;
-  /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
-  private offWindowResize: (() => void) | null = null;
   /** 是否正在提交（登录与注册互斥） */
   private submitting = false;
   /** 公告提醒弹窗（进登录页时把生效中的重要公告摊开给玩家看，见该类的说明） */
@@ -48,11 +45,9 @@ export class Login extends Component {
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
-    // 屏幕适配：铺满窗口（无黑边），与游戏内一致（见 utils/layout/ScreenLayout）
-    applyScreenPolicy();
     // 位置/尺寸与用图统一见 configs/hudLayout.loginLayout
     const layout = loginLayout;
-    // 背景（不在舞台内：铺满可见区，舞台等比缩小后四周留白由它兜底）
+    // 背景（不在舞台内：铺满整个屏幕，始终盖住窗口）
     this.node.addChild(GameUiHelper.createFullScreenImage("login_background", layout.background));
     // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.loginLayout）
     this.stage = new Node("login_stage");
@@ -91,9 +86,6 @@ export class Login extends Component {
     this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, layout.zoneSelector.position, layout.zoneSelector.size, layout.zoneSelector.color);
     this.stage.addChild(this.zoneLabel);
     this.bindZonePicker();
-    // 按当前可见尺寸适配舞台，并在窗口尺寸变化时重排
-    this.applyStageLayout();
-    this.offWindowResize = onWindowResize(() => this.applyStageLayout());
     // 拉活区列表（公共接口，无需令牌；不阻塞登录页出现，失败静默 —— 注册落默认区）
     void this.loadZones();
     // 清空缓存------开发时使用（含角色缓存与上次会话，进登录页一律重新登录）
@@ -102,23 +94,6 @@ export class Login extends Component {
     // 挂在本场景自己的节点上（登录场景没有 UI 图层容器，见 AnnouncementNoticeDialog 的说明），
     // 不 await：公告不该拖慢登录页的出现，也不阻塞账号密码输入
     void this.announcementNotice.open(this.node);
-  }
-
-  /** 场景卸载：取消窗口尺寸监听（监听挂在 screen 单例上，不随节点销毁） */
-  onDestroy() {
-    this.offWindowResize?.();
-    this.offWindowResize = null;
-  }
-
-  /**
-   * 舞台适配（窗口尺寸变化时可重复调用）：按可见尺寸等比缩放整块舞台并居中
-   * （与选角场景同一套做法，缩放算法见 ui/utils/layout/ScreenLayout.getStageScale）
-   */
-  private applyStageLayout() {
-    const stage = this.stage;
-    if (!stage || !isValid(stage, true)) return;
-    const scale = getStageScale(loginLayout.stageSize, getVisibleSize());
-    stage.setScale(scale, scale, 1);
   }
 
   /** 登录 */

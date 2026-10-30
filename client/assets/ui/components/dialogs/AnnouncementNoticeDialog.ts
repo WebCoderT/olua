@@ -7,7 +7,7 @@ import { getText } from "../../../configs/texts";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import { blockClickThrough } from "../../utils/input/UiHit";
-import { getVisibleSize } from "../../utils/layout/ScreenLayout";
+import { designResolution } from "../../utils/layout/ScreenLayout";
 import { clearChildren } from "../../utils/node/NodeTree";
 
 /**
@@ -54,8 +54,8 @@ export default class AnnouncementNoticeDialog {
   /** 组装弹窗（几何、配色与用图全部来自 configs/hudLayout.announcementNoticeDialogLayout） */
   private create(views: AnnouncementView[]): Node {
     const dialog = new Node(layout.name);
-    // 全屏尺寸取「可见区」而不是设计分辨率：任意窗口宽高比都要盖满（与确认框同一口径）
-    const screenSize = getVisibleSize();
+    // 全屏尺寸 = 设计分辨率（与确认框同一口径）：本作只有一个分辨率，遮罩正好盖满屏幕
+    const screenSize = designResolution;
     dialog.addComponent(UITransform).setContentSize(screenSize.width, screenSize.height);
     // 遮罩：黑色半透明 + 兼作下层点击的拦截层
     const mask = new Node(`${layout.name}_mask`);

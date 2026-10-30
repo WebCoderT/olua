@@ -1,4 +1,4 @@
-import { _decorator, Camera, Component, isValid, Node, sys, Vec3 } from "cc";
+import { _decorator, Camera, Component, isValid, Node, screen, sys, Vec3 } from "cc";
 import { maps } from "../configs/map";
 import MpHelper from "./utils/battle/MpHelper";
 import HpHelper from "./utils/battle/HpHelper";
@@ -45,7 +45,6 @@ import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
 import StatusManager from "./core/StatusManager";
 import HoverTipManager from "./core/HoverTipManager";
-import { applyScreenPolicy, onWindowResize } from "./utils/layout/ScreenLayout";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { partyDialogLayout } from "../configs/hudLayout";
 import RoleSync from "./utils/net/RoleSync";
@@ -90,7 +89,7 @@ export class Game extends Component {
   private positionReportTimer = 0;
   /** 上次上报的位置（#324：与本次差量判「是否在移动」，随 pos 帧上报给互见广播） */
   private lastReportedPosition: { x: number; y: number } | null = null;
-  /** 窗口尺寸变化的取消监听函数（场景销毁时调用） */
+  /** 窗口尺寸变化的取消监听函数（场景销毁时调用；只用来把相机拉回主角，不重排布局） */
   private offWindowResize: (() => void) | null = null;
   /** 引导进度订阅（#469：走完/跳过的那一刻补开聊天窗；离场退订） */
   private offGuideChange: (() => void) | null = null;
@@ -100,8 +99,6 @@ export class Game extends Component {
   private guideLastPosition: Vec3 | null = null;
 
   async start() {
-    // 屏幕适配：铺满窗口（无黑边），可见宽度随窗口宽高比变化（见 utils/layout/ScreenLayout）
-    applyScreenPolicy();
     // 网络层接线（幂等，登录场景已调过一次）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
     // 角色进度同步的失败出口：同步请求是静默的（不弹通用提示），
@@ -275,20 +272,16 @@ export class Game extends Component {
     this.offGuideChange = GuideStore.onChange(() => {
       if (!GuideStore.visible()) this.bottomBar?.openChatBox(true);
     });
-    // 窗口尺寸变化时重排四个常驻区域（角色信息栏贴左上角 / 小地图贴右上角 / 底部栏贴底部居中 / 摇杆贴左下角）
-    // 注意顺序：引擎的 Canvas 在尺寸变化时会把相机世界坐标拽回 Canvas 节点位置（canvas-resize），
-    // 而相机/UI 层本该跟着主角，故重排后必须再把相机与 UI 层重新对齐到主角，否则地图视野会错位
-    this.offWindowResize = onWindowResize(() => {
-      // 相机与 UI 层重新对齐到主角（Canvas 在尺寸变化时会把相机拽回 Canvas 节点位置）
+    // 窗口尺寸变化时**不重排任何布局**：本作只有 1920×1080 一个分辨率，HUD 坐标都是常量
+    // （见 configs/hudLayout 与 ScreenLayout.designResolution），重排只会算出同一批数字。
+    // 唯一要处理的是相机：引擎的 Canvas 在尺寸变化时会把相机世界坐标拽回 Canvas 节点位置
+    // （canvas-resize），而相机 / UI 层本该跟着主角 —— 角色站着不动时没有哪一次 LayerManager.move
+    // 会把它拉回来，视野就永久错位，所以这条监听留着，且只做这一件事。
+    const realignCamera = () => {
       if (this.roleDisplay && isValid(this.roleDisplay)) LayerManager.move(this.roleDisplay.getWorldPosition());
-      this.roleInfoBar?.applyAnchorPosition();
-      this.smallMap?.applyAnchorPosition();
-      this.bottomBar?.applyAnchorPosition();
-      this.bottomBar?.refreshChatBoxDock();
-      this.joystick?.applyAnchorPosition();
-      // 引导遮罩是按屏幕尺寸挖洞的，尺寸一变就得重算（气泡的贴边夹取同理）
-      this.guideOverlay?.refresh();
-    });
+    };
+    screen.on("window-resize", realignCamera);
+    this.offWindowResize = () => screen.off("window-resize", realignCamera);
     /** 怪物信息面板创建器（选中怪物时才动态创建，取消选中即销毁） */
     RoleUIManager.setMonsterInfoFactory((target) => {
       const monsterInfoPanel = new MonsterInfoPanel(target);

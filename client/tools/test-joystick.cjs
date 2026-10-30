@@ -14,7 +14,7 @@
  *    而 MOUSE_MOVE 注册在节点上会吞掉指针追踪与按住走路）
  * · 手柄位移被夹在可拖半径内、抬起/取消回中
  * · 主角的移动意图优先级：键盘 > 摇杆 > 鼠标；isManualMoving 也要认摇杆（自动战斗据此让位）
- * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、贴边重排接了 applyAnchorPosition
+ * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、贴边位置由 applyAnchorPosition 一次算出（坐标是常量，窗口变化不再重排）
  * · 「按压起点在界面元素上」的那次抬起不被世界侧当成点击（ScreenClickInput + Pointer.isUiPressOnUiElement）
  * · 几何自洽：手柄拖到最外圈不溢出底座；素材在 resources/main 且带 meta
  *
@@ -32,33 +32,17 @@ const CC_DIR = (outDir) => path.join(path.dirname(outDir), "node_modules/cc/inde
 /**
  * 追加到 cc 垫片末尾的部分：
  * · Vec2 的向量方法（真实配置/工具函数会用到 length / lengthSqr / equals）
- * · screen / view / ResolutionPolicy（ScreenLayout 的贴边计算要用）
+ * · Size / Vec2（ScreenLayout 的贴边计算只用这两个纯数据类）
  * · Node / BoxCollider2D 空壳（BattleMath 的八方向量化里会 getComponent，沙箱不真的取碰撞盒）
+ *
+ * 不再需要 view / screen / ResolutionPolicy 垫片 —— 全工程只有 1920×1080 一个分辨率，
+ * 布局是纯算术（见 ui/utils/layout/ScreenLayout），被加载的三个模块都不碰引擎的尺寸接口。
  */
 const CC_EXTRA = `
 Vec2.prototype.length = function () { return Math.sqrt(this.x * this.x + this.y * this.y); };
 Vec2.prototype.lengthSqr = function () { return this.x * this.x + this.y * this.y; };
 Vec2.prototype.equals = function (other) { return !!other && this.x === other.x && this.y === other.y; };
 
-const __screen = { windowWidth: 1624, windowHeight: 750, scaleX: 1, scaleY: 1 };
-const view = {
-  getScaleX: () => __screen.scaleX,
-  getScaleY: () => __screen.scaleY,
-  getDesignResolutionSize: () => new Size(1624, 750),
-  getVisibleSize: () => new Size(1624, 750),
-  setDesignResolutionSize: () => {},
-};
-const screen = {
-  get windowSize() { return new Size(__screen.windowWidth, __screen.windowHeight); },
-  on: () => {},
-  off: () => {},
-};
-const ResolutionPolicy = { NO_BORDER: "NO_BORDER", SHOW_ALL: "SHOW_ALL" };
-
-module.exports.view = view;
-module.exports.screen = screen;
-module.exports.ResolutionPolicy = ResolutionPolicy;
-module.exports.__screen = __screen;
 module.exports.Node = class Node {};
 module.exports.BoxCollider2D = class BoxCollider2D {};
 module.exports.isValid = () => true;
@@ -140,24 +124,23 @@ if (outDir) {
   // ---- 贴边布局：bottom-left ----
   console.log("\nA 段：贴边布局（新增 bottom-left；既有三种贴边行为不变）");
   const size = new cc.Size(joystickLayout.size.width, joystickLayout.size.height);
-  const visible = new cc.Size(designResolution.width, designResolution.height);
   const { marginX, marginY } = joystickLayout.anchor;
 
-  const bottomLeft = getAnchoredPosition(size, visible, "bottom-left", marginX, marginY);
+  const bottomLeft = getAnchoredPosition(size, "bottom-left", marginX, marginY);
   check(
     near(bottomLeft.x, -designResolution.width / 2 + marginX + size.width / 2) && near(bottomLeft.y, -designResolution.height / 2 + marginY + size.height / 2),
     "bottom-left：左边距从屏幕左边缘算、下边距从屏幕下边缘算（区块整块落在可见区左下角）",
     `(${bottomLeft.x}, ${bottomLeft.y})`,
   );
 
-  const topLeft = getAnchoredPosition(size, visible, "top-left", marginX, marginY);
+  const topLeft = getAnchoredPosition(size, "top-left", marginX, marginY);
   check(near(bottomLeft.x, topLeft.x), "bottom-left 与 top-left 的横坐标一致（同贴左边）");
   check(bottomLeft.y < 0 && topLeft.y > 0, "bottom-left 在屏幕下半、top-left 在上半（贴边方向相反）");
 
-  const bottomCenter = getAnchoredPosition(size, visible, "bottom-center", 0, marginY);
+  const bottomCenter = getAnchoredPosition(size, "bottom-center", 0, marginY);
   check(near(bottomCenter.x, 0) && near(bottomCenter.y, -designResolution.height / 2 + marginY), "bottom-center 语义不变（区块中心到屏幕下边缘，底部栏在用）");
 
-  const topRight = getAnchoredPosition(size, visible, "top-right", 2, 12);
+  const topRight = getAnchoredPosition(size, "top-right", 2, 12);
   check(near(topRight.x, designResolution.width / 2 - 2 - size.width / 2), "top-right 语义不变（小地图在用）");
 }
 
@@ -211,10 +194,10 @@ check(/isManualMoving\(\)[\s\S]{0,260}?joystickInput/.test(roleDisplaySrc), "isM
 // ---- HUD 组装与贴边 ----
 check(/applyJoystickBodyStyle/.test(joystickSrc) && /static applyJoystickBodyStyle/.test(gameUiHelperSrc), "摇杆零件由 GameUiHelper 施加（组件里不写尺寸/图片路径）");
 check(/get handleNode\(\)/.test(joystickSrc) && /get stickNode\(\)/.test(joystickSrc), "摇杆暴露底座与手柄两个节点给输入层");
-check(/applyAnchorPosition\(\)\s*\{[\s\S]{0,120}?setJoystickPosition/.test(joystickSrc), "摇杆可被重排（窗口尺寸变化时会调用）");
+check(/applyAnchorPosition\(\)\s*\{[\s\S]{0,120}?setJoystickPosition/.test(joystickSrc), "摇杆按固定画布贴边（applyAnchorPosition → setJoystickPosition）");
 check(/new Joystick\(\)/.test(gameSrc) && /addToUILayer\(this\.joystick\)/.test(gameSrc), "组合根创建摇杆并挂到 UI 层");
 check(/setJoystick\(\s*this\.joystick\.stickNode,\s*this\.joystick\.handleNode\s*\)/.test(gameSrc), "组合根把摇杆节点注入主角组件");
-check(/this\.joystick\?\.applyAnchorPosition\(\)/.test(gameSrc), "窗口尺寸变化时摇杆跟着重排");
+check(/realignCamera/.test(gameSrc) && !/applyAnchorPosition\(\)/.test(gameSrc), "Game：窗口尺寸变化只把相机拉回主角，HUD 坐标是常量不再重排");
 
 // ---- 世界侧不误判摇杆拖动 ----
 check(/export function isUiPressOnUiElement/.test(pointerSrc), "Pointer 导出「本次按压的起点是否在界面元素上」的判据");

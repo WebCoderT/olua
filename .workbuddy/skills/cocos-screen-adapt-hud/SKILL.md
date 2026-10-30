@@ -6,6 +6,13 @@ agent_created: true
 
 # Cocos Creator 铺满窗口适配 + 常驻 HUD 贴边布局
 
+> **本项目（olua）已不适用这一套**：自 #543 起 olua 只有一个分辨率 **1920×1080**，
+> 运行时**不设置、不读**分辨率，也没有「可见区」概念 —— 舞台不缩放、HUD 贴边直接用
+> `ScreenLayout.designResolution` 算常量、窗口比例不符时由引擎等比缩放留黑边。
+> 本文保留给「必须兼容多种窗口尺寸」的场景（其它项目，或将来真的要重新支持多分辨率时）参考；
+> 在 olua 里照抄 `applyScreenPolicy` / `getVisibleSize` / `getStageScale` 会被
+> `client/tools/test-scene-stage.cjs` 的源码断言直接判红。
+
 适用对象：**任意窗口尺寸/宽高比下都要贴边的常驻 HUD**（左上角色信息栏、右上小地图、底部导航栏、任务追踪条……），
 「画面铺满窗口不留黑边」的适配策略（`ResolutionPolicy.NO_BORDER`），
 以及**跟着鼠标悬停元素走的浮层**（tooltip / 物品详情弹窗，见第六节）。目标是**不写死坐标**：

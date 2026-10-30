@@ -2,7 +2,7 @@ import { isValid, Label, Node, UITransform } from "cc";
 import { hoverTipLayout } from "../../../configs/hudLayout";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
-import { getVisibleSize } from "../../utils/layout/ScreenLayout";
+import { designResolution } from "../../utils/layout/ScreenLayout";
 
 /**
  * 悬停详情数据（状态与技能共用，由 HoverTipManager 组装）
@@ -72,9 +72,8 @@ export default class HoverTipDialog extends Node {
     const anchorHalfHeight = (anchor.getComponent(UITransform)?.contentSize.height ?? 0) / 2;
     const width = hoverTipLayout.size.width;
     const { anchorGap, screenMargin } = hoverTipLayout;
-    const visibleSize = getVisibleSize();
-    const halfWidth = visibleSize.width / 2;
-    const halfHeight = visibleSize.height / 2;
+    const halfWidth = designResolution.width / 2;
+    const halfHeight = designResolution.height / 2;
     // 图标上方/下方的空闲高度（屏幕中心系：上为正）
     const topFree = halfHeight - (centerY + anchorHalfHeight) - anchorGap;
     const bottomFree = centerY - anchorHalfHeight - anchorGap;

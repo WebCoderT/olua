@@ -207,7 +207,7 @@
 - **不可恢复**：本地存档里没有回收站，丢掉的物品找不回来（数据虽会同步到服务端，但那条同步推的是「删掉之后」的状态，服务端只存不校验内容、也没有历史版本）
 - **和「一键回收」不是一回事**：回收**只吃装备**且折算成绑定元宝；丢弃对装备/药品/材料**都生效、不返还任何东西**，用来清理杂物。两者都只动背包 —— 身上穿着的槽位天然不受影响
 - **规则与提示都在数据层**：`StorageManager.getBagDiscardPreview`（报数，看一眼不动数据）与 `StorageManager.discardBagGood`（该格置空 → 落盘 → 刷新背包）。界面 `BagDialog` 只做模式分流与确认框接线：丢弃模式下点格子走丢弃，其余时候仍是左键使用、右键穿戴
-- **确认框是全屏模态、两路输入都独占**：触摸通道上遮罩自己注册四个 `TOUCH_*` 并停冒泡（否则按下会穿过遮罩落到下面的背包格子上、直接开始拖物品），鼠标通道上 `blockClickThrough` 命中即中断（下层 UI 与世界都收不到这次点击）；全屏尺寸取**可见区**（`ScreenLayout.getVisibleSize`，NO_BORDER 下不等于设计分辨率）。点遮罩空白处**不做任何事** —— 销毁类操作必须明确选择
+- **确认框是全屏模态、两路输入都独占**：触摸通道上遮罩自己注册四个 `TOUCH_*` 并停冒泡（否则按下会穿过遮罩落到下面的背包格子上、直接开始拖物品），鼠标通道上 `blockClickThrough` 命中即中断（下层 UI 与世界都收不到这次点击）；全屏尺寸取画布尺寸（`ScreenLayout.designResolution`；单分辨率下就是 1920×1080，遮罩正好盖满）。点遮罩空白处**不做任何事** —— 销毁类操作必须明确选择
 - **确认框挂在 UI 层、不随背包弹窗销毁**：所以关背包弹窗时必须显式收掉它（`BagDialog.closeDiscardConfirm`），否则会留下一个盖住屏幕的黑幕
 - **文案与几何在配置里**：按钮文案 `configs/texts.label_bag_discard / label_bag_discard_exit`、确认框文案 `bag_discard_confirm_title / bag_discard_confirm_text` 与通用按钮 `label_confirm_ok / label_confirm_cancel`，提示见 `bag_discard_*_tip`；按钮位置与超时在 `configs/layout/dialogs.bagDialogLayout.discardButton`（底部三个按钮各错开 140 → 两两间距 17），确认框几何在 `configs/layout/dialogs.confirmDialogLayout`
 - 回归单测：`node tools/test-bag-discard.cjs`（在沙箱里跑**真实的 StorageManager**：丢装备/药品/材料、整格数量一起丢、只动目标格、落盘生效、幂等、只动在线角色、不动装备槽、空格与越界防御、认不出的 id 也能清掉、预览只读，外加丢弃模式、拖出销毁与确认框的接线/配置/文案源码断言；共 117 项）
@@ -293,7 +293,7 @@
 - **想调手感**：改 `configs/layout/dialogs.goodDetailLayout.placement` 的 `gap`（弹窗边缘与物品格的间距）与 `screenMargin`（弹窗到可见区边缘的留白），组件不写数值
 - **高度是自适应的**：弹窗由自身 Layout 撑开（`ResizeMode.CONTAINER`），首帧量到的是配置里的占位高度（200），内容撑开后按**最终尺寸**复夹一次（监听 `SIZE_CHANGED`，幂等，内容稳定后不再动）
 - **以前为什么会「偏移得很严重」**：老实现把相机 `worldToScreen` 的**物理像素**坐标直接减**设计分辨率**的一半 —— 两个口径差一个 view 缩放系数（窗口越大偏得越多，纹理分辨率高的屏幕上直接飞出屏幕）；而且它中途把弹窗与两个子节点的锚点改成 0 / 1，Layout 会按新锚点重排内容，整块内容又跟着错位。现在统一用**屏幕中心系坐标**（`物品格世界坐标 − LayerManager.UILayer 世界坐标`，与左上角色栏/小地图等常驻 HUD 同一个口径）并按配置摆，锚点恒为 0.5/0.5，**不要**再拿 `worldToScreen` 去摆 UI
-- 回归单测：`node tools/test-good-detail-placement.cjs`（4 种窗口尺寸 × 100 组锚点下弹窗整块可见、优先摆靠中间那侧、有空间时不遮物品、超大弹窗居中且不出 NaN、可见区取「窗口像素 ÷ 缩放」、纯函数不改入参，外加接线与「老 bug 不许回来」的源码断言；共 39 项）
+- 回归单测：`node tools/test-good-detail-placement.cjs`（1920×1080 画布 × 25 组锚点下弹窗整块可见、优先摆靠中间那侧、有空间时不遮物品、超大弹窗居中且不出 NaN、边界取 `designResolution`、纯函数不改入参，外加接线与「老 bug 不许回来」的源码断言；共 36 项）
 
 ### 新建角色的背包里为什么有一堆同名武器？想改出生物品清单怎么办？
 
@@ -392,38 +392,38 @@ TSC=/path/to/tsc node tools/test-bag-tidy.cjs   # 手动指定 tsc
 
 ## 屏幕适配
 
-### 游戏画面为什么不跟着窗口缩放？想让它随窗口自适应改哪里？
+### 只有一个分辨率（1920×1080），窗口变了会怎样？
 
-「画面自适应」是**三层**的事，缺任何一层都会看到「固定大小的框」或者黑边：
+本作**固定 1920×1080**，运行时不做任何分辨率适配：
 
 | 层 | 管什么 | 本工程的做法 |
 | --- | --- | --- |
 | 页面层 | 画布元素本身多大 | `build-templates/web-desktop/`（覆盖引擎模板）：`#GameDiv` / `#Cocos3dGameContainer` / `#GameCanvas` 都铺满视口，去掉边框、阴影与页面上下那两行文字 |
-| 设计分辨率层 | 游戏内部坐标系怎么映射到像素 | 四个场景 `start()` 都调 `ScreenLayout.applyScreenPolicy()` → `setDesignResolutionSize(1624, 750, NO_BORDER)`：等比缩放**铺满**窗口、不留黑边 |
-| 场景布局层 | 各类元素摆在坐标系里的哪 | 常驻 HUD（角色栏 / 小地图 / 底部栏 / 摇杆）用 `getAnchoredPosition(尺寸, getVisibleSize(), 贴哪条边, 边距)` 现算；`Game.ts` 注册 `onWindowResize` 统一重排；登录 / 选角整块舞台按 `getStageScale` 等比 contain 缩放 |
+| 设计分辨率层 | 游戏内部坐标系怎么映射到像素 | 只写在项目设置里（`client/settings/v2/packages/project.json` → `general.designResolution` = 1920×1080，fitWidth + fitHeight = 等比完整显示）；**代码里不再设置分辨率**，四个场景启动时都不碰它 |
+| 场景布局层 | 元素摆在坐标系里的哪 | 原点恒为画布中心：贴边（`getAnchoredPosition`）、全屏遮罩、浮层夹取（`getPopupPosition`）全部以 `ScreenLayout.designResolution` 为边界；1 设计像素 = 1 屏幕像素 |
 
-**为什么以前是一个固定大小的框**：引擎自带的 web-desktop 模板把尺寸写死在内联样式里 ——
+**两份数字靠单测对着**：`ScreenLayout.designResolution` 只服务布局计算，
+`client/tools/test-scene-stage.cjs` 会直接读 `project.json` 比对 —— 改分辨率必须两处一起改。
+
+**窗口比例不是 16:9 时**：引擎按 fitWidth + fitHeight 等比完整显示，左右或上下留黑边，
+游戏内坐标与元素的相对位置都不变 —— 这就是「只有一个分辨率」的语义：不裁画面、也不重排。
+
+**为什么还要自定义构建模板**：引擎自带的 web-desktop 模板把尺寸写死在内联样式里 ——
 `<div id="GameDiv" style="width: 1920px; height: 1080px">`，还带 5px 黑边与阴影、页面上下各一行文字。
-窗口怎么缩放它都不变，于是画布永远 1920×1080。本工程用 `client/build-templates/web-desktop/`
-覆盖了同名的 `index.ejs` 与 `style.css`（自定义构建模板就是在 `build-templates/<平台>/` 放同名文件，
-构建时覆盖到产物目录），把外壳改成「铺满视口、无边框、无滚动条」。
+不铺满视口的话画布会缩在页面中间一小块。本工程用 `client/build-templates/web-desktop/` 覆盖同名的
+`index.ejs` 与 `style.css`（自定义构建模板就是在 `build-templates/<平台>/` 放同名文件，构建时覆盖到产物目录）。
 
-**改成铺满之后，窗口缩放是怎么传导到画面的**：
-`window resize` → 引擎 `screen` 派发 `window-resize` → `screenAdapter` 重读 `#GameDiv` 的
-`clientWidth/clientHeight`（`exactFitScreen` 为 false 时走这个 SubFrame 口径；为 true 时直接用
-`window.innerWidth/innerHeight`，连 CSS 都不看）→ 重设 canvas 像素尺寸 → `view` 重算缩放 →
-游戏里 `onWindowResize` 把贴边 HUD 重排一次。所以「页面层没铺满」时，后面两层再对也只能画在一个固定框里。
+**唯一保留的窗口尺寸处理**：`Game.ts` 在 `window-resize` 时把相机与 UI 层重新对齐到主角 ——
+引擎的 `Canvas` 在尺寸变化时会把相机拽回 Canvas 原点，角色站着不动时没有哪次移动会把它拉回来。
+这跟分辨率无关：HUD 一个坐标都不重排。
 
 两个容易踩的点：
 
-- **算可见区不能用 `view.getVisibleSize()`**：NO_BORDER 下引擎把视口放大到超出画布再裁掉溢出部分，
-  `_visibleRect` 恒等于设计分辨率，贴边元素会被排到屏幕外。统一用 `ScreenLayout.getVisibleSize()`
-  （窗口像素 ÷ `view.getScaleX/getScaleY`，与相机 orthoHeight 同一个公式）。
-- **不要为了自适应换 `web-mobile` 平台**：它的模板给 canvas 挂了 `oncontextmenu="event.preventDefault()"`，
-  右键寻路 / 传送会被吃掉。要铺满就覆盖桌面模板，别换平台。
+- **不要为了「适配某个窗口」再加缩放**：同一份坐标会在不同机器上画出不同画面，这次删掉的就是它。
+- **不要换 `web-mobile` 平台**：它给 canvas 挂了 `oncontextmenu="event.preventDefault()"`，右键寻路 / 传送会被吃掉。
 
 改完怎么验证：在 Cocos Creator 里重新构建（模板只在构建时生效，预览用的是预览器自己的页面），
-构建后拖浏览器窗口，画面与 HUD 应同步缩放 / 重排；改 `client/build-templates/` 下的文件不需要动 `assets/`。
+构建后拖浏览器窗口 —— 画面整体等比缩放（必要时留黑边），HUD 与场景构图**不应**出现相对位移。
 
 ## 相关文档
 

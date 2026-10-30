@@ -9,12 +9,12 @@
  * 链路（引擎 3.8.7 pal/screen-adapter/web）：
  *   窗口 resize → screen 派发 window-resize → screenAdapter._updateFrame()
  *   → 读 #GameDiv 的 clientWidth/clientHeight（exactFitScreen 为 false，即 SubFrame 口径）
- *   → 重设 canvas 像素尺寸 → view 重算缩放 → 游戏里 onWindowResize 重排贴边 HUD
+ *   → 重设 canvas 像素尺寸 → view 按固定分辨率重算缩放（等比、必要时留黑边）
  * 所以这里必须是「真的铺满」：html/body/#GameDiv 三层都要 100%，
  * 任何一层漏掉或被 inline style 覆盖，画布就只跟那一层走（这是原来固定框的成因）。
  *
  * 注意：不要给 body 加 padding / 边框 / display:flex 居中 —— 那会让 clientWidth 比窗口小，
- * 画布与「可见区」口径就对不上了（ScreenLayout.getVisibleSize 用的是窗口像素 ÷ view 缩放）。
+ * 画布缩在页面中间一块（游戏内部坐标是固定的 1920×1080，不会跟着窗口走，详见 client/FAQ.md「屏幕适配」）。
  */
 html,
 body {

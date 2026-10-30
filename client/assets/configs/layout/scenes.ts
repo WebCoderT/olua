@@ -4,10 +4,10 @@ import { uiImages } from "./images";
 /**
  * 场景界面（登录 / 选角 / 加载）的布局与用图
  *
- * 坐标系：场景内元素坐标以「舞台中心」为原点（= 屏幕中心）。登录与选角都采用同一套
- * 「舞台」适配：全部元素挂在舞台容器下按设计坐标摆放，运行时把整块舞台按可见尺寸
- * 等比缩放（contain、只缩不放，见 ui/utils/layout/ScreenLayout.getStageScale），
- * 于是任意窗口宽高比下构图都完整可见；背景图不在舞台内（铺满可见区，始终盖住窗口）
+ * 坐标系：场景内元素坐标以「舞台中心」为原点（= 屏幕中心）。
+ * 本作只有 **1920×1080** 一个分辨率（见 ui/utils/layout/ScreenLayout.designResolution）：
+ * 1 设计像素 = 1 屏幕像素，舞台**不缩放**，这里写多少屏幕上就是多少，没有「按窗口尺寸换算」。
+ * 背景图不在舞台内（铺满整个屏幕，始终盖住窗口）
  */
 
 //#region 登录场景
@@ -16,7 +16,7 @@ import { uiImages } from "./images";
 export const loginLayout = {
   /**
    * 舞台尺寸：登录构图的包围盒加少量余量（最宽元素 600；纵向范围 -373 ~ 350）
-   * 设计分辨率（1624×750）下缩放系数恰为 1（不缩放），元素坐标改动过大时这里要同步
+   * 舞台不缩放（1:1），这里只是个容器尺寸，元素坐标改动过大时这里要同步
    */
   stageSize: new Size(680, 750),
   background: uiImages.loginBackground,
@@ -57,23 +57,22 @@ export const loginLayout = {
 /**
  * 选角界面布局（主视图 + 创建角色弹窗）
  *
- * 坐标为「舞台」坐标系（原点在舞台中心）：所有元素挂在舞台容器下，
- * 由 RoleSelector.applyStageLayout 按当前可见尺寸把整块舞台等比缩放后再居中
- * （舞台 = 按本文件坐标摆好的完整构图，缩放算法见 ui/utils/layout/ScreenLayout.getStageScale）。
- * 于是新增元素只需按这张「设计尺寸的画布」摆坐标，不必关心窗口宽高比；
- * 背景图不在舞台内（铺满可见区，始终盖住窗口，见 RoleSelector.createBackground）
+ * 坐标为「舞台」坐标系（原点在舞台中心）：所有元素挂在舞台容器下，舞台 = 1920×1080 的画布
+ * （不缩放，1 设计像素 = 1 屏幕像素）。
+ * 新增元素按这张 1080p 画布摆坐标即可；
+ * 背景图不在舞台内（铺满整个屏幕，见 RoleSelector.createBackground）
  */
 export const roleSelectorLayout = {
-  /** 舞台尺寸（= 设计分辨率 1624×750，见 ScreenLayout.designResolution；改分辨率时两处同步） */
-  stageSize: new Size(1624, 750),
+  /** 舞台尺寸 = 设计分辨率 1920×1080（见 ScreenLayout.designResolution；容器尺寸，不缩放） */
+  stageSize: new Size(1920, 1080),
   background: uiImages.roleSelectorBackground,
   /**
    * 底部栏（开始游戏按钮所在容器）：**不在舞台内** —— 素材是带「开始游戏」牌匾装饰的整图，
-   * 不能拉伸变形，只能等比缩放；作为「框」它要横跨整个可见宽并贴屏幕底边，
-   * 位置/缩放由 RoleSelector.applyStageLayout 按当前可见尺寸实时算（舞台缩放救不了这两件事：
-   * 跟着舞台缩会两侧露背景，且舞台下沿不贴屏幕底边）
+   * 作为「框」它要横跨整屏并贴屏幕底边。尺寸按 1080p 画布定（1920 宽 = 屏幕宽，
+   * 高度按素材原比例 1624×139 等比换算，不拉伸变形），位置由 RoleSelector.dockBottomBar 算。
+   * 跟着舞台走会两侧露背景，所以它挂在场景根上。
    */
-  bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, size: new Size(1624, 139) },
+  bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, size: new Size(1920, 164) },
   /** 开始游戏按钮（默认置灰，选中角色后可用） */
   beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -40), size: new Size(190, 48) },
   /** 创建角色按钮 / 管理角色按钮 / 创建弹窗返回按钮 */

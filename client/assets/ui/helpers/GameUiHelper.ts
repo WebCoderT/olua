@@ -55,7 +55,7 @@ import { getRankLevel, rankAttributeLabels, rankMaxLevel } from "../../configs/r
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
-import { getAnchoredPosition, getPopupPosition, getVisibleSize } from "../utils/layout/ScreenLayout";
+import { designResolution, getAnchoredPosition, getPopupPosition } from "../utils/layout/ScreenLayout";
 import {
   avatarImage,
   bagGridLayout,
@@ -197,13 +197,13 @@ export default class GameUiHelper {
    * 登录与加载背景不在此列 —— 那两张的构图里有 logo 与合规文字，裁掉就是内容缺失。
    * @param name 元素名称
    * @param src 图片资源路径
-   * @param onTextureLoaded 素材原始尺寸回调（窗口尺寸变化时要拿它重算，见 fitCover）
+   * @param onTextureLoaded 素材原始尺寸回调（加载完拿它算铺满尺寸，见 fitCover）
    */
   static createCoverImage(name: string, src: string, onTextureLoaded?: (textureSize: Size) => void) {
     return UiHelper.createCoverNode(name, src, onTextureLoaded);
   }
 
-  /** 窗口尺寸变化后按可见区重算该背景的尺寸（cover），保证任何窗口比例下都铺满且不变形 */
+  /** 按屏幕尺寸给背景算铺满尺寸（cover）：等比缩放，永远铺满且不变形 */
   static fitCover(node: Node, textureSize: Size) {
     UiHelper.fitCoverNode(node, textureSize);
   }
@@ -772,7 +772,7 @@ export default class GameUiHelper {
     if (!effectLayer || !isValid(effectLayer) || !effectLayer.scene) return;
     const camera = LayerManager.camera;
     if (!camera || !isValid(camera.node)) return;
-    const size = getVisibleSize();
+    const size = designResolution;
     const flash = new Node("hit_screen_flash");
     const transform = flash.addComponent(UITransform);
     const width = size.width * config.overscan;
@@ -1025,10 +1025,10 @@ export default class GameUiHelper {
     return node;
   }
 
-  /** 聊天小窗重贴停靠角（窗口尺寸变化时由组合根调；关着的时候调用是 no-op，由调用方判空） */
+  /** 聊天小窗重贴停靠角（开小窗时由组合根调；关着的时候调用是 no-op，由调用方判空） */
   static placeChatBox(node: Node) {
     const { size, dock } = chatDialogLayout;
-    const position = getAnchoredPosition(size, getVisibleSize(), dock.edge, dock.marginX, dock.marginY);
+    const position = getAnchoredPosition(size, dock.edge, dock.marginX, dock.marginY);
     node.setPosition(position.x, position.y, 0);
   }
 
@@ -1823,7 +1823,6 @@ export default class GameUiHelper {
       anchorCenter,
       anchorSize,
       transform.contentSize,
-      getVisibleSize(),
       goodDetailLayout.placement.gap,
       goodDetailLayout.placement.screenMargin,
     );
@@ -2184,10 +2183,10 @@ export default class GameUiHelper {
     node.addChild(UiHelper.createSprite("bottom_nav_bar_background", uiImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
   }
 
-  /** 底部栏贴边定位（贴屏幕底部居中；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
+  /** 底部栏贴边定位（贴屏幕底部居中；边界 = ui/utils/layout/ScreenLayout.designResolution） */
   static setBottomBarPosition(node: Node) {
     const { anchor } = bottomBarLayout;
-    const position = getAnchoredPosition(bottomBarLayout.size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
+    const position = getAnchoredPosition(bottomBarLayout.size, anchor.edge, anchor.marginX, anchor.marginY);
     node.setPosition(position.x, position.y, 0);
   }
 
@@ -2235,10 +2234,10 @@ export default class GameUiHelper {
     return handle;
   }
 
-  /** 操作摇杆贴边定位（贴屏幕左下角；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
+  /** 操作摇杆贴边定位（贴屏幕左下角；边界 = ui/utils/layout/ScreenLayout.designResolution） */
   static setJoystickPosition(node: Node) {
     const { size, anchor } = joystickLayout;
-    const position = getAnchoredPosition(size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
+    const position = getAnchoredPosition(size, anchor.edge, anchor.marginX, anchor.marginY);
     node.setPosition(position.x, position.y, 0);
   }
 
@@ -2474,10 +2473,10 @@ export default class GameUiHelper {
     this.setSmallMapPosition(node);
   }
 
-  /** 小地图贴边定位（贴屏幕右上角；窗口尺寸变化时可重复调用，见 ui/utils/layout/ScreenLayout） */
+  /** 小地图贴边定位（贴屏幕右上角；边界 = ui/utils/layout/ScreenLayout.designResolution） */
   static setSmallMapPosition(node: Node) {
     const { anchor } = smallMapLayout;
-    const position = getAnchoredPosition(smallMapLayout.size, getVisibleSize(), anchor.edge, anchor.marginX, anchor.marginY);
+    const position = getAnchoredPosition(smallMapLayout.size, anchor.edge, anchor.marginX, anchor.marginY);
     node.setPosition(position.x, position.y, 0);
   }
 

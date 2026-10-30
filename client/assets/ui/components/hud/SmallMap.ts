@@ -171,7 +171,7 @@ export default class SmallMap extends Node {
 
   //#region 结构拼装
 
-  /** 贴边定位（贴屏幕右上角按可见尺寸重算）——窗口尺寸变化时由组合根调用 */
+  /** 贴边定位（贴屏幕右上角；坐标是常量，创建时调一次） */
   applyAnchorPosition() {
     GameUiHelper.setSmallMapPosition(this);
   }

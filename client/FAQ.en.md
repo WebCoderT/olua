@@ -207,7 +207,7 @@ Carrying and sorting are two separate layers, and it is clear which one you are 
 - **Irreversible**: there is no recycle bin in the local save; discarded items cannot come back (data does sync to the server, but that sync pushes the state *after* deletion, and the server only stores character data without validating contents or keeping history)
 - **Not the same as "recycle"**: recycling **takes only equipment** and converts it to bound ingots; discarding **works on equipment / consumables / materials alike and returns nothing**, and exists for clearing junk. Both touch only the bag — equipped slots are unaffected by construction
 - **Rules and prompts live in the data layer**: `StorageManager.getBagDiscardPreview` (reports numbers, read-only) and `StorageManager.discardBagGood` (clear that cell → persist → refresh the bag). The interface (`BagDialog`) only routes modes and wires the confirm box: in discard mode clicking a cell discards, otherwise left click still uses and right click still equips
-- **The confirm box is a full-screen modal that owns both channels**: on the touch channel the mask registers all four `TOUCH_*` and stops bubbling itself (otherwise a press would pass through the mask onto the bag cell below and start dragging an item directly), and on the mouse channel `blockClickThrough` stops at first hit (neither lower UI nor the world receives that click); the full-screen size comes from the **visible area** (`ScreenLayout.getVisibleSize`, which under NO_BORDER is not the design resolution). Clicking blank mask area does **nothing** — a destructive operation has to be chosen explicitly
+- **The confirm box is a full-screen modal that owns both channels**: on the touch channel the mask registers all four `TOUCH_*` and stops bubbling itself (otherwise a press would pass through the mask onto the bag cell below and start dragging an item directly), and on the mouse channel `blockClickThrough` stops at first hit (neither lower UI nor the world receives that click); the full-screen size is the canvas size (`ScreenLayout.designResolution` — 1920×1080, one resolution only, so the mask covers the screen exactly). Clicking blank mask area does **nothing** — a destructive operation has to be chosen explicitly
 - **The confirm box hangs on the UI layer and does not die with the bag dialog**: so closing the bag dialog must explicitly dismiss it (`BagDialog.closeDiscardConfirm`), otherwise a black curtain stays over the screen
 - **Text and geometry live in config**: button text `configs/texts.label_bag_discard / label_bag_discard_exit`, confirm box text `bag_discard_confirm_title / bag_discard_confirm_text` and the generic buttons `label_confirm_ok / label_confirm_cancel`, tips under `bag_discard_*_tip`; button position and timeout in `configs/layout/dialogs.bagDialogLayout.discardButton` (the three bottom buttons are offset by 140 each → pairwise spacing 17), confirm box geometry in `configs/layout/dialogs.confirmDialogLayout`
 - Regression tests: `node tools/test-bag-discard.cjs` (in a sandbox running **the real `StorageManager`**: discarding equipment / consumables / materials, whole-cell quantities discarded together, only the target cell touched, persistence taking effect, idempotence, only the online character affected, equipment slots untouched, empty-cell and out-of-range defence, unrecognisable ids still cleared, preview being read-only, plus source assertions for the discard mode / drag-out destruction / confirm box wiring, config and text; 117 checks in total)
@@ -293,7 +293,7 @@ Before #14 a status only had name / icon / duration; it now also carries combat 
 - **To tune the feel**: change `gap` (space between dialog edge and item cell) and `screenMargin` (space between dialog and visible-area edge) in `configs/layout/dialogs.goodDetailLayout.placement`; the component writes no numbers
 - **Height is auto-sized**: the dialog is stretched by its own `Layout` (`ResizeMode.CONTAINER`), so the first frame measures the placeholder height from config (200); once content settles it is re-clamped against the **final size** (listening to `SIZE_CHANGED`, idempotent, so it stops moving once content is stable)
 - **Why it used to be "badly offset"**: the old implementation took the camera `worldToScreen` **physical pixel** coordinates and subtracted half the **design resolution** — two systems off by a view scale factor (the larger the window the worse the offset, and on high-texture-resolution screens it flew clean off screen); it also switched the dialog's and two child nodes' anchors to 0 / 1 midway, so `Layout` re-laid the content against the new anchors and everything shifted again. Everything now uses **screen-centre coordinates** (`item cell world position − LayerManager.UILayer world position`, the same system as the persistent HUD such as the character column and minimap) and positions by config, with anchors fixed at 0.5/0.5 — **do not** go back to positioning UI with `worldToScreen`
-- Regression tests: `node tools/test-good-detail-placement.cjs` (dialog fully visible across 4 window sizes × 100 anchor points, prefers the side toward the middle, does not cover the item when there is room, oversized dialog centred with no NaN, visible area derived as "window pixels ÷ scale", pure function does not mutate its input, plus source assertions for the wiring and for "the old bug must not come back"; 39 checks in total)
+- Regression tests: `node tools/test-good-detail-placement.cjs` (dialog fully visible across the 1920×1080 canvas × 25 anchor points, prefers the side toward the middle, does not cover the item when there is room, oversized dialog centred with no NaN, bounds taken from `designResolution`, pure function does not mutate its input, plus source assertions for the wiring and for "the old bug must not come back"; 36 checks in total)
 
 ### Why does a new character's bag hold a pile of identically named weapons? How do I change the starting list?
 
@@ -392,34 +392,41 @@ A few conventions:
 
 ## Screen adaptation
 
-### Why doesn't the game view follow the window? Where do I change it?
+### There is only one resolution (1920×1080) — what happens when the window changes?
 
-"Adapting to the window" is a **three-layer** thing; miss any layer and you see a fixed-size box or black bars:
+This game is **fixed at 1920×1080** and does no resolution adaptation at runtime:
 
 | Layer | What it controls | What this project does |
 | --- | --- | --- |
 | Page layer | How big the canvas element itself is | `build-templates/web-desktop/` (overriding the engine template): `#GameDiv` / `#Cocos3dGameContainer` / `#GameCanvas` all fill the viewport, with the border, the shadow and the two lines of text above and below the page removed |
-| Design-resolution layer | How the in-game coordinate system maps to pixels | All four scenes call `ScreenLayout.applyScreenPolicy()` in `start()` → `setDesignResolutionSize(1624, 750, NO_BORDER)`: scale proportionally to **fill** the window without letterboxing |
-| Scene-layout layer | Where elements sit inside that coordinate system | The persistent HUD (role bar / minimap / bottom bar / joystick) computes its position from `getAnchoredPosition(size, getVisibleSize(), which edge, margin)`; `Game.ts` registers `onWindowResize` and relayouts them together; the login and character-selection stage scales as a whole through `getStageScale` (contain) |
+| Design-resolution layer | How the in-game coordinate system maps to pixels | Only in the project settings (`client/settings/v2/packages/project.json` → `general.designResolution` = 1920×1080, fitWidth + fitHeight = proportional, fully visible); **the code never sets the resolution**, none of the four scenes touches it |
+| Scene-layout layer | Where elements sit inside that coordinate system | The origin is always the canvas centre: edge anchoring (`getAnchoredPosition`), full-screen masks and popup clamping (`getPopupPosition`) all use `ScreenLayout.designResolution` as their bounds; 1 design pixel = 1 screen pixel |
 
-**Why it used to be a fixed-size box**: the engine's web-desktop template hardcodes the size in an inline style —
+**Two copies of the number, kept honest by a test**: `ScreenLayout.designResolution` only serves layout maths,
+and `client/tools/test-scene-stage.cjs` reads `project.json` directly to compare — changing the resolution means changing both.
+
+**When the window is not 16:9**: the engine scales proportionally and shows the whole picture (fitWidth + fitHeight),
+adding black bars left/right or top/bottom, while in-game coordinates and relative positions stay identical —
+that is exactly what "one resolution only" means: no cropping, no relayout.
+
+**Why keep a custom build template then**: the engine's own web-desktop template hardcodes the size in an inline style —
 `<div id="GameDiv" style="width: 1920px; height: 1080px">`, plus a 5px border, a shadow and a line of text above and below.
-It never changed with the window, so the canvas stayed 1920×1080 forever. This project overrides the same-named
-`index.ejs` and `style.css` under `client/build-templates/web-desktop/` (a custom build template is just same-named files
-under `build-templates/<platform>/`, copied over the build output), turning the shell into "fill the viewport, no border, no scrollbars".
+Without filling the viewport the canvas shrinks into a small box in the middle of the page. This project overrides the
+same-named `index.ejs` and `style.css` under `client/build-templates/web-desktop/` (a custom build template is just
+same-named files under `build-templates/<platform>/`, copied over the build output).
 
-**How a window resize reaches the picture once the page fills the window**:
-`window resize` → the engine's `screen` emits `window-resize` → `screenAdapter` re-reads `#GameDiv`'s
-`clientWidth/clientHeight` (the SubFrame path taken when `exactFitScreen` is false; when it is true the adapter uses
-`window.innerWidth/innerHeight` directly and ignores CSS) → the canvas pixel size is reset → `view` recomputes the scale →
-`onWindowResize` relayouts the edge-anchored HUD. So while the page layer is a fixed box, the other two layers can be perfect and you still draw into a frame.
+**The only window-size handling left**: on `window-resize`, `Game.ts` re-aligns the camera and UI layer with the player —
+the engine's `Canvas` yanks the camera back to the Canvas origin on resize, and a standing character never triggers the
+move that would pull it back. This has nothing to do with resolution: not a single HUD coordinate is recomputed.
 
 Two easy traps:
 
-- **Do not compute the visible area with `view.getVisibleSize()`**: under NO_BORDER the engine enlarges the viewport past the canvas and lets the canvas clip the overflow, so `_visibleRect` always equals the design resolution and edge-anchored elements land off-screen. Use `ScreenLayout.getVisibleSize()` instead (window pixels ÷ `view.getScaleX/getScaleY`, the same formula as the camera's orthoHeight).
-- **Do not switch to the `web-mobile` platform just to get a full-screen canvas**: its template puts `oncontextmenu="event.preventDefault()"` on the canvas, which swallows right-click pathing and teleporting. Override the desktop template instead of changing platforms.
+- **Do not add scaling back for "some window"**: the same coordinates would then paint different pictures on different machines — that is exactly what was removed here.
+- **Do not switch to the `web-mobile` platform**: its template puts `oncontextmenu="event.preventDefault()"` on the canvas, which swallows right-click pathing and teleporting.
 
-To verify: rebuild in Cocos Creator (the template only takes effect at build time; preview uses the previewer's own page), then drag the browser window — the picture and the HUD must scale and relayout together. Editing files under `client/build-templates/` requires no changes under `assets/`.
+To verify: rebuild in Cocos Creator (the template only takes effect at build time; preview uses the previewer's own page),
+then drag the browser window — the picture scales proportionally (with black bars when needed) and the HUD and scene
+composition must **not** shift relative to each other.
 
 ## Related documents
 
