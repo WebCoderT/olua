@@ -95,16 +95,15 @@ export const roleSelectorLayout = {
   bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, size: new Size(1920, 164) },
   /** 开始游戏按钮（默认置灰，选中角色后可用） */
   beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -44), size: new Size(220, 52) },
-  /**
-   * 返回登录按钮（底部栏最右侧）：清本地会话并回登录场景（换账号 / 误进选角都能用）。
-   * 用通用红底图 + 文字（同创建弹窗的确认按钮），文案见 texts（label_role_back_login）；
-   * 点击行为走 NetworkSetup.returnToLogin —— 与「需要重新登录」兜底共用同一条路。
-   */
-  backToLoginButton: { name: "back_to_login_button", image: uiImages.middleButtonBackground, text: "label_role_back_login", position: new Vec2(855, -40), size: new Size(190, 48), fontSize: 18 },
-  /** 创建角色按钮 / 管理角色按钮 / 创建弹窗返回按钮 */
+  /** 创建角色按钮 / 管理角色按钮 */
   createRoleButton: { name: "show_create_role_button", image: uiImages.roleSelectorNewRoleButton, position: new Vec2(-884, 455), size: new Size(75, 79) },
   manageRoleButton: { name: "manage_role_button", image: uiImages.roleSelectorManageButton, position: new Vec2(-884, 355), size: new Size(75, 79) },
-  backButton: { name: "cancel_create_role_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-884, -370), size: new Size(75, 79) },
+  /**
+   * 返回按钮：**常驻**（不在弹窗里时也在），点击清本地会话回登录场景（换账号 / 误进选角都能用）。
+   * 点击行为走 NetworkSetup.returnToLogin —— 与「需要重新登录」兜底共用同一条路，退出只有一条路。
+   * 创建角色弹窗的关闭在弹窗自己的右上角（见 createDialog.closeButton），不走这颗按钮
+   */
+  backButton: { name: "back_to_login_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-884, -370), size: new Size(75, 79) },
   /**
    * 选中角色信息框（名称 + 等级）：挂在**底部栏**下（role_selector_bottom_bar 的子节点），
    * position 相对底部栏中心 —— 底部栏贴屏幕底边（中心在画布 (0, -540 + 82)），
@@ -113,7 +112,7 @@ export const roleSelectorLayout = {
   selectedInfo: {
     name: "selected_role_info_background",
     image: uiImages.roleSelectorIdleInfo,
-    position: new Vec2(-435, -35),
+    position: new Vec2(-530, -35),
     size: new Size(345, 26),
     nameLabel: { name: "selected_role_name", text: "---", position: new Vec2(-35, 0), size: new Size(160, 30), fontSize: 20 },
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },
@@ -164,7 +163,7 @@ export const roleSelectorLayout = {
     /** 待确认状态的超时（毫秒）：到点自动复位，免得「确认删除」一直挂着被误点（与背包回收同一套两步确认口径） */
     confirmTimeout: 3000,
     /** 管理模式的提示条（舞台顶部居中；文字见 configs/texts.label_role_delete_hint） */
-    hint: { name: "role_manage_hint", position: new Vec2(0, 300), size: new Size(700, 40), fontSize: 22, color: new Color("#FFD700") },
+    hint: { name: "role_manage_hint", position: new Vec2(0, 450), size: new Size(700, 40), fontSize: 22, color: new Color("#FFD700") },
   },
   /** 创建角色弹窗 */
   createDialog: {
@@ -191,7 +190,17 @@ export const roleSelectorLayout = {
     /** 职业说明图（尺寸取职业配置的 descriptionSize）与角色预览 */
     occupationDescription: { position: new Vec2(0, -142) },
     occupationPreview: { position: new Vec2(-245, -95), size: new Size(200, 360) },
+    /**
+     * 右上角关闭按钮：点它关弹窗（backButton 已改为常驻的「返回登录」，不再兼职关弹窗）。
+     * 坐标相对弹窗中心 —— 弹窗 320×580，(138, 266) = 右上角往里缩一点
+     */
+    closeButton: { name: "close_create_role_button", image: uiImages.middleRedButtonBackground, position: new Vec2(138, 266), size: new Size(44, 44), fontSize: 24 },
   },
+  /**
+   * 选中角色框：白细线描在选中角色的单元格上（预览区域外扩 margin），跟随单元格滚动。
+   * 用引擎 Graphics 运行时画（素材里没有现成的框图），线宽 / 颜色 / 外扩都在这里调
+   */
+  selectionFrame: { lineWidth: 2, color: new Color("#FFFFFF"), margin: 6 },
 };
 
 //#endregion

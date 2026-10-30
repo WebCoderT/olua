@@ -157,8 +157,6 @@ export const uiTexts = {
   feature_coming_soon: "{feature}功能正在开发中",
 
   //#region 浮动提示：选角与角色管理
-  /** 进入管理模式（选角界面「管理」按钮） */
-  role_delete_mode_tip: "点击角色上方的删除按钮可删除角色",
   /** 删除角色的两步确认（第一次点击，{name} = 角色名） */
   role_delete_confirm_tip: "再点一次确认删除角色「{name}」，删除后无法恢复",
   /** 删除成功（{name}） */
@@ -224,8 +222,8 @@ export const uiTexts = {
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
   /** 选角界面角色名牌（脚下；{name} = 角色名，{level} = 等级） */
   label_role_name_plate: "{name} Lv.{level}",
-  /** 选角界面底部栏最右侧的返回登录按钮（清会话回登录场景） */
-  label_role_back_login: "返回登录",
+  /** 创建角色弹窗右上角关闭按钮（通用红底图 + 这行字，见 configs/hudLayout.roleSelectorLayout.createDialog.closeButton） */
+  label_close: "×",
 
   //#region 界面标签：属性与装备
   /** 属性分组标题（特殊属性暂未接入，等有行可填时再加回来，见 GameUiHelper.applyRoleAttributeListStyle 的注释） */

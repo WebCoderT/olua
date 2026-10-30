@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Layout, Node, ScrollView, Size, Sprite, Toggle, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, Graphics, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
@@ -33,7 +33,7 @@ interface RoleSelectorMainView {
 
 /** 创建角色弹窗视图引用（本组件拼装并持有） */
 interface RoleSelectorCreateView {
-  backButton: Node;
+  closeButton: Node;
   dialog: Node;
   nameInput: Node;
   sexToggleGroup: Node;
@@ -61,6 +61,8 @@ export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
+  /** 选中角色框（白细线，Graphics 运行时画）：挂当前选中角色的单元格下，随滚动区走 */
+  private selectionFrame: Node | null = null;
   /** 舞台容器（除背景与底部栏外的所有元素都挂这里，不缩放；见 dockBottomBar） */
   private stage: Node | null = null;
   /**
@@ -231,20 +233,13 @@ export class RoleSelector extends Component {
     beginGameButton.getComponent(Sprite).grayscale = true;
     beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
     bottomBar.addChild(beginGameButton);
-    // 返回登录按钮（底部栏最右侧）：清本地会话并回登录场景（换账号 / 误进选角都能用），
-    // 与「需要重新登录」兜底共用 NetworkSetup.returnToLogin —— 退出只有一条路，行为不会漂移
-    const backLayout = layout.backToLoginButton;
-    const backToLoginButton = GameUiHelper.createTexturedButton(
-      backLayout.name,
-      backLayout.image,
-      getText(backLayout.text),
-      backLayout.position,
-      backLayout.size,
-      undefined,
-      backLayout.fontSize,
-    );
-    backToLoginButton.on(Node.EventType.TOUCH_END, () => returnToLogin());
-    bottomBar.addChild(backToLoginButton);
+    // 常驻返回按钮（左下）：点击清本地会话回登录场景（换账号 / 误进选角都能用），
+    // 与「需要重新登录」兜底共用 NetworkSetup.returnToLogin —— 退出只有一条路，行为不会漂移。
+    // 创建角色弹窗的关闭在弹窗右上角（closeButton），不走这颗按钮
+    const backLayout = layout.backButton;
+    const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
+    backButton.on(Node.EventType.TOUCH_END, () => returnToLogin());
+    this.stage!.addChild(backButton);
     // 角色滚动网格：一排 7 个、排满换行、超出视口上下滚。排布全交给引擎 Layout
     // （GRID + 横向起始轴 + CONTAINER：换行点 = 内容宽，CONTAINER 只撑高不改宽），
     // 数字与换行推导见 configs 里 roleScroll 的注释 —— 这里只把配置接上
@@ -304,6 +299,8 @@ export class RoleSelector extends Component {
     });
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
+    // 选中框挂在单元格里，重建列表时随节点一起销毁了 → 选中的角色还在列表就重新画上
+    if (this.ownerRoleSelectedId) this.showSelectionFrame(this.ownerRoleSelectedId);
   }
 
   /**
@@ -350,7 +347,6 @@ export class RoleSelector extends Component {
     }
     this.manageMode = true;
     this.refreshManageControls();
-    GameUiHelper.createTip("role_delete_mode_tip");
   }
 
   /** 按当前角色列表重建管理模式的提示条与删除按钮（进入管理模式、删除角色后刷新列表时调用） */
@@ -466,12 +462,44 @@ export class RoleSelector extends Component {
   private clearSelectedRole() {
     const info = roleSelectorLayout.selectedInfo;
     this.ownerRoleSelectedId = null;
+    this.clearSelectionFrame();
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = true;
     this.mainView.selectedRoleName.getComponent(Label).string = info.nameLabel.text;
     this.mainView.selectedRoleLevel.getComponent(Label).string = info.levelLabel.text;
   }
 
   //#endregion
+
+  /** 摘掉选中框（取消选中 / 列表重建前调用；节点随单元格销毁时这里自动变无害） */
+  private clearSelectionFrame() {
+    if (this.selectionFrame && isValid(this.selectionFrame)) this.selectionFrame.destroy();
+    this.selectionFrame = null;
+  }
+
+  /**
+   * 给当前选中角色画选中框：白细线（样式见 roleSelectorLayout.selectionFrame）描在单元格的
+   * 预览区域外扩 margin 处，挂在**单元格**下 —— 跟着滚动内容走，滚动后不会与角色错位
+   */
+  private showSelectionFrame(roleId: string) {
+    this.clearSelectionFrame();
+    const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${roleId}`);
+    if (!cell) return;
+    const { cell: cellSize } = roleSelectorLayout.roleScroll;
+    const previewSize = roleSelectorLayout.previewSize;
+    const frame = roleSelectorLayout.selectionFrame;
+    const node = new Node("role_selection_frame");
+    const g = node.addComponent(Graphics);
+    g.lineWidth = frame.lineWidth;
+    g.strokeColor = frame.color;
+    const halfW = previewSize.width / 2 + frame.margin;
+    const halfH = previewSize.height / 2 + frame.margin;
+    g.rect(-halfW, -halfH, halfW * 2, halfH * 2);
+    g.stroke();
+    // 框对齐预览区域：预览贴单元格底部（与 createRoleCell 同一条公式）
+    node.setPosition(0, -(cellSize.height - previewSize.height) / 2);
+    cell.addChild(node);
+    this.selectionFrame = node;
+  }
 
   private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;
@@ -481,6 +509,7 @@ export class RoleSelector extends Component {
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = false;
     this.mainView.selectedRoleName.getComponent(Label).string = summary.name;
     this.mainView.selectedRoleLevel.getComponent(Label).string = summary.level.toString();
+    this.showSelectionFrame(roleId);
   }
 
   createRoleUI() {
@@ -491,14 +520,14 @@ export class RoleSelector extends Component {
   /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/hudLayout.roleSelectorLayout.createDialog） */
   private createCreateRoleView(): RoleSelectorCreateView {
     const layout = roleSelectorLayout.createDialog;
-    // 返回按钮
-    const backLayout = roleSelectorLayout.backButton;
-    const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
-    this.stage!.addChild(backButton);
-    backButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
     // 弹窗主体与标题
     const dialog = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
     this.stage!.addChild(dialog);
+    // 右上角关闭按钮（backButton 已改常驻的「返回登录」，不再兼职关弹窗）
+    const closeLayout = layout.closeButton;
+    const closeButton = GameUiHelper.createTexturedButton(closeLayout.name, closeLayout.image, getText("label_close"), closeLayout.position, closeLayout.size, Color.WHITE, closeLayout.fontSize);
+    closeButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
+    dialog.addChild(closeButton);
     dialog.addChild(GameUiHelper.createImage(layout.title.name, layout.title.image, layout.title.position, layout.title.size));
     dialog.addChild(GameUiHelper.createImage(layout.genderLabel.name, layout.genderLabel.image, layout.genderLabel.position, layout.genderLabel.size));
     // 性别开关组
@@ -536,7 +565,7 @@ export class RoleSelector extends Component {
     // （探针实测：当帧 activeToggles() 就有第一项）—— 但下面的首次渲染必须把 view 显式传进去，见 updateOccupationSelection
 
     const view: RoleSelectorCreateView = {
-      backButton,
+      closeButton,
       dialog,
       nameInput: nameInput.input,
       sexToggleGroup,
@@ -545,18 +574,18 @@ export class RoleSelector extends Component {
       occupationDescription: null,
       occupationPreview: null,
     };
-    this.updateOccupationSelection();
+    // 首次渲染**必须显式传 view**：此刻 this.createView 还没赋值（在 createRoleUI 的返回值赋值那一步），
+    // 不传的话方法里读 this.createView 是 null → 直接早退 → 弹窗打开描述与预览全空，要手动点一次才有
+    this.updateOccupationSelection(view);
     return view;
   }
 
-  /** 根据当前选中的职业与性别更新职业描述和预览 */
+  /** 根据当前选中的职业与性别更新职业描述和预览（开关变更时回调） */
   onOccupationChanged() {
-    if (this.createView) this.updateOccupationSelection();
+    if (this.createView) this.updateOccupationSelection(this.createView);
   }
 
-  private updateOccupationSelection() {
-    const view = this.createView;
-    if (!view) return;
+  private updateOccupationSelection(view: RoleSelectorCreateView) {
     const occupationId = view.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
     const sex = view.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
     const occupation = occupationId && occupations.get(occupationId as OECCUPATION);
@@ -576,7 +605,6 @@ export class RoleSelector extends Component {
   cancelCreateRoleUI() {
     if (!this.createView) return;
     this.createView.dialog.destroy();
-    this.createView.backButton.destroy();
     this.createView = null;
   }
 

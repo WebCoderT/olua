@@ -123,6 +123,8 @@ function roleSelectorElements() {
     ["选中信息框", { position: { x: layout.selectedInfo.position.x, y: layout.selectedInfo.position.y + barCenterY }, size: layout.selectedInfo.size }],
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
     ["创建角色弹窗", layout.createDialog],
+    // 弹窗右上角关闭按钮：坐标相对弹窗中心，换算回舞台坐标再判画布包含
+    ["弹窗关闭按钮", { position: { x: layout.createDialog.position.x + layout.createDialog.closeButton.position.x, y: layout.createDialog.position.y + layout.createDialog.closeButton.position.y }, size: layout.createDialog.closeButton.size }],
   ];
   // 角色滚动网格：视口是一块画布内的矩形（行列交给引擎 Layout 排，行数多了在视口里滚，
   // 所以只判视口本身在画布内，不逐个判单元格）。每排个数由视口宽与单元格/间距推导，守点是 6。
@@ -302,12 +304,20 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "RoleSelector：管理模式删除按钮挂单元格下（躲开预览的选中冒泡，又跟着滚动区走不与角色错位）",
   );
   check(
-    /sexToggleGroup\.children\[0\]\.getComponent\(Toggle\)\.isChecked = true/.test(selector) && /occupationToggleGroup\.children\[0\]\.getComponent\(Toggle\)\.isChecked = true/.test(selector),
-    "RoleSelector：创建弹窗默认选中第一项性别与职业（描述与预览打开即显示，不用手动点一次才出来）",
+    /this\.updateOccupationSelection\(view\)/.test(selector) && /this\.createView\) this\.updateOccupationSelection\(this\.createView\)/.test(selector),
+    "RoleSelector：创建弹窗首次渲染显式传 view（首次调用时 this.createView 还没赋值，读它会空手而归 → 描述与预览打开全空）",
   );
   check(
-    /bottomBar\.addChild\(backToLoginButton\)/.test(selector) && /returnToLogin\(\)/.test(selector),
-    "RoleSelector：返回登录按钮挂在底部栏最右侧，点击清会话回登录（走 NetworkSetup.returnToLogin，与 401 兜底同一条路）",
+    /const backLayout = layout\.backButton/.test(selector) && /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => returnToLogin\(\)\)/.test(selector) && !/backToLoginButton/.test(selector),
+    "RoleSelector：返回按钮常驻（进场景即建，不随弹窗开关），点击清会话回登录（走 NetworkSetup.returnToLogin，与 401 兜底同一条路）",
+  );
+  check(
+    /closeLayout = layout\.closeButton/.test(selector) && /dialog\.addChild\(closeButton\)/.test(selector) && /cancelCreateRoleUI\(\)/.test(selector),
+    "RoleSelector：创建弹窗右上角有自己的关闭按钮（backButton 常驻回登录后，关弹窗不再兼职）",
+  );
+  check(
+    /new Node\("role_selection_frame"\)/.test(selector) && /addComponent\(Graphics\)/.test(selector) && /cell\.addChild\(node\)/.test(selector) && /frame\.lineWidth/.test(selector),
+    "RoleSelector：选中角色有白细线选中框（Graphics 按配置画，挂单元格下随滚动区走；列表重建后重新画上）",
   );
   check(
     /ApiErrorKind\.Network/.test(selector) && /scheduleOnce\(\(\) => returnToLogin\(\)/.test(selector) && /errorMoveDuration \+ tipsLayout\.errorFadeDuration/.test(selector),
