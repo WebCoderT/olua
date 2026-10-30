@@ -11,7 +11,7 @@ import { getText } from "../configs/texts";
 const { ccclass } = _decorator;
 
 /** 【临时开关】true = 加载完不跳转，停在 Loading 场景 100%（调场景效果用；调完改回 false） */
-const STAY_AFTER_LOADED = true;
+const STAY_AFTER_LOADED = false;
 
 /**
  * 过渡场景控制器（挂载于 Loading 场景）
