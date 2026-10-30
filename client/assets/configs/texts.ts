@@ -224,6 +224,8 @@ export const uiTexts = {
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
   /** 选角界面角色名牌（脚下；{name} = 角色名，{level} = 等级） */
   label_role_name_plate: "{name} Lv.{level}",
+  /** 选角界面底部栏最右侧的返回登录按钮（清会话回登录场景） */
+  label_role_back_login: "返回登录",
 
   //#region 界面标签：属性与装备
   /** 属性分组标题（特殊属性暂未接入，等有行可填时再加回来，见 GameUiHelper.applyRoleAttributeListStyle 的注释） */

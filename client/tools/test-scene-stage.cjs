@@ -298,6 +298,14 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   );
   check(/NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /namePlate\.offset/.test(selector), "RoleSelector：每个站位脚下有名字与等级名牌（文案走 texts、偏移走配置，随列表重建）");
   check(
+    /bottomBar\.addChild\(backToLoginButton\)/.test(selector) && /returnToLogin\(\)/.test(selector),
+    "RoleSelector：返回登录按钮挂在底部栏最右侧，点击清会话回登录（走 NetworkSetup.returnToLogin，与 401 兜底同一条路）",
+  );
+  check(
+    /ApiErrorKind\.Network/.test(selector) && /scheduleOnce\(\(\) => returnToLogin\(\)/.test(selector) && /errorMoveDuration \+ tipsLayout\.errorFadeDuration/.test(selector),
+    "RoleSelector：连不上服务器时等错误飘字走完再清会话回登录（立刻换场景会把提示一起销毁）",
+  );
+  check(
     /createCoverImage\("role_selector_background"/.test(selector) && !/createFullScreenImage\("role_selector_background"/.test(selector),
     "RoleSelector：背景走等比铺满（cover），不再 CUSTOM 拉伸（竖图铺横屏会拉歪 3.87 倍）",
   );

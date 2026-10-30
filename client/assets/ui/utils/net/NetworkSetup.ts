@@ -7,6 +7,16 @@ import Session from "./Session";
 let installed = false;
 
 /**
+ * 回到登录场景：清本地会话 + 跳登录。
+ * 两条路共用这一个出口：选角界面底部栏的「返回登录」按钮（主动退出）、
+ * 请求层判定需要重新登录（令牌过期 / 非法 / 账号被封禁，见下方 unauthorizedHandler）。
+ */
+export function returnToLogin() {
+  Session.clear();
+  SceneManager.loadScene("Login");
+}
+
+/**
  * 网络层全局接线（**幂等**：多个场景都调也只生效一次）
  *
  * 请求层刻意不认识「场景」和「飘字」——它们是界面的事，所以在这一个地方接上：
@@ -19,10 +29,7 @@ export function installNetwork() {
   if (installed) return;
   installed = true;
 
-  HttpClient.setUnauthorizedHandler(() => {
-    Session.clear();
-    SceneManager.loadScene("Login");
-  });
+  HttpClient.setUnauthorizedHandler(() => returnToLogin());
 
   HttpClient.setFailureHandler((error) => {
     console.warn(`[net] 请求失败：${error.kind} code=${error.code} status=${error.status}`);

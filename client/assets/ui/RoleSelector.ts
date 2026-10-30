@@ -5,13 +5,13 @@ import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
 import { getAnchoredPosition } from "./utils/layout/ScreenLayout";
-import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
+import { roleSelectorLayout, tipsLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { Role } from "../entities/Role";
 import { RoleApi } from "./utils/net/Api";
 import type { RoleSummary } from "./utils/net/Api";
-import { describeError } from "./utils/net/ApiError";
-import { installNetwork } from "./utils/net/NetworkSetup";
+import { describeError, ApiError, ApiErrorKind } from "./utils/net/ApiError";
+import { installNetwork, returnToLogin } from "./utils/net/NetworkSetup";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
@@ -172,6 +172,8 @@ export class RoleSelector extends Component {
       console.warn(`[RoleSelector] 角色列表加载失败：${describeError(error)}`);
       this.roleSummaries = [];
       this.showOwnerRolesUI();
+      // 连不上服务器：飘字走完后清登录信息回登录页（选角没有服务端什么都做不了）
+      this.backToLoginWhenUnreachable(error);
       return;
     }
     this.roleSummaries = summaries;
@@ -180,6 +182,22 @@ export class RoleSelector extends Component {
       if (ids.indexOf(role.id) === -1) StorageManager.deleteRole(role.id);
     });
     this.showOwnerRolesUI();
+  }
+
+  /**
+   * 连不上服务器（网络层失败 / 超时）：**等错误飘字走完**再清登录信息回登录页。
+   *
+   * 全局失败观察者已经飘了错误提示（见 NetworkSetup），而飘字挂在本场景的 Canvas 上 ——
+   * 立刻换场景会把它一起销毁，玩家只见页面闪一下、提示一个字没看到（与登录页 401 重载同坑）。
+   * 所以等「上浮 + 淡出」走完（时长见 tipsLayout）再 returnToLogin。
+   *
+   * 只认连接层失败：业务失败说明服务端还活着（比如角色重名），提示或重试就够了，
+   * 不该把人踢回登录；会话类失败（令牌过期 / 被封禁）由网络层按业务码先走一步，到不了这里。
+   */
+  private backToLoginWhenUnreachable(error: unknown) {
+    const unreachable = error instanceof ApiError && (error.kind === ApiErrorKind.Network || error.kind === ApiErrorKind.Timeout);
+    if (!unreachable) return;
+    this.scheduleOnce(() => returnToLogin(), tipsLayout.errorMoveDuration + tipsLayout.errorFadeDuration);
   }
 
   /**
@@ -218,6 +236,20 @@ export class RoleSelector extends Component {
     beginGameButton.getComponent(Sprite).grayscale = true;
     beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
     bottomBar.addChild(beginGameButton);
+    // 返回登录按钮（底部栏最右侧）：清本地会话并回登录场景（换账号 / 误进选角都能用），
+    // 与「需要重新登录」兜底共用 NetworkSetup.returnToLogin —— 退出只有一条路，行为不会漂移
+    const backLayout = layout.backToLoginButton;
+    const backToLoginButton = GameUiHelper.createTexturedButton(
+      backLayout.name,
+      backLayout.image,
+      getText(backLayout.text),
+      backLayout.position,
+      backLayout.size,
+      undefined,
+      backLayout.fontSize,
+    );
+    backToLoginButton.on(Node.EventType.TOUCH_END, () => returnToLogin());
+    bottomBar.addChild(backToLoginButton);
     // 创建角色按钮
     const createLayout = layout.createRoleButton;
     const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
