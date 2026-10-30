@@ -112,8 +112,12 @@ export const roleSelectorLayout = {
     nameLabel: { name: "selected_role_name", text: "---", position: new Vec2(-35, 0), size: new Size(160, 30), fontSize: 20 },
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },
   },
-  /** 已有角色预览：站位（最多 3 个，按角色顺序）、预览尺寸、站立帧动画帧率（每秒帧数） */
-  rolePositions: [new Vec2(-485, -25), new Vec2(-250, -75), new Vec2(-10, -40)],
+  /**
+   * 已有角色预览：**自动网格排列** —— 从左到右排满一行再往下一行，数量不设上限。
+   * 第 index 个角色的站位 = start + (index % perRow) × spacingX（向右），
+   * start - floor(index / perRow) × spacingY（向下）；首行 y、列距、行距都在这里调。
+   */
+  roleGrid: { start: new Vec2(-485, -25), spacingX: 235, spacingY: 390, perRow: 3 },
   previewSize: new Size(200, 360),
   previewFrameRate: 8,
   /**

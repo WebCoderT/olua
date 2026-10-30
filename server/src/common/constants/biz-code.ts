@@ -56,8 +56,6 @@ export const BizCode = {
   ACCOUNT_EMAIL_EXISTS: 10007,
 
   //#region 角色
-  /** 角色数量已达上限 */
-  ROLE_LIMIT: 20001,
   /** 角色不存在 */
   ROLE_NOT_FOUND: 20002,
   /** 角色数据不合法 */

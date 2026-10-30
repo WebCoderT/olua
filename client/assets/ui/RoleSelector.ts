@@ -20,6 +20,16 @@ const DELETE_ROLE_BUTTON_PREFIX = "delete_role_";
 /** 角色名牌的节点名前缀（节点名带角色 id 便于排查） */
 const NAME_PLATE_PREFIX = "role_name_plate_";
 
+/**
+ * 第 index 个角色的站位：**网格自动排列** —— 从左到右排满一行再往下一行，数量不设上限
+ * （公式与可调数字见 `roleSelectorLayout.roleGrid` 的注释）。角色多到排进底栏就是真的放不下了，
+ * 那属于构图问题，去布局里调 start / spacingY / perRow，而不是加一个「上限」数字。
+ */
+function gridStand(index: number): Vec2 {
+  const grid = roleSelectorLayout.roleGrid;
+  return new Vec2(grid.start.x + (index % grid.perRow) * grid.spacingX, grid.start.y - Math.floor(index / grid.perRow) * grid.spacingY);
+}
+
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
   beginGameButton: Node;
@@ -239,15 +249,8 @@ export class RoleSelector extends Component {
       if (isValid(node)) node.destroy();
     });
     this.mainView.ownerRoleNodes.length = 0;
-    // 角色数超过站位数量 = **服务端上限被配得比界面容量大**（部署那台的 .env，仓库里的守卫看不到）。
-    // 超出的角色取不到站位（下面的 `?? new Vec2()`），会叠在原点 —— 留一条能查的日志，
-    // 别让这件事只剩「看起来像是渲染错了」
-    const stands = roleSelectorLayout.rolePositions.length;
-    if (this.roleSummaries.length > stands) {
-      console.warn(`[RoleSelector] 角色数 ${this.roleSummaries.length} 超过站位 ${stands} 个：多出的角色没有站位、会叠在原点（检查服务端 ROLE_MAX_PER_ACCOUNT 是否大于选区站位数量）`);
-    }
     this.roleSummaries.forEach((role, index) => {
-      const stand = roleSelectorLayout.rolePositions[index] ?? new Vec2();
+      const stand = gridStand(index);
       const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, stand, roleSelectorLayout.previewSize);
       node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
       this.stage!.addChild(node);
@@ -299,8 +302,7 @@ export class RoleSelector extends Component {
     this.manageNodes.push(hint);
     // 每个角色站位上方一个删除按钮（位置由站位 + 偏移推导，角色数量变化时跟着重建）
     this.roleSummaries.forEach((role, index) => {
-      const stand = roleSelectorLayout.rolePositions[index];
-      if (!stand) return;
+      const stand = gridStand(index);
       const button = GameUiHelper.createTexturedButton(
         `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
         uiImages.middleRedButtonBackground,
@@ -512,19 +514,10 @@ export class RoleSelector extends Component {
    * 创建角色
    *
    * 角色数据由**客户端按自身配置**生成（新手装备、初始金币、背包格、快捷键都在 configs/role），
-   * 服务端只校验结构、归属、数量上限与重名 —— 于是游戏侧改配置不必同步改服务端。
+   * 服务端只校验结构、归属与重名（数量不设上限）—— 于是游戏侧改配置不必同步改服务端。
    */
   async createRole() {
     if (!this.createView || this.busy) return;
-    // 站位满了就先拦一道（省一次往返）：**界面能画几个角色，唯一来源就是布局里的站位数组**，
-    // 客户端没有第二个「上限」数字（见 configs/role 顶部的说明）。
-    // 业务上限在服务端（server/.env 的 ROLE_MAX_PER_ACCOUNT，只能调低、不得超过站位数量）——
-    // 它拒下来的请求会走全局错误提示，用的是服务端自己的数字。
-    const stands = roleSelectorLayout.rolePositions.length;
-    if (this.roleSummaries.length >= stands) {
-      GameUiHelper.createTip("role_create_limit_tip", { max: stands });
-      return;
-    }
     // 读取表单（职业与性别取自选中开关的节点名称，即枚举值）
     const occupation = (this.createView.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as OECCUPATION;
     const sex = (this.createView.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as SEX;

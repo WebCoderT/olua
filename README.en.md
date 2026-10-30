@@ -116,7 +116,7 @@ This is a **Vibe Coding** project: humans write no code; they only **state requi
 - **Every pitfall turns into a script.** Regression is not prevented by memory here, but by automated guards: 58 unit-test suites under `client/tools/` and 13 audits under `tools/`, denser than the business code — whether configs leaked, whether addresses are hard-coded, whether generated artifacts match the server docs byte for byte, whether the combat-rules snapshot has drifted, whether the attributes the server computes match the client's version, whether UI clicks fall through to the world, whether module boundaries are bypassed — all of it is watched by scripts.
 - **Everything tunable lives in `client/assets/configs`.** Numbers, texts, layout, colours, durations and asset paths are never written into logic. This convention was forced by "AI keeps changing the numbers", not chosen for elegance.
 - **All API files are generated from the server's Swagger document.** A signature mismatch between the sides becomes a **compile error**, not an `undefined` in production. For the same reason: when AI changes one side, the other two are stopped at compile time.
-- **Regression is a hard gate.** Every change runs: server e2e (248 + 120 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67 + 73 assertions) + typechecks on two sides + 58 unit-test suites + 13 audits — green means done.
+- **Regression is a hard gate.** Every change runs: server e2e (247 + 119 + 283 + 120 + 28 + 50 + 130 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67 + 73 assertions) + typechecks on two sides + 58 unit-test suites + 13 audits — green means done.
 - **One commit per problem solved.** A feature lands in its own commit the moment it's done, never a pile of mixed uncommitted changes — so "which change introduced this regression" can always be bisected.
 - **Pitfalls went into the FAQ.** Each side's FAQ collects its own concrete problems; cross-side mechanisms and environment traps are in [FAQ.en.md](FAQ.en.md); every entry there was actually hit, including environment traps (for example an injected `NODE_OPTIONS` in some terminals makes the server **fail to start silently**).
 
@@ -226,7 +226,7 @@ olua/
 - src/swagger/setup: documentation mounting (extracted into a function so tests can also generate docs once to verify grouping / permission annotations / dangling `$ref`)
 - src/swagger/emit: **offline production of `openapi.json`** (`npm run swagger:emit`, the only input to both consumers' API files)
 - openapi.json: the machine-readable contract (committed to the repo; must be regenerated after any API change, or both consumers stay on the old contract)
-- test/e2e.cjs: end-to-end cases (real server + real requests, 248 assertions: registration and login / character CRUD / privilege escalation / token audience isolation / full admin flows / doc grouping and permission points / four-level escalation and super-admin protection / announcement pull and time windows)
+- test/e2e.cjs: end-to-end cases (real server + real requests, 247 assertions: registration and login / character CRUD / privilege escalation / token audience isolation / full admin flows / doc grouping and permission points / four-level escalation and super-admin protection / announcement pull and time windows)
 - test/e2e-roles.cjs: **character management focus** (120 assertions: revision-number optimistic locking + guide-progress schema checks / six-dimension filtering / structured field validation / batch and whole-account deletion / read-only observer escalation / docs)
 - test/e2e-guard.cjs: **operations and security baseline focus** (283 assertions: password reset and token revocation / self-service password change / audit log persistence, masking, filtering, permissions / login throttling by username and by IP / kicking offline)
 - test/e2e-mail.cjs: **mail channel focus** (120 assertions: verifying enqueue / delivery / retry and exhausting the limit / manual re-delivery / whole-channel disabling when SMTP is unconfigured, using an injectable **fake sender**; no real SMTP server needed)
@@ -257,7 +257,7 @@ olua/
 - audit-api-hardcode.cjs: no hard-coded addresses on any side, requests leaving only through the single exit, every environment variable key registered in `.env.example`
 - audit-config-leak.cjs: no tunables leaking into client core code, and every key in `configs/texts` registered (allowlist `config-leak-allowlist.json`)
 - audit-ui-click-through.cjs: do client UI clicks fall through to the world, and is press ownership wired up completely
-- audit-shared-data.cjs: is the shared game data byte-identical to the client's `configs`, and is every table present and non-empty (**data** drift raises no error, it just makes the two sides slowly compute different numbers); it also guards one cross-side numeric convention — the character cap must not exceed the character-select stand count, and the client holds no second limit number
+- audit-shared-data.cjs: is the shared game data byte-identical to the client's `configs`, and is every table present and non-empty (**data** drift raises no error, it just makes the two sides slowly compute different numbers)
 - audit-combat-parity.cjs: do the character attributes the server computes match the client's `combatCalc` (**algorithm** drift). The expected values are not a copied formula — the real `GameHelper.combatCalc` is compiled into Node and run: 2849 input sets × 10 fields, covering all levels / all equipment / all War Soul, Title and Rank tiers
 - audit-deploy.cjs: do the Docker / compose / nginx cross-file wirings line up (service names / ports / volumes / reverse-proxy prefixes / secret isolation)
 - audit-docs-en.cjs: do the English translations stay in step with the Chinese (coverage / no leftover Chinese / section parity / no dropped numbers / anchors and links reachable / mutual links)
@@ -408,7 +408,7 @@ Manual equivalent (no `make` needed):
 # Client: 58 unit-test suites (run inside client/; scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + twenty-four e2e suites (248 / 120 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67 + 73) + generated-artifact consistency
+# Server: compile + twenty-four e2e suites (247 / 119 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50  + 87 + 55  + 39 + 51 + 67 + 73) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build

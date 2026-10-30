@@ -384,8 +384,8 @@ async function expectFailure(action) {
   const deleteIndex = selectorSource.indexOf("StorageManager.deleteRole(roleId)");
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");
   check(
-    /roleSelectorLayout\.rolePositions\.length/.test(selectorSource) && !/maxRoleCount/.test(selectorSource),
-    "创建前按选角站位数量先拦一道（客户端没有第二个上限数字，服务端仍是业务权威）",
+    /function gridStand\(/.test(selectorSource) && /roleSelectorLayout\.roleGrid/.test(selectorSource) && !/role_create_limit_tip/.test(selectorSource),
+    "角色数量不设上限：站位按 roleGrid 网格自动算（从左到右排满一行再往下），创建前不再拦截",
   );
 
   const gameSource = read(FILE.game);

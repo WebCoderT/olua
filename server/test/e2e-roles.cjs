@@ -21,7 +21,7 @@ process.env.DB_PATH = ":memory:";
 process.env.ADMIN_REGISTER_CODE = "test-admin-code";
 process.env.JWT_SECRET = "test-secret";
 process.env.LOG_REQUESTS = "false";
-process.env.ROLE_MAX_PER_ACCOUNT = "3";
+
 process.env.CORS_ORIGINS = "*";
 
 const { NestFactory } = require("@nestjs/core");
@@ -42,7 +42,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 120;
+const EXPECTED_ASSERTIONS = 119;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -166,9 +166,7 @@ function roleData(id, name, occupation, level) {
 
   const roleA2 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a2", "甲二", "2", 10) } });
   const roleA3 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a3", "甲三", "3", 20) } });
-  check(roleA2.code === 0 && roleA3.code === 0, "同一账号可建到上限（3 个）");
-  const overLimit = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a4", "甲四", "1", 1) } });
-  check(overLimit.code === 20001, "超出上限被拒（业务码 20001）", `${overLimit.code}`);
+  check(roleA2.code === 0 && roleA3.code === 0, "同一账号可连续创建多个角色（数量不设上限）");
 
   const saved1 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 6) } });
   check(saved1.code === 0 && saved1.data.revision === 2, "不带 revision 保存仍然可用（向后兼容），revision 递增到 2", JSON.stringify(saved1.data && saved1.data.revision));

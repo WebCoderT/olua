@@ -63,7 +63,7 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
   { key: "API_PREFIX", field: "apiPrefix" },
   { key: "DB_PATH", field: "dbPath" },
   { key: "JWT_EXPIRES_IN", field: "jwtExpiresIn" },
-  { key: "ROLE_MAX_PER_ACCOUNT", field: "roleMaxPerAccount", render: (read) => `${read<number>("roleMaxPerAccount")} 个` },
+
   { key: "LOG_REQUESTS", field: "logRequests", render: (read) => (read<boolean>("logRequests") ? "开启" : "关闭") },
   {
     key: "TRUST_PROXY",

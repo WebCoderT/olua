@@ -45,9 +45,6 @@ export class RoleRepository {
       .map((row) => row.id);
   }
 
-  countByAccount(accountId: string): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM roles WHERE account_id = ?", [accountId]);
-  }
 
   insert(row: RoleRow): void {
     this.db.run(

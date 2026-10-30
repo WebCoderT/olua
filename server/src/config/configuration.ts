@@ -49,8 +49,6 @@ export interface AppConfiguration {
    * 没配注册码就谁也不许注册，要用 `.env` 里显式打开（或干脆配一个注册码）。
    */
   adminRegisterOpen: boolean;
-  /** 每个账号的角色上限 */
-  roleMaxPerAccount: number;
   /** 允许的跨域来源（["*"] = 全部） */
   corsOrigins: string[];
   /** 是否打印详细日志 */
@@ -362,7 +360,7 @@ export default function configuration(): AppConfiguration {
     adminRegisterCode,
     playerRegisterOpen: (process.env.PLAYER_REGISTER_OPEN ?? "true") === "true",
     adminRegisterOpen: (process.env.ADMIN_REGISTER_OPEN ?? "false") === "true",
-    roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? 3),
+
     corsOrigins: (process.env.CORS_ORIGINS ?? "*")
       .split(",")
       .map((item) => item.trim())

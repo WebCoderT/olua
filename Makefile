@@ -224,7 +224,7 @@ server-build: ## 编译服务端到 server/dist
 server-start: ## 跑服务端已构建产物（需先 make server-build）
 	@cd server && $(NPM) run start
 
-server-e2e: ## 服务端主 e2e（248 条断言）
+server-e2e: ## 服务端主 e2e（247 条断言）
 	@cd server && $(NPM) run test:e2e
 
 server-e2e-roles: ## 服务端角色管理专项 e2e（110 条）

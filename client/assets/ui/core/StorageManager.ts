@@ -61,7 +61,7 @@ export default class StorageManager {
    * 2. 选角场景创建角色（服务端落库后回传完整数据）。
    *
    * **不触发**服务端同步：这份数据本来就是从服务端拿的，推回去纯属白跑一趟。
-   * 角色数量上限由服务端把关（server/.env 的 ROLE_MAX_PER_ACCOUNT），本地不再自己拦。
+   * 角色数量不设上限（服务端创建只校验结构与重名），本地也不自己拦。
    * @param role 服务端返回的角色完整数据（服务端存的就是客户端 entities/Role 的快照）
    */
   static cacheRole(role: Role) {

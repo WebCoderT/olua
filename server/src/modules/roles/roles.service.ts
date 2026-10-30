@@ -1,5 +1,4 @@
 import { HttpStatus, Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
@@ -50,7 +49,6 @@ export class RolesService {
   constructor(
     private readonly roles: RoleRepository,
     private readonly accounts: AccountRepository,
-    private readonly config: ConfigService,
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
@@ -59,17 +57,6 @@ export class RolesService {
     private readonly growth: GrowthRepository,
   ) {}
 
-  /**
-   * 角色数量上限（**业务上限只在这一处**）
-   *
-   * 客户端**没有**第二份数字：它那边的「上限」是选角界面的**站位数量**
-   * （`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions`），那是界面容量。
-   * 所以这个值**只能调低** —— 不得超过站位数量，否则玩家能建出界面上没处放的角色
-   * （多出来的取不到站位，会叠在原点）。这条关系由 `tools/audit-shared-data.cjs` 守着。
-   */
-  private get maxRoles(): number {
-    return this.config.get<number>("roleMaxPerAccount") ?? 3;
-  }
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
   list(accountId: string): RoleSummaryDto[] {
@@ -122,16 +109,13 @@ export class RolesService {
   /**
    * 创建角色
    *
-   * 校验顺序：数量上限 → id 是否已存在 → 同账号是否重名。
+   * 校验顺序：id 是否已存在 → 同账号是否重名（角色数量不设上限，选角界面按网格自动排）。
    * 第一个角色自动设为在线（与客户端「建完就能进游戏」的体验一致）。
    */
   create(accountId: string, dto: CreateRoleDto): RoleDto {
     const account = this.mustAccount(accountId);
     const { fields, data } = parseRoleData(dto.data);
 
-    if (this.roles.countByAccount(accountId) >= this.maxRoles) {
-      throw BizException.conflict(BizCode.ROLE_LIMIT, `角色数量已达上限（最多 ${this.maxRoles} 个）`);
-    }
     if (this.roles.findById(fields.id)) throw BizException.conflict(BizCode.ROLE_ID_EXISTS, "角色 id 已存在，请重试");
     if (this.roles.findByAccountAndName(accountId, fields.name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
 

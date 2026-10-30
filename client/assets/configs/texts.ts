@@ -341,14 +341,7 @@ export const uiTexts = {
   register_success_tip: "注册成功，欢迎 {name}",
   /** 角色创建成功（服务端已保存后才提示） */
   role_create_success_tip: "角色创建成功",
-  /**
-   * 选角界面的**站位满了**（{max} = 界面能画几个 = configs/layout/scenes 的
-   * roleSelectorLayout.rolePositions 的长度）
-   *
-   * 这是**界面容量**，不是业务上限 —— 业务上限在服务端（server/.env 的 ROLE_MAX_PER_ACCOUNT，
-   * 只能调低、不得超过站位数量），它拒下来的请求走全局错误提示，用的是服务端自己的数字。
-   */
-  role_create_limit_tip: "最多只能创建 {max} 个角色",
+
   /**
    * 角色数据已被后台修改，已自动同步为最新
    *

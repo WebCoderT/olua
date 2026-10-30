@@ -46,7 +46,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run start` | 跑已构建产物 |
 | `npm run swagger:emit` | 编译 + 由源码产出 `openapi.json`（契约的唯一来源） |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` —— **重新生成两端接口文件** |
-| `npm run test:e2e` | 主 e2e（248 条断言） |
+| `npm run test:e2e` | 主 e2e（247 条断言） |
 | `npm run test:e2e:roles` | 角色管理专项（120 条） |
 | `npm run test:e2e:guard` | 运营与安全底座专项（283 条） |
 | `npm run test:e2e:mail` | 邮件通道专项（120 条；**假发信器**，不需要 SMTP 服务器） |
@@ -78,7 +78,6 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `JWT_SECRET` | 开发占位值 | **生产必须换成随机长串** |
 | `JWT_EXPIRES_IN` | `7d` | 令牌有效期 |
 | `ADMIN_REGISTER_CODE` | 有值 | 管理端注册码；留空 = 开放注册 |
-| `ROLE_MAX_PER_ACCOUNT` | `3` | 每账号角色上限（**只能调低**：不得超过客户端选角界面的站位数量 `roleSelectorLayout.rolePositions`，守卫在查） |
 | `CORS_ORIGINS` | `*` | 允许的跨域来源，逗号分隔 |
 | `NODE_ENV` | `development` | 只影响标记，不改变行为 |
 | `LOG_REQUESTS` | `true` | 是否打印每请求日志（只打方法/路径/耗时，**不打请求体**） |
@@ -103,12 +102,8 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 > 登录限流会把全部玩家当成同一个人、一起锁死；反过来**直连暴露时必须保持 `false`** —— 开着等于允许调用方
 > 随便伪造 `X-Forwarded-For` 绕过 IP 限流。这一条在 `.env.example` 里也写明了。
 
-> **`ROLE_MAX_PER_ACCOUNT` 只能往下降**：「能建几个角色」在客户端那边是**界面容量** ——
-> 选角布局 `configs/layout/scenes` 的 `roleSelectorLayout.rolePositions` 有几个**站位**，界面上就能站几个，
-> 而客户端的提前拦截就是「站位满了」。所以这个值**不得超过站位数量**：调大了玩家能建出界面上没处放的
-> 角色（多出来的会叠在原点）。二者不再是「同一件事」，因此也不需要一起改 ——
-> 加站位是布局 / 美术的活，调这个只往下走。仓库里的默认值由 `tools/audit-shared-data.cjs` 守着；
-> **部署那台的 `.env` 不进仓库**，守卫看不到，所以别把它调过站位数量。
+> **角色数量不设上限**：创建角色只校验结构与重名；客户端选角界面按网格自动排列
+> （`configs/layout/scenes` 的 `roleSelectorLayout.roleGrid`，从左到右排满一行再往下一行）。
 
 ## 目录结构
 
@@ -174,7 +169,7 @@ server/
 │       └── emit.ts                 ← 离线产出 openapi.json
 ├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 scripts/lib/db-tooling.cjs）
 ├── test/
-│   ├── e2e.cjs                     248 条断言（真实起服务 + 真实 HTTP 请求）
+│   ├── e2e.cjs                     247 条断言（真实起服务 + 真实 HTTP 请求）
 │   ├── e2e-roles.cjs               120 条
 │   ├── e2e-guard.cjs               283 条
 │   ├── e2e-mail.cjs                120 条（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
@@ -414,7 +409,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
-| `test/e2e.cjs` | **248** | 注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 / **公告的公共拉取与生效时间窗** |
+| `test/e2e.cjs` | **247** | 注册登录 / 角色 CRUD 与重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 / **公告的公共拉取与生效时间窗** |
 | `test/e2e-roles.cjs` | **120** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 |
 | `test/e2e-guard.cjs` | **283** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·导出 / 用户名与 IP 双维度限流 / 踢下线 / 封禁闭环 / 看板 / 列表排序 / 系统信息与启动自检 |
 | `test/e2e-mail.cjs` | **120** | 邮件通道：入队即返回 / 后台投递到已发送 / **指数退避重试与用尽上限后标失败**（原因可查）/ 手动重投把次数归零 / 未配置 SMTP 时整体禁用 / 密钥只报形态 / 模板必填变量缺失即拒发。用**可注入的假发信器**（`MAIL_TRANSPORT=fake|fail`），不需要真实 SMTP |

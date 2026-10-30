@@ -124,14 +124,21 @@ function roleSelectorElements() {
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
     ["创建角色弹窗", layout.createDialog],
   ];
-  // 角色站位（预览）与管理模式的删除按钮（位置 = 站位 + 偏移）
-  layout.rolePositions.forEach((position, index) => {
+  // 角色站位（预览）与管理模式的删除按钮（位置 = 站位 + 偏移）：网格排列，与 ui/RoleSelector.gridStand 同一条公式。
+  // 画几行不写死：整个预览块装得进画布的行数全画（行数由画布高与 spacingY 推导）——
+  // 调大 spacingY 让第二行出画布，这里会红；加行就得真的调配置装得下
+  const grid = layout.roleGrid;
+  const fitsRow = (y) => y - layout.previewSize.height / 2 >= -CANVAS.height / 2 && y + layout.previewSize.height / 2 <= CANVAS.height / 2;
+  let rowCount = 0;
+  while (rowCount < 10 && fitsRow(grid.start.y - rowCount * grid.spacingY)) rowCount++;
+  for (let index = 0; index < grid.perRow * rowCount; index++) {
+    const position = { x: grid.start.x + (index % grid.perRow) * grid.spacingX, y: grid.start.y - Math.floor(index / grid.perRow) * grid.spacingY };
     elements.push([`角色站位${index + 1}`, { position, size: layout.previewSize }]);
     elements.push([
       `删除按钮${index + 1}`,
       { position: { x: position.x + layout.manageRole.deleteButtonOffset.x, y: position.y + layout.manageRole.deleteButtonOffset.y }, size: layout.manageRole.deleteButtonSize },
     ]);
-  });
+  }
   return elements;
 }
 
