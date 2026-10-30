@@ -94,7 +94,7 @@ export const roleSelectorLayout = {
    */
   bottomBar: { name: "role_selector_bottom_bar", image: uiImages.roleSelectorBottomBar, size: new Size(1920, 164) },
   /** 开始游戏按钮（默认置灰，选中角色后可用） */
-  beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -40), size: new Size(190, 48) },
+  beginGameButton: { name: "begin_game_button", image: uiImages.roleSelectorStartButton, position: new Vec2(0, -44), size: new Size(220, 52) },
   /**
    * 返回登录按钮（底部栏最右侧）：清本地会话并回登录场景（换账号 / 误进选角都能用）。
    * 用通用红底图 + 文字（同创建弹窗的确认按钮），文案见 texts（label_role_back_login）；

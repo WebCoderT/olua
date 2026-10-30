@@ -532,11 +532,8 @@ export class RoleSelector extends Component {
     eventHandler.handler = "onOccupationChanged";
     occupationToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
     sexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
-    // 默认选中第一项性别与职业：开关组出厂全不选，弹窗一打开 updateOccupationSelection 拿不到
-    // activeToggles 就空手而归，描述与预览要手动点一次才出现。直接置 isChecked（不触发 checkEvents），
-    // 默认内容由下面那次 updateOccupationSelection 统一画
-    sexToggleGroup.children[0].getComponent(Toggle).isChecked = true;
-    occupationToggleGroup.children[0].getComponent(Toggle).isChecked = true;
+    // 默认选中项不用手动设：Toggle 出厂即「已选中」，组激活时 ensureValidState 会把「第一个之外的」关掉
+    // （探针实测：当帧 activeToggles() 就有第一项）—— 但下面的首次渲染必须把 view 显式传进去，见 updateOccupationSelection
 
     const view: RoleSelectorCreateView = {
       backButton,
