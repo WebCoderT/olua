@@ -42,8 +42,15 @@ export class Login extends Component {
   private zones: Zone[] = [];
   /** 当前选中的区服下标（zones 的下标；tap 循环切换） */
   private zoneIndex = 0;
-  /** 区服选择文案节点（zones 拉到后创建并刷新） */
+  /** 区服选择文案节点（创建后即由 renderZone 按 zoneState 刷新） */
   private zoneLabel: Node | null = null;
+  /**
+   * 与服务器的连接状态（区服文案按它显示）：
+   * - `connecting`：进页面就是它，活区列表还在拉（显示「连接中…」）；
+   * - `ready`：列表拉到了，区服文案正常；
+   * - `unreachable`：拉取失败（连不上服务器），显示「暂时无法连接服务器」。
+   */
+  private zoneState: "connecting" | "ready" | "unreachable" = "connecting";
 
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
@@ -91,6 +98,8 @@ export class Login extends Component {
     // 点击换区走统一指针入口（PC 走 bindMousePress 防穿透，触屏走 TOUCH_END）—— 审计 audit-ui-click-through 守这条
     this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, new Vec2(), layout.zoneSelector.size, layout.zoneSelector.color);
     this.bindZonePicker();
+    // 进页面即显示「连接中…」，拉到列表 / 确认连不上后再由 loadZones 刷新
+    this.renderZone();
     // 元素按 key 登记，按 loginLayout.order 的顺序挂进舞台（挂载顺序 = 屏幕顺序，Layout 照它排）
     this.widgets = { logo, account: account.node, password: password.node, zoneSelector: this.zoneLabel, loginButton, registerButton };
     for (const key of layout.order) {
@@ -131,9 +140,9 @@ export class Login extends Component {
   }
 
   /**
-   * 拉活区列表（公共接口）：拉到后刷新区服文案；
-   * 只有一个区就不给「点击切换」的提示（切了也是它）。失败静默 —— 老服务端没有这个接口，
-   * 注册不带 zoneId，服务端落默认区，行为与区服上线前完全一致。
+   * 拉活区列表（公共接口）：拉到 → 区服文案正常；拉不到 → 区服位置显示「暂时无法连接服务器」。
+   * 只有一个区就不给「点击切换」的提示（切了也是它）。失败的另一面不变：注册不带 zoneId，
+   * 服务端落默认区 —— 文案是给玩家看的信号，不改变请求行为。
    */
   private async loadZones() {
     try {
@@ -141,9 +150,13 @@ export class Login extends Component {
       if (!isValid(this.zoneLabel, true)) return;
       this.zones = zones ?? [];
       this.zoneIndex = 0;
+      this.zoneState = "ready";
       this.renderZone();
     } catch (error) {
       console.warn(`[Login] 区服列表拉取失败（注册将落默认区）：${describeError(error)}`);
+      if (!isValid(this.zoneLabel, true)) return;
+      this.zoneState = "unreachable";
+      this.renderZone();
     }
   }
 
@@ -164,16 +177,21 @@ export class Login extends Component {
     this.renderZone();
   }
 
-  /** 刷新区服文案（zones 未拉到时保持空白，不占视觉焦点） */
+  /** 刷新区服文案：连接中 / 无法连接 / 正常（文案全部来自 configs/texts） */
   private renderZone() {
     if (!this.zoneLabel || !isValid(this.zoneLabel, true)) return;
+    const label = this.zoneLabel.getComponent(Label);
+    if (this.zoneState !== "ready") {
+      label.string = getText(this.zoneState === "connecting" ? "login_zone_connecting" : "login_zone_unreachable");
+      return;
+    }
     const zone = this.zones[this.zoneIndex];
     if (!zone) {
-      this.zoneLabel.getComponent(Label).string = "";
+      label.string = "";
       return;
     }
     const key = this.zones.length > 1 ? "login_zone_picker" : "login_zone_label";
-    this.zoneLabel.getComponent(Label).string = getText(key, { zone: zone.name });
+    label.string = getText(key, { zone: zone.name });
   }
 
   /** 读输入框（为空时提示并返回 null） */

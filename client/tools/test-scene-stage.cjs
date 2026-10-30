@@ -29,6 +29,7 @@ const LOADING_FILE = path.join(PROJECT_ROOT, "assets/ui/Loading.ts");
 const GAME_FILE = path.join(PROJECT_ROOT, "assets/ui/Game.ts");
 const SCREEN_LAYOUT_FILE = path.join(PROJECT_ROOT, "assets/ui/utils/layout/ScreenLayout.ts");
 const PROJECT_SETTINGS = path.join(PROJECT_ROOT, "settings/v2/packages/project.json");
+const TEXTS_FILE = path.join(PROJECT_ROOT, "assets/configs/texts.ts");
 
 let outDir;
 try {
@@ -87,13 +88,13 @@ function loginBlocks() {
 function loginContainerHeight() {
   const blocks = loginBlocks();
   const heights = loginLayout.order.map((key) => blocks[key].size.height);
-  return loginLayout.paddingTop + heights.reduce((sum, h) => sum + h, 0) + (heights.length - 1) * loginLayout.spacingY + loginLayout.paddingBottom;
+  return (loginLayout.paddingTop ?? 0) + heights.reduce((sum, h) => sum + h, 0) + (heights.length - 1) * loginLayout.spacingY + loginLayout.paddingBottom;
 }
 
 /** 登录舞台的各元素中心 y（按引擎同一条公式从容器顶边往下推：首项顶边 = 容器高/2 - paddingTop） */
 function loginCenters() {
   const blocks = loginBlocks();
-  let cursor = loginContainerHeight() / 2 - loginLayout.paddingTop;
+  let cursor = loginContainerHeight() / 2 - (loginLayout.paddingTop ?? 0);
   return loginLayout.order.map((key) => {
     const h = blocks[key].size.height;
     const center = cursor - h / 2;
@@ -190,10 +191,11 @@ console.log("\n== C2. 登录舞台：cc.Layout 垂直布局（宽固定 / 高随
   // 顺序与间距（数值随手动调整变化，守的是「屏幕上真的从上到下、间距统一」）
   const descending = order.every((key, index) => index === 0 || centerOf(key) < centerOf(order[index - 1]) - EPS);
   check(descending, `中心 y 从上到下严格递减：${order.map((key) => `${key}=${centerOf(key).toFixed(1)}`).join(" → ")}`);
-  const firstTop = loginContainerHeight() / 2 - loginLayout.paddingTop;
+  const paddingTop = loginLayout.paddingTop ?? 0;
+  const firstTop = loginContainerHeight() / 2 - paddingTop;
   check(
     Math.abs(firstTop - blocks[order[0]].size.height / 2 - centerOf(order[0])) < EPS,
-    `第一个元素（${order[0]}）从容器顶边退 paddingTop ${loginLayout.paddingTop} 起排`,
+    `第一个元素（${order[0]}）从容器顶边退 paddingTop ${paddingTop} 起排`,
   );
   const spacingOk = order.every((key, index) => {
     if (index === 0) return true;
@@ -254,8 +256,8 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "Login：舞台用 cc.Layout 垂直布局（VERTICAL + CONTAINER + TOP_TO_BOTTOM，宽固定 / 高随内容 / 从上到下）",
   );
   check(
-    /stageLayout\.spacingY = layout\.spacingY/.test(login) && /paddingTop = layout\.paddingTop/.test(login) && /paddingBottom = layout\.paddingBottom/.test(login),
-    "Login：间距与留白全部读配置（spacingY / paddingTop / paddingBottom），代码里没有写死的布局数字",
+    /stageLayout\.spacingY = layout\.spacingY/.test(login) && /paddingBottom = layout\.paddingBottom/.test(login),
+    "Login：间距与留白全部读配置（spacingY / paddingBottom；paddingTop 已移除，第一项直接贴容器顶）",
   );
   check(/for \(const key of layout\.order\)[\s\S]{0,260}?this\.stage\.addChild\(widget\)/.test(login), "Login：按 loginLayout.order 的顺序挂进舞台（挂载顺序 = 屏幕顺序）");
   check(/createFullScreenImage\("login_background"/.test(login) && !/this\.stage\.addChild\(GameUiHelper\.createFullScreenImage/.test(login), "Login：背景挂在场景根（不在舞台内，铺满整个屏幕）");
@@ -265,6 +267,12 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   );
   check(!/getColumnCenters|stackWidgets/.test(login), "Login：不再自己算纵向坐标（交给引擎 Layout）");
   check(!/layout\.(account|password|loginButton|registerButton|logo|zoneSelector)\.position/.test(login), "Login：不再读写死坐标（位置交给 Layout）");
+  // 区服位置的两态提示：连不上服务器时不是空白，玩家能看到「暂时无法连接服务器」
+  check(/zoneState: "connecting" \| "ready" \| "unreachable"/.test(login), "Login：区服连接状态只有 connecting / ready / unreachable 三个值");
+  check(/getText\(this\.zoneState === "connecting" \? "login_zone_connecting" : "login_zone_unreachable"\)/.test(login), "Login：连接中与无法连接的文案都来自 configs/texts（代码里不写中文）");
+  check(/this\.zoneState = "ready";/.test(login) && /this\.zoneState = "unreachable";/.test(login), "Login：loadZones 拉到置 ready、拉不到置 unreachable（两个分支都刷新区服文案）");
+  const texts = fs.readFileSync(TEXTS_FILE, "utf8");
+  check(/login_zone_connecting: "连接中…"/.test(texts) && /login_zone_unreachable: "暂时无法连接服务器"/.test(texts), "texts：连接中 / 无法连接两条文案存在（区服位置不再是空白）");
 
   check(/this\.node\.addChild\(bottomBar\);\s*\n\s*this\.bottomBar = bottomBar;/.test(selector), "RoleSelector：底部栏挂在场景根（不在舞台子树里）");
   check(!/this\.stage!\.addChild\(bottomBar\)/.test(selector), "RoleSelector：底部栏不挂进舞台（否则跟着舞台走、两侧露背景）");

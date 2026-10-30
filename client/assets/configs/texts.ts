@@ -329,6 +329,10 @@ export const uiTexts = {
   login_zone_label: "区服：{zone}",
   /** 登录页区服选择（多个区时可点击切换，{zone} = 当前选中的区服名） */
   login_zone_picker: "区服：{zone}（点击切换）",
+  /** 登录页区服位置：正在连接服务器（活区列表还没拉到） */
+  login_zone_connecting: "连接中…",
+  /** 登录页区服位置：连不上服务器（活区列表拉取失败，注册将落默认区） */
+  login_zone_unreachable: "暂时无法连接服务器",
   /** 登录成功（{name} = 账号名） */
   login_success_tip: "登录成功，欢迎 {name}",
   /** 注册成功（{name} = 账号名） */
