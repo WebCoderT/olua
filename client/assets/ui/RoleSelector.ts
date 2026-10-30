@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
@@ -10,7 +10,7 @@ import { getText } from "../configs/texts";
 import { Role } from "../entities/Role";
 import { RoleApi } from "./utils/net/Api";
 import type { RoleSummary } from "./utils/net/Api";
-import { describeError, ApiError, ApiErrorKind } from "./utils/net/ApiError";
+import ApiError, { describeError, ApiErrorKind } from "./utils/net/ApiError";
 import { installNetwork, returnToLogin } from "./utils/net/NetworkSetup";
 const { ccclass } = _decorator;
 
@@ -20,15 +20,8 @@ const DELETE_ROLE_BUTTON_PREFIX = "delete_role_";
 /** 角色名牌的节点名前缀（节点名带角色 id 便于排查） */
 const NAME_PLATE_PREFIX = "role_name_plate_";
 
-/**
- * 第 index 个角色的站位：**网格自动排列** —— 从左到右排满一行再往下一行，数量不设上限
- * （公式与可调数字见 `roleSelectorLayout.roleGrid` 的注释）。角色多到排进底栏就是真的放不下了，
- * 那属于构图问题，去布局里调 start / spacingY / perRow，而不是加一个「上限」数字。
- */
-function gridStand(index: number): Vec2 {
-  const grid = roleSelectorLayout.roleGrid;
-  return new Vec2(grid.start.x + (index % grid.perRow) * grid.spacingX, grid.start.y - Math.floor(index / grid.perRow) * grid.spacingY);
-}
+/** 角色单元格的节点名前缀（滚动网格里每个角色的容器：预览 + 名牌 + 管理模式的删除按钮） */
+const ROLE_CELL_PREFIX = "role_cell_";
 
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
@@ -75,6 +68,8 @@ export class RoleSelector extends Component {
    * （素材带牌匾装饰是整图，尺寸在配置里按 1080p 画布定死，跟舞台走会两侧露背景）
    */
   private bottomBar: Node | null = null;
+  /** 角色滚动网格的内容容器（单元格都挂它下面，Layout GRID 自动排布与撑高） */
+  private roleScrollContent: Node | null = null;
   /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
   private manageMode = false;
   /** 管理模式的临时节点（提示条 + 各角色的删除按钮）：退出管理模式或刷新列表时统一销毁 */
@@ -250,6 +245,27 @@ export class RoleSelector extends Component {
     );
     backToLoginButton.on(Node.EventType.TOUCH_END, () => returnToLogin());
     bottomBar.addChild(backToLoginButton);
+    // 角色滚动网格：一排 7 个、排满换行、超出视口上下滚。排布全交给引擎 Layout
+    // （GRID + 横向起始轴 + CONTAINER：换行点 = 内容宽，CONTAINER 只撑高不改宽），
+    // 数字与换行推导见 configs 里 roleScroll 的注释 —— 这里只把配置接上
+    const scrollLayout = layout.roleScroll;
+    const scrollView = GameUiHelper.createScrollView(scrollLayout.name, scrollLayout.position, scrollLayout.viewSize);
+    scrollView.getComponent(ScrollView)!.horizontal = false;
+    const content = scrollView.getChildByName(`${scrollLayout.name}_content`)!;
+    const grid = content.getComponent(Layout)!;
+    grid.type = Layout.Type.GRID;
+    grid.resizeMode = Layout.ResizeMode.CONTAINER;
+    grid.startAxis = Layout.AxisDirection.HORIZONTAL;
+    grid.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    grid.horizontalDirection = Layout.HorizontalDirection.LEFT_TO_RIGHT;
+    grid.spacingX = scrollLayout.spacingX;
+    grid.spacingY = scrollLayout.spacingY;
+    grid.paddingLeft = scrollLayout.paddingX;
+    grid.paddingRight = scrollLayout.paddingX;
+    grid.paddingTop = scrollLayout.paddingY;
+    grid.paddingBottom = scrollLayout.paddingY;
+    this.stage!.addChild(scrollView);
+    this.roleScrollContent = content;
     // 创建角色按钮
     const createLayout = layout.createRoleButton;
     const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
@@ -281,34 +297,48 @@ export class RoleSelector extends Component {
       if (isValid(node)) node.destroy();
     });
     this.mainView.ownerRoleNodes.length = 0;
-    this.roleSummaries.forEach((role, index) => {
-      const stand = gridStand(index);
-      const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, stand, roleSelectorLayout.previewSize);
-      node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
-      this.stage!.addChild(node);
-      this.mainView.ownerRoleNodes.push(node);
-      // 名字与等级挂在脚下（随列表一起重建销毁；位置由站位 + 偏移推导，见 roleSelectorLayout.namePlate ——
-      // 头顶留给管理模式的删除按钮，两层不叠）
-      const plate = GameUiHelper.createText(
-        `${NAME_PLATE_PREFIX}${role.id}`,
-        getText("label_role_name_plate", { name: role.name, level: role.level }),
-        roleSelectorLayout.namePlate.fontSize,
-        new Vec2(stand.x + roleSelectorLayout.namePlate.offset.x, stand.y + roleSelectorLayout.namePlate.offset.y),
-        roleSelectorLayout.namePlate.size,
-        roleSelectorLayout.namePlate.color,
-      );
-      this.stage!.addChild(plate);
-      this.mainView.ownerRoleNodes.push(plate);
+    this.roleSummaries.forEach((role) => {
+      const cell = this.createRoleCell(role);
+      this.roleScrollContent!.addChild(cell);
+      this.mainView.ownerRoleNodes.push(cell);
     });
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
+  }
+
+  /**
+   * 造一个角色的「单元格」：预览（点击选中）+ 脚下名牌，装进滚动网格由 Layout 排布。
+   * 预览贴单元格底部，顶部留出删除按钮的位置（尺寸见 roleScroll.cell 的注释）；
+   * 名牌挂在单元格下而不是预览下，与预览是兄弟节点 —— 预览只管选中，别的东西不进它的子树。
+   */
+  private createRoleCell(role: RoleSummary): Node {
+    const { cell: cellSize } = roleSelectorLayout.roleScroll;
+    const previewSize = roleSelectorLayout.previewSize;
+    // 预览贴底：预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2
+    const previewY = -(cellSize.height - previewSize.height) / 2;
+    const cell = new Node(`${ROLE_CELL_PREFIX}${role.id}`);
+    cell.addComponent(UITransform).setContentSize(cellSize);
+    const preview = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, new Vec2(0, previewY), previewSize);
+    preview.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
+    cell.addChild(preview);
+    // 名字与等级挂在脚下（偏移相对预览中心，见 roleSelectorLayout.namePlate —— 头顶留给管理模式的删除按钮）
+    const plate = roleSelectorLayout.namePlate;
+    cell.addChild(GameUiHelper.createText(
+      `${NAME_PLATE_PREFIX}${role.id}`,
+      getText("label_role_name_plate", { name: role.name, level: role.level }),
+      plate.fontSize,
+      new Vec2(plate.offset.x, previewY + plate.offset.y),
+      plate.size,
+      plate.color,
+    ));
+    return cell;
   }
 
   //#region 角色管理（删除）
 
   /**
    * 「管理」按钮：进入 / 退出管理模式
-   * 管理模式 = 各角色站位上方出现删除按钮（挂舞台，不在角色预览子树里 —— 预览自带 TOUCH_END 选中事件，
+   * 管理模式 = 各角色头顶上方出现删除按钮（挂单元格下、预览的兄弟节点 —— 预览自带 TOUCH_END 选中事件，
    * 按钮挂在它下面会被冒泡吞掉，点删除会连带选中该角色）
    */
   private toggleManageRole() {
@@ -332,20 +362,26 @@ export class RoleSelector extends Component {
     const hint = GameUiHelper.createText(layout.hint.name, getText("label_role_delete_hint"), layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color);
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
-    // 每个角色站位上方一个删除按钮（位置由站位 + 偏移推导，角色数量变化时跟着重建）
-    this.roleSummaries.forEach((role, index) => {
-      const stand = gridStand(index);
+    // 每个角色头顶上方一个删除按钮：挂在**单元格**下（预览的兄弟节点，躲开预览的选中冒泡），
+    // 跟着滚动内容走 —— 挂舞台上的话，滚动后按钮就与角色错位了
+    this.roleSummaries.forEach((role) => {
+      const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${role.id}`);
+      if (!cell) return;
+      // 偏移相对**预览中心**（见 manageRole.deleteButtonOffset 的注释）；预览贴单元格底部，先换算回单元格局部
+      const { cell: cellSize } = roleSelectorLayout.roleScroll;
+    const previewSize = roleSelectorLayout.previewSize;
+      const previewY = -(cellSize.height - previewSize.height) / 2;
       const button = GameUiHelper.createTexturedButton(
         `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
         uiImages.middleRedButtonBackground,
         getText("label_role_delete"),
-        new Vec2(stand.x + layout.deleteButtonOffset.x, stand.y + layout.deleteButtonOffset.y),
+        new Vec2(layout.deleteButtonOffset.x, previewY + layout.deleteButtonOffset.y),
         layout.deleteButtonSize,
         Color.WHITE,
         layout.deleteButtonFontSize,
       );
       button.on(Node.EventType.TOUCH_END, () => this.onDeleteRoleClick(role.id, button), this);
-      this.stage!.addChild(button);
+      cell.addChild(button);
       this.manageNodes.push(button);
     });
   }

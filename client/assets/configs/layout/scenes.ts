@@ -119,28 +119,45 @@ export const roleSelectorLayout = {
     levelLabel: { name: "selected_role_level", text: "-", position: new Vec2(147, 0), size: new Size(40, 30), fontSize: 16 },
   },
   /**
-   * 已有角色预览：**自动网格排列** —— 从左到右排满一行再往下一行，数量不设上限。
-   * 第 index 个角色的站位 = start + (index % perRow) × spacingX（向右），
-   * start - floor(index / perRow) × spacingY（向下）；首行 y、列距、行距都在这里调。
+   * 已有角色预览：**滚动网格** —— 一排 7 个，排满一行自动换行，行数超出视口在滚动区里上下滚。
+   * 排布交给引擎 Layout（GRID + 横向起始轴 + CONTAINER）：换行点 = 内容宽度，CONTAINER 只撑高
+   * 不改宽（见 cocos/ui/layout.ts），所以「每排几个」由 viewSize.width − paddingX×2 推导：
+   * 这里 1680 − 40 = 1640 的可用宽装 (200 + 30) × 6 + 200 = 1580，第 8 个越界自动换行 = 7 个一排。
+   * 调每排个数就调 viewSize.width / paddingX / spacingX；预览 + 名牌 + （管理模式）删除按钮
+   * 装进同一个「单元格」节点，随内容一起滚。
    */
-  roleGrid: { start: new Vec2(-485, -25), spacingX: 235, spacingY: 390, perRow: 3 },
+  roleScroll: {
+    name: "role_scroll_view",
+    /** 视口在舞台上的位置（视口中心；视口顶 = y + viewSize.height/2 = 405，底 = -515，都留在画布内） */
+    position: new Vec2(30, 35),
+    /** 视口尺寸：宽同时是滚动内容宽（换行基准），高决定一屏能看到几行 */
+    viewSize: new Size(1680, 880),
+    /** 单元格尺寸（预览贴单元格底部；删除按钮已压角色正中间，这里只当布局格子用，高度随便调） */
+    cell: new Size(200, 400),
+    /** 列距 / 行距 */
+    spacingX: 80,
+    spacingY: 0,
+    /** 水平内边距（左右各一份，从可用宽里扣掉再换行） */
+    paddingX: 20,
+    paddingY: 50,
+  },
   previewSize: new Size(200, 360),
   previewFrameRate: 8,
   /**
-   * 角色名牌（脚下）：显示「名字 Lv.等级」，位置由站位 + 偏移推导，随角色列表一起重建。
-   * 放脚下而不是头顶 —— 头顶留给管理模式的删除按钮（见 manageRole.deleteButtonOffset），两层不叠
+   * 角色名牌（脚下）：显示「名字 Lv.等级」，位置 = 预览中心 + 偏移（预览贴单元格底部，
+   * 偏移相对预览中心，随角色列表一起重建）
    */
   namePlate: { offset: new Vec2(0, -200), size: new Size(200, 36), fontSize: 20, color: new Color("#FFFFFF") },
   /**
-   * 管理角色（删除）：点「管理」按钮进入管理模式后，每个角色站位上方出现一个删除按钮
+   * 管理角色（删除）：点「管理」按钮进入管理模式后，每个角色**正中间**出现一个删除按钮
    *
-   * 删除按钮挂在**舞台**上（不在角色预览子树里）——预览自己带 TOUCH_END 选中事件，
-   * 按钮若挂它下面，点删除会连带触发选中（事件冒泡）；按钮另有一层好处是位置由站位 + 偏移推导，
-   * 角色数量变化时跟着重建即可。文案见 configs/texts（label_role_delete / label_role_delete_confirm）
+   * 删除按钮挂在**单元格**下（不在角色预览子树里）——预览自己带 TOUCH_END 选中事件，
+   * 按钮若挂它下面，点删除会连带触发选中（事件冒泡）；挂单元格下既躲开冒泡又跟着滚动区走
+   * （挂舞台上的话，滚动后按钮就与角色错位了）。文案见 configs/texts（label_role_delete / label_role_delete_confirm）
    */
   manageRole: {
-    /** 删除按钮相对角色站位的位置偏移（放角色头顶上方，避免与预览主体重叠） */
-    deleteButtonOffset: new Vec2(0, 215),
+    /** 删除按钮相对**预览中心**的位置偏移（0,0 = 压在角色正中间） */
+    deleteButtonOffset: new Vec2(0, 0),
     /** 删除按钮尺寸与字号 */
     deleteButtonSize: new Size(96, 40),
     deleteButtonFontSize: 18,

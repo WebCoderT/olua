@@ -124,21 +124,13 @@ function roleSelectorElements() {
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
     ["创建角色弹窗", layout.createDialog],
   ];
-  // 角色站位（预览）与管理模式的删除按钮（位置 = 站位 + 偏移）：网格排列，与 ui/RoleSelector.gridStand 同一条公式。
-  // 画几行不写死：整个预览块装得进画布的行数全画（行数由画布高与 spacingY 推导）——
-  // 调大 spacingY 让第二行出画布，这里会红；加行就得真的调配置装得下
-  const grid = layout.roleGrid;
-  const fitsRow = (y) => y - layout.previewSize.height / 2 >= -CANVAS.height / 2 && y + layout.previewSize.height / 2 <= CANVAS.height / 2;
-  let rowCount = 0;
-  while (rowCount < 10 && fitsRow(grid.start.y - rowCount * grid.spacingY)) rowCount++;
-  for (let index = 0; index < grid.perRow * rowCount; index++) {
-    const position = { x: grid.start.x + (index % grid.perRow) * grid.spacingX, y: grid.start.y - Math.floor(index / grid.perRow) * grid.spacingY };
-    elements.push([`角色站位${index + 1}`, { position, size: layout.previewSize }]);
-    elements.push([
-      `删除按钮${index + 1}`,
-      { position: { x: position.x + layout.manageRole.deleteButtonOffset.x, y: position.y + layout.manageRole.deleteButtonOffset.y }, size: layout.manageRole.deleteButtonSize },
-    ]);
-  }
+  // 角色滚动网格：视口是一块画布内的矩形（行列交给引擎 Layout 排，行数多了在视口里滚，
+  // 所以只判视口本身在画布内，不逐个判单元格）。每排个数由视口宽与单元格/间距推导，守点是 7。
+  const scroll = layout.roleScroll;
+  elements.push(["角色滚动视口", { position: scroll.position, size: scroll.viewSize }]);
+  const availableWidth = scroll.viewSize.width - scroll.paddingX * 2;
+  const perRow = Math.floor((availableWidth - scroll.cell.width) / (scroll.cell.width + scroll.spacingX)) + 1;
+  check(perRow === 7, `角色滚动网格每排 ${perRow} 个（= (视口宽 − paddingX×2 − 单元格宽) ÷ (单元格宽 + spacingX) + 1，期望 7）`);
   return elements;
 }
 
@@ -296,7 +288,19 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     /bottomBar\.addChild\(selectedInfoBox\)/.test(selector) && !/this\.stage!\.addChild\(selectedInfoBox\)/.test(selector),
     "RoleSelector：选中信息框挂在底部栏下（selected_role_info_background 是 role_selector_bottom_bar 的子节点）",
   );
-  check(/NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /namePlate\.offset/.test(selector), "RoleSelector：每个站位脚下有名字与等级名牌（文案走 texts、偏移走配置，随列表重建）");
+  check(/NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /(namePlate|plate)\.offset/.test(selector), "RoleSelector：每个站位脚下有名字与等级名牌（文案走 texts、偏移走配置，随列表重建）");
+  check(
+    /Layout\.Type\.GRID/.test(selector) && /AxisDirection\.HORIZONTAL/.test(selector) && /roleScroll/.test(selector),
+    "RoleSelector：角色网格交给引擎 Layout（GRID + 横向起始轴，换行点 = 内容宽；一排几个改 roleScroll 配置）",
+  );
+  check(
+    /createScrollView\(/.test(selector) && /role_cell_/.test(selector) && /roleScrollContent!\.addChild\(cell\)/.test(selector),
+    "RoleSelector：预览装进单元格挂滚动内容下（超出一屏上下滚，角色多了不再画不进画布）",
+  );
+  check(
+    /roleScrollContent\?\.getChildByName/.test(selector) && /cell\.addChild\(button\)/.test(selector),
+    "RoleSelector：管理模式删除按钮挂单元格下（躲开预览的选中冒泡，又跟着滚动区走不与角色错位）",
+  );
   check(
     /bottomBar\.addChild\(backToLoginButton\)/.test(selector) && /returnToLogin\(\)/.test(selector),
     "RoleSelector：返回登录按钮挂在底部栏最右侧，点击清会话回登录（走 NetworkSetup.returnToLogin，与 401 兜底同一条路）",
