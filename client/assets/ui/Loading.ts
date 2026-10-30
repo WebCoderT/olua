@@ -1,13 +1,17 @@
-import { _decorator, Component, director, Label } from "cc";
+import { _decorator, Component, director, Label, Sprite } from "cc";
 import { maps } from "../configs/map";
 import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
 import GameUiHelper from "./helpers/GameUiHelper";
+import AnimationHelper from "./helpers/AnimationHelper";
 import StorageManager from "./core/StorageManager";
 import { loadingLayout } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 
 const { ccclass } = _decorator;
+
+/** 【临时开关】true = 加载完不跳转，停在 Loading 场景 100%（调场景效果用；调完改回 false） */
+const STAY_AFTER_LOADED = true;
 
 /**
  * 过渡场景控制器（挂载于 Loading 场景）
@@ -24,11 +28,27 @@ export class Loading extends Component {
 
   /** 进度文本 */
   private progressLabel: Label | null = null;
+  /** 进度条填充图（Sprite FILLED 横向，fillRange 跟进度走） */
+  private progressFill: Sprite | null = null;
 
   start() {
     // 背景与进度文字（位置、字号与用图见 configs/hudLayout.loadingLayout）
     this.node.addChild(GameUiHelper.createFullScreenImage("loading_background", loadingLayout.background));
-    // 一行进度文字（百分比显示）
+    // 居中的加载帧动画（图集 7 帧循环；显示尺寸 / 帧率见 configs loadingLayout.loadingAnimation）
+    const animLayout = loadingLayout.loadingAnimation;
+    const animation = GameUiHelper.createImage("loading_animation", "", animLayout.position, animLayout.size);
+    AnimationHelper.playLoopAtlas("loading_animation", animation, animLayout.atlas, animLayout.frameRate);
+    this.node.addChild(animation);
+    // 底部正中的进度条（底图在下、填充图在上；填充按进度横向裁切）
+    const barLayout = loadingLayout.bar;
+    this.node.addChild(GameUiHelper.createImage("loading_bar_background", barLayout.background, barLayout.position, barLayout.size));
+    const fill = GameUiHelper.createImage("loading_bar_fill", barLayout.fill, barLayout.position, barLayout.size);
+    this.progressFill = fill.getComponent(Sprite);
+    this.progressFill.fillType = Sprite.FillType.HORIZONTAL;
+    this.progressFill.fillStart = 0;
+    this.progressFill.fillRange = 0;
+    this.node.addChild(fill);
+    // 一行小字：进度条右下角（位置 / 字号见 configs loadingLayout.progress）
     const progress = GameUiHelper.createLoadingProgress(loadingLayout.progress.text, loadingLayout.progress.position, loadingLayout.progress.fontSize);
     this.progressLabel = progress.progressLabel;
     this.node.addChild(progress.node);
@@ -55,6 +75,12 @@ export class Loading extends Component {
         }
       }
       this.setProgress(100);
+      // 【临时】调 Loading 场景效果用：加载完停在 100% 不跳转（pendingScene 也不清，
+      // 把上面 STAY_AFTER_LOADED 改回 false 后，下次进 Loading 仍按原目标场景走）
+      if (STAY_AFTER_LOADED) {
+        console.log(`[Loading] 临时不跳转（STAY_AFTER_LOADED）—— 场景 ${scene} 资源就绪，停在 Loading`);
+        return;
+      }
       SceneManager.pendingScene = null;
       director.loadScene(scene);
       console.log(`[Loading] 场景 ${scene} 加载总耗时 ${Date.now() - startedAt}ms`);
@@ -72,9 +98,10 @@ export class Loading extends Component {
     return result;
   }
 
-  /** 更新进度（ratio 取值 0~1，显示为百分比；tip 为当前阶段的说明，如"帧动画 3/7"） */
+  /** 更新进度（ratio 取值 0~100；进度条填充图 + 百分比小字同步；tip 为当前阶段的说明，如"帧动画 3/7"） */
   private setProgress(ratio: number, tip?: string) {
     const percent = Math.min(100, Math.floor(ratio));
+    if (this.progressFill) this.progressFill.fillRange = Math.min(1, ratio / 100);
     this.setProgressText(tip ? getText("progress_loading_tip", { percent, tip }) : getText("progress_loading", { percent }));
   }
 

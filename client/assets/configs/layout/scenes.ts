@@ -210,8 +210,20 @@ export const roleSelectorLayout = {
 /** 加载界面布局 */
 export const loadingLayout = {
   background: uiImages.loadingBackground,
-  /** 进度文字（居中） */
-  progress: { text: "加载中 0%", position: new Vec2(), fontSize: 32 },
+  /** 居中的加载帧动画（图集 7 帧循环；显示尺寸 / 位置 / 帧率在这里调） */
+  loadingAnimation: { atlas: uiImages.loadingAnimationAtlas, position: new Vec2(-45, 0), size: new Size(240, 240), frameRate: 8 },
+  /**
+   * 底部正中的进度条：底图 + 填充图，填充图按进度横向 FILLED 裁切（fillRange 跟进度走）。
+   * 两张图素材原生 1136×227，这里按半尺寸显示；位置 / 尺寸在这里调
+   */
+  bar: {
+    position: new Vec2(0, -390),
+    size: new Size(1920 , 300),
+    background: uiImages.loadingProgressBackground,
+    fill: uiImages.loadingProgressFill,
+  },
+  /** 加载进度文字：一行小字放进度条右下角（坐标相对画布中心） */
+  progress: { text: "加载中 0%", position: new Vec2(0, -100), fontSize: 12 },
 };
 
 //#endregion

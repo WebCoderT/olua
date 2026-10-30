@@ -156,6 +156,11 @@ export const uiImages = {
 
   // ---------------- 加载界面 ----------------
   loadingBackground: loadingImage("loading_bg"),
+  /** 底部进度条：底图 + 填充图（填充图按进度横向 FILLED 裁切；素材文件名就是 pregress，拼错的就让它去吧） */
+  loadingProgressBackground: loadingImage("progress_bg"),
+  loadingProgressFill: loadingImage("pregress_content"),
+  /** 居中的加载帧动画图集（loading@0.plist，7 帧循环） */
+  loadingAnimationAtlas: loadingImage("loading@0"),
 
   // ---------------- 商城 ----------------
   /** 商城弹窗背景（resources/mall/bg，门面样式底图，商品列表摆它的橱窗开口里） */

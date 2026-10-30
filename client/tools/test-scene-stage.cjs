@@ -41,7 +41,7 @@ try {
 }
 
 const { designResolution } = require(path.join(outDir, "ui/utils/layout/ScreenLayout.js"));
-const { loginLayout, roleSelectorLayout } = require(path.join(outDir, "configs/layout/scenes.js"));
+const { loginLayout, roleSelectorLayout, loadingLayout } = require(path.join(outDir, "configs/layout/scenes.js"));
 
 const EPS = 1e-6;
 const CANVAS = designResolution;
@@ -250,6 +250,24 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(!RESOLUTION_CODE.test(login), "Login：没有分辨率适配代码（applyScreenPolicy / getVisibleSize / getStageScale）");
   check(!RESOLUTION_CODE.test(selector), "RoleSelector：没有分辨率适配代码");
   check(!RESOLUTION_CODE.test(loading) && !RESOLUTION_CODE.test(game), "Loading / Game：没有分辨率适配代码");
+
+  // Loading 场景：居中加载动画 + 底部进度条 + 右下角小字，全部落在画布内（布局配置在 configs/layout/scenes.loadingLayout）
+  check(
+    inside(rectOf(loadingLayout.loadingAnimation.position, loadingLayout.loadingAnimation.size), CANVAS) && loadingLayout.loadingAnimation.size.width === 240 && loadingLayout.loadingAnimation.size.height === 240,
+    "Loading：加载帧动画 240×240 在画布正中（图集 loading@0 七帧循环，显示尺寸走配置）",
+  );
+  check(
+    inside(rectOf(loadingLayout.bar.position, loadingLayout.bar.size), CANVAS) && loadingLayout.bar.position.x === 0 && loadingLayout.bar.position.y < 0,
+    "Loading：进度条在画布内且位于下半屏正中（底图 + 填充图，素材原生 1136×227 按半尺寸显示）",
+  );
+  check(
+    loadingLayout.progress.fontSize <= 18 && inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS) && loadingLayout.progress.position.y < loadingLayout.bar.position.y,
+    "Loading：进度文字是小字（fontSize ≤ 18）、在画布内且位于进度条下半部（具体压哪个角落随手动微调，守大位置）",
+  );
+  check(
+    /playLoopAtlas\("loading_animation"/.test(loading) && /FillType\.HORIZONTAL/.test(loading) && /fillRange = Math\.min\(1, ratio \/ 100\)/.test(loading),
+    "Loading：帧动画走 playLoopAtlas 循环播放；进度条填充图 FILLED 横向，fillRange 跟 setProgress 走",
+  );
   check(!/onWindowResize\(/.test(login) && !/onWindowResize\(/.test(selector), "两个场景都不再注册窗口尺寸变化重排");
 
   check(/new Node\("login_stage"\)/.test(login), "Login：创建舞台容器 login_stage");
