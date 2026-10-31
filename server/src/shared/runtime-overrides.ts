@@ -36,9 +36,11 @@ import {
   DRUGS,
   EQUIPMENT_ATTRIBUTES,
   EQUIPMENT_PREFIX_RATES,
+  EQUIPMENT_RECYCLE_PRICES,
   EQUIPMENT_SUFFIX_RATES,
   ITEM_BASES,
   RANK_LEVEL_ATTRIBUTES,
+  SELL_PRICES,
   SKILLS,
   SOUL_LEVEL_ATTRIBUTES,
   TITLE_LEVEL_ATTRIBUTES,
@@ -70,9 +72,20 @@ export interface AttributeColumns {
   taoist_defense_max: number;
 }
 
-/** 装备基础件的一行（只需要 id + 八项属性；部位 / 等级 / 名称不参与结算） */
+/** 装备基础件的一行（id + 等级 + 八项属性；部位 / 名称不参与结算，等级决定回收价） */
 export interface EquipmentBaseOverride extends AttributeColumns {
   id: string;
+  level: number;
+}
+
+/** 物品 / 材料的一行（`items` 表：叠加上限与卖价参与结算） */
+export interface ItemOverride {
+  id: string;
+  label: string;
+  description: string;
+  level: number;
+  sell_price: number;
+  max_stack: number;
 }
 
 /** 称号 / 战魂 / 军衔的一行（level 是主键，1 起） */
@@ -121,11 +134,13 @@ export interface DrugOverride {
 //#region 存储（null = 没有运营改动，读取方回落生成物）
 
 let equipmentVariants: Map<string, AttributeBundle> | null = null;
+let equipmentPrices: Map<string, number> | null = null;
 let titleBundles: Map<number, AttributeBundle> | null = null;
 let soulBundles: Map<number, AttributeBundle> | null = null;
 let rankBundles: Map<number, AttributeBundle> | null = null;
 let skillRows: Map<string, AttributeBundle> | null = null;
 let drugRows: Map<string, AttributeBundle> | null = null;
+let itemRows: Map<string, AttributeBundle> | null = null;
 
 //#endregion
 
@@ -155,23 +170,54 @@ export function attributeBundleOf(row: AttributeColumns): AttributeBundle {
  *
  * 变体 id 从**出厂表的键**解析（`cloth_1_p3s2` → 基础件 `cloth_1`、前缀 3、后缀 2），
  * 不给运维新造 id 的机会：基础件之外的 id 一律不认。
+ *
+ * 顺带把**回收价**一起算好（#545）：价 = 等级对应的基础价 × 同一组倍率，取整口径与客户端
+ * `applyEquipmentRows` 里的 `Math.round(equipmentRecyclePrice(level) * rate)` 逐值相同。
+ * 之所以价签也在这里算：运营改**等级**就改了价（等级既是穿戴门槛也是定价依据），
+ * 而客户端的价格读的是自己即时算的曲线值，服务端若还按出厂价签付钱，就是「显示一个价、
+ * 到账另一个价」。
  */
 export function applyEquipmentOverrides(rows: EquipmentBaseOverride[]): void {
   if (!rows.length) {
     equipmentVariants = null;
+    equipmentPrices = null;
     return;
   }
-  const bases = new Map<string, AttributeBundle>();
-  for (const row of rows) bases.set(row.id, attributeBundleOf(row));
+  const bases = new Map<string, { bundle: AttributeBundle; level: number }>();
+  for (const row of rows) bases.set(row.id, { bundle: attributeBundleOf(row), level: numberOr(row.level) });
 
   const variants = new Map<string, AttributeBundle>();
+  const prices = new Map<string, number>();
   for (const id of Object.keys(EQUIPMENT_ATTRIBUTES)) {
     const parsed = parseEquipmentVariantId(id);
     const base = parsed ? bases.get(parsed.baseKey) : undefined;
     if (!parsed || !base) continue;
-    variants.set(id, scaleBundle(base, rateOf(parsed.prefix, parsed.suffix)));
+    const rate = rateOf(parsed.prefix, parsed.suffix);
+    variants.set(id, scaleBundle(base.bundle, rate));
+    prices.set(id, Math.round(recycleBasePriceOf(base.level) * rate));
   }
   equipmentVariants = variants;
+  equipmentPrices = prices;
+}
+
+/** 装进物品 / 材料的当前值（`items` 表：叠加上限、卖价；形状与生成物 `ITEM_BASES` 对齐） */
+export function applyItemOverrides(rows: ItemOverride[]): void {
+  if (!rows.length) {
+    itemRows = null;
+    return;
+  }
+  const map = new Map<string, AttributeBundle>();
+  for (const row of rows) {
+    map.set(row.id, {
+      type: "",
+      label: row.label,
+      description: row.description,
+      level: numberOr(row.level),
+      sellPrice: numberOr(row.sell_price),
+      maxStack: numberOr(row.max_stack),
+    });
+  }
+  itemRows = map;
 }
 
 /** 装进称号 / 战魂 / 军衔的当前值（键 = 等级，1 起） */
@@ -246,11 +292,13 @@ export function applyDrugOverrides(rows: DrugOverride[]): void {
 /** 清空全部覆盖（e2e 之间隔离用；生产只在进程启动时天然为空） */
 export function resetRuntimeOverrides(): void {
   equipmentVariants = null;
+  equipmentPrices = null;
   titleBundles = null;
   soulBundles = null;
   rankBundles = null;
   skillRows = null;
   drugRows = null;
+  itemRows = null;
 }
 
 //#endregion
@@ -287,9 +335,31 @@ export function drugOf(id: string): AttributeBundle | null {
   return drugRows?.get(id) ?? (DRUGS as Record<string, AttributeBundle>)[id] ?? null;
 }
 
-/** 材料 / 其它物品的当前配置（运营改的是 `items` 表；目前只有叠加上限参与结算） */
+/** 材料 / 其它物品的当前配置（运营改的是 `items` 表：叠加上限 + 卖价） */
 export function itemBaseOf(id: string): AttributeBundle | null {
-  return (ITEM_BASES as Record<string, AttributeBundle>)[id] ?? null;
+  return itemRows?.get(id) ?? (ITEM_BASES as Record<string, AttributeBundle>)[id] ?? null;
+}
+
+/**
+ * 某个物品的**出售单价**（货币 = 绑定元宝/个）；`null` = 不可卖
+ *
+ * 卖价的三条来源，按「谁有裁决权」排序：
+ * 1. 装备（含变体）→ 回收价 = 等级基础价 × 前后缀倍率（覆盖层里已算好，见
+ *    `applyEquipmentOverrides`）。**不看 `sell_price` 列** —— 客户端 `applyEquipmentRows`
+ *    也是按等级曲线重算的，两边必须同一口径，否则「背包显示 400、到账 100」；
+ * 2. 药品 / 材料 → 各自表里的 `sell_price`（运营在管理端改的就是它）；
+ * 3. 都没有 → 回落生成物 `SELL_PRICES`（出厂价签）；仍然没有 = `null` = 不可卖
+ *    （任务物 / 关键道具就靠这条拦住，`SELL_NOT_SELLABLE`）。
+ */
+export function sellPriceOf(id: string): number | null {
+  const equipment = equipmentPrices?.get(id);
+  if (equipment !== undefined) return equipment;
+  const drug = drugRows?.get(id);
+  if (drug) return numberOr(drug.sellPrice);
+  const item = itemRows?.get(id);
+  if (item) return numberOr(item.sellPrice);
+  const factory = (SELL_PRICES as Record<string, number>)[id];
+  return factory === undefined ? null : numberOr(factory);
 }
 
 //#endregion
@@ -322,6 +392,21 @@ function rateOf(prefix: number, suffix: number): number {
   const prefixRate = prefix < EQUIPMENT_PREFIX_RATES.length ? EQUIPMENT_PREFIX_RATES[prefix] : 1;
   const suffixRate = suffix < EQUIPMENT_SUFFIX_RATES.length ? EQUIPMENT_SUFFIX_RATES[suffix] : 1;
   return prefixRate * suffixRate;
+}
+
+/**
+ * 某等级装备的回收基础价（普通·人级，含前后缀倍率之前）
+ *
+ * 生成物里存的是**采样值**（下标 = 等级 - 1），不是曲线公式 —— 两端读同一组数字，
+ * 不存在「插值写法差一点」的可能。等级越界按端点夹紧（运营把等级改成 0 / 999 时不至于
+ * 让价格变成 NaN 或 0：宁可给端点价，也不要「卖掉却没给钱」）。
+ */
+function recycleBasePriceOf(level: number): number {
+  if (!EQUIPMENT_RECYCLE_PRICES.length) return 0;
+  const index = Math.trunc(level) - 1;
+  if (!Number.isFinite(index) || index < 0) return numberOr(EQUIPMENT_RECYCLE_PRICES[0]);
+  if (index >= EQUIPMENT_RECYCLE_PRICES.length) return numberOr(EQUIPMENT_RECYCLE_PRICES[EQUIPMENT_RECYCLE_PRICES.length - 1]);
+  return numberOr(EQUIPMENT_RECYCLE_PRICES[index]);
 }
 
 /** 按倍率缩放一份属性包（单值逐项乘、区间两端各乘，统一 Math.round） */

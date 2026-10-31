@@ -37,7 +37,7 @@
 
 ### Why are buttons greyed out / why are admin menu items missing?
 
-- **Every piece of visibility comes from the permission points carried in the token** (`hasPermission` in `store/session`). Nav items carry a `permission` field (`Layout` filters before rendering), write buttons are `disabled`, and pages are wrapped by the `RequirePermission` shell in `App.tsx`
+- **Every piece of visibility comes from the permission points carried in the token** (`hasPermission` in `store/session`). Nav items carry a `permission` field (`Layout` filters before rendering), write buttons are `disabled`, and pages are wrapped by the `RequirePermission` shell in `App.tsx`. The sidebar nav is split into four collapsible groups by function, and **a group is hidden entirely when every child in it lacks the permission**
 - **Interface visibility is only experience; the server is the authority**: guards re-evaluate on every request, so typing an address by hand gets nothing more than `403` + business code **30006**
 - The single source of truth for permission points is on the **server** at `src/common/constants/permission.ts` (25 permission points / 3 roles). `PERMISSION` in the admin `src/api/types.ts` mirrors it, and the two must correspond one to one
 - **The two mail blocks are gated differently**: `mail:read` is **not granted to the read-only observer** (delivery records expose player email addresses, which are personal data), while the announcements `announcement:read` is granted (announcements are public content aimed at the whole service). So an observer account legitimately lands with **one fewer admin nav item** — this is not a bug
@@ -50,7 +50,7 @@ No white screen. The `RequirePermission` shell renders an inline "no access" not
 
 ### Why is "My Account" in the top-right corner instead of the left nav?
 
-Because it is **everyone's private page** (your own identity / login status / permission points, plus self-service password change) and **requires no permission point at all** — putting it in the left nav would mix it with "features you need permission to see", which is the wrong semantics. So `Layout` renders it as a button in the top identity bar, and the `/me` route hangs directly under `RequireAuth` without a `RequirePermission` wrapper. For the same reason every item in `NAV_ITEMS` carries a `permission` except that one.
+Because it is **everyone's private page** (your own identity / login status / permission points, plus self-service password change) and **requires no permission point at all** — putting it in the left nav would mix it with "features you need permission to see", which is the wrong semantics. So `Layout` renders it as a button in the top identity bar, and the `/me` route hangs directly under `RequireAuth` without a `RequirePermission` wrapper. For the same reason every item in `NAV_TOP` / `NAV_GROUPS` (the top-level entries and the two-level groups) carries a `permission` except that one.
 
 ## Password management
 

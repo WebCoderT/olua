@@ -37,7 +37,7 @@
 
 ### 按钮为什么是灰的 / 菜单为什么少了几项？
 
-- 管理端的**每一处显隐都来自令牌里的权限点**（`store/session` 的 `hasPermission`）。导航项带 `permission` 字段（`Layout` 过滤后再渲染），写操作按钮 `disabled`，页面级用 `App.tsx` 的 `RequirePermission` 外壳
+- 管理端的**每一处显隐都来自令牌里的权限点**（`store/session` 的 `hasPermission`）。导航项带 `permission` 字段（`Layout` 过滤后再渲染），写操作按钮 `disabled`，页面级用 `App.tsx` 的 `RequirePermission` 外壳。侧栏导航按功能分成四个可折叠分组，**分组下的子项全部无权限时整组隐藏**
 - **界面显隐只是体验，服务端才是权威**：守卫每次请求都重新判一次，改 Address 硬闯也只有 `403` + 业务码 **30006**
 - 权限点的唯一来源在**服务端** `src/common/constants/permission.ts`（25 个权限点 / 3 种角色）。管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，两边要一一对应
 - **邮件两块的显隐不一样**：`mail:read` **不给只读观察员**（投递记录里有玩家邮箱，属个人信息），而公告的 `announcement:read` 给了（公告是面向全服的公开内容）。所以观察员账号登录后左侧导航会**少一个「邮件」** —— 这不是 bug
@@ -50,7 +50,7 @@
 
 ### 为什么「我的账号」在右上角，不在左侧导航里？
 
-因为它是**每个人的私有页面**（看自己的身份 / 登录情况 / 权限点，以及自助改密），**不需要任何权限点** —— 放右侧导航会和「需要权限才能看的功能」混在一起，语义不对。所以 `Layout` 把它做成顶部身份栏的一个按钮，路由 `/me` 直接挂在 `RequireAuth` 下、不套 `RequirePermission`。同理，`NAV_ITEMS` 里每一项都有 `permission`，唯独它没有。
+因为它是**每个人的私有页面**（看自己的身份 / 登录情况 / 权限点，以及自助改密），**不需要任何权限点** —— 放右侧导航会和「需要权限才能看的功能」混在一起，语义不对。所以 `Layout` 把它做成顶部身份栏的一个按钮，路由 `/me` 直接挂在 `RequireAuth` 下、不套 `RequirePermission`。同理，`NAV_TOP` / `NAV_GROUPS`（顶层独立项与二级分组）里每一项都有 `permission`，唯独它没有。
 
 ## 口令管理
 

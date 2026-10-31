@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { EquipmentRepository } from "../../database/repositories/equipment.repository";
+import { ItemRepository } from "../../database/repositories/item.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
@@ -8,6 +9,7 @@ import { TitleRepository } from "../../database/repositories/title.repository";
 import {
   applyDrugOverrides,
   applyEquipmentOverrides,
+  applyItemOverrides,
   applyRankOverrides,
   applySkillOverrides,
   applySoulOverrides,
@@ -48,6 +50,7 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     private readonly ranks: RankRepository,
     private readonly skills: SkillRepository,
     private readonly drugs: DrugRepository,
+    private readonly items: ItemRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -62,16 +65,19 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     const ranks = this.ranks.list({ ...ALL });
     const skills = this.skills.listAll();
     const drugs = this.drugs.list({ ...ALL });
+    const items = this.items.list({ ...ALL });
     applyEquipmentOverrides(equipments);
     applyTitleOverrides(titles);
     applySoulOverrides(souls);
     applyRankOverrides(ranks);
     applySkillOverrides(skills);
     applyDrugOverrides(drugs);
+    applyItemOverrides(items);
     // 只记条数不记值：出问题时第一件事就是确认「覆盖层里到底装没装上」
     this.logger.log(
       `运营配置已装载：装备 ${equipments.length} 件（含变体展开）· 称号 ${titles.length} 级 · ` +
-        `战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · 技能 ${skills.length} 个 · 药品 ${drugs.length} 种`,
+        `战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · 技能 ${skills.length} 个 · ` +
+        `药品 ${drugs.length} 种 · 材料 ${items.length} 种`,
     );
   }
 }

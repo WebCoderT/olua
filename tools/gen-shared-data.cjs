@@ -207,6 +207,9 @@ function buildSnapshot(cfg) {
     // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
     growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
     growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
+    // 装备回收基础价（#545）：等级 → 绑定元宝，**采样值**而不是曲线公式 —— 服务端卖装备
+    // 要按「等级 × 前后缀倍率」算价，与客户端同一个取整口径；公式搬一份到服务端必然漂移
+    equipmentRecyclePrices: pickEquipmentRecyclePrices(cfg.growth),
     // 任务（#396）：管理端可改的任务配置（主线链 / 日常 / 单目标 / 奖励）
     quests: pickQuests(cfg.questData),
     // 成就（#401）：累计型（kill / quest）走事件、状态型（level / combat / collect）查询现算，
@@ -977,6 +980,31 @@ function pickGrowthScalars(growth, expGain) {
 }
 
 /**
+ * 装备回收基础价（#545）：等级 → 绑定元宝，下标 = 等级 - 1
+ *
+ * 客户端 `configs/growth.equipmentRecyclePrice(level)` 是**分段线性曲线的采样**，
+ * 装备变体价 = 基础价 × 前后缀倍率（`Math.round`，见 `buildEquipmentMap`）。
+ * 服务端卖装备必须按同一口径算 —— 但「再写一份插值公式」等于制造第二份真相
+ * （曲线的段边界一改就两端分裂，且不会报错）。所以这里把 1..roleMaxLevel 的
+ * **采样结果**直接进快照：两端读同一组数字，没有公式可漂移。
+ */
+function pickEquipmentRecyclePrices(growth) {
+  const sample = growth.equipmentRecyclePrice;
+  if (typeof sample !== "function") throw new Error("configs/growth 没有导出 equipmentRecyclePrice（改名了？）");
+  const maxLevel = Math.round(Number(growth.roleMaxLevel));
+  if (!Number.isFinite(maxLevel) || maxLevel < 1) {
+    throw new Error(`configs/growth 的 roleMaxLevel 不合法：${growth.roleMaxLevel}`);
+  }
+  const out = [];
+  for (let level = 1; level <= maxLevel; level++) {
+    const price = sample(level);
+    if (!Number.isFinite(price) || price < 0) throw new Error(`装备回收价曲线在 ${level} 级取到非法值：${price}`);
+    out.push(round(price));
+  }
+  return out;
+}
+
+/**
  * 装备前后缀的属性倍率（#544）
  *
  * 与 `*_LABELS` 一一对应（下标 = 前后缀序号）：长度对不上就说明客户端改了枚举却没补倍率，
@@ -1061,6 +1089,9 @@ ${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }�
 ${jsonTable("DROP_DEFAULT", "兜底掉落表（#254；怪物既无独立表也没引用具名表时使用）", s.dropDefault)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
+
+/** 装备回收基础价（下标 = 等级 - 1；绑定元宝，普通·人级。变体价 = 本表 × 前后缀倍率再 Math.round，与客户端 buildEquipmentMap 同口径） */
+export const EQUIPMENT_RECYCLE_PRICES: number[] = ${JSON.stringify(s.equipmentRecyclePrices)};
 
 /** 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；特殊价是运营数据不进快照 */
 export const MALL: Record<string, number> = {

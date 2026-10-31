@@ -425,6 +425,7 @@ export class GameConfigService implements OnModuleInit {
       updated_at: Date.now(),
     };
     this.items.update(next);
+    this.touchRuntime();
     return ItemDto.from(this.requireItem(id));
   }
 

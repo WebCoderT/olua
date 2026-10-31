@@ -175,6 +175,33 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
 
+**4.0.1 运营库优先：生成物是出厂值，库是当前真相**（#544）
+
+此前只有**客户端**吃运营改动（进游戏拉快照 + `apply-snapshot` 原地覆写），服务端结算读的仍是
+编译期生成物 —— 管理端把某件装备的攻击从 10 调到 20，玩家面板变了、服务端算伤害还是 10，
+**没有任何报错**。现在读取走 `src/shared/runtime-overrides.ts`：**先查运营库覆盖层、缺省回落生成物**。
+
+| 表 | 谁在结算时读 | 口径 |
+|---|---|---|
+| 装备（含 555 变体） | `role-attributes.ts` 的 `equipmentAttributesOf` | 库里只有 37 个基础件；变体按「基础件 × `EQUIPMENT_PREFIX_RATES` / `EQUIPMENT_SUFFIX_RATES`」重算，`Math.round` 与客户端 `buildEquipmentMap` 同一口径 |
+| 称号 / 战魂 / 军衔 | `titleAttributesOf` / `soulAttributesOf` / `rankAttributesOf` | 传**等级（1 起）**，函数内部转生成物下标（-1），调用方不重复那个容易写反的减一 |
+| 技能 | `combat-settlement.service.ts` 的 `skillOf` | 整行（冷却 / 伤害系数 / 耗蓝）；DB 列 → 生成物 camelCase 形状在覆盖层里一处映射 |
+| 药品 / 材料 | `roles.service.ts` 的 `drugOf` / `itemBaseOf` | 背包叠加上限 |
+
+- **装载时机只有两个**：`RuntimeConfigService.onApplicationBootstrap`（必须晚于各配置服务的
+  `onModuleInit` seed，否则读到空表 → 重启后运营改动"悄悄消失"）+ `GameConfigService.touchRuntime()`
+  （称号 / 战魂 / 军衔 / 装备 / 药品 / 技能六张表的写操作末尾各一行）。漏一处就是「保存了但没生效」。
+- **全量重装而不是增量**：37 件装备 + 34 级称号 + 37 阶战魂 + 100 阶军衔 + 15 技能 + 8 药品，
+  几十毫秒，换「永不漏刷」。
+- **为什么不做成 async 查库**：`role-attributes` 是同步纯函数，被伤害结算 / 互见血条 / 战力 / 成就 /
+  存档重算六处共用；改成 async 会牵动整条链路。覆盖层是模块级内存表，读起来仍是同步的。
+- **仍然读生成物的**（后续上移清单，别以为已经全接了）：卖价 `SELL_PRICES`（装备取回收价曲线，
+  曲线在客户端 `configs/growth` 的 `equipmentRecyclePriceCurve`，尚未导出）、状态 `STATUSES`
+  （服务端目前不消费状态数值）、物品大类 `ITEM_TYPES`、击杀经验公式（两端各写一份）。
+- **另一半缺口（未修）**：seed 是 `INSERT OR IGNORE` —— **客户端配置改了值，库里已有的行不会更新**
+  （重跑 seed 也只在空表生效）。所以「改 configs → 服务端」目前仍需清库或手工 SQL。要根治得给每行记
+  「出厂基线哈希」：DB 值 == 基线 → 说明运营没动过，可用新出厂值覆盖；不等 → 保留运营改动。
+
 - **45 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies` / `role_blocks` / `role_reports` / `quests` / `quest_progress` / `parties` / `party_members` / `achievements` / `role_achievements` / `role_mails` / `equip_aligns` / `equip_in_aligns`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
@@ -330,7 +357,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - 内存库（`:memory:`）**必须关着**自动备份 —— 没有文件可备份，开着只会每 tick 失败一次。
 
 **9. 派生属性出口：服务端重算，客户端只是上报**
-- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），查的五张数据表来自 4.0 那份公共生成物（等级 / 战魂 / 称号 / 军衔 / 装备属性），#541 起客户端算子已删，这里是**唯一**的属性算法（没有对账对象）；
+- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），查的五张数据表**先经运营库覆盖层、缺省回落 4.0 那份公共生成物**（等级 / 战魂 / 称号 / 军衔 / 装备属性，见 4.0.1），#541 起客户端算子已删，这里是**唯一**的属性算法（没有对账对象）；
 - 玩家上报存档时（`PUT /roles/:id`）服务端会**比对**上报的派生值与自算值 —— 这条是 #34「伤害结算上移」的地基。
 
 **10. 屏蔽与举报（#398）：过滤必须在服务端，且不下发「谁拉黑了我」**

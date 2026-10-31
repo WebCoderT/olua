@@ -43,7 +43,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 119;
+const EXPECTED_ASSERTIONS = 127;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -591,6 +591,123 @@ function roleData(id, name, occupation, level) {
     "列表**不带** derived（只有详情带）",
     JSON.stringify(listForDerived.data.list.map((role) => Object.keys(role).indexOf("derived") !== -1)),
   );
+
+  //#endregion
+
+  //#region 八点五、运营库改值即时生效（#544）
+
+  console.log("— 八点五、管理端改装备属性 → 服务端结算立刻按新值 —");
+
+  // 这条守的是「两端一致」：管理端改的是库，客户端靠快照覆写跟着变；服务端此前读的是
+  // 编译期生成物 —— 于是面板变了、伤害没变，且没有任何报错。现在覆盖层接管，必须立刻生效。
+  const equipList = await api("GET", "admin/equipments?size=1", { token: adminToken });
+  const sampleEquip = equipList.data.list[0];
+  check(!!sampleEquip && sampleEquip.attributes.maxHp > 0, "准备：取一件 maxHp > 0 的基础件", JSON.stringify(sampleEquip && sampleEquip.attributes));
+
+  const wearIt = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { level: 10, equipments: { WEAPON: sampleEquip.id } } });
+  const baseMaxHp = wearIt.data.derived.attributes.maxHp;
+  check(typeof baseMaxHp === "number", "穿上后取到含装备加成的 maxHp", String(baseMaxHp));
+
+  const doubled = await api("PATCH", `admin/equipments/${sampleEquip.id}`, {
+    token: adminToken,
+    body: { attributes: { ...sampleEquip.attributes, maxHp: sampleEquip.attributes.maxHp * 2 } },
+  });
+  check(doubled.code === 0, "管理端把该装备的 maxHp 改成 2 倍", doubled.message);
+
+  const afterDouble = await api("GET", "admin/roles/role_d1", { token: adminToken });
+  const doubledMaxHp = afterDouble.data.derived.attributes.maxHp;
+  check(
+    doubledMaxHp === baseMaxHp + sampleEquip.attributes.maxHp,
+    "服务端重算立刻按新值（不需要重启、也不需要客户端同步）",
+    `${baseMaxHp} → ${doubledMaxHp}（基础件 maxHp ${sampleEquip.attributes.maxHp}）`,
+  );
+
+  // 变体同一口径：管理端改的是基础件，玩家身上穿的可能是 `_pXsY` 变体（属性 = 基础件 × 前后缀倍率）
+  const shared = require("../dist/shared/game-data.generated");
+  const variantRate = shared.EQUIPMENT_PREFIX_RATES[4] * shared.EQUIPMENT_SUFFIX_RATES[2];
+  const variantId = `${sampleEquip.id}_p4s2`;
+  const wearVariant = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { equipments: { WEAPON: variantId } } });
+  check(wearVariant.code === 0, "准备：把同一件的变体穿上（p4s2）", wearVariant.message);
+  // 等级那部分加成没变，减掉它剩下的就是装备加成
+  const variantBonus = wearVariant.data.derived.attributes.maxHp - (baseMaxHp - sampleEquip.attributes.maxHp);
+  check(
+    variantBonus === Math.round(sampleEquip.attributes.maxHp * 2 * variantRate),
+    "变体按「基础件 × 前后缀倍率」重算（p4s2 = 1.4 × 3）",
+    `${variantBonus} vs ${Math.round(sampleEquip.attributes.maxHp * 2 * variantRate)}`,
+  );
+
+  const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { attributes: sampleEquip.attributes } });
+  check(restoredEquip.code === 0, "还原该装备的属性", restoredEquip.message);
+  const backToNormal = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { equipments: { WEAPON: sampleEquip.id } } });
+  check(
+    backToNormal.data.derived.attributes.maxHp === baseMaxHp,
+    "还原后回到原值（覆盖层跟着回退，不是一次性的）",
+    `${backToNormal.data.derived.attributes.maxHp} vs ${baseMaxHp}`,
+  );
+
+  //#endregion
+
+  //#region 八点六、管理端改价签 → 服务端成交价跟着变（#545）
+
+  console.log("— 八点六、管理端改价签 / 等级 → 服务端成交价跟着变 —");
+
+  // 这条守的是「经济出口两端一致」：客户端背包里的价签来自快照覆写（管理端改完立刻变），
+  // 服务端此前读的是编译期生成物 —— 界面上写 77，到账 2。玩家只能描述成「价签不对」。
+  const bagWith = (id, count) => ({ bag: [{ row: 0, col: 0, id, count }] });
+
+  const putHide = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith("material_hide", 5) });
+  check(putHide.code === 0, "准备：背包里放 5 块兽皮", putHide.message);
+
+  const hideFactory = shared.SELL_PRICES["material_hide"];
+  const soldAtFactory = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+  });
+  checkEqual(soldAtFactory.data.sold[0].unitPrice, hideFactory, "未改价时按出厂价签成交（库里 seed 值与生成物一致）");
+
+  const priceUp = await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: 77 } });
+  check(priceUp.code === 0, "管理端把兽皮卖价改成 77", priceUp.message);
+  const soldAtNew = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+  });
+  checkEqual(soldAtNew.data.sold[0].unitPrice, 77, "再卖一块立刻按新价（不重启、不清库）");
+
+  await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: hideFactory } });
+  const soldBackToFactory = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+  });
+  checkEqual(soldBackToFactory.data.sold[0].unitPrice, hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）");
+
+  // 装备：等级既是穿戴门槛也是定价依据（回收价 = 等级基础价 × 前后缀倍率）
+  const putEquip = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  check(putEquip.code === 0, "准备：背包里放一件该装备（基础件）", putEquip.message);
+  const soldEquip = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+  });
+  checkEqual(
+    soldEquip.data.sold[0].unitPrice,
+    shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1],
+    "装备价 = 该等级的回收基础价（客户端显示的就是这一档）",
+  );
+
+  const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: 50 } });
+  check(levelUp.code === 0, "管理端把该装备的等级改成 50", levelUp.message);
+  await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  const soldEquip50 = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+  });
+  checkEqual(
+    soldEquip50.data.sold[0].unitPrice,
+    shared.EQUIPMENT_RECYCLE_PRICES[49],
+    "改等级后价签跟着走（不用重新生成共享数据）",
+  );
+
+  const levelRestore = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: sampleEquip.level } });
+  check(levelRestore.code === 0, "还原该装备的等级（后续断言仍按出厂值）", levelRestore.message);
 
   //#endregion
 

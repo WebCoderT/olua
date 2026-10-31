@@ -4,8 +4,8 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { GROWTH_SCALARS, ITEM_TYPES, SELL_PRICES } from "../../shared/game-data.generated";
-import { drugOf, itemBaseOf } from "../../shared/runtime-overrides";
+import { GROWTH_SCALARS, ITEM_TYPES } from "../../shared/game-data.generated";
+import { drugOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -330,10 +330,15 @@ export class RolesService {
   /**
    * 出售 / 回收（玩家侧 #397，epic #394）：扣物与入账都在服务端
    *
-   * 价格只认共享快照 `SELL_PRICES`（装备 = 回收价曲线已含前后缀倍率，其余 = 条目价签）——
-   * 客户端报多少都无效，它只报「卖什么、卖几件」。快照里没有价签的 id 就是**不可卖**
+   * 价格走 `sellPriceOf`（#545）：**先查运营库覆盖层，缺省回落生成物的出厂价签
+   * `SELL_PRICES`**（装备 = 回收价曲线已含前后缀倍率，其余 = 条目价签）——
+   * 客户端报多少都无效，它只报「卖什么、卖几件」。没有任何价签的 id 就是**不可卖**
    * （任务物 / 关键道具靠这条拦住，20018），与商城「目录之外的 id 一律 404」同口径：
    * 白名单在数据里，不在代码里。
+   *
+   * #545 之前这里直接读生成物：管理端把某种材料的卖价从 2 调到 20，客户端背包显示 20
+   * （快照覆写生效），服务端仍按 2 付钱 —— 玩家看到的是「价签不对」，我们看到的应该是
+   * 「这条链路还没接库」。
    *
    * **整单结算**：任何一条不合法（不可卖 / 数量不够）都不落库，不存在「卖了一半」的存档
    * （与 grantQuestRewards 的校验期抛错语义一致）。同 id 的多条先合并 —— 一键回收会把
@@ -357,11 +362,11 @@ export class RolesService {
       wanted.set(entry.goodId, (wanted.get(entry.goodId) ?? 0) + count);
     }
 
-    // 1) 计价：价签读快照，客户端报的价一概不看
+    // 1) 计价：价签读运营库（缺省回落出厂价签），客户端报的价一概不看
     const sold: SellLineDto[] = [];
     let total = 0;
     for (const [goodId, count] of wanted) {
-      const unitPrice = Math.max(0, Math.floor(Number((SELL_PRICES as Record<string, number>)[goodId]) || 0));
+      const unitPrice = Math.max(0, Math.floor(sellPriceOf(goodId) ?? 0));
       if (unitPrice <= 0) {
         throw BizException.conflict(BizCode.SELL_NOT_SELLABLE, `该物品不可出售：${goodId}`);
       }
