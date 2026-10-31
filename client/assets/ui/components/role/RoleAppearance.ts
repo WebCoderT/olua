@@ -8,11 +8,6 @@ import { getFashionOut } from "../../../configs/fashionClothes";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
-/** 这些朝向下衣服在武器上方（武器在身后）：左 / 左上 / 上 / 左下；其余朝向武器在衣服上方 */
-const CLOTH_ON_TOP_DIRECTIONS: DIRECTION[] = [DIRECTION.LEFT, DIRECTION.LEFT_UP, DIRECTION.UP, DIRECTION.LEFT_DOWN];
-
-
-
 /**
  * 装配一套角色外观所需的最小数据（#383）
  *
@@ -66,19 +61,17 @@ export default class RoleAppearance {
    */
   private clothTransform: OutTransform | null = null;
   private weaponTransform: OutTransform | null = null;
-  /** 上次计算的层级关系（null 表示尚未计算；方向没变时不重复调整 sibling） */
-  private clothOnTop: boolean | null = null;
   /** 死亡标记：死亡动画播完停最后一帧，期间不再响应任何动作切换与播完续播，直到复活 */
   private dead = false;
 
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
     // 衣服/武器节点（样式由 GameUiHelper 零件生成，本类只负责挂到宿主并持有引用）
-    // 两者的层级关系由 updateLayerOrder 按朝向动态调整（首次 play 时立即生效），这里的顺序只是初始兜底
-    this.weapon = GameUiHelper.createRoleWeaponNode();
-    host.addChild(this.weapon);
+    // 固定层级：衣服在下、武器永远在衣服上方（#541，不再按朝向动态调换）
     this.cloth = GameUiHelper.createRoleClothNode();
     host.addChild(this.cloth);
+    this.weapon = GameUiHelper.createRoleWeaponNode();
+    host.addChild(this.weapon);
   }
 
   /** 更新外观（换装后调用）：按当前装备重新加载衣服与武器动画 */
@@ -103,7 +96,6 @@ export default class RoleAppearance {
     // 衣服与武器同一套摆法（#541：外观只认数据 —— 工作台/服务端的 8 向绝对位置，武器没有独立的算法路径）
     this.applyOutTransform(this.cloth, this.clothTransform);
     this.applyOutTransform(this.weapon, this.weaponTransform);
-    this.updateLayerOrder();
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
     this.clothAnimate?.crossFade(animationName, 0.2);
@@ -120,7 +112,6 @@ export default class RoleAppearance {
     this.dead = true;
     this.applyOutTransform(this.cloth, this.clothTransform);
     this.applyOutTransform(this.weapon, this.weaponTransform);
-    this.updateLayerOrder();
     const animationName = getAnimationName(ACTION.DIE, direction);
     this.clothAnimate?.crossFade(animationName, 0.1);
     this.weaponAnimate?.crossFade(animationName, 0.1);
@@ -149,18 +140,6 @@ export default class RoleAppearance {
     if (state.isPlaying) return;
     this.clothAnimate.crossFade(animationName, 0.1);
     this.weaponAnimate?.crossFade(animationName, 0.1);
-  }
-
-  /**
-   * 按朝向调整衣服与武器的层级：左/左上/上/左下时衣服在武器上方，其余朝向武器在衣服上方
-   * 方向没变时不做任何事（play 会在动作切换时频繁调用，避免反复触发 sibling 重排）
-   */
-  private updateLayerOrder() {
-    const clothOnTop = CLOTH_ON_TOP_DIRECTIONS.indexOf(this.direction) !== -1;
-    if (this.clothOnTop === clothOnTop) return;
-    this.clothOnTop = clothOnTop;
-    if (clothOnTop) this.cloth.setSiblingIndex(this.weapon.getSiblingIndex() + 1);
-    else this.weapon.setSiblingIndex(this.cloth.getSiblingIndex() + 1);
   }
 
   /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
