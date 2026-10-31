@@ -11,7 +11,6 @@ import {
   DropTableDto,
   DropTableListDto,
   MonsterDropDto,
-  MonsterDropPageDto,
   MonsterDropQueryDto,
   UpdateDropTableDto,
   UpdateMonsterDropDto,

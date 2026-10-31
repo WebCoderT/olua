@@ -384,21 +384,24 @@ async function main() {
       check(typeof firstUpdate?.data?.combat === "number" && firstUpdate.data.combat > 0, "快照的战斗力是服务端重算的");
       checkEqual(firstUpdate?.data?.revision, created.body?.data?.revision, "快照带上修订号（客户端拿它做存档基线）");
 
-      // 改库（save 一份更大的 gold）→ 下一拍再推一次，gold 跟着变
+      // 改库（save 一份 exp 与一份被篡改的 gold）→ 下一拍再推一次：
+      // exp 归客户端（跟着变），gold 归服务端（上报值被丢弃，见 role-authority.ts）
       const saved = await api(baseUrl, "PUT", "/api/roles/realtime_r1", {
         token: tokenA,
-        body: { data: { ...roleSnapshot("realtime_r1"), gold: 5555 } },
+        body: { data: { ...roleSnapshot("realtime_r1"), gold: 5555, exp: 777 } },
       });
-      checkEqual(saved.status, 200, "准备：save 改一份 gold");
+      checkEqual(saved.status, 200, "准备：save 改一份 exp 与 gold");
       const secondUpdate = await waitFor(
         "第二帧 roleUpdate",
-        async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.gold === 5555) ?? null,
+        async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.exp === 777) ?? null,
         5_000,
       );
       check(Boolean(secondUpdate), "改库后下一拍 roleUpdate 跟上（跨进程写库也逃不过轮询）");
       check(
-        typeof secondUpdate?.data?.combat === "number" && secondUpdate?.data?.revision === saved.body?.data?.revision,
-        "第二帧仍是服务端重算的权威值与最新修订号",
+        typeof secondUpdate?.data?.combat === "number" &&
+          secondUpdate?.data?.revision === saved.body?.data?.revision &&
+          secondUpdate?.data?.gold === 1000,
+        "第二帧仍是服务端重算的权威值与最新修订号（gold 上报 5555 被丢弃）",
       );
     }
     //#endregion

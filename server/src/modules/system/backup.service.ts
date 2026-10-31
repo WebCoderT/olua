@@ -76,7 +76,7 @@ export class BackupService {
   /** 上一轮还没跑完就又到点了：跳过这一轮，别把数据库压着连续重写两遍 */
   private running = false;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(config: ConfigService) {
     this.dbPath = config.get<string>("dbPath") ?? ":memory:";
     this.intervalHours = Number(config.get<number>("backupIntervalHours") ?? 24);
     const keepCount = Number(config.get<number>("backupKeepCount") ?? 7);

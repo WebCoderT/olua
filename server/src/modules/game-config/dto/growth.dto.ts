@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from "class-validator";
-import { GROWTH_CURVE_KEYS, GROWTH_SCALAR_SPECS } from "../../../common/constants/game-config";
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { GROWTH_CURVE_KEYS } from "../../../common/constants/game-config";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { GrowthScalarRow, GrowthSegmentRow, LevelExpRow } from "../../../database/rows";
 

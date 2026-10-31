@@ -1,6 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { BizCode } from "../constants/biz-code";
 import { BizException } from "../errors/biz.exception";
 import { afterFailure, afterSuccess, AttemptState, createAttemptState, describeWait, isIdle, lockedForMs, ThrottleRule } from "../utils/rate-limit.util";
 
