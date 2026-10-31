@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { equipmentsApi, formatTime, PERMISSION, slotLabel } from "../api";
+import { equipmentIcon, equipmentsApi, formatTime, PERMISSION, slotLabel } from "../api";
 import type { ConfigAttributes, Equipment, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { EQUIPMENT_SLOTS } from "../api/gameData";
@@ -260,6 +261,7 @@ export function EquipmentsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>部位</th>
                 <th className={thClass}>名称</th>
@@ -273,6 +275,9 @@ export function EquipmentsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={equipmentIcon(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={tdClass}>
                     <Badge tone="slate">{slotLabel(item.slot)}</Badge>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatTime, npcsApi, PERMISSION } from "../api";
+import { formatTime, npcsApi, npcSrc, PERMISSION } from "../api";
 import type { Npc, PageResult } from "../api";
+import { GameFrame } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -119,6 +120,7 @@ export function NpcsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>对话</th>
@@ -129,6 +131,9 @@ export function NpcsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameFrame atlas={npcSrc(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={`${tdClass} max-w-[360px] truncate text-xs text-slate-400`} title={item.dialog}>

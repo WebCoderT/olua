@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatTime, PERMISSION, SKILL_OWNER_LABELS, SKILL_OWNER_OPTIONS, STATUS_SOURCE_LABELS, statusesApi } from "../api";
 import type { PageResult, Status, StatusCombat, UpdateStatus } from "../api";
 import { Pagination } from "../components/Pagination";
+import { GameIcon } from "../components/GameImage";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -336,6 +337,7 @@ export function StatusesPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>状态名</th>
                 <th className={thClass}>归属</th>
@@ -352,6 +354,9 @@ export function StatusesPage() {
                 const summary = combatSummary(item.combat);
                 return (
                   <tr key={item.id} className="transition hover:bg-slate-800/30">
+                    <td className={tdClass}>
+                      <GameIcon path={item.icon} alt={item.label} />
+                    </td>
                     <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                     <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                     <td className={tdClass}>

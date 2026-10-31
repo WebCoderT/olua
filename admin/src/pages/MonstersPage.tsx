@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatTime, monstersApi, PERMISSION, skillsApi } from "../api";
+import { formatTime, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
 import type { Monster, MonsterAttributes, PageResult, Skill } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -426,6 +427,7 @@ export function MonstersPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>key</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>定位</th>
@@ -439,6 +441,9 @@ export function MonstersPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={monsterIcon(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>

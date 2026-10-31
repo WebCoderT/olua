@@ -10,6 +10,7 @@ import {
   statusesApi,
 } from "../api";
 import type { CreateSkill, DamageCoefficient, PageResult, Skill, Status, UpdateSkill } from "../api";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -690,6 +691,7 @@ export function SkillsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>技能名</th>
                 <th className={thClass}>归属</th>
@@ -708,6 +710,9 @@ export function SkillsPage() {
                 const first = item.damageCoefficients[0];
                 return (
                   <tr key={item.id} className="transition hover:bg-slate-800/30">
+                    <td className={tdClass}>
+                      <GameIcon path={item.icon} alt={item.label} />
+                    </td>
                     <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                     <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                     <td className={tdClass}>

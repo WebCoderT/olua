@@ -12,6 +12,7 @@
 
 - [How do I start the admin console? Where is the API address configured?](#how-do-i-start-the-admin-console-where-is-the-api-address-configured)
 - [Why are buttons greyed out / why are admin menu items missing?](#why-are-buttons-greyed-out--why-are-admin-menu-items-missing)
+- [Where do the list thumbnails come from? Why do some rows show "no image"?](#where-do-the-list-thumbnails-come-from-why-do-some-rows-show-no-image)
 - [What happens if I type a URL for a page I have no permission for?](#what-happens-if-i-type-a-url-for-a-page-i-have-no-permission-for)
 - [What is the difference between resetting a password and changing my own?](#what-is-the-difference-between-resetting-a-password-and-changing-my-own)
 - [Why is "My Account" in the top-right corner instead of the left nav?](#why-is-my-account-in-the-top-right-corner-instead-of-the-left-nav)
@@ -43,6 +44,14 @@
 - **The two mail blocks are gated differently**: `mail:read` is **not granted to the read-only observer** (delivery records expose player email addresses, which are personal data), while the announcements `announcement:read` is granted (announcements are public content aimed at the whole service). So an observer account legitimately lands with **one fewer admin nav item** — this is not a bug
 - **Fallback for a dirty session**: when `permissions` is missing from the session (an old token, hand-edited localStorage), `hasPermission` treats it as an **empty array** — the result is **least privilege** (almost the whole admin menu disappears), never a silent grant
 - After an admin is demoted, **reloading the page takes effect**: on entry `Layout` quietly calls `authApi.me()` once and writes the latest role and permission points back into the session
+
+### Where do the list thumbnails come from? Why do some rows show "no image"?
+
+- The thumbnail component lives in `components/GameImage.tsx`: single-image resources (the `icon` field) render via a plain `<img>`, while atlas animations (titles / souls / NPCs) parse the plist and draw the **first frame in document order** onto a canvas (both TexturePacker format 2 / 3 dialects are supported, with a module-level cache so each atlas is parsed once per screen).
+- Image paths are always looked up from `game-data.generated.ts` (the `equipmentIcon`-style helpers in `api/gameData.ts`); the API rows for skills / statuses / fashions / titles / souls already carry `icon` / `animation`, and those row values are used directly — both paths read the **same configuration**, so no second dictionary exists.
+- "No image" means the path is empty or the PNG could not be fetched: either the client asset has not been added yet (new config ahead of the art) or the id was added in the database later and is not in the generated snapshot yet. Adding the asset or re-running `node tools/gen-shared-data.cjs` fixes it; nothing else in the list is affected.
+- The URL root is `/game-resources/`: the vite middleware reads `client/assets/resources` directly in dev, and in prod the admin nginx reverse-proxies to the game container — the same pipeline as the equipment alignment workbench, and because it is same-origin the canvas never gets tainted.
+- **Thumbnails are clickable to zoom in**: clicking any cell opens a lightbox (larger view, closes with Esc or by clicking the backdrop). The atlas zoom is a large canvas **redrawn** from the same cached first frame — not the 40px thumbnail stretched — so pixel art stays sharp.
 
 ### What happens if I type a URL for a page I have no permission for?
 

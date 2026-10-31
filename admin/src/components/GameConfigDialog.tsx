@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ACQUIRE_CHANNEL, ACQUIRE_CHANNEL_LABELS } from "../api";
 import type { ConfigAttributes, Rank, Soul, Title } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "./AttributesEditor";
+import { GameFrame } from "./GameImage";
 import { Button, Field, Input, Select } from "./ui";
 
 /** 弹窗表单值（channel 仅称号、tier 仅军衔有；不相关的 kind 传过来时忽略）。价格不在这里 —— 唯一修改口在成长列表（#232/#234/#250） */
@@ -135,8 +136,11 @@ export function GameConfigDialog({
 
           {hasAnimation ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="动画资源目录" hint="resources 相对路径">
-                <Input value={animation} onChange={(event) => setAnimation(event.target.value)} />
+              <Field label="动画资源目录" hint="resources 相对路径；右侧即目录里图集的首帧预览">
+                <div className="flex items-center gap-3">
+                  <GameFrame atlas={animation} alt="动画首帧预览" size={56} />
+                  <Input value={animation} onChange={(event) => setAnimation(event.target.value)} />
+                </div>
               </Field>
               <Field label="动画帧率">
                 <Input

@@ -85,6 +85,8 @@ admin/
 
 ## Pages
 
+The **first column of every config list page is a thumbnail**: single-image resources (equipment / drugs / items / monsters / skills / statuses / fashions / mall goods) show their icon directly, while titles / souls / NPCs show the **first frame** of their atlas animation (component in `components/GameImage.tsx`). **Thumbnails are clickable to zoom in** (lightbox view, Esc to close). The images come from the client assets (served by the vite middleware in dev and reverse-proxied to the game container by nginx in prod, under the same `/game-resources/` prefix), and the paths are looked up from the one shared generated snapshot — when the asset is missing or the id is not in the snapshot the cell shows a "no image" placeholder without breaking the list.
+
 | Page | Route | Permission point required | What it does |
 | --- | --- | --- | --- |
 | Login / register | `/login` · `/register` | none (public) | Admin login; registration (the first registrant becomes super administrator) |

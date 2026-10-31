@@ -326,6 +326,8 @@ function pickEquipmentBases(maps) {
           level: round(item.level ?? 0),
           sellPrice: round(item.sellPirce ?? 0),
           label: String(item.label ?? ""),
+          // 图标（resources 相对路径，不含扩展名）：管理端列表缩略图用，与外观几何无关
+          icon: String(item.icon ?? ""),
           attributes: pickAttributes(item),
         },
       ]);
@@ -362,6 +364,8 @@ function pickMonsters(monsters) {
       level: round(item.level ?? 0),
       tier: String(item.tier ?? "normal"),
       maxHp: round(item.maxHp ?? 0),
+      // 图标（monster/icon/<key>_00000 这类单图）：管理端列表缩略图用；外观图集（out）仍不进
+      icon: String(item.icon ?? ""),
       // AI 参数（#323）：主动怪判定 / 检测范围 / 移动速度（服务端 tick 按它推进位置）
       aggressive: Boolean(item.aggressive),
       detectRange: round(item.detectRange ?? 0),
@@ -396,10 +400,10 @@ function pickMonsterAi(monsterAi) {
 /**
  * NPC 表 → [[NPC id, 元数据]]（#258）
  *
- * 来源是 `configs/npc-data`（数据与行为分家后的纯数据文件，见文件头）。只收
- * id 与 label：src / scale / position 是表现层资源与几何，不进快照；对话文案
- * 客户端目前没有数据形态（都写死在弹窗组件里），管理端在 npcs 表上新增
- * dialog 列运营可改，客户端消费等对接（#248/#249）。
+ * 来源是 `configs/npc-data`（数据与行为分家后的纯数据文件，见文件头）。收
+ * id、label 与 src（resources 相对路径，管理端列表缩略图用）：scale / position
+ * 是纯几何，不进快照；对话文案客户端目前没有数据形态（都写死在弹窗组件里），
+ * 管理端在 npcs 表上新增 dialog 列运营可改，客户端消费等对接（#248/#249）。
  */
 function pickNpcs(npcs) {
   const out = [];
@@ -408,7 +412,7 @@ function pickNpcs(npcs) {
     if (!item || !item.id) throw new Error("configs/npc-data 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`NPC id 重复：${item.id}`);
     seen.add(item.id);
-    out.push([item.id, { label: String(item.label ?? "") }]);
+    out.push([item.id, { label: String(item.label ?? ""), src: String(item.src ?? "") }]);
   }
   if (out.length === 0) throw new Error("configs/npc-data 的 npcData 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
@@ -559,6 +563,8 @@ function pickDrugs(drugs) {
       {
         label: String(item.label ?? ""),
         description: String(item.description ?? ""),
+        // 图标（item/<id> 这类单图）：管理端列表缩略图用
+        icon: String(item.icon ?? ""),
         level: round(item.level ?? 0),
         sellPrice: round(item.sellPirce ?? 0),
         maxStack: round(item.maxStack ?? 99),
@@ -594,6 +600,8 @@ function pickItemBases(materials) {
         type: String(item.type ?? ""),
         label: String(item.label ?? ""),
         description: String(item.description ?? ""),
+        // 图标（item/<id> 这类单图）：管理端列表缩略图用
+        icon: String(item.icon ?? ""),
         level: round(item.level ?? 0),
         sellPrice: round(item.sellPirce ?? 0),
         maxStack: round(item.maxStack ?? 99),
@@ -1079,10 +1087,10 @@ ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.ran
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 整行配置（#367：owner / 分类 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数 / 挂载状态 / 释放限制）。damageCoefficients 的下标 = 技能等级", s.skills)}
 ${jsonTable("STATUSES", "状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath", s.statuses)}
-${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）", s.monsters)}
+${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）+ icon 图标（管理端缩略图）", s.monsters)}
 ${jsonTable("MONSTER_AI", "怪物 AI 全局节奏参数（#323：普攻间隔/普攻距离/待机游走节奏，服务端 AI tick 与客户端同源）", s.monsterAi)}
 ${jsonTable("MONSTER_SKILLS", "怪物 key → 技能挂载清单（#372：skillId / priority / 可选 cooldown 覆写）。服务端 AI 按它释放，管理端可增删改", s.monsterSkills)}
-${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
+${jsonTable("NPCS", "NPC id → 名称 + src 素材路径（管理端缩略图用；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
 ${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}
 ${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }（#254；实际掉落以此为准，key 与 MONSTERS 对齐）", s.monsterDrops)}
@@ -1110,9 +1118,9 @@ ${textTable("EQUIPMENT_SLOTS", "装备槽位 → 中文名（如 1 → 衣服）
 ${numTable("EQUIPMENT_SLOT_ORDER", "装备槽位 → 整理序号（背包「一键整理」的部位顺序）", s.equipmentSlotOrder)}
 ${textTable("EQUIPMENT_DISPLAY_NAMES", "装备 id → 显示名（已拼好前后缀，如「精良的·天级 屠龙」）", s.equipmentDisplayNames)}
 ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLOTS 显示部位）", s.equipmentSlotOf)}
-${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
-${jsonTable("DRUGS", "药品 id → { label, description, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
-${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
+${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, icon 图标, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
+${jsonTable("DRUGS", "药品 id → { label, description, icon 图标, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
+${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, icon 图标, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
 ${numTable("SELL_PRICES", "物品 id → 出售价（#397；货币 = 绑定元宝/个）。装备取回收价曲线（含前后缀倍率）、其余取 sellPirce；**不在表里 = 不可卖**，服务端结算只认这一份", s.sellPrices)}
 ${jsonTable("QUESTS", "任务 id → { kind main|daily, label, description, prevQuestId 主线链前置, minLevel, npcId 发布 NPC, objective 单目标 kill|talk|collect, rewards { gold, exp, items } }（#396；服务端 quests 表的 seed 来源）", s.quests)}
 ${jsonTable("ACHIEVEMENTS", "成就 id → { category battle|growth|explore, label, description, condition { type kill|quest|level|combat|collect, target, count }, rewards { gold, exp, items }, order, hidden }（#401；服务端 achievements 表的 seed 来源。kill/quest 是累计型走事件 +1，level/combat/collect 是状态型每次查询现算）", s.achievements)}

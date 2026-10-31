@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatTime, PERMISSION, soulsApi } from "../api";
+import { formatTime, PERMISSION, soulAnimation, soulsApi } from "../api";
 import type { PageResult, Soul } from "../api";
 import { GameConfigDialog } from "../components/GameConfigDialog";
+import { GameFrame } from "../components/GameImage";
 import type { GameConfigFormValue } from "../components/GameConfigDialog";
 import { GameGrowthListDialog } from "../components/GameGrowthListDialog";
 import { Pagination } from "../components/Pagination";
@@ -136,6 +137,7 @@ export function SoulsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>阶数</th>
                 <th className={thClass}>名称 / 描述</th>
                 <th className={thClass}>属性摘要</th>
@@ -146,6 +148,9 @@ export function SoulsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.level} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameFrame atlas={soulAnimation(item.level)} alt={item.label} />
+                  </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>
                     <span className="block font-medium text-slate-100">{item.label}</span>

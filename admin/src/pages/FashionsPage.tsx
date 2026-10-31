@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ACQUIRE_CHANNEL, fashionsApi, formatTime, PERMISSION } from "../api";
 import type { ConfigAttributes, Fashion, FashionQuery, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -259,6 +260,7 @@ export function FashionsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>获得渠道</th>
@@ -271,6 +273,9 @@ export function FashionsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={item.icon} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>

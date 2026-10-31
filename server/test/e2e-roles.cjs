@@ -663,7 +663,7 @@ function roleData(id, name, occupation, level) {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },
   });
-  checkEqual(soldAtFactory.data.sold[0].unitPrice, hideFactory, "未改价时按出厂价签成交（库里 seed 值与生成物一致）");
+  check(soldAtFactory.data.sold[0].unitPrice === hideFactory, "未改价时按出厂价签成交（库里 seed 值与生成物一致）", soldAtFactory.data.sold[0].unitPrice);
 
   const priceUp = await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: 77 } });
   check(priceUp.code === 0, "管理端把兽皮卖价改成 77", priceUp.message);
@@ -671,14 +671,14 @@ function roleData(id, name, occupation, level) {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },
   });
-  checkEqual(soldAtNew.data.sold[0].unitPrice, 77, "再卖一块立刻按新价（不重启、不清库）");
+  check(soldAtNew.data.sold[0].unitPrice === 77, "再卖一块立刻按新价（不重启、不清库）", soldAtNew.data.sold[0].unitPrice);
 
   await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: hideFactory } });
   const soldBackToFactory = await api("POST", "roles/role_d1/sell", {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },
   });
-  checkEqual(soldBackToFactory.data.sold[0].unitPrice, hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）");
+  check(soldBackToFactory.data.sold[0].unitPrice === hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）", soldBackToFactory.data.sold[0].unitPrice);
 
   // 装备：等级既是穿戴门槛也是定价依据（回收价 = 等级基础价 × 前后缀倍率）
   const putEquip = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
@@ -687,10 +687,10 @@ function roleData(id, name, occupation, level) {
     token: tokenC,
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
   });
-  checkEqual(
-    soldEquip.data.sold[0].unitPrice,
-    shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1],
+  check(
+    soldEquip.data.sold[0].unitPrice === shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1],
     "装备价 = 该等级的回收基础价（客户端显示的就是这一档）",
+    `${soldEquip.data.sold[0].unitPrice} vs ${shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1]}`,
   );
 
   const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: 50 } });
@@ -700,10 +700,10 @@ function roleData(id, name, occupation, level) {
     token: tokenC,
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
   });
-  checkEqual(
-    soldEquip50.data.sold[0].unitPrice,
-    shared.EQUIPMENT_RECYCLE_PRICES[49],
+  check(
+    soldEquip50.data.sold[0].unitPrice === shared.EQUIPMENT_RECYCLE_PRICES[49],
     "改等级后价签跟着走（不用重新生成共享数据）",
+    `${soldEquip50.data.sold[0].unitPrice} vs ${shared.EQUIPMENT_RECYCLE_PRICES[49]}`,
   );
 
   const levelRestore = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: sampleEquip.level } });

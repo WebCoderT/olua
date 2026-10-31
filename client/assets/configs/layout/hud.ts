@@ -66,7 +66,7 @@ export const bottomBarLayout = {
     key: { position: new Vec2(14, 16), size: new Size(20, 20), fontSize: 10 },
   },
   /** 经验条 */
-  expBar: { position: new Vec2(0, -44.5), size: new Size(724, 8) },
+  expBar: { position: new Vec2(0, -55.5), size: new Size(614, 8) },
   /**
    * 血量球（role_hp_orb 节点：球底图/填充与血量文字都挂这个节点下）
    *
