@@ -43,7 +43,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 137;
+const EXPECTED_ASSERTIONS = 146;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -764,6 +764,83 @@ function roleData(id, name, occupation, level) {
   check(readBack.data.data.combat === rightCombat, "取回来的 combat 是服务端重算的那份（与一致上报值相同）", String(readBack.data.data.combat));
 
   Logger.prototype.warn = originalWarn;
+
+  //#endregion
+
+  //#region 九点五、权威边界：账本与成长线阶位写不进去
+
+  console.log("— 九点五、权威边界：账本与成长线阶位写不进去 —");
+
+  const playerF = await api("POST", "auth/register", { body: { username: "role_player_f", password: "pass1234" } });
+  const tokenF = playerF.data.token;
+  // 建号这份按客户端 `new Role(...)` 的形状补齐三条成长线（客户端构造时恒为 0）——
+  // 服务端只在「库里已有这个字段」之后才回填，缺键会被当成老存档首次上传而放行
+  const seededF = await api("POST", "roles", {
+    token: tokenF,
+    body: { data: { ...roleData("role_f1", "报二", "1", 10), title: 0, soulOfWar: 0, rank: 0 } },
+  });
+  check(seededF.code === 0, "准备：第五个玩家建一个 10 级角色（初始 1000 金）", seededF.message);
+
+  // 改包视角：把账本与阶位一起改掉再推整份存档。服务端照样收下（拒收会让
+  // 「客户端少收了一帧」变成玩不了），但落库的必须是库里的值。
+  const tampered = {
+    ...roleData("role_f1", "报二", "1", 10),
+    gold: 999999,
+    bindGold: 88888,
+    silver: 7777,
+    title: 9,
+    soulOfWar: 9,
+    rank: 9,
+    exp: 424242,
+    hp: 999999,
+  };
+  const tamperSave = await api("PUT", "roles/role_f1", { token: tokenF, body: { data: tampered } });
+  check(tamperSave.code === 0, "改包存档照常收下（回填而不是 409：拦的是「写进去」，不是「发过来」）", tamperSave.message);
+
+  const afterTamper = await api("GET", "roles/role_f1", { token: tokenF });
+  const tamperedDoc = afterTamper.data.data;
+  check(tamperedDoc.gold === 1000, "金币没被改写（账本以库为准）", `gold=${tamperedDoc.gold}`);
+  check(
+    tamperedDoc.bindGold === 0 && tamperedDoc.silver === 0,
+    "绑定元宝 / 银两同样没被改写",
+    `bindGold=${tamperedDoc.bindGold} silver=${tamperedDoc.silver}`,
+  );
+  check(
+    tamperedDoc.title === 0 && tamperedDoc.soulOfWar === 0 && tamperedDoc.rank === 0,
+    "称号 / 战魂 / 军衔阶位没被改写（只有 upgradeGrowth 能推进）",
+    `title=${tamperedDoc.title} soul=${tamperedDoc.soulOfWar} rank=${tamperedDoc.rank}`,
+  );
+  // 上限由服务端重算得出，血蓝夹在 [0, maxHp]（客户端 applyServerRoleUpdate 同一条不变式）
+  const fDerived = await api("GET", "admin/roles/role_f1", { token: adminToken });
+  const fMaxHp = fDerived.data.derived.attributes.maxHp;
+  check(
+    tamperedDoc.hp === fMaxHp,
+    "血量被夹回上限（改包填 999999 也拿不到超上限的血）",
+    `hp=${tamperedDoc.hp} maxHp=${fMaxHp}`,
+  );
+
+  // 正常客户端：账本与阶位原样上报（它本来就是从 roleUpdate 帧抄回来的），保存照旧
+  const plainSave = await api("PUT", "roles/role_f1", {
+    token: tokenF,
+    body: { data: { ...roleData("role_f1", "报二", "1", 10), gold: 1000 } },
+  });
+  check(plainSave.code === 0, "账本一致的存档照常保存（回填对正常客户端是空操作）", plainSave.message);
+
+  // 建号那一版没有旧值可比（库里还是空的），上界改为「配置给的起点」（ROLE_INITIAL_CURRENCY）
+  const goldCap = shared.ROLE_INITIAL_CURRENCY.gold;
+  const richCreate = await api("POST", "roles", {
+    token: tokenF,
+    body: { data: { ...roleData("role_f2", "报三", "1", 1), gold: 99999999, bindGold: 99999999, silver: 99999999 } },
+  });
+  check(richCreate.code === 0, "准备：再建一个角色，账本填九位数（改包建号的视角）", richCreate.message);
+  const richDetail = await api("GET", "roles/role_f2", { token: tokenF });
+  check(
+    richDetail.data.data.gold === goldCap &&
+      richDetail.data.data.bindGold === goldCap &&
+      richDetail.data.data.silver === goldCap,
+    "建号时的账本夹到配置给的起点（开号即暴富这条口子也堵上）",
+    `gold=${richDetail.data.data.gold} bindGold=${richDetail.data.data.bindGold} silver=${richDetail.data.data.silver}，期望 ${goldCap}`,
+  );
 
   //#endregion
 

@@ -20,7 +20,7 @@ export class BackupSchedulerService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
 
   constructor(
-    private readonly config: ConfigService,
+    config: ConfigService,
     private readonly backups: BackupService,
   ) {
     this.intervalHours = Number(config.get<number>("backupIntervalHours") ?? 24);

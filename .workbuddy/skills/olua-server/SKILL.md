@@ -200,12 +200,39 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   口径必须与客户端 `applyEquipmentRows` 一致 —— 那里也是 `Math.round(curve(row.level) * rate)`。
 - **仍然读生成物的**（后续上移清单，别以为已经全接了）：状态 `STATUSES`（服务端目前不消费状态数值）、
   物品大类 `ITEM_TYPES`（只用于「掉落表配了不存在的 id」的结构校验）、击杀经验公式（两端各写一份）。
-- **另一半缺口（未修）**：seed 是 `INSERT OR IGNORE` —— **客户端 configs 改了值，库里已有的行不会更新**
-  （重跑 seed 也只在空表生效）。所以「改 configs → 服务端」目前仍需清库或手工 SQL；根治要给每行记
-  「出厂基线哈希」：DB 值 == 基线 → 运营没动过，可用新出厂值覆盖；不等 → 保留运营改动。
 - **另一半缺口（未修）**：seed 是 `INSERT OR IGNORE` —— **客户端配置改了值，库里已有的行不会更新**
   （重跑 seed 也只在空表生效）。所以「改 configs → 服务端」目前仍需清库或手工 SQL。要根治得给每行记
   「出厂基线哈希」：DB 值 == 基线 → 说明运营没动过，可用新出厂值覆盖；不等 → 保留运营改动。
+
+**4.0.2 角色存档的权威边界：谁能写哪个字段**（#548）
+
+`PUT /roles/:id` 是「客户端推**整份**存档」的形态（`data` 是不透明文档），所以「哪些字段归服务端」
+必须有明文，否则就是**靠 review 记性**防作弊。边界定义在 `modules/roles/role-authority.ts`，
+`save()` 按它分流 —— 判据在 `tools/audit-role-authority.cjs`（`make audit` 的一项）。
+
+| 类别 | 字段 | 权威 | 依据 |
+|---|---|---|---|
+| 账本 | `gold` / `bindGold` / `silver` | **服务端** | 商城 / 回收 / 成长线 / 任务 / 成就 / 邮件 / 后台各有服务端写点；客户端只有 `applyServerRoleUpdate` 一个入口，**没有任何本地改写** |
+| 成长线阶位 | `title` / `soulOfWar` / `rank` | **服务端** | 只有 `upgradeGrowth` 能推进（扣费 + 成长链校验都在那） |
+| 派生值 | `combat` / `maxHp` / `hpRecover` / `maxMp` / 六项攻防 | **服务端重算** | `applyAuthoritativeAttributes` 每次写档现算覆盖，不走回填 |
+| 客户端全权 | `bag` / `equipments` / `skills` / `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` | 客户端 | 换装、整理背包、丢弃、走图、喝药回血、引导推进都在本地；收权要先补一整套服务端接口 |
+
+- **回填而不是拒收**：客户端报的账本值与库不符 → 用库值覆盖后继续落库，并打一条 warn。
+  拒收（409）会把「客户端少收了一帧」变成玩不了；回填下一次 `roleUpdate` 自动纠正。
+  **要拦的是「写进去」，不是「发过来」。**
+- **库里没有这个字段就放行**：老存档（服务端接管前的本地档）首次上传时文档里没有 `bindGold` 这类键，
+  这时客户端那份是唯一来源 —— 删掉等于把玩家的钱清零。只在「服务端写过」之后才回填。
+- **建号是唯一没有旧值可比的口子**：`create` 时库里还是空的，`enforceServerAuthority` 无从回填 ——
+  所以单独用 `clampInitialCurrency` 把三个账本字段夹到 `ROLE_INITIAL_CURRENCY`（生成物，
+  来源是客户端 `configs/role` 的 `initialGold` / `initialBindGold` / `initialSilver`）。
+  缺字段按「没提要求」处理 → 给出厂值（与「没有行 = 出厂值」同一口径）。
+- **血蓝夹在 `[0, 上限]`**（`clampVitals`，必须在重算之后调）：当前值归客户端（自然回复在本地），
+  但超上限只可能是改包或存档错乱；客户端 `applyServerRoleUpdate` 自己也做同一条 `Math.min`。
+- **还没收的（有意留白，别当成漏了）**：
+  - `level` / `exp`：客户端有两条本地加经验的路（实时通道不可用时的结算兜底 `MonsterManager.awardKillExp`、
+    泡点活动 `AutoUpgrade`），收权会让这两条路径的经验被静默丢弃。要收得先把泡点做成服务端 tick；
+  - `bag` / `equipments` / `skills`：本地操作太多（换装 / 整理 / 移动 / 丢弃 / 穿时装），得先有对应的服务端接口；
+  - `hp` / `mp`：自然回复与技能扣减在客户端，收权需要服务端出回复 tick。
 
 - **45 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies` / `role_blocks` / `role_reports` / `quests` / `quest_progress` / `parties` / `party_members` / `achievements` / `role_achievements` / `role_mails` / `equip_aligns` / `equip_in_aligns`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
@@ -469,7 +496,7 @@ env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.
 **每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
 
 - 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
-- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 十套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端十套 e2e + 管理端构建 + 12 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
+- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 十套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端十套 e2e + 管理端构建 + 13 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
 - 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；服务端的端名取 `server`。
 - **改了接口的提交必须连生成物一起提交**（`openapi.json` + 两端接口文件是同一笔改动的一部分，否则另外两端停在旧契约上）。
 - 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。

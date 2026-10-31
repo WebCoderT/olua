@@ -1212,12 +1212,14 @@ async function main() {
     checkEqual(poor.status, 409, "绑定元宝不足时升级 → 409");
     checkEqual(poor.body?.code, 20009, "元宝不足 → 20009");
 
-    // 充值走既有 role.save（带 revision 基线；同时为乐观锁用例制造一个旧 revision）
-    const rich = await api(base, "PUT", `/api/roles/${growthRoleId}`, {
-      token: growthPlayer,
-      body: { revision: growthRevision, data: { ...growthCreate.body?.data?.data, bindGold: 1000000000 } },
+    // 充值走**服务端权威写点**（管理端 PATCH）：`role.save` 不接受客户端改账本（#548），
+    // 推上去会被回填成库里的值 —— 这也顺带解释了「为什么改包充不了钱」。
+    // 同时为乐观锁用例制造一个旧 revision（PATCH 同样推进修订号）
+    const rich = await api(base, "PATCH", `/api/admin/roles/${growthRoleId}`, {
+      token,
+      body: { bindGold: 999999999 },
     });
-    checkEqual(rich.status, 200, "role.save 充值绑定元宝成功");
+    checkEqual(rich.status, 200, "管理端给成长线角色充值绑定元宝（账本只有服务端写点）");
     growthRevision = rich.body?.data?.revision;
 
     const stale = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
@@ -1241,7 +1243,7 @@ async function main() {
     checkEqual(up1.body?.data?.gainedLevel, 1, "gainedLevel = 1");
     checkEqual(up1.body?.data?.gainedLabel, shared.TITLE_LABELS["0"], "gainedLabel = 1 阶称号名");
     checkEqual(up1.body?.data?.data?.title, 1, "存档 title 推进到 1");
-    checkEqual(up1.body?.data?.data?.bindGold, 1000000000 - price1, "存档 bindGold 扣减到位");
+    checkEqual(up1.body?.data?.data?.bindGold, 999999999 - price1, "存档 bindGold 扣减到位");
     checkEqual(up1.body?.data?.revision, growthRevision + 1, "revision 原子 +1");
     growthRevision = up1.body?.data?.revision;
 
@@ -1344,11 +1346,11 @@ async function main() {
     checkEqual(badGood.body?.code, 50021, "商品不在目录 → 50021");
 
     // 背包满 → 20012（先于元宝不足：入包前先扣费的设计下顺序是 价→钱→包，但这里钱也不足……先充值再测满包）
-    const richMall = await api(base, "PUT", `/api/roles/${mallRoleId}`, {
-      token: mallPlayer,
-      body: { data: { ...mallCreate.body?.data?.data, bindGold: 1000000000, bag: fullBag } },
+    const richMall = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
+      token,
+      body: { bindGold: 999999999 },
     });
-    checkEqual(richMall.status, 200, "充值并保持满背包");
+    checkEqual(richMall.status, 200, "管理端充值到 999999999（背包仍是满的）");
     const fullBagBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
       body: { goodId: "cloth_1_p0s1", revision: richMall.body?.data?.revision },
@@ -1356,12 +1358,12 @@ async function main() {
     checkEqual(fullBagBuy.status, 409, "满背包购买 → 409");
     checkEqual(fullBagBuy.body?.code, 20012, "背包已满 → 20012");
 
-    // 腾出背包：换成空网格；统一价是 1（MALL.defaultPrice），0 元宝必不足
-    const emptied = await api(base, "PUT", `/api/roles/${mallRoleId}`, {
-      token: mallPlayer,
-      body: { data: { ...mallCreate.body?.data?.data, bindGold: 0, bag: emptyBag } },
+    // 腾出背包 + 归零：账本只有服务端写点（#548），所以走管理端 PATCH 的稀疏背包（空数组 = 清空）
+    const emptied = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
+      token,
+      body: { bindGold: 0, bag: [] },
     });
-    checkEqual(emptied.status, 200, "改为空网格 + 0 元宝（故意不足）");
+    checkEqual(emptied.status, 200, "管理端清空背包 + 归零元宝（故意不足）");
     const poorBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
       body: { goodId: "cloth_1_p0s1", revision: emptied.body?.data?.revision },
@@ -1373,11 +1375,11 @@ async function main() {
     const setPrice = await api(base, "PUT", "/api/admin/mall/prices/cloth_1_p0s1", { token, body: { price: 777 } });
     checkEqual(setPrice.status, 200, "管理端设特殊价 777");
 
-    const recharge = await api(base, "PUT", `/api/roles/${mallRoleId}`, {
-      token: mallPlayer,
-      body: { data: { ...mallCreate.body?.data?.data, bindGold: 1000, bag: emptyBag } },
+    const recharge = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
+      token,
+      body: { bindGold: 1000 },
     });
-    checkEqual(recharge.status, 200, "充值 1000 元宝");
+    checkEqual(recharge.status, 200, "管理端充 1000 元宝");
     const staleRev = recharge.body?.data?.revision;
 
     const staleBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {

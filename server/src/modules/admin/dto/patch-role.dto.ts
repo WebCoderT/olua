@@ -3,7 +3,6 @@ import { Type } from "class-transformer";
 import { IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, Length, Max, Min, ValidateNested } from "class-validator";
 import {
   ROLE_BAG_AXIS_MAX,
-  ROLE_BAG_CELL_MAX,
   ROLE_FIELD_VALUE_MAX_LENGTH,
   ROLE_LEVEL_MAX,
   ROLE_NAME_MAX_LENGTH,

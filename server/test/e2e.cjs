@@ -324,7 +324,7 @@ async function runSuite(baseUrl) {
   checkEqual(save.status, 200, "保存进度返回 200");
   checkEqual(save.body.data.id, "1001", "id 以路径为准（请求体里的 id 被忽略）");
   checkEqual(save.body.data.level, 5, "等级已保存");
-  checkEqual(save.body.data.data.gold, 8888, "金币已保存");
+  checkEqual(save.body.data.data.gold, 1000, "金币不接受客户端上报（账本在服务端，见 role-authority.ts）");
   checkEqual(save.body.data.data.bag[0][0].id, "a", "未改动的字段原样保留");
 
   const savedDetail = await call("GET", "/api/roles/1001", { token });

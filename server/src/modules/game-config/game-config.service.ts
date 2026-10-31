@@ -64,11 +64,11 @@ import {
 } from "../../shared/game-data.generated";
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
-import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
+import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
 import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
-import { CreateQuestDto, parseRewardItems, QuestDto, QuestObjectiveDto, QuestQueryDto, QuestRewardsDto, UpdateQuestDto } from "./dto/quest.dto";
+import { CreateQuestDto, parseRewardItems, QuestDto, QuestQueryDto, UpdateQuestDto } from "./dto/quest.dto";
 import {
   AchievementDto,
   AchievementQueryDto,

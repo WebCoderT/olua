@@ -224,14 +224,6 @@ function lookupGeneratedBundle(table: GeneratedBundle, level: number): Generated
   return bundle && typeof bundle === "object" ? (bundle as GeneratedBundle) : null;
 }
 
-/**
- * 按「客户端的等级语义」查战魂 / 称号 / 军衔表
- *
- * 已迁走：这套查表（含「生成物键是下标、等级从 1 起，两者差一位」的转换）搬进了
- * `shared/runtime-overrides` 的 `titleAttributesOf` / `soulAttributesOf` / `rankAttributesOf`
- * —— 那里同时承担「先查运营库覆盖层、再回落生成物」，转换只留一处，不会两边各写一份。
- */
-
 /** 收集穿戴装备的属性包（查不到的 id 跳过，但记进 notes） */
 function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], notes: RoleAttributeNotes): GeneratedBundle[] {
   if (!equipments || typeof equipments !== "object") return [];

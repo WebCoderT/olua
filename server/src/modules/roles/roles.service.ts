@@ -13,7 +13,7 @@ import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
-import { AccountRow, DrugRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
+import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
@@ -21,6 +21,7 @@ import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto"
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
 import { decodeStoredRoleData, parseRoleData } from "./role-data.util";
+import { clampInitialCurrency, clampVitals, enforceServerAuthority } from "./role-authority";
 
 /** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
 export interface KillExpResult {
@@ -57,7 +58,6 @@ export class RolesService {
     private readonly drugs: DrugRepository,
     private readonly growth: GrowthRepository,
   ) {}
-
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
   list(accountId: string): RoleSummaryDto[] {
@@ -121,6 +121,8 @@ export class RolesService {
     if (this.roles.findByAccountAndName(accountId, fields.name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
 
     const now = Date.now();
+    // 建号的账本只能到「配置给的起点」（#548）：库里还没有值可比，这是唯一需要单独封上界的地方
+    clampInitialCurrency(data);
     // 战斗属性与战斗力在落库前由服务端重算（权威值）：客户端给的只是占位/参考
     this.applyAuthoritativeAttributes(fields.level, data);
     const row: RoleRow = {
@@ -174,10 +176,15 @@ export class RolesService {
       throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
     }
 
+    // 权威边界（见 role-authority.ts）：账本与成长线阶位以库为准，客户端报上来的一律丢弃；
+    // 老存档里没有这些键时不回填（客户端那份是唯一来源，删掉等于把玩家的钱清零）
+    this.enforceAuthority(decodeStoredRoleData(existing.data), data);
     // 比对在前（记录客户端这次上报了什么，观察用），重算在后（落库的一定是服务端算的）：
     // 客户端那份自 #541 起只是演，谁强由这里的公式说了算
     this.warnIfAttributesMismatch(roleId, fields.level, data);
     this.applyAuthoritativeAttributes(fields.level, data);
+    // 上限是上面那步算出来的，夹在它之后；血蓝的「当前值」仍归客户端（自然回复在本地）
+    clampVitals(data);
     const row: RoleRow = {
       ...existing,
       name: fields.name,
@@ -882,15 +889,6 @@ export class RolesService {
   }
 
   /**
-  /**
-   * 客户端上报的那份战斗属性与服务端重算还差多少（save 路径的可观测点）
-   *
-   * #541 起客户端已经不算属性了，这个比对从「防客户端算法漂移」降级为「写库前顺手看一眼
-   * 上报值有多旧」：mismatch 只打一条可检索的 warn，**随后 `applyAuthoritativeAttributes`
-   * 无条件用服务端结果覆盖落库** —— 观测与权威是两条独立的线，warn 不拦流程、
-   * 权威不靠 warn。一致时什么都不打（每次推进度都刷一条等于没有日志）。
-   */
-  /**
    * 战斗属性与战斗力的**权威重算**：按等级 + 存档（装备/战魂/称号/军衔）现算，
    * 直接覆盖 `data` 里的八项属性与 combat
    *
@@ -913,6 +911,14 @@ export class RolesService {
     data.combat = summary.combat;
   }
 
+  /**
+   * 客户端上报的战斗属性与服务端重算还差多少（save 路径的可观测点）
+   *
+   * #541 起客户端已经不算属性了，这个比对从「防客户端算法漂移」降级为「写库前顺手看一眼
+   * 上报值有多旧」：mismatch 只打一条可检索的 warn，**随后 `applyAuthoritativeAttributes`
+   * 无条件用服务端结果覆盖落库** —— 观测与权威是两条独立的线，warn 不拦流程、
+   * 权威不靠 warn。一致时什么都不打（每次推进度都刷一条等于没有日志）。
+   */
   private warnIfAttributesMismatch(roleId: string, level: number, data: Record<string, unknown>): void {
     const comparison = compareRoleAttributesOfRole(level, data);
     if (!comparison.mismatch || !comparison.server) return;
@@ -920,6 +926,24 @@ export class RolesService {
       `角色 ${roleId}（等级 ${level}）上报的战斗属性与服务端重算不一致：` +
         `服务端 combat=${comparison.server.combat} maxHp=${comparison.server.maxHp}；` +
         `客户端 combat=${comparison.reported.combat} maxHp=${comparison.reported.maxHp}`,
+    );
+  }
+
+  /**
+   * 账本 / 成长线阶位以库为准（权威边界见 `role-authority.ts`）
+   *
+   * 与 `warnIfAttributesMismatch` 的关系：那条是「派生值算不算得出对」，这条是
+   * 「这个字段根本不该由客户端决定」。前者记日志后照样覆盖，后者记日志后**也照样落库**
+   * （回填成库里的值再落）—— 都不拒收，因为拒收会让「客户端少收了一帧」变成玩不了。
+   */
+  private enforceAuthority(stored: Record<string, unknown>, incoming: Record<string, unknown>): void {
+    const drift = enforceServerAuthority(stored, incoming);
+    if (!drift.length) return;
+    // 一个字段一条会比实际短：正常情况下 drift 恒为空（客户端从不本地改这些），
+    // 真出现时往往一整批一起出现，合并成一条更好读
+    this.logger.warn(
+      `账号存档里改动了服务端独占字段，已按库中值为准：` +
+        drift.map((d) => `${d.field}（库里 ${JSON.stringify(d.stored)}，上报 ${JSON.stringify(d.reported)}）`).join("；"),
     );
   }
 

@@ -13,7 +13,6 @@ import {
 } from "../../shared/game-data.generated";
 import {
   MallPriceItemDto,
-  MallPricePageDto,
   MallPriceQueryDto,
   MallSettingsDto,
   PutMallPriceDto,

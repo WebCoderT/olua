@@ -17,6 +17,11 @@
     "strictPropertyInitialization": false,
     "noImplicitAny": true,
     "noFallthroughCasesInSwitch": true,
+    // 未使用的 import / 局部变量直接报错（#548 清理时打开）
+    // 为什么只开 noUnusedLocals 不开 noUnusedParameters：Nest DI 的构造函数参数
+    // 有「只为了注入、方法体里不用」的合法形态（守卫、拦截器），
+    // 但 `private readonly x` 写成了属性却没人读，属于真该删的，这条也会报
+    "noUnusedLocals": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "types": ["node"]
