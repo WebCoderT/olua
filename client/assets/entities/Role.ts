@@ -35,7 +35,8 @@ export class Role implements BattleAttributes {
   hp: number;
   /**
    * 每秒血量回复量（点/秒）：等级 + 防御装备 + 战魂 + 称号 + 军衔 五处来源之和，
-   * 由 GameHelper.combatCalc 统一重算；结算在 ui/utils/battle/HpHelper.recover
+   * 由服务端重算后经 roleUpdate 帧下发（#541）；
+   * 结算在 ui/utils/battle/HpHelper.recover
    */
   hpRecover: number;
   /** 血量自然回复的累积量（不足 1 点的部分，避免低回复速度下被取整丢弃） */
@@ -49,15 +50,15 @@ export class Role implements BattleAttributes {
   /** 背包：格子只存物品 key 与数量（BagCell），物品数据经 configs/items 实时解析 */
   bag: Array<Array<BagCell | null>>;
   combat: number = 0;
-  /** 战魂等级（0 = 未激活；升级消耗绑定元宝，见 configs/soul；属性加成计入 combatCalc，也是地图 soulOfWar 进入条件） */
+  /** 战魂等级（0 = 未激活；升级消耗绑定元宝，见 configs/soul；属性加成由服务端重算（roleUpdate 帧下发），也是地图 soulOfWar 进入条件） */
   soulOfWar: number = 0;
   /** 战魂外显开关（勾选后在主角右上角挂当前等级的战魂动画，见 RoleDisplay.updateSoulShow） */
   soulShow: boolean = false;
-  /** 称号等级（0 = 未激活；解锁/升级消耗绑定元宝，见 configs/title；属性加成计入 combatCalc，解锁后名牌动画常显头顶，见 RoleDisplay.updateTitleShow） */
+  /** 称号等级（0 = 未激活；解锁/升级消耗绑定元宝，见 configs/title；属性加成由服务端重算（roleUpdate 帧下发），解锁后名牌动画常显头顶，见 RoleDisplay.updateTitleShow） */
   title: number = 0;
   /**
    * 军衔阶数（0 = 未授衔；晋升消耗绑定元宝，见 configs/rank，共 100 阶）
-   * 属性加成计入 combatCalc；授衔后军衔名以**红色文字**常显在头顶信息栏血条上方（见 RoleDisplay.updateHead）
+   * 属性加成由服务端重算（roleUpdate 帧下发）；授衔后军衔名以**红色文字**常显在头顶信息栏血条上方（见 RoleDisplay.updateHead）
    */
   rank: number = 0;
   physicalAttack: [number, number] = [0, 0];
@@ -118,7 +119,8 @@ export class Role implements BattleAttributes {
     this.mp = this.maxMp = levelMap.get(this.level).maxMp;
     this.combat = this.maxHp * 10;
     // 复制一份初始属性（不要直接引用配置里的区间数组，避免运行时改动污染配置表；
-    // 完整属性由 GameHelper.combatCalc 按「等级 + 装备 + 战魂 + 称号 + 军衔」重算）
+    // 完整属性由服务端重算后经 roleUpdate 帧下发（#541）——这里的占位值只活到建号那次存档，
+    // 服务端 create 时就重算落库了）
     this.physicalAttack = [...levelMap.get(this.level).physicalAttack];
 
     // 初始化背包数据

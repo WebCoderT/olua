@@ -46,7 +46,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run start` | Run the built output |
 | `npm run swagger:emit` | Compile + emit `openapi.json` from source (the single source of the contract) |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` — **regenerate both ends' interface files** |
-| `npm run test:e2e` | Main e2e (248 assertions) |
+| `npm run test:e2e` | Main e2e (247 assertions) |
 | `npm run test:e2e:roles` | Role-management suite (120 assertions) |
 | `npm run test:e2e:guard` | Operations & security base (283 assertions) |
 | `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
@@ -78,7 +78,6 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `JWT_SECRET` | dev placeholder | **Must be a random long string in production** |
 | `JWT_EXPIRES_IN` | `7d` | Token lifetime |
 | `ADMIN_REGISTER_CODE` | has value | Admin registration code; empty = open registration |
-| `ROLE_MAX_PER_ACCOUNT` | `3` | Max characters per account (**lower only**: must not exceed the character-select UI's stand count `roleSelectorLayout.rolePositions`; a guard enforces this) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins, comma-separated |
 | `NODE_ENV` | `development` | Only affects flags, does not change behavior |
 | `LOG_REQUESTS` | `true` | Whether to log each request (method/path/latency only, **no request body**) |
@@ -103,13 +102,9 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 > and login rate limiting would treat all players as one person and lock them all out; conversely, **when exposed directly you must keep it `false`** — leaving it on lets the caller
 > forge `X-Forwarded-For` to bypass IP limiting. This is also spelled out in `.env.example`.
 
-> **`ROLE_MAX_PER_ACCOUNT` can only go down**: on the client, "how many characters you can have" is the **UI capacity** —
-> the character-select layout `configs/layout/scenes` has `roleSelectorLayout.rolePositions` **stands**, i.e. as many as are drawn,
-> and the client's pre-check is exactly "all stands are taken". So this value must **not exceed the stand count**: raising it would
-> let a player create a character the UI has nowhere to place (the extra one stacks at the origin). The two are no longer "the
-> same thing", so they no longer have to change together — adding stands is layout / art work, while this knob only goes down.
-> The committed defaults are enforced by `tools/audit-shared-data.cjs`; the **deployment's `.env` is not in the repo**, so the guard
-> cannot see it — do not set it above the stand count.
+> **There is no role-count limit**: creating a role only validates structure and duplicate names; the character-select UI lays
+> stands out on the grid automatically (`configs/layout/scenes`'s `roleSelectorLayout.roleGrid`, left to right, filling a row before
+> moving to the next).
 
 ## Directory structure
 
@@ -175,7 +170,7 @@ server/
 │       └── emit.ts                 ← offline emit of openapi.json
 ├── scripts/                        backup / restore (VACUUM INTO + five-step restore, see scripts/lib/db-tooling.cjs)
 ├── test/
-│   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
+│   ├── e2e.cjs                     247 assertions (real server + real HTTP requests)
 │   ├── e2e-roles.cjs               120 assertions
 │   ├── e2e-guard.cjs               283 assertions
 │   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
@@ -408,7 +403,7 @@ All twenty-four e2e suites are **real server process + real HTTP requests** (not
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
-| `test/e2e.cjs` | **248** | register/login / character CRUD and count cap / duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
+| `test/e2e.cjs` | **247** | register/login / character CRUD and duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
 | `test/e2e-roles.cjs` | **120** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
 | `test/e2e-guard.cjs` | **283** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
 | `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |

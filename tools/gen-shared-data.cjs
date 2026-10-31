@@ -55,12 +55,9 @@
  */
 
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
 
-const ROOT = path.resolve(__dirname, "..");
-const ASSETS = path.join(ROOT, "client", "assets");
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
 
 /**
@@ -89,28 +86,12 @@ const EQUIPMENT_MAPS = ["clothes", "weapons", "rings", "nicklaces", "shoes", "he
 const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 const SINGLE_KEYS = ["maxHp", "hpRecover"];
 
-/**
- * 最小 Cocos 垫片
- *
- * 只有被拉进来的配置在**运行时**真的构造了才能用到；纯类型用途的 import 会被 TypeScript 擦掉。
- * `equipments` 用到 Color（前后缀配色）与 Vec2（贴图偏移），`role` 用到 Size（职业介绍图尺寸），
- * `items`/`map` 本身不用 —— 都在表现层，不参与任何数值。
- */
-const CC_SHIM = `"use strict";
-class Color { constructor(value) { this.value = value; } }
-class Vec2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }
-class Size { constructor(width = 0, height = 0) { this.width = width; this.height = height; } }
-class Vec3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } }
-module.exports = { Color, Vec2, Size, Vec3 };
-`;
-
 function main() {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-shared-data-"));
-  writeShim(work);
-  compile(work);
+  const work = createWork("shared-data");
+  compileClientConfig(work, SOURCE_FILES);
 
-  const cfg = load(work);
-  const snapshot = buildSnapshot(cfg);
+  const { cfg } = configLoader(work);
+  const snapshot = buildSnapshot(load(cfg));
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -122,67 +103,10 @@ function main() {
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
   console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
-  fs.rmSync(work, { recursive: true, force: true });
+  cleanupWork(work);
 }
 
-/** 把 cc 垫片伪装成一个可被 require 的包 */
-function writeShim(work) {
-  const shimDir = path.join(work, "out", "node_modules", "cc");
-  fs.mkdirSync(shimDir, { recursive: true });
-  fs.writeFileSync(path.join(shimDir, "index.js"), CC_SHIM, "utf8");
-  fs.writeFileSync(path.join(shimDir, "package.json"), '{"name":"cc","version":"0.0.0","main":"index.js"}', "utf8");
-}
-
-/**
- * 编译客户端配置到临时目录
- *
- * 报 `Cannot find module 'cc'` 是**预期内的**：客户端配置处在 Cocos 工程里，这里没有引擎类型。
- * 缺类型不影响 JS 产物（下面要的是运行时的值）。真正的失败（语法 / 找不到源文件）不会被吞掉。
- */
-function compile(work) {
-  const tsconfig = path.join(work, "tsconfig.json");
-  fs.writeFileSync(
-    tsconfig,
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          module: "CommonJS",
-          moduleResolution: "node",
-          outDir: path.join(work, "out"),
-          rootDir: ASSETS,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          strict: false,
-          noEmitOnError: false,
-        },
-        files: SOURCE_FILES,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
-
-  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
-  if (!fs.existsSync(tsc)) {
-    throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
-  }
-
-  let log = "";
-  try {
-    log = execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (error) {
-    log = `${error.stdout ?? ""}${error.stderr ?? ""}`;
-  }
-
-  const fatal = log.split("\n").filter((line) => line.includes("error TS") && !line.includes("Cannot find module 'cc'"));
-  if (fatal.length > 0) throw new Error(`编译客户端配置失败：\n${fatal.slice(0, 3).join("\n")}`);
-}
-
-function load(work) {
-  const dir = path.join(work, "out", "configs");
-  const cfg = (name) => require(path.join(dir, `${name}.js`));
+function load(cfg) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -283,6 +207,9 @@ function buildSnapshot(cfg) {
     // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
     growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
     growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
+    // 装备回收基础价（#545）：等级 → 绑定元宝，**采样值**而不是曲线公式 —— 服务端卖装备
+    // 要按「等级 × 前后缀倍率」算价，与客户端同一个取整口径；公式搬一份到服务端必然漂移
+    equipmentRecyclePrices: pickEquipmentRecyclePrices(cfg.growth),
     // 任务（#396）：管理端可改的任务配置（主线链 / 日常 / 单目标 / 奖励）
     quests: pickQuests(cfg.questData),
     // 成就（#401）：累计型（kill / quest）走事件、状态型（level / combat / collect）查询现算，
@@ -298,6 +225,10 @@ function buildSnapshot(cfg) {
     equipmentSlotOrder: pickMap(cfg.equipments.equipmentSlotOrder),
     equipmentPrefixLabels: cfg.equipments.equipmentPrefixLabels.map(String),
     equipmentSuffixLabels: cfg.equipments.equipmentSuffixLabels.map(String),
+    // 前后缀**属性倍率**（#544）：客户端用它展开 555 个变体；服务端拿运营改过的
+    // 基础件重算变体属性时必须是同一组数字，否则「管理端改一件、服务端算另一件」
+    equipmentPrefixRates: pickRates("equipmentPrefixRates", cfg.growth.equipmentPrefixRates, cfg.equipments.equipmentPrefixLabels),
+    equipmentSuffixRates: pickRates("equipmentSuffixRates", cfg.growth.equipmentSuffixRates, cfg.equipments.equipmentSuffixLabels),
     equipmentDisplayNames: pickEquipmentNames(cfg.equipmentMaps, cfg.equipments),
     equipmentSlotOf: pickEquipmentSlots(cfg.equipmentMaps),
     soulLabels: pickList(cfg.soul, (item) => String(item.label ?? "")),
@@ -395,6 +326,8 @@ function pickEquipmentBases(maps) {
           level: round(item.level ?? 0),
           sellPrice: round(item.sellPirce ?? 0),
           label: String(item.label ?? ""),
+          // 图标（resources 相对路径，不含扩展名）：管理端列表缩略图用，与外观几何无关
+          icon: String(item.icon ?? ""),
           attributes: pickAttributes(item),
         },
       ]);
@@ -431,6 +364,8 @@ function pickMonsters(monsters) {
       level: round(item.level ?? 0),
       tier: String(item.tier ?? "normal"),
       maxHp: round(item.maxHp ?? 0),
+      // 图标（monster/icon/<key>_00000 这类单图）：管理端列表缩略图用；外观图集（out）仍不进
+      icon: String(item.icon ?? ""),
       // AI 参数（#323）：主动怪判定 / 检测范围 / 移动速度（服务端 tick 按它推进位置）
       aggressive: Boolean(item.aggressive),
       detectRange: round(item.detectRange ?? 0),
@@ -465,10 +400,10 @@ function pickMonsterAi(monsterAi) {
 /**
  * NPC 表 → [[NPC id, 元数据]]（#258）
  *
- * 来源是 `configs/npc-data`（数据与行为分家后的纯数据文件，见文件头）。只收
- * id 与 label：src / scale / position 是表现层资源与几何，不进快照；对话文案
- * 客户端目前没有数据形态（都写死在弹窗组件里），管理端在 npcs 表上新增
- * dialog 列运营可改，客户端消费等对接（#248/#249）。
+ * 来源是 `configs/npc-data`（数据与行为分家后的纯数据文件，见文件头）。收
+ * id、label 与 src（resources 相对路径，管理端列表缩略图用）：scale / position
+ * 是纯几何，不进快照；对话文案客户端目前没有数据形态（都写死在弹窗组件里），
+ * 管理端在 npcs 表上新增 dialog 列运营可改，客户端消费等对接（#248/#249）。
  */
 function pickNpcs(npcs) {
   const out = [];
@@ -477,7 +412,7 @@ function pickNpcs(npcs) {
     if (!item || !item.id) throw new Error("configs/npc-data 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`NPC id 重复：${item.id}`);
     seen.add(item.id);
-    out.push([item.id, { label: String(item.label ?? "") }]);
+    out.push([item.id, { label: String(item.label ?? ""), src: String(item.src ?? "") }]);
   }
   if (out.length === 0) throw new Error("configs/npc-data 的 npcData 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
@@ -628,6 +563,8 @@ function pickDrugs(drugs) {
       {
         label: String(item.label ?? ""),
         description: String(item.description ?? ""),
+        // 图标（item/<id> 这类单图）：管理端列表缩略图用
+        icon: String(item.icon ?? ""),
         level: round(item.level ?? 0),
         sellPrice: round(item.sellPirce ?? 0),
         maxStack: round(item.maxStack ?? 99),
@@ -663,6 +600,8 @@ function pickItemBases(materials) {
         type: String(item.type ?? ""),
         label: String(item.label ?? ""),
         description: String(item.description ?? ""),
+        // 图标（item/<id> 这类单图）：管理端列表缩略图用
+        icon: String(item.icon ?? ""),
         level: round(item.level ?? 0),
         sellPrice: round(item.sellPirce ?? 0),
         maxStack: round(item.maxStack ?? 99),
@@ -1048,6 +987,48 @@ function pickGrowthScalars(growth, expGain) {
   return out;
 }
 
+/**
+ * 装备回收基础价（#545）：等级 → 绑定元宝，下标 = 等级 - 1
+ *
+ * 客户端 `configs/growth.equipmentRecyclePrice(level)` 是**分段线性曲线的采样**，
+ * 装备变体价 = 基础价 × 前后缀倍率（`Math.round`，见 `buildEquipmentMap`）。
+ * 服务端卖装备必须按同一口径算 —— 但「再写一份插值公式」等于制造第二份真相
+ * （曲线的段边界一改就两端分裂，且不会报错）。所以这里把 1..roleMaxLevel 的
+ * **采样结果**直接进快照：两端读同一组数字，没有公式可漂移。
+ */
+function pickEquipmentRecyclePrices(growth) {
+  const sample = growth.equipmentRecyclePrice;
+  if (typeof sample !== "function") throw new Error("configs/growth 没有导出 equipmentRecyclePrice（改名了？）");
+  const maxLevel = Math.round(Number(growth.roleMaxLevel));
+  if (!Number.isFinite(maxLevel) || maxLevel < 1) {
+    throw new Error(`configs/growth 的 roleMaxLevel 不合法：${growth.roleMaxLevel}`);
+  }
+  const out = [];
+  for (let level = 1; level <= maxLevel; level++) {
+    const price = sample(level);
+    if (!Number.isFinite(price) || price < 0) throw new Error(`装备回收价曲线在 ${level} 级取到非法值：${price}`);
+    out.push(round(price));
+  }
+  return out;
+}
+
+/**
+ * 装备前后缀的属性倍率（#544）
+ *
+ * 与 `*_LABELS` 一一对应（下标 = 前后缀序号）：长度对不上就说明客户端改了枚举却没补倍率，
+ * 那种情况下「某档前缀没有倍率」会静默变成 1（= 白升一档），所以这里直接抛错。
+ */
+function pickRates(name, rates, labels) {
+  if (!Array.isArray(rates) || rates.length === 0) throw new Error(`configs/growth 的 ${name} 为空`);
+  if (labels && rates.length !== labels.length) {
+    throw new Error(`configs/growth 的 ${name}（${rates.length} 项）与前后缀名（${labels.length} 项）长度不一致`);
+  }
+  return rates.map((value, index) => {
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`configs/growth 的 ${name}[${index}] 不是正数：${value}`);
+    return round(value);
+  });
+}
+
 const tuple = (value) => (Array.isArray(value) ? [round(value[0]), round(value[1])] : [0, 0]);
 const round = (value) => (Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0);
 
@@ -1106,16 +1087,19 @@ ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.ran
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 整行配置（#367：owner / 分类 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数 / 挂载状态 / 释放限制）。damageCoefficients 的下标 = 技能等级", s.skills)}
 ${jsonTable("STATUSES", "状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath", s.statuses)}
-${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）", s.monsters)}
+${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）+ icon 图标（管理端缩略图）", s.monsters)}
 ${jsonTable("MONSTER_AI", "怪物 AI 全局节奏参数（#323：普攻间隔/普攻距离/待机游走节奏，服务端 AI tick 与客户端同源）", s.monsterAi)}
 ${jsonTable("MONSTER_SKILLS", "怪物 key → 技能挂载清单（#372：skillId / priority / 可选 cooldown 覆写）。服务端 AI 按它释放，管理端可增删改", s.monsterSkills)}
-${jsonTable("NPCS", "NPC id → 名称（#258；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
+${jsonTable("NPCS", "NPC id → 名称 + src 素材路径（管理端缩略图用；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
 ${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}
 ${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }（#254；实际掉落以此为准，key 与 MONSTERS 对齐）", s.monsterDrops)}
 ${jsonTable("DROP_DEFAULT", "兜底掉落表（#254；怪物既无独立表也没引用具名表时使用）", s.dropDefault)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
+
+/** 装备回收基础价（下标 = 等级 - 1；绑定元宝，普通·人级。变体价 = 本表 × 前后缀倍率再 Math.round，与客户端 buildEquipmentMap 同口径） */
+export const EQUIPMENT_RECYCLE_PRICES: number[] = ${JSON.stringify(s.equipmentRecyclePrices)};
 
 /** 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；特殊价是运营数据不进快照 */
 export const MALL: Record<string, number> = {
@@ -1134,9 +1118,9 @@ ${textTable("EQUIPMENT_SLOTS", "装备槽位 → 中文名（如 1 → 衣服）
 ${numTable("EQUIPMENT_SLOT_ORDER", "装备槽位 → 整理序号（背包「一键整理」的部位顺序）", s.equipmentSlotOrder)}
 ${textTable("EQUIPMENT_DISPLAY_NAMES", "装备 id → 显示名（已拼好前后缀，如「精良的·天级 屠龙」）", s.equipmentDisplayNames)}
 ${textTable("EQUIPMENT_SLOT_OF", "装备 id → 所属槽位（配 EQUIPMENT_SLOTS 显示部位）", s.equipmentSlotOf)}
-${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
-${jsonTable("DRUGS", "药品 id → { label, description, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
-${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
+${jsonTable("EQUIPMENT_BASES", "装备基础件 id → { slot 部位, level 等级需求, sellPrice 售卖价, label 名称, icon 图标, attributes 八项属性 }（#252；只收普通的·人级，变体是它乘前后缀倍率展开的）", s.equipmentBases)}
+${jsonTable("DRUGS", "药品 id → { label, description, icon 图标, level 使用等级, sellPrice, maxStack, cooldown, hp/mp 固定回复量, hpPercent/mpPercent 百分比回复 }（#253；effects 数组已按键求和，与客户端 resolveDrugRecovery 的累加口径等价）", s.drugs)}
+${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description, icon 图标, level, sellPrice, maxStack }（#255；只收 MATERIAL / OTHER 大类，装备与药品各有自己的表）", s.itemBases)}
 ${numTable("SELL_PRICES", "物品 id → 出售价（#397；货币 = 绑定元宝/个）。装备取回收价曲线（含前后缀倍率）、其余取 sellPirce；**不在表里 = 不可卖**，服务端结算只认这一份", s.sellPrices)}
 ${jsonTable("QUESTS", "任务 id → { kind main|daily, label, description, prevQuestId 主线链前置, minLevel, npcId 发布 NPC, objective 单目标 kill|talk|collect, rewards { gold, exp, items } }（#396；服务端 quests 表的 seed 来源）", s.quests)}
 ${jsonTable("ACHIEVEMENTS", "成就 id → { category battle|growth|explore, label, description, condition { type kill|quest|level|combat|collect, target, count }, rewards { gold, exp, items }, order, hidden }（#401；服务端 achievements 表的 seed 来源。kill/quest 是累计型走事件 +1，level/combat/collect 是状态型每次查询现算）", s.achievements)}
@@ -1154,6 +1138,12 @@ export const EQUIPMENT_PREFIX_LABELS: string[] = ${literal(s.equipmentPrefixLabe
 
 /** 装备后缀名（下标 = 后缀序号，如 0 → 人级） */
 export const EQUIPMENT_SUFFIX_LABELS: string[] = ${literal(s.equipmentSuffixLabels, "  ")};
+
+/** 装备前缀属性倍率（下标 = 前缀序号，与 EQUIPMENT_PREFIX_LABELS 对齐；变体属性 = 基础件属性 × 前缀倍率 × 后缀倍率） */
+export const EQUIPMENT_PREFIX_RATES: number[] = ${literal(s.equipmentPrefixRates, "  ")};
+
+/** 装备后缀属性倍率（下标 = 后缀序号，与 EQUIPMENT_SUFFIX_LABELS 对齐） */
+export const EQUIPMENT_SUFFIX_RATES: number[] = ${literal(s.equipmentSuffixRates, "  ")};
 
 //#endregion
 `;

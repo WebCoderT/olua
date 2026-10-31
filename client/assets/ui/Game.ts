@@ -188,6 +188,9 @@ export class Game extends Component {
       const exp = StorageManager.applyPartyExpGain(gain);
       if (exp > 0) GameUiHelper.createTipText(partyDialogLayout.texts.expGainTip.split("{exp}").join(`${exp}`));
     };
+    // 角色权威快照（#541）：战斗力 / 属性 / 货币 / 等级血蓝以服务端为准 —— 客户端不再自己算，
+    // 收到就照搬刷新（换装、任务发奖、后台改动、升级……全都在这一条上汇合）
+    CombatChannel.onRoleUpdate = (update) => StorageManager.applyServerRoleUpdate(update);
     // 服务端拒绝（#495：聊天限频 / 组队失败 / 参数不合法…）：把服务端给的原因飘出来。
     // 不接这条的话动作被拒等于没反应（玩家只会反复点），所以文案直接用服务端的 message。
     // 用**错误色**（#498）：拒绝不是普通提示，绿色小字和「已邀请」「经验 +N」混在一起分不出来。

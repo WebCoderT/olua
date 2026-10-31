@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ACQUIRE_CHANNEL, fashionsApi, formatTime, PERMISSION } from "../api";
 import type { ConfigAttributes, Fashion, FashionQuery, PageResult } from "../api";
-import { RANGE_FIELDS } from "../components/GameConfigDialog";
+import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -68,10 +69,7 @@ function FashionEditDialog({
   }, [open, initial]);
 
   /** 区间交叉（min > max）的键集合；空 = 合法 */
-  const crossedKeys = useMemo(() => {
-    if (!attributes) return [];
-    return RANGE_FIELDS.filter(({ key }) => attributes[key].min > attributes[key].max).map(({ key }) => key);
-  }, [attributes]);
+  const crossedKeys = useMemo(() => (attributes ? crossedRangeKeys(attributes) : []), [attributes]);
 
   if (!open || !attributes || !initial) return null;
 
@@ -79,11 +77,6 @@ function FashionEditDialog({
   const descriptionValid = description.length <= 500;
   const priceValid = Number.isInteger(Number(sellPrice)) && Number(sellPrice) >= 0 && Number(sellPrice) <= 100_000_000;
   const canSubmit = labelValid && descriptionValid && priceValid && crossedKeys.length === 0 && !submitting;
-
-  const setRange = (key: (typeof RANGE_FIELDS)[number]["key"], side: "min" | "max", value: string) => {
-    const parsed = Math.max(0, Math.floor(Number(value) || 0));
-    setAttributes({ ...attributes, [key]: { ...attributes[key], [side]: parsed } });
-  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -129,63 +122,8 @@ function FashionEditDialog({
             </Select>
           </Field>
 
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">八项属性（整份替换）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">生命上限</span>
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-20"
-                  aria-label="生命上限"
-                  value={attributes.maxHp}
-                  onChange={(event) => setAttributes({ ...attributes, maxHp: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">每 5 秒回血</span>
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-20"
-                  aria-label="每 5 秒回血"
-                  value={attributes.hpRecover}
-                  onChange={(event) => setAttributes({ ...attributes, hpRecover: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
-                />
-              </div>
-              {RANGE_FIELDS.map(({ key, label: fieldLabel }) => (
-                <div key={key} className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-slate-400">{fieldLabel}</span>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-20"
-                      aria-label={`${fieldLabel}下限`}
-                      value={attributes[key].min}
-                      onChange={(event) => setRange(key, "min", event.target.value)}
-                    />
-                    <span className="text-xs text-slate-600">~</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-20"
-                      aria-label={`${fieldLabel}上限`}
-                      value={attributes[key].max}
-                      onChange={(event) => setRange(key, "max", event.target.value)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <AttributesGrid attributes={attributes} onChange={setAttributes} header="八项属性（整份替换）" crossed={crossedKeys} />
 
-          {crossedKeys.length > 0 ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              以下属性的下限不能大于上限：{crossedKeys.join("、")}。
-            </p>
-          ) : null}
           {!labelValid || !descriptionValid || !priceValid ? (
             <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
               名称需为 1~50 字、描述 ≤500 字、售卖价需为 0~1 亿的整数。
@@ -322,6 +260,7 @@ export function FashionsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>获得渠道</th>
@@ -334,6 +273,9 @@ export function FashionsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={item.icon} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>

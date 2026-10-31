@@ -45,20 +45,20 @@ const TICKET_TTL_MS = 3000;
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
  *
- * 为什么要有这个数：`README.md` 与 `docs/resume.md` 里都写着「服务端 N 条 e2e」，
+ * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
  * 而那个 N 是各套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
  * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 59;
+const EXPECTED_ASSERTIONS = 69;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
   if (passedCount === EXPECTED_ASSERTIONS) return;
   console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
   process.exit(1);
 }
 
@@ -234,7 +234,7 @@ async function registerPlayer(baseUrl, username) {
   return response.body?.data?.token;
 }
 
-/** 造一份最小可建号的角色文档（e2e-roles 同款口径；服务端只校验结构，属性交给服务端重算） */
+/** 造一份最小可建号的角色文档（e2e-roles 同款口径；服务端只校验结构 + 索引字段，属性 / 战斗力交给服务端重算） */
 function roleSnapshot(id) {
   return {
     id,
@@ -368,6 +368,39 @@ async function main() {
     await waitForHandshake("过期票据的握手", stale);
     checkEqual(stale.rejected?.status, 401, "过期票据被拒（401）");
     checkEqual(stale.rejected?.body?.code, 40102, "过期给的是 40102（TOKEN_EXPIRED），与「无效」区分开");
+    //#endregion
+
+    //#region 三·五、角色权威快照（roleUpdate，#541）
+    group("三·五、roleUpdate：建号即推权威快照，改库后下一拍跟上");
+    {
+      // 建一个角色（首个角色自动在线）→ 下一轮轮询就该把权威快照推过来
+      const created = await api(baseUrl, "POST", "/api/roles", { token: tokenA, body: { data: roleSnapshot("realtime_r1") } });
+      checkEqual(created.status, 201, "准备：给账号 A 建一个角色（自动在线）");
+      const firstUpdate = await waitFor("首帧 roleUpdate", async () => messageOf(live, "roleUpdate"), 5_000);
+      check(Boolean(firstUpdate), "建号后 roleUpdate 帧自动到达（权威基线不用客户端来拉）");
+      checkEqual(firstUpdate?.data?.level, 10, "快照带上等级");
+      checkEqual(firstUpdate?.data?.gold, 1000, "快照带上货币");
+      check(Array.isArray(firstUpdate?.data?.physicalAttack) && firstUpdate.data.physicalAttack.length === 2, "快照带八项属性（区间属性是 [下限, 上限]）");
+      check(typeof firstUpdate?.data?.combat === "number" && firstUpdate.data.combat > 0, "快照的战斗力是服务端重算的");
+      checkEqual(firstUpdate?.data?.revision, created.body?.data?.revision, "快照带上修订号（客户端拿它做存档基线）");
+
+      // 改库（save 一份更大的 gold）→ 下一拍再推一次，gold 跟着变
+      const saved = await api(baseUrl, "PUT", "/api/roles/realtime_r1", {
+        token: tokenA,
+        body: { data: { ...roleSnapshot("realtime_r1"), gold: 5555 } },
+      });
+      checkEqual(saved.status, 200, "准备：save 改一份 gold");
+      const secondUpdate = await waitFor(
+        "第二帧 roleUpdate",
+        async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.gold === 5555) ?? null,
+        5_000,
+      );
+      check(Boolean(secondUpdate), "改库后下一拍 roleUpdate 跟上（跨进程写库也逃不过轮询）");
+      check(
+        typeof secondUpdate?.data?.combat === "number" && secondUpdate?.data?.revision === saved.body?.data?.revision,
+        "第二帧仍是服务端重算的权威值与最新修订号",
+      );
+    }
     //#endregion
 
     //#region 四、消息与心跳

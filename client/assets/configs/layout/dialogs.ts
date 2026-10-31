@@ -39,26 +39,46 @@ export const dialogFrame = {
 
 //#region 战魂弹窗（左中右三栏）
 
+/**
+ * 三栏养成弹窗（战魂 / 称号 / 军衔）的公共几何 —— 一处改、三窗同变
+ *
+ * 三个弹窗的结构与坐标完全同源（左列表 + 中展示 + 右属性列），差异只在文案、
+ * 列表名与中间栏的内容（动画 / 徽记）。数值直接改这里。
+ */
+const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
+  name,
+  position: new Vec2(-320, -5),
+  size: new Size(210, 490),
+  cardSize: new Size(192, 44),
+  cardFontSize: 13,
+  stateFontSize: 11,
+  /** 卡片文字颜色：选中 / 未激活 / 已激活 */
+  selectedColor: new Color(255, 214, 102),
+  lockedColor: new Color(140, 140, 140),
+  activeColor: new Color(120, 220, 120),
+  ...extra,
+});
+const growthAnimation = { position: new Vec2(0, 30), size: new Size(300, 300) };
+const growthAttribute = {
+  position: new Vec2(250, 240),
+  width: 210,
+  spacing: 6,
+  fontSize: 12,
+  titleColor: new Color(255, 214, 102),
+  rowNameColor: new Color(170, 170, 170),
+  rowDiffColor: new Color(120, 220, 120),
+};
+const growthBindGold = { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 };
+
 /** 战魂弹窗布局 */
 export const warSoulDialogLayout = {
   name: "war_soul_dialog",
   title: "战魂",
   size: new Size(880, 560),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分） */
-  list: {
-    name: "soul_list",
-    position: new Vec2(-320, -5),
-    size: new Size(210, 490),
-    cardSize: new Size(192, 44),
-    cardFontSize: 13,
-    stateFontSize: 11,
-    /** 卡片文字颜色：选中 / 未激活 / 已激活 */
-    selectedColor: new Color(255, 214, 102),
-    lockedColor: new Color(140, 140, 140),
-    activeColor: new Color(120, 220, 120),
-  },
+  list: growthCardList("soul_list"),
   /** 中：战魂动画（帧率取各等级配置 configs/soul 的 animationFrameRate） */
-  animation: { position: new Vec2(0, 30), size: new Size(300, 300) },
+  animation: growthAnimation,
   /** 中：名称 / 描述 / 当前战魂 / 外显勾选框（槽位坐标，子件坐标以槽位中心为原点） */
   info: {
     position: new Vec2(0, -145),
@@ -69,17 +89,9 @@ export const warSoulDialogLayout = {
     toggle: { position: new Vec2(0, -48), size: new Size(90, 22), fontSize: 13, text: "外显", boxSize: 16, textGap: 18 },
   },
   /** 右：属性列表（含下一级增量） */
-  attribute: {
-    position: new Vec2(250, 240),
-    width: 210,
-    spacing: 6,
-    fontSize: 12,
-    titleColor: new Color(255, 214, 102),
-    rowNameColor: new Color(170, 170, 170),
-    rowDiffColor: new Color(120, 220, 120),
-  },
+  attribute: growthAttribute,
   /** 右：绑定元宝余额 */
-  bindGold: { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 },
+  bindGold: growthBindGold,
   /** 右：升级按钮（满级时文案与置灰） */
   upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级" },
 };
@@ -97,20 +109,9 @@ export const titleUpgradeDialogLayout = {
   title: "称号",
   size: new Size(880, 560),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分；34 个称号与战魂 37 个同容器尺寸） */
-  list: {
-    name: "title_list",
-    position: new Vec2(-320, -5),
-    size: new Size(210, 490),
-    cardSize: new Size(192, 44),
-    cardFontSize: 13,
-    stateFontSize: 11,
-    /** 卡片文字颜色：选中 / 未激活 / 已激活 */
-    selectedColor: new Color(255, 214, 102),
-    lockedColor: new Color(140, 140, 140),
-    activeColor: new Color(120, 220, 120),
-  },
+  list: growthCardList("title_list"),
   /** 中：称号动画（名牌帧原始宽 156~245，弹窗内按 RAW 原尺寸展示） */
-  animation: { position: new Vec2(0, 30), size: new Size(300, 300) },
+  animation: growthAnimation,
   /** 中：名称 / 描述 / 当前称号（槽位坐标，子件坐标以槽位中心为原点；比战魂少一行——没有外显勾选框） */
   info: {
     position: new Vec2(0, -145),
@@ -119,17 +120,9 @@ export const titleUpgradeDialogLayout = {
     current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
   },
   /** 右：属性列表（含下一级增量） */
-  attribute: {
-    position: new Vec2(250, 240),
-    width: 210,
-    spacing: 6,
-    fontSize: 12,
-    titleColor: new Color(255, 214, 102),
-    rowNameColor: new Color(170, 170, 170),
-    rowDiffColor: new Color(120, 220, 120),
-  },
+  attribute: growthAttribute,
   /** 右：绑定元宝余额 */
-  bindGold: { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 },
+  bindGold: growthBindGold,
   /** 右：升级按钮（满级时文案与置灰） */
   upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级" },
 };
@@ -148,20 +141,7 @@ export const rankUpgradeDialogLayout = {
   title: "军衔",
   size: new Size(880, 560),
   /** 左：阶数卡片竖向滚动列表（100 阶从上到下，状态用颜色区分） */
-  list: {
-    name: "rank_list",
-    position: new Vec2(-320, -5),
-    size: new Size(210, 490),
-    cardSize: new Size(192, 44),
-    cardFontSize: 13,
-    stateFontSize: 11,
-    /** 选中项的描边粗细 */
-    borderWidth: 2,
-    /** 卡片文字颜色：选中 / 未授衔 / 已授衔 */
-    selectedColor: new Color(255, 214, 102),
-    lockedColor: new Color(140, 140, 140),
-    activeColor: new Color(120, 220, 120),
-  },
+  list: growthCardList("rank_list", { borderWidth: 2 }),
   /** 中：军衔徽记（文字牌：段名 + 红色军衔名 + 阶数进度） */
   badge: {
     position: new Vec2(0, 30),
@@ -184,17 +164,9 @@ export const rankUpgradeDialogLayout = {
     current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
   },
   /** 右：属性列表（含下一阶增量） */
-  attribute: {
-    position: new Vec2(250, 240),
-    width: 210,
-    spacing: 6,
-    fontSize: 12,
-    titleColor: new Color(255, 214, 102),
-    rowNameColor: new Color(170, 170, 170),
-    rowDiffColor: new Color(120, 220, 120),
-  },
+  attribute: growthAttribute,
   /** 右：绑定元宝余额 */
-  bindGold: { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 },
+  bindGold: growthBindGold,
   /** 右：晋升按钮（满衔时文案与置灰） */
   upgradeButton: { position: new Vec2(250, -205), text: "晋 升", maxedText: "已满衔" },
 };
@@ -1028,8 +1000,8 @@ export const reportDialogLayout = {
 export const chatDialogLayout = {
   name: "chat_box",
   size: new Size(440, 280),
-  /** 常驻停靠：贴屏幕左下角（边距为窗体边缘到屏幕左/下边缘的距离，见 getAnchoredPosition） */
-  dock: { edge: "bottom-left", marginX: 24, marginY: 205 } as const,
+  /** 常驻停靠：屏幕左下角（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「贴左下 + 边距 24/205」算出） */
+  position: new Vec2(-730, -395),
   /** 窗体底板（半透明深色 + 金色细边；颜色必须在配置里，组件不写字面量） */
   box: {
     fill: new Color(16, 20, 32, 215),

@@ -157,8 +157,6 @@ export const uiTexts = {
   feature_coming_soon: "{feature}功能正在开发中",
 
   //#region 浮动提示：选角与角色管理
-  /** 进入管理模式（选角界面「管理」按钮） */
-  role_delete_mode_tip: "点击角色上方的删除按钮可删除角色",
   /** 删除角色的两步确认（第一次点击，{name} = 角色名） */
   role_delete_confirm_tip: "再点一次确认删除角色「{name}」，删除后无法恢复",
   /** 删除成功（{name}） */
@@ -222,6 +220,10 @@ export const uiTexts = {
   label_role_create: "创建",
   /** 管理模式提示条 */
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
+  /** 选角界面角色名牌（脚下；{name} = 角色名，{level} = 等级） */
+  label_role_name_plate: "{name} Lv.{level}",
+  /** 创建角色弹窗右上角关闭按钮（通用红底图 + 这行字，见 configs/hudLayout.roleSelectorLayout.createDialog.closeButton） */
+  label_close: "×",
 
   //#region 界面标签：属性与装备
   /** 属性分组标题（特殊属性暂未接入，等有行可填时再加回来，见 GameUiHelper.applyRoleAttributeListStyle 的注释） */
@@ -329,20 +331,17 @@ export const uiTexts = {
   login_zone_label: "区服：{zone}",
   /** 登录页区服选择（多个区时可点击切换，{zone} = 当前选中的区服名） */
   login_zone_picker: "区服：{zone}（点击切换）",
+  /** 登录页区服位置：正在连接服务器（活区列表还没拉到） */
+  login_zone_connecting: "连接中…",
+  /** 登录页区服位置：连不上服务器（活区列表拉取失败，注册将落默认区） */
+  login_zone_unreachable: "暂时无法连接服务器",
   /** 登录成功（{name} = 账号名） */
   login_success_tip: "登录成功，欢迎 {name}",
   /** 注册成功（{name} = 账号名） */
   register_success_tip: "注册成功，欢迎 {name}",
   /** 角色创建成功（服务端已保存后才提示） */
   role_create_success_tip: "角色创建成功",
-  /**
-   * 选角界面的**站位满了**（{max} = 界面能画几个 = configs/layout/scenes 的
-   * roleSelectorLayout.rolePositions 的长度）
-   *
-   * 这是**界面容量**，不是业务上限 —— 业务上限在服务端（server/.env 的 ROLE_MAX_PER_ACCOUNT，
-   * 只能调低、不得超过站位数量），它拒下来的请求走全局错误提示，用的是服务端自己的数字。
-   */
-  role_create_limit_tip: "最多只能创建 {max} 个角色",
+
   /**
    * 角色数据已被后台修改，已自动同步为最新
    *

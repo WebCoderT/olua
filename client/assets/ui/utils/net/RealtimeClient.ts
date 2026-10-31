@@ -317,6 +317,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchExpGain(frame.data);
       return;
     }
+    if (frame.type === "roleUpdate") {
+      // 角色权威快照（#541）：属性 / 战斗力 / 货币 / 等级血蓝以服务端为准，形状的解释在 CombatChannel
+      CombatChannel.dispatchRoleUpdate(frame.data);
+      return;
+    }
     if (frame.type === "error") {
       // 服务端的拒绝（聊天限频 / 组队失败 / 参数不合法…）：**必须让玩家看见**，
       // 否则点完按钮什么都不发生，只能反复点（#495）。形状的解释在 CombatChannel。

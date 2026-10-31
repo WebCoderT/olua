@@ -71,7 +71,8 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - `api/types.ts` 的 `PERMISSION`（与服务端 `common/constants/permission.ts` **一一对应**，现 25 个权限点；`gameConfig:read/write` 养成配置、`account:password` 重置玩家口令、`account:email` 补录 / 查看玩家邮箱、`announcement:*` 公告、`mail:*` 邮件、`audit:read` 查操作日志与 `system:read` 看系统信息是逐个后加的）；
 - `store/session.hasPermission`（**脏会话兜底空数组 = 最小权限**）；
 - 导航项带 `permission` 过滤；写操作用 `disabled`；`App.tsx` 用 `RequirePermission` 外壳包住页面；
-- **不需要权限点的页面**（如「我的账号」）直接挂路由，不进 `NAV_ITEMS`（它是每个人的私有页，放顶部身份栏更顺手）；
+- **导航是二级结构**（`Layout.tsx`）：顶层独立项 `NAV_TOP` + 四个可折叠分组 `NAV_GROUPS`（运营管理 / 战斗与装备 / 养成与玩法 / 系统管理）；分组下子项全部无权限时整组隐藏；折叠偏好记在 localStorage（key `olua-admin-nav-expanded`，分组改名 = 偏好重置）；路由仍是扁平路径，分组只是视觉层次；
+- **不需要权限点的页面**（如「我的账号」）直接挂路由，不进 `NAV_TOP` / `NAV_GROUPS`（它是每个人的私有页，放顶部身份栏更顺手）；
 - 新增需要权限的界面：先在服务端加权限点 → 同步 `PERMISSION` → 再在导航 / 按钮 / 外壳上引用。
 
 ## 五、页面
@@ -233,6 +234,35 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
   取帧用 `firstFrameName()`（按名字排序取第一个**非空**帧 —— 空帧是 1×1 占位）。
 - **没有裸模内观素材**：未穿衣服时客户端不画身体，所以 id 形态里没有 `role:*`（服务端用
   `equipInAlignId` 正则挡掉，e2e 用 `role:1` → 400 钉住）。
+
+## 五点十、版式：整页一屏，超出只让**那个区域**滚
+
+后台骨架（`components/Layout.tsx`）不是「整页往下滚」，而是**外壳锁死一屏 + 三个区域各自滚**：
+
+| 区域 | 行为 |
+|---|---|
+| 外层 `<div>` | `h-screen overflow-hidden` —— 文档高度恒等于视口（`documentElement.scrollHeight === clientHeight`） |
+| 左侧 `<aside>` | `overflow-hidden` + 标题 `shrink-0`；里面 `<nav>` 是 `min-h-0 flex-1 overflow-y-auto`，**29 项菜单（四个可折叠分组 + 概览）全在这条侧栏里滚** |
+| 顶栏 `<header>` | `shrink-0`，永远可见（不随内容滚走） |
+| 内容 `<main>` | `min-h-0 min-w-0 flex-1 overflow-y-auto`，页面内容再长也只滚这一块 |
+
+三条容易写错的地方：
+
+1. **`min-h-0` 是必需的**：flex 子项默认 `min-height: auto`，会被内容撑到自然高度，`overflow-y-auto`
+   就永远不触发 —— 表现为「明明写了 overflow，整页还是越滚越长」。`flex-1` + `min-h-0` 才是「占满剩余高度」。
+2. **换页面要手动把 `main` 滚回顶部**：滚动容器从文档变成了 `main`，浏览器「换 URL 自动回顶」管不着它。
+   `Layout` 里按 `location.pathname` 做 `mainRef.current.scrollTo({ top: 0 })`，否则从长列表点下一页会停在半空。
+3. **当前导航项要滚进视野**：菜单一屏放不下时，直接进 `/system` 看不到自己被高亮在哪。
+   当前项所在分组会先自动展开，再由 `NavLink` 选中自带的 `aria-current="page"`
+   按它的矩形与 nav 的可视矩形做「nearest」微调（不把整列甩到顶）。
+
+新增页面只要遵守一条：**根元素用 `flex flex-col gap-4`，别写 `h-screen` / `min-h-screen`**
+（那是给登录 / 注册这类独立整页用的）。需要「页内某块自己滚」时才加 `max-h-* + overflow-auto`
+（现状：弹窗 `max-h-[90vh] overflow-y-auto`、两个对齐工作台的侧边列表 `max-h-[520/560px] overflow-auto`）。
+
+验证不看代码看实测（探针 `/tmp` 脚本口径，量三个数）：文档 `scrollHeight === clientHeight`、
+`nav.scrollHeight > nav.clientHeight`（1440×620 下必成立）、`main.scrollHeight > main.clientHeight`，
+再滚 `main` 断言 `header.top` 与首个导航项 `top` 不变。
 
 ## 六、必踩的坑
 

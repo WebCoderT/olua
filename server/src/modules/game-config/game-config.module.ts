@@ -25,6 +25,7 @@ import { GameConfigService } from "./game-config.service";
 import { DropConfigService } from "./drop-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
+import { RuntimeConfigService } from "./runtime-config.service";
 
 /**
  * 养成配置（称号 / 战魂 / 军衔 / 装备基础件 / 药品 / 物品材料 / 怪物 / NPC / 商城定价 / 时装 /
@@ -36,7 +37,7 @@ import { MallPricingService } from "./mall-pricing.service";
  */
 @Module({
   controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
-  providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService],
+  providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   exports: [MallPricingService],
 })

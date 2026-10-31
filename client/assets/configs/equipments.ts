@@ -187,7 +187,7 @@ export function getRecyclePrice(equipment: Equipment | null | undefined): number
 /**
  * 装备的战斗力贡献（**纯函数**，角色信息弹窗「更好装备」提示的判定口径，见 configs/items.findBagEquipmentUpgrade）
  *
- * 与 GameHelper.combatCalc 用同一张权重表（configs/battle.combatCalc）：
+ * 权重表 configs/battle.combatCalc（与服务端生成物 COMBAT_WEIGHTS 同源）：
  * 区间型属性取上下限之和、maxHp 取单值、hpRecover 不计（回血不算战斗力，口径两边必须一致，
  * 否则「提示说更好」与「穿上后战斗力变高」会对不上）。权重表改这里跟着变，没有第二份倍率。
  */
@@ -612,13 +612,13 @@ export const clothes = buildEquipmentMap(clothesData);
 
 // 武器（按名称强弱排等级：weapon_1 是新手的定海神针 = 1 级，weapon_20 焚世巨剑 = 60 级）
 //
-// **几何字段（inPosition / outPositions / inScale*）一律留 0，位置由运行时按素材算**（2026-10-29）：
-// 素材的画布与裁剪留白每件都不同（武器画布 245×234 ~ 570×608，身体 142×112 ~ 480×480），
-// 写死偏移只能对上一件身体 —— 换衣服就飘。现在：
-//   - 外观（场景）：RoleAppearance.applyWeaponTransform 读「当前身体帧 + 武器帧」的内容 bbox，
-//     把手部锚点（身体侧边 0.52、纵向 52%）当握持点；
-//   - 内观（角色弹窗）：RoleInShowView.alignWeapon 把武器贴到身体内观的左手位，并缩放到身体高度的 1.15 倍。
-// 下面的 outPositions 只当**逐件微调**用（默认 0，确实要挪 1~2 px 才填），不要再写手调绝对值。
+// **几何字段（inPosition / outPositions / inScale*）出厂一律留 0，真值不在源码里**（#541，2026-10-31）：
+//   - 外观（场景）：RoleAppearance.applyOutTransform 原样摆服务端 `game-config/equip-align`
+//     下发的 8 向绝对位置（管理端「装备对齐」工作台写库；定稿后可用 tools/apply-equip-align.cjs
+//     烧回这份出厂配置做离线兜底）——帧算法已删除，客户端不算位置；
+//   - 内观（角色弹窗）：RoleInShowView.alignWeapon 把武器贴到身体内观的左手位并缩放到 1.15 倍，
+//     手调过的武器（inManual）走 inPosition 绝对值。
+// 出厂全 0 = 「未对齐」：外观会落在角色原点，要么去工作台调、要么等下发，别在客户端兜底。
 const weaponsData: EquipmentData[] = [
   {
     key: "weapon_1",

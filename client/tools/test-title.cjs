@@ -7,7 +7,7 @@
  * · 属性曲线：每级属性 = 等效等级的角色裸属性 × rate × 系列 factor（与 configs/soul 同一套做法），
  *   三个家族（江湖 1 / 军阶 1.15 / 搞怪 1.3）换系时按 factor 跳档
  * · 价格曲线：升到 N 阶 = priceBase × N²，单调递增
- * · 存档迁移（旧档 title 补 0）与升级链路接线、属性计入 combatCalc、头顶常显、预加载
+ * · 存档迁移（旧档 title 补 0）与升级链路接线、属性加成在服务端权威重算（#541）、头顶常显、预加载
  * · 入口：称号不走 NPC，唯一入口 = 角色信息弹窗的「称号」按钮；头部信息栏的写死文字称号占位已移除
  *
  * 数据层跑在沙箱里（真实的 configs/title + growth，见 lib/configs-sandbox.cjs），素材与源码断言直接读文件。
@@ -74,42 +74,37 @@ check(titleLevels.every((config) => config.bindGold === Math.round(titleGrowth.p
 check(titleLevels.every((config, index) => index === 0 || config.bindGold > titleLevels[index - 1].bindGold), "价格逐级递增");
 check(titleGrowth.rate < 0.5 && titleGrowth.priceBase < 300, "称号整体弱于/便宜于战魂（rate < 0.5、priceBase < 300）");
 
-console.log("\n— D. 素材守卫（帧序号 / 尺寸一致 / 画布一致）—");
+console.log("\n— D. 素材守卫（#542 起整目录打成同名 plist 图集：帧序 / 画布一致 / 帧数下限）—");
+/** 解析打包图集 plist 的帧名清单与画布尺寸（打包器见 client/tools/pack-loose-frames.py） */
+function parsePackedPlist(file) {
+  const xml = fs.readFileSync(file, "utf8");
+  const framesSection = xml.slice(xml.indexOf("<key>frames</key>") + "<key>frames</key>".length, xml.indexOf("<key>metadata</key>"));
+  const frameNames = Array.from(framesSection.matchAll(/<key>([^<]+)<\/key>\s*<dict>/g)).map((m) => m[1]);
+  const size = /<key>size<\/key>\s*<string>(\{[^}]+\})<\/string>/.exec(xml.slice(xml.indexOf("<key>metadata</key>")));
+  return { frameNames, textureSize: size ? size[1] : null };
+}
 let fewest = null;
 let checkedFrames = 0;
 for (const dir of diskDirs) {
   const dirPath = path.join(TITLE_DIR, dir);
-  const pngs = fs.readdirSync(dirPath).filter((name) => name.endsWith(".png")).sort();
-  if (!pngs.length) {
-    check(false, `${dir} 目录里有帧`);
+  const plistPath = path.join(dirPath, `${dir}.plist`);
+  const pngPath = path.join(dirPath, `${dir}.png`);
+  if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) {
+    check(false, `${dir} 打包图集 plist + png 成对存在`, "缺文件（散帧目录必须打成同名 plist 图集，工具 client/tools/pack-loose-frames.py）");
     continue;
   }
-  const orders = pngs.map((name) => Number((name.match(/(\d+)\.png$/) || [])[1]));
+  const plist = parsePackedPlist(plistPath);
+  // 帧名 = 原散帧文件名（sfx_<id>_0_<帧>.png），末尾帧号升序 = 打包顺序；AnimationHelper 按序号排序的口径不变
+  const orders = plist.frameNames.map((name) => Number((name.match(/(\d+)\.png$/) || [])[1]));
   const sortedEverywhere = orders.every((order, index) => index === 0 || order > orders[index - 1]);
-  if (!sortedEverywhere) {
-    check(false, `${dir} 帧名末尾序号按升序排列（AnimationHelper 按序号排序的前提）`, orders.join(","));
-  }
-  const baseSize = pngSize(path.join(dirPath, pngs[0]));
-  const mismatch = pngs.filter((name) => {
-    const size = pngSize(path.join(dirPath, name));
-    return size.width !== baseSize.width || size.height !== baseSize.height;
-  });
-  if (mismatch.length) {
-    check(false, `${dir} 目录内每帧尺寸一致`, `${mismatch.length}/${pngs.length} 帧不是 ${baseSize.width}×${baseSize.height}`);
-  }
-  const canvasMismatch = pngs.filter((name) => {
-    const meta = JSON.parse(fs.readFileSync(path.join(dirPath, `${name}.meta`), "utf8"));
-    const userData = Object.values(meta.subMetas).find((subMeta) => subMeta.importer === "sprite-frame")?.userData ?? {};
-    return Number(userData.rawWidth) !== baseSize.width || Number(userData.rawHeight) !== baseSize.height;
-  });
-  if (canvasMismatch.length) {
-    check(false, `${dir} 每帧 meta 原始画布与 PNG 尺寸一致（RAW 显示的前提）`, `${canvasMismatch.length}/${pngs.length} 帧画布不符`);
-  }
-  checkedFrames += pngs.length;
-  if (!fewest || pngs.length < fewest.frames) fewest = { key: dir, frames: pngs.length };
+  check(sortedEverywhere, `${dir} 图集帧名末尾序号按升序排列（AnimationHelper 按序号排序的前提）`, orders.join(","));
+  const size = pngSize(pngPath);
+  check(plist.textureSize === `{${size.width},${size.height}}`, `${dir} plist 画布尺寸 == PNG 尺寸`, plist.textureSize);
+  checkedFrames += plist.frameNames.length;
+  if (!fewest || plist.frameNames.length < fewest.frames) fewest = { key: dir, frames: plist.frameNames.length };
 }
 check(!!fewest && fewest.frames >= 8, `每个称号至少 8 帧（最少的 ${fewest ? fewest.key : "?"} 有 ${fewest ? fewest.frames : 0} 帧）`);
-check(true, `全部称号目录的帧序/尺寸/画布检查通过（${diskDirs.length} 个目录 × ${checkedFrames} 帧）`);
+check(true, `全部称号目录的图集帧序/画布检查通过（${diskDirs.length} 个目录 × ${checkedFrames} 帧）`);
 
 console.log("\n— E. 接线（源码断言）—");
 const roleSource = read("assets/entities/Role.ts");
@@ -136,8 +131,8 @@ check(/title_max_tip|title_bind_gold_tip|title_upgrade_tip/.test(storageSource) 
 // #248：扣费与阶位推进都搬到服务端，客户端走三条成长线共用的 upgradeGrowthOnServer
 const growthBody = storageSource.slice(storageSource.indexOf("private static async upgradeGrowthOnServer"), storageSource.indexOf("static async upgradeSoul"));
 check(/upgradeGrowthOnServer\(role, "title", next\.level, "title_upgrade_tip"\)/.test(storageSource), "升级交给共用的服务端升级流程（本地不再扣费落阶）");
-check(/role\.title = Number\(data\.title \?\? nextLevel\)/.test(growthBody) && /Object\.assign\(role, GameHelper\.combatCalc\(role\)\)/.test(growthBody), "以服务端返回的称号等级为准并重算属性与战斗力");
-check(/getTitleLevel\(role\.title\)/.test(helperSource) && /\(title\?\.attributes\.maxHp \?\? 0\)/.test(helperSource) && /if \(title\) sources\.push\(title\.attributes\[key\]\);/.test(helperSource), "combatCalc 把称号属性计入血量与六维");
+check(/role\.title = Number\(data\.title \?\? nextLevel\)/.test(growthBody) && !/combatCalc/.test(growthBody), "以服务端返回的称号等级为准（属性与战斗力由服务端权威重算，roleUpdate 帧带回 —— #541 不在客户端重算）");
+check(!/combatCalc/.test(helperSource), "GameHelper 已无本地属性计算（称号加成计入属性发生在服务端 role-attributes，客户端只消费）");
 check(/updateTitleShow\(\)/.test(displaySource) && /getTitleLevel\(role\.title\)/.test(displaySource) && /createTitleAnimation\(config, roleShowLayout\.title\.size\)/.test(displaySource), "RoleDisplay.updateTitleShow 按角色数据挂头顶名牌动画");
 check(/updateTitleShow\(\);/.test(gameSource), "进图时挂称号外显（Game 初始化调用）");
 check(/updateTitleShow: \(\) => void;/.test(managerSource) && /static updateTitleShow\(\)/.test(managerSource), "RoleUIManager 接口与实现都有 updateTitleShow");

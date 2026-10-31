@@ -9,7 +9,7 @@
  * 读者拿到的是一份自信的、过期的数字。这跟 `game-data.generated.ts` 那类快照腐化
  * 是同一类问题，解法也一样：**别靠记性，靠脚本**。
  *
- * 历史：#81 重刷过 `docs/resume.md`，但没覆盖各端 README —— 于是 `server/README.md`
+ * 历史：#81 重刷过 README，但没覆盖各端 README —— 于是 `server/README.md`
  * 与 `FAQ.md` 又落后了一两个版本，直到 #93 动接口时才被撞见。
  *
  * #113 又发现**守卫自己**漏得比想象中多：句式都是照着「当时那一行文本」写的正则，
@@ -70,7 +70,6 @@ const DOCS = [
   "README.en.md",
   "FAQ.md",
   "FAQ.en.md",
-  "docs/resume.md",
   "server/README.md",
   "server/README.en.md",
   "server/FAQ.md",
@@ -83,11 +82,6 @@ const DOCS = [
   "client/README.en.md",
   "client/FAQ.md",
   "client/FAQ.en.md",
-  // 官网（#332）：它也到处写工程数字，但不在本清单里时没人守 —— 曾经停在 51 接口 /
-  // 876 条 e2e 漂了两天才被人眼尖发现。只收 index.html（没有 en 译本，
-  // audit-docs-en 的双语 parity 不涉及它）；句式照写就行，接口 / 路径 / 模型 /
-  // 权限点 / 审计 / e2e 总数这些现有句式对官网文本天然命中。
-  "website/index.html",
   // 项目技能也随仓库提交，而且是**下一轮会话唯一的上下文** —— 里面的数字同样不能漂（#115）。
   // 技能不在 DOCS 里时，「权限点是 13 个」这种话没人管，一过期就把下一次改动引到错的地方。
   //
@@ -98,7 +92,7 @@ const DOCS = [
   ".workbuddy/skills/olua-admin/SKILL.md",
 ];
 
-/** e2e 脚本清单（顺序即 `docs/resume.md` 里括号中加数的推荐顺序） */
+/** e2e 脚本清单（顺序即 README 里括号中加数的推荐顺序） */
 const E2E_SCRIPTS = [
   ["服务端主链路", "server/test/e2e.cjs"],
   ["角色管理", "server/test/e2e-roles.cjs"],
@@ -198,7 +192,7 @@ function countTables() {
 /**
  * 权限点数：`server/src/common/constants/permission.ts` 里 `Permission` 对象有几项
  *
- * 这个文件的注释自己写着「唯一来源」，`docs/resume.md` 的口径说明也把它列为权限点的出处 ——
+ * 这个文件的注释自己写着「唯一来源」，README 的口径说明也把它列为权限点的出处 ——
  * 但脚本此前压根没查它，于是 `server/README.md` 写 17、实际 18 这件事没人发现。
  */
 function countPermissionPoints() {
@@ -400,8 +394,8 @@ const REQUIRED_PATTERNS = [
   "仓储数",
   "审计脚本数",
   "单测套数",
-  "回归守卫总数",
-  "e2e 总数",
+  // 「回归守卫总数」与「e2e 总数」两种句式只存在于 resume.md / 官网（均已退出受管清单），
+  // 现在文档里只剩加数串与各类计数句式 —— 留着下限只会误报「句式失灵」。
   "e2e 加数串",
   "分组「公共接口」",
   "分组「客户端」",
@@ -420,7 +414,7 @@ function main() {
 
     // 1. 接口 / 路径 / 模型（中英两种句式都认；间隔用 NUM_GAP，官网标记见其注释）
     //    `个\s*` 而不是 `个` —— 文档里既有「51 个接口」也有「51 个 REST 接口」，
-    //    中间那个空格曾经让这条例行长年漏检（`docs/resume.md` 因此一直写着旧数字）。
+    //    中间那个空格曾经让这条例行长年漏检（README 因此一直写着旧数字）。
     checkNumbers(doc, source, "接口总数", new RegExp(`(\\d+)${NUM_GAP}个${NUM_GAP}(?:REST\\s+)?接口`, "g"), expected.endpoints);
     checkNumbers(doc, source, "接口总数（英文）", /(\d+)\s+interfaces?\b/g, expected.endpoints);
     checkNumbers(doc, source, "路径数", new RegExp(`(\\d+)${NUM_GAP}条路径`, "g"), expected.paths);
@@ -478,10 +472,7 @@ function main() {
       checkGroupRow(doc, source, header, header, expected);
     }
 
-    // 3. e2e 总数与加数串
-    const e2eTotal = expected.e2e.reduce((sum, item) => sum + item.count, 0);
-    checkNumbers(doc, source, "e2e 总数", new RegExp(`(\\d+)${NUM_GAP}条(?:服务端\\s*)?e2e`, "g"), e2eTotal);
-    checkNumbers(doc, source, "e2e 总数（英文）", /(\d+)\s+(?:server\s+)?e2e\b/gi, e2eTotal);
+    // 3. e2e 加数串（总数句式只存在于 resume.md / 官网，均已退出受管清单）
     checkE2eBreakdown(doc, source, expected);
 
     // 4. 审计脚本数 / 单测套数
@@ -496,21 +487,6 @@ function main() {
     // 词形写法（`八个审计脚本`）—— 中文数字正则抓不到，走词形通道
     checkWordNumbers(doc, source, "审计脚本数", /([一二三四五六七八九十])个审计/g, expected.audits);
 
-    // 5. 「回归守卫」= 单测套数 + 审计脚本数（一句概括全部自动化守卫的写法）
-    checkNumbers(
-      doc,
-      source,
-      "回归守卫总数",
-      /(\d+)\s*个自动化回归守卫/g,
-      expected.unitTests + expected.audits,
-    );
-    checkNumbers(
-      doc,
-      source,
-      "回归守卫总数（英文）",
-      /(\d+)\s+automated\s+regression\s+guards?/gi,
-      expected.unitTests + expected.audits,
-    );
   }
 
   // 句式覆盖下限：某一条核心句式一处都没匹配到 = 这一类检查静默失灵（见 matchCounts 的注释）

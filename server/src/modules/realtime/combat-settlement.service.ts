@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { GROWTH_SCALARS, SKILLS } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS } from "../../shared/game-data.generated";
+import { skillOf } from "../../shared/runtime-overrides";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
@@ -8,7 +9,7 @@ import { GrowthRepository } from "../../database/repositories/growth.repository"
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { MonsterRow } from "../../database/rows";
-import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
@@ -31,7 +32,8 @@ import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from 
  *   素材来自生成物的等级 / 装备 / 战魂 / 称号 / 军衔表）；
  * - 目标（怪物）：**世界服务持有的实例**（#35 起）—— 身份由服务端发牌（`worldJoin` 的
  *   instanceId），血量 / 存活都在那里；战斗数值来自 monsters 表（#258 起后台可改，即时生效）；
- * - 技能倍率：生成物 `SKILLS`（`damageCoefficients` 下标 = 技能等级）。
+ * - 技能倍率：`skillOf`（先查运营库覆盖层，没改过用生成物 `SKILLS`；`damageCoefficients`
+ *   下标 = 技能等级）—— #544 起管理端改技能数值对结算即时生效。
  *
  * ===========================================================================
  * 目标状态的归属（#35 之后的边界）
@@ -158,8 +160,8 @@ export class CombatSettlementService {
   private settleNew(accountId: string, cast: ParsedCast): RealtimeSettleData {
     const fail = (code: string, message: string): RealtimeSettleData => ({ castId: cast.castId, ok: false, code, message });
 
-    // 技能：存在 + 已学习 + 该等级有伤害系数
-    const skill = SKILLS[cast.skillId as keyof typeof SKILLS];
+    // 技能：存在 + 已学习 + 该等级有伤害系数（先查运营库覆盖层，没改过就是出厂值）
+    const skill = skillOf(cast.skillId);
     if (!skill) return fail("unknown_skill", `技能不存在：${cast.skillId}`);
 
     // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，
@@ -183,7 +185,8 @@ export class CombatSettlementService {
     // 角色：在线角色 + 等级可汇总 + 技能已学习
     const role = this.roles.online(accountId);
     if (!role) return fail("no_role", "当前没有在线角色，无法结算");
-    const summary = summarizeRoleAttributes(role);
+    // RoleDto 顶层数据在 `data` 里，必须摊平后再汇总 —— 直接传 DTO 只会按裸等级算（装备/成长线全丢）
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data));
     if (!summary) return fail("no_role", `角色等级 ${role.level} 不在成长曲线里，算不出属性`);
     const skillLevel = readSkillLevel(role.data, cast.skillId);
     if (!skillLevel) return fail("skill_not_learned", `技能 ${cast.skillId} 尚未学习`);
@@ -254,7 +257,7 @@ export class CombatSettlementService {
   ): RealtimeKillReward {
     const exp = this.killExpFor(roleLevel, stats.level);
     // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
-    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp) : null;
+    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp, { refillOnLevelUp: true }) : null;
     if (exp > 0 && !applied) {
       this.logger.warn(`击杀奖励入账失败：账号 ${accountId} 角色 ${roleId}（可能已被下线），本次经验 ${exp} 未记`);
       return { exp: 0, level: roleLevel, expNow: 0, expNeed: 0, leveledUp: false, revision: roleRevision, drops: [] };

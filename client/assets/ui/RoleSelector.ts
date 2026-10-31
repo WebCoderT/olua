@@ -1,21 +1,27 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Node, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, Graphics, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import { OECCUPATION, SEX } from "../types/role";
 import { getAnchoredPosition } from "./utils/layout/ScreenLayout";
-import { roleSelectorLayout, uiImages } from "../configs/hudLayout";
+import { roleSelectorLayout, tipsLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { Role } from "../entities/Role";
 import { RoleApi } from "./utils/net/Api";
 import type { RoleSummary } from "./utils/net/Api";
-import { describeError } from "./utils/net/ApiError";
-import { installNetwork } from "./utils/net/NetworkSetup";
+import ApiError, { describeError, ApiErrorKind } from "./utils/net/ApiError";
+import { installNetwork, returnToLogin } from "./utils/net/NetworkSetup";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
 const DELETE_ROLE_BUTTON_PREFIX = "delete_role_";
+
+/** 角色名牌的节点名前缀（节点名带角色 id 便于排查） */
+const NAME_PLATE_PREFIX = "role_name_plate_";
+
+/** 角色单元格的节点名前缀（滚动网格里每个角色的容器：预览 + 名牌 + 管理模式的删除按钮） */
+const ROLE_CELL_PREFIX = "role_cell_";
 
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
@@ -27,7 +33,7 @@ interface RoleSelectorMainView {
 
 /** 创建角色弹窗视图引用（本组件拼装并持有） */
 interface RoleSelectorCreateView {
-  backButton: Node;
+  closeButton: Node;
   dialog: Node;
   nameInput: Node;
   sexToggleGroup: Node;
@@ -55,6 +61,8 @@ export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
+  /** 选中角色框（白细线，Graphics 运行时画）：挂当前选中角色的单元格下，随滚动区走 */
+  private selectionFrame: Node | null = null;
   /** 舞台容器（除背景与底部栏外的所有元素都挂这里，不缩放；见 dockBottomBar） */
   private stage: Node | null = null;
   /**
@@ -62,6 +70,8 @@ export class RoleSelector extends Component {
    * （素材带牌匾装饰是整图，尺寸在配置里按 1080p 画布定死，跟舞台走会两侧露背景）
    */
   private bottomBar: Node | null = null;
+  /** 角色滚动网格的内容容器（单元格都挂它下面，Layout GRID 自动排布与撑高） */
+  private roleScrollContent: Node | null = null;
   /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
   private manageMode = false;
   /** 管理模式的临时节点（提示条 + 各角色的删除按钮）：退出管理模式或刷新列表时统一销毁 */
@@ -159,6 +169,8 @@ export class RoleSelector extends Component {
       console.warn(`[RoleSelector] 角色列表加载失败：${describeError(error)}`);
       this.roleSummaries = [];
       this.showOwnerRolesUI();
+      // 连不上服务器：飘字走完后清登录信息回登录页（选角没有服务端什么都做不了）
+      this.backToLoginWhenUnreachable(error);
       return;
     }
     this.roleSummaries = summaries;
@@ -167,6 +179,22 @@ export class RoleSelector extends Component {
       if (ids.indexOf(role.id) === -1) StorageManager.deleteRole(role.id);
     });
     this.showOwnerRolesUI();
+  }
+
+  /**
+   * 连不上服务器（网络层失败 / 超时）：**等错误飘字走完**再清登录信息回登录页。
+   *
+   * 全局失败观察者已经飘了错误提示（见 NetworkSetup），而飘字挂在本场景的 Canvas 上 ——
+   * 立刻换场景会把它一起销毁，玩家只见页面闪一下、提示一个字没看到（与登录页 401 重载同坑）。
+   * 所以等「上浮 + 淡出」走完（时长见 tipsLayout）再 returnToLogin。
+   *
+   * 只认连接层失败：业务失败说明服务端还活着（比如角色重名），提示或重试就够了，
+   * 不该把人踢回登录；会话类失败（令牌过期 / 被封禁）由网络层按业务码先走一步，到不了这里。
+   */
+  private backToLoginWhenUnreachable(error: unknown) {
+    const unreachable = error instanceof ApiError && (error.kind === ApiErrorKind.Network || error.kind === ApiErrorKind.Timeout);
+    if (!unreachable) return;
+    this.scheduleOnce(() => returnToLogin(), tipsLayout.errorMoveDuration + tipsLayout.errorFadeDuration);
   }
 
   /**
@@ -205,6 +233,34 @@ export class RoleSelector extends Component {
     beginGameButton.getComponent(Sprite).grayscale = true;
     beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
     bottomBar.addChild(beginGameButton);
+    // 常驻返回按钮（左下）：点击清本地会话回登录场景（换账号 / 误进选角都能用），
+    // 与「需要重新登录」兜底共用 NetworkSetup.returnToLogin —— 退出只有一条路，行为不会漂移。
+    // 创建角色弹窗的关闭在弹窗右上角（closeButton），不走这颗按钮
+    const backLayout = layout.backButton;
+    const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
+    backButton.on(Node.EventType.TOUCH_END, () => returnToLogin());
+    this.stage!.addChild(backButton);
+    // 角色滚动网格：一排 7 个、排满换行、超出视口上下滚。排布全交给引擎 Layout
+    // （GRID + 横向起始轴 + CONTAINER：换行点 = 内容宽，CONTAINER 只撑高不改宽），
+    // 数字与换行推导见 configs 里 roleScroll 的注释 —— 这里只把配置接上
+    const scrollLayout = layout.roleScroll;
+    const scrollView = GameUiHelper.createScrollView(scrollLayout.name, scrollLayout.position, scrollLayout.viewSize);
+    scrollView.getComponent(ScrollView)!.horizontal = false;
+    const content = scrollView.getChildByName(`${scrollLayout.name}_content`)!;
+    const grid = content.getComponent(Layout)!;
+    grid.type = Layout.Type.GRID;
+    grid.resizeMode = Layout.ResizeMode.CONTAINER;
+    grid.startAxis = Layout.AxisDirection.HORIZONTAL;
+    grid.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
+    grid.horizontalDirection = Layout.HorizontalDirection.LEFT_TO_RIGHT;
+    grid.spacingX = scrollLayout.spacingX;
+    grid.spacingY = scrollLayout.spacingY;
+    grid.paddingLeft = scrollLayout.paddingX;
+    grid.paddingRight = scrollLayout.paddingX;
+    grid.paddingTop = scrollLayout.paddingY;
+    grid.paddingBottom = scrollLayout.paddingY;
+    this.stage!.addChild(scrollView);
+    this.roleScrollContent = content;
     // 创建角色按钮
     const createLayout = layout.createRoleButton;
     const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
@@ -215,12 +271,13 @@ export class RoleSelector extends Component {
     const manageRoleButton = GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size);
     manageRoleButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole());
     this.stage!.addChild(manageRoleButton);
-    // 选中角色信息框（名称 + 等级）
+    // 选中角色信息框（名称 + 等级）：挂在**底部栏**下（它本来就是底部栏的一部分），
+    // position 相对底部栏中心（见 configs 里 selectedInfo 的注释）
     const infoLayout = layout.selectedInfo;
     const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
     selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size));
     selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size));
-    this.stage!.addChild(selectedInfoBox);
+    bottomBar.addChild(selectedInfoBox);
     return {
       beginGameButton,
       selectedRoleName: selectedInfoBox.getChildByName(infoLayout.nameLabel.name),
@@ -235,28 +292,50 @@ export class RoleSelector extends Component {
       if (isValid(node)) node.destroy();
     });
     this.mainView.ownerRoleNodes.length = 0;
-    // 角色数超过站位数量 = **服务端上限被配得比界面容量大**（部署那台的 .env，仓库里的守卫看不到）。
-    // 超出的角色取不到站位（下面的 `?? new Vec2()`），会叠在原点 —— 留一条能查的日志，
-    // 别让这件事只剩「看起来像是渲染错了」
-    const stands = roleSelectorLayout.rolePositions.length;
-    if (this.roleSummaries.length > stands) {
-      console.warn(`[RoleSelector] 角色数 ${this.roleSummaries.length} 超过站位 ${stands} 个：多出的角色没有站位、会叠在原点（检查服务端 ROLE_MAX_PER_ACCOUNT 是否大于选区站位数量）`);
-    }
-    this.roleSummaries.forEach((role, index) => {
-      const node = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, roleSelectorLayout.rolePositions[index] ?? new Vec2(), roleSelectorLayout.previewSize);
-      node.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
-      this.stage!.addChild(node);
-      this.mainView.ownerRoleNodes.push(node);
+    this.roleSummaries.forEach((role) => {
+      const cell = this.createRoleCell(role);
+      this.roleScrollContent!.addChild(cell);
+      this.mainView.ownerRoleNodes.push(cell);
     });
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
+    // 选中框挂在单元格里，重建列表时随节点一起销毁了 → 选中的角色还在列表就重新画上
+    if (this.ownerRoleSelectedId) this.showSelectionFrame(this.ownerRoleSelectedId);
+  }
+
+  /**
+   * 造一个角色的「单元格」：预览（点击选中）+ 脚下名牌，装进滚动网格由 Layout 排布。
+   * 预览贴单元格底部（预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2，见 roleScroll.cell 的注释）；
+   * 名牌挂在单元格下而不是预览下，与预览是兄弟节点 —— 预览只管选中，别的东西不进它的子树。
+   */
+  private createRoleCell(role: RoleSummary): Node {
+    const { cell: cellSize } = roleSelectorLayout.roleScroll;
+      const previewSize = roleSelectorLayout.previewSize;
+    // 预览贴底：预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2
+    const previewY = -(cellSize.height - previewSize.height) / 2;
+    const cell = new Node(`${ROLE_CELL_PREFIX}${role.id}`);
+    cell.addComponent(UITransform).setContentSize(cellSize);
+    const preview = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, new Vec2(0, previewY), previewSize);
+    preview.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
+    cell.addChild(preview);
+    // 名字与等级挂在脚下（偏移相对预览中心，见 roleSelectorLayout.namePlate —— 头顶留给管理模式的删除按钮）
+    const plate = roleSelectorLayout.namePlate;
+    cell.addChild(GameUiHelper.createText(
+      `${NAME_PLATE_PREFIX}${role.id}`,
+      getText("label_role_name_plate", { name: role.name, level: role.level }),
+      plate.fontSize,
+      new Vec2(plate.offset.x, previewY + plate.offset.y),
+      plate.size,
+      plate.color,
+    ));
+    return cell;
   }
 
   //#region 角色管理（删除）
 
   /**
    * 「管理」按钮：进入 / 退出管理模式
-   * 管理模式 = 各角色站位上方出现删除按钮（挂舞台，不在角色预览子树里 —— 预览自带 TOUCH_END 选中事件，
+   * 管理模式 = 每个角色正中间出现删除按钮（挂单元格下、预览的兄弟节点 —— 预览自带 TOUCH_END 选中事件，
    * 按钮挂在它下面会被冒泡吞掉，点删除会连带选中该角色）
    */
   private toggleManageRole() {
@@ -268,7 +347,6 @@ export class RoleSelector extends Component {
     }
     this.manageMode = true;
     this.refreshManageControls();
-    GameUiHelper.createTip("role_delete_mode_tip");
   }
 
   /** 按当前角色列表重建管理模式的提示条与删除按钮（进入管理模式、删除角色后刷新列表时调用） */
@@ -280,21 +358,26 @@ export class RoleSelector extends Component {
     const hint = GameUiHelper.createText(layout.hint.name, getText("label_role_delete_hint"), layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color);
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
-    // 每个角色站位上方一个删除按钮（位置由站位 + 偏移推导，角色数量变化时跟着重建）
-    this.roleSummaries.forEach((role, index) => {
-      const stand = roleSelectorLayout.rolePositions[index];
-      if (!stand) return;
+    // 每个角色正中间一个删除按钮（偏移 (0,0) = 预览中心，见 manageRole.deleteButtonOffset）：挂在**单元格**下（预览的兄弟节点，躲开预览的选中冒泡），
+    // 跟着滚动内容走 —— 挂舞台上的话，滚动后按钮就与角色错位了
+    this.roleSummaries.forEach((role) => {
+      const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${role.id}`);
+      if (!cell) return;
+      // 偏移相对**预览中心**（见 manageRole.deleteButtonOffset 的注释）；预览贴单元格底部，先换算回单元格局部
+      const { cell: cellSize } = roleSelectorLayout.roleScroll;
+      const previewSize = roleSelectorLayout.previewSize;
+      const previewY = -(cellSize.height - previewSize.height) / 2;
       const button = GameUiHelper.createTexturedButton(
         `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
         uiImages.middleRedButtonBackground,
         getText("label_role_delete"),
-        new Vec2(stand.x + layout.deleteButtonOffset.x, stand.y + layout.deleteButtonOffset.y),
+        new Vec2(layout.deleteButtonOffset.x, previewY + layout.deleteButtonOffset.y),
         layout.deleteButtonSize,
         Color.WHITE,
         layout.deleteButtonFontSize,
       );
       button.on(Node.EventType.TOUCH_END, () => this.onDeleteRoleClick(role.id, button), this);
-      this.stage!.addChild(button);
+      cell.addChild(button);
       this.manageNodes.push(button);
     });
   }
@@ -379,12 +462,44 @@ export class RoleSelector extends Component {
   private clearSelectedRole() {
     const info = roleSelectorLayout.selectedInfo;
     this.ownerRoleSelectedId = null;
+    this.clearSelectionFrame();
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = true;
     this.mainView.selectedRoleName.getComponent(Label).string = info.nameLabel.text;
     this.mainView.selectedRoleLevel.getComponent(Label).string = info.levelLabel.text;
   }
 
   //#endregion
+
+  /** 摘掉选中框（取消选中 / 列表重建前调用；节点随单元格销毁时这里自动变无害） */
+  private clearSelectionFrame() {
+    if (this.selectionFrame && isValid(this.selectionFrame)) this.selectionFrame.destroy();
+    this.selectionFrame = null;
+  }
+
+  /**
+   * 给当前选中角色画选中框：白细线（样式见 roleSelectorLayout.selectionFrame）描在单元格的
+   * 预览区域外扩 margin 处，挂在**单元格**下 —— 跟着滚动内容走，滚动后不会与角色错位
+   */
+  private showSelectionFrame(roleId: string) {
+    this.clearSelectionFrame();
+    const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${roleId}`);
+    if (!cell) return;
+    const { cell: cellSize } = roleSelectorLayout.roleScroll;
+    const previewSize = roleSelectorLayout.previewSize;
+    const frame = roleSelectorLayout.selectionFrame;
+    const node = new Node("role_selection_frame");
+    const g = node.addComponent(Graphics);
+    g.lineWidth = frame.lineWidth;
+    g.strokeColor = frame.color;
+    const halfW = previewSize.width / 2 + frame.margin;
+    const halfH = previewSize.height / 2 + frame.margin;
+    g.rect(-halfW, -halfH, halfW * 2, halfH * 2);
+    g.stroke();
+    // 框对齐预览区域：预览贴单元格底部（与 createRoleCell 同一条公式）
+    node.setPosition(0, -(cellSize.height - previewSize.height) / 2);
+    cell.addChild(node);
+    this.selectionFrame = node;
+  }
 
   private onlineRole(roleId: string) {
     this.ownerRoleSelectedId = roleId;
@@ -394,6 +509,7 @@ export class RoleSelector extends Component {
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = false;
     this.mainView.selectedRoleName.getComponent(Label).string = summary.name;
     this.mainView.selectedRoleLevel.getComponent(Label).string = summary.level.toString();
+    this.showSelectionFrame(roleId);
   }
 
   createRoleUI() {
@@ -404,14 +520,14 @@ export class RoleSelector extends Component {
   /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/hudLayout.roleSelectorLayout.createDialog） */
   private createCreateRoleView(): RoleSelectorCreateView {
     const layout = roleSelectorLayout.createDialog;
-    // 返回按钮
-    const backLayout = roleSelectorLayout.backButton;
-    const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
-    this.stage!.addChild(backButton);
-    backButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
     // 弹窗主体与标题
     const dialog = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
     this.stage!.addChild(dialog);
+    // 右上角关闭按钮（backButton 已改常驻的「返回登录」，不再兼职关弹窗）
+    const closeLayout = layout.closeButton;
+    const closeButton = GameUiHelper.createTexturedButton(closeLayout.name, closeLayout.image, getText("label_close"), closeLayout.position, closeLayout.size, Color.WHITE, closeLayout.fontSize);
+    closeButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
+    dialog.addChild(closeButton);
     dialog.addChild(GameUiHelper.createImage(layout.title.name, layout.title.image, layout.title.position, layout.title.size));
     dialog.addChild(GameUiHelper.createImage(layout.genderLabel.name, layout.genderLabel.image, layout.genderLabel.position, layout.genderLabel.size));
     // 性别开关组
@@ -445,9 +561,11 @@ export class RoleSelector extends Component {
     eventHandler.handler = "onOccupationChanged";
     occupationToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
     sexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
+    // 默认选中项不用手动设：Toggle 出厂即「已选中」，组激活时 ensureValidState 会把「第一个之外的」关掉
+    // （探针实测：当帧 activeToggles() 就有第一项）—— 但下面的首次渲染必须把 view 显式传进去，见 updateOccupationSelection
 
     const view: RoleSelectorCreateView = {
-      backButton,
+      closeButton,
       dialog,
       nameInput: nameInput.input,
       sexToggleGroup,
@@ -456,18 +574,18 @@ export class RoleSelector extends Component {
       occupationDescription: null,
       occupationPreview: null,
     };
-    this.updateOccupationSelection();
+    // 首次渲染**必须显式传 view**：此刻 this.createView 还没赋值（在 createRoleUI 的返回值赋值那一步），
+    // 不传的话方法里读 this.createView 是 null → 直接早退 → 弹窗打开描述与预览全空，要手动点一次才有
+    this.updateOccupationSelection(view);
     return view;
   }
 
-  /** 根据当前选中的职业与性别更新职业描述和预览 */
+  /** 根据当前选中的职业与性别更新职业描述和预览（开关变更时回调） */
   onOccupationChanged() {
-    if (this.createView) this.updateOccupationSelection();
+    if (this.createView) this.updateOccupationSelection(this.createView);
   }
 
-  private updateOccupationSelection() {
-    const view = this.createView;
-    if (!view) return;
+  private updateOccupationSelection(view: RoleSelectorCreateView) {
     const occupationId = view.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
     const sex = view.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
     const occupation = occupationId && occupations.get(occupationId as OECCUPATION);
@@ -487,7 +605,6 @@ export class RoleSelector extends Component {
   cancelCreateRoleUI() {
     if (!this.createView) return;
     this.createView.dialog.destroy();
-    this.createView.backButton.destroy();
     this.createView = null;
   }
 
@@ -495,19 +612,10 @@ export class RoleSelector extends Component {
    * 创建角色
    *
    * 角色数据由**客户端按自身配置**生成（新手装备、初始金币、背包格、快捷键都在 configs/role），
-   * 服务端只校验结构、归属、数量上限与重名 —— 于是游戏侧改配置不必同步改服务端。
+   * 服务端只校验结构、归属与重名（数量不设上限）—— 于是游戏侧改配置不必同步改服务端。
    */
   async createRole() {
     if (!this.createView || this.busy) return;
-    // 站位满了就先拦一道（省一次往返）：**界面能画几个角色，唯一来源就是布局里的站位数组**，
-    // 客户端没有第二个「上限」数字（见 configs/role 顶部的说明）。
-    // 业务上限在服务端（server/.env 的 ROLE_MAX_PER_ACCOUNT，只能调低、不得超过站位数量）——
-    // 它拒下来的请求会走全局错误提示，用的是服务端自己的数字。
-    const stands = roleSelectorLayout.rolePositions.length;
-    if (this.roleSummaries.length >= stands) {
-      GameUiHelper.createTip("role_create_limit_tip", { max: stands });
-      return;
-    }
     // 读取表单（职业与性别取自选中开关的节点名称，即枚举值）
     const occupation = (this.createView.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as OECCUPATION;
     const sex = (this.createView.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as SEX;

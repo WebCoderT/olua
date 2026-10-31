@@ -1,5 +1,5 @@
-import { Color, isValid, Label, Node, ProgressBar } from "cc";
-import { monsterInfoPanelLayout } from "../../../configs/hudLayout";
+import { Color, isValid, Label, Node, ProgressBar, UITransform, Vec2 } from "cc";
+import { monsterInfoPanelLayout, uiImages } from "../../../configs/hudLayout";
 import MonsterManager from "../../core/MonsterManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
@@ -22,8 +22,10 @@ export default class MonsterInfoPanel extends Node {
 
   constructor(target: Node) {
     super("monster_info");
-    // 面板主体（尺寸/位置/背景）由 GameUiHelper 生成
-    GameUiHelper.applyMonsterInfoBodyStyle(this);
+    // 面板主体（尺寸/位置/背景：固定值见 configs/hudLayout.monsterInfoPanel）
+    this.addComponent(UITransform).setContentSize(monsterInfoPanelLayout.size);
+    this.setPosition(monsterInfoPanelLayout.position.x, monsterInfoPanelLayout.position.y, 0);
+    this.addChild(GameUiHelper.createImage(BACKGROUND_NAME, uiImages.monsterInfoBackground, new Vec2(), monsterInfoPanelLayout.size));
     this.select(target);
   }
 

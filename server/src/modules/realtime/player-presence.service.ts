@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
-import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import type { RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
@@ -144,7 +144,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     const existed = this.entries.get(accountId);
     if (!existed) {
       const role = this.roles.online(accountId);
-      const summary = role ? summarizeRoleAttributes(role) : null;
+      const summary = role ? summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data)) : null;
       const maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, hp);
       // 显示名：角色名优先（互见看到的是「那个角色」，不是登录账号），缺省回落账号名
       const roleName = typeof role?.data?.name === "string" ? role.data.name : "";
@@ -192,7 +192,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     if (existed.updatedAt - existed.appearanceAt > this.appearanceRefreshMs()) {
       const role = this.roles.online(accountId);
       existed.appearance = this.readAppearance(role);
-      const summary = role ? summarizeRoleAttributes(role) : null;
+      const summary = role ? summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data)) : null;
       existed.maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, existed.hp);
       const guild = this.readGuild(role?.id ?? existed.roleId);
       existed.guildId = guild.guildId;

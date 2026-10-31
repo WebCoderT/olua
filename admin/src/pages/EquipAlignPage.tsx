@@ -23,6 +23,7 @@ import {
 import type { Guides } from "./equipAlign/render";
 import { drawCell, layoutCells, originOfCell } from "./equipAlign/render";
 import { useAlignStore } from "./equipAlign/saved";
+import { makeAlignWorkbenchActions } from "./equipAlign/workbench-actions";
 
 /**
  * 装备对齐工作台（#509 / #513）
@@ -130,7 +131,11 @@ function itemsOfKind(kind: Kind): WorkItem[] {
     key: item.key,
     label: item.label,
     atlas: item.atlas,
-    base: geometryFromCatalog(item, kind === "cloth"),
+    // manual 默认 true：工作台对衣服与武器的整套编辑（拖拽 / 按裸模给初值 / 预览）都是**绝对位置**语义
+    // （render.ts 画格子从不看 manual），保存出去就该按绝对位置被客户端读 ——
+    // 默认 false 时「页面上看着对、游戏里不对」（客户端把同一份坐标当微调叠在自动算法上，#541）。
+    // 想要「自动算法 + 微调」再在右栏把勾去掉。
+    base: geometryFromCatalog(item, true),
   }));
 }
 
@@ -683,54 +688,21 @@ export function EquipAlignPage() {
     });
   };
 
-  /** 保存当前件 —— 主流程的出口：调完按这个，客户端重进游戏就看到了 */
-  const saveActive = async () => {
-    if (pending) return;
-    const ok = await saveAlign(activeItem.id, geometry);
-    if (!ok) return;
-    dropDraft(activeItem.id);
-    setNotice(`已保存「${activeItem.label}」—— 客户端重进游戏即生效`);
-  };
-
-  /**
-   * 还原本件
-   *
-   * 服务端有记录就删掉（回到出厂值），没有就只清临时改动。**顺序不能反**：
-   * 先删服务端、再清本地，反过来会有一瞬间「本地没了但服务端还在」，刷新页面那件又跳回旧位置。
-   */
-  const resetItem = async () => {
-    if (pending) return;
-    if (saved[activeItem.id]) {
-      const ok = await resetAlign(activeItem.id);
-      if (!ok) return;
-    }
-    dropDraft(activeItem.id);
-    setNotice(`已把「${activeItem.label}」还原成出厂值`);
-  };
-
-  /**
-   * 保存全部未保存的件（逐条提交）
-   *
-   * 逐条而不是一个批量接口：一条失败不拖累其它（失败清单要能指名道姓），
-   * 而且工作台的真实节奏本来就是「调一件存一件」，批量只是顺手。
-   */
-  const saveAll = async () => {
-    if (pending || !unsavedIds.length) return;
-    let done = 0;
-    const failed: string[] = [];
-    for (const id of unsavedIds) {
-      const item = ALL_ITEMS.find((entry) => entry.id === id);
-      if (!item) continue;
-      const ok = await saveAlign(id, drafts[id] ?? baseOf(item));
-      if (ok) {
-        done += 1;
-        dropDraft(id);
-      } else {
-        failed.push(id);
-      }
-    }
-    setNotice(failed.length ? `已保存 ${done} 件，失败 ${failed.length} 件：${failed.join("、")}` : `已保存 ${done} 件`);
-  };
+  /** 保存 / 还原 / 批量保存（与内观工作台共用的流程，差异只在生效文案与落库 API） */
+  const workbench = makeAlignWorkbenchActions<Geometry, WorkItem>({
+    pending,
+    save: saveAlign,
+    reset: resetAlign,
+    saved,
+    drafts,
+    baseOf,
+    dropDraft,
+    setNotice,
+    effectHint: "客户端重进游戏即生效",
+  });
+  const saveActive = () => workbench.saveActive(activeItem, geometry);
+  const resetItem = () => workbench.resetItem(activeItem);
+  const saveAll = () => workbench.saveAll(ALL_ITEMS, unsavedIds);
 
   /**
    * 按裸模自动给一个初值（免费的人工起点）
@@ -1077,8 +1049,8 @@ export function EquipAlignPage() {
                   onChange={(event) => patchGeometry((current) => ({ ...current, manual: event.target.checked }))}
                 />
                 <span>
-                  使用手调的绝对位置
-                  <span className="block text-slate-500">关掉 = 客户端按身体帧自动算，这里的数值只当微调。</span>
+                  使用手调的绝对位置（#541 起客户端已停用帧算法，恒按绝对位置摆）
+                  <span className="block text-slate-500">此开关当前不影响游戏内表现，仅保留数据语义：客户端外观一律把坐标当绝对位置；保存时保持勾选即可。</span>
                 </span>
               </label>
             ) : null}

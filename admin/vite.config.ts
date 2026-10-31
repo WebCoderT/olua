@@ -12,7 +12,7 @@ const RESOURCES = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..
 /**
  * 开发期把客户端素材挂到 `/game-resources` 下
  *
- * 对齐工作台要读 `clothes/atlas/out/005/stand/stand.{png,plist}` 这类文件。
+ * 对齐工作台要读 `clothes/out/005/stand/stand.{png,plist}` 这类文件（#542 起图集与散帧同路径）。
  * 生产由管理端 nginx 反代到 game 容器（**同源**：canvas 才不会被污染、`getImageData` 才可用）；
  * 开发期没有 nginx，就在这里直读本地素材 —— 两边是同一个 URL 前缀，
  * 页面代码不需要为环境分支，也就不会出现「本地调好了、部署上去 404」。

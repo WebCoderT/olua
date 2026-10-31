@@ -5,29 +5,11 @@ import { roleBody } from "../role";
  * 常驻 HUD 与游戏内固定表现元素的布局
  *
  * 位置/尺寸的坐标系见各自注释：组件自身坐标以屏幕中心为原点，子件坐标以所在容器中心为原点
- * 常驻 HUD 四区域（左上角色信息栏 / 右上小地图 / 底部栏 / 左下操作摇杆）不写死坐标，
- * 而是按「贴哪条边 + 边距」由当前可见尺寸实时算出（计算见 ui/utils/layout/ScreenLayout）
+ * 常驻 HUD 四区域（左上角色信息栏 / 右上小地图 / 底部栏 / 左下操作摇杆）的自身位置是**固定值**，
+ * 不做任何按屏幕尺寸的换算 —— 手调位置直接改这里的 position
  *
  * 图片来源见 configs/layout/images（uiImages）；公共尺寸见 configs/layout/sizes（uiSize）
  */
-
-//#region 贴边布局（常驻 HUD 四区域）
-
-/**
- * 常驻 HUD 区块的贴边方式
- * 区块位置不再写死坐标，而是按「贴哪条边 + 边距」由当前可见尺寸实时算出
- * （计算见 ui/utils/layout/ScreenLayout.getAnchoredPosition，窗口尺寸变化时会重排）
- */
-export interface HudAnchor {
-  /** 贴哪条边（左上 / 右上 / 左下 / 底部居中） */
-  edge: "top-left" | "top-right" | "bottom-left" | "bottom-center";
-  /** 水平边距：区块边缘到屏幕左/右边缘的距离（bottom-center 忽略，恒居中） */
-  marginX: number;
-  /** 垂直边距：top-* 为区块上边缘到屏幕上边缘；bottom-left 为区块下边缘到屏幕下边缘；bottom-center 为区块中心到屏幕下边缘 */
-  marginY: number;
-}
-
-//#endregion
 
 //#region 角色信息栏（左上角常驻）
 
@@ -35,8 +17,8 @@ export interface HudAnchor {
 export const roleInfoBarLayout = {
   /** 信息栏自身尺寸 */
   size: new Size(300, 70),
-  /** 自己固定在左上角（贴边方式与边距：按可见尺寸实时计算位置） */
-  anchor: { edge: "top-left", marginX: 19, marginY: 16 } as HudAnchor,
+  /** 自己固定在左上角（屏幕坐标，原点在屏幕中心；固定值直接手调） */
+  position: new Vec2(-791, 489),
   /** 其他玩家（屏幕中心） */
   otherPosition: new Vec2(0, 0),
   /** 背景框尺寸（与原图一致） */
@@ -62,11 +44,17 @@ export const roleInfoBarLayout = {
 /** 底部栏布局（自身坐标以屏幕中心为原点，子件坐标以底部栏中心为原点） */
 export const bottomBarLayout = {
   /** 底部栏主体 */
-  size: new Size(1100, 210),
-  /** 贴屏幕底部居中（marginY = 主体中心到屏幕下边缘的距离；背景下沿本就溢出屏幕，故按中心定位） */
-  anchor: { edge: "bottom-center", marginX: 0, marginY: 51 } as HudAnchor,
-  /** 功能按键区（横向布局容器，按钮排列交给 Layout） */
-  navBar: { spacing: 6, position: new Vec2(153.5, -10), size: new Size(400, 40) },
+  size: new Size(970, 134),
+  /** 贴屏幕底部居中（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「中心距下边缘 51」算出，换算结果就是 -489） */
+  position: new Vec2(0, -477),
+  /**
+   * 功能按键区（横向布局容器，按钮排列交给 Layout）
+   *
+   * 当前 6 个入口 = 6×40 + 5×6 = 270，从容器**左缘**起排；容器宽留 400，
+   * 最右侧多出的宽度对应背景图上那个**宽格子 —— 什么都不放**（留白）。
+   * 入口清单见 configs/bottomNav.bottomNavItems；想再塞入口先看这 130 宽度装不装得下
+   */
+  navBar: { spacing: 6, position: new Vec2(102, -18), size: new Size(282, 44) },
   /**
    * 单个功能按键：图标尺寸 + 快捷键字母
    *
@@ -74,31 +62,44 @@ export const bottomBarLayout = {
    * 原来放在右下方 (15,-15) 正好压住最后一个字（真机上是「好友F」「组队G」这种，见 #466）。
    */
   navButton: {
-    size: new Size(40, 40),
+    size: new Size(42, 44),
     key: { position: new Vec2(14, 16), size: new Size(20, 20), fontSize: 10 },
   },
   /** 经验条 */
-  expBar: { position: new Vec2(0, -44.5), size: new Size(724, 8) },
-  /** 血量文字 */
-  hpText: { position: new Vec2(-421, -39), size: new Size(120, 10), fontSize: 12 },
-  /** 圆形血球（底图与填充同尺寸，竖向进度） */
-  hpOrb: { position: new Vec2(-420, 12.5), size: new Size(90, 90) },
-  /** 魔法值文字（与血量文字同款式，镜像到底部栏右侧） */
-  mpText: { position: new Vec2(421, -39), size: new Size(120, 10), fontSize: 12 },
-  /** 圆形魔法球（与血球同款式同尺寸，镜像到底部栏右侧） */
-  mpOrb: { position: new Vec2(420, 12.5), size: new Size(90, 90) },
-  /** 快捷键栏（横向布局容器，6 格 = 6×40 + 5×6 = 270；居中在血球与功能按键区之间的空档） */
-  shortcutBar: { spacing: 6, position: new Vec2(-224.7, -9), size: new Size(270, 40) },
+  expBar: { position: new Vec2(0, -55.5), size: new Size(614, 8) },
+  /**
+   * 血量球（role_hp_orb 节点：球底图/填充与血量文字都挂这个节点下）
+   *
+   * position 是 role_hp_orb **节点**在底部栏坐标系里的位置（固定值直接手调，
+   * 改它整球——球图加文字——一起动）；球图（底图与竖向填充）都在节点原点，
+   * 血量文字相对球心偏移
+   */
+  hpOrb: {
+    position: new Vec2(-370, 5),
+    size: new Size(90, 90),
+    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 12 },
+  },
+  /**
+   * 魔法球（role_mp_orb 节点：结构与血球一致，填充图为蓝色魔法球）
+   * 坐标口径与 hpOrb 相同：position 是节点在底部栏里的位置，文字相对球心偏移
+   */
+  mpOrb: {
+    position: new Vec2(370, 5),
+    size: new Size(90, 90),
+    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 12 },
+  },
+  /** 快捷键栏（横向布局容器，5 格 = 5×44 + 4×4 = 224；居中在血球与功能按键区之间的空档） */
+  shortcutBar: { spacing: 4, position: new Vec2(-194, -18), size: new Size(226, 44) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {
-    size: new Size(40, 40),
+    size: new Size(42, 44),
     key: { position: new Vec2(20, -15), size: new Size(20, 10), fontSize: 10 },
     cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: 16 },
   },
   /** 自动挂机开关（底部栏中段空档，图标下方带文字） */
   autoFight: {
     size: new Size(44, 44),
-    position: new Vec2(-338, 62),
+    position: new Vec2(-295, 62),
     label: { text: "挂机", position: new Vec2(0, -14), size: new Size(44, 12), fontSize: 10 },
   },
 };
@@ -118,8 +119,8 @@ export const bottomBarLayout = {
 export const joystickLayout = {
   /** 摇杆主体（= 底座底图尺寸，同时也是按下时的命中范围） */
   size: new Size(175, 172),
-  /** 贴屏幕左下角（边距为区块边缘到屏幕左/下边缘的距离） */
-  anchor: { edge: "bottom-left", marginX: 24, marginY: 18 } as HudAnchor,
+  /** 贴屏幕左下角（屏幕坐标，原点在屏幕中心；固定值直接手调） */
+  position: new Vec2(-848.5, -436),
   /** 手柄显示尺寸（素材 98×99 略缩，给拖动留出空间） */
   handleSize: new Size(72, 73),
   /** 手柄中心可离底座中心的最大距离（拖动幅度按它归一化；取值使手柄贴到最外圈时恰好不溢出底座） */
@@ -136,10 +137,9 @@ export const joystickLayout = {
  * （功能入口按钮列贴地图内容区左侧，名称条贴内容区上方，线路/排行榜贴内容区下方）
  */
 export const smallMapLayout = {
-  /** 组件主体（尺寸需容纳整块内容，位置贴屏幕右上角——按可见尺寸实时计算） */
+  /** 组件主体（尺寸需容纳整块内容，位置在屏幕右上角——屏幕坐标固定值，原点在屏幕中心，直接手调） */
   size: new Size(280, 250),
-  /** 贴屏幕右上角（边距为区块边缘到屏幕上/右边缘的距离） */
-  anchor: { edge: "top-right", marginX: 2, marginY: 12 } as HudAnchor,
+  position: new Vec2(818, 403),
   /**
    * 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录）
    *
@@ -181,7 +181,7 @@ export const smallMapLayout = {
 /** 怪物信息面板布局（坐标以面板中心为原点） */
 export const monsterInfoPanelLayout = {
   size: new Size(238, 71),
-  position: new Vec2(0, 330),
+  position: new Vec2(0, 480),
   /** 左侧头像（取怪物图标） */
   avatar: { position: new Vec2(-75, 0), size: new Size(60, 66) },
   /** 名称（左对齐） */

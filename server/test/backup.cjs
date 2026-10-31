@@ -43,7 +43,7 @@ const { BackupService } = require(path.join(SERVER_DIR, "dist", "modules", "syst
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
  *
- * 为什么要有这个数：`README.md` 与 `docs/resume.md` 里都写着「服务端 N 条 e2e」，
+ * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
  * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
  * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
  *
@@ -56,7 +56,7 @@ function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
   if (passedCount === EXPECTED_ASSERTIONS) return;
   console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
   process.exit(1);
 }
 

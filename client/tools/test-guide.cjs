@@ -10,11 +10,12 @@
  *
  * 覆盖：
  * A. 步骤表是数据：id 唯一 / 文案非空 / 触发与高亮目标都在枚举内
- * B. 推进：只有当前步的 trigger 能推进，别的事件不越级；走完置 done
+ * B. 推进：只有当前步的 trigger 能推进，别的事件不越级；走完置 done；「下一步」无条件前进
  * C. 老档与坏值：读不到 guide（或值坏了）一律按「已完成」，老号不弹
  * D. 存档续走：新角色从第 0 步开始；推进后落盘、重新读回还在原步
  * E. 跳过：显式跳过落 skipped，之后不再弹也不再推进
- * F. 接线契约：组合根起停、三个面板与两个玩法事件真的 notify 了、遮罩不拦点击
+ * F. 接线契约：组合根起停、三个面板与两个玩法事件真的 notify 了、遮罩不拦点击、两个按钮各自接线
+ * G. 气泡排版：正文放得下、折两行也不压底部那一行、底部两个按钮不与进度文字重叠
  *
  * 用法：node client/tools/test-guide.cjs
  */
@@ -33,7 +34,12 @@ const DIALOGS = ["BagDialog", "SkillListDialog", "ChatDialog"].map((name) => ({
 
 let sandbox;
 try {
-  sandbox = prepareStorage("olua-guide", ["ui/core/GuideStore.ts", "ui/utils/guide/guide-progress.ts"]);
+  // configs/layout/sizes.ts 只是为了让排版守点能拿到真实按钮尺寸（UI 层不能进沙箱，配置可以）
+  sandbox = prepareStorage("olua-guide", [
+    "ui/core/GuideStore.ts",
+    "ui/utils/guide/guide-progress.ts",
+    "configs/layout/sizes.ts",
+  ]);
 } catch (error) {
   fail(`沙箱准备失败：${error.message}`);
   return;
@@ -45,6 +51,7 @@ const guideLogic = requireOut("ui/utils/guide/guide-progress.js");
 const GuideStore = requireOut("ui/core/GuideStore.js").default;
 const guideConfig = requireOut("configs/guide.js");
 const guideTypes = requireOut("types/guide.js");
+const uiSize = requireOut("configs/layout/sizes.js").uiSize;
 
 const steps = guideConfig.guideSteps;
 const stepCount = steps.length;
@@ -100,6 +107,15 @@ check(walked && walked.step === stepCount && walked.done === true, "走完最后
 check(guideLogic.advanceGuide(walked, steps[0].trigger, steps[0].trigger, stepCount) === null, "done 之后再收到事件不再推进");
 check(guideLogic.shouldRunGuide(walked, stepCount) === false, "done 之后不显示引导");
 
+// 「下一步」是第二条推进路径：不看当前步的 trigger，玩家点了就前进
+const nudged = guideLogic.nextGuide(first, stepCount);
+check(nudged && nudged.step === 1 && !nudged.done, "「下一步」不看触发事件直接前进（不做动作也能往下走）", JSON.stringify(nudged));
+check(guideLogic.nextGuide(guideLogic.skipGuide(first), stepCount) === null, "跳过后「下一步」不再推进（skip 不是临时状态）");
+check(guideLogic.nextGuide(walked, stepCount) === null, "走完之后「下一步」不再推进（不会越过末尾，也不会把 done 洗掉）");
+let byNext = guideLogic.newGuideProgress();
+for (let index = 0; index < stepCount; index++) byNext = guideLogic.nextGuide(byNext, stepCount);
+check(byNext && byNext.step === stepCount && byNext.done === true, "连点「下一步」能一路走到完成（与走完是同一条落账）", JSON.stringify(byNext));
+
 //#endregion
 
 //#region C. 老档与坏值
@@ -144,6 +160,11 @@ GuideStore.reset();
 GuideStore.start(StorageManager.findOnlineRole());
 check(GuideStore.current().step === 1 && GuideStore.visible() === true, "重连后从存档的第 1 步继续（断点续走）");
 
+// 「下一步」按钮走的是同一个落账路径（真仓 + 真存档）
+GuideStore.next();
+check(GuideStore.current().step === 2 && GuideStore.visible() === true, "点「下一步」推进一步（不需要先做对应动作）");
+check(StorageManager.findOnlineRole().guide.step === 2, "「下一步」推进的进度同样写回存档");
+
 // 老档（没有 guide 字段）经 ensureRoleDefaults 补成「已完成」
 const legacyRole = makeRole("guide_old");
 delete legacyRole.guide;
@@ -187,6 +208,11 @@ check(/GuideStore\.reset\(\)/.test(game) && /GuideOverlay\.setSpotProvider\(null
 check(/GuideStore\.notifyMove\(/.test(game), "移动事件按实际位移喂给引导（摇杆 / 方向键 / 点地面都算）");
 check(!/blockClickThrough|addComponent\(Button\)/.test(overlay), "遮罩不拦点击（引导绝不锁操作：卡死即事故）");
 check(/GuideStore\.skip\(\)/.test(overlay), "气泡上的跳过按钮直接调 GuideStore.skip");
+check(/GuideStore\.next\(\)/.test(overlay), "气泡上的「下一步」按钮直接调 GuideStore.next（与事件推进共用落账路径）");
+check(
+  /names\.nextLabel/.test(overlay) && guideConfig.guideOverlayStyle.names.nextLabel === `${guideConfig.guideOverlayStyle.names.next}_label`,
+  "「完成」文案取的是按钮里那个文字节点（名 = 按钮名 + _label，与 createMiddleButton 的约定一致）",
+);
 check(/GUIDE_EVENT\.OPEN_BAG/.test(read(DIALOGS[0].file)), "打开背包 → 通知引导");
 check(/GUIDE_EVENT\.OPEN_SKILL/.test(read(DIALOGS[1].file)), "打开技能 → 通知引导");
 check(/GUIDE_EVENT\.OPEN_CHAT/.test(read(DIALOGS[2].file)), "打开聊天 → 通知引导");
@@ -198,7 +224,7 @@ check(/normalizeGuide\(source\.guide\)/.test(read(ROLE_DATA_UTIL)), "服务端�
 
 //#region G. 气泡排版自洽
 
-console.log("— G. 气泡排版：正文放得下、折两行也不压底部行 —");
+console.log("— G. 气泡排版：正文放得下、折两行也不压底部那一行 —");
 
 const bubble = guideConfig.guideConfig.layout;
 const innerWidth = bubble.bubbleWidth - bubble.bubblePadding * 2;
@@ -215,6 +241,32 @@ check(
   `正文底 ${descBottom.toFixed(1)} vs 进度顶 ${progressTop.toFixed(1)}`,
 );
 
+// 底部那一行现在并排两个中号按钮（跳过 + 下一步），位置算法见 GuideOverlay.layoutButtons：
+// 右对齐 → 下一步贴右缘，跳过排在它左侧，间距 buttonGap
+const buttonWidth = uiSize.middleButtonSize.width;
+const buttonHeight = uiSize.middleButtonSize.height;
+const rightEdge = bubble.bubbleWidth / 2 - bubble.bubblePadding;
+const buttonLeft = rightEdge - buttonWidth * 2 - bubble.buttonGap;
+check(
+  buttonLeft > -innerWidth / 2,
+  "两个按钮放得进气泡（不会从左边溢出去）",
+  `按钮左缘 ${buttonLeft} vs 气泡内左边 ${-innerWidth / 2}`,
+);
+// 进度文字：中心 x = -inner/2 + 70、盒宽 160（见 GuideOverlay.createBubble），右缘不能压到「跳过」
+const progressRight = -innerWidth / 2 + 70 + 160 / 2;
+check(
+  progressRight < buttonLeft,
+  "进度文字与按钮行不重叠（文字在左、按钮在右）",
+  `进度右缘 ${progressRight} vs 按钮左缘 ${buttonLeft}`,
+);
+// 按钮行的上沿不能顶到正文（正文底边 descBottom，折两行）
+const buttonTop = -bubble.bubbleHeight / 2 + bubble.bubblePadding + buttonHeight;
+check(
+  descBottom > buttonTop,
+  "正文折两行时仍高于按钮行（否则按钮会盖住正文最后一行）",
+  `正文底 ${descBottom.toFixed(1)} vs 按钮顶 ${buttonTop.toFixed(1)}`,
+);
+
 //#endregion
 
-finish("新手引导（#402）：步骤表 / 推进 / 老档 / 续走 / 跳过 / 接线 / 排版");
+finish("新手引导（#402）：步骤表 / 推进 / 老档 / 续走 / 跳过 / 下一步 / 接线 / 排版");

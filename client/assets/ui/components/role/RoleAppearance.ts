@@ -7,20 +7,6 @@ import { getEquipment } from "../../../configs/items";
 import { getFashionOut } from "../../../configs/fashionClothes";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { EQUIP_ALIGN, placeWeaponOnHand } from "../../../configs/equipAlign";
-
-/** 这些朝向下衣服在武器上方（武器在身后）：左 / 左上 / 上 / 左下；其余朝向武器在衣服上方 */
-const CLOTH_ON_TOP_DIRECTIONS: DIRECTION[] = [DIRECTION.LEFT, DIRECTION.LEFT_UP, DIRECTION.UP, DIRECTION.LEFT_DOWN];
-
-/**
- * 武器握持点：面向哪些朝向时武器在观众**左侧**
- *
- * 角色右手持械 —— 面向观众（down）时右手在观众左边；转身背对（up）时换到右边。
- * 左右斜向跟各自的主朝向一致，右向的两个朝向右、左向的两个朝向左。
- */
-const WEAPON_ON_LEFT: DIRECTION[] = [DIRECTION.DOWN, DIRECTION.LEFT, DIRECTION.LEFT_DOWN, DIRECTION.LEFT_UP];
-
-
 
 /**
  * 装配一套角色外观所需的最小数据（#383）
@@ -75,24 +61,17 @@ export default class RoleAppearance {
    */
   private clothTransform: OutTransform | null = null;
   private weaponTransform: OutTransform | null = null;
-  /** 上次计算的层级关系（null 表示尚未计算；方向没变时不重复调整 sibling） */
-  private clothOnTop: boolean | null = null;
   /** 死亡标记：死亡动画播完停最后一帧，期间不再响应任何动作切换与播完续播，直到复活 */
   private dead = false;
-  /**
-   * 武器对齐的重试计数（素材是异步装上去的：首帧还没落到 Sprite 上时读不到内容 bbox，
-   * 这时候不能拿 (0,0) 硬算，否则武器会先出现在脚底再跳上去）
-   */
-  private alignRetry = 0;
 
   constructor(host: Node, onAttackFinished: () => void) {
     this.onAttackFinished = onAttackFinished;
     // 衣服/武器节点（样式由 GameUiHelper 零件生成，本类只负责挂到宿主并持有引用）
-    // 两者的层级关系由 updateLayerOrder 按朝向动态调整（首次 play 时立即生效），这里的顺序只是初始兜底
-    this.weapon = GameUiHelper.createRoleWeaponNode();
-    host.addChild(this.weapon);
+    // 固定层级：衣服在下、武器永远在衣服上方（#541，不再按朝向动态调换）
     this.cloth = GameUiHelper.createRoleClothNode();
     host.addChild(this.cloth);
+    this.weapon = GameUiHelper.createRoleWeaponNode();
+    host.addChild(this.weapon);
   }
 
   /** 更新外观（换装后调用）：按当前装备重新加载衣服与武器动画 */
@@ -114,9 +93,9 @@ export default class RoleAppearance {
     this.action = action;
     this.direction = direction;
     // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
+    // 衣服与武器同一套摆法（#541：外观只认数据 —— 工作台/服务端的 8 向绝对位置，武器没有独立的算法路径）
     this.applyOutTransform(this.cloth, this.clothTransform);
-    this.applyWeaponTransform();
-    this.updateLayerOrder();
+    this.applyOutTransform(this.weapon, this.weaponTransform);
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
     this.clothAnimate?.crossFade(animationName, 0.2);
@@ -132,8 +111,7 @@ export default class RoleAppearance {
     this.direction = direction;
     this.dead = true;
     this.applyOutTransform(this.cloth, this.clothTransform);
-    this.applyWeaponTransform();
-    this.updateLayerOrder();
+    this.applyOutTransform(this.weapon, this.weaponTransform);
     const animationName = getAnimationName(ACTION.DIE, direction);
     this.clothAnimate?.crossFade(animationName, 0.1);
     this.weaponAnimate?.crossFade(animationName, 0.1);
@@ -162,18 +140,6 @@ export default class RoleAppearance {
     if (state.isPlaying) return;
     this.clothAnimate.crossFade(animationName, 0.1);
     this.weaponAnimate?.crossFade(animationName, 0.1);
-  }
-
-  /**
-   * 按朝向调整衣服与武器的层级：左/左上/上/左下时衣服在武器上方，其余朝向武器在衣服上方
-   * 方向没变时不做任何事（play 会在动作切换时频繁调用，避免反复触发 sibling 重排）
-   */
-  private updateLayerOrder() {
-    const clothOnTop = CLOTH_ON_TOP_DIRECTIONS.indexOf(this.direction) !== -1;
-    if (this.clothOnTop === clothOnTop) return;
-    this.clothOnTop = clothOnTop;
-    if (clothOnTop) this.cloth.setSiblingIndex(this.weapon.getSiblingIndex() + 1);
-    else this.weapon.setSiblingIndex(this.cloth.getSiblingIndex() + 1);
   }
 
   /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
@@ -206,6 +172,13 @@ export default class RoleAppearance {
    * 应用外观变换（outScale / outPositions）
    * 位置数组按 configs/animation 的 directions 顺序取当前朝向的下标；
    * 数组缺该项时回落第一项，变换缺省（null）时回落到不缩放、不偏移
+   *
+   * 衣服与武器共用这一份（#541）：外观几何只认数据、不认算法 ——
+   * 管理端工作台调好、服务端 `game-config/equip-align` 每次进图下发的 8 向绝对位置
+   * 就是唯一真相（离线兜底是出厂配置里烧进去的同一份坐标）。
+   * 原先「按身体帧内容 bbox 自动贴握持点」的算法（#505）已整体删除：
+   * 它现场算出来的位置与工作台/服务端数据对不上。没有数据行且出厂配置全 0 的武器
+   * 会落在角色原点 —— 那是「未对齐」的诚实表现，去工作台调它，不要在客户端加算法兜底。
    */
   private applyOutTransform(node: Node, transform: OutTransform | null) {
     const scale = transform?.outScale ?? 1;
@@ -213,57 +186,6 @@ export default class RoleAppearance {
     const offset = positions?.[getDirectionIndex(this.direction)] ?? positions?.[0] ?? Vec2.ZERO;
     node.setScale(scale, scale, 1);
     node.setPosition(offset.x, offset.y, 0);
-  }
-
-  /**
-   * 武器位置：贴到「当前身体帧」的握持点
-   *
-   * 为什么不直接用手调的 outPositions：素材的裁剪留白与画布尺寸每件都不一样（武器画布 245×234 ~ 570×608，
-   * 身体 142×112 ~ 480×480），写死的偏移只对作者当初那件身体成立 —— 换一件衣服武器就飘走。
-   * 这里改成读**当前帧的内容 bbox**（裁剪偏移已由 SpriteFrame.offset 还原）：
-   *   手部锚点 = 身体内容 bbox 的侧边 × 0.52、纵向 52%（角色右手）
-   *   武器位置 = 手部锚点 − 武器内容中心的缩放偏移
-   * 于是任何身体尺寸、任何武器都自动对齐。outPositions 保留为**微调**（默认 0，逐件微调不碰公式）。
-   * 素材未就绪（帧还没落到 Sprite 上）时保持不动 —— 下一帧的 play 会再算一次。
-   *
-   * **`outManual` 为 true 时整段跳过**（#509）：那件武器是在管理端「装备对齐」工作台里、
-   * 以裸模为基准逐方向手调过的绝对值，再叠一层自动算法只会把人的判断改掉。
-   */
-  private applyWeaponTransform() {
-    // 手调过的武器与衣服同一套摆法（缩放 + 8 方向绝对位置），差异只在数据来源
-    if (this.weaponTransform?.outManual) {
-      this.applyOutTransform(this.weapon, this.weaponTransform);
-      return;
-    }
-    const weaponBox = GameUiHelper.spriteContentBox(this.weapon);
-    const clothBox = GameUiHelper.spriteContentBox(this.cloth);
-    const scale = this.weaponTransform?.outScale ?? 1;
-    this.weapon.setScale(scale, scale, 1);
-    if (!weaponBox || !clothBox) {
-      this.retryAlign();
-      return;
-    }
-    this.alignRetry = 0;
-    // 身体内容 bbox（宿主坐标系：衣服节点自身带着它的 outPositions，且可能带 outScale）
-    const clothPos = this.cloth.position;
-    const clothScale = this.cloth.scale.x;
-    const body = {
-      cx: clothPos.x + clothBox.cx * clothScale,
-      cy: clothPos.y + clothBox.cy * clothScale,
-      w: clothBox.w * clothScale,
-      h: clothBox.h * clothScale,
-    };
-    // 逐件微调（outPositions 按方向下标；缺省 0）
-    const nudge = this.weaponTransform?.outPositions?.[getDirectionIndex(this.direction)] ?? Vec2.ZERO;
-    const pos = placeWeaponOnHand(body, weaponBox, scale, nudge, WEAPON_ON_LEFT.indexOf(this.direction) !== -1);
-    this.weapon.setPosition(pos.x, pos.y, 0);
-  }
-
-  /** 素材未就绪：下一帧再算一次（上限与间隔见 configs/equipAlign.EQUIP_ALIGN，避免素材真的缺帧时无限重排） */
-  private retryAlign() {
-    if (this.alignRetry >= EQUIP_ALIGN.alignRetryTimes) return;
-    this.alignRetry += 1;
-    setTimeout(() => this.applyWeaponTransform(), EQUIP_ALIGN.alignRetryDelayMs);
   }
 
   /** 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调） */

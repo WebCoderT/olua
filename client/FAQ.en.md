@@ -35,7 +35,7 @@
 - [Why does a new character's bag hold a pile of identically named weapons? How do I change the starting list?](#why-does-a-new-characters-bag-hold-a-pile-of-identically-named-weapons-how-do-i-change-the-starting-list)
 - [How does the mall work? Where do I add goods or change prices?](#how-does-the-mall-work-where-do-i-add-goods-or-change-prices)
 - [How is character progress synced to the server?](#how-is-character-progress-synced-to-the-server)
-- [Want to change the character-count limit? Which side?](#want-to-change-the-character-count-limit-which-side)
+- [Why is there no character-count limit?](#why-is-there-no-character-count-limit)
 - [Why can't I see error toasts on the login and character selection screens?](#why-cant-i-see-error-toasts-on-the-login-and-character-selection-screens)
 - [How does the client hook up the realtime (WebSocket) channel?](#how-does-the-client-hook-up-the-realtime-websocket-channel)
 - [How do unit tests run real Cocos code in node?](#how-do-unit-tests-run-real-cocos-code-in-node)
@@ -261,7 +261,7 @@ Carrying and sorting are two separate layers, and it is clear which one you are 
 
 ### How is health regeneration per second calculated? Where do I make it faster or slower?
 
-Regeneration is **an ordinary attribute** (`hpRecover`, unit "points/second") sitting on the character alongside max health, summed from five sources by `GameHelper.combatCalc` (which is also the single exit for attribute aggregation):
+Regeneration is **an ordinary attribute** (`hpRecover`, unit "points/second") sitting on the character alongside max health, summed from five sources **on the server** and delivered via the `roleUpdate` frame (the client no longer computes them):
 
 - **Strength is derived as a share of max health**: base regeneration per level = max health × `configs/growth.attributeRange.hpRecoverRate` (default `0.01` = 1% per second). **To retune global speed, change only this one number** — regeneration from equipment / war soul / title / rank is each computed with its own discount and scales proportionally.
 - **Only defensive-slot equipment adds regeneration**: the `recover` column of `configs/growth.equipmentSlotShare` (clothes 40 / helmet 20 / belt 20 / boots 20, totalling 100; weapons and jewellery are 0). Wearing all four defensive slots is worth about `equipmentGrowth.setPowerRate` (2) times base regeneration. A "minimum 1 point" is **deliberately absent**: low-level armour adds only a few dozen health, so not reaching 1 point/second is normal; forcing a floor would hand a level 1 character in four pieces of armour 4 points/second for free (same-level monsters deal about 7 points/second), making the early game invincible.
@@ -331,12 +331,11 @@ So a new character starts with `5 + 20 + 12 + 14 = 51` pieces, and that pile of 
 - **Server rejections** each have their own handling (revision conflict 20006 / character deleted 20002 / kicked offline 20007), covered in [../FAQ.en.md](../FAQ.en.md#an-admin-edits-a-character--when-does-the-player-see-it)
 - Regression tests: `node tools/test-client-net.cjs` (envelope unwrap / business codes and text / retry and no-retry / token injection / silent and re-login / debounce and flush / dirty session data / every wiring)
 
-### Want to change the character-count limit? Which side?
+### Why is there no character-count limit?
 
-- **The client has no "limit" number**: how many characters the UI can draw has a single source — the **stand array** `roleSelectorLayout.rolePositions` in `configs/layout/scenes`; as many stands as it holds, that many characters can be shown
-- **The business cap is on the server**: `ROLE_MAX_PER_ACCOUNT` in `server/.env` (default 3); over-limit requests are rejected at creation time. The client's pre-creation check means "**all stands are taken**" (saving a round trip, see `ui/RoleSelector.createRole`) and is not a second cap
-- **So it can only be lowered**: it must not exceed the stand count, otherwise a player can create a character the UI has nowhere to place (the extra one gets no stand and stacks at the origin, with a `console.warn` from the client). Adding stands is **layout / art** work (`rolePositions` is a hand-tuned composition) while changing `.env` is an **ops** task, so the two never have to change together
-- Guard: `tools/audit-shared-data.cjs` asserts the committed defaults are no greater than the stand count and forbids the client from introducing a second limit number
+- **Neither side caps it**: the server only validates structure and duplicate names at creation; the client holds no "at most N" number
+- **The UI arranges them automatically**: stands are computed on the grid from `configs/layout/scenes`'s `roleSelectorLayout.roleGrid` — left to right, filling a row before moving to the next (see `ui/RoleSelector.gridStand`); row spacing / column spacing / per-row count are tuned in the layout
+- **The two former numbers are gone**: the hand-written `maxRoleCount` and the server's `.env` `ROLE_MAX_PER_ACCOUNT` were kept in sync only by memory; with the limit cancelled they were removed together
 
 ### Why can't I see error toasts on the login and character selection screens?
 

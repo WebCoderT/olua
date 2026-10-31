@@ -39,8 +39,8 @@ One-line map:
 
 Things that are easy to mix up:
 
-- **The content of character data (what's in the bag, equipment numbers) is not the server's business.** The server validates structure, ownership, limits and name collisions, and stores the content as-is — because the truth about that data lives in `client/assets/configs`. see [server/FAQ.md](server/FAQ.en.md), "Why doesn't the server validate the content of character data".
-- **"How many characters per account" is a single number with two meanings**: the **UI capacity** is the character-select layout's stand array `roleSelectorLayout.rolePositions` (as many stands as are drawn), and the **business cap** is `ROLE_MAX_PER_ACCOUNT` in `server/.env`, which may only be **lowered** and must never exceed the UI capacity (`tools/audit-shared-data.cjs` pins this down). The client holds no second copy of the number.
+- **The content of character data (what's in the bag, equipment numbers) is not the server's business.** The server validates structure, ownership and name collisions, and stores the content as-is — because the truth about that data lives in `client/assets/configs`. see [server/FAQ.md](server/FAQ.en.md), "Why doesn't the server validate the content of character data".
+- **There is no character-count limit**: the server only validates structure and duplicate names at creation, and the character-select UI lays stands out on a grid (`roleSelectorLayout.roleGrid`, left to right, filling a row before moving to the next) — the two former limit numbers (`maxRoleCount` and `ROLE_MAX_PER_ACCOUNT`) have been removed, see [server/FAQ.md](server/FAQ.en.md#why-is-there-no-character-count-limit).
 - **Each side has its own single place for the address** — see the next entry.
 
 ## Switching the backend address (LAN / public domain): which files change?
@@ -125,10 +125,11 @@ Their rules are written in the header of each script — re-run the script inste
 
 ## How should regression be run? What must be green?
 
-Before merging, at least these three categories must run (green means done). The repository root has a Makefile so one command covers it:
+**The day-to-day regression gate is "run what you touched"**: whatever a change affects is what gets run — `make test-changed` picks the minimal verification set from the working tree (or `BASE=main` for a base ref): client changes run the typecheck plus the unit-test suites whose sources reference the touched files; server changes run the build, the affected module's e2e suites and the boundary/hardcode audits; config-table changes run the data-drift audits; doc changes run the doc-numbers and bilingual-parity audits.
 
 ```bash
-make verify   # = check (client tsc + admin typecheck + 13 audits) + builds on all three sides + all tests
+make test-changed        # day-to-day gate: run what you touched (stops on the first failure)
+make verify              # pre-release full gate: typechecks + builds + all tests + all audits
 ```
 
 Manual equivalent (no `make` needed):
@@ -137,7 +138,7 @@ Manual equivalent (no `make` needed):
 # Client: 58 unit-test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + twenty-four e2e suites (248 / 120 / 283 / 120 / 28 / 59 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 87 / 55 / 39 / 51 / 67 + 73) + generated-artifact consistency
+# Server: compile + twenty-four e2e suites (247 / 137 / 283 / 120 / 28 / 69 / 130 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 50 + 87 + 55 + 39 + 51 + 67 + 73) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build
@@ -145,18 +146,17 @@ cd admin && npm run build
 
 # Project-level audits (run from the repository root)
 node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
-  && node tools/audit-shared-data.cjs && node tools/audit-combat-parity.cjs \
+  && node tools/audit-shared-data.cjs \
   && node tools/audit-config-leak.cjs && node tools/audit-docs-en.cjs \
   && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs \
   && node tools/audit-doc-numbers.cjs
 ```
 
-You may run only the suites relevant to your change, but **the server e2e suites and the 13 audit scripts should all pass before every commit** — they watch for "silent failure" problems that unit tests cannot catch:
+These audits watch for "silent failure" problems that unit tests cannot catch (which ones run day to day is decided by `make test-changed` from the change scope; `make verify` runs all of them before a release):
 
 - `audit-api-generated`: are generated artifacts byte-for-byte identical to the documentation (guards against "changed the server, forgot to regenerate")
 - `audit-api-hardcode`: were addresses written into code, or environment variables forgotten in `.env.example`
-- `audit-shared-data`: is the game data shared by all three sides byte-for-byte identical to the client's config tables, and is every table present and non-empty (guards against data drift and against a generator silently dropping a table); it also guards one cross-side numeric convention — the character cap must not exceed the character-select stand count
-- `audit-combat-parity`: does the server's role-attribute algorithm match the client's real one (it compiles the real `GameHelper.combatCalc` into Node as the expected value, guarding against algorithm drift)
+- `audit-shared-data`: is the game data shared by all three sides byte-for-byte identical to the client's config tables, and is every table present and non-empty (guards against data drift and against a generator silently dropping a table)
 - `audit-config-leak`: have tunables leaked into core code, or text keys been left unregistered
 - `audit-docs-en`: did sections or numbers get lost in translation between the Chinese and English docs
 - `audit-ui-click-through`: do UI clicks fall through to the world, and is press ownership wired up completely

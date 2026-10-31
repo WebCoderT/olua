@@ -295,6 +295,34 @@ export interface PartyExpGain {
   from: { roleId: string; username: string };
 }
 
+/**
+ * 本账号角色的权威快照（#541，协议见 realtime.protocol 的 RealtimeRoleUpdateMessage）
+ *
+ * 战斗力 / 八项属性 / 货币 / 等级血蓝全部以这里为准 —— 客户端不再自己算（combatCalc 已退位），
+ * 收到就照搬刷新；区间属性缺省（服务端等级不在成长曲线的边角）时**不碰**对应字段。
+ */
+export interface RoleAuthorityUpdate {
+  level: number;
+  exp: number;
+  expNeed: number;
+  hp: number;
+  mp: number;
+  gold: number;
+  bindGold: number;
+  silver: number;
+  combat: number;
+  maxHp?: number;
+  hpRecover?: number;
+  maxMp?: number;
+  physicalAttack?: [number, number];
+  magicAttack?: [number, number];
+  taoistAttack?: [number, number];
+  physicalDefense?: [number, number];
+  magicDefense?: [number, number];
+  taoistDefense?: [number, number];
+  revision: number;
+}
+
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
@@ -332,6 +360,9 @@ export default class CombatChannel {
 
   /** 队友击杀分到的经验出口（#399；组合根接线到 StorageManager.applyPartyExpGain，不接时经验条不涨） */
   static onExpGain: ((data: PartyExpGain) => void) | null = null;
+
+  /** 角色权威快照出口（#541；组合根接线到 StorageManager.applyServerRoleUpdate，不接时面板不会跟上服务端） */
+  static onRoleUpdate: ((data: RoleAuthorityUpdate) => void) | null = null;
 
   /**
    * 服务端拒绝出口（#495；组合根接线到一句飘字）
@@ -532,6 +563,15 @@ export default class CombatChannel {
     if (!gain || typeof gain !== "object" || typeof gain.exp !== "number" || typeof gain.revision !== "number") return;
     if (!this.onExpGain) return;
     this.onExpGain(gain);
+  }
+
+  /** RealtimeClient 收到 roleUpdate 帧后走这里（#541：属性 / 战斗力 / 货币的权威值到了） */
+  static dispatchRoleUpdate(data: unknown): void {
+    const update = data as RoleAuthorityUpdate | null;
+    if (!update || typeof update !== "object") return;
+    if (typeof update.revision !== "number" || typeof update.combat !== "number" || typeof update.level !== "number") return;
+    if (!this.onRoleUpdate) return;
+    this.onRoleUpdate(update);
   }
 
   /**

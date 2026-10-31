@@ -1,18 +1,23 @@
 /**
- * 装备对齐口径（**唯一实现**：场景外观与角色内观都从这里取几何）
+ * 装备对齐口径（**唯一实现**：角色内观从这里取几何）
  *
  * ===========================================================================
- * 为什么要「算」而不是「配」
+ * #541：**外观已不再「算」—— 场景里的衣服与武器一律摆绝对位置**
+ * ===========================================================================
+ * 外观（场景里跟角色走的那套）的几何只认数据：管理端「装备对齐」工作台调好的
+ * 8 向绝对位置经服务端 `game-config/equip-align` 每次进图下发（configs/apply-snapshot），
+ * 客户端 `RoleAppearance.applyOutTransform` 原样摆上去 —— 曾经的「按身体帧内容 bbox
+ * 自动贴握持点」算法（#505）已删除，因为它现场算出来的位置与工作台/服务端数据对不上，
+ * 用户无法用工作台表达最终效果。本文件保留的纯函数仅供**内观**（RoleInShowView）
+ * 与单测使用。
+ *
+ * ===========================================================================
+ * 内观为什么仍要「算」（历史背景，即原外观算法的出处）
  * ===========================================================================
  * 素材的画布与裁剪留白每件都不一样（武器外观画布 245×234 ~ 570×608，身体 142×112 ~ 480×480），
- * 所以写死一个 inPosition / outPositions 只能对上一件身体：换一件衣服，武器就飘到脚底或头顶；
- * 换一把武器，内观里的位置又对不上。历史配置正是这么攒出来的 —— 20 把武器 20 组互不相干的手调数字。
- *
- * 这里改成由**运行时读到的帧几何**推导：
- *   - 外观：武器内容 bbox 的中心落到「当前身体内容 bbox 的握持点」（右侧或左侧由朝向决定）
- *   - 内观：武器缩放到身体高度的固定倍数，同样贴到握持点
- * 于是任何身体尺寸、任何武器都自动对齐；新增素材不需要再手调数字（配置里的 outPositions
- * 退化为逐件微调，默认 0）。
+ * 写死一个 inPosition / outPositions 只能对上一件身体：换一件衣服，武器就飘到脚底或头顶。
+ * 内观仍由**运行时读到的帧几何**推导（武器缩放到身体高度的固定倍数、贴握持点），
+ * 手调过的武器用 `inManual = true` 走绝对值（#523）。
  *
  * 帧几何一律用**内容 bbox**（`SpriteFrame.rect` + `SpriteFrame.offset`，见
  * GameUiHelper.spriteContentBox）—— 用节点框会随着裁剪留白漂移，正是原来的病根。
@@ -56,17 +61,16 @@ export function handAnchor(body: ContentBox, onLeft: boolean): { x: number; y: n
 }
 
 /**
- * 外观：武器节点位置（宿主坐标）
+ * 武器节点位置（宿主坐标，内观用）
  *
  * 武器节点被摆到 `手部锚点 − 武器内容中心 × 缩放`，于是**武器的内容中心**正好落在握持点上。
  * 内容中心不等于节点中心（裁剪留白），所以必须减去 `weapon.cx/cy`，否则留白越多偏得越远。
  *
- * @param scale 武器缩放（outScale）
- * @param nudge 逐件微调（配置里的 outPositions，默认 0）
+ * @param scale 武器缩放
  */
-export function placeWeaponOnHand(body: ContentBox, weapon: ContentBox, scale: number, nudge: { x: number; y: number }, onLeft: boolean): { x: number; y: number } {
+export function placeWeaponOnHand(body: ContentBox, weapon: ContentBox, scale: number, onLeft: boolean): { x: number; y: number } {
   const hand = handAnchor(body, onLeft);
-  return { x: hand.x - weapon.cx * scale + nudge.x, y: hand.y - weapon.cy * scale + nudge.y };
+  return { x: hand.x - weapon.cx * scale, y: hand.y - weapon.cy * scale };
 }
 
 /**
@@ -76,6 +80,6 @@ export function placeWeaponOnHand(body: ContentBox, weapon: ContentBox, scale: n
  */
 export function placeInShowWeapon(body: ContentBox, weapon: ContentBox, onLeft = true): { x: number; y: number; scale: number } {
   const scale = (body.h * EQUIP_ALIGN.inWeaponHeightRatio) / weapon.h;
-  const pos = placeWeaponOnHand(body, weapon, scale, { x: 0, y: 0 }, onLeft);
+  const pos = placeWeaponOnHand(body, weapon, scale, onLeft);
   return { x: pos.x, y: pos.y, scale };
 }

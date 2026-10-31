@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { itemsApi, formatTime, PERMISSION } from "../api";
+import { itemsApi, formatTime, itemIcon, PERMISSION } from "../api";
 import type { Item, PageResult } from "../api";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -140,6 +141,7 @@ export function ItemsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>大类</th>
                 <th className={thClass}>名称 / 描述</th>
@@ -153,6 +155,9 @@ export function ItemsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={itemIcon(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={tdClass}>
                     <Badge tone="slate">{TYPE_LABELS[item.type] ?? item.type}</Badge>

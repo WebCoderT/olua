@@ -49,8 +49,6 @@ export interface AppConfiguration {
    * 没配注册码就谁也不许注册，要用 `.env` 里显式打开（或干脆配一个注册码）。
    */
   adminRegisterOpen: boolean;
-  /** 每个账号的角色上限 */
-  roleMaxPerAccount: number;
   /** 允许的跨域来源（["*"] = 全部） */
   corsOrigins: string[];
   /** 是否打印详细日志 */
@@ -205,6 +203,15 @@ export interface AppConfiguration {
    * 整个往返。清算只动库标记，残留连接由踢下线巡检（`realtimeKickPollMs`）收尾。
    */
   realtimeOnlineStaleMs: number;
+  /**
+   * 角色权威快照（roleUpdate 帧）的轮询间隔（毫秒；`0` = 关闭推送）
+   *
+   * 角色属性 / 战斗力 / 货币的写点分散在两个进程（存档进程的任务 / 邮件 / 商城 / 后台，
+   * 实时进程的升级 / 拾取），进程内事件总线跨不过进程边界 —— 与踢下线感知同一难题、
+   * 同一答案：实时进程轮询在线角色的行，`revision / updated_at` 变了才推。
+   * 默认 1 秒：属性面板与货币栏的「实时」以这个粒度为准。
+   */
+  realtimeRoleSyncMs: number;
   //#endregion
 
   //#region 聊天（#395）
@@ -375,7 +382,7 @@ export default function configuration(): AppConfiguration {
     adminRegisterCode,
     playerRegisterOpen: (process.env.PLAYER_REGISTER_OPEN ?? "true") === "true",
     adminRegisterOpen: (process.env.ADMIN_REGISTER_OPEN ?? "false") === "true",
-    roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? 3),
+
     corsOrigins: (process.env.CORS_ORIGINS ?? "*")
       .split(",")
       .map((item) => item.trim())
@@ -412,6 +419,7 @@ export default function configuration(): AppConfiguration {
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
     realtimeOnlineStaleMs: Number(process.env.REALTIME_ONLINE_STALE_MS ?? 90 * 1000),
+    realtimeRoleSyncMs: Number(process.env.REALTIME_ROLE_SYNC_MS ?? 1 * 1000),
     chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 120),
     chatRateLimit: Number(process.env.CHAT_RATE_LIMIT ?? 5),
     chatRateWindowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 10 * 1000),

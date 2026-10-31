@@ -19,17 +19,27 @@
  */
 
 import {
+  DRUGS,
+  EQUIPMENT_BASES,
   EQUIPMENT_DISPLAY_NAMES,
   EQUIPMENT_SLOTS,
   EQUIPMENT_SLOT_OF,
+  FASHIONS,
+  ITEM_BASES,
   ITEM_LABELS,
   MAP_LABELS,
+  MONSTERS,
+  NPCS,
   OCCUPATION_LABELS,
   RANK_LABELS,
   SEX_LABELS,
+  SKILLS,
   SKILL_LABELS,
   SOUL_LABELS,
+  SOUL_LEVEL_META,
+  STATUSES,
   TITLE_LABELS,
+  TITLE_LEVEL_META,
 } from "../../../server/src/shared/game-data.generated";
 
 export {
@@ -123,4 +133,72 @@ export function rankText(level: string | number): string {
   const rows: Record<string, { tier: string; label: string }> = RANK_LABELS;
   const row = rows[String(value - 1)];
   return row ? `${row.tier} · ${row.label}` : "";
+}
+
+/* ===========================================================================
+ * 图片字段查表（列表页缩略图用）
+ *
+ * 图片是**客户端静态资源**，不是运营数据：与页面上的名字同一份生成物查出来，
+ * 不进库、不走接口。查不到（生成物里没有这个 id / 字段为空）返回空串，
+ * 缩略图组件会显示「无图」占位。
+ * =========================================================================== */
+
+/** 生成物表里直读一个字符串字段（表行都是 Record<string, unknown>，只开这一个口） */
+function rowField(table: Record<string, unknown>, key: string, field: string): string {
+  const row = table[key];
+  if (!row || typeof row !== "object") return "";
+  const value = (row as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
+}
+
+/** 装备基础件 id → 图标（商城商品 = 装备，同一份） */
+export function equipmentIcon(id: string): string {
+  return rowField(EQUIPMENT_BASES, id, "icon");
+}
+
+/** 药品 id → 图标 */
+export function drugIcon(id: string): string {
+  return rowField(DRUGS, id, "icon");
+}
+
+/** 物品（材料 / 其他）id → 图标 */
+export function itemIcon(id: string): string {
+  return rowField(ITEM_BASES, id, "icon");
+}
+
+/** 怪物 key → 图标 */
+export function monsterIcon(id: string): string {
+  return rowField(MONSTERS, id, "icon");
+}
+
+/** 技能 id → 图标 */
+export function skillIcon(id: string): string {
+  return rowField(SKILLS, id, "icon");
+}
+
+/** 状态 id → 图标 */
+export function statusIcon(id: string): string {
+  return rowField(STATUSES, id, "icon");
+}
+
+/** 时装 id → 图标 */
+export function fashionIcon(id: string): string {
+  return rowField(FASHIONS, id, "icon");
+}
+
+/** NPC id → 素材目录（图集动画，缩略图取首帧） */
+export function npcSrc(id: string): string {
+  return rowField(NPCS, id, "src");
+}
+
+/** 称号等级 → 动画图集目录（下标 = 等级 - 1，与 levelText 同一口径；缩略图取首帧） */
+export function titleAnimation(level: string | number): string {
+  const value = Number(level);
+  return Number.isFinite(value) && value >= 1 ? rowField(TITLE_LEVEL_META, String(value - 1), "animation") : "";
+}
+
+/** 战魂阶数 → 动画图集目录（下标 = 等级 - 1；缩略图取首帧） */
+export function soulAnimation(level: string | number): string {
+  const value = Number(level);
+  return Number.isFinite(value) && value >= 1 ? rowField(SOUL_LEVEL_META, String(value - 1), "animation") : "";
 }

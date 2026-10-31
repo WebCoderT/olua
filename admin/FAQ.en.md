@@ -12,6 +12,7 @@
 
 - [How do I start the admin console? Where is the API address configured?](#how-do-i-start-the-admin-console-where-is-the-api-address-configured)
 - [Why are buttons greyed out / why are admin menu items missing?](#why-are-buttons-greyed-out--why-are-admin-menu-items-missing)
+- [Where do the list thumbnails come from? Why do some rows show "no image"?](#where-do-the-list-thumbnails-come-from-why-do-some-rows-show-no-image)
 - [What happens if I type a URL for a page I have no permission for?](#what-happens-if-i-type-a-url-for-a-page-i-have-no-permission-for)
 - [What is the difference between resetting a password and changing my own?](#what-is-the-difference-between-resetting-a-password-and-changing-my-own)
 - [Why is "My Account" in the top-right corner instead of the left nav?](#why-is-my-account-in-the-top-right-corner-instead-of-the-left-nav)
@@ -37,12 +38,20 @@
 
 ### Why are buttons greyed out / why are admin menu items missing?
 
-- **Every piece of visibility comes from the permission points carried in the token** (`hasPermission` in `store/session`). Nav items carry a `permission` field (`Layout` filters before rendering), write buttons are `disabled`, and pages are wrapped by the `RequirePermission` shell in `App.tsx`
+- **Every piece of visibility comes from the permission points carried in the token** (`hasPermission` in `store/session`). Nav items carry a `permission` field (`Layout` filters before rendering), write buttons are `disabled`, and pages are wrapped by the `RequirePermission` shell in `App.tsx`. The sidebar nav is split into four collapsible groups by function, and **a group is hidden entirely when every child in it lacks the permission**
 - **Interface visibility is only experience; the server is the authority**: guards re-evaluate on every request, so typing an address by hand gets nothing more than `403` + business code **30006**
 - The single source of truth for permission points is on the **server** at `src/common/constants/permission.ts` (25 permission points / 3 roles). `PERMISSION` in the admin `src/api/types.ts` mirrors it, and the two must correspond one to one
 - **The two mail blocks are gated differently**: `mail:read` is **not granted to the read-only observer** (delivery records expose player email addresses, which are personal data), while the announcements `announcement:read` is granted (announcements are public content aimed at the whole service). So an observer account legitimately lands with **one fewer admin nav item** — this is not a bug
 - **Fallback for a dirty session**: when `permissions` is missing from the session (an old token, hand-edited localStorage), `hasPermission` treats it as an **empty array** — the result is **least privilege** (almost the whole admin menu disappears), never a silent grant
 - After an admin is demoted, **reloading the page takes effect**: on entry `Layout` quietly calls `authApi.me()` once and writes the latest role and permission points back into the session
+
+### Where do the list thumbnails come from? Why do some rows show "no image"?
+
+- The thumbnail component lives in `components/GameImage.tsx`: single-image resources (the `icon` field) render via a plain `<img>`, while atlas animations (titles / souls / NPCs) parse the plist and draw the **first frame in document order** onto a canvas (both TexturePacker format 2 / 3 dialects are supported, with a module-level cache so each atlas is parsed once per screen).
+- Image paths are always looked up from `game-data.generated.ts` (the `equipmentIcon`-style helpers in `api/gameData.ts`); the API rows for skills / statuses / fashions / titles / souls already carry `icon` / `animation`, and those row values are used directly — both paths read the **same configuration**, so no second dictionary exists.
+- "No image" means the path is empty or the PNG could not be fetched: either the client asset has not been added yet (new config ahead of the art) or the id was added in the database later and is not in the generated snapshot yet. Adding the asset or re-running `node tools/gen-shared-data.cjs` fixes it; nothing else in the list is affected.
+- The URL root is `/game-resources/`: the vite middleware reads `client/assets/resources` directly in dev, and in prod the admin nginx reverse-proxies to the game container — the same pipeline as the equipment alignment workbench, and because it is same-origin the canvas never gets tainted.
+- **Thumbnails are clickable to zoom in**: clicking any cell opens a lightbox (larger view, closes with Esc or by clicking the backdrop). The atlas zoom is a large canvas **redrawn** from the same cached first frame — not the 40px thumbnail stretched — so pixel art stays sharp.
 
 ### What happens if I type a URL for a page I have no permission for?
 
@@ -50,7 +59,7 @@ No white screen. The `RequirePermission` shell renders an inline "no access" not
 
 ### Why is "My Account" in the top-right corner instead of the left nav?
 
-Because it is **everyone's private page** (your own identity / login status / permission points, plus self-service password change) and **requires no permission point at all** — putting it in the left nav would mix it with "features you need permission to see", which is the wrong semantics. So `Layout` renders it as a button in the top identity bar, and the `/me` route hangs directly under `RequireAuth` without a `RequirePermission` wrapper. For the same reason every item in `NAV_ITEMS` carries a `permission` except that one.
+Because it is **everyone's private page** (your own identity / login status / permission points, plus self-service password change) and **requires no permission point at all** — putting it in the left nav would mix it with "features you need permission to see", which is the wrong semantics. So `Layout` renders it as a button in the top identity bar, and the `/me` route hangs directly under `RequireAuth` without a `RequirePermission` wrapper. For the same reason every item in `NAV_TOP` / `NAV_GROUPS` (the top-level entries and the two-level groups) carries a `permission` except that one.
 
 ## Password management
 
@@ -79,7 +88,7 @@ The two entries are deliberately separate because **the verification and the con
 ### Why are there two sets of combat attributes on the detail page? Does a mismatch mean cheating?
 
 - **Left column, "server recompute"**: the server recomputes from the **saved** snapshot (level / equipment / war soul / title / rank). It is a derived field, not a stored column, so it is **recomputed on every detail read** — after you change that batch of fields in the console and save, this updates immediately and does not wait for the client's next sync
-- **Right column, "client reported"**: the values the client's `combatCalc` wrote into the snapshot. The server only compares **combat power and max health** (the client writes both on every recompute, and combat power is a weighted total that best represents whether the two sides still agree). The six attack/defense ranges are in the snapshot too, but judging "do these agree" on them is far too noisy (saving between a level-up and a recompute would trip it), so the server does not compare them and this column does not show them — showing numbers nothing validates would suggest they had been checked
+- **Right column, "client reported"**: the attribute values carried in the save. Since #541 the client no longer computes attributes itself — this column shows the gap between the reported values and the **server's authoritative recompute** (the server only compares **combat power and max health**: combat power is a weighted total that best represents how stale the reported values are). The six attack/defense ranges are in the snapshot too, but judging "do these agree" on them is far too noisy (saving between a level-up and a recompute would trip it), so the server does not compare them and this column does not show them — showing numbers nothing validates would suggest they had been checked
 - **The "mismatch" banner**: it only means the two sides **disagree on the formula's output**, and it is **not proof of cheating** — saving between a level-up and a recompute, client config drift, or a stale equipment id left in the snapshot all trip it. The console **does not decide which side is right** (the server side is not automatically correct either: if the player saved between a level-up and a recompute, the client side is the stale one); it only makes the gap visible
 - **"Equipment ids the server cannot resolve"**: tripped when the client deleted that piece of equipment, or the snapshot still holds an old id. The server skips that piece when it cannot find its attributes (matching the client's "unknown means not worn"), but says so — otherwise the attributes quietly come out short while everything looks fine
 - The list page has **no** combat-power column, and that is deliberate: the list endpoint does not carry `derived` (recomputing per row would only bloat the response, and the list does not display it anyway)

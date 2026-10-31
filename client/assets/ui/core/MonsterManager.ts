@@ -357,8 +357,9 @@ export default class MonsterManager {
    *
    * 扣多少血、死没死都以结算帧为准（overkill 不截断伤害数字，血量才截断）；
    * 击杀奖励（经验 + 掉落）以 reward 为准（#316：结算在服务端，本地只演不掷）；
-   * 同时做一次**合法带对账**：服务端伤害越出客户端口径允许的区间，
-   * 以 `combat-parity` 标签记到 console —— 在删掉客户端旧算法之前，这就是发现口径漂移的地方。
+   * 同时做一次**合法带对账**：服务端伤害越出客户端用下发属性推的允许区间，
+   * 以 `combat-parity` 标签记到 console —— 服务端权威（#541）下这仍是发现
+   * 「属性快照没跟上 / 结算口径异常」的可观测点。
    */
   static applyServerSettle(data: { castId: number; skillId: string; targetId: string; damage: number; hp: number; killed: boolean; reward?: CombatKillReward }) {
     const node = this.instanceIndex.get(data.targetId);

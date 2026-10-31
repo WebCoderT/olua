@@ -36,12 +36,9 @@
  */
 
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
 
-const ROOT = path.resolve(__dirname, "..");
-const ASSETS = path.join(ROOT, "client", "assets");
 const OUT = process.env.EQUIP_ALIGN_OUT || path.join(ROOT, "admin", "src", "data", "equip-align.catalog.json");
 
 const SOURCE_FILES = [
@@ -50,101 +47,27 @@ const SOURCE_FILES = [
   path.join(ASSETS, "configs", "layout", "dialogs.ts"),
 ];
 
-/** cc 垫片：配置层只用到这几个表现层类（与 gen-shared-data 完全一致） */
-const CC_SHIM = `
-class Color { constructor(value) { this.value = value; } }
-class Vec2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }
-class Size { constructor(width = 0, height = 0) { this.width = width; this.height = height; } }
-class Vec3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } }
-module.exports = { Color, Vec2, Size, Vec3 };
-`;
-
 function main() {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-equip-catalog-"));
-  writeShim(work);
-  compile(work);
-  const cfg = load(work);
-  const catalog = buildCatalog(cfg);
+  const work = createWork("equip-catalog");
+  compileClientConfig(work, SOURCE_FILES);
+  const { cfg, layoutCfg } = configLoader(work);
+  const catalog = buildCatalog({
+    equipments: cfg("equipments"),
+    role: cfg("role"),
+    animation: cfg("animation"),
+    dialogs: layoutCfg("dialogs"),
+  });
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
-  fs.rmSync(work, { recursive: true, force: true });
+  cleanupWork(work);
 
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  裸模 ${catalog.role.length} 套 · 衣服 ${catalog.clothes.length} 件 · 武器 ${catalog.weapons.length} 把`);
 }
 
-/** 把 cc 垫片伪装成一个可被 require 的包 */
-function writeShim(work) {
-  const shimDir = path.join(work, "out", "node_modules", "cc");
-  fs.mkdirSync(shimDir, { recursive: true });
-  fs.writeFileSync(path.join(shimDir, "index.js"), CC_SHIM, "utf8");
-  fs.writeFileSync(path.join(shimDir, "package.json"), '{"name":"cc","version":"0.0.0","main":"index.js"}', "utf8");
-}
-
-/**
- * 编译客户端配置到临时目录
- *
- * 报 `Cannot find module 'cc'` 是**预期内的**（引擎类型不在这个工程里），
- * 缺类型不影响 JS 产物；真正的失败（语法错误 / 找不到源文件）不会被吞掉。
- */
-function compile(work) {
-  const tsconfig = path.join(work, "tsconfig.json");
-  fs.writeFileSync(
-    tsconfig,
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          module: "CommonJS",
-          moduleResolution: "node",
-          outDir: path.join(work, "out"),
-          rootDir: ASSETS,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          strict: false,
-          noEmitOnError: false,
-        },
-        files: SOURCE_FILES,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
-
-  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
-  if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
-
-  let log = "";
-  try {
-    log = execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (error) {
-    log = `${error.stdout ?? ""}${error.stderr ?? ""}`;
-  }
-  const fatal = log.split("\n").filter((line) => line.includes("error TS") && !line.includes("Cannot find module 'cc'"));
-  if (fatal.length) {
-    console.error(fatal.slice(0, 20).join("\n"));
-    throw new Error(`客户端配置编译失败（${fatal.length} 条错误，见上）`);
-  }
-}
-
-function load(work) {
-  const dir = path.join(work, "out", "configs");
-  const requireCfg = (name) => require(path.join(dir, `${name}.js`));
-  return {
-    equipments: requireCfg("equipments"),
-    role: requireCfg("role"),
-    animation: requireCfg("animation"),
-    dialogs: require(path.join(dir, "layout", "dialogs.js")),
-  };
-}
-
-/** `clothes/out/005` → `clothes/atlas/out/005`（与客户端 `configs/animation.getAtlasSrc` 同一条规则） */
+/** 图集路径（#542 起图集与散帧**同路径**，夹层已移除 → 恒等；保留函数是为页面字段语义留名） */
 function toAtlas(outSrc) {
-  const direct = /^(\w+)\/out\/(.+)$/.exec(outSrc);
-  if (direct) return `${direct[1]}/atlas/out/${direct[2]}`;
-  const role = /^role\/(\d+)$/.exec(outSrc);
-  return role ? `role/atlas/${role[1]}` : "";
+  return outSrc;
 }
 
 const vec = (value) => (value ? [Number(value.x) || 0, Number(value.y) || 0] : [0, 0]);

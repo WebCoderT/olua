@@ -43,9 +43,17 @@ export default class ApiError {
     return this.kind === ApiErrorKind.Network || this.kind === ApiErrorKind.Timeout;
   }
 
-  /** 是否需要重新登录（令牌失效 / 账号被封禁） */
+  /**
+   * 是否需要重新登录（令牌失效 / 账号被封禁）
+   *
+   * 判据**只有业务码**，不看 HTTP 状态码：登录接口「账号或密码错误」也回 401
+   * （服务端防账号枚举，见 server auth.service 的 PASSWORD_WRONG），但那是业务失败 ——
+   * 提示一下即可；「status 401 就重登」会把登录页整个重载，错误提示刚建出来就被销毁，
+   * 玩家只看到页面闪一下。会话类失败（40100~40103 / 10004 被封禁）服务端都带对应业务码
+   * （auth.guard 抛 40100，all-exceptions.filter 把其他 401 兜底映射成 40100），码表里查得到。
+   */
   get needRelogin(): boolean {
-    return this.status === 401 || RELOGIN_BIZ_CODES.indexOf(this.code as (typeof RELOGIN_BIZ_CODES)[number]) !== -1;
+    return RELOGIN_BIZ_CODES.indexOf(this.code as (typeof RELOGIN_BIZ_CODES)[number]) !== -1;
   }
 
   /** 可直接展示给玩家的文案 */

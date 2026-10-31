@@ -104,12 +104,11 @@ export interface OutTransform {
    */
   outPositions?: Vec2[];
   /**
-   * 武器的位置语义（#509）：true = `outPositions` 是**绝对位置**，false/缺省 = 运行时按身体帧自动算
+   * 武器的位置语义（#509 遗留，**#541 起客户端不再读它**）
    *
-   * 衣服与裸模一直是绝对位置，不看这个字段。武器之所以要开关：自动算法在素材裁剪留白、
-   * 影子、身体比例差异大的情况下会偏（见 #505 / #509 的比对结论），
-   * 由管理端「装备对齐」工作台逐件调过的武器置 true，没调的继续走自动算法 ——
-   * 渐进替换，不会一次把 20 把武器全部推到原点。
+   * 外观帧算法已删除：客户端外观（衣服与武器）一律把 `outPositions` 当绝对位置摆，
+   * 这个字段只剩数据管道意义（服务端 DTO / apply-snapshot 的基线还原、工作台的保存语义）。
+   * 工作台保存时仍默认写 true。
    */
   outManual?: boolean;
 }
@@ -154,8 +153,9 @@ export interface Equipment extends Good, BattleAttributes {
    * 外观位置（按 8 方向各一个）
    * 数组下标顺序与 configs/animation 的 directions 一致：
    * up / right_up / right / right_down / down / left_down / left / left_up
-   * 衣服：相对角色节点原点（脚底锚点）的偏移，y 向上 —— **身体站哪儿就是它**；
-   * 武器：只当**微调**（默认 0），实际位置由 RoleAppearance.applyWeaponTransform 贴着当前身体帧现算。
+   * 衣服与武器都是**绝对位置**（相对角色节点原点 = 脚底锚点，y 向上，#541）：
+   * 真值由服务端 `game-config/equip-align` 每次进图下发（或工作台定稿后烧回出厂配置）；
+   * 出厂配置里留 0 = 未对齐占位。
    */
   outPositions: Vec2[];
   // 外观

@@ -10,7 +10,7 @@ import { AchievementRepository } from "../../database/repositories/achievement.r
 import { RoleAchievementRepository } from "../../database/repositories/role-achievement.repository";
 import { AchievementRow, RoleAchievementRow } from "../../database/rows";
 import { parseRewardItems } from "../../common/utils/reward-items.util";
-import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RoleDto } from "../roles/dto/role.dto";
 import { GameMailService } from "../game-mail/game-mail.service";
 import { RolesService } from "../roles/roles.service";
@@ -187,7 +187,7 @@ export class AchievementService implements OnModuleInit {
     const records = new Map(this.records.listByRole(role.id).map((item) => [item.achievement_id, item]));
     // 状态型要读背包与战力：一次查询里各算一次，不按成就条数重复算
     const bagCounts = new Map<string, number>();
-    const combat = summarizeRoleAttributes(role)?.combat ?? 0;
+    const combat = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data))?.combat ?? 0;
     return this.achievementsRepo.listAll().map((row) =>
       this.viewOf(accountId, role, row, records.get(row.id), { bagCounts, combat }),
     );
@@ -225,7 +225,7 @@ export class AchievementService implements OnModuleInit {
       case "level":
         return Math.max(1, role.level);
       case "combat":
-        return cache?.combat ?? summarizeRoleAttributes(role)?.combat ?? 0;
+        return cache?.combat ?? summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data))?.combat ?? 0;
       case "collect": {
         const goodId = row.condition_target;
         if (!goodId) return 0;

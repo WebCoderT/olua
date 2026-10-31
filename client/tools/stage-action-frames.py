@@ -15,8 +15,8 @@
 
 - 源：client/assets/resources/<目录ID>/{NNNNN.png, NNNNN.PNG}
 - 目标：client/tools/_stage_action_atlas/<目录ID>/<action>/d<方向>_<帧>.png
-  （暂存根按树分目录，打包器镜像相对路径 → 输出根取 resources/<树>/atlas：
-   _stage_action_atlas/clothes/out/001/... → resources/clothes/atlas/out/001/...）
+  （暂存根按树分目录，打包器镜像相对路径 → 输出根取 resources/<树>：
+   #542 起图集与外观目录同路径，_stage_action_atlas/clothes/out/001/... → resources/clothes/out/001/...）
   （同卷硬链接，避免大体积拷贝；跨卷时退回复制）
 - 源帧缺失时记入缺失清单并继续（个别包缺段属正常，如怪物 27 没有走路段）
 输出根目录由调用方传给 plist_packer / verify_plist。

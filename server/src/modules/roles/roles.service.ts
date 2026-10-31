@@ -1,11 +1,11 @@
 import { HttpStatus, Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
-import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { GROWTH_SCALARS, ITEM_BASES, ITEM_TYPES, DRUGS, SELL_PRICES } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS, ITEM_TYPES } from "../../shared/game-data.generated";
+import { drugOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -50,7 +50,6 @@ export class RolesService {
   constructor(
     private readonly roles: RoleRepository,
     private readonly accounts: AccountRepository,
-    private readonly config: ConfigService,
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
@@ -59,17 +58,6 @@ export class RolesService {
     private readonly growth: GrowthRepository,
   ) {}
 
-  /**
-   * 角色数量上限（**业务上限只在这一处**）
-   *
-   * 客户端**没有**第二份数字：它那边的「上限」是选角界面的**站位数量**
-   * （`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions`），那是界面容量。
-   * 所以这个值**只能调低** —— 不得超过站位数量，否则玩家能建出界面上没处放的角色
-   * （多出来的取不到站位，会叠在原点）。这条关系由 `tools/audit-shared-data.cjs` 守着。
-   */
-  private get maxRoles(): number {
-    return this.config.get<number>("roleMaxPerAccount") ?? 3;
-  }
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
   list(accountId: string): RoleSummaryDto[] {
@@ -122,20 +110,19 @@ export class RolesService {
   /**
    * 创建角色
    *
-   * 校验顺序：数量上限 → id 是否已存在 → 同账号是否重名。
+   * 校验顺序：id 是否已存在 → 同账号是否重名（角色数量不设上限，选角界面按网格自动排）。
    * 第一个角色自动设为在线（与客户端「建完就能进游戏」的体验一致）。
    */
   create(accountId: string, dto: CreateRoleDto): RoleDto {
     const account = this.mustAccount(accountId);
     const { fields, data } = parseRoleData(dto.data);
 
-    if (this.roles.countByAccount(accountId) >= this.maxRoles) {
-      throw BizException.conflict(BizCode.ROLE_LIMIT, `角色数量已达上限（最多 ${this.maxRoles} 个）`);
-    }
     if (this.roles.findById(fields.id)) throw BizException.conflict(BizCode.ROLE_ID_EXISTS, "角色 id 已存在，请重试");
     if (this.roles.findByAccountAndName(accountId, fields.name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
 
     const now = Date.now();
+    // 战斗属性与战斗力在落库前由服务端重算（权威值）：客户端给的只是占位/参考
+    this.applyAuthoritativeAttributes(fields.level, data);
     const row: RoleRow = {
       id: fields.id,
       account_id: accountId,
@@ -151,10 +138,10 @@ export class RolesService {
       updated_at: now,
     };
     this.roles.insert(row);
-    // 这里**刻意不做**战斗属性比对（与 save 那条不同）：
-    // 建号这份 data 是客户端 `new Role(...)` **刚构造出来的初始存档**，它的 `combat` 是构造函数里的
-    // 占位值（`maxHp * 10`），压根没经过 `GameHelper.combatCalc` —— 实测 1 级裸角色重算是 2310、
-    // 而占位值是 1000，**必然不一致**。那不是任何人的 bug，比了只会每次建号刷一条噪音。
+    // 这里**刻意不做**战斗属性比对（与 save 那条不同）：建号这份 data 是客户端 `new Role(...)`
+    // 刚构造出来的初始存档，combat 是构造函数里的占位值 —— 但占位值不会落库：上面那行
+    // `applyAuthoritativeAttributes` 已经把它换成了服务端重算的真实值（1 级裸角色约 2310）。
+    // 在线标记一律走 `setOnlineRole`（#547）：它顺带写心跳，否则这一行会被在线清算判成「没人」。
     if (!account.online_role_id) this.accounts.setOnlineRole(accountId, row.id);
     return RoleDto.from(row, account.online_role_id ?? row.id);
   }
@@ -187,6 +174,10 @@ export class RolesService {
       throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
     }
 
+    // 比对在前（记录客户端这次上报了什么，观察用），重算在后（落库的一定是服务端算的）：
+    // 客户端那份自 #541 起只是演，谁强由这里的公式说了算
+    this.warnIfAttributesMismatch(roleId, fields.level, data);
+    this.applyAuthoritativeAttributes(fields.level, data);
     const row: RoleRow = {
       ...existing,
       name: fields.name,
@@ -200,7 +191,6 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.roles.replace(row);
-    this.warnIfAttributesMismatch(row.id, row.level, data);
     return RoleDto.from(row, account.online_role_id);
   }
 
@@ -257,6 +247,8 @@ export class RolesService {
 
     data[field] = target.level;
     data.bindGold = bindGold - target.bind_gold;
+    // 阶位变了，属性与战斗力跟着变 —— 同样由服务端重算落库
+    this.applyAuthoritativeAttributes(existing.level, data);
 
     const row: RoleRow = {
       ...existing,
@@ -339,10 +331,15 @@ export class RolesService {
   /**
    * 出售 / 回收（玩家侧 #397，epic #394）：扣物与入账都在服务端
    *
-   * 价格只认共享快照 `SELL_PRICES`（装备 = 回收价曲线已含前后缀倍率，其余 = 条目价签）——
-   * 客户端报多少都无效，它只报「卖什么、卖几件」。快照里没有价签的 id 就是**不可卖**
+   * 价格走 `sellPriceOf`（#545）：**先查运营库覆盖层，缺省回落生成物的出厂价签
+   * `SELL_PRICES`**（装备 = 回收价曲线已含前后缀倍率，其余 = 条目价签）——
+   * 客户端报多少都无效，它只报「卖什么、卖几件」。没有任何价签的 id 就是**不可卖**
    * （任务物 / 关键道具靠这条拦住，20018），与商城「目录之外的 id 一律 404」同口径：
    * 白名单在数据里，不在代码里。
+   *
+   * #545 之前这里直接读生成物：管理端把某种材料的卖价从 2 调到 20，客户端背包显示 20
+   * （快照覆写生效），服务端仍按 2 付钱 —— 玩家看到的是「价签不对」，我们看到的应该是
+   * 「这条链路还没接库」。
    *
    * **整单结算**：任何一条不合法（不可卖 / 数量不够）都不落库，不存在「卖了一半」的存档
    * （与 grantQuestRewards 的校验期抛错语义一致）。同 id 的多条先合并 —— 一键回收会把
@@ -366,11 +363,11 @@ export class RolesService {
       wanted.set(entry.goodId, (wanted.get(entry.goodId) ?? 0) + count);
     }
 
-    // 1) 计价：价签读快照，客户端报的价一概不看
+    // 1) 计价：价签读运营库（缺省回落出厂价签），客户端报的价一概不看
     const sold: SellLineDto[] = [];
     let total = 0;
     for (const [goodId, count] of wanted) {
-      const unitPrice = Math.max(0, Math.floor(Number((SELL_PRICES as Record<string, number>)[goodId]) || 0));
+      const unitPrice = Math.max(0, Math.floor(sellPriceOf(goodId) ?? 0));
       if (unitPrice <= 0) {
         throw BizException.conflict(BizCode.SELL_NOT_SELLABLE, `该物品不可出售：${goodId}`);
       }
@@ -462,8 +459,9 @@ export class RolesService {
     const bag = data.bag;
     if (!Array.isArray(bag)) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包数据不完整，无法放入物品");
     // 单格上限：装备没有叠加概念（1）；药品/材料从各自的表读 maxStack（#252/#255 起入库），读不到按 99
+    // #544 起先查运营库覆盖层：管理端改药品叠加上限对服务端入包即时生效
     const stackable = itemType !== "equipment";
-    const stackRow = stackable ? (DRUGS[goodId] ?? ITEM_BASES[goodId]) : undefined;
+    const stackRow = stackable ? (drugOf(goodId) ?? itemBaseOf(goodId)) : undefined;
     const maxStack = stackable ? Math.max(1, Math.floor(Number(stackRow && (stackRow as Record<string, unknown>).maxStack) || 99)) : 1;
 
     const placed: Array<{ row: number; col: number; id: string; count: number }> = [];
@@ -625,13 +623,7 @@ export class RolesService {
    * （等级不在成长曲线里属于旧存档边角情况，恢复性操作走兜底而不是拒绝）
    */
   private resolveResourceLimits(existing: RoleRow, data: Record<string, unknown>): { maxHp: number; maxMp: number } {
-    const summary = summarizeRoleAttributes({
-      level: existing.level,
-      equipments: (data.equipments as Record<string, string | null> | undefined) ?? null,
-      soulOfWar: typeof data.soulOfWar === "number" ? data.soulOfWar : undefined,
-      title: typeof data.title === "number" ? data.title : undefined,
-      rank: typeof data.rank === "number" ? data.rank : undefined,
-    });
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(existing.level, data));
     if (summary) return { maxHp: summary.maxHp, maxMp: summary.maxMp };
     return {
       maxHp: Math.max(1, Math.floor(Number(data.maxHp) || 0)),
@@ -693,7 +685,7 @@ export class RolesService {
    * @returns 入账后的角色状态（level / expNow / expNeed / leveledUp / revision）；
    *          角色已被踢下线等无法落账的情况返回 null（调用方跳过奖励，不视为错误）
    */
-  applyKillExp(accountId: string, roleId: string, exp: number): KillExpResult | null {
+  applyKillExp(accountId: string, roleId: string, exp: number, options: { refillOnLevelUp?: boolean } = {}): KillExpResult | null {
     const account = this.accounts.findById(accountId);
     const existing = account ? this.roles.findById(roleId) : undefined;
     // 与升级 / 购买同一纪律：被踢下线的角色不能再推进度（结算进行到一半被踢是正常情况）
@@ -714,6 +706,14 @@ export class RolesService {
     }
 
     data.exp = expNow;
+    // 等级变了属性就变：服务端重算并写回存档（权威值，客户端那份只是演）
+    this.applyAuthoritativeAttributes(level, data);
+    // 击杀者侧的升级惯例：补满血蓝（队友分经验路径**不补** —— 队友打怪不是我在挨打，
+    // 与客户端 applyPartyExpGain 的纪律一致；refillOnLevelUp 由调用方按路径传）
+    if (leveledUp && options.refillOnLevelUp) {
+      data.hp = data.maxHp;
+      data.mp = data.maxMp;
+    }
     const row: RoleRow = {
       ...existing,
       level,
@@ -788,6 +788,8 @@ export class RolesService {
       expNeed = this.expNeedOf(level);
     }
     data.exp = expNow;
+    // 升级（或任何写档）后属性以服务端重算为准；不补血蓝 —— 发奖路径没有「升级回满」的惯例
+    this.applyAuthoritativeAttributes(level, data);
 
     const row: RoleRow = {
       ...existing,
@@ -863,7 +865,11 @@ export class RolesService {
     return existing;
   }
 
-  /** 升到下一级所需经验（level_exps 表；没有该级行 = 曲线没铺到这里，按「不再升级」处理） */
+  /** 升到下一级所需经验（level_exps 表；升级路径与实时进程 roleUpdate 帧共用；曲线没铺到的等级回落 0） */
+  expNeedAt(level: number): number {
+    return this.expNeedOf(level);
+  }
+
   private expNeedOf(level: number): number {
     return Math.max(0, Math.floor(Number(this.growth.findLevelExp(level)?.exp) || 0));
   }
@@ -876,29 +882,37 @@ export class RolesService {
   }
 
   /**
-   * 玩家上报的那份战斗属性，与服务端重算的对不对得上
+  /**
+   * 客户端上报的那份战斗属性与服务端重算还差多少（save 路径的可观测点）
    *
-   * ===========================================================================
-   * 为什么在这里做（而不是只靠管理端详情那个 `derived.mismatch`）
-   * ===========================================================================
-   * 详情接口上的那个布尔要**有人点开才发生** —— 那是抽查。而这里是**玩家每次推进度都会经过**
-   * 的地方，是唯一的全量观测点：客户端口径一旦漂了，当天就能在日志里看见，
-   * 不必等哪天有人翻后台。
-   *
-   * ===========================================================================
-   * 只记不拦
-   * ===========================================================================
-   * **不改写存档、不拒绝写入**。存进去了就是玩家的存档 —— 服务端没有纠正它的立场，
-   * 而且 `mismatch` 也不等于作弊：
-   *
-   * - 玩家在「升级」与「下一次 combatCalc」之间存档 → 客户端那份是旧的 → 会命中
-   * - 存档里留着客户端配置已经删掉的装备 id → 会命中
-   * - 客户端配置漂了、服务端快照还没跟上 → 会命中（有 audit-shared-data 守着部署时的一致性）
-   *
-   * 拿它去拒收，正常玩法当场被打断。所以这里只让它变成一条**能检索**的日志。
-   *
-   * 一致时**什么都不打**（不打 info —— 每次推进度都刷一条等于没有日志）。
+   * #541 起客户端已经不算属性了，这个比对从「防客户端算法漂移」降级为「写库前顺手看一眼
+   * 上报值有多旧」：mismatch 只打一条可检索的 warn，**随后 `applyAuthoritativeAttributes`
+   * 无条件用服务端结果覆盖落库** —— 观测与权威是两条独立的线，warn 不拦流程、
+   * 权威不靠 warn。一致时什么都不打（每次推进度都刷一条等于没有日志）。
    */
+  /**
+   * 战斗属性与战斗力的**权威重算**：按等级 + 存档（装备/战魂/称号/军衔）现算，
+   * 直接覆盖 `data` 里的八项属性与 combat
+   *
+   * #541 起客户端不再自己算这些值（它那份只是演），凡是服务端写档的路径都要经过这里，
+   * 保证库里落的一定是服务端公式的结果。等级不在成长曲线里（旧存档边角）时跳过 ——
+   * 保留原值总比把属性抹成 0 好。
+   */
+  private applyAuthoritativeAttributes(level: number, data: Record<string, unknown>): void {
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(level, data));
+    if (!summary) return;
+    data.maxHp = summary.maxHp;
+    data.hpRecover = summary.hpRecover;
+    data.maxMp = summary.maxMp;
+    data.physicalAttack = Array.from(summary.physicalAttack);
+    data.magicAttack = Array.from(summary.magicAttack);
+    data.taoistAttack = Array.from(summary.taoistAttack);
+    data.physicalDefense = Array.from(summary.physicalDefense);
+    data.magicDefense = Array.from(summary.magicDefense);
+    data.taoistDefense = Array.from(summary.taoistDefense);
+    data.combat = summary.combat;
+  }
+
   private warnIfAttributesMismatch(roleId: string, level: number, data: Record<string, unknown>): void {
     const comparison = compareRoleAttributesOfRole(level, data);
     if (!comparison.mismatch || !comparison.server) return;
@@ -907,6 +921,20 @@ export class RolesService {
         `服务端 combat=${comparison.server.combat} maxHp=${comparison.server.maxHp}；` +
         `客户端 combat=${comparison.reported.combat} maxHp=${comparison.reported.maxHp}`,
     );
+  }
+
+  /**
+   * 账号当前在线角色的整行快照（实时进程的 roleUpdate 轮询用）
+   *
+   * 只做归属校验与取行：属性重算与帧组装在通道侧（它知道该什么时候推）。
+   * 没有在线角色 / 角色不属于这个账号返回 null。
+   */
+  onlineRoleRow(accountId: string): RoleRow | null {
+    const account = this.accounts.findById(accountId);
+    const roleId = account?.online_role_id;
+    if (!roleId) return null;
+    const row = this.roles.findById(roleId);
+    return row && row.account_id === accountId ? row : null;
   }
 
   /** 选中（在线）角色（#547：标记与心跳一起置上，宽限期从这一刻起算） */

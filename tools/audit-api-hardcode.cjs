@@ -47,8 +47,8 @@ const ENDPOINT = {
   clientRequest: "client/assets/ui/utils/net/HttpClient.ts",
   clientRoutes: "client/assets/ui/utils/net/ApiRoutes.ts",
   adminRequest: "admin/src/api/http.ts",
-  // 静态素材读取（装备对齐工作台的 plist/png）：不碰 /api、不带令牌，因此单独放行
-  adminAssets: "admin/src/pages/equipAlign/assets.ts",
+  // 静态素材读取（装备对齐工作台的 plist/png、图标首帧缩略图）：不碰 /api、不带令牌，因此单独放行
+  adminAssets: ["admin/src/pages/equipAlign/assets.ts", "admin/src/components/GameImage.tsx"],
   adminRoutes: "admin/src/api/routes.ts",
   adminEnv: "admin/.env.example",
   serverEnv: "server/.env.example",
@@ -78,8 +78,8 @@ const RULES = [
     id: "requestEntry",
     label: "请求实现（XMLHttpRequest / fetch）",
     test: (line) => /new XMLHttpRequest\(/.test(line) || /(^|[^.\w])fetch\(/.test(line),
-    allow: [ENDPOINT.clientRequest, ENDPOINT.adminRequest, ENDPOINT.adminAssets],
-    why: `请求必须二次封装、统一调度：客户端在 ${ENDPOINT.clientRequest}，管理端在 ${ENDPOINT.adminRequest}（静态素材读取例外：${ENDPOINT.adminAssets}）`,
+    allow: [ENDPOINT.clientRequest, ENDPOINT.adminRequest, ...ENDPOINT.adminAssets],
+    why: `请求必须二次封装、统一调度：客户端在 ${ENDPOINT.clientRequest}，管理端在 ${ENDPOINT.adminRequest}（静态素材读取例外：${ENDPOINT.adminAssets.join("、")}）`,
   },
   {
     id: "authHeader",

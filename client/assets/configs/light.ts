@@ -22,9 +22,15 @@ import { getEquipmentBaseKey } from "./equipments";
  */
 const lightSerials: number[] = [1, 2, 3, 4, 5, 6];
 
-/** 光柱资源表（数组为源 + 尾部建 Map）：key = `light/<编号>`，atlas = resources 加载路径（不含扩展名） */
+/**
+ * 光柱资源表（数组为源 + 尾部建 Map）：key = `light_<编号>`（**就是素材名**，与图集同名），
+ * atlas = resources 加载路径（不含扩展名）。
+ *
+ * key 不带斜杠是硬要求：它会被拼进掉落物子节点名（`drop_light_<key>`，见 GameUiHelper.createEquipmentLight），
+ * 而 Cocos 对含 `/` 的节点名会报 `Node name can not include '/'` —— 每个掉落的装备报一次。
+ */
 export const lightResources: LightResource[] = lightSerials.map((serial) => ({
-  key: `light/${serial}`,
+  key: `light_${serial}`,
   atlas: `effect/light/light_${serial}`,
 }));
 
@@ -36,11 +42,11 @@ lightResources.forEach((resource) => lights.set(resource.key, resource));
  * 前缀 → 光柱（5 个前缀各一个，数组顺序即强度升序：普通的 → 超神的；想换光柱只改这张表）
  */
 const prefixLightData: LightAssignment[] = [
-  { prefix: EQUIPMENT_PREFIX.NORMAL, light: "light/1" },
-  { prefix: EQUIPMENT_PREFIX.STRENGTHENED, light: "light/2" },
-  { prefix: EQUIPMENT_PREFIX.FINE, light: "light/3" },
-  { prefix: EQUIPMENT_PREFIX.SUPERB, light: "light/4" },
-  { prefix: EQUIPMENT_PREFIX.GODLY, light: "light/5" },
+  { prefix: EQUIPMENT_PREFIX.NORMAL, light: "light_1" },
+  { prefix: EQUIPMENT_PREFIX.STRENGTHENED, light: "light_2" },
+  { prefix: EQUIPMENT_PREFIX.FINE, light: "light_3" },
+  { prefix: EQUIPMENT_PREFIX.SUPERB, light: "light_4" },
+  { prefix: EQUIPMENT_PREFIX.GODLY, light: "light_5" },
 ];
 
 /** 前缀 → 光柱 key（按前缀查表用） */
@@ -56,7 +62,7 @@ prefixLightData.forEach((assignment) => prefixLights.set(assignment.prefix, assi
  */
 const customEquipmentLightData: CustomLightAssignment[] = [
   // 示例（去掉注释即生效）：焚世巨剑（含全部前后缀变体）改用预留的 6 号光柱
-  // { equipment: "weapon_20", light: "light/6" },
+  // { equipment: "weapon_20", light: "light_6" },
 ];
 
 /** 物品 id / 基础件 key → 光柱 key（按装备查表用） */
@@ -94,3 +100,4 @@ export function getAssignedLights(): LightResource[] {
   });
   return result;
 }
+

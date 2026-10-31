@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatTime, monstersApi, PERMISSION, skillsApi } from "../api";
+import { formatTime, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
 import type { Monster, MonsterAttributes, PageResult, Skill } from "../api";
-import { RANGE_FIELDS } from "../components/GameConfigDialog";
+import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -52,21 +53,13 @@ function MonsterEditDialog({
   }, [open, initial]);
 
   /** 区间交叉（min > max）的键集合；空 = 合法 */
-  const crossedKeys = useMemo(() => {
-    if (!attributes) return [];
-    return RANGE_FIELDS.filter(({ key }) => attributes[key].min > attributes[key].max).map(({ key }) => key);
-  }, [attributes]);
+  const crossedKeys = useMemo(() => (attributes ? crossedRangeKeys(attributes) : []), [attributes]);
 
   if (!open || !attributes || !initial) return null;
 
   const levelValid = Number.isInteger(Number(level)) && Number(level) >= 1;
   const maxHpValid = Number.isInteger(Number(maxHp)) && Number(maxHp) >= 1;
   const canSubmit = label.trim().length > 0 && levelValid && maxHpValid && crossedKeys.length === 0 && !submitting;
-
-  const setRange = (key: (typeof RANGE_FIELDS)[number]["key"], side: "min" | "max", value: string) => {
-    const parsed = Math.max(0, Math.floor(Number(value) || 0));
-    setAttributes({ ...attributes, [key]: { ...attributes[key], [side]: parsed } });
-  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -96,41 +89,8 @@ function MonsterEditDialog({
             </Field>
           </div>
 
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">六项攻防区间（整份替换）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
-              {RANGE_FIELDS.map(({ key, label: fieldLabel }) => (
-                <div key={key} className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-slate-400">{fieldLabel}</span>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-20"
-                      aria-label={`${fieldLabel}下限`}
-                      value={attributes[key].min}
-                      onChange={(event) => setRange(key, "min", event.target.value)}
-                    />
-                    <span className="text-xs text-slate-600">~</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-20"
-                      aria-label={`${fieldLabel}上限`}
-                      value={attributes[key].max}
-                      onChange={(event) => setRange(key, "max", event.target.value)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <AttributesGrid attributes={attributes} onChange={setAttributes} header="六项攻防区间（整份替换）" crossed={crossedKeys} />
 
-          {crossedKeys.length > 0 ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              以下属性的下限不能大于上限：{crossedKeys.join("、")}。
-            </p>
-          ) : null}
           {!levelValid || !maxHpValid ? (
             <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
               等级与生命上限需为 ≥1 的整数。
@@ -467,6 +427,7 @@ export function MonstersPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>key</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>定位</th>
@@ -480,6 +441,9 @@ export function MonstersPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={monsterIcon(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>

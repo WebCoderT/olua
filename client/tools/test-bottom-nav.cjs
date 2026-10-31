@@ -22,7 +22,7 @@ const { prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
  * 接上回调后要把它从这里删掉（并把 bottomNav.ts 里的 comingSoon 改成 false）；
  * 新增入口忘了接回调却也没登记 → 这里会红，逼人做一次明确决定。
  */
-const EXPECTED_COMING_SOON = ["friend", "horse", "config"];
+const EXPECTED_COMING_SOON = ["friend"];
 
 try {
   const outDir = prepare("olua-bottom-nav", ["configs/bottomNav.ts"]);
@@ -56,7 +56,7 @@ try {
   console.log("\n— C. 按钮节点名唯一（按 key 命名，不按图标） —");
   {
     // `BottomNavButton` 的节点名是 `bottom_nav_${key}`。**曾经按图标路径命名**，
-    // 而「聊天」与「好友」共用 `friend` 图 → 两个同名节点，按名字找按钮的代码会命中错的那个（#486）。
+    // 而「聊天」与「好友」曾共用 `friend` 图 → 两个同名节点，按名字找按钮的代码会命中错的那个（#486）。
     // 这里两种命名都算一遍：按 key 必须唯一；顺便把「按图标会重名」的事实打印出来（防止有人改回去）。
     const byKey = bottomNavItems.map((item) => `bottom_nav_${item.key}`);
     const dupKey = byKey.filter((name, i, all) => all.indexOf(name) !== i);

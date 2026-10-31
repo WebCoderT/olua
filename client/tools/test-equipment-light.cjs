@@ -23,7 +23,7 @@ const LIGHT_DIR = path.join(PROJECT_ROOT, "assets/resources/effect/light");
 const PREFIX_COUNT = 5;
 const LIGHT_COUNT = 6;
 /** 预留光柱（留给特殊装备手动添加，不参与前缀映射） */
-const RESERVED_LIGHT = "light/6";
+const RESERVED_LIGHT = "light_6";
 
 let outDir;
 try {
@@ -60,11 +60,17 @@ const diskAtlases = fs
 check(diskAtlases.length === LIGHT_COUNT, `磁盘有 ${LIGHT_COUNT} 个光柱图集`, `实际 ${diskAtlases.length}：${diskAtlases.join("、")}`);
 check(lightResources.length === diskAtlases.length, `资源表数量与磁盘一致（${lightResources.length} 个）`);
 check(
-  JSON.stringify(lightResources.map((r) => r.key)) === JSON.stringify(diskAtlases.map((serial) => `light/${serial}`)),
+  JSON.stringify(lightResources.map((r) => r.key)) === JSON.stringify(diskAtlases.map((serial) => `light_${serial}`)),
   "资源表与磁盘图集一一对应（无多登 / 漏登 / 写错编号）",
 );
 check(new Set(lightResources.map((r) => r.key)).size === lightResources.length, "光柱 key 唯一");
-check(lightResources.every((r) => r.atlas === `effect/light/light_${r.key.split("/")[1]}`), "atlas 路径 = effect/light/light_<编号>（resources 加载口径）");
+// key 会拼进掉落物子节点名（drop_light_<key>）：带斜杠时 Cocos 每个掉落物报一次
+// 「Node name can not include '/'」，所以 key 必须是不带路径分隔符的素材名
+check(
+  lightResources.every((r) => !r.key.includes("/")),
+  "光柱 key 不含斜杠（它要进节点名，见 GameUiHelper.createEquipmentLight）",
+);
+check(lightResources.every((r) => r.atlas === `effect/light/${r.key}`), "atlas 路径 = effect/light/<key>（key 即素材名，resources 加载口径）");
 check(
   lightResources.every((r) => fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", `${r.atlas}.plist`)) && fs.existsSync(path.join(PROJECT_ROOT, "assets/resources", `${r.atlas}.png`))),
   "登记的每个光柱图集（plist + png）都真实存在",
@@ -90,7 +96,7 @@ Array.from(prefixLights.keys()).forEach((prefix) => {
 });
 // 强度升序：前缀枚举值越大 → 光柱编号越大（越强的装备光柱越靠后）
 const ordered = prefixValues.slice().sort((a, b) => Number(a) - Number(b));
-const serials = ordered.map((prefix) => Number(prefixLights.get(prefix).split("/")[1]));
+const serials = ordered.map((prefix) => Number(prefixLights.get(prefix).replace("light_", "")));
 check(
   serials.every((serial, index) => index === 0 || serial > serials[index - 1]),
   "前缀越强光柱编号越大（强度升序取 1~5 号）",
@@ -133,7 +139,7 @@ const variant = equipments.find((equipment) => equipment.id !== baseKey && equip
 check(!!variant && getEquipmentLightKey(variant) === RESERVED_LIGHT, "写基础件 key → 该装备的全部变体都生效");
 customEquipmentLights.delete(baseKey);
 check(getEquipmentLightKey(sample) === originalPrefixKey, "还原后回到前缀表");
-customEquipmentLights.set(sample.id, "light/99");
+customEquipmentLights.set(sample.id, "light_99");
 check(getEquipmentLightKey(sample) === originalPrefixKey, "自定义指向未登记光柱 → 回退前缀表（不显示为空）");
 customEquipmentLights.delete(sample.id);
 

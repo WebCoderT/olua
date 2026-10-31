@@ -14,7 +14,7 @@
 - [接口文档是怎么分组的？为什么每个管理端接口都写着「所需权限」？](#接口文档是怎么分组的为什么每个管理端接口都写着所需权限)
 - [管理员有几种角色？权限点在哪加？权限不够会怎样？](#管理员有几种角色权限点在哪加权限不够会怎样)
 - [服务端为什么不校验角色数据的内容？](#服务端为什么不校验角色数据的内容)
-- [角色数量上限想改，改哪边？](#角色数量上限想改改哪边)
+- [角色数量为什么不设上限？](#角色数量为什么不设上限)
 - [帮会为什么用唯一索引，而不是业务判重？](#帮会为什么用唯一索引而不是业务判重)
 - [好友为什么存两行镜像，而不是一行 + 双向查？](#好友为什么存两行镜像而不是一行--双向查)
 - [玩家忘记密码怎么办？重置之后他为什么被踢出去了？](#玩家忘记密码怎么办重置之后他为什么被踢出去了)
@@ -30,7 +30,7 @@
 - **启动**：`cd server && npm install && cp .env.example .env && npm run dev`（`npm run start` 跑已构建产物）。默认监听 `3100`、路由前缀 `api`，客户端默认连的就是 `http://localhost:3100/api`
 - **接口文档**：<http://localhost:3100/api-docs>（Swagger UI；JSON 在 `/api-docs-json`）。文档**不带路由前缀**，因为它不是业务接口。所有接口都是「统一响应包裹 + 统一错误出口」，所以文档里每个接口的响应都是 `code / message / data / timestamp` 五件套，`data` 才是业务数据
 - **数据库**：SQLite（Node 22 内置 `node:sqlite`，**不需要任何原生模块**），默认 `server/data/olua.db`，首次启动自动建 `accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / level_exps / growth_segments / growth_scalars / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / skills / statuses / monster_skills / parties / party_members / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / achievements / role_achievements / role_mails / equip_aligns / equip_in_aligns` 45 张表。删账号由外键 `ON DELETE CASCADE` 级联删掉它的全部角色
-- **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**248 条断言**（注册登录 / 角色 CRUD 与上限重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护** / **公告的公共拉取与生效时间窗**）。角色相关改动另跑 `npm run test:e2e:roles`（120 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）；**邮件通道**相关改动另跑 `npm run test:e2e:mail`（120 条，用可注入的假发信器，不需要 SMTP 服务器）；**玩家邮箱字段**相关改动另跑 `npm run test:e2e:account-email`（28 条）；**实时通道**相关改动另跑 `npm run test:e2e:realtime`（50 条，真实 WebSocket 握手，不需要浏览器）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（87 条）。一条命令全验：`npm run verify`
+- **回归**：`cd server && npm run test:e2e` —— 真实起服务进程 + 真实 HTTP 请求，**247 条断言**（注册登录 / 角色 CRUD 与重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / **只读观察员越权被拒** / **超管保护** / **公告的公共拉取与生效时间窗**）。角色相关改动另跑 `npm run test:e2e:roles`（119 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）；**邮件通道**相关改动另跑 `npm run test:e2e:mail`（120 条，用可注入的假发信器，不需要 SMTP 服务器）；**玩家邮箱字段**相关改动另跑 `npm run test:e2e:account-email`（28 条）；**实时通道**相关改动另跑 `npm run test:e2e:realtime`（50 条，真实 WebSocket 握手，不需要浏览器）；备份 / 恢复相关改动另跑 `npm run test:e2e:backup`（87 条）。一条命令全验：`npm run verify`
 - **新增接口的规矩**：只改服务端（控制器 + DTO + `operationId`），然后 `npm run gen:api` 重新生成两端的接口文件 —— 见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)。路径、方法名、类型都不允许在两端手写
 
 ### 跑测试时一直「等待服务启动超时」，也不打日志，为什么？
@@ -75,24 +75,21 @@ env -u NODE_OPTIONS npm run verify
 - **权限不够会怎样**：`403` + 业务码 **30006**，提示会直接写出缺哪个权限（如「当前角色没有该操作权限：封禁 / 解封账号」）。管理端界面会**按权限点隐藏菜单与禁用按钮**，但那只是体验 —— 服务端每次请求都重新判一次，改地址栏硬闯也只有 403
 - **改完立即生效**：守卫每次请求都从库里取管理员的角色（和账号封禁同一套逻辑），降权后旧的令牌下一次请求就受限，不用等令牌过期
 - **两道保护（业务码 30007）**：不能把**最后一个启用中的超级管理员**降级 / 停用 / 删除 —— 否则后台就没人能管了。有第二个超管时自降是允许的（可以用来轮值）
-- 回归：`cd server && npm run test:e2e` 的第七段（只读观察员四处写操作被拒、降权即时生效、超管保护、管理员列表与筛选）；角色相关改动另跑 `npm run test:e2e:roles`（120 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）
+- 回归：`cd server && npm run test:e2e` 的第七段（只读观察员四处写操作被拒、降权即时生效、超管保护、管理员列表与筛选）；角色相关改动另跑 `npm run test:e2e:roles`（119 条）；口令 / 审计 / 限流 / 踢下线相关改动另跑 `npm run test:e2e:guard`（283 条）
 
 ## 数据模型
 
 ### 服务端为什么不校验角色数据的内容？
 
-- **角色数据是「不透明文档」**：背包 / 装备 / 技能 / 快捷键 / 新手物品全部由客户端 `configs/role` 这套配置驱动生成，服务端**不复制**游戏配置（复制必然漂移：改了配置忘了改服务端，就会出现「客户端有的东西服务端说非法」）。所以服务端只校验结构、归属、数量上限与重名，内容原样存
+- **角色数据是「不透明文档」**：背包 / 装备 / 技能 / 快捷键 / 新手物品全部由客户端 `configs/role` 这套配置驱动生成，服务端**不复制**游戏配置（复制必然漂移：改了配置忘了改服务端，就会出现「客户端有的东西服务端说非法」）。所以服务端只校验结构、归属与重名，内容原样存
 - **代价与代价的兜底**：服务端只把索引字段（id / name / occupation / sex / level）另存成独立列 —— 列表查询因此不用解析 JSON。改客户端配置**不需要**同步改服务端
 - **连「允许值清单」与文档文案也是派生的**：校验用的 `ROLE_OCCUPATIONS` / `ROLE_SEXES` 取的是公共数据的标签表键（`Object.keys`），接口文档里那行 `1 战士 / 2 魔法师 / 3 道士 / 4 全职业` 是 `shared/game-data.ts` 算出来的 —— 客户端加一个职业码（或改职业名），重新生成公共数据后服务端**不必改一行**。此前这两处是手写的，注释里写着「与客户端一致」，而这句话只能靠人记得同步（#122 把它们改成派生的，并让守卫咬住改回去的写法）
 - **改存档格式时注意**：`roles.data` 存的是 JSON **字符串**。读取路径用容错解析（坏数据当空对象），**编辑路径必须严格解析且解析失败直接报错** —— 绝不能用「空对象」兜底去写，那会把玩家的背包/装备清空（这是踩过的坑，e2e 里钉了断言）
-- **上限在哪调**：见下一条
+### 角色数量为什么不设上限？
 
-### 角色数量上限想改，改哪边？
-
-- **业务上限在服务端**：`server/.env` 的 `ROLE_MAX_PER_ACCOUNT`（默认 3），创建时由服务端拒绝超限请求 —— 这是**唯一**的那个「上限」数字
-- **界面容量在客户端**：`configs/layout/scenes` 的 `roleSelectorLayout.rolePositions` 数组就是选角界面的**站位**（有几个站位就能画几个角色）。客户端创建前的拦截是「**站位满了**」（省一次往返），不是另一份上限
-- **所以它只能调低**：`ROLE_MAX_PER_ACCOUNT` **不得超过**站位数量 —— 调大会让玩家建出界面上没处放的角色（多出来的取不到站位，会叠在原点，客户端会打一条告警）。改站位是**美术 / 布局**的事（构图要重排），改 `.env` 是**运维**的事（只往下调），两者不再需要「一起改」
-- **守卫**：`tools/audit-shared-data.cjs` 断言仓库里的默认值（`.env.example` 与 `configuration.ts` 的兜底）≤ 站位数量，并禁止客户端再出现第二份上限数字。**运行时**的 `.env` 是部署本地的（不进仓库），守卫看不到 —— 所以这条关系靠上面写清楚 + 客户端那条运行期告警兜着
+- **服务端不拦**：创建角色只校验结构与重名，数量没有上限
+- **客户端自动排**：选角界面按 `configs/layout/scenes` 的 `roleSelectorLayout.roleGrid` 网格排列 —— 从左到右排满一行再往下一行，建多少个都放得下（行距 / 列距 / 每行个数在布局里调）
+- **曾经的两个数字已删掉**：手写的 `maxRoleCount` 与 `.env` 的 `ROLE_MAX_PER_ACCOUNT` 靠「两边一起改」的记性维持（#124），取消上限后一并删除 —— 同一个数写两份必然漂移
 
 ### 帮会为什么用唯一索引，而不是业务判重？
 

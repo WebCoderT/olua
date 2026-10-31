@@ -1,13 +1,17 @@
-import { _decorator, Component, director, Label } from "cc";
+import { _decorator, Component, director, Label, Mask, Node, UITransform, Vec2 } from "cc";
 import { maps } from "../configs/map";
 import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
 import GameUiHelper from "./helpers/GameUiHelper";
+import AnimationHelper from "./helpers/AnimationHelper";
 import StorageManager from "./core/StorageManager";
 import { loadingLayout } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 
 const { ccclass } = _decorator;
+
+/** 【临时开关】true = 加载完不跳转，停在 Loading 场景 100%（调场景效果用；调完改回 false） */
+const STAY_AFTER_LOADED = false;
 
 /**
  * 过渡场景控制器（挂载于 Loading 场景）
@@ -24,11 +28,37 @@ export class Loading extends Component {
 
   /** 进度文本 */
   private progressLabel: Label | null = null;
+  /** 进度条填充的 Mask（宽度跟进度走，从内条左缘起裁切 —— 图不拉伸，见 configs bar.fillArea 注释） */
+  private progressFillMask: UITransform | null = null;
 
   start() {
     // 背景与进度文字（位置、字号与用图见 configs/hudLayout.loadingLayout）
     this.node.addChild(GameUiHelper.createFullScreenImage("loading_background", loadingLayout.background));
-    // 一行进度文字（百分比显示）
+    // 居中的加载帧动画（图集 7 帧循环；显示尺寸 / 帧率见 configs loadingLayout.loadingAnimation）
+    const animLayout = loadingLayout.loadingAnimation;
+    const animation = GameUiHelper.createImage("loading_animation", "", animLayout.position, animLayout.size);
+    AnimationHelper.playLoopAtlas("loading_animation", animation, animLayout.atlas, animLayout.frameRate);
+    this.node.addChild(animation);
+    // 底部进度条：底图 + 填充图。填充图挂 Mask 下，Mask 锚点在内条左缘、宽度 = 进度 × 内条宽 ——
+    // 填充区坐标全部按条显示尺寸从素材占比现算（fillArea 是素材原生占比，条改大小不用改这里）
+    const barLayout = loadingLayout.bar;
+    const fillArea = barLayout.fillArea;
+    this.node.addChild(GameUiHelper.createImage(`${barLayout.name}_background`, barLayout.background, barLayout.position, barLayout.size));
+    // 内条左缘 / 纵心相对**条中心**的偏移（由素材占比 × 条显示尺寸现算）
+    const relLeft = (fillArea.leftFrac - 0.5) * barLayout.size.width;
+    const relOffsetY = -(fillArea.yCenterFrac - 0.5) * barLayout.size.height;
+    // Mask 锚点 (0,0.5) 定在内条左缘：舞台坐标 = 条坐标 + 相对偏移
+    const fillMask = new Node(`${barLayout.name}_fill_mask`);
+    this.progressFillMask = fillMask.addComponent(UITransform);
+    this.progressFillMask.setAnchorPoint(0, 0.5);
+    fillMask.setPosition(barLayout.position.x + relLeft, barLayout.position.y + relOffsetY, 0);
+    this.progressFillMask.setContentSize(0, fillArea.heightFrac * barLayout.size.height); // 初始进度 0 → 宽 0
+    fillMask.addComponent(Mask);
+    // 填充图与底图对齐：子节点（锚点 0.5,0.5）摆在「条中心相对 Mask 锚点」的局部坐标 = 负的相对偏移
+    const fill = GameUiHelper.createImage(`${barLayout.name}_fill`, barLayout.fill, new Vec2(-relLeft, -relOffsetY), barLayout.size);
+    fillMask.addChild(fill);
+    this.node.addChild(fillMask);
+    // 一行小字：进度条右下角（位置 / 字号见 configs loadingLayout.progress）
     const progress = GameUiHelper.createLoadingProgress(loadingLayout.progress.text, loadingLayout.progress.position, loadingLayout.progress.fontSize);
     this.progressLabel = progress.progressLabel;
     this.node.addChild(progress.node);
@@ -55,6 +85,12 @@ export class Loading extends Component {
         }
       }
       this.setProgress(100);
+      // 【临时】调 Loading 场景效果用：加载完停在 100% 不跳转（pendingScene 也不清，
+      // 把上面 STAY_AFTER_LOADED 改回 false 后，下次进 Loading 仍按原目标场景走）
+      if (STAY_AFTER_LOADED) {
+        console.log(`[Loading] 临时不跳转（STAY_AFTER_LOADED）—— 场景 ${scene} 资源就绪，停在 Loading`);
+        return;
+      }
       SceneManager.pendingScene = null;
       director.loadScene(scene);
       console.log(`[Loading] 场景 ${scene} 加载总耗时 ${Date.now() - startedAt}ms`);
@@ -72,9 +108,13 @@ export class Loading extends Component {
     return result;
   }
 
-  /** 更新进度（ratio 取值 0~1，显示为百分比；tip 为当前阶段的说明，如"帧动画 3/7"） */
+  /** 更新进度（ratio 取值 0~100；填充 Mask 宽度 + 百分比小字同步；tip 为当前阶段的说明，如"帧动画 3/7"） */
   private setProgress(ratio: number, tip?: string) {
     const percent = Math.min(100, Math.floor(ratio));
+    if (this.progressFillMask) {
+      const fillArea = loadingLayout.bar.fillArea;
+      this.progressFillMask.width = Math.max(0, Math.min(1, ratio / 100)) * fillArea.widthFrac * loadingLayout.bar.size.width;
+    }
     this.setProgressText(tip ? getText("progress_loading_tip", { percent, tip }) : getText("progress_loading", { percent }));
   }
 

@@ -2,7 +2,7 @@ import type { SoulAttributes, SoulLevelConfig } from "../types/soul";
 
 /**
  * 战魂配置（单一成长线）
- * 数据来自 resources/war-soul：sfx_13001 ~ sfx_13201 共 37 个散图帧目录，
+ * 数据来自 resources/war-soul：sfx_13001 ~ sfx_13201 共 37 个特效动画目录（#542 起整目录打成一个同名 plist 图集），
  * 按外观由弱到强排成等级序列 1 ~ 37（下标 + 1 即等级）：
  * - sfx_13001~13020 灵体系（factor 1）
  * - sfx_13101~13115 兽魂/魔将系（factor 1.15）

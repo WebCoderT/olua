@@ -643,6 +643,48 @@ export interface RealtimeExpGainMessage {
   };
 }
 
+/**
+ * 服务端 → 客户端：**本账号角色的权威快照**（战斗属性 / 战斗力 / 货币 / 等级）
+ *
+ * #541 起角色「有多强、有多少钱」由服务端说了算：客户端不再自己算（`combatCalc` 已退位），
+ * 这里把服务端重算的结果推过去，客户端照搬刷新血条 / 属性面板 / 货币栏。
+ *
+ * 为什么是「轮询 + 变更才推」而不是每个写点各推一次：改角色的写点分散在**两个进程**
+ * （存档进程的任务 / 邮件 / 商城 / 后台，实时进程的升级 / 拾取），进程内事件总线跨不过
+ * 进程边界 —— 与「踢下线感知」同一难题，同一答案：实时进程轮询在线角色的行，
+ * `revision / updated_at` 变了才组帧推一次。建连时也推一次，给客户端一个权威基线。
+ */
+export interface RealtimeRoleUpdateMessage {
+  type: "roleUpdate";
+  data: {
+    level: number;
+    /** 当前经验与升到下一级所需（经验条用） */
+    exp: number;
+    expNeed: number;
+    /** 当前血量与蓝量（服务端落库值；升级补血 / 用药后的权威值从这里来） */
+    hp: number;
+    mp: number;
+    /** 金币 / 绑定金币 / 银币（任务 / 邮件 / 后台改完这里都能看到） */
+    gold: number;
+    bindGold: number;
+    silver: number;
+    /** 战斗力（服务端按权重表现算） */
+    combat: number;
+    /** 八项战斗属性（区间属性 = [下限, 上限]）；等级不在成长曲线里时省略 */
+    maxHp?: number;
+    hpRecover?: number;
+    maxMp?: number;
+    physicalAttack?: [number, number];
+    magicAttack?: [number, number];
+    taoistAttack?: [number, number];
+    physicalDefense?: [number, number];
+    magicDefense?: [number, number];
+    taoistDefense?: [number, number];
+    /** 角色修订号（客户端照搬做存档基线，防下一次推档撞乐观锁） */
+    revision: number;
+  };
+}
+
 //#endregion
 
 /** 服务端会发出的全部消息 */
@@ -659,7 +701,8 @@ export type RealtimeServerMessage =
   | RealtimeQuestMessage
   | RealtimePartySnapshotMessage
   | RealtimePartyInviteMessage
-  | RealtimeExpGainMessage;
+  | RealtimeExpGainMessage
+  | RealtimeRoleUpdateMessage;
 
 /**
  * 关闭码

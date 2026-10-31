@@ -35,17 +35,11 @@ export const roleRigid = {
 };
 
 /**
- * 角色数量上限**不在这个文件里** —— 这里有意不留数字
+ * 角色数量**不设上限** —— 服务端不拦（创建只校验结构与重名），客户端也不拦（选角界面按
+ * `roleSelectorLayout.roleScroll` 滚动网格排列：一排 6 个、排满一行自动换行、超出视口上下滚动）。
  *
- * 界面上能画几个角色，唯一来源是选角布局的**站位数组**（`configs/layout/scenes` 的
- * `roleSelectorLayout.rolePositions`）：站位有几个，界面上就能站几个，所以客户端不需要
- * 第二份「上限」。
- *
- * 服务端的 `ROLE_MAX_PER_ACCOUNT`（`server/.env`）是**业务上限**，它只能**调低** ——
- * 不得超过站位数量，否则玩家能建出界面上没处放的角色（多出来的会叠在原点）。
- * 这条关系由 `tools/audit-shared-data.cjs` 守着，不再靠「两边一起改」的记性。
- *
- * （这里原本有一个手写的 `export const maxRoleCount = 3` —— 它就是那个「第二份数字」，已删掉。）
+ * （这里原本有两份上限数字：手写的 `maxRoleCount` 与服务端 `.env` 的 `ROLE_MAX_PER_ACCOUNT`，
+ *   靠「两边一起改」的记性维持 —— 都已删掉，见 #124 的教训：同一个数写两份必然漂移。）
  */
 
 /**
@@ -205,14 +199,13 @@ export const initialSkills: { [key in SkillId]: number } = {
   "1011": 1,
 };
 
-/** 初始快捷键配置 */
+/** 初始快捷键配置（5 格 = 数字键 1~5） */
 export const initialShortcutKeys: NeedSetShortcutKeyConfig[] = [
   { label: "1", key: 49, skillId: null },
   { label: "2", key: 50, skillId: null },
   { label: "3", key: 51, skillId: null },
   { label: "4", key: 52, skillId: null },
   { label: "5", key: 53, skillId: null },
-  { label: "6", key: 54, skillId: null },
 ];
 
 /** 角色默认速度倍率 */

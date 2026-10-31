@@ -33,7 +33,7 @@
  * 容差 1e-6 完全兜得住。
  */
 
-import { RoleAttributeSource, summarizeRoleAttributesWithNotes } from "./role-attributes";
+import { type RoleAttributeSource, roleAttributeSourceOf, summarizeRoleAttributesWithNotes } from "./role-attributes";
 
 /** 浮点比对的容差（理由见文件头） */
 const COMPARISON_EPSILON = 1e-6;
@@ -102,28 +102,7 @@ export function compareRoleAttributes(source: RoleAttributeSource, reported: Rep
  * @param data 已解码的角色存档
  */
 export function compareRoleAttributesOfRole(level: number, data: Record<string, unknown>): RoleAttributeComparison {
-  return compareRoleAttributes(
-    {
-      level,
-      equipments: equipmentMapOf(data.equipments),
-      soulOfWar: numberOrUndefined(data.soulOfWar),
-      title: numberOrUndefined(data.title),
-      rank: numberOrUndefined(data.rank),
-    },
-    { combat: data.combat, maxHp: data.maxHp },
-  );
-}
-
-/** 存档里的装备表（槽位 → 装备 id）；形状不对就当没穿（与汇总函数的容错一致） */
-function equipmentMapOf(value: unknown): Record<string, string | null> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, string | null>;
-}
-
-/** 取一个有限数字；不是数字时返回 undefined（交回汇总函数按「未激活」处理） */
-function numberOrUndefined(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return compareRoleAttributes(roleAttributeSourceOf(level, data), { combat: data.combat, maxHp: data.maxHp });
 }
 
 /** 取一个有限数字，其余形态（undefined / 字符串 / NaN / Infinity）一律当「没有」 */

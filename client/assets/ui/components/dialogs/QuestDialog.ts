@@ -10,8 +10,9 @@ import { monsters } from "../../../configs/monster";
 import { npcs } from "../../../configs/npc";
 import { items } from "../../../configs/items";
 import { questDialogLayout as layout } from "../../../configs/hudLayout";
-import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
+import { blockClickThrough } from "../../utils/input/UiHit";
+import { createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 两个页签（进行中 / 可接） */
 type QuestTab = "active" | "available";
@@ -90,26 +91,9 @@ export default class QuestDialog {
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
-    this.tabNodes.clear();
-    this.tabLabels.clear();
-    TABS.forEach((tab, index) => {
-      const node = UiHelper.createNode(`${layout.name}_tab_${tab}`, new Vec2(layout.tabs.columns[index], layout.tabs.y), layout.tabs.size);
-      node.addComponent(Graphics);
-      const label = UiHelper.createLabel(
-        `${layout.name}_tab_${tab}_label`,
-        layout.texts.tabs[index],
-        layout.tabs.idleText,
-        layout.tabs.fontSize,
-        new Vec2(),
-        layout.tabs.size,
-      );
-      node.addChild(label);
-      node.on(Node.EventType.TOUCH_END, () => this.select(tab), this);
-      blockClickThrough(node);
-      dialog.addChild(node);
-      this.tabNodes.set(tab, node);
-      this.tabLabels.set(tab, label);
-    });
+    const { nodes, labels } = createTabStrip(dialog, layout.name, TABS, layout.texts.tabs, layout.tabs, (tab) => this.select(tab));
+    this.tabNodes = nodes;
+    this.tabLabels = labels;
   }
 
   /** 切换页签（清空内容区重画） */
@@ -121,28 +105,7 @@ export default class QuestDialog {
   }
 
   private paintTabs() {
-    TABS.forEach((tab) => {
-      const node = this.tabNodes.get(tab);
-      const labelNode = this.tabLabels.get(tab);
-      if (!node || !isValid(node) || !labelNode) return;
-      const active = tab === this.tab;
-      const graphics = node.getComponent(Graphics);
-      if (graphics) {
-        const half = layout.tabs.size;
-        graphics.clear();
-        graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, layout.tabs.radius);
-        graphics.fillColor = active ? layout.tabs.activeFill : layout.tabs.idleFill;
-        graphics.fill();
-        if (!active) {
-          graphics.lineWidth = 1;
-          graphics.strokeColor = layout.tabs.idleBorder;
-          graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, layout.tabs.radius);
-          graphics.stroke();
-        }
-      }
-      const label = labelNode.getComponent(Label);
-      if (label) label.color = active ? layout.tabs.activeText : layout.tabs.idleText;
-    });
+    paintTabStrip(this.tabNodes, this.tabLabels, TABS, this.tab, layout.tabs);
   }
 
   /** 页签角标：可交付数 / 可接数（数字才值得提醒，进行中不算） */

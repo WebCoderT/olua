@@ -7,35 +7,35 @@
  * 服务端要成为战斗权威，第一步不是「会算伤害」，而是**得先知道玩家有多强**。
  * 这份函数就是那个答案：给定一份角色存档，算出八项战斗属性与战斗力。
  *
- * 它不是新设计，是**对齐**：结果务必与客户端 `GameHelper.combatCalc` 完全一致。
- * 两端一旦算得不一样，后面所有上移到服务端的结算都会偏离玩家所见 —— 而这个偏差
- * 不会报错，只会变成「打怪手感不对」「升级后血量没变」这类最难查的抱怨。
+ * #541 起这就是**唯一的属性算法**：客户端的 `GameHelper.combatCalc` 已随「服务端权威、
+ * 实时下发」一起删除 —— 客户端不再自己算、只消费 roleUpdate 帧，两端各算一份再拿审计
+ * 对账的旧形态到此为止。属性只有一个出处（这里），错了就是错了，不存在「对齐谁」。
  *
- * 所以本文件每一处「为什么这么写」都指向客户端那一版的行为，包括几处看着别扭的
- * 地方（见下）。**改这里先跑 `make audit-combat-parity`** —— 那个审计会拿着真的
- * 客户端算子跑同一组输入、逐项比对，掉一位都不行。
+ * 历史备注：本文件的算法是从客户端原版逐行平移来的（包括几处看着别扭的地方），
+ * 当年的比对由 `audit-combat-parity` 完成 —— 那个审计已随客户端算子一起删除，
+ * 现在改这里没有任何对账网兜，唯一的安全网是 e2e-roles 的「权威覆盖」断言。
  *
  * ===========================================================================
- * 输入的数据全部来自生成物
+ * 输入的数据从哪来（#544 起口径变了）
  * ===========================================================================
- * 五张表全部取自那份 `@generated` 生成物（单一来源仍是 `client/assets/configs`）。
- * 这里只做查表与相加 —— **不做任何自行推算**。把算法照抄一份到服务端，
- * 正是这条线要消灭的事。
+ * 五张表都走 `shared/runtime-overrides` 的读取函数：**先查运营库覆盖层（管理端改过的
+ * 当前值），没有再回落到 `@generated` 生成物（出厂值）**。
  *
- * 生成物住在 `src/shared/`，与它同住的还有名字与元数据（职业 / 物品 / 槽位 / 地图…），
- * 管理端 import 的是**同一个文件**。此前算属性用的那份 `battle-rules.generated.ts` 已经
- * 并进它 —— 两份快照并存必然各自漂移，而它们的数据本来就是同一批。
+ * 这条改动之前，这里直接读生成物 —— 生成物是**编译期**快照，于是「管理端把某件装备的
+ * 攻击调到 20」在客户端生效（快照下发后 `apply-snapshot` 覆写），服务端算伤害还是 10：
+ * 面板与伤害分裂，且没有任何报错。覆盖层由 `RuntimeConfigService` 在启动时与管理端
+ * 每次写操作后装载。
+ *
+ * 数据来源仍是同一份（客户端的 `client/assets/configs` → 生成物），只是**真相搬到了库里**：
+ * 生成物回到「出厂值 + 兜底」的位置。
  */
 
 import {
   COMBAT_RANGE_KEYS,
   COMBAT_WEIGHTS,
-  EQUIPMENT_ATTRIBUTES,
-  RANK_LEVEL_ATTRIBUTES,
   ROLE_LEVEL_ATTRIBUTES,
-  SOUL_LEVEL_ATTRIBUTES,
-  TITLE_LEVEL_ATTRIBUTES,
 } from "../../shared/game-data.generated";
+import { equipmentAttributesOf, rankAttributesOf, soulAttributesOf, titleAttributesOf } from "../../shared/runtime-overrides";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */
 export interface RoleAttributeSource {
@@ -49,6 +49,30 @@ export interface RoleAttributeSource {
   title?: number;
   /** 军衔阶数（0 = 未授衔） */
   rank?: number;
+}
+
+/**
+ * 从**角色存档**取汇总输入（把「摊平 data」的容错逻辑收成一处）
+ *
+ * 存档里装备 / 战魂 / 称号 / 军衔都是普通 JSON 字段，形状可能旧、可能缺 ——
+ * 这里的容错与 `compareRoleAttributesOfRole` 原来那版完全一致，只是从「比对专用」
+ * 提升为所有调用方共用：伤害结算、互见血条、成就战力、用药上限、存档重算
+ * 必须吃同一份输入，否则就会出现「伤害按裸等级算、排行榜却算装备」的口径分裂。
+ *
+ * @param level 取**索引列**（`roles.level`）而不是 `data.level`：前者是服务端维护的权威值
+ * @param data 已解码的角色存档（`decodeStoredRoleData` 的产物）
+ */
+export function roleAttributeSourceOf(level: number, data: Record<string, unknown>): RoleAttributeSource {
+  return {
+    level,
+    equipments:
+      data.equipments && typeof data.equipments === "object" && !Array.isArray(data.equipments)
+        ? (data.equipments as Record<string, string | null>)
+        : null,
+    soulOfWar: typeof data.soulOfWar === "number" ? data.soulOfWar : undefined,
+    title: typeof data.title === "number" ? data.title : undefined,
+    rank: typeof data.rank === "number" ? data.rank : undefined,
+  };
 }
 
 /** 汇总结果（八项战斗属性 + 战斗力） */
@@ -81,12 +105,12 @@ export interface RoleAttributeNotes {
 /**
  * 汇总一个角色的战斗属性
  *
- * 与客户端 `combatCalc` 只有两处差异，都是刻意的：
+ * 与原客户端 `combatCalc`（已删除）只有两处差异，都是刻意的：
  *
- * 1. **不改传入对象**：客户端 `Object.assign(role, ...)` 直接把结果写回角色，
+ * 1. **不改传入对象**：原客户端 `Object.assign(role, ...)` 直接把结果写回角色，
  *    这里是纯函数。服务端没有「改完要同步回客户端」的语境，写回还会让调用方分不清
  *    哪些字段是算出来的、哪些是存档里原本就有的。
- * 2. **等级查不到时返回 null**：客户端是「原样返回 role」（一次兜底，等于没重算）。
+ * 2. **等级查不到时返回 null**：原客户端是「原样返回 role」（一次兜底，等于没重算）。
  *    服务端无处可取旧值，返回 null 让调用方自己决定是报错还是兜底 —— 不能静默给 0，
  *    「属性全 0」会被读成「算过了、结果就是 0」，那是完全不同的两句话。
  *
@@ -110,11 +134,9 @@ export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): {
 
   const equipmentBundles = collectEquipmentBundles(source.equipments, notes);
   // 战魂 / 称号 / 军衔：三项都是「当前等级提供整份加成，未激活（< 1）则不加成」
-  const extras = [
-    lookupLevelBundle(SOUL_LEVEL_ATTRIBUTES, source.soulOfWar),
-    lookupLevelBundle(TITLE_LEVEL_ATTRIBUTES, source.title),
-    lookupLevelBundle(RANK_LEVEL_ATTRIBUTES, source.rank),
-  ].filter((bundle): bundle is GeneratedBundle => bundle !== null);
+  const extras = [soulAttributesOf(source.soulOfWar), titleAttributesOf(source.title), rankAttributesOf(source.rank)].filter(
+    (bundle): bundle is GeneratedBundle => bundle !== null,
+  );
 
   // maxHp / hpRecover 是单值，六项攻防是 [下限, 上限] 元组 —— 两条路径，别合并着写
   let maxHp = singleOf(levelBundle, "maxHp", 0);
@@ -205,15 +227,10 @@ function lookupGeneratedBundle(table: GeneratedBundle, level: number): Generated
 /**
  * 按「客户端的等级语义」查战魂 / 称号 / 军衔表
  *
- * 生成物里这三张表的键是**来源数组的下标**，而客户端 `getXxxLevel(n)` 取的是
- * `config.level === n` 那一项（等级从 1 起）—— 两者差一位。这里是那一位的唯一去处，
- * 由 `audit-combat-parity` 全量遍历每个等级来保证没写反。
+ * 已迁走：这套查表（含「生成物键是下标、等级从 1 起，两者差一位」的转换）搬进了
+ * `shared/runtime-overrides` 的 `titleAttributesOf` / `soulAttributesOf` / `rankAttributesOf`
+ * —— 那里同时承担「先查运营库覆盖层、再回落生成物」，转换只留一处，不会两边各写一份。
  */
-function lookupLevelBundle(table: GeneratedBundle, level: number | undefined): GeneratedBundle | null {
-  const value = Number(level);
-  if (!Number.isFinite(value) || value < 1) return null; // 未激活（0 / undefined）→ 不加成
-  return lookupGeneratedBundle(table, value - 1);
-}
 
 /** 收集穿戴装备的属性包（查不到的 id 跳过，但记进 notes） */
 function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], notes: RoleAttributeNotes): GeneratedBundle[] {
@@ -221,7 +238,8 @@ function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], 
   const bundles: GeneratedBundle[] = [];
   for (const id of Object.values(equipments)) {
     if (typeof id !== "string" || id === "") continue; // 空槽位
-    const bundle = EQUIPMENT_ATTRIBUTES[id as keyof typeof EQUIPMENT_ATTRIBUTES];
+    // 先查运营库覆盖层（管理端改过就是新值），没有再提出厂属性 —— 两端同一份数字
+    const bundle = equipmentAttributesOf(id);
     if (!bundle) {
       notes.unknownEquipmentIds.push(id);
       continue;

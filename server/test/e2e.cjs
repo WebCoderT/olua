@@ -22,20 +22,20 @@ const ADMIN_CODE = "e2e-admin-code";
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
  *
- * 为什么要有这个数：`README.md` 与 `docs/resume.md` 里都写着「服务端 N 条 e2e」，
+ * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
  * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
  * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 248;
+const EXPECTED_ASSERTIONS = 247;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
   if (passedCount === EXPECTED_ASSERTIONS) return;
   console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
   process.exit(1);
 }
 
@@ -126,7 +126,7 @@ async function main() {
       JWT_SECRET: "e2e-secret-key",
       JWT_EXPIRES_IN: "1h",
       ADMIN_REGISTER_CODE: ADMIN_CODE,
-      ROLE_MAX_PER_ACCOUNT: "3",
+
       LOG_REQUESTS: "false",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -296,11 +296,10 @@ async function runSuite(baseUrl) {
   checkEqual(role3.status, 201, "创建第三个角色成功");
 
   const role4 = await call("POST", "/api/roles", { token, body: { data: { ...role1, id: "1004", name: "小强" } } });
-  checkEqual(role4.status, 409, "超过角色上限被拒（409）");
-  checkEqual(role4.body.code, 20001, "超上限业务码为 ROLE_LIMIT");
+  checkEqual(role4.status, 201, "创建第四个角色成功（角色数量不设上限）");
 
   const list = await call("GET", "/api/roles", { token });
-  checkEqual(list.body.data.length, 3, "角色列表 3 个");
+  checkEqual(list.body.data.length, 4, "角色列表 4 个");
   checkEqual(list.body.data[0].name, "小明", "列表按创建顺序");
   checkEqual(list.body.data[0].data, undefined, "列表不含 data（体量小）");
   checkEqual(list.body.data[0].online, true, "列表带在线标记");
@@ -401,7 +400,7 @@ async function runSuite(baseUrl) {
   const stats = await call("GET", "/api/admin/stats", { token: adminToken });
   checkEqual(stats.status, 200, "概览统计可访问");
   checkEqual(stats.body.data.accountCount, 2, "账号总数 = 2");
-  checkEqual(stats.body.data.roleCount, 3, "角色总数 = 3");
+  checkEqual(stats.body.data.roleCount, 4, "角色总数 = 4（角色数量不设上限，第四个也建成了）");
   checkEqual(stats.body.data.adminCount, 1, "管理员数 = 1");
 
   const accounts = await call("GET", "/api/admin/accounts?page=1&size=10", { token: adminToken });
@@ -419,10 +418,10 @@ async function runSuite(baseUrl) {
   const accountId = register.body.data.account.id;
   const accountDetail = await call("GET", `/api/admin/accounts/${accountId}`, { token: adminToken });
   checkEqual(accountDetail.body.data.account.username, "player001", "账号详情返回账号信息");
-  checkEqual(accountDetail.body.data.roles.length, 3, "账号详情带名下角色");
+  checkEqual(accountDetail.body.data.roles.length, 4, "账号详情带名下角色");
 
   const adminRoles = await call("GET", `/api/admin/roles?accountId=${accountId}`, { token: adminToken });
-  checkEqual(adminRoles.body.data.total, 3, "按账号查角色 total = 3");
+  checkEqual(adminRoles.body.data.total, 4, "按账号查角色 total = 4");
   checkEqual(adminRoles.body.data.list[0].accountName, "player001", "角色列表带账号名");
   checkEqual(adminRoles.body.data.list.filter((item) => item.online).length, 1, "角色列表带在线标记");
 
@@ -484,7 +483,7 @@ async function runSuite(baseUrl) {
   const deleteOwnRole = await call("DELETE", "/api/roles/1003", { token });
   checkEqual(deleteOwnRole.status, 200, "客户端删除角色成功");
   const listAfterDelete = await call("GET", "/api/roles", { token });
-  checkEqual(listAfterDelete.body.data.length, 1, "删除后角色只剩 1 个");
+  checkEqual(listAfterDelete.body.data.length, 2, "删除后角色只剩 2 个（四个里删了在线角色与 1003）");
 
   const otherAccountId = otherLogin.body.data.account.id;
   const deleteAccount = await call("DELETE", `/api/admin/accounts/${accountId}`, { token: adminToken });

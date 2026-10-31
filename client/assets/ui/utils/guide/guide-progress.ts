@@ -69,7 +69,21 @@ export function skipGuide(progress: GuideProgress): GuideProgress {
 }
 
 /**
- * 无条件推进一步（内部用：`advanceGuide` 校验完事件就落到这里）
+ * 点「下一步」：**不看触发事件**，无条件推进一步（最后一步 → 走完）
+ *
+ * 与 `advanceGuide` 是并存的两条路：**自己做到了**（真走了 / 打倒一只 / 捡起东西 / 打开过面板）
+ * 自动前进，**没做也想往前走**就点按钮。只留事件一条路时，不愿意动手的玩家在第一步就被拦住，
+ * 唯一的出口是「跳过引导」—— 那等于逼他放弃整段引导。
+ *
+ * 走完 / 跳过之后返回 null（不越过末尾、也不会把 skipped 洗回 false）。
+ */
+export function nextGuide(progress: GuideProgress, stepCount: number): GuideProgress | null {
+  if (!shouldRunGuide(progress, stepCount)) return null;
+  return finishStep(progress, stepCount);
+}
+
+/**
+ * 无条件推进一步（内部用：`advanceGuide` 校验完事件、`nextGuide` 判定可推进后都落到这里）
  */
 function finishStep(progress: GuideProgress, stepCount: number): GuideProgress {
   const step = Math.min(progress.step + 1, stepCount);

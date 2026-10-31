@@ -8,9 +8,8 @@
  * 榜单种类
  *
  * - `LEVEL`：角色等级（`roles.level` 索引列，升级路径一直在维护它）；
- * - `COMBAT`：战斗力（`summarizeRoleAttributes().combat`，与客户端 `combatCalc` 同源，
- *   `make audit-combat-parity` 逐位比对）——它把等级、装备、战魂、称号、军衔全算进去了，
- *   是「谁更能打」最接近的答案；
+ * - `COMBAT`：战斗力（`summarizeRoleAttributes().combat`，#541 起属性算法只有服务端一份）
+ *   ——它把等级、装备、战魂、称号、军衔全算进去了，是「谁更能打」最接近的答案；
  * - `KILLS`：击杀数（`roles.kills`，服务端结算路径 +1）。
  *
  * 三个榜都用同一套「排序 + 竞赛排名」实现，所以新增一个榜只需要在这里加一项、

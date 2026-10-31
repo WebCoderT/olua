@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { drugsApi, formatTime, PERMISSION } from "../api";
+import { drugIcon, drugsApi, formatTime, PERMISSION } from "../api";
 import type { Drug, PageResult } from "../api";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -151,6 +152,7 @@ export function DrugsPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>等级</th>
@@ -165,6 +167,9 @@ export function DrugsPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={drugIcon(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={tdClass}>
                     <span className="block font-medium text-slate-100">{item.label}</span>

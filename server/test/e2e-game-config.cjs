@@ -33,7 +33,7 @@ function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
   if (passedCount === EXPECTED_ASSERTIONS) return;
   console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
   process.exit(1);
 }
 

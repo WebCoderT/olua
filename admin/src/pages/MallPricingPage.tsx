@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatTime, mallApi, PERMISSION } from "../api";
+import { equipmentIcon, formatTime, mallApi, PERMISSION } from "../api";
 import type { MallPriceItem, MallSettings, PageResult } from "../api";
 import { EQUIPMENT_SLOTS } from "../api/gameData";
+import { GameIcon } from "../components/GameImage";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -210,6 +211,7 @@ export function MallPricingPage() {
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
+                <th className={thClass}>图</th>
                 <th className={thClass}>商品 id</th>
                 <th className={thClass}>名称</th>
                 <th className={thClass}>部位</th>
@@ -222,6 +224,9 @@ export function MallPricingPage() {
             <tbody>
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <td className={tdClass}>
+                    <GameIcon path={equipmentIcon(item.id)} alt={item.label} />
+                  </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} max-w-[240px] truncate font-medium text-slate-100`} title={item.label}>
                     {item.label}

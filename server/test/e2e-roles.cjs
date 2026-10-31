@@ -11,7 +11,8 @@
  * · 管理端修改：基础信息（含时装 / 头像 / 所在地图）、装备表 / 技能表 / 背包格子（结构化校验）、同账号重名校验
  * · 批量删除：按 id 删（幂等）、清空某账号全部角色、在线标记被顺带清掉
  * · 权限：只读观察员调写接口一律 403 / 30006
- * · 派生属性：详情带服务端重算的战斗属性；与客户端上报值比对（不一致可观测）；
+ * · 派生属性：详情带服务端重算的战斗属性；与客户端上报值比对；
+ *   **#541 起服务端权威重算落库**：建号与存档都会把属性/战斗力覆盖成服务端算的（离谱上报不落库）；
  *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级不在曲线里时如实给 null
  * · 文档：新接口落在「管理端」分组且带权限点标注
  *
@@ -21,7 +22,7 @@ process.env.DB_PATH = ":memory:";
 process.env.ADMIN_REGISTER_CODE = "test-admin-code";
 process.env.JWT_SECRET = "test-secret";
 process.env.LOG_REQUESTS = "false";
-process.env.ROLE_MAX_PER_ACCOUNT = "3";
+
 process.env.CORS_ORIGINS = "*";
 
 const { NestFactory } = require("@nestjs/core");
@@ -36,20 +37,20 @@ const { setupSwagger } = require("../dist/swagger/setup");
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
  *
- * 为什么要有这个数：`README.md` 与 `docs/resume.md` 里都写着「服务端 N 条 e2e」，
+ * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
  * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
  * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 120;
+const EXPECTED_ASSERTIONS = 137;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
   if (passedCount === EXPECTED_ASSERTIONS) return;
   console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
   process.exit(1);
 }
 
@@ -166,9 +167,7 @@ function roleData(id, name, occupation, level) {
 
   const roleA2 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a2", "甲二", "2", 10) } });
   const roleA3 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a3", "甲三", "3", 20) } });
-  check(roleA2.code === 0 && roleA3.code === 0, "同一账号可建到上限（3 个）");
-  const overLimit = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a4", "甲四", "1", 1) } });
-  check(overLimit.code === 20001, "超出上限被拒（业务码 20001）", `${overLimit.code}`);
+  check(roleA2.code === 0 && roleA3.code === 0, "同一账号可连续创建多个角色（数量不设上限）");
 
   const saved1 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 6) } });
   check(saved1.code === 0 && saved1.data.revision === 2, "不带 revision 保存仍然可用（向后兼容），revision 递增到 2", JSON.stringify(saved1.data && saved1.data.revision));
@@ -508,7 +507,7 @@ function roleData(id, name, occupation, level) {
     "重算结果里有八项属性与战斗力",
     JSON.stringify(d1.attributes),
   );
-  check(d1.reported.combat === null && d1.reported.maxHp === null, "存档里没上报这两个值 → reported 为 null", JSON.stringify(d1.reported));
+  check(d1.reported.combat === d1.attributes.combat, "建号没上报 combat → 服务端重算落库补齐（reported = 权威值）", JSON.stringify(d1.reported));
   check(
     d1.comparable === true && d1.mismatch === false,
     "算得出来但没上报值 → comparable=true 且 mismatch=false（没比成与不一致是两回事）",
@@ -530,19 +529,18 @@ function roleData(id, name, occupation, level) {
   check(derived2.data.derived.mismatch === false, "上报服务端刚算出的那份 → 一致", JSON.stringify(derived2.data.derived.reported));
   check(derived2.data.derived.reported.combat === steadyCombat, "上报值原样带出来（对照用）", String(derived2.data.derived.reported.combat));
 
-  // 明显不对的上报值
+  // 明显不对的上报值：**建号即被服务端重算覆盖**（#541 权威）——「客户端说自己多强」的口子在创建时就焊死了
   const bogus = await api("POST", "roles", {
     token: tokenC,
     body: { data: { ...roleData("role_d3", "算三", "1", 10), combat: 999999999, maxHp: 1 } },
   });
   check(bogus.code === 0, "准备：建一个上报值离谱的角色", bogus.message);
   const derived3 = await api("GET", "admin/roles/role_d3", { token: adminToken });
-  check(derived3.data.derived.mismatch === true, "上报值与服务端重算对不上 → mismatch=true", JSON.stringify(derived3.data.derived.reported));
-  check(derived3.data.derived.comparable === true, "对不上时依然是「比过了」的（comparable=true）");
+  check(derived3.data.derived.mismatch === false, "建号上报离谱值 → 服务端重算覆盖，入库即权威（mismatch=false）", JSON.stringify(derived3.data.derived.reported));
   check(
-    warnLines.some((line) => line.indexOf("role_d3") !== -1 && line.indexOf("不一致") !== -1),
-    "不一致同时落到服务端日志（可观测，不静默）",
-    JSON.stringify(warnLines.slice(-3)),
+    derived3.data.derived.reported.combat === derived3.data.derived.attributes.combat,
+    "离谱上报没有落库：reported 已是服务端算的那份",
+    JSON.stringify(derived3.data.derived.reported),
   );
 
   // 管理端改等级 → derived 立刻跟着变（不等客户端同步），且客户端那份旧上报值当场变成「不一致」
@@ -596,6 +594,123 @@ function roleData(id, name, occupation, level) {
 
   //#endregion
 
+  //#region 八点五、运营库改值即时生效（#544）
+
+  console.log("— 八点五、管理端改装备属性 → 服务端结算立刻按新值 —");
+
+  // 这条守的是「两端一致」：管理端改的是库，客户端靠快照覆写跟着变；服务端此前读的是
+  // 编译期生成物 —— 于是面板变了、伤害没变，且没有任何报错。现在覆盖层接管，必须立刻生效。
+  const equipList = await api("GET", "admin/equipments?size=1", { token: adminToken });
+  const sampleEquip = equipList.data.list[0];
+  check(!!sampleEquip && sampleEquip.attributes.maxHp > 0, "准备：取一件 maxHp > 0 的基础件", JSON.stringify(sampleEquip && sampleEquip.attributes));
+
+  const wearIt = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { level: 10, equipments: { WEAPON: sampleEquip.id } } });
+  const baseMaxHp = wearIt.data.derived.attributes.maxHp;
+  check(typeof baseMaxHp === "number", "穿上后取到含装备加成的 maxHp", String(baseMaxHp));
+
+  const doubled = await api("PATCH", `admin/equipments/${sampleEquip.id}`, {
+    token: adminToken,
+    body: { attributes: { ...sampleEquip.attributes, maxHp: sampleEquip.attributes.maxHp * 2 } },
+  });
+  check(doubled.code === 0, "管理端把该装备的 maxHp 改成 2 倍", doubled.message);
+
+  const afterDouble = await api("GET", "admin/roles/role_d1", { token: adminToken });
+  const doubledMaxHp = afterDouble.data.derived.attributes.maxHp;
+  check(
+    doubledMaxHp === baseMaxHp + sampleEquip.attributes.maxHp,
+    "服务端重算立刻按新值（不需要重启、也不需要客户端同步）",
+    `${baseMaxHp} → ${doubledMaxHp}（基础件 maxHp ${sampleEquip.attributes.maxHp}）`,
+  );
+
+  // 变体同一口径：管理端改的是基础件，玩家身上穿的可能是 `_pXsY` 变体（属性 = 基础件 × 前后缀倍率）
+  const shared = require("../dist/shared/game-data.generated");
+  const variantRate = shared.EQUIPMENT_PREFIX_RATES[4] * shared.EQUIPMENT_SUFFIX_RATES[2];
+  const variantId = `${sampleEquip.id}_p4s2`;
+  const wearVariant = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { equipments: { WEAPON: variantId } } });
+  check(wearVariant.code === 0, "准备：把同一件的变体穿上（p4s2）", wearVariant.message);
+  // 等级那部分加成没变，减掉它剩下的就是装备加成
+  const variantBonus = wearVariant.data.derived.attributes.maxHp - (baseMaxHp - sampleEquip.attributes.maxHp);
+  check(
+    variantBonus === Math.round(sampleEquip.attributes.maxHp * 2 * variantRate),
+    "变体按「基础件 × 前后缀倍率」重算（p4s2 = 1.4 × 3）",
+    `${variantBonus} vs ${Math.round(sampleEquip.attributes.maxHp * 2 * variantRate)}`,
+  );
+
+  const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { attributes: sampleEquip.attributes } });
+  check(restoredEquip.code === 0, "还原该装备的属性", restoredEquip.message);
+  const backToNormal = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { equipments: { WEAPON: sampleEquip.id } } });
+  check(
+    backToNormal.data.derived.attributes.maxHp === baseMaxHp,
+    "还原后回到原值（覆盖层跟着回退，不是一次性的）",
+    `${backToNormal.data.derived.attributes.maxHp} vs ${baseMaxHp}`,
+  );
+
+  //#endregion
+
+  //#region 八点六、管理端改价签 → 服务端成交价跟着变（#545）
+
+  console.log("— 八点六、管理端改价签 / 等级 → 服务端成交价跟着变 —");
+
+  // 这条守的是「经济出口两端一致」：客户端背包里的价签来自快照覆写（管理端改完立刻变），
+  // 服务端此前读的是编译期生成物 —— 界面上写 77，到账 2。玩家只能描述成「价签不对」。
+  const bagWith = (id, count) => ({ bag: [{ row: 0, col: 0, id, count }] });
+
+  const putHide = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith("material_hide", 5) });
+  check(putHide.code === 0, "准备：背包里放 5 块兽皮", putHide.message);
+
+  const hideFactory = shared.SELL_PRICES["material_hide"];
+  const soldAtFactory = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+  });
+  check(soldAtFactory.data.sold[0].unitPrice === hideFactory, "未改价时按出厂价签成交（库里 seed 值与生成物一致）", soldAtFactory.data.sold[0].unitPrice);
+
+  const priceUp = await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: 77 } });
+  check(priceUp.code === 0, "管理端把兽皮卖价改成 77", priceUp.message);
+  const soldAtNew = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+  });
+  check(soldAtNew.data.sold[0].unitPrice === 77, "再卖一块立刻按新价（不重启、不清库）", soldAtNew.data.sold[0].unitPrice);
+
+  await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: hideFactory } });
+  const soldBackToFactory = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+  });
+  check(soldBackToFactory.data.sold[0].unitPrice === hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）", soldBackToFactory.data.sold[0].unitPrice);
+
+  // 装备：等级既是穿戴门槛也是定价依据（回收价 = 等级基础价 × 前后缀倍率）
+  const putEquip = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  check(putEquip.code === 0, "准备：背包里放一件该装备（基础件）", putEquip.message);
+  const soldEquip = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+  });
+  check(
+    soldEquip.data.sold[0].unitPrice === shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1],
+    "装备价 = 该等级的回收基础价（客户端显示的就是这一档）",
+    `${soldEquip.data.sold[0].unitPrice} vs ${shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1]}`,
+  );
+
+  const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: 50 } });
+  check(levelUp.code === 0, "管理端把该装备的等级改成 50", levelUp.message);
+  await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  const soldEquip50 = await api("POST", "roles/role_d1/sell", {
+    token: tokenC,
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+  });
+  check(
+    soldEquip50.data.sold[0].unitPrice === shared.EQUIPMENT_RECYCLE_PRICES[49],
+    "改等级后价签跟着走（不用重新生成共享数据）",
+    `${soldEquip50.data.sold[0].unitPrice} vs ${shared.EQUIPMENT_RECYCLE_PRICES[49]}`,
+  );
+
+  const levelRestore = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: sampleEquip.level } });
+  check(levelRestore.code === 0, "还原该装备的等级（后续断言仍按出厂值）", levelRestore.message);
+
+  //#endregion
+
   //#region 九、玩家上报存档时的比对（写入路径）
 
   console.log("— 九、玩家上报存档时的比对（写入路径） —");
@@ -621,11 +736,18 @@ function roleData(id, name, occupation, level) {
     token: tokenD,
     body: { data: { ...roleData("role_e1", "报一", "1", 10), combat: rightCombat + 123456, maxHp: rightMaxHp } },
   });
-  check(badSave.code === 0, "上报值对不上的存档照样存进去（只记不拦，不打断正常玩法）", `${badSave.code}`);
+  check(badSave.code === 0, "上报值对不上的存档照常收下（日志记录 + 权威覆盖，不打断正常玩法）", `${badSave.code}`);
   check(
     warnLines.slice(beforeBad).some((line) => line.indexOf("role_e1") !== -1 && line.indexOf("不一致") !== -1),
     "…并落到一条 warn（写入路径才是全量观测点：每次推进度都会经过）",
     JSON.stringify(warnLines.slice(beforeBad)),
+  );
+  // #541 权威覆盖：上报的那份只用来记日志，落库的一定是服务端重算的
+  const afterBadSave = await api("GET", "admin/roles/role_e1", { token: adminToken });
+  check(
+    afterBadSave.data.derived.reported.combat === afterBadSave.data.derived.attributes.combat,
+    "离谱上报不落库：存档里已被服务端重算值覆盖（reported = 权威值）",
+    JSON.stringify(afterBadSave.data.derived.reported),
   );
 
   // 一致：不记（每次推进度都刷一条等于没有日志）
@@ -637,9 +759,9 @@ function roleData(id, name, occupation, level) {
   check(goodSave.code === 0, "上报值一致的存档照常保存", `${goodSave.code}`);
   check(warnLines.length === beforeGood, "一致时一条日志都不打", JSON.stringify(warnLines.slice(beforeGood)));
 
-  // 没有改动存档：存进去什么，取回来就是什么
+  // 没有改动存档：一致的上报值经服务端重算后取回还是它（口径一致时覆盖 == 原值）
   const readBack = await api("GET", "roles/role_e1", { token: tokenD });
-  check(readBack.data.data.combat === rightCombat, "服务端不改写玩家上报的值（存进去什么取回来什么）", String(readBack.data.data.combat));
+  check(readBack.data.data.combat === rightCombat, "取回来的 combat 是服务端重算的那份（与一致上报值相同）", String(readBack.data.data.combat));
 
   Logger.prototype.warn = originalWarn;
 

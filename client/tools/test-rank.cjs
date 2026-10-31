@@ -9,7 +9,7 @@
  * · 强度定位：满衔介于满阶称号与满阶战魂之间（0.39 < 0.525 < 0.675），rate 也夹在两者之间
  * · 价格曲线：晋到 N 阶 = priceBase × N²，逐阶递增，价格基数比称号/战魂都便宜
  * · 头顶红字：军衔是头上那行红字（排在角色名称与血条之间），文案模板带 {rank} 占位、未授衔为空串
- * · 接线：存档迁移（旧档 rank 补 0）、晋升链路、属性计入 combatCalc、入口按钮在角色信息弹窗（不走 NPC）
+ * · 接线：存档迁移（旧档 rank 补 0）、晋升链路、属性加成在服务端权威重算（#541）、入口按钮在角色信息弹窗（不走 NPC）
  * · 工程口径：100 阶列表只在打开时建一次，切换选中不重建（避免重演商城「打开就卡」那个坑）
  *
  * 数据层跑在沙箱里（真实的 configs/rank + growth + title + soul，见 lib/configs-sandbox.cjs），源码断言直接读文件。
@@ -165,8 +165,7 @@ const growthBody = storageSource.slice(storageSource.indexOf("private static asy
 check(/upgradeGrowthOnServer\(role, "rank", next\.level, "rank_upgrade_tip"\)/.test(storageSource), "晋升交给共用的服务端升级流程（本地不再扣费落阶）");
 check(/RoleApi\.growthUpgrade\(role\.id, \{ kind, targetLevel: nextLevel, revision: role\.revision \}\)/.test(growthBody), "升级请求带修订号做乐观锁（后台改过 → 20006 被拒）");
 check(/role\.bindGold = Number\(data\.bindGold \?\? role\.bindGold\)/.test(growthBody) && /role\.rank = Number\(data\.rank \?\? nextLevel\)/.test(growthBody), "以服务端返回的余额与阶位为准（客户端那套「先扣钱再落阶」已下线）");
-check(/Object\.assign\(role, GameHelper\.combatCalc\(role\)\)/.test(growthBody), "晋升后重算属性与战斗力（共用流程里做，三条成长线一致）");
-check(/getRankLevel\(role\.rank\)/.test(helperSource) && /\(rank\?\.attributes\.maxHp \?\? 0\)/.test(helperSource) && /if \(rank\) sources\.push\(rank\.attributes\[key\]\);/.test(helperSource), "combatCalc 把军衔属性计入血量与六维");
+check(!/combatCalc/.test(growthBody), "晋升后**不在客户端重算**属性与战斗力（#541 服务端权威：服务端重算落库，roleUpdate 帧带回）");
 check(/createHead\("role_head", this\.role\.hp, this\.role\.maxHp, this\.role\.rank\)/.test(displaySource), "RoleDisplay 建头部信息栏时把军衔一并传进去（进图即显示）");
 check(/this\.addChild\(GameUiHelper\.createRoleName\(this\.role\)\)/.test(displaySource), "RoleDisplay 把名称节点挂在角色身上（在 appearance 之后添加 → 绘制在角色之上）");
 check(/getChildByName\("role_rank"\)/.test(displaySource) && /GameUiHelper\.getRankHeadText\(role\.rank\)/.test(displaySource), "RoleDisplay.updateHead 按名字刷新军衔红字（晋升后无需重进图）");

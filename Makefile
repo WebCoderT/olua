@@ -5,14 +5,15 @@
 #    client/  Cocos Creator 3.8.7 + TypeScript 客户端（没有 npm 脚本，用编辑器打开）
 #    server/  NestJS 12 + node:sqlite 服务端（同时是接口契约的唯一源头）
 #    admin/   React 19 + Vite + Tailwind v4 管理端
-#    tools/   跨端脚本（接口生成 + 数据快照生成 + 13 项审计 + e2e 辅助）
+#    tools/   跨端脚本（接口生成 + 数据快照生成 + 12 项审计 + e2e 辅助）
 #
 #  常用：
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
 #    make client-test      客户端 58 套单测（需要本机 Cocos 工程）
-#    make verify           一条命令跑完全部门禁（含三端构建与二十四套 e2e）
+#    make test-changed     日常回归硬门槛：改动哪跑哪（按改动范围挑最小的验证集）
+#    make verify           一条命令跑完全部门禁（含三端构建与二十四套 e2e；发布前全量确认用）
 #    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
 #
 #  完整清单：make / make help
@@ -48,7 +49,8 @@ CREATOR ?= CocosCreator
 .PHONY: help info install install-ci env \
         dev dev-server dev-admin \
         check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
-        audit-shared-data audit-combat-parity audit-doc-numbers audit-equip-align-catalog \
+        test-changed \
+        audit-shared-data audit-doc-numbers audit-equip-align-catalog \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
@@ -224,7 +226,7 @@ server-build: ## 编译服务端到 server/dist
 server-start: ## 跑服务端已构建产物（需先 make server-build）
 	@cd server && $(NPM) run start
 
-server-e2e: ## 服务端主 e2e（248 条断言）
+server-e2e: ## 服务端主 e2e（247 条断言）
 	@cd server && $(NPM) run test:e2e
 
 server-e2e-roles: ## 服务端角色管理专项 e2e（110 条）
@@ -377,9 +379,6 @@ audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
 audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一致 + 表齐全非空（数据漂移）+ 角色上限不超过选角站位
 	@$(NODE) tools/audit-shared-data.cjs
 
-audit-combat-parity: ## 服务端算的角色属性是否与客户端 combatCalc 一致（算法漂移）
-	@$(NODE) tools/audit-combat-parity.cjs
-
 audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据源）是否与客户端 configs 逐字节一致 + 无展开变体 / 缺方向 / 缩成点
 	@$(NODE) tools/audit-equip-align-catalog.cjs
 
@@ -413,6 +412,9 @@ docker-logs: ## 跟服务端日志（Ctrl+C 退出）
 check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc + 管理端 typecheck + 全部审计
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
+
+test-changed: ## 日常回归硬门槛：改动哪跑哪（BASE=main 可指定基准；全量门禁仍是 verify）
+	@$(NODE) tools/test-changed.cjs $(if $(BASE),--base=$(BASE),)
 
 test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align ## 全部测试：客户端 58 套 + 服务端二十四套 e2e
 	@echo ""
