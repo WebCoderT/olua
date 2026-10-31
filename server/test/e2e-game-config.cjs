@@ -1470,13 +1470,18 @@ async function main() {
     checkEqual(bigHeal.body?.data?.data?.bag?.[0]?.[0], null, "数量减到 0 → 格子清空");
     // 上面 100000 已被 maxHp 封顶（hp 已满）→ 再用必拒：同时证明回复被资源上限封住
     // （大回复那一次已把格子用空，先补一格药并保持血量已满）
-    const refillBag = Array.from({ length: 4 }, () => Array.from({ length: 6 }, () => null));
-    refillBag[0][0] = { id: "drug_hp_1", count: 1 };
+    //
+    // 背包内容自 #556 起是服务端权威：客户端存档里的 bag 会被库里那份回填（只借网格尺寸），
+    // 所以「摆一格药」要走管理端结构化编辑，PUT 只负责改血量
+    const refillPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
+      token,
+      body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 1 }] },
+    });
+    checkEqual(refillPlaced.status, 200, "补一格药（管理端摆格，血量保持已满）");
     const refillSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
       token: drugPlayer,
-      body: { data: { ...drugCreate.body?.data?.data, hp: bigHeal.body?.data?.data?.hp, bag: refillBag } },
+      body: { data: { ...drugCreate.body?.data?.data, hp: bigHeal.body?.data?.data?.hp } },
     });
-    checkEqual(refillSave.status, 200, "补一格药（血量保持已满）");
     const hpFullUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
       body: { row: 0, col: 0, revision: refillSave.body?.data?.revision },
@@ -1485,13 +1490,15 @@ async function main() {
     checkEqual(hpFullUse.body?.code, 20014, "无需用药 → 20014");
 
     // 太阳水：血满蓝不满也照用，只回蓝的部分（recoveredHp = 0）
-    const sunBag = Array.from({ length: 4 }, () => Array.from({ length: 6 }, () => null));
-    sunBag[0][1] = { id: "drug_sun", count: 1 };
+    const sunPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
+      token,
+      body: { bag: [{ row: 0, col: 1, id: "drug_sun", count: 1 }] },
+    });
+    checkEqual(sunPlaced.status, 200, "摆好太阳水（管理端摆格，血满蓝低）");
     const sunSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
       token: drugPlayer,
-      body: { data: { ...drugCreate.body?.data?.data, hp: 999999, mp: 10, bag: sunBag } },
+      body: { data: { ...drugCreate.body?.data?.data, hp: 999999, mp: 10 } },
     });
-    checkEqual(sunSave.status, 200, "摆好太阳水（血满蓝低）");
     const sunUsed = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
       body: { row: 0, col: 1, revision: sunSave.body?.data?.revision },
@@ -1506,11 +1513,15 @@ async function main() {
     );
 
     // 血蓝全满 → 拒用不扣药
+    const fullPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
+      token,
+      body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 2 }] },
+    });
+    checkEqual(fullPlaced.status, 200, "摆好满血满蓝 + 一格药（管理端摆格）");
     const fullSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
       token: drugPlayer,
-      body: { data: { ...drugCreate.body?.data?.data, hp: 999999, mp: 999999, bag: drugBag } },
+      body: { data: { ...drugCreate.body?.data?.data, hp: 999999, mp: 999999 } },
     });
-    checkEqual(fullSave.status, 200, "摆好满血满蓝 + 一格药");
     const allFullUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
       body: { row: 0, col: 0, revision: fullSave.body?.data?.revision },
@@ -1523,13 +1534,15 @@ async function main() {
     checkEqual(afterFull.body?.data?.data?.bag?.[0]?.[0]?.count, 2, "拒绝用药不扣药（数量仍 2）");
 
     // 目标不合法：非药品格子 / 空格子 / 坐标越界
-    const equipBag = Array.from({ length: 4 }, () => Array.from({ length: 6 }, () => null));
-    equipBag[1][0] = { id: "cloth_1_p0s0", count: 1 };
+    const equipPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
+      token,
+      body: { bag: [{ row: 1, col: 0, id: "cloth_1_p0s0", count: 1 }] },
+    });
+    checkEqual(equipPlaced.status, 200, "摆好一格装备（管理端摆格）");
     const equipSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
       token: drugPlayer,
-      body: { data: { ...drugCreate.body?.data?.data, hp: 10, mp: 10, bag: equipBag } },
+      body: { data: { ...drugCreate.body?.data?.data, hp: 10, mp: 10 } },
     });
-    checkEqual(equipSave.status, 200, "摆好一格装备");
     const equipUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
       body: { row: 1, col: 0, revision: equipSave.body?.data?.revision },

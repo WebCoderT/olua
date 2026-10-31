@@ -305,6 +305,11 @@ function roleData(id, name, level, skills) {
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
 
+    // 管理端令牌：技能 / 装备 / 背包 从 #556 起是服务端权威，玩家侧存档已经改不动它们了
+    // （客户端上报会被库里那份回填），所以测试要造这些状态只能走管理端结构化编辑。
+    const adminToken = await registerAdmin(baseUrl, "combat_admin", "Combat#123");
+    check(!!adminToken, "准备：管理员已登录（改配置表与造角色状态都要用它）");
+
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const wsUrl = `${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`;
     let session = connect(wsUrl);
@@ -354,8 +359,9 @@ function roleData(id, name, level, skills) {
     //#region 二、正常结算
 
     group("二、正常结算：伤害由服务端算出，血量算术自洽");
-    const saved = await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: roleData("combat_r1", "斗战者", 1, { 1000: 1 }) } });
-    check(saved.code === 0, "准备：角色已学会技能 1000", saved.message);
+    // 技能已收权（#556）：玩家侧存档改不动 `skills`，学技能只能走管理端结构化编辑
+    const saved = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: { 1000: 1 } } });
+    check(saved.code === 0, "准备：角色已学会技能 1000（管理端结构化编辑）", saved.message);
 
     // 怪物 1：maxHp 65 / 物防 [4,6]；1 级角色物攻 [14,20]，技能 1 级倍率 1 → 伤害 ∈ [8, 16]
     const firstShot = cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" });
@@ -460,8 +466,7 @@ function roleData(id, name, level, skills) {
 
     group("六、击杀奖励：经验与掉落的结算在服务端（settle 帧 reward）");
 
-    const adminToken = await registerAdmin(baseUrl, "combat_admin", "Combat#123");
-    check(!!adminToken, "准备：管理员已登录（击杀奖励要用它改配置表）");
+    // 管理员令牌已在「准备」段落登录（技能 / 装备 / 背包自 #556 起是服务端权威，只有管理端能改）
 
     /** 再来一名带技能的玩家（独立账号 / 角色 / 实时连接），返回 { token, roleId, session } */
     async function newPlayer(name, level = 1) {
@@ -764,13 +769,11 @@ function roleData(id, name, level, skills) {
     check(!!hurtFrame, "E：血量变化进入增量广播（互见的血条跟着走）", JSON.stringify(hurtFrame));
 
     // —— H. 换装（#383）：改存档后站在不动也要被别人看到（在场表按 refresh 间隔重读）——
-    const companionDetail = await api(baseUrl, "GET", `roles/${companion.roleId}`, { token: companion.token });
-    const redressed = await api(baseUrl, "PUT", `roles/${companion.roleId}`, {
-      token: companion.token,
-      body: {
-        revision: companionDetail.data.revision,
-        data: { ...roleData("combat_rpr_r1", "combat_rpr", 1, { 1000: 1 }), equipments: { cloth: "3001", weapon: "4001" } },
-      },
+    // 装备栏自 #556 起是服务端权威：玩家侧上报的 equipments 会被库里那份回填，
+    // 换装只能走管理端结构化编辑（等价于运营改档）
+    const redressed = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, {
+      token: adminToken,
+      body: { equipments: { cloth: "3001", weapon: "4001" } },
     });
     check(redressed.code === 0, "H：换装已写进存档（服务端权威数据变了，实时进程没被告知）", redressed.message);
     const dressedFrame = await waitFor("fighter 收到 companion 的换装帧", async () => {
@@ -915,15 +918,13 @@ function roleData(id, name, level, skills) {
 
     // —— E. 背包满拒拾：整份放不下 → 20012，存档与修订号都不动 ——
 
-    const roleBeforeFull = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
-    const revisionBeforeFull = roleBeforeFull.data && roleBeforeFull.data.revision;
     // 4×10 全塞满 material_iron（可叠加物品堆满每一格：药再也吃不进已有堆，也找不到空格）
-    const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => ({ id: "material_iron", count: 99 })));
-    const savedFull = await api(baseUrl, "PUT", `roles/${picker.roleId}`, {
-      token: picker.token,
-      body: { revision: revisionBeforeFull, data: { ...roleData("combat_rpk_r1", "combat_rpk", 1, { 1000: 1 }), bag: fullBag } },
-    });
-    check(savedFull.code === 0, "E：背包已存成全满（4×10 格 material_iron x99）", savedFull.message);
+    // 背包内容自 #556 起是服务端权威：玩家侧上报的内容会被库里那份回填（只借客户端的网格尺寸），
+    // 所以「塞满背包」这种造状态必须走管理端结构化编辑（稀疏格式，一行一格）
+    const fullCells = [];
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) fullCells.push({ row, col, id: "material_iron", count: 99 });
+    const savedFull = await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, body: { bag: fullCells } });
+    check(savedFull.code === 0, "E：背包已存成全满（4×10 格 material_iron x99，管理端结构化编辑）", savedFull.message);
 
     const mobFull = await aliveMonster(picker, "1");
     check(!!mobFull, "E：等到了活着的怪（上一只已按 5s 重生）", JSON.stringify(mobFull));

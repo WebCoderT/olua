@@ -4,8 +4,8 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { GROWTH_SCALARS, ITEM_TYPES } from "../../shared/game-data.generated";
-import { drugOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
+import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_OF, GROWTH_SCALARS, ITEM_TYPES } from "../../shared/game-data.generated";
+import { drugOf, equipmentLevelOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -15,13 +15,26 @@ import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
 import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
+import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
-import { decodeStoredRoleData, normalizeLevel, parseRoleData } from "./role-data.util";
+import { decodeStoredRoleData, normalizeBagCells, normalizeLevel, parseRoleData, applyBagCells } from "./role-data.util";
 import { clampInitialCurrency, clampVitals, enforceServerAuthority, pinInitialLevel } from "./role-authority";
+import {
+  BagGrid,
+  cellAt,
+  discardAt,
+  equipAt,
+  readBagGrid,
+  readWornEquipments,
+  sameBagContent,
+  sameGridShape,
+  sanitizeEquipments,
+  unequipSlot,
+} from "./role-inventory";
 
 /** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
 export interface KillExpResult {
@@ -191,6 +204,17 @@ export class RolesService {
     // 等级可能被上面回填改掉，索引列必须从**回填后**的文档重取：
     // 否则 `row.level`（客户端报的）与 `data.level`（库里的）各说一套，列表与详情对不上
     const level = normalizeLevel(data.level);
+    // 装备槽位的脏数据（部位不符 / 同一件穿在多个槽位）必须在重算**之前**清掉：
+    // 属性重算是遍历 `equipments` 的所有值累加的，不看键 —— 同一件算三遍就是三倍战力
+    // （收权之前的老存档没经过这层校验，清理只打日志，不打扰玩家）
+    const cleanedWorn = sanitizeEquipments(readWornEquipments(data.equipments), (id) => this.equipmentSlotOf(id));
+    if (cleanedWorn.dropped.length) {
+      this.logger.warn(
+        `角色 ${roleId} 的装备槽位有脏数据，已清理：` +
+          cleanedWorn.dropped.map((item) => `${item.slot}=${item.id}（${item.reason}）`).join("；"),
+      );
+    }
+    data.equipments = cleanedWorn.equipments;
     // 比对在前（记录客户端这次上报了什么，观察用），重算在后（落库的一定是服务端算的）：
     // 客户端那份自 #541 起只是演，谁强由这里的公式说了算
     this.warnIfAttributesMismatch(roleId, level, data);
@@ -623,6 +647,123 @@ export class RolesService {
     };
     this.roles.replace(row);
     return DrugUseResultDto.fromRow(row, account.online_role_id, drug.id, recoveredHp, recoveredMp);
+  }
+
+  /**
+   * 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作共用一条写路径
+   *
+   * **为什么这五个动作要收到服务端**：`bag` / `equipments` 从这一版起进权威清单
+   * （见 `role-authority.ts`）。收权之后，客户端本地改的背包会在下一次存档被回填成库里的值 ——
+   * 所以每一个「改背包」的动作都必须先有一个服务端写点，否则那个动作会变成「按下去没反应」。
+   *
+   * **服务端自己算的三个**（穿 / 脱 / 丢）与**只验守恒的两个**（整理 / 搬运）：
+   * 前者决定数值或者销毁物品，后者只是换位置。复刻一遍客户端的 move/merge/swap 会让
+   * 两端慢慢漂开（本地那份还带着「合并超过上限留在原格」这类细节），所以改成
+   * 「客户端给排布、服务端验内容守恒」—— 少一件多一件都过不去，算子见 `role-inventory.ts`。
+   *
+   * 失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 / 等级不够）
+   * / 20022 排布与库里对不上 / 20012 背包满（卸下时没有空格）。
+   */
+  bagOp(accountId: string, roleId: string, dto: BagOpDto): BagOpResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与升级 / 购买 / 用药同一纪律：被踢下线的角色不能继续改背包
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    let grid: BagGrid = readBagGrid(data.bag);
+    // 老存档的装备槽位可能是收权之前写进去的：顺手清掉「部位不符 / 同一件穿多格」的脏数据，
+    // 否则属性重算会把它算进战力（见 sanitizeEquipments 的注释）
+    const cleaned = sanitizeEquipments(readWornEquipments(data.equipments), (id) => this.equipmentSlotOf(id));
+    if (cleaned.dropped.length) {
+      this.logger.warn(
+        `角色 ${roleId} 的装备槽位有脏数据，已清理：` +
+          cleaned.dropped.map((item) => `${item.slot}=${item.id}（${item.reason}）`).join("；"),
+      );
+    }
+    const worn = cleaned.equipments;
+    let slot: string | null = null;
+
+    switch (dto.action) {
+      case "equip": {
+        const cell = cellAt(grid, dto.row, dto.col);
+        if (!cell) throw new BizException(BizCode.BAG_TARGET_INVALID, "这一格没有可以穿戴的装备");
+        const equipmentSlot = this.equipmentSlotOf(cell.id);
+        if (!equipmentSlot) throw new BizException(BizCode.BAG_EQUIP_REJECTED, "这件物品不是装备，无法穿戴");
+        const required = equipmentLevelOf(cell.id);
+        if (required === null) throw new BizException(BizCode.BAG_EQUIP_REJECTED, `认不出的装备：${cell.id}`);
+        if (required > existing.level) {
+          throw new BizException(BizCode.BAG_EQUIP_REJECTED, `需要等级 ${required} 才能穿戴这件装备`);
+        }
+        equipAt(grid, worn, Number(dto.row), Number(dto.col), equipmentSlot);
+        slot = equipmentSlot;
+        break;
+      }
+      case "unequip": {
+        if (!dto.slot) throw new BizException(BizCode.BAG_TARGET_INVALID, "缺少装备槽位");
+        // 槽位名不在客户端那套清单里（改包塞了个 other99）→ 连脱都不用脱，直接拒绝
+        if (!(dto.slot in EQUIPMENT_SLOTS)) {
+          throw new BizException(BizCode.BAG_TARGET_INVALID, `没有这个装备槽位：${dto.slot}`);
+        }
+        unequipSlot(grid, worn, dto.slot);
+        slot = dto.slot;
+        break;
+      }
+      case "discard": {
+        discardAt(grid, Number(dto.row), Number(dto.col));
+        break;
+      }
+      case "move":
+      case "tidy": {
+        if (!dto.cells) throw new BizException(BizCode.BAG_TARGET_INVALID, "缺少操作后的背包内容");
+        const arranged = applyBagCells(grid, normalizeBagCells(dto.cells)) as BagGrid;
+        // 守恒判据只有两条：形状不变、同 id 总件数不变（搬运的合并 / 交换、整理的重排都满足）
+        if (!sameGridShape(grid, arranged) || !sameBagContent(grid, arranged)) {
+          throw new BizException(BizCode.BAG_ARRANGE_INVALID, "背包内容与服务器不一致，请重新打开背包");
+        }
+        grid = arranged;
+        break;
+      }
+      default: {
+        // DTO 的 @IsIn 已经拦过一遍，这里是给「将来加了动作却忘了写分支」留的显式出口
+        throw new BizException(BizCode.BAG_TARGET_INVALID, `不支持的背包操作：${String(dto.action)}`);
+      }
+    }
+
+    data.bag = grid;
+    data.equipments = worn;
+    // 穿戴 / 卸下改了 `equipments` —— 它是属性重算的输入，必须当场重算（血蓝上限跟着变）
+    if (dto.action === "equip" || dto.action === "unequip") {
+      this.applyAuthoritativeAttributes(existing.level, data);
+      clampVitals(data);
+    }
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return BagOpResultDto.fromRow(row, account.online_role_id, dto.action, slot);
+  }
+
+  /**
+   * 物品 id → 装备槽位（不是装备返回 null）
+   *
+   * 槽位表来自生成物 `EQUIPMENT_SLOT_OF`（含前后缀变体，基础件与变体的部位必然一致），
+   * 所以这里不需要再解析变体 id。注意它**不含**运营改过的部位 —— 部位不参与结算，
+   * 管理端也改不了它（装备配置页只改等级与八项属性）。
+   */
+  private equipmentSlotOf(id: string): string | null {
+    if (!id) return null;
+    const slot = (EQUIPMENT_SLOT_OF as Record<string, string>)[id];
+    return typeof slot === "string" && slot ? slot : null;
   }
 
   /** 读存档背包网格的指定格子（网格不是数组 / 坐标越界 / 格子为空 → 同一个 20013 失败语义） */

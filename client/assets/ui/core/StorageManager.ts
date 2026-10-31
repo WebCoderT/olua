@@ -25,7 +25,7 @@ import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import type { CombatKillReward, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
-import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
+import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
 
@@ -517,20 +517,75 @@ export default class StorageManager {
     if (!role || !cell) return false;
     const good = getItem(cell.id);
     if (!good) return false;
-    if (isEquipment(good)) return this.equipFromBag(row, col);
+    if (isEquipment(good)) return await this.equipFromBag(row, col);
     if (isDrug(good)) return await this.useDrug(row, col);
     GameUiHelper.createTip("good_unsupported_tip");
     return false;
   }
 
   /**
-   * 从背包穿戴装备：脱下同槽位的旧装备并放回刚腾出的格子
-   * 等级/性别/职业不符时提示原因并放弃（校验与文案由 GameHelper 给出）
+   * 背包操作的统一出口（#556）：发出 `role.bagOp` 并把服务端那份结果抄回本地
+   *
+   * `bag` / `equipments` 从这一版起是**服务端独占字段**（见服务端 `role-authority.ts`）：
+   * 本地改完会被下一次存档回填成库里的值 —— 所以五个背包动作都必须经过这里，
+   * 否则表现就是「按下去没反应」（本地动了，推上去又被打回来）。
+   *
+   * 抄回来的是**整份**：背包、装备槽位、重算后的战斗属性、当前血量上限（服务端夹过）、修订号。
+   * 只抄自己要改的那几格是不行的 —— 穿戴会换掉两处（格子 + 槽位），整理会动一整片。
+   *
+   * 不在这里刷界面：调用方各自的收尾不同（换装要刷内观与槽位、整理只刷网格），
+   * 由它们自己接 `applyEquipmentChange` / `refreshBag`。
+   *
+   * @returns 服务端结果；失败（含乐观锁、被踢、校验拒绝）返回 null，提示已由请求层弹过
+   */
+  private static async runBagOp(role: Role, body: Omit<BagOp, "revision">): Promise<BagOpResult | null> {
+    let result: BagOpResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝这次操作
+      result = await RoleApi.bagOp(role.id, { ...body, revision: role.revision });
+    } catch {
+      return null; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    const data = result.data as Record<string, unknown>;
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    if (data.equipments && typeof data.equipments === "object" && !Array.isArray(data.equipments)) {
+      role.equipments = data.equipments as typeof role.equipments;
+    }
+    // 穿脱会改属性，服务端当场重算过 —— 这里照搬，不必等下一个 roleUpdate 帧
+    if (typeof data.combat === "number") role.combat = data.combat;
+    if (typeof data.maxHp === "number") role.maxHp = data.maxHp;
+    if (typeof data.maxMp === "number") role.maxMp = data.maxMp;
+    if (typeof data.hpRecover === "number") role.hpRecover = data.hpRecover;
+    // 血量当前值服务端会夹到新上限以内（脱掉加血装备时尤其需要），照搬比本地再判一次稳
+    if (typeof data.hp === "number") role.hp = data.hp;
+    if (typeof data.mp === "number") role.mp = data.mp;
+    role.revision = result.revision;
+    return result;
+  }
+
+  /** 背包内容转成接口要的**稀疏格子**（整理 / 搬运提交用：空格不报） */
+  private static sparseBagCells(bag: BagCell[][]): Array<{ row: number; col: number; id: string; count: number }> {
+    const cells: Array<{ row: number; col: number; id: string; count: number }> = [];
+    bag.forEach((line, row) =>
+      line.forEach((cell, col) => {
+        if (cell) cells.push({ row, col, id: cell.id, count: Math.max(1, cell.count) });
+      }),
+    );
+    return cells;
+  }
+
+  /**
+   * 从背包穿戴装备（当前在线角色；穿戴由服务端判定与落库，#556）
+   *
+   * 本地仍留一道预检（格子解析得出装备、等级/性别/职业够）—— 它只为**即时提示**，
+   * 服务端会再按库里的等级与真实的背包内容判一次：改包绕过预检也穿不上。
+   * 旧装备由服务端放回刚腾出的那一格（格数守恒），这里不再自己算。
+   *
    * @param row 背包行
    * @param col 背包列
-   * @returns 是否穿戴成功
+   * @returns 是否穿戴成功（失败原因已用浮动提示告知）
    */
-  static equipFromBag(row: number, col: number): boolean {
+  static async equipFromBag(row: number, col: number): Promise<boolean> {
     const role = this.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
@@ -546,37 +601,24 @@ export default class StorageManager {
       GameUiHelper.createTip(reason.key, reason.params);
       return false;
     }
-    // 旧装备放回刚腾空的格子：格数守恒，换装不会丢装备（格子存 key，槽位也是 key）
-    const wornId = role.equipments[good.slot];
-    role.bag[row][col] = wornId ? { id: wornId, count: 1 } : null;
-    role.equipments[good.slot] = good.id ?? cell.id;
-    this.applyEquipmentChange(role, good.slot);
+    const result = await this.runBagOp(role, { action: "equip", row, col });
+    if (!result) return false;
+    this.applyEquipmentChange(role, (result.slot as EQUIPMENT_TYPE | null) ?? good.slot);
     return true;
   }
 
   /**
    * 脱下装备放入背包（放进第一个空格；背包已满时提示并放弃）
+   *
+   * 落点由服务端决定（第一个空格），本地不再自己找 —— 两边各找一套只会有一天对不上。
    * @param slot 装备槽位
-   * @returns 是否脱下成功
+   * @returns 是否脱下成功（失败原因已用浮动提示告知）
    */
-  static unequipToBag(slot: EQUIPMENT_TYPE): boolean {
+  static async unequipToBag(slot: EQUIPMENT_TYPE): Promise<boolean> {
     const role = this.findOnlineRole();
-    const equipmentId = role?.equipments[slot];
-    if (!role || !equipmentId) return false;
-    const cell = this.findEmptyBagCell(role);
-    if (!cell) {
-      GameUiHelper.createTip("bag_full_tip");
-      return false;
-    }
-    // 从配置确认装备存在后，格子存 key（脱下后槽位清空）
-    const equipment = getItem(equipmentId);
-    if (!equipment) {
-      GameUiHelper.createTip("equip_missing_tip");
-      role.equipments[slot] = null;
-      return false;
-    }
-    role.bag[cell.row][cell.col] = { id: equipmentId, count: 1 };
-    role.equipments[slot] = null;
+    if (!role || !role.equipments[slot]) return false;
+    const result = await this.runBagOp(role, { action: "unequip", slot });
+    if (!result) return false;
     this.applyEquipmentChange(role, slot);
     return true;
   }
@@ -641,16 +683,6 @@ export default class StorageManager {
 
   //#endregion
 
-  /** 找背包的第一个空格（没有空格返回 null） */
-  private static findEmptyBagCell(role: Role) {
-    for (let row = 0; row < role.bag.length; row++) {
-      for (let col = 0; col < role.bag[row].length; col++) {
-        if (!role.bag[row][col]) return { row, col };
-      }
-    }
-    return null;
-  }
-
   /**
    * 取身上某槽位穿戴的装备（未穿戴/解析不出返回 null）
    * 背包悬停详情「按住 Ctrl 对比」的数据源（见 GameUiHelper.createGood 的 compareWornProvider）
@@ -685,10 +717,10 @@ export default class StorageManager {
    * @param slot 装备槽位
    * @returns 是否换上成功（没有更好的装备时返回 false，不打扰）
    */
-  static equipBetterFromBag(slot: EQUIPMENT_TYPE): boolean {
+  static async equipBetterFromBag(slot: EQUIPMENT_TYPE): Promise<boolean> {
     const better = this.findBetterEquipmentInBag(slot);
     if (!better) return false;
-    return this.equipFromBag(better.row, better.col);
+    return await this.equipFromBag(better.row, better.col);
   }
 
   /**
@@ -732,12 +764,13 @@ export default class StorageManager {
    * 背包格子存的是 id + 数量，丢弃就是把该格置空：**可叠加物品整格一起丢**（不做「丢几个」的数量选择，
    * 要支持它得先引入数量输入控件，别在这里悄悄改语义，见 configs/texts.bag_discard_confirm_tip 的文案口径）。
    *
-   * 规则判定与提示都在本层（界面只上报点击，见 BagDialog 的丢弃模式），丢弃不动属性/战力，故无需 updateUi
+   * 置空这一步由服务端做（#556）：客户端只报「丢哪一格」，服务端按库里的那一格自己清 ——
+   * 客户端报「结果」等于把销毁物品的权力交出去。丢弃不动属性/战力，故无需 updateUi
    * @param row 背包行
    * @param col 背包列
    * @returns 是否丢弃成功（空格子或越界时返回 false 并提示）
    */
-  static discardBagGood(row: number, col: number): boolean {
+  static async discardBagGood(row: number, col: number): Promise<boolean> {
     const role = this.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) {
@@ -746,8 +779,8 @@ export default class StorageManager {
     }
     const label = getItem(cell.id)?.label ?? cell.id;
     const count = Math.max(1, cell.count);
-    role.bag[row][col] = null;
-    // 保存并刷新背包显示
+    if (!(await this.runBagOp(role, { action: "discard", row, col }))) return false;
+    // 服务端已清格：刷新显示（顺带把 updateOnlineRole 的防抖存档排上）
     this.updateOnlineRole(role);
     RoleUIManager.refreshBag();
     GameUiHelper.createTip("bag_discard_done_tip", { name: label, count });
@@ -761,18 +794,22 @@ export default class StorageManager {
   /**
    * 一键整理背包（当前在线角色）
    *
-   * 搬运算法是纯函数 `configs/items.tidyBagGrid`（合并同类可叠加物 → 按等级/部位排序 → **从第一个格子起铺满**），
-   * 这里只负责：取角色 → 调用 → **有变动才落盘刷新**，背包本来就整齐时不重复写存储
-   * @returns 是否有变动（无角色/背包为空/整理前后一致时返回 false）
+   * 排序算法仍是纯函数 `configs/items.tidyBagGrid`（合并同类可叠加物 → 按等级/部位排序 →
+   * **从第一个格子起铺满**）—— 它留在客户端是因为它是**展示规则**，而且单测（`test-bag-tidy`）
+   * 跑的就是这一份。服务端不重算排布，只验**守恒**（同 id 总件数不变，见 `role.bagOp` 的 `tidy`）。
+   *
+   * 本地先算一遍的意义是「没变动就不发请求」：背包本来就整齐时点整理不该占一次网络往返。
+   * @returns 是否有变动（无角色/背包为空/整理前后一致/请求失败时返回 false）
    */
-  static tidyBag(): boolean {
+  static async tidyBag(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
     if (this.bagIsEmpty(role.bag)) return false;
     const before = this.bagSignature(role.bag);
-    role.bag = tidyBagGrid(role.bag);
-    if (this.bagSignature(role.bag) === before) return false;
-    // 保存并刷新背包显示
+    const arranged = tidyBagGrid(role.bag);
+    if (this.bagSignature(arranged) === before) return false;
+    if (!(await this.runBagOp(role, { action: "tidy", cells: this.sparseBagCells(arranged) }))) return false;
+    // 服务端那份才是权威排布（万一它按别的规则合并过），照它的结果刷新
     this.updateOnlineRole(role);
     RoleUIManager.refreshBag();
     GameUiHelper.createTip("bag_tidy_tip");
@@ -809,19 +846,28 @@ export default class StorageManager {
    * 拖动把背包一格里的物品搬到另一格（当前在线角色）
    *
    * 落点规则全在纯函数 `configs/items.moveBagCellGrid`：空格 = 移动、同种可叠加 = 合并（超过单格上限的留在原格）、
-   * 其余 = 交换；这里只负责取角色 → 调用 → **真的动了才落盘刷新**。
+   * 其余 = 交换。本地算完之后把**整份排布**交给服务端（`role.bagOp` 的 `move`），
+   * 由它验守恒（形状不变 + 同 id 总件数不变）—— 位置是展示规则，件数是钱，只有后者必须服务端说了算。
    *
    * 与「整理」同一口径：**不弹提示** —— 拖动的反馈就是物品的位置/数量变化本身，
    * 每次落子都飘一条字反而吵；无效拖动（拖空格、拖回原格）静默返回 false
-   * @returns 是否有变动（起点为空、起终点相同、越界、无角色时返回 false）
+   * @returns 是否有变动（起点为空、起终点相同、越界、无角色、请求失败时返回 false）
    */
-  static moveBagGood(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
+  static async moveBagGood(fromRow: number, fromCol: number, toRow: number, toCol: number): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
     const result = moveBagCellGrid(role.bag, { row: fromRow, col: fromCol }, { row: toRow, col: toCol });
     if (!result.moved) return false;
+    // 拖动是高频操作：本地先摆好再发请求，界面在往返期间就已经是新位置；
+    // 服务端拒绝（乐观锁 / 守恒不过）时把本地那份还原，别留一个「看着动了其实没动」的网格
+    const previous = role.bag;
     role.bag = result.bag;
-    // 保存并刷新背包显示
+    RoleUIManager.refreshBag();
+    if (!(await this.runBagOp(role, { action: "move", cells: this.sparseBagCells(result.bag) }))) {
+      role.bag = previous;
+      RoleUIManager.refreshBag();
+      return false;
+    }
     this.updateOnlineRole(role);
     RoleUIManager.refreshBag();
     return true;

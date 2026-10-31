@@ -5,6 +5,7 @@ import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
+import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
@@ -144,6 +145,28 @@ export class RolesController {
   @ApiDataResponse(DrugUseResultDto, { description: "使用后的角色（含本次回复量）" })
   drugUse(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: DrugUseDto): DrugUseResultDto {
     return this.rolesService.useDrug(user.id, id, dto);
+  }
+
+  @Post(":id/bag-op")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.bagOp",
+    summary: "背包操作：穿戴 / 卸下 / 丢弃 / 整理 / 搬运（#556）",
+    description:
+      "五个动作共用一条写路径，`action` 区分，字段组合在服务端逐条校验。\n\n" +
+      "**穿 / 脱 / 丢由服务端自己算**：`equip` 先证明这件东西真在那一格、确实是该部位的装备、等级够，" +
+      "再把旧装备放回刚腾出的格子；`unequip` 由服务端找第一个空格；`discard` 只认格子坐标。" +
+      "**整理 / 搬运只验守恒**：`move` / `tidy` 传操作后的完整内容（稀疏格子），" +
+      "服务端只校验「网格形状不变 + 同 id 总件数不变」—— 多一件少一件都会被拒。\n\n" +
+      "穿戴 / 卸下会重算战斗属性并把血蓝夹回上限（`combat` / `maxHp` 等字段随响应一起回来）。\n\n" +
+      "失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 / 等级不够）" +
+      "/ 20022 排布与库里对不上 / 20012 背包满（卸下时没有空格）；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(BagOpResultDto, { description: "操作后的角色（含背包 / 装备槽位 / 重算后的战斗属性）" })
+  bagOp(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: BagOpDto): BagOpResultDto {
+    return this.rolesService.bagOp(user.id, id, dto);
   }
 
   @Delete(":id")

@@ -387,10 +387,12 @@ function setRoleLevel(dbPath, roleId, level) {
     //#region 六、背包满：整份奖励转邮件（#429）
 
     group("六、背包满：整份奖励转邮件，成就照常记已领（#429）");
-    // 背包格子格式是 { id, count }（与 RolesService.placeGoodsIntoBag 同一口径）
-    const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => ({ id: "material_hide", count: 99 })));
-    const stuffed = await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: { ...roleDoc, level: 10, bag: fullBag } } });
-    checkEqual(stuffed && stuffed.code, 0, "准备：背包塞满（40 格兽皮）");
+    // 背包内容自 #556 起是服务端权威（客户端存档里的 bag 会被库里那份回填），
+    // 所以「塞满背包」要走管理端结构化编辑（稀疏格式，一行一格）
+    const stuffedCells = [];
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) stuffedCells.push({ row, col, id: "material_hide", count: 99 });
+    const stuffed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: stuffedCells } });
+    checkEqual(stuffed && stuffed.code, 0, "准备：背包塞满（40 格兽皮，管理端摆格）");
     const bagFull = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_level_10" } });
     checkEqual(bagFull && bagFull.code, 0, "背包满时成就也能领（不再堵在 20012）");
     check(!!(bagFull && bagFull.data && bagFull.data.mailId), "返回 mailId：整份奖励转进了邮箱");
@@ -405,9 +407,11 @@ function setRoleLevel(dbPath, roleId, level) {
       "邮件内容是那份成就奖励（kind = achievement / 金币 1000 / 1 条物品）",
       JSON.stringify(rewardMail),
     );
-    const oneFree = emptyBag();
-    oneFree[0][0] = { id: "material_hide", count: 99 };
-    await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: { ...roleDoc, level: 10, bag: oneFree } } });
+    // 清出一格（只剩 (0,0) 一件）：同样靠管理端摆格，客户端存档改不动背包内容
+    await api(baseUrl, "PATCH", `admin/roles/${roleId}`, {
+      token: adminToken,
+      body: { bag: [{ row: 0, col: 0, id: "material_hide", count: 99 }] },
+    });
     const claimedAfter = await api(baseUrl, "POST", `mails/${rewardMail && rewardMail.id}/claim`, { token });
     checkEqual(claimedAfter && claimedAfter.code, 0, "清出一格后从邮箱领到手上");
     checkEqual(claimedAfter && claimedAfter.data && claimedAfter.data.items && claimedAfter.data.items.length, 1, "物品奖励到账（1 条）");

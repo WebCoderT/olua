@@ -10,8 +10,9 @@
  * | 账本 | `gold` / `bindGold` / `silver` | **服务端** | 商城、回收、成长线、任务、成就、邮件、后台都有各自的服务端写点；客户端只从 `roleUpdate` 帧照搬，**没有任何本地改写的代码**（`StorageManager.applyServerRoleUpdate` 是唯一入口）|
  * | 成长线阶位 | `title` / `soulOfWar` / `rank` | **服务端** | 只有 `RolesService.upgradeGrowth` 能推进（扣费 + 成长链校验都在那）；客户端 `upgradeGrowthOnServer` 只把服务端返回值抄回来 |
  * | 进度 | `level` / `exp` | **服务端** | 经验只由服务端结算（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台），客户端**没有**本地加经验路径（#550 删掉了泡点组件与"实时通道不可用"的兜底；那条路上连伤害都不结算，留着只是给改包留门）|
+ * | 背包与穿戴 | `bag` / `equipments` / `skills` | **服务端** | 穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作全都走 `POST /roles/:id/bag-op`（#556），客户端不再本地改；`equipments` 还是属性重算的输入 —— 不收权等于把「塞一件没拥有的顶级装备」变成刷战力 |
  * | 派生值 | `combat` / `maxHp` / `hpRecover` / `maxMp` / 六项攻防 | **服务端重算** | 每次写档由 `applyAuthoritativeAttributes` 现算覆盖，**不走本文件的回填**（回填反而会把刚算好的值盖回旧的）|
- * | 客户端全权 | `bag` / `equipments` / `skills` / `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` / `relationShip` | 客户端 | 换装、整理背包、丢弃、走图、喝药回血、引导推进**都发生在本地**，服务端只有部分动作有接口（拾取 / 购买 / 回收 / 用药）；这些字段若收权，得先把本地那套操作全部改成服务端接口 |
+ * | 客户端全权 | `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` / `relationShip` | 客户端 | 走图、喝药回血、时装外观、引导推进**都发生在本地**，且都不改数值（`hp`/`mp` 只做夹取，见 `clampVitals`）；时装还没有「拥有清单」，收权要先把获取渠道做出来 |
  *
  * 两条纪律：
  *
@@ -27,6 +28,7 @@
  */
 
 import { ROLE_INITIAL_CURRENCY } from "../../shared/game-data.generated";
+import { adoptBagShape, readBagGrid } from "./role-inventory";
 
 /** 账本：只有服务端能改（客户端上报值一律丢弃） */
 export const SERVER_LEDGER_FIELDS = ["gold", "bindGold", "silver"] as const;
@@ -42,6 +44,19 @@ export const SERVER_GROWTH_FIELDS = ["title", "soulOfWar", "rank"] as const;
  * 重新取一次索引列 —— 否则「列表里的等级」与「详情里的等级」会各说一套。
  */
 export const SERVER_PROGRESS_FIELDS = ["level", "exp"] as const;
+
+/**
+ * 背包与穿戴（#556）：五个写操作全在 `RolesService.bagOp`
+ *
+ * `equipments` 是**属性重算的输入**（`roleAttributeSourceOf` 直接读它），所以它必须与
+ * 账本同权：否则「塞一件没拥有的顶级装备进文档」就等于白拿属性 —— #541 把算法收到
+ * 服务端之后，这条路的收益反而被做实了。
+ *
+ * `skills` 目前客户端一个写点都没有（技能升级入口未开），但文档字段本身可写 ——
+ * 改包填满级就能吃到伤害公式里。清单宁可比写点宽一格：宽了只是不允许本地改，
+ * 窄了就是留一个没人看着的口子。
+ */
+export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills"] as const;
 
 /**
  * 派生值：由 `applyAuthoritativeAttributes` 重算覆盖
@@ -62,11 +77,12 @@ export const SERVER_DERIVED_FIELDS = [
   "taoistDefense",
 ] as const;
 
-/** 服务端独占的全部字段（= 账本 + 阶位 + 进度；派生值另算） */
+/** 服务端独占的全部字段（= 账本 + 阶位 + 进度 + 背包穿戴；派生值另算） */
 export const SERVER_OWNED_FIELDS: readonly string[] = [
   ...SERVER_LEDGER_FIELDS,
   ...SERVER_GROWTH_FIELDS,
   ...SERVER_PROGRESS_FIELDS,
+  ...SERVER_INVENTORY_FIELDS,
 ];
 
 /** 一次回填里的一个字段差异（只用于日志，不参与判定） */
@@ -143,6 +159,24 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * `bag` 的回填特例：**内容取库里的、尺寸取客户端这次的**
+ *
+ * 网格尺寸归客户端配置管（`bagRow × bagCol`，服务端不认识它 —— 见
+ * `role-data.util.normalizeBagCells` 的注释）。整份照抄库里的值，第一次改格子数之后
+ * 老角色的背包就永远不长个了；整份照抄客户端的，又等于把背包还给客户端。
+ *
+ * 两边都解析不出（库里的行坏了 / 客户端报了个不是二维数组的东西）→ 退回库里的原值，
+ * 不用一个解析失败去拦掉整次存档：背包动不了总比玩不了强。
+ */
+export function reconcileBag(stored: unknown, incoming: unknown): unknown {
+  try {
+    return adoptBagShape(readBagGrid(stored, "库里的背包"), readBagGrid(incoming, "上报的背包"));
+  } catch {
+    return stored;
+  }
+}
+
+/**
  * 把服务端独占字段以**库里的值**为准（就地改 `incoming`）
  *
  * @param stored  库里当前的存档文档（`decodeStoredRoleData(existing.data)`）
@@ -159,7 +193,7 @@ export function enforceServerAuthority(
     if (!hasOwn(stored, field)) continue;
     if (sameValue(stored[field], incoming[field])) continue;
     drift.push({ field, stored: stored[field], reported: incoming[field] });
-    incoming[field] = stored[field];
+    incoming[field] = field === "bag" ? reconcileBag(stored[field], incoming[field]) : stored[field];
   }
   return drift;
 }

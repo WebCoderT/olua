@@ -35,6 +35,7 @@
 import {
   DRUGS,
   EQUIPMENT_ATTRIBUTES,
+  EQUIPMENT_BASES,
   EQUIPMENT_PREFIX_RATES,
   EQUIPMENT_RECYCLE_PRICES,
   EQUIPMENT_SUFFIX_RATES,
@@ -135,6 +136,8 @@ export interface DrugOverride {
 
 let equipmentVariants: Map<string, AttributeBundle> | null = null;
 let equipmentPrices: Map<string, number> | null = null;
+/** 变体 id → 穿戴等级门槛（跟着基础件走；#556 起穿戴校验要读它） */
+let equipmentLevels: Map<string, number> | null = null;
 let titleBundles: Map<number, AttributeBundle> | null = null;
 let soulBundles: Map<number, AttributeBundle> | null = null;
 let rankBundles: Map<number, AttributeBundle> | null = null;
@@ -181,6 +184,7 @@ export function applyEquipmentOverrides(rows: EquipmentBaseOverride[]): void {
   if (!rows.length) {
     equipmentVariants = null;
     equipmentPrices = null;
+    equipmentLevels = null;
     return;
   }
   const bases = new Map<string, { bundle: AttributeBundle; level: number }>();
@@ -188,6 +192,7 @@ export function applyEquipmentOverrides(rows: EquipmentBaseOverride[]): void {
 
   const variants = new Map<string, AttributeBundle>();
   const prices = new Map<string, number>();
+  const levels = new Map<string, number>();
   for (const id of Object.keys(EQUIPMENT_ATTRIBUTES)) {
     const parsed = parseEquipmentVariantId(id);
     const base = parsed ? bases.get(parsed.baseKey) : undefined;
@@ -195,9 +200,11 @@ export function applyEquipmentOverrides(rows: EquipmentBaseOverride[]): void {
     const rate = rateOf(parsed.prefix, parsed.suffix);
     variants.set(id, scaleBundle(base.bundle, rate));
     prices.set(id, Math.round(recycleBasePriceOf(base.level) * rate));
+    levels.set(id, base.level);
   }
   equipmentVariants = variants;
   equipmentPrices = prices;
+  equipmentLevels = levels;
 }
 
 /** 装进物品 / 材料的当前值（`items` 表：叠加上限、卖价；形状与生成物 `ITEM_BASES` 对齐） */
@@ -293,6 +300,7 @@ export function applyDrugOverrides(rows: DrugOverride[]): void {
 export function resetRuntimeOverrides(): void {
   equipmentVariants = null;
   equipmentPrices = null;
+  equipmentLevels = null;
   titleBundles = null;
   soulBundles = null;
   rankBundles = null;
@@ -308,6 +316,24 @@ export function resetRuntimeOverrides(): void {
 /** 某件装备（含变体）的当前属性；查不到返回 null（调用方按"没穿"处理并记账） */
 export function equipmentAttributesOf(id: string): AttributeBundle | null {
   return equipmentVariants?.get(id) ?? (EQUIPMENT_ATTRIBUTES as Record<string, AttributeBundle>)[id] ?? null;
+}
+
+/**
+ * 某件装备（含变体）的**穿戴等级门槛**；不是装备返回 null
+ *
+ * 等级既是门槛，也是回收价的依据。运营在管理端把一件衣服从 16 级改到 22 级，
+ * 客户端快照会跟着变（`apply-snapshot` 原地覆写），服务端的门槛若还读出厂的 16，
+ * 就是「客户端不让穿、接口放过去」—— 所以这里与属性 / 价签走同一层覆盖。
+ *
+ * 变体（`cloth_1_p3s2`）没有自己的等级，跟着基础件走（与客户端 `buildEquipmentMap` 一致）。
+ */
+export function equipmentLevelOf(id: string): number | null {
+  const overridden = equipmentLevels?.get(id);
+  if (overridden !== undefined) return overridden;
+  const parsed = parseEquipmentVariantId(id);
+  if (!parsed) return null;
+  const base = (EQUIPMENT_BASES as Record<string, { level?: number }>)[parsed.baseKey];
+  return base ? numberOr(base.level) : null;
 }
 
 /** 某级称号的当前属性（1 起；未激活传 0 / 负数 → null） */

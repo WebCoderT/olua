@@ -81,7 +81,10 @@ export default class BagDialog {
         // 底部按钮与丢弃模式互斥：先退出丢弃模式，免得整理完再点格子又丢东西
         this.exitDiscardMode();
         // 整理算法不改动存储时会返回 false，这里补一句反馈，免得玩家以为按钮没反应
-        if (!StorageManager.tidyBag()) GameUiHelper.createTip("bag_tidy_noop_tip");
+        // （#556 之后整理要往服务端跑一趟：排布发过去、服务端验守恒再落库）
+        void StorageManager.tidyBag().then((changed) => {
+          if (!changed) GameUiHelper.createTip("bag_tidy_noop_tip");
+        });
       },
       this,
     );
@@ -148,7 +151,7 @@ export default class BagDialog {
       return;
     }
     // useGood → useDrug 已收权到服务端（#308），await 等结算完成再返回（调用方不消费返回值）
-    if (action === "equip") StorageManager.equipFromBag(row, col);
+    if (action === "equip") await StorageManager.equipFromBag(row, col);
     else await StorageManager.useGood(row, col);
   }
 
@@ -198,7 +201,7 @@ export default class BagDialog {
     if (pending && pending.row === row && pending.col === col) {
       // 第二步：确认丢弃（先复位待确认状态再改数据 —— 丢弃会刷新网格，格子节点随之重建）
       this.clearDiscardPending();
-      StorageManager.discardBagGood(row, col);
+      void StorageManager.discardBagGood(row, col);
       return;
     }
     // 第一步：记住这一格（点别的格子 = 换目标，先放弃上一个）
@@ -248,7 +251,7 @@ export default class BagDialog {
       // 确定：真的丢弃（落盘 + 刷新背包；扣留由 refresh 统一放开）
       onConfirm: () => {
         this.confirmDialog = null;
-        StorageManager.discardBagGood(from.row, from.col);
+        void StorageManager.discardBagGood(from.row, from.col);
       },
       // 取消：数据没动过，放开扣留就是「回到原位」
       onCancel: () => {

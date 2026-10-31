@@ -299,6 +299,24 @@ function setRoleLevel(dbPath, roleId, level) {
   db.close();
 }
 
+/**
+ * 直接改库里的背包（#556 起 `bag` 是服务端权威：客户端存档里的那份会被库里回填）
+ *
+ * 与 `setRoleLevel` / `insertMail` 同一口径：这个文件没有管理员令牌，造状态只能落到库上。
+ * 写进去的就是服务端认的那一份 —— 之后任何 `PUT /roles/:id` 都改不动它，所以别再用存档造背包。
+ * @returns 写进去的格子（调用方读回核对，别只看「没报错」）
+ */
+function stuffBag(dbPath, roleId, bag) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const row = db.prepare("SELECT data FROM roles WHERE id = ?").get(roleId);
+  const data = row && row.data ? JSON.parse(row.data) : {};
+  data.bag = bag;
+  db.prepare("UPDATE roles SET data = ? WHERE id = ?").run(JSON.stringify(data), roleId);
+  db.close();
+  return bag;
+}
+
 /** 成就记录的两个时刻（#401 的表，兜底断言用） */
 function achievementTimestamps(dbPath, roleId, achievementId) {
   const { DatabaseSync } = require("node:sqlite");
@@ -458,8 +476,12 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
 
     group("六、背包满：一键领取领到满为止，单封领取 20012");
     const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => ({ id: "material_hide", count: 99 })));
-    const stuffed = await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: { ...roleDoc, bag: fullBag } } });
-    checkEqual(stuffed && stuffed.code, 0, "准备：背包塞满（40 格兽皮）");
+    const stuffed = stuffBag(dbPath, roleId, fullBag);
+    checkEqual(
+      stuffed.flat().filter((cell) => cell && cell.id === "material_hide").length,
+      40,
+      "准备：背包塞满（40 格兽皮，直接落库）",
+    );
     insertMail(dbPath, {
       id: "mail_full_a",
       roleId,
@@ -500,9 +522,10 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
       "邮件内容是那份成就奖励（kind = achievement、金币 1000、1 条物品附件）",
       JSON.stringify(fallback),
     );
+    // 清出一格：同样走库（背包是服务端权威，存档改不动），只剩 (0,0) 一件
     const oneFree = emptyBag();
     oneFree[0][0] = { id: "material_hide", count: 99 };
-    await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: { ...roleDoc, level: 10, bag: oneFree } } });
+    stuffBag(dbPath, roleId, oneFree);
     const fallbackClaim = await api(baseUrl, "POST", `mails/${fallback.id}/claim`, { token });
     checkEqual(fallbackClaim && fallbackClaim.code, 0, "清出一格后从邮件领到手上");
     checkEqual(fallbackClaim && fallbackClaim.data && fallbackClaim.data.items.length, 1, "成就的物品附件真的进了背包");

@@ -46,20 +46,21 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run start` | Run the built output |
 | `npm run swagger:emit` | Compile + emit `openapi.json` from source (the single source of the contract) |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` — **regenerate both ends' interface files** |
-| `npm run test:e2e` | Main e2e (247 assertions) |
-| `npm run test:e2e:roles` | Role-management suite (120 assertions) |
+| `npm run test:e2e` | Main e2e (248 assertions) |
+| `npm run test:e2e:roles` | Role-management suite (150 assertions) |
 | `npm run test:e2e:guard` | Operations & security base (283 assertions) |
 | `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
 | `npm run test:e2e:account-email` | Player email field (28 assertions) |
-| `npm run test:e2e:realtime` | Realtime channel (50 assertions; **real WebSocket handshake**, no browser needed) |
+| `npm run test:e2e:realtime` | Realtime channel (72 assertions; **real WebSocket handshake**, no browser needed) |
 | `npm run test:e2e:blocks` | Blocks and reports (50 assertions; one-way rows / server-side chat and presence filtering / report persistence and dedup) |
-| `npm run test:e2e:party` | Parties (79 assertions; invite creates the party / transfer and hand-over / exp sharing / blocks win) |
-| `npm run test:e2e:rank` | Leaderboards (55 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
+| `npm run test:e2e:party` | Parties (87 assertions; invite creates the party / transfer and hand-over / exp sharing / blocks win) |
+| `npm run test:e2e:rank` | Leaderboards (56 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
+| `npm run test:e2e:bag` | Bag and worn equipment (38 assertions; equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + twenty-four e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + twenty-five e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -170,13 +171,13 @@ server/
 │       └── emit.ts                 ← offline emit of openapi.json
 ├── scripts/                        backup / restore (VACUUM INTO + five-step restore, see scripts/lib/db-tooling.cjs)
 ├── test/
-│   ├── e2e.cjs                     247 assertions (real server + real HTTP requests)
-│   ├── e2e-roles.cjs               120 assertions
+│   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
+│   ├── e2e-roles.cjs               150 assertions
 │   ├── e2e-guard.cjs               283 assertions
 │   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
 │   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
-│   ├── e2e-realtime.cjs            50 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
-│   ├── e2e-combat.cjs              32 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
+│   ├── e2e-realtime.cjs            72 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
+│   ├── e2e-combat.cjs              131 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
 │   ├── e2e-world.cjs               24 assertions (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
 │   ├── e2e-dual.cjs                14 assertions (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
 │   ├── e2e-zone.cjs                32 assertions (zones: registration zone choice / merge boundaries / per-zone world isolation / merge effect and epoch invalidation)
@@ -186,8 +187,8 @@ server/
 │   ├── e2e-quest.cjs               48 assertions (quests: accept gating / talk, kill and collect objectives / turn-in rewards in a single write / daily re-acceptable after claiming)
 │   ├── e2e-sell.cjs                24 assertions (selling: snapshot pricing / same-id cells merged / client price ignored / not sellable / all-or-nothing / optimistic lock / foreign role)
 │   ├── e2e-blocks.cjs              50 assertions (blocks and reports: one-way rows / server-side filtering of chat and presence / report dedup and persistence / read-only admin list)
-│   ├── e2e-party.cjs               79 assertions (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
-│   ├── e2e-rank.cjs                55 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
+│   ├── e2e-party.cjs               87 assertions (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
+│   ├── e2e-rank.cjs                56 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
 │   ├── e2e-achievement.cjs         39 assertions (achievements: snapshot delivery / cumulative kinds counted from events / state kinds evaluated on read with no stored progress / claiming and a full bag turning into mail / admin config and delete refusal)
 │   ├── e2e-game-mail.cjs           51 assertions (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail / channels: four fixed badges · per-channel claim · unknown channel 40000 · social and combat delivery)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
@@ -317,12 +318,12 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **162 interfaces / 134 paths / 241 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **163 interfaces / 135 paths / 244 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
-| Client | 49 | `player` token, may only operate its own account's data |
+| Client | 50 | `player` token, may only operate its own account's data |
 | Admin | 106 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
@@ -399,24 +400,25 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All twenty-four e2e suites are **real server process + real HTTP requests** (not mocks):
+All twenty-five e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
-| `test/e2e.cjs` | **247** | register/login / character CRUD and duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
-| `test/e2e-roles.cjs` | **120** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
+| `test/e2e.cjs` | **248** | register/login / character CRUD and duplicate-name rejection / save and online-switch / escalation and token-audience isolation / full admin flow / **three-group classification and every interface's permission annotation** / read-only viewer escalation / super-admin protection / **public pull of announcements and the effective-time window** |
+| `test/e2e-roles.cjs` | **150** | character-management suite: optimistic-lock revision / six-dimension filtering / structured-field validation / batch and whole-account deletion / read-only viewer escalation / docs |
 | `test/e2e-guard.cjs` | **283** | operations & security base: password reset and token invalidation / self-service password change / operation-log persistence·masking·filtering·export / username & IP dual-dimension limiting / kick offline / ban closed-loop / dashboard / list sorting / system info and startup self-check |
 | `test/e2e-mail.cjs` | **120** | mail channel: enqueue returns immediately / background delivery to sent / **exponential-backoff retry and failure after cap (reason queryable)** / manual re-delivery resets the count / fully disabled when SMTP unconfigured / key only reports shape / template missing required variable rejects send. Uses an **injectable fake mailer** (`MAIL_TRANSPORT=fake|fail`), no real SMTP needed |
 | `test/e2e-account-email.cjs` | **28** | player email field: read-only viewers can neither see nor change it / backfill·view·clear / format validation and same-email dedup (case-insensitive) / mail falls back to the linked account's email / contract permission annotation |
-| `test/e2e-realtime.cjs` | **50** | realtime channel: the ticket is one-shot (burned on use / expired / forged / cross-account all refused) / **a refused handshake answers with an HTTP 401 envelope instead of "connect first, then close"** / application-level ping→pong / one connection per account (a new one evicts the old, close code `4000`) / protocol-level liveness probe / on SIGTERM connections receive `1001` and the process exits immediately |
-| `test/e2e-combat.cjs` | **32** | server-side damage settlement (world-authority adaptation): every invalid cast is refused (bad_request / unknown_skill / unknown_target / skill_not_learned) / **damage is computed by the server from snapshot values** (lands inside the formula band, hp arithmetic is self-consistent) / the same castId replays idempotently (duplicate, no re-roll, no extra hp loss) / death is decided by the server (killed exactly once, then target_dead) / **targets resolve to world instances** (unknown instanceIds refused) / resetting the ledger does not revive dead monsters / snapshots carry respawn countdown / map round-trips keep state / rejoin after reconnect does not duplicate |
+| `test/e2e-realtime.cjs` | **72** | realtime channel: the ticket is one-shot (burned on use / expired / forged / cross-account all refused) / **a refused handshake answers with an HTTP 401 envelope instead of "connect first, then close"** / application-level ping→pong / one connection per account (a new one evicts the old, close code `4000`) / protocol-level liveness probe / on SIGTERM connections receive `1001` and the process exits immediately |
+| `test/e2e-combat.cjs` | **131** | server-side damage settlement (world-authority adaptation): every invalid cast is refused (bad_request / unknown_skill / unknown_target / skill_not_learned) / **damage is computed by the server from snapshot values** (lands inside the formula band, hp arithmetic is self-consistent) / the same castId replays idempotently (duplicate, no re-roll, no extra hp loss) / death is decided by the server (killed exactly once, then target_dead) / **targets resolve to world instances** (unknown instanceIds refused) / resetting the ledger does not revive dead monsters / snapshots carry respawn countdown / map round-trips keep state / rejoin after reconnect does not duplicate |
 | `test/e2e-world.cjs` | **24** | world authority: **seeding on an empty map from spawn areas** (unknown monster keys skipped, points inside the area rect, repeated join does not duplicate, accounts share the same instances) / settlement lands directly in the world (snapshot hp = settled hp, visible to account B) / killing a monster queues a respawn / **tick respawns on time and broadcasts** / graceful shutdown flushes everything / **instance identity and hp restored as-is after restart** (due respawns backfilled at once) |
 | `test/e2e-dual.cjs` | **14** | dual-process form (#175): the archive process (`REALTIME_EMBEDDED=false`) has no realtime endpoints (ticket POST → 404) / the realtime process validates tokens against **the same database** (ticket → WS → welcome) / worldJoin seeding and cast settlement run inside the realtime process / after the persist throttle, the **test process opens a read-only connection and sees** `world_monsters` (WAL carrying cross-process writes) / kicking from the archive process → the realtime process disconnects within one sweep interval (close `4000`) / password reset on the archive process → the old token is refused at the realtime process (`token_version` compared against the database) |
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
-| `test/e2e-rank.cjs` | **55** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
+| `test/e2e-rank.cjs` | **56** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
+| `test/e2e-bag.cjs` | **38** | bag and worn equipment (#556): equipping / unequipping / discarding / tidying and moving all live on the server; **move and tidy only verify two conservation rules** (grid shape + total count per id); slot and level gating decided by the server (a level-1 character cannot wear level-10 clothes and the item stays in the bag); attributes recomputed on equip and unequip (taking off an HP-boosting item lowers HP too); **`PUT /roles/:id` can no longer change bag / equipment / skills** (values are backfilled, not rejected); **bag size comes from the client config** (a larger grid grows and nothing is lost, and saving never re-packs positions); stale revision → 20006, another account's role → 40300 |
 
 ```bash
-cd server && npm run verify          # compile + twenty-four e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + twenty-five e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

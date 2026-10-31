@@ -254,12 +254,19 @@ function roleData(id, name, level, skills) {
     check(!!token, "准备：注册玩家拿到令牌", player.body.message);
     const accountId = player.body.data && player.body.data.account && player.body.data.account.id;
 
-    // 先建不带技能的空号，再 PUT 补技能（与 e2e-combat 同一条已验证的建号路径）
+    // 先建不带技能的空号，再补技能。技能自 #556 起是服务端权威 ——
+    // 客户端存档里的 skills 会被库里那份回填，补技能只能走管理端结构化编辑。
+    // 超管顺手在这里注册（后面的踢下线段也要用它），省一次重复注册。
     const created = await api(baseUrl, "POST", "roles", { token, body: { data: roleData("dual_r1", "双进程斗士", 5, {}) } });
     check(created.body.code === 0 && created.body.data.online === true, "准备：角色已创建并自动在线", created.body.message);
     const roleId = created.body.data && created.body.data.id;
-    const saved = await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: roleData("dual_r1", "双进程斗士", 5, { 1000: 1 }) } });
-    checkEqual(saved.body.code, 0, "准备：角色补上技能 1000", saved.body.message);
+    const adminReg = await api(baseUrl, "POST", "admin/auth/register", {
+      body: { username: "dual_super", password: "super-pass-1", registerCode: "dual-admin-code" },
+    });
+    const adminToken = adminReg.body.data && adminReg.body.data.token;
+    check(!!adminToken, "准备：超管已在存档进程注册", adminReg.body.message);
+    const saved = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: { 1000: 1 } } });
+    checkEqual(saved.body.code, 0, "准备：角色补上技能 1000（管理端结构化编辑）", saved.body.message);
 
     //#endregion
 
@@ -307,11 +314,7 @@ function roleData(id, name, level, skills) {
 
     group("三、存档进程踢下线，实时进程巡检断连");
 
-    const adminReg = await api(baseUrl, "POST", "admin/auth/register", {
-      body: { username: "dual_super", password: "super-pass-1", registerCode: "dual-admin-code" },
-    });
-    const adminToken = adminReg.body.data && adminReg.body.data.token;
-    check(!!adminToken, "准备：超管已在存档进程注册", adminReg.body.message);
+    // 超管令牌在「准备：账号与角色」段落已注册（补技能时就用它）
 
     const kick = await api(baseUrl, "POST", `admin/accounts/${accountId}/offline`, { token: adminToken });
     checkEqual(kick.body.code, 0, "存档进程踢下线成功（清 online_role_id）", kick.body.message);

@@ -79,22 +79,30 @@ server/src
     emit.ts     离线产出 openapi.json（npm run swagger:emit）
 openapi.json                     机器可读契约（**提交进仓库**）+ 两端接口文件的唯一输入
 test/e2e.cjs                     全量回归（248 条断言）
-test/e2e-roles.cjs               角色管理专项（110 条断言）
+test/e2e-roles.cjs               角色管理专项（150 条断言）
 test/e2e-guard.cjs               口令 / 审计 / 限流 / 踢下线专项（283 条断言，起两台服务各验一轮）
 test/e2e-mail.cjs                邮件通道专项（120 条断言，假发信器）
 test/e2e-account-email.cjs       玩家邮箱字段专项（28 条断言）
-test/e2e-realtime.cjs            实时通道专项（50 条断言，真实 WebSocket 握手）
-test/e2e-combat.cjs              伤害结算专项（32 条断言，世界权威适配）
-test/e2e-world.cjs               世界权威专项（22 条断言，tick / 落盘 / 重启恢复）
+test/e2e-realtime.cjs            实时通道专项（72 条断言，真实 WebSocket 握手）
+test/e2e-combat.cjs              伤害结算专项（131 条断言，世界权威适配）
+test/e2e-world.cjs               世界权威专项（24 条断言，tick / 落盘 / 重启恢复）
 test/e2e-dual.cjs                双进程形态专项（14 条断言，存档与实时分进程 / 踢下线巡检断连）
-test/e2e-blocks.cjs              屏蔽与举报专项（50 条断言，聊天与互见按 role_blocks 过滤）
+test/e2e-game-config.cjs         养成配置专项（639 条断言，称号 / 战魂 / 军衔阶位表）
+test/backup.cjs                  备份 / 恢复专项（87 条断言）
+test/e2e-zone.cjs                区服专项（32 条断言，多开区 / 合并区）
+test/e2e-guild.cjs               帮会专项（60 条断言，建帮 / 申请 / 审批 / 转让 / 解散）
+test/e2e-social.cjs              社交专项（47 条断言，好友 / 敌人 / 互见身份）
 test/e2e-chat.cjs                聊天专项（35 条断言，世界同图广播 / 私聊 / 限频）
 test/e2e-quest.cjs               任务专项（48 条断言，四写入口 / 日常重接）
 test/e2e-sell.cjs                出售专项（24 条断言，快照价结算 / 整单拒绝）
-test/e2e-party.cjs               队伍专项（79 条断言，邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
+test/e2e-bag.cjs                 背包与穿戴专项（36 条断言：穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸）
+test/e2e-blocks.cjs              屏蔽与举报专项（50 条断言，聊天与互见按 role_blocks 过滤）
+test/e2e-party.cjs               队伍专项（87 条断言，邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
+test/e2e-rank.cjs                排行榜专项（56 条断言，全服榜单）
 test/e2e-achievement.cjs         成就专项（39 条断言，累计 / 状态两种存储 / 背包满转邮件）
 test/e2e-game-mail.cjs           游戏内邮件专项（51 条断言，附件领取 / 拒删 / 一键领取到背包满 / 频道与两处投递）
-test/backup.cjs                  备份 / 恢复专项（87 条断言）
+test/e2e-equip-align.cjs         装备对齐几何专项（67 条断言，#513）
+test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523）
 ```
 
 ## 二、加 / 改一个接口的标准动作
@@ -264,8 +272,9 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 | 账本 | `gold` / `bindGold` / `silver` | 服务端 | 商城 / 回收 / 成长线 / 任务 / 成就 / 邮件 / 后台各有写点 |
 | 成长线阶位 | `title` / `soulOfWar` / `rank` | 服务端 | 只有 `upgradeGrowth` 能推进 |
 | 进度 | `level` / `exp` | 服务端 | 经验只由结算产生（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台）|
+| 背包与穿戴 | `bag` / `equipments` / `skills` | 服务端 | `POST /roles/:id/bag-op`（穿戴 / 卸下 / 丢弃 / 整理 / 搬运）；建号首次上传 |
 | 派生值 | `combat` / 八项属性 | 服务端重算 | `applyAuthoritativeAttributes` 每次写档现算覆盖，**不走回填** |
-| 客户端全权 | `bag` / `equipments` / `skills` / `hp` / `mp` / `onMap` / 外观 / 快捷键 / 引导 | 客户端 | 这些若要收权，得先把本地那套操作全改成服务端接口 |
+| 客户端全权 | `hp` / `mp` / `onMap` / 外观 / 快捷键 / 引导 / 社交关系 | 客户端 | 这些若要收权，得先把本地那套操作全改成服务端接口 |
 
 - **回填而不是拒收**：客户端推上来的值与库里不一致 → 用库里的值覆盖、继续落库。
   拒收（409）会把「客户端少收了一帧」变成玩不了；真正要拦的是「**写进去**」不是「发过来」。
@@ -284,6 +293,9 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - **守卫**：`tools/audit-role-authority.cjs`（第 13 项）—— 清单字段在客户端实体里有、`save`/`create` 挂了边界、
   **客户端对这些字段的赋值只能来自服务端应答**。第三条按 `role.` 接收者匹配（`level` 这个词满仓都是：
   任务目标的 `this.level`、怪物的 `monster.level`），右值里**引用**了 `update.` / `reward.` / `gain.` 等就算放行。
+  清单名从 `SERVER_OWNED_FIELDS` 的展开项**自动派生**（#556 之前是手写三个常量名，加第四组时审计照样报
+  「完好（8 个字段）」，新字段一个都没被检查 —— 假绿）；确有「对服务端那份做迁移 / 规整 / 回滚」的合法赋值走
+  `ASSIGNMENT_EXCEPTIONS`（按文件 + 字段 + 行内特征逐条放行，**一条对不上就报过期**，避免例外清单变成遮羞布）。
 - **客户端不许有本地加经验路径**（#550）：`onlineRoleGetExp` / `awardKillExp` 已删；`MonsterManager.hurt`
   保留但**只演伤害**（技能在实时通道不活跃时的兜底出手，早先按「零调用」判死代码被打回过 ——
   调用走 `SkillMonsterProvider` 接口，按实现类搜不到）；世界快照的兜底清场曾借 `applyDamage` 的 else 分支
@@ -299,6 +311,38 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   #554 又把「建号时直接给等级」这条造号路径删了，`e2e-roles` 里造 10 / 20 级角色改成 `raiseLevel()`
   （建号 → 管理端 PATCH）。**造号只在 1 级落库，任何「建个 N 级号」的写法都是假绿**。
   注意修订号：拿某个角色当修订号基线时，别对它多做一次 PATCH（多一次写库就把后面的数字全顶偏）。
+  #556 收 `bag` / `equipments` / `skills` 时同样连坐两套：`e2e-combat`（补技能 / 换装 / 塞满背包造状态）
+  与 `e2e-dual`（补技能），全部改成管理端 `PATCH /admin/roles/:id` 的结构化编辑。
+
+### 四之四补、背包与穿戴收权（#556）：一个接口五个动作，两种口径
+
+`POST /roles/:id/bag-op`（`role.bagOp`）一个入口五个动作，返回形状统一是「操作后的角色 + action/slot」：
+
+| 动作 | 谁定结果 | 服务端要算的东西 |
+|---|---|---|
+| `equip` | 服务端 | 部位（`EQUIPMENT_SLOT_OF`）/ 等级门槛（`equipmentLevelOf`）/ 换下的旧装备回包 |
+| `unequip` | 服务端 | 背包找第一个空格（满 → 20012），槽位名合法性 |
+| `discard` | 服务端 | 销毁物品 |
+| `move` / `tidy` | 客户端给排布，服务端**只验守恒** | `sameGridShape` + `sameBagContent`（同 id 总件数不变），不过 → 20022 |
+
+- **为什么 move/tidy 不重算**：合并 / 交换 / 拆分是展示规则，客户端 `configs/items.moveBagCellGrid`
+  已经有一份；服务端再实现一遍必然两端漂。**位置是展示，件数是钱** —— 只对后者下判断。
+- **`equipments` 是属性重算的输入，必须先洗**：`roleAttributeSourceOf` → `collectEquipmentBundles`
+  是**遍历所有值累加、不看键**的，同一件塞进 5 个槽位就能算 5 遍（改包刷战力）。
+  `sanitizeEquipments` 三条口径：**认不出 id 原样保留**（可能客户端配置比服务端快照新）/
+  部位不符能挪就挪 / 同一件只留第一个。`save()` 里洗一次，`bagOp` 里也洗一次。
+- **`bag` 是回填的唯一特例**：内容取库里的、**尺寸取客户端这次的**（`reconcileBag` → `adoptBagShape`）。
+  网格尺寸归客户端配置（`bagRow × bagCol`）管，整份照抄会让老角色的背包永远不长个；
+  装不进新尺寸时保留原网格，**不静默丢东西**。这条也让「客户端首次上传带 4×10 空网格」继续成立
+  （`e2e-combat` 的拾取前提就是它）。
+- **穿 / 卸当场重算属性**：`applyAuthoritativeAttributes(existing.level, data)` + `clampVitals(data)` ——
+  脱掉加体力的衣服时血量要跟着降，否则血条停在超上限的位置。
+- **`equipmentLevelOf` 走运营覆盖层**（`runtime-overrides` 的 `equipmentLevels`，随 `applyEquipmentOverrides`
+  重算、`resetRuntimeOverrides` 清空），缺省回落 `EQUIPMENT_BASES[id].level`；别直接读静态表，
+  后台改过等级门槛就白改。
+- **`skills` 目前没有任何玩家侧写入口**（客户端根本没有学技能 UI，`StorageManager` 里只有读）。
+  收权后要靠管理端 `PATCH /admin/roles/:id` 或建号首次上传。哪天真做技能学习，
+  得同步给它一个服务端接口 —— 否则「学了不生效」会是那种查半天查不出的 bug。
 
 ### 四之五、游戏事件总线：进度采集点唯一（#401）
 

@@ -179,6 +179,9 @@ export const RoleApi = {
   drugUse(roleId: string, body: any, options?: any): Promise<any> {
     return dispatch("drugUse", [roleId, body, options]);
   },
+  bagOp(roleId: string, body: any, options?: any): Promise<any> {
+    return dispatch("bagOp", [roleId, body, options]);
+  },
 };
 
 export default { RoleApi };
@@ -201,6 +204,23 @@ export type MallPurchaseResult = {
 export type DrugUseResult = {
   data: Record<string, unknown>;
   revision: number;
+};
+
+/** #556：背包操作（穿戴 / 卸下 / 丢弃 / 整理 / 搬运）的请求与结果 */
+export type BagOp = {
+  action: "equip" | "unequip" | "discard" | "move" | "tidy";
+  row?: number;
+  col?: number;
+  slot?: string;
+  cells?: Array<{ row: number; col: number; id: string; count: number }>;
+  revision?: number;
+};
+
+export type BagOpResult = {
+  data: Record<string, unknown>;
+  revision: number;
+  action: string;
+  slot: string | null;
 };
 `,
   "CombatChannelTypes.ts": `/** 替身：只补 StorageManager 的 \`import type\`（真定义是 ui/utils/net/CombatChannel，运行期不用） */
@@ -355,4 +375,39 @@ function prepareStorage(sandboxName, extraEntries = []) {
   };
 }
 
-module.exports = { prepareStorage, STUB_IMPORTS, STUBS, CC_SHIM };
+/**
+ * 给 `RoleApi.bagOp` 装一个**回声桩**（#556 之后五个背包动作都要走接口）
+ *
+ * 它只做一件真事：把客户端刚算好的那份排布原样收下再回给它 —— `tidy` / `move` 按
+ * `cells` 重建网格、`discard` 清掉那一格、`equip` / `unequip` 回当前那份（本沙箱里
+ * 不跑穿戴：那需要装备快照与属性重算，属于服务端的事）。
+ *
+ * **服务端的真语义不在这里**（守恒校验、等级门槛、旧装备回位）：那些由
+ * `server/test/e2e-bag.cjs` 盯。这里只保证客户端那一半接得上、且失败时能还原。
+ *
+ * @param RoleApi 沙箱里的接口替身（`prepareStorage(...).RoleApi`）
+ * @param StorageManager 沙箱里的真 StorageManager（用来取当前在线角色那份文档）
+ */
+function installBagOpEcho(RoleApi, StorageManager) {
+  RoleApi.handlers.bagOp = (roleId, body) => {
+    const role = StorageManager.findOnlineRole();
+    const data = role ? JSON.parse(JSON.stringify(role)) : {};
+    if (Array.isArray(data.bag)) {
+      if (body.action === "discard") {
+        const line = data.bag[body.row];
+        if (line && body.col < line.length) line[body.col] = null;
+      }
+      if (Array.isArray(body.cells)) {
+        const grid = data.bag.map((line) => line.map(() => null));
+        body.cells.forEach((cell) => {
+          const line = grid[cell.row];
+          if (line && cell.col < line.length) line[cell.col] = { id: cell.id, count: cell.count };
+        });
+        data.bag = grid;
+      }
+    }
+    return { data, revision: Number((role && role.revision) || 0) + 1, action: body.action, slot: body.slot ?? null };
+  };
+}
+
+module.exports = { prepareStorage, installBagOpEcho, STUB_IMPORTS, STUBS, CC_SHIM };

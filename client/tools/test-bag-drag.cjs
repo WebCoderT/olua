@@ -41,6 +41,9 @@ try {
 
 const { StorageManager, Role, outDir } = sandbox;
 const { moveBagCellGrid, normalizeBagGrid, getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
+const { installBagOpEcho } = require("./lib/storage-sandbox.cjs");
+// #556：整理 / 搬运都走 role.bagOp —— 服务端语义由 server/test/e2e-bag.cjs 盯，这里只保证客户端接得上
+installBagOpEcho(sandbox.RoleApi, StorageManager);
 
 const equipment = getItemsByType("equipment")[0];
 const drug = getItemsByType("drug")[0];
@@ -246,33 +249,35 @@ console.log("\n=== 场景 H：背包尺寸对齐当前配置 ===");
   check(broken.length === 7 && broken.every((row) => row.length === 11), "非数组一律当空背包（不抛异常）");
 }
 
+// #556：整理 / 搬运要往服务端跑一趟（服务端验守恒）—— 这一段包进 async
+const dataLayer = (async () => {
 console.log("\n— 整理口径：散着的背包必须能被压紧（回归「点整理像没反应」） —");
 
 // 1. 物品散在最后一个格子：整理要把它拉回第一格
 seed([{ row: 6, col: 10, id: drug.id, count: 3 }]);
-check(StorageManager.tidyBag() === true, "物品散在末格时，一键整理返回 true（真的动了）");
+check((await StorageManager.tidyBag()) === true, "物品散在末格时，一键整理返回 true（真的动了）");
 check(cellAt(0, 0)?.count === 3, "整理后物品落在第一个格子（0 行 0 列）");
-check(StorageManager.tidyBag() === false, "已经紧凑整齐后再点整理 → 无变动（不重复写存储）");
+check((await StorageManager.tidyBag()) === false, "已经紧凑整齐后再点整理 → 无变动（不重复写存储）");
 
 // 2. 最容易踩的坑：物品「顺序没变、只是中间空着」—— 指纹若不含空格就会被判成「已经很整齐」而整理不动
 seed([
   { row: 0, col: 0, id: drug.id, count: 2 },
   { row: 0, col: 5, id: material.id, count: 1 },
 ]);
-check(StorageManager.tidyBag() === true, "顺序没变、只是中间空着 → 整理仍会把它压紧（指纹含空格）");
+check((await StorageManager.tidyBag()) === true, "顺序没变、只是中间空着 → 整理仍会把它压紧（指纹含空格）");
 check(cellAt(0, 0)?.id === drug.id && cellAt(0, 1)?.id === material.id, "压紧后两件物品紧挨着排在最前");
 
 // 3. 拖动物品后立刻点整理：位置变了但顺序没变，同样要能压紧
 seed([{ row: 0, col: 0, id: drug.id, count: 1 }]);
-StorageManager.moveBagGood(0, 0, 3, 3);
-check(StorageManager.tidyBag() === true, "把物品拖走后再整理 → 能拉回第一个格子");
+await StorageManager.moveBagGood(0, 0, 3, 3);
+check((await StorageManager.tidyBag()) === true, "把物品拖走后再整理 → 能拉回第一个格子");
 check(cellAt(0, 0)?.count === 1, "整理后回到第一个格子");
 
 console.log("\n— 数据层：StorageManager.moveBagGood —");
 
 // 1. 拖到空格并落盘
 seed([{ row: 0, col: 0, id: drug.id, count: 6 }]);
-check(StorageManager.moveBagGood(0, 0, 5, 10) === true, "拖动搬到空格返回 true");
+check((await StorageManager.moveBagGood(0, 0, 5, 10)) === true, "拖动搬到空格返回 true");
 check(cellAt(0, 0) === null && cellAt(5, 10)?.count === 6, "内存里的背包已搬运");
 check(JSON.parse(sandbox.shim.__memory.get("roles"))[0].bag[5][10]?.count === 6, "搬运结果已写入存档（不是只改内存）");
 
@@ -281,14 +286,14 @@ seed([
   { row: 0, col: 0, id: drug.id, count: 4 },
   { row: 0, col: 1, id: drug.id, count: 9 },
 ]);
-check(StorageManager.moveBagGood(0, 0, 0, 1) === true, "拖动合并返回 true");
+check((await StorageManager.moveBagGood(0, 0, 0, 1)) === true, "拖动合并返回 true");
 check(cellAt(0, 1)?.count === 13 && cellAt(0, 0) === null, "合并后的数量已落盘");
 
 // 3. 无效拖动返回 false
 seed([{ row: 0, col: 0, id: drug.id, count: 1 }]);
-check(StorageManager.moveBagGood(3, 3, 4, 4) === false, "拖空格返回 false");
-check(StorageManager.moveBagGood(0, 0, 0, 0) === false, "拖回原格返回 false");
-check(StorageManager.moveBagGood(-1, 0, 0, 1) === false, "越界拖动返回 false");
+check((await StorageManager.moveBagGood(3, 3, 4, 4)) === false, "拖空格返回 false");
+check((await StorageManager.moveBagGood(0, 0, 0, 0)) === false, "拖回原格返回 false");
+check((await StorageManager.moveBagGood(-1, 0, 0, 1)) === false, "越界拖动返回 false");
 check(cellAt(0, 0)?.count === 1, "无效拖动不改动背包");
 
 // 4. 结构不变
@@ -306,7 +311,7 @@ check(cellAt(0, 0)?.count === 1, "无效拖动不改动背包");
   StorageManager.clear();
   StorageManager.setRoles([me, other]);
   StorageManager.onlineRole("r1");
-  StorageManager.moveBagGood(0, 0, 2, 2);
+  await StorageManager.moveBagGood(0, 0, 2, 2);
   const others = StorageManager.getRoles().find((role) => role.id === "r2");
   check(others.bag[0][0]?.count === 4, "另一个角色的背包不受影响");
   check(StorageManager.getRoles().find((role) => role.id === "r1").bag[2][2]?.count === 4, "在线角色的物品已搬走");
@@ -320,18 +325,20 @@ check(cellAt(0, 0)?.count === 1, "无效拖动不改动背包");
   StorageManager.clear();
   StorageManager.setRoles([role]);
   StorageManager.onlineRole("r1");
-  StorageManager.moveBagGood(0, 0, 1, 1);
+  await StorageManager.moveBagGood(0, 0, 1, 1);
   check(online().equipments[equipment.slot] === equipment.id, "拖动背包物品后，身上的装备槽原样不动");
 }
 
 // 7. 连续拖动（拖到 B、再拖到 C）不丢东西
 {
   seed([{ row: 0, col: 0, id: drug.id, count: 8 }]);
-  StorageManager.moveBagGood(0, 0, 1, 1);
-  StorageManager.moveBagGood(1, 1, 6, 10);
+  await StorageManager.moveBagGood(0, 0, 1, 1);
+  await StorageManager.moveBagGood(1, 1, 6, 10);
   check(cellAt(6, 10)?.count === 8, "连续拖动后物品仍在，数量不变");
   check(flatOf(online().bag).length === 1, "中间格子没有留下残影");
 }
+
+})();
 
 console.log("\n— 界面接线：BagGridView / BagDialog / 配置 —");
 
@@ -347,7 +354,7 @@ const gameHelperSource = fs.readFileSync(GAME_HELPER_FILE, "utf8");
 // 数据层接线
 check(/export function moveBagCellGrid\(bag: BagCell\[\]\[\], from: BagCellPos, to: BagCellPos\): BagMoveResult \{/.test(itemsSource), "items 暴露 moveBagCellGrid 纯函数");
 check(/export function normalizeBagGrid\(bag: BagCell\[\]\[\], rows: number, cols: number\): BagCell\[\]\[\] \{/.test(itemsSource), "items 暴露 normalizeBagGrid");
-check(/static moveBagGood\(fromRow: number, fromCol: number, toRow: number, toCol: number\): boolean \{/.test(storageSource), "StorageManager 暴露 moveBagGood");
+check(/static async moveBagGood\(fromRow: number, fromCol: number, toRow: number, toCol: number\): Promise<boolean> \{/.test(storageSource), "StorageManager 暴露 moveBagGood");
 check(/if \(!result\.moved\) return false;/.test(storageSource), "没真的搬动就不落盘、不刷新");
 check(/signature \+= cell \? `\$\{cell\.id\}x\$\{cell\.count\},` : "·";/.test(storageSource), "整理指纹把空格也算进去（否则「只挪位置不改顺序」的背包会被判成已整齐）");
 check(/private static bagIsEmpty\(bag: BagCell\[\]\[\]\)/.test(storageSource), "空背包判定拆成独立方法（指纹不再用空串当空背包）");
@@ -431,4 +438,4 @@ check(/convertToNodeSpaceAR\(GameHelper\.screenPositionToWorldPosition\(screenPo
 }
 check(!/[\u4e00-\u9fa5]/.test(gridViewSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "BagGridView 里没有裸中文（注释之外）");
 
-finish("PASS：拖动规则（移动/合并/交换）、尺寸对齐、存储搬运、触摸归属与界面接线全部通过。");
+void dataLayer.then(() => finish("PASS：拖动规则（移动/合并/交换）、尺寸对齐、存储搬运、触摸归属与界面接线全部通过。"));

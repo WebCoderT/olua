@@ -55,14 +55,26 @@ function read(p) {
   return fs.readFileSync(p, "utf8");
 }
 
-/** 从 role-authority.ts 里读出服务端独占字段（解析常量数组的字面量，不执行 TS） */
+/**
+ * 从 role-authority.ts 里读出服务端独占字段（解析常量数组的字面量，不执行 TS）
+ *
+ * 清单名**从 `SERVER_OWNED_FIELDS` 的展开项派生**，不再手写三个常量名 ——
+ * 写死名单的后果是：加一组新字段（#556 的 `SERVER_INVENTORY_FIELDS`）时审计照样报
+ * 「权威边界完好（8 个字段）」，那几个字段其实一个都没被检查过（假绿比漏检更难发现）。
+ */
 function serverOwnedFields() {
   const text = read(AUTHORITY);
+  const owned = /export const SERVER_OWNED_FIELDS[\s\S]*?=\s*\[([\s\S]*?)\]/.exec(text);
+  const names = owned ? [...owned[1].matchAll(/\.\.\.\s*([A-Z][A-Z0-9_]*)/g)].map((item) => item[1]) : [];
+  if (!names.length) {
+    problems.push(`${rel(AUTHORITY)}：解析不出 SERVER_OWNED_FIELDS 由哪几组字段拼成（边界清单被改名或改写？）`);
+    return [];
+  }
   const fields = [];
-  for (const name of ["SERVER_LEDGER_FIELDS", "SERVER_GROWTH_FIELDS", "SERVER_PROGRESS_FIELDS"]) {
+  for (const name of names) {
     const match = new RegExp(`export const ${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(text);
     if (!match) {
-      problems.push(`${rel(AUTHORITY)}：找不到 ${name}（权威边界清单被改名或删掉了？）`);
+      problems.push(`${rel(AUTHORITY)}：SERVER_OWNED_FIELDS 里引用了 ${name}，但找不到它的定义`);
       continue;
     }
     for (const item of match[1].matchAll(/"([^"]+)"/g)) fields.push(item[1]);
@@ -135,6 +147,35 @@ function collectTs(dir, out = []) {
   return out;
 }
 
+/**
+ * 例外：这些赋值**不是「在本地造数据再推上去」**，而是对服务端下发那份做迁移 / 规整 / 回滚
+ *
+ * 判据 3 的意图是「不许客户端自己造账」；但同一个 `role.bag = ...` 写法也出现在
+ * 「把服务端给的那份调成当前配置的样子」里（旧存档迁移、网格尺寸对齐、拖动失败回滚），
+ * 这些必须留着 —— 所以按「文件 + 字段 + 行内特征」逐条放行，并且**一条对不上就报过期**：
+ * 例外清单允许存在，允许变旧就等于允许它悄悄盖住新的违规。
+ */
+const ASSIGNMENT_EXCEPTIONS = [
+  {
+    file: "ui/core/StorageManager.ts",
+    field: "bag",
+    match: "role.bag = (Array.isArray(role.bag)",
+    why: "旧存档迁移：把物品快照对象收敛成 { id, count }（服务端下发的就是这份文档）",
+  },
+  {
+    file: "ui/core/StorageManager.ts",
+    field: "bag",
+    match: "role.bag = normalizeBagGrid(role.bag",
+    why: "网格尺寸对齐当前配置（尺寸归客户端，服务端 reconcileBag 就按这个形状存）",
+  },
+  {
+    file: "ui/core/StorageManager.ts",
+    field: "bag",
+    match: "role.bag = previous;",
+    why: "拖动被服务端拒绝后回滚乐观 UI（不留「看着动了其实没动」的网格）",
+  },
+];
+
 /** 判据 3：客户端对账本 / 阶位 / 进度的赋值只能来自服务端 */
 function checkClientAssignments(fields) {
   if (!fields.length) return;
@@ -144,6 +185,7 @@ function checkClientAssignments(fields) {
   // `this.level`（QuestStore）、怪物的 `monster.level`、UI 节点的 `layout.title` ——
   // 按字段名裸匹配会把它们全判成违规。真正要盯的是「角色对象自己那份账」。
   const pattern = new RegExp(`(?:^|[^.\\w])role\\.(${fields.join("|")})\\s*([+\\-*/]?=)(?!=)\\s*(.*)$`);
+  const usedExceptions = new Set();
   for (const file of collectTs(CLIENT_UI)) {
     const lines = read(file).split("\n");
     lines.forEach((line, index) => {
@@ -156,12 +198,23 @@ function checkClientAssignments(fields) {
       // 旧档补默认：`if (typeof role.gold !== "number") role.gold = 0;`
       const legacyDefault = /^0;?$/.test(rhs) && /typeof\s+\w+\.\w+\s*!==/.test(line);
       if (fromServer || legacyDefault) return;
+      const exception = ASSIGNMENT_EXCEPTIONS.findIndex(
+        (item, itemIndex) => !usedExceptions.has(itemIndex) && file.endsWith(item.file) && item.field === match[1] && line.includes(item.match),
+      );
+      if (exception >= 0) {
+        usedExceptions.add(exception);
+        return;
+      }
       problems.push(
         `${rel(file)}:${index + 1}：在本地改服务端独占字段 ${match[1]}（${line.trim()}）` +
           ` —— 推上去会被服务端回填成库里的值，改了个寂寞；要走服务端接口`,
       );
     });
   }
+  ASSIGNMENT_EXCEPTIONS.forEach((item, index) => {
+    if (usedExceptions.has(index)) return;
+    problems.push(`${item.file}：例外清单里这条已经对不上了（${item.match}）—— 代码改了就同步例外清单，别让它悄悄失效`);
+  });
 }
 
 const fields = serverOwnedFields();

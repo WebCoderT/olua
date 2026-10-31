@@ -294,7 +294,8 @@ export default class BagGridView extends Node {
     // 先收干净再落子：搬运会刷新网格（格子节点重建），幽灵与高亮不能留到那之后
     this.endDrag();
     if (!active || !landing) return;
-    StorageManager.moveBagGood(from.row, from.col, landing.row, landing.col);
+    // 搬运要往服务端跑一趟（#556：服务端验守恒后落库）；本地先摆好、失败还原，见 moveBagGood
+    void StorageManager.moveBagGood(from.row, from.col, landing.row, landing.col);
   }
 
   /**
