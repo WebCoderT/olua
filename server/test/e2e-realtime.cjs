@@ -51,7 +51,7 @@ const TICKET_TTL_MS = 3000;
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 69;
+const EXPECTED_ASSERTIONS = 72;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -373,6 +373,15 @@ async function main() {
     //#region 三·五、角色权威快照（roleUpdate，#541）
     group("三·五、roleUpdate：建号即推权威快照，改库后下一拍跟上");
     {
+      // 管理端令牌（改阶位要用）：本段独立注册，不依赖上一段的块级变量
+      await api(baseUrl, "POST", "/api/admin/auth/register", {
+        body: { username: "role_update_admin", password: "Admin#1234", registerCode: ADMIN_CODE },
+      });
+      const roleAdminLogin = await api(baseUrl, "POST", "/api/admin/auth/login", {
+        body: { username: "role_update_admin", password: "Admin#1234" },
+      });
+      const roleAdminToken = roleAdminLogin.body?.data?.token;
+
       // 建一个角色（首个角色自动在线）→ 下一轮轮询就该把权威快照推过来
       const created = await api(baseUrl, "POST", "/api/roles", { token: tokenA, body: { data: roleSnapshot("realtime_r1") } });
       checkEqual(created.status, 201, "准备：给账号 A 建一个角色（自动在线）");
@@ -403,6 +412,25 @@ async function main() {
           secondUpdate?.data?.gold === 1000 &&
           secondUpdate?.data?.exp === 0,
         "第二帧仍是服务端重算的权威值与最新修订号（gold 5555 / exp 777 都被丢弃）",
+      );
+
+      // 后台改阶位（#551）→ 下一拍帧带着新值：不重进也要看得见。
+      // 这三个字段自 #548 起归服务端（改包会被回填），所以「改了但看不到」只能靠帧补
+      const patched = await api(baseUrl, "PATCH", "/api/admin/roles/realtime_r1", {
+        token: roleAdminToken,
+        body: { title: 5, soulOfWar: 6, rank: 7 },
+      });
+      checkEqual(patched.status, 200, "准备：管理端改三个阶位（称号 5 / 战魂 6 / 军衔 7）");
+      const growthUpdate = await waitFor(
+        "帧带上阶位",
+        async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.title === 5) ?? null,
+        5_000,
+      );
+      check(Boolean(growthUpdate), "后台改阶位后下一拍 roleUpdate 跟上（不用重新选角）");
+      check(
+        growthUpdate?.data?.soulOfWar === 6 && growthUpdate?.data?.rank === 7,
+        "三个阶位一起带（称号 / 战魂 / 军衔）",
+        JSON.stringify({ title: growthUpdate?.data?.title, soul: growthUpdate?.data?.soulOfWar, rank: growthUpdate?.data?.rank }),
       );
     }
     //#endregion

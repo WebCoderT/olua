@@ -670,6 +670,18 @@ export interface RealtimeRoleUpdateMessage {
     silver: number;
     /** 战斗力（服务端按权重表现算） */
     combat: number;
+    /**
+     * 成长线阶位（#551）：称号 / 战魂 / 军衔
+     *
+     * 运营在后台改了某人的阶位，以前要等到「重新选角 / 重连」才看得见（#548 之前更糟：
+     * 会被玩家下一次存档**直接覆盖掉**）。三件套都归服务端（`role-authority.ts` 的清单里），
+     * 帧不带它们就等于「改了但看不出来改了」。
+     *
+     * 可选：老服务端 / 老客户端互认时不至于把字段读成 undefined 而崩。
+     */
+    title?: number;
+    soulOfWar?: number;
+    rank?: number;
     /** 八项战斗属性（区间属性 = [下限, 上限]）；等级不在成长曲线里时省略 */
     maxHp?: number;
     hpRecover?: number;
