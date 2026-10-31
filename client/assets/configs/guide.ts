@@ -100,6 +100,9 @@ export const guideOverlayStyle = {
     desc: "guide_desc",
     progress: "guide_progress",
     skip: "guide_skip",
+    next: "guide_next",
+    /** 下一步按钮上的文字节点（`GameUiHelper.createMiddleButton` 按 `${name}_label` 生成，这里是那个契约） */
+    nextLabel: "guide_next_label",
   },
   colors: {
     /** 遮罩：黑，透明度见 layout.maskOpacity */
@@ -148,9 +151,17 @@ export const guideConfig = {
      * 末行只剩「手。」（#466）。
      */
     bubbleWidth: 560,
-    bubbleHeight: 190,
+    /**
+     * 气泡高度 210（原来 190）
+     *
+     * 底部那一行原来只放一个「跳过引导」，现在并排放「跳过 + 下一步」（两个中号按钮 123×36 = 258 宽），
+     * 正文折两行时的下沿要给它们让出位置，见 test-guide 的排版守点。
+     */
+    bubbleHeight: 210,
     bubblePadding: 20,
     bubbleGap: 18,
+    /** 底部两个按钮之间的间距 */
+    buttonGap: 12,
     /** 标题占位底部与正文顶部的间距（正文锚点在顶边向下长，见 GuideOverlay.createBubble） */
     descGap: 8,
     screenMargin: 24,
@@ -165,6 +176,10 @@ export const guideConfig = {
     progress: "新手引导 {index}/{total}",
     /** 跳过按钮 */
     skip: "跳过引导",
+    /** 下一步按钮（非最后一步） */
+    next: "下一步",
+    /** 最后一步的按钮文案（点下去就是走完） */
+    finish: "完成",
     /** 全部走完的飘字 */
     finished: "引导结束，去玩吧！",
     /** 主动跳过的飘字 */

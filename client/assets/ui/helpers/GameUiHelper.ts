@@ -986,7 +986,11 @@ export default class GameUiHelper {
   /**
    * 创建装备光柱零件（空精灵 + 动画组件，帧由 playLoopAtlas 异步装载）
    *
-   * 与图标**同中心**：位置取 dropItemLayout.iconOffsetY（随掉落物布局走，不在这里另配一套坐标）
+   * 与图标**同中心**：位置取 dropItemLayout.iconOffsetY（随掉落物布局走，不在这里另配一套坐标）。
+   *
+   * 节点名 = 前缀 + 光柱 key（`drop_light_light_1`）—— key 从 #542 起就是素材名、不含斜杠
+   * （Cocos 对含 `/` 的节点名会报 `Node name can not include '/'`）。名字同时是 playLoopAtlas
+   * 的动画状态名与片段名，改前缀会连带动画名，别单改一边。
    */
   static createEquipmentLight(lightKey: string) {
     const light = UiHelper.createSprite(`${equipmentLightLayout.namePrefix}${lightKey}`, "", new Vec2(0, dropItemLayout.iconOffsetY), equipmentLightLayout.size);

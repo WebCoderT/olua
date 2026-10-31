@@ -1,7 +1,7 @@
 import type { Role } from "../../entities/Role";
 import { guideConfig, guideStepAt, guideStepCount } from "../../configs/guide";
 import type { GuideStepConfig } from "../../configs/guide";
-import { advanceGuide, normalizeGuideProgress, shouldRunGuide, skipGuide } from "../utils/guide/guide-progress";
+import { advanceGuide, normalizeGuideProgress, nextGuide, shouldRunGuide, skipGuide } from "../utils/guide/guide-progress";
 import type { GuideEvent, GuideProgress } from "../../types/guide";
 import StorageManager from "./StorageManager";
 
@@ -17,9 +17,10 @@ import StorageManager from "./StorageManager";
  * 放 `role.guide` 的好处是换设备 / 重连 / 重启都自然续走，且不需要为它多一张表；
  * 服务端只校验结构与体量（见 server 的 `parseRoleData`），不做业务判定。
  *
- * ## 为什么推进靠事件不靠点击
- * 「点下一步」的引导玩家会一路点到尾、一句没看；而「自己走两步 / 打倒一只怪」
- * 是真做到了才前进。代价是每一步都得有可观测的触发点 —— 这就是那六个事件。
+ * ## 为什么推进「事件 + 下一步」两条路并存
+ * 只靠点击：玩家会一路点到尾、一句没看；只靠事件：不愿意动手的玩家第一步就被卡住，
+ * 唯一出口只剩「跳过引导」。所以两条路都留 —— 做到了就自动前进（那六个事件），
+ * 没做也能点气泡上的「下一步」自己往前走（最后一步变成「完成」）。
  */
 export default class GuideStore {
   private static listeners: Array<() => void> = [];
@@ -90,6 +91,15 @@ export default class GuideStore {
     if (this.moved < guideConfig.tuning.moveDistance) return;
     this.moved = 0;
     this.notify("move");
+  }
+
+  /** 玩家点了「下一步」：不看触发事件直接前进（最后一步 → 走完） */
+  static next(): void {
+    const progress = this.progress;
+    if (!progress) return;
+    const next = nextGuide(progress, guideStepCount());
+    if (!next) return;
+    this.apply(next);
   }
 
   /** 玩家点了「跳过引导」：落成 skipped，之后不再弹也不再自动开始 */

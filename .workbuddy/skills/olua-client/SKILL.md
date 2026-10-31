@@ -121,16 +121,22 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 新手引导（`configs/guide.ts` 六步 + `ui/utils/guide/guide-progress.ts` 纯函数 + `ui/core/GuideStore.ts` + `ui/components/GuideOverlay.ts`）
 定型了几条与「引导」本身无关、但凡是**引导类 UI** 都适用的做法：
 
-- **推进靠事件，不靠点「下一步」**：六个触发 `move`/`kill`/`pickup`/`openBag`/`openSkill`/`openChat`（`GUIDE_EVENT`），
+- **推进靠事件，但也留「下一步」这条显式出口**：六个触发 `move`/`kill`/`pickup`/`openBag`/`openSkill`/`openChat`（`GUIDE_EVENT`），
   **只有当前步的 `trigger` 命中才前进**，别的事件一律不越级 —— 否则「先点背包」会把「走路 / 打怪 / 拾取」三步一起吃掉，
   玩家一句话没看就通关了。代价是每步都得有可观测触发点，所以步骤表是**有限触发集合**的配置，加步不改代码、加新触发方式才改代码。
+  **只留事件一条路是错的**（#402 初版）：不愿意动手的玩家第一步就被拦住，唯一出口只剩「跳过引导」= 逼他放弃整段引导。
+  所以气泡上并排「跳过引导」+「下一步」（最后一步文案变「完成」），点按钮走 `nextGuide`（**不校验 trigger**，与事件推进共用
+  `GuideStore.apply` 这一条落账路径）；`GuideStore.next()` 之外的入口一律不加 —— 两条路各写一份推进逻辑必然会漂。
 - **移动按实际位移判**：`Game.update` 里 `Vec3.distance(当前, 上一帧)` 累计到 `tuning.moveDistance(260)` 才算一次。
   摇杆 / 方向键 / 点地面走都是「我在移动」的同一件事，别去监听某一个输入源。
 - **高亮用语义位，不写坐标**：`GUIDE_SPOT`（`joystick` / `nav:bag` / `nav:skill` / `nav:chat` / `shortcut`）由组合根注册的
   `spotProvider` 换成真实节点。HUD 是贴边重排的，写死坐标换宽高比就偏；**取不到节点要退化成「只显示气泡」**，
   不能让整层不显示（少个高亮是小事，引导消失是事故）。
-- **遮罩不拦点击、不锁移动**，只有跳过按钮是按钮（单测直接断言 `!/blockClickThrough|addComponent\(Button\)/`）。
+- **遮罩不拦点击、不锁移动**，只有气泡上的「跳过 / 下一步」两个按钮是按钮（单测直接断言 `!/blockClickThrough|addComponent\(Button\)/`）。
   引导卡住比「玩家没看完」严重得多。
+- **气泡底部是「一排按钮 + 左侧进度」**：两个中号按钮（123×36）右对齐、间距 `layout.buttonGap`，进度文字在左下角；
+  加了按钮就要同步抬 `bubbleHeight`（190 → 210），并按「正文折两行也不压按钮行、进度右缘不碰按钮左缘」写守点
+  （换算全在 `test-guide.cjs` 的排版区，别再手算）。
 - **遮罩用四块矩形拼，不用 `Mask` 也不贴图**：洞的矩形取目标 `getBoundingBoxToWorld()` 的**两个对角点**分别
   `convertToNodeSpaceAR` 再算宽高 —— 父层带缩放时「中心 + 世界宽高」算出来会偏，而 HUD 正是带缩放的。
 - **气泡贴边夹取**：洞在上半屏就放下面，反之放上面，再按 `screenMargin` 与自身尺寸四向夹，保证不出屏。

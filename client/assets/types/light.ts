@@ -6,7 +6,7 @@ import type { EQUIPMENT_PREFIX } from "./good";
  * 整包 14~15 帧循环），播放在地面掉落物节点的光柱子节点上（原始 400×400 画布，显示尺寸见 configs/layout/lights）。
  */
 export interface LightResource {
-  /** 光柱 key（= 图集名带上级路径，如 1 号光柱是 "light/1"；配置表之间用它互相关联） */
+  /** 光柱 key（= 图集名，如 1 号光柱是 "light_1"；配置表之间用它互相关联） */
   key: string;
   /** 图集资源（resources 下 plist 路径、不含扩展名，如 effect/light/light_1） */
   atlas: string;

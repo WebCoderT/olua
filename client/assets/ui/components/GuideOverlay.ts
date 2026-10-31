@@ -17,8 +17,9 @@ interface SpotRect {
  * 新手引导的遮罩层（#402）
  *
  * 一屏四块黑边挖出一个洞罩住当前步骤的目标，旁边挂一条气泡说「做什么」，
- * 气泡上常显「跳过引导」。**整层不参与点击**（只有跳过按钮是按钮）：
- * 引导绝不锁移动、不拦面板 —— 卡死即事故，玩家想自己乱点就先让他乱点。
+ * 气泡上常显「跳过引导」与「下一步」（最后一步变「完成」）。**整层不参与点击**
+ * （只有这两个按钮是按钮）：引导绝不锁移动、不拦面板 —— 卡死即事故，
+ * 玩家想自己乱点就先让他乱点。
  *
  * 目标位置**不写死在配置里**：HUD 是贴边重排的（HUD 位置见 hudLayout 各 position（固定值）），
  * 写死坐标换个窗口宽高比就错位。这里把「语义位」（`GUIDE_SPOT`）交给组合根注册的
@@ -107,7 +108,7 @@ export default class GuideOverlay extends Node {
     // 进度文案只在配置里写一处（`{index}` / `{total}` 两个占位）
     this.progressLabel.string = guideConfig.texts.progress.split("{index}").join(`${progress.step + 1}`).split("{total}").join(`${guideStepCount()}`);
     this.layoutBubble(screen.width, screen.height, hole);
-    this.layoutSkipButton();
+    this.layoutButtons();
   }
 
   /**
@@ -192,21 +193,54 @@ export default class GuideOverlay extends Node {
     this.bubble.setPosition(x, y, 0);
   }
 
-  /** 跳过按钮贴气泡右下角（按钮尺寸取它自己的 UITransform，不在这里猜） */
-  private layoutSkipButton(): void {
+  /**
+   * 气泡底部那一行：跳过（左）+ 下一步（右），右对齐贴气泡右缘
+   *
+   * 按钮尺寸一律取各自的 `UITransform`，不在这里猜；进度文字在左下角，两者共处底部一行，
+   * 水平方向互不重叠（守点在 test-guide 的排版区）。
+   */
+  private layoutButtons(): void {
     const layout = guideConfig.layout;
     const bubble = this.bubble.getComponent(UITransform);
     if (!bubble) return;
-    let skip = this.bubble.getChildByName(guideOverlayStyle.names.skip);
-    if (!skip) {
-      skip = GameUiHelper.createMiddleButton(guideOverlayStyle.names.skip, guideConfig.texts.skip, new Vec2(0, 0));
-      skip.on(Node.EventType.TOUCH_END, () => this.onSkip(), this);
-      this.bubble.addChild(skip);
-    }
+    const skip = this.ensureButton(guideOverlayStyle.names.skip, guideConfig.texts.skip, () => this.onSkip());
+    const next = this.ensureButton(guideOverlayStyle.names.next, guideConfig.texts.next, () => this.onNext());
+    const nextTransform = next.getComponent(UITransform);
+    const nextWidth = nextTransform ? nextTransform.width : 0;
+    const nextHeight = nextTransform ? nextTransform.height : 0;
+    const right = bubble.width / 2 - layout.bubblePadding;
+    const y = -bubble.height / 2 + layout.bubblePadding + nextHeight / 2;
+    next.setPosition(right - nextWidth / 2, y, 0);
     const skipTransform = skip.getComponent(UITransform);
-    const width = skipTransform ? skipTransform.width : 0;
-    const height = skipTransform ? skipTransform.height : 0;
-    skip.setPosition(bubble.width / 2 - layout.bubblePadding - width / 2, -bubble.height / 2 + layout.bubblePadding + height / 2, 0);
+    const skipWidth = skipTransform ? skipTransform.width : 0;
+    skip.setPosition(right - nextWidth - layout.buttonGap - skipWidth / 2, y, 0);
+    this.paintNextLabel();
+  }
+
+  /** 按需创建气泡上的按钮（第一次渲染时建，之后复用；节点名是「按名取子节点」的契约） */
+  private ensureButton(name: string, text: string, onClick: () => void): Node {
+    const existing = this.bubble.getChildByName(name);
+    if (existing) return existing;
+    const button = GameUiHelper.createMiddleButton(name, text, new Vec2(0, 0));
+    button.on(Node.EventType.TOUCH_END, onClick, this);
+    this.bubble.addChild(button);
+    return button;
+  }
+
+  /**
+   * 下一步按钮的文案：最后一步写「完成」
+   *
+   * 走完那一步之后点它就该结束，写「下一步」会让人以为后面还有内容；
+   * 文案只在配置里（`texts.next` / `texts.finish`），这里只负责按步数选一个。
+   */
+  private paintNextLabel(): void {
+    const label = this.bubble
+      .getChildByName(guideOverlayStyle.names.next)
+      ?.getChildByName(guideOverlayStyle.names.nextLabel)
+      ?.getComponent(Label);
+    const progress = GuideStore.current();
+    if (!label || !progress) return;
+    label.string = progress.step >= guideStepCount() - 1 ? guideConfig.texts.finish : guideConfig.texts.next;
   }
 
   /** 点跳过：落存档 + 飘一句（跳过与走完是两条不同的路，提示分开） */
@@ -215,7 +249,12 @@ export default class GuideOverlay extends Node {
     GameUiHelper.createTipText(guideConfig.texts.skipped);
   }
 
-  /** 气泡本体：底板 + 标题 + 正文 + 进度（跳过按钮在 layoutSkipButton 里挂，尺寸要等组件给） */
+  /** 点下一步：不看触发事件直接前进；走完那一步的飘字由 render 统一发 */
+  private onNext(): void {
+    GuideStore.next();
+  }
+
+  /** 气泡本体：底板 + 标题 + 正文 + 进度（两个按钮在 layoutButtons 里挂，尺寸要等组件给） */
   private createBubble(): Node {
     const layout = guideConfig.layout;
     const width = layout.bubbleWidth;
