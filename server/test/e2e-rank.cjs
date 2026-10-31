@@ -151,11 +151,29 @@ function roleData(id, name, level, extra = {}) {
   return { id, name, occupation: "1", sex: "1", level, hp: 100, mp: 50, equipments: {}, bag: [], skills: {}, ...extra };
 }
 
-/** 注册账号 + 建一个在线角色 */
+/** 注册账号 + 建一个在线角色；`level` 不是 1 时由管理端提级
+ *
+ * #554 起建号请求里的 `level` 被钉成出厂值 1（开号即满级那条口子焊死了），
+ * 所以「造一个 10 级号」必须两步：建号 → 管理端 PATCH。榜本身就是按等级 / 战力排的，
+ * 这套里几乎所有角色都要提级，提级令牌按服务缓存一份。
+ */
+const raiserTokens = new Map();
+
 async function preparePlayer(baseUrl, username, roleId, roleName, level, extra = {}) {
   const registered = await data(baseUrl, "POST", "auth/register", { body: { username, password: "pass1234" } });
   const token = registered && registered.token;
-  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName, level, extra) } });
+  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName, 1, extra) } });
+  if (level !== 1) {
+    // 提级令牌**按服务分别缓存**：这套会起第二台服务（独立库），令牌跨服务用会得到「管理员账号不存在」
+    let raiserToken = raiserTokens.get(baseUrl);
+    if (!raiserToken) {
+      raiserToken = await registerAdmin(baseUrl, "rank_raiser", "Admin#1234");
+      raiserTokens.set(baseUrl, raiserToken);
+    }
+    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: raiserToken, body: { level } });
+    const code = raised && raised.body && raised.body.code;
+    if (code !== 0) throw new Error(`提等级失败 ${roleId} → ${level}：${raised && raised.body && raised.body.message}`);
+  }
   return { token, roleId, name: roleName };
 }
 

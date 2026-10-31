@@ -32,6 +32,9 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 /** 队伍上限压到 3：四个人就能撞满员，不必凑六个账号 */
 const PARTY_LIMIT = 3;
 
+/** 管理端注册码：造高等级号要提级（#554 后建号恒 1 级），提级得用管理端令牌 */
+const ADMIN_REGISTER_CODE = "e2e-party-admin-code";
+
 //#region 断言小工具（与 e2e-chat / e2e-blocks 同款口径）
 
 const failures = [];
@@ -148,6 +151,8 @@ async function startServer(dbPath, extraEnv = {}) {
       SOCIAL_BLOCK_CACHE_MS: "0",
       // 本套靠 mapId 判「同图分经验」，位置过期线拉长到 60 秒（waitFor 的空档会跨过默认 3 秒）
       MONSTER_AI_POS_STALE_MS: "60000",
+      // 提级要用管理端接口（#554：建号等级钉成出厂值，造高级号只能建号 → PATCH）
+      ADMIN_REGISTER_CODE,
       ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -193,12 +198,38 @@ function roleData(id, name, level, skills) {
   return { id, name, occupation: "1", sex: "1", level, hp: 100, mp: 50, equipments: {}, bag: [], skills };
 }
 
-/** 注册账号 + 建一个在线角色，返回 { token, roleId } */
+/** 注册账号 + 建一个在线角色，返回 { token, roleId }
+ *
+ * `level` 不是 1 时**由管理端提到该等级**：#554 起建号请求里的 `level` 会被钉成出厂值 1
+ * （改包建号即满级那条口子焊死了），所以「造一个 12 级队友」只能建号 → PATCH。
+ */
 async function preparePlayer(baseUrl, username, roleId, roleName, level = 1, skills = { "1000": 1 }) {
   const reg = await api(baseUrl, "POST", "auth/register", { body: { username, password: "pass1234" } });
   const token = reg.data && reg.data.token;
-  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName, level, skills) } });
+  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName, 1, skills) } });
+  if (level !== 1) await raiseLevel(baseUrl, roleId, level);
   return { token, roleId };
+}
+
+/** 管理端令牌（按服务缓存一份：这套只拿它做提等级） */
+const adminTokens = new Map();
+
+async function adminTokenOf(baseUrl) {
+  if (adminTokens.has(baseUrl)) return adminTokens.get(baseUrl);
+  const reg = await api(baseUrl, "POST", "admin/auth/register", {
+    body: { username: "party_gm", password: "Admin#1234", registerCode: ADMIN_REGISTER_CODE },
+  });
+  const token = reg.data && reg.data.token;
+  adminTokens.set(baseUrl, token);
+  return token;
+}
+
+/** 管理端把角色提到指定等级（#554 之后唯一的正规提级路径） */
+async function raiseLevel(baseUrl, roleId, level) {
+  const token = await adminTokenOf(baseUrl);
+  const res = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token, body: { level } });
+  if (!res || res.code !== 0) throw new Error(`提等级失败 ${roleId} → ${level}：${res && res.message}`);
+  return res;
 }
 
 /** 一条收集全部帧的 WS 连接（队伍 / 邀请 / 经验 / 互见 / 结算 / 错误都留档） */
