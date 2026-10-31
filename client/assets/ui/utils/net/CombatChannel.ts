@@ -311,6 +311,10 @@ export interface RoleAuthorityUpdate {
   bindGold: number;
   silver: number;
   combat: number;
+  /** 成长线阶位（#551）：称号 / 战魂 / 军衔 —— 后台改完不重进也能看到 */
+  title?: number;
+  soulOfWar?: number;
+  rank?: number;
   maxHp?: number;
   hpRecover?: number;
   maxMp?: number;

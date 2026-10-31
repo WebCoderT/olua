@@ -439,6 +439,7 @@ export default class StorageManager {
    * 战斗力 / 八项属性 / 货币 / 等级血蓝**照搬不算**——这是「客户端只演」在角色数值上的落点：
    * 换装、任务/成就/邮件发奖、商城、成长线升级、后台改动、升级，全部由服务端重算后
    * 经这一帧汇合到本地。区间属性缺省（等级不在成长曲线的边角存档）时不动对应字段。
+   * 成长线阶位（称号 / 战魂 / 军衔）自 #551 起也走这一帧 —— 后台改完不重进就生效。
    * 只刷新显示、**不触发存档**：帧的内容就是服务端现状，推回去是白推还多占一个防抖节拍。
    */
   static applyServerRoleUpdate(update: RoleAuthorityUpdate): void {
@@ -461,11 +462,22 @@ export default class StorageManager {
     if (update.physicalDefense) role.physicalDefense = [update.physicalDefense[0], update.physicalDefense[1]];
     if (update.magicDefense) role.magicDefense = [update.magicDefense[0], update.magicDefense[1]];
     if (update.taoistDefense) role.taoistDefense = [update.taoistDefense[0], update.taoistDefense[1]];
+    // 成长线阶位（#551）：运营在后台改了称号 / 战魂 / 军衔，不重进也要看得见。
+    // 三者的外显方式不同，所以先记下「哪一项真的变了」：
+    // - 军衔 = 头顶那行红字，`updateUi` → `updateRoleData` → `updateHead` 会带出来；
+    // - 称号 / 战魂 = 按角色数据**重建动画**，重建一次就闪一下，只在变了时才调
+    const titleChanged = update.title !== undefined && update.title !== role.title;
+    const soulChanged = update.soulOfWar !== undefined && update.soulOfWar !== role.soulOfWar;
+    if (update.title !== undefined) role.title = update.title;
+    if (update.soulOfWar !== undefined) role.soulOfWar = update.soulOfWar;
+    if (update.rank !== undefined) role.rank = update.rank;
     role.hp = Math.min(role.hp, role.maxHp);
     role.revision = update.revision;
     this.updateUi(role);
     // 角色信息弹窗开着的话，属性列表与战斗力一起跟上（升级/换装的面板刷新缺口在这补上）
     RoleUIManager.refreshRoleAttributes();
+    if (titleChanged) RoleUIManager.updateTitleShow();
+    if (soulChanged) RoleUIManager.updateSoulShow();
   }
 
   /**

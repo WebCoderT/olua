@@ -279,9 +279,19 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - **守卫**：`tools/audit-role-authority.cjs`（第 13 项）—— 清单字段在客户端实体里有、`save`/`create` 挂了边界、
   **客户端对这些字段的赋值只能来自服务端应答**。第三条按 `role.` 接收者匹配（`level` 这个词满仓都是：
   任务目标的 `this.level`、怪物的 `monster.level`），右值里**引用**了 `update.` / `reward.` / `gain.` 等就算放行。
-- **客户端不许有本地加经验路径**（#550 删干净了：泡点组件 `AutoUpgrade` 没人挂、`MonsterManager.hurt` 零调用、
-  世界快照的兜底清场曾借 `applyDamage` 的 else 分支**白送经验**）。实时通道不可用时就是不给经验 ——
-  那条路上连伤害与掉落都不结算，留一条「只有经验能本地加」的口子等于给改包留门。
+- **客户端不许有本地加经验路径**（#550）：`onlineRoleGetExp` / `awardKillExp` 已删；`MonsterManager.hurt`
+  保留但**只演伤害**（技能在实时通道不活跃时的兜底出手，早先按「零调用」判死代码被打回过 ——
+  调用走 `SkillMonsterProvider` 接口，按实现类搜不到）；世界快照的兜底清场曾借 `applyDamage` 的 else 分支
+  **白送经验**，那个分支已删。泡点 `AutoUpgrade` 组件已删，`ActivityController` 的开关保留并 warn
+  （它是运行时 `addComponent` 挂的，不是死组件；要恢复得做成服务端 tick）。
+- **`roleUpdate` 帧带什么**（`realtime.service.ts` 的 `buildRoleUpdate`）：等级 / 经验 / 血蓝 / 三货币 /
+  战斗力 / 八项属性 / **成长线三件套 `title`+`soulOfWar`+`rank`（#551）** / 修订号。
+  加字段时两条纪律：① 客户端 `CombatChannel.RoleAuthorityUpdate` 是**手写副本**（实时协议没有生成器），
+  不同步就是「服务端推了、客户端读不到」；② 客户端落值后**只在该字段变了时**重建外显
+  （称号 / 战魂是按角色数据重建动画，每帧重建会闪；军衔是头顶那行字，`updateUi → updateHead` 自动带出）。
+- **回归门槛**：给权威清单加字段时，先 `grep` 一遍 e2e 里拿它造场景的地方 —— #550 一口气踩了四套
+  （roles / e2e / combat / rank 都在用「存档改等级」当「改点东西」的载体），全部要改成管理端 `PATCH`
+  或建号直接给。`level` 在 `AdminPatchRoleDto` 里本来就有，不必新开接口。
 
 ### 四之五、游戏事件总线：进度采集点唯一（#401）
 
