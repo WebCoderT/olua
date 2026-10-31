@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { adminRoleLabel, authApi, PERMISSION } from "../api";
 import { APP_TITLE } from "../api/config";
 import { clearSession, hasPermission, readAdmin, readToken, saveSession, subscribeSession } from "../store/session";
@@ -49,9 +49,19 @@ const NAV_ITEMS = [
  *
  * 进来先静默拉一次「当前管理员」：令牌过期 / 被停用时请求层会统一把人送回登录页；
  * 同时把最新的角色与权限点写回会话（管理员被降权后刷新即可看到界面跟着变）。
+ *
+ * ## 高度：整页不滚，各区域自己滚
+ * 外层锁死一屏（`h-screen overflow-hidden`），导航栏与内容区各自 `overflow-y-auto`：
+ * 导航项再多也只滚那条侧栏，顶栏身份信息始终看得见；换页面时滚动的只有内容区，
+ * 侧栏与顶栏不会跟着上下跑。`min-h-0` 是必须的 —— flex 子项的默认 `min-height:auto`
+ * 会让它撑到内容高度，`overflow-y-auto` 就永远不触发（表现为「整页越滚越长」）。
+ * 弹窗都是 `fixed`，不受这里的 `overflow-hidden` 影响。
  */
 export function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const [admin, setAdmin] = useState(readAdmin());
 
   useEffect(() => {
@@ -75,6 +85,26 @@ export function Layout() {
   // 会话变化（「我的账号」里改完密码换了新令牌 / 被重置后清会话）→ 顶部身份栏跟着刷新
   useEffect(() => subscribeSession(setAdmin), []);
 
+  /**
+   * 换页面时的两件收尾
+   *
+   * 1. **内容区回顶部**：滚动容器换成了 `main`（不是文档），浏览器那套「换 URL 自动回顶」
+   *    就管不着了 —— 不复位的话从长列表点进下一页会停在半空。
+   * 2. **导航把当前项滚进视野**：29 项里点第 25 项，刷新后当前项在侧栏可视区外，
+   *    看着像「没有任何菜单被选中」。只挪到刚好可见（nearest），不把整列甩到顶。
+   */
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+    const nav = navRef.current;
+    // NavLink 选中时自带 aria-current="page"，不用另查 class
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !active) return;
+    const navBox = nav.getBoundingClientRect();
+    const itemBox = active.getBoundingClientRect();
+    if (itemBox.top < navBox.top) nav.scrollTop -= navBox.top - itemBox.top;
+    else if (itemBox.bottom > navBox.bottom) nav.scrollTop += itemBox.bottom - navBox.bottom;
+  }, [location.pathname]);
+
   const logout = () => {
     clearSession();
     navigate("/login", { replace: true });
@@ -83,10 +113,10 @@ export function Layout() {
   const visibleNav = NAV_ITEMS.filter((item) => !item.permission || hasPermission(item.permission));
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-slate-800 bg-slate-900/50 px-4 py-6">
-        <p className="px-2 text-sm font-semibold tracking-wide text-slate-100">{APP_TITLE}</p>
-        <nav className="mt-6 flex flex-col gap-1">
+    <div className="flex h-screen overflow-hidden">
+      <aside className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900/50 px-4 py-6">
+        <p className="shrink-0 px-2 text-sm font-semibold tracking-wide text-slate-100">{APP_TITLE}</p>
+        <nav ref={navRef} className="mt-6 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
           {visibleNav.map((item) => (
             <NavLink
               key={item.to}
@@ -104,8 +134,8 @@ export function Layout() {
         </nav>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/30 px-6 py-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/30 px-6 py-4">
           <div className="min-w-0">
             <p className="flex items-center gap-2 truncate text-sm text-slate-300">
               当前管理员：<span className="font-medium text-slate-100">{admin?.username ?? "未知"}</span>
@@ -126,7 +156,7 @@ export function Layout() {
             </Button>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-6">
+        <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6 [scrollbar-gutter:stable]">
           <Outlet />
         </main>
       </div>

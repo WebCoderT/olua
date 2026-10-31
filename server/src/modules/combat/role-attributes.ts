@@ -16,26 +16,26 @@
  * 现在改这里没有任何对账网兜，唯一的安全网是 e2e-roles 的「权威覆盖」断言。
  *
  * ===========================================================================
- * 输入的数据全部来自生成物
+ * 输入的数据从哪来（#544 起口径变了）
  * ===========================================================================
- * 五张表全部取自那份 `@generated` 生成物（单一来源仍是 `client/assets/configs`）。
- * 这里只做查表与相加 —— **不做任何自行推算**。把算法照抄一份到服务端，
- * 正是这条线要消灭的事。
+ * 五张表都走 `shared/runtime-overrides` 的读取函数：**先查运营库覆盖层（管理端改过的
+ * 当前值），没有再回落到 `@generated` 生成物（出厂值）**。
  *
- * 生成物住在 `src/shared/`，与它同住的还有名字与元数据（职业 / 物品 / 槽位 / 地图…），
- * 管理端 import 的是**同一个文件**。此前算属性用的那份 `battle-rules.generated.ts` 已经
- * 并进它 —— 两份快照并存必然各自漂移，而它们的数据本来就是同一批。
+ * 这条改动之前，这里直接读生成物 —— 生成物是**编译期**快照，于是「管理端把某件装备的
+ * 攻击调到 20」在客户端生效（快照下发后 `apply-snapshot` 覆写），服务端算伤害还是 10：
+ * 面板与伤害分裂，且没有任何报错。覆盖层由 `RuntimeConfigService` 在启动时与管理端
+ * 每次写操作后装载。
+ *
+ * 数据来源仍是同一份（客户端的 `client/assets/configs` → 生成物），只是**真相搬到了库里**：
+ * 生成物回到「出厂值 + 兜底」的位置。
  */
 
 import {
   COMBAT_RANGE_KEYS,
   COMBAT_WEIGHTS,
-  EQUIPMENT_ATTRIBUTES,
-  RANK_LEVEL_ATTRIBUTES,
   ROLE_LEVEL_ATTRIBUTES,
-  SOUL_LEVEL_ATTRIBUTES,
-  TITLE_LEVEL_ATTRIBUTES,
 } from "../../shared/game-data.generated";
+import { equipmentAttributesOf, rankAttributesOf, soulAttributesOf, titleAttributesOf } from "../../shared/runtime-overrides";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */
 export interface RoleAttributeSource {
@@ -134,11 +134,9 @@ export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): {
 
   const equipmentBundles = collectEquipmentBundles(source.equipments, notes);
   // 战魂 / 称号 / 军衔：三项都是「当前等级提供整份加成，未激活（< 1）则不加成」
-  const extras = [
-    lookupLevelBundle(SOUL_LEVEL_ATTRIBUTES, source.soulOfWar),
-    lookupLevelBundle(TITLE_LEVEL_ATTRIBUTES, source.title),
-    lookupLevelBundle(RANK_LEVEL_ATTRIBUTES, source.rank),
-  ].filter((bundle): bundle is GeneratedBundle => bundle !== null);
+  const extras = [soulAttributesOf(source.soulOfWar), titleAttributesOf(source.title), rankAttributesOf(source.rank)].filter(
+    (bundle): bundle is GeneratedBundle => bundle !== null,
+  );
 
   // maxHp / hpRecover 是单值，六项攻防是 [下限, 上限] 元组 —— 两条路径，别合并着写
   let maxHp = singleOf(levelBundle, "maxHp", 0);
@@ -229,16 +227,10 @@ function lookupGeneratedBundle(table: GeneratedBundle, level: number): Generated
 /**
  * 按「客户端的等级语义」查战魂 / 称号 / 军衔表
  *
- * 生成物里这三张表的键是**来源数组的下标**，而客户端 `getXxxLevel(n)` 取的是
- * `config.level === n` 那一项（等级从 1 起）—— 两者差一位。这里是那一位的唯一去处
- *（原由 `audit-combat-parity` 全量遍历每个等级保证没写反；该审计已删，写反只会在
- * 玩家升级时以「属性没涨」的形式暴露，改前先在 e2e-roles 里补断言）。
+ * 已迁走：这套查表（含「生成物键是下标、等级从 1 起，两者差一位」的转换）搬进了
+ * `shared/runtime-overrides` 的 `titleAttributesOf` / `soulAttributesOf` / `rankAttributesOf`
+ * —— 那里同时承担「先查运营库覆盖层、再回落生成物」，转换只留一处，不会两边各写一份。
  */
-function lookupLevelBundle(table: GeneratedBundle, level: number | undefined): GeneratedBundle | null {
-  const value = Number(level);
-  if (!Number.isFinite(value) || value < 1) return null; // 未激活（0 / undefined）→ 不加成
-  return lookupGeneratedBundle(table, value - 1);
-}
 
 /** 收集穿戴装备的属性包（查不到的 id 跳过，但记进 notes） */
 function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], notes: RoleAttributeNotes): GeneratedBundle[] {
@@ -246,7 +238,8 @@ function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], 
   const bundles: GeneratedBundle[] = [];
   for (const id of Object.values(equipments)) {
     if (typeof id !== "string" || id === "") continue; // 空槽位
-    const bundle = EQUIPMENT_ATTRIBUTES[id as keyof typeof EQUIPMENT_ATTRIBUTES];
+    // 先查运营库覆盖层（管理端改过就是新值），没有再提出厂属性 —— 两端同一份数字
+    const bundle = equipmentAttributesOf(id);
     if (!bundle) {
       notes.unknownEquipmentIds.push(id);
       continue;

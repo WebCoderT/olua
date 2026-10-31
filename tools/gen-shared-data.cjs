@@ -222,6 +222,10 @@ function buildSnapshot(cfg) {
     equipmentSlotOrder: pickMap(cfg.equipments.equipmentSlotOrder),
     equipmentPrefixLabels: cfg.equipments.equipmentPrefixLabels.map(String),
     equipmentSuffixLabels: cfg.equipments.equipmentSuffixLabels.map(String),
+    // 前后缀**属性倍率**（#544）：客户端用它展开 555 个变体；服务端拿运营改过的
+    // 基础件重算变体属性时必须是同一组数字，否则「管理端改一件、服务端算另一件」
+    equipmentPrefixRates: pickRates("equipmentPrefixRates", cfg.growth.equipmentPrefixRates, cfg.equipments.equipmentPrefixLabels),
+    equipmentSuffixRates: pickRates("equipmentSuffixRates", cfg.growth.equipmentSuffixRates, cfg.equipments.equipmentSuffixLabels),
     equipmentDisplayNames: pickEquipmentNames(cfg.equipmentMaps, cfg.equipments),
     equipmentSlotOf: pickEquipmentSlots(cfg.equipmentMaps),
     soulLabels: pickList(cfg.soul, (item) => String(item.label ?? "")),
@@ -972,6 +976,23 @@ function pickGrowthScalars(growth, expGain) {
   return out;
 }
 
+/**
+ * 装备前后缀的属性倍率（#544）
+ *
+ * 与 `*_LABELS` 一一对应（下标 = 前后缀序号）：长度对不上就说明客户端改了枚举却没补倍率，
+ * 那种情况下「某档前缀没有倍率」会静默变成 1（= 白升一档），所以这里直接抛错。
+ */
+function pickRates(name, rates, labels) {
+  if (!Array.isArray(rates) || rates.length === 0) throw new Error(`configs/growth 的 ${name} 为空`);
+  if (labels && rates.length !== labels.length) {
+    throw new Error(`configs/growth 的 ${name}（${rates.length} 项）与前后缀名（${labels.length} 项）长度不一致`);
+  }
+  return rates.map((value, index) => {
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`configs/growth 的 ${name}[${index}] 不是正数：${value}`);
+    return round(value);
+  });
+}
+
 const tuple = (value) => (Array.isArray(value) ? [round(value[0]), round(value[1])] : [0, 0]);
 const round = (value) => (Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0);
 
@@ -1078,6 +1099,12 @@ export const EQUIPMENT_PREFIX_LABELS: string[] = ${literal(s.equipmentPrefixLabe
 
 /** 装备后缀名（下标 = 后缀序号，如 0 → 人级） */
 export const EQUIPMENT_SUFFIX_LABELS: string[] = ${literal(s.equipmentSuffixLabels, "  ")};
+
+/** 装备前缀属性倍率（下标 = 前缀序号，与 EQUIPMENT_PREFIX_LABELS 对齐；变体属性 = 基础件属性 × 前缀倍率 × 后缀倍率） */
+export const EQUIPMENT_PREFIX_RATES: number[] = ${literal(s.equipmentPrefixRates, "  ")};
+
+/** 装备后缀属性倍率（下标 = 后缀序号，与 EQUIPMENT_SUFFIX_LABELS 对齐） */
+export const EQUIPMENT_SUFFIX_RATES: number[] = ${literal(s.equipmentSuffixRates, "  ")};
 
 //#endregion
 `;

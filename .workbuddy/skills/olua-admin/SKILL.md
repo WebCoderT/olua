@@ -234,6 +234,34 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - **没有裸模内观素材**：未穿衣服时客户端不画身体，所以 id 形态里没有 `role:*`（服务端用
   `equipInAlignId` 正则挡掉，e2e 用 `role:1` → 400 钉住）。
 
+## 五点十、版式：整页一屏，超出只让**那个区域**滚
+
+后台骨架（`components/Layout.tsx`）不是「整页往下滚」，而是**外壳锁死一屏 + 三个区域各自滚**：
+
+| 区域 | 行为 |
+|---|---|
+| 外层 `<div>` | `h-screen overflow-hidden` —— 文档高度恒等于视口（`documentElement.scrollHeight === clientHeight`） |
+| 左侧 `<aside>` | `overflow-hidden` + 标题 `shrink-0`；里面 `<nav>` 是 `min-h-0 flex-1 overflow-y-auto`，**29 项菜单全在这条侧栏里滚** |
+| 顶栏 `<header>` | `shrink-0`，永远可见（不随内容滚走） |
+| 内容 `<main>` | `min-h-0 min-w-0 flex-1 overflow-y-auto`，页面内容再长也只滚这一块 |
+
+三条容易写错的地方：
+
+1. **`min-h-0` 是必需的**：flex 子项默认 `min-height: auto`，会被内容撑到自然高度，`overflow-y-auto`
+   就永远不触发 —— 表现为「明明写了 overflow，整页还是越滚越长」。`flex-1` + `min-h-0` 才是「占满剩余高度」。
+2. **换页面要手动把 `main` 滚回顶部**：滚动容器从文档变成了 `main`，浏览器「换 URL 自动回顶」管不着它。
+   `Layout` 里按 `location.pathname` 做 `mainRef.current.scrollTo({ top: 0 })`，否则从长列表点下一页会停在半空。
+3. **当前导航项要滚进视野**：菜单一屏放不下时，直接进 `/system` 看不到自己被高亮在哪。
+   `NavLink` 选中自带 `aria-current="page"`，按它的矩形与 nav 的可视矩形做「nearest」微调（不把整列甩到顶）。
+
+新增页面只要遵守一条：**根元素用 `flex flex-col gap-4`，别写 `h-screen` / `min-h-screen`**
+（那是给登录 / 注册这类独立整页用的）。需要「页内某块自己滚」时才加 `max-h-* + overflow-auto`
+（现状：弹窗 `max-h-[90vh] overflow-y-auto`、两个对齐工作台的侧边列表 `max-h-[520/560px] overflow-auto`）。
+
+验证不看代码看实测（探针 `/tmp` 脚本口径，量三个数）：文档 `scrollHeight === clientHeight`、
+`nav.scrollHeight > nav.clientHeight`（1440×620 下必成立）、`main.scrollHeight > main.clientHeight`，
+再滚 `main` 断言 `header.top` 与首个导航项 `top` 不变。
+
 ## 六、必踩的坑
 
 1. **生成的类型必须是 `type` 不是 `interface`**。`interface` 没有隐式索引签名，赋给请求层的 `Record<string, string | number | null | undefined>`（query 参数）会被 TS 拒。生成器已经统一产出 `export type X = { ... }`，别再手写回 interface。

@@ -22,6 +22,7 @@ import { RoleAchievementRepository } from "../../database/repositories/role-achi
 import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
+import { RuntimeConfigService } from "./runtime-config.service";
 import {
   DrugRow,
   EquipmentRow,
@@ -122,6 +123,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly questProgressRepo: QuestProgressRepository,
     private readonly achievementsRepo: AchievementRepository,
     private readonly roleAchievementsRepo: RoleAchievementRepository,
+    private readonly runtime: RuntimeConfigService,
   ) {}
 
   /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
@@ -140,6 +142,20 @@ export class GameConfigService implements OnModuleInit {
     this.seedMonsterSkills();
     this.seedQuests();
     this.seedAchievements();
+  }
+
+  /**
+   * 写完库立刻把运营库的当前值装进结算层（#544）
+   *
+   * 「管理端保存 → 服务端下一次结算就按新值」靠这一行成立。只在这六张表（称号 / 战魂 /
+   * 军衔 / 装备 / 药品 / 技能）的写操作后调用 —— 它们进了 `shared/runtime-overrides`
+   * 的覆盖层；其余表（怪物 / 掉落 / 商城 / 成长）本来就是**直读库**的，不需要刷新。
+   *
+   * 全量重装而不是增量：数据量是「37 件装备 + 34 级称号 + …」这个级别，几十毫秒，
+   * 换来的是「永不漏刷」——漏一处就是「保存了但没生效」这种最费时的 bug。
+   */
+  private touchRuntime(): void {
+    this.runtime.refreshAll();
   }
 
   // —— 称号 ——
@@ -179,6 +195,7 @@ export class GameConfigService implements OnModuleInit {
       updated_at: Date.now(),
     };
     this.titles.update(next);
+    this.touchRuntime();
     return TitleDto.from(this.requireTitle(level));
   }
 
@@ -209,6 +226,7 @@ export class GameConfigService implements OnModuleInit {
     }
     const orderByLevel = new Map(dto.levels.map((value, index) => [value, index + 1]));
     this.titles.reassignUpgradeOrders([...orderByLevel].map(([value, order]) => ({ level: value, order })));
+    this.touchRuntime();
     return this.listUpgradeTitles();
   }
 
@@ -243,6 +261,7 @@ export class GameConfigService implements OnModuleInit {
       updated_at: Date.now(),
     };
     this.souls.update(next);
+    this.touchRuntime();
     return SoulDto.from(this.requireSoul(level));
   }
 
@@ -270,6 +289,7 @@ export class GameConfigService implements OnModuleInit {
     }
     const orderByLevel = new Map(dto.levels.map((value, index) => [value, index + 1]));
     this.souls.reassignUpgradeOrders([...orderByLevel].map(([value, order]) => ({ level: value, order })));
+    this.touchRuntime();
     return this.listUpgradeSouls();
   }
 
@@ -304,6 +324,7 @@ export class GameConfigService implements OnModuleInit {
       updated_at: Date.now(),
     };
     this.ranks.update(next);
+    this.touchRuntime();
     return RankDto.from(this.requireRank(level));
   }
 
@@ -338,6 +359,7 @@ export class GameConfigService implements OnModuleInit {
       updated_at: Date.now(),
     };
     this.equipments.update(next);
+    this.touchRuntime();
     return EquipmentDto.from(this.requireEquipment(id));
   }
 
@@ -372,6 +394,7 @@ export class GameConfigService implements OnModuleInit {
       updated_at: Date.now(),
     };
     this.drugs.update(next);
+    this.touchRuntime();
     return DrugDto.from(this.requireDrug(id));
   }
 
@@ -546,6 +569,7 @@ export class GameConfigService implements OnModuleInit {
     if (touchesConsistency) this.assertSkillConsistency(next);
     next.updated_at = Date.now();
     this.skillsRepo.update(next);
+    this.touchRuntime();
     return SkillDto.from(this.requireSkill(id));
   }
 
@@ -594,6 +618,7 @@ export class GameConfigService implements OnModuleInit {
     };
     this.assertSkillConsistency(row);
     this.skillsRepo.insert(row);
+    this.touchRuntime();
     return SkillDto.from(this.requireSkill(dto.id));
   }
 
@@ -615,6 +640,7 @@ export class GameConfigService implements OnModuleInit {
       throw new BizException(BizCode.PARAM_INVALID, `技能 ${id} 仍被 ${refs} 只怪挂载，先解绑再删`);
     }
     this.skillsRepo.remove(id);
+    this.touchRuntime();
     return { deleted: true };
   }
 

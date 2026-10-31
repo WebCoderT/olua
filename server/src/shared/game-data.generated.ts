@@ -4825,4 +4825,16 @@ export const EQUIPMENT_SUFFIX_LABELS: string[] = ["人级",
   "天级",
   "神级"];
 
+/** 装备前缀属性倍率（下标 = 前缀序号，与 EQUIPMENT_PREFIX_LABELS 对齐；变体属性 = 基础件属性 × 前缀倍率 × 后缀倍率） */
+export const EQUIPMENT_PREFIX_RATES: number[] = [1,
+  1.1,
+  1.2,
+  1.3,
+  1.4];
+
+/** 装备后缀属性倍率（下标 = 后缀序号，与 EQUIPMENT_SUFFIX_LABELS 对齐） */
+export const EQUIPMENT_SUFFIX_RATES: number[] = [1,
+  2,
+  3];
+
 //#endregion

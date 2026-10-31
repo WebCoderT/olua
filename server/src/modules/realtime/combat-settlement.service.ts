@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { GROWTH_SCALARS, SKILLS } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS } from "../../shared/game-data.generated";
+import { skillOf } from "../../shared/runtime-overrides";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
@@ -31,7 +32,8 @@ import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from 
  *   素材来自生成物的等级 / 装备 / 战魂 / 称号 / 军衔表）；
  * - 目标（怪物）：**世界服务持有的实例**（#35 起）—— 身份由服务端发牌（`worldJoin` 的
  *   instanceId），血量 / 存活都在那里；战斗数值来自 monsters 表（#258 起后台可改，即时生效）；
- * - 技能倍率：生成物 `SKILLS`（`damageCoefficients` 下标 = 技能等级）。
+ * - 技能倍率：`skillOf`（先查运营库覆盖层，没改过用生成物 `SKILLS`；`damageCoefficients`
+ *   下标 = 技能等级）—— #544 起管理端改技能数值对结算即时生效。
  *
  * ===========================================================================
  * 目标状态的归属（#35 之后的边界）
@@ -158,8 +160,8 @@ export class CombatSettlementService {
   private settleNew(accountId: string, cast: ParsedCast): RealtimeSettleData {
     const fail = (code: string, message: string): RealtimeSettleData => ({ castId: cast.castId, ok: false, code, message });
 
-    // 技能：存在 + 已学习 + 该等级有伤害系数
-    const skill = SKILLS[cast.skillId as keyof typeof SKILLS];
+    // 技能：存在 + 已学习 + 该等级有伤害系数（先查运营库覆盖层，没改过就是出厂值）
+    const skill = skillOf(cast.skillId);
     if (!skill) return fail("unknown_skill", `技能不存在：${cast.skillId}`);
 
     // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，

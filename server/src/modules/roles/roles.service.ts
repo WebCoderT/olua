@@ -4,7 +4,8 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { GROWTH_SCALARS, ITEM_BASES, ITEM_TYPES, DRUGS, SELL_PRICES } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS, ITEM_TYPES, SELL_PRICES } from "../../shared/game-data.generated";
+import { drugOf, itemBaseOf } from "../../shared/runtime-overrides";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
@@ -452,8 +453,9 @@ export class RolesService {
     const bag = data.bag;
     if (!Array.isArray(bag)) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包数据不完整，无法放入物品");
     // 单格上限：装备没有叠加概念（1）；药品/材料从各自的表读 maxStack（#252/#255 起入库），读不到按 99
+    // #544 起先查运营库覆盖层：管理端改药品叠加上限对服务端入包即时生效
     const stackable = itemType !== "equipment";
-    const stackRow = stackable ? (DRUGS[goodId] ?? ITEM_BASES[goodId]) : undefined;
+    const stackRow = stackable ? (drugOf(goodId) ?? itemBaseOf(goodId)) : undefined;
     const maxStack = stackable ? Math.max(1, Math.floor(Number(stackRow && (stackRow as Record<string, unknown>).maxStack) || 99)) : 1;
 
     const placed: Array<{ row: number; col: number; id: string; count: number }> = [];
