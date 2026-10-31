@@ -387,7 +387,8 @@ async function main() {
       checkEqual(created.status, 201, "准备：给账号 A 建一个角色（自动在线）");
       const firstUpdate = await waitFor("首帧 roleUpdate", async () => messageOf(live, "roleUpdate"), 5_000);
       check(Boolean(firstUpdate), "建号后 roleUpdate 帧自动到达（权威基线不用客户端来拉）");
-      checkEqual(firstUpdate?.data?.level, 10, "快照带上等级");
+      // 建号上报的是 10 级，帧里必须是出厂值 1 —— 帧带的是**服务端的等级**，不是客户端报的那份（#554）
+      checkEqual(firstUpdate?.data?.level, 1, "快照带上服务端等级（上报 10 被钉成出厂值 1）");
       checkEqual(firstUpdate?.data?.gold, 1000, "快照带上货币");
       check(Array.isArray(firstUpdate?.data?.physicalAttack) && firstUpdate.data.physicalAttack.length === 2, "快照带八项属性（区间属性是 [下限, 上限]）");
       check(typeof firstUpdate?.data?.combat === "number" && firstUpdate.data.combat > 0, "快照的战斗力是服务端重算的");

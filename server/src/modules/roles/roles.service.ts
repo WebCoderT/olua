@@ -21,7 +21,7 @@ import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto"
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
 import { decodeStoredRoleData, normalizeLevel, parseRoleData } from "./role-data.util";
-import { clampInitialCurrency, clampVitals, enforceServerAuthority } from "./role-authority";
+import { clampInitialCurrency, clampVitals, enforceServerAuthority, pinInitialLevel } from "./role-authority";
 
 /** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
 export interface KillExpResult {
@@ -123,15 +123,23 @@ export class RolesService {
     const now = Date.now();
     // 建号的账本只能到「配置给的起点」（#548）：库里还没有值可比，这是唯一需要单独封上界的地方
     clampInitialCurrency(data);
+    // 建号等级钉成出厂值（#554）：这个字段在建号请求里没有任何合法用途，
+    // 放行等于「改个包就开号满级」——而且满级会越过等级曲线，让属性重算静默失效
+    const pinned = pinInitialLevel(data);
+    if (pinned.reported !== undefined && Number(pinned.reported) !== pinned.level) {
+      this.logger.warn(
+        `[roles] 建号等级被钉到 ${pinned.level}（客户端上报 ${pinned.reported}，role=${fields.id}）`,
+      );
+    }
     // 战斗属性与战斗力在落库前由服务端重算（权威值）：客户端给的只是占位/参考
-    this.applyAuthoritativeAttributes(fields.level, data);
+    this.applyAuthoritativeAttributes(pinned.level, data);
     const row: RoleRow = {
       id: fields.id,
       account_id: accountId,
       name: fields.name,
       occupation: fields.occupation,
       sex: fields.sex,
-      level: fields.level,
+      level: pinned.level,
       // 新角色的击杀数从 0 起（#400）：这一列只由结算路径 +1，创建时不给客户端任何话语权
       kills: 0,
       data: JSON.stringify(data),
@@ -899,10 +907,17 @@ export class RolesService {
    * #541 起客户端不再自己算这些值（它那份只是演），凡是服务端写档的路径都要经过这里，
    * 保证库里落的一定是服务端公式的结果。等级不在成长曲线里（旧存档边角）时跳过 ——
    * 保留原值总比把属性抹成 0 好。
+   *
+   * **跳过时必须留痕**（#554）：`ROLE_LEVEL_MAX` 是 1000、曲线只到 60，
+   * 管理端把等级改到曲线外（或改小了 roleMaxLevel）之后这里会全程静默 ——
+   * 属性从此不再重算，而界面上看不出任何异常。所以打一条 warn 把「没算」说出口。
    */
   private applyAuthoritativeAttributes(level: number, data: Record<string, unknown>): void {
     const summary = summarizeRoleAttributes(roleAttributeSourceOf(level, data));
-    if (!summary) return;
+    if (!summary) {
+      this.logger.warn(`[roles] 等级 ${level} 不在成长曲线内（当前上限 ${this.roleMaxLevel()}），战斗属性未重算`);
+      return;
+    }
     data.maxHp = summary.maxHp;
     data.hpRecover = summary.hpRecover;
     data.maxMp = summary.maxMp;

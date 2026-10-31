@@ -274,8 +274,13 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   文档里也有一份。所以 `save()` 里要按「表列压过文档」构造回填的 `stored`，
   回填后**再从文档重取一次** `normalizeLevel(data.level)` 去写 `row.level` ——
   漏了这一步，列表按客户端报的等级排、详情按库里的等级显示，两边各说一套。
-- **建号是唯一没有旧值可比的口子**：账本上界由 `clampInitialCurrency` 夹到 `ROLE_INITIAL_CURRENCY`。
-  **等级仍是 1~1000 的宽上界**（管理端 `PATCH` 不能改等级，测试造高级号靠建号时直接给），属未收口。
+- **建号是唯一没有旧值可比的口子**：账本上界由 `clampInitialCurrency` 夹到 `ROLE_INITIAL_CURRENCY`，
+  等级由 `pinInitialLevel` **直接钉成出厂值 1**（#554）。建号请求里的 `level` 没有任何合法用途 ——
+  正常客户端是 `new Role()` 构造的、恒为 1，放行等于「改个包就开号满级」。
+  满级不只是数字难看：`roles.level` 是索引列（门槛 / 排序 / 筛选全读它），而等级属性曲线只到 60 级，
+  **曲线外的等级算不出属性**，`applyAuthoritativeAttributes` 会跳过 —— 客户端自报的战斗力就这样绕过重算落了库。
+  所以那里现在**跳过必打 warn**（`ROLE_LEVEL_MAX` 是 1000，管理端 `PATCH level: 999` 也会走这条路）。
+  要提等级只有一条正规路径：管理端 `PATCH /admin/roles/:id`。
 - **守卫**：`tools/audit-role-authority.cjs`（第 13 项）—— 清单字段在客户端实体里有、`save`/`create` 挂了边界、
   **客户端对这些字段的赋值只能来自服务端应答**。第三条按 `role.` 接收者匹配（`level` 这个词满仓都是：
   任务目标的 `this.level`、怪物的 `monster.level`），右值里**引用**了 `update.` / `reward.` / `gain.` 等就算放行。
@@ -289,9 +294,11 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   加字段时两条纪律：① 客户端 `CombatChannel.RoleAuthorityUpdate` 是**手写副本**（实时协议没有生成器），
   不同步就是「服务端推了、客户端读不到」；② 客户端落值后**只在该字段变了时**重建外显
   （称号 / 战魂是按角色数据重建动画，每帧重建会闪；军衔是头顶那行字，`updateUi → updateHead` 自动带出）。
-- **回归门槛**：给权威清单加字段时，先 `grep` 一遍 e2e 里拿它造场景的地方 —— #550 一口气踩了四套
-  （roles / e2e / combat / rank 都在用「存档改等级」当「改点东西」的载体），全部要改成管理端 `PATCH`
-  或建号直接给。`level` 在 `AdminPatchRoleDto` 里本来就有，不必新开接口。
+- **回归门槛**：给权威清单加字段（或改建号口径）时，先 `grep` 一遍 e2e 里拿它造场景的地方 —— #550 一口气踩了四套
+  （roles / e2e / combat / rank 都在用「存档改等级」当「改点东西」的载体），全部要改成管理端 `PATCH`；
+  #554 又把「建号时直接给等级」这条造号路径删了，`e2e-roles` 里造 10 / 20 级角色改成 `raiseLevel()`
+  （建号 → 管理端 PATCH）。**造号只在 1 级落库，任何「建个 N 级号」的写法都是假绿**。
+  注意修订号：拿某个角色当修订号基线时，别对它多做一次 PATCH（多一次写库就把后面的数字全顶偏）。
 
 ### 四之五、游戏事件总线：进度采集点唯一（#401）
 
