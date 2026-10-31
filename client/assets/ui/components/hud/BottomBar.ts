@@ -1,8 +1,9 @@
-import { Node } from "cc";
+import { Node, UITransform, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
 import { SkillId } from "../../../types/skill";
 import { ShortcutKeys } from "../../../types/role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
+import { bottomBarLayout, uiImages } from "../../../configs/hudLayout";
 import { bottomNavItems } from "../../../configs/bottomNav";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
@@ -58,8 +59,10 @@ export default class BottomBar extends Node {
     // 注册弹窗，供数据层刷新：装备穿脱后的槽位/内观（StorageManager 装备变更流程）、背包显示（拾取/使用物品）
     RoleUIManager.registerRoleInfoDialog(this.roleInfoDialog);
     RoleUIManager.registerBagDialog(this.bagDialog);
-    // 底部栏主体（尺寸/位置/背景）
-    GameUiHelper.applyBottomBarBodyStyle(this);
+    // 底部栏主体（尺寸/位置/背景：固定值见 configs/hudLayout.bottomBar，改位置直接改配置）
+    this.addComponent(UITransform).setContentSize(bottomBarLayout.size);
+    this.setPosition(bottomBarLayout.position.x, bottomBarLayout.position.y, 0);
+    this.addChild(GameUiHelper.createImage("bottom_nav_bar_background", uiImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
     // 子组件
     this.navBar = new BottomNavBar(this.bottomNavBarButtons, role);
     this.addChild(this.navBar);
@@ -139,11 +142,6 @@ export default class BottomBar extends Node {
   /** 技能快捷键栏节点（引导「打怪」那一步指这里 —— 怪会跑，画个洞没意义） */
   shortcutNode(): Node | null {
     return this.shortcutKeyBar;
-  }
-
-  /** 贴边定位（贴屏幕底部居中；坐标是常量，创建时调一次） */
-  applyFixedPosition() {
-    GameUiHelper.setBottomBarPosition(this);
   }
 
   /** 更新指定快捷键槽的图标与绑定技能 */

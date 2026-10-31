@@ -73,13 +73,11 @@ import {
   equipmentSlotLayout,
   goodDetailLayout,
   hoverTipLayout,
-  joystickLayout,
   monsterInfoPanelLayout,
   roleAttributeListLayout,
   roleInfoBarLayout,
   roleSelectorLayout,
   skillListDialogLayout,
-  smallMapLayout,
   tipsLayout,
   uiImages,
   uiSize,
@@ -1021,14 +1019,9 @@ export default class GameUiHelper {
     graphics.stroke();
     // 窗体整体拦截指针：聊天窗底下是可点地的世界，盖住的区域不该再把点击漏给寻路
     blockClickThrough(node);
-    this.placeChatBox(node);
+    // 停靠左下角（固定值，见 chatDialogLayout.position；窗口缩放时由 ChatDialog.refreshDock 重贴）
+    node.setPosition(chatDialogLayout.position.x, chatDialogLayout.position.y, 0);
     return node;
-  }
-
-  /** 聊天小窗重贴停靠角（开小窗时由组合根调；关着的时候调用是 no-op，由调用方判空） */
-  static placeChatBox(node: Node) {
-    const { position } = chatDialogLayout;
-    node.setPosition(position.x, position.y, 0);
   }
 
   /**
@@ -2175,19 +2168,6 @@ export default class GameUiHelper {
 
   //#region 底部栏
 
-  /** 为已有节点施加底部栏主体样式（尺寸与背景见 hudLayout.bottomBar），节点由底部栏组件自身充当 */
-  static applyBottomBarBodyStyle(node: Node) {
-    node.addComponent(UITransform).setContentSize(bottomBarLayout.size);
-    this.setBottomBarPosition(node);
-    node.addChild(UiHelper.createSprite("bottom_nav_bar_background", uiImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
-  }
-
-  /** 底部栏定位（固定值，见 hudLayout.bottomBar.position —— 主界面布局不再按屏幕尺寸换算，直接改配置手调） */
-  static setBottomBarPosition(node: Node) {
-    const { position } = bottomBarLayout;
-    node.setPosition(position.x, position.y, 0);
-  }
-
   /**
    * 创建血量/魔法值文字零件
    * 位置/尺寸/字号由调用方传自各自球布局的 text（见 hudLayout.bottomBar.hpOrb.text / mpOrb.text，
@@ -2215,32 +2195,6 @@ export default class GameUiHelper {
     hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
     barSprite.addChild(hpBar);
     return { barSprite, hpBar };
-  }
-
-  //#endregion
-
-  //#region 操作摇杆
-
-  /**
-   * 为已有节点施加操作摇杆样式（底座 + 可拖动手柄，尺寸见 hudLayout.joystickLayout）
-   * @param node 摇杆主体节点（由摇杆组件自身充当：尺寸即触摸命中的范围）
-   * @returns 手柄节点（拖动时由输入层摆位，见 components/input/RoleJoystickInput）
-   */
-  static applyJoystickBodyStyle(node: Node): Node {
-    const { size, handleSize } = joystickLayout;
-    node.addComponent(UITransform).setContentSize(size);
-    node.addChild(UiHelper.createSprite("joystick_bg", uiImages.joystickBackground, new Vec2(), size));
-    // 手柄初始停在正中间（拖动位移由输入层写入；锚点在自身中心，位移即相对底座中心）
-    const handle = UiHelper.createSprite("joystick_handle", uiImages.joystickHandle, new Vec2(), handleSize);
-    node.addChild(handle);
-    this.setJoystickPosition(node);
-    return handle;
-  }
-
-  /** 操作摇杆定位（固定值，见 hudLayout.joystickLayout.position） */
-  static setJoystickPosition(node: Node) {
-    const { position } = joystickLayout;
-    node.setPosition(position.x, position.y, 0);
   }
 
   //#endregion
@@ -2422,16 +2376,6 @@ export default class GameUiHelper {
 
   //#region 怪物信息面板
 
-  /**
-   * 为已有节点施加怪物信息面板主体样式（尺寸、位置与背景见 hudLayout.monsterInfoPanel），节点由面板组件自身充当
-   * 背景资源见 uiImages.monsterInfoBackground
-   */
-  static applyMonsterInfoBodyStyle(node: Node) {
-    node.addComponent(UITransform).setContentSize(monsterInfoPanelLayout.size);
-    node.setPosition(monsterInfoPanelLayout.position.x, monsterInfoPanelLayout.position.y, 0);
-    node.addChild(UiHelper.createSprite("monster_info_background", uiImages.monsterInfoBackground, new Vec2(), monsterInfoPanelLayout.size));
-  }
-
   /** 创建怪物头像（左侧，取怪物图标；位置与尺寸见 hudLayout.monsterInfoPanel.avatar） */
   static createMonsterAvatar(monster: Monster, position: Vec2 = monsterInfoPanelLayout.avatar.position, size: Size = monsterInfoPanelLayout.avatar.size) {
     return UiHelper.createSprite("monster_avatar", monster.icon, position, size);
@@ -2464,22 +2408,6 @@ export default class GameUiHelper {
   //#endregion
 
   //#region 小地图
-
-  /**
-   * 为已有节点施加小地图主体样式（尺寸见 hudLayout.smallMap），节点由小地图组件自身充当
-   * 尺寸需容纳「左侧功能按钮列 + 名称条/地图/标签/坐标条」整块内容（子节点位置以地图内容区中心为原点）
-   */
-  static applySmallMapBodyStyle(node: Node) {
-    const uiTransform = node.addComponent(UITransform);
-    uiTransform.setContentSize(smallMapLayout.size);
-    this.setSmallMapPosition(node);
-  }
-
-  /** 小地图定位（固定值，见 hudLayout.smallMapLayout.position） */
-  static setSmallMapPosition(node: Node) {
-    const { position } = smallMapLayout;
-    node.setPosition(position.x, position.y, 0);
-  }
 
   /**
    * 创建小地图坐标点绘制层（单个 Graphics 节点，占满内容区）

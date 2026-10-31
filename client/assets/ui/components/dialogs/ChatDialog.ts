@@ -100,7 +100,7 @@ export default class ChatDialog {
 
   /** 重贴左下角（开小窗时由组合根调；关着时是 no-op） */
   refreshDock() {
-    if (this.dialog && isValid(this.dialog)) GameUiHelper.placeChatBox(this.dialog);
+    if (this.dialog && isValid(this.dialog)) this.dialog.setPosition(layout.position.x, layout.position.y, 0);
   }
 
   //#region 页签

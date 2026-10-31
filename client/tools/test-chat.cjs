@@ -224,7 +224,7 @@ try {
 
   // #469：聊天窗常驻左下角
   check(/open\(auto = false\)/.test(clientDialog) && /if \(!auto\) GuideStore\.notify/.test(clientDialog), "自动开窗不推进引导（程序代开不算「学会聊天」）");
-  check(/refreshDock/.test(clientDialog) && /placeChatBox/.test(clientDialog), "窗口缩放时聊天窗重贴左下角（停靠不漂移）");
+  check(/refreshDock/.test(clientDialog) && /layout\.position\.x[\s\S]{0,80}?layout\.position\.y/.test(clientDialog), "窗口缩放时聊天窗重贴左下角（直接读 chatDialogLayout.position，停靠不漂移）");
   check(/openChatBox\(true\)/.test(clientGame) && /offGuideChange/.test(clientGame), "组合根：引导不可见时自动开聊天窗，走完/跳过引导补开，离场退订");
 
   //#endregion

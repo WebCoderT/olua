@@ -98,8 +98,9 @@ export default class SmallMap extends Node {
     this.mapPreviewDialog = new MapPreviewDialog(roleDisplay);
     // 公告板自己拉公告；未读数变化通过回调回到这里（红点长什么样是 HUD 的事）
     this.announcementDialog = new AnnouncementBoardDialog((unread) => this.setAnnouncementUnread(unread));
-    // 主体（尺寸与屏幕右上角位置）
-    GameUiHelper.applySmallMapBodyStyle(this);
+    // 主体（尺寸与右上角固定位置：见 configs/hudLayout.smallMap，改位置直接改配置）
+    this.addComponent(UITransform).setContentSize(smallMapLayout.size);
+    this.setPosition(smallMapLayout.position.x, smallMapLayout.position.y, 0);
     this.createEntryButtons();
     this.createMapArea();
     this.createBottomInfo();
@@ -170,11 +171,6 @@ export default class SmallMap extends Node {
   }
 
   //#region 结构拼装
-
-  /** 贴边定位（贴屏幕右上角；坐标是常量，创建时调一次） */
-  applyFixedPosition() {
-    GameUiHelper.setSmallMapPosition(this);
-  }
 
   /** 左侧：功能入口按钮（单列竖排的纵向布局容器，整体对齐地图内容区中心） */
   private createEntryButtons() {

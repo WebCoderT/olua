@@ -181,7 +181,7 @@ export const smallMapLayout = {
 /** 怪物信息面板布局（坐标以面板中心为原点） */
 export const monsterInfoPanelLayout = {
   size: new Size(238, 71),
-  position: new Vec2(0, 330),
+  position: new Vec2(0, 480),
   /** 左侧头像（取怪物图标） */
   avatar: { position: new Vec2(-75, 0), size: new Size(60, 66) },
   /** 名称（左对齐） */

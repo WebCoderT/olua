@@ -14,7 +14,7 @@
  *    而 MOUSE_MOVE 注册在节点上会吞掉指针追踪与按住走路）
  * · 手柄位移被夹在可拖半径内、抬起/取消回中
  * · 主角的移动意图优先级：键盘 > 摇杆 > 鼠标；isManualMoving 也要认摇杆（自动战斗据此让位）
- * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、位置由 applyFixedPosition 读配置固定值（窗口变化不重排）
+ * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、位置由组件自己读配置固定值在构造时一次设好（窗口变化不重排）
  * · 「按压起点在界面元素上」的那次抬起不被世界侧当成点击（ScreenClickInput + Pointer.isUiPressOnUiElement）
  * · 几何自洽：手柄拖到最外圈不溢出底座；素材在 resources/main 且带 meta
  *
@@ -197,17 +197,17 @@ check(/new RoleJoystickInput\(/.test(roleDisplaySrc), "主角组件创建摇杆�
 check(/setJoystick\(stick: Node, handle: Node\)/.test(roleDisplaySrc), "主角组件开放 setJoystick（由组合根注入摇杆节点）");
 check(/isManualMoving\(\)[\s\S]{0,260}?joystickInput/.test(roleDisplaySrc), "isManualMoving 认摇杆（自动战斗据此让位）");
 
-// ---- HUD 组装与贴边 ----
-check(/applyJoystickBodyStyle/.test(joystickSrc) && /static applyJoystickBodyStyle/.test(gameUiHelperSrc), "摇杆零件由 GameUiHelper 施加（组件里不写尺寸/图片路径）");
+// ---- HUD 组装与定位 ----
 check(/get handleNode\(\)/.test(joystickSrc) && /get stickNode\(\)/.test(joystickSrc), "摇杆暴露底座与手柄两个节点给输入层");
-check(/applyFixedPosition\(\)\s*\{[\s\S]{0,120}?setJoystickPosition/.test(joystickSrc), "摇杆位置来自配置固定值（applyFixedPosition → setJoystickPosition，不做换算）");
 // 主界面 HUD 一律读配置里的固定坐标：谁再往定位里塞「贴边换算」，这里会红
 check(!/getAnchoredPosition\(/.test(gameUiHelperSrc), "主界面 HUD 定位不再走贴边计算（GameUiHelper 里没有 getAnchoredPosition 调用）");
 check(
-  /static setBottomBarPosition[\s\S]{0,120}?\{ position \} = bottomBarLayout/.test(gameUiHelperSrc) &&
-    /static setSmallMapPosition[\s\S]{0,120}?\{ position \} = smallMapLayout/.test(gameUiHelperSrc) &&
-    /static setJoystickPosition[\s\S]{0,120}?\{ position \} = joystickLayout/.test(gameUiHelperSrc),
-  "底部栏 / 小地图 / 摇杆三个定位方法都直接读配置 position（固定值，手调即生效）",
+  !/setBottomBarPosition|setJoystickPosition|setSmallMapPosition|applyBottomBarBodyStyle|applyJoystickBodyStyle|applySmallMapBodyStyle|applyMonsterInfoBodyStyle|placeChatBox/.test(gameUiHelperSrc),
+  "GameUiHelper 里旧的定位/主体样式转发方法已删净（各 HUD 组件直接读配置，不再绕一层）",
+);
+check(
+  /joystickLayout/.test(joystickSrc) && /setContentSize\(/.test(joystickSrc) && /setPosition\(/.test(joystickSrc) && !/applyFixedPosition/.test(joystickSrc),
+  "摇杆自己读 configs/hudLayout.joystickLayout 拼装主体与固定位置（构造时一次设好，没有转发方法）",
 );
 check(/new Joystick\(\)/.test(gameSrc) && /addToUILayer\(this\.joystick\)/.test(gameSrc), "组合根创建摇杆并挂到 UI 层");
 check(/setJoystick\(\s*this\.joystick\.stickNode,\s*this\.joystick\.handleNode\s*\)/.test(gameSrc), "组合根把摇杆节点注入主角组件");
