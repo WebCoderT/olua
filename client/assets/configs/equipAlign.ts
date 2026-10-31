@@ -7,7 +7,7 @@
  * 外观（场景里跟角色走的那套）的几何只认数据：管理端「装备对齐」工作台调好的
  * 8 向绝对位置经服务端 `game-config/equip-align` 每次进图下发（configs/apply-snapshot），
  * 客户端 `RoleAppearance.applyOutTransform` 原样摆上去 —— 曾经的「按身体帧内容 bbox
- * 自动贴握持点」算法（#505）已停用，因为它现场算出来的位置与工作台/服务端数据对不上，
+ * 自动贴握持点」算法（#505）已删除，因为它现场算出来的位置与工作台/服务端数据对不上，
  * 用户无法用工作台表达最终效果。本文件保留的纯函数仅供**内观**（RoleInShowView）
  * 与单测使用。
  *
@@ -61,17 +61,16 @@ export function handAnchor(body: ContentBox, onLeft: boolean): { x: number; y: n
 }
 
 /**
- * 外观：武器节点位置（宿主坐标）
+ * 武器节点位置（宿主坐标，内观用）
  *
  * 武器节点被摆到 `手部锚点 − 武器内容中心 × 缩放`，于是**武器的内容中心**正好落在握持点上。
  * 内容中心不等于节点中心（裁剪留白），所以必须减去 `weapon.cx/cy`，否则留白越多偏得越远。
  *
- * @param scale 武器缩放（outScale）
- * @param nudge 逐件微调（配置里的 outPositions，默认 0）
+ * @param scale 武器缩放
  */
-export function placeWeaponOnHand(body: ContentBox, weapon: ContentBox, scale: number, nudge: { x: number; y: number }, onLeft: boolean): { x: number; y: number } {
+export function placeWeaponOnHand(body: ContentBox, weapon: ContentBox, scale: number, onLeft: boolean): { x: number; y: number } {
   const hand = handAnchor(body, onLeft);
-  return { x: hand.x - weapon.cx * scale + nudge.x, y: hand.y - weapon.cy * scale + nudge.y };
+  return { x: hand.x - weapon.cx * scale, y: hand.y - weapon.cy * scale };
 }
 
 /**
@@ -81,6 +80,6 @@ export function placeWeaponOnHand(body: ContentBox, weapon: ContentBox, scale: n
  */
 export function placeInShowWeapon(body: ContentBox, weapon: ContentBox, onLeft = true): { x: number; y: number; scale: number } {
   const scale = (body.h * EQUIP_ALIGN.inWeaponHeightRatio) / weapon.h;
-  const pos = placeWeaponOnHand(body, weapon, scale, { x: 0, y: 0 }, onLeft);
+  const pos = placeWeaponOnHand(body, weapon, scale, onLeft);
   return { x: pos.x, y: pos.y, scale };
 }

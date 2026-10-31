@@ -100,8 +100,9 @@ export default class RoleAppearance {
     this.action = action;
     this.direction = direction;
     // 外观缩放与按方向的位置：朝向变化时也要更新，因此放在 play（换装后的 updateOutShow 最终也会走到这里）
+    // 衣服与武器同一套摆法（#541：外观只认数据 —— 工作台/服务端的 8 向绝对位置，武器没有独立的算法路径）
     this.applyOutTransform(this.cloth, this.clothTransform);
-    this.applyWeaponTransform();
+    this.applyOutTransform(this.weapon, this.weaponTransform);
     this.updateLayerOrder();
     if (actionNeedWeapon[action] && !this.weaponAnimate) return;
     const animationName = getAnimationName(action, direction);
@@ -118,7 +119,7 @@ export default class RoleAppearance {
     this.direction = direction;
     this.dead = true;
     this.applyOutTransform(this.cloth, this.clothTransform);
-    this.applyWeaponTransform();
+    this.applyOutTransform(this.weapon, this.weaponTransform);
     this.updateLayerOrder();
     const animationName = getAnimationName(ACTION.DIE, direction);
     this.clothAnimate?.crossFade(animationName, 0.1);
@@ -192,6 +193,13 @@ export default class RoleAppearance {
    * 应用外观变换（outScale / outPositions）
    * 位置数组按 configs/animation 的 directions 顺序取当前朝向的下标；
    * 数组缺该项时回落第一项，变换缺省（null）时回落到不缩放、不偏移
+   *
+   * 衣服与武器共用这一份（#541）：外观几何只认数据、不认算法 ——
+   * 管理端工作台调好、服务端 `game-config/equip-align` 每次进图下发的 8 向绝对位置
+   * 就是唯一真相（离线兜底是出厂配置里烧进去的同一份坐标）。
+   * 原先「按身体帧内容 bbox 自动贴握持点」的算法（#505）已整体删除：
+   * 它现场算出来的位置与工作台/服务端数据对不上。没有数据行且出厂配置全 0 的武器
+   * 会落在角色原点 —— 那是「未对齐」的诚实表现，去工作台调它，不要在客户端加算法兜底。
    */
   private applyOutTransform(node: Node, transform: OutTransform | null) {
     const scale = transform?.outScale ?? 1;
@@ -199,22 +207,6 @@ export default class RoleAppearance {
     const offset = positions?.[getDirectionIndex(this.direction)] ?? positions?.[0] ?? Vec2.ZERO;
     node.setScale(scale, scale, 1);
     node.setPosition(offset.x, offset.y, 0);
-  }
-
-  /**
-   * 武器位置：**直接摆到数据给的绝对位置**（#541）
-   *
-   * 外观几何只认数据、不认算法：管理端工作台按裸模调好的 8 向位置就是唯一真相
-   * （服务端 `game-config/equip-align` 每次进图下发，见 configs/apply-snapshot；
-   * 离线兜底是出厂配置 equipments.ts 里烧进去的同一份坐标）。
-   * 原先「按身体帧内容 bbox 自动贴握持点」的算法（#505）**整体停用**——
-   * 它现场算出来的位置与工作台/服务端数据对不上，用户无法用工作台表达最终效果。
-   * 注意：没有服务端行且出厂配置也是全 0 的武器会落在角色原点 —— 那是「未对齐」的诚实表现，
-   * 要么去工作台调它，要么等下发，不要在客户端给算法兜底。
-   */
-  private applyWeaponTransform() {
-    // 与衣服同一套摆法：缩放 + 按方向下标取绝对位置（transform 为 null 时不缩放、不偏移）
-    this.applyOutTransform(this.weapon, this.weaponTransform);
   }
 
   /** 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调） */

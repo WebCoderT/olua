@@ -34,8 +34,8 @@ try {
   const weaponShort = { cx: -22, cy: 12, w: 80, h: 60 };
 
   /** 摆完之后，武器内容中心（世界坐标）= pos + 内容偏移 × 缩放 */
-  const centerAfter = (body, weapon, scale, nudge, onLeft) => {
-    const pos = placeWeaponOnHand(body, weapon, scale, nudge, onLeft);
+  const centerAfter = (body, weapon, scale, onLeft) => {
+    const pos = placeWeaponOnHand(body, weapon, scale, onLeft);
     return { x: pos.x + weapon.cx * scale, y: pos.y + weapon.cy * scale };
   };
 
@@ -43,7 +43,7 @@ try {
     for (const [weaponName, weapon] of [["长武器 174", weaponTall], ["短武器 60", weaponShort]]) {
       for (const onLeft of [true, false]) {
         const hand = handAnchor(body, onLeft);
-        const center = centerAfter(body, weapon, 1, { x: 0, y: 0 }, onLeft);
+        const center = centerAfter(body, weapon, 1, onLeft);
         const dx = Math.abs(center.x - hand.x);
         const dy = Math.abs(center.y - hand.y);
         check(dx < 1e-6 && dy < 1e-6, `${bodyName} + ${weaponName} + ${onLeft ? "左手" : "右手"}：内容中心 = 握持点`, `偏差 (${dx.toFixed(3)}, ${dy.toFixed(3)})`);
@@ -64,10 +64,6 @@ try {
   const leftHand = handAnchor(bodySmall, true);
   const rightHand = handAnchor(bodySmall, false);
   check(Math.abs(rightHand.x - leftHand.x - bodySmall.w * EQUIP_ALIGN.handSideRatio) < 1e-6, "左右手互为镜像（横向相差 身体宽 × handSideRatio）");
-
-  const nudged = placeWeaponOnHand(bodySmall, weaponTall, 1, { x: 3, y: -2 }, true);
-  const plain = placeWeaponOnHand(bodySmall, weaponTall, 1, { x: 0, y: 0 }, true);
-  check(Math.abs(nudged.x - plain.x - 3) < 1e-6 && Math.abs(nudged.y - plain.y + 2) < 1e-6, "逐件微调只平移，不参与公式");
 
   //#endregion
 
@@ -118,10 +114,9 @@ try {
   const inShow = read("assets/ui/components/panel/RoleInShowView.ts");
   const helper = read("assets/ui/helpers/GameUiHelper.ts");
 
-  check(!/placeWeaponOnHand\(/.test(appearance), "RoleAppearance 不再调用 placeWeaponOnHand（#541：外观帧算法停用，只认数据）");
-  check(!/spriteContentBox|retryAlign|EQUIP_ALIGN/.test(appearance), "外观定位不再读帧 bbox、不再有素材重试（绝对位置不依赖素材就绪）");
+  check(!/placeWeaponOnHand\(/.test(appearance), "RoleAppearance 不再调用 placeWeaponOnHand（#541：外观帧算法已删除，只认数据）");
+  check(!/applyWeaponTransform|spriteContentBox|retryAlign|EQUIP_ALIGN/.test(appearance), "外观不再有独立的武器定位路径（衣服与武器同一份 applyOutTransform）");
   check(!/handSideRatio|handHeightRatio/.test(appearance), "RoleAppearance 里没有另写一份手部比例");
-  check(/applyWeaponTransform\(\)/.test(appearance), "武器走独立的 applyWeaponTransform（衣服仍走 applyOutTransform）");
   check(/applyOutTransform\(this\.weapon, this\.weaponTransform\)/.test(appearance), "武器与衣服同一套绝对位置摆法（applyOutTransform，#541）");
   check(/applyOutTransform\(this\.cloth/.test(appearance), "衣服走 applyOutTransform（恒为绝对位置）");
   check(EQUIP_ALIGN.alignRetryTimes > 0 && EQUIP_ALIGN.alignRetryDelayMs > 0, `内观重试配置有效：${EQUIP_ALIGN.alignRetryTimes} 次 × ${EQUIP_ALIGN.alignRetryDelayMs}ms`);
