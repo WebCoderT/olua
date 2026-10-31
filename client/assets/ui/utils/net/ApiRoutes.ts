@@ -238,7 +238,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（11 个接口） */
+  /** role 模块（12 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -270,6 +270,12 @@ export const ApiRoutes = {
      * 全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。
      */
     save: (id: string) => `/roles/${encodeURIComponent(id)}`,
+    /**
+     * 背包操作：穿戴 / 卸下 / 丢弃 / 整理 / 搬运（#556）（POST /roles/{id}/bag-op）
+     *
+     * 五个动作共用一条写路径，`action` 区分，字段组合在服务端逐条校验。
+     */
+    bagOp: (id: string) => `/roles/${encodeURIComponent(id)}/bag-op`,
     /**
      * 药品使用（回复结算与扣减都在服务端）（POST /roles/{id}/drug-use）
      *

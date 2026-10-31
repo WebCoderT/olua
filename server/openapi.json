@@ -805,6 +805,70 @@
         }
       }
     },
+    "/roles/{id}/bag-op": {
+      "post": {
+        "description": "五个动作共用一条写路径，`action` 区分，字段组合在服务端逐条校验。\n\n**穿 / 脱 / 丢由服务端自己算**：`equip` 先证明这件东西真在那一格、确实是该部位的装备、等级够，再把旧装备放回刚腾出的格子；`unequip` 由服务端找第一个空格；`discard` 只认格子坐标。**整理 / 搬运只验守恒**：`move` / `tidy` 传操作后的完整内容（稀疏格子），服务端只校验「网格形状不变 + 同 id 总件数不变」—— 多一件少一件都会被拒。\n\n穿戴 / 卸下会重算战斗属性并把血蓝夹回上限（`combat` / `maxHp` 等字段随响应一起回来）。\n\n失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 / 等级不够）/ 20022 排布与库里对不上 / 20012 背包满（卸下时没有空格）；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.bagOp",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BagOpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作后的角色（含背包 / 装备槽位 / 重算后的战斗属性）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BagOpResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "背包操作：穿戴 / 卸下 / 丢弃 / 整理 / 搬运（#556）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BagOpResultDto"
+        }
+      }
+    },
     "/admin/auth/register": {
       "post": {
         "description": "注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
@@ -11327,6 +11391,91 @@
           "col"
         ]
       },
+      "BagOpCellDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "行",
+            "minimum": 0,
+            "maximum": 63,
+            "example": 0
+          },
+          "col": {
+            "type": "number",
+            "description": "列",
+            "minimum": 0,
+            "maximum": 63,
+            "example": 3
+          },
+          "id": {
+            "type": "string",
+            "description": "物品 id",
+            "example": "drug_1"
+          },
+          "count": {
+            "type": "number",
+            "description": "件数",
+            "minimum": 1,
+            "example": 3
+          }
+        },
+        "required": [
+          "row",
+          "col",
+          "id",
+          "count"
+        ]
+      },
+      "BagOpDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "动作",
+            "enum": [
+              "equip",
+              "unequip",
+              "discard",
+              "move",
+              "tidy"
+            ],
+            "example": "equip"
+          },
+          "row": {
+            "type": "number",
+            "description": "背包行（equip / discard）",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "col": {
+            "type": "number",
+            "description": "背包列（equip / discard）",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "slot": {
+            "type": "string",
+            "description": "装备槽位（unequip），如 cloth / weapon",
+            "example": "cloth"
+          },
+          "cells": {
+            "description": "操作后的背包内容（move / tidy；稀疏格子，只报有东西的格子）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BagOpCellDto"
+            }
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
       "AdminRegisterDto": {
         "type": "object",
         "properties": {
@@ -14164,6 +14313,87 @@
           "drugId",
           "recoveredHp",
           "recoveredMp"
+        ]
+      },
+      "BagOpResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "action": {
+            "type": "string",
+            "description": "本次执行的动作",
+            "enum": [
+              "equip",
+              "unequip",
+              "discard",
+              "move",
+              "tidy"
+            ]
+          },
+          "slot": {
+            "type": "string",
+            "description": "本次涉及的装备槽位（非装备操作为 null）",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "action",
+          "slot"
         ]
       },
       "RealtimeTicketDto": {

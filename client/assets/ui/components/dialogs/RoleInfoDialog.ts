@@ -56,8 +56,12 @@ export default class RoleInfoDialog {
       new EquipmentSlotGroup(
         side,
         role.equipments,
-        (type) => StorageManager.unequipToBag(type),
-        (type) => StorageManager.equipBetterFromBag(type),
+        (type) => {
+          void StorageManager.unequipToBag(type);
+        },
+        (type) => {
+          void StorageManager.equipBetterFromBag(type);
+        },
       ),
     );
     this.equipmentGroups.forEach((group) => this.dialog.addChild(group));

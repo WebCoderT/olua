@@ -111,6 +111,7 @@ const E2E_SCRIPTS = [
   ["聊天（世界/帮会/私聊）", "server/test/e2e-chat.cjs"],
   ["任务（接取/推进/交付）", "server/test/e2e-quest.cjs"],
   ["出售 / 回收（经济出口）", "server/test/e2e-sell.cjs"],
+  ["背包与穿戴（#556）", "server/test/e2e-bag.cjs"],
   ["屏蔽与举报（社交安全）", "server/test/e2e-blocks.cjs"],
   ["组队（队伍系统）", "server/test/e2e-party.cjs"],
   ["排行榜（全服榜单）", "server/test/e2e-rank.cjs"],

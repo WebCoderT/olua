@@ -36,6 +36,9 @@ try {
 const { StorageManager, Role, outDir } = sandbox;
 // 配置表与 StorageManager 在沙箱里是同一份产物（import 链被编译进来），items 是同一个 Map
 const { items, getItemsByType, getItem } = require(path.join(outDir, "configs/items.js"));
+const { installBagOpEcho } = require("./lib/storage-sandbox.cjs");
+// #556：五个背包动作都走 role.bagOp —— 服务端语义由 server/test/e2e-bag.cjs 盯，这里只保证客户端接得上
+installBagOpEcho(sandbox.RoleApi, StorageManager);
 
 const equipment = getItemsByType("equipment")[0];
 const drug = getItemsByType("drug")[0];
@@ -79,6 +82,8 @@ function filledCells() {
   return list;
 }
 
+// #556：`bag` / `equipments` 进服务端权威清单，丢弃要往服务端跑一趟 —— 整段包进 async
+const dataLayer = (async () => {
 console.log("— 数据层：StorageManager.discardBagGood —");
 
 // 0. 前提：新建角色自带初始装备（所以下面每组测试都先清空背包，断言才只针对预置格子）
@@ -86,7 +91,7 @@ check(makeRole("probe", "探针").bag.some((row) => row.some((cell) => Boolean(c
 
 // 1. 丢装备（不可叠加，count 恒 1）
 seed([{ row: 0, col: 0, id: equipment.id, count: 1 }]);
-check(StorageManager.discardBagGood(0, 0) === true, "丢弃装备返回 true");
+check((await StorageManager.discardBagGood(0, 0)) === true, "丢弃装备返回 true");
 check(cellAt(0, 0) === null, "格子已被清空");
 check(filledCells().length === 0, "背包里再无物品");
 
@@ -95,13 +100,13 @@ check(JSON.parse(sandbox.shim.__memory.get("roles"))[0].bag[0][0] === null, "丢
 
 // 3. 可叠加物品：整格一起丢（不做数量拆分）
 seed([{ row: 2, col: 3, id: drug.id, count: 37 }]);
-check(StorageManager.discardBagGood(2, 3) === true, "丢弃成堆的药品返回 true");
+check((await StorageManager.discardBagGood(2, 3)) === true, "丢弃成堆的药品返回 true");
 check(cellAt(2, 3) === null, "整格 37 个一起丢弃，没有残留");
 check(filledCells().length === 0, "没有留下半个格子");
 
 // 4. 材料同样可丢（丢弃不限物品大类，与「一键回收只吃装备」不同）
 seed([{ row: 1, col: 1, id: material.id, count: 5 }]);
-check(StorageManager.discardBagGood(1, 1) === true, "丢弃材料返回 true");
+check((await StorageManager.discardBagGood(1, 1)) === true, "丢弃材料返回 true");
 check(cellAt(1, 1) === null, "材料格子已清空");
 
 // 5. 只动目标格：邻格与其它行原样保留
@@ -110,7 +115,7 @@ seed([
   { row: 0, col: 1, id: drug.id, count: 9 },
   { row: 6, col: 10, id: material.id, count: 2 },
 ]);
-StorageManager.discardBagGood(0, 0);
+await StorageManager.discardBagGood(0, 0);
 {
   const left = filledCells();
   check(left.length === 2, "只丢掉了一格", `剩余 ${JSON.stringify(left)}`);
@@ -125,20 +130,20 @@ StorageManager.discardBagGood(0, 0);
 }
 
 // 7. 幂等：同一格再丢一次返回 false（不能顺手把别人的东西丢掉）
-check(StorageManager.discardBagGood(0, 0) === false, "重复丢弃同一格第二次返回 false");
-check(StorageManager.discardBagGood(0, 1) === true, "确认第二次调用没有误伤邻格（邻格可正常丢弃）");
+check((await StorageManager.discardBagGood(0, 0)) === false, "重复丢弃同一格第二次返回 false");
+check((await StorageManager.discardBagGood(0, 1)) === true, "确认第二次调用没有误伤邻格（邻格可正常丢弃）");
 
 // 8. 空格 / 越界防御
 seed([]);
-check(StorageManager.discardBagGood(0, 0) === false, "丢空格子返回 false");
-check(StorageManager.discardBagGood(-1, 0) === false, "负行号返回 false（不抛异常）");
-check(StorageManager.discardBagGood(0, 99) === false, "越界的列号返回 false（不抛异常）");
-check(StorageManager.discardBagGood(99, 0) === false, "越界的行号返回 false（不抛异常）");
+check((await StorageManager.discardBagGood(0, 0)) === false, "丢空格子返回 false");
+check((await StorageManager.discardBagGood(-1, 0)) === false, "负行号返回 false（不抛异常）");
+check((await StorageManager.discardBagGood(0, 99)) === false, "越界的列号返回 false（不抛异常）");
+check((await StorageManager.discardBagGood(99, 0)) === false, "越界的行号返回 false（不抛异常）");
 
 // 9. 解析不出配置的 id：允许清掉（玩家有权清理认不出的杂物，名字用 id 兜底）
 seed([{ row: 3, col: 3, id: "gone_equipment_999", count: 1 }]);
 check(StorageManager.getBagDiscardPreview(3, 3)?.label === "gone_equipment_999", "未知 id 的预览用 id 当名字");
-check(StorageManager.discardBagGood(3, 3) === true, "未知 id 也能被丢弃");
+check((await StorageManager.discardBagGood(3, 3)) === true, "未知 id 也能被丢弃");
 
 // 10. 不影响装备槽（身上穿着的不在背包里，丢弃碰不到它）
 {
@@ -148,7 +153,7 @@ check(StorageManager.discardBagGood(3, 3) === true, "未知 id 也能被丢弃")
   StorageManager.clear();
   StorageManager.setRoles([role]);
   StorageManager.onlineRole("r1");
-  StorageManager.discardBagGood(0, 0);
+  await StorageManager.discardBagGood(0, 0);
   check(online().equipments[equipment.slot] === equipment.id, "丢弃背包物品后，身上的装备槽原样不动");
 }
 
@@ -161,11 +166,13 @@ check(StorageManager.discardBagGood(3, 3) === true, "未知 id 也能被丢弃")
   StorageManager.clear();
   StorageManager.setRoles([me, other]);
   StorageManager.onlineRole("r1");
-  StorageManager.discardBagGood(0, 0);
+  await StorageManager.discardBagGood(0, 0);
   const others = StorageManager.getRoles().find((role) => role.id === "r2");
   check(others.bag[0][0]?.count === 4, "另一个角色的背包不受影响");
   check(StorageManager.getRoles().find((role) => role.id === "r1").bag[0][0] === null, "在线角色的格子已清空");
 }
+
+})();
 
 console.log("— 预览：StorageManager.getBagDiscardPreview —");
 
@@ -195,8 +202,8 @@ const layoutSource = fs.readFileSync(DIALOGS_FILE, "utf8");
 const textsSource = fs.readFileSync(TEXTS_FILE, "utf8");
 
 check(/static getBagDiscardPreview\(row: number, col: number\)/.test(storageSource), "StorageManager 暴露了 getBagDiscardPreview");
-check(/static discardBagGood\(row: number, col: number\): boolean \{/.test(storageSource), "StorageManager 暴露了 discardBagGood");
-check(/role\.bag\[row\]\[col\] = null;/.test(storageSource), "丢弃实现是把格子置空（整格丢弃）");
+check(/static async discardBagGood\(row: number, col: number\): Promise<boolean> \{/.test(storageSource), "StorageManager 暴露了 discardBagGood");
+check(/action: "discard", row, col/.test(storageSource), "丢弃只报「丢哪一格」，置空由服务端做（#556）");
 
 check(/createMiddleButton\(\s*bagDialogLayout\.discardButton\.name/.test(dialogSource), "背包底部建了「丢弃」按钮");
 check(/discardButton\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.toggleDiscardMode\(\)/.test(dialogSource), "丢弃按钮绑定了模式开关");
@@ -207,10 +214,10 @@ check(/this\.discardMode = false;\s*this\.setButtonText\(this\.discardButton, ge
 check(/if \(this\.discardMode\) \{\s*this\.onDiscardCell\(row, col\);\s*return;\s*\}/.test(dialogSource), "丢弃模式下点格子走丢弃（不再使用/穿戴）");
 check(/pending\.row === row && pending\.col === col/.test(dialogSource), "两步确认只在点同一格时生效");
 check(/GameUiHelper\.createTip\("bag_discard_confirm_tip", \{ name: preview\.label, count: preview\.count \}\)/.test(dialogSource), "第一次点击只报物品名与数量，不改数据");
-check(/this\.clearDiscardPending\(\);\s*StorageManager\.discardBagGood\(row, col\);/.test(dialogSource), "第二次点击先复位状态再真的丢弃");
+check(/this\.clearDiscardPending\(\);\s*void StorageManager\.discardBagGood\(row, col\);/.test(dialogSource), "第二次点击先复位状态再真的丢弃");
 check(/setTimeout\(\(\) => this\.clearDiscardPending\(\), bagDialogLayout\.discardButton\.confirmTimeout\)/.test(dialogSource), "待确认状态带超时自动放弃");
 
-check(/this\.exitDiscardMode\(\);\s*(\/\/[^\n]*\n\s*)*if \(!StorageManager\.tidyBag\(\)\)/.test(dialogSource), "点「一键整理」会先退出丢弃模式");
+check(/this\.exitDiscardMode\(\);\s*(\/\/[^\n]*\n\s*)*void StorageManager\.tidyBag\(\)/.test(dialogSource), "点「一键整理」会先退出丢弃模式");
 check(/this\.exitDiscardMode\(\);\s*this\.onRecycleClick\(\)/.test(dialogSource), "点「一键回收」会先退出丢弃模式");
 check(/close\(\) \{\s*this\.cancelRecycleConfirm\(\);[\s\S]{0,160}this\.clearDiscardPending\(\);/.test(dialogSource), "关弹窗会清掉丢弃待确认与定时器");
 check(/isValid\(this\.dialog\)\) \{\s*this\.dialog = null;[\s\S]{0,160}this\.discardButton = null;/.test(dialogSource), "弹窗被外部销毁时清理丢弃按钮引用");
@@ -269,7 +276,7 @@ check(/releaseDiscardHold\(\) \{/.test(gridSource), "暴露 releaseDiscardHold �
 check(/private endDrag\(keepSourceDimmed = false\)/.test(gridSource), "endDrag 支持保留压暗（拖出时物品不被悄悄恢复亮度）");
 check(/if \(!keepSourceDimmed\) GameUiHelper\.setNodeOpacity\(drag\.sourceGood/.test(gridSource), "默认仍恢复透明度（落子/取消照旧）");
 check(/cancelDrag\(\) \{\s*this\.releaseDiscardHold\(\);\s*this\.endDrag\(\);/.test(gridSource), "关弹窗时连扣留一起放开");
-check(/StorageManager\.moveBagGood\(from\.row, from\.col, landing\.row, landing\.col\);/.test(gridSource), "落子路径未受影响（仍走数据层 moveBagGood）");
+check(/void StorageManager\.moveBagGood\(from\.row, from\.col, landing\.row, landing\.col\);/.test(gridSource), "落子路径未受影响（仍走数据层 moveBagGood，只是改成了发请求）");
 check(!/[\u4e00-\u9fa5]/.test(gridSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "BagGridView 里没有裸中文（注释之外）");
 
 // —— 拖出背包弹窗销毁：确认框与弹窗接线 ——
@@ -295,7 +302,7 @@ check(/if \(!preview\) \{\s*this\.bagGrid\?\.releaseDiscardHold\(\);\s*return;\s
 check(/const confirm = new ConfirmDialog\(\{/.test(dialogSource), "拖出后弹全屏确认框");
 check(/LayerManager\.addDialogToUILayer\(confirm\);/.test(dialogSource), "确认框挂 UI 层顶层并登记为弹窗（盖在背包弹窗之上，见 LayerManager.addDialogToUILayer）");
 check(/getText\("bag_discard_confirm_text", \{ name: preview\.label, count: preview\.count \}\)/.test(dialogSource), "确认框写明物品名与整格数量（数据取自 getBagDiscardPreview）");
-check(/onConfirm: \(\) => \{[\s\S]{0,120}StorageManager\.discardBagGood\(from\.row, from\.col\);/.test(dialogSource), "点「确定」真的整格丢弃");
+check(/onConfirm: \(\) => \{[\s\S]{0,160}void StorageManager\.discardBagGood\(from\.row, from\.col\);/.test(dialogSource), "点「确定」真的整格丢弃");
 check(/onCancel: \(\) => \{[\s\S]{0,160}this\.bagGrid\?\.releaseDiscardHold\(\);/.test(dialogSource), "点「取消」只放开扣留（数据没动过，物品回原位）");
 check(!/confirm\.on\(Node\.EventType\.TOUCH_END/.test(dialogSource), "按钮逻辑不写在弹窗这层（由 ConfirmDialog 组件负责）");
 check(/private closeDiscardConfirm\(\) \{/.test(dialogSource), "有统一的收框入口");
@@ -316,4 +323,4 @@ check(/this\.closeDiscardConfirm\(\);\s*\n\s*const confirm = new ConfirmDialog/.
 }
 
 void items;
-finish("PASS: 背包丢弃的数据行为、界面接线与配置全部通过");
+void dataLayer.then(() => finish("PASS: 背包丢弃的数据行为、界面接线与配置全部通过"));

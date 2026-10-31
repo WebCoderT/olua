@@ -27,6 +27,7 @@ import { GrowthUpgradeDto } from "../modules/roles/dto/growth-upgrade.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "../modules/roles/dto/mall-purchase.dto";
 import { SellEntryDto, SellGoodsDto, SellGoodsResultDto, SellLineDto } from "../modules/roles/dto/sell-goods.dto";
 import { DrugUseDto, DrugUseResultDto } from "../modules/roles/dto/drug-use.dto";
+import { BagOpCellDto, BagOpDto, BagOpResultDto } from "../modules/roles/dto/bag-op.dto";
 import {
   SystemConfigItemDto,
   SystemDatabaseDto,
@@ -143,6 +144,9 @@ export const SWAGGER_MODELS = [
   SellLineDto,
   SellGoodsResultDto,
   DrugUseResultDto,
+  BagOpDto,
+  BagOpCellDto,
+  BagOpResultDto,
   RealtimeTicketDto,
   // 区服（#295 阶段二）
   ZoneDto,

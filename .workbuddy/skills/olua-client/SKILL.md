@@ -84,6 +84,21 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 **内观几何还要「开弹窗就再拉一次」**（#527）：外观看的是场景里的角色，重进图必然重画；内观只在角色信息弹窗里出现，玩家保存完的第一反应是**再点开弹窗看一眼**，那时场景没重载 —— 只靠进图拉一次必然「看不到变化」。`ConfigLoader.refreshInAlign()` 每次开弹窗拉一次（1 个请求、几百字节），拉到后由 `RoleInfoDialog.open()` 就地重建内观节点；它**不复用**进图那次去重的 `inAlignLoading`（被上个 Promise 顶掉 = 没拉）。另外两套几何的 `catch` 都改成 `console.warn`：一个 404（服务端旧版本）与「保存没生效」长得一模一样，静默吞掉就是吞掉证据。
 ⚠️ `findOnlineRole()` 每次都从 localStorage 解析**新对象**：改完字段要把**同一个对象**交回 `updateOnlineRole`，写成 `updateOnlineRole(findOnlineRole())` 会把改动丢掉。
 
+**背包写操作全在服务端（#556）**：`StorageManager` 的 `equipFromBag` / `unequipToBag` / `equipBetterFromBag` /
+`discardBagGood` / `tidyBag` / `moveBagGood` 六个方法**全是 `async`**，统一走私有 `runBagOp(role, body)`
+（`POST /roles/:id/bag-op`，带 `revision` 乐观锁），返回 `Promise<boolean>` = 「有没有变动」。
+- **别再自己找空格 / 自己算结果**：卸下时背包满要让服务端回 20012，穿戴要由它判部位与等级。
+  本地那份 `findEmptyBagCell` 已删 —— 留着就是第二个真相。
+- **`moveBagGood` 是唯一「先动后发」的**：本地 `moveBagCellGrid` 先摆好（拖动是高频操作，
+  等往返会显得卡），失败必须**还原 `previous`** 并重刷，否则留下「看着动了其实没动」的网格。
+- 成功一律**整份抄回**服务端返回的 `bag` / `equipments` / `combat` / `maxHp` / `maxMp` / `hpRecover` / `hp` / `mp` / `revision`
+  —— 穿脱装备会重算属性，只抄 `bag` 会让战力与血条停在旧值。
+- 提示由请求层弹（`runBagOp` 失败返回 null）；调用方只区分「有没有变动」，**整理无变动才飘 `bag_tidy_noop_tip`**。
+- 沙箱单测：`client/tools/lib/storage-sandbox.cjs` 的 `RoleApi` 替身有 `bagOp`，
+  并导出 `installBagOpEcho(RoleApi, StorageManager)` —— 回声桩按 `cells` 重建网格（tidy/move）、
+  discard 清格，**只保证「客户端数据层行为自洽」**；真正的守恒校验由服务端 `e2e-bag` 盯。
+  新写背包单测时记得装上它，否则 `runBagOp` 拿到 undefined 会一路 return false。
+
 ## 五之二、实时帧的落点：一条帧 → 一个 Store → 只演不算
 
 服务端推下来的东西（互见 / 怪物 AI / 结算 / 拾取 / 聊天 / 任务 / **队伍**）都走同一条链路：
