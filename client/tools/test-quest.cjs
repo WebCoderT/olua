@@ -227,7 +227,9 @@ try {
     check(spawner.includes("QuestNpcMarks.attach(npcNode, id)"), "NPC 落位后挂头顶标记");
     check(spawner.includes("npc.onClick && npc.onClick()"), "原有点击行为保留（传送 / 战魂不因任务改动失效）");
     const bottomBar = read(CLIENT_BOTTOM_BAR);
-    check(bottomBar.includes("task: () => this.questDialog.open()"), "底部「任务」入口接上任务弹窗");
+    // 任务入口已从底部导航移除（导航只留 6 个入口，见 configs/bottomNav）——
+    // 任务面板唯一入口 = 任务追踪栏点击 → openQuests（面板仍归底部栏持有）
+    check(!bottomBar.includes("task: () => this.questDialog.open()"), "底部导航已无「任务」入口（按键区只留 6 个入口，任务走追踪栏）");
     check(bottomBar.includes("openQuests()"), "追踪栏点击走 openQuests（面板归底部栏持有）");
     const tracker = read(CLIENT_TRACKER);
     check(tracker.includes("QuestStore.onChange"), "追踪栏订阅任务仓（状态变即重画）");

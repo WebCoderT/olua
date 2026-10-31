@@ -32,7 +32,7 @@ export default class Joystick extends Node {
   }
 
   /** 贴边定位（贴屏幕左下角；坐标是常量，创建时调一次） */
-  applyAnchorPosition() {
+  applyFixedPosition() {
     GameUiHelper.setJoystickPosition(this);
   }
 }

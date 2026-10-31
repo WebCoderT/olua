@@ -1028,8 +1028,8 @@ export const reportDialogLayout = {
 export const chatDialogLayout = {
   name: "chat_box",
   size: new Size(440, 280),
-  /** 常驻停靠：贴屏幕左下角（边距为窗体边缘到屏幕左/下边缘的距离，见 getAnchoredPosition） */
-  dock: { edge: "bottom-left", marginX: 24, marginY: 205 } as const,
+  /** 常驻停靠：屏幕左下角（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「贴左下 + 边距 24/205」算出） */
+  position: new Vec2(-716, -195),
   /** 窗体底板（半透明深色 + 金色细边；颜色必须在配置里，组件不写字面量） */
   box: {
     fill: new Color(16, 20, 32, 215),

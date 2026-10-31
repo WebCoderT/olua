@@ -265,7 +265,7 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "Loading：进度文字是小字（fontSize ≤ 18）且在画布内（具体压哪个角落随手动微调，守大位置）",
   );
   check(
-    /new Node\("loading_bar_fill_mask"\)/.test(loading) && /addComponent\(Mask\)/.test(loading) && /widthFrac \* loadingLayout\.bar\.size\.width/.test(loading) && !/FillType/.test(loading),
+    /new Node\(`\$\{barLayout\.name\}_fill_mask`\)/.test(loading) && /addComponent\(Mask\)/.test(loading) && /widthFrac \* loadingLayout\.bar\.size\.width/.test(loading) && !/FillType/.test(loading),
     "Loading：填充图挂 Mask 下、Mask 宽度 = 进度 × widthFrac × 条宽（内条从左缘起显示宽度，图不拉伸；不再用会把纹理压扁的 FILLED）",
   );
   check(

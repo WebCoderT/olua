@@ -211,8 +211,8 @@ export default class StorageManager {
    * 调用时机：进入游戏取得在线角色之后（见 ui/Game.start）
    * - 魔法值：mp / maxMp / mpRecoverAccumulator（默认值规则见 utils/battle/MpHelper）
    * - 血量回复：hpRecover / hpRecoverAccumulator（默认值规则见 utils/battle/HpHelper）
-   * - 快捷键：按 configs/role.initialShortcutKeys 的按键码对齐（保留玩家已绑定的技能，补齐新增的按键槽，
-   *   例如快捷键由 4 个扩展到 6 个后，旧存档会补出 5/6 两格，否则快捷键栏只显示旧有的 4 格）
+   * - 快捷键：按 configs/role.initialShortcutKeys 的按键码对齐（保留玩家已绑定的技能，补齐新增的按键槽；
+   *   存档里多出的按键（如曾有的第 6 格）自然丢弃，减格不报错）
    * - 装备槽：旧存档存的是装备快照对象，迁移为只存装备 id（新格式经配置表实时解析，改配置重启即生效）
    * - 背包：旧存档格子存的是物品快照对象，迁移为 { id, count }（物品数据经配置表实时解析）
    */

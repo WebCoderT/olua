@@ -5,7 +5,6 @@ import StatusIconBar from "./StatusIconBar";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
 import { uiImages, roleInfoBarLayout } from "../../../configs/hudLayout";
-import { getAnchoredPosition } from "../../utils/layout/ScreenLayout";
 
 /** 货币种数（金币 / 绑定金币 / 银币），用于把货币容器宽度等分给每件 */
 const CURRENCY_COUNT = 3;
@@ -15,7 +14,7 @@ const CURRENCY_COUNT = 3;
  * 展示：背景框 + 头像 + 名称 + 等级 + 金币/绑定金币/银币（横向布局容器）+ 战斗力
  * 由通用零件（背景/头像/货币/战斗力）拼装而成，本组件负责拼装与数据刷新
  * 位置与尺寸全部来自 configs/hudLayout（各子件坐标以信息栏中心为原点）：
- * 自己的位置按「贴屏幕左上角 + 边距」算出（坐标是常量，创建时调一次 applyAnchorPosition）
+ * 自己的位置是固定值（hudLayout.roleInfoBarLayout.position，创建时调一次 applyFixedPosition）
  */
 export default class RoleInfoBar extends Node {
   /** 名称文本 */
@@ -39,7 +38,7 @@ export default class RoleInfoBar extends Node {
     const isSelf = role.relationShip === RELATION_SHIP.SELF;
     this.isSelf = isSelf;
     this.addComponent(UITransform).setContentSize(layout.size);
-    this.applyAnchorPosition();
+    this.applyFixedPosition();
     // 背景框
     this.addChild(GameUiHelper.createImage("role_info_background", uiImages.roleInfoBackground, new Vec2(), layout.backgroundSize));
     // 名称与等级
@@ -72,16 +71,14 @@ export default class RoleInfoBar extends Node {
     RoleUIManager.registerStatusIconBar(statusIconBar);
   }
 
-  /** 贴边定位（本人贴屏幕左上角；其他玩家固定在屏幕中心） */
-  applyAnchorPosition() {
+  /** 定位（固定值，见 hudLayout.roleInfoBarLayout.position —— 主界面布局不再按屏幕尺寸换算） */
+  applyFixedPosition() {
     const layout = roleInfoBarLayout;
     if (!this.isSelf) {
       this.setPosition(layout.otherPosition.x, layout.otherPosition.y, 0);
       return;
     }
-    const { anchor } = layout;
-    const position = getAnchoredPosition(layout.size, anchor.edge, anchor.marginX, anchor.marginY);
-    this.setPosition(position.x, position.y, 0);
+    this.setPosition(layout.position.x, layout.position.y, 0);
   }
 
   /** 数据变更后刷新显示 */

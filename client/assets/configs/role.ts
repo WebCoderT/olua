@@ -199,14 +199,13 @@ export const initialSkills: { [key in SkillId]: number } = {
   "1011": 1,
 };
 
-/** 初始快捷键配置 */
+/** 初始快捷键配置（5 格 = 数字键 1~5） */
 export const initialShortcutKeys: NeedSetShortcutKeyConfig[] = [
   { label: "1", key: 49, skillId: null },
   { label: "2", key: 50, skillId: null },
   { label: "3", key: 51, skillId: null },
   { label: "4", key: 52, skillId: null },
   { label: "5", key: 53, skillId: null },
-  { label: "6", key: 54, skillId: null },
 ];
 
 /** 角色默认速度倍率 */

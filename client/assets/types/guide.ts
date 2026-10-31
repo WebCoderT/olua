@@ -32,7 +32,7 @@ export type GuideEvent = (typeof GUIDE_EVENT)[keyof typeof GUIDE_EVENT];
 /**
  * 高亮目标（`GuideOverlay` 按它去拿真实节点）
  *
- * 刻意不用「写死屏幕坐标」：HUD 是贴边重排的（见各 `applyAnchorPosition`），
+ * 刻意不用「写死屏幕坐标」：HUD 是贴边重排的（HUD 位置见 hudLayout 各 position（固定值）），
  * 换窗口宽高比坐标就错位。所以这里存的是**语义位**，由 `GuideOverlay` 现取节点；
  * 取不到（面板未创建 / 被销毁）就退化为「只显示底部气泡」，不画洞也不报错。
  */

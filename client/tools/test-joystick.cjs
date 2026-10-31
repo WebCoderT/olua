@@ -4,7 +4,7 @@
  *
  * A 段跑**真实代码**（沙箱见 client/tools/lib/configs-sandbox.cjs）：
  * · `ui/utils/input/Joystick` 的两个纯函数（夹取半径 / 拖动位移 → 八方向 + 走跑）
- * · `ui/utils/layout/ScreenLayout.getAnchoredPosition` 的新贴边方式 bottom-left
+ * · 主界面 HUD 位置是配置固定值（ScreenLayout.getAnchoredPosition 保留给选角等场景）
  *   （与 top-left 对称，且不改变 bottom-center 的旧语义——底部栏按「区块中心到屏幕下边缘」定位）
  * 期望值全部由**真实配置**（configs/role.joystickMove、configs/layout/hud.joystickLayout）算出，不另写一份常量。
  *
@@ -14,7 +14,7 @@
  *    而 MOUSE_MOVE 注册在节点上会吞掉指针追踪与按住走路）
  * · 手柄位移被夹在可拖半径内、抬起/取消回中
  * · 主角的移动意图优先级：键盘 > 摇杆 > 鼠标；isManualMoving 也要认摇杆（自动战斗据此让位）
- * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、贴边位置由 applyAnchorPosition 一次算出（坐标是常量，窗口变化不再重排）
+ * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、位置由 applyFixedPosition 读配置固定值（窗口变化不重排）
  * · 「按压起点在界面元素上」的那次抬起不被世界侧当成点击（ScreenClickInput + Pointer.isUiPressOnUiElement）
  * · 几何自洽：手柄拖到最外圈不溢出底座；素材在 resources/main 且带 meta
  *
@@ -122,10 +122,16 @@ if (outDir) {
   }
 
   // ---- 贴边布局：bottom-left ----
-  console.log("\nA 段：贴边布局（新增 bottom-left；既有三种贴边行为不变）");
+  console.log("\nA 段：贴边布局（ScreenLayout.getAnchoredPosition 保留给选角等场景，主界面 HUD 已改固定值）");
   const size = new cc.Size(joystickLayout.size.width, joystickLayout.size.height);
-  const { marginX, marginY } = joystickLayout.anchor;
+  // 主界面摇杆是固定坐标：位置必须与配置逐字一致（不走路由、不做换算）
+  check(
+    near(joystickLayout.position.x, -848.5) && near(joystickLayout.position.y, -436),
+    "摇杆位置是配置里的固定值（hudLayout.joystickLayout.position，直接手调）",
+    `(${joystickLayout.position.x}, ${joystickLayout.position.y})`,
+  );
 
+  const marginX = 24, marginY = 18;
   const bottomLeft = getAnchoredPosition(size, "bottom-left", marginX, marginY);
   check(
     near(bottomLeft.x, -designResolution.width / 2 + marginX + size.width / 2) && near(bottomLeft.y, -designResolution.height / 2 + marginY + size.height / 2),
@@ -138,10 +144,10 @@ if (outDir) {
   check(bottomLeft.y < 0 && topLeft.y > 0, "bottom-left 在屏幕下半、top-left 在上半（贴边方向相反）");
 
   const bottomCenter = getAnchoredPosition(size, "bottom-center", 0, marginY);
-  check(near(bottomCenter.x, 0) && near(bottomCenter.y, -designResolution.height / 2 + marginY), "bottom-center 语义不变（区块中心到屏幕下边缘，底部栏在用）");
+  check(near(bottomCenter.x, 0) && near(bottomCenter.y, -designResolution.height / 2 + marginY), "bottom-center 语义不变（选角底部栏在用）");
 
   const topRight = getAnchoredPosition(size, "top-right", 2, 12);
-  check(near(topRight.x, designResolution.width / 2 - 2 - size.width / 2), "top-right 语义不变（小地图在用）");
+  check(near(topRight.x, designResolution.width / 2 - 2 - size.width / 2), "top-right 语义不变（ScreenLayout 保留的能力）");
 }
 
 //#endregion
@@ -194,7 +200,15 @@ check(/isManualMoving\(\)[\s\S]{0,260}?joystickInput/.test(roleDisplaySrc), "isM
 // ---- HUD 组装与贴边 ----
 check(/applyJoystickBodyStyle/.test(joystickSrc) && /static applyJoystickBodyStyle/.test(gameUiHelperSrc), "摇杆零件由 GameUiHelper 施加（组件里不写尺寸/图片路径）");
 check(/get handleNode\(\)/.test(joystickSrc) && /get stickNode\(\)/.test(joystickSrc), "摇杆暴露底座与手柄两个节点给输入层");
-check(/applyAnchorPosition\(\)\s*\{[\s\S]{0,120}?setJoystickPosition/.test(joystickSrc), "摇杆按固定画布贴边（applyAnchorPosition → setJoystickPosition）");
+check(/applyFixedPosition\(\)\s*\{[\s\S]{0,120}?setJoystickPosition/.test(joystickSrc), "摇杆位置来自配置固定值（applyFixedPosition → setJoystickPosition，不做换算）");
+// 主界面 HUD 一律读配置里的固定坐标：谁再往定位里塞「贴边换算」，这里会红
+check(!/getAnchoredPosition\(/.test(gameUiHelperSrc), "主界面 HUD 定位不再走贴边计算（GameUiHelper 里没有 getAnchoredPosition 调用）");
+check(
+  /static setBottomBarPosition[\s\S]{0,120}?\{ position \} = bottomBarLayout/.test(gameUiHelperSrc) &&
+    /static setSmallMapPosition[\s\S]{0,120}?\{ position \} = smallMapLayout/.test(gameUiHelperSrc) &&
+    /static setJoystickPosition[\s\S]{0,120}?\{ position \} = joystickLayout/.test(gameUiHelperSrc),
+  "底部栏 / 小地图 / 摇杆三个定位方法都直接读配置 position（固定值，手调即生效）",
+);
 check(/new Joystick\(\)/.test(gameSrc) && /addToUILayer\(this\.joystick\)/.test(gameSrc), "组合根创建摇杆并挂到 UI 层");
 check(/setJoystick\(\s*this\.joystick\.stickNode,\s*this\.joystick\.handleNode\s*\)/.test(gameSrc), "组合根把摇杆节点注入主角组件");
 check(/realignCamera/.test(gameSrc) && !/applyAnchorPosition\(\)/.test(gameSrc), "Game：窗口尺寸变化只把相机拉回主角，HUD 坐标是常量不再重排");
@@ -206,9 +220,9 @@ check(/isUiPressOnUiElement\(\)/.test(screenClickSrc), "世界点击据此跳过
 
 // ---- 配置 ----
 const joystickBlock = hudLayoutSrc.slice(hudLayoutSrc.indexOf("export const joystickLayout"), hudLayoutSrc.indexOf("//#region 小地图"));
-check(joystickBlock.length > 0 && /edge:\s*"bottom-left"/.test(joystickBlock), "摇杆布局贴屏幕左下角（bottom-left）");
+check(joystickBlock.length > 0 && /position:\s*new Vec2\(/.test(joystickBlock), "摇杆位置是配置固定值（position，不做贴边换算）");
 check(/radius:\s*\d+/.test(joystickBlock) && /handleSize:\s*new Size\(/.test(joystickBlock), "摇杆布局含可拖半径与手柄尺寸");
-check(/"bottom-left"/.test(hudLayoutSrc.split("//#region")[1] ?? ""), "贴边方式的联合类型里登记了 bottom-left");
+check(/"bottom-left"/.test(read(path.join(UI, "utils/layout/ScreenLayout.ts"))), "ScreenLayout 仍保留 bottom-left 档（选角等场景继续用）");
 check(/export const joystickMove/.test(roleConfigSrc) && /deadZone/.test(roleConfigSrc) && /runThreshold/.test(roleConfigSrc), "手感参数（死区/跑动阈值）在 configs/role.joystickMove");
 check(/joystickBackground:\s*mainImage\("joystick_bg"\)/.test(imagesSrc) && /joystickHandle:\s*mainImage\("joystick"\)/.test(imagesSrc), "两张摇杆素材都登记在 uiImages（代码里没有裸路径）");
 

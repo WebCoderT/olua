@@ -55,7 +55,7 @@ import { getRankLevel, rankAttributeLabels, rankMaxLevel } from "../../configs/r
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
-import { designResolution, getAnchoredPosition, getPopupPosition } from "../utils/layout/ScreenLayout";
+import { designResolution, getPopupPosition } from "../utils/layout/ScreenLayout";
 import {
   avatarImage,
   bagGridLayout,
@@ -1027,8 +1027,7 @@ export default class GameUiHelper {
 
   /** 聊天小窗重贴停靠角（开小窗时由组合根调；关着的时候调用是 no-op，由调用方判空） */
   static placeChatBox(node: Node) {
-    const { size, dock } = chatDialogLayout;
-    const position = getAnchoredPosition(size, dock.edge, dock.marginX, dock.marginY);
+    const { position } = chatDialogLayout;
     node.setPosition(position.x, position.y, 0);
   }
 
@@ -2183,10 +2182,9 @@ export default class GameUiHelper {
     node.addChild(UiHelper.createSprite("bottom_nav_bar_background", uiImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
   }
 
-  /** 底部栏贴边定位（贴屏幕底部居中；边界 = ui/utils/layout/ScreenLayout.designResolution） */
+  /** 底部栏定位（固定值，见 hudLayout.bottomBar.position —— 主界面布局不再按屏幕尺寸换算，直接改配置手调） */
   static setBottomBarPosition(node: Node) {
-    const { anchor } = bottomBarLayout;
-    const position = getAnchoredPosition(bottomBarLayout.size, anchor.edge, anchor.marginX, anchor.marginY);
+    const { position } = bottomBarLayout;
     node.setPosition(position.x, position.y, 0);
   }
 
@@ -2234,10 +2232,9 @@ export default class GameUiHelper {
     return handle;
   }
 
-  /** 操作摇杆贴边定位（贴屏幕左下角；边界 = ui/utils/layout/ScreenLayout.designResolution） */
+  /** 操作摇杆定位（固定值，见 hudLayout.joystickLayout.position） */
   static setJoystickPosition(node: Node) {
-    const { size, anchor } = joystickLayout;
-    const position = getAnchoredPosition(size, anchor.edge, anchor.marginX, anchor.marginY);
+    const { position } = joystickLayout;
     node.setPosition(position.x, position.y, 0);
   }
 
@@ -2473,10 +2470,9 @@ export default class GameUiHelper {
     this.setSmallMapPosition(node);
   }
 
-  /** 小地图贴边定位（贴屏幕右上角；边界 = ui/utils/layout/ScreenLayout.designResolution） */
+  /** 小地图定位（固定值，见 hudLayout.smallMapLayout.position） */
   static setSmallMapPosition(node: Node) {
-    const { anchor } = smallMapLayout;
-    const position = getAnchoredPosition(smallMapLayout.size, anchor.edge, anchor.marginX, anchor.marginY);
+    const { position } = smallMapLayout;
     node.setPosition(position.x, position.y, 0);
   }
 

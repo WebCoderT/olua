@@ -43,19 +43,19 @@ export class Loading extends Component {
     // 填充区坐标全部按条显示尺寸从素材占比现算（fillArea 是素材原生占比，条改大小不用改这里）
     const barLayout = loadingLayout.bar;
     const fillArea = barLayout.fillArea;
-    this.node.addChild(GameUiHelper.createImage("loading_bar_background", barLayout.background, barLayout.position, barLayout.size));
+    this.node.addChild(GameUiHelper.createImage(`${barLayout.name}_background`, barLayout.background, barLayout.position, barLayout.size));
     // 内条左缘 / 纵心相对**条中心**的偏移（由素材占比 × 条显示尺寸现算）
     const relLeft = (fillArea.leftFrac - 0.5) * barLayout.size.width;
     const relOffsetY = -(fillArea.yCenterFrac - 0.5) * barLayout.size.height;
     // Mask 锚点 (0,0.5) 定在内条左缘：舞台坐标 = 条坐标 + 相对偏移
-    const fillMask = new Node("loading_bar_fill_mask");
+    const fillMask = new Node(`${barLayout.name}_fill_mask`);
     this.progressFillMask = fillMask.addComponent(UITransform);
     this.progressFillMask.setAnchorPoint(0, 0.5);
     fillMask.setPosition(barLayout.position.x + relLeft, barLayout.position.y + relOffsetY, 0);
     this.progressFillMask.setContentSize(0, fillArea.heightFrac * barLayout.size.height); // 初始进度 0 → 宽 0
     fillMask.addComponent(Mask);
     // 填充图与底图对齐：子节点（锚点 0.5,0.5）摆在「条中心相对 Mask 锚点」的局部坐标 = 负的相对偏移
-    const fill = GameUiHelper.createImage("loading_bar_fill", barLayout.fill, new Vec2(-relLeft, -relOffsetY), barLayout.size);
+    const fill = GameUiHelper.createImage(`${barLayout.name}_fill`, barLayout.fill, new Vec2(-relLeft, -relOffsetY), barLayout.size);
     fillMask.addChild(fill);
     this.node.addChild(fillMask);
     // 一行小字：进度条右下角（位置 / 字号见 configs loadingLayout.progress）

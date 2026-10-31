@@ -218,6 +218,7 @@ export const loadingLayout = {
    * 显示尺寸在这里调（当前 1920×300 是拉满全宽的）
    */
   bar: {
+    name: "loading_bar",
     position: new Vec2(0, -390),
     size: new Size(1920, 300),
     background: uiImages.loadingProgressBackground,

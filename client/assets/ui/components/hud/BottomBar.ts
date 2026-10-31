@@ -88,8 +88,6 @@ export default class BottomBar extends Node {
     const handlers: Record<string, () => void> = {
       role: () => this.roleInfoDialog.open(),
       bag: () => this.bagDialog.open(),
-      chat: () => this.chatDialog.open(),
-      task: () => this.questDialog.open(),
       group: () => this.partyDialog.open(),
       mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
@@ -144,7 +142,7 @@ export default class BottomBar extends Node {
   }
 
   /** 贴边定位（贴屏幕底部居中；坐标是常量，创建时调一次） */
-  applyAnchorPosition() {
+  applyFixedPosition() {
     GameUiHelper.setBottomBarPosition(this);
   }
 
