@@ -38,7 +38,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 期望的断言条数（全绿时必须恰好这么多）
  * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md；make audit 会比对）。
  */
-const EXPECTED_ASSERTIONS = 130;
+const EXPECTED_ASSERTIONS = 131;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -584,17 +584,22 @@ function roleData(id, name, level, skills) {
     const killerD = await newPlayer("combat_rwd");
     const roleDBefore = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
     const revisionDBefore = roleDBefore.data && roleDBefore.data.revision;
-    // 把角色存成 10 级（revision 用最新值；带的还是 1 级技能，结算只看等级差）
-    const savedD = await api(baseUrl, "PUT", `roles/${killerD.roleId}`, {
-      token: killerD.token,
-      body: { revision: revisionDBefore, data: roleData("combat_rwd_r1", "combd", 10, { 1000: 1 }) },
-    });
-    check(savedD.code === 0 && savedD.data.revision === revisionDBefore + 1, "D：角色已存成 10 级（revision 推进一次）", JSON.stringify(savedD.data && savedD.data.revision));
+    // 等级是服务端写点（#550 起存档改不动它），这里走运营侧的 PATCH 改到 10 级 ——
+    // 顺带验一件事：level 是索引列，PATCH 之后详情里的等级必须是 10，修订号只推进一次
+    const savedD = await api(baseUrl, "PATCH", `admin/roles/${killerD.roleId}`, { token: adminToken, body: { level: 10 } });
+    check(savedD.code === 0, "D：角色已改到 10 级（管理端 PATCH）", savedD.message);
+    const afterPatchD = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
+    const revisionD = afterPatchD.data && afterPatchD.data.revision;
+    check(
+      afterPatchD.data.level === 10 && revisionD === revisionDBefore + 1,
+      "D：等级落到索引列，修订号只推进一次",
+      `level=${afterPatchD.data.level} revision=${revisionD}`,
+    );
     const mobD = await aliveMonster(killerD, "1");
     check(!!mobD, "D：等到了活着的怪", JSON.stringify(mobD));
     const killedD2 = mobD ? await killMonster(killerD, mobD.monsterKey, mobD.instanceId) : null;
     check(!!(killedD2 && killedD2.reward) && killedD2.reward.exp === 0, "D：等级差 9 ≥ 6 → 无经验（exp = 0）", JSON.stringify(killedD2 && killedD2.reward));
-    check(!!(killedD2 && killedD2.reward) && killedD2.reward.revision === revisionDBefore + 1, "D：无经验不入账（revision 不再推进）", JSON.stringify(killedD2 && killedD2.reward));
+    check(!!(killedD2 && killedD2.reward) && killedD2.reward.revision === revisionD, "D：无经验不入账（revision 不再推进）", JSON.stringify(killedD2 && killedD2.reward));
     const roleDAfter = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
     check(roleDAfter.code === 0 && !roleDAfter.data.data.exp, "D：存档里没有经验记录（服务端没有多记）", JSON.stringify(roleDAfter.data && roleDAfter.data.data && roleDAfter.data.data.exp));
 
@@ -783,17 +788,11 @@ function roleData(id, name, level, skills) {
     );
 
     // 血条分母跟着存档走：升到 10 级（体力上限 100 → 262），别人看到的分母要跟上 ——
-    // maxHp 只在首见时算过一次，不并进懒刷新就会被冻在那一刻（换装加体力也会撞这条）
+    // maxHp 只在首见时算过一次，不并进懒刷新就会被冻在那一刻（换装加体力也会撞这条）。
+    // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
     const maxHpBefore = dressedEntry ? dressedEntry.maxHp : 0;
-    const beforeLevelUp = await api(baseUrl, "GET", `roles/${companion.roleId}`, { token: companion.token });
-    const leveled = await api(baseUrl, "PUT", `roles/${companion.roleId}`, {
-      token: companion.token,
-      body: {
-        revision: beforeLevelUp.data.revision,
-        data: { ...roleData("combat_rpr_r1", "combat_rpr", 10, { 1000: 1 }), equipments: { cloth: "3001", weapon: "4001" } },
-      },
-    });
-    check(leveled.code === 0, "H：等级已改（升到 10 级，体力上限随之变化）", leveled.message);
+    const leveled = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, { token: adminToken, body: { level: 10 } });
+    check(leveled.code === 0, "H：等级已改（管理端 PATCH 到 10 级，体力上限随之变化）", leveled.message);
     const maxHpFrame = await waitFor("fighter 收到 companion 的血条分母变化", async () => {
       return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.maxHp !== maxHpBefore)) || null;
     }, 8_000);

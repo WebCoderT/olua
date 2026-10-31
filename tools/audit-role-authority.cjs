@@ -59,7 +59,7 @@ function read(p) {
 function serverOwnedFields() {
   const text = read(AUTHORITY);
   const fields = [];
-  for (const name of ["SERVER_LEDGER_FIELDS", "SERVER_GROWTH_FIELDS"]) {
+  for (const name of ["SERVER_LEDGER_FIELDS", "SERVER_GROWTH_FIELDS", "SERVER_PROGRESS_FIELDS"]) {
     const match = new RegExp(`export const ${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(text);
     if (!match) {
       problems.push(`${rel(AUTHORITY)}：找不到 ${name}（权威边界清单被改名或删掉了？）`);
@@ -135,18 +135,24 @@ function collectTs(dir, out = []) {
   return out;
 }
 
-/** 判据 3：客户端对账本 / 阶位的赋值只能来自服务端 */
+/** 判据 3：客户端对账本 / 阶位 / 进度的赋值只能来自服务端 */
 function checkClientAssignments(fields) {
   if (!fields.length) return;
-  // 赋值运算符要包含复合赋值：`role.gold -= price` 才是真正常见的翻车写法
-  const pattern = new RegExp(`\\.(${fields.join("|")})\\s*([+\\-*/]?=)(?!=)\\s*(.*)$`);
+  // 赋值运算符要包含复合赋值：`role.gold -= price` 才是真正常见的翻车写法。
+  //
+  // 接收者必须叫 `role`（#550 收窄）：`level` 这个词在客户端到处都是 —— 任务目标的
+  // `this.level`（QuestStore）、怪物的 `monster.level`、UI 节点的 `layout.title` ——
+  // 按字段名裸匹配会把它们全判成违规。真正要盯的是「角色对象自己那份账」。
+  const pattern = new RegExp(`(?:^|[^.\\w])role\\.(${fields.join("|")})\\s*([+\\-*/]?=)(?!=)\\s*(.*)$`);
   for (const file of collectTs(CLIENT_UI)) {
     const lines = read(file).split("\n");
     lines.forEach((line, index) => {
       const match = pattern.exec(line);
       if (!match) return;
       const rhs = match[3].trim();
-      const fromServer = /^(update|data|result|fresh|saved|detail)\./.test(rhs) || /^Number\((data|result|update)\./.test(rhs);
+      // 右值里**引用**了服务端应答对象就算放行 —— 包一层 `Math.max(0, Math.floor(update.exp))`
+      // 也还是照抄服务端，不该因为多了个取整就判红
+      const fromServer = /(^|[^\w.])(update|data|result|fresh|saved|detail|reward|gain)\./.test(rhs);
       // 旧档补默认：`if (typeof role.gold !== "number") role.gold = 0;`
       const legacyDefault = /^0;?$/.test(rhs) && /typeof\s+\w+\.\w+\s*!==/.test(line);
       if (fromServer || legacyDefault) return;

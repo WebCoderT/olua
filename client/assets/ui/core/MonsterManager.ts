@@ -3,7 +3,6 @@ import { monsters } from "../../configs/monster";
 import { findSkillConfig, skills } from "../../configs/skill";
 import { statuses } from "../../configs/status";
 import { statusEffect } from "../../configs/effect";
-import { getKillExp } from "../../configs/level";
 import { Monster, MonsterSpawnArea } from "../../types/monster";
 import { SkillId } from "../../types/skill";
 import { ACTION } from "../../types/animation";
@@ -229,7 +228,13 @@ export default class MonsterManager {
     MonsterAI.push(target, direction, distance, duration);
   }
 
-  /** 对目标怪物结算一次伤害（**本地口径**，实时通道不可用时的回滚路径） */
+  /**
+   * 对目标怪物结算一次伤害（**仅表现**：实时通道不活跃时技能的本地下手）
+   *
+   * 调用方只有 `skills/*` 的回滚分支（通道连不上时技能不能白放，动作与飘字要演出来）。
+   * #550 起这条路上**不给经验也不铺掉落** —— 经验只由服务端结算，本地这一下打死的怪
+   * 在下一次世界快照里就是「服务端认为它还活着」或「别人杀的」，给经验等于白送。
+   */
   static hurt(target: Node, damage: number) {
     const monster = this.getMonsterData(target);
     if (!monster || monster.hp <= 0) return;
@@ -416,11 +421,15 @@ export default class MonsterManager {
   }
 
   /**
-   * 把一次伤害落到目标身上（表现与死亡流程的唯一去处，本地口径与服务端结算共用）
-   * @param hp 落完后的血量（本地口径传「扣完的值」；服务端结算直接用服务端给的值）
-   * @param killed 是否死亡（缺省按 hp <= 0 判 —— 本地口径；服务端结算以服务端判定为准）
-   * @param reward 击杀奖励（#316：服务端结算的入账结果；缺省 = 本地口径，走本地经验与掉落表）
-   * @param castId 结算的出手序号（#325：随掉落物记账，拾取帧靠它定位服务端账本；本地口径没有）
+   * 把一次伤害落到目标身上（表现与死亡流程的唯一去处）
+   *
+   * 结算的**唯一来源是服务端**（#550）：伤害、击杀判定、经验、掉落全部由 `applyServerSettle`
+   * 带回来，这里只负责演。没有 `reward` 的死亡（世界快照的兜底清场：断线期间被队友击杀 /
+   * 换图残留）**只演死亡**，不给经验也不铺掉落 —— 那不是一次本地击杀。
+   * @param hp 落完后的血量（服务端给的值）
+   * @param killed 是否死亡（以服务端判定为准）
+   * @param reward 击杀奖励（#316：服务端结算的入账结果；缺省 = 兜底清场，无奖励）
+   * @param castId 结算的出手序号（#325：随掉落物记账，拾取帧靠它定位服务端账本）
    */
   private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward, castId?: number) {
     // 受伤飘字（需在死亡销毁节点前显示；0 伤不飘 —— 世界快照的兜底清理不是一次真实受击）
@@ -433,9 +442,11 @@ export default class MonsterManager {
       MonsterAI.provoke(target);
       return;
     }
-    // 死亡：先结算击杀奖励再注销数据（经验飘字要借还活着的节点定位）——
-    // 服务端结算路径（reward 存在）：经验入账与掉落内容都以服务端给的为准，本地只演；
-    // 本地口径回滚路径（实时通道不可用）：按本地经验公式与掉落配置结算（既有行为）
+    // 死亡：先结算击杀奖励再注销数据（经验飘字要借还活着的节点定位）
+    //
+    // 这里**只有**服务端结算这一条路（#550 删掉了「本地口径」那条）：客户端没有伤害结算能力，
+    // 也就不存在「本地打死一只怪」这种事。此前的 else 分支会让世界快照的清场白送一份经验
+    // （注释写着「不演经验与掉落」，代码却走了本地加经验），已删除。
     if (reward) {
       if (reward.exp > 0) {
         // 经验入账后的状态（level / exp / revision）在服务端已落账，照搬即可
@@ -444,11 +455,6 @@ export default class MonsterManager {
       }
       // 掉落铺场时带上 castId（#325）：拾取要拿「castId + 下标」向服务端发 pick 帧
       DropManager.spawnResults(reward.drops, target.getWorldPosition(), castId);
-    } else {
-      const role = StorageManager.findOnlineRole();
-      if (role) this.awardKillExp(target, monster, role.level);
-      // 按掉落配置在地面生成掉落物
-      DropManager.drop(monster.drops, target.getWorldPosition(), monster.dropPicks);
     }
     // 注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）
@@ -462,15 +468,6 @@ export default class MonsterManager {
     const head = target.getChildByName("monster_head");
     if (head) head.active = false;
     if (!MonsterAI.die(target)) target.destroy();
-  }
-
-  /** 结算击杀经验（**本地口径回滚路径**：实时通道不可用时按本地公式入账；服务端结算在线时走 StorageManager.applyKillReward） */
-  private static awardKillExp(target: Node, monster: Monster, roleLevel: number) {
-    const exp = getKillExp(roleLevel, monster.level);
-    if (exp <= 0) return;
-    // 经验入账（升级判定/属性重算/补满血蓝/落盘/UI 刷新都在 StorageManager.onlineRoleGetExp 内完成）
-    StorageManager.onlineRoleGetExp(exp);
-    GameUiHelper.showExpGain(target, exp);
   }
 
   /** 刷新怪物头顶血条与血量文字（monster_head 结构：children[0]=血条 children[1]=血量文字，见 GameUiHelper.createMonsterHead） */

@@ -28,7 +28,7 @@ const ADMIN_CODE = "e2e-admin-code";
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 247;
+const EXPECTED_ASSERTIONS = 248;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -323,12 +323,13 @@ async function runSuite(baseUrl) {
   });
   checkEqual(save.status, 200, "保存进度返回 200");
   checkEqual(save.body.data.id, "1001", "id 以路径为准（请求体里的 id 被忽略）");
-  checkEqual(save.body.data.level, 5, "等级已保存");
+  checkEqual(save.body.data.level, 1, "等级不接受客户端上报（进度在服务端，见 role-authority.ts）");
   checkEqual(save.body.data.data.gold, 1000, "金币不接受客户端上报（账本在服务端，见 role-authority.ts）");
+  checkEqual(save.body.data.data.exp, 0, "经验也不接受客户端上报（#550：只剩服务端结算一条路）");
   checkEqual(save.body.data.data.bag[0][0].id, "a", "未改动的字段原样保留");
 
   const savedDetail = await call("GET", "/api/roles/1001", { token });
-  checkEqual(savedDetail.body.data.level, 5, "重新读取仍是保存后的等级");
+  checkEqual(savedDetail.body.data.level, 1, "重新读取仍是服务端的等级");
 
   const onlineBefore = await call("GET", "/api/roles/online", { token });
   checkEqual(onlineBefore.body.data.id, "1001", "在线角色是 1001");

@@ -2,8 +2,6 @@ import { sys } from "cc";
 import RoleUIManager from "./RoleUIManager";
 import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
-import { levelMap } from "../../configs/level";
-import { roleMaxLevel } from "../../configs/growth";
 import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
@@ -361,31 +359,6 @@ export default class StorageManager {
       return false;
     }
     return this.upgradeGrowthOnServer(role, "rank", next.level, "rank_upgrade_tip");
-  }
-
-  /** 角色获得经验(当前在线角色) */
-  static onlineRoleGetExp(exp: number) {
-    const role = this.findOnlineRole();
-    role.exp += exp;
-    // 确认是否升级,经验满了则升级
-    if (role.exp >= levelMap.get(role.level).exp) {
-      // 扣除升级所需经验
-      role.exp -= levelMap.get(role.level).exp;
-      // 升级（等级上限跟成长曲线走，见 configs/growth 的 roleMaxLevel）
-      if (role.level >= roleMaxLevel) role.level = roleMaxLevel;
-      else role.level += 1;
-      // 属性与战斗力不在客户端算（#541 服务端权威）：本地结算兜底只记账等级与经验，
-      // 连上服务端后 roleUpdate 帧会把重算结果带回来
-      // 升级时补满血量与魔法值至最大值
-      role.hp = role.maxHp;
-      role.mp = role.maxMp;
-      // 播放升级特效
-      LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
-    }
-    // 保存
-    this.updateOnlineRole(role);
-    // 更新UI
-    this.updateUi(role);
   }
 
   /**

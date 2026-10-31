@@ -34,7 +34,9 @@ const REFRESH_MS = 300;
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 55;
+const EXPECTED_ASSERTIONS = 56;
+/** 管理端注册邀请码（改等级走运营侧 PATCH，见「六、快照语义」） */
+const ADMIN_CODE = "e2e-rank-admin";
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -97,6 +99,7 @@ async function startServer(dbPath, extraEnv = {}) {
       // 默认这台是「快照语义」用：不起定时器，只在首次请求时算一次
       LEADERBOARD_REFRESH_MS: "0",
       LEADERBOARD_TOP_N: String(TOP_N),
+      ADMIN_REGISTER_CODE: ADMIN_CODE,
       ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -156,6 +159,13 @@ async function preparePlayer(baseUrl, username, roleId, roleName, level, extra =
   return { token, roleId, name: roleName };
 }
 
+/** 注册并登录一个管理员（改等级要 `ROLE_WRITE`：等级是服务端写点，#550 起存档改不动它） */
+async function registerAdmin(baseUrl, username, password) {
+  await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  return login.body && login.body.data && login.body.data.token;
+}
+
 /** 直插击杀数（造数：被测的是「榜怎么排名」，不是「击杀怎么记」——后者在 e2e-combat 里盯） */
 function seedKills(dbPath, kills) {
   const { DatabaseSync } = require("node:sqlite");
@@ -191,6 +201,9 @@ function namesOf(page) {
   try {
     server = await startServer(mainDb);
     const { baseUrl } = server;
+    // 管理员：改等级要用它（等级是服务端写点，#550 起存档改不动）
+    const adminToken = await registerAdmin(baseUrl, "rank_admin", "Rank#123456");
+    check(!!adminToken, "准备：管理员已登录（改等级 / 造等级变化要用）");
 
     //#region 准备：六个角色（等级两两一组，丁戊己带养成项）
 
@@ -321,12 +334,9 @@ function namesOf(page) {
     group("六、快照语义：REFRESH_MS=0 时改了等级榜不动（名次延迟是设计，不是 bug）");
 
     const beforeSnapshot = await data(baseUrl, "GET", "leaderboards/level?size=10", { token: A.token });
-    const detailA = await data(baseUrl, "GET", "roles/rank_role_a", { token: A.token });
-    const raised = await api(baseUrl, "PUT", "roles/rank_role_a", {
-      token: A.token,
-      body: { data: { ...detailA.data, level: 20 }, revision: detailA.revision },
-    });
-    checkEqual(raised.body && raised.body.data && raised.body.data.level, 20, "甲的角色等级已改成 20（存档写成功）");
+    // 等级是服务端写点（#550 起存档里的上报值会被回填）：造「等级变了但快照还没重算」走运营侧 PATCH
+    const raised = await data(baseUrl, "PATCH", "admin/roles/rank_role_a", { token: adminToken, body: { level: 20 } });
+    checkEqual(raised && raised.level, 20, "甲的角色等级已改成 20（管理端 PATCH）");
 
     const afterSnapshot = await data(baseUrl, "GET", "leaderboards/level?size=10", { token: A.token });
     checkEqual(afterSnapshot && afterSnapshot.list[0].level, 10, "榜上还是 10 级 —— 快照没重算");
@@ -368,11 +378,8 @@ function namesOf(page) {
     const freshBefore = await data(refresher.baseUrl, "GET", "leaderboards/level", { token: freshA.token });
     checkEqual(namesOf(freshBefore), "后进,先锋", "第一次查询就把榜算出来了（惰性首算，不需要预热）");
 
-    const freshDetail = await data(refresher.baseUrl, "GET", "roles/rank_fresh_a", { token: freshA.token });
-    await api(refresher.baseUrl, "PUT", "roles/rank_fresh_a", {
-      token: freshA.token,
-      body: { data: { ...freshDetail.data, level: 12 }, revision: freshDetail.revision },
-    });
+    const freshAdmin = await registerAdmin(refresher.baseUrl, "rank_fresh_admin", "Rank#12345");
+    await data(refresher.baseUrl, "PATCH", "admin/roles/rank_fresh_a", { token: freshAdmin, body: { level: 12 } });
     const freshRight = await data(refresher.baseUrl, "GET", "leaderboards/level", { token: freshA.token });
     checkEqual(namesOf(freshRight), "后进,先锋", "改完立刻查还是旧顺序（快照期内不跳名）");
 
