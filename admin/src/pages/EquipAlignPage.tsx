@@ -1081,8 +1081,8 @@ export function EquipAlignPage() {
                   onChange={(event) => patchGeometry((current) => ({ ...current, manual: event.target.checked }))}
                 />
                 <span>
-                  使用手调的绝对位置（默认勾选）
-                  <span className="block text-slate-500">工作台里调的位置就是绝对位置；关掉 = 客户端按身体帧自动算，这里的数值只当微调 —— 关掉后预览与游戏内表现会不一致。</span>
+                  使用手调的绝对位置（#541 起客户端已停用帧算法，恒按绝对位置摆）
+                  <span className="block text-slate-500">此开关当前不影响游戏内表现，仅保留数据语义：客户端外观一律把坐标当绝对位置；保存时保持勾选即可。</span>
                 </span>
               </label>
             ) : null}
