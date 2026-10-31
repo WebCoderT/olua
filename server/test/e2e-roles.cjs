@@ -43,7 +43,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 146;
+const EXPECTED_ASSERTIONS = 148;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -169,17 +169,20 @@ function roleData(id, name, occupation, level) {
   const roleA3 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a3", "甲三", "3", 20) } });
   check(roleA2.code === 0 && roleA3.code === 0, "同一账号可连续创建多个角色（数量不设上限）");
 
-  const saved1 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 6) } });
+  // 这几次存档用 `onMap`（客户端全权字段）当「改点东西」的载体，**不用 level / exp**：
+  // #550 起等级与经验也归服务端（存档里的上报值会被回填成库里的值），
+  // 拿它们当载体验修订号的话，验的就不是修订号了
+  const saved1 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...roleData("role_a1", "甲一", "1", 5), onMap: "1" } } });
   check(saved1.code === 0 && saved1.data.revision === 2, "不带 revision 保存仍然可用（向后兼容），revision 递增到 2", JSON.stringify(saved1.data && saved1.data.revision));
 
-  const saved2 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 7), revision: 2 } });
+  const saved2 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...roleData("role_a1", "甲一", "1", 5), onMap: "2" }, revision: 2 } });
   check(saved2.code === 0 && saved2.data.revision === 3, "带正确 revision 保存成功，revision 到 3", JSON.stringify(saved2.data && saved2.data.revision));
 
-  const stale = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 8), revision: 2 } });
+  const stale = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...roleData("role_a1", "甲一", "1", 5), onMap: "3" }, revision: 2 } });
   check(stale.code === 20006 && stale.status === 409, "带过期 revision 保存被拒（20006 / 409）", `${stale.code}/${stale.status}`);
 
   const afterStale = await api("GET", "roles/role_a1", { token: tokenA });
-  check(afterStale.data.level === 7, "被拒的保存没有写库（还是上一次的值 7）", `${afterStale.data.level}`);
+  check(afterStale.data.data.onMap === "2", "被拒的保存没有写库（还是上一次的值 2）", `${afterStale.data.data && afterStale.data.data.onMap}`);
   check(afterStale.data.revision === 3, "详情里的 revision 与服务端一致", `${afterStale.data.revision}`);
 
   const crossAccount = await api("GET", "roles/role_a1", { token: tokenB });
@@ -785,6 +788,8 @@ function roleData(id, name, occupation, level) {
   // 「客户端少收了一帧」变成玩不了），但落库的必须是库里的值。
   const tampered = {
     ...roleData("role_f1", "报二", "1", 10),
+    // 等级也改（#550）：这是索引列，回填不生效的话列表与详情会按 99 级显示一身神装
+    level: 99,
     gold: 999999,
     bindGold: 88888,
     silver: 7777,
@@ -810,6 +815,10 @@ function roleData(id, name, occupation, level) {
     "称号 / 战魂 / 军衔阶位没被改写（只有 upgradeGrowth 能推进）",
     `title=${tamperedDoc.title} soul=${tamperedDoc.soulOfWar} rank=${tamperedDoc.rank}`,
   );
+  // 进度（#550）：经验只由服务端结算，客户端已经没有本地加经验路径；等级还是索引列，
+  // 回填之后 `row.level` 必须跟着重取（否则列表按 99 级排序、详情按 10 级显示）
+  check(tamperedDoc.exp === 0, "经验没被改写（经验只由服务端结算）", `exp=${tamperedDoc.exp}`);
+  check(tamperedDoc.level === 10, "等级没被改写（改包填 99，索引列也跟着回填成 10）", `level=${tamperedDoc.level}`);
   // 上限由服务端重算得出，血蓝夹在 [0, maxHp]（客户端 applyServerRoleUpdate 同一条不变式）
   const fDerived = await api("GET", "admin/roles/role_f1", { token: adminToken });
   const fMaxHp = fDerived.data.derived.attributes.maxHp;

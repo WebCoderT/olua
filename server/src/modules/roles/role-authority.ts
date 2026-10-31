@@ -9,6 +9,7 @@
  * |---|---|---|---|
  * | 账本 | `gold` / `bindGold` / `silver` | **服务端** | 商城、回收、成长线、任务、成就、邮件、后台都有各自的服务端写点；客户端只从 `roleUpdate` 帧照搬，**没有任何本地改写的代码**（`StorageManager.applyServerRoleUpdate` 是唯一入口）|
  * | 成长线阶位 | `title` / `soulOfWar` / `rank` | **服务端** | 只有 `RolesService.upgradeGrowth` 能推进（扣费 + 成长链校验都在那）；客户端 `upgradeGrowthOnServer` 只把服务端返回值抄回来 |
+ * | 进度 | `level` / `exp` | **服务端** | 经验只由服务端结算（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台），客户端**没有**本地加经验路径（#550 删掉了泡点组件与"实时通道不可用"的兜底；那条路上连伤害都不结算，留着只是给改包留门）|
  * | 派生值 | `combat` / `maxHp` / `hpRecover` / `maxMp` / 六项攻防 | **服务端重算** | 每次写档由 `applyAuthoritativeAttributes` 现算覆盖，**不走本文件的回填**（回填反而会把刚算好的值盖回旧的）|
  * | 客户端全权 | `bag` / `equipments` / `skills` / `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` / `relationShip` | 客户端 | 换装、整理背包、丢弃、走图、喝药回血、引导推进**都发生在本地**，服务端只有部分动作有接口（拾取 / 购买 / 回收 / 用药）；这些字段若收权，得先把本地那套操作全部改成服务端接口 |
  *
@@ -33,6 +34,15 @@ export const SERVER_LEDGER_FIELDS = ["gold", "bindGold", "silver"] as const;
 export const SERVER_GROWTH_FIELDS = ["title", "soulOfWar", "rank"] as const;
 
 /**
+ * 进度：经验与等级只由服务端结算（#550）
+ *
+ * `level` 还多一层：它在 `roles` 表里是**索引列**（列表排序 / 筛选都读它），
+ * 存档文档里也有一份（客户端整份推上来）。所以回填之后，`save` 必须用文档里的新值
+ * 重新取一次索引列 —— 否则「列表里的等级」与「详情里的等级」会各说一套。
+ */
+export const SERVER_PROGRESS_FIELDS = ["level", "exp"] as const;
+
+/**
  * 派生值：由 `applyAuthoritativeAttributes` 重算覆盖
  *
  * 这里**只登记**（给文档与审计一个可读清单），回填逻辑不碰它们 ——
@@ -51,8 +61,12 @@ export const SERVER_DERIVED_FIELDS = [
   "taoistDefense",
 ] as const;
 
-/** 服务端独占的全部字段（= 账本 + 阶位；派生值另算） */
-export const SERVER_OWNED_FIELDS: readonly string[] = [...SERVER_LEDGER_FIELDS, ...SERVER_GROWTH_FIELDS];
+/** 服务端独占的全部字段（= 账本 + 阶位 + 进度；派生值另算） */
+export const SERVER_OWNED_FIELDS: readonly string[] = [
+  ...SERVER_LEDGER_FIELDS,
+  ...SERVER_GROWTH_FIELDS,
+  ...SERVER_PROGRESS_FIELDS,
+];
 
 /** 一次回填里的一个字段差异（只用于日志，不参与判定） */
 export interface AuthorityDrift {

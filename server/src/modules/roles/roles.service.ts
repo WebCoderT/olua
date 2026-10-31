@@ -20,7 +20,7 @@ import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
-import { decodeStoredRoleData, parseRoleData } from "./role-data.util";
+import { decodeStoredRoleData, normalizeLevel, parseRoleData } from "./role-data.util";
 import { clampInitialCurrency, clampVitals, enforceServerAuthority } from "./role-authority";
 
 /** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
@@ -176,13 +176,17 @@ export class RolesService {
       throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
     }
 
-    // 权威边界（见 role-authority.ts）：账本与成长线阶位以库为准，客户端报上来的一律丢弃；
-    // 老存档里没有这些键时不回填（客户端那份是唯一来源，删掉等于把玩家的钱清零）
-    this.enforceAuthority(decodeStoredRoleData(existing.data), data);
+    // 权威边界（见 role-authority.ts）：账本 / 成长线阶位 / 进度以库为准，客户端报上来的一律丢弃；
+    // 老存档里没有这些键时不回填（客户端那份是唯一来源，删掉等于把玩家的钱清零）。
+    // `level` 另有索引列（`roles.level`）压过文档里的那份 —— 列表排序与筛选读的是列，列才是真相
+    this.enforceAuthority({ ...decodeStoredRoleData(existing.data), level: existing.level }, data);
+    // 等级可能被上面回填改掉，索引列必须从**回填后**的文档重取：
+    // 否则 `row.level`（客户端报的）与 `data.level`（库里的）各说一套，列表与详情对不上
+    const level = normalizeLevel(data.level);
     // 比对在前（记录客户端这次上报了什么，观察用），重算在后（落库的一定是服务端算的）：
     // 客户端那份自 #541 起只是演，谁强由这里的公式说了算
-    this.warnIfAttributesMismatch(roleId, fields.level, data);
-    this.applyAuthoritativeAttributes(fields.level, data);
+    this.warnIfAttributesMismatch(roleId, level, data);
+    this.applyAuthoritativeAttributes(level, data);
     // 上限是上面那步算出来的，夹在它之后；血蓝的「当前值」仍归客户端（自然回复在本地）
     clampVitals(data);
     const row: RoleRow = {
@@ -190,7 +194,7 @@ export class RolesService {
       name: fields.name,
       occupation: fields.occupation,
       sex: fields.sex,
-      level: fields.level,
+      level,
       data: JSON.stringify(data),
       // 与 replace() 里的 `revision = revision + 1` 对齐：SQL 只是落库，这里要给出**落库后**的值，
       // 否则响应里的 revision 比库里小 1，客户端拿它做基线会立刻撞乐观锁（自锁死循环）
