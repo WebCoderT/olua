@@ -2188,14 +2188,19 @@ export default class GameUiHelper {
     node.setPosition(position.x, position.y, 0);
   }
 
-  /** 创建血量/魔法值文字零件（位置与尺寸见 hudLayout.bottomBar.hpText / mpText） */
-  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpText.size, name = "hp_text") {
-    return UiHelper.createLabel(name, text, Color.WHITE, bottomBarLayout.hpText.fontSize, position, size);
+  /**
+   * 创建血量/魔法值文字零件
+   * 位置/尺寸/字号由调用方传自各自球布局的 text（见 hudLayout.bottomBar.hpOrb.text / mpOrb.text，
+   * 坐标相对球心），默认值仅是兜底
+   */
+  static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = new Size(120, 10), name = "hp_text", fontSize = 12) {
+    return UiHelper.createLabel(name, text, Color.WHITE, fontSize, position, size);
   }
 
   /**
    * 创建圆形血量/魔法值显示零件（底图 + 竖向进度条）
-   * 返回底图节点与其内部的进度条节点，位置与尺寸见 hudLayout.bottomBar.hpOrb / mpOrb
+   * 返回底图节点与其内部的进度条节点；尺寸见 hudLayout.bottomBar.hpOrb.size / mpOrb.size，
+   * 位置由调用方（RoleHpOrb / RoleMpOrb 的包装节点）决定，这里默认在原点
    * 底图见 uiImages.hpOrbBase；填充图缺省为 uiImages.hpOrbFill，魔法球传 uiImages.mpOrbFill
    */
   static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size, fillImage: string = uiImages.hpOrbFill): { barSprite: Node; hpBar: Node } {

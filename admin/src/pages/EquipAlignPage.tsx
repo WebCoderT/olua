@@ -130,7 +130,11 @@ function itemsOfKind(kind: Kind): WorkItem[] {
     key: item.key,
     label: item.label,
     atlas: item.atlas,
-    base: geometryFromCatalog(item, kind === "cloth"),
+    // manual 默认 true：工作台对衣服与武器的整套编辑（拖拽 / 按裸模给初值 / 预览）都是**绝对位置**语义
+    // （render.ts 画格子从不看 manual），保存出去就该按绝对位置被客户端读 ——
+    // 默认 false 时「页面上看着对、游戏里不对」（客户端把同一份坐标当微调叠在自动算法上，#541）。
+    // 想要「自动算法 + 微调」再在右栏把勾去掉。
+    base: geometryFromCatalog(item, true),
   }));
 }
 
@@ -1077,8 +1081,8 @@ export function EquipAlignPage() {
                   onChange={(event) => patchGeometry((current) => ({ ...current, manual: event.target.checked }))}
                 />
                 <span>
-                  使用手调的绝对位置
-                  <span className="block text-slate-500">关掉 = 客户端按身体帧自动算，这里的数值只当微调。</span>
+                  使用手调的绝对位置（默认勾选）
+                  <span className="block text-slate-500">工作台里调的位置就是绝对位置；关掉 = 客户端按身体帧自动算，这里的数值只当微调 —— 关掉后预览与游戏内表现会不一致。</span>
                 </span>
               </label>
             ) : null}

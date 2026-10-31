@@ -67,14 +67,27 @@ export const bottomBarLayout = {
   },
   /** 经验条 */
   expBar: { position: new Vec2(0, -44.5), size: new Size(724, 8) },
-  /** 血量文字 */
-  hpText: { position: new Vec2(-0, -39), size: new Size(120, 10), fontSize: 12 },
-  /** 圆形血球（底图与填充同尺寸，竖向进度） */
-  hpOrb: { position: new Vec2(0, 12.5), size: new Size(90, 90) },
-  /** 魔法值文字（与血量文字同款式，镜像到底部栏右侧） */
-  mpText: { position: new Vec2(0, -39), size: new Size(120, 10), fontSize: 12 },
-  /** 圆形魔法球（与血球同款式同尺寸，镜像到底部栏右侧） */
-  mpOrb: { position: new Vec2(0, 12.5), size: new Size(90, 90) },
+  /**
+   * 血量球（role_hp_orb 节点：球底图/填充与血量文字都挂这个节点下）
+   *
+   * position 是 role_hp_orb **节点**在底部栏坐标系里的位置（固定值直接手调，
+   * 改它整球——球图加文字——一起动）；球图（底图与竖向填充）都在节点原点，
+   * 血量文字相对球心偏移
+   */
+  hpOrb: {
+    position: new Vec2(-370, 5),
+    size: new Size(90, 90),
+    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 12 },
+  },
+  /**
+   * 魔法球（role_mp_orb 节点：结构与血球一致，填充图为蓝色魔法球）
+   * 坐标口径与 hpOrb 相同：position 是节点在底部栏里的位置，文字相对球心偏移
+   */
+  mpOrb: {
+    position: new Vec2(370, 5),
+    size: new Size(90, 90),
+    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 12 },
+  },
   /** 快捷键栏（横向布局容器，5 格 = 5×44 + 4×4 = 224；居中在血球与功能按键区之间的空档） */
   shortcutBar: { spacing: 4, position: new Vec2(-194, -18), size: new Size(226, 44) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
