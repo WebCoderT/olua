@@ -192,6 +192,19 @@ export interface AppConfiguration {
    * 意味着踢下线最迟 3 秒 + 一个心跳内生效。
    */
   realtimeKickPollMs: number;
+  /**
+   * 在线心跳的宽限期（毫秒，#547；`0` = 关闭清算）
+   *
+   * 「角色在线」以 `accounts.online_role_id` 为准，但玩家崩溃 / 断网后没人清这个标记
+   * （断线不立刻清是刻意的：短暂掉线重连不该被拒存档）。所以实时进程给活连接的标记
+   * **续心跳**（存活探测每拍一次），超过这个宽限期没有续约的标记被清算判为下线 ——
+   * 心跳不在，就是不在了。
+   *
+   * 取值下限是**两个存活探测周期**：活连接最迟每拍续约一次，比这更短的宽限期会把
+   * 一次网络抖动误判成下线。默认 90 秒 = 3 个默认心跳，够覆盖「掉线 → 重连 → 重选角」
+   * 整个往返。清算只动库标记，残留连接由踢下线巡检（`realtimeKickPollMs`）收尾。
+   */
+  realtimeOnlineStaleMs: number;
   //#endregion
 
   //#region 聊天（#395）
@@ -398,6 +411,7 @@ export default function configuration(): AppConfiguration {
     realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
+    realtimeOnlineStaleMs: Number(process.env.REALTIME_ONLINE_STALE_MS ?? 90 * 1000),
     chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 120),
     chatRateLimit: Number(process.env.CHAT_RATE_LIMIT ?? 5),
     chatRateWindowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 10 * 1000),

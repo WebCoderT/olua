@@ -199,7 +199,9 @@ export class AdminService {
   kickAccountOffline(id: string): AccountDto {
     const account = this.mustAccount(id);
     if (!account.online_role_id) return AccountDto.from(account);
-    this.accounts.updateById(id, { online_role_id: null });
+    // #547：标记与心跳一起清 —— 留着心跳，下一拍清算判据虽然不会动它（标记已空），
+    // 但「标记没了心跳还在」的半截行会污染排查
+    this.accounts.setOnlineRole(id, null);
     return AccountDto.from({ ...account, online_role_id: null });
   }
 
@@ -222,6 +224,7 @@ export class AdminService {
     return {
       status: ENTITY_STATUS.DISABLED,
       online_role_id: null,
+      online_heartbeat_at: null,
       ban_reason: dto.reason?.trim() || null,
       ban_until: hours === null ? null : now + hours * 3_600_000,
       banned_by: operator ?? null,

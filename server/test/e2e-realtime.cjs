@@ -11,6 +11,8 @@
  * - 消息与心跳：应用层 `ping` → `pong`；不认识的消息只回 `error` 帧、**不断开连接**
  * - 一账号一条连接：新连接上线顶掉旧连接（关闭码 `4000`）
  * - 存活探测：不回 `pong` 的连接被服务端断开（客户端看到 `1006`）
+ * - 在线心跳（#547）：活连接逐拍续约 `online_heartbeat_at`；断线不清标记（重连窗口），
+ *   心跳过期的在线标记被清算判为下线（标记与心跳一起清）；踢下线同一条路
  * - 优雅关闭：SIGTERM 后连接收 `1001`、进程自己退出、日志记下收了尾
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
@@ -18,7 +20,9 @@
  */
 const { spawn } = require("node:child_process");
 const net = require("node:net");
-const path = require("path");
+const os = require("node:os");
+const path = require("node:path");
+const { DatabaseSync } = require("node:sqlite");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -47,7 +51,7 @@ const TICKET_TTL_MS = 3000;
  *
  * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
  */
-const EXPECTED_ASSERTIONS = 50;
+const EXPECTED_ASSERTIONS = 59;
 
 /** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
 function assertExpectedCount(passedCount, failureCount) {
@@ -98,8 +102,8 @@ function freePort() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** 起一台服务并等它就绪（实例留着，末段要 SIGTERM 它） */
-async function startServer() {
+/** 起一台服务并等它就绪（实例留着，末段要 SIGTERM 它；extraEnv 供后段覆盖 DB_PATH 等） */
+async function startServer(extraEnv = {}) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", ENTRY], {
@@ -116,6 +120,7 @@ async function startServer() {
       LOG_REQUESTS: "false",
       REALTIME_TICKET_TTL_MS: String(TICKET_TTL_MS),
       REALTIME_HEARTBEAT_MS: String(HEARTBEAT_MS),
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -229,10 +234,32 @@ async function registerPlayer(baseUrl, username) {
   return response.body?.data?.token;
 }
 
+/** 造一份最小可建号的角色文档（e2e-roles 同款口径；服务端只校验结构，属性交给服务端重算） */
+function roleSnapshot(id) {
+  return {
+    id,
+    name: id,
+    occupation: "1",
+    sex: "1",
+    level: 10,
+    gold: 1000,
+    bindGold: 0,
+    silver: 0,
+    exp: 0,
+    bag: [[null, null], [null, null]],
+    equipments: { WEAPON: null, HELMET: null },
+    skills: { "1001": 1 },
+    shortcutKeys: [],
+    onMap: "0",
+  };
+}
+
 async function main() {
   console.log("=== 服务端 e2e：实时通道 ===");
 
   const server = await startServer();
+  /** 后段「在线心跳」用的第二台服务（独立文件库；组内自己收尾） */
+  let heartbeatServer = null;
   const { baseUrl, port } = server;
   const wsUrl = (ticket) => `ws://127.0.0.1:${port}/api/realtime${ticket === null ? "" : `?ticket=${ticket}`}`;
 
@@ -416,6 +443,93 @@ async function main() {
         "关闭原因写明是服务端在关（客户端可据此稍后重连）",
       );
       check(server.logs().includes("实时通道已关闭"), "服务端日志里记下了「实时通道已关闭」（onModuleDestroy 真的跑了）");
+    }
+    //#endregion
+
+    //#region 八、在线心跳（#547）
+    group("八、在线心跳：心跳在 = 在线可信，心跳不在 = 下线");
+    {
+      // 独立一台服务 + **文件库**：清算判据要以第三方读者身份直接改库里的心跳（:memory: 摸不到）。
+      // 宽限 2500ms（在「下限 = 2×心跳 = 2000ms」之上）：活连接每 1000ms 续约一次不会被误清，
+      // 而把心跳改旧之后最多两拍多就能等到清算，不用干等默认的 90 秒
+      const dbPath = path.join(os.tmpdir(), `olua-e2e-heartbeat-${process.pid}-${Date.now()}.db`);
+      heartbeatServer = await startServer({
+        DB_PATH: dbPath,
+        REALTIME_KICK_POLL_MS: "100",
+        REALTIME_ONLINE_STALE_MS: "2500",
+      });
+      try {
+        const hbUrl = heartbeatServer.baseUrl;
+        const reader = new DatabaseSync(dbPath);
+        const rowOf = (username) =>
+          reader.prepare("SELECT online_role_id, online_heartbeat_at FROM accounts WHERE username = ?").get(username);
+
+        const tokenC = await registerPlayer(hbUrl, "heartbeat_c");
+        await api(hbUrl, "POST", "/api/roles", { token: tokenC, body: { data: roleSnapshot("heartbeat_r1") } });
+        let row = rowOf("heartbeat_c");
+        check(Boolean(row?.online_role_id), "建号自动在线：online_role_id 已置上");
+        check(
+          typeof row?.online_heartbeat_at === "number" && row.online_heartbeat_at > 0,
+          "在线心跳与标记一起写上（置标记与写心跳是同一条语句，不存在半截行）",
+        );
+        const heartbeatAtCreate = row.online_heartbeat_at;
+
+        // 连上 WS：活连接由存活探测逐拍续约，心跳应被推着往前走
+        const liveTicket = (await api(hbUrl, "POST", "/api/realtime/ticket", { token: tokenC })).body?.data?.ticket;
+        const live = openSocket(`ws://127.0.0.1:${heartbeatServer.port}/api/realtime?ticket=${liveTicket}`);
+        await waitForHandshake("在线心跳段的连接", live);
+        await sleep(HEARTBEAT_MS * 2 + 300); // 跨过两拍，续约一定发生过
+        row = rowOf("heartbeat_c");
+        check(
+          typeof row?.online_heartbeat_at === "number" && row.online_heartbeat_at > heartbeatAtCreate,
+          "活连接的在线心跳被实时进程逐拍续约（不是建号那一下就再也不动）",
+        );
+
+        // 断线**不**立刻清标记（刻意的：短暂掉线重连不该被拒存档），下线判据交给心跳清算。
+        // 这里先等一拍再改旧心跳，避免「刚改旧就被下一拍续约推回新鲜」的竞态
+        live.socket.close();
+        await sleep(HEARTBEAT_MS + 300);
+        row = rowOf("heartbeat_c");
+        check(row?.online_role_id != null, "断线不清在线标记（重连窗口内在线状态不变）");
+
+        reader.prepare("UPDATE accounts SET online_heartbeat_at = ? WHERE username = ?").run(Date.now() - 60_000, "heartbeat_c");
+        const cleared = await waitFor(
+          "心跳过期清算",
+          async () => (rowOf("heartbeat_c")?.online_role_id == null ? true : null),
+          6_000,
+        );
+        check(Boolean(cleared), "心跳不在 = 下线：过期标记被清算清空（崩溃 / 断网不再永久「在线」）");
+        check(rowOf("heartbeat_c")?.online_heartbeat_at == null, "清算把心跳与标记一起清（不留半截行）");
+
+        // 踢下线走同一条 setOnlineRole：标记与心跳一起清
+        const adminRegister = await api(hbUrl, "POST", "/api/admin/auth/register", {
+          body: { username: "hb_admin", password: "Admin#1234", registerCode: ADMIN_CODE },
+        });
+        const adminLogin = await api(hbUrl, "POST", "/api/admin/auth/login", {
+          body: { username: "hb_admin", password: "Admin#1234" },
+        });
+        const adminToken = adminLogin.body?.data?.token ?? adminRegister.body?.data?.token;
+        const tokenD = await registerPlayer(hbUrl, "heartbeat_d");
+        const meD = await api(hbUrl, "GET", "/api/auth/me", { token: tokenD });
+        const accountIdD = meD.body?.data?.id;
+        await api(hbUrl, "POST", "/api/roles", { token: tokenD, body: { data: roleSnapshot("heartbeat_r2") } });
+        check(Boolean(accountIdD && rowOf("heartbeat_d")?.online_role_id), "准备：账号 D 已建号并自动在线");
+        const kick = await api(hbUrl, "POST", `/api/admin/accounts/${accountIdD}/offline`, { token: adminToken });
+        checkEqual(kick.status, 201, "管理端踢下线成功");
+        const rowD = rowOf("heartbeat_d");
+        check(rowD?.online_role_id == null && rowD?.online_heartbeat_at == null, "踢下线把标记与心跳一起清（与清算同一条写点）");
+
+        reader.close();
+      } finally {
+        if (heartbeatServer.child.exitCode === null && heartbeatServer.child.signalCode === null) {
+          heartbeatServer.child.kill("SIGKILL");
+        }
+        try {
+          require("node:fs").rmSync(dbPath, { force: true });
+        } catch {
+          /* 临时库清不掉就算了（tmpdir 会兜底回收） */
+        }
+      }
     }
     //#endregion
   } finally {

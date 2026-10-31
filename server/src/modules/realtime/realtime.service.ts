@@ -236,7 +236,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     };
 
     this.logger.log(
-      `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
+      `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 在线心跳宽限 ${this.onlineStaleMs() > 0 ? `${this.onlineStaleMs()}ms` : "关"} / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
     );
   }
 
@@ -568,8 +568,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    * socket 层**不会**自己发现对端已经没了（拔网线、进程被杀、NAT 表过期都会留下一条「看起来还在」的
    * 连接）。所以：上一轮 ping 没还 pong 的直接拆掉，还了的再 ping 一次。
    * 也就是说最坏情况下一条死连接会多留一个周期 —— 这是刻意的（宁可晚一点，也不要因为一次网络抖动误杀）。
+   *
+   * 同一节拍顺带两件事（#547 在线心跳，都只对库说话）：
+   * - **续约**：这轮确认还活着的连接，其账号的在线心跳垫到现在 —— 「标记还在且心跳新鲜」是在线可信的形态；
+   * - **清算**：宽限期（`realtimeOnlineStaleMs`，下限两个探测周期）内没有续约的在线标记判为下线
+   *   （心跳与标记一起清）。玩家崩溃 / 断网后没人清标记，这里是唯一的兜底；清掉之后
+   *   残留连接由踢下线巡检按既有的「从有到无」收尾，本方法不碰连接。
    */
   private sweep(): void {
+    const now = Date.now();
+    const alive: string[] = [];
     for (const socket of this.connections.values()) {
       if (!socket.isAlive) {
         socket.terminate();
@@ -577,7 +585,28 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       }
       socket.isAlive = false;
       socket.ping();
+      alive.push(socket.identity.id);
     }
+    this.accounts.touchHeartbeats(alive, now);
+    const staleMs = this.onlineStaleMs();
+    if (staleMs > 0) {
+      const cleared = this.accounts.clearStaleOnline(now - staleMs, now);
+      if (cleared > 0) {
+        this.logger.warn(`在线心跳清算：${cleared} 个账号的在线标记心跳过期（超过 ${staleMs}ms 未续约），判为下线`);
+      }
+    }
+  }
+
+  /**
+   * 在线心跳的宽限期（毫秒；0 = 关闭清算）
+   *
+   * 配置值不小于**两个存活探测周期**：活连接最迟每拍续约一次，更短的宽限期会把一次
+   * 网络抖动误判成下线（与「死连接多留一个周期」同一个取舍：宁可晚判，不误杀）。
+   */
+  private onlineStaleMs(): number {
+    const configured = Math.max(0, Number(this.config.get<number>("realtimeOnlineStaleMs") ?? 90_000));
+    if (configured === 0) return 0;
+    return Math.max(configured, this.heartbeatMs() * 2);
   }
 
   /**

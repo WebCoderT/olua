@@ -49,14 +49,15 @@ export class AccountRepository {
 
   insert(row: AccountRow): void {
     this.db.run(
-      `INSERT INTO accounts (id, username, password, status, online_role_id, token_version, zone_id, created_at, updated_at, last_login_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO accounts (id, username, password, status, online_role_id, online_heartbeat_at, token_version, zone_id, created_at, updated_at, last_login_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.username,
         row.password,
         row.status,
         row.online_role_id,
+        row.online_heartbeat_at,
         row.token_version,
         row.zone_id ?? 1,
         row.created_at,
@@ -78,6 +79,7 @@ export class AccountRepository {
     if (patch.password !== undefined) assign("password", patch.password);
     if (patch.status !== undefined) assign("status", patch.status);
     if (patch.online_role_id !== undefined) assign("online_role_id", patch.online_role_id);
+    if (patch.online_heartbeat_at !== undefined) assign("online_heartbeat_at", patch.online_heartbeat_at);
     if (patch.token_version !== undefined) assign("token_version", patch.token_version);
     if (patch.ban_reason !== undefined) assign("ban_reason", patch.ban_reason);
     if (patch.ban_until !== undefined) assign("ban_until", patch.ban_until);
@@ -113,11 +115,59 @@ export class AccountRepository {
 
   /** 清空当前在线角色（角色被删时调用；只在正好指向该角色时清） */
   clearOnlineRole(accountId: string, roleId: string): void {
-    this.db.run("UPDATE accounts SET online_role_id = NULL, updated_at = ? WHERE id = ? AND online_role_id = ?", [
-      Date.now(),
-      accountId,
+    this.db.run(
+      "UPDATE accounts SET online_role_id = NULL, online_heartbeat_at = NULL, updated_at = ? WHERE id = ? AND online_role_id = ?",
+      [Date.now(), accountId, roleId],
+    );
+  }
+
+  /**
+   * 置 / 清在线角色标记（#547：标记与心跳**一条语句同生同灭**）
+   *
+   * 在线状态的清算判据是「心跳过期」——两者分两条语句写，就存在「标记有了心跳还没到」
+   * 或反之的半截窗口：前者会被下一拍清算误杀刚选角的人，后者让心跳清算永远差一口气。
+   * 所有写 `online_role_id` 的业务（选角 / 首角色自动在线 / 踢下线 / 封禁）都走这里，
+   * 不要用 `updateById` 单独动标记。
+   */
+  setOnlineRole(id: string, roleId: string | null, now: number = Date.now()): void {
+    this.db.run("UPDATE accounts SET online_role_id = ?, online_heartbeat_at = ?, updated_at = ? WHERE id = ?", [
       roleId,
+      roleId === null ? null : now,
+      now,
+      id,
     ]);
+  }
+
+  /**
+   * 在线心跳续约（实时进程存活探测每拍调用）
+   *
+   * 只动心跳列、**不碰 updated_at**：这是节拍性的「我还活着」信号，不是账号变更，
+   * 每拍都推 updated_at 会让后台的「最近更新」失去意义。只续「确有在线标记」的行 ——
+   * 连接还没进图（没选角）的账号没有在线状态可言，写了也是噪音。
+   */
+  touchHeartbeats(accountIds: string[], now: number): void {
+    if (accountIds.length === 0) return;
+    const placeholders = accountIds.map(() => "?").join(", ");
+    this.db.run(
+      `UPDATE accounts SET online_heartbeat_at = ? WHERE online_role_id IS NOT NULL AND id IN (${placeholders})`,
+      [now, ...accountIds],
+    );
+  }
+
+  /**
+   * 在线心跳清算（#547：心跳不在 = 下线）
+   *
+   * 把「有在线标记但心跳已过期（含心跳为 NULL 的异常行）」的账号判为下线：标记与心跳
+   * 一起清。返回清掉的账号数供日志。残留连接的收尾不在这里 —— 清掉标记后，实时进程
+   * 既有的踢下线巡检会按「从有到无」把连接断开，那条路已经是验证过的。
+   */
+  clearStaleOnline(staleBefore: number, now: number = Date.now()): number {
+    return this.db
+      .execute(
+        "UPDATE accounts SET online_role_id = NULL, online_heartbeat_at = NULL, updated_at = ? WHERE online_role_id IS NOT NULL AND (online_heartbeat_at IS NULL OR online_heartbeat_at < ?)",
+        [now, staleBefore],
+      )
+      .changes;
   }
 
   /** 按 id 批量取（批量封禁 / 解封要先知道这些 id 是否存在、是否在线） */

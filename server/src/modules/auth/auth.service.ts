@@ -50,6 +50,7 @@ export class AuthService {
       email: null,
       status: ENTITY_STATUS.ACTIVE,
       online_role_id: null,
+      online_heartbeat_at: null,
       token_version: 0,
       ban_reason: null,
       ban_until: null,

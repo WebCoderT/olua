@@ -82,6 +82,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         email          TEXT,
         status         TEXT NOT NULL DEFAULT 'active',
         online_role_id TEXT,
+        online_heartbeat_at INTEGER,
         token_version  INTEGER NOT NULL DEFAULT 0,
         ban_reason     TEXT,
         ban_until      INTEGER,
@@ -807,6 +808,14 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 区服（#295 阶段二）：存量账号全部归入一区（zone_id=1 与 zones seed 对齐，注册入参可指定）
     this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
     this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    // 在线心跳（#547）：与 online_role_id 同生同灭。补列后存量在线标记的心跳是 NULL，
+    // 而「NULL 心跳」在清算判据里等于已过期 —— 直接上线会把所有在线玩家 mass kick。
+    // 这里垫成启动时刻，给活连接一个完整宽限窗让实时进程接管续约；真死连接宽限期后照清。
+    this.ensureColumn("accounts", "online_heartbeat_at", "INTEGER");
+    this.db
+      .prepare("UPDATE accounts SET online_heartbeat_at = ? WHERE online_role_id IS NOT NULL AND online_heartbeat_at IS NULL")
+      .run(Date.now());
+
     // 消息频道（#436）：存量邮件按 kind 回填一次 —— 成就兜底的邮件属于「奖励」频道，
     // 其余留在「系统」。幂等：只动「还是默认值且来源已明确」的行
     this.ensureColumn("role_mails", "channel", "TEXT NOT NULL DEFAULT 'system'");

@@ -155,7 +155,7 @@ export class RolesService {
     // 建号这份 data 是客户端 `new Role(...)` **刚构造出来的初始存档**，它的 `combat` 是构造函数里的
     // 占位值（`maxHp * 10`），压根没经过 `GameHelper.combatCalc` —— 实测 1 级裸角色重算是 2310、
     // 而占位值是 1000，**必然不一致**。那不是任何人的 bug，比了只会每次建号刷一条噪音。
-    if (!account.online_role_id) this.accounts.updateById(accountId, { online_role_id: row.id });
+    if (!account.online_role_id) this.accounts.setOnlineRole(accountId, row.id);
     return RoleDto.from(row, account.online_role_id ?? row.id);
   }
 
@@ -909,11 +909,11 @@ export class RolesService {
     );
   }
 
-  /** 选中（在线）角色 */
+  /** 选中（在线）角色（#547：标记与心跳一起置上，宽限期从这一刻起算） */
   select(accountId: string, roleId: string): RoleDto {
     this.mustAccount(accountId);
     const row = this.mustOwnRole(accountId, roleId);
-    this.accounts.updateById(accountId, { online_role_id: row.id });
+    this.accounts.setOnlineRole(accountId, row.id);
     return RoleDto.from(row, row.id);
   }
 
