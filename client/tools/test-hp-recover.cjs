@@ -211,18 +211,7 @@ check(/hpRecover: number;/.test(roleSource) && /hpRecoverAccumulator: number = 0
 check(/this\.hpRecover = levelMap\.get\(this\.level\)\.hpRecover;/.test(roleSource), "新建角色按等级初始化回血");
 
 const helperSource = read("assets/ui/core/GameHelper.ts");
-check(
-  /levelConfig\.hpRecover/.test(helperSource) &&
-    /total \+ equipment\.hpRecover, 0\)/.test(helperSource) &&
-    /\(soul\?\.attributes\.hpRecover \?\? 0\)/.test(helperSource) &&
-    /\(title\?\.attributes\.hpRecover \?\? 0\)/.test(helperSource) &&
-    /\(rank\?\.attributes\.hpRecover \?\? 0\)/.test(helperSource),
-  "combatCalc 把等级 + 装备 + 战魂 + 称号 + 军衔五处回血相加",
-);
-check(
-  /keyof Omit<BattleAttributes, "maxHp" \| "hpRecover">/.test(helperSource),
-  "combatCalc 里 hpRecover 不算区间属性（与 maxHp 一样单独相加，否则会被当成 [min,max] 相加）",
-);
+check(!/combatCalc/.test(helperSource), "GameHelper 里没有本地属性计算（#541 服务端权威：hpRecover 由 roleUpdate 帧下发，客户端只消费）");
 check(/Exclude<keyof BattleAttributes, "hpRecover">/.test(read("assets/configs/battle.ts")), "战斗力权重表把 hpRecover 排除在外（回血不计入战斗力/地图门槛）");
 
 check(/HpHelper\.ensureDefaults\(role\);/.test(read("assets/ui/core/StorageManager.ts")), "StorageManager.ensureRoleDefaults 补旧存档的回血字段");

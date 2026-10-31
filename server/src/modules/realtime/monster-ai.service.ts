@@ -7,7 +7,7 @@ import { SkillRepository } from "../../database/repositories/skill.repository";
 import { StatusRepository } from "../../database/repositories/status.repository";
 import { SkillRow, StatusRow } from "../../database/rows";
 import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json";
-import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
 import type { RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit } from "./realtime.protocol";
@@ -534,7 +534,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (!role) return null;
     const stats = this.monsterConfigs.findByKey(monster.monsterKey);
     if (!stats) return null;
-    const summary = summarizeRoleAttributes(role);
+    // RoleDto 要摊平（装备/成长线在 data 里），否则玩家的防御只剩等级那一档
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data));
     const attack = rollRange([Number(stats.physical_attack_min) || 0, Number(stats.physical_attack_max) || 0]) * this.attackMultiplierOf(monster.instanceId);
     const defense = summary ? rollRange(summary.physicalDefense) : 0;
     const damage = Math.max(0, Math.round(attack * rate - defense));

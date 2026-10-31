@@ -67,6 +67,7 @@ const ALLOWED_EDGES = [
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
   { from: "modules/realtime", to: "modules/roles/roles.service.ts", why: "结算读写存档走存档服务" },
+  { from: "modules/realtime", to: "modules/roles/role-data.util.ts", why: "roleUpdate 组帧解码存档（#541）" },
   // 社交（#388/#389）：所有帮会 / 好友动作都落在「账号的在线角色」上，
   // 而哪个角色在线只有存档域知道（accounts.online_role_id）—— 不让社交域自己摸账号表
   { from: "modules/social", to: "modules/roles/roles.service.ts", why: "社交动作取账号的在线角色" },

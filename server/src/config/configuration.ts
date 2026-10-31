@@ -190,6 +190,15 @@ export interface AppConfiguration {
    * 意味着踢下线最迟 3 秒 + 一个心跳内生效。
    */
   realtimeKickPollMs: number;
+  /**
+   * 角色权威快照（roleUpdate 帧）的轮询间隔（毫秒；`0` = 关闭推送）
+   *
+   * 角色属性 / 战斗力 / 货币的写点分散在两个进程（存档进程的任务 / 邮件 / 商城 / 后台，
+   * 实时进程的升级 / 拾取），进程内事件总线跨不过进程边界 —— 与踢下线感知同一难题、
+   * 同一答案：实时进程轮询在线角色的行，`revision / updated_at` 变了才推。
+   * 默认 1 秒：属性面板与货币栏的「实时」以这个粒度为准。
+   */
+  realtimeRoleSyncMs: number;
   //#endregion
 
   //#region 聊天（#395）
@@ -396,6 +405,7 @@ export default function configuration(): AppConfiguration {
     realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
+    realtimeRoleSyncMs: Number(process.env.REALTIME_ROLE_SYNC_MS ?? 1 * 1000),
     chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 120),
     chatRateLimit: Number(process.env.CHAT_RATE_LIMIT ?? 5),
     chatRateWindowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 10 * 1000),

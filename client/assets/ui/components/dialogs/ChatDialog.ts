@@ -11,10 +11,10 @@ import CombatChannel from "../../utils/net/CombatChannel";
 import type { ChatChannel, ChatEntry } from "../../utils/net/CombatChannel";
 import { chatDialogLayout as layout } from "../../../configs/hudLayout";
 import { getRelationColor } from "../../../configs/social";
-import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import GuideStore from "../../core/GuideStore";
 import { GUIDE_EVENT } from "../../../types/guide";
+import { createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 聊天弹窗的三个页签（与协议频道同名，切换零映射） */
 type ChatTab = ChatChannel;
@@ -109,26 +109,9 @@ export default class ChatDialog {
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
-    this.tabNodes.clear();
-    this.tabLabels.clear();
-    TABS.forEach((tab, index) => {
-      const node = UiHelper.createNode(`${layout.name}_tab_${tab}`, new Vec2(layout.tabs.columns[index], layout.tabs.y), layout.tabs.size);
-      node.addComponent(Graphics);
-      const label = UiHelper.createLabel(
-        `${layout.name}_tab_${tab}_label`,
-        layout.texts.tabs[index],
-        layout.tabs.idleText,
-        layout.tabs.fontSize,
-        new Vec2(),
-        layout.tabs.size,
-      );
-      node.addChild(label);
-      node.on(Node.EventType.TOUCH_END, () => this.select(tab), this);
-      blockClickThrough(node);
-      dialog.addChild(node);
-      this.tabNodes.set(tab, node);
-      this.tabLabels.set(tab, label);
-    });
+    const { nodes, labels } = createTabStrip(dialog, layout.name, TABS, layout.texts.tabs, layout.tabs, (tab) => this.select(tab));
+    this.tabNodes = nodes;
+    this.tabLabels = labels;
   }
 
   /** 切换页签（清空内容区重画；切走 = 该页已读） */
@@ -142,28 +125,7 @@ export default class ChatDialog {
   }
 
   private paintTabs() {
-    TABS.forEach((tab) => {
-      const node = this.tabNodes.get(tab);
-      const labelNode = this.tabLabels.get(tab);
-      if (!node || !isValid(node) || !labelNode) return;
-      const active = tab === this.tab;
-      const graphics = node.getComponent(Graphics);
-      if (graphics) {
-        graphics.clear();
-        const half = layout.tabs.size;
-        graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, layout.tabs.radius);
-        graphics.fillColor = active ? layout.tabs.activeFill : layout.tabs.idleFill;
-        graphics.fill();
-        if (!active) {
-          graphics.lineWidth = 1;
-          graphics.strokeColor = layout.tabs.idleBorder;
-          graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, layout.tabs.radius);
-          graphics.stroke();
-        }
-      }
-      const label = labelNode.getComponent(Label);
-      if (label) label.color = active ? layout.tabs.activeText : layout.tabs.idleText;
-    });
+    paintTabStrip(this.tabNodes, this.tabLabels, TABS, this.tab, layout.tabs);
   }
 
   /** 页签角标（私聊未读数；世界 / 帮会有气泡扛提醒，这里只标私聊） */

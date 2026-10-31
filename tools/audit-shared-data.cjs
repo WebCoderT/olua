@@ -57,12 +57,6 @@
  * （同类的还有组队最低等级 #497；角色数量上限也曾是这一类 —— 后来整个取消、不再有这个数，
  *   见 `configs/role` 顶部的说明。删守卫比留一个没东西可守的判据诚实。）
  *
- * ===========================================================================
- * 与 `audit-combat-parity.cjs` 的分工
- * ===========================================================================
- * 这条守「**数据**没漂移」，parity 那条守「**算法**写得对不对」—— 表一模一样，
- * 也可能有人在服务端把 maxHp 忘了加装备。两条都要有。
- *
  * 用法：node tools/audit-shared-data.cjs
  */
 
@@ -277,8 +271,7 @@ function findPartyMinLevelDrift() {
 /**
  * 把生成物编译成 JS 并 `require` 回来（后面两条检查都要**真的值**，不是源码文本）
  *
- * 这个编译单元**没有** Cocos 依赖（生成物本身不含引擎类型），所以任何 error TS 都是真错误 ——
- * 与 `audit-combat-parity.cjs` 那边要挑错码不同，这里一律当失败。
+ * 这个编译单元**没有** Cocos 依赖（生成物本身不含引擎类型），所以任何 error TS 都是真错误，一律当失败。
  */
 function compileGenerated() {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-shared-audit-"));

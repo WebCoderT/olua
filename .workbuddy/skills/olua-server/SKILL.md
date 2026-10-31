@@ -155,8 +155,8 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   改数值 / 改文案都改客户端配置，然后重新生成。产物 ~255 KB / 3410 行 / 24 张数据表。
 - **守卫** `tools/audit-shared-data.cjs`（= `make audit-shared-data`）：重生成后**逐字节**比对，并断言数据表
   **每张都在且非空** —— 逐字节比对发现不了「生成器自己少产一张数据表」（同一份代码必然一致，而消费方拿到
-  `undefined`：管理端页面空白、服务端查表得 0）。算法一侧另有人守：`audit-combat-parity.cjs` 把**真的**
-  `GameHelper.combatCalc` 编译进 Node 当期望值。
+  `undefined`：管理端页面空白、服务端查表得 0）。算法一致性曾是 `audit-combat-parity` 的事 —— #541
+  起客户端算子已删、属性只有服务端一份，这条审计随之删除。
 - **它还会扫两端源码**，抓「自己维护一份」的三种破法（#122）：①与生成物**同名**的字典定义；②把**短标签表**
   （键数 ≤ 8、值全是字符串）的键清单写成数组字面量（`["1","2","3","4"]`）；③抄表的**行文**（`1 战士`）。
   另有第三条专查 `roles/role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES` 必须是从公共数据**派生**的
@@ -330,7 +330,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
 - 内存库（`:memory:`）**必须关着**自动备份 —— 没有文件可备份，开着只会每 tick 失败一次。
 
 **9. 派生属性出口：服务端重算，客户端只是上报**
-- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），查的五张数据表来自 4.0 那份公共生成物（等级 / 战魂 / 称号 / 军衔 / 装备属性），与客户端 `GameHelper.combatCalc` 的一致性由 `tools/audit-combat-parity.cjs` 锁住（它把真的客户端算法编译进 Node 当期望值，不是再抄一版口径）；
+- `GET /roles/:id/derived` 返回服务端**自己算**的属性（`role-attributes.ts`），查的五张数据表来自 4.0 那份公共生成物（等级 / 战魂 / 称号 / 军衔 / 装备属性），#541 起客户端算子已删，这里是**唯一**的属性算法（没有对账对象）；
 - 玩家上报存档时（`PUT /roles/:id`）服务端会**比对**上报的派生值与自算值 —— 这条是 #34「伤害结算上移」的地基。
 
 **10. 屏蔽与举报（#398）：过滤必须在服务端，且不下发「谁拉黑了我」**
@@ -375,7 +375,7 @@ test/backup.cjs                  备份 / 恢复专项（87 条断言）
   没有在线角色时 `rank = 0`（`LEADERBOARD_NO_RANK`，**不是 404**：榜本身是好的，只是这个人没名次）；
 - **`size` 超 `LEADERBOARD_TOP_N` 夹到上限**（不报错）；非法 `board` 走 `assertBoard` 抛 40000 并**列出可选值**（干巴巴一句「参数错误」等于让人猜）；
 - **条目只有八个字段**：不带 `accountId`、不带 `data`、**不带在线状态** —— 榜上标「在线」等于给人蹲点；
-- **战力算不出来给 0**：等级超出成长曲线 / 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数，`audit-combat-parity` 锁着），**不许在榜里另算一版**；
+- **战力算不出来给 0**：等级超出成长曲线 / 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数），**不许在榜里另算一版**；
 - 边界审计：`modules/leaderboard` 要读 `modules/combat/role-attributes.ts` 与 `role`/`account` 仓储 → 在 `tools/audit-server-boundaries.cjs` 的 `ALLOWED_EDGES` / `REPO_EDGES` 各补一条边（带注释说明为什么必须是同一个数）。
 
 ## 六、必踩的坑
@@ -437,7 +437,7 @@ env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.
 **每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
 
 - 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
-- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 十套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端十套 e2e + 管理端构建 + 13 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
+- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 十套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端十套 e2e + 管理端构建 + 12 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
 - 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；服务端的端名取 `server`。
 - **改了接口的提交必须连生成物一起提交**（`openapi.json` + 两端接口文件是同一笔改动的一部分，否则另外两端停在旧契约上）。
 - 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。

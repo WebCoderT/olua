@@ -25,6 +25,8 @@ interface RoleDisplayView {
 interface RoleInfoDialogView {
   updateDialog: (equipmentType: EQUIPMENT_TYPE) => void;
   refreshHints: () => void;
+  /** 属性列表单独刷新（#541：roleUpdate 权威快照到达时；弹窗没打开是 no-op） */
+  updateAttributes: () => void;
 }
 
 /** 背包弹窗视图（物品变更后刷新背包显示） */
@@ -239,5 +241,10 @@ export default class RoleUIManager {
   /** 装备变更后刷新角色信息弹窗内观 */
   static updateEquipmentDialog(equipmentType: EQUIPMENT_TYPE) {
     this.roleInfoDialog?.updateDialog(equipmentType);
+  }
+
+  /** 角色属性面板的属性列表刷新（#541：roleUpdate 权威快照到达时；弹窗没打开是 no-op） */
+  static refreshRoleAttributes() {
+    this.roleInfoDialog?.updateAttributes();
   }
 }

@@ -36,7 +36,7 @@ const ADMIN_CODE = "e2e-combat-admin";
 
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
- * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）。
+ * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md；make audit 会比对）。
  */
 const EXPECTED_ASSERTIONS = 130;
 

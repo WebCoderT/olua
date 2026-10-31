@@ -1,4 +1,4 @@
-import { Color, Graphics, Label, isValid, Node, ScrollView, Size, Vec2 } from "cc";
+import { Graphics, Label, isValid, Node, ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import AchievementStore from "../../core/AchievementStore";
@@ -12,6 +12,7 @@ import type { AchievementCategory } from "../../../configs/achievement";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { AchievementView } from "../../utils/net/ApiModels";
+import { createRoundedPanel, createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 背包满的业务码（与 `common/constants/biz-code` 的 MALL_BAG_FULL 同值） */
 const CODE_BAG_FULL = 20012;
@@ -80,30 +81,11 @@ export default class AchievementDialog {
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
-    this.tabNodes.clear();
-    this.tabLabels.clear();
-    achievementCategories.forEach((category, index) => {
-      const node = UiHelper.createNode(
-        `${layout.name}_tab_${category}`,
-        new Vec2(layout.tabs.columns[index], layout.tabs.y),
-        layout.tabs.size,
-      );
-      node.addComponent(Graphics);
-      const label = UiHelper.createLabel(
-        `${layout.name}_tab_${category}_label`,
-        texts.tabs[index],
-        layout.tabs.idleText,
-        layout.tabs.fontSize,
-        new Vec2(),
-        layout.tabs.size,
-      );
-      node.addChild(label);
-      node.on(Node.EventType.TOUCH_END, () => this.select(category), this);
-      blockClickThrough(node);
-      dialog.addChild(node);
-      this.tabNodes.set(category, node);
-      this.tabLabels.set(category, label);
-    });
+    const { nodes, labels } = createTabStrip(dialog, layout.name, achievementCategories, texts.tabs, layout.tabs, (tab) =>
+      this.select(tab),
+    );
+    this.tabNodes = nodes;
+    this.tabLabels = labels;
   }
 
   private select(category: AchievementCategory) {
@@ -115,28 +97,7 @@ export default class AchievementDialog {
   }
 
   private paintTabs() {
-    achievementCategories.forEach((category) => {
-      const node = this.tabNodes.get(category);
-      const labelNode = this.tabLabels.get(category);
-      if (!node || !isValid(node) || !labelNode) return;
-      const active = category === this.category;
-      const graphics = node.getComponent(Graphics);
-      if (graphics) {
-        const size = layout.tabs.size;
-        graphics.clear();
-        graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, layout.tabs.radius);
-        graphics.fillColor = active ? layout.tabs.activeFill : layout.tabs.idleFill;
-        graphics.fill();
-        if (!active) {
-          graphics.lineWidth = 1;
-          graphics.strokeColor = layout.tabs.idleBorder;
-          graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, layout.tabs.radius);
-          graphics.stroke();
-        }
-      }
-      const label = labelNode.getComponent(Label);
-      if (label) label.color = active ? layout.tabs.activeText : layout.tabs.idleText;
-    });
+    paintTabStrip(this.tabNodes, this.tabLabels, achievementCategories, this.category, layout.tabs);
   }
 
   //#endregion
@@ -193,7 +154,7 @@ export default class AchievementDialog {
   /** 一条成就：名称 + 描述 + 进度 + 状态按钮 */
   private createRow(row: AchievementView, busy: boolean) {
     const config = layout.row;
-    const node = this.createPanel(
+    const node = createRoundedPanel(
       `achievement_row_${row.id}`,
       config.size,
       row.achieved && !row.claimed ? config.achievedFill : config.fill,
@@ -284,20 +245,6 @@ export default class AchievementDialog {
     return node;
   }
 
-  private createPanel(name: string, size: Size, fill: Color, border: Color, radius: number): Node {
-    const node = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = node.addComponent(Graphics);
-    const path = () => graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-    graphics.fillColor = fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = border;
-    path();
-    graphics.stroke();
-    blockClickThrough(node);
-    return node;
-  }
 
   //#endregion
 

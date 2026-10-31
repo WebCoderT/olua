@@ -5,7 +5,7 @@ import catalogJson from "../data/equip-align.catalog.json";
 import type { Atlas } from "./equipAlign/atlas";
 import { firstFrameName, measureSolid } from "./equipAlign/atlas";
 import { loadInAtlas, probeInAtlas } from "./equipAlign/assets";
-import type { InGeometry, Vec2 } from "./equipAlignIn/model";
+import type { InGeometry, InItem, Vec2 } from "./equipAlignIn/model";
 import {
   boxToScreen,
   contentBox,
@@ -22,6 +22,7 @@ import {
 import type { InGuides, InLayer } from "./equipAlignIn/render";
 import { drawInShow, layerSolid } from "./equipAlignIn/render";
 import { useInAlignStore } from "./equipAlignIn/saved";
+import { makeAlignWorkbenchActions } from "./equipAlign/workbench-actions";
 
 /**
  * 内观对齐工作台（#523）
@@ -444,46 +445,21 @@ export function EquipInAlignPage() {
     });
   };
 
-  const saveActive = async () => {
-    if (pending) return;
-    const ok = await saveAlign(activeItem.id, geometry);
-    if (!ok) return;
-    dropDraft(activeItem.id);
-    setNotice(`已保存「${activeItem.label}」—— 客户端重开角色信息弹窗即生效`);
-  };
-
-  /**
-   * 还原本件：先删服务端、再清本地
-   *
-   * 顺序不能反 —— 反过来会有一瞬间「本地没了但服务端还在」，刷新页面那件又跳回旧位置。
-   */
-  const resetItem = async () => {
-    if (pending) return;
-    if (saved[activeItem.id]) {
-      const ok = await resetAlign(activeItem.id);
-      if (!ok) return;
-    }
-    dropDraft(activeItem.id);
-    setNotice(`已把「${activeItem.label}」还原成出厂值`);
-  };
-
-  const saveAll = async () => {
-    if (pending || !unsavedIds.length) return;
-    let done = 0;
-    const failed: string[] = [];
-    for (const id of unsavedIds) {
-      const item = ALL_ITEMS.find((entry) => entry.id === id);
-      if (!item) continue;
-      const ok = await saveAlign(id, drafts[id] ?? baseOf(item));
-      if (ok) {
-        done += 1;
-        dropDraft(id);
-      } else {
-        failed.push(id);
-      }
-    }
-    setNotice(failed.length ? `已保存 ${done} 件，失败 ${failed.length} 件：${failed.join("、")}` : `已保存 ${done} 件`);
-  };
+  /** 保存 / 还原 / 批量保存（与外观工作台共用的流程，差异只在生效文案与落库 API） */
+  const workbench = makeAlignWorkbenchActions<InGeometry, InItem>({
+    pending,
+    save: saveAlign,
+    reset: resetAlign,
+    saved,
+    drafts,
+    baseOf,
+    dropDraft,
+    setNotice,
+    effectHint: "客户端重开角色信息弹窗即生效",
+  });
+  const saveActive = () => workbench.saveActive(activeItem, geometry);
+  const resetItem = () => workbench.resetItem(activeItem);
+  const saveAll = () => workbench.saveAll(ALL_ITEMS, unsavedIds);
 
   /** 衣服：把可见轮廓的底边中点按到圆盘中心（换素材 / 改缩放后按一下，比手算靠谱） */
   const snapToPlate = () => {

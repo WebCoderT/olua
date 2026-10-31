@@ -1,17 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ACQUIRE_CHANNEL, ACQUIRE_CHANNEL_LABELS } from "../api";
 import type { ConfigAttributes, Rank, Soul, Title } from "../api";
+import { AttributesGrid, crossedRangeKeys } from "./AttributesEditor";
 import { Button, Field, Input, Select } from "./ui";
-
-/** 区间型属性的六项（与 ConfigAttributes 的区间字段一一对应；展示名在这里。装备配置页共用） */
-export const RANGE_FIELDS = [
-  { key: "physicalAttack", label: "物攻" },
-  { key: "magicAttack", label: "魔攻" },
-  { key: "taoistAttack", label: "道攻" },
-  { key: "physicalDefense", label: "物防" },
-  { key: "magicDefense", label: "魔防" },
-  { key: "taoistDefense", label: "道防" },
-] as const;
 
 /** 弹窗表单值（channel 仅称号、tier 仅军衔有；不相关的 kind 传过来时忽略）。价格不在这里 —— 唯一修改口在成长列表（#232/#234/#250） */
 export interface GameConfigFormValue {
@@ -82,21 +73,13 @@ export function GameConfigDialog({
   const hasAnimation = kind !== "rank";
 
   /** 区间交叉（min > max）的键集合；空 = 合法 */
-  const crossedKeys = useMemo(() => {
-    if (!attributes) return [];
-    return RANGE_FIELDS.filter(({ key }) => attributes[key].min > attributes[key].max).map(({ key }) => key);
-  }, [attributes]);
+  const crossedKeys = useMemo(() => (attributes ? crossedRangeKeys(attributes) : []), [attributes]);
 
   if (!open || !attributes) return null;
 
   const numbersValid = !hasAnimation || (Number.isInteger(Number(frameRate)) && Number(frameRate) >= 1);
   const animationValid = !hasAnimation || animation.trim().length > 0;
   const canSubmit = label.trim().length > 0 && animationValid && numbersValid && crossedKeys.length === 0 && !submitting;
-
-  const setRange = (key: (typeof RANGE_FIELDS)[number]["key"], side: "min" | "max", value: string) => {
-    const parsed = Math.max(0, Math.floor(Number(value) || 0));
-    setAttributes({ ...attributes, [key]: { ...attributes[key], [side]: parsed } });
-  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -166,65 +149,8 @@ export function GameConfigDialog({
             </div>
           ) : null}
 
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">属性加成（整份替换）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">生命上限</span>
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-28"
-                  value={attributes.maxHp}
-                  onChange={(event) =>
-                    setAttributes({ ...attributes, maxHp: Math.max(0, Math.floor(Number(event.target.value) || 0)) })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">每 5 秒回血</span>
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-28"
-                  value={attributes.hpRecover}
-                  onChange={(event) =>
-                    setAttributes({ ...attributes, hpRecover: Math.max(0, Math.floor(Number(event.target.value) || 0)) })
-                  }
-                />
-              </div>
-              {RANGE_FIELDS.map(({ key, label: fieldLabel }) => (
-                <div key={key} className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-slate-400">{fieldLabel}</span>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-20"
-                      aria-label={`${fieldLabel}下限`}
-                      value={attributes[key].min}
-                      onChange={(event) => setRange(key, "min", event.target.value)}
-                    />
-                    <span className="text-xs text-slate-600">~</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-20"
-                      aria-label={`${fieldLabel}上限`}
-                      value={attributes[key].max}
-                      onChange={(event) => setRange(key, "max", event.target.value)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <AttributesGrid attributes={attributes} onChange={setAttributes} header="属性加成（整份替换）" crossed={crossedKeys} />
 
-          {crossedKeys.length > 0 ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              以下属性的下限不能大于上限：{crossedKeys.join("、")}。
-            </p>
-          ) : null}
           {!numbersValid ? (
             <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
               帧率需为 ≥1 的整数。

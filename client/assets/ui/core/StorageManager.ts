@@ -26,7 +26,7 @@ import { getRankLevel } from "../../configs/rank";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
-import type { CombatKillReward } from "../utils/net/CombatChannel";
+import type { CombatKillReward, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
 import type { DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
@@ -296,8 +296,8 @@ export default class StorageManager {
     else if (kind === "soul") role.soulOfWar = Number(data.soulOfWar ?? nextLevel);
     else role.rank = Number(data.rank ?? nextLevel);
     role.revision = result.revision;
-    // 属性计入角色属性与战斗力，升级后重算（称号头顶名牌动画由调用方经 RoleUIManager.updateTitleShow 刷新）
-    Object.assign(role, GameHelper.combatCalc(role));
+    // 属性与战斗力不再本地重算（#541 服务端权威）：升级接口已成功 = 服务端在线，
+    // 权威值正由 roleUpdate 帧在路上（服务端已重算落库，轮询下一个节拍就推）
     this.updateOnlineRole(role);
     this.updateUi(role);
     GameUiHelper.createTip(tipKey, { level: result.gainedLevel, label: result.gainedLabel });
@@ -374,8 +374,8 @@ export default class StorageManager {
       // 升级（等级上限跟成长曲线走，见 configs/growth 的 roleMaxLevel）
       if (role.level >= roleMaxLevel) role.level = roleMaxLevel;
       else role.level += 1;
-      // 属性重新计算
-      Object.assign(role, GameHelper.combatCalc(role));
+      // 属性与战斗力不在客户端算（#541 服务端权威）：本地结算兜底只记账等级与经验，
+      // 连上服务端后 roleUpdate 帧会把重算结果带回来
       // 升级时补满血量与魔法值至最大值
       role.hp = role.maxHp;
       role.mp = role.maxMp;
@@ -403,9 +403,9 @@ export default class StorageManager {
     role.level = reward.level;
     role.revision = reward.revision;
     if (reward.leveledUp) {
-      // 属性重新计算（等级变了，maxHp / 攻防都跟着曲线走）
-      Object.assign(role, GameHelper.combatCalc(role));
-      // 升级时补满血量与魔法值至最大值
+      // 属性与战斗力不本地重算（#541 服务端权威）：服务端升级时已重算落库并补满血蓝
+      // （applyKillExp 的 refillOnLevelUp），权威值由 roleUpdate 帧带回；这里先把血蓝
+      // 顶到当前上限做即时演出，帧到达时以服务端值为准
       role.hp = role.maxHp;
       role.mp = role.maxMp;
       // 播放升级特效
@@ -437,7 +437,7 @@ export default class StorageManager {
     role.level = gain.level;
     role.revision = gain.revision;
     if (gain.leveledUp) {
-      Object.assign(role, GameHelper.combatCalc(role));
+      // 属性不本地重算（#541 服务端权威）：权威值由 roleUpdate 帧带回，也不补满血蓝（见方法注释）
       LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
     }
     this.updateOnlineRole(role);
@@ -458,6 +458,41 @@ export default class StorageManager {
     if (hit.maxHp > 0) role.maxHp = hit.maxHp;
     this.updateOnlineRole(role);
     this.updateUi(role);
+  }
+
+  /**
+   * 服务端角色权威快照落账（#541：roleUpdate 帧带回的服务端重算值）
+   *
+   * 战斗力 / 八项属性 / 货币 / 等级血蓝**照搬不算**——这是「客户端只演」在角色数值上的落点：
+   * 换装、任务/成就/邮件发奖、商城、成长线升级、后台改动、升级，全部由服务端重算后
+   * 经这一帧汇合到本地。区间属性缺省（等级不在成长曲线的边角存档）时不动对应字段。
+   * 只刷新显示、**不触发存档**：帧的内容就是服务端现状，推回去是白推还多占一个防抖节拍。
+   */
+  static applyServerRoleUpdate(update: RoleAuthorityUpdate): void {
+    const role = this.findOnlineRole();
+    if (!role) return;
+    role.level = update.level;
+    role.exp = Math.max(0, Math.floor(update.exp));
+    role.combat = update.combat;
+    role.gold = update.gold;
+    role.bindGold = update.bindGold;
+    role.silver = update.silver;
+    role.hp = Math.max(0, Math.floor(update.hp));
+    role.mp = Math.max(0, Math.floor(update.mp));
+    if (update.maxHp !== undefined) role.maxHp = update.maxHp;
+    if (update.hpRecover !== undefined) role.hpRecover = update.hpRecover;
+    if (update.maxMp !== undefined) role.maxMp = update.maxMp;
+    if (update.physicalAttack) role.physicalAttack = [update.physicalAttack[0], update.physicalAttack[1]];
+    if (update.magicAttack) role.magicAttack = [update.magicAttack[0], update.magicAttack[1]];
+    if (update.taoistAttack) role.taoistAttack = [update.taoistAttack[0], update.taoistAttack[1]];
+    if (update.physicalDefense) role.physicalDefense = [update.physicalDefense[0], update.physicalDefense[1]];
+    if (update.magicDefense) role.magicDefense = [update.magicDefense[0], update.magicDefense[1]];
+    if (update.taoistDefense) role.taoistDefense = [update.taoistDefense[0], update.taoistDefense[1]];
+    role.hp = Math.min(role.hp, role.maxHp);
+    role.revision = update.revision;
+    this.updateUi(role);
+    // 角色信息弹窗开着的话，属性列表与战斗力一起跟上（升级/换装的面板刷新缺口在这补上）
+    RoleUIManager.refreshRoleAttributes();
   }
 
   /**
@@ -672,11 +707,13 @@ export default class StorageManager {
   }
 
   /**
-   * 装备变更后的统一收尾：属性重算 → 血量修正 → 落盘 → 刷新各视图
+   * 装备变更后的统一收尾：血量修正 → 落盘 → 刷新各视图
    * 装备影响 maxHp，脱下加血装备时当前血量要跟随上限下调，避免血量超过上限
+   *
+   * 属性与战斗力**不在客户端算**（#541 服务端权威，本游戏无离线形态）：
+   * 落盘后服务端权威重算，roleUpdate 帧把结果带回来（applyServerRoleUpdate 统一落账）
    */
   private static applyEquipmentChange(role: Role, slot: EQUIPMENT_TYPE) {
-    Object.assign(role, GameHelper.combatCalc(role));
     role.hp = Math.min(role.hp, role.maxHp);
     this.updateOnlineRole(role);
     this.updateUi(role);

@@ -8,7 +8,7 @@ import { GrowthRepository } from "../../database/repositories/growth.repository"
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { MonsterRow } from "../../database/rows";
-import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
@@ -183,7 +183,8 @@ export class CombatSettlementService {
     // 角色：在线角色 + 等级可汇总 + 技能已学习
     const role = this.roles.online(accountId);
     if (!role) return fail("no_role", "当前没有在线角色，无法结算");
-    const summary = summarizeRoleAttributes(role);
+    // RoleDto 顶层数据在 `data` 里，必须摊平后再汇总 —— 直接传 DTO 只会按裸等级算（装备/成长线全丢）
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data));
     if (!summary) return fail("no_role", `角色等级 ${role.level} 不在成长曲线里，算不出属性`);
     const skillLevel = readSkillLevel(role.data, cast.skillId);
     if (!skillLevel) return fail("skill_not_learned", `技能 ${cast.skillId} 尚未学习`);
@@ -254,7 +255,7 @@ export class CombatSettlementService {
   ): RealtimeKillReward {
     const exp = this.killExpFor(roleLevel, stats.level);
     // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
-    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp) : null;
+    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp, { refillOnLevelUp: true }) : null;
     if (exp > 0 && !applied) {
       this.logger.warn(`击杀奖励入账失败：账号 ${accountId} 角色 ${roleId}（可能已被下线），本次经验 ${exp} 未记`);
       return { exp: 0, level: roleLevel, expNow: 0, expNeed: 0, leveledUp: false, revision: roleRevision, drops: [] };

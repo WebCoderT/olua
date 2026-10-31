@@ -9,6 +9,7 @@ import type { MailChannelKey } from "../../../configs/mail";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { MailView } from "../../utils/net/ApiModels";
+import { createRoundedPanel } from "./tab-kit";
 
 /** 业务码（与 `common/constants/biz-code` 同值）：背包满 / 已领 / 附件没领不能删 */
 const CODE_BAG_FULL = 20012;
@@ -239,7 +240,7 @@ export default class MailDialog {
   /** 一封邮件：标题（未读更亮）+ 附件摘要 / 正文 + 领取 + 删除 */
   private createRow(row: MailView, busy: boolean) {
     const config = layout.row;
-    const node = this.createPanel(
+    const node = createRoundedPanel(
       `mail_row_${row.id}`,
       config.size,
       row.read ? config.fill : config.unreadFill,
@@ -371,20 +372,6 @@ export default class MailDialog {
     return node;
   }
 
-  private createPanel(name: string, size: Size, fill: Color, border: Color, radius: number) {
-    const node = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = node.addComponent(Graphics);
-    const path = () => graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-    graphics.fillColor = fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = border;
-    path();
-    graphics.stroke();
-    blockClickThrough(node);
-    return node;
-  }
 
   private hasNoAttachment(row: MailView): boolean {
     return row.gold <= 0 && row.exp <= 0 && row.attachments.length === 0;

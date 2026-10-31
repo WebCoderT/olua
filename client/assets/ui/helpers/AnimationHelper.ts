@@ -1,5 +1,5 @@
 import { Animation, AnimationClip, isValid, Node, resources, SpriteAtlas, SpriteFrame } from "cc";
-import { BLANK_FRAME_MAX_AREA, getAnimationName, getAnimationFrameBase, getAtlasSrc, getLoopAtlasDir, directions, monsterActionAtlas, monsterAnimation, roleActionAtlas, roleAnimationMap } from "../../configs/animation";
+import { BLANK_FRAME_MAX_AREA, getAnimationName, getAnimationFrameBase, directions, monsterActionAtlas, monsterAnimation, roleActionAtlas, roleAnimationMap } from "../../configs/animation";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
 
@@ -14,9 +14,9 @@ import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
  * 缓存不释放：工程内没有任何 release/autoRelease 调用（场景 autoReleaseAssets 默认 false），
  * 帧与片段在切场景后依然有效，可以放心复用
  *
- * #235 起散帧已全部图集化并把原始逐帧移出 assets（仓库根 _loose_frames_archive，gitignored）：
+ * #235 起散帧全部图集化（原始逐帧在仓库根 _loose_frames_archive，gitignored）：
  * monster/clothes/weapons 外观与 role 本体走 prepareActionAtlas 动作图集，
- * npc/背景走 loadLoopFrames 单循环图集；散帧目录路径保留为**保险回退**
+ * 称号/战魂特效、NPC 外观、装备详情背景走 loadLoopFrames 单循环图集；散帧目录路径保留为**保险回退**
  * （图集缺失时静默回退，本地重新从归档打图集前也不至于整片空白）
  */
 export default class AnimationHelper {
@@ -68,15 +68,20 @@ export default class AnimationHelper {
 
   /**
    * 预加载一个目录：先取帧序列，再按动画表把整包片段切割并缓存
-   * 重复调用是廉价的（已缓存时立即返回）；"frames" 种类只缓存帧序列（整包循环播放的动画如 NPC 外观）
+   * 重复调用是廉价的（已缓存时立即返回）；"frames" 种类只缓存帧序列（整包循环播放的动画如称号/战魂特效、NPC 外观）
    * 怪物与角色（衣服/武器外观）先尝试按动作图集路径（见 prepareActionAtlas），目录下没有图集时
-   * 静默回退散帧目录切割——图集按动作分 plist 打包（<树>/atlas/out/<id>/<动作>），
+   * 静默回退散帧目录切割——图集按动作分 plist 打包（<树>/out/<id>/<动作>），
    * 未打包的目录行为与从前完全一致
    * @param dirSrc 帧动画目录
    * @param kind 动画种类（决定用哪张动画表切割）
    * @param speedRate 速度倍率（role/monster 切割片段用，缺省按每秒 1 帧）
    */
   static async prepare(dirSrc: string, kind: AnimationKind, speedRate?: SpeedRate): Promise<void> {
+    if (kind === "frames") {
+      // 整包循环动画的帧来源在 loadLoopFrames（图集优先）；预热即完成，调用方拿到的是同一份缓存
+      await this.loadLoopFrames(dirSrc);
+      return;
+    }
     if ((kind === "monster" || kind === "role") && (await this.prepareActionAtlas(dirSrc, kind, speedRate))) return;
     const frames = await this.loadFrames(dirSrc);
     const animationMap = getAnimationMap(kind);
@@ -91,7 +96,7 @@ export default class AnimationHelper {
   }
 
   /**
-   * 按动作分 plist 的图集路径（monster/atlas/out/<id>/<动作>/<动作>.plist 等，见 configs.getAtlasSrc）
+   * 按动作分 plist 的图集路径（monster/out/<id>/<动作>/<动作>.plist 等 —— #542 起图集与目录同路径）
    * 加载每个动作图集，按帧名 d<方向>_<帧> 分组成 8 方向片段，切片段并缓存——
    * 图集帧名自描述，不再依赖 configs/animation 的帧号表
    * 目录下没有图集时返回 false（调用方回退散帧目录路径）；任一动作缺图集只跳过该动作
@@ -100,14 +105,13 @@ export default class AnimationHelper {
   private static async prepareActionAtlas(dirSrc: string, kind: "monster" | "role", speedRate?: SpeedRate): Promise<boolean> {
     // 已有片段缓存（无论来自图集还是散帧）都算准备完成，避免重复加载
     if (this.clipCache.get(this.clipKey(dirSrc, kind, speedRate))) return true;
-    const atlasDir = getAtlasSrc(dirSrc);
-    if (!atlasDir) return false;
+    if (!dirSrc) return false;
     // 同步探测：目录索引里没有任何图集即视为未打包，静默返回（不打错误日志刷屏）
-    if (!resources.getDirWithPath(atlasDir, SpriteAtlas).length) return false;
+    if (!resources.getDirWithPath(dirSrc, SpriteAtlas).length) return false;
     const clips = new Map<string, AnimationClip>();
     const cacheKey = this.clipKey(dirSrc, kind, speedRate);
     for (const spec of this.actionAtlasSpecs(kind)) {
-      const frames = await this.loadFramesFromAtlas(`${atlasDir}/${spec.action}`);
+      const frames = await this.loadFramesFromAtlas(`${dirSrc}/${spec.action}`);
       if (!frames.length) continue;
       // 帧名 d<方向>_<帧>：按方向分组后组内按帧下标排序（不依赖 loadFramesFromAtlas 的末尾数字排序——
       // d0_00 与 d1_00 的末尾数字同为 0，跨方向顺序要靠方向下标决定）
@@ -154,20 +158,18 @@ export default class AnimationHelper {
   }
 
   /**
-   * 单循环目录动画（NPC 外观 / 装备详情背景）的帧来源：目录有对应图集（见 configs.getLoopAtlasDir）时
-   * 取图集帧并过滤空帧，否则回退散帧目录——两条路径对调用方完全透明
+   * 单循环目录动画（称号/战魂特效、NPC 外观、装备详情背景）的帧来源（公开：GameUiHelper 的
+   * 称号 / 战魂动画节点也用它）：目录里有同名 plist 图集
+   * （图集与散帧目录同路径，见 configs/animation 顶部说明）时取图集帧并过滤空帧，
+   * 否则回退散帧目录——两条路径对调用方完全透明
    * 空帧过滤与 prepareActionAtlas / buildClips 同口径（占位空图 1×1，rect 边长 >1 才算有效帧）
    */
-  private static async loadLoopFrames(dirSrc: string): Promise<SpriteFrame[]> {
-    const atlasDir = getLoopAtlasDir(dirSrc);
-    if (atlasDir) {
-      // 同步探测：目录索引里没有图集即视为未打包，静默回退散帧目录（不打错误日志刷屏）
-      if (resources.getDirWithPath(atlasDir, SpriteAtlas).length) {
-        // 图集内 plist 与目录同名：<id>/<id>.plist
-        const frames = await this.loadFramesFromAtlas(`${atlasDir}/${atlasDir.split("/").pop()}`);
-        const valid = frames.filter((frame) => this.isSolidFrame(frame));
-        if (valid.length) return valid;
-      }
+  static async loadLoopFrames(dirSrc: string): Promise<SpriteFrame[]> {
+    if (dirSrc && resources.getDirWithPath(dirSrc, SpriteAtlas).length) {
+      // 图集内 plist 与目录同名：<id>/<id>.plist
+      const frames = await this.loadFramesFromAtlas(`${dirSrc}/${dirSrc.split("/").pop()}`);
+      const valid = frames.filter((frame) => this.isSolidFrame(frame));
+      if (valid.length) return valid;
     }
     return this.loadFrames(dirSrc);
   }
@@ -369,7 +371,7 @@ export default class AnimationHelper {
    */
   static playOnceWithDir(name: string, node: Node, dirSrc: string, duration: number = 1) {
     const animate = this.useAnimation(node);
-    this.loadFrames(dirSrc).then((spriteFrames) => {
+    this.loadLoopFrames(dirSrc).then((spriteFrames) => {
       if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
       this.play(name, node, animate, spriteFrames, duration, AnimationClip.WrapMode.Normal);
     });
@@ -459,8 +461,8 @@ export default class AnimationHelper {
   /**
    * 循环播放一个帧序列目录的全部帧 —— 装备详情背景这类「常驻循环」的目录动画用
    *
-   * 帧来源走 loadLoopFrames：目录有对应单 plist 图集（resources/backgrounds/atlas/<id>，见
-   * configs.getLoopAtlasDir）时取图集帧（过滤空帧），否则回退逐帧 png 目录；
+   * 帧来源走 loadLoopFrames：目录有同名单 plist 图集（resources/<目录>/<基名>.plist，#542 起同路径）
+   * 时取图集帧（过滤空帧），否则回退逐帧 png 目录；
    * 片段同样进 loopClipCache（键 = 目录|帧率，目录路径与图集路径不会撞键），
    * 同一背景被反复悬停时共用同一个片段，只在首次加载时付出成本
    *

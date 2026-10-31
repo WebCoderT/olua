@@ -1,4 +1,4 @@
-import { Color, Graphics, isValid, Label, Node, ScrollView, Size, Vec2 } from "cc";
+import { isValid, Label, Node, ScrollView, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import PartyStore from "../../core/PartyStore";
@@ -11,6 +11,7 @@ import { relationLabels } from "../../../configs/social";
 import { partyDialogLayout as layout } from "../../../configs/hudLayout";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
+import { createRoundedPanel, createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 两个页签（成员 / 邀请） */
 type PartyTab = "members" | "invite";
@@ -111,26 +112,9 @@ export default class PartyDialog {
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
-    this.tabNodes.clear();
-    this.tabLabels.clear();
-    TABS.forEach((tab, index) => {
-      const node = UiHelper.createNode(`${layout.name}_tab_${tab}`, new Vec2(layout.tabs.columns[index], layout.tabs.y), layout.tabs.size);
-      node.addComponent(Graphics);
-      const label = UiHelper.createLabel(
-        `${layout.name}_tab_${tab}_label`,
-        layout.texts.tabs[index],
-        layout.tabs.idleText,
-        layout.tabs.fontSize,
-        new Vec2(),
-        layout.tabs.size,
-      );
-      node.addChild(label);
-      node.on(Node.EventType.TOUCH_END, () => this.select(tab), this);
-      blockClickThrough(node);
-      dialog.addChild(node);
-      this.tabNodes.set(tab, node);
-      this.tabLabels.set(tab, label);
-    });
+    const { nodes, labels } = createTabStrip(dialog, layout.name, TABS, layout.texts.tabs, layout.tabs, (tab) => this.select(tab));
+    this.tabNodes = nodes;
+    this.tabLabels = labels;
   }
 
   private select(tab: PartyTab) {
@@ -141,28 +125,7 @@ export default class PartyDialog {
   }
 
   private paintTabs() {
-    TABS.forEach((tab) => {
-      const node = this.tabNodes.get(tab);
-      const labelNode = this.tabLabels.get(tab);
-      if (!node || !isValid(node) || !labelNode) return;
-      const active = tab === this.tab;
-      const graphics = node.getComponent(Graphics);
-      if (graphics) {
-        const size = layout.tabs.size;
-        graphics.clear();
-        graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, layout.tabs.radius);
-        graphics.fillColor = active ? layout.tabs.activeFill : layout.tabs.idleFill;
-        graphics.fill();
-        if (!active) {
-          graphics.lineWidth = 1;
-          graphics.strokeColor = layout.tabs.idleBorder;
-          graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, layout.tabs.radius);
-          graphics.stroke();
-        }
-      }
-      const label = labelNode.getComponent(Label);
-      if (label) label.color = active ? layout.tabs.activeText : layout.tabs.idleText;
-    });
+    paintTabStrip(this.tabNodes, this.tabLabels, TABS, this.tab, layout.tabs);
   }
 
   /** 页签角标：待处理邀请数 / 附近可邀请的人数（数字才值得提醒） */
@@ -252,7 +215,7 @@ export default class PartyDialog {
   /** 一条待处理邀请：谁邀请的 + 「同意 / 拒绝」 */
   private createInviteRow(invite: PartyInvite) {
     const row = layout.inviteRow;
-    const node = this.createPanel(`party_invite_${invite.fromRoleId}`, row.size, row.fill, row.border, row.radius);
+    const node = createRoundedPanel(`party_invite_${invite.fromRoleId}`, row.size, row.fill, row.border, row.radius);
     const title = layout.texts.inviteTitle
       .split("{name}")
       .join(invite.fromName)
@@ -275,7 +238,7 @@ export default class PartyDialog {
   private createMemberRow(member: PartyMemberEntry, myRoleId: string) {
     const row = layout.row;
     const isMe = !!myRoleId && member.roleId === myRoleId;
-    const node = this.createPanel(`party_member_${member.roleId}`, row.size, row.fill, row.border, row.radius);
+    const node = createRoundedPanel(`party_member_${member.roleId}`, row.size, row.fill, row.border, row.radius);
     const name = `${member.name}${isMe ? "（我）" : ""}`;
     node.addChild(
       UiHelper.createLabel(
@@ -312,7 +275,7 @@ export default class PartyDialog {
   /** 附近的一名玩家：名字 + 等级/关系 + 「邀请」 */
   private createCandidateRow(player: { roleId: string; name: string; relation: string }) {
     const row = layout.row;
-    const node = this.createPanel(`party_candidate_${player.roleId}`, row.size, row.fill, row.border, row.radius);
+    const node = createRoundedPanel(`party_candidate_${player.roleId}`, row.size, row.fill, row.border, row.radius);
     node.addChild(
       UiHelper.createLabel(
         `party_candidate_name_${player.roleId}`,
@@ -484,20 +447,6 @@ export default class PartyDialog {
   }
 
   /** 行底板（圆角 + 填充 + 描边；尺寸与配色全来自 layout） */
-  private createPanel(name: string, size: Size, fill: Color, border: Color, radius: number): Node {
-    const node = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = node.addComponent(Graphics);
-    const path = () => graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-    graphics.fillColor = fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = border;
-    path();
-    graphics.stroke();
-    blockClickThrough(node);
-    return node;
-  }
 
   /** 行内小按钮（复用 HUD 小按钮的外观，位置由调用方给） */
   private createAction(name: string, text: string, position: Vec2, onTap: () => void) {

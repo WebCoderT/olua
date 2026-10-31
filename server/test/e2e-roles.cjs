@@ -11,7 +11,8 @@
  * · 管理端修改：基础信息（含时装 / 头像 / 所在地图）、装备表 / 技能表 / 背包格子（结构化校验）、同账号重名校验
  * · 批量删除：按 id 删（幂等）、清空某账号全部角色、在线标记被顺带清掉
  * · 权限：只读观察员调写接口一律 403 / 30006
- * · 派生属性：详情带服务端重算的战斗属性；与客户端上报值比对（不一致可观测）；
+ * · 派生属性：详情带服务端重算的战斗属性；与客户端上报值比对；
+ *   **#541 起服务端权威重算落库**：建号与存档都会把属性/战斗力覆盖成服务端算的（离谱上报不落库）；
  *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级不在曲线里时如实给 null
  * · 文档：新接口落在「管理端」分组且带权限点标注
  *
@@ -36,7 +37,7 @@ const { setupSwagger } = require("../dist/swagger/setup");
 /**
  * 期望的断言条数（全绿时必须恰好这么多）
  *
- * 为什么要有这个数：`README.md` 与 `docs/resume.md` 里都写着「服务端 N 条 e2e」，
+ * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
  * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
  * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
  *
@@ -49,7 +50,7 @@ function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
   if (passedCount === EXPECTED_ASSERTIONS) return;
   console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md / docs/resume.md；make audit 会比对）");
+  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
   process.exit(1);
 }
 
@@ -506,7 +507,7 @@ function roleData(id, name, occupation, level) {
     "重算结果里有八项属性与战斗力",
     JSON.stringify(d1.attributes),
   );
-  check(d1.reported.combat === null && d1.reported.maxHp === null, "存档里没上报这两个值 → reported 为 null", JSON.stringify(d1.reported));
+  check(d1.reported.combat === d1.attributes.combat, "建号没上报 combat → 服务端重算落库补齐（reported = 权威值）", JSON.stringify(d1.reported));
   check(
     d1.comparable === true && d1.mismatch === false,
     "算得出来但没上报值 → comparable=true 且 mismatch=false（没比成与不一致是两回事）",
@@ -528,19 +529,18 @@ function roleData(id, name, occupation, level) {
   check(derived2.data.derived.mismatch === false, "上报服务端刚算出的那份 → 一致", JSON.stringify(derived2.data.derived.reported));
   check(derived2.data.derived.reported.combat === steadyCombat, "上报值原样带出来（对照用）", String(derived2.data.derived.reported.combat));
 
-  // 明显不对的上报值
+  // 明显不对的上报值：**建号即被服务端重算覆盖**（#541 权威）——「客户端说自己多强」的口子在创建时就焊死了
   const bogus = await api("POST", "roles", {
     token: tokenC,
     body: { data: { ...roleData("role_d3", "算三", "1", 10), combat: 999999999, maxHp: 1 } },
   });
   check(bogus.code === 0, "准备：建一个上报值离谱的角色", bogus.message);
   const derived3 = await api("GET", "admin/roles/role_d3", { token: adminToken });
-  check(derived3.data.derived.mismatch === true, "上报值与服务端重算对不上 → mismatch=true", JSON.stringify(derived3.data.derived.reported));
-  check(derived3.data.derived.comparable === true, "对不上时依然是「比过了」的（comparable=true）");
+  check(derived3.data.derived.mismatch === false, "建号上报离谱值 → 服务端重算覆盖，入库即权威（mismatch=false）", JSON.stringify(derived3.data.derived.reported));
   check(
-    warnLines.some((line) => line.indexOf("role_d3") !== -1 && line.indexOf("不一致") !== -1),
-    "不一致同时落到服务端日志（可观测，不静默）",
-    JSON.stringify(warnLines.slice(-3)),
+    derived3.data.derived.reported.combat === derived3.data.derived.attributes.combat,
+    "离谱上报没有落库：reported 已是服务端算的那份",
+    JSON.stringify(derived3.data.derived.reported),
   );
 
   // 管理端改等级 → derived 立刻跟着变（不等客户端同步），且客户端那份旧上报值当场变成「不一致」
@@ -619,11 +619,18 @@ function roleData(id, name, occupation, level) {
     token: tokenD,
     body: { data: { ...roleData("role_e1", "报一", "1", 10), combat: rightCombat + 123456, maxHp: rightMaxHp } },
   });
-  check(badSave.code === 0, "上报值对不上的存档照样存进去（只记不拦，不打断正常玩法）", `${badSave.code}`);
+  check(badSave.code === 0, "上报值对不上的存档照常收下（日志记录 + 权威覆盖，不打断正常玩法）", `${badSave.code}`);
   check(
     warnLines.slice(beforeBad).some((line) => line.indexOf("role_e1") !== -1 && line.indexOf("不一致") !== -1),
     "…并落到一条 warn（写入路径才是全量观测点：每次推进度都会经过）",
     JSON.stringify(warnLines.slice(beforeBad)),
+  );
+  // #541 权威覆盖：上报的那份只用来记日志，落库的一定是服务端重算的
+  const afterBadSave = await api("GET", "admin/roles/role_e1", { token: adminToken });
+  check(
+    afterBadSave.data.derived.reported.combat === afterBadSave.data.derived.attributes.combat,
+    "离谱上报不落库：存档里已被服务端重算值覆盖（reported = 权威值）",
+    JSON.stringify(afterBadSave.data.derived.reported),
   );
 
   // 一致：不记（每次推进度都刷一条等于没有日志）
@@ -635,9 +642,9 @@ function roleData(id, name, occupation, level) {
   check(goodSave.code === 0, "上报值一致的存档照常保存", `${goodSave.code}`);
   check(warnLines.length === beforeGood, "一致时一条日志都不打", JSON.stringify(warnLines.slice(beforeGood)));
 
-  // 没有改动存档：存进去什么，取回来就是什么
+  // 没有改动存档：一致的上报值经服务端重算后取回还是它（口径一致时覆盖 == 原值）
   const readBack = await api("GET", "roles/role_e1", { token: tokenD });
-  check(readBack.data.data.combat === rightCombat, "服务端不改写玩家上报的值（存进去什么取回来什么）", String(readBack.data.data.combat));
+  check(readBack.data.data.combat === rightCombat, "取回来的 combat 是服务端重算的那份（与一致上报值相同）", String(readBack.data.data.combat));
 
   Logger.prototype.warn = originalWarn;
 

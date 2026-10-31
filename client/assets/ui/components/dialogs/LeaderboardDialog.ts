@@ -1,4 +1,4 @@
-import { Color, Graphics, isValid, Label, Node, ScrollView, Size, Vec2 } from "cc";
+import { isValid, Label, Node, ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import LeaderboardStore, { LEADERBOARD_BOARD } from "../../core/LeaderboardStore";
@@ -8,6 +8,7 @@ import { leaderboardDialogLayout as layout } from "../../../configs/hudLayout";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { LeaderboardEntry } from "../../utils/net/ApiModels";
+import { createRoundedPanel, createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 页签顺序（与 layout.tabs.columns / layout.texts.tabs 一一对应） */
 const TABS: LeaderboardBoard[] = [LEADERBOARD_BOARD.LEVEL, LEADERBOARD_BOARD.COMBAT, LEADERBOARD_BOARD.KILLS];
@@ -82,26 +83,9 @@ export default class LeaderboardDialog {
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
-    this.tabNodes.clear();
-    this.tabLabels.clear();
-    TABS.forEach((board, index) => {
-      const node = UiHelper.createNode(`${layout.name}_tab_${board}`, new Vec2(layout.tabs.columns[index], layout.tabs.y), layout.tabs.size);
-      node.addComponent(Graphics);
-      const label = UiHelper.createLabel(
-        `${layout.name}_tab_${board}_label`,
-        layout.texts.tabs[index],
-        layout.tabs.idleText,
-        layout.tabs.fontSize,
-        new Vec2(),
-        layout.tabs.size,
-      );
-      node.addChild(label);
-      node.on(Node.EventType.TOUCH_END, () => this.select(board), this);
-      blockClickThrough(node);
-      dialog.addChild(node);
-      this.tabNodes.set(board, node);
-      this.tabLabels.set(board, label);
-    });
+    const { nodes, labels } = createTabStrip(dialog, layout.name, TABS, layout.texts.tabs, layout.tabs, (tab) => this.select(tab));
+    this.tabNodes = nodes;
+    this.tabLabels = labels;
   }
 
   private select(board: LeaderboardBoard) {
@@ -113,28 +97,7 @@ export default class LeaderboardDialog {
   }
 
   private paintTabs() {
-    TABS.forEach((board) => {
-      const node = this.tabNodes.get(board);
-      const labelNode = this.tabLabels.get(board);
-      if (!node || !isValid(node) || !labelNode) return;
-      const active = board === this.tab;
-      const graphics = node.getComponent(Graphics);
-      if (graphics) {
-        const size = layout.tabs.size;
-        graphics.clear();
-        graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, layout.tabs.radius);
-        graphics.fillColor = active ? layout.tabs.activeFill : layout.tabs.idleFill;
-        graphics.fill();
-        if (!active) {
-          graphics.lineWidth = 1;
-          graphics.strokeColor = layout.tabs.idleBorder;
-          graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, layout.tabs.radius);
-          graphics.stroke();
-        }
-      }
-      const label = labelNode.getComponent(Label);
-      if (label) label.color = active ? layout.tabs.activeText : layout.tabs.idleText;
-    });
+    paintTabStrip(this.tabNodes, this.tabLabels, TABS, this.tab, layout.tabs);
   }
 
   //#endregion
@@ -181,7 +144,7 @@ export default class LeaderboardDialog {
   /** 底部固定的「我的名次」：榜外的人靠它确认自己第几 */
   private renderSelf(body: Node, rank: number, entry: LeaderboardEntry | null) {
     const config = layout.selfRow;
-    const node = this.createPanel("leaderboard_self", config.size, config.fill, config.border, config.radius);
+    const node = createRoundedPanel("leaderboard_self", config.size, config.fill, config.border, config.radius);
     node.setPosition(config.position.x, config.position.y, 0);
     const text = rank > 0 && entry ? layout.texts.selfIn.split("{rank}").join(`${rank}`) : layout.texts.selfOut;
     node.addChild(
@@ -193,7 +156,7 @@ export default class LeaderboardDialog {
   /** 一条名次：名次（左）+ 名字 + 数值行（右） */
   private createRow(entry: LeaderboardEntry, isMe: boolean) {
     const config = layout.row;
-    const node = this.createPanel(
+    const node = createRoundedPanel(
       `leaderboard_row_${entry.roleId}`,
       config.size,
       isMe ? config.selfFill : config.fill,
@@ -258,20 +221,6 @@ export default class LeaderboardDialog {
     return node;
   }
 
-  private createPanel(name: string, size: Size, fill: Color, border: Color, radius: number): Node {
-    const node = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = node.addComponent(Graphics);
-    const path = () => graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-    graphics.fillColor = fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = border;
-    path();
-    graphics.stroke();
-    blockClickThrough(node);
-    return node;
-  }
 
   //#endregion
 

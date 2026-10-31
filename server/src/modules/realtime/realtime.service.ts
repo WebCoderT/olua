@@ -8,7 +8,11 @@ import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { BizCode } from "../../common/constants/biz-code";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
+import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
+import { RolesService } from "../roles/roles.service";
+import { decodeStoredRoleData } from "../roles/role-data.util";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { BlockService } from "./block.service";
 import { PartyService } from "../party/party.service";
@@ -27,6 +31,7 @@ import {
   type RealtimeIdentity,
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
+  type RealtimeRoleUpdateMessage,
   type RealtimePlayerEntry,
   type RealtimePlayersMessage,
   type RealtimeQuestMessage,
@@ -47,6 +52,11 @@ interface TrackedSocket extends WebSocket {
    * （巡检对它永不生效 —— 没有在线角色的账号谈不上「被踢」）。
    */
   baselineOnlineRoleId?: string | null;
+  /**
+   * 上一轮角色快照推送时看到的行签名（`revision:updated_at`，见 syncRoles）。
+   * `undefined` = 还没推过（建连后的首次推送会补上）。
+   */
+  roleSyncSignature?: string;
 }
 
 /** 一张还没被用掉的票据 */
@@ -105,6 +115,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   private ticketSweepTimer: NodeJS.Timeout | null = null;
   /** 踢下线巡检定时器（见 sweepKicked；0 = 关闭巡检） */
   private kickPollTimer: NodeJS.Timeout | null = null;
+  /** 角色快照轮询定时器（见 syncRoles；0 = 关闭推送） */
+  private roleSyncTimer: NodeJS.Timeout | null = null;
   /** 握手路径（`/<API_PREFIX>/realtime`），bootstrap 时按前缀算出来 */
   private path = `/${REALTIME_PATH}`;
   private closing = false;
@@ -121,6 +133,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly quests: QuestService,
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
+    private readonly roles: RolesService,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -174,6 +187,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 这里轮询库把「已被踢 / 已登出」的连接断掉；内嵌形态下它同样生效
       // （把「踢下线只清标记、连接要等下一次操作才被拒」的欠账一并补上）
       this.kickPollTimer = setInterval(() => this.sweepKicked(), kickPollMs).unref();
+    }
+    const roleSyncMs = this.roleSyncPollMs();
+    if (roleSyncMs > 0) {
+      // 角色权威快照轮询（#541）：属性 / 战斗力 / 货币的写点分散在两个进程，
+      // 轮询库变更才推（见 syncRoles）—— 这是玩家面板「实时」的全部来源
+      this.roleSyncTimer = setInterval(() => this.syncRoles(), roleSyncMs).unref();
     }
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
     this.world.onWorldChanged = (zoneId, mapId) => this.broadcastWorld(zoneId, mapId);
@@ -245,6 +264,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     return Math.max(0, Number(this.config.get<number>("realtimeKickPollMs") ?? 3000));
   }
 
+  /** 角色快照轮询间隔（毫秒；0 = 关闭 roleUpdate 推送） */
+  private roleSyncPollMs(): number {
+    return Math.max(0, Number(this.config.get<number>("realtimeRoleSyncMs") ?? 1000));
+  }
+
   /**
    * 关掉通道（**在 `onModuleDestroy` 而不是 `onApplicationShutdown` 里**）
    *
@@ -260,10 +284,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   async onModuleDestroy(): Promise<void> {
     this.closing = true;
-    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer]) if (timer) clearInterval(timer);
+    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.roleSyncTimer]) if (timer) clearInterval(timer);
     this.heartbeatTimer = null;
     this.ticketSweepTimer = null;
     this.kickPollTimer = null;
+    this.roleSyncTimer = null;
     this.tickets.clear();
 
     const sockets = [...this.connections.values()];
@@ -399,6 +424,79 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         serverTime: Date.now(),
       },
     });
+    // 建连即推一次权威基线（#541）：客户端登入拿到的角色存档里，属性/战斗力可能是
+    // 旧口径的存量值，这一帧把它当场纠正，不用等第一次轮询节拍
+    this.pushRoleUpdate(socket);
+  }
+
+  /**
+   * 角色权威快照轮询（#541）
+   *
+   * 每 `realtimeRoleSyncMs` 跑一遍在线连接：取账号当前在线角色行，`revision:updated_at`
+   * 没变就跳过（绝大多数轮询都停在这里，查行是唯一开销）；变了就重算属性组一帧
+   * `roleUpdate` 推给本人。签名记在 socket 上，连接断开即随之消失，无需额外清理。
+   *
+   * 覆盖的写点：客户端存档（PUT /roles）、任务 / 成就 / 邮件发奖、商城 / 回收 / 成长线 / 用药、
+   * 实时侧的升级与拾取、管理端后台改角色 —— **全部**经由「行变了」这一处汇合，
+   * 不需要每个写点各发一次通知（也发不了：写点跨进程，事件总线过不去）。
+   */
+  private syncRoles(): void {
+    if (this.closing || this.connections.size === 0) return;
+    for (const socket of this.connections.values()) {
+      const row = this.roles.onlineRoleRow(socket.identity.id);
+      if (!row) continue; // 没有在线角色：踢下线巡检会处理连接，这里无事可推
+      const signature = `${row.revision}:${row.updated_at}`;
+      if (socket.roleSyncSignature === signature) continue;
+      socket.roleSyncSignature = signature;
+      const frame = this.buildRoleUpdate(row);
+      if (frame) this.send(socket, frame);
+    }
+  }
+
+  /** 给一条连接推当前角色的权威快照（签名一并记下，避免下一轮重复推） */
+  private pushRoleUpdate(socket: TrackedSocket): void {
+    const row = this.roles.onlineRoleRow(socket.identity.id);
+    if (!row) return;
+    socket.roleSyncSignature = `${row.revision}:${row.updated_at}`;
+    const frame = this.buildRoleUpdate(row);
+    if (frame) this.send(socket, frame);
+  }
+
+  /**
+   * 由角色行组一帧 roleUpdate：属性与战斗力**现算**（不信任存档里客户端报的旧值），
+   * 货币 / 等级 / 血蓝 / 经验取行内权威字段
+   */
+  private buildRoleUpdate(row: RoleRow): RealtimeRoleUpdateMessage | null {
+    const data = decodeStoredRoleData(row.data);
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(row.level, data));
+    return {
+      type: "roleUpdate",
+      data: {
+        level: row.level,
+        exp: Math.max(0, Math.floor(Number(data.exp) || 0)),
+        expNeed: this.roles.expNeedAt(row.level),
+        hp: Math.max(0, Math.floor(Number(data.hp) || 0)),
+        mp: Math.max(0, Math.floor(Number(data.mp) || 0)),
+        gold: Math.max(0, Math.floor(Number(data.gold) || 0)),
+        bindGold: Math.max(0, Math.floor(Number(data.bindGold) || 0)),
+        silver: Math.max(0, Math.floor(Number(data.silver) || 0)),
+        combat: summary?.combat ?? Math.max(0, Math.floor(Number(data.combat) || 0)),
+        ...(summary
+          ? {
+              maxHp: summary.maxHp,
+              hpRecover: summary.hpRecover,
+              maxMp: summary.maxMp,
+              physicalAttack: summary.physicalAttack,
+              magicAttack: summary.magicAttack,
+              taoistAttack: summary.taoistAttack,
+              physicalDefense: summary.physicalDefense,
+              magicDefense: summary.magicDefense,
+              taoistDefense: summary.taoistDefense,
+            }
+          : {}),
+        revision: row.revision,
+      },
+    };
   }
 
   /**

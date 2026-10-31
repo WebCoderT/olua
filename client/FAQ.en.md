@@ -261,7 +261,7 @@ Carrying and sorting are two separate layers, and it is clear which one you are 
 
 ### How is health regeneration per second calculated? Where do I make it faster or slower?
 
-Regeneration is **an ordinary attribute** (`hpRecover`, unit "points/second") sitting on the character alongside max health, summed from five sources by `GameHelper.combatCalc` (which is also the single exit for attribute aggregation):
+Regeneration is **an ordinary attribute** (`hpRecover`, unit "points/second") sitting on the character alongside max health, summed from five sources **on the server** and delivered via the `roleUpdate` frame (the client no longer computes them):
 
 - **Strength is derived as a share of max health**: base regeneration per level = max health × `configs/growth.attributeRange.hpRecoverRate` (default `0.01` = 1% per second). **To retune global speed, change only this one number** — regeneration from equipment / war soul / title / rank is each computed with its own discount and scales proportionally.
 - **Only defensive-slot equipment adds regeneration**: the `recover` column of `configs/growth.equipmentSlotShare` (clothes 40 / helmet 20 / belt 20 / boots 20, totalling 100; weapons and jewellery are 0). Wearing all four defensive slots is worth about `equipmentGrowth.setPowerRate` (2) times base regeneration. A "minimum 1 point" is **deliberately absent**: low-level armour adds only a few dozen health, so not reaching 1 point/second is normal; forcing a floor would hand a level 1 character in four pieces of armour 4 points/second for free (same-level monsters deal about 7 points/second), making the early game invincible.

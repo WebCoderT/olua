@@ -263,8 +263,8 @@ export class LeaderboardService implements OnApplicationShutdown {
   /**
    * 一行存档 → 三个榜的原料
    *
-   * 战力靠 `summarizeRoleAttributes` 现算（它与客户端 `combatCalc` 是同源的两份实现，
-   * `make audit-combat-parity` 逐位比对）。**算不出来就给 0**，不让它把整次重算带崩：
+   * 战力靠 `summarizeRoleAttributes` 现算（#541 起属性算法只有服务端这一份实现）。
+   * **算不出来就给 0**，不让它把整次重算带崩：
    * 等级超出成长曲线（旧存档 / 后台手工改过）、存档 JSON 坏掉，都属于「这一个角色数据有问题」，
    * 不该让全服榜一起没了。
    */

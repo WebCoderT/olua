@@ -112,6 +112,20 @@ export default class RoleInfoDialog {
   }
 
   /**
+   * 属性列表单独刷新（#541：roleUpdate 权威快照到达时调）
+   *
+   * 与 updateDialog 的差别：不碰装备槽与内观 —— 服务端推的是数值（属性/战斗力/货币），
+   * 槽位显示只随装备变化，内观更与数值无关。升级导致的属性变化此前漏刷（只刷了
+   * 顶栏与血条，面板开着时数字停在旧值），从这条出口补上。
+   */
+  updateAttributes() {
+    if (!this.dialog || !this.dialog.active) return;
+    const role = StorageManager.findOnlineRole();
+    if (!role) return;
+    this.attributeList?.update(role);
+  }
+
+  /**
    * 按当前背包重算所有槽位的「更好装备」提示（弹窗未打开时忽略）
    * 背包任何变动（拾取/丢弃/回收/整理/换装）都会经 RoleUIManager.refreshBag 走到这里
    */

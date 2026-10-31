@@ -187,7 +187,7 @@ export function getRecyclePrice(equipment: Equipment | null | undefined): number
 /**
  * 装备的战斗力贡献（**纯函数**，角色信息弹窗「更好装备」提示的判定口径，见 configs/items.findBagEquipmentUpgrade）
  *
- * 与 GameHelper.combatCalc 用同一张权重表（configs/battle.combatCalc）：
+ * 权重表 configs/battle.combatCalc（与服务端生成物 COMBAT_WEIGHTS 同源）：
  * 区间型属性取上下限之和、maxHp 取单值、hpRecover 不计（回血不算战斗力，口径两边必须一致，
  * 否则「提示说更好」与「穿上后战斗力变高」会对不上）。权重表改这里跟着变，没有第二份倍率。
  */

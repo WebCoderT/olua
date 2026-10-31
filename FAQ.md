@@ -125,10 +125,14 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 回归该怎么跑？哪些必须全绿？
 
-改动合并前至少跑完这三类（全绿才算完）。仓库根有 Makefile，一条命令搞定：
+**日常回归的硬门槛是「改动哪跑哪」**：改动了哪里，就跑哪里受影响的那几套 ——
+`make test-changed` 按工作区改动（或 `BASE=main` 指定基准）挑出最小验证集：
+客户端改动跑类型检查 + 源码里引用过它的那几套单测；服务端改动跑编译 + 对应模块的
+e2e + 边界/硬编码审计；配置表改动跑数据漂移审计；文档改动跑文档数字与双语 parity。
 
 ```bash
-make verify   # = check（客户端 tsc + 管理端 typecheck + 13 个审计）+ 三端构建 + 全部测试
+make test-changed        # 日常门禁：改动哪跑哪（失败即停，修好重跑）
+make verify              # 发布前的全量门禁：三端类型检查 + 构建 + 全部测试 + 全部审计
 ```
 
 手工跑（等价，不依赖 `make`）：
@@ -137,7 +141,7 @@ make verify   # = check（客户端 tsc + 管理端 typecheck + 13 个审计）+
 # 客户端：58 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 二十四套 e2e（247 / 119 / 283 / 120 / 28 / 50 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 87 / 55 / 39 / 51 / 67 + 73）+ 生成物一致性
+# 服务端：编译 + 二十四套 e2e（247 / 119 / 283 / 120 / 28 / 60 / 130 / 24 / 14 / 639 / 87 / 32 / 60 / 47 / 35 / 48 / 24 / 50 / 87 / 55 / 39 / 51 / 67 + 73）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建
@@ -145,18 +149,17 @@ cd admin && npm run build
 
 # 项目级审计（在仓库根跑）
 node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
-  && node tools/audit-shared-data.cjs && node tools/audit-combat-parity.cjs \
+  && node tools/audit-shared-data.cjs \
   && node tools/audit-config-leak.cjs && node tools/audit-docs-en.cjs \
   && node tools/audit-ui-click-through.cjs && node tools/audit-deploy.cjs \
   && node tools/audit-doc-numbers.cjs
 ```
 
-按改动范围可以只跑相关的那几套，但**服务端 e2e 与 13 个审计脚本在提交前都该过一遍** —— 它们盯着的是「静默失效」这类单测抓不到的问题：
+上面这些审计盯的是「静默失效」这类单测抓不到的问题（日常跑哪几套由 `make test-changed` 按改动范围决定，发布前 `make verify` 全量过一遍）：
 
 - `audit-api-generated`：生成物与文档是否逐字节一致（防「改了服务端忘了生成」）
 - `audit-api-hardcode`：地址有没有写进代码、环境变量有没有漏登记进 `.env.example`
 - `audit-shared-data`：三端共用的公共游戏数据与客户端配置表是否逐字节一致，外加每张数据表都在且非空（防数据漂移、防「生成器静默少产一张数据表」）
-- `audit-combat-parity`：服务端角色属性算法与客户端真身是否一致（把真的 `GameHelper.combatCalc` 编进 Node 当期望值，防算法漂移）
 - `audit-config-leak`：可调项有没有散落进核心代码、文案 key 有没有漏登记
 - `audit-docs-en`：中英文档的章节与数字有没有在翻译里走漏
 - `audit-ui-click-through`：UI 点击会不会穿透到世界、按压归属接线是否齐全

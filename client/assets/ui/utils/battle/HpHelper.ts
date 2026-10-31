@@ -9,7 +9,8 @@ import type { Role } from "../../../entities/Role";
  * StorageManager.updateOnlineRole 落盘，否则下次读取会被覆盖）。
  *
  * 「每秒血量回复量」不是一个固定速度，而是**角色身上的一项属性**（role.hpRecover）：
- * 由等级曲线、防御装备、战魂、称号、军衔五处来源相加而成，见 ui/core/GameHelper.combatCalc。
+ * 由等级曲线、防御装备、战魂、称号、军衔五处来源相加而成，权威值由服务端重算并经
+ * roleUpdate 帧下发（#541，客户端只消费不下算）。
  * 这里只负责按经过时间把它结算成血量。
  */
 export default class HpHelper {
@@ -17,7 +18,7 @@ export default class HpHelper {
   static ensureDefaults(role: Role) {
     if (typeof role.maxHp !== "number") role.maxHp = levelMap.get(role.level)?.maxHp ?? 0;
     if (typeof role.hp !== "number") role.hp = role.maxHp;
-    // 旧存档没有这一项：先按等级裸回血兜底（够用就不会显示 0），完整值由下一次 combatCalc 重算覆盖
+    // 旧存档没有这一项：先按等级裸回血兜底（够用就不会显示 0），完整值由服务端 roleUpdate 帧覆盖
     if (typeof role.hpRecover !== "number") role.hpRecover = levelMap.get(role.level)?.hpRecover ?? 0;
     if (typeof role.hpRecoverAccumulator !== "number") role.hpRecoverAccumulator = 0;
   }

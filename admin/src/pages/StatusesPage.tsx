@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatTime, PERMISSION, SKILL_OWNER_LABELS, SKILL_OWNER_OPTIONS, STATUS_SOURCE_LABELS, statusesApi } from "../api";
 import type { PageResult, Status, StatusCombat, UpdateStatus } from "../api";
 import { Pagination } from "../components/Pagination";
+import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -201,32 +202,12 @@ function StatusEditDialog({
             </div>
           </div>
 
-          <Field label="描述文案" hint="≤500 字">
-            <textarea
-              className="min-h-[80px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
-              maxLength={500}
-              value={form.description}
-              onChange={(event) => set("description", event.target.value)}
-            />
-          </Field>
+          <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
 
-          {problems.length > 0 ? (
-            <ul className="flex flex-col gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              {problems.map((message) => (
-                <li key={message}>· {message}</li>
-              ))}
-            </ul>
-          ) : null}
+          <ProblemList problems={problems} />
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
-          </Button>
-          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-            保存修改
-          </Button>
-        </div>
+        <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
       </div>
     </div>
   );

@@ -1,22 +1,15 @@
 import { Camera, Vec3 } from "cc";
-import { BattleAttributes, TextRef } from "../../types/common";
-import { Equipment, EQUIPMENT_TYPE } from "../../types/good";
+import { TextRef } from "../../types/common";
+import { Equipment } from "../../types/good";
 import { OECCUPATION, SEX } from "../../types/role";
 import StorageManager from "./StorageManager";
-import { Role } from "../../entities/Role";
-import { levelMap } from "../../configs/level";
-import { getEquipment } from "../../configs/items";
-import { combatCalc as combatAttributeWeights } from "../../configs/battle";
 import { maps } from "../../configs/map";
-import { getSoulLevel } from "../../configs/soul";
-import { getTitleLevel } from "../../configs/title";
-import { getRankLevel } from "../../configs/rank";
 import { getText, textRef } from "../../configs/texts";
 import { MapId } from "../../types/map";
 
 /**
  * 游戏工具（静态类）
- * 负责坐标系换算、装备校验与战斗属性计算
+ * 负责坐标系换算与装备校验（战斗属性/战斗力的计算在服务端，#541 —— 客户端只消费 roleUpdate 帧）
  */
 export default class GameHelper {
   static camera: Camera | null = null;
@@ -81,65 +74,5 @@ export default class GameHelper {
     return null;
   }
 
-  /** 战斗属性计算公式 */
-  static combatCalc(role: Role) {
-    const levelConfig = levelMap.get(role.level);
-    if (!levelConfig) return role;
-
-    const equipmentList = (Object.keys(role.equipments) as EQUIPMENT_TYPE[])
-      .map((slot) => getEquipment(role.equipments[slot]))
-      .filter((equipment): equipment is Equipment => equipment !== null);
-    // 战魂按当前等级提供整份属性加成（configs/soul，未激活为 null 不加成）
-    const soul = getSoulLevel(role.soulOfWar);
-    // 称号同战魂：当前等级整份加成（configs/title，未激活为 null 不加成）
-    const title = getTitleLevel(role.title);
-    // 军衔同战魂/称号：当前阶整份加成（configs/rank，未授衔为 null 不加成）
-    const rank = getRankLevel(role.rank);
-    // 区间型属性（maxHp 与 hpRecover 是单值属性，单独相加，不在这里）
-    const attributeKeys: (keyof Omit<BattleAttributes, "maxHp" | "hpRecover">)[] = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
-
-    role.maxHp = levelConfig.maxHp + equipmentList.reduce((total, equipment) => total + equipment.maxHp, 0) + (soul?.attributes.maxHp ?? 0) + (title?.attributes.maxHp ?? 0) + (rank?.attributes.maxHp ?? 0);
-    // 每秒回血与 maxHp 同一份来源清单（等级 / 防御装备 / 战魂 / 称号 / 军衔），口径一致才能保证
-    // 「加血的来源也加回血」；具体结算见 ui/utils/battle/HpHelper.recover。
-    // 它不计入战斗力（configs/battle 的权重表里没有它）：战斗力是地图准入的门槛，
-    // 把持续回复算进去会凭空抬高所有地图的门槛，而回血并不改变伤害输出。
-    role.hpRecover =
-      levelConfig.hpRecover +
-      equipmentList.reduce((total, equipment) => total + equipment.hpRecover, 0) +
-      (soul?.attributes.hpRecover ?? 0) +
-      (title?.attributes.hpRecover ?? 0) +
-      (rank?.attributes.hpRecover ?? 0);
-    // 最大魔法值只跟等级走（装备暂不影响魔法值）
-    role.maxMp = levelConfig.maxMp;
-    for (const key of attributeKeys) {
-      const sources: [number, number][] = [levelConfig[key], ...equipmentList.map((equipment) => equipment[key])];
-      if (soul) sources.push(soul.attributes[key]);
-      if (title) sources.push(title.attributes[key]);
-      if (rank) sources.push(rank.attributes[key]);
-      role[key] = this.twoAttributesCalc(sources);
-    }
-
-    role.combat = Array.from(combatAttributeWeights.entries()).reduce((total, [key, weight]) => {
-      const value = key === "maxHp" ? role.maxHp : this.oneAttributeCalc(role[key]);
-      return total + value * weight;
-    }, 0);
-
-    return role;
-  }
-
-  /** 双属性计算 */
-  static twoAttributesCalc(array: [number, number][]): [number, number] {
-    return array.reduce(
-      (acc, cur) => {
-        return [acc[0] + cur[0], acc[1] + cur[1]];
-      },
-      [0, 0],
-    );
-  }
-
-  /** 单属性计算 */
-  static oneAttributeCalc(array: number[]) {
-    return array.reduce((acc, cur) => acc + cur, 0);
-  }
 }
 

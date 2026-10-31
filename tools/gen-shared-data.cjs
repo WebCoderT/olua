@@ -55,12 +55,9 @@
  */
 
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
 
-const ROOT = path.resolve(__dirname, "..");
-const ASSETS = path.join(ROOT, "client", "assets");
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
 
 /**
@@ -89,28 +86,12 @@ const EQUIPMENT_MAPS = ["clothes", "weapons", "rings", "nicklaces", "shoes", "he
 const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
 const SINGLE_KEYS = ["maxHp", "hpRecover"];
 
-/**
- * 最小 Cocos 垫片
- *
- * 只有被拉进来的配置在**运行时**真的构造了才能用到；纯类型用途的 import 会被 TypeScript 擦掉。
- * `equipments` 用到 Color（前后缀配色）与 Vec2（贴图偏移），`role` 用到 Size（职业介绍图尺寸），
- * `items`/`map` 本身不用 —— 都在表现层，不参与任何数值。
- */
-const CC_SHIM = `"use strict";
-class Color { constructor(value) { this.value = value; } }
-class Vec2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }
-class Size { constructor(width = 0, height = 0) { this.width = width; this.height = height; } }
-class Vec3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } }
-module.exports = { Color, Vec2, Size, Vec3 };
-`;
-
 function main() {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-shared-data-"));
-  writeShim(work);
-  compile(work);
+  const work = createWork("shared-data");
+  compileClientConfig(work, SOURCE_FILES);
 
-  const cfg = load(work);
-  const snapshot = buildSnapshot(cfg);
+  const { cfg } = configLoader(work);
+  const snapshot = buildSnapshot(load(cfg));
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -122,67 +103,10 @@ function main() {
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
   console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 地图 ${count(snapshot.mapLabels)} 张 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
-  fs.rmSync(work, { recursive: true, force: true });
+  cleanupWork(work);
 }
 
-/** 把 cc 垫片伪装成一个可被 require 的包 */
-function writeShim(work) {
-  const shimDir = path.join(work, "out", "node_modules", "cc");
-  fs.mkdirSync(shimDir, { recursive: true });
-  fs.writeFileSync(path.join(shimDir, "index.js"), CC_SHIM, "utf8");
-  fs.writeFileSync(path.join(shimDir, "package.json"), '{"name":"cc","version":"0.0.0","main":"index.js"}', "utf8");
-}
-
-/**
- * 编译客户端配置到临时目录
- *
- * 报 `Cannot find module 'cc'` 是**预期内的**：客户端配置处在 Cocos 工程里，这里没有引擎类型。
- * 缺类型不影响 JS 产物（下面要的是运行时的值）。真正的失败（语法 / 找不到源文件）不会被吞掉。
- */
-function compile(work) {
-  const tsconfig = path.join(work, "tsconfig.json");
-  fs.writeFileSync(
-    tsconfig,
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          module: "CommonJS",
-          moduleResolution: "node",
-          outDir: path.join(work, "out"),
-          rootDir: ASSETS,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          strict: false,
-          noEmitOnError: false,
-        },
-        files: SOURCE_FILES,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
-
-  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
-  if (!fs.existsSync(tsc)) {
-    throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
-  }
-
-  let log = "";
-  try {
-    log = execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (error) {
-    log = `${error.stdout ?? ""}${error.stderr ?? ""}`;
-  }
-
-  const fatal = log.split("\n").filter((line) => line.includes("error TS") && !line.includes("Cannot find module 'cc'"));
-  if (fatal.length > 0) throw new Error(`编译客户端配置失败：\n${fatal.slice(0, 3).join("\n")}`);
-}
-
-function load(work) {
-  const dir = path.join(work, "out", "configs");
-  const cfg = (name) => require(path.join(dir, `${name}.js`));
+function load(cfg) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);

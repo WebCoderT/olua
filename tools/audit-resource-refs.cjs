@@ -24,10 +24,10 @@
  *      （称号 titles/sfx_<id>、详情背景 backgrounds/sfx_<serial>、光柱
  *      effect/light/light_<n>），从配置表的数值字段展开成完整路径逐一核对。
  *   3. 图集 / 散帧结构对应（磁盘侧自检）：外观树（monster/clothes/weapons）的每个
- *      散帧目录 <树>/out/<id> 必须有对应图集目录 <树>/atlas/out/<id>（至少 1 个
- *      plist）；role/<n> 对应 role/atlas/<n>；npc/npc_* 对应 npc/atlas/<name>/<name>.plist；
- *      backgrounds/sfx_* 对应 backgrounds/atlas/<name>/<name>.plist。
- *      AnimationHelper 的口径是「图集优先、散帧兜底」，两者全缺 = 该外观整片空白。
+ *      外观目录 <树>/out/<id> 里必须有至少 1 个 plist 图集；role/<n>、npc/npc_*、
+ *      backgrounds/sfx_* 目录里必须有同名 plist（<name>/<name>.plist）。
+ *      #542 起图集与散帧目录同路径（atlas 夹层已移除）；AnimationHelper 的口径是
+ *      「图集优先、散帧兜底」，两者全缺 = 该外观整片空白。
  *   4. 服务端快照核对（管理端 / DB 数据层）：configs → gen-shared-data → 快照 →
  *      DB seed 是管理端数据的来路；快照里带资源路径的字段（FASHIONS 的 icon/in/out、
  *      MONSTERS 的 key 拼外观路径）必须同样命中磁盘——客户端 configs 被上面三层守住，
@@ -147,19 +147,8 @@ function resourceExists(rel) {
   return fileExists(rel) || dirExists(rel);
 }
 
-/** 外观图集目录是否存在（getAtlasSrc 规则的磁盘版；空串 = 该形态没有图集规则） */
-function atlasDirOf(outSrc) {
-  const matched = /^(\w+)\/out\/(.+)$/.exec(outSrc);
-  if (matched) return `${matched[1]}/atlas/out/${matched[2]}`;
-  const roleMatched = /^role\/(\d+)$/.exec(outSrc);
-  return roleMatched ? `role/atlas/${roleMatched[1]}` : "";
-}
-
-/** 单循环目录动画的图集 plist（getLoopAtlasDir 规则的磁盘版；空串 = 走散帧） */
-function loopAtlasPlistOf(dirSrc) {
-  const matched = /^(npc|backgrounds)\/(\w+)$/.exec(dirSrc);
-  return matched ? `${matched[1]}/atlas/${matched[2]}/${matched[2]}.plist` : "";
-}
+// #542 起图集目录与散帧目录同路径（atlas 夹层已移除），「散帧缺、图集在」的引用
+// 就是同一个路径命中目录 —— 不再需要单独的图集路径映射。
 
 //#endregion
 
@@ -200,17 +189,6 @@ for (const [value, sources] of refs) {
     passed += 1;
     continue;
   }
-  // 外观帧目录引用允许「散帧缺、图集在」：AnimationHelper 图集优先、散帧兜底
-  const atlasDir = atlasDirOf(value);
-  if (atlasDir && dirExists(atlasDir)) {
-    passed += 1;
-    continue;
-  }
-  const loopPlist = loopAtlasPlistOf(value);
-  if (loopPlist && fileExists(loopPlist)) {
-    passed += 1;
-    continue;
-  }
   failures.push(`引用断链：${value}（${sources.slice(0, 3).join(", ")}${sources.length > 3 ? " 等" : ""}）`);
 }
 
@@ -218,7 +196,7 @@ for (const [value, sources] of refs) {
 
 //#region 2. 展开型引用（模板串的取值在数据表数值字段里）
 
-/** 称号：title.ts 的 `{ id: <数字>,` → titles/sfx_<id> 目录（titles 不在 getLoopAtlasDir 里，纯散帧） */
+/** 称号：title.ts 的 `{ id: <数字>,` → titles/sfx_<id> 目录（#542 起目录里有同名打包图集，路径不变） */
 const titleSource = stripComments(fs.readFileSync(path.join(ROOT, "client/assets/configs/title.ts"), "utf8"));
 const titleIds = [...titleSource.matchAll(/\bid:\s*(\d+),/g)].map((m) => Number(m[1]));
 if (!titleIds.length) failures.push("展开核对：title.ts 里解析不出称号 id（写法变了？）");
@@ -235,8 +213,7 @@ const bgSerials = bgArray ? [...bgArray[1].matchAll(/\b(\d{5})\b/g)].map((m) => 
 if (!bgSerials.length) failures.push("展开核对：background.ts 里解析不出背景编号（写法变了？）");
 for (const serial of bgSerials) {
   const dir = `backgrounds/sfx_${serial}`;
-  const plist = loopAtlasPlistOf(dir);
-  if (dirExists(dir) || (plist && fileExists(plist))) passed += 1;
+  if (dirExists(dir)) passed += 1;
   else failures.push(`详情背景断链：${dir}（configs/background.ts serial=${serial}）`);
 }
 
@@ -256,7 +233,7 @@ for (const serial of lightSerials) {
 
 //#region 3. 图集 / 散帧结构对应（磁盘侧自检）
 
-/** 外观树：散帧目录 <树>/out/<id> 必须有图集目录（至少 1 个 plist）—— 两者全缺 = 外观空白 */
+/** 外观树：外观目录 <树>/out/<id> 必须有图集 plist（#542 起图集就在目录里）—— 图集缺 = 外观空白 */
 const OUT_TREES = ["monster", "clothes", "weapons"];
 for (const tree of OUT_TREES) {
   const outRoot = path.join(RES_ROOT, tree, "out");
@@ -264,40 +241,36 @@ for (const tree of OUT_TREES) {
   for (const entry of fs.readdirSync(outRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const outDir = `${tree}/out/${entry.name}`;
-    const atlasDir = `${tree}/atlas/out/${entry.name}`;
-    const atlasFull = path.join(RES_ROOT, atlasDir);
-    const plists = fs.existsSync(atlasFull)
-      ? fs.readdirSync(atlasFull).filter((name) => name.toLowerCase().endsWith(".plist")).length
-      : 0;
-    if (dirExists(outDir) && plists > 0) {
+    // 图集 plist 在动作子目录里（<动作>/<动作>.plist），任意深度命中即算有图集
+    const hasPlist = [...diskFiles].some((p) => p.startsWith(`${outDir.toLowerCase()}/`) && p.endsWith(".plist"));
+    if (hasPlist) {
       passed += 1;
       continue;
     }
-    // 散帧与图集都缺内容（空目录 / 图集目录没 plist）才算断链；散帧缺但图集在是合法形态
-    const hasLoose = dirExists(outDir) && fs.readdirSync(path.join(RES_ROOT, outDir)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
-    if (!hasLoose && plists === 0) failures.push(`外观树断链：${outDir} 既无散帧也无图集 plist（${atlasDir}）`);
+    // 目录里只有散帧（未打包）也算合法形态（AnimationHelper 会兜底切割）；全空才算断链
+    const hasLoose = fs.readdirSync(path.join(RES_ROOT, outDir)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
+    if (!hasLoose) failures.push(`外观树断链：${outDir} 既无图集 plist 也无散帧`);
   }
 }
 
-/** role 本体：role/<n> 散帧 或 role/atlas/<n> 图集，二者必须其一有内容 */
+/** role 本体：role/<n> 目录里必须有图集 plist 或散帧（#542 起图集就在目录里） */
 for (const entry of fs.readdirSync(path.join(RES_ROOT, "role"), { withFileTypes: true })) {
   if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
-  const loose = fs.readdirSync(path.join(RES_ROOT, "role", entry.name)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
-  const atlasFull = path.join(RES_ROOT, "role", "atlas", entry.name);
-  const plists = fs.existsSync(atlasFull)
-    ? fs.readdirSync(atlasFull).filter((name) => name.toLowerCase().endsWith(".plist")).length
-    : 0;
-  if (loose || plists > 0) passed += 1;
-  else failures.push(`role 本体断链：role/${entry.name} 既无散帧也无图集`);
+  // 图集 plist 在动作子目录里（<动作>/<动作>.plist），任意深度命中即算有图集
+  const hasPlist = [...diskFiles].some((p) => p.startsWith(`role/${entry.name.toLowerCase()}/`) && p.endsWith(".plist"));
+  const hasLoose = fs.readdirSync(path.join(RES_ROOT, "role", entry.name)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
+  const hasContent = hasPlist || hasLoose;
+  if (hasContent) passed += 1;
+  else failures.push(`role 本体断链：role/${entry.name} 既无图集也无散帧`);
 }
 
-/** npc / backgrounds：单循环图集 plist 与散帧目录必须其一有内容 */
+/** npc / backgrounds：单循环图集 plist（#542 起与目录同路径）或散帧目录必须其一有内容 */
 for (const [tree, dirPattern] of [["npc", /^npc_\w+$/], ["backgrounds", /^sfx_\w+$/]]) {
   const root = path.join(RES_ROOT, tree);
   if (!fs.existsSync(root)) continue;
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || !dirPattern.test(entry.name)) continue;
-    const plist = `${tree}/atlas/${entry.name}/${entry.name}.plist`;
+    const plist = `${tree}/${entry.name}/${entry.name}.plist`;
     const loose = fs.readdirSync(path.join(root, entry.name)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
     if (loose || fileExists(plist)) passed += 1;
     else failures.push(`单循环动画断链：${tree}/${entry.name} 既无散帧也无图集 plist（${plist}）`);
@@ -329,7 +302,7 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
       for (const field of ["icon", "in", "out"]) {
         const value = row[field];
         if (!value) continue;
-        if (resourceExists(value) || (atlasDirOf(value) && dirExists(atlasDirOf(value))) || (loopAtlasPlistOf(value) && fileExists(loopAtlasPlistOf(value)))) {
+        if (resourceExists(value)) {
           passed += 1;
         } else {
           failures.push(`快照时装断链：FASHIONS.${id}.${field} = ${value}（DB fashions seed 同源，管理端时装页会引用）`);
@@ -341,11 +314,11 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
   const monsters = grabRecord("MONSTERS");
   if (monsters) {
     for (const key of Object.keys(monsters)) {
-      // 怪物外观：monster/out/<key> 散帧，或 monster/atlas/out/<key> 图集（新包为纯图集形态，
-      // plist 藏在动作子目录里，任意深度命中即算有图集）
-      if (dirExists(`monster/out/${key}`) || dirExists(`monster/atlas/out/${key}`)) {
+      // 怪物外观：monster/out/<key> 目录里的图集 plist（#542 起图集就在目录里，
+      // plist 在动作子目录中，任意深度命中即算有图集）或散帧
+      if (dirExists(`monster/out/${key}`)) {
         const hasPlist = [...diskFiles].some(
-          (p) => p.startsWith(`monster/atlas/out/${key.toLowerCase()}/`) && p.endsWith(".plist"),
+          (p) => p.startsWith(`monster/out/${key.toLowerCase()}/`) && p.endsWith(".plist"),
         );
         const hasLoose = [...diskFiles].some(
           (p) => p.startsWith(`monster/out/${key.toLowerCase()}/`) && EXTS.has(path.extname(p).slice(1)),
@@ -355,7 +328,7 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
           continue;
         }
       }
-      failures.push(`快照怪物外观断链：MONSTERS key=${key}（monster/out 与 monster/atlas/out 均无内容，客户端按 key 拼外观路径）`);
+      failures.push(`快照怪物外观断链：MONSTERS key=${key}（monster/out 无内容，客户端按 key 拼外观路径）`);
     }
   }
 }

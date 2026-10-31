@@ -23,6 +23,7 @@ import {
 import type { Guides } from "./equipAlign/render";
 import { drawCell, layoutCells, originOfCell } from "./equipAlign/render";
 import { useAlignStore } from "./equipAlign/saved";
+import { makeAlignWorkbenchActions } from "./equipAlign/workbench-actions";
 
 /**
  * 装备对齐工作台（#509 / #513）
@@ -687,54 +688,21 @@ export function EquipAlignPage() {
     });
   };
 
-  /** 保存当前件 —— 主流程的出口：调完按这个，客户端重进游戏就看到了 */
-  const saveActive = async () => {
-    if (pending) return;
-    const ok = await saveAlign(activeItem.id, geometry);
-    if (!ok) return;
-    dropDraft(activeItem.id);
-    setNotice(`已保存「${activeItem.label}」—— 客户端重进游戏即生效`);
-  };
-
-  /**
-   * 还原本件
-   *
-   * 服务端有记录就删掉（回到出厂值），没有就只清临时改动。**顺序不能反**：
-   * 先删服务端、再清本地，反过来会有一瞬间「本地没了但服务端还在」，刷新页面那件又跳回旧位置。
-   */
-  const resetItem = async () => {
-    if (pending) return;
-    if (saved[activeItem.id]) {
-      const ok = await resetAlign(activeItem.id);
-      if (!ok) return;
-    }
-    dropDraft(activeItem.id);
-    setNotice(`已把「${activeItem.label}」还原成出厂值`);
-  };
-
-  /**
-   * 保存全部未保存的件（逐条提交）
-   *
-   * 逐条而不是一个批量接口：一条失败不拖累其它（失败清单要能指名道姓），
-   * 而且工作台的真实节奏本来就是「调一件存一件」，批量只是顺手。
-   */
-  const saveAll = async () => {
-    if (pending || !unsavedIds.length) return;
-    let done = 0;
-    const failed: string[] = [];
-    for (const id of unsavedIds) {
-      const item = ALL_ITEMS.find((entry) => entry.id === id);
-      if (!item) continue;
-      const ok = await saveAlign(id, drafts[id] ?? baseOf(item));
-      if (ok) {
-        done += 1;
-        dropDraft(id);
-      } else {
-        failed.push(id);
-      }
-    }
-    setNotice(failed.length ? `已保存 ${done} 件，失败 ${failed.length} 件：${failed.join("、")}` : `已保存 ${done} 件`);
-  };
+  /** 保存 / 还原 / 批量保存（与内观工作台共用的流程，差异只在生效文案与落库 API） */
+  const workbench = makeAlignWorkbenchActions<Geometry, WorkItem>({
+    pending,
+    save: saveAlign,
+    reset: resetAlign,
+    saved,
+    drafts,
+    baseOf,
+    dropDraft,
+    setNotice,
+    effectHint: "客户端重进游戏即生效",
+  });
+  const saveActive = () => workbench.saveActive(activeItem, geometry);
+  const resetItem = () => workbench.resetItem(activeItem);
+  const saveAll = () => workbench.saveAll(ALL_ITEMS, unsavedIds);
 
   /**
    * 按裸模自动给一个初值（免费的人工起点）

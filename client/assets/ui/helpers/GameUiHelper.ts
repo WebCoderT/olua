@@ -1226,7 +1226,7 @@ export default class GameUiHelper {
   }
 
   /**
-   * 创建战魂动画节点（异步加载散图帧目录后循环播放）
+   * 创建战魂动画节点（异步加载图集帧后循环播放）
    * @param config 战魂等级配置
    * @param size 节点尺寸（缺省用弹窗中间展示尺寸；挂到主角身上的外显传小尺寸）
    */
@@ -1235,7 +1235,7 @@ export default class GameUiHelper {
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.RAW;
     sprite.trim = false;
-    AnimationHelper.loadFrames(config.animation).then((frames) => {
+    AnimationHelper.loadLoopFrames(config.animation).then((frames) => {
       if (!isValid(node) || !frames.length) return;
       AnimationHelper.playLoopWithFrames("soul_stand", node, frames, config.animationFrameRate);
     });
@@ -1366,7 +1366,7 @@ export default class GameUiHelper {
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.RAW;
     sprite.trim = false;
-    AnimationHelper.loadFrames(config.animation).then((frames) => {
+    AnimationHelper.loadLoopFrames(config.animation).then((frames) => {
       if (!isValid(node) || !frames.length) return;
       AnimationHelper.playLoopWithFrames("title_loop", node, frames, config.animationFrameRate);
     });

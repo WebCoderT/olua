@@ -105,7 +105,6 @@ const STUBS = {
 }
 `,
   "GameHelper.ts": `export default class GameHelper {
-  static combatCalc(_role: unknown): any { return {}; }
   static getEquipmentRejectReason(_equipment: unknown): any { return null; }
   static checkRoleCanUseEquipment(_equipment: unknown): boolean { return true; }
   static getMapEnterRejectReason(_mapId: unknown): any { return null; }
