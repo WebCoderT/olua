@@ -10,7 +10,7 @@ import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import MonsterAreaSpawner from "./MonsterAreaSpawner";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { mapPointToWorld } from "../../utils/map/MapPointMath";
-import { maps } from "../../../configs/map";
+import { mapSrcOf } from "../../../configs/map";
 
 /**
  * 地图组件（自身即地图节点）
@@ -31,7 +31,6 @@ export default class GameMap extends Node {
   constructor() {
     super("map");
     const role = StorageManager.findOnlineRole();
-    const onMap = maps.get(role.onMap);
     this.name = `map_${role.onMap}`;
     this.onMapId = role.onMap;
     // 清空上一张地图的怪物、掉落物与远端玩家（#324：互见的演出节点不跨图）
@@ -39,7 +38,8 @@ export default class GameMap extends Node {
     DropManager.reset();
     OtherPlayerManager.reset();
     LayerManager.clearMapLayer();
-    this.loadMap(onMap.src);
+    // 路径按目录约定拼（#573）：玩法配置在服务端，但「加载哪张图」只取决于 id
+    this.loadMap(mapSrcOf(role.onMap));
   }
 
   /** 初始化地图（异步：地图资源加载完成后才挂载 TiledMap 组件） */

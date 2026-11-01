@@ -23,42 +23,33 @@ export interface NpcData extends NPC {
   id: string;
 }
 
-// 地图编号
-export type MapId = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
-
-// 地图类型
-export enum MapType {
-  /** 普通地图 */
-  NORMAL = "0",
-  /** 等级地图 */
-  LEVEL = "1",
-  /** 战斗力地图 */
-  COMBAT = "2",
-  /** 战魂地图 */
-  SOUL_OF_WAR = 3,
-}
-
-// 地图配置接口
-export interface MapConfig {
-  // 地图名称
-  label: string;
-  // 地图地址
-  src: string;
-  // 地图类型
-  type: MapType;
-  /** 进入地图所需等级 */
-  level: number;
-  /** 进入地图所需战斗力 */
-  combat: number;
-  /** 进入地图所需战魂等级 */
-  soulOfWar: number;
-}
+/**
+ * 地图编号
+ *
+ * **不再是一串字面量联合类型**（#573）：地图清单的真相是服务端下发的配置
+ * （行由资源清单 seed 出来）。客户端要是还枚举着 "0".."10"，加一张图就得改客户端代码 +
+ * 重打包 —— 那正是这次搬迁要去掉的东西。这里只是 `resources/map/<id>/<id>.tmx` 的目录名。
+ */
+export type MapId = string;
 
 /**
- * 地图数据条目（configs/map 的 mapData）
- * id 只做关联（Role.onMap / TMX 文件名与它对应），不参与数值计算
+ * 地图的玩法配置（**运行时**填充）
+ *
+ * ⚠ 客户端不存这些值的出厂数据（#573 之前它们写在 `configs/map.ts` 的 mapData 里）。
+ * 进游戏时 `ConfigLoader` 拉 `gameConfig.snapshot`，由 `configs/apply-snapshot` 按 id
+ * 覆写进 `configs/map` 的运行时表；资源路径不在其中（由 `mapSrcOf` 按目录约定拼）。
  */
-export interface MapData extends MapConfig {
-  /** 地图编号（唯一） */
-  id: MapId;
+export interface MapConfig {
+  /** 地图名称（传送弹窗 / 小地图 / 预览图标题都读它） */
+  label: string;
+  /** 类型码（"0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
+  type: string;
+  /** 类型名（服务端拼好的显示文案，客户端不再自己维护一份码表） */
+  typeLabel: string;
+  /** 进入所需等级（0 = 不限） */
+  level: number;
+  /** 进入所需战斗力（0 = 不限） */
+  combat: number;
+  /** 进入所需战魂阶（0 = 不限） */
+  soulOfWar: number;
 }

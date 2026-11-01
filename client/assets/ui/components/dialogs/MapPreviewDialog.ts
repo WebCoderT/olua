@@ -1,5 +1,5 @@
 import { EventMouse, EventTouch, Graphics, isValid, Node, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { maps, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/map";
+import { mapLabelOf, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/map";
 import { monsters } from "../../../configs/monster";
 import { npcs } from "../../../configs/npc";
 import { mapPreviewImage, mapPreviewDialogLayout } from "../../../configs/hudLayout";
@@ -55,7 +55,7 @@ export default class MapPreviewDialog {
     const layout = mapPreviewDialogLayout;
     const role = StorageManager.findOnlineRole();
     // 标题用当前地图名（configs/map.ts 登记），没读到数据时退回兜底文案
-    const dialog = GameUiHelper.createDialog(layout.name, (role && maps.get(role.onMap)?.label) || layout.title);
+    const dialog = GameUiHelper.createDialog(layout.name, role ? mapLabelOf(role.onMap) : layout.title);
     this.dialog = dialog;
     // 预览区：整张地图的预览图（贴图异步装载；点击换算与点位层都以它为基准）
     const preview = GameUiHelper.createImage(layout.preview.name, "", layout.preview.position, layout.preview.size);

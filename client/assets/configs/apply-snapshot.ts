@@ -12,6 +12,8 @@ import type {
   Item as ItemRow,
   LevelExp,
   MallPriceItem,
+  MapConfig as MapConfigRow,
+  MapTypeGroup as MapTypeGroupRow,
   Monster as MonsterRow,
   Npc as NpcRow,
   Quest as QuestRow,
@@ -30,6 +32,7 @@ import type { TitleAttributes, TitleLevelConfig } from "../types/title";
 import { titleLevels } from "./title";
 import { soulLevels } from "./soul";
 import { rankLevels } from "./rank";
+import { mapTypeGroups, maps } from "./map";
 import { applyMallPricing } from "./mall";
 import { attributeRange, equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates, roleGrowth, setRoleMaxLevel } from "./growth";
 import { expGain, levelMap, rebuildLevelMap } from "./level";
@@ -555,7 +558,47 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyGrowthSnapshot(snapshot);
   applyContentSnapshot(snapshot);
   applySkillSnapshot(snapshot);
+  if (snapshot.maps) applyMapRows(snapshot.maps, snapshot.mapTypes ?? []);
 }
+
+//#region 地图玩法配置（#573）
+
+/**
+ * 覆写地图玩法配置（#573）
+ *
+ * 客户端以前把 11 张图的名称 / 类型 / 进入条件写死在 `configs/map.ts` 的 `mapData` 里 ——
+ * 改一个进入等级要重打整个客户端包。现在这些值由服务端 `maps` 表下发（管理端可改），
+ * 这里按 id 填进运行时表，消费方（传送弹窗 / 小地图 / 进图判定）读的引用不变。
+ *
+ * 三条口径：
+ * - **整表重建**（先 clear 再按行填）：地图行由服务端决定，客户端没有「本地兜底行」可言。
+ *   留着旧行会让「服务端没有这张图」在客户端变成幽灵按钮（点开就是黑屏）。
+ * - **资源路径不在这里**（`mapSrcOf` 按 `resources/map/<id>/<id>` 拼）：下发方永远改不到
+ *   「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致。
+ * - **类型分组一并替换**：类型码 → 文案的唯一来源在服务端，客户端的 `mapTypeGroups`
+ *   只是它的容器（以前这里也存着一份，改一次文案要改两个仓库里的同一个意思）。
+ */
+export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): void {
+  maps.clear();
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string") continue;
+    maps.set(row.id, {
+      label: String(row.label ?? ""),
+      type: String(row.type ?? ""),
+      typeLabel: String(row.typeLabel ?? row.type ?? ""),
+      level: Number(row.level) || 0,
+      combat: Number(row.combat) || 0,
+      soulOfWar: Number(row.soulOfWar) || 0,
+    });
+  }
+  mapTypeGroups.length = 0;
+  for (const group of groups) {
+    if (!group || typeof group.type !== "string") continue;
+    mapTypeGroups.push({ type: group.type, label: String(group.label ?? group.type) });
+  }
+}
+
+//#endregion
 
 //#region 装备外观几何（#513）
 
