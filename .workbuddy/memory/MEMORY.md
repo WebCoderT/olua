@@ -1,7 +1,8 @@
 # olua 长期记忆（索引，细节见 skills 与 2026-*.md）
 
 > 纪律：一切提交走 issue → 分支 `type/n-slug` → PR（`Closes #n`）→ CI 绿 → squash；docs/记忆同样；写日志前先切分支。一个 PR = 一个功能；全绿才提交（`make ci`，数字实测）。记忆/技能随仓库提交；仓库 PUBLIC —— **IP / 私钥 / 邀请码 / JWT 不进记忆**。
-> master = 横屏 1624×750；portrait = 竖屏 750×1624（竖屏只进 portrait）。
+> **分支只剩 `master`**（2026-11-02 清理）：portrait（移动端竖屏）按用户要求删除，原 SHA `7e52900bd4055d0fbb77439dc66bdf2e38f86531`（`git branch portrait <sha>` 可找回）；
+> 其余 11 条都是「功能早已 squash 进 master、分支本身没被 `git branch --merged` 认出来」的残留 —— **判断依据是内容（文件/模块是否存在 + 有无独有提交），不是 `--merged`**。
 
 ## 会再犯的坑（守点 = 脚本，细节见对应 skill / 日志）
 - **环境相关不进生成物**：清单带 `hasAsset` 会让逐字节守点在 CI 必然假红 → 运行时 `HEAD` 探测（403/404/410 才算缺）。
@@ -29,7 +30,8 @@
   装不下（配置改小）时整份退回原网格，不静默挪位置。
 - **给权威清单加字段 = 必然有一批测试在测「客户端能改它」**（#550 踩四套 / #556 踩三套：combat / dual / game-config）：
   先 `grep "PUT roles/"`，把造状态改成管理端 `PATCH /admin/roles/:id`（equipments/skills/bag 都支持结构化编辑）。
-- **文档数字**：加审计/单测会连坐 README/FAQ/resume/官网/skills（`audit-doc-numbers` 给行号），双语还要数字次数相等（`audit-docs-en`）。**中英必须一起改**（只改中文会被判「中文多 1 次」；`0.5 透明` vs `50% opacity` 这种同义异写也算不等）；新页面还要补 `admin/README` 的页面表与结构树 —— 数字审计只管数字，漏行它不管。
+- **文档数字**：加审计/单测会连坐 FAQ/各端 README/官网/skills（`audit-doc-numbers` 给行号），双语还要数字次数相等（`audit-docs-en`）。**中英必须一起改**（只改中文会被判「中文多 1 次」；`0.5 透明` vs `50% opacity` 这种同义异写也算不等）；新页面还要补 `admin/README` 的页面表与结构树 —— 数字审计只管数字，漏行它不管。
+  **根 README 从 #575 起不写数字句式**（「N 个接口 / 共 M 条 e2e」全删）：`audit-doc-numbers` 只在**匹配到句式**时校验、没有 MISS 检查，所以「不写」= 永不漂；比对处数从 58 降到 35（其余在 FAQ / 各端 README / 技能）。代价是 **`audit-docs-en` 的数字 multiset 仍要相等** —— 精简时中文写「三处 / 两个维度」而英文写 `3 / 2` 就会红，统一改成不带数字的写法最省事。
 - 真机验证：真实 Chrome `headless:false` + playwright-core；自适应只测真实窗口（`viewport:null`）；`window.__cc` 要等 `__v.ready()`，`reload` 后重新 `ready()`。
 
 ## 架构不变量（细节 skill `olua-server` / `olua-admin` / `olua-client`）
