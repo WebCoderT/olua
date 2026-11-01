@@ -94,8 +94,9 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 - 操作摇杆：左下角常驻摇杆（底座 + 可拖动手柄），按住拖动即移动 —— **拖得少走路、拖得多跑动**（死区/阈值见 configs/role.joystickMove）；只用触摸通道，桌面端鼠标按住拖动同样可用，摇杆上的按压不穿透、拖动结束也不会误清选中目标
 - 屏幕适配：**单一分辨率 1920×1080**（1 设计像素 = 1 屏幕像素），运行时不设置分辨率、不按窗口重排；窗口比例不符时由引擎等比缩放并留黑边，游戏内坐标与元素位置都不变
 - 服务端：账号注册登录（scrypt 加盐摘要）、角色数据云端保存（防抖合并推送）、修订号乐观锁、两套令牌受众、权限点守卫、登录限流、口令重置与令牌主动作废、操作审计日志、公告发布与全服触达、邮件通道（模板 + 投递队列 + 失败重试）、实时通道（一次性票据换 WebSocket 连接、心跳与存活探测、一账号一条连接、在线心跳清算 —— 崩溃 / 断网后不再永久「在线」）、**伤害结算上移**（服务端按共享快照数值算打怪伤害、castId 幂等、死亡判定，客户端只做表现）、**世界权威**（怪物实例服务端持有：进图播种 / 跨账号共享 / tick 到点重生 / 状态落盘跨重启恢复，客户端只做表现与差量合并）
-- 管理端：账号与角色管理（六维筛选 / 结构化编辑 / 批量删除）、管理员与权限、操作日志查询、我的账号；角色详情页把装备 / 技能 / 物品 / 地图 / 战魂称号军衔都**显示成名字**（名字来自三端共用的那份游戏数据，后台不自己维护一份）
-- **游戏数据只有一份**：装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的权威定义都在客户端 `client/assets/configs`，由 `tools/gen-shared-data.cjs` 快照成 `server/src/shared/game-data.generated.ts` —— 服务端与管理端读的是**同一个文件**（`tools/audit-shared-data.cjs` 守着它逐字节不漂、每张表齐全非空，并禁止任何一端再抄一份：同名的表、手写的码清单、抄来的中文名都会被拦）。连服务端校验用的「职业 / 性别码清单」与接口文档里那行 `1 战士 / 2 魔法师 / …` 也是从这份数据**算出来**的，客户端加一个职业码三端自动跟着变。
+- 管理端：账号与角色管理（六维筛选 / 结构化编辑 / 批量删除）、管理员与权限、操作日志查询、我的账号；角色详情页把装备 / 技能 / 物品 / 战魂称号军衔都**显示成名字**（名字来自三端共用的那份游戏数据，后台不自己维护一份）
+- **游戏数据只有一份**：装备 / 战魂 / 称号 / 军衔 / 技能 / 物品的权威定义都在客户端 `client/assets/configs`，由 `tools/gen-shared-data.cjs` 快照成 `server/src/shared/game-data.generated.ts` —— 服务端与管理端读的是**同一个文件**（`tools/audit-shared-data.cjs` 守着它逐字节不漂、每张表齐全非空，并禁止任何一端再抄一份：同名的表、手写的码清单、抄来的中文名都会被拦）。连服务端校验用的「职业 / 性别码清单」与接口文档里那行 `1 战士 / 2 魔法师 / …` 也是从这份数据**算出来**的，客户端加一个职业码三端自动跟着变。
+  **地图是唯一的例外（#573）**：客户端只存资源本体（TMX / 底图 / 预览图，路径按 `map/<id>/<id>` 目录约定拼），“对资源的整理结果”——名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶——归服务端 `maps` 表，管理端可视化改、改完即时随配置快照下发。
 
 ## 一个纯 AI 编写的项目
 
@@ -116,7 +117,7 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 - **每个踩过的坑都会变成一个脚本**。这里不靠记性防回归，靠自动化守卫：`client/tools/` 下有 59 套单测、`tools/` 下有 15 套审计，比业务代码还密 —— 配置有没有外泄、接口地址有没有硬编码、生成物与服务端文档是否逐字节一致、战斗规则快照有没有漂移、界面点击会不会穿透到世界、模块边界有没有被绕过，全都有脚本盯着。
 - **一切可调的东西都收进 `client/assets/configs`**。数值、文案、布局、配色、时长、资源路径都不写进逻辑里。这条约定是被「AI 反复改数值」逼出来的，不是为了好看。
 - **接口文件全部由服务端 Swagger 文档生成**。三端签名对不上会**编译报错**，而不是线上出现一个 `undefined`。这同样是为了让 AI 改完一端后，另一端在编译期就被拦住。
-- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 150 + 283 + 120 + 28 + 72 + 131 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 88 条）+ 两端类型检查 + 59 套单测 + 15 套审计，全绿才算完。
+- **回归是硬门槛**。每次改动都要跑：服务端 e2e（248 + 150 + 283 + 120 + 28 + 72 + 131 + 24 + 14 + 639 + 87 + 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 122 条）+ 两端类型检查 + 59 套单测 + 15 套审计，全绿才算完。
 - **每处理完一个问题就按功能提交一次**。改完一个功能立刻落一次 commit，不留一堆混在一起的未提交改动 —— 这样「哪次改动引入了回归」永远能二分出来。
 - **踩过的坑写进了 FAQ**。每端目录下的 FAQ 收纳该端的具体问题，跨端的机制与环境坑在 [FAQ.md](FAQ.md)；里面的每一条都是真实撞过的，包括环境坑（例如某类终端注入的 `NODE_OPTIONS` 会让服务端**静默起不来**）。
 
@@ -221,7 +222,7 @@ olua/
   - constants/swagger-tags：文档分组（公共接口 / 客户端 / 管理端）
   - interceptors/audit.interceptor：**管理端写接口自动记日志**（动作取 `operationId`，口令类字段落库前打码）
   - security：登录限流的纯函数判定（`rate-limit.util`）+ 内存计数器服务（`login-throttle.service`）
-- src/database：SQLite 连接与 45 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / parties / party_members / achievements / role_achievements / equip_aligns / equip_in_aligns，含存量补列）的仓储层
+- src/database：SQLite 连接与 46 张表（accounts / roles / admins / audit_logs / announcements / mail_queue / world_monsters / map_spawn_areas / maps / zones / world_meta / titles / souls / ranks / equipments / drugs / items / monsters / npcs / fashions / mall_prices / mall_settings / drop_tables / monster_drops / level_exps / growth_segments / growth_scalars / skills / statuses / monster_skills / guilds / guild_members / guild_applications / role_friends / role_enemies / role_blocks / role_reports / quests / quest_progress / parties / party_members / achievements / role_achievements / equip_aligns / equip_in_aligns，含存量补列）的仓储层
 - src/modules：auth（玩家认证）/ roles（角色）/ admin（管理端：认证 / 账号 / 角色 / 管理员 / 口令）/ announcement（公告：公共拉取 + 管理端 CRUD）/ mail（邮件：模板 + 投递队列 + 后台调度）/ audit（操作日志）/ token（JWT）/ health
 - src/swagger/setup：文档挂载（抽成函数，好让自动化测试也生成一次文档来验分组 / 权限标注 / 悬空 `$ref`）
 - src/swagger/emit：**离线产出 `openapi.json`**（`npm run swagger:emit`，两端接口文件的唯一输入）
@@ -405,7 +406,7 @@ make verify   # = check + 三端构建 + 全部测试
 # 客户端：59 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 二十六套 e2e（248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 88）+ 生成物一致性
+# 服务端：编译 + 二十六套 e2e（248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 122）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建

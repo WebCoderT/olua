@@ -309,7 +309,7 @@ server-e2e-equip-in-align: ## 服务端装备内观几何 e2e（73 条：保存�
 	@echo "==> 服务端装备内观几何 e2e（73 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:equip-in-align
 
-server-e2e-map: ## 服务端地图管理 e2e（只读边界：两套坐标对账 / 写路由 404 / 权限 / 文档契约）
+server-e2e-map: ## 服务端地图管理 e2e（玩法配置可改 / 两套坐标对账 / 无新建·删除 / 权限 / 文档契约）
 	@echo "==> 服务端地图管理 e2e（只读）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:map
 

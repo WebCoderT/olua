@@ -54,10 +54,18 @@
   **判据**：整屏黑 = 这条；有图但偏半张图 = 锚点设在赋值之后。
   **精简 #570**：换算只剩 3 个导出（`mapPointToWorld` / `mapRectCenterToWorld` / `getMapWorldRect`），不再收 `map` 参数；
   前提是**地图节点恒在世界原点**（守点：`LayerManager.move` 不许动 MapLayer）。
-- **管理端地图管理（只读）#571**：`GET /admin/maps` + `/:id`（`gameConfig:read`），**没有任何写入口**（e2e 钉死 POST/PUT/PATCH/DELETE 404，
-  超管也一样 —— 「没有入口」不是「没权限」）；响应里带 `sources`（`config`/`snapshot`/`db` 三类来源），页面按它打徽标。
-  `groups` 是 Tiled 原始口径、`spawnAreas` 是世界坐标，判据 = **同一个矩形的中心对得上**（只测字段存在等于没测）。
-  两个坑：`new BizException(code,msg)` **默认 400**（要 `BizException.notFound`）；类型名别另立短标签表（撞 `audit-shared-data` 的「手写键清单」判据，
-  改为生成时拼进 `MAPS.typeLabel`）。e2e `e2e-map.cjs` 88 条。
-- 数字基线（#571 后）：165 接口 / 137 路径 / 253 模型 / 25 权限点 / 45 表 / 37 仓储；e2e **2591（26 套）**；单测 59；守卫 70；审计 15；管理端页面 34 + 侧栏 30 项。
+- **管理端地图管理 #571（观测）/ #573（玩法配置可改）**：`GET /admin/maps` + `/:id`（`gameConfig:read`）+ `PATCH /:id`（`gameConfig:write`）；
+  e2e 钉死 POST/PUT/DELETE 404（**没有新建/删除地图**：图存不存在由客户端 TMX 决定），响应带 `sources`（`db`/`config`/`snapshot`）供页面打徽标。
+  `groups` 是 Tiled 原始口径、`spawnAreas` 是世界坐标，判据 = **同一个矩形的中心对得上**。
+  两个坑：`new BizException(code,msg)` **默认 400**（要 `BizException.notFound`）；地图类型名/顺序的唯一来源在服务端 `MAP_TYPE_LABELS`。e2e `e2e-map.cjs` 122 条。
+- **地图玩法配置归服务端 #573**（用户：「客户端不存储这些东西」）：客户端 `configs/map.ts` 只剩**资源约定**（`mapSrcOf` = `map/<id>/<id>`、对象组/属性名），
+  `mapData` 11 条原样搬成 `constants/map-config.ts` 的 `MAP_DEFAULTS`（**只当 seed**，`MapRepository.seedRow` 用 `INSERT OR IGNORE` 按 `MAP_CONTENTS` 的键补行，
+  运营改过的行重启不被盖回）；落 `maps` 表 → `GET /game-config` 下发 `maps` + `mapTypes` → 客户端 `applyMapRows` **整表重建**（先 clear）。
+  三个关键决定：① **资源路径不入库**（两端按目录约定各拼，下发方永远改不到「加载哪张图」，请求里塞 `src` 被白名单剥掉）；
+  ② **不做「新建/删除地图」**；③ **故意不在 `worldJoin` 拦进图条件** —— 登录与传送共用同一条消息、登录时进的就是脚下那张图，
+  硬拦的后果是「运营把门槛调高 → 站在图里的低等级玩家下次登录黑屏且出不来」（22 套 e2e 都在 mapId=1 用 1 级角色，是最好的反证）；
+  判定留在客户端 `StorageManager.changeOnMap`（所有传送的必经之路），服务端只提供数据。判据一律 `> 0` 且 `> 角色值`（0 = 不限制）。
+  管理端地图名走 `api/mapCatalog.ts` 进程内缓存（`Layout` 挂载 `ensureMapCatalog()`、保存后 `refreshMapCatalog()`）——
+  页面要在渲染中途**同步**读名字，而名字只在服务端。客户端 `Game.start` 的 `loadGameConfig()` 必须 **await**（地图名与进入条件已不在客户端）。
+- 数字基线（#573 后）：166 接口 / 137 路径 / 256 模型 / 25 权限点 / 46 表 / 38 仓储；e2e **2625（26 套）**；单测 59；守卫 70；审计 15；管理端页面 34 + 侧栏 30 项。
 - **回归门槛 = 改动哪跑哪**：`make test-changed`（tools/test-changed.cjs；BASE=<ref> 可选）。客户端单测按内容匹配；服务端 e2e 按模块表，表外/共享底座回落全量；已删文件要 existsSync 过滤（否则删除的审计还会进计划）；已知基线红 5 套（素材未入库）在 CLIENT_BASELINE_RED 容忍；全量门禁 make verify 只在发布前。

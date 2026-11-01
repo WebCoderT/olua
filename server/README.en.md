@@ -57,7 +57,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:rank` | Leaderboards (56 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run test:e2e:bag` | Bag and worn equipment (38 assertions; equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
-| `npm run test:e2e:map` | Maps (88 assertions; **read-only boundary** / two coordinate systems reconciled / write routes 404 / permissions and doc contract) |
+| `npm run test:e2e:map` | Maps (122 assertions; **gameplay config is editable, the resource itself is not** / two coordinate systems reconciled / no create or delete / permissions and doc contract) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
@@ -138,7 +138,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           37 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align
+│   │   └── repositories/           38 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -200,7 +200,7 @@ server/
 
 ## Data model
 
-45 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+46 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -259,7 +259,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 37 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all 38 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -319,13 +319,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **165 interfaces / 137 paths / 253 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **166 interfaces / 137 paths / 256 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
 | Client | 50 | `player` token, may only operate its own account's data |
-| Admin | 108 | `admin` token + each interface's own permission point |
+| Admin | 109 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;
@@ -417,7 +417,7 @@ All twenty-six e2e suites are **real server process + real HTTP requests** (not 
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 | `test/e2e-rank.cjs` | **56** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
 | `test/e2e-bag.cjs` | **38** | bag and worn equipment (#556): equipping / unequipping / discarding / tidying and moving all live on the server; **move and tidy only verify two conservation rules** (grid shape + total count per id); slot and level gating decided by the server (a level-1 character cannot wear level-10 clothes and the item stays in the bag); attributes recomputed on equip and unequip (taking off an HP-boosting item lowers HP too); **`PUT /roles/:id` can no longer change bag / equipment / skills** (values are backfilled, not rejected); **bag size comes from the client config** (a larger grid grows and nothing is lost, and saving never re-packs positions); stale revision → 20006, another account's role → 40300 |
-| `test/e2e-map.cjs` | **88** | map management (#571, **read-only**): 11 maps sorted by **numeric** id (`10` never before `2`) / the two kinds of counts kept apart (`monsterAreaCount` = TMX rectangles on the client, `spawnAreaCount` = rows in the server table) / **two coordinate systems reconciled** (`groups` in raw Tiled terms, `spawnAreas` in world coordinates — the centre of the same rectangle must match) / **POST, PUT, PATCH and DELETE always 404** (even for the super admin: this is "no entry point", not "no permission") / unknown map 404 + 50032 / viewer can read, no token 401 / doc contract and "no Map write models" |
+| `test/e2e-map.cjs` | **122** | map management (#573, **gameplay config editable, resource itself not**): 11 maps sorted by **numeric** id (`10` never before `2`) / the two kinds of counts kept apart (`monsterAreaCount` = TMX rectangles on the client, `spawnAreaCount` = rows in the server table) / **two coordinate systems reconciled** (`groups` in raw Tiled terms, `spawnAreas` in world coordinates — the centre of the same rectangle must match) / **gameplay config takes effect on save** (list, detail and the **player config snapshot** all agree; a `src` smuggled into the request is stripped by the whitelist, so the sender can never change which image the client loads) / out-of-range type, level or empty label → 400 with nothing written / **POST, PUT and DELETE always 404** (there is no "create / delete a map": whether a map exists is decided by its TMX) / unknown map 404 + 50032 / viewer can read, write 403, no token 401 / doc contract and "no Map write models" |
 
 ```bash
 cd server && npm run verify          # compile + twenty-six e2e suites + generated-file consistency, one command for everything
