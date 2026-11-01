@@ -24,6 +24,7 @@ import {
   EQUIPMENT_DISPLAY_NAMES,
   EQUIPMENT_SLOTS,
   EQUIPMENT_SLOT_OF,
+  EQUIPMENT_SLOT_ORDER,
   FASHIONS,
   ITEM_BASES,
   ITEM_LABELS,
@@ -149,6 +150,227 @@ function rowField(table: Record<string, unknown>, key: string, field: string): s
   if (!row || typeof row !== "object") return "";
   const value = (row as Record<string, unknown>)[field];
   return typeof value === "string" ? value : "";
+}
+
+/** 直读一个数字字段（缺失 / 非数字 → 0，调用方不用到处判 undefined） */
+function rowNumber(table: Record<string, unknown>, key: string, field: string): number {
+  const row = table[key];
+  if (!row || typeof row !== "object") return 0;
+  const value = (row as Record<string, unknown>)[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * 装备 id → 基础件 id（`cloth_1_p2s1` → `cloth_1`）
+ *
+ * 变体规则与客户端 `getEquipmentBaseKey`、服务端 `parseEquipmentVariantId` 同一口径：
+ * 只有末尾 `_pXsY` 是变体段。管理端不自己发明第二套规则，剥完还要在基础件表里查得到才算。
+ * 查不到返回空串（脏 id / 未来新增的其它形态都不猜）。
+ */
+export function equipmentBaseId(id: string): string {
+  if (!id) return "";
+  if (EQUIPMENT_BASES[id]) return id;
+  const match = /^(.*)_p\d+s\d+$/.exec(id);
+  const base = match ? match[1] : "";
+  return base && EQUIPMENT_BASES[base] ? base : "";
+}
+
+/** 装备 id（基础件或变体）→ 部位 key；认不出返回空串 */
+export function equipmentSlot(id: string): string {
+  return EQUIPMENT_SLOT_OF[id] ?? "";
+}
+
+/**
+ * 装备 id → 穿戴等级门槛
+ *
+ * 变体不带自己的等级，一律取基础件那一行（与客户端「变体只改倍率、不改门槛」一致）。
+ * 认不出 → 0（界面显示成「等级未知」由调用方决定，不在这里编一个数）。
+ */
+export function equipmentLevel(id: string): number {
+  const base = equipmentBaseId(id);
+  return base ? rowNumber(EQUIPMENT_BASES, base, "level") : 0;
+}
+
+/** 不给部位前缀的装备显示名（`equipmentText` 是「部位 · 名字」，这个只取名字） */
+export function equipmentName(id: string): string {
+  if (!id) return "";
+  return EQUIPMENT_DISPLAY_NAMES[id] ?? ITEM_LABELS[id] ?? "";
+}
+
+/**
+ * 部位清单与顺序（生成物 `EQUIPMENT_SLOT_ORDER`：背包一键整理的部位顺序）
+ *
+ * 界面按它排装备格 —— 顺序也归客户端配置管，管理端不另排一套。
+ */
+export function equipmentSlotKeys(): string[] {
+  return Object.keys(EQUIPMENT_SLOT_ORDER).sort(
+    (a, b) =>
+      (EQUIPMENT_SLOT_ORDER as Record<string, number>)[a] - (EQUIPMENT_SLOT_ORDER as Record<string, number>)[b],
+  );
+}
+
+/** 技能 id → 描述（列表里当副标题；没有就空串） */
+export function skillDescription(id: string): string {
+  return rowField(SKILLS, id, "description");
+}
+
+/** 技能 id → 学习 / 升级所需等级 */
+export function skillLevelReq(id: string): number {
+  return rowNumber(SKILLS, id, "levelReq");
+}
+
+/** 技能 id → 拥有者（`role` 玩家 / `monster` 怪物），用来分组 */
+export function skillOwner(id: string): string {
+  return rowField(SKILLS, id, "owner");
+}
+
+/** 物品 id → 描述（材料 / 药品有，装备没有） */
+export function itemDescription(id: string): string {
+  return rowField(ITEM_BASES, id, "description");
+}
+
+/** 物品 id → 类型（`material` 等；装备 id 不在物品表里，返回空串） */
+export function itemType(id: string): string {
+  return rowField(ITEM_BASES, id, "type");
+}
+
+/** 药品 id → 名（不在药品表返回空串，让调用方去试别的表） */
+export function drugText(id: string): string {
+  return rowField(DRUGS, id, "label");
+}
+
+/** 药品 id → 使用等级 */
+export function drugLevel(id: string): number {
+  return rowNumber(DRUGS, id, "level");
+}
+
+/** 时装 id → 名 */
+export function fashionText(id: string): string {
+  return rowField(FASHIONS, id, "label");
+}
+
+/** 时装 id → 描述 */
+export function fashionDescription(id: string): string {
+  return rowField(FASHIONS, id, "description");
+}
+
+/**
+ * 单格堆叠上限
+ *
+ * 药品 / 材料各表自己写着 `maxStack`；装备不进堆叠（1 件 1 格）。
+ * 查不到的一律按 1 —— 宁可让运营多摆一格，也不让界面允许一个服务端会拒的数量。
+ */
+export function maxStackOf(id: string): number {
+  const drug = rowNumber(DRUGS, id, "maxStack");
+  if (drug > 0) return drug;
+  const item = rowNumber(ITEM_BASES, id, "maxStack");
+  if (item > 0) return item;
+  return 1;
+}
+
+/** 一档养成等级的元数据（称号 / 战魂：说明文案 + 升到该级消耗 + 动画图集） */
+export interface GrowthStepMeta {
+  description: string;
+  bindGold: number;
+  animation: string;
+}
+
+function growthStep(table: Record<string, unknown>, level: string | number): GrowthStepMeta | null {
+  const value = Number(level);
+  if (!Number.isFinite(value) || value < 1) return null;
+  const row = table[String(value - 1)];
+  if (!row || typeof row !== "object") return null;
+  const record = row as Record<string, unknown>;
+  return {
+    description: typeof record.description === "string" ? record.description : "",
+    bindGold: typeof record.bindGold === "number" ? record.bindGold : 0,
+    animation: typeof record.animation === "string" ? record.animation : "",
+  };
+}
+
+/** 称号等级 → 元数据（下标 = 等级 - 1，与 `titleText` 同一口径） */
+export function titleMeta(level: string | number): GrowthStepMeta | null {
+  return growthStep(TITLE_LEVEL_META, level);
+}
+
+/** 战魂阶数 → 元数据 */
+export function soulMeta(level: string | number): GrowthStepMeta | null {
+  return growthStep(SOUL_LEVEL_META, level);
+}
+
+/** 军衔阶数 → { 大段, 衔名 }；无动画（军衔只有名字） */
+export function rankMeta(level: string | number): { tier: string; label: string } | null {
+  const value = Number(level);
+  if (!Number.isFinite(value) || value < 1) return null;
+  const rows: Record<string, { tier: string; label: string }> = RANK_LABELS;
+  return rows[String(value - 1)] ?? null;
+}
+
+/** 三张等级表各有多少档（等级选择器的上限；不是页面写死的数字） */
+export function levelCount(kind: "title" | "soul" | "rank"): number {
+  if (kind === "title") return Object.keys(TITLE_LEVEL_META).length;
+  if (kind === "soul") return Object.keys(SOUL_LEVEL_META).length;
+  return Object.keys(RANK_LABELS).length;
+}
+
+/* ===========================================================================
+ * 可选清单（选择器用）
+ *
+ * 清单键一律取自生成物各表本身 —— 页面 / 组件不写死「有哪些装备、哪些技能」，
+ * 客户端配置加一件，这里的下拉就自动多一条。
+ * =========================================================================== */
+
+/** 全部装备 id（基础件 + 全部前后缀变体，与角色身上穿的 id 同一形态） */
+export function equipmentIds(): string[] {
+  return Object.keys(EQUIPMENT_DISPLAY_NAMES);
+}
+
+/** 全部可进背包的物品 id（装备 / 药品 / 材料都在内，`ITEM_LABELS` 是客户端那份总表） */
+export function itemIds(): string[] {
+  return Object.keys(ITEM_LABELS);
+}
+
+/** 全部技能 id（玩家技能 + 怪物技能） */
+export function skillIds(): string[] {
+  return Object.keys(SKILL_LABELS);
+}
+
+/** 全部药品 id */
+export function drugIds(): string[] {
+  return Object.keys(DRUGS);
+}
+
+/** 全部时装 id */
+export function fashionIds(): string[] {
+  return Object.keys(FASHIONS);
+}
+
+/** 全部地图 id（`MAP_LABELS` 的键；角色 `onMap` 存的就是这个） */
+export function mapIds(): string[] {
+  return Object.keys(MAP_LABELS);
+}
+
+/**
+ * 地图预览图（小地图弹窗用的那张底图）
+ *
+ * 路径规则来自客户端 `configs/layout/images.ts` 的 `mapPreviewImage`：`map/<id>/preview`，
+ * 磁盘上是 **.jpg**（不是 png）—— 所以取图时要带扩展名，直接按默认 png 拼会 404。
+ * 生成物里只有地图名（`MAP_LABELS`），没有这张图的字段，规则只能在这里落一处。
+ */
+export function mapPreview(id: string): string {
+  return id ? `map/${id}/preview` : "";
+}
+
+/**
+ * 角色头像：按「职业-性别」取图（`avatars/<occupation>-<sex>.png`）
+ *
+ * 同样是客户端的取图规则（`configs/layout/images.ts` 的 `avatarImage`）。
+ * 注意：角色数据里的 `avatar`（数字）是**头像编号**，不是这张图的下标 ——
+ * 客户端 HUD 头像一直按职业 + 性别取，所以这里也按这两个字段取，不去索引数字。
+ */
+export function avatarPath(occupation: string, sex: string): string {
+  if (!occupation || !sex) return "";
+  return `avatars/${occupation}-${sex}`;
 }
 
 /** 装备基础件 id → 图标（商城商品 = 装备，同一份） */

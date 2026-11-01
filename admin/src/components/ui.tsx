@@ -65,11 +65,36 @@ export function Select({ className = "", children, ...rest }: SelectHTMLAttribut
   );
 }
 
-export function Card({ title, description, actions, children, className = "" }: { title?: string; description?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
+/**
+ * 卡片外壳
+ *
+ * `dense` 是给「一屏要塞下好几张卡」的详情页用的：**只压内边距**（header 与正文各瘦一圈），
+ * 标题、说明、内容一概不少 —— 那种页面里最费高度的不是内容而是四张卡加起来的内边距。
+ * 默认不压缩，列表页的呼吸感保持原样。
+ */
+export function Card({
+  title,
+  description,
+  actions,
+  children,
+  className = "",
+  dense = false,
+}: {
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  dense?: boolean;
+}) {
   return (
     <section className={`rounded-2xl border border-slate-800 bg-slate-900/40 shadow-lg shadow-black/20 ${className}`}>
       {title || actions ? (
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+        <header
+          className={`flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 ${
+            dense ? "px-4 py-2.5" : "px-5 py-4"
+          }`}
+        >
           <div>
             {title ? <h2 className="text-sm font-semibold text-slate-100">{title}</h2> : null}
             {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
@@ -77,7 +102,7 @@ export function Card({ title, description, actions, children, className = "" }: 
           {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </header>
       ) : null}
-      <div className="p-5">{children}</div>
+      <div className={dense ? "p-4" : "p-5"}>{children}</div>
     </section>
   );
 }

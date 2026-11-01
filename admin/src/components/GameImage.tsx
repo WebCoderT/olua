@@ -17,9 +17,9 @@ import { createPortal } from "react-dom";
 
 export const GAME_RES_ROOT = "/game-resources";
 
-/** resources 相对路径（不含扩展名）→ 同源 PNG 地址 */
-export function gameResUrl(path: string): string {
-  return `${GAME_RES_ROOT.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}.png`;
+/** resources 相对路径（不含扩展名）→ 同源图片地址；扩展名默认 png，地图预览是 jpg */
+export function gameResUrl(path: string, ext: "png" | "jpg" = "png"): string {
+  return `${GAME_RES_ROOT.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}.${ext}`;
 }
 
 /** 「无图」占位：浅格线 + 灰字，宽高与真图一致，列表不跳动 */
@@ -98,27 +98,45 @@ function Zoomable({
 }
 
 /** 单图图标：path 为空或 404 时显示占位 */
-export function GameIcon({ path, alt, size = 40 }: { path: string; alt?: string; size?: number }) {
+export function GameIcon({
+  path,
+  alt,
+  size = 40,
+  zoomable = true,
+  ext = "png",
+}: {
+  path: string;
+  alt?: string;
+  size?: number;
+  /** 卡片里的图标不放大查看：外层整块是可点选的按钮，套一层放大按钮会变成嵌套按钮 */
+  zoomable?: boolean;
+  /** 扩展名（地图预览图在磁盘上是 jpg） */
+  ext?: "png" | "jpg";
+}) {
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState(false);
-  useEffect(() => setFailed(false), [path]);
+  useEffect(() => setFailed(false), [path, ext]);
   if (!path || failed) return <NoImage size={size} />;
+  const picture = (
+    <img
+      src={gameResUrl(path, ext)}
+      alt={alt ?? ""}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={imgClass}
+      style={{ width: size, height: size, imageRendering: "pixelated" }}
+    />
+  );
+  if (!zoomable) return picture;
   return (
     <>
       <Zoomable alt={alt} onZoom={() => setZoom(true)}>
-        <img
-          src={gameResUrl(path)}
-          alt={alt ?? ""}
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className={imgClass}
-          style={{ width: size, height: size, imageRendering: "pixelated" }}
-        />
+        {picture}
       </Zoomable>
       {zoom ? (
         <Lightbox alt={alt} onClose={() => setZoom(false)}>
           <img
-            src={gameResUrl(path)}
+            src={gameResUrl(path, ext)}
             alt={alt ?? ""}
             className="max-h-[60vmin] max-w-[60vmin] object-contain"
             style={{ imageRendering: "pixelated" }}
@@ -254,7 +272,18 @@ function drawFrameTo(canvas: HTMLCanvasElement, frame: FirstFrame, target: numbe
  * 图集首帧缩略图：atlas 是 resources 相对目录（称号 / 战魂的 animation、NPC 的 src）。
  * 点击可放大查看（大图用同一份缓存首帧重画，不是把 40px 的小画布拉大）。
  */
-export function GameFrame({ atlas, alt, size = 40 }: { atlas: string; alt?: string; size?: number }) {
+export function GameFrame({
+  atlas,
+  alt,
+  size = 40,
+  zoomable = true,
+}: {
+  atlas: string;
+  alt?: string;
+  size?: number;
+  /** 卡片里的图标不放大查看（同 GameIcon：外层整块已经是可点选按钮） */
+  zoomable?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState(false);
@@ -276,16 +305,20 @@ export function GameFrame({ atlas, alt, size = 40 }: { atlas: string; alt?: stri
     };
   }, [atlas, size]);
   if (!atlas || failed) return <NoImage size={size} />;
+  const canvas = (
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={alt ?? ""}
+      className="rounded border border-slate-800 bg-slate-900/60"
+      style={{ imageRendering: "pixelated" }}
+    />
+  );
+  if (!zoomable) return canvas;
   return (
     <>
       <Zoomable alt={alt} onZoom={() => setZoom(true)}>
-        <canvas
-          ref={canvasRef}
-          role="img"
-          aria-label={alt ?? ""}
-          className="rounded border border-slate-800 bg-slate-900/60"
-          style={{ imageRendering: "pixelated" }}
-        />
+        {canvas}
       </Zoomable>
       {zoom ? <FrameLightbox atlas={atlas} alt={alt} onClose={() => setZoom(false)} /> : null}
     </>
