@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { itemsApi, formatTime, itemIcon, PERMISSION } from "../api";
 import type { Item, PageResult } from "../api";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 物品大类 → 中文名（与客户端 GOOD_TYPE 的语义对应；type 是结构字段不参与编辑） */
 const TYPE_LABELS: Record<string, string> = { equipment: "装备", drug: "药品", material: "材料", other: "其他" };
@@ -93,38 +95,34 @@ export function ItemsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">物品配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          只收材料与其他大类（装备 / 药品各有自己的配置页）；id 清单固定（被掉落表与脚本引用），
-          只可编辑、不可新增 / 删除；大类与等级需求不开放编辑。商城售价归「商城定价」管理，不在这里。
-        </p>
-      </div>
+      <PageHeader
+        title="物品配置"
+        description={<>只收材料与其他大类（装备 / 药品各有自己的配置页）；id 清单固定（被掉落表与脚本引用），
+            只可编辑、不可新增 / 删除；大类与等级需求不开放编辑。商城售价归「商城定价」管理，不在这里。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 名称 / 描述</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">大类</span>
-            <Select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
-              <option value="">全部</option>
-              {TYPE_OPTIONS.map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 名称 / 描述">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-32" label="大类">
+              <Select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
+                <option value="">全部</option>
+                {TYPE_OPTIONS.map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
@@ -191,53 +189,53 @@ export function ItemsPage() {
       </Card>
 
       {form ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-slate-100">编辑物品 · {editing?.id}</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              部分更新：只提交下方字段；大类与等级需求不开放编辑。
-            </p>
-
-            <div className="mt-5 flex flex-col gap-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="名称">
-                  <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
-                </Field>
-                <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={String(form.sellPrice)}
-                    onChange={(event) => setForm({ ...form, sellPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
-                  />
-                </Field>
-              </div>
-
-              <Field label="描述">
-                <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-              </Field>
-
-              <Field label="堆叠上限" hint="背包里最多叠多少个">
-                <Input
-                  type="number"
-                  min={1}
-                  max={9999}
-                  value={String(form.maxStack)}
-                  onChange={(event) => setForm({ ...form, maxStack: Math.max(1, Math.floor(Number(event.target.value) || 1)) })}
-                />
-              </Field>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
+        <Modal
+          open
+          title={`编辑物品 · ${editing?.id ?? ""}`}
+          hint="部分更新：只提交下方字段；大类与等级需求不开放编辑。"
+          size="md"
+          onClose={closeEdit}
+          footer={
+            <>
               <Button variant="outline" onClick={closeEdit}>
                 取消
               </Button>
               <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
                 保存修改
               </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="名称">
+                <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+              </Field>
+              <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理">
+                <Input
+                  type="number"
+                  min={0}
+                  value={String(form.sellPrice)}
+                  onChange={(event) => setForm({ ...form, sellPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
+                />
+              </Field>
             </div>
+
+            <Field label="描述">
+              <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+            </Field>
+
+            <Field label="堆叠上限" hint="背包里最多叠多少个">
+              <Input
+                type="number"
+                min={1}
+                max={9999}
+                value={String(form.maxStack)}
+                onChange={(event) => setForm({ ...form, maxStack: Math.max(1, Math.floor(Number(event.target.value) || 1)) })}
+              />
+            </Field>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );

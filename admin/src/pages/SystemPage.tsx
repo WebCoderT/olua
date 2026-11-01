@@ -5,6 +5,7 @@ import type { SystemInfo } from "../api";
 import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 「标签 + 值」的一格（运行时信息用它排成网格，值可能很长所以允许折行） */
 function InfoItem({ label, value }: { label: string; value: ReactNode }) {
@@ -73,17 +74,15 @@ export function SystemPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-100">系统信息</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            采集于 {formatTimeFull(info.time)} · 只读页面，每次打开实时读一次
-          </p>
-        </div>
-        <Button variant="outline" loading={loading} onClick={() => void load(true)}>
-          刷新
-        </Button>
-      </div>
+      <PageHeader
+        title="系统信息"
+        description={<>采集于 {formatTimeFull(info.time)} · 只读页面，每次打开实时读一次</>}
+        actions={<>
+          <Button variant="outline" loading={loading} onClick={() => void load(true)}>
+            刷新
+          </Button>
+        </>}
+      />
 
       {warnings.length > 0 ? (
         <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4">

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { drugIcon, drugsApi, formatTime, PERMISSION } from "../api";
 import type { Drug, PageResult } from "../api";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 回复摘要（列表列太窄，只报关键数；完整数值在编辑弹窗里） */
 function effectSummary(item: Drug): string {
@@ -115,27 +117,24 @@ export function DrugsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">药品配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          id 清单固定（被掉落表与背包引用），只可编辑、不可新增 / 删除；使用等级需求不开放编辑（属客户端成长曲线定标）。
-          商城售价归「商城定价」管理，不在这里。
-        </p>
-      </div>
+      <PageHeader
+        title="药品配置"
+        description={<>id 清单固定（被掉落表与背包引用），只可编辑、不可新增 / 删除；使用等级需求不开放编辑（属客户端成长曲线定标）。
+            商城售价归「商城定价」管理，不在这里。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 名称 / 描述</span>
-            <Input
-              value={draftKeyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraftKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 名称 / 描述">
+              <Input
+                value={draftKeyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraftKeyword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
@@ -202,52 +201,46 @@ export function DrugsPage() {
       </Card>
 
       {form ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-slate-100">编辑药品 · {editing?.id}</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              部分更新：只提交下方字段；回复量按「血/蓝固定值 + 百分比」四项独立生效（客户端各自封顶结算）。
-            </p>
-
-            <div className="mt-5 flex flex-col gap-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="名称">
-                  <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
-                </Field>
-                <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={String(form.sellPrice)}
-                    onChange={(event) => setForm({ ...form, sellPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
-                  />
-                </Field>
-              </div>
-
-              <Field label="描述">
-                <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-              </Field>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}
-                {numberField("固定回复魔法", "使用后立即回复的 MP", "effectMp", 0, 100000000)}
-                {numberField("百分比回复血（%）", "按角色 maxHp 的百分比，50 = 50%", "effectHpPercent", 0, 100)}
-                {numberField("百分比回复蓝（%）", "按角色 maxMp 的百分比，50 = 50%", "effectMpPercent", 0, 100)}
-                {numberField("使用冷却（秒）", "0 = 无冷却", "cooldown", 0, 3600)}
-                {numberField("堆叠上限", "背包里最多叠多少个", "maxStack", 1, 9999)}
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" onClick={closeEdit}>
-                取消
-              </Button>
-              <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
-                保存修改
-              </Button>
-            </div>
+        <Modal
+          open
+          title={<>编辑药品 · {editing?.id}</>}
+          hint="部分更新：只提交下方字段；回复量按「血/蓝固定值 + 百分比」四项独立生效（客户端各自封顶结算）。"
+          size="md"
+          onClose={closeEdit}
+          footer={<>
+            <Button variant="outline" onClick={closeEdit}>
+              取消
+            </Button>
+            <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
+              保存修改
+            </Button>
+          </>}
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="名称">
+              <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+            </Field>
+            <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理">
+              <Input
+                type="number"
+                min={0}
+                value={String(form.sellPrice)}
+                onChange={(event) => setForm({ ...form, sellPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
+              />
+            </Field>
           </div>
-        </div>
+          <Field label="描述">
+            <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}
+            {numberField("固定回复魔法", "使用后立即回复的 MP", "effectMp", 0, 100000000)}
+            {numberField("百分比回复血（%）", "按角色 maxHp 的百分比，50 = 50%", "effectHpPercent", 0, 100)}
+            {numberField("百分比回复蓝（%）", "按角色 maxMp 的百分比，50 = 50%", "effectMpPercent", 0, 100)}
+            {numberField("使用冷却（秒）", "0 = 无冷却", "cooldown", 0, 3600)}
+            {numberField("堆叠上限", "背包里最多叠多少个", "maxStack", 1, 9999)}
+          </div>
+        </Modal>
       ) : null}
     </div>
   );

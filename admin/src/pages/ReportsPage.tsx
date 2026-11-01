@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { formatTime, reportsApi } from "../api";
 import type { Report, ReportQuery } from "../api";
 import { Pagination } from "../components/Pagination";
+import { FilterBar } from "../components/FilterBar";
+import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
   Button,
@@ -13,7 +15,7 @@ import {
   tableClass,
   tdClass,
   thClass,
-  theadClass,
+  theadClass,  Field,
 } from "../components/ui";
 
 const PAGE_SIZE = 20;
@@ -91,51 +93,44 @@ export function ReportsPage() {
   const toggle = (id: string) => setExpanded((current) => ({ ...current, [id]: !current[id] }));
 
   return (
-    <div className="flex flex-col gap-5">
-      <Card
-        title="筛选"
-        description="关键字模糊匹配双方角色名或角色 id；条件之间是「与」的关系。"
-        actions={<Button onClick={submitSearch}>查询</Button>}
-      >
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">角色名 / 角色 id</span>
-            <Input
-              value={draft.keyword}
-              placeholder="举报人或被举报人"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-40">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">类别</span>
-            <Select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>
-              <option value="">全部</option>
-              {CATEGORY_LABELS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">状态</span>
-            <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(STATUS_META).map(([value, meta]) => (
-                <option key={value} value={value}>
-                  {meta.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Button variant="outline" onClick={resetSearch}>
-            重置
-          </Button>
-        </div>
-      </Card>
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="玩家举报"
+        description="这一版只把举报摆出来，不做处置：半成品的「已处理」按钮比没有更糟。双方角色名取查询时的现名，角色被删后显示 id。"
+      />
+
+      <FilterBar onSearch={submitSearch} onReset={resetSearch}>
+        <Field width="w-56" label="角色名 / 角色 id">
+          <Input
+            value={draft.keyword}
+            placeholder="举报人或被举报人"
+            onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submitSearch();
+            }}
+          />
+        </Field>
+        <Field width="w-40" label="类别">
+          <Select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>
+            <option value="">全部</option>
+            {CATEGORY_LABELS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field width="w-32" label="状态">
+          <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
+            <option value="">全部</option>
+            {Object.entries(STATUS_META).map(([value, meta]) => (
+              <option key={value} value={value}>
+                {meta.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </FilterBar>
 
       <Card
         title="举报记录"

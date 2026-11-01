@@ -10,6 +10,7 @@ import { EmailDialog } from "../components/EmailDialog";
 import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 某个账号的详情 + 名下角色（可进角色编辑、可直接删角色；写操作按权限点显隐） */
 export function AccountDetailPage() {
@@ -188,12 +189,10 @@ export function AccountDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-50">{account.username}</h1>
-          <p className="mt-1 text-xs text-slate-500">账号 id：{account.id}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        title={<>{account.username}</>}
+        description={<>账号 id：{account.id}</>}
+        actions={<>
           <Button
             variant="outline"
             disabled={!canSelect || !account.onlineRoleId}
@@ -223,8 +222,8 @@ export function AccountDetailPage() {
           <Link to="/accounts">
             <Button variant="outline">返回列表</Button>
           </Link>
-        </div>
-      </div>
+        </>}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <Card title="账号状态">

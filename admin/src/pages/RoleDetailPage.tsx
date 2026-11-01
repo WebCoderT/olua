@@ -28,6 +28,7 @@ import { GameIcon } from "../components/GameImage";
 import { Badge, Button, Card, EmptyState, Spinner } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * 角色详情
@@ -403,14 +404,16 @@ export function RoleDetailPage() {
   return (
     <div className="flex flex-col gap-3">
       {/* 头部：身份 + 全部「打开大块内容」的入口，一行放完 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-50">
+      <PageHeader
+        title={
+          <>
             {role.name}
             {role.online ? <Badge tone="indigo">在线</Badge> : null}
             <span className="text-xs font-normal text-slate-500">修订 #{role.revision}</span>
-          </h1>
-          <p className="mt-0.5 text-xs text-slate-500">
+          </>
+        }
+        description={
+          <>
             角色 id：{role.id} · 账号：
             {role.accountName ? (
               <Link to={`/accounts/${role.accountId}`} className="text-indigo-300 hover:text-indigo-200">
@@ -420,51 +423,58 @@ export function RoleDetailPage() {
               "—"
             )}
             {" · "}更新：{formatTime(role.updatedAt)}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            className="px-2.5 py-1 text-xs"
-            onClick={() => {
-              // 每次打开都从当前表单重新取草稿：上一次「放弃改动」关掉后不该残留
-              setDraftSkills(form.skills);
-              setSkillsOpen(true);
-            }}
-          >
-            技能 {form.skills.length}
-          </Button>
-          <Button
-            variant="outline"
-            className="px-2.5 py-1 text-xs"
-            onClick={() => {
-              setDraftBag(form.bag);
-              setBagOpen(true);
-            }}
-          >
-            背包 {form.bag.length}/{bagRows * bagCols}
-          </Button>
-          <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setRawOpen(true)}>
-            原始数据
-          </Button>
-          <Link to="/roles">
-            <Button variant="outline" className="px-2.5 py-1 text-xs">
-              返回列表
+          </>
+        }
+        actions={
+          <>
+            <Button
+              variant="outline"
+              className="px-2.5 py-1 text-xs"
+              onClick={() => {
+                // 每次打开都从当前表单重新取草稿：上一次「放弃改动」关掉后不该残留
+                setDraftSkills(form.skills);
+                setSkillsOpen(true);
+              }}
+            >
+              技能 {form.skills.length}
             </Button>
-          </Link>
-          <Button className="px-2.5 py-1 text-xs" variant="outline" onClick={() => void setOnline()} disabled={!canSelect || role.online}>
-            设为在线
-          </Button>
-          <Button className="px-2.5 py-1 text-xs" variant="danger" onClick={() => setConfirmDelete(true)} disabled={!canDelete}>
-            删除
-          </Button>
-        </div>
-      </div>
+            <Button
+              variant="outline"
+              className="px-2.5 py-1 text-xs"
+              onClick={() => {
+                setDraftBag(form.bag);
+                setBagOpen(true);
+              }}
+            >
+              背包 {form.bag.length}/{bagRows * bagCols}
+            </Button>
+            <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setRawOpen(true)}>
+              原始数据
+            </Button>
+            <Link to="/roles">
+              <Button variant="outline" className="px-2.5 py-1 text-xs">
+                返回列表
+              </Button>
+            </Link>
+            <Button
+              className="px-2.5 py-1 text-xs"
+              variant="outline"
+              onClick={() => void setOnline()}
+              disabled={!canSelect || role.online}
+            >
+              设为在线
+            </Button>
+            <Button className="px-2.5 py-1 text-xs" variant="danger" onClick={() => setConfirmDelete(true)} disabled={!canDelete}>
+              删除
+            </Button>
+          </>
+        }
+      />
 
       {/* 主体：左窄栏一张「角色」卡（身份 / 货币 / 属性，**只读**），右宽栏「装备」（可改，含时装与成长阶位） */}
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(340px,420px)_minmax(0,1fr)]">
         <div className="flex flex-col gap-3">
-          <Card dense title="角色" description="只读：身份 / 货币与经验 / 战斗属性（服务端重算）。要换装备请用右边那张卡。">
+          <Card dense title="角色" description="只读：身份 / 货币与经验 / 战斗属性（服务端重算）">
             <div className="flex flex-col gap-3">
               {/* 身份（只读展示，没有输入框） */}
               <div className="flex gap-2.5">
@@ -579,7 +589,7 @@ export function RoleDetailPage() {
         open={skillsOpen}
         title={`技能（${form.skills.length} 个）`}
         hint="图标 + 名字 + 描述来自客户端配置；改完点「保存并关闭」才会落库。"
-        size="max-w-3xl"
+        size="lg"
         onClose={() => setSkillsOpen(false)}
         footer={
           <>
@@ -610,7 +620,7 @@ export function RoleDetailPage() {
         open={bagOpen}
         title={`背包（${form.bag.length} / ${bagRows * bagCols} 格）`}
         hint={`网格按存档里的形状铺开（${bagRows} 行 × ${bagCols} 列）；点格子放东西 / 改数量。改完点「保存并关闭」才会落库。`}
-        size="max-w-3xl"
+        size="lg"
         onClose={() => setBagOpen(false)}
         footer={
           <>
@@ -644,7 +654,7 @@ export function RoleDetailPage() {
         open={rawOpen}
         title="完整角色数据（只读）"
         hint="客户端 entities/Role 的原始快照；这里没做的字段（快捷键绑定、速度倍率…）请用游戏内功能改。"
-        size="max-w-3xl"
+        size="lg"
         onClose={() => setRawOpen(false)}
       >
         <pre className="overflow-auto rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs leading-relaxed text-slate-400">

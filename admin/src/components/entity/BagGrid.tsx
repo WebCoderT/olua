@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { maxStackOf } from "../../api";
+import { Modal } from "../Modal";
 import { Button, Input } from "../ui";
 import { EntityImage } from "./EntityImage";
 import { EntityPickerList } from "./EntityPickerList";
@@ -188,15 +189,6 @@ function CellEditor({
     setCount(String(cell?.count ?? 1));
   }, [target, cell]);
 
-  useEffect(() => {
-    if (!target) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [target, onClose]);
-
   if (!target) return null;
 
   const max = id ? maxStackOf(id) : 1;
@@ -204,72 +196,46 @@ function CellEditor({
   const countOk = Number.isFinite(parsed) && parsed >= 1 && parsed <= max;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`编辑第 ${target.row + 1} 行第 ${target.col + 1} 列`}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              第 {target.row + 1} 行 · 第 {target.col + 1} 列
-            </h3>
-            <p className="mt-1 text-xs text-slate-500">挑一件物品放进这一格；同一格只放一种物品，数量不超堆叠上限。</p>
-          </div>
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={onClose}>
-            关闭
-          </Button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <EntityPickerList options={options} current={id} resetKey={target} onPick={(picked) => setId(picked)} />
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-800 bg-slate-900 pt-4">
-          <div className="flex min-w-[140px] flex-1 items-center gap-2">
-            {id ? <EntityImage image={entityImage("item", id)} alt={entityLabel("item", id)} size={36} /> : null}
+    <Modal
+      open
+      title={`第 ${target.row + 1} 行 · 第 ${target.col + 1} 列`}
+      hint="挑一件物品放进这一格；同一格只放一种物品，数量不超堆叠上限。"
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <div className="mr-auto flex min-w-[160px] flex-1 items-center gap-2">
+            {id ? <EntityImage image={entityImage("item", id)} alt={entityLabel("item", id)} size={32} /> : null}
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs text-slate-200">{id ? entityLabel("item", id) : "还没选物品"}</p>
-              <p className="truncate text-[10px] text-slate-500">
-                {id ? `堆叠上限 ${max}` : "在上面的列表里点一项"}
-              </p>
+              <p className="truncate text-[10px] text-slate-500">{id ? `堆叠上限 ${max}` : "在上面的列表里点一项"}</p>
             </div>
           </div>
+          {!countOk && id ? (
+            <span className="text-[11px] text-amber-300">数量要在 1 ~ {max} 之间（超过堆叠上限请分格放）</span>
+          ) : null}
           <label className="flex items-center gap-2 text-xs text-slate-400">
             数量
-            <Input
-              className="w-24"
-              inputMode="numeric"
-              value={count}
-              aria-label="数量"
-              disabled={!id}
-              onChange={(event) => setCount(event.target.value.replace(/[^\d]/g, ""))}
-            />
+            <div className="w-24">
+              <Input
+                inputMode="numeric"
+                value={count}
+                aria-label="数量"
+                disabled={!id}
+                onChange={(event) => setCount(event.target.value.replace(/[^\d]/g, ""))}
+              />
+            </div>
           </label>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              disabled={disabled || !cell}
-              onClick={() => onSubmit("", 0)}
-              title="把这一格清空"
-            >
-              清空格子
-            </Button>
-            <Button disabled={disabled || !id || !countOk} onClick={() => onSubmit(id, parsed)}>
-              放入
-            </Button>
-          </div>
-        </div>
-        {!countOk && id ? (
-          <p className="mt-2 text-[11px] text-amber-300">数量要在 1 ~ {max} 之间（超过堆叠上限请分格放）</p>
-        ) : null}
-      </div>
-    </div>
+          <Button variant="outline" disabled={disabled || !cell} onClick={() => onSubmit("", 0)} title="把这一格清空">
+            清空格子
+          </Button>
+          <Button disabled={disabled || !id || !countOk} onClick={() => onSubmit(id, parsed)}>
+            放入
+          </Button>
+        </>
+      }
+    >
+      <EntityPickerList options={options} current={id} resetKey={target} onPick={(picked) => setId(picked)} />
+    </Modal>
   );
 }

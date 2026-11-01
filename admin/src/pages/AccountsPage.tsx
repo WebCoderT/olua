@@ -7,10 +7,11 @@ import { BanStatus } from "../components/BanStatus";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { SortableTh, useSort } from "../components/sortable";
-import { Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { formatTime } from "../api";
 import { hasPermission } from "../store/session";
 import { toastError, toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 10;
 
@@ -163,34 +164,30 @@ export function AccountsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">账号管理</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          封禁后该账号的令牌立即失效；删除账号会连带删掉名下所有角色。点表头可换排序，排序由服务端执行（对全部数据生效，不是只排当前页）。
-        </p>
-      </div>
+      <PageHeader
+        title="账号管理"
+        description="封禁后该账号的令牌立即失效；删除账号会连带删掉名下所有角色。点表头可换排序，排序由服务端执行（对全部数据生效，不是只排当前页）。"
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">账号名</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-40">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">状态</span>
-            <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
-              <option value="">全部</option>
-              <option value="active">正常</option>
-              <option value="disabled">已封禁</option>
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="账号名">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-40" label="状态">
+              <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
+                <option value="">全部</option>
+                <option value="active">正常</option>
+                <option value="disabled">已封禁</option>
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

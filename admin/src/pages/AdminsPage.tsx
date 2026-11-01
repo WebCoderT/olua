@@ -5,9 +5,10 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 import { SortableTh, useSort } from "../components/sortable";
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission, readAdmin } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 10;
 
@@ -142,37 +143,33 @@ export function AdminsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">管理员</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          三级角色：超级管理员（全部权限）/ 管理员（不能管管理员）/ 只读观察员（只能查看）。改角色与启停立即生效，无需对方重新登录；重置密码会让对方手里的令牌当场失效（他需要重新登录）。
-        </p>
-      </div>
+      <PageHeader
+        title="管理员"
+        description="三级角色：超级管理员（全部权限）/ 管理员（不能管管理员）/ 只读观察员（只能查看）。改角色与启停立即生效，无需对方重新登录；重置密码会让对方手里的令牌当场失效（他需要重新登录）。"
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">管理员账号</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-40">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">角色</span>
-            <Select value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="管理员账号">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-40" label="角色">
+              <Select value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })}>
+                <option value="">全部</option>
+                {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
@@ -210,17 +207,19 @@ export function AdminsPage() {
                     </td>
                     <td className={tdClass}>
                       {canManage && !busy ? (
-                        <Select
-                          className="w-36 py-1 text-xs"
-                          value={admin.role}
-                          onChange={(event) => void changeRole(admin, event.target.value)}
-                        >
-                          {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </Select>
+                        <div className="w-36">
+                          <Select
+                            className="py-1 text-xs"
+                            value={admin.role}
+                            onChange={(event) => void changeRole(admin, event.target.value)}
+                          >
+                            {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
                       ) : (
                         <Badge tone={ROLE_TONE[admin.role] ?? "slate"}>{adminRoleLabel(admin.role)}</Badge>
                       )}

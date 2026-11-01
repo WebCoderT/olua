@@ -14,10 +14,11 @@ import {
   tableClass,
   tdClass,
   thClass,
-  theadClass,
+  theadClass,  Field,
 } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 10;
 
@@ -203,112 +204,114 @@ export function MailsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">邮件</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          给指定玩家发邮件。<strong className="text-slate-400">点「发送」只是入队</strong>，后台调度器负责真正投递 ——
-          失败会自动重试（指数退避），用尽次数才标为失败并保留原因。未配置 SMTP 时通道整体禁用，接口会直接说明原因。
-        </p>
-      </div>
+      <PageHeader
+        title="邮件"
+        description={<>给指定玩家发邮件。<strong className="text-slate-400">点「发送」只是入队</strong>，后台调度器负责真正投递 ——
+            失败会自动重试（指数退避），用尽次数才标为失败并保留原因。未配置 SMTP 时通道整体禁用，接口会直接说明原因。</>}
+      />
 
       <Card title="发送邮件" description={canWrite ? undefined : "当前角色没有「发送邮件」权限，表单只读。"}>
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-[240px] flex-1">
-              <span className="mb-1.5 block text-xs font-medium text-slate-400">收件邮箱</span>
-              <Input
-                value={to}
-                placeholder="player@example.com"
-                disabled={!canWrite}
-                onChange={(event) => setTo(event.target.value)}
-              />
+              <Field label="收件邮箱">
+                <Input
+                  value={to}
+                  placeholder="player@example.com"
+                  disabled={!canWrite}
+                  onChange={(event) => setTo(event.target.value)}
+                />
+              </Field>
             </div>
-            <div className="w-48">
-              <span className="mb-1.5 block text-xs font-medium text-slate-400">模板</span>
-              <Select
-                value={templateKey}
-                disabled={!canWrite}
-                onChange={(event) => {
-                  setTemplateKey(event.target.value);
-                  setVariables({});
-                }}
-              >
-                {templates.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <Field width="w-48" label="模板">
+                <Select
+                  value={templateKey}
+                  disabled={!canWrite}
+                  onChange={(event) => {
+                    setTemplateKey(event.target.value);
+                    setVariables({});
+                  }}
+                >
+                  {templates.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
           </div>
 
           {template ? <p className="text-xs text-slate-500">{template.hint}</p> : null}
 
           {canReadAccount ? (
             <div>
-              <span className="mb-1.5 block text-xs font-medium text-slate-400">关联玩家账号（可选，只为追溯）</span>
-              {account ? (
-                <div className="flex items-center gap-2 text-sm text-slate-300">
-                  <Badge tone="indigo">{account.username}</Badge>
-                  <span className="text-xs text-slate-500">（不是投递凭据，不填也照样发）</span>
-                  <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setAccount(null)}>
-                    取消关联
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    className="w-56"
-                    value={accountKeyword}
-                    placeholder="按账号名搜索"
-                    disabled={!canWrite}
-                    onChange={(event) => setAccountKeyword(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void searchAccounts();
-                    }}
-                  />
-                  <Button variant="outline" disabled={!canWrite} loading={searching} onClick={() => void searchAccounts()}>
-                    搜索
-                  </Button>
-                  {accountOptions.map((item) => (
-                    <Button
-                      key={item.id}
-                      variant="outline"
-                      className="px-2.5 py-1 text-xs"
-                      onClick={() => {
-                        setAccount(item);
-                        setAccountOptions([]);
-                        // 选了关联账号后，自动把它的邮箱带进收件框（服务端也会按账号兜底，这里只是省去手填）
-                        // 注意：邮箱是个人信息，只有持 account:email 权限才查得出来；拿不到时提示手动填，
-                        // 服务端仍会按账号邮箱兜底投递，不影响发送。
-                        if (item.email) {
-                          setTo(item.email);
-                          toastSuccess(`已自动带出邮箱：${item.email}`);
-                        } else {
-                          toastSuccess("未获取到该账号的邮箱，请手动填写收件邮箱");
-                        }
-                      }}
-                    >
-                      {item.username}
+              <Field label="关联玩家账号（可选，只为追溯）">
+                {account ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-300">
+                    <Badge tone="indigo">{account.username}</Badge>
+                    <span className="text-xs text-slate-500">（不是投递凭据，不填也照样发）</span>
+                    <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setAccount(null)}>
+                      取消关联
                     </Button>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-end gap-2">
+                    {/* 宽度给外层：Input 自带 w-full，写在自己的 className 上会与外层冲突 */}
+                    <div className="w-56">
+                      <Input
+                        value={accountKeyword}
+                        placeholder="按账号名搜索"
+                        disabled={!canWrite}
+                        onChange={(event) => setAccountKeyword(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void searchAccounts();
+                        }}
+                      />
+                    </div>
+                    <Button variant="outline" disabled={!canWrite} loading={searching} onClick={() => void searchAccounts()}>
+                      搜索
+                    </Button>
+                    {accountOptions.map((item) => (
+                      <Button
+                        key={item.id}
+                        variant="outline"
+                        className="px-2.5 py-1 text-xs"
+                        onClick={() => {
+                          setAccount(item);
+                          setAccountOptions([]);
+                          // 选了关联账号后，自动把它的邮箱带进收件框（服务端也会按账号兜底，这里只是省去手填）
+                          // 注意：邮箱是个人信息，只有持 account:email 权限才查得出来；拿不到时提示手动填，
+                          // 服务端仍会按账号邮箱兜底投递，不影响发送。
+                          if (item.email) {
+                            setTo(item.email);
+                            toastSuccess(`已自动带出邮箱：${item.email}`);
+                          } else {
+                            toastSuccess("未获取到该账号的邮箱，请手动填写收件邮箱");
+                          }
+                        }}
+                      >
+                        {item.username}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </Field>
             </div>
           ) : null}
 
           {/* 模板变量：按模板声明的必填项动态生成 —— 模板是数据，界面不硬编码有哪些变量 */}
           {!isCustom && template?.variables.length ? (
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap items-end gap-2">
               {template.variables.map((name) => (
                 <div key={name} className="min-w-[180px] flex-1">
-                  <span className="mb-1.5 block text-xs font-medium text-slate-400">{name}</span>
-                  <Input
-                    value={variables[name] ?? ""}
-                    disabled={!canWrite}
-                    placeholder={`${name}（必填）`}
-                    onChange={(event) => setVariables({ ...variables, [name]: event.target.value })}
-                  />
+                  <Field label={name}>
+                    <Input
+                      value={variables[name] ?? ""}
+                      disabled={!canWrite}
+                      placeholder="必填"
+                      onChange={(event) => setVariables({ ...variables, [name]: event.target.value })}
+                    />
+                  </Field>
                 </div>
               ))}
             </div>
@@ -317,18 +320,20 @@ export function MailsPage() {
           {isCustom ? (
             <div className="flex flex-col gap-3">
               <div>
-                <span className="mb-1.5 block text-xs font-medium text-slate-400">标题</span>
-                <Input value={subject} disabled={!canWrite} onChange={(event) => setSubject(event.target.value)} />
+                <Field label="标题">
+                  <Input value={subject} disabled={!canWrite} onChange={(event) => setSubject(event.target.value)} />
+                </Field>
               </div>
               <div>
-                <span className="mb-1.5 block text-xs font-medium text-slate-400">正文（纯文本）</span>
-                <textarea
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-indigo-500"
-                  rows={4}
-                  value={body}
-                  disabled={!canWrite}
-                  onChange={(event) => setBody(event.target.value)}
-                />
+                <Field label="正文（纯文本）">
+                  <textarea
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-indigo-500"
+                    rows={4}
+                    value={body}
+                    disabled={!canWrite}
+                    onChange={(event) => setBody(event.target.value)}
+                  />
+                </Field>
               </div>
             </div>
           ) : null}
@@ -342,29 +347,27 @@ export function MailsPage() {
       </Card>
 
       <Card title="投递记录" actions={loading ? <Spinner /> : null}>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">邮箱 / 标题 / 账号名</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-40">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">状态</span>
-            <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
-              <option value="">全部</option>
-              <option value="pending">待发送</option>
-              <option value="sending">发送中</option>
-              <option value="retrying">重试中</option>
-              <option value="sent">已发送</option>
-              <option value="failed">发送失败</option>
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="邮箱 / 标题 / 账号名">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-40" label="状态">
+              <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
+                <option value="">全部</option>
+                <option value="pending">待发送</option>
+                <option value="sending">发送中</option>
+                <option value="retrying">重试中</option>
+                <option value="sent">已发送</option>
+                <option value="failed">发送失败</option>
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Input } from "./ui";
+import { Modal } from "./Modal";
+import { Button, Input, Notice } from "./ui";
 import { toastError, toastSuccess } from "../store/toast";
 
 /**
@@ -82,51 +83,62 @@ export function ResetPasswordDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        {done ? (
+    <Modal
+      open
+      size="sm"
+      title={done ? "口令已重置" : "重置口令"}
+      hint={
+        done ? (
           <>
-            <h3 className="text-base font-semibold text-slate-100">口令已重置</h3>
-            <p className="mt-2 text-sm text-slate-400">
-              {kindText}「{targetName}」的新口令如下，请<strong className="text-slate-200">现在</strong>告知本人。
-            </p>
-            <p className="mt-4 select-all rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-center font-mono text-xl tracking-wider text-amber-300">{password}</p>
-            <p className="mt-3 text-xs text-slate-500">
-              服务端只保存口令的哈希，关掉这个框之后就再也查不到了（忘了只能再重置一次）。对方此前的令牌已全部失效，需要用它重新登录。
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => void copyText(password)}>
-                复制口令
-              </Button>
-              <Button onClick={onCancel}>完成</Button>
-            </div>
+            {kindText}「{targetName}」的新口令如下，请<strong className="text-slate-200">现在</strong>告知本人。
+          </>
+        ) : (
+          <>将为{kindText}「{targetName}」设置一个新口令。</>
+        )
+      }
+      onClose={onCancel}
+      footer={
+        done ? (
+          <>
+            <Button variant="outline" onClick={() => void copyText(password)}>
+              复制口令
+            </Button>
+            <Button onClick={onCancel}>完成</Button>
           </>
         ) : (
           <>
-            <h3 className="text-base font-semibold text-slate-100">重置口令</h3>
-            <p className="mt-2 text-sm text-slate-400">
-              将为{kindText}「{targetName}」设置一个新口令：
-            </p>
-            <div className="mt-3 flex items-center gap-2">
-              <Input value={password} readOnly className="font-mono" />
-              <Button variant="outline" className="shrink-0" onClick={() => setPassword(generatePassword())}>
-                换一个
-              </Button>
-            </div>
-            <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              重置后，该{kindText}此前签发的令牌会<strong>全部作废</strong>（在线的话下一次操作就被送回登录页）。请确认能联系上本人再操作。
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" disabled={submitting} onClick={onCancel}>
-                取消
-              </Button>
-              <Button loading={submitting} onClick={() => void submit()}>
-                确认重置
-              </Button>
-            </div>
+            <Button variant="outline" disabled={submitting} onClick={onCancel}>
+              取消
+            </Button>
+            <Button loading={submitting} onClick={() => void submit()}>
+              确认重置
+            </Button>
           </>
-        )}
-      </div>
-    </div>
+        )
+      }
+    >
+      {done ? (
+        <div className="flex flex-col gap-3">
+          <p className="select-all rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-center font-mono text-xl tracking-wider text-amber-300">
+            {password}
+          </p>
+          <Notice tone="amber">
+            服务端只保存口令的哈希，关掉这个框之后就再也查不到了（忘了只能再重置一次）。对方此前的令牌已全部失效，需要用它重新登录。
+          </Notice>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Input value={password} readOnly className="font-mono" />
+            <Button variant="outline" className="shrink-0" onClick={() => setPassword(generatePassword())}>
+              换一个
+            </Button>
+          </div>
+          <Notice tone="amber">
+            重置后，该{kindText}此前签发的令牌会<strong>全部作废</strong>（在线的话下一次操作就被送回登录页）。请确认能联系上本人再操作。
+          </Notice>
+        </div>
+      )}
+    </Modal>
   );
 }

@@ -13,9 +13,10 @@ import {
 import type { AuditLog, AuditQuery, PageResult } from "../api";
 import { Pagination } from "../components/Pagination";
 import { SortableTh, useSort } from "../components/sortable";
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 20;
 
@@ -150,96 +151,87 @@ export function AuditPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">操作日志</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          管理端的<strong className="text-slate-400">写</strong>操作自动留痕（读接口不记，否则一页列表就能把日志刷满）。口令一类字段落库前已打码；日志超过上限时自动清理最旧的。
-        </p>
-      </div>
+      <PageHeader
+        title="操作日志"
+        description={<>管理端的<strong className="text-slate-400">写</strong>操作自动留痕（读接口不记，否则一页列表就能把日志刷满）。口令一类字段落库前已打码；日志超过上限时自动清理最旧的。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">关键字</span>
-            <Input
-              value={draft.keyword}
-              placeholder="操作人 / 动作 / 目标 id / 请求路径"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-52">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">动作</span>
-            <Select value={draft.action} onChange={(event) => setDraft({ ...draft, action: event.target.value })}>
-              <option value="">全部</option>
-              {actions.map((item) => (
-                <option key={item} value={item}>
-                  {auditActionLabel(item)}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">目标类型</span>
-            <Select value={draft.targetType} onChange={(event) => setDraft({ ...draft, targetType: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">结果</span>
-            <Select value={draft.success} onChange={(event) => setDraft({ ...draft, success: event.target.value })}>
-              <option value="">全部</option>
-              <option value="true">只看成功</option>
-              <option value="false">只看失败</option>
-            </Select>
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">操作人角色</span>
-            <Select value={draft.actorRole} onChange={(event) => setDraft({ ...draft, actorRole: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-44">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">来源 IP</span>
-            <Input
-              value={draft.ip}
-              placeholder="精确匹配"
-              onChange={(event) => setDraft({ ...draft, ip: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-48">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">起始时间</span>
-            <Input type="datetime-local" value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })} />
-          </div>
-          <div className="w-48">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">结束时间</span>
-            <Input type="datetime-local" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} />
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="关键字">
+              <Input
+                value={draft.keyword}
+                placeholder="操作人 / 动作 / 目标 id / 请求路径"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-52" label="动作">
+              <Select value={draft.action} onChange={(event) => setDraft({ ...draft, action: event.target.value })}>
+                <option value="">全部</option>
+                {actions.map((item) => (
+                  <option key={item} value={item}>
+                    {auditActionLabel(item)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-36" label="目标类型">
+              <Select value={draft.targetType} onChange={(event) => setDraft({ ...draft, targetType: event.target.value })}>
+                <option value="">全部</option>
+                {Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-32" label="结果">
+              <Select value={draft.success} onChange={(event) => setDraft({ ...draft, success: event.target.value })}>
+                <option value="">全部</option>
+                <option value="true">只看成功</option>
+                <option value="false">只看失败</option>
+              </Select>
+            </Field>
+          <Field width="w-32" label="操作人角色">
+              <Select value={draft.actorRole} onChange={(event) => setDraft({ ...draft, actorRole: event.target.value })}>
+                <option value="">全部</option>
+                {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-44" label="来源 IP">
+              <Input
+                value={draft.ip}
+                placeholder="精确匹配"
+                onChange={(event) => setDraft({ ...draft, ip: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-48" label="起始时间">
+              <Input type="datetime-local" value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })} />
+            </Field>
+          <Field width="w-48" label="结束时间">
+              <Input type="datetime-local" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} />
+            </Field>
           <div className="min-w-[180px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">目标 id</span>
-            <Input
-              value={draft.targetId}
-              placeholder="精确匹配某条记录的 id"
-              onChange={(event) => setDraft({ ...draft, targetId: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
+            <Field label="目标 id">
+              <Input
+                value={draft.targetId}
+                placeholder="精确匹配某条记录的 id"
+                onChange={(event) => setDraft({ ...draft, targetId: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
           </div>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>

@@ -3,10 +3,12 @@ import { formatTime, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../
 import type { Monster, MonsterAttributes, PageResult, Skill } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 定位中文名（configs/monster 的 tier） */
 const TIER_LABELS: Record<string, string> = { normal: "普通", elite: "精英", boss: "首领" };
@@ -68,46 +70,40 @@ function MonsterEditDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">编辑怪物 · {initial.id}</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          定位 {TIER_LABELS[initial.tier] ?? initial.tier}（不可改）。改完即时生效：世界播种与伤害结算直读 monsters 表；
-          已活着的世界实例血量上限沿用出生时的值，重生后用新值。
-        </p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="名称">
-              <Input value={label} onChange={(event) => setLabel(event.target.value)} />
-            </Field>
-            <Field label="等级" hint="显示用元数据；改它不会重算战斗数值">
-              <Input type="number" min={1} value={level} onChange={(event) => setLevel(event.target.value)} />
-            </Field>
-            <Field label="生命上限">
-              <Input type="number" min={1} value={maxHp} onChange={(event) => setMaxHp(event.target.value)} />
-            </Field>
-          </div>
-
-          <AttributesGrid attributes={attributes} onChange={setAttributes} header="六项攻防区间（整份替换）" crossed={crossedKeys} />
-
-          {!levelValid || !maxHpValid ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              等级与生命上限需为 ≥1 的整数。
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
-          </Button>
-          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-            保存修改
-          </Button>
-        </div>
+    <Modal
+      open
+      title={<>编辑怪物 · {initial.id}</>}
+      hint={<>定位 {TIER_LABELS[initial.tier] ?? initial.tier}（不可改）。改完即时生效：世界播种与伤害结算直读 monsters 表；
+          已活着的世界实例血量上限沿用出生时的值，重生后用新值。</>}
+      size="md"
+      onClose={onCancel}
+      footer={<>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
+          取消
+        </Button>
+        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+          保存修改
+        </Button>
+      </>}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="名称">
+          <Input value={label} onChange={(event) => setLabel(event.target.value)} />
+        </Field>
+        <Field label="等级" hint="显示用元数据；改它不会重算战斗数值">
+          <Input type="number" min={1} value={level} onChange={(event) => setLevel(event.target.value)} />
+        </Field>
+        <Field label="生命上限">
+          <Input type="number" min={1} value={maxHp} onChange={(event) => setMaxHp(event.target.value)} />
+        </Field>
       </div>
-    </div>
+      <AttributesGrid attributes={attributes} onChange={setAttributes} header="六项攻防区间（整份替换）" crossed={crossedKeys} />
+      {!levelValid || !maxHpValid ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          等级与生命上限需为 ≥1 的整数。
+        </p>
+      ) : null}
+    </Modal>
   );
 }
 
@@ -208,64 +204,73 @@ function MonsterSkillsDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">技能挂载 · {monster.label}</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          服务端 AI 先用状态型（强化自身），再用伤害型；同类型内按优先级升序，同优先级按技能 id。
-          冷却留空 = 用技能自身的冷却。整份保存，删行等于解绑。
-        </p>
-
-        {loading ? (
-          <div className="mt-6 flex justify-center">
-            <Spinner />
-          </div>
-        ) : (
-          <>
-            <div className="mt-5 flex flex-col gap-2">
-              {rows.length === 0 ? (
-                <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
-                  这只怪不放技能，只普攻。
-                </p>
-              ) : null}
-              {rows.map((row, index) => (
-                <div key={row.skillId} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                  <span className="min-w-[140px] flex-1 text-xs text-slate-200">
-                    <span className="font-mono text-slate-500">{row.skillId}</span> · {labelOf(row.skillId)}
-                  </span>
-                  <label className="flex items-center gap-1 text-xs text-slate-400">
-                    优先级
+    <Modal
+      open
+      title={<>技能挂载 · {monster.label}</>}
+      hint={<>服务端 AI 先用状态型（强化自身），再用伤害型；同类型内按优先级升序，同优先级按技能 id。
+          冷却留空 = 用技能自身的冷却。整份保存，删行等于解绑。</>}
+      size="md"
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          取消
+        </Button>
+        <Button disabled={loading || saving || problems.length > 0} loading={saving} onClick={() => void save()}>
+          保存挂载
+        </Button>
+      </>}
+    >
+      {loading ? (
+        <div className="mt-6 flex justify-center">
+          <Spinner />
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 flex flex-col gap-2">
+            {rows.length === 0 ? (
+              <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+                这只怪不放技能，只普攻。
+              </p>
+            ) : null}
+            {rows.map((row, index) => (
+              <div key={row.skillId} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <span className="min-w-[140px] flex-1 text-xs text-slate-200">
+                  <span className="font-mono text-slate-500">{row.skillId}</span> · {labelOf(row.skillId)}
+                </span>
+                <label className="flex items-center gap-1 text-xs text-slate-400">
+                  优先级
+                  <div className="w-16">
                     <Input
-                      className="w-16"
                       aria-label={`${row.skillId} 优先级`}
                       value={row.priority}
                       onChange={(event) => setRows(rows.map((entry, i) => (i === index ? { ...entry, priority: event.target.value } : entry)))}
                     />
-                  </label>
-                  <label className="flex items-center gap-1 text-xs text-slate-400">
-                    冷却
+                  </div>
+                </label>
+                <label className="flex items-center gap-1 text-xs text-slate-400">
+                  冷却
+                  <div className="w-20">
                     <Input
-                      className="w-20"
                       placeholder="跟技能"
                       aria-label={`${row.skillId} 冷却`}
                       value={row.cooldown}
                       onChange={(event) => setRows(rows.map((entry, i) => (i === index ? { ...entry, cooldown: event.target.value } : entry)))}
                     />
-                  </label>
-                  <Button
-                    variant="ghost"
-                    className="px-2 py-1 text-xs text-rose-300"
-                    onClick={() => setRows(rows.filter((_, i) => i !== index))}
-                  >
-                    移除
-                  </Button>
-                </div>
-              ))}
-            </div>
+                  </div>
+                </label>
+                <Button
+                  variant="ghost"
+                  className="px-2 py-1 text-xs text-rose-300"
+                  onClick={() => setRows(rows.filter((_, i) => i !== index))}
+                >
+                  移除
+                </Button>
+              </div>
+            ))}
+          </div>
 
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              <div className="min-w-[200px] flex-1">
-                <span className="mb-1.5 block text-xs font-medium text-slate-400">添加技能</span>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <Field width="w-56" label="添加技能">
                 <Select
                   value=""
                   disabled={addable.length === 0}
@@ -282,29 +287,19 @@ function MonsterSkillsDialog({
                     </option>
                   ))}
                 </Select>
-              </div>
-            </div>
+              </Field>
+          </div>
 
-            {problems.length > 0 ? (
-              <ul className="mt-4 space-y-1 rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-xs text-amber-300">
-                {problems.map((message) => (
-                  <li key={message}>· {message}</li>
-                ))}
-              </ul>
-            ) : null}
-          </>
-        )}
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={saving} onClick={onClose}>
-            取消
-          </Button>
-          <Button disabled={loading || saving || problems.length > 0} loading={saving} onClick={() => void save()}>
-            保存挂载
-          </Button>
-        </div>
-      </div>
-    </div>
+          {problems.length > 0 ? (
+            <ul className="mt-4 space-y-1 rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-xs text-amber-300">
+              {problems.map((message) => (
+                <li key={message}>· {message}</li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+    </Modal>
   );
 }
 
@@ -379,38 +374,34 @@ export function MonstersPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">怪物配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除；定位不开放编辑。
-          改名称与战斗数值即时生效（世界播种与伤害结算直读 monsters 表）。掉落表归「掉落配置」管理。
-        </p>
-      </div>
+      <PageHeader
+        title="怪物配置"
+        description={<>key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除；定位不开放编辑。
+            改名称与战斗数值即时生效（世界播种与伤害结算直读 monsters 表）。掉落表归「掉落配置」管理。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">key / 名称</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">定位</span>
-            <Select value={draft.tier} onChange={(event) => setDraft({ ...draft, tier: event.target.value })}>
-              <option value="">全部</option>
-              {TIER_OPTIONS.map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="key / 名称">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-32" label="定位">
+              <Select value={draft.tier} onChange={(event) => setDraft({ ...draft, tier: event.target.value })}>
+                <option value="">全部</option>
+                {TIER_OPTIONS.map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

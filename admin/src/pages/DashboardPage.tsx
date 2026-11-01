@@ -4,6 +4,7 @@ import { accountsApi, auditActionLabel, auditTargetLabel, formatTimeFull, OCCUPA
 import type { AdminStats, StatsBreakdown, StatsRecentItem, StatsTrend } from "../api";
 import { BarList, LineChart, SERIES_COLORS } from "../components/charts";
 import { Badge, Button, Card, EmptyState, Spinner, StatCard } from "../components/ui";
+import { PageHeader } from "../components/PageHeader";
 
 /** 趋势可选天数（服务端上限 90，这里只放三档最常用的） */
 const TREND_RANGES = [7, 14, 30];
@@ -63,17 +64,15 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-50">概览</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            数据实时来自服务端；封禁、改角色等操作在对应页面进行。
-          </p>
-        </div>
-        <Button variant="outline" className="px-3 py-1 text-xs" loading={loading} onClick={() => void load()}>
-          刷新
-        </Button>
-      </div>
+      <PageHeader
+        title="概览"
+        description="数据实时来自服务端；封禁、改角色等操作在对应页面进行。"
+        actions={<>
+          <Button variant="outline" className="px-3 py-1 text-xs" loading={loading} onClick={() => void load()}>
+            刷新
+          </Button>
+        </>}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="账号总数" value={stats?.accountCount ?? 0} />

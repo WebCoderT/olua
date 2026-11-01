@@ -1,5 +1,5 @@
 import type { RoleDerived, RoleDerivedAttributes } from "../api";
-import { Card } from "./ui";
+import { Card, Notice } from "./ui";
 
 /** 服务端重算里的一项：键 + 中文名 + 它是不是 [下限, 上限] 区间 */
 interface AttributeRow {
@@ -64,10 +64,6 @@ function serverTextOf(attributes: RoleDerivedAttributes, row: AttributeRow): str
  * `mismatch` 明确可能是正常存档时机造成的，查不到的装备 id 也只是属性少算一截。
  * 红色在这个后台里专属于危险操作（封禁 / 删除），不拿来当普通提醒用。
  */
-function Notice({ children }: { children: string }) {
-  return <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">{children}</p>;
-}
-
 /**
  * 一张属性表（紧凑模式会把 10 行拆成两张并排，所以抽出来）
  *

@@ -5,6 +5,7 @@ import type { AdminInfo } from "../api";
 import { Badge, Button, Card, Field, Input, Spinner } from "../components/ui";
 import { readAdmin, readToken, saveSession } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * 我的账号（每个管理员都能进，不需要额外权限点）
@@ -77,10 +78,10 @@ export function MyAccountPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">我的账号</h1>
-        <p className="mt-1 text-xs text-slate-500">改密码需要先验证原密码；改完服务端会下发新令牌，本次登录继续有效。</p>
-      </div>
+      <PageHeader
+        title="我的账号"
+        description="改密码需要先验证原密码；改完服务端会下发新令牌，本次登录继续有效。"
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card title="当前身份">

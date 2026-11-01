@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { formatTime, npcsApi, npcSrc, PERMISSION } from "../api";
 import type { Npc, PageResult } from "../api";
 import { GameFrame } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * NPC 配置管理（#258，养成配置第七页）
@@ -83,27 +85,24 @@ export function NpcsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">NPC 配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          id 清单固定（被 Tiled 地图对象组引用），只可编辑、不可新增 / 删除；外观资源与点击行为是表现层配置，不进服务端。
-          对话文案在客户端暂无数据形态，先在这里维护。
-        </p>
-      </div>
+      <PageHeader
+        title="NPC 配置"
+        description={<>id 清单固定（被 Tiled 地图对象组引用），只可编辑、不可新增 / 删除；外观资源与点击行为是表现层配置，不进服务端。
+            对话文案在客户端暂无数据形态，先在这里维护。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 名称</span>
-            <Input
-              value={draftKeyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraftKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 名称">
+              <Input
+                value={draftKeyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraftKeyword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
@@ -157,35 +156,33 @@ export function NpcsPage() {
       </Card>
 
       {form ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-slate-100">编辑 NPC · {editing?.id}</h3>
-            <p className="mt-1 text-xs text-slate-500">部分更新：只提交下方字段；对话文案传空串 = 清空。</p>
-
-            <div className="mt-5 flex flex-col gap-4">
-              <Field label="名称">
-                <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
-              </Field>
-              <Field label="对话文案" hint="客户端暂无对话数据形态，先在这里维护（≤2000 字）">
-                <textarea
-                  className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
-                  maxLength={2000}
-                  value={form.dialog}
-                  onChange={(event) => setForm({ ...form, dialog: event.target.value })}
-                />
-              </Field>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" onClick={closeEdit}>
-                取消
-              </Button>
-              <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
-                保存修改
-              </Button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          title={<>编辑 NPC · {editing?.id}</>}
+          hint="部分更新：只提交下方字段；对话文案传空串 = 清空。"
+          size="md"
+          onClose={closeEdit}
+          footer={<>
+            <Button variant="outline" onClick={closeEdit}>
+              取消
+            </Button>
+            <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
+              保存修改
+            </Button>
+          </>}
+        >
+          <Field label="名称">
+            <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+          </Field>
+          <Field label="对话文案" hint="客户端暂无对话数据形态，先在这里维护（≤2000 字）">
+            <textarea
+              className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
+              maxLength={2000}
+              value={form.dialog}
+              onChange={(event) => setForm({ ...form, dialog: event.target.value })}
+            />
+          </Field>
+        </Modal>
       ) : null}
     </div>
   );

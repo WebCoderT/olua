@@ -3,11 +3,13 @@ import { equipmentIcon, equipmentsApi, formatTime, PERMISSION, slotLabel } from 
 import type { ConfigAttributes, Equipment, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { EQUIPMENT_SLOTS } from "../api/gameData";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 属性摘要（列表列太窄，只报几个关键数；完整数值在编辑弹窗里） */
 function attributeSummary(item: Equipment): string {
@@ -67,54 +69,46 @@ function EquipmentEditDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">
-          编辑装备 · {initial.id}
-        </h3>
-        <p className="mt-1 text-xs text-slate-500">
-          部位 {slotLabel(initial.slot)} · 名称「{initial.label}」（文案与部位不可改）。变体属性 = 这里的基础属性 × 前后缀倍率，改基础件即改全部 15 个变体。
-        </p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="穿戴需求等级" hint="装备定强的锚点；等级变了属性不会自动重算（这里改的是快照值）">
-              <Input
-                type="number"
-                min={1}
-                value={level}
-                onChange={(event) => setLevel(event.target.value)}
-              />
-            </Field>
-            <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理，不在这里">
-              <Input
-                type="number"
-                min={0}
-                value={sellPrice}
-                onChange={(event) => setSellPrice(event.target.value)}
-              />
-            </Field>
-          </div>
-
-          <AttributesGrid attributes={attributes} onChange={setAttributes} header="基础属性（整份替换）" crossed={crossedKeys} />
-
-          {!levelValid || !priceValid ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              等级需为 ≥1 的整数，售卖价需为 ≥0 的整数。
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
-          </Button>
-          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-            保存修改
-          </Button>
-        </div>
+    <Modal
+      open
+      title={<>编辑装备 · {initial.id}</>}
+      hint={<>部位 {slotLabel(initial.slot)} · 名称「{initial.label}」（文案与部位不可改）。变体属性 = 这里的基础属性 × 前后缀倍率，改基础件即改全部 15 个变体。</>}
+      size="md"
+      onClose={onCancel}
+      footer={<>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
+          取消
+        </Button>
+        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+          保存修改
+        </Button>
+      </>}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="穿戴需求等级" hint="装备定强的锚点；等级变了属性不会自动重算（这里改的是快照值）">
+          <Input
+            type="number"
+            min={1}
+            value={level}
+            onChange={(event) => setLevel(event.target.value)}
+          />
+        </Field>
+        <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理，不在这里">
+          <Input
+            type="number"
+            min={0}
+            value={sellPrice}
+            onChange={(event) => setSellPrice(event.target.value)}
+          />
+        </Field>
       </div>
-    </div>
+      <AttributesGrid attributes={attributes} onChange={setAttributes} header="基础属性（整份替换）" crossed={crossedKeys} />
+      {!levelValid || !priceValid ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          等级需为 ≥1 的整数，售卖价需为 ≥0 的整数。
+        </p>
+      ) : null}
+    </Modal>
   );
 }
 
@@ -195,56 +189,50 @@ export function EquipmentsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">装备配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          只收基础件（普通的·人级），变体是基础件乘前后缀倍率展开的 —— 改基础件即改全部 15 个变体。
-          id / 部位结构固定，只可编辑、不可新增 / 删除；商城售价归「商城定价」管理，不在这里。
-        </p>
-      </div>
+      <PageHeader
+        title="装备配置"
+        description={<>只收基础件（普通的·人级），变体是基础件乘前后缀倍率展开的 —— 改基础件即改全部 15 个变体。
+            id / 部位结构固定，只可编辑、不可新增 / 删除；商城售价归「商城定价」管理，不在这里。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 名称</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">部位</span>
-            <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
-              <option value="">全部</option>
-              {SLOT_OPTIONS.map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-28">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">等级 ≥</span>
-            <Input
-              type="number"
-              min={1}
-              value={draft.minLevel}
-              onChange={(event) => setDraft({ ...draft, minLevel: event.target.value })}
-            />
-          </div>
-          <div className="w-28">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">等级 ≤</span>
-            <Input
-              type="number"
-              min={1}
-              value={draft.maxLevel}
-              onChange={(event) => setDraft({ ...draft, maxLevel: event.target.value })}
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 名称">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-36" label="部位">
+              <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
+                <option value="">全部</option>
+                {SLOT_OPTIONS.map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-28" label="等级 ≥">
+              <Input
+                type="number"
+                min={1}
+                value={draft.minLevel}
+                onChange={(event) => setDraft({ ...draft, minLevel: event.target.value })}
+              />
+            </Field>
+          <Field width="w-28" label="等级 ≤">
+              <Input
+                type="number"
+                min={1}
+                value={draft.maxLevel}
+                onChange={(event) => setDraft({ ...draft, maxLevel: event.target.value })}
+              />
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
