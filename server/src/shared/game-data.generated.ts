@@ -4818,6 +4818,21 @@ export const MAP_LABELS: Record<string, string> = {
   "10": "桃花源溪",
 };
 
+/** 地图 id → { label 名称, src 资源路径, type 类型码, typeLabel 类型名, level 进入等级, combat 进入战斗力, soulOfWar 进入战魂阶 }（#571；管理端「地图管理」页的只读信息源。尺寸 / 图层 / 对象组不在这里 —— 它们只有 TMX 有，见 shared/map-content.generated.ts） */
+export const MAPS: Record<string, unknown> = {
+  "0": {"label":"新手村","src":"map/0/0","type":"0","typeLabel":"安全地图","level":1,"combat":0,"soulOfWar":0},
+  "1": {"label":"卧龙城","src":"map/1/1","type":"0","typeLabel":"安全地图","level":10,"combat":0,"soulOfWar":0},
+  "2": {"label":"王城","src":"map/2/2","type":"0","typeLabel":"安全地图","level":40,"combat":0,"soulOfWar":0},
+  "3": {"label":"雪域高原","src":"map/3/3","type":"1","typeLabel":"等级地图","level":1,"combat":0,"soulOfWar":0},
+  "4": {"label":"漠北草原","src":"map/4/4","type":"1","typeLabel":"等级地图","level":10,"combat":0,"soulOfWar":0},
+  "5": {"label":"大漠戈壁","src":"map/5/5","type":"1","typeLabel":"等级地图","level":20,"combat":0,"soulOfWar":0},
+  "6": {"label":"破碎神庙","src":"map/6/6","type":"1","typeLabel":"等级地图","level":30,"combat":0,"soulOfWar":0},
+  "7": {"label":"灼烧之地","src":"map/7/7","type":"1","typeLabel":"等级地图","level":35,"combat":0,"soulOfWar":0},
+  "8": {"label":"石林峡谷","src":"map/8/8","type":"1","typeLabel":"等级地图","level":40,"combat":0,"soulOfWar":0},
+  "9": {"label":"水乡泽国","src":"map/9/9","type":"1","typeLabel":"等级地图","level":45,"combat":0,"soulOfWar":0},
+  "10": {"label":"桃花源溪","src":"map/10/10","type":"1","typeLabel":"等级地图","level":50,"combat":0,"soulOfWar":0},
+};
+
 
 /** 装备前缀名（下标 = 前缀序号，如 0 → 普通的） */
 export const EQUIPMENT_PREFIX_LABELS: string[] = ["普通的",

@@ -112,6 +112,8 @@ const MODULES = {
   adminItem: { target: "admin", export: "itemsApi" },
   adminMonster: { target: "admin", export: "monstersApi" },
   adminNpc: { target: "admin", export: "npcsApi" },
+  // 地图管理（#571）：只读观测台 —— 只有 list / detail，故意没有写接口
+  adminMap: { target: "admin", export: "mapsApi" },
   adminMall: { target: "admin", export: "mallApi" },
   adminFashion: { target: "admin", export: "fashionsApi" },
   adminDrop: { target: "admin", export: "dropApi" },

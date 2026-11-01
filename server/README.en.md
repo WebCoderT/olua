@@ -57,10 +57,11 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:rank` | Leaderboards (56 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run test:e2e:bag` | Bag and worn equipment (38 assertions; equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
+| `npm run test:e2e:map` | Maps (88 assertions; **read-only boundary** / two coordinate systems reconciled / write routes 404 / permissions and doc contract) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + twenty-five e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + twenty-six e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -318,13 +319,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **163 interfaces / 135 paths / 244 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **165 interfaces / 137 paths / 253 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
 | Client | 50 | `player` token, may only operate its own account's data |
-| Admin | 106 | `admin` token + each interface's own permission point |
+| Admin | 108 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;
@@ -400,7 +401,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All twenty-five e2e suites are **real server process + real HTTP requests** (not mocks):
+All twenty-six e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -416,13 +417,14 @@ All twenty-five e2e suites are **real server process + real HTTP requests** (not
 | `test/backup.cjs` | **87** | backup / restore: `VACUUM INTO` while running for a consistent snapshot / old db archived after restore / bad file and "service may be running" protective refusal / automatic scheduled backup (real process, visible failure, pure due-check function) |
 | `test/e2e-rank.cjs` | **56** | leaderboards (#400): **ranks and values checked one by one across the three boards** / ties share a rank (competition ranking, then roleId ascending) / the combat board orders differently from the level board, so it is not a copy of level / page slicing, empty pages, `size` clamped to the cap and invalid paging / `me` returns a real rank both inside and outside the page, "no rank" when no character is active, and is refused when signed out / with the refresh period set to zero the snapshot ignores save changes and `computedAt` stays put / an entry has exactly eight fields and carries no `accountId`, `data` or online status / the periodic recompute really swaps in a new snapshot |
 | `test/e2e-bag.cjs` | **38** | bag and worn equipment (#556): equipping / unequipping / discarding / tidying and moving all live on the server; **move and tidy only verify two conservation rules** (grid shape + total count per id); slot and level gating decided by the server (a level-1 character cannot wear level-10 clothes and the item stays in the bag); attributes recomputed on equip and unequip (taking off an HP-boosting item lowers HP too); **`PUT /roles/:id` can no longer change bag / equipment / skills** (values are backfilled, not rejected); **bag size comes from the client config** (a larger grid grows and nothing is lost, and saving never re-packs positions); stale revision → 20006, another account's role → 40300 |
+| `test/e2e-map.cjs` | **88** | map management (#571, **read-only**): 11 maps sorted by **numeric** id (`10` never before `2`) / the two kinds of counts kept apart (`monsterAreaCount` = TMX rectangles on the client, `spawnAreaCount` = rows in the server table) / **two coordinate systems reconciled** (`groups` in raw Tiled terms, `spawnAreas` in world coordinates — the centre of the same rectangle must match) / **POST, PUT, PATCH and DELETE always 404** (even for the super admin: this is "no entry point", not "no permission") / unknown map 404 + 50032 / viewer can read, no token 401 / doc contract and "no Map write models" |
 
 ```bash
-cd server && npm run verify          # compile + twenty-five e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + twenty-six e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 
-Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; blocks / reports → `test:e2e:blocks`; leaderboards → `test:e2e:rank`; realtime channel → `test:e2e:realtime`),
+Prioritize the matching suite for what you changed (character interface → `test:e2e:roles`; maps / spawn areas → `test:e2e:map`; password / audit / limiting / kick-offline → `test:e2e:guard`; mail → `test:e2e:mail`; blocks / reports → `test:e2e:blocks`; leaderboards → `test:e2e:rank`; realtime channel → `test:e2e:realtime`),
 but **`npm run verify` should pass before committing**.
 
 ## Related docs

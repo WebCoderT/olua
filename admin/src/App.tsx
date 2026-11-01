@@ -20,6 +20,7 @@ import { DrugsPage } from "./pages/DrugsPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
+import { MapsPage } from "./pages/MapsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { StatusesPage } from "./pages/StatusesPage";
 import { QuestsPage } from "./pages/QuestsPage";
@@ -280,6 +281,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <GrowthPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="maps"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <MapsPage />
               </RequirePermission>
             }
           />

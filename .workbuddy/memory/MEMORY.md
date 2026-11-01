@@ -54,5 +54,10 @@
   **判据**：整屏黑 = 这条；有图但偏半张图 = 锚点设在赋值之后。
   **精简 #570**：换算只剩 3 个导出（`mapPointToWorld` / `mapRectCenterToWorld` / `getMapWorldRect`），不再收 `map` 参数；
   前提是**地图节点恒在世界原点**（守点：`LayerManager.move` 不许动 MapLayer）。
-- 数字基线（#566 后）：163 接口 / 135 路径 / 244 模型 / 25 权限点 / 45 表 / 37 仓储；e2e 2503（25 套）；单测 58；守卫 70；审计 15。
+- **管理端地图管理（只读）#571**：`GET /admin/maps` + `/:id`（`gameConfig:read`），**没有任何写入口**（e2e 钉死 POST/PUT/PATCH/DELETE 404，
+  超管也一样 —— 「没有入口」不是「没权限」）；响应里带 `sources`（`config`/`snapshot`/`db` 三类来源），页面按它打徽标。
+  `groups` 是 Tiled 原始口径、`spawnAreas` 是世界坐标，判据 = **同一个矩形的中心对得上**（只测字段存在等于没测）。
+  两个坑：`new BizException(code,msg)` **默认 400**（要 `BizException.notFound`）；类型名别另立短标签表（撞 `audit-shared-data` 的「手写键清单」判据，
+  改为生成时拼进 `MAPS.typeLabel`）。e2e `e2e-map.cjs` 88 条。
+- 数字基线（#571 后）：165 接口 / 137 路径 / 253 模型 / 25 权限点 / 45 表 / 37 仓储；e2e **2591（26 套）**；单测 59；守卫 70；审计 15；管理端页面 34 + 侧栏 30 项。
 - **回归门槛 = 改动哪跑哪**：`make test-changed`（tools/test-changed.cjs；BASE=<ref> 可选）。客户端单测按内容匹配；服务端 e2e 按模块表，表外/共享底座回落全量；已删文件要 existsSync 过滤（否则删除的审计还会进计划）；已知基线红 5 套（素材未入库）在 CLIENT_BASELINE_RED 容忍；全量门禁 make verify 只在发布前。

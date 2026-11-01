@@ -130,11 +130,17 @@ const REPO_EDGES = {
     "modules/world",
     // 合并区（#295）：重排 from 区世界发牌（instanceId 换 to 区区段）在 ZoneService 事务里
     "modules/zone",
+    // 地图管理（#571）：只读地图页按图/区聚合场上实例数（countByMap）
+    "modules/map",
   ],
   // 区服（#295）：注册选区校验活区（auth）、世界代际巡检（world）、开区/合并（zone）
   "database/repositories/zone.repository.ts": ["modules/zone", "modules/auth", "modules/world"],
   // 刷怪区（#295）：播种来源表，与世界实例同属 world 模块
-  "database/repositories/map-spawn-area.repository.ts": ["modules/world"],
+  "database/repositories/map-spawn-area.repository.ts": [
+    "modules/world",
+    // 地图管理（#571）：只读地图页要按图统计刷怪区行数（countByMap），不写任何东西
+    "modules/map",
+  ],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],

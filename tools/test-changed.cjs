@@ -94,6 +94,7 @@ const SERVER_MODULE_E2E = [
   ["src/modules/party", ["party", "realtime"]],
   ["src/modules/leaderboard", ["rank"]],
   ["src/modules/achievement", ["achievement"]],
+  ["src/modules/map", ["map"]],
   ["src/modules/admin", ["guard"]],
   // 共享数据 / 建库 / 进程装配是「所有套件的底座」—— 动了就全量
   ["src/shared", "ALL"],

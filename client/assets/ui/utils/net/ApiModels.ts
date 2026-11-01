@@ -5923,6 +5923,353 @@ export type EquipInAlignList = {
   list: EquipInAlign[];
 };
 
+export type MapLayer = {
+  /**
+   * 图层名（Tiled 里的图层名，如 ground / wall）
+   */
+  name: string;
+  /**
+   * 横向格数
+   */
+  width: number;
+  /**
+   * 纵向格数
+   */
+  height: number;
+};
+
+export type MapObject = {
+  /**
+   * 对象 id（图内唯一）
+   */
+  id: number;
+  /**
+   * 对象名（如「1号怪物」「复活点」；可空）
+   */
+  name: string;
+  /**
+   * 对象类（Tiled 的 type / class；空串 = 普通矩形）
+   */
+  klass: string;
+  /**
+   * Tiled 坐标 x（左上角原点）
+   */
+  x: number;
+  /**
+   * Tiled 坐标 y（左上角原点、y 向下）
+   */
+  y: number;
+  /**
+   * 矩形宽（点对象为 0）
+   */
+  width: number;
+  /**
+   * 矩形高（点对象为 0）
+   */
+  height: number;
+  /**
+   * 自定义属性原件（刷怪区的 id / min / max 等，键值都是字符串）
+   */
+  properties: Record<string, string>;
+};
+
+export type MapGroup = {
+  /**
+   * 对象组名（TMX 里的名字）
+   */
+  name: string;
+  /**
+   * 组内对象（按 TMX 内的出现顺序）
+   */
+  objects: MapObject[];
+};
+
+export type MapSpawnArea = {
+  /**
+   * 行 id（导入顺序，发牌可复现）
+   */
+  id: number;
+  /**
+   * 区域名（Tiled 对象名）
+   */
+  name: string;
+  /**
+   * 怪物 key（configs/monster 的关联键）
+   */
+  monsterKey: string;
+  /**
+   * 怪物名（查不到配置时回落成 key）
+   */
+  monsterLabel: string;
+  /**
+   * 区域允许的最少怪物数
+   */
+  min: number;
+  /**
+   * 区域允许的最多怪物数（播种按它展开）
+   */
+  max: number;
+  /**
+   * 区域中心 x（世界坐标；原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 区域中心 y（世界坐标；y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 区域宽
+   */
+  w: number;
+  /**
+   * 区域高
+   */
+  h: number;
+};
+
+export type MapWorldMonster = {
+  /**
+   * 区服 id
+   */
+  zoneId: number;
+  /**
+   * 该区这张图的实例总数
+   */
+  total: number;
+  /**
+   * 其中存活只数
+   */
+  alive: number;
+};
+
+export type MapSource = {
+  /**
+   * 对应的字段块（layers / groups / spawnAreas / worldMonsters / config / size）
+   */
+  section: string;
+  /**
+   * 给人看的名字
+   */
+  label: string;
+  /**
+   * 来源类别：config 客户端配置 / snapshot 服务端生成快照 / db 服务端库表
+   */
+  origin: string;
+  /**
+   * 具体文件或表名（config / snapshot 给路径，db 给表名）
+   */
+  ref: string;
+  /**
+   * 一句话说明这块能不能改、改了怎么生效
+   */
+  note: string;
+};
+
+export type MapSummary = {
+  /**
+   * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
+   */
+  id: string;
+  /**
+   * 地图名
+   */
+  label: string;
+  /**
+   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
+   */
+  type: string;
+  /**
+   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
+   */
+  typeLabel: string;
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 进入所需战斗力（0 = 不限）
+   */
+  combat: number;
+  /**
+   * 进入所需战魂阶（0 = 不限）
+   */
+  soulOfWar: number;
+  /**
+   * 客户端资源路径（如 map/0/0）
+   */
+  src: string;
+  /**
+   * 横向格数
+   */
+  cols: number;
+  /**
+   * 纵向格数
+   */
+  rows: number;
+  /**
+   * 单格宽（像素）
+   */
+  tileWidth: number;
+  /**
+   * 单格高（像素）
+   */
+  tileHeight: number;
+  /**
+   * 地图像素宽
+   */
+  width: number;
+  /**
+   * 地图像素高
+   */
+  height: number;
+  /**
+   * 图层数
+   */
+  layerCount: number;
+  /**
+   * NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）
+   */
+  npcCount: number;
+  /**
+   * 刷怪区对象数（客户端资源 monster 组的矩形数）
+   */
+  monsterAreaCount: number;
+  /**
+   * 碰撞矩形数（客户端资源 collision 组的对象数）
+   */
+  collisionCount: number;
+  /**
+   * 复活点数（客户端资源里 klass=revive 的对象）
+   */
+  reviveCount: number;
+  /**
+   * 服务端刷怪区行数（map_spawn_areas）
+   */
+  spawnAreaCount: number;
+  /**
+   * 服务端场上怪物实例数（world_monsters，全部区合计）
+   */
+  worldMonsterCount: number;
+};
+
+export type MapList = {
+  /**
+   * 地图总数
+   */
+  total: number;
+  /**
+   * 地图列表（按 id 数字升序）
+   */
+  list: MapSummary[];
+};
+
+export type MapDetail = {
+  /**
+   * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
+   */
+  id: string;
+  /**
+   * 地图名
+   */
+  label: string;
+  /**
+   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
+   */
+  type: string;
+  /**
+   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
+   */
+  typeLabel: string;
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 进入所需战斗力（0 = 不限）
+   */
+  combat: number;
+  /**
+   * 进入所需战魂阶（0 = 不限）
+   */
+  soulOfWar: number;
+  /**
+   * 客户端资源路径（如 map/0/0）
+   */
+  src: string;
+  /**
+   * 横向格数
+   */
+  cols: number;
+  /**
+   * 纵向格数
+   */
+  rows: number;
+  /**
+   * 单格宽（像素）
+   */
+  tileWidth: number;
+  /**
+   * 单格高（像素）
+   */
+  tileHeight: number;
+  /**
+   * 地图像素宽
+   */
+  width: number;
+  /**
+   * 地图像素高
+   */
+  height: number;
+  /**
+   * 图层数
+   */
+  layerCount: number;
+  /**
+   * NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）
+   */
+  npcCount: number;
+  /**
+   * 刷怪区对象数（客户端资源 monster 组的矩形数）
+   */
+  monsterAreaCount: number;
+  /**
+   * 碰撞矩形数（客户端资源 collision 组的对象数）
+   */
+  collisionCount: number;
+  /**
+   * 复活点数（客户端资源里 klass=revive 的对象）
+   */
+  reviveCount: number;
+  /**
+   * 服务端刷怪区行数（map_spawn_areas）
+   */
+  spawnAreaCount: number;
+  /**
+   * 服务端场上怪物实例数（world_monsters，全部区合计）
+   */
+  worldMonsterCount: number;
+  /**
+   * 图层（服务端生成快照，源自 TMX）
+   */
+  layers: MapLayer[];
+  /**
+   * 对象组（Tiled 原始坐标，服务端生成快照）
+   */
+  groups: MapGroup[];
+  /**
+   * 刷怪区（服务端库表，世界坐标）
+   */
+  spawnAreas: MapSpawnArea[];
+  /**
+   * 场上怪物（按区分组；进程未启动过世界时为空）
+   */
+  worldMonsters: MapWorldMonster[];
+  /**
+   * 每一块数据的来源（页面按它渲染徽标）
+   */
+  sources: MapSource[];
+};
+
 export type GameMailClaimAllQuery = {
   /**
    * 只领这一栏：system / reward / social / combat（不传 = 全部）

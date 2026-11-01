@@ -557,6 +557,12 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 22. **没有 HTTP 出口的列，e2e 用 `node:sqlite` 直读**：#400 的 `roles.kills` 只在榜接口里以「排序结果」出现，没法断言「这一杀到底记没记」——
    `e2e-combat.cjs` 的 `readKills(dbPath, roleId)` 开只读连接直查该列，才有「打死一只 +1、再打死一只变 2」这种精确断言。
    同理：**别为了测试给正式接口开一个只有测试用的出口**。
+23. **只读模块要把「不可写」做成 404，而不是靠没人调**（#571 地图管理）：`@Controller("admin/maps")` 只留 `@Get`，
+   e2e 断言 `POST / PUT / PATCH / DELETE` 全 **404**（超管也一样）。**403 与 404 不能混**：403 是「你没权限」，
+   会诱导下一个人去补权限；404 是「这件事没有入口」。配套两条：
+   ① `new BizException(code, msg)` **默认 400** —— 资源不存在必须 `BizException.notFound(code, msg)`，否则
+   「地图 11 不存在」被报成「参数不合法」；② 只读模块**不写 Create/Update DTO**（少一个 DTO 比留一个永远没人调的写接口更诚实），
+   并在 e2e 里断言文档 schema 里没有 `Create*Map` / `Update*Map`。
 
 ## 七、验证闭环
 
