@@ -9,7 +9,7 @@ import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
-import { getMapPixelSize, getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld } from "../../utils/map/MapPointMath";
+import { getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld, getMapWorldRect } from "../../utils/map/MapPointMath";
 import { getTiledObjects, getTiledObjectsFrom } from "../../utils/map/TiledObjects";
 import { bindMousePress, getHitScreenPoint, getPointerButton, HAS_MOUSE, PointerButton } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
@@ -143,11 +143,11 @@ export default class MapPreviewDialog {
     if (!map || !transform) return null;
     const size = transform.contentSize;
     if (size.width <= 0 || size.height <= 0) return null;
-    const mapSize = getMapPixelSize(map);
-    const mapCenter = map.getWorldPosition();
+    // 地图在世界里的矩形（#566：原点在左上角，左下角 = 原点 - H）；比例 = (世界 - 左下角) / 尺寸
+    const bounds = getMapWorldRect(map);
     return (worldX: number, worldY: number): Vec2 => {
-      const ratioX = Math.min(1, Math.max(0, (worldX - (mapCenter.x - mapSize.width / 2)) / mapSize.width));
-      const ratioY = Math.min(1, Math.max(0, (worldY - (mapCenter.y - mapSize.height / 2)) / mapSize.height));
+      const ratioX = Math.min(1, Math.max(0, (worldX - bounds.x) / bounds.width));
+      const ratioY = Math.min(1, Math.max(0, (worldY - bounds.y) / bounds.height));
       return new Vec2((ratioX - 0.5) * size.width, (ratioY - 0.5) * size.height);
     };
   }
@@ -170,7 +170,7 @@ export default class MapPreviewDialog {
       if (object.objectClass === tiledObjectClasses.revive || object.name === tiledObjectClasses.revive) return;
       const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
       if (!npc) return;
-      const world = getMapPointPositionOnWorld(new Vec3(object.x, object.y), map);
+      const world = getMapPointPositionOnWorld(object.x, object.y, map);
       const local = toPreview(world.x, world.y);
       npcDots.push({ x: local.x, y: local.y, color: marker.npcDotColor, radius: marker.npcDotRadius });
       const labelPosition = new Vec2(local.x, local.y + marker.npcDotRadius + marker.npcLabelGap + marker.labelSize.height / 2);
@@ -246,9 +246,8 @@ export default class MapPreviewDialog {
     // 点击点相对预览图中心的比例（点在预览图边缘外时夹到 0~1，取边界落点）
     const ratioX = Math.min(1, Math.max(0, (worldPoint.x - center.x) / size.width + 0.5));
     const ratioY = Math.min(1, Math.max(0, (worldPoint.y - center.y) / size.height + 0.5));
-    const mapSize = getMapPixelSize(map);
-    const mapCenter = map.getWorldPosition();
-    return new Vec2(mapCenter.x - mapSize.width / 2 + ratioX * mapSize.width, mapCenter.y - mapSize.height / 2 + ratioY * mapSize.height);
+    const bounds = getMapWorldRect(map);
+    return new Vec2(bounds.x + ratioX * bounds.width, bounds.y + ratioY * bounds.height);
   }
 
   /** 右键传送：落点吸附到最近可站立位置后直接飞过去（与复活传送同一套入口），并停掉正在进行的自动移动 */

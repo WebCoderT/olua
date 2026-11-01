@@ -1,6 +1,6 @@
 ---
 name: cocos-tiledmap-objectgroup
-description: Cocos Creator 3.x 中把 Tiled（.tmx）对象组在游戏内实例化的正确做法，含三个必踩的引擎坑（对象「类」被解析器丢弃、object.y 被 _init 原地改写导致坐标翻两次、TiledMap 的瓦片裁剪 enableCulling 在相机跳变后会算错可见范围）、对象坐标换算、静态碰撞体生成、属性驱动的区域玩法（刷怪区 min/max，默认开图时一次性生成；含数量维持类需求的设计取舍与 tick 归属）、区域名称/指示线的调试显示、点位驱动的出生位置（类 revive 的点 = 进图/传送后的出生点，含「地图异步加载 vs 角色创建」的先后坑与回调式注册）；以及"没有地图节点时直接读 TMX 原文解析对象组"（资源预加载阶段推导地图内 NPC/怪物外观目录用）。触发场景：用户提到"Tiled 对象组 / 对象层"、"collision 碰撞图层"、"地图碰撞区域动态创建"、"NPC/刷怪点/复活点坐标"、"进图在复活点出生/复活点定位"、"按对象类/Class 判断"、"地图坐标转世界坐标"、"对象位置上下镜像/反了"、"monster 刷怪层 / 区域刷怪 / min max 数量 / 怪物刷新"、"不实例化地图就读出对象组/预加载地图内容"、"传送后地图一片黑 / 地图不渲染 / 动一下才显示 / 瓦片裁剪 / enableCulling"等。
+description: Cocos Creator 3.x 中把 Tiled（.tmx）对象组在游戏内实例化的正确做法，含三个必踩的引擎坑（对象「类」被解析器丢弃、object.y 被 _init 原地改写导致坐标翻两次、TiledMap 的瓦片裁剪 enableCulling 在相机跳变后会算错可见范围）、对象坐标换算、静态碰撞体生成、属性驱动的区域玩法（刷怪区 min/max，默认开图时一次性生成；含数量维持类需求的设计取舍与 tick 归属）、区域名称/指示线的调试显示、点位驱动的出生位置（类 revive 的点 = 进图/传送后的出生点，含「地图异步加载 vs 角色创建」的先后坑与回调式注册）；以及"没有地图节点时直接读 TMX 原文解析对象组"（资源预加载阶段推导地图内 NPC/怪物外观目录用）。触发场景：用户提到"Tiled 对象组 / 对象层"、"collision 碰撞图层"、"地图碰撞区域动态创建"、"NPC/刷怪点/复活点坐标"、"进图在复活点出生/复活点定位"、"按对象类/Class 判断"、"地图坐标转世界坐标"、"地图原点 / 左上角为原点"、"接新 TMX 要不要减半个地图"、"对象位置上下镜像/反了"、"地图整体偏了半张图"、"monster 刷怪层 / 区域刷怪 / min max 数量 / 怪物刷新"、"不实例化地图就读出对象组/预加载地图内容"、"传送后地图一片黑 / 地图不渲染 / 动一下才显示 / 瓦片裁剪 / enableCulling"等。
 agent_created: true
 ---
 
@@ -89,41 +89,50 @@ tiledMap.enableCulling = false;        // 再关裁剪：setter 会转发给所�
 - 放在 `tmxAsset` 赋值**之后**最稳：图层是在赋值时 `_buildLayerAndGroup()` 创建的，setter 才能遍历到它们；
   放在之前也可以（图层构建时会继承 map 上的 `_enableCulling`）。
 
-## 坐标换算（两种写法，必须配对应来源）
+## 坐标换算（把地图锚点设成左上角，换算只剩一次 y 取反）
 
-| 坐标系 | 原点 | y 方向 |
-|---|---|---|
-| Tiled 对象原始坐标（`object.offset`，或 Tiled 编辑器里看到的） | 地图**左上角** | **向下**（北小南大） |
-| Cocos 地图节点本地坐标 | 地图**中心** | 向上 |
+| 坐标系 | 原点 | x 正向 | y 正向 | 地图占据的范围 |
+|---|---|---|---|---|
+| Tiled 原始坐标（`object.offset`，或 Tiled 编辑器里看到的） | 地图**左上角** | 向右 | **向下** | `x∈[0,W]` `y∈[0,H]` |
+| Cocos 地图节点本地 / 世界（**本项目口径**） | 地图**左上角** | 向右 | 向上 | `x∈[0,W]` `y∈[-H,0]` |
 
+```ts
+// 地图节点：锚点 (0,1) —— 原点落在左上角
+const transform = mapNode.getComponent(UITransform) ?? mapNode.addComponent(UITransform);
+transform.setAnchorPoint(0, 1);        // 必须在 tmxAsset 赋值**之前**
+
+// 换算：只有 y 取反，没有半图偏移
+localX = tiledX;
+localY = -tiledY;                      // 矩形先取几何中心：(x + w/2, y + h/2)，同样只取反
+world  = mapNode.getWorldPosition() + (localX, localY);
 ```
-// ✅ 推荐：取原始坐标（object.offset），按 Tiled 语义换算
-localX = tiledX - mapPixelWidth  / 2
-localY = mapPixelHeight / 2 - tiledY          // 点对象
-localY = mapPixelHeight / 2 - (tiledY + h/2)  // 矩形对象，先取几何中心（Tiled 的 y 是矩形上边）
 
-// ✅ 等价：直接用 getObjects() 的运行时值（已翻转过一次），就不要再翻
-localY = object.y - mapPixelHeight / 2
-```
+**为什么这样最省事**：Tiled 里量出来的数就是世界坐标（只是 y 符号相反），接一张新 TMX 不用再在脑子里减半张图；
+`mapCenter`、`±W/2`、`±H/2` 这类式子从代码里彻底消失，也就没有「两套写法配错就镜像」的机会。
 
-**两套不能混用**：`H/2 - y` 配「原始 y」，`y - H/2` 配「运行时 y」，配错了就是翻了两次 → 上下镜像。
+**锚点必须在 `tmxAsset` 赋值之前设**（这是本节最容易踩的一步）：赋值那一刻引擎同步执行
+`_buildLayerAndGroup()` → `_syncAnchorPoint()`，按**当时的锚点**给每个图层节点设锚点、算顶点平移量
+（`leftDownToCenterX/Y = w*anchorX / h*anchorY`）。赋值后再改锚点只动地图节点自身，图层仍按旧锚点绘制
+→ 表现是「地图整体偏半张图」，且不报错、不崩，只能靠肉眼发现。
 
-`mapPixelWidth = mapSize.width * tileSize.width`，`mapPixelHeight = mapSize.height * tileSize.height`。
+### 依据（引擎源码 3.8.7，不要靠猜）
 
-### 依据（引擎源码，不要靠猜）
-
-- `tiled-map.ts` 的 `_syncAnchorPoint()`：对象组节点 **anchor 强制 (0.5, 0.5)**，位置 (0,0)，且是地图节点的子节点
-  → **对象组本地坐标 == 地图节点本地坐标**（无需再叠加偏移）；地图节点 contentSize = 地图像素尺寸、默认 anchor (0.5,0.5)
-  → **地图节点原点 = 地图中心**。
-- `tiled-object-group.ts` 的 `_init()`：`object.y = height - object.y`，子对象按 `object.y - height*0.5` 定位
-  → 引擎自己的对象节点坐标就是 `y_runtime - H/2`，这是「视觉正确」的权威参照。
-- `set tmxAsset` → `_applyFile()` → `_buildLayerAndGroup()` → `group._init(...)` **全同步**，所以赋值完 tmxAsset
-  再读对象组时，y 一定已被改写。
+- `tiled-map.ts` 的 `_buildLayerAndGroup()`：建完图层把节点 `contentSize` 设成地图像素尺寸，再调
+  `_syncAnchorPoint()`；后者把**图层节点锚点同步成地图节点锚点**，并按 `anchorPoint` 重设对象组 / 图片层位置。
+- `assembler/simple.ts` 的 `updateRenderData()`：`left = col*tw - width*anchorX`、`bottom = rowY - height*anchorY`。
+  锚点 (0.5,0.5) → 瓦片铺在 `[-W/2, W/2]×[-H/2, H/2]`（原点 = 中心）；
+  锚点 (0,1) → 铺在 `[0, W]×[-H, 0]`（原点 = 左上角）。
+- `tiled-object-group.ts` 的 `_init()`：`object.y = height - object.y`（把 y 翻成向上），
+  所以 `getObjects()` 给的 y **不是** Tiled 原值 —— 要走 `object.offset` 或干脆自己读 TMX 原文。
+- `set tmxAsset` → `_applyFile()` → `_buildLayerAndGroup()` **全同步**，所以赋值完就可以读对象组、也可以
+  立刻用 `getMapSize()/getTileSize()` 算地图像素尺寸（别在赋值前算，那时还是 0）。
 
 ### 两条自检法（比看代码更快发现方向错）
 
-1. **语义边界**：Tiled 里叫「北/上/top」的对象换算后 y 必须 **> 0**，「南/下/bottom」< 0；四周墙的包围盒应各自跨在对应边缘（±W/2、±H/2）上。
-2. **与历史可用公式对齐**：若项目里曾有过能跑通的换算（如旧提交里的复活点/相机定位），拿同一点位代入，两种写法必须得到**完全相同**的数值。数值一致才算改对——只做「看起来合理」的数值自检会漏掉整体镜像（四周都有围墙时镜像肉眼几乎看不出）。
+1. **语义边界**：Tiled 里叫「北/上/top」的对象换算后 y 必须 **≤ 0**（上边缘 y=0、下边缘 y=-H），
+   四周墙的包围盒应各自贴着 `x=0`、`x=W`、`y=0`、`y=-H`。
+2. **与历史可用公式对齐**：口径改过一次的项目里，同一点位的新旧值必须满足**恰好一次整图平移**
+   （旧「中心为原点」→ 新「左上角」= `+W/2, -H/2`）。整批数据都满足才算改对——只看一两个点会漏掉整体镜像。
 
 ## 实例化流程
 
@@ -172,7 +181,10 @@ collider.size = node.getComponent(UITransform).contentSize;   // 尺寸取自 UI
 - spawner（地图侧）只做「地图数据 → 区域描述对象」的翻译（矩形转中心 + 尺寸，含 min/max 等属性），
   再把描述数组整体交给 core 里的管理器；**物体（怪物/掉落）的生成留在管理器内**，避免地图侧与运行时状态互相耦合。
 - 描述对象的坐标给**世界坐标**（管理器生成物体时用 `setWorldPosition`），换算仍走统一的坐标工具；
-  矩形转中心要记得 Tiled 的 `x/y` 是**左上角**：先取几何中心再换算。
+  矩形转中心要记得 Tiled 的 `x/y` 是**左上角**：先取几何中心 `(x + w/2, y + h/2)`，再把 y 取反。
+- **服务端也要这份坐标**（刷怪区已收归服务端 `map_spawn_areas`）：导入工具与客户端必须同一套口径，
+  否则怪物会刷在离正确位置半张图远的地方。导入工具**只读 TMX**、不读客户端代码，所以口径一改就要
+  两边同改（本项目把这条钉成了 `tools/audit-map-origin.cjs`：刷怪区矩形必须整体落在图内）。
 - **默认按「开图时一次性生成」实现**：每个区域按其 `max` 在矩形内随机落点生成，之后不再变动，管理器也不需要为它存任何状态。
   数量维持/定时补刷属于后续需求，别顺手一起做——本项目就写过一版「按编号聚合 + 定时检测补充」，
   随即被要求整段移除（只保留首次生成），白做一遍还留下 min/max 语义歧义。

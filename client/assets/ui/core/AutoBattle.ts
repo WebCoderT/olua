@@ -1,11 +1,11 @@
-import { isValid, Node, Rect, Vec2, Vec3 } from "cc";
+import { isValid, Node, Rect, Vec2 } from "cc";
 import { autoBattle } from "../../configs/autoBattle";
 import { tiledGroupNames, tiledObjectClasses } from "../../configs/map";
 import { skills } from "../../configs/skill";
 import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import { canAttackTarget } from "../utils/battle/BattleMath";
-import { getMapPixelSize, getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld } from "../utils/map/MapPointMath";
+import { getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld, getMapWorldRect } from "../utils/map/MapPointMath";
 import PathGrid from "../utils/map/PathGrid";
 import { TiledObject, getTiledObjectsFrom } from "../utils/map/TiledObjects";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -384,10 +384,9 @@ export default class AutoBattle {
     if (this.grid) return this.grid;
     const map = this.mapNode;
     if (!map || !isValid(map)) return null;
-    // 网格范围 = 地图像素范围（地图节点在世界原点，本地坐标即世界坐标）
-    const size = getMapPixelSize(map);
-    const mapWorld = map.getWorldPosition();
-    const bounds = new Rect(mapWorld.x - size.width / 2, mapWorld.y - size.height / 2, size.width, size.height);
+    // 网格范围 = 地图像素范围。地图节点原点在左上角（#566），范围就是
+    // [原点.x, 原点.x + W] × [原点.y - H, 原点.y]，不再拼「中心 ± 半图」
+    const bounds = getMapWorldRect(map);
     this.grid = new PathGrid(bounds, autoBattle.cellSize, autoBattle.clearance, this.readStaticObstacles(map));
     return this.grid;
   }
@@ -402,7 +401,7 @@ export default class AutoBattle {
     });
     getTiledObjectsFrom(map, tiledGroupNames.npc, tiledGroupNames.legacyObjects).forEach((object) => {
       if (object.objectClass !== tiledObjectClasses.npc) return;
-      const position = getMapPointPositionOnWorld(new Vec3(object.x, object.y, 0), map);
+      const position = getMapPointPositionOnWorld(object.x, object.y, map);
       const width = autoBattle.npcObstacleSize.width;
       const height = autoBattle.npcObstacleSize.height;
       rects.push(new Rect(position.x - width / 2, position.y - height / 2, width, height));

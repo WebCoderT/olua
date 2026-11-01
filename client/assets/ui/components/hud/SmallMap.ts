@@ -8,7 +8,7 @@ import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
-import { getMapPixelSize } from "../../utils/map/MapPointMath";
+import { getMapWorldRect } from "../../utils/map/MapPointMath";
 import { bindPointerAction } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { AnnouncementApi, GameMailApi } from "../../utils/net/Api";
@@ -290,16 +290,18 @@ export default class SmallMap extends Node {
       this.loadedMapId = role.onMap;
       this.loadMapImage(role.onMap, image);
     }
-    const mapSize = getMapPixelSize(map);
-    if (mapSize.width <= 0 || mapSize.height <= 0) return;
+    // 地图在世界里的矩形（#566：原点在左上角，左下角 = 原点 - H）
+    const bounds = getMapWorldRect(map);
+    if (bounds.width <= 0 || bounds.height <= 0) return;
     // 比例由固定的内容区宽度反推（与 updateDots 同一入口，底图与点位不会各算一套）
     const scale = getSmallMapScale(smallMapLayout.contentSize.width);
     // 底图节点尺寸 = 地图像素尺寸（1 像素对 1 单位），再整体乘缩放 → 与坐标点换算同一个比例
-    transform.setContentSize(mapSize.width, mapSize.height);
+    transform.setContentSize(bounds.width, bounds.height);
     image.node.setScale(scale, scale, 1);
     // 角色相对地图中心的世界偏移 × 缩放 = 角色在底图上的本地坐标，反向平移使角色落在视口中心
-    const mapCenter = map.getWorldPosition();
-    image.node.setPosition(-(rolePosition.x - mapCenter.x) * scale, -(rolePosition.y - mapCenter.y) * scale, 0);
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    image.node.setPosition(-(rolePosition.x - centerX) * scale, -(rolePosition.y - centerY) * scale, 0);
   }
 
   /** 装载指定地图的小地图底图（map/<id>/preview；失败只提示，小地图退化为占位底图） */
