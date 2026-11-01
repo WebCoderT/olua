@@ -798,13 +798,14 @@ export function EquipAlignPage() {
       {/* 顶部：资源根 + 基准 + 导出 */}
       <Card dense>
         <div className="flex flex-wrap items-end gap-2">
-        <Field width="w-40" label="资源根（指向游戏站的 resources）">
-          <Input
-            className="w-72"
-            value={prefs.resRoot}
-            onChange={(event) => setPrefs((prev) => ({ ...prev, resRoot: event.target.value }))}
-            placeholder="/game-resources"
-          />
+        <Field label="资源根（指向游戏站的 resources）">
+          <div className="w-72">
+            <Input
+              value={prefs.resRoot}
+              onChange={(event) => setPrefs((prev) => ({ ...prev, resRoot: event.target.value }))}
+              placeholder="/game-resources"
+            />
+          </div>
         </Field>
         <Field width="w-40" label="比对基准（裸模）">
           <select
@@ -819,18 +820,19 @@ export function EquipAlignPage() {
             ))}
           </select>
         </Field>
-        <Field width="w-40" label="每格视野（游戏单位）">
-          <Input
-            className="w-28"
-            type="number"
-            step="10"
-            min="60"
-            max="600"
-            value={prefs.viewSpan ?? 190}
-            onChange={(event) =>
-              setPrefs((prev) => ({ ...prev, viewSpan: Math.min(600, Math.max(60, Number(event.target.value) || 190)) }))
-            }
-          />
+        <Field label="每格视野（游戏单位）">
+          <div className="w-28">
+            <Input
+              type="number"
+              step="10"
+              min="60"
+              max="600"
+              value={prefs.viewSpan ?? 190}
+              onChange={(event) =>
+                setPrefs((prev) => ({ ...prev, viewSpan: Math.min(600, Math.max(60, Number(event.target.value) || 190)) }))
+              }
+            />
+          </div>
         </Field>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500">

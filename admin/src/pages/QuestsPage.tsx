@@ -208,14 +208,25 @@ function QuestDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
-      title={<>{creating ? "新增任务" : `编辑任务 · ${initial?.id ?? ""}`}</>}
-      hint={<>{creating
+      title={creating ? "新增任务" : `编辑任务 · ${initial?.id ?? ""}`}
+      hint={
+        creating
           ? "id 建议主线用 8000 段、日常用 8100 段（与生成物里的既有任务同一动线）。建成后随配置快照下发客户端。"
-          : "id 是行身份，不可改。保存后随配置快照下发客户端；正在进行的玩家进度不受影响（进度记的是 quest id）。"}</>}
+          : "id 是行身份，不可改。保存后随配置快照下发客户端；正在进行的玩家进度不受影响（进度记的是 quest id）。"
+      }
       size="lg"
       onClose={onCancel}
+      footer={
+        <FormFooter
+          submitting={submitting}
+          canSubmit={canSubmit}
+          onCancel={onCancel}
+          onSubmit={() => void submit()}
+          label={creating ? "创建" : "保存修改"}
+        />
+      }
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {creating ? (
@@ -354,15 +365,16 @@ function QuestDialog({
                 ) : null}
               </Select>
               <span className="text-xs text-slate-600">×</span>
-              <Input
-                type="number"
-                min={1}
-                max={9999}
-                className="w-24"
-                aria-label={`第 ${index + 1} 条奖励数量`}
-                value={entry.count}
-                onChange={(event) => setItem(index, { count: Number(event.target.value) || 0 })}
-              />
+              <div className="w-24">
+                <Input
+                  type="number"
+                  min={1}
+                  max={9999}
+                  aria-label={`第 ${index + 1} 条奖励数量`}
+                  value={entry.count}
+                  onChange={(event) => setItem(index, { count: Number(event.target.value) || 0 })}
+                />
+              </div>
               <Button
                 variant="ghost"
                 className="px-2 py-1 text-xs text-rose-300"
@@ -376,13 +388,6 @@ function QuestDialog({
       </div>
       <DescriptionField value={form.description} onChange={(value) => set("description", value)} hint="客户端任务详情里显示；≤500 字" />
       <ProblemList problems={problems} />
-      <FormFooter
-        submitting={submitting}
-        canSubmit={canSubmit}
-        onCancel={onCancel}
-        onSubmit={() => void submit()}
-        label={creating ? "创建" : "保存修改"}
-      />
     </Modal>
   );
 }
@@ -530,7 +535,7 @@ export function QuestsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="任务配置"
         description={<>主线（一次性）与日常（领奖后可重接）。每个任务一个目标：击杀怪物 / 与 NPC 对话 / 收集物品。
             进度与发奖都在服务端结算，客户端只显示；改完随配置快照下发，NPC 头顶标记也跟着变。</>}

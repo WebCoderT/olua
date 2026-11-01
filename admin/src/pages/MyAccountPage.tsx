@@ -78,7 +78,7 @@ export function MyAccountPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="我的账号"
         description="改密码需要先验证原密码；改完服务端会下发新令牌，本次登录继续有效。"
       />

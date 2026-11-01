@@ -1,4 +1,4 @@
-import { Input } from "./ui";
+import { Input, Notice } from "./ui";
 
 /** 区间型属性的六项（与 ConfigAttributes / MonsterAttributes 的区间字段一一对应；展示名在这里） */
 export const RANGE_FIELDS = [
@@ -58,47 +58,49 @@ export function AttributesGrid<A extends { maxHp?: number; hpRecover?: number } 
         {"maxHp" in attributes
           ? SCALAR_ROWS.map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">{label}</span>
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-28"
-                  value={attributes[key] ?? 0}
-                  onChange={(event) => onChange({ ...attributes, [key]: toCount(event.target.value) })}
-                />
+                <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">{label}</span>
+                {/* 宽度给外层：`Input` 自带 `w-full`，写在自己的 className 上会与基础类打架 */}
+                <div className="w-28">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={attributes[key] ?? 0}
+                    onChange={(event) => onChange({ ...attributes, [key]: toCount(event.target.value) })}
+                  />
+                </div>
               </div>
             ))
           : null}
         {RANGE_FIELDS.map(({ key, label: fieldLabel }) => (
           <div key={key} className="flex items-center justify-between gap-2">
-            <span className="text-xs text-slate-400">{fieldLabel}</span>
+            <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">{fieldLabel}</span>
             <div className="flex items-center gap-1">
-              <Input
-                type="number"
-                min={0}
-                className="w-20"
-                aria-label={`${fieldLabel}下限`}
-                value={attributes[key].min}
-                onChange={(event) => setRange(key, "min", event.target.value)}
-              />
+              <div className="w-20">
+                <Input
+                  type="number"
+                  min={0}
+                  aria-label={`${fieldLabel}下限`}
+                  value={attributes[key].min}
+                  onChange={(event) => setRange(key, "min", event.target.value)}
+                />
+              </div>
               <span className="text-xs text-slate-600">~</span>
-              <Input
-                type="number"
-                min={0}
-                className="w-20"
-                aria-label={`${fieldLabel}上限`}
-                value={attributes[key].max}
-                onChange={(event) => setRange(key, "max", event.target.value)}
-              />
+              <div className="w-20">
+                <Input
+                  type="number"
+                  min={0}
+                  aria-label={`${fieldLabel}上限`}
+                  value={attributes[key].max}
+                  onChange={(event) => setRange(key, "max", event.target.value)}
+                />
+              </div>
             </div>
           </div>
         ))}
       </div>
 
       {crossed.length > 0 ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-          以下属性的下限不能大于上限：{crossed.join("、")}。
-        </p>
+        <Notice tone="red">以下属性的下限不能大于上限：{crossed.join("、")}。</Notice>
       ) : null}
     </div>
   );

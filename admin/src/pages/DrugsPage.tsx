@@ -117,7 +117,7 @@ export function DrugsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="药品配置"
         description={<>id 清单固定（被掉落表与背包引用），只可编辑、不可新增 / 删除；使用等级需求不开放编辑（属客户端成长曲线定标）。
             商城售价归「商城定价」管理，不在这里。</>}
@@ -201,7 +201,7 @@ export function DrugsPage() {
       </Card>
 
       {form ? (
-                <Modal
+        <Modal
           open
           title={<>编辑药品 · {editing?.id}</>}
           hint="部分更新：只提交下方字段；回复量按「血/蓝固定值 + 百分比」四项独立生效（客户端各自封顶结算）。"

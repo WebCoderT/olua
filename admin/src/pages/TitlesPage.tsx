@@ -110,7 +110,7 @@ export function TitlesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="称号配置"
         description={<>等级序列固定（1..34），只可编辑、不可新增 / 删除。获得渠道默认「无法获取」，由运营逐个开放（系统赠送的发放逻辑暂未实现）；
             升级价格在「称号成长列表」弹窗里显示和修改。</>}

@@ -123,13 +123,22 @@ function StatusEditDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
-      title={<>编辑状态 · {initial.id}
-          <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span></>}
+      title={
+        <>
+          编辑状态 · {initial.id}
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            {SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属
+          </span>
+        </>
+      }
       hint="归属与 id 是行身份，不可改。状态 id 被技能的「挂载状态」引用，改名不影响引用，改 id 不行（没有改 id 的入口）。"
       size="md"
       onClose={onCancel}
+      footer={
+        <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
+      }
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="状态名">
@@ -200,7 +209,6 @@ function StatusEditDialog({
       </div>
       <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
       <ProblemList problems={problems} />
-      <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
     </Modal>
   );
 }
@@ -280,7 +288,7 @@ export function StatusesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="状态配置"
         description={<>角色与怪物同一张表（归属区分），只可编辑、不可新增 / 删除；状态 id 被技能的「挂载状态」引用。
             战斗修正只声明「这个状态在数值上意味着什么」，公式在客户端 BattleMath；留空 = 该维度不参与。</>}

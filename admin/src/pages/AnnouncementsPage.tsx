@@ -186,7 +186,7 @@ export function AnnouncementsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="公告"
         description={<>面向全服的运营消息。玩家侧由 <code className="text-slate-400">GET /announcements/active</code> 拉取「当前生效中」的那一批（无需登录，登录页也能显示）；
             生效 = 已启用 且 在时间窗内，两个条件由服务端判定。</>}

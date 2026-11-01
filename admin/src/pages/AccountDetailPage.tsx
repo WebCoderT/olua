@@ -189,7 +189,7 @@ export function AccountDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title={<>{account.username}</>}
         description={<>账号 id：{account.id}</>}
         actions={<>

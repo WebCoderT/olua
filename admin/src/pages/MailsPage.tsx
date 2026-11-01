@@ -204,7 +204,7 @@ export function MailsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="邮件"
         description={<>给指定玩家发邮件。<strong className="text-slate-400">点「发送」只是入队</strong>，后台调度器负责真正投递 ——
             失败会自动重试（指数退避），用尽次数才标为失败并保留原因。未配置 SMTP 时通道整体禁用，接口会直接说明原因。</>}
@@ -214,7 +214,7 @@ export function MailsPage() {
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-[240px] flex-1">
-              <Field width="w-40" label="收件邮箱">
+              <Field label="收件邮箱">
                 <Input
                   value={to}
                   placeholder="player@example.com"
@@ -245,7 +245,7 @@ export function MailsPage() {
 
           {canReadAccount ? (
             <div>
-              <Field width="w-40" label="关联玩家账号（可选，只为追溯）">
+              <Field label="关联玩家账号（可选，只为追溯）">
                 {account ? (
                   <div className="flex items-center gap-2 text-sm text-slate-300">
                     <Badge tone="indigo">{account.username}</Badge>
@@ -256,16 +256,18 @@ export function MailsPage() {
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-end gap-2">
-                    <Input
-                      className="w-56"
-                      value={accountKeyword}
-                      placeholder="按账号名搜索"
-                      disabled={!canWrite}
-                      onChange={(event) => setAccountKeyword(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") void searchAccounts();
-                      }}
-                    />
+                    {/* 宽度给外层：Input 自带 w-full，写在自己的 className 上会与外层冲突 */}
+                    <div className="w-56">
+                      <Input
+                        value={accountKeyword}
+                        placeholder="按账号名搜索"
+                        disabled={!canWrite}
+                        onChange={(event) => setAccountKeyword(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void searchAccounts();
+                        }}
+                      />
+                    </div>
                     <Button variant="outline" disabled={!canWrite} loading={searching} onClick={() => void searchAccounts()}>
                       搜索
                     </Button>
@@ -302,11 +304,11 @@ export function MailsPage() {
             <div className="flex flex-wrap items-end gap-2">
               {template.variables.map((name) => (
                 <div key={name} className="min-w-[180px] flex-1">
-                  <Field width="w-40" label="{name}">
+                  <Field label={name}>
                     <Input
                       value={variables[name] ?? ""}
                       disabled={!canWrite}
-                      placeholder={`${name}（必填）`}
+                      placeholder="必填"
                       onChange={(event) => setVariables({ ...variables, [name]: event.target.value })}
                     />
                   </Field>
@@ -318,12 +320,12 @@ export function MailsPage() {
           {isCustom ? (
             <div className="flex flex-col gap-3">
               <div>
-                <Field width="w-40" label="标题">
+                <Field label="标题">
                   <Input value={subject} disabled={!canWrite} onChange={(event) => setSubject(event.target.value)} />
                 </Field>
               </div>
               <div>
-                <Field width="w-40" label="正文（纯文本）">
+                <Field label="正文（纯文本）">
                   <textarea
                     className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-indigo-500"
                     rows={4}

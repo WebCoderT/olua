@@ -112,7 +112,7 @@ export function GuildsPage() {
 
   return (
     <div className="space-y-4">
-            <PageHeader
+      <PageHeader
         title="帮会管理"
         description="玩家自发组织的帮会与被解散处置。玩家侧的入帮申请是帮主自己的待办，这里不介入。"
         actions={<>

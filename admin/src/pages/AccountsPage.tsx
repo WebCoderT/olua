@@ -164,7 +164,7 @@ export function AccountsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="账号管理"
         description="封禁后该账号的令牌立即失效；删除账号会连带删掉名下所有角色。点表头可换排序，排序由服务端执行（对全部数据生效，不是只排当前页）。"
       />

@@ -44,7 +44,8 @@ export function PageHeader({
         <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-semibold text-slate-50">{title}</h1>
         {description ? <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {/* `ml-auto`：说明很长时动作区会换到第二行，换行后仍贴右，不会孤零零飘在左边 */}
+      {actions ? <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

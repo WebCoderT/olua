@@ -143,7 +143,7 @@ export function AdminsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="管理员"
         description="三级角色：超级管理员（全部权限）/ 管理员（不能管管理员）/ 只读观察员（只能查看）。改角色与启停立即生效，无需对方重新登录；重置密码会让对方手里的令牌当场失效（他需要重新登录）。"
       />
@@ -207,17 +207,19 @@ export function AdminsPage() {
                     </td>
                     <td className={tdClass}>
                       {canManage && !busy ? (
-                        <Select
-                          className="w-36 py-1 text-xs"
-                          value={admin.role}
-                          onChange={(event) => void changeRole(admin, event.target.value)}
-                        >
-                          {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </Select>
+                        <div className="w-36">
+                          <Select
+                            className="py-1 text-xs"
+                            value={admin.role}
+                            onChange={(event) => void changeRole(admin, event.target.value)}
+                          >
+                            {Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
                       ) : (
                         <Badge tone={ROLE_TONE[admin.role] ?? "slate"}>{adminRoleLabel(admin.role)}</Badge>
                       )}

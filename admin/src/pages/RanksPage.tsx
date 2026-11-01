@@ -99,10 +99,9 @@ export function RanksPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="军衔配置"
-        description={<>阶数序列固定（1..100，10 大段 × 10 阶），只可编辑、不可新增 / 删除。晋升价格在「军衔成长列表」弹窗里显示和修改；
-            军衔属性按阶映射角色等级再打折（#256 的成长曲线是它的基准），改曲线会连锁影响军衔强度。</>}
+        description={<>阶数固定 1..100（10 大段 × 10 阶），只可编辑；晋升价格在「军衔成长列表」里改。</>}
         actions={<>
           <Button variant="outline" onClick={() => setGrowthOpen(true)}>
             军衔成长列表

@@ -133,7 +133,7 @@ export function MallPricingPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="商城定价"
         description={<>商品 = 装备全量变体（清单来自生成物，不归这里管）；特殊价行动态增删，未定价的商品走统一价。
             客户端购买以服务端复核价为准（对接等后续 issue）。</>}
@@ -262,7 +262,7 @@ export function MallPricingPage() {
       </Card>
 
       {editing ? (
-                <Modal
+        <Modal
           open
           title={<>设置特殊价 · {editing.id}</>}
           hint={<>{editing.label}。特殊价只影响这一件商品（品质变体各自定价）；「回统一价」在列表行操作里。</>}

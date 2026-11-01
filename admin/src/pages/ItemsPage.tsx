@@ -95,7 +95,7 @@ export function ItemsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="物品配置"
         description={<>只收材料与其他大类（装备 / 药品各有自己的配置页）；id 清单固定（被掉落表与脚本引用），
             只可编辑、不可新增 / 删除；大类与等级需求不开放编辑。商城售价归「商城定价」管理，不在这里。</>}

@@ -87,7 +87,7 @@ function FashionEditDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={<>编辑时装 · {initial.id}</>}
       hint={<>图标 / 内观 / 外观资源路径不可改（外观资源仍在客户端）。获得渠道语义与称号一致；
@@ -206,7 +206,7 @@ export function FashionsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="时装配置"
         description={<>id 清单固定（configs/fashionClothes 的 20 套），只可编辑、不可新增 / 删除；图标与外观资源路径不开放编辑。
             获得渠道 seed 默认「无法获取」，由运营逐个开放；属性 seed 全 0，可按运营需要调整。</>}

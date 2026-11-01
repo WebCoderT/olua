@@ -85,7 +85,7 @@ export function NpcsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="NPC 配置"
         description={<>id 清单固定（被 Tiled 地图对象组引用），只可编辑、不可新增 / 删除；外观资源与点击行为是表现层配置，不进服务端。
             对话文案在客户端暂无数据形态，先在这里维护。</>}
@@ -156,7 +156,7 @@ export function NpcsPage() {
       </Card>
 
       {form ? (
-                <Modal
+        <Modal
           open
           title={<>编辑 NPC · {editing?.id}</>}
           hint="部分更新：只提交下方字段；对话文案传空串 = 清空。"

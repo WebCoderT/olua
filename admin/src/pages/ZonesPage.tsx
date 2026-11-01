@@ -91,7 +91,7 @@ export function ZonesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="区服管理"
         description="区是账号归属（注册时选定）；世界怪物按区独立播种。合并把源区整体搬进目标区，玩家自己换不了区。"
       />

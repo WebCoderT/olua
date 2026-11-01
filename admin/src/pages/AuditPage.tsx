@@ -151,7 +151,7 @@ export function AuditPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="操作日志"
         description={<>管理端的<strong className="text-slate-400">写</strong>操作自动留痕（读接口不记，否则一页列表就能把日志刷满）。口令一类字段落库前已打码；日志超过上限时自动清理最旧的。</>}
       />
@@ -222,7 +222,7 @@ export function AuditPage() {
               <Input type="datetime-local" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} />
             </Field>
           <div className="min-w-[180px] flex-1">
-            <Field width="w-40" label="目标 id">
+            <Field label="目标 id">
               <Input
                 value={draft.targetId}
                 placeholder="精确匹配某条记录的 id"

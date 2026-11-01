@@ -190,14 +190,27 @@ function SkillEditDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
-      title={<>编辑技能 · {initial.id}
-          <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span></>}
-      hint={<>归属与 id 是行身份，不可改。保存后随配置快照下发客户端，实时进程最多 1 秒后用新值
-          （角色技能由本机施法读，怪物技能由服务端 AI 释放读）。</>}
+      title={
+        <>
+          编辑技能 · {initial.id}
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            {SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属
+          </span>
+        </>
+      }
+      hint={
+        <>
+          归属与 id 是行身份，不可改。保存后随配置快照下发客户端，实时进程最多 1 秒后用新值
+          （角色技能由本机施法读，怪物技能由服务端 AI 释放读）。
+        </>
+      }
       size="lg"
       onClose={onCancel}
+      footer={
+        <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
+      }
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="技能名">
@@ -300,27 +313,29 @@ function SkillEditDialog({
           {form.coefficients.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
               <span className="w-12 shrink-0 text-xs text-slate-500">Lv.{index + 1}</span>
-              <Select
-                className="w-32"
-                value={entry.baseType}
-                onChange={(event) => setCoefficient(index, { baseType: event.target.value })}
-              >
-                {DAMAGE_BASE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
+              <div className="w-32">
+                <Select
+                  value={entry.baseType}
+                  onChange={(event) => setCoefficient(index, { baseType: event.target.value })}
+                >
+                  {DAMAGE_BASE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
               <span className="text-xs text-slate-600">×</span>
-              <Input
-                type="number"
-                min={0}
-                step={0.05}
-                className="w-24"
-                aria-label={`第 ${index + 1} 级倍率`}
-                value={entry.baseTypeRate}
-                onChange={(event) => setCoefficient(index, { baseTypeRate: Number(event.target.value) || 0 })}
-              />
+              <div className="w-24">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.05}
+                  aria-label={`第 ${index + 1} 级倍率`}
+                  value={entry.baseTypeRate}
+                  onChange={(event) => setCoefficient(index, { baseTypeRate: Number(event.target.value) || 0 })}
+                />
+              </div>
               <Button
                 variant="ghost"
                 className="px-2 py-1 text-xs text-rose-300"
@@ -334,7 +349,6 @@ function SkillEditDialog({
       </div>
       <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
       <ProblemList problems={problems} />
-      <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
     </Modal>
   );
 }
@@ -423,13 +437,26 @@ function SkillCreateDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title="新增怪物技能"
-      hint={<>只能建怪物技能（9000 段）：角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在客户端配置里。
-          建完要去「怪物配置」把它挂到具体的怪，服务端 AI 才会释放。</>}
+      hint={
+        <>
+          只能建怪物技能（9000 段）：角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在客户端配置里。
+          建完要去「怪物配置」把它挂到具体的怪，服务端 AI 才会释放。
+        </>
+      }
       size="md"
       onClose={onCancel}
+      footer={
+        <FormFooter
+          submitting={submitting}
+          canSubmit={problems.length === 0 && !submitting}
+          onCancel={onCancel}
+          onSubmit={() => void submit()}
+          label="创建"
+        />
+      }
     >
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="id" hint="9000~9999">
@@ -486,13 +513,6 @@ function SkillCreateDialog({
         </Field>
       </div>
       <ProblemList problems={problems} tone="amber" />
-      <FormFooter
-        submitting={submitting}
-        canSubmit={problems.length === 0 && !submitting}
-        onCancel={onCancel}
-        onSubmit={() => void submit()}
-        label="创建"
-      />
     </Modal>
   );
 }
@@ -623,7 +643,7 @@ export function SkillsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="技能配置"
         description={<>角色与怪物同一张表（归属区分）。角色技能只可编辑；怪物技能（9000 段）可新增 / 删除，
             新建后要在「怪物配置」里挂到具体的怪才会被释放。保存后随配置快照下发客户端 ——

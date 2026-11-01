@@ -70,7 +70,7 @@ function MonsterEditDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={<>编辑怪物 · {initial.id}</>}
       hint={<>定位 {TIER_LABELS[initial.tier] ?? initial.tier}（不可改）。改完即时生效：世界播种与伤害结算直读 monsters 表；
@@ -204,7 +204,7 @@ function MonsterSkillsDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={<>技能挂载 · {monster.label}</>}
       hint={<>服务端 AI 先用状态型（强化自身），再用伤害型；同类型内按优先级升序，同优先级按技能 id。
@@ -239,22 +239,24 @@ function MonsterSkillsDialog({
                 </span>
                 <label className="flex items-center gap-1 text-xs text-slate-400">
                   优先级
-                  <Input
-                    className="w-16"
-                    aria-label={`${row.skillId} 优先级`}
-                    value={row.priority}
-                    onChange={(event) => setRows(rows.map((entry, i) => (i === index ? { ...entry, priority: event.target.value } : entry)))}
-                  />
+                  <div className="w-16">
+                    <Input
+                      aria-label={`${row.skillId} 优先级`}
+                      value={row.priority}
+                      onChange={(event) => setRows(rows.map((entry, i) => (i === index ? { ...entry, priority: event.target.value } : entry)))}
+                    />
+                  </div>
                 </label>
                 <label className="flex items-center gap-1 text-xs text-slate-400">
                   冷却
-                  <Input
-                    className="w-20"
-                    placeholder="跟技能"
-                    aria-label={`${row.skillId} 冷却`}
-                    value={row.cooldown}
-                    onChange={(event) => setRows(rows.map((entry, i) => (i === index ? { ...entry, cooldown: event.target.value } : entry)))}
-                  />
+                  <div className="w-20">
+                    <Input
+                      placeholder="跟技能"
+                      aria-label={`${row.skillId} 冷却`}
+                      value={row.cooldown}
+                      onChange={(event) => setRows(rows.map((entry, i) => (i === index ? { ...entry, cooldown: event.target.value } : entry)))}
+                    />
+                  </div>
                 </label>
                 <Button
                   variant="ghost"
@@ -372,7 +374,7 @@ export function MonstersPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="怪物配置"
         description={<>key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除；定位不开放编辑。
             改名称与战斗数值即时生效（世界播种与伤害结算直读 monsters 表）。掉落表归「掉落配置」管理。</>}

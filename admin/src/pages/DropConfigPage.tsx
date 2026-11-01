@@ -97,12 +97,12 @@ function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onChange: (
               />
               <span className="mt-0.5 block truncate text-[10px] text-slate-500">{itemText(draft.goodId)}</span>
             </div>
-            <Input type="number" min={0} step="0.01" className="w-20" aria-label="权重" value={draft.weight} onChange={(event) => update(index, { weight: event.target.value })} />
-            <Input type="number" min={0} max={1} step="0.01" className="w-20" aria-label="概率" value={draft.chance} onChange={(event) => update(index, { chance: event.target.value })} />
+            <div className="w-20"><Input type="number" min={0} step="0.01"  aria-label="权重" value={draft.weight} onChange={(event) => update(index, { weight: event.target.value })} /></div>
+            <div className="w-20"><Input type="number" min={0} max={1} step="0.01"  aria-label="概率" value={draft.chance} onChange={(event) => update(index, { chance: event.target.value })} /></div>
             <div className="flex items-center gap-1">
-              <Input type="number" min={0} className="w-16" aria-label="数量下限" value={draft.countMin} onChange={(event) => update(index, { countMin: event.target.value })} />
+              <div className="w-16"><Input type="number" min={0}  aria-label="数量下限" value={draft.countMin} onChange={(event) => update(index, { countMin: event.target.value })} /></div>
               <span className="text-xs text-slate-600">~</span>
-              <Input type="number" min={0} className="w-16" aria-label="数量上限" value={draft.countMax} onChange={(event) => update(index, { countMax: event.target.value })} />
+              <div className="w-16"><Input type="number" min={0}  aria-label="数量上限" value={draft.countMax} onChange={(event) => update(index, { countMax: event.target.value })} /></div>
             </div>
             <Button variant="outline" className="px-2 py-1 text-xs" disabled={drafts.length <= 1} onClick={() => remove(index)}>
               删
@@ -119,10 +119,10 @@ function PicksEditor({ draft, onChange }: { draft: PicksDraft; onChange: (next: 
   return (
     <div className="flex items-end gap-2">
       <Field label="抽取件数下限">
-        <Input type="number" min={1} className="w-24" value={draft.min} onChange={(event) => onChange({ ...draft, min: event.target.value })} />
+        <div className="w-24"><Input type="number" min={1}  value={draft.min} onChange={(event) => onChange({ ...draft, min: event.target.value })} /></div>
       </Field>
       <Field label="上限（留空 = 固定）">
-        <Input type="number" min={1} className="w-24" value={draft.max} onChange={(event) => onChange({ ...draft, max: event.target.value })} />
+        <div className="w-24"><Input type="number" min={1}  value={draft.max} onChange={(event) => onChange({ ...draft, max: event.target.value })} /></div>
       </Field>
     </div>
   );
@@ -172,7 +172,7 @@ function DropTableDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={<>{creating ? "新建具名掉落表" : `编辑具名掉落表 · ${initial?.id}`}</>}
       hint="表可被多只怪复用；被引用中的表不能删。改表即时生效（服务端掉落结算直读表）。"
@@ -267,7 +267,7 @@ function MonsterDropDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={<>编辑怪物掉落 · key {initial.monsterKey}</>}
       hint="整份替换：引用具名表 / 内联条目池 / 清空走兜底，三选一。改完即时生效。"
@@ -444,7 +444,7 @@ export function DropConfigPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="掉落配置"
         description={<>具名掉落表可被多怪复用（可新建 / 删除，被引用中的拒绝删）；每怪掉落与怪物一一对应，只可整份替换
             （引用具名表 / 内联条目池 / 清空走兜底）。改完即时生效（服务端掉落结算直读表，无需客户端更新）。</>}

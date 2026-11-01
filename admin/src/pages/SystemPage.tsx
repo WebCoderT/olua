@@ -74,7 +74,7 @@ export function SystemPage() {
 
   return (
     <div className="flex flex-col gap-5">
-            <PageHeader
+      <PageHeader
         title="系统信息"
         description={<>采集于 {formatTimeFull(info.time)} · 只读页面，每次打开实时读一次</>}
         actions={<>

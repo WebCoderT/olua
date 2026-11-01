@@ -216,14 +216,15 @@ function CellEditor({
           ) : null}
           <label className="flex items-center gap-2 text-xs text-slate-400">
             数量
-            <Input
-              className="w-24"
-              inputMode="numeric"
-              value={count}
-              aria-label="数量"
-              disabled={!id}
-              onChange={(event) => setCount(event.target.value.replace(/[^\d]/g, ""))}
-            />
+            <div className="w-24">
+              <Input
+                inputMode="numeric"
+                value={count}
+                aria-label="数量"
+                disabled={!id}
+                onChange={(event) => setCount(event.target.value.replace(/[^\d]/g, ""))}
+              />
+            </div>
           </label>
           <Button variant="outline" disabled={disabled || !cell} onClick={() => onSubmit("", 0)} title="把这一格清空">
             清空格子

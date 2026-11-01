@@ -103,7 +103,7 @@ export function GrowthPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="成长曲线"
         description={<>升级经验、角色裸属性曲线与经验节奏收口到后台（#256）。三类数据都只可编辑、不可新增 / 删除；
             改曲线会连锁影响军衔等效强度（军衔按阶映射角色等级再打折）与怪物数值。</>}
@@ -434,7 +434,7 @@ function NumberEditDialog(props: {
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={title}
       hint={hint}

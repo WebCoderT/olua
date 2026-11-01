@@ -533,13 +533,14 @@ export function EquipInAlignPage() {
       {/* 顶部：资源根 + 基准 + 保存 */}
       <Card dense>
         <div className="flex flex-wrap items-end gap-2">
-        <Field width="w-40" label="资源根（指向游戏站的 resources）">
-          <Input
-            className="w-64"
-            value={prefs.resRoot}
-            onChange={(event) => setPrefs((prev) => ({ ...prev, resRoot: event.target.value }))}
-            placeholder="/game-resources"
-          />
+        <Field label="资源根（指向游戏站的 resources）">
+          <div className="w-64">
+            <Input
+              value={prefs.resRoot}
+              onChange={(event) => setPrefs((prev) => ({ ...prev, resRoot: event.target.value }))}
+              placeholder="/game-resources"
+            />
+          </div>
         </Field>
         <Field width="w-40" label="衣服基准">
           <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">

@@ -69,7 +69,7 @@ function EquipmentEditDialog({
   };
 
   return (
-        <Modal
+    <Modal
       open
       title={<>编辑装备 · {initial.id}</>}
       hint={<>部位 {slotLabel(initial.slot)} · 名称「{initial.label}」（文案与部位不可改）。变体属性 = 这里的基础属性 × 前后缀倍率，改基础件即改全部 15 个变体。</>}
@@ -189,7 +189,7 @@ export function EquipmentsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="装备配置"
         description={<>只收基础件（普通的·人级），变体是基础件乘前后缀倍率展开的 —— 改基础件即改全部 15 个变体。
             id / 部位结构固定，只可编辑、不可新增 / 删除；商城售价归「商城定价」管理，不在这里。</>}

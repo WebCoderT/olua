@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableCl
 import { Pagination } from "../components/Pagination";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 
 /** 分类的中文名（与 achievement-data 的 category 同值） */
@@ -222,10 +223,9 @@ export function AchievementsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="成就配置"
-        description={<>seed 自客户端 <code>configs/achievement-data</code>，可动态增删。累计型（击杀 / 交付任务）的进度由事件流记账；
-            状态型（等级 / 战力 / 持有物品）每次查询按角色当前状态现算 —— 改状态型的门槛会**立刻**改变所有人的达成状态。</>}
+        description={<>seed 自客户端 <code>configs/achievement-data</code>，可动态增删；状态型条件的门槛一改，所有人的达成状态立刻变。</>}
         actions={<>
           <Button
             disabled={!canWrite}
@@ -267,113 +267,119 @@ export function AchievementsPage() {
       </Card>
 
       {form ? (
-        <Card
+        <Modal
+          open
+          size="lg"
           title={creating ? "新建成就" : `编辑成就：${form.id}`}
-          description={
+          hint={
             cumulative
               ? "累计型条件：进度由事件流 +1 记账，改门槛只影响「还要再做多少次」。"
               : "状态型条件：进度按角色当前状态现算，改门槛会立刻改变所有人的达成状态。"
           }
-          actions={saving ? <Spinner /> : null}
-        >
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="成就 id" hint={creating ? "语义串，如 ach_kill_10（创建后不可改）" : "主键，不可修改"}>
-              <Input
-                value={form.id}
-                disabled={!creating}
-                placeholder="ach_kill_10"
-                onChange={(event) => setForm({ ...form, id: event.target.value })}
-              />
-            </Field>
-            <Field label="分类">
-              <Select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as Category })}>
-                <option value="battle">战斗</option>
-                <option value="growth">成长</option>
-                <option value="explore">探索</option>
-              </Select>
-            </Field>
-            <Field label="名称">
-              <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
-            </Field>
-            <Field label="分类内顺序" hint="小的在前">
-              <Input
-                type="number"
-                value={form.sortOrder}
-                onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) || 0 })}
-              />
-            </Field>
-            <div className="md:col-span-2">
-              <Field label="描述" hint="达成条件的人话说明（客户端成就墙显示）">
-                <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-              </Field>
-            </div>
-            <Field label="条件类型">
-              <Select
-                value={form.conditionType}
-                onChange={(event) => setForm({ ...form, conditionType: event.target.value as ConditionType })}
+          onClose={() => {
+            setForm(null);
+            setCreating(false);
+          }}
+          footer={
+            <>
+              <Button disabled={!canWrite} loading={saving} onClick={() => void save()}>
+                保存
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setForm(null);
+                  setCreating(false);
+                }}
               >
-                <option value="kill">累计击杀（事件）</option>
-                <option value="quest">累计交付任务（事件）</option>
-                <option value="level">等级达到（现算）</option>
-                <option value="combat">战力达到（现算）</option>
-                <option value="collect">持有物品（现算）</option>
-              </Select>
+                取消
+              </Button>
+            </>
+          }
+        >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Field label="成就 id" hint={creating ? "语义串，如 ach_kill_10（创建后不可改）" : "主键，不可修改"}>
+            <Input
+              value={form.id}
+              disabled={!creating}
+              placeholder="ach_kill_10"
+              onChange={(event) => setForm({ ...form, id: event.target.value })}
+            />
+          </Field>
+          <Field label="分类">
+            <Select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as Category })}>
+              <option value="battle">战斗</option>
+              <option value="growth">成长</option>
+              <option value="explore">探索</option>
+            </Select>
+          </Field>
+          <Field label="名称">
+            <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+          </Field>
+          <Field label="分类内顺序" hint="小的在前">
+            <Input
+              type="number"
+              value={form.sortOrder}
+              onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) || 0 })}
+            />
+          </Field>
+          <div className="md:col-span-2">
+            <Field label="描述" hint="达成条件的人话说明（客户端成就墙显示）">
+              <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
             </Field>
-            <Field
-              label="条件目标"
-              hint={
-                form.conditionType === "kill"
-                  ? "怪物 key，或 * 表示任意怪"
-                  : form.conditionType === "collect"
-                    ? "物品 id"
-                    : "这两类不看目标，留空即可"
-              }
-            >
-              <Input
-                value={form.conditionTarget}
-                onChange={(event) => setForm({ ...form, conditionTarget: event.target.value })}
-              />
-            </Field>
-            <Field label="门槛值" hint={cumulative ? "需要累计多少次" : "需要达到多少"}>
-              <Input
-                type="number"
-                value={form.conditionCount}
-                onChange={(event) => setForm({ ...form, conditionCount: Number(event.target.value) || 1 })}
-              />
-            </Field>
-            <Field label="未达成时隐藏" hint="客户端折叠、不剧透条件">
-              <Select value={form.hidden ? "1" : "0"} onChange={(event) => setForm({ ...form, hidden: event.target.value === "1" })}>
-                <option value="0">不隐藏</option>
-                <option value="1">隐藏</option>
-              </Select>
-            </Field>
-            <Field label="奖励金币">
-              <Input type="number" value={form.gold} onChange={(event) => setForm({ ...form, gold: Number(event.target.value) || 0 })} />
-            </Field>
-            <Field label="奖励经验">
-              <Input type="number" value={form.exp} onChange={(event) => setForm({ ...form, exp: Number(event.target.value) || 0 })} />
-            </Field>
-            <div className="md:col-span-2">
-              <Field label="奖励物品" hint="格式：material_iron:2, material_gem:1（留空表示不给物品）">
-                <Input value={form.itemsText} onChange={(event) => setForm({ ...form, itemsText: event.target.value })} />
-              </Field>
-            </div>
           </div>
-          <div className="mt-4 flex gap-2">
-            <Button disabled={saving || !canWrite} onClick={() => void save()}>
-              保存
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setForm(null);
-                setCreating(false);
-              }}
+          <Field label="条件类型">
+            <Select
+              value={form.conditionType}
+              onChange={(event) => setForm({ ...form, conditionType: event.target.value as ConditionType })}
             >
-              取消
-            </Button>
+              <option value="kill">累计击杀（事件）</option>
+              <option value="quest">累计交付任务（事件）</option>
+              <option value="level">等级达到（现算）</option>
+              <option value="combat">战力达到（现算）</option>
+              <option value="collect">持有物品（现算）</option>
+            </Select>
+          </Field>
+          <Field
+            label="条件目标"
+            hint={
+              form.conditionType === "kill"
+                ? "怪物 key，或 * 表示任意怪"
+                : form.conditionType === "collect"
+                  ? "物品 id"
+                  : "这两类不看目标，留空即可"
+            }
+          >
+            <Input
+              value={form.conditionTarget}
+              onChange={(event) => setForm({ ...form, conditionTarget: event.target.value })}
+            />
+          </Field>
+          <Field label="门槛值" hint={cumulative ? "需要累计多少次" : "需要达到多少"}>
+            <Input
+              type="number"
+              value={form.conditionCount}
+              onChange={(event) => setForm({ ...form, conditionCount: Number(event.target.value) || 1 })}
+            />
+          </Field>
+          <Field label="未达成时隐藏" hint="客户端折叠、不剧透条件">
+            <Select value={form.hidden ? "1" : "0"} onChange={(event) => setForm({ ...form, hidden: event.target.value === "1" })}>
+              <option value="0">不隐藏</option>
+              <option value="1">隐藏</option>
+            </Select>
+          </Field>
+          <Field label="奖励金币">
+            <Input type="number" value={form.gold} onChange={(event) => setForm({ ...form, gold: Number(event.target.value) || 0 })} />
+          </Field>
+          <Field label="奖励经验">
+            <Input type="number" value={form.exp} onChange={(event) => setForm({ ...form, exp: Number(event.target.value) || 0 })} />
+          </Field>
+          <div className="md:col-span-2">
+            <Field label="奖励物品" hint="格式：material_iron:2, material_gem:1（留空表示不给物品）">
+              <Input value={form.itemsText} onChange={(event) => setForm({ ...form, itemsText: event.target.value })} />
+            </Field>
           </div>
-        </Card>
+        </div>        </Modal>
       ) : null}
 
       <Card

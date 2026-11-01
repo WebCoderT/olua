@@ -89,7 +89,7 @@ export function SoulsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-            <PageHeader
+      <PageHeader
         title="战魂配置"
         description={<>阶数序列固定（1..37），只可编辑、不可新增 / 删除；属性加成随阶递增。
             升级消耗在「战魂成长列表」弹窗里显示和修改。</>}

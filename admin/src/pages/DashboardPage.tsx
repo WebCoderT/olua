@@ -64,7 +64,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-            <PageHeader
+      <PageHeader
         title="概览"
         description="数据实时来自服务端；封禁、改角色等操作在对应页面进行。"
         actions={<>
