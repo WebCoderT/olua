@@ -30,7 +30,8 @@
  *      「图集优先、散帧兜底」，两者全缺 = 该外观整片空白。
  *   4. 服务端快照核对（管理端 / DB 数据层）：configs → gen-shared-data → 快照 →
  *      DB seed 是管理端数据的来路；快照里带资源路径的字段（FASHIONS 的 icon/in/out、
- *      MONSTERS 的 key 拼外观路径）必须同样命中磁盘——客户端 configs 被上面三层守住，
+ *      怪物表现清单 monster-presentation.generated 的 out 路径，#588 起怪物资源
+ *      不进快照生成物）必须同样命中磁盘——客户端 configs 被上面三层守住，
  *      这一层守服务端与管理端口径，资源换版时管理端数据不会悄悄断链。
  *
  * 不查什么：resources 里存在但代码没引用的素材（噪音大，增删素材不等于要改代码）；
@@ -311,9 +312,17 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
     }
   }
 
-  const monsters = grabRecord("MONSTERS");
-  if (monsters) {
-    for (const key of Object.keys(monsters)) {
+  // #588 起怪物资源表现（icon/out/几何）住在独立生成物里，不在快照生成物中 ——
+  // 每行的 out 直接内嵌 key（`out: "monster/out/<id>"`），从它取 key 逐一核对磁盘。
+  // 清单存在但一条都解析不出来 = 生成物形状变了，必须报红而不是静默跳过。
+  const MONSTER_PRESENTATION_FILE = path.join(ROOT, "server", "src", "shared", "monster-presentation.generated.ts");
+  if (fs.existsSync(MONSTER_PRESENTATION_FILE)) {
+    const presentation = fs.readFileSync(MONSTER_PRESENTATION_FILE, "utf8");
+    const monsterKeys = Array.from(presentation.matchAll(/out: "monster\/out\/([^"]+)"/g), (m) => m[1]);
+    if (monsterKeys.length === 0) {
+      failures.push(`怪物表现清单解析不到任何 out 路径（monster-presentation.generated.ts 形状变了？）`);
+    }
+    for (const key of monsterKeys) {
       // 怪物外观：monster/out/<key> 目录里的图集 plist（#542 起图集就在目录里，
       // plist 在动作子目录中，任意深度命中即算有图集）或散帧
       if (dirExists(`monster/out/${key}`)) {
@@ -328,7 +337,7 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
           continue;
         }
       }
-      failures.push(`快照怪物外观断链：MONSTERS key=${key}（monster/out 无内容，客户端按 key 拼外观路径）`);
+      failures.push(`怪物表现断链：monster/out key=${key}（monster/out 无内容，客户端按 key 拼外观路径）`);
     }
   }
 }

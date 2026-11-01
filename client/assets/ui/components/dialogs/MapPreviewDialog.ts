@@ -1,6 +1,6 @@
 import { EventMouse, EventTouch, Graphics, isValid, Node, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
 import { mapLabelOf, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/map";
-import { monsters } from "../../../configs/monster";
+import { monsterLabelOf, monsterResource } from "../../../configs/monsterRuntime";
 import { npcs } from "../../../configs/npc";
 import { mapPreviewImage, mapPreviewDialogLayout } from "../../../configs/hudLayout";
 import { smallMapConfig } from "../../../configs/smallMap";
@@ -177,14 +177,14 @@ export default class MapPreviewDialog {
       markerLayer.addChild(GameUiHelper.createText(`npc_name_${object.name || npc.id}`, npc.label, marker.npcLabelFontSize, labelPosition, marker.labelSize, marker.npcLabelColor));
     });
     GameUiHelper.drawSmallMapDots(markerLayer.addComponent(Graphics), npcDots);
-    // 刷怪区中心的怪物名称
+    // 刷怪区中心的怪物名称（#588：数值走运行时表，快照没到或缺行显示 key）
     getTiledObjects(map, tiledGroupNames.monster).forEach((object) => {
       if (object.width <= 0 || object.height <= 0) return;
-      const monster = monsters.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
-      if (!monster) return;
+      const key = `${object.properties[tiledPropertyNames.id] ?? ""}`;
+      if (!monsterResource.has(key)) return;
       const center = mapRectCenterToWorld(object.x, object.y, object.width, object.height);
       const local = toPreview(center.x, center.y);
-      markerLayer.addChild(GameUiHelper.createText(`monster_area_name_${object.name || monster.label}`, monster.label, marker.monsterLabelFontSize, local, marker.labelSize, marker.monsterLabelColor));
+      markerLayer.addChild(GameUiHelper.createText(`monster_area_name_${object.name || key}`, monsterLabelOf(key), marker.monsterLabelFontSize, local, marker.labelSize, marker.monsterLabelColor));
     });
   }
 

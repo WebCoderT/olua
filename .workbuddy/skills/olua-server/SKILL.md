@@ -186,7 +186,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   `GET /admin/monster-drops`（列表）/ `GET /admin/monster-drops/:monsterKey`（单条，弹窗回填，#584）/
   `PATCH /admin/monster-drops/:monsterKey`（**唯一写入路径**，三选一）；`GET /admin/monsters` 每行带 `drop` 摘要
   （`AdminMonsterDto`），**玩家侧快照只下发 `MonsterDto`、不带摘要** —— 客户端不结算掉落。**不在范围**：时装（`configs/fashionClothes`
-  整份被注释，没有活的来源 —— 不凭空造一份）。怪物战斗数值已进快照（#34，MONSTER_COMBAT）；怪物实例
+  整份被注释，没有活的来源 —— 不凭空造一份）。怪物数值服务端独有（#588：出厂数值 = `server/src/shared/monster-seed.ts` 四元组 + 曲线展开，进 `monsters` 表随快照下发；资源表现 = `monster-presentation.generated.ts` 随快照 `monsterPresentations` 段下发，客户端 configs/monster 只剩 monsterAI 等全局常量）；怪物实例
   属世界权威（#35，服务端读 `map_spawn_areas` 播种、tick 重生、状态落盘；#581 删掉了客户端进图自己刷的那条路）。
 - 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，

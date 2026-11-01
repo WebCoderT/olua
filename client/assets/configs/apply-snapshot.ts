@@ -15,6 +15,7 @@ import type {
   MapConfig as MapConfigRow,
   MapTypeGroup as MapTypeGroupRow,
   Monster as MonsterRow,
+  MonsterPresentation as MonsterPresentationRow,
   Npc as NpcRow,
   Quest as QuestRow,
   Rank,
@@ -38,7 +39,7 @@ import { attributeRange, equipmentPrefixRates, equipmentRecyclePrice, equipmentS
 import { expGain, levelMap, rebuildLevelMap } from "./level";
 import { items } from "./items";
 import { drugs } from "./drug";
-import { monsters } from "./monster";
+import { applyMonsterPresentation, applyMonsterRuntimeStats } from "./monsterRuntime";
 import { npcData } from "./npc-data";
 import { questData } from "./quest-data";
 import type { QuestData } from "./quest-data";
@@ -52,6 +53,7 @@ import { SkillData, SkillTargetType, SkillType } from "../types/skill";
 import { OECCUPATION, SEX } from "../types/role";
 import { StatusConfig, StatusSource } from "../types/status";
 import type { ACTION } from "../types/animation";
+import type { MonsterRuntimeStats } from "../types/monster";
 
 /**
  * 服务端配置快照落库（#294 / #361 / #363）
@@ -319,27 +321,37 @@ export function applyItemRows(rows: ItemRow[]): void {
 }
 
 /**
- * 覆写怪物基础数据（名称 / 等级 / 生命 / 六项攻防）
+ * 怪物数值落表（#588：**不再覆写本地副本** —— 客户端 configs/monster 没有怪物数据了）
  *
- * 数值来源是服务端的展开值（管理端改的是 maxHp 与区间本身，不是曲线参数），
- * 所以直接写死字段而不是重算 monsterStats —— 重算会在「管理端给某只怪单独调高血量」时把它抹回去。
- * 外观（icon / out / 几何 / 移动速度 / AI）不覆写。
+ * 数值唯一来源是服务端 monsters 表，快照整段写入 configs/monsterRuntime 的运行时数值表；
+ * 消费点（MonsterManager / 血条 / 名牌 / 地图预览 / 任务文案）从那里取。
+ * 表里没有的 key 不落行 —— 缺行的退化口径（名字 = key、攻防 [0,0]）由 monsterRuntime 统一给。
  */
 export function applyMonsterRows(rows: MonsterRow[]): void {
   rows.forEach((row) => {
-    const config = monsters.get(row.id);
-    if (!config) return;
     const range = (source: { min: number; max: number }): [number, number] => [source.min, source.max];
-    config.label = row.label;
-    config.level = row.level;
-    config.maxHp = row.maxHp;
-    config.physicalAttack = range(row.attributes.physicalAttack);
-    config.magicAttack = range(row.attributes.magicAttack);
-    config.taoistAttack = range(row.attributes.taoistAttack);
-    config.physicalDefense = range(row.attributes.physicalDefense);
-    config.magicDefense = range(row.attributes.magicDefense);
-    config.taoistDefense = range(row.attributes.taoistDefense);
+    applyMonsterRuntimeStats(row.id, {
+      label: row.label,
+      level: row.level,
+      tier: (row.tier ?? "normal") as MonsterRuntimeStats["tier"],
+      maxHp: row.maxHp,
+      physicalAttack: range(row.attributes.physicalAttack),
+      magicAttack: range(row.attributes.magicAttack),
+      taoistAttack: range(row.attributes.taoistAttack),
+      physicalDefense: range(row.attributes.physicalDefense),
+      magicDefense: range(row.attributes.magicDefense),
+      taoistDefense: range(row.attributes.taoistDefense),
+    });
   });
+}
+
+/**
+ * 怪物资源与表现落表（#588 新增）：快照 monsterPresentations 段 → 运行时资源表。
+ * 与数值一一对应（同一份 key 清单，服务端生成器双向对账过）；speedRate 覆盖在这里
+ * 与客户端默认表合成（见 monsterRuntime.applyMonsterPresentation）。
+ */
+export function applyMonsterPresentations(rows: MonsterPresentationRow[]): void {
+  rows.forEach((row) => applyMonsterPresentation(row.id, row));
 }
 
 /**
@@ -540,6 +552,8 @@ export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   if (snapshot.drugs) applyDrugRows(snapshot.drugs);
   if (snapshot.items) applyItemRows(snapshot.items);
   if (snapshot.monsters) applyMonsterRows(snapshot.monsters);
+  // #588：怪物资源与表现（icon / out / 几何 / 移动 / AI 参数）—— 客户端没有本地怪物数据文件
+  if (snapshot.monsterPresentations) applyMonsterPresentations(snapshot.monsterPresentations);
   if (snapshot.npcs) applyNpcRows(snapshot.npcs);
   if (snapshot.quests) applyQuestRows(snapshot.quests);
   if (snapshot.fashions) applyFashionRows(snapshot.fashions);

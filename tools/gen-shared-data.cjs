@@ -42,8 +42,9 @@
  * 不在范围内（以及为什么）
  * ===========================================================================
  * - ~~怪物 / NPC~~：**#34 / #258 起已纳入**——实测 `configs/monster` 在 cc 垫片（Vec2/Size/Vec3/Color）下
- *   能干净编译加载（此前记的「依赖 UI 模块」已不成立），战斗数值按
- *   「monsterStats(level, tier) 打底 + 条目覆盖」展开后进快照（`MONSTERS`，#258 起带名称）；
+ *   能干净编译加载（此前记的「依赖 UI 模块」已不成立）。**#588 起快照只带表现 / AI 参数**
+ *   （icon / aggressive / detectRange / moveSpeed，`MONSTER_PRESENTATION`）——数值（label / level /
+ *   maxHp / 六项）的唯一来源改服务端 `monster-seed.ts` + `monsters` 表，快照不再带；
  *   NPC 走 `configs/npc-data`（**数据与行为分家**：原 npc.ts 引 UI 弹窗链，Node 加载会炸 ——
  *   实证 `Pointer.js` 的 `sys.hasFeature` 即炸，onClick 接线留在 npc.ts），快照只有 id / label。
  * - ~~时装~~：**#257 起已纳入**——`configs/fashionClothes` 恢复为纯数据文件（原整份注释、
@@ -59,6 +60,24 @@ const path = require("node:path");
 const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
 
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
+
+/**
+ * 怪物 key 清单（#588）：从服务端出厂数值种子（monster-seed.ts）解析。
+ *
+ * 客户端 configs/monster 不再有怪物条目（资源与表现是服务端 monster-presentation.generated，
+ * 数值在种子 + monsters 表），所以技能挂载 / 掉落表 / 成就击杀目标的「key 是否存在」校验
+ * 改用这份清单 —— key 的权威清单在服务端种子，客户端只是消费方。
+ */
+const MONSTER_SEED_KEYS = (() => {
+  const src = fs.readFileSync(path.join(ROOT, "server", "src", "shared", "monster-seed.ts"), "utf8");
+  const block = src.slice(src.indexOf("export const MONSTER_SEED_ROWS"), src.indexOf("\n];", src.indexOf("export const MONSTER_SEED_ROWS")));
+  const keys = new Set();
+  let m;
+  const re = /\{ id: "([^"]+)", label: "[^"]*", level: \d+, tier: "(\w+)" \}/g;
+  while ((m = re.exec(block))) keys.add(m[1]);
+  if (keys.size === 0) throw new Error("monster-seed.ts 里一行种子都没解析到（形状变了？）");
+  return keys;
+})();
 
 /**
  * 参与生成的客户端配置（**唯一来源**；顺序只影响编译，不影响产物）
@@ -101,7 +120,7 @@ function main() {
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
   console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
-  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 职业 ${count(snapshot.occupationLabels)} 个 · 怪物 ${count(snapshot.monsters)} 只 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
+  console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 职业 ${count(snapshot.occupationLabels)} 个 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
   console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
   cleanupWork(work);
 }
@@ -127,8 +146,9 @@ function load(cfg) {
     // 建号初始货币（#548）：服务端 create 拿它当上界（客户端 `new Role(...)` 里那三个常量）
     roleInitialCurrency: pickRoleInitialCurrency(missing("role", cfg("role"))),
     items: missing("items", cfg("items").items),
-    monsters: missing("monster.monsters", cfg("monster").monsters),
     // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
+    // #588：怪物条目不再从客户端 configs 取 —— 数值唯一来源是服务端 monster-seed.ts，
+    // 资源与表现是 monster-presentation.generated.ts；这里只保留 monsterAI 全局节奏
     monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
     npcs: missing("npc-data.npcData", cfg("npc-data").npcData),
     // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
@@ -185,8 +205,7 @@ function buildSnapshot(cfg) {
     // 状态（#367）：角色状态的数值修正 / 时长 / 图标特效，管理端收口成可改数据
     statuses: pickStatuses(cfg.statuses),
     // 怪物技能挂载（#372）：怪物 key → 技能清单（服务端 AI 的释放依据，管理端可增删改）
-    monsterSkills: pickMonsterSkills(cfg.monsterSkills, cfg.monsters, skills),
-    monsters: pickMonsters(cfg.monsters),
+    monsterSkills: pickMonsterSkills(cfg.monsterSkills, MONSTER_SEED_KEYS, skills),
     // 怪物 AI 节奏参数（#323：服务端 AI tick 与客户端同一套手感数值）
     monsterAi: pickMonsterAi(cfg.monsterAi),
     npcs: pickNpcs(cfg.npcs),
@@ -194,7 +213,7 @@ function buildSnapshot(cfg) {
     // —— 掉落（#254：管理端可改的具名表 / 每怪表 / 兜底表）——
     dropTables: pickDropTables(cfg.dropTables),
     dropDefault: [["default", pickDropTable("default", cfg.dropDefault)]],
-    monsterDrops: pickMonsterDrops(cfg.monsterDropTables, cfg.monsters),
+    monsterDrops: pickMonsterDrops(cfg.monsterDropTables, MONSTER_SEED_KEYS),
     mallDefaultPrice: round(cfg.mallPrice ?? 0),
     // 药品（#253）：管理端「药品配置」的 seed 来源。effects 数组按键**求和**拍平 ——
     // 客户端 resolveDrugRecovery 对多项 effects 就是累加生效，求和与逐项累加等价
@@ -218,7 +237,7 @@ function buildSnapshot(cfg) {
     quests: pickQuests(cfg.questData),
     // 成就（#401）：累计型（kill / quest）走事件、状态型（level / combat / collect）查询现算，
     // 配置只声明条件与门槛；target 的引用在生成期就校验（怪物 key / 物品 id 必须真实存在）
-    achievements: pickAchievements(cfg.achievementData, cfg.monsters, cfg.items),
+    achievements: pickAchievements(cfg.achievementData, MONSTER_SEED_KEYS, cfg.items),
 
     // —— 名字与元数据（三端做界面用）——
     occupationLabels: pickOccupationLabels(cfg.occupations, TYPES_ROLE),
@@ -342,49 +361,6 @@ function pickEquipmentBases(maps) {
 }
 
 /**
- * 怪物表 → [[怪物 key, 战斗数值]]
- *
- * 与装备同一取舍：快照里放**展开后**的战斗数值（monsterStats(level, tier) 打底 + 条目覆盖
- * 已在 configs/monster 建 Map 时合成完毕），服务端不做「按等级现算」——那等于把成长曲线的
- * 口径复制出去。只留参与伤害结算的字段（maxHp + 六项攻防区间 + 等级 / 定位），
- * 外观 / 几何 / 掉落 / AI 参数都是表现或世界层，不进。
- */
-/**
- * 怪物表 → [[key, 行]]（#258 起战斗数值；#323 起补 AI 参数）
- *
- * 攻防区间**已在 configs/monster 建 Map 时合成完毕**，服务端不做「按等级现算」——
- * 那等于把成长曲线的口径复制出去。#323 起 AI 收权到服务端，`aggressive / detectRange /
- * moveSpeed` 从「表现层参数」变成「行为权威的输入」，一并进快照（几何 / 外观 / 掉落仍不进）。
- */
-function pickMonsters(monsters) {
-  const out = [];
-  const seen = new Set();
-  monsters.forEach((item, key) => {
-    if (seen.has(key)) throw new Error(`怪物 key 重复：${key}`);
-    seen.add(key);
-    const row = {
-      label: String(item.label ?? ""),
-      level: round(item.level ?? 0),
-      tier: String(item.tier ?? "normal"),
-      maxHp: round(item.maxHp ?? 0),
-      // 图标（monster/icon/<key>_00000 这类单图）：管理端列表缩略图用；外观图集（out）仍不进
-      icon: String(item.icon ?? ""),
-      // AI 参数（#323）：主动怪判定 / 检测范围 / 移动速度（服务端 tick 按它推进位置）
-      aggressive: Boolean(item.aggressive),
-      detectRange: round(item.detectRange ?? 0),
-      moveSpeed: round(item.moveSpeed ?? 0),
-    };
-    for (const key2 of RANGE_KEYS) {
-      const value = item[key2];
-      if (!Array.isArray(value) || value.length < 2) throw new Error(`怪物 ${key} 缺少区间属性 ${key2}（monsterStats 没铺到？）`);
-      row[key2] = [round(value[0]), round(value[1])];
-    }
-    out.push([key, row]);
-  });
-  return out;
-}
-
-/**
  * 怪物 AI 全局节奏参数（#323）：configs/monster 的 monsterAI 里**服务端 tick 用得到的数值**
  * （普攻间隔 / 普攻距离 / 待机游走节奏）。动作池与击退时长是纯表现层，不进。
  */
@@ -490,9 +466,10 @@ function pickAchievements(achievements, monsters, items) {
   const seen = new Set();
   const categories = new Set(["battle", "growth", "explore"]);
   const types = new Set(["kill", "quest", "level", "combat", "collect"]);
-  // 怪物表与物品总表都是 Map（键 = 怪物 key / 物品 id）；这里只取键做引用校验
+  // 怪物 key 集合（#588 起传入的就是服务端种子 keys）与物品总表都是引用校验用
   const monsterKeys = new Set();
-  if (monsters instanceof Map) for (const key of monsters.keys()) monsterKeys.add(String(key));
+  if (monsters instanceof Set) for (const key of monsters) monsterKeys.add(String(key));
+  else if (monsters instanceof Map) for (const key of monsters.keys()) monsterKeys.add(String(key));
   else for (const item of monsters || []) monsterKeys.add(String(item.key));
   const goodIds = new Set();
   if (items instanceof Map) for (const key of items.keys()) goodIds.add(String(key));
@@ -1114,13 +1091,12 @@ ${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.ran
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 整行配置（#367：owner / 分类 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数 / 挂载状态 / 释放限制）。damageCoefficients 的下标 = 技能等级", s.skills)}
 ${jsonTable("STATUSES", "状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath", s.statuses)}
-${jsonTable("MONSTERS", "怪物 key → 名称与战斗数值（#258；monsterStats 打底 + 条目覆盖，已展开；tier 仅作标注）+ AI 参数 aggressive/detectRange/moveSpeed（#323）+ icon 图标（管理端缩略图）", s.monsters)}
 ${jsonTable("MONSTER_AI", "怪物 AI 全局节奏参数（#323：普攻间隔/普攻距离/待机游走节奏，服务端 AI tick 与客户端同源）", s.monsterAi)}
 ${jsonTable("MONSTER_SKILLS", "怪物 key → 技能挂载清单（#372：skillId / priority / 可选 cooldown 覆写）。服务端 AI 按它释放，管理端可增删改", s.monsterSkills)}
 ${jsonTable("NPCS", "NPC id → 名称 + src 素材路径（管理端缩略图用；对话文案不在配置里，管理端 npcs 表的 dialog 列运营可改）", s.npcs)}
 ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内观, out 外观, sellPrice 售卖价, maxHp 与六项攻防区间 }（#257；属性当前全 0，管理端可改）", s.fashions)}
 ${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}
-${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }（#254；实际掉落以此为准，key 与 MONSTERS 对齐）", s.monsterDrops)}
+${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }（#254；实际掉落以此为准，key 与怪物种子（server/src/shared/monster-seed）对齐）", s.monsterDrops)}
 ${jsonTable("DROP_DEFAULT", "兜底掉落表（#254；怪物既无独立表也没引用具名表时使用）", s.dropDefault)}
 ${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
 ${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}

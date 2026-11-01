@@ -118,7 +118,7 @@ Sync timing, failure handling and debounce details: [client/FAQ.md](client/FAQ.e
 
 There are also a few **gameplay config tables produced by generators** (not API artifacts, but artifacts nonetheless):
 
-- `configs/monster.ts` ← `client/tools/gen-monster-config.cjs` (body sizes and offsets measured from asset `.meta` auto-trim data)
+- `server/src/shared/monster-presentation.generated.ts` ← `client/tools/gen-monster-config.cjs` (the monster presentation manifest; from #588 on it is written to the server, geometry measured from atlas plist base frames)
 - `configs/monsterDrops.ts` ← `client/tools/gen-monster-drops.cjs` (drop tables)
 
 Their rules are written in the header of each script — re-run the script instead of editing the output.
@@ -138,7 +138,7 @@ Manual equivalent (no `make` needed):
 # Client: 59 unit-test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# Server: compile + twenty-six e2e suites (248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 651 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 132) + generated-artifact consistency
+# Server: compile + twenty-six e2e suites (248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 658 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 132) + generated-artifact consistency
 cd server && npm run verify
 
 # Admin: typecheck + build

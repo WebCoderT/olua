@@ -37,7 +37,7 @@ function main() {
 
   const { items, getItem } = require(path.join(outDir, "configs/items.js"));
   const { drugs } = require(path.join(outDir, "configs/drug.js"));
-  const { monsters } = require(path.join(outDir, "configs/monster.js"));
+  const { monsterRuntime, monsterResource, applyMonsterPresentation, applyMonsterRuntimeStats } = require(path.join(outDir, "configs/monsterRuntime.js"));
   const { npcData } = require(path.join(outDir, "configs/npc-data.js"));
   const { fashionData } = require(path.join(outDir, "configs/fashionClothes.js"));
   const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
@@ -112,8 +112,12 @@ function main() {
   check(materialAfter.icon === materialBefore.icon, "图标不动（资源路径）", materialAfter.icon);
   check(materialAfter.type === materialBefore.type, "大类不覆写（结构字段）", materialAfter.type);
 
-  console.log("\n=== 怪物：名称 / 等级 / 生命 / 六项区间 ===");
-  const monsterBefore = monsters.get("1");
+  console.log("\n=== 怪物：数值落运行时表 + 资源落运行时表（#588：客户端没有怪物数据文件） ===");
+  // 资源行先落（真实路径：applyMonsterPresentation，几何/速度在落表时合成）
+  applyMonsterPresentation("1", { icon: "monster/icon/1_00000", out: "monster/out/1", outOffset: { x: -2, y: -2 }, contentSize: { width: 44, height: 49 }, moveSpeed: 2, aggressive: false, detectRange: 200, speedRate: { stand: 2 } });
+  const resourceAfter = monsterResource.get("1");
+  check(resourceAfter && resourceAfter.out === "monster/out/1" && resourceAfter.contentSize.width === 44, "资源与表现已落运行时表", resourceAfter && `${resourceAfter.out} / ${resourceAfter.contentSize.width}×${resourceAfter.contentSize.height}`);
+  check(resourceAfter.speedRate.stand === 2 && resourceAfter.speedRate.walk === 1, "speedRate 快照覆盖与默认表在落表时合成", `${resourceAfter.speedRate.stand} / ${resourceAfter.speedRate.walk}`);
   snapshotApi.applyConfigSnapshot({
     monsters: [
       {
@@ -133,16 +137,15 @@ function main() {
       },
     ],
   });
-  const monsterAfter = monsters.get("1");
-  check(monsterAfter.label === "测试怪" && monsterAfter.level === 33, "名称与等级已覆写", `${monsterAfter.label} / ${monsterAfter.level}`);
-  check(monsterAfter.maxHp === 54321, "生命取服务端展开值（不按曲线重算，否则单独调高的血会被抹回）", `${monsterBefore.maxHp} → ${monsterAfter.maxHp}`);
+  const monsterAfter = monsterRuntime.get("1");
+  check(monsterAfter && monsterAfter.label === "测试怪" && monsterAfter.level === 33, "数值落运行时表（名称 / 等级）", monsterAfter && `${monsterAfter.label} / ${monsterAfter.level}`);
+  check(monsterAfter.maxHp === 54321, "生命取服务端展开值（不按曲线重算）", String(monsterAfter.maxHp));
   check(
     monsterAfter.physicalAttack[0] === 11 && monsterAfter.physicalAttack[1] === 22,
     "区间对象转成元组",
     JSON.stringify(monsterAfter.physicalAttack),
   );
-  check(monsterAfter.out === monsterBefore.out && monsterAfter.icon === monsterBefore.icon, "外观与图标不动", monsterAfter.out);
-  check(monsterAfter.moveSpeed === monsterBefore.moveSpeed, "移动速度（AI 参数）不动", String(monsterAfter.moveSpeed));
+  check(resourceAfter === monsterResource.get("1") && resourceAfter.out === "monster/out/1", "数值落表不碰资源（两半分开，各自整段替换）", resourceAfter.out);
 
   console.log("\n=== NPC 与时装：只覆写文案与数值 ===");
   const npcBefore = npcData.find((npc) => npc.id === "0002");
@@ -179,12 +182,13 @@ function main() {
   );
 
   console.log("\n=== 幂等与兜底 ===");
-  const once = JSON.stringify([getItem("cloth_1"), getItem(variantId), monsters.get("1")]);
+  const monsterRow = { id: "1", label: "测试怪", tier: "normal", level: 33, maxHp: 54321, attributes: { physicalAttack: { min: 11, max: 22 }, magicAttack: { min: 0, max: 0 }, taoistAttack: { min: 0, max: 0 }, physicalDefense: { min: 3, max: 6 }, magicDefense: { min: 3, max: 6 }, taoistDefense: { min: 3, max: 6 } } };
+  const once = JSON.stringify([getItem("cloth_1"), getItem(variantId), monsterRuntime.get("1")]);
   snapshotApi.applyConfigSnapshot({
     equipments: [equipmentRow],
-    monsters: [{ id: "1", label: "测试怪", tier: "normal", level: 33, maxHp: 54321, attributes: { physicalAttack: { min: 11, max: 22 }, magicAttack: { min: 0, max: 0 }, taoistAttack: { min: 0, max: 0 }, physicalDefense: { min: 3, max: 6 }, magicDefense: { min: 3, max: 6 }, taoistDefense: { min: 3, max: 6 } } }],
+    monsters: [monsterRow],
   });
-  const twice = JSON.stringify([getItem("cloth_1"), getItem(variantId), monsters.get("1")]);
+  const twice = JSON.stringify([getItem("cloth_1"), getItem(variantId), monsterRuntime.get("1")]);
   check(once === twice, "同一份快照覆写两次结果一致（变体不会一代代乘倍率）");
 
   const hpBeforeEmpty = getItem("cloth_1").maxHp;

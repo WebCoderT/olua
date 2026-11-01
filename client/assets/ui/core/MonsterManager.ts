@@ -1,5 +1,5 @@
 import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
-import { monsters } from "../../configs/monster";
+import { monsterResourceOf, monsterStatsOrDefault } from "../../configs/monsterRuntime";
 import { findSkillConfig, skills } from "../../configs/skill";
 import { statuses } from "../../configs/status";
 import { statusEffect } from "../../configs/effect";
@@ -99,23 +99,27 @@ export default class MonsterManager {
     CombatChannel.resetPositionThrottle();
   }
 
-  /** 生成一只怪物（按配置初始化数据与节点，挂载到怪物层）
-   *  @param instanceId 实例 id：**服务端发的牌**（世界权威 #35，来自 world 快照）；
-   *                    缺省 = 本地发牌（回滚路径：通道不可用、怪还在客户端刷）
-   *  @param hp 初始血量：世界权威下用服务端快照的值；缺省按配置满血
+  /** 生成一只怪物（数据全来自服务端：资源表现与数值取运行时表，出生点/实例/血量按调用方）
+   *  @param instanceId 实例 id：**服务端发的牌**（世界权威 #35，来自 world 快照）
+   *  @param hp 初始血量：世界权威下用服务端快照的值；缺省按数值行的 maxHp 满血
    */
   static spawn(monsterId: string, position: Vec3, instanceId?: string, hp?: number) {
-    const monsterConfig = monsters.get(monsterId);
-    if (!monsterConfig) {
-      console.warn(`[MonsterManager] 怪物配置不存在：${monsterId}`);
-      return;
-    }
-    // 数据：由配置派生运行时数据；实例 id 服务端牌优先（本地回滚路径现场发牌，会话内唯一）
+    // 资源与表现（#588）：快照没到或服务端缺行 = 没法渲染，这只怪不落场（warn 已打）——
+    // 不像旧口径那样「没有资源也硬生成」，一只看不见的怪能被选中、能被打，比没有更糟
+    const resource = monsterResourceOf(monsterId);
+    if (!resource) return;
+    // 数值（#588）：运行时数值表是唯一来源；缺行给退化值（名字 = key、攻防 [0,0]、血条按当前血拉满）
+    const stats = monsterStatsOrDefault(monsterId, hp ?? 0);
+    // 实例 id 服务端牌优先（世界权威 #35）
     this.instanceSeq += 1;
-    const monster: Monster = { ...monsterConfig, id: monsterId, hp: hp ?? monsterConfig.maxHp, instanceId: instanceId ?? `mon_${this.instanceSeq}` };
+    const monster: Monster = { ...resource, ...stats, id: monsterId, hp: hp ?? stats.maxHp, hpRecover: 0, instanceId: instanceId ?? `mon_${this.instanceSeq}` };
     // 节点：创建并挂载到怪物层
     const monsterNode = this.createMonsterNode(monster);
     LayerManager.addToMonsterLayer(monsterNode);
+    // 入场景后再确认待机动画在播（Cocos 3.8.7 实测：createMonsterBody 在「还没挂进场景」的
+    // 节点上 play，state 建得出来但节点启用后不会自动恢复 —— spriteFrame 一直是 null，
+    // 站着不动的怪整只不显示，只有等它走起来才看得见。重播一次即稳定，见 #588 真机验证）
+    MonsterAI.replayCurrent(monsterNode);
     monsterNode.setWorldPosition(position);
     // 数据与节点建立映射（实例索引给服务端结算找落点用）
     this.monsterMap.set(monsterNode, monster);

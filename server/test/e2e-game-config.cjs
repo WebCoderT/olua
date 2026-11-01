@@ -24,10 +24,15 @@ const ADMIN_CODE = "gamecfgadmin-code";
 
 // seed 的源头（编译产物）——断言「库里就是客户端配置」要用它对照
 const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
+// #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
+const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
+const { MONSTER_PRESENTATION_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "monster-presentation.generated.js"));
+const monsterSeed1 = MONSTER_SEED_ROWS.find((row) => row.id === "1");
+const monsterAttrs1 = expandMonsterSeed(monsterSeed1);
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 651;
+const EXPECTED_ASSERTIONS = 658;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -682,7 +687,7 @@ async function main() {
 
     const monsters = await api(base, "GET", "/api/admin/monsters", { token });
     checkEqual(monsters.status, 200, "怪物列表可读");
-    const monsterCount = Object.keys(shared.MONSTERS).length;
+    const monsterCount = MONSTER_SEED_ROWS.length;
     checkEqual(monsters.body?.data?.total, monsterCount, `怪物行数 = 配置表（${monsterCount}）`);
     checkEqual(monsters.body?.data?.list?.length, 100, "默认每页 100 条（220 只装不下一页）");
     const monstersPage2 = await api(base, "GET", "/api/admin/monsters?page=2", { token });
@@ -693,24 +698,24 @@ async function main() {
 
     const monster1 = monsters.body?.data?.list?.find((row) => row.id === "1");
     check(Boolean(monster1), "列表里有怪物 key \"1\"");
-    checkEqual(monster1?.label, shared.MONSTERS["1"].label, "怪物 1 名称与配置一致");
-    checkEqual(monster1?.tier, shared.MONSTERS["1"].tier, "怪物 1 定位与配置一致");
-    checkEqual(monster1?.maxHp, shared.MONSTERS["1"].maxHp, "怪物 1 生命上限与配置一致");
+    checkEqual(monster1?.label, monsterSeed1.label, "怪物 1 名称与种子一致");
+    checkEqual(monster1?.tier, monsterSeed1.tier, "怪物 1 定位与种子一致");
+    checkEqual(monster1?.maxHp, monsterAttrs1.maxHp, "怪物 1 生命上限与种子展开值一致");
     checkEqual(
       JSON.stringify([monster1?.attributes?.physicalAttack?.min, monster1?.attributes?.physicalAttack?.max]),
-      JSON.stringify(shared.MONSTERS["1"].physicalAttack),
-      "怪物 1 物攻区间与配置一致（快照数组 → min/max 结构）",
+      JSON.stringify(monsterAttrs1.physicalAttack),
+      "怪物 1 物攻区间与种子展开值一致（快照数组 → min/max 结构）",
     );
 
-    const monsterKeyword = await api(base, "GET", "/api/admin/monsters?keyword=" + encodeURIComponent(shared.MONSTERS["1"].label), { token });
+    const monsterKeyword = await api(base, "GET", "/api/admin/monsters?keyword=" + encodeURIComponent(monsterSeed1.label), { token });
     checkEqual(monsterKeyword.body?.data?.total, 1, "关键字按名称命中怪物 1");
     const monstersNormal = await api(base, "GET", "/api/admin/monsters?tier=normal", { token });
     const monstersBoss = await api(base, "GET", "/api/admin/monsters?tier=boss", { token });
     // 分档口径从快照现算（#436）：这条以前写的是「全部怪物，当前全是普通怪」——
     // 那是 `configs/monster.ts` 建 Map 时把 tier 解构掉又没放回的 bug 留下的印记，
     // tier 修好后 220 只怪里只有 199 只是普通怪，照抄老数字会立刻假红。
-    const normalCount = Object.values(shared.MONSTERS).filter((row) => row.tier === "normal").length;
-    const bossCount = Object.values(shared.MONSTERS).filter((row) => row.tier === "boss").length;
+    const normalCount = MONSTER_SEED_ROWS.filter((row) => row.tier === "normal").length;
+    const bossCount = MONSTER_SEED_ROWS.filter((row) => row.tier === "boss").length;
     checkEqual(
       `${monstersNormal.body?.data?.total}/${monstersBoss.body?.data?.total}`,
       `${normalCount}/${bossCount}`,
@@ -752,7 +757,7 @@ async function main() {
     checkEqual(monsterGhost.body?.code, 50019, "怪物未找到用专属业务码 50019");
     const monsterStructural = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { tier: "boss" } });
     checkEqual(monsterStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
-    checkEqual(monsterStructural.body?.data?.tier, shared.MONSTERS["1"].tier, "tier 不可编辑（已展开数值才是结算依据）");
+    checkEqual(monsterStructural.body?.data?.tier, monsterSeed1.tier, "tier 不可编辑（已展开数值才是结算依据）");
     const postMonster = await api(base, "POST", "/api/admin/monsters", { token, body: { id: "999" } });
     checkEqual(postMonster.status, 404, "POST 怪物 → 404（路由不存在）");
     const deleteMonster = await api(base, "DELETE", "/api/admin/monsters/1", { token });
@@ -1132,8 +1137,19 @@ async function main() {
     checkEqual(snap.equipments?.length, Object.keys(shared.EQUIPMENT_BASES).length, "快照装备基础件行数 = 生成物");
     checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
-    checkEqual(snap.monsters?.length, Object.keys(shared.MONSTERS).length, "快照怪物行数 = 生成物（220）");
+    checkEqual(snap.monsters?.length, MONSTER_SEED_ROWS.length, "快照怪物行数 = 种子（220）");
     check(!("drop" in (snap.monsters?.[0] ?? {})), "玩家侧快照的怪物不带掉落摘要（客户端不结算掉落，#584）");
+    // #588：表现段 —— 客户端零副本，icon / out / 几何 / 移速全靠这一段下发
+    checkEqual(snap.monsterPresentations?.length, MONSTER_PRESENTATION_ROWS.length, `快照表现段行数 = 生成物（${MONSTER_PRESENTATION_ROWS.length}）`);
+    {
+      const first = snap.monsterPresentations?.[0] ?? {};
+      check(Boolean(first.icon && first.out), "表现行带 icon / out（客户端渲染与预载的路径来源）");
+      check(typeof first.outOffset?.x === "number" && typeof first.outOffset?.y === "number", "表现行 outOffset 是 {x,y}（可见身体中心对准节点原点）");
+      check(typeof first.contentSize?.width === "number" && typeof first.contentSize?.height === "number", "表现行 contentSize 是 {width,height}（碰撞盒 / 血条位置）");
+      check(new RegExp(`^monster/out/${first.id}$`).test(String(first.out)), "表现行的 out 按 key 拼路径（monster/out/<id>）");
+      check(typeof first.moveSpeed === "number" && first.moveSpeed > 0, "表现行带正的 moveSpeed");
+      check(typeof first.aggressive === "boolean" && typeof first.detectRange === "number", "表现行带 AI 参数（aggressive / detectRange）");
+    }
     checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 生成物");
     checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20）");
     checkEqual(snap.levelExps?.length, Object.keys(shared.ROLE_LEVEL_ATTRIBUTES).length, "快照升级经验行数 = 等级数");

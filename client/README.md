@@ -124,7 +124,7 @@ node tools/test-bag-tidy.cjs                                 # 单跑一套
 
 | 脚本 | 产出 | 说明 |
 | --- | --- | --- |
-| `gen-monster-config.cjs` | `assets/configs/monster.ts` | 几何读素材 `.meta` 的 auto-trim 实测（不解码 PNG）；规则写在脚本文件头，改完重跑 |
+| `gen-monster-config.cjs` | `../server/src/shared/monster-presentation.generated.ts` | 怪物资源与表现清单（#588 起写到**服务端**，客户端零副本）：几何读图集 plist 基准帧实测；规则写在脚本文件头，改完重跑 |
 | `gen-monster-drops.cjs` | `assets/configs/monsterDrops.ts` | 每怪独立掉落表 |
 | `clean-role-empty-frames.cjs` | 清理空帧素材 | 先预演列清单，`--apply` 才真动；会先备份到仓库根 `.workbuddy/backup/` |
 
@@ -163,20 +163,29 @@ cd client
 - **`[...map.values()]` 禁用**：打包 babel 以 loose 模式会把迭代器展开编译成 `[].concat()`（恒为单元素），
   转数组只用 `Array.from` / `forEach` —— 这个坑只在打包产物上才暴露，且不报错
 
-## 数据归属：怪物配置分三层
+## 数据归属：怪物数据客户端为零（#588）
 
-`configs/monster.ts` 里混着三类东西，**改之前先分清要改的是哪一层**（和地图 #573 的分法同一套：
-资源归客户端、整理结果归服务端、管理端可视化地改服务端那份）：
+怪物的一切数据都在服务端，客户端 `configs/monster.ts` 只剩两个全局行为常量
+（`monsterAI`：普攻间隔 / 距离；`monsterDefaultSpeedRate`：11 动作移速倍率打底）。
+**改之前先分清数据是哪一类**：
 
-| 层 | 字段 | 归谁 | 改完怎么生效 |
+| 类别 | 字段 | 唯一来源 | 改完怎么生效 |
 |---|---|---|---|
-| 资源 | `icon` / `out`（帧目录）/ 动作清单 | 客户端素材包 | 换素材后重打包 |
-| 表现 | `contentSize` / `outOffset` / `speedRate` / `aggressive` / `monsterAI` | 客户端（几何由 `tools/gen-monster-config.cjs` 从 `.meta` 实测生成） | 重跑生成器，或直接改条目 |
-| 数值 | `label` / `level` / `maxHp` / 六项攻防区间 / 掉落 | **服务端表**（`monsters` / `monster_drops`，管理端改） | 保存即生效，客户端下次进游戏拉快照 |
+| 数值 | `label` / `level` / `tier` / `maxHp` / 六项攻防 | 服务端 `monsters` 表（出厂 = `server/src/shared/monster-seed.ts` 曲线展开，管理端可改） | 保存即生效，客户端下次进游戏拉快照 |
+| 资源表现 | `icon` / `out` / `outOffset` / `contentSize` / `moveSpeed` / `aggressive` / `detectRange` / `speedRate` 覆盖 | `server/src/shared/monster-presentation.generated.ts`（`client/tools/gen-monster-config.cjs` 从图集 plist 实测生成） | 重跑生成器 + 重启服务端 |
+| 掉落 | 每怪掉落表 | 服务端 `monster_drops`（管理端改） | 保存即生效 |
 
-第三层的本地值只是**出厂兜底**（服务端还没 seed 时用），运行时由 `configs/apply-snapshot.ts` 的
-`applyMonsterRows` 覆写 —— 覆写漏一个字段不会报错，只会让管理端「改了没生效」：所以 9 项数值
-全部被覆写这件事写成了守点（`node ../tools/audit-world-authority.cjs`）。
+客户端运行时两张表（`configs/monsterRuntime.ts`）全部由快照填充：数值段
+`applyMonsterRows`、表现段 `applyMonsterPresentations`。本地**没有副本**——
+快照缺行时数值退化为「名字 = key、攻防 [0,0]」（warn 一次）、资源缺行 spawn 直接
+跳过（没法渲染的怪比没有更糟）。归属口径由守点钉死
+（`node ../tools/audit-world-authority.cjs`：configs 不许再长数值字段、
+运行时表必须被快照两段填充、MonsterManager 不许 import configs/monster）。
+
+**加一只怪 = 三步**：① 素材入库跑 `client/tools/gen-monster-config.cjs`；
+② `server/src/shared/monster-seed.ts` 加一行四元组（数值唯一要写的地方）；
+③ 重启服务端（新 key 自动 seed 进表）。key 三方（素材目录 / 种子 / 掉落表）
+由生成器双向对账，少一边会报错。
 
 **怪物放在哪儿也不归客户端**：刷怪区（位置 / 区域尺寸 / 数量）在服务端 `map_spawn_areas` 表，
 客户端不许按 TMX 自己刷怪（#581）；刷怪区还必须整体落在地图矩形里 —— 世界坐标原点 = 地图左上角、

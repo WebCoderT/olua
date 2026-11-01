@@ -25,7 +25,10 @@
  *   3. 唯一入口接线：`GameMap` 发 `sendWorldJoin`、`MonsterManager` 落 `applyWorldState`、
  *      `DropManager.spawnResults` 的 `castId` **必填**（缺省就是「本地口径的掉落」）；
  *   4. 服务端那一侧真的在算：`world.service` 读 `map_spawn_areas` 播种、
- *      `combat-settlement` 抽掉落并调 `roles.pickDrop`。
+ *      `combat-settlement` 抽掉落并调 `roles.pickDrop`；
+ *   5. 怪物数值与表现**客户端零副本**（#588，取代 #586 的「出厂兜底」）：configs/monster
+ *      不许再长数值字段、旧类型 MonsterData/MonsterConfig 不许复活、运行时表必须被
+ *      快照两段（monsters + monsterPresentations）填充、MonsterManager 只认运行时表。
  *
  * 输出风格与 `audit-map-origin.cjs` 一致：违规逐条指名道姓（文件:行 + 原文 + 该怎么做），exit 1。
  */
@@ -170,32 +173,83 @@ requirePatterns(SETTLEMENT, [
 ]);
 
 // ---------------------------------------------------------------------------
-// 五、怪物数值的归属：服务端权威，客户端只做出厂兜底（#586）
+// 五、怪物数值的归属：服务端独有，客户端零副本（#588，取代 #586 的「出厂兜底」口径）
 // ---------------------------------------------------------------------------
-// 客户端 `configs/monster` 里仍然留着 label / level / maxHp / 六项区间 —— 这些是**出厂兜底**，
-// 运行时由服务端快照覆写（管理端改的就是服务端表）。覆写漏一个字段不会报错，只会让某一项
-// 悄悄回到「客户端自己那份值」：管理端调了血量、游戏里没变，看起来像保存没生效。
+// #586 那版审「覆写全不全」；#588 把客户端的本地副本整个删了 —— 数值唯一来源是
+// 服务端 monsters 表，资源表现唯一来源是服务端 monster-presentation 生成物，
+// 客户端 configs/monster 只剩全局行为常量（monsterAI / 默认移速倍率）。
+// 副本没了，「覆写漏字段」这类 bug 从根上消失；新的坏法是**运行时表没人填**
+// （表空 = 全场怪退化为 key 名字 + 攻防 0，看起来像「快照没生效」），所以这里钉两层：
+//   静态层 —— 客户端 configs/types 里不许再长出怪物数值与资源字段；
+//   接线层 —— 快照入口必须把两段数据填进运行时表，消费点必须只认运行时表。
 const APPLY_SNAPSHOT = path.join(CLIENT_CONFIGS, "apply-snapshot.ts");
+const MONSTER_CONFIG = path.join(CLIENT_CONFIGS, "monster.ts");
+const MONSTER_RUNTIME = path.join(CLIENT_CONFIGS, "monsterRuntime.ts");
 {
+  // —— 静态层：客户端配置里不许再有怪物数值副本 ——
+  const monsterConfig = read(MONSTER_CONFIG, "客户端怪物配置");
+  if (monsterConfig) {
+    // 只看代码行：注释里提到字段名（归属说明）不算副本
+    const code = monsterConfig.split(/\r?\n/).filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line)).join("\n");
+    const NUMERIC_FIELDS = ["maxHp", "physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+    const leaked = NUMERIC_FIELDS.filter((field) => new RegExp(`\\b${field}\\b`).test(code));
+    if (leaked.length > 0) {
+      problem(MONSTER_CONFIG, 0, `configs/monster 又出现了怪物数值字段（${leaked.join("/")}）—— #588 起数值服务端独有，这里只许有 monsterAI 与默认移速倍率`);
+    }
+    if (!/\bmonsterAI\b/.test(monsterConfig)) {
+      problem(MONSTER_CONFIG, 0, "configs/monster 连 monsterAI 都没了 —— 被删过头了，全局行为常量还住在这里");
+    }
+  }
+
+  // 类型层：MonsterData / MonsterConfig 这两个旧类型不许复活（字段会顺着类型长回来）
+  for (const file of walk(path.join(ROOT, "client", "assets", "types"))) {
+    const lines = read(file, "怪物类型").split(/\r?\n/);
+    lines.forEach((text, index) => {
+      if (/\b(MonsterData|MonsterConfig)\b/.test(text)) {
+        problem(file, index + 1, `旧怪物数据类型 #588 已删 —— 类型复活通常意味着本地副本也跟着回来了：${text.trim()}`);
+      }
+    });
+  }
+
+  // —— 接线层：运行时表必须被快照填充 ——
   const text = read(APPLY_SNAPSHOT, "快照应用");
   const body = /export function applyMonsterRows\([\s\S]*?\n\}/.exec(text)?.[0] ?? "";
   if (!body) {
-    problem(APPLY_SNAPSHOT, 0, "找不到 applyMonsterRows —— 怪物数值的覆写入口变了，请先确认服务端权威还在，再同步改本审计");
+    problem(APPLY_SNAPSHOT, 0, "找不到 applyMonsterRows —— 怪物数值落表入口变了，请先确认服务端权威还在，再同步改本审计");
   } else {
-    const OWNED = ["label", "level", "maxHp", "physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+    if (!/applyMonsterRuntimeStats\(row\.id,/.test(body)) {
+      problem(APPLY_SNAPSHOT, 0, "applyMonsterRows 没写运行时数值表（applyMonsterRuntimeStats）—— 快照来了也进不了消费点的视野");
+    }
+    const OWNED = ["label", "level", "tier", "maxHp", "attributes.physicalAttack", "attributes.magicAttack", "attributes.taoistAttack", "attributes.physicalDefense", "attributes.magicDefense", "attributes.taoistDefense"];
     for (const field of OWNED) {
-      if (!new RegExp(`config\\.${field}\\s*=`).test(body)) {
-        problem(
-          APPLY_SNAPSHOT,
-          0,
-          `applyMonsterRows 少了 config.${field} 的覆写：这一项会静默回到客户端的出厂值 —— 管理端改了、游戏里没变（#586 的归属：数值归服务端表，客户端只兜底）`,
-        );
+      if (!new RegExp(`row\\.${field.replace(/\./g, "\\.")}`).test(body)) {
+        problem(APPLY_SNAPSHOT, 0, `applyMonsterRows 少了 row.${field} 的落表：这一项会永远停在退化值（0 或 key 名）—— 管理端改了、游戏里没变`);
       }
     }
   }
   if (!/applyMonsterRows\(snapshot\.monsters\)/.test(text)) {
-    problem(APPLY_SNAPSHOT, 0, "applyMonsterRows 没被快照入口调用 —— 写了等于没写（快照一来就该覆写）");
+    problem(APPLY_SNAPSHOT, 0, "applyMonsterRows 没被快照入口调用 —— 写了等于没写（快照一来就该落表）");
   }
+  // 表现段是 #588 新增的快照段：没接 = 全场怪刷不出来（spawn 按资源表过滤，缺行直接跳过）
+  if (!/applyMonsterPresentations\(snapshot\.monsterPresentations\)/.test(text)) {
+    problem(APPLY_SNAPSHOT, 0, "快照入口没接 applyMonsterPresentations —— 表现段（icon/out/几何/移速）没人落表，怪物会被 spawn 整只跳过");
+  }
+
+  // —— 消费层：MonsterManager 只认运行时表，不许回头 import 客户端配置 ——
+  const monsterManager = read(MONSTER_MANAGER, "怪物管理器");
+  if (monsterManager && /from\s+"\.\.\/\.\.\/configs\/monster"/.test(monsterManager)) {
+    problem(MONSTER_MANAGER, 0, "MonsterManager 又 import 了 configs/monster —— 资源与数值一律走 monsterRuntime 的运行时表（monsterResourceOf / monsterStatsOrDefault）");
+  }
+  requirePatterns(MONSTER_MANAGER, [
+    { pattern: /monsterResourceOf\(/, hint: "spawn 前必须查运行时资源表（缺行跳过 = 没法渲染的怪不落场）" },
+    { pattern: /monsterStatsOrDefault\(/, hint: "spawn 必须从运行时数值表取属性（本地没有兜底副本可抄）" },
+  ]);
+
+  // —— 服务端那一侧真的在下发：快照带表现段 ——
+  const CLIENT_CONFIG_SERVICE = path.join(SERVER, "modules", "game-config", "client-config.service.ts");
+  requirePatterns(CLIENT_CONFIG_SERVICE, [
+    { pattern: /monsterPresentations:\s*MONSTER_PRESENTATION_ROWS/, hint: "快照必须携带 monsterPresentations 段（客户端零副本，全靠这一段）" },
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +259,7 @@ if (problems.length === 0) {
   console.log(
     `✓ 世界权威：客户端 ${scanned} 个文件无本地刷怪 / 无本地掉落结算；` +
       "唯一入口（sendWorldJoin / applyWorldState / spawnResults(castId) / pickDrop）齐全；" +
-      "怪物 9 项数值全部由服务端快照覆写",
+      "怪物数值与表现客户端零副本（configs/monster 无数值字段、运行时表由快照两段填充）",
   );
   process.exit(0);
 }

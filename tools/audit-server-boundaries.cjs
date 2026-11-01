@@ -169,7 +169,8 @@ const REPO_EDGES = {
   "database/repositories/item.repository.ts": ["modules/game-config"],
   // 怪物基础数据（#258）：game-config 读写之外，世界播种（world）与伤害结算（realtime）
   // 也直读本表 —— 管理端改数值即时生效（快照只作 seed 来源，结算不走生成物）
-  "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime"],
+  // #588：地图详情的刷怪区显示怪物名 —— 名字的权威来源是 monsters 表（只读一行），不再读生成物
+  "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime", "modules/map"],
   // NPC 基础数据（#258）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；
   // 任务（#396）的 npc-talk 也读（对话文案 + 存在性校验）
   "database/repositories/npc.repository.ts": ["modules/game-config", "modules/quest"],

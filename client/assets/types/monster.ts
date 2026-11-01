@@ -1,66 +1,72 @@
 import { Size, Vec2, Vec3 } from "cc";
-import type { BattleAttributes, CommonAttributes } from "./common";
 import type { ACTION, DIRECTION, SpeedRate } from "./animation";
-import type { DropPicks, DropSource } from "./drop";
-import type { SkillId } from "./skill";
 
 /**
- * 怪物定位：决定「同等级」下的强度倍率（倍率数值见 configs/growth 的 monsterTierScale）
- * - normal 普通怪：曲线基准
- * - elite  精英怪：更耐打、打人更疼
- * - boss   首领：同级要打几十刀
+ * 怪物定位（normal / elite / boss）
+ *
+ * **#588 起只是个类型**：数值语义（倍率、强度）归服务端 —— 出厂在 `monster-seed.ts`
+ * （MONSTER_TIER_SCALE），运行时权威在 `monsters` 表（管理端可改），战斗频道的 BOSS 判定也读那边。
+ * 客户端只消费快照里带来的 tier 值（MonsterRuntimeStats.tier），不再自己按 tier 算任何数值。
  */
 export type MonsterTier = "normal" | "elite" | "boss";
 
 /**
- * 怪物配置数据（configs/monster 里的条目形态）
+ * 怪物运行时数值（#588 数据归属收口）
  *
- * **key 只做关联**：地图对象组的 id、掉落表、AI 都用它引用同一只怪；
- * key 可以是任意字符串（不要求是数字，例如 "goblin_chief"），也不参与任何数值计算。
- * 数值一律按 level（配合 tier）从 configs/growth 的成长曲线派生。
- *
- * 战斗属性（maxHp 与六项攻防）与动作速度（speedRate）是**可选**的：
- * 不写就分别由 monsterStats(level, tier) 与 configs/monster 的 monsterDefaultSpeedRate 生成，
- * 写了则逐字段覆盖生成值（用于法系怪要魔法攻击、特殊怪要更高血量 / 某只怪动作更慢之类的特例）。
+ * 唯一来源 = 服务端 `monsters` 表（出厂值由 `server/src/shared/monster-seed.ts` 展开 seed，
+ * 管理端 `PATCH /admin/monsters/:id` 可改），经 `GET /game-config` 快照下发，
+ * `configs/monsterRuntime` 的运行时数值表持有 —— 客户端 configs/monster **不再有本地副本**。
  */
-export type MonsterData = Omit<MonsterConfig, keyof BattleAttributes | "speedRate"> &
-  Partial<BattleAttributes> & {
-    /** 关联键（唯一）——地图对象组的 id 就是它，仅用于相互引用 */
-    key: string;
-    /** 定位（不写 = normal，影响同等级下的强度倍率） */
-    tier?: MonsterTier;
-    /** 动作速度覆盖：只写要改的动作，其余沿用 configs/monster 的 monsterDefaultSpeedRate */
-    speedRate?: Partial<SpeedRate>;
-  };
+export interface MonsterRuntimeStats {
+  /** 名称（管理端改的是表里这份；地图预览 / 任务文案 / 怪物头顶都显示它） */
+  label: string;
+  /** 等级 */
+  level: number;
+  /** 定位：normal / elite / boss（BOSS 判定的展示口径；结算判定在服务端） */
+  tier: MonsterTier;
+  /** 最大血量 */
+  maxHp: number;
+  /** 物理攻击区间 */
+  physicalAttack: [number, number];
+  /** 魔法攻击区间 */
+  magicAttack: [number, number];
+  /** 道术攻击区间 */
+  taoistAttack: [number, number];
+  /** 物理防御区间 */
+  physicalDefense: [number, number];
+  /** 魔法防御区间 */
+  magicDefense: [number, number];
+  /** 道术防御区间 */
+  taoistDefense: [number, number];
+}
 
-/** 怪物配置接口 */
-export interface MonsterConfig extends CommonAttributes, BattleAttributes {
-  /**
-   * 定位（normal / elite / boss）
-   *
-   * 数值倍率在 `monsterStats(level, tier)` 里已经展开进六项攻防与 maxHp，但**这个标签本身也要留着**：
-   * 服务端要按它 seed `monsters.tier`（管理端「怪物配置」的那一列、战斗频道的 BOSS 判定都读它），
-   * 掉落 / 技能也在配置层按它分流。曾经在建 Map 时把它解构掉了，结果快照里 220 只怪全是 normal。
-   */
-  tier?: MonsterTier;
-  /** 图标 */
+/**
+ * 怪物资源与表现（#588 数据归属收口）
+ *
+ * 唯一来源 = 服务端 `monster-presentation.generated.ts`（生成器从图集基准帧实测几何，
+ * key 与数值种子双向对账），随 `GET /game-config` 快照的 `monsterPresentations` 段下发，
+ * `configs/monsterRuntime` 的运行时资源表持有。客户端**没有怪物数据文件** ——
+ * icon / out 是素材包里的路径事实，改素材 = 服务端重跑生成器 + 客户端重新进游戏。
+ */
+export interface MonsterPresentation {
+  /** 图标（monster/icon/<key>_00000 单图） */
   icon: string;
-  // 外观
+  /** 外观图集目录（monster/out/<key>，帧动画按动作约定拼） */
   out: string;
   /**
    * 外观节点摆放偏移：把**可见身体中心**对准节点原点
    * （外观画布中心默认落在原点，身体在画布里不居中 → 外观节点按此偏移回摆；
-   * 生成器按基准帧的 auto-trim 实测，消费点 GameUiHelper.createMonsterBody）
+   * 生成器按基准帧 trim 实测，消费点 GameUiHelper.createMonsterBody）
    */
   outOffset: Vec2;
   /**
-   * 可见身体尺寸（基准帧 auto-trim 实测）：碰撞盒（MonsterCollider）、
+   * 可见身体尺寸（基准帧 trim 实测）：碰撞盒（MonsterCollider）、
    * 点击选中（UITransform.hitTest）、头顶血条位置都由它决定
    */
   contentSize: Size;
   /**
-   * 动作速度（每秒循环数，片段总时长 = 1 / 该值）：运行时由 configs/monster 的
-   * monsterDefaultSpeedRate 打底、条目覆盖合成，全怪共用一套默认（素材帧规格统一）
+   * 动作速度（每秒循环数）：快照带的逐怪覆盖与 configs/monster 的 monsterDefaultSpeedRate
+   * 在落运行时表时已合成完毕，消费方直接用
    */
   speedRate: SpeedRate;
   /**
@@ -78,31 +84,28 @@ export interface MonsterConfig extends CommonAttributes, BattleAttributes {
   aggressive: boolean;
   /** 检测范围（像素半径，以怪物自身为圆心；主动怪常驻使用，被动怪被激怒后同样使用） */
   detectRange: number;
-  /** 怪物技能（未配置则不显示技能） */
-  skills?: SkillId[];
-  /**
-   * 掉落物品列表：**默认取 configs/monsterDrops 里该 key 的独立掉落表**（每只怪一份，
-   * 条目逐条配 weight/chance/count）；条目里直接写数组或具名表 id 可完全覆盖本表
-   */
-  drops?: DropSource;
-  /**
-   * 掉落件数（= 抽取次数）：数字 = 固定件数，[最小, 最大] = 件数区间（例 [1, 10] 掉 1~10 件，
-   * 每次抽取独立随机、可重复命中同一条目）；默认取独立掉落表里的 picks，写了则覆盖
-   */
-  dropPicks?: DropPicks;
 }
 
-/** 生成的怪物接口 */
-export interface Monster extends MonsterConfig {
-  /** 怪物编号（configs/monster 中的 key，同一编号的怪物可分布在多个刷怪区域） */
+/**
+ * 场上怪物实例 = 资源表现 + 运行时数值 + 实例状态
+ * 两半都来自服务端（#588）：资源与表现走快照 `monsterPresentations`，数值走快照 `monsters`；
+ * 实例本身（出生点 / 实例 id / 血量）来自 world 帧与结算帧。
+ */
+export interface Monster extends MonsterPresentation, MonsterRuntimeStats {
+  /** 怪物编号（服务端种子的 key，同一编号的怪物可分布在多个刷怪区域） */
   id: string;
   /** 当前血量 */
   hp: number;
   /**
+   * 恒为 0：怪物不回血（回血是玩家养成线的收益，「磨血」打法依赖这一点）。
+   * 战斗纯函数（BattleMath）按 BattleAttributes 口径收参，要这个字段 —— 实例上补一个常量
+   * 比让纯函数改签名干净（怪不回血是游戏规则，不是数据）。
+   */
+  hpRecover: number;
+  /**
    * 实例 id：场上每只怪一份，全服唯一。
    * 世界权威（#35）后由**服务端发牌**（进图 worldJoin 的 world 帧下发，跨重启稳定），
-   * cast 的 targetId 用它；通道不可用的回滚路径（怪还在客户端刷）才由客户端现场发牌。
-   * 数值（maxHp / 攻防）一律来自服务端那份表。
+   * cast 的 targetId 用它。数值（maxHp / 攻防）一律来自服务端那份表。
    */
   instanceId: string;
 }
@@ -161,7 +164,7 @@ export interface MonsterAIState {
 export interface MonsterSpawnArea {
   /** 区域名称（地图里给区域起的名字，仅用于日志与调试显示） */
   label: string;
-  /** 怪物编号（configs/monster 中的 key，由自定义属性 id 指定） */
+  /** 怪物编号（服务端种子的 key，由自定义属性 id 指定） */
   monsterId: string;
   /** 区域中心（世界坐标，怪物落点以它为基准；地图节点位于原点时与本地坐标一致） */
   center: Vec3;

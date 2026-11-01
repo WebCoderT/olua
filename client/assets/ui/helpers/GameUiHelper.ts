@@ -2393,13 +2393,14 @@ export default class GameUiHelper {
    * @param spacing 图标间距
    */
   static createMonsterSkillRow(
-    monster: Monster,
+    skillIds: SkillId[],
     position: Vec2 = monsterInfoPanelLayout.skillRow.position,
     slotSize: number = monsterInfoPanelLayout.skillRow.slotSize,
     spacing: number = monsterInfoPanelLayout.skillRow.spacing,
   ) {
     const row = UiHelper.createNode("monster_skills", position, new Size(monsterInfoPanelLayout.size.width, slotSize));
-    const skillIds = monster.skills ?? [];
+    // #588：Monster 实例不再带 skills 字段（旧字段从未被赋过值，本行一直是空的）；
+    // 怪物技能挂载映射在服务端（monster_skills 表），要下发时从这里接上
     skillIds.forEach((skillId, index) => {
       const skillConfig = skills.get(skillId);
       if (!skillConfig) return;

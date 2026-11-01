@@ -6,9 +6,9 @@ import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interfac
 import { spawnAreaInBounds, spawnAreaOverflow } from "../../common/utils/spawn-area-bounds.util";
 import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-area.repository";
 import { MapRepository } from "../../database/repositories/map.repository";
+import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { MapRow } from "../../database/rows";
-import { MONSTERS } from "../../shared/game-data.generated";
 import { MAP_CONTENTS, MapContent } from "../../shared/map-content.generated";
 import { MAP_PIXEL_SIZES, MapPixelSize } from "../../shared/map-sizes.generated";
 import {
@@ -23,11 +23,6 @@ import {
   MapWorldMonsterDto,
   SaveMapConfigDto,
 } from "./dto/map.dto";
-
-/** 生成物 `MONSTERS` 里用得到的部分（只取名字，数值不在这页展示） */
-interface MonsterMeta {
-  label?: string;
-}
 
 /**
  * 地图（#571 观测台 / #573 玩法配置归服务端）
@@ -71,6 +66,7 @@ export class MapService implements OnModuleInit {
     private readonly maps: MapRepository,
     private readonly spawnAreas: MapSpawnAreaRepository,
     private readonly worldMonsters: WorldMonsterRepository,
+    private readonly monsters: MonsterRepository,
   ) {}
 
   /**
@@ -247,8 +243,8 @@ export class MapService implements OnModuleInit {
   }
 
   private monsterLabelOf(key: string): string {
-    const monster = (MONSTERS as Record<string, MonsterMeta>)[key];
-    return monster?.label ?? key;
+    // 数值（含名称）的唯一来源是 monsters 表（#588）：表里没有这只怪（种子没灌 / 被删行）就显示 key
+    return this.monsters.findByKey(key)?.label ?? key;
   }
 
   /** map_id → 全场实例数（跨区合计），列表只需要这个数 */

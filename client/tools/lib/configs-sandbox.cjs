@@ -131,6 +131,51 @@ function loadCcShim(outDir) {
   return require(path.join(path.dirname(outDir), "node_modules/cc/index.js"));
 }
 
+/**
+ * 编译服务端 `server/src/shared` 下的纯数据源（如 monster-seed.ts）供单测真跑。
+ * #588 起客户端没有怪物数值副本 —— 击杀目标 key、数值锚点等断言都改从种子取，
+ * 用真实 expandMonsterSeed 展开而不是在测试里复刻一份公式。
+ * @param {string} entry 相对 server/src/shared 的入口（如 "monster-seed.ts"）
+ * @param {string} sandboxName 沙箱目录名，各脚本取不同名字互不干扰
+ * @returns {string} 编译产物 JS 路径，直接 require
+ */
+function compileServerShared(entry, sandboxName) {
+  const tscPath = findTsc();
+  if (!tscPath) throw new Error("缺少 tsc（同 prepare 的要求）");
+  const serverShared = path.resolve(PROJECT_ROOT, "..", "server", "src", "shared");
+  const sandbox = path.join(os.tmpdir(), sandboxName);
+  fs.rmSync(sandbox, { recursive: true, force: true });
+  fs.mkdirSync(sandbox, { recursive: true });
+  fs.writeFileSync(
+    path.join(sandbox, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2019",
+          module: "CommonJS",
+          moduleResolution: "node",
+          strict: false,
+          skipLibCheck: true,
+          esModuleInterop: true,
+          rootDir: serverShared,
+          outDir: path.join(sandbox, "out"),
+          types: [],
+        },
+        files: [path.join(serverShared, entry)],
+      },
+      null,
+      2,
+    ),
+  );
+  const result = spawnSync(process.execPath, [tscPath, "-p", path.join(sandbox, "tsconfig.json")], { encoding: "utf8" });
+  if (result.status !== 0) {
+    console.error(result.stdout || "");
+    console.error(result.stderr || "");
+    throw new Error(`服务端 shared 编译失败（${entry}，tsc 退出码 ${result.status}）`);
+  }
+  return path.join(sandbox, "out", entry.replace(/\.ts$/, ".js"));
+}
+
 //#region 断言小工具（各脚本共用，打印风格一致）
 
 let failed = 0;
@@ -162,4 +207,4 @@ function fail(message) {
 
 //#endregion
 
-module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, check, finish, fail };
+module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, compileServerShared, check, finish, fail };

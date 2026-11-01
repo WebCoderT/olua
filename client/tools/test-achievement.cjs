@@ -22,7 +22,7 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, compileServerShared, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 /** PROJECT_ROOT 是 client/，服务端与根目录要往上走一层 */
@@ -70,7 +70,9 @@ try {
   const { achievementData } = data;
 
   const generated = readRepo(SERVER_GENERATED);
-  const monsterKeys = new Set(snapshotKeys(generated, "MONSTERS"));
+  // #588 起生成物没有 MONSTERS 了：怪物 key 的唯一来源是服务端种子（编译真文件取，不复刻解析）
+  const { MONSTER_SEED_ROWS } = require(compileServerShared("monster-seed.ts", "olua-monster-seed-ach"));
+  const monsterKeys = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
   const itemKeys = new Set(snapshotKeys(generated, "ITEM_LABELS"));
   const achievementKeys = snapshotKeys(generated, "ACHIEVEMENTS");
 
@@ -79,7 +81,7 @@ try {
   console.log("\n— A. 配置表：引用必须真实存在（写错的表现是「怎么打都不解锁」） —");
 
   check(Array.isArray(achievementData) && achievementData.length === 24, `配置表有 24 条成就（实得 ${achievementData.length}）`);
-  check(monsterKeys.size > 0 && itemKeys.size > 0, `快照里能取到怪物（${monsterKeys.size}）与物品（${itemKeys.size}）的 key`);
+  check(monsterKeys.size > 0 && itemKeys.size > 0, `种子里取到怪物（${monsterKeys.size}）、快照里取到物品（${itemKeys.size}）的 key`);
 
   const ids = achievementData.map((item) => item.id);
   check(new Set(ids).size === ids.length, "成就 id 唯一（id 是主键，重复只会静默覆盖一条）");

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MONSTERS, MONSTER_AI } from "../../shared/game-data.generated";
+import { MONSTER_AI } from "../../shared/game-data.generated";
+import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
@@ -22,6 +23,9 @@ const AI = MONSTER_AI as unknown as {
   idleMoveSpeedScale: number;
   wanderRadius: number;
 };
+
+/** 怪物表现参数（#588：monster-presentation 生成物，aggressive / detectRange / moveSpeed 驱动权威 AI） */
+const PRESENTATION_BY_KEY = new Map(MONSTER_PRESENTATION_ROWS.map((row) => [row.id, row]));
 
 /**
  * 技能 / 挂载 / 状态的读库缓存时长（毫秒）
@@ -356,7 +360,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
           runtimes.delete(monster.instanceId);
           continue;
         }
-        const config = MONSTERS[monster.monsterKey] as { aggressive: boolean; detectRange: number; moveSpeed: number } | undefined;
+        const config = PRESENTATION_BY_KEY.get(monster.monsterKey);
         if (!config) continue;
         const runtime = this.runtimeOf(monster);
         this.stepMonster(runtime, monster, config, players, now, key);

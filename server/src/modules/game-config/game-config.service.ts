@@ -47,7 +47,6 @@ import {
   FASHIONS,
   ITEM_BASES,
   MONSTER_SKILLS,
-  MONSTERS,
   NPCS,
   QUESTS,
   ITEM_TYPES,
@@ -63,6 +62,10 @@ import {
   TITLE_LEVEL_ATTRIBUTES,
   TITLE_LEVEL_META,
 } from "../../shared/game-data.generated";
+import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
+
+/** 怪物 key 清单（出厂种子派生；成就击杀目标 / 任务击杀目标的存在性校验共用） */
+const MONSTER_SEED_KEYS = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
@@ -1033,7 +1036,7 @@ export class GameConfigService implements OnModuleInit {
   private assertAchievementConsistency(row: AchievementRow): void {
     const target = String(row.condition_target ?? "");
     if (row.condition_type === "kill" && target !== "*") {
-      if (!(target in (MONSTERS as Record<string, unknown>))) {
+      if (!MONSTER_SEED_KEYS.has(target)) {
         throw new BizException(
           BizCode.PARAM_INVALID,
           `成就 ${row.id} 的击杀目标 ${target || "(空)"} 不是已配置的怪物（任意怪请写 *）`,
@@ -1066,7 +1069,7 @@ export class GameConfigService implements OnModuleInit {
    */
   private assertQuestConsistency(row: QuestRow): void {
     if (row.objective_type === "kill") {
-      if (!(String(row.objective_target) in (MONSTERS as Record<string, unknown>))) {
+      if (!MONSTER_SEED_KEYS.has(String(row.objective_target))) {
         throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的击杀目标 ${row.objective_target} 不是已配置的怪物`);
       }
     } else if (row.objective_type === "talk") {
@@ -1224,19 +1227,21 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 怪物 seed：MONSTERS 直接灌（名称 + 已展开战斗数值），220 只（#258） */
+  /** 怪物 seed：出厂种子（服务端自有，#588）展开成数值行，220 只（#258） */
   private seedMonsters() {
-    for (const [id, meta] of Object.entries(MONSTERS as Record<string, Record<string, unknown>>)) {
-      const attributes = meta as unknown as MonsterAttributesRowShape;
+    for (const row of MONSTER_SEED_ROWS) {
+      const attributes = expandMonsterSeed(row);
       this.monstersRepo.seedRow({
-        id,
-        label: String(meta.label ?? ""),
-        tier: String(meta.tier ?? "normal"),
-        level: Number(meta.level) || 1,
-        max_hp: Number(meta.maxHp) || 1,
+        id: row.id,
+        label: row.label,
+        tier: row.tier,
+        level: row.level,
+        max_hp: attributes.maxHp,
         ...flatMonsterAttributes(attributes),
         updated_at: 0,
       });
+      // 存量修复（#588）：tier 列晚灌的旧行吃了 DEFAULT 'normal'，boss 顶着 normal 的 tier
+      this.monstersRepo.alignTierToFactory(row.id, row.tier, attributes.maxHp);
     }
   }
 

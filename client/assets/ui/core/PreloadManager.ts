@@ -1,7 +1,7 @@
 import { TiledMapAsset } from "cc";
 import { loadingConfig } from "../../configs/loading";
 import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../configs/map";
-import { monsters } from "../../configs/monster";
+import { monsterResourceOf } from "../../configs/monsterRuntime";
 import { npcs } from "../../configs/npc";
 import { getRoleDefaultCloth } from "../../configs/role";
 import { getTitleLevel } from "../../configs/title";
@@ -94,8 +94,8 @@ export default class PreloadManager {
       });
     // 怪物：monster 对象组的 id 属性即怪物编号（与 tools/import-spawn-areas.cjs 同一套读法）
     readTiledObjects(xml, tiledGroupNames.monster).forEach((object) => {
-      const monster = monsters.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
-      if (monster?.out) tasks.push({ dir: monster.out, kind: "monster", speedRate: monster.speedRate });
+      const resource = monsterResourceOf(`${object.properties[tiledPropertyNames.id] ?? ""}`);
+      if (resource?.out) tasks.push({ dir: resource.out, kind: "monster", speedRate: resource.speedRate });
     });
     return tasks;
   }
