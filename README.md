@@ -267,7 +267,7 @@ olua/
 ├── admin/                  # 管理端：React
 ├── tools/                  # 项目级脚本（跨端）
 ├── website/                # 项目官网（纯静态单页）
-├── docs/                   # 项目文档（简历介绍等）
+├── docs/                   # 部署说明
 └── resources_dist/         # 素材清单（发布用）
 ```
 

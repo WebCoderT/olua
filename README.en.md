@@ -267,7 +267,7 @@ olua/
 ├── admin/                  # the admin: React
 ├── tools/                  # project-level scripts (cross-side)
 ├── website/                # the project site (a static single page)
-├── docs/                   # project docs (resume and friends)
+├── docs/                   # deployment notes
 └── resources_dist/         # asset manifest (for publishing)
 ```
 
