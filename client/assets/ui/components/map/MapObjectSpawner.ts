@@ -6,7 +6,7 @@ import QuestNpcMarks from "../../core/QuestNpcMarks";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import QuestTalk from "../../utils/net/QuestTalk";
 import { markWorldInteractive } from "../../utils/input/UiHit";
-import { getMapPointPositionOnWorld } from "../../utils/map/MapPointMath";
+import { mapPointToWorld } from "../../utils/map/MapPointMath";
 import { getTiledObjectsFrom, TiledObject } from "../../utils/map/TiledObjects";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
@@ -73,7 +73,7 @@ export default class MapObjectSpawner {
     // 先入层再定位：节点无父节点时 setWorldPosition 写进去的其实是本地坐标，
     // 一旦以后地图层不再位于世界原点（或地图节点挂到别处），顺序反了就会整体偏移
     LayerManager.addToMapLayer(npcNode);
-    npcNode.setWorldPosition(getMapPointPositionOnWorld(position.x, position.y, this.map));
+    npcNode.setWorldPosition(mapPointToWorld(position.x, position.y));
     // 头顶任务标记（#396：! 可接 / ? 可交付；没有任务时整块隐藏）
     QuestNpcMarks.attach(npcNode, id);
     npcNode.on(

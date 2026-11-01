@@ -9,7 +9,7 @@ import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
-import { getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld, getMapWorldRect } from "../../utils/map/MapPointMath";
+import { getMapWorldRect, mapPointToWorld, mapRectCenterToWorld } from "../../utils/map/MapPointMath";
 import { getTiledObjects, getTiledObjectsFrom } from "../../utils/map/TiledObjects";
 import { bindMousePress, getHitScreenPoint, getPointerButton, HAS_MOUSE, PointerButton } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
@@ -170,7 +170,7 @@ export default class MapPreviewDialog {
       if (object.objectClass === tiledObjectClasses.revive || object.name === tiledObjectClasses.revive) return;
       const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
       if (!npc) return;
-      const world = getMapPointPositionOnWorld(object.x, object.y, map);
+      const world = mapPointToWorld(object.x, object.y);
       const local = toPreview(world.x, world.y);
       npcDots.push({ x: local.x, y: local.y, color: marker.npcDotColor, radius: marker.npcDotRadius });
       const labelPosition = new Vec2(local.x, local.y + marker.npcDotRadius + marker.npcLabelGap + marker.labelSize.height / 2);
@@ -182,7 +182,7 @@ export default class MapPreviewDialog {
       if (object.width <= 0 || object.height <= 0) return;
       const monster = monsters.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
       if (!monster) return;
-      const center = getMapRectCenterPositionOnWorld(object.x, object.y, object.width, object.height, map);
+      const center = mapRectCenterToWorld(object.x, object.y, object.width, object.height);
       const local = toPreview(center.x, center.y);
       markerLayer.addChild(GameUiHelper.createText(`monster_area_name_${object.name || monster.label}`, monster.label, marker.monsterLabelFontSize, local, marker.labelSize, marker.monsterLabelColor));
     });

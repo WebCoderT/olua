@@ -2,7 +2,7 @@ import { Node, Size } from "cc";
 import { tiledGroupNames } from "../../../configs/map";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { getMapRectCenterPositionOnWorld } from "../../utils/map/MapPointMath";
+import { mapRectCenterToWorld } from "../../utils/map/MapPointMath";
 import { getTiledObjects, TiledObject } from "../../utils/map/TiledObjects";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
@@ -10,12 +10,12 @@ import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
  * 碰撞区域生成器
  * 读取 TiledMap 中名为 collision 的对象组，把其中每个矩形对象实例化为游戏内的静态碰撞体：
  * 节点尺寸即碰撞范围（静态 RigidBody2D + BoxCollider2D，与 NPC 的障碍物同一套做法），
- * 位置按「Tiled 左上角坐标」换算到世界坐标（地图节点原点也是左上角，只差 y 方向），节点统一挂到地图层；
- * 碰撞范围的可视化由 GameUiHelper.showColliderRange 统一负责（与全部碰撞体共用一套调试开关）
- * 地图坐标到本地坐标的换算依赖地图节点本身，因此构造时注入地图节点
+ * 位置按「Tiled 左上角坐标」换算到世界坐标（地图原点即左上角、地图节点在世界原点，只差 y 方向），
+ * 节点统一挂到地图层；碰撞范围的可视化由 GameUiHelper.showColliderRange 统一负责
+ * 地图坐标到世界坐标的换算依赖地图节点本身，因此构造时注入地图节点
  */
 export default class CollisionAreaSpawner {
-  /** 地图节点（自身即地图，坐标换算需要） */
+  /** 地图节点（读 collision 对象组用） */
   private map: Node;
 
   constructor(map: Node) {
@@ -40,6 +40,6 @@ export default class CollisionAreaSpawner {
     GameUiHelper.showColliderRange(node, area.name);
     // 先入层再定位（无父节点时写的其实是本地坐标），与 NPC 生成器同一顺序
     LayerManager.addToMapLayer(node);
-    node.setWorldPosition(getMapRectCenterPositionOnWorld(area.x, area.y, size.width, size.height, this.map));
+    node.setWorldPosition(mapRectCenterToWorld(area.x, area.y, size.width, size.height));
   }
 }

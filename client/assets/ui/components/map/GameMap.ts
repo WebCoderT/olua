@@ -9,7 +9,7 @@ import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import MonsterAreaSpawner from "./MonsterAreaSpawner";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
-import { getMapPointPositionOnWorld } from "../../utils/map/MapPointMath";
+import { mapPointToWorld } from "../../utils/map/MapPointMath";
 import { maps } from "../../../configs/map";
 
 /**
@@ -57,6 +57,14 @@ export default class GameMap extends Node {
     transform.setAnchorPoint(0, 1);
     const tiledMap = this.addComponent(TiledMap);
     tiledMap.tmxAsset = mapAsset;
+    // 建完图必须让每个图层补算一次自己的锚点偏移（TiledLayer.leftDownToCenter）——漏了就是**整屏黑**：
+    // 图层只在 onEnable 里注册 ANCHOR_CHANGED 监听，而此刻地图节点还没进场景（addToMapLayer 在下面），
+    // 建图时图层未启用 → 地图 `_syncAnchorPoint()` 改锚点时没人接事件 → leftDownToCenter 停在按默认锚点
+    // 0.5 算的 (W/2, H/2)，瓦片照旧铺在中心；而坐标换算已按左上角把角色送到 (x, -y)（0 号图复活点
+    // 4100,4736 → 4100,-4736），那个点正好在「错位的图」之外。手动改一次锚点之所以能看见，就是补上了这次重算。
+    for (const layer of tiledMap.getLayers()) {
+      (layer as unknown as { _syncAnchorPoint(): void })._syncAnchorPoint();
+    }
     // 关闭引擎的瓦片裁剪（TiledMap.enableCulling 默认 true）——这是「传送后整张地图一片黑、动一下才恢复」的根因：
     // 裁剪范围（可见瓦片行列）由 TiledLayer.updateCulling 在「相机节点 TRANSFORM_CHANGED」时**同步**重算，
     // 而它用的是相机视图矩阵（camera.screenToWorld），此刻矩阵还没跟上本帧的位置变化（引擎自己也把首次裁剪
@@ -113,7 +121,7 @@ export default class GameMap extends Node {
       console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个类为 revive 的点位`);
       return;
     }
-    this.reviveWorldPosition = getMapPointPositionOnWorld(revivePoint.x, revivePoint.y, this as Node);
+    this.reviveWorldPosition = mapPointToWorld(revivePoint.x, revivePoint.y);
     this.reviveHandler?.(this.reviveWorldPosition);
   }
 }

@@ -5,7 +5,7 @@ import { skills } from "../../configs/skill";
 import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import { canAttackTarget } from "../utils/battle/BattleMath";
-import { getMapPointPositionOnWorld, getMapRectCenterPositionOnWorld, getMapWorldRect } from "../utils/map/MapPointMath";
+import { getMapWorldRect, mapPointToWorld } from "../utils/map/MapPointMath";
 import PathGrid from "../utils/map/PathGrid";
 import { TiledObject, getTiledObjectsFrom } from "../utils/map/TiledObjects";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -397,11 +397,11 @@ export default class AutoBattle {
     getTiledObjectsFrom(map, tiledGroupNames.collision).forEach((object) => {
       // 没有面积的元素（点、多边形）构不成矩形阻挡，与碰撞区生成器同一规则跳过
       if (object.width <= 0 || object.height <= 0) return;
-      rects.push(this.tiledRectToWorld(object, map));
+      rects.push(this.tiledRectToWorld(object));
     });
     getTiledObjectsFrom(map, tiledGroupNames.npc, tiledGroupNames.legacyObjects).forEach((object) => {
       if (object.objectClass !== tiledObjectClasses.npc) return;
-      const position = getMapPointPositionOnWorld(object.x, object.y, map);
+      const position = mapPointToWorld(object.x, object.y);
       const width = autoBattle.npcObstacleSize.width;
       const height = autoBattle.npcObstacleSize.height;
       rects.push(new Rect(position.x - width / 2, position.y - height / 2, width, height));
@@ -409,10 +409,10 @@ export default class AutoBattle {
     return rects;
   }
 
-  /** Tiled 矩形对象 -> 世界坐标矩形（复用 MapPointMath 的换算，避免再踩 y 轴翻转的坑） */
-  private static tiledRectToWorld(object: TiledObject, map: Node): Rect {
-    const center = getMapRectCenterPositionOnWorld(object.x, object.y, object.width, object.height, map);
-    return new Rect(center.x - object.width / 2, center.y - object.height / 2, object.width, object.height);
+  /** Tiled 矩形对象 -> 世界坐标矩形（Rect 的 x/y 是左下角 = Tiled 的左下角 `(x, y + h)` 取反） */
+  private static tiledRectToWorld(object: TiledObject): Rect {
+    const leftBottom = mapPointToWorld(object.x, object.y + object.height);
+    return new Rect(leftBottom.x, leftBottom.y, object.width, object.height);
   }
 
   /** 放弃当前目标：挂机时拉黑一段时间换下一个（无限重复的前提是不卡死在一只怪上），快速攻击直接结束 */
