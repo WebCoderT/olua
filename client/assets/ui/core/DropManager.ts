@@ -1,12 +1,11 @@
 import { isValid, Node, UITransform, Vec2, Vec3 } from "cc";
-import { dropRuntime, resolveDropTable } from "../../configs/drop";
+import { dropRuntime } from "../../configs/drop";
 import { getGoodCursorStyle, cursorConfig } from "../../configs/cursor";
 import { getItem } from "../../configs/items";
 import { getText } from "../../configs/texts";
-import type { DropPicks, DropResult, DropSource } from "../../types/drop";
+import type { DropResult } from "../../types/drop";
 import type { Goods } from "../../types/good";
 import { scatterDropPositions } from "../utils/drop/DropScatter";
-import { rollDropTable } from "../utils/drop/DropRoller";
 import type { PickResult } from "../utils/net/CombatChannel";
 import CombatChannel from "../utils/net/CombatChannel";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -24,19 +23,18 @@ interface DropItem {
   count: number;
   /**
    * 服务端结算的拾取定位（#325）：击杀那次的 castId + reward.drops 下标。
-   * 存在 = 服务端口径的掉落，拾取要走 pick 帧（入包权威在服务端）；
-   * 缺省 = 本地口径的掉落（实时通道不可用的回滚路径），走本地入包。
+   * **必填**（#581）：掉落物只可能来自 settle 帧的 reward —— 以前「缺省 = 本地口径的掉落，
+   * 直接进本地背包」那条回滚已经删掉（它等于给客户端开了一条「自己造物品」的路）。
    */
-  pick?: { castId: number; index: number };
+  pick: { castId: number; index: number };
 }
 
-/** 一次拾取请求的结果：picked = 已入包（本地口径）；pending = 服务端应答在途；full = 背包放不下 */
-type PickOutcome = "picked" | "pending" | "full";
+/** 一次拾取请求的结果：pending = 已发 pick 帧等应答（**唯一**的正常结果）；full = 背包已满 */
+type PickOutcome = "pending" | "full";
 
-/** 拾取请求的返回值：本地口径已入包时一并带回掉落物数据（节点此时已移除，提示要用它） */
+/** 拾取请求的返回值（#581 起没有「本地已入包」这一种：入包只能等服务端应答） */
 interface PickRequest {
   outcome: PickOutcome;
-  drop?: DropItem;
 }
 
 /**
@@ -69,27 +67,14 @@ export default class DropManager {
   }
 
   /**
-   * 结算一次掉落并在指定位置生成掉落物（**本地口径**：实时通道不可用时的回滚路径；
-   * 服务端结算在线时击杀掉落由 settle 帧的 reward 给定，走 spawnResults）
-   * @param source 怪物掉落配置（条目数组 / 具名掉落表 id / 内联掉落表，缺省用默认掉落表）
-   * @param position 掉落位置（一般取怪物死亡时的世界坐标）
-   * @param picks 掉落件数：数字 = 固定件数，[最小, 最大] = 件数区间（例 [1, 10] 掉 1~10 件）；
-   *              仅 source 为条目数组时生效（怪物按自己的掉落配置传 dropPicks）
-   * @returns 本次掉落结果（便于日志/统计；为空表示没掉东西）
-   */
-  static drop(source: DropSource | undefined, position: Vec3, picks?: DropPicks): DropResult[] {
-    return this.spawnResults(rollDropTable(resolveDropTable(source, picks)), position);
-  }
-
-  /**
    * 把一份**已经结算好**的掉落结果铺到指定位置（#316：掉落内容由服务端决定，这里只演）
    * @param results 掉落结果列表（goodId + count；可为空数组 —— 什么都没掉就不铺）
    * @param position 掉落位置（一般取怪物死亡时的世界坐标）
-   * @param castId 结算的出手序号（#325：带上后拾取走 pick 帧、入包权威在服务端；
-   *               缺省 = 本地口径的掉落，拾取直接进本地背包）
+   * @param castId 结算的出手序号（**必填**：#581 起掉落物一律带服务端账本定位，
+   *               拾取走 pick 帧、入包以 picked 帧为准）
    * @returns 原样返回 results（便于日志/统计）
    */
-  static spawnResults(results: DropResult[], position: Vec3, castId?: number): DropResult[] {
+  static spawnResults(results: DropResult[], position: Vec3, castId: number): DropResult[] {
     // 先算全部散落点，再统一铺放：保证任意两件掉落物都不落在同一点上
     const offsets = scatterDropPositions(results.length);
     results.forEach((result, index) => {
@@ -98,13 +83,13 @@ export default class DropManager {
         console.warn(`掉落物品不存在：${result.goodId}`);
         return;
       }
-      this.createDropNode(good, result.count, position, offsets[index], castId === undefined ? undefined : { castId, index });
+      this.createDropNode(good, result.count, position, offsets[index], { castId, index });
     });
     return results;
   }
 
   /** 生成掉落物节点并挂载到掉落层（offset 为相对落点的散落偏移，保证各掉落物不重叠） */
-  private static createDropNode(good: Goods, count: number, position: Vec3, offset: Vec2, pick?: { castId: number; index: number }) {
+  private static createDropNode(good: Goods, count: number, position: Vec3, offset: Vec2, pick: { castId: number; index: number }) {
     const { node } = GameUiHelper.createDropItem(good, count);
     LayerManager.addToDropLayer(node);
     node.setWorldPosition(position.x + offset.x, position.y + offset.y, position.z);
@@ -118,12 +103,11 @@ export default class DropManager {
    * 由组合根在 Game.update 中驱动
    * @param rolePosition 角色世界坐标（角色节点原点即脚底）
    * @param radius 拾取半径，缺省 AUTO_PICKUP_RADIUS
-   * @returns 本次拾取到的物品数量（服务端口径的拾取在应答回来后才算数，这里不计）
+   * @returns 无（#581：入包只能等 picked 应答，这里没有「捡到了几件」可报）
    */
-  static autoPickup(rolePosition: Vec3, radius: number = this.AUTO_PICKUP_RADIUS): number {
+  static autoPickup(rolePosition: Vec3, radius: number = this.AUTO_PICKUP_RADIUS): void {
     // 背包已满的节流期内直接跳过：既避免每帧刷提示，也避免每帧重复尝试入包
-    if (Date.now() - this.fullTipTime < this.FULL_TIP_INTERVAL) return 0;
-    const picked: string[] = [];
+    if (Date.now() - this.fullTipTime < this.FULL_TIP_INTERVAL) return;
     Array.from(this.dropMap.keys()).forEach((node) => {
       // 已销毁的残留节点直接清理
       if (!isValid(node)) {
@@ -138,11 +122,8 @@ export default class DropManager {
         this.notifyBagFull();
         return;
       }
-      if (outcome.outcome === "picked" && outcome.drop) picked.push(`${outcome.drop.good.label} x${outcome.drop.count}`);
     });
-    // 同一帧拾取的多件物品合并为一条提示，避免互相遮挡
-    if (picked.length) GameUiHelper.createTip("pickup_tip", { names: picked.join(getText("label_list_separator")) });
-    return picked.length;
+    // 提示在 picked 帧回来时给（applyPickedFrame）—— 那时才知道真的入包了
   }
 
   /**
@@ -169,38 +150,31 @@ export default class DropManager {
       this.notifyBagFull();
       return false;
     }
-    if (request.outcome === "picked" && request.drop) {
-      const { good, count } = request.drop;
-      GameUiHelper.createTip("pickup_tip", { names: getText("label_good_count", { name: good.label, count }) });
-    }
     return true;
   }
 
   /**
    * 请求拾取一个掉落物（自动拾取与点击拾取共用的唯一入口）
    *
-   * 服务端口径（带 pick 定位，#325）：发 pick 帧、节点保留在地面，入包与移除都等
-   * picked 应答（applyPickedFrame）——背包放不放得下只有服务端知道，本地先斩后奏
-   * 会演出入包了其实没有。应答在途（或刚超时未到重发前）返回 pending，不提示不重发。
-   * 本地口径（回滚路径）：直接进本地背包，放不下返回 full。
+   * 只做一件事：发 pick 帧，节点保留在地面 —— 入包与移除都等 picked 应答
+   * （applyPickedFrame）。背包放不放得下只有服务端知道，本地先斩后奏会演出入包了其实没有。
+   * 应答在途（或刚超时未到重发前）返回 pending，不提示不重发。
+   *
+   * #581 删掉了「没有 pick 定位就直接进本地背包」那条回滚：掉落物现在必带服务端账本定位，
+   * 没有定位的节点只可能是脏数据 —— 与其静默入包，不如留在地面并告警。
    */
   private static requestPick(node: Node): PickRequest {
     const drop = this.dropMap.get(node);
     if (!drop) return { outcome: "pending" }; // 竞态：刚被别的路径拾走，不当背包满处理
-    if (drop.pick) {
-      const sentAt = this.pendingPicks.get(node);
-      if (sentAt !== undefined) {
-        if (Date.now() - sentAt < dropRuntime.pickReplyTimeout) return { outcome: "pending" };
-        // 应答超时（帧丢失 / 断线期间）：撤掉在途标记，允许重新拾取
-        this.pendingPicks.delete(node);
-      }
-      if (!CombatChannel.sendPick(drop.pick.castId, drop.pick.index)) return { outcome: "pending" }; // 通道不在线：等恢复后再试
-      this.pendingPicks.set(node, Date.now());
-      return { outcome: "pending" };
+    const sentAt = this.pendingPicks.get(node);
+    if (sentAt !== undefined) {
+      if (Date.now() - sentAt < dropRuntime.pickReplyTimeout) return { outcome: "pending" };
+      // 应答超时（帧丢失 / 断线期间）：撤掉在途标记，允许重新拾取
+      this.pendingPicks.delete(node);
     }
-    if (!StorageManager.addGood(drop.good, drop.count)) return { outcome: "full" };
-    this.removeDropNode(node);
-    return { outcome: "picked", drop };
+    if (!CombatChannel.sendPick(drop.pick.castId, drop.pick.index)) return { outcome: "pending" }; // 通道不在线：等恢复后再试
+    this.pendingPicks.set(node, Date.now());
+    return { outcome: "pending" };
   }
 
   /**
