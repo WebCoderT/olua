@@ -48,8 +48,6 @@ export default class RoleInfoDialog {
     // 装饰背景与战斗力图标
     const bgLayout = roleInfoDialogLayout.background;
     const bg = GameUiHelper.createImage("role_information_background", bgLayout.image, bgLayout.position, bgLayout.size);
-    const combatLayout = roleInfoDialogLayout.combatIcon;
-    bg.addChild(GameUiHelper.createImage("combat_icon", combatLayout.image, combatLayout.position, combatLayout.size));
     this.dialog.addChild(bg);
     // 装备槽分组（左/右/底三个方向），右键槽位脱下装备、左键角标一键换更好的
     this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) =>

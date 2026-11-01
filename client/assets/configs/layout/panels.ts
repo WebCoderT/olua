@@ -36,7 +36,7 @@ export const equipmentSlotLayout = {
   groups: {
     left: { name: "equipment_slots_left", position: new Vec2(-240, 40), size: new Size(50, 290), horizontal: false },
     right: { name: "equipment_slots_right", position: new Vec2(80, 40), size: new Size(50, 290), horizontal: false },
-    bottom: { name: "equipment_slots_bottom", position: new Vec2(-75, -140), size: new Size(170, 50), horizontal: true },
+    bottom: { name: "equipment_slots_bottom", position: new Vec2(-75, -203.5), size: new Size(170, 50), horizontal: true },
   },
 };
 
