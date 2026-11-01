@@ -1,12 +1,19 @@
 import { EQUIPMENT_TYPE } from "../types/good";
-import type { DropEntry, DropPicks, DropSource, DropTable } from "../types/drop";
+import type { DropEntry, DropPicks, DropTable } from "../types/drop";
 import type { MonsterTier } from "../types/monster";
 import { getNearestEquipmentId } from "./equipments";
 
 /**
- * 掉落配置（兜底与具名表）
+ * 掉落配置（兜底与具名表）—— **服务端 seed 的来源，客户端运行时不读**
  *
- * **实际掉落以 configs/monsterDrops 的「每只怪独立掉落表」为准**，本文件负责：
+ * #581 起掉落只由服务端抽（`monster_drops` / `drop_tables`，见 `combat-settlement.service`），
+ * 客户端拿到的只是一次结算的**结果**（settle 帧的 `reward.drops`）。这个文件留在客户端是因为
+ * 它是**出厂数据的唯一书写处**：`tools/gen-shared-data.cjs` 把它抽成
+ * `DROP_TABLES` / `MONSTER_DROPS` / `DROP_DEFAULT`，服务端启动时 seed 进库，之后在管理端改。
+ * 所以：**改这里是改出厂值**（要重跑生成器 + 重新 seed），改线上掉落请去管理端「掉落配置」。
+ * 客户端运行时只从这里取 `dropRuntime`（拾取半径 / 提示节流 / 散落间距这些手感参数）。
+ *
+ * 下面这些表的规则：**实际掉落以 configs/monsterDrops 的「每只怪独立掉落表」为准**，本文件负责：
  * 1. dropData：具名掉落表（字符串 id 引用，适合多怪物复用同一套掉落）
  * 2. monsterDrops(level, tier)：按等级/定位**兜底生成**条目数组——只在某只怪既没有
  *    独立掉落表、条目里也没写 drops 时才会用到（例如新增怪物后还没来得及铺掉落）
@@ -99,20 +106,6 @@ export const defaultDropTable: DropTable = {
     { goodId: "material_cloth", weight: 30, count: [1, 2] },
   ],
 };
-
-/**
- * 解析怪物掉落配置为掉落表
- * @param source 具名表 id / 掉落表对象 / 掉落条目数组；缺省使用默认掉落表
- * @param picks 掉落件数：数字 = 固定件数，[最小, 最大] = 件数区间；
- *              仅 source 为条目数组时生效（数组本身不带件数，
- *              按怪物定位的默认件数由 configs/monster 的 dropPicks 传入）
- */
-export function resolveDropTable(source?: DropSource, picks?: DropPicks): DropTable {
-  if (!source) return defaultDropTable;
-  if (typeof source === "string") return dropTables.get(source) ?? defaultDropTable;
-  if (Array.isArray(source)) return { picks: picks ?? 1, entries: source };
-  return source;
-}
 
 /**
  * **兜底**：按怪物等级与定位生成掉落条目数组

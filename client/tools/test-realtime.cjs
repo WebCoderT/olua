@@ -468,11 +468,16 @@ async function connectOk(heartbeatMs = 600000) {
   const codes = read("ui/utils/net/ApiCodes.ts");
   check(/export const REALTIME_CLOSE/.test(codes) && /REPLACED:\s*4000/.test(codes), "关闭码登记在 ApiCodes（服务端常量的手写镜像，跨端逐键比对见 audit-shared-data）");
 
-  // #493：建图时**无条件**登记图 id（连接可能比进图晚，登记要早于 active 判断）
-  const spawner = read("ui/components/map/MonsterAreaSpawner.ts");
+  // #493：建图时**无条件**登记图 id（连接可能比进图晚，登记要早于任何 active 判断）；
+  // #581：登记点从 MonsterAreaSpawner 搬到 GameMap（那个类连同「本地按区域刷怪」一起删了）
+  const gameMap = read("ui/components/map/GameMap.ts");
   check(
-    /CombatChannel\.sendWorldJoin\(this\.mapId\);[\s\S]{0,600}?if \(CombatChannel\.active\)/.test(spawner),
-    "spawnAll 先无条件 sendWorldJoin 再判 active（否则进图早于连接时 lastJoin 永远是空的）",
+    /CombatChannel\.sendWorldJoin\(this\.onMapId\);/.test(gameMap) && !/CombatChannel\.active/.test(gameMap),
+    "GameMap 建图时无条件 sendWorldJoin，且不拿 active 挡它（否则进图早于连接时 lastJoin 永远是空的）",
+  );
+  check(
+    !/spawnByAreas|MonsterAreaSpawner/.test(gameMap) && !/spawnByAreas/.test(read("ui/core/MonsterManager.ts")),
+    "客户端不再有本地按区域刷怪的路径（#581：怪物实例只能来自服务端 world 帧）",
   );
 
   finish("全部通过：取票 / 建连 / 心跳 / 退避 / 顶替处理都符合预期");

@@ -9,6 +9,9 @@
 
 A **Cocos Creator 3.8.7** prototype of 2D character growth and equipment gameplay, covering login, character selection, map exploration, combat, the bag and the mall,
 plus three growth lines (war soul / title / rank). The server is authoritative for character data; the local copy is only a cache.
+**Monster instances, damage settlement, drop rolling and bag writes are server-side too** (#581): entering a map only
+sends `sendWorldJoin`, incoming instances become nodes, incoming rewards are played out, and clicking a ground item only
+sends a pick request — there is no local fallback that "computes it anyway" when the server is unreachable.
 
 ## Requirements
 

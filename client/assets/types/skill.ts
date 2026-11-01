@@ -71,8 +71,6 @@ export interface SkillMonsterProvider {
   getNearestMonster(position: Vec3, distance: number): Node | null;
   /** 获取目标节点的怪物数据 */
   getMonsterData(target: Node): Monster | null;
-  /** 对目标结算一次伤害（刷新血条，死亡移除） */
-  hurt(target: Node, damage: number): void;
   /**
    * 击退目标（direction 为世界坐标下的方向向量，无需归一化；distance 像素，duration 毫秒）
    * 这是场上唯一能推动怪物的途径

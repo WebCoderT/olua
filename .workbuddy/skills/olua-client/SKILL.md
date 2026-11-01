@@ -9,7 +9,7 @@ agent_created: true
 Cocos 工程在 **`client/`**（用它打开这个目录；资源在 `client/assets/`），没有 npm 脚本；用 Cocos Creator 3.8.7 打开 `client/` 运行。
 `server/`（NestJS）与 `admin/`（React）是另外两个**平级**子工程；仓库根只放总 README / FAQ、跨端 `tools/` 与官网等。
 
-## 一、两条必须记住的边界
+## 一、三条必须记住的边界
 
 1. **本地 `roles` 只是缓存，服务端才是权威。** 进游戏必须从服务端拿完整数据，拿不到**不进场景**；同时写入必须经过服务端。
 2. **游戏数据的唯一真相是客户端自己的 `assets/configs`。** 服务端只存一份不透明 JSON，它不认识装备槽位名、技能 id。所以「服务端校验失败」几乎总是**客户端发出去的形状不对**，而不是服务端不懂游戏。
@@ -17,6 +17,12 @@ Cocos 工程在 **`client/`**（用它打开这个目录；资源在 `client/ass
    由 `GET /game-config` 下发、`applyMapRows` 整表覆写 `configs/map` 的运行时表；客户端只留**资源约定**
    （`mapSrcOf(id) = map/<id>/<id>`、对象组与属性名）。所以「地图名显示成『地图 0』」先看快照拉没拉到，
    别去客户端找配置 —— 那里已经没有出厂数据了。
+3. **怪物实例与掉落也只信服务端（#581）。** 进图无条件 `CombatChannel.sendWorldJoin(mapId)` 登记；服务端按
+   `map_spawn_areas` 播种、按 `monster_drops` / `drop_tables` 抽掉落并**直接写背包**，`roles/pickDrop` 管
+   「地上这件归谁」。客户端只做三件事：把下发实例落成节点、把 reward 演出来（`DropManager.spawnResults`
+   带必填 `castId`）、点地上的东西发 pick 帧等 `applyPickResult`。**「通道断了就本地自己算」的分支一律不许加回来** ——
+   守卫 `tools/audit-world-authority.cjs`（`ui/` 下出现 `spawnByAreas` / `rollDropTable` / `resolveDropTable` /
+   `static hurt(` / `addGood(`，或 `skills/` 下出现 `calcSkillDamage(` / `MonsterManager.hurt(`，即判红）。
 
 ## 二、`ui/utils/net` 的分工（生成物 / 手写）
 
@@ -264,6 +270,7 @@ node tools/audit-api-hardcode.cjs       # 地址 / 请求 / 路径唯一来源
 node tools/audit-api-generated.cjs      # 生成物与文档一致
 node tools/audit-config-leak.cjs        # 可配置项有没有外泄
 node tools/audit-ui-click-through.cjs   # UI 点击会不会穿透到世界
+node tools/audit-world-authority.cjs    # 客户端不许本地刷怪 / 本地抽掉落 / 本地入包（#581）
 ```
 
 > 放在 `/tmp` 下的 tsconfig 在本机读写出过怪问题（`TS5058` 路径不存在 / `cp` ENOENT），所以用**随仓库提交的** `client/tools/tsconfig.check.json`（不是 `temp/`，temp 会被 Cocos 重建且不进版本库）。

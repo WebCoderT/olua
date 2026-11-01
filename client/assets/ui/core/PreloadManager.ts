@@ -92,7 +92,7 @@ export default class PreloadManager {
         const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
         if (npc?.src) tasks.push({ dir: npc.src, kind: "frames" });
       });
-    // 怪物：monster 对象组的 id 属性即怪物编号（与 MonsterAreaSpawner 同一套读法）
+    // 怪物：monster 对象组的 id 属性即怪物编号（与 tools/import-spawn-areas.cjs 同一套读法）
     readTiledObjects(xml, tiledGroupNames.monster).forEach((object) => {
       const monster = monsters.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
       if (monster?.out) tasks.push({ dir: monster.out, kind: "monster", speedRate: monster.speedRate });

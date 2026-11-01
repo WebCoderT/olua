@@ -7,7 +7,7 @@ import AutoBattle from "../../core/AutoBattle";
 import StorageManager from "../../core/StorageManager";
 import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
-import MonsterAreaSpawner from "./MonsterAreaSpawner";
+import CombatChannel from "../../utils/net/CombatChannel";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { mapPointToWorld } from "../../utils/map/MapPointMath";
 import { mapSrcOf } from "../../../configs/map";
@@ -15,8 +15,10 @@ import { mapSrcOf } from "../../../configs/map";
 /**
  * 地图组件（自身即地图节点）
  * 负责地图资源加载与复活点定位，地图对象（NPC/复活点）生成交给 MapObjectSpawner、
- * 碰撞区域（collision 对象组）生成交给 CollisionAreaSpawner、
- * 刷怪区域（monster 对象组）生成交给 MonsterAreaSpawner（怪物本体由 MonsterManager 按区域生成）
+ * 碰撞区域（collision 对象组）生成交给 CollisionAreaSpawner。
+ * **怪物不在这里生成**（#581）：本类只登记「我在哪张图」(`sendWorldJoin`)，
+ * 实例由服务端按 `map_spawn_areas` 播种、经 world 帧落到 MonsterManager —— 客户端没有
+ * 「没有服务端也能刷怪」这条路径了（连离线都不刷：刷出来也结算不了）
  * 地图资源异步加载完成后才在自身挂载 TiledMap 组件并生成地图对象，
  * 避免节点先挂上而地图未加载完成导致的黑屏
  */
@@ -81,9 +83,11 @@ export default class GameMap extends Node {
     objectSpawner.spawnAll();
     // 按 collision 对象组生成碰撞区域（静态碰撞体 + 名称/区域指示线）
     new CollisionAreaSpawner(this as Node).spawnAll();
-    // 按 monster 对象组生成怪物（世界权威 #35：世界在线时发进图播种，权威状态由 world 帧回填；
-    // 通道不可用时退回本地按区域一次性生成）
-    new MonsterAreaSpawner(this as Node, this.onMapId).spawnAll();
+    // 进图登记（#35 / #493）：**无条件**发，且要在任何「通道是否在线」的判断之前 ——
+    // RealtimeClient.start() 是异步的（取票据 → 握手 → welcome），建图常常比它快；
+    // sendWorldJoin 内部先记 lastJoin 再发，未连接时发送是 no-op，连上后 welcome 会补发。
+    // 怪物实例由服务端播种并以 world 帧回来（MonsterManager.applyWorldState），这里不生成任何怪。
+    CombatChannel.sendWorldJoin(this.onMapId);
     // 自动战斗的寻路网格以这张地图为基准（换图后旧网格作废，挂机目标重新选取）
     AutoBattle.setMap(this as Node);
     this.goToRevivePoint(objectSpawner.getRevivePoint());

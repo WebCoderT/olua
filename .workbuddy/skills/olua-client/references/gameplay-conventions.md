@@ -51,7 +51,7 @@
 ## 怪物 / 战斗 / 掉落
 
 - **怪物配置由生成器产出**：`client/tools/gen-monster-config.cjs` 重写 `configs/monster.ts`（规则在文件头，改后重跑；保留手工字段）。**几何读素材 .meta 不解码 PNG**（Cocos 对怪物帧 `trimType:"auto"`，帧 .meta 的 `offsetX/offsetY` 即渲染用裁剪数据，offset y 向上为正）；基准帧 00040；contentSize = trim 尺寸（碰撞盒/点选/血条全靠它，曾有 216 只 0×0 点不中）；outOffset = `(-offsetX,-offsetY)`，消费点 `createMonsterBody`。**speedRate = 每秒循环数**；默认表 `monsterDefaultSpeedRate` + 条目 Partial 覆盖。**运行时 Map 条目没有 key/tier**（建表解构丢弃，单测要 tier 从源码解析）。主动怪 = body 宽 ≥ 250 或 boss；售价 = level × {2,5,20}。守卫 `test-monster-config.cjs`。
-- 掉落链 `monster.drops → DropManager → DropRoller → DropScatter`；**地面掉落名三段着色走 `getEquipmentNameParts`**（禁另写色表），各段 `Label.Overflow.NONE`（CLAMP 会压成 0）。
+- **掉落链（#581 之后）**：**抽表与入包都在服务端** —— `combat-settlement` 读库里的 `monster_drops` / `drop_tables` 抽掉落直接写背包，`roles/pickDrop` 管「地上这件归谁」；客户端 `DropManager.spawnResults(results, position, castId)` 只演散落（`DropScatter`），点击只发 pick 帧等 `applyPickResult`。客户端**没有**抽表能力（`configs/drop.ts` 只是服务端 seed 的出厂书写处，运行时只读 `dropRuntime`），`DropRoller` / `resolveDropTable` / `MonsterManager.hurt` 已删。**地面掉落名三段着色走 `getEquipmentNameParts`**（禁另写色表），各段 `Label.Overflow.NONE`（CLAMP 会压成 0）。
 - TiledMap 必关裁剪（`enableCulling=false`）；**伤害唯一入口 = 技能系统**（普攻 "1000"）；伤害 `max(0, 攻 - 防)`；**角色是 JSON 禁挂方法**。
 - `findOnlineRole()` 每次返回新对象（**长命视图别缓存**）；`deleteRole` 必清 `selectedRole`。
 
@@ -64,5 +64,5 @@
 | `layer-sandbox.cjs` | 真实 `LayerManager` + 引擎语义 Node 垫片 | stub 路径要写 `"../../stubs/UiHit"`（写成 `../stubs/` 会解析到 `ui/stubs/`） |
 | `net-sandbox.cjs` | 真实请求层 | `XMLHttpRequest` 由测试注入 |
 
-现 **24 套** `client/tools/test-*.cjs` + **5 套** `tools/audit-*.cjs`（审计在仓库根）。
+现 **59 套** `client/tools/test-*.cjs` + **16 套** `tools/audit-*.cjs`（审计在仓库根）。
 `test-client-net` / `test-dialog-top` / `test-rank` / `test-title` / `test-bag-discard` 含**源码接线断言**（改签名要同步）。

@@ -5,30 +5,26 @@ import AutoBattle from "../ui/core/AutoBattle";
 import CursorManager from "../ui/core/CursorManager";
 import EffectManager from "../ui/core/EffectManager";
 import LayerManager from "../ui/core/LayerManager";
-import MonsterManager from "../ui/core/MonsterManager";
 import StatusManager from "../ui/core/StatusManager";
 import CombatChannel from "../ui/utils/net/CombatChannel";
-import { calcSkillDamage, getDirectionByVector, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
+import { getDirectionByVector, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
 import { HAS_MOUSE } from "../ui/utils/input/Pointer";
 
 /** ‌基础剑术：对单体目标造成一次物理伤害（伤害与物理攻击相关） */
 export function skill_1000(context: SkillContext) {
-  const { config, level, role, caster, target, monsters } = context;
+  const { config, caster, target, monsters } = context;
   if (!target) return;
   // 面向目标播放技能配置的动作动画（config.action）——表现立刻走，不等服务端的往返
   caster.playSkillAttack(config.action, getDirectionToTarget(target, caster), config.castLockMs);
   const monster = monsters.getMonsterData(target);
   if (!monster) return;
-  const rate = config.damageCoefficients[level - 1].baseTypeRate;
-  // 伤害结算上移服务端（#34）：出手打上去，扣血/飘字/死亡等 settle 帧回来后演
-  // （MonsterManager.applyServerSettle 是结果的落点；实时通道不可用时退回本地口径）
-  if (CombatChannel.active) {
-    CombatChannel.sendCast(config.id, monster.instanceId, monster.id);
-    return;
-  }
-  // 本地结算（回滚路径：与上移前同一套公式，关掉开关就回到纯客户端）
-  const damage = calcSkillDamage(role, monster, "physicalAttack", rate);
-  MonsterManager.hurt(target, damage);
+  // 伤害结算上移服务端（#34）：出手打上去，扣血 / 飘字 / 死亡等 settle 帧回来后演
+  // （MonsterManager.applyServerSettle 是结果的落点）。
+  //
+  // **没有本地结算分支**（#581）：怪物只在服务端生成（进图 worldJoin → 服务端播种 → world 帧），
+  // 通道不在线时场上根本没有怪可打，所以「关掉开关回到纯客户端」那条路不是降级，是空转；
+  // 留着它只会让人以为客户端还能自己打怪。真断线时出手会走 sendCast 的失败提示。
+  CombatChannel.sendCast(config.id, monster.instanceId, monster.id);
 }
 
 /** 烈火剑法：对单体目标造成一次强化物理伤害 */

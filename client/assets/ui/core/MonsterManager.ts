@@ -3,7 +3,7 @@ import { monsters } from "../../configs/monster";
 import { findSkillConfig, skills } from "../../configs/skill";
 import { statuses } from "../../configs/status";
 import { statusEffect } from "../../configs/effect";
-import { Monster, MonsterSpawnArea } from "../../types/monster";
+import { Monster } from "../../types/monster";
 import { SkillId } from "../../types/skill";
 import { ACTION } from "../../types/animation";
 import { skillDamageBand } from "../utils/battle/BattleMath";
@@ -27,17 +27,18 @@ import RealtimeClient from "../utils/net/RealtimeClient";
  * 怪物管理器（静态类）
  * 统一管理怪物数据与怪物节点的映射：
  * 生成（数据+节点+图层挂载）→ 点击/最近目标查询 → 受击结算（扣血/刷血条/死亡移除）→ 换图清空
- * 怪物在开图时按地图的刷怪区域生成（#35 起由服务端持有状态：进图 worldJoin 播种，
- * 死亡后由服务端 tick 到点重生并以 world 帧广播，客户端随之补场；通道不可用时退回
- * 本地按区域一次性生成、不刷新的旧口径）
+ * 怪物的**生成只有一个来源**：服务端（进图 worldJoin → 服务端按 `map_spawn_areas` 播种，
+ * 死亡后由服务端 tick 到点重生并以 world 帧广播，客户端按快照补场）。#581 删掉了
+ * 「通道不可用时本地按区域一次性生成」那条回滚 —— 它让「断线 = 自己造怪」成为可能，
+ * 而造出来的怪没有服务端实例 id，打死了也结算不了（见 applyWorldState 的离线兜底）
  * 怪物的行为与动画（待机游走/追击玩家/普攻/被击退）由 MonsterAI 每帧驱动，本类只管数据与生命周期
  * 所有怪物节点一律挂载到 LayerManager 怪物层（Layer.MONSTER）
  *
  * 伤害结算（#34）：玩家打怪的伤害由服务端算（见 utils/net/CombatChannel），本类的
  * applyServerSettle 是结果的落点 —— 扣多少血、死没死都以服务端说的为准，本地只做表现
- * 与合法带对账；实时通道不可用时技能实现会退回 hurt()（本地口径，回滚路径）。
+ * 与合法带对账。#581 起连「技能本地下手」也没有了（怪物只在服务端生成，断线时场上无怪可打）。
  *
- * 世界权威（#35）：进图由 MonsterAreaSpawner 发 worldJoin，本类 applyWorldState 按服务端
+ * 世界权威（#35）：进图由 GameMap 直接发 worldJoin，本类 applyWorldState 按服务端
  * 快照做差量合并（实例 id 服务端发牌、出生点以快照为准）；游走/追击仍是本地表现层，
  * 服务端持有的「坐标」是出生点。断线重连后 CombatChannel 会自动重发进图登记。
  */
@@ -137,32 +138,6 @@ export default class MonsterManager {
     return node;
   }
 
-  //#region 按刷怪区域生成
-
-  /**
-   * 按地图的刷怪区域生成怪物（开图时由地图的 MonsterAreaSpawner 调用，只生成这一次）
-   * 每个区域按 max 在其矩形范围内随机落点生成对应编号的怪物，之后不再补充
-   * @param areas 地图 monster 对象组解析出的区域列表（空数组表示该地图不刷怪）
-   */
-  static spawnByAreas(areas: MonsterSpawnArea[]) {
-    areas.forEach((area) => {
-      for (let index = 0; index < area.max; index++) this.spawnInArea(area);
-    });
-  }
-
-  /** 在区域内的随机位置生成一只怪物 */
-  private static spawnInArea(area: MonsterSpawnArea) {
-    this.spawn(area.monsterId, this.getRandomAreaPosition(area));
-  }
-
-  /** 取区域内随机一点的坐标（地图节点未旋转缩放，在区域矩形内均匀取值即可） */
-  private static getRandomAreaPosition(area: MonsterSpawnArea) {
-    const { center, size } = area;
-    return new Vec3(center.x + (Math.random() - 0.5) * size.width, center.y + (Math.random() - 0.5) * size.height);
-  }
-
-  //#endregion
-
   /**
    * 获取被点击的怪物节点
    * 命中用 hitTest（屏幕坐标口径，内部走相机 screenToWorld），与走路换算同一坐标系；
@@ -226,19 +201,6 @@ export default class MonsterManager {
   static push(target: Node, direction: Vec2, distance: number, duration?: number) {
     if (!this.monsterMap.has(target)) return;
     MonsterAI.push(target, direction, distance, duration);
-  }
-
-  /**
-   * 对目标怪物结算一次伤害（**仅表现**：实时通道不活跃时技能的本地下手）
-   *
-   * 调用方只有 `skills/*` 的回滚分支（通道连不上时技能不能白放，动作与飘字要演出来）。
-   * #550 起这条路上**不给经验也不铺掉落** —— 经验只由服务端结算，本地这一下打死的怪
-   * 在下一次世界快照里就是「服务端认为它还活着」或「别人杀的」，给经验等于白送。
-   */
-  static hurt(target: Node, damage: number) {
-    const monster = this.getMonsterData(target);
-    if (!monster || monster.hp <= 0) return;
-    this.applyDamage(target, monster, damage, Math.max(0, monster.hp - damage));
   }
 
   /**

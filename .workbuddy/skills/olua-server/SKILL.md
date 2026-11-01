@@ -181,9 +181,10 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   **连「码的清单」与「文案」也派生**：`shared/game-data.ts`（手写门面，与管理端的 `api/gameData.ts` 对称）
   给出 `ROLE_OCCUPATION_CODES` / `ROLE_SEX_CODES` 与 `OCCUPATION_HINT` / `SEX_HINT` ——
   客户端加一个职业码，服务端的校验清单与 DTO 里那行 `1 战士 / 2 魔法师 / …` **自动跟着变**（不必改服务端一行）。
-- **不在范围**：掉落（`configs/monsterDrops` 依赖 UI 模块，留待后续上移）；时装（`configs/fashionClothes`
+- **已上移**：掉落（#581 —— `drop_tables` / `monster_drops` 进库当运营数据，`combat-settlement` 抽表、
+  `roles/pickDrop` 入包，客户端只演散落与拾取）。**不在范围**：时装（`configs/fashionClothes`
   整份被注释，没有活的来源 —— 不凭空造一份）。怪物战斗数值已进快照（#34，MONSTER_COMBAT）；怪物实例
-  属世界权威（#35，服务端持有状态、客户端进图播种）。
+  属世界权威（#35，服务端读 `map_spawn_areas` 播种、tick 重生、状态落盘；#581 删掉了客户端进图自己刷的那条路）。
 - 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译
   （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
   连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
@@ -605,7 +606,7 @@ env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.
 **每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
 
 - 一个功能一个 commit，**改完立刻提交**；不要把多个不相关改动混在一次提交里（这样「哪次改动引入了回归」永远能二分出来）。
-- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 十套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端十套 e2e + 管理端构建 + 15 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
+- 提交前跑绿 `env -u NODE_OPTIONS npm run verify`（编译 + 十套 e2e + 生成物审计），**全绿才提交**。（CI 跑的是 `make ci`：服务端十套 e2e + 管理端构建 + 16 个跨端审计；客户端门禁是本地专属，需要 Cocos 工程与不入库的素材。）
 - 提交信息用 `feat|fix|refactor|docs|test|chore(端): 一句话说清做了什么`（`chore` 用于构建 / 工具 / 依赖），正文列关键改动与验证结果；服务端的端名取 `server`。
 - **改了接口的提交必须连生成物一起提交**（`openapi.json` + 两端接口文件是同一笔改动的一部分，否则另外两端停在旧契约上）。
 - 涉及多端的同一功能拆成几个提交，顺序按依赖（服务端先，再 `admin` / `client`，最后 `docs`）。

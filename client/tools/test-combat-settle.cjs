@@ -97,12 +97,14 @@ const channelSource = read(path.join("assets", "ui", "utils", "net", "CombatChan
 const skillTypeSource = read(path.join("assets", "types", "skill.ts"));
 
 check(
-  /if \(CombatChannel\.active\) \{\s*\n\s*CombatChannel\.sendCast\(config\.id, monster\.instanceId, monster\.id\);\s*\n\s*return;/.test(warriorSource),
-  "通道可用：sendCast(config.id, instanceId, monsterKey) 后 return（本地不许再扣一次血）",
+  /CombatChannel\.sendCast\(config\.id, monster\.instanceId, monster\.id\);/.test(warriorSource),
+  "出手只发 sendCast(config.id, instanceId, monsterKey)（伤害由服务端算）",
 );
+// #581：本地扣血那条回滚已删 —— 怪物只在服务端生成，断线时场上根本没有怪可打，
+// 留着「算一遍本地伤害」只会让人以为客户端还能自己打怪
 check(
-  /calcSkillDamage\(role, monster, "physicalAttack", rate\)/.test(warriorSource) && /MonsterManager\.hurt\(target, damage\)/.test(warriorSource),
-  "本地回滚路径保留（通道不可用时走与上移前同一套公式）",
+  !/calcSkillDamage\(/.test(warriorSource) && !/MonsterManager\.hurt\(/.test(warriorSource) && !/static hurt\(/.test(monsterSource),
+  "客户端没有本地扣血路径（skills 不算伤害、MonsterManager 没有 hurt）",
 );
 check(
   /static applyServerSettle\(/.test(monsterSource) && /skillDamageBand\(role, monster, "physicalAttack", rate\)/.test(monsterSource),
