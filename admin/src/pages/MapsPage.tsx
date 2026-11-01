@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { gameResUrl } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Button, Card, EmptyState, Field as FormField, Input, Notice, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
-import { mapPreview, mapsApi, refreshMapCatalog } from "../api";
-import type { MapDetail, MapGroup, MapObject, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
+import { Badge, Button, Card, EmptyState, Field as FormField, Input, Notice, Select, Spinner } from "../components/ui";
+import { MapCanvas, type MapLayerVisibility } from "../components/map/MapCanvas";
+import {
+  GroupsDialog,
+  LayersDialog,
+  NpcPointsDialog,
+  SourcesDialog,
+  SpawnAreasDialog,
+  WorldMonstersDialog,
+} from "../components/map/MapDialogs";
+import { mapsApi, refreshMapCatalog } from "../api";
+import type { MapDetail, MapObject, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
 import { toastSuccess } from "../store/toast";
 
 /** 类型码（服务端生成的字面量联合："0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
@@ -18,8 +27,14 @@ interface MapForm {
   soulOfWar: string;
 }
 
+/** 打开中的观测弹窗（页面主视图只留配置 + 地图，其余按需打开） */
+type DialogKey = "layers" | "points" | "spawn" | "monsters" | "groups" | "sources" | null;
+
+/** 叠加层的默认开关：碰撞盒数量大（每图上百个），默认关；其余默认开 */
+const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, tiled: true, npc: true, revive: true, collision: false };
+
 /**
- * 地图管理（#571 观测台 / #573 玩法配置可改）
+ * 地图管理（#571 观测台 / #573 玩法配置可改 / #580 可视化 + 弹窗）
  *
  * ## 这一页能改什么、不能改什么
  *
@@ -28,21 +43,25 @@ interface MapForm {
  * - **服务端**存「对这份资源的整理结果」；
  * - **管理端**可视化地改服务端的整理结果。
  *
- * 所以这里分两块：
- *
  * | 块 | 能不能改 | 改了怎么生效 |
  * |---|---|---|
  * | 名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 | **能改**（`PATCH /admin/maps/:id`） | 立即（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
  * | 图层 / 对象组 / 刷怪区 / 场上怪物 | 只读 | 改 TMX → 跑导入工具 → 重打包客户端 |
  *
- * ## 两套坐标必须分开看（页面里也是最容易看错的地方）
+ * ## 为什么观测数据都在弹窗里
+ *
+ * 这一页的主任务是「看这张图对不对」，而看的方式是**地图**，不是六个表格。表格平铺在页面上
+ * 会把地图挤到需要滚动才能看见的位置 —— 地图页看不到地图，等于没有地图页。
+ *
+ * ## 两套坐标在图上同时画（页面里最容易看错的地方）
  *
  * | 展示块 | 口径 | 来源 |
  * |---|---|---|
  * | 对象组 / NPC / 复活点 | **Tiled 原始坐标**（左上角原点、y 向下） | 服务端生成快照（源自 TMX） |
  * | 刷怪区 | **世界坐标**（原点 = 地图左上角、y 轴向上，故 cy 为负） | `map_spawn_areas` 表 |
  *
- * 两条路的同一块区域，数值本来就不同（差一次 y 取反），不是数据不一致。
+ * 同一块区域两条路的数值本来就不同（差一次 y 取反），不是数据不一致 —— 图上让它们重合，
+ * 才是「导入没算错」的判据。
  */
 export function MapsPage() {
   const [list, setList] = useState<MapSummary[]>([]);
@@ -51,9 +70,14 @@ export function MapsPage() {
   const [detail, setDetail] = useState<MapDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [previewFailed, setPreviewFailed] = useState(false);
   const [form, setForm] = useState<MapForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [layers, setLayers] = useState<MapLayerVisibility>(DEFAULT_LAYERS);
+  const [dialog, setDialog] = useState<DialogKey>(null);
+  const [focusArea, setFocusArea] = useState<number | undefined>(undefined);
+  const [focusNpc, setFocusNpc] = useState<number | undefined>(undefined);
+  /** 放大地图（密集的图在 620px 宽下标签会挤，这里给到 1024） */
+  const [zoomed, setZoomed] = useState(false);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -77,7 +101,6 @@ export function MapsPage() {
     if (!selected) return;
     let cancelled = false;
     setDetailLoading(true);
-    setPreviewFailed(false);
     mapsApi
       .detail(selected)
       .then((data) => {
@@ -122,13 +145,25 @@ export function MapsPage() {
     }
   };
 
+  /** 从图上点刷怪区 → 打开弹窗并定位到那一行 */
+  const openArea = (area: MapSpawnArea) => {
+    setFocusArea(area.id);
+    setDialog("spawn");
+  };
+
+  /** 从图上点 NPC / 复活点 → 打开弹窗并定位到那一行 */
+  const openNpc = (object: MapObject) => {
+    setFocusNpc(object.id);
+    setDialog("points");
+  };
+
   const dirty = !!form && !!detail && !sameForm(form, formOf(detail));
 
   return (
     <div className="space-y-3">
       <PageHeader
         title="地图管理"
-        description="玩法配置（名称 / 类型 / 进入条件）在这里改，保存即生效；地图资源（TMX / 底图）仍走客户端资源包。"
+        description="玩法配置在这里改，保存即生效；怪物与 NPC 在地图上看。"
         actions={
           <>
             <Badge tone="indigo">可编辑玩法配置</Badge>
@@ -140,14 +175,11 @@ export function MapsPage() {
       />
 
       <Notice tone="slate" title="哪些能改、哪些改不了">
-        <span className="text-emerald-300">能改</span>：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 ——
-        这些以前写在客户端 <code className="text-slate-200">configs/map.ts</code> 里，改一次要重打整个客户端包；
-        现在归服务端 <code className="text-slate-200">maps</code> 表，保存后服务端进图校验立即按新值判，客户端下次进游戏拉取新配置。
+        <span className="text-emerald-300">能改</span>：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶（服务端 <code className="text-slate-200">maps</code> 表，保存即生效）。
         <br />
-        <span className="text-amber-300">改不了</span>：图层 / 对象组 / 刷怪区 —— 它们来自 TMX。换图的唯一路径是改{" "}
+        <span className="text-amber-300">改不了</span>：图层 / 刷怪区 / NPC —— 它们来自 TMX。换图只能改{" "}
         <code className="text-slate-200">resources/map/&lt;id&gt;/&lt;id&gt;.tmx</code> → 跑{" "}
-        <code className="text-slate-200">node tools/import-spawn-areas.cjs</code>（带{" "}
-        <code className="text-slate-200">--db</code> 时覆盖刷怪区表）→ 重新打包客户端。
+        <code className="text-slate-200">node tools/import-spawn-areas.cjs</code>（带 <code className="text-slate-200">--db</code> 时覆盖刷怪区表）→ 重新打包客户端。
       </Notice>
 
       {loading ? (
@@ -166,9 +198,7 @@ export function MapsPage() {
                       type="button"
                       onClick={() => setSelected(item.id)}
                       className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
-                        active
-                          ? "border-indigo-500/50 bg-indigo-500/10"
-                          : "border-slate-800 bg-slate-900/40 hover:border-slate-700"
+                        active ? "border-indigo-500/50 bg-indigo-500/10" : "border-slate-800 bg-slate-900/40 hover:border-slate-700"
                       }`}
                     >
                       <div className="flex items-baseline justify-between gap-2">
@@ -178,7 +208,9 @@ export function MapsPage() {
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
                         <span>{item.typeLabel}</span>
                         <span>·</span>
-                        <span>{item.cols}×{item.rows}</span>
+                        <span>
+                          {item.cols}×{item.rows}
+                        </span>
                         <span>·</span>
                         <span>刷怪区 {item.spawnAreaCount}</span>
                       </div>
@@ -198,47 +230,12 @@ export function MapsPage() {
               </Card>
             ) : !detail || !form ? (
               <Card>
-                <EmptyState title="选一张地图" description="左侧列表里点一张图，这里显示它的全部信息" />
+                <EmptyState title="选一张地图" description="左侧列表里点一张图，这里显示它的玩法配置与地图" />
               </Card>
             ) : (
               <>
                 <Card
-                  title={`${detail.label || `（未命名 #${detail.id}）`}（#${detail.id}）`}
-                  description={`资源路径 ${detail.src || "—"} · ${detail.typeLabel}`}
-                  actions={<Badge tone="indigo">{detail.typeLabel}</Badge>}
-                >
-                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
-                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs sm:grid-cols-3">
-                      <Field label="尺寸" value={`${detail.cols} × ${detail.rows} 格`} />
-                      <Field label="单格" value={`${detail.tileWidth} × ${detail.tileHeight} px`} />
-                      <Field label="像素" value={`${detail.width} × ${detail.height}`} />
-                      <Field label="图层" value={String(detail.layerCount)} />
-                      <Field label="NPC" value={String(detail.npcCount)} />
-                      <Field label="复活点" value={String(detail.reviveCount)} />
-                      <Field label="刷怪区（资源）" value={String(detail.monsterAreaCount)} />
-                      <Field label="刷怪区（服务端）" value={String(detail.spawnAreaCount)} />
-                      <Field label="场上怪物" value={String(detail.worldMonsterCount)} />
-                    </dl>
-                    <div>
-                      {previewFailed ? (
-                        <div className="flex h-[136px] items-center justify-center rounded-lg border border-slate-800 bg-slate-900/60 text-[11px] text-slate-600">
-                          无预览图
-                        </div>
-                      ) : (
-                        <img
-                          alt={`${detail.label} 预览`}
-                          src={gameResUrl(mapPreview(detail.id), "jpg")}
-                          onError={() => setPreviewFailed(true)}
-                          className="h-[136px] w-full rounded-lg border border-slate-800 bg-slate-900/60 object-cover"
-                        />
-                      )}
-                      <p className="mt-1 text-[11px] text-slate-600">预览图取自客户端资源（map/{detail.id}/preview.jpg）</p>
-                    </div>
-                  </div>
-                </Card>
-
-                <Card
-                  title="玩法配置"
+                  title={`${detail.label || `（未命名 #${detail.id}）`}（#${detail.id}）· 玩法配置`}
                   description="保存即生效：服务端进图校验读这张表，客户端下次进游戏拉取新配置"
                   actions={
                     <div className="flex items-center gap-2">
@@ -254,12 +251,7 @@ export function MapsPage() {
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <FormField label="地图名称">
-                      <Input
-                        value={form.label}
-                        maxLength={24}
-                        placeholder="如：卧龙城"
-                        onChange={(event) => setForm({ ...form, label: event.target.value })}
-                      />
+                      <Input value={form.label} maxLength={24} placeholder="如：卧龙城" onChange={(event) => setForm({ ...form, label: event.target.value })} />
                     </FormField>
                     <FormField label="类型（决定传送弹窗分组）">
                       <Select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as MapTypeCode })}>
@@ -271,186 +263,70 @@ export function MapsPage() {
                       </Select>
                     </FormField>
                     <FormField label="进入等级（0 = 不限）">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={200}
-                        value={form.level}
-                        onChange={(event) => setForm({ ...form, level: event.target.value })}
-                      />
+                      <Input type="number" min={0} max={200} value={form.level} onChange={(event) => setForm({ ...form, level: event.target.value })} />
                     </FormField>
                     <FormField label="进入战斗力（0 = 不限）">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.combat}
-                        onChange={(event) => setForm({ ...form, combat: event.target.value })}
-                      />
+                      <Input type="number" min={0} value={form.combat} onChange={(event) => setForm({ ...form, combat: event.target.value })} />
                     </FormField>
                     <FormField label="进入战魂阶（0 = 不限）">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.soulOfWar}
-                        onChange={(event) => setForm({ ...form, soulOfWar: event.target.value })}
-                      />
+                      <Input type="number" min={0} value={form.soulOfWar} onChange={(event) => setForm({ ...form, soulOfWar: event.target.value })} />
                     </FormField>
                   </div>
                   <p className="mt-2 text-[11px] text-slate-500">
-                    数值 <code className="text-slate-400">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。
-                    改完保存，玩家下一次进游戏（客户端拉配置快照）就能看到新名字与新门槛；已经在图里的玩家不受影响。
+                    数值 <code className="text-slate-400">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。已经在图里的玩家不受影响，新门槛从下一次进游戏开始生效。
                   </p>
                 </Card>
 
-                <Card title="数据来源" description="这一页每个数字是谁的 —— 来源不同，能不能改也不同">
-                  <div className="overflow-x-auto">
-                    <table className={tableClass}>
-                      <thead className={theadClass}>
-                        <tr>
-                          <th className={thClass}>数据块</th>
-                          <th className={thClass}>类别</th>
-                          <th className={thClass}>文件 / 表</th>
-                          <th className={thClass}>说明</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.sources.map((source) => (
-                          <tr key={source.section}>
-                            <td className={tdClass}>{source.label}</td>
-                            <td className={tdClass}>
-                              <Badge tone={source.origin === "db" ? "green" : source.origin === "config" ? "amber" : "slate"}>
-                                {source.origin === "db" ? "服务端库表" : source.origin === "config" ? "客户端资源" : "生成快照"}
-                              </Badge>
-                            </td>
-                            <td className={`${tdClass} font-mono text-[11px]`}>{source.ref}</td>
-                            <td className={`${tdClass} whitespace-normal text-slate-400`}>{source.note}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <Card
+                  title="地图"
+                  description={
+                    <>
+                      实线 = 服务端刷怪区（世界坐标）；虚线 = TMX 原始矩形（Tiled 坐标），两者重合才说明导入没算错。
+                      <br />
+                      资源 {detail.src || "—"} · {detail.cols}×{detail.rows} 格（{detail.width}×{detail.height} px）· 图层 {detail.layerCount} · NPC/复活点{" "}
+                      {detail.npcCount}/{detail.reviveCount} · 刷怪区 {detail.spawnAreaCount}（资源 {detail.monsterAreaCount}）· 场上怪物 {detail.worldMonsterCount}
+                    </>
+                  }
+                  actions={
+                    <>
+                      <Button variant="ghost" onClick={() => setZoomed(true)}>
+                        放大
+                      </Button>
+                      <Button variant="ghost" onClick={() => setLayers(DEFAULT_LAYERS)}>
+                        重置图层
+                      </Button>
+                    </>
+                  }
+                >
+                  <LayerLegend visible={layers} onChange={setLayers} />
+                  <div className="mt-2">
+                    <MapCanvas detail={detail} visible={layers} onPickArea={openArea} onPickNpc={openNpc} />
                   </div>
-                </Card>
-
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                  <Card title="图层" description="TMX 结构（瓦片数据留在客户端）">
-                    <div className="overflow-x-auto">
-                      <table className={tableClass}>
-                        <thead className={theadClass}>
-                          <tr>
-                            <th className={thClass}>图层名</th>
-                            <th className={thClass}>格数</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {detail.layers.map((layer) => (
-                            <tr key={layer.name}>
-                              <td className={tdClass}>{layer.name}</td>
-                              <td className={tdClass}>{layer.width} × {layer.height}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                  <Card title="NPC / 复活点" description="Tiled 原始坐标（左上角原点、y 向下）">
-                    <ObjectsTable objects={npcObjects(detail.groups)} empty="这张图没有 NPC / 复活点" />
-                  </Card>
-                </div>
-
-                <Card title="刷怪区（服务端整理后）" description="世界坐标：原点 = 地图左上角、y 轴向上（cy 因此为负）；播种直接读这张表">
-                  {detail.spawnAreas.length === 0 ? (
-                    <EmptyState title="没有刷怪区" description="安全地图不刷怪；或者这张图还没跑过导入工具" />
-                  ) : (
-                    <div className="max-h-72 overflow-auto">
-                      <table className={tableClass}>
-                        <thead className={theadClass}>
-                          <tr>
-                            <th className={thClass}>#</th>
-                            <th className={thClass}>区域名</th>
-                            <th className={thClass}>怪物</th>
-                            <th className={thClass}>数量</th>
-                            <th className={thClass}>中心（世界）</th>
-                            <th className={thClass}>尺寸</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {detail.spawnAreas.map((area) => (
-                            <tr key={area.id}>
-                              <td className={tdClass}>{area.id}</td>
-                              <td className={tdClass}>{area.name}</td>
-                              <td className={tdClass}>
-                                {area.monsterLabel} <span className="text-slate-600">({area.monsterKey})</span>
-                              </td>
-                              <td className={tdClass}>{area.min}~{area.max}</td>
-                              <td className={tdClass}>({area.cx}, {area.cy})</td>
-                              <td className={tdClass}>{area.w} × {area.h}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Card>
-
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                  <Card title="场上怪物" description="服务端世界实例（world_monsters），按区聚合">
-                    {detail.worldMonsters.length === 0 ? (
-                      <EmptyState title="当前没有实例" description="世界没跑过这张图，或进程刚重启还没播种" />
-                    ) : (
-                      <table className={tableClass}>
-                        <thead className={theadClass}>
-                          <tr>
-                            <th className={thClass}>区服</th>
-                            <th className={thClass}>实例数</th>
-                            <th className={thClass}>存活</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {detail.worldMonsters.map((item) => (
-                            <tr key={item.zoneId}>
-                              <td className={tdClass}>{item.zoneId} 区</td>
-                              <td className={tdClass}>{item.total}</td>
-                              <td className={tdClass}>{item.alive}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </Card>
-
-                  <Card title="对象组计数" description="客户端资源里的对象数（不是服务端刷怪区）">
-                    <table className={tableClass}>
-                      <thead className={theadClass}>
-                        <tr>
-                          <th className={thClass}>对象组</th>
-                          <th className={thClass}>对象数</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.groups.map((group) => (
-                          <tr key={group.name}>
-                            <td className={tdClass}>{group.name}</td>
-                            <td className={tdClass}>{group.objects.length}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </Card>
-                </div>
-
-                <Card title="对象组明细" description="Tiled 原始坐标与属性；用来对着编辑器核对资源里到底有什么">
-                  <div className="space-y-2">
-                    {detail.groups.map((group) => (
-                      <details key={group.name} className="rounded-lg border border-slate-800 bg-slate-900/30" open={group.name !== "collision"}>
-                        <summary className="cursor-pointer select-none px-3 py-2 text-xs text-slate-300">
-                          {group.name} <span className="text-slate-600">（{group.objects.length} 个）</span>
-                        </summary>
-                        <div className="max-h-64 overflow-auto border-t border-slate-800 px-3 py-2">
-                          <ObjectsTable objects={group.objects} empty="这个对象组是空的" />
-                        </div>
-                      </details>
-                    ))}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button variant="ghost" onClick={() => {
+                        setFocusArea(undefined);
+                        setDialog("spawn");
+                      }}>
+                      刷怪区（{detail.spawnAreas.length}）
+                    </Button>
+                    <Button variant="ghost" onClick={() => {
+                        setFocusNpc(undefined);
+                        setDialog("points");
+                      }}>
+                      NPC / 复活点（{detail.npcCount + detail.reviveCount}）
+                    </Button>
+                    <Button variant="ghost" onClick={() => setDialog("monsters")}>
+                      场上怪物（{detail.worldMonsterCount}）
+                    </Button>
+                    <Button variant="ghost" onClick={() => setDialog("layers")}>
+                      图层（{detail.layerCount}）
+                    </Button>
+                    <Button variant="ghost" onClick={() => setDialog("groups")}>
+                      对象组（{detail.groups.length}）
+                    </Button>
+                    <Button variant="ghost" onClick={() => setDialog("sources")}>
+                      数据来源
+                    </Button>
                   </div>
                 </Card>
               </>
@@ -458,6 +334,58 @@ export function MapsPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={zoomed}
+        title={`${detail?.label ?? ""}（#${detail?.id ?? ""}）· 放大地图`}
+        hint="与页面上是同一份数据，只是画得更大；密集的图在这里看标签与区域边界"
+        size="xl"
+        onClose={() => setZoomed(false)}
+      >
+        {detail ? (
+          <MapCanvas
+            detail={detail}
+            visible={layers}
+            maxWidth="min(100%, 72vh)"
+            onPickArea={() => undefined}
+            onPickNpc={() => undefined}
+          />
+        ) : null}
+      </Modal>
+
+      <SpawnAreasDialog open={dialog === "spawn"} detail={detail} focusId={focusArea} onClose={() => setDialog(null)} />
+      <NpcPointsDialog open={dialog === "points"} detail={detail} focusId={focusNpc} onClose={() => setDialog(null)} />
+      <WorldMonstersDialog open={dialog === "monsters"} detail={detail} onClose={() => setDialog(null)} />
+      <LayersDialog open={dialog === "layers"} detail={detail} onClose={() => setDialog(null)} />
+      <GroupsDialog open={dialog === "groups"} detail={detail} onClose={() => setDialog(null)} />
+      <SourcesDialog open={dialog === "sources"} detail={detail} onClose={() => setDialog(null)} />
+    </div>
+  );
+}
+
+/** 叠加层图例 + 开关（色块与 MapCanvas 的描边同一套颜色，靠 label 对上而不是靠记忆） */
+function LayerLegend({ visible, onChange }: { visible: MapLayerVisibility; onChange: (next: MapLayerVisibility) => void }) {
+  const items: Array<{ key: keyof MapLayerVisibility; label: string; color: string; dash?: boolean }> = [
+    { key: "spawn", label: "刷怪区（服务端）", color: "#818cf8" },
+    { key: "tiled", label: "TMX 原始矩形", color: "#fbbf24", dash: true },
+    { key: "npc", label: "NPC", color: "#38bdf8" },
+    { key: "revive", label: "复活点", color: "#34d399" },
+    { key: "collision", label: "碰撞盒", color: "#fb7185" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      {items.map((item) => (
+        <label key={item.key} className="flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-400">
+          <input
+            type="checkbox"
+            checked={visible[item.key]}
+            onChange={(event) => onChange({ ...visible, [item.key]: event.target.checked })}
+            className="h-3 w-3 accent-indigo-500"
+          />
+          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: item.dash ? "transparent" : item.color, border: `2px ${item.dash ? "dashed" : "solid"} ${item.color}` }} />
+          {item.label}
+        </label>
+      ))}
     </div>
   );
 }
@@ -487,62 +415,5 @@ function sameForm(a: MapForm, b: MapForm): boolean {
     toInt(a.level) === toInt(b.level) &&
     toInt(a.combat) === toInt(b.combat) &&
     toInt(a.soulOfWar) === toInt(b.soulOfWar)
-  );
-}
-
-/** 只取 NPC 与复活点对象（对象类可能落在 npc 组，也可能在早期地图的 objects 组里） */
-function npcObjects(groups: MapGroup[]): MapObject[] {
-  return groups.flatMap((group) => group.objects).filter((object) => object.klass === "npc" || object.klass === "revive");
-}
-
-/** 对象表（对象组明细与 NPC 表共用一份，避免两处列宽漂移） */
-function ObjectsTable({ objects, empty }: { objects: MapObject[]; empty: string }) {
-  if (objects.length === 0) return <EmptyState title={empty} />;
-  return (
-    <table className={tableClass}>
-      <thead className={theadClass}>
-        <tr>
-          <th className={thClass}>id</th>
-          <th className={thClass}>名称</th>
-          <th className={thClass}>类</th>
-          <th className={thClass}>坐标（Tiled）</th>
-          <th className={thClass}>尺寸</th>
-          <th className={thClass}>属性</th>
-        </tr>
-      </thead>
-      <tbody>
-        {objects.map((object) => (
-          <tr key={`${object.id}-${object.name}`}>
-            <td className={tdClass}>{object.id}</td>
-            <td className={tdClass}>{object.name || "—"}</td>
-            <td className={tdClass}>{object.klass || "—"}</td>
-            <td className={tdClass}>({object.x}, {object.y})</td>
-            <td className={tdClass}>
-              {object.width || object.height ? `${object.width} × ${object.height}` : "点"}
-            </td>
-            <td className={`${tdClass} whitespace-normal font-mono text-[11px] text-slate-500`}>
-              {formatProperties(object.properties)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/** 属性对象 → 一行 `k=v`（空属性给「—」，别让单元格看起来像漏数据） */
-function formatProperties(properties: Record<string, string>): string {
-  const entries = Object.entries(properties);
-  if (entries.length === 0) return "—";
-  return entries.map(([key, value]) => `${key}=${value}`).join(" · ");
-}
-
-/** 详情里的小字段（标签 + 值）；不用 ui 的 Field 是因为它带输入框语义（label + input） */
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] text-slate-500">{label}</dt>
-      <dd className="truncate text-slate-200">{value}</dd>
-    </div>
   );
 }
