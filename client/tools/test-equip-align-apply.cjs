@@ -156,7 +156,10 @@ function main() {
   );
 
   const game = read("assets/ui/Game.ts");
-  check(/void loadGameConfig\(\)/.test(game), "Game 场景启动时调 loadGameConfig（每次进图都走一遍）");
+  check(
+    /await loadGameConfig\(\)/.test(game),
+    "Game 场景启动时 **await** loadGameConfig（每次进图都走一遍；#573 起地图名与进入条件不在客户端，不等就会显示成「地图 0」）",
+  );
 
   console.log("\n=== 八、裸模出厂几何必须真的踩在地面上 ===");
   // 坑：外观节点是默认 anchor 0.5/0.5 的 Sprite，位置的语义是「**画布中心**落在脚下」，

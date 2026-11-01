@@ -219,6 +219,23 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_map_spawn_areas_natural ON map_spawn_areas(map_id, name);
       CREATE INDEX IF NOT EXISTS idx_map_spawn_areas_map ON map_spawn_areas(map_id);
 
+      -- 地图玩法配置（#573）：一行 = 一张图的「整理结果」。
+      -- 客户端只存资源本体（TMX / 图 / 预览图），名称 / 类型 / 进入条件这些**玩法数据**归服务端，
+      -- 管理端「地图管理」页可视化地改它们，客户端进游戏时随配置快照拉走（configs/apply-snapshot）。
+      -- map_id 与 resources/map/<id>/<id>.tmx 的目录名对应 —— 资源清单的真相仍在客户端，
+      -- 所以这里**没有「新建地图」接口**：新图要先把 TMX 放进资源包，再跑工具，行由 seed 补出来。
+      -- 没有 sort_order：地图 id 是数字字符串，界面与接口一律按数值升序（10 排在 9 后面）。
+      CREATE TABLE IF NOT EXISTS maps (
+        map_id      TEXT    PRIMARY KEY,
+        label       TEXT    NOT NULL DEFAULT '',
+        type        TEXT    NOT NULL DEFAULT '0',
+        level       INTEGER NOT NULL DEFAULT 0,
+        combat      INTEGER NOT NULL DEFAULT 0,
+        soul_of_war INTEGER NOT NULL DEFAULT 0,
+        updated_by  TEXT    NOT NULL DEFAULT '',
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
+
       -- 区服（#295 阶段二）：一行 = 一个游戏区。账号注册时选定归属区，
       -- 各区的世界（怪物实例）相互独立；合并区后 from 区在此打 merged_into 标记
       -- （不删行：区号是历史事实，管理端列表还要展示「已并入 X 区」）。

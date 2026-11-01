@@ -30,7 +30,8 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 | `config.ts` | 手写 | 读 `VITE_API_BASE_URL` + `buildUrl` + `API_TIMEOUT`（地址唯一来源） |
 | `http.ts` | 手写 | 请求唯一出口（见下） |
 | `types.ts` | 手写 | **服务端文档里没有的东西**：`ApiEnvelope` / `PageResult<T>` / `ApiError` / `BIZ_CODE` / `RELOGIN_CODES` / `PERMISSION` / 权限点与审计动作的中文名字典 / 时间与输入框换算。**游戏数据不在这里** |
-| `gameData.ts` | 引用**生成物** | 游戏数据的唯一入口：re-export 三端共用的 `server/src/shared/game-data.generated.ts`（相对路径 import，Vite 打包）+ 查表函数（`equipmentText` / `skillText` / `itemText` / `mapText` / `soulText` / `titleText` / `rankText` / `occupationLabel` / `sexLabel` / `slotLabel`） |
+| `gameData.ts` | 引用**生成物** | 游戏数据的唯一入口：re-export 三端共用的 `server/src/shared/game-data.generated.ts`（相对路径 import，Vite 打包）+ 查表函数（`equipmentText` / `skillText` / `itemText` / `soulText` / `titleText` / `rankText` / `occupationLabel` / `sexLabel` / `slotLabel`） |
+| `mapCatalog.ts` | 手写 | **地图名录的进程内缓存**（#573：地图名只在服务端 `maps` 表，而角色详情 / 实体选择器要**同步**读）—— `Layout` 挂载时 `ensureMapCatalog()` 拉一次，地图页保存成功后 `refreshMapCatalog()`；`mapText(id)` 缓存没到时回落显示 id |
 | `index.ts` | 手写 | barrel —— **页面 import 统一走 `../api`**，换生成物时页面一行都不用改 |
 
 守卫（在**仓库根**跑）：`node tools/audit-api-generated.cjs`（生成物逐字节一致 + 生成标记 + 路径只在路径表）、
@@ -39,10 +40,14 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 
 ### 游戏数据：一份来源，三端共用（用户 2026-10-13 定的硬要求，issue #117~#119）
 
-装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字与元数据，权威定义只有一处 —— 客户端
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品的名字与元数据，权威定义只有一处 —— 客户端
 `client/assets/configs`（外加 `client/assets/types/role.ts` 的枚举注释：「全职业」职业码与三个性别名只写在那儿）。
 管理端**不复制**：`api/gameData.ts` 按相对路径 import `server/src/shared/game-data.generated.ts`
 （由 `tools/gen-shared-data.cjs` 生成），**服务端与管理端读的是同一个文件**。
+
+**地图不在这一套里（#573）**：地图的玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）归服务端 `maps` 表，
+出厂值只是 `server/src/common/constants/map-config.ts` 的 seed，客户端只留资源约定（`map/<id>/<id>` 目录）；
+生成物里已经没有 `MAPS` / `MAP_LABELS`，页面上的地图名走 `api/mapCatalog.ts`。
 
 - **此前管理端自己抄过一份** `OCCUPATION_LABELS` / `SEX_LABELS`（写在 `types.ts` 里）—— 客户端改了这边不会知道，
   已删掉改引用生成物；`audit-shared-data` 现在会扫 `admin/src` 抓「与生成物同名的字典型定义」。
@@ -92,7 +97,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `EquipmentsPage` | **养成配置**（装备基础件 #252）：部位 / 等级段筛选 + 分页；**只收基础件**（37 件，变体在客户端按倍率展开）；编辑弹窗只开放等级 / 售卖价 / 八项属性（页面内 `EquipmentEditDialog`，不复用 GameConfigDialog —— 字段差异太大） |
 | `MonstersPage` | **养成配置**（怪物基础数据 #258）：关键字 / 定位筛选 + 分页；编辑弹窗开放名称 / 等级 / 生命上限 / 六项攻防区间（页面内 `MonsterEditDialog`，区间字段复用 `RANGE_FIELDS`）；**改值即时生效**（世界播种与伤害结算直读 monsters 表） |
 | `NpcsPage` | **养成配置**（NPC 基础数据 #258）：关键字筛选 + 分页；编辑弹窗只有名称 / 对话文案（对话 seed 为空串，客户端暂无消费） |
-| `MapsPage` | **地图管理（#571，只读）**：左侧 11 张图，右侧详情 = 基础信息 + 预览图 + **数据来源表** + 图层 + NPC/复活点 + 刷怪区（世界坐标）+ 场上怪物 + 对象组明细。**没有编辑入口，这是功能定义不是缺口**：地图真相在客户端 TMX，改地图只能改 TMX → 跑 `import-spawn-areas` → 重打包客户端（服务端写路由一律 404，超管也一样） |
+| `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改）**：左侧 11 张图，右侧详情 = 上半「玩法配置」（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶，可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半观测区（基础信息 + 预览图 + **数据来源表** + 图层 + NPC/复活点 + 刷怪区（世界坐标）+ 场上怪物 + 对象组明细）。**观测区没有编辑入口是功能定义不是缺口**：地图真相在客户端 TMX，换图只能改 TMX → 跑 `import-spawn-areas` → 重打包客户端（POST / PUT / DELETE 一律 404，超管也一样；`src` 塞进来也会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
 | `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自生成物 555 件变体）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径不开放编辑；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
 | `DropConfigPage` | **掉落配置**（#254）：上半部具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 goodId（带物品名提示）/ 权重 / 概率 / 数量区间）；下半部每怪掉落列表（关键字 / 来源筛选 + 分页，编辑弹窗三选一：引用具名表 / 内联条目+必填 picks / 清空 none）；具名表被引用中的行拒删 |

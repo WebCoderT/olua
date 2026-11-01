@@ -130,10 +130,6 @@ const REQUIRED_EXPORTS = [
   "RANK_LABELS",
   "RANK_LEVEL_META",
   "SKILL_LABELS",
-  "MAP_LABELS",
-  // 地图管理页（#571）：名称之外的进入条件与资源路径。漏产这张表，
-  // 管理端拿到的是 undefined（页面空白），所以一并钉住。
-  "MAPS",
   "EQUIPMENT_PREFIX_LABELS",
   "EQUIPMENT_SUFFIX_LABELS",
 ];

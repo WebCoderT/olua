@@ -1,5 +1,5 @@
 import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { maps } from "../../../configs/map";
+import { mapLabelOf } from "../../../configs/map";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
 import { uiImages, mapPreviewImage, smallMapImage, smallMapLayout } from "../../../configs/hudLayout";
 import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";
@@ -269,7 +269,7 @@ export default class SmallMap extends Node {
   /** 刷新地图名称与世界坐标文本 */
   private updateLabels(rolePosition: Vec3) {
     const role = StorageManager.findOnlineRole();
-    this.mapNameLabel.string = (role && maps.get(role.onMap)?.label) || "";
+    this.mapNameLabel.string = role ? mapLabelOf(role.onMap) : "";
     this.positionLabel.string = `${Math.round(rolePosition.x)}, ${Math.round(rolePosition.y)}`;
   }
 

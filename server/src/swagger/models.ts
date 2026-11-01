@@ -115,6 +115,7 @@ import {
 import { EquipAlignDto, EquipAlignListDto, EquipAlignPointDto, SaveEquipAlignDto } from "../modules/game-config/dto/equip-align.dto";
 import { EquipInAlignDto, EquipInAlignListDto, EquipInAlignPointDto, SaveEquipInAlignDto } from "../modules/game-config/dto/equip-in-align.dto";
 import {
+  MapConfigDto,
   MapDetailDto,
   MapGroupDto,
   MapLayerDto,
@@ -123,7 +124,9 @@ import {
   MapSourceDto,
   MapSpawnAreaDto,
   MapSummaryDto,
+  MapTypeGroupDto,
   MapWorldMonsterDto,
+  SaveMapConfigDto,
 } from "../modules/map/dto/map.dto";
 
 /**
@@ -397,7 +400,7 @@ export const SWAGGER_MODELS = [
   EquipInAlignDto,
   EquipInAlignListDto,
   SaveEquipInAlignDto,
-  // 地图管理（#571，只读）
+  // 地图管理（#571 观测台 / #573 玩法配置可改）
   MapLayerDto,
   MapObjectDto,
   MapGroupDto,
@@ -405,6 +408,9 @@ export const SWAGGER_MODELS = [
   MapWorldMonsterDto,
   MapSourceDto,
   MapSummaryDto,
+  MapConfigDto,
+  MapTypeGroupDto,
+  SaveMapConfigDto,
   MapListDto,
   MapDetailDto,
 ];

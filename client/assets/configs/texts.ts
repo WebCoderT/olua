@@ -142,6 +142,7 @@ export const uiTexts = {
   map_teleport_dead_tip: "死亡状态无法传送",
   /** 地图预览大图加载失败 */
   map_preview_load_error_tip: "地图预览图加载失败",
+  map_config_loading_tip: "地图配置还没加载完，请稍后再打开",
 
   //#region 浮动提示：活动与功能解锁
   /** 泡点活动开启 */

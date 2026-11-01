@@ -8,7 +8,8 @@
  * - **生成物**（禁止手改）：`./endpoints` 接口方法 + `./models` 实体类型 + `./routes` 路径表，
  *   由 `tools/gen-api.cjs` 从服务端 OpenAPI 文档生成；
  * - **公共游戏数据**（也是生成物）：`./gameData` 引用三端共用的那一份快照
- *   （`server/src/shared/game-data.generated.ts`），职业 / 性别 / 装备 / 技能 / 物品 / 地图的名字都在它那里；
+ *   （`server/src/shared/game-data.generated.ts`），职业 / 性别 / 装备 / 技能 / 物品的名字都在它那里；
+ *   地图不在其中（#573：地图的玩法配置归服务端 `maps` 表，见 `./mapCatalog`）；
  * - **手写**：`./types` 里的错误模型、业务码、权限点、展示字典（服务端文档描述不了它们）；
  * - `./config` / `./http`：地址与请求实现，页面不直接碰。
  */
@@ -116,12 +117,7 @@ export {
   ITEM_LABELS,
   itemText,
   levelCount,
-  MAP_LABELS,
-  MAPS,
-  mapIds,
-  mapMetaOf,
   mapPreview,
-  mapText,
   maxStackOf,
   monsterIcon,
   npcSrc,
@@ -151,3 +147,5 @@ export {
   titleText,
 } from "./gameData";
 export type { GrowthStepMeta } from "./gameData";
+// 地图名录（#573）：名字只在服务端，这里只是「拉一次 + 进程内缓存」的读口
+export { ensureMapCatalog, mapCatalogLoaded, mapIds, mapText, refreshMapCatalog } from "./mapCatalog";

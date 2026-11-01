@@ -3,7 +3,7 @@ import { TextRef } from "../../types/common";
 import { Equipment } from "../../types/good";
 import { OECCUPATION, SEX } from "../../types/role";
 import StorageManager from "./StorageManager";
-import { maps } from "../../configs/map";
+import { mapLabelOf, maps } from "../../configs/map";
 import { getText, textRef } from "../../configs/texts";
 import { MapId } from "../../types/map";
 
@@ -60,17 +60,27 @@ export default class GameHelper {
 
   /**
    * 取进入地图的限制原因（满足条件返回 null）
-   * 判定项与顺序：等级 → 战斗力 → 战魂等级；同样只产出 TextRef（见 getEquipmentRejectReason）
+   *
+   * 判定项与顺序：等级 → 战斗力 → 战魂等级（服务端 `MapService.enterBlockOf` 是同一套顺序）。
+   * **这里只是提前提示**：配置（等级 / 战力 / 战魂）住在服务端 `maps` 表，进图的权威判定在
+   * `worldJoin`（#573）—— 客户端这份读的是配置快照，改包绕过它也进不去。
+   *
+   * 配置还没拉到（快照失败 / 刚启动）时**不拦**：那时 `maps` 是空的，拦下来只会把
+   * 「其实能进」的图也挡住；服务端那道门会给出准确原因。
+   *
+   * 数值 `0` 表示不限制（安全地图就是 0/0/0），所以判据是「> 0 且 > 角色值」。
+   *
    * @param mapId 目标地图编号
    */
   static getMapEnterRejectReason(mapId: MapId): TextRef | null {
     const role = StorageManager.findOnlineRole();
     if (!role) return textRef("reject_no_role");
     const config = maps.get(mapId);
-    if (!config) return textRef("reject_map_missing");
-    if (config.level > role.level) return textRef("reject_map_level", { map: config.label, level: config.level });
-    if (config.combat > role.combat) return textRef("reject_map_combat", { map: config.label, combat: config.combat });
-    if (config.soulOfWar > role.soulOfWar) return textRef("reject_map_soul", { map: config.label, soul: config.soulOfWar });
+    if (!config) return null;
+    const map = mapLabelOf(mapId);
+    if (config.level > 0 && config.level > role.level) return textRef("reject_map_level", { map, level: config.level });
+    if (config.combat > 0 && config.combat > role.combat) return textRef("reject_map_combat", { map, combat: config.combat });
+    if (config.soulOfWar > 0 && config.soulOfWar > role.soulOfWar) return textRef("reject_map_soul", { map, soul: config.soulOfWar });
     return null;
   }
 

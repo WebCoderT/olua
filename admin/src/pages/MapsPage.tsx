@@ -1,23 +1,39 @@
 import { useCallback, useEffect, useState } from "react";
 import { gameResUrl } from "../components/GameImage";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Button, Card, EmptyState, Notice, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
-import { mapPreview, mapsApi } from "../api";
-import type { MapDetail, MapGroup, MapObject, MapSummary } from "../api";
+import { Badge, Button, Card, EmptyState, Field as FormField, Input, Notice, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { mapPreview, mapsApi, refreshMapCatalog } from "../api";
+import type { MapDetail, MapGroup, MapObject, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
+import { toastSuccess } from "../store/toast";
+
+/** 类型码（服务端生成的字面量联合："0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
+type MapTypeCode = SaveMapConfig["type"];
+
+/** 编辑表单的形状（= 服务端 `SaveMapConfigDto` 的五个字段） */
+interface MapForm {
+  label: string;
+  type: MapTypeCode;
+  level: string;
+  combat: string;
+  soulOfWar: string;
+}
 
 /**
- * 地图管理（#571，**只读**）
+ * 地图管理（#571 观测台 / #573 玩法配置可改）
  *
- * ## 这一页为什么没有「保存」
+ * ## 这一页能改什么、不能改什么
  *
- * 三端分工是**定死的**（用户 2026-11-01 口径）：
- * - **客户端**只保存资源的真实对象 —— TMX 瓦片、动画帧、图片；
- * - **服务端**存的是对这份资源的**整理结果** —— 尺寸、刷怪区（世界坐标）、场上怪物实例；
- * - **管理端**是「可视化看/改服务端整理数据」的地方；而地图的整理结果目前**没有运营可改的字段**
- *   （改地图 = 改 TMX → 跑导入工具 → 重新打包客户端），所以这里只有观测，没有写入口。
+ * 按三端边界（用户 2026-11-01 口径）：
+ * - **客户端**只保存资源的真实对象 —— TMX 瓦片、底图、预览图；
+ * - **服务端**存「对这份资源的整理结果」；
+ * - **管理端**可视化地改服务端的整理结果。
  *
- * 硬加一个「编辑刷怪区」看起来更像后台，实际会让客户端画面与服务端判定各说一套 ——
- * 那正是这一版要避免的事。
+ * 所以这里分两块：
+ *
+ * | 块 | 能不能改 | 改了怎么生效 |
+ * |---|---|---|
+ * | 名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 | **能改**（`PATCH /admin/maps/:id`） | 立即（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
+ * | 图层 / 对象组 / 刷怪区 / 场上怪物 | 只读 | 改 TMX → 跑导入工具 → 重打包客户端 |
  *
  * ## 两套坐标必须分开看（页面里也是最容易看错的地方）
  *
@@ -30,17 +46,21 @@ import type { MapDetail, MapGroup, MapObject, MapSummary } from "../api";
  */
 export function MapsPage() {
   const [list, setList] = useState<MapSummary[]>([]);
+  const [types, setTypes] = useState<MapTypeGroup[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [detail, setDetail] = useState<MapDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [form, setForm] = useState<MapForm | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const loadList = useCallback(async () => {
     setLoading(true);
     try {
       const data = await mapsApi.list();
       setList(data.list);
+      setTypes(data.types ?? []);
       setSelected((current) => current || data.list[0]?.id || "");
     } catch {
       /* 错误已由请求层统一提示 */
@@ -61,7 +81,9 @@ export function MapsPage() {
     mapsApi
       .detail(selected)
       .then((data) => {
-        if (!cancelled) setDetail(data);
+        if (cancelled) return;
+        setDetail(data);
+        setForm(formOf(data));
       })
       .catch(() => {
         /* 错误已由请求层统一提示 */
@@ -74,14 +96,42 @@ export function MapsPage() {
     };
   }, [selected]);
 
+  /** 保存玩法配置（整份覆盖；只提交这五个字段） */
+  const save = async () => {
+    if (!form || !detail || saving) return;
+    setSaving(true);
+    try {
+      const saved = await mapsApi.save(detail.id, {
+        label: form.label.trim(),
+        type: form.type,
+        level: toInt(form.level),
+        combat: toInt(form.combat),
+        soulOfWar: toInt(form.soulOfWar),
+      });
+      // 服务端返回的是保存后那一行（含计数）—— 直接铺回列表与详情，不额外再拉一次
+      setList((prev) => prev.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)));
+      setDetail((prev) => (prev ? { ...prev, ...saved } : prev));
+      setForm(formOf(saved));
+      // 角色详情 / 实体选择器读的是本地名录缓存，保存成功要让它重新拉一次
+      void refreshMapCatalog();
+      toastSuccess(`「${saved.label}」的玩法配置已保存（服务端立即生效，客户端下次进游戏拉取）`);
+    } catch {
+      /* 错误已由请求层统一提示（400 的字段级消息也在里面） */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dirty = !!form && !!detail && !sameForm(form, formOf(detail));
+
   return (
     <div className="space-y-3">
       <PageHeader
         title="地图管理"
-        description="只读观测台：地图本体是客户端资源（TMX），这里看的是服务端整理出来的尺寸、刷怪区与场上怪物 —— 本页没有任何写操作。"
+        description="玩法配置（名称 / 类型 / 进入条件）在这里改，保存即生效；地图资源（TMX / 底图）仍走客户端资源包。"
         actions={
           <>
-            <Badge tone="slate">只读</Badge>
+            <Badge tone="indigo">可编辑玩法配置</Badge>
             <Button variant="ghost" onClick={() => void loadList()}>
               刷新
             </Button>
@@ -89,10 +139,15 @@ export function MapsPage() {
         }
       />
 
-      <Notice tone="slate" title="改地图不走后台">
-        改地图只有一条路：改客户端 <code className="text-slate-200">resources/map/&lt;id&gt;/&lt;id&gt;.tmx</code> →
-        跑 <code className="text-slate-200">node tools/import-spawn-areas.cjs</code>（带{" "}
-        <code className="text-slate-200">--db</code> 时覆盖刷怪区表）→ 重新打包客户端。绕过后台手改坐标，会让客户端画面与服务端判定各说一套。
+      <Notice tone="slate" title="哪些能改、哪些改不了">
+        <span className="text-emerald-300">能改</span>：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 ——
+        这些以前写在客户端 <code className="text-slate-200">configs/map.ts</code> 里，改一次要重打整个客户端包；
+        现在归服务端 <code className="text-slate-200">maps</code> 表，保存后服务端进图校验立即按新值判，客户端下次进游戏拉取新配置。
+        <br />
+        <span className="text-amber-300">改不了</span>：图层 / 对象组 / 刷怪区 —— 它们来自 TMX。换图的唯一路径是改{" "}
+        <code className="text-slate-200">resources/map/&lt;id&gt;/&lt;id&gt;.tmx</code> → 跑{" "}
+        <code className="text-slate-200">node tools/import-spawn-areas.cjs</code>（带{" "}
+        <code className="text-slate-200">--db</code> 时覆盖刷怪区表）→ 重新打包客户端。
       </Notice>
 
       {loading ? (
@@ -117,7 +172,7 @@ export function MapsPage() {
                       }`}
                     >
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm text-slate-100">{item.label}</span>
+                        <span className="truncate text-sm text-slate-100">{item.label || `（未命名 #${item.id}）`}</span>
                         <span className="shrink-0 text-xs text-slate-500">#{item.id}</span>
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
@@ -141,22 +196,19 @@ export function MapsPage() {
                   <Spinner /> 加载地图详情…
                 </div>
               </Card>
-            ) : !detail ? (
+            ) : !detail || !form ? (
               <Card>
                 <EmptyState title="选一张地图" description="左侧列表里点一张图，这里显示它的全部信息" />
               </Card>
             ) : (
               <>
                 <Card
-                  title={`${detail.label}（#${detail.id}）`}
+                  title={`${detail.label || `（未命名 #${detail.id}）`}（#${detail.id}）`}
                   description={`资源路径 ${detail.src || "—"} · ${detail.typeLabel}`}
                   actions={<Badge tone="indigo">{detail.typeLabel}</Badge>}
                 >
                   <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs sm:grid-cols-3">
-                      <Field label="进入等级" value={detail.level > 0 ? `${detail.level} 级` : "不限"} />
-                      <Field label="进入战斗力" value={detail.combat > 0 ? String(detail.combat) : "不限"} />
-                      <Field label="进入战魂" value={detail.soulOfWar > 0 ? `${detail.soulOfWar} 阶` : "不限"} />
                       <Field label="尺寸" value={`${detail.cols} × ${detail.rows} 格`} />
                       <Field label="单格" value={`${detail.tileWidth} × ${detail.tileHeight} px`} />
                       <Field label="像素" value={`${detail.width} × ${detail.height}`} />
@@ -185,6 +237,71 @@ export function MapsPage() {
                   </div>
                 </Card>
 
+                <Card
+                  title="玩法配置"
+                  description="保存即生效：服务端进图校验读这张表，客户端下次进游戏拉取新配置"
+                  actions={
+                    <div className="flex items-center gap-2">
+                      {dirty && <Badge tone="amber">未保存</Badge>}
+                      <Button variant="ghost" onClick={() => setForm(formOf(detail))} disabled={!dirty || saving}>
+                        还原
+                      </Button>
+                      <Button onClick={() => void save()} disabled={!dirty || saving || !form.label.trim()}>
+                        {saving ? "保存中…" : "保存"}
+                      </Button>
+                    </div>
+                  }
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    <FormField label="地图名称">
+                      <Input
+                        value={form.label}
+                        maxLength={24}
+                        placeholder="如：卧龙城"
+                        onChange={(event) => setForm({ ...form, label: event.target.value })}
+                      />
+                    </FormField>
+                    <FormField label="类型（决定传送弹窗分组）">
+                      <Select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as MapTypeCode })}>
+                        {types.map((type) => (
+                          <option key={type.type} value={type.type}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormField>
+                    <FormField label="进入等级（0 = 不限）">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={200}
+                        value={form.level}
+                        onChange={(event) => setForm({ ...form, level: event.target.value })}
+                      />
+                    </FormField>
+                    <FormField label="进入战斗力（0 = 不限）">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.combat}
+                        onChange={(event) => setForm({ ...form, combat: event.target.value })}
+                      />
+                    </FormField>
+                    <FormField label="进入战魂阶（0 = 不限）">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.soulOfWar}
+                        onChange={(event) => setForm({ ...form, soulOfWar: event.target.value })}
+                      />
+                    </FormField>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    数值 <code className="text-slate-400">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。
+                    改完保存，玩家下一次进游戏（客户端拉配置快照）就能看到新名字与新门槛；已经在图里的玩家不受影响。
+                  </p>
+                </Card>
+
                 <Card title="数据来源" description="这一页每个数字是谁的 —— 来源不同，能不能改也不同">
                   <div className="overflow-x-auto">
                     <table className={tableClass}>
@@ -202,7 +319,7 @@ export function MapsPage() {
                             <td className={tdClass}>{source.label}</td>
                             <td className={tdClass}>
                               <Badge tone={source.origin === "db" ? "green" : source.origin === "config" ? "amber" : "slate"}>
-                                {source.origin === "db" ? "服务端库表" : source.origin === "config" ? "客户端配置" : "生成快照"}
+                                {source.origin === "db" ? "服务端库表" : source.origin === "config" ? "客户端资源" : "生成快照"}
                               </Badge>
                             </td>
                             <td className={`${tdClass} font-mono text-[11px]`}>{source.ref}</td>
@@ -345,6 +462,34 @@ export function MapsPage() {
   );
 }
 
+/** 详情 → 表单（数字转字符串：输入框里「0」与空串是两件事） */
+function formOf(row: MapSummary): MapForm {
+  return {
+    label: row.label,
+    type: row.type as MapTypeCode,
+    level: String(row.level),
+    combat: String(row.combat),
+    soulOfWar: String(row.soulOfWar),
+  };
+}
+
+/** 表单 → 整数（空串 / 非法值按 0 = 不限制；服务端还会再校验一次范围） */
+function toInt(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+/** 两份表单是否等价（数字按数值比：`"10"` 与 `"010"` 存进去是同一个值） */
+function sameForm(a: MapForm, b: MapForm): boolean {
+  return (
+    a.label.trim() === b.label.trim() &&
+    a.type === b.type &&
+    toInt(a.level) === toInt(b.level) &&
+    toInt(a.combat) === toInt(b.combat) &&
+    toInt(a.soulOfWar) === toInt(b.soulOfWar)
+  );
+}
+
 /** 只取 NPC 与复活点对象（对象类可能落在 npc 组，也可能在早期地图的 objects 组里） */
 function npcObjects(groups: MapGroup[]): MapObject[] {
   return groups.flatMap((group) => group.objects).filter((object) => object.klass === "npc" || object.klass === "revive");
@@ -392,7 +537,7 @@ function formatProperties(properties: Record<string, string>): string {
   return entries.map(([key, value]) => `${key}=${value}`).join(" · ");
 }
 
-/** 详情里的小字段（标签 + 值）；不用 Field 是因为它带输入框语义（label + input） */
+/** 详情里的小字段（标签 + 值）；不用 ui 的 Field 是因为它带输入框语义（label + input） */
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">

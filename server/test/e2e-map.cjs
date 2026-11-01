@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 /**
- * 服务端 e2e：管理端「地图管理」只读模块（#571）
+ * 服务端 e2e：管理端「地图管理」—— 玩法配置可改，资源本体不可改（#571 / #573）
  *
- * 这一套测的**不是 CRUD，是边界**。地图的真相在客户端资源里（`resources/map/*.tmx`
- * + `configs/map.ts`），服务端存的是对它整理出来的东西（尺寸 / 刷怪区 / 场上怪物）。
- * 所以「管理端能不能改地图」这个问题，答案必须由测试钉住，而不是靠读代码时的自觉。
+ * 这一套测的**不是 CRUD，是边界**。地图分两半：
+ * - **资源本体**（TMX / 底图 / 预览图）在客户端资源包里，服务端连一列都没有；
+ * - **玩法配置**（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）归服务端 `maps` 表（#573 才搬过来）。
  *
- * ## 六条主线
- * 1. **列表 11 张、按 id 数字升序**：`10` 不许排到 `2` 前面（`Object.keys` 的字典序就是这样）；
- *    两种计数各归各位 —— `monsterAreaCount` 是客户端 TMX 的矩形数，`spawnAreaCount` 是服务端
- *    库表的行数，混在一起看就会得出「刷怪区和资源不一致」的假结论。
+ * 所以「管理端能改什么」这个问题，答案必须由测试钉住，而不是靠读代码时的自觉。
+ *
+ * ## 七条主线
+ * 1. **列表按 id 数值升序**（`10` 不许排到 `2` 前面），两种计数各归各位 ——
+ *    `monsterAreaCount` 是客户端 TMX 的矩形数，`spawnAreaCount` 是服务端库表的行数，
+ *    混在一起看就会得出「刷怪区和资源不一致」的假结论。
  * 2. **两套坐标不能混**：`groups` 是 Tiled 原始口径（左上角原点、y 向下），`spawnAreas` 是
  *    世界坐标（原点左上角、y 向上）。**同一个矩形的中心必须对得上** —— 这是唯一能证明
- *    「两边说的是同一件事」的判据，也是这一页存在的理由。
- * 3. **只读是能力边界，不是权限**：POST / PUT / PATCH / DELETE 一律 404（路由不存在），
- *    超管也一样 404。403 是「你没权限」、404 是「这件事没有入口」，两者不能混。
- * 4. **不存在的图**：404 + 专属业务码 50032（不是 50000 兜底）。
- * 5. **权限与受众**：观察员（`gameConfig:read`）能看，写入口本来就不存在；无令牌 401。
- * 6. **文档契约**：两个 GET 的标签 / 权限 / 响应类型；文档里也没有写方法；没有 Map 写模型。
+ *    「两边说的是同一件事」的判据。
+ * 3. **玩法配置保存即生效**：PATCH 之后列表 / 详情 / **玩家配置快照** 三处同步反映 ——
+ *    第三处最关键，它决定「客户端下次进游戏能不能看到新门槛」。
+ * 4. **资源本体写不动**：请求里塞 `src` 也会被丢掉（白名单剥离），返回仍是 `map/<id>/<id>`；
+ *    POST / PUT / DELETE 一律 404（没有「新建 / 删除地图」这回事，图存不存在由 TMX 决定）。
+ * 5. **参数越界要拒**：类型不在 0..3、等级 > 200、名称为空 → 400（不是静默存进去）。
+ * 6. **权限**：观察员能读、写 403（写入口存在，但他是只读角色）；无令牌 401。
+ * 7. **文档契约**：三个 operation（list / detail / save）、`save` 要 `gameConfig:write`、
+ *    有 `SaveMapConfigDto`、**没有** Create / Delete 模型。
  *
  * 用法：npm run test:e2e:map（前置 npm run build）
  */
@@ -31,7 +36,7 @@ const ADMIN_CODE = "map-code";
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 88;
+const EXPECTED_ASSERTIONS = 122;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -143,22 +148,30 @@ async function registerAdmin(baseUrl, username, password) {
   return retry.body?.data?.token;
 }
 
+/** 注册并登录一个玩家，返回 token（配置快照要玩家令牌） */
+async function registerPlayer(baseUrl, username) {
+  const login = await api(baseUrl, "POST", "/api/auth/login", { body: { username, password: "pass1234" } });
+  if (login.body?.data?.token) return login.body.data.token;
+  const registered = await api(baseUrl, "POST", "/api/auth/register", { body: { username, password: "pass1234" } });
+  return registered.body?.data?.token;
+}
+
 //#region 主流程
 
 async function main() {
   const server = await startServer({});
   try {
     const base = server.baseUrl;
-    const rootToken = await registerAdmin(base, "maproot", "MapReadonly#1");
+    const rootToken = await registerAdmin(base, "maproot", "MapAdmin#1");
     check(Boolean(rootToken), "超管注册并登录成功");
 
     //#region 一、列表
 
-    group("一、列表：11 张图，两类计数各归各位");
+    group("一、列表：按 id 数值升序，两类计数各归各位");
 
     const list = await api(base, "GET", "/api/admin/maps", { token: rootToken });
     checkEqual(list.status, 200, "管理端能读地图列表");
-    checkEqual(list.body?.data?.total, 11, "一共 11 张图（清单由客户端 configs/map.ts 固定）");
+    checkEqual(list.body?.data?.total, 11, "一共 11 张图（行由资源清单 seed 出来）");
 
     const rows = list.body?.data?.list ?? [];
     checkEqual(rows.length, 11, "list 长度与 total 一致（不分页）");
@@ -168,12 +181,17 @@ async function main() {
       "按 id 数值升序（字典序会把 10 排到 2 前面）",
     );
 
+    const types = list.body?.data?.types ?? [];
+    checkEqual(types.length, 4, "列表带全部类型选项（编辑下拉要能选到当下没人用的类型）");
+    checkEqual(types.map((item) => item.type).join(","), "0,1,2,3", "类型选项按声明顺序");
+    checkEqual(types[0]?.label, "安全地图", "类型名由服务端给（客户端与后台都不再各抄一份）");
+
     const map0 = rows.find((row) => row.id === "0") ?? {};
-    checkEqual(map0.label, "新手村", "0 号图名称来自客户端配置");
+    checkEqual(map0.label, "新手村", "0 号图名称来自出厂种子（库里的行）");
     checkEqual(map0.type, "0", "类型码原样带出");
-    checkEqual(map0.typeLabel, "安全地图", "类型名在生成快照里就拼好了（服务端不再维护第二份码表）");
-    checkEqual(map0.level, 1, "进入等级原样带出");
-    checkEqual(map0.src, "map/0/0", "客户端资源路径原样带出");
+    checkEqual(map0.typeLabel, "安全地图", "类型名由服务端拼（映射只有一处来源）");
+    checkEqual(map0.level, 1, "进入等级来自库");
+    checkEqual(map0.src, "map/0/0", "资源路径按目录约定拼出（不是存下来的字段）");
     checkEqual(map0.cols, 64, "横向格数来自 TMX 头");
     checkEqual(map0.tileWidth, 128, "单格宽来自 TMX 头");
     checkEqual(map0.width, 8192, "像素宽 = 格数 × 单格宽");
@@ -256,50 +274,152 @@ async function main() {
     checkEqual((data.worldMonsters ?? []).length, 0, "没跑过世界的进程里 worldMonsters 是空数组（不是 500）");
 
     const sources = data.sources ?? [];
-    checkEqual(sources.length, 6, "每一块数据都带来源说明（6 条）");
+    checkEqual(sources.length, 7, "每一块数据都带来源说明（7 条）");
     checkEqual(
       sources.map((item) => item.section).join(","),
-      "config,size,layers,groups,spawnAreas,worldMonsters",
+      "config,resource,size,layers,groups,spawnAreas,worldMonsters",
       "来源覆盖页面上的每一栏",
     );
     checkEqual(
       [...new Set(sources.map((item) => item.origin))].sort().join(","),
       "config,db,snapshot",
-      "来源分三类：客户端配置 / 服务端快照 / 服务端库表",
+      "来源分三类：客户端资源 / 服务端快照 / 服务端库表",
     );
     check(
-      sources.filter((item) => item.origin === "db").every((item) => /^map_spawn_areas|world_monsters/.test(item.ref)),
-      "归到「库表」的两条写的是真表名（不是含糊的「服务端」）",
+      sources
+        .filter((item) => item.origin === "db")
+        .every((item) => /^maps|map_spawn_areas|world_monsters/.test(item.ref)),
+      "归到「库表」的三条写的是真表名（不是含糊的「服务端」）",
     );
     check(
       sources.filter((item) => item.origin === "config").every((item) => item.ref.includes("client/assets/")),
-      "归到「客户端配置」的那条指着客户端路径（这一页最容易犯的错就是把资源当服务端数据）",
+      "归到「客户端资源」的那条指着客户端路径（这一页最容易犯的错就是把资源当服务端数据）",
+    );
+    checkEqual(
+      sources.find((item) => item.section === "config")?.origin,
+      "db",
+      "玩法配置（名称 / 类型 / 进入条件）归服务端库表 —— #573 就是从客户端搬过来的这一块",
     );
 
     //#endregion
 
-    //#region 三、只读边界
+    //#region 三、玩法配置可改
 
-    group("三、只读边界：四个写方法都不存在（404 而不是 403）");
+    group("三、玩法配置：保存即生效（列表 / 详情 / 玩家快照三处同步）");
 
-    const post = await api(base, "POST", "/api/admin/maps", { token: rootToken, body: { label: "新地图" } });
-    checkEqual(post.status, 404, "POST 地图 → 404（路由不存在）");
-    const put = await api(base, "PUT", "/api/admin/maps/0", { token: rootToken, body: { label: "改个名" } });
-    checkEqual(put.status, 404, "PUT 地图 → 404");
-    const patch = await api(base, "PATCH", "/api/admin/maps/0", { token: rootToken, body: { level: 99 } });
-    checkEqual(patch.status, 404, "PATCH 地图 → 404");
-    const del = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
-    checkEqual(del.status, 404, "DELETE 地图 → 404");
+    const playerToken = await registerPlayer(base, "map_snap_player");
+    check(Boolean(playerToken), "玩家注册并登录成功（快照要玩家令牌）");
+
+    const beforeSnap = await api(base, "GET", "/api/game-config", { token: playerToken });
+    checkEqual(beforeSnap.status, 200, "玩家能拉配置快照");
+    const snapMapsBefore = beforeSnap.body?.data?.maps ?? [];
+    checkEqual(snapMapsBefore.length, 11, "快照里的地图行数 = 列表（客户端进游戏就靠它）");
+    checkEqual(
+      snapMapsBefore.find((row) => row.id === "0")?.label,
+      "新手村",
+      "改之前快照里 0 号图还是出厂名",
+    );
+
+    const saved = await api(base, "PATCH", "/api/admin/maps/0", {
+      token: rootToken,
+      body: { label: "新手村·改", type: "1", level: 5, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(saved.status, 200, "保存玩法配置 → 200");
+    checkEqual(saved.body?.data?.label, "新手村·改", "返回的是保存后那一行");
+    checkEqual(saved.body?.data?.type, "1", "类型改掉了");
+    checkEqual(saved.body?.data?.typeLabel, "等级地图", "类型名跟着变（不是缓存住的旧值）");
+    checkEqual(saved.body?.data?.level, 5, "进入等级改掉了");
+    checkEqual(saved.body?.data?.src, "map/0/0", "返回里仍带资源路径（只读回显，不是入参）");
+
+    const reread = await api(base, "GET", "/api/admin/maps/0", { token: rootToken });
+    checkEqual(reread.body?.data?.label, "新手村·改", "重新读详情就是新值（没有缓存层挡着）");
+    checkEqual(reread.body?.data?.level, 5, "等级也持久化了");
+
+    const listAfter = await api(base, "GET", "/api/admin/maps", { token: rootToken });
+    const rowAfter = (listAfter.body?.data?.list ?? []).find((row) => row.id === "0") ?? {};
+    checkEqual(rowAfter.label, "新手村·改", "列表也反映新名字");
+    checkEqual(rowAfter.typeLabel, "等级地图", "列表里的类型名同样跟着变");
+
+    const afterSnap = await api(base, "GET", "/api/game-config", { token: playerToken });
+    const snapMap0 = (afterSnap.body?.data?.maps ?? []).find((row) => row.id === "0") ?? {};
+    checkEqual(snapMap0.label, "新手村·改", "玩家快照里也是新名字（客户端下次进游戏就换成这个）");
+    checkEqual(snapMap0.level, 5, "玩家快照里的进入等级同步了 —— 这是「保存即生效」对玩家的那一半");
+    checkEqual(snapMap0.type, "1", "快照里的类型码同步");
+    checkEqual((afterSnap.body?.data?.mapTypes ?? []).length, 4, "快照同时下发类型分组（顺序即传送弹窗分组）");
+
+    // 资源路径不可改：请求里塞 src 会被白名单剥掉，返回仍是目录约定算出来的那个
+    const withSrc = await api(base, "PATCH", "/api/admin/maps/1", {
+      token: rootToken,
+      body: { label: "卧龙城", type: "0", level: 10, combat: 0, soulOfWar: 0, src: "map/evil/evil" },
+    });
+    checkEqual(withSrc.status, 200, "带多余字段的请求仍成功（白名单剥离，不是 400）");
+    checkEqual(withSrc.body?.data?.src, "map/1/1", "塞进来的 src 被丢掉 —— 下发方永远改不到客户端加载哪张图");
+
+    const audits = await api(base, "GET", "/api/admin/audit-logs?targetType=map&size=20", { token: rootToken });
+    const auditRows = audits.body?.data?.list ?? [];
     check(
-      post.status === 404 && put.status === 404 && patch.status === 404 && del.status === 404,
-      "超管也写不动：这是「没有入口」，不是「你没权限」（否则会有人去补权限）",
+      auditRows.some((row) => row.action === "adminMap.save" && String(row.targetId) === "0"),
+      "保存动作进了审计日志（targetType=map / action=adminMap.save）",
+    );
+    check(
+      auditRows.every((row) => row.targetType === "map"),
+      "审计按目标类型筛得出来（枚举只有一处来源，写与查共用）",
     );
 
     //#endregion
 
-    //#region 四、不存在的图
+    //#region 四、参数校验
 
-    group("四、不存在的图：404 + 专属业务码");
+    group("四、参数校验：越界要拒，不是静默存进去");
+
+    const badType = await api(base, "PATCH", "/api/admin/maps/0", {
+      token: rootToken,
+      body: { label: "x", type: "9", level: 1, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(badType.status, 400, "类型不在 0..3 → 400");
+
+    const badLevel = await api(base, "PATCH", "/api/admin/maps/0", {
+      token: rootToken,
+      body: { label: "x", type: "0", level: 201, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(badLevel.status, 400, "进入等级超过上限 → 400（拦「把 999 拍进去」这类错误）");
+
+    const negativeCombat = await api(base, "PATCH", "/api/admin/maps/0", {
+      token: rootToken,
+      body: { label: "x", type: "0", level: 1, combat: -1, soulOfWar: 0 },
+    });
+    checkEqual(negativeCombat.status, 400, "负战斗力 → 400");
+
+    const emptyLabel = await api(base, "PATCH", "/api/admin/maps/0", {
+      token: rootToken,
+      body: { label: "", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(emptyLabel.status, 400, "空名称 → 400（列表里会显示成空白按钮）");
+
+    const partial = await api(base, "PATCH", "/api/admin/maps/0", { token: rootToken, body: { label: "只传一个字段" } });
+    checkEqual(partial.status, 400, "缺字段 → 400（整份覆盖，不是部分更新）");
+
+    const stillThere = await api(base, "GET", "/api/admin/maps/0", { token: rootToken });
+    checkEqual(stillThere.body?.data?.label, "新手村·改", "四次失败请求一次都没写进去（校验在落库之前）");
+
+    //#endregion
+
+    //#region 五、能力边界
+
+    group("五、能力边界：没有新建 / 删除，也没有 PUT（资源本体不归后台）");
+
+    const post = await api(base, "POST", "/api/admin/maps", {
+      token: rootToken,
+      body: { label: "新地图", type: "0", level: 0, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(post.status, 404, "POST 新建地图 → 404（一张图存不存在由客户端的 TMX 决定）");
+    const put = await api(base, "PUT", "/api/admin/maps/0", {
+      token: rootToken,
+      body: { label: "改个名", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(put.status, 404, "PUT 整份替换 → 404（保存走 PATCH，语义是「改这五个字段」）");
+    const del = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
+    checkEqual(del.status, 404, "DELETE 删除地图 → 404");
 
     const outOfRange = await api(base, "GET", "/api/admin/maps/11", { token: rootToken });
     checkEqual(outOfRange.status, 404, "11 号图不存在 → 404");
@@ -308,13 +428,20 @@ async function main() {
     checkEqual(nonsense.status, 404, "id 形态不对同样 404（不 400：客户端不该猜 id 长什么样）");
     checkEqual(nonsense.body?.code, 50032, "同一个业务码");
 
+    const patchMissing = await api(base, "PATCH", "/api/admin/maps/99", {
+      token: rootToken,
+      body: { label: "幽灵图", type: "0", level: 0, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(patchMissing.status, 404, "改一张不存在的图 → 404");
+    checkEqual(patchMissing.body?.code, 50032, "同样是 50032（不是「参数不合法」）");
+
     //#endregion
 
-    //#region 五、权限
+    //#region 六、权限
 
-    group("五、权限：观察员能看，写入口本来就没有");
+    group("六、权限：观察员能读，写 403");
 
-    const viewerToken = await registerAdmin(base, "mapviewer", "MapReadonly#2");
+    const viewerToken = await registerAdmin(base, "mapviewer", "MapAdmin#2");
     const viewerId = (await api(base, "GET", "/api/admin/admins", { token: rootToken })).body?.data?.list?.find(
       (row) => row.username === "mapviewer",
     )?.id;
@@ -325,25 +452,34 @@ async function main() {
     checkEqual(viewerList.status, 200, "观察员可读列表（gameConfig:read 就够）");
     const viewerDetail = await api(base, "GET", "/api/admin/maps/3", { token: viewerToken });
     checkEqual(viewerDetail.status, 200, "观察员可读详情");
-    const viewerWrite = await api(base, "PATCH", "/api/admin/maps/0", { token: viewerToken, body: { level: 1 } });
-    checkEqual(viewerWrite.status, 404, "观察员写也是 404（写入口对所有角色都不存在）");
+    const viewerWrite = await api(base, "PATCH", "/api/admin/maps/0", {
+      token: viewerToken,
+      body: { label: "观察员改的", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+    });
+    checkEqual(viewerWrite.status, 403, "观察员改玩法配置 → 403（写入口存在，但他没有 gameConfig:write）");
 
     const detailNoToken = await api(base, "GET", "/api/admin/maps/0");
     checkEqual(detailNoToken.status, 401, "没有令牌读不到详情");
 
     //#endregion
 
-    //#region 六、文档契约
+    //#region 七、文档契约
 
-    group("六、文档契约：只有两个 GET，没有 Map 写模型");
+    group("七、文档契约：三个 operation，只有 save 是写");
 
     const docs = await fetch(`${base}/api-docs-json`);
     const doc = await docs.json();
     const listPath = doc.paths?.["/api/admin/maps"];
     const detailPath = doc.paths?.["/api/admin/maps/{id}"];
-    check(Boolean(listPath?.get && detailPath?.get), "两个 GET 都在文档里");
-    checkEqual(listPath?.get?.["x-olua-permissions"]?.join(","), "gameConfig:read", "列表要求 gameConfig:read（只读权限点）");
+    check(Boolean(listPath?.get && listPath?.post === undefined), "列表有 get、没有 post");
+    check(Boolean(detailPath?.get && detailPath?.patch && detailPath?.put === undefined), "详情有 get + patch、没有 put");
+    checkEqual(listPath?.get?.["x-olua-permissions"]?.join(","), "gameConfig:read", "列表要求 gameConfig:read");
     checkEqual(detailPath?.get?.["x-olua-permissions"]?.join(","), "gameConfig:read", "详情同样只要读权限");
+    checkEqual(
+      detailPath?.patch?.["x-olua-permissions"]?.join(","),
+      "gameConfig:write",
+      "保存要写权限（读权限的人只能看）",
+    );
     checkEqual(listPath?.get?.["x-olua-audience"], "admin", "列表归管理端受众");
     checkEqual(
       listPath?.get?.["x-olua-data-schema"]?.$ref,
@@ -351,19 +487,9 @@ async function main() {
       "列表响应类型是 MapListDto",
     );
     checkEqual(
-      detailPath?.get?.["x-olua-data-schema"]?.$ref,
-      "#/components/schemas/MapDetailDto",
-      "详情响应类型是 MapDetailDto",
-    );
-    checkEqual(
-      Object.keys(listPath ?? {}).join(","),
-      "get",
-      "列表路径只有 get（文档里也没有写方法，生成链不会漏看）",
-    );
-    checkEqual(
-      Object.keys(detailPath ?? {}).join(","),
-      "get",
-      "详情路径也只有 get（路径参数写在 operation 里，不是另一个键）",
+      detailPath?.patch?.["x-olua-data-schema"]?.$ref,
+      "#/components/schemas/MapSummaryDto",
+      "保存响应类型是 MapSummaryDto（回显保存后的那一行）",
     );
 
     const schemas = doc.components?.schemas ?? {};
@@ -381,9 +507,15 @@ async function main() {
       "#/components/schemas/MapSpawnAreaDto",
       "spawnAreas 指向 MapSpawnAreaDto（不是随手的 object）",
     );
+    check(Boolean(schemas.SaveMapConfigDto), "有 SaveMapConfigDto（写入口只有这一个形状）");
+    checkEqual(
+      Object.keys(schemas.SaveMapConfigDto?.properties ?? {}).sort().join(","),
+      "combat,label,level,soulOfWar,type",
+      "写模型只有五个字段：**没有 src / 尺寸 / 图层** —— 资源本体不是一个可编辑的字段",
+    );
     check(
-      Object.keys(schemas).every((name) => !/^(Create|Update|Save)Map/.test(name)),
-      "文档里没有任何 Map 写模型（少一个 DTO 比留一个永远没人调的写接口更诚实）",
+      Object.keys(schemas).every((name) => !/^(Create|Update|Delete)Map/.test(name)),
+      "文档里没有 Map 的新建 / 删除模型（后台造不出一张没有 TMX 的地图）",
     );
 
     //#endregion

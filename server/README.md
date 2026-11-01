@@ -57,7 +57,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:rank` | 排行榜专项（56 条；三榜名次与数值 / 并列竞赛排名 / 分页与 `me` / 快照与定时重算） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run test:e2e:bag` | 背包与穿戴专项（38 条；穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸） |
-| `npm run test:e2e:map` | 地图管理专项（88 条；**只读边界** / 两套坐标对账 / 写路由 404 / 权限与文档契约） |
+| `npm run test:e2e:map` | 地图管理专项（122 条；**玩法配置可改 / 资源本体不可改** / 两套坐标对账 / 无新建·删除 / 权限与文档契约） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
@@ -137,7 +137,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align 37 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align 38 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -199,7 +199,7 @@ server/
 
 ## 数据模型
 
-45 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+46 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -258,7 +258,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（37 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（38 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -325,13 +325,13 @@ server/
 
 ## 接口与契约
 
-当前 **165 个接口 / 137 条路径 / 253 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **166 个接口 / 137 条路径 / 256 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
 | 客户端 | 50 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 108 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 109 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -423,7 +423,7 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 | `test/e2e-rank.cjs` | **56** | 排行榜（#400）：**三个榜（等级 / 战力 / 击杀）的名次与数值逐个对** / 并列时同名次（竞赛排名，同分再按 roleId 升序）/ 战力榜与等级榜不同序（证明不是照抄等级）/ 分页切片、空页、`size` 夹上限与非法分页 `/ `me` 榜内榜外名次都真实、当前无在线角色时返回「没有名次」、未登录被拒 / 刷新周期设为零时快照不随存档变、`computedAt` 不动 / 条目恰好八个字段且不带 `accountId`·`data`·在线状态 / 周期定时重算真的换了一份 |
 | `test/e2e-bag.cjs` | **38** | 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理与搬运全在服务端；**move·tidy 只验两条守恒**（网格形状 + 同 id 总件数）；等级门槛与部位由服务端判（1 级穿 10 级衣服被拒且衣服还在包里）；穿脱当场重算属性（脱掉加血装备血量跟着降）；**`PUT /roles/:id` 改不动背包 / 装备 / 技能**（回填而不是拒收）；**背包尺寸归客户端配置**（改大能长个且不丢东西，存档不重排位置）；错 revision → 20006、别人的角色 → 40300 |
-| `test/e2e-map.cjs` | **88** | 地图管理（#571，**只读**）：11 张图按 id **数值**升序（`10` 不排到 `2` 前面）/ 两类计数各归各位（`monsterAreaCount` 是客户端 TMX 的矩形、`spawnAreaCount` 是库表行数）/ **两套坐标对账**（`groups` 是 Tiled 原始口径，`spawnAreas` 是世界坐标 —— 同一个矩形的中心必须对得上）/ **POST·PUT·PATCH·DELETE 一律 404**（超管也一样：这是「没有入口」不是「没权限」）/ 不存在的图 404 + 50032 / 观察员可读、无令牌 401 / 文档契约与「没有 Map 写模型」 |
+| `test/e2e-map.cjs` | **122** | 地图管理（#573，**玩法配置可改、资源本体不可改**）：11 张图按 id **数值**升序（`10` 不排到 `2` 前面）/ 两类计数各归各位（`monsterAreaCount` 是客户端 TMX 的矩形、`spawnAreaCount` 是库表行数）/ **两套坐标对账**（`groups` 是 Tiled 原始口径，`spawnAreas` 是世界坐标 —— 同一个矩形的中心必须对得上）/ **玩法配置保存即生效**（列表 / 详情 / **玩家配置快照**三处同步；请求里塞 `src` 被白名单剥掉，下发方改不到客户端加载哪张图）/ 参数越界（类型 / 等级 / 名称）一律 400 且没写进去 / **POST·PUT·DELETE 一律 404**（没有「新建 / 删除地图」这回事：图存不存在由 TMX 决定）/ 不存在的图 404 + 50032 / 观察员可读、写 403、无令牌 401 / 文档契约与「没有 Map 写模型」 |
 
 
 ```bash

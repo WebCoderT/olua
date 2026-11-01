@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { adminRoleLabel, authApi, PERMISSION } from "../api";
+import { adminRoleLabel, authApi, ensureMapCatalog, PERMISSION } from "../api";
 import { APP_TITLE } from "../api/config";
 import { clearSession, hasPermission, readAdmin, readToken, saveSession, subscribeSession } from "../store/session";
 import { Badge, Button } from "./ui";
@@ -144,6 +144,12 @@ export function Layout() {
 
   // 会话变化（「我的账号」里改完密码换了新令牌 / 被重置后清会话）→ 顶部身份栏跟着刷新
   useEffect(() => subscribeSession(setAdmin), []);
+
+  // 地图名录（#573）：地图名只在服务端，角色详情 / 实体选择器要同步读它 ——
+  // 登录后进到布局就拉一次，失败静默（只是名字回落成 id，不挡任何页面）
+  useEffect(() => {
+    void ensureMapCatalog();
+  }, []);
 
   /**
    * 换页面时的三件收尾

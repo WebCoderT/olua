@@ -608,6 +608,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         return;
       }
       const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
+      // 进图条件（#573）**故意不在这里拦**，判定留在客户端 `StorageManager.changeOnMap`
+      // （所有传送入口都经过它，配置来自服务端快照）。原因见 `MapService` 顶部的
+      // 「为什么没有『拦连接』的判定」：登录与传送共用 worldJoin，而登录时进的就是
+      // 玩家脚下那张图 —— 运营事后调高门槛会把人锁在门外（进游戏即黑屏）。
       const snapshot = this.world.join(zoneId, socket.identity.id, join.mapId);
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);

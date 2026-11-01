@@ -14,9 +14,13 @@ agent_created: true
 3. **产出接口契约** —— Swagger 文档 → 客户端与管理端的接口文件**全部由它生成**；
 4. **实时通道** —— 一条 WebSocket 长连接（目前只做「建连 + 心跳」，业务消息见 #34）。
 
-**最重要的一条心智模型**：游戏数据（装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图）的权威定义**只有一处** —— 客户端 `client/assets/configs`。
+**最重要的一条心智模型**：游戏数据（装备 / 战魂 / 称号 / 军衔 / 技能 / 物品）的权威定义**只有一处** —— 客户端 `client/assets/configs`。
 服务端**不复制**它，而是引用它的引擎无关快照 `src/shared/game-data.generated.ts`（`node tools/gen-shared-data.cjs` 生成，`make audit-shared-data` 逐字节守着重生成必然一致）；管理端 import 的是**同一个文件**。
 三端**没有第二份副本**，谁都不许自己维护一份。服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，从不复制一份游戏配置过来。
+
+**唯一的例外是地图（#573，用户定）**：地图只有「资源本体」在客户端（TMX / 底图 / 预览图，靠 `map/<id>/<id>`
+目录约定拼路径），**「对资源的整理结果」归服务端** —— 名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶进 `maps` 表，
+出厂值只是 `constants/map-config.ts` 里的 seed，管理端可视化改。所以「客户端不存玩法配置」是有意为之，不是缺口。
 
 **连「码的清单」与「文案」也不许手写**（#122）：`role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES`
 是 `Object.keys(OCCUPATION_LABELS / SEX_LABELS)`，DTO 里那行 `1 战士 / 2 魔法师 / …` 是
@@ -47,8 +51,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（45 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align（37 个仓储）
+    database.service.ts           建表（46 张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align（38 个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -155,9 +159,10 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 **4.0 游戏数据三端共用一份**（用户 2026-10-13 定的硬要求，见 issue #117~#122）
 
-装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的权威定义**只有一处**：客户端 `client/assets/configs`。
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品的权威定义**只有一处**：客户端 `client/assets/configs`。
 服务端**不复制**，引用它的引擎无关快照 `src/shared/game-data.generated.ts`；管理端 import 的是**同一个文件**
-（Vite 按相对路径打包）—— **三端没有第二份副本**。
+（Vite 按相对路径打包）—— **三端没有第二份副本**。地图的玩法配置是例外（#573，见开头那条心智模型）：进 `maps` 表，
+`constants/map-config.ts` 只提供出厂 seed，`gen-shared-data.cjs` 不再产出 `MAPS` / `MAP_LABELS`。
 
 - **生成** `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）：编客户端纯配置 → 在 Node 里加载 → 快照。
   改数值 / 改文案都改客户端配置，然后重新生成。产物 ~255 KB / 3410 行 / 24 张数据表。
@@ -242,7 +247,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   - `bag` / `equipments` / `skills`：本地操作太多（换装 / 整理 / 移动 / 丢弃 / 穿时装），得先有对应的服务端接口；
   - `hp` / `mp`：自然回复与技能扣减在客户端，收权需要服务端出回复 tick。
 
-- **45 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies` / `role_blocks` / `role_reports` / `quests` / `quest_progress` / `parties` / `party_members` / `achievements` / `role_achievements` / `role_mails` / `equip_aligns` / `equip_in_aligns`。删账号**级联删其角色**。
+- **46 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies` / `role_blocks` / `role_reports` / `quests` / `quest_progress` / `parties` / `party_members` / `achievements` / `role_achievements` / `role_mails` / `equip_aligns` / `equip_in_aligns`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。
@@ -557,12 +562,19 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 22. **没有 HTTP 出口的列，e2e 用 `node:sqlite` 直读**：#400 的 `roles.kills` 只在榜接口里以「排序结果」出现，没法断言「这一杀到底记没记」——
    `e2e-combat.cjs` 的 `readKills(dbPath, roleId)` 开只读连接直查该列，才有「打死一只 +1、再打死一只变 2」这种精确断言。
    同理：**别为了测试给正式接口开一个只有测试用的出口**。
-23. **只读模块要把「不可写」做成 404，而不是靠没人调**（#571 地图管理）：`@Controller("admin/maps")` 只留 `@Get`，
-   e2e 断言 `POST / PUT / PATCH / DELETE` 全 **404**（超管也一样）。**403 与 404 不能混**：403 是「你没权限」，
-   会诱导下一个人去补权限；404 是「这件事没有入口」。配套两条：
-   ① `new BizException(code, msg)` **默认 400** —— 资源不存在必须 `BizException.notFound(code, msg)`，否则
-   「地图 11 不存在」被报成「参数不合法」；② 只读模块**不写 Create/Update DTO**（少一个 DTO 比留一个永远没人调的写接口更诚实），
-   并在 e2e 里断言文档 schema 里没有 `Create*Map` / `Update*Map`。
+23. **「能改什么」要按字段划线，不是按整页划线**（#571 → #573 地图管理）：第一版整页只读，e2e 断言
+   `POST / PUT / PATCH / DELETE` 全 **404**；用户随后把玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）
+   划到服务端可改，于是只剩 `PATCH :id` 一个写入口，而**资源本体仍然不可改**：
+   ① POST / PUT / DELETE 依旧 404（没有「新建 / 删除地图」—— 图存不存在由客户端 TMX 决定），
+   ② 请求里塞 `src` 被白名单剥掉，返回仍是 `map/<id>/<id>` 目录约定算出来的值 —— 「下发方永远改不到客户端加载哪张图」；
+   ③ 进图条件**故意不拦连接**（`worldJoin` 里不判）：登录与传送共用同一条消息，登录时进的就是玩家
+   **脚下那张图**，硬拦的后果是「运营把某图门槛调高 → 正站在图里的低等级玩家下次登录即黑屏，且自己出不来」。
+   判定留在客户端 `StorageManager.changeOnMap`（所有传送的必经之路，读的就是下发的那份配置）。
+   判据一律写 `> 0` 且 `> 角色值`（0 = 不限制；安全地图是 0/0/0，写成 1 会挡住 1 级新号）。
+   **403 与 404 不能混**：403 是「你没权限」，会诱导下一个人去补权限；404 是「这件事没有入口」。配套两条：
+   `new BizException(code, msg)` **默认 400** —— 资源不存在必须 `BizException.notFound(code, msg)`，否则
+   「地图 11 不存在」被报成「参数不合法」；写 DTO 只留**一个** `SaveMapConfigDto`（恰好五个字段，
+   e2e 断言字段集合，多一个少一个都红），文档里没有 `Create*Map` / `Delete*Map`。
 
 ## 七、验证闭环
 

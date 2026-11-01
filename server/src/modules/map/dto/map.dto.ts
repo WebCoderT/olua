@@ -1,14 +1,25 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { IsIn, IsInt, IsString, Length, Max, Min } from "class-validator";
+import {
+  MAP_ENTER_LIMITS,
+  MAP_LABEL_MAX_LENGTH,
+  MAP_TYPE_LABELS,
+  MAP_TYPE_VALUES,
+  MapTypeValue,
+} from "../../../common/constants/map-config";
 
 /**
- * 地图管理（#571）的只读 DTO
+ * 地图管理的 DTO（#571 只读观测 / #573 玩法配置可改）
  *
- * 这个模块**只有读**：地图本体是客户端资源（TMX），服务端存的是对它整理出来的东西
- * （尺寸 / 刷怪区 / 场上怪物），管理端只是把两边摆在一起看。所以这里没有任何
- * `CreateXxx` / `UpdateXxx` 入参 —— 少写一个 DTO 比写一个「永远没人调」的写接口更诚实。
+ * 地图分两半，**边界就在这两个名字之间**：
+ * - **资源本体**（TMX / 底图 / 预览图）在客户端资源包里 —— 服务端一个字段都改不了；
+ * - **整理结果**（名称 / 类型 / 进入条件 / 尺寸 / 刷怪区 / 场上怪物）归服务端，管理端可视化地改。
+ *
+ * 所以这里能写的只有 `SaveMapConfigDto` 那五个字段 —— 没有「新建地图」的入参：
+ * 一张图存不存在由客户端的 TMX 决定（行由启动 seed 按资源清单补出来）。
  *
  * 来源分三类，详情里的 `sources` 会把每一块标出来（页面上也是按这个分栏的）：
- * - `config`：客户端配置 `configs/map.ts`（名称 / 类型 / 进入条件 / 资源路径）；
+ * - `services`：`maps` 表（名称 / 类型 / 进入条件）——#573 起从客户端搬过来的；
  * - `snapshot`：服务端代码里的生成快照（TMX 尺寸、图层、对象组 —— 随仓库提交，随版本发布）；
  * - `db`：服务端库表（`map_spawn_areas` 刷怪区、`world_monsters` 场上实例）。
  */
@@ -210,13 +221,58 @@ export class MapSummaryDto {
   worldMonsterCount: number;
 }
 
-/** 地图列表（11 张图，不分页） */
+/**
+ * 地图玩法配置的精简行（**下发客户端的那一份**）
+ *
+ * 与 `MapSummaryDto` 的区别只有「不带计数与尺寸」：客户端进游戏需要的是「这张图叫什么、
+ * 属于哪一类、进去要什么条件」，TMX 里的对象数它自己就能数。少发的字段不会漂，
+ * 多发的字段迟早有人拿去当判据。
+ */
+export class MapConfigDto {
+  @ApiProperty({ description: "地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）" })
+  id: string;
+
+  @ApiProperty({ description: "地图名" })
+  label: string;
+
+  @ApiProperty({ description: "类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）" })
+  type: string;
+
+  @ApiProperty({ description: "类型名" })
+  typeLabel: string;
+
+  @ApiProperty({ description: "进入所需等级（0 = 不限）" })
+  level: number;
+
+  @ApiProperty({ description: "进入所需战斗力（0 = 不限）" })
+  combat: number;
+
+  @ApiProperty({ description: "进入所需战魂阶（0 = 不限）" })
+  soulOfWar: number;
+}
+
+/** 地图类型分组（顺序 = 传送弹窗的分组顺序；文案的唯一来源在服务端） */
+export class MapTypeGroupDto {
+  @ApiProperty({ description: "类型码" })
+  type: string;
+
+  @ApiProperty({ description: "类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）" })
+  label: string;
+}
+
+/** 地图列表（全部图，不分页） */
 export class MapListDto {
   @ApiProperty({ description: "地图总数" })
   total: number;
 
   @ApiProperty({ description: "地图列表（按 id 数字升序）", type: [MapSummaryDto] })
   list: MapSummaryDto[];
+
+  @ApiProperty({
+    description: "全部地图类型（管理端编辑下拉用；含当前没有地图使用的类型，顺序即传送弹窗分组顺序）",
+    type: [MapTypeGroupDto],
+  })
+  types: MapTypeGroupDto[];
 }
 
 /** 地图详情：列表字段 + 图层 / 对象组 / 刷怪区 / 场上怪物 / 来源说明 */
@@ -235,4 +291,58 @@ export class MapDetailDto extends MapSummaryDto {
 
   @ApiProperty({ description: "每一块数据的来源（页面按它渲染徽标）", type: [MapSourceDto] })
   sources: MapSourceDto[];
+}
+
+/**
+ * 保存一张图的玩法配置（**整份覆盖**这五个字段）
+ *
+ * 为什么是整份而不是部分更新：这五项在页面上是一张表单、一次提交，
+ * 分字段更新只会让「两个管理员同时开两个标签页」变成互相覆盖一半 —— 整份提交至少是
+ * 最后一次写入说了算，页面刷新就能看出来。
+ *
+ * 名称之外的四个字段都允许 0：**0 = 不限制**（安全地图就是「等级 0 / 战力 0 / 战魂 0」，
+ * 而不是「等级 1」—— 后者会把 1 级新号挡在新手村外面）。
+ */
+export class SaveMapConfigDto {
+  @ApiProperty({ description: "地图名称（显示在传送弹窗 / 小地图 / 公告里）", maxLength: MAP_LABEL_MAX_LENGTH })
+  @IsString({ message: "地图名称必须是字符串" })
+  @Length(1, MAP_LABEL_MAX_LENGTH, { message: `地图名称不能为空且不超过 ${MAP_LABEL_MAX_LENGTH} 个字` })
+  label: string;
+
+  @ApiProperty({
+    description: `地图类型（${MAP_TYPE_VALUES.map((type) => `${type} ${MAP_TYPE_LABELS[type as MapTypeValue]}`).join(" / ")}）`,
+    enum: MAP_TYPE_VALUES,
+  })
+  @IsIn(MAP_TYPE_VALUES, { message: `地图类型只能是 ${MAP_TYPE_VALUES.join(" / ")}` })
+  type: string;
+
+  @ApiProperty({
+    description: "进入所需等级（0 = 不限）",
+    minimum: MAP_ENTER_LIMITS.level.min,
+    maximum: MAP_ENTER_LIMITS.level.max,
+  })
+  @IsInt({ message: "进入等级必须是整数" })
+  @Min(MAP_ENTER_LIMITS.level.min, { message: `进入等级不能小于 ${MAP_ENTER_LIMITS.level.min}` })
+  @Max(MAP_ENTER_LIMITS.level.max, { message: `进入等级不能大于 ${MAP_ENTER_LIMITS.level.max}` })
+  level: number;
+
+  @ApiProperty({
+    description: "进入所需战斗力（0 = 不限）",
+    minimum: MAP_ENTER_LIMITS.combat.min,
+    maximum: MAP_ENTER_LIMITS.combat.max,
+  })
+  @IsInt({ message: "进入战斗力必须是整数" })
+  @Min(MAP_ENTER_LIMITS.combat.min, { message: `进入战斗力不能小于 ${MAP_ENTER_LIMITS.combat.min}` })
+  @Max(MAP_ENTER_LIMITS.combat.max, { message: `进入战斗力不能大于 ${MAP_ENTER_LIMITS.combat.max}` })
+  combat: number;
+
+  @ApiProperty({
+    description: "进入所需战魂阶（0 = 不限）",
+    minimum: MAP_ENTER_LIMITS.soulOfWar.min,
+    maximum: MAP_ENTER_LIMITS.soulOfWar.max,
+  })
+  @IsInt({ message: "进入战魂阶必须是整数" })
+  @Min(MAP_ENTER_LIMITS.soulOfWar.min, { message: `进入战魂阶不能小于 ${MAP_ENTER_LIMITS.soulOfWar.min}` })
+  @Max(MAP_ENTER_LIMITS.soulOfWar.max, { message: `进入战魂阶不能大于 ${MAP_ENTER_LIMITS.soulOfWar.max}` })
+  soulOfWar: number;
 }
