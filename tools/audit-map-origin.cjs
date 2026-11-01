@@ -23,6 +23,10 @@
  * 6. 生成的刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
  *    这是「生成物用错口径」唯一不需要跑客户端就能发现的判据。
  * 7. 客户端不许再出现 `mapCenter` 这类「地图中心」的命名（照旧代码抄回来最常见）。
+ * 8. 越界判定必须落在**跑得起来的链路**上（#586）：`common/utils/spawn-area-bounds.util.ts` 是唯一判据，
+ *    `map.service` 要真的用它算 `inBounds`、`world.service` 播种时要对越界区域告警 ——
+ *    第 6 条只校验生成快照，而运行时读的是库表；库表只在空库时按快照 seed 一次，
+ *    旧口径时期 seed 过的库会一直把怪刷在图外，静态审计看不见它。
  *
  * 用法：node tools/audit-map-origin.cjs
  */
@@ -251,6 +255,37 @@ function checkLegacyNaming() {
   }
 }
 
+/** 越界判据必须被真的用起来（#586）—— 字段加了没人算 = 等于没做 */
+function checkBoundsWired() {
+  const util = path.join(REPO, "server/src/common/utils/spawn-area-bounds.util.ts");
+  const utilSrc = read(util, "server/src/common/utils/spawn-area-bounds.util.ts");
+  if (utilSrc && !/export const SPAWN_AREA_TOLERANCE = 1;/.test(utilSrc)) {
+    problem(
+      "server/src/common/utils/spawn-area-bounds.util.ts",
+      0,
+      "容差必须是 1（导入按浮点算中心、列是整数，取整会造出 0.x 的假越界）—— 改容差要同时改本条规则与第 6 条的 ±1",
+    );
+  }
+
+  const service = read(path.join(REPO, "server/src/modules/map/map.service.ts"), "server/src/modules/map/map.service.ts");
+  if (service && !(/spawnAreaInBounds\(/.test(service) && /spawnAreaOverflow\(/.test(service))) {
+    problem(
+      "server/src/modules/map/map.service.ts",
+      0,
+      "详情必须按地图尺寸算 inBounds / overflow（用 spawn-area-bounds.util）：管理端只显示结论，不自己再判一遍",
+    );
+  }
+
+  const world = read(path.join(REPO, "server/src/modules/world/world.service.ts"), "server/src/modules/world/world.service.ts");
+  if (world && !/spawnAreaInBounds\(/.test(world)) {
+    problem(
+      "server/src/modules/world/world.service.ts",
+      0,
+      "播种时要对越界区域告警（spawnAreaInBounds）：库表可能还是旧口径 seed 的，怪会刷在图外而没人知道",
+    );
+  }
+}
+
 checkAnchoredBeforeAsset();
 checkLayerAnchorResync();
 checkPointMath();
@@ -258,9 +293,10 @@ checkMapLayerStatic();
 checkImportTool();
 checkSpawnAreasInMap();
 checkLegacyNaming();
+checkBoundsWired();
 
 if (problems.length === 0) {
-  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、换算只有 y 取反、地图层静止、刷怪区坐标全部落在图内");
+  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、换算只有 y 取反、地图层静止、刷怪区坐标全部落在图内（快照 + 库表两条路都有判据）");
   process.exit(0);
 }
 
