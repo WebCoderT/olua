@@ -114,7 +114,8 @@ export function Card({
   dense = true,
 }: {
   title?: string;
-  description?: string;
+  /** 说明：允许富文本（多段、内联 code）—— 有的卡片要在一行里说清「口径 + 计数」，纯字符串写不下 */
+  description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
