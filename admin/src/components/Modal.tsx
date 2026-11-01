@@ -76,11 +76,12 @@ export function Modal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
+          <div className="min-w-0">
             <h3 className="text-base font-semibold text-slate-100">{title}</h3>
             {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
           </div>
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={onClose}>
+          {/* `shrink-0`：标题过长时不能把「关闭」压成竖排两个字 */}
+          <Button variant="ghost" className="shrink-0 whitespace-nowrap px-2 py-1 text-xs" onClick={onClose}>
             关闭
           </Button>
         </div>

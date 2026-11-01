@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BAN_DURATION_MAX_HOURS, BAN_DURATION_PRESETS, BAN_REASON_MAX_LENGTH } from "../api";
-import { Button, Field, Input, Select } from "./ui";
+import { Modal } from "./Modal";
+import { Button, Field, Input, Notice, Select } from "./ui";
 import { toastError } from "../store/toast";
 
 /** 快选里代表「永久」的值（`Select` 的 value 只能是字符串，用这个常量对映 null） */
@@ -72,61 +73,61 @@ export function BanDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">封禁账号</h3>
-        <p className="mt-2 text-sm text-slate-400">
-          将对账号「{targetName}」执行封禁：
-        </p>
-
-        <div className="mt-4 flex flex-col gap-4">
-          <Field label="封禁原因" hint={`最多 ${BAN_REASON_MAX_LENGTH} 字；玩家登录时会看到`}>
-            <Input
-              value={reason}
-              maxLength={BAN_REASON_MAX_LENGTH}
-              placeholder="例如：使用外挂脚本"
-              onChange={(event) => setReason(event.target.value)}
-            />
-          </Field>
-
-          <Field label="封禁时长" hint="临时封禁到期会自动解封，不需要再来点一次">
-            <Select value={preset} onChange={(event) => setPreset(event.target.value)}>
-              {BAN_DURATION_PRESETS.map((item) => (
-                <option key={item.label} value={item.hours === null ? FOREVER : String(item.hours)}>
-                  {item.label}
-                </option>
-              ))}
-              <option value={CUSTOM}>自定义…</option>
-            </Select>
-          </Field>
-
-          {preset === CUSTOM ? (
-            <Field label="自定义时长（小时）" hint={`1 ~ ${BAN_DURATION_MAX_HOURS}`}>
-              <Input
-                type="number"
-                min={1}
-                max={BAN_DURATION_MAX_HOURS}
-                value={customHours}
-                onChange={(event) => setCustomHours(event.target.value)}
-              />
-            </Field>
-          ) : null}
-        </div>
-
-        <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          封禁<strong>立即生效</strong>：在线的玩家下一次请求就会被拒（客户端会收到「账号已被封禁并带上原因」），
-          在线标记也会一并清除。永久封禁没有自动恢复，只能手动解封。
-        </p>
-
-        <div className="mt-6 flex justify-end gap-2">
+    <Modal
+      open
+      size="sm"
+      title="封禁账号"
+      hint={`将对账号「${targetName}」执行封禁。`}
+      onClose={onCancel}
+      footer={
+        <>
           <Button variant="outline" disabled={submitting} onClick={onCancel}>
             取消
           </Button>
           <Button variant="danger" loading={submitting} onClick={() => void submit()}>
             确认封禁
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="封禁原因" hint={`最多 ${BAN_REASON_MAX_LENGTH} 字；玩家登录时会看到`}>
+          <Input
+            value={reason}
+            maxLength={BAN_REASON_MAX_LENGTH}
+            placeholder="例如：使用外挂脚本"
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </Field>
+
+        <Field label="封禁时长" hint="临时封禁到期会自动解封，不需要再来点一次">
+          <Select value={preset} onChange={(event) => setPreset(event.target.value)}>
+            {BAN_DURATION_PRESETS.map((item) => (
+              <option key={item.label} value={item.hours === null ? FOREVER : String(item.hours)}>
+                {item.label}
+              </option>
+            ))}
+            <option value={CUSTOM}>自定义…</option>
+          </Select>
+        </Field>
+
+        {preset === CUSTOM ? (
+          <Field label="自定义时长（小时）" hint={`1 ~ ${BAN_DURATION_MAX_HOURS}`}>
+            <Input
+              type="number"
+              min={1}
+              max={BAN_DURATION_MAX_HOURS}
+              value={customHours}
+              onChange={(event) => setCustomHours(event.target.value)}
+            />
+          </Field>
+        ) : null}
+
+        <Notice tone="amber">
+          封禁<strong>立即生效</strong>：在线的玩家下一次请求就会被拒（客户端会收到「账号已被封禁并带上原因」），
+          在线标记也会一并清除。永久封禁没有自动恢复，只能手动解封。
+        </Notice>
       </div>
-    </div>
+    </Modal>
   );
 }

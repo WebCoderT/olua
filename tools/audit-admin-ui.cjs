@@ -26,8 +26,20 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const PAGES = path.resolve(__dirname, "../admin/src/pages");
+const COMPONENTS = path.resolve(__dirname, "../admin/src/components");
 
 /** 白名单：文件名 → 理由（必须写清楚，否则下一个人会往里塞第二个） */
+/**
+ * `components/` 里只查第一类（手写遮罩）：那里正是这批组件的实现处，
+ * 拿「不许写卡片 class」去卡 `ui.tsx` 只会得到一堆假 FAIL。
+ * 但**手写遮罩会跨页面传染** —— 五个共用弹窗（封禁 / 重置口令 / 公告 / 养成配置 / 成长列表）
+ * 曾经全部绕开 `Modal`，页面里守住了、组件里漏了，用户看到的是「有的弹窗能按 Esc，有的不能」。
+ */
+const COMPONENT_EXEMPT = {
+  "Modal.tsx": "它就是遮罩的唯一实现",
+  "GameImage.tsx": "大图查看器（`z-[100]` 全屏看图），不是表单弹窗，没有 footer 与标题栏",
+};
+
 const EXEMPT = {
   "LoginPage.tsx": "登录壳：`<h1>` 是应用名，不是后台页面头（没有侧栏、没有 PageHeader）",
   "RegisterPage.tsx": "注册壳：同上，与登录页对称",
@@ -73,8 +85,29 @@ for (const file of files) {
   }
 }
 
+// 组件目录：只查「手写遮罩」一条
+const componentFiles = fs.readdirSync(COMPONENTS).filter((f) => f.endsWith(".tsx")).sort();
+for (const file of componentFiles) {
+  if (COMPONENT_EXEMPT[file]) continue;
+  const rel = path.join("admin/src/components", file);
+  const lines = fs.readFileSync(path.join(COMPONENTS, file), "utf8").split("\n");
+  lines.forEach((line, index) => {
+    if (/fixed inset-0/.test(line)) {
+      problems.push({
+        file: rel,
+        line: index + 1,
+        id: "no-handwritten-overlay",
+        hint: RULES[0].hint,
+        text: line.trim().slice(0, 100),
+      });
+    }
+  });
+}
+
 if (problems.length === 0) {
-  console.log(`✓ 界面一致性：${files.length} 个页面全部走共用组件（PageHeader / Modal / Card / Field）`);
+  console.log(
+    `✓ 界面一致性：${files.length} 个页面 + ${componentFiles.length - Object.keys(COMPONENT_EXEMPT).length} 个组件全部走共用组件（PageHeader / Modal / Card / Field）`,
+  );
   process.exit(0);
 }
 

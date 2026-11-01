@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Input } from "./ui";
+import { Modal } from "./Modal";
+import { Button, Field, Input, Notice } from "./ui";
 
 /**
  * 补录 / 修改玩家邮箱弹窗
@@ -46,21 +47,34 @@ export function EmailDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">补录 / 修改玩家邮箱</h3>
-        <p className="mt-2 text-sm text-slate-400">
-          为玩家「{targetName}」设置邮箱（个人信息，仅持 account:email 权限的管理员可见）。
-        </p>
-
+    <Modal
+      open
+      size="sm"
+      title="补录 / 修改玩家邮箱"
+      hint={`为玩家「${targetName}」设置邮箱（个人信息，仅持 account:email 权限的管理员可见）。`}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="outline" disabled={submitting} onClick={() => void submit("")}>
+            清空邮箱
+          </Button>
+          <Button variant="outline" disabled={submitting} onClick={onCancel}>
+            取消
+          </Button>
+          <Button loading={submitting} onClick={() => void submit(email)}>
+            保存
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
         {currentEmail ? (
-          <p className="mt-3 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
+          <Notice tone="slate">
             当前邮箱：<span className="text-slate-200">{currentEmail}</span>
-          </p>
+          </Notice>
         ) : null}
 
-        <div className="mt-3">
-          <span className="mb-1.5 block text-xs font-medium text-slate-400">新邮箱（留空点「清空邮箱」即删除）</span>
+        <Field label="新邮箱（留空点「清空邮箱」即删除）">
           <Input
             type="email"
             value={email}
@@ -71,24 +85,10 @@ export function EmailDialog({
               if (event.key === "Enter" && !submitting) void submit(email);
             }}
           />
-        </div>
+        </Field>
 
-        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          同一邮箱只能绑定一个账号（大小写不敏感）。格式或冲突错误由服务端即时返回。
-        </p>
-
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={() => void submit("")}>
-            清空邮箱
-          </Button>
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
-          </Button>
-          <Button loading={submitting} onClick={() => void submit(email)}>
-            保存
-          </Button>
-        </div>
+        <Notice tone="amber">同一邮箱只能绑定一个账号（大小写不敏感）。格式或冲突错误由服务端即时返回。</Notice>
       </div>
-    </div>
+    </Modal>
   );
 }

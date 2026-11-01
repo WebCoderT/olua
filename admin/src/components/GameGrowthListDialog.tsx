@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ranksApi, soulsApi, titlesApi } from "../api";
+import { Modal } from "./Modal";
 import { Button, EmptyState, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "./ui";
 import { toastError, toastSuccess } from "../store/toast";
 
@@ -166,24 +167,28 @@ export function GameGrowthListDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <h3 className="text-base font-semibold text-slate-100">{conf.heading}</h3>
-          {loading ? <Spinner /> : null}
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          {canWrite
-            ? conf.sortable
-              ? "拖动整行调整升级顺序；价格在这里显示和修改（主列表与编辑弹窗均不涉及价格）。"
-              : "顺序天然按阶，无需拖动；价格在这里显示和修改（主列表与编辑弹窗均不涉及价格）。"
-            : "当前角色没有「修改养成配置」权限：可以看顺序与价格，不能拖动或改价。"}
-        </p>
+    <Modal
+      open
+      size="lg"
+      title={conf.heading}
+      hint={
+        canWrite
+          ? conf.sortable
+            ? "拖动整行调整升级顺序；价格在这里显示和修改（主列表与编辑弹窗均不涉及价格）。"
+            : "顺序天然按阶，无需拖动；价格在这里显示和修改（主列表与编辑弹窗均不涉及价格）。"
+          : "当前角色没有「修改养成配置」权限：可以看顺序与价格，不能拖动或改价。"
+      }
+      onClose={onClose}
+      footer={
+        <Button variant="outline" onClick={onClose}>
+          关闭
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {loading ? <Spinner /> : null}
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
@@ -215,14 +220,15 @@ export function GameGrowthListDialog({
                   </td>
                   <td className={tdClass}>
                     <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={priceDraft[item.level] ?? String(item.bindGold)}
-                        disabled={!canWrite}
-                        className="w-28"
-                        onChange={(event) => setPriceDraft({ ...priceDraft, [item.level]: event.target.value })}
-                      />
+                      <div className="w-28">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={priceDraft[item.level] ?? String(item.bindGold)}
+                          disabled={!canWrite}
+                          onChange={(event) => setPriceDraft({ ...priceDraft, [item.level]: event.target.value })}
+                        />
+                      </div>
                       <Button
                         variant="outline"
                         className="px-2.5 py-1 text-xs"
@@ -244,13 +250,7 @@ export function GameGrowthListDialog({
         </div>
 
         {!loading && items.length === 0 ? <EmptyState title={conf.empty.title} description={conf.empty.description} /> : null}
-
-        <div className="mt-5 flex justify-end">
-          <Button variant="outline" onClick={onClose}>
-            关闭
-          </Button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
