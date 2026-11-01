@@ -182,7 +182,10 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   给出 `ROLE_OCCUPATION_CODES` / `ROLE_SEX_CODES` 与 `OCCUPATION_HINT` / `SEX_HINT` ——
   客户端加一个职业码，服务端的校验清单与 DTO 里那行 `1 战士 / 2 魔法师 / …` **自动跟着变**（不必改服务端一行）。
 - **已上移**：掉落（#581 —— `drop_tables` / `monster_drops` 进库当运营数据，`combat-settlement` 抽表、
-  `roles/pickDrop` 入包，客户端只演散落与拾取）。**不在范围**：时装（`configs/fashionClothes`
+  `roles/pickDrop` 入包，客户端只演散落与拾取）。管理端入口是 `GET/POST/PATCH/DELETE /admin/drop-tables` +
+  `GET /admin/monster-drops`（列表）/ `GET /admin/monster-drops/:monsterKey`（单条，弹窗回填，#584）/
+  `PATCH /admin/monster-drops/:monsterKey`（**唯一写入路径**，三选一）；`GET /admin/monsters` 每行带 `drop` 摘要
+  （`AdminMonsterDto`），**玩家侧快照只下发 `MonsterDto`、不带摘要** —— 客户端不结算掉落。**不在范围**：时装（`configs/fashionClothes`
   整份被注释，没有活的来源 —— 不凭空造一份）。怪物战斗数值已进快照（#34，MONSTER_COMBAT）；怪物实例
   属世界权威（#35，服务端读 `map_spawn_areas` 播种、tick 重生、状态落盘；#581 删掉了客户端进图自己刷的那条路）。
 - 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译

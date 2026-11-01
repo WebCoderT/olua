@@ -27,7 +27,7 @@ const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.genera
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 639;
+const EXPECTED_ASSERTIONS = 651;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -1084,6 +1084,24 @@ async function main() {
     const viewerMonsterDropWrite = await api(base, "PATCH", "/api/admin/monster-drops/1", { token: viewerToken, body: { tableId: null, entries: null } });
     checkEqual(viewerMonsterDropWrite.status, 403, "观察员改每怪掉落 → 403");
 
+    // #584：怪物列表直接带掉落摘要（管理端视角），弹窗回填走单条详情
+    const monstersWithDrop = await api(base, "GET", "/api/admin/monsters?size=5", { token });
+    checkEqual(monstersWithDrop.status, 200, "怪物列表可读（#584 起带掉落摘要）");
+    const firstMonster = monstersWithDrop.body?.data?.list?.[0];
+    check(Boolean(firstMonster?.drop), "怪物行带 drop 摘要");
+    check(["table", "entries", "none"].includes(firstMonster?.drop?.source), "摘要来源是三种之一（table / entries / none）");
+    const dropDetail = await api(base, "GET", `/api/admin/monster-drops/${firstMonster?.id}`, { token });
+    checkEqual(dropDetail.status, 200, "单条掉落详情可读（弹窗回填用）");
+    checkEqual(dropDetail.body?.data?.monsterKey, firstMonster?.id, "详情的 key 与请求一致");
+    checkEqual(dropDetail.body?.data?.source, firstMonster?.drop?.source, "详情来源 = 列表摘要来源（两处不会漂）");
+    checkEqual(dropDetail.body?.data?.entryCount, undefined, "详情不重复造 entryCount（摘要字段只在列表上）");
+    checkEqual(dropDetail.body?.data?.entries?.length ?? 0, firstMonster?.drop?.entryCount, "摘要条目数 = 详情条目数");
+    const dropDetailGhost = await api(base, "GET", "/api/admin/monster-drops/999", { token });
+    checkEqual(dropDetailGhost.status, 404, "查不存在的怪掉落 → 404");
+    checkEqual(dropDetailGhost.body?.code, 50024, "怪物掉落未找到用 50024");
+    const viewerDropDetail = await api(base, "GET", "/api/admin/monster-drops/1", { token: viewerToken });
+    checkEqual(viewerDropDetail.body?.code, 0, "观察员能看单条掉落详情（只读）");
+
     //#endregion
     //#region 十六、玩家侧配置快照（#294）：一次下发全部运营配置 / 管理端改值进快照 / 需要玩家令牌
 
@@ -1115,6 +1133,7 @@ async function main() {
     checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
     checkEqual(snap.monsters?.length, Object.keys(shared.MONSTERS).length, "快照怪物行数 = 生成物（220）");
+    check(!("drop" in (snap.monsters?.[0] ?? {})), "玩家侧快照的怪物不带掉落摘要（客户端不结算掉落，#584）");
     checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 生成物");
     checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20）");
     checkEqual(snap.levelExps?.length, Object.keys(shared.ROLE_LEVEL_ATTRIBUTES).length, "快照升级经验行数 = 等级数");
