@@ -46,5 +46,8 @@
 - 2026-10-31：**背包与穿戴收权 #556** —— `bag`/`equipments`/`skills` 进权威清单（8 → 11 字段），
   `POST /roles/:id/bag-op` 一个接口五个动作（equip/unequip/discard 服务端算，move/tidy 只验守恒），
   `bag` 尺寸特例（内容取库里、尺寸取客户端、逐格保坐标）；客户端六个方法改 async 走 `runBagOp`。
-- 数字基线（#556 后）：163 接口 / 135 路径 / 244 模型 / 25 权限点 / 45 表 / 37 仓储；e2e 2503（25 套）；单测 58；守卫 70；审计 13。
+- 2026-11-01：**管理端风格全站统一 #564/#565**（技能 `olua-admin-ui` + PageHeader/Modal/FilterBar 组件层 + 紧凑档 + 审计 `audit-admin-ui`）
+  → **地图原点改左上角 #566**：地图节点锚点 (0,1)（**必须在 `tmxAsset` 赋值之前**，否则图层按旧锚点绘制 = 整体偏半张图），
+  Tiled 坐标只剩 `(x,y)→(x,-y)`；刷怪区快照换口径 + `world_meta.coord_origin` 标记的一次性平移；守点 `audit-map-origin`。
+- 数字基线（#566 后）：163 接口 / 135 路径 / 244 模型 / 25 权限点 / 45 表 / 37 仓储；e2e 2503（25 套）；单测 58；守卫 70；审计 15。
 - **回归门槛 = 改动哪跑哪**：`make test-changed`（tools/test-changed.cjs；BASE=<ref> 可选）。客户端单测按内容匹配；服务端 e2e 按模块表，表外/共享底座回落全量；已删文件要 existsSync 过滤（否则删除的审计还会进计划）；已知基线红 5 套（素材未入库）在 CLIENT_BASELINE_RED 容忍；全量门禁 make verify 只在发布前。
