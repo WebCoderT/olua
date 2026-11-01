@@ -2,6 +2,7 @@ import { useState } from "react";
 import { mapPreview } from "../../api";
 import type { MapDetail, MapObject, MapSpawnArea } from "../../api";
 import { gameResUrl } from "../GameImage";
+import { overflowText } from "./bounds";
 
 /**
  * 地图可视化（预览图 + SVG 叠加层）
@@ -26,6 +27,12 @@ import { gameResUrl } from "../GameImage";
  * - 线宽用 `vectorEffect="non-scaling-stroke"`：viewBox 是 TMX 像素（8192），容器只有几百像素，
  *   按 viewBox 缩放的 2px 描边会变成 0.03px 看不见。
  * - 点标记的半径 / 字号必须按 `detail.width` 算（不能写死）：写死 40 在 8192 的图上是 1 像素。
+ *
+ * ## 越界为什么必须换颜色（#586）
+ *
+ * 容器是 `overflow-hidden` 的：越出 viewBox 的那部分矩形**会被裁掉**。所以「区域摆到了图外」
+ * 在画面上表现为「这块区域不存在」—— 跟「这张图本来没有这个区域」一模一样。
+ * 判据（`inBounds`）由服务端按地图尺寸算，这里只负责把它变成肉眼可见的东西：描边转警示色 + 虚线。
  */
 export interface MapLayerVisibility {
   /** 刷怪区（服务端世界坐标，实线） */
@@ -42,6 +49,8 @@ export interface MapLayerVisibility {
 
 const COLOR = {
   spawn: "#818cf8", // indigo-400
+  /** 越界区域：换成警示色，否则「被裁掉的那块」看起来跟「本来就没有」一模一样 */
+  spawnOutside: "#f43f5e", // rose-500
   tiled: "#fbbf24", // amber-400
   npc: "#38bdf8", // sky-400
   revive: "#34d399", // emerald-400
@@ -151,6 +160,9 @@ export function MapCanvas({
         {visible.spawn &&
           detail.spawnAreas.map((area) => {
             const box = tiledBoxOf(area);
+            // 越界区域描警示色：容器 overflow-hidden 会把越出 viewBox 的部分裁掉，
+            // 也就是「区域在图外」在画面上表现为「这块区域不见了」—— 只有颜色能提示。
+            const color = area.inBounds ? COLOR.spawn : COLOR.spawnOutside;
             return (
               <g key={`spawn-${area.id}`} className="cursor-pointer" onClick={() => onPickArea(area)}>
                 <rect
@@ -158,13 +170,14 @@ export function MapCanvas({
                   y={box.y}
                   width={box.width}
                   height={box.height}
-                  fill={COLOR.spawn}
-                  fillOpacity={0.14}
-                  stroke={COLOR.spawn}
-                  strokeWidth={2}
+                  fill={color}
+                  fillOpacity={area.inBounds ? 0.14 : 0.24}
+                  stroke={color}
+                  strokeWidth={area.inBounds ? 2 : 3}
+                  strokeDasharray={area.inBounds ? undefined : `${labelSize * 0.45} ${labelSize * 0.25}`}
                   vectorEffect="non-scaling-stroke"
                 >
-                  <title>{`#${area.id} ${area.name} · ${area.monsterLabel}(${area.monsterKey}) ${area.min}~${area.max} 只\n世界坐标 (${area.cx}, ${area.cy}) ${area.w}×${area.h}`}</title>
+                  <title>{`#${area.id} ${area.name} · ${area.monsterLabel}(${area.monsterKey}) ${area.min}~${area.max} 只\n世界坐标 (${area.cx}, ${area.cy}) ${area.w}×${area.h}${area.inBounds ? "" : `\n⚠ 越出地图边界（${overflowText(area)}），超出的部分在画面上看不到`}`}</title>
                 </rect>
                 <text
                   x={box.x + box.width / 2}

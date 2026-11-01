@@ -2,6 +2,7 @@ import { Modal } from "../Modal";
 import { Badge, EmptyState, tableClass, tdClass, thClass, theadClass } from "../ui";
 import type { MapDetail, MapObject } from "../../api";
 import { tiledBoxOf } from "./MapCanvas";
+import { overflowText, overflowTitle } from "./bounds";
 
 /**
  * 地图观测弹窗（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）
@@ -129,7 +130,7 @@ export function SpawnAreasDialog({
     <Modal
       open={open}
       title="刷怪区"
-      hint="实线数据来自服务端 map_spawn_areas（世界坐标：原点左上、y 轴向上，cy 为负）；「Tiled 原始」那一列是同区域的 TMX 矩形，两者应当重合"
+      hint="实线数据来自服务端 map_spawn_areas（世界坐标：原点左上、y 轴向上，cy 为负）；「Tiled 原始」那一列是同区域的 TMX 矩形，两者应当重合；「在图内」由服务端按地图尺寸判（越界 = 怪会刷到图外，多半是库表还留着旧口径）"
       size="xl"
       onClose={onClose}
     >
@@ -146,6 +147,7 @@ export function SpawnAreasDialog({
                 <th className={thClass}>数量</th>
                 <th className={thClass}>世界中心</th>
                 <th className={thClass}>尺寸</th>
+                <th className={thClass}>在图内</th>
                 <th className={thClass}>Tiled 原始（左上角）</th>
               </tr>
             </thead>
@@ -169,6 +171,16 @@ export function SpawnAreasDialog({
                     </td>
                     <td className={rowClass(area.id === focusId)}>
                       {area.w} × {area.h}
+                    </td>
+                    <td className={rowClass(area.id === focusId)}>
+                      {area.inBounds ? (
+                        <Badge tone="green">在图内</Badge>
+                      ) : (
+                        <span className="flex flex-wrap items-center gap-1.5 text-[11px]" title={overflowTitle(area)}>
+                          <Badge tone="red">越界</Badge>
+                          <span className="font-mono text-rose-300">{overflowText(area)}</span>
+                        </span>
+                      )}
                     </td>
                     <td className={`${rowClass(area.id === focusId)} whitespace-normal`}>
                       {twin ? (

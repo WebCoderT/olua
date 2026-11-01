@@ -3,6 +3,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, Button, Card, EmptyState, Field as FormField, Input, Notice, Select, Spinner } from "../components/ui";
 import { MapCanvas, type MapLayerVisibility } from "../components/map/MapCanvas";
+import { outOfBoundsCount } from "../components/map/bounds";
 import {
   GroupsDialog,
   LayersDialog,
@@ -158,6 +159,8 @@ export function MapsPage() {
   };
 
   const dirty = !!form && !!detail && !sameForm(form, formOf(detail));
+  /** 越界区域数（服务端判；0 时页面保持安静，>0 才出红色徽标） */
+  const outOfBounds = detail ? outOfBoundsCount(detail.spawnAreas) : 0;
 
   return (
     <div className="space-y-3">
@@ -283,12 +286,16 @@ export function MapsPage() {
                     <>
                       实线 = 服务端刷怪区（世界坐标）；虚线 = TMX 原始矩形（Tiled 坐标），两者重合才说明导入没算错。
                       <br />
+                      区域必须整体落在图内（x ∈ [0, 宽]、y ∈ [-高, 0]）：越界的那块会被画布裁掉，所以越界区域描成红色虚线。
+                      <br />
                       资源 {detail.src || "—"} · {detail.cols}×{detail.rows} 格（{detail.width}×{detail.height} px）· 图层 {detail.layerCount} · NPC/复活点{" "}
                       {detail.npcCount}/{detail.reviveCount} · 刷怪区 {detail.spawnAreaCount}（资源 {detail.monsterAreaCount}）· 场上怪物 {detail.worldMonsterCount}
                     </>
                   }
                   actions={
                     <>
+                      {/* 只在有越界时出现：0 越界是常态，天天挂一个绿徽标等于没有徽标 */}
+                      {outOfBounds > 0 && <Badge tone="red">刷怪区越界 {outOfBounds}</Badge>}
                       <Button variant="ghost" onClick={() => setZoomed(true)}>
                         放大
                       </Button>
@@ -299,6 +306,10 @@ export function MapsPage() {
                   }
                 >
                   <LayerLegend visible={layers} onChange={setLayers} />
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-dashed" style={{ borderColor: "#f43f5e" }} />
+                    红色虚线 = 越出地图边界的区域（超出部分被画布裁掉，图上只剩缺角）
+                  </p>
                   <div className="mt-2">
                     <MapCanvas detail={detail} visible={layers} onPickArea={openArea} onPickNpc={openNpc} />
                   </div>
