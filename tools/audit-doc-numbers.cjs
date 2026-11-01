@@ -122,6 +122,7 @@ const E2E_SCRIPTS = [
   ["装备对齐几何（#513）", "server/test/e2e-equip-align.cjs"],
   ["装备内观几何（#523）", "server/test/e2e-equip-in-align.cjs"],
   ["地图管理（玩法配置可改，#573）", "server/test/e2e-map.cjs"],
+  ["界面特效配置（#594）", "server/test/e2e-ui-effect.cjs"],
 ];
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];

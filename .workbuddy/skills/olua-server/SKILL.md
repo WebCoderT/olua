@@ -51,8 +51,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（46 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align（38 个仓储）
+    database.service.ts           建表（47 张表）+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect（39 个仓储）
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -251,7 +251,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   - `bag` / `equipments` / `skills`：本地操作太多（换装 / 整理 / 移动 / 丢弃 / 穿时装），得先有对应的服务端接口；
   - `hp` / `mp`：自然回复与技能扣减在客户端，收权需要服务端出回复 tick。
 
-- **46 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies` / `role_blocks` / `role_reports` / `quests` / `quest_progress` / `parties` / `party_members` / `achievements` / `role_achievements` / `role_mails` / `equip_aligns` / `equip_in_aligns`。删账号**级联删其角色**。
+- **47 张表**：`accounts` / `roles` / `admins` / `audit_logs` / `announcements` / `mail_queue` / `world_monsters` / `map_spawn_areas` / `zones` / `world_meta` / `titles` / `souls` / `ranks` / `equipments` / `drugs` / `items` / `monsters` / `npcs` / `fashions` / `mall_prices` / `mall_settings` / `drop_tables` / `monster_drops` / `level_exps` / `growth_segments` / `growth_scalars` / `skills` / `statuses` / `monster_skills` / `guilds` / `guild_members` / `guild_applications` / `role_friends` / `role_enemies` / `role_blocks` / `role_reports` / `quests` / `quest_progress` / `parties` / `party_members` / `achievements` / `role_achievements` / `role_mails` / `equip_aligns` / `equip_in_aligns` / `ui_effects`。删账号**级联删其角色**。
   - `world_monsters` 是**世界权威的状态表**：instanceId（`m<mapId>_<n>`，跨重启稳定发牌）/ map_id / monster_key / 出生点 x,y / hp / max_hp / alive / killed_at / respawn_at；`upsertBatch` 事务批量落盘，`listByMap` 供重载恢复。
   - `audit_logs` 是**日志表**（不是主数据）：`actor_name` / `target_id` 冗余存名字与 id（操作人可能被删、角色可能被删，只留外键事后谁也认不出这条记录说的是谁），三个索引（`created_at DESC` / `actor_id` / `(target_type, target_id)`）。
 - **加列一律走 `migrate()` 里的 `ensureColumn`**（内部读 `PRAGMA table_info` 判断），别只改建表语句就完事 —— 存量库不会被重建。

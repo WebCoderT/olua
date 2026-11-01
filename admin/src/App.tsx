@@ -21,6 +21,7 @@ import { ItemsPage } from "./pages/ItemsPage";
 import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
 import { MapsPage } from "./pages/MapsPage";
+import { UiEffectsPage } from "./pages/UiEffectsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { StatusesPage } from "./pages/StatusesPage";
 import { QuestsPage } from "./pages/QuestsPage";
@@ -290,6 +291,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <MapsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="ui-effects"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <UiEffectsPage />
               </RequirePermission>
             }
           />

@@ -490,6 +490,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   guild: "帮会",
   equipAlign: "装备外观对齐",
   equipInAlign: "装备内观对齐",
+  uiEffect: "界面特效",
 };
 
 /** 目标类型中文名（未知类型原样显示） */
@@ -529,6 +530,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "adminMail.send": "发送邮件",
   "adminMail.retry": "重投邮件",
   "adminGameMail.send": "补发游戏消息",
+  "adminUiEffect.save": "保存特效参数",
   "role.create": "创建角色",
   "role.save": "保存角色进度",
   "role.remove": "删除角色",

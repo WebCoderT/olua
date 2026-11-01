@@ -9,6 +9,7 @@ import { GrowthScalarDto, LevelDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
 import { MallPriceItemDto, MallSettingsDto } from "./mall.dto";
 import { MapConfigDto, MapTypeGroupDto } from "../../map/dto/map.dto";
+import { UiEffectConfigDto } from "../../ui-effect/dto/ui-effect.dto";
 import { MonsterDto, MonsterPresentationDto } from "./monster.dto";
 import { NpcDto } from "./npc.dto";
 import { RankDto } from "./rank.dto";
@@ -143,4 +144,13 @@ export class GameConfigSnapshotDto {
   })
   @Type(() => MapTypeGroupDto)
   mapTypes!: MapTypeGroupDto[];
+
+  @ApiProperty({
+    description:
+      "界面特效的表现参数（#594：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— " +
+      "调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定 `effect/<key>/<key>.plist`）",
+    type: [UiEffectConfigDto],
+  })
+  @Type(() => UiEffectConfigDto)
+  uiEffects!: UiEffectConfigDto[];
 }

@@ -236,6 +236,24 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
+      -- 界面特效配置（#594）：一行 = 一个特效 key 的「摆位 / 缩放 / 旋转 / 时长 / 开关」
+      -- （与武器外观同一套取向）。图集本体在客户端资源包里，路径是两端约定
+      -- effect/<key>/<key>.plist —— **不入库**（#573 同一条纪律：存了只会让人把客户端
+      -- 指到不存在的图上）。行由启动 seed 按 UI_EFFECT_DEFAULTS 补出来，
+      -- 一个 key 存在的前提是客户端有消费代码，所以没有「新建 / 删除特效」接口。
+      CREATE TABLE IF NOT EXISTS ui_effects (
+        effect_key  TEXT    PRIMARY KEY,
+        offset_x    INTEGER NOT NULL DEFAULT 0,
+        offset_y    INTEGER NOT NULL DEFAULT 0,
+        scale_x     REAL    NOT NULL DEFAULT 1,
+        scale_y     REAL    NOT NULL DEFAULT 1,
+        rotate      INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 1000,
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        updated_by  TEXT    NOT NULL DEFAULT '',
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
+
       -- 区服（#295 阶段二）：一行 = 一个游戏区。账号注册时选定归属区，
       -- 各区的世界（怪物实例）相互独立；合并区后 from 区在此打 merged_into 标记
       -- （不删行：区号是历史事实，管理端列表还要展示「已并入 X 区」）。

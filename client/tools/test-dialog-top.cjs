@@ -194,7 +194,10 @@ check(/LayerManager\.addToUILayer\(dialog\)/.test(hoverTipSource), "悬停提示
 check(/LayerManager\.addToUILayer\(this\.bottomBar\)/.test(gameSource) && /LayerManager\.addToUILayer\(this\.roleInfoBar\)/.test(gameSource) && /LayerManager\.addToUILayer\(this\.smallMap\)/.test(gameSource), "三个常驻 HUD 区域仍是 addToUILayer（点它们不该跑到弹窗之上）");
 check(/LayerManager\.addToUILayer\(monsterInfoPanel\)/.test(gameSource), "怪物信息面板仍是 addToUILayer（同上）");
 check(/LayerManager\.addToUILayer\(this\.deathDialog\)/.test(gameSource), "死亡遮罩仍是 addToUILayer：不参与置顶排序，保持盖在弹窗之上");
-check(/LayerManager\.addToUILayer\(GameUiHelper\.createUpgradeEffect\(\)\)/.test(storageSource), "升级特效仍是 addToUILayer（临时特效不参与排序）");
+check(
+  /const upgradeEffect = GameUiHelper\.createUpgradeEffect\(\);\s*\n\s*if \(upgradeEffect\) LayerManager\.addToUILayer\(upgradeEffect\);/.test(storageSource),
+  "升级特效仍是 addToUILayer（临时特效不参与排序；判空是 #594 的开关 —— 服务端关了不建节点）",
+);
 
 //#endregion
 

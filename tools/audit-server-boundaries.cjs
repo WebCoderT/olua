@@ -101,6 +101,7 @@ const ALLOWED_EDGES = [
   // 配置快照要下发它（game-config）—— 走 MapService 的公开口，不许直接读表。
   // 注意 realtime **不在这张图里**：进图条件故意不拦连接（原因见 MapService 顶部）
   { from: "modules/game-config", to: "modules/map/", why: "配置快照下发地图玩法配置" },
+  { from: "modules/game-config", to: "modules/ui-effect/", why: "配置快照下发界面特效参数（#594）" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -130,6 +131,8 @@ const REPO_EDGES = {
   "database/repositories/announcement.repository.ts": ["modules/announcement"],
   // 地图玩法配置（#573）：只有地图域读写它 —— 配置快照与进图校验都经 MapService
   "database/repositories/map.repository.ts": ["modules/map"],
+  // 界面特效（#594）：只有特效域读写它 —— 配置快照经 UiEffectService
+  "database/repositories/ui-effect.repository.ts": ["modules/ui-effect"],
   "database/repositories/mail.repository.ts": ["modules/mail"],
   "database/repositories/system.repository.ts": ["modules/system"],
   "database/repositories/world-monster.repository.ts": [

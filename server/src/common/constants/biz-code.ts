@@ -394,4 +394,15 @@ export const BizCode = {
   /** 附件还没领，不能删（删了等于替玩家扔掉奖励） */
   MAIL_UNCLAIMED: 50143,
   //#endregion
+
+  //#region 界面特效（#594）
+
+  /**
+   * 界面特效 key 不存在
+   *
+   * 不是参数错（400），是「没有这个特效」：行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，
+   * 客户端没有消费代码的 key 就算写进表里也不会有任何效果，不如直接挡住。
+   */
+  UI_EFFECT_KEY_NOT_FOUND: 50145,
+  //#endregion
 } as const;

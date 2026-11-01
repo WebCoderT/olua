@@ -357,7 +357,12 @@ try {
       /throw new BizException\(BizCode\.PARAM_INVALID, `不认识的消息频道：\$\{channel\}`\)/.test(service),
     "非法频道报 40000（静默当「全部」会让人以为只领了一栏，实际整箱都领了）",
   );
-  check(/const pending = this\.mails\.listUnclaimed\(role\.id, scope\);/.test(service), "一键领取把频道下推到仓储");
+  // 末尾的 Date.now() 是 #439 加的「过期行不进待领」（读口即时生效，物理删除交给清理任务），
+  // 频道仍是下推到 SQL 的（scope 照旧传给仓储，不是取回再过滤）
+  check(
+    /const pending = this\.mails\.listUnclaimed\(role\.id, scope, Date\.now\(\)\);/.test(service),
+    "一键领取把频道下推到仓储（并带上「现在」滤掉过期行）",
+  );
   check(
     /@ApiQuery\(\{\s*name: "channel",\s*required: false,/.test(controller) && /@Query\("channel"\) channel\?: string/.test(controller),
     "controller 把 channel 声明成可选 query 参数（生成物里才有类型）",

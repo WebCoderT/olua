@@ -2965,7 +2965,8 @@
                 "achievement",
                 "equipAlign",
                 "equipInAlign",
-                "map"
+                "map",
+                "uiEffect"
               ]
             }
           },
@@ -3246,7 +3247,8 @@
                 "achievement",
                 "equipAlign",
                 "equipInAlign",
-                "map"
+                "map",
+                "uiEffect"
               ]
             }
           },
@@ -11403,6 +11405,120 @@
         ]
       }
     },
+    "/admin/ui-effects": {
+      "get": {
+        "description": "全部界面特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\nkey 的取值域由客户端的消费代码决定（当前只有 `upgrade` 升级特效）。\n\n不分页，按 key 字典序。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminUiEffect.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "界面特效列表（total / list）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/UiEffectListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "界面特效列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/UiEffectListDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/ui-effects/{id}": {
+      "patch": {
+        "description": "改的是**表现参数**：摆位偏移 / 横纵缩放 / 旋转 / 一轮时长 / 开关。保存后立刻生效 ——\n配置快照每次查表，客户端下次触发特效（如升级）就按新参数演，不用重打客户端包。\n\n- **整份覆盖**，不是部分更新：一个特效的参数是联动的一组状态，分字段更新会留下上一次的其它字段；\n- `enabled = false` 时客户端**不创建**特效节点（不是播一次空的）；\n- 图集路径不在这里：那是客户端资源约定 `effect/<key>/<key>.plist`，换美术要换资源重发包。\n\nkey 不存在 → 404（`50145`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminUiEffect.save",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "特效 key（如 upgrade）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveUiEffectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存后的特效配置（含追账字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/UiEffectDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "保存界面特效的表现参数（整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/UiEffectDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/realtime/ticket": {
       "post": {
         "description": "取一张**一次性**票据，用它去 `ws://<host>/<API_PREFIX>/realtime?ticket=<票据>` 建立实时连接。\n\n票据默认 **30 秒**过期、**用过即焚**、与账号绑定；重新连接要重新取票。\n\n之所以不直接用访问令牌建连：WS 握手没有 `Authorization` 头的便利，而访问令牌能用 7 天，放进 URL query 会被代理日志 / 浏览器历史留痕。票据是随机字节、状态只在服务端内存里，泄漏一张已期票据拿不到任何东西。\n\n同一个账号只保留**一条**连接：新连接会把旧连接关掉（关闭码 `4000`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -14031,6 +14147,10 @@
           "soulOfWar"
         ]
       },
+      "SaveUiEffectDto": {
+        "type": "object",
+        "properties": {}
+      },
       "ApiEnvelopeDto": {
         "type": "object",
         "properties": {
@@ -15944,7 +16064,8 @@
               "achievement",
               "equipAlign",
               "equipInAlign",
-              "map"
+              "map",
+              "uiEffect"
             ]
           },
           "targetId": {
@@ -19976,6 +20097,54 @@
           "label"
         ]
       },
+      "UiEffectConfigDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "特效 key",
+            "example": "upgrade"
+          },
+          "offsetX": {
+            "type": "number",
+            "description": "摆位偏移 X（像素，相对 UI 层锚点）"
+          },
+          "offsetY": {
+            "type": "number",
+            "description": "摆位偏移 Y（像素，y 向上为正）"
+          },
+          "scaleX": {
+            "type": "number",
+            "description": "横向缩放（1 = 原始尺寸）"
+          },
+          "scaleY": {
+            "type": "number",
+            "description": "纵向缩放（1 = 原始尺寸）"
+          },
+          "rotate": {
+            "type": "number",
+            "description": "旋转（度，顺时针）"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "一轮播放总时长（毫秒）"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "开关（false = 关：客户端不播这个特效）"
+          }
+        },
+        "required": [
+          "key",
+          "offsetX",
+          "offsetY",
+          "scaleX",
+          "scaleY",
+          "rotate",
+          "durationMs",
+          "enabled"
+        ]
+      },
       "GameConfigSnapshotDto": {
         "type": "object",
         "properties": {
@@ -20133,6 +20302,13 @@
             "items": {
               "$ref": "#/components/schemas/MapTypeGroupDto"
             }
+          },
+          "uiEffects": {
+            "description": "界面特效的表现参数（#594：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定 `effect/<key>/<key>.plist`）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UiEffectConfigDto"
+            }
           }
         },
         "required": [
@@ -20157,7 +20333,8 @@
           "quests",
           "achievements",
           "maps",
-          "mapTypes"
+          "mapTypes",
+          "uiEffects"
         ]
       },
       "GuildSummaryDto": {
@@ -22074,6 +22251,84 @@
           "spawnAreas",
           "worldMonsters",
           "sources"
+        ]
+      },
+      "UiEffectDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "特效 key（如 upgrade；取值域见 UI_EFFECT_KEYS）",
+            "example": "upgrade"
+          },
+          "offsetX": {
+            "type": "number",
+            "description": "摆位偏移 X（像素，相对 UI 层锚点，-2000~2000）"
+          },
+          "offsetY": {
+            "type": "number",
+            "description": "摆位偏移 Y（像素，y 向上为正，-2000~2000）"
+          },
+          "scaleX": {
+            "type": "number",
+            "description": "横向缩放（0.1~5，1 = 原始尺寸）"
+          },
+          "scaleY": {
+            "type": "number",
+            "description": "纵向缩放（0.1~5，1 = 原始尺寸）"
+          },
+          "rotate": {
+            "type": "number",
+            "description": "旋转（度，顺时针，-360~360）"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "一轮播放总时长（毫秒，100~10000；帧率 = 帧数 / 时长）"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "开关（false = 关：客户端不再创建特效节点）"
+          },
+          "updatedBy": {
+            "type": "string",
+            "description": "最后一个改它的管理员账号名（追账用，与审计日志能对上）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒时间戳；0 = 从没改过，仍是出厂值）"
+          }
+        },
+        "required": [
+          "key",
+          "offsetX",
+          "offsetY",
+          "scaleX",
+          "scaleY",
+          "rotate",
+          "durationMs",
+          "enabled",
+          "updatedBy",
+          "updatedAt"
+        ]
+      },
+      "UiEffectListDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "行数（= 特效 key 数）"
+          },
+          "list": {
+            "description": "全部特效行，按 key 字典序",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UiEffectDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "list"
         ]
       }
     }

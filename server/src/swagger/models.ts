@@ -128,6 +128,7 @@ import {
   MapWorldMonsterDto,
   SaveMapConfigDto,
 } from "../modules/map/dto/map.dto";
+import { SaveUiEffectDto, UiEffectConfigDto, UiEffectDto, UiEffectListDto } from "../modules/ui-effect/dto/ui-effect.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -415,4 +416,9 @@ export const SWAGGER_MODELS = [
   SaveMapConfigDto,
   MapListDto,
   MapDetailDto,
+  // 界面特效（#594）
+  UiEffectDto,
+  UiEffectConfigDto,
+  UiEffectListDto,
+  SaveUiEffectDto,
 ];

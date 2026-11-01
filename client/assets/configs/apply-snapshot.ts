@@ -18,6 +18,7 @@ import type {
   Quest as QuestRow,
   Skill as SkillRow,
   Status as StatusRow,
+  UiEffectConfig,
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
@@ -27,6 +28,7 @@ import { applySoulRows } from "./soul";
 import { applyRankRows } from "./rank";
 import { applyLevelRows } from "./level";
 import { mapTypeGroups, maps } from "./map";
+import { uiEffects } from "./effect";
 import { applyMallPricing } from "./mall";
 import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates, setRoleMaxLevel } from "./growth";
 import { items } from "./items";
@@ -461,6 +463,7 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyContentSnapshot(snapshot);
   applySkillSnapshot(snapshot);
   if (snapshot.maps) applyMapRows(snapshot.maps, snapshot.mapTypes ?? []);
+  if (snapshot.uiEffects) applyUiEffectRows(snapshot.uiEffects);
 }
 
 //#region 地图玩法配置（#573）
@@ -497,6 +500,51 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
   for (const group of groups) {
     if (!group || typeof group.type !== "string") continue;
     mapTypeGroups.push({ type: group.type, label: String(group.label ?? group.type) });
+  }
+}
+
+//#endregion
+
+//#region 界面特效表现参数（#594）
+
+/**
+ * 覆写界面特效的表现参数（#594）
+ *
+ * 特效的摆位 / 缩放 / 旋转 / 时长 / 开关以前写死在 `GameUiHelper.createUpgradeEffect` 里 ——
+ * 调一次摆位要重打 3G 的客户端包。现在这些值由服务端 `ui_effects` 表下发（管理端「特效管理」
+ * 可改，与武器外观同一套取向），这里按 key 填进运行时表，消费方读 `upgradeEffectConfig()`。
+ *
+ * 三条口径：
+ * - **整表重建**（先 clear 再按行填）：特效行由服务端 seed 决定，客户端没有「本地兜底行」可言；
+ * - **图集路径不在这里**（`effect/<key>/<key>.plist` 两端约定）：下发方永远改不到
+ *   「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致；
+ * - **坏行整条跳过**：缺 key / 数值不是数的行直接丢，宁可用出厂值演，不演一半错位的。
+ */
+export function applyUiEffectRows(rows: UiEffectConfig[]): void {
+  uiEffects.clear();
+  for (const row of rows ?? []) {
+    if (!row || typeof row.key !== "string" || !row.key) continue;
+    const numeric = (value: unknown): number | null => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+    const offsetX = numeric(row.offsetX);
+    const offsetY = numeric(row.offsetY);
+    const scaleX = numeric(row.scaleX);
+    const scaleY = numeric(row.scaleY);
+    const rotate = numeric(row.rotate);
+    const durationMs = numeric(row.durationMs);
+    if (offsetX === null || offsetY === null || scaleX === null || scaleY === null || rotate === null || durationMs === null) continue;
+    uiEffects.set(row.key, {
+      key: row.key,
+      offsetX,
+      offsetY,
+      scaleX,
+      scaleY,
+      rotate,
+      durationMs,
+      enabled: row.enabled === true,
+    });
   }
 }
 
