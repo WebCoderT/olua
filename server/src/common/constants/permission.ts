@@ -71,6 +71,16 @@ export const Permission = {
   /** 发送邮件（对外投递，可能触达真实用户，与公告同级：写操作单列） */
   MAIL_WRITE: "mail:write",
 
+  /**
+   * 补发游戏消息（#437：向某个玩家的游戏内收件箱发一封 system / reward 消息）
+   *
+   * **不叫 `mail:send`**：`mail:*` 命名空间已经归外发 SMTP 投递队列（`MAIL_READ` / `MAIL_WRITE`），
+   * 再塞一个「发游戏内消息」进去，两件中文都叫「发邮件」的事就分不开了。
+   * 走 `gameMail:` 前缀与玩家侧接口的 `gameMail.*` 模块段同名，一眼看出是哪个收件箱。
+   * 观察员不给：向玩家发东西是运营动作（审计里要能查到是谁发的），不是看数据。
+   */
+  GAME_MAIL_SEND: "gameMail:send",
+
   /** 查看管理员列表 */
   ADMIN_READ: "admin:read",
   /** 管理管理员（改角色 / 启停 / 删除 / 重置密码） */
@@ -208,6 +218,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
   [Permission.MAIL_READ]: "查看邮件投递记录",
   [Permission.MAIL_WRITE]: "发送邮件",
+  [Permission.GAME_MAIL_SEND]: "补发游戏消息",
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",

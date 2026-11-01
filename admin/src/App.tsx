@@ -34,6 +34,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MailsPage } from "./pages/MailsPage";
+import { MailSendPage } from "./pages/MailSendPage";
 import { MyAccountPage } from "./pages/MyAccountPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { RoleDetailPage } from "./pages/RoleDetailPage";
@@ -313,6 +314,15 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.MAIL_READ}>
                 <MailsPage />
+              </RequirePermission>
+            }
+          />
+          {/* 发消息（#437）：游戏内消息补发，与上面 SMTP 投递记录不是同一件事 */}
+          <Route
+            path="mail-send"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_MAIL_SEND}>
+                <MailSendPage />
               </RequirePermission>
             }
           />

@@ -1,14 +1,67 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { RoleMailRow } from "../../../database/rows";
 import { parseRewardItems } from "../../../common/utils/reward-items.util";
 
 /** 邮件里的一件附件（口径与任务 / 成就的奖励物品完全一致） */
 export class MailAttachmentDto {
   @ApiProperty({ description: "物品 id（客户端拿共享快照换名字与图标）" })
+  @IsString()
   goodId: string;
 
   @ApiProperty({ description: "数量" })
+  @IsInt()
+  @Min(1)
+  @Max(9999)
   count: number;
+}
+
+/**
+ * 管理端补发入参（#437）
+ *
+ * `channel` 收窄成两个值（system / reward）：social / combat 是系统自动产生的事实记录，
+ * 人工往里发一条「运营补偿」，玩家翻战报时就得先分辨这是不是真的战斗记录。
+ * 收窄在 DTO 的 `@IsIn`（400）与服务端 sendFromAdmin（兜底）各拦一道 ——
+ * DTO 管形状，业务管语义，两层缺一不可。
+ */
+export class AdminSendMailDto {
+  @ApiProperty({ description: "频道：只允许 system（系统）/ reward（奖励）", enum: ["system", "reward"] })
+  @IsIn(["system", "reward"], { message: "人工补发只允许 system / reward 频道（social / combat 是系统事实记录）" })
+  channel: string;
+
+  @ApiProperty({ description: "标题", minLength: 1, maxLength: 60 })
+  @IsString()
+  @MaxLength(60)
+  title: string;
+
+  @ApiProperty({ description: "正文（纯文本，换行用 \\n；可空）", required: false, maxLength: 1000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  body?: string;
+
+  @ApiProperty({ description: "附件金币（不传 = 没有）", required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(99_999_999)
+  gold?: number;
+
+  @ApiProperty({ description: "附件经验（不传 = 没有）", required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(99_999_999)
+  exp?: number;
+
+  @ApiProperty({ description: "附件物品（不传 = 没有）", required: false, type: [MailAttachmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => MailAttachmentDto)
+  items?: MailAttachmentDto[];
 }
 
 /**

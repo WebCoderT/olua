@@ -66,7 +66,7 @@ import { CreateQuestDto, QuestDto, QuestObjectiveDto, QuestPageDto, QuestQueryDt
 import { MyQuestsDto, NpcTalkDto, NpcTalkResultDto, QuestIdDto, QuestRewardResultDto, QuestStateDto, QuestSubmitResultDto } from "../modules/quest/dto/quest-state.dto";
 import { AchievementConditionDto, AchievementDto, AchievementPageDto, AchievementQueryDto, AchievementRewardItemDto, AchievementRewardsDto, CreateAchievementDto, UpdateAchievementDto } from "../modules/game-config/dto/achievement.dto";
 import { AchievementClaimResultDto, AchievementIdDto, AchievementSummaryDto, AchievementViewDto, MyAchievementsDto } from "../modules/achievement/dto/achievement.dto";
-import { MailAttachmentDto, MailBoxDto, MailChannelSummaryDto, MailClaimAllResultDto, MailClaimResultDto, MailViewDto } from "../modules/game-mail/dto/game-mail.dto";
+import { AdminSendMailDto, MailAttachmentDto, MailBoxDto, MailChannelSummaryDto, MailClaimAllResultDto, MailClaimResultDto, MailViewDto } from "../modules/game-mail/dto/game-mail.dto";
 import { MallPriceItemDto, MallPricePageDto, MallPriceQueryDto, MallPriceRemoveDto, MallSettingsDto, PutMallPriceDto, UpdateMallSettingsDto } from "../modules/game-config/dto/mall.dto";
 import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "../modules/game-config/dto/fashion.dto";
 import { CreateDropTableDto, DropEntryDto, DropTableDto, DropTableListDto, MonsterDropDto, MonsterDropPageDto, MonsterDropQueryDto, UpdateDropTableDto, UpdateMonsterDropDto } from "../modules/game-config/dto/drop.dto";
@@ -390,6 +390,8 @@ export const SWAGGER_MODELS = [
   MailChannelSummaryDto,
   MailClaimResultDto,
   MailClaimAllResultDto,
+  // 管理端游戏消息补发（#437）
+  AdminSendMailDto,
   // 装备对齐几何（#513）
   EquipAlignPointDto,
   EquipAlignDto,

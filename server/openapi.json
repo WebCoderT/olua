@@ -11168,6 +11168,72 @@
         }
       }
     },
+    "/admin/game-mail/roles/{id}": {
+      "post": {
+        "description": "给指定角色发一封游戏内消息（收件箱四栏里的 `system` / `reward` 两栏）。\n\n- `channel` 只允许 `system` / `reward`：`social` / `combat` 是系统自动产生的事实记录，人工往里发会污染语义（传了 → 400）。\n- `gold` / `exp` / `items` 是**可选附件**：玩家在消息中心点「领取」才真的到手，发奖与任务交付走同一个入口；不传就是一封纯文本通知。\n- 收件人**不要求在线**：邮件本来就是异步的，离线角色下次上线自然看到。\n- 角色不存在 → 404；发给谁由路径上的角色 id 决定（角色运营台的「发消息」按钮会带上）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameMail:send`（补发游戏消息；角色：超级管理员 / 管理员）",
+        "operationId": "adminGameMail.send",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSendMailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已落进收件箱的那封消息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MailViewDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "补发游戏消息（单发）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MailViewDto"
+        },
+        "x-olua-permissions": [
+          "gameMail:send"
+        ]
+      }
+    },
     "/admin/maps": {
       "get": {
         "description": "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n计数分两类，**不要混着看**：\n- `npcCount` / `monsterAreaCount` / `collisionCount` / `reviveCount`：客户端 TMX 里的对象数（生成快照）；\n- `spawnAreaCount` / `worldMonsterCount`：服务端库表里的行数（`map_spawn_areas` / `world_monsters`）。\n\n不分页，按 id **数值**升序（`10` 排在 `9` 后面）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -13858,6 +13924,66 @@
         },
         "required": [
           "achievementId"
+        ]
+      },
+      "MailAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id（客户端拿共享快照换名字与图标）"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量"
+          }
+        },
+        "required": [
+          "goodId",
+          "count"
+        ]
+      },
+      "AdminSendMailDto": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "description": "频道：只允许 system（系统）/ reward（奖励）",
+            "enum": [
+              "system",
+              "reward"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "标题",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "body": {
+            "type": "string",
+            "description": "正文（纯文本，换行用 \\n；可空）",
+            "maxLength": 1000
+          },
+          "gold": {
+            "type": "number",
+            "description": "附件金币（不传 = 没有）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "附件经验（不传 = 没有）"
+          },
+          "items": {
+            "description": "附件物品（不传 = 没有）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachmentDto"
+            }
+          }
+        },
+        "required": [
+          "channel",
+          "title"
         ]
       },
       "SaveMapConfigDto": {
@@ -21050,23 +21176,6 @@
             "description": "分类筛选：battle | growth | explore"
           }
         }
-      },
-      "MailAttachmentDto": {
-        "type": "object",
-        "properties": {
-          "goodId": {
-            "type": "string",
-            "description": "物品 id（客户端拿共享快照换名字与图标）"
-          },
-          "count": {
-            "type": "number",
-            "description": "数量"
-          }
-        },
-        "required": [
-          "goodId",
-          "count"
-        ]
       },
       "MailViewDto": {
         "type": "object",

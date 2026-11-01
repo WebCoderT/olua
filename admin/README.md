@@ -2,7 +2,7 @@
 
 > [English](README.en.md) | 简体中文
 
-> 运营后台：账号 / 角色 / 管理员 / 公告 / 邮件 / 操作日志 / 玩家举报七块。界面按**权限点**显隐，服务端独立校验。
+> 运营后台：账号 / 角色 / 管理员 / 公告 / 邮件 / 发消息 / 操作日志 / 玩家举报八块。界面按**权限点**显隐，服务端独立校验。
 >
 > 项目总览见 [../README.md](../README.md)；管理端的问题见 [FAQ.md](FAQ.md)；
 > 客户端 / 服务端 / 跨端见 [../client/](../client/) · [../server/](../server/) · [../FAQ.md](../FAQ.md)。
@@ -67,7 +67,7 @@ admin/
 │   │   ├── http.ts                 请求层：拦截器 / 超时 / 包裹解包 / 错误归一 / 401 跳登录
 │   │   ├── routes.ts               ⚠️ 生成物：接口路径表
 │   │   ├── models.ts               ⚠️ 生成物：接口类型（服务端 DTO 的镜像）
-│   │   ├── endpoints.ts            ⚠️ 生成物：接口方法（accountsApi/adminsApi/announcementsApi/mailsApi/auditApi/authApi/rolesApi/statsApi/systemApi）
+│   │   ├── endpoints.ts            ⚠️ 生成物：接口方法（accountsApi/adminsApi/announcementsApi/mailsApi/gameMailsApi/auditApi/authApi/rolesApi/statsApi/systemApi）
 │   │   ├── types.ts                手写：业务码 / 权限点 / 动作与目标的中文字典 / 时间工具（**游戏数据不在这里**）
 │   │   ├── gameData.ts             游戏数据：引用三端共用的那份生成物 + 查表函数（名字都从这里来）
 │   │   └── index.ts                统一出口（页面只从这里 import）
@@ -101,6 +101,7 @@ admin/
 | 区服管理 | `/zones` | `zone:read` | 看区服清单（含已合并去向与账号分布）；**开新区**、**合并区**（一个事务搬走源区账号 + 世界实例重排续序，合并瞬间未落盘伤害丢弃 —— 弹窗二次确认写明代价；写操作另需 `zone:write`） |
 | 帮会管理 | `/guilds` | `guild:read` | 看帮会清单（人数降序，带帮主与人数）与成员名单（职位上色）；**改名 / 改公告**（名字仍要全局唯一）、**强制解散**（成员与待审批申请一并清除、不可恢复 —— 二次确认写明代价；写操作另需 `guild:write`）。入帮审批是帮主自己的待办，管理端不代做 |
 | 邮件 | `/mails` | `mail:read` | **发信**（选模板 → 填变量 → 入队）+ **投递记录**（状态 / 关键字筛选 + 分页 + 排序）。投递是**异步**的，所以有「待发送 / 重试中」中间态并自动刷新；只看得到已尝试次数与失败原因（写操作另需 `mail:write`） |
+| 发消息（#437） | `/mail-send` | `gameMail:send` | **游戏内消息补发（单发）**：输入角色 id（角色详情页「发消息」按钮会带上）→ 选频道（只有 system / reward，social / combat 是系统事实记录）→ 标题 / 正文 / 可选附件（金币 / 经验 / 物品）。落库与成就兜底、好友申请走**同一个 send**；收件人不要求在线；**没有撤回**——发出去就归玩家。与上面的「邮件」（SMTP 外发投递）不是同一件事 |
 | 操作日志 | `/audit-logs` | `audit:read` | 7 项筛选（关键字 / 动作 / 目标类型 / 结果 / 起止时间 / 目标 id）+ 分页 + 展开看请求体 |
 | 玩家举报 | `/reports` | `report:read` | 看玩家举报（关键字 / 类别 / 状态筛选 + 分页 + 行展开看描述与双方 id）。**这一版只有读**：处置需要「谁改的、凭什么改、能不能申诉」一整套，半成品按钮比没有更糟 |
 | 我的账号 | `/me` | **不需要权限点** | 看自己的身份 / 登录情况 / 权限点；**自助改密**（要验原密码） |
@@ -137,7 +138,7 @@ admin/
 
 界面显隐**只是体验**，**服务端才是权威**。
 
-- 权限点唯一来源在**服务端**（`server/src/common/constants/permission.ts`，25 个权限点 / 3 种角色）；管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，一一对应
+- 权限点唯一来源在**服务端**（`server/src/common/constants/permission.ts`，26 个权限点 / 3 种角色）；管理端 `src/api/types.ts` 的 `PERMISSION` 是它的镜像，一一对应
 - 管理员信息随令牌一起在响应里下发，落到 `store/session`；`hasPermission(点)` 直接查这份数组
 - **脏会话兜底**：`admin.permissions` 缺失时按**空数组**处理（最小权限），不会因为会话不完整而放开界面
 - 导航项带 `permission` 字段，`Layout` 过滤后再渲染；`App.tsx` 的 `RequirePermission` 外壳守住直达路由

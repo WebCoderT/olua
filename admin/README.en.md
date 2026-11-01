@@ -2,7 +2,7 @@
 
 > [简体中文](README.md) | English
 
-> Operations backend covering seven areas: accounts / characters / admins / announcements / mails / audit logs / player reports. The interface shows and hides by **permission point**, and the server validates independently.
+> Operations backend covering eight areas: accounts / characters / admins / announcements / mails / message sending / audit logs / player reports. The interface shows and hides by **permission point**, and the server validates independently.
 >
 > Project overview: [../README.en.md](../README.en.md); admin questions: [FAQ.en.md](FAQ.en.md);
 > root cross-side FAQ: [../FAQ.en.md](../FAQ.en.md). The English editions of the client and server documents land in follow-up issues and will be linked here once available.
@@ -67,7 +67,7 @@ admin/
 │   │   ├── http.ts                 request layer: interceptors / timeout / envelope unwrap / error normalization / 401 → login
 │   │   ├── routes.ts               ⚠️ generated: endpoint path table
 │   │   ├── models.ts               ⚠️ generated: endpoint types (mirror of the server DTOs)
-│   │   ├── endpoints.ts            ⚠️ generated: endpoint methods (accountsApi/adminsApi/announcementsApi/mailsApi/auditApi/authApi/rolesApi/statsApi/systemApi)
+│   │   ├── endpoints.ts            ⚠️ generated: endpoint methods (accountsApi/adminsApi/announcementsApi/mailsApi/gameMailsApi/auditApi/authApi/rolesApi/statsApi/systemApi)
 │   │   ├── types.ts                hand-written: business codes / permission points / Chinese dictionaries for actions and targets / time helpers (**game data is not here**)
 │   │   ├── gameData.ts             game data: re-exports the shared artifact + lookup helpers (every name comes from here)
 │   │   └── index.ts                single entry point (pages import only from here)
@@ -100,6 +100,7 @@ The **first column of every config list page is a thumbnail**: single-image reso
 | Zones | `/zones` | `zone:read` | Zone list (including merged destinations and account counts); **create zones** and **merge zones** (one transaction moves all source-zone accounts and re-keys world instances; unsaved damage within seconds of the merge is discarded — the confirm dialog spells out the cost; writes additionally need `zone:write`) |
 | Guilds | `/guilds` | `guild:read` | Guild list (sorted by member count, with leader and size) plus the member roster (ranks colour-coded); **rename / edit the notice** (the name stays globally unique) and **force-disband** (members and pending applications are removed with it, irreversible — the confirm dialog spells out the cost; writes also need `guild:write`). Approving applications is the leader’s own backlog, the console does not do it for them |
 | Mails | `/mails` | `mail:read` | **Send** (pick template → fill variables → enqueue) + **delivery records** (status / keyword filter + pagination + sorting). Delivery is **asynchronous**, so "pending / retrying" intermediate states exist and refresh automatically; only attempt count and failure reason are visible (writes additionally need `mail:write`) |
+| Message sending (#437) | `/mail-send` | `gameMail:send` | **In-game message top-up (single send)**: enter a role id (the role detail page's "send message" button fills it in) → pick a channel (only system / reward — social / combat are system-generated records) → title / body / optional attachments (gold / exp / items). Lands through the **same send** as achievement fallback and friend requests; the recipient need not be online; **no recall** — once sent it belongs to the player. Not the same thing as "mails" above (outbound SMTP delivery) |
 | Audit logs | `/audit-logs` | `audit:read` | 7 filters (keyword / action / target type / result / start-end time / target id) + pagination + expand to see the request body |
 | Player reports | `/reports` | `report:read` | Browse player reports (keyword / category / status filters + pagination + row-expanded description and both role ids). **Read-only in this release**: handling needs the full trail of who changed what and why, and a half-built button is worse than none |
 | My account | `/me` | **no permission point** | Own identity / login status / permission points; **self-service password change** (requires the current password) |
@@ -141,7 +142,7 @@ the server and the admin read the **same file**.
 
 Interface visibility **is only experience**; **the server is the authority**.
 
-- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 25 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
+- The single source of truth for permission points is on the **server** (`server/src/common/constants/permission.ts`, 26 permission points / 3 roles); `PERMISSION` in the admin `src/api/types.ts` mirrors it one to one
 - Admin info comes down with the token in the response and lands in `store/session`; `hasPermission(point)` looks it up in that array directly
 - **Fallback for a dirty session**: a missing `admin.permissions` is treated as an **empty array** (least privilege) — an incomplete session never opens up the interface
 - Nav items carry a `permission` field and `Layout` filters before rendering; the `RequirePermission` shell in `App.tsx` guards direct route access
