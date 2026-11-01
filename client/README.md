@@ -163,6 +163,25 @@ cd client
 - **`[...map.values()]` 禁用**：打包 babel 以 loose 模式会把迭代器展开编译成 `[].concat()`（恒为单元素），
   转数组只用 `Array.from` / `forEach` —— 这个坑只在打包产物上才暴露，且不报错
 
+## 数据归属：怪物配置分三层
+
+`configs/monster.ts` 里混着三类东西，**改之前先分清要改的是哪一层**（和地图 #573 的分法同一套：
+资源归客户端、整理结果归服务端、管理端可视化地改服务端那份）：
+
+| 层 | 字段 | 归谁 | 改完怎么生效 |
+|---|---|---|---|
+| 资源 | `icon` / `out`（帧目录）/ 动作清单 | 客户端素材包 | 换素材后重打包 |
+| 表现 | `contentSize` / `outOffset` / `speedRate` / `aggressive` / `monsterAI` | 客户端（几何由 `tools/gen-monster-config.cjs` 从 `.meta` 实测生成） | 重跑生成器，或直接改条目 |
+| 数值 | `label` / `level` / `maxHp` / 六项攻防区间 / 掉落 | **服务端表**（`monsters` / `monster_drops`，管理端改） | 保存即生效，客户端下次进游戏拉快照 |
+
+第三层的本地值只是**出厂兜底**（服务端还没 seed 时用），运行时由 `configs/apply-snapshot.ts` 的
+`applyMonsterRows` 覆写 —— 覆写漏一个字段不会报错，只会让管理端「改了没生效」：所以 9 项数值
+全部被覆写这件事写成了守点（`node ../tools/audit-world-authority.cjs`）。
+
+**怪物放在哪儿也不归客户端**：刷怪区（位置 / 区域尺寸 / 数量）在服务端 `map_spawn_areas` 表，
+客户端不许按 TMX 自己刷怪（#581）；刷怪区还必须整体落在地图矩形里 —— 世界坐标原点 = 地图左上角、
+y 轴向上，超出 `[0, 宽] × [-高, 0]` 就是越界（#566 / #586，管理端地图页会标红）。
+
 ## 素材
 
 `assets/resources` 体积很大，**不进版本库**（见仓库根 `.gitignore`）。需要素材请联系仓库作者。

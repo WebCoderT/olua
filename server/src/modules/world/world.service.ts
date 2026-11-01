@@ -5,6 +5,8 @@ import { MonsterRepository } from "../../database/repositories/monster.repositor
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
 import { WorldMonsterRow } from "../../database/rows";
+import { spawnAreaInBounds, spawnAreaOverflow, spawnAreaOverflowText } from "../../common/utils/spawn-area-bounds.util";
+import { MAP_PIXEL_SIZES } from "../../shared/map-sizes.generated";
 import { SPAWN_AREAS } from "./spawn-areas.generated";
 
 /** 服务端持有的一只怪物实例（权威状态；内存形态，落盘见 WorldMonsterRow） */
@@ -360,11 +362,21 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
 
     if (rows.length === 0) {
       const areas = this.spawnAreas.listByMap(mapId);
+      // 越界区域只告警不拦（#586）：拦掉会让「改了配置忘了重跑导入工具」变成「这张图一只怪都没有」，
+      // 那比怪刷在图外更难查；但也不能闷着 —— 库表可能还是旧口径时期 seed 的，静态审计看不见它。
+      const mapPixel = MAP_PIXEL_SIZES[mapId];
       let seeded = 0;
       for (const area of areas) {
         if (!this.monsterConfigs.findByKey(area.monster_key)) {
           this.logger.warn(`地图 ${mapId} 刷怪区「${area.name}」的怪物 key（${area.monster_key}）在 monsters 表里不存在，跳过`);
           continue;
+        }
+        if (mapPixel && !spawnAreaInBounds(area, mapPixel)) {
+          this.logger.warn(
+            `地图 ${mapId} 刷怪区「${area.name}」越出地图边界（${spawnAreaOverflowText(spawnAreaOverflow(area, mapPixel))}）—— ` +
+              `中心 (${area.cx}, ${area.cy}) ${area.w}×${area.h}，图 ${mapPixel.width}×${mapPixel.height}；` +
+              "多半是库表还留着旧口径（重跑 node tools/import-spawn-areas.cjs --db），怪会刷在图外",
+          );
         }
         for (let index = 0; index < area.max; index += 1) {
           const point = pickPointInArea(area.cx, area.cy, area.w, area.h);

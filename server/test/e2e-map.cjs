@@ -36,7 +36,7 @@ const ADMIN_CODE = "map-code";
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 122;
+const EXPECTED_ASSERTIONS = 132;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -271,6 +271,22 @@ async function main() {
     checkEqual(tiledCenterX, area.cx, "Tiled 矩形中心 x 等于服务端 cx（同一个矩形，没挪位置）");
     checkEqual(-tiledCenterY, area.cy, "Tiled 矩形中心 y 取反等于 cy（只换了 y 的正方向）");
 
+    // 边界约定（#586）：区域矩形必须整体落在图内 —— x ∈ [0, W]、y ∈ [-H, 0]。
+    // 判据在服务端（`spawn-area-bounds.util.ts`），因为它校验的是**库表**：库表只在空库时按快照
+    // seed 一次，旧口径时期 seed 过的库会一直把怪刷在图外，而只查快照的静态审计看不见这件事。
+    checkEqual(area.inBounds, true, "刷怪区在图内（inBounds 由服务端按地图尺寸判）");
+    checkEqual(
+      Object.keys(area.overflow ?? {}).sort().join(","),
+      "bottom,left,right,top",
+      "越界量按四边分别给（只给一个布尔就只能自己去翻数据）",
+    );
+    checkEqual(
+      [area.overflow.left, area.overflow.right, area.overflow.top, area.overflow.bottom].join(","),
+      "0,0,0,0",
+      "在图内时四边越界量都是 0（不是 null / undefined）",
+    );
+    check(areas.every((item) => item.inBounds === true), "这张图的 3 个刷怪区全部在图内");
+
     checkEqual((data.worldMonsters ?? []).length, 0, "没跑过世界的进程里 worldMonsters 是空数组（不是 500）");
 
     const sources = data.sources ?? [];
@@ -300,6 +316,46 @@ async function main() {
       "db",
       "玩法配置（名称 / 类型 / 进入条件）归服务端库表 —— #573 就是从客户端搬过来的这一块",
     );
+
+    //#endregion
+
+    //#region 二·补、越界判据本身（纯函数，从 dist 直接测）
+
+    group("二·补、越界判据：越出去多少要说得出，贴边不算越界");
+
+    // 接口没有任何「写刷怪区」的入口（刷怪区只能由导入工具写），所以**越界这个分支没法用请求造出来** ——
+    // 只能直接测那个纯函数。它是唯一一处判据，e2e 又跑在 build 之后，直接 require dist 里那份。
+    const bounds = require(path.join(SERVER_DIR, "dist", "common", "utils", "spawn-area-bounds.util.js"));
+    const mapSize = { width: 8192, height: 8192 };
+
+    // 中心 (100, -100)、400×100 → 左边在 -100（越过左边界 100），其余三边都在图内
+    const spilled = { cx: 100, cy: -100, w: 400, h: 100 };
+    checkEqual(bounds.spawnAreaInBounds(spilled, mapSize), false, "左边越出图外 → 判为越界");
+    checkEqual(
+      JSON.stringify(bounds.spawnAreaOverflow(spilled, mapSize)),
+      JSON.stringify({ left: 99, right: 0, top: 0, bottom: 0 }),
+      "越界量只写在越出去的那一边（99 = 100 减去 1px 容差）",
+    );
+    // 左边差 1px：导入工具按浮点算中心、列是整数，取整会造出 0.x 的假越界，容差 1 吸收掉它
+    checkEqual(bounds.spawnAreaInBounds({ cx: 201, cy: -4000, w: 400, h: 100 }, mapSize), true, "贴边差 1px 仍算在图内（容差 1）");
+    checkEqual(
+      bounds.spawnAreaInBounds({ cx: 100, cy: 4000, w: 400, h: 100 }, mapSize),
+      false,
+      "y 正方向越界也要判出来（y 轴向上，图的顶边是 0 —— 这里最容易把符号写反）",
+    );
+
+    // 11 张图的全部区域扫一遍：口径一错就是一大片越界，这个遍历是最省事的判据
+    let totalAreas = 0;
+    const outside = [];
+    for (const row of rows) {
+      const each = await api(base, "GET", `/api/admin/maps/${row.id}`, { token: rootToken });
+      for (const item of each.body?.data?.spawnAreas ?? []) {
+        totalAreas += 1;
+        if (!item.inBounds) outside.push(`#${row.id} ${item.name}`);
+      }
+    }
+    checkEqual(outside.length, 0, `11 张图共 ${totalAreas} 个刷怪区全部在图内（旧口径会在这一步大面积爆红）`);
+    checkEqual(totalAreas, 62, "刷怪区总数 62（换图 / 加区域后同步这个数）");
 
     //#endregion
 

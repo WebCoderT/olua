@@ -579,6 +579,14 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
    `new BizException(code, msg)` **默认 400** —— 资源不存在必须 `BizException.notFound(code, msg)`，否则
    「地图 11 不存在」被报成「参数不合法」；写 DTO 只留**一个** `SaveMapConfigDto`（恰好五个字段，
    e2e 断言字段集合，多一个少一个都红），文档里没有 `Create*Map` / `Delete*Map`。
+24. **静态审计校验生成物，运行时校验库表 —— 这是两条路，别只做一条**（#586 刷怪区越界）：`audit-map-origin` 第 6 条一直在
+   校验 `spawn-areas.generated.ts` 的四边落在图内（当时 62 个全绿），但游戏里读的是 `map_spawn_areas` **表**，而表只在
+   `countAll() === 0` 时按快照 seed 一次 —— 旧口径时期 seed 过的库会一直把怪刷在图外：审计绿、游戏错、管理端一个字都没有。
+   于是判据挪进 `common/utils/spawn-area-bounds.util.ts`（唯一一处），由 `map.service.detail` 算进 DTO、`world.service`
+   播种时告警、管理端只显示结论（页面自己再判一遍 = 第二个口径）。**容差 1px**（导入按浮点算中心、列是整数）。
+   附带的两个反面提醒：① 越界在图上**看不见** —— 容器 `overflow-hidden` 会把越出部分裁掉，「区域在图外」表现为「区域不存在」，
+   所以必须靠颜色/徽标，不能指望眼睛；② 契约字段不能通过接口构造时，直接 `require` `dist/` 里的纯函数测（e2e 跑在 build 之后，
+   而「开个只给测试用的写入口」是更坏的选择）。
 
 ## 七、验证闭环
 

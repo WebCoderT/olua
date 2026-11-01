@@ -21339,6 +21339,33 @@
           "objects"
         ]
       },
+      "MapSpawnAreaOverflowDto": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "number",
+            "description": "矩形左边超出图左边界多少（0 = 在图内）"
+          },
+          "right": {
+            "type": "number",
+            "description": "矩形右边超出图右边界多少（0 = 在图内）"
+          },
+          "top": {
+            "type": "number",
+            "description": "矩形上边超出图顶边多少（0 = 在图内；y 轴向上，图的顶边是 y = 0）"
+          },
+          "bottom": {
+            "type": "number",
+            "description": "矩形下边超出图底边多少（0 = 在图内）"
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "top",
+          "bottom"
+        ]
+      },
       "MapSpawnAreaDto": {
         "type": "object",
         "properties": {
@@ -21381,6 +21408,18 @@
           "h": {
             "type": "number",
             "description": "区域高"
+          },
+          "inBounds": {
+            "type": "boolean",
+            "description": "是否整体落在图内（世界坐标 `[0, W] × [-H, 0]`，容差 1px）；false = 坐标口径错了或区域摆到了图外"
+          },
+          "overflow": {
+            "description": "四边越界量（inBounds 时全 0）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MapSpawnAreaOverflowDto"
+              }
+            ]
           }
         },
         "required": [
@@ -21393,7 +21432,9 @@
           "cx",
           "cy",
           "w",
-          "h"
+          "h",
+          "inBounds",
+          "overflow"
         ]
       },
       "MapWorldMonsterDto": {

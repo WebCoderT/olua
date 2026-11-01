@@ -74,5 +74,12 @@
 - **世界权威上移 #581**：删掉客户端四条本地旁路（`MonsterAreaSpawner` 本地刷怪 / `DropManager.drop`+`DropRoller` 本地抽掉落 /
   `requestPick` 本地 `addGood` 入包 / `warrior.ts` 本地扣血回滚）；怪物只认 `sendWorldJoin`，掉落只认 settle 的 `reward` +
   `applyPickResult`，`spawnResults` 的 `castId` 与 `DropItem.pick` 变必填；`configs/drop` 只剩「出厂数据书写处」。守卫 `audit-world-authority`。
-- 数字基线（#581 后）：166 接口 / 137 路径 / 256 模型 / 25 权限点 / 46 表 / 38 仓储；e2e **2625（26 套）**；单测 59；守卫 70；审计 16；管理端页面 34 + 侧栏 30 项。
+- **怪物列表直接配掉落 #584**：`AdminMonsterDto extends MonsterDto`（多一个 `drop` 摘要），玩家侧 `GET /game-config` 仍只发 `MonsterDto`（多给一份配置 = 「客户端也有权威」的错觉，e2e 一条断言钉住）；
+  单条详情 `GET /admin/monster-drops/:key` **刻意不加 PUT**（写入只留 `PATCH`，否则两处写入语义会漂）；摘要批量 `listByKeys`（空数组直接 return，`IN ()` 在 SQLite 是语法错误）；
+  弹窗自取数据（一页 20 只怪 × 112 条不要塞进列表页）；徽标已写来源、摘要就别再写「内联/兜底」。
+- **刷怪区按地图边界约定 #586**：`audit-map-origin` 第 6 条只校验**生成快照**，运行时读的是 `map_spawn_areas` **表**，表只在空库时 seed 一次 →
+  **旧口径库会一直把怪刷在图外而审计全绿**。判据挪进 `common/utils/spawn-area-bounds.util.ts`（容差 1px），`MapSpawnAreaDto` 带 `inBounds` + 四边 `overflow`，
+  `world.service` 播种时 warn（只告警不拦），管理端只显示结论。**容器 `overflow-hidden` 会裁掉越界部分** → 「区域在图外」在图上表现为「区域不存在」，必须靠颜色/徽标。
+  数据归属写进 `client/README`：资源 / 表现 / 数值三层，`audit-world-authority` 新增第五节钉住 `applyMonsterRows` 必须覆写 9 项数值。
+- 数字基线（#586 后）：167 接口 / 137 路径 / 259 模型 / 25 权限点 / 46 表 / 38 仓储；e2e **2647（26 套）**；单测 59；守卫 70；审计 16；管理端页面 34 + 侧栏 30 项。
 - **回归门槛 = 改动哪跑哪**：`make test-changed`（tools/test-changed.cjs；BASE=<ref> 可选）。客户端单测按内容匹配；服务端 e2e 按模块表，表外/共享底座回落全量；已删文件要 existsSync 过滤（否则删除的审计还会进计划）；已知基线红 5 套（素材未入库）在 CLIENT_BASELINE_RED 容忍；全量门禁 make verify 只在发布前。

@@ -170,12 +170,42 @@ requirePatterns(SETTLEMENT, [
 ]);
 
 // ---------------------------------------------------------------------------
+// 五、怪物数值的归属：服务端权威，客户端只做出厂兜底（#586）
+// ---------------------------------------------------------------------------
+// 客户端 `configs/monster` 里仍然留着 label / level / maxHp / 六项区间 —— 这些是**出厂兜底**，
+// 运行时由服务端快照覆写（管理端改的就是服务端表）。覆写漏一个字段不会报错，只会让某一项
+// 悄悄回到「客户端自己那份值」：管理端调了血量、游戏里没变，看起来像保存没生效。
+const APPLY_SNAPSHOT = path.join(CLIENT_CONFIGS, "apply-snapshot.ts");
+{
+  const text = read(APPLY_SNAPSHOT, "快照应用");
+  const body = /export function applyMonsterRows\([\s\S]*?\n\}/.exec(text)?.[0] ?? "";
+  if (!body) {
+    problem(APPLY_SNAPSHOT, 0, "找不到 applyMonsterRows —— 怪物数值的覆写入口变了，请先确认服务端权威还在，再同步改本审计");
+  } else {
+    const OWNED = ["label", "level", "maxHp", "physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+    for (const field of OWNED) {
+      if (!new RegExp(`config\\.${field}\\s*=`).test(body)) {
+        problem(
+          APPLY_SNAPSHOT,
+          0,
+          `applyMonsterRows 少了 config.${field} 的覆写：这一项会静默回到客户端的出厂值 —— 管理端改了、游戏里没变（#586 的归属：数值归服务端表，客户端只兜底）`,
+        );
+      }
+    }
+  }
+  if (!/applyMonsterRows\(snapshot\.monsters\)/.test(text)) {
+    problem(APPLY_SNAPSHOT, 0, "applyMonsterRows 没被快照入口调用 —— 写了等于没写（快照一来就该覆写）");
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 if (problems.length === 0) {
   const scanned = walk(CLIENT_UI).length;
   console.log(
     `✓ 世界权威：客户端 ${scanned} 个文件无本地刷怪 / 无本地掉落结算；` +
-      "唯一入口（sendWorldJoin / applyWorldState / spawnResults(castId) / pickDrop）齐全",
+      "唯一入口（sendWorldJoin / applyWorldState / spawnResults(castId) / pickDrop）齐全；" +
+      "怪物 9 项数值全部由服务端快照覆写",
   );
   process.exit(0);
 }

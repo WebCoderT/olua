@@ -6111,6 +6111,25 @@ export type MapGroup = {
   objects: MapObject[];
 };
 
+export type MapSpawnAreaOverflow = {
+  /**
+   * 矩形左边超出图左边界多少（0 = 在图内）
+   */
+  left: number;
+  /**
+   * 矩形右边超出图右边界多少（0 = 在图内）
+   */
+  right: number;
+  /**
+   * 矩形上边超出图顶边多少（0 = 在图内；y 轴向上，图的顶边是 y = 0）
+   */
+  top: number;
+  /**
+   * 矩形下边超出图底边多少（0 = 在图内）
+   */
+  bottom: number;
+};
+
 export type MapSpawnArea = {
   /**
    * 行 id（导入顺序，发牌可复现）
@@ -6152,6 +6171,14 @@ export type MapSpawnArea = {
    * 区域高
    */
   h: number;
+  /**
+   * 是否整体落在图内（世界坐标 `[0, W] × [-H, 0]`，容差 1px）；false = 坐标口径错了或区域摆到了图外
+   */
+  inBounds: boolean;
+  /**
+   * 四边越界量（inBounds 时全 0）
+   */
+  overflow: MapSpawnAreaOverflow;
 };
 
 export type MapWorldMonster = {

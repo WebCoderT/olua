@@ -82,11 +82,35 @@ export class MapGroupDto {
 }
 
 /**
+ * 刷怪区越界量（#586）
+ *
+ * 四个数都是「越出多少」（图内的一侧为 0），不是坐标。分开给四边而不是给一个布尔：
+ * 「越界了」只能让人去翻数据，而「右边多了 96」可以直接判断是贴错了图还是口径错了。
+ */
+export class MapSpawnAreaOverflowDto {
+  @ApiProperty({ description: "矩形左边超出图左边界多少（0 = 在图内）" })
+  left: number;
+
+  @ApiProperty({ description: "矩形右边超出图右边界多少（0 = 在图内）" })
+  right: number;
+
+  @ApiProperty({ description: "矩形上边超出图顶边多少（0 = 在图内；y 轴向上，图的顶边是 y = 0）" })
+  top: number;
+
+  @ApiProperty({ description: "矩形下边超出图底边多少（0 = 在图内）" })
+  bottom: number;
+}
+
+/**
  * 刷怪区（**服务端库表** `map_spawn_areas` 的一行）
  *
  * 与上面 `groups` 里的 monster 对象不是同一份数据：那一个是 Tiled 原始矩形，
  * 这一个是导入后按世界坐标整理过的区域 —— 管理端两栏并排显示，就是为了让人能核对
  * 「资源里的矩形」和「服务端真正在用的区域」是否对得上。
+ *
+ * `inBounds` / `overflow` **由服务端按地图尺寸判**（`spawn-area-bounds.util.ts`），
+ * 页面只显示结论：运行时刷怪读的是这张表，越界判定必须落在跑得起来的链路上 ——
+ * 只校验生成快照的话，「旧口径时期 seed 过的库」会一直把怪刷在图外而没人发现。
  */
 export class MapSpawnAreaDto {
   @ApiProperty({ description: "行 id（导入顺序，发牌可复现）" })
@@ -118,6 +142,14 @@ export class MapSpawnAreaDto {
 
   @ApiProperty({ description: "区域高" })
   h: number;
+
+  @ApiProperty({
+    description: "是否整体落在图内（世界坐标 `[0, W] × [-H, 0]`，容差 1px）；false = 坐标口径错了或区域摆到了图外",
+  })
+  inBounds: boolean;
+
+  @ApiProperty({ description: "四边越界量（inBounds 时全 0）", type: MapSpawnAreaOverflowDto })
+  overflow: MapSpawnAreaOverflowDto;
 }
 
 /** 场上怪物汇总（按区；**服务端库表** `world_monsters`） */
