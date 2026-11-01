@@ -355,7 +355,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 2. `cd server && npm run gen:api` 重新产出文档与两端接口文件（`admin/src/api/endpoints.ts` / `models.ts` / `routes.ts`）。
 3. 管理端：`npx tsc --noEmit` 看报错，按生成的方法签名改调用点；新增页面走 `RequirePermission` 外壳 + `PERMISSION` 常量 + `Layout.tsx` 导航项。
 4. **同步受管文档数字**：接口数 / 路径数 / 模型数 / 管理端分组数变了就改 README / FAQ 双语 / resume / server README（见坑 11）。
-5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 生成物一致性）+ 仓库根 `make audit`（13 项跨端审计）。
+5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 生成物一致性）+ 仓库根 `make audit`（16 项跨端审计）。
 6. 仓库根 Makefile 等价目标：`make admin-build` / `make admin-typecheck` / `make gen-api` / `make verify`（全门禁）；`make help` 列全部。
 
 ## 八、提交纪律（强制，与仓库根纪律一致）

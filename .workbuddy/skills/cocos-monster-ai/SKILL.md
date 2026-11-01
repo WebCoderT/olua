@@ -25,7 +25,7 @@ agent_created: true
 
 ## 一、先分好层：数据归管理器，行为归 AI 静态类
 
-- **管理器（如 MonsterManager）只管数据与生命周期**：生成、按区域刷怪、节点↔数据映射（`Map<Node, Monster>`）、查询、受击结算、换图 reset。不要往里塞行为逻辑。
+- **管理器（如 MonsterManager）只管数据与生命周期**：把服务端下发的实例落成节点、节点↔数据映射（`Map<Node, Monster>`）、查询、受击表现、换图 reset。**不生成怪物**（#581：实例由服务端按 `map_spawn_areas` 播种，客户端进图只 `sendWorldJoin`）。不要往里塞行为逻辑。
 - **AI 单独一个静态类（如 `ui/core/MonsterAI.ts`）管行为与动画**：
   - 入口 `static tick(monsters, player)`，由**组合根**（Game.update）每帧调用；`static replayCurrent(node)` 由怪物动画的 FINISHED 事件调用。
   - 每只怪的状态放 `private static states = new WeakMap<Node, MonsterAIState>()`，**节点销毁自动回收**，怪物数据对象上不挂运行时字段（数据要能直接存档/序列化）。

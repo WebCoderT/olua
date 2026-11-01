@@ -197,7 +197,7 @@ Implemented features only; each side's README covers its own capabilities in mor
 | Appearance and inner view | 8-direction appearance position and scale; a gender-based default body when no clothes are worn |
 | Prefix and suffix variants | 5 prefixes × 3 suffixes, 15 variants per base item, 555 items in total |
 | Quality borders and detail backgrounds | Border and background animations chosen by the prefix / suffix combination |
-| Drops | Weighted drop tables, random drop counts, rings of drops that never overlap, auto and click pickup |
+| Drops | The server rolls the weighted tables and writes the bag; the client only plays the ring scatter and pickup |
 | Per-monster drop tables | One list per monster, each entry with weight / chance / count |
 | Drop light beams | A beam plays on the ground according to the prefix quality |
 | Bag tidy | Merges stackables and re-sorts by level / slot, pure functions covered by unit tests |
@@ -223,7 +223,7 @@ Implemented features only; each side's README covers its own capabilities in mor
 
 | Feature | Notes |
 | --- | --- |
-| Area spawning | Spawned randomly inside a map's spawn rectangles |
+| Area spawning | The server spawns inside a map's spawn rectangles; the client only registers the map, never spawns |
 | World authority | Monster instances live on the server, shared across accounts, persisted across restarts |
 | Monster AI | Idle wandering, active chasing, enrage on being hit, basic attacks |
 | Death animation | The node is removed only after the falling animation finishes |
