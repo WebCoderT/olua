@@ -1185,6 +1185,13 @@ export interface RoleMailRow {
   read_at: number | null;
   /** 领取时刻（null = 附件还没领；无附件的邮件也走领取，语义是「已处理」） */
   claimed_at: number | null;
+  /**
+   * 收件箱保质期（#439，毫秒时间戳；null = 永不过期）
+   *
+   * 由**投递方**在 send 时给定（不同来源的保质期不同），清理任务只按它删。
+   * 带**未领附件**的行不允许过期（过期等于替玩家扔奖励），判据在清理 SQL 里。
+   */
+  expires_at: number | null;
   created_at: number;
 }
 

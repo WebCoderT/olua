@@ -3,6 +3,7 @@ import { RolesModule } from "../roles/roles.module";
 import { AdminGameMailController } from "./admin-game-mail.controller";
 import { GameMailController } from "./game-mail.controller";
 import { GameMailEventsService } from "./game-mail-events.service";
+import { GameMailPurgeService } from "./game-mail-purge.service";
 import { GameMailService } from "./game-mail.service";
 
 /**
@@ -19,7 +20,7 @@ import { GameMailService } from "./game-mail.service";
 @Module({
   imports: [RolesModule],
   controllers: [GameMailController, AdminGameMailController],
-  providers: [GameMailService, GameMailEventsService],
+  providers: [GameMailService, GameMailEventsService, GameMailPurgeService],
   exports: [GameMailService],
 })
 export class GameMailModule {}

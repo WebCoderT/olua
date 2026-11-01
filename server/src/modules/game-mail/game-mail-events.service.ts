@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { GameEventsService, MonsterKilledEvent } from "../../common/events/game-events.service";
-import { GameMailService } from "./game-mail.service";
+import { BOSS_MAIL_TTL_MS, GameMailService } from "./game-mail.service";
 
 /**
  * 战斗频道的消息投递（#436）
@@ -42,6 +42,8 @@ export class GameMailEventsService implements OnModuleInit {
       kind: "boss",
       title: `击杀 ${event.monsterLabel}`,
       body: `你击杀了 BOSS「${event.monsterLabel}」。这条记录留在战斗频道，方便回看自己的进度。`,
+      // 战报 7 天过期（#439）：它是「回看进度」的记录，不是要保管的资产，让位给新的里程碑
+      ttlMs: BOSS_MAIL_TTL_MS,
     });
   }
 }
