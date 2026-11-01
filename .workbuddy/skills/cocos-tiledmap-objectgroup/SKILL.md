@@ -97,7 +97,7 @@ tiledMap.enableCulling = false;        // 再关裁剪：setter 会转发给所�
 | Cocos 地图节点本地 / 世界（**本项目口径**） | 地图**左上角** | 向右 | 向上 | `x∈[0,W]` `y∈[-H,0]` |
 
 ```ts
-// 地图节点：锚点 (0,1) —— 原点落在左上角
+// 地图节点：锚点 (0,1) —— 原点落在左上角；并且**必须留在世界原点**（地图层不跟相机走）
 const transform = mapNode.getComponent(UITransform) ?? mapNode.addComponent(UITransform);
 transform.setAnchorPoint(0, 1);        // 必须在 tmxAsset 赋值**之前**
 
@@ -106,14 +106,14 @@ tiledMap.tmxAsset = mapAsset;
 // 建完图后逐个图层补一次重算（原因见下面「坑 4」，漏了 = 进图整屏黑）
 for (const layer of tiledMap.getLayers()) (layer as any)._syncAnchorPoint();
 
-// 换算：只有 y 取反，没有半图偏移
-localX = tiledX;
-localY = -tiledY;                      // 矩形先取几何中心：(x + w/2, y + h/2)，同样只取反
-world  = mapNode.getWorldPosition() + (localX, localY);
+// 换算：只有 y 取反，没有半图偏移，也不需要再叠地图节点的世界坐标（它恒为 0）
+mapPointToWorld(tiledX, tiledY);                        // -> (x, -y)
+mapRectCenterToWorld(x, y, w, h);                       // 区域中心 = 先加半宽半高再取反
 ```
 
 **为什么这样最省事**：Tiled 里量出来的数就是世界坐标（只是 y 符号相反），接一张新 TMX 不用再在脑子里减半张图；
 `mapCenter`、`±W/2`、`±H/2` 这类式子从代码里彻底消失，也就没有「两套写法配错就镜像」的机会。
+**换算函数不要再收 `map` 参数**：地图节点恒在世界原点时，本地坐标就是世界坐标，多叠一次只会让人以为还要再叠。
 
 **锚点必须在 `tmxAsset` 赋值之前设**（这是本节最容易踩的一步）：赋值那一刻引擎同步执行
 `_buildLayerAndGroup()` → `_syncAnchorPoint()`，按**当时的锚点**给每个图层节点设锚点、算顶点平移量

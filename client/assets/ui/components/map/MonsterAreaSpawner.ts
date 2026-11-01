@@ -7,7 +7,7 @@ import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import CombatChannel from "../../utils/net/CombatChannel";
-import { getMapRectCenterPositionOnWorld } from "../../utils/map/MapPointMath";
+import { mapRectCenterToWorld } from "../../utils/map/MapPointMath";
 import { getTiledObjects, TiledObject } from "../../utils/map/TiledObjects";
 
 /**
@@ -81,7 +81,7 @@ export default class MonsterAreaSpawner {
       max = min;
     }
     const size = new Size(object.width, object.height);
-    const center = getMapRectCenterPositionOnWorld(object.x, object.y, size.width, size.height, this.map);
+    const center = mapRectCenterToWorld(object.x, object.y, size.width, size.height);
     this.createAreaView(object.name, size, center, monsterId, min, max);
     return { label: object.name, monsterId, center, size, min, max };
   }

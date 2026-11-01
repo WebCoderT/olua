@@ -14,12 +14,15 @@
  *    里注册 ANCHOR_CHANGED 监听，而建图时地图节点还没入场景、图层未启用，地图那次 `_syncAnchorPoint()`
  *    没人接：`leftDownToCenter` 停在按默认锚点 0.5 算的 (W/2, H/2)，瓦片照旧铺在中心；坐标换算却已按
  *    左上角把角色送到 (x, -y) → 落在错位的图之外 = **整屏黑**（#568）。这条最容易漏，因为它不报错。
- * 3. `MapPointMath.getMapPointPosition` 的函数体必须是 `(x, y) -> (x, -y)` —— 任何 `- W/2`、
- *    `H/2 -` 都说明半图偏移又回来了。
- * 4. `tools/import-spawn-areas.cjs` 里不许出现旧公式 `- mapW / 2` / `mapH / 2 -`。
- * 5. 生成的刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
+ * 3. `MapPointMath.mapPointToWorld` 的函数体必须是 `(x, y) -> (x, -y)` —— 任何 `- W/2`、
+ *    `H/2 -` 都说明半图偏移又回来了；换算函数不许再收 `map` 参数（地图节点恒在世界原点，
+ *    再叠一次世界坐标就是多余运算，也是「两套写法」的入口）。
+ * 4. `LayerManager.move` 只许搬 UI 层与相机，**不许动地图层** —— 整套「世界坐标 = Tiled 坐标取反 y」
+ *    的地基是「地图节点在世界原点」，地图层一旦被移动，所有点位会整体错位而不报错。
+ * 5. `tools/import-spawn-areas.cjs` 里不许出现旧公式 `- mapW / 2` / `mapH / 2 -`。
+ * 6. 生成的刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
  *    这是「生成物用错口径」唯一不需要跑客户端就能发现的判据。
- * 6. 客户端不许再出现 `mapCenter` 这类「地图中心」的命名（照旧代码抄回来最常见）。
+ * 7. 客户端不许再出现 `mapCenter` 这类「地图中心」的命名（照旧代码抄回来最常见）。
  *
  * 用法：node tools/audit-map-origin.cjs
  */
@@ -34,6 +37,7 @@ const IMPORT_TOOL = path.join(REPO, "tools/import-spawn-areas.cjs");
 const SPAWN_AREAS = path.join(REPO, "server/src/modules/world/spawn-areas.generated.ts");
 const MAP_SIZES = path.join(REPO, "server/src/shared/map-sizes.generated.ts");
 const CLIENT_ASSETS = path.join(REPO, "client/assets");
+const LAYER_MANAGER = path.join(REPO, "client/assets/ui/core/LayerManager.ts");
 
 /** 逐条问题（文件名:行号 + 该做什么） */
 const problems = [];
@@ -103,11 +107,37 @@ function checkPointMath() {
   const src = read(POINT_MATH, "client/assets/ui/utils/map/MapPointMath.ts");
   if (!src) return;
   // 函数体只允许一次 y 取反：`return new Vec3(x, -y);`
-  if (!/export function getMapPointPosition\(\s*x: number,\s*y: number\s*\)\s*\{\s*return new Vec3\(x, -y\);\s*\}/.test(src)) {
+  if (!/export function mapPointToWorld\(\s*x: number,\s*y: number\s*\)\s*\{\s*return new Vec3\(x, -y\);\s*\}/.test(src)) {
     problem(
       "client/assets/ui/utils/map/MapPointMath.ts",
       0,
-      "getMapPointPosition 必须是 `(x, y) -> (x, -y)`：出现 -W/2、H/2- 之类就是半图偏移回来了（#566 只保留 y 取反）",
+      "mapPointToWorld 必须是 `(x, y) -> (x, -y)`：出现 -W/2、H/2- 之类就是半图偏移回来了（#566 只保留 y 取反）",
+    );
+  }
+  // 换算函数不再收 map 参数：地图节点恒在世界原点，再叠一次世界坐标是多余运算
+  if (/mapPointToWorld\([^)]*map[^)]*\)|mapRectCenterToWorld\([^)]*map[^)]*\)/.test(src)) {
+    problem(
+      "client/assets/ui/utils/map/MapPointMath.ts",
+      0,
+      "换算函数不该再收 map 参数（地图节点在世界原点，本地坐标即世界坐标）—— 收了就会有人以为还要再叠一次",
+    );
+  }
+}
+
+/** 地图层必须静止：它是「世界坐标 = Tiled 坐标取反 y」这条口径的地基 */
+function checkMapLayerStatic() {
+  const src = read(LAYER_MANAGER, "client/assets/ui/core/LayerManager.ts");
+  if (!src) return;
+  const body = /static move\s*\([^)]*\)\s*\{([\s\S]*?)\n  \}/.exec(src);
+  if (!body) {
+    problem("client/assets/ui/core/LayerManager.ts", 0, "找不到 LayerManager.move —— 相机跟随的实现变了，请同步改本审计的判据");
+    return;
+  }
+  if (/MapLayer/.test(body[1])) {
+    problem(
+      "client/assets/ui/core/LayerManager.ts",
+      0,
+      "LayerManager.move 不许移动地图层：地图节点必须留在世界原点，否则 MapPointMath 的换算（只取反 y）会整体错位且不报错",
     );
   }
 }
@@ -224,12 +254,13 @@ function checkLegacyNaming() {
 checkAnchoredBeforeAsset();
 checkLayerAnchorResync();
 checkPointMath();
+checkMapLayerStatic();
 checkImportTool();
 checkSpawnAreasInMap();
 checkLegacyNaming();
 
 if (problems.length === 0) {
-  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、换算只有 y 取反、刷怪区坐标全部落在图内");
+  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、换算只有 y 取反、地图层静止、刷怪区坐标全部落在图内");
   process.exit(0);
 }
 

@@ -9,7 +9,7 @@ import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import MonsterAreaSpawner from "./MonsterAreaSpawner";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
-import { getMapPointPositionOnWorld } from "../../utils/map/MapPointMath";
+import { mapPointToWorld } from "../../utils/map/MapPointMath";
 import { maps } from "../../../configs/map";
 
 /**
@@ -126,7 +126,7 @@ export default class GameMap extends Node {
       console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个类为 revive 的点位`);
       return;
     }
-    this.reviveWorldPosition = getMapPointPositionOnWorld(revivePoint.x, revivePoint.y, this as Node);
+    this.reviveWorldPosition = mapPointToWorld(revivePoint.x, revivePoint.y);
     this.reviveHandler?.(this.reviveWorldPosition);
   }
 }
