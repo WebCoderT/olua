@@ -1,4 +1,5 @@
 import { Color, Vec2 } from "cc";
+import type { UiEffectConfig } from "../ui/utils/net/ApiModels";
 
 /**
  * 特效配置
@@ -58,3 +59,54 @@ export const hitScreenFlash = {
   /** 铺满可视区再放大的倍率（镜头边缘/适配留白时防止四周露出未覆盖的底） */
   overscan: 1.2,
 };
+
+//#region 界面特效运行时表（#594）
+
+/**
+ * 升级特效的兜底参数（= 服务端 `UI_EFFECT_DEFAULTS.upgrade` 的出厂值）
+ *
+ * 服务端表在、快照没到 / 表里没有 `upgrade` 行时用它 —— 搬家不改行为：
+ * 出厂值在两端各有一份（同一注释放着），但**权威在服务端**，这里只是兜底。
+ */
+export const upgradeEffectDefaults: Omit<UiEffectConfig, "key"> = {
+  offsetX: 0,
+  offsetY: 90,
+  scaleX: 1,
+  scaleY: 1,
+  rotate: 0,
+  durationMs: 1000,
+  enabled: true,
+};
+
+/**
+ * 运行时界面特效表（key → 表现参数，#594）
+ *
+ * 内容由服务端配置快照的 `uiEffects` 段填充（`applyUiEffectRows`，进游戏时一次，
+ * **整表重建**）。**不要往这里写死数据** —— 那等于把配置又搬回了客户端。
+ * key 的取值域由客户端的消费代码决定（`upgrade` 之外加特效 = 写消费代码 +
+ * 服务端 `UI_EFFECT_KEYS` 登记，两端对上才有东西可演）。
+ */
+export const uiEffects = new Map<string, UiEffectConfig>();
+
+/**
+ * 取升级特效的表现参数（摆位与缩放都归服务端，见 GameUiHelper.createUpgradeEffect）
+ *
+ * 逐字段与出厂值合并：快照行覆盖它带来的字段，缺的字段回落出厂值 ——
+ * 这里全是标量，浅合并正好安全；将来加字段时老快照不会把新字段带成 undefined。
+ */
+export function upgradeEffectConfig(): UiEffectConfig {
+  // 逐字段合并（快照行覆盖它带来的字段，缺的字段留在出厂值）——
+  // 不直接 {...defaults, ...row} 展开：老快照缺新字段时会把 undefined 盖到出厂值上
+  const merged: Omit<UiEffectConfig, "key"> = { ...upgradeEffectDefaults };
+  const row = uiEffects.get("upgrade");
+  if (row) {
+    const source = row as unknown as Record<string, unknown>;
+    for (const field of Object.keys(upgradeEffectDefaults) as Array<keyof typeof upgradeEffectDefaults>) {
+      const value = source[field];
+      if (value !== undefined) (merged as Record<string, unknown>)[field] = value;
+    }
+  }
+  return { key: "upgrade", ...merged };
+}
+
+//#endregion

@@ -3,6 +3,7 @@ import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
 import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
 import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import { MapService } from "../map/map.service";
+import { UiEffectService } from "../ui-effect/ui-effect.service";
 import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
@@ -29,6 +30,7 @@ export class ClientConfigService {
     private readonly mall: MallPricingService,
     private readonly drop: DropConfigService,
     private readonly map: MapService,
+    private readonly uiEffect: UiEffectService,
   ) {}
 
   snapshot(): GameConfigSnapshotDto {
@@ -65,6 +67,8 @@ export class ClientConfigService {
       // 客户端 `configs/map.ts` 不再存这些 —— 改一个进入等级不用重打客户端包。
       maps: this.map.configs(),
       mapTypes: MAP_TYPE_GROUPS.map((group) => ({ type: group.type, label: group.label })),
+      // #594：界面特效的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关）—— 特效按服务端参数演
+      uiEffects: this.uiEffect.configs(),
     };
   }
 }

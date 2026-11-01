@@ -1548,6 +1548,9 @@ export type SaveMapConfig = {
   soulOfWar: number;
 };
 
+export type SaveUiEffect = {
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -2747,7 +2750,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -5228,6 +5231,41 @@ export type MapTypeGroup = {
   label: string;
 };
 
+export type UiEffectConfig = {
+  /**
+   * 特效 key
+   */
+  key: string;
+  /**
+   * 摆位偏移 X（像素，相对 UI 层锚点）
+   */
+  offsetX: number;
+  /**
+   * 摆位偏移 Y（像素，y 向上为正）
+   */
+  offsetY: number;
+  /**
+   * 横向缩放（1 = 原始尺寸）
+   */
+  scaleX: number;
+  /**
+   * 纵向缩放（1 = 原始尺寸）
+   */
+  scaleY: number;
+  /**
+   * 旋转（度，顺时针）
+   */
+  rotate: number;
+  /**
+   * 一轮播放总时长（毫秒）
+   */
+  durationMs: number;
+  /**
+   * 开关（false = 关：客户端不播这个特效）
+   */
+  enabled: boolean;
+};
+
 export type GameConfigSnapshot = {
   /**
    * 称号配置（34 阶，含渠道与升级链顺序）
@@ -5317,6 +5355,10 @@ export type GameConfigSnapshot = {
    * 地图类型分组（顺序即传送弹窗的分组顺序；类型文案的唯一来源在服务端）
    */
   mapTypes: MapTypeGroup[];
+  /**
+   * 界面特效的表现参数（#594：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定 `effect/<key>/<key>.plist`）
+   */
+  uiEffects: UiEffectConfig[];
 };
 
 export type GuildSummary = {
@@ -6561,6 +6603,60 @@ export type MapDetail = {
    * 每一块数据的来源（页面按它渲染徽标）
    */
   sources: MapSource[];
+};
+
+export type UiEffect = {
+  /**
+   * 特效 key（如 upgrade；取值域见 UI_EFFECT_KEYS）
+   */
+  key: string;
+  /**
+   * 摆位偏移 X（像素，相对 UI 层锚点，-2000~2000）
+   */
+  offsetX: number;
+  /**
+   * 摆位偏移 Y（像素，y 向上为正，-2000~2000）
+   */
+  offsetY: number;
+  /**
+   * 横向缩放（0.1~5，1 = 原始尺寸）
+   */
+  scaleX: number;
+  /**
+   * 纵向缩放（0.1~5，1 = 原始尺寸）
+   */
+  scaleY: number;
+  /**
+   * 旋转（度，顺时针，-360~360）
+   */
+  rotate: number;
+  /**
+   * 一轮播放总时长（毫秒，100~10000；帧率 = 帧数 / 时长）
+   */
+  durationMs: number;
+  /**
+   * 开关（false = 关：客户端不再创建特效节点）
+   */
+  enabled: boolean;
+  /**
+   * 最后一个改它的管理员账号名（追账用，与审计日志能对上）
+   */
+  updatedBy: string;
+  /**
+   * 最后修改时间（毫秒时间戳；0 = 从没改过，仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type UiEffectList = {
+  /**
+   * 行数（= 特效 key 数）
+   */
+  total: number;
+  /**
+   * 全部特效行，按 key 字典序
+   */
+  list: UiEffect[];
 };
 
 export type GameMailClaimAllQuery = {

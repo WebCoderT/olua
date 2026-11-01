@@ -381,8 +381,9 @@ export default class StorageManager {
       // 顶到当前上限做即时演出，帧到达时以服务端值为准
       role.hp = role.maxHp;
       role.mp = role.maxMp;
-      // 播放升级特效
-      LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
+      // 播放升级特效（#594：服务端可关 —— 关了不建节点）
+      const upgradeEffect = GameUiHelper.createUpgradeEffect();
+      if (upgradeEffect) LayerManager.addToUILayer(upgradeEffect);
     }
     // 保存并刷新（revision 已与服务端对齐，下一次落盘不会撞乐观锁）
     this.updateOnlineRole(role);
@@ -411,7 +412,8 @@ export default class StorageManager {
     role.revision = gain.revision;
     if (gain.leveledUp) {
       // 属性不本地重算（#541 服务端权威）：权威值由 roleUpdate 帧带回，也不补满血蓝（见方法注释）
-      LayerManager.addToUILayer(GameUiHelper.createUpgradeEffect());
+      const upgradeEffect = GameUiHelper.createUpgradeEffect();
+      if (upgradeEffect) LayerManager.addToUILayer(upgradeEffect);
     }
     this.updateOnlineRole(role);
     this.updateUi(role);

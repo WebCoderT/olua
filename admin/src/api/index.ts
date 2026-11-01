@@ -35,6 +35,7 @@ export {
   monstersApi,
   npcsApi,
   mapsApi,
+  uiEffectsApi,
   skillsApi,
   statusesApi,
   questsApi,

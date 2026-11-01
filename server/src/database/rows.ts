@@ -341,6 +341,36 @@ export interface MapRow {
   updated_at: number;
 }
 
+/**
+ * 界面特效配置一行（`ui_effects` 表；#594：特效表现参数归服务端）
+ *
+ * 一行 = 一个特效 key 的「摆位 / 缩放 / 旋转 / 时长 / 开关」（与武器外观同一套取向）。
+ * 图集路径**不在表里** —— 那是两端约定 `effect/<key>/<key>.plist`，存了只会让人把客户端
+ * 指到不存在的图上（#573 同一条纪律）。行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，
+ * **没有新建 / 删除语义**：一个 key 存在的前提是客户端有这个特效的消费代码。
+ */
+export interface UiEffectRow {
+  /** 特效 key（如 upgrade；取值域见 common/constants/ui-effect 的 UI_EFFECT_KEYS） */
+  effect_key: string;
+  /** 摆位偏移 X（像素，相对 UI 层锚点） */
+  offset_x: number;
+  /** 摆位偏移 Y（像素，y 向上为正） */
+  offset_y: number;
+  /** 横向缩放（1 = 原始尺寸） */
+  scale_x: number;
+  /** 纵向缩放（1 = 原始尺寸） */
+  scale_y: number;
+  /** 旋转（度，顺时针） */
+  rotate: number;
+  /** 一轮播放总时长（毫秒）；帧率由帧数 / 时长推出 */
+  duration_ms: number;
+  /** 开关（0 = 关：升级不播特效） */
+  enabled: number;
+  /** 最后一个改它的管理员账号名（追账用；与 audit_logs 能对上） */
+  updated_by: string;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 养成配置（称号 / 战魂）

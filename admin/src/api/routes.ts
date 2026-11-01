@@ -775,6 +775,21 @@ export const routes = {
      */
     reorderUpgradeList: "/admin/titles/upgrade-order",
   },
+  /** adminUiEffect 模块（2 个接口） */
+  adminUiEffect: {
+    /**
+     * 界面特效列表（GET /admin/ui-effects）
+     *
+     * 全部界面特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。
+     */
+    list: "/admin/ui-effects",
+    /**
+     * 保存界面特效的表现参数（整份覆盖）（PATCH /admin/ui-effects/{id}）
+     *
+     * 改的是**表现参数**：摆位偏移 / 横纵缩放 / 旋转 / 一轮时长 / 开关。保存后立刻生效 ——
+     */
+    save: (id: string) => `/admin/ui-effects/${encodeURIComponent(id)}`,
+  },
   /** adminZone 模块（3 个接口） */
   adminZone: {
     /**

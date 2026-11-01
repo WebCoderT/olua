@@ -59,6 +59,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:bag` | 背包与穿戴专项（38 条；穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
+| `npm run test:e2e:ui-effect` | 界面特效专项（27 条；#594：可读不可写 / 出厂值 seed / 无新建·删除 / 数值边界 / 快照即最新 / 审计与文档契约） |
 | `npm run test:e2e:map` | 地图管理专项（122 条；**玩法配置可改 / 资源本体不可改** / 两套坐标对账 / 无新建·删除 / 权限与文档契约） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
@@ -141,7 +142,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align 38 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect 39 个仓储
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -201,6 +202,7 @@ server/
 │   ├── e2e-game-mail.cjs           51 条（游戏内邮件：收件箱与未读·未领 / 已读幂等 / 领取与三种错误码 / 附件没领拒删 / 一键领取领到背包满 / 成就兜底转邮件 / 频道：四栏角标·按栏领取·非法频道 40000·社交与战斗投递）
 │   ├── e2e-admin-mail.cjs          29 条（管理端消息补发 #437：观察员 403 / 玩家令牌 401 / 频道收窄 / 角色不存在 404 / 形状校验 / 附件领到手 / reward 落位 / 离线收件 / 审计留痕 / 文档分组）
 │   ├── e2e-mail-expiry.cjs         15 条（收件箱保质期 #439：ttl 写入 / 读口即时消失 / 过期单封操作按不存在 / 清理判据：带未领附件不删·空永不删 / 批量上限跨批）
+│   ├── e2e-ui-effect.cjs           27 条（界面特效 #594：观察员可读不可写 / seed 出厂值 / 没有新建·删除 / 数值边界 / key 404 / 保存追账 / 快照即最新 / 审计 / 文档契约）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -209,7 +211,7 @@ server/
 
 ## 数据模型
 
-46 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+47 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -268,7 +270,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（38 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（39 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -335,13 +337,13 @@ server/
 
 ## 接口与契约
 
-当前 **168 个接口 / 138 条路径 / 264 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **170 个接口 / 140 条路径 / 268 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
 | 客户端 | 50 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 111 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 113 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

@@ -28,6 +28,7 @@ import { LeaderboardModule } from "./modules/leaderboard/leaderboard.module";
 import { AchievementModule } from "./modules/achievement/achievement.module";
 import { GameMailModule } from "./modules/game-mail/game-mail.module";
 import { MapModule } from "./modules/map/map.module";
+import { UiEffectModule } from "./modules/ui-effect/ui-effect.module";
 
 /**
  * 应用根模块
@@ -80,6 +81,8 @@ export class AppModule {
         GameMailModule,
         // 地图管理（#571）：只读观测，两个进程（API / 存档）都要有 —— 它是管理端页面，不是实时能力
         MapModule,
+        // 界面特效（#594）：表现参数管理 + 配置快照下发，同地图，两个进程都要有
+        UiEffectModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

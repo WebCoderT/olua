@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { MapModule } from "../map/map.module";
+import { UiEffectModule } from "../ui-effect/ui-effect.module";
 import { AdminAchievementController } from "./admin-achievement.controller";
 import { AdminDropController } from "./admin-drop.controller";
 import { ClientConfigController } from "./client-config.controller";
@@ -38,7 +39,8 @@ import { RuntimeConfigService } from "./runtime-config.service";
  */
 @Module({
   // 地图玩法配置（#573）：配置快照要下发它（客户端据此判进入条件）
-  imports: [MapModule],
+  // 界面特效（#594）：配置快照要下发它（客户端特效按服务端参数演）
+  imports: [MapModule, UiEffectModule],
   controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
   providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
