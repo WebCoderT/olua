@@ -3,6 +3,7 @@ import { BizCode } from "../../common/constants/biz-code";
 import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue, mapDefaultOf } from "../../common/constants/map-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
+import { spawnAreaInBounds, spawnAreaOverflow } from "../../common/utils/spawn-area-bounds.util";
 import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-area.repository";
 import { MapRepository } from "../../database/repositories/map.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
@@ -137,7 +138,8 @@ export class MapService implements OnModuleInit {
   }
 
   /** 详情：基础 + 图层 + 对象组 + 刷怪区 + 场上怪物 + 来源说明 */
-  detail(id: string): MapDetailDto {    const row = this.requireRow(id);
+  detail(id: string): MapDetailDto {
+    const row = this.requireRow(id);
     const content = this.contentOf(id);
     const groups = content.groups.map((group) => {
       const dto = new MapGroupDto();
@@ -146,6 +148,9 @@ export class MapService implements OnModuleInit {
       return dto;
     });
 
+    // 越界判定按「这张图的实际像素尺寸」算（MAP_PIXEL_SIZES 生成快照，与 TMX 头一致）。
+    // 判据只在服务端一处：页面直接显示 inBounds，不自己再算一遍 —— 两边各算迟早会分叉。
+    const mapPixel = this.sizeOf(id);
     const areas: MapSpawnAreaDto[] = this.spawnAreas.listByMap(id).map((area) => ({
       id: area.id,
       name: area.name,
@@ -157,6 +162,8 @@ export class MapService implements OnModuleInit {
       cy: area.cy,
       w: area.w,
       h: area.h,
+      inBounds: spawnAreaInBounds(area, mapPixel),
+      overflow: spawnAreaOverflow(area, mapPixel),
     }));
 
     const worldMonsters: MapWorldMonsterDto[] = this.worldMonsters
