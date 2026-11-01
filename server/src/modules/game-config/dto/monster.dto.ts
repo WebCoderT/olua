@@ -3,9 +3,9 @@ import { Type } from "class-transformer";
 import { IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { MonsterDropRow, MonsterRow } from "../../../database/rows";
+import type { MonsterPresentationRow } from "../../../shared/monster-presentation.generated";
 import { MonsterDropSummaryDto } from "./drop.dto";
 
-/** 怪物定位取值清单（configs/monster 的 tier：normal / elite / boss；**手写结构常量**，与客户端枚举逐值一致） */
 /** 怪物定位取值清单（configs/monster 的 tier：normal / elite / boss；**手写结构常量**，与客户端枚举逐值一致） */
 export const MONSTER_TIER_KEYS = ["normal", "elite", "boss"];
 
@@ -183,4 +183,66 @@ export class UpdateMonsterDto {
   @ValidateNested()
   @Type(() => MonsterAttributesDto)
   attributes?: MonsterAttributesDto;
+}
+
+/** 外观摆放偏移（二维；y 向上为正，与地图世界坐标同口径） */
+export class OutOffsetDto {
+  @ApiProperty({ description: "x（向右为正）" })
+  x: number;
+  @ApiProperty({ description: "y（向上为正）" })
+  y: number;
+}
+
+/** 可见身体尺寸（像素；碰撞盒 / 点击选中 / 头顶血条位置都由它决定） */
+export class ContentSizeDto {
+  @ApiProperty({ description: "宽（像素）" })
+  width: number;
+  @ApiProperty({ description: "高（像素）" })
+  height: number;
+}
+
+/**
+ * 怪物资源与表现（#588：随快照下发，客户端不再持有怪物数据文件）
+ *
+ * 来源是 `server/src/shared/monster-presentation.generated.ts`（生成器从图集基准帧实测几何），
+ * **不是库表**：icon / out 是素材包里的路径事实，管理端不改它（改素材 → 重跑生成器）；
+ * 数值在 `MonsterDto`（monsters 表），两段在客户端运行时合体成一只怪。
+ */
+export class MonsterPresentationDto {
+  @ApiProperty({ description: "怪物 key（与 MonsterDto.id 一一对应）" })
+  id: string;
+  @ApiProperty({ description: "图标路径（monster/icon/<key>_00000 单图）" })
+  icon: string;
+  @ApiProperty({ description: "外观图集目录（monster/out/<key>，帧动画按动作约定拼）" })
+  out: string;
+  @ApiProperty({ description: "外观节点摆放偏移（把可见身体中心对准节点原点）", type: OutOffsetDto })
+  outOffset: OutOffsetDto;
+  @ApiProperty({ description: "可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）", type: ContentSizeDto })
+  contentSize: ContentSizeDto;
+  @ApiProperty({ description: "移动速度（刚体线速度单位）" })
+  moveSpeed: number;
+  @ApiProperty({ description: "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）" })
+  aggressive: boolean;
+  @ApiProperty({ description: "检测范围（像素半径）" })
+  detectRange: number;
+  @ApiProperty({
+    description: "动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）",
+    nullable: true,
+    additionalProperties: { type: "number" },
+  })
+  speedRate?: Record<string, number>;
+
+  static from(row: MonsterPresentationRow): MonsterPresentationDto {
+    const dto = new MonsterPresentationDto();
+    dto.id = row.id;
+    dto.icon = row.icon;
+    dto.out = row.out;
+    dto.outOffset = { x: row.outOffset[0], y: row.outOffset[1] };
+    dto.contentSize = { width: row.contentSize[0], height: row.contentSize[1] };
+    dto.moveSpeed = row.moveSpeed;
+    dto.aggressive = row.aggressive;
+    dto.detectRange = row.detectRange;
+    dto.speedRate = row.speedRate;
+    return dto;
+  }
 }

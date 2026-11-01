@@ -48,7 +48,8 @@ export default class MonsterInfoPanel extends Node {
     this.hpText = GameUiHelper.createText("monster_hp_text", `${monster.hp} / ${monster.maxHp}`, layout.hpText.fontSize, layout.hpText.position, layout.hpText.size, Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
     this.addChild(this.hpText.node);
     // 技能行（怪物未配置技能则不渲染）
-    this.addChild(GameUiHelper.createMonsterSkillRow(monster));
+    // 怪物技能挂载映射在服务端（monster_skills 表），客户端快照还没有这段 —— 先给空清单（本行历史上也一直为空）
+    this.addChild(GameUiHelper.createMonsterSkillRow([]));
   }
 
   /** 面板节点是否仍存活（Node 子类无 node 属性，供管理器校验并清理引用） */

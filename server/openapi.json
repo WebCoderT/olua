@@ -19484,6 +19484,104 @@
           }
         }
       },
+      "OutOffsetDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "x（向右为正）"
+          },
+          "y": {
+            "type": "number",
+            "description": "y（向上为正）"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "ContentSizeDto": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "description": "宽（像素）"
+          },
+          "height": {
+            "type": "number",
+            "description": "高（像素）"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ]
+      },
+      "MonsterPresentationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "怪物 key（与 MonsterDto.id 一一对应）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标路径（monster/icon/<key>_00000 单图）"
+          },
+          "out": {
+            "type": "string",
+            "description": "外观图集目录（monster/out/<key>，帧动画按动作约定拼）"
+          },
+          "outOffset": {
+            "description": "外观节点摆放偏移（把可见身体中心对准节点原点）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutOffsetDto"
+              }
+            ]
+          },
+          "contentSize": {
+            "description": "可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContentSizeDto"
+              }
+            ]
+          },
+          "moveSpeed": {
+            "type": "number",
+            "description": "移动速度（刚体线速度单位）"
+          },
+          "aggressive": {
+            "type": "boolean",
+            "description": "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）"
+          },
+          "detectRange": {
+            "type": "number",
+            "description": "检测范围（像素半径）"
+          },
+          "speedRate": {
+            "type": "object",
+            "description": "动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "icon",
+          "out",
+          "outOffset",
+          "contentSize",
+          "moveSpeed",
+          "aggressive",
+          "detectRange",
+          "speedRate"
+        ]
+      },
       "AchievementConditionDto": {
         "type": "object",
         "properties": {
@@ -19718,6 +19816,13 @@
               "$ref": "#/components/schemas/MonsterDto"
             }
           },
+          "monsterPresentations": {
+            "description": "怪物资源与表现（#588：icon / out / 几何 / 移动 / AI 参数）。**客户端没有怪物数据文件** —— 数值在本快照的 monsters 段（monsters 表），资源与表现在这段，客户端运行时两段合体",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterPresentationDto"
+            }
+          },
           "npcs": {
             "description": "NPC 基础数据（名称 / 对话文案）",
             "type": "array",
@@ -19833,6 +19938,7 @@
           "drugs",
           "items",
           "monsters",
+          "monsterPresentations",
           "npcs",
           "fashions",
           "levelExps",

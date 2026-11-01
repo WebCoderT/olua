@@ -1,23 +1,33 @@
 #!/usr/bin/env node
 /**
- * 生成 assets/configs/monster.ts 的几何 / 玩法字段（重写整个文件）
+ * 生成 server/src/shared/monster-presentation.generated.ts（重写整个文件）
+ *
+ * **#588 数据归属收口：客户端没有怪物数据文件**。本生成器把怪物的「资源与表现」事实
+ * 写进**服务端**的生成物（icon / out / 几何 / 移动 / AI 参数），经 `GET /game-config`
+ * 快照的 monsterPresentations 段下发 —— 客户端运行时才拿到，本地不再持有副本。
+ * 数值（label / level / tier / maxHp / 六项）不归本生成器管：出厂在 monster-seed.ts，
+ * 运行时权威在 monsters 表（管理端可改）。
  *
  * 数据来源：
- * 1. 旧 configs/monster.ts —— 保留手工数据（key / level / tier / icon / out / label /
- *    moveSpeed / detectRange / description）与 monsterAI 块、以及条目里「非全 1」的 speedRate 覆盖；
- * 2. assets/resources/monster/out/<id>/00040.png.meta —— Cocos 编辑器对每帧做好的 auto-trim 数据
- *    （trimType:"auto"，与引擎渲染同一口径），从中取：
- *      · contentSize = 裁剪区尺寸（width × height）＝ 可见身体尺寸；
+ * 1. 上一份 monster-presentation.generated.ts（或迁移期的旧 configs/monster.ts）——
+ *    保留手工调过的 moveSpeed / detectRange / speedRate 覆盖（素材里没有这些事实）；
+ * 2. assets/resources/monster/out/<id>/stand/stand.plist —— 图集（#235 已把散帧打包）里
+ *    基准帧的 trim 数据（与引擎渲染同一口径），从中取：
+ *      · contentSize = spriteSize（裁剪区尺寸）＝ 可见身体尺寸；
  *        碰撞盒（MonsterCollider）、点击选中（UITransform.hitTest）、头顶血条位置全由它决定；
- *      · outOffset   = 裁剪区中心相对画布中心的反向偏移（-offsetX, -offsetY），
- *        外观节点摆在它上面可见身体中心就正好落在节点原点（消费点 GameUiHelper.createMonsterBody）。
+ *      · outOffset   = -spriteOffset（裁剪区中心相对画布中心的反向偏移，双轴取反），
+ *        外观节点摆在它上面可见身体中心就正好落在节点原点（消费点 GameUiHelper.createMonsterBody）；
+ * 3. server/src/shared/monster-seed.ts —— 只读 `tier`（aggressive 判定用），**不读数值**。
  *
- * 规则（改这里后重新生成本文件）：
- * - aggressive：tier === "boss" 或可见身体宽 ≥ AGGRESSIVE_BODY_WIDTH 判主动；
- * - sellPirce：normal = level × 2 / elite = level × 5 / boss = level × 20（当前无消费点，为击杀奖励预留）；
- * - moveSpeed / detectRange：沿用旧表数值（保持全员 2 / 200）；
- * - speedRate：条目里不再写死，运行时以 configs/monster 的 monsterDefaultSpeedRate 打底、
- *   条目覆盖（与角色 defaultRoleSpeedRate 同构）。
+ * 规则：
+ * - aggressive：服务端种子里 tier === "boss" 或可见身体宽 ≥ AGGRESSIVE_BODY_WIDTH 判主动；
+ * - moveSpeed / detectRange：沿用上一份的值（保持全员 2 / 200），想调直接改上一份生成物对应行
+ *   （生成器会原样保留；这份数据服务端管，客户端只是消费）；
+ * - speedRate：条目覆盖原样保留（非全 1 才写）。
+ *
+ * **key 双向对账**：种子（数值）与本生成器（资源）必须一一对应，多一只少一只都直接报错 ——
+ * 加一只怪的正确姿势：素材入库重跑本生成器（服务端资源行）+ monster-seed.ts 加一行（数值），
+ * 重启服务端（seed 进表），客户端重启后从快照拿到全部数据。
  *
  * 运行：node client/tools/gen-monster-config.cjs
  */
@@ -25,216 +35,183 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const MONSTER_TS = path.join(ROOT, "assets/configs/monster.ts");
-// 散帧已图集化（#235）移出 assets：原始逐帧素材 + .meta 在仓库根 _loose_frames_archive（gitignored）
-const OUT_DIR = path.join(ROOT, "..", "_loose_frames_archive", "monster", "out");
+const REPO = path.join(ROOT, "..");
+const OUT_TS = path.join(REPO, "server/src/shared/monster-presentation.generated.ts");
+const SERVER_SEED_TS = path.join(REPO, "server/src/shared/monster-seed.ts");
+// 迁移期旧来源：客户端 configs/monster.ts 还有条目时优先读它（之后这份文件不再有怪物数据）
+const LEGACY_TS = path.join(ROOT, "assets/configs/monster.ts");
+// #235 起帧动画是图集（stand.png + stand.plist），不再有散帧 meta
+const OUT_DIR = path.join(ROOT, "assets/resources/monster/out");
 
 /** 规则：可见身体宽达到该值（像素）判主动怪（220 只怪身体宽 p75 ≈ 250，即约四分之一大体型 + BOSS 主动） */
 const AGGRESSIVE_BODY_WIDTH = 250;
-/** 规则：出售价按定位取「每级单价」（normal / elite / boss） */
-const SELL_PRICE_PER_LEVEL = { normal: 2, elite: 5, boss: 20 };
-/** 几何基准帧：stand 动作、正面（DOWN，方向下标 4）、该方向第 1 帧（start 0 + 4×spacing 10） */
-const STAND_DOWN_FRAME = 40;
+/** 几何基准帧：图集 stand 是 8 向 × 4 帧，帧名 d<方向>_<序号>；方向 4 = 正面（DOWN）第 0 帧 */
+const STAND_BASE_FRAME = "d4_00.png";
 
-//#region 1. 读旧表（保留手工数据）
+//#region 1. 读上一份的手工值（moveSpeed / detectRange / speedRate 覆盖）
 
-const src = fs.readFileSync(MONSTER_TS, "utf8");
-
-const aiStart = src.indexOf("export const monsterAI");
-const aiEnd = src.indexOf("\n};", aiStart) + 3;
-if (aiStart < 0 || aiEnd < 3) throw new Error("旧表里找不到 monsterAI 块");
-const aiBlock = src.slice(aiStart, aiEnd);
-
-const dataStart = src.indexOf("const monsterData");
-const dataEnd = src.indexOf("\n];", dataStart);
-if (dataStart < 0 || dataEnd < 0) throw new Error("旧表里找不到 monsterData 数组");
-
-const monsters = [];
-const blocks = src.slice(dataStart, dataEnd).split(/\n  \{/).slice(1);
-for (const block of blocks) {
-  const grab = (re) => {
-    const m = re.exec(block);
-    return m ? m[1] : undefined;
-  };
-  const key = grab(/key:\s*"([^"]+)"/);
-  if (!key) continue;
-  // 旧条目里的 speedRate 覆盖（非全 1 才保留；1~4 号那份全 1 是历史默认，收敛进 monsterDefaultSpeedRate）
-  const rateBlock = /speedRate:\s*\{([\s\S]*?)\n\s*\},?\s*$/.exec(block.trimEnd());
-  const speedRate = {};
-  if (rateBlock) {
-    const reRate = /\[ACTION\.(\w+)\]:\s*([\d.]+)/g;
-    let r;
-    while ((r = reRate.exec(rateBlock[1]))) speedRate[r[1]] = Number(r[2]);
+function parseEntries(text) {
+  const entries = new Map();
+  const dataStart = text.indexOf("const monsterData");
+  const source = dataStart >= 0 ? text.slice(dataStart, text.indexOf("\n];", dataStart)) : text;
+  const blocks = source.split(/\n  \{/).slice(1);
+  for (const block of blocks) {
+    const grab = (re) => {
+      const m = re.exec(block);
+      return m ? m[1] : undefined;
+    };
+    const key = grab(/key:\s*"([^"]+)"/);
+    if (!key) continue;
+    // speedRate 覆盖（非全 1 才保留；全 1 是历史默认，收敛进客户端 monsterDefaultSpeedRate）
+    const rateBlock = /speedRate:\s*\{([\s\S]*?)\n\s*\},?\s*$/.exec(block.trimEnd());
+    const speedRate = {};
+    if (rateBlock) {
+      const reRate = /\[ACTION\.(\w+)\]:\s*([\d.]+)/g;
+      let r;
+      while ((r = reRate.exec(rateBlock[1]))) speedRate[r[1]] = Number(r[2]);
+    }
+    const hasOverride = Object.keys(speedRate).length > 0 && !Object.values(speedRate).every((v) => v === 1);
+    entries.set(key, {
+      icon: grab(/icon:\s*"([^"]+)"/),
+      out: grab(/out:\s*"([^"]+)"/),
+      moveSpeed: grab(/moveSpeed:\s*([\d.]+)/) ?? "2",
+      detectRange: grab(/detectRange:\s*([\d.]+)/) ?? "200",
+      speedRate: hasOverride ? speedRate : undefined,
+    });
   }
-  const hasOverride = Object.keys(speedRate).length > 0 && !Object.values(speedRate).every((v) => v === 1);
-  monsters.push({
-    key,
-    level: Number(grab(/level:\s*(\d+)/)),
-    tier: grab(/tier:\s*"(\w+)"/),
-    icon: grab(/icon:\s*"([^"]+)"/),
-    out: grab(/out:\s*"([^"]+)"/),
-    label: grab(/label:\s*"([^"]+)"/),
-    moveSpeed: grab(/moveSpeed:\s*([\d.]+)/) ?? "2",
-    detectRange: grab(/detectRange:\s*([\d.]+)/) ?? "200",
-    description: grab(/description:\s*"([^"]*)"/),
-    speedRate: hasOverride ? speedRate : undefined,
-  });
+  return entries;
 }
-if (!monsters.length) throw new Error("旧表一条怪物都没解析到，中止（防止误清空）");
-console.log("旧表怪物:", monsters.length);
+
+const legacyText = fs.readFileSync(LEGACY_TS, "utf8");
+const generatedText = fs.existsSync(OUT_TS) ? fs.readFileSync(OUT_TS, "utf8") : "";
+let handValues = parseEntries(legacyText);
+let sourceName = "旧 configs/monster.ts（迁移期）";
+if (generatedText && parseEntries(generatedText).size >= handValues.size) {
+  handValues = parseEntries(generatedText);
+  sourceName = "上一份 monster-presentation.generated.ts";
+}
+if (handValues.size === 0) throw new Error("上一份怪物数据一条都解析到，中止（防止误清空）");
+console.log(`手工值来源: ${sourceName}（${handValues.size} 条）`);
 
 //#endregion
 
-//#region 2. 读素材 meta（auto-trim 实测）
+//#region 2. 读服务端种子（只读 tier）+ 双向对账
+
+const seedSrc = fs.readFileSync(SERVER_SEED_TS, "utf8");
+const seedBlock = seedSrc.slice(seedSrc.indexOf("export const MONSTER_SEED_ROWS"), seedSrc.indexOf("\n];", seedSrc.indexOf("export const MONSTER_SEED_ROWS")));
+const seedTier = new Map();
+const seedKey = /\{ id: "([^"]+)", label: "[^"]*", level: \d+, tier: "(\w+)" \}/g;
+let sm;
+while ((sm = seedKey.exec(seedBlock))) seedTier.set(sm[1], sm[2]);
+if (seedTier.size === 0) throw new Error("服务端种子里一行都没解析到，中止（monster-seed.ts 形状变了？）");
+
+const handKeys = new Set(handValues.keys());
+const seedKeys = new Set(seedTier.keys());
+const onlyHand = [...handKeys].filter((k) => !seedKeys.has(k));
+const onlySeed = [...seedKeys].filter((k) => !handKeys.has(k));
+if (onlyHand.length || onlySeed.length) {
+  throw new Error(
+    "资源行与服务端种子（数值）的怪物 key 不一致，先补齐再加资源：\n" +
+      (onlyHand.length ? `  只在资源行（种子缺数值行）：${onlyHand.join(", ")}\n` : "") +
+      (onlySeed.length ? `  只在种子（缺资源行）：${onlySeed.join(", ")}\n` : ""),
+  );
+}
+
+//#endregion
+
+//#region 3. 读素材图集（trim 实测）
 
 function readTrim(outPath) {
   const id = outPath.split("/").pop();
-  const metaPath = path.join(OUT_DIR, id, `${String(STAND_DOWN_FRAME).padStart(5, "0")}.png.meta`);
-  if (!fs.existsSync(metaPath)) throw new Error(`找不到基准帧 meta：${metaPath}`);
-  const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-  // sprite-frame 子 meta 的 id 是内容哈希（通常为 f9941），按 importer 找更稳
-  const sfMeta = Object.values(meta.subMetas).find((sub) => sub.importer === "sprite-frame");
-  const data = sfMeta && sfMeta.userData;
-  if (!data || typeof data.width !== "number") throw new Error(`meta 里没有 trim 数据：${metaPath}`);
+  const plistPath = path.join(OUT_DIR, id, "stand", "stand.plist");
+  if (!fs.existsSync(plistPath)) throw new Error(`找不到图集：${plistPath}`);
+  const plist = fs.readFileSync(plistPath, "utf8");
+  const i = plist.indexOf(`<key>${STAND_BASE_FRAME}</key>`);
+  if (i < 0) throw new Error(`图集里没有基准帧 ${STAND_BASE_FRAME}：${plistPath}`);
+  const seg = plist.slice(i, i + 700);
+  const tuple = (name) => {
+    const m = new RegExp(`<key>${name}</key>\\s*<string>\\{([^}]+)\\}`).exec(seg);
+    if (!m) throw new Error(`基准帧缺 ${name}：${plistPath}`);
+    return m[1].split(",").map(Number);
+  };
+  const size = tuple("spriteSize");
+  const offset = tuple("spriteOffset");
   return {
-    width: data.width,
-    height: data.height,
-    offsetX: data.offsetX ?? 0,
-    offsetY: data.offsetY ?? 0,
+    width: size[0],
+    height: size[1],
+    offsetX: offset[0],
+    offsetY: offset[1],
   };
 }
 
-for (const mon of monsters) {
-  if (!mon.out) throw new Error(`怪物 ${mon.key} 缺 out 字段`);
-  const trim = readTrim(mon.out);
-  mon.contentSize = { width: trim.width, height: trim.height };
-  // 裁剪区中心相对画布中心偏了 (offsetX, offsetY)（y 向上为正）→ 外观节点反向摆，身体中心就回到原点
-  mon.outOffset = { x: -trim.offsetX, y: -trim.offsetY };
-  mon.aggressive = mon.tier === "boss" || trim.width >= AGGRESSIVE_BODY_WIDTH;
-  mon.sellPirce = mon.level * SELL_PRICE_PER_LEVEL[mon.tier ?? "normal"];
+const rows = [];
+for (const [key, hand] of [...handValues].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+  if (!hand.out) throw new Error(`怪物 ${key} 缺 out 字段`);
+  const trim = readTrim(hand.out);
+  const aggressive = seedTier.get(key) === "boss" || trim.width >= AGGRESSIVE_BODY_WIDTH;
+  rows.push({ key, hand, aggressive, contentSize: trim, outOffset: { x: -trim.offsetX, y: -trim.offsetY } });
 }
 
-const aggressiveCount = monsters.filter((m) => m.aggressive).length;
-console.log(`主动怪: ${aggressiveCount}/${monsters.length}（body 宽 ≥ ${AGGRESSIVE_BODY_WIDTH} 或 boss）`);
-const widths = monsters.map((m) => m.contentSize.width);
+const aggressiveCount = rows.filter((r) => r.aggressive).length;
+console.log(`主动怪: ${aggressiveCount}/${rows.length}（body 宽 ≥ ${AGGRESSIVE_BODY_WIDTH} 或种子 tier=boss）`);
+const widths = rows.map((r) => r.contentSize.width);
 console.log(`身体宽 min/median/max: ${Math.min(...widths)}/${widths.slice().sort((a, b) => a - b)[Math.floor(widths.length / 2)]}/${Math.max(...widths)}`);
 
 //#endregion
 
-//#region 3. 生成文件
+//#region 4. 生成服务端文件
 
-const fmtNum = (n) => (Number.isInteger(n) ? String(n) : String(n));
-const fmtVec = (v) => `new Vec2(${fmtNum(v.x)}, ${fmtNum(v.y)})`;
-const fmtSize = (s) => `new Size(${s.width}, ${s.height})`;
+const fmtVec = (v) => `[${v.x}, ${v.y}]`;
+const fmtSize = (s) => `[${s.width}, ${s.height}]`;
 const fmtRate = (rate) =>
   Object.entries(rate)
-    .map(([action, value]) => `      [ACTION.${action}]: ${value},`)
-    .join("\n");
+    .map(([action, value]) => `${action}: ${value}`)
+    .join(", ");
 
 const lines = [];
-lines.push(`import { Size, Vec2 } from "cc";`);
-lines.push(`import { ACTION, SpeedRate } from "../types/animation";`);
-lines.push(`import { MonsterConfig, MonsterData } from "../types/monster";`);
-lines.push(`import { monsterStats } from "./growth";`);
-lines.push(`import { monsterDropPicks, monsterDrops } from "./drop";`);
-lines.push(`import { getMonsterDropConfig } from "./monsterDrops";`);
-lines.push("");
 lines.push("/**");
-lines.push(" * 怪物数据表");
+lines.push(" * ⚠️ 生成物，请勿手改 —— @generated by client/tools/gen-monster-config.cjs");
 lines.push(" *");
-lines.push(" * **key 只做关联**：地图对象组里的 id、掉落 / 技能 / AI 要引用同一只怪时都用 key，");
-lines.push(" * 它可以是任意字符串（\"1\"、\"goblin_chief\" 都行），**不参与任何数值计算**。");
-lines.push(" * 数值全部按**等级**从 configs/growth 的成长曲线取：");
-lines.push(" * - level：这只怪自己的等级（唯一定级入口，想调强弱就改它）");
-lines.push(" * - tier：定位 normal / elite / boss（不写 = normal），决定同等级下的强度倍率（见 configs/growth 的 monsterTierScale）");
-lines.push(" * - 六项攻防与 maxHp：由 monsterStats(level, tier) 按等级生成，不用手写");
-lines.push(" *   · 想单独改某只怪（法系怪要魔法攻击、特殊怪要更高血量）→ 直接在条目里覆盖同名字段");
-lines.push(" *   · 想整体调手感（怪更耐打 / 打人更疼）→ 改 configs/growth 的 monsterBalance / roleGrowth");
+lines.push(" * 怪物**资源与表现**行（#588：客户端没有怪物数据文件，这里 + GET /game-config 快照");
+lines.push(" * `monsterPresentations` 段是客户端拿数据的唯一通道；服务端权威 AI 也消费 aggressive/");
+lines.push(" * detectRange/moveSpeed）。数值（label / level / tier / maxHp / 六项）不在这份文件 ——");
+lines.push(" * 出厂在 `monster-seed.ts`（紧凑四元组 + 曲线展开），运行时权威在 `monsters` 表（管理端可改）。");
 lines.push(" *");
-lines.push(" * **掉落**：每只怪的掉落列表独立配置在 configs/monsterDrops（key 与这里一一对应，");
-lines.push(" * 条目里逐条配 weight/chance/count）；这里只做「条目里的 drops/dropPicks 覆盖 > 独立掉落表 > 兜底生成」三级取值。");
-lines.push(" *");
-lines.push(" * **几何 / 玩法字段由 client/tools/gen-monster-config.cjs 生成**（数据源 = 素材 .meta 的 auto-trim 实测，");
-lines.push(" * 与引擎渲染同一口径；改生成器头部的规则后重跑即可，手工微调直接改条目）：");
-lines.push(` * - contentSize：基准帧（stand·正面·第 ${STAND_DOWN_FRAME} 帧）裁剪后的**可见身体尺寸** ——`);
-lines.push(" *   碰撞盒（MonsterCollider）、点击选中（UITransform.hitTest）、头顶血条位置都由它决定；");
-lines.push(" * - outOffset：外观节点摆放偏移（裁剪区中心相对画布中心的反向偏移），");
-lines.push(" *   把可见身体中心对准节点原点（消费点 GameUiHelper.createMonsterBody）；");
-lines.push(` * - aggressive：tier=boss 或身体宽 ≥ ${AGGRESSIVE_BODY_WIDTH}px 判主动；`);
-lines.push(" * - sellPirce：normal = level×2 / elite = level×5 / boss = level×20（击杀奖励预留，当前无消费点）；");
-lines.push(" * - speedRate：条目里默认不写，运行时取下方 monsterDefaultSpeedRate 打底；");
-lines.push(" *   想给个别怪调速就在条目里写 speedRate: { stand: 2 }（只写要改的动作，生成器会原样保留）。");
+lines.push(" * 几何（contentSize / outOffset）从图集基准帧的 trim 实测（与引擎渲染同一口径）；");
+lines.push(" * moveSpeed / detectRange / speedRate 覆盖沿用上一份的值（生成器原样保留，要调直接改上一份再重跑）。");
+lines.push(" * key 与 monster-seed.ts 双向对账（生成器断言），加怪两边都要加。");
 lines.push(" */");
+lines.push("export interface MonsterPresentationRow {");
+lines.push("  id: string;");
+lines.push("  icon: string;");
+lines.push("  out: string;");
+lines.push("  outOffset: [number, number];");
+lines.push("  contentSize: [number, number];");
+lines.push("  moveSpeed: number;");
+lines.push("  aggressive: boolean;");
+lines.push("  detectRange: number;");
+lines.push("  speedRate?: Record<string, number>;");
+lines.push("}");
 lines.push("");
-lines.push(aiBlock);
-lines.push("");
-lines.push("/**");
-lines.push(" * 怪物默认动作速度（**每秒循环数**，片段总时长 = 1 / 该值，见 AnimationHelper.createClip）");
-lines.push(" * 怪物素材是统一帧规格（见 configs/animation 的 monsterActionSpecs：stand 4 帧 / walk·run 6 帧 /");
-lines.push(" * injured 2 帧 / die 10 帧，没有攻击帧——播攻击动作时回退待机），所以全怪共用一套默认即可；");
-lines.push(" * 想单独调某只怪 → 条目里写 speedRate 覆盖（与角色 defaultRoleSpeedRate 同构）");
-lines.push(" */");
-lines.push("export const monsterDefaultSpeedRate: SpeedRate = {");
-lines.push("  [ACTION.STAND]: 1, // 4 帧 / 1 秒：缓慢的呼吸循环");
-lines.push("  [ACTION.WALK]: 1, // 6 帧 / 1 秒，与角色步行循环同速");
-lines.push("  [ACTION.RUN]: 1, // 6 帧 / 1 秒");
-lines.push("  [ACTION.ATTACK_NEAR]: 2, // 素材暂无攻击帧（回退待机），留 0.5 秒一击的默认");
-lines.push("  [ACTION.ATTACK_SKILL_1]: 2,");
-lines.push("  [ACTION.TEST3]: 1,");
-lines.push("  [ACTION.ATTACK_FAR]: 2,");
-lines.push("  [ACTION.INJURED]: 2, // 受击只有 2 帧，0.5 秒抖一下");
-lines.push("  [ACTION.A1]: 1,");
-lines.push("  [ACTION.DIE]: 1, // 10 帧 / 1 秒：一秒倒地");
-lines.push("  [ACTION.TEST1]: 1,");
-lines.push("};");
-lines.push("");
-lines.push("const monsterData: MonsterData[] = [");
-for (const mon of monsters) {
+lines.push("export const MONSTER_PRESENTATION_ROWS: MonsterPresentationRow[] = [");
+for (const row of rows) {
   lines.push("  {");
-  lines.push(`    key: "${mon.key}",`);
-  lines.push(`    level: ${mon.level},`);
-  if (mon.tier) lines.push(`    tier: "${mon.tier}",`);
-  lines.push(`    icon: "${mon.icon}",`);
-  lines.push(`    out: "${mon.out}",`);
-  lines.push(`    outOffset: ${fmtVec(mon.outOffset)},`);
-  lines.push(`    label: "${mon.label}",`);
-  lines.push(`    moveSpeed: ${mon.moveSpeed},`);
-  lines.push(`    aggressive: ${mon.aggressive},`);
-  lines.push(`    detectRange: ${mon.detectRange},`);
-  lines.push(`    description: "${mon.description ?? mon.label}",`);
-  lines.push(`    sellPirce: ${mon.sellPirce},`);
-  lines.push(`    contentSize: ${fmtSize(mon.contentSize)},`);
-  if (mon.speedRate) {
-    lines.push("    speedRate: {");
-    lines.push(fmtRate(mon.speedRate));
-    lines.push("    },");
-  }
+  lines.push(`    id: "${row.key}",`);
+  lines.push(`    icon: "${row.hand.icon}",`);
+  lines.push(`    out: "${row.hand.out}",`);
+  lines.push(`    outOffset: ${fmtVec(row.outOffset)},`);
+  lines.push(`    contentSize: ${fmtSize(row.contentSize)},`);
+  lines.push(`    moveSpeed: ${row.hand.moveSpeed},`);
+  lines.push(`    aggressive: ${row.aggressive},`);
+  lines.push(`    detectRange: ${row.hand.detectRange},`);
+  if (row.hand.speedRate) lines.push(`    speedRate: { ${fmtRate(row.hand.speedRate)} },`);
   lines.push("  },");
 }
 lines.push("];");
 lines.push("");
-lines.push("/** 怪物配置（key → 配置）：等级取自条目里的 level，属性由 monsterStats(level, tier) 按等级生成 */");
-lines.push("export const monsters = new Map<string, MonsterConfig>();");
-lines.push("for (const data of monsterData) {");
-lines.push("  const { key, tier, drops, dropPicks, ...rest } = data;");
-lines.push("  // 掉落优先取「每只怪独立掉落表」（configs/monsterDrops）；条目里写了 drops/dropPicks 则再覆盖；");
-lines.push("  // 两者都没有（例如新加的怪还没铺掉落）→ 退回 configs/drop 的按等级兜底生成器");
-lines.push("  const dropConfig = getMonsterDropConfig(key);");
-lines.push("  monsters.set(key, {");
-lines.push("    ...monsterStats(data.level, tier),");
-lines.push("    ...rest,");
-lines.push("    // 动作速度：默认表打底，条目里写了 speedRate 则逐动作覆盖（见 monsterDefaultSpeedRate）");
-lines.push("    speedRate: { ...monsterDefaultSpeedRate, ...data.speedRate },");
-lines.push("    drops: drops ?? dropConfig?.entries ?? monsterDrops(data.level, tier),");
-lines.push("    dropPicks: dropPicks ?? dropConfig?.picks ?? monsterDropPicks(tier),");
-lines.push("  });");
-lines.push("}");
-lines.push("");
-lines.push("export default monsters;");
-lines.push("");
 
 const out = lines.join("\n");
-fs.writeFileSync(MONSTER_TS, out, "utf8");
-console.log("写入:", MONSTER_TS, `(${(Buffer.byteLength(out) / 1024).toFixed(1)} KB, ${lines.length} 行)`);
+fs.writeFileSync(OUT_TS, out, "utf8");
+console.log("写入:", OUT_TS, `(${(Buffer.byteLength(out) / 1024).toFixed(1)} KB, ${lines.length} 行)`);
 
 //#endregion

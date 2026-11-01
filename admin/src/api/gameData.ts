@@ -28,7 +28,6 @@ import {
   FASHIONS,
   ITEM_BASES,
   ITEM_LABELS,
-  MONSTERS,
   NPCS,
   OCCUPATION_LABELS,
   RANK_LABELS,
@@ -41,6 +40,8 @@ import {
   TITLE_LABELS,
   TITLE_LEVEL_META,
 } from "../../../server/src/shared/game-data.generated";
+// 怪物资源与表现（#588：客户端 configs/monster 不再有怪物数据，图标字典随生成物走）
+import { MONSTER_PRESENTATION_ROWS } from "../../../server/src/shared/monster-presentation.generated";
 
 export {
   EQUIPMENT_DISPLAY_NAMES,
@@ -375,9 +376,10 @@ export function itemIcon(id: string): string {
   return rowField(ITEM_BASES, id, "icon");
 }
 
-/** 怪物 key → 图标 */
+/** 怪物 key → 图标（monster-presentation 生成物；数值在 monsters 表，走管理端接口） */
 export function monsterIcon(id: string): string {
-  return rowField(MONSTERS, id, "icon");
+  const row = MONSTER_PRESENTATION_ROWS.find((item) => item.id === id);
+  return row?.icon ?? "";
 }
 
 /** 技能 id → 图标 */

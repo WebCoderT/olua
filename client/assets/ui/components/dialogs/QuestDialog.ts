@@ -6,7 +6,7 @@ import type { QuestView } from "../../core/QuestStore";
 import UiHelper from "../../helpers/UiHelper";
 import { QuestApi } from "../../utils/net/Api";
 import { QUEST_OBJECTIVE_LABELS } from "../../../configs/quest";
-import { monsters } from "../../../configs/monster";
+import { monsterLabelOf } from "../../../configs/monsterRuntime";
 import { npcs } from "../../../configs/npc";
 import { items } from "../../../configs/items";
 import { questDialogLayout as layout } from "../../../configs/hudLayout";
@@ -283,7 +283,7 @@ export default class QuestDialog {
   private targetName(view: QuestView): string {
     const key = view.quest.objective.target;
     const type = view.quest.objective.type;
-    if (type === "kill") return monsters.get(key)?.label ?? key;
+    if (type === "kill") return monsterLabelOf(key);
     if (type === "talk") return npcs.get(key)?.label ?? key;
     return items.get(key)?.label ?? key;
   }

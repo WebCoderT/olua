@@ -4967,6 +4967,67 @@ export type MonsterDropQuery = {
   source?: "table" | "entries" | "none";
 };
 
+export type OutOffset = {
+  /**
+   * x（向右为正）
+   */
+  x: number;
+  /**
+   * y（向上为正）
+   */
+  y: number;
+};
+
+export type ContentSize = {
+  /**
+   * 宽（像素）
+   */
+  width: number;
+  /**
+   * 高（像素）
+   */
+  height: number;
+};
+
+export type MonsterPresentation = {
+  /**
+   * 怪物 key（与 MonsterDto.id 一一对应）
+   */
+  id: string;
+  /**
+   * 图标路径（monster/icon/<key>_00000 单图）
+   */
+  icon: string;
+  /**
+   * 外观图集目录（monster/out/<key>，帧动画按动作约定拼）
+   */
+  out: string;
+  /**
+   * 外观节点摆放偏移（把可见身体中心对准节点原点）
+   */
+  outOffset: OutOffset;
+  /**
+   * 可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）
+   */
+  contentSize: ContentSize;
+  /**
+   * 移动速度（刚体线速度单位）
+   */
+  moveSpeed: number;
+  /**
+   * 是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）
+   */
+  aggressive: boolean;
+  /**
+   * 检测范围（像素半径）
+   */
+  detectRange: number;
+  /**
+   * 动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）
+   */
+  speedRate: Record<string, number> | null;
+};
+
 export type AchievementCondition = {
   /**
    * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
@@ -5111,6 +5172,10 @@ export type GameConfigSnapshot = {
    * 怪物基础数据（名称 / 等级 / 战斗数值）
    */
   monsters: Monster[];
+  /**
+   * 怪物资源与表现（#588：icon / out / 几何 / 移动 / AI 参数）。**客户端没有怪物数据文件** —— 数值在本快照的 monsters 段（monsters 表），资源与表现在这段，客户端运行时两段合体
+   */
+  monsterPresentations: MonsterPresentation[];
   /**
    * NPC 基础数据（名称 / 对话文案）
    */

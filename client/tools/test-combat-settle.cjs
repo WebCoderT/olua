@@ -10,16 +10,16 @@
  * B. 出手与结算接线（源码断言）：warrior.ts 通道可用时 sendCast 后 return（不许本地再扣一次），
  *    回滚路径保留；MonsterManager.applyServerSettle 走 skillDamageBand 对账、死亡清索引；
  *    Game.ts 接 onSettle、RealtimeClient 转发 settle 帧、CombatChannel.castSeq 单调
- * C. 服务端快照与守卫：MONSTERS 进了生成物（220 只怪，2026-10-25 从 MONSTER_COMBAT 改名并加 label）、
- *    audit-shared-data 守着这张表、生成器 SOURCE_FILES 收了 configs/monster；
- *    e2e-combat 依赖的怪物 "1" 数值锚在快照上
+ * C. 服务端快照与守卫：#588 起怪物数值**服务端独有** —— 生成物不再导出 MONSTERS、
+ *    audit-shared-data 的 REQUIRED_EXPORTS 同步收窄、gen-shared-data 不再收录怪物表；
+ *    e2e-combat 依赖的怪物 "1" 数值锚改由真实 expandMonsterSeed 从种子展开（不再看快照字面量）
  *
  * 沙箱机制：A 段复用 lib/configs-sandbox.cjs 的 prepare（真实 BattleMath + cc 垫片，
  * 只用到 Vec2 的构造，BoxCollider2D/Node 只在不会调用的函数里出现）。
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, compileServerShared, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -136,19 +136,24 @@ const generated = read(path.join("..", "server", "src", "shared", "game-data.gen
 const auditSource = read(path.join("..", "tools", "audit-shared-data.cjs"));
 const genSource = read(path.join("..", "tools", "gen-shared-data.cjs"));
 
-check(/export const MONSTERS: Record<string, unknown> = \{/.test(generated), "生成物导出 MONSTERS（怪物数值随快照下发服务端）");
-check(/"MONSTERS",/.test(auditSource), "audit-shared-data 的 REQUIRED_EXPORTS 收了 MONSTERS（表漂移会被守卫抓）");
-check(/"monster"/.test(genSource), "gen-shared-data 的 SOURCE_FILES 收了 configs/monster（源头在客户端配置）");
+check(!/export const MONSTERS[ :]/.test(generated), "生成物不再导出 MONSTERS（#588：怪物数值服务端独有，客户端零本地副本）");
+check(!/"MONSTERS"/.test(auditSource), "audit-shared-data 的 REQUIRED_EXPORTS 不再收 MONSTERS（守卫跟着快照收窄）");
+check(!/MONSTERS/.test(genSource), "gen-shared-data 不再收录怪物数值表（出厂数值唯一书写处 = server/src/shared/monster-seed.ts）");
 
 {
-  const block = generated.slice(generated.indexOf("export const MONSTERS"));
-  const body = block.slice(0, block.indexOf("\n};"));
-  // 每只怪一行、tab 里 key 是数字 id（形状：`  "1": {"label":…,"level":1,…},`）——
-  // 别拿 `{"level":` 当锚，label 排在 level 前面，改名后这个锚永远是 0
-  const entryCount = (body.match(/^ {2}"\d+": \{/gm) || []).length;
-  check(entryCount === 220, `快照收录 220 只怪的战斗数值（实得 ${entryCount}）`);
-  check(/"1": \{"label":"[^"]+","level":1,"tier":"normal","maxHp":65,/.test(body), "怪物 \"1\" 的锚点数值在快照里（maxHp 65，e2e-combat 依赖）");
-  check(/"1": \{.*"physicalDefense":\[4,6\]/.test(body), "怪物 \"1\" 物防 [4,6]（e2e 区间 [8,16] 的怪侧一半）");
+  // 用真实 expandMonsterSeed 展开（不是测试里复刻公式）：种子连着 game-data.generated
+  // 一起编译，角色曲线改动时这里跟着走 —— e2e-combat 的 [8,16] 区间依赖这两个锚点值
+  const seedJs = compileServerShared("monster-seed.ts", "olua-monster-seed-combat");
+  const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(seedJs);
+  check(MONSTER_SEED_ROWS.length === 220, `种子收录 220 只怪（实得 ${MONSTER_SEED_ROWS.length}）`);
+  const row = MONSTER_SEED_ROWS.find((item) => item.id === "1");
+  const attrs = expandMonsterSeed(row);
+  check(attrs.maxHp === 65, `怪物 "1" 的锚点 maxHp 65（e2e-combat 依赖，由种子 + 角色曲线展开）`, String(attrs.maxHp));
+  check(
+    JSON.stringify(attrs.physicalDefense) === "[4,6]",
+    `怪物 "1" 物防 [4,6]（e2e 区间 [8,16] 的怪侧一半）`,
+    JSON.stringify(attrs.physicalDefense),
+  );
 }
 
 finish("PASS：伤害结算上移（skillDamageBand 带口径、出手/结算接线、快照与守卫）全部通过。");

@@ -31,11 +31,11 @@ agent_created: true
 ```
 configs/growth.ts        ← 曲线本身 + 从曲线取值的函数（新建，别塞进 level.ts）
 configs/level.ts         ← 只做「曲线 → levelMap」的搬运 + 经验换算
-configs/monster.ts       ← 数据数组：每条写 { key, level, tier?, …表现字段 }，末尾统一 monsterStats(level, tier) 注入属性
+server/src/shared/monster-seed.ts ← 四元组数组：每只怪一行 { id, label, level, tier }，expandMonsterSeed(level, tier) 注入属性（#588 起怪物数值服务端独有）
 configs/equipments.ts    ← 数据数组：每条写 { key, level, slot, …表现字段 }，末尾统一 buildEquipmentMap 注入属性
 configs/soul.ts          ← 按「等效等级」取角色属性再打折
 configs/drug.ts          ← 回复量按血量曲线定标（否则高等级药水毫无用处）
-configs/types            ← MonsterTier / MonsterData / EquipmentData 等类型（configs 依赖 types，反过来不行）
+configs/types            ← MonsterTier / EquipmentData 等类型（configs 依赖 types，反过来不行）
 ```
 
 ```ts
@@ -101,30 +101,28 @@ export const monsterTierScale: Record<MonsterTier, { hp: number; attack: number;
 export function monsterStats(level: number, tier: MonsterTier = "normal"): MonsterBaseStats { /* 见第四节反推公式 */ }
 ```
 
-配置侧写成「数据数组 + 统一注入」——等级只写一次，属性一律由等级派生：
+配置侧写成「紧凑四元组 + 统一展开」——等级只写一次，属性一律由等级派生（#588 起这份种子住在**服务端**
+`server/src/shared/monster-seed.ts`，客户端没有怪物数据副本；展开口径 = 第四节的反推公式，角色曲线来自
+game-data.generated 的 ROLE_LEVEL_ATTRIBUTES，不做第二份曲线）：
 
 ```ts
-// configs/monster.ts
-const monsterData: MonsterData[] = [
-  { key: "1",   level: 1,  icon: "…", label: "…", moveSpeed: 2, … },        // 普通怪
-  { key: "200", level: 45, tier: "boss", icon: "…", drops: "boss", … },     // 首领
+// server/src/shared/monster-seed.ts
+export const MONSTER_SEED_ROWS: MonsterSeedRow[] = [
+  { id: "1",   label: "赤焰斗鸡", level: 1,  tier: "normal" },
+  { id: "200", label: "…",       level: 45, tier: "boss"   },
 ];
 
-export const monsters = new Map<string, MonsterConfig>();
-for (const data of monsterData) {
-  const { key, tier, ...rest } = data;                                   // key / tier 不写进最终配置
-  monsters.set(key, { ...monsterStats(data.level, tier), ...rest });     // rest 里若写了属性则覆盖生成值
-}
+export function expandMonsterSeed(row: MonsterSeedRow) { /* 第四节反推公式 + MONSTER_TIER_SCALE */ }
 ```
 
 - **等级从哪来**：首次迁移可以先用「按编号线性插值」批量铺一遍
-  （`round(fromLevel + (id-fromId)/(toId-fromId) * (toLevel-fromLevel))`），但**铺完立刻冻结成明文 `level:` 写进每条怪，
+  （`round(fromLevel + (id-fromId)/(toId-fromId) * (toLevel-fromLevel))`），但**铺完立刻冻结成明文 `level:` 写进每行种子，
   然后把天梯函数删掉**——留着它就等于留着一个「用 key 猜数值」的入口。
 - **天梯要铺满等级上限**，否则高等级玩家没有同级怪（第一版踩过：普通怪只铺到 50 级，51~60 级玩家只能打 BOSS）。
 - **定位用「血 ×N 倍」表达精英/BOSS**（同级 BOSS 打 N 倍刀数），攻防小幅放大——BOSS 应该「耐打 + 打人疼」，
   不是「一刀秒人」。定位同样写在数据里（`tier`），不要靠 key 落在哪个数值区间去猜。
-- **直接收益**：加新怪 = 写 `{ key, level, …表现字段 }`，不用管它在表里的位置；调强弱 = 只改那只的 `level`；
-  特例（法系怪补 `magicAttack`、某只怪加血）= 在条目里写同名字段覆盖生成值。
+- **直接收益**：加新怪 = 种子里写一行四元组，不用管它在表里的位置；调强弱 = 只改那只的 `level`；
+  特例（法系怪补 `magicAttack`、某只怪加血）= 管理端改那一行（改的是 `monsters` 表存量行，出厂值只服务空库）。
 
 ## 六、装备：等级是「定强入口」，权重按部位分
 

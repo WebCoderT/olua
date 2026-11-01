@@ -118,7 +118,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 另有几个**由生成器产出的游戏配置表**（不是接口生成物，但同样是生成物）：
 
-- `configs/monster.ts` ← `client/tools/gen-monster-config.cjs`（几何读素材 `.meta` 的 auto-trim 实测）
+- `server/src/shared/monster-presentation.generated.ts` ← `client/tools/gen-monster-config.cjs`（怪物资源表现清单，#588 起产出到服务端；几何读图集 plist 基准帧实测）
 - `configs/monsterDrops.ts` ← `client/tools/gen-monster-drops.cjs`（掉落表）
 
 这两个的规则写在各自脚本的文件头，改完要重跑脚本，不要直接改产物。
@@ -141,7 +141,7 @@ make verify              # 发布前的全量门禁：三端类型检查 + 构�
 # 客户端：59 套单测（在 client/ 下跑，脚本自己找 Cocos 自带的 tsc）
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
-# 服务端：编译 + 二十六套 e2e（248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 651 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 132）+ 生成物一致性
+# 服务端：编译 + 二十六套 e2e（248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 658 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73 + 132）+ 生成物一致性
 cd server && npm run verify
 
 # 管理端：类型检查 + 构建

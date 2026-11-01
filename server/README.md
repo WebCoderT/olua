@@ -231,7 +231,7 @@ server/
 | `equipments` | 装备基础件配置（#252） | 主键是基础件 id（如 `cloth_1`，变体不进库）；部位 / 等级需求 / 售卖价 / 八项属性；id / 部位结构固定，只可改不可增删 |
 | `drugs` | 药品配置（#253） | 主键是药品 id（如 `drug_hp_1`，被掉落表与背包引用）；名称 / 描述 / 售卖价 / 堆叠 / 冷却 / 四项回复量（effects 按键求和）；id 清单固定，只可改不可增删 |
 | `items` | 物品与材料配置（#255） | 主键是物品 id（如 `material_hide`，被掉落表与脚本引用）；只收 MATERIAL / OTHER 大类；名称 / 描述 / 售卖价 / 堆叠；id 清单固定，只可改不可增删 |
-| `monsters` | 怪物基础数据（#258） | 主键是怪物 key（configs/monster 的关联键，被地图刷怪点 / 掉落表引用）；名称 / 等级 / 生命 / 六项攻防区间；**世界播种与伤害结算直读本表（改值即时生效）**；key 清单固定，只可改不可增删 |
+| `monsters` | 怪物基础数据（#258） | 主键是怪物 key（怪物种子 `monster-seed.ts` 的关联键，被地图刷怪点 / 掉落表引用；#588 起客户端无副本，数值随快照下发）；名称 / 等级 / 定位 / 生命 / 六项攻防区间；**世界播种与伤害结算直读本表（改值即时生效）**；key 清单固定，只可改不可增删 |
 | `npcs` | NPC 基础数据（#258） | 主键是 NPC id（Tiled 对象组的关联键）；名称 / 对话文案（seed 为空串，客户端暂无对话数据形态）；id 清单固定，只可改不可增删 |
 | `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；**怪物技能（9000 段）可增删**（角色技能清单固定，id 被技能栏 / 快捷键 / 存档引用；被怪物挂载引用中的行拒删） |
 | `statuses` | 状态配置（#367） | 主键是状态 id（被 `skills.status_id` 引用）；`owner` 同上分流；时长 / 来源 / 图标 / 身上特效 / `combat`（JSON：格挡概率、格挡系数、防御倍率、**攻击倍率**，缺省 = 该维度不参与）——**角色侧公式在客户端 `BattleMath`，怪物侧在服务端 `MonsterAiService`**（#372：狂怒乘出手伤害、硬化皮肤乘防御项）；id 清单固定，只可改不可增删 |
@@ -240,7 +240,7 @@ server/
 | `mall_prices` | 商城特殊定价（#251） | 主键是商品 id（装备变体 id，商品清单来自生成物）；**全库唯一允许动态增删的配置表**（PUT upsert / DELETE 回统一价）；未定价商品走 `mall_settings` 的统一价 |
 | `mall_settings` | 商城统一价（#251） | 单行表（id 恒为 1）；全场默认售价 seed 自生成物 MALL_DEFAULT_PRICE（客户端 configs/mall 的 mallPrice），运营可改 |
 | `drop_tables` | 掉落表（#254） | 主键是表 id（`[a-z][a-z0-9_]{0,49}`）；`picks`（捞取次数）与 `entries`（goodId / 权重 / 概率 / 数量区间）都是 JSON 列，结构校验在 service（goodId 必须在生成物 ITEM_LABELS 里）；**允许动态增删的配置表**（同 mall_prices 定位），被 `monster_drops.table_id` 引用中的行拒删；seed 三张具名表 common / elite / boss + default 兜底 |
-| `monster_drops` | 怪物掉落（#254） | 主键是怪物 key（configs/monster 关联键）；`source` 三选一：`table`（引用 drop_tables）/ `entries`（内联条目 + 必填 picks）/ `none`（清空）；key 与怪物一一对应，只有 list + PATCH 整份替换，不可增删 |
+| `monster_drops` | 怪物掉落（#254） | 主键是怪物 key（怪物种子 `monster-seed.ts` 关联键）；`source` 三选一：`table`（引用 drop_tables）/ `entries`（内联条目 + 必填 picks）/ `none`（清空）；key 与怪物一一对应，只有 list + PATCH 整份替换，不可增删 |
 
 **角色数据是「不透明文档」**：服务端**不复制**游戏配置，只校验结构 / 归属 / 数量上限 / 重名，内容原样存。
 原因与代价见 [FAQ.md](FAQ.md#服务端为什么不校验角色数据的内容)。
@@ -325,7 +325,7 @@ server/
 
 ## 接口与契约
 
-当前 **167 个接口 / 137 条路径 / 259 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **167 个接口 / 137 条路径 / 262 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |

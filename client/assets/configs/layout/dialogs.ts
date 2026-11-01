@@ -247,8 +247,6 @@ export const roleInfoDialogLayout = {
   title: "角色信息",
   /** 装饰背景（含属性区底图） */
   background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-78, -19), size: new Size(431, 452) },
-  /** 战斗力图标（贴在装饰背景左下） */
-  combatIcon: { image: uiImages.combatIcon, position: new Vec2(-7, -225), size: new Size(100, 50) },
   /**
    * 「军衔」「称号」「战魂」三个入口按钮（弹窗右侧竖排相邻三格，几何按中号按钮 123×36 推导）：
    * 称号在右下空区（y -215），战魂紧贴其上一格（-215 + 36 + 10 间距 = -169），

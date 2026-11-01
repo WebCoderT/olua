@@ -1,11 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
+import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
 import { MapService } from "../map/map.service";
 import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
 import { DropConfigService } from "./drop-config.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
+import { MonsterPresentationDto } from "./dto/monster.dto";
 
 /** 快照全量拉取的分页参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界 100 的限制 */
 const ALL = { page: 1, size: 1_000_000 };
@@ -36,6 +38,8 @@ export class ClientConfigService {
       drugs: this.gameConfig.listDrugs({ ...ALL }).list,
       items: this.gameConfig.listItems({ ...ALL }).list,
       monsters: this.gameConfig.listMonsters({ ...ALL }).list,
+      // #588：怪物资源与表现（生成物实测），客户端不再持有怪物数据文件
+      monsterPresentations: MONSTER_PRESENTATION_ROWS.map((row) => MonsterPresentationDto.from(row)),
       npcs: this.gameConfig.listNpcs({ ...ALL }).list,
       fashions: this.gameConfig.listFashions({ ...ALL }).list,
       levelExps: this.growth.listLevelExps({ ...ALL }).list,

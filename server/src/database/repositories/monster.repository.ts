@@ -30,6 +30,23 @@ export interface MonsterListOptions {
 export class MonsterRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  /**
+   * 出厂对齐 tier（#588 发现的存量数据修复）
+   *
+   * tier 列晚于出厂值灌入：早期 MONSTERS 只有展开后的 maxHp（已按 boss 倍率算）没有 tier 字段，
+   * 行落库时 tier 吃了 DEFAULT 'normal'；后来 seed 加了 tier，但 `INSERT OR IGNORE` 不回改既有行 ——
+   * 于是 200~220 这批 boss 一直是「boss 的血量、normal 的定位」（战斗频道 BOSS 判定读 tier，全部判错）。
+   *
+   * 只修**与出厂展开值逐字段一致**的行（这里用 max_hp 作指纹：数值被管理端改过的行不匹配，
+   * 一律不动）—— 出厂对齐不该覆盖任何人工修改。
+   */
+  alignTierToFactory(id: string, tier: string, factoryMaxHp: number): void {
+    this.db.run(
+      `UPDATE monsters SET tier = ? WHERE id = ? AND tier <> ? AND max_hp = ?`,
+      [tier, id, tier, factoryMaxHp],
+    );
+  }
+
   /** seed 一行（已存在则跳过 —— 运营改过的值不会被配置更新覆盖回去） */
   seedRow(row: MonsterRow): void {
     this.db.run(

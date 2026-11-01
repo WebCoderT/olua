@@ -9,7 +9,7 @@ import { GrowthScalarDto, LevelExpDto, GrowthSegmentDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
 import { MallPriceItemDto, MallSettingsDto } from "./mall.dto";
 import { MapConfigDto, MapTypeGroupDto } from "../../map/dto/map.dto";
-import { MonsterDto } from "./monster.dto";
+import { MonsterDto, MonsterPresentationDto } from "./monster.dto";
 import { NpcDto } from "./npc.dto";
 import { RankDto } from "./rank.dto";
 import { SkillDto } from "./skill.dto";
@@ -58,6 +58,15 @@ export class GameConfigSnapshotDto {
   @ApiProperty({ description: "怪物基础数据（名称 / 等级 / 战斗数值）", type: [MonsterDto] })
   @Type(() => MonsterDto)
   monsters!: MonsterDto[];
+
+  @ApiProperty({
+    description:
+      "怪物资源与表现（#588：icon / out / 几何 / 移动 / AI 参数）。**客户端没有怪物数据文件** —— " +
+      "数值在本快照的 monsters 段（monsters 表），资源与表现在这段，客户端运行时两段合体",
+    type: [MonsterPresentationDto],
+  })
+  @Type(() => MonsterPresentationDto)
+  monsterPresentations!: MonsterPresentationDto[];
 
   @ApiProperty({ description: "NPC 基础数据（名称 / 对话文案）", type: [NpcDto] })
   @Type(() => NpcDto)
