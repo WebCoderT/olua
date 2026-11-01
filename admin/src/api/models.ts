@@ -4065,6 +4065,60 @@ export type Monster = {
   updatedAt: number;
 };
 
+export type MonsterDropSummary = {
+  /**
+   * 来源：table（引用具名表）/ entries（内联条目池）/ none（未配置走兜底）
+   */
+  source: "table" | "entries" | "none";
+  /**
+   * 引用的具名表 id（source = table 时非空）
+   */
+  tableId: string | null;
+  /**
+   * 抽取次数（null = 用表自己的件数）
+   */
+  picks: unknown | null;
+  /**
+   * 内联条目数（source = entries 时有意义；引用具名表时条目数在 /admin/drop-tables）
+   */
+  entryCount: number;
+};
+
+export type AdminMonster = {
+  /**
+   * 怪物 key（configs/monster 的关联键，如 "1"）
+   */
+  id: string;
+  /**
+   * 名称（头顶名牌，后台可改）
+   */
+  label: string;
+  /**
+   * 定位（normal / elite / boss；仅作标注，不开放编辑）
+   */
+  tier: string;
+  /**
+   * 等级（显示用元数据；战斗数值以 maxHp / 六项区间为准）
+   */
+  level: number;
+  /**
+   * 最大生命
+   */
+  maxHp: number;
+  /**
+   * 六项攻防区间（0 ≤ min ≤ max）
+   */
+  attributes: MonsterAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 掉落摘要（与怪物一一对应；null 表示这一行还没 seed 出来）
+   */
+  drop: MonsterDropSummary | null;
+};
+
 export type MonsterPage = {
   /**
    * 总条数
@@ -4079,9 +4133,9 @@ export type MonsterPage = {
    */
   size: number;
   /**
-   * 当前页的怪物基础数据
+   * 当前页的怪物基础数据（含掉落摘要）
    */
-  list: Monster[];
+  list: AdminMonster[];
 };
 
 export type MonsterQuery = {

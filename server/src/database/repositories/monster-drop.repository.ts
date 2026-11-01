@@ -48,6 +48,21 @@ export class MonsterDropRepository {
     return this.db.get<MonsterDropRow>("SELECT * FROM monster_drops WHERE monster_key = ?", [monsterKey]);
   }
 
+  /**
+   * 一次取一页怪物的掉落行（管理端怪物列表要按 key 批量补摘要）
+   *
+   * 逐只 `findByKey` 会变成一页 20 次单查；这里一次 IN 查完，调用方自己建 Map 对齐。
+   * 空数组直接返回（`IN ()` 在 SQLite 里是语法错误）。
+   */
+  listByKeys(monsterKeys: string[]): MonsterDropRow[] {
+    if (monsterKeys.length === 0) return [];
+    const placeholders = monsterKeys.map(() => "?").join(", ");
+    return this.db.all<MonsterDropRow>(
+      `SELECT * FROM monster_drops WHERE monster_key IN (${placeholders})`,
+      monsterKeys,
+    );
+  }
+
   /** 分页检索（默认按 key 数值升序 —— 与怪物配置页同一动线） */
   list(options: MonsterDropListOptions): MonsterDropRow[] {
     const { clause, params } = this.where(options);

@@ -9,6 +9,7 @@ import { EquipmentRepository, EquipmentListOptions } from "../../database/reposi
 import { FashionRepository, FashionListOptions } from "../../database/repositories/fashion.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
+import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
 import { SkillRepository, SkillListOptions } from "../../database/repositories/skill.repository";
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
@@ -66,7 +67,7 @@ import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equip
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
-import { MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
+import { AdminMonsterDto, MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 import { CreateQuestDto, parseRewardItems, QuestDto, QuestQueryDto, UpdateQuestDto } from "./dto/quest.dto";
 import {
@@ -114,6 +115,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly drugs: DrugRepository,
     private readonly items: ItemRepository,
     private readonly monstersRepo: MonsterRepository,
+    private readonly monsterDropsRepo: MonsterDropRepository,
     private readonly npcsRepo: NpcRepository,
     private readonly fashionsRepo: FashionRepository,
     private readonly skillsRepo: SkillRepository,
@@ -443,6 +445,29 @@ export class GameConfigService implements OnModuleInit {
     const rows = this.monstersRepo.list(options);
     const total = this.monstersRepo.count(options);
     return { list: rows.map(MonsterDto.from), total, page: options.page, size: options.size };
+  }
+
+  /**
+   * 管理端怪物列表（= 基础数据 + 掉落摘要）
+   *
+   * 摘要只补这一页的 20 只：`listByKeys` 一次 IN 查完再按 key 对齐，
+   * 不要逐只 `findByKey`（一页 20 次单查）。玩家侧快照走 `listMonsters`，不带摘要。
+   */
+  listAdminMonsters(query: MonsterQueryDto): PageResult<AdminMonsterDto> {
+    const page = this.listMonsters(query);
+    const drops = new Map(
+      this.monsterDropsRepo.listByKeys(page.list.map((item) => item.id)).map((row) => [row.monster_key, row]),
+    );
+    return { ...page, list: page.list.map((item) => AdminMonsterDto.withDrop(item, drops.get(item.id))) };
+  }
+
+  /**
+   * 改怪物 → 回管理端视图（PATCH 的响应要与管理端列表同形，
+   * 否则「刚改完那行」和「刷新后那行」长得不一样）
+   */
+  updateMonsterAdmin(id: string, dto: UpdateMonsterDto): AdminMonsterDto {
+    const saved = this.updateMonster(id, dto);
+    return AdminMonsterDto.withDrop(saved, this.monsterDropsRepo.findByKey(id));
   }
 
   updateMonster(id: string, dto: UpdateMonsterDto): MonsterDto {

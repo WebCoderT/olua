@@ -117,6 +117,22 @@ export class AdminDropController {
     return this.dropConfigService.listMonsterDrops(query);
   }
 
+  @Get("monster-drops/:monsterKey")
+  @ApiAdminDoc({
+    operationId: "adminDrop.getMonsterDrop",
+    summary: "单只怪的掉落配置",
+    description:
+      "弹窗回填用（怪物列表点「掉落」时拉这一条）。与列表同形，只是单条。\n\n" +
+      "写入**只有** `PATCH /admin/monster-drops/{monsterKey}` 一条路 —— 这里刻意不提供 PUT，避免两处写入语义漂移。\n" +
+      "`monsterKey` 不存在 → 404（`50024`）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiParam({ name: "monsterKey", description: "怪物 key（如 \"1\"）" })
+  @ApiDataResponse(MonsterDropDto, { description: "这只怪当前的掉落配置" })
+  getMonsterDrop(@Param("monsterKey") monsterKey: string): MonsterDropDto {
+    return this.dropConfigService.getMonsterDrop(monsterKey);
+  }
+
   @Patch("monster-drops/:monsterKey")
   @AuditTarget("monsterDrop")
   @ApiAdminDoc({

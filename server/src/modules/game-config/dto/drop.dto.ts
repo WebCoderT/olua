@@ -174,6 +174,36 @@ export class MonsterDropPageDto extends PageMetaDto {
 }
 
 /**
+ * 掉落摘要（管理端怪物列表用）
+ *
+ * 只够列表展示与「要不要点进去改」这个判断：完整条目池在 `GET /admin/monster-drops/:key`，
+ * 别把整份 entries 塞进怪物列表（一页 20 只怪会带出上千条条目）。
+ * **玩家侧快照不带它** —— 掉落由服务端结算，客户端拿到也没有用（见 `AdminMonsterDto`）。
+ */
+export class MonsterDropSummaryDto {
+  @ApiProperty({ description: "来源：table（引用具名表）/ entries（内联条目池）/ none（未配置走兜底）", enum: [...MONSTER_DROP_SOURCES] })
+  source: string;
+
+  @ApiProperty({ description: "引用的具名表 id（source = table 时非空）", nullable: true, type: String })
+  tableId: string | null;
+
+  @ApiProperty({ description: "抽取次数（null = 用表自己的件数）", nullable: true, oneOf: [{ type: "number" }, { type: "array", items: { type: "number" } }] })
+  picks: number | [number, number] | null;
+
+  @ApiProperty({ description: "内联条目数（source = entries 时有意义；引用具名表时条目数在 /admin/drop-tables）" })
+  entryCount: number;
+
+  static from(row: MonsterDropRow): MonsterDropSummaryDto {
+    const dto = new MonsterDropSummaryDto();
+    dto.source = row.source;
+    dto.tableId = row.table_id;
+    dto.picks = row.picks === null ? null : JSON.parse(row.picks);
+    dto.entryCount = row.entries === null ? 0 : (JSON.parse(row.entries) as unknown[]).length;
+    return dto;
+  }
+}
+
+/**
  * 编辑每怪掉落入参（**整份替换**：表引用 / 内联条目 / 清空 三选一）
  *
  * - `tableId` 非空 → 该怪引用具名表（`picks` 可覆盖件数，`entries` 必须不传）；
