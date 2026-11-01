@@ -25,6 +25,9 @@ import { MAIL_CHANNELS, MailChannel, isMailChannel, toMailChannel } from "./mail
  */
 export const ADMIN_SEND_CHANNELS = ["system", "reward"] as const;
 
+/** BOSS 战报的保质期（#439）：战报是「回看进度」用的记录，7 天后让位给新的里程碑 */
+export const BOSS_MAIL_TTL_MS = 7 * 24 * 3600_000;
+
 /**
  * 发一条消息（成就兜底、好友申请、BOSS 战报、运营补发都走这里）
  *
@@ -40,6 +43,12 @@ export interface SendMailInput {
   gold?: number;
   exp?: number;
   items?: RewardItem[];
+  /**
+   * 保质期（#439，毫秒）：`expires_at = 发送时刻 + ttlMs`；不传 = 永不过期。
+   * 由**投递方**给 —— 不同来源的保质期不同（BOSS 战报 7 天、运营补发永久），
+   * 集中在清理任务里算就表达不了这个差异。带未领附件的行不会因此被清（判据在清理 SQL）。
+   */
+  ttlMs?: number;
 }
 
 /**
@@ -74,9 +83,7 @@ export class GameMailService {
   box(accountId: string): MailBoxDto {
     const role = this.requireOnlineRole(accountId);
     return this.boxOf(role.id);
-  }
-
-  /** 标已读（重复标不动 `read_at`：第一次看到的时刻才有意义） */
+  }  /** 标已读（重复标不动 `read_at`：第一次看到的时刻才有意义） */
   read(accountId: string, mailId: string): MailBoxDto {
     const role = this.requireOnlineRole(accountId);
     const mail = this.ownedMail(role.id, mailId);
@@ -130,7 +137,7 @@ export class GameMailService {
   claimAll(accountId: string, channel?: string): MailClaimAllResultDto {
     const role = this.requireOnlineRole(accountId);
     const scope = this.scopeOf(channel);
-    const pending = this.mails.listUnclaimed(role.id, scope);
+    const pending = this.mails.listUnclaimed(role.id, scope, Date.now());
 
     const lines: Array<{ gold: number; exp: number; items: RewardItem[] }> = [];
     let claimedCount = 0;
@@ -190,8 +197,9 @@ export class GameMailService {
    * 而这里的调用方都是「一次具体动作」，本来就不会重复）。
    */
   send(roleId: string, input: SendMailInput): RoleMailRow {
+    const created_at = Date.now();
     const row: RoleMailRow = {
-      id: `mail_${Date.now()}_${randomUUID().slice(0, 8)}`,
+      id: `mail_${created_at}_${randomUUID().slice(0, 8)}`,
       role_id: roleId,
       channel: toMailChannel(input.channel),
       kind: input.kind,
@@ -202,7 +210,9 @@ export class GameMailService {
       attachments: JSON.stringify(input.items ?? []),
       read_at: null,
       claimed_at: null,
-      created_at: Date.now(),
+      // 保质期由投递方声明（#439）：不传 = 永不过期（运营补发的实物补偿通常就是这类）
+      expires_at: input.ttlMs && input.ttlMs > 0 ? created_at + Math.floor(input.ttlMs) : null,
+      created_at,
     };
     this.mails.insert(row);
     return row;
@@ -248,7 +258,7 @@ export class GameMailService {
    * 「列表里 5 封未读、角标写 4」这种自相矛盾比多一次遍历难查得多。
    */
   private boxOf(roleId: string): MailBoxDto {
-    const rows = this.mails.listByRole(roleId);
+    const rows = this.mails.listByRole(roleId, Date.now());
     const dto = new MailBoxDto();
     dto.mails = rows.map((row) => MailViewDto.of(row));
     dto.unread = rows.filter((row) => row.read_at === null).length;
@@ -283,7 +293,8 @@ export class GameMailService {
   /** 取一封属于该角色的邮件（别人的邮件一律当作不存在，不做越权探测口） */
   private ownedMail(roleId: string, mailId: string): RoleMailRow {
     const mail = this.mails.findByKey(mailId);
-    if (!mail || mail.role_id !== roleId) {
+    // 过期的信按「不存在」处理（#439）：列表里已经看不见了，点旧链接来领 / 标读也不该有响应
+    if (!mail || mail.role_id !== roleId || isExpired(mail, Date.now())) {
       throw BizException.notFound(BizCode.MAIL_NOT_FOUND, "邮件不存在或已被删除");
     }
     return mail;
@@ -318,6 +329,11 @@ export class GameMailService {
   }
 
   //#endregion
+}
+
+/** 是否已过保质期（#439）：读口与单封操作的同一把尺子（NULL = 永不过期） */
+function isExpired(row: RoleMailRow, now: number): boolean {
+  return row.expires_at !== null && row.expires_at <= now;
 }
 
 /** 同 id 的附件合并成一行（一键领取的展示口径：别给客户端一串重复 id） */

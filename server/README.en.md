@@ -57,11 +57,13 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:rank` | Leaderboards (56 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
 | `npm run test:e2e:backup` | Backup / restore (87 assertions) |
 | `npm run test:e2e:bag` | Bag and worn equipment (38 assertions; equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
+| `npm run test:e2e:admin-mail` | Admin message top-up (29 assertions; #437 auth / channel narrowing / attachments claimable / offline recipient / audit trail) |
+| `npm run test:e2e:mail-expiry` | Inbox expiry (15 assertions; #439 ttl write / instant disappearance at read / purge criteria / batch cap) |
 | `npm run test:e2e:map` | Maps (122 assertions; **gameplay config is editable, the resource itself is not** / two coordinate systems reconciled / no create or delete / permissions and doc contract) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + twenty-six e2e suites + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + twenty-eight e2e suites + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -91,6 +93,8 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `AUDIT_LOG_MAX_ROWS` | `20000` | Audit-log retention cap (oldest auto-purged beyond it; `0` = never purge) |
 | `MAIL_RETENTION_DAYS` | `90` | Mail-delivery record retention days (older ones auto-purged; `0` = no time-based purge) |
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | Mail-delivery record retention cap (only sent / failed, so undelivered mail is never dropped; `0` = never purge) |
+| `MAIL_PURGE_BATCH` | `500` | Rows deleted per inbox-expiry purge pass (#439; the rest wait for the next round. **Not the same thing as `MAIL_RETENTION_DAYS`** — that one governs outbound delivery records, this one governs in-game inbox expiry recycling) |
+| `MAIL_PURGE_INTERVAL_MS` | `60000` | Sweep interval for inbox-expiry purging (≤ 0 disables the purge task; expired rows are always invisible at read time — this only affects disk recycling) |
 | `REALTIME_TICKET_TTL_MS` | `30000` | Lifetime of a realtime connection ticket (one-shot, burned on use; the ticket can appear in a URL, so it only lives 30 seconds) |
 | `REALTIME_HEARTBEAT_MS` | `30000` | WebSocket liveness-probe interval (the server sends protocol-level pings; the client uses it to pace its application-level `ping`) |
 | `REALTIME_EMBEDDED` | `true` | whether the realtime channel is embedded in the main process; `false` = standalone form (the main process mounts neither the WS channel nor the ticket endpoint; `main.realtime.ts` boots a dedicated realtime process, #37) |
@@ -198,6 +202,8 @@ server/
 │   ├── e2e-rank.cjs                56 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
 │   ├── e2e-achievement.cjs         39 assertions (achievements: snapshot delivery / cumulative kinds counted from events / state kinds evaluated on read with no stored progress / claiming and a full bag turning into mail / admin config and delete refusal)
 │   ├── e2e-game-mail.cjs           51 assertions (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail / channels: four fixed badges · per-channel claim · unknown channel 40000 · social and combat delivery)
+│   ├── e2e-admin-mail.cjs          29 assertions (admin message top-up #437: viewer 403 / player token 401 / channel narrowing / role not found 404 / shape validation / attachments claimable / reward placement / offline recipient / audit trail / doc grouping)
+│   ├── e2e-mail-expiry.cjs         15 assertions (inbox expiry #439: ttl write / instant disappearance at read / expired single-mail ops treated as missing / purge criteria: unclaimed attachments never purged · NULL never purged / batch cap across passes)
 │   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
@@ -228,7 +234,7 @@ server/
 | `achievements` | achievement configs (#401) | condition (`condition_type` / `target` / `count`) + rewards (gold / exp / items JSON column) + `category` / `sort_order` / `hidden`; seeded from the client's `configs/achievement-data` snapshot, admin-editable, **deletion refused once player records exist** |
 | `role_achievements` | player achievement records (#401) | `PRIMARY KEY (role_id, achievement_id)`; **only cumulative kinds write `progress`** (state kinds are computed on read, so a missing row is normal); `achieved_at` non-null = claimable, `claimed_at` non-null = claimed; counting stops once achieved and rows are never deleted on achievement |
 | `equip_aligns` | equipment appearance alignment (#513) | one row = the **outward** geometry of a garment / weapon / bare model: `id` looks like `cloth:cloth_1` / `weapon:weapon_1` / `role:1`; `out_positions` is the 8-direction `[x, y]` JSON; `out_manual = 1` means absolute positions (the gradual semantics for weapons); **no row = use the value in the client config**, which is why "reset" is just deleting the row |
-| `role_mails` | in-game mail (#429 / channels #436) | `id` primary key + `role_id` (cascade); `channel` (four-value enum: system / reward / social / combat, default system, kept apart from the source tag `kind`) / `kind` / `title` / `body` / attachments (`gold` / `exp` / `attachments` JSON column) + `read_at` / `claimed_at`. **Unrelated to `mail_queue`** (that one is the outbound SMTP queue). Attachments only enter the bag on claim; rows with unclaimed attachments are refused deletion; indexes `(role_id, created_at DESC)` for the box and `(role_id, claimed_at)` for the unclaimed count |
+| `role_mails` | in-game mail (#429 / channels #436 / expiry #439) | `id` primary key + `role_id` (cascade); `channel` (four-value enum: system / reward / social / combat, default system, kept apart from the source tag `kind`) / `kind` / `title` / `body` / attachments (`gold` / `exp` / `attachments` JSON column) + `read_at` / `claimed_at` + `expires_at` (ms timestamp, NULL = never expires; the sender passes `ttlMs` at send time). **Unrelated to `mail_queue`** (that one is the outbound SMTP queue; its `MAIL_RETENTION_DAYS` is the delivery-record retention, not the inbox shelf life — two different things). Attachments only enter the bag on claim; rows with unclaimed attachments are refused deletion; **rows with unclaimed attachments are never purged even when expired** (expiry must not throw away a player's reward), and the purge task deletes at most `MAIL_PURGE_BATCH` rows per pass; indexes `(role_id, created_at DESC)` for the box and `(role_id, claimed_at)` for the unclaimed count |
 | `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
 | `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level (factory value = curve expansion from growth-seed, #590) |
@@ -407,7 +413,7 @@ The check is placed **before the optimistic lock** — the kicked player should 
 
 ## Testing and regression
 
-All twenty-six e2e suites are **real server process + real HTTP requests** (not mocks):
+All twenty-eight e2e suites are **real server process + real HTTP requests** (not mocks):
 
 | Script | Assertions | Coverage |
 | --- | --- | --- |
@@ -426,7 +432,7 @@ All twenty-six e2e suites are **real server process + real HTTP requests** (not 
 | `test/e2e-map.cjs` | **122** | map management (#573, **gameplay config editable, resource itself not**): 11 maps sorted by **numeric** id (`10` never before `2`) / the two kinds of counts kept apart (`monsterAreaCount` = TMX rectangles on the client, `spawnAreaCount` = rows in the server table) / **two coordinate systems reconciled** (`groups` in raw Tiled terms, `spawnAreas` in world coordinates — the centre of the same rectangle must match) / **gameplay config takes effect on save** (list, detail and the **player config snapshot** all agree; a `src` smuggled into the request is stripped by the whitelist, so the sender can never change which image the client loads) / out-of-range type, level or empty label → 400 with nothing written / **POST, PUT and DELETE always 404** (there is no "create / delete a map": whether a map exists is decided by its TMX) / unknown map 404 + 50032 / viewer can read, write 403, no token 401 / doc contract and "no Map write models" |
 
 ```bash
-cd server && npm run verify          # compile + twenty-six e2e suites + generated-file consistency, one command for everything
+cd server && npm run verify          # compile + twenty-eight e2e suites + generated-file consistency, one command for everything
 env -u NODE_OPTIONS npm run verify   # in a restricted terminal clear NODE_OPTIONS
 ```
 

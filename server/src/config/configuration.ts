@@ -127,6 +127,15 @@ export interface AppConfiguration {
    * 条数上限防刷爆磁盘，天数上限防「量不大但陈年堆积」。
    */
   mailQueueMaxRows: number;
+  /**
+   * 收件箱过期清理的批大小（#439）：一次最多删这么多行
+   *
+   * 与 `mailRetentionDays`（外发投递记录的保留期）**是两件事**：那个管 SMTP 队列的历史，
+   * 这个管玩家游戏内收件箱的保质期回收。
+   */
+  mailPurgeBatch: number;
+  /** 收件箱过期清理的扫描间隔（毫秒；≤ 0 = 不启动清理任务） */
+  mailPurgeIntervalMs: number;
 
   //#region 自动备份
   /**
@@ -409,6 +418,8 @@ export default function configuration(): AppConfiguration {
     mailPollMs: Number(process.env.MAIL_POLL_MS ?? 15 * 1000),
     mailRetentionDays: Number(process.env.MAIL_RETENTION_DAYS ?? 90),
     mailQueueMaxRows: Number(process.env.MAIL_QUEUE_MAX_ROWS ?? 20000),
+    mailPurgeBatch: Number(process.env.MAIL_PURGE_BATCH ?? 500),
+    mailPurgeIntervalMs: Number(process.env.MAIL_PURGE_INTERVAL_MS ?? 60 * 1000),
     backupIntervalHours: Number(process.env.BACKUP_INTERVAL_HOURS ?? 24),
     backupKeepCount: Number(process.env.BACKUP_KEEP_COUNT ?? 7),
     backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS ?? 30),

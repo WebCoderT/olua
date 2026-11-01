@@ -57,11 +57,13 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:rank` | 排行榜专项（56 条；三榜名次与数值 / 并列竞赛排名 / 分页与 `me` / 快照与定时重算） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run test:e2e:bag` | 背包与穿戴专项（38 条；穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸） |
+| `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
+| `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
 | `npm run test:e2e:map` | 地图管理专项（122 条；**玩法配置可改 / 资源本体不可改** / 两套坐标对账 / 无新建·删除 / 权限与文档契约） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 二十六套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 二十八套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -91,6 +93,8 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `AUDIT_LOG_MAX_ROWS` | `20000` | 操作日志保留上限（超出自动清最旧；`0` = 不清理） |
 | `MAIL_RETENTION_DAYS` | `90` | 投递记录保留天数（早于该天数的自动清理；`0` = 不按时间清理） |
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | 投递记录保留上限（只对已发送 / 已失败生效，避免删掉还没发出去的信；`0` = 不清理） |
+| `MAIL_PURGE_BATCH` | `500` | 收件箱过期清理的一批条数（#439，一次最多删这么多，剩下的下一轮；**与 `MAIL_RETENTION_DAYS` 是两件事**——那个管外发投递记录的保留期，这个管游戏内收件箱的保质期回收） |
+| `MAIL_PURGE_INTERVAL_MS` | `60000` | 收件箱过期清理的扫描间隔（≤ 0 = 不启动清理任务；过期的行在读口始终不可见，这里只影响磁盘回收） |
 | `REALTIME_TICKET_TTL_MS` | `30000` | 实时连接票据的有效期（一次性、用过即焚；票据可以出现在 URL 里，所以只能活 30 秒） |
 | `REALTIME_HEARTBEAT_MS` | `30000` | WebSocket 存活探测间隔（服务端发协议层 ping；客户端用它决定应用层 `ping` 的节奏） |
 | `REALTIME_EMBEDDED` | `true` | 实时通道是否内嵌主进程；`false` = 独立进程形态（主进程不挂 WS 与取票接口，由 `main.realtime.ts` 单独起实时进程，#37） |
@@ -195,6 +199,8 @@ server/
 │   ├── e2e-rank.cjs                56 条（排行榜：三榜名次与数值 / 并列竞赛排名 / 分页与 size 夹上限 / me 榜外名次 / 快照与定时重算 / 条目八字段）
 │   ├── e2e-achievement.cjs         39 条（成就：快照下发 / 累计型事件记账 / 状态型现算不落进度 / 领取与背包满转邮件 / 管理端配置与拒删）
 │   ├── e2e-game-mail.cjs           51 条（游戏内邮件：收件箱与未读·未领 / 已读幂等 / 领取与三种错误码 / 附件没领拒删 / 一键领取领到背包满 / 成就兜底转邮件 / 频道：四栏角标·按栏领取·非法频道 40000·社交与战斗投递）
+│   ├── e2e-admin-mail.cjs          29 条（管理端消息补发 #437：观察员 403 / 玩家令牌 401 / 频道收窄 / 角色不存在 404 / 形状校验 / 附件领到手 / reward 落位 / 离线收件 / 审计留痕 / 文档分组）
+│   ├── e2e-mail-expiry.cjs         15 条（收件箱保质期 #439：ttl 写入 / 读口即时消失 / 过期单封操作按不存在 / 清理判据：带未领附件不删·空永不删 / 批量上限跨批）
 │   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
@@ -225,7 +231,7 @@ server/
 | `achievements` | 成就配置（#401） | 条件（`condition_type` / `target` / `count`）+ 奖励（金币 / 经验 / 物品 JSON 列）+ `category` / `sort_order` / `hidden`；seed 来自客户端 `configs/achievement-data` 的快照，管理端可增删改，**有玩家记录拒删** |
 | `role_achievements` | 玩家成就记录（#401） | `PRIMARY KEY (role_id, achievement_id)`；**只有累计型写 `progress`**（状态型查询时现算，故没有行也正常）；`achieved_at` 非空 = 可领、`claimed_at` 非空 = 已领；达成后不再累加，行不会因达成而删除 |
 | `equip_aligns` | 装备外观对齐几何（#513） | 一行 = 一件衣服 / 一把武器 / 一套裸模的**外观**几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`；`out_positions` 是 8 个方向的 `[x, y]` JSON；`out_manual = 1` 表示绝对位置（武器的渐进语义）；**没有行 = 用客户端配置里的值**，所以「重置」就是删行 |
-| `role_mails` | 游戏内邮件（#429 / 频道 #436） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at`。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
+| `role_mails` | 游戏内邮件（#429 / 频道 #436 / 保质期 #439） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at` + `expires_at`（毫秒时间戳，NULL = 永不过期，由投递方在 send 时给 `ttlMs`）。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列，其 `MAIL_RETENTION_DAYS` 是投递记录的保留期，与收件箱保质期是两件事）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；**带未领附件的行即使过期也不清理**（过期不等于替玩家扔奖励），清理任务每轮最多删 `MAIL_PURGE_BATCH` 条；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一） | **从客户端 Tiled 导入一次后归服务端**：`tools/import-spawn-areas.cjs` 生成 SPAWN_AREAS 快照（提交进仓库），启动时空表自动 seed；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId |
 | `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验（出厂 = growth-seed 的曲线展开，#590） |
@@ -411,7 +417,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-二十六套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+二十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -431,7 +437,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 
 ```bash
-cd server && npm run verify          # 编译 + 二十六套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 二十八套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

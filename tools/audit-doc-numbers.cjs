@@ -118,6 +118,7 @@ const E2E_SCRIPTS = [
   ["成就（累计型记账 / 状态型现算）", "server/test/e2e-achievement.cjs"],
   ["游戏内邮件（附件领取 / 背包满兜底）", "server/test/e2e-game-mail.cjs"],
   ["管理端消息补发（#437）", "server/test/e2e-admin-mail.cjs"],
+  ["收件箱保质期（#439）", "server/test/e2e-mail-expiry.cjs"],
   ["装备对齐几何（#513）", "server/test/e2e-equip-align.cjs"],
   ["装备内观几何（#523）", "server/test/e2e-equip-in-align.cjs"],
   ["地图管理（玩法配置可改，#573）", "server/test/e2e-map.cjs"],

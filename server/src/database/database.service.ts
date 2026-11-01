@@ -802,6 +802,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         attachments TEXT    NOT NULL DEFAULT '[]',
         read_at     INTEGER,
         claimed_at  INTEGER,
+        -- 收件箱保质期（#439）：毫秒时间戳，NULL = 永不过期。
+        -- 与 mail_queue 的 MAIL_RETENTION_DAYS（投递记录保留期）是两件事，别混
+        expires_at  INTEGER,
         created_at  INTEGER NOT NULL DEFAULT 0
       );
       -- 收件箱永远按「这个角色 + 时间倒序」取，未领数也用得上 claimed_at
@@ -841,6 +844,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 其余留在「系统」。幂等：只动「还是默认值且来源已明确」的行
     this.ensureColumn("role_mails", "channel", "TEXT NOT NULL DEFAULT 'system'");
     this.db.exec("UPDATE role_mails SET channel = 'reward' WHERE kind = 'achievement' AND channel = 'system'");
+    // 收件箱保质期（#439）：存量行全是 NULL = 永不过期（与「没有该字段」同义，老邮件不因为补列而消失）
+    this.ensureColumn("role_mails", "expires_at", "INTEGER");
     // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");
