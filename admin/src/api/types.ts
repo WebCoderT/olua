@@ -139,6 +139,13 @@ export const PERMISSION = {
   MAIL_READ: "mail:read",
   /** 发送邮件（对外投递，可能触达真实用户） */
   MAIL_WRITE: "mail:write",
+  /**
+   * 补发游戏消息（#437，向玩家游戏内收件箱发 system / reward 消息）
+   *
+   * **不叫 `mail:send`**：`mail:*` 已归外发 SMTP 投递队列，两件中文都叫「发邮件」
+   * 的事不能共用一个前缀。只读观察员没有这一项。
+   */
+  GAME_MAIL_SEND: "gameMail:send",
   ADMIN_READ: "admin:read",
   ADMIN_MANAGE: "admin:manage",
   /** 查看操作日志（只读观察员没有这一项） */
@@ -213,6 +220,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
   [PERMISSION.MAIL_READ]: "查看邮件投递记录",
   [PERMISSION.MAIL_WRITE]: "发送邮件",
+  [PERMISSION.GAME_MAIL_SEND]: "补发游戏消息",
   [PERMISSION.ADMIN_READ]: "查看管理员",
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
@@ -520,6 +528,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "adminAnnouncement.remove": "删除公告",
   "adminMail.send": "发送邮件",
   "adminMail.retry": "重投邮件",
+  "adminGameMail.send": "补发游戏消息",
   "role.create": "创建角色",
   "role.save": "保存角色进度",
   "role.remove": "删除角色",

@@ -7,6 +7,7 @@ import { RoleMailRow } from "../../database/rows";
 import { RoleMailRepository } from "../../database/repositories/role-mail.repository";
 import { RolesService } from "../roles/roles.service";
 import {
+  AdminSendMailDto,
   MailAttachmentDto,
   MailBoxDto,
   MailChannelSummaryDto,
@@ -15,6 +16,14 @@ import {
   MailViewDto,
 } from "./dto/game-mail.dto";
 import { MAIL_CHANNELS, MailChannel, isMailChannel, toMailChannel } from "./mail-channel";
+
+/**
+ * 人工补发允许的频道（#437）
+ *
+ * social / combat 是系统自动产生的事实记录（好友申请 / BOSS 战报），人工往里发
+ * 会污染语义 —— 运营想说的永远是「系统通知你一声」或「给你一份奖励」。
+ */
+export const ADMIN_SEND_CHANNELS = ["system", "reward"] as const;
 
 /**
  * 发一条消息（成就兜底、好友申请、BOSS 战报、运营补发都走这里）
@@ -197,6 +206,37 @@ export class GameMailService {
     };
     this.mails.insert(row);
     return row;
+  }
+
+  /**
+   * 管理端补发（#437）
+   *
+   * 不另写 INSERT：落库只走 {@link send} 这一个口子 —— channel 收窄、附件序列化、
+   * id 规则都收敛在一处，管理端补发与成就兜底 / 好友申请发出去的行永远同形。
+   *
+   * 两道校验的分工：
+   * - **角色存在性**（404）：入参是管理端手输的 id，不存在是常态输入错误，不是异常；
+   * - **频道语义**（400）：DTO 的 `@IsIn` 管形状，这里再拦一道兜底（直连调用方绕不过）。
+   *
+   * 不要求收件人在线：邮件本来就是异步的，离线角色的行等他下次上线自然看到。
+   */
+  sendFromAdmin(roleId: string, dto: AdminSendMailDto): MailViewDto {
+    if (!(dto.channel as string) || !ADMIN_SEND_CHANNELS.includes(dto.channel as (typeof ADMIN_SEND_CHANNELS)[number])) {
+      throw new BizException(BizCode.PARAM_INVALID, `人工补发只允许 ${ADMIN_SEND_CHANNELS.join(" / ")} 频道`);
+    }
+    if (!this.roles.existsById(roleId)) {
+      throw BizException.notFound(BizCode.ROLE_NOT_FOUND, "角色不存在");
+    }
+    const row = this.send(roleId, {
+      channel: dto.channel as MailChannel,
+      kind: "admin",
+      title: dto.title,
+      body: dto.body,
+      gold: dto.gold,
+      exp: dto.exp,
+      items: dto.items,
+    });
+    return MailViewDto.of(row);
   }
 
   //#region 内部

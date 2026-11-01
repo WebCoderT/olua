@@ -23,6 +23,7 @@ export {
   statsApi,
   systemApi,
   mailsApi,
+  gameMailsApi,
   soulsApi,
   titlesApi,
   ranksApi,

@@ -302,7 +302,7 @@ Two layers, **both in guards; business code must not write role checks**:
    and **re-checks the database on every request** — ban / deletion / password change take effect instantly, no waiting for token expiry
 2. **Permission point** (`PermissionGuard`, registered after `AuthGuard`): uses `request.user.role` directly, no further DB lookup
 
-The only source of permission points is `src/common/constants/permission.ts` (25 permission points / 3 roles):
+The only source of permission points is `src/common/constants/permission.ts` (26 permission points / 3 roles):
 
 | Role | Permissions |
 | --- | --- |
@@ -325,13 +325,13 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **167 interfaces / 137 paths / 263 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Currently **168 interfaces / 138 paths / 264 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |
 | Public | 7 | No token (health check, player register/login, admin login/register, pull active announcements, **pull the live-zone list**) |
 | Client | 50 | `player` token, may only operate its own account's data |
-| Admin | 110 | `admin` token + each interface's own permission point |
+| Admin | 111 | `admin` token + each interface's own permission point |
 
 **Grouping is tagged by method, not by controller**: one controller often has both public and login-required interfaces (e.g. `auth`'s `register/login` are public, `me` is client).
 So **controllers do not write class-level `@ApiTags`**; use the combined decorators in `common/decorators/api-doc.decorator` uniformly;

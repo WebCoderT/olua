@@ -451,6 +451,14 @@ export function RoleDetailPage() {
             <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setRawOpen(true)}>
               原始数据
             </Button>
+            {/* 发消息（#437）：带上当前角色 id 跳到补发页，运营不用再手抄一遍 */}
+            {hasPermission(PERMISSION.GAME_MAIL_SEND) ? (
+              <Link to={`/mail-send?roleId=${encodeURIComponent(role.id)}`}>
+                <Button variant="outline" className="px-2.5 py-1 text-xs">
+                  发消息
+                </Button>
+              </Link>
+            ) : null}
             <Link to="/roles">
               <Button variant="outline" className="px-2.5 py-1 text-xs">
                 返回列表

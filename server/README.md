@@ -306,7 +306,7 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（25 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`（26 个权限点 / 3 种角色）：
 
 | 角色 | 权限 |
 | --- | --- |
@@ -329,13 +329,13 @@ server/
 
 ## 接口与契约
 
-当前 **167 个接口 / 137 条路径 / 263 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **168 个接口 / 138 条路径 / 264 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
 | 客户端 | 50 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 110 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 111 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；

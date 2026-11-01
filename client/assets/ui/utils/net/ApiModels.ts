@@ -1487,6 +1487,44 @@ export type AchievementId = {
   achievementId: string;
 };
 
+export type MailAttachment = {
+  /**
+   * 物品 id（客户端拿共享快照换名字与图标）
+   */
+  goodId: string;
+  /**
+   * 数量
+   */
+  count: number;
+};
+
+export type AdminSendMail = {
+  /**
+   * 频道：只允许 system（系统）/ reward（奖励）
+   */
+  channel: "system" | "reward";
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本，换行用 \n；可空）
+   */
+  body?: string;
+  /**
+   * 附件金币（不传 = 没有）
+   */
+  gold?: number;
+  /**
+   * 附件经验（不传 = 没有）
+   */
+  exp?: number;
+  /**
+   * 附件物品（不传 = 没有）
+   */
+  items?: MailAttachment[];
+};
+
 export type SaveMapConfig = {
   /**
    * 地图名称（显示在传送弹窗 / 小地图 / 公告里）
@@ -5910,17 +5948,6 @@ export type AchievementQuery = {
    * 分类筛选：battle | growth | explore
    */
   category?: string;
-};
-
-export type MailAttachment = {
-  /**
-   * 物品 id（客户端拿共享快照换名字与图标）
-   */
-  goodId: string;
-  /**
-   * 数量
-   */
-  count: number;
 };
 
 export type MailView = {

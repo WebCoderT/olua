@@ -91,6 +91,9 @@ const MODULES = {
   achievement: { target: "client", export: "AchievementApi" },
   // 游戏内邮件（#429）：玩家侧收件箱；与管理端 adminMail（外发 SMTP 队列）不是同一件事
   gameMail: { target: "client", export: "GameMailApi" },
+  // 管理端游戏消息补发（#437）：往玩家游戏内收件箱发 system / reward 消息；
+  // 与 adminMail（外发 SMTP 队列）不是同一件事 —— 故意不叫 adminGameMail 同名的 mail:* 权限
+  adminGameMail: { target: "admin", export: "gameMailsApi" },
   adminAuth: { target: "admin", export: "authApi" },
   adminAccount: { target: "admin", export: "accountsApi" },
   adminAdmin: { target: "admin", export: "adminsApi" },

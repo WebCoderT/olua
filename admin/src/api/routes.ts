@@ -340,6 +340,15 @@ export const routes = {
      */
     update: (id: string) => `/admin/fashions/${encodeURIComponent(id)}`,
   },
+  /** adminGameMail 模块（1 个接口） */
+  adminGameMail: {
+    /**
+     * 补发游戏消息（单发）（POST /admin/game-mail/roles/{id}）
+     *
+     * 给指定角色发一封游戏内消息（收件箱四栏里的 `system` / `reward` 两栏）。
+     */
+    send: (id: string) => `/admin/game-mail/roles/${encodeURIComponent(id)}`,
+  },
   /** adminGrowthScalar 模块（2 个接口） */
   adminGrowthScalar: {
     /**
