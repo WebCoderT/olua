@@ -6,10 +6,14 @@
  * 解析刷怪区域，做坐标换算后生成 server/src/modules/world/spawn-areas.generated.ts
  * （提交进仓库，服务端启动时若 map_spawn_areas 表为空会拿它做种子）。
  *
- * 坐标口径与客户端完全一致（MonsterAreaSpawner 旧公式）：
+ * 坐标口径与客户端完全一致（#566 起：地图节点原点 = 地图左上角）：
  *   Tiled 矩形 x/y 是左上角、y 轴向下；中心 = (x + w/2, y + h/2)；
- *   换成地图节点本地坐标（中心为原点、y 向上）：cx = x + w/2 - mapW/2，cy = mapH/2 - (y + h/2)。
- *   地图节点挂在原点的图层容器下，世界坐标 = 本地坐标，所以快照 x/y 语义不变。
+ *   换成世界坐标只需把 y 取反：cx = x + w/2，cy = -(y + h/2) —— **没有半图偏移**。
+ *   （旧口径是「地图中心为原点」，cx = x + w/2 - mapW/2、cy = mapH/2 - (y + h/2)；
+ *    与现在的差别是全图平移 (mapW/2, -mapH/2)，存量库由服务端的一次性迁移抹平，见 database.service。）
+ *
+ * 另外把每张图的地图像素尺寸写进 server/src/shared/map-sizes.generated.ts ——
+ * 服务端升级坐标口径时要按图平移存量数据，只有本工具读得到 TMX 头的 width/height/tilewidth。
  *
  * 解析口径移植自 client/assets/ui/utils/map/TiledObjects.ts（正则读 TMX 原文，
  * 不用引擎解析 —— 引擎会丢对象类并翻转 y）。
@@ -28,6 +32,7 @@ const path = require("path");
 const REPO = path.resolve(__dirname, "..");
 const MAP_DIR = path.join(REPO, "client", "assets", "resources", "map");
 const OUT_TS = path.join(REPO, "server", "src", "modules", "world", "spawn-areas.generated.ts");
+const OUT_SIZES_TS = path.join(REPO, "server", "src", "shared", "map-sizes.generated.ts");
 
 // ----------------------------------------------------------------------------//
 // TMX 解析（移植 client/assets/ui/utils/map/TiledObjects.ts 的口径）
@@ -121,6 +126,8 @@ function main() {
   }
 
   const areas = [];
+  /** mapId → 地图像素尺寸（TMX 头里的 grid 数 × 单格像素） */
+  const mapSizes = new Map();
   const mapDirs = fs
     .readdirSync(MAP_DIR, { withFileTypes: true })
     .filter((item) => item.isDirectory())
@@ -145,6 +152,7 @@ function main() {
     const tileH = Number(readXmlAttribute(mapTag[1], "tileheight"));
     const mapW = cols * tileW;
     const mapH = rows * tileH;
+    mapSizes.set(mapId, { cols, rows, tileW, tileH, width: mapW, height: mapH });
 
     const groupXml = readObjectGroupXml(xml, "monster");
     if (!groupXml) {
@@ -169,8 +177,8 @@ function main() {
         monsterKey: parsed.monsterKey,
         min: parsed.min,
         max: parsed.max,
-        cx: parsed.x + parsed.width / 2 - mapW / 2,
-        cy: mapH / 2 - (parsed.y + parsed.height / 2),
+        cx: parsed.x + parsed.width / 2,
+        cy: -(parsed.y + parsed.height / 2),
         w: parsed.width,
         h: parsed.height,
       });
@@ -186,7 +194,7 @@ function main() {
   }
   const lines = [
     "/** @generated 由 tools/import-spawn-areas.cjs 从客户端 Tiled 地图（client/assets/resources/map 目录）的 monster 对象组生成，勿手改（#295）",
-    " *  坐标口径 = 客户端世界坐标（地图节点在原点）：cx/cy 是区域中心、w/h 是区域尺寸，",
+    " *  坐标口径 = 客户端世界坐标（#566：地图节点原点在左上角、y 轴向上）：",
     " *  服务端随机落点公式与客户端旧版 MonsterAreaSpawner 完全一致。",
     " *  min/max = 该区域允许的最少/最多怪物数（播种按 max 展开成逐只落点）。",
     " */",
@@ -222,6 +230,39 @@ function main() {
   lines.push("};", "");
   fs.writeFileSync(OUT_TS, lines.join("\n"), "utf8");
   console.log(`\n已生成 ${path.relative(REPO, OUT_TS)}（${areas.length} 个区域 / ${byMap.size} 张图）`);
+
+  // 地图尺寸快照（服务端升级坐标口径 / 任何需要地图边界的服务端逻辑都要它）
+  const sizeLines = [
+    "/** @generated 由 tools/import-spawn-areas.cjs 从客户端 Tiled 地图（client/assets/resources/map）的 <map> 头生成，勿手改",
+    " *  世界坐标口径（#566）：地图节点原点 = 地图左上角，y 轴向上 ⇒ 地图在世界里占",
+    " *  x ∈ [0, width]、y ∈ [-height, 0]。",
+    " */",
+    "export interface MapPixelSize {",
+    "  /** 横向格数 */",
+    "  cols: number;",
+    "  /** 纵向格数 */",
+    "  rows: number;",
+    "  /** 单格宽（像素） */",
+    "  tileWidth: number;",
+    "  /** 单格高（像素） */",
+    "  tileHeight: number;",
+    "  /** 地图像素宽（cols × tileWidth） */",
+    "  width: number;",
+    "  /** 地图像素高（rows × tileHeight） */",
+    "  height: number;",
+    "}",
+    "",
+    "/** mapId → 地图像素尺寸 */",
+    "export const MAP_PIXEL_SIZES: Record<string, MapPixelSize> = {",
+  ];
+  for (const [mapId, size] of [...mapSizes.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+    sizeLines.push(
+      `  "${mapId}": { cols: ${size.cols}, rows: ${size.rows}, tileWidth: ${size.tileW}, tileHeight: ${size.tileH}, width: ${size.width}, height: ${size.height} },`,
+    );
+  }
+  sizeLines.push("};", "");
+  fs.writeFileSync(OUT_SIZES_TS, sizeLines.join("\n"), "utf8");
+  console.log(`已生成 ${path.relative(REPO, OUT_SIZES_TS)}（${mapSizes.size} 张图）`);
 
   if (dbPath) {
     const { DatabaseSync } = require("node:sqlite");

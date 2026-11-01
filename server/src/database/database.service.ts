@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { AdminRole } from "../common/constants/permission";
 import { AnnouncementLevel } from "../common/constants/announcement";
+import { MAP_PIXEL_SIZES } from "../shared/map-sizes.generated";
 
 /** 可绑定的参数值（node:sqlite 支持的类型） */
 export type SqlParam = string | number | bigint | null | Uint8Array;
@@ -238,7 +239,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- tick 发现 epoch 变了就把整份内存世界作废（不落盘），下次 join 从库重载。
       CREATE TABLE IF NOT EXISTS world_meta (
         id    INTEGER PRIMARY KEY CHECK (id = 1),
-        epoch INTEGER NOT NULL DEFAULT 0
+        epoch INTEGER NOT NULL DEFAULT 0,
+        -- 世界坐标口径（#566）：topleft = 地图左上角为原点（当前口径），
+        -- center = 旧口径（地图中心为原点，存量库补列时落到这个值，然后被一次性迁移抹平）
+        coord_origin TEXT NOT NULL DEFAULT 'topleft'
       );
       INSERT OR IGNORE INTO world_meta (id, epoch) VALUES (1, 0);
 
@@ -824,6 +828,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");
     this.migrateWorldMonsterInstanceIds();
+    // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
+    this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
+    this.migrateMapCoordinateOrigin();
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(
@@ -879,6 +886,41 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       migrated += 1;
     }
     if (migrated > 0) this.logger.log(`world_monsters 存量 instanceId 已补区段（改写 ${migrated} 行）`);
+  }
+
+  /**
+   * 世界坐标口径升级（#566）：地图原点从「地图中心」改成「地图左上角」
+   *
+   * 客户端把 `TiledMap` 节点的锚点设成 (0,1)，瓦片从此铺在 `x∈[0,W]`、`y∈[-H,0]` ——
+   * Tiled 坐标只差一次 y 取反就能用，不再需要「减半宽、翻半高」。代价是**同一个世界位置的
+   * 数值整体平移了** `(W/2, -H/2)`（8192 像素的图就是 +4096 / -4096），
+   * 而库里存着两批旧口径的坐标：`map_spawn_areas`（刷怪区中心）与 `world_monsters`（怪物落点）。
+   * 不平移的话，升级后怪物会按旧坐标出现在离正确位置半张图远的地方（多半在地图外）。
+   *
+   * 平移不可重复执行（再来一次就整体偏半张图），所以用 `world_meta.coord_origin` 打标记：
+   * 只在它还是 'center' 时做一次，做完置 'topleft'。地图尺寸取自 TMX 头生成的快照
+   * （`shared/map-sizes.generated.ts`），认不出的 map_id 只 warn、不动数据。
+   */
+  private migrateMapCoordinateOrigin(): void {
+    const pending = this.count("SELECT COUNT(1) AS total FROM world_meta WHERE coord_origin = 'center'");
+    if (pending === 0) return;
+    let moved = 0;
+    this.transaction(() => {
+      for (const [mapId, size] of Object.entries(MAP_PIXEL_SIZES)) {
+        const dx = size.width / 2;
+        const dy = -size.height / 2;
+        moved += this.execute("UPDATE map_spawn_areas SET cx = cx + ?, cy = cy + ? WHERE map_id = ?", [dx, dy, mapId]).changes;
+        moved += this.execute("UPDATE world_monsters SET x = x + ?, y = y + ? WHERE map_id = ?", [dx, dy, mapId]).changes;
+      }
+      this.run("UPDATE world_meta SET coord_origin = 'topleft' WHERE id = 1");
+    });
+    const unknown = this.all<{ map_id: string }>(
+      "SELECT DISTINCT map_id FROM world_monsters UNION SELECT DISTINCT map_id FROM map_spawn_areas",
+    ).filter((row) => !(row.map_id in MAP_PIXEL_SIZES));
+    if (unknown.length > 0) {
+      this.logger.warn(`地图原点迁移：这些 map_id 没有 TMX 尺寸快照，坐标未平移 —— ${unknown.map((row) => row.map_id).join(", ")}`);
+    }
+    this.logger.log(`地图原点已改为左上角：平移 ${moved} 条世界坐标（${Object.keys(MAP_PIXEL_SIZES).length} 张图）`);
   }
 
   /** 给已有表补一列（列已存在则不动；SQLite 的 ADD COLUMN 带 NOT NULL 必须有默认值） */
