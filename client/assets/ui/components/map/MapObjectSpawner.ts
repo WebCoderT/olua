@@ -6,7 +6,7 @@ import QuestNpcMarks from "../../core/QuestNpcMarks";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import QuestTalk from "../../utils/net/QuestTalk";
 import { markWorldInteractive } from "../../utils/input/UiHit";
-import { getMapPointPosition } from "../../utils/map/MapPointMath";
+import { getMapPointPositionOnWorld } from "../../utils/map/MapPointMath";
 import { getTiledObjectsFrom, TiledObject } from "../../utils/map/TiledObjects";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
@@ -16,7 +16,8 @@ import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
  * TiledObjects 从 TMX 原文读出）分流：
  * 类=npc 生成 NPC 节点（挂地图层、带静态碰撞体、绑定点击事件），
  * 类=revive 记录为复活点坐标供 GameMap 使用（不生成节点）。
- * 点位坐标（Tiled 左上角原点、y 轴向下）由 MapPointMath 统一换算，本类不自行翻转 y
+ * 点位坐标（Tiled 左上角原点、y 轴向下）由 MapPointMath 统一换算（地图节点原点也是左上角，只差 y 方向），
+ * 本类不自行翻转 y
  * 地图坐标换算依赖地图节点本身，因此构造时注入地图节点
  */
 export default class MapObjectSpawner {
@@ -69,8 +70,10 @@ export default class MapObjectSpawner {
     addObstacleCollider(npcNode);
     // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
     GameUiHelper.showColliderRange(npcNode, npc.label);
-    npcNode.setWorldPosition(getMapPointPosition(position, this.map));
+    // 先入层再定位：节点无父节点时 setWorldPosition 写进去的其实是本地坐标，
+    // 一旦以后地图层不再位于世界原点（或地图节点挂到别处），顺序反了就会整体偏移
     LayerManager.addToMapLayer(npcNode);
+    npcNode.setWorldPosition(getMapPointPositionOnWorld(position.x, position.y, this.map));
     // 头顶任务标记（#396：! 可接 / ? 可交付；没有任务时整块隐藏）
     QuestNpcMarks.attach(npcNode, id);
     npcNode.on(

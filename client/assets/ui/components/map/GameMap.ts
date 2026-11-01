@@ -1,4 +1,4 @@
-import { Node, TiledMap, TiledMapAsset, Vec3 } from "cc";
+import { Node, TiledMap, TiledMapAsset, UITransform, Vec3 } from "cc";
 import LayerManager from "../../core/LayerManager";
 import DropManager from "../../core/DropManager";
 import MonsterManager from "../../core/MonsterManager";
@@ -48,6 +48,13 @@ export default class GameMap extends Node {
     const mapAsset = await loadResourceAsync<TiledMapAsset>(src, TiledMapAsset);
     // 重复初始化时先移除旧组件
     this.getComponent(TiledMap)?.destroy();
+    // 原点 = 地图左上角（#566）：锚点取 (0,1)，瓦片就铺在 x∈[0,W]、y∈[-H,0] ——
+    // 于是 Tiled 坐标只用把 y 取反，不再需要「减半宽、翻半高」的偏移（见 MapPointMath）。
+    // **必须在 tmxAsset 赋值之前设**：引擎在赋值那一刻同步 `_buildLayerAndGroup()` → `_syncAnchorPoint()`，
+    // 按当时的锚点算好每个图层节点的锚点与 leftDownToCenter（瓦片顶点的平移量）；
+    // 赋值之后再改，只会改到本节点，图层仍按旧锚点绘制 —— 表现是「地图整体偏移半张图」。
+    const transform = this.getComponent(UITransform) ?? this.addComponent(UITransform);
+    transform.setAnchorPoint(0, 1);
     const tiledMap = this.addComponent(TiledMap);
     tiledMap.tmxAsset = mapAsset;
     // 关闭引擎的瓦片裁剪（TiledMap.enableCulling 默认 true）——这是「传送后整张地图一片黑、动一下才恢复」的根因：
@@ -106,7 +113,7 @@ export default class GameMap extends Node {
       console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个类为 revive 的点位`);
       return;
     }
-    this.reviveWorldPosition = getMapPointPositionOnWorld(revivePoint, this as Node);
+    this.reviveWorldPosition = getMapPointPositionOnWorld(revivePoint.x, revivePoint.y, this as Node);
     this.reviveHandler?.(this.reviveWorldPosition);
   }
 }
