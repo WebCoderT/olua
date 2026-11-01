@@ -57,16 +57,11 @@ export default class GameMap extends Node {
     transform.setAnchorPoint(0, 1);
     const tiledMap = this.addComponent(TiledMap);
     tiledMap.tmxAsset = mapAsset;
-    // 建完图必须让每个图层**立刻重算一次**自己的锚点偏移（TiledLayer.leftDownToCenter）——漏了就是黑屏：
-    // 图层只在 `TiledLayer.onEnable` 里注册 ANCHOR_CHANGED 监听，而此刻地图节点还没进场景
-    // （addToMapLayer 在下面），建图时图层是未启用状态：地图的 `_syncAnchorPoint()` 确实把图层锚点改成了
-    // (0,1)，但**没人接这个事件** → 图层的 leftDownToCenter 停在 init 时按默认锚点 0.5 算的 (W/2, H/2)；
-    // 装配器 `left = col*tw - leftDownToCenterX`、`bottom = rowY - leftDownToCenterY` 于是照旧把瓦片铺在
-    // **中心**（[-W/2,W/2]×[-H/2,H/2]），而坐标换算已按左上角口径把角色送到 (x, -y)
-    // （0 号图复活点 4100,4736 → (4100,-4736)）——那个点正好落在「错位的图」之外 = 整屏黑。
-    // 手动改一次锚点之所以能看见地图：那时图层已启用，事件被接住、重算一次就对了（= 靠人手替引擎补了这一步）。
-    // 所以这里显式补上：`_syncAnchorPoint` 是 TiledLayer 的引擎内部方法（protected，无公开替代），
-    // 调用后会置 leftDownToCenter 并 mark render data dirty，顶点随之按新锚点重算。
+    // 建完图必须让每个图层补算一次自己的锚点偏移（TiledLayer.leftDownToCenter）——漏了就是**整屏黑**：
+    // 图层只在 onEnable 里注册 ANCHOR_CHANGED 监听，而此刻地图节点还没进场景（addToMapLayer 在下面），
+    // 建图时图层未启用 → 地图 `_syncAnchorPoint()` 改锚点时没人接事件 → leftDownToCenter 停在按默认锚点
+    // 0.5 算的 (W/2, H/2)，瓦片照旧铺在中心；而坐标换算已按左上角把角色送到 (x, -y)（0 号图复活点
+    // 4100,4736 → 4100,-4736），那个点正好在「错位的图」之外。手动改一次锚点之所以能看见，就是补上了这次重算。
     for (const layer of tiledMap.getLayers()) {
       (layer as unknown as { _syncAnchorPoint(): void })._syncAnchorPoint();
     }
