@@ -1,7 +1,7 @@
 import { Color, Vec2 } from "cc";
 import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } from "../types/good";
 import type { BattleAttributes } from "../types/common";
-import { equipmentPrefixRates, equipmentRecyclePrice, equipmentStats, equipmentSuffixRates } from "./growth";
+import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates } from "./growth";
 import { combatCalc as combatCalcWeights } from "./battle";
 import { OECCUPATION, SEX } from "../types/role";
 
@@ -125,26 +125,40 @@ export function getEquipmentBaseKey(id: string): string {
 }
 
 /**
+ * 装备的**零值属性基线**（#590 起装备属性不在客户端生成）
+ *
+ * #590 把角色曲线移出客户端（唯一书写处 = server/src/shared/growth-seed），加载期算不出属性了 ——
+ * 变体在加载期只建**结构**（id / 名称 / 图标 / 部位 / 前后缀 / 几何，属性全 0），
+ * 进游戏后 `applyEquipmentRows` 按服务端下发的基础件属性 × 前后缀倍率重算（#363 的既有链路，
+ * 对**每一个**变体都会跑一遍）。快照先于预载必到，属性全 0 的窗口玩家看不到。
+ */
+const ZERO_EQUIPMENT_ATTRIBUTES: BattleAttributes = {
+  maxHp: 0,
+  hpRecover: 0,
+  physicalAttack: [0, 0],
+  magicAttack: [0, 0],
+  taoistAttack: [0, 0],
+  physicalDefense: [0, 0],
+  magicDefense: [0, 0],
+  taoistDefense: [0, 0],
+};
+
+/**
  * 装备数据表 → 装备配置 Map
  *
  * **key 只做关联**：背包 / 掉落表 / 职业初始装备（configs/role.getNewRoleEquipments）都用它引用，
  * key 可以是任意字符串（"ring_1"、"cloth_fire" 都行），**不参与任何数值计算**。
- * 数值全部按**等级**从 configs/growth 的装备曲线取：
- * - level：该装备的穿戴需求等级，也是**唯一定强入口**（想调强弱就改它）
- * - slot：部位，决定属性怎么分配（见 configs/growth 的 equipmentSlotShare）
- * - 六项攻防、maxHp 与每秒回血：由 equipmentStats(level, slot) 生成，条目里不用手写
- *   · 每秒回血只有**防御部位**有（衣服/头盔/腰带/鞋子，见 configs/growth 的 equipmentSlotShare.recover）
- *   · 想单独给某件装备加特例（例如只加攻击不加防御）→ 直接在条目里覆盖同名字段
- *   · 想整体调强/调弱所有装备 → 改 configs/growth 的 equipmentGrowth.setPowerRate
  *
- * **前后缀变体**：每件基础装备展开成全部「前缀 × 后缀」组合（5 × 3 = 15 件），
- * 属性 = 基础属性 × 前缀倍率 × 后缀倍率（倍率见 configs/growth 的 equipmentPrefixRates / equipmentSuffixRates）：
+ * **属性不在加载期生成**（#590）：基础件属性唯一来源是服务端 `equipments` 表，
+ * 快照下发后按「服务端属性 × 前后缀倍率」重算每个变体（configs/apply-snapshot 的 applyEquipmentRows）；
+ * 加载期这里只填零值占位（ZERO_EQUIPMENT_ATTRIBUTES）。
+ *
+ * **前后缀变体**：每件基础装备展开成全部「前缀 × 后缀」组合（5 × 3 = 15 件）：
  * - 「普通的·人级」沿用基础装备的原 key（基础件本身，倍率 1 × 1）
  * - 其余组合 key 为 `${key}_p${前缀序号}s${后缀序号}`（如 cloth_1_p3s2）
- * - 基础条目不配置前后缀（类型层已去掉该字段），变体统一由这里生成
  *
- * **回收价**同理按倍率缩放：基础价 = 条目的 recyclePrice（写了才用）或按 level 从
- * configs/growth 的回收价曲线取，变体乘同一个 rate（超神·神级 = 基础价 × 4.2）。
+ * **回收价**按倍率缩放：基础价 = 条目的 recyclePrice（写了才用）或按 level 从
+ * 回收价曲线取（configs/growth，本轮仍是客户端常量），变体乘同一个 rate（超神·神级 = 基础价 × 4.2）。
  *
  * 注意：等级同时是「穿戴门槛」（GameHelper.getEquipmentRejectReason 会挡「需要等级 N」），
  * 变体与基础件同 level，门槛一致；所以排等级时要想清楚这件装备应该在什么等级被拿到。
@@ -153,8 +167,8 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
   const map = new Map<string, Equipment>();
   for (const entry of data) {
     const { key, ...rest } = entry; // key 只做关联，不写进最终配置对象
-    // 基础属性（等级生成值 + 条目特例覆盖），变体在其上乘前后缀倍率
-    const base = { ...equipmentStats(rest.level, rest.slot), ...rest } as Equipment;
+    // 结构基线（属性零值占位，快照后重算）+ 条目特例覆盖，变体在其上乘前后缀倍率
+    const base = { ...ZERO_EQUIPMENT_ATTRIBUTES, ...rest } as unknown as Equipment;
     // 回收基础价（普通·人级的价）：条目里写了就用它，否则按等级从回收价曲线取（见 configs/growth）
     const baseRecyclePrice = entry.recyclePrice ?? equipmentRecyclePrice(rest.level);
     for (let p = 0; p < equipmentPrefixRates.length; p++) {

@@ -4,22 +4,25 @@
  *
  * 盯的不变量（改称号系统后必须全绿）：
  * · 等级序列与磁盘一致（resources/titles 下每个帧目录都对应一个等级、无多登/漏登）
- * · 属性曲线：每级属性 = 等效等级的角色裸属性 × rate × 系列 factor（与 configs/soul 同一套做法），
- *   三个家族（江湖 1 / 军阶 1.15 / 搞怪 1.3）换系时按 factor 跳档
- * · 价格曲线：升到 N 阶 = priceBase × N²，单调递增
+ * · 数据链路（#590）：客户端是**空运行时表**，唯一数据来源 = 服务端 title-seed（经快照整表下发）；
+ *   属性曲线（等效等级裸属性 × rate × 系列 factor）与价格曲线（priceBase × N²）都在服务端种子展开
  * · 存档迁移（旧档 title 补 0）与升级链路接线、属性加成在服务端权威重算（#541）、头顶常显、预加载
  * · 入口：称号不走 NPC，唯一入口 = 角色信息弹窗的「称号」按钮；头部信息栏的写死文字称号占位已移除
  *
- * 数据层跑在沙箱里（真实的 configs/title + growth，见 lib/configs-sandbox.cjs），素材与源码断言直接读文件。
+ * 数据层跑在沙箱里（configs/title 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
+ * 的 seedRuntimeTables），素材与源码断言直接读文件。
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, compileServerShared, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const TITLE_DIR = path.join(PROJECT_ROOT, "assets/resources/titles");
 const outDir = prepare("olua-title", ["configs/title.ts"]);
-const { titleLevels, titleMaxLevel, titleGrowth, titleUpgradePrice, getTitleLevel, titleAttributeLabels } = require(path.join(outDir, "configs/title.js"));
-const { getRoleLevelAttributes, roleMaxLevel } = require(path.join(outDir, "configs/growth.js"));
+seedRuntimeTables(outDir);
+const titleSeed = require(compileServerShared("title-seed.ts", "olua-title-title-seed"));
+const growthSeed = require(compileServerShared("growth-seed.ts", "olua-title-growth-seed"));
+const { titleLevels, titleMaxLevel, getTitleLevel, titleAttributeLabels } = require(path.join(outDir, "configs/title.js"));
+const titleGrowth = titleSeed.TITLE_GROWTH;
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -39,28 +42,33 @@ const registryDirs = titleLevels.map((config) => config.animation.replace(/^titl
 check(registryDirs.length === diskDirs.length, `等级序列数量与磁盘一致（${registryDirs.length} 个）`);
 check(JSON.stringify(registryDirs) === JSON.stringify(diskDirs), "等级序列与磁盘目录一一对应（无多登/漏登/写错编号）");
 check(titleLevels.every((config, index) => config.level === index + 1), "等级从 1 起连续（下标 + 1 即等级）");
-check(titleMaxLevel === titleLevels.length, "titleMaxLevel 与序列等长");
+check(titleMaxLevel() === titleLevels.length, "titleMaxLevel() 与序列等长");
+check(titleLevels.length === titleSeed.TITLE_SEEDS.length, "客户端运行时表行数 = 服务端种子行数（#590 整表重建）");
+// 属性键序不参与比较（种子行 hpRecover 在末尾、客户端构造顺序不同），属性按固定键序取值再比
+const ATTR_KEYS = ["maxHp", "hpRecover", "physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+const attrJson = (attributes) => JSON.stringify(ATTR_KEYS.map((key) => attributes[key]));
+const seedMismatch = titleLevels.filter((config, index) => {
+  const seed = titleSeed.TITLE_SEEDS[index];
+  return (
+    config.level !== seed.level ||
+    config.label !== seed.label ||
+    config.description !== seed.description ||
+    config.bindGold !== seed.bindGold ||
+    config.animation !== seed.animation ||
+    config.animationFrameRate !== seed.animationFrameRate ||
+    attrJson(config.attributes) !== attrJson(seed.attributes)
+  );
+});
+check(!seedMismatch.length, "客户端每行与服务端种子逐行一致（属性/价格/文案/动画）", seedMismatch.map((config) => config.level).join("、") || "34 级全部命中");
 check(new Set(titleLevels.map((config) => config.label)).size === titleLevels.length, "称号名称唯一");
 check(titleLevels.every((config) => config.animation.startsWith("titles/sfx_")), "动画路径 = titles/<目录名>（resources 加载口径）");
 check(titleLevels.every((config) => fs.existsSync(path.join(TITLE_DIR, config.animation.replace(/^titles\//, "")))), "每个称号的帧目录都真实存在");
 check(titleLevels.every((config) => config.animationFrameRate === 10), "帧率统一 10（与战魂同一档）");
 check(getTitleLevel(0) === null && getTitleLevel(-1) === null && getTitleLevel(1)?.level === 1, "getTitleLevel：0/负数返回 null（未激活），1 起有效");
 
-console.log("\n— B. 属性曲线（等效等级裸属性 × rate × 系列 factor）—");
-const FAMILY_FACTORS = [1, 1.15, 1.3];
-const familySizes = [12, 11, 11];
-function expectedAttributes(level) {
-  // 与 configs/title 同一套换算（等级 → 等效角色等级 → 裸属性打折）
-  const familyIndex = familySizes.findIndex((size, index) => level <= familySizes.slice(0, index + 1).reduce((a, b) => a + b, 0));
-  const factor = FAMILY_FACTORS[familyIndex];
-  const equivalentLevel = Math.round(titleGrowth.fromLevel + ((level - 1) / Math.max(1, titleLevels.length - 1)) * (titleGrowth.toLevel - titleGrowth.fromLevel));
-  const base = getRoleLevelAttributes(equivalentLevel);
-  const rate = titleGrowth.rate * factor;
-  const scale = (range) => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
-  return { maxHp: Math.round(base.maxHp * rate), hpRecover: Math.round(base.hpRecover * rate), physicalAttack: scale(base.physicalAttack), magicAttack: scale(base.magicAttack), taoistAttack: scale(base.taoistAttack), physicalDefense: scale(base.physicalDefense), magicDefense: scale(base.magicDefense), taoistDefense: scale(base.taoistDefense) };
-}
-const mismatched = titleLevels.filter((config) => JSON.stringify(config.attributes) !== JSON.stringify(expectedAttributes(config.level)));
-check(!mismatched.length, "每级属性都严格按「等效等级裸属性 × rate × factor」生成", mismatched.map((config) => config.level).join("、") || "34 级全部命中");
+console.log("\n— B. 属性曲线（公式在服务端 title-seed；这里盯曲线的体感性质）—");
+const getRoleLevelAttributes = growthSeed.getRoleLevelAttributes;
+const roleMaxLevel = growthSeed.ROLE_MAX_LEVEL;
 const increasing = titleLevels.every((config, index) => index === 0 || config.attributes.maxHp > titleLevels[index - 1].attributes.maxHp);
 check(increasing, "maxHp 逐级递增（换系跳档叠加在等级增长之上）");
 check(titleLevels[0].attributes.maxHp > 0 && titleLevels[titleLevels.length - 1].attributes.maxHp < getRoleLevelAttributes(roleMaxLevel).maxHp, "1 阶有加成、满阶仍低于 60 级角色裸血（称号是次级成长线，弱于战魂）");
@@ -68,8 +76,7 @@ const attrKeys = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefe
 check(titleLevels.every((config) => attrKeys.every((key) => config.attributes[key][0] <= config.attributes[key][1])), "区间属性下限 ≤ 上限");
 check(JSON.stringify(titleAttributeLabels.map((item) => item.key)) === JSON.stringify(["maxHp", ...attrKeys, "hpRecover"]), "属性显示顺序表覆盖全部字段且顺序固定");
 
-console.log("\n— C. 价格曲线 —");
-check(titleLevels.every((config) => config.bindGold === titleUpgradePrice(config.level)), "每级 bindGold 与价格曲线一致");
+console.log("\n— C. 价格曲线（在服务端种子展开；这里盯形态）—");
 check(titleLevels.every((config) => config.bindGold === Math.round(titleGrowth.priceBase * config.level * config.level)), "价格 = priceBase × N²（与战魂同形态、便宜一档）");
 check(titleLevels.every((config, index) => index === 0 || config.bindGold > titleLevels[index - 1].bindGold), "价格逐级递增");
 check(titleGrowth.rate < 0.5 && titleGrowth.priceBase < 300, "称号整体弱于/便宜于战魂（rate < 0.5、priceBase < 300）");

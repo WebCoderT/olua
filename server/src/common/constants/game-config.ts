@@ -29,11 +29,12 @@ export const ACQUIRE_CHANNEL_LABELS: Record<AcquireChannelValue, string> = {
 
 // —— 成长曲线（#256）——
 
-import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS, GROWTH_CURVES } from "../../shared/game-data.generated";
+import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS } from "../../shared/game-data.generated";
+import { GROWTH_CURVES } from "../../shared/growth-seed";
 
 /**
- * 成长曲线键清单（**派生**自生成物的 GROWTH_CURVES，不许手写字面量清单 ——
- * 客户端 configs/growth 增删曲线，这里与服务端校验自动跟着变）
+ * 成长曲线键清单（**派生**自 growth-seed 的 GROWTH_CURVES，不许手写字面量清单 ——
+ * 种子里增删曲线，这里与服务端校验自动跟着变）
  */
 export const GROWTH_CURVE_KEYS = Object.keys(GROWTH_CURVES);
 

@@ -4,31 +4,49 @@
  *
  * 盯的不变量（改军衔系统后必须全绿）：
  * · 序列完整性：100 阶（10 大段 × 10 阶）、阶数连续、衔名唯一、大段顺序与段内强度递增
- * · 属性曲线：每阶属性 = 等效等级(浮点)的角色裸属性 × rate × 大段 factor（与 configs/soul/title 同一套做法）；
- *   血量逐阶严格递增、六维单调不降（低阶相邻两阶的攻防增量不足 1 点，四舍五入会打平，这是预期）
+ * · 数据链路（#590）：客户端是**空运行时表**，唯一数据来源 = 服务端 rank-seed（经快照整表下发）——
+ *   客户端行必须与服务端种子逐行一致；血量逐阶严格递增、六维单调不降（低阶相邻两阶的攻防
+ *   增量不足 1 点，四舍五入会打平，这是预期）
  * · 强度定位：满衔介于满阶称号与满阶战魂之间（0.39 < 0.525 < 0.675），rate 也夹在两者之间
  * · 价格曲线：晋到 N 阶 = priceBase × N²，逐阶递增，价格基数比称号/战魂都便宜
  * · 头顶红字：军衔是头上那行红字（排在角色名称与血条之间），文案模板带 {rank} 占位、未授衔为空串
  * · 接线：存档迁移（旧档 rank 补 0）、晋升链路、属性加成在服务端权威重算（#541）、入口按钮在角色信息弹窗（不走 NPC）
  * · 工程口径：100 阶列表只在打开时建一次，切换选中不重建（避免重演商城「打开就卡」那个坑）
  *
- * 数据层跑在沙箱里（真实的 configs/rank + growth + title + soul，见 lib/configs-sandbox.cjs），源码断言直接读文件。
+ * 数据层跑在沙箱里（configs/rank 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
+ * 的 seedRuntimeTables；插值公式断言直接读 server/src/shared/rank-seed.ts 源码），其余源码断言直接读文件。
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, compileServerShared, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const outDir = prepare("olua-rank", ["configs/rank.ts", "configs/title.ts", "configs/soul.ts"]);
-const { rankLevels, rankMaxLevel, rankTotal, rankGrowth, rankUpgradePrice, getRankLevel, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
-const { titleLevels, titleGrowth } = require(path.join(outDir, "configs/title.js"));
-const { soulLevels, soulGrowth } = require(path.join(outDir, "configs/soul.js"));
-const { getRoleLevelAttributes } = require(path.join(outDir, "configs/growth.js"));
+seedRuntimeTables(outDir);
+const rankSeed = require(compileServerShared("rank-seed.ts", "olua-rank-rank-seed"));
+const titleSeed = require(compileServerShared("title-seed.ts", "olua-rank-title-seed"));
+const soulSeed = require(compileServerShared("soul-seed.ts", "olua-rank-soul-seed"));
+const growthSeed = require(compileServerShared("growth-seed.ts", "olua-rank-growth-seed"));
+const { rankLevels, rankMaxLevel, getRankLevel, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
+const { titleLevels } = require(path.join(outDir, "configs/title.js"));
+const { soulLevels } = require(path.join(outDir, "configs/soul.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
+const rankGrowth = rankSeed.RANK_GROWTH;
+const titleGrowth = titleSeed.TITLE_GROWTH;
 
-console.log("\n— A. 序列完整性（100 阶 = 10 大段 × 10 阶）—");
-check(rankTotal === 100, `总阶数是 100（${rankTotal}）`);
-check(rankMaxLevel === rankLevels.length && rankLevels.length === 100, "rankMaxLevel 与序列等长且为 100");
+console.log("\n— A. 序列完整性（100 阶 = 10 大段 × 10 阶；数据唯一来源 = 服务端 rank-seed）—");
+check(rankSeed.RANK_TOTAL === 100, `种子总阶数是 100（${rankSeed.RANK_TOTAL}）`);
+check(rankMaxLevel() === rankLevels.length && rankLevels.length === 100, "rankMaxLevel() 与运行时表等长且为 100");
+check(rankLevels.length === rankSeed.RANK_SEEDS.length, "客户端运行时表行数 = 服务端种子行数（#590 整表重建）");
+const seedMismatch = rankLevels.filter((config, index) => JSON.stringify(config) !== JSON.stringify({
+  level: rankSeed.RANK_SEEDS[index].level,
+  label: rankSeed.RANK_SEEDS[index].label,
+  tier: rankSeed.RANK_SEEDS[index].tier,
+  description: rankSeed.RANK_SEEDS[index].description,
+  bindGold: rankSeed.RANK_SEEDS[index].bindGold,
+  attributes: rankSeed.RANK_SEEDS[index].attributes,
+}));
+check(!seedMismatch.length, "客户端每行与服务端种子逐行一致（属性/衔名/大段/价格）", seedMismatch.map((config) => config.level).join("、") || "100 阶全部命中");
 check(rankLevels.every((config, index) => config.level === index + 1), "阶数从 1 起连续（下标 + 1 即阶数）");
 check(new Set(rankLevels.map((config) => config.label)).size === rankLevels.length, "衔名唯一（100 个各不相同）");
 check(rankLevels[0].label === "新兵" && rankLevels[99].label === "兵主临世", `首阶与末阶符合设计（${rankLevels[0].label} → ${rankLevels[99].label}）`);
@@ -42,7 +60,7 @@ rankLevels.forEach((config) => {
   else last.levels.push(config.level);
 });
 check(tiers.length === 10, `大段数量为 10（${tiers.length}）`);
-// 段宽从数据本身量（configs/rank 不再导出 rankTierSize：段配置改成 rankTierSources 之后它只是内部量）
+// 段宽从数据本身量（大段配置在服务端 rank-seed，客户端只收展开后的行）
 const rankTierSize = tiers[0]?.levels.length ?? 0;
 check(rankTierSize === 10, `每段 10 阶（实测 ${rankTierSize}）`);
 check(
@@ -51,40 +69,13 @@ check(
 );
 check(new Set(tiers.map((item) => item.tier)).size === 10, "大段名称唯一");
 
-console.log("\n— B. 属性曲线（等效等级裸属性 × rate × 大段 factor）—");
-const FAMILY_FACTORS = [1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.5];
-const factorOf = (level) => FAMILY_FACTORS[Math.floor((level - 1) / rankTierSize)];
-function expectedAttributes(level) {
-  // 与 configs/rank 同一套换算（阶 → 等效角色等级 → 两侧整数等级插值 → 裸属性打折；等效等级不取整）
-  const equivalentLevel = rankGrowth.fromLevel + ((level - 1) / Math.max(1, rankLevels.length - 1)) * (rankGrowth.toLevel - rankGrowth.fromLevel);
-  const lower = Math.floor(equivalentLevel);
-  const ratio = equivalentLevel - lower;
-  const a = getRoleLevelAttributes(lower);
-  const b = getRoleLevelAttributes(lower + 1);
-  const mix = (x, y) => x + (y - x) * ratio;
-  const mixRange = (x, y) => [mix(x[0], y[0]), mix(x[1], y[1])];
-  const base = {
-    maxHp: mix(a.maxHp, b.maxHp),
-    // 回血与血量同一口径：也要按两侧整数等级插值（裸回血由曲线派生，有同样的跳档边界）
-    hpRecover: mix(a.hpRecover, b.hpRecover),
-    physicalAttack: mixRange(a.physicalAttack, b.physicalAttack),
-    magicAttack: mixRange(a.magicAttack, b.magicAttack),
-    taoistAttack: mixRange(a.taoistAttack, b.taoistAttack),
-    physicalDefense: mixRange(a.physicalDefense, b.physicalDefense),
-    magicDefense: mixRange(a.magicDefense, b.magicDefense),
-    taoistDefense: mixRange(a.taoistDefense, b.taoistDefense),
-  };
-  const rate = rankGrowth.rate * factorOf(level);
-  const scale = (range) => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
-  return { maxHp: Math.round(base.maxHp * rate), hpRecover: Math.round(base.hpRecover * rate), physicalAttack: scale(base.physicalAttack), magicAttack: scale(base.magicAttack), taoistAttack: scale(base.taoistAttack), physicalDefense: scale(base.physicalDefense), magicDefense: scale(base.magicDefense), taoistDefense: scale(base.taoistDefense) };
-}
-const mismatched = rankLevels.filter((config) => JSON.stringify(config.attributes) !== JSON.stringify(expectedAttributes(config.level)));
-check(!mismatched.length, "每阶属性都严格按「等效等级裸属性 × rate × 大段 factor」生成", mismatched.map((config) => config.level).join("、") || "100 阶全部命中");
+console.log("\n— B. 属性曲线（公式在服务端 rank-seed；这里盯曲线的体感性质）—");
+const getRoleLevelAttributes = growthSeed.getRoleLevelAttributes;
 
-// 分数等效等级直接喂分段曲线会在档位边界回落（15 阶攻击会掉回 19），必须走两侧整数等级插值
-const rankSource = read("assets/configs/rank.ts");
-check(/getEquivalentAttributes\(getEquivalentLevel\(level\)\)/.test(rankSource), "属性走「两侧整数等级插值」取裸属性");
-check(!/getRoleLevelAttributes\(getEquivalentLevel\(/.test(rankSource), "不把分数等效等级直接喂给 getRoleLevelAttributes（分段曲线在档位边界会对分数级回推、算出更低的属性）");
+// 分数等效等级直接喂分段曲线会在档位边界回落（15 阶攻击会掉回 19），服务端必须走两侧整数等级插值
+const rankSeedSource = fs.readFileSync(path.join(PROJECT_ROOT, "..", "server", "src", "shared", "rank-seed.ts"), "utf8");
+check(/getEquivalentAttributes\(getEquivalentLevel\(level\)\)/.test(rankSeedSource), "服务端属性走「两侧整数等级插值」取裸属性");
+check(!/getRoleLevelAttributes\(getEquivalentLevel\(/.test(rankSeedSource), "不把分数等效等级直接喂给 getRoleLevelAttributes（分段曲线在档位边界会对分数级回推、算出更低的属性）");
 const fractional = getRoleLevelAttributes(10.2);
 const integerTen = getRoleLevelAttributes(10);
 check(fractional.physicalAttack[1] < integerTen.physicalAttack[1], `实测记录该陷阱：getRoleLevelAttributes(10.2) 的攻击上限 ${fractional.physicalAttack[1]} < 10 级的 ${integerTen.physicalAttack[1]}（所以必须插值）`);
@@ -99,7 +90,7 @@ check(JSON.stringify(rankAttributeLabels.map((item) => item.key)) === JSON.strin
 
 // 大段跳档：跨段那一阶的涨幅要明显大于段内相邻阶的涨幅（「换衔」的推进感）
 const boundaryJumps = [];
-for (let boundary = rankTierSize + 1; boundary < rankMaxLevel; boundary += rankTierSize) {
+for (let boundary = rankTierSize + 1; boundary < rankMaxLevel(); boundary += rankTierSize) {
   const ratio = (index) => rankLevels[index].attributes.maxHp / rankLevels[index - 1].attributes.maxHp - 1;
   boundaryJumps.push({ boundary, jump: ratio(boundary - 1), normal: ratio(boundary - 2) });
 }
@@ -121,8 +112,7 @@ check(rankMaxHp < bareMaxHp, `满衔仍低于 60 级角色裸血（${rankMaxHp} 
 check(rankGrowth.rate > titleGrowth.rate && rankGrowth.rate < 0.5, `折扣率夹在称号（${titleGrowth.rate}）与战魂冻结口径（0.5）之间（${rankGrowth.rate}）`);
 
 console.log("\n— C. 价格曲线（晋到 N 阶 = priceBase × N²，货币 = 绑定元宝）—");
-check(rankLevels.every((config) => config.bindGold === rankUpgradePrice(config.level)), "每阶 bindGold 与价格曲线一致");
-check(rankLevels.every((config) => config.bindGold === Math.round(rankGrowth.priceBase * config.level * config.level)), "价格 = priceBase × N²（与战魂/称号同形态）");
+check(rankLevels.every((config) => config.bindGold === Math.round(rankGrowth.priceBase * config.level * config.level)), "价格 = priceBase × N²（与战魂/称号同形态，价格已在服务端种子展开）");
 check(rankLevels.every((config, index) => index === 0 || config.bindGold > rankLevels[index - 1].bindGold), "价格逐阶递增");
 check(rankGrowth.priceBase < titleGrowth.priceBase && rankGrowth.priceBase < 300, `价格基数比称号/战魂都便宜（${rankGrowth.priceBase}）`);
 const totalCost = rankLevels.reduce((total, config) => total + config.bindGold, 0);

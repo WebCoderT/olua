@@ -40,12 +40,12 @@ import {
   EQUIPMENT_RECYCLE_PRICES,
   EQUIPMENT_SUFFIX_RATES,
   ITEM_BASES,
-  RANK_LEVEL_ATTRIBUTES,
   SELL_PRICES,
   SKILLS,
-  SOUL_LEVEL_ATTRIBUTES,
-  TITLE_LEVEL_ATTRIBUTES,
 } from "./game-data.generated";
+import { RANK_LEVEL_ATTRIBUTES } from "./rank-seed";
+import { SOUL_LEVEL_ATTRIBUTES } from "./soul-seed";
+import { TITLE_LEVEL_ATTRIBUTES } from "./title-seed";
 
 /** 生成物里「一份属性包」的形状：单值 + 六项区间元组 */
 export type AttributeBundle = Record<string, unknown>;
@@ -466,7 +466,8 @@ function bundleAt(override: Map<number, AttributeBundle> | null, table: Attribut
   const levelValue = Math.trunc(value);
   const fromOverride = override?.get(levelValue);
   if (fromOverride) return fromOverride;
-  const bundle = table[String(levelValue - 1)];
+  // #590 起三条成长线的属性表在各自的 seed 文件里，键 = 等级字符串（"1".."N"）
+  const bundle = table[String(levelValue)];
   return bundle && typeof bundle === "object" ? (bundle as AttributeBundle) : null;
 }
 

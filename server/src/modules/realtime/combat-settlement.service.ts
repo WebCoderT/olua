@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { GROWTH_SCALARS } from "../../shared/game-data.generated";
+import { GROWTH_SCALARS } from "../../shared/growth-seed";
 import { skillOf } from "../../shared/runtime-overrides";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";

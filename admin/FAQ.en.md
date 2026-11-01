@@ -105,13 +105,13 @@ The two entries are deliberately separate because **the verification and the con
 
 ### Can the admin keep its own table of equipment / class names?
 
-**No, and the guard will stop you.** The names for equipment / War Soul / Title / Rank / skills / items / maps have one authoritative definition: the client's `client/assets/configs` (plus the enum comments in `client/assets/types/role.ts` — the "all classes" occupation code and the three gender names live only there). `src/api/gameData.ts` imports the artifact generated from them, `server/src/shared/game-data.generated.ts` — **the same file the server reads**.
+**No, and the guard will stop you.** The names for equipment / War Soul / Title / Rank / skills / items / maps have one authoritative definition: the client's `client/assets/configs` (plus the enum comments in `client/assets/types/role.ts` — the "all classes" occupation code and the three gender names live only there); from #590 on the Title / Soul / Rank names additionally live in the server seeds `server/src/shared/{title,soul,rank}-seed.ts`, imported directly by `api/gameData.ts`). `src/api/gameData.ts` reads the generated `server/src/shared/game-data.generated.ts` — **the same artifact, never a second copy**.
 
 Writing another dictionary in `admin/src` that shares a name with the artifact (say `SEX_LABELS = { … }`) makes `make audit-shared-data` fail with the file and line. `types.ts` used to hold a hand-copied class and gender table — the client could change and the admin would never know; that copy is gone.
 
 ### Where do I change an equipment or title name?
 
-Edit the client config → run `node tools/gen-shared-data.cjs` from the repository root (= `make gen-shared-data`) → rebuild the admin.
+Edit the matching source and regenerate accordingly: for equipment / item / skill names edit the client config then run `node tools/gen-shared-data.cjs` (= `make gen-shared-data`); from #590 on the names and values of titles / souls / ranks / levels / curves live in `server/src/shared/{title,soul,rank,growth}-seed.ts` (imported directly by `api/gameData.ts`), so restart the server after editing.
 
 Forgetting to regenerate will not slip through: `make audit-shared-data` reports "artifact is stale". The guard does not ask a human whether an update is needed — the source of truth is the client, and there is no other correct answer here.
 

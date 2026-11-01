@@ -9,7 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
@@ -19,6 +19,8 @@ function readSrc(rel) {
 
 function main() {
   const outDir = prepare("olua-equip-upgrade-hint", []);
+  // #590：装备出厂属性用真实种子公式灌回（客户端 Map 是零值占位，快照后重算）
+  seedRuntimeTables(outDir);
   const items = require(path.join(outDir, "configs/items.js"));
   const equipments = require(path.join(outDir, "configs/equipments.js"));
   const { EQUIPMENT_TYPE } = require(path.join(outDir, "types/good.js"));

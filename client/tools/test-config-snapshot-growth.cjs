@@ -1,20 +1,22 @@
 #!/usr/bin/env node
 /**
- * 配置快照覆写（成长底座）回归单测（#361）
+ * 配置快照覆写（成长底座）回归单测（#361 建、#590 重写）
  *
- * 跑的是**真实配置表与真实派生函数**（configs-sandbox 编译 CommonJS + cc 垫片），不是复刻：
- * 断言「服务端下发成长曲线 / 标量 / 经验表之后，客户端的等级表真的换了」。
+ * #590 起曲线 / 标量 / 经验公式全部搬去服务端（server/src/shared/growth-seed.ts 是唯一书写处），
+ * 客户端不再有任何派生 —— 断言口径随之翻转：
+ * · **零本地数据** —— 模块加载期 levelMap / titleLevels / soulLevels / rankLevels 全是空表
+ * · **整表重建** —— 快照 `levels` / `titles` / `souls` / `ranks` 段到达后先清空再按行填
+ *   （数组与 Map 的**引用不变**），服务端没有的行客户端就没有
+ * · **上限走标量** —— roleMaxLevel 由 growthScalars 下发；未知标量键忽略不炸
+ * · **兜底不炸** —— 空快照（旧服务端）保留当前值；同一份快照重复覆写幂等
  *
- * 盯的四条口径：
- * · 曲线整条替换 —— 段数、边界、斜率都跟着服务端走，采样结果随之变
- * · 重建等级表 —— 每级属性与升级经验都由曲线派生，不重建就是旧值留底
- * · 经验表压轴 —— 管理端直接改经验表时以服务端为准（与曲线解耦）
- * · 兜底不炸 —— 缺表 / 未知曲线键 / 未知标量键一律跳过，保留本地值
+ * 行数据用**真实服务端种子**（compileServerShared 编 growth-seed / title-seed /
+ * soul-seed / rank-seed）展开，不在测试里复刻一行数值。
  *
  * 用法：node client/tools/test-config-snapshot-growth.cjs
  */
 const path = require("path");
-const { prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { prepare, compileServerShared, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 function main() {
   let outDir;
@@ -27,111 +29,113 @@ function main() {
 
   const growth = require(path.join(outDir, "configs/growth.js"));
   const level = require(path.join(outDir, "configs/level.js"));
+  const title = require(path.join(outDir, "configs/title.js"));
+  const soul = require(path.join(outDir, "configs/soul.js"));
+  const rank = require(path.join(outDir, "configs/rank.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
 
-  const { levelMap, expGain } = level;
-  const { roleGrowth, attributeRange, getRoleLevelAttributes } = growth;
-  // roleMaxLevel 是 `export let`：CommonJS 下解构会把它拷成快照，必须每次按属性读（客户端源码是
-  // ESM 命名导入，编译后是 `growth_1.roleMaxLevel` 属性访问，天然是 live 的）
+  const { levelMap } = level;
+  const { titleLevels } = title;
+  const { soulLevels } = soul;
+  const { rankLevels } = rank;
+  // roleMaxLevel 是 `export let`：CommonJS 下解构会拷成快照，必须按属性读
   const maxLevel = () => growth.roleMaxLevel;
 
-  /** 把一条曲线整体翻倍（段数与边界照抄本地，只有值变） */
-  const doubled = (curve) =>
-    roleGrowth[curve].map((segment, index) => ({
-      curve,
-      seq: index + 1,
-      fromLevel: segment.from,
-      toLevel: segment.to,
-      startValue: segment.start * 2,
-      perLevel: segment.perLevel * 2,
+  // 真实服务端种子（快照行 = 种子展开 + 区间对象）
+  const growthSeed = require(compileServerShared("growth-seed.ts", "olua-seed-growth-snap"));
+  const titleSeed = require(compileServerShared("title-seed.ts", "olua-seed-title-snap"));
+  const soulSeed = require(compileServerShared("soul-seed.ts", "olua-seed-soul-snap"));
+  const rankSeed = require(compileServerShared("rank-seed.ts", "olua-seed-rank-snap"));
+
+  const range = (tuple) => ({ min: tuple[0], max: tuple[1] });
+  const toRangeAttributes = (attributes) => ({
+    maxHp: attributes.maxHp,
+    hpRecover: attributes.hpRecover,
+    physicalAttack: range(attributes.physicalAttack),
+    magicAttack: range(attributes.magicAttack),
+    taoistAttack: range(attributes.taoistAttack),
+    physicalDefense: range(attributes.physicalDefense),
+    magicDefense: range(attributes.magicDefense),
+    taoistDefense: range(attributes.taoistDefense),
+  });
+  const levelRows = (scale = 1) =>
+    Object.entries(growthSeed.ROLE_LEVEL_ATTRIBUTES).map(([key, a]) => ({
+      level: Number(key),
+      maxHp: Math.round(a.maxHp * scale),
+      maxMp: a.maxMp,
+      hpRecover: a.hpRecover,
+      physicalAttack: range(a.physicalAttack),
+      magicAttack: range(a.magicAttack),
+      taoistAttack: range(a.taoistAttack),
+      physicalDefense: range(a.physicalDefense),
+      magicDefense: range(a.magicDefense),
+      taoistDefense: range(a.taoistDefense),
+      exp: a.exp,
     }));
+  const titleRows = () => titleSeed.TITLE_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) }));
+  const soulRows = () => soulSeed.SOUL_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) }));
+  const rankRows = () => rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) }));
 
-  // 快照内容在覆写**之前**算好：覆写会改 roleGrowth 本身，边覆写边派生会一代代滚雪球
-  const doubledSegments = [...doubled("maxHp"), ...doubled("attack"), ...doubled("defense")];
-  const levelScalars = [
-    { key: "roleMaxLevel", value: 70, description: "", updatedAt: 0 },
-    { key: "attributeRange.hpRecoverRate", value: 0.02, description: "", updatedAt: 0 },
-    { key: "expGain.expPerLevel", value: 10, description: "", updatedAt: 0 },
-    // 未知键：服务端新增参数时旧客户端应当忽略而不是炸掉
-    { key: "attributeRange.unknownRate", value: 999, description: "", updatedAt: 0 },
-  ];
+  console.log("\n=== 零本地数据：加载期全是空表 ===");
+  check(levelMap.size === 0, "levelMap 加载期为空（等级数据唯一来源 = 快照 levels 段）", String(levelMap.size));
+  check(titleLevels.length === 0, "titleLevels 加载期为空");
+  check(soulLevels.length === 0, "soulLevels 加载期为空");
+  check(rankLevels.length === 0, "rankLevels 加载期为空");
 
-  // —— 基线：模块加载期的本地值 ——
-  const localHp1 = getRoleLevelAttributes(1).maxHp;
-  const localHp60 = getRoleLevelAttributes(60).maxHp;
-  const localExp1 = levelMap.get(1).exp;
-  const localExp2 = levelMap.get(2).exp;
-  const localSize = levelMap.size;
+  console.log("\n=== levels 段整表重建（引用不变）===");
+  const mapRef = levelMap;
+  snapshotApi.applyConfigSnapshot({ levels: levelRows() });
+  check(mapRef === levelMap, "levelMap 引用不变（消费方拿到的还是同一个 Map）");
+  check(levelMap.size === growthSeed.ROLE_MAX_LEVEL, "行数 = 服务端 roleMaxLevel", `${levelMap.size}`);
+  check(levelMap.get(1).maxHp === growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].maxHp, "1 级 maxHp = 种子展开值", String(levelMap.get(1).maxHp));
+  check(levelMap.get(1).exp === growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].exp, "1 级升级经验 = 快照下发的最终值（客户端不再派生）", String(levelMap.get(1).exp));
+  check(Array.isArray(levelMap.get(1).physicalAttack), "区间对象转回客户端元组 [min, max]", JSON.stringify(levelMap.get(1).physicalAttack));
 
-  console.log("\n=== 曲线整条替换：每级属性跟着走 ===");
-  snapshotApi.applyConfigSnapshot({
-    growthSegments: doubledSegments,
-    growthScalars: [],
-    levelExps: [],
-  });
-  check(roleGrowth.maxHp[0].start === 200, "曲线第一段的 start 已换成服务端的值", JSON.stringify(roleGrowth.maxHp[0]));
-  check(getRoleLevelAttributes(1).maxHp === localHp1 * 2, "1 级 maxHp 翻倍（重建等级表后派生函数读到新曲线）", `${localHp1} → ${getRoleLevelAttributes(1).maxHp}`);
-  check(getRoleLevelAttributes(60).maxHp === localHp60 * 2, "60 级 maxHp 同样翻倍（不是只换第一段）", `${localHp60} → ${getRoleLevelAttributes(60).maxHp}`);
-  check(levelMap.get(1).maxHp === localHp1 * 2, "levelMap 里的每级血量同步（重建生效，不是只改了曲线对象）", `${levelMap.get(1).maxHp}`);
-  check(growth.monsterStats(60, "normal").maxHp > 0, "怪物属性派生函数在新曲线上仍算得出（曲线是它的基数）");
+  // 模拟服务端改曲线后下发的新值：同一份行数据整体放大
+  snapshotApi.applyConfigSnapshot({ levels: levelRows(2) });
+  check(levelMap.get(1).maxHp === growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].maxHp * 2, "第二份快照整表替换（不是只增量补行）", String(levelMap.get(1).maxHp));
 
-  console.log("\n=== 标量：上限 / 回血率 / 经验节奏 ===");
-  const localRecover1 = levelMap.get(1).hpRecover;
-  snapshotApi.applyConfigSnapshot({
-    growthSegments: [],
-    growthScalars: levelScalars,
-    levelExps: [],
-  });
+  console.log("\n=== 三条成长线：titles / souls / ranks 段 ===");
+  snapshotApi.applyConfigSnapshot({ titles: titleRows(), souls: soulRows(), ranks: rankRows() });
+  check(titleLevels.length === titleSeed.TITLE_SEEDS.length, "称号阶数 = 种子阶数", String(titleLevels.length));
+  check(titleLevels[0].attributes.physicalAttack[0] === titleSeed.TITLE_SEEDS[0].attributes.physicalAttack[0], "称号属性 = 种子展开值（客户端零派生）");
+  check(soulLevels.length === soulSeed.SOUL_SEEDS.length, "战魂阶数 = 种子阶数", String(soulLevels.length));
+  check(rankLevels.length === rankSeed.RANK_SEEDS.length, "军衔阶数 = 种子阶数（1 连续到 100）", String(rankLevels.length));
+  check(rankLevels[0].tier === rankSeed.RANK_SEEDS[0].tier, "军衔大段名（tier）随快照下发", rankLevels[0].tier);
+  check(titleMax() === titleLevels.length, "titleMaxLevel() 读的是运行时表", String(titleMax()));
+  check(soulMax() === soulLevels.length, "soulMaxLevel() 读的是运行时表", String(soulMax()));
+  check(rankMax() === rankLevels.length, "rankMaxLevel() 读的是运行时表", String(rankMax()));
+
+  console.log("\n=== 标量：roleMaxLevel 下发 ===");
+  snapshotApi.applyConfigSnapshot({ growthScalars: [{ key: "roleMaxLevel", value: 70, description: "", updatedAt: 0 }] });
   check(maxLevel() === 70, "等级上限读到服务端的 70", String(maxLevel()));
-  check(levelMap.size === 70, "重建后等级表扩到 70 行", `${localSize} → ${levelMap.size}`);
-  check(levelMap.has(70) && !levelMap.has(71), "70 级有行、71 级没有（上限是闭区间）");
-  check(
-    levelMap.get(1).hpRecover === Math.round(levelMap.get(1).maxHp * 0.02),
-    "每秒回血按新比例重算（= maxHp × hpRecoverRate）",
-    `${localRecover1} → ${levelMap.get(1).hpRecover}`,
-  );
-  check(attributeRange.hpRecoverRate === 0.02, "标量写回了 attributeRange");
-  check(expGain.expPerLevel === 10, "每级基准经验写回了 expGain");
-  check(levelMap.get(1).exp > localExp1, "曲线口径下的升级经验跟着新 expPerLevel 变大", `${localExp1} → ${levelMap.get(1).exp}`);
-  check(maxLevel() === 70 && levelMap.size === 70, "未知标量键被忽略，不影响其余参数");
+  snapshotApi.applyConfigSnapshot({ growthScalars: [{ key: "attributeRange.unknownRate", value: 999, description: "", updatedAt: 0 }] });
+  check(maxLevel() === 70, "未知标量键被忽略，不影响其余参数", String(maxLevel()));
 
-  console.log("\n=== 经验表压轴：以服务端为准 ===");
-  const curveExp1 = levelMap.get(1).exp;
-  const curveExp2 = levelMap.get(2).exp;
-  snapshotApi.applyConfigSnapshot({
-    growthSegments: [],
-    growthScalars: [],
-    levelExps: [
-      { level: 1, exp: 12_345, updatedAt: 0 },
-      { level: 2, exp: 0, updatedAt: 0 },
-      // 超出上限的行：上限调小后服务端仍会发更大 level 的行，不该凭空造出等级
-      { level: 999, exp: 1, updatedAt: 0 },
-    ],
-  });
-  check(levelMap.get(1).exp === 12_345, "经验表覆盖了曲线算出的值", `${curveExp1} → ${levelMap.get(1).exp}`);
-  check(levelMap.get(2).exp === 0, "经验表里写 0 也照单全收（不存在「0 当没填」的歧义）", String(levelMap.get(2).exp));
-  check(!levelMap.has(999), "超出上限的经验行被跳过（不凭空造等级）");
-  check(levelMap.size === 70, "行数不受经验表影响（等级表由上限决定）", String(levelMap.size));
-  check(curveExp2 > 0, "未被覆盖的等级仍保留曲线口径的经验", String(curveExp2));
+  console.log("\n=== 缩表：服务端把上限调小 ===");
+  const shrunken = levelRows().filter((row) => row.level <= 50);
+  snapshotApi.applyConfigSnapshot({ levels: shrunken });
+  check(levelMap.size === 50, "整表重建后行数跟着缩（管理端调小上限，客户端没有幽灵等级）", String(levelMap.size));
+  check(!levelMap.has(51) && !levelMap.has(70), "50 级以上已清空");
 
-  console.log("\n=== 兜底：缺表不炸、重复覆写幂等 ===");
+  console.log("\n=== 兜底：空快照不炸、重复覆写幂等 ===");
+  snapshotApi.applyConfigSnapshot({ levels: levelRows() });
   const hpBefore = levelMap.get(1).maxHp;
   snapshotApi.applyConfigSnapshot({});
-  check(levelMap.get(1).maxHp === hpBefore, "空快照（旧服务端）保留当前值，回落到已有配置");
-  check(maxLevel() === 70 && levelMap.size === 70, "空快照不动等级上限");
+  check(levelMap.get(1).maxHp === hpBefore, "空快照（旧服务端）保留当前值");
+  check(maxLevel() === 70, "空快照不动等级上限", String(maxLevel()));
 
-  const reapply = () =>
-    snapshotApi.applyConfigSnapshot({
-      growthSegments: doubledSegments,
-      growthScalars: levelScalars,
-      levelExps: [{ level: 1, exp: 12_345, updatedAt: 0 }],
-    });
+  const reapply = () => snapshotApi.applyConfigSnapshot({ levels: levelRows(2), titles: titleRows(), souls: soulRows(), ranks: rankRows() });
   reapply();
-  const once = JSON.stringify([...levelMap.keys()].map((key) => levelMap.get(key)));
+  const once = JSON.stringify([...levelMap.entries()]);
   reapply();
-  const twice = JSON.stringify([...levelMap.keys()].map((key) => levelMap.get(key)));
+  const twice = JSON.stringify([...levelMap.entries()]);
   check(once === twice, "同一份快照连续覆写两次结果一致（幂等，重进游戏不会滚雪球）");
-  check(levelMap.get(1).exp === 12_345, "幂等之后经验表仍是最终权威");
+  check(titleLevels.length === titleSeed.TITLE_SEEDS.length && rankLevels.length === rankSeed.RANK_SEEDS.length, "幂等同样覆盖三条成长线");
+
+  function titleMax() { return title.titleMaxLevel(); }
+  function soulMax() { return soul.soulMaxLevel(); }
+  function rankMax() { return rank.rankMaxLevel(); }
 
   finish("配置快照成长底座：全部断言通过");
 }

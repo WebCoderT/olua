@@ -3,8 +3,75 @@ import { IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validato
 import { GROWTH_CURVE_KEYS } from "../../../common/constants/game-config";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { GrowthScalarRow, GrowthSegmentRow, LevelExpRow } from "../../../database/rows";
+import { ConfigAttributeRangeDto } from "./title.dto";
 
 // —— 等级经验 ——
+
+/**
+ * 快照 `levels` 段的一行（#590）：某级的**最终**属性与升级经验
+ *
+ * 属性由服务端 growth-seed 按曲线当场展开（管理端改曲线 → 重启 → 快照即变），
+ * exp 取 `level_exps` 表（管理端可改的最终权威）。客户端 `levelMap` 整表由这段填充，
+ * 不再自己派生（曲线与标量不再下发）。
+ */
+export class LevelDto {
+  @ApiProperty({ description: "等级（1 起，连续到 roleMaxLevel）" })
+  level: number;
+
+  @ApiProperty({ description: "生命上限（裸属性）" })
+  maxHp: number;
+
+  @ApiProperty({ description: "魔法上限（= maxHp × mpRate）" })
+  maxMp: number;
+
+  @ApiProperty({ description: "每秒回血（裸属性）" })
+  hpRecover: number;
+
+  @ApiProperty({ description: "物攻区间", type: ConfigAttributeRangeDto })
+  physicalAttack: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "魔攻区间", type: ConfigAttributeRangeDto })
+  magicAttack: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "道攻区间", type: ConfigAttributeRangeDto })
+  taoistAttack: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "物防区间", type: ConfigAttributeRangeDto })
+  physicalDefense: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "魔防区间", type: ConfigAttributeRangeDto })
+  magicDefense: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "道防区间", type: ConfigAttributeRangeDto })
+  taoistDefense: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "升到下一级所需经验（level_exps 表的最终值）" })
+  exp: number;
+
+  /** 从 growth-seed 展开行 + level_exps 最终值拼一行（六项区间是 [min,max] 元组） */
+  static from(level: number, attributes: Record<string, unknown>, exp: number): LevelDto {
+    const dto = new LevelDto();
+    const range = (value: unknown): ConfigAttributeRangeDto => {
+      const tuple = value as [number, number];
+      const out = new ConfigAttributeRangeDto();
+      out.min = tuple[0];
+      out.max = tuple[1];
+      return out;
+    };
+    dto.level = level;
+    dto.maxHp = Number(attributes.maxHp);
+    dto.maxMp = Number(attributes.maxMp);
+    dto.hpRecover = Number(attributes.hpRecover);
+    dto.physicalAttack = range(attributes.physicalAttack);
+    dto.magicAttack = range(attributes.magicAttack);
+    dto.taoistAttack = range(attributes.taoistAttack);
+    dto.physicalDefense = range(attributes.physicalDefense);
+    dto.magicDefense = range(attributes.magicDefense);
+    dto.taoistDefense = range(attributes.taoistDefense);
+    dto.exp = exp;
+    return dto;
+  }
+}
 
 /** 管理端看到的一行升级经验 */
 export class LevelExpDto {

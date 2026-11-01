@@ -105,13 +105,13 @@
 
 ### 后台能自己加一张「装备名 / 职业名」的表吗？
 
-**不能，而且守卫会拦。** 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字，权威定义只有一处 —— 客户端的 `client/assets/configs`（外加 `client/assets/types/role.ts` 的枚举注释：「全职业」这个职业码与三个性别名只写在那里）。`src/api/gameData.ts` 引用的就是由它们生成的 `server/src/shared/game-data.generated.ts`，**和服务端读的是同一个文件**。
+**不能，而且守卫会拦。** 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字，权威定义只有一处 —— 客户端的 `client/assets/configs`（外加 `client/assets/types/role.ts` 的枚举注释：「全职业」这个职业码与三个性别名只写在那里）；#590 起称号 / 战魂 / 军衔的名字另有一处服务端种子 `server/src/shared/{title,soul,rank}-seed.ts`，`api/gameData.ts` 直接 import 同一份。`src/api/gameData.ts` 读的生成物 `server/src/shared/game-data.generated.ts` **与生成物同一份、不是第二份副本**。
 
 要在 `admin/src` 里再写一份与生成物同名的字典（比如 `SEX_LABELS = { … }`），`make audit-shared-data` 会直接 FAIL 并点出文件行号。此前 `types.ts` 里就手抄过一份职业名与性别名 —— 客户端改了这边不会知道，已经删掉改成引用。
 
 ### 想改装备名 / 称号名，改哪里？
 
-改客户端配置 → 在仓库根跑 `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）→ 管理端重新构建。
+改对应来源 → 视情况重跑或重建：装备 / 物品 / 技能名改客户端配置后跑 `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）；#590 起称号 / 战魂 / 军衔 / 等级 / 曲线的名字与数值在 `server/src/shared/{title,soul,rank,growth}-seed.ts`（管理端 `api/gameData.ts` 直接 import 同一份），改完重启服务端即可。
 
 忘了重新生成也不会漏过去：`make audit-shared-data` 会报「生成物已过期」。这条守卫不去让人判断「要不要更新」—— 来源在客户端，这边没有别的正确答案。
 

@@ -5,7 +5,7 @@ import { DrugDto } from "./drug.dto";
 import { DropTableDto, MonsterDropDto } from "./drop.dto";
 import { EquipmentDto } from "./equipment.dto";
 import { FashionDto } from "./fashion.dto";
-import { GrowthScalarDto, LevelExpDto, GrowthSegmentDto } from "./growth.dto";
+import { GrowthScalarDto, LevelDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
 import { MallPriceItemDto, MallSettingsDto } from "./mall.dto";
 import { MapConfigDto, MapTypeGroupDto } from "../../map/dto/map.dto";
@@ -76,15 +76,17 @@ export class GameConfigSnapshotDto {
   @Type(() => FashionDto)
   fashions!: FashionDto[];
 
-  @ApiProperty({ description: "升级经验表（一行 = 升到下一级所需经验）", type: [LevelExpDto] })
-  @Type(() => LevelExpDto)
-  levelExps!: LevelExpDto[];
+  @ApiProperty({
+    description:
+      "等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— " +
+      "属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；" +
+      "客户端 levelMap 整表由这段填充，曲线与标量不再下发",
+    type: [LevelDto],
+  })
+  @Type(() => LevelDto)
+  levels!: LevelDto[];
 
-  @ApiProperty({ description: "成长曲线分段", type: [GrowthSegmentDto] })
-  @Type(() => GrowthSegmentDto)
-  growthSegments!: GrowthSegmentDto[];
-
-  @ApiProperty({ description: "成长标量参数（键值对）", type: [GrowthScalarDto] })
+  @ApiProperty({ description: "成长标量参数（键值对；客户端只消费 roleMaxLevel，其余键服务端自用）", type: [GrowthScalarDto] })
   @Type(() => GrowthScalarDto)
   growthScalars!: GrowthScalarDto[];
 

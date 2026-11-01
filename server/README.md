@@ -162,8 +162,12 @@ server/
 │   │   ├── token/                  JWT 签发与校验（双受众）
 │   │   └── health/
 │   ├── shared/
-│   │   ├── game-data.generated.ts  公共游戏数据快照（**三端唯一的游戏数据来源**；@generated，
-│   │   │                           重生成 = node tools/gen-shared-data.cjs）
+│   │   ├── game-data.generated.ts  公共游戏数据快照（装备 / 物品 / 技能 / 状态 / 掉落 / NPC / 时装等；
+│   │   │                           @generated，重生成 = node tools/gen-shared-data.cjs）
+│   │   ├── growth-seed.ts          成长曲线与等级裸属性的唯一书写处（#590；装备出厂属性公式 equipmentStats 也在这里）
+│   │   ├── title-seed.ts / soul-seed.ts / rank-seed.ts
+│   │   │                           三条成长线的唯一书写处（#590；客户端 configs 只是空运行时表，快照整表下发）
+│   │   ├── monster-seed.ts         怪物出厂数值的唯一书写处（#588）
 │   │   └── game-data.ts            服务端门面（手写）：从上面那份派生职业 / 性别码清单与文档文案
 │   └── swagger/
 │       ├── setup.ts                文档挂载（抽成函数，好让测试也生成一次来验分组/权限/悬空 $ref）
@@ -224,10 +228,10 @@ server/
 | `role_mails` | 游戏内邮件（#429 / 频道 #436） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at`。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一） | **从客户端 Tiled 导入一次后归服务端**：`tools/import-spawn-areas.cjs` 生成 SPAWN_AREAS 快照（提交进仓库），启动时空表自动 seed；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId |
-| `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验 |
-| `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验） |
+| `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验（出厂 = growth-seed 的曲线展开，#590） |
+| `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验）；出厂 = growth-seed（#590 起曲线唯一书写处在服务端种子） |
 | `growth_scalars` | 成长标量参数（#256） | 等级上限 / 属性区间倍率 / 经验节奏；各键取值域见服务端常量 |
-| `ranks` | 军衔配置（#250） | 阶数序列固定（1..100），只可改不可增删；衔名 / 大段名 / 晋升价格 / 八项属性 |
+| `ranks` | 军衔配置（#250） | 阶数序列固定（1..100），只可改不可增删；衔名 / 大段名 / 晋升价格 / 八项属性（出厂 = rank-seed 展开，#590） |
 | `equipments` | 装备基础件配置（#252） | 主键是基础件 id（如 `cloth_1`，变体不进库）；部位 / 等级需求 / 售卖价 / 八项属性；id / 部位结构固定，只可改不可增删 |
 | `drugs` | 药品配置（#253） | 主键是药品 id（如 `drug_hp_1`，被掉落表与背包引用）；名称 / 描述 / 售卖价 / 堆叠 / 冷却 / 四项回复量（effects 按键求和）；id 清单固定，只可改不可增删 |
 | `items` | 物品与材料配置（#255） | 主键是物品 id（如 `material_hide`，被掉落表与脚本引用）；只收 MATERIAL / OTHER 大类；名称 / 描述 / 售卖价 / 堆叠；id 清单固定，只可改不可增删 |
@@ -325,7 +329,7 @@ server/
 
 ## 接口与契约
 
-当前 **167 个接口 / 137 条路径 / 262 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **167 个接口 / 137 条路径 / 263 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |

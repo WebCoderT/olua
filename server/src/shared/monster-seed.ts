@@ -18,7 +18,7 @@
  *           ③ 重启服务端（新 key 自动 seed 进表）。
  */
 
-import { GROWTH_SCALARS, ROLE_LEVEL_ATTRIBUTES } from "./game-data.generated";
+import { GROWTH_SCALARS, ROLE_LEVEL_ATTRIBUTES } from "./growth-seed";
 
 /** 怪物定位（决定同等级下的强度倍率，见 MONSTER_TIER_SCALE） */
 export type MonsterSeedTier = "normal" | "elite" | "boss";

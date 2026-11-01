@@ -197,10 +197,10 @@ for (const [value, sources] of refs) {
 
 //#region 2. 展开型引用（模板串的取值在数据表数值字段里）
 
-/** 称号：title.ts 的 `{ id: <数字>,` → titles/sfx_<id> 目录（#542 起目录里有同名打包图集，路径不变） */
-const titleSource = stripComments(fs.readFileSync(path.join(ROOT, "client/assets/configs/title.ts"), "utf8"));
-const titleIds = [...titleSource.matchAll(/\bid:\s*(\d+),/g)].map((m) => Number(m[1]));
-if (!titleIds.length) failures.push("展开核对：title.ts 里解析不出称号 id（写法变了？）");
+/** 称号：id 唯一书写处 = 服务端 title-seed 的 TITLE_SOURCE_ROWS（#590 起客户端 title.ts 不再有数据）→ titles/sfx_<id> 目录 */
+const titleSource = stripComments(fs.readFileSync(path.join(ROOT, "server/src/shared/title-seed.ts"), "utf8"));
+const titleIds = [...titleSource.matchAll(/\{\s*id:\s*(\d+),\s*factor:/g)].map((m) => Number(m[1]));
+if (!titleIds.length) failures.push("展开核对：title-seed.ts 里解析不出称号 id（写法变了？）");
 for (const id of titleIds) {
   const dir = `titles/sfx_${id}`;
   if (dirExists(dir)) passed += 1;

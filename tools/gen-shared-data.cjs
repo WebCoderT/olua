@@ -57,6 +57,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
 
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
@@ -85,7 +86,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["level", "growth", "battle", "soul", "title", "rank", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status", "monster-skills", "quest-data", "achievement-data"].map(
+const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status", "monster-skills", "quest-data", "achievement-data"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -110,7 +111,13 @@ function main() {
   compileClientConfig(work, SOURCE_FILES);
 
   const { cfg } = configLoader(work);
-  const snapshot = buildSnapshot(load(cfg));
+  // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
+  // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
+  const growthSeed = compileServerShared(work);
+  const prefixRates = cfg("growth").equipmentPrefixRates;
+  const suffixRates = cfg("growth").equipmentSuffixRates;
+  const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
+  const snapshot = buildSnapshot(load(cfg), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -118,10 +125,9 @@ function main() {
 
   const count = (rows) => rows.length;
   console.log(`✔ 已生成 ${path.relative(ROOT, OUT)}`);
-  console.log(`  身形：等级 ${count(snapshot.roleLevels)} 级 · 战魂 ${count(snapshot.soulLabels)} 阶 · 称号 ${count(snapshot.titleLabels)} 级 · 军衔 ${count(snapshot.rankLabels)} 阶`);
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
   console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 职业 ${count(snapshot.occupationLabels)} 个 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
-  console.log(`  成长曲线 ${count(snapshot.growthCurves)} 条 · 标量参数 ${count(snapshot.growthScalars)} 个`);
+  console.log(`  #590 起等级 / 战魂 / 称号 / 军衔 / 成长曲线不在生成物里（唯一来源 = server/src/shared/*-seed.ts）`);
   cleanupWork(work);
 }
 
@@ -132,13 +138,10 @@ function load(cfg) {
     return value;
   };
   return {
-    level: cfg("level"),
-    // 成长曲线参数（#256）：分段线性曲线本体 + 标量参数，管理端收口成可改数据
+    // 成长曲线参数只保留**装备倍率与回收价曲线**（客户端常量，装备批次再收）——
+    // #590 起曲线本体 / 标量 / 等级表 / 三条成长线的书写处都在 server/src/shared/*-seed.ts
     growth: cfg("growth"),
     battle: cfg("battle"),
-    soul: missing("soul", cfg("soul").soulLevels),
-    title: missing("title", cfg("title").titleLevels),
-    rank: missing("rank", cfg("rank").rankLevels),
     equipments,
     equipmentMaps: EQUIPMENT_MAPS.map((name) => [name, missing(`equipments.${name}`, equipments[name])]),
     skillData: missing("skill-data", cfg("skill-data").skillData),
@@ -177,30 +180,16 @@ function load(cfg) {
 }
 
 /** 抽成一个与引擎、与 TS 类型都无关的纯数据快照 */
-function buildSnapshot(cfg) {
+function buildSnapshot(cfg, statsOf) {
   // 技能行两处要用：快照本身 + 怪物挂载校验（挂的必须是 owner=monster 的技能）
   const skills = pickSkills(cfg.skillData);
   return {
     // —— 战斗数值（服务端算属性用；与它之前那份独立的 battle-rules 快照**逐值相同**，已合并）——
-    roleLevels: pickMap(cfg.level.levelMap, (value) => {
-      const out = pickAttributes(value);
-      out.maxMp = round(value.maxMp ?? 0);
-      out.exp = round(value.exp ?? 0);
-      return out;
-    }),
     combatWeights: pickMap(cfg.battle.combatCalc),
-    soulLevels: pickList(cfg.soul, (item) => pickAttributes(item.attributes)),
-    titleLevels: pickList(cfg.title, (item) => pickAttributes(item.attributes)),
-    rankLevels: pickList(cfg.rank, (item) => pickAttributes(item.attributes)),
-    // —— 养成配置元数据（管理端 seed 用：名称之外，还带文案 / 价格 / 动画资源）——
-    soulMeta: pickList(cfg.soul, pickConfigMeta),
-    titleMeta: pickList(cfg.title, pickConfigMeta),
-    // 军衔（#250）：没有动画资源，只带文案与晋升价格
-    rankMeta: pickList(cfg.rank, pickRankMeta),
-    equipmentAttributes: pickEquipments(cfg.equipmentMaps),
+    equipmentAttributes: pickEquipments(cfg.equipmentMaps, statsOf),
     // 装备基础件（#252）：普通的·人级那一档，管理端「装备配置」的 seed 来源 ——
     // 变体（_pXsY）的属性与回收价都是基础件乘倍率展开的，运营只改基础件这一份
-    equipmentBases: pickEquipmentBases(cfg.equipmentMaps),
+    equipmentBases: pickEquipmentBases(cfg.equipmentMaps, statsOf),
     skills,
     // 状态（#367）：角色状态的数值修正 / 时长 / 图标特效，管理端收口成可改数据
     statuses: pickStatuses(cfg.statuses),
@@ -224,9 +213,7 @@ function buildSnapshot(cfg) {
     // 出售价（#397）：整张物品总表一遍过 —— 装备按回收价曲线（配置层建表时已算好 recyclePrice），
     // 其余物品取 sellPirce；0 与缺省 = 不可卖。服务端照这份表结算，**不信任客户端报的价**
     sellPrices: pickSellPrices(cfg.items),
-    // —— 成长曲线（#256：管理端可改的曲线本体与标量参数）——
-    growthCurves: pickGrowthCurves(cfg.growth.roleGrowth),
-    growthScalars: pickGrowthScalars(cfg.growth, cfg.level.expGain),
+    // —— 成长曲线：#590 起不再从客户端取（server/src/shared/growth-seed.ts 是唯一书写处）——
     // 装备回收基础价（#545）：等级 → 绑定元宝，**采样值**而不是曲线公式 —— 服务端卖装备
     // 要按「等级 × 前后缀倍率」算价，与客户端同一个取整口径；公式搬一份到服务端必然漂移
     equipmentRecyclePrices: pickEquipmentRecyclePrices(cfg.growth),
@@ -254,9 +241,6 @@ function buildSnapshot(cfg) {
     equipmentSuffixRates: pickRates("equipmentSuffixRates", cfg.growth.equipmentSuffixRates, cfg.equipments.equipmentSuffixLabels),
     equipmentDisplayNames: pickEquipmentNames(cfg.equipmentMaps, cfg.equipments),
     equipmentSlotOf: pickEquipmentSlots(cfg.equipmentMaps),
-    soulLabels: pickList(cfg.soul, (item) => String(item.label ?? "")),
-    titleLabels: pickList(cfg.title, (item) => String(item.label ?? "")),
-    rankLabels: pickList(cfg.rank, (item) => ({ tier: String(item.tier ?? ""), label: String(item.label ?? "") })),
     skillLabels: pickSkillsLabels(cfg.skillData),
   };
 }
@@ -308,18 +292,92 @@ function pickEquipmentSlots(maps) {
  *
  * id 重复要在**这里**挡掉：落到 `Record` 里就是 TS1117「重复属性名」，报错点离真因很远。
  */
-function pickEquipments(maps) {
+function pickEquipments(maps, statsOf) {
   const out = [];
   const seen = new Set();
   for (const [name, map] of maps) {
     map.forEach((item, id) => {
       if (seen.has(id)) throw new Error(`装备 id 重复：${id}（同一 id 不能出现在两个部位表里）`);
       seen.add(id);
-      out.push([id, pickAttributes(item)]);
+      out.push([id, pickEquipmentAttributes(statsOf, item)]);
     });
     void name;
   }
   return out;
+}
+
+/**
+ * 装备条目 → 八项战斗属性（#590：公式在 server/src/shared/growth-seed.ts 的 equipmentStats，
+ * 按**装备自己的 level + slot** 出厂；变体在出厂值上乘前后缀倍率 —— 与客户端
+ * buildEquipmentMap 快照重算后的结果同一口径）
+ */
+function pickEquipmentAttributes(statsOf, item) {
+  const stats = statsOf(item);
+  return {
+    maxHp: round(stats.maxHp ?? 0),
+    hpRecover: round(stats.hpRecover ?? 0),
+    physicalAttack: tuple(stats.physicalAttack),
+    magicAttack: tuple(stats.magicAttack),
+    taoistAttack: tuple(stats.taoistAttack),
+    physicalDefense: tuple(stats.physicalDefense),
+    magicDefense: tuple(stats.magicDefense),
+    taoistDefense: tuple(stats.taoistDefense),
+  };
+}
+
+/**
+ * 编译服务端 growth-seed.ts（#590）并返回模块（equipmentStats 在里面）
+ *
+ * 与 compileClientConfig 同一条路：同一个 tsc、独立 tsconfig（rootDir = server/src/shared），
+ * 编译失败直接抛 —— 种子坏了不能让生成物静默变成全 0。
+ */
+function compileServerShared(work) {
+  const sharedDir = path.join(ROOT, "server", "src", "shared");
+  const tsconfig = path.join(work, "tsconfig.server.json");
+  fs.writeFileSync(
+    tsconfig,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "CommonJS",
+          moduleResolution: "node",
+          outDir: path.join(work, "server-out"),
+          rootDir: sharedDir,
+          skipLibCheck: true,
+          esModuleInterop: true,
+          strict: false,
+          noEmitOnError: false,
+          types: [],
+        },
+        files: [path.join(sharedDir, "growth-seed.ts")],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
+  if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
+  execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return require(path.join(work, "server-out", "growth-seed.js"));
+}
+
+/** 出厂属性 × 前后缀倍率（倍率表仍是客户端 growth.ts 的常量，装备批次再收权到服务端） */
+function scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates) {
+  const stats = growthSeed.equipmentStats(Number(item.level) || 0, String(item.slot ?? ""));
+  const rate = (prefixRates[Number(item.prefix) || 0] ?? 1) * (suffixRates[Number(item.suffix) || 0] ?? 1);
+  const scaleRange = (range) => [Math.round(range[0] * rate), Math.round(range[1] * rate)];
+  return {
+    maxHp: Math.round(stats.maxHp * rate),
+    hpRecover: Math.round(stats.hpRecover * rate),
+    physicalAttack: scaleRange(stats.physicalAttack),
+    magicAttack: scaleRange(stats.magicAttack),
+    taoistAttack: scaleRange(stats.taoistAttack),
+    physicalDefense: scaleRange(stats.physicalDefense),
+    magicDefense: scaleRange(stats.magicDefense),
+    taoistDefense: scaleRange(stats.taoistDefense),
+  };
 }
 
 /**
@@ -332,7 +390,7 @@ function pickEquipments(maps) {
  * sellPrice 来自条目的 `sellPirce`（客户端字段名历史上拼成了 Pirce，这里统一规整成
  * sellPrice，两端生成物与库里都用正确拼写）；回收价是「曲线 × 倍率」的派生值，不进快照。
  */
-function pickEquipmentBases(maps) {
+function pickEquipmentBases(maps, statsOf) {
   const out = [];
   const seen = new Set();
   for (const [name, map] of maps) {
@@ -350,7 +408,8 @@ function pickEquipmentBases(maps) {
           label: String(item.label ?? ""),
           // 图标（resources 相对路径，不含扩展名）：管理端列表缩略图用，与外观几何无关
           icon: String(item.icon ?? ""),
-          attributes: pickAttributes(item),
+          // #590：出厂属性 = 服务端公式（equipmentStats），不再读客户端 Map（那里是零值占位）
+          attributes: pickEquipmentAttributes(statsOf, item),
         },
       ]);
     });
@@ -899,75 +958,6 @@ function pickList(list, project) {
 }
 
 /**
- * 养成等级配置的元数据（战魂阶 / 称号等级共用一条形状）
- *
- * `attributes` 已由 `pickAttributes` 单独快照，这里只带**管理端要展示与编辑**的
- * 四个字段：文案、升到该级的价格、动画资源与帧率 —— 全部取自等级条目本身，
- * 不在这里重算（客户端 configs 怎么写，快照就是什么）。
- */
-function pickConfigMeta(item) {
-  return {
-    description: String(item.description ?? ""),
-    bindGold: round(item.bindGold ?? 0),
-    animation: String(item.animation ?? ""),
-    animationFrameRate: round(item.animationFrameRate ?? 0),
-  };
-}
-
-/** 军衔阶的元数据（#250）：军衔没有动画，只带文案与晋升价格（rankUpgradePrice 派生的 bindGold） */
-function pickRankMeta(item) {
-  return {
-    description: String(item.description ?? ""),
-    bindGold: round(item.bindGold ?? 0),
-  };
-}
-
-/**
- * 成长曲线（#256）→ [[曲线键, 分段数组]]
- *
- * curves 键是 configs/growth 的 roleGrowth 四条曲线（maxHp / attack / defense / killsPerLevel），
- * 每段 {from, to, start, perLevel} 原样快照 —— 分段线性插值的口径留在客户端，
- * 这里只搬数据，不复制「怎么取样」。
- */
-function pickGrowthCurves(roleGrowth) {
-  const out = [];
-  for (const [key, segments] of Object.entries(roleGrowth)) {
-    if (!Array.isArray(segments) || segments.length === 0) throw new Error(`成长曲线 ${key} 为空（configs/growth 改坏了？）`);
-    out.push([
-      key,
-      segments.map((segment) => ({
-        from: round(segment.from ?? 0),
-        to: round(segment.to ?? 0),
-        start: round(segment.start ?? 0),
-        perLevel: round(segment.perLevel ?? 0),
-      })),
-    ]);
-  }
-  return out;
-}
-
-/**
- * 成长标量参数（#256）→ [[键, 数值]]
- *
- * 键用「来源.字段」的扁平形状，消费方按字符串取值；管理端 seed 时逐行落库、
- * 逐行编辑 —— 所以这里必须是**纯数值**，任何结构化的东西都该进 curves。
- */
-function pickGrowthScalars(growth, expGain) {
-  const out = [];
-  const push = (key, value) => {
-    if (!Number.isFinite(value)) throw new Error(`成长标量 ${key} 不是有限数值（configs 改坏了？）`);
-    out.push([key, round(value)]);
-  };
-  push("roleMaxLevel", growth.roleMaxLevel);
-  push("attributeRange.minRate", growth.attributeRange.minRate);
-  push("attributeRange.mpRate", growth.attributeRange.mpRate);
-  push("attributeRange.hpRecoverRate", growth.attributeRange.hpRecoverRate);
-  push("expGain.expPerLevel", expGain.expPerLevel);
-  push("expGain.maxLevelGap", expGain.maxLevelGap);
-  return out;
-}
-
-/**
  * 装备回收基础价（#545）：等级 → 绑定元宝，下标 = 等级 - 1
  *
  * 客户端 `configs/growth.equipmentRecyclePrice(level)` 是**分段线性曲线的采样**，
@@ -1083,11 +1073,9 @@ export const COMBAT_SINGLE_KEYS: string[] = ${literal(SINGLE_KEYS, "  ")};
 
 //#region 战斗数值（服务端算角色属性用）
 
-${numTable("ROLE_LEVEL_ATTRIBUTES", "等级 → 战斗属性（下标 / 键 = 来源等级）", s.roleLevels)}
+// #590：ROLE_LEVEL_ATTRIBUTES / 三条成长线的 LEVEL_ATTRIBUTES / GROWTH_CURVES / GROWTH_SCALARS
+// 已移出生成物 —— 唯一书写处 = server/src/shared/{growth,title,soul,rank}-seed.ts
 ${numTable("COMBAT_WEIGHTS", "战斗力权重（属性名 → 倍率）", s.combatWeights)}
-${numTable("SOUL_LEVEL_ATTRIBUTES", "战魂等级 → 整份属性加成", s.soulLevels)}
-${numTable("TITLE_LEVEL_ATTRIBUTES", "称号等级 → 整份属性加成", s.titleLevels)}
-${numTable("RANK_LEVEL_ATTRIBUTES", "军衔等级 → 整份属性加成", s.rankLevels)}
 ${numTable("EQUIPMENT_ATTRIBUTES", "装备 id → 战斗属性（已含前后缀变体，id 里带品质后缀，如 cloth_1_p3s2）", s.equipmentAttributes)}
 ${numTable("SKILLS", "技能 id → 整行配置（#367：owner / 分类 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数 / 挂载状态 / 释放限制）。damageCoefficients 的下标 = 技能等级", s.skills)}
 ${jsonTable("STATUSES", "状态 id → 整行配置（#367：owner / 时长 / 图标特效 / 战斗数值修正 combat）。combat 的口径实现在客户端 BattleMath", s.statuses)}
@@ -1098,8 +1086,6 @@ ${jsonTable("FASHIONS", "时装 id → { label, description, icon 图标, in 内
 ${jsonTable("DROP_TABLES", "具名掉落表 id → { picks 抽取次数, entries 条目池 }（#254；weight/chance/count 已规整为全显式，缺省规则不在消费方复制）", s.dropTables)}
 ${jsonTable("MONSTER_DROPS", "怪物 key → 独立掉落表 { picks, entries }（#254；实际掉落以此为准，key 与怪物种子（server/src/shared/monster-seed）对齐）", s.monsterDrops)}
 ${jsonTable("DROP_DEFAULT", "兜底掉落表（#254；怪物既无独立表也没引用具名表时使用）", s.dropDefault)}
-${jsonTable("GROWTH_CURVES", "成长曲线键 → 分段线性曲线（#256；段形状 {from,to,start,perLevel}，插值口径在客户端 configs/growth）", s.growthCurves)}
-${numTable("GROWTH_SCALARS", "成长标量参数键 → 数值（#256；roleMaxLevel / attributeRange.* / expGain.*）", s.growthScalars)}
 
 /** 装备回收基础价（下标 = 等级 - 1；绑定元宝，普通·人级。变体价 = 本表 × 前后缀倍率再 Math.round，与客户端 buildEquipmentMap 同口径） */
 export const EQUIPMENT_RECYCLE_PRICES: number[] = ${JSON.stringify(s.equipmentRecyclePrices)};
@@ -1130,12 +1116,6 @@ ${jsonTable("ITEM_BASES", "物品 id → { type 物品大类, label, description
 ${numTable("SELL_PRICES", "物品 id → 出售价（#397；货币 = 绑定元宝/个）。装备取回收价曲线（含前后缀倍率）、其余取 sellPirce；**不在表里 = 不可卖**，服务端结算只认这一份", s.sellPrices)}
 ${jsonTable("QUESTS", "任务 id → { kind main|daily, label, description, prevQuestId 主线链前置, minLevel, npcId 发布 NPC, objective 单目标 kill|talk|collect, rewards { gold, exp, items } }（#396；服务端 quests 表的 seed 来源）", s.quests)}
 ${jsonTable("ACHIEVEMENTS", "成就 id → { category battle|growth|explore, label, description, condition { type kill|quest|level|combat|collect, target, count }, rewards { gold, exp, items }, order, hidden }（#401；服务端 achievements 表的 seed 来源。kill/quest 是累计型走事件 +1，level/combat/collect 是状态型每次查询现算）", s.achievements)}
-${textTable("SOUL_LABELS", "战魂阶数（下标 + 1 即阶）→ 名", s.soulLabels)}
-${textTable("TITLE_LABELS", "称号等级（下标 + 1 即等级）→ 名", s.titleLabels)}
-${numTable("SOUL_LEVEL_META", "战魂阶数（下标 + 1 即阶）→ { description 文案, bindGold 升到该阶消耗, animation 动画资源, animationFrameRate 帧率 }", s.soulMeta)}
-${numTable("TITLE_LEVEL_META", "称号等级（下标 + 1 即等级）→ { description 文案, bindGold 升到该级价格, animation 动画资源, animationFrameRate 帧率 }", s.titleMeta)}
-${numTable("RANK_LABELS", "军衔阶数（下标 + 1 即阶）→ { tier 大段名, label 衔名 }", s.rankLabels)}
-${numTable("RANK_LEVEL_META", "军衔阶数（下标 + 1 即阶）→ { description 文案, bindGold 晋到该阶消耗 }", s.rankMeta)}
 ${textTable("SKILL_LABELS", "技能 id → 技能名", s.skillLabels)}
 
 /** 装备前缀名（下标 = 前缀序号，如 0 → 普通的） */

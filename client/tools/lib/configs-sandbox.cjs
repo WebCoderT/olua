@@ -176,6 +176,106 @@ function compileServerShared(entry, sandboxName) {
   return path.join(sandbox, "out", entry.replace(/\.ts$/, ".js"));
 }
 
+/**
+ * 把服务端种子灌进沙箱里的运行时表（#590）
+ *
+ * #590 起等级 / 称号 / 战魂 / 军衔在客户端是**空运行时表**（快照到达后整表重建），
+ * 而单测的 Role / UI 消费方在进游戏语境里才被用到 —— 测试里要拿到与快照一致的表，
+ * 就用真实种子（compileServerShared）当场展开灌进去，**不**在测试里复刻任何一行数据。
+ *
+ * @param {string} outDir prepare() / prepareStorage() 的产物目录
+ * @returns {{ levelMap: Map<number, object>, titleLevels: object[], soulLevels: object[], rankLevels: object[] }}
+ */
+function seedRuntimeTables(outDir) {
+  const growth = require(compileServerShared("growth-seed.ts", "olua-seed-growth"));
+
+  // 沙箱按 import 链编译（configs-sandbox 只编 items.ts 一条链），四张运行时表不一定都在
+  // 产物里 —— 各自按存在性处理：在就灌表，不在说明该测试根本不消费它
+  const has = (rel) => fs.existsSync(path.join(outDir, rel));
+
+  // 快照行形状：六项区间是 {min,max} 对象（种子与 LEVEL_ATTRIBUTES 里是 [min,max] 元组）
+  const range = (tuple) => ({ min: tuple[0], max: tuple[1] });
+  const toRangeAttributes = (attributes) => ({
+    maxHp: attributes.maxHp,
+    hpRecover: attributes.hpRecover,
+    physicalAttack: range(attributes.physicalAttack),
+    magicAttack: range(attributes.magicAttack),
+    taoistAttack: range(attributes.taoistAttack),
+    physicalDefense: range(attributes.physicalDefense),
+    magicDefense: range(attributes.magicDefense),
+    taoistDefense: range(attributes.taoistDefense),
+  });
+
+  if (has("configs/level.js")) {
+    const level = require(path.join(outDir, "configs/level.js"));
+    level.applyLevelRows(
+      Object.entries(growth.ROLE_LEVEL_ATTRIBUTES).map(([key, a]) => ({
+        level: Number(key),
+        maxHp: a.maxHp,
+        maxMp: a.maxMp,
+        hpRecover: a.hpRecover,
+        physicalAttack: range(a.physicalAttack),
+        magicAttack: range(a.magicAttack),
+        taoistAttack: range(a.taoistAttack),
+        physicalDefense: range(a.physicalDefense),
+        magicDefense: range(a.magicDefense),
+        taoistDefense: range(a.taoistDefense),
+        exp: a.exp,
+      })),
+    );
+  }
+  if (has("configs/title.js")) {
+    const title = require(path.join(outDir, "configs/title.js"));
+    const titleSeed = require(compileServerShared("title-seed.ts", "olua-seed-title"));
+    title.applyTitleRows(titleSeed.TITLE_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
+  }
+  if (has("configs/soul.js")) {
+    const soul = require(path.join(outDir, "configs/soul.js"));
+    const soulSeed = require(compileServerShared("soul-seed.ts", "olua-seed-soul"));
+    soul.applySoulRows(soulSeed.SOUL_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
+  }
+  if (has("configs/rank.js")) {
+    const rank = require(path.join(outDir, "configs/rank.js"));
+    const rankSeed = require(compileServerShared("rank-seed.ts", "olua-seed-rank"));
+    rank.applyRankRows(rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
+  }
+
+  // 装备出厂属性（#590）：客户端 buildEquipmentMap 是零值占位（快照后重算），测试里
+  // 用真实公式（growth-seed.equipmentStats，与生成物 / 服务端 seed 同一来源）逐件重算，
+  // 等价于「快照 equipments 段 + applyEquipmentRows」的最终结果。items 总表与部位 Map
+  // 共享同一对象引用（configs/items.registerItem），原地改一处即两边同步。
+  if (has("configs/equipments.js") && has("configs/growth.js")) {
+    const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
+    const growthCfg = require(path.join(outDir, "configs/growth.js"));
+    const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+    for (const map of [
+      equipmentsMod.clothes,
+      equipmentsMod.weapons,
+      equipmentsMod.rings,
+      equipmentsMod.nicklaces,
+      equipmentsMod.shoes,
+      equipmentsMod.helmets,
+      equipmentsMod.belts,
+    ]) {
+      map.forEach((item) => {
+        const stats = growth.equipmentStats(Number(item.level) || 0, String(item.slot ?? ""));
+        const rate = (growthCfg.equipmentPrefixRates[Number(item.prefix) || 0] ?? 1) * (growthCfg.equipmentSuffixRates[Number(item.suffix) || 0] ?? 1);
+        item.maxHp = Math.round(stats.maxHp * rate);
+        item.hpRecover = Math.round(stats.hpRecover * rate);
+        for (const key of RANGE_KEYS) item[key] = [Math.round(stats[key][0] * rate), Math.round(stats[key][1] * rate)];
+        // recyclePrice 由 buildEquipmentMap 按「曲线 × rate」算好（曲线仍在客户端 growth），不动
+      });
+    }
+  }
+
+  return {
+    levelMap: has("configs/level.js") ? require(path.join(outDir, "configs/level.js")).levelMap : null,
+    titleLevels: has("configs/title.js") ? require(path.join(outDir, "configs/title.js")).titleLevels : null,
+    soulLevels: has("configs/soul.js") ? require(path.join(outDir, "configs/soul.js")).soulLevels : null,
+    rankLevels: has("configs/rank.js") ? require(path.join(outDir, "configs/rank.js")).rankLevels : null,
+  };
+}
+
 //#region 断言小工具（各脚本共用，打印风格一致）
 
 let failed = 0;
@@ -207,4 +307,4 @@ function fail(message) {
 
 //#endregion
 
-module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, compileServerShared, check, finish, fail };
+module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, compileServerShared, seedRuntimeTables, check, finish, fail };
