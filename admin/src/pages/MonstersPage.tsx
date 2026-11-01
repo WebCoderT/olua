@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatTime, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
-import type { Monster, MonsterAttributes, PageResult, Skill } from "../api";
+import { dropApi, formatTime, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
+import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { MonsterDropDialog } from "../components/drop/MonsterDropDialog";
+import { DROP_SOURCE_LABELS, DROP_SOURCE_TONE, dropSummaryText } from "../components/drop/DropEditors";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
@@ -38,8 +40,7 @@ function MonsterEditDialog({
   initial: Monster | null;
   onCancel: () => void;
   onSubmit: (value: { label: string; level: number; maxHp: number; attributes: MonsterAttributes }) => Promise<boolean>;
-}) {
-  const [label, setLabel] = useState("");
+}) {  const [label, setLabel] = useState("");
   const [level, setLevel] = useState("1");
   const [maxHp, setMaxHp] = useState("1");
   const [attributes, setAttributes] = useState<MonsterAttributes | null>(null);
@@ -309,7 +310,8 @@ function MonsterSkillsDialog({
  * key 清单固定（被地图刷怪点 / 掉落表 / 技能引用，启动时 seed 落库）——
  * **没有「新建」「删除」**，只有「编辑」；tier 不开放编辑。按关键字 / 定位筛选。
  * 战斗数值是客户端 monsterStats 打底 + 条目覆盖的展开结果，改这里即时生效。
- * 技能挂载（#372）单独一个弹窗，整份替换 —— 掉落表归「掉落配置」管理。
+ * 技能挂载（#372）与每怪掉落（#584）各一个弹窗，都是整份替换 —— 掉落在这一页就能改，
+ * 不需要再去「掉落配置」页对着 key 找同一只怪。
  * 写操作要 `gameConfig:write`。
  */
 export function MonstersPage() {
@@ -318,12 +320,17 @@ export function MonstersPage() {
   const [query, setQuery] = useState({ keyword: "", tier: "" });
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(20);
-  const [data, setData] = useState<PageResult<Monster> | null>(null);
+  const [data, setData] = useState<PageResult<AdminMonster> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Monster | null>(null);
+  const [editing, setEditing] = useState<AdminMonster | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   /** 技能挂载弹窗的目标怪（= null 表示关闭） */
-  const [skillTarget, setSkillTarget] = useState<Monster | null>(null);
+  const [skillTarget, setSkillTarget] = useState<AdminMonster | null>(null);
+  /** 掉落弹窗的目标怪（= null 表示关闭） */
+  const [dropTarget, setDropTarget] = useState<AdminMonster | null>(null);
+  /** 具名掉落表（只为把摘要里的 tableId 写成「common · 12 条」） */
+  const [tables, setTables] = useState<DropTable[]>([]);
+  const tablesById = useMemo(() => new Map(tables.map((table) => [table.id, table])), [tables]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -335,6 +342,22 @@ export function MonstersPage() {
       setLoading(false);
     }
   }, [page, size, query]);
+
+  /** 具名表清单：摘要里要显示「表 id + 条目数」，失败不影响怪物列表（摘要退化成只写表 id） */
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const list = await dropApi.listTables();
+        if (alive) setTables(list.list);
+      } catch {
+        /* 错误已由请求层统一提示 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     void load();
@@ -377,7 +400,8 @@ export function MonstersPage() {
       <PageHeader
         title="怪物配置"
         description={<>key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除；定位不开放编辑。
-            改名称与战斗数值即时生效（世界播种与伤害结算直读 monsters 表）。掉落表归「掉落配置」管理。</>}
+            改名称与战斗数值即时生效（世界播种与伤害结算直读 monsters 表）。<span className="text-slate-300">死后掉什么就在这一页改</span>（
+            引用具名表 / 内联条目池 / 清空走兜底，三选一，服务端抽表并入包）。</>}
       />
 
       <Card>
@@ -425,6 +449,7 @@ export function MonstersPage() {
                 <th className={thClass}>等级</th>
                 <th className={thClass}>生命</th>
                 <th className={thClass}>属性摘要</th>
+                <th className={thClass}>掉落</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
@@ -443,6 +468,14 @@ export function MonstersPage() {
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>{item.maxHp}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
+                  <td className={tdClass}>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <Badge tone={DROP_SOURCE_TONE[item.drop?.source ?? "none"] ?? "slate"}>
+                        {DROP_SOURCE_LABELS[item.drop?.source ?? "none"] ?? "兜底"}
+                      </Badge>
+                      <span className="text-xs text-slate-400">{dropSummaryText(item.drop, tablesById)}</span>
+                    </div>
+                  </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
@@ -459,6 +492,9 @@ export function MonstersPage() {
                       </Button>
                       <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setSkillTarget(item)}>
                         技能
+                      </Button>
+                      <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setDropTarget(item)}>
+                        掉落
                       </Button>
                     </div>
                   </td>
@@ -489,6 +525,17 @@ export function MonstersPage() {
         onClose={() => setSkillTarget(null)}
         onSaved={() => {
           setSkillTarget(null);
+          void load();
+        }}
+      />
+
+      <MonsterDropDialog
+        monsterKey={dropTarget?.id ?? null}
+        monsterLabel={dropTarget?.label}
+        onClose={() => setDropTarget(null)}
+        onSaved={() => {
+          setDropTarget(null);
+          // 列表里的摘要要跟着变，所以保存后重拉这一页
           void load();
         }}
       />

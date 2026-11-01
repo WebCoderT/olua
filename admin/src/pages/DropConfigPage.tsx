@@ -1,132 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
-import { dropApi, formatTime, itemText, PERMISSION } from "../api";
+import { dropApi, formatTime, PERMISSION } from "../api";
 import type { DropEntry, DropTable, MonsterDrop, PageResult } from "../api";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { MonsterDropDialog } from "../components/drop/MonsterDropDialog";
+import {
+  DROP_SOURCE_LABELS,
+  DROP_SOURCE_TONE,
+  EntriesEditor,
+  type EntryDraft,
+  PicksEditor,
+  type PicksDraft,
+  emptyEntryDraft,
+  entriesFrom,
+  entriesOf,
+  entryErrors,
+  picksFrom,
+  picksOf,
+  picksText,
+} from "../components/drop/DropEditors";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
-
-/** 来源中文名（语义标注：引用具名表 / 内联条目 / 未配置走兜底） */
-const SOURCE_LABELS: Record<string, string> = { table: "具名表", entries: "内联", none: "兜底" };
-const SOURCE_TONE: Record<string, "indigo" | "green" | "slate"> = { table: "indigo", entries: "green", none: "slate" };
-
-/** picks 的编辑形态：两个输入，max 留空 = 固定件数（min），都填 = [min, max] */
-type PicksDraft = { min: string; max: string };
-
-function picksOf(value: unknown): PicksDraft {
-  if (Array.isArray(value)) return { min: String(value[0]), max: String(value[1]) };
-  return { min: String(value ?? 1), max: "" };
-}
-
-/** PicksDraft → 服务端形状（max 空 = 数字；非法返回 undefined 由调用方拦） */
-function picksFrom(draft: PicksDraft): number | [number, number] | undefined {
-  const min = Number(draft.min);
-  if (!Number.isInteger(min) || min < 1) return undefined;
-  if (draft.max.trim() === "") return min;
-  const max = Number(draft.max);
-  if (!Number.isInteger(max) || max < min) return undefined;
-  return [min, max];
-}
-
-/** 条目行（编辑器内的可变形状：数字输入都是字符串） */
-type EntryDraft = { goodId: string; weight: string; chance: string; countMin: string; countMax: string };
-
-function entriesOf(entries: DropEntry[] | null): EntryDraft[] {
-  return (entries ?? []).map((entry) => ({
-    goodId: entry.goodId,
-    weight: String(entry.weight ?? 1),
-    chance: String(entry.chance ?? 1),
-    countMin: String(entry.count?.[0] ?? 1),
-    countMax: String(entry.count?.[1] ?? 1),
-  }));
-}
-
-function entriesFrom(drafts: EntryDraft[]): DropEntry[] | undefined {
-  return drafts.map((draft) => ({
-    goodId: draft.goodId.trim(),
-    weight: Number(draft.weight) || 0,
-    chance: Number(draft.chance),
-    count: [Number(draft.countMin) || 1, Number(draft.countMax) || 1],
-  }));
-}
-
-/** 条目草稿的即时校验（显示层拦截；权威在服务端：goodId 存在性 / count min ≤ max） */
-function entryErrors(drafts: EntryDraft[]): string[] {
-  const errors: string[] = [];
-  drafts.forEach((draft, index) => {
-    const where = `条目 ${index + 1}`;
-    if (!draft.goodId.trim()) errors.push(`${where} 的物品 id 为空`);
-    if (Number(draft.chance) < 0 || Number(draft.chance) > 1) errors.push(`${where} 的概率要在 0~1 之间`);
-    if (Number(draft.countMin) > Number(draft.countMax)) errors.push(`${where} 的数量下限大于上限`);
-  });
-  return errors;
-}
-
-/**
- * 条目池编辑器（具名表与每怪内联共用一份）
- *
- * 每行：物品 id + 物品名提示 + 权重 + 概率 + 数量区间；可增删行。
- * 物品名走 gameData 查表（ITEM_LABELS = 装备全量变体 + 药品 + 材料，与服务端校验同一来源）。
- */
-function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onChange: (next: EntryDraft[]) => void }) {
-  const update = (index: number, patch: Partial<EntryDraft>) => {
-    onChange(drafts.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)));
-  };
-  const remove = (index: number) => onChange(drafts.filter((_, i) => i !== index));
-  const add = () => onChange([...drafts, { goodId: "", weight: "1", chance: "1", countMin: "1", countMax: "1" }]);
-
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">条目池（weight 权重 / chance 概率 0~1 / count 数量区间）</span>
-        <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={add}>
-          加一条
-        </Button>
-      </div>
-      <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-        {drafts.map((draft, index) => (
-          <div key={index} className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[180px] flex-1">
-              <Input
-                value={draft.goodId}
-                placeholder="物品 id（如 drug_hp_1 / weapon_1_p0s1）"
-                className="font-mono text-xs"
-                onChange={(event) => update(index, { goodId: event.target.value })}
-              />
-              <span className="mt-0.5 block truncate text-[10px] text-slate-500">{itemText(draft.goodId)}</span>
-            </div>
-            <div className="w-20"><Input type="number" min={0} step="0.01"  aria-label="权重" value={draft.weight} onChange={(event) => update(index, { weight: event.target.value })} /></div>
-            <div className="w-20"><Input type="number" min={0} max={1} step="0.01"  aria-label="概率" value={draft.chance} onChange={(event) => update(index, { chance: event.target.value })} /></div>
-            <div className="flex items-center gap-1">
-              <div className="w-16"><Input type="number" min={0}  aria-label="数量下限" value={draft.countMin} onChange={(event) => update(index, { countMin: event.target.value })} /></div>
-              <span className="text-xs text-slate-600">~</span>
-              <div className="w-16"><Input type="number" min={0}  aria-label="数量上限" value={draft.countMax} onChange={(event) => update(index, { countMax: event.target.value })} /></div>
-            </div>
-            <Button variant="outline" className="px-2 py-1 text-xs" disabled={drafts.length <= 1} onClick={() => remove(index)}>
-              删
-            </Button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** picks 编辑（max 空 = 固定件数） */
-function PicksEditor({ draft, onChange }: { draft: PicksDraft; onChange: (next: PicksDraft) => void }) {
-  return (
-    <div className="flex items-end gap-2">
-      <Field label="抽取件数下限">
-        <div className="w-24"><Input type="number" min={1}  value={draft.min} onChange={(event) => onChange({ ...draft, min: event.target.value })} /></div>
-      </Field>
-      <Field label="上限（留空 = 固定）">
-        <div className="w-24"><Input type="number" min={1}  value={draft.max} onChange={(event) => onChange({ ...draft, max: event.target.value })} /></div>
-      </Field>
-    </div>
-  );
-}
 
 /**
  * 具名表编辑弹窗（新建 / 编辑共用；id 只在创建时可填）
@@ -153,7 +49,8 @@ function DropTableDialog({
     if (!open) return;
     setId(initial?.id ?? "");
     setPicks(picksOf(initial?.picks));
-    setDrafts(entriesOf(initial?.entries ?? null).length > 0 ? entriesOf(initial?.entries ?? null) : [{ goodId: "", weight: "1", chance: "1", countMin: "1", countMax: "1" }]);
+    const rows = entriesOf(initial?.entries ?? null);
+    setDrafts(rows.length > 0 ? rows : [emptyEntryDraft()]);
     setSubmitting(false);
   }, [open, initial]);
 
@@ -202,130 +99,6 @@ function DropTableDialog({
 }
 
 /**
- * 每怪掉落编辑弹窗（三选一：引用具名表 / 内联条目池 / 清空走兜底）
- */
-function MonsterDropDialog({
-  open,
-  initial,
-  tableIds,
-  onCancel,
-  onSubmit,
-}: {
-  open: boolean;
-  initial: MonsterDrop | null;
-  tableIds: string[];
-  onCancel: () => void;
-  onSubmit: (value: { tableId: string | null; picks?: number | [number, number]; entries?: DropEntry[] }) => Promise<boolean>;
-}) {
-  /** mode：table = 引用具名表；inline = 内联条目池；none = 清空 */
-  const [mode, setMode] = useState<"table" | "inline" | "none">("inline");
-  const [tableId, setTableId] = useState("");
-  const [picks, setPicks] = useState<PicksDraft>({ min: "1", max: "" });
-  const [drafts, setDrafts] = useState<EntryDraft[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open || !initial) return;
-    if (initial.source === "table") {
-      setMode("table");
-      setTableId(initial.tableId ?? "");
-      setPicks(initial.picks !== null ? picksOf(initial.picks) : { min: "", max: "" });
-    } else if (initial.source === "entries") {
-      setMode("inline");
-      setTableId("");
-      setPicks(picksOf(initial.picks));
-    } else {
-      setMode("none");
-      setTableId("");
-      setPicks({ min: "1", max: "" });
-    }
-    setDrafts(entriesOf(initial.entries).length > 0 ? entriesOf(initial.entries) : [{ goodId: "", weight: "1", chance: "1", countMin: "1", countMax: "1" }]);
-    setSubmitting(false);
-  }, [open, initial]);
-
-  if (!open || !initial) return null;
-
-  const picksValue = picksFrom(picks);
-  const errors = mode === "inline" ? entryErrors(drafts) : [];
-  const inlineValid = picksValue !== undefined && drafts.length > 0 && drafts.every((d) => d.goodId.trim()) && errors.length === 0;
-  const tableValid = mode !== "table" || (tableId !== "" && (picks.min.trim() === "" || picksValue !== undefined));
-  const canSubmit = !submitting && (mode === "none" || (mode === "inline" ? inlineValid : tableValid));
-
-  const submit = async () => {
-    setSubmitting(true);
-    const value: { tableId: string | null; picks?: number | [number, number]; entries?: DropEntry[] } = { tableId: null };
-    if (mode === "table") {
-      value.tableId = tableId;
-      if (picks.min.trim() !== "") value.picks = picksValue;
-    } else if (mode === "inline") {
-      value.picks = picksValue;
-      value.entries = entriesFrom(drafts);
-    }
-    const ok = await onSubmit(value);
-    setSubmitting(false);
-    void ok;
-  };
-
-  return (
-    <Modal
-      open
-      title={<>编辑怪物掉落 · key {initial.monsterKey}</>}
-      hint="整份替换：引用具名表 / 内联条目池 / 清空走兜底，三选一。改完即时生效。"
-      size="lg"
-      onClose={onCancel}
-      footer={<>
-        <Button variant="outline" disabled={submitting} onClick={onCancel}>
-          取消
-        </Button>
-        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-          保存
-        </Button>
-      </>}
-    >
-      <div className="flex gap-2">
-        {(
-          [
-            ["table", "引用具名表"],
-            ["inline", "内联条目池"],
-            ["none", "清空（走兜底）"],
-          ] as const
-        ).map(([value, label]) => (
-          <Button key={value} variant={mode === value ? "primary" : "outline"} className="px-3 py-1.5 text-xs" onClick={() => setMode(value)}>
-            {label}
-          </Button>
-        ))}
-      </div>
-      {mode === "table" ? (
-        <div className="flex items-end gap-4">
-          <Field label="具名掉落表">
-            <Select value={tableId} onChange={(event) => setTableId(event.target.value)}>
-              <option value="">选一张表…</option>
-              {tableIds.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <PicksEditor draft={picks} onChange={setPicks} />
-        </div>
-      ) : null}
-      {mode === "inline" ? (
-        <div className="flex flex-col gap-4">
-          <PicksEditor draft={picks} onChange={setPicks} />
-          <EntriesEditor drafts={drafts} onChange={setDrafts} />
-        </div>
-      ) : null}
-      {mode === "none" ? <p className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">清空后这只怪没有独立掉落配置，将走兜底表（default）。</p> : null}
-      {picksValue === undefined && (mode === "inline" || (mode === "table" && picks.min.trim() !== "")) ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p>
-      ) : null}
-      {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
-    </Modal>
-  );
-}
-
-/**
  * 掉落配置管理（#254）
  *
  * 上：具名掉落表卡片组（完整 CRUD，被引用中的表拒绝删除）；
@@ -346,8 +119,8 @@ export function DropConfigPage() {
   const [size, setSize] = useState(20);
   const [data, setData] = useState<PageResult<MonsterDrop> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dropDialogOpen, setDropDialogOpen] = useState(false);
-  const [editingDrop, setEditingDrop] = useState<MonsterDrop | null>(null);
+  /** 正在编辑掉落的怪物 key（null = 弹窗关闭） */
+  const [dropKey, setDropKey] = useState<string | null>(null);
 
   const loadTables = useCallback(async () => {
     setTablesLoading(true);
@@ -425,22 +198,7 @@ export function DropConfigPage() {
     }
   };
 
-  /** 每怪：整份替换（三选一） */
-  const submitMonsterDrop = async (value: { tableId: string | null; picks?: number | [number, number]; entries?: DropEntry[] }): Promise<boolean> => {
-    if (!editingDrop) return false;
-    try {
-      await dropApi.updateMonsterDrop(editingDrop.monsterKey, value);
-      toastSuccess(`怪物 ${editingDrop.monsterKey} 的掉落配置已更新`);
-      setDropDialogOpen(false);
-      setEditingDrop(null);
-      await load();
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const tableIds = tables?.map((table) => table.id) ?? [];
+  /** 每怪：弹窗自己按 key 拉数据并保存（#584 起与怪物列表共用同一个弹窗） */
 
   return (
     <div className="flex flex-col gap-4">
@@ -485,7 +243,7 @@ export function DropConfigPage() {
               {tables?.map((table) => (
                 <tr key={table.id} className="transition hover:bg-slate-800/30">
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{table.id}</td>
-                  <td className={`${tdClass} font-mono text-xs`}>{Array.isArray(table.picks) ? `${table.picks[0]}~${table.picks[1]}` : String(table.picks)}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{picksText(table.picks)}</td>
                   <td className={tdClass}>{table.entries.length}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(table.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
@@ -552,12 +310,12 @@ export function DropConfigPage() {
                 <tr key={item.monsterKey} className="transition hover:bg-slate-800/30">
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.monsterKey}</td>
                   <td className={tdClass}>
-                    <Badge tone={SOURCE_TONE[item.source] ?? "slate"}>{SOURCE_LABELS[item.source] ?? item.source}</Badge>
+                    <Badge tone={DROP_SOURCE_TONE[item.source] ?? "slate"}>{DROP_SOURCE_LABELS[item.source] ?? item.source}</Badge>
                   </td>
                   <td className={`${tdClass} font-mono text-xs`}>
-                    {item.source === "table" ? item.tableId : ""}
-                    {item.picks !== null && !Array.isArray(item.picks) ? String(item.picks) : ""}
-                    {Array.isArray(item.picks) ? `${item.picks[0]}~${item.picks[1]}` : ""}
+                    {item.source === "table"
+                      ? `${item.tableId ?? ""}${item.picks !== null ? ` · ${picksText(item.picks)}` : ""}`
+                      : picksText(item.picks) || "—"}
                   </td>
                   <td className={tdClass}>{item.entries?.length ?? "-"}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
@@ -566,10 +324,7 @@ export function DropConfigPage() {
                       variant="outline"
                       className="px-2.5 py-1 text-xs"
                       disabled={!canWrite}
-                      onClick={() => {
-                        setEditingDrop(item);
-                        setDropDialogOpen(true);
-                      }}
+                      onClick={() => setDropKey(item.monsterKey)}
                     >
                       编辑
                     </Button>
@@ -597,14 +352,12 @@ export function DropConfigPage() {
       />
 
       <MonsterDropDialog
-        open={dropDialogOpen}
-        initial={editingDrop}
-        tableIds={tableIds}
-        onCancel={() => {
-          setDropDialogOpen(false);
-          setEditingDrop(null);
+        monsterKey={dropKey}
+        onClose={() => setDropKey(null)}
+        onSaved={() => {
+          setDropKey(null);
+          void load();
         }}
-        onSubmit={submitMonsterDrop}
       />
     </div>
   );
