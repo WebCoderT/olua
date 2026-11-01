@@ -1,45 +1,73 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  equipmentText,
+  avatarPath,
   formatTime,
-  itemText,
   mapText,
   OCCUPATION_LABELS,
   PERMISSION,
-  rankText,
-  ROLE_BAG_AXIS_MAX,
   rolesApi,
   SEX_LABELS,
-  skillText,
-  slotLabel,
-  soulText,
-  titleText,
 } from "../api";
-import type { AdminRole, AdminRoleDetail, RoleBagCell, RolePatchPayload } from "../api";
+import type { AdminRole, AdminRoleDetail, RolePatchPayload } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Modal } from "../components/Modal";
 import { RoleAttributesCard } from "../components/RoleAttributesCard";
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner } from "../components/ui";
+import { BagGrid } from "../components/entity/BagGrid";
+import type { BagCellValue } from "../components/entity/BagGrid";
+import { EntityCard } from "../components/entity/EntityCard";
+import { EntityImage } from "../components/entity/EntityImage";
+import { EntityPicker } from "../components/entity/EntityPicker";
+import { EquipSlots } from "../components/entity/EquipSlots";
+import { LevelLadder } from "../components/entity/LevelLadder";
+import { SkillList } from "../components/entity/SkillList";
+import type { SkillRow } from "../components/entity/SkillList";
+import { entityImage, entityLabel, entityOptions } from "../components/entity/catalog";
+import type { LevelKind } from "../components/entity/catalog";
+import { GameIcon } from "../components/GameImage";
+import { Badge, Button, Card, EmptyState, Spinner } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 
-/** 装备槽位行 / 技能等级行 / 背包格子行（都是「键值对」的可编辑列表） */
-interface KeyValueRow {
-  key: string;
-  value: string;
-}
+/**
+ * 角色详情
+ *
+ * 版式目标：**一屏看完，不滚长页面**。
+ * - 左窄栏：一张「角色」卡 = 身份（头像 / 名字 / 等级职业性别 / 所在地图）+ 货币与经验 + 战斗属性；
+ * - 右宽栏：一张「装备」卡 = 穿戴槽位 + 时装 + 成长阶位（称号 / 战魂 / 军衔）；
+ * - 大块内容（技能列表、7×11 背包网格、原始 JSON）各自进弹窗，页面本身不被撑长。
+ *
+ * **左栏那张卡是只读的**（用户 2026-11-01 定：身份 / 货币 / 属性不允许改）：所以那里是
+ * 纯文本而不是「禁用态的输入框」—— 灰输入框看起来像「没权限」，纯文本才是「这里本来就不改」，
+ * 也不会让人以为某个开关一开就能改。可改的只有右边的装备卡（穿戴 / 时装 / 阶位）。
+ *
+ * 可视化都来自 `components/entity/` 那套组件（同一份 `catalog`）：装备格、档位卡、
+ * 背包网格、选择器。别处要「挑一个装备 / 物品 / 技能 / 时装」时直接复用，不用再写一份
+ * 「id 输入框 + 名字提示」。
+ *
+ * 三条不变的约定：
+ * 1. 结构化字段（装备 / 技能 / 背包）**整体提交**，其余字段只提交改动项（`buildPatch`）；
+ * 2. 名字与图标一律来自 `api/gameData`（客户端配置的生成物），页面不硬编码游戏内容；
+ * 3. 界面按权限只读（`ROLE_WRITE`），服务端仍会拒。
+ */
 
-/** 背包格子行（行列也做成输入框，便于整格搬家） */
-interface BagRow {
-  row: string;
-  col: string;
-  id: string;
-  count: string;
-}
+/** 常用货币与经验（称号 / 战魂 / 军衔走档位选择器，不在这里） */
+const NUMBER_FIELDS: { key: keyof RoleForm; label: string }[] = [
+  { key: "gold", label: "金币" },
+  { key: "bindGold", label: "绑定元宝" },
+  { key: "silver", label: "银两" },
+  { key: "exp", label: "经验" },
+];
 
-/** 表单初值：全部是字符串，便于受控输入 */
+/** 三张养成等级表（`LevelKind` 与生成物的表一一对应） */
+const GROWTH_FIELDS: { key: keyof RoleForm; kind: LevelKind }[] = [
+  { key: "title", kind: "title" },
+  { key: "soulOfWar", kind: "soul" },
+  { key: "rank", kind: "rank" },
+];
+
+/** 表单初值：数字类全部是字符串（受控输入），结构化字段用组件自己的形状 */
 interface RoleForm {
-  // 基础信息
   name: string;
   occupation: string;
   sex: string;
@@ -48,30 +76,18 @@ interface RoleForm {
   fashionCloth: string;
   avatar: string;
   onMap: string;
-  // 常用数值
   gold: string;
   bindGold: string;
   silver: string;
   exp: string;
+  /** 成长阶位（0 = 未激活） */
   soulOfWar: string;
   title: string;
   rank: string;
-  // 运行时数据
-  equipments: KeyValueRow[];
-  skills: KeyValueRow[];
-  bag: BagRow[];
+  equipments: Record<string, string | null>;
+  skills: SkillRow[];
+  bag: BagCellValue[];
 }
-
-const NUMBER_FIELDS: { key: keyof RoleForm; label: string }[] = [
-  { key: "level", label: "等级" },
-  { key: "gold", label: "金币" },
-  { key: "bindGold", label: "绑定元宝" },
-  { key: "silver", label: "银两" },
-  { key: "exp", label: "经验" },
-  { key: "soulOfWar", label: "战魂等级" },
-  { key: "title", label: "称号等级" },
-  { key: "rank", label: "军衔阶数" },
-];
 
 /** 取 data 里的数字字段（缺失 / 非数字 → 空串，界面上就是空输入框） */
 function readNumber(data: Record<string, unknown>, key: string): string {
@@ -80,48 +96,55 @@ function readNumber(data: Record<string, unknown>, key: string): string {
 }
 
 /**
- * 把 data 里的键值对象读成可编辑行
+ * 装备槽位：`equipments` 是「槽位 → 装备 id | null」
  *
- * 键来自**角色自己的数据**（不是管理端硬编码的清单）：装备槽位与技能 id 的权威定义在客户端配置里，
- * 服务端与后台都不复制一份，所以这里只呈现「这个角色实际有的那些键」。
+ * 键来自**角色自己的数据**（不是管理端硬编码的清单）：部位表在生成物里有（`EquipSlots`
+ * 按它排序），但角色实际有哪些键仍以数据为准 —— 旧存档带了个已经删掉的部位时，
+ * 这件装备还得看得见（不然存一次就真没了）。
  */
-function readKeyValueRows(data: Record<string, unknown>, key: string): KeyValueRow[] {
-  const source = data[key];
+function readEquipments(data: Record<string, unknown>): Record<string, string | null> {
+  const source = data.equipments;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const rows: Record<string, string | null> = {};
+  for (const [slot, value] of Object.entries(source as Record<string, unknown>)) {
+    rows[slot] = typeof value === "string" && value ? value : null;
+  }
+  return rows;
+}
+
+/** 技能：`skills` 是「技能 id → 等级」 */
+function readSkillRows(data: Record<string, unknown>): SkillRow[] {
+  const source = data.skills;
   if (!source || typeof source !== "object" || Array.isArray(source)) return [];
-  return Object.entries(source as Record<string, unknown>).map(([name, value]) => ({
-    key: name,
-    value: typeof value === "number" ? String(value) : typeof value === "string" ? value : "",
+  return Object.entries(source as Record<string, unknown>).map(([id, level]) => ({
+    id,
+    level: typeof level === "number" ? String(level) : "",
   }));
 }
 
-/** 把二维背包读成稀疏格子行（只列有东西的格子） */
-function readBagRows(data: Record<string, unknown>): BagRow[] {
+/** 把二维背包读成稀疏格子（只列有东西的格子；行列是数字，交给网格组件铺位置） */
+function readBagCells(data: Record<string, unknown>): BagCellValue[] {
   const bag = data.bag;
   if (!Array.isArray(bag)) return [];
-  const rows: BagRow[] = [];
+  const cells: BagCellValue[] = [];
   bag.forEach((rowValue, row) => {
     if (!Array.isArray(rowValue)) return;
     rowValue.forEach((cell, col) => {
       if (!cell || typeof cell !== "object" || Array.isArray(cell)) return;
       const item = cell as { id?: unknown; count?: unknown };
       if (typeof item.id !== "string" || !item.id) return;
-      rows.push({ row: String(row), col: String(col), id: item.id, count: String(typeof item.count === "number" ? item.count : 1) });
+      cells.push({ row, col, id: item.id, count: typeof item.count === "number" ? item.count : 1 });
     });
   });
-  return rows;
+  return cells;
 }
 
-/**
- * 战魂 / 称号 / 军衔这三个数值字段的「当前是什么」提示
- *
- * 名字取自三端共用的公共数据（= 客户端那三张等级表），值本身仍是玩家数据里的数字 ——
- * 后台不复制一份等级表，也不在这里翻译。
- */
-function levelNameOf(key: keyof RoleForm, form: RoleForm): string {
-  if (key === "soulOfWar") return soulText(form.soulOfWar) || "0 = 未激活";
-  if (key === "title") return titleText(form.title) || "0 = 未激活";
-  if (key === "rank") return rankText(form.rank) || "0 = 未授衔";
-  return "";
+/** 存档里的背包形状（`bag` 是二维数组：行数 = 外层长度，列数 = 最长一行） */
+function readBagShape(data: Record<string, unknown>): { rows: number; cols: number } {
+  const bag = data.bag;
+  if (!Array.isArray(bag) || bag.length === 0) return { rows: 0, cols: 0 };
+  const cols = bag.reduce<number>((max, line) => (Array.isArray(line) ? Math.max(max, line.length) : max), 0);
+  return { rows: bag.length, cols };
 }
 
 function toForm(role: AdminRole): RoleForm {
@@ -141,9 +164,9 @@ function toForm(role: AdminRole): RoleForm {
     soulOfWar: readNumber(data, "soulOfWar"),
     title: readNumber(data, "title"),
     rank: readNumber(data, "rank"),
-    equipments: readKeyValueRows(data, "equipments"),
-    skills: readKeyValueRows(data, "skills"),
-    bag: readBagRows(data),
+    equipments: readEquipments(data),
+    skills: readSkillRows(data),
+    bag: readBagCells(data),
   };
 }
 
@@ -154,20 +177,26 @@ function toNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/** 两批键值行是否等价（顺序无关，值按字符串比） */
-function sameRows(current: KeyValueRow[], original: KeyValueRow[]): boolean {
-  if (current.length !== original.length) return false;
-  return current.every((row) => {
-    const target = original.find((item) => item.key === row.key);
-    return !!target && target.value === row.value;
-  });
+/** 装备槽是否等价（键集合 + 每个槽位的值） */
+function sameEquipments(current: Record<string, string | null>, original: Record<string, string | null>): boolean {
+  const keys = Object.keys(current);
+  if (keys.length !== Object.keys(original).length) return false;
+  return keys.every((key) => (current[key] ?? null) === (original[key] ?? null));
 }
 
-/** 两批背包格子是否等价（顺序无关） */
-function sameBag(current: BagRow[], original: BagRow[]): boolean {
+/** 技能行是否等价（顺序无关：id 对得上、等级一致） */
+function sameSkills(current: SkillRow[], original: SkillRow[]): boolean {
   if (current.length !== original.length) return false;
-  return current.every((row) =>
-    original.some((item) => item.row === row.row && item.col === row.col && item.id === row.id && item.count === row.count),
+  return current.every((row) => original.some((item) => item.id === row.id && item.level === row.level));
+}
+
+/** 背包格子是否等价（顺序无关，位置也算） */
+function sameBag(current: BagCellValue[], original: BagCellValue[]): boolean {
+  if (current.length !== original.length) return false;
+  return current.every((cell) =>
+    original.some(
+      (item) => item.row === cell.row && item.col === cell.col && item.id === cell.id && item.count === cell.count,
+    ),
   );
 }
 
@@ -194,102 +223,57 @@ function buildPatch(role: AdminRole, form: RoleForm): RolePatchPayload {
     if (form[key] === original[key]) continue;
     const value = toNumber(form[key] as string);
     if (value === undefined) continue;
-    patch[key as "level" | "gold" | "bindGold" | "silver" | "exp" | "soulOfWar" | "title" | "rank"] = value;
+    patch[key as "gold" | "bindGold" | "silver" | "exp"] = value;
+  }
+  for (const { key } of GROWTH_FIELDS) {
+    if (form[key] === original[key]) continue;
+    const value = toNumber(form[key] as string);
+    if (value === undefined) continue;
+    patch[key as "soulOfWar" | "title" | "rank"] = value;
+  }
+  if (form.level !== original.level) {
+    const level = toNumber(form.level);
+    if (level !== undefined) patch.level = level;
   }
 
-  if (!sameRows(form.equipments, original.equipments)) {
+  if (!sameEquipments(form.equipments, original.equipments)) {
     const equipments: Record<string, string | null> = {};
-    for (const row of form.equipments) {
-      const slot = row.key.trim();
-      if (!slot) continue;
-      equipments[slot] = row.value.trim() || null;
+    for (const [slot, id] of Object.entries(form.equipments)) {
+      const key = slot.trim();
+      if (!key) continue;
+      equipments[key] = id && id.trim() ? id.trim() : null;
     }
     patch.equipments = equipments;
   }
-  if (!sameRows(form.skills, original.skills)) {
+  if (!sameSkills(form.skills, original.skills)) {
     const skills: Record<string, number> = {};
     for (const row of form.skills) {
-      const id = row.key.trim();
-      const level = toNumber(row.value);
+      const id = row.id.trim();
+      const level = toNumber(row.level);
       if (!id || level === undefined) continue;
       skills[id] = level;
     }
     patch.skills = skills;
   }
   if (!sameBag(form.bag, original.bag)) {
-    patch.bag = form.bag
-      .map<RoleBagCell | null>((row) => {
-        const rowIndex = toNumber(row.row);
-        const colIndex = toNumber(row.col);
-        const count = toNumber(row.count);
-        if (rowIndex === undefined || colIndex === undefined || count === undefined || !row.id.trim()) return null;
-        return { row: rowIndex, col: colIndex, id: row.id.trim(), count };
-      })
-      .filter((item): item is RoleBagCell => item !== null);
+    patch.bag = form.bag.map((cell) => ({ row: cell.row, col: cell.col, id: cell.id, count: cell.count }));
   }
   return patch;
 }
 
-/** 键值行编辑表（装备槽 / 技能等级共用一套交互） */
-function KeyValueEditor({
-  rows,
-  keyLabel,
-  valueLabel,
-  keyPlaceholder,
-  valuePlaceholder,
-  describe,
-  disabled,
-  onChange,
-}: {
-  rows: KeyValueRow[];
-  keyLabel: string;
-  valueLabel: string;
-  keyPlaceholder: string;
-  valuePlaceholder: string;
-  /** 这一行「键 + 值」在游戏里是什么（装备名 / 技能名…）；返回空串就不显示 */
-  describe?: (row: KeyValueRow) => string;
-  disabled: boolean;
-  onChange: (rows: KeyValueRow[]) => void;
-}) {
+/**
+ * 只读展示项（身份 / 货币与经验）
+ *
+ * 这两段按需求**不允许修改**，所以这里只有标签与值，没有输入框 —— 不是「禁用态的输入框」：
+ * 灰掉的输入框看起来像「没权限」，纯文本才是「这里本来就不改」。
+ */
+function ReadOnlyValue({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-2">
-      {rows.map((row, index) => {
-        const hint = describe?.(row) ?? "";
-        return (
-          <div key={`${row.key}-${index}`} className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <Input
-                value={row.key}
-                placeholder={keyPlaceholder}
-                disabled={disabled}
-                aria-label={`${keyLabel} ${index + 1}`}
-                onChange={(event) => onChange(rows.map((item, position) => (position === index ? { ...item, key: event.target.value } : item)))}
-              />
-              <Input
-                value={row.value}
-                placeholder={valuePlaceholder}
-                disabled={disabled}
-                aria-label={`${valueLabel} ${index + 1}`}
-                onChange={(event) => onChange(rows.map((item, position) => (position === index ? { ...item, value: event.target.value } : item)))}
-              />
-              <Button
-                variant="ghost"
-                className="px-2 py-1 text-xs"
-                disabled={disabled}
-                onClick={() => onChange(rows.filter((_, position) => position !== index))}
-              >
-                移除
-              </Button>
-            </div>
-            {hint ? <span className="pl-1 text-xs text-slate-500">{hint}</span> : null}
-          </div>
-        );
-      })}
-      <div>
-        <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={disabled} onClick={() => onChange([...rows, { key: "", value: "" }])}>
-          添加一行
-        </Button>
-      </div>
+    <div className="min-w-0">
+      <p className="text-[10px] text-slate-500">{label}</p>
+      <p className="truncate text-xs font-medium tabular-nums text-slate-100" title={value}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -308,6 +292,16 @@ export function RoleDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // 弹窗：时装选择（装备卡里）/ 技能编辑 / 背包编辑 / 原始数据。
+  // 地图不在这里：它属于「身份」，身份卡是只读的
+  const [fashionOpen, setFashionOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [bagOpen, setBagOpen] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
+  // 弹窗里的草稿：只有点「保存并关闭」才写回 form 并落库，关掉就是丢弃
+  const [draftSkills, setDraftSkills] = useState<SkillRow[]>([]);
+  const [draftBag, setDraftBag] = useState<BagCellValue[]>([]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -325,12 +319,19 @@ export function RoleDetailPage() {
     void load();
   }, [load]);
 
-  const save = async () => {
-    if (!role || !form) return;
-    const patch = buildPatch(role, form);
+  /**
+   * 保存：默认提交当前表单，也可以带一份覆盖值
+   *
+   * 覆盖值是给弹窗用的（技能 / 背包）：弹窗点「保存并关闭」时，`setForm` 还没生效，
+   * 必须把草稿直接交给保存函数，否则会走上次的表单状态、看起来「保存了没变化」。
+   */
+  const save = async (override?: RoleForm): Promise<boolean> => {
+    const target = override ?? form;
+    if (!role || !target) return false;
+    const patch = buildPatch(role, target);
     if (Object.keys(patch).length === 0) {
       toastSuccess("没有需要保存的改动");
-      return;
+      return true;
     }
     setSaving(true);
     try {
@@ -338,8 +339,10 @@ export function RoleDetailPage() {
       setRole(updated);
       setForm(toForm(updated));
       toastSuccess("已保存；角色在线时玩家会在下一次同步拿到最新数据");
+      return true;
     } catch {
       /* 统一提示 */
+      return false;
     } finally {
       setSaving(false);
     }
@@ -384,17 +387,31 @@ export function RoleDetailPage() {
   const update = <K extends keyof RoleForm>(key: K, value: RoleForm[K]) => setForm({ ...form, [key]: value });
   const readonlyHint = canWrite ? undefined : "当前角色没有「修改角色」权限，字段只读（服务端同样会拒绝保存请求）。";
 
+  // 背包网格：以存档里的形状为基准，form 里有更靠外的格子就把网格撑到能看见（不缩）
+  const savedShape = readBagShape(role.data);
+  let bagRows = savedShape.rows;
+  let bagCols = savedShape.cols;
+  for (const cell of form.bag) {
+    bagRows = Math.max(bagRows, cell.row + 1);
+    bagCols = Math.max(bagCols, cell.col + 1);
+  }
+
+  const avatar = avatarPath(form.occupation, form.sex);
+  const occupationLabel = OCCUPATION_LABELS[form.occupation] ?? form.occupation;
+  const sexLabel = SEX_LABELS[form.sex] ?? form.sex;
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
+      {/* 头部：身份 + 全部「打开大块内容」的入口，一行放完 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-50">
             {role.name}
             {role.online ? <Badge tone="indigo">在线</Badge> : null}
             <span className="text-xs font-normal text-slate-500">修订 #{role.revision}</span>
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
-            角色 id：{role.id} · 所属账号：
+          <p className="mt-0.5 text-xs text-slate-500">
+            角色 id：{role.id} · 账号：
             {role.accountName ? (
               <Link to={`/accounts/${role.accountId}`} className="text-indigo-300 hover:text-indigo-200">
                 {role.accountName}
@@ -402,234 +419,248 @@ export function RoleDetailPage() {
             ) : (
               "—"
             )}
-            {" · "}更新时间：{formatTime(role.updatedAt)}
+            {" · "}更新：{formatTime(role.updatedAt)}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link to="/roles">
-            <Button variant="outline">返回列表</Button>
-          </Link>
-          <Button variant="outline" onClick={() => void setOnline()} disabled={!canSelect || role.online}>
-            设为在线角色
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="px-2.5 py-1 text-xs"
+            onClick={() => {
+              // 每次打开都从当前表单重新取草稿：上一次「放弃改动」关掉后不该残留
+              setDraftSkills(form.skills);
+              setSkillsOpen(true);
+            }}
+          >
+            技能 {form.skills.length}
           </Button>
-          <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={!canDelete}>
-            删除角色
+          <Button
+            variant="outline"
+            className="px-2.5 py-1 text-xs"
+            onClick={() => {
+              setDraftBag(form.bag);
+              setBagOpen(true);
+            }}
+          >
+            背包 {form.bag.length}/{bagRows * bagCols}
+          </Button>
+          <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setRawOpen(true)}>
+            原始数据
+          </Button>
+          <Link to="/roles">
+            <Button variant="outline" className="px-2.5 py-1 text-xs">
+              返回列表
+            </Button>
+          </Link>
+          <Button className="px-2.5 py-1 text-xs" variant="outline" onClick={() => void setOnline()} disabled={!canSelect || role.online}>
+            设为在线
+          </Button>
+          <Button className="px-2.5 py-1 text-xs" variant="danger" onClick={() => setConfirmDelete(true)} disabled={!canDelete}>
+            删除
           </Button>
         </div>
       </div>
 
-      <Card title="基础信息" description={readonlyHint ?? "改名仍受「同一账号下不重名」约束；所在地图是客户端 configs/map 的 key。"}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="角色名">
-            <Input value={form.name} disabled={!canWrite} onChange={(event) => update("name", event.target.value)} />
-          </Field>
-          <Field label="职业">
-            <Select value={form.occupation} disabled={!canWrite} onChange={(event) => update("occupation", event.target.value)}>
-              {Object.entries(OCCUPATION_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="性别">
-            <Select value={form.sex} disabled={!canWrite} onChange={(event) => update("sex", event.target.value)}>
-              {Object.entries(SEX_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="等级">
-            <Input inputMode="numeric" value={form.level} disabled={!canWrite} onChange={(event) => update("level", event.target.value.replace(/[^\d]/g, ""))} />
-          </Field>
-          <Field label="时装 id" hint="填 fashions 表的 id（如 cloth_2），留空 = 不穿">
-            <Input
-              value={form.fashionCloth}
-              placeholder="cloth_2"
-              disabled={!canWrite}
-              onChange={(event) => update("fashionCloth", event.target.value.replace(/[^A-Za-z0-9_]/g, ""))}
-            />
-          </Field>
-          <Field label="头像编号">
-            <Input
-              inputMode="numeric"
-              value={form.avatar}
-              placeholder="0"
-              disabled={!canWrite}
-              onChange={(event) => update("avatar", event.target.value.replace(/[^\d]/g, ""))}
-            />
-          </Field>
-          <Field label="所在地图" hint={form.onMap.trim() ? mapText(form.onMap.trim()) : "客户端 configs/map 的 key"}>
-            <Input value={form.onMap} placeholder="0" disabled={!canWrite} onChange={(event) => update("onMap", event.target.value)} />
-          </Field>
+      {/* 主体：左窄栏一张「角色」卡（身份 / 货币 / 属性，**只读**），右宽栏「装备」（可改，含时装与成长阶位） */}
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(340px,420px)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-3">
+          <Card dense title="角色" description="只读：身份 / 货币与经验 / 战斗属性（服务端重算）。要换装备请用右边那张卡。">
+            <div className="flex flex-col gap-3">
+              {/* 身份（只读展示，没有输入框） */}
+              <div className="flex gap-2.5">
+                <div className="flex w-16 shrink-0 flex-col items-center gap-1">
+                  <GameIcon path={avatar} alt={`${occupationLabel}${sexLabel}头像`} size={56} />
+                  <span className="text-[10px] text-slate-500">编号 {form.avatar || 0}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-100" title={form.name}>
+                    {form.name}
+                  </p>
+                  <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-1">
+                    <ReadOnlyValue label="等级" value={form.level || "—"} />
+                    <ReadOnlyValue label="职业" value={occupationLabel} />
+                    <ReadOnlyValue label="性别" value={sexLabel} />
+                  </div>
+                  <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+                    <span className="shrink-0 text-[10px] text-slate-500">所在地图</span>
+                    {form.onMap.trim() ? (
+                      <>
+                        <EntityImage image={entityImage("map", form.onMap.trim())} size={22} alt={mapText(form.onMap.trim())} />
+                        <span className="truncate text-xs text-slate-200">{mapText(form.onMap.trim())}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-600">未在地图上</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 货币与经验（只读） */}
+              <div className="border-t border-slate-800 pt-3">
+                <p className="mb-1.5 text-[10px] uppercase tracking-wide text-slate-500">货币与经验</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {NUMBER_FIELDS.map(({ key, label }) => (
+                    <ReadOnlyValue key={key} label={label} value={(form[key] as string) || "0"} />
+                  ))}
+                </div>
+              </div>
+
+              {/* 战斗属性（服务端重算，只读） */}
+              <div className="border-t border-slate-800 pt-3">
+                <RoleAttributesCard derived={role.derived} bare />
+              </div>
+            </div>
+          </Card>
         </div>
-      </Card>
 
-      <Card title="常用数值" description={readonlyHint}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {NUMBER_FIELDS.filter((item) => item.key !== "level").map(({ key, label }) => (
-            <Field key={key} label={label} hint={levelNameOf(key, form)}>
-              <Input
-                inputMode="numeric"
-                disabled={!canWrite}
-                value={form[key] as string}
-                onChange={(event) => update(key, event.target.value.replace(/[^\d]/g, ""))}
-              />
-            </Field>
-          ))}
+        <div className="flex flex-col gap-3">
+          <Card dense
+            title="装备"
+            description={
+              readonlyHint ?? "点格子挑装备（默认只列本部位），× 卸下；时装与称号 / 战魂 / 军衔也在这里改。"
+            }
+          >
+            <div className="flex flex-col gap-3">
+              <EquipSlots value={form.equipments} disabled={!canWrite} onChange={(next) => update("equipments", next)} />
+
+              {/* 时装 + 成长阶位：都是「一项外观 / 一个档位」，并成一行，不再各占一张卡 */}
+              <div className="border-t border-slate-800 pt-3">
+                <p className="mb-2 text-[10px] uppercase tracking-wide text-slate-500">时装与成长阶位</p>
+                {/* auto-fit 而不是 xl 断点：这一行的宽度跟的是**卡片**（右栏 460~700 都可能），
+                    不是视口 —— 按视口排版会让 1280 下四格挤成 105px，「未激活」被竖排成四个字 */}
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))" }}
+                >
+                  <EntityCard
+                    badge="时装"
+                    label={form.fashionCloth ? entityLabel("fashion", form.fashionCloth) : ""}
+                    note={form.fashionCloth ? form.fashionCloth : undefined}
+                    image={form.fashionCloth ? entityImage("fashion", form.fashionCloth) : {}}
+                    placeholder="未穿时装"
+                    size={32}
+                    disabled={!canWrite}
+                    onClick={() => setFashionOpen(true)}
+                    onClear={() => update("fashionCloth", "")}
+                    clearTitle="脱掉时装"
+                  />
+                  {GROWTH_FIELDS.map(({ key, kind }) => (
+                    <LevelLadder
+                      key={key}
+                      kind={kind}
+                      compact
+                      value={Number(form[key]) || 0}
+                      disabled={!canWrite}
+                      onChange={(level) => update(key, String(level))}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
-      </Card>
+      </div>
 
-      <RoleAttributesCard derived={role.derived} />
+      {/* 保存条：一直可见（页面不滚，它也不会跑） */}
+      <div className="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-800 bg-slate-900/95 px-3 py-2 shadow-lg shadow-black/30 backdrop-blur">
+        <span className="mr-auto text-xs text-slate-500">
+          {canWrite ? "只提交改动过的字段；装备 / 技能 / 背包是整体替换。" : readonlyHint}
+        </span>
+        <Button variant="outline" onClick={() => setForm(toForm(role))} disabled={!canWrite || saving}>
+          重置
+        </Button>
+        <Button onClick={() => void save()} loading={saving} disabled={!canWrite}>
+          保存改动
+        </Button>
+      </div>
 
-      <Card
-        title="运行时数据"
-        description={
-          readonlyHint ??
-          "装备槽位与技能 id 的清单来自这个角色自己的数据；下面的名字（部位 / 装备名 / 技能名 / 物品名）来自三端共用的那份游戏数据（客户端配置的快照），后台没有自己的副本。背包按「有东西的格子」编辑，清空全部格子即清空背包。"
+      {/* —— 弹窗：技能（大块内容不进页面） —— */}
+      <Modal
+        open={skillsOpen}
+        title={`技能（${form.skills.length} 个）`}
+        hint="图标 + 名字 + 描述来自客户端配置；改完点「保存并关闭」才会落库。"
+        size="max-w-3xl"
+        onClose={() => setSkillsOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSkillsOpen(false)}>
+              放弃改动
+            </Button>
+            <Button
+              loading={saving}
+              disabled={!canWrite}
+              onClick={async () => {
+                if (await save({ ...form, skills: draftSkills })) setSkillsOpen(false);
+              }}
+            >
+              保存并关闭
+            </Button>
+          </>
         }
       >
-        <div className="flex flex-col gap-6">
-          <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">装备穿戴（槽位 → 装备 id；值留空 = 卸下）</p>
-            {form.equipments.length === 0 ? (
-              <p className="mb-2 text-xs text-slate-500">该角色数据里没有装备表（可能是旧存档或数据异常）。</p>
-            ) : null}
-            <KeyValueEditor
-              rows={form.equipments}
-              keyLabel="装备槽位"
-              valueLabel="装备 id"
-              keyPlaceholder="槽位名"
-              valuePlaceholder="装备 id"
-              describe={(row) => (row.value.trim() ? equipmentText(row.value.trim()) : slotLabel(row.key.trim()))}
-              disabled={!canWrite}
-              onChange={(rows) => update("equipments", rows)}
-            />
-          </div>
+        <SkillList
+          rows={draftSkills}
+          disabled={!canWrite}
+          onChange={setDraftSkills}
+        />
+      </Modal>
 
-          <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">技能等级（技能 id → 等级）</p>
-            {form.skills.length === 0 ? <p className="mb-2 text-xs text-slate-500">该角色数据里没有技能表。</p> : null}
-            <KeyValueEditor
-              rows={form.skills}
-              keyLabel="技能 id"
-              valueLabel="技能等级"
-              keyPlaceholder="技能 id"
-              valuePlaceholder="等级"
-              describe={(row) => skillText(row.key.trim())}
-              disabled={!canWrite}
-              onChange={(rows) => update("skills", rows)}
-            />
-          </div>
-
-          <div>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-medium text-slate-400">
-                背包（第 {form.bag.length} 格有物品；行 / 列上限 {ROLE_BAG_AXIS_MAX}）
-              </p>
-              <Button
-                variant="outline"
-                className="px-2.5 py-1 text-xs"
-                disabled={!canWrite || form.bag.length === 0}
-                onClick={() => update("bag", [])}
-              >
-                清空背包
-              </Button>
-            </div>
-            {form.bag.map((row, index) => (
-              <div key={`bag-${index}`} className="mb-2 flex flex-wrap items-center gap-2">
-                <Input
-                  className="w-20"
-                  inputMode="numeric"
-                  value={row.row}
-                  aria-label={`第 ${index + 1} 格行号`}
-                  disabled={!canWrite}
-                  onChange={(event) =>
-                    update(
-                      "bag",
-                      form.bag.map((item, position) => (position === index ? { ...item, row: event.target.value.replace(/[^\d]/g, "") } : item)),
-                    )
-                  }
-                />
-                <Input
-                  className="w-20"
-                  inputMode="numeric"
-                  value={row.col}
-                  aria-label={`第 ${index + 1} 格列号`}
-                  disabled={!canWrite}
-                  onChange={(event) =>
-                    update(
-                      "bag",
-                      form.bag.map((item, position) => (position === index ? { ...item, col: event.target.value.replace(/[^\d]/g, "") } : item)),
-                    )
-                  }
-                />
-                <Input
-                  className="flex-1"
-                  value={row.id}
-                  placeholder="物品 id"
-                  aria-label={`第 ${index + 1} 格物品 id`}
-                  disabled={!canWrite}
-                  onChange={(event) =>
-                    update(
-                      "bag",
-                      form.bag.map((item, position) => (position === index ? { ...item, id: event.target.value } : item)),
-                    )
-                  }
-                />
-                {row.id.trim() ? <span className="text-xs text-slate-500">{itemText(row.id.trim())}</span> : null}
-                <Input
-                  className="w-24"
-                  inputMode="numeric"
-                  value={row.count}
-                  placeholder="数量"
-                  aria-label={`第 ${index + 1} 格数量`}
-                  disabled={!canWrite}
-                  onChange={(event) =>
-                    update(
-                      "bag",
-                      form.bag.map((item, position) => (position === index ? { ...item, count: event.target.value.replace(/[^\d]/g, "") } : item)),
-                    )
-                  }
-                />
-                <Button
-                  variant="ghost"
-                  className="px-2 py-1 text-xs"
-                  disabled={!canWrite}
-                  onClick={() => update("bag", form.bag.filter((_, position) => position !== index))}
-                >
-                  移除
-                </Button>
-              </div>
-            ))}
+      {/* —— 弹窗：背包（7×11 网格不进页面） —— */}
+      <Modal
+        open={bagOpen}
+        title={`背包（${form.bag.length} / ${bagRows * bagCols} 格）`}
+        hint={`网格按存档里的形状铺开（${bagRows} 行 × ${bagCols} 列）；点格子放东西 / 改数量。改完点「保存并关闭」才会落库。`}
+        size="max-w-3xl"
+        onClose={() => setBagOpen(false)}
+        footer={
+          <>
             <Button
               variant="outline"
-              className="px-2.5 py-1 text-xs"
-              disabled={!canWrite}
-              onClick={() => update("bag", [...form.bag, { row: "0", col: "0", id: "", count: "1" }])}
+              disabled={!canWrite || draftBag.length === 0}
+              onClick={() => setDraftBag([])}
             >
-              添加一个格子
+              清空背包
             </Button>
-          </div>
-        </div>
+            <Button variant="outline" onClick={() => setBagOpen(false)}>
+              放弃改动
+            </Button>
+            <Button
+              loading={saving}
+              disabled={!canWrite}
+              onClick={async () => {
+                if (await save({ ...form, bag: draftBag })) setBagOpen(false);
+              }}
+            >
+              保存并关闭
+            </Button>
+          </>
+        }
+      >
+        <BagGrid cells={draftBag} rows={bagRows} cols={bagCols} disabled={!canWrite} onChange={setDraftBag} />
+      </Modal>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setForm(toForm(role))} disabled={!canWrite || saving}>
-            重置
-          </Button>
-          <Button onClick={() => void save()} loading={saving} disabled={!canWrite}>
-            保存改动
-          </Button>
-        </div>
-      </Card>
-
-      <Card title="完整角色数据（只读）" description="客户端 entities/Role 的原始快照；上面三项结构化编辑之外的内容（快捷键绑定、速度倍率…）请用游戏内功能改。">
-        <pre className="max-h-96 overflow-auto rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs leading-relaxed text-slate-400">
+      {/* —— 弹窗：原始数据（只读） —— */}
+      <Modal
+        open={rawOpen}
+        title="完整角色数据（只读）"
+        hint="客户端 entities/Role 的原始快照；这里没做的字段（快捷键绑定、速度倍率…）请用游戏内功能改。"
+        size="max-w-3xl"
+        onClose={() => setRawOpen(false)}
+      >
+        <pre className="overflow-auto rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs leading-relaxed text-slate-400">
           {JSON.stringify(role.data, null, 2)}
         </pre>
-      </Card>
+      </Modal>
+
+      <EntityPicker
+        open={fashionOpen}
+        title="选择时装"
+        hint="时装 id 来自 fashions 表（客户端外观资源同源）；选中即穿上，× 可脱掉。"
+        options={entityOptions("fashion")}
+        current={form.fashionCloth}
+        onSelect={(next) => update("fashionCloth", next)}
+        onClose={() => setFashionOpen(false)}
+      />
 
       <ConfirmDialog
         open={confirmDelete}

@@ -1,6 +1,6 @@
 ---
 name: olua-admin
-description: olua 项目管理端（React 19 + TypeScript + Vite + Tailwind CSS v4，目录 admin/）的开发做法。核心心智模型：界面按权限显隐只是体验，服务端才是权威；接口路径 / 方法 / 实体类型全部由服务端 Swagger 文档生成，禁止手写；页面从共享基件拼装（ui.tsx / Pagination / 弹窗 / Toast），不手写表格样式。涵盖：api 目录的生成物与手写边界（routes.ts 路径表 / models.ts 类型 / endpoints.ts 接口方法 accountsApi adminsApi announcementsApi auditApi authApi mailsApi rolesApi soulsApi statsApi systemApi titlesApi 都是生成物，config.ts http.ts types.ts gameData.ts index.ts 是手写）、地址唯一来源 admin/.env 的 VITE_API_BASE_URL（代码只读 src/api/config.ts）、请求唯一出口 http.ts（请求与响应拦截器 / AbortController 超时 / 统一包裹解包 / ApiError 归一 / ApiError.needRelogin 触发重新登录 / 错误观察者单槽位 / HttpOptions 的 auth 与 silent）、按权限渲染（api/types.ts 的 PERMISSION 现有 25 个权限点与服务端一一对应 + store/session.hasPermission 脏会话兜底空数组即最小权限 + 导航项带 permission 过滤 + 写按钮 disabled + App.tsx 的 RequirePermission 外壳）、共享 UI 组件（ui.tsx 的 Spinner Button Field Input Select Card Badge EmptyState StatCard 与 tableClass 系列、Pagination 服务端分页 10/20/50/100、ConfirmDialog、toastError/toastSuccess）、养成配置页面模式（TitlesPage / SoulsPage：GameConfigDialog 属性整份提交整份替换、价格不进编辑弹窗；GameGrowthListDialog 成长列表弹窗化、KIND_CONF 收敛两种配置的文案与接口适配、拖拽排序乐观更新失败回滚、行内改价；价格唯一显示与修改口 = 成长列表；升级链顺序与等级号解耦）、页面结构（Dashboard / Accounts / AccountDetail / Roles / RoleDetail / Admins / Announcements / Titles / Souls / Mails / Audit / System / MyAccount / Login / Register）、口令管理（AccountDetailPage 的重置密码 + 踢下线、AdminsPage 的重置密码且对自己置灰、MyAccountPage 的自助改密必须用返回的新令牌覆盖会话）、操作日志页（筛选 + 分页 + 展开请求体、动作中文名走 api/types 的 AUDIT_ACTION_LABELS 字典而动作清单从接口拉）、重置口令弹窗 ResetPasswordDialog 的两阶段（确认时前端生成随机口令、成功后只显示一次）、会话变化订阅 subscribeSession 让顶部身份栏跟着刷新、角色运行时数据编辑（KeyValueEditor 编辑装备与技能、背包稀疏格子编辑器含清空背包、buildPatch 对结构化字段整体提交其余只提交改动项）、业务码与展示字典（BIZ_CODE RELOGIN_CODES ADMIN_ROLE_LABELS PERMISSION_LABELS AUDIT_ACTION_LABELS AUDIT_TARGET_LABELS OCCUPATION_LABELS SEX_LABELS ROLE_BAG_AXIS_MAX PASSWORD_MIN_LENGTH formatTime formatTimeFull msToLocalInput localInputToMs）、枚举字段必须收口（as XxxQuery 字段名）、生成类型必须是 type 不能是 interface、接口数 / 管理端导航分组数等是 audit-doc-numbers 的受管数字（改接口必须连文档数字一起改）、新增页面或接口的标准步骤、验证命令 npm run build 等于 tsc --noEmit 加 vite build、提交走 issue + PR + CI 门禁。触发场景：用户说"改管理端页面""加一个管理端功能""后台要能改角色属性""加筛选条件""加批量操作""权限按钮不该显示""登录后跳转不对""管理端类型报错""新接口管理端调不到""按权限显隐菜单""后台重置密码""踢下线按钮""操作日志页""看谁改了什么""改自己的密码""管理端登录被锁""称号配置""战魂配置""成长列表""养成配置""做成分页""改成弹窗""拖拽排序"。
+description: olua 项目管理端（React 19 + TypeScript + Vite + Tailwind CSS v4，目录 admin/）的开发做法。核心心智模型：界面按权限显隐只是体验，服务端才是权威；接口路径 / 方法 / 实体类型全部由服务端 Swagger 文档生成，禁止手写；页面从共享基件拼装（ui.tsx / Pagination / 弹窗 / Toast），不手写表格样式。涵盖：api 目录的生成物与手写边界（routes.ts 路径表 / models.ts 类型 / endpoints.ts 接口方法 accountsApi adminsApi announcementsApi auditApi authApi mailsApi rolesApi soulsApi statsApi systemApi titlesApi 都是生成物，config.ts http.ts types.ts gameData.ts index.ts 是手写）、地址唯一来源 admin/.env 的 VITE_API_BASE_URL（代码只读 src/api/config.ts）、请求唯一出口 http.ts（请求与响应拦截器 / AbortController 超时 / 统一包裹解包 / ApiError 归一 / ApiError.needRelogin 触发重新登录 / 错误观察者单槽位 / HttpOptions 的 auth 与 silent）、按权限渲染（api/types.ts 的 PERMISSION 现有 25 个权限点与服务端一一对应 + store/session.hasPermission 脏会话兜底空数组即最小权限 + 导航项带 permission 过滤 + 写按钮 disabled + App.tsx 的 RequirePermission 外壳）、共享 UI 组件（ui.tsx 的 Spinner Button Field Input Select Card Badge EmptyState StatCard 与 tableClass 系列、Pagination 服务端分页 10/20/50/100、ConfirmDialog、toastError/toastSuccess）、养成配置页面模式（TitlesPage / SoulsPage：GameConfigDialog 属性整份提交整份替换、价格不进编辑弹窗；GameGrowthListDialog 成长列表弹窗化、KIND_CONF 收敛两种配置的文案与接口适配、拖拽排序乐观更新失败回滚、行内改价；价格唯一显示与修改口 = 成长列表；升级链顺序与等级号解耦）、页面结构（Dashboard / Accounts / AccountDetail / Roles / RoleDetail / Admins / Announcements / Titles / Souls / Mails / Audit / System / MyAccount / Login / Register）、口令管理（AccountDetailPage 的重置密码 + 踢下线、AdminsPage 的重置密码且对自己置灰、MyAccountPage 的自助改密必须用返回的新令牌覆盖会话）、操作日志页（筛选 + 分页 + 展开请求体、动作中文名走 api/types 的 AUDIT_ACTION_LABELS 字典而动作清单从接口拉）、重置口令弹窗 ResetPasswordDialog 的两阶段（确认时前端生成随机口令、成功后只显示一次）、会话变化订阅 subscribeSession 让顶部身份栏跟着刷新、角色运行时数据编辑（KeyValueEditor 编辑装备与技能、背包稀疏格子编辑器含清空背包、buildPatch 对结构化字段整体提交其余只提交改动项）、业务码与展示字典（BIZ_CODE RELOGIN_CODES ADMIN_ROLE_LABELS PERMISSION_LABELS AUDIT_ACTION_LABELS AUDIT_TARGET_LABELS OCCUPATION_LABELS SEX_LABELS ROLE_BAG_AXIS_MAX PASSWORD_MIN_LENGTH formatTime formatTimeFull msToLocalInput localInputToMs）、枚举字段必须收口（as XxxQuery 字段名）、生成类型必须是 type 不能是 interface、接口数 / 管理端导航分组数等是 audit-doc-numbers 的受管数字（改接口必须连文档数字一起改）、新增页面或接口的标准步骤、验证命令 npm run build 等于 tsc --noEmit 加 vite build、提交走 issue + PR + CI 门禁。触发场景：用户说"改管理端页面""加一个管理端功能""后台要能改角色属性""加筛选条件""加批量操作""权限按钮不该显示""登录后跳转不对""管理端类型报错""新接口管理端调不到""按权限显隐菜单""后台重置密码""踢下线按钮""操作日志页""看谁改了什么""改自己的密码""管理端登录被锁""称号配置""战魂配置""成长列表""养成配置""做成分页""改成弹窗""拖拽排序""角色详情太长""做成可视化""用图挑装备/称号/时装""一屏看完""抽个公共组件"。
 agent_created: true
 ---
 
@@ -84,7 +84,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `AccountsPage` | 账号列表：分页 + 状态检索 + 封禁 / 解封 + 删除 |
 | `AccountDetailPage` | 账号信息 + 名下角色概要 + **重置密码** + **踢下线** + **清空该账号全部角色** |
 | `RolesPage` | 角色列表：**六维筛选**（关键字 / 账号 / 在线 / 职业 / 性别 / 等级区间）+ 多选 + 批量删除确认框（列出角色名）+「修订」列 |
-| `RoleDetailPage` | 三块卡片：基础信息 / 常用数值 / **运行时数据**（`KeyValueEditor` 编辑装备与技能、背包稀疏格子编辑器含「清空背包」） |
+| `RoleDetailPage` | **一屏看完**的角色详情（见「五点十一」）：左栏一张**只读**「角色」卡（身份 / 货币与经验 / 战斗属性），右栏一张可改的「装备」卡（穿戴槽位 + 时装 + 成长阶位）；技能 / 背包 / 原始数据各自进弹窗 |
 | `AnnouncementsPage` | 公告列表与发布 / 编辑（`announcement:read` 看见、`announcement:write` 改，编辑走 `AnnouncementDialog`） |
 | `TitlesPage` / `SoulsPage` | **养成配置**（称号 / 战魂，`gameConfig:read/write`）：服务端分页主列表 + 顶部按钮唤起「成长列表」弹窗。见「养成配置页面模式」一节 |
 | `RanksPage` | **养成配置**（军衔 #250）：同上模式，无拖动排序（100 阶天然按阶），主列表带大段 Badge；`GameConfigDialog` kind="rank"（无动画栏、加大段名输入） |
@@ -114,16 +114,19 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 **`RoleDetailPage` 的两条约定**：
 - 结构化字段（装备 / 技能 / 背包）**整体提交**；其余字段**只提交改动项**（`buildPatch`）；
-- 装备与技能的键**按角色自己数据里已有的键渲染，不硬编码清单** —— 服务端不认识客户端配置，硬编码清单一定会漂移。
-  值那一侧现在是**有名字的**：行下面会用 `api/gameData.ts` 的 `equipmentText` / `skillText` / `slotLabel`
-  显示「部位 · 装备名」与技能名，背包格子显示物品名，地图与战魂/称号/军衔也各带一行当前名 ——
-  这些名字全来自三端共用的那份数据，页面不拼口径。
+- 装备槽的键**按角色自己数据里已有的键渲染，不硬编码清单** —— 部位表只负责「排序 + 补全空槽」，
+  旧存档带了已删掉的部位时那件装备仍要看得见（只按部位表渲染 = 存一次就真没了）。
+  值与名字的可视化见「五点十一」：槽位卡、档位卡、背包格子全部来自 `components/entity/`，
+  图标 / 名字 / 部位 / 等级门槛一律走 `api/gameData.ts`，页面不拼口径、也不画「id 输入框 + 名字提示」。
 
 **筛选表单与查询分离**：表单状态与「已应用的查询」分开（`applied`），点「查询」才生效；刷新列表要**清空多选**。
 
 ## 五点五、共享 UI 组件与页面模式（新页面从这里拼，不手写样式）
 
-**`components/ui.tsx` 是基件**：`Spinner` / `Button`（`tone` + `disabled`）/ `Field`（label + hint 包输入）/ `Input` / `Select` / `Card`（title + description + actions）/ `Badge`（`tone`）/ `EmptyState` / `StatCard`，以及表格类名常量 `tableClass` / `theadClass` / `thClass` / `tdClass`。页面表格统一这套类名，深色主题口径只在 ui.tsx 改一处。
+**`components/ui.tsx` 是基件**：`Spinner` / `Button`（`tone` + `disabled`）/ `Field`（label + hint 包输入）/ `Input` / `Select` / `Card`（title + description + actions，`dense` 只压内边距）/ `Badge`（`tone`）/ `EmptyState` / `StatCard`，以及表格类名常量 `tableClass` / `theadClass` / `thClass` / `tdClass`。页面表格统一这套类名，深色主题口径只在 ui.tsx 改一处。
+
+**`Card` 的 `dense` 只压内边距**（header `px-5 py-4`→`px-4 py-2.5`、正文 `p-5`→`p-4`），标题 / 说明 / 内容一样不少。
+详情页里「四张卡加起来的内边距」往往比内容更吃高度 —— 要一屏放下时先开这个，别去删内容。
 
 **分页统一走 `Pagination` 组件**（服务端分页：只上报页码与条数，翻页由页面重新拉数据）：
 
@@ -263,6 +266,66 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 验证不看代码看实测（探针 `/tmp` 脚本口径，量三个数）：文档 `scrollHeight === clientHeight`、
 `nav.scrollHeight > nav.clientHeight`（1440×620 下必成立）、`main.scrollHeight > main.clientHeight`，
 再滚 `main` 断言 `header.top` 与首个导航项 `top` 不变。
+
+## 五点十一、可视化实体组件层（`components/entity/`，#562）
+
+「装备 / 物品 / 技能 / 地图 / 时装 / 称号」这些**游戏内容**在后台一律用图挑，不写 id 输入框。
+这一层是四段拼起来的，**上层只认识 `catalog` 的数据形状**：
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| 目录 | `entity/catalog.ts` | `entityOptions(kind)` / `entityLabel` / `entityNote` / `entityImage`（单图 or 图集首帧）+ `levelOptions(kind)` / `levelLabel` / `levelNote` / `levelImage` / `levelDescription`；模块级 `Map` 缓存，**数据只从 `api/gameData` 取** |
+| 原子 | `entity/EntityImage.tsx` | 单图 / 图集首帧 / **空值虚线方块**（不画「无图」占位：未激活、没穿时装是正常状态，画成缺资源会让人去找那张图） |
+| 卡片 | `entity/EntityCard.tsx` | 一张可点卡（图标 + 主标题 + 副标题 + 角标），空值画虚线、有值右上角 `×` 清除 |
+| 选择器 | `entity/EntityPickerList.tsx`（无壳）/ `entity/EntityPicker.tsx`（`Modal` 外壳） | 搜索 + 分组 chips + 网格；`max=120` 上限并提示「只画了前 N 项」 |
+| 业务 | `entity/EquipSlots.tsx` / `LevelLadder.tsx` / `SkillList.tsx` / `BagGrid.tsx` | 部位槽位 / 档位阶梯 / 技能行 / 背包网格 |
+
+复用它要记的四条：
+
+1. **`EntityPickerList` 根节点必须 `h-full`**：父级给了 `flex-1` 而自己不撑满时，列表按内容自然高度长出去、压到底部按钮上
+   （`overflow-y-auto` 因此永远不触发）。这是「弹窗列表糊到按钮上」的唯一根因。
+2. **候选要按「业务约束」过滤，但要给脏数据留路**：装备槽默认只列本部位（服务端会校验，列别的等于给一个必被拒的操作），
+   部位表里**根本没有**这个槽（旧存档脏键）时才退回全量；合法但客户端没配装备的部位（`other1`/`other2`）
+   给空列表 + `emptyHint` 说明，别放开成全量。
+3. **排序按「同款聚在一起、从普通到超神」**：装备 id 的 `_pXsY` 是变体段，先按基础件名字排、再按 `p/s` 序号排。
+   只按 id 字典序排会把「超神的…」全堆在第一屏，运营根本找不到那件普通的。
+4. **`item` 的 label 优先用 `equipmentName`**：装备变体在 `ITEM_LABELS` 里同名（15 个都叫「唯一深爱(衣)」），
+   拿总表的 label 会让选择器里一片同名。
+
+**角色详情的一屏版式**（1440×900 实测 `main.scrollHeight === clientHeight`）：
+
+- 左窄栏 340~420：**一张只读的「角色」卡**，三段用 `border-t` 分隔 ——
+  身份（头像按**职业 + 性别**取 `avatars/<occ>-<sex>.png`；所在地图预览图是 **`.jpg`**）/
+  货币与经验 / 战斗属性（`<RoleAttributesCard bare />`）；
+- 右宽栏：**一张可改的「装备」卡** = 穿戴槽位（有装备用大卡、空槽压成一行小按钮）+ 分隔线 +
+  「时装与成长阶位」（`EntityCard` + 三个 `LevelLadder compact` 并排一行）；
+- 技能列表、7×11 背包网格、原始 JSON 各自进 `Modal`（弹窗里有草稿 `draftSkills` / `draftBag`，
+  点「保存并关闭」才 `save({ ...form, draft })` 落库 —— `setForm` 还没生效就调保存会拿到旧表单）；
+- 顶部一行入口按钮（技能 N / 背包 N/M / 原始数据 / 返回 / 在线 / 删除），底部保存条。
+
+**「这张卡不允许改」要写成纯文本，不是禁用态的输入框**（用户 2026-11-01 定：身份 / 货币 / 属性只读，
+装备卡仍可改）。灰输入框看起来像「没权限」、会让人去找那个能解锁的开关；纯文本才是「这里本来就不改」。
+落成结构：`ReadOnlyValue`（标签 + 值，`tabular-nums`）+ `EntityImage` 画地图小图，卡里 `input/select`
+数量 = 0 —— 这条可以直接断言（`main section` 里按标题取卡片，数 `input,select,textarea`）。
+
+三个高度陷阱：**属性别在窄栏用表格**（三列表头会折成「服务端重 / 算」，`406 ~ 550` 也折行，
+10 行吃掉 300px；`bare` 那档走竖排列表，同样宽度只要一半）、**空槽别用大卡**（13 个部位里 11 个常年为空，
+全用大卡平白吃四行）、**四张卡的内边距比内容更吃高度**（`Card dense`）。
+
+**弹窗内容也要紧凑**（技能 / 背包，用户 2026-11-01 追加）：
+
+- 技能列表：**双列**（`repeat(auto-fit, minmax(280px, 1fr))`）+ `EntityCard compact`（序号跟在名字前，
+  不再独占一行）+ 右侧窄等级框 —— 12 个技能从 12 行变 6 行；
+- 背包网格：格子**封顶 46px**（`repeat(cols, minmax(28px, 46px))` + `justifyContent: start`），
+  不要 `1fr` 撑满 —— 撑满 720 时 7 行就是 455px 高；
+- **`Input` / `Select` 的基础类带 `w-full`**（`CONTROL_CLASS`），再写 `w-11` / `h-8` 是同一属性的冲突，
+  谁生效取决于 CSS 生成顺序 —— 实测把 `flex-1` 的技能卡挤成 **10px** 宽（文字全被 truncate 掉）。
+  要限定宽度就套一层定宽容器，别跟基础类抢同一个属性。
+
+**属性面板那一列叫「存档旧值」，不叫「客户端上报」**：客户端从 #541 起不再计算属性，
+每次写档由 `applyAuthoritativeAttributes` 现算覆盖 `combat` / `maxHp`，客户端只是把下发值抄回来。
+所以差异的含义是「**存档旧了**」（配置漂移 / 某次改动没触发重算），不是「客户端说了算」、更不是作弊；
+只在**与重算值不同**时才把旧值摆出来（一样的时候它没有信息量，窄栏每行多一个数字就挤一分）。
 
 ## 六、必踩的坑
 
