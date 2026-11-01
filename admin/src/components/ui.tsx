@@ -32,7 +32,7 @@ export function Button({
     <button
       {...rest}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANTS[variant]} ${className}`}
     >
       {loading ? <Spinner /> : null}
       {children}
@@ -40,9 +40,40 @@ export function Button({
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+/**
+ * 字段（标签 + 控件）
+ *
+ * **默认就是上下结构**（标签在上、控件在下）：筛选条里一排若干个这样的块，每个块内部
+ * 上下两行、整组排成一行 —— 标签左置会把「标签 + 控件」挤成一行，输入框反而更窄。
+ *
+ * `inline` 只留给**真的没有标签位置**的地方（如弹窗里一行两三个短字段），别在筛选条里用。
+ * `width` 给块定宽：`Input` / `Select` 自带 `w-full`，宽度只能由外层给。
+ */
+export function Field({
+  label,
+  hint,
+  inline = false,
+  width,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  inline?: boolean;
+  /** 控件（或整块）宽度，如 `w-56` */
+  width?: string;
+  children: ReactNode;
+}) {
+  if (inline) {
+    return (
+      <label className={`flex items-center gap-1.5 whitespace-nowrap ${width ?? "w-40"}`}>
+        <span className="shrink-0 text-xs text-slate-400">{label}</span>
+        <span className="min-w-0 flex-1">{children}</span>
+        {hint ? <span className="shrink-0 text-xs text-slate-500">{hint}</span> : null}
+      </label>
+    );
+  }
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className={`flex flex-col gap-1 ${width ?? ""}`}>
       <span className="text-xs font-medium text-slate-400">{label}</span>
       {children}
       {hint ? <span className="text-xs text-slate-500">{hint}</span> : null}
@@ -51,7 +82,7 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 const CONTROL_CLASS =
-  "w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60";
+  "w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2.5 py-1.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60";
 
 export function Input({ className = "", ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...rest} className={`${CONTROL_CLASS} ${className}`} />;
@@ -68,9 +99,11 @@ export function Select({ className = "", children, ...rest }: SelectHTMLAttribut
 /**
  * 卡片外壳
  *
- * `dense` 是给「一屏要塞下好几张卡」的详情页用的：**只压内边距**（header 与正文各瘦一圈），
- * 标题、说明、内容一概不少 —— 那种页面里最费高度的不是内容而是四张卡加起来的内边距。
- * 默认不压缩，列表页的呼吸感保持原样。
+ * **默认就是紧凑的**（2026-11-01 用户口径：「全局使用紧凑布局」）：同一屏里放得下更多行，
+ * 后台最常见的动作是「扫一遍列表」，多出来的内边距只会让人多滚两次。
+ *
+ * `dense` 只压内边距，标题 / 说明 / 内容一概不少。要恢复原来的呼吸感传 `dense={false}`
+ * （目前只有登录壳与少数展板类页面用得上）。
  */
 export function Card({
   title,
@@ -78,7 +111,7 @@ export function Card({
   actions,
   children,
   className = "",
-  dense = false,
+  dense = true,
 }: {
   title?: string;
   description?: string;
@@ -91,18 +124,18 @@ export function Card({
     <section className={`rounded-2xl border border-slate-800 bg-slate-900/40 shadow-lg shadow-black/20 ${className}`}>
       {title || actions ? (
         <header
-          className={`flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 ${
-            dense ? "px-4 py-2.5" : "px-5 py-4"
+          className={`flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 ${
+            dense ? "px-3.5 py-2" : "px-5 py-4"
           }`}
         >
-          <div>
+          <div className="min-w-0">
             {title ? <h2 className="text-sm font-semibold text-slate-100">{title}</h2> : null}
-            {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+            {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
           </div>
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
         </header>
       ) : null}
-      <div className={dense ? "p-4" : "p-5"}>{children}</div>
+      <div className={dense ? "px-3.5 py-3" : "p-5"}>{children}</div>
     </section>
   );
 }
@@ -121,6 +154,41 @@ export function Badge({ tone = "slate", children }: { tone?: BadgeTone; children
   return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${BADGE_TONES[tone]}`}>{children}</span>;
 }
 
+type NoticeTone = "amber" | "red" | "slate" | "emerald";
+
+const NOTICE_TONES: Record<NoticeTone, string> = {
+  amber: "border-amber-500/30 bg-amber-500/10 text-amber-200",
+  red: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+  slate: "border-slate-700 bg-slate-800/40 text-slate-300",
+  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+};
+
+/**
+ * 提示条（一行到一段的解释性文字）
+ *
+ * 为什么抽出来：各页原来自己拼 `rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4`
+ * 或者 `rounded-lg border border-red-500/30 …`，同为「提醒」却有三种字号与两种圆角。
+ *
+ * 用途边界：**解释 / 警告**用它，**操作结果**用 toast（`toastSuccess` / `toastError`）——
+ * 提示条是页面的一部分（刷新后还在），toast 是一次性反馈。
+ */
+export function Notice({
+  tone = "amber",
+  title,
+  children,
+}: {
+  tone?: NoticeTone;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`rounded-xl border px-3 py-2 text-xs leading-relaxed ${NOTICE_TONES[tone]}`}>
+      {title ? <p className="font-medium">{title}</p> : null}
+      <div className={title ? "mt-1 opacity-90" : ""}>{children}</div>
+    </div>
+  );
+}
+
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1 py-12 text-center">
@@ -132,9 +200,9 @@ export function EmptyState({ title, description }: { title: string; description?
 
 export function StatCard({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-3">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-50">{value}</p>
+      <p className="mt-1 text-xl font-semibold text-slate-50">{value}</p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   );
@@ -143,5 +211,5 @@ export function StatCard({ label, value, hint }: { label: string; value: number 
 /** 表格统一样式（页面里直接拼这些 class，避免每个表各写一套） */
 export const tableClass = "w-full min-w-[720px] border-collapse text-sm";
 export const theadClass = "text-left text-xs uppercase tracking-wide text-slate-500";
-export const thClass = "whitespace-nowrap border-b border-slate-800 px-4 py-3 font-medium";
-export const tdClass = "whitespace-nowrap border-b border-slate-800/60 px-4 py-3 text-slate-300";
+export const thClass = "whitespace-nowrap border-b border-slate-800 px-3 py-2 font-medium";
+export const tdClass = "whitespace-nowrap border-b border-slate-800/60 px-3 py-2 text-slate-300";
