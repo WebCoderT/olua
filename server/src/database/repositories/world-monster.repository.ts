@@ -91,4 +91,17 @@ export class WorldMonsterRepository {
   countAll(): number {
     return this.db.count("SELECT COUNT(1) AS total FROM world_monsters");
   }
+
+  /**
+   * 每图每区的实例数与存活数（管理端地图页只读展示，%571）
+   *
+   * 只读聚合：世界服务自己的播种 / 重生逻辑不读它，避免「为了看统计而多一条写路径」。
+   * `alive` 在库里是 0/1，SUM 出来就是存活只数。
+   */
+  countByMap(): Array<{ map_id: string; zone_id: number; total: number; alive: number }> {
+    return this.db.all<{ map_id: string; zone_id: number; total: number; alive: number }>(
+      `SELECT map_id, zone_id, COUNT(1) AS total, SUM(alive) AS alive
+       FROM world_monsters GROUP BY map_id, zone_id ORDER BY map_id ASC, zone_id ASC`,
+    );
+  }
 }

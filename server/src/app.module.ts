@@ -27,6 +27,7 @@ import { PartyModule } from "./modules/party/party.module";
 import { LeaderboardModule } from "./modules/leaderboard/leaderboard.module";
 import { AchievementModule } from "./modules/achievement/achievement.module";
 import { GameMailModule } from "./modules/game-mail/game-mail.module";
+import { MapModule } from "./modules/map/map.module";
 
 /**
  * 应用根模块
@@ -77,6 +78,8 @@ export class AppModule {
         LeaderboardModule,
         AchievementModule,
         GameMailModule,
+        // 地图管理（#571）：只读观测，两个进程（API / 存档）都要有 —— 它是管理端页面，不是实时能力
+        MapModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

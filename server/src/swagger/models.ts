@@ -114,6 +114,17 @@ import {
 } from "../modules/mail/dto/mail.dto";
 import { EquipAlignDto, EquipAlignListDto, EquipAlignPointDto, SaveEquipAlignDto } from "../modules/game-config/dto/equip-align.dto";
 import { EquipInAlignDto, EquipInAlignListDto, EquipInAlignPointDto, SaveEquipInAlignDto } from "../modules/game-config/dto/equip-in-align.dto";
+import {
+  MapDetailDto,
+  MapGroupDto,
+  MapLayerDto,
+  MapListDto,
+  MapObjectDto,
+  MapSourceDto,
+  MapSpawnAreaDto,
+  MapSummaryDto,
+  MapWorldMonsterDto,
+} from "../modules/map/dto/map.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -386,4 +397,14 @@ export const SWAGGER_MODELS = [
   EquipInAlignDto,
   EquipInAlignListDto,
   SaveEquipInAlignDto,
+  // 地图管理（#571，只读）
+  MapLayerDto,
+  MapObjectDto,
+  MapGroupDto,
+  MapSpawnAreaDto,
+  MapWorldMonsterDto,
+  MapSourceDto,
+  MapSummaryDto,
+  MapListDto,
+  MapDetailDto,
 ];

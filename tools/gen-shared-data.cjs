@@ -128,6 +128,9 @@ function load(cfg) {
     roleInitialCurrency: pickRoleInitialCurrency(missing("role", cfg("role"))),
     items: missing("items", cfg("items").items),
     maps: missing("map.maps", cfg("map").maps),
+    // 地图类型分组（#571）：管理端地图页要显示「安全地图 / 等级地图 / …」，
+    // 这段文案只存在于客户端 `configs/map.ts` 的 mapTypeGroups，不在管理端另抄一份
+    mapTypeGroups: missing("map.mapTypeGroups", cfg("map").mapTypeGroups),
     monsters: missing("monster.monsters", cfg("monster").monsters),
     // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
     monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
@@ -241,7 +244,33 @@ function buildSnapshot(cfg) {
     rankLabels: pickList(cfg.rank, (item) => ({ tier: String(item.tier ?? ""), label: String(item.label ?? "") })),
     skillLabels: pickSkillsLabels(cfg.skillData),
     mapLabels: pickMap(cfg.maps, (value) => String(value.label ?? "")),
+    // 地图元数据（#571）：名称之外的进入条件与资源路径 —— 管理端「地图管理」页的只读信息源。
+    // 尺寸 / 图层 / 对象组不在这一份里：它们只能从 TMX 读，由 import-spawn-areas 产出 map-content。
+    // typeLabel 在这里就拼好：类型码 → 显示名只有 `mapTypeGroups` 一处来源，
+    // 单独再产一张「码 → 名」的表只会多一个可能漂的副本（而且它的键是 0..3，
+    // 会被 audit-shared-data 的「手写键清单」判据误认成抄了别的枚举）。
+    maps: pickMap(cfg.maps, (value) => ({
+      label: String(value.label ?? ""),
+      src: String(value.src ?? ""),
+      type: String(value.type ?? ""),
+      typeLabel: mapTypeLabelOf(cfg.mapTypeGroups, value.type),
+      level: Number(value.level) || 0,
+      combat: Number(value.combat) || 0,
+      soulOfWar: Number(value.soulOfWar) || 0,
+    })),
   };
+}
+
+/**
+ * 类型码 → 类型名（地图）
+ *
+ * 客户端的 `mapTypeGroups` 是这段文案的唯一来源（`MapType` 枚举里 `SOUL_OF_WAR` 是数字 3，
+ * 其余是字符串，所以两边都 `String()` 再比）。
+ */
+function mapTypeLabelOf(groups, type) {
+  const code = String(type ?? "");
+  const group = groups.find((item) => String(item.type ?? "") === code);
+  return group ? String(group.label ?? "") : code;
 }
 
 /**
@@ -1164,6 +1193,7 @@ ${numTable("RANK_LABELS", "军衔阶数（下标 + 1 即阶）→ { tier 大段�
 ${numTable("RANK_LEVEL_META", "军衔阶数（下标 + 1 即阶）→ { description 文案, bindGold 晋到该阶消耗 }", s.rankMeta)}
 ${textTable("SKILL_LABELS", "技能 id → 技能名", s.skillLabels)}
 ${textTable("MAP_LABELS", "地图 id → 地图名", s.mapLabels)}
+${jsonTable("MAPS", "地图 id → { label 名称, src 资源路径, type 类型码, typeLabel 类型名, level 进入等级, combat 进入战斗力, soulOfWar 进入战魂阶 }（#571；管理端「地图管理」页的只读信息源。尺寸 / 图层 / 对象组不在这里 —— 它们只有 TMX 有，见 shared/map-content.generated.ts）", s.maps)}
 
 /** 装备前缀名（下标 = 前缀序号，如 0 → 普通的） */
 export const EQUIPMENT_PREFIX_LABELS: string[] = ${literal(s.equipmentPrefixLabels, "  ")};

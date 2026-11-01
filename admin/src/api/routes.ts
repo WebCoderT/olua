@@ -481,6 +481,21 @@ export const routes = {
      */
     updateSettings: "/admin/mall/settings",
   },
+  /** adminMap 模块（2 个接口） */
+  adminMap: {
+    /**
+     * 地图列表（只读）（GET /admin/maps）
+     *
+     * 11 张地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。
+     */
+    list: "/admin/maps",
+    /**
+     * 地图详情（只读）（GET /admin/maps/{id}）
+     *
+     * 列表字段 + 图层 + 对象组 + 刷怪区 + 场上怪物 + **每一块数据的来源**（`sources`）。
+     */
+    detail: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
+  },
   /** adminMonster 模块（4 个接口） */
   adminMonster: {
     /**

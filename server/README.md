@@ -57,10 +57,11 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:rank` | 排行榜专项（56 条；三榜名次与数值 / 并列竞赛排名 / 分页与 `me` / 快照与定时重算） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run test:e2e:bag` | 背包与穿戴专项（38 条；穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸） |
+| `npm run test:e2e:map` | 地图管理专项（88 条；**只读边界** / 两套坐标对账 / 写路由 404 / 权限与文档契约） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 二十五套 e2e + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 二十六套 e2e + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -324,13 +325,13 @@ server/
 
 ## 接口与契约
 
-当前 **163 个接口 / 135 条路径 / 244 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+当前 **165 个接口 / 137 条路径 / 253 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
 | 客户端 | 50 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 106 | `admin` 令牌 + 每个接口各自的权限点 |
+| 管理端 | 108 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -406,7 +407,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-二十五套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+二十六套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -422,14 +423,15 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
 | `test/e2e-rank.cjs` | **56** | 排行榜（#400）：**三个榜（等级 / 战力 / 击杀）的名次与数值逐个对** / 并列时同名次（竞赛排名，同分再按 roleId 升序）/ 战力榜与等级榜不同序（证明不是照抄等级）/ 分页切片、空页、`size` 夹上限与非法分页 `/ `me` 榜内榜外名次都真实、当前无在线角色时返回「没有名次」、未登录被拒 / 刷新周期设为零时快照不随存档变、`computedAt` 不动 / 条目恰好八个字段且不带 `accountId`·`data`·在线状态 / 周期定时重算真的换了一份 |
 | `test/e2e-bag.cjs` | **38** | 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理与搬运全在服务端；**move·tidy 只验两条守恒**（网格形状 + 同 id 总件数）；等级门槛与部位由服务端判（1 级穿 10 级衣服被拒且衣服还在包里）；穿脱当场重算属性（脱掉加血装备血量跟着降）；**`PUT /roles/:id` 改不动背包 / 装备 / 技能**（回填而不是拒收）；**背包尺寸归客户端配置**（改大能长个且不丢东西，存档不重排位置）；错 revision → 20006、别人的角色 → 40300 |
+| `test/e2e-map.cjs` | **88** | 地图管理（#571，**只读**）：11 张图按 id **数值**升序（`10` 不排到 `2` 前面）/ 两类计数各归各位（`monsterAreaCount` 是客户端 TMX 的矩形、`spawnAreaCount` 是库表行数）/ **两套坐标对账**（`groups` 是 Tiled 原始口径，`spawnAreas` 是世界坐标 —— 同一个矩形的中心必须对得上）/ **POST·PUT·PATCH·DELETE 一律 404**（超管也一样：这是「没有入口」不是「没权限」）/ 不存在的图 404 + 50032 / 观察员可读、无令牌 401 / 文档契约与「没有 Map 写模型」 |
 
 
 ```bash
-cd server && npm run verify          # 编译 + 二十五套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 二十六套 e2e + 生成物一致性，一条命令全验
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 
-改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改排行榜 → `test:e2e:rank`；改实时通道 → `test:e2e:realtime`），
+改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改地图 / 刷怪区 → `test:e2e:map`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改排行榜 → `test:e2e:rank`；改实时通道 → `test:e2e:realtime`），
 但**提交前 `npm run verify` 都该过一遍**。
 
 ## 相关文档

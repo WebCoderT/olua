@@ -15,6 +15,11 @@
  * 另外把每张图的地图像素尺寸写进 server/src/shared/map-sizes.generated.ts ——
  * 服务端升级坐标口径时要按图平移存量数据，只有本工具读得到 TMX 头的 width/height/tilewidth。
  *
+ * #571 起再产出一份 server/src/shared/map-content.generated.ts：图层与**全部**对象组
+ * （npc / monster / collision / objects）的原始 Tiled 数据（坐标不换算、属性原样保留）。
+ * 管理端「地图管理」页是只读观测台，读的就是这份 —— 它要能对着 Tiled 看同一组数字，
+ * 所以这里刻意不做坐标换算（世界坐标由刷怪区表那条路提供，两者在页面上分栏显示）。
+ *
  * 解析口径移植自 client/assets/ui/utils/map/TiledObjects.ts（正则读 TMX 原文，
  * 不用引擎解析 —— 引擎会丢对象类并翻转 y）。
  *
@@ -33,6 +38,7 @@ const REPO = path.resolve(__dirname, "..");
 const MAP_DIR = path.join(REPO, "client", "assets", "resources", "map");
 const OUT_TS = path.join(REPO, "server", "src", "modules", "world", "spawn-areas.generated.ts");
 const OUT_SIZES_TS = path.join(REPO, "server", "src", "shared", "map-sizes.generated.ts");
+const OUT_CONTENT_TS = path.join(REPO, "server", "src", "shared", "map-content.generated.ts");
 
 // ----------------------------------------------------------------------------//
 // TMX 解析（移植 client/assets/ui/utils/map/TiledObjects.ts 的口径）
@@ -113,6 +119,71 @@ function parseMonsterObject(objectXml) {
 }
 
 // ----------------------------------------------------------------------------//
+// 图层与对象组解析（#571：管理端地图页的全量只读视图）
+// ----------------------------------------------------------------------------//
+
+/** 瓦片图层：只取结构（名字 / 格数），`<data>` 里的几万个 gid 对管理端没有意义 */
+function parseLayers(xml) {
+  const layers = [];
+  const pattern = /<layer\b([^>]*)>/g;
+  let match;
+  while ((match = pattern.exec(xml))) {
+    const attributes = match[1];
+    if (/\/\s*$/.test(attributes)) continue;
+    layers.push({
+      name: readXmlAttribute(attributes, "name"),
+      width: Number(readXmlAttribute(attributes, "width")) || 0,
+      height: Number(readXmlAttribute(attributes, "height")) || 0,
+    });
+  }
+  return layers;
+}
+
+/** 一个对象组里的全部对象（坐标原样保留：管理端要跟 Tiled 对得上） */
+function parseObjects(body) {
+  const objects = [];
+  const openTagPattern = /<object\b([^>]*?)(\/?)>/g;
+  let match;
+  while ((match = openTagPattern.exec(body))) {
+    const attributes = match[1];
+    const bodyStart = openTagPattern.lastIndex;
+    const bodyEnd = match[2] === "/" ? bodyStart : body.indexOf("</object>", bodyStart);
+    const inner = bodyEnd < 0 ? "" : body.slice(bodyStart, bodyEnd);
+    if (bodyEnd > bodyStart) openTagPattern.lastIndex = bodyEnd;
+
+    objects.push({
+      id: Number(readXmlAttribute(attributes, "id")) || 0,
+      name: readXmlAttribute(attributes, "name"),
+      // Tiled 1.9 起把 type 改名 class；两种写法都认，空串 = 普通矩形
+      klass: readXmlAttribute(attributes, "type") || readXmlAttribute(attributes, "class"),
+      x: Number(readXmlAttribute(attributes, "x")) || 0,
+      y: Number(readXmlAttribute(attributes, "y")) || 0,
+      width: Number(readXmlAttribute(attributes, "width")) || 0,
+      height: Number(readXmlAttribute(attributes, "height")) || 0,
+      properties: readObjectProperties(inner),
+    });
+  }
+  return objects;
+}
+
+/** 全部对象组（npc / monster / collision / 早期 objects），按 TMX 里的出现顺序 */
+function parseObjectGroups(xml) {
+  const groups = [];
+  const openTagPattern = /<objectgroup\b([^>]*)>/g;
+  let match;
+  while ((match = openTagPattern.exec(xml))) {
+    const attributes = match[1];
+    if (/\/\s*$/.test(attributes)) continue;
+    const start = match.index + match[0].length;
+    const end = xml.indexOf("</objectgroup>", start);
+    const body = end < 0 ? "" : xml.slice(start, end);
+    groups.push({ name: readXmlAttribute(attributes, "name"), objects: parseObjects(body) });
+    if (end > start) openTagPattern.lastIndex = end;
+  }
+  return groups;
+}
+
+// ----------------------------------------------------------------------------//
 // 主流程
 // ----------------------------------------------------------------------------//
 
@@ -128,6 +199,8 @@ function main() {
   const areas = [];
   /** mapId → 地图像素尺寸（TMX 头里的 grid 数 × 单格像素） */
   const mapSizes = new Map();
+  /** mapId → 图层与对象组（#571：管理端只读地图页的内容源） */
+  const mapContents = new Map();
   const mapDirs = fs
     .readdirSync(MAP_DIR, { withFileTypes: true })
     .filter((item) => item.isDirectory())
@@ -153,6 +226,8 @@ function main() {
     const mapW = cols * tileW;
     const mapH = rows * tileH;
     mapSizes.set(mapId, { cols, rows, tileW, tileH, width: mapW, height: mapH });
+    // 图层与对象组：安全图（没有 monster 组）也要收，管理端要能看到它的 NPC 与碰撞
+    mapContents.set(mapId, { layers: parseLayers(xml), groups: parseObjectGroups(xml) });
 
     const groupXml = readObjectGroupXml(xml, "monster");
     if (!groupXml) {
@@ -263,6 +338,90 @@ function main() {
   sizeLines.push("};", "");
   fs.writeFileSync(OUT_SIZES_TS, sizeLines.join("\n"), "utf8");
   console.log(`已生成 ${path.relative(REPO, OUT_SIZES_TS)}（${mapSizes.size} 张图）`);
+
+  // 图层 / 对象组快照（#571）：管理端「地图管理」页的**客户端资源视图** ——
+  // 页面会把这块标成「客户端资源（服务端未整理）」：坐标是 Tiled 原始值、不做换算，
+  // 与库里那张 map_spawn_areas（服务端整理后的世界坐标）分栏显示，避免两套数字被当成一套。
+  const contentLines = [
+    "/** @generated 由 tools/import-spawn-areas.cjs 从客户端 Tiled 地图（client/assets/resources/map）生成，勿手改（#571）",
+    " *",
+    " * 这是**客户端资源视图**，不是服务端的运营数据：",
+    " * - 坐标保持 Tiled 原始口径（左上角原点、y 向下，和 Tiled 编辑器里看到的一致），不做换算；",
+    " * - 对象属性原样保留（刷怪区的 id / min / max 等），不在这里解释含义；",
+    " * - 服务端真正用于运行的是 `map_spawn_areas` 表（世界坐标，运营可整理）与 `world_monsters`。",
+    " * 管理端展示它只有一个目的：让人能对着 Tiled 核对「资源里到底有什么」。",
+    " */",
+    "export interface MapLayerInfo {",
+    "  /** 图层名（Tiled 里的图层名） */",
+    "  name: string;",
+    "  /** 横向格数 */",
+    "  width: number;",
+    "  /** 纵向格数 */",
+    "  height: number;",
+    "}",
+    "",
+    "export interface MapObjectInfo {",
+    "  /** 对象 id（图内唯一，Tiled 的 nextobjectid 序列） */",
+    "  id: number;",
+    "  /** 对象名（如「1号怪物」「复活点」） */",
+    "  name: string;",
+    "  /** 对象类（Tiled 的 type / class；空串 = 普通矩形） */",
+    "  klass: string;",
+    "  /** Tiled 坐标 x（左上角原点，y 向下） */",
+    "  x: number;",
+    "  /** Tiled 坐标 y（左上角原点，y 向下） */",
+    "  y: number;",
+    "  /** 矩形宽（点对象为 0） */",
+    "  width: number;",
+    "  /** 矩形高（点对象为 0） */",
+    "  height: number;",
+    "  /** 自定义属性（原样：刷怪区的 id / min / max 等） */",
+    "  properties: Record<string, string>;",
+    "}",
+    "",
+    "export interface MapGroupInfo {",
+    "  /** 对象组名（npc / monster / collision / 早期 objects） */",
+    "  name: string;",
+    "  objects: MapObjectInfo[];",
+    "}",
+    "",
+    "export interface MapContent {",
+    "  layers: MapLayerInfo[];",
+    "  groups: MapGroupInfo[];",
+    "}",
+    "",
+    "/** mapId → 图层与对象组（对象按 TMX 内的出现顺序） */",
+    "export const MAP_CONTENTS: Record<string, MapContent> = {",
+  ];
+  for (const [mapId, content] of [...mapContents.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+    contentLines.push(`  "${mapId}": {`);
+    contentLines.push("    layers: [");
+    for (const layer of content.layers) {
+      contentLines.push(`      { name: ${JSON.stringify(layer.name)}, width: ${layer.width}, height: ${layer.height} },`);
+    }
+    contentLines.push("    ],");
+    contentLines.push("    groups: [");
+    for (const group of content.groups) {
+      contentLines.push(`      { name: ${JSON.stringify(group.name)}, objects: [`);
+      for (const object of group.objects) {
+        contentLines.push(
+          `        { id: ${object.id}, name: ${JSON.stringify(object.name)}, klass: ${JSON.stringify(object.klass)}, x: ${round(object.x)}, y: ${round(object.y)}, width: ${round(object.width)}, height: ${round(object.height)}, properties: ${JSON.stringify(object.properties)} },`,
+        );
+      }
+      contentLines.push("      ] },");
+    }
+    contentLines.push("    ],");
+    contentLines.push("  },");
+  }
+  contentLines.push("};", "");
+  fs.writeFileSync(OUT_CONTENT_TS, contentLines.join("\n"), "utf8");
+
+  const objectCount = [...mapContents.values()].reduce(
+    (total, content) => total + content.groups.reduce((sum, group) => sum + group.objects.length, 0),
+    0,
+  );
+  const layerCount = [...mapContents.values()].reduce((total, content) => total + content.layers.length, 0);
+  console.log(`已生成 ${path.relative(REPO, OUT_CONTENT_TS)}（${mapContents.size} 张图 · ${layerCount} 个图层 · ${objectCount} 个对象）`);
 
   if (dbPath) {
     const { DatabaseSync } = require("node:sqlite");

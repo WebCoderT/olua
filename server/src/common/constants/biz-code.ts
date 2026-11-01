@@ -216,6 +216,16 @@ export const BizCode = {
   /** 状态不存在（清单 seed 自生成物 STATUSES，不可增删行） */
   STATUS_NOT_FOUND: 50030,
 
+  //#region 地图（#571：只读观测）
+  /**
+   * 地图不存在
+   *
+   * 地图清单由客户端 `configs/map.ts` 固定（11 张），地图模块**没有任何写接口** ——
+   * 这个码只会在「查一张不存在的图」时出现，不会出现在保存失败的场景。
+   */
+  MAP_NOT_FOUND: 50032,
+  //#endregion
+
   //#region 任务（#396）
   /** 任务不存在（配置表里没有这个 id） */
   QUEST_NOT_FOUND: 50031,

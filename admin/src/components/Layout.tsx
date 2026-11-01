@@ -12,7 +12,7 @@ import { Badge, Button } from "./ui";
  * 与后端的 `@RequirePermissions` 一一对应（见服务端 constants/permission）。
  * 「我的账号」不做成导航项：它是每个人的私有页面，放在右上角身份栏更顺手。
  *
- * 29 项按功能分成四个可折叠分组 + 一个顶层独立项（概览）：
+ * 30 项按功能分成四个可折叠分组 + 一个顶层独立项（概览）：
  * 路由本身仍是扁平路径（`App.tsx` 不用动），分组只是侧栏的视觉与交互层次。
  */
 type NavItem = { to: string; label: string; end?: boolean; permission: string | null };
@@ -45,6 +45,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/skills", label: "技能配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/statuses", label: "状态配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/drops", label: "掉落配置", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/maps", label: "地图管理", permission: PERMISSION.GAME_CONFIG_READ },
     ],
   },
   {
