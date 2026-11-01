@@ -163,8 +163,14 @@ server/
 │   │   ├── token/                  JWT issue & verify (dual audience)
 │   │   └── health/
 │   ├── shared/
-│   │   ├── game-data.generated.ts  shared game-data artifact (**the one source all three sides read**; @generated,
-│   │   │                           regenerate with node tools/gen-shared-data.cjs)
+│   │   ├── game-data.generated.ts  shared game-data artifact (equipment / items / skills / statuses / drops / NPCs / fashions;
+│   │   │                           @generated, regenerate with node tools/gen-shared-data.cjs)
+│   │   ├── growth-seed.ts          the one source of truth for growth curves and per-level bare attributes (#590; the equipment
+│   │   │                           factory-attribute formula equipmentStats lives here too)
+│   │   ├── title-seed.ts / soul-seed.ts / rank-seed.ts
+│   │   │                           the one source of truth for the three growth lines (#590; client configs are empty runtime
+│   │   │                           tables, rebuilt wholesale from the snapshot)
+│   │   ├── monster-seed.ts         the one source of truth for monster factory values (#588)
 │   │   └── game-data.ts            server facade (hand-written): derives the occupation / sex code lists and doc text
 │   └── swagger/
 │       ├── setup.ts                doc mounting (factored into a function so tests can also generate once to verify grouping/permissions/dangling $ref)
@@ -225,10 +231,10 @@ server/
 | `role_mails` | in-game mail (#429 / channels #436) | `id` primary key + `role_id` (cascade); `channel` (four-value enum: system / reward / social / combat, default system, kept apart from the source tag `kind`) / `kind` / `title` / `body` / attachments (`gold` / `exp` / `attachments` JSON column) + `read_at` / `claimed_at`. **Unrelated to `mail_queue`** (that one is the outbound SMTP queue). Attachments only enter the bag on claim; rows with unclaimed attachments are refused deletion; indexes `(role_id, created_at DESC)` for the box and `(role_id, claimed_at)` for the unclaimed count |
 | `world_meta` | world epoch (#295 phase two) | single-row table (id always 1); merging bumps `epoch` by 1, and both processes' in-memory worlds poll it to invalidate stale state (the cross-process "the database was rewritten" signal) |
 | `map_spawn_areas` | spawn areas (#295 phase one) | **imported once from the client's Tiled, then owned by the server**: `tools/import-spawn-areas.cjs` generates the SPAWN_AREAS snapshot (committed), empty tables are auto-seeded at boot; each area expands into per-monster random points inside its rect, worldJoin only carries mapId |
-| `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level |
-| `growth_segments` | growth-curve segments (#256) | four piecewise-linear curves x segments; edits must keep the curve covering 1..roleMaxLevel contiguously (cross-row validation) |
+| `level_exps` | level-up experience (#256) | fixed level sequence (1..roleMaxLevel), edit-only; one row = experience needed to reach the next level (factory value = curve expansion from growth-seed, #590) |
+| `growth_segments` | growth-curve segments (#256) | four piecewise-linear curves x segments; edits must keep the curve covering 1..roleMaxLevel contiguously (cross-row validation); factory value = growth-seed (from #590 the curves are written only in the server seed) |
 | `growth_scalars` | growth scalar parameters (#256) | level cap / attribute-range rates / experience pacing; each key has its own value domain |
-| `ranks` | rank configuration (#250) | fixed rank sequence (1..100), edit-only; label / tier / promotion price / eight attributes |
+| `ranks` | rank configuration (#250) | fixed rank sequence (1..100), edit-only; label / tier / promotion price / eight attributes (factory value = rank-seed expansion, #590) |
 | `equipments` | equipment base-piece config (#252) | primary key is the base-piece id (e.g. `cloth_1`, variants not stored); slot / level requirement / sell price / eight attributes; id & slot structure fixed, edit-only |
 | `drugs` | drug config (#253) | primary key is the drug id (e.g. `drug_hp_1`, referenced by drop tables and backpack); label / description / sell price / stack cap / cooldown / four recovery amounts (effects summed per key); id list fixed, edit-only |
 | `items` | item & material config (#255) | primary key is the item id (e.g. `material_hide`, referenced by drop tables and scripts); MATERIAL / OTHER types only; label / description / sell price / stack cap; id list fixed, edit-only |
