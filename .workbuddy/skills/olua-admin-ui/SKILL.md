@@ -169,6 +169,10 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 
 弹窗里的表单仍用 `Field`；底部按钮顺序固定：右起「保存类」→「取消」。
 
+**按钮必须进 `footer`，不许写在 children 末尾** —— children 是滚动区，长表单一滚按钮就跟着滚走，
+表现为「弹窗里找不到保存」。共用表单的 `FormFooter`（`components/form-bits.tsx`）直接塞进 `footer`。
+标题过长时「关闭」不许被挤成竖排两个字（`Modal` 里已 `shrink-0 whitespace-nowrap`）。
+
 ## 六、表格与列表
 
 - 列头 `theadClass`（`text-xs uppercase tracking-wide text-slate-500`），行 `hover:bg-slate-800/30`。
@@ -218,8 +222,12 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 4. `<span className="mb-1.5 block text-xs font-medium text-slate-400">` —— 字段标签一律走 `Field`；
 5. `text-xl` / `text-2xl` 当页面标题、`bg-white`、`text-black`。
 
-`components/**` 里同样不许 1~4（`Modal` / `Card` / `PageHeader` 自己是唯一实现）。
-组件内部要写这些 class 是正当的 —— 但那就等于又造了一份，改之前先问「能不能复用」。
+`components/**` 里**至少不许 1**（手写遮罩）—— 脚本就是这么跑的：页面查 1~4，组件查 1，
+白名单只有 `Modal.tsx`（遮罩的唯一实现）与 `GameImage.tsx`（`z-[100]` 全屏看图，不是表单弹窗）。
+
+为什么组件也要查：五个共用弹窗（封禁 / 重置口令 / 补录邮箱 / 公告 / 养成配置 / 成长列表）曾经**全部**
+绕开 `Modal` —— 页面里守住了、组件里漏了，用户看到的是「有的弹窗能按 Esc，有的不能、宽度也不一样」。
+共用弹窗是最容易漏的一类，因为写它的人不在 `pages/` 里看。
 
 ## 十、迁移手册（存量页面怎么改到规范上）
 
@@ -276,3 +284,10 @@ const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
   要么不用 sticky。
 - **`disabled` 输入框 ≠ 只读**：前者暗示「有开关能解锁」，后者才是「这里不改」。
 - **弹窗里再放 `Card`**：双层圆角+边框，看着像套娃。弹窗内部用分隔线（`border-t border-slate-800`）分组。
+- **「宽度给外层」这条对组件库同样成立**：`AttributesEditor` 里写 `<Input className="w-20">` 时，
+  八项属性的标签被压成「物\n攻」竖排、输入框宽度也不受控 —— 改成 `<div className="w-20"><Input/></div>`
+  才稳定。扫法：`<Input|Select className="…w-*…">` 一律是可疑点。
+- **迁移脚本会把 markdown 的 `**粗体**` 原样搬进 JSX 文本**：用户看到的是字面星号。
+  改成 `<strong className="text-slate-400">`，或者删掉强调。
+- **页头说明一旦超过两行，右侧动作会换到第二行**：`PageHeader` 里给动作区补了 `ml-auto`（换行后仍贴右），
+  但根治办法是把说明压到一行 —— 说明是「为什么 / 边界」，不是规格书。
