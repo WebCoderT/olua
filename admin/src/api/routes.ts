@@ -208,7 +208,7 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
-  /** adminDrop 模块（6 个接口） */
+  /** adminDrop 模块（7 个接口） */
   adminDrop: {
     /**
      * 具名掉落表列表（GET /admin/drop-tables）
@@ -240,6 +240,12 @@ export const routes = {
      * 行与怪物一一对应（key 清单固定），**没有创建 / 删除**。`keyword` 模糊匹配怪物 key，`source` 按来源筛（table / entries / none）。
      */
     listMonsterDrops: "/admin/monster-drops",
+    /**
+     * 单只怪的掉落配置（GET /admin/monster-drops/{monsterKey}）
+     *
+     * 弹窗回填用（怪物列表点「掉落」时拉这一条）。与列表同形，只是单条。
+     */
+    getMonsterDrop: (monsterKey: string) => `/admin/monster-drops/${encodeURIComponent(monsterKey)}`,
     /**
      * 整份替换一只怪的掉落配置（PATCH /admin/monster-drops/{monsterKey}）
      *

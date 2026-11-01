@@ -2,7 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
-import { MonsterRow } from "../../../database/rows";
+import { MonsterDropRow, MonsterRow } from "../../../database/rows";
+import { MonsterDropSummaryDto } from "./drop.dto";
 
 /** 怪物定位取值清单（configs/monster 的 tier：normal / elite / boss；**手写结构常量**，与客户端枚举逐值一致） */
 /** 怪物定位取值清单（configs/monster 的 tier：normal / elite / boss；**手写结构常量**，与客户端枚举逐值一致） */
@@ -107,9 +108,26 @@ export class MonsterDto {
   }
 }
 
+/**
+ * 管理端怪物行（= 基础数据 + 掉落摘要）
+ *
+ * 掉落摘要**只在管理端**：玩家侧快照（`GET /game-config`）仍下发 `MonsterDto` ——
+ * 客户端不参与掉落结算，多给它一份配置只会造成「客户端也有权威」的错觉。
+ */
+export class AdminMonsterDto extends MonsterDto {
+  @ApiProperty({ description: "掉落摘要（与怪物一一对应；null 表示这一行还没 seed 出来）", nullable: true, type: MonsterDropSummaryDto })
+  drop: MonsterDropSummaryDto | null;
+
+  /** 基础数据 + 掉落行 → 管理端行（掉落行缺失时 drop = null，页面按「兜底」展示） */
+  static withDrop(base: MonsterDto, row: MonsterDropRow | undefined): AdminMonsterDto {
+    const dto = Object.assign(new AdminMonsterDto(), base);
+    dto.drop = row ? MonsterDropSummaryDto.from(row) : null;
+    return dto;
+  }
+}
+
 /** 怪物列表查询入参 */
-export class MonsterQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ description: "关键字：模糊匹配 id 与名称" })
+export class MonsterQueryDto extends PageQueryDto {  @ApiPropertyOptional({ description: "关键字：模糊匹配 id 与名称" })
   @IsOptional()
   @IsString({ message: "关键字必须是字符串" })
   declare keyword?: string;
@@ -123,10 +141,10 @@ export class MonsterQueryDto extends PageQueryDto {
   tier?: string;
 }
 
-/** 怪物分页结果 */
+/** 怪物分页结果（管理端列表带掉落摘要） */
 export class MonsterPageDto extends PageMetaDto {
-  @ApiProperty({ description: "当前页的怪物基础数据", type: [MonsterDto] })
-  list: MonsterDto[];
+  @ApiProperty({ description: "当前页的怪物基础数据（含掉落摘要）", type: [AdminMonsterDto] })
+  list: AdminMonsterDto[];
 }
 
 /**

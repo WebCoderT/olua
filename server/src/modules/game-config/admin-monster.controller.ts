@@ -9,7 +9,7 @@ import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { MONSTER_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
-import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "./dto/monster.dto";
+import { AdminMonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "./dto/monster.dto";
 import { MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
 
 /**
@@ -38,13 +38,15 @@ export class AdminMonsterController {
       "战斗数值是「monsterStats(level, tier) 打底 + 条目覆盖」的**展开结果**——" +
       "改这里的值即时生效（世界播种与伤害结算直读 monsters 表）；" +
       "`level` 是显示用元数据，改它**不会**重算数值。\n\n" +
-      `**排序**：\`sort\` 取 ${sortFieldNames(MONSTER_SORT)}，\`order\` 取 asc / desc（默认等级升序）。`,
+      `**排序**：\`sort\` 取 ${sortFieldNames(MONSTER_SORT)}，\`order\` 取 asc / desc（默认等级升序）。\n\n` +
+      "每行带 `drop` 掉落摘要（来源 / 具名表 id / 抽取次数 / 内联条目数）—— 掉落就在这一页改，" +
+      "完整条目池走 `GET /admin/monster-drops/:monsterKey`，写入仍只有 `PATCH /admin/monster-drops/:monsterKey` 一条路。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiQueryModel(MonsterQueryDto)
-  @ApiDataResponse(MonsterPageDto, { description: "分页结果（list/total/page/size）" })
-  list(@Query() query: MonsterQueryDto): PageResult<MonsterDto> {
-    return this.gameConfigService.listMonsters(query);
+  @ApiDataResponse(MonsterPageDto, { description: "分页结果（list/total/page/size；每行含掉落摘要）" })
+  list(@Query() query: MonsterQueryDto): PageResult<AdminMonsterDto> {
+    return this.gameConfigService.listAdminMonsters(query);
   }
 
   @Patch(":id")
@@ -64,9 +66,9 @@ export class AdminMonsterController {
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "怪物 key（configs/monster 的关联键，如 \"1\"）" })
-  @ApiDataResponse(MonsterDto, { description: "更新后的怪物基础数据" })
-  update(@Param("id") id: string, @Body() dto: UpdateMonsterDto): MonsterDto {
-    return this.gameConfigService.updateMonster(id, dto);
+  @ApiDataResponse(AdminMonsterDto, { description: "更新后的怪物基础数据（含掉落摘要，与列表同形）" })
+  update(@Param("id") id: string, @Body() dto: UpdateMonsterDto): AdminMonsterDto {
+    return this.gameConfigService.updateMonsterAdmin(id, dto);
   }
 
   @Get(":id/skills")

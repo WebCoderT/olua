@@ -96,6 +96,15 @@ export class DropConfigService implements OnModuleInit {
   }
 
   /**
+   * 单只怪的掉落配置（管理端怪物列表的弹窗回填用）
+   *
+   * 与列表同一个 `MonsterDropDto`，只是单条 —— 写入仍然只有 `updateMonsterDrop` 一条路。
+   */
+  getMonsterDrop(monsterKey: string): MonsterDropDto {
+    return MonsterDropDto.from(this.requireMonsterDrop(monsterKey));
+  }
+
+  /**
    * 整份替换一只怪的掉落配置（三选一）：
    * tableId 非空 → 引用具名表（picks 可覆盖件数，entries 必须不传）；
    * tableId 为 null 且 entries 非空 → 内联条目池（picks 必填）；
