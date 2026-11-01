@@ -28,8 +28,6 @@ import {
   FASHIONS,
   ITEM_BASES,
   ITEM_LABELS,
-  MAP_LABELS,
-  MAPS,
   MONSTERS,
   NPCS,
   OCCUPATION_LABELS,
@@ -49,8 +47,6 @@ export {
   EQUIPMENT_SLOTS,
   EQUIPMENT_SLOT_OF,
   ITEM_LABELS,
-  MAP_LABELS,
-  MAPS,
   OCCUPATION_LABELS,
   RANK_LABELS,
   SEX_LABELS,
@@ -98,25 +94,6 @@ export function itemText(id: string): string {
 export function skillText(id: string): string {
   if (!id) return "";
   return SKILL_LABELS[id] ?? `未知技能 ${id}`;
-}
-
-/** 地图 id → 地图名 */
-export function mapText(id: string): string {
-  if (!id) return "";
-  return MAP_LABELS[id] ?? id;
-}
-
-/** 一张地图的基础配置（名称 / 资源路径 / 类型 / 进入条件）；不在清单里返回 null */
-export function mapMetaOf(
-  id: string,
-): { label: string; src: string; type: string; typeLabel: string; level: number; combat: number; soulOfWar: number } | null {
-  const meta = (
-    MAPS as Record<
-      string,
-      { label: string; src: string; type: string; typeLabel: string; level: number; combat: number; soulOfWar: number }
-    >
-  )[id];
-  return meta ?? null;
 }
 
 /**
@@ -358,11 +335,6 @@ export function drugIds(): string[] {
 /** 全部时装 id */
 export function fashionIds(): string[] {
   return Object.keys(FASHIONS);
-}
-
-/** 全部地图 id（`MAP_LABELS` 的键；角色 `onMap` 存的就是这个） */
-export function mapIds(): string[] {
-  return Object.keys(MAP_LABELS);
 }
 
 /**
