@@ -9,7 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
@@ -19,6 +19,8 @@ function readSrc(rel) {
 
 function main() {
   const outDir = prepare("olua-equip-compare", ["configs/good.ts"]);
+  // #590：装备是零值占位（快照后重算）—— 用真实种子公式把出厂属性灌回去，对比才有差值可比
+  seedRuntimeTables(outDir);
   const items = require(path.join(outDir, "configs/items.js"));
   const equipments = require(path.join(outDir, "configs/equipments.js"));
   const good = require(path.join(outDir, "configs/good.js"));

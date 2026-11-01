@@ -1,45 +1,19 @@
-import type { BattleAttributes } from "../types/common";
-import type { MonsterTier } from "../types/monster";
-
 /**
- * 成长曲线（全角色 / 全怪物的数值唯一来源）
+ * 成长底座（#590 起客户端只剩「装备前后缀倍率 + 回收价曲线」这几个**客户端常量**）
  *
- * 这里只放「曲线」本身，不放任何具体怪物或装备的数据：
- * - 角色等级属性：configs/level 拿它生成 1~60 级的 levelMap（key 就是等级本身）
- * - 怪物属性：configs/monster 的每条怪物按**自己的 level 字段**调 monsterStats(level, tier) 拿
- *   （怪物的 key 只做相互关联，可以是任意字符串，不参与任何数值计算）
- * - 战魂属性：configs/soul 的逐级明文表（issue #17 起为手调数据；冻结前曾按「等效等级」从本曲线打折派生）
- * 想调数值一律改这个文件，不要再回各配置里散着改。
+ * #361 时代这里是全角色的数值唯一来源（曲线 / 标量 / 属性派生都在这份文件里手写），
+ * #590 起归属翻转：曲线、标量、等级表、三条成长线的**唯一书写处**在
+ * `server/src/shared/growth-seed.ts`（以及 title/soul/rank-seed），管理端可改，
+ * 客户端经快照 `levels` 段拿最终值（configs/level 的 levelMap）。
  *
- * ## 曲线形态：分段线性
- * 每 10 级一个档位，**档内**每升一级涨固定值（明文数字，好算好调），
- * **档间**每级增量突然变大（这就是「跳档」的推进感：10 级再往上升，每级血量的涨幅是之前的 3 倍多）。
- * 每档只写两个数：start（该档第 1 级的值）与 perLevel（该档每升 1 级的增量）。
+ * 留在这里的三样东西：
+ * - **装备前后缀倍率**：客户端把服务端下发的基础件展开成 15 个变体要用
+ *   （applyEquipmentRows 与 buildEquipmentMap 同口径，服务端生成物里也有一份对账）；
+ * - **装备回收价曲线**：背包「一键回收」的计价（归属装备批次再收）；
+ * - **roleMaxLevel**：等级上限的运行时值（快照 growthScalars 里的 roleMaxLevel 覆写，
+ *   见 configs/apply-snapshot）—— UI 的「等级/上限」判断直接读它。
  *
- * ## 设计目标（改曲线时先回来看这三条）
- * 1. **打怪节奏**：角色裸属性（不带装备/战魂）普攻同级普通怪，约 monsterBalance.hitCount（5.5）刀打死
- *    —— 普攻冷却 1 秒，所以是「同级约 5~6 秒一只」。
- * 2. **生存节奏**：角色裸血能扛同级普通怪 8~13 刀（怪普攻 2 秒一次 → 16~26 秒）。
- *    前期偏脆、后期偏肉（见下面的攻击/血量比，从 20% 一路降到 12.7%），装备与战魂用来补前期。
- *    另有**每秒回血**（每秒回复最大生命的 attributeRange.hpRecoverRate，默认 1%）持续抵消伤害，
- *    把同级裸血的生存时间再拉长约 1.4 倍（60 级约 13 刀 → 约 18 刀）；想关掉它把率设为 0 即可。
- *    ⚠ 回血同样来自装备与三条成长线（configs/growth 的 equipmentSlotShare.recover、configs/soul/title/rank），
- *    所以「穿满防御部位 + 三条线拉满」时合计回血约 4500/秒，已经超过同级普通怪 3700/秒 的输出
- *    —— 满养成的角色挂机不会被普通怪打死，只有 BOSS（攻击 ×1.5）或围攻才压得住。
- *    这是「养成到顶」的收益，若觉得太强只调 attributeRange.hpRecoverRate 一个数。
- * 3. **升级节奏**：每升 1 级大约要击杀 10~350 只同级怪（前期少、后期多），
- *    1→60 级全流程约 7000 只怪 ≈ 11 小时。
- *
- * ## 与装备的关系
- * 装备属性由下面的 equipmentStats(level, slot) 按**装备自己的 level** 生成，
- * 各装备的条目里不再手写攻防（要特例就写同名字段覆盖）。
- * 全套装备合计 = 同级角色裸属性的 equipmentGrowth.setPowerRate 倍（当前 2 = 200%，
- * 即穿满一套后总属性约是裸属性的 3 倍）。
- *
- * ⚠ 注意：上面的「打怪节奏 5.5 刀」是按**裸属性**定标的，
- * 所以穿满一套后同级怪只要约 1.4 刀。如果希望「穿满一套正好 5.5 刀」，
- * 要么把 setPowerRate 降下来（0.6 左右），要么把怪物血量按穿满装备重新定标
- * （改 monsterBalance，会让裸装变成约 21 刀）。
+ * 想调血量 / 攻防 / 升级节奏 / 军衔强度，改服务端种子或管理端，**不要在这里写数字**。
  */
 
 /** 一条分段线性曲线的一档：档内按等级线性增长，档间靠 perLevel 跳档 */
@@ -55,13 +29,11 @@ export interface GrowthSegment {
 }
 
 /**
- * 角色等级上限（曲线覆盖到这一级；改曲线时记得同步把 roleGrowth 的最后一段 to 改掉）
+ * 角色等级上限（**可变**：快照 growthScalars 的 roleMaxLevel 覆写）
  *
- * **可变**：管理端能改这个数（`growthScales` 快照里的 `roleMaxLevel`），
- * 覆写后由 `configs/level.rebuildLevelMap()` 按新上限重建等级表（#361）。
  * 用 `let` 而不是 getter，是为了让消费方的 `if (role.level >= roleMaxLevel)` 这类写法一行都不用改。
- * 注意：称号 / 军衔的等级序列在模块加载期就按加载时的上限算好了（序列固定不可增删），
- * 改大上限不会自动长出新阶 —— 那两条线各自有服务端下发的行做覆写。
+ * #590 起等级表本身由快照 `levels` 段整表下发，这里的值只影响「读表的边界判断」；
+ * 快照没到时保持出厂值 60，进游戏后即被服务端值覆盖。
  */
 export let roleMaxLevel = 60;
 
@@ -70,16 +42,12 @@ export let roleMaxLevel = 60;
  *
  * ESM 的导入绑定是只读的，`apply-snapshot` 不能直接给 `roleMaxLevel` 赋值 ——
  * 收一个函数在这里，写入点就还是「只有 growth.ts 自己能改这个数」。
- * 调用方负责在改完之后重建等级表（见 `configs/level.rebuildLevelMap`）。
  */
 export function setRoleMaxLevel(level: number): void {
   roleMaxLevel = Math.max(1, Math.floor(level));
 }
 
-/**
- * 在分段线性曲线上取某等级的值
- * 超出最后一段时按最后一段的斜率继续外推（方便临时把 level 填高一点做测试）
- */
+/** 在分段线性曲线上取某等级的值（目前只服务回收价曲线；超出最后一段按最后一段斜率外推） */
 export function sampleGrowth(segments: GrowthSegment[], level: number): number {
   if (level <= 0) return 0;
   let last = segments[0];
@@ -89,235 +57,6 @@ export function sampleGrowth(segments: GrowthSegment[], level: number): number {
   }
   return last.start + (level - last.from) * last.perLevel;
 }
-
-/**
- * 角色等级成长表（6 档 × 10 级）
- * 攻击/防御只写「上限」，实际取值区间见 attributeRange.minRate；
- * 三项攻击同值、三项防御同值（角色只会用自己职业那一项攻击，怪也大多只有物攻，
- * 所以这里刻意不做职业强弱差 —— 职业差异留给装备与技能倍率）。
- */
-export const roleGrowth = {
-  /** 最大生命：100 → 98,720（60 级） */
-  maxHp: [
-    { from: 1, to: 10, start: 100, perLevel: 18 },
-    { from: 11, to: 20, start: 330, perLevel: 59 },
-    { from: 21, to: 30, start: 1080, perLevel: 192 },
-    { from: 31, to: 40, start: 3520, perLevel: 630 },
-    { from: 41, to: 50, start: 11500, perLevel: 2070 },
-    { from: 51, to: 60, start: 37700, perLevel: 6780 },
-  ] as GrowthSegment[],
-  /** 攻击上限（物/魔/道三攻同值）：20 → 12,540 */
-  attack: [
-    { from: 1, to: 10, start: 20, perLevel: 4 },
-    { from: 11, to: 20, start: 62, perLevel: 11 },
-    { from: 21, to: 30, start: 184, perLevel: 33 },
-    { from: 31, to: 40, start: 550, perLevel: 100 },
-    { from: 41, to: 50, start: 1650, perLevel: 290 },
-    { from: 51, to: 60, start: 4800, perLevel: 860 },
-  ] as GrowthSegment[],
-  /** 防御上限（物/魔/道三防同值）：6 → 3,762（约攻击的 30%，保证「同级怪打角色」与「角色打同级怪」同档） */
-  defense: [
-    { from: 1, to: 10, start: 6, perLevel: 1 },
-    { from: 11, to: 20, start: 18, perLevel: 3 },
-    { from: 21, to: 30, start: 55, perLevel: 10 },
-    { from: 31, to: 40, start: 165, perLevel: 30 },
-    { from: 41, to: 50, start: 495, perLevel: 87 },
-    { from: 51, to: 60, start: 1440, perLevel: 258 },
-  ] as GrowthSegment[],
-  /**
-   * 每升 1 级需要击杀的**同级怪数量**（不是经验值，经验的单位换算见 configs/level）
-   * 10 → 350 只；配合「同级怪约 5.5 秒一只」，1→60 级全程约 11 小时
-   */
-  killsPerLevel: [
-    { from: 1, to: 10, start: 10, perLevel: 2 },
-    { from: 11, to: 20, start: 32, perLevel: 3 },
-    { from: 21, to: 30, start: 65, perLevel: 4 },
-    { from: 31, to: 40, start: 110, perLevel: 6 },
-    { from: 41, to: 50, start: 175, perLevel: 8 },
-    { from: 51, to: 60, start: 260, perLevel: 10 },
-  ] as GrowthSegment[],
-};
-
-/** 属性区间与派生值比例（角色与怪物共用，改这里两边一起变） */
-export const attributeRange = {
-  /**
-   * 属性取值下限倍率：实际值在 [上限 × minRate, 上限] 之间随机
-   * 0.7 表示「最低打七折」，伤害波动约 ±15%，既有随机感又不会出现「一刀打空」的观感
-   */
-  minRate: 0.7,
-  /** 最大魔法值 = 最大生命 × 该值（技能消耗见 configs/skill 的 mpCost） */
-  mpRate: 0.5,
-  /**
-   * 每秒血量回复 = 最大生命 × 该值（0.01 = 每秒 1%）
-   *
-   * **回血的唯一强度入口**，只作用在「角色等级的裸回血」上（见 getRoleLevelAttributes），
-   * 装备 / 战魂 / 称号 / 军衔都按自己那份额度再乘各自的折扣（装备走部位权重与 setPowerRate、
-   * 三条成长线走 rate × factor），所以这里调一个数，全套来源同比例跟着变。
-   *
-   * 为什么按「最大生命的比例」而不是给每个来源单拍一个数：
-   * - 前期后期手感一致（1 级 100 血回 1/秒，60 级 9.8 万血回 987/秒），不会出现「满级回血像没回」
-   * - 与 maxMp 同一口径（本文件里 maxMp = maxHp × mpRate），一眼能看懂量级
-   * - 血量上限涨了回血自动跟着涨，不用维护两条曲线
-   */
-  hpRecoverRate: 0.01,
-};
-
-/** 按上限算属性取值区间 */
-export function toAttributeRange(maximum: number): [number, number] {
-  return [Math.round(maximum * attributeRange.minRate), Math.round(maximum)];
-}
-
-/** 角色某等级的战斗属性（裸属性：不含装备与战魂） */
-export type RoleLevelAttributes = BattleAttributes & { maxMp: number };
-
-/** 取角色某等级的裸属性；等级超出曲线范围时按最后一段外推 */
-export function getRoleLevelAttributes(level: number): RoleLevelAttributes {
-  const maxHp = Math.round(sampleGrowth(roleGrowth.maxHp, level));
-  const attackMax = Math.round(sampleGrowth(roleGrowth.attack, level));
-  const defenseMax = Math.round(sampleGrowth(roleGrowth.defense, level));
-  const attack = toAttributeRange(attackMax);
-  const defense = toAttributeRange(defenseMax);
-  return {
-    maxHp,
-    maxMp: Math.round(maxHp * attributeRange.mpRate),
-    // 每秒回血按血量上限的比例派生（见 attributeRange.hpRecoverRate 的说明）
-    hpRecover: Math.round(maxHp * attributeRange.hpRecoverRate),
-    physicalAttack: [attack[0], attack[1]],
-    magicAttack: [attack[0], attack[1]],
-    taoistAttack: [attack[0], attack[1]],
-    physicalDefense: [defense[0], defense[1]],
-    magicDefense: [defense[0], defense[1]],
-    taoistDefense: [defense[0], defense[1]],
-  };
-}
-
-/** 取某等级升到下一级需要击杀的同级怪数量 */
-export function getLevelKills(level: number): number {
-  return Math.round(sampleGrowth(roleGrowth.killsPerLevel, level));
-}
-
-//#region 怪物
-
-/**
- * 怪物定位倍率（类型 MonsterTier 定义在 types/monster）
- * 每条怪在 configs/monster 的条目里用自己的 `tier` 字段指定定位，**不由 key 推断**
- * - normal 普通怪：曲线基准
- * - elite  精英怪：血 3 倍、攻防 1.3 倍（同级要打 16 刀左右）
- * - boss   首领：血 8 倍、攻 1.5/1.4 倍（同级要打 44 刀左右，且打人很疼）
- */
-export const monsterTierScale: Record<MonsterTier, { hp: number; attack: number; defense: number }> = {
-  normal: { hp: 1, attack: 1, defense: 1 },
-  elite: { hp: 3, attack: 1.3, defense: 1.3 },
-  boss: { hp: 8, attack: 1.5, defense: 1.4 },
-};
-
-/**
- * 怪物的「血量 = 角色打几刀」与攻防取法
- * 想让怪更耐打就调 hitCount（整体节奏），想单独放大某类怪就调 monsterTierScale
- */
-export const monsterBalance = {
-  /** 同级普通怪的生命 = 角色单次普攻平均伤害 × 该值（即「要打几刀」，普攻冷却 1 秒 ≈ 几秒） */
-  hitCount: 5.5,
-  /** 怪物攻击上限 = 同等级角色攻击上限 × 该值（1 = 打人跟角色打怪一样疼；怪普攻 2 秒一次，所以其实慢一倍） */
-  attackRate: 1,
-  /** 怪物防御上限 = 同等级角色防御上限 × 该值 */
-  defenseRate: 1,
-};
-
-/**
- * 怪物基础战斗属性（等级相同的怪属性完全一致，只有定位倍率不同；等级由 configs/monster 的 level 字段持有）
- *
- * 带 hpRecover 只是为了跟角色的 BattleAttributes 对齐口径 —— 怪**恒为 0**：
- * 每秒回血是玩家养成线的收益（等级/装备/战魂/称号/军衔），怪物不回血，否则「磨血」的打法会失效。
- */
-export type MonsterBaseStats = Pick<BattleAttributes, "maxHp" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense" | "hpRecover">;
-
-/**
- * 按**等级**生成怪物的战斗属性（configs/monster 的每条怪物都用它）
- * 等级取自怪物自己的 `level` 字段 —— 不来自 key（key 只做相互关联，且允许是任意字符串）。
- * 生命不是直接拍的，而是由「角色普攻要多打几刀」反推出来的，
- * 这样以后改角色曲线，怪物的耐打程度会自动跟着保持同一手感。
- * @param level 怪物等级（就是 configs/monster 里那条怪的 level）
- * @param tier 定位：normal / elite / boss，不传按普通怪
- */
-export function monsterStats(level: number, tier: MonsterTier = "normal"): MonsterBaseStats {
-  const scale = monsterTierScale[tier];
-  const role = getRoleLevelAttributes(level);
-
-  const attackMax = Math.round(role.physicalAttack[1] * monsterBalance.attackRate * scale.attack);
-  const defenseMax = Math.round(role.physicalDefense[1] * monsterBalance.defenseRate * scale.defense);
-
-  // 角色一次普攻的平均伤害 = 攻击均值 − 怪物防御均值
-  // 两边都是 [上限 × minRate, 上限] 的均匀随机，所以均值 = 上限 × (1 + minRate) / 2
-  const averageFactor = (1 + attributeRange.minRate) / 2;
-  const damagePerAttack = Math.max(1, averageFactor * (role.physicalAttack[1] - defenseMax));
-  const maxHp = Math.max(1, Math.round(damagePerAttack * monsterBalance.hitCount * scale.hp));
-
-  const defense = toAttributeRange(defenseMax);
-  return {
-    maxHp,
-    // 怪物不回血（见 MonsterBaseStats 的说明）
-    hpRecover: 0,
-    // 怪物默认只有物理攻击（法系怪要另配魔法攻击，直接在条目里覆盖 magicAttack）
-    physicalAttack: toAttributeRange(attackMax),
-    magicAttack: [0, 0],
-    taoistAttack: [0, 0],
-    // 三种防御同值：角色三职业可能用任意一种攻击打它，防御拉开会导致某些职业凭空变强
-    physicalDefense: [defense[0], defense[1]],
-    magicDefense: [defense[0], defense[1]],
-    taoistDefense: [defense[0], defense[1]],
-  };
-}
-
-//#endregion
-
-//#region 装备
-
-/**
- * 装备部位键（与 types/good 的 EQUIPMENT_TYPE 枚举值一一对应）
- * 故意写成字面量联合而不是 import 枚举：growth.ts 要保持「只依赖 type 导入、能被 node 直接跑」，
- * 且拼错部位名时能直接编译报错（字符串枚举成员可赋给这里的字面量类型）
- */
-export type EquipmentSlotKey =
-  | "cloth"
-  | "weapon"
-  | "helmet"
-  | "belt"
-  | "shoes"
-  | "necklace"
-  | "ring"
-  | "accessories"
-  | "scapular"
-  | "shinguard"
-  | "wristband"
-  | "other1"
-  | "other2";
-
-/** 某部位对各类属性的贡献权重（各列合计 100，含义见 equipmentSlotShare 注释） */
-export interface EquipmentAttributeShare {
-  /** 血量权重 */
-  maxHp: number;
-  /** 攻击权重（三攻同值，取角色同级攻击上限） */
-  attack: number;
-  /** 防御权重（三防同值，取角色同级防御上限） */
-  defense: number;
-  /** 每秒回血权重（取角色同级的裸回血，见 attributeRange.hpRecoverRate） */
-  recover: number;
-}
-
-/** 装备成长参数 */
-export const equipmentGrowth = {
-  /**
-   * 全套装备合计 = 同级角色裸属性的该倍数
-   * 2 表示「每类属性都 +200%」：穿满一套后，血量/攻击/防御都变成裸属性的 3 倍。
-   *
-   * ⚠ 这个值直接决定装备在养成里的分量，也直接改变打怪节奏：
-   *   0.6 → 同级怪约 3.5 刀（装备是锦上添花）
-   *   2.0 → 同级怪约 1.4 刀（装备是主要成长来源，怪很脆）
-   * 想整体调强/调弱装备只改这一个数（各部位之间的分配比例见 equipmentSlotShare）。
-   */
-  setPowerRate: 2,
-} as const;
 
 /**
  * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
@@ -332,83 +71,16 @@ export const equipmentPrefixRates = [1, 1.1, 1.2, 1.3, 1.4] as const;
 export const equipmentSuffixRates = [1, 2, 3] as const;
 
 /**
- * 部位分配权重（每列合计 100）
- * 实际数值 = 同级角色裸属性上限 × (该部位权重 / 100) × equipmentGrowth.setPowerRate
- *
- * 设计口径：武器只给攻击、衣服是血防主源、首饰偏攻击但血防也有、防具（头盔/腰带/鞋子）血量略高于防御。
- * 补上「肩胛/护腕/护腿/饰品」等新部位时，从现有部位里匀出权重（保持每列 100），
- * 否则全套会超过 setPowerRate。
- *
- * **回血列只在防御部位**（衣服 / 头盔 / 腰带 / 鞋子）：武器与首饰不提供每秒回血
- * —— 与「回血是防具的收益」这条口径一致（首饰虽然也加血，但它的详情只列攻击三属性，见 configs/good）。
- * 因此回血列单独凑 100（衣服 40 是主源，三件防具各 20），穿满防御部位即 setPowerRate 倍的裸回血。
- */
-export const equipmentSlotShare: Record<EquipmentSlotKey, EquipmentAttributeShare> = {
-  weapon: { maxHp: 0, attack: 52, defense: 8, recover: 0 },
-  cloth: { maxHp: 30, attack: 10, defense: 30, recover: 40 },
-  helmet: { maxHp: 16, attack: 5, defense: 15, recover: 20 },
-  belt: { maxHp: 17, attack: 4, defense: 15, recover: 20 },
-  shoes: { maxHp: 13, attack: 5, defense: 14, recover: 20 },
-  necklace: { maxHp: 12, attack: 12, defense: 9, recover: 0 },
-  ring: { maxHp: 12, attack: 12, defense: 9, recover: 0 },
-  // 以下部位暂无装备：权重留 0，补装备时从上面匀（写 0 而不是缺键，是为了让拼错的部位名编译报错）
-  accessories: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
-  scapular: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
-  shinguard: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
-  wristband: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
-  other1: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
-  other2: { maxHp: 0, attack: 0, defense: 0, recover: 0 },
-};
-
-/** 装备提供的战斗属性（固定值：区间两端同数，与角色的浮动区间区分开） */
-export type EquipmentStats = Pick<BattleAttributes, "maxHp" | "hpRecover" | "physicalAttack" | "magicAttack" | "taoistAttack" | "physicalDefense" | "magicDefense" | "taoistDefense">;
-
-/**
- * 按**装备等级 + 部位**生成战斗属性（configs/equipments 的每条装备都用它）
- * 等级取自装备条目自己的 `level` 字段（= 穿戴需求等级），部位取自 `slot` 字段。
- * 数值是**固定值**（区间两端相同），同名装备数值确定，便于横向比较与手调。
- * @param level 装备等级（穿戴需求等级）
- * @param slot 装备部位（决定属性分配比例）
- */
-export function equipmentStats(level: number, slot: EquipmentSlotKey): EquipmentStats {
-  const share = equipmentSlotShare[slot];
-  const role = getRoleLevelAttributes(level);
-  const rate = equipmentGrowth.setPowerRate / 100;
-
-  // 有份额但算出来 <1 时保底 1（低等级时裸属性很小，四舍五入会把小份额抹成 0）
-  const scale = (maximum: number, weight: number) => (weight > 0 ? Math.max(1, Math.round(maximum * weight * rate)) : 0);
-
-  const maxHp = scale(role.maxHp, share.maxHp);
-  const attack = scale(role.physicalAttack[1], share.attack);
-  const defense = scale(role.physicalDefense[1], share.defense);
-  // 回血**不保底 1**：低等级防具只加几十点血，凑不出 1 点/秒是正常的；
-  // 强行保底会让 1 级穿满四件防具的角色白拿 4 点/秒（同级怪打人约 7 点/秒），前期直接无敌
-  const hpRecover = share.recover > 0 ? Math.round(role.hpRecover * share.recover * rate) : 0;
-  return {
-    maxHp,
-    hpRecover,
-    // 三攻同值：角色只用自己职业那一项，拉开只会凭空造出职业强弱差（与角色曲线同一口径）
-    physicalAttack: [attack, attack],
-    magicAttack: [attack, attack],
-    taoistAttack: [attack, attack],
-    physicalDefense: [defense, defense],
-    magicDefense: [defense, defense],
-    taoistDefense: [defense, defense],
-  };
-}
-
-/**
  * 装备回收价的成长曲线（背包「一键回收」的计价唯一来源，货币 = **绑定元宝**）
  *
  * 与装备属性同一口径，**只按装备自己的 level 取基础价**（普通·人级 的价），
  * 前后缀变体再乘对应倍率（equipmentPrefixRates × equipmentSuffixRates，最高 4.2 倍），
- * 在 configs/equipments.buildEquipmentMap 里生成。
- * 想整体调价只改这段曲线，26 件装备的条目里不用逐件写；想单独给某件装备定价，
- * 在它的条目里写 recyclePrice 覆盖生成值即可。
+ * 在 configs/equipments.buildEquipmentMap 里生成；快照覆写时服务端下发的行
+ * 也按「服务端等级 × 同一曲线」重算（applyEquipmentRows）。
+ * 归属备注：这是装备定价数据，随装备批次（#590 之后）再决定是否搬服务端。
  *
- * 量级参考：升满战魂合计约 527 万绑定元宝（300 × Σn²，n = 1..37，见 configs/soul），
- * 角色出生带 1 万（configs/role.initialBindGold）。当前曲线下：
- * 60 级基础装备回收约 4 万（≈ 战魂最后一级的 1/10），1 级装备 10（新手装直接丢掉不心疼）。
+ * 量级参考：升满战魂合计约 527 万绑定元宝（300 × Σn²，n = 1..37，见 server/src/shared/soul-seed），
+ * 角色出生带 1 万。当前曲线下 60 级基础装备回收约 4 万，1 级装备 10（新手装直接丢掉不心疼）。
  */
 export const equipmentRecyclePriceCurve: GrowthSegment[] = [
   { from: 1, to: 10, start: 10, perLevel: 5 }, // 1 级 10 → 10 级 55
@@ -423,5 +95,3 @@ export const equipmentRecyclePriceCurve: GrowthSegment[] = [
 export function equipmentRecyclePrice(level: number): number {
   return Math.max(0, Math.round(sampleGrowth(equipmentRecyclePriceCurve, level)));
 }
-
-//#endregion

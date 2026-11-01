@@ -5028,6 +5028,53 @@ export type MonsterPresentation = {
   speedRate: Record<string, number> | null;
 };
 
+export type Level = {
+  /**
+   * 等级（1 起，连续到 roleMaxLevel）
+   */
+  level: number;
+  /**
+   * 生命上限（裸属性）
+   */
+  maxHp: number;
+  /**
+   * 魔法上限（= maxHp × mpRate）
+   */
+  maxMp: number;
+  /**
+   * 每秒回血（裸属性）
+   */
+  hpRecover: number;
+  /**
+   * 物攻区间
+   */
+  physicalAttack: ConfigAttributeRange;
+  /**
+   * 魔攻区间
+   */
+  magicAttack: ConfigAttributeRange;
+  /**
+   * 道攻区间
+   */
+  taoistAttack: ConfigAttributeRange;
+  /**
+   * 物防区间
+   */
+  physicalDefense: ConfigAttributeRange;
+  /**
+   * 魔防区间
+   */
+  magicDefense: ConfigAttributeRange;
+  /**
+   * 道防区间
+   */
+  taoistDefense: ConfigAttributeRange;
+  /**
+   * 升到下一级所需经验（level_exps 表的最终值）
+   */
+  exp: number;
+};
+
 export type AchievementCondition = {
   /**
    * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
@@ -5185,15 +5232,11 @@ export type GameConfigSnapshot = {
    */
   fashions: Fashion[];
   /**
-   * 升级经验表（一行 = 升到下一级所需经验）
+   * 等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— 属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；客户端 levelMap 整表由这段填充，曲线与标量不再下发
    */
-  levelExps: LevelExp[];
+  levels: Level[];
   /**
-   * 成长曲线分段
-   */
-  growthSegments: GrowthSegment[];
-  /**
-   * 成长标量参数（键值对）
+   * 成长标量参数（键值对；客户端只消费 roleMaxLevel，其余键服务端自用）
    */
   growthScalars: GrowthScalar[];
   /**

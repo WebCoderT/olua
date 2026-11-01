@@ -1499,7 +1499,7 @@ export default class GameUiHelper {
     node.addChild(plate);
     node.addChild(UiHelper.createLabel("rank_badge_tier", config.tier, layout.tier.color, layout.tier.fontSize, layout.tier.position, layout.tier.size));
     node.addChild(UiHelper.createLabel("rank_badge_label", config.label, layout.label.color, layout.label.fontSize, layout.label.position, layout.label.size));
-    node.addChild(UiHelper.createLabel("rank_badge_progress", getText("label_rank_progress", { level: config.level, total: rankMaxLevel }), layout.progress.color, layout.progress.fontSize, layout.progress.position, layout.progress.size));
+    node.addChild(UiHelper.createLabel("rank_badge_progress", getText("label_rank_progress", { level: config.level, total: rankMaxLevel() }), layout.progress.color, layout.progress.fontSize, layout.progress.position, layout.progress.size));
     return node;
   }
 

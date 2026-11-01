@@ -1,12 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
 import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
+import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import { MapService } from "../map/map.service";
 import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
 import { DropConfigService } from "./drop-config.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
+import { LevelDto } from "./dto/growth.dto";
 import { MonsterPresentationDto } from "./dto/monster.dto";
 
 /** 快照全量拉取的分页参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界 100 的限制 */
@@ -42,8 +44,11 @@ export class ClientConfigService {
       monsterPresentations: MONSTER_PRESENTATION_ROWS.map((row) => MonsterPresentationDto.from(row)),
       npcs: this.gameConfig.listNpcs({ ...ALL }).list,
       fashions: this.gameConfig.listFashions({ ...ALL }).list,
-      levelExps: this.growth.listLevelExps({ ...ALL }).list,
-      growthSegments: this.growth.listSegments({ ...ALL }).list,
+      // #590：等级表（属性按曲线展开 + level_exps 最终经验）—— 客户端 levelMap 的唯一来源
+      levels: Object.entries(ROLE_LEVEL_ATTRIBUTES).map(([level, attributes]) => {
+        const row = this.growth.findLevelExp(Number(level));
+        return LevelDto.from(Number(level), attributes, row ? row.exp : Number(attributes.exp));
+      }),
       growthScalars: this.growth.listScalars({ ...ALL }).list,
       mallPrices: this.mall.listPrices({ ...ALL }).list,
       mallSettings: this.mall.getSettings(),

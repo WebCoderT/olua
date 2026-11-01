@@ -110,7 +110,7 @@ export default class TitleUpgradeDialog {
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("title_upgrade_button_label")?.getComponent(Label);
-      const maxed = role.title >= titleMaxLevel;
+      const maxed = role.title >= titleMaxLevel();
       if (label) label.string = maxed ? layout.upgradeButton.maxedText : layout.upgradeButton.text;
       if (sprite) sprite.grayscale = maxed;
     }

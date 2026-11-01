@@ -24,6 +24,12 @@ const ADMIN_CODE = "gamecfgadmin-code";
 
 // seed 的源头（编译产物）——断言「库里就是客户端配置」要用它对照
 const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
+const titleSeed = require(path.join(SERVER_DIR, "dist", "shared", "title-seed.js")); // #590：三线数据唯一书写处 = 各自种子
+const soulSeed = require(path.join(SERVER_DIR, "dist", "shared", "soul-seed.js"));
+const rankSeed = require(path.join(SERVER_DIR, "dist", "shared", "rank-seed.js"));
+const growthSeed = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.js"));
+const growthSeedScalars = growthSeed.GROWTH_SCALARS;
+const growthSeedKeys = Object.keys(growthSeedScalars);
 // #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
 const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
 const { MONSTER_PRESENTATION_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "monster-presentation.generated.js"));
@@ -32,7 +38,7 @@ const monsterAttrs1 = expandMonsterSeed(monsterSeed1);
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 658;
+const EXPECTED_ASSERTIONS = 659;
 
 function assertExpectedCount(passedCount, failureCount) {
   if (failureCount !== 0) return;
@@ -163,27 +169,27 @@ async function main() {
 
     const titles = await api(base, "GET", "/api/admin/titles", { token });
     checkEqual(titles.status, 200, "称号列表可读");
-    checkEqual(titles.body?.data?.total, Object.keys(shared.TITLE_LEVEL_META).length, `称号行数 = 配置表（${Object.keys(shared.TITLE_LEVEL_META).length}）`);
-    checkEqual(titles.body?.data?.list?.length, Object.keys(shared.TITLE_LEVEL_META).length, "默认一页装下全部称号");
+    checkEqual(titles.body?.data?.total, titleSeed.TITLE_SEEDS.length, `称号行数 = 配置表（${titleSeed.TITLE_SEEDS.length}）`);
+    checkEqual(titles.body?.data?.list?.length, titleSeed.TITLE_SEEDS.length, "默认一页装下全部称号");
 
     const firstTitle = titles.body?.data?.list?.[0];
     checkEqual(firstTitle?.level, 1, "首行是 1 级");
-    checkEqual(firstTitle?.label, shared.TITLE_LABELS["0"], "1 级称号名与配置一致");
-    checkEqual(firstTitle?.bindGold, shared.TITLE_LEVEL_META[0].bindGold, "1 级升级价格与配置一致");
+    checkEqual(firstTitle?.label, titleSeed.TITLE_SEEDS[0].label, "1 级称号名与配置一致");
+    checkEqual(firstTitle?.bindGold, titleSeed.TITLE_SEEDS[0].bindGold, "1 级升级价格与配置一致");
     checkEqual(firstTitle?.acquireChannel, "unavailable", "初始渠道默认「无法获取」");
     checkEqual(
       titles.body?.data?.list?.filter((item) => item.acquireChannel === "unavailable").length,
-      Object.keys(shared.TITLE_LEVEL_META).length,
+      titleSeed.TITLE_SEEDS.length,
       "seed 后全部称号都是无法获取（运营逐个开放）",
     );
 
     const souls = await api(base, "GET", "/api/admin/souls", { token });
     checkEqual(souls.status, 200, "战魂列表可读");
-    checkEqual(souls.body?.data?.total, Object.keys(shared.SOUL_LEVEL_META).length, `战魂行数 = 配置表（${Object.keys(shared.SOUL_LEVEL_META).length}）`);
-    checkEqual(souls.body?.data?.list?.[0]?.label, shared.SOUL_LABELS["0"], "1 阶战魂名与配置一致");
+    checkEqual(souls.body?.data?.total, soulSeed.SOUL_SEEDS.length, `战魂行数 = 配置表（${soulSeed.SOUL_SEEDS.length}）`);
+    checkEqual(souls.body?.data?.list?.[0]?.label, soulSeed.SOUL_SEEDS[0].label, "1 阶战魂名与配置一致");
     check(Boolean(souls.body?.data?.list?.[0]?.attributes?.maxHp !== undefined), "战魂属性以嵌套结构返回");
 
-    const titled = await api(base, "GET", `/api/admin/titles?keyword=${encodeURIComponent(shared.TITLE_LABELS["0"])}`, { token });
+    const titled = await api(base, "GET", `/api/admin/titles?keyword=${encodeURIComponent(titleSeed.TITLE_SEEDS[0].label)}`, { token });
     checkEqual(titled.body?.data?.total, 1, "关键字能命中对应称号");
 
     //#endregion
@@ -240,7 +246,7 @@ async function main() {
     const upgraded = await api(base, "GET", "/api/admin/titles?acquireChannel=upgrade", { token });
     checkEqual(upgraded.body?.data?.total, 1, "按渠道筛选：upgrade 只有刚改的那条");
     const unavailable = await api(base, "GET", "/api/admin/titles?acquireChannel=unavailable", { token });
-    checkEqual(unavailable.body?.data?.total, Object.keys(shared.TITLE_LEVEL_META).length - 1, "其余称号仍在无法获取里");
+    checkEqual(unavailable.body?.data?.total, titleSeed.TITLE_SEEDS.length - 1, "其余称号仍在无法获取里");
 
     const soulPriced = await api(base, "PATCH", "/api/admin/souls/1", { token, body: { bindGold: 888 } });
     checkEqual(soulPriced.body?.data?.bindGold, 888, "PATCH 战魂消耗生效");
@@ -308,7 +314,7 @@ async function main() {
     const keptPrice = (await api(base, "GET", "/api/admin/titles?acquireChannel=unavailable", { token })).body?.data?.list?.find(
       (item) => item.level === 2,
     );
-    checkEqual(keptPrice?.bindGold, shared.TITLE_LEVEL_META[1].bindGold, "切走后升级价格保留（不受进出列表影响）");
+    checkEqual(keptPrice?.bindGold, titleSeed.TITLE_SEEDS[1].bindGold, "切走后升级价格保留（不受进出列表影响）");
 
     // 再切回来：追加到尾（不恢复旧序号；序号允许留空洞，只保证相对顺序）
     const rejoin = await api(base, "PATCH", "/api/admin/titles/2", { token, body: { acquireChannel: "upgrade" } });
@@ -329,7 +335,7 @@ async function main() {
 
     group("五、战魂成长列表");
 
-    const soulLevels = Array.from({ length: Object.keys(shared.SOUL_LEVEL_META).length }, (_, index) => index + 1);
+    const soulLevels = Array.from({ length: soulSeed.SOUL_SEEDS.length }, (_, index) => index + 1);
 
     // seed 后全量在列表里，初值顺序 = 阶数
     const soulUpgrade1 = await api(base, "GET", "/api/admin/souls/upgrade-list", { token });
@@ -384,11 +390,11 @@ async function main() {
 
     const levelExps = await api(base, "GET", "/api/admin/level-exps", { token });
     checkEqual(levelExps.status, 200, "升级经验列表可读");
-    const levelCount = Object.keys(shared.ROLE_LEVEL_ATTRIBUTES).length;
+    const levelCount = growthSeed.ROLE_MAX_LEVEL;
     checkEqual(levelExps.body?.data?.total, levelCount, `升级经验行数 = 等级上限（${levelCount}）`);
     const firstExp = levelExps.body?.data?.list?.[0];
     checkEqual(firstExp?.level, 1, "首行是 1 级");
-    checkEqual(firstExp?.exp, shared.ROLE_LEVEL_ATTRIBUTES["1"].exp, "1 级经验与配置一致");
+    checkEqual(firstExp?.exp, growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].exp, "1 级经验与配置一致");
 
     const expPatched = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 999 } });
     checkEqual(expPatched.status, 200, "PATCH 升级经验成功");
@@ -412,8 +418,8 @@ async function main() {
 
     const segmentsAll = await api(base, "GET", "/api/admin/growth-segments", { token });
     checkEqual(segmentsAll.status, 200, "曲线分段列表可读");
-    const curveKeys = Object.keys(shared.GROWTH_CURVES);
-    const segmentTotal = curveKeys.reduce((sum, key) => sum + shared.GROWTH_CURVES[key].length, 0);
+    const curveKeys = Object.keys(growthSeed.GROWTH_CURVES);
+    const segmentTotal = curveKeys.reduce((sum, key) => sum + growthSeed.GROWTH_CURVES[key].length, 0);
     checkEqual(segmentsAll.body?.data?.total, segmentTotal, `分段行数 = 曲线段总和（${segmentTotal}）`);
     const segmentsMaxHp = await api(base, "GET", "/api/admin/growth-segments?curve=maxHp", { token });
     checkEqual(segmentsMaxHp.body?.data?.list?.[0]?.fromLevel, 1, "首段从 1 级开始（连续覆盖）");
@@ -457,9 +463,9 @@ async function main() {
 
     const scalars = await api(base, "GET", "/api/admin/growth-scalars", { token });
     checkEqual(scalars.status, 200, "标量参数列表可读");
-    checkEqual(scalars.body?.data?.total, Object.keys(shared.GROWTH_SCALARS).length, `标量参数行数 = 配置（${Object.keys(shared.GROWTH_SCALARS).length}）`);
+    checkEqual(scalars.body?.data?.total, growthSeedKeys.length, `标量参数行数 = 配置（${growthSeedKeys.length}）`);
     const maxLevelRow = scalars.body?.data?.list?.find((item) => item.key === "roleMaxLevel");
-    checkEqual(maxLevelRow?.value, shared.GROWTH_SCALARS["roleMaxLevel"], "等级上限初值与配置一致");
+    checkEqual(maxLevelRow?.value, growthSeedScalars.roleMaxLevel, "等级上限初值与配置一致");
     check(Boolean(maxLevelRow?.description), "每个标量参数都带说明");
 
     const ratePatched = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 0.8 } });
@@ -488,18 +494,18 @@ async function main() {
 
     const ranks = await api(base, "GET", "/api/admin/ranks", { token });
     checkEqual(ranks.status, 200, "军衔列表可读");
-    const rankCount = Object.keys(shared.RANK_LEVEL_META).length;
+    const rankCount = rankSeed.RANK_SEEDS.length;
     checkEqual(ranks.body?.data?.total, rankCount, `军衔行数 = 配置表（${rankCount}）`);
     checkEqual(ranks.body?.data?.list?.length, 100, "默认一页装下全部军衔");
     const firstRank = ranks.body?.data?.list?.[0];
     checkEqual(firstRank?.level, 1, "首行是 1 阶");
-    checkEqual(firstRank?.label, shared.RANK_LABELS["0"].label, "1 阶衔名与配置一致");
-    checkEqual(firstRank?.tier, shared.RANK_LABELS["0"].tier, "1 阶大段名与配置一致");
-    checkEqual(firstRank?.bindGold, shared.RANK_LEVEL_META[0].bindGold, "1 阶晋升价格与配置一致");
+    checkEqual(firstRank?.label, rankSeed.RANK_SEEDS[0].label, "1 阶衔名与配置一致");
+    checkEqual(firstRank?.tier, rankSeed.RANK_SEEDS[0].tier, "1 阶大段名与配置一致");
+    checkEqual(firstRank?.bindGold, rankSeed.RANK_SEEDS[0].bindGold, "1 阶晋升价格与配置一致");
     check(Boolean(firstRank?.attributes?.maxHp !== undefined), "军衔属性以嵌套结构返回");
     checkEqual(firstRank?.animation, undefined, "军衔没有动画字段（外观是头顶一行红字）");
 
-    const rankTierFiltered = await api(base, "GET", `/api/admin/ranks?tier=${encodeURIComponent(shared.RANK_LABELS["0"].tier)}`, { token });
+    const rankTierFiltered = await api(base, "GET", `/api/admin/ranks?tier=${encodeURIComponent(rankSeed.RANK_SEEDS[0].tier)}`, { token });
     checkEqual(rankTierFiltered.body?.data?.total, 10, "按大段筛：每段恰好 10 阶");
 
     const rankPriced = await api(base, "PATCH", "/api/admin/ranks/1", { token, body: { bindGold: 500 } });
@@ -1131,9 +1137,9 @@ async function main() {
     const snap = snapshot.body?.data ?? {};
 
     // 各表行数 = 管理端列表的全量（快照的形状与列表行一致）
-    checkEqual(snap.titles?.length, Object.keys(shared.TITLE_LEVEL_META).length, "快照称号行数 = 配置表");
-    checkEqual(snap.souls?.length, Object.keys(shared.SOUL_LEVEL_META).length, "快照战魂行数 = 配置表");
-    checkEqual(snap.ranks?.length, Object.keys(shared.RANK_LEVEL_META).length, "快照军衔行数 = 配置表（100 阶）");
+    checkEqual(snap.titles?.length, titleSeed.TITLE_SEEDS.length, "快照称号行数 = 配置表");
+    checkEqual(snap.souls?.length, soulSeed.SOUL_SEEDS.length, "快照战魂行数 = 配置表");
+    checkEqual(snap.ranks?.length, rankSeed.RANK_SEEDS.length, "快照军衔行数 = 配置表（100 阶）");
     checkEqual(snap.equipments?.length, Object.keys(shared.EQUIPMENT_BASES).length, "快照装备基础件行数 = 生成物");
     checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
@@ -1152,8 +1158,12 @@ async function main() {
     }
     checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 生成物");
     checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20）");
-    checkEqual(snap.levelExps?.length, Object.keys(shared.ROLE_LEVEL_ATTRIBUTES).length, "快照升级经验行数 = 等级数");
-    check(Boolean(Array.isArray(snap.growthSegments) && snap.growthSegments.length > 0), "快照带成长曲线分段");
+    checkEqual(snap.levels?.length, growthSeed.ROLE_MAX_LEVEL, "快照等级行数 = 等级上限（#590：levels 段替代 levelExps + growthSegments）");
+    check(
+      Boolean(Array.isArray(snap.levels) && snap.levels.length > 0 && typeof snap.levels[0].exp === "number" && typeof snap.levels[0].maxHp === "number"),
+      "快照等级行带最终属性与升级经验（客户端不再派生）",
+    );
+    check(snap.growthSegments === undefined && snap.levelExps === undefined, "旧段（growthSegments / levelExps）已随 #590 移出快照");
     check(Boolean(Array.isArray(snap.growthScalars) && snap.growthScalars.length > 0), "快照带成长标量参数");
     check(Boolean(snap.mallSettings?.defaultPrice > 0), "快照带商城统一价");
     check(Boolean(Array.isArray(snap.mallPrices) && snap.mallPrices.length > 0), "快照带商城定价目录");
@@ -1180,7 +1190,7 @@ async function main() {
     checkEqual(snapshot2.body?.data?.titles?.[0]?.label, "快照验证·改名", "管理端改值后重新拉快照反映新值（改配置对客户端生效的通道）");
     const restore = await api(base, "PATCH", `/api/admin/titles/${snap.titles[0].level}`, {
       token,
-      body: { label: shared.TITLE_LABELS["0"] },
+      body: { label: titleSeed.TITLE_SEEDS[0].label },
     });
     checkEqual(restore.status, 200, "还原称号名（不污染其他断言）");
 
@@ -1276,7 +1286,7 @@ async function main() {
     checkEqual(up1.status, 200, "升 1 阶称号 → 200");
     checkEqual(up1.body?.data?.consumed, price1, "consumed = 库里 1 阶价格");
     checkEqual(up1.body?.data?.gainedLevel, 1, "gainedLevel = 1");
-    checkEqual(up1.body?.data?.gainedLabel, shared.TITLE_LABELS["0"], "gainedLabel = 1 阶称号名");
+    checkEqual(up1.body?.data?.gainedLabel, titleSeed.TITLE_SEEDS[0].label, "gainedLabel = 1 阶称号名");
     checkEqual(up1.body?.data?.data?.title, 1, "存档 title 推进到 1");
     checkEqual(up1.body?.data?.data?.bindGold, 999999999 - price1, "存档 bindGold 扣减到位");
     checkEqual(up1.body?.data?.revision, growthRevision + 1, "revision 原子 +1");

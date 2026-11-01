@@ -356,6 +356,9 @@ function prepareStorage(sandboxName, extraEntries = []) {
   const storageModule = require(moduleFile);
   const StorageManager = storageModule.default ?? storageModule;
   const Role = require(path.join(outDir, "entities/Role.js")).Role ?? require(path.join(outDir, "entities/Role.js")).default;
+  // #590：等级 / 称号 / 战魂 / 军衔是空运行时表，Role 构造就要读 levelMap —— 用真实种子当场灌
+  const { seedRuntimeTables } = require("./configs-sandbox.cjs");
+  const tables = seedRuntimeTables(outDir);
   // 垫片内存（测试用它直接核对 localStorage 里到底写了什么，而不是从业务接口倒推）
   const shim = require(path.join(sandbox, "node_modules/cc/index.js"));
   // 网络层替身（测试可断言「落盘是否安排了同步 / 清存档是否连带清会话」这类接线）
@@ -368,6 +371,8 @@ function prepareStorage(sandboxName, extraEntries = []) {
     Role,
     outDir,
     shim,
+    /** #590：种子灌好的运行时表（levelMap / titleLevels / soulLevels / rankLevels），断言用 */
+    tables,
     RoleSync: stubOf("RoleSync"),
     Session: stubOf("Session"),
     /** 角色接口替身（记账 + handlers）：购买 / 用药 / 升级收权后客户端只发请求、以服务端结果为准 */

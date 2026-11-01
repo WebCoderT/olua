@@ -19582,6 +19582,92 @@
           "speedRate"
         ]
       },
+      "LevelDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "等级（1 起，连续到 roleMaxLevel）"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "生命上限（裸属性）"
+          },
+          "maxMp": {
+            "type": "number",
+            "description": "魔法上限（= maxHp × mpRate）"
+          },
+          "hpRecover": {
+            "type": "number",
+            "description": "每秒回血（裸属性）"
+          },
+          "physicalAttack": {
+            "description": "物攻区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "magicAttack": {
+            "description": "魔攻区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "taoistAttack": {
+            "description": "道攻区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "physicalDefense": {
+            "description": "物防区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "magicDefense": {
+            "description": "魔防区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "taoistDefense": {
+            "description": "道防区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "exp": {
+            "type": "number",
+            "description": "升到下一级所需经验（level_exps 表的最终值）"
+          }
+        },
+        "required": [
+          "level",
+          "maxHp",
+          "maxMp",
+          "hpRecover",
+          "physicalAttack",
+          "magicAttack",
+          "taoistAttack",
+          "physicalDefense",
+          "magicDefense",
+          "taoistDefense",
+          "exp"
+        ]
+      },
       "AchievementConditionDto": {
         "type": "object",
         "properties": {
@@ -19837,22 +19923,15 @@
               "$ref": "#/components/schemas/FashionDto"
             }
           },
-          "levelExps": {
-            "description": "升级经验表（一行 = 升到下一级所需经验）",
+          "levels": {
+            "description": "等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— 属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；客户端 levelMap 整表由这段填充，曲线与标量不再下发",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LevelExpDto"
-            }
-          },
-          "growthSegments": {
-            "description": "成长曲线分段",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/GrowthSegmentDto"
+              "$ref": "#/components/schemas/LevelDto"
             }
           },
           "growthScalars": {
-            "description": "成长标量参数（键值对）",
+            "description": "成长标量参数（键值对；客户端只消费 roleMaxLevel，其余键服务端自用）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GrowthScalarDto"
@@ -19941,8 +20020,7 @@
           "monsterPresentations",
           "npcs",
           "fashions",
-          "levelExps",
-          "growthSegments",
+          "levels",
           "growthScalars",
           "mallPrices",
           "mallSettings",

@@ -1,22 +1,29 @@
 /**
- * 游戏数据：**直接引用三端共用的那一份生成物**
+ * 游戏数据：**直接引用三端共用的那一份生成物 + 服务端种子（#590）**
  *
  * ===========================================================================
  * 这份文件是干什么的
  * ===========================================================================
- * 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字与元数据，权威定义只有一处 ——
+ * 装备 / 技能 / 物品 / 地图的名字与元数据，权威定义只有一处 ——
  * 客户端 `client/assets/configs`。它由 `tools/gen-shared-data.cjs` 快照成
  * `server/src/shared/game-data.generated.ts`，本文件**按相对路径 import 同一个文件**
  * （Vite 打包，跨目录没问题），**不是**同步过来的第二份副本。
  *
+ * 三条成长线（#590 起）：称号 / 战魂 / 军衔的名字与元数据**不在生成物里**，
+ * 唯一书写处是 `server/src/shared/{title,soul,rank}-seed.ts`，本文件直接 import 同一份。
+ *
  * 所以这里只有两种东西：**转发**（`export { … } from`）与**查表用的纯函数**。
- * 想改数值或文案 → 改客户端配置 → `node tools/gen-shared-data.cjs`。
+ * 想改数值或文案 → 改客户端配置 / 服务端种子 → 重新生成或重跑。
  * **不许在这边或页面里再写一份字典** —— 那正是这条线要消灭的（此前 `api/types.ts`
  * 里手抄过职业名与性别名，客户端改了这边不会知道）。
  *
  * 守卫：`node tools/audit-shared-data.cjs`（生成物与客户端 configs 逐字节一致、每张表
  * 齐全非空）；它还会扫 `admin/src`，抓「与生成物同名的字典型定义」。
  */
+
+import { RANK_SEEDS } from "../../../server/src/shared/rank-seed";
+import { SOUL_SEEDS } from "../../../server/src/shared/soul-seed";
+import { TITLE_SEEDS } from "../../../server/src/shared/title-seed";
 
 import {
   DRUGS,
@@ -30,15 +37,10 @@ import {
   ITEM_LABELS,
   NPCS,
   OCCUPATION_LABELS,
-  RANK_LABELS,
   SEX_LABELS,
   SKILLS,
   SKILL_LABELS,
-  SOUL_LABELS,
-  SOUL_LEVEL_META,
   STATUSES,
-  TITLE_LABELS,
-  TITLE_LEVEL_META,
 } from "../../../server/src/shared/game-data.generated";
 // 怪物资源与表现（#588：客户端 configs/monster 不再有怪物数据，图标字典随生成物走）
 import { MONSTER_PRESENTATION_ROWS } from "../../../server/src/shared/monster-presentation.generated";
@@ -49,11 +51,8 @@ export {
   EQUIPMENT_SLOT_OF,
   ITEM_LABELS,
   OCCUPATION_LABELS,
-  RANK_LABELS,
   SEX_LABELS,
   SKILL_LABELS,
-  SOUL_LABELS,
-  TITLE_LABELS,
 };
 
 /** 职业码 → 名（查不到原样显示码，不静默留空） */
@@ -97,35 +96,25 @@ export function skillText(id: string): string {
   return SKILL_LABELS[id] ?? `未知技能 ${id}`;
 }
 
-/**
- * 三张等级表都是「下标 = 等级 - 1」（客户端等级从 1 起，来源数组从 0 起）——
- * 那一位差只在这里处理，页面不碰。
- */
-function levelText(table: Record<string, { label?: string } | string>, level: string | number): string {
+/** 战魂阶数 → 名（#590：唯一来源 = 服务端 soul-seed，数组下标 = 阶数 - 1） */
+export function soulText(level: string | number): string {
   const value = Number(level);
   if (!Number.isFinite(value) || value < 1) return "";
-  const row = table[String(value - 1)];
-  if (row === undefined) return "";
-  return typeof row === "string" ? row : (row.label ?? "");
+  return SOUL_SEEDS[value - 1]?.label ?? "";
 }
 
-/** 战魂阶数 → 名 */
-export function soulText(level: string | number): string {
-  return levelText(SOUL_LABELS, level);
-}
-
-/** 称号等级 → 名 */
+/** 称号等级 → 名（#590：唯一来源 = 服务端 title-seed） */
 export function titleText(level: string | number): string {
-  return levelText(TITLE_LABELS, level);
+  const value = Number(level);
+  if (!Number.isFinite(value) || value < 1) return "";
+  return TITLE_SEEDS[value - 1]?.label ?? "";
 }
 
-/** 军衔阶数 → 名（大段 + 衔名） */
+/** 军衔阶数 → 名（大段 + 衔名；#590：唯一来源 = 服务端 rank-seed） */
 export function rankText(level: string | number): string {
   const value = Number(level);
   if (!Number.isFinite(value) || value < 1) return "";
-  // 生成物里的 `RANK_LABELS` 是「字面量键」类型（每个键都写死了），拿字符串索引要先摊成 Record
-  const rows: Record<string, { tier: string; label: string }> = RANK_LABELS;
-  const row = rows[String(value - 1)];
+  const row = RANK_SEEDS[value - 1];
   return row ? `${row.tier} · ${row.label}` : "";
 }
 
@@ -268,42 +257,42 @@ export interface GrowthStepMeta {
   animation: string;
 }
 
-function growthStep(table: Record<string, unknown>, level: string | number): GrowthStepMeta | null {
-  const value = Number(level);
-  if (!Number.isFinite(value) || value < 1) return null;
-  const row = table[String(value - 1)];
-  if (!row || typeof row !== "object") return null;
-  const record = row as Record<string, unknown>;
+function seedStep(row: { description: string; bindGold: number; animation: string } | undefined): GrowthStepMeta | null {
+  if (!row) return null;
   return {
-    description: typeof record.description === "string" ? record.description : "",
-    bindGold: typeof record.bindGold === "number" ? record.bindGold : 0,
-    animation: typeof record.animation === "string" ? record.animation : "",
+    description: row.description,
+    bindGold: row.bindGold,
+    animation: row.animation,
   };
 }
 
-/** 称号等级 → 元数据（下标 = 等级 - 1，与 `titleText` 同一口径） */
+/** 称号等级 → 元数据（#590：唯一来源 = 服务端 title-seed，下标 = 等级 - 1） */
 export function titleMeta(level: string | number): GrowthStepMeta | null {
-  return growthStep(TITLE_LEVEL_META, level);
+  const value = Number(level);
+  if (!Number.isFinite(value) || value < 1) return null;
+  return seedStep(TITLE_SEEDS[value - 1]);
 }
 
-/** 战魂阶数 → 元数据 */
+/** 战魂阶数 → 元数据（#590：唯一来源 = 服务端 soul-seed） */
 export function soulMeta(level: string | number): GrowthStepMeta | null {
-  return growthStep(SOUL_LEVEL_META, level);
+  const value = Number(level);
+  if (!Number.isFinite(value) || value < 1) return null;
+  return seedStep(SOUL_SEEDS[value - 1]);
 }
 
-/** 军衔阶数 → { 大段, 衔名 }；无动画（军衔只有名字） */
+/** 军衔阶数 → { 大段, 衔名 }（#590：唯一来源 = 服务端 rank-seed）；无动画（军衔只有名字） */
 export function rankMeta(level: string | number): { tier: string; label: string } | null {
   const value = Number(level);
   if (!Number.isFinite(value) || value < 1) return null;
-  const rows: Record<string, { tier: string; label: string }> = RANK_LABELS;
-  return rows[String(value - 1)] ?? null;
+  const row = RANK_SEEDS[value - 1];
+  return row ? { tier: row.tier, label: row.label } : null;
 }
 
 /** 三张等级表各有多少档（等级选择器的上限；不是页面写死的数字） */
 export function levelCount(kind: "title" | "soul" | "rank"): number {
-  if (kind === "title") return Object.keys(TITLE_LEVEL_META).length;
-  if (kind === "soul") return Object.keys(SOUL_LEVEL_META).length;
-  return Object.keys(RANK_LABELS).length;
+  if (kind === "title") return TITLE_SEEDS.length;
+  if (kind === "soul") return SOUL_SEEDS.length;
+  return RANK_SEEDS.length;
 }
 
 /* ===========================================================================
@@ -402,14 +391,14 @@ export function npcSrc(id: string): string {
   return rowField(NPCS, id, "src");
 }
 
-/** 称号等级 → 动画图集目录（下标 = 等级 - 1，与 levelText 同一口径；缩略图取首帧） */
+/** 称号等级 → 动画图集目录（#590：服务端 title-seed，下标 = 等级 - 1；缩略图取首帧） */
 export function titleAnimation(level: string | number): string {
   const value = Number(level);
-  return Number.isFinite(value) && value >= 1 ? rowField(TITLE_LEVEL_META, String(value - 1), "animation") : "";
+  return Number.isFinite(value) && value >= 1 ? (TITLE_SEEDS[value - 1]?.animation ?? "") : "";
 }
 
-/** 战魂阶数 → 动画图集目录（下标 = 等级 - 1；缩略图取首帧） */
+/** 战魂阶数 → 动画图集目录（#590：服务端 soul-seed，下标 = 阶数 - 1；缩略图取首帧） */
 export function soulAnimation(level: string | number): string {
   const value = Number(level);
-  return Number.isFinite(value) && value >= 1 ? rowField(SOUL_LEVEL_META, String(value - 1), "animation") : "";
+  return Number.isFinite(value) && value >= 1 ? (SOUL_SEEDS[value - 1]?.animation ?? "") : "";
 }

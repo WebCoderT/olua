@@ -3,16 +3,13 @@ import { Type } from "class-transformer";
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { RankRow } from "../../../database/rows";
-import { RANK_LABELS } from "../../../shared/game-data.generated";
+import { RANK_TIERS } from "../../../shared/rank-seed";
 import { ConfigAttributesDto, ConfigAttributeRangeDto, SoulRowShape } from "./title.dto";
 
 /** 名称 / 描述 / 大段名的长度上限（与称号同一档） */
 export const RANK_LABEL_MAX = 20;
 export const RANK_TIER_MAX = 20;
 export const RANK_DESCRIPTION_MAX = 200;
-
-/** 大段名清单（**派生**自生成物的 RANK_LABELS，不手写字面量清单） */
-export const RANK_TIERS = [...new Set(Object.values(RANK_LABELS).map((item) => item.tier))];
 
 /** 管理端看到的一条军衔配置 */
 export class RankDto {

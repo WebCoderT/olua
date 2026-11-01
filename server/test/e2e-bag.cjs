@@ -29,7 +29,8 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
 /** 属性与门槛的唯一来源（服务端算的就是这份生成物 + 运营覆盖层） */
-const { EQUIPMENT_BASES, ROLE_LEVEL_ATTRIBUTES } = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
+const { EQUIPMENT_BASES } = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
+const { ROLE_LEVEL_ATTRIBUTES } = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.js")); // #590：等级表唯一书写处 = growth-seed
 
 /** 管理员注册码（提等级要用；等级只能走管理端，见 #550 / #554） */
 const ADMIN_CODE = "e2e-bag-admin";

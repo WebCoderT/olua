@@ -14,7 +14,7 @@ import {
   GROWTH_CURVES,
   GROWTH_SCALARS,
   ROLE_LEVEL_ATTRIBUTES,
-} from "../../shared/game-data.generated";
+} from "../../shared/growth-seed";
 import {
   GrowthScalarDto,
   GrowthScalarQueryDto,
@@ -55,6 +55,11 @@ export class GrowthConfigService implements OnModuleInit {
   }
 
   // —— 等级经验 ——
+
+  /** 某一级的最终升级经验（快照 levels 段用；没有行返回 undefined，调用方回落曲线出厂值） */
+  findLevelExp(level: number) {
+    return this.growth.findLevelExp(level);
+  }
 
   listLevelExps(query: LevelExpQueryDto): PageResult<LevelExpDto> {
     const options: LevelExpListOptions = {
@@ -209,7 +214,7 @@ export class GrowthConfigService implements OnModuleInit {
   /** 曲线分段 seed：GROWTH_CURVES 四条曲线的段原样落库 */
   private seedSegments() {
     for (const [curve, segments] of Object.entries(GROWTH_CURVES)) {
-      (segments as Array<Record<string, number>>).forEach((segment, index) => {
+      (segments as unknown as Array<Record<string, number>>).forEach((segment, index) => {
         this.growth.seedSegment({
           curve,
           seq: index + 1,

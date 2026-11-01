@@ -33,8 +33,8 @@
 import {
   COMBAT_RANGE_KEYS,
   COMBAT_WEIGHTS,
-  ROLE_LEVEL_ATTRIBUTES,
 } from "../../shared/game-data.generated";
+import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import { equipmentAttributesOf, rankAttributesOf, soulAttributesOf, titleAttributesOf } from "../../shared/runtime-overrides";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */

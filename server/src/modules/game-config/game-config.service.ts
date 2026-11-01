@@ -50,19 +50,13 @@ import {
   NPCS,
   QUESTS,
   ITEM_TYPES,
-  RANK_LABELS,
-  RANK_LEVEL_ATTRIBUTES,
-  RANK_LEVEL_META,
   SKILLS,
-  SOUL_LABELS,
   STATUSES,
-  SOUL_LEVEL_ATTRIBUTES,
-  SOUL_LEVEL_META,
-  TITLE_LABELS,
-  TITLE_LEVEL_ATTRIBUTES,
-  TITLE_LEVEL_META,
 } from "../../shared/game-data.generated";
 import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
+import { TITLE_SEEDS } from "../../shared/title-seed";
+import { SOUL_SEEDS } from "../../shared/soul-seed";
+import { RANK_SEEDS } from "../../shared/rank-seed";
 
 /** 怪物 key 清单（出厂种子派生；成就击杀目标 / 任务击杀目标的存在性校验共用） */
 const MONSTER_SEED_KEYS = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
@@ -1150,62 +1144,54 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 军衔 seed：RANK_LABELS（段名/衔名）/ RANK_LEVEL_META（文案/价格）/ RANK_LEVEL_ATTRIBUTES（属性）三表按阶 zip */
+  /** 军衔 seed：rank-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/rank-seed.ts） */
   private seedRanks() {
-    const attributeTable = RANK_LEVEL_ATTRIBUTES as Record<string, Record<string, unknown>>;
-    const labelTable = RANK_LABELS as Record<string, { tier: string; label: string }>;
-    for (const [index, meta] of Object.entries(RANK_LEVEL_META)) {
-      const rank = labelTable[index] ?? { tier: "", label: "" };
+    for (const row of RANK_SEEDS) {
       this.ranks.seedRow({
-        level: Number(index) + 1,
-        label: rank.label,
-        tier: rank.tier,
-        description: meta.description,
-        bind_gold: meta.bindGold,
-        ...flatAttributes(attributeTable[index]),
+        level: row.level,
+        label: row.label,
+        tier: row.tier,
+        description: row.description,
+        bind_gold: row.bindGold,
+        ...flatAttributes(row.attributes),
         updated_at: 0,
       });
     }
   }
 
   /**
-   * 称号 seed：TITLE_LABELS（名）/ TITLE_LEVEL_META（文案/价格/动画）/ TITLE_LEVEL_ATTRIBUTES（属性）
-   * 三张表按等级键 zip；渠道默认「无法获取」，由运营逐个开放（赠送逻辑暂未实现）
+   * 称号 seed：title-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/title-seed.ts）；
+   * 渠道默认「无法获取」，由运营逐个开放（赠送逻辑暂未实现）
    */
   private seedTitles() {
-    // 属性表是字面量键（"0".."33"）的 Record，用通用形状取值避免逐键字面量索引
-    const attributeTable = TITLE_LEVEL_ATTRIBUTES as Record<string, Record<string, unknown>>;
-    for (const [index, meta] of Object.entries(TITLE_LEVEL_META)) {
-      const attributes = attributeTable[index];
+    for (const row of TITLE_SEEDS) {
       this.titles.seedRow({
-        level: Number(index) + 1,
-        label: TITLE_LABELS[index] ?? "",
-        description: meta.description,
-        animation: meta.animation,
-        animation_frame_rate: meta.animationFrameRate,
-        bind_gold: meta.bindGold,
+        level: row.level,
+        label: row.label,
+        description: row.description,
+        animation: row.animation,
+        animation_frame_rate: row.animationFrameRate,
+        bind_gold: row.bindGold,
         acquire_channel: AcquireChannel.UNAVAILABLE,
         upgrade_order: null,
-        ...flatAttributes(attributes),
+        ...flatAttributes(row.attributes),
         updated_at: 0,
       });
     }
   }
 
-  /** 战魂 seed：与称号同构（少渠道列） */
+  /** 战魂 seed：soul-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/soul-seed.ts） */
   private seedSouls() {
-    const attributeTable = SOUL_LEVEL_ATTRIBUTES as Record<string, Record<string, unknown>>;
-    for (const [index, meta] of Object.entries(SOUL_LEVEL_META)) {
-      const attributes = attributeTable[index];
+    for (const row of SOUL_SEEDS) {
       this.souls.seedRow({
-        level: Number(index) + 1,
-        label: SOUL_LABELS[index] ?? "",
-        description: meta.description,
-        animation: meta.animation,
-        animation_frame_rate: meta.animationFrameRate,
-        bind_gold: meta.bindGold,
-        upgrade_order: Number(index) + 1,
-        ...flatAttributes(attributes),
+        level: row.level,
+        label: row.label,
+        description: row.description,
+        animation: row.animation,
+        animation_frame_rate: row.animationFrameRate,
+        bind_gold: row.bindGold,
+        upgrade_order: row.level,
+        ...flatAttributes(row.attributes),
         updated_at: 0,
       });
     }

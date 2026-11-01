@@ -3,9 +3,9 @@
  * 每秒血量回复（hpRecover）单测（client/tools/test-hp-recover.cjs）
  *
  * 盯的不变量（改回血相关配置/接线后必须全绿）：
- * · 等级：裸回血 = 最大生命上限 × attributeRange.hpRecoverRate（逐级核对），逐级单调不降
+ * · 等级：裸回血 = 最大生命上限 × growthSeed.ATTRIBUTE_RANGE.hpRecoverRate（逐级核对），逐级单调不降
  * · 装备：**只有防御部位**有回血（衣服/头盔/腰带/鞋子），武器与首饰恒为 0；
- *   防位的回血权重合计 100，穿满防位 = 裸回血 × equipmentGrowth.setPowerRate；
+ *   防位的回血权重合计 100，穿满防位 = 裸回血 × growthSeed.EQUIPMENT_SET_POWER_RATE；
  *   前后缀变体与血量同一口径缩放（超神·神级 = 普通·人级 × 4.2）
  * · 三条成长线：战魂 / 称号 / 军衔各自都有回血，满阶 > 0、且都低于同级裸回血；显示名表把 hpRecover 收进去且顺序固定
  * · 怪物：monsterStats 恒返回 hpRecover = 0（回血是玩家养成的收益，磨血流不许被怪自己回血破坏）
@@ -21,7 +21,7 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, compileServerShared, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const outDir = prepare("olua-hp-recover", [
   "configs/good.ts",
@@ -31,7 +31,14 @@ const outDir = prepare("olua-hp-recover", [
   "configs/equipments.ts",
   "ui/utils/battle/HpHelper.ts",
 ]);
-const { getRoleLevelAttributes, equipmentStats, equipmentSlotShare, equipmentGrowth, monsterStats, attributeRange, roleMaxLevel } = require(path.join(outDir, "configs/growth.js"));
+// #590：曲线 / 装备公式 / 部位权重都在服务端 growth-seed；怪物量级探针用 monster-seed 的真实展开器；
+// 三条成长线与装备条目用真实种子灌进运行时表（客户端加载期是空表 / 零值占位）
+const growthSeed = require(compileServerShared("growth-seed.ts", "olua-hp-recover-growth"));
+const monsterSeed = require(compileServerShared("monster-seed.ts", "olua-hp-recover-monster"));
+seedRuntimeTables(outDir);
+const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
+void equipmentPrefixRates;
+void equipmentSuffixRates;
 const { soulLevels, soulAttributeLabels } = require(path.join(outDir, "configs/soul.js"));
 const { titleLevels, titleAttributeLabels } = require(path.join(outDir, "configs/title.js"));
 const { rankLevels, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
@@ -46,15 +53,15 @@ const percent = (value) => `${(value * 100).toFixed(1)}%`;
 //#region A. 等级：裸回血按血量上限派生
 
 console.log("\n— A. 等级裸回血（= 最大生命 × hpRecoverRate，逐级单调不降）—");
-check(attributeRange.hpRecoverRate > 0, `回血率已开启（每秒 ${percent(attributeRange.hpRecoverRate)} 最大生命）`);
+check(growthSeed.ATTRIBUTE_RANGE.hpRecoverRate > 0, `回血率已开启（每秒 ${percent(growthSeed.ATTRIBUTE_RANGE.hpRecoverRate)} 最大生命）`);
 
-const attributes = Array.from({ length: roleMaxLevel }, (_, index) => getRoleLevelAttributes(index + 1));
+const attributes = Array.from({ length: growthSeed.ROLE_MAX_LEVEL }, (_, index) => growthSeed.getRoleLevelAttributes(index + 1));
 const last = attributes[attributes.length - 1];
-const offBy = attributes.filter((attr) => Math.abs(attr.hpRecover - attr.maxHp * attributeRange.hpRecoverRate) > 0.5);
+const offBy = attributes.filter((attr) => Math.abs(attr.hpRecover - attr.maxHp * growthSeed.ATTRIBUTE_RANGE.hpRecoverRate) > 0.5);
 check(
   offBy.length === 0,
   "每一级的裸回血都等于「最大生命 × 回血率」（四舍五入内）",
-  offBy.length ? offBy.map((attr) => `${attr.maxHp}→${attr.hpRecover}`).join("、") : `1 级 ${attributes[0].hpRecover}/秒 → ${roleMaxLevel} 级 ${last.hpRecover}/秒`,
+  offBy.length ? offBy.map((attr) => `${attr.maxHp}→${attr.hpRecover}`).join("、") : `1 级 ${attributes[0].hpRecover}/秒 → ${growthSeed.ROLE_MAX_LEVEL} 级 ${last.hpRecover}/秒`,
 );
 check(attributes.every((attr, index) => index === 0 || attr.hpRecover >= attributes[index - 1].hpRecover), "裸回血逐级单调不降（升一级绝不会变少）");
 check(attributes[0].hpRecover >= 1, `1 级就有 ${attributes[0].hpRecover} 点/秒，新手期不是死值 0`);
@@ -66,7 +73,7 @@ check(attributes[0].hpRecover >= 1, `1 级就有 ${attributes[0].hpRecover} 点/
 console.log("\n— B. 装备回血（只有防御部位，穿满 = 裸回血 × setPowerRate）—");
 const DEFENSIVE = ["cloth", "helmet", "belt", "shoes"];
 const JEWELRY = [EQUIPMENT_TYPE.WEAPON, EQUIPMENT_TYPE.NECKLACE, EQUIPMENT_TYPE.RING, EQUIPMENT_TYPE.ACCESSORIES];
-const shareEntries = Object.entries(equipmentSlotShare);
+const shareEntries = Object.entries(growthSeed.EQUIPMENT_SLOT_SHARE);
 const recoverSlots = shareEntries.filter(([, share]) => share.recover > 0).map(([slot]) => slot).sort();
 check(
   JSON.stringify(recoverSlots) === JSON.stringify([...DEFENSIVE].sort()),
@@ -74,20 +81,20 @@ check(
   shareEntries.filter(([, share]) => share.recover === 0 && share.maxHp > 0).map(([slot]) => `${slot}（有血但无回血）`).join("、") || "无",
 );
 check(shareEntries.reduce((total, [, share]) => total + share.recover, 0) === 100, "回血权重列合计 100（与血量/攻击/防御三列同一口径，全套不会超 setPowerRate）");
-check(DEFENSIVE.every((slot) => equipmentSlotShare[slot].maxHp > 0), "给回血的部位都是血部位（回血由血量派生，不给血的部位不该有回血）");
+check(DEFENSIVE.every((slot) => growthSeed.EQUIPMENT_SLOT_SHARE[slot].maxHp > 0), "给回血的部位都是血部位（回血由血量派生，不给血的部位不该有回血）");
 
-const jewelryRecover = JEWELRY.map((slot) => `${slot} ${equipmentStats(60, slot).hpRecover}`).join(" / ");
-check(JEWELRY.every((slot) => equipmentStats(60, slot).hpRecover === 0), "武器与首饰（武器/项链/戒指/饰品）不回血", jewelryRecover);
+const jewelryRecover = JEWELRY.map((slot) => `${slot} ${growthSeed.equipmentStats(60, slot).hpRecover}`).join(" / ");
+check(JEWELRY.every((slot) => growthSeed.equipmentStats(60, slot).hpRecover === 0), "武器与首饰（武器/项链/戒指/饰品）不回血", jewelryRecover);
 
-const fullDefense = DEFENSIVE.reduce((total, slot) => total + equipmentStats(60, slot).hpRecover, 0);
+const fullDefense = DEFENSIVE.reduce((total, slot) => total + growthSeed.equipmentStats(60, slot).hpRecover, 0);
 const bareRecover60 = last.hpRecover;
-const expectedFullDefense = bareRecover60 * equipmentGrowth.setPowerRate;
+const expectedFullDefense = bareRecover60 * growthSeed.EQUIPMENT_SET_POWER_RATE;
 check(
   Math.abs(fullDefense - expectedFullDefense) <= Math.max(2, expectedFullDefense * 0.01),
-  `60 级穿满防御部位的回血 ≈ 裸回血的 ${equipmentGrowth.setPowerRate} 倍`,
+  `60 级穿满防御部位的回血 ≈ 裸回血的 ${growthSeed.EQUIPMENT_SET_POWER_RATE} 倍`,
   `${fullDefense} vs ${expectedFullDefense}（每件各自四舍五入，容差 1%）`,
 );
-check(equipmentStats(1, EQUIPMENT_TYPE.HELMET).hpRecover === 0, "1 级防具不给回血（几十点血凑不出 1 点/秒，也不做「保底 1」——否则 1 级穿满防具就无敌了）");
+check(growthSeed.equipmentStats(1, EQUIPMENT_TYPE.HELMET).hpRecover === 0, "1 级防具不给回血（几十点血凑不出 1 点/秒，也不做「保底 1」——否则 1 级穿满防具就无敌了）");
 
 // 前后缀变体：回血与血量同一口径缩放（超神·神级 = 4.2 倍）
 // 注意装备对象本身不带 id（Map 的 key 才是 id），所以按「基础件（前后缀全 0）」的条件取条目
@@ -114,7 +121,7 @@ const LABEL_KEYS = ["maxHp", "physicalAttack", "magicAttack", "taoistAttack", "p
 for (const line of LINES) {
   const values = line.levels.map((config) => config.attributes.hpRecover);
   const top = values[values.length - 1];
-  check(top > 0 && top < bareRecover60, `${line.name}：满阶 ${top}/秒 > 0 且低于 ${roleMaxLevel} 级裸回血 ${bareRecover60}/秒（不盖过角色本人）`);
+  check(top > 0 && top < bareRecover60, `${line.name}：满阶 ${top}/秒 > 0 且低于 ${growthSeed.ROLE_MAX_LEVEL} 级裸回血 ${bareRecover60}/秒（不盖过角色本人）`);
   check(values.every((value, index) => index === 0 || value >= values[index - 1]), `${line.name}：回血逐阶单调不降`);
   check(
     JSON.stringify(line.labels.map((item) => item.key)) === JSON.stringify(LABEL_KEYS),
@@ -149,7 +156,7 @@ check(
 //#region E. 结算（真实 HpHelper）
 
 console.log("\n— E. 结算（真实 HpHelper）—");
-const makeRole = (patch) => Object.assign({ level: roleMaxLevel, hp: 5000, maxHp: 10000, hpRecover: 100, hpRecoverAccumulator: 0 }, patch);
+const makeRole = (patch) => Object.assign({ level: growthSeed.ROLE_MAX_LEVEL, hp: 5000, maxHp: 10000, hpRecover: 100, hpRecoverAccumulator: 0 }, patch);
 
 let role = makeRole({ hp: 10000 });
 check(HpHelper.recover(role, 1000) === false && role.hp === 10000, "满血不回血（不刷屏也不落盘）");
@@ -178,7 +185,7 @@ check(
 );
 
 // 量级：满养成合计回血 vs 同级普通怪的每秒输出（怪普攻间隔从 configs/monster 源码取，避免整份怪物配置进沙箱）
-const monster = monsterStats(roleMaxLevel);
+const monster = monsterSeed.expandMonsterSeed({ id: "probe", label: "探针", level: growthSeed.ROLE_MAX_LEVEL, tier: "normal" });
 const attackInterval = Number((read("assets/configs/monster.ts").match(/attackInterval:\s*(\d+)/) ?? [])[1]) || 2000;
 const average = ([min, max]) => (min + max) / 2;
 const monsterDps = Math.max(1, average(monster.physicalAttack) - average(last.physicalDefense)) / (attackInterval / 1000);
@@ -227,8 +234,10 @@ check(
 );
 check(/private recoverTimer = 0;/.test(gameSource) && !/mpRecoverTimer/.test(gameSource), "计时器已改名 recoverTimer（不再是「只服务魔法值」的名字）");
 
-const growthSource = read("assets/configs/growth.ts");
-check(/"maxHp" \| "physicalAttack"[\s\S]*?"hpRecover">/.test(growthSource) && /hpRecover: 0,/.test(growthSource), "monsterStats 恒返回 hpRecover = 0（并在 MonsterBaseStats 的 Pick 里带上它）");
+// #590：怪物数值的唯一书写处 = server/src/shared/monster-seed.ts —— 展开结果里没有 hpRecover 字段
+// （怪不回血），这里断言种子展开器确实不给怪回血
+const probe = monsterSeed.expandMonsterSeed({ id: "probe", label: "探针", level: growthSeed.ROLE_MAX_LEVEL, tier: "normal" });
+check(!("hpRecover" in probe) || probe.hpRecover === 0, "怪物种子展开结果不含回血（怪不回血，回血是玩家养成的收益）");
 
 //#endregion
 

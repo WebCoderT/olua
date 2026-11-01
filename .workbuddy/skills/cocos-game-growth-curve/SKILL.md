@@ -29,11 +29,11 @@ agent_created: true
 ## 二、目标结构：一个 growth 文件当唯一来源
 
 ```
-configs/growth.ts        ← 曲线本身 + 从曲线取值的函数（新建，别塞进 level.ts）
-configs/level.ts         ← 只做「曲线 → levelMap」的搬运 + 经验换算
+server/src/shared/growth-seed.ts ← 曲线本身 + 从曲线取值的函数（#590 起唯一书写处在这里：等级裸属性、装备出厂属性 equipmentStats 都从这里展开；客户端 configs/growth.ts 只剩运行时容器与装备倍率 / 回收价）
+configs/level.ts         ← 空运行时表 + applyLevelRows（快照整表重建；客户端不再派生，#590）
 server/src/shared/monster-seed.ts ← 四元组数组：每只怪一行 { id, label, level, tier }，expandMonsterSeed(level, tier) 注入属性（#588 起怪物数值服务端独有）
-configs/equipments.ts    ← 数据数组：每条写 { key, level, slot, …表现字段 }，末尾统一 buildEquipmentMap 注入属性
-configs/soul.ts          ← 按「等效等级」取角色属性再打折
+configs/equipments.ts    ← 数据数组：每条写 { key, level, slot, …表现字段 }，末尾统一 buildEquipmentMap 建结构（零值占位，快照后按服务端公式重算，#590）
+configs/soul.ts          ← 空运行时表（数据唯一书写处 = server/src/shared/soul-seed.ts，#590）
 configs/drug.ts          ← 回复量按血量曲线定标（否则高等级药水毫无用处）
 configs/types            ← MonsterTier / EquipmentData 等类型（configs 依赖 types，反过来不行）
 ```

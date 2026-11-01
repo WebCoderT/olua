@@ -119,7 +119,7 @@ export default class WarSoulDialog {
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("soul_upgrade_button_label")?.getComponent(Label);
-      const maxed = role.soulOfWar >= soulMaxLevel;
+      const maxed = role.soulOfWar >= soulMaxLevel();
       const next = getSoulLevel(role.soulOfWar + 1);
       if (label) label.string = maxed ? layout.upgradeButton.maxedText : layout.upgradeButton.text;
       if (sprite) sprite.grayscale = maxed;
