@@ -83,7 +83,9 @@ export function EquipSlots({
         {wornSlots.length === 0 ? (
           <p className="text-xs text-slate-500">还没穿任何装备 —— 从下面点一个部位开始挑。</p>
         ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          // auto-fit：卡片的宽度取决于它被放进哪一栏（右宽栏 460~700），按**可用宽度**决定列数
+          // 比按视口断点稳 —— 1280 下四张卡挤成 105px 会把装备名截成「普通的·人…」
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
             {wornSlots.map((slot) => {
               const id = value[slot] ?? "";
               const known = knownSlots.includes(slot);

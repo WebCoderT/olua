@@ -20,6 +20,7 @@ export function EntityCard({
   badge,
   disabled = false,
   size = 40,
+  compact = false,
   onClick,
   onClear,
   clearTitle = "清除",
@@ -33,6 +34,13 @@ export function EntityCard({
   badge?: string;
   disabled?: boolean;
   size?: number;
+  /**
+   * 紧凑版：内边距与间距各缩一格，**角标从「独立一行」改成名字前面的一小段**
+   *
+   * 用于「一屏里要塞十几行」的地方（技能弹窗）。角标独占一行时每行多 12px，
+   * 12 行就是 144px —— 而它只是个序号，跟在名字前面一样看得懂。
+   */
+  compact?: boolean;
   onClick?: () => void;
   onClear?: () => void;
   clearTitle?: string;
@@ -54,7 +62,7 @@ export function EntityCard({
       aria-disabled={disabled || undefined}
       onClick={disabled ? undefined : onClick}
       onKeyDown={onKeyDown}
-      className={`relative flex items-center gap-2.5 rounded-xl border p-2 text-left transition ${
+      className={`relative flex items-center rounded-xl border ${compact ? "gap-1.5 p-1" : "gap-2.5 p-2"} text-left transition ${
         empty ? "border-dashed border-slate-700 bg-slate-900/30" : "border-slate-700 bg-slate-900/70"
       } ${disabled || !onClick ? "" : "cursor-pointer hover:border-indigo-500/70 hover:bg-slate-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"}`}
     >
@@ -69,11 +77,12 @@ export function EntityCard({
         <EntityImage image={image} alt={label} size={size} />
       )}
       <div className="min-w-0 flex-1">
-        {badge ? <p className="text-[10px] leading-tight text-slate-500">{badge}</p> : null}
+        {badge && !compact ? <p className="text-[10px] leading-tight text-slate-500">{badge}</p> : null}
         <p className={`truncate text-xs font-medium ${empty ? "text-slate-600" : "text-slate-100"}`}>
+          {badge && compact ? <span className="mr-1 text-[10px] font-normal text-slate-500">{badge}</span> : null}
           {empty ? placeholder : label}
         </p>
-        {!empty && note ? <p className="truncate text-[10px] text-slate-500">{note}</p> : null}
+        {!empty && note ? <p className="truncate text-[10px] leading-tight text-slate-500">{note}</p> : null}
       </div>
       {!empty && onClear ? (
         <button

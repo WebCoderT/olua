@@ -35,46 +35,55 @@ export function SkillList({
     <div className="flex flex-col gap-2">
       {rows.length === 0 ? <p className="text-xs text-slate-500">该角色还没有技能。</p> : null}
 
-      {rows.map((row, index) => {
-        const known = !!row.id;
-        return (
-          <div key={`${row.id}-${index}`} className="flex items-stretch gap-2">
-            <div className="min-w-0 flex-1">
-              <EntityCard
-                label={known ? entityLabel("skill", row.id) : ""}
-                note={known ? entityNote("skill", row.id) : undefined}
-                image={known ? entityImage("skill", row.id) : {}}
-                placeholder="点此挑技能"
-                badge={`第 ${index + 1} 个`}
-                disabled={disabled}
-                onClick={() => {
-                  // 已有技能点一下 = 换成别的：先移除这一行，再从候选里挑
-                  onChange(rows.filter((_, position) => position !== index));
-                  setOpen(true);
-                }}
-                onClear={() => onChange(rows.filter((_, position) => position !== index))}
-                clearTitle="移除技能"
-              />
+      {/* 双列 + 紧凑行：12 个技能原来是 12 行 × 64px（要滚），现在是 6 行 × 40px。
+          列数按**可用宽度** auto-fit（弹窗 4xl 下两列，窄一点自动变一列） */}
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+        {rows.map((row, index) => {
+          const known = !!row.id;
+          return (
+            <div key={`${row.id}-${index}`} className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <EntityCard
+                  compact
+                  size={24}
+                  label={known ? entityLabel("skill", row.id) : ""}
+                  note={known ? entityNote("skill", row.id) : undefined}
+                  image={known ? entityImage("skill", row.id) : {}}
+                  placeholder="点此挑技能"
+                  badge={`${index + 1}.`}
+                  disabled={disabled}
+                  onClick={() => {
+                    // 已有技能点一下 = 换成别的：先移除这一行，再从候选里挑
+                    onChange(rows.filter((_, position) => position !== index));
+                    setOpen(true);
+                  }}
+                  onClear={() => onChange(rows.filter((_, position) => position !== index))}
+                  clearTitle="移除技能"
+                />
+              </div>
+              {/* 宽度只能给外层容器：`Input` 的基础类里带 `w-full`，再写 `w-11` 是同一属性的冲突，
+                  谁生效取决于 CSS 生成顺序 —— 直接把 `flex-1` 的卡片挤成了 0 宽（实测 10px） */}
+              <div className="w-12 shrink-0">
+                <Input
+                  inputMode="numeric"
+                  value={row.level}
+                  placeholder="Lv"
+                  title="等级"
+                  aria-label={`第 ${index + 1} 个技能等级`}
+                  disabled={disabled || !known}
+                  onChange={(event) =>
+                    onChange(
+                      rows.map((item, position) =>
+                        position === index ? { ...item, level: event.target.value.replace(/[^\d]/g, "") } : item,
+                      ),
+                    )
+                  }
+                />
+              </div>
             </div>
-            <label className="flex w-24 flex-col justify-center gap-1">
-              <span className="text-[10px] text-slate-500">等级</span>
-              <Input
-                inputMode="numeric"
-                value={row.level}
-                aria-label={`第 ${index + 1} 个技能等级`}
-                disabled={disabled || !known}
-                onChange={(event) =>
-                  onChange(
-                    rows.map((item, position) =>
-                      position === index ? { ...item, level: event.target.value.replace(/[^\d]/g, "") } : item,
-                    ),
-                  )
-                }
-              />
-            </label>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
       <div>
         <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={disabled} onClick={() => setOpen(true)}>

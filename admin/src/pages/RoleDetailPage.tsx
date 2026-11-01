@@ -526,7 +526,12 @@ export function RoleDetailPage() {
               {/* 时装 + 成长阶位：都是「一项外观 / 一个档位」，并成一行，不再各占一张卡 */}
               <div className="border-t border-slate-800 pt-3">
                 <p className="mb-2 text-[10px] uppercase tracking-wide text-slate-500">时装与成长阶位</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {/* auto-fit 而不是 xl 断点：这一行的宽度跟的是**卡片**（右栏 460~700 都可能），
+                    不是视口 —— 按视口排版会让 1280 下四格挤成 105px，「未激活」被竖排成四个字 */}
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))" }}
+                >
                   <EntityCard
                     badge="时装"
                     label={form.fashionCloth ? entityLabel("fashion", form.fashionCloth) : ""}
@@ -574,7 +579,7 @@ export function RoleDetailPage() {
         open={skillsOpen}
         title={`技能（${form.skills.length} 个）`}
         hint="图标 + 名字 + 描述来自客户端配置；改完点「保存并关闭」才会落库。"
-        size="max-w-4xl"
+        size="max-w-3xl"
         onClose={() => setSkillsOpen(false)}
         footer={
           <>
@@ -605,7 +610,7 @@ export function RoleDetailPage() {
         open={bagOpen}
         title={`背包（${form.bag.length} / ${bagRows * bagCols} 格）`}
         hint={`网格按存档里的形状铺开（${bagRows} 行 × ${bagCols} 列）；点格子放东西 / 改数量。改完点「保存并关闭」才会落库。`}
-        size="max-w-5xl"
+        size="max-w-3xl"
         onClose={() => setBagOpen(false)}
         footer={
           <>

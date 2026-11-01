@@ -79,7 +79,8 @@ export function BagGrid({
         <div className="overflow-x-auto">
           <div
             className="grid gap-1"
-            style={{ gridTemplateColumns: `repeat(${cols}, minmax(36px, 1fr))`, minWidth: Math.min(cols * 40, 720) }}
+            // 格子封顶 46px（原来按 1fr 撑满 720，7 行就是 455px 高）；7×11 一屏内能看全
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(28px, 46px))`, justifyContent: "start" }}
           >
             {slots.map(({ row, col }) => {
               const cell = cellMap.get(`${row},${col}`);
@@ -145,7 +146,7 @@ function BagCellButton({
     >
       {cell ? (
         <>
-          <EntityImage image={entityImage("item", cell.id)} alt={entityLabel("item", cell.id)} size={28} />
+          <EntityImage image={entityImage("item", cell.id)} alt={entityLabel("item", cell.id)} size={24} />
           {cell.count > 1 ? (
             <span className="absolute bottom-0 right-0.5 text-[10px] font-medium text-amber-200">{cell.count}</span>
           ) : null}

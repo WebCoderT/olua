@@ -56,7 +56,9 @@ export function LevelLadder({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="text-[10px] leading-tight text-slate-500">{label}</p>
-            <Badge tone={active ? "indigo" : "slate"}>{active ? `${value} 档` : "未激活"}</Badge>
+            <Badge tone={active ? "indigo" : "slate"}>
+              <span className="whitespace-nowrap">{active ? `${value} 档` : "未激活"}</span>
+            </Badge>
           </div>
           <p className={`truncate text-xs font-medium ${active ? "text-slate-100" : "text-slate-600"}`}>
             {active ? levelLabel(kind, value) || `第 ${value} 档` : "点此选择档位"}

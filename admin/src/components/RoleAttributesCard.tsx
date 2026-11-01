@@ -31,16 +31,20 @@ const ATTRIBUTE_ROWS: AttributeRow[] = [
 ];
 
 /**
- * 客户端上报值（存档 `data` 里那一项）
+ * 存档里那份派生值（`data.combat` / `data.maxHp`）
  *
- * 只有 `combat` / `maxHp` 有值：服务端的比对口径就这两项（#93 定的 —— 客户端每次
- * `combatCalc` 都会写它们，而 `combat` 是加权总和、最能代表「两端口径是否还一致」；
- * 六项区间属性拿来判「是否一致」噪音太大，玩家在升级与重算之间存档就会命中）。
+ * **客户端已经不算属性了**（#541 起服务端收权）：每次写档都由 `applyAuthoritativeAttributes`
+ * 按存档输入现算覆盖 `combat` / `maxHp` / 六项攻防，客户端只是把下发值抄回来再随整份存档推上来。
+ * 所以这一列的含义只剩「**存档里上一次写下的那份**」—— 它与「按当前输入重算」不同，
+ * 就说明存档那份过期了（客户端配置漂移、或某次改动没触发重算），不是「客户端说了算」。
  *
- * 所以这一列只摆**被比对过**的项。存档里其实也有六项攻防，但既然服务端没校验过，
- * 摆出来只会让人误以为那几项也过了对照。
+ * 旧名字叫「客户端上报」，在 #556 之后已经名不副实（会让人以为客户端还有算法、还有作弊空间），
+ * 所以改成「存档旧值」；判据没变 —— 两份数值并列摆着，让人自己看。
+ *
+ * 只有 `combat` / `maxHp` 有值：存档里也有六项攻防，但服务端从来没拿它们对照过，
+ * 摆出来会让人误以为那几项也校验过。
  */
-function reportedOf(derived: RoleDerived, key: keyof RoleDerivedAttributes): number | null {
+function storedValueOf(derived: RoleDerived, key: keyof RoleDerivedAttributes): number | null {
   if (key === "combat") return derived.reported.combat;
   if (key === "maxHp") return derived.reported.maxHp;
   return null;
@@ -89,12 +93,12 @@ function AttributeTable({
         <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
           <th className={`${cell} font-medium`}>属性</th>
           <th className={`${cell} font-medium`}>服务端重算</th>
-          <th className={`${dense ? "py-1" : "py-2"} font-medium`}>客户端上报</th>
+          <th className={`${dense ? "py-1" : "py-2"} font-medium`}>存档旧值</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => {
-          const reported = reportedOf(derived, row.key);
+          const reported = storedValueOf(derived, row.key);
           const serverValue = attributes ? attributes[row.key] : undefined;
           const differs = reported !== null && typeof serverValue === "number" && serverValue !== reported;
           return (
@@ -116,14 +120,13 @@ function AttributeTable({
 }
 
 /**
- * 战斗属性卡片：**服务端重算的那份** vs **客户端上报的那份**
+ * 战斗属性卡片：**按当前输入重算的那份** vs **存档里上一次写下的那份**
  *
- * 这个卡片存在的唯一理由是「让它可见」：服务端重算的值到了接口里（#93），
- * 但如果没人显示，运营在后台看到的战斗力就仍然只是玩家客户端说了多少。
+ * 这个卡片存在的理由：服务端从 #541 起按存档输入自己算属性（伤害 / 掉落 / 战力都走它），
+ * 存档里那份派生值只是它上一次写下的快照。两张摆在一起，才能一眼看出「存档是不是旧了」——
+ * 配置漂移、某次改动没触发重算，都会在这里露出差异。
  *
- * 前端**不下结论**。服务端算的那份不一定对（玩家在升级与重算之间存档 → 客户端那份
- * 才是旧的；服务端快照落后于客户端配置 → 反过来），所以这里只把两份摆在一起，
- * 判定权交给看的人。
+ * 前端**不下结论**：差异不代表谁作弊（客户端已经不参与计算了），只表示两份不一致。
  *
  * `dense`：角色详情要「一屏看完」，所以行高压到最紧、10 行拆成两张并排、
  * 底部那段长说明收起来 —— **判据（两份数值并列 + 差异高亮）一条不少**。
@@ -136,7 +139,7 @@ export function RoleAttributesCard({
   derived: RoleDerived;
   dense?: boolean;
   /**
-   * 并进「角色」卡的那一档：**只读**、竖排紧凑列表（一行一个属性，右侧「上报」只在该项有上报时出现）
+   * 并进「角色」卡的那一档：**只读**、竖排紧凑列表（一行一个属性，右侧「存档 x」只在**和重算值不同**时才出现）
    *
    * 为什么不用表格：窄栏里三列表头会折成「服务端重 / 算」，数值 `406 ~ 550` 也会折行，
    * 一折行每行就变两三行高，10 行吃掉 300px。列表这个形状在同样宽度下只要一半高度，
@@ -153,12 +156,12 @@ export function RoleAttributesCard({
 
   const notices = (
     <div className="flex flex-col gap-2">
-      {!attributes ? <Notice>服务端算不出这个等级（等级不在成长曲线里），本次没有可对照的基准；客户端上报值照常显示。</Notice> : null}
+      {!attributes ? <Notice>服务端算不出这个等级（等级不在成长曲线里），本次没有可对照的基准；存档里那份旧值照常显示。</Notice> : null}
       {derived.mismatch ? (
         <Notice>
           {bare
-            ? "两份数值对不上（下面标出的那几行）。升级与重算之间存档、配置漂移、旧装备 id 都会命中 —— 这里只让它可见，不判定哪一份对。"
-            : "服务端重算与客户端上报对不上（数值不同的那一行已标出）。这不等于作弊：玩家在升级与重算之间存档、客户端配置漂移、存档留着旧装备 id 都会命中。这里只负责让它可见，不判定哪一份是对的。"}
+            ? "存档里那份派生值与按当前输入重算的不一致（下面标出的那几行）。客户端已经不参与计算，这多半是存档旧了（配置漂移、或某次改动没触发重算），出现差异时保存一次就会被重算覆盖。"
+            : "存档里那份派生值（上次写档时的快照）与按当前输入重算的结果不一致，数值不同的那一行已标出。客户端 #541 起不再计算属性，所以这不是「客户端说了算」：多半是存档旧了 —— 客户端配置漂移、或某次改动没触发重算；保存一次就会按当前输入重算覆盖。"}
         </Notice>
       ) : null}
       {unknownEquipmentIds.length > 0 ? (
@@ -176,7 +179,7 @@ export function RoleAttributesCard({
         {notices}
         <dl className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
           {ATTRIBUTE_ROWS.map((row) => {
-            const reported = reportedOf(derived, row.key);
+            const reported = storedValueOf(derived, row.key);
             const serverValue = attributes ? attributes[row.key] : undefined;
             const differs = reported !== null && typeof serverValue === "number" && serverValue !== reported;
             return (
@@ -192,11 +195,11 @@ export function RoleAttributesCard({
                   <span className={`text-xs font-medium tabular-nums ${differs ? "text-amber-200" : "text-slate-100"}`}>
                     {attributes ? serverTextOf(attributes, row) : "—"}
                   </span>
-                  {reported === null ? null : (
-                    <span className={`text-[10px] tabular-nums ${differs ? "text-amber-300" : "text-slate-500"}`}>
-                      上报 {reported}
-                    </span>
-                  )}
+                  {/* 只在「和重算值不同」时才把旧值摆出来：一样的时候它没有信息量，
+                      而窄栏里每行多一个数字就挤一分 */}
+                  {differs && reported !== null ? (
+                    <span className="text-[10px] tabular-nums text-amber-300">存档 {reported}</span>
+                  ) : null}
                 </dd>
               </div>
             );
@@ -232,7 +235,7 @@ export function RoleAttributesCard({
 
       {dense ? null : (
         <p className="mt-3 text-xs leading-relaxed text-slate-600">
-          「客户端上报」一列只有战斗力与最大生命值：服务端的比对口径就这两项（客户端每次重算都会写它们，而战斗力是加权总和、最能代表两端口径是否还一致）。存档里其实也有六项攻防，但服务端没有校验过它们，摆出来只会让人以为那几项也过了对照 —— 服务端重算的结果全在左列，要排查时对着看。
+          「存档旧值」一列只有战斗力与最大生命值：存档里其实也有六项攻防，但服务端从来没拿它们对照过，摆出来会让人误以为那几项也校验过。客户端从 #541 起不再计算属性 —— 每次写档都由服务端按存档输入（等级 / 装备 / 战魂 / 称号 / 军衔）重算覆盖，所以这一列只是「上一次写下的快照」；它与重算值不同，说明存档旧了，保存一次即可纠正。
         </p>
       )}
     </Card>
