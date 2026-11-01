@@ -267,6 +267,29 @@ node tools/audit-ui-click-through.cjs   # UI 点击会不会穿透到世界
 本机（WorkBuddy 环境）跑 Node 子进程相关脚本，必要时清掉注入的环境变量：`env -u NODE_OPTIONS node tools/xxx.cjs`。
 另：本机 Bash 的 `grep` 对 `client/assets/` 恒返回空（假阴性），检索该目录**一律用 Grep 工具**。
 
+## 八之二、帧动画的坑：销毁前必须自己停状态（#560）
+
+**症状**：进游戏后控制台一帧一条刷 `[PreviewInEditor] Cannot read properties of null (reading '_uiProps')`，
+栈是 `AnimationState._sampleCurves → TrackEvalStatus.evaluate → Sprite.set spriteFrame → Sprite._applySpriteFrame → _applySpriteSize`。
+典型触发：打怪 / 换图 / 关弹窗之后开始刷，**重启才停**。
+
+**原因**（Cocos 3.8.7 的坑，官方论坛同栈确认）：带循环片段的节点 `destroy()` 后，引擎不保证把
+`AnimationState` 从**全局** `AnimationManager` 摘干净 —— `Animation.onDestroy` 走 `AnimationState.destroy()`，
+后者只在「正在播」时才 `removeAnimation`；组件若没过 `onLoad` 连 `onDestroy` 都不走。
+残留状态每帧往**已销毁**的 Sprite 写 `spriteFrame` → `self.node` 是 null → 炸 `_uiProps`，永不停歇。
+
+**做法**（`ui/helpers/AnimationHelper.ts`）：
+- `useAnimation(node)` 顺手 `guardDestroy(node)`：在 `NODE_DESTROYED`（引擎**先**发这个事件、**再**销毁子节点与组件）
+  上挂一次性钩子 → `stopTree(node)` 递归取 `getComponentsInChildren(Animation)` → 逐个 `state.stop()`。
+- 必须**逐个 state.stop()**，不能只 `animate.stop()`（那只停 cross-fade 的权重，状态还在全局管理器里）；
+  片段是缓存共享的，只停状态、别碰 clips。
+- 起动画的入口一律先过 `animatable(node)` = `isValid(node, true)`：`destroy()` 之后同帧内
+  `isValid(node)` **仍是 true**（只是进了 `ToDestroy` 队列），不拦就会在将死的节点上起一个没人停的状态。
+- 一次性播放（Normal）用 `animate.once(FINISHED, cb, node)`，别用裸 `on`：组件会被后续播放复用，
+  堆着的监听会在「别人播完」时误销毁节点。
+- 守点：`client/tools/test-animation-destroy.cjs`（最小 cc 垫片照抄引擎语义：`Animation.stop()` 故意不动状态，
+  判据就是「全局管理器里还剩几个在播的状态」；把 guard 删掉立刻红 5 条）。
+
 ## 九、提交纪律（强制）
 
 **每处理完一个问题，就按功能提交一次代码 —— 不要攒着。**
