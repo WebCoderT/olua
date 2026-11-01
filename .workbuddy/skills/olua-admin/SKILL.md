@@ -312,6 +312,21 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 10 行吃掉 300px；`bare` 那档走竖排列表，同样宽度只要一半）、**空槽别用大卡**（13 个部位里 11 个常年为空，
 全用大卡平白吃四行）、**四张卡的内边距比内容更吃高度**（`Card dense`）。
 
+**弹窗内容也要紧凑**（技能 / 背包，用户 2026-11-01 追加）：
+
+- 技能列表：**双列**（`repeat(auto-fit, minmax(280px, 1fr))`）+ `EntityCard compact`（序号跟在名字前，
+  不再独占一行）+ 右侧窄等级框 —— 12 个技能从 12 行变 6 行；
+- 背包网格：格子**封顶 46px**（`repeat(cols, minmax(28px, 46px))` + `justifyContent: start`），
+  不要 `1fr` 撑满 —— 撑满 720 时 7 行就是 455px 高；
+- **`Input` / `Select` 的基础类带 `w-full`**（`CONTROL_CLASS`），再写 `w-11` / `h-8` 是同一属性的冲突，
+  谁生效取决于 CSS 生成顺序 —— 实测把 `flex-1` 的技能卡挤成 **10px** 宽（文字全被 truncate 掉）。
+  要限定宽度就套一层定宽容器，别跟基础类抢同一个属性。
+
+**属性面板那一列叫「存档旧值」，不叫「客户端上报」**：客户端从 #541 起不再计算属性，
+每次写档由 `applyAuthoritativeAttributes` 现算覆盖 `combat` / `maxHp`，客户端只是把下发值抄回来。
+所以差异的含义是「**存档旧了**」（配置漂移 / 某次改动没触发重算），不是「客户端说了算」、更不是作弊；
+只在**与重算值不同**时才把旧值摆出来（一样的时候它没有信息量，窄栏每行多一个数字就挤一分）。
+
 ## 六、必踩的坑
 
 1. **生成的类型必须是 `type` 不是 `interface`**。`interface` 没有隐式索引签名，赋给请求层的 `Record<string, string | number | null | undefined>`（query 参数）会被 TS 拒。生成器已经统一产出 `export type X = { ... }`，别再手写回 interface。
