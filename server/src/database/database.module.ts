@@ -22,6 +22,7 @@ import { MonsterDropRepository } from "./repositories/monster-drop.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository";
+import { MapRepository } from "./repositories/map.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
 import { SkillRepository } from "./repositories/skill.repository";
 import { StatusRepository } from "./repositories/status.repository";
@@ -59,6 +60,7 @@ import { EquipInAlignRepository } from "./repositories/equip-in-align.repository
     SystemRepository,
     WorldMonsterRepository,
     MapSpawnAreaRepository,
+    MapRepository,
     ZoneRepository,
     TitleRepository,
     RankRepository,
@@ -99,6 +101,7 @@ import { EquipInAlignRepository } from "./repositories/equip-in-align.repository
     SystemRepository,
     WorldMonsterRepository,
     MapSpawnAreaRepository,
+    MapRepository,
     ZoneRepository,
     TitleRepository,
     RankRepository,

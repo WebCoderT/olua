@@ -97,6 +97,10 @@ const ALLOWED_EDGES = [
   // 社交（#436）：好友申请给对方留一条社交频道的消息 —— 只是通知，状态仍以 social 表为准
   { from: "modules/social", to: "modules/game-mail/game-mail.service.ts", why: "好友申请 → 一条社交消息（消息中心频道化）" },
   { from: "modules/social", to: "modules/roles/dto/", why: "在线角色的形状（RoleDto）：消息正文要用角色名与等级" },
+  // 地图（#573）：玩法配置从客户端搬到服务端 `maps` 表之后，
+  // 配置快照要下发它（game-config）—— 走 MapService 的公开口，不许直接读表。
+  // 注意 realtime **不在这张图里**：进图条件故意不拦连接（原因见 MapService 顶部）
+  { from: "modules/game-config", to: "modules/map/", why: "配置快照下发地图玩法配置" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -124,6 +128,8 @@ const REPO_EDGES = {
   ],
   "database/repositories/audit.repository.ts": ["modules/audit", "modules/admin"],
   "database/repositories/announcement.repository.ts": ["modules/announcement"],
+  // 地图玩法配置（#573）：只有地图域读写它 —— 配置快照与进图校验都经 MapService
+  "database/repositories/map.repository.ts": ["modules/map"],
   "database/repositories/mail.repository.ts": ["modules/mail"],
   "database/repositories/system.repository.ts": ["modules/system"],
   "database/repositories/world-monster.repository.ts": [

@@ -3,12 +3,17 @@ import { AdminMapController } from "./map.controller";
 import { MapService } from "./map.service";
 
 /**
- * 地图模块（#571：管理端只读观测）
+ * 地图模块（#571 观测台 / #573 玩法配置归服务端）
  *
- * 只读，没有 seed、没有写入口：数据源是生成快照（`shared/map-*.generated.ts`）与
- * 两张已有库表（`map_spawn_areas` / `world_monsters`），仓储由全局 DatabaseModule 提供。
- * 之所以单独成模块而不是塞进 game-config：这一块**不改任何配置**，混进去会让人以为
- * 地图也是「可编辑的运营配置」（它不是 —— 真相在客户端 TMX）。
+ * 与 game-config 分开的原因不是「只读」了，而是**能改的东西不一样**：
+ * game-config 那些模块改的是客户端配置的镜像（称号 / 装备 / 技能…），
+ * 这里改的是地图的玩法配置（名称 / 类型 / 进入条件），而地图的**资源本体**根本不在服务端
+ * （TMX 在客户端资源包里）。混进 game-config 会让人以为「地图也能像装备那样整套替换」。
+ *
+ * 仓储由全局 DatabaseModule 提供；seed 在 `MapService.onModuleInit`（按资源清单补行，
+ * `INSERT OR IGNORE` 幂等，api 与 realtime 两个进程各跑一次也无副作用）。
+ * `exports: MapService` 是给 `ClientConfigService`（配置快照）用的 —— 客户端拿到快照后
+ * 在 `changeOnMap` 里自己判进入条件（服务端不拦连接，原因见 `MapService` 顶部）。
  */
 @Module({
   controllers: [AdminMapController],

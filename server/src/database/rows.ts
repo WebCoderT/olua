@@ -317,6 +317,30 @@ export interface MapSpawnAreaRow {
   updated_at: number;
 }
 
+/**
+ * 地图玩法配置一行（`maps` 表；#573：地图的整理结果归服务端）
+ *
+ * 一行 = 一张图的「名称 / 类型 / 进入条件」。资源本体（TMX / 底图 / 预览图）仍在客户端
+ * 资源包里，`map_id` 就是 `resources/map/<id>/<id>.tmx` 的目录名 —— 所以**没有新建语义**：
+ * 行由启动 seed 按资源清单（`MAP_CONTENTS` 的键）补出来，运营只改不改增。
+ */
+export interface MapRow {
+  map_id: string;
+  /** 地图名称（传送弹窗、小地图、公告等处显示的就是它） */
+  label: string;
+  /** 类型码（取值域见 common/constants/map-config 的 `MapType`） */
+  type: string;
+  /** 进入所需等级（0 = 无限制） */
+  level: number;
+  /** 进入所需战斗力（0 = 无限制） */
+  combat: number;
+  /** 进入所需战魂阶（0 = 无限制） */
+  soul_of_war: number;
+  /** 最后一个改它的管理员账号名（追账用；与 audit_logs 能对上） */
+  updated_by: string;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 养成配置（称号 / 战魂）

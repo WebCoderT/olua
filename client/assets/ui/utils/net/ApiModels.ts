@@ -1487,6 +1487,29 @@ export type AchievementId = {
   achievementId: string;
 };
 
+export type SaveMapConfig = {
+  /**
+   * 地图名称（显示在传送弹窗 / 小地图 / 公告里）
+   */
+  label: string;
+  /**
+   * 地图类型（0 安全地图 / 1 等级地图 / 2 战斗力地图 / 3 战魂地图）
+   */
+  type: "0" | "1" | "2" | "3";
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 进入所需战斗力（0 = 不限）
+   */
+  combat: number;
+  /**
+   * 进入所需战魂阶（0 = 不限）
+   */
+  soulOfWar: number;
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -2686,7 +2709,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4963,6 +4986,48 @@ export type Achievement = {
   recordCount?: number;
 };
 
+export type MapConfig = {
+  /**
+   * 地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）
+   */
+  id: string;
+  /**
+   * 地图名
+   */
+  label: string;
+  /**
+   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
+   */
+  type: string;
+  /**
+   * 类型名
+   */
+  typeLabel: string;
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 进入所需战斗力（0 = 不限）
+   */
+  combat: number;
+  /**
+   * 进入所需战魂阶（0 = 不限）
+   */
+  soulOfWar: number;
+};
+
+export type MapTypeGroup = {
+  /**
+   * 类型码
+   */
+  type: string;
+  /**
+   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
+   */
+  label: string;
+};
+
 export type GameConfigSnapshot = {
   /**
    * 称号配置（34 阶，含渠道与升级链顺序）
@@ -5044,6 +5109,14 @@ export type GameConfigSnapshot = {
    * 成就配置（#401：分类 / 条件 / 门槛 / 奖励）。进度与达成状态走 `/achievements/me`，不在配置快照里
    */
   achievements: Achievement[];
+  /**
+   * 地图玩法配置（#573：名称 / 类型 / 进入条件）。**客户端不再自己存这些** —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里
+   */
+  maps: MapConfig[];
+  /**
+   * 地图类型分组（顺序即传送弹窗的分组顺序；类型文案的唯一来源在服务端）
+   */
+  mapTypes: MapTypeGroup[];
 };
 
 export type GuildSummary = {
@@ -6161,6 +6234,10 @@ export type MapList = {
    * 地图列表（按 id 数字升序）
    */
   list: MapSummary[];
+  /**
+   * 全部地图类型（管理端编辑下拉用；含当前没有地图使用的类型，顺序即传送弹窗分组顺序）
+   */
+  types: MapTypeGroup[];
 };
 
 export type MapDetail = {

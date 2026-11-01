@@ -1,4 +1,6 @@
 import { Injectable } from "@nestjs/common";
+import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
+import { MapService } from "../map/map.service";
 import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
@@ -22,6 +24,7 @@ export class ClientConfigService {
     private readonly growth: GrowthConfigService,
     private readonly mall: MallPricingService,
     private readonly drop: DropConfigService,
+    private readonly map: MapService,
   ) {}
 
   snapshot(): GameConfigSnapshotDto {
@@ -49,6 +52,10 @@ export class ClientConfigService {
       quests: this.gameConfig.listQuests({ ...ALL }).list,
       // #401：成就配置（条件 / 门槛 / 奖励）；进度与达成状态走 /achievements/me，不在配置快照里
       achievements: this.gameConfig.listAchievements({ ...ALL }).list,
+      // #573：地图玩法配置（名称 / 类型 / 进入条件）+ 类型分组顺序。
+      // 客户端 `configs/map.ts` 不再存这些 —— 改一个进入等级不用重打客户端包。
+      maps: this.map.configs(),
+      mapTypes: MAP_TYPE_GROUPS.map((group) => ({ type: group.type, label: group.label })),
     };
   }
 }
