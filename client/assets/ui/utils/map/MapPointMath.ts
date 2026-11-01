@@ -19,6 +19,9 @@ import { Node, Rect, Size, TiledMap, Vec3 } from "cc";
  * contentSize 设成地图像素尺寸后调 `_syncAnchorPoint()`，按 `anchorPoint` 同步每个图层节点的锚点并重设
  * 对象组/图片层位置；装配器 `assembler/simple.ts` 再用 `left = col*tw - w*anchorX`、
  * `bottom = rowY - h*anchorY` 平移顶点。锚点取 (0,1) 即顶点从 `(0, -H)` 铺到 `(W, 0)`。
+ * **光设锚点还不够**：图层自己的 `leftDownToCenter` 只在它启用后才会跟着锚点事件重算，建图时地图节点
+ * 还没入场景 → 会停在按锚点 0.5 算的旧值（瓦片照旧铺在中心 = 进图整屏黑），所以 `GameMap.loadMap`
+ * 建完图要给每个图层补一次 `_syncAnchorPoint()`（详见该处注释与 `cocos-tiledmap-objectgroup` 技能坑 4）。
  *
  * ## 入参一律是 **Tiled 原始坐标**
  * 引擎 `getObjects()` 给出的 y 已被 `TiledObjectGroup._init` 翻转过一次（`y = 地图像素高 - y`），

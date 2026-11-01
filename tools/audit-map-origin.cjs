@@ -6,15 +6,20 @@
  * 而且看起来像正常渲染，只能靠肉眼发现。历史包袱还特别重：客户端换算、导入工具、生成快照、
  * 小地图 / 预览图 / 寻路网格各写过一遍「中心 ± 半图」，改一处很容易漏另一处。
  *
- * 四条规则（全部是静态可判的，不做数值回归）：
+ * 六条规则（全部是静态可判的，不做数值回归）：
  * 1. `GameMap.loadMap` 必须把 UITransform 锚点设成 (0,1)，且**在 `tmxAsset` 赋值之前**
  *    —— 引擎在赋值那一刻同步 `_buildLayerAndGroup()`→`_syncAnchorPoint()`，按当时锚点算图层锚点与
  *    顶点平移量；事后改锚点只改本节点，图层仍按旧锚点绘制（= 整体偏半张图）。
- * 2. `MapPointMath.getMapPointPosition` 的函数体必须是 `(x, y) -> (x, -y)` —— 任何 `- W/2`、
+ * 2. `tmxAsset` 赋值之后必须**逐个图层重算一次 `_syncAnchorPoint()`** —— 图层只在 `TiledLayer.onEnable`
+ *    里注册 ANCHOR_CHANGED 监听，而建图时地图节点还没入场景、图层未启用，地图那次 `_syncAnchorPoint()`
+ *    没人接：`leftDownToCenter` 停在按默认锚点 0.5 算的 (W/2, H/2)，瓦片照旧铺在中心；坐标换算却已按
+ *    左上角把角色送到 (x, -y) → 落在错位的图之外 = **整屏黑**（#568）。这条最容易漏，因为它不报错。
+ * 3. `MapPointMath.getMapPointPosition` 的函数体必须是 `(x, y) -> (x, -y)` —— 任何 `- W/2`、
  *    `H/2 -` 都说明半图偏移又回来了。
- * 3. `tools/import-spawn-areas.cjs` 里不许出现旧公式 `- mapW / 2` / `mapH / 2 -`。
- * 4. 生成的刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
+ * 4. `tools/import-spawn-areas.cjs` 里不许出现旧公式 `- mapW / 2` / `mapH / 2 -`。
+ * 5. 生成的刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
  *    这是「生成物用错口径」唯一不需要跑客户端就能发现的判据。
+ * 6. 客户端不许再出现 `mapCenter` 这类「地图中心」的命名（照旧代码抄回来最常见）。
  *
  * 用法：node tools/audit-map-origin.cjs
  */
@@ -65,6 +70,31 @@ function checkAnchoredBeforeAsset() {
       "client/assets/ui/components/map/GameMap.ts",
       anchorAt + 1,
       "锚点必须在 tmxAsset 赋值**之前**设：引擎在赋值时同步按当前锚点算图层锚点与顶点平移量，事后改只动本节点（= 地图整体偏半张图）",
+    );
+  }
+}
+
+function checkLayerAnchorResync() {
+  const src = read(GAME_MAP, "client/assets/ui/components/map/GameMap.ts");
+  if (!src) return;
+  const lines = src.split("\n");
+  const isComment = (line) => /^\s*(\*|\/\/|\/\*)/.test(line);
+  const assetAt = lines.findIndex((line) => /\.tmxAsset\s*=/.test(line));
+  if (assetAt < 0) return; // 由 checkAnchoredBeforeAsset 报
+  const syncAt = lines.findIndex((line) => !isComment(line) && /_syncAnchorPoint\(\)/.test(line));
+  if (syncAt < 0) {
+    problem(
+      "client/assets/ui/components/map/GameMap.ts",
+      0,
+      "tmxAsset 赋值后没给图层重算 leftDownToCenter：建图时图层未启用、收不到 ANCHOR_CHANGED，瓦片会照旧铺在中心（坐标换算却已按左上角）→ 进图整屏黑。加 `for (const layer of tiledMap.getLayers()) (layer as any)._syncAnchorPoint();`",
+    );
+    return;
+  }
+  if (syncAt < assetAt) {
+    problem(
+      "client/assets/ui/components/map/GameMap.ts",
+      syncAt + 1,
+      "图层重算必须在 tmxAsset 赋值**之后**（赋值时才建出图层，之前还没有图层可重算）",
     );
   }
 }
@@ -192,13 +222,14 @@ function checkLegacyNaming() {
 }
 
 checkAnchoredBeforeAsset();
+checkLayerAnchorResync();
 checkPointMath();
 checkImportTool();
 checkSpawnAreasInMap();
 checkLegacyNaming();
 
 if (problems.length === 0) {
-  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、换算只有 y 取反、刷怪区坐标全部落在图内");
+  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、换算只有 y 取反、刷怪区坐标全部落在图内");
   process.exit(0);
 }
 

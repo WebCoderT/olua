@@ -1,12 +1,12 @@
 ---
 name: cocos-tiledmap-objectgroup
-description: Cocos Creator 3.x 中把 Tiled（.tmx）对象组在游戏内实例化的正确做法，含三个必踩的引擎坑（对象「类」被解析器丢弃、object.y 被 _init 原地改写导致坐标翻两次、TiledMap 的瓦片裁剪 enableCulling 在相机跳变后会算错可见范围）、对象坐标换算、静态碰撞体生成、属性驱动的区域玩法（刷怪区 min/max，默认开图时一次性生成；含数量维持类需求的设计取舍与 tick 归属）、区域名称/指示线的调试显示、点位驱动的出生位置（类 revive 的点 = 进图/传送后的出生点，含「地图异步加载 vs 角色创建」的先后坑与回调式注册）；以及"没有地图节点时直接读 TMX 原文解析对象组"（资源预加载阶段推导地图内 NPC/怪物外观目录用）。触发场景：用户提到"Tiled 对象组 / 对象层"、"collision 碰撞图层"、"地图碰撞区域动态创建"、"NPC/刷怪点/复活点坐标"、"进图在复活点出生/复活点定位"、"按对象类/Class 判断"、"地图坐标转世界坐标"、"地图原点 / 左上角为原点"、"接新 TMX 要不要减半个地图"、"对象位置上下镜像/反了"、"地图整体偏了半张图"、"monster 刷怪层 / 区域刷怪 / min max 数量 / 怪物刷新"、"不实例化地图就读出对象组/预加载地图内容"、"传送后地图一片黑 / 地图不渲染 / 动一下才显示 / 瓦片裁剪 / enableCulling"等。
+description: Cocos Creator 3.x 中把 Tiled（.tmx）对象组在游戏内实例化的正确做法，含四个必踩的引擎坑（对象「类」被解析器丢弃、object.y 被 _init 原地改写导致坐标翻两次、TiledMap 的瓦片裁剪 enableCulling 在相机跳变后会算错可见范围、改了地图锚点后图层 leftDownToCenter 不会自己重算导致整屏黑）、对象坐标换算、静态碰撞体生成、属性驱动的区域玩法（刷怪区 min/max，默认开图时一次性生成；含数量维持类需求的设计取舍与 tick 归属）、区域名称/指示线的调试显示、点位驱动的出生位置（类 revive 的点 = 进图/传送后的出生点，含「地图异步加载 vs 角色创建」的先后坑与回调式注册）；以及"没有地图节点时直接读 TMX 原文解析对象组"（资源预加载阶段推导地图内 NPC/怪物外观目录用）。触发场景：用户提到"Tiled 对象组 / 对象层"、"collision 碰撞图层"、"地图碰撞区域动态创建"、"NPC/刷怪点/复活点坐标"、"进图在复活点出生/复活点定位"、"按对象类/Class 判断"、"地图坐标转世界坐标"、"地图原点 / 左上角为原点"、"接新 TMX 要不要减半个地图"、"对象位置上下镜像/反了"、"地图整体偏了半张图"、"monster 刷怪层 / 区域刷怪 / min max 数量 / 怪物刷新"、"不实例化地图就读出对象组/预加载地图内容"、"传送后地图一片黑 / 地图不渲染 / 动一下才显示 / 瓦片裁剪 / enableCulling"、"进游戏黑屏但改一下 anchorPoint 就能看到地图 / 地图锚点改左上角后一片黑"等。
 agent_created: true
 ---
 
 # Cocos TiledMap 对象组实例化
 
-## 先记住三条引擎行为（否则必错）
+## 先记住四条引擎行为（否则必错）
 
 ### 坑 1：对象的「类 / Class」被解析器直接丢掉
 
@@ -101,6 +101,11 @@ tiledMap.enableCulling = false;        // 再关裁剪：setter 会转发给所�
 const transform = mapNode.getComponent(UITransform) ?? mapNode.addComponent(UITransform);
 transform.setAnchorPoint(0, 1);        // 必须在 tmxAsset 赋值**之前**
 
+const tiledMap = mapNode.addComponent(TiledMap);
+tiledMap.tmxAsset = mapAsset;
+// 建完图后逐个图层补一次重算（原因见下面「坑 4」，漏了 = 进图整屏黑）
+for (const layer of tiledMap.getLayers()) (layer as any)._syncAnchorPoint();
+
 // 换算：只有 y 取反，没有半图偏移
 localX = tiledX;
 localY = -tiledY;                      // 矩形先取几何中心：(x + w/2, y + h/2)，同样只取反
@@ -114,6 +119,27 @@ world  = mapNode.getWorldPosition() + (localX, localY);
 `_buildLayerAndGroup()` → `_syncAnchorPoint()`，按**当时的锚点**给每个图层节点设锚点、算顶点平移量
 （`leftDownToCenterX/Y = w*anchorX / h*anchorY`）。赋值后再改锚点只动地图节点自身，图层仍按旧锚点绘制
 → 表现是「地图整体偏半张图」，且不报错、不崩，只能靠肉眼发现。
+
+### 坑 4：锚点设对了还不够 —— 图层自己要重算一次，漏了就是**整屏黑**
+
+锚点改完，图层手里的 `leftDownToCenter` 还是旧的（按默认 0.5 算的 `W/2, H/2`），瓦片照旧铺在**中心**。
+而坐标换算已经按左上角把角色送到 `(x, -y)` —— 两个坐标系错了半个图，角色落到「错位的图」之外，**整屏黑**。
+
+为什么会漏：`TiledLayer` 只在 `onEnable` 里注册 `ANCHOR_CHANGED` 监听（`tiled-layer.ts`），而地块图一般是
+**先建图、后入场景**（`addToMapLayer` 在后面）——建图时图层未启用，地图 `_syncAnchorPoint()` 把图层锚点改成
+(0,1) 的那一刻**没人接事件**，`leftDownToCenter` 就停在旧值；`onEnable` 只注册监听 + mark dirty，**不会补算**。
+
+判据（一眼分辨这是坑 4 还是别的错）：
+
+- **黑的**（连角落都没有瓦片）→ 角色在错位图之外，就是坑 4；这时手动改一次锚点能立刻看见地图，因为事件被接住了。
+- **偏半张图**（有地图，位置不对）→ 坑 1（锚点设在赋值之后）。
+
+```ts
+for (const layer of tiledMap.getLayers()) (layer as any)._syncAnchorPoint();   // 建图后显式补一次
+```
+
+`_syncAnchorPoint` 是 `TiledLayer` 的引擎内部方法（protected，没有公开替代），效果是重算 `leftDownToCenter`
+并 mark render data dirty，顶点随之按新锚点重排；重复调用无副作用。
 
 ### 依据（引擎源码 3.8.7，不要靠猜）
 
