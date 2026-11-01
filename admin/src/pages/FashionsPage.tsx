@@ -3,10 +3,12 @@ import { ACQUIRE_CHANNEL, fashionsApi, formatTime, PERMISSION } from "../api";
 import type { ConfigAttributes, Fashion, FashionQuery, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * 获得渠道中文名（#257）
@@ -85,62 +87,54 @@ function FashionEditDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">编辑时装 · {initial.id}</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          图标 / 内观 / 外观资源路径不可改（外观资源仍在客户端）。获得渠道语义与称号一致；
-          属性当前配置全为 0 加成，需要强化属性时在这里改。
-        </p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="名称">
-              <Input value={label} onChange={(event) => setLabel(event.target.value)} />
-            </Field>
-            <Field label="售卖价（绑定元宝）">
-              <Input type="number" min={0} value={sellPrice} onChange={(event) => setSellPrice(event.target.value)} />
-            </Field>
-          </div>
-
-          <Field label="描述文案">
-            <textarea
-              className="min-h-[64px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-sky-500"
-              maxLength={500}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </Field>
-
-          <Field label="获得渠道">
-            <Select value={channel} onChange={(event) => setChannel(event.target.value)}>
-              {CHANNEL_OPTIONS.map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <AttributesGrid attributes={attributes} onChange={setAttributes} header="八项属性（整份替换）" crossed={crossedKeys} />
-
-          {!labelValid || !descriptionValid || !priceValid ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              名称需为 1~50 字、描述 ≤500 字、售卖价需为 0~1 亿的整数。
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
-          </Button>
-          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-            保存修改
-          </Button>
-        </div>
+        <Modal
+      open
+      title={<>编辑时装 · {initial.id}</>}
+      hint={<>图标 / 内观 / 外观资源路径不可改（外观资源仍在客户端）。获得渠道语义与称号一致；
+          属性当前配置全为 0 加成，需要强化属性时在这里改。</>}
+      size="md"
+      onClose={onCancel}
+      footer={<>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
+          取消
+        </Button>
+        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+          保存修改
+        </Button>
+      </>}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="名称">
+          <Input value={label} onChange={(event) => setLabel(event.target.value)} />
+        </Field>
+        <Field label="售卖价（绑定元宝）">
+          <Input type="number" min={0} value={sellPrice} onChange={(event) => setSellPrice(event.target.value)} />
+        </Field>
       </div>
-    </div>
+      <Field label="描述文案">
+        <textarea
+          className="min-h-[64px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-sky-500"
+          maxLength={500}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </Field>
+      <Field label="获得渠道">
+        <Select value={channel} onChange={(event) => setChannel(event.target.value)}>
+          {CHANNEL_OPTIONS.map(([value, text]) => (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <AttributesGrid attributes={attributes} onChange={setAttributes} header="八项属性（整份替换）" crossed={crossedKeys} />
+      {!labelValid || !descriptionValid || !priceValid ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          名称需为 1~50 字、描述 ≤500 字、售卖价需为 0~1 亿的整数。
+        </p>
+      ) : null}
+    </Modal>
   );
 }
 
@@ -212,38 +206,34 @@ export function FashionsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">时装配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          id 清单固定（configs/fashionClothes 的 20 套），只可编辑、不可新增 / 删除；图标与外观资源路径不开放编辑。
-          获得渠道 seed 默认「无法获取」，由运营逐个开放；属性 seed 全 0，可按运营需要调整。
-        </p>
-      </div>
+            <PageHeader
+        title="时装配置"
+        description={<>id 清单固定（configs/fashionClothes 的 20 套），只可编辑、不可新增 / 删除；图标与外观资源路径不开放编辑。
+            获得渠道 seed 默认「无法获取」，由运营逐个开放；属性 seed 全 0，可按运营需要调整。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 名称</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">获得渠道</span>
-            <Select value={draft.channel} onChange={(event) => setDraft({ ...draft, channel: event.target.value })}>
-              <option value="">全部</option>
-              {CHANNEL_OPTIONS.map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 名称">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-32" label="获得渠道">
+              <Select value={draft.channel} onChange={(event) => setDraft({ ...draft, channel: event.target.value })}>
+                <option value="">全部</option>
+                {CHANNEL_OPTIONS.map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

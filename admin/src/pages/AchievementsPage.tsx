@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableCl
 import { Pagination } from "../components/Pagination";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 分类的中文名（与 achievement-data 的 category 同值） */
 const CATEGORY_LABELS: Record<string, string> = {
@@ -221,47 +222,43 @@ export function AchievementsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-50">成就配置</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            seed 自客户端 <code>configs/achievement-data</code>，可动态增删。累计型（击杀 / 交付任务）的进度由事件流记账；
-            状态型（等级 / 战力 / 持有物品）每次查询按角色当前状态现算 —— 改状态型的门槛会**立刻**改变所有人的达成状态。
-          </p>
-        </div>
-        <Button
-          disabled={!canWrite}
-          onClick={() => {
-            setCreating(true);
-            setForm(emptyDraft());
-          }}
-        >
-          新建成就
-        </Button>
-      </div>
+            <PageHeader
+        title="成就配置"
+        description={<>seed 自客户端 <code>configs/achievement-data</code>，可动态增删。累计型（击杀 / 交付任务）的进度由事件流记账；
+            状态型（等级 / 战力 / 持有物品）每次查询按角色当前状态现算 —— 改状态型的门槛会**立刻**改变所有人的达成状态。</>}
+        actions={<>
+          <Button
+            disabled={!canWrite}
+            onClick={() => {
+              setCreating(true);
+              setForm(emptyDraft());
+            }}
+          >
+            新建成就
+          </Button>
+        </>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 名称</span>
-            <Input
-              value={draftFilter.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraftFilter({ ...draftFilter, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-[140px]">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">分类</span>
-            <Select value={draftFilter.category} onChange={(event) => setDraftFilter({ ...draftFilter, category: event.target.value })}>
-              <option value="">全部</option>
-              <option value="battle">战斗</option>
-              <option value="growth">成长</option>
-              <option value="explore">探索</option>
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 名称">
+              <Input
+                value={draftFilter.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraftFilter({ ...draftFilter, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-[140px]" label="分类">
+              <Select value={draftFilter.category} onChange={(event) => setDraftFilter({ ...draftFilter, category: event.target.value })}>
+                <option value="">全部</option>
+                <option value="battle">战斗</option>
+                <option value="growth">成长</option>
+                <option value="explore">探索</option>
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

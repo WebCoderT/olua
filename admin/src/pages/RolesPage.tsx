@@ -6,9 +6,11 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { SortableTh, useSort } from "../components/sortable";
 import type { SortOrder } from "../components/sortable";
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { FilterBar } from "../components/FilterBar";
+import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 10;
 
@@ -156,78 +158,72 @@ export function RolesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">角色管理</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          关键字同时匹配角色名与角色 id；可改基础信息（含时装 / 所在地图）与装备、技能、背包。
-          「在线」= 该角色是所属账号当前选中的那个（玩家在选角界面选它进游戏）。
-        </p>
-      </div>
+      <PageHeader
+        title="角色管理"
+        description={<>关键字同时匹配角色名与角色 id；可改基础信息（含时装 / 所在地图）与装备、技能、背包。
+            「在线」= 该角色是所属账号当前选中的那个（玩家在选角界面选它进游戏）。</>}
+      />
 
-      <Card title="筛选" actions={loading ? <Spinner /> : null}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="角色名 / 角色 id">
-            <Input
-              value={form.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => update("keyword", event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </Field>
-          <Field label="在线状态">
-            <Select value={form.online} onChange={(event) => update("online", event.target.value)}>
-              <option value="">全部</option>
-              <option value="true">在线</option>
-              <option value="false">离线</option>
-            </Select>
-          </Field>
-          <Field label="职业">
-            <Select value={form.occupation} onChange={(event) => update("occupation", event.target.value)}>
-              <option value="">全部</option>
-              {Object.entries(OCCUPATION_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="性别">
-            <Select value={form.sex} onChange={(event) => update("sex", event.target.value)}>
-              <option value="">全部</option>
-              {Object.entries(SEX_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="最低等级">
-            <Input
-              inputMode="numeric"
-              value={form.minLevel}
-              placeholder="不限"
-              onChange={(event) => update("minLevel", event.target.value.replace(/[^\d]/g, ""))}
-            />
-          </Field>
-          <Field label="最高等级">
-            <Input
-              inputMode="numeric"
-              value={form.maxLevel}
-              placeholder="不限"
-              onChange={(event) => update("maxLevel", event.target.value.replace(/[^\d]/g, ""))}
-            />
-          </Field>
-          <div className="flex items-end gap-2">
-            <Button onClick={submitSearch}>查询</Button>
-            <Button variant="outline" onClick={resetFilter}>
-              重置
-            </Button>
-          </div>
-        </div>
-        {accountId ? <p className="mt-3 text-xs text-slate-500">当前只显示账号 id 为 {accountId} 的角色（重置可清除该筛选）</p> : null}
-      </Card>
+      <FilterBar
+        loading={loading}
+        onSearch={submitSearch}
+        onReset={resetFilter}
+        hint={accountId ? `当前只显示账号 id 为 ${accountId} 的角色（重置可清除该筛选）` : undefined}
+      >
+        <Field label="角色名 / id" width="w-48">
+          <Input
+            value={form.keyword}
+            placeholder="支持模糊匹配"
+            onChange={(event) => update("keyword", event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submitSearch();
+            }}
+          />
+        </Field>
+        <Field label="在线" width="w-24">
+          <Select value={form.online} onChange={(event) => update("online", event.target.value)}>
+            <option value="">全部</option>
+            <option value="true">在线</option>
+            <option value="false">离线</option>
+          </Select>
+        </Field>
+        <Field label="职业" width="w-24">
+          <Select value={form.occupation} onChange={(event) => update("occupation", event.target.value)}>
+            <option value="">全部</option>
+            {Object.entries(OCCUPATION_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="性别" width="w-20">
+          <Select value={form.sex} onChange={(event) => update("sex", event.target.value)}>
+            <option value="">全部</option>
+            {Object.entries(SEX_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="最低等级" width="w-24">
+          <Input
+            inputMode="numeric"
+            value={form.minLevel}
+            placeholder="不限"
+            onChange={(event) => update("minLevel", event.target.value.replace(/[^\d]/g, ""))}
+          />
+        </Field>
+        <Field label="最高等级" width="w-24">
+          <Input
+            inputMode="numeric"
+            value={form.maxLevel}
+            placeholder="不限"
+            onChange={(event) => update("maxLevel", event.target.value.replace(/[^\d]/g, ""))}
+          />
+        </Field>
+      </FilterBar>
 
       <Card
         title={`角色列表（${data?.total ?? 0}）`}

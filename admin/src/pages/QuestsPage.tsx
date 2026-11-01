@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatTime, itemsApi, monstersApi, npcsApi, PERMISSION, questsApi } from "../api";
 import type { CreateQuest, Item, Monster, Npc, PageResult, Quest, QuestRewardItem, UpdateQuest } from "../api";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 任务类型（与服务端口径一致：main 一次性 / daily 领奖后可重接） */
 const QUEST_KIND_LABELS: Record<string, string> = { main: "主线", daily: "日常" };
@@ -206,191 +208,182 @@ function QuestDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">{creating ? "新增任务" : `编辑任务 · ${initial?.id ?? ""}`}</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          {creating
-            ? "id 建议主线用 8000 段、日常用 8100 段（与生成物里的既有任务同一动线）。建成后随配置快照下发客户端。"
-            : "id 是行身份，不可改。保存后随配置快照下发客户端；正在进行的玩家进度不受影响（进度记的是 quest id）。"}
+        <Modal
+      open
+      title={<>{creating ? "新增任务" : `编辑任务 · ${initial?.id ?? ""}`}</>}
+      hint={<>{creating
+          ? "id 建议主线用 8000 段、日常用 8100 段（与生成物里的既有任务同一动线）。建成后随配置快照下发客户端。"
+          : "id 是行身份，不可改。保存后随配置快照下发客户端；正在进行的玩家进度不受影响（进度记的是 quest id）。"}</>}
+      size="lg"
+      onClose={onCancel}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {creating ? (
+          <Field label="任务 id" hint="唯一，≤32 字">
+            <Input value={id} onChange={(event) => setId(event.target.value)} />
+          </Field>
+        ) : (
+          <Field label="任务 id">
+            <Input value={id} disabled />
+          </Field>
+        )}
+        <Field label="类型">
+          <Select value={form.kind} onChange={(event) => set("kind", event.target.value)}>
+            {Object.entries(QUEST_KIND_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="名称" hint="≤50 字">
+          <Input value={form.label} onChange={(event) => set("label", event.target.value)} maxLength={50} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="前置任务" hint="主线链门控：前置未领奖则不可接">
+          <Select value={form.prevQuestId} onChange={(event) => set("prevQuestId", event.target.value)}>
+            <option value="">（无前置）</option>
+            {questOptions.map((item) => (
+              <option key={item.id} value={item.id} disabled={item.id === id.trim()}>
+                {item.id} · {item.label}
+              </option>
+            ))}
+            {/* 配置里引用了不在列表里的前置（已删 / 分页外）：保留原值，避免保存时被悄悄清空 */}
+            {form.prevQuestId && !questOptions.some((item) => item.id === form.prevQuestId) ? (
+              <option value={form.prevQuestId}>{form.prevQuestId}（未在任务表中）</option>
+            ) : null}
+          </Select>
+        </Field>
+        <Field label="接取等级" hint="1~999">
+          <Input type="number" min={1} max={999} value={form.minLevel} onChange={(event) => set("minLevel", event.target.value)} />
+        </Field>
+        <Field label="发布 NPC" hint="决定玩家在谁那里接 / 交">
+          <Select value={form.npcId} onChange={(event) => set("npcId", event.target.value)}>
+            <option value="">（请选择）</option>
+            {npcOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.id} · {item.label}
+              </option>
+            ))}
+            {form.npcId && !npcOptions.some((item) => item.id === form.npcId) ? (
+              <option value={form.npcId}>{form.npcId}（未在 NPC 表中）</option>
+            ) : null}
+          </Select>
+        </Field>
+      </div>
+      <div>
+        <span className="mb-2 block text-xs font-medium text-slate-400">目标（单目标，v1 边界）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+          <Field label="目标类型" hint="决定推进方式">
+            <Select value={form.objectiveType} onChange={(event) => switchObjectiveType(event.target.value)}>
+              {Object.entries(OBJECTIVE_TYPE_LABELS).map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="目标对象">
+            <Select value={form.objectiveTarget} onChange={(event) => set("objectiveTarget", event.target.value)}>
+              <option value="">（请选择）</option>
+              {targetOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.id} · {item.label}
+                </option>
+              ))}
+              {form.objectiveTarget && !targetOptions.some((item) => item.id === form.objectiveTarget) ? (
+                <option value={form.objectiveTarget}>{form.objectiveTarget}（未在当前表里）</option>
+              ) : null}
+            </Select>
+          </Field>
+          <Field label="目标数量" hint="1~9999">
+            <Input
+              type="number"
+              min={1}
+              max={9999}
+              value={form.objectiveCount}
+              onChange={(event) => set("objectiveCount", event.target.value)}
+            />
+          </Field>
+        </div>
+        <p className="mt-1.5 text-xs text-slate-600">
+          kill 的进度在服务端击杀结算时推进（实时进程直写库）；talk 在玩家与 NPC 对话时推进；
+          collect 在交付时按背包实有数量判定，不需要额外钩子。
         </p>
+      </div>
+      <div>
+        <span className="mb-2 block text-xs font-medium text-slate-400">奖励（交付时直接入包，整份放不下会被拒绝）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
+          <Field label="金币">
+            <Input type="number" min={0} value={form.gold} onChange={(event) => set("gold", event.target.value)} />
+          </Field>
+          <Field label="经验">
+            <Input type="number" min={0} value={form.exp} onChange={(event) => set("exp", event.target.value)} />
+          </Field>
+        </div>
 
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {creating ? (
-              <Field label="任务 id" hint="唯一，≤32 字">
-                <Input value={id} onChange={(event) => setId(event.target.value)} />
-              </Field>
-            ) : (
-              <Field label="任务 id">
-                <Input value={id} disabled />
-              </Field>
-            )}
-            <Field label="类型">
-              <Select value={form.kind} onChange={(event) => set("kind", event.target.value)}>
-                {Object.entries(QUEST_KIND_LABELS).map(([value, text]) => (
-                  <option key={value} value={value}>
-                    {text}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="名称" hint="≤50 字">
-              <Input value={form.label} onChange={(event) => set("label", event.target.value)} maxLength={50} />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="前置任务" hint="主线链门控：前置未领奖则不可接">
-              <Select value={form.prevQuestId} onChange={(event) => set("prevQuestId", event.target.value)}>
-                <option value="">（无前置）</option>
-                {questOptions.map((item) => (
-                  <option key={item.id} value={item.id} disabled={item.id === id.trim()}>
-                    {item.id} · {item.label}
-                  </option>
-                ))}
-                {/* 配置里引用了不在列表里的前置（已删 / 分页外）：保留原值，避免保存时被悄悄清空 */}
-                {form.prevQuestId && !questOptions.some((item) => item.id === form.prevQuestId) ? (
-                  <option value={form.prevQuestId}>{form.prevQuestId}（未在任务表中）</option>
-                ) : null}
-              </Select>
-            </Field>
-            <Field label="接取等级" hint="1~999">
-              <Input type="number" min={1} max={999} value={form.minLevel} onChange={(event) => set("minLevel", event.target.value)} />
-            </Field>
-            <Field label="发布 NPC" hint="决定玩家在谁那里接 / 交">
-              <Select value={form.npcId} onChange={(event) => set("npcId", event.target.value)}>
-                <option value="">（请选择）</option>
-                {npcOptions.map((item) => (
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-xs text-slate-500">奖励物品（最多 {REWARD_ITEMS_MAX} 条）</span>
+          <Button
+            variant="outline"
+            className="px-2.5 py-1 text-xs"
+            disabled={form.items.length >= REWARD_ITEMS_MAX}
+            onClick={() => set("items", [...form.items, { goodId: "", count: 1 }])}
+          >
+            加一条
+          </Button>
+        </div>
+        <div className="mt-2 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+          {form.items.length === 0 ? <p className="text-xs text-slate-500">没有物品奖励：只发金币与经验。</p> : null}
+          {form.items.map((entry, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <Select
+                className="flex-1"
+                value={entry.goodId}
+                onChange={(event) => setItem(index, { goodId: event.target.value })}
+              >
+                <option value="">（请选择物品）</option>
+                {itemOptions.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.id} · {item.label}
                   </option>
                 ))}
-                {form.npcId && !npcOptions.some((item) => item.id === form.npcId) ? (
-                  <option value={form.npcId}>{form.npcId}（未在 NPC 表中）</option>
+                {entry.goodId && !itemOptions.some((item) => item.id === entry.goodId) ? (
+                  <option value={entry.goodId}>{entry.goodId}（未在物品表中）</option>
                 ) : null}
               </Select>
-            </Field>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">目标（单目标，v1 边界）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
-              <Field label="目标类型" hint="决定推进方式">
-                <Select value={form.objectiveType} onChange={(event) => switchObjectiveType(event.target.value)}>
-                  {Object.entries(OBJECTIVE_TYPE_LABELS).map(([value, text]) => (
-                    <option key={value} value={value}>
-                      {text}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="目标对象">
-                <Select value={form.objectiveTarget} onChange={(event) => set("objectiveTarget", event.target.value)}>
-                  <option value="">（请选择）</option>
-                  {targetOptions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.id} · {item.label}
-                    </option>
-                  ))}
-                  {form.objectiveTarget && !targetOptions.some((item) => item.id === form.objectiveTarget) ? (
-                    <option value={form.objectiveTarget}>{form.objectiveTarget}（未在当前表里）</option>
-                  ) : null}
-                </Select>
-              </Field>
-              <Field label="目标数量" hint="1~9999">
-                <Input
-                  type="number"
-                  min={1}
-                  max={9999}
-                  value={form.objectiveCount}
-                  onChange={(event) => set("objectiveCount", event.target.value)}
-                />
-              </Field>
-            </div>
-            <p className="mt-1.5 text-xs text-slate-600">
-              kill 的进度在服务端击杀结算时推进（实时进程直写库）；talk 在玩家与 NPC 对话时推进；
-              collect 在交付时按背包实有数量判定，不需要额外钩子。
-            </p>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">奖励（交付时直接入包，整份放不下会被拒绝）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
-              <Field label="金币">
-                <Input type="number" min={0} value={form.gold} onChange={(event) => set("gold", event.target.value)} />
-              </Field>
-              <Field label="经验">
-                <Input type="number" min={0} value={form.exp} onChange={(event) => set("exp", event.target.value)} />
-              </Field>
-            </div>
-
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs text-slate-500">奖励物品（最多 {REWARD_ITEMS_MAX} 条）</span>
+              <span className="text-xs text-slate-600">×</span>
+              <Input
+                type="number"
+                min={1}
+                max={9999}
+                className="w-24"
+                aria-label={`第 ${index + 1} 条奖励数量`}
+                value={entry.count}
+                onChange={(event) => setItem(index, { count: Number(event.target.value) || 0 })}
+              />
               <Button
-                variant="outline"
-                className="px-2.5 py-1 text-xs"
-                disabled={form.items.length >= REWARD_ITEMS_MAX}
-                onClick={() => set("items", [...form.items, { goodId: "", count: 1 }])}
+                variant="ghost"
+                className="px-2 py-1 text-xs text-rose-300"
+                onClick={() => set("items", form.items.filter((_, i) => i !== index))}
               >
-                加一条
+                删除
               </Button>
             </div>
-            <div className="mt-2 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-              {form.items.length === 0 ? <p className="text-xs text-slate-500">没有物品奖励：只发金币与经验。</p> : null}
-              {form.items.map((entry, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Select
-                    className="flex-1"
-                    value={entry.goodId}
-                    onChange={(event) => setItem(index, { goodId: event.target.value })}
-                  >
-                    <option value="">（请选择物品）</option>
-                    {itemOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.id} · {item.label}
-                      </option>
-                    ))}
-                    {entry.goodId && !itemOptions.some((item) => item.id === entry.goodId) ? (
-                      <option value={entry.goodId}>{entry.goodId}（未在物品表中）</option>
-                    ) : null}
-                  </Select>
-                  <span className="text-xs text-slate-600">×</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={9999}
-                    className="w-24"
-                    aria-label={`第 ${index + 1} 条奖励数量`}
-                    value={entry.count}
-                    onChange={(event) => setItem(index, { count: Number(event.target.value) || 0 })}
-                  />
-                  <Button
-                    variant="ghost"
-                    className="px-2 py-1 text-xs text-rose-300"
-                    onClick={() => set("items", form.items.filter((_, i) => i !== index))}
-                  >
-                    删除
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <DescriptionField value={form.description} onChange={(value) => set("description", value)} hint="客户端任务详情里显示；≤500 字" />
-
-          <ProblemList problems={problems} />
+          ))}
         </div>
-
-        <FormFooter
-          submitting={submitting}
-          canSubmit={canSubmit}
-          onCancel={onCancel}
-          onSubmit={() => void submit()}
-          label={creating ? "创建" : "保存修改"}
-        />
       </div>
-    </div>
+      <DescriptionField value={form.description} onChange={(value) => set("description", value)} hint="客户端任务详情里显示；≤500 字" />
+      <ProblemList problems={problems} />
+      <FormFooter
+        submitting={submitting}
+        canSubmit={canSubmit}
+        onCancel={onCancel}
+        onSubmit={() => void submit()}
+        label={creating ? "创建" : "保存修改"}
+      />
+    </Modal>
   );
 }
 
@@ -537,38 +530,34 @@ export function QuestsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">任务配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          主线（一次性）与日常（领奖后可重接）。每个任务一个目标：击杀怪物 / 与 NPC 对话 / 收集物品。
-          进度与发奖都在服务端结算，客户端只显示；改完随配置快照下发，NPC 头顶标记也跟着变。
-        </p>
-      </div>
+            <PageHeader
+        title="任务配置"
+        description={<>主线（一次性）与日常（领奖后可重接）。每个任务一个目标：击杀怪物 / 与 NPC 对话 / 收集物品。
+            进度与发奖都在服务端结算，客户端只显示；改完随配置快照下发，NPC 头顶标记也跟着变。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 任务名</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">类型</span>
-            <Select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(QUEST_KIND_LABELS).map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 任务名">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-36" label="类型">
+              <Select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value })}>
+                <option value="">全部</option>
+                {Object.entries(QUEST_KIND_LABELS).map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

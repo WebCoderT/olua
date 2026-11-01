@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatTime, growthScalarsApi, growthSegmentsApi, levelExpsApi, PERMISSION } from "../api";
 import type { GrowthScalar, GrowthSegment, LevelExp, PageResult } from "../api";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
-import { Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastError, toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 曲线键 → 中文名（展示用；键清单以服务端 seed 的为准，未登记的原样显示键名） */
 const CURVE_LABELS: Record<string, string> = {
@@ -101,13 +103,11 @@ export function GrowthPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">成长曲线</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          升级经验、角色裸属性曲线与经验节奏收口到后台（#256）。三类数据都只可编辑、不可新增 / 删除；
-          改曲线会连锁影响军衔等效强度（军衔按阶映射角色等级再打折）与怪物数值。
-        </p>
-      </div>
+            <PageHeader
+        title="成长曲线"
+        description={<>升级经验、角色裸属性曲线与经验节奏收口到后台（#256）。三类数据都只可编辑、不可新增 / 删除；
+            改曲线会连锁影响军衔等效强度（军衔按阶映射角色等级再打折）与怪物数值。</>}
+      />
 
       <Card
         title="升级经验表"
@@ -238,21 +238,20 @@ export function GrowthPage() {
         description="等级上限 / 属性区间倍率 / 经验节奏等数值参数；每个键的语义见说明列。"
         actions={scalarLoading ? <Spinner /> : null}
       >
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">参数键 / 说明</span>
-            <Input
-              value={scalarKeyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setScalarKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  setScalarPage(1);
-                  void loadScalars();
-                }
-              }}
-            />
-          </div>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Field width="w-56" label="参数键 / 说明">
+              <Input
+                value={scalarKeyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setScalarKeyword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    setScalarPage(1);
+                    void loadScalars();
+                  }
+                }}
+              />
+            </Field>
           <Button
             onClick={() => {
               setScalarPage(1);
@@ -435,36 +434,34 @@ function NumberEditDialog(props: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={saving ? undefined : onClose}>
-      <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-slate-50">{title}</h2>
-        {hint ? <p className="mt-1.5 text-xs leading-5 text-amber-400/90">{hint}</p> : null}
-        <div className="mt-4 flex flex-col gap-3">
-          {fields.map((field) => (
-            <label key={field.key} className="block">
-              <span className="mb-1.5 block text-xs font-medium text-slate-400">{field.label}</span>
-              <Input
-                type="number"
-                step={field.integer ? 1 : "any"}
-                min={field.min}
-                value={String(value[field.key] ?? "")}
-                onChange={(event) => setValue({ ...value, [field.key]: Number(event.target.value) })}
-              />
-            </label>
-          ))}
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="outline" disabled={saving} onClick={onClose}>
-            取消
-          </Button>
-          <Button disabled={saving} onClick={() => void submit()}>
-            {saving ? "保存中…" : "保存"}
-          </Button>
-        </div>
+        <Modal
+      open
+      title={title}
+      hint={hint}
+      size="md"
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          取消
+        </Button>
+        <Button disabled={saving} onClick={() => void submit()}>
+          {saving ? "保存中…" : "保存"}
+        </Button>
+      </>}
+    >
+      <div className="flex flex-col gap-3">
+        {fields.map((field) => (
+          <Field key={field.key} label={field.label}>
+            <Input
+              type="number"
+              step={field.integer ? 1 : "any"}
+              min={field.min}
+              value={String(value[field.key] ?? "")}
+              onChange={(event) => setValue({ ...value, [field.key]: Number(event.target.value) })}
+            />
+          </Field>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }

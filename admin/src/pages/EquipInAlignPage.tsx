@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
-import { Button, Field, Input, Spinner } from "../components/ui";
+import { PageHeader } from "../components/PageHeader";
+import { Button, Card, Field, Input, Spinner } from "../components/ui";
 import catalogJson from "../data/equip-align.catalog.json";
 import type { Atlas } from "./equipAlign/atlas";
 import { firstFrameName, measureSolid } from "./equipAlign/atlas";
@@ -524,9 +525,15 @@ export function EquipInAlignPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <PageHeader
+        title="内观对齐"
+        description="弹窗里的圆盘与角色：衣服对圆盘、武器对第一件衣服。左侧挑条目，中间看点位。改完点「保存全部」落库。"
+      />
+
       {/* 顶部：资源根 + 基准 + 保存 */}
-      <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 px-5 py-4">
-        <Field label="资源根（指向游戏站的 resources）">
+      <Card dense>
+        <div className="flex flex-wrap items-end gap-2">
+        <Field width="w-40" label="资源根（指向游戏站的 resources）">
           <Input
             className="w-64"
             value={prefs.resRoot}
@@ -534,12 +541,12 @@ export function EquipInAlignPage() {
             placeholder="/game-resources"
           />
         </Field>
-        <Field label="衣服基准">
+        <Field width="w-40" label="衣服基准">
           <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">
             弹窗圆盘（背景图）
           </div>
         </Field>
-        <Field label="武器基准">
+        <Field width="w-40" label="武器基准">
           <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">
             第一件衣服 · {BASE_CLOTH ? BASE_CLOTH.label : "（缺素材）"}
           </div>
@@ -556,7 +563,8 @@ export function EquipInAlignPage() {
             重新读取
           </Button>
         </div>
-      </section>
+        </div>
+      </Card>
 
       {savedError ? (
         <div className="flex items-start gap-3 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
@@ -584,7 +592,7 @@ export function EquipInAlignPage() {
       <div className="flex flex-col gap-3 xl:flex-row">
         {/* 左栏：条目 */}
         <aside className="w-full shrink-0 xl:w-52">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
+          <Card>
             <div className="mb-2 flex gap-1">
               {(["cloth", "weapon"] as Kind[]).map((value) => (
                 <button
@@ -628,12 +636,12 @@ export function EquipInAlignPage() {
                 );
               })}
             </div>
-          </div>
+          </Card>
         </aside>
 
         {/* 中间：弹窗视图 */}
         <div className="min-w-0 flex-1">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
+          <Card>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span className="font-medium text-slate-200">
                 {KIND_LABELS[activeItem.kind]} · {activeItem.label}
@@ -677,12 +685,12 @@ export function EquipInAlignPage() {
                 </label>
               ))}
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* 右栏：数值 */}
         <aside className="w-full shrink-0 xl:w-64">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <Card>
             <div className="mb-3 text-sm font-semibold text-slate-100">
               {KIND_LABELS[activeItem.kind]} · {activeItem.label}
             </div>
@@ -785,7 +793,7 @@ export function EquipInAlignPage() {
             </div>
 
             {notice ? <div className="mt-3 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-300">{notice}</div> : null}
-          </div>
+          </Card>
         </aside>
       </div>
     </div>

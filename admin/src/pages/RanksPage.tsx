@@ -5,9 +5,10 @@ import { GameConfigDialog } from "../components/GameConfigDialog";
 import type { GameConfigFormValue } from "../components/GameConfigDialog";
 import { GameGrowthListDialog } from "../components/GameGrowthListDialog";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Input, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 属性摘要（列表列太窄，只报几个关键数；完整数值在编辑弹窗里） */
 function attributeSummary(item: Rank): string {
@@ -98,32 +99,29 @@ export function RanksPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-50">军衔配置</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            阶数序列固定（1..100，10 大段 × 10 阶），只可编辑、不可新增 / 删除。晋升价格在「军衔成长列表」弹窗里显示和修改；
-            军衔属性按阶映射角色等级再打折（#256 的成长曲线是它的基准），改曲线会连锁影响军衔强度。
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => setGrowthOpen(true)}>
-          军衔成长列表
-        </Button>
-      </div>
+            <PageHeader
+        title="军衔配置"
+        description={<>阶数序列固定（1..100，10 大段 × 10 阶），只可编辑、不可新增 / 删除。晋升价格在「军衔成长列表」弹窗里显示和修改；
+            军衔属性按阶映射角色等级再打折（#256 的成长曲线是它的基准），改曲线会连锁影响军衔强度。</>}
+        actions={<>
+          <Button variant="outline" onClick={() => setGrowthOpen(true)}>
+            军衔成长列表
+          </Button>
+        </>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">衔名 / 大段 / 描述</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="衔名 / 大段 / 描述">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

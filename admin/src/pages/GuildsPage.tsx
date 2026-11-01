@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * 帮会管理（#388）
@@ -111,17 +112,15 @@ export function GuildsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">帮会管理</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            玩家自发组织的帮会与被解散处置。玩家侧的入帮申请是帮主自己的待办，这里不介入。
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => void load()} loading={loading}>
-          刷新
-        </Button>
-      </div>
+            <PageHeader
+        title="帮会管理"
+        description="玩家自发组织的帮会与被解散处置。玩家侧的入帮申请是帮主自己的待办，这里不介入。"
+        actions={<>
+          <Button variant="outline" onClick={() => void load()} loading={loading}>
+            刷新
+          </Button>
+        </>}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
         <Card className="overflow-hidden">

@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableCl
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * 区服管理（#314，#295 阶段二的运营页面）
@@ -90,17 +91,14 @@ export function ZonesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">区服管理</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          区是账号归属（注册时选定）；世界怪物按区独立播种。合并把源区整体搬进目标区，玩家自己换不了区。
-        </p>
-      </div>
+            <PageHeader
+        title="区服管理"
+        description="区是账号归属（注册时选定）；世界怪物按区独立播种。合并把源区整体搬进目标区，玩家自己换不了区。"
+      />
 
       <Card title="开新区" description="名字 1~20 字、全服唯一；开完注册侧下拉立即可选。">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
-            <Field label="区服名">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="区服名">
               <Input
                 value={name}
                 placeholder="如：三区"
@@ -112,7 +110,6 @@ export function ZonesPage() {
                 }}
               />
             </Field>
-          </div>
           <Button disabled={!canWrite || !nameValid || submitting} loading={submitting} onClick={() => void submitCreate()}>
             开新区
           </Button>
@@ -121,29 +118,27 @@ export function ZonesPage() {
       </Card>
 
       <Card title="合并区" description="把源区并入目标区：源区账号全部搬走、世界实例重排续序、源区标记为已合并（不可逆）。">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-48">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">被并入的区（源区）</span>
-            <Select value={fromId} disabled={!canWrite} onChange={(event) => setFromId(event.target.value)}>
-              <option value="">选择源区</option>
-              {liveZones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}（id {zone.id}，{zone.accountCount} 账号）
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-48">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">并入的目标区</span>
-            <Select value={toId} disabled={!canWrite} onChange={(event) => setToId(event.target.value)}>
-              <option value="">选择目标区</option>
-              {liveZones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}（id {zone.id}，{zone.accountCount} 账号）
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-48" label="被并入的区（源区）">
+              <Select value={fromId} disabled={!canWrite} onChange={(event) => setFromId(event.target.value)}>
+                <option value="">选择源区</option>
+                {liveZones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}（id {zone.id}，{zone.accountCount} 账号）
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-48" label="并入的目标区">
+              <Select value={toId} disabled={!canWrite} onChange={(event) => setToId(event.target.value)}>
+                <option value="">选择目标区</option>
+                {liveZones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}（id {zone.id}，{zone.accountCount} 账号）
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button variant="danger" disabled={!canWrite || !mergeValid || submitting} onClick={openMergeConfirm}>
             合并区
           </Button>

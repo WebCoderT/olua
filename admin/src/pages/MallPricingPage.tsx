@@ -3,10 +3,12 @@ import { equipmentIcon, formatTime, mallApi, PERMISSION } from "../api";
 import type { MallPriceItem, MallSettings, PageResult } from "../api";
 import { EQUIPMENT_SLOTS } from "../api/gameData";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 部位下拉的选项（id + 中文名；生成物 EQUIPMENT_SLOTS 派生） */
 const SLOT_OPTIONS = Object.entries(EQUIPMENT_SLOTS);
@@ -131,19 +133,16 @@ export function MallPricingPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">商城定价</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          商品 = 装备全量变体（清单来自生成物，不归这里管）；特殊价行动态增删，未定价的商品走统一价。
-          客户端购买以服务端复核价为准（对接等后续 issue）。
-        </p>
-      </div>
+            <PageHeader
+        title="商城定价"
+        description={<>商品 = 装备全量变体（清单来自生成物，不归这里管）；特殊价行动态增删，未定价的商品走统一价。
+            客户端购买以服务端复核价为准（对接等后续 issue）。</>}
+      />
 
       <Card title="统一价" description="全场默认售价（绑定元宝/件）；特殊价优先于它。">
         {settings ? (
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-44">
-              <Field label="统一价">
+          <div className="flex flex-wrap items-end gap-2">
+            <Field width="w-44" label="统一价">
                 <Input
                   type="number"
                   min={0}
@@ -152,7 +151,6 @@ export function MallPricingPage() {
                   onChange={(event) => setSettings({ ...settings, defaultPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
                 />
               </Field>
-            </div>
             <Button disabled={!canWrite || !settingsValid || submitting} loading={submitting} onClick={() => void saveSettings()}>
               保存统一价
             </Button>
@@ -164,37 +162,34 @@ export function MallPricingPage() {
       </Card>
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">商品 id / 显示名</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">部位</span>
-            <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
-              <option value="">全部</option>
-              {SLOT_OPTIONS.map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">定价状态</span>
-            <Select value={draft.priced} onChange={(event) => setDraft({ ...draft, priced: event.target.value })}>
-              <option value="">全部</option>
-              <option value="true">已设特殊价</option>
-              <option value="false">未定价（统一价）</option>
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="商品 id / 显示名">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-32" label="部位">
+              <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
+                <option value="">全部</option>
+                {SLOT_OPTIONS.map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-36" label="定价状态">
+              <Select value={draft.priced} onChange={(event) => setDraft({ ...draft, priced: event.target.value })}>
+                <option value="">全部</option>
+                <option value="true">已设特殊价</option>
+                <option value="false">未定价（统一价）</option>
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
@@ -267,32 +262,30 @@ export function MallPricingPage() {
       </Card>
 
       {editing ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-slate-100">设置特殊价 · {editing.id}</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              {editing.label}。特殊价只影响这一件商品（品质变体各自定价）；「回统一价」在列表行操作里。
-            </p>
-
-            <div className="mt-5">
-              <Field label="特殊售价（绑定元宝/件）" hint="0 = 免费领取也合法">
-                <Input type="number" min={0} value={price} onChange={(event) => setPrice(event.target.value)} />
-              </Field>
-            </div>
-            {!priceValid ? (
-              <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">售价需为 ≥0 的整数。</p>
-            ) : null}
-
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" disabled={submitting} onClick={closeEdit}>
-                取消
-              </Button>
-              <Button disabled={!priceValid || submitting} loading={submitting} onClick={() => void submitEdit()}>
-                保存定价
-              </Button>
-            </div>
+                <Modal
+          open
+          title={<>设置特殊价 · {editing.id}</>}
+          hint={<>{editing.label}。特殊价只影响这一件商品（品质变体各自定价）；「回统一价」在列表行操作里。</>}
+          size="md"
+          onClose={closeEdit}
+          footer={<>
+            <Button variant="outline" disabled={submitting} onClick={closeEdit}>
+              取消
+            </Button>
+            <Button disabled={!priceValid || submitting} loading={submitting} onClick={() => void submitEdit()}>
+              保存定价
+            </Button>
+          </>}
+        >
+          <div className="mt-5">
+            <Field label="特殊售价（绑定元宝/件）" hint="0 = 免费领取也合法">
+              <Input type="number" min={0} value={price} onChange={(event) => setPrice(event.target.value)} />
+            </Field>
           </div>
-        </div>
+          {!priceValid ? (
+            <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">售价需为 ≥0 的整数。</p>
+          ) : null}
+        </Modal>
       ) : null}
     </div>
   );

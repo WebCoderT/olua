@@ -6,9 +6,10 @@ import { GameFrame } from "../components/GameImage";
 import type { GameConfigFormValue } from "../components/GameConfigDialog";
 import { GameGrowthListDialog } from "../components/GameGrowthListDialog";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 渠道徽章配色：可升级的绿、赠送的蓝、暂不放出的灰 */
 const CHANNEL_TONE: Record<string, "green" | "indigo" | "slate"> = {
@@ -109,43 +110,39 @@ export function TitlesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-50">称号配置</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            等级序列固定（1..34），只可编辑、不可新增 / 删除。获得渠道默认「无法获取」，由运营逐个开放（系统赠送的发放逻辑暂未实现）；
-            升级价格在「称号成长列表」弹窗里显示和修改。
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => setGrowthOpen(true)}>
-          称号成长列表
-        </Button>
-      </div>
+            <PageHeader
+        title="称号配置"
+        description={<>等级序列固定（1..34），只可编辑、不可新增 / 删除。获得渠道默认「无法获取」，由运营逐个开放（系统赠送的发放逻辑暂未实现）；
+            升级价格在「称号成长列表」弹窗里显示和修改。</>}
+        actions={<>
+          <Button variant="outline" onClick={() => setGrowthOpen(true)}>
+            称号成长列表
+          </Button>
+        </>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">名称 / 描述</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">获得渠道</span>
-            <Select value={draft.channel} onChange={(event) => setDraft({ ...draft, channel: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(ACQUIRE_CHANNEL_LABELS).map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="名称 / 描述">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-36" label="获得渠道">
+              <Select value={draft.channel} onChange={(event) => setDraft({ ...draft, channel: event.target.value })}>
+                <option value="">全部</option>
+                {Object.entries(ACQUIRE_CHANNEL_LABELS).map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

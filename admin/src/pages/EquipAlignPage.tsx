@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
-import { Button, Field, Input, Spinner } from "../components/ui";
+import { PageHeader } from "../components/PageHeader";
+import { Button, Card, Field, Input, Spinner } from "../components/ui";
 import catalogJson from "../data/equip-align.catalog.json";
 import type { Atlas } from "./equipAlign/atlas";
 import { frameNameOf, measureSolid } from "./equipAlign/atlas";
@@ -789,9 +790,15 @@ export function EquipAlignPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <PageHeader
+        title="装备对齐"
+        description="按角色 / 衣服 / 武器调 8 个方向的落点与缩放；左侧挑条目，中间按游戏实际层序预览（参考框一律画在最上层）。改完点「保存全部」落库。"
+      />
+
       {/* 顶部：资源根 + 基准 + 导出 */}
-      <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 px-5 py-4">
-        <Field label="资源根（指向游戏站的 resources）">
+      <Card dense>
+        <div className="flex flex-wrap items-end gap-2">
+        <Field width="w-40" label="资源根（指向游戏站的 resources）">
           <Input
             className="w-72"
             value={prefs.resRoot}
@@ -799,7 +806,7 @@ export function EquipAlignPage() {
             placeholder="/game-resources"
           />
         </Field>
-        <Field label="比对基准（裸模）">
+        <Field width="w-40" label="比对基准（裸模）">
           <select
             className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
             value={prefs.baseRoleId}
@@ -812,7 +819,7 @@ export function EquipAlignPage() {
             ))}
           </select>
         </Field>
-        <Field label="每格视野（游戏单位）">
+        <Field width="w-40" label="每格视野（游戏单位）">
           <Input
             className="w-28"
             type="number"
@@ -853,7 +860,8 @@ export function EquipAlignPage() {
             />
           </label>
         </div>
-      </section>
+        </div>
+      </Card>
 
       {savedError ? (
         <div className="flex items-start gap-3 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
@@ -905,7 +913,7 @@ export function EquipAlignPage() {
       <div className="flex flex-col gap-3 xl:flex-row">
         {/* 左栏：条目 */}
         <aside className="w-full shrink-0 xl:w-52">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
+          <Card>
             <div className="mb-2 flex gap-1">
               {(["role", "cloth", "weapon"] as Kind[]).map((value) => (
                 <button
@@ -950,12 +958,12 @@ export function EquipAlignPage() {
                 );
               })}
             </div>
-          </div>
+          </Card>
         </aside>
 
         {/* 中间：8 宫格 */}
         <div className="min-w-0 flex-1">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
+          <Card>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span className="font-medium text-slate-200">
                 {KIND_LABELS[activeItem.kind]} · {activeItem.label}
@@ -1001,12 +1009,12 @@ export function EquipAlignPage() {
                 </label>
               ))}
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* 右栏：数值 */}
         <aside className="w-full shrink-0 xl:w-64">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <Card>
             <div className="mb-3 text-sm font-semibold text-slate-100">当前方向：{DIRECTION_LABELS[DIRECTIONS[direction]]}（{DIRECTIONS[direction]}）</div>
             <div className="grid grid-cols-2 gap-2">
               <Field label="X">
@@ -1103,7 +1111,7 @@ export function EquipAlignPage() {
             </div>
 
             {notice ? <div className="mt-3 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-300">{notice}</div> : null}
-          </div>
+          </Card>
         </aside>
       </div>
     </div>

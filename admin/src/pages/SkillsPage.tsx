@@ -11,11 +11,13 @@ import {
 } from "../api";
 import type { CreateSkill, DamageCoefficient, PageResult, Skill, Status, UpdateSkill } from "../api";
 import { GameIcon } from "../components/GameImage";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /**
  * 伤害系数的收益基数（**与服务端 `DAMAGE_BASE_TYPES` 同集合**：
@@ -188,163 +190,152 @@ function SkillEditDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">
-          编辑技能 · {initial.id}
-          <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span>
-        </h3>
-        <p className="mt-1 text-xs text-slate-500">
-          归属与 id 是行身份，不可改。保存后随配置快照下发客户端，实时进程最多 1 秒后用新值
-          （角色技能由本机施法读，怪物技能由服务端 AI 释放读）。
-        </p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="技能名">
-              <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
-            </Field>
-            <Field label="分类" hint="决定释放后做什么">
-              <Select value={form.category} onChange={(event) => set("category", event.target.value)}>
-                {Object.entries(SKILL_CATEGORY_LABELS).map(([value, text]) => (
-                  <option key={value} value={value}>
-                    {text}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="目标类型">
-              <Select value={form.targetType} onChange={(event) => set("targetType", event.target.value)}>
-                {Object.entries(SKILL_TARGET_TYPE_LABELS).map(([value, text]) => (
-                  <option key={value} value={value}>
-                    {text}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+        <Modal
+      open
+      title={<>编辑技能 · {initial.id}
+          <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span></>}
+      hint={<>归属与 id 是行身份，不可改。保存后随配置快照下发客户端，实时进程最多 1 秒后用新值
+          （角色技能由本机施法读，怪物技能由服务端 AI 释放读）。</>}
+      size="lg"
+      onClose={onCancel}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="技能名">
+          <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
+        </Field>
+        <Field label="分类" hint="决定释放后做什么">
+          <Select value={form.category} onChange={(event) => set("category", event.target.value)}>
+            {Object.entries(SKILL_CATEGORY_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="目标类型">
+          <Select value={form.targetType} onChange={(event) => set("targetType", event.target.value)}>
+            {Object.entries(SKILL_TARGET_TYPE_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="图标路径" hint="resources 相对路径，不含扩展名；空 = 不显示">
+          <Input value={form.icon} onChange={(event) => set("icon", event.target.value)} />
+        </Field>
+        <Field label="施法动作" hint="客户端动画动作键（如 attack_near）；空 = 不播动作">
+          <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
+        </Field>
+        <Field label="技能特效" hint="图集路径；空 = 无特效">
+          <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
+        </Field>
+        <Field label="挂载状态" hint="释放成功后给自身挂的状态；状态型技能必填">
+          <Select value={form.statusId} onChange={(event) => set("statusId", event.target.value)}>
+            <option value="">（不挂状态）</option>
+            {statusOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.id} · {item.label}
+              </option>
+            ))}
+            {/* 配置里引用了不在列表里的状态（跨归属 / 已被清理）：保留原值，避免保存时被悄悄清空 */}
+            {form.statusId && !statusOptions.some((item) => item.id === form.statusId) ? (
+              <option value={form.statusId}>{form.statusId}（未在状态表中）</option>
+            ) : null}
+          </Select>
+        </Field>
+      </div>
+      <div>
+        <span className="mb-2 block text-xs font-medium text-slate-400">释放限制（动作锁同时锁移动与再次出手）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+          <Field label="冷却（秒）" hint="0 = 不限制">
+            <Input type="number" min={0} step={0.1} value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
+          </Field>
+          <Field label="耗蓝" hint="0 = 不消耗">
+            <Input type="number" min={0} value={form.mpCost} onChange={(event) => set("mpCost", event.target.value)} />
+          </Field>
+          <Field label="施法距离" hint="0 = 不限">
+            <Input type="number" min={0} value={form.distance} onChange={(event) => set("distance", event.target.value)} />
+          </Field>
+          <Field label="等级需求">
+            <Input type="number" min={1} value={form.levelReq} onChange={(event) => set("levelReq", event.target.value)} />
+          </Field>
+          <Field label="动作锁（毫秒）" hint="0 = 跟动画时长走">
+            <Input type="number" min={0} value={form.castLockMs} onChange={(event) => set("castLockMs", event.target.value)} />
+          </Field>
+          <div className="flex flex-col justify-center gap-2">
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input type="checkbox" checked={form.requireTarget} onChange={(event) => set("requireTarget", event.target.checked)} />
+              要求有合法目标
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input type="checkbox" checked={form.effectOnSelf} onChange={(event) => set("effectOnSelf", event.target.checked)} />
+              特效播在自己身上
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input type="checkbox" checked={form.canAuto} onChange={(event) => set("canAuto", event.target.checked)} />
+              可被自动战斗释放
+            </label>
           </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="图标路径" hint="resources 相对路径，不含扩展名；空 = 不显示">
-              <Input value={form.icon} onChange={(event) => set("icon", event.target.value)} />
-            </Field>
-            <Field label="施法动作" hint="客户端动画动作键（如 attack_near）；空 = 不播动作">
-              <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
-            </Field>
-            <Field label="技能特效" hint="图集路径；空 = 无特效">
-              <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
-            </Field>
-            <Field label="挂载状态" hint="释放成功后给自身挂的状态；状态型技能必填">
-              <Select value={form.statusId} onChange={(event) => set("statusId", event.target.value)}>
-                <option value="">（不挂状态）</option>
-                {statusOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.id} · {item.label}
-                  </option>
-                ))}
-                {/* 配置里引用了不在列表里的状态（跨归属 / 已被清理）：保留原值，避免保存时被悄悄清空 */}
-                {form.statusId && !statusOptions.some((item) => item.id === form.statusId) ? (
-                  <option value={form.statusId}>{form.statusId}（未在状态表中）</option>
-                ) : null}
-              </Select>
-            </Field>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">释放限制（动作锁同时锁移动与再次出手）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
-              <Field label="冷却（秒）" hint="0 = 不限制">
-                <Input type="number" min={0} step={0.1} value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
-              </Field>
-              <Field label="耗蓝" hint="0 = 不消耗">
-                <Input type="number" min={0} value={form.mpCost} onChange={(event) => set("mpCost", event.target.value)} />
-              </Field>
-              <Field label="施法距离" hint="0 = 不限">
-                <Input type="number" min={0} value={form.distance} onChange={(event) => set("distance", event.target.value)} />
-              </Field>
-              <Field label="等级需求">
-                <Input type="number" min={1} value={form.levelReq} onChange={(event) => set("levelReq", event.target.value)} />
-              </Field>
-              <Field label="动作锁（毫秒）" hint="0 = 跟动画时长走">
-                <Input type="number" min={0} value={form.castLockMs} onChange={(event) => set("castLockMs", event.target.value)} />
-              </Field>
-              <div className="flex flex-col justify-center gap-2">
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input type="checkbox" checked={form.requireTarget} onChange={(event) => set("requireTarget", event.target.checked)} />
-                  要求有合法目标
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input type="checkbox" checked={form.effectOnSelf} onChange={(event) => set("effectOnSelf", event.target.checked)} />
-                  特效播在自己身上
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input type="checkbox" checked={form.canAuto} onChange={(event) => set("canAuto", event.target.checked)} />
-                  可被自动战斗释放
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">伤害系数（下标 = 技能等级 - 1，整份替换）</span>
-              <Button
-                variant="outline"
-                className="px-2.5 py-1 text-xs"
-                disabled={form.coefficients.length >= COEFFICIENT_MAX_LEVELS}
-                onClick={() => set("coefficients", [...form.coefficients, { baseType: "physicalAttack", baseTypeRate: 1 }])}
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">伤害系数（下标 = 技能等级 - 1，整份替换）</span>
+          <Button
+            variant="outline"
+            className="px-2.5 py-1 text-xs"
+            disabled={form.coefficients.length >= COEFFICIENT_MAX_LEVELS}
+            onClick={() => set("coefficients", [...form.coefficients, { baseType: "physicalAttack", baseTypeRate: 1 }])}
+          >
+            加一级
+          </Button>
+        </div>
+        <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+          {form.coefficients.length === 0 ? (
+            <p className="text-xs text-slate-500">没有配置倍率：状态型技能可以为空，主动 / 回复类技能至少一条。</p>
+          ) : null}
+          {form.coefficients.map((entry, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-xs text-slate-500">Lv.{index + 1}</span>
+              <Select
+                className="w-32"
+                value={entry.baseType}
+                onChange={(event) => setCoefficient(index, { baseType: event.target.value })}
               >
-                加一级
+                {DAMAGE_BASE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <span className="text-xs text-slate-600">×</span>
+              <Input
+                type="number"
+                min={0}
+                step={0.05}
+                className="w-24"
+                aria-label={`第 ${index + 1} 级倍率`}
+                value={entry.baseTypeRate}
+                onChange={(event) => setCoefficient(index, { baseTypeRate: Number(event.target.value) || 0 })}
+              />
+              <Button
+                variant="ghost"
+                className="px-2 py-1 text-xs text-rose-300"
+                onClick={() => set("coefficients", form.coefficients.filter((_, i) => i !== index))}
+              >
+                删除
               </Button>
             </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-              {form.coefficients.length === 0 ? (
-                <p className="text-xs text-slate-500">没有配置倍率：状态型技能可以为空，主动 / 回复类技能至少一条。</p>
-              ) : null}
-              {form.coefficients.map((entry, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <span className="w-12 shrink-0 text-xs text-slate-500">Lv.{index + 1}</span>
-                  <Select
-                    className="w-32"
-                    value={entry.baseType}
-                    onChange={(event) => setCoefficient(index, { baseType: event.target.value })}
-                  >
-                    {DAMAGE_BASE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                  <span className="text-xs text-slate-600">×</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.05}
-                    className="w-24"
-                    aria-label={`第 ${index + 1} 级倍率`}
-                    value={entry.baseTypeRate}
-                    onChange={(event) => setCoefficient(index, { baseTypeRate: Number(event.target.value) || 0 })}
-                  />
-                  <Button
-                    variant="ghost"
-                    className="px-2 py-1 text-xs text-rose-300"
-                    onClick={() => set("coefficients", form.coefficients.filter((_, i) => i !== index))}
-                  >
-                    删除
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
-
-          <ProblemList problems={problems} />
+          ))}
         </div>
-
-        <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
       </div>
-    </div>
+      <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
+      <ProblemList problems={problems} />
+      <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
+    </Modal>
   );
 }
 
@@ -432,80 +423,77 @@ function SkillCreateDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">新增怪物技能</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          只能建怪物技能（9000 段）：角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在客户端配置里。
-          建完要去「怪物配置」把它挂到具体的怪，服务端 AI 才会释放。
-        </p>
-
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="id" hint="9000~9999">
-            <Input value={form.id} onChange={(event) => set("id", event.target.value)} />
-          </Field>
-          <Field label="技能名">
-            <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
-          </Field>
-          <Field label="分类" hint="释放后做什么">
-            <Select value={form.category} onChange={(event) => set("category", event.target.value)}>
-              {Object.entries(SKILL_CATEGORY_LABELS).map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="目标类型">
-            <Select value={form.targetType} onChange={(event) => set("targetType", event.target.value)}>
-              {Object.entries(SKILL_TARGET_TYPE_LABELS).map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="施法动作" hint="如 attack_skill_1">
-            <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
-          </Field>
-          <Field label="技能特效" hint="图集路径；空 = 无特效">
-            <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
-          </Field>
-          <Field label="冷却（秒）">
-            <Input value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
-          </Field>
-          <Field label="施法距离" hint="状态型忽略距离">
-            <Input value={form.distance} onChange={(event) => set("distance", event.target.value)} />
-          </Field>
-          <Field label="动作锁（毫秒）" hint="0 = 跟动画">
-            <Input value={form.castLockMs} onChange={(event) => set("castLockMs", event.target.value)} />
-          </Field>
-          <Field label="挂载状态" hint="状态型必填">
-            <Select value={form.statusId} onChange={(event) => set("statusId", event.target.value)}>
-              <option value="">（不挂状态）</option>
-              {statusOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.id} · {item.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="等级 1 倍率" hint="仅伤害型要填；状态型留空">
-            <Input value={form.rate} onChange={(event) => set("rate", event.target.value)} disabled={stateful} />
-          </Field>
-        </div>
-
-        <ProblemList problems={problems} tone="amber" />
-
-        <FormFooter
-          submitting={submitting}
-          canSubmit={problems.length === 0 && !submitting}
-          onCancel={onCancel}
-          onSubmit={() => void submit()}
-          label="创建"
-        />
+        <Modal
+      open
+      title="新增怪物技能"
+      hint={<>只能建怪物技能（9000 段）：角色技能的 id 被技能栏 / 快捷键 / 角色存档引用，清单固定在客户端配置里。
+          建完要去「怪物配置」把它挂到具体的怪，服务端 AI 才会释放。</>}
+      size="md"
+      onClose={onCancel}
+    >
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="id" hint="9000~9999">
+          <Input value={form.id} onChange={(event) => set("id", event.target.value)} />
+        </Field>
+        <Field label="技能名">
+          <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
+        </Field>
+        <Field label="分类" hint="释放后做什么">
+          <Select value={form.category} onChange={(event) => set("category", event.target.value)}>
+            {Object.entries(SKILL_CATEGORY_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="目标类型">
+          <Select value={form.targetType} onChange={(event) => set("targetType", event.target.value)}>
+            {Object.entries(SKILL_TARGET_TYPE_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="施法动作" hint="如 attack_skill_1">
+          <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
+        </Field>
+        <Field label="技能特效" hint="图集路径；空 = 无特效">
+          <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
+        </Field>
+        <Field label="冷却（秒）">
+          <Input value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
+        </Field>
+        <Field label="施法距离" hint="状态型忽略距离">
+          <Input value={form.distance} onChange={(event) => set("distance", event.target.value)} />
+        </Field>
+        <Field label="动作锁（毫秒）" hint="0 = 跟动画">
+          <Input value={form.castLockMs} onChange={(event) => set("castLockMs", event.target.value)} />
+        </Field>
+        <Field label="挂载状态" hint="状态型必填">
+          <Select value={form.statusId} onChange={(event) => set("statusId", event.target.value)}>
+            <option value="">（不挂状态）</option>
+            {statusOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.id} · {item.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="等级 1 倍率" hint="仅伤害型要填；状态型留空">
+          <Input value={form.rate} onChange={(event) => set("rate", event.target.value)} disabled={stateful} />
+        </Field>
       </div>
-    </div>
+      <ProblemList problems={problems} tone="amber" />
+      <FormFooter
+        submitting={submitting}
+        canSubmit={problems.length === 0 && !submitting}
+        onCancel={onCancel}
+        onSubmit={() => void submit()}
+        label="创建"
+      />
+    </Modal>
   );
 }
 
@@ -635,39 +623,35 @@ export function SkillsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">技能配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          角色与怪物同一张表（归属区分）。角色技能只可编辑；怪物技能（9000 段）可新增 / 删除，
-          新建后要在「怪物配置」里挂到具体的怪才会被释放。保存后随配置快照下发客户端 ——
-          动作锁同时锁移动与再次出手，状态型技能必须指定要挂载的状态。
-        </p>
-      </div>
+            <PageHeader
+        title="技能配置"
+        description={<>角色与怪物同一张表（归属区分）。角色技能只可编辑；怪物技能（9000 段）可新增 / 删除，
+            新建后要在「怪物配置」里挂到具体的怪才会被释放。保存后随配置快照下发客户端 ——
+            动作锁同时锁移动与再次出手，状态型技能必须指定要挂载的状态。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 技能名</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">归属</span>
-            <Select value={draft.owner} onChange={(event) => setDraft({ ...draft, owner: event.target.value })}>
-              <option value="">全部</option>
-              {SKILL_OWNER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 技能名">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-36" label="归属">
+              <Select value={draft.owner} onChange={(event) => setDraft({ ...draft, owner: event.target.value })}>
+                <option value="">全部</option>
+                {SKILL_OWNER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

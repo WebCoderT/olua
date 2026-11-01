@@ -6,9 +6,10 @@ import type { AnnouncementFormValue } from "../components/AnnouncementDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { SortableTh, useSort } from "../components/sortable";
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 10;
 
@@ -185,59 +186,53 @@ export function AnnouncementsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-50">公告</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            面向全服的运营消息。玩家侧由 <code className="text-slate-400">GET /announcements/active</code> 拉取「当前生效中」的那一批（无需登录，登录页也能显示）；
-            生效 = 已启用 且 在时间窗内，两个条件由服务端判定。
-          </p>
-        </div>
-        <Button disabled={!canWrite} onClick={openCreate}>
-          发布公告
-        </Button>
-      </div>
+            <PageHeader
+        title="公告"
+        description={<>面向全服的运营消息。玩家侧由 <code className="text-slate-400">GET /announcements/active</code> 拉取「当前生效中」的那一批（无需登录，登录页也能显示）；
+            生效 = 已启用 且 在时间窗内，两个条件由服务端判定。</>}
+        actions={<>
+          <Button disabled={!canWrite} onClick={openCreate}>
+            发布公告
+          </Button>
+        </>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">标题 / 正文</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">级别</span>
-            <Select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}>
-              <option value="">全部</option>
-              {Object.entries(ANNOUNCEMENT_LEVEL_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">生效状态</span>
-            <Select value={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.value })}>
-              <option value="">全部</option>
-              <option value="true">生效中</option>
-              <option value="false">不在生效窗口</option>
-            </Select>
-          </div>
-          <div className="w-32">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">启用开关</span>
-            <Select value={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.value })}>
-              <option value="">全部</option>
-              <option value="true">已启用</option>
-              <option value="false">已停用</option>
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="标题 / 正文">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-32" label="级别">
+              <Select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}>
+                <option value="">全部</option>
+                {Object.entries(ANNOUNCEMENT_LEVEL_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          <Field width="w-32" label="生效状态">
+              <Select value={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.value })}>
+                <option value="">全部</option>
+                <option value="true">生效中</option>
+                <option value="false">不在生效窗口</option>
+              </Select>
+            </Field>
+          <Field width="w-32" label="启用开关">
+              <Select value={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.value })}>
+                <option value="">全部</option>
+                <option value="true">已启用</option>
+                <option value="false">已停用</option>
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

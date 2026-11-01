@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatTime, PERMISSION, SKILL_OWNER_LABELS, SKILL_OWNER_OPTIONS, STATUS_SOURCE_LABELS, statusesApi } from "../api";
 import type { PageResult, Status, StatusCombat, UpdateStatus } from "../api";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { GameIcon } from "../components/GameImage";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 弹窗表单值：三个修正维度以字符串承载，空串 = 该维度不参与（不是 0） */
 interface StatusForm {
@@ -121,96 +123,85 @@ function StatusEditDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">
-          编辑状态 · {initial.id}
-          <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span>
-        </h3>
-        <p className="mt-1 text-xs text-slate-500">
-          归属与 id 是行身份，不可改。状态 id 被技能的「挂载状态」引用，改名不影响引用，改 id 不行（没有改 id 的入口）。
-        </p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="状态名">
-              <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
-            </Field>
-            <Field label="来源">
-              <Select value={form.source} onChange={(event) => set("source", event.target.value)}>
-                {Object.entries(STATUS_SOURCE_LABELS).map(([value, text]) => (
-                  <option key={value} value={value}>
-                    {text}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="持续（秒）" hint="重复获得从获得时刻重新计时，不叠层">
-              <Input type="number" min={0} max={86400} value={form.duration} onChange={(event) => set("duration", event.target.value)} />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="图标路径" hint="resources 相对路径，不含扩展名">
-              <Input value={form.icon} onChange={(event) => set("icon", event.target.value)} />
-            </Field>
-            <Field label="身上特效" hint="图集路径；空 = 只在图标栏显示">
-              <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
-            </Field>
-          </div>
-
-          <label className="flex items-center gap-2 text-xs text-slate-300">
-            <input type="checkbox" checked={form.effectHoldLast} onChange={(event) => set("effectHoldLast", event.target.checked)} />
-            身上特效只播一遍并停在尾帧（脉冲类特效勾上）
-          </label>
-
-          <div>
-            <span className="mb-2 block text-xs font-medium text-slate-400">战斗数值修正（整份替换；留空 = 该维度不参与，全空 = 纯表现状态）</span>
-            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
-              <Field label="格挡概率" hint="0~1，如 0.2">
-                <Input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  placeholder="不参与"
-                  value={form.blockChance}
-                  onChange={(event) => set("blockChance", event.target.value)}
-                />
-              </Field>
-              <Field label="格挡系数" hint="0~1，0.5 = 本次伤害减半">
-                <Input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  placeholder="不参与"
-                  value={form.blockFactor}
-                  onChange={(event) => set("blockFactor", event.target.value)}
-                />
-              </Field>
-              <Field label="防御倍率" hint="≥1，1.5 = 防御 ×1.5">
-                <Input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.05}
-                  placeholder="不参与"
-                  value={form.defenseMultiplier}
-                  onChange={(event) => set("defenseMultiplier", event.target.value)}
-                />
-              </Field>
-            </div>
-          </div>
-
-          <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
-
-          <ProblemList problems={problems} />
-        </div>
-
-        <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
+        <Modal
+      open
+      title={<>编辑状态 · {initial.id}
+          <span className="ml-2 text-xs font-normal text-slate-500">{SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属</span></>}
+      hint="归属与 id 是行身份，不可改。状态 id 被技能的「挂载状态」引用，改名不影响引用，改 id 不行（没有改 id 的入口）。"
+      size="md"
+      onClose={onCancel}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="状态名">
+          <Input value={form.label} onChange={(event) => set("label", event.target.value)} />
+        </Field>
+        <Field label="来源">
+          <Select value={form.source} onChange={(event) => set("source", event.target.value)}>
+            {Object.entries(STATUS_SOURCE_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="持续（秒）" hint="重复获得从获得时刻重新计时，不叠层">
+          <Input type="number" min={0} max={86400} value={form.duration} onChange={(event) => set("duration", event.target.value)} />
+        </Field>
       </div>
-    </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="图标路径" hint="resources 相对路径，不含扩展名">
+          <Input value={form.icon} onChange={(event) => set("icon", event.target.value)} />
+        </Field>
+        <Field label="身上特效" hint="图集路径；空 = 只在图标栏显示">
+          <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
+        </Field>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-slate-300">
+        <input type="checkbox" checked={form.effectHoldLast} onChange={(event) => set("effectHoldLast", event.target.checked)} />
+        身上特效只播一遍并停在尾帧（脉冲类特效勾上）
+      </label>
+      <div>
+        <span className="mb-2 block text-xs font-medium text-slate-400">战斗数值修正（整份替换；留空 = 该维度不参与，全空 = 纯表现状态）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+          <Field label="格挡概率" hint="0~1，如 0.2">
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              placeholder="不参与"
+              value={form.blockChance}
+              onChange={(event) => set("blockChance", event.target.value)}
+            />
+          </Field>
+          <Field label="格挡系数" hint="0~1，0.5 = 本次伤害减半">
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              placeholder="不参与"
+              value={form.blockFactor}
+              onChange={(event) => set("blockFactor", event.target.value)}
+            />
+          </Field>
+          <Field label="防御倍率" hint="≥1，1.5 = 防御 ×1.5">
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={0.05}
+              placeholder="不参与"
+              value={form.defenseMultiplier}
+              onChange={(event) => set("defenseMultiplier", event.target.value)}
+            />
+          </Field>
+        </div>
+      </div>
+      <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
+      <ProblemList problems={problems} />
+      <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
+    </Modal>
   );
 }
 
@@ -289,38 +280,34 @@ export function StatusesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">状态配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          角色与怪物同一张表（归属区分），只可编辑、不可新增 / 删除；状态 id 被技能的「挂载状态」引用。
-          战斗修正只声明「这个状态在数值上意味着什么」，公式在客户端 BattleMath；留空 = 该维度不参与。
-        </p>
-      </div>
+            <PageHeader
+        title="状态配置"
+        description={<>角色与怪物同一张表（归属区分），只可编辑、不可新增 / 删除；状态 id 被技能的「挂载状态」引用。
+            战斗修正只声明「这个状态在数值上意味着什么」，公式在客户端 BattleMath；留空 = 该维度不参与。</>}
+      />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">id / 状态名</span>
-            <Input
-              value={draft.keyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
-          <div className="w-36">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">归属</span>
-            <Select value={draft.owner} onChange={(event) => setDraft({ ...draft, owner: event.target.value })}>
-              <option value="">全部</option>
-              {SKILL_OWNER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="id / 状态名">
+              <Input
+                value={draft.keyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraft({ ...draft, keyword: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
+          <Field width="w-36" label="归属">
+              <Select value={draft.owner} onChange={(event) => setDraft({ ...draft, owner: event.target.value })}>
+                <option value="">全部</option>
+                {SKILL_OWNER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置

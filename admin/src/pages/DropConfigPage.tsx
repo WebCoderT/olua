@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { dropApi, formatTime, itemText, PERMISSION } from "../api";
 import type { DropEntry, DropTable, MonsterDrop, PageResult } from "../api";
+import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { PageHeader } from "../components/PageHeader";
 
 /** 来源中文名（语义标注：引用具名表 / 内联条目 / 未配置走兜底） */
 const SOURCE_LABELS: Record<string, string> = { table: "具名表", entries: "内联", none: "兜底" };
@@ -85,7 +87,7 @@ function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onChange: (
       </div>
       <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
         {drafts.map((draft, index) => (
-          <div key={index} className="flex flex-wrap items-center gap-2">
+          <div key={index} className="flex flex-wrap items-end gap-2">
             <div className="min-w-[180px] flex-1">
               <Input
                 value={draft.goodId}
@@ -170,36 +172,32 @@ function DropTableDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">{creating ? "新建具名掉落表" : `编辑具名掉落表 · ${initial?.id}`}</h3>
-        <p className="mt-1 text-xs text-slate-500">表可被多只怪复用；被引用中的表不能删。改表即时生效（服务端掉落结算直读表）。</p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="flex items-end gap-4">
-            <Field label="表 id">
-              <Input value={id} disabled={!creating} className="font-mono text-xs" placeholder="如 event_gold" onChange={(event) => setId(event.target.value)} />
-            </Field>
-            <PicksEditor draft={picks} onChange={setPicks} />
-          </div>
-
-          <EntriesEditor drafts={drafts} onChange={setDrafts} />
-
-          {!idValid ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">表 id 只能是小写字母开头的字母 / 数字 / 下划线（≤50 字符）。</p> : null}
-          {picksValue === undefined ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p> : null}
-          {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
-          </Button>
-          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-            保存
-          </Button>
-        </div>
+        <Modal
+      open
+      title={<>{creating ? "新建具名掉落表" : `编辑具名掉落表 · ${initial?.id}`}</>}
+      hint="表可被多只怪复用；被引用中的表不能删。改表即时生效（服务端掉落结算直读表）。"
+      size="lg"
+      onClose={onCancel}
+      footer={<>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
+          取消
+        </Button>
+        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+          保存
+        </Button>
+      </>}
+    >
+      <div className="flex items-end gap-4">
+        <Field label="表 id">
+          <Input value={id} disabled={!creating} className="font-mono text-xs" placeholder="如 event_gold" onChange={(event) => setId(event.target.value)} />
+        </Field>
+        <PicksEditor draft={picks} onChange={setPicks} />
       </div>
-    </div>
+      <EntriesEditor drafts={drafts} onChange={setDrafts} />
+      {!idValid ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">表 id 只能是小写字母开头的字母 / 数字 / 下划线（≤50 字符）。</p> : null}
+      {picksValue === undefined ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p> : null}
+      {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
+    </Modal>
   );
 }
 
@@ -269,67 +267,61 @@ function MonsterDropDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100">编辑怪物掉落 · key {initial.monsterKey}</h3>
-        <p className="mt-1 text-xs text-slate-500">整份替换：引用具名表 / 内联条目池 / 清空走兜底，三选一。改完即时生效。</p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="flex gap-2">
-            {(
-              [
-                ["table", "引用具名表"],
-                ["inline", "内联条目池"],
-                ["none", "清空（走兜底）"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button key={value} variant={mode === value ? "primary" : "outline"} className="px-3 py-1.5 text-xs" onClick={() => setMode(value)}>
-                {label}
-              </Button>
-            ))}
-          </div>
-
-          {mode === "table" ? (
-            <div className="flex items-end gap-4">
-              <Field label="具名掉落表">
-                <Select value={tableId} onChange={(event) => setTableId(event.target.value)}>
-                  <option value="">选一张表…</option>
-                  {tableIds.map((id) => (
-                    <option key={id} value={id}>
-                      {id}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <PicksEditor draft={picks} onChange={setPicks} />
-            </div>
-          ) : null}
-
-          {mode === "inline" ? (
-            <div className="flex flex-col gap-4">
-              <PicksEditor draft={picks} onChange={setPicks} />
-              <EntriesEditor drafts={drafts} onChange={setDrafts} />
-            </div>
-          ) : null}
-
-          {mode === "none" ? <p className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">清空后这只怪没有独立掉落配置，将走兜底表（default）。</p> : null}
-
-          {picksValue === undefined && (mode === "inline" || (mode === "table" && picks.min.trim() !== "")) ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p>
-          ) : null}
-          {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" disabled={submitting} onClick={onCancel}>
-            取消
+        <Modal
+      open
+      title={<>编辑怪物掉落 · key {initial.monsterKey}</>}
+      hint="整份替换：引用具名表 / 内联条目池 / 清空走兜底，三选一。改完即时生效。"
+      size="lg"
+      onClose={onCancel}
+      footer={<>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
+          取消
+        </Button>
+        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+          保存
+        </Button>
+      </>}
+    >
+      <div className="flex gap-2">
+        {(
+          [
+            ["table", "引用具名表"],
+            ["inline", "内联条目池"],
+            ["none", "清空（走兜底）"],
+          ] as const
+        ).map(([value, label]) => (
+          <Button key={value} variant={mode === value ? "primary" : "outline"} className="px-3 py-1.5 text-xs" onClick={() => setMode(value)}>
+            {label}
           </Button>
-          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-            保存
-          </Button>
-        </div>
+        ))}
       </div>
-    </div>
+      {mode === "table" ? (
+        <div className="flex items-end gap-4">
+          <Field label="具名掉落表">
+            <Select value={tableId} onChange={(event) => setTableId(event.target.value)}>
+              <option value="">选一张表…</option>
+              {tableIds.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <PicksEditor draft={picks} onChange={setPicks} />
+        </div>
+      ) : null}
+      {mode === "inline" ? (
+        <div className="flex flex-col gap-4">
+          <PicksEditor draft={picks} onChange={setPicks} />
+          <EntriesEditor drafts={drafts} onChange={setDrafts} />
+        </div>
+      ) : null}
+      {mode === "none" ? <p className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">清空后这只怪没有独立掉落配置，将走兜底表（default）。</p> : null}
+      {picksValue === undefined && (mode === "inline" || (mode === "table" && picks.min.trim() !== "")) ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p>
+      ) : null}
+      {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
+    </Modal>
   );
 }
 
@@ -452,13 +444,11 @@ export function DropConfigPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-50">掉落配置</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          具名掉落表可被多怪复用（可新建 / 删除，被引用中的拒绝删）；每怪掉落与怪物一一对应，只可整份替换
-          （引用具名表 / 内联条目池 / 清空走兜底）。改完即时生效（服务端掉落结算直读表，无需客户端更新）。
-        </p>
-      </div>
+            <PageHeader
+        title="掉落配置"
+        description={<>具名掉落表可被多怪复用（可新建 / 删除，被引用中的拒绝删）；每怪掉落与怪物一一对应，只可整份替换
+            （引用具名表 / 内联条目池 / 清空走兜底）。改完即时生效（服务端掉落结算直读表，无需客户端更新）。</>}
+      />
 
       <Card
         title="具名掉落表"
@@ -526,18 +516,17 @@ export function DropConfigPage() {
       </Card>
 
       <Card title="每怪掉落">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <span className="mb-1.5 block text-xs font-medium text-slate-400">怪物 key</span>
-            <Input
-              value={draftKeyword}
-              placeholder="支持模糊匹配"
-              onChange={(event) => setDraftKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field width="w-56" label="怪物 key">
+              <Input
+                value={draftKeyword}
+                placeholder="支持模糊匹配"
+                onChange={(event) => setDraftKeyword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitSearch();
+                }}
+              />
+            </Field>
           <Button onClick={submitSearch}>查询</Button>
           <Button variant="outline" onClick={resetSearch}>
             重置
