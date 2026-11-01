@@ -135,7 +135,7 @@ make verify              # pre-release full gate: typechecks + builds + all test
 Manual equivalent (no `make` needed):
 
 ```bash
-# Client: 58 unit-test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
+# Client: 59 unit-test suites (run inside client/; the scripts locate Cocos' bundled tsc themselves)
 cd client && for t in tools/test-*.cjs; do node "$t" || exit 1; done
 
 # Server: compile + twenty-five e2e suites (248 / 150 / 283 / 120 / 28 / 72 / 131 / 24 / 14 / 639 / 87 / 32 + 60 + 47 + 35 + 48 + 24 + 38 + 50 + 87 + 56 + 39 + 51 + 67 + 73) + generated-artifact consistency

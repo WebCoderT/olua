@@ -11,7 +11,7 @@
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
-#    make client-test      客户端 58 套单测（需要本机 Cocos 工程）
+#    make client-test      客户端 59 套单测（需要本机 Cocos 工程）
 #    make test-changed     日常回归硬门槛：改动哪跑哪（按改动范围挑最小的验证集）
 #    make verify           一条命令跑完全部门禁（含三端构建与二十四套 e2e；发布前全量确认用）
 #    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
@@ -55,7 +55,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-verify db-backup db-restore gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-verify db-backup db-restore gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
@@ -279,6 +279,9 @@ server-e2e-sell: ## 服务端出售专项 e2e（24 条：快照价结算 / 同 i
 	@echo "==> 服务端出售 e2e（24 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:sell
 
+server-e2e-bag: ## 服务端背包与穿戴专项 e2e（38 条：五个背包操作 / 两条守恒 / 等级门槛 / 回填特例）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:bag
+
 server-e2e-quest: ## 服务端任务专项 e2e（48 条：接取门控 / talk·kill·collect 三目标推进 / daily 删行重接 / 配置守卫）
 	@cd server && $(NPM) run test:e2e:quest
 
@@ -416,7 +419,7 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 test-changed: ## 日常回归硬门槛：改动哪跑哪（BASE=main 可指定基准；全量门禁仍是 verify）
 	@$(NODE) tools/test-changed.cjs $(if $(BASE),--base=$(BASE),)
 
-test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align ## 全部测试：客户端 58 套 + 服务端二十四套 e2e
+test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align ## 全部测试：客户端 59 套 + 服务端二十五套 e2e
 	@echo ""
 	@echo "✓ 测试全部通过"
 

@@ -237,7 +237,64 @@ export default class AnimationHelper {
 
   /** 取节点上的动画组件（已有则复用，避免同一节点上叠加多个 Animation 互相抢帧） */
   private static useAnimation(node: Node) {
+    this.guardDestroy(node);
     return node.getComponent(Animation) ?? node.addComponent(Animation);
+  }
+
+  //#endregion
+
+  //#region 销毁前停动画（引擎坑的兜底）
+
+  /** 已挂过「销毁前停动画」钩子的节点（WeakSet：节点被回收后自动失效，不需要手动清理） */
+  private static destroyGuarded = new WeakSet<Node>();
+
+  /**
+   * 给节点挂「销毁前先停掉整棵子树的动画状态」钩子（幂等）
+   *
+   * **为什么必须自己停（Cocos 3.8.7 的坑，官方论坛同栈确认）**：
+   * 带循环片段的节点被 `destroy()` 后，引擎并不保证把状态从**全局** AnimationManager 摘掉 ——
+   * `Animation.onDestroy` 走 `AnimationState.destroy()`，而后者只在「正在播」时才 `removeAnimation`；
+   * 组件若没经过 `onLoad`（我们大量节点是运行时 `addComponent` 出来的）连 `onDestroy` 都不会走。
+   * 残留的 AnimationState 每帧继续往已销毁的 Sprite 上写 `spriteFrame`：
+   * `Sprite._applySpriteSize` 里 `self.node._uiProps` 炸 `Cannot read properties of null`，
+   * 一帧一条、永不停歇（打怪 / 换图 / 关弹窗这类「建了又销毁」的节点上最容易命中）。
+   *
+   * 钩在 `NODE_DESTROYED` 上：引擎在 `_onPreDestroyBase` 里**先**发这个事件、**再**销毁子节点与组件，
+   * 所以此刻拿得到整棵树（`getComponentsInChildren`），逐个 state.stop() 就能确定性地摘干净，
+   * 不依赖引擎那套「组件自己收尾」的运气。
+   */
+  private static guardDestroy(node: Node) {
+    if (!node || this.destroyGuarded.has(node)) return;
+    this.destroyGuarded.add(node);
+    node.once(Node.EventType.NODE_DESTROYED, () => this.stopTree(node));
+  }
+
+  /** 停掉整棵子树上所有动画状态（销毁前调用；节点可能已在销毁流程里，只认「存在」不认 isValid） */
+  static stopTree(node: Node) {
+    if (!node) return;
+    const animates = node.getComponentsInChildren(Animation);
+    for (const animate of animates) this.stopStates(animate);
+  }
+
+  /**
+   * 停掉一个动画组件上所有「正在播」的状态（重复调用安全）
+   *
+   * 逐个 `state.stop()` 而不是 `animate.stop()`：后者只停 cross-fade 内部那套权重，
+   * 不会把状态从全局 AnimationManager 摘掉（论坛里「我先 stop 了还照样崩」就是这个原因）。
+   * 片段是**缓存共享**的，这里只停状态、不碰 clips 资源。
+   */
+  static stopStates(animate: Animation | null | undefined) {
+    if (!animate) return;
+    for (const clip of animate.clips) {
+      if (!clip) continue;
+      const state = animate.getState(clip.name);
+      if (state && state.isPlaying) state.stop();
+    }
+  }
+
+  /** 这个节点还允不允许起动画：已进销毁队列（`ToDestroy`）的节点不行 —— 起了就停不掉，只会留残留状态 */
+  private static animatable(node: Node) {
+    return !!node && isValid(node, true);
   }
 
   //#endregion
@@ -370,9 +427,10 @@ export default class AnimationHelper {
    * @param duration 动画总时长（秒）
    */
   static playOnceWithDir(name: string, node: Node, dirSrc: string, duration: number = 1) {
+    if (!this.animatable(node)) return;
     const animate = this.useAnimation(node);
     this.loadLoopFrames(dirSrc).then((spriteFrames) => {
-      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      if (!isValid(node, true) || !isValid(animate, true) || !spriteFrames.length) return;
       this.play(name, node, animate, spriteFrames, duration, AnimationClip.WrapMode.Normal);
     });
   }
@@ -385,9 +443,10 @@ export default class AnimationHelper {
    * @param duration 动画总时长（秒）
    */
   static playLoopWithDir(name: string, node: Node, dirSrc: string, duration: number = 1) {
+    if (!this.animatable(node)) return;
     const animate = this.useAnimation(node);
     this.loadLoopFrames(dirSrc).then((spriteFrames) => {
-      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      if (!isValid(node, true) || !isValid(animate, true) || !spriteFrames.length) return;
       this.play(name, node, animate, spriteFrames, duration, AnimationClip.WrapMode.Loop);
     });
   }
@@ -400,7 +459,7 @@ export default class AnimationHelper {
    * @param frameRate 每秒帧数（如 20 表示每秒 20 帧，一轮循环时长 = 帧数 / 帧率）
    */
   static playLoopWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], frameRate: number) {
-    if (!spriteFrames.length) return;
+    if (!spriteFrames.length || !this.animatable(node)) return;
     const animate = this.useAnimation(node);
     this.play(name, node, animate, spriteFrames, spriteFrames.length / this.normalizeFrameRate(frameRate), AnimationClip.WrapMode.Loop);
   }
@@ -418,11 +477,12 @@ export default class AnimationHelper {
    * @param frameRate 每秒帧数
    */
   static playLoopAtlas(name: string, node: Node, atlasSrc: string, frameRate: number) {
+    if (!this.animatable(node)) return;
     const animate = this.useAnimation(node);
     const cacheKey = `${atlasSrc}|${frameRate}`;
     this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
       // 装载前校验：节点/动画组件可能已被销毁（背包刷新、弹窗关闭都会重建边框）
-      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      if (!isValid(node, true) || !isValid(animate, true) || !spriteFrames.length) return;
       let clip = this.loopClipCache.get(cacheKey);
       if (!clip) {
         clip = AnimationClip.createWithSpriteFrames(spriteFrames, this.normalizeFrameRate(frameRate));
@@ -448,12 +508,13 @@ export default class AnimationHelper {
    * @param duration 动画总时长（秒）
    */
   static playLoopAtlasWithDuration(name: string, node: Node, atlasSrc: string, duration: number = 1) {
+    if (!this.animatable(node)) return Promise.resolve();
     const animate = this.useAnimation(node);
     return this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
       // 空帧过滤与切片路径同口径（isSolidFrame）：内观图集里同样夹着占位空图
       // （clothes/in 有 1×1），不滤掉会让内观的衣服/武器周期性闪空
       const valid = spriteFrames.filter((frame) => this.isSolidFrame(frame));
-      if (!isValid(node) || !isValid(animate) || !valid.length) return;
+      if (!isValid(node, true) || !isValid(animate, true) || !valid.length) return;
       this.play(name, node, animate, valid, duration > 0 ? duration : valid.length, AnimationClip.WrapMode.Loop);
     });
   }
@@ -472,11 +533,12 @@ export default class AnimationHelper {
    * @param frameRate 每秒帧数
    */
   static playLoopDir(name: string, node: Node, dirSrc: string, frameRate: number) {
+    if (!this.animatable(node)) return;
     const animate = this.useAnimation(node);
     const cacheKey = `${dirSrc}|${frameRate}`;
     this.loadLoopFrames(dirSrc).then((spriteFrames) => {
       // 装载前校验：节点/动画组件可能已被销毁（详情弹窗随鼠标移出即销毁）
-      if (!isValid(node) || !isValid(animate) || !spriteFrames.length) return;
+      if (!isValid(node, true) || !isValid(animate, true) || !spriteFrames.length) return;
       let clip = this.loopClipCache.get(cacheKey);
       if (!clip) {
         clip = AnimationClip.createWithSpriteFrames(spriteFrames, this.normalizeFrameRate(frameRate));
@@ -499,7 +561,7 @@ export default class AnimationHelper {
    *        （角色动作动画总时长 = 1 / speedRate，见 configs/role 的 defaultRoleSpeedRate）
    */
   static playOnceWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], duration: number) {
-    if (!spriteFrames.length) return;
+    if (!spriteFrames.length || !this.animatable(node)) return;
     const animate = this.useAnimation(node);
     this.play(name, node, animate, spriteFrames, duration > 0 ? duration : spriteFrames.length, AnimationClip.WrapMode.Normal);
   }
@@ -513,7 +575,7 @@ export default class AnimationHelper {
    * @param frameRate 每秒帧数（如 12 表示每秒 12 帧，一轮时长 = 帧数 / 帧率）
    */
   static playOnceHoldWithFrames(name: string, node: Node, spriteFrames: SpriteFrame[], frameRate: number) {
-    if (!spriteFrames.length) return;
+    if (!spriteFrames.length || !this.animatable(node)) return;
     const animate = this.useAnimation(node);
     const clip = AnimationClip.createWithSpriteFrames(spriteFrames, this.normalizeFrameRate(frameRate));
     // Normal 播完停在尾帧（引擎行为）；不注册 FINISHED 销毁，让画面驻留
@@ -565,6 +627,7 @@ export default class AnimationHelper {
    * @param kind 动画种类
    */
   static useManyNameAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate, kind: AnimationKind) {
+    if (!this.animatable(node)) return this.useAnimation(node);
     const animate = this.useAnimation(node);
     const clips = this.clipCache.get(this.clipKey(dirSrc, kind, speedRate));
     if (clips) {
@@ -573,7 +636,7 @@ export default class AnimationHelper {
       return animate;
     }
     this.prepare(dirSrc, kind, speedRate).then(() => {
-      if (!isValid(node) || !isValid(animate)) return;
+      if (!isValid(node, true) || !isValid(animate, true)) return;
       const prepared = this.clipCache.get(this.clipKey(dirSrc, kind, speedRate));
       if (!prepared) return;
       this.applyClips(animate, prepared);
@@ -596,15 +659,21 @@ export default class AnimationHelper {
    * @param wrapMode 播放模式（Normal 播完自动销毁节点）
    */
   private static play(name: string, node: Node, animate: Animation, spriteFrames: SpriteFrame[], duration: number, wrapMode: AnimationClip.WrapMode) {
+    if (!this.animatable(node) || !isValid(animate, true)) return;
     const clip = AnimationClip.createWithSpriteFrames(spriteFrames, spriteFrames.length / duration);
     clip.wrapMode = wrapMode;
     clip.enableTrsBlending = false;
     clip.name = name;
     animate.addClip(clip, name);
     if (wrapMode === AnimationClip.WrapMode.Normal)
-      animate.on(Animation.EventType.FINISHED, () => {
-        node.destroy();
-      });
+      // once + 目标：片段是缓存的、组件可能被后续播放复用，留着的 on 监听会在「别人播完」时误销毁节点
+      animate.once(
+        Animation.EventType.FINISHED,
+        () => {
+          if (isValid(node, true)) node.destroy();
+        },
+        node,
+      );
     animate.play(name);
   }
 

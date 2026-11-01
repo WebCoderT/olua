@@ -91,7 +91,12 @@ function main() {
   console.log("=== 接线：角标点击 → 数据层 → 背包变动刷新（源码静态断言）===");
   const storage = readSrc("ui/core/StorageManager.ts");
   check(/static findBetterEquipmentInBag\(slot: EQUIPMENT_TYPE\)/.test(storage) && /findBagEquipmentUpgrade\(/.test(storage), "StorageManager.findBetterEquipmentInBag 包装纯函数（注入角色与可穿判定）");
-  check(/static equipBetterFromBag\(slot: EQUIPMENT_TYPE\)/.test(storage) && /equipBetterFromBag[\s\S]*?findBetterEquipmentInBag[\s\S]*?equipFromBag\(/.test(storage), "StorageManager.equipBetterFromBag = 找更优格 + 复用 equipFromBag 换装（旧装备回原格）");
+  // #556 后换装走服务端 bag-op：找更优格仍是本地的，换装动作复用 equipFromBag（空格归服务端找、旧装备回原格）
+  check(
+    /static async equipBetterFromBag\(slot: EQUIPMENT_TYPE\): Promise<boolean>/.test(storage) &&
+      /equipBetterFromBag[\s\S]*?findBetterEquipmentInBag[\s\S]*?return await this\.equipFromBag\(/.test(storage),
+    "StorageManager.equipBetterFromBag = 找更优格 + 复用 equipFromBag 换装（旧装备回原格）",
+  );
 
   const group = readSrc("ui/components/panel/EquipmentSlotGroup.ts");
   check(/attachUpgradeHint\(slot, type\)/.test(group) && /updateSlot\(type: EQUIPMENT_TYPE/.test(group), "EquipmentSlotGroup.updateSlot 清格子后重挂角标（clearChildren 会销毁子节点）");

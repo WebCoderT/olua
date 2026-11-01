@@ -14,6 +14,7 @@
 - **枚举只能一处来源**：审计目标类型从 `@AuditTarget` 派生、查询与写入共用（此前写死 5 种，`equipment`/`title` 筛不出来）。
 - **babel loose**：`[...map.values()]` 装的是迭代器不是内容 → Map/Set 一律 `Array.from`（守点 `audit-iterator-spread`）。
 - **指针事件必须配 `UITransform`**（3.8.7）：否则抛 `cameraPriority` 空指针、输入全废；静默跳过会吞证据。
+- **动画节点的「引擎自己收尾」不可信**（3.8.7 的坑，#560）：带循环片段的节点 `destroy()` 后 `AnimationState` 会留在**全局** `AnimationManager` 里，每帧往已销毁的 Sprite 写 `spriteFrame` → `_applySpriteSize` 读 `self.node._uiProps` 抛错、一帧一条永不停歇（打怪 + 换图成批销毁时最容易命中）。必须自己在 `NODE_DESTROYED`（引擎**先**发它、**再**销毁子节点与组件）里**逐个 `state.stop()`** —— `animate.stop()` 只停 cross-fade 权重、状态还在管理器里。另：`destroy()` 同帧内 `isValid(node)` 仍是 true（只进了 `ToDestroy`），起动画前要用 `isValid(node, true)`。
 - **自适应分三层**（模板 / `applyScreenPolicy` / 场景贴边），模板只在 GUI 构建生效；游戏内坐标一律以相机为准。
 - **飘字**跨场景挂场景里的 `Canvas`（不是场景根）；行内文字按 bbox 验（CLAMP + 左对齐从框左缘起排），装不下要 `enableWrapText` + 行高自适应。
 - **几何**：位置按帧内容 bbox 运行时算、配置只当微调（内容中心 = 节点中心 + `offset`，y 向上；衣服缩放要乘；空帧按面积判 4；`spriteSourceSize` 只有 2 个数）；改语义要渐进（`outManual`）。**外观锚点是画布中心、不是脚下**：`outPositions=0` 只是「画布中心落在脚下」，画布底部留白 25~66 → 全 0 会让身体沉到地下（裸模沉 31，#517）；判据（地面线/碰撞盒）固定在宿主原点，尺寸从 `catalog.body` 取。
@@ -36,7 +37,7 @@
 - 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据是不透明文档（`guide` 例外：只校验结构、**不补默认值**）；乐观锁 409+20006；`whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；`BizException` 默认 400。
 - 新 operationId 模块段登记 `tools/gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries` 的 `REPO_EDGES`；新 e2e 登记 `audit-doc-numbers` 的 `E2E_SCRIPTS`。
 - 部署：compose 四服务（admin:80 / game:8080 / server:3100 / realtime:3101），`/api` 与 `/game-resources/` 反代到内网；密钥只在 `deploy.env`；先合 master 再发布；Cocos 只能 GUI 打包。
-- 本机 client-test 基线 **58 套 / 53 过 5 红**（红全是素材未入库）；CI 不跑它，门禁看 `make ci`。
+- 本机 client-test 基线 **59 套 / 54 过 5 红**（红全是素材未入库）；CI 不跑它，门禁看 `make ci`。改了客户端动手最勤的地方（换装/背包/动画）要**自己跑一遍** `make client-test`，否则静态断言的假红会攒着没人发现（#557 就漏了一处）。
 
 ## 进度（细节见 2026-*.md）
 - 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · **玩法补全 #394 十二刀**。
