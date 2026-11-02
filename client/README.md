@@ -129,7 +129,6 @@ node tools/test-bag-tidy.cjs                                 # 单跑一套
 | 脚本 | 产出 | 说明 |
 | --- | --- | --- |
 | `gen-monster-config.cjs` | `../server/src/shared/monster-presentation.generated.ts` | 怪物资源与表现清单（#588 起写到**服务端**，客户端零副本）：几何读图集 plist 基准帧实测；规则写在脚本文件头，改完重跑 |
-| `gen-monster-drops.cjs` | `assets/configs/monsterDrops.ts` | 每怪独立掉落表 |
 | `clean-role-empty-frames.cjs` | 清理空帧素材 | 先预演列清单，`--apply` 才真动；会先备份到仓库根 `.workbuddy/backup/` |
 
 ### 单测沙箱（`tools/lib/`）

@@ -1,12 +1,14 @@
-import type { DropEntry, DropPicks } from "../types/drop";
-
 /**
- * 怪物独立掉落表（**每只怪一份**，key = configs/monster 的怪物 key）
+ * 怪物独立掉落种子（#602 起服务端唯一书写处）
  *
- * 与 configs/drop 的关系：
- * - configs/drop 只提供具名表（common/elite/boss）与兜底生成器 monsterDrops，
- *   **实际掉落以本文件为准**（configs/monster 建表时优先取这里的条目与抽取次数）
- * - 这里的每一条都是显式数据，改某只怪掉什么、掉多重，直接改对应 key 的 entries
+ * #602 之前这张表写在客户端 `configs/monsterDrops`（19743 行 / 1.3MB），生成器抄进
+ * game-data.generated —— 归属反了：「调一只怪的掉落要改客户端 + 重新生成 + 服务端重启」。
+ * #602 起**只在这里手写**，生成器从这里读（gen-shared-data 的 SOURCE_FILES 已移除
+ * monsterDrops），客户端经快照 `monsterDrops` 段拿最终值（管理端可改的行不受影响，
+ * 与 monsters 表同一条 seed 语义：只空库 INSERT，运营改过的不盖回）。
+ *
+ * 与 configs/drop（客户端）/ drop_tables 表的关系：具名表（common/elite/boss）在
+ * drop.ts；**实际掉落以本表的每怪条目为准**（建 monsters 表时优先取这里的条目与抽取次数）。
  *
  * 条目构成（按怪物等级 / 定位自动铺好，可手改）：
  * 1. 药品 / 材料：按等级分档（≤20 小药、21~40 中药、41+ 大药；铁矿 10 级起、宝石 21 级起），
@@ -23,19 +25,34 @@ import type { DropEntry, DropPicks } from "../types/drop";
  * 3. 掉落件数 picks：**每只怪可单独配**，数字 = 固定件数，[最小, 最大] = 件数区间
  *    （例 [3, 10] = 本次掉 3~10 件；每次抽取独立随机、可重复命中同一条目），
  *    默认按定位：普通 [1, 3] / 精英 [2, 6] / BOSS [3, 10]
- *
- * 想整体调节奏（装备更欧 / 更肝 / 一次掉几件）→ 改上面的权重倍率、预算与件数区间后重新生成；
- * 想只改某只怪 → 直接在 configs/monster 该条目里写 drops / dropPicks 覆盖本表。
  */
-export interface MonsterDropConfig {
-  /** 掉落件数（= 抽取次数）：数字 = 固定件数，[最小, 最大] = 件数区间（每只怪可单独配） */
-  picks: DropPicks;
-  /** 掉落条目池：每条独立配 weight（权重）/ chance（概率）/ count（数量区间） */
-  entries: DropEntry[];
+
+/** 掉落条目：从掉落表中按权重抽取，命中后按概率判定是否真正掉落（语义与客户端 types/drop 同构） */
+export interface MonsterDropSeedEntry {
+  /** 物品 id（物品总表的键） */
+  goodId: string;
+  /** 抽取权重（同一掉落表内的相对值，缺省 1；0 表示不参与权重抽取） */
+  weight?: number;
+  /** 掉落概率 0~1（抽中后再判定，缺省 1 表示必掉） */
+  chance?: number;
+  /** 数量区间 [最小, 最大]，缺省 [1, 1] */
+  count?: [number, number];
 }
 
-/** 每只怪的独立掉落配置（数组为源，尾部建 Map） */
-const monsterDropData: Array<{ key: string } & MonsterDropConfig> = [
+/** 掉落件数：数字 = 固定件数；[最小, 最大] = 件数区间 */
+export type MonsterDropSeedPicks = number | [number, number];
+
+/** 每只怪的独立掉落表 */
+export interface MonsterDropSeedTable {
+  /** 怪物 key（与 monster-seed.ts 的 MONSTER_SEED_ROWS 对齐，生成器会校验） */
+  key: string;
+  /** 抽取次数（= 本次掉落最多几件），缺省 1；每次抽取独立随机、可重复命中同一条目 */
+  picks?: MonsterDropSeedPicks;
+  /** 掉落条目池 */
+  entries: MonsterDropSeedEntry[];
+}
+
+export const MONSTER_DROP_SEED_ROWS: MonsterDropSeedTable[] = [
   /** 1 · 赤焰斗鸡 · 1 级 · 普通（装备 7 件基础件 × 15 变体，掉落 1~3 件） */
   {
     key: "1",
@@ -19730,14 +19747,3 @@ const monsterDropData: Array<{ key: string } & MonsterDropConfig> = [
     ],
   },
 ];
-
-/** 怪物独立掉落表（key → 掉落配置） */
-export const monsterDropTables = new Map<string, MonsterDropConfig>();
-for (const drop of monsterDropData) {
-  monsterDropTables.set(drop.key, drop);
-}
-
-/** 取某只怪的独立掉落配置（未配置返回 undefined，由调用方兜底） */
-export function getMonsterDropConfig(key: string): MonsterDropConfig | undefined {
-  return monsterDropTables.get(key);
-}

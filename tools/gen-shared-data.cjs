@@ -86,7 +86,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "monsterDrops", "status", "monster-skills", "quest-data", "achievement-data"].map(
+const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "status", "monster-skills", "quest-data", "achievement-data"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -113,11 +113,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const growthSeed = compileServerShared(work);
+  const { growthSeed, monsterDropSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -131,7 +131,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg) {
+function load(cfg, monsterDropSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -160,7 +160,8 @@ function load(cfg) {
     // 在生成器规整为全显式，消费方不复制缺省规则
     dropTables: missing("drop.dropTables", cfg("drop").dropTables),
     dropDefault: missing("drop.defaultDropTable", cfg("drop").defaultDropTable),
-    monsterDropTables: missing("monsterDrops.monsterDropTables", cfg("monsterDrops").monsterDropTables),
+    // #602 起每怪独立掉落表的服务端唯一书写处是 monster-drop-seed.ts，客户端 configs 不再有这份
+    monsterDropTables: monsterDropSeed.MONSTER_DROP_SEED_ROWS,
     // 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；
     // 特殊价是运营数据不进快照（动态增删，归 mall_prices 表）
     mallPrice: missing("mall.mallPrice", cfg("mall").mallPrice),
@@ -348,7 +349,8 @@ function compileServerShared(work) {
           noEmitOnError: false,
           types: [],
         },
-        files: [path.join(sharedDir, "growth-seed.ts")],
+        // #590 growth-seed（装备出厂属性公式）+ #602 monster-drop-seed（每怪独立掉落表）
+        files: [path.join(sharedDir, "growth-seed.ts"), path.join(sharedDir, "monster-drop-seed.ts")],
       },
       null,
       2,
@@ -358,7 +360,10 @@ function compileServerShared(work) {
   const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
   if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
   execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return require(path.join(work, "server-out", "growth-seed.js"));
+  return {
+    growthSeed: require(path.join(work, "server-out", "growth-seed.js")),
+    monsterDropSeed: require(path.join(work, "server-out", "monster-drop-seed.js")),
+  };
 }
 
 /** 出厂属性 × 前后缀倍率（倍率表仍是客户端 growth.ts 的常量，装备批次再收权到服务端） */
@@ -706,7 +711,7 @@ function pickFashions(fashions) {
  *
  * 客户端 DropEntry 的缺省规则（weight=1 / chance=1 / count=[1,1]）在这里**规整成全显式**：
  * 消费方（服务端校验 / 管理端编辑器回填）不必各自抄一遍「缺省是多少」。weight 保留小数
- * （monsterDrops 生成的装备权重是 6.29 / 0.63 这类），chance / count 用 round。
+ * （monster-drop-seed 生成的装备权重是 6.29 / 0.63 这类），chance / count 用 round。
  */
 function pickDropEntry(entry, where) {
   if (!entry || typeof entry !== "object" || !entry.goodId) throw new Error(`${where} 里有缺 goodId 的掉落条目`);
@@ -753,21 +758,23 @@ function pickDropTables(tables) {
 }
 
 /**
- * 每怪独立掉落表 Map → [[怪物 key, { picks, entries }]]（#254）
+ * 每怪独立掉落表（#602 起来自 server/src/shared/monster-drop-seed.ts 的行数组）→
+ * [[怪物 key, { picks, entries }]]（#254）
  *
- * key 必须是 configs/monster 里的怪物（掉落挂在怪身上，key 对不上就是配置漂移，
+ * key 必须是怪物种子里的怪（掉落挂在怪身上，key 对不上就是配置漂移，
  * 在生成器这里挡掉比落到表里再查省一个回合）。
  */
 function pickMonsterDrops(monsterDropTables, monsters) {
   const out = [];
   const seen = new Set();
-  monsterDropTables.forEach((table, key) => {
+  for (const table of monsterDropTables) {
+    const key = String(table.key);
     if (seen.has(key)) throw new Error(`怪物掉落 key 重复：${key}`);
     seen.add(key);
-    if (!monsters.has(key)) throw new Error(`怪物掉落 key ${key} 不在 configs/monster 里（配置漂移，先对齐两份配置）`);
+    if (!monsters.has(key)) throw new Error(`怪物掉落 key ${key} 不在怪物种子（monster-seed.ts）里（配置漂移，先对齐两份配置）`);
     out.push([key, pickDropTable(key, table)]);
-  });
-  if (out.length === 0) throw new Error("configs/monsterDrops 的 monsterDropTables 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  }
+  if (out.length === 0) throw new Error("monster-drop-seed.ts 的 MONSTER_DROP_SEED_ROWS 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 
