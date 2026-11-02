@@ -429,12 +429,33 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
 
       -- 装备基础件配置（#252）：主键是基础件 id（如 cloth_1），id / 部位结构固定不可增删行；
       -- 属性列与 titles / souls / ranks 同构（SoulRowShape 十四列），变体不进库
+      --
+      -- #603 第九域起**显示与规则字段也在库里**（此前只有名称与数值，图标 / 图集 / 缩放 /
+      -- 8 向位置 / 职业性别限制全写死在客户端 configs/equipments）：客户端对应文件只剩
+      -- 纯函数与空运行时表，改这些值不再需要重新打包。
+      -- 几何是**出厂值**：管理端「装备对齐 / 内观对齐」工作台的保存结果落在 equip_aligns /
+      -- equip_in_aligns 表、每次进图另发（覆盖语义），这里改了只在「没调过对齐」的装备上可见。
+      -- 列名用 in_atlas / out_atlas 而不是 in / out（in 是 SQL 关键字）
       CREATE TABLE IF NOT EXISTS equipments (
         id                   TEXT    PRIMARY KEY,
         slot                 TEXT    NOT NULL,
         level                INTEGER NOT NULL DEFAULT 1,
         sell_price           INTEGER NOT NULL DEFAULT 0,
         label                TEXT    NOT NULL DEFAULT '',
+        occupation           TEXT    NOT NULL DEFAULT '4',
+        sex                  TEXT    NOT NULL DEFAULT '3',
+        description          TEXT    NOT NULL DEFAULT '',
+        icon                 TEXT    NOT NULL DEFAULT '',
+        in_atlas             TEXT    NOT NULL DEFAULT '',
+        out_atlas            TEXT    NOT NULL DEFAULT '',
+        tags                 TEXT    NOT NULL DEFAULT '[]',
+        in_pos_x             REAL    NOT NULL DEFAULT 0,
+        in_pos_y             REAL    NOT NULL DEFAULT 0,
+        in_scale_x           REAL    NOT NULL DEFAULT 1,
+        in_scale_y           REAL    NOT NULL DEFAULT 1,
+        in_rotate            REAL    NOT NULL DEFAULT 0,
+        out_scale            REAL    NOT NULL DEFAULT 1,
+        out_positions        TEXT    NOT NULL DEFAULT '[]',
         max_hp               INTEGER NOT NULL DEFAULT 0,
         hp_recover           INTEGER NOT NULL DEFAULT 0,
         physical_attack_min  INTEGER NOT NULL DEFAULT 0,
@@ -450,6 +471,30 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
         updated_at           INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 装备槽位表（#603 第九域）：13 行，主键是 EQUIPMENT_TYPE 的枚举值。
+      -- 顺序即角色弹窗的槽位排列与背包「一键整理」的部位序（sort_order）；
+      -- 表结构固定不可增删行（枚举是封闭的，新增部位属于代码改动）
+      CREATE TABLE IF NOT EXISTS equipment_slots (
+        key        TEXT    PRIMARY KEY,
+        label      TEXT    NOT NULL DEFAULT '',
+        image_src  TEXT    NOT NULL DEFAULT '',
+        position   TEXT    NOT NULL DEFAULT 'bottom',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 装备规则（#603 第九域）：单行表（id 恒为 1），存前后缀倍率 / 文案 / 回收价曲线。
+      -- 三个数组都是 JSON 文本 —— 它们是「一组同长的表」，拆成列反而要多维护行数约束
+      CREATE TABLE IF NOT EXISTS equipment_meta (
+        id            INTEGER PRIMARY KEY CHECK (id = 1),
+        prefix_rates  TEXT    NOT NULL DEFAULT '[]',
+        suffix_rates  TEXT    NOT NULL DEFAULT '[]',
+        prefix_labels TEXT    NOT NULL DEFAULT '[]',
+        suffix_labels TEXT    NOT NULL DEFAULT '[]',
+        recycle_curve TEXT    NOT NULL DEFAULT '[]',
+        updated_at    INTEGER NOT NULL DEFAULT 0
       );
 
       -- 药品配置（#253）：主键是药品 id（如 drug_hp_1），id 清单固定不可增删行；
@@ -880,6 +925,22 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("npcs", "scale_y", "REAL NOT NULL DEFAULT 1");
     this.ensureColumn("npcs", "pos_x", "REAL NOT NULL DEFAULT 0");
     this.ensureColumn("npcs", "pos_y", "REAL NOT NULL DEFAULT 0");
+    // 装备显示与规则字段（#603 第九域）：老库只有名称与数值，补列后由 seedEquipments 的
+    // backfillAppearance 一次性回填（只在 icon 还是空串时填 —— 见那个方法的注释）
+    this.ensureColumn("equipments", "occupation", "TEXT NOT NULL DEFAULT '4'");
+    this.ensureColumn("equipments", "sex", "TEXT NOT NULL DEFAULT '3'");
+    this.ensureColumn("equipments", "description", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("equipments", "icon", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("equipments", "in_atlas", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("equipments", "out_atlas", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("equipments", "tags", "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn("equipments", "in_pos_x", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("equipments", "in_pos_y", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("equipments", "in_scale_x", "REAL NOT NULL DEFAULT 1");
+    this.ensureColumn("equipments", "in_scale_y", "REAL NOT NULL DEFAULT 1");
+    this.ensureColumn("equipments", "in_rotate", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("equipments", "out_scale", "REAL NOT NULL DEFAULT 1");
+    this.ensureColumn("equipments", "out_positions", "TEXT NOT NULL DEFAULT '[]'");
     this.migrateWorldMonsterInstanceIds();
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");

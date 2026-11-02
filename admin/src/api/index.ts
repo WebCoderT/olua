@@ -28,6 +28,8 @@ export {
   titlesApi,
   ranksApi,
   equipmentsApi,
+  equipmentSlotsApi,
+  equipmentMetaApi,
   equipAlignsApi,
   equipInAlignsApi,
   drugsApi,

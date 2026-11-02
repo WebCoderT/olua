@@ -310,6 +310,36 @@ export const routes = {
      */
     save: (id: string) => `/admin/equip-in-aligns/${encodeURIComponent(id)}`,
   },
+  /** adminEquipmentMeta 模块（2 个接口） */
+  adminEquipmentMeta: {
+    /**
+     * 装备规则（前后缀倍率 / 文案 / 回收价曲线）（GET /admin/equipment-meta）
+     *
+     * 单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。
+     */
+    get: "/admin/equipment-meta",
+    /**
+     * 编辑装备规则（PATCH /admin/equipment-meta）
+     *
+     * **部分更新**：只改请求体里出现的字段（数组字段是整份替换）。
+     */
+    update: "/admin/equipment-meta",
+  },
+  /** adminEquipmentSlot 模块（2 个接口） */
+  adminEquipmentSlot: {
+    /**
+     * 装备槽位表（GET /admin/equipment-slots）
+     *
+     * 13 行，**只读清单 + 可改文案/底图/位置分组**，没有创建 / 删除（新增部位属于代码改动）。
+     */
+    list: "/admin/equipment-slots",
+    /**
+     * 编辑装备槽位（PATCH /admin/equipment-slots/{key}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (key: string) => `/admin/equipment-slots/${encodeURIComponent(key)}`,
+  },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {
     /**

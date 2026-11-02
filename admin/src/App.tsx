@@ -14,6 +14,7 @@ import { TitlesPage } from "./pages/TitlesPage";
 import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
+import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
 import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
@@ -171,6 +172,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <EquipmentsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="equipment-settings"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <EquipmentSettingsPage />
               </RequirePermission>
             }
           />

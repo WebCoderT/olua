@@ -21,7 +21,7 @@ import type {
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
-import type { DrugEffect, OutTransform } from "../types/good";
+import type { DrugEffect, EquipmentData, OutTransform } from "../types/good";
 import { applyTitleRows } from "./title";
 import { applySoulRows } from "./soul";
 import { applyRankRows } from "./rank";
@@ -30,7 +30,7 @@ import { mapTypeGroups, maps } from "./map";
 import { uiEffects } from "./effect";
 import { applyMallPricing } from "./mall";
 import { applyCombatWeights } from "./battle";
-import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates, setRoleMaxLevel } from "./growth";
+import { applyEquipmentRules, setRoleMaxLevel } from "./growth";
 import { items } from "./items";
 import { drugs } from "./drug";
 import { applyMonsterPresentation, applyMonsterRuntimeStats } from "./monsterRuntime";
@@ -39,7 +39,7 @@ import { questData } from "./quest-data";
 import type { QuestData } from "./quest-data";
 import { rebuildQuests } from "./quest";
 import { fashionData } from "./fashionClothes";
-import { getEquipmentBaseKey, scaleEquipmentAttributes } from "./equipments";
+import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths } from "./role";
 import { skillData } from "./skill-data";
 import { statuses } from "./status";
@@ -116,46 +116,83 @@ export function applyGrowthSnapshot(snapshot: GameConfigSnapshot): void {
 
 //#region 内容表（#363）
 
-/** 八项属性 DTO → 客户端战斗属性（响应里是区间对象 {min,max}，客户端一直用元组 [min,max]） */
+/** 区间型属性（服务端 `{ min, max }`）→ 客户端 `[下限, 上限]` */
+function toAttributeRange(range: { min: number; max: number } | undefined): [number, number] {
+  return [range?.min ?? 0, range?.max ?? 0];
+}
+
+/**
+ * 八项属性（服务端 `ConfigAttributes`）→ 客户端 `BattleAttributes`
+ *
+ * 两者只差区间表示：服务端是 `{ min, max }` 对象，客户端是二元组数组。
+ * 时装段与装备段共用这一份，避免两处各写一遍漏掉 hpRecover（#590 新增的属性）。
+ */
 function toBattleAttributes(attributes: ConfigAttributes): BattleAttributes {
-  const range = (source: { min: number; max: number }): [number, number] => [source.min, source.max];
   return {
     maxHp: attributes.maxHp,
-    hpRecover: attributes.hpRecover,
-    physicalAttack: range(attributes.physicalAttack),
-    magicAttack: range(attributes.magicAttack),
-    taoistAttack: range(attributes.taoistAttack),
-    physicalDefense: range(attributes.physicalDefense),
-    magicDefense: range(attributes.magicDefense),
-    taoistDefense: range(attributes.taoistDefense),
+    hpRecover: attributes.hpRecover ?? 0,
+    physicalAttack: toAttributeRange(attributes.physicalAttack),
+    magicAttack: toAttributeRange(attributes.magicAttack),
+    taoistAttack: toAttributeRange(attributes.taoistAttack),
+    physicalDefense: toAttributeRange(attributes.physicalDefense),
+    magicDefense: toAttributeRange(attributes.magicDefense),
+    taoistDefense: toAttributeRange(attributes.taoistDefense),
   };
 }
 
 /**
- * 覆写装备（#363）
+ * 装备行（服务端快照）→ 客户端基础件条目（`EquipmentData`）
  *
- * 服务端只下发**基础件**（37 件，属性是「普通的·人级」），客户端是一张 555 条的变体 Map
- * （每件基础件 × 5 前缀 × 3 后缀）。所以这里按 id 归并回基础件、再按同一套倍率**重算**每个变体：
- * 属性**从服务端基础值重新乘倍率**，不是在变体当前值上再乘一次 —— 后者每覆写一次就滚一级雪球，
- * 重进游戏数值会飘（这也是幂等的唯一保证）。
+ * **为什么这层转换放在这里而不是 `configs/equipments`**：`equipments.ts` 处在
+ * 「生成器要在 Node 垫片里加载 `configs/items` 这条链」上（见 `tools/lib/configs-sandbox.cjs`），
+ * 一旦它 import `ui/utils/net/ApiModels` 就把整个网络层拖进去了。行格式（DTO）只在
+ * 网络这一侧出现，转换就留在网络这一侧。
  *
- * 资源与几何（icon / in / out / 位置 / 缩放 / 部位）一律不动：那是发布素材与客户端布局，
- * 服务端没有裁决权。回收价按「服务端等级 × 前后缀倍率」重算，与 buildEquipmentMap 同口径。
+ * `outManual` / `inManual` **不从行里取**：它们是工作台（`equip_aligns` / `equip_in_aligns`）
+ * 运行时覆盖出来的语义，出厂值一律 false（= 没手调过），否则一只「外观对齐」工作台
+ * 调过的衣服会把全服玩家的武器内观都钉死在某个数字上。
  */
-export function applyEquipmentRows(rows: EquipmentRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, EquipmentRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  items.forEach((good, id) => {
-    if (good.type !== GOOD_TYPE.EQUIPMENT) return;
-    const row = overrides.get(getEquipmentBaseKey(id));
-    if (!row) return;
-    const rate = equipmentPrefixRates[good.prefix] * equipmentSuffixRates[good.suffix];
-    Object.assign(good, scaleEquipmentAttributes(toBattleAttributes(row.attributes), rate));
-    good.label = row.label;
-    good.level = row.level;
-    good.sellPirce = row.sellPrice;
-    good.recyclePrice = Math.round(equipmentRecyclePrice(row.level) * rate);
+function rowToEquipmentData(row: EquipmentRow): EquipmentData {
+  const attributes = toBattleAttributes(row.attributes);
+  return {
+    key: row.id,
+    type: GOOD_TYPE.EQUIPMENT,
+    label: row.label,
+    description: row.description,
+    sellPirce: row.sellPrice,
+    level: row.level,
+    slot: row.slot as EquipmentData["slot"],
+    occupation: row.occupation as EquipmentData["occupation"],
+    sex: row.sex as EquipmentData["sex"],
+    icon: row.icon,
+    in: row.inAtlas,
+    out: row.outAtlas,
+    tags: row.tags,
+    inPosition: new Vec2(row.inPosX, row.inPosY),
+    inScaleX: row.inScaleX,
+    inScaleY: row.inScaleY,
+    inRotate: row.inRotate,
+    outScale: row.outScale,
+    outPositions: (row.outPositions ?? []).map((point) => new Vec2(point.x, point.y)),
+    ...attributes,
+  };
+}
+
+/**
+ * 装载装备（#603 第九域：整表重建 + 灌物品总表）
+ *
+ * 服务端下发**基础件**（37 件）+ 全部显示字段，`applyEquipmentData` 按「前缀 × 后缀」
+ * 展开成 555 条变体并按部位分表；这里再把变体写进物品总表（`items` 是全局
+ * 「id → 物品」索引，背包 / 掉落 / 商城 / 任务全读它）。
+ *
+ * **为什么要写进 items**：以前装备在加载期就注册好了（items 直接 import 七张部位表），
+ * 现在客户端没有本地装备，items 加载期只有药品与材料 —— 索引必须由这里补上。
+ * 用 `items.set` 而不是 `registerItem`：后者「已存在不覆盖」，快照重复应用时会留下上一轮的旧对象。
+ */
+export function applyEquipments(rows: EquipmentRow[]): void {
+  const all = applyEquipmentData(rows.map(rowToEquipmentData));
+  all.forEach((good) => {
+    if (good.id) items.set(good.id, good);
   });
 }
 
@@ -425,7 +462,7 @@ export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
 
 /** 内容表的覆写总入口（#363）：六张表各自按 id 对齐，缺表跳过 */
 export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
-  if (snapshot.equipments) applyEquipmentRows(snapshot.equipments);
+  if (snapshot.equipments) applyEquipments(snapshot.equipments);
   if (snapshot.drugs) applyDrugRows(snapshot.drugs);
   if (snapshot.items) applyItemRows(snapshot.items);
   if (snapshot.monsters) applyMonsterRows(snapshot.monsters);
@@ -442,6 +479,13 @@ export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
 export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   // #603：战斗力权重（客户端不再存倍率，唯一来源是服务端 combat-seed）
   applyCombatWeights(snapshot.combatWeights);
+  // #603 第九域：装备规则**必须最先装** —— 它决定「每件基础件展开成几档变体」
+  // （倍率为空 = 一件都展开不出来）与「回收价怎么算」。顺序反了装备表整个是空的
+  if (snapshot.equipmentMeta) {
+    applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates, snapshot.equipmentMeta.recycleCurve);
+    applyEquipmentQualityLabels(snapshot.equipmentMeta.prefixLabels, snapshot.equipmentMeta.suffixLabels);
+  }
+  if (snapshot.equipmentSlots) applyEquipmentSlots(snapshot.equipmentSlots);
   if (snapshot.titles) applyTitleRows(snapshot.titles);
   if (snapshot.souls) applySoulRows(snapshot.souls);
   if (snapshot.ranks) applyRankRows(snapshot.ranks);

@@ -544,8 +544,34 @@ export interface EquipmentRow {
   level: number;
   /** 售卖价（客户端条目 `sellPirce` 的 seed 值 —— 客户端字段名历史拼写如此） */
   sell_price: number;
-  /** 名称（如「青铜重甲」；seed 自客户端条目，暂不开放编辑） */
+  /** 名称（如「青铜重甲」；管理端可改） */
   label: string;
+  /** 职业限制（OECCUPATION 的枚举值：1 战士 / 2 法师 / 3 道士 / 4 不限） */
+  occupation: string;
+  /** 性别限制（SEX 的枚举值：1 男 / 2 女 / 3 不限） */
+  sex: string;
+  /** 描述（详情弹窗正文） */
+  description: string;
+  /** 图标（resources 相对路径，如 `clothes/icon/005`） */
+  icon: string;
+  /** 内观图集（列名避开 SQL 关键字 in） */
+  in_atlas: string;
+  /** 外观图集 */
+  out_atlas: string;
+  /** 标签 JSON 数组文本（如 `["第一大陆"]`） */
+  tags: string;
+  /** 内观锚点（弹窗坐标系，原点 = 弹窗中心、y 向上） */
+  in_pos_x: number;
+  in_pos_y: number;
+  /** 内观缩放（1 = 原尺寸） */
+  in_scale_x: number;
+  in_scale_y: number;
+  /** 内观旋转角度（度，0 = 不转） */
+  in_rotate: number;
+  /** 外观缩放 */
+  out_scale: number;
+  /** 外观 8 向绝对位置 JSON 数组文本（`[{"x":..,"y":..}, …]`，顺序 up → left_up） */
+  out_positions: string;
   max_hp: number;
   hp_recover: number;
   physical_attack_min: number;
@@ -560,6 +586,47 @@ export interface EquipmentRow {
   magic_defense_max: number;
   taoist_defense_min: number;
   taoist_defense_max: number;
+  updated_at: number;
+}
+
+/**
+ * 装备槽位（#603 第九域）：13 行，主键是 EQUIPMENT_TYPE 的枚举值
+ *
+ * `sort_order` 同时是角色弹窗的槽位排列顺序与背包「一键整理」的部位序 ——
+ * 「顺序」只有这一份，客户端 `equipmentSlotOrder` 是它的派生。
+ */
+export interface EquipmentSlotRow {
+  /** 槽位 key（EQUIPMENT_TYPE 的枚举值，如 `cloth`；主键，不可增删行） */
+  key: string;
+  /** 槽位中文名（如「衣服」） */
+  label: string;
+  /** 槽位底图（resources 相对路径） */
+  image_src: string;
+  /** 在角色弹窗里的位置分组（left / right / bottom / custom） */
+  position: string;
+  /** 排序序号（从 0 起，越界由 seed 兜底） */
+  sort_order: number;
+  updated_at: number;
+}
+
+/**
+ * 装备规则（#603 第九域）：单行表（id 恒 1）
+ *
+ * 五列都是 JSON 文本 —— 它们是「一组等长的表」（前后缀倍率 / 文案 / 回收价曲线的分段），
+ * 拆成行反而要额外维护「档数必须一致」的约束。
+ */
+export interface EquipmentMetaRow {
+  id: number;
+  /** 前缀倍率 JSON（`[1, 1.1, 1.2, 1.3, 1.4]`） */
+  prefix_rates: string;
+  /** 后缀倍率 JSON（`[1, 2, 3]`） */
+  suffix_rates: string;
+  /** 前缀文案 JSON（`["普通的", …]`，与倍率同长） */
+  prefix_labels: string;
+  /** 后缀文案 JSON（`["人级", "天级", "神级"]`） */
+  suffix_labels: string;
+  /** 回收价曲线 JSON（`[{ from, to, start, perLevel }, …]`） */
+  recycle_curve: string;
   updated_at: number;
 }
 

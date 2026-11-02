@@ -107,6 +107,10 @@ const MODULES = {
   adminSoul: { target: "admin", export: "soulsApi" },
   adminRank: { target: "admin", export: "ranksApi" },
   adminEquipment: { target: "admin", export: "equipmentsApi" },
+  // 装备槽位（#603 第九域）：13 行固定清单，客户端槽位表/整理序的唯一来源
+  adminEquipmentSlot: { target: "admin", export: "equipmentSlotsApi" },
+  // 装备规则（#603 第九域）：前后缀倍率 / 文案 / 回收价曲线（单行）
+  adminEquipmentMeta: { target: "admin", export: "equipmentMetaApi" },
   // 装备对齐几何（#513）：工作台的读写口；与 adminEquipment（数值配置）不是同一件事
   adminEquipAlign: { target: "admin", export: "equipAlignsApi" },
   // 装备内观几何（#523）：与上面同形，但字段是「单点位置 + 两轴缩放」，两张表互不影响
