@@ -34,7 +34,7 @@ export class AdminAchievementController {
     operationId: "adminAchievement.list",
     summary: "成就配置列表",
     description:
-      "seed 自客户端 configs/achievement-data，允许动态增删。`category` 筛 battle / growth / explore，" +
+      "seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，" +
       "`keyword` 模糊匹配 id / 名称。\n\n" +
       "`condition` 分两类：`kill` / `quest` 是**累计型**（进度由事件流落库），" +
       "`level` / `combat` / `collect` 是**状态型**（每次查询按角色当前状态现算，不落进度）。\n\n" +

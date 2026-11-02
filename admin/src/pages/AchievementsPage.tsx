@@ -8,7 +8,7 @@ import { toastSuccess } from "../store/toast";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 
-/** 分类的中文名（与 achievement-data 的 category 同值） */
+/** 分类的中文名（与成就种子的 category 同值） */
 const CATEGORY_LABELS: Record<string, string> = {
   battle: "战斗",
   growth: "成长",
@@ -225,7 +225,7 @@ export function AchievementsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="成就配置"
-        description={<>seed 自客户端 <code>configs/achievement-data</code>，可动态增删；状态型条件的门槛一改，所有人的达成状态立刻变。</>}
+        description={<>seed 自服务端 <code>server/src/shared/achievement-seed.ts</code>，可动态增删；状态型条件的门槛一改，所有人的达成状态立刻变。</>}
         actions={<>
           <Button
             disabled={!canWrite}

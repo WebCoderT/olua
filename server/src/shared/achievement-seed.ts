@@ -1,9 +1,9 @@
 /**
- * 成就纯数据表（#401）
+ * 成就种子（#603 起服务端唯一书写处）
  *
- * **只有数据**（id / 分类 / 文案 / 条件 / 奖励），不含任何 UI 字段 —— 工具链
- * `tools/gen-shared-data.cjs` 要在 Node 垫片里编译加载本文件给三端生成公共数据快照
- * （同 `quest-data` 的分家纪律），一旦引到 UI 组件就会在加载期炸掉。
+ * #603 之前这张表写在客户端 `configs/achievement-data`，生成器抄进 game-data.generated →
+ * 服务端 achievements 表 seed → 管理端可改 → 「我的成就」接口下发。客户端那份**零消费者**
+ * （成就面板读 `/achievements/me`，不用本地表），纯属仓库死重与第二处书写。现在**只在这里手写**。
  *
  * ## 条件分两类，存储需求完全不同
  *
@@ -22,14 +22,16 @@
  *   不允许出现「后一条的奖励不如前一条」（那会让玩家觉得高阶成就白做）；
  * - `hidden`：未达成的隐藏成就，面板默认折叠（不剧透条件）。
  *
- * ## 当前规模（#428 起 24 条）
+ * ## 当前梯度
  *
- * 三分类各自梯度（入门 → 中段 → 高阶），五种条件类型全部有用例，另有 **3 条隐藏成就**
+ * 三分类各自梯度（入门 → 中段 → 高阶），五种条件类型全部有用例，另有几条隐藏成就
  * 分别落在三个分类里（验证「未达成不剧透」的路径，也留点彩蛋）。
  *
- * 想新增成就就往这里加一条纯数据；服务端 achievements 表的 seed 来源、
- * 管理端「成就配置」页与客户端成就面板都以生成物为唯一来源。
+ * 管理端看到的是 `achievements` 表（seed 自本文件，运营可增删改），**改这里只影响新装库**；
+ * 已上线的库走管理端。引用校验（怪物 key / 物品 id）在生成器里，写错当场报错。
  */
+
+/** 面板分类（成就墙的三个页签） */
 export type AchievementCategory = "battle" | "growth" | "explore";
 
 /** 条件类型：前两个是累计型（事件驱动），后三个是状态型（查询现算） */
@@ -49,7 +51,7 @@ export interface AchievementRewards {
   items: Array<{ goodId: string; count: number }>;
 }
 
-export interface AchievementData {
+export interface AchievementSeedRow {
   id: string;
   category: AchievementCategory;
   label: string;
@@ -60,7 +62,7 @@ export interface AchievementData {
   hidden: boolean;
 }
 
-const achievementDataEntries: AchievementData[] = [
+export const ACHIEVEMENT_SEED_ROWS: AchievementSeedRow[] = [
   //#region battle：从「打过十只」到「五十只终局 boss」，奖励单调上抬
   {
     id: "ach_kill_10",
@@ -310,5 +312,3 @@ const achievementDataEntries: AchievementData[] = [
   },
   //#endregion
 ];
-
-export { achievementDataEntries as achievementData };
