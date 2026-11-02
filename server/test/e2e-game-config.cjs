@@ -33,6 +33,8 @@ const growthSeedKeys = Object.keys(growthSeedScalars);
 // #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
 const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
 const { MONSTER_PRESENTATION_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "monster-presentation.generated.js"));
+// #603 第七域：NPC 出厂数据的唯一书写处（客户端 configs/npc-data 已删）
+const { NPC_SEED_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "npc-seed.js"));
 const monsterSeed1 = MONSTER_SEED_ROWS.find((row) => row.id === "1");
 const monsterAttrs1 = expandMonsterSeed(monsterSeed1);
 
@@ -781,6 +783,23 @@ async function main() {
     checkEqual(npc2?.label, shared.NPCS["0002"].label, "NPC 0002 名称与配置一致");
     checkEqual(npc2?.dialog, "", "对话文案 seed 为空串（客户端暂无对话数据形态）");
 
+    // #603 第七域：外观（素材目录 / 缩放 / 偏移）也在库里 —— 客户端不再存任何 NPC 显示数据
+    const npcSeed2 = NPC_SEED_ROWS.find((row) => row.id === "0002");
+    const npcSeedPlain = NPC_SEED_ROWS.find((row) => row.id === "1001");
+    checkEqual(npc2?.src, npcSeed2.src, "素材目录 seed 自 npc-seed（0002）");
+    checkEqual(npc2?.scaleX, 1.5, "0002 横向缩放 seed 自 npc-seed");
+    checkEqual(npc2?.scaleY, 1.5, "0002 纵向缩放 seed 自 npc-seed");
+    checkEqual(npc2?.posX, 11, "0002 横向偏移 seed 自 npc-seed");
+    checkEqual(npc2?.posY, 0, "0002 纵向偏移 seed 自 npc-seed");
+    const npcPlain = npcs.body?.data?.list?.find((row) => row.id === "1001");
+    checkEqual(npcPlain?.src, npcSeedPlain.src, "素材目录 seed 自 npc-seed（1001）");
+    checkEqual(npcPlain?.scaleX, 1, "没配缩放的 NPC 落默认 1（不是 NULL）");
+    checkEqual(npcPlain?.posX, 0, "没配偏移的 NPC 落默认 0（不是 NULL）");
+    check(
+      npcs.body?.data?.list?.every((row) => typeof row.src === "string" && row.src.length > 0),
+      "全部 NPC 都有素材目录（空 src = 客户端查不到素材、NPC 不显示）",
+    );
+
     const npcKeyword = await api(base, "GET", "/api/admin/npcs?keyword=" + encodeURIComponent("传送官"), { token });
     checkEqual(npcKeyword.body?.data?.total, 2, "关键字按名称命中两个传送官");
 
@@ -793,6 +812,20 @@ async function main() {
     checkEqual(npcPatched.body?.data?.dialog, "要传送去哪张地图？", "响应里的对话已更新");
     const npcCleared = await api(base, "PATCH", "/api/admin/npcs/0002", { token, body: { dialog: "" } });
     checkEqual(npcCleared.body?.data?.dialog, "", "对话传空串 = 清空");
+    // 外观也能改（#603）：改完客户端下次进游戏由快照整表重建
+    const npcLook = await api(base, "PATCH", "/api/admin/npcs/0002", {
+      token,
+      body: { src: "npc/npc_9999", scaleX: 2, scaleY: 2.5, posX: -8, posY: 6 },
+    });
+    checkEqual(npcLook.body?.data?.src, "npc/npc_9999", "素材目录可改");
+    checkEqual(npcLook.body?.data?.scaleX, 2, "横向缩放可改");
+    checkEqual(npcLook.body?.data?.scaleY, 2.5, "纵向缩放可改");
+    checkEqual(npcLook.body?.data?.posX, -8, "横向偏移可改（负数可用）");
+    checkEqual(npcLook.body?.data?.posY, 6, "纵向偏移可改");
+    const npcScaled = await api(base, "PATCH", "/api/admin/npcs/0002", { token, body: { scaleX: 0 } });
+    checkEqual(npcScaled.status, 400, "缩放 0 → 400（节点会整个消失，不接受）");
+    const npcOffset = await api(base, "PATCH", "/api/admin/npcs/0002", { token, body: { posX: 99999 } });
+    checkEqual(npcOffset.status, 400, "偏移超出 ±4000 → 400");
     const npcGhost = await api(base, "PATCH", "/api/admin/npcs/9999", { token, body: { label: "x" } });
     checkEqual(npcGhost.status, 404, "改不存在的 NPC → 404");
     checkEqual(npcGhost.body?.code, 50020, "NPC 未找到用专属业务码 50020");
@@ -1147,7 +1180,14 @@ async function main() {
       check(typeof first.moveSpeed === "number" && first.moveSpeed > 0, "表现行带正的 moveSpeed");
       check(typeof first.aggressive === "boolean" && typeof first.detectRange === "number", "表现行带 AI 参数（aggressive / detectRange）");
     }
-    checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 生成物");
+    checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 种子");
+    {
+      // #603 第七域：快照必须带外观 —— 客户端已经没有 npc-data 兜底，缺字段 = 素材加载不到
+      const row = snap.npcs?.find((item) => item.id === "0002") ?? {};
+      check(Boolean(row.src), "快照 NPC 行带素材目录（客户端预载 / 建节点全靠它）");
+      check(typeof row.scaleX === "number" && typeof row.scaleY === "number", "快照 NPC 行带缩放（数字）");
+      check(typeof row.posX === "number" && typeof row.posY === "number", "快照 NPC 行带偏移（数字）");
+    }
     checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20）");
     checkEqual(snap.levels?.length, growthSeed.ROLE_MAX_LEVEL, "快照等级行数 = 等级上限（#590：levels 段替代 levelExps + growthSegments）");
     check(

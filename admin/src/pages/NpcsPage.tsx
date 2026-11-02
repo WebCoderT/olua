@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatTime, npcsApi, npcSrc, PERMISSION } from "../api";
+import { formatTime, npcsApi, PERMISSION } from "../api";
 import type { Npc, PageResult } from "../api";
 import { GameFrame } from "../components/GameImage";
 import { Modal } from "../components/Modal";
@@ -13,9 +13,10 @@ import { PageHeader } from "../components/PageHeader";
  * NPC 配置管理（#258，养成配置第七页）
  *
  * id 清单固定（被 Tiled 地图对象组引用，启动时 seed 落库）——**没有「新建」「删除」**，
- * 只有「编辑」；名称与对话文案可改，外观资源（src / scale / position）与点击行为是
- * 表现层配置不进服务端。对话文案 seed 为空串（客户端暂无对话数据形态），在这里运营
- * 可维护，客户端消费等对接。写操作要 `gameConfig:write`。
+ * 只有「编辑」。#603 第七域起**客户端不再存 NPC 的任何显示数据**：名称、素材目录、缩放、
+ * 偏移都在这张表里，改完下次进游戏由 `GET /game-config` 快照整表重建客户端 `npcs`。
+ * 只有点击行为（弹哪个窗）还在客户端 `configs/npcClicks`（那是 UI 组件，不能进库）。
+ * 对话文案 seed 为空串（客户端暂无对话数据形态），在这里运营可维护。写操作要 `gameConfig:write`。
  */
 export function NpcsPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
@@ -74,7 +75,15 @@ export function NpcsPage() {
   const submitEdit = async () => {
     if (!editing || !form) return;
     try {
-      await npcsApi.update(editing.id, { label: form.label, dialog: form.dialog });
+      await npcsApi.update(editing.id, {
+        label: form.label,
+        dialog: form.dialog,
+        src: form.src,
+        scaleX: form.scaleX,
+        scaleY: form.scaleY,
+        posX: form.posX,
+        posY: form.posY,
+      });
       toastSuccess(`NPC「${form.label}」已更新`);
       closeEdit();
       await load();
@@ -87,8 +96,8 @@ export function NpcsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="NPC 配置"
-        description={<>id 清单固定（被 Tiled 地图对象组引用），只可编辑、不可新增 / 删除；外观资源与点击行为是表现层配置，不进服务端。
-            对话文案在客户端暂无数据形态，先在这里维护。</>}
+        description={<>id 清单固定（被 Tiled 地图对象组引用），只可编辑、不可新增 / 删除。客户端不再存 NPC 的任何显示数据 ——
+            名称 / 素材 / 缩放 / 偏移都在这里改，下次进游戏生效（点击行为仍在客户端按 id 接线）。</>}
       />
 
       <Card>
@@ -122,6 +131,8 @@ export function NpcsPage() {
                 <th className={thClass}>图</th>
                 <th className={thClass}>id</th>
                 <th className={thClass}>名称</th>
+                <th className={thClass}>素材目录</th>
+                <th className={thClass}>缩放 / 偏移</th>
                 <th className={thClass}>对话</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
@@ -131,10 +142,16 @@ export function NpcsPage() {
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameFrame atlas={npcSrc(item.id)} alt={item.label} />
+                    <GameFrame atlas={item.src} alt={item.label} />
                   </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                  <td className={`${tdClass} font-mono text-xs text-slate-400`}>{item.src || <span className="text-slate-600">（未配置，不显示）</span>}</td>
+                  <td className={`${tdClass} whitespace-nowrap font-mono text-xs text-slate-400`}>
+                    ×{item.scaleX} / ×{item.scaleY}
+                    <br />
+                    ({item.posX}, {item.posY})
+                  </td>
                   <td className={`${tdClass} max-w-[360px] truncate text-xs text-slate-400`} title={item.dialog}>
                     {item.dialog || <span className="text-slate-600">（未配置）</span>}
                   </td>
@@ -174,6 +191,47 @@ export function NpcsPage() {
           <Field label="名称">
             <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
           </Field>
+          <Field label="素材目录" hint="resources 下的相对路径（图集动画，如 npc/npc_2125）；空串 = 该 NPC 不显示">
+            <Input value={form.src} onChange={(event) => setForm({ ...form, src: event.target.value })} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="横向缩放" hint="1 = 原尺寸（0.1~10）">
+              <Input
+                type="number"
+                step="0.1"
+                min={0.1}
+                max={10}
+                value={form.scaleX}
+                onChange={(event) => setForm({ ...form, scaleX: Number(event.target.value) })}
+              />
+            </Field>
+            <Field label="纵向缩放" hint="1 = 原尺寸（0.1~10）">
+              <Input
+                type="number"
+                step="0.1"
+                min={0.1}
+                max={10}
+                value={form.scaleY}
+                onChange={(event) => setForm({ ...form, scaleY: Number(event.target.value) })}
+              />
+            </Field>
+            <Field label="横向偏移" hint="像素，0 = 不偏移（±4000）">
+              <Input
+                type="number"
+                step="1"
+                value={form.posX}
+                onChange={(event) => setForm({ ...form, posX: Number(event.target.value) })}
+              />
+            </Field>
+            <Field label="纵向偏移" hint="像素，0 = 不偏移（±4000）">
+              <Input
+                type="number"
+                step="1"
+                value={form.posY}
+                onChange={(event) => setForm({ ...form, posY: Number(event.target.value) })}
+              />
+            </Field>
+          </div>
           <Field label="对话文案" hint="客户端暂无对话数据形态，先在这里维护（≤2000 字）">
             <textarea
               className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"

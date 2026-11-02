@@ -122,7 +122,6 @@ export {
   mapPreview,
   maxStackOf,
   monsterIcon,
-  npcSrc,
   OCCUPATION_LABELS,
   occupationLabel,
   rankMeta,

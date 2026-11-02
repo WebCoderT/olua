@@ -145,6 +145,8 @@ const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
 const sizesSource = read("assets/configs/layout/sizes.ts");
 const panelsSource = read("assets/configs/layout/panels.ts");
 const npcSource = read("assets/configs/npc.ts");
+// #603 第七域：NPC 点击行为在 npcClicks（数据在服务端）
+const npcClicksSource = read("assets/configs/npcClicks.ts");
 
 check(/rank: number = 0;/.test(roleSource) && /军衔阶数/.test(roleSource), "Role 有 rank 字段（0 = 未授衔）");
 check(/typeof role\.rank !== "number"\) role\.rank = 0;/.test(storageSource), "旧存档迁移：rank 缺失补 0（ensureRoleDefaults）");
@@ -163,7 +165,7 @@ check(/getChildByName\("role_rank"\)/.test(displaySource) && /GameUiHelper\.getR
 check(/static createRankCard/.test(uiHelperSource) && /static updateRankCard/.test(uiHelperSource) && /static createRankAttributeList/.test(uiHelperSource) && /static createRankBadge/.test(uiHelperSource), "GameUiHelper 有军衔四零件（卡片 / 卡片状态刷新 / 属性表 / 徽记）");
 check(/rankUpgradeDialogLayout\.list\.cardSize/.test(uiHelperSource) && /rankAttributeLabels/.test(uiHelperSource) && /getText\("label_rank_progress"/.test(uiHelperSource), "军衔零件的几何、属性顺序与文案都来自 configs（不写死）");
 check(/new RankUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.rankButton/.test(roleInfoSource), "角色信息弹窗有「军衔」按钮打开军衔弹窗（唯一入口）");
-check(!/RankUpgradeDialog/.test(npcSource), "军衔不走 NPC（入口只在角色信息弹窗）");
+check(!/RankUpgradeDialog/.test(npcClicksSource), "军衔不走 NPC（入口只在角色信息弹窗）");
 check(/createRankCard|updateRankCard|createRankBadge|upgradeRank\(\)/.test(dialogSource), "军衔弹窗接线：零件 + 晋升 + 状态刷新");
 check(/buildList\(role\?\.rank \?\? 0\);/.test(dialogSource) && !/buildList/.test(dialogSource.split("private selectLevel")[1].split("private updateCardStates")[0]), "100 阶列表只在打开时建一次，切换选中不重建（避免「点一下建 400 个节点」）");
 check(/updateRankCard\(card, config, currentLevel, target === this\.selectedLevel\)/.test(dialogSource), "切换选中只刷受影响的两张卡片外观");

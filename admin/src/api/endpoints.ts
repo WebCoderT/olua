@@ -729,7 +729,7 @@ export const npcsApi = {
   /**
    * NPC 基础数据列表（GET /admin/npcs）
    *
-   * id 清单固定（seed 自客户端 configs/npc-data 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。
+   * id 清单固定（seed 自服务端 npc-seed 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。
    *
    * 权限点：gameConfig:read
    */

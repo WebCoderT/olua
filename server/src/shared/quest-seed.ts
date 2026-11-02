@@ -11,7 +11,7 @@
  * ## 字段口径（与客户端 QuestData 同构）
  * - `kind`：main = 主线（一次性，`prevQuestId` 线性链门控）；daily = 日常（领奖后可重复接，
  *   进度清零；首版**不做每日重置定时器**，重接即新一轮）；
- * - `npcId`：发布 NPC（客户端头顶 `!` 标记与对话入口的依据，id 见 npc-data）；
+ * - `npcId`：发布 NPC（客户端头顶 `!` 标记与对话入口的依据，id 见 npc-seed）；
  * - `objective`：**单目标**（v1 边界）—— kill = 击杀怪物 key、talk = 与 NPC id 对话、
  *   collect = 交付时背包持有物品 id ×count（会扣走）；
  * - `rewards.items`：奖励物品（goodId 必须存在于物品总表，生成器会校验）；
@@ -52,7 +52,7 @@ export interface QuestSeedRow {
   prevQuestId: string;
   /** 接取最低等级 */
   minLevel: number;
-  /** 发布 NPC 的 id（npc-data 的 id） */
+  /** 发布 NPC 的 id（npc-seed 的 id） */
   npcId: string;
   /** 单目标 */
   objective: QuestSeedObjective;

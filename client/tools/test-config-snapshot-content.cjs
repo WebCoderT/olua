@@ -38,7 +38,7 @@ function main() {
   const { items, getItem } = require(path.join(outDir, "configs/items.js"));
   const { drugs } = require(path.join(outDir, "configs/drug.js"));
   const { monsterRuntime, monsterResource, applyMonsterPresentation, applyMonsterRuntimeStats } = require(path.join(outDir, "configs/monsterRuntime.js"));
-  const { npcData } = require(path.join(outDir, "configs/npc-data.js"));
+  const { npcs } = require(path.join(outDir, "configs/npc.js"));
   const { fashionData } = require(path.join(outDir, "configs/fashionClothes.js"));
   const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
@@ -147,12 +147,23 @@ function main() {
   );
   check(resourceAfter === monsterResource.get("1") && resourceAfter.out === "monster/out/1", "数值落表不碰资源（两半分开，各自整段替换）", resourceAfter.out);
 
-  console.log("\n=== NPC 与时装：只覆写文案与数值 ===");
-  const npcBefore = npcData.find((npc) => npc.id === "0002");
-  snapshotApi.applyConfigSnapshot({ npcs: [{ id: "0002", label: "测试传送官", dialog: "你好", updatedAt: 0 }] });
-  const npcAfter = npcData.find((npc) => npc.id === "0002");
-  check(npcAfter.label === "测试传送官", "NPC 名称已覆写", `${npcBefore.label} → ${npcAfter.label}`);
-  check(npcAfter.src === npcBefore.src, "NPC 资源路径与几何不动", npcAfter.src);
+  console.log("\n=== NPC：整表重建（客户端不再存任何 NPC 数据）===");
+  check(npcs.size === 0, "快照到达前 NPC 表为空（客户端没有本地兜底）", `size=${npcs.size}`);
+  snapshotApi.applyConfigSnapshot({
+    npcs: [
+      { id: "0002", label: "测试传送官", dialog: "你好", src: "npc/npc_9999", scaleX: 1.5, scaleY: 1.5, posX: 11, posY: 0, updatedAt: 0 },
+      { id: "1001", label: "神装使者", dialog: "", src: "npc/npc_2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, updatedAt: 0 },
+    ],
+  });
+  const npcAfter = npcs.get("0002");
+  check(npcAfter && npcAfter.label === "测试传送官", "NPC 名称取快照", npcAfter && npcAfter.label);
+  check(npcAfter && npcAfter.src === "npc/npc_9999", "素材目录取快照（客户端没有 src 兜底）", npcAfter && npcAfter.src);
+  check(npcAfter && npcAfter.scale.x === 1.5 && npcAfter.scale.y === 1.5, "缩放取快照", npcAfter && JSON.stringify(npcAfter.scale));
+  check(npcAfter && npcAfter.position.x === 11 && npcAfter.position.y === 0, "偏移取快照", npcAfter && JSON.stringify(npcAfter.position));
+  check(npcs.size === 2, "整表重建：快照里没有的 NPC 不会残留", `size=${npcs.size}`);
+  check(typeof (npcAfter && npcAfter.onClick) === "function", "点击行为按 id 延迟接线（npcClicks 注册表）", typeof (npcAfter && npcAfter.onClick));
+
+  console.log("\n=== 时装：只覆写文案与数值 ===");
 
   const fashionBefore = fashionData.find((fashion) => fashion.id === "cloth_2");
   snapshotApi.applyConfigSnapshot({

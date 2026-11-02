@@ -28,18 +28,30 @@ export class NpcRepository {
   /** seed 一行（已存在则跳过 —— 运营改过的值不会被配置更新覆盖回去） */
   seedRow(row: NpcRow): void {
     this.db.run(
-      `INSERT OR IGNORE INTO npcs (id, label, dialog, updated_at) VALUES (?, ?, ?, ?)`,
-      [row.id, row.label, row.dialog, row.updated_at],
+      `INSERT OR IGNORE INTO npcs (id, label, dialog, src, scale_x, scale_y, pos_x, pos_y, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.label, row.dialog, row.src, row.scale_x, row.scale_y, row.pos_x, row.pos_y, row.updated_at],
     );
   }
 
+  /**
+   * 存量库补外观（#603 第七域）：老库的 npcs 行是「只有 id / label / dialog」的形态，
+   * `seedRow` 的 INSERT OR IGNORE 会整行跳过 → src 空着 = 客户端查不到素材、NPC 不显示。
+   * 只在 **src 还是空串**（= 从没填过）时回填一次，运营清空 src 的极端情况按「重填」处理。
+   * @returns 真的补了行数（日志用）
+   */
+  backfillAppearance(row: NpcRow): number {
+    return this.db.execute(
+      `UPDATE npcs SET src = ?, scale_x = ?, scale_y = ?, pos_x = ?, pos_y = ? WHERE id = ? AND src = ''`,
+      [row.src, row.scale_x, row.scale_y, row.pos_x, row.pos_y, row.id],
+    ).changes;
+  }
+
   update(row: NpcRow): { changes: number } {
-    return this.db.execute(`UPDATE npcs SET label = ?, dialog = ?, updated_at = ? WHERE id = ?`, [
-      row.label,
-      row.dialog,
-      row.updated_at,
-      row.id,
-    ]);
+    return this.db.execute(
+      `UPDATE npcs SET label = ?, dialog = ?, src = ?, scale_x = ?, scale_y = ?, pos_x = ?, pos_y = ?, updated_at = ? WHERE id = ?`,
+      [row.label, row.dialog, row.src, row.scale_x, row.scale_y, row.pos_x, row.pos_y, row.updated_at, row.id],
+    );
   }
 
   findByKey(id: string): NpcRow | undefined {

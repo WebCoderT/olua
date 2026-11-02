@@ -6554,7 +6554,7 @@
     },
     "/admin/npcs": {
       "get": {
-        "description": "id 清单固定（seed 自客户端 configs/npc-data 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。\n\n`dialog` 是对话文案列：客户端目前没有对话数据形态（都写死在弹窗组件里），seed 为空串，在这里运营可改，客户端消费等对接。\n\n**排序**：`sort` 取 `id` / `label` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "id 清单固定（seed 自服务端 npc-seed 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。\n\n`src` / `scaleX` / `scaleY` / `posX` / `posY` 是外观（素材目录 + 缩放 + 偏移）：客户端不再存这份数据，改完下次进游戏由配置快照整表重建。\n\n`dialog` 是对话文案列：客户端目前没有对话数据形态（都写死在弹窗组件里），seed 为空串，在这里运营可改，客户端消费等对接。\n\n**排序**：`sort` 取 `id` / `label` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminNpc.list",
         "parameters": [
           {
@@ -6663,7 +6663,7 @@
     },
     "/admin/npcs/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：名称。\n- `dialog`：对话文案（空串 = 清空；≤2000 字）。\n- `id` 不存在 → 404（`50020`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：名称（≤50 字）。\n- `dialog`：对话文案（空串 = 清空；≤2000 字）。\n- `src`：素材目录（resources 相对路径；空串 = 该 NPC 不显示）。\n- `scaleX` / `scaleY`：缩放（0.1~10，1 = 原尺寸）。\n- `posX` / `posY`：偏移（像素，±4000，0 = 不偏移）。\n- `id` 不存在 → 404（`50020`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminNpc.update",
         "parameters": [
           {
@@ -13427,6 +13427,26 @@
             "type": "string",
             "description": "对话文案（不传则不改；空串 = 清空）",
             "maxLength": 2000
+          },
+          "src": {
+            "type": "string",
+            "description": "素材目录（resources 相对路径；不传则不改；空串 = 该 NPC 不显示）"
+          },
+          "scaleX": {
+            "type": "number",
+            "description": "横向缩放（0.1~10，不传则不改；1 = 原尺寸）"
+          },
+          "scaleY": {
+            "type": "number",
+            "description": "纵向缩放（0.1~10，不传则不改；1 = 原尺寸）"
+          },
+          "posX": {
+            "type": "number",
+            "description": "横向偏移（像素，±4000，不传则不改；0 = 不偏移）"
+          },
+          "posY": {
+            "type": "number",
+            "description": "纵向偏移（像素，±4000，不传则不改；0 = 不偏移）"
           }
         }
       },
@@ -18414,6 +18434,26 @@
             "type": "string",
             "description": "对话文案（客户端暂无对话数据形态，seed 为空串；消费等 #248/#249）"
           },
+          "src": {
+            "type": "string",
+            "description": "素材目录（resources 相对路径，图集动画；列表缩略图取首帧）"
+          },
+          "scaleX": {
+            "type": "number",
+            "description": "精灵横向缩放（1 = 原尺寸）"
+          },
+          "scaleY": {
+            "type": "number",
+            "description": "精灵纵向缩放（1 = 原尺寸）"
+          },
+          "posX": {
+            "type": "number",
+            "description": "精灵横向偏移（像素，0 = 不偏移）"
+          },
+          "posY": {
+            "type": "number",
+            "description": "精灵纵向偏移（像素，0 = 不偏移）"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -18423,6 +18463,11 @@
           "id",
           "label",
           "dialog",
+          "src",
+          "scaleX",
+          "scaleY",
+          "posX",
+          "posY",
           "updatedAt"
         ]
       },
@@ -18445,7 +18490,7 @@
             "example": 20
           },
           "list": {
-            "description": "当前页的 NPC 基础数据",
+            "description": "当前页的 NPC 数据",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/NpcDto"

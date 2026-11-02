@@ -1120,6 +1120,26 @@ export type UpdateNpc = {
    * 对话文案（不传则不改；空串 = 清空）
    */
   dialog?: string;
+  /**
+   * 素材目录（resources 相对路径；不传则不改；空串 = 该 NPC 不显示）
+   */
+  src?: string;
+  /**
+   * 横向缩放（0.1~10，不传则不改；1 = 原尺寸）
+   */
+  scaleX?: number;
+  /**
+   * 纵向缩放（0.1~10，不传则不改；1 = 原尺寸）
+   */
+  scaleY?: number;
+  /**
+   * 横向偏移（像素，±4000，不传则不改；0 = 不偏移）
+   */
+  posX?: number;
+  /**
+   * 纵向偏移（像素，±4000，不传则不改；0 = 不偏移）
+   */
+  posY?: number;
 };
 
 export type UpdateQuestObjective = {
@@ -4228,6 +4248,26 @@ export type Npc = {
    */
   dialog: string;
   /**
+   * 素材目录（resources 相对路径，图集动画；列表缩略图取首帧）
+   */
+  src: string;
+  /**
+   * 精灵横向缩放（1 = 原尺寸）
+   */
+  scaleX: number;
+  /**
+   * 精灵纵向缩放（1 = 原尺寸）
+   */
+  scaleY: number;
+  /**
+   * 精灵横向偏移（像素，0 = 不偏移）
+   */
+  posX: number;
+  /**
+   * 精灵纵向偏移（像素，0 = 不偏移）
+   */
+  posY: number;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -4247,7 +4287,7 @@ export type NpcPage = {
    */
   size: number;
   /**
-   * 当前页的 NPC 基础数据
+   * 当前页的 NPC 数据
    */
   list: Npc[];
 };

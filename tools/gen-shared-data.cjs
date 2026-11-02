@@ -45,8 +45,9 @@
  *   能干净编译加载（此前记的「依赖 UI 模块」已不成立）。**#588 起快照只带表现 / AI 参数**
  *   （icon / aggressive / detectRange / moveSpeed，`MONSTER_PRESENTATION`）——数值（label / level /
  *   maxHp / 六项）的唯一来源改服务端 `monster-seed.ts` + `monsters` 表，快照不再带；
- *   NPC 走 `configs/npc-data`（**数据与行为分家**：原 npc.ts 引 UI 弹窗链，Node 加载会炸 ——
- *   实证 `Pointer.js` 的 `sys.hasFeature` 即炸，onClick 接线留在 npc.ts），快照只有 id / label。
+ *   NPC 出厂数据的唯一书写处是服务端 `npc-seed.ts`（#603 第七域从客户端 `configs/npc-data` 搬来），
+ *   生成物里的 NPCS 只剩 id / label / src（管理端列表缩略图）；外观参数（scale / position）与
+ *   名称 / 对话文案落 `npcs` 表、随快照下发 —— 客户端 `configs/npc` 只留点击接线。
  * - ~~时装~~：**#257 起已纳入**——`configs/fashionClothes` 恢复为纯数据文件（原整份注释、
  *   零导出零消费，表现层参数全是常量未随恢复保留，见该文件头），快照 FASHION
  *   带 id / 名称 / 文案 / 资源路径 / 售卖价 / 属性（当前全 0，管理端可改）。
@@ -88,7 +89,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes"].map(
+const SOURCE_FILES = ["growth", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "mall", "fashionClothes"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -115,11 +116,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed } = compileServerShared(work);
+  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -133,7 +134,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed) {
+function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -156,7 +157,8 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
     // #588：怪物条目不再从客户端 configs 取 —— 数值唯一来源是服务端 monster-seed.ts，
     // 资源与表现是 monster-presentation.generated.ts；这里只保留 monsterAI 全局节奏
     monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
-    npcs: missing("npc-data.npcData", cfg("npc-data").npcData),
+    // #603 起 NPC 出厂数据的服务端唯一书写处是 npc-seed.ts，客户端 configs/npc 只剩点击接线
+    npcs: npcSeed.NPC_SEED_ROWS,
     // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
     // 售卖价/属性），表现层参数未随恢复保留（见 fashionClothes.ts 文件头）
     fashions: missing("fashionClothes.fashionData", cfg("fashionClothes").fashionData),
@@ -371,6 +373,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "achievement-seed.ts"),
           path.join(sharedDir, "drop-seed.ts"),
           path.join(sharedDir, "combat-seed.ts"),
+          path.join(sharedDir, "npc-seed.ts"),
         ],
       },
       null,
@@ -390,6 +393,7 @@ function compileServerShared(work) {
     achievementSeed: require(path.join(work, "server-out", "achievement-seed.js")),
     dropSeed: require(path.join(work, "server-out", "drop-seed.js")),
     combatSeed: require(path.join(work, "server-out", "combat-seed.js")),
+    npcSeed: require(path.join(work, "server-out", "npc-seed.js")),
   };
 }
 
@@ -468,21 +472,21 @@ function pickMonsterAi(monsterAi) {
 /**
  * NPC 表 → [[NPC id, 元数据]]（#258）
  *
- * 来源是 `configs/npc-data`（数据与行为分家后的纯数据文件，见文件头）。收
- * id、label 与 src（resources 相对路径，管理端列表缩略图用）：scale / position
- * 是纯几何，不进快照；对话文案客户端目前没有数据形态（都写死在弹窗组件里），
- * 管理端在 npcs 表上新增 dialog 列运营可改，客户端消费等对接（#248/#249）。
+ * 来源是服务端 `server/src/shared/npc-seed.ts`（#603 第七域起唯一书写处；此前在客户端
+ * `configs/npc-data`）。收 id、label 与 src（resources 相对路径，管理端列表缩略图用）：
+ * scale / position 是运营可改的表现参数，走 `npcs` 表 + 快照，不重复进这份生成物；
+ * 对话文案客户端目前没有数据形态（都写死在弹窗组件里），管理端在 npcs 表 dialog 列运营可改。
  */
 function pickNpcs(npcs) {
   const out = [];
   const seen = new Set();
   for (const item of npcs || []) {
-    if (!item || !item.id) throw new Error("configs/npc-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("NPC 种子里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`NPC id 重复：${item.id}`);
     seen.add(item.id);
     out.push([item.id, { label: String(item.label ?? ""), src: String(item.src ?? "") }]);
   }
-  if (out.length === 0) throw new Error("configs/npc-data 的 npcData 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  if (out.length === 0) throw new Error("NPC 种子为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 

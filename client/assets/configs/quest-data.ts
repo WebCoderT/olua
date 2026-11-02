@@ -42,7 +42,7 @@ export interface QuestData {
   prevQuestId: string;
   /** 接取最低等级 */
   minLevel: number;
-  /** 发布 NPC（npc-data 的 id） */
+  /** 发布 NPC（服务端 npc-seed 的 id） */
   npcId: string;
   objective: QuestObjective;
   rewards: QuestRewards;

@@ -674,6 +674,14 @@ export interface NpcRow {
   label: string;
   /** 对话文案（seed 为空串，客户端消费等 #248/#249） */
   dialog: string;
+  /** 素材目录（resources 相对路径，图集动画；#603 第七域起客户端不再存这份） */
+  src: string;
+  /** 精灵缩放（1 = 原尺寸） */
+  scale_x: number;
+  scale_y: number;
+  /** 精灵在节点内的偏移（0,0 = 不偏移） */
+  pos_x: number;
+  pos_y: number;
   updated_at: number;
 }
 

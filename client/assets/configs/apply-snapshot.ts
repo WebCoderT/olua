@@ -14,7 +14,6 @@ import type {
   MapTypeGroup as MapTypeGroupRow,
   Monster as MonsterRow,
   MonsterPresentation as MonsterPresentationRow,
-  Npc as NpcRow,
   Quest as QuestRow,
   Skill as SkillRow,
   Status as StatusRow,
@@ -35,7 +34,7 @@ import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates, setR
 import { items } from "./items";
 import { drugs } from "./drug";
 import { applyMonsterPresentation, applyMonsterRuntimeStats } from "./monsterRuntime";
-import { npcData } from "./npc-data";
+import { applyNpcRows } from "./npc";
 import { questData } from "./quest-data";
 import type { QuestData } from "./quest-data";
 import { rebuildQuests } from "./quest";
@@ -243,22 +242,6 @@ export function applyMonsterRows(rows: MonsterRow[]): void {
  */
 export function applyMonsterPresentations(rows: MonsterPresentationRow[]): void {
   rows.forEach((row) => applyMonsterPresentation(row.id, row));
-}
-
-/**
- * 覆写 NPC 名称（#363）
- *
- * 只改文案：`src` / `scale` / `position` 是地图摆放与资源路径，归客户端与素材包管。
- * 服务端的 `dialog` 客户端暂无形（对话数据形态未落地），这里不硬塞。
- */
-export function applyNpcRows(rows: NpcRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, NpcRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  npcData.forEach((npc) => {
-    const row = overrides.get(npc.id);
-    if (row) npc.label = row.label;
-  });
 }
 
 /**
