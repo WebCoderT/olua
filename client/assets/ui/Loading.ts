@@ -1,5 +1,5 @@
 import { _decorator, Component, director, Label, Mask, Node, Size, UITransform, Vec2 } from "cc";
-import { mapSrcOf } from "../configs/map";
+import { mapSrcOf } from "../configs/game-config";
 import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
 import GameUiHelper from "./helpers/GameUiHelper";

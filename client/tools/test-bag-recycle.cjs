@@ -31,7 +31,7 @@ function main() {
 
   const { items, getItem, summarizeBagRecycle, recycleBagEquipmentGrid } = require(path.join(outDir, "configs/items.js"));
   const { getRecyclePrice } = require(path.join(outDir, "configs/equipments.js"));
-  const { equipmentRecyclePrice, equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
+  const { equipmentRecyclePrice, equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
   const { bagRow, bagCol } = require(path.join(outDir, "configs/role.js"));
   const { isEquipment } = require(path.join(outDir, "types/good.js"));
 

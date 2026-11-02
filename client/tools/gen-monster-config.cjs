@@ -9,8 +9,9 @@
  * 运行时权威在 monsters 表（管理端可改）。
  *
  * 数据来源：
- * 1. 上一份 monster-presentation.generated.ts（或迁移期的旧 configs/monster.ts）——
- *    保留手工调过的 moveSpeed / detectRange / speedRate 覆盖（素材里没有这些事实）；
+ * 1. 上一份 monster-presentation.generated.ts —— 保留手工调过的 moveSpeed / detectRange /
+ *    speedRate 覆盖（素材里没有这些事实）。「上一份生成物」是这些手工值的**唯一住址**，
+ *    客户端 configs 里没有副本（#588 之后就没再有过）；
  * 2. assets/resources/monster/out/<id>/stand/stand.plist —— 图集（#235 已把散帧打包）里
  *    基准帧的 trim 数据（与引擎渲染同一口径），从中取：
  *      · contentSize = spriteSize（裁剪区尺寸）＝ 可见身体尺寸；
@@ -38,8 +39,6 @@ const ROOT = path.resolve(__dirname, "..");
 const REPO = path.join(ROOT, "..");
 const OUT_TS = path.join(REPO, "server/src/shared/monster-presentation.generated.ts");
 const SERVER_SEED_TS = path.join(REPO, "server/src/shared/monster-seed.ts");
-// 迁移期旧来源：客户端 configs/monster.ts 还有条目时优先读它（之后这份文件不再有怪物数据）
-const LEGACY_TS = path.join(ROOT, "assets/configs/monster.ts");
 // #235 起帧动画是图集（stand.png + stand.plist），不再有散帧 meta
 const OUT_DIR = path.join(ROOT, "assets/resources/monster/out");
 
@@ -60,7 +59,8 @@ function parseEntries(text) {
       const m = re.exec(block);
       return m ? m[1] : undefined;
     };
-    const key = grab(/key:\s*"([^"]+)"/);
+    // 生成物里字段叫 `id`（服务端口径），迁移期的客户端旧表叫 `key` —— 两个都认
+    const key = grab(/(?:id|key):\s*"([^"]+)"/);
     if (!key) continue;
     // speedRate 覆盖（非全 1 才保留；全 1 是历史默认，收敛进客户端 monsterDefaultSpeedRate）
     const rateBlock = /speedRate:\s*\{([\s\S]*?)\n\s*\},?\s*$/.exec(block.trimEnd());
@@ -82,16 +82,10 @@ function parseEntries(text) {
   return entries;
 }
 
-const legacyText = fs.readFileSync(LEGACY_TS, "utf8");
 const generatedText = fs.existsSync(OUT_TS) ? fs.readFileSync(OUT_TS, "utf8") : "";
-let handValues = parseEntries(legacyText);
-let sourceName = "旧 configs/monster.ts（迁移期）";
-if (generatedText && parseEntries(generatedText).size >= handValues.size) {
-  handValues = parseEntries(generatedText);
-  sourceName = "上一份 monster-presentation.generated.ts";
-}
+const handValues = parseEntries(generatedText);
 if (handValues.size === 0) throw new Error("上一份怪物数据一条都解析到，中止（防止误清空）");
-console.log(`手工值来源: ${sourceName}（${handValues.size} 条）`);
+console.log(`手工值来源: 上一份 monster-presentation.generated.ts（${handValues.size} 条）`);
 
 //#endregion
 

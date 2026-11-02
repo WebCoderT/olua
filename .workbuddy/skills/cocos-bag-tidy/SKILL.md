@@ -117,7 +117,7 @@ export function recycleBagEquipmentGrid(bag: BagCell[][]) {
 ### 2. 定价：**曲线 × 倍率**，越贵的东西越不能逐件手写
 
 ```ts
-// configs/growth.ts —— 与角色/怪物曲线同一形态（分段线性，档内线性 + 档间跳档；#590 起曲线本体在服务端 growth-seed，这段回收价曲线暂留客户端）
+// configs/game-config.ts 区 6 —— 与角色/怪物曲线同一形态（分段线性，档内线性 + 档间跳档；#590 起曲线本体在服务端 growth-seed，这段回收价曲线暂留客户端；#626 前在 configs/growth.ts）
 export const equipmentRecyclePriceCurve: GrowthSegment[] = [
   { from: 1, to: 10, start: 10, perLevel: 5 },
   // …6 档，60 级约 4 万

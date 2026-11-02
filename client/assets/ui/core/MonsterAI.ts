@@ -1,5 +1,5 @@
 import { Animation, isValid, Node, Rect, RigidBody2D, Vec2, Vec3 } from "cc";
-import { monsterAI } from "../../configs/monster";
+import { monsterAI } from "../../configs/game-config";
 import { getAnimationName } from "../../configs/animation";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterAIState } from "../../types/monster";

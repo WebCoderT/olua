@@ -182,7 +182,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 ### 背包「一键回收」的价想调（太贵/太便宜、想单独改某一件）？
 
-- **价是「等级曲线 × 前后缀倍率」**，唯一来源在 `configs/growth.equipmentRecyclePriceCurve`（6 档分段线性，和角色/怪物同一种曲线）：基础价按装备自己的 `level` 取（60 级约 4 万），前后缀变体再乘 `equipmentPrefixRates × equipmentSuffixRates`（超神·神级 = 基础价 × 4.2）。想整体调价**只改那一段曲线**
+- **价是「等级曲线 × 前后缀倍率」**，曲线出厂在 `server/src/shared/equipment-seed.ts` 的 `EQUIPMENT_RECYCLE_CURVE_SEED`（6 档分段线性，和角色/怪物同一种曲线；管理端 `/equipment-settings` 可改），客户端读快照里的那一份（`configs/game-config.ts` 区 6 的 `equipmentRecyclePrice`）：基础价按装备自己的 `level` 取（60 级约 4 万），前后缀变体再乘 `equipmentPrefixRates × equipmentSuffixRates`（超神·神级 = 基础价 × 4.2）。想整体调价**只改那一段曲线**
 - **想给某件装备单独定价**：在它的条目里写 `recyclePrice`（覆盖曲线生成值，与「战斗属性可写可不写」同一套路）。基础件与它的 14 个变体都按这个基础价缩放
 - **货币是绑定元宝**（`role.bindGold`，与战魂升级同一个钱包），回收后角色信息栏余额立即刷新；装备详情弹窗（鼠标悬停）里会显示这件装备的「回收价 N 绑定元宝」
 - **只回收背包里的装备**：身上穿着的槽位一律不动；药品/材料/解析不出配置的 id 一概不碰、连格子引用都不换（`configs/items.recycleBagEquipmentGrid` 是纯函数，守着「行列不变 / 非装备一件不动」两条不变量）
@@ -256,8 +256,8 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 - **入口**：角色信息弹窗右下的「称 号」按钮（唯一入口，**不走 NPC**）；称号升级弹窗与战魂弹窗同构（左等级列表 / 中名牌动画与信息 / 右属性 + 绑定元宝 + 升级按钮），但没有「外显」勾选框
 - **显示**：解锁称号（升到 1 阶）后名牌动画**常显**在角色头顶，节点挂在**头部信息栏容器**里（与角色名称/血条同一个 FlexCol，`RoleDisplay.updateTitleShow`）：位置由该容器的纵向布局自动排列（插在最上 = 排在名称之上），代码不手动定位、也**不缩放**（按素材原始尺寸显示）；插入位置与占位尺寸见 `configs/layout/hud.roleShowLayout.title`（`siblingIndex` / `size`）。名牌取代了头部信息栏里原来写死的「- 战神 * 女武神 -」文字占位；未激活时不显示
-- **数据**：`configs/title.ts` —— 34 个帧目录（resources/titles 全登记）按强度排成 1~34 阶：sfx_13009~13020 江湖系（factor 1）→ 13031~13041 军阶系（1.15）→ 13060~13070「我能打」搞怪系（1.3）；名称与素材画面上烙的字一致
-- **属性曲线**：与战魂同一套做法 —— 每阶映射一个「等效角色等级」，取裸属性再打 `titleGrowth.rate`（0.3，弱于战魂的 0.5）× 系列 factor 折；改 `configs/growth` 的等级曲线称号强度自动跟着走
+- **数据**：出厂在服务端 `server/src/shared/title-seed.ts`（管理端 `/titles` 可改），客户端只收快照（`configs/game-config.ts` 区 1 的 `titleLevels`）—— 34 个帧目录（resources/titles 全登记）按强度排成 1~34 阶：sfx_13009~13020 江湖系（factor 1）→ 13031~13041 军阶系（1.15）→ 13060~13070「我能打」搞怪系（1.3）；名称与素材画面上烙的字一致
+- **属性曲线**：与战魂同一套做法 —— 每阶映射一个「等效角色等级」，取裸属性再打 `titleGrowth.rate`（0.3，弱于战魂的 0.5）× 系列 factor 折；靠的是服务端 `growth-seed.ts` 的等级曲线（管理端 `/growth`），改它称号强度自动跟着走
 - **价格曲线**：升到 N 阶 = `titleGrowth.priceBase`（200）× N² 绑定元宝（战魂是 300 × N²，见 `titleUpgradePrice`）；想整体调贵贱只改这两个数
 - **存档**：旧档缺 `title` 字段自动补 0（`StorageManager.ensureRoleDefaults`）；升级走 `StorageManager.upgradeTitle`，属性与战斗力即时重算，头顶名牌同步刷新
 - **预加载**：进图前 `PreloadManager` 把**当前称号**的帧目录一起预载（未激活跳过），名牌进图即出现
@@ -267,19 +267,19 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 回血是**一项普通属性**（`hpRecover`，单位「点/秒」），与最大生命同级存在角色身上，五个来源相加在**服务端**完成并经 `roleUpdate` 帧下发（客户端不再自己算）：
 
-- **强度按最大生命比例派生**：等级裸回血 = 最大生命 × `configs/growth.attributeRange.hpRecoverRate`（默认 `0.01` = 每秒回 1%）。**想整体调快慢，只改这一个数** —— 装备 / 战魂 / 称号 / 军衔的回血都是各自乘自己那套折扣算出来的，会跟着同比例变化。
-- **只有防御部位装备加回血**：`configs/growth.equipmentSlotShare` 的 `recover` 列（衣服 40 / 头盔 20 / 腰带 20 / 鞋子 20，合计 100；武器与首饰为 0）。穿满四个防御部位 ≈ 裸回血的 `equipmentGrowth.setPowerRate`（2）倍。这里**故意不做「保底 1 点」**：低等级防具只加几十点血，凑不出 1 点/秒是正常的；强行保底会让 1 级穿满四件防具的角色白拿 4 点/秒（同级怪打人约 7 点/秒），前期直接无敌。
+- **强度按最大生命比例派生**：等级裸回血 = 最大生命 × `hpRecoverRate`（`server/src/shared/growth-seed.ts` 的 `ATTRIBUTE_RANGE.hpRecoverRate`，管理端 `/growth` 的标量键 `attributeRange.hpRecoverRate`；默认 `0.01` = 每秒回 1%）。**想整体调快慢，只改这一个数** —— 装备 / 战魂 / 称号 / 军衔的回血都是各自乘自己那套折扣算出来的，会跟着同比例变化。
+- **只有防御部位装备加回血**：`server/src/shared/growth-seed.ts` 的 `EQUIPMENT_SLOT_SHARE` 的 `recover` 列（衣服 40 / 头盔 20 / 腰带 20 / 鞋子 20，合计 100；武器与首饰为 0）。穿满四个防御部位 ≈ 裸回血的 `equipmentGrowth.setPowerRate`（2）倍。这里**故意不做「保底 1 点」**：低等级防具只加几十点血，凑不出 1 点/秒是正常的；强行保底会让 1 级穿满四件防具的角色白拿 4 点/秒（同级怪打人约 7 点/秒），前期直接无敌。
 - **战魂 / 称号 / 军衔**：和它们的其它属性同一套算法（`rate × 系列/大段 factor`），因此回血与最大生命**同涨同落**。
 - **结算**：`ui/utils/battle/HpHelper.recover`，游戏主循环**每秒**结一次（与回蓝共用同一个计时器、同一次落盘，不会因此多写存档）；不足 1 点的部分累加在 `hpRecoverAccumulator` 里不丢（低回血速度下不会被取整丢掉）；回复封顶不超过最大生命。
 - **死亡期间不回复**：`hp ≤ 0` 时直接不结算，否则回血会把角色从死亡流程（死亡动画 + 复活弹窗）里「拉起来」。
-- **不计入战斗力**：`configs/battle.combatCalc` 的权重表显式排除了 `hpRecover`。回血不改变输出与承伤上限，算进去只会凭空抬高所有地图的战力门槛。**怪物也不回血**（`configs/growth.monsterStats` 恒返回 0）。
+- **不计入战斗力**：`configs/game-config.ts` 区 5 的 `combatCalc` 权重表显式排除了 `hpRecover`。回血不改变输出与承伤上限，算进去只会凭空抬高所有地图的战力门槛。**怪物也不回血**（`server/src/shared/monster-seed.ts` 展开的怪物属性里 `hpRecover` 恒 0）。
 - **旧存档**：读角色时由 `StorageManager.ensureRoleDefaults → HpHelper.ensureDefaults` 把缺的字段补 0（补满血则以最大生命为准），不需要迁移脚本。
 - **显示**：装备详情与角色信息弹窗的「基础属性」列表按 `configs/good.goodShowAttributes`（哪些部位列出这一项）与 `goodShowAttributesLabel`（标签文案「每秒回血」、以及列表顺序）渲染，界面代码里没有写死的属性表。
 - 回归单测：`node tools/test-hp-recover.cjs`（等级曲线逐级复算、装备回血只出现在防御部位且权重合计 100、三条成长线单调、显示口径、真实 `HpHelper` 行为：满血/死亡/封顶/余数/旧档补齐，外加数值量级探针与全部接线源码断言）
 
 ### 状态数值（格挡/加防）是怎么参与伤害结算的？想调概率/强度改哪里？
 
-状态在 #14 之前只有名称/图标/时长，之后补上了战斗数值语义。**想调某个状态的强度，改 `configs/status.ts` 里对应条目的 `combat` 字段**；结算公式想换口径，改 `ui/utils/battle/BattleMath.ts`（纯函数）。
+状态在 #14 之前只有名称/图标/时长，之后补上了战斗数值语义。**想调某个状态的强度，去管理端 `/statuses` 改对应条目的 `combat` 字段**（出厂在 `server/src/shared/status-seed.ts`，客户端 `configs/game-config.ts` 区 7 只是快照落下来的运行时表）；结算公式想换口径，改 `ui/utils/battle/BattleMath.ts`（纯函数）。
 
 - **数值语义在配置**：`StatusConfig.combat`（`types/status.ts`）三个可选字段——`blockChance`（格挡概率 0-1）、`blockFactor`（格挡触发时伤害乘的系数，0.5 = 减半）、`defenseMultiplier`（防御乘法系数）。不配 `combat` 的状态是纯表现状态，不参与结算
 - **现行口径**：护体神盾（2001）= 30% 概率格挡、格挡时本次伤害 ×0.5；金刚护体（2002）= 防御 ×1.5
@@ -310,8 +310,8 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 ### 商城怎么买东西？想改商品 / 价格改哪里？
 
 - **入口**：底部功能栏「商城」（快捷键 `M`，1 级解锁）。弹窗就是商城门面背景（`resources/mall/bg`），商品列表摆在门面的橱窗开口里
-- **商品**：**系统内的全部装备** —— 七个部位的装备表全量收进来（`configs/mall.getMallGoods`），含前后缀品质变体（37 件基础 × 15 变体 = 555 件），按「部位序 → 等级 → 前缀 → 后缀」排好序。以后新增装备**自动上架**，不用改商城
-- **价格**：默认全场统一 **1 绑定元宝/件**（`configs/mall.mallPrice`）。想给个别装备单独定价，往 `configs/mall` 的 `customPriceData` 加一条 `{ id, price }`（写变体 id 只影响那一件，写基础件 key 只对那一件生效——目前是精确 id 匹配），不在此表的走统一价
+- **商品**：**系统内的全部装备** —— 七个部位的装备表全量收进来（`configs/equipments.getMallGoods`，它要读七张部位表，所以住在装备模块而不是快照域），含前后缀品质变体（37 件基础 × 15 变体 = 555 件），按「部位序 → 等级 → 前缀 → 后缀」排好序。以后新增装备**自动上架**，不用改商城
+- **价格**：默认全场统一 **1 绑定元宝/件**（出厂在服务端 `mall-seed.ts` → `mall_settings` 表，管理端 `/mall-pricing` 可改；客户端一个价格都不存，只读快照）。想给个别装备单独定价，也是在 `/mall-pricing` 里加一条特殊价（`mall_prices` 表，写变体 id 只影响那一件，写基础件 key 只对那一件生效——目前是精确 id 匹配），不在此表的走统一价
 - **购买**：点行尾「购 买」→ 扣绑定元宝 → 装备直接进背包第一个空格（装备不可叠加，每次买 1 件占 1 格）。**三种失败都不改任何数据**：绑定元宝不足、背包已满（会原样退出）、商品 id 解析不出配置（已下架）。连买不受限，买多少次都行，钱够就成交
 - **列表为什么滚动流畅（虚拟化）**：555 件商品如果全部常驻渲染会有几千个节点参与绘制与命中判定，滚动会卡；所以行节点只建一次、位置手动摆（固定行距），按滚动位置**只激活视口附近的几行**（`MallDialog.updateVirtualRows`）。改行高/间距后行距自动跟着变，不要在组件里另写一份行距
 - **悬停看详情**：鼠标停在图标上显示完整装备详情（与背包格子同一套零件：三段着色名、属性、回收价、品质背景动画），移开即收；滚动列表时详情自动收起

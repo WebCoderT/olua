@@ -1,7 +1,7 @@
 import { isValid, Node } from "cc";
 import { skillTargetTypeLabels, skillTypeLabels, skills } from "../../configs/skill";
 import { getText, uiTexts } from "../../configs/texts";
-import { statuses } from "../../configs/status";
+import { statuses } from "../../configs/game-config";
 import { SkillId } from "../../types/skill";
 import { StatusBadge } from "../../types/status";
 import HoverTipDialog, { HoverTipData } from "../components/dialogs/HoverTipDialog";

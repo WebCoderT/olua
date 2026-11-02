@@ -9,8 +9,8 @@ import {
   GOOD_TYPE,
 } from "../types/good";
 import type { BattleAttributes } from "../types/common";
-import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates } from "./growth";
-import { combatCalc as combatCalcWeights } from "./battle";
+import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates } from "./game-config";
+import { combatCalc as combatCalcWeights } from "./game-config";
 
 /**
  * 装备配置（#603 第九域：**客户端不存任何装备数据**）
@@ -507,6 +507,36 @@ export function applyEquipmentSeed(rows: EquipmentSeedRowLike[]): Equipment[] {
       outPositions: row.outPositions.map((point) => new Vec2(point.x, point.y)),
     })),
   );
+}
+
+//#endregion
+
+//#region 全部装备（商城商品表）
+
+/**
+ * 全部装备：七个部位的装备 Map 全量合并，按 **部位序 → 等级升序 → 前缀 → 后缀** 排序
+ * （部位序 = 装备槽配置的先后，见 equipmentSlotOrder；每次调用现算，不怕外部改表）
+ *
+ * 商城拿它当商品目录（`ui/components/dialogs/MallDialog`）。**放在装备表这里而不是
+ * `configs/game-config` 的商城区**：这一份要读七个部位表，而部位表在 `growth` / `battle`
+ * 之后才建起来 —— 商城区若自己 import 部位表，就会形成 `game-config → equipments →
+ * game-config` 的环。查询装备表的函数本来就该和装备表住一起。
+ *
+ * ⚠️ 收集必须用 `map.forEach`：打包 babel loose 会把 `[...map.values()]` 编成 `[].concat(迭代器)`
+ * → 恒为空数组（症状 = 商城静默无货，见上面 getBaseEquipments 的注释）
+ */
+export function getMallGoods(): Equipment[] {
+  const result: Equipment[] = [];
+  [clothes, weapons, rings, nicklaces, shoes, helmets, belts].forEach((map) =>
+    map.forEach((equipment, key) => {
+      // id 由 configs/items 统一登记（登记时回填到同一对象）；这里兜底补一次，脱离 items 也能自洽
+      if (!equipment.id) equipment.id = key;
+      result.push(equipment);
+    }),
+  );
+  const slotOrder = (equipment: Equipment) => equipmentSlotOrder.get(equipment.slot) ?? Number.MAX_SAFE_INTEGER;
+  result.sort((a, b) => slotOrder(a) - slotOrder(b) || a.level - b.level || a.prefix - b.prefix || a.suffix - b.suffix);
+  return result;
 }
 
 //#endregion

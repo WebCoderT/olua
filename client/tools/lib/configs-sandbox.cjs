@@ -140,47 +140,39 @@ function prepare(sandboxName, extraEntries = [], ccExtra = "") {
  */
 function hydrateSnapshotTables(outDir) {
   const has = (rel) => fs.existsSync(path.join(outDir, rel));
+  // #626 起快照各域的表与落库都在 `configs/game-config`，一个 require 就能全灌
+  if (!has("configs/game-config.js")) return;
+  const cfg = require(path.join(outDir, "configs/game-config.js"));
 
-  // 任务（#603 第六域）：客户端 `configs/quest-data` 只剩空数组，数据在 quest-seed.ts ——
+  // 任务（#603 第六域）：客户端只剩空数组，数据在 quest-seed.ts ——
   // 任务面板 / 可接判定 / NPC 头顶标记的断言都读这张表
-  if (has("configs/quest-data.js")) {
-    const questSeed = require(compileServerShared("quest-seed.ts", "olua-seed-quest"));
-    const questDataMod = require(path.join(outDir, "configs/quest-data.js"));
-    questDataMod.questData.length = 0;
-    questSeed.QUEST_SEED_ROWS.forEach((row) => questDataMod.questData.push(row));
-    // 任务仓读的是 quests Map（由 questData 重建），不重建就是空表
-    if (has("configs/quest.js")) require(path.join(outDir, "configs/quest.js")).rebuildQuests();
-  }
+  const questSeed = require(compileServerShared("quest-seed.ts", "olua-seed-quest"));
+  cfg.questData.length = 0;
+  questSeed.QUEST_SEED_ROWS.forEach((row) => cfg.questData.push(row));
+  // 任务仓读的是 quests Map（由 questData 重建），不重建就是空表
+  cfg.rebuildQuests();
 
-  // 技能（#603 第十一域）：客户端 `configs/skill-data` 只剩空数组 + 「职业 → 技能 id」的派生规则，
+  // 技能（#603 第十一域）：客户端只剩空数组 + 「职业 → 技能 id」的派生规则，
   // 数值在 skill-seed.ts —— 技能栏 / 快捷栏 / 技能弹窗 / 普攻距离判定的断言都读这张表。
-  // 放在装备那段的 early-return 之前：只编了 skill-data 的用例也要能拿到技能。
-  if (has("configs/skill-data.js")) {
-    const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill"));
-    require(path.join(outDir, "configs/skill-data.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
-  }
+  const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill"));
+  cfg.applySkillData(skillSeed.SKILL_SEED_ROWS);
 
   // 时装（#603 第十二域）：衣柜 / 取源规则 / 预载的断言都读 fashionData，
   // 数据在 fashion-seed.ts（种子形状 = 快照形状，直接走线上同一个 applyFashionData）
-  if (has("configs/fashionClothes.js")) {
-    const fashionSeed = require(compileServerShared("fashion-seed.ts", "olua-seed-fashion"));
-    require(path.join(outDir, "configs/fashionClothes.js")).applyFashionData(fashionSeed.FASHION_SEED_ROWS);
-  }
+  const fashionSeed = require(compileServerShared("fashion-seed.ts", "olua-seed-fashion"));
+  cfg.applyFashionData(fashionSeed.FASHION_SEED_ROWS);
 
-  if (!has("configs/equipments.js") || !has("configs/growth.js")) return;
+  if (!has("configs/equipments.js")) return;
 
   const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
-  const growthCfg = require(path.join(outDir, "configs/growth.js"));
   const equipmentSeed = require(requireEquipmentSeed());
 
   // 战斗力权重（#603）：空表时 equipmentCombatValue 恒 0，「更好装备」提示会把所有候选判成不更好
-  if (has("configs/battle.js")) {
-    const combatSeed = require(compileServerShared("combat-seed.ts", "olua-seed-combat"));
-    require(path.join(outDir, "configs/battle.js")).applyCombatWeights(combatSeed.COMBAT_WEIGHTS_SEED);
-  }
+  const combatSeed = require(compileServerShared("combat-seed.ts", "olua-seed-combat"));
+  cfg.applyCombatWeights(combatSeed.COMBAT_WEIGHTS_SEED);
 
   // 顺序讲究：倍率先装（它决定展开档数，空数组一件都展开不出来），再装槽位与文案
-  growthCfg.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
+  cfg.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
   equipmentsMod.applyEquipmentQualityLabels(equipmentSeed.EQUIPMENT_PREFIX_LABEL_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_LABEL_SEEDS);
   // 槽位的 order 就是种子数组下标（与 equipment_slots.sort_order 的出厂值同源）
   equipmentsMod.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
@@ -191,8 +183,8 @@ function hydrateSnapshotTables(outDir) {
   // 药品 / 材料（#603 第十域）：客户端这两张表也是空的，数据在 item-seed.ts。
   // 单测里背包里装的药、掉落名、商城条目都按 id 查这张表 —— 不灌就是「查不到该物品」。
   const itemSeed = require(compileServerShared("item-seed.ts", "olua-seed-item"));
-  require(path.join(outDir, "configs/drug.js")).applyDrugData(itemSeed.DRUG_SEED_ROWS);
-  require(path.join(outDir, "configs/material.js")).applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
+  cfg.applyDrugData(itemSeed.DRUG_SEED_ROWS);
+  cfg.applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
   // 总表按「装备 → 药品 → 材料」重建（顺序只有客户端这一份实现）
   require(path.join(outDir, "configs/items.js")).rebuildItemIndex();
 
@@ -212,7 +204,7 @@ function hydrateSnapshotTables(outDir) {
   ]) {
     map.forEach((item) => {
       const stats = growthSeed.equipmentStats(Number(item.level) || 0, String(item.slot ?? ""));
-      const rate = (growthCfg.equipmentPrefixRates[Number(item.prefix) || 0] ?? 1) * (growthCfg.equipmentSuffixRates[Number(item.suffix) || 0] ?? 1);
+      const rate = (cfg.equipmentPrefixRates[Number(item.prefix) || 0] ?? 1) * (cfg.equipmentSuffixRates[Number(item.suffix) || 0] ?? 1);
       item.maxHp = Math.round(stats.maxHp * rate);
       item.hpRecover = Math.round(stats.hpRecover * rate);
       for (const key of RANGE_KEYS) item[key] = [Math.round(stats[key][0] * rate), Math.round(stats[key][1] * rate)];
@@ -293,10 +285,6 @@ function compileServerShared(entry, sandboxName) {
 function seedRuntimeTables(outDir) {
   const growth = require(compileServerShared("growth-seed.ts", "olua-seed-growth"));
 
-  // 沙箱按 import 链编译（configs-sandbox 只编 items.ts 一条链），四张运行时表不一定都在
-  // 产物里 —— 各自按存在性处理：在就灌表，不在说明该测试根本不消费它
-  const has = (rel) => fs.existsSync(path.join(outDir, rel));
-
   // 快照行形状：六项区间是 {min,max} 对象（种子与 LEVEL_ATTRIBUTES 里是 [min,max] 元组）
   const range = (tuple) => ({ min: tuple[0], max: tuple[1] });
   const toRangeAttributes = (attributes) => ({
@@ -310,49 +298,45 @@ function seedRuntimeTables(outDir) {
     taoistDefense: range(attributes.taoistDefense),
   });
 
-  if (has("configs/level.js")) {
-    const level = require(path.join(outDir, "configs/level.js"));
-    level.applyLevelRows(
-      Object.entries(growth.ROLE_LEVEL_ATTRIBUTES).map(([key, a]) => ({
-        level: Number(key),
-        maxHp: a.maxHp,
-        maxMp: a.maxMp,
-        hpRecover: a.hpRecover,
-        physicalAttack: range(a.physicalAttack),
-        magicAttack: range(a.magicAttack),
-        taoistAttack: range(a.taoistAttack),
-        physicalDefense: range(a.physicalDefense),
-        magicDefense: range(a.magicDefense),
-        taoistDefense: range(a.taoistDefense),
-        exp: a.exp,
-      })),
-    );
+  // #626 起四张表都在 `configs/game-config` 里，一个 require 全部拿到；
+  // 产物里没有它说明这条测试链根本不消费这些表，直接返回 null（调用方各自按需断言）
+  const has = (rel) => fs.existsSync(path.join(outDir, rel));
+  if (!has("configs/game-config.js")) {
+    return { levelMap: null, titleLevels: null, soulLevels: null, rankLevels: null };
   }
-  if (has("configs/title.js")) {
-    const title = require(path.join(outDir, "configs/title.js"));
-    const titleSeed = require(compileServerShared("title-seed.ts", "olua-seed-title"));
-    title.applyTitleRows(titleSeed.TITLE_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
-  }
-  if (has("configs/soul.js")) {
-    const soul = require(path.join(outDir, "configs/soul.js"));
-    const soulSeed = require(compileServerShared("soul-seed.ts", "olua-seed-soul"));
-    soul.applySoulRows(soulSeed.SOUL_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
-  }
-  if (has("configs/rank.js")) {
-    const rank = require(path.join(outDir, "configs/rank.js"));
-    const rankSeed = require(compileServerShared("rank-seed.ts", "olua-seed-rank"));
-    rank.applyRankRows(rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
-  }
+  const cfg = require(path.join(outDir, "configs/game-config.js"));
+
+  cfg.applyLevelRows(
+    Object.entries(growth.ROLE_LEVEL_ATTRIBUTES).map(([key, a]) => ({
+      level: Number(key),
+      maxHp: a.maxHp,
+      maxMp: a.maxMp,
+      hpRecover: a.hpRecover,
+      physicalAttack: range(a.physicalAttack),
+      magicAttack: range(a.magicAttack),
+      taoistAttack: range(a.taoistAttack),
+      physicalDefense: range(a.physicalDefense),
+      magicDefense: range(a.magicDefense),
+      taoistDefense: range(a.taoistDefense),
+      exp: a.exp,
+    })),
+  );
+  const titleSeed = require(compileServerShared("title-seed.ts", "olua-seed-title"));
+  cfg.applyTitleRows(titleSeed.TITLE_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
+  const soulSeed = require(compileServerShared("soul-seed.ts", "olua-seed-soul"));
+  cfg.applySoulRows(soulSeed.SOUL_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
+  const rankSeed = require(compileServerShared("rank-seed.ts", "olua-seed-rank"));
+  cfg.applyRankRows(rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
 
   // 装备（#603 第九域）**不在这里** —— 它不再是「快照到达后才有」，而是 prepare() 编完就
   // 按线上同一条路灌好的既存前提（见本文件顶部的 hydrateSnapshotTables）。这里只管四张
   // 「#590 起客户端零数据」的运行时表。
 
   return {
-    levelMap: has("configs/level.js") ? require(path.join(outDir, "configs/level.js")).levelMap : null,
-    titleLevels: has("configs/title.js") ? require(path.join(outDir, "configs/title.js")).titleLevels : null,
-    soulLevels: has("configs/soul.js") ? require(path.join(outDir, "configs/soul.js")).soulLevels : null,
-    rankLevels: has("configs/rank.js") ? require(path.join(outDir, "configs/rank.js")).rankLevels : null,
+    levelMap: cfg.levelMap,
+    titleLevels: cfg.titleLevels,
+    soulLevels: cfg.soulLevels,
+    rankLevels: cfg.rankLevels,
   };
 }
 

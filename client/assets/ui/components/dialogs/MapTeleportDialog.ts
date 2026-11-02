@@ -2,7 +2,7 @@ import { Node, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
-import { mapLabelOf, mapTypeGroups, maps } from "../../../configs/map";
+import { mapLabelOf, mapTypeGroups, maps } from "../../../configs/game-config";
 import type { MapId } from "../../../types/map";
 import { mapTeleportDialogLayout } from "../../../configs/hudLayout";
 

@@ -4,7 +4,7 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
-import { getTitleLevel, titleLevels, titleMaxLevel } from "../../../configs/title";
+import { getTitleLevel, titleLevels, titleMaxLevel } from "../../../configs/game-config";
 import { titleUpgradeDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";

@@ -13,23 +13,23 @@
  * · 主动怪规则：种子 tier=boss 或身体宽 ≥ 阈值（与生成器头部常量一致）；
  * · 老怪行为不回退：1~4 号 moveSpeed 2 / detectRange 200 / stand 速度 1；
  * · 资源在位：每只怪的 icon 与 out 图集都真实存在；
- * · 接线：createMonsterBody 消费 outOffset；运行时表消费方不再 import configs/monster 的怪物 Map
+ * · 接线：createMonsterBody 消费 outOffset；运行时表消费方不再 import configs/game-config 的怪物 Map
  *   （那个 Map 已经不存在，谁抄旧代码谁编译红 —— 这里再钉一道源码断言）。
  */
 const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
 
-const outDir = prepare("olua-monster-config", ["configs/monster.ts", "configs/monsterRuntime.ts"]);
-const { monsterResource, applyMonsterPresentation } = require(path.join(outDir, "configs/monsterRuntime.js"));
-const { monsterDefaultSpeedRate } = require(path.join(outDir, "configs/monster.js"));
+const outDir = prepare("olua-monster-config", ["configs/game-config.ts", "configs/game-config.ts"]);
+const { monsterResource, applyMonsterPresentation } = require(path.join(outDir, "configs/game-config.js"));
+const { monsterDefaultSpeedRate } = require(path.join(outDir, "configs/game-config.js"));
 
 const SHARED = path.join(PROJECT_ROOT, "..", "server", "src", "shared");
 const PRES_SRC = fs.readFileSync(path.join(SHARED, "monster-presentation.generated.ts"), "utf8");
 const SEED_SRC = fs.readFileSync(path.join(SHARED, "monster-seed.ts"), "utf8");
 const HELPER_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"), "utf8");
 const GEN_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "tools/gen-monster-config.cjs"), "utf8");
-const RUNTIME_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/monsterRuntime.ts"), "utf8");
+const RUNTIME_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts"), "utf8");
 const OUT_RES = path.join(PROJECT_ROOT, "assets/resources/monster/out");
 
 /** 主动怪的身体宽阈值（与 gen-monster-config.cjs 头部的 AGGRESSIVE_BODY_WIDTH 同源，改一处要同步另一处） */
@@ -159,8 +159,8 @@ check(resMissing.length === 0, "每只怪的图集与 icon 资源都在磁盘上
 check(/animationNode\.setPosition\(monster\.outOffset\.x,\s*monster\.outOffset\.y,\s*0\)/.test(HELPER_SRC), "createMonsterBody 消费 outOffset（身体中心对准节点原点）");
 check(/const AGGRESSIVE_BODY_WIDTH = 250;/.test(GEN_SRC), "生成器阈值与测试同源（250）");
 check(GEN_SRC.includes(`"${STAND_BASE_FRAME}"`), `生成器几何基准帧 = ${STAND_BASE_FRAME}`);
-// 客户端不许再 import configs/monster 的怪物 Map（那个 Map 已经删了；谁抄旧代码这里红）
-check(!/from "\.\.\/\.\.\/configs\/monster"/.test(fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/core/MonsterManager.ts"), "utf8")), "MonsterManager 不再 import configs/monster（数据全走 monsterRuntime）");
+// 客户端不许再 import configs/game-config 的怪物 Map（那个 Map 已经删了；谁抄旧代码这里红）
+check(!/from "\.\.\/\.\.\/configs\/monster"/.test(fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/core/MonsterManager.ts"), "utf8")), "MonsterManager 不再 import configs/game-config（数据全走 monsterRuntime）");
 check(/speedRate:\s*\{\s*\.\.\.monsterDefaultSpeedRate,\s*\.\.\.\(row\.speedRate \?\? \{\}\)\s*\}/.test(RUNTIME_SRC), "运行时表落表时默认速度打底 + 快照覆盖合并");
 // 真机踩到的坑（#588 验证轮）：Animation.play 在「还没挂进场景」的节点上调用，
 // Cocos 3.8.7 不会在启用后自动恢复 —— spriteFrame 一直空，站着不动的怪整只不显示。

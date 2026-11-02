@@ -27,11 +27,11 @@ function main() {
     return;
   }
 
-  const growth = require(path.join(outDir, "configs/growth.js"));
-  const level = require(path.join(outDir, "configs/level.js"));
-  const title = require(path.join(outDir, "configs/title.js"));
-  const soul = require(path.join(outDir, "configs/soul.js"));
-  const rank = require(path.join(outDir, "configs/rank.js"));
+  const growth = require(path.join(outDir, "configs/game-config.js"));
+  const level = require(path.join(outDir, "configs/game-config.js"));
+  const title = require(path.join(outDir, "configs/game-config.js"));
+  const soul = require(path.join(outDir, "configs/game-config.js"));
+  const rank = require(path.join(outDir, "configs/game-config.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
 
   const { levelMap } = level;

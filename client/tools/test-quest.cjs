@@ -52,7 +52,7 @@ const guard = (fn) => {
 try {
   const outDir = prepare("olua-quest", ["ui/core/QuestStore.ts"]);
   const QuestStore = require(path.join(outDir, "ui/core/QuestStore.js")).default;
-  const { quests } = require(path.join(outDir, "configs/quest.js"));
+  const { quests } = require(path.join(outDir, "configs/game-config.js"));
 
   //#region A. 任务仓（跑真类）
 

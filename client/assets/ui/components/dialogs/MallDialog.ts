@@ -7,8 +7,8 @@ import { Draggable } from "../input/Draggable";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { trackUiPress } from "../../utils/input/Pointer";
 import { mallDialogLayout, uiImages } from "../../../configs/hudLayout";
-import { getMallGoods, getMallPrice } from "../../../configs/mall";
-import { getEquipmentNameParts } from "../../../configs/equipments";
+import { getMallPrice } from "../../../configs/game-config";
+import { getEquipmentNameParts, getMallGoods } from "../../../configs/equipments";
 import { getText } from "../../../configs/texts";
 import { Equipment } from "../../../types/good";
 

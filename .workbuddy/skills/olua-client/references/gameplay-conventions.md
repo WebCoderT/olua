@@ -24,7 +24,7 @@
 
 ## 成长线与属性
 
-- **`growth.sampleGrowth` 只吃整数等级**：曲线段间不连续（第 10 级 262 血 / 第 11 级 330 血），分数等级会拿下一段斜率外推。按分数等效等级取属性必须**两侧整数等级线性插值**（`configs/rank.getEquivalentAttributes`，test-rank 钉死）。
+- **`growth.sampleGrowth` 只吃整数等级**：曲线段间不连续（第 10 级 262 血 / 第 11 级 330 血），分数等级会拿下一段斜率外推。按分数等效等级取属性必须**两侧整数等级线性插值**（服务端 `rank-seed.ts` 的 `getEquivalentAttributes`，#590 起成长曲线与插值都在服务端，test-rank 钉死）。
 - **三条成长线同构**（战魂 `soul` 37 阶 / 称号 `title` 34 阶 / 军衔 `rank` 100 阶 = 10 大段 × 10 阶）：
   都 = 「等效等级裸属性 × rate × 系列/大段 factor」（rate 0.5 / 0.3 / 0.35）；都消耗**绑定元宝**、价格 = `priceBase × N²`（300 / 200 / 30）；都计 `GameHelper.combatCalc`、都要 `StorageManager.ensureRoleDefaults` 补 0、都走 `StorageManager.upgradeXxx()`（先扣款再落阶再重算再 updateUi）。
 - **`hpRecover`（点/秒）**：单值属性（**不进 `attributeKeys` 区间循环**）。五来源 = 等级（`maxHp × hpRecoverRate`，默认 0.01）+ **防御装备**（衣 40% / 头 20% / 腰带 20% / 鞋 20%，**不保底 1**）+ 战魂 / 称号 / 军衔。汇总在 `combatCalc`、结算 `HpHelper.recover`（`hp<=0` 不回、攒余数）、与 `MpHelper` 共用一次落盘。**不计战斗力**、怪物恒 0。守卫 `test-hp-recover.cjs`。
@@ -50,7 +50,7 @@
 
 ## 怪物 / 战斗 / 掉落
 
-- **怪物数据客户端为零（#588）**：数值与表现都由 `GET /game-config` 快照下发，落进 `configs/monsterRuntime.ts` 的两张运行时表（`monsterResource` / `monsterRuntime`）；`configs/monster.ts` 只剩 `monsterAI` 与 `monsterDefaultSpeedRate` 两个全局常量。资源表现清单的来源是服务端 `server/src/shared/monster-presentation.generated.ts`（`client/tools/gen-monster-config.cjs` 从图集 plist 基准帧实测：contentSize = spriteSize、outOffset = -spriteOffset，出图目录 `server/src/shared/`）；数值出厂数值 = `monster-seed.ts` 四元组 + `expandMonsterSeed` 曲线展开。快照缺数值行 → 名字 = key、攻防 [0,0]、warn 一次；缺资源行 → spawn 直接跳过。消费点一律 `monsterResourceOf` / `monsterStatsOrDefault` / `monsterLabelOf`，**禁止 import configs/monster 拿数据**（守卫：`audit-world-authority.cjs` 第五节 + `test-monster-config.cjs`）。
+- **怪物数据客户端为零（#588）**：数值与表现都由 `GET /game-config` 快照下发，落进 `configs/game-config.ts` 区 16 的两张运行时表（`monsterResource` / `monsterRuntime`）；同文件区 15 只剩 `monsterAI` 与 `monsterDefaultSpeedRate` 两个全局常量。资源表现清单的来源是服务端 `server/src/shared/monster-presentation.generated.ts`（`client/tools/gen-monster-config.cjs` 从图集 plist 基准帧实测：contentSize = spriteSize、outOffset = -spriteOffset，出图目录 `server/src/shared/`）；数值出厂数值 = `monster-seed.ts` 四元组 + `expandMonsterSeed` 曲线展开。快照缺数值行 → 名字 = key、攻防 [0,0]、warn 一次；缺资源行 → spawn 直接跳过。消费点一律 `monsterResourceOf` / `monsterStatsOrDefault` / `monsterLabelOf`，**禁止自己兜一份怪物数据**（守卫：`audit-world-authority.cjs` 第五节 + `test-monster-config.cjs`）。
 - **掉落链（#581 之后）**：**抽表与入包都在服务端** —— `combat-settlement` 读库里的 `monster_drops` / `drop_tables` 抽掉落直接写背包，`roles/pickDrop` 管「地上这件归谁」；客户端 `DropManager.spawnResults(results, position, castId)` 只演散落（`DropScatter`），点击只发 pick 帧等 `applyPickResult`。客户端**没有**抽表能力（`configs/drop.ts` 只剩 `dropRuntime` 手感参数 —— 掉落表 #603 起全部搬到服务端 `drop-seed.ts` / `monster-drop-seed.ts`），`DropRoller` / `resolveDropTable` / `MonsterManager.hurt` 已删。**地面掉落名三段着色走 `getEquipmentNameParts`**（禁另写色表），各段 `Label.Overflow.NONE`（CLAMP 会压成 0）。
 - TiledMap 必关裁剪（`enableCulling=false`）；**伤害唯一入口 = 技能系统**（普攻 "1000"）；伤害 `max(0, 攻 - 防)`；**角色是 JSON 禁挂方法**。
 - `findOnlineRole()` 每次返回新对象（**长命视图别缓存**）；`deleteRole` 必清 `selectedRole`。

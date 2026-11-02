@@ -183,11 +183,23 @@ requirePatterns(SETTLEMENT, [
 //   静态层 —— 客户端 configs/types 里不许再长出怪物数值与资源字段；
 //   接线层 —— 快照入口必须把两段数据填进运行时表，消费点必须只认运行时表。
 const APPLY_SNAPSHOT = path.join(CLIENT_CONFIGS, "apply-snapshot.ts");
-const MONSTER_CONFIG = path.join(CLIENT_CONFIGS, "monster.ts");
-const MONSTER_RUNTIME = path.join(CLIENT_CONFIGS, "monsterRuntime.ts");
+// #626 起怪物手感常量与运行时表都在 configs/game-config（原 monster.ts / monsterRuntime.ts）。
+// 判据不变，但范围要收窄到「怪物手感参数」那一区 —— 整个文件里别的域本来就有 maxHp 之类的字段。
+const GAME_CONFIG = path.join(CLIENT_CONFIGS, "game-config.ts");
+const MONSTER_REGION = 15;
+/** 取 game-config 里某个 //#region N 的正文（找不到返回空串，由调用方报问题） */
+function regionOf(source, index) {
+  const lines = source.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.startsWith(`//#region ${index} ·`));
+  if (start < 0) return "";
+  const end = lines.findIndex((line, i) => i > start && line.startsWith("//#endregion"));
+  if (end < 0) return "";
+  return lines.slice(start + 1, end).join("\n");
+}
 {
   // —— 静态层：客户端配置里不许再有怪物数值副本 ——
-  const monsterConfig = read(MONSTER_CONFIG, "客户端怪物配置");
+  const gameConfigSource = read(GAME_CONFIG, "客户端快照配置");
+  const monsterConfig = regionOf(gameConfigSource, MONSTER_REGION);
   if (monsterConfig) {
     // 只看代码行：注释里提到字段名（归属说明）不算副本
     const code = monsterConfig.split(/\r?\n/).filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line)).join("\n");
@@ -197,7 +209,7 @@ const MONSTER_RUNTIME = path.join(CLIENT_CONFIGS, "monsterRuntime.ts");
       problem(MONSTER_CONFIG, 0, `configs/monster 又出现了怪物数值字段（${leaked.join("/")}）—— #588 起数值服务端独有，这里只许有 monsterAI 与默认移速倍率`);
     }
     if (!/\bmonsterAI\b/.test(monsterConfig)) {
-      problem(MONSTER_CONFIG, 0, "configs/monster 连 monsterAI 都没了 —— 被删过头了，全局行为常量还住在这里");
+      problem(GAME_CONFIG, 0, "game-config 的怪物手感参数区连 monsterAI 都没了 —— 被删过头了，全局行为常量还住在这里");
     }
   }
 
@@ -213,17 +225,18 @@ const MONSTER_RUNTIME = path.join(CLIENT_CONFIGS, "monsterRuntime.ts");
 
   // —— 接线层：运行时表必须被快照填充 ——
   const text = read(APPLY_SNAPSHOT, "快照应用");
-  const body = /export function applyMonsterRows\([\s\S]*?\n\}/.exec(text)?.[0] ?? "";
+  // applyMonsterRows 的实现随 #626 搬进 game-config（总入口仍在 apply-snapshot 调用它）
+  const body = /export function applyMonsterRows\([\s\S]*?\n\}/.exec(gameConfigSource)?.[0] ?? "";
   if (!body) {
-    problem(APPLY_SNAPSHOT, 0, "找不到 applyMonsterRows —— 怪物数值落表入口变了，请先确认服务端权威还在，再同步改本审计");
+    problem(GAME_CONFIG, 0, "找不到 applyMonsterRows —— 怪物数值落表入口变了，请先确认服务端权威还在，再同步改本审计");
   } else {
     if (!/applyMonsterRuntimeStats\(row\.id,/.test(body)) {
-      problem(APPLY_SNAPSHOT, 0, "applyMonsterRows 没写运行时数值表（applyMonsterRuntimeStats）—— 快照来了也进不了消费点的视野");
+      problem(GAME_CONFIG, 0, "applyMonsterRows 没写运行时数值表（applyMonsterRuntimeStats）—— 快照来了也进不了消费点的视野");
     }
     const OWNED = ["label", "level", "tier", "maxHp", "attributes.physicalAttack", "attributes.magicAttack", "attributes.taoistAttack", "attributes.physicalDefense", "attributes.magicDefense", "attributes.taoistDefense"];
     for (const field of OWNED) {
       if (!new RegExp(`row\\.${field.replace(/\./g, "\\.")}`).test(body)) {
-        problem(APPLY_SNAPSHOT, 0, `applyMonsterRows 少了 row.${field} 的落表：这一项会永远停在退化值（0 或 key 名）—— 管理端改了、游戏里没变`);
+        problem(GAME_CONFIG, 0, `applyMonsterRows 少了 row.${field} 的落表：这一项会永远停在退化值（0 或 key 名）—— 管理端改了、游戏里没变`);
       }
     }
   }
@@ -259,7 +272,7 @@ if (problems.length === 0) {
   console.log(
     `✓ 世界权威：客户端 ${scanned} 个文件无本地刷怪 / 无本地掉落结算；` +
       "唯一入口（sendWorldJoin / applyWorldState / spawnResults(castId) / pickDrop）齐全；" +
-      "怪物数值与表现客户端零副本（configs/monster 无数值字段、运行时表由快照两段填充）",
+      "怪物数值与表现客户端零副本（game-config 怪物区无数值字段、运行时表由快照两段填充）",
   );
   process.exit(0);
 }

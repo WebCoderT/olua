@@ -1,5 +1,5 @@
 import { _decorator, Camera, Component, isValid, Node, screen, sys, Vec3 } from "cc";
-import { mapSrcOf } from "../configs/map";
+import { mapSrcOf } from "../configs/game-config";
 import MpHelper from "./utils/battle/MpHelper";
 import HpHelper from "./utils/battle/HpHelper";
 import { ActivityController } from "./controllers/ActivityController";

@@ -1,6 +1,6 @@
 import type { QuestState } from "../utils/net/ApiModels";
-import { allQuests, quests } from "../../configs/quest";
-import type { QuestData } from "../../configs/quest";
+import { allQuests, quests } from "../../configs/game-config";
+import type { QuestData } from "../../configs/game-config";
 
 /**
  * 任务状态口径（#396）

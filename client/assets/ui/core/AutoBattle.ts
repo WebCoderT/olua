@@ -1,6 +1,6 @@
 import { isValid, Node, Rect, Vec2 } from "cc";
 import { autoBattle } from "../../configs/autoBattle";
-import { tiledGroupNames, tiledObjectClasses } from "../../configs/map";
+import { tiledGroupNames, tiledObjectClasses } from "../../configs/game-config";
 import { skills } from "../../configs/skill";
 import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";

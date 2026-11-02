@@ -1,53 +1,44 @@
 import { Vec2 } from "cc";
 import type {
   ConfigAttributes,
-  Drug as DrugRow,
   Equipment as EquipmentRow,
   EquipAlign,
   EquipInAlign,
-  Fashion as FashionRow,
   GameConfigSnapshot,
   GrowthScalar,
-  Item as ItemRow,
   MallPriceItem,
-  MapConfig as MapConfigRow,
-  MapTypeGroup as MapTypeGroupRow,
-  Monster as MonsterRow,
-  MonsterPresentation as MonsterPresentationRow,
-  Quest as QuestRow,
-  Skill as SkillRow,
-  Status as StatusRow,
-  UiEffectConfig,
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
 import type { EquipmentData, OutTransform } from "../types/good";
-import { applyTitleRows } from "./title";
-import { applySoulRows } from "./soul";
-import { applyRankRows } from "./rank";
-import { applyLevelRows } from "./level";
-import { mapTypeGroups, maps } from "./map";
-import { uiEffects } from "./effect";
-import { applyMallPricing } from "./mall";
-import { applyCombatWeights } from "./battle";
-import { applyEquipmentRules, setRoleMaxLevel } from "./growth";
+// 快照的「表 + 每段落库」都在 configs/game-config（#626 合并），这里只做编排
+import {
+  applyCombatWeights,
+  applyDrugRows,
+  applyEquipmentRules,
+  applyFashionRows,
+  applyItemRows,
+  applyLevelRows,
+  applyMallPricing,
+  applyMapRows,
+  applyMonsterPresentations,
+  applyMonsterRows,
+  applyNpcRows,
+  applyQuestRows,
+  applyRankRows,
+  applySkillRows,
+  applySoulRows,
+  applyStatusRows,
+  applyTitleRows,
+  applyUiEffectRows,
+  checkSnapshotContract,
+  setRoleMaxLevel,
+  snapshotContractMessage,
+} from "./game-config";
 import { items, rebuildItemIndex } from "./items";
-import { applyDrugData } from "./drug";
-import { applyItemBaseData } from "./material";
-import { applyMonsterPresentation, applyMonsterRuntimeStats } from "./monsterRuntime";
-import { applyNpcRows } from "./npc";
-import { questData } from "./quest-data";
-import type { QuestData } from "./quest-data";
-import { rebuildQuests } from "./quest";
-import { applyFashionData } from "./fashionClothes";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths } from "./role";
-import { applySkillData } from "./skill-data";
-import { statuses } from "./status";
-import { checkSnapshotContract, snapshotContractMessage } from "./snapshot-contract";
 import { SEX } from "../types/role";
-import { StatusConfig, StatusSource } from "../types/status";
-import type { MonsterRuntimeStats } from "../types/monster";
 
 /**
  * 服务端配置快照落库（#294 / #361 / #363 / #590）
@@ -197,169 +188,6 @@ export function applyEquipments(rows: EquipmentRow[]): void {
   applyEquipmentData(rows.map(rowToEquipmentData));
 }
 
-/**
- * 覆写药品（#603 第十域：**整表重建**）
- *
- * 客户端 `configs/drug` 已经没有出厂行了（数据在服务端 `item-seed.ts` → `drugs` 表），
- * 所以这里是「清空再按快照填」而不是「按 id 覆写已有行」—— 管理端下架一种药,
- * 客户端就该少一种（留着旧行会让它变成捡不起来、用不掉的幽灵物品）。
- *
- * 效果值的还原（四段拍平 → effects 数组）在 `configs/drug.toDrugEffects` 里,
- * 与 `resolveDrugRecovery` 的累加口径一致，这里只做直传。
- */
-export function applyDrugRows(rows: DrugRow[]): void {
-  applyDrugData(rows);
-}
-
-/**
- * 覆写物品与材料（#603 第十域：**整表重建**）
- *
- * 与药品同款：客户端 `configs/material` 只剩空数组，这里按快照清空重建。
- * 只收 MATERIAL / OTHER 大类（装备与药品各有自己的段与表）—— 快照的 `items` 段
- * 按表内容下发，不会混进装备行。
- */
-export function applyItemRows(rows: ItemRow[]): void {
-  applyItemBaseData(rows);
-}
-
-/**
- * 怪物数值落表（#588：**不再覆写本地副本** —— 客户端 configs/monster 没有怪物数据了）
- *
- * 数值唯一来源是服务端 monsters 表，快照整段写入 configs/monsterRuntime 的运行时数值表；
- * 消费点（MonsterManager / 血条 / 名牌 / 地图预览 / 任务文案）从那里取。
- * 表里没有的 key 不落行 —— 缺行的退化口径（名字 = key、攻防 [0,0]）由 monsterRuntime 统一给。
- */
-export function applyMonsterRows(rows: MonsterRow[]): void {
-  rows.forEach((row) => {
-    const range = (source: { min: number; max: number }): [number, number] => [source.min, source.max];
-    applyMonsterRuntimeStats(row.id, {
-      label: row.label,
-      level: row.level,
-      tier: (row.tier ?? "normal") as MonsterRuntimeStats["tier"],
-      maxHp: row.maxHp,
-      physicalAttack: range(row.attributes.physicalAttack),
-      magicAttack: range(row.attributes.magicAttack),
-      taoistAttack: range(row.attributes.taoistAttack),
-      physicalDefense: range(row.attributes.physicalDefense),
-      magicDefense: range(row.attributes.magicDefense),
-      taoistDefense: range(row.attributes.taoistDefense),
-    });
-  });
-}
-
-/**
- * 怪物资源与表现落表（#588 新增）：快照 monsterPresentations 段 → 运行时资源表。
- * 与数值一一对应（同一份 key 清单，服务端生成器双向对账过）；speedRate 覆盖在这里
- * 与客户端默认表合成（见 monsterRuntime.applyMonsterPresentation）。
- */
-export function applyMonsterPresentations(rows: MonsterPresentationRow[]): void {
-  rows.forEach((row) => applyMonsterPresentation(row.id, row));
-}
-
-/**
- * 覆写任务配置（#396；#603 第六域起**整表重建**）
- *
- * 客户端 `configs/quest-data` 早在 #603 就没有出厂行了，所以这里与技能 / 状态 / 时装同口径：
- * 先清空再按快照填 —— 管理端删掉一条任务，客户端就该少一条（留着旧行会变成
- * 「追踪栏还挂着、点开却是空任务」的幽灵）。`quests` Map 由 `rebuildQuests()` 重建。
- *
- * 行转换（`questRowToConfig`）仍保留钳制：目标类型只认 kill / talk / collect，
- * 数量至少 1，等级至少 1 —— 这些是**消费方的前提**（`Progress` 除以 count），
- * 不是「兜底数据」，坏行宁可钳到 1 也不该让任务追踪栏崩掉。
- *
- * 奖励物品只认 `goodId / count` 两个字段：物品名与图标由物品总表解析，任务表不复制一份。
- */
-export function applyQuestRows(rows: QuestRow[]): void {
-  questData.length = 0;
-  for (const row of rows) questData.push(questRowToConfig(row));
-  rebuildQuests();
-}
-
-/** 任务行（服务端快照）→ 客户端任务配置（奖励物品只认 goodId / count） */
-function questRowToConfig(row: QuestRow): QuestData {
-  const objective = row.objective ?? { type: "kill", target: "", count: 1 };
-  const type = objective.type === "talk" || objective.type === "collect" ? objective.type : "kill";
-  return {
-    id: row.id,
-    kind: row.kind === "daily" ? "daily" : "main",
-    label: row.label,
-    description: row.description,
-    prevQuestId: row.prevQuestId ?? "",
-    minLevel: Math.max(1, Math.floor(row.minLevel || 1)),
-    npcId: row.npcId ?? "",
-    objective: { type, target: `${objective.target ?? ""}`, count: Math.max(1, Math.floor(objective.count || 1)) },
-    rewards: {
-      gold: Math.max(0, Math.floor(row.rewards?.gold ?? 0)),
-      exp: Math.max(0, Math.floor(row.rewards?.exp ?? 0)),
-      items: (row.rewards?.items ?? []).map((entry) => ({ goodId: `${entry.goodId ?? ""}`, count: Math.max(1, Math.floor(entry.count || 1)) })),
-    },
-  };
-}
-
-/**
- * 时装装载（#257 / #603 第十二域）
- *
- * #603 起客户端**没有任何时装出厂行**（`configs/fashionClothes` 只剩空数组 + 取源规则），
- * 所以这里一律整表重建：快照里有什么就是什么。
- *
- * **icon / in / out 也来自快照**（与地图那套相反）：时装 id 与资源目录编号之间没有可推导的
- * 约定（cloth_13 甚至没有内观图），路径只能入库跟着行走。属性全 0 时也要照写
- * （运营可能就是把加成清零）。
- */
-export function applyFashionRows(rows: FashionRow[]): void {
-  applyFashionData(rows);
-}
-
-/** 状态行（服务端快照）→ 客户端状态配置 */
-function statusRowToConfig(row: StatusRow): StatusConfig {
-  return {
-    label: row.label,
-    icon: row.icon,
-    duration: row.duration,
-    source: row.source as StatusSource,
-    description: row.description,
-    effect: row.effect || undefined,
-    effectHoldLast: row.effectHoldLast,
-    // 四个维度全缺省 = 纯表现状态（与 StatusCombatConfig 的「缺省不参与」一致）
-    combat: {
-      blockChance: row.combat?.blockChance,
-      blockFactor: row.combat?.blockFactor,
-      defenseMultiplier: row.combat?.defenseMultiplier,
-      attackMultiplier: row.combat?.attackMultiplier,
-    },
-  };
-}
-
-/**
- * 技能配置装载（#367 / #372 / #603）
- *
- * #603 第十一域起客户端**没有任何技能出厂行**（`configs/skill-data` 只剩空数组 + 派生规则），
- * 所以这里一律整表重建：快照里有什么就是什么，角色技能与怪物技能同表（`owner` 区分）。
- *
- * **不动 onClick**：技能释放实现是代码（configs/skill 按 id 接上），数据只描述
- * 「冷却 / 倍率 / 动作 / 特效 / 释放限制 / 职业归属 / 击退」。重建后必须调 `rebuildSkills()`
- * （见 ConfigLoader），否则 `skills` Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
- */
-export function applySkillRows(rows: SkillRow[]): void {
-  applySkillData(rows);
-}
-
-/**
- * 状态配置装载（#367 / #372 / #603 第三域；#604 起整表重建）
- *
- * 覆写的是**注册表本身**（`statuses` 这个 Map），所以已经在身上生效的状态
- * 时长与图标也会跟着变（`StatusManager` 只记到期时间戳，读的仍是这份配置）。
- *
- * 客户端 `configs/status` 只有一张空 Map（数据在服务端 `status-seed.ts` → `statuses` 表），
- * 所以这里先 clear 再按快照填：快照里没有的状态客户端就不该有。
- * 角色与怪物同表（`owner` 由服务端行带下来，这里不区分）—— 角色技能的 `casts` 帧只带
- * statusId，查不到配置就表现不出来，所以缺行必须由契约拦住而不是「补一半」。
- */
-export function applyStatusRows(rows: StatusRow[]): void {
-  statuses.clear();
-  for (const row of rows) statuses.set(row.id, statusRowToConfig(row));
-}
-
 /** 技能与状态的覆写总入口（#367）：角色与怪物同表，一起覆写；两段都是契约必填 */
 export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
   applySkillRows(snapshot.skills);
@@ -417,90 +245,6 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyMapRows(snapshot.maps, snapshot.mapTypes);
   applyUiEffectRows(snapshot.uiEffects);
 }
-
-//#region 地图玩法配置（#573）
-
-/**
- * 覆写地图玩法配置（#573）
- *
- * 客户端以前把 11 张图的名称 / 类型 / 进入条件写死在 `configs/map.ts` 的 `mapData` 里 ——
- * 改一个进入等级要重打整个客户端包。现在这些值由服务端 `maps` 表下发（管理端可改），
- * 这里按 id 填进运行时表，消费方（传送弹窗 / 小地图 / 进图判定）读的引用不变。
- *
- * 三条口径：
- * - **整表重建**（先 clear 再按行填）：地图行由服务端决定，客户端没有「本地兜底行」可言。
- *   留着旧行会让「服务端没有这张图」在客户端变成幽灵按钮（点开就是黑屏）。
- * - **资源路径不在这里**（`mapSrcOf` 按 `resources/map/<id>/<id>` 拼）：下发方永远改不到
- *   「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致。
- * - **类型分组一并替换**：类型码 → 文案的唯一来源在服务端，客户端的 `mapTypeGroups`
- *   只是它的容器（以前这里也存着一份，改一次文案要改两个仓库里的同一个意思）。
- */
-export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): void {
-  maps.clear();
-  for (const row of rows) {
-    if (!row || typeof row.id !== "string") continue;
-    maps.set(row.id, {
-      label: String(row.label ?? ""),
-      type: String(row.type ?? ""),
-      typeLabel: String(row.typeLabel ?? row.type ?? ""),
-      level: Number(row.level) || 0,
-      combat: Number(row.combat) || 0,
-      soulOfWar: Number(row.soulOfWar) || 0,
-    });
-  }
-  mapTypeGroups.length = 0;
-  for (const group of groups) {
-    if (!group || typeof group.type !== "string") continue;
-    mapTypeGroups.push({ type: group.type, label: String(group.label ?? group.type) });
-  }
-}
-
-//#endregion
-
-//#region 界面特效表现参数（#594）
-
-/**
- * 覆写界面特效的表现参数（#594）
- *
- * 特效的摆位 / 缩放 / 旋转 / 时长 / 开关以前写死在 `GameUiHelper.createUpgradeEffect` 里 ——
- * 调一次摆位要重打 3G 的客户端包。现在这些值由服务端 `ui_effects` 表下发（管理端「特效管理」
- * 可改，与武器外观同一套取向），这里按 key 填进运行时表，消费方读 `upgradeEffectConfig()`。
- *
- * 三条口径：
- * - **整表重建**（先 clear 再按行填）：特效行由服务端 seed 决定，客户端没有「本地兜底行」可言；
- * - **图集路径不在这里**（`effect/<key>/<key>.plist` 两端约定）：下发方永远改不到
- *   「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致；
- * - **坏行整条跳过**：缺 key / 数值不是数的行直接丢，宁可用出厂值演，不演一半错位的。
- */
-export function applyUiEffectRows(rows: UiEffectConfig[]): void {
-  uiEffects.clear();
-  for (const row of rows ?? []) {
-    if (!row || typeof row.key !== "string" || !row.key) continue;
-    const numeric = (value: unknown): number | null => {
-      const n = Number(value);
-      return Number.isFinite(n) ? n : null;
-    };
-    const offsetX = numeric(row.offsetX);
-    const offsetY = numeric(row.offsetY);
-    const scaleX = numeric(row.scaleX);
-    const scaleY = numeric(row.scaleY);
-    const rotate = numeric(row.rotate);
-    const durationMs = numeric(row.durationMs);
-    if (offsetX === null || offsetY === null || scaleX === null || scaleY === null || rotate === null || durationMs === null) continue;
-    uiEffects.set(row.key, {
-      key: row.key,
-      offsetX,
-      offsetY,
-      scaleX,
-      scaleY,
-      rotate,
-      durationMs,
-      enabled: row.enabled === true,
-    });
-  }
-}
-
-//#endregion
 
 //#region 装备外观几何（#513）
 

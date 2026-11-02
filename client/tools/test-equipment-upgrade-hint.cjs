@@ -28,7 +28,7 @@ function main() {
   console.log("=== 数据层：equipmentCombatValue（战斗力贡献口径）===");
   const weapon1 = items.getItem("weapon_1");
   check(!!weapon1, "weapon_1 存在（测试前置）");
-  // 手算期望值：权重表 configs/battle.combatCalc = 攻 5 ×3 / 防 10 ×3 / maxHp 15，
+  // 手算期望值：权重表 configs/game-config.combatCalc = 攻 5 ×3 / 防 10 ×3 / maxHp 15，
   // 区间型属性取上下限之和 —— 这份期望值钉死了口径，权重表或实现任一方漂移都会红
   const expected =
     (weapon1.physicalAttack[0] + weapon1.physicalAttack[1]) * 5 +
@@ -51,7 +51,7 @@ function main() {
   const weapon1Value = equipments.equipmentCombatValue(weapon1);
   const weapon2 = items.getItem("weapon_2");
   const weapon3 = items.getItem("weapon_3");
-  // 前置：武器按等级单调变强（ configs/growth.equipmentStats 单调曲线）
+  // 前置：武器按等级单调变强（ configs/game-config.equipmentStats 单调曲线）
   check(
     equipments.equipmentCombatValue(weapon3) > equipments.equipmentCombatValue(weapon2) && equipments.equipmentCombatValue(weapon2) > weapon1Value,
     "weapon_1 < weapon_2 < weapon_3（等级曲线单调，测试前置）",

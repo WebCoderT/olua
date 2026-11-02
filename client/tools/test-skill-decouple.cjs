@@ -3,7 +3,7 @@
  * 技能数值与实现解耦单测（client/tools/test-skill-decouple.cjs，#31）
  *
  * 盯的不变量（改技能系统后必须全绿）：
- * A. 纯数据模块（configs/skill-data.ts）：12 个技能的全部数值字段逐一钉死 ——
+ * A. 纯数据模块（configs/game-config.ts）：12 个技能的全部数值字段逐一钉死 ——
  *    改数值必须来改这里（有意的摩擦），不允许悄悄漂移；数据模块里不允许出现 onClick
  * B. 模块边界（源码断言）：skill-data.ts 零引擎依赖（import 白名单只有 types/ 三件套），
  *    技能实现只住在 skills/warrior.ts，由接线层 configs/skill.ts 引用
@@ -27,10 +27,10 @@ const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 //  A. 纯数据模块：12 个技能数值逐一钉死
 // ==============================================================================
 
-console.log("\n— A. 纯数据模块（configs/skill-data.ts）—");
+console.log("\n— A. 纯数据模块（configs/game-config.ts）—");
 
-const outDir = prepare("olua-skill-decouple", ["configs/skill-data.ts"]);
-const { skillData, oeccupationSkills, basicAttackSkillId, skillTypeLabels, skillTargetTypeLabels } = require(path.join(outDir, "configs/skill-data.js"));
+const outDir = prepare("olua-skill-decouple", ["configs/game-config.ts"]);
+const { skillData, oeccupationSkills, basicAttackSkillId, skillTypeLabels, skillTargetTypeLabels } = require(path.join(outDir, "configs/game-config.js"));
 
 /** 递归按键排序，让深比较不受字段书写顺序影响 */
 const sortDeep = (value) => {
@@ -143,13 +143,20 @@ check(JSON.stringify(skillTargetTypeLabels) === JSON.stringify({ "0": "区域", 
 
 console.log("\n— B. 模块边界（零引擎依赖 / 实现只住 warrior）—");
 
-const dataSource = read("assets/configs/skill-data.ts");
+const dataSource = read("assets/configs/game-config.ts");
 const skillSource = read("assets/configs/skill.ts");
 
-const importLines = dataSource.split("\n").filter((line) => /^import /.test(line));
-check(importLines.length > 0 && importLines.every((line) => /^import .* from "\.\.\/types\/(role|skill|animation)";$/.test(line)), "skill-data.ts 的 import 只有 types/ 三件套（role / skill / animation）", importLines.join(" | "));
-check(!/from "\.\.\/skills\/warrior"/.test(dataSource), "skill-data.ts 不 import 技能实现（注释里允许提到名字，import 语句不允许）");
-check(!/from "\.\.\/ui\//.test(dataSource) && !/from "\.\.\/entities\//.test(dataSource), "skill-data.ts 不引用 ui/ 运行时与 entities/");
+const importSpecs = [...dataSource.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+// #626 起技能数据与其它快照域同住 configs/game-config，允许 cc 的四个纯数据类与
+// ApiModels 的**类型**；不许出现 skills/（技能实现）、ui/ 运行时、entities/
+check(
+  importSpecs.length > 0 &&
+    importSpecs.every((spec) => spec === "cc" || spec === "../ui/utils/net/ApiModels" || /^\.\.\/types\/[\w-]+$/.test(spec)),
+  "game-config.ts 只 import types/ + cc 的纯数据类 + ApiModels 的类型（配置层要能在 Node 垫片里加载）",
+  importSpecs.join(" | "),
+);
+check(!/from "\.\.\/skills\/warrior"/.test(dataSource), "技能数据区不 import 技能实现（注释里允许提到名字，import 语句不允许）");
+check(!/from "\.\.\/ui\/(?!utils\/net\/ApiModels)/.test(dataSource) && !/from "\.\.\/entities\//.test(dataSource), "不引用 ui/ 运行时与 entities/（ApiModels 的纯类型除外）");
 check(/import \{ skill_1000, skill_1001, skill_1008, skill_1010 \} from "\.\.\/skills\/warrior";/.test(skillSource), "skill.ts（接线层）引用 skills/warrior 的 4 个实现");
 check(
   /const roleSkillHandlers: Record<RoleSkillId, \(context: SkillContext\) => void> = \{/.test(skillSource),
@@ -244,7 +251,7 @@ if (!tsc) {
       // #603 第十一域：客户端技能表加载期是空的（数据在 skill-seed.ts），
       // 这里按线上同一条路灌种子再让接线层重算 skills Map —— 不灌就是「空 Map 全红」
       const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill-wire"));
-      require(path.join(out, "configs/skill-data.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
+      require(path.join(out, "configs/game-config.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
       wired.rebuildSkills();
       /** id → 应接的实现函数名（与 warrior.ts 的导出名一一对应） */
       const HANDLERS = {

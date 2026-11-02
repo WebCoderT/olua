@@ -1,6 +1,6 @@
 import { Node, ProgressBar } from "cc";
 import { Role } from "../../../entities/Role";
-import { getCurrentLevelExpRate } from "../../../configs/level";
+import { getCurrentLevelExpRate } from "../../../configs/game-config";
 import { bottomBarLayout } from "../../../configs/hudLayout";
 import GameUiHelper from "../../helpers/GameUiHelper";
 

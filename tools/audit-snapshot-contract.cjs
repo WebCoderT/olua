@@ -9,7 +9,7 @@
  * 要么客户端白屏，要么有人顺手把客户端的校验去掉。
  *
  * 五条规则（全部静态可判，不需要起服务）：
- * 1. 客户端 `SNAPSHOT_SECTIONS`（`configs/snapshot-contract.ts`）非空、key 不重复、每段有中文名；
+ * 1. 客户端 `SNAPSHOT_SECTIONS`（`configs/game-config.ts` 第 0 区）非空、key 不重复、每段有中文名；
  * 2. 这份清单的 key 集合 == `GameConfigSnapshotDto` 的字段集合（双向：少一个或多一个都报）——
  *    DTO 是下发的形状声明，清单是客户端的要求，两边对不上就是契约破裂；
  * 3. `client-config.service.snapshot()` 的 return 字面量 key 集合 == DTO 字段集合
@@ -28,7 +28,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const REPO = path.resolve(__dirname, "..");
-const CONTRACT = path.join(REPO, "client/assets/configs/snapshot-contract.ts");
+// #626 起契约清单与各段落库同住 configs/game-config（原 snapshot-contract.ts 是它的第 0 区）
+const CONTRACT = path.join(REPO, "client/assets/configs/game-config.ts");
 const APPLY = path.join(REPO, "client/assets/configs/apply-snapshot.ts");
 const DTO = path.join(REPO, "server/src/modules/game-config/dto/client-config.dto.ts");
 const SERVICE = path.join(REPO, "server/src/modules/game-config/client-config.service.ts");

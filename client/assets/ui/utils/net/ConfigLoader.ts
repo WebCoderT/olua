@@ -1,8 +1,8 @@
 import { GameConfigApi } from "./Api";
 import type { EquipAlignList, EquipInAlignList, GameConfigSnapshot } from "./ApiModels";
 import { applyConfigSnapshot, applyEquipAlignRows, applyEquipInAlignRows } from "../../../configs/apply-snapshot";
-import { checkSnapshotContract, snapshotContractMessage } from "../../../configs/snapshot-contract";
-import type { SnapshotProblem } from "../../../configs/snapshot-contract";
+import { checkSnapshotContract, snapshotContractMessage } from "../../../configs/game-config";
+import type { SnapshotProblem } from "../../../configs/game-config";
 import { rebuildSkills } from "../../../configs/skill";
 import { getText } from "../../../configs/texts";
 

@@ -9,7 +9,7 @@
  * · 存档迁移（旧档 title 补 0）与升级链路接线、属性加成在服务端权威重算（#541）、头顶常显、预加载
  * · 入口：称号不走 NPC，唯一入口 = 角色信息弹窗的「称号」按钮；头部信息栏的写死文字称号占位已移除
  *
- * 数据层跑在沙箱里（configs/title 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
+ * 数据层跑在沙箱里（configs/game-config 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
  * 的 seedRuntimeTables），素材与源码断言直接读文件。
  */
 const fs = require("fs");
@@ -17,11 +17,11 @@ const path = require("path");
 const { PROJECT_ROOT, prepare, compileServerShared, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const TITLE_DIR = path.join(PROJECT_ROOT, "assets/resources/titles");
-const outDir = prepare("olua-title", ["configs/title.ts"]);
+const outDir = prepare("olua-title", ["configs/game-config.ts"]);
 seedRuntimeTables(outDir);
 const titleSeed = require(compileServerShared("title-seed.ts", "olua-title-title-seed"));
 const growthSeed = require(compileServerShared("growth-seed.ts", "olua-title-growth-seed"));
-const { titleLevels, titleMaxLevel, getTitleLevel, titleAttributeLabels } = require(path.join(outDir, "configs/title.js"));
+const { titleLevels, titleMaxLevel, getTitleLevel, titleAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
 const titleGrowth = titleSeed.TITLE_GROWTH;
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -125,7 +125,7 @@ const uiHelperSource = read("assets/ui/helpers/GameUiHelper.ts");
 const roleInfoSource = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
 const dialogSource = read("assets/ui/components/dialogs/TitleUpgradeDialog.ts");
 const textsSource = read("assets/configs/texts.ts");
-const npcSource = read("assets/configs/npc.ts");
+const npcSource = read("assets/configs/game-config.ts");
 // #603 第七域：NPC 数据搬去服务端，点击行为单独一个文件（它会引 UI 组件）
 const npcClicksSource = read("assets/configs/npcClicks.ts");
 const hudSource = read("assets/configs/layout/hud.ts");

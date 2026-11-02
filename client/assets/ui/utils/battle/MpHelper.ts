@@ -1,4 +1,4 @@
-import { levelMap } from "../../../configs/level";
+import { levelMap } from "../../../configs/game-config";
 import { mpRecoverPerSecond } from "../../../configs/role";
 import type { Role } from "../../../entities/Role";
 

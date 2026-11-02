@@ -3,7 +3,7 @@
  * 战魂逐级明文表回归单测（issue #17 建；#590 重写为服务端种子口径）
  *
  * #590 起战魂数据的唯一书写处 = `server/src/shared/soul-seed.ts`（消耗 + 属性两张逐阶明文表
- * 都在服务端），客户端 configs/soul 是**空运行时表**（快照整表下发）—— 本测试盯的是这套
+ * 都在服务端），客户端 configs/game-config 是**空运行时表**（快照整表下发）—— 本测试盯的是这套
  * 数据本身的不变量：
  *
  * · 数据完整性：两张表与外观序列逐阶对齐、等级 1~37 连续（错位会在消费端静默 undefined）
@@ -24,7 +24,7 @@ const ASSETS = path.resolve(__dirname, "..", "assets");
 function main() {
   let outDir;
   try {
-    outDir = prepare("olua-soul-growth", ["configs/soul.ts", "configs/title.ts", "configs/rank.ts", "configs/growth.ts"]);
+    outDir = prepare("olua-soul-growth", ["configs/game-config.ts", "configs/game-config.ts", "configs/game-config.ts", "configs/game-config.ts"]);
   } catch (error) {
     fail(String(error.message ?? error));
     return;
@@ -33,9 +33,9 @@ function main() {
   seedRuntimeTables(outDir);
   const soulSeed = require(compileServerShared("soul-seed.ts", "olua-soul-soul-seed"));
   const growthSeed = require(compileServerShared("growth-seed.ts", "olua-soul-growth-seed"));
-  const { soulLevels, soulMaxLevel, getSoulLevel } = require(path.join(outDir, "configs/soul.js"));
-  const { titleLevels } = require(path.join(outDir, "configs/title.js"));
-  const { rankLevels } = require(path.join(outDir, "configs/rank.js"));
+  const { soulLevels, soulMaxLevel, getSoulLevel } = require(path.join(outDir, "configs/game-config.js"));
+  const { titleLevels } = require(path.join(outDir, "configs/game-config.js"));
+  const { rankLevels } = require(path.join(outDir, "configs/game-config.js"));
 
   // 消耗表 = 种子展开行的 bindGold（升到 N 阶的价；37 阶满阶不再有消耗）
   const soulUpgradeCosts = soulSeed.SOUL_SEEDS.map((row) => row.bindGold);
@@ -113,7 +113,7 @@ function main() {
   );
 
   console.log("\n=== 客户端零数据：soul.ts 不再有任何数据或派生 ===");
-  const soulSrc = fs.readFileSync(path.join(ASSETS, "configs/soul.ts"), "utf8");
+  const soulSrc = fs.readFileSync(path.join(ASSETS, "configs/game-config.ts"), "utf8");
   check(!/getRoleLevelAttributes|getEquivalentLevel|scaleAttributes|soulGrowth|soulUpgradeCosts|soulLevelAttributes/.test(soulSrc), "soul.ts 不再引用等级曲线、旧派生函数或本地数据表");
   check(/soulLevels: SoulLevelConfig\[\] = \[\]/.test(soulSrc), "运行时表以空数组起（快照到达后整表重建）");
   // 数据明文搬家了：两张表现在只在服务端种子

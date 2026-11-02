@@ -14,7 +14,7 @@ Cocos 工程在 **`client/`**（用它打开这个目录；资源在 `client/ass
 1. **本地 `roles` 只是缓存，服务端才是权威。** 进游戏必须从服务端拿完整数据，拿不到**不进场景**；同时写入必须经过服务端。
 2. **游戏数据的唯一真相是客户端自己的 `assets/configs`。** 服务端只存一份不透明 JSON，它不认识装备槽位名、技能 id。所以「服务端校验失败」几乎总是**客户端发出去的形状不对**，而不是服务端不懂游戏。
    **例外是地图（#573，用户定）**：地图的玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）**不在客户端**，
-   由 `GET /game-config` 下发、`applyMapRows` 整表覆写 `configs/map` 的运行时表；客户端只留**资源约定**
+   由 `GET /game-config` 下发、`applyMapRows` 整表覆写 `configs/game-config.ts` 区 18 的运行时表；客户端只留**资源约定**
    （`mapSrcOf(id) = map/<id>/<id>`、对象组与属性名）。所以「地图名显示成『地图 0』」先看快照拉没拉到，
    别去客户端找配置 —— 那里已经没有出厂数据了。
 3. **怪物实例与掉落也只信服务端（#581）。** 进图无条件 `CombatChannel.sendWorldJoin(mapId)` 登记；服务端按
@@ -84,7 +84,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 
 新增字段不影响旧行为：`revision` 是**可选**的，不带就是「最后写入者胜」。
 
-**角色外观的取源只有一处**：`configs/fashionClothes` 的 `getFashionOut` / `getFashionIn`，优先级 **时装（`fashionCloth`，时装 id）> 装备衣服 > 性别默认外观**。
+**角色外观的取源只有一处**：`configs/game-config.ts` 区 14 的 `getFashionOut` / `getFashionIn`，优先级 **时装（`fashionCloth`，时装 id）> 装备衣服 > 性别默认外观**。
 场景主角（`RoleAppearance`）、进图预载（`PreloadManager`）、弹窗内观（`RoleInShowView`）、**远端玩家（`OtherPlayerManager`，数据来自互见帧的 `appearance`）** 四处都调它 —— 谁自己判一遍，就会出现「弹窗换了、地图上还是旧的」「进图第一帧空着」或「别人看你还是旧衣服」。
 `RoleAppearance` 收的是**结构化子集** `RoleOutSource`（`sex` / `equipments.cloth|weapon` / `fashionCloth` / `speedRate`）而不是 `Role`：远端玩家拿互见帧那四样字段拼个轻量对象就能复用同一份装配。**要加装配逻辑就加在这里**，别在别处再写一份（#383 之前远端玩家是自绘的蓝色占位圆，就是这个坑）。
 服务端那侧的对应口径：互见帧 `appearance` 的「没穿」用**空串**，客户端 `toOutSource` 转成 `null`；外观与血条分母都按 `PLAYER_APPEARANCE_REFRESH_MS`（默认 5s）懒刷新 —— 换装 / 升级走 HTTP 存档，实时进程不会被告知。

@@ -1,9 +1,9 @@
 import { RoleSkillId, SkillConfig, SkillContext, SkillData, SkillId } from "../types/skill";
 import { skill_1000, skill_1001, skill_1008, skill_1010 } from "../skills/warrior";
-import { skillData } from "./skill-data";
+import { skillData } from "./game-config";
 
 // 数值数据与文案表原样再导出（消费方照旧 from "../configs/skill"，零改动；#31 只拆文件不动接口）
-export { basicAttackSkillId, oeccupationSkills, skillTargetTypeLabels, skillTypeLabels } from "./skill-data";
+export { basicAttackSkillId, oeccupationSkills, skillTargetTypeLabels, skillTypeLabels } from "./game-config";
 
 /**
  * 角色技能释放实现（id → 实现函数）

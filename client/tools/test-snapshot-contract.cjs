@@ -176,22 +176,22 @@ function thrown(run) {
 function main() {
   let outDir;
   try {
-    outDir = prepare("olua-snapshot-contract", ["configs/apply-snapshot.ts", "configs/snapshot-contract.ts"]);
+    outDir = prepare("olua-snapshot-contract", ["configs/apply-snapshot.ts", "configs/game-config.ts"]);
   } catch (error) {
     fail(String(error.message ?? error));
     return;
   }
 
-  const contract = require(path.join(outDir, "configs/snapshot-contract.js"));
+  const contract = require(path.join(outDir, "configs/game-config.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
-  const { levelMap } = require(path.join(outDir, "configs/level.js"));
+  const { levelMap } = require(path.join(outDir, "configs/game-config.js"));
   const { equipmentSlots } = require(path.join(outDir, "configs/equipments.js"));
-  const { skillData } = require(path.join(outDir, "configs/skill-data.js"));
-  const { statuses } = require(path.join(outDir, "configs/status.js"));
-  const { questData } = require(path.join(outDir, "configs/quest-data.js"));
+  const { skillData } = require(path.join(outDir, "configs/game-config.js"));
+  const { statuses } = require(path.join(outDir, "configs/game-config.js"));
+  const { questData } = require(path.join(outDir, "configs/game-config.js"));
   const { items } = require(path.join(outDir, "configs/items.js"));
-  const { maps, mapTypeGroups } = require(path.join(outDir, "configs/map.js"));
-  const { getMallPrice } = require(path.join(outDir, "configs/mall.js"));
+  const { maps, mapTypeGroups } = require(path.join(outDir, "configs/game-config.js"));
+  const { getMallPrice } = require(path.join(outDir, "configs/game-config.js"));
 
   console.log("\n=== 清单自检 ===");
   check(contract.SNAPSHOT_SECTIONS.length >= 20, "契约清单非空（少于 20 段说明清单被删了）", `${contract.SNAPSHOT_SECTIONS.length} 段`);

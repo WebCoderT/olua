@@ -164,9 +164,10 @@ function loadSharedSeed(work, file, tag) {
  */
 function hydrateEquipment(cfg, equipmentSeed) {
   const equipments = cfg("equipments");
-  const growth = cfg("growth");
+  // #626 起装备规则（growth 区）在 configs/game-config
+  const snap = cfg("game-config");
 
-  growth.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
+  snap.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
   equipments.applyEquipmentQualityLabels(equipmentSeed.EQUIPMENT_PREFIX_LABEL_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_LABEL_SEEDS);
   // 槽位的 order 就是种子数组下标（`equipment_slots.sort_order` 的出厂值同源）
   equipments.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
@@ -186,8 +187,10 @@ function hydrateEquipment(cfg, equipmentSeed) {
  * 装备先进部位表，重建时才会排在最前。
  */
 function hydrateItems(cfg, itemSeed) {
-  cfg("drug").applyDrugData(itemSeed.DRUG_SEED_ROWS);
-  cfg("material").applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
+  // #626 起药品 / 材料表在 configs/game-config
+  const snap = cfg("game-config");
+  snap.applyDrugData(itemSeed.DRUG_SEED_ROWS);
+  snap.applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
   const items = cfg("items");
   if (typeof items.rebuildItemIndex === "function") items.rebuildItemIndex();
   return items.items;

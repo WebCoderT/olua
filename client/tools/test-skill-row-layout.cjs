@@ -5,7 +5,7 @@
  * 盯的不变量：
  *   1. `TextLayout.wrappedLineCount` 的估算口径（中文 1 字宽 / ASCII 0.55 字宽 / 显式换行 / 空串）；
  *   2. 技能行的几何自洽（行宽 = 图标 + 间距 + 说明列）；
- *   3. **`configs/skill-data.ts` 里每一条说明都能在 `maxLines` 行内显示完** ——
+ *   3. **`configs/game-config.ts` 里每一条说明都能在 `maxLines` 行内显示完** ——
  *      这条是重点：说明曾经是单行 CLAMP，205 宽只有 ~20 字，40~73 字的说明后半句直接看不到（#481）。
  *      将来有人把说明写得更长，这里先红，而不是等玩家在游戏里看不见。
  *
@@ -22,7 +22,7 @@ try {
   ]);
   const { wrappedLineCount, wrappedHeight } = require(path.join(outDir, "ui/helpers/TextLayout.js"));
   const { skillListDialogLayout } = require(path.join(outDir, "configs/layout/dialogs.js"));
-  const { skillData } = require(path.join(outDir, "configs/skill-data.js"));
+  const { skillData } = require(path.join(outDir, "configs/game-config.js"));
 
   const desc = skillListDialogLayout.row.desc;
 

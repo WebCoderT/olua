@@ -1,6 +1,6 @@
 import { isValid, Node } from "cc";
-import { statuses } from "../../configs/status";
-import { statusEffect } from "../../configs/effect";
+import { statuses } from "../../configs/game-config";
+import { statusEffect } from "../../configs/game-config";
 import { StatusBadge, StatusConfig, StatusId } from "../../types/status";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";

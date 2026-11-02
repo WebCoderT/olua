@@ -3,7 +3,7 @@
  * 状态数值参与伤害结算的单测（issue #14）
  *
  * 覆盖三层：
- * 1. configs/status 的 combat 数值语义（格挡概率/系数、防御乘法）与文案一致
+ * 1. configs/game-config 的 combat 数值语义（格挡概率/系数、防御乘法）与文案一致
  * 2. BattleMath 纯函数：collectStatusCombatModifiers 叠加口径、resolveIncomingDamage 判定
  * 3. applyHitDamage 接线：状态修正真的进了伤害公式（大防御系数 → 伤害归零）
  *
@@ -15,11 +15,11 @@ const { prepare, compileServerShared, check, finish } = require(path.join(__dirn
 
 const outDir = prepare(
   "olua-status-combat",
-  ["configs/status.ts", "ui/utils/battle/BattleMath.ts"],
+  ["configs/game-config.ts", "ui/utils/battle/BattleMath.ts"],
   "class BoxCollider2D {}\nclass Node {}\nmodule.exports.BoxCollider2D = BoxCollider2D;\nmodule.exports.Node = Node;\n",
 );
 
-const { statuses } = require(path.join(outDir, "configs/status.js"));
+const { statuses } = require(path.join(outDir, "configs/game-config.js"));
 // #603 起客户端不再内置状态数据，唯一书写处是服务端 status-seed.ts —— 直接灌真实种子
 const { STATUS_SEED_ROWS } = require(compileServerShared("status-seed.ts", "olua-status-seed"));
 for (const { id, ...rest } of STATUS_SEED_ROWS) statuses.set(id, rest);
@@ -30,7 +30,7 @@ const {
   NO_STATUS_MODIFIERS,
 } = require(path.join(outDir, "ui/utils/battle/BattleMath.js"));
 
-console.log("\n=== configs/status：数值语义与文案一致 ===");
+console.log("\n=== configs/game-config：数值语义与文案一致 ===");
 const shield = statuses.get("2001");
 const diamond = statuses.get("2002");
 check(!!shield && !!diamond, "2001 护体神盾 / 2002 金刚护体都已注册");

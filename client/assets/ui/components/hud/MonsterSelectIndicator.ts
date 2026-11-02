@@ -1,5 +1,5 @@
 import { isValid, Node } from "cc";
-import { selectIndicator } from "../../../configs/effect";
+import { selectIndicator } from "../../../configs/game-config";
 import MonsterManager from "../../core/MonsterManager";
 import AnimationHelper from "../../helpers/AnimationHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
