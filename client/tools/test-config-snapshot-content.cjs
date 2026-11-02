@@ -3,9 +3,11 @@
  * 配置快照覆写（内容表）回归单测（#363）
  *
  * 跑的是**真实配置表与真实派生函数**（configs-sandbox 编译 CommonJS + cc 垫片），不是复刻。
- * 盯的四条口径：
+ * 盯的五条口径：
  * · 数据覆写生效 —— 文案 / 价格 / 数值 / 回复量都换成服务端的
- * · 资源不覆写 —— icon / in / out / src / 位置一律保留本地（素材以发布包为准）
+ * · 图标跟快照走 —— 装备 / 药品 / 材料的图标在服务端表里（客户端拼不出 `item/fs_2` 这类路径），
+ *   而几何 / 时装资源（in / out）仍以发布素材包为准，不覆写
+ * · 整表重建 —— 快照里没有的 id 客户端就不该有（#603 第九 / 十域，客户端没有出厂行）
  * · 装备变体重算 —— 只下发 37 个基础件，555 个变体按前后缀倍率重新展开
  * · 幂等 —— 同一份快照覆写两次结果一致（不能一代代滚雪球）
  *
@@ -37,6 +39,7 @@ function main() {
 
   const { items, getItem } = require(path.join(outDir, "configs/items.js"));
   const { drugs } = require(path.join(outDir, "configs/drug.js"));
+  const { materials } = require(path.join(outDir, "configs/material.js"));
   const { monsterRuntime, monsterResource, applyMonsterPresentation, applyMonsterRuntimeStats } = require(path.join(outDir, "configs/monsterRuntime.js"));
   const { npcs } = require(path.join(outDir, "configs/npc.js"));
   const { fashionData } = require(path.join(outDir, "configs/fashionClothes.js"));
@@ -109,11 +112,12 @@ function main() {
     `${baseAfter.recyclePrice} / ${variantAfter.recyclePrice}`,
   );
 
-  console.log("\n=== 药品：扁平四值还原成 effects ===");
+  console.log("\n=== 药品：整表重建 + 扁平四值还原成 effects（#603 第十域） ===");
   const drugBefore = drugs.find((drug) => drug.id === "drug_hp_1");
+  check(drugs.length === 8, "快照到达前药品表有 8 种（沙箱按线上同一条路灌了种子）", `size=${drugs.length}`);
   snapshotApi.applyConfigSnapshot({
     drugs: [
-      { id: "drug_hp_1", label: "测试金创药", description: "测试描述", level: 1, sellPrice: 88, maxStack: 50, cooldown: 3, effectHp: 1234, effectMp: 0, effectHpPercent: 0, effectMpPercent: 25, updatedAt: 0 },
+      { id: "drug_hp_1", label: "测试金创药", description: "测试描述", icon: "item/fs_9", level: 1, sellPrice: 88, maxStack: 50, cooldown: 3, effectHp: 1234, effectMp: 0, effectHpPercent: 0, effectMpPercent: 25, updatedAt: 0 },
     ],
   });
   const drugAfter = drugs.find((drug) => drug.id === "drug_hp_1");
@@ -125,18 +129,24 @@ function main() {
     JSON.stringify(drugAfter.effects),
   );
   check(drugAfter.effects[0].mp === undefined, "管理端填 0 的效果不写进数组（0 = 没有该效果）", JSON.stringify(drugAfter.effects[0]));
-  check(drugAfter === drugs.find((drug) => drug.id === "drug_hp_1"), "原地覆写（effects 换数组、物品对象不换）", drugAfter.label);
+  check(drugAfter.icon === "item/fs_9", "图标跟快照走（客户端不再自带图标）", drugAfter.icon);
+  // 整表重建：快照里只有一种药 → 客户端就只剩这一种（管理端下架会如实反映）
+  check(drugs.length === 1, "整表重建（客户端没有出厂行可兜底）", `size=${drugs.length}`);
+  check(items.get("drug_hp_1") === drugAfter, "物品总表指向重建后的同一个对象（索引已重建）", "ok");
+  check(drugBefore !== drugAfter, "重建换的是新对象（不再原地覆写）", "ok");
 
-  console.log("\n=== 物品与材料：文案 / 价格 / 叠加上限 ===");
+  console.log("\n=== 物品与材料：整表重建（#603 第十域） ===");
   const materialBefore = getItem("material_hide");
   snapshotApi.applyConfigSnapshot({
-    items: [{ id: "material_hide", type: "material", label: "测试兽皮", description: "测试材料", level: 1, sellPrice: 66, maxStack: 20, updatedAt: 0 }],
+    items: [{ id: "material_hide", type: "material", label: "测试兽皮", description: "测试材料", icon: "item/2010211", level: 1, sellPrice: 66, maxStack: 20, updatedAt: 0 }],
   });
   const materialAfter = getItem("material_hide");
   check(materialAfter.label === "测试兽皮" && materialAfter.description === "测试材料", "名称与描述已覆写", materialAfter.label);
   check(materialAfter.sellPirce === 66 && materialAfter.maxStack === 20, "价格与叠加上限已覆写", `${materialAfter.sellPirce} / ${materialAfter.maxStack}`);
-  check(materialAfter.icon === materialBefore.icon, "图标不动（资源路径）", materialAfter.icon);
-  check(materialAfter.type === materialBefore.type, "大类不覆写（结构字段）", materialAfter.type);
+  check(materialAfter.icon === "item/2010211", "图标跟快照走", materialAfter.icon);
+  check(materialAfter.type === "material", "大类取快照原值（枚举），不再写死", String(materialAfter.type));
+  check(materialBefore !== materialAfter, "重建换的是新对象（不再原地覆写）", "ok");
+  check(getItem("material_iron") === null, "快照里没有的材料客户端就没有（整表重建）", "ok");
 
   console.log("\n=== 怪物：数值落运行时表 + 资源落运行时表（#588：客户端没有怪物数据文件） ===");
   // 资源行先落（真实路径：applyMonsterPresentation，几何/速度在落表时合成）
@@ -231,8 +241,17 @@ function main() {
   const hpBeforeEmpty = getItem("cloth_1").maxHp;
   snapshotApi.applyConfigSnapshot({});
   check(getItem("cloth_1").maxHp === hpBeforeEmpty, "空快照保留当前值（旧服务端不炸）");
-  check(snapshotApi.applyConfigSnapshot({ equipments: [{ id: "不存在的装备", attributes: attributes(1, 0, 1, 1), level: 1, label: "x", sellPrice: 0, slot: "cloth" }] }) === undefined, "未知 id 被忽略，不新增物品");
-  check(items.size > 500, "物品总数不变（覆写不增删行）", String(items.size));
+  // #603 第九域起装备也是整表重建：快照里只有一件「不存在的装备」→ 旧的 555 件全部消失。
+  // 这是设计口径（客户端没有出厂行），不是 bug —— 顺便证明「下架一件装备」真的会少一件。
+  snapshotApi.applyConfigSnapshot({
+    equipments: [{ id: "不存在的装备", attributes: attributes(1, 0, 1, 1), level: 1, label: "x", sellPrice: 0, slot: "cloth" }],
+  });
+  check(getItem("cloth_1") === null, "装备整表重建（快照里没有的客户端就没有）", "ok");
+  check(
+    items.size === 15 + drugs.length + materials.length,
+    "物品总表条数 = 装备变体 + 药品 + 材料（三张表重建后自洽）",
+    `${items.size} = 15 + ${drugs.length} + ${materials.length}`,
+  );
 
   finish("配置快照内容表：全部断言通过");
 }

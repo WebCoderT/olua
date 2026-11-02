@@ -1,15 +1,27 @@
 import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
-import { equipmentCombatValue, equipmentSlotOrder, getRecyclePrice } from "./equipments";
+import {
+  belts,
+  clothes,
+  equipmentCombatValue,
+  equipmentSlotOrder,
+  getRecyclePrice,
+  helmets,
+  nicklaces,
+  rings,
+  shoes,
+  weapons,
+} from "./equipments";
 import { materials } from "./material";
 
 /**
  * 物品总表：物品 id -> 物品数据
  *
  * 掉落、任务、商店、背包/装备槽存档等一律按物品 id 引用物品 —— 这是全局唯一的
- * 「id → 物品」索引。**加载期只有药品与材料**：#603 第九域起装备数据在服务端，
- * `applyEquipmentData` 展开出 555 个变体后由 `configs/apply-snapshot` 灌进来
- * （见 `applyEquipments`）。所以进游戏前 `items` 里查不到装备，这不是 bug。
+ * 「id → 物品」索引。**加载期是空表**：#603 第九 / 十域起，装备来自服务端 equipments 表、
+ * 药品来自 drugs 表、材料来自 items 表，三者进游戏后由 `configs/apply-snapshot` 落库,
+ * 再由 `rebuildItemIndex()` 一次性登记进本表。所以进游戏前 `items` 里什么都查不到，
+ * 这不是 bug（消费方都在进游戏之后才读）。
  */
 export const items = new Map<string, Goods>();
 
@@ -25,12 +37,26 @@ export function registerItems(list: Goods[], prefix: string) {
   list.forEach((good, index) => registerItem(good.id ?? `${prefix}_${index + 1}`, good));
 }
 
-// 装备不在这里注册：它的数据在服务端（快照 equipments 段 → configs/equipments.applyEquipmentData
-// 展开 15 倍变体 → apply-snapshot 写进本表）。#603 第九域之前是「7 张部位表在加载期建好再 forEach 注册」
-// 药品
-registerItems(drugs, "drug");
-// 材料
-registerItems(materials, "material");
+/**
+ * 重建物品总表（#603 第十域）：**装备 → 药品 → 材料**，整表清空后按这个顺序登记
+ *
+ * 顺序有语义：`getItemsByType` 的注释写的就是「注册顺序 = 装备 → 药品 → 材料」,
+ * 图鉴 / 商店 / 背包整理都按这个顺序呈现；顺序变了列表会悄悄换个排法。
+ *
+ * 三处调用：`applyConfigSnapshot`（进游戏落库后一次）、单测沙箱的 `hydrateSnapshotTables`、
+ * 以及任何「只改了其中一张表」的地方 —— 用同一个函数重建，别各写一份遍历。
+ */
+export function rebuildItemIndex(): void {
+  items.clear();
+  // 装备：七张部位表（由 applyEquipmentData 从基础件展开成 555 个变体）
+  [clothes, weapons, rings, nicklaces, shoes, helmets, belts].forEach((map) => {
+    map.forEach((good) => {
+      if (good.id) items.set(good.id, good);
+    });
+  });
+  registerItems(drugs, "drug");
+  registerItems(materials, "material");
+}
 
 /**
  * 按药品效果与角色资源上限计算一次使用的回复量（**纯函数**，给 useDrug 与单测共用）

@@ -171,10 +171,15 @@ function hydrateSnapshotTables(outDir) {
   equipmentsMod.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
 
   const variants = equipmentsMod.applyEquipmentSeed(equipmentSeed.EQUIPMENT_SEED_ROWS);
-  const items = require(path.join(outDir, "configs/items.js")).items;
-  variants.forEach((good) => {
-    if (good.id) items.set(good.id, good);
-  });
+  if (variants.length === 0) throw new Error("装备种子一件都没展开出来");
+
+  // 药品 / 材料（#603 第十域）：客户端这两张表也是空的，数据在 item-seed.ts。
+  // 单测里背包里装的药、掉落名、商城条目都按 id 查这张表 —— 不灌就是「查不到该物品」。
+  const itemSeed = require(compileServerShared("item-seed.ts", "olua-seed-item"));
+  require(path.join(outDir, "configs/drug.js")).applyDrugData(itemSeed.DRUG_SEED_ROWS);
+  require(path.join(outDir, "configs/material.js")).applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
+  // 总表按「装备 → 药品 → 材料」重建（顺序只有客户端这一份实现）
+  require(path.join(outDir, "configs/items.js")).rebuildItemIndex();
 
   // 装备属性（#590）：种子不带八项属性（由 growth-seed.equipmentStats 公式算），展开出来的
   // 变体属性是 0 —— 这里按「公式 × 前后缀倍率」重算，与生成物 / 服务端 seed 同一来源。

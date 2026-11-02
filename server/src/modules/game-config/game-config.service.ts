@@ -42,16 +42,15 @@ import {
 } from "../../database/rows";
 import {
   ACHIEVEMENTS,
-  DRUGS,
   EQUIPMENT_BASES,
   FASHIONS,
-  ITEM_BASES,
   MONSTER_SKILLS,
   QUESTS,
   ITEM_TYPES,
   SKILLS,
   STATUSES,
 } from "../../shared/game-data.generated";
+import { DRUG_SEED_ROWS, ITEM_BASE_SEED_ROWS } from "../../shared/item-seed";
 import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
 import { TITLE_SEEDS } from "../../shared/title-seed";
 import { SOUL_SEEDS } from "../../shared/soul-seed";
@@ -552,6 +551,7 @@ export class GameConfigService implements OnModuleInit {
       ...existing,
       label: dto.label ?? existing.label,
       description: dto.description ?? existing.description,
+      icon: dto.icon ?? existing.icon,
       sell_price: dto.sellPrice ?? existing.sell_price,
       max_stack: dto.maxStack ?? existing.max_stack,
       cooldown: dto.cooldown ?? existing.cooldown,
@@ -588,6 +588,7 @@ export class GameConfigService implements OnModuleInit {
       ...existing,
       label: dto.label ?? existing.label,
       description: dto.description ?? existing.description,
+      icon: dto.icon ?? existing.icon,
       sell_price: dto.sellPrice ?? existing.sell_price,
       max_stack: dto.maxStack ?? existing.max_stack,
       updated_at: Date.now(),
@@ -1284,24 +1285,36 @@ export class GameConfigService implements OnModuleInit {
     return row;
   }
 
-  /** 药品 seed：DRUGS 直接灌（effects 已按键求和），8 种 */
+  /**
+   * 药品 seed（#603 第十域）：`item-seed.ts` 的 `DRUG_SEED_ROWS` 整行灌 ——
+   * 名称 / 描述 / **图标** / 等级 / 售价 / 叠加 / 冷却 / 四段回复量全在服务端种子里,
+   * 客户端 `configs/drug` 只剩空数组（进游戏由快照整表重建）。
+   *
+   * 存量库的行是「没有 icon 列」的老形态，`seedRow` 的 INSERT OR IGNORE 会整行跳过,
+   * 所以补一次 `backfillIcon`（只在空串时填）—— 否则老库的药会集体没图标。
+   */
   private seedDrugs() {
-    for (const [id, meta] of Object.entries(DRUGS as Record<string, Record<string, unknown>>)) {
-      this.drugs.seedRow({
-        id,
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        level: Number(meta.level) || 0,
-        sell_price: Number(meta.sellPrice) || 0,
-        max_stack: Number(meta.maxStack) || 99,
-        cooldown: Number(meta.cooldown) || 0,
-        effect_hp: Number(meta.hp) || 0,
-        effect_mp: Number(meta.mp) || 0,
-        effect_hp_percent: Number(meta.hpPercent) || 0,
-        effect_mp_percent: Number(meta.mpPercent) || 0,
+    let backfilled = 0;
+    for (const row of DRUG_SEED_ROWS) {
+      const seeded: DrugRow = {
+        id: row.id,
+        label: row.label,
+        description: row.description,
+        icon: row.icon,
+        level: row.level,
+        sell_price: row.sellPrice,
+        max_stack: row.maxStack,
+        cooldown: row.cooldown,
+        effect_hp: row.effectHp,
+        effect_mp: row.effectMp,
+        effect_hp_percent: row.effectHpPercent,
+        effect_mp_percent: row.effectMpPercent,
         updated_at: 0,
-      });
+      };
+      this.drugs.seedRow(seeded);
+      backfilled += this.drugs.backfillIcon(seeded);
     }
+    if (backfilled > 0) this.logger.log(`药品图标补全：${backfilled} 行`);
   }
 
   /**
@@ -1408,20 +1421,29 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 物品与材料 seed：ITEM_BASES 直接灌（只收 MATERIAL / OTHER 大类），5 种 */
+  /**
+   * 物品与材料 seed（#603 第十域）：`item-seed.ts` 的 `ITEM_BASE_SEED_ROWS` 整行灌,
+   * 含图标；客户端 `configs/material` 只剩空数组。
+   * 老库同样补一次 `backfillIcon`（只在空串时填）。
+   */
   private seedItems() {
-    for (const [id, meta] of Object.entries(ITEM_BASES as Record<string, Record<string, unknown>>)) {
-      this.items.seedRow({
-        id,
-        type: String(meta.type ?? ""),
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        level: Number(meta.level) || 0,
-        sell_price: Number(meta.sellPrice) || 0,
-        max_stack: Number(meta.maxStack) || 99,
+    let backfilled = 0;
+    for (const row of ITEM_BASE_SEED_ROWS) {
+      const seeded: ItemRow = {
+        id: row.id,
+        type: row.type,
+        label: row.label,
+        description: row.description,
+        icon: row.icon,
+        level: row.level,
+        sell_price: row.sellPrice,
+        max_stack: row.maxStack,
         updated_at: 0,
-      });
+      };
+      this.items.seedRow(seeded);
+      backfilled += this.items.backfillIcon(seeded);
     }
+    if (backfilled > 0) this.logger.log(`物品图标补全：${backfilled} 行`);
   }
 
   /** 怪物 seed：出厂种子（服务端自有，#588）展开成数值行，220 只（#258） */

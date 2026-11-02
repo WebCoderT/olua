@@ -31,18 +31,26 @@ export class ItemRepository {
   seedRow(row: ItemRow): void {
     this.db.run(
       `INSERT OR IGNORE INTO items
-        (id, type, label, description, level, sell_price, max_stack, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.type, row.label, row.description, row.level, row.sell_price, row.max_stack, row.updated_at],
+        (id, type, label, description, icon, level, sell_price, max_stack, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.type, row.label, row.description, row.icon, row.level, row.sell_price, row.max_stack, row.updated_at],
     );
+  }
+
+  /**
+   * 老库补图标（#603 第十域）：只在 icon 还是空串时填，**不覆盖**运营改过的值
+   * @returns 实际回填的行数（只用于启动日志）
+   */
+  backfillIcon(row: ItemRow): number {
+    return this.db.execute("UPDATE items SET icon = ? WHERE id = ? AND icon = ''", [row.icon, row.id]).changes;
   }
 
   update(row: ItemRow): { changes: number } {
     return this.db.execute(
       `UPDATE items SET
-         label = ?, description = ?, sell_price = ?, max_stack = ?, updated_at = ?
+         label = ?, description = ?, icon = ?, sell_price = ?, max_stack = ?, updated_at = ?
        WHERE id = ?`,
-      [row.label, row.description, row.sell_price, row.max_stack, row.updated_at, row.id],
+      [row.label, row.description, row.icon, row.sell_price, row.max_stack, row.updated_at, row.id],
     );
   }
 

@@ -1116,6 +1116,10 @@ export type UpdateDrug = {
    */
   description?: string;
   /**
+   * 图标（resources 相对路径，如 item/fs_2；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表
+   */
+  icon?: string;
+  /**
    * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
   sellPrice?: number;
@@ -1154,6 +1158,10 @@ export type UpdateItem = {
    * 描述（不传则不改）
    */
   description?: string;
+  /**
+   * 图标（resources 相对路径，如 item/2010210；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品 / 材料的图标与 id 之间没有可推导的约定（地图 / 特效能按 id 拼路径，这两个拼不出来），只能存表
+   */
+  icon?: string;
   /**
    * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
@@ -4131,6 +4139,10 @@ export type Drug = {
    */
   description: string;
   /**
+   * 图标资源路径（resources 相对路径，如 item/fs_2）
+   */
+  icon: string;
+  /**
    * 使用等级需求（暂不开放编辑）
    */
   level: number;
@@ -4227,6 +4239,10 @@ export type Item = {
    * 描述
    */
   description: string;
+  /**
+   * 图标资源路径（resources 相对路径，如 item/2010210）
+   */
+  icon: string;
   /**
    * 等级需求（暂不开放编辑）
    */

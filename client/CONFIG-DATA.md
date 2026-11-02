@@ -50,8 +50,8 @@
 | `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `shared/equipment-seed.ts` → `equipments` 表 | `/equipments` |
 | `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `shared/equipment-seed.ts` → `equipment_slots` 表 | `/equipment-settings` |
 | `equipmentMeta` | `applyEquipmentRules`（growth）/ `applyEquipmentQualityLabels`（equipments） | `configs/growth.ts` 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `shared/equipment-seed.ts` → `equipment_meta` 表 | `/equipment-settings` |
-| `items` | `applyItemRows` | `configs/items.ts` `items` | `items` 表 ← `configs/items.ts` | `/items` |
-| `drugs` | `applyDrugRows` | `configs/drug.ts` `drugs` | `drugs` 表 ← `configs/drug.ts` | `/drugs` |
+| `items` | `applyItemRows`（→ `applyItemBaseData`，整表重建） | `configs/material.ts` `materials` | `shared/item-seed.ts` → `items` 表 | `/items` |
+| `drugs` | `applyDrugRows`（→ `applyDrugData`，整表重建） | `configs/drug.ts` `drugs` | `shared/item-seed.ts` → `drugs` 表 | `/drugs` |
 | `monsters` | `applyMonsterRows` | `configs/monsterRuntime.ts` `monsterRuntime` | `shared/monster-seed.ts` → `monsters` 表 | `/monsters` |
 | `monsterPresentations` | `applyMonsterPresentations` | `configs/monsterRuntime.ts` `monsterResource` | `shared/monster-presentation.generated.ts` | `/monsters`（掉落弹窗另有摘要） |
 | `npcs` | `applyNpcRows` | `configs/npc.ts` `npcs` | `shared/npc-seed.ts` → `npcs` 表 | `/npcs` |
@@ -91,17 +91,18 @@
 | `map.ts` | `maps` / `mapTypeGroups` | `applyMapRows` |
 | `equipments.ts` | 七张部位表 / `equipmentSlots` / `equipmentSlotOrder` / 品质文案 | `applyEquipmentData` / `applyEquipmentSlots` / `applyEquipmentQualityLabels` |
 | `growth.ts` | 前后缀倍率 / 回收价曲线（`roleMaxLevel` 也由 `growthScalars` 覆写） | `applyEquipmentRules` |
+| `drug.ts` | `drugs`（**空数组**，含图标） | `applyDrugData`（整表重建） |
+| `material.ts` | `materials`（**空数组**，含图标） | `applyItemBaseData`（整表重建） |
+| `items.ts` | `items` 总表 = 装备 + 药品 + 材料的「id → 物品」索引 | `rebuildItemIndex()`（装备 → 药品 → 材料） |
 
 ### 4.2 仍是「客户端持有 + 快照覆写」（#603 未搬完的部分）
 
 | 文件 | 行数 | 现在客户端存什么 | 阻力 |
 |---|---|---|---|
 | `skill-data.ts` | 489 | 技能数值行 + `oeccupationSkills`（职业→技能）映射 | 与释放实现 `Record<RoleSkillId>` 耦合 |
-| `items.ts` | 485 | 物品总表（模块加载期建好，`applyItemRows` 只覆写已有行） | 删本地数据要改成整表重建 |
 | `fashionClothes.ts` | 229 | 时装行（icon / in / out 资源路径是表现层） | 资源路径是否入库要定（地图那套选择了「不入库」） |
 | `role.ts` | 198 | 职业表 + 移动速度 | 只剩少量常量 |
 | `monster.ts` | 65 | 只有 `monsterAI` 全局节奏常量 | 低优先 |
-| `material.ts` | 63 | 5 条材料行 | 随 `items` 一起 |
 
 ### 4.3 客户端自己的东西（与运营数据无关）
 

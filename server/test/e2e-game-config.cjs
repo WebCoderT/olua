@@ -740,6 +740,8 @@ async function main() {
     checkEqual(drugHp1?.effectHp, shared.DRUGS["drug_hp_1"].hp, "drug_hp_1 固定回复量与配置一致（effects 求和）");
     checkEqual(drugHp1?.maxStack, shared.DRUGS["drug_hp_1"].maxStack, "drug_hp_1 堆叠上限与配置一致");
     checkEqual(drugHp1?.cooldown, shared.DRUGS["drug_hp_1"].cooldown, "drug_hp_1 冷却与配置一致");
+    // #603 第十域：图标也入库了（客户端不再自带，拼不出 item/fs_2 这类路径）
+    checkEqual(drugHp1?.icon, shared.DRUGS["drug_hp_1"].icon, "drug_hp_1 图标与配置一致（图标在表里）");
     const drugSun = drugs.body?.data?.list?.find((row) => row.id === "drug_sun");
     checkEqual(drugSun?.effectHp, shared.DRUGS["drug_sun"].hp, "drug_sun 固定回血与配置一致");
     checkEqual(drugSun?.effectMp, shared.DRUGS["drug_sun"].mp, "drug_sun 固定回蓝与配置一致");
@@ -757,6 +759,13 @@ async function main() {
     checkEqual(drugPatched.body?.data?.effectHp, 120, "响应里的回复量已更新");
     checkEqual(drugPatched.body?.data?.cooldown, 2, "响应里的冷却已更新");
     checkEqual(drugPatched.body?.data?.maxStack, 999, "响应里的堆叠上限已更新");
+    // 图标是显示数据，运营能改；改完立刻还原（下面还有依赖出厂图标的断言）
+    const drugIconPatched = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: "item/fs_9" } });
+    checkEqual(drugIconPatched.body?.data?.icon, "item/fs_9", "图标可编辑（#603 第十域）");
+    const drugIconBad = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: "x".repeat(201) } });
+    checkEqual(drugIconBad.status, 400, "图标路径超过 200 字 → 400");
+    const drugIconRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: shared.DRUGS["drug_hp_1"].icon } });
+    checkEqual(drugIconRestore.body?.data?.icon, shared.DRUGS["drug_hp_1"].icon, "图标已还原出厂值");
     const drugBadPercent = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { effectHpPercent: 120 } });
     checkEqual(drugBadPercent.status, 400, "百分比回复超过 100 → 400");
     checkEqual(drugBadPercent.body?.code, 40000, "百分比校验用 40000（参数非法）");
@@ -793,6 +802,7 @@ async function main() {
     checkEqual(hide?.label, shared.ITEM_BASES["material_hide"].label, "material_hide 名称与配置一致");
     checkEqual(hide?.sellPrice, shared.ITEM_BASES["material_hide"].sellPrice, "material_hide 售卖价与配置一致");
     checkEqual(hide?.maxStack, shared.ITEM_BASES["material_hide"].maxStack, "material_hide 堆叠上限与配置一致");
+    checkEqual(hide?.icon, shared.ITEM_BASES["material_hide"].icon, "material_hide 图标与配置一致（图标在表里）");
 
     const itemsTyped = await api(base, "GET", "/api/admin/items?type=material", { token });
     checkEqual(itemsTyped.body?.data?.total, itemCount, "按大类筛 material：恰好全部物品");
@@ -806,6 +816,10 @@ async function main() {
     checkEqual(itemPatched.body?.data?.label, "兽皮（改）", "响应里的名称已更新");
     checkEqual(itemPatched.body?.data?.sellPrice, 8, "响应里的售卖价已更新");
     checkEqual(itemPatched.body?.data?.maxStack, 500, "响应里的堆叠上限已更新");
+    const itemIconPatched = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: "item/2010299" } });
+    checkEqual(itemIconPatched.body?.data?.icon, "item/2010299", "物品图标可编辑（#603 第十域）");
+    const itemIconRestore = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: shared.ITEM_BASES["material_hide"].icon } });
+    checkEqual(itemIconRestore.body?.data?.icon, shared.ITEM_BASES["material_hide"].icon, "物品图标已还原出厂值");
     const itemGhost = await api(base, "PATCH", "/api/admin/items/material_none", { token, body: { label: "x" } });
     checkEqual(itemGhost.status, 404, "改不存在的物品 → 404");
     checkEqual(itemGhost.body?.code, 50018, "物品未找到用专属业务码 50018");
@@ -1324,6 +1338,13 @@ async function main() {
     check(Array.isArray(snap.equipmentMeta?.recycleCurve) && snap.equipmentMeta.recycleCurve.length > 0, "快照带回收价曲线（客户端算回收价）");
     checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
+    {
+      // #603 第十域：客户端不带图标了 —— 快照必须带，缺了整套物品显示成白块
+      const drugRow = snap.drugs?.find((row) => row.id === "drug_hp_1") ?? {};
+      check(Boolean(drugRow.icon), "快照药品行带图标（客户端拼不出 item/fs_2 这类路径）");
+      const itemRow = snap.items?.find((row) => row.id === "material_hide") ?? {};
+      check(Boolean(itemRow.icon && itemRow.type), "快照物品行带图标与大类");
+    }
     checkEqual(snap.monsters?.length, MONSTER_SEED_ROWS.length, "快照怪物行数 = 种子（220）");
     check(!("drop" in (snap.monsters?.[0] ?? {})), "玩家侧快照的怪物不带掉落摘要（客户端不结算掉落，#584）");
     // #588：表现段 —— 客户端零副本，icon / out / 几何 / 移速全靠这一段下发

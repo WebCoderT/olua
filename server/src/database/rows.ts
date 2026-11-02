@@ -644,7 +644,9 @@ export interface DrugRow {
   label: string;
   /** 描述（运营文案，可编辑） */
   description: string;
-  /** 使用等级需求（seed 自客户端条目，暂不开放编辑） */
+  /** 图标资源路径（resources 相对路径，如 `item/fs_2`；#603 第十域起由服务端持有并下发） */
+  icon: string;
+  /** 使用等级需求（seed 自 item-seed.ts，暂不开放编辑） */
   level: number;
   /** 售卖价（客户端条目 `sellPirce` 的 seed 值；商城售价归 #251，不在这里） */
   sell_price: number;
@@ -678,7 +680,9 @@ export interface ItemRow {
   label: string;
   /** 描述 */
   description: string;
-  /** 等级需求（seed 自客户端条目，暂不开放编辑） */
+  /** 图标资源路径（resources 相对路径，如 `item/2010210`；#603 第十域起由服务端持有并下发） */
+  icon: string;
+  /** 等级需求（seed 自 item-seed.ts，暂不开放编辑） */
   level: number;
   /** 售卖价（客户端条目 `sellPirce` 的 seed 值；商城售价归 #251，不在这里） */
   sell_price: number;

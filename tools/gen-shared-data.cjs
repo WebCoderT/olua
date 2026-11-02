@@ -69,6 +69,7 @@ const {
   configLoader,
   cleanupWork,
   hydrateEquipment: hydrateEquipmentTables,
+  hydrateItems,
 } = require("./lib/client-config-compile.cjs");
 
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
@@ -124,10 +125,10 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, equipmentSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed } = compileServerShared(work);
-  // #603 第九域：装备数据 / 槽位 / 前后缀倍率 / 回收价曲线的唯一书写处是 equipment-seed.ts，
+  const { growthSeed, equipmentSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed, itemSeed } = compileServerShared(work);
+  // #603 第九 / 十域：装备 / 药品 / 材料数据的唯一书写处都在 server/src/shared，
   // 客户端那几张表**加载期是空的** —— 生成器先用种子把它们填起来，后面那套快照逻辑一行都不用改
-  hydrateEquipment(cfg, equipmentSeed);
+  hydrateEquipment(cfg, equipmentSeed, itemSeed);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
@@ -388,6 +389,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "combat-seed.ts"),
           path.join(sharedDir, "npc-seed.ts"),
           path.join(sharedDir, "mall-seed.ts"),
+          path.join(sharedDir, "item-seed.ts"),
         ],
       },
       null,
@@ -410,29 +412,21 @@ function compileServerShared(work) {
     combatSeed: require(path.join(work, "server-out", "combat-seed.js")),
     npcSeed: require(path.join(work, "server-out", "npc-seed.js")),
     mallSeed: require(path.join(work, "server-out", "mall-seed.js")),
+    itemSeed: require(path.join(work, "server-out", "item-seed.js")),
   };
 }
 
 /**
- * 用装备种子把客户端那几张**空**运行时表填起来（#603 第九域）
+ * 用服务端种子把客户端那几张**空**运行时表填起来（#603 第九 / 十域）
  *
- * 表本身的填充走共享库的 `hydrateEquipment`（与 `gen-equip-align-catalog` 同一份逻辑：
- * 装规则 → 装槽位与文案 → `applyEquipmentSeed` 展开 555 条），这里只补一件生成器独有的活：
- * **物品总表的插入顺序**。#603 之前装备是加载期先注册的（排在药品 / 材料前面），现在只能事后灌，
- * 所以要清表重建一次 —— `ITEM_LABELS` / `SELL_PRICES` 按插入顺序渲染，
- * 顺序一变「重新生成逐字节不变」这条守点立刻红。
+ * 表本身的填充走共享库（与 `gen-equip-align-catalog`、单测沙箱同一份逻辑）：
+ * 装备先装规则再展开 555 条；药品 / 材料整表重建；最后 `rebuildItemIndex()` 重建
+ * 「id → 物品」总表 —— **顺序（装备 → 药品 → 材料）只由客户端那份函数决定**,
+ * `ITEM_LABELS` / `SELL_PRICES` 按插入顺序渲染，顺序一变「重新生成逐字节不变」立刻红。
  */
-function hydrateEquipment(cfg, equipmentSeed) {
-  const variants = hydrateEquipmentTables(cfg, equipmentSeed);
-  const items = cfg("items").items;
-  const others = [...items.entries()];
-  items.clear();
-  variants.forEach((good) => {
-    if (good.id) items.set(good.id, good);
-  });
-  others.forEach(([id, good]) => {
-    if (!items.has(id)) items.set(id, good);
-  });
+function hydrateEquipment(cfg, equipmentSeed, itemSeed) {
+  hydrateEquipmentTables(cfg, equipmentSeed);
+  hydrateItems(cfg, itemSeed);
 }
 
 /** 出厂属性 × 前后缀倍率（倍率表仍是客户端 growth.ts 的常量，装备批次再收权到服务端） */

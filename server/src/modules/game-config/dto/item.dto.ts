@@ -26,6 +26,9 @@ export class ItemDto {
   @ApiProperty({ description: "描述" })
   description: string;
 
+  @ApiProperty({ description: "图标资源路径（resources 相对路径，如 item/2010210）" })
+  icon: string;
+
   @ApiProperty({ description: "等级需求（暂不开放编辑）" })
   level: number;
 
@@ -44,6 +47,7 @@ export class ItemDto {
     dto.type = row.type;
     dto.label = row.label;
     dto.description = row.description;
+    dto.icon = row.icon;
     dto.level = row.level;
     dto.sellPrice = row.sell_price;
     dto.maxStack = row.max_stack;
@@ -94,6 +98,18 @@ export class UpdateItemDto {
   @IsString({ message: "描述必须是字符串" })
   @MaxLength(ITEM_DESCRIPTION_MAX, { message: `描述最长 ${ITEM_DESCRIPTION_MAX} 个字` })
   description?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "图标（resources 相对路径，如 item/2010210；空串 = 不显示图标）。" +
+      "**这是少数允许下发的资源路径** —— 药品 / 材料的图标与 id 之间没有可推导的约定" +
+      "（地图 / 特效能按 id 拼路径，这两个拼不出来），只能存表",
+    maxLength: 200,
+  })
+  @IsOptional()
+  @IsString({ message: "图标必须是字符串" })
+  @MaxLength(200, { message: "图标路径不能超过 200 字" })
+  icon?: string;
 
   @ApiPropertyOptional({
     description: "售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）",

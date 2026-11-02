@@ -82,6 +82,7 @@ export function ItemsPage() {
       await itemsApi.update(editing.id, {
         label: form.label,
         description: form.description,
+        icon: form.icon,
         sellPrice: form.sellPrice,
         maxStack: form.maxStack,
       });
@@ -154,7 +155,7 @@ export function ItemsPage() {
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameIcon path={itemIcon(item.id)} alt={item.label} />
+                    <GameIcon path={item.icon || itemIcon(item.id)} alt={item.label} />
                   </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={tdClass}>
@@ -223,6 +224,10 @@ export function ItemsPage() {
 
             <Field label="描述">
               <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+            </Field>
+
+            <Field label="图标" hint="resources 相对路径（如 item/2010210）；空串 = 不显示图标">
+              <Input value={form.icon} onChange={(event) => setForm({ ...form, icon: event.target.value })} />
             </Field>
 
             <Field label="堆叠上限" hint="背包里最多叠多少个">

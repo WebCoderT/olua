@@ -87,6 +87,7 @@ export function DrugsPage() {
       await drugsApi.update(editing.id, {
         label: form.label,
         description: form.description,
+        icon: form.icon,
         sellPrice: form.sellPrice,
         maxStack: form.maxStack,
         cooldown: form.cooldown,
@@ -167,7 +168,7 @@ export function DrugsPage() {
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameIcon path={drugIcon(item.id)} alt={item.label} />
+                    <GameIcon path={item.icon || drugIcon(item.id)} alt={item.label} />
                   </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={tdClass}>
@@ -231,6 +232,9 @@ export function DrugsPage() {
           </div>
           <Field label="描述">
             <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+          </Field>
+          <Field label="图标" hint="resources 相对路径（如 item/fs_2）；空串 = 不显示图标">
+            <Input value={form.icon} onChange={(event) => setForm({ ...form, icon: event.target.value })} />
           </Field>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}

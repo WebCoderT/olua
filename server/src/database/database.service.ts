@@ -503,6 +503,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         id                 TEXT    PRIMARY KEY,
         label              TEXT    NOT NULL DEFAULT '',
         description        TEXT    NOT NULL DEFAULT '',
+        icon               TEXT    NOT NULL DEFAULT '',
         level              INTEGER NOT NULL DEFAULT 1,
         sell_price         INTEGER NOT NULL DEFAULT 0,
         max_stack          INTEGER NOT NULL DEFAULT 99,
@@ -521,6 +522,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         type         TEXT    NOT NULL DEFAULT 'material',
         label        TEXT    NOT NULL DEFAULT '',
         description  TEXT    NOT NULL DEFAULT '',
+        icon         TEXT    NOT NULL DEFAULT '',
         level        INTEGER NOT NULL DEFAULT 1,
         sell_price   INTEGER NOT NULL DEFAULT 0,
         max_stack    INTEGER NOT NULL DEFAULT 99,
@@ -942,6 +944,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("equipments", "out_scale", "REAL NOT NULL DEFAULT 1");
     this.ensureColumn("equipments", "out_positions", "TEXT NOT NULL DEFAULT '[]'");
     this.migrateWorldMonsterInstanceIds();
+    // 药品 / 物品图标（#603 第十域）：客户端不再存图标（它拼不出 `item/fs_2` 这类路径，
+    // 与地图 / 特效那种「能按 id 推导」的不同）—— 老库补列后由 seedDrugs / seedItems
+    // 的 backfillIcon 一次性回填（只在 icon 还是空串时填）
+    this.ensureColumn("drugs", "icon", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("items", "icon", "TEXT NOT NULL DEFAULT ''");
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();

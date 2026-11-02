@@ -21,7 +21,7 @@ import type {
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
-import type { DrugEffect, EquipmentData, OutTransform } from "../types/good";
+import type { EquipmentData, OutTransform } from "../types/good";
 import { applyTitleRows } from "./title";
 import { applySoulRows } from "./soul";
 import { applyRankRows } from "./rank";
@@ -31,8 +31,9 @@ import { uiEffects } from "./effect";
 import { applyMallPricing } from "./mall";
 import { applyCombatWeights } from "./battle";
 import { applyEquipmentRules, setRoleMaxLevel } from "./growth";
-import { items } from "./items";
-import { drugs } from "./drug";
+import { items, rebuildItemIndex } from "./items";
+import { applyDrugData } from "./drug";
+import { applyItemBaseData } from "./material";
 import { applyMonsterPresentation, applyMonsterRuntimeStats } from "./monsterRuntime";
 import { applyNpcRows } from "./npc";
 import { questData } from "./quest-data";
@@ -179,72 +180,40 @@ function rowToEquipmentData(row: EquipmentRow): EquipmentData {
 }
 
 /**
- * 装载装备（#603 第九域：整表重建 + 灌物品总表）
+ * 装载装备（#603 第九域：整表重建）
  *
  * 服务端下发**基础件**（37 件）+ 全部显示字段，`applyEquipmentData` 按「前缀 × 后缀」
- * 展开成 555 条变体并按部位分表；这里再把变体写进物品总表（`items` 是全局
- * 「id → 物品」索引，背包 / 掉落 / 商城 / 任务全读它）。
- *
- * **为什么要写进 items**：以前装备在加载期就注册好了（items 直接 import 七张部位表），
- * 现在客户端没有本地装备，items 加载期只有药品与材料 —— 索引必须由这里补上。
- * 用 `items.set` 而不是 `registerItem`：后者「已存在不覆盖」，快照重复应用时会留下上一轮的旧对象。
+ * 展开成 555 条变体并按部位分表。物品总表（`items`）不在这里逐条写 —— 由
+ * `applyContentSnapshot` 末尾的 `rebuildItemIndex()` 一次性重建（#603 第十域）,
+ * 顺序「装备 → 药品 → 材料」只有那一处实现。
  */
 export function applyEquipments(rows: EquipmentRow[]): void {
-  const all = applyEquipmentData(rows.map(rowToEquipmentData));
-  all.forEach((good) => {
-    if (good.id) items.set(good.id, good);
-  });
+  applyEquipmentData(rows.map(rowToEquipmentData));
 }
 
 /**
- * 服务端把药品效果拍平成四个单值（同类效果逐项求和），客户端用的是 effects 数组 ——
- * 两者语义等价（resolveDrugRecovery 也是逐项累加），这里还原成**一条**合并效果即可，
- * 全为 0 时给空数组（0 = 没有该效果，不是「回 0 点」）。
- */
-function toDrugEffects(row: DrugRow): DrugEffect[] {
-  const effect: DrugEffect = {};
-  if (row.effectHp > 0) effect.hp = row.effectHp;
-  if (row.effectMp > 0) effect.mp = row.effectMp;
-  if (row.effectHpPercent > 0) effect.hpPercent = row.effectHpPercent;
-  if (row.effectMpPercent > 0) effect.mpPercent = row.effectMpPercent;
-  return Object.keys(effect).length ? [effect] : [];
-}
-
-/** 覆写药品（文案 / 价格 / 叠加上限 / 冷却 / 回复量；id 序列固定，不增删行） */
-export function applyDrugRows(rows: DrugRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, DrugRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  drugs.forEach((drug) => {
-    const row = drug.id ? overrides.get(drug.id) : undefined;
-    if (!row) return;
-    drug.label = row.label;
-    drug.description = row.description;
-    drug.sellPirce = row.sellPrice;
-    drug.maxStack = row.maxStack;
-    drug.cooldown = row.cooldown;
-    drug.effects = toDrugEffects(row);
-  });
-}
-
-/**
- * 覆写物品与材料（文案 / 价格 / 叠加上限）
+ * 覆写药品（#603 第十域：**整表重建**）
  *
- * 按 id 逐个对齐后原地改：快照里没有的 id（客户端独有的其它条目）保持本地值，
- * 类型（type）与图标属结构字段，不覆写。
+ * 客户端 `configs/drug` 已经没有出厂行了（数据在服务端 `item-seed.ts` → `drugs` 表），
+ * 所以这里是「清空再按快照填」而不是「按 id 覆写已有行」—— 管理端下架一种药,
+ * 客户端就该少一种（留着旧行会让它变成捡不起来、用不掉的幽灵物品）。
+ *
+ * 效果值的还原（四段拍平 → effects 数组）在 `configs/drug.toDrugEffects` 里,
+ * 与 `resolveDrugRecovery` 的累加口径一致，这里只做直传。
+ */
+export function applyDrugRows(rows: DrugRow[]): void {
+  applyDrugData(rows);
+}
+
+/**
+ * 覆写物品与材料（#603 第十域：**整表重建**）
+ *
+ * 与药品同款：客户端 `configs/material` 只剩空数组，这里按快照清空重建。
+ * 只收 MATERIAL / OTHER 大类（装备与药品各有自己的段与表）—— 快照的 `items` 段
+ * 按表内容下发，不会混进装备行。
  */
 export function applyItemRows(rows: ItemRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, ItemRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  items.forEach((good, id) => {
-    const row = overrides.get(id);
-    if (!row) return;
-    good.label = row.label;
-    good.description = row.description;
-    good.sellPirce = row.sellPrice;
-    if (good.stackable) good.maxStack = row.maxStack;
-  });
+  applyItemBaseData(rows);
 }
 
 /**
@@ -465,6 +434,9 @@ export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   if (snapshot.equipments) applyEquipments(snapshot.equipments);
   if (snapshot.drugs) applyDrugRows(snapshot.drugs);
   if (snapshot.items) applyItemRows(snapshot.items);
+  // #603 第十域：三张物品表都落完，再一次性重建「id → 物品」总表 ——
+  // 放在这里而不是各自 apply 里，是因为顺序（装备 → 药品 → 材料）只该有一处实现
+  rebuildItemIndex();
   if (snapshot.monsters) applyMonsterRows(snapshot.monsters);
   // #588：怪物资源与表现（icon / out / 几何 / 移动 / AI 参数）—— 客户端没有本地怪物数据文件
   if (snapshot.monsterPresentations) applyMonsterPresentations(snapshot.monsterPresentations);

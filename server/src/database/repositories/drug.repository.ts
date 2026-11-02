@@ -29,13 +29,14 @@ export class DrugRepository {
   seedRow(row: DrugRow): void {
     this.db.run(
       `INSERT OR IGNORE INTO drugs
-        (id, label, description, level, sell_price, max_stack, cooldown,
+        (id, label, description, icon, level, sell_price, max_stack, cooldown,
          effect_hp, effect_mp, effect_hp_percent, effect_mp_percent, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.label,
         row.description,
+        row.icon,
         row.level,
         row.sell_price,
         row.max_stack,
@@ -49,16 +50,28 @@ export class DrugRepository {
     );
   }
 
+  /**
+   * 老库补图标（#603 第十域）：只在 icon 还是空串时填，**不覆盖**运营改过的值
+   *
+   * 存量库的行是「没有 icon 列」的老形态，`seedRow` 的 INSERT OR IGNORE 会整行跳过,
+   * 没有这一步老库里 8 种药会集体没图标（客户端已不再自带图标）。
+   * @returns 实际回填的行数（只用于启动日志）
+   */
+  backfillIcon(row: DrugRow): number {
+    return this.db.execute("UPDATE drugs SET icon = ? WHERE id = ? AND icon = ''", [row.icon, row.id]).changes;
+  }
+
   update(row: DrugRow): { changes: number } {
     return this.db.execute(
       `UPDATE drugs SET
-         label = ?, description = ?, sell_price = ?, max_stack = ?, cooldown = ?,
+         label = ?, description = ?, icon = ?, sell_price = ?, max_stack = ?, cooldown = ?,
          effect_hp = ?, effect_mp = ?, effect_hp_percent = ?, effect_mp_percent = ?,
          updated_at = ?
        WHERE id = ?`,
       [
         row.label,
         row.description,
+        row.icon,
         row.sell_price,
         row.max_stack,
         row.cooldown,
