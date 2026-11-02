@@ -30,6 +30,7 @@ import { applyLevelRows } from "./level";
 import { mapTypeGroups, maps } from "./map";
 import { uiEffects } from "./effect";
 import { applyMallPricing } from "./mall";
+import { applyCombatWeights } from "./battle";
 import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates, setRoleMaxLevel } from "./growth";
 import { items } from "./items";
 import { drugs } from "./drug";
@@ -456,6 +457,8 @@ export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
 
 /** 快照总入口：逐表覆写；某表缺失（undefined）时跳过该表，保留本地兜底 */
 export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
+  // #603：战斗力权重（客户端不再存倍率，唯一来源是服务端 combat-seed）
+  applyCombatWeights(snapshot.combatWeights);
   if (snapshot.titles) applyTitleRows(snapshot.titles);
   if (snapshot.souls) applySoulRows(snapshot.souls);
   if (snapshot.ranks) applyRankRows(snapshot.ranks);

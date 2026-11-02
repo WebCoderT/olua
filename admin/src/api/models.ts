@@ -5324,6 +5324,10 @@ export type GameConfigSnapshot = {
    */
   growthScalars: GrowthScalar[];
   /**
+   * 战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 shared/combat-seed.ts）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）
+   */
+  combatWeights: Record<string, number>;
+  /**
    * 商城全部商品定价（price = null 走统一价）
    */
   mallPrices: MallPriceItem[];
