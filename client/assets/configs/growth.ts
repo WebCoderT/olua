@@ -1,19 +1,15 @@
 /**
- * 成长底座（#590 起客户端只剩「装备前后缀倍率 + 回收价曲线」这几个**客户端常量**）
+ * 成长底座（#603 第九域起只剩「运行时表 + 取样函数」）
  *
- * #361 时代这里是全角色的数值唯一来源（曲线 / 标量 / 属性派生都在这份文件里手写），
- * #590 起归属翻转：曲线、标量、等级表、三条成长线的**唯一书写处**在
- * `server/src/shared/growth-seed.ts`（以及 title/soul/rank-seed），管理端可改，
- * 客户端经快照 `levels` 段拿最终值（configs/level 的 levelMap）。
+ * 这个文件历史上换过两次主人：
+ * - #361 时代它是全角色数值的唯一来源（曲线 / 标量 / 属性派生全手写在客户端）；
+ * - #590 起曲线、标量、等级表、三条成长线搬去服务端种子，客户端只剩「装备前后缀倍率 +
+ *   回收价曲线 + roleMaxLevel」三样客户端常量；
+ * - **#603 第九域起连那三样也不在客户端了**：倍率、品质文案、回收价曲线的唯一书写处是
+ *   `server/src/shared/equipment-seed.ts`（→ `equipment_meta` 表，管理端可改），
+ *   进游戏由配置快照 `equipmentMeta` 段下发，本文件只剩空运行时表 + 一段取样算术。
  *
- * 留在这里的三样东西：
- * - **装备前后缀倍率**：客户端把服务端下发的基础件展开成 15 个变体要用
- *   （applyEquipmentRows 与 buildEquipmentMap 同口径，服务端生成物里也有一份对账）；
- * - **装备回收价曲线**：背包「一键回收」的计价（归属装备批次再收）；
- * - **roleMaxLevel**：等级上限的运行时值（快照 growthScalars 里的 roleMaxLevel 覆写，
- *   见 configs/apply-snapshot）—— UI 的「等级/上限」判断直接读它。
- *
- * 想调血量 / 攻防 / 升级节奏 / 军衔强度，改服务端种子或管理端，**不要在这里写数字**。
+ * 所以这里**一个数字都不许再写**：想调倍率 / 回收价 / 等级上限，改服务端种子或管理端。
  */
 
 /** 一条分段线性曲线的一档：档内按等级线性增长，档间靠 perLevel 跳档 */
@@ -47,9 +43,15 @@ export function setRoleMaxLevel(level: number): void {
   roleMaxLevel = Math.max(1, Math.floor(level));
 }
 
-/** 在分段线性曲线上取某等级的值（目前只服务回收价曲线；超出最后一段按最后一段斜率外推） */
+/**
+ * 在分段线性曲线上取某等级的值（目前只服务回收价曲线；超出最后一段按最后一段斜率外推）
+ *
+ * 服务端 `equipment-seed.sampleEquipmentCurve` 是同一段算术（两端各写一份是因为
+ * 服务端不能 import 客户端代码）—— 改这里必须同步改那边，判据是
+ * `test-equipment-recycle` 里「客户端与服务端取价逐级相同」那组断言。
+ */
 export function sampleGrowth(segments: GrowthSegment[], level: number): number {
-  if (level <= 0) return 0;
+  if (level <= 0 || segments.length === 0) return 0;
   let last = segments[0];
   for (const segment of segments) {
     if (level <= segment.to) return segment.start + (level - segment.from) * segment.perLevel;
@@ -60,38 +62,41 @@ export function sampleGrowth(segments: GrowthSegment[], level: number): number {
 
 /**
  * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
- * 普通的 / 强化的 / 精良的 / 极品的 / 超神的
+ *
+ * **空数组 = 快照还没到**：此时 `buildEquipmentMap` 展开不出任何变体（装备表整个是空的）。
+ * 正常路径上 `Game.start` 的 `loadGameConfig()` 在进场景前 await 过，玩家看不到空表。
  */
-export const equipmentPrefixRates = [1, 1.1, 1.2, 1.3, 1.4] as const;
+export let equipmentPrefixRates: number[] = [];
+
+/** 装备后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）；空数组的含义同上 */
+export let equipmentSuffixRates: number[] = [];
+
+/** 装备回收价的成长曲线（背包「一键回收」与卖装备结算的计价依据）；空数组 = 快照没到 */
+export let equipmentRecycleCurve: GrowthSegment[] = [];
 
 /**
- * 装备后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）
- * 人级 / 天级 / 神级
+ * 装载装备规则（`configs/apply-snapshot` 调；快照 `equipmentMeta` 段）
+ *
+ * 只收正数倍率（≤ 0 或非数字会让变体属性变成 0 或负数，比「没升级」更糟）；
+ * 曲线按原样收（取样函数自己处理越界）。
  */
-export const equipmentSuffixRates = [1, 2, 3] as const;
+export function applyEquipmentRules(prefixRates: number[], suffixRates: number[], recycleCurve: GrowthSegment[]): void {
+  equipmentPrefixRates = (prefixRates || []).map((rate) => Number(rate)).filter((rate) => Number.isFinite(rate) && rate > 0);
+  equipmentSuffixRates = (suffixRates || []).map((rate) => Number(rate)).filter((rate) => Number.isFinite(rate) && rate > 0);
+  equipmentRecycleCurve = (recycleCurve || []).map((segment) => ({
+    from: Number(segment.from) || 0,
+    to: Number(segment.to) || 0,
+    start: Number(segment.start) || 0,
+    perLevel: Number(segment.perLevel) || 0,
+  }));
+}
 
 /**
- * 装备回收价的成长曲线（背包「一键回收」的计价唯一来源，货币 = **绑定元宝**）
+ * 取某等级装备的回收基础价（普通·人级；前后缀倍率由调用方乘上）
  *
- * 与装备属性同一口径，**只按装备自己的 level 取基础价**（普通·人级 的价），
- * 前后缀变体再乘对应倍率（equipmentPrefixRates × equipmentSuffixRates，最高 4.2 倍），
- * 在 configs/equipments.buildEquipmentMap 里生成；快照覆写时服务端下发的行
- * 也按「服务端等级 × 同一曲线」重算（applyEquipmentRows）。
- * 归属备注：这是装备定价数据，随装备批次（#590 之后）再决定是否搬服务端。
- *
- * 量级参考：升满战魂合计约 527 万绑定元宝（300 × Σn²，n = 1..37，见 server/src/shared/soul-seed），
- * 角色出生带 1 万。当前曲线下 60 级基础装备回收约 4 万，1 级装备 10（新手装直接丢掉不心疼）。
+ * 曲线来自服务端（`equipmentMeta.recycleCurve`）—— 快照没到时返回 0，
+ * **不兜一份本地曲线**（那等于又造一份价格真相，正是 #603 要消掉的东西）。
  */
-export const equipmentRecyclePriceCurve: GrowthSegment[] = [
-  { from: 1, to: 10, start: 10, perLevel: 5 }, // 1 级 10 → 10 级 55
-  { from: 11, to: 20, start: 60, perLevel: 20 }, // 20 级 240
-  { from: 21, to: 30, start: 260, perLevel: 70 }, // 30 级 890
-  { from: 31, to: 40, start: 960, perLevel: 270 }, // 40 级 3,390
-  { from: 41, to: 50, start: 3600, perLevel: 840 }, // 50 级 11,160
-  { from: 51, to: 60, start: 12000, perLevel: 3100 }, // 60 级 39,900
-];
-
-/** 取某等级装备的回收基础价（普通·人级；前后缀倍率由 configs/equipments 乘上） */
 export function equipmentRecyclePrice(level: number): number {
-  return Math.max(0, Math.round(sampleGrowth(equipmentRecyclePriceCurve, level)));
+  return Math.max(0, Math.round(sampleGrowth(equipmentRecycleCurve, level)));
 }

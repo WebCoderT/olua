@@ -2,7 +2,7 @@
 
 > 这份文件是**索引**，不是权威：字段含义看代码注释，接口契约看 `server/openapi.json`。
 > 目的只有一个 —— 想改某个东西时，能一眼看出「它现在归谁、改哪儿、客户端什么时候拿到」。
-> 最后更新：2026-11-02（#603 逐域搬迁进行中）。
+> 最后更新：2026-11-02（#603 逐域搬迁：第九域 equipments + growth 已搬完）。
 
 ## 一、一句话规则
 
@@ -47,7 +47,9 @@
 | `souls` | `applySoulRows` | `configs/soul.ts` `souls` | `shared/soul-seed.ts` | `/souls` |
 | `ranks` | `applyRankRows` | `configs/rank.ts` `ranks` | `shared/rank-seed.ts` | `/ranks` |
 | `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `configs/level.ts` `levels`、`configs/growth.ts` 的等级上限 | `shared/growth-seed.ts` | `/growth` |
-| `equipments` | `applyEquipmentRows` | `configs/items.ts` 的装备表（基础件 + 555 变体重算） | `equipments` 表 ← 客户端 `configs/equipments.ts` | `/equipments` |
+| `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `shared/equipment-seed.ts` → `equipments` 表 | `/equipments` |
+| `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `shared/equipment-seed.ts` → `equipment_slots` 表 | `/equipment-settings` |
+| `equipmentMeta` | `applyEquipmentRules`（growth）/ `applyEquipmentQualityLabels`（equipments） | `configs/growth.ts` 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `shared/equipment-seed.ts` → `equipment_meta` 表 | `/equipment-settings` |
 | `items` | `applyItemRows` | `configs/items.ts` `items` | `items` 表 ← `configs/items.ts` | `/items` |
 | `drugs` | `applyDrugRows` | `configs/drug.ts` `drugs` | `drugs` 表 ← `configs/drug.ts` | `/drugs` |
 | `monsters` | `applyMonsterRows` | `configs/monsterRuntime.ts` `monsterRuntime` | `shared/monster-seed.ts` → `monsters` 表 | `/monsters` |
@@ -87,17 +89,17 @@
 | `monsterRuntime.ts` | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` |
 | `mall.ts` | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` |
 | `map.ts` | `maps` / `mapTypeGroups` | `applyMapRows` |
+| `equipments.ts` | 七张部位表 / `equipmentSlots` / `equipmentSlotOrder` / 品质文案 | `applyEquipmentData` / `applyEquipmentSlots` / `applyEquipmentQualityLabels` |
+| `growth.ts` | 前后缀倍率 / 回收价曲线（`roleMaxLevel` 也由 `growthScalars` 覆写） | `applyEquipmentRules` |
 
 ### 4.2 仍是「客户端持有 + 快照覆写」（#603 未搬完的部分）
 
 | 文件 | 行数 | 现在客户端存什么 | 阻力 |
 |---|---|---|---|
-| `equipments.ts` | 1381 | 7 个部位的基础件表 + 555 变体展开规则 + 10 个运行时函数 | 与 `growth.ts` 的倍率 / 回收价曲线强耦合，必须同轮搬 |
 | `skill-data.ts` | 489 | 技能数值行 + `oeccupationSkills`（职业→技能）映射 | 与释放实现 `Record<RoleSkillId>` 耦合 |
 | `items.ts` | 485 | 物品总表（模块加载期建好，`applyItemRows` 只覆写已有行） | 删本地数据要改成整表重建 |
 | `fashionClothes.ts` | 229 | 时装行（icon / in / out 资源路径是表现层） | 资源路径是否入库要定（地图那套选择了「不入库」） |
 | `role.ts` | 198 | 职业表 + 移动速度 | 只剩少量常量 |
-| `growth.ts` | 97 | 装备前后缀倍率 + 回收价曲线 | 与 `equipments` 同轮 |
 | `monster.ts` | 65 | 只有 `monsterAI` 全局节奏常量 | 低优先 |
 | `material.ts` | 63 | 5 条材料行 | 随 `items` 一起 |
 
@@ -132,14 +134,20 @@
 | 读地图 | `maps` / `mapTypeGroups` / `mapSrcOf` / `mapLabelOf` | `configs/map.ts` |
 | 读商城价 | `getMallPrice(good)` | `configs/mall.ts` |
 | 算装备战斗力 / 对比 | `equipmentCombatValue(...)`（权重读 `configs/battle.ts`） | `configs/equipments.ts` |
+| 算装备回收价（基础件） | `equipmentRecyclePrice(level)` / `getRecyclePrice(equipment)` | `configs/growth.ts` / `configs/equipments.ts` |
 
 ## 六、搬迁进度（#603）
 
 已搬完（客户端不再有出厂数据）：`monsterDrops`、`monster-skills`、`status`、`quest`、`achievement`、
-`drop`（具名表 + 兜底表）、`battle`（战斗力权重）、`npc`、`mall`（默认售价）。
+`drop`（具名表 + 兜底表）、`battle`（战斗力权重）、`npc`、`mall`（默认售价）、
+**`equipments` + `growth`（第九域：装备/槽位/倍率/回收价曲线，含 1080 行装备数据）**。
 
-剩余按阻力排序：`equipments` + `growth`（必须同轮）→ `items` / `material` / `drug`（要把
-`apply*Rows` 从「覆写已有行」改成整表重建）→ `skill-data` → `fashionClothes` → `role` / `monster`（AI 节奏常量）。
+剩余按阻力排序：`items` / `material` / `drug`（要把 `apply*Rows` 从「覆写已有行」改成整表重建）→
+`skill-data` → `fashionClothes` → `role` / `monster`（AI 节奏常量）。
+
+> 第九域的三层切分值得记住：**显示与规则**进 `equipments` / `equipment_slots` / `equipment_meta` 三张表；
+> **八项战斗属性**不进表，由 `growth-seed.equipmentStats(level, slot)` 公式算（#590）；
+> **几何**（内观锚点 / 外观 8 向）在表里是**出厂值**，工作台结果在 `equip_aligns` / `equip_in_aligns`、每次进图另发。
 
 > 注：成就（`achievements`）虽然也在快照里，但客户端**不落表** —— 成就面板走
 > `AchievementStore` + `/achievements/me`（进度与达成状态是玩家数据，不是配置）。这一段属于

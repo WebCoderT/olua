@@ -356,8 +356,10 @@ function prepareStorage(sandboxName, extraEntries = []) {
   const storageModule = require(moduleFile);
   const StorageManager = storageModule.default ?? storageModule;
   const Role = require(path.join(outDir, "entities/Role.js")).Role ?? require(path.join(outDir, "entities/Role.js")).default;
+  // #603：装备 / 倍率 / 战力权重也是空运行时表（数据在服务端种子），与 prepare() 同一条路灌回来
+  const { seedRuntimeTables, hydrateSnapshotTables } = require("./configs-sandbox.cjs");
+  hydrateSnapshotTables(outDir);
   // #590：等级 / 称号 / 战魂 / 军衔是空运行时表，Role 构造就要读 levelMap —— 用真实种子当场灌
-  const { seedRuntimeTables } = require("./configs-sandbox.cjs");
   const tables = seedRuntimeTables(outDir);
   // 垫片内存（测试用它直接核对 localStorage 里到底写了什么，而不是从业务接口倒推）
   const shim = require(path.join(sandbox, "node_modules/cc/index.js"));

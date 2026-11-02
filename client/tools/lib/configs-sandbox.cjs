@@ -122,7 +122,91 @@ function prepare(sandboxName, extraEntries = [], ccExtra = "") {
     console.error(result.stderr || "");
     throw new Error(`配置表编译失败（tsc 退出码 ${result.status}）`);
   }
+  hydrateSnapshotTables(outDir);
   return outDir;
+}
+
+/**
+ * 把「#603 搬到服务端」的那几张表按线上同一条路灌进沙箱（装备 555 变体 + 战斗力权重）
+ *
+ * 客户端 `configs/equipments` / `configs/growth` / `configs/battle` 加载期都是**空表**
+ * （数据在服务端 `equipment-seed.ts` / `combat-seed.ts`），但配置层单测一直把
+ * 「这些表有值」当既有前提（背包回收、整理、对比、掉落名、更好装备提示…）。
+ * 这些断言测的不是「快照有没有到」，而是规则本身 —— 所以 `prepare()` 编完就灌好：
+ * 与进游戏后 `applyConfigSnapshot` 的最终状态同形。
+ *
+ * 用**真实种子 + 真实装载函数**而不是在测试里造数据：展开规则（5×3 档、rate 相乘、
+ * 回收价取整）只有 `buildEquipmentMap` 一份，测试与线上算出来的一定是同一组数字。
+ */
+function hydrateSnapshotTables(outDir) {
+  const has = (rel) => fs.existsSync(path.join(outDir, rel));
+
+  // 任务（#603 第六域）：客户端 `configs/quest-data` 只剩空数组，数据在 quest-seed.ts ——
+  // 任务面板 / 可接判定 / NPC 头顶标记的断言都读这张表
+  if (has("configs/quest-data.js")) {
+    const questSeed = require(compileServerShared("quest-seed.ts", "olua-seed-quest"));
+    const questDataMod = require(path.join(outDir, "configs/quest-data.js"));
+    questDataMod.questData.length = 0;
+    questSeed.QUEST_SEED_ROWS.forEach((row) => questDataMod.questData.push(row));
+    // 任务仓读的是 quests Map（由 questData 重建），不重建就是空表
+    if (has("configs/quest.js")) require(path.join(outDir, "configs/quest.js")).rebuildQuests();
+  }
+
+  if (!has("configs/equipments.js") || !has("configs/growth.js")) return;
+
+  const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
+  const growthCfg = require(path.join(outDir, "configs/growth.js"));
+  const equipmentSeed = require(requireEquipmentSeed());
+
+  // 战斗力权重（#603）：空表时 equipmentCombatValue 恒 0，「更好装备」提示会把所有候选判成不更好
+  if (has("configs/battle.js")) {
+    const combatSeed = require(compileServerShared("combat-seed.ts", "olua-seed-combat"));
+    require(path.join(outDir, "configs/battle.js")).applyCombatWeights(combatSeed.COMBAT_WEIGHTS_SEED);
+  }
+
+  // 顺序讲究：倍率先装（它决定展开档数，空数组一件都展开不出来），再装槽位与文案
+  growthCfg.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
+  equipmentsMod.applyEquipmentQualityLabels(equipmentSeed.EQUIPMENT_PREFIX_LABEL_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_LABEL_SEEDS);
+  // 槽位的 order 就是种子数组下标（与 equipment_slots.sort_order 的出厂值同源）
+  equipmentsMod.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
+
+  const variants = equipmentsMod.applyEquipmentSeed(equipmentSeed.EQUIPMENT_SEED_ROWS);
+  const items = require(path.join(outDir, "configs/items.js")).items;
+  variants.forEach((good) => {
+    if (good.id) items.set(good.id, good);
+  });
+
+  // 装备属性（#590）：种子不带八项属性（由 growth-seed.equipmentStats 公式算），展开出来的
+  // 变体属性是 0 —— 这里按「公式 × 前后缀倍率」重算，与生成物 / 服务端 seed 同一来源。
+  // items 总表与部位 Map 引用的是同一批对象，原地改一处即两边同步。
+  const growthSeed = require(compileServerShared("growth-seed.ts", "olua-seed-growth"));
+  const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
+  for (const map of [
+    equipmentsMod.clothes,
+    equipmentsMod.weapons,
+    equipmentsMod.rings,
+    equipmentsMod.nicklaces,
+    equipmentsMod.shoes,
+    equipmentsMod.helmets,
+    equipmentsMod.belts,
+  ]) {
+    map.forEach((item) => {
+      const stats = growthSeed.equipmentStats(Number(item.level) || 0, String(item.slot ?? ""));
+      const rate = (growthCfg.equipmentPrefixRates[Number(item.prefix) || 0] ?? 1) * (growthCfg.equipmentSuffixRates[Number(item.suffix) || 0] ?? 1);
+      item.maxHp = Math.round(stats.maxHp * rate);
+      item.hpRecover = Math.round(stats.hpRecover * rate);
+      for (const key of RANGE_KEYS) item[key] = [Math.round(stats[key][0] * rate), Math.round(stats[key][1] * rate)];
+      // recyclePrice 由 buildEquipmentMap 按「曲线 × rate」算好（曲线已由 applyEquipmentRules 装进来），不动
+    });
+  }
+}
+
+/** 装备种子编译产物（进程内只编一次：单测常在一个进程里 prepare 两次） */
+let equipmentSeedPath = null;
+
+function requireEquipmentSeed() {
+  if (!equipmentSeedPath) equipmentSeedPath = compileServerShared("equipment-seed.ts", "olua-seed-equipment");
+  return equipmentSeedPath;
 }
 
 /** 取沙箱的 `cc` 垫片模块（ccExtra 里导出的可调状态在这里读改，例如屏幕尺寸/缩放） */
@@ -240,33 +324,9 @@ function seedRuntimeTables(outDir) {
     rank.applyRankRows(rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
   }
 
-  // 装备出厂属性（#590）：客户端 buildEquipmentMap 是零值占位（快照后重算），测试里
-  // 用真实公式（growth-seed.equipmentStats，与生成物 / 服务端 seed 同一来源）逐件重算，
-  // 等价于「快照 equipments 段 + applyEquipmentRows」的最终结果。items 总表与部位 Map
-  // 共享同一对象引用（configs/items.registerItem），原地改一处即两边同步。
-  if (has("configs/equipments.js") && has("configs/growth.js")) {
-    const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
-    const growthCfg = require(path.join(outDir, "configs/growth.js"));
-    const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
-    for (const map of [
-      equipmentsMod.clothes,
-      equipmentsMod.weapons,
-      equipmentsMod.rings,
-      equipmentsMod.nicklaces,
-      equipmentsMod.shoes,
-      equipmentsMod.helmets,
-      equipmentsMod.belts,
-    ]) {
-      map.forEach((item) => {
-        const stats = growth.equipmentStats(Number(item.level) || 0, String(item.slot ?? ""));
-        const rate = (growthCfg.equipmentPrefixRates[Number(item.prefix) || 0] ?? 1) * (growthCfg.equipmentSuffixRates[Number(item.suffix) || 0] ?? 1);
-        item.maxHp = Math.round(stats.maxHp * rate);
-        item.hpRecover = Math.round(stats.hpRecover * rate);
-        for (const key of RANGE_KEYS) item[key] = [Math.round(stats[key][0] * rate), Math.round(stats[key][1] * rate)];
-        // recyclePrice 由 buildEquipmentMap 按「曲线 × rate」算好（曲线仍在客户端 growth），不动
-      });
-    }
-  }
+  // 装备（#603 第九域）**不在这里** —— 它不再是「快照到达后才有」，而是 prepare() 编完就
+  // 按线上同一条路灌好的既存前提（见本文件顶部的 hydrateSnapshotTables）。这里只管四张
+  // 「#590 起客户端零数据」的运行时表。
 
   return {
     levelMap: has("configs/level.js") ? require(path.join(outDir, "configs/level.js")).levelMap : null,
@@ -307,4 +367,4 @@ function fail(message) {
 
 //#endregion
 
-module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, compileServerShared, seedRuntimeTables, check, finish, fail };
+module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, compileServerShared, hydrateSnapshotTables, seedRuntimeTables, check, finish, fail };

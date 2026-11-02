@@ -1,12 +1,15 @@
 import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./drug";
-import { belts, clothes, equipmentCombatValue, equipmentSlotOrder, getRecyclePrice, helmets, nicklaces, rings, shoes, weapons } from "./equipments";
+import { equipmentCombatValue, equipmentSlotOrder, getRecyclePrice } from "./equipments";
 import { materials } from "./material";
 
 /**
  * 物品总表：物品 id -> 物品数据
- * 掉落、任务、商店、背包/装备槽存档等一律按物品 id 引用物品。
- * 装备的各配置列表是 Map，key 即物品 id（cloth_1 / weapon_2 …），顺序与增删互不影响。
+ *
+ * 掉落、任务、商店、背包/装备槽存档等一律按物品 id 引用物品 —— 这是全局唯一的
+ * 「id → 物品」索引。**加载期只有药品与材料**：#603 第九域起装备数据在服务端，
+ * `applyEquipmentData` 展开出 555 个变体后由 `configs/apply-snapshot` 灌进来
+ * （见 `applyEquipments`）。所以进游戏前 `items` 里查不到装备，这不是 bug。
  */
 export const items = new Map<string, Goods>();
 
@@ -22,14 +25,8 @@ export function registerItems(list: Goods[], prefix: string) {
   list.forEach((good, index) => registerItem(good.id ?? `${prefix}_${index + 1}`, good));
 }
 
-// 装备（列表是 Map，key 即物品 id）
-clothes.forEach((good, id) => registerItem(id, good));
-weapons.forEach((good, id) => registerItem(id, good));
-rings.forEach((good, id) => registerItem(id, good));
-nicklaces.forEach((good, id) => registerItem(id, good));
-shoes.forEach((good, id) => registerItem(id, good));
-helmets.forEach((good, id) => registerItem(id, good));
-belts.forEach((good, id) => registerItem(id, good));
+// 装备不在这里注册：它的数据在服务端（快照 equipments 段 → configs/equipments.applyEquipmentData
+// 展开 15 倍变体 → apply-snapshot 写进本表）。#603 第九域之前是「7 张部位表在加载期建好再 forEach 注册」
 // 药品
 registerItems(drugs, "drug");
 // 材料

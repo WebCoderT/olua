@@ -57,12 +57,76 @@ import { TITLE_SEEDS } from "../../shared/title-seed";
 import { SOUL_SEEDS } from "../../shared/soul-seed";
 import { RANK_SEEDS } from "../../shared/rank-seed";
 import { NPC_SEED_ROWS } from "../../shared/npc-seed";
+import {
+  EQUIPMENT_PREFIX_LABEL_SEEDS,
+  EQUIPMENT_PREFIX_RATE_SEEDS,
+  EQUIPMENT_RECYCLE_CURVE_SEED,
+  EQUIPMENT_SEED_ROWS,
+  EQUIPMENT_SLOT_SEEDS,
+  EQUIPMENT_SUFFIX_LABEL_SEEDS,
+  EQUIPMENT_SUFFIX_RATE_SEEDS,
+  EquipmentSeedRow,
+} from "../../shared/equipment-seed";
 
 /** 怪物 key 清单（出厂种子派生；成就击杀目标 / 任务击杀目标的存在性校验共用） */
 const MONSTER_SEED_KEYS = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
 /** NPC id 清单（#603 第七域起同样从服务端种子派生，不再读生成物里的 NPCS 表） */
 const NPC_SEED_KEYS = new Set(NPC_SEED_ROWS.map((row) => row.id));
-import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
+
+/**
+ * 装备种子行 → 数据库行（#603 第九域）
+ *
+ * 八项属性刻意留 0：它们由 `growth-seed.equipmentStats(level, slot)` 公式算，
+ * 调用方用生成物 `EQUIPMENT_BASES` 的 `flatAttributes` 覆盖（见 `seedEquipments`）。
+ */
+function equipmentSeedToRow(row: EquipmentSeedRow): EquipmentRow {
+  return {
+    id: row.id,
+    slot: row.slot,
+    level: row.level,
+    sell_price: row.sellPrice,
+    label: row.label,
+    occupation: row.occupation,
+    sex: row.sex,
+    description: row.description,
+    icon: row.icon,
+    in_atlas: row.in,
+    out_atlas: row.out,
+    tags: JSON.stringify(row.tags),
+    in_pos_x: row.inPosition.x,
+    in_pos_y: row.inPosition.y,
+    in_scale_x: row.inScaleX,
+    in_scale_y: row.inScaleY,
+    in_rotate: row.inRotate ?? 0,
+    out_scale: row.outScale,
+    out_positions: JSON.stringify(row.outPositions),
+    max_hp: 0,
+    hp_recover: 0,
+    physical_attack_min: 0,
+    physical_attack_max: 0,
+    magic_attack_min: 0,
+    magic_attack_max: 0,
+    taoist_attack_min: 0,
+    taoist_attack_max: 0,
+    physical_defense_min: 0,
+    physical_defense_max: 0,
+    magic_defense_min: 0,
+    magic_defense_max: 0,
+    taoist_defense_min: 0,
+    taoist_defense_max: 0,
+    updated_at: 0,
+  };
+}
+import {
+  EquipmentDto,
+  EquipmentMetaDto,
+  EquipmentQueryDto,
+  EquipmentSlotDto,
+  UpdateEquipmentDto,
+  UpdateEquipmentMetaDto,
+  UpdateEquipmentSlotDto,
+} from "./dto/equipment.dto";
+
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
@@ -358,12 +422,113 @@ export class GameConfigService implements OnModuleInit {
       ...existing,
       level: dto.level ?? existing.level,
       sell_price: dto.sellPrice ?? existing.sell_price,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      occupation: dto.occupation ?? existing.occupation,
+      sex: dto.sex ?? existing.sex,
+      icon: dto.icon ?? existing.icon,
+      in_atlas: dto.inAtlas ?? existing.in_atlas,
+      out_atlas: dto.outAtlas ?? existing.out_atlas,
+      tags: dto.tags ? JSON.stringify(dto.tags) : existing.tags,
+      out_scale: dto.outScale ?? existing.out_scale,
+      in_scale_x: dto.inScaleX ?? existing.in_scale_x,
+      in_scale_y: dto.inScaleY ?? existing.in_scale_y,
+      in_rotate: dto.inRotate ?? existing.in_rotate,
+      in_pos_x: dto.inPosX ?? existing.in_pos_x,
+      in_pos_y: dto.inPosY ?? existing.in_pos_y,
+      // 8 向位置整份替换：只留 x / y 两个字段，防止把前端多余字段写进 JSON 列
+      out_positions: dto.outPositions
+        ? JSON.stringify(dto.outPositions.map((point) => ({ x: point.x, y: point.y })))
+        : existing.out_positions,
       ...attributeColumns(attributes),
       updated_at: Date.now(),
     };
     this.equipments.update(next);
     this.touchRuntime();
     return EquipmentDto.from(this.requireEquipment(id));
+  }
+
+  // —— 装备槽位与规则（#603 第九域：客户端不再存槽位表 / 倍率 / 回收价曲线）——
+
+  /** 槽位表（13 行，顺序即角色弹窗排列与背包整理序） */
+  listEquipmentSlots(): EquipmentSlotDto[] {
+    return this.equipments.listSlots().map(EquipmentSlotDto.from);
+  }
+
+  updateEquipmentSlot(key: string, dto: UpdateEquipmentSlotDto): EquipmentSlotDto {
+    const existing = this.equipments.findSlot(key);
+    if (!existing) throw BizException.notFound(BizCode.NOT_FOUND, `装备槽位不存在：${key}`);
+    this.equipments.updateSlot({
+      ...existing,
+      label: dto.label ?? existing.label,
+      image_src: dto.imageSrc ?? existing.image_src,
+      position: dto.position ?? existing.position,
+      // 排序同时是背包「一键整理」的部位序（客户端 equipmentSlotOrder 直接读它）
+      sort_order: dto.order ?? existing.sort_order,
+      updated_at: Date.now(),
+    });
+    const updated = this.equipments.findSlot(key);
+    if (!updated) throw BizException.notFound(BizCode.NOT_FOUND, `装备槽位不存在：${key}`);
+    // 槽位不影响结算（只影响界面），但仍重装一次：槽位名会随快照下发，管理端要能立刻看到自己改的值
+    this.touchRuntime();
+    return EquipmentSlotDto.from(updated);
+  }
+
+  /** 装备规则（单行：前后缀倍率 / 文案 / 回收价曲线）；表里没有行时回落出厂种子 */
+  getEquipmentMeta(): EquipmentMetaDto {
+    const row = this.equipments.getMeta();
+    if (!row) {
+      return EquipmentMetaDto.from({
+        id: 1,
+        prefix_rates: JSON.stringify(EQUIPMENT_PREFIX_RATE_SEEDS),
+        suffix_rates: JSON.stringify(EQUIPMENT_SUFFIX_RATE_SEEDS),
+        prefix_labels: JSON.stringify(EQUIPMENT_PREFIX_LABEL_SEEDS),
+        suffix_labels: JSON.stringify(EQUIPMENT_SUFFIX_LABEL_SEEDS),
+        recycle_curve: JSON.stringify(EQUIPMENT_RECYCLE_CURVE_SEED),
+        updated_at: 0,
+      });
+    }
+    return EquipmentMetaDto.from(row);
+  }
+
+  /**
+   * 改装备规则（部分更新；整份替换语义）
+   *
+   * 跨字段校验只在这里做：**倍率与文案必须等长**（差一位就是「某一档没有名字」，
+   * 客户端名称会拼出 `undefined·人级`）；曲线每档 `from ≤ to`。
+   */
+  updateEquipmentMeta(dto: UpdateEquipmentMetaDto): EquipmentMetaDto {
+    const current = this.getEquipmentMeta();
+    const prefixRates = dto.prefixRates ?? current.prefixRates;
+    const suffixRates = dto.suffixRates ?? current.suffixRates;
+    const prefixLabels = dto.prefixLabels ?? current.prefixLabels;
+    const suffixLabels = dto.suffixLabels ?? current.suffixLabels;
+    const recycleCurve = dto.recycleCurve ?? current.recycleCurve;
+    if (prefixRates.length !== prefixLabels.length) {
+      throw new BizException(BizCode.PARAM_INVALID, `前缀倍率（${prefixRates.length} 项）与文案（${prefixLabels.length} 项）长度必须一致`);
+    }
+    if (suffixRates.length !== suffixLabels.length) {
+      throw new BizException(BizCode.PARAM_INVALID, `后缀倍率（${suffixRates.length} 项）与文案（${suffixLabels.length} 项）长度必须一致`);
+    }
+    for (const segment of recycleCurve) {
+      if (segment.to < segment.from) {
+        throw new BizException(BizCode.PARAM_INVALID, `回收价曲线有一档 from=${segment.from} > to=${segment.to}`);
+      }
+      if (segment.start < 0 || segment.perLevel < 0) {
+        throw new BizException(BizCode.PARAM_INVALID, "回收价曲线的 start / perLevel 不能为负");
+      }
+    }
+    this.equipments.updateMeta({
+      id: 1,
+      prefix_rates: JSON.stringify(prefixRates),
+      suffix_rates: JSON.stringify(suffixRates),
+      prefix_labels: JSON.stringify(prefixLabels),
+      suffix_labels: JSON.stringify(suffixLabels),
+      recycle_curve: JSON.stringify(recycleCurve),
+      updated_at: Date.now(),
+    });
+    this.touchRuntime();
+    return this.getEquipmentMeta();
   }
 
   // —— 药品（#253：id 清单固定只改数值；effects 按键求和成四列）——
@@ -1139,19 +1304,55 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 装备基础件 seed：EQUIPMENT_BASES（slot/level/sellPrice/label/属性）直接灌，37 件基础件 */
+  /**
+   * 装备种子（#603 第九域）：`equipment-seed.ts`（显示与规则）+ `EQUIPMENT_BASES`（八项属性）
+   *
+   * 属性仍由 `growth-seed.equipmentStats(level, slot)` 公式算（#590 的结论），生成物里的
+   * `EQUIPMENT_BASES` 就是它的快照 —— 所以这里**属性读生成物、其余读种子**，
+   * 两边的 id 集合必须一致（生成物忘了重新生成会被下面的断言逮住，而不是静默少几行）。
+   *
+   * 槽位与规则（倍率 / 文案 / 回收价曲线）也在这张种子文件里，一并 seed。
+   */
   private seedEquipments() {
-    for (const [id, meta] of Object.entries(EQUIPMENT_BASES as Record<string, Record<string, unknown>>)) {
+    const bases = EQUIPMENT_BASES as Record<string, Record<string, unknown>>;
+    const seedIds = new Set(EQUIPMENT_SEED_ROWS.map((row) => row.id));
+    const baseIds = new Set(Object.keys(bases));
+    if (seedIds.size !== baseIds.size || EQUIPMENT_SEED_ROWS.some((row) => !baseIds.has(row.id))) {
+      throw new Error(
+        `装备种子与生成物不同步：种子 ${seedIds.size} 件 / EQUIPMENT_BASES ${baseIds.size} 件（先跑 node tools/gen-shared-data.cjs）`,
+      );
+    }
+    for (const row of EQUIPMENT_SEED_ROWS) {
+      const meta = bases[row.id];
       this.equipments.seedRow({
-        id,
-        slot: String(meta.slot ?? ""),
-        level: Number(meta.level) || 0,
-        sell_price: Number(meta.sellPrice) || 0,
-        label: String(meta.label ?? ""),
+        ...equipmentSeedToRow(row),
         ...flatAttributes(meta.attributes as Record<string, unknown>),
+      });
+      // 老库（只有 id + 名称 + 数值的行）补显示字段；icon 已填的行不受影响
+      this.equipments.backfillAppearance({
+        ...equipmentSeedToRow(row),
+        ...flatAttributes(meta.attributes as Record<string, unknown>),
+      });
+    }
+    for (const [index, slot] of EQUIPMENT_SLOT_SEEDS.entries()) {
+      this.equipments.seedSlot({
+        key: slot.key,
+        label: slot.label,
+        image_src: slot.imageSrc,
+        position: slot.position,
+        sort_order: index,
         updated_at: 0,
       });
     }
+    this.equipments.seedMeta({
+      id: 1,
+      prefix_rates: JSON.stringify(EQUIPMENT_PREFIX_RATE_SEEDS),
+      suffix_rates: JSON.stringify(EQUIPMENT_SUFFIX_RATE_SEEDS),
+      prefix_labels: JSON.stringify(EQUIPMENT_PREFIX_LABEL_SEEDS),
+      suffix_labels: JSON.stringify(EQUIPMENT_SUFFIX_LABEL_SEEDS),
+      recycle_curve: JSON.stringify(EQUIPMENT_RECYCLE_CURVE_SEED),
+      updated_at: 0,
+    });
   }
 
   /** 军衔 seed：rank-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/rank-seed.ts） */

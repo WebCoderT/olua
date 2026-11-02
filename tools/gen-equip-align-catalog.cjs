@@ -37,7 +37,16 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
+const {
+  ASSETS,
+  ROOT,
+  createWork,
+  compileClientConfig,
+  configLoader,
+  cleanupWork,
+  loadEquipmentSeed,
+  hydrateEquipment,
+} = require("./lib/client-config-compile.cjs");
 
 const OUT = process.env.EQUIP_ALIGN_OUT || path.join(ROOT, "admin", "src", "data", "equip-align.catalog.json");
 
@@ -51,6 +60,9 @@ function main() {
   const work = createWork("equip-catalog");
   compileClientConfig(work, SOURCE_FILES);
   const { cfg, layoutCfg } = configLoader(work);
+  // #603 第九域：客户端 `configs/equipments` 加载期是空表（数据在服务端 equipment-seed.ts）——
+  // 不先把种子灌回来，这里生成的清单里衣服 / 武器全是 0 件（审计会当场报「clothes 是空表」）
+  hydrateEquipment(cfg, loadEquipmentSeed(work));
   const catalog = buildCatalog({
     equipments: cfg("equipments"),
     role: cfg("role"),

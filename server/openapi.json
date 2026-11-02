@@ -5548,6 +5548,228 @@
         ]
       }
     },
+    "/admin/equipment-slots": {
+      "get": {
+        "description": "13 行，**只读清单 + 可改文案/底图/位置分组**，没有创建 / 删除（新增部位属于代码改动）。\n\n`order` 同时是角色弹窗的槽位排列顺序与背包「一键整理」的部位序 —— 客户端 `equipmentSlotOrder` 就是它。\n\nkey 取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipmentSlot.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "槽位清单（按 order 升序）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/EquipmentSlotDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备槽位表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EquipmentSlotDto"
+          }
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/equipment-slots/{key}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：槽位中文名（如「衣服」）。\n- `imageSrc`：槽位底图（resources 相对路径，空串 = 不显示底图）。\n- `position`：在角色弹窗里的位置分组（left / right / bottom / custom）。\n- 顺序不开放编辑（它是种子里的书写序，改了会让背包整理序漂）。\n- key 不存在 → 404。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipmentSlot.update",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "description": "槽位 key（EQUIPMENT_TYPE 的枚举值，如 cloth）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEquipmentSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的槽位",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentSlotDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑装备槽位",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentSlotDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/equipment-meta": {
+      "get": {
+        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n- `recycleCurve`：回收价曲线（分段线性）—— 背包「一键回收」与服务端卖装备结算共用。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipmentMeta.get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "装备规则",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentMetaDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备规则（前后缀倍率 / 文案 / 回收价曲线）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentMetaDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 回收价曲线每档要求 `from ≤ to`、`start ≥ 0`、`perLevel ≥ 0`，违反 → 400。\n- 改完立刻重装服务端结算层：**卖装备的到账价与背包显示同步变**（不必重启）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipmentMeta.update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEquipmentMetaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的装备规则",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentMetaDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑装备规则",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentMetaDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/equip-aligns": {
       "get": {
         "description": "全部**已保存**的对齐几何（不分页：12 件衣服 + 19 把武器 + 2 套裸模，量很小）。\n\n**没有行 = 用客户端配置里的值**（`client/assets/configs/equipments.ts` / `role.ts`）—— 所以「哪些调过」就是这份列表的 id 集合，不需要另存默认值副本。\n\n`outPositions` 是 8 个方向的位移（顺序见客户端 `configs/animation` 的 `directions`）；`outManual=true` 表示它是绝对位置（工作台手调过），false 表示运行时按身体帧自动算、只当微调。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -13063,9 +13285,109 @@
           }
         }
       },
+      "EquipmentPointDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "x（像素，单轴 ±4000）"
+          },
+          "y": {
+            "type": "number",
+            "description": "y（像素，向上为正；单轴 ±4000）"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
       "UpdateEquipmentDto": {
         "type": "object",
         "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改；≤50 字）",
+            "maxLength": 50
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（不传则不改；≤500 字，空串 = 清空）",
+            "maxLength": 500
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业限制（取值：1 / 2 / 3 / 4）"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别限制（取值：1 / 2 / 3）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径；空串 = 不显示图标）",
+            "maxLength": 200
+          },
+          "inAtlas": {
+            "type": "string",
+            "description": "内观图集（resources 相对路径；空串 = 内观不显示这件）",
+            "maxLength": 200
+          },
+          "outAtlas": {
+            "type": "string",
+            "description": "外观图集（resources 相对路径；空串 = 外观不显示这件）",
+            "maxLength": 200
+          },
+          "tags": {
+            "description": "标签（整份替换；每一项 ≤20 字，最多 8 个）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outScale": {
+            "type": "number",
+            "description": "外观缩放（1 = 原尺寸）",
+            "minimum": 0.1,
+            "maximum": 10
+          },
+          "inScaleX": {
+            "type": "number",
+            "description": "内观横向缩放（1 = 原尺寸）",
+            "minimum": 0.1,
+            "maximum": 10
+          },
+          "inScaleY": {
+            "type": "number",
+            "description": "内观纵向缩放（1 = 原尺寸）",
+            "minimum": 0.1,
+            "maximum": 10
+          },
+          "inRotate": {
+            "type": "number",
+            "description": "内观旋转角度（度；0 = 不转）",
+            "minimum": -360,
+            "maximum": 360
+          },
+          "inPosX": {
+            "type": "number",
+            "description": "内观锚点 x（像素）",
+            "minimum": -4000,
+            "maximum": 4000
+          },
+          "inPosY": {
+            "type": "number",
+            "description": "内观锚点 y（像素，向上为正）",
+            "minimum": -4000,
+            "maximum": 4000
+          },
+          "outPositions": {
+            "description": "外观 8 向位置（**整份提交、整份替换**，必须正好 8 个，顺序 up → left_up；单轴 ±4000）。只改出厂值，实际效果以「装备对齐」工作台（equip_aligns）为准",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentPointDto"
+            }
+          },
           "level": {
             "type": "number",
             "description": "穿戴需求等级（不传则不改）",
@@ -13085,6 +13407,101 @@
                 "$ref": "#/components/schemas/ConfigAttributesDto"
               }
             ]
+          }
+        }
+      },
+      "UpdateEquipmentSlotDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "槽位中文名（不传则不改；≤20 字）",
+            "maxLength": 20
+          },
+          "imageSrc": {
+            "type": "string",
+            "description": "槽位底图（resources 相对路径；空串 = 不显示底图）",
+            "maxLength": 200
+          },
+          "position": {
+            "type": "string",
+            "description": "位置分组：left / right / bottom / custom"
+          },
+          "order": {
+            "type": "number",
+            "description": "排序序号（从 0 起；也决定背包「一键整理」的部位序）",
+            "minimum": 0
+          }
+        }
+      },
+      "EquipmentCurveSegmentDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "number",
+            "description": "起始等级（含）",
+            "minimum": 1
+          },
+          "to": {
+            "type": "number",
+            "description": "结束等级（含）",
+            "minimum": 1
+          },
+          "start": {
+            "type": "number",
+            "description": "起始等级的值（绑定元宝）",
+            "minimum": 0
+          },
+          "perLevel": {
+            "type": "number",
+            "description": "该档内每升一级的增量",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "start",
+          "perLevel"
+        ]
+      },
+      "UpdateEquipmentMetaDto": {
+        "type": "object",
+        "properties": {
+          "prefixRates": {
+            "description": "前缀倍率（整份替换；1~10 项，每项 > 0）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "suffixRates": {
+            "description": "后缀倍率（整份替换；1~10 项，每项 > 0）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "prefixLabels": {
+            "description": "前缀文案（整份替换；必须与前缀倍率等长）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suffixLabels": {
+            "description": "后缀文案（整份替换；必须与后缀倍率等长）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recycleCurve": {
+            "description": "回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentCurveSegmentDto"
+            }
           }
         }
       },
@@ -17829,7 +18246,69 @@
           },
           "label": {
             "type": "string",
-            "description": "名称（seed 自客户端条目，暂不开放编辑）"
+            "description": "名称（如「青铜重甲」；前后缀由客户端拼在名字前后）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（装备详情弹窗正文）"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）"
+          },
+          "inAtlas": {
+            "type": "string",
+            "description": "内观图集（角色弹窗里穿在身上的那套；resources 相对路径）"
+          },
+          "outAtlas": {
+            "type": "string",
+            "description": "外观图集（场景里跟着角色走的那个；resources 相对路径）"
+          },
+          "tags": {
+            "description": "标签（如「第一大陆」；详情弹窗展示，无逻辑含义）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outScale": {
+            "type": "number",
+            "description": "外观缩放（1 = 原尺寸）"
+          },
+          "inScaleX": {
+            "type": "number",
+            "description": "内观横向缩放（1 = 原尺寸）"
+          },
+          "inScaleY": {
+            "type": "number",
+            "description": "内观纵向缩放（1 = 原尺寸）"
+          },
+          "inRotate": {
+            "type": "number",
+            "description": "内观旋转角度（度，0 = 不转）"
+          },
+          "inPosX": {
+            "type": "number",
+            "description": "内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）"
+          },
+          "inPosY": {
+            "type": "number",
+            "description": "内观锚点 y（弹窗坐标系，y 向上）"
+          },
+          "outPositions": {
+            "description": "外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentPointDto"
+            }
           },
           "attributes": {
             "description": "八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）",
@@ -17850,6 +18329,20 @@
           "level",
           "sellPrice",
           "label",
+          "description",
+          "occupation",
+          "sex",
+          "icon",
+          "inAtlas",
+          "outAtlas",
+          "tags",
+          "outScale",
+          "inScaleX",
+          "inScaleY",
+          "inRotate",
+          "inPosX",
+          "inPosY",
+          "outPositions",
           "attributes",
           "updatedAt"
         ]
@@ -20193,6 +20686,95 @@
           "enabled"
         ]
       },
+      "EquipmentSlotDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "槽位 key（EQUIPMENT_TYPE 的枚举值，如 cloth）"
+          },
+          "label": {
+            "type": "string",
+            "description": "槽位中文名（如「衣服」）"
+          },
+          "imageSrc": {
+            "type": "string",
+            "description": "槽位底图（resources 相对路径，如 slots/cloth）"
+          },
+          "position": {
+            "type": "string",
+            "description": "在角色弹窗里的位置分组（left / right / bottom / custom）"
+          },
+          "order": {
+            "type": "number",
+            "description": "排序序号（从 0 起；槽位排列与背包整理序的唯一来源）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "imageSrc",
+          "position",
+          "order",
+          "updatedAt"
+        ]
+      },
+      "EquipmentMetaDto": {
+        "type": "object",
+        "properties": {
+          "prefixRates": {
+            "description": "前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "suffixRates": {
+            "description": "后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "prefixLabels": {
+            "description": "前缀文案（与倍率同长）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suffixLabels": {
+            "description": "后缀文案（与倍率同长）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recycleCurve": {
+            "description": "回收价曲线（分段线性）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentCurveSegmentDto"
+            }
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "prefixRates",
+          "suffixRates",
+          "prefixLabels",
+          "suffixLabels",
+          "recycleCurve",
+          "updatedAt"
+        ]
+      },
       "GameConfigSnapshotDto": {
         "type": "object",
         "properties": {
@@ -20364,6 +20946,21 @@
             "items": {
               "$ref": "#/components/schemas/UiEffectConfigDto"
             }
+          },
+          "equipmentSlots": {
+            "description": "装备槽位表（#603 第九域，13 行）：槽位名 / 底图 / 位置分组 / 顺序。客户端 `equipmentSlots` 与 `equipmentSlotOrder` 都按它整表重建（缓存里没有本地兜底）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentSlotDto"
+            }
+          },
+          "equipmentMeta": {
+            "description": "装备规则（#603 第九域，单行）：前后缀属性倍率 / 品质文案 / 回收价曲线。客户端靠倍率才知道要把每件基础件展开成几档变体，靠曲线算回收价 —— 缺这一段装备表整个是空的",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EquipmentMetaDto"
+              }
+            ]
           }
         },
         "required": [
@@ -20390,7 +20987,9 @@
           "achievements",
           "maps",
           "mapTypes",
-          "uiEffects"
+          "uiEffects",
+          "equipmentSlots",
+          "equipmentMeta"
         ]
       },
       "GuildSummaryDto": {

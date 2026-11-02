@@ -39,6 +39,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "战斗与装备",
     items: [
       { to: "/equipments", label: "装备配置", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/equipment-settings", label: "槽位与规则", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equip-align", label: "装备对齐", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equip-in-align", label: "内观对齐", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/monsters", label: "怪物配置", permission: PERMISSION.GAME_CONFIG_READ },

@@ -1,50 +1,61 @@
 import { Color, Vec2 } from "cc";
-import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX, EQUIPMENT_TYPE, EquipmentData, EquipmentSlot, GOOD_TYPE } from "../types/good";
+import {
+  Equipment,
+  EQUIPMENT_PREFIX,
+  EQUIPMENT_SUFFIX,
+  EQUIPMENT_TYPE,
+  EquipmentData,
+  EquipmentSlot,
+  GOOD_TYPE,
+} from "../types/good";
 import type { BattleAttributes } from "../types/common";
 import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates } from "./growth";
 import { combatCalc as combatCalcWeights } from "./battle";
-import { OECCUPATION, SEX } from "../types/role";
 
-/** 装备槽位数据表（角色弹窗用；key 只做关联，与怪物/装备同一约定） */
-const equipmentSlotData: Array<EquipmentSlot & { key: EQUIPMENT_TYPE }> = [
-  { key: EQUIPMENT_TYPE.OTHER1, label: "其他1", imageSrc: "slots/other", position: "bottom" },
-  { key: EQUIPMENT_TYPE.CLOTH, label: "衣服", imageSrc: "slots/cloth", position: "bottom" },
-  { key: EQUIPMENT_TYPE.OTHER2, label: "其他2", imageSrc: "slots/other", position: "bottom" },
+/**
+ * 装备配置（#603 第九域：**客户端不存任何装备数据**）
+ *
+ * 这个文件以前有 1381 行，其中 1080 行是 7 个 `*Data` 数组 —— 37 件基础件的名称 / 描述 /
+ * 图标 / 图集 / 职业性别 / 标签 / 内观锚点 / 外观 8 向位置，全部写死在源码里，改一个图标
+ * 要重新打包。现在它们全部搬到服务端（`equipment-seed.ts` → `equipments` 表，管理端可改），
+ * 进游戏由 `GET /game-config` 的快照 `equipments` 段下发，`applyEquipmentData` 整表重建。
+ *
+ * **这个文件现在只剩三类东西**：
+ * 1. **空运行时表**：`clothes` / `weapons` / … / `equipmentSlots` / `equipmentSlotOrder`
+ *    —— 快照没到时它们是空的（客户端没有本地兜底，`CONFIG-DATA.md` 里有说明）；
+ * 2. **纯函数**：变体 id 拼解、属性倍率缩放、战斗力、回收价、属性对比；
+ * 3. **装载入口**：`applyEquipmentData` / `applyEquipmentSlots` / `applyEquipmentQualityLabels`。
+ *
+ * 展开规则（每件基础件 = 5 前缀 × 3 后缀 = 15 个变体）**属代码不属运营数据**，留在这里 ——
+ * 服务端生成物 `EQUIPMENT_ATTRIBUTES` 用同一套规则展开，判据是「重新生成逐字节不变」。
+ */
 
-  { key: EQUIPMENT_TYPE.WEAPON, label: "武器", imageSrc: "slots/weapon", position: "left" },
-  { key: EQUIPMENT_TYPE.NECKLACE, label: "项链", imageSrc: "slots/necklace", position: "left" },
-  { key: EQUIPMENT_TYPE.RING, label: "戒指", imageSrc: "slots/ring", position: "left" },
-  { key: EQUIPMENT_TYPE.ACCESSORIES, label: "饰品", imageSrc: "slots/accessories", position: "left" },
-  { key: EQUIPMENT_TYPE.SHINGUARD, label: "护腿", imageSrc: "slots/shinguard", position: "left" },
+/** 七张部位表的统一访问口（整表重建时一起清） */
+const PART_MAPS: Map<EQUIPMENT_TYPE, Map<string, Equipment>> = new Map();
 
-  { key: EQUIPMENT_TYPE.HELMET, label: "头盔", imageSrc: "slots/helmet", position: "right" },
-  { key: EQUIPMENT_TYPE.SCAPULAR, label: "肩胛", imageSrc: "slots/scapular", position: "right" },
-  { key: EQUIPMENT_TYPE.BELT, label: "腰带", imageSrc: "slots/belt", position: "right" },
-  { key: EQUIPMENT_TYPE.WRISTBAND, label: "护腕", imageSrc: "slots/wristband", position: "right" },
-  { key: EQUIPMENT_TYPE.SHOES, label: "鞋子", imageSrc: "slots/shoes", position: "right" },
-];
-
-/** 装备槽位（槽位 → 槽位配置）：由 equipmentSlotData 统一构建 */
+/** 装备槽位（槽位 → 槽位配置）：快照 `equipmentSlots` 到达后由 applyEquipmentSlots 填 */
 export const equipmentSlots = new Map<EQUIPMENT_TYPE, EquipmentSlot>();
-for (const slot of equipmentSlotData) {
-  equipmentSlots.set(slot.key, slot);
-}
 
 /**
  * 装备部位的整理序号（背包「一键整理」排部位用，见 configs/items 的 compareBagGoods）
  *
- * **唯一来源**：不另写一份部位顺序 —— 序号就是 equipmentSlotData 的先后，
- * 改装备槽位配置的顺序时，装备界面的槽位排列与背包整理顺序一起生效。
+ * **唯一来源**：不另写一份部位顺序 —— 序号就是服务端槽位表的 `order`（`equipment_slots.sort_order`），
+ * 改槽位顺序时装备界面的槽位排列与背包整理顺序一起生效。
  */
 export const equipmentSlotOrder = new Map<EQUIPMENT_TYPE, number>();
-for (const slot of equipmentSlotData) {
-  equipmentSlotOrder.set(slot.key, equipmentSlotOrder.size);
-}
 
-/** 装备前缀文案（下标 = EQUIPMENT_PREFIX 序号） */
-export const equipmentPrefixLabels = ["普通的", "强化的", "精良的", "极品的", "超神的"];
+/** 装备前缀文案（下标 = EQUIPMENT_PREFIX 序号）；快照 `equipmentMeta.prefixLabels` 到达后填 */
+export let equipmentPrefixLabels: string[] = [];
 
-/** 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染 */
+/** 装备后缀文案（下标 = EQUIPMENT_SUFFIX 序号）；快照 `equipmentMeta.suffixLabels` 到达后填 */
+export let equipmentSuffixLabels: string[] = [];
+
+/**
+ * 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染
+ *
+ * **颜色留在客户端**（不像文案那样上移）：它是渲染主题色（`Color` 对象），
+ * 没有任何服务端消费者，改色属于「调 UI 观感」而不是「调数据」。
+ */
 export const equipmentPrefixColors = [
   new Color("#DDDDDD"), // 普通的：灰白
   new Color("#6EE86E"), // 强化的：绿
@@ -52,9 +63,6 @@ export const equipmentPrefixColors = [
   new Color("#C77DFF"), // 极品的：紫
   new Color("#FFA640"), // 超神的：橙
 ];
-
-/** 装备后缀文案（下标 = EQUIPMENT_SUFFIX 序号） */
-export const equipmentSuffixLabels = ["人级", "天级", "神级"];
 
 /** 装备后缀文字颜色（与文案同下标；只用于后缀文字，不影响名称） */
 export const equipmentSuffixColors = [
@@ -73,14 +81,19 @@ export interface EquipmentNameParts {
   suffix: { label: string; color: Color };
 }
 
-/** 拆装备名称三段（前缀文案、名称、后缀文案 + 各自颜色；异常前后缀回退普通/人级） */
+/**
+ * 拆装备名称三段（前缀文案、名称、后缀文案 + 各自颜色）
+ *
+ * 越界前后缀回退到第一档（普通的 / 人级）：快照还没到时 `equipmentPrefixLabels` 是空数组，
+ * 这时 `undefined` 会直接落到名称里 —— 回退比显示 `undefined` 好。
+ */
 export function getEquipmentNameParts(equipment: Equipment): EquipmentNameParts {
   const prefix = equipmentPrefixRates.length > equipment.prefix ? equipment.prefix : EQUIPMENT_PREFIX.NORMAL;
   const suffix = equipmentSuffixRates.length > equipment.suffix ? equipment.suffix : EQUIPMENT_SUFFIX.MORTAL;
   return {
-    prefix: { label: equipmentPrefixLabels[prefix], color: equipmentPrefixColors[prefix] },
+    prefix: { label: equipmentPrefixLabels[prefix] ?? "", color: equipmentPrefixColors[prefix] ?? equipmentPrefixColors[0] },
     label: equipment.label,
-    suffix: { label: equipmentSuffixLabels[suffix], color: equipmentSuffixColors[suffix] },
+    suffix: { label: equipmentSuffixLabels[suffix] ?? "", color: equipmentSuffixColors[suffix] ?? equipmentSuffixColors[0] },
   };
 }
 
@@ -88,7 +101,7 @@ export function getEquipmentNameParts(equipment: Equipment): EquipmentNameParts 
  * 按前后缀倍率缩放战斗属性（六项攻防区间、maxHp 与每秒回血逐项相乘后取整）
  *
  * 导出是给配置快照覆写用的（#363）：管理端只改**基础件**（普通的·人级）的属性，
- * 15 个变体要按同一套倍率重算 —— 复算口径必须与 \`buildEquipmentMap\` 完全一致，
+ * 15 个变体要按同一套倍率重算 —— 复算口径必须与 `buildEquipmentMap` 完全一致，
  * 所以两边共用这一个函数，而不是各写一份。
  */
 export function scaleEquipmentAttributes(attributes: BattleAttributes, rate: number): BattleAttributes {
@@ -125,12 +138,11 @@ export function getEquipmentBaseKey(id: string): string {
 }
 
 /**
- * 装备的**零值属性基线**（#590 起装备属性不在客户端生成）
+ * 装备的**零值属性基线**
  *
- * #590 把角色曲线移出客户端（唯一书写处 = server/src/shared/growth-seed），加载期算不出属性了 ——
- * 变体在加载期只建**结构**（id / 名称 / 图标 / 部位 / 前后缀 / 几何，属性全 0），
- * 进游戏后 `applyEquipmentRows` 按服务端下发的基础件属性 × 前后缀倍率重算（#363 的既有链路，
- * 对**每一个**变体都会跑一遍）。快照先于预载必到，属性全 0 的窗口玩家看不到。
+ * 变体在展开时以「服务端下发的基础件属性」为底（见 `applyEquipmentData`），
+ * 这个零值只在「某件装备缺属性字段」时兜底 —— 不是「加载期占位」了，
+ * 因为加载期根本没有装备（数据在服务端）。
  */
 const ZERO_EQUIPMENT_ATTRIBUTES: BattleAttributes = {
   maxHp: 0,
@@ -149,16 +161,15 @@ const ZERO_EQUIPMENT_ATTRIBUTES: BattleAttributes = {
  * **key 只做关联**：背包 / 掉落表 / 掉落拾取入包都用它引用，
  * key 可以是任意字符串（"ring_1"、"cloth_fire" 都行），**不参与任何数值计算**。
  *
- * **属性不在加载期生成**（#590）：基础件属性唯一来源是服务端 `equipments` 表，
- * 快照下发后按「服务端属性 × 前后缀倍率」重算每个变体（configs/apply-snapshot 的 applyEquipmentRows）；
- * 加载期这里只填零值占位（ZERO_EQUIPMENT_ATTRIBUTES）。
- *
  * **前后缀变体**：每件基础装备展开成全部「前缀 × 后缀」组合（5 × 3 = 15 件）：
  * - 「普通的·人级」沿用基础装备的原 key（基础件本身，倍率 1 × 1）
  * - 其余组合 key 为 `${key}_p${前缀序号}s${后缀序号}`（如 cloth_1_p3s2）
  *
+ * **倍率来自快照**（`configs/growth` 的 `equipmentPrefixRates` / `equipmentSuffixRates`）：
+ * 空数组 = 快照没到 = 一件都展开不出来，这是有意的（不兜本地倍率）。
+ *
  * **回收价**按倍率缩放：基础价 = 条目的 recyclePrice（写了才用）或按 level 从
- * 回收价曲线取（configs/growth，本轮仍是客户端常量），变体乘同一个 rate（超神·神级 = 基础价 × 4.2）。
+ * 回收价曲线取（曲线也来自快照），变体乘同一个 rate（超神·神级 = 基础价 × 4.2）。
  *
  * 注意：等级同时是「穿戴门槛」（GameHelper.getEquipmentRejectReason 会挡「需要等级 N」），
  * 变体与基础件同 level，门槛一致；所以排等级时要想清楚这件装备应该在什么等级被拿到。
@@ -167,7 +178,7 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
   const map = new Map<string, Equipment>();
   for (const entry of data) {
     const { key, ...rest } = entry; // key 只做关联，不写进最终配置对象
-    // 结构基线（属性零值占位，快照后重算）+ 条目特例覆盖，变体在其上乘前后缀倍率
+    // 结构基线（零值兜底）+ 条目覆盖（属性就是服务端下发的基础件属性），变体在其上乘前后缀倍率
     const base = { ...ZERO_EQUIPMENT_ATTRIBUTES, ...rest } as unknown as Equipment;
     // 回收基础价（普通·人级的价）：条目里写了就用它，否则按等级从回收价曲线取（见 configs/growth）
     const baseRecyclePrice = entry.recyclePrice ?? equipmentRecyclePrice(rest.level);
@@ -268,7 +279,8 @@ export function formatSignedAttributeValue(value: number[] | number): string {
  * 打包时 babel 以 loose 模式编译，会把 `[...迭代器]` 降级成 `[].concat(迭代器)`，
  * 而 `concat` 只展开数组、不认 Map/Set 迭代器 → 结果是 `[MapIterator]` 这一个元素，
  * 过滤后恒为空数组（编辑器里不降级，所以只在打包产物上才复现，症状 = 背包/列表静默为空）
- */export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
+ */
+export function getBaseEquipments(map: Map<string, Equipment>): Equipment[] {
   const result: Equipment[] = [];
   map.forEach((eq) => {
     if (eq.prefix === EQUIPMENT_PREFIX.NORMAL && eq.suffix === EQUIPMENT_SUFFIX.MORTAL) result.push(eq);
@@ -293,1065 +305,39 @@ export function getEquipmentsByLevel(map: Map<string, Equipment>, level: number)
   return result;
 }
 
-// 衣服（按名称强弱排等级 1 → 60；战斗数值由 equipmentStats(level, slot) 生成；内外观位置/缩放逐件手调）
-const clothesData: EquipmentData[] = [
-  {
-    key: "cloth_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "* 唯一深爱(衣) *",
-    sex: SEX.ALL,
-    description: "葬爱家族专属衣服，穿上此装备，开启你的旅程吧！",
-    sellPirce: 0,
-    icon: "clothes/icon/005",
-    in: "clothes/in/005",
-    out: "clothes/out/005",
-    inPosition: new Vec2(-72.5, 48),
-    tags: ["第一大陆"],
-    inScaleX: 1.3,
-    inScaleY: 1.3,
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_10",
-    level: 10,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "钢铁战甲",
-    sex: SEX.ALL,
-    description: "红金涂装的钢铁战甲，可以吸收星光来补充能量。",
-    sellPirce: 0,
-    icon: "clothes/icon/010",
-    in: "clothes/in/010",
-    out: "clothes/out/010",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_14",
-    level: 16,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "青铜重甲",
-    sex: SEX.ALL,
-    description: "古战场流传下来的青铜重铠，甲片铆接、刀枪难入。",
-    sellPirce: 0,
-    icon: "clothes/icon/014",
-    in: "clothes/in/014",
-    out: "clothes/out/014",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_15",
-    level: 22,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "紫蓑浪人",
-    sex: SEX.ALL,
-    description: "紫蓑斗笠的独行浪人，腰间铃铛与手杖随夜风轻响。",
-    sellPirce: 0,
-    icon: "clothes/icon/015",
-    in: "clothes/in/015",
-    out: "clothes/out/015",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_17",
-    level: 28,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "苍龙宝甲",
-    sex: SEX.ALL,
-    description: "缀有龙纹的宝蓝战甲，沉稳如山，是为大将之风。",
-    sellPirce: 0,
-    icon: "clothes/icon/017",
-    in: "clothes/in/017",
-    out: "clothes/out/017",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_21",
-    level: 34,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "紫电黑衣",
-    sex: SEX.ALL,
-    description: "一袭黑衣的沉默剑客，周身偶尔炸开细碎的紫色电弧。",
-    sellPirce: 0,
-    icon: "clothes/icon/021",
-    in: "clothes/in/021",
-    out: "clothes/out/021",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_23",
-    level: 38,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "白霜猫灵",
-    sex: SEX.ALL,
-    description: "雪白皮毛的猫族少女，一身霜白，来自雪山之巅。",
-    sellPirce: 0,
-    icon: "clothes/icon/023",
-    in: "clothes/in/023",
-    out: "clothes/out/023",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_26",
-    level: 42,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "幽影夜行",
-    sex: SEX.ALL,
-    description: "黑紫异形的暗影行者，夜色里掠过的一抹紫光是它唯一的痕迹。",
-    sellPirce: 0,
-    icon: "clothes/icon/026",
-    in: "clothes/in/026",
-    out: "clothes/out/026",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_29",
-    level: 46,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "伏魔圣僧",
-    sex: SEX.ALL,
-    description: "蓝光护体的圣僧，僧袍猎猎，专降世间妖魔。",
-    sellPirce: 0,
-    icon: "clothes/icon/029",
-    in: "clothes/in/029",
-    out: "clothes/out/029",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_30",
-    level: 50,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "夜雨黑衣",
-    sex: SEX.ALL,
-    description: "雨夜中静立的黑衣男子，紫焰在他指间明灭。",
-    sellPirce: 0,
-    icon: "clothes/icon/030",
-    in: "clothes/in/030",
-    out: "clothes/out/030",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_31",
-    level: 55,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "鎏金圣衣",
-    sex: SEX.ALL,
-    description: "闪耀着金色光辉的圣衣，穿上它便是全场焦点。",
-    sellPirce: 0,
-    icon: "clothes/icon/031",
-    in: "clothes/in/031",
-    out: "clothes/out/031",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-  {
-    key: "cloth_32",
-    level: 60,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.CLOTH,
-    occupation: OECCUPATION.ALL,
-    label: "赤裙猫娘",
-    sex: SEX.ALL,
-    description: "红裙猫族少女，爪印与铃铛是她走过的记号。",
-    sellPirce: 0,
-    icon: "clothes/icon/032",
-    in: "clothes/in/032",
-    out: "clothes/out/032",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(7.3, 34.2), // up
-      new Vec2(7.3, 34.2), // right_up
-      new Vec2(7.3, 34.2), // right
-      new Vec2(7.3, 34.2), // right_down
-      new Vec2(7.3, 34.2), // down
-      new Vec2(7.3, 34.2), // left_down
-      new Vec2(7.3, 34.2), // left
-      new Vec2(7.3, 34.2), // left_up
-    ],
-  },
-];
-export const clothes = buildEquipmentMap(clothesData);
+//#region 部位表（空壳：快照到达后由 applyEquipmentData 整表重建）
 
-// 武器（按名称强弱排等级：weapon_1 是新手的定海神针 = 1 级，weapon_20 焚世巨剑 = 60 级）
-//
-// **几何字段（inPosition / outPositions / inScale*）出厂一律留 0，真值不在源码里**（#541，2026-10-31）：
-//   - 外观（场景）：RoleAppearance.applyOutTransform 原样摆服务端 `game-config/equip-align`
-//     下发的 8 向绝对位置（管理端「装备对齐」工作台写库；定稿后可用 tools/apply-equip-align.cjs
-//     烧回这份出厂配置做离线兜底）——帧算法已删除，客户端不算位置；
-//   - 内观（角色弹窗）：RoleInShowView.alignWeapon 把武器贴到身体内观的左手位并缩放到 1.15 倍，
-//     手调过的武器（inManual）走 inPosition 绝对值。
-// 出厂全 0 = 「未对齐」：外观会落在角色原点，要么去工作台调、要么等下发，别在客户端兜底。
-const weaponsData: EquipmentData[] = [
-  {
-    key: "weapon_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "菲奥娜de蓝钢佩剑",
-    sex: SEX.ALL,
-    description: "东海龙王的宝物，送给新手冒险家的第一件武器。握紧它，开启你的旅程吧！",
-    sellPirce: 0,
-    icon: "weapons/icon/001",
-    in: "weapons/in/001",
-    out: "weapons/out/001",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_2",
-    level: 6,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "暗夜雷光剑",
-    sex: SEX.ALL,
-    description: "漆黑的剑身中封存着一道白色雷霆，挥动之时雷光乍现，暗夜如昼。",
-    sellPirce: 0,
-    icon: "weapons/icon/002",
-    in: "weapons/in/002",
-    out: "weapons/out/002",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_3",
-    level: 10,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "圣天使之剑",
-    sex: SEX.ALL,
-    description: "剑柄生有天使之翼，护手处镶着一颗心形红宝石，传说是圣天使留给凡间的馈赠。",
-    sellPirce: 0,
-    icon: "weapons/icon/003",
-    in: "weapons/in/003",
-    out: "weapons/out/003",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_4",
-    level: 14,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "青龙破军剑",
-    sex: SEX.ALL,
-    description: "青碧剑身上盘绕着金龙与流火，出鞘之时隐有龙吟，破军之锋所指之处皆为坦途。",
-    sellPirce: 0,
-    icon: "weapons/icon/004",
-    in: "weapons/in/004",
-    out: "weapons/out/004",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_5",
-    level: 18,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "炎狱狂刀",
-    sex: SEX.ALL,
-    description: "布满锯齿的重刃燃烧着狱蓝色的火焰，戾气极重，凡人难以掌控。",
-    sellPirce: 0,
-    icon: "weapons/icon/005",
-    in: "weapons/in/005",
-    out: "", // resources/weapons/out/005 缺失，暂无外观
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_6",
-    level: 22,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "焚天赤金刃",
-    sex: SEX.ALL,
-    description: "通体赤金的宝刃，刀身终年缠绕着不灭的烈焰，可焚天下之物。",
-    sellPirce: 0,
-    icon: "weapons/icon/006",
-    in: "weapons/in/006",
-    out: "weapons/out/006",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_7",
-    level: 26,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "玄铁惊雷剑",
-    sex: SEX.ALL,
-    description: "以玄铁铸就的重剑，剑锋常年缠绕惊雷，挥落之时如雷鸣贯耳。",
-    sellPirce: 0,
-    icon: "weapons/icon/007",
-    in: "weapons/in/007",
-    out: "weapons/out/007",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_8",
-    level: 29,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "嗜血魔刃",
-    sex: SEX.ALL,
-    description: "暗红的剑身上浮现着古老的血色符文，饮血而愈，愈战愈勇。",
-    sellPirce: 0,
-    icon: "weapons/icon/008",
-    in: "weapons/in/008",
-    out: "weapons/out/008",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_9",
-    level: 32,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "紫电青霜剑",
-    sex: SEX.ALL,
-    description: "紫蓝雷光在水晶剑身上流转，出剑快如闪电，剑气冷若寒霜。",
-    sellPirce: 0,
-    icon: "weapons/icon/009",
-    in: "weapons/in/009",
-    out: "weapons/out/009",
-    inPosition: new Vec2(0, 0),
-    inRotate: 260,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_10",
-    level: 35,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "朱雀羽刃",
-    sex: SEX.ALL,
-    description: "刀如凤凰展翅，燃着朱雀神火，传说蕴含浴火重生之力。",
-    sellPirce: 0,
-    icon: "weapons/icon/010",
-    in: "weapons/in/010",
-    out: "weapons/out/010",
-    inPosition: new Vec2(0, 0),
-    inRotate: 280,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_11",
-    level: 38,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "炽焰双头杖",
-    sex: SEX.ALL,
-    description: "两端燃着不灭火焰的秘法长杖，是火系法师梦寐以求的宝物。",
-    sellPirce: 0,
-    icon: "weapons/icon/011",
-    in: "weapons/in/011",
-    out: "weapons/out/011",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_12",
-    level: 41,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "圣光十字剑",
-    sex: SEX.ALL,
-    description: "金色十字剑柄辉映着湛蓝圣光，可破一切黑暗邪祟。",
-    sellPirce: 0,
-    icon: "weapons/icon/012",
-    in: "weapons/in/012",
-    out: "weapons/out/012",
-    inPosition: new Vec2(0, 0),
-    inRotate: 240,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_13",
-    level: 44,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "炎皇圣剑",
-    sex: SEX.ALL,
-    description: "剑身铭刻上古炎皇纹章，中央的赤红宝石封存着焚世之力。",
-    sellPirce: 0,
-    icon: "weapons/icon/013",
-    in: "weapons/in/013",
-    out: "weapons/out/013",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_14",
-    level: 47,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "紫翼金冠刃",
-    sex: SEX.ALL,
-    description: "形似金冠、缀以紫翼的奇门兵器，唯有王者方可驾驭。",
-    sellPirce: 0,
-    icon: "weapons/icon/014",
-    in: "weapons/in/014",
-    out: "weapons/out/014",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_15",
-    level: 50,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "屠龙金纹剑",
-    sex: SEX.ALL,
-    description: "剑身铭满屠龙金纹，曾是斩杀上古魔龙的英雄佩剑。",
-    sellPirce: 0,
-    icon: "weapons/icon/015",
-    in: "weapons/in/015",
-    out: "weapons/out/015",
-    inPosition: new Vec2(0, 0),
-    inRotate: 280,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_16",
-    level: 52,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "青莲业火剑",
-    sex: SEX.ALL,
-    description: "剑身燃着青莲业火，焚尽业障，可斩虚空。",
-    sellPirce: 0,
-    icon: "weapons/icon/016",
-    in: "weapons/in/016",
-    out: "weapons/out/016",
-    inPosition: new Vec2(0, 0),
-    inRotate: 280,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_17",
-    level: 54,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "紫晶魔剑",
-    sex: SEX.ALL,
-    description: "由整块紫晶雕琢而成的魔剑，剑气所过之处空间震裂。",
-    sellPirce: 0,
-    icon: "weapons/icon/017",
-    in: "weapons/in/017",
-    out: "weapons/out/017",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_18",
-    level: 56,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "紫翼神冠刃",
-    sex: SEX.ALL,
-    description: "紫翼金冠的真正形态，觉醒之后可撕裂苍穹。",
-    sellPirce: 0,
-    icon: "weapons/icon/018",
-    in: "weapons/in/018",
-    out: "weapons/out/018",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_19",
-    level: 58,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "燃金圣剑",
-    sex: SEX.ALL,
-    description: "圣剑通体由燃金铸成，剑焰不熄，光照千里。",
-    sellPirce: 0,
-    icon: "weapons/icon/019",
-    in: "weapons/in/019",
-    out: "weapons/out/019",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-  {
-    key: "weapon_20",
-    level: 60,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.WEAPON,
-    occupation: OECCUPATION.ALL,
-    label: "焚世巨剑",
-    sex: SEX.ALL,
-    description: "传闻此剑一挥，可焚尽一世。唯有真正的强者敢将它握在手中。",
-    sellPirce: 0,
-    icon: "weapons/icon/020",
-    in: "weapons/in/020",
-    out: "weapons/out/020",
-    inPosition: new Vec2(0, 0),
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0, 0), // up
-      new Vec2(0, 0), // right_up
-      new Vec2(0, 0), // right
-      new Vec2(0, 0), // right_down
-      new Vec2(0, 0), // down
-      new Vec2(0, 0), // left_down
-      new Vec2(0, 0), // left
-      new Vec2(0, 0), // left_up
-    ],
-  },
-];
-export const weapons = buildEquipmentMap(weaponsData);
+/** 衣服 */
+export const clothes = new Map<string, Equipment>();
+/** 武器 */
+export const weapons = new Map<string, Equipment>();
+/** 戒指 */
+export const rings = new Map<string, Equipment>();
+/** 项链 */
+export const nicklaces = new Map<string, Equipment>();
+/** 鞋子 */
+export const shoes = new Map<string, Equipment>();
+/** 头盔 */
+export const helmets = new Map<string, Equipment>();
+/** 腰带 */
+export const belts = new Map<string, Equipment>();
 
-// 戒指
-const ringsData: EquipmentData[] = [
-  {
-    key: "ring_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.RING,
-    occupation: OECCUPATION.ALL,
-    sex: SEX.ALL,
-    in: "",
-    inPosition: new Vec2(),
-    out: "",
-    label: "新手戒指",
-    description: "新手戒指，穿上此装备，开启你的旅程吧！",
-    icon: "item/2010210",
-    sellPirce: 0,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0.0, 0.0), // up
-      new Vec2(0.0, 0.0), // right_up
-      new Vec2(0.0, 0.0), // right
-      new Vec2(0.0, 0.0), // right_down
-      new Vec2(0.0, 0.0), // down
-      new Vec2(0.0, 0.0), // left_down
-      new Vec2(0.0, 0.0), // left
-      new Vec2(0.0, 0.0), // left_up
-    ],
-  },
-];
-export const rings = buildEquipmentMap(ringsData);
+PART_MAPS.set(EQUIPMENT_TYPE.CLOTH, clothes);
+PART_MAPS.set(EQUIPMENT_TYPE.WEAPON, weapons);
+PART_MAPS.set(EQUIPMENT_TYPE.RING, rings);
+PART_MAPS.set(EQUIPMENT_TYPE.NECKLACE, nicklaces);
+PART_MAPS.set(EQUIPMENT_TYPE.SHOES, shoes);
+PART_MAPS.set(EQUIPMENT_TYPE.HELMET, helmets);
+PART_MAPS.set(EQUIPMENT_TYPE.BELT, belts);
 
-// 项链
-const nicklacesData: EquipmentData[] = [
-  {
-    key: "necklace_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.NECKLACE,
-    occupation: OECCUPATION.ALL,
-    sex: SEX.ALL,
-    in: "",
-    inPosition: new Vec2(),
-    out: "",
-    label: "新手项链",
-    description: "新手项链，穿上此装备，开启你的旅程吧！",
-    icon: "item/2010310",
-    sellPirce: 0,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0.0, 0.0), // up
-      new Vec2(0.0, 0.0), // right_up
-      new Vec2(0.0, 0.0), // right
-      new Vec2(0.0, 0.0), // right_down
-      new Vec2(0.0, 0.0), // down
-      new Vec2(0.0, 0.0), // left_down
-      new Vec2(0.0, 0.0), // left
-      new Vec2(0.0, 0.0), // left_up
-    ],
-  },
-];
-export const nicklaces = buildEquipmentMap(nicklacesData);
-
-// 鞋子
-const shoesData: EquipmentData[] = [
-  {
-    key: "shoes_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.SHOES,
-    occupation: OECCUPATION.ALL,
-    sex: SEX.ALL,
-    in: "",
-    inPosition: new Vec2(),
-    out: "",
-    label: "新手鞋子",
-    description: "新手鞋子，穿上此装备，开启你的旅程吧！",
-    icon: "item/2030410",
-    sellPirce: 0,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0.0, 0.0), // up
-      new Vec2(0.0, 0.0), // right_up
-      new Vec2(0.0, 0.0), // right
-      new Vec2(0.0, 0.0), // right_down
-      new Vec2(0.0, 0.0), // down
-      new Vec2(0.0, 0.0), // left_down
-      new Vec2(0.0, 0.0), // left
-      new Vec2(0.0, 0.0), // left_up
-    ],
-  },
-];
-export const shoes = buildEquipmentMap(shoesData);
-
-// 头盔
-const helmetsData: EquipmentData[] = [
-  {
-    key: "helmet_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.HELMET,
-    occupation: OECCUPATION.ALL,
-    sex: SEX.ALL,
-    in: "",
-    inPosition: new Vec2(),
-    out: "",
-    label: "新手头盔",
-    description: "新手头盔，穿上此装备，开启你的旅程吧！",
-    icon: "item/2030702",
-    sellPirce: 0,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0.0, 0.0), // up
-      new Vec2(0.0, 0.0), // right_up
-      new Vec2(0.0, 0.0), // right
-      new Vec2(0.0, 0.0), // right_down
-      new Vec2(0.0, 0.0), // down
-      new Vec2(0.0, 0.0), // left_down
-      new Vec2(0.0, 0.0), // left
-      new Vec2(0.0, 0.0), // left_up
-    ],
-  },
-];
-export const helmets = buildEquipmentMap(helmetsData);
-
-// 腰带
-const beltsData: EquipmentData[] = [
-  {
-    key: "belt_1",
-    level: 1,
-    type: GOOD_TYPE.EQUIPMENT,
-    slot: EQUIPMENT_TYPE.BELT,
-    occupation: OECCUPATION.ALL,
-    sex: SEX.ALL,
-    in: "",
-    inPosition: new Vec2(),
-    out: "",
-    label: "新手腰带",
-    description: "新手腰带，穿上此装备，开启你的旅程吧！",
-    icon: "item/2030810",
-    sellPirce: 0,
-    tags: [],
-    outScale: 1,
-    outPositions: [
-      new Vec2(0.0, 0.0), // up
-      new Vec2(0.0, 0.0), // right_up
-      new Vec2(0.0, 0.0), // right
-      new Vec2(0.0, 0.0), // right_down
-      new Vec2(0.0, 0.0), // down
-      new Vec2(0.0, 0.0), // left_down
-      new Vec2(0.0, 0.0), // left
-      new Vec2(0.0, 0.0), // left_up
-    ],
-  },
-];
-export const belts = buildEquipmentMap(beltsData);
-
-/** 各部位装备表（掉落按部位就近取件用） */
-const equipmentBySlot = new Map<EQUIPMENT_TYPE, Map<string, Equipment>>([
-  [EQUIPMENT_TYPE.WEAPON, weapons],
-  [EQUIPMENT_TYPE.CLOTH, clothes],
-  [EQUIPMENT_TYPE.HELMET, helmets],
-  [EQUIPMENT_TYPE.BELT, belts],
-  [EQUIPMENT_TYPE.SHOES, shoes],
-  [EQUIPMENT_TYPE.NECKLACE, nicklaces],
-  [EQUIPMENT_TYPE.RING, rings],
-]);
+/**
+ * 各部位装备表（掉落按部位就近取件用）
+ *
+ * 与七张具名表不同的是，它**按服务端下发的 slot 动态分组**：将来某个部位（如饰品 / 护腿）
+ * 开始有装备时，不需要在客户端补一张具名表，`getNearestEquipmentId` 也能直接用。
+ * 快照到达时整份重建（`rebuildEquipmentBySlot`）。
+ */
+export let equipmentBySlot = new Map<EQUIPMENT_TYPE, Map<string, Equipment>>();
 
 /**
  * 按等级就近取一件装备的物品 id（怪物掉落分档用）
@@ -1379,3 +365,148 @@ export function getNearestEquipmentId(slot: EQUIPMENT_TYPE, level: number): stri
   });
   return best ?? fallback;
 }
+
+//#endregion
+
+//#region 装载入口（#603 第九域：客户端不再存装备数据，全部来自配置快照）
+
+/**
+ * 装载槽位表（快照 `equipmentSlots` 段；**整表重建**）
+ *
+ * 客户端不再有槽位清单：13 个 key、名称、底图、位置分组、排序全部来自服务端。
+ * `equipmentSlotOrder` 直接用服务端给的 `order`（背包整理序与角色弹窗排列序同一份）。
+ */
+export function applyEquipmentSlots(
+  rows: Array<{ key: string; label: string; imageSrc: string; position: string; order: number }>,
+): void {
+  if (!rows.length) return;
+  equipmentSlots.clear();
+  equipmentSlotOrder.clear();
+  const ordered = rows.slice().sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+  ordered.forEach((row) => {
+    const key = row.key as EQUIPMENT_TYPE;
+    equipmentSlots.set(key, {
+      label: row.label,
+      imageSrc: row.imageSrc,
+      position: (row.position as EquipmentSlot["position"]) ?? "bottom",
+    });
+    equipmentSlotOrder.set(key, row.order ?? equipmentSlotOrder.size);
+  });
+}
+
+/** 装载品质文案（快照 `equipmentMeta.prefixLabels` / `suffixLabels`；颜色仍按同下标取本地常量） */
+export function applyEquipmentQualityLabels(prefixLabels: string[], suffixLabels: string[]): void {
+  if (prefixLabels?.length) equipmentPrefixLabels = prefixLabels.map(String);
+  if (suffixLabels?.length) equipmentSuffixLabels = suffixLabels.map(String);
+}
+
+/**
+ * 装载装备（快照 `equipments` 段；**整表重建**）
+ *
+ * 入参是**基础件条目**（服务端下发的 37 件，属性是「普通的·人级」），客户端按
+ * 「前缀 × 后缀」展开成 555 条变体。流程与以前的加载期建表**完全一致**
+ * （`buildEquipmentMap` 同一个函数），只是数据来源从源码常量换成了快照。
+ *
+ * 行 → 条目的转换在 `configs/apply-snapshot` 里做（那里已经有 DTO 类型与区间对象转换），
+ * 本文件不 import `ApiModels` —— 生成器要能在没有 UI 层的 Node 环境里编译 `configs/items`
+ * 这条链，把网络模型引进来会把整条 UI 依赖拖进生成器。
+ *
+ * 必须整表重建而不是逐条覆写：客户端已经没有本地装备了，快照里少一件就得真少一件
+ * （逐条覆写会让「管理端删掉/改名的装备」在客户端残留）。
+ *
+ * ⚠️ 调用顺序有讲究：**倍率（`configs/growth`）必须先装**，否则 `buildEquipmentMap`
+ * 展开档数为 0，装备表整个是空的。`applyConfigSnapshot` 里已经排好了。
+ *
+ * @returns 展开后的全部变体（调用方拿去灌物品总表 —— 那里是「id → 物品」的全局索引）
+ */
+export function applyEquipmentData(data: EquipmentData[]): Equipment[] {
+  if (!data.length) return [];
+  PART_MAPS.forEach((map) => map.clear());
+  const variants = buildEquipmentMap(data);
+  // 按 slot 重建「部位 → 变体」索引：七张具名表收自己那一份，其它部位（将来新增的）也在索引里 ——
+  // 这样 `getNearestEquipmentId` 不会因为「没写具名表」而看不到新部位的装备
+  const bySlot = new Map<EQUIPMENT_TYPE, Map<string, Equipment>>();
+  const all: Equipment[] = [];
+  variants.forEach((item, id) => {
+    // 变体 id 就是物品 id（物品总表要按它索引；buildEquipmentMap 里 key 被剥掉了）
+    item.id = id;
+    let bucket = bySlot.get(item.slot);
+    if (!bucket) {
+      bucket = new Map<string, Equipment>();
+      bySlot.set(item.slot, bucket);
+    }
+    bucket.set(id, item);
+    PART_MAPS.get(item.slot)?.set(id, item);
+    all.push(item);
+  });
+  equipmentBySlot = bySlot;
+  return all;
+}
+
+/**
+ * 服务端装备种子的行形状（`server/src/shared/equipment-seed.ts` 的 `EquipmentSeedRow`）
+ *
+ * 与那边**同形但不 import**（客户端不能依赖服务端源码，服务端也不能依赖客户端）——
+ * 这是一份「客户端读种子时需要的字段」的声明，判据是两端字段名一致。
+ * 只有工具链会用它：`tools/gen-shared-data.cjs`（生成物）与
+ * `client/tools/lib/configs-sandbox.cjs`（配置层单测沙箱）都要在 Node 里把种子摊开成 555 条。
+ */
+export interface EquipmentSeedRowLike {
+  id: string;
+  slot: string;
+  level: number;
+  label: string;
+  sellPrice: number;
+  description: string;
+  occupation: string;
+  sex: string;
+  icon: string;
+  in: string;
+  out: string;
+  tags: string[];
+  inPosition: { x: number; y: number };
+  inScaleX: number;
+  inScaleY: number;
+  inRotate?: number;
+  outScale: number;
+  outPositions: Array<{ x: number; y: number }>;
+}
+
+/**
+ * 装载**服务端种子行**（工具链用；游戏内走 `applyEquipmentData`，入参是快照 DTO）
+ *
+ * 只做三件事：`id` → `key`、`sellPrice` → `sellPirce`（客户端历史拼写）、平面点 → `Vec2`，
+ * 然后交给 `applyEquipmentData` 展开。**所以展开规则仍然只有一份** ——
+ * 生成器的 555 条与线上客户端的 555 条是同一个函数算出来的，不可能漂移。
+ *
+ * 种子行**不带八项属性**（属性由 `growth-seed.equipmentStats(level, slot)` 公式算，见 #590），
+ * 所以展开出来的变体属性是 0：生成器用公式现算，测试沙箱随后也重算一遍，谁都不读这个 0。
+ */
+export function applyEquipmentSeed(rows: EquipmentSeedRowLike[]): Equipment[] {
+  if (!rows.length) return [];
+  return applyEquipmentData(
+    rows.map((row) => ({
+      key: row.id,
+      type: GOOD_TYPE.EQUIPMENT,
+      label: row.label,
+      description: row.description,
+      sellPirce: row.sellPrice,
+      level: row.level,
+      slot: row.slot as EQUIPMENT_TYPE,
+      occupation: row.occupation as Equipment["occupation"],
+      sex: row.sex as Equipment["sex"],
+      icon: row.icon,
+      in: row.in,
+      out: row.out,
+      tags: row.tags,
+      inPosition: new Vec2(row.inPosition.x, row.inPosition.y),
+      inScaleX: row.inScaleX,
+      inScaleY: row.inScaleY,
+      inRotate: row.inRotate,
+      outScale: row.outScale,
+      outPositions: row.outPositions.map((point) => new Vec2(point.x, point.y)),
+    })),
+  );
+}
+
+//#endregion

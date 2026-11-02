@@ -35,6 +35,14 @@ const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "
 const { MONSTER_PRESENTATION_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "monster-presentation.generated.js"));
 // #603 第七域：NPC 出厂数据的唯一书写处（客户端 configs/npc-data 已删）
 const { NPC_SEED_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "npc-seed.js"));
+// #603 第九域：装备槽位 / 前后缀倍率 / 回收价曲线的唯一书写处（客户端 configs/equipments + growth 已空）
+const {
+  EQUIPMENT_SLOT_SEEDS,
+  EQUIPMENT_PREFIX_RATE_SEEDS,
+  EQUIPMENT_SUFFIX_RATE_SEEDS,
+  EQUIPMENT_PREFIX_LABEL_SEEDS,
+  EQUIPMENT_SUFFIX_LABEL_SEEDS,
+} = require(path.join(SERVER_DIR, "dist", "shared", "equipment-seed.js"));
 const monsterSeed1 = MONSTER_SEED_ROWS.find((row) => row.id === "1");
 const monsterAttrs1 = expandMonsterSeed(monsterSeed1);
 
@@ -563,10 +571,71 @@ async function main() {
     const equipmentGhost = await api(base, "PATCH", "/api/admin/equipments/cloth_999", { token, body: { level: 1 } });
     checkEqual(equipmentGhost.status, 404, "改不存在的装备基础件 → 404");
     checkEqual(equipmentGhost.body?.code, 50016, "装备未找到用专属业务码 50016");
+    // #603 第九域：名称 / 描述 / 资源 / 几何都从客户端源码搬进了 equipments 表，所以 label 现在**可改**；
+    // 只有 slot（部位结构）与 id 仍然不可改 —— 白名单剥离后照旧 200，但值不变
     const equipmentStructural = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token, body: { slot: "weapon", label: "改名尝试" } });
     checkEqual(equipmentStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
     checkEqual(equipmentStructural.body?.data?.slot, "cloth", "slot 不可编辑（部位结构固定）");
-    checkEqual(equipmentStructural.body?.data?.label, shared.EQUIPMENT_BASES["cloth_14"].label, "label 不可编辑");
+    checkEqual(equipmentStructural.body?.data?.label, "改名尝试", "label 可编辑（#603 从客户端源码搬来）");
+    const equipmentRestoreLabel = await api(base, "PATCH", "/api/admin/equipments/cloth_14", {
+      token,
+      body: { label: shared.EQUIPMENT_BASES["cloth_14"].label },
+    });
+    checkEqual(equipmentRestoreLabel.body?.data?.label, shared.EQUIPMENT_BASES["cloth_14"].label, "名称已还原（不污染后续关键字断言）");
+
+    // 显示字段整份提交（#603）：资源路径 / 几何 / 职业性别 / 标签 / 描述
+    const eightPositions = Array.from({ length: 8 }, (_, index) => ({ x: index, y: -index }));
+    const equipmentDisplay = await api(base, "PATCH", "/api/admin/equipments/cloth_14", {
+      token,
+      body: {
+        description: "e2e 描述",
+        occupation: "1",
+        sex: "2",
+        icon: "clothes/icon/e2e",
+        inAtlas: "clothes/in/e2e",
+        outAtlas: "clothes/out/e2e",
+        tags: ["第一大陆", "e2e"],
+        outScale: 1.25,
+        inScaleX: 0.9,
+        inScaleY: 0.8,
+        inRotate: 15,
+        inPosX: -12.5,
+        inPosY: 34,
+        outPositions: eightPositions,
+      },
+    });
+    checkEqual(equipmentDisplay.status, 200, "PATCH 显示字段成功");
+    checkEqual(equipmentDisplay.body?.data?.description, "e2e 描述", "描述已更新");
+    checkEqual(equipmentDisplay.body?.data?.icon, "clothes/icon/e2e", "图标已更新（资源路径现在归服务端）");
+    checkEqual(equipmentDisplay.body?.data?.inAtlas, "clothes/in/e2e", "内观图集已更新");
+    checkEqual(equipmentDisplay.body?.data?.outAtlas, "clothes/out/e2e", "外观图集已更新");
+    checkEqual(equipmentDisplay.body?.data?.tags?.length, 2, "标签整份替换（2 个）");
+    checkEqual(equipmentDisplay.body?.data?.inPosX, -12.5, "内观锚点 x 已更新");
+    checkEqual(equipmentDisplay.body?.data?.outPositions?.length, 8, "8 向位置整份替换（8 个）");
+    checkEqual(equipmentDisplay.body?.data?.outPositions?.[3]?.y, -3, "8 向位置逐项落库（第 4 向 y = -3）");
+    const badPositions = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token, body: { outPositions: eightPositions.slice(0, 4) } });
+    checkEqual(badPositions.status, 400, "8 向位置不足 8 个 → 400");
+    checkEqual(badPositions.body?.code, 40000, "8 向位置数量校验用 40000");
+    const restoreDisplay = await api(base, "PATCH", "/api/admin/equipments/cloth_14", {
+      token,
+      body: {
+        description: cloth14.description,
+        occupation: cloth14.occupation,
+        sex: cloth14.sex,
+        icon: cloth14.icon,
+        inAtlas: cloth14.inAtlas,
+        outAtlas: cloth14.outAtlas,
+        tags: cloth14.tags,
+        outScale: cloth14.outScale,
+        inScaleX: cloth14.inScaleX,
+        inScaleY: cloth14.inScaleY,
+        inRotate: cloth14.inRotate,
+        inPosX: cloth14.inPosX,
+        inPosY: cloth14.inPosY,
+        outPositions: cloth14.outPositions,
+      },
+    });
+    checkEqual(restoreDisplay.status, 200, "显示字段已还原（不污染快照断言）");
     const postEquipment = await api(base, "POST", "/api/admin/equipments", { token, body: { id: "cloth_new" } });
     checkEqual(postEquipment.status, 404, "POST 装备 → 404（路由不存在）");
     const deleteEquipment = await api(base, "DELETE", "/api/admin/equipments/cloth_14", { token });
@@ -576,6 +645,82 @@ async function main() {
     const viewerEquipmentWrite = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token: viewerToken, body: { sellPrice: 1 } });
     checkEqual(viewerEquipmentWrite.status, 403, "观察员改装备 → 403");
     checkEqual(viewerEquipmentWrite.body?.code, 30006, "观察员改装备 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 八·二、装备槽位与规则（#603 第九域：从客户端 equipments.ts / growth.ts 搬来）
+
+    group("八·二、装备槽位与规则");
+
+    const slots = await api(base, "GET", "/api/admin/equipment-slots", { token });
+    checkEqual(slots.status, 200, "槽位表可读");
+    checkEqual(slots.body?.data?.length, EQUIPMENT_SLOT_SEEDS.length, `槽位行数 = 种子（${EQUIPMENT_SLOT_SEEDS.length}）`);
+    checkEqual(slots.body?.data?.[0]?.key, EQUIPMENT_SLOT_SEEDS[0].key, "按 sort_order 升序（第一行 = 种子第一项）");
+    checkEqual(slots.body?.data?.[0]?.order, 0, "排序从 0 起");
+    checkEqual(slots.body?.data?.[0]?.label, EQUIPMENT_SLOT_SEEDS[0].label, "槽位名称与种子一致");
+
+    const slotAuthoring = await api(base, "GET", "/api/admin/equipment-slots", { token: viewerToken });
+    checkEqual(slotAuthoring.body?.code, 0, "观察员能看槽位表");
+    const slotWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-slots/cloth", { token: viewerToken, body: { label: "衣服改" } });
+    checkEqual(slotWriteByViewer.status, 403, "观察员改槽位 → 403");
+    const slotPost = await api(base, "POST", "/api/admin/equipment-slots", { token, body: { key: "ghost" } });
+    checkEqual(slotPost.status, 404, "POST 槽位 → 404（槽位不能新增）");
+    const slotDelete = await api(base, "DELETE", "/api/admin/equipment-slots/cloth", { token });
+    checkEqual(slotDelete.status, 404, "DELETE 槽位 → 404（槽位不能删除）");
+    const slotGhost = await api(base, "PATCH", "/api/admin/equipment-slots/ghost", { token, body: { label: "x" } });
+    checkEqual(slotGhost.status, 404, "改不存在的槽位 → 404");
+    checkEqual(slotGhost.body?.code, 40400, "槽位未找到用通用业务码 40400（槽位没有专属码）");
+    const slotPatched = await api(base, "PATCH", "/api/admin/equipment-slots/cloth", { token, body: { label: "衣服(e2e)", order: 5 } });
+    checkEqual(slotPatched.status, 200, "PATCH 槽位成功");
+    checkEqual(slotPatched.body?.data?.label, "衣服(e2e)", "槽位名称已更新");
+    checkEqual(slotPatched.body?.data?.order, 5, "槽位排序已更新（背包整理序同源）");
+    const slotRestored = await api(base, "PATCH", "/api/admin/equipment-slots/cloth", {
+      token,
+      body: { label: EQUIPMENT_SLOT_SEEDS.find((slot) => slot.key === "cloth").label, order: EQUIPMENT_SLOT_SEEDS.findIndex((slot) => slot.key === "cloth") },
+    });
+    checkEqual(slotRestored.status, 200, "槽位已还原（不污染快照断言）");
+
+    const meta = await api(base, "GET", "/api/admin/equipment-meta", { token });
+    checkEqual(meta.status, 200, "装备规则可读");
+    const metaRow = meta.body?.data ?? {};
+    checkEqual(metaRow.prefixRates?.length, EQUIPMENT_PREFIX_RATE_SEEDS.length, `前缀倍率档数 = 种子（${EQUIPMENT_PREFIX_RATE_SEEDS.length}）`);
+    checkEqual(metaRow.suffixRates?.length, EQUIPMENT_SUFFIX_RATE_SEEDS.length, `后缀倍率档数 = 种子（${EQUIPMENT_SUFFIX_RATE_SEEDS.length}）`);
+    checkEqual(metaRow.prefixLabels?.[0], EQUIPMENT_PREFIX_LABEL_SEEDS[0], "前缀文案与种子一致");
+    checkEqual(metaRow.suffixLabels?.[0], EQUIPMENT_SUFFIX_LABEL_SEEDS[0], "后缀文案与种子一致");
+    check(Array.isArray(metaRow.recycleCurve) && metaRow.recycleCurve.length > 0, "回收价曲线至少一段（采样表由它派生）");
+    const metaByViewer = await api(base, "GET", "/api/admin/equipment-meta", { token: viewerToken });
+    checkEqual(metaByViewer.body?.code, 0, "观察员能看装备规则");
+    const metaWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-meta", { token: viewerToken, body: { prefixRates: [1] } });
+    checkEqual(metaWriteByViewer.status, 403, "观察员改装备规则 → 403");
+
+    const metaAsymmetric = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.5], prefixLabels: ["一档"] } });
+    checkEqual(metaAsymmetric.status, 400, "倍率与文案长度不一致 → 400");
+    checkEqual(metaAsymmetric.body?.code, 40000, "跨字段校验用 40000（参数非法）");
+    const metaBadCurve = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: { recycleCurve: [{ from: 10, to: 1, start: 1, perLevel: 1 }] },
+    });
+    checkEqual(metaBadCurve.status, 400, "曲线 from > to → 400");
+    const metaNegative = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: { recycleCurve: [{ from: 1, to: 10, start: -1, perLevel: 1 }] },
+    });
+    checkEqual(metaNegative.status, 400, "曲线 start < 0 → 400");
+
+    const metaPatched = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.1, 1.2, 1.3, 1.5] } });
+    checkEqual(metaPatched.status, 200, "PATCH 前缀倍率成功");
+    checkEqual(metaPatched.body?.data?.prefixRates?.[4], 1.5, "新版倍率已落库（改它就是全局调强度）");
+    const metaRestored = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: {
+        prefixRates: EQUIPMENT_PREFIX_RATE_SEEDS,
+        suffixRates: EQUIPMENT_SUFFIX_RATE_SEEDS,
+        prefixLabels: EQUIPMENT_PREFIX_LABEL_SEEDS,
+        suffixLabels: EQUIPMENT_SUFFIX_LABEL_SEEDS,
+        recycleCurve: metaRow.recycleCurve,
+      },
+    });
+    checkEqual(metaRestored.body?.data?.prefixRates?.[4], EQUIPMENT_PREFIX_RATE_SEEDS[4], "倍率已还原（不污染后续结算断言）");
 
     //#endregion
 
@@ -1165,6 +1310,18 @@ async function main() {
     checkEqual(snap.souls?.length, soulSeed.SOUL_SEEDS.length, "快照战魂行数 = 配置表");
     checkEqual(snap.ranks?.length, rankSeed.RANK_SEEDS.length, "快照军衔行数 = 配置表（100 阶）");
     checkEqual(snap.equipments?.length, Object.keys(shared.EQUIPMENT_BASES).length, "快照装备基础件行数 = 生成物");
+    {
+      // #603 第九域：客户端 `configs/equipments` 已经没有装备数据 —— 显示字段全在这段里，缺字段 = 装备整表是空的
+      const row = snap.equipments?.find((item) => item.id === "cloth_1") ?? {};
+      check(Boolean(row.label && row.icon && row.inAtlas && row.outAtlas), "快照装备行带名称与三张资源路径（图标 / 内观 / 外观）");
+      check(Array.isArray(row.outPositions) && row.outPositions.length === 8, "快照装备行带 8 向外观位置");
+      check(typeof row.inPosX === "number" && typeof row.inPosY === "number", "快照装备行带内观锚点（数字）");
+      check(Array.isArray(row.tags) && typeof row.attributes?.maxHp === "number", "快照装备行带标签与八项属性");
+    }
+    checkEqual(snap.equipmentSlots?.length, EQUIPMENT_SLOT_SEEDS.length, `快照槽位行数 = 种子（${EQUIPMENT_SLOT_SEEDS.length}）`);
+    checkEqual(snap.equipmentMeta?.prefixRates?.length, EQUIPMENT_PREFIX_RATE_SEEDS.length, "快照带前后缀倍率（客户端展开 15 个变体的依据）");
+    checkEqual(snap.equipmentMeta?.prefixLabels?.[0], EQUIPMENT_PREFIX_LABEL_SEEDS[0], "快照带品质文案");
+    check(Array.isArray(snap.equipmentMeta?.recycleCurve) && snap.equipmentMeta.recycleCurve.length > 0, "快照带回收价曲线（客户端算回收价）");
     checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
     checkEqual(snap.monsters?.length, MONSTER_SEED_ROWS.length, "快照怪物行数 = 种子（220）");

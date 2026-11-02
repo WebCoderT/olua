@@ -46,6 +46,7 @@ import {
 import { RANK_LEVEL_ATTRIBUTES } from "./rank-seed";
 import { SOUL_LEVEL_ATTRIBUTES } from "./soul-seed";
 import { TITLE_LEVEL_ATTRIBUTES } from "./title-seed";
+import { EquipmentCurveSegment, sampleEquipmentCurve } from "./equipment-seed";
 
 /** 生成物里「一份属性包」的形状：单值 + 六项区间元组 */
 export type AttributeBundle = Record<string, unknown>;
@@ -161,6 +162,22 @@ export function attributeBundleOf(row: AttributeColumns): AttributeBundle {
     magicDefense: [numberOr(row.magic_defense_min), numberOr(row.magic_defense_max)],
     taoistDefense: [numberOr(row.taoist_defense_min), numberOr(row.taoist_defense_max)],
   };
+}
+
+/**
+ * 装备规则覆盖（#603 第九域）：前后缀倍率 + 回收价曲线
+ *
+ * 三者（倍率、文案、曲线）在 `equipment_meta` 表里是一行，但结算只用得到倍率与曲线；
+ * 文案的消费方是生成物 `EQUIPMENT_DISPLAY_NAMES`（编译期拼接，改文案不影响结算）。
+ * `null` = 库里没有规则行 → 回落生成物的出厂值。
+ */
+let equipmentRules: { prefixRates: number[]; suffixRates: number[]; recycleCurve: EquipmentCurveSegment[] } | null = null;
+
+/** 装进装备规则的当前值（管理端改完倍率/曲线后由 `RuntimeConfigService` 调；传 null 清空） */
+export function applyEquipmentRulesOverrides(
+  rules: { prefixRates: number[]; suffixRates: number[]; recycleCurve: EquipmentCurveSegment[] } | null,
+): void {
+  equipmentRules = rules && rules.prefixRates.length > 0 && rules.suffixRates.length > 0 ? rules : null;
 }
 
 /**
@@ -298,6 +315,8 @@ export function applyDrugOverrides(rows: DrugOverride[]): void {
 
 /** 清空全部覆盖（e2e 之间隔离用；生产只在进程启动时天然为空） */
 export function resetRuntimeOverrides(): void {
+  // 规则要先于装备清：装备覆盖里的价格是按当时那套倍率/曲线算好的，清掉任一都要重装
+  equipmentRules = null;
   equipmentVariants = null;
   equipmentPrices = null;
   equipmentLevels = null;
@@ -415,19 +434,34 @@ function parseEquipmentVariantId(id: string): { baseKey: string; prefix: number;
 
 /** 前后缀倍率（越界按 1 处理 —— 与客户端 `equipmentPrefixRates.length > p ? ... : NORMAL` 同口径） */
 function rateOf(prefix: number, suffix: number): number {
-  const prefixRate = prefix < EQUIPMENT_PREFIX_RATES.length ? EQUIPMENT_PREFIX_RATES[prefix] : 1;
-  const suffixRate = suffix < EQUIPMENT_SUFFIX_RATES.length ? EQUIPMENT_SUFFIX_RATES[suffix] : 1;
+  // #603 第九域：倍率可在管理端改（`equipment_meta`），缺省才是生成物的出厂值
+  const prefixRates = equipmentRules?.prefixRates ?? EQUIPMENT_PREFIX_RATES;
+  const suffixRates = equipmentRules?.suffixRates ?? EQUIPMENT_SUFFIX_RATES;
+  const prefixRate = prefix < prefixRates.length ? numberOr(prefixRates[prefix]) : 1;
+  const suffixRate = suffix < suffixRates.length ? numberOr(suffixRates[suffix]) : 1;
   return prefixRate * suffixRate;
 }
 
 /**
  * 某等级装备的回收基础价（普通·人级，含前后缀倍率之前）
  *
- * 生成物里存的是**采样值**（下标 = 等级 - 1），不是曲线公式 —— 两端读同一组数字，
- * 不存在「插值写法差一点」的可能。等级越界按端点夹紧（运营把等级改成 0 / 999 时不至于
- * 让价格变成 NaN 或 0：宁可给端点价，也不要「卖掉却没给钱」）。
+ * 两条来源：
+ * - **库里有规则行**（#603 第九域起，运营可改）→ 用 `equipment_meta.recycle_curve` 现算，
+ *   算术是 `equipment-seed.sampleEquipmentCurve`，与客户端同一段；
+ * - 否则→ 生成物里的**采样值**（下标 = 等级 - 1），两端读同一组数字。
+ *
+ * 等级越界按端点夹紧（运营把等级改成 0 / 999 时不至于让价格变成 NaN 或 0：
+ * 宁可给端点价，也不要「卖掉却没给钱」）。曲线分支的夹紧口径与采样表逐值一致
+ * （采样表就是「1..roleMaxLevel 的曲线值」，两端取端点即等价）。
  */
 function recycleBasePriceOf(level: number): number {
+  if (equipmentRules) {
+    const curve = equipmentRules.recycleCurve;
+    if (!curve.length) return 0;
+    const maxLevel = curve[curve.length - 1].to;
+    const clamped = Math.min(Math.max(Math.trunc(level) || 1, 1), maxLevel);
+    return Math.max(0, Math.round(sampleEquipmentCurve(curve, clamped)));
+  }
   if (!EQUIPMENT_RECYCLE_PRICES.length) return 0;
   const index = Math.trunc(level) - 1;
   if (!Number.isFinite(index) || index < 0) return numberOr(EQUIPMENT_RECYCLE_PRICES[0]);

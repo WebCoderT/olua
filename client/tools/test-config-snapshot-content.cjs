@@ -48,12 +48,28 @@ function main() {
   const variantId = "cloth_1_p4s2";
   const variantBefore = getItem(variantId);
   // 基础件（普通的·人级）属性 1000/5/100/20；变体 p4s2 = ×1.4 × 3 = ×4.2
+  // #603 第九域：客户端 `configs/equipments` 已经没有装备数据，显示字段也在快照里 ——
+  // 这张假行必须带齐（少了就等于「运营把图标清空了」）
   const equipmentRow = {
     id: "cloth_1",
     slot: "cloth",
     level: 12,
     sellPrice: 777,
     label: "测试衣服",
+    description: "测试描述",
+    occupation: "4",
+    sex: "3",
+    icon: "clothes/icon/test",
+    inAtlas: "clothes/in/test",
+    outAtlas: "clothes/out/test",
+    tags: ["测试"],
+    outScale: 1.5,
+    inScaleX: 1.2,
+    inScaleY: 1.1,
+    inRotate: 0,
+    inPosX: 10,
+    inPosY: 20,
+    outPositions: Array.from({ length: 8 }, (_, index) => ({ x: 1 + index, y: 2 })),
     attributes: attributes(1000, 5, 100, 20),
     updatedAt: 0,
   };
@@ -76,7 +92,17 @@ function main() {
   check(baseAfter.label === "测试衣服" && baseAfter.level === 12, "基础件名称与等级跟着服务端走", `${baseAfter.label} / ${baseAfter.level}`);
   check(variantAfter.label === "测试衣服", "变体共用同一份文案（基础件与变体共享对象）", variantAfter.label);
   check(variantAfter.sellPirce === 777, "售卖价按服务端值（客户端字段名是 sellPirce）", String(variantAfter.sellPirce));
-  check(baseAfter.in === baseBefore.in && baseAfter.out === baseBefore.out && baseAfter.icon === baseBefore.icon, "内外观与图标一个字都没动（资源以发布包为准）", baseAfter.in);
+  check(
+    baseAfter.icon === "clothes/icon/test" && baseAfter.in === "clothes/in/test" && baseAfter.out === "clothes/out/test",
+    "图标 / 内观 / 外观图集跟着快照走（#603 第九域起资源路径归服务端）",
+    `${baseBefore.icon} → ${baseAfter.icon}`,
+  );
+  check(baseAfter.tags.length === 1 && baseAfter.outScale === 1.5, "标签与外观缩放跟着快照走", `${baseAfter.tags} / ${baseAfter.outScale}`);
+  check(
+    baseAfter.outPositions.length === 8 && baseAfter.outPositions[0].x === 1 && baseAfter.inPosition.x === 10,
+    "8 向位置与内观锚点转成 Vec2 落表（数量与逐项数值都要对）",
+    `${baseAfter.outPositions.length} 向 / in.x=${baseAfter.inPosition.x}`,
+  );
   check(
     variantAfter.recyclePrice === Math.round(baseAfter.recyclePrice * rate) && variantAfter.recyclePrice > baseAfter.recyclePrice,
     "回收价按「服务端等级 × 倍率」重算（变体比基础件贵）",

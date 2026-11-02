@@ -98,4 +98,76 @@ function cleanupWork(work) {
   fs.rmSync(work, { recursive: true, force: true });
 }
 
-module.exports = { ROOT, ASSETS, createWork, compileClientConfig, configLoader, cleanupWork };
+/**
+ * 编译服务端 `server/src/shared/equipment-seed.ts` 并返回模块（#603 第九域）
+ *
+ * 装备 / 槽位 / 前后缀倍率 / 回收价曲线的唯一书写处已经搬到服务端，客户端
+ * `configs/equipments` 与 `configs/growth` 加载期是**空表**。要在 Node 里生成任何
+ * 「装备清单 / 装备数值」类产物，都得先把种子拿过来 —— 与 `prepare()` 里的
+ * `hydrateSnapshotTables`（单测沙箱）同一条思路。
+ */
+function loadEquipmentSeed(work) {
+  const sharedDir = path.join(ROOT, "server", "src", "shared");
+  const tsconfig = path.join(work, "tsconfig.equipment-seed.json");
+  const outDir = path.join(work, "equipment-seed-out");
+  fs.writeFileSync(
+    tsconfig,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "CommonJS",
+          moduleResolution: "node",
+          outDir,
+          rootDir: sharedDir,
+          skipLibCheck: true,
+          esModuleInterop: true,
+          strict: false,
+          noEmitOnError: false,
+          types: [],
+        },
+        files: [path.join(sharedDir, "equipment-seed.ts")],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
+  if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
+  execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return require(path.join(outDir, "equipment-seed.js"));
+}
+
+/**
+ * 用装备种子把客户端那几张空表填起来（#603 第九域）
+ *
+ * 与线上同一条路：先装规则（倍率决定展开档数），再装槽位与品质文案，最后用
+ * `applyEquipmentSeed` 展开 555 条变体并写进物品总表（编了 `configs/items` 才写）。
+ * **展开规则只写一份**（客户端 `buildEquipmentMap`），所以生成物与线上客户端算出来的
+ * 一定是同一组数字。
+ */
+function hydrateEquipment(cfg, equipmentSeed) {
+  const equipments = cfg("equipments");
+  const growth = cfg("growth");
+
+  growth.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
+  equipments.applyEquipmentQualityLabels(equipmentSeed.EQUIPMENT_PREFIX_LABEL_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_LABEL_SEEDS);
+  // 槽位的 order 就是种子数组下标（`equipment_slots.sort_order` 的出厂值同源）
+  equipments.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
+
+  const variants = equipments.applyEquipmentSeed(equipmentSeed.EQUIPMENT_SEED_ROWS);
+  if (variants.length === 0) throw new Error("装备一件都没展开出来（倍率种子为空？）");
+  return variants;
+}
+
+module.exports = {
+  ROOT,
+  ASSETS,
+  createWork,
+  compileClientConfig,
+  configLoader,
+  cleanupWork,
+  loadEquipmentSeed,
+  hydrateEquipment,
+};

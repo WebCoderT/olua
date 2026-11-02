@@ -903,7 +903,78 @@ export type UpdateStatus = {
   combat?: StatusCombat;
 };
 
+export type EquipmentPoint = {
+  /**
+   * x（像素，单轴 ±4000）
+   */
+  x: number;
+  /**
+   * y（像素，向上为正；单轴 ±4000）
+   */
+  y: number;
+};
+
 export type UpdateEquipment = {
+  /**
+   * 名称（不传则不改；≤50 字）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改；≤500 字，空串 = 清空）
+   */
+  description?: string;
+  /**
+   * 职业限制（取值：1 / 2 / 3 / 4）
+   */
+  occupation?: string;
+  /**
+   * 性别限制（取值：1 / 2 / 3）
+   */
+  sex?: string;
+  /**
+   * 图标（resources 相对路径；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 内观图集（resources 相对路径；空串 = 内观不显示这件）
+   */
+  inAtlas?: string;
+  /**
+   * 外观图集（resources 相对路径；空串 = 外观不显示这件）
+   */
+  outAtlas?: string;
+  /**
+   * 标签（整份替换；每一项 ≤20 字，最多 8 个）
+   */
+  tags?: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale?: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX?: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY?: number;
+  /**
+   * 内观旋转角度（度；0 = 不转）
+   */
+  inRotate?: number;
+  /**
+   * 内观锚点 x（像素）
+   */
+  inPosX?: number;
+  /**
+   * 内观锚点 y（像素，向上为正）
+   */
+  inPosY?: number;
+  /**
+   * 外观 8 向位置（**整份提交、整份替换**，必须正好 8 个，顺序 up → left_up；单轴 ±4000）。只改出厂值，实际效果以「装备对齐」工作台（equip_aligns）为准
+   */
+  outPositions?: EquipmentPoint[];
   /**
    * 穿戴需求等级（不传则不改）
    */
@@ -916,6 +987,67 @@ export type UpdateEquipment = {
    * 八项基础属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）。变体属性 = 基础属性 × 前后缀倍率，在客户端展开
    */
   attributes?: ConfigAttributes;
+};
+
+export type UpdateEquipmentSlot = {
+  /**
+   * 槽位中文名（不传则不改；≤20 字）
+   */
+  label?: string;
+  /**
+   * 槽位底图（resources 相对路径；空串 = 不显示底图）
+   */
+  imageSrc?: string;
+  /**
+   * 位置分组：left / right / bottom / custom
+   */
+  position?: string;
+  /**
+   * 排序序号（从 0 起；也决定背包「一键整理」的部位序）
+   */
+  order?: number;
+};
+
+export type EquipmentCurveSegment = {
+  /**
+   * 起始等级（含）
+   */
+  from: number;
+  /**
+   * 结束等级（含）
+   */
+  to: number;
+  /**
+   * 起始等级的值（绑定元宝）
+   */
+  start: number;
+  /**
+   * 该档内每升一级的增量
+   */
+  perLevel: number;
+};
+
+export type UpdateEquipmentMeta = {
+  /**
+   * 前缀倍率（整份替换；1~10 项，每项 > 0）
+   */
+  prefixRates?: number[];
+  /**
+   * 后缀倍率（整份替换；1~10 项，每项 > 0）
+   */
+  suffixRates?: number[];
+  /**
+   * 前缀文案（整份替换；必须与前缀倍率等长）
+   */
+  prefixLabels?: string[];
+  /**
+   * 后缀文案（整份替换；必须与后缀倍率等长）
+   */
+  suffixLabels?: string[];
+  /**
+   * 回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）
+   */
+  recycleCurve?: EquipmentCurveSegment[];
 };
 
 export type EquipAlignPoint = {
@@ -3862,9 +3994,65 @@ export type Equipment = {
    */
   sellPrice: number;
   /**
-   * 名称（seed 自客户端条目，暂不开放编辑）
+   * 名称（如「青铜重甲」；前后缀由客户端拼在名字前后）
    */
   label: string;
+  /**
+   * 描述（装备详情弹窗正文）
+   */
+  description: string;
+  /**
+   * 职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
+   */
+  occupation: string;
+  /**
+   * 性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）
+   */
+  sex: string;
+  /**
+   * 图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   */
+  icon: string;
+  /**
+   * 内观图集（角色弹窗里穿在身上的那套；resources 相对路径）
+   */
+  inAtlas: string;
+  /**
+   * 外观图集（场景里跟着角色走的那个；resources 相对路径）
+   */
+  outAtlas: string;
+  /**
+   * 标签（如「第一大陆」；详情弹窗展示，无逻辑含义）
+   */
+  tags: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY: number;
+  /**
+   * 内观旋转角度（度，0 = 不转）
+   */
+  inRotate: number;
+  /**
+   * 内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）
+   */
+  inPosX: number;
+  /**
+   * 内观锚点 y（弹窗坐标系，y 向上）
+   */
+  inPosY: number;
+  /**
+   * 外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发
+   */
+  outPositions: EquipmentPoint[];
   /**
    * 八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）
    */
@@ -5314,6 +5502,60 @@ export type UiEffectConfig = {
   enabled: boolean;
 };
 
+export type EquipmentSlot = {
+  /**
+   * 槽位 key（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   */
+  key: string;
+  /**
+   * 槽位中文名（如「衣服」）
+   */
+  label: string;
+  /**
+   * 槽位底图（resources 相对路径，如 slots/cloth）
+   */
+  imageSrc: string;
+  /**
+   * 在角色弹窗里的位置分组（left / right / bottom / custom）
+   */
+  position: string;
+  /**
+   * 排序序号（从 0 起；槽位排列与背包整理序的唯一来源）
+   */
+  order: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipmentMeta = {
+  /**
+   * 前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
+   */
+  prefixRates: number[];
+  /**
+   * 后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）
+   */
+  suffixRates: number[];
+  /**
+   * 前缀文案（与倍率同长）
+   */
+  prefixLabels: string[];
+  /**
+   * 后缀文案（与倍率同长）
+   */
+  suffixLabels: string[];
+  /**
+   * 回收价曲线（分段线性）
+   */
+  recycleCurve: EquipmentCurveSegment[];
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
 export type GameConfigSnapshot = {
   /**
    * 称号配置（34 阶，含渠道与升级链顺序）
@@ -5411,6 +5653,14 @@ export type GameConfigSnapshot = {
    * 界面特效的表现参数（#594：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定 `effect/<key>/<key>.plist`）
    */
   uiEffects: UiEffectConfig[];
+  /**
+   * 装备槽位表（#603 第九域，13 行）：槽位名 / 底图 / 位置分组 / 顺序。客户端 `equipmentSlots` 与 `equipmentSlotOrder` 都按它整表重建（缓存里没有本地兜底）
+   */
+  equipmentSlots: EquipmentSlot[];
+  /**
+   * 装备规则（#603 第九域，单行）：前后缀属性倍率 / 品质文案 / 回收价曲线。客户端靠倍率才知道要把每件基础件展开成几档变体，靠曲线算回收价 —— 缺这一段装备表整个是空的
+   */
+  equipmentMeta: EquipmentMeta;
 };
 
 export type GuildSummary = {

@@ -73,6 +73,11 @@ export class ClientConfigService {
       mapTypes: MAP_TYPE_GROUPS.map((group) => ({ type: group.type, label: group.label })),
       // #594：界面特效的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关）—— 特效按服务端参数演
       uiEffects: this.uiEffect.configs(),
+      // #603 第九域：槽位表与装备规则（前后缀倍率 / 文案 / 回收价曲线）。
+      // 客户端 `configs/equipments` 与 `configs/growth` 不再存这两样 ——
+      // 没有它们客户端连 555 个变体都展开不出来（倍率决定展开档数）
+      equipmentSlots: this.gameConfig.listEquipmentSlots(),
+      equipmentMeta: this.gameConfig.getEquipmentMeta(),
     };
   }
 }

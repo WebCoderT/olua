@@ -6,9 +6,12 @@ import { RankRepository } from "../../database/repositories/rank.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
+import { EquipmentMetaRow } from "../../database/rows";
+import { EquipmentCurveSegment } from "../../shared/equipment-seed";
 import {
   applyDrugOverrides,
   applyEquipmentOverrides,
+  applyEquipmentRulesOverrides,
   applyItemOverrides,
   applyRankOverrides,
   applySkillOverrides,
@@ -66,6 +69,9 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     const skills = this.skills.listAll();
     const drugs = this.drugs.list({ ...ALL });
     const items = this.items.list({ ...ALL });
+    // #603 第九域：规则（倍率 / 回收价曲线）必须先装 —— 装备覆盖里的变体属性与价签
+    // 是按当前规则算好存起来的，顺序反了会「改倍率后价格还是旧的」
+    applyEquipmentRulesOverrides(equipmentRulesOf(this.equipments.getMeta()));
     applyEquipmentOverrides(equipments);
     applyTitleOverrides(titles);
     applySoulOverrides(souls);
@@ -80,4 +86,46 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
         `药品 ${drugs.length} 种 · 材料 ${items.length} 种`,
     );
   }
+}
+
+/**
+ * `equipment_meta` 行 → 覆盖层要的形状（#603 第九域）
+ *
+ * 解析失败/缺行一律返回 null = 回落生成物的出厂规则（宁可回出厂值，也不要让错误数据
+ * 把全局倍率变成 1 或价格变成 0 —— 那等于全服经济静默重算一次）。
+ */
+function equipmentRulesOf(row: EquipmentMetaRow | undefined): {
+  prefixRates: number[];
+  suffixRates: number[];
+  recycleCurve: EquipmentCurveSegment[];
+} | null {
+  if (!row) return null;
+  const parse = (text: string): unknown => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+  const numbers = (value: unknown): number[] =>
+    Array.isArray(value) ? value.map((item) => Number(item)).filter((item) => Number.isFinite(item)) : [];
+  const prefixRates = numbers(parse(row.prefix_rates));
+  const suffixRates = numbers(parse(row.suffix_rates));
+  const curveRaw = parse(row.recycle_curve);
+  const recycleCurve: EquipmentCurveSegment[] = Array.isArray(curveRaw)
+    ? curveRaw
+        .filter((segment) => segment && typeof segment === "object")
+        .map((segment) => {
+          const item = segment as Record<string, unknown>;
+          return {
+            from: Number(item.from) || 0,
+            to: Number(item.to) || 0,
+            start: Number(item.start) || 0,
+            perLevel: Number(item.perLevel) || 0,
+          };
+        })
+        .filter((segment) => segment.to >= segment.from)
+    : [];
+  if (!prefixRates.length || !suffixRates.length || !recycleCurve.length) return null;
+  return { prefixRates, suffixRates, recycleCurve };
 }

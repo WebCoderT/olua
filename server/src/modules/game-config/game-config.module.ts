@@ -7,6 +7,7 @@ import { ClientConfigController } from "./client-config.controller";
 import { ClientConfigService } from "./client-config.service";
 import { AdminDrugController } from "./admin-drug.controller";
 import { AdminEquipmentController } from "./admin-equipment.controller";
+import { AdminEquipmentRulesController } from "./admin-equipment-rules.controller";
 import { AdminEquipAlignController } from "./admin-equip-align.controller";
 import { AdminEquipInAlignController } from "./admin-equip-in-align.controller";
 import { AdminFashionController } from "./admin-fashion.controller";
@@ -41,7 +42,7 @@ import { RuntimeConfigService } from "./runtime-config.service";
   // 地图玩法配置（#573）：配置快照要下发它（客户端据此判进入条件）
   // 界面特效（#594）：配置快照要下发它（客户端特效按服务端参数演）
   imports: [MapModule, UiEffectModule],
-  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController],
   providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   exports: [MallPricingService],

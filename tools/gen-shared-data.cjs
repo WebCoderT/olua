@@ -61,7 +61,15 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { ASSETS, ROOT, createWork, compileClientConfig, configLoader, cleanupWork } = require("./lib/client-config-compile.cjs");
+const {
+  ASSETS,
+  ROOT,
+  createWork,
+  compileClientConfig,
+  configLoader,
+  cleanupWork,
+  hydrateEquipment: hydrateEquipmentTables,
+} = require("./lib/client-config-compile.cjs");
 
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
 
@@ -116,7 +124,10 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed } = compileServerShared(work);
+  const { growthSeed, equipmentSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed } = compileServerShared(work);
+  // #603 第九域：装备数据 / 槽位 / 前后缀倍率 / 回收价曲线的唯一书写处是 equipment-seed.ts，
+  // 客户端那几张表**加载期是空的** —— 生成器先用种子把它们填起来，后面那套快照逻辑一行都不用改
+  hydrateEquipment(cfg, equipmentSeed);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
@@ -131,6 +142,7 @@ function main() {
   console.log(`  装备：${count(snapshot.equipmentAttributes)} 件（含前后缀变体）· 基础件 ${count(snapshot.equipmentBases)} 件 · 槽位 ${count(snapshot.equipmentSlots)} 个`);
   console.log(`  物品 ${count(snapshot.itemLabels)} 件 · 可卖 ${count(snapshot.sellPrices)} 种 · 技能 ${count(snapshot.skillLabels)} 个 · 状态 ${count(snapshot.statuses)} 个 · 怪物技能挂载 ${count(snapshot.monsterSkills)} 只怪 · 职业 ${count(snapshot.occupationLabels)} 个 · NPC ${count(snapshot.npcs)} 个 · 药品 ${count(snapshot.drugs)} 种 · 时装 ${count(snapshot.fashions)} 套 · 掉落表 ${count(snapshot.dropTables)} 张具名 + ${count(snapshot.monsterDrops)} 只怪 · 任务 ${count(snapshot.quests)} 个 · 成就 ${count(snapshot.achievements)} 个`);
   console.log(`  #590 起等级 / 战魂 / 称号 / 军衔 / 成长曲线不在生成物里（唯一来源 = server/src/shared/*-seed.ts）`);
+  console.log(`  #603 第九域起装备数据 / 槽位 / 倍率 / 回收价曲线也不在客户端（唯一来源 = equipment-seed.ts）`);
   cleanupWork(work);
 }
 
@@ -366,6 +378,7 @@ function compileServerShared(work) {
         // #603 monster-skill-seed（怪物技能挂载）/ status / quest / achievement / drop（具名表 + 兜底表）
         files: [
           path.join(sharedDir, "growth-seed.ts"),
+          path.join(sharedDir, "equipment-seed.ts"),
           path.join(sharedDir, "monster-drop-seed.ts"),
           path.join(sharedDir, "monster-skill-seed.ts"),
           path.join(sharedDir, "status-seed.ts"),
@@ -387,6 +400,7 @@ function compileServerShared(work) {
   execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return {
     growthSeed: require(path.join(work, "server-out", "growth-seed.js")),
+    equipmentSeed: require(path.join(work, "server-out", "equipment-seed.js")),
     monsterDropSeed: require(path.join(work, "server-out", "monster-drop-seed.js")),
     monsterSkillSeed: require(path.join(work, "server-out", "monster-skill-seed.js")),
     statusSeed: require(path.join(work, "server-out", "status-seed.js")),
@@ -397,6 +411,28 @@ function compileServerShared(work) {
     npcSeed: require(path.join(work, "server-out", "npc-seed.js")),
     mallSeed: require(path.join(work, "server-out", "mall-seed.js")),
   };
+}
+
+/**
+ * 用装备种子把客户端那几张**空**运行时表填起来（#603 第九域）
+ *
+ * 表本身的填充走共享库的 `hydrateEquipment`（与 `gen-equip-align-catalog` 同一份逻辑：
+ * 装规则 → 装槽位与文案 → `applyEquipmentSeed` 展开 555 条），这里只补一件生成器独有的活：
+ * **物品总表的插入顺序**。#603 之前装备是加载期先注册的（排在药品 / 材料前面），现在只能事后灌，
+ * 所以要清表重建一次 —— `ITEM_LABELS` / `SELL_PRICES` 按插入顺序渲染，
+ * 顺序一变「重新生成逐字节不变」这条守点立刻红。
+ */
+function hydrateEquipment(cfg, equipmentSeed) {
+  const variants = hydrateEquipmentTables(cfg, equipmentSeed);
+  const items = cfg("items").items;
+  const others = [...items.entries()];
+  items.clear();
+  variants.forEach((good) => {
+    if (good.id) items.set(good.id, good);
+  });
+  others.forEach(([id, good]) => {
+    if (!items.has(id)) items.set(id, good);
+  });
 }
 
 /** 出厂属性 × 前后缀倍率（倍率表仍是客户端 growth.ts 的常量，装备批次再收权到服务端） */

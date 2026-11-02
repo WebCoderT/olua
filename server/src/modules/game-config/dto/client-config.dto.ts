@@ -3,7 +3,7 @@ import { Type } from "class-transformer";
 import { ValidateNested } from "class-validator";
 import { DrugDto } from "./drug.dto";
 import { DropTableDto, MonsterDropDto } from "./drop.dto";
-import { EquipmentDto } from "./equipment.dto";
+import { EquipmentDto, EquipmentMetaDto, EquipmentSlotDto } from "./equipment.dto";
 import { FashionDto } from "./fashion.dto";
 import { GrowthScalarDto, LevelDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
@@ -162,4 +162,22 @@ export class GameConfigSnapshotDto {
   })
   @Type(() => UiEffectConfigDto)
   uiEffects!: UiEffectConfigDto[];
+
+  @ApiProperty({
+    description:
+      "装备槽位表（#603 第九域，13 行）：槽位名 / 底图 / 位置分组 / 顺序。" +
+      "客户端 `equipmentSlots` 与 `equipmentSlotOrder` 都按它整表重建（缓存里没有本地兜底）",
+    type: [EquipmentSlotDto],
+  })
+  @Type(() => EquipmentSlotDto)
+  equipmentSlots!: EquipmentSlotDto[];
+
+  @ApiProperty({
+    description:
+      "装备规则（#603 第九域，单行）：前后缀属性倍率 / 品质文案 / 回收价曲线。" +
+      "客户端靠倍率才知道要把每件基础件展开成几档变体，靠曲线算回收价 —— 缺这一段装备表整个是空的",
+    type: EquipmentMetaDto,
+  })
+  @Type(() => EquipmentMetaDto)
+  equipmentMeta!: EquipmentMetaDto;
 }
