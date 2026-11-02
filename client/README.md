@@ -117,7 +117,7 @@ node tools/test-bag-tidy.cjs                                 # 单跑一套
 
 | 分组 | 脚本 |
 | --- | --- |
-| 背包 | `test-bag-tidy`（整理排序）· `test-bag-drag`（拖动换格）· `test-bag-recycle`（一键回收）· `test-bag-discard`（丢弃/拖出销毁）· `test-new-role-bag`（新手背包） |
+| 背包 | `test-bag-tidy`（整理排序）· `test-bag-drag`（拖动换格）· `test-bag-recycle`（一键回收）· `test-bag-discard`（丢弃/拖出销毁） |
 | 装备与物品 | `test-equipment-appearance`（外观切片）· `test-equipment-border`（品质边框）· `test-equipment-detail-background`（详情背景）· `test-equipment-light`（掉落光柱）· `test-good-detail-placement`（详情弹窗摆放）· `test-drop-name`（掉落物名称） |
 | 成长 | `test-rank`（军衔）· `test-title`（称号）· `test-hp-recover`（每秒回血）· `test-role-default-cloth`（默认身体） |
 | 界面与输入 | `test-dialog-top`（弹窗置顶）· `test-joystick`（操作摇杆）· `test-scene-stage`（登录 / 选角整屏适配）· `test-announcement`（公告展示：排序 / 未读 / 时间窗 / 登录提醒 / 已读记录） |

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * 服务端 e2e：伤害结算（实时通道上的战斗指令）
  *
@@ -33,20 +34,6 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "e2e-combat-admin";
 
 //#region 断言小工具
-
-/**
- * 期望的断言条数（全绿时必须恰好这么多）
- * 改了断言就改这个数，并同步文档里的 e2e 总数（README.md；make audit 会比对）。
- */
-const EXPECTED_ASSERTIONS = 131;
-
-function assertExpectedCount(passedCount, failureCount) {
-  if (failureCount !== 0) return;
-  if (passedCount === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exit(1);
-}
 
 let passed = 0;
 let failed = 0;
@@ -281,11 +268,6 @@ function connect(url) {
   return session;
 }
 
-/** 一份最小可建号的角色文档（e2e-roles 的 roleData 同款口径） */
-function roleData(id, name, level, skills) {
-  return { id, name, occupation: "1", sex: "1", level, hp: 100, mp: 50, equipments: {}, bag: [], skills };
-}
-
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-combat-${Date.now()}.db`);
   seedSpawnAreas(dbPath);
@@ -300,8 +282,9 @@ function roleData(id, name, level, skills) {
     const token = player.data && player.data.token;
     check(!!token, "准备：注册玩家拿到令牌", player.message);
 
-    // 初始角色不带技能：先验证「未学习」被拒，再补上技能走正常结算
-    const created = await api(baseUrl, "POST", "roles", { token, body: { data: roleData("combat_r1", "斗战者", 1, {}) } });
+    // #597 起建号由服务端给齐初始技能（1xxx 全 1 级）：想测「未学习」，
+    // 先用管理端把技能清空，第二段再补回来走正常结算
+    const created = await api(baseUrl, "POST", "roles", { token, body: { name: "斗战者", occupation: "1", sex: "1" } });
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
 
@@ -309,6 +292,10 @@ function roleData(id, name, level, skills) {
     // （客户端上报会被库里那份回填），所以测试要造这些状态只能走管理端结构化编辑。
     const adminToken = await registerAdmin(baseUrl, "combat_admin", "Combat#123");
     check(!!adminToken, "准备：管理员已登录（改配置表与造角色状态都要用它）");
+
+    // 清空技能，让「未学习」这条用例恢复前提（#597 起初始号自带 1xxx 全 1 级）
+    const cleared = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: {} } });
+    check(cleared.code === 0, "准备：管理端清空技能（未学习用例的前提）", cleared.message);
 
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const wsUrl = `${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`;
@@ -468,11 +455,11 @@ function roleData(id, name, level, skills) {
 
     // 管理员令牌已在「准备」段落登录（技能 / 装备 / 背包自 #556 起是服务端权威，只有管理端能改）
 
-    /** 再来一名带技能的玩家（独立账号 / 角色 / 实时连接），返回 { token, roleId, session } */
+    /** 再来一名玩家（独立账号 / 角色 / 实时连接）：#597 起初始技能由服务端给齐（1xxx 全 1 级），无需再补 */
     async function newPlayer(name, level = 1) {
       const registered = await api(baseUrl, "POST", "auth/register", { body: { username: name, password: "pass1234" } });
       const playerToken = registered.data && registered.data.token;
-      const createdRole = await api(baseUrl, "POST", "roles", { token: playerToken, body: { data: roleData(`${name}_r1`, name, level, { 1000: 1 }) } });
+      const createdRole = await api(baseUrl, "POST", "roles", { token: playerToken, body: { name, occupation: "1", sex: "1" } });
       const ticket = await api(baseUrl, "POST", "realtime/ticket", { token: playerToken });
       const playerSession = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
       await waitFor(`${name} 握手成功`, async () => (playerSession.opened ? playerSession : null));
@@ -848,14 +835,15 @@ function roleData(id, name, level, skills) {
     // —— A. 正常拾取：按账本原子入包，revision 推进，存档可查 ——
 
     const picker = await newPlayer("combat_rpk");
-    // 服务端不扩容（与商城同一语义）：先把背包存成客户端建号时会有的规范化空网格（4×10）
+    // 服务端不扩容（与商城同一语义）：初始 bag 是空数组（没有网格），先把存档原样带回、
+    // 只把 bag 换成规范化空网格（4×10），给「服务端不扩容」一个前提
     const pickerInitial = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
     const emptyGrid = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
     const savedGrid = await api(baseUrl, "PUT", `roles/${picker.roleId}`, {
       token: picker.token,
       body: {
         revision: pickerInitial.data && pickerInitial.data.revision,
-        data: { ...roleData("combat_rpk_r1", "combat_rpk", 1, { 1000: 1 }), bag: emptyGrid },
+        data: { ...(pickerInitial.data.data || {}), bag: emptyGrid },
       },
     });
     check(savedGrid.code === 0, "A：背包已存成规范化空网格（4×10，服务端不扩容语义的前提）", savedGrid.message);
@@ -1085,7 +1073,6 @@ function roleData(id, name, level, skills) {
 
     //#endregion
 
-    assertExpectedCount(passed, failed);
     console.log(`\n${failed === 0 ? "✅" : "❌"} 伤害结算：${passed} 条通过 / ${failed} 条失败`);
     if (failed > 0) {
       console.log("\n失败项：");

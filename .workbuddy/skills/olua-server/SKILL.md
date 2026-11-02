@@ -1,6 +1,6 @@
 ---
 name: olua-server
-description: olua 项目服务端（NestJS 12 + node:sqlite + JWT + Swagger）的开发与改接口做法。它同时是「三端接口契约的唯一源头」——控制器 + DTO + 装饰器产出 server/openapi.json，再由 tools/gen-api.cjs 生成客户端与管理端两端的接口文件，所以加接口的唯一正确顺序是「改服务端 → 补 operationId → npm run gen:api → 两端 build」。涵盖：三档分组装饰器 @ApiPublicDoc / @ApiPlayerDoc / @ApiAdminDoc（分组按方法标、控制器禁写类级 @ApiTags、createDocument 必须 autoTagControllers 传 false）、管理端接口必须带 permissions（同时落文档说明 + x-olua-permissions + RequirePermissions 运行时元数据，漏了就是真放行）、@ApiDataResponse 的 x-olua-data-schema 与 x-olua-data-nullable、@ApiQueryModel 的 x-olua-query-schema、两层守卫（AuthGuard 受众每次回查库 + PermissionGuard 权限点注册在其后，业务代码禁写角色判断）、统一响应包裹 code message data timestamp 与业务码分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）、SQLite 四表仓储与 ensureColumn 存量补列、全局 ValidationPipe whitelist 会静默剥掉嵌套裸对象属性（必须带装饰器的 DTO 类加 ValidateNested each true 加 Type 并登记 SWAGGER_MODELS）、分页必须用 PageMetaDto 而非 isArray、同账号角色重名 20005、清在线标记必须早于删角色行、角色修订号 revision 乐观锁、口令管理（重置玩家口令 / 管理员自助改密 / token_version 让旧令牌立即作废 40103）、操作日志（审计拦截器只审写方法、action 复用 operationId、敏感字段递归打码、prune 限容、目标名用相关子查询、keyword 的 LIKE 通配符要转义）、登录限流（纯函数 rate-limit.util + 内存 LoginThrottleService、用户名与 IP 两维度、达阈值计数归零、TRUST_PROXY 双向陷阱）、踢下线（只清在线标记拦不住本地客户端，必须叠加存档写入拒收 20007 且判定放在乐观锁之前）、服务端不认识客户端配置只做结构体量与格式校验、swagger emit 与 gen api 与 verify api 与十套 e2e（e2e / e2e-roles / e2e-guard / mail / account-email / realtime / combat / world / dual / backup）与 verify 脚本的写法（真实起服务 + 真实请求 + setupSwagger 生成真文档验分组权限与悬空引用）、实时通道（一次性票据换 WebSocket 连接：握手复用 AuthGuard 的结论而不另写一套校验、拒连时回的是与其余接口同形的 HTTP 401 包裹体而不是先建连再关、协议层 ping/pong 存活探测、一账号一条连接、收连接必须写在 onModuleDestroy 而不是 onApplicationShutdown 否则死锁）、每处理完一个问题按功能提交一次代码（改接口的提交必须连 openapi.json 与两端生成物一起提交）。触发场景：用户说"改服务端接口""加一个接口""给接口补权限点""Swagger 分组不对""文档里少了某个接口""服务端校验失败""接口报 500""分页接口文档写成数组""e2e 挂了""数据库加一列""后台改角色""角色改名""乐观锁冲突""前端类型跟服务端对不上""重置密码""改密码""旧令牌还有效吗""操作日志""审计""谁改了什么""登录被锁""限流""踢下线""把玩家踢出去""反代拿不到真实 IP"。
+description: olua 项目服务端（NestJS 12 + node:sqlite + JWT + Swagger）的开发与改接口做法。它同时是「三端接口契约的唯一源头」——控制器 + DTO + 装饰器产出 server/openapi.json，再由 tools/gen-api.cjs 生成客户端与管理端两端的接口文件，所以加接口的唯一正确顺序是「改服务端 → 补 operationId → npm run gen:api → 两端 build」。涵盖：三档分组装饰器 @ApiPublicDoc / @ApiPlayerDoc / @ApiAdminDoc（分组按方法标、控制器禁写类级 @ApiTags、createDocument 必须 autoTagControllers 传 false）、管理端接口必须带 permissions（同时落文档说明 + x-olua-permissions + RequirePermissions 运行时元数据，漏了就是真放行）、@ApiDataResponse 的 x-olua-data-schema 与 x-olua-data-nullable、@ApiQueryModel 的 x-olua-query-schema、两层守卫（AuthGuard 受众每次回查库 + PermissionGuard 权限点注册在其后，业务代码禁写角色判断）、统一响应包裹 code message data timestamp 与业务码分段（1xxxx 账号 / 2xxxx 角色 / 3xxxx 管理端 / 4xxxx 通用）、SQLite 四表仓储与 ensureColumn 存量补列、全局 ValidationPipe whitelist 会静默剥掉嵌套裸对象属性（必须带装饰器的 DTO 类加 ValidateNested each true 加 Type 并登记 SWAGGER_MODELS）、分页必须用 PageMetaDto 而非 isArray、同账号角色重名 20005、清在线标记必须早于删角色行、角色修订号 revision 乐观锁、口令管理（重置玩家口令 / 管理员自助改密 / token_version 让旧令牌立即作废 40103）、操作日志（审计拦截器只审写方法、action 复用 operationId、敏感字段递归打码、prune 限容、目标名用相关子查询、keyword 的 LIKE 通配符要转义）、登录限流（纯函数 rate-limit.util + 内存 LoginThrottleService、用户名与 IP 两维度、达阈值计数归零、TRUST_PROXY 双向陷阱）、踢下线（只清在线标记拦不住本地客户端，必须叠加存档写入拒收 20007 且判定放在乐观锁之前）、服务端不认识客户端配置只做结构体量与格式校验、swagger emit 与 gen api 与 verify api 与全部 e2e（e2e / e2e-roles / e2e-guard / mail / account-email / realtime / combat / world / dual / backup）与 verify 脚本的写法（真实起服务 + 真实请求 + setupSwagger 生成真文档验分组权限与悬空引用）、实时通道（一次性票据换 WebSocket 连接：握手复用 AuthGuard 的结论而不另写一套校验、拒连时回的是与其余接口同形的 HTTP 401 包裹体而不是先建连再关、协议层 ping/pong 存活探测、一账号一条连接、收连接必须写在 onModuleDestroy 而不是 onApplicationShutdown 否则死锁）、每处理完一个问题按功能提交一次代码（改接口的提交必须连 openapi.json 与两端生成物一起提交）。触发场景：用户说"改服务端接口""加一个接口""给接口补权限点""Swagger 分组不对""文档里少了某个接口""服务端校验失败""接口报 500""分页接口文档写成数组""e2e 挂了""数据库加一列""后台改角色""角色改名""乐观锁冲突""前端类型跟服务端对不上""重置密码""改密码""旧令牌还有效吗""操作日志""审计""谁改了什么""登录被锁""限流""踢下线""把玩家踢出去""反代拿不到真实 IP"。
 agent_created: true
 ---
 
@@ -51,8 +51,8 @@ server/src
     interceptors/audit.interceptor.ts   管理端写接口自动记日志（挂在 AuditModule 上，不在 AppModule）
     filters/ interceptors/ errors/ utils/password.util.ts utils/rate-limit.util.ts
   database/
-    database.service.ts           建表（47 张表）+ migrate() 里的 ensureColumn 存量补列
-    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect（39 个仓储）
+    database.service.ts           建表+ migrate() 里的 ensureColumn 存量补列
+    repositories/                 account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect
   modules/
     auth/    玩家注册登录（限流 + 登录审计）
     roles/   角色 CRUD（存档写入必须校验「仍是账号当前在线角色」）+ role-data.util.ts（结构校验）
@@ -82,30 +82,30 @@ server/src
     setup.ts    buildSwaggerDocument() + setupSwagger(app)（main 与自动化测试**共用同一份**）
     emit.ts     离线产出 openapi.json（npm run swagger:emit）
 openapi.json                     机器可读契约（**提交进仓库**）+ 两端接口文件的唯一输入
-test/e2e.cjs                     全量回归（248 条断言）
-test/e2e-roles.cjs               角色管理专项（150 条断言）
-test/e2e-guard.cjs               口令 / 审计 / 限流 / 踢下线专项（283 条断言，起两台服务各验一轮）
-test/e2e-mail.cjs                邮件通道专项（120 条断言，假发信器）
-test/e2e-account-email.cjs       玩家邮箱字段专项（28 条断言）
-test/e2e-realtime.cjs            实时通道专项（72 条断言，真实 WebSocket 握手）
-test/e2e-combat.cjs              伤害结算专项（131 条断言，世界权威适配）
-test/e2e-world.cjs               世界权威专项（24 条断言，tick / 落盘 / 重启恢复）
-test/e2e-dual.cjs                双进程形态专项（14 条断言，存档与实时分进程 / 踢下线巡检断连）
-test/e2e-game-config.cjs         养成配置专项（639 条断言，称号 / 战魂 / 军衔阶位表）
-test/backup.cjs                  备份 / 恢复专项（87 条断言）
-test/e2e-zone.cjs                区服专项（32 条断言，多开区 / 合并区）
-test/e2e-guild.cjs               帮会专项（60 条断言，建帮 / 申请 / 审批 / 转让 / 解散）
-test/e2e-social.cjs              社交专项（47 条断言，好友 / 敌人 / 互见身份）
-test/e2e-chat.cjs                聊天专项（35 条断言，世界同图广播 / 私聊 / 限频）
-test/e2e-quest.cjs               任务专项（48 条断言，四写入口 / 日常重接）
-test/e2e-sell.cjs                出售专项（24 条断言，快照价结算 / 整单拒绝）
-test/e2e-bag.cjs                 背包与穿戴专项（36 条断言：穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸）
-test/e2e-blocks.cjs              屏蔽与举报专项（50 条断言，聊天与互见按 role_blocks 过滤）
-test/e2e-party.cjs               队伍专项（87 条断言，邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
-test/e2e-rank.cjs                排行榜专项（56 条断言，全服榜单）
-test/e2e-achievement.cjs         成就专项（39 条断言，累计 / 状态两种存储 / 背包满转邮件）
-test/e2e-game-mail.cjs           游戏内邮件专项（51 条断言，附件领取 / 拒删 / 一键领取到背包满 / 频道与两处投递）
-test/e2e-equip-align.cjs         装备对齐几何专项（67 条断言，#513）
+test/e2e.cjs                     全量回归
+test/e2e-roles.cjs               角色管理专项
+test/e2e-guard.cjs               口令 / 审计 / 限流 / 踢下线专项（起两台服务各验一轮）
+test/e2e-mail.cjs                邮件通道专项（假发信器）
+test/e2e-account-email.cjs       玩家邮箱字段专项
+test/e2e-realtime.cjs            实时通道专项（真实 WebSocket 握手）
+test/e2e-combat.cjs              伤害结算专项（世界权威适配）
+test/e2e-world.cjs               世界权威专项（tick / 落盘 / 重启恢复）
+test/e2e-dual.cjs                双进程形态专项（存档与实时分进程 / 踢下线巡检断连）
+test/e2e-game-config.cjs         养成配置专项（称号 / 战魂 / 军衔阶位表）
+test/backup.cjs                  备份 / 恢复专项
+test/e2e-zone.cjs                区服专项（多开区 / 合并区）
+test/e2e-guild.cjs               帮会专项（建帮 / 申请 / 审批 / 转让 / 解散）
+test/e2e-social.cjs              社交专项（好友 / 敌人 / 互见身份）
+test/e2e-chat.cjs                聊天专项（世界同图广播 / 私聊 / 限频）
+test/e2e-quest.cjs               任务专项（四写入口 / 日常重接）
+test/e2e-sell.cjs                出售专项（快照价结算 / 整单拒绝）
+test/e2e-bag.cjs                 背包与穿戴专项（穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸）
+test/e2e-blocks.cjs              屏蔽与举报专项（聊天与互见按 role_blocks 过滤）
+test/e2e-party.cjs               队伍专项（邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
+test/e2e-rank.cjs                排行榜专项（全服榜单）
+test/e2e-achievement.cjs         成就专项（累计 / 状态两种存储 / 背包满转邮件）
+test/e2e-game-mail.cjs           游戏内邮件专项（附件领取 / 拒删 / 一键领取到背包满 / 频道与两处投递）
+test/e2e-equip-align.cjs         装备对齐几何专项（#513）
 test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523）
 ```
 
@@ -239,9 +239,10 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   **要拦的是「写进去」，不是「发过来」。**
 - **库里没有这个字段就放行**：老存档（服务端接管前的本地档）首次上传时文档里没有 `bindGold` 这类键，
   这时客户端那份是唯一来源 —— 删掉等于把玩家的钱清零。只在「服务端写过」之后才回填。
-- **建号是唯一没有旧值可比的口子**：`create` 时库里还是空的，`enforceServerAuthority` 无从回填 ——
-  所以单独用 `clampInitialCurrency` 把三个账本字段夹到 `ROLE_INITIAL_CURRENCY`（生成物，
-  来源是客户端 `configs/role` 的 `initialGold` / `initialBindGold` / `initialSilver`）。
+- **建号是唯一没有旧值可比的口子**：#597 起 `create` 的入参只有名称 / 职业 / 性别三样，出厂文档
+  由服务端 `initial-role.ts` 的 `buildInitialRoleData` 一次性造好（背包空、装备空、账本全 0、
+  初始技能 1xxx 全 1）—— 旧的 `clampInitialCurrency` / `ROLE_INITIAL_CURRENCY` 口子已随
+  「建号送钱」一起退场，不存在「客户端报多少初始货币」的问题了。
   缺字段按「没提要求」处理 → 给出厂值（与「没有行 = 出厂值」同一口径）。
 - **血蓝夹在 `[0, 上限]`**（`clampVitals`，必须在重算之后调）：当前值归客户端（自然回复在本地），
   但超上限只可能是改包或存档错乱；客户端 `applyServerRoleUpdate` 自己也做同一条 `Math.min`。
@@ -292,11 +293,9 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   文档里也有一份。所以 `save()` 里要按「表列压过文档」构造回填的 `stored`，
   回填后**再从文档重取一次** `normalizeLevel(data.level)` 去写 `row.level` ——
   漏了这一步，列表按客户端报的等级排、详情按库里的等级显示，两边各说一套。
-- **建号是唯一没有旧值可比的口子**：账本上界由 `clampInitialCurrency` 夹到 `ROLE_INITIAL_CURRENCY`，
-  等级由 `pinInitialLevel` **直接钉成出厂值 1**（#554）。建号请求里的 `level` 没有任何合法用途 ——
-  正常客户端是 `new Role()` 构造的、恒为 1，放行等于「改个包就开号满级」。
-  满级不只是数字难看：`roles.level` 是索引列（门槛 / 排序 / 筛选全读它），而等级属性曲线只到 60 级，
-  **曲线外的等级算不出属性**，`applyAuthoritativeAttributes` 会跳过 —— 客户端自报的战斗力就这样绕过重算落了库。
+- **建号曾经是唯一没有旧值可比的口子**（#597 前的历史）：那时账本上界由 `clampInitialCurrency` 夹到
+  `ROLE_INITIAL_CURRENCY`、等级由 `pinInitialLevel` 钉成 1（#554）。#597 起建号入参只剩名称 / 职业 / 性别，
+  初始文档由 `buildInitialRoleData` 在服务端构造 —— 两个夹子随之整体退场，客户端没有任何「开号塞值」的路。
   所以那里现在**跳过必打 warn**（`ROLE_LEVEL_MAX` 是 1000，管理端 `PATCH level: 999` 也会走这条路）。
   要提等级只有一条正规路径：管理端 `PATCH /admin/roles/:id`。
 - **守卫**：`tools/audit-role-authority.cjs`（第 13 项）—— 清单字段在客户端实体里有、`save`/`create` 挂了边界、

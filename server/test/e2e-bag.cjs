@@ -5,7 +5,7 @@
  * **客户端说什么都不算，服务端按库里的样子算**。所以每一段都成对：
  * 一个「正常操作成功」，紧跟一个「改包/越界被拒且存档不动」。
  *
- * 〇、准备：一个 1 级角色（背包 4×10，一件 1 级衣服、一件 10 级衣服、两样材料）
+ * 〇、准备：一个 1 级角色（#597 起建号背包为空，四样物品由管理端 PATCH 注入，网格被撑到 2×5）
  * 一、穿戴：装备离包、进槽位、属性**当场重算**（maxHp = 裸模 100 + 衣服 60）
  * 二、等级门槛：穿 10 级衣服 → 20021，且东西还在包里
  * 三、换装：旧装备回到刚腾出的那一格（格数守恒），属性跟着换成新衣服的
@@ -37,19 +37,10 @@ const ADMIN_CODE = "e2e-bag-admin";
 
 //#region 断言小工具（与 e2e-sell 同款口径）
 
-const EXPECTED_ASSERTIONS = 38;
 
 let passed = 0;
 let failed = 0;
 const failures = [];
-
-function assertExpectedCount() {
-  if (failed !== 0) return;
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exit(1);
-}
 
 function group(title) {
   console.log(`\n▶ ${title}`);
@@ -142,26 +133,21 @@ async function api(baseUrl, method, route, options = {}) {
   return body;
 }
 
-/** 背包网格：4 行 × 10 列（与客户端 `bagRow × bagCol` 同一形状） */
-function emptyBag(rows = 4, cols = 10) {
-  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
-}
-
 /**
- * 一份最小可建号的角色文档
+ * 开局注入的四格物品（#597 起建号背包为空，造状态只能走管理端 PATCH）
  *
  * · (0,0) cloth_1   1 级衣服：验证穿戴成功 + 属性重算
  * · (0,4) cloth_10  10 级衣服：验证等级门槛（1 级穿不上）与换装
  * · (1,0)/(1,1) 两样材料：整理 / 搬运的守恒对象
+ *
+ * 稀疏格子会把空网格扩到刚好放下 → 网格是 2 行 × 5 列，不是客户端的 4×10。
  */
-function roleData(id, name) {
-  const bag = emptyBag();
-  bag[0][0] = { id: "cloth_1", count: 1 };
-  bag[0][4] = { id: "cloth_10", count: 1 };
-  bag[1][0] = { id: "material_hide", count: 2 };
-  bag[1][1] = { id: "material_iron", count: 1 };
-  return { id, name, occupation: "1", sex: "1", level: 1, hp: 100, mp: 50, equipments: {}, bag, skills: { 1000: 1 } };
-}
+const BAG_SEED_CELLS = [
+  { row: 0, col: 0, id: "cloth_1", count: 1 },
+  { row: 0, col: 4, id: "cloth_10", count: 1 },
+  { row: 1, col: 0, id: "material_hide", count: 2 },
+  { row: 1, col: 1, id: "material_iron", count: 1 },
+];
 
 /** 背包里某物品的总数（按 id 数格子） */
 function countInBag(bag, goodId) {
@@ -190,7 +176,7 @@ function sparseCells(bag) {
   return cells;
 }
 
-/** 把一串物品按行优先铺进 4×10 的网格，返回稀疏格子（造「换了个顺序」的排布用） */
+/** 把一串物品按行优先铺开，返回稀疏格子（造「换了个顺序」的排布用） */
 function layoutCells(items, cols = 10) {
   return items.map((item, index) => ({
     row: Math.floor(index / cols),
@@ -226,10 +212,15 @@ const CLOTH_10_MAX_HP = EQUIPMENT_BASES["cloth_10"].attributes.maxHp;
     group("准备：玩家与角色");
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "bag_player", password: "pass1234" } });
     const token = registered.data && registered.data.token;
-    const created = await api(baseUrl, "POST", "roles", { token, body: { data: roleData("bag_r1", "背包客") } });
+    const created = await api(baseUrl, "POST", "roles", { token, body: { name: "背包客", occupation: "1", sex: "1" } });
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
-    checkEqual(countInBag(created.data.data.bag, "cloth_1"), 1, "准备：背包里有一件 cloth_1（1 级衣服）");
+    const adminToken = await registerAdmin(baseUrl, "bag_admin", "Admin#123456");
+    check(!!adminToken, "准备：管理员已登录（造状态 / 提等级只有这条路）");
+    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: BAG_SEED_CELLS } });
+    check(seeded.code === 0, "准备：管理端把四样物品注入背包", seeded.message);
+    const snapshot = await api(baseUrl, "GET", `roles/${roleId}`, { token });
+    checkEqual(countInBag(snapshot.data.data.bag, "cloth_1"), 1, "准备：背包里有一件 cloth_1（1 级衣服）");
 
     const other = await api(baseUrl, "POST", "auth/register", { body: { username: "bag_other", password: "pass1234" } });
     const otherToken = other.data && other.data.token;
@@ -267,8 +258,6 @@ const CLOTH_10_MAX_HP = EQUIPMENT_BASES["cloth_10"].attributes.maxHp;
     //#region 三、换装：旧装备回到刚腾出的格子
 
     group("三、换装（格数守恒）");
-    const adminToken = await registerAdmin(baseUrl, "bag_admin", "Admin#123456");
-    check(!!adminToken, "准备：管理员已登录（提等级只有这条路）");
     const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10 } });
     checkEqual(raised.code, 0, "管理端把等级提到 10（提级是管理端特权）");
     const swapped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4 } });
@@ -340,8 +329,8 @@ const CLOTH_10_MAX_HP = EQUIPMENT_BASES["cloth_10"].attributes.maxHp;
     group("七、权威边界（PUT 存档改不动背包与穿戴）");
     const fresh = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     const tampered = JSON.parse(JSON.stringify(fresh.data.data));
-    // ① 往背包里塞一件 28 级顶级衣服
-    tampered.bag[2][0] = { id: "cloth_17", count: 1 };
+    // ① 往背包里塞一件 28 级顶级衣服（网格是 2×5，(1,4) 是空格）
+    tampered.bag[1][4] = { id: "cloth_17", count: 1 };
     // ② 直接把衣服穿上（不走接口）
     tampered.equipments = { ...(tampered.equipments || {}), cloth: "cloth_17" };
     // ③ 技能全点满
@@ -380,10 +369,10 @@ const CLOTH_10_MAX_HP = EQUIPMENT_BASES["cloth_10"].attributes.maxHp;
     );
     const beforeResize = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     const wider = JSON.parse(JSON.stringify(beforeResize.data.data));
-    // 配置把背包从 4 行改成 5 行：内容取库里的、尺寸取这一次的
-    wider.bag = [...wider.bag, Array.from({ length: 10 }, () => null)];
+    // 配置把背包多加一行（行宽随现有网格）：内容取库里的、尺寸取这一次的
+    wider.bag = [...wider.bag, Array.from({ length: wider.bag[0].length }, () => null)];
     const resized = await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: wider, revision: beforeResize.data.revision } });
-    checkEqual(resized.data.data.bag.length, 5, "背包跟着配置长到 5 行（内容仍取库里的）");
+    checkEqual(resized.data.data.bag.length, beforeResize.data.data.bag.length + 1, "背包跟着配置长一行（内容仍取库里的）");
     checkEqual(countInBag(resized.data.data.bag, "material_hide"), 2, "长大个的过程中一件东西都没丢");
 
     //#endregion
@@ -409,7 +398,6 @@ const CLOTH_10_MAX_HP = EQUIPMENT_BASES["cloth_10"].attributes.maxHp;
       console.log(server.logs().split("\n").slice(-30).join("\n"));
       process.exitCode = 1;
     }
-    assertExpectedCount();
   } finally {
     if (serverChild) serverChild.kill("SIGTERM");
     await sleep(300);

@@ -103,7 +103,7 @@ All of them are **local verification scripts** that take no part in bundling; ru
 > `make client-gen-monster` / `make client-gen-drops` ·
 > `make client-clean-frames[-apply]` · `make client-open`. `make help` lists everything.
 
-### Unit tests (28 suites)
+### Unit tests
 
 The scripts locate Cocos Creator's bundled `tsc` themselves (`TSC=/path/to/tsc node …` overrides it manually).
 
@@ -115,7 +115,7 @@ node tools/test-bag-tidy.cjs                                 # run one suite
 
 | Group | Scripts |
 | --- | --- |
-| Bag | `test-bag-tidy` (tidy sorting) · `test-bag-drag` (drag to swap cells) · `test-bag-recycle` (recycle all) · `test-bag-discard` (discard / drag out to destroy) · `test-new-role-bag` (starter bag) |
+| Bag | `test-bag-tidy` (tidy sorting) · `test-bag-drag` (drag to swap cells) · `test-bag-recycle` (recycle all) · `test-bag-discard` (discard / drag out to destroy) |
 | Equipment and items | `test-equipment-appearance` (appearance slicing) · `test-equipment-border` (quality border) · `test-equipment-detail-background` (detail background) · `test-equipment-light` (drop light pillar) · `test-good-detail-placement` (detail dialog placement) · `test-drop-name` (drop names) |
 | Growth | `test-rank` (rank) · `test-title` (title) · `test-hp-recover` (health per second) · `test-role-default-cloth` (default body) |
 | Interface and input | `test-dialog-top` (dialog raise to top) · `test-joystick` (movement joystick) · `test-scene-stage` (login / character selection full-screen fit) · `test-announcement` (announcement display: sorting / unread / time window / login notice / read records) |

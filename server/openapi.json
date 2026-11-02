@@ -11647,23 +11647,26 @@
       "CreateRoleDto": {
         "type": "object",
         "properties": {
-          "data": {
-            "type": "object",
-            "description": "角色完整数据（客户端 entities/Role 的 JSON；必须含 id / name / occupation / sex / level）",
-            "additionalProperties": true,
-            "example": {
-              "id": "1760000000000",
-              "name": "小明",
-              "occupation": "1",
-              "sex": "1",
-              "level": 1,
-              "gold": 1000,
-              "bag": []
-            }
+          "name": {
+            "type": "string",
+            "description": "角色名（同一账号内唯一；去空白后 1~12 字）",
+            "example": "小明"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业（客户端 OECCUPATION 枚举值）",
+            "example": "1"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别（客户端 SEX 枚举值）",
+            "example": "1"
           }
         },
         "required": [
-          "data"
+          "name",
+          "occupation",
+          "sex"
         ]
       },
       "SaveRoleDto": {

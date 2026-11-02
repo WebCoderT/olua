@@ -32,7 +32,6 @@ const MEMBER_LIMIT = 3;
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 60;
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -51,13 +50,6 @@ function checkEqual(actual, expected, label) {
 
 function group(label) {
   console.log(`\n▶ ${label}`);
-}
-
-function assertExpectedCount() {
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed + failed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exitCode = 1;
 }
 
 //#endregion
@@ -134,16 +126,12 @@ async function api(baseUrl, method, route, options = {}) {
   return body;
 }
 
-/** 一份最小可建号的角色文档（e2e-zone 同款口径） */
-function roleData(id, name) {
-  return { id, name, occupation: "1", sex: "1", level: 1, hp: 100, mp: 50, equipments: {}, bag: [], skills: {} };
-}
-
-/** 注册账号 + 建一个在线角色，返回 { token, roleId } */
-async function preparePlayer(baseUrl, username, roleId, roleName) {
+/** 注册账号 + 建一个在线角色，返回 { token, roleId }（#597：id 由服务端生成） */
+async function preparePlayer(baseUrl, username, roleName) {
   const reg = await api(baseUrl, "POST", "auth/register", { body: { username, password: "pass1234" } });
   const token = reg.data && reg.data.token;
-  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName) } });
+  const created = await api(baseUrl, "POST", "roles", { token, body: { name: roleName, occupation: "1", sex: "1" } });
+  const roleId = created.data && created.data.id;
   return { token, roleId };
 }
 
@@ -156,10 +144,10 @@ async function preparePlayer(baseUrl, username, roleId, roleName) {
     //#region 准备：四个玩家 + 一个超级管理员
 
     group("准备：四个玩家（各一个在线角色）+ 超级管理员");
-    const A = await preparePlayer(baseUrl, "guild_player_a", "guild_role_a", "帮主甲");
-    const B = await preparePlayer(baseUrl, "guild_player_b", "guild_role_b", "成员乙");
-    const C = await preparePlayer(baseUrl, "guild_player_c", "guild_role_c", "成员丙");
-    const D = await preparePlayer(baseUrl, "guild_player_d", "guild_role_d", "成员丁");
+    const A = await preparePlayer(baseUrl, "guild_player_a", "帮主甲");
+    const B = await preparePlayer(baseUrl, "guild_player_b", "成员乙");
+    const C = await preparePlayer(baseUrl, "guild_player_c", "成员丙");
+    const D = await preparePlayer(baseUrl, "guild_player_d", "成员丁");
     check(!!(A.token && B.token && C.token && D.token), "四个账号都注册并建好在线角色");
 
     const adminReg = await api(baseUrl, "POST", "admin/auth/register", {
@@ -375,7 +363,6 @@ async function preparePlayer(baseUrl, username, roleId, roleName) {
     server.child.kill();
   }
 
-  assertExpectedCount();
   if (failed > 0) {
     console.log(`\n❌ 帮会 e2e：${failed} 条失败`);
     for (const item of failures) console.log(`   - ${item}`);

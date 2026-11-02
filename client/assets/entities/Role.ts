@@ -5,8 +5,7 @@ import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../ty
 import { SkillId } from "../types/skill";
 import { MapId } from "../types/map";
 import type { GuideProgress } from "../types/guide";
-import { bagCol, bagRow, defaultRoleSpeedRate, getNewRoleEquipments, initialBindGold, initialGold, initialShortcutKeys, initialSilver, initialSkills } from "../configs/role";
-import { levelMap } from "../configs/level";
+import { bagCol, bagRow, defaultRoleSpeedRate, initialShortcutKeys, initialSkills } from "../configs/role";
 
 /**
  * 角色实体
@@ -27,9 +26,9 @@ export class Role implements BattleAttributes {
   fashionCloth: string | null = null;
   relationShip: RELATION_SHIP = RELATION_SHIP.SELF;
   avatar: number = 0;
-  gold: number = initialGold;
-  bindGold: number = initialBindGold;
-  silver: number = initialSilver;
+  gold: number = 0;
+  bindGold: number = 0;
+  silver: number = 0;
   exp: number = 0;
   maxHp: number;
   hp: number;
@@ -109,21 +108,22 @@ export class Role implements BattleAttributes {
    */
   guide: GuideProgress = { step: 0, done: false, skipped: false };
 
+  /**
+   * 构造函数（#597 起仅剩测试与工具在用）
+   *
+   * 建号职责已**全部**搬到服务端（`POST /roles` 由服务端构造初始文档：背包 / 装备 /
+   * 货币全空、技能全解锁 1 级、等级 1，血量 / 攻防 / 战斗力全部由服务端重算回填）——
+   * 客户端不再 `new Role(...)` 拼建号存档，也不在这里算任何数值。
+   * 这里只保留「一个空白角色实体的形状」；血蓝等缺失字段由
+   * `HpHelper / MpHelper.ensureDefaults` 在读档时兜底。
+   */
   constructor(name: string, occupation: OECCUPATION, sex: SEX) {
     this.id = new Date().getTime().toString();
     this.name = name;
     this.occupation = occupation;
     this.sex = sex;
-    this.hp = this.maxHp = levelMap.get(this.level).maxHp;
-    this.hpRecover = levelMap.get(this.level).hpRecover;
-    this.mp = this.maxMp = levelMap.get(this.level).maxMp;
-    this.combat = this.maxHp * 10;
-    // 复制一份初始属性（不要直接引用配置里的区间数组，避免运行时改动污染配置表；
-    // 完整属性由服务端重算后经 roleUpdate 帧下发（#541）——这里的占位值只活到建号那次存档，
-    // 服务端 create 时就重算落库了）
-    this.physicalAttack = [...levelMap.get(this.level).physicalAttack];
 
-    // 初始化背包数据
+    // 初始化空背包（建号不赠任何物品 —— #597）
     this.bag = [];
     for (let row = 0; row < bagRow; row++) {
       this.bag[row] = [];
@@ -131,17 +131,5 @@ export class Role implements BattleAttributes {
         this.bag[row][col] = null;
       }
     }
-    // 初始化成功后，获得新手物品（配置对象经 items 注册表带有 id，格子只存 key + 数量）
-    // 防御：超出背包容量的条目丢弃（绝不能越界写 bag[row]，否则报 Cannot set properties of undefined）；
-    // 静默丢弃会让人以为东西发下去了，所以留一条可查的日志（调整新手物品清单后如果刷这条，说明该精简清单或扩背包）
-    const newRoleItems = getNewRoleEquipments(occupation, sex);
-    const capacity = bagRow * bagCol;
-    if (newRoleItems.length > capacity) {
-      console.warn(`[role] 新手物品 ${newRoleItems.length} 件超出背包容量 ${capacity} 格，末尾 ${newRoleItems.length - capacity} 件已丢弃`);
-    }
-    newRoleItems.slice(0, capacity).forEach((item, index) => {
-      if (!item.id) return; // 无 id（没注册进物品总表）的条目跳过
-      this.bag[Math.floor(index / bagCol)][index % bagCol] = { id: item.id, count: 1 };
-    });
   }
 }

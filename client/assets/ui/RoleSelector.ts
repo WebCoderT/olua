@@ -7,7 +7,6 @@ import { OECCUPATION, SEX } from "../types/role";
 import { getAnchoredPosition } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout, tipsLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
-import { Role } from "../entities/Role";
 import { RoleApi } from "./utils/net/Api";
 import type { RoleSummary } from "./utils/net/Api";
 import ApiError, { describeError, ApiErrorKind } from "./utils/net/ApiError";
@@ -609,10 +608,11 @@ export class RoleSelector extends Component {
   }
 
   /**
-   * 创建角色
+   * 创建角色（#597：建号职责在服务端）
    *
-   * 角色数据由**客户端按自身配置**生成（新手装备、初始金币、背包格、快捷键都在 configs/role），
-   * 服务端只校验结构、归属与重名（数量不设上限）—— 于是游戏侧改配置不必同步改服务端。
+   * 客户端只传它自己才知道的三样 —— 输入框的名字、选中的职业与性别；
+   * 初始数据（背包 / 装备 / 货币 / 技能 / 引导…）由服务端构造（背包装备货币全空、
+   * 技能全解锁 1 级），返回的完整存档才是本地缓存的基线 —— 客户端不再 `new Role(...)`。
    */
   async createRole() {
     if (!this.createView || this.busy) return;
@@ -623,8 +623,7 @@ export class RoleSelector extends Component {
     if (!name) return;
     this.busy = true;
     try {
-      // 角色对象是 entities/Role 的实例；服务端只把它当不透明文档（结构 / 索引字段由服务端校验）
-      const detail = await RoleApi.create({ data: new Role(name, occupation, sex) as unknown as Record<string, unknown> });
+      const detail = await RoleApi.create({ name, occupation, sex });
       StorageManager.cacheServerRole(detail);
       GameUiHelper.createTip("role_create_success_tip");
       this.cancelCreateRoleUI();

@@ -81,5 +81,12 @@
   **旧口径库会一直把怪刷在图外而审计全绿**。判据挪进 `common/utils/spawn-area-bounds.util.ts`（容差 1px），`MapSpawnAreaDto` 带 `inBounds` + 四边 `overflow`，
   `world.service` 播种时 warn（只告警不拦），管理端只显示结论。**容器 `overflow-hidden` 会裁掉越界部分** → 「区域在图外」在图上表现为「区域不存在」，必须靠颜色/徽标。
   数据归属写进 `client/README`：资源 / 表现 / 数值三层，`audit-world-authority` 新增第五节钉住 `applyMonsterRows` 必须覆写 9 项数值。
-- 数字基线（#586 后）：167 接口 / 137 路径 / 259 模型 / 25 权限点 / 46 表 / 38 仓储；e2e **2647（26 套）**；单测 59；守卫 70；审计 16；管理端页面 34 + 侧栏 30 项。
+- 数字基线（#439 后）：168 接口 / 138 路径 / 264 模型 / 26 权限点 / 46 表 / 38 仓储；e2e **28 套**；单测 59；守卫 70；审计 16；管理端页面 35 + 侧栏 31 项。
+- 2026-11-02（夜）：**消息补发 #437（PR #592）+ 邮件过期回收 #439（PR #593）**，用户指令「合并上去之后停止」，#438 群发未开工（口径已备好：batch_id 幂等 / 每角色一行 / 分批 500 事务 / 全服·按区·等级段筛选 / preview 接口）。
+  #437：权限点叫 `gameMail:send` 不叫 `mail:send`（`mail:*` 已归 SMTP 投递队列）；`sendFromAdmin` 复用 `send()` 落库；
+  `@AuditTarget("role")` 的 targetId 取 `request.params?.id` → **路由参数必须叫 `:id`**。
+  #439：`expires_at` 可空 = 永不过期；过期只对「已领或无附件」生效；BOSS 战报 `ttlMs=BOSS_MAIL_TTL_MS`（7 天）；
+  读口 SQL 过滤即时消失 + `GameMailPurgeService` 后台分批物理删（`MAIL_PURGE_BATCH`/`MAIL_PURGE_INTERVAL_MS`）；
+  陷阱：`DELETE...LIMIT` 依赖编译开关（先 SELECT id 再 DELETE IN）、`Number("3600_000")`=NaN、`:memory:` 两连接不共享（in-process e2e 用 tmpdir 文件库）。
+  用户待办见仓库根 `TODO-FOR-USER.md`（本地文件）。
 - **回归门槛 = 改动哪跑哪**：`make test-changed`（tools/test-changed.cjs；BASE=<ref> 可选）。客户端单测按内容匹配；服务端 e2e 按模块表，表外/共享底座回落全量；已删文件要 existsSync 过滤（否则删除的审计还会进计划）；已知基线红 5 套（素材未入库）在 CLIENT_BASELINE_RED 容忍；全量门禁 make verify 只在发布前。

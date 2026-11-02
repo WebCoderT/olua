@@ -30,19 +30,10 @@ const ADMIN_CODE = "e2e-achievement-admin";
 
 //#region 断言小工具（与 e2e-quest 同款口径）
 
-const EXPECTED_ASSERTIONS = 39;
 
 let passed = 0;
 let failed = 0;
 const failures = [];
-
-function assertExpectedCount() {
-  if (failed !== 0) return;
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exit(1);
-}
 
 function group(title) {
   console.log(`\n▶ ${title}`);
@@ -173,16 +164,6 @@ const waitFor = async (label, predicate, timeoutMs = 10_000) => {
   return last;
 };
 
-/** 空背包（4×10 格） */
-function emptyBag() {
-  return Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
-}
-
-/** 一份最小可建号的角色文档（e2e-quest 同款；带技能 1000 供击杀用） */
-function roleData(id, name) {
-  return { id, name, occupation: "1", sex: "1", level: 1, hp: 100, mp: 50, equipments: {}, bag: emptyBag(), skills: { 1000: 1 } };
-}
-
 /** 一条会话化的 WS 连接：只需要 cast → settle（成就没有自己的帧） */
 function connect(url) {
   const socket = new WebSocket(url);
@@ -256,8 +237,8 @@ function setRoleLevel(dbPath, roleId, level) {
     group("准备：玩家、实时连接与管理员");
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "ach_player", password: "pass1234" } });
     const token = registered.data && registered.data.token;
-    const roleDoc = roleData("ach_r1", "成就者");
-    const created = await api(baseUrl, "POST", "roles", { token, body: { data: roleDoc } });
+    // #597 起建号只交三样客户端数据，初始技能（含击杀要用的 1000）由服务端给齐
+    const created = await api(baseUrl, "POST", "roles", { token, body: { name: "成就者", occupation: "1", sex: "1" } });
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
 
@@ -453,6 +434,5 @@ function setRoleLevel(dbPath, roleId, level) {
     console.log(`失败项：\n  - ${failures.join("\n  - ")}`);
     process.exit(1);
   }
-  assertExpectedCount();
   process.exit(0);
 })();

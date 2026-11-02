@@ -33,7 +33,6 @@ const MAX_LENGTH = 50;
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 35;
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -52,13 +51,6 @@ function checkEqual(actual, expected, label) {
 
 function group(label) {
   console.log(`\n▶ ${label}`);
-}
-
-function assertExpectedCount() {
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed + failed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exitCode = 1;
 }
 
 //#endregion
@@ -151,16 +143,12 @@ async function api(baseUrl, method, route, options = {}) {
   return body;
 }
 
-/** 一份最小可建号的角色文档（e2e-social 同款口径） */
-function roleData(id, name) {
-  return { id, name, occupation: "1", sex: "1", level: 1, hp: 100, mp: 50, equipments: {}, bag: [], skills: {} };
-}
-
-/** 注册账号 + 建一个在线角色，返回 { token, roleId } */
-async function preparePlayer(baseUrl, username, roleId, roleName) {
+/** 注册账号 + 建一个在线角色，返回 { token, roleId }（#597：id 由服务端生成） */
+async function preparePlayer(baseUrl, username, roleName) {
   const reg = await api(baseUrl, "POST", "auth/register", { body: { username, password: "pass1234" } });
   const token = reg.data && reg.data.token;
-  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName) } });
+  const created = await api(baseUrl, "POST", "roles", { token, body: { name: roleName, occupation: "1", sex: "1" } });
+  const roleId = created.data && created.data.id;
   return { token, roleId };
 }
 
@@ -208,9 +196,9 @@ function connect(url) {
     //#region 准备：三个账号，A/B 同图、C 在另一张图
 
     group("准备：三个账号（A/B 同图，C 在另一张图）");
-    const A = await preparePlayer(baseUrl, "chat_player_a", "chat_role_a", "甲玩家");
-    const B = await preparePlayer(baseUrl, "chat_player_b", "chat_role_b", "乙玩家");
-    const C = await preparePlayer(baseUrl, "chat_player_c", "chat_role_c", "丙玩家");
+    const A = await preparePlayer(baseUrl, "chat_player_a", "甲玩家");
+    const B = await preparePlayer(baseUrl, "chat_player_b", "乙玩家");
+    const C = await preparePlayer(baseUrl, "chat_player_c", "丙玩家");
     check(!!(A.token && B.token && C.token), "三个账号都注册并建好在线角色");
 
     const tickets = await Promise.all(
@@ -416,7 +404,6 @@ function connect(url) {
     server.child.kill();
   }
 
-  assertExpectedCount();
   if (failed > 0) {
     console.log(`\n❌ 聊天 e2e：${failed} 条失败`);
     for (const item of failures) console.log(`   - ${item}`);

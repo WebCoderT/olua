@@ -23,11 +23,11 @@
  *    没有 `bindGold` 这类键 —— 这时客户端那份就是唯一来源，删掉等于把玩家的钱清零。
  *    所以只在「服务端写过这个字段」之后才执行回填，其余情况原样放行并记一条 warn。
  *
- * 建号是这条规则的例外口子（库里还没有值可比）：账本由 `clampInitialCurrency` 封上界，
- * 等级由 `pinInitialLevel` 直接钉成出厂值 —— 两处都是「没有旧值可比，所以换个办法定死」。
+ * 建号（#597 起）不再是「客户端推一份初始存档」：入参只有名称 / 职业 / 性别，
+ * 初始文档由服务端构造（`initial-role.ts`）—— 上面这条规则里「建号没有旧值可比」的
+ * 例外口子（`clampInitialCurrency` / `pinInitialLevel`）随之整体退场。
  */
 
-import { ROLE_INITIAL_CURRENCY } from "../../shared/game-data.generated";
 import { adoptBagShape, readBagGrid } from "./role-inventory";
 
 /** 账本：只有服务端能改（客户端上报值一律丢弃） */
@@ -94,57 +94,8 @@ export interface AuthorityDrift {
   reported: unknown;
 }
 
-/**
- * 建号时把账本夹到「配置给的起点」以内（就地改 `incoming`）
- *
- * 建号是**唯一**一处服务端没有旧值可比的地方（`enforceServerAuthority` 要有库里的值才回填），
- * 而建号这份存档同样是客户端构造出来推上来的 —— 把 `initialGold` 改成九位数就能开号即暴富。
- * 上界来自共享生成物的 `ROLE_INITIAL_CURRENCY`（客户端 `configs/role` 那三个常量），
- * 不在这里写死数字：改配置 → 重生成 → 两边同时变。
- *
- * 缺字段按「没提要求」处理 → 给出厂值（与「没有行 = 出厂值」同一口径），不是 0。
- */
-export function clampInitialCurrency(incoming: Record<string, unknown>): void {
-  for (const [field, ceiling] of Object.entries(ROLE_INITIAL_CURRENCY)) {
-    const value = Number(incoming[field]);
-    const normalized = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : ceiling;
-    incoming[field] = Math.min(normalized, ceiling);
-  }
-}
-
-/**
- * 建号时的出厂等级（与客户端 `Role.level` 的默认值同一个数）
- *
- * 建号请求里的 `level` **没有任何合法用途**：正常客户端是 `new Role()` 构造出来的，
- * 恒为 1；而接口是公开的 —— 放行等于「改个包就开号满级」（#554）。
- *
- * 满级号不只是个数字难看：`roles.level` 是索引列（门槛判定 / 排序 / 筛选全读它），
- * 而等级属性曲线只到 60 级（`ROLE_LEVEL_ATTRIBUTES`），曲线外的等级**算不出属性**，
- * `applyAuthoritativeAttributes` 会静默跳过 —— 客户端自报的战斗力就这样绕过重算落了库。
- *
- * 要「提等级」只有一条正规路径：管理端 `PATCH /admin/roles/:id`。
- */
+/** 建号等级（#597 起由服务端构造初始文档时直接写死，不再有「客户端上报值」这回事） */
 export const ROLE_INITIAL_LEVEL = 1;
-
-/** 建号等级钉死的结果（上报值只用于日志） */
-export interface InitialLevelPin {
-  /** 落库用的等级（恒为 `ROLE_INITIAL_LEVEL`） */
-  level: number;
-  /** 客户端这次上报的等级（没带就是 `undefined`，正常客户端就是这种情况） */
-  reported: unknown;
-}
-
-/**
- * 把建号等级钉成出厂值（就地改 `incoming`）
- *
- * 与 `clampInitialCurrency` 的区别：账本是「夹到上界」（起点本身是个配置值），
- * 等级是「钉死」（起点只有一个值，没有可夹的区间）。
- */
-export function pinInitialLevel(incoming: Record<string, unknown>): InitialLevelPin {
-  const reported = incoming.level;
-  incoming.level = ROLE_INITIAL_LEVEL;
-  return { level: ROLE_INITIAL_LEVEL, reported };
-}
 
 /** 只认自有属性（`data.gold` 与 `data.toString` 不是一回事） */
 function hasOwn(target: Record<string, unknown>, key: string): boolean {

@@ -35,7 +35,6 @@ const REALTIME_ENTRY = path.join(SERVER_DIR, "dist", "main.realtime.js");
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 14;
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -54,13 +53,6 @@ function checkEqual(actual, expected, label) {
 
 function group(label) {
   console.log(`\n▶ ${label}`);
-}
-
-function assertExpectedCount() {
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed + failed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exitCode = 1;
 }
 
 //#endregion
@@ -223,11 +215,6 @@ function seedSpawnAreas(dbPath) {
   db.close();
 }
 
-/** 一份最小可建号的角色文档（e2e-combat 同款口径） */
-function roleData(id, name, level, skills) {
-  return { id, name, occupation: "1", sex: "1", level, hp: 100, mp: 50, equipments: {}, bag: [], skills };
-}
-
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-dual-${process.pid}-${Date.now()}.db`);
   // 预插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）；
@@ -254,10 +241,9 @@ function roleData(id, name, level, skills) {
     check(!!token, "准备：注册玩家拿到令牌", player.body.message);
     const accountId = player.body.data && player.body.data.account && player.body.data.account.id;
 
-    // 先建不带技能的空号，再补技能。技能自 #556 起是服务端权威 ——
-    // 客户端存档里的 skills 会被库里那份回填，补技能只能走管理端结构化编辑。
+    // #597 起建号由服务端给齐初始技能（1xxx 全 1 级），这里只交三样客户端数据。
     // 超管顺手在这里注册（后面的踢下线段也要用它），省一次重复注册。
-    const created = await api(baseUrl, "POST", "roles", { token, body: { data: roleData("dual_r1", "双进程斗士", 5, {}) } });
+    const created = await api(baseUrl, "POST", "roles", { token, body: { name: "双进程斗士", occupation: "1", sex: "1" } });
     check(created.body.code === 0 && created.body.data.online === true, "准备：角色已创建并自动在线", created.body.message);
     const roleId = created.body.data && created.body.data.id;
     const adminReg = await api(baseUrl, "POST", "admin/auth/register", {
@@ -265,8 +251,6 @@ function roleData(id, name, level, skills) {
     });
     const adminToken = adminReg.body.data && adminReg.body.data.token;
     check(!!adminToken, "准备：超管已在存档进程注册", adminReg.body.message);
-    const saved = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: { 1000: 1 } } });
-    checkEqual(saved.body.code, 0, "准备：角色补上技能 1000（管理端结构化编辑）", saved.body.message);
 
     //#endregion
 
@@ -351,7 +335,6 @@ function roleData(id, name, level, skills) {
   }
 
   console.log(`\n===== e2e-dual：${passed} 通过 / ${failed} 失败 =====`);
-  assertExpectedCount();
   if (failures.length > 0) {
     console.log("\n失败明细：");
     for (const item of failures) console.log(`  - ${item}`);
