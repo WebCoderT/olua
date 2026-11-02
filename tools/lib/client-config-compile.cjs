@@ -107,9 +107,24 @@ function cleanupWork(work) {
  * `hydrateSnapshotTables`（单测沙箱）同一条思路。
  */
 function loadEquipmentSeed(work) {
+  return loadSharedSeed(work, "equipment-seed.ts", "equipment-seed");
+}
+
+/** 编译服务端 `server/src/shared/item-seed.ts`（#603 第十域：药品 / 材料出厂行） */
+function loadItemSeed(work) {
+  return loadSharedSeed(work, "item-seed.ts", "item-seed");
+}
+
+/**
+ * 编一个 `server/src/shared` 下的纯数据种子并 require 回来
+ * @param {string} work createWork() 的临时目录
+ * @param {string} file 相对 server/src/shared 的文件名（如 "item-seed.ts"）
+ * @param {string} tag 产物子目录名（同一 work 里编多个种子时不互相覆盖）
+ */
+function loadSharedSeed(work, file, tag) {
   const sharedDir = path.join(ROOT, "server", "src", "shared");
-  const tsconfig = path.join(work, "tsconfig.equipment-seed.json");
-  const outDir = path.join(work, "equipment-seed-out");
+  const tsconfig = path.join(work, `tsconfig.${tag}.json`);
+  const outDir = path.join(work, `${tag}-out`);
   fs.writeFileSync(
     tsconfig,
     JSON.stringify(
@@ -126,7 +141,7 @@ function loadEquipmentSeed(work) {
           noEmitOnError: false,
           types: [],
         },
-        files: [path.join(sharedDir, "equipment-seed.ts")],
+        files: [path.join(sharedDir, file)],
       },
       null,
       2,
@@ -136,7 +151,7 @@ function loadEquipmentSeed(work) {
   const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
   if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
   execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return require(path.join(outDir, "equipment-seed.js"));
+  return require(path.join(outDir, file.replace(/\.ts$/, ".js")));
 }
 
 /**
@@ -161,6 +176,23 @@ function hydrateEquipment(cfg, equipmentSeed) {
   return variants;
 }
 
+/**
+ * 用 `item-seed.ts` 把药品 / 材料那两张空表填起来（#603 第十域）
+ *
+ * 与线上同一条路：`applyDrugData` / `applyItemBaseData` 整表重建（客户端那两个函数就是
+ * 快照落库用的同一份实现），最后 `rebuildItemIndex()` 重建「id → 物品」总表。
+ *
+ * **必须在 `hydrateEquipment` 之后调**：总表顺序是「装备 → 药品 → 材料」,
+ * 装备先进部位表，重建时才会排在最前。
+ */
+function hydrateItems(cfg, itemSeed) {
+  cfg("drug").applyDrugData(itemSeed.DRUG_SEED_ROWS);
+  cfg("material").applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
+  const items = cfg("items");
+  if (typeof items.rebuildItemIndex === "function") items.rebuildItemIndex();
+  return items.items;
+}
+
 module.exports = {
   ROOT,
   ASSETS,
@@ -170,4 +202,6 @@ module.exports = {
   cleanupWork,
   loadEquipmentSeed,
   hydrateEquipment,
+  loadItemSeed,
+  hydrateItems,
 };

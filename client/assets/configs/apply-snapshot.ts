@@ -21,7 +21,7 @@ import type {
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
-import type { DrugEffect, EquipmentData, OutTransform } from "../types/good";
+import type { EquipmentData, OutTransform } from "../types/good";
 import { applyTitleRows } from "./title";
 import { applySoulRows } from "./soul";
 import { applyRankRows } from "./rank";
@@ -31,22 +31,21 @@ import { uiEffects } from "./effect";
 import { applyMallPricing } from "./mall";
 import { applyCombatWeights } from "./battle";
 import { applyEquipmentRules, setRoleMaxLevel } from "./growth";
-import { items } from "./items";
-import { drugs } from "./drug";
+import { items, rebuildItemIndex } from "./items";
+import { applyDrugData } from "./drug";
+import { applyItemBaseData } from "./material";
 import { applyMonsterPresentation, applyMonsterRuntimeStats } from "./monsterRuntime";
 import { applyNpcRows } from "./npc";
 import { questData } from "./quest-data";
 import type { QuestData } from "./quest-data";
 import { rebuildQuests } from "./quest";
-import { fashionData } from "./fashionClothes";
+import { applyFashionData } from "./fashionClothes";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths } from "./role";
-import { skillData } from "./skill-data";
+import { applySkillData } from "./skill-data";
 import { statuses } from "./status";
-import { SkillData, SkillTargetType, SkillType } from "../types/skill";
-import { OECCUPATION, SEX } from "../types/role";
+import { SEX } from "../types/role";
 import { StatusConfig, StatusSource } from "../types/status";
-import type { ACTION } from "../types/animation";
 import type { MonsterRuntimeStats } from "../types/monster";
 
 /**
@@ -179,72 +178,40 @@ function rowToEquipmentData(row: EquipmentRow): EquipmentData {
 }
 
 /**
- * 装载装备（#603 第九域：整表重建 + 灌物品总表）
+ * 装载装备（#603 第九域：整表重建）
  *
  * 服务端下发**基础件**（37 件）+ 全部显示字段，`applyEquipmentData` 按「前缀 × 后缀」
- * 展开成 555 条变体并按部位分表；这里再把变体写进物品总表（`items` 是全局
- * 「id → 物品」索引，背包 / 掉落 / 商城 / 任务全读它）。
- *
- * **为什么要写进 items**：以前装备在加载期就注册好了（items 直接 import 七张部位表），
- * 现在客户端没有本地装备，items 加载期只有药品与材料 —— 索引必须由这里补上。
- * 用 `items.set` 而不是 `registerItem`：后者「已存在不覆盖」，快照重复应用时会留下上一轮的旧对象。
+ * 展开成 555 条变体并按部位分表。物品总表（`items`）不在这里逐条写 —— 由
+ * `applyContentSnapshot` 末尾的 `rebuildItemIndex()` 一次性重建（#603 第十域）,
+ * 顺序「装备 → 药品 → 材料」只有那一处实现。
  */
 export function applyEquipments(rows: EquipmentRow[]): void {
-  const all = applyEquipmentData(rows.map(rowToEquipmentData));
-  all.forEach((good) => {
-    if (good.id) items.set(good.id, good);
-  });
+  applyEquipmentData(rows.map(rowToEquipmentData));
 }
 
 /**
- * 服务端把药品效果拍平成四个单值（同类效果逐项求和），客户端用的是 effects 数组 ——
- * 两者语义等价（resolveDrugRecovery 也是逐项累加），这里还原成**一条**合并效果即可，
- * 全为 0 时给空数组（0 = 没有该效果，不是「回 0 点」）。
- */
-function toDrugEffects(row: DrugRow): DrugEffect[] {
-  const effect: DrugEffect = {};
-  if (row.effectHp > 0) effect.hp = row.effectHp;
-  if (row.effectMp > 0) effect.mp = row.effectMp;
-  if (row.effectHpPercent > 0) effect.hpPercent = row.effectHpPercent;
-  if (row.effectMpPercent > 0) effect.mpPercent = row.effectMpPercent;
-  return Object.keys(effect).length ? [effect] : [];
-}
-
-/** 覆写药品（文案 / 价格 / 叠加上限 / 冷却 / 回复量；id 序列固定，不增删行） */
-export function applyDrugRows(rows: DrugRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, DrugRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  drugs.forEach((drug) => {
-    const row = drug.id ? overrides.get(drug.id) : undefined;
-    if (!row) return;
-    drug.label = row.label;
-    drug.description = row.description;
-    drug.sellPirce = row.sellPrice;
-    drug.maxStack = row.maxStack;
-    drug.cooldown = row.cooldown;
-    drug.effects = toDrugEffects(row);
-  });
-}
-
-/**
- * 覆写物品与材料（文案 / 价格 / 叠加上限）
+ * 覆写药品（#603 第十域：**整表重建**）
  *
- * 按 id 逐个对齐后原地改：快照里没有的 id（客户端独有的其它条目）保持本地值，
- * 类型（type）与图标属结构字段，不覆写。
+ * 客户端 `configs/drug` 已经没有出厂行了（数据在服务端 `item-seed.ts` → `drugs` 表），
+ * 所以这里是「清空再按快照填」而不是「按 id 覆写已有行」—— 管理端下架一种药,
+ * 客户端就该少一种（留着旧行会让它变成捡不起来、用不掉的幽灵物品）。
+ *
+ * 效果值的还原（四段拍平 → effects 数组）在 `configs/drug.toDrugEffects` 里,
+ * 与 `resolveDrugRecovery` 的累加口径一致，这里只做直传。
+ */
+export function applyDrugRows(rows: DrugRow[]): void {
+  applyDrugData(rows);
+}
+
+/**
+ * 覆写物品与材料（#603 第十域：**整表重建**）
+ *
+ * 与药品同款：客户端 `configs/material` 只剩空数组，这里按快照清空重建。
+ * 只收 MATERIAL / OTHER 大类（装备与药品各有自己的段与表）—— 快照的 `items` 段
+ * 按表内容下发，不会混进装备行。
  */
 export function applyItemRows(rows: ItemRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, ItemRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  items.forEach((good, id) => {
-    const row = overrides.get(id);
-    if (!row) return;
-    good.label = row.label;
-    good.description = row.description;
-    good.sellPirce = row.sellPrice;
-    if (good.stackable) good.maxStack = row.maxStack;
-  });
+  applyItemBaseData(rows);
 }
 
 /**
@@ -325,66 +292,17 @@ function questRowToConfig(row: QuestRow): QuestData {
 }
 
 /**
- * 覆写时装（名称 / 描述 / 价格 / 八项属性）
+ * 时装装载（#257 / #603 第十二域）
  *
- * **icon / in / out 不覆写**：资源路径以发布素材包为准（与 resources 纪律一致），
- * 服务端那份只是 seed 时的镜像。属性全 0 时也要照写（运营可能就是把加成清零）。
+ * #603 起客户端**没有任何时装出厂行**（`configs/fashionClothes` 只剩空数组 + 取源规则），
+ * 所以这里一律整表重建：快照里有什么就是什么。
+ *
+ * **icon / in / out 也来自快照**（与地图那套相反）：时装 id 与资源目录编号之间没有可推导的
+ * 约定（cloth_13 甚至没有内观图），路径只能入库跟着行走。属性全 0 时也要照写
+ * （运营可能就是把加成清零）。
  */
 export function applyFashionRows(rows: FashionRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, FashionRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  fashionData.forEach((fashion) => {
-    const row = overrides.get(fashion.id);
-    if (!row) return;
-    fashion.label = row.label;
-    fashion.description = row.description;
-    fashion.sellPrice = row.sellPrice;
-    const attributes = toBattleAttributes(row.attributes);
-    fashion.attributes = {
-      maxHp: attributes.maxHp,
-      physicalAttack: attributes.physicalAttack,
-      magicAttack: attributes.magicAttack,
-      taoistAttack: attributes.taoistAttack,
-      physicalDefense: attributes.physicalDefense,
-      magicDefense: attributes.magicDefense,
-      taoistDefense: attributes.taoistDefense,
-    };
-  });
-}
-
-/**
- * 技能行（服务端快照）→ 客户端数值配置（不含释放实现）
- *
- * `oeccupation` 不来自服务端：它属于客户端布局（技能栏按 `oeccupationSkills` 列举 id），
- * 服务端也没有这一列 —— 覆写时保留本地的职业归属，追加时统一给「全职业」。
- */
-function skillRowToData(row: SkillRow, oeccupation: OECCUPATION = OECCUPATION.ALL): SkillData {
-  return {
-    id: row.id,
-    owner: row.owner === "monster" ? "monster" : "role",
-    label: row.label,
-    icon: row.icon,
-    cooldown: row.cooldown,
-    mpCost: row.mpCost,
-    targetType: row.targetType as SkillTargetType,
-    oeccupation,
-    level: row.levelReq,
-    description: row.description,
-    type: row.category as SkillType,
-    damageCoefficients: row.damageCoefficients.map((entry) => ({
-      baseType: entry.baseType as keyof BattleAttributes,
-      baseTypeRate: entry.baseTypeRate,
-    })),
-    distance: row.distance,
-    action: row.action as ACTION,
-    effect: row.effect || undefined,
-    effectIsOnSelf: row.effectOnSelf,
-    statusId: row.statusId || undefined,
-    castLockMs: row.castLockMs,
-    requireTarget: row.requireTarget,
-    canAuto: row.canAuto,
-  };
+  applyFashionData(rows);
 }
 
 /** 状态行（服务端快照）→ 客户端状态配置 */
@@ -408,27 +326,17 @@ function statusRowToConfig(row: StatusRow): StatusConfig {
 }
 
 /**
- * 技能配置覆写（#367 / #372）
+ * 技能配置装载（#367 / #372 / #603）
  *
- * 角色与怪物**一起覆写**（#372 起怪物技能也要按运营改过的值演出）：
- * - 本地已有的行 → 原地覆写（消费方拿到的引用不变，`skills` Map 由 `rebuildSkills()` 重建）；
- * - 本地没有、快照里是**怪物技能** → 追加（管理端能新建怪物技能，客户端必须能演新的动作 / 特效）；
- * - 本地没有、快照里是角色技能 → 忽略（角色技能清单固定在配置里，多出来的 id 没有实现）。
+ * #603 第十一域起客户端**没有任何技能出厂行**（`configs/skill-data` 只剩空数组 + 派生规则），
+ * 所以这里一律整表重建：快照里有什么就是什么，角色技能与怪物技能同表（`owner` 区分）。
  *
  * **不动 onClick**：技能释放实现是代码（configs/skill 按 id 接上），数据只描述
- * 「冷却 / 倍率 / 动作 / 特效 / 释放限制」。覆写后必须调 `rebuildSkills()`（见 ConfigLoader），
- * 否则 skills Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
+ * 「冷却 / 倍率 / 动作 / 特效 / 释放限制 / 职业归属 / 击退」。重建后必须调 `rebuildSkills()`
+ * （见 ConfigLoader），否则 `skills` Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
  */
 export function applySkillRows(rows: SkillRow[]): void {
-  for (const row of rows) {
-    const config = skillData.find((item) => item.id === row.id);
-    if (!config) {
-      if (row.owner === "monster") skillData.push(skillRowToData(row));
-      continue;
-    }
-    const next = skillRowToData(row, config.oeccupation);
-    Object.assign(config, next);
-  }
+  applySkillData(rows);
 }
 
 /**
@@ -465,6 +373,9 @@ export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   if (snapshot.equipments) applyEquipments(snapshot.equipments);
   if (snapshot.drugs) applyDrugRows(snapshot.drugs);
   if (snapshot.items) applyItemRows(snapshot.items);
+  // #603 第十域：三张物品表都落完，再一次性重建「id → 物品」总表 ——
+  // 放在这里而不是各自 apply 里，是因为顺序（装备 → 药品 → 材料）只该有一处实现
+  rebuildItemIndex();
   if (snapshot.monsters) applyMonsterRows(snapshot.monsters);
   // #588：怪物资源与表现（icon / out / 几何 / 移动 / AI 参数）—— 客户端没有本地怪物数据文件
   if (snapshot.monsterPresentations) applyMonsterPresentations(snapshot.monsterPresentations);

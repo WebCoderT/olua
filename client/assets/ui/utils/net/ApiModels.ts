@@ -768,6 +768,14 @@ export type UpdateSkill = {
    * 是否可被自动战斗 / 挂机释放
    */
   canAuto?: boolean;
+  /**
+   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）
+   */
+  occupation?: "1" | "2" | "3" | "4";
+  /**
+   * 命中后的击退距离（像素；0 = 不击退；只对单体技能生效）
+   */
+  pushDistance?: number;
 };
 
 export type CreateSkill = {
@@ -839,6 +847,14 @@ export type CreateSkill = {
    * 是否可被自动战斗 / 挂机释放
    */
   canAuto?: boolean;
+  /**
+   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）
+   */
+  occupation?: "1" | "2" | "3" | "4";
+  /**
+   * 命中后的击退距离（像素；0 = 不击退；只对单体技能生效）
+   */
+  pushDistance?: number;
   /**
    * 技能 id（怪物技能段：9000~9999 的四位数字，如 "9001"）
    */
@@ -1116,6 +1132,10 @@ export type UpdateDrug = {
    */
   description?: string;
   /**
+   * 图标（resources 相对路径，如 item/fs_2；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表
+   */
+  icon?: string;
+  /**
    * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
   sellPrice?: number;
@@ -1154,6 +1174,10 @@ export type UpdateItem = {
    * 描述（不传则不改）
    */
   description?: string;
+  /**
+   * 图标（resources 相对路径，如 item/2010210；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品 / 材料的图标与 id 之间没有可推导的约定（地图 / 特效能按 id 拼路径，这两个拼不出来），只能存表
+   */
+  icon?: string;
   /**
    * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
@@ -4131,6 +4155,10 @@ export type Drug = {
    */
   description: string;
   /**
+   * 图标资源路径（resources 相对路径，如 item/fs_2）
+   */
+  icon: string;
+  /**
    * 使用等级需求（暂不开放编辑）
    */
   level: number;
@@ -4227,6 +4255,10 @@ export type Item = {
    * 描述
    */
   description: string;
+  /**
+   * 图标资源路径（resources 相对路径，如 item/2010210）
+   */
+  icon: string;
   /**
    * 等级需求（暂不开放编辑）
    */
@@ -4580,6 +4612,14 @@ export type Skill = {
    * 是否可被自动战斗 / 挂机释放
    */
   canAuto: boolean;
+  /**
+   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域）。客户端技能栏按它重建「职业 → 技能」映射，所以这一列是「技能归谁」的唯一来源
+   */
+  occupation: string;
+  /**
+   * 命中后的击退距离（像素；0 = 不击退。只对单体技能生效）
+   */
+  pushDistance: number;
   /**
    * 最近更新时间（毫秒）
    */
@@ -5054,7 +5094,7 @@ export type MallPriceRemove = {
 
 export type Fashion = {
   /**
-   * 时装 id（configs/fashionClothes，如 "cloth_2"；序列固定，不可增删行）
+   * 时装 id（seed 自 shared/fashion-seed.ts，如 "cloth_2"；序列固定，不可增删行）
    */
   id: string;
   /**

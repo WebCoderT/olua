@@ -4,10 +4,12 @@
  *
  * 跑的是**真实配置表与真实覆写函数**（configs-sandbox 编译 CommonJS + cc 垫片），不是复刻。
  * 盯的四条口径：
- * · 技能覆写生效并原地改 —— 名字 / 冷却 / 耗蓝 / 距离 / 等级 / 倍率 / 挂载状态 / 释放限制
- * · 怪物技能（#372）—— 同表一起覆写；本地没有的怪物行追加（管理端能新建），角色行仍不追加
+ * · 技能**整表重建**（#603 第十一域起客户端零出厂行）—— 数值 / 文案 / 释放限制 / 职业归属 /
+ *   击退全部跟着服务端行；快照有几行就几行，行序也跟着快照；改职业归属要能立刻改出技能栏
+ * · 怪物技能（#372）—— 同表下发，靠 owner 区分；角色技能与怪物技能不各留一份
  * · 状态覆写生效 —— 时长 / 文案 / 特效 / 三项战斗修正（缺省维度是 undefined，不是 0）
- * · 接线钉死 —— 快照覆写后要重建 skills Map（副本），释放限制三处落点都在
+ * · 接线钉死 —— 快照覆写后要重建 skills Map（**行对象都是新建的**，不重建读到的还是旧的），
+ *   释放限制三处落点都在
  *
  * 用法：node client/tools/test-skill-snapshot.cjs
  */
@@ -39,6 +41,8 @@ function skillRow(patch = {}) {
     castLockMs: 0,
     requireTarget: true,
     canAuto: true,
+    occupation: "1",
+    pushDistance: 0,
     updatedAt: 0,
     ...patch,
   };
@@ -53,7 +57,7 @@ function main() {
     return;
   }
 
-  const { skillData } = require(path.join(outDir, "configs/skill-data.js"));
+  const { skillData, oeccupationSkills } = require(path.join(outDir, "configs/skill-data.js"));
   const { statuses } = require(path.join(outDir, "configs/status.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
   // #603 起客户端 configs/status 只剩空 Map（数据唯一书写处是服务端 status-seed.ts），
@@ -61,9 +65,23 @@ function main() {
   const { STATUS_SEED_ROWS } = require(compileServerShared("status-seed.ts", "olua-status-seed"));
   for (const { id, ...rest } of STATUS_SEED_ROWS) statuses.set(id, rest);
 
-  console.log("\n=== 技能：数值 / 文案 / 释放限制都跟着服务端走 ===");
+  console.log("\n=== 技能：整表重建（快照是唯一来源，#603 第十一域）===");
+  // 沙箱按线上同一条路灌好了种子（prepare → hydrateSnapshotTables），与「快照已到」同形；
+  // 客户端自身零出厂行（出厂数据唯一书写处是服务端 server/src/shared/skill-seed.ts）
+  check(skillData.length > 0, "沙箱里的技能表由 skill-seed 灌好（不是客户端写死的行）", String(skillData.length));
+  const { SKILL_SEED_ROWS } = require(compileServerShared("skill-seed.ts", "olua-skill-seed"));
+  snapshotApi.applySkillRows(SKILL_SEED_ROWS);
+  check(skillData.length === SKILL_SEED_ROWS.length, "整表重建后行数 = 快照行数", `${skillData.length} / ${SKILL_SEED_ROWS.length}`);
+  check(
+    JSON.stringify(skillData.map((item) => item.id)) === JSON.stringify(SKILL_SEED_ROWS.map((row) => row.id)),
+    "行序跟着快照走（客户端不再自己排序）",
+  );
+
   const before = skillData.find((item) => item.id === "1000");
-  const beforeObject = before;
+  check(before.oeccupation === "1", "职业归属来自快照（客户端不再手写这份映射）", String(before.oeccupation));
+  check(before.push === undefined, "没配击退时 push 是 undefined（不是 {distance:0}，否则会走一遍击退流程）", String(before.push));
+  check(oeccupationSkills.get("1")?.length === 12 && oeccupationSkills.get("2")?.length === 0, "职业技能映射按快照行重建（战士 12 / 法师空）", String(oeccupationSkills.get("1")?.length));
+
   snapshotApi.applySkillSnapshot({
     skills: [
       skillRow({
@@ -82,11 +100,14 @@ function main() {
         canAuto: false,
         effectOnSelf: true,
         effect: "effect/skill/s_1006@0",
+        occupation: "2",
+        pushDistance: 60,
       }),
     ],
   });
   const after = skillData.find((item) => item.id === "1000");
-  check(after === beforeObject, "原地覆写（数组元素对象不换，引用保持）", "消费方持有的引用不会失效");
+  check(skillData.length === 1, "快照只给 1 行 → 表里就只剩这 1 行（管理端删掉的技能会如实消失）", String(skillData.length));
+  check(after !== before, "行对象是新建的（所以必须重建 skills Map，不能指望原地改）");
   check(after.label === "测试基础剑术" && after.description === "改过的描述", "名称与描述已覆写", after.label);
   check(after.cooldown === 2.5 && after.mpCost === 3 && after.distance === 12, "冷却 / 耗蓝 / 距离已覆写", `${after.cooldown} / ${after.mpCost} / ${after.distance}`);
   check(after.level === 2, "服务端 levelReq 落到客户端的 level 字段", String(after.level));
@@ -96,6 +117,12 @@ function main() {
     JSON.stringify(after.damageCoefficients),
   );
   check(after.effect === "effect/skill/s_1006@0" && after.effectIsOnSelf === true, "特效与「播在自己身上」已覆写", after.effect);
+  check(after.oeccupation === "2" && after.push?.distance === 60, "职业归属与击退距离跟着快照走", `${after.oeccupation} / ${JSON.stringify(after.push)}`);
+  check(
+    oeccupationSkills.get("2")?.length === 1 && oeccupationSkills.get("1")?.length === 0,
+    "改了职业归属，技能栏映射立刻跟着变（派生视图，不是第二份清单）",
+    JSON.stringify([oeccupationSkills.get("1"), oeccupationSkills.get("2")]),
+  );
 
   console.log("\n=== 释放限制：动作锁 / 目标要求 / 自动释放 ===");
   check(after.castLockMs === 700, "动作锁毫秒数已覆写（客户端按它做兜底超时）", String(after.castLockMs));
@@ -110,29 +137,34 @@ function main() {
 
   console.log("\n=== 挂载状态：statusId 空串 = 不挂（不是空字符串） ===");
   snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1011", statusId: "2001", category: "2" })] });
-  const skill1011 = skillData.find((item) => item.id === "1011");
-  check(skill1011.statusId === "2001", "statusId 已覆写（技能 1011 挂到 2001）", String(skill1011.statusId));
+  check(skillData.find((item) => item.id === "1011").statusId === "2001", "statusId 已覆写（技能 1011 挂到 2001）", String(skillData.find((item) => item.id === "1011").statusId));
   snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1011", statusId: "" })] });
-  check(skill1011.statusId === undefined, "空串清成 undefined（消费方判 `if (config.statusId)` 即可）", String(skill1011.statusId));
+  check(
+    skillData.find((item) => item.id === "1011").statusId === undefined,
+    "空串清成 undefined（消费方判 `if (config.statusId)` 即可）",
+    String(skillData.find((item) => item.id === "1011").statusId),
+  );
 
-  console.log("\n=== 怪物技能（#372）：同表一起覆写，本地没有的怪物行追加 ===");
-  // 已有行（9001 在客户端配置里）→ 原地覆写：服务端执行技能，但动作 / 特效 / 施法硬直要看新配置
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "9001", owner: "monster", cooldown: 12, label: "改过的猛击" })] });
+  console.log("\n=== 怪物技能（#372）：同表下发，靠 owner 区分 ===");
+  // 快照里角色与怪物行一起下发：表 = 快照，分归属只影响「进不进技能栏」
+  snapshotApi.applySkillSnapshot({
+    skills: [
+      skillRow({ id: "1000" }),
+      skillRow({ id: "9001", owner: "monster", cooldown: 12, label: "改过的猛击", action: "attack_skill_1", occupation: "4" }),
+      skillRow({ id: "9010", owner: "monster", label: "新技能", action: "attack_skill_1", occupation: "4" }),
+    ],
+  });
   const monsterAfter = skillData.find((item) => item.id === "9001");
-  check(monsterAfter.cooldown === 12 && monsterAfter.label === "改过的猛击", "怪物技能行同样被覆写", `${monsterAfter.cooldown} / ${monsterAfter.label}`);
-  check(monsterAfter.owner === "monster", "覆写后仍带 owner=monster（不被打回 role）", String(monsterAfter.owner));
-
-  // 本地没有的怪物行 → 追加：管理端能新建怪物技能，客户端必须能演新动作
-  const countBeforeMonster = skillData.length;
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "9010", owner: "monster", label: "新技能", action: "attack_skill_1" })] });
-  const appended = skillData.find((item) => item.id === "9010");
-  check(skillData.length === countBeforeMonster + 1, "本地没有的怪物技能被追加（管理端新建的技能也能演）", String(skillData.length));
-  check(appended && appended.action === "attack_skill_1", "追加行的动作 / 特效来自快照", appended ? String(appended.action) : "缺失");
-
-  // 本地没有的角色行 → 忽略：角色技能清单固定在配置里，凭空多一行不会有人释放它
-  const countBeforeRole = skillData.length;
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1999", owner: "role", label: "不存在的角色技能" })] });
-  check(skillData.length === countBeforeRole, "本地没有的角色技能行被忽略（清单固定在配置里）", String(skillData.length));
+  check(monsterAfter.cooldown === 12 && monsterAfter.label === "改过的猛击", "怪物技能行同样被整表重建", `${monsterAfter.cooldown} / ${monsterAfter.label}`);
+  check(monsterAfter.owner === "monster", "重建后仍带 owner=monster（不被打回 role）", String(monsterAfter.owner));
+  const added = skillData.find((item) => item.id === "9010");
+  check(Boolean(added) && added.action === "attack_skill_1", "管理端新建的怪物技能跟着快照进来（客户端能演新动作 / 特效）", added ? String(added.action) : "缺失");
+  check(skillData.length === 3, "行数 = 快照行数（角色与怪物同表，不各留一份）", String(skillData.length));
+  check(
+    oeccupationSkills.get("1")?.length === 1 && oeccupationSkills.get("2")?.length === 0,
+    "怪物技能不进技能栏（职业映射只收 owner=role 的行）",
+    JSON.stringify([oeccupationSkills.get("1"), oeccupationSkills.get("2")]),
+  );
 
   console.log("\n=== 状态：时长 / 文案 / 特效 / 三项战斗修正 ===");
   const statusBefore = statuses.get("2001");
@@ -190,9 +222,9 @@ function main() {
   const hpBeforeEmpty = skillData.find((item) => item.id === "1000").cooldown;
   snapshotApi.applySkillSnapshot({});
   check(skillData.find((item) => item.id === "1000").cooldown === hpBeforeEmpty, "空快照保留当前值（旧服务端不下发技能表也不炸）");
-  const countBeforeUnknown = skillData.length;
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "不存在的技能" })] });
-  check(skillData.length === countBeforeUnknown, "未知 id 被忽略，不新增行", String(skillData.length));
+  // 表 = 快照：快照里有几行就是几行，id 不认识也照样进表（它没有释放实现，本地放不出来）
+  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1999", label: "不存在的角色技能" })] });
+  check(skillData.length === 1 && skillData[0].id === "1999", "不认识的 id 也按快照进表（表是快照的镜像，不做本地白名单）", JSON.stringify(skillData.map((item) => item.id)));
 
   console.log("\n=== 接线钉死（源码断言：这三处不接上，配了也不会生效） ===");
   const configLoader = read("assets/ui/utils/net/ConfigLoader.ts");

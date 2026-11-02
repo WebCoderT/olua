@@ -17,6 +17,46 @@ export interface SkillListOptions {
 }
 
 /**
+ * 技能表的列 → 取值（**加字段只改这一张表**）
+ *
+ * 这个仓储有三条写语句（seed / insert / update），以前每加一列要同时改三处 SQL ——
+ * #603 第十一域加 `occupation` 与 `push_distance` 时正好踩上这个坑的边界，
+ * 索性收成一份声明：列名与取值同源，三条语句都由它拼出来，漏一处的可能性归零。
+ */
+const SKILL_COLUMNS: Array<[string, (row: SkillRow) => SqlParam]> = [
+  ["id", (row) => row.id],
+  ["owner", (row) => row.owner],
+  ["label", (row) => row.label],
+  ["icon", (row) => row.icon],
+  ["category", (row) => row.category],
+  ["target_type", (row) => row.target_type],
+  ["action", (row) => row.action],
+  ["effect", (row) => row.effect],
+  ["effect_on_self", (row) => row.effect_on_self],
+  ["cooldown", (row) => row.cooldown],
+  ["mp_cost", (row) => row.mp_cost],
+  ["distance", (row) => row.distance],
+  ["level_req", (row) => row.level_req],
+  ["description", (row) => row.description],
+  ["damage_coefficients", (row) => row.damage_coefficients],
+  ["status_id", (row) => row.status_id],
+  ["cast_lock_ms", (row) => row.cast_lock_ms],
+  ["require_target", (row) => row.require_target],
+  ["can_auto", (row) => row.can_auto],
+  ["occupation", (row) => row.occupation],
+  ["push_distance", (row) => row.push_distance],
+  ["updated_at", (row) => row.updated_at],
+];
+
+const SKILL_COLUMN_NAMES = SKILL_COLUMNS.map(([name]) => name);
+const SKILL_PLACEHOLDERS = SKILL_COLUMNS.map(() => "?").join(", ");
+const skillValues = (row: SkillRow): SqlParam[] => SKILL_COLUMNS.map(([, pick]) => pick(row));
+/** UPDATE 的列（除主键）+ 末尾的 WHERE 参数 */
+const SKILL_UPDATE_SET = SKILL_COLUMN_NAMES.filter((name) => name !== "id")
+  .map((name) => `${name} = ?`)
+  .join(", ");
+
+/**
  * 技能数据访问（#367）
  *
  * 与称号 / 装备 / 怪物同一取向：**没有 insert / remove 的对外语义** —— 行只能来自启动 seed
@@ -30,68 +70,12 @@ export class SkillRepository {
 
   /** seed 一行（已存在则跳过 —— 运营改过的值不会被配置更新覆盖回去） */
   seedRow(row: SkillRow): void {
-    this.db.run(
-      `INSERT OR IGNORE INTO skills
-         (id, owner, label, icon, category, target_type, action, effect, effect_on_self,
-          cooldown, mp_cost, distance, level_req, description, damage_coefficients,
-          status_id, cast_lock_ms, require_target, can_auto, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        row.id,
-        row.owner,
-        row.label,
-        row.icon,
-        row.category,
-        row.target_type,
-        row.action,
-        row.effect,
-        row.effect_on_self,
-        row.cooldown,
-        row.mp_cost,
-        row.distance,
-        row.level_req,
-        row.description,
-        row.damage_coefficients,
-        row.status_id,
-        row.cast_lock_ms,
-        row.require_target,
-        row.can_auto,
-        row.updated_at,
-      ],
-    );
+    this.db.run(`INSERT OR IGNORE INTO skills (${SKILL_COLUMN_NAMES.join(", ")}) VALUES (${SKILL_PLACEHOLDERS})`, skillValues(row));
   }
 
   /** 新增一行（#372：只给怪物技能用；重复 id 由调用方先查重，这里不吞异常） */
   insert(row: SkillRow): void {
-    this.db.run(
-      `INSERT INTO skills
-         (id, owner, label, icon, category, target_type, action, effect, effect_on_self,
-          cooldown, mp_cost, distance, level_req, description, damage_coefficients,
-          status_id, cast_lock_ms, require_target, can_auto, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        row.id,
-        row.owner,
-        row.label,
-        row.icon,
-        row.category,
-        row.target_type,
-        row.action,
-        row.effect,
-        row.effect_on_self,
-        row.cooldown,
-        row.mp_cost,
-        row.distance,
-        row.level_req,
-        row.description,
-        row.damage_coefficients,
-        row.status_id,
-        row.cast_lock_ms,
-        row.require_target,
-        row.can_auto,
-        row.updated_at,
-      ],
-    );
+    this.db.run(`INSERT INTO skills (${SKILL_COLUMN_NAMES.join(", ")}) VALUES (${SKILL_PLACEHOLDERS})`, skillValues(row));
   }
 
   /** 删除一行（#372：只给怪物技能用；被挂载引用时由调用方拒绝） */
@@ -100,34 +84,8 @@ export class SkillRepository {
   }
 
   update(row: SkillRow): { changes: number } {
-    return this.db.execute(
-      `UPDATE skills SET
-         label = ?, icon = ?, category = ?, target_type = ?, action = ?, effect = ?, effect_on_self = ?,
-         cooldown = ?, mp_cost = ?, distance = ?, level_req = ?, description = ?, damage_coefficients = ?,
-         status_id = ?, cast_lock_ms = ?, require_target = ?, can_auto = ?, updated_at = ?
-       WHERE id = ?`,
-      [
-        row.label,
-        row.icon,
-        row.category,
-        row.target_type,
-        row.action,
-        row.effect,
-        row.effect_on_self,
-        row.cooldown,
-        row.mp_cost,
-        row.distance,
-        row.level_req,
-        row.description,
-        row.damage_coefficients,
-        row.status_id,
-        row.cast_lock_ms,
-        row.require_target,
-        row.can_auto,
-        row.updated_at,
-        row.id,
-      ],
-    );
+    const values = SKILL_COLUMNS.filter(([name]) => name !== "id").map(([, pick]) => pick(row));
+    return this.db.execute(`UPDATE skills SET ${SKILL_UPDATE_SET} WHERE id = ?`, [...values, row.id]);
   }
 
   findByKey(id: string): SkillRow | undefined {

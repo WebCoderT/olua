@@ -1,22 +1,76 @@
 /**
- * 技能数值数据表（#31 从 configs/skill 拆出）
+ * 技能数值数据表（#31 从 configs/skill 拆出；#603 第十一域起**客户端零出厂数据**）
  *
  * 定位：**纯数据模块** —— 只放数值 / 文案 / 映射，零引擎 import（不 import skills/warrior，
  * 也不 import 任何 ui/ 运行时），可被 Node 沙箱直接 require 跑断言（见 client/tools/test-skill-decouple.cjs）。
- * 释放实现不在这里：configs/skill.ts 的 skillHandlers 按 id 接上，合成消费方要的 skills Map。
+ * 释放实现不在这里：configs/skill.ts 的 roleSkillHandlers 按 id 接上，合成消费方要的 skills Map。
+ *
+ * ===========================================================================
+ * #603 第十一域：数据搬走，算法留下
+ * ===========================================================================
+ * 名称 / 图标 / 分类 / 目标类型 / 动作 / 特效 / 冷却 / 魔法消耗 / 施法距离 / 学习等级 /
+ * 描述 / 伤害倍率 / 挂载状态 / 施法锁 / 释放限制 / **职业归属 / 击退距离** 的唯一书写处是
+ * 服务端 `server/src/shared/skill-seed.ts` → `skills` 表（管理端「技能配置」可改）→
+ * `GET /game-config` 快照的 `skills` 段 → 这里整表重建（`applySkillData`）。
+ *
+ * 留在本文件的是**对枚举值的翻译**（技能类型 / 目标类型文案）与**派生规则**（职业 → 技能 id），
+ * 它们不是运营数据：改一次数值不该要重打客户端包，而改一句「主动」的措辞本来就该改代码。
+ *
+ * **客户端加载期 `skillData` 是空的** —— 进游戏前 `skills` Map 里一个技能都没有不是 bug，
+ * 那只是快照还没到。
  */
 import { OECCUPATION } from "../types/role";
-import { SkillData, SkillId, SkillTargetType, SkillType } from "../types/skill";
 import { ACTION } from "../types/animation";
+import { DamageCoefficient, SkillData, SkillId, SkillTargetType, SkillType } from "../types/skill";
 
-/** 职业技能映射 */
+/** 服务端技能行（快照 `skills` 段；与 `skill-seed.ts` 的 `SkillSeedRow` 同形） */
+export interface SkillSeedLike {
+  id: string;
+  /** 归属：role | monster（同一张表，靠它区分技能栏里的技能与怪物 AI 放的技能） */
+  owner: string;
+  label: string;
+  icon: string;
+  /** 客户端 SkillType 原值（"0" 主动 / "1" 被动 / "2" 状态 / "3" 回复） */
+  category: string;
+  /** 客户端 SkillTargetType 原值（"0" 区域 / "1" 单体 / "2" 群体 / "3" 自身） */
+  targetType: string;
+  /** 客户端动画动作键（如 attack_near） */
+  action: string;
+  /** 特效图集路径（空串 = 无） */
+  effect: string;
+  effectOnSelf: boolean;
+  cooldown: number;
+  mpCost: number;
+  distance: number;
+  /** 学习 / 开启等级（客户端字段名是 level） */
+  levelReq: number;
+  description: string;
+  damageCoefficients: Array<{ baseType: string; baseTypeRate: number }>;
+  /** 挂载的状态 id（空串 = 不挂） */
+  statusId: string;
+  castLockMs: number;
+  requireTarget: boolean;
+  canAuto: boolean;
+  /** 职业归属（"1" 战士 / "2" 法师 / "3" 道士 / "4" 全职业） */
+  occupation: string;
+  /** 击退距离（像素；0 = 不击退） */
+  pushDistance: number;
+}
+
+/** 技能数值表（内容全部来自服务端；加载期为空） */
+export const skillData: Array<SkillData & { id: SkillId }> = [];
+
+/** 技能栏的三种职业（`OECCUPATION.ALL` 的技能进全部三栏，见 `rebuildOccupationSkills`） */
+const SKILL_BAR_OCCUPATIONS: OECCUPATION[] = [OECCUPATION.ZHAN, OECCUPATION.FA, OECCUPATION.DAO];
+
+/**
+ * 职业技能映射（职业 → 技能 id，技能栏 / 技能列表面板按它列条目）
+ *
+ * #603 第十一域起不再手写：它是 `skillData` 的**派生视图**，由 `rebuildOccupationSkills()`
+ * 在每次整表重建后重算。以前这份清单与技能行分开维护，新增一个技能要改两处，
+ * 漏一处就是「技能学了不显示」。
+ */
 export const oeccupationSkills = new Map<OECCUPATION, SkillId[]>();
-/** 战士技能映射 */
-oeccupationSkills.set(OECCUPATION.ZHAN, ["1000", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011"]);
-/** 法师技能映射 */
-oeccupationSkills.set(OECCUPATION.FA, []);
-/** 道士技能映射 */
-oeccupationSkills.set(OECCUPATION.DAO, []);
 
 /**
  * 普攻技能（左键点击怪物直接释放的那个技能，见 components/input/ScreenClickInput）
@@ -40,450 +94,77 @@ export const skillTargetTypeLabels: Record<SkillTargetType, string> = {
   [SkillTargetType.SELF]: "自身",
 };
 
+/** 服务端行 → 客户端数值行（不含 onClick：释放实现由 configs/skill 按 id 接上） */
+function toSkillData(row: SkillSeedLike): SkillData & { id: SkillId } {
+  const pushDistance = Number(row.pushDistance) || 0;
+  return {
+    id: row.id as SkillId,
+    // 归属缺省 role：绝大多数技能是角色技能，只有怪物 AI 放的才显式写 monster
+    owner: row.owner === "monster" ? "monster" : "role",
+    label: String(row.label ?? ""),
+    icon: String(row.icon ?? ""),
+    cooldown: Number(row.cooldown) || 0,
+    mpCost: Number(row.mpCost) || 0,
+    targetType: row.targetType as SkillTargetType,
+    oeccupation: (row.occupation || OECCUPATION.ALL) as OECCUPATION,
+    level: Number(row.levelReq) || 1,
+    description: String(row.description ?? ""),
+    type: row.category as SkillType,
+    damageCoefficients: (row.damageCoefficients || []).map(
+      (entry): DamageCoefficient => ({
+        baseType: entry.baseType as DamageCoefficient["baseType"],
+        baseTypeRate: Number(entry.baseTypeRate) || 0,
+      }),
+    ),
+    distance: Number(row.distance) || 0,
+    action: row.action as ACTION,
+    // 0 = 不击退（不是「击退 0 像素」）：留着空对象会让 SkillManager 走一遍击退流程
+    push: pushDistance > 0 ? { distance: pushDistance } : undefined,
+    canAuto: row.canAuto === true,
+    effect: row.effect || undefined,
+    effectIsOnSelf: row.effectOnSelf === true,
+    statusId: row.statusId || undefined,
+    castLockMs: Number(row.castLockMs) || 0,
+    // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在表里显式写 false
+    requireTarget: row.requireTarget !== false,
+  };
+}
+
 /**
- * 技能数据表
- * id 只做关联（技能栏/快捷键/AutoBattle 都用它引用），与怪物/装备同一约定。
+ * 整表重建技能（#603 第十一域）
+ *
+ * **整表重建而不是覆写已有行**：客户端已经没有出厂行了，快照里没有的 id 客户端就不该有
+ * （管理端下架/删掉的技能会如实消失）。数组是同一个引用（`skillData` 只 clear + push）。
+ *
+ * 重建后必须让 `configs/skill` 重算 `skills` Map（那里有 onClick）—— 快照链路里由
+ * ConfigLoader 调 `rebuildSkills()`，本函数只负责数值表与职业技能映射。
  */
-export const skillData: Array<SkillData & { id: SkillId }> = [
-  {
-    id: "1000",
-    label: "‌基础剑术",
-    icon: "skill/icon/1001",
-    cooldown: 1,
-    mpCost: 0,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 1,
-    description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关",
-    type: SkillType.PROACTIVE,
-    distance: 10,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 1 },
-      { baseType: "physicalAttack", baseTypeRate: 1.1 },
-      { baseType: "physicalAttack", baseTypeRate: 1.2 },
-      { baseType: "physicalAttack", baseTypeRate: 1.3 },
-      { baseType: "physicalAttack", baseTypeRate: 1.4 },
-      { baseType: "physicalAttack", baseTypeRate: 1.5 },
-      { baseType: "physicalAttack", baseTypeRate: 1.6 },
-      { baseType: "physicalAttack", baseTypeRate: 1.7 },
-      { baseType: "physicalAttack", baseTypeRate: 1.8 },
-      { baseType: "physicalAttack", baseTypeRate: 1.9 },
-      { baseType: "physicalAttack", baseTypeRate: 2 },
-    ],
-    action: ACTION.ATTACK_NEAR,
-    canAuto: true,
-  },
+export function applySkillData(rows: SkillSeedLike[]): void {
+  skillData.length = 0;
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string" || !row.id) continue;
+    skillData.push(toSkillData(row));
+  }
+  rebuildOccupationSkills();
+}
 
-  {
-    id: "1001",
-    label: "烈火剑法",
-    icon: "skill/icon/1006",
-    cooldown: 1,
-    mpCost: 8,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "战士标志性爆发技能，10级可造成‌280%~560%‌ 攻击伤害，附带15%暴击率，觉醒后还会附加灼烧效果，是PK秒杀、打BOSS爆发的核心招式",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 10,
-    action: ACTION.ATTACK_SKILL_1,
-    // 示例：命中后把目标击退 120 像素（技能击退是场上唯一能推动怪物的途径，删掉这行就不击退）
-    push: { distance: 120 },
-    canAuto: false,
-    effect: "effect/skill/s_1006@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1002",
-    label: "刺杀剑术",
-    icon: "skill/icon/1003",
-    cooldown: 1,
-    mpCost: 6,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "公认的破防神技，隔位释放的第二格剑气为无属性攻击，可无视目标防御，直接穿透法师的魔法盾，是克制远程职业、挑战高防BOSS的必备技能",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.STAND,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1003",
-    label: "莲月剑法",
-    icon: "skill/icon/2003",
-    cooldown: 1,
-    mpCost: 6,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "传奇3版本特色技能，可打出两段连击，总伤害达300%，目标防御越高伤害增幅越明显，适合团战持续黏人输出、残血收割",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.STAND,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1004",
-    label: "‌擒龙手‌",
-    icon: "skill/icon/3010",
-    cooldown: 1,
-    mpCost: 10,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 100000,
-    action: ACTION.ATTACK_FAR,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: false,
-  },
-
-  {
-    id: "1005",
-    label: "野蛮冲撞",
-    icon: "skill/icon/1010",
-    cooldown: 1,
-    mpCost: 8,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "全版本通用的核心控场技能，10级可冲撞4格，65%概率将等级低于自身的目标撞飞并眩晕0.8秒，用于追击敌人、分割敌方阵型、抢BOSS卡位都非常实用",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.STAND,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1006",
-    label: "逐日剑法‌",
-    icon: "skill/icon/2202",
-    cooldown: 1,
-    mpCost: 8,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "四格范围内的突进突袭技能，可快速拉近与远程职业的距离，弥补战士手短的短板，是PK中追击残血目标的利器",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.STAND,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1007",
-    label: "狮子吼",
-    icon: "skill/icon/3007",
-    cooldown: 1,
-    mpCost: 12,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "范围麻痹技能，可震开并麻痹周围3格内的敌人，等级高于目标时必中，被围攻时能快速脱身，团战中可打乱敌方后排输出节奏",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.STAND,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1008",
-    label: "十步一杀",
-    icon: "skill/icon/1005",
-    cooldown: 1,
-    mpCost: 10,
-    targetType: SkillTargetType.PLACE,
-    oeccupation: OECCUPATION.ALL,
-    level: 10,
-    description: "高阶专属技能，突进目标后有概率触发麻痹效果，是后期版本中打先手控制的神技",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [],
-    distance: 200,
-    action: ACTION.ATTACK_FAR,
-    canAuto: false,
-    // 区域技能的特效位置由技能实现决定（十步一杀播在突进落点），SkillManager 不代播，见 EffectManager.playAt
-    effect: "effect/skill/s_3010@0",
-  },
-
-  {
-    id: "1009",
-    label: "半月弯刀",
-    icon: "skill/icon/1004",
-    cooldown: 1,
-    mpCost: 6,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "扇形范围群攻技能，可同时攻击身前半圆内的多个敌人，挂机清怪效率极高，被围时贴身释放也能快速清场突围",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.STAND,
-    canAuto: false,
-    effect: "effect/skill/s_1002@0",
-    effectIsOnSelf: true,
-  },
-
-  {
-    id: "1010",
-    label: "‌护体神盾",
-    icon: "skill/icon/2009",
-    cooldown: 60,
-    mpCost: 15,
-    targetType: SkillTargetType.SELF,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 1,
-    description: "被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障",
-    type: SkillType.STATUS,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.ATTACK_FAR,
-    canAuto: false,
-    // 自身状态技能（#367）：挂配置里的状态；不需要选中敌人才能给自己上盾
-    statusId: "2001",
-    requireTarget: false,
-  },
-
-  {
-    id: "1011",
-    label: "金刚护体",
-    icon: "skill/icon/1008",
-    cooldown: 1,
-    mpCost: 15,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ZHAN,
-    level: 10,
-    description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开",
-    type: SkillType.STATUS,
-    damageCoefficients: [
-      { baseType: "physicalAttack", baseTypeRate: 3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.1 },
-      { baseType: "physicalAttack", baseTypeRate: 3.2 },
-      { baseType: "physicalAttack", baseTypeRate: 3.3 },
-      { baseType: "physicalAttack", baseTypeRate: 3.4 },
-      { baseType: "physicalAttack", baseTypeRate: 3.5 },
-      { baseType: "physicalAttack", baseTypeRate: 3.6 },
-      { baseType: "physicalAttack", baseTypeRate: 3.7 },
-      { baseType: "physicalAttack", baseTypeRate: 3.8 },
-      { baseType: "physicalAttack", baseTypeRate: 3.9 },
-      { baseType: "physicalAttack", baseTypeRate: 4 },
-    ],
-    distance: 0,
-    action: ACTION.ATTACK_FAR,
-    canAuto: false,
-    // 自身状态技能（#367）：机制上仍是「给自己挂状态」，不要求有敌人在场
-    statusId: "2002",
-    requireTarget: false,
-  },
-
-  //#region 怪物技能（#372；9000 段，owner = monster）
-  /*
-   * 怪物技能与角色技能**同表**（#367 定的口径）：差别只在 owner 与消费方。
-   * - 客户端不为它们提供释放实现（`configs/skill` 的 handler 表只收角色 id），
-   *   它们由服务端 `MonsterAiService` 按挂载表释放，客户端收到 casts 帧后按这里的
-   *   action / effect / castLockMs 演出；
-   * - 技能等级固定 1（怪物不练级），所以 damageCoefficients 只需要一条；
-   * - 挂载关系（哪只怪放哪些、优先级、冷却覆写）在 `configs/monster-skills`。
-   *
-   * 数值口径：伤害型 = round(怪物物攻区间随机值 × 倍率 − 玩家物防区间随机值)，与角色一致；
-   * 状态型 = 给自己挂 statusId 指向的状态，服务端按 combat 修正后续伤害。
-   */
-  {
-    id: "9001",
-    owner: "monster",
-    label: "跃鼠猛击",
-    icon: "skill/icon/1006",
-    cooldown: 6,
-    mpCost: 0,
-    targetType: SkillTargetType.SINGLE,
-    oeccupation: OECCUPATION.ALL,
-    level: 1,
-    description: "蓄力扑击，对目标造成 1.8 倍物理攻击伤害",
-    type: SkillType.PROACTIVE,
-    damageCoefficients: [{ baseType: "physicalAttack", baseTypeRate: 1.8 }],
-    distance: 90,
-    action: ACTION.ATTACK_SKILL_1,
-    effect: "effect/skill/s_1008@0",
-    effectIsOnSelf: false,
-    // 施法硬直：扑出去之后站定 0.8 秒，比普攻（0.6 秒）更久，给玩家反应窗口
-    castLockMs: 800,
-    canAuto: false,
-  },
-  {
-    id: "9002",
-    owner: "monster",
-    label: "狂怒",
-    icon: "skill/icon/2009",
-    cooldown: 15,
-    mpCost: 0,
-    targetType: SkillTargetType.SELF,
-    oeccupation: OECCUPATION.ALL,
-    level: 1,
-    description: "进入狂怒，持续时间内物理攻击 ×1.5",
-    type: SkillType.STATUS,
-    damageCoefficients: [],
-    distance: 0,
-    action: ACTION.A1,
-    effect: "effect/status/s_2004@0",
-    effectIsOnSelf: true,
-    statusId: "9001",
-    castLockMs: 600,
-    // 状态型不要求目标（但服务端仍要「已在战斗中」才会放，见 MonsterAiService）
-    requireTarget: false,
-    canAuto: false,
-  },
-  {
-    id: "9003",
-    owner: "monster",
-    label: "硬化皮肤",
-    icon: "skill/icon/1008",
-    cooldown: 15,
-    mpCost: 0,
-    targetType: SkillTargetType.SELF,
-    oeccupation: OECCUPATION.ALL,
-    level: 1,
-    description: "皮肤硬化，持续时间内防御 ×1.5",
-    type: SkillType.STATUS,
-    damageCoefficients: [],
-    distance: 0,
-    action: ACTION.A1,
-    effect: "effect/skill/s_1008@0",
-    effectIsOnSelf: true,
-    statusId: "9002",
-    castLockMs: 600,
-    requireTarget: false,
-    canAuto: false,
-  },
-  //#endregion
-];
+/**
+ * 按当前 `skillData` 重建「职业 → 技能 id」
+ *
+ * - 怪物技能不进技能栏（它们由服务端 AI 释放，客户端只演）；
+ * - `OECCUPATION.ALL` 的技能进全部三种职业；
+ * - 每个职业的键**总是存在**（哪怕是空数组）：技能列表面板 `oeccupationSkills.get(职业)`
+ *   拿到 undefined 会直接抛错，空数组才是「这个职业还没技能」。
+ */
+export function rebuildOccupationSkills(): void {
+  oeccupationSkills.clear();
+  for (const code of SKILL_BAR_OCCUPATIONS) oeccupationSkills.set(code, []);
+  for (const skill of skillData) {
+    if (skill.owner === "monster") continue;
+    const codes = skill.oeccupation === OECCUPATION.ALL ? SKILL_BAR_OCCUPATIONS : [skill.oeccupation];
+    for (const code of codes) {
+      const list = oeccupationSkills.get(code);
+      if (list && list.indexOf(skill.id) < 0) list.push(skill.id);
+    }
+  }
+}

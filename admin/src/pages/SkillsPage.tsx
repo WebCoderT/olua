@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   formatTime,
+  OCCUPATION_LABELS,
   PERMISSION,
   SKILL_CATEGORY_LABELS,
   SKILL_OWNER_LABELS,
@@ -60,6 +61,10 @@ interface SkillForm {
   requireTarget: boolean;
   canAuto: boolean;
   statusId: string;
+  /** 职业归属（#603 第十一域）：客户端技能栏按它重建「职业 → 技能 id」 */
+  occupation: string;
+  /** 击退距离（像素，0 = 不击退）：场上唯一能推动怪物的途径 */
+  pushDistance: string;
   description: string;
   coefficients: DamageCoefficient[];
 }
@@ -82,6 +87,8 @@ function toForm(item: Skill): SkillForm {
     requireTarget: item.requireTarget,
     canAuto: item.canAuto,
     statusId: item.statusId,
+    occupation: item.occupation,
+    pushDistance: String(item.pushDistance),
     description: item.description,
     coefficients: item.damageCoefficients.map((entry) => ({ ...entry })),
   };
@@ -151,6 +158,7 @@ function SkillEditDialog({
     checkNumber(form.distance, { name: "施法距离", min: 0, max: 100_000 }),
     checkNumber(form.levelReq, { name: "等级需求", min: 1, max: 200, int: true }),
     checkNumber(form.castLockMs, { name: "动作锁", min: 0, max: 10_000, int: true }),
+    checkNumber(form.pushDistance, { name: "击退距离", min: 0, max: 2_000, int: true }),
   ];
   for (const message of numberChecks) {
     if (message) problems.push(message);
@@ -183,6 +191,8 @@ function SkillEditDialog({
       requireTarget: form.requireTarget,
       canAuto: form.canAuto,
       statusId: form.statusId,
+      occupation: form.occupation as UpdateSkill["occupation"],
+      pushDistance: Number(form.pushDistance),
       description: form.description.trim(),
       damageCoefficients: form.coefficients.map((entry) => ({ baseType: entry.baseType, baseTypeRate: entry.baseTypeRate })),
     });
@@ -234,6 +244,15 @@ function SkillEditDialog({
             ))}
           </Select>
         </Field>
+        <Field label="职业归属" hint="决定它出现在哪个职业的技能栏里（全职业 = 三栏都有）">
+          <Select value={form.occupation} onChange={(event) => set("occupation", event.target.value)}>
+            {Object.entries(OCCUPATION_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="图标路径" hint="resources 相对路径，不含扩展名；空 = 不显示">
@@ -277,6 +296,14 @@ function SkillEditDialog({
           </Field>
           <Field label="动作锁（毫秒）" hint="0 = 跟动画时长走">
             <Input type="number" min={0} value={form.castLockMs} onChange={(event) => set("castLockMs", event.target.value)} />
+          </Field>
+          <Field label="击退距离（像素）" hint="0 = 不击退；只对单体技能生效，是场上唯一能推动怪物的途径">
+            <Input
+              type="number"
+              min={0}
+              value={form.pushDistance}
+              onChange={(event) => set("pushDistance", event.target.value)}
+            />
           </Field>
           <div className="flex flex-col justify-center gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-300">
@@ -700,6 +727,7 @@ export function SkillsPage() {
                 <th className={thClass}>技能名</th>
                 <th className={thClass}>归属</th>
                 <th className={thClass}>分类</th>
+                <th className={thClass}>职业</th>
                 <th className={thClass}>目标</th>
                 <th className={thClass}>消耗</th>
                 <th className={thClass}>倍率</th>
@@ -723,10 +751,12 @@ export function SkillsPage() {
                       <Badge tone={item.owner === "monster" ? "amber" : "indigo"}>{SKILL_OWNER_LABELS[item.owner] ?? item.owner}</Badge>
                     </td>
                     <td className={tdClass}>{SKILL_CATEGORY_LABELS[item.category] ?? item.category}</td>
+                    <td className={tdClass}>{OCCUPATION_LABELS[item.occupation] ?? item.occupation}</td>
                     <td className={tdClass}>{SKILL_TARGET_TYPE_LABELS[item.targetType] ?? item.targetType}</td>
                     <td className={`${tdClass} text-xs text-slate-400`}>
                       冷却 {item.cooldown}s · 蓝 {item.mpCost}
                       {item.distance > 0 ? ` · 距离 ${item.distance}` : ""}
+                      {item.pushDistance > 0 ? ` · 击退 ${item.pushDistance}` : ""}
                     </td>
                     <td className={`${tdClass} text-xs text-slate-400`}>
                       {first ? `${damageBaseLabel(first.baseType)}×${first.baseTypeRate}（共 ${item.damageCoefficients.length} 级）` : "—"}

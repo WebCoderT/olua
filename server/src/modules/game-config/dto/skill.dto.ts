@@ -23,6 +23,7 @@ import {
   SKILL_OWNER_VALUES,
   SKILL_TARGET_TYPE_VALUES,
 } from "../../../common/constants/game-config";
+import { OCCUPATION_HINT, ROLE_OCCUPATION_CODES } from "../../../shared/game-data";
 import { SkillRow } from "../../../database/rows";
 
 /**
@@ -110,6 +111,16 @@ export class SkillDto {
   @ApiProperty({ description: "是否可被自动战斗 / 挂机释放" })
   canAuto: boolean;
 
+  @ApiProperty({
+    description:
+      `职业归属：${OCCUPATION_HINT}（#603 第十一域）。` +
+      "客户端技能栏按它重建「职业 → 技能」映射，所以这一列是「技能归谁」的唯一来源",
+  })
+  occupation: string;
+
+  @ApiProperty({ description: "命中后的击退距离（像素；0 = 不击退。只对单体技能生效）" })
+  pushDistance: number;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -134,6 +145,8 @@ export class SkillDto {
     dto.castLockMs = row.cast_lock_ms;
     dto.requireTarget = row.require_target === 1;
     dto.canAuto = row.can_auto === 1;
+    dto.occupation = row.occupation;
+    dto.pushDistance = row.push_distance;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -267,6 +280,21 @@ export class UpdateSkillDto {
   @IsOptional()
   @IsBoolean({ message: "canAuto 必须是布尔值" })
   canAuto?: boolean;
+
+  @ApiPropertyOptional({
+    description: `职业归属：${OCCUPATION_HINT}（#603 第十一域；客户端技能栏按它重建映射）`,
+    enum: ROLE_OCCUPATION_CODES,
+  })
+  @IsOptional()
+  @IsIn(ROLE_OCCUPATION_CODES, { message: `occupation 必须是 ${ROLE_OCCUPATION_CODES.join(" / ")} 之一` })
+  occupation?: string;
+
+  @ApiPropertyOptional({ description: "命中后的击退距离（像素；0 = 不击退；只对单体技能生效）", minimum: 0, maximum: 2000 })
+  @IsOptional()
+  @IsNumber({}, { message: "pushDistance 必须是数字" })
+  @Min(0, { message: "pushDistance 不能小于 0" })
+  @Max(2000, { message: "pushDistance 不能大于 2000" })
+  pushDistance?: number;
 }
 
 /**

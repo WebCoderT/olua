@@ -644,7 +644,9 @@ export interface DrugRow {
   label: string;
   /** 描述（运营文案，可编辑） */
   description: string;
-  /** 使用等级需求（seed 自客户端条目，暂不开放编辑） */
+  /** 图标资源路径（resources 相对路径，如 `item/fs_2`；#603 第十域起由服务端持有并下发） */
+  icon: string;
+  /** 使用等级需求（seed 自 item-seed.ts，暂不开放编辑） */
   level: number;
   /** 售卖价（客户端条目 `sellPirce` 的 seed 值；商城售价归 #251，不在这里） */
   sell_price: number;
@@ -678,7 +680,9 @@ export interface ItemRow {
   label: string;
   /** 描述 */
   description: string;
-  /** 等级需求（seed 自客户端条目，暂不开放编辑） */
+  /** 图标资源路径（resources 相对路径，如 `item/2010210`；#603 第十域起由服务端持有并下发） */
+  icon: string;
+  /** 等级需求（seed 自 item-seed.ts，暂不开放编辑） */
   level: number;
   /** 售卖价（客户端条目 `sellPirce` 的 seed 值；商城售价归 #251，不在这里） */
   sell_price: number;
@@ -827,7 +831,7 @@ export interface MonsterDropRow {
 /**
  * 时装配置（#257）：管理端「时装配置」的行
  *
- * 主键是时装 id（configs/fashionClothes，如 "cloth_2"）—— 清单固定，**不可增删行**。
+ * 主键是时装 id（shared/fashion-seed.ts，如 "cloth_2"）—— 清单固定，**不可增删行**。
  * 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS（属性当前全 0），
  * 运营可改；`icon` / `in_res` / `out_res` 是客户端资源路径（表现层），后台不改。
  * `acquire_channel` 的取值域复用称号的 AcquireChannel（见 common/constants/game-config，
@@ -927,6 +931,10 @@ export interface SkillRow {
   require_target: number;
   /** 是否可被自动战斗 / 挂机释放（1 = 可以） */
   can_auto: number;
+  /** 职业归属（"1" 战士 / "2" 法师 / "3" 道士 / "4" 全职业；#603 第十一域：客户端技能栏按它重建映射） */
+  occupation: string;
+  /** 命中后的击退距离（像素；0 = 不击退。只对单体技能生效） */
+  push_distance: number;
   updated_at: number;
 }
 

@@ -740,6 +740,8 @@ async function main() {
     checkEqual(drugHp1?.effectHp, shared.DRUGS["drug_hp_1"].hp, "drug_hp_1 固定回复量与配置一致（effects 求和）");
     checkEqual(drugHp1?.maxStack, shared.DRUGS["drug_hp_1"].maxStack, "drug_hp_1 堆叠上限与配置一致");
     checkEqual(drugHp1?.cooldown, shared.DRUGS["drug_hp_1"].cooldown, "drug_hp_1 冷却与配置一致");
+    // #603 第十域：图标也入库了（客户端不再自带，拼不出 item/fs_2 这类路径）
+    checkEqual(drugHp1?.icon, shared.DRUGS["drug_hp_1"].icon, "drug_hp_1 图标与配置一致（图标在表里）");
     const drugSun = drugs.body?.data?.list?.find((row) => row.id === "drug_sun");
     checkEqual(drugSun?.effectHp, shared.DRUGS["drug_sun"].hp, "drug_sun 固定回血与配置一致");
     checkEqual(drugSun?.effectMp, shared.DRUGS["drug_sun"].mp, "drug_sun 固定回蓝与配置一致");
@@ -757,6 +759,13 @@ async function main() {
     checkEqual(drugPatched.body?.data?.effectHp, 120, "响应里的回复量已更新");
     checkEqual(drugPatched.body?.data?.cooldown, 2, "响应里的冷却已更新");
     checkEqual(drugPatched.body?.data?.maxStack, 999, "响应里的堆叠上限已更新");
+    // 图标是显示数据，运营能改；改完立刻还原（下面还有依赖出厂图标的断言）
+    const drugIconPatched = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: "item/fs_9" } });
+    checkEqual(drugIconPatched.body?.data?.icon, "item/fs_9", "图标可编辑（#603 第十域）");
+    const drugIconBad = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: "x".repeat(201) } });
+    checkEqual(drugIconBad.status, 400, "图标路径超过 200 字 → 400");
+    const drugIconRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: shared.DRUGS["drug_hp_1"].icon } });
+    checkEqual(drugIconRestore.body?.data?.icon, shared.DRUGS["drug_hp_1"].icon, "图标已还原出厂值");
     const drugBadPercent = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { effectHpPercent: 120 } });
     checkEqual(drugBadPercent.status, 400, "百分比回复超过 100 → 400");
     checkEqual(drugBadPercent.body?.code, 40000, "百分比校验用 40000（参数非法）");
@@ -793,6 +802,7 @@ async function main() {
     checkEqual(hide?.label, shared.ITEM_BASES["material_hide"].label, "material_hide 名称与配置一致");
     checkEqual(hide?.sellPrice, shared.ITEM_BASES["material_hide"].sellPrice, "material_hide 售卖价与配置一致");
     checkEqual(hide?.maxStack, shared.ITEM_BASES["material_hide"].maxStack, "material_hide 堆叠上限与配置一致");
+    checkEqual(hide?.icon, shared.ITEM_BASES["material_hide"].icon, "material_hide 图标与配置一致（图标在表里）");
 
     const itemsTyped = await api(base, "GET", "/api/admin/items?type=material", { token });
     checkEqual(itemsTyped.body?.data?.total, itemCount, "按大类筛 material：恰好全部物品");
@@ -806,6 +816,10 @@ async function main() {
     checkEqual(itemPatched.body?.data?.label, "兽皮（改）", "响应里的名称已更新");
     checkEqual(itemPatched.body?.data?.sellPrice, 8, "响应里的售卖价已更新");
     checkEqual(itemPatched.body?.data?.maxStack, 500, "响应里的堆叠上限已更新");
+    const itemIconPatched = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: "item/2010299" } });
+    checkEqual(itemIconPatched.body?.data?.icon, "item/2010299", "物品图标可编辑（#603 第十域）");
+    const itemIconRestore = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: shared.ITEM_BASES["material_hide"].icon } });
+    checkEqual(itemIconRestore.body?.data?.icon, shared.ITEM_BASES["material_hide"].icon, "物品图标已还原出厂值");
     const itemGhost = await api(base, "PATCH", "/api/admin/items/material_none", { token, body: { label: "x" } });
     checkEqual(itemGhost.status, 404, "改不存在的物品 → 404");
     checkEqual(itemGhost.body?.code, 50018, "物品未找到用专属业务码 50018");
@@ -1324,6 +1338,13 @@ async function main() {
     check(Array.isArray(snap.equipmentMeta?.recycleCurve) && snap.equipmentMeta.recycleCurve.length > 0, "快照带回收价曲线（客户端算回收价）");
     checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
+    {
+      // #603 第十域：客户端不带图标了 —— 快照必须带，缺了整套物品显示成白块
+      const drugRow = snap.drugs?.find((row) => row.id === "drug_hp_1") ?? {};
+      check(Boolean(drugRow.icon), "快照药品行带图标（客户端拼不出 item/fs_2 这类路径）");
+      const itemRow = snap.items?.find((row) => row.id === "material_hide") ?? {};
+      check(Boolean(itemRow.icon && itemRow.type), "快照物品行带图标与大类");
+    }
     checkEqual(snap.monsters?.length, MONSTER_SEED_ROWS.length, "快照怪物行数 = 种子（220）");
     check(!("drop" in (snap.monsters?.[0] ?? {})), "玩家侧快照的怪物不带掉落摘要（客户端不结算掉落，#584）");
     // #588：表现段 —— 客户端零副本，icon / out / 几何 / 移速全靠这一段下发
@@ -1360,6 +1381,11 @@ async function main() {
     checkEqual(snap.skills?.length, Object.keys(shared.SKILLS).length, "快照技能行数 = 生成物（含释放限制字段）");
     checkEqual(snap.statuses?.length, Object.keys(shared.STATUSES).length, "快照状态行数 = 生成物");
     check(Boolean(snap.skills?.[0]?.castLockMs !== undefined && snap.skills?.[0]?.requireTarget !== undefined), "快照技能行带释放限制（castLockMs / requireTarget）");
+    // 时装（#603 第十二域）：客户端整表重建要靠这几列，路径必须跟着快照下来
+    const snapFashion2 = snap.fashions?.find((row) => row.id === "cloth_2");
+    checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20 套）");
+    check(Boolean(snapFashion2?.icon && snapFashion2?.inRes && snapFashion2?.outRes), "快照时装行带 icon / inRes / outRes（客户端据此整表重建，不自己拼路径）");
+    check(Boolean(snapFashion2?.attributes?.physicalAttack?.min !== undefined), "快照时装行带嵌套区间属性");
 
     // 字段形状抽检：camelCase、与管理端列表行同形状（称号渠道不预设值——前面的 region 已改过渠道）
     const adminTitles = await api(base, "GET", "/api/admin/titles", { token });
@@ -1824,6 +1850,16 @@ async function main() {
     checkEqual(skill1010?.statusId, "2001", "状态型技能 1010 的 statusId 来自配置（不再手写映射表）");
     checkEqual(skill1010?.requireTarget, false, "状态型技能不要求目标");
 
+    // —— 职业归属与击退（#603 第十一域）——
+    // 这两项以前只活在客户端：职业写在手写的 oeccupationSkills 里、击退写在技能行上，
+    // 新增技能要改两处。现在跟在技能行里，客户端按行重建那份映射。
+    checkEqual(skill1000?.occupation, shared.SKILLS["1000"].occupation, "职业归属 seed 与配置一致");
+    checkEqual(skill1000?.occupation, "1", "普攻归战士（技能栏按 occupation 重建）");
+    const skill1001 = roleSkills.body?.data?.list?.find((row) => row.id === "1001");
+    checkEqual(skill1001?.pushDistance, shared.SKILLS["1001"].pushDistance, "击退距离 seed 与配置一致");
+    checkEqual(skill1001?.pushDistance, 120, "烈火剑法击退 120 像素（场上唯一能推动怪物的途径）");
+    checkEqual(skill1010?.pushDistance, 0, "没配击退的技能是 0（不是「击退 0 像素」）");
+
     const skillKeyword = await api(base, "GET", "/api/admin/skills?keyword=" + encodeURIComponent("逐日"), { token });
     checkEqual(skillKeyword.body?.data?.total, 1, "关键字按技能名命中「逐日剑法」");
 
@@ -1843,6 +1879,10 @@ async function main() {
     checkEqual(badCooldown.status, 400, "冷却为负 → 400（DTO 拦下）");
     const badCategory = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { category: "9" } });
     checkEqual(badCategory.status, 400, "分类不在枚举里 → 400（DTO 拦下）");
+    const badOccupation = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { occupation: "9" } });
+    checkEqual(badOccupation.status, 400, "职业归属不在枚举里 → 400（DTO 拦下）");
+    const badPush = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { pushDistance: -1 } });
+    checkEqual(badPush.status, 400, "击退距离为负 → 400（往自己身后推没有意义）");
 
     // —— 跨字段约束：状态型必须挂状态 / 主动必须能打出伤害 / 状态必须真实存在 ——
     const statusWithoutId = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { category: "2", statusId: "" } });
@@ -1860,17 +1900,20 @@ async function main() {
     checkEqual(patchLock.body?.data?.castLockMs, 500, "动作锁已写入");
     checkEqual(patchLock.body?.data?.damageCoefficients?.length, 0, "顺带断言：1008 的倍率保持原样（空）");
 
-    // —— 正常更新生效：释放限制三件套 ——
+    // —— 正常更新生效：释放限制三件套 + 职业归属 / 击退 ——
     const patchSkill = await api(base, "PATCH", "/api/admin/skills/1000", {
       token,
-      body: { cooldown: 2.5, mpCost: 3, castLockMs: 700, requireTarget: false, canAuto: false },
+      body: { cooldown: 2.5, mpCost: 3, castLockMs: 700, requireTarget: false, canAuto: false, occupation: "2", pushDistance: 60 },
     });
-    checkEqual(patchSkill.status, 200, "PATCH 技能成功（冷却 / 耗蓝 / 动作锁 / 目标要求 / 自动释放）");
+    checkEqual(patchSkill.status, 200, "PATCH 技能成功（冷却 / 耗蓝 / 动作锁 / 目标要求 / 自动释放 / 职业 / 击退）");
     checkEqual(patchSkill.body?.data?.cooldown, 2.5, "响应里的冷却已更新");
     checkEqual(patchSkill.body?.data?.castLockMs, 700, "响应里的动作锁已更新");
     checkEqual(patchSkill.body?.data?.requireTarget, false, "响应里的「要求目标」已关掉");
+    checkEqual(patchSkill.body?.data?.occupation, "2", "响应里的职业归属已改成法师");
+    checkEqual(patchSkill.body?.data?.pushDistance, 60, "响应里的击退距离已写入");
     const skillReread = await api(base, "GET", "/api/admin/skills?keyword=1000", { token });
     checkEqual(skillReread.body?.data?.list?.[0]?.cooldown, 2.5, "重新读取冷却已是新值（落库了）");
+    checkEqual(skillReread.body?.data?.list?.[0]?.occupation, "2", "重新读取职业归属已是新值（落库了）");
 
     // —— 状态表 ——
     const statuses = await api(base, "GET", "/api/admin/statuses", { token });
@@ -1920,13 +1963,15 @@ async function main() {
     const snapSkill1000 = skillSnapshot.body?.data?.skills?.find((row) => row.id === "1000");
     checkEqual(snapSkill1000?.cooldown, 2.5, "快照里的技能已是管理端改过的冷却");
     checkEqual(snapSkill1000?.castLockMs, 700, "快照里的技能带释放动作锁（客户端按它锁出手）");
+    checkEqual(snapSkill1000?.occupation, "2", "快照里的技能带职业归属（客户端据此重建技能栏）");
+    checkEqual(snapSkill1000?.pushDistance, 60, "快照里的技能带击退距离（客户端据此推怪）");
     const snapStatus2001 = skillSnapshot.body?.data?.statuses?.find((row) => row.id === "2001");
     checkEqual(Object.keys(snapStatus2001?.combat ?? {}).length, 0, "快照里的状态修正跟着被清空（改配置对客户端生效的通道）");
 
     // 还原 seed 前提（不给后续追加的断言留脏数据）
     const restoreSkill = await api(base, "PATCH", "/api/admin/skills/1000", {
       token,
-      body: { cooldown: 1, mpCost: 0, castLockMs: 0, requireTarget: true, canAuto: true },
+      body: { cooldown: 1, mpCost: 0, castLockMs: 0, requireTarget: true, canAuto: true, occupation: "1", pushDistance: 0 },
     });
     checkEqual(restoreSkill.status, 200, "还原技能 1000 的释放限制");
     const restoreSkill1008 = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { castLockMs: 0 } });

@@ -69,6 +69,7 @@ const {
   configLoader,
   cleanupWork,
   hydrateEquipment: hydrateEquipmentTables,
+  hydrateItems,
 } = require("./lib/client-config-compile.cjs");
 
 const OUT = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
@@ -97,7 +98,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "fashionClothes"].map(
+const SOURCE_FILES = ["growth", "equipments", "role", "items", "monster", "drug", "material"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -124,14 +125,14 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, equipmentSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed } = compileServerShared(work);
-  // #603 第九域：装备数据 / 槽位 / 前后缀倍率 / 回收价曲线的唯一书写处是 equipment-seed.ts，
+  const seeds = compileServerShared(work);
+  // #603 第九 / 十 / 十一域：装备 / 药品 / 材料 / 技能数据的唯一书写处都在 server/src/shared，
   // 客户端那几张表**加载期是空的** —— 生成器先用种子把它们填起来，后面那套快照逻辑一行都不用改
-  hydrateEquipment(cfg, equipmentSeed);
+  hydrateEquipment(cfg, seeds.equipmentSeed, seeds.itemSeed);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
-  const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed), statsOf);
+  const statsOf = (item) => scaledEquipmentStats(seeds.growthSeed, item, prefixRates, suffixRates);
+  const snapshot = buildSnapshot(load(cfg, seeds), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -146,7 +147,8 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed) {
+function load(cfg, seeds) {
+  const { monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed, skillSeed, fashionSeed } = seeds;
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -162,7 +164,9 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
     battle: { combatCalc: new Map(Object.entries(combatSeed.COMBAT_WEIGHTS_SEED)) },
     equipments,
     equipmentMaps: EQUIPMENT_MAPS.map((name) => [name, missing(`equipments.${name}`, equipments[name])]),
-    skillData: missing("skill-data", cfg("skill-data").skillData),
+    // 技能行（#603 第十一域）：唯一书写处 = server/src/shared/skill-seed.ts，
+    // 客户端 configs/skill-data 只剩空数组 + 「职业 → 技能 id」的派生规则
+    skillRows: skillSeed.SKILL_SEED_ROWS,
     occupations: missing("role.occupations", cfg("role").occupations),
     items: missing("items", cfg("items").items),
     // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
@@ -171,9 +175,9 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
     monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
     // #603 起 NPC 出厂数据的服务端唯一书写处是 npc-seed.ts，客户端 configs/npc 只剩点击接线
     npcs: npcSeed.NPC_SEED_ROWS,
-    // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
-    // 售卖价/属性），表现层参数未随恢复保留（见 fashionClothes.ts 文件头）
-    fashions: missing("fashionClothes.fashionData", cfg("fashionClothes").fashionData),
+    // 时装（#257 / #603 第十二域）：唯一书写处 = server/src/shared/fashion-seed.ts，
+    // 客户端 configs/fashionClothes 只剩空数组 + 整表重建（资源路径与属性都跟着行走）
+    fashions: fashionSeed.FASHION_SEED_ROWS,
     // 掉落（#254）：具名表（common/elite/boss）、兜底表与每怪独立表 —— 管理端
     // 「掉落配置」的 seed 来源；条目缺省值（weight=1 / chance=1 / count=[1,1]）
     // 在生成器规整为全显式，消费方不复制缺省规则
@@ -205,7 +209,7 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
 /** 抽成一个与引擎、与 TS 类型都无关的纯数据快照 */
 function buildSnapshot(cfg, statsOf) {
   // 技能行两处要用：快照本身 + 怪物挂载校验（挂的必须是 owner=monster 的技能）
-  const skills = pickSkills(cfg.skillData);
+  const skills = pickSkills(cfg.skillRows);
   return {
     // —— 战斗数值（服务端算属性用；与它之前那份独立的 battle-rules 快照**逐值相同**，已合并）——
     combatWeights: pickMap(cfg.battle.combatCalc),
@@ -265,7 +269,7 @@ function buildSnapshot(cfg, statsOf) {
     equipmentSuffixRates: pickRates("equipmentSuffixRates", cfg.growth.equipmentSuffixRates, cfg.equipments.equipmentSuffixLabels),
     equipmentDisplayNames: pickEquipmentNames(cfg.equipmentMaps, cfg.equipments),
     equipmentSlotOf: pickEquipmentSlots(cfg.equipmentMaps),
-    skillLabels: pickSkillsLabels(cfg.skillData),
+    skillLabels: pickSkillsLabels(cfg.skillRows),
   };
 }
 
@@ -388,6 +392,9 @@ function compileServerShared(work) {
           path.join(sharedDir, "combat-seed.ts"),
           path.join(sharedDir, "npc-seed.ts"),
           path.join(sharedDir, "mall-seed.ts"),
+          path.join(sharedDir, "item-seed.ts"),
+          path.join(sharedDir, "skill-seed.ts"),
+          path.join(sharedDir, "fashion-seed.ts"),
         ],
       },
       null,
@@ -410,29 +417,23 @@ function compileServerShared(work) {
     combatSeed: require(path.join(work, "server-out", "combat-seed.js")),
     npcSeed: require(path.join(work, "server-out", "npc-seed.js")),
     mallSeed: require(path.join(work, "server-out", "mall-seed.js")),
+    itemSeed: require(path.join(work, "server-out", "item-seed.js")),
+    skillSeed: require(path.join(work, "server-out", "skill-seed.js")),
+    fashionSeed: require(path.join(work, "server-out", "fashion-seed.js")),
   };
 }
 
 /**
- * 用装备种子把客户端那几张**空**运行时表填起来（#603 第九域）
+ * 用服务端种子把客户端那几张**空**运行时表填起来（#603 第九 / 十域）
  *
- * 表本身的填充走共享库的 `hydrateEquipment`（与 `gen-equip-align-catalog` 同一份逻辑：
- * 装规则 → 装槽位与文案 → `applyEquipmentSeed` 展开 555 条），这里只补一件生成器独有的活：
- * **物品总表的插入顺序**。#603 之前装备是加载期先注册的（排在药品 / 材料前面），现在只能事后灌，
- * 所以要清表重建一次 —— `ITEM_LABELS` / `SELL_PRICES` 按插入顺序渲染，
- * 顺序一变「重新生成逐字节不变」这条守点立刻红。
+ * 表本身的填充走共享库（与 `gen-equip-align-catalog`、单测沙箱同一份逻辑）：
+ * 装备先装规则再展开 555 条；药品 / 材料整表重建；最后 `rebuildItemIndex()` 重建
+ * 「id → 物品」总表 —— **顺序（装备 → 药品 → 材料）只由客户端那份函数决定**,
+ * `ITEM_LABELS` / `SELL_PRICES` 按插入顺序渲染，顺序一变「重新生成逐字节不变」立刻红。
  */
-function hydrateEquipment(cfg, equipmentSeed) {
-  const variants = hydrateEquipmentTables(cfg, equipmentSeed);
-  const items = cfg("items").items;
-  const others = [...items.entries()];
-  items.clear();
-  variants.forEach((good) => {
-    if (good.id) items.set(good.id, good);
-  });
-  others.forEach(([id, good]) => {
-    if (!items.has(id)) items.set(id, good);
-  });
+function hydrateEquipment(cfg, equipmentSeed, itemSeed) {
+  hydrateEquipmentTables(cfg, equipmentSeed);
+  hydrateItems(cfg, itemSeed);
 }
 
 /** 出厂属性 × 前后缀倍率（倍率表仍是客户端 growth.ts 的常量，装备批次再收权到服务端） */
@@ -746,33 +747,54 @@ function pickSellPrices(items) {
 }
 
 /**
- * 时装表 → [[时装 id, 管理端元数据]]（#257）
+ * 时装种子（`FASHION_SEED_ROWS`）→ [[时装 id, 元数据]]
  *
- * 来源是 `configs/fashionClothes`（#257 恢复为纯数据文件，见文件头）。名称 / 文案 /
- * 资源路径 / 售卖价 / 属性进快照（sellPrice 来自可选字段，缺省 0）；属性经
- * pickAttributes 拍平（当前配置全缺省 = 0，管理端可改，客户端消费等穿戴功能）。
+ * #603 第十二域起唯一书写处换成服务端 `fashion-seed.ts`：种子的形状**就是本生成物的形状**
+ * （资源路径 / 售卖价 / 八项属性都已在种子里拍平），这里只做校验与规整 ——
+ * 不再从客户端 `configs/fashionClothes` 读（那边只剩空数组 + 整表重建）。
  */
 function pickFashions(fashions) {
   const out = [];
   const seen = new Set();
   for (const item of fashions || []) {
-    if (!item || !item.id) throw new Error("configs/fashionClothes 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("fashion-seed 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`时装 id 重复：${item.id}`);
     seen.add(item.id);
     const row = {
       label: String(item.label ?? ""),
       description: String(item.description ?? ""),
       icon: String(item.icon ?? ""),
-      in: String(item.in ?? ""),
-      out: String(item.out ?? ""),
+      // 种子用快照里的字段名（inRes / outRes），生成物沿用历史的 in / out（admin 读它）
+      in: String(item.inRes ?? ""),
+      out: String(item.outRes ?? ""),
       sellPrice: round(item.sellPrice ?? 0),
-      // attributes 全缺省时 pickAttributes(undefined) 会返回 null —— 这里保证拍平形状恒在（全 0）
-      ...pickAttributes(item.attributes ?? {}),
+      ...pickAttributes(seedAttributesToTuples(item)),
     };
     out.push([item.id, row]);
   }
-  if (out.length === 0) throw new Error("configs/fashionClothes 的 fashionData 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  if (out.length === 0) throw new Error("fashion-seed 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
+}
+
+/**
+ * 种子里的属性区间（`{min,max}`，与快照 / 管理端同形）→ 生成物用的 `[min,max]` 元组
+ *
+ * 生成物的 `FASHIONS` 是**管理端读的那份**，形状自 #257 起就是元组；种子按快照形状写，
+ * 因为沙箱要用 `applyFashionData(种子)` 复现线上 `applyFashionData(快照)`。
+ * 转换只在这一处，别在消费方各转一遍。
+ */
+function seedAttributesToTuples(row) {
+  const tupleOf = (range) => [round(range?.min ?? 0), round(range?.max ?? 0)];
+  return {
+    maxHp: row.maxHp,
+    hpRecover: row.hpRecover,
+    physicalAttack: tupleOf(row.physicalAttack),
+    magicAttack: tupleOf(row.magicAttack),
+    taoistAttack: tupleOf(row.taoistAttack),
+    physicalDefense: tupleOf(row.physicalDefense),
+    magicDefense: tupleOf(row.magicDefense),
+    taoistDefense: tupleOf(row.taoistDefense),
+  };
 }
 
 /**
@@ -848,41 +870,48 @@ function pickMonsterDrops(monsterDropTables, monsters) {
 }
 
 /**
- * 技能表 → [[技能 id, 战斗数值]]
+ * 技能种子（`SKILL_SEED_ROWS`）→ [[技能 id, 战斗数值]]
  *
- * id 重复同样在这里挡掉（落进 `Record` 就是 TS1117）。
+ * #603 第十一域起单位换成服务端 `skill-seed.ts`：种子的字段名**就是本生成物与表的形状**
+ * （category / effectOnSelf / levelReq 都已在种子里改好名），这里只做两件事 ——
+ * 校验（缺 id / 重复 id 落进 `Record` 就是 TS1117）与数值规整，**不重新映射字段**：
+ * 重新映射等于把「字段叫什么」这件事复制出第二份，正是这条管线要消灭的东西。
  */
 function pickSkills(list) {
   const out = [];
   const seen = new Set();
   for (const item of list) {
-    if (!item || !item.id) throw new Error("configs/skill-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("skill-seed 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`技能 id 重复：${item.id}`);
     seen.add(item.id);
     const row = {
-      // #372：归属来自配置（角色技能缺省 role，怪物技能显式写 monster）。
+      // #372：归属来自数据（角色技能 role，怪物技能 monster）。
       // 技能行本身对两边同构 —— 分表只会让「同一个技能既给人又给怪」复制两份并漂移
       owner: item.owner === "monster" ? "monster" : "role",
       label: String(item.label ?? ""),
       icon: String(item.icon ?? ""),
       // category 就是客户端的 SkillType（"0" 主动 / "1" 被动 / "2" 状态 / "3" 回复），存原值不另起一套
-      category: String(item.type ?? "0"),
+      category: String(item.category ?? "0"),
       targetType: String(item.targetType ?? "1"),
       action: String(item.action ?? ""),
       effect: String(item.effect ?? ""),
-      effectOnSelf: item.effectIsOnSelf === true,
+      effectOnSelf: item.effectOnSelf === true,
       cooldown: round(item.cooldown ?? 0),
       mpCost: round(item.mpCost ?? 0),
       distance: round(item.distance ?? 0),
-      // level 在原表里是「学习/开启等级」，落库叫 level_req（避免与「技能等级」混读）
-      levelReq: round(item.level ?? 1),
+      // level_req 是「学习 / 开启等级」，与「技能等级」区分开
+      levelReq: round(item.levelReq ?? 1),
       description: String(item.description ?? ""),
       damageCoefficients: (item.damageCoefficients ?? []).map((c) => ({ baseType: c.baseType, baseTypeRate: round(c.baseTypeRate) })),
       statusId: String(item.statusId ?? ""),
       castLockMs: round(item.castLockMs ?? 0),
-      // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在配置里显式写 false
+      // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在种子里显式写 false
       requireTarget: item.requireTarget !== false,
       canAuto: item.canAuto === true,
+      // 职业归属（#603 第十一域）：客户端据此重建「职业 → 技能 id」，不再手写第二份清单
+      occupation: String(item.occupation ?? "4"),
+      // 击退距离（0 = 不击退）：技能击退是场上唯一能推动位置的途径，落库后才可运营
+      pushDistance: round(item.pushDistance ?? 0),
     };
     if (!Array.isArray(row.damageCoefficients)) throw new Error(`技能 ${item.id} 的 damageCoefficients 不是数组`);
     out.push([item.id, row]);
@@ -960,12 +989,12 @@ function pickMonsterSkills(map, monsters, skills) {
   return out;
 }
 
-/** 技能 id → 技能名 */
+/** 技能 id → 技能名（来源同 `pickSkills`：服务端 skill-seed.ts） */
 function pickSkillsLabels(list) {
   const out = [];
   const seen = new Set();
   for (const item of list) {
-    if (!item || !item.id) throw new Error("configs/skill-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("skill-seed 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`技能 id 重复：${item.id}`);
     seen.add(item.id);
     out.push([item.id, String(item.label ?? "")]);

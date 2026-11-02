@@ -42,16 +42,15 @@ import {
 } from "../../database/rows";
 import {
   ACHIEVEMENTS,
-  DRUGS,
   EQUIPMENT_BASES,
-  FASHIONS,
-  ITEM_BASES,
   MONSTER_SKILLS,
   QUESTS,
   ITEM_TYPES,
-  SKILLS,
   STATUSES,
 } from "../../shared/game-data.generated";
+import { DRUG_SEED_ROWS, ITEM_BASE_SEED_ROWS } from "../../shared/item-seed";
+import { SKILL_SEED_ROWS } from "../../shared/skill-seed";
+import { FASHION_SEED_ROWS } from "../../shared/fashion-seed";
 import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
 import { TITLE_SEEDS } from "../../shared/title-seed";
 import { SOUL_SEEDS } from "../../shared/soul-seed";
@@ -552,6 +551,7 @@ export class GameConfigService implements OnModuleInit {
       ...existing,
       label: dto.label ?? existing.label,
       description: dto.description ?? existing.description,
+      icon: dto.icon ?? existing.icon,
       sell_price: dto.sellPrice ?? existing.sell_price,
       max_stack: dto.maxStack ?? existing.max_stack,
       cooldown: dto.cooldown ?? existing.cooldown,
@@ -588,6 +588,7 @@ export class GameConfigService implements OnModuleInit {
       ...existing,
       label: dto.label ?? existing.label,
       description: dto.description ?? existing.description,
+      icon: dto.icon ?? existing.icon,
       sell_price: dto.sellPrice ?? existing.sell_price,
       max_stack: dto.maxStack ?? existing.max_stack,
       updated_at: Date.now(),
@@ -759,6 +760,9 @@ export class GameConfigService implements OnModuleInit {
     if (dto.castLockMs !== undefined) next.cast_lock_ms = dto.castLockMs;
     if (dto.requireTarget !== undefined) next.require_target = dto.requireTarget ? 1 : 0;
     if (dto.canAuto !== undefined) next.can_auto = dto.canAuto ? 1 : 0;
+    // #603 第十一域：职业归属与击退距离也可改（前者决定技能栏归谁，后者只对单体技能生效）
+    if (dto.occupation !== undefined) next.occupation = dto.occupation;
+    if (dto.pushDistance !== undefined) next.push_distance = dto.pushDistance;
     // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态。
     // 只在本次请求**动了分类 / 倍率 / 状态**时才校验 —— 这三个字段之外的部分（名字、冷却、
     // 动作锁……）与约束无关；而且库里存在「分类是主动但没配倍率」的历史行（如 1008 十步一杀，
@@ -812,6 +816,9 @@ export class GameConfigService implements OnModuleInit {
       cast_lock_ms: dto.castLockMs ?? 0,
       require_target: dto.requireTarget === false ? 0 : 1,
       can_auto: dto.canAuto === true ? 1 : 0,
+      // 怪物技能没有「归哪个职业」的语义（服务端 AI 释放），一律全职业；击退默认不配
+      occupation: dto.occupation ?? "4",
+      push_distance: dto.pushDistance ?? 0,
       updated_at: Date.now(),
     };
     this.assertSkillConsistency(row);
@@ -1284,24 +1291,36 @@ export class GameConfigService implements OnModuleInit {
     return row;
   }
 
-  /** 药品 seed：DRUGS 直接灌（effects 已按键求和），8 种 */
+  /**
+   * 药品 seed（#603 第十域）：`item-seed.ts` 的 `DRUG_SEED_ROWS` 整行灌 ——
+   * 名称 / 描述 / **图标** / 等级 / 售价 / 叠加 / 冷却 / 四段回复量全在服务端种子里,
+   * 客户端 `configs/drug` 只剩空数组（进游戏由快照整表重建）。
+   *
+   * 存量库的行是「没有 icon 列」的老形态，`seedRow` 的 INSERT OR IGNORE 会整行跳过,
+   * 所以补一次 `backfillIcon`（只在空串时填）—— 否则老库的药会集体没图标。
+   */
   private seedDrugs() {
-    for (const [id, meta] of Object.entries(DRUGS as Record<string, Record<string, unknown>>)) {
-      this.drugs.seedRow({
-        id,
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        level: Number(meta.level) || 0,
-        sell_price: Number(meta.sellPrice) || 0,
-        max_stack: Number(meta.maxStack) || 99,
-        cooldown: Number(meta.cooldown) || 0,
-        effect_hp: Number(meta.hp) || 0,
-        effect_mp: Number(meta.mp) || 0,
-        effect_hp_percent: Number(meta.hpPercent) || 0,
-        effect_mp_percent: Number(meta.mpPercent) || 0,
+    let backfilled = 0;
+    for (const row of DRUG_SEED_ROWS) {
+      const seeded: DrugRow = {
+        id: row.id,
+        label: row.label,
+        description: row.description,
+        icon: row.icon,
+        level: row.level,
+        sell_price: row.sellPrice,
+        max_stack: row.maxStack,
+        cooldown: row.cooldown,
+        effect_hp: row.effectHp,
+        effect_mp: row.effectMp,
+        effect_hp_percent: row.effectHpPercent,
+        effect_mp_percent: row.effectMpPercent,
         updated_at: 0,
-      });
+      };
+      this.drugs.seedRow(seeded);
+      backfilled += this.drugs.backfillIcon(seeded);
     }
+    if (backfilled > 0) this.logger.log(`药品图标补全：${backfilled} 行`);
   }
 
   /**
@@ -1408,20 +1427,29 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 物品与材料 seed：ITEM_BASES 直接灌（只收 MATERIAL / OTHER 大类），5 种 */
+  /**
+   * 物品与材料 seed（#603 第十域）：`item-seed.ts` 的 `ITEM_BASE_SEED_ROWS` 整行灌,
+   * 含图标；客户端 `configs/material` 只剩空数组。
+   * 老库同样补一次 `backfillIcon`（只在空串时填）。
+   */
   private seedItems() {
-    for (const [id, meta] of Object.entries(ITEM_BASES as Record<string, Record<string, unknown>>)) {
-      this.items.seedRow({
-        id,
-        type: String(meta.type ?? ""),
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        level: Number(meta.level) || 0,
-        sell_price: Number(meta.sellPrice) || 0,
-        max_stack: Number(meta.maxStack) || 99,
+    let backfilled = 0;
+    for (const row of ITEM_BASE_SEED_ROWS) {
+      const seeded: ItemRow = {
+        id: row.id,
+        type: row.type,
+        label: row.label,
+        description: row.description,
+        icon: row.icon,
+        level: row.level,
+        sell_price: row.sellPrice,
+        max_stack: row.maxStack,
         updated_at: 0,
-      });
+      };
+      this.items.seedRow(seeded);
+      backfilled += this.items.backfillIcon(seeded);
     }
+    if (backfilled > 0) this.logger.log(`物品图标补全：${backfilled} 行`);
   }
 
   /** 怪物 seed：出厂种子（服务端自有，#588）展开成数值行，220 只（#258） */
@@ -1525,58 +1553,73 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 时装 seed：FASHIONS 直接灌（名称 / 文案 / 资源路径 / 售卖价 / 属性），20 套；渠道默认 unavailable（#257） */
+  /**
+   * 时装 seed（#257 / #603 第十二域）：`fashion-seed.ts` 的 `FASHION_SEED_ROWS` 整行灌 ——
+   * 名称 / 文案 / 图标 / 内观 / 外观资源 / 售卖价 / 八项属性都在服务端种子，
+   * 客户端 `configs/fashionClothes` 只剩空数组（进游戏由快照整表重建），20 套；
+   * 渠道默认 unavailable（运营按活动开放）。
+   */
   private seedFashions() {
-    for (const [id, meta] of Object.entries(FASHIONS as Record<string, Record<string, unknown>>)) {
+    for (const row of FASHION_SEED_ROWS) {
       this.fashionsRepo.seedRow({
-        id,
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        icon: String(meta.icon ?? ""),
-        in_res: String(meta.in ?? ""),
-        out_res: String(meta.out ?? ""),
-        sell_price: Number(meta.sellPrice) || 0,
+        id: row.id,
+        label: row.label,
+        description: row.description,
+        icon: row.icon,
+        in_res: row.inRes,
+        out_res: row.outRes,
+        sell_price: row.sellPrice,
         acquire_channel: SEED_ACQUIRE_CHANNEL,
-        ...flatAttributes(meta),
+        // 种子里的区间与快照同形（{min,max}），入库列是 min/max 拍平的两列
+        ...flatAttributes({
+          maxHp: row.maxHp,
+          hpRecover: row.hpRecover,
+          physicalAttack: [row.physicalAttack.min, row.physicalAttack.max],
+          magicAttack: [row.magicAttack.min, row.magicAttack.max],
+          taoistAttack: [row.taoistAttack.min, row.taoistAttack.max],
+          physicalDefense: [row.physicalDefense.min, row.physicalDefense.max],
+          magicDefense: [row.magicDefense.min, row.magicDefense.max],
+          taoistDefense: [row.taoistDefense.min, row.taoistDefense.max],
+        }),
         updated_at: 0,
       });
     }
   }
 
   /**
-   * 技能 seed（#367）：SKILLS 是**整行**快照（owner/分类/动作/特效/冷却/倍率/挂载状态/释放限制），
-   * 直接按字段灌；damageCoefficients 落库前序列化成 JSON。
+   * 技能 seed（#603 第十一域）：`skill-seed.ts` 的 `SKILL_SEED_ROWS` 整行灌 ——
+   * 名称 / 图标 / 分类 / 目标 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 描述 / 倍率 /
+   * 挂载状态 / 施法锁 / 释放限制 / **职业归属** / **击退距离** 都在服务端种子,
+   * 客户端 `configs/skill-data` 只剩空数组（进游戏由快照整表重建）。
    *
    * 角色技能行 id 固定（客户端技能栏 / 快捷键 / 角色存档都引用它），所以这里只有 INSERT OR IGNORE。
    */
   private seedSkills() {
-    for (const [id, meta] of Object.entries(SKILLS as Record<string, Record<string, unknown>>)) {
-      const coefficients = Array.isArray(meta.damageCoefficients) ? meta.damageCoefficients : [];
+    for (const row of SKILL_SEED_ROWS) {
       this.skillsRepo.seedRow({
-        id,
-        owner: String(meta.owner ?? "role"),
-        label: String(meta.label ?? ""),
-        icon: String(meta.icon ?? ""),
-        category: String(meta.category ?? "0"),
-        target_type: String(meta.targetType ?? "1"),
-        action: String(meta.action ?? ""),
-        effect: String(meta.effect ?? ""),
-        effect_on_self: meta.effectOnSelf === true ? 1 : 0,
-        cooldown: Number(meta.cooldown) || 0,
-        mp_cost: Number(meta.mpCost) || 0,
-        distance: Number(meta.distance) || 0,
-        level_req: Number(meta.levelReq) || 1,
-        description: String(meta.description ?? ""),
+        id: row.id,
+        owner: row.owner,
+        label: row.label,
+        icon: row.icon,
+        category: row.category,
+        target_type: row.targetType,
+        action: row.action,
+        effect: row.effect,
+        effect_on_self: row.effectOnSelf ? 1 : 0,
+        cooldown: row.cooldown,
+        mp_cost: row.mpCost,
+        distance: row.distance,
+        level_req: row.levelReq,
+        description: row.description,
         damage_coefficients: JSON.stringify(
-          coefficients.map((entry) => {
-            const item = (entry ?? {}) as Record<string, unknown>;
-            return { baseType: String(item.baseType ?? ""), baseTypeRate: Number(item.baseTypeRate) || 0 };
-          }),
+          row.damageCoefficients.map((entry) => ({ baseType: String(entry.baseType ?? ""), baseTypeRate: Number(entry.baseTypeRate) || 0 })),
         ),
-        status_id: String(meta.statusId ?? ""),
-        cast_lock_ms: Number(meta.castLockMs) || 0,
-        require_target: meta.requireTarget === false ? 0 : 1,
-        can_auto: meta.canAuto === true ? 1 : 0,
+        status_id: row.statusId,
+        cast_lock_ms: row.castLockMs,
+        require_target: row.requireTarget ? 1 : 0,
+        can_auto: row.canAuto ? 1 : 0,
+        occupation: row.occupation,
+        push_distance: row.pushDistance,
         updated_at: 0,
       });
     }

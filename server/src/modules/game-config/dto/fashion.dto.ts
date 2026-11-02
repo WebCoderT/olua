@@ -19,7 +19,7 @@ export const FASHION_DESCRIPTION_MAX = 500;
 
 /** 管理端看到的一条时装配置 */
 export class FashionDto {
-  @ApiProperty({ description: "时装 id（configs/fashionClothes，如 \"cloth_2\"；序列固定，不可增删行）" })
+  @ApiProperty({ description: "时装 id（seed 自 shared/fashion-seed.ts，如 \"cloth_2\"；序列固定，不可增删行）" })
   id: string;
 
   @ApiProperty({ description: "名称（后台可改）" })
