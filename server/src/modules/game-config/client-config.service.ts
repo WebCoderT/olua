@@ -71,7 +71,7 @@ export class ClientConfigService {
       // 客户端 `configs/map.ts` 不再存这些 —— 改一个进入等级不用重打客户端包。
       maps: this.map.configs(),
       mapTypes: MAP_TYPE_GROUPS.map((group) => ({ type: group.type, label: group.label })),
-      // #594：界面特效的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关）—— 特效按服务端参数演
+      // #594 升级特效 / #634 掉落光效：表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关）—— 特效按服务端参数演
       uiEffects: this.uiEffect.configs(),
       // #603 第九域：槽位表与装备规则（前后缀倍率 / 文案 / 回收价曲线）。
       // 客户端 `configs/equipments` 与 `configs/growth` 不再存这两样 ——

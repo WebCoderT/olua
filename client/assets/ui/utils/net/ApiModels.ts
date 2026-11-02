@@ -5690,7 +5690,7 @@ export type GameConfigSnapshot = {
    */
   mapTypes: MapTypeGroup[];
   /**
-   * 界面特效的表现参数（#594：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定 `effect/<key>/<key>.plist`）
+   * 特效的表现参数（#594 升级特效 / #634 掉落光效：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定：升级 `effect/<key>/<key>.plist`、掉落光效 `effect/light/<key>.plist`）
    */
   uiEffects: UiEffectConfig[];
   /**

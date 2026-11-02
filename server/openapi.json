@@ -11629,12 +11629,12 @@
     },
     "/admin/ui-effects": {
       "get": {
-        "description": "全部界面特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\nkey 的取值域由客户端的消费代码决定（当前只有 `upgrade` 升级特效）。\n\n不分页，按 key 字典序。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "全部特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\nkey 的取值域由客户端的消费代码决定（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6`）。\n\n不分页，按 seed 顺序（= `UI_EFFECT_KEYS` 的登记顺序，升级特效在最前）返回。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminUiEffect.list",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "界面特效列表（total / list）",
+            "description": "特效列表（total / list）",
             "content": {
               "application/json": {
                 "schema": {
@@ -11660,7 +11660,7 @@
             "admin": []
           }
         ],
-        "summary": "界面特效列表",
+        "summary": "特效列表",
         "tags": [
           "管理端"
         ],
@@ -11676,14 +11676,14 @@
     },
     "/admin/ui-effects/{id}": {
       "patch": {
-        "description": "改的是**表现参数**：摆位偏移 / 横纵缩放 / 旋转 / 一轮时长 / 开关。保存后立刻生效 ——\n配置快照每次查表，客户端下次触发特效（如升级）就按新参数演，不用重打客户端包。\n\n- **整份覆盖**，不是部分更新：一个特效的参数是联动的一组状态，分字段更新会留下上一次的其它字段；\n- `enabled = false` 时客户端**不创建**特效节点（不是播一次空的）；\n- 图集路径不在这里：那是客户端资源约定 `effect/<key>/<key>.plist`，换美术要换资源重发包。\n\nkey 不存在 → 404（`50145`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "改的是**表现参数**：摆位偏移 / 横纵缩放 / 旋转 / 一轮时长 / 开关。保存后立刻生效 ——\n配置快照每次查表，客户端下次触发特效（升级、掉落光柱）就按新参数演，不用重打客户端包。\n\n- **整份覆盖**，不是部分更新：一个特效的参数是联动的一组状态，分字段更新会留下上一次的其它字段；\n- `enabled = false` 时客户端**不创建**特效节点（不是播一次空的）；\n- 图集路径不在这里：那是客户端资源约定（升级 `effect/<key>/<key>.plist`、掉落光效\n  `effect/light/<key>.plist`），换美术要换资源重发包。\n\nkey 不存在 → 404（`50145`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminUiEffect.save",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "特效 key（如 upgrade）",
+            "description": "特效 key（升级特效 upgrade、掉落光效 light_1~light_6）",
             "schema": {
               "type": "string"
             }
@@ -11727,7 +11727,7 @@
             "admin": []
           }
         ],
-        "summary": "保存界面特效的表现参数（整份覆盖）",
+        "summary": "保存特效的表现参数（整份覆盖）",
         "tags": [
           "管理端"
         ],
@@ -21003,7 +21003,7 @@
             }
           },
           "uiEffects": {
-            "description": "界面特效的表现参数（#594：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定 `effect/<key>/<key>.plist`）",
+            "description": "特效的表现参数（#594 升级特效 / #634 掉落光效：摆位 / 缩放 / 旋转 / 时长 / 开关）。与武器外观同一套取向 —— 调一次摆位不用重打客户端包；图集路径不在下发范围里（客户端资源约定：升级 `effect/<key>/<key>.plist`、掉落光效 `effect/light/<key>.plist`）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/UiEffectConfigDto"

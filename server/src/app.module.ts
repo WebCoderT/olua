@@ -81,7 +81,7 @@ export class AppModule {
         GameMailModule,
         // 地图管理（#571）：只读观测，两个进程（API / 存档）都要有 —— 它是管理端页面，不是实时能力
         MapModule,
-        // 界面特效（#594）：表现参数管理 + 配置快照下发，同地图，两个进程都要有
+        // 特效（#594 升级特效 / #634 掉落光效）：表现参数管理 + 配置快照下发，同地图，两个进程都要有
         UiEffectModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],

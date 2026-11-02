@@ -3,7 +3,7 @@ import { AdminUiEffectController } from "./ui-effect.controller";
 import { UiEffectService } from "./ui-effect.service";
 
 /**
- * 界面特效模块（#594：升级特效的表现参数归服务端）
+ * 特效模块（#594 升级特效 / #634 掉落光效的表现参数归服务端）
  *
  * 与 game-config 分开的原因同地图（#573）：这里管的不是「客户端配置的镜像」，
  * 而是特效自己的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关），特效的**图集本体**
