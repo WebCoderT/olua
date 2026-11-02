@@ -7,16 +7,30 @@ import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import type { Atlas } from "./equipAlign/atlas";
 import {
-  PREVIEW_SIZE,
   drawPreview,
   effectAtlasPath,
   effectFrameNames,
   loadPreviewAtlases,
+  previewKindOf,
+  previewSizeOf,
   roleAtlasPath,
 } from "./uiEffects/preview";
 
-/** 特效 key → 页面展示名（key 的唯一来源在服务端 UI_EFFECT_KEYS；新特效登记后这里补一行中文名） */
-const EFFECT_LABELS: Record<string, string> = { upgrade: "升级特效" };
+/**
+ * 特效 key → 页面展示名（key 的唯一来源在服务端 UI_EFFECT_KEYS；新特效登记后这里补一行中文名）
+ *
+ * 掉落光效一档一个页签（#634）：六张图集是六份美术，谁想单独放大某一档都该能做到。
+ * 1~5 号按装备前缀强度升序（普通的 → 超神的），6 号留给特殊装备（`configs/light` 的自定义表）。
+ */
+const EFFECT_LABELS: Record<string, string> = {
+  upgrade: "升级特效",
+  light_1: "掉落光效 1 号",
+  light_2: "掉落光效 2 号",
+  light_3: "掉落光效 3 号",
+  light_4: "掉落光效 4 号",
+  light_5: "掉落光效 5 号",
+  light_6: "掉落光效 6 号（预留）",
+};
 
 const PREVIEW_PREFS_KEY = "olua.uiEffects.prefs.v1";
 
@@ -63,10 +77,12 @@ function readResRoot(): string {
 }
 
 /**
- * 特效预览画布：裸模正面站立第一帧为参考，特效按表单当前值叠放并逐帧播放
+ * 特效预览画布：参考层按族取（升级特效 = 裸模正面站立第一帧；掉落光效 = 掉落物图标 40×40），
+ * 特效按表单当前值叠放并逐帧播放
  *
  * 素材经 `resRoot` 读（同装备对齐工作台）：裸模 = `role/1/stand/stand` 的正面第一帧，
- * 特效 = `effect/<key>/<key>.plist`。读不到素材就给一句人话提示，不渲染半个残影。
+ * 特效 = `upgrade` 的 `effect/<key>/<key>`、掉落光效的 `effect/light/<key>`。读不到素材就给一句
+ * 人话提示，不渲染半个残影（掉落光效的图标是画出来的占位框，没有素材依赖）。
  */
 function EffectPreview({
   resRoot,
@@ -78,9 +94,11 @@ function EffectPreview({
   form: EffectForm;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const kind = previewKindOf(effectKey);
+  const size = previewSizeOf(effectKey);
   const [state, setState] = useState<
     | { phase: "loading" }
-    | { phase: "ready"; role: Atlas; effect: Atlas | null; frameNames: string[] }
+    | { phase: "ready"; role: Atlas | null; effect: Atlas | null; frameNames: string[] }
     | { phase: "error"; message: string }
   >({ phase: "loading" });
   const [tick, setTick] = useState(0);
@@ -96,16 +114,17 @@ function EffectPreview({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
+        const sources = [kind === "role" ? roleAtlasPath() : null, effectAtlasPath(effectKey)].filter(Boolean).join(" 或 ");
         setState({
           phase: "error",
-          message: `读不到预览素材（${roleAtlasPath()} 或 ${effectAtlasPath(effectKey)}）—— 检查上方「资源根」是否指到游戏站的 resources。表单照常可用，保存不受影响。`,
+          message: `读不到预览素材（${sources}）—— 检查上方「资源根」是否指到游戏站的 resources。表单照常可用，保存不受影响。`,
         });
         void error;
       });
     return () => {
       cancelled = true;
     };
-  }, [resRoot, effectKey]);
+  }, [resRoot, effectKey, kind]);
 
   // 播放循环：帧率 = 帧数 ÷ 时长（表单当前值，未保存也生效）
   const durationMs = Math.max(100, Math.floor(Number(form.durationMs)) || 1000);
@@ -125,7 +144,7 @@ function EffectPreview({
       const value = Number(text);
       return Number.isFinite(value) ? value : fallback;
     };
-    drawPreview(ctx, state.role, state.effect, state.frameNames, {
+    drawPreview(ctx, kind, state.role, state.effect, state.frameNames, {
       offsetX: numeric(form.offsetX, 0),
       offsetY: numeric(form.offsetY, 0),
       scaleX: numeric(form.scaleX, 1),
@@ -133,7 +152,7 @@ function EffectPreview({
       rotate: numeric(form.rotate, 0),
       frameIndex: tick,
     });
-  }, [state, form, tick]);
+  }, [state, form, tick, kind]);
 
   if (state.phase === "loading") {
     return <Card className="flex items-center justify-center p-6 text-sm text-slate-400">预览素材加载中…</Card>;
@@ -145,28 +164,33 @@ function EffectPreview({
     <div className="flex flex-col items-center gap-2">
       <canvas
         ref={canvasRef}
-        width={PREVIEW_SIZE.width}
-        height={PREVIEW_SIZE.height}
+        width={size.width}
+        height={size.height}
         className="max-w-full rounded-lg border border-slate-800 bg-slate-950"
       />
       <p className="text-xs text-slate-600">
-        参考：裸模正面站立第一帧（{roleAtlasPath()}）· 虚线 = 脚下原点 · 特效按表单当前值实时叠放（未保存也生效）
+        {kind === "dropItem"
+          ? `参考：掉落物图标 ${40}×40（虚线框）· 虚线 = 地面 · 光柱画在图标下层 · 按表单当前值实时叠放（未保存也生效）`
+          : `参考：裸模正面站立第一帧（${roleAtlasPath()}）· 虚线 = 脚下原点 · 特效按表单当前值实时叠放（未保存也生效）`}
       </p>
     </div>
   );
 }
 
 /**
- * 特效管理（#594：升级特效的表现参数归服务端）
+ * 特效管理（#594 升级特效 / #634 掉落光效）
  *
- * 页面按「一个特效一个页签」组织（用户要求：先有升级特效，后面还会加更多，
- * 比如物品掉落在地图上的特效）—— 页签即服务端 seed 出来的 key，新特效登记后
- * 这里自动多一个页签，页面结构不用动。
+ * 页面按「一个特效一个页签」组织：升级特效一个页签，掉落光效一档一个页签
+ * （`light_1`…`light_6`，六张图集是六份美术，各自可调）—— 页签即服务端 seed 出来的 key，
+ * 新特效登记后这里自动多一个页签，页面结构不用动。
  *
  * 管的是特效的**表现参数**（摆位 / 缩放 / 旋转 / 时长 / 开关），与武器外观同一套取向 ——
- * 调一次摆位不用重打客户端包。图集本体在客户端资源包里（`effect/<key>/<key>.plist`），
- * 后台改不了，所以这里**没有新建 / 删除**：行由服务端启动 seed 决定，
- * 一个 key 存在的前提是客户端有这个特效的消费代码。
+ * 调一次摆位不用重打客户端包。图集本体在客户端资源包里（升级特效 `effect/<key>/<key>.plist`、
+ * 掉落光效 `effect/light/<key>.plist`），后台改不了，所以这里**没有新建 / 删除**：行由服务端
+ * 启动 seed 决定，一个 key 存在的前提是客户端有这个特效的消费代码。
+ *
+ * 预览的参考层按族取：升级特效是裸模（看摆位），掉落光效是掉落物图标 40×40 的占位框
+ * （看「光柱相对图标多大、偏到哪」，光柱按客户端层级画在图标下层）。
  *
  * 权限点 `gameConfig:read`（看）/ `gameConfig:write`（改）：界面按权限显隐只是体验，服务端守卫才是权威。
  */
@@ -237,22 +261,25 @@ export function UiEffectsPage() {
   const activeRow = rows.find((row) => row.key === activeKey) ?? null;
   const activeForm = activeKey ? forms[activeKey] : null;
   const numeric = (text: string) => text.trim() !== "" && Number.isFinite(Number(text));
+  /** 当前页签属于哪一族（决定预览参考层与几条提示的措辞） */
+  const activeKind = activeRow ? previewKindOf(activeRow.key) : "role";
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <PageHeader
         title="特效管理"
-        description="界面特效的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关），以裸模正面站立第一帧为参考实时预览；保存后玩家下次触发即生效，不用重打客户端包。图集本体在客户端资源包里，后台改不了，所以没有新建 / 删除 —— 一个特效在不在，由客户端的消费代码决定。"
+        description="特效的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关），改完点保存、玩家下次触发即生效，不用重打客户端包。升级特效以裸模正面站立第一帧为参考；掉落光效以掉落物图标 40×40 为参考（光柱画在图标下层）。图集本体在客户端资源包里，后台改不了，所以没有新建 / 删除 —— 一个特效在不在，由客户端的消费代码决定。"
       />
 
       {loading ? (
         <Card className="p-5 text-sm text-slate-400">加载中…</Card>
       ) : rows.length === 0 ? (
-        <Card className="p-5 text-sm text-slate-400">还没有界面特效（服务端 seed 没有灌出任何一行 —— 检查 UI_EFFECT_DEFAULTS）。</Card>
+        <Card className="p-5 text-sm text-slate-400">还没有特效（服务端 seed 没有灌出任何一行 —— 检查 UI_EFFECT_DEFAULTS）。</Card>
       ) : (
         <>
-          {/* 页签栏：一个特效一个页签；新 key 登记后自动多一个，页面结构不用动 */}
-          <div className="flex items-center gap-1 border-b border-slate-800" role="tablist">
+          {/* 页签栏：一个特效一个页签（升级特效 + 掉落光效六档）；新 key 登记后自动多一个，页面结构不用动。
+              页签多了会换行 —— 掉落光效的档位名偏长，横排一屏放不下 */}
+          <div className="flex flex-wrap items-center gap-1 border-b border-slate-800" role="tablist">
             {rows.map((row) => {
               const active = row.key === activeKey;
               const dirty = forms[row.key] ? isDirty(forms[row.key], row) : false;
@@ -285,15 +312,20 @@ export function UiEffectsPage() {
 
               {!activeForm.enabled ? (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                  特效已停用（enabled = false）—— 游戏里升级不再播特效，预览仍按参数显示供调整。
+                  {activeKind === "dropItem"
+                    ? "光效已停用（enabled = false）—— 游戏里这件掉落物不再显示光柱（照常拾取），预览仍按参数显示供调整。"
+                    : "特效已停用（enabled = false）—— 游戏里升级不再播特效，预览仍按参数显示供调整。"}
                 </p>
               ) : null}
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="偏移 X" hint="像素，右为正（相对脚下原点）">
+                <Field
+                  label="偏移 X"
+                  hint={activeKind === "dropItem" ? "像素，右为正（相对掉落物图标中心）" : "像素，右为正（相对脚下原点）"}
+                >
                   <Input type="number" value={activeForm.offsetX} onChange={(e) => patch(activeRow.key, { offsetX: e.target.value })} disabled={!canWrite} />
                 </Field>
-                <Field label="偏移 Y" hint="像素，上为正">
+                <Field label="偏移 Y" hint={activeKind === "dropItem" ? "像素，上为正（相对图标中心）" : "像素，上为正"}>
                   <Input type="number" value={activeForm.offsetY} onChange={(e) => patch(activeRow.key, { offsetY: e.target.value })} disabled={!canWrite} />
                 </Field>
                 <Field label="旋转" hint="度，顺时针">

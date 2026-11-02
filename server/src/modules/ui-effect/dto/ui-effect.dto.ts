@@ -3,23 +3,24 @@ import { IsBoolean, IsInt, IsNumber, Max, Min } from "class-validator";
 import { UI_EFFECT_LIMITS } from "../../../common/constants/ui-effect";
 
 /**
- * 界面特效管理的 DTO（#594）
+ * 特效管理的 DTO（#594 升级特效 / #634 掉落光效）
  *
  * 管的是特效的**表现参数**（摆位 / 缩放 / 旋转 / 时长 / 开关），不是特效本体：
- * 图集在客户端资源包里（`effect/<key>/<key>.plist`，两端约定），服务端连一列都没有 ——
+ * 图集在客户端资源包里（`upgrade` = `effect/<key>/<key>.plist`、掉落光效 =
+ * `effect/light/<key>.plist`，都是两端约定），服务端连一列都没有 ——
  * 要换特效美术，路只有一条：换图集资源 → 重新分发资源包。所以这里没有「新建 / 删除」入参，
  * 行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来（key 存在的前提是客户端有消费代码）。
  */
 
 /** 管理端列表 / 保存返回的一行（含追账字段） */
 export class UiEffectDto {
-  @ApiProperty({ description: "特效 key（如 upgrade；取值域见 UI_EFFECT_KEYS）", example: "upgrade" })
+  @ApiProperty({ description: "特效 key（升级特效 = upgrade、掉落光效 = light_1~light_6；取值域见 UI_EFFECT_KEYS）", example: "upgrade" })
   key: string;
 
-  @ApiProperty({ description: `摆位偏移 X（像素，相对 UI 层锚点，${UI_EFFECT_LIMITS.offsetMin}~${UI_EFFECT_LIMITS.offsetMax}）` })
+  @ApiProperty({ description: `摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 掉落物图标中心，${UI_EFFECT_LIMITS.offsetMin}~${UI_EFFECT_LIMITS.offsetMax}）` })
   offsetX: number;
 
-  @ApiProperty({ description: `摆位偏移 Y（像素，y 向上为正，${UI_EFFECT_LIMITS.offsetMin}~${UI_EFFECT_LIMITS.offsetMax}）` })
+  @ApiProperty({ description: `摆位偏移 Y（像素，y 向上为正；相对挂点同 X，${UI_EFFECT_LIMITS.offsetMin}~${UI_EFFECT_LIMITS.offsetMax}）` })
   offsetY: number;
 
   @ApiProperty({ description: `横向缩放（${UI_EFFECT_LIMITS.scaleMin}~${UI_EFFECT_LIMITS.scaleMax}，1 = 原始尺寸）` })
@@ -49,7 +50,7 @@ export class UiEffectConfigDto {
   @ApiProperty({ description: "特效 key", example: "upgrade" })
   key: string;
 
-  @ApiProperty({ description: "摆位偏移 X（像素，相对 UI 层锚点）" })
+  @ApiProperty({ description: "摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 图标中心）" })
   offsetX: number;
 
   @ApiProperty({ description: "摆位偏移 Y（像素，y 向上为正）" })
@@ -112,6 +113,6 @@ export class UiEffectListDto {
   @ApiProperty({ description: "行数（= 特效 key 数）" })
   total!: number;
 
-  @ApiProperty({ description: "全部特效行，按 key 字典序", type: [UiEffectDto] })
+  @ApiProperty({ description: "全部特效行，按 seed 顺序（= UI_EFFECT_KEYS 登记顺序：升级特效在最前，掉落光效按档排）", type: [UiEffectDto] })
   list!: UiEffectDto[];
 }

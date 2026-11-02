@@ -5513,7 +5513,7 @@ export type UiEffectConfig = {
    */
   key: string;
   /**
-   * 摆位偏移 X（像素，相对 UI 层锚点）
+   * 摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 图标中心）
    */
   offsetX: number;
   /**
@@ -6949,15 +6949,15 @@ export type MapDetail = {
 
 export type UiEffect = {
   /**
-   * 特效 key（如 upgrade；取值域见 UI_EFFECT_KEYS）
+   * 特效 key（升级特效 = upgrade、掉落光效 = light_1~light_6；取值域见 UI_EFFECT_KEYS）
    */
   key: string;
   /**
-   * 摆位偏移 X（像素，相对 UI 层锚点，-2000~2000）
+   * 摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 掉落物图标中心，-2000~2000）
    */
   offsetX: number;
   /**
-   * 摆位偏移 Y（像素，y 向上为正，-2000~2000）
+   * 摆位偏移 Y（像素，y 向上为正；相对挂点同 X，-2000~2000）
    */
   offsetY: number;
   /**
@@ -6996,7 +6996,7 @@ export type UiEffectList = {
    */
   total: number;
   /**
-   * 全部特效行，按 key 字典序
+   * 全部特效行，按 seed 顺序（= UI_EFFECT_KEYS 登记顺序：升级特效在最前，掉落光效按档排）
    */
   list: UiEffect[];
 };

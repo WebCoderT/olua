@@ -89,7 +89,7 @@ import type {
  * | 16 | 怪物运行时表 | `monsters` / `monsterPresentations` | `applyMonsterRows` / `applyMonsterPresentations` |
  * | 17 | 商城定价 | `mallPrices` / `mallSettings` | `applyMallPricing` |
  * | 18 | 地图 | `maps` / `mapTypes` | `applyMapRows` |
- * | 19 | 界面特效 | `uiEffects` | `applyUiEffectRows` |
+ * | 19 | 界面特效（升级特效 + 掉落光效） | `uiEffects` | `applyUiEffectRows` |
  * | 20 | 装备几何锚点 | `equip-align` / `equip-in-align`（另两个接口） | `applyEquipAlignRows`（在 apply-snapshot） |
  *
  * 守点：`tools/audit-snapshot-contract.cjs` —— 分区 0 的清单 == 服务端 `GameConfigSnapshotDto`
@@ -1859,7 +1859,7 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
 
 //#endregion
 
-//#region 19 · 界面特效（原 configs/effect.ts）
+//#region 19 · 界面特效（升级特效 + 掉落光效；原 configs/effect.ts）
 
 /**
  * 特效配置
@@ -1920,7 +1920,7 @@ export const hitScreenFlash = {
   overscan: 1.2,
 };
 
-//#region 界面特效运行时表（#594）
+//#region 界面特效运行时表（#594 升级特效 / #634 掉落光效）
 
 /**
  * 升级特效的兜底参数（= 服务端 `UI_EFFECT_DEFAULTS.upgrade` 的出厂值）
@@ -1939,34 +1939,85 @@ export const upgradeEffectDefaults: Omit<UiEffectConfig, "key"> = {
 };
 
 /**
- * 运行时界面特效表（key → 表现参数，#594）
+ * 掉落光效（装备光柱）的出厂时长 —— key 是**素材名** `light_1`…`light_6`
+ *
+ * 时长 = 帧数 × 100ms（客户端原先写死 10fps 的等效口径）：1 号素材 14 帧 = 1400，
+ * 2~6 号各 15 帧 = 1500。**换素材改帧数时这里与服务端 `UI_EFFECT_DEFAULTS` 要一起改**
+ * （`client/tools/test-equipment-light.cjs` 拿 plist 的实际帧数逐条核对，对不上会红）。
+ *
+ * 顺带承担「哪些光柱 key 是登记过的」：不在表里的 key 一律不演（配置写错过，
+ * 比如自定义表指到一个已删除的素材）。
+ */
+const dropLightFallbackDurations: Record<string, number> = {
+  light_1: 1400,
+  light_2: 1500,
+  light_3: 1500,
+  light_4: 1500,
+  light_5: 1500,
+  light_6: 1500,
+};
+
+/**
+ * 运行时界面特效表（key → 表现参数，#594 / #634）
  *
  * 内容由服务端配置快照的 `uiEffects` 段填充（`applyUiEffectRows`，进游戏时一次，
  * **整表重建**）。**不要往这里写死数据** —— 那等于把配置又搬回了客户端。
- * key 的取值域由客户端的消费代码决定（`upgrade` 之外加特效 = 写消费代码 +
+ * key 的取值域由客户端的消费代码决定（`upgrade` + 掉落光效六档之外加特效 = 写消费代码 +
  * 服务端 `UI_EFFECT_KEYS` 登记，两端对上才有东西可演）。
  */
 export const uiEffects = new Map<string, UiEffectConfig>();
 
+/** 逐字段合并要走的字段（快照行覆盖它带来的字段，缺的字段留在兜底值） */
+const UI_EFFECT_FIELDS = ["offsetX", "offsetY", "scaleX", "scaleY", "rotate", "durationMs", "enabled"] as const;
+
+/**
+ * 兜底值 + 快照行的逐字段合并
+ *
+ * 不直接 `{...fallback, ...row}` 展开：老快照缺新字段时会把 `undefined` 盖到兜底值上。
+ * 这里全是标量，逐字段覆盖正好安全。
+ */
+function mergeUiEffect(fallback: UiEffectConfig): UiEffectConfig {
+  const row = uiEffects.get(fallback.key);
+  if (!row) return fallback;
+  const merged: UiEffectConfig = { ...fallback };
+  const source = row as unknown as Record<string, unknown>;
+  for (const field of UI_EFFECT_FIELDS) {
+    const value = source[field];
+    if (value !== undefined) (merged as unknown as Record<string, unknown>)[field] = value;
+  }
+  return merged;
+}
+
 /**
  * 取升级特效的表现参数（摆位与缩放都归服务端，见 GameUiHelper.createUpgradeEffect）
- *
- * 逐字段与出厂值合并：快照行覆盖它带来的字段，缺的字段回落出厂值 ——
- * 这里全是标量，浅合并正好安全；将来加字段时老快照不会把新字段带成 undefined。
  */
 export function upgradeEffectConfig(): UiEffectConfig {
-  // 逐字段合并（快照行覆盖它带来的字段，缺的字段留在出厂值）——
-  // 不直接 {...defaults, ...row} 展开：老快照缺新字段时会把 undefined 盖到出厂值上
-  const merged: Omit<UiEffectConfig, "key"> = { ...upgradeEffectDefaults };
-  const row = uiEffects.get("upgrade");
-  if (row) {
-    const source = row as unknown as Record<string, unknown>;
-    for (const field of Object.keys(upgradeEffectDefaults) as Array<keyof typeof upgradeEffectDefaults>) {
-      const value = source[field];
-      if (value !== undefined) (merged as Record<string, unknown>)[field] = value;
-    }
-  }
-  return { key: "upgrade", ...merged };
+  return mergeUiEffect({ key: "upgrade", ...upgradeEffectDefaults });
+}
+
+/**
+ * 取某个掉落光柱的表现参数（#634：摆位 / 缩放 / 旋转 / 时长 / 开关都归服务端）
+ *
+ * 参数语义与升级特效同一套，只有**挂点**不同：偏移是相对**掉落物图标中心**的
+ * （客户端把它加到 `dropItemLayout.iconOffsetY` 上，所以 (0,0) = 与图标同心，与 #634 之前一致）。
+ *
+ * @param lightKey 光柱 key（`light_1`…`light_6`，来自 configs/light 的前缀表 / 自定义表）
+ * @returns 未登记的光柱返回 null（不演 —— 配置写错了，别拿默认参数演一个不存在的素材）；
+ *          登记过的总返回配置（`enabled = false` 由调用方判断，与升级特效同一个口径）
+ */
+export function dropLightEffectConfig(lightKey: string): UiEffectConfig | null {
+  const durationMs = dropLightFallbackDurations[lightKey];
+  if (durationMs === undefined) return null;
+  return mergeUiEffect({
+    key: lightKey,
+    offsetX: 0,
+    offsetY: 0,
+    scaleX: 1,
+    scaleY: 1,
+    rotate: 0,
+    durationMs,
+    enabled: true,
+  });
 }
 
 /**
@@ -1974,12 +2025,13 @@ export function upgradeEffectConfig(): UiEffectConfig {
  *
  * 特效的摆位 / 缩放 / 旋转 / 时长 / 开关以前写死在 `GameUiHelper.createUpgradeEffect` 里 ——
  * 调一次摆位要重打 3G 的客户端包。现在这些值由服务端 `ui_effects` 表下发（管理端「特效管理」
- * 可改，与武器外观同一套取向），这里按 key 填进运行时表，消费方读 `upgradeEffectConfig()`。
+ * 可改，与武器外观同一套取向），这里按 key 填进运行时表，消费方读 `upgradeEffectConfig()` /
+ * `dropLightEffectConfig()`。
  *
  * 三条口径：
  * - **整表重建**（先 clear 再按行填）：特效行由服务端 seed 决定，客户端没有「本地兜底行」可言；
- * - **图集路径不在这里**（`effect/<key>/<key>.plist` 两端约定）：下发方永远改不到
- *   「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致；
+ * - **图集路径不在这里**（`upgrade` = `effect/<key>/<key>.plist`、掉落光效 = `effect/light/<key>.plist`，
+ *   都是两端约定）：下发方永远改不到「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致；
  * - **坏行整条跳过**：缺 key / 数值不是数的行直接丢，宁可用出厂值演，不演一半错位的。
  */
 export function applyUiEffectRows(rows: UiEffectConfig[]): void {

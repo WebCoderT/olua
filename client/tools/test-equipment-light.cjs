@@ -10,9 +10,12 @@
  * · 全部装备都能取到光柱（掉落物不会出现「有的装备没光柱」）
  * · 素材守卫：每个光柱的 plist 图集与同名 png 成对存在、帧号连续无缺口、plist 画布尺寸 == PNG 尺寸
  *   —— 打包时逐帧 alpha 裁剪并以 spriteOffset 保留回贴位置，播放画面与原逐帧版一致（见 #216）
+ * · **表现参数归服务端（#634）**：每档都有兜底行、出厂值 = 原写死的口径（偏移 0/0、缩放 1/1、
+ *   旋转 0、**时长 = 帧数 × 100ms**）、未登记的 key 返回 null、关掉时连节点都不建；界面不再从
+ *   layout 读帧率（一轮时长改由服务端下发）
  * · 接线：唯一挂点在掉落物零件、光柱排在图标之前（画在图标下层）、图集循环播放、进图前预加载
  *
- * 数据层跑在沙箱里（真实的 configs/light + equipments + items，见 lib/configs-sandbox.cjs），
+ * 数据层跑在沙箱里（真实的 configs/light + game-config + equipments + items，见 lib/configs-sandbox.cjs），
  * 素材与源码断言直接读文件。
  */
 const fs = require("fs");
@@ -24,16 +27,19 @@ const PREFIX_COUNT = 5;
 const LIGHT_COUNT = 6;
 /** 预留光柱（留给特殊装备手动添加，不参与前缀映射） */
 const RESERVED_LIGHT = "light_6";
+/** 出厂帧率（#634 之前写死 10fps；搬家后时长 = 帧数 × 100ms，这一档就是它的换算基准） */
+const LEGACY_FRAME_RATE = 10;
 
 let outDir;
 try {
-  outDir = prepare("olua-equipment-light", ["configs/light.ts", "ui/utils/animation/FrameOrder.ts"]);
+  outDir = prepare("olua-equipment-light", ["configs/light.ts", "configs/game-config.ts", "ui/utils/animation/FrameOrder.ts"]);
 } catch (error) {
   fail(String(error && error.message ? error.message : error));
   process.exit();
 }
 
 const { lightResources, lights, prefixLights, customEquipmentLights, getEquipmentLightKey, getAssignedLights } = require(path.join(outDir, "configs/light.js"));
+const { dropLightEffectConfig, applyUiEffectRows } = require(path.join(outDir, "configs/game-config.js"));
 const { EQUIPMENT_PREFIX, isEquipment } = require(path.join(outDir, "types/good.js"));
 const { getItemsByType } = require(path.join(outDir, "configs/items.js"));
 const { getFrameIndex } = require(path.join(outDir, "ui/utils/animation/FrameOrder.js"));
@@ -200,7 +206,39 @@ lightResources.forEach((resource) => {
 console.log("      帧数一览：");
 frameStats.forEach((stat) => console.log(`        ${stat.key.padEnd(10, " ")} ${stat.count} 帧`));
 
-console.log("\n— F. 接线：挂点唯一、画在图标下层、循环播放、预加载 —");
+console.log("\n— F. 表现参数：出厂值 = 原写死口径、快照可覆盖、关掉不建节点（#634）—");
+lightResources.forEach((resource) => {
+  const config = dropLightEffectConfig(resource.key);
+  const frames = frameStats.find((stat) => stat.key === resource.key).count;
+  check(!!config && config.key === resource.key, `${resource.key} 有兜底参数（快照缺这一行也演得出来）`);
+  check(
+    !!config && config.offsetX === 0 && config.offsetY === 0 && config.scaleX === 1 && config.scaleY === 1 && config.rotate === 0 && config.enabled === true,
+    `${resource.key} 出厂摆位 = 搬家前写死的那组（偏移 0/0、素材原尺寸、不旋转、默认开）`,
+    JSON.stringify(config),
+  );
+  check(
+    !!config && config.durationMs === (frames * 1000) / LEGACY_FRAME_RATE,
+    `${resource.key} 出厂时长 = 帧数 × 100ms（原 10fps 的等效口径）`,
+    `帧数 ${frames} → ${config && config.durationMs}ms`,
+  );
+});
+check(dropLightEffectConfig("light_99") === null, "未登记的光柱返回 null（不拿默认参数演一个不存在的素材）");
+check(dropLightEffectConfig("") === null, "空 key 返回 null（调用方直接跳过）");
+{
+  // 快照覆盖：整行生效（含关掉）；没被覆盖的档仍走兜底；整表重建后不残留
+  applyUiEffectRows([{ key: "light_3", offsetX: 12, offsetY: -8, scaleX: 0.5, scaleY: 0.5, rotate: 90, durationMs: 800, enabled: false }]);
+  const tuned = dropLightEffectConfig("light_3");
+  check(
+    !!tuned && tuned.offsetX === 12 && tuned.offsetY === -8 && tuned.scaleX === 0.5 && tuned.rotate === 90 && tuned.durationMs === 800 && tuned.enabled === false,
+    "快照行整份覆盖（偏移 / 缩放 / 旋转 / 时长 / 开关）",
+    JSON.stringify(tuned),
+  );
+  check(dropLightEffectConfig("light_1").durationMs === 1400, "没被快照覆盖的档仍走兜底");
+  applyUiEffectRows([]);
+  check(dropLightEffectConfig("light_3").enabled === true, "整表重建后回到兜底（配置没粘住）");
+}
+
+console.log("\n— G. 接线：挂点唯一、画在图标下层、循环播放、预加载 —");
 check(/this\.applyEquipmentLight\(node, good\)/.test(gameUiSource), "掉落物零件里挂了装备光柱（唯一挂点）");
 {
   // 层级：光柱必须在图标之前 addChild（同一父节点下排在前面的画在下层）
@@ -210,13 +248,25 @@ check(/this\.applyEquipmentLight\(node, good\)/.test(gameUiSource), "掉落物�
   check(lightIndex >= 0 && iconIndex >= 0 && lightIndex < iconIndex, "光柱在图标之前挂载（画在图标下层，物品本身清晰可辨）");
 }
 check(/if \(!isEquipment\(good\)\) return;/.test(gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"))), "非装备不挂光柱");
-check(/playLoopAtlas\(/.test(gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"))), "光柱用图集循环播放（playLoopAtlas）");
-check(/equipmentLightLayout\.frameRate/.test(gameUiSource), "帧率走 configs/layout/lights（界面不写死）");
-check(/equipmentLightLayout\.size/.test(gameUiSource) && /equipmentLightLayout\.namePrefix/.test(gameUiSource), "尺寸与节点名前缀走 configs/layout/lights");
 {
-  const createLight = gameUiSource.slice(gameUiSource.indexOf("static createEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight") + 600);
+  const applyLight = gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"));
+  check(/dropLightEffectConfig\(lightKey\)/.test(applyLight), "表现参数取自快照（dropLightEffectConfig，管理端「特效管理」可改）");
+  check(/if \(!config \|\| !config\.enabled\) return;/.test(applyLight), "该档被运营关掉时连节点都不建（不是建一个空精灵）");
+  check(/playLoopAtlasWithDuration\(/.test(applyLight), "一轮时长走图集总时长口径（playLoopAtlasWithDuration，与升级特效同一套）");
+  check(/Math\.max\(0\.1, config\.durationMs \/ 1000\)/.test(applyLight), "时长下限 0.1 秒（服务端最小 100ms，客户端再兜一层）");
+}
+check(!/equipmentLightLayout\.frameRate/.test(gameUiSource), "界面不再从 layout 读帧率（一轮时长已归服务端）");
+check(!/frameRate/.test(layoutSource), "configs/layout/lights 只剩基准尺寸与节点名前缀（帧率已搬去服务端）");
+check(/equipmentLightLayout\.size/.test(gameUiSource) && /equipmentLightLayout\.namePrefix/.test(gameUiSource), "基准尺寸与节点名前缀走 configs/layout/lights");
+{
+  const createLight = gameUiSource.slice(gameUiSource.indexOf("static createEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight") + 900);
   check(!/trim\s*=\s*true/.test(createLight), "光柱没有把 trim 改成 true（这批素材 trim=true 会帧间抖动）");
   check(!/Sprite\.SizeMode\.RAW/.test(createLight), "光柱用固定尺寸（CUSTOM），不按素材原始尺寸撑开");
+  check(
+    /new Vec2\(config\.offsetX, dropItemLayout\.iconOffsetY \+ config\.offsetY\)/.test(createLight),
+    "摆位 = 图标中心基准（iconOffsetY）+ 服务端偏移（偏移 0 = 与图标同心）",
+  );
+  check(/light\.setScale\(config\.scaleX, config\.scaleY, 1\)/.test(createLight) && /light\.angle = config\.rotate/.test(createLight), "缩放 / 旋转取自同一行配置");
 }
 check(/getEquipmentLightKey\(good\)/.test(gameUiSource) && /lights\.get\(lightKey\)/.test(gameUiSource), "取用走 configs/light 的映射表");
 check(!/"effect\/light/.test(gameUiSource), "界面里没有硬编码光柱素材路径（路径只出现在 configs/light）");
@@ -232,4 +282,4 @@ check(assigned.every((resource) => !assignedKeys.has(RESERVED_LIGHT) || resource
 check(/export const equipmentLightLayout/.test(layoutSource), "configs/layout/lights 导出显示口径");
 check(/export \* from "\.\/layout\/lights"/.test(barrelSource) && /layout\/lights\.ts/.test(barrelSource), "hudLayout barrel 登记了 lights 布局（统一入口）");
 
-finish("PASS：光柱资源表与磁盘一致、前缀 5 档全覆盖、6 号预留未占用、取用与回退正确、素材与接线口径一致。");
+finish("PASS：光柱资源表与磁盘一致、前缀 5 档全覆盖、6 号预留未占用、取用与回退正确、出厂参数 = 原写死口径、素材与接线口径一致。");

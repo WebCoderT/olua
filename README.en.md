@@ -199,7 +199,7 @@ Implemented features only; each side's README covers its own capabilities in mor
 | Quality borders and detail backgrounds | Border and background animations chosen by the prefix / suffix combination |
 | Drops | The server rolls the weighted tables and writes the bag; the client only plays the ring scatter and pickup |
 | Per-monster drop tables | One list per monster, each entry with weight / chance / count |
-| Drop light beams | A beam plays on the ground according to the prefix quality |
+| Drop light beams | A beam plays on the ground according to the prefix quality; its offset / scale / rotation / duration / toggle are tuned in the admin "UI effects" page (`light_1`…`light_6`) |
 | Bag tidy | Merges stackables and re-sorts by level / slot, pure functions covered by unit tests |
 | Bag drag / recycle / discard | Move or swap cells, recycle into bound ingots, drag out of the dialog to destroy a stack |
 | Mall | Every item is listed automatically, paged card browsing, purchases go straight into the bag |

@@ -20710,7 +20710,7 @@
           },
           "offsetX": {
             "type": "number",
-            "description": "摆位偏移 X（像素，相对 UI 层锚点）"
+            "description": "摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 图标中心）"
           },
           "offsetY": {
             "type": "number",
@@ -22975,16 +22975,16 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "特效 key（如 upgrade；取值域见 UI_EFFECT_KEYS）",
+            "description": "特效 key（升级特效 = upgrade、掉落光效 = light_1~light_6；取值域见 UI_EFFECT_KEYS）",
             "example": "upgrade"
           },
           "offsetX": {
             "type": "number",
-            "description": "摆位偏移 X（像素，相对 UI 层锚点，-2000~2000）"
+            "description": "摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 掉落物图标中心，-2000~2000）"
           },
           "offsetY": {
             "type": "number",
-            "description": "摆位偏移 Y（像素，y 向上为正，-2000~2000）"
+            "description": "摆位偏移 Y（像素，y 向上为正；相对挂点同 X，-2000~2000）"
           },
           "scaleX": {
             "type": "number",
@@ -23036,7 +23036,7 @@
             "description": "行数（= 特效 key 数）"
           },
           "list": {
-            "description": "全部特效行，按 key 字典序",
+            "description": "全部特效行，按 seed 顺序（= UI_EFFECT_KEYS 登记顺序：升级特效在最前，掉落光效按档排）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/UiEffectDto"

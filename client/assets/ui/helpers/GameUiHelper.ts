@@ -30,7 +30,8 @@ import { debugConfig } from "../../configs/debug";
 import { getText, TextParams } from "../../configs/texts";
 import { BottomNavItem } from "../../configs/bottomNav";
 import { BLANK_FRAME_MAX_AREA, getAnimationName } from "../../configs/animation";
-import { hitScreenFlash, upgradeEffectConfig } from "../../configs/game-config";
+import { dropLightEffectConfig, hitScreenFlash, upgradeEffectConfig } from "../../configs/game-config";
+import type { UiEffectConfig } from "../utils/net/ApiModels";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
@@ -966,34 +967,49 @@ export default class GameUiHelper {
    * 帧偏移由图集的 spriteOffset 保留（打包时逐帧按 alpha 裁剪并记录回贴位置），精灵 trim 保持
    * createSprite 的缺省 false，各帧画布一致、画面帧间不跳。
    *
+   * 表现参数（摆位 / 缩放 / 旋转 / 一轮时长 / 开关）归服务端 `ui_effects` 的 `light_*` 行（#634，
+   * 管理端「特效管理」可改，与升级特效同一套取向）—— 这里只决定「这张装备用哪张光柱」。
+   * 关掉时**连节点都不建**（不是建一个空精灵），与 `createUpgradeEffect` 的 enabled 口径一致。
+   *
    * 光柱排在图标之前（见 createDropItem）→ 画在图标下层；它是掉落物节点的子节点，
    * 随掉落物一起销毁（拾取 / 换图清空都不必单独清理）
    *
    * @param node 掉落物节点
-   * @param good 物品数据（非装备或没分配到光柱时不显示）
+   * @param good 物品数据（非装备、没分配到光柱、或该光柱被运营关掉时不显示）
    */
   static applyEquipmentLight(node: Node, good: Goods) {
     if (!isEquipment(good)) return;
     const lightKey = getEquipmentLightKey(good);
     const resource = lightKey ? lights.get(lightKey) : null;
-    if (!resource) return;
-    const light = this.createEquipmentLight(lightKey);
+    if (!lightKey || !resource) return;
+    const config = dropLightEffectConfig(lightKey);
+    if (!config || !config.enabled) return;
+    const light = this.createEquipmentLight(lightKey, config);
     node.addChild(light);
-    // 帧已由 PreloadManager 进图前预加载（片段按 图集|帧率 缓存，多个掉落物共用同一个片段）
-    AnimationHelper.playLoopAtlas(light.name, light, resource.atlas, equipmentLightLayout.frameRate);
+    // 帧已由 PreloadManager 进图前预加载（片段按 图集|时长 缓存，同一档光柱的多个掉落物共用）
+    AnimationHelper.playLoopAtlasWithDuration(light.name, light, resource.atlas, Math.max(0.1, config.durationMs / 1000));
   }
 
   /**
-   * 创建装备光柱零件（空精灵 + 动画组件，帧由 playLoopAtlas 异步装载）
+   * 创建装备光柱零件（空精灵 + 动画组件，帧由 playLoopAtlasWithDuration 异步装载）
    *
-   * 与图标**同中心**：位置取 dropItemLayout.iconOffsetY（随掉落物布局走，不在这里另配一套坐标）。
+   * 摆位口径：**与图标同中心**再加服务端给的偏移 —— 基准点是 `dropItemLayout.iconOffsetY`
+   * （随掉落物布局走，不在这里另配一套坐标），所以偏移 (0,0) 时与 #634 之前完全一致。
+   * 缩放按横纵各自乘、旋转顺时针，与升级特效 / 武器外观同一套语义。
    *
    * 节点名 = 前缀 + 光柱 key（`drop_light_light_1`）—— key 从 #542 起就是素材名、不含斜杠
-   * （Cocos 对含 `/` 的节点名会报 `Node name can not include '/'`）。名字同时是 playLoopAtlas
-   * 的动画状态名与片段名，改前缀会连带动画名，别单改一边。
+   * （Cocos 对含 `/` 的节点名会报 `Node name can not include '/'`）。名字同时是
+   * playLoopAtlasWithDuration 的动画状态名，改前缀会连带动画名，别单改一边。
    */
-  static createEquipmentLight(lightKey: string) {
-    const light = UiHelper.createSprite(`${equipmentLightLayout.namePrefix}${lightKey}`, "", new Vec2(0, dropItemLayout.iconOffsetY), equipmentLightLayout.size);
+  static createEquipmentLight(lightKey: string, config: UiEffectConfig) {
+    const light = UiHelper.createSprite(
+      `${equipmentLightLayout.namePrefix}${lightKey}`,
+      "",
+      new Vec2(config.offsetX, dropItemLayout.iconOffsetY + config.offsetY),
+      equipmentLightLayout.size,
+    );
+    light.setScale(config.scaleX, config.scaleY, 1);
+    light.angle = config.rotate;
     light.addComponent(Animation);
     return light;
   }
