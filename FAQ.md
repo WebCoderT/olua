@@ -163,9 +163,20 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 - `audit-ui-click-through`：UI 点击会不会穿透到世界、按压归属接线是否齐全
 - `audit-deploy`：Docker / compose / nginx 的跨文件接线是否对得上（服务名 / 端口 / 卷 / 反代前缀 / 密钥隔离）
 
+## 一次改动跑几遍门禁？现在只跑一遍
+
+2026-11-03 之前，一个 PR 要跑**三遍**同一套全量：本机 `make ci`、PR 上的 CI、合并后 master 上的 CI（`push` 触发，各约 3~4.5 分钟）。#631 之后只剩 PR 上一次：
+
+- **合并后那遍是纯重复。** PR 的 CI 跑的是 `refs/pull/N/merge` —— 「master + 本次改动」的合并树；squash 之后 master 的树与它相同。这一遍测不到任何新东西。
+- **本机那遍改成定向回归。** 提交前跑 `make test-changed`（改动哪跑哪），全量 `make ci` 留给「发布前 / 心里没底」。本机全量既慢又不稳：负载一高就红在 e2e 的「等待超时」断言上（同一份代码在 CI 上连续全绿），拿它当硬门禁等于自己制造假红。
+- **纯文档改动不跑。** `**/*.md` / `.workbuddy/**` / `design/**` / `website/**` 不可能让代码变坏，`paths-ignore` 直接不触发 —— 写记忆不再等四分钟。
+- **CI 内部拆并行。** `static`（类型检查 / 审计 / 两端构建）与 4 个 e2e 分片同时跑，全量从约 4.5 分钟降到约 2 分钟。分片清单从 `server/package.json` 的 `test:e2e*` 脚本**派生**（按 `index % N` 切），新增 e2e 脚本自动纳入 —— 以前 Makefile 里手写的清单漏了 3 套（`admin-mail` / `mail-expiry` / `ui-effect`，共 72 条断言）没人发现。
+
+想手动重跑全量：`gh workflow run ci.yml`（或 GitHub 网页上的 `workflow_dispatch`）。
+
 ## 为什么 CI 不覆盖客户端？
 
-CI 跑的是 `make ci`（见 `.github/workflows/ci.yml`），它覆盖**服务端 e2e（定向子集）+ 管理端构建 + 跨端审计 + 客户端类型检查**，但**不跑客户端单测**。这是 2026-10-11 在 #24 里拍板的「路径 B」：
+CI 分两个 job（见 `.github/workflows/ci.yml`）：`make ci-static`（客户端 tsc + 管理端构建 + 跨端审计 + 服务端编译）与 `make server-e2e-shard`（全部服务端 e2e，分 4 片并行）；两者合起来就是本机 `make ci` 的串行版。它**不跑客户端单测**。这是 2026-10-11 在 #24 里拍板的「路径 B」：
 
 - **客户端类型检查（`make client-check`，全工程 tsc）已进 CI。** Cocos 编辑器生成的 `client/temp/declarations/{cc,cc.custom-macro,jsb,cc.env}.d.ts` 里，shim 的 `/// <reference path="..."/>` 指向**本机 Cocos 安装的绝对路径**，而 `client/temp/` 在 `.gitignore` 里、CI 上也没装 Cocos。所以把这些声明 vendoring 进 `client/types/engine/`（相对路径 + 真实引擎 `cc.d.ts`），CI 用 `install-ci` 装好的 `client/node_modules/.bin/tsc`（与 Cocos 自带的同版本 5.8.2）即可类型检查，**无需编辑器**。
 - **客户端单测（`make client-test`）仍本地专属。** 其中 10 套直接断言 `assets/resources/` 下的真实素材（图集 / 帧序列 / 怪物帧 `.meta`），而素材 2.8 GB / 168000 文件、**有意不入库**。干净 clone 上这些断言不可能成立，把它们搬上 CI 等于要托管整套素材（路径 C），成本与维护压力都大，当前阶段不值得。

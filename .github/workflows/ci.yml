@@ -1,41 +1,56 @@
 # olua CI
 #
-# ## 覆盖范围（刻意如此，不是漏跑）
-#   ✓ 服务端：编译 + 七套 e2e（248 / 110 / 283 / 120 / 28 / 50 / 87 条断言，共 926；真实起服务、真实 HTTP 打）
-#   ✓ 管理端：类型检查 + 构建
-#   ✓ 跨端审计：9 个（接口生成物一致性 / 地址唯一来源 / 战斗规则快照 / 战斗算法 parity / 配置外泄 / 中英文档一致 / 文档数字 / 点击穿透 / 部署接线）
+# ## 什么时候跑（#631 收敛过，这是刻意的最小集合）
+#   ✓ PR：跑一次全套（静态半边 + 4 个 e2e 分片并行）
+#   ✗ 合并到 master：**不再跑** —— PR 的 CI 跑的是 `refs/pull/N/merge`，即
+#     「master + 本次改动」；squash 之后 master 的树与它相同，再跑一遍测不到新东西。
+#     （直接 push master 不受门禁保护，所以别那么干；需要时用 workflow_dispatch。）
+#   ✗ 纯文档 / 记忆 / 设计稿：`paths-ignore` 直接不触发（改 .md 跑不动任何代码）
+#   ✓ 手动：workflow_dispatch（想重跑全量时用）
 #
-#   ✓ 客户端类型检查（client-check）：**已进 CI**。Cocos 类型声明 vendoring 进
-#     client/types/engine/（相对路径 + 真实引擎 cc.d.ts），CI 无需 Cocos 编辑器，
-#     由 install-ci 装好的 client/node_modules/.bin/tsc 跑（见 #24 路径 B）。
-#   ✗ 客户端单测（client-test）：**仍不在 CI 覆盖范围内**——26 套里有 10 套断言
-#     assets/resources/ 下的真实素材（图集/帧序列/怪物帧 .meta），素材体积大、有意不入库
-#     （见 .gitignore）。干净 clone 上这些断言不可能成立。客户端单测是「本地专属」：
-#     本机用 Cocos Creator 打开 client/ 后跑 `make test`。
+# ## 跑什么
+#   static  = `make ci-static`：客户端 tsc + 管理端构建 + 15 项跨端审计 + 服务端编译
+#   e2e × 4 = `make server-e2e-shard`：套件清单**派生自 server/package.json**
+#             （29 个 test:e2e* 脚本），按 index % N 切片 —— 新增 e2e 脚本自动进 CI，
+#             不需要来改这个文件。以前 Makefile 里手写的清单漏了 3 套
+#             （admin-mail / mail-expiry / ui-effect），谁都没发现。
 #
-# ## 门禁清单只此一处
-#   这个 workflow 只调 `make ci`，顺序与内容全写在 Makefile 里 —— 本机跑同一条命令即可复现 CI。
+# ## 不跑什么（刻意，不是漏跑）
+#   ✗ 客户端单测（client-test）：若干套断言 assets/resources/ 下的真实素材
+#     （图集/帧序列/怪物帧 .meta），素材体积大、有意不入库（见 .gitignore），
+#     干净 clone 上这些断言不可能成立。客户端单测是「本地专属」。
+#   ✓ 客户端类型检查（client-check）：Cocos 类型声明 vendoring 进 client/types/engine/
+#     （相对路径 + 真实引擎 cc.d.ts），CI 无需 Cocos 编辑器。
+#
+# ## 门禁清单仍在 Makefile
+#   这个 workflow 只调三个 make 目标（ci-static / server-install-ci / server-e2e-shard），
+#   顺序与内容写在 Makefile —— 本机 `make ci` 跑的是同一套（串行版），不会漂。
 
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
+    # 只有文档变动的 PR 不必跑门禁：这些路径不可能让代码变坏
+    paths-ignore:
+      - "**/*.md"
+      - ".workbuddy/**"
+      - "design/**"
+      - "website/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# 同一个 PR 连续 push 时取消上一轮（新提交没必要等旧提交跑完）
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: 门禁（服务端 + 管理端 + 跨端审计）
+  static:
+    name: 静态（类型检查 / 审计 / 构建）
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: 取代码
         uses: actions/checkout@v4
@@ -43,17 +58,46 @@ jobs:
       - name: 装 Node（服务端 engines 要求 >= 22.5.0，node:sqlite）
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: |
             server/package-lock.json
             admin/package-lock.json
             client/package-lock.json
 
-      - name: 打印工具链与工程状态
-        run: make info
+      - name: 跑静态半边
+        # TSC：install-ci 已把 tsc 装进 client/node_modules，client-check 里 `cd client`
+        # 后相对路径正好解析到它，CI 无需 Cocos 编辑器。
+        run: make ci-static TSC=node_modules/.bin/tsc
 
-      - name: 跑门禁
-        # install-ci 已把 tsc 装进 client/node_modules；client-check 里 `cd client` 后
-        # 相对路径 node_modules/.bin/tsc 正好解析到它，CI 无需 Cocos 编辑器。
-        run: make ci TSC=node_modules/.bin/tsc
+  e2e:
+    name: e2e 分片 ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false # 一片红不影响其它片跑完 —— 一次看到全部失败
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - name: 取代码
+        uses: actions/checkout@v4
+
+      - name: 装 Node（服务端 engines 要求 >= 22.5.0，node:sqlite）
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            admin/package-lock.json
+            client/package-lock.json
+
+      - name: 装服务端依赖
+        run: make server-install-ci
+
+      - name: 编译服务端（e2e 跑的是 dist/ 产物）
+        run: make server-build
+
+      - name: 跑本分片
+        # N 取 matrix 的长度，不写死 —— 改分片数只改上面那个数组
+        run: make server-e2e-shard I=${{ matrix.shard }} N=${{ strategy.job-total }}

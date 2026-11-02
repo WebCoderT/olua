@@ -61,7 +61,7 @@ jscpd 的重复块先定性再动手，四类**合理形态不要抽**：
 1. **删码连注释一起删**：死常量头上的 JSDoc（往往解释着不存在的机制）比代码更误导，一并清。
 2. **孤儿 import 一起清**：删 `getMapOffset` 后 `view` 从 "cc" 的 import 里没了引用，必须同步摘。
 3. **两端编译验证**：`cd server && npm run build` + client 的 `tsc -p tools/tsconfig.check.json`，0 错才算完。
-4. **全绿再提交**：`make ci`（十二套 e2e + 审计）过了再 PR；本机另有 `make client-test`。
+4. **全绿再提交**：本机 `make test-changed`（改动哪跑哪）过了就 PR，全量交给 PR 上的 CI；`make ci` 是它的本机串行版（e2e 清单派生自 `server/package.json`，别再手写）。
 5. **改动前后必须拉取**：`git fetch` + 同步 master（提交纪律，见 MEMORY.md）。
 
 ## 五、历史判例（2026-10-26 #354）
