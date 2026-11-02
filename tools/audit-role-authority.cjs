@@ -94,8 +94,8 @@ function checkFieldsExist(fields) {
   }
   const roleText = read(CLIENT_ROLE);
   for (const field of fields) {
-    // 客户端 Role 的字段声明形如 `  gold: number = initialGold;`
-    if (!new RegExp(`^\\s{2}${field}[?:]?\\s*:`, "m").test(roleText)) {
+    // 客户端 Role 的字段声明形如 `  gold: number = initialGold;`（含 TS 确定性赋值断言 `  skills!: {...}`）
+    if (!new RegExp(`^\\s{2}${field}[?!]?\\s*:`, "m").test(roleText)) {
       problems.push(`${rel(CLIENT_ROLE)}：客户端角色实体里没有字段 ${field} —— 服务端在保护一个不存在的字段`);
     }
   }
