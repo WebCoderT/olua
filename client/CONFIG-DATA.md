@@ -57,7 +57,7 @@
 | `skills` | `applySkillRows` | `configs/skill-data.ts` `skillData` | `skills` 表 ← `configs/skill-data.ts` | `/skills` |
 | `statuses` | `applyStatusRows` | `configs/status.ts` `statuses` | `shared/status-seed.ts` | `/statuses` |
 | `fashions` | `applyFashionRows` | `configs/fashionClothes.ts` `fashionData` | `fashions` 表 ← `configs/fashionClothes.ts` | `/fashions` |
-| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `configs/mall.ts`（价格表） | `mall_prices` / `mall_settings` 表 | `/mall-pricing` |
+| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `configs/mall.ts`（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
 | `maps` / `mapTypes` | `applyMapRows` | `configs/map.ts` `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
 | `uiEffects` | `applyUiEffectRows` | `configs/effect.ts` `uiEffects` | `ui_effects` 表 | `/ui-effects` |
 
@@ -85,7 +85,7 @@
 | `npc.ts` | `npcs` | `applyNpcRows`（整表重建） |
 | `battle.ts` | `combatCalc` | `applyCombatWeights` |
 | `monsterRuntime.ts` | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` |
-| `mall.ts` | 价格表 | `applyMallPricing` |
+| `mall.ts` | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` |
 | `map.ts` | `maps` / `mapTypeGroups` | `applyMapRows` |
 
 ### 4.2 仍是「客户端持有 + 快照覆写」（#603 未搬完的部分）
@@ -99,7 +99,6 @@
 | `role.ts` | 198 | 职业表 + 移动速度 | 只剩少量常量 |
 | `growth.ts` | 97 | 装备前后缀倍率 + 回收价曲线 | 与 `equipments` 同轮 |
 | `monster.ts` | 65 | 只有 `monsterAI` 全局节奏常量 | 低优先 |
-| `mall.ts` | 65 | `mallPrice` 兜底常量（服务端已有权威定价） | 收益小 |
 | `material.ts` | 63 | 5 条材料行 | 随 `items` 一起 |
 
 ### 4.3 客户端自己的东西（与运营数据无关）
@@ -137,10 +136,10 @@
 ## 六、搬迁进度（#603）
 
 已搬完（客户端不再有出厂数据）：`monsterDrops`、`monster-skills`、`status`、`quest`、`achievement`、
-`drop`（具名表 + 兜底表）、`battle`（战斗力权重）、`npc`。
+`drop`（具名表 + 兜底表）、`battle`（战斗力权重）、`npc`、`mall`（默认售价）。
 
 剩余按阻力排序：`equipments` + `growth`（必须同轮）→ `items` / `material` / `drug`（要把
-`apply*Rows` 从「覆写已有行」改成整表重建）→ `skill-data` → `fashionClothes` → `role` / `monster` / `mall`。
+`apply*Rows` 从「覆写已有行」改成整表重建）→ `skill-data` → `fashionClothes` → `role` / `monster`（AI 节奏常量）。
 
 > 注：成就（`achievements`）虽然也在快照里，但客户端**不落表** —— 成就面板走
 > `AchievementStore` + `/achievements/me`（进度与达成状态是玩家数据，不是配置）。这一段属于
