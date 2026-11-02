@@ -11,7 +11,7 @@ import type { Level as LevelRow } from "../ui/utils/net/ApiModels";
  * 口径与称号 / 战魂 / 军衔（#590）一致：
  * - **整表重建**（先 clear 再按行填，`levelMap` 引用不变）——快照没有的等级客户端就没有，
  *   「管理端把上限调小」后多出来的等级会自动消失；
- * - **快照先于预载必到**（`Game.start` 里 `loadGameConfig()` 在 `PreloadManager` 之前），
+ * - **快照先于预载必到**（`Loading` 场景里 `loadGameConfig()` 在 `PreloadManager` 之前，#604），
  *   `levelMap` 的消费方（`entities/Role`、经验条）全部在进游戏后才读它。
  */
 

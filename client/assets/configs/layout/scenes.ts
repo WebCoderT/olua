@@ -231,6 +231,19 @@ export const loadingLayout = {
   },
   /** 加载进度文字：一行小字放进度条右下角（坐标相对画布中心） */
   progress: { text: "加载中 0%", position: new Vec2(0, -100), fontSize: 12 },
+  /**
+   * 运营配置拉不到时的失败面板（#604）：明细一行红字 + 一个重试按钮
+   *
+   * 位置在进度条上方一点（y 向下为负）。明细宽度给足 1000 并自动换行 ——
+   * 报错文案会带「缺了哪几段」，一行 12 号字塞不下。颜色只在布局里定义（ui/ 里不写色值）。
+   */
+  failure: {
+    detailPosition: new Vec2(0, -140),
+    detailWidth: 1000,
+    detailFontSize: 20,
+    detailColor: new Color("#FF6060"),
+    retryPosition: new Vec2(0, -230),
+  },
 };
 
 //#endregion

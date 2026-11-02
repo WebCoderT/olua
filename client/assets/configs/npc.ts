@@ -16,8 +16,9 @@ import type { Npc as NpcRow } from "../ui/utils/net/ApiModels";
  * 点击接线继续留在 `configs/npcClicks.ts`（那边才引弹窗），本文件只放一个注册表。
  *
  * ⚠ 快照到达前这张表是**空的**（不是 bug）：`MapObjectSpawner` 建节点时查不到会跳过该 NPC，
- * `PreloadManager` 也不会预载它的素材 —— 而 `Game.start` 里 `loadGameConfig()` 排在预载**之前**，
- * 所以正常进游戏时表已经满了；只有「Loading 场景先预载」那一趟会漏（`Game` 里那趟会补上）。
+ * `PreloadManager` 也不会预载它的素材。**#604 起这条时序已经钉死**：`Loading` 场景先
+ * `await loadGameConfig()` 再 `preloadGame`（拿不到配置就停在 Loading 重试），
+ * 所以预载那一趟读到的就是完整表 —— 以前「Loading 先预载、Game 再补一趟」的缺口没有了。
  */
 export const npcs = new Map<string, NpcData>();
 

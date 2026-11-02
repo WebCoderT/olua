@@ -44,6 +44,7 @@ import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, g
 import { roleDefaultCloths } from "./role";
 import { applySkillData } from "./skill-data";
 import { statuses } from "./status";
+import { checkSnapshotContract, snapshotContractMessage } from "./snapshot-contract";
 import { SEX } from "../types/role";
 import { StatusConfig, StatusSource } from "../types/status";
 import type { MonsterRuntimeStats } from "../types/monster";
@@ -59,6 +60,13 @@ import type { MonsterRuntimeStats } from "../types/monster";
  * #590 起称号 / 战魂 / 军衔 / 等级表是**整表重建**（与地图 #573 同款）：
  * 客户端没有本地数据兜底行（书写处在 server/src/shared/*-seed.ts），
  * 快照里没有的阶 / 级客户端就不存在 —— 「管理端删了一行」会如实反映。
+ *
+ * ## #604 起是**显式契约**，不再有「缺段跳过」
+ * 这个文件里没有任何 `if (snapshot.x)`：段在不在由 `configs/snapshot-contract` 判，
+ * `applyConfigSnapshot` 第一句就校验，缺段 / 形状不对直接**抛错**（不静默跳过、不回落本地）。
+ * 理由：客户端那几份出厂表随 #603 逐域退场后，「回落」等于回落到空表 ——
+ * 一个空着却看不出来的游戏比一个炸得响的错误难查得多。`ConfigLoader` 接住这个错，
+ * 把玩家挡在 Loading 界面并给出明确文案 + 重试。
  *
  * ## 只覆写「管理端能改的字段」
  * 资源路径（icon / 动画目录 / 外观 src）、几何（位置 / 缩放 / 碰撞尺寸）、
@@ -109,8 +117,8 @@ export function applyGrowthScalars(rows: GrowthScalar[]): void {
  * 顺序有讲究：上限变了 levelMap 行数跟着变（整表重建自然裁掉多出来的等级）。
  */
 export function applyGrowthSnapshot(snapshot: GameConfigSnapshot): void {
-  if (snapshot.growthScalars) applyGrowthScalars(snapshot.growthScalars);
-  if (snapshot.levels) applyLevelRows(snapshot.levels);
+  applyGrowthScalars(snapshot.growthScalars);
+  applyLevelRows(snapshot.levels);
 }
 
 //#region 内容表（#363）
@@ -249,24 +257,21 @@ export function applyMonsterPresentations(rows: MonsterPresentationRow[]): void 
 }
 
 /**
- * 覆写任务配置（#396）
+ * 覆写任务配置（#396；#603 第六域起**整表重建**）
  *
- * 三种情况都要处理：
- * - 本地有的行 → 原地覆写（消费方拿到的引用不变，`quests` Map 由 `rebuildQuests()` 重建）；
- * - 本地没有、快照里有 → **追加**（管理端能新建任务，目标类型只有 kill / talk / collect 三种，
- *   新的行不需要客户端代码配合就能跑）；
- * - 快照里没有、本地有 → 保留（服务端还没 seed 时用本地兜底，与其它表同口径）。
+ * 客户端 `configs/quest-data` 早在 #603 就没有出厂行了，所以这里与技能 / 状态 / 时装同口径：
+ * 先清空再按快照填 —— 管理端删掉一条任务，客户端就该少一条（留着旧行会变成
+ * 「追踪栏还挂着、点开却是空任务」的幽灵）。`quests` Map 由 `rebuildQuests()` 重建。
+ *
+ * 行转换（`questRowToConfig`）仍保留钳制：目标类型只认 kill / talk / collect，
+ * 数量至少 1，等级至少 1 —— 这些是**消费方的前提**（`Progress` 除以 count），
+ * 不是「兜底数据」，坏行宁可钳到 1 也不该让任务追踪栏崩掉。
  *
  * 奖励物品只认 `goodId / count` 两个字段：物品名与图标由物品总表解析，任务表不复制一份。
  */
 export function applyQuestRows(rows: QuestRow[]): void {
-  if (!rows.length) return;
-  for (const row of rows) {
-    const next = questRowToConfig(row);
-    const config = questData.find((item) => item.id === row.id);
-    if (config) Object.assign(config, next);
-    else questData.push(next);
-  }
+  questData.length = 0;
+  for (const row of rows) questData.push(questRowToConfig(row));
   rebuildQuests();
 }
 
@@ -340,74 +345,77 @@ export function applySkillRows(rows: SkillRow[]): void {
 }
 
 /**
- * 状态配置装载（#367 / #372 / #603）
+ * 状态配置装载（#367 / #372 / #603 第三域；#604 起整表重建）
  *
- * 覆写的是**注册表本身**（`statuses` 这个 Map 的元素内容），所以已经在身上生效的状态
+ * 覆写的是**注册表本身**（`statuses` 这个 Map），所以已经在身上生效的状态
  * 时长与图标也会跟着变（`StatusManager` 只记到期时间戳，读的仍是这份配置）。
  *
- * #603 起客户端 `configs/status` 里**没有任何状态数据**（只剩一张空 Map），所以
- * 这里对**所有**未登记的行一律写入（不再区分 owner）—— 角色状态与怪物状态同表，
- * 快照就是唯一来源。角色技能的 `casts` 帧只带 statusId，查不到配置就表现不出来，
- * 所以缺行必须补而不是忽略。
+ * 客户端 `configs/status` 只有一张空 Map（数据在服务端 `status-seed.ts` → `statuses` 表），
+ * 所以这里先 clear 再按快照填：快照里没有的状态客户端就不该有。
+ * 角色与怪物同表（`owner` 由服务端行带下来，这里不区分）—— 角色技能的 `casts` 帧只带
+ * statusId，查不到配置就表现不出来，所以缺行必须由契约拦住而不是「补一半」。
  */
 export function applyStatusRows(rows: StatusRow[]): void {
-  for (const row of rows) {
-    const next = statusRowToConfig(row);
-    const config = statuses.get(row.id);
-    if (!config) {
-      statuses.set(row.id, next);
-      continue;
-    }
-    Object.assign(config, next);
-  }
+  statuses.clear();
+  for (const row of rows) statuses.set(row.id, statusRowToConfig(row));
 }
 
-/** 技能与状态的覆写总入口（#367）：角色与怪物同表，一起覆写；缺表跳过 */
+/** 技能与状态的覆写总入口（#367）：角色与怪物同表，一起覆写；两段都是契约必填 */
 export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
-  if (snapshot.skills) applySkillRows(snapshot.skills);
-  if (snapshot.statuses) applyStatusRows(snapshot.statuses);
+  applySkillRows(snapshot.skills);
+  applyStatusRows(snapshot.statuses);
 }
 
-/** 内容表的覆写总入口（#363）：六张表各自按 id 对齐，缺表跳过 */
+/** 内容表的覆写总入口（#363）：逐段整表重建；段的存在性由契约保证（#604） */
 export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
-  if (snapshot.equipments) applyEquipments(snapshot.equipments);
-  if (snapshot.drugs) applyDrugRows(snapshot.drugs);
-  if (snapshot.items) applyItemRows(snapshot.items);
+  applyEquipments(snapshot.equipments);
+  applyDrugRows(snapshot.drugs);
+  applyItemRows(snapshot.items);
   // #603 第十域：三张物品表都落完，再一次性重建「id → 物品」总表 ——
   // 放在这里而不是各自 apply 里，是因为顺序（装备 → 药品 → 材料）只该有一处实现
   rebuildItemIndex();
-  if (snapshot.monsters) applyMonsterRows(snapshot.monsters);
+  applyMonsterRows(snapshot.monsters);
   // #588：怪物资源与表现（icon / out / 几何 / 移动 / AI 参数）—— 客户端没有本地怪物数据文件
-  if (snapshot.monsterPresentations) applyMonsterPresentations(snapshot.monsterPresentations);
-  if (snapshot.npcs) applyNpcRows(snapshot.npcs);
-  if (snapshot.quests) applyQuestRows(snapshot.quests);
-  if (snapshot.fashions) applyFashionRows(snapshot.fashions);
+  applyMonsterPresentations(snapshot.monsterPresentations);
+  applyNpcRows(snapshot.npcs);
+  applyQuestRows(snapshot.quests);
+  applyFashionRows(snapshot.fashions);
 }
 
 //#endregion
 
-/** 快照总入口：逐表覆写；某表缺失（undefined）时跳过该表，保留本地兜底 */
+/**
+ * 快照总入口（#294 / #604）
+ *
+ * 第一句校验契约：缺段 / 形状不对直接抛，**不再有「某表缺失就跳过」的分支**。
+ * 这是 #604 的全部要点 —— 快照是唯一数据来源，它不完整就是服务端的 bug，
+ * 应该在登录时炸响，而不是让客户端拿着半份数据演一个看似正常的游戏。
+ *
+ * 顺序有两处讲究（改顺序会静默毁数据）：
+ * - 装备规则必须最先装：倍率决定每件基础件展开成几档变体，晚了装备表整个是空的；
+ * - `rebuildItemIndex()` 在 `applyContentSnapshot` 末尾（三张物品表都落完之后）。
+ */
 export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
+  const problems = checkSnapshotContract(snapshot);
+  if (problems.length > 0) {
+    throw new Error(`配置快照不符合契约：${snapshotContractMessage(problems)}`);
+  }
   // #603：战斗力权重（客户端不再存倍率，唯一来源是服务端 combat-seed）
   applyCombatWeights(snapshot.combatWeights);
   // #603 第九域：装备规则**必须最先装** —— 它决定「每件基础件展开成几档变体」
   // （倍率为空 = 一件都展开不出来）与「回收价怎么算」。顺序反了装备表整个是空的
-  if (snapshot.equipmentMeta) {
-    applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates, snapshot.equipmentMeta.recycleCurve);
-    applyEquipmentQualityLabels(snapshot.equipmentMeta.prefixLabels, snapshot.equipmentMeta.suffixLabels);
-  }
-  if (snapshot.equipmentSlots) applyEquipmentSlots(snapshot.equipmentSlots);
-  if (snapshot.titles) applyTitleRows(snapshot.titles);
-  if (snapshot.souls) applySoulRows(snapshot.souls);
-  if (snapshot.ranks) applyRankRows(snapshot.ranks);
-  if (snapshot.mallPrices && snapshot.mallSettings) {
-    applyMallPrices(snapshot.mallPrices, snapshot.mallSettings.defaultPrice);
-  }
+  applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates, snapshot.equipmentMeta.recycleCurve);
+  applyEquipmentQualityLabels(snapshot.equipmentMeta.prefixLabels, snapshot.equipmentMeta.suffixLabels);
+  applyEquipmentSlots(snapshot.equipmentSlots);
+  applyTitleRows(snapshot.titles);
+  applySoulRows(snapshot.souls);
+  applyRankRows(snapshot.ranks);
+  applyMallPrices(snapshot.mallPrices, snapshot.mallSettings.defaultPrice);
   applyGrowthSnapshot(snapshot);
   applyContentSnapshot(snapshot);
   applySkillSnapshot(snapshot);
-  if (snapshot.maps) applyMapRows(snapshot.maps, snapshot.mapTypes ?? []);
-  if (snapshot.uiEffects) applyUiEffectRows(snapshot.uiEffects);
+  applyMapRows(snapshot.maps, snapshot.mapTypes);
+  applyUiEffectRows(snapshot.uiEffects);
 }
 
 //#region 地图玩法配置（#573）

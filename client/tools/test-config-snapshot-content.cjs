@@ -28,6 +28,24 @@ const attributes = (maxHp, hpRecover, attack, defense) => ({
   taoistDefense: { min: defense, max: defense },
 });
 
+/**
+ * #604 起 `applyConfigSnapshot` 是**显式契约**：缺段直接抛，不再「缺段跳过」。
+ * 单测要验的是某一段的落库口径，所以改用分段入口（`applyContentSnapshot` / `applySkillSnapshot`），
+ * 由下面两个助手补齐该入口必需的段 —— 别在测试里喂「半份快照」，那正是 #604 要禁止的用法。
+ */
+const contentSnapshot = (over = {}) => ({
+  equipments: [],
+  drugs: [],
+  items: [],
+  monsters: [],
+  monsterPresentations: [],
+  npcs: [],
+  quests: [],
+  fashions: [],
+  ...over,
+});
+const skillSnapshot = (over = {}) => ({ skills: [], statuses: [], ...over });
+
 function main() {
   let outDir;
   try {
@@ -45,6 +63,13 @@ function main() {
   const { fashionData } = require(path.join(outDir, "configs/fashionClothes.js"));
   const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
+
+  // 沙箱的「快照到达前」状态：客户端自身零出厂行，表是 hydrateSnapshotTables 按服务端种子灌的。
+  // **必须在任何 apply* 之前断言** —— 分段入口是整表重建，后跑的分段会把别的表清空。
+  console.log("\n=== 快照到达前的表（沙箱按线上同一条路灌种子）===");
+  check(drugs.length === 8, "药品表 8 种（#603 第十域：数据在 item-seed）", `size=${drugs.length}`);
+  check(fashionData.length === 20, "时装表 20 套（#603 第十二域：数据在 fashion-seed）", String(fashionData.length));
+  check(npcs.size === 0, "NPC 表为空（客户端没有本地兜底）", `size=${npcs.size}`);
 
   console.log("\n=== 装备：只下发基础件，变体按倍率重算 ===");
   const baseBefore = getItem("cloth_1");
@@ -76,7 +101,7 @@ function main() {
     attributes: attributes(1000, 5, 100, 20),
     updatedAt: 0,
   };
-  snapshotApi.applyConfigSnapshot({ equipments: [equipmentRow] });
+  snapshotApi.applyContentSnapshot(contentSnapshot({ equipments: [equipmentRow] }));
   const baseAfter = getItem("cloth_1");
   const variantAfter = getItem(variantId);
   const rate = equipmentPrefixRates[4] * equipmentSuffixRates[2];
@@ -114,12 +139,14 @@ function main() {
 
   console.log("\n=== 药品：整表重建 + 扁平四值还原成 effects（#603 第十域） ===");
   const drugBefore = drugs.find((drug) => drug.id === "drug_hp_1");
-  check(drugs.length === 8, "快照到达前药品表有 8 种（沙箱按线上同一条路灌了种子）", `size=${drugs.length}`);
-  snapshotApi.applyConfigSnapshot({
-    drugs: [
-      { id: "drug_hp_1", label: "测试金创药", description: "测试描述", icon: "item/fs_9", level: 1, sellPrice: 88, maxStack: 50, cooldown: 3, effectHp: 1234, effectMp: 0, effectHpPercent: 0, effectMpPercent: 25, updatedAt: 0 },
-    ],
-  });
+  // 「到达前有 8 种」已在文件开头断言（分段入口会整表重建，这里再判就没意义了）
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      drugs: [
+        { id: "drug_hp_1", label: "测试金创药", description: "测试描述", icon: "item/fs_9", level: 1, sellPrice: 88, maxStack: 50, cooldown: 3, effectHp: 1234, effectMp: 0, effectHpPercent: 0, effectMpPercent: 25, updatedAt: 0 },
+      ],
+    }),
+  );
   const drugAfter = drugs.find((drug) => drug.id === "drug_hp_1");
   check(drugAfter.label === "测试金创药" && drugAfter.sellPirce === 88, "文案与售价已覆写", `${drugAfter.label} / ${drugAfter.sellPirce}`);
   check(drugAfter.maxStack === 50 && drugAfter.cooldown === 3, "叠加上限与冷却已覆写", `${drugAfter.maxStack} / ${drugAfter.cooldown}`);
@@ -137,9 +164,11 @@ function main() {
 
   console.log("\n=== 物品与材料：整表重建（#603 第十域） ===");
   const materialBefore = getItem("material_hide");
-  snapshotApi.applyConfigSnapshot({
-    items: [{ id: "material_hide", type: "material", label: "测试兽皮", description: "测试材料", icon: "item/2010211", level: 1, sellPrice: 66, maxStack: 20, updatedAt: 0 }],
-  });
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      items: [{ id: "material_hide", type: "material", label: "测试兽皮", description: "测试材料", icon: "item/2010211", level: 1, sellPrice: 66, maxStack: 20, updatedAt: 0 }],
+    }),
+  );
   const materialAfter = getItem("material_hide");
   check(materialAfter.label === "测试兽皮" && materialAfter.description === "测试材料", "名称与描述已覆写", materialAfter.label);
   check(materialAfter.sellPirce === 66 && materialAfter.maxStack === 20, "价格与叠加上限已覆写", `${materialAfter.sellPirce} / ${materialAfter.maxStack}`);
@@ -154,25 +183,27 @@ function main() {
   const resourceAfter = monsterResource.get("1");
   check(resourceAfter && resourceAfter.out === "monster/out/1" && resourceAfter.contentSize.width === 44, "资源与表现已落运行时表", resourceAfter && `${resourceAfter.out} / ${resourceAfter.contentSize.width}×${resourceAfter.contentSize.height}`);
   check(resourceAfter.speedRate.stand === 2 && resourceAfter.speedRate.walk === 1, "speedRate 快照覆盖与默认表在落表时合成", `${resourceAfter.speedRate.stand} / ${resourceAfter.speedRate.walk}`);
-  snapshotApi.applyConfigSnapshot({
-    monsters: [
-      {
-        id: "1",
-        label: "测试怪",
-        tier: "normal",
-        level: 33,
-        maxHp: 54321,
-        attributes: {
-          physicalAttack: { min: 11, max: 22 },
-          magicAttack: { min: 0, max: 0 },
-          taoistAttack: { min: 0, max: 0 },
-          physicalDefense: { min: 3, max: 6 },
-          magicDefense: { min: 3, max: 6 },
-          taoistDefense: { min: 3, max: 6 },
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      monsters: [
+        {
+          id: "1",
+          label: "测试怪",
+          tier: "normal",
+          level: 33,
+          maxHp: 54321,
+          attributes: {
+            physicalAttack: { min: 11, max: 22 },
+            magicAttack: { min: 0, max: 0 },
+            taoistAttack: { min: 0, max: 0 },
+            physicalDefense: { min: 3, max: 6 },
+            magicDefense: { min: 3, max: 6 },
+            taoistDefense: { min: 3, max: 6 },
+          },
         },
-      },
-    ],
-  });
+      ],
+    }),
+  );
   const monsterAfter = monsterRuntime.get("1");
   check(monsterAfter && monsterAfter.label === "测试怪" && monsterAfter.level === 33, "数值落运行时表（名称 / 等级）", monsterAfter && `${monsterAfter.label} / ${monsterAfter.level}`);
   check(monsterAfter.maxHp === 54321, "生命取服务端展开值（不按曲线重算）", String(monsterAfter.maxHp));
@@ -184,13 +215,15 @@ function main() {
   check(resourceAfter === monsterResource.get("1") && resourceAfter.out === "monster/out/1", "数值落表不碰资源（两半分开，各自整段替换）", resourceAfter.out);
 
   console.log("\n=== NPC：整表重建（客户端不再存任何 NPC 数据）===");
-  check(npcs.size === 0, "快照到达前 NPC 表为空（客户端没有本地兜底）", `size=${npcs.size}`);
-  snapshotApi.applyConfigSnapshot({
-    npcs: [
-      { id: "0002", label: "测试传送官", dialog: "你好", src: "npc/npc_9999", scaleX: 1.5, scaleY: 1.5, posX: 11, posY: 0, updatedAt: 0 },
-      { id: "1001", label: "神装使者", dialog: "", src: "npc/npc_2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, updatedAt: 0 },
-    ],
-  });
+  // 「到达前 NPC 表为空」已在文件开头断言
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      npcs: [
+        { id: "0002", label: "测试传送官", dialog: "你好", src: "npc/npc_9999", scaleX: 1.5, scaleY: 1.5, posX: 11, posY: 0, updatedAt: 0 },
+        { id: "1001", label: "神装使者", dialog: "", src: "npc/npc_2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, updatedAt: 0 },
+      ],
+    }),
+  );
   const npcAfter = npcs.get("0002");
   check(npcAfter && npcAfter.label === "测试传送官", "NPC 名称取快照", npcAfter && npcAfter.label);
   check(npcAfter && npcAfter.src === "npc/npc_9999", "素材目录取快照（客户端没有 src 兜底）", npcAfter && npcAfter.src);
@@ -201,23 +234,25 @@ function main() {
 
   console.log("\n=== 时装：整表重建（资源路径也取快照）===");
 
-  check(fashionData.length === 20, "沙箱已按 fashion-seed 灌好 20 套（客户端自身零出厂行）", String(fashionData.length));
-  snapshotApi.applyConfigSnapshot({
-    fashions: [
-      {
-        id: "cloth_2",
-        label: "测试时装",
-        description: "测试时装描述",
-        icon: "clothes/icon/999",
-        inRes: "clothes/in/999",
-        outRes: "clothes/out/999",
-        sellPrice: 4321,
-        acquireChannel: "upgrade",
-        attributes: attributes(500, 0, 40, 10),
-        updatedAt: 0,
-      },
-    ],
-  });
+  // 「沙箱已灌 20 套」已在文件开头断言
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      fashions: [
+        {
+          id: "cloth_2",
+          label: "测试时装",
+          description: "测试时装描述",
+          icon: "clothes/icon/999",
+          inRes: "clothes/in/999",
+          outRes: "clothes/out/999",
+          sellPrice: 4321,
+          acquireChannel: "upgrade",
+          attributes: attributes(500, 0, 40, 10),
+          updatedAt: 0,
+        },
+      ],
+    }),
+  );
   const fashionAfter = fashionData.find((fashion) => fashion.id === "cloth_2");
   check(fashionData.length === 1, "整表重建：快照只给 1 行 → 衣柜里就只剩这 1 套", String(fashionData.length));
   check(fashionAfter.label === "测试时装" && fashionAfter.description === "测试时装描述", "名称与描述来自快照", fashionAfter.label);
@@ -231,29 +266,43 @@ function main() {
   );
   check(fashionData.find((fashion) => fashion.id === "cloth_3") === undefined, "快照里没有的时装不会残留（下架如实反映）");
 
-  console.log("\n=== 幂等与兜底 ===");
+  console.log("\n=== 幂等 + 契约（#604：缺段不再静默跳过） ===");
   const monsterRow = { id: "1", label: "测试怪", tier: "normal", level: 33, maxHp: 54321, attributes: { physicalAttack: { min: 11, max: 22 }, magicAttack: { min: 0, max: 0 }, taoistAttack: { min: 0, max: 0 }, physicalDefense: { min: 3, max: 6 }, magicDefense: { min: 3, max: 6 }, taoistDefense: { min: 3, max: 6 } } };
+  const idempotent = contentSnapshot({ equipments: [equipmentRow], monsters: [monsterRow] });
+  snapshotApi.applyContentSnapshot(idempotent);
   const once = JSON.stringify([getItem("cloth_1"), getItem(variantId), monsterRuntime.get("1")]);
-  snapshotApi.applyConfigSnapshot({
-    equipments: [equipmentRow],
-    monsters: [monsterRow],
-  });
+  snapshotApi.applyContentSnapshot(idempotent);
   const twice = JSON.stringify([getItem("cloth_1"), getItem(variantId), monsterRuntime.get("1")]);
   check(once === twice, "同一份快照覆写两次结果一致（变体不会一代代乘倍率）");
 
+  // #604：空快照 = 契约破坏（服务端把整份 return 删了），必须当场抛错。
+  // 以前这里是「保留当前值，旧服务端不炸」—— 那条兜底正是「改了没生效」类问题的温床。
   const hpBeforeEmpty = getItem("cloth_1").maxHp;
-  snapshotApi.applyConfigSnapshot({});
-  check(getItem("cloth_1").maxHp === hpBeforeEmpty, "空快照保留当前值（旧服务端不炸）");
+  let contractError = "";
+  try {
+    snapshotApi.applyConfigSnapshot({});
+  } catch (error) {
+    contractError = String((error && error.message) || error);
+  }
+  check(
+    contractError.indexOf("skills") >= 0 && contractError.indexOf("技能配置") >= 0,
+    "空快照直接抛错，错误里带 key 与中文名（服务端开发按 key 查、运营按中文名认）",
+    contractError.slice(0, 70),
+  );
+  check(getItem("cloth_1").maxHp === hpBeforeEmpty, "先校验后落库：抛错时不会半途写坏表", `maxHp=${getItem("cloth_1").maxHp}`);
+
   // #603 第九域起装备也是整表重建：快照里只有一件「不存在的装备」→ 旧的 555 件全部消失。
   // 这是设计口径（客户端没有出厂行），不是 bug —— 顺便证明「下架一件装备」真的会少一件。
-  snapshotApi.applyConfigSnapshot({
-    equipments: [{ id: "不存在的装备", attributes: attributes(1, 0, 1, 1), level: 1, label: "x", sellPrice: 0, slot: "cloth" }],
-  });
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      equipments: [{ id: "不存在的装备", attributes: attributes(1, 0, 1, 1), level: 1, label: "x", sellPrice: 0, slot: "cloth" }],
+    }),
+  );
   check(getItem("cloth_1") === null, "装备整表重建（快照里没有的客户端就没有）", "ok");
   check(
-    items.size === 15 + drugs.length + materials.length,
-    "物品总表条数 = 装备变体 + 药品 + 材料（三张表重建后自洽）",
-    `${items.size} = 15 + ${drugs.length} + ${materials.length}`,
+    items.size === 15 * 1 && drugs.length === 0 && materials.length === 0,
+    "物品总表 = 装备变体 + 药品 + 材料（三张表同一份快照重建后自洽）",
+    `items=${items.size} / drugs=${drugs.length} / materials=${materials.length}`,
   );
 
   finish("配置快照内容表：全部断言通过");

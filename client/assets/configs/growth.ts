@@ -64,7 +64,7 @@ export function sampleGrowth(segments: GrowthSegment[], level: number): number {
  * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
  *
  * **空数组 = 快照还没到**：此时 `buildEquipmentMap` 展开不出任何变体（装备表整个是空的）。
- * 正常路径上 `Game.start` 的 `loadGameConfig()` 在进场景前 await 过，玩家看不到空表。
+ * 正常路径上 `Loading` 场景的 `loadGameConfig()` 在进场景前 await 过（#604 起拿不到就不让进图），玩家看不到空表。
  */
 export let equipmentPrefixRates: number[] = [];
 

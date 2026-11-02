@@ -46,7 +46,7 @@ export function getMallPrice(good: Goods): number {
   if (defaultPrice == null) {
     if (!warnedMissing) {
       warnedMissing = true;
-      console.warn("[mall] 商城定价快照还没到就取价了（返回 0）：检查调用时序，正常应在 Game.start 的 loadGameConfig 之后");
+      console.warn("[mall] 商城定价快照还没到就取价了（返回 0）：检查调用时序，正常应在 Loading 场景的 loadGameConfig（#604）之后");
     }
     return 0;
   }

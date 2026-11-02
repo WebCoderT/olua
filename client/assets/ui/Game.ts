@@ -207,7 +207,15 @@ export class Game extends Component {
     // **这里必须 await**（#573）：地图的「名称 / 类型 / 进入条件」已经不在客户端了 ——
     // 传送弹窗与小地图直接读这份数据，不等它就会出现「进了游戏但地图全叫『地图 0』」。
     // 资源预加载不依赖它（路径由 mapSrcOf 按目录约定算），所以网络慢也只是名字晚到。
-    await loadGameConfig();
+    const config = await loadGameConfig();
+    // #604：配置是硬依赖，没就绪就别构建世界（客户端出厂表已随 #603 退场，带病进图 = 全空）。
+    // 正常路径走不到这里 —— Loading 场景在进图前已经拉过；只有「直接在编辑器里跑 Game 场景」会命中，
+    // 那时回 Loading 重走一遍（那边会显示明确原因并等玩家点屏幕重试）。
+    if (!config.ok) {
+      console.error(`[Game] 运营配置未就绪，回 Loading 重试：${config.message ?? ""}`, config.problems ?? []);
+      SceneManager.loadScene("Game");
+      return;
+    }
     RealtimeClient.start();
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）

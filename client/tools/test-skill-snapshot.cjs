@@ -83,6 +83,8 @@ function main() {
   check(oeccupationSkills.get("1")?.length === 12 && oeccupationSkills.get("2")?.length === 0, "职业技能映射按快照行重建（战士 12 / 法师空）", String(oeccupationSkills.get("1")?.length));
 
   snapshotApi.applySkillSnapshot({
+    // #604：分段入口要求「本入口要的段都在」—— 技能与状态同表下发，缺一段就是契约破坏
+    statuses: [],
     skills: [
       skillRow({
         label: "测试基础剑术",
@@ -128,7 +130,7 @@ function main() {
   check(after.castLockMs === 700, "动作锁毫秒数已覆写（客户端按它做兜底超时）", String(after.castLockMs));
   check(after.requireTarget === false, "「要求目标」已关掉（自身 / 状态型技能不再要求选中）", String(after.requireTarget));
   check(after.canAuto === false, "「可自动释放」已关掉", String(after.canAuto));
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ castLockMs: 0 })] });
+  snapshotApi.applySkillSnapshot({ statuses: [], skills: [skillRow({ castLockMs: 0 })] });
   check(
     skillData.find((item) => item.id === "1000").castLockMs === 0,
     "动作锁填 0 = 跟动画走（保持 0，不变成 undefined）",
@@ -136,9 +138,9 @@ function main() {
   );
 
   console.log("\n=== 挂载状态：statusId 空串 = 不挂（不是空字符串） ===");
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1011", statusId: "2001", category: "2" })] });
+  snapshotApi.applySkillSnapshot({ statuses: [], skills: [skillRow({ id: "1011", statusId: "2001", category: "2" })] });
   check(skillData.find((item) => item.id === "1011").statusId === "2001", "statusId 已覆写（技能 1011 挂到 2001）", String(skillData.find((item) => item.id === "1011").statusId));
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1011", statusId: "" })] });
+  snapshotApi.applySkillSnapshot({ statuses: [], skills: [skillRow({ id: "1011", statusId: "" })] });
   check(
     skillData.find((item) => item.id === "1011").statusId === undefined,
     "空串清成 undefined（消费方判 `if (config.statusId)` 即可）",
@@ -148,6 +150,8 @@ function main() {
   console.log("\n=== 怪物技能（#372）：同表下发，靠 owner 区分 ===");
   // 快照里角色与怪物行一起下发：表 = 快照，分归属只影响「进不进技能栏」
   snapshotApi.applySkillSnapshot({
+    // #604：分段入口要求「本入口要的段都在」—— 技能与状态同表下发，缺一段就是契约破坏
+    statuses: [],
     skills: [
       skillRow({ id: "1000" }),
       skillRow({ id: "9001", owner: "monster", cooldown: 12, label: "改过的猛击", action: "attack_skill_1", occupation: "4" }),
@@ -185,7 +189,14 @@ function main() {
     },
   ]);
   const statusAfter = statuses.get("2001");
-  check(statusAfter === statusBeforeObject, "原地覆写注册表元素（已在身上生效的状态也读新配置）", String(statusAfter.duration));
+  // #604：状态表也是整表重建（与技能同口径），所以换的是**新对象**。
+  // 已经在身上生效的状态靠 statusId 现读这份注册表（StatusManager 只记到期时间戳），
+  // 所以换对象不影响「生效中的状态也读新配置」—— 判据从「同一个对象」改成「按 id 读得到新值」。
+  check(
+    statusAfter !== statusBeforeObject && statusAfter.duration === 20 && statuses.get("2001") === statusAfter,
+    "整表重建后按 id 读得到新配置（生效中的状态同理，它每次结算都重新查表）",
+    String(statusAfter.duration),
+  );
   check(statusAfter.duration === 20 && statusAfter.label === "测试护体神盾", "时长与名称已覆写", `${statusAfter.duration} / ${statusAfter.label}`);
   check(statusAfter.combat.blockChance === 0.4 && statusAfter.combat.blockFactor === 0.45, "格挡概率与系数已覆写", JSON.stringify(statusAfter.combat));
   check(statusAfter.combat.defenseMultiplier === 1.2, "防御倍率已覆写", String(statusAfter.combat.defenseMultiplier));
@@ -213,24 +224,33 @@ function main() {
     JSON.stringify(pureStatus.combat),
   );
 
-  console.log("\n=== 幂等与兜底 ===");
-  const snapshot = { skills: [skillRow({ cooldown: 3 })] };
+  console.log("\n=== 幂等 + 契约（#604） ===");
+  const snapshot = { statuses: [], skills: [skillRow({ cooldown: 3 })] };
   snapshotApi.applySkillSnapshot(snapshot);
   const once = JSON.stringify(skillData.find((item) => item.id === "1000"));
   snapshotApi.applySkillSnapshot(snapshot);
   check(JSON.stringify(skillData.find((item) => item.id === "1000")) === once, "同一份快照覆写两次结果一致");
-  const hpBeforeEmpty = skillData.find((item) => item.id === "1000").cooldown;
-  snapshotApi.applySkillSnapshot({});
-  check(skillData.find((item) => item.id === "1000").cooldown === hpBeforeEmpty, "空快照保留当前值（旧服务端不下发技能表也不炸）");
+  const cooldownBefore = skillData.find((item) => item.id === "1000").cooldown;
+  // #604：整份快照缺段是契约破坏（applyConfigSnapshot 会抛）；分段入口要求本入口的段都在。
+  // 以前这里断言「空快照保留当前值」—— 那条兜底就是「改了没生效」类问题的来源。
+  let contractError = "";
+  try {
+    snapshotApi.applyConfigSnapshot({});
+  } catch (error) {
+    contractError = String((error && error.message) || error);
+  }
+  check(contractError.indexOf("skills") >= 0, "整份快照缺段 → 抛错并点名 skills（#604）", contractError.slice(0, 50));
+  check(skillData.find((item) => item.id === "1000").cooldown === cooldownBefore, "抛错前不落库（技能表还是上一份的样子）");
   // 表 = 快照：快照里有几行就是几行，id 不认识也照样进表（它没有释放实现，本地放不出来）
-  snapshotApi.applySkillSnapshot({ skills: [skillRow({ id: "1999", label: "不存在的角色技能" })] });
+  snapshotApi.applySkillSnapshot({ statuses: [], skills: [skillRow({ id: "1999", label: "不存在的角色技能" })] });
   check(skillData.length === 1 && skillData[0].id === "1999", "不认识的 id 也按快照进表（表是快照的镜像，不做本地白名单）", JSON.stringify(skillData.map((item) => item.id)));
 
   console.log("\n=== 接线钉死（源码断言：这三处不接上，配了也不会生效） ===");
   const configLoader = read("assets/ui/utils/net/ConfigLoader.ts");
   check(/rebuildSkills/.test(configLoader), "ConfigLoader 引入了 rebuildSkills");
+  // 顺序判据用「先出现 applyConfigSnapshot，后出现 rebuildSkills」—— 别用窗口长度（注释一长就假红）
   check(
-    /applyConfigSnapshot\([\s\S]{0,200}?rebuildSkills\(\)/.test(configLoader),
+    configLoader.indexOf("applyConfigSnapshot(") >= 0 && configLoader.indexOf("applyConfigSnapshot(") < configLoader.lastIndexOf("rebuildSkills()"),
     "rebuildSkills 在 applyConfigSnapshot 之后调用（Map 里的副本不重建就读不到新数值）",
   );
 
