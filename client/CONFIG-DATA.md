@@ -97,12 +97,16 @@
 | `skill-data.ts` | `skillData`（**空数组**）+ `oeccupationSkills`（按行派生） | `applySkillData`（整表重建，含职业映射重算） |
 | `fashionClothes.ts` | `fashionData`（**空数组**）+ 外观取源规则（`getFashionOut` / `getFashionIn`） | `applyFashionData`（整表重建，含 icon / in / out） |
 
-### 4.2 仍是「客户端持有 + 快照覆写」（#603 未搬完的部分）
+### 4.2 复核后判定「不搬」（#603 第十三域的结论）
 
-| 文件 | 行数 | 现在客户端存什么 | 阻力 |
-|---|---|---|---|
-| `role.ts` | 198 | 职业表 + 移动速度 | 只剩少量常量 |
-| `monster.ts` | 65 | 只有 `monsterAI` 全局节奏常量 | 低优先 |
+| 文件 | 剩下什么 | 为什么不入库 |
+|---|---|---|
+| `role.ts` | `occupations`（3 行职业介绍）、移动速度、体型 / 碰撞盒、摇杆与鼠标死区、背包行列、快捷键布局、动作速度倍率 | 职业名的权威副本已在公共数据（生成物 `OCCUPATION_LABELS`）；介绍图路径按职业码可推导（`create_role/tips_<码>`），尺寸是素材量出来的；其余全是手感 / 布局参数（`client/README` 的「表现层」） |
+| `monster.ts` | `monsterAI`（普攻间隔 / 停下出手距离 / 待机游走节奏 / 击退时长）、`monsterDefaultSpeedRate` | 动画节奏与手感；服务端 tick 读的 6 个数值已由生成器收进 `MONSTER_AI`（**两端同源，不是两份**）。怪物真正的数值（血量 / 六项攻防 / 掉落）早在 `monsters` 表 |
+
+> 判据沿用项目既定三条：**能按 id 推导的资源路径不入库**、**素材尺寸不是运营数值**、
+> **客户端只留资源约定与手感参数**。为了「搬完」而给 3 行 UI 文案建表 + 建页面，
+> 收益不抵一处新的漂移面 —— 这一点已写进 `TODO-FOR-USER.md` 等拍板。
 
 ### 4.3 客户端自己的东西（与运营数据无关）
 
@@ -146,7 +150,8 @@
 **`skill-data`（第十一域：15 条技能行 + 职业归属 / 击退距离，`oeccupationSkills` 改为派生）**、
 **`fashionClothes`（第十二域：20 套时装，含 icon / in / out 资源路径 —— 路径不可按 id 推导，必须入库）**。
 
-剩余按阻力排序：`role` / `monster`（AI 节奏常量）。
+**`role` / `monster`（第十三域）：复核后判定不搬** —— 剩下的全是表现层（职业介绍图路径可推导、
+尺寸取素材、AI 节奏与移动手感），判据见 4.2。至此 #603 的「运营数据进库」全部收口。
 
 > 第九域的三层切分值得记住：**显示与规则**进 `equipments` / `equipment_slots` / `equipment_meta` 三张表；
 > **八项战斗属性**不进表，由 `growth-seed.equipmentStats(level, slot)` 公式算（#590）；

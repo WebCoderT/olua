@@ -157,12 +157,29 @@ roleDefaultCloths.set(SEX.GRIL, {
  */
 export function getRoleDefaultCloth(sex: SEX): RoleDefaultCloth {
   return roleDefaultCloths.get(sex) ?? roleDefaultCloths.get(SEX.BOY)!;
-}/** 职业介绍信息MAP */
+}/**
+ * 职业介绍信息（创建角色界面用：职业名 + 介绍图 + 介绍图尺寸）
+ *
+ * #603 第十三域复核结论：**这份数据不入库**，只把「手写的三条路径」收成推导规则。
+ * 判据是项目一贯的三层归属：
+ * - **职业名**是可运营文案，唯一的权威副本已经在公共数据里（生成物 `OCCUPATION_LABELS`，
+ *   管理端 / 服务端读的都是它，来源就是本表）—— 再建一张表只会变成「两份名字」；
+ * - **介绍图路径可按职业码推导**（`create_role/tips_<职业码>`，1/2/3 与 tips_1/2/3 一一对应），
+ *   按「能按 id 推导的资源路径不入库」的判据（地图 `map/<id>/<id>` 同理），它属于资源约定；
+ * - **尺寸是素材量出来的**（两张 249×69、一张 245×51），换图才需要改，不是运营数值。
+ *
+ * 于是这里只留**推导规则**，不再手写三条路径 —— 加第四个职业时不会漏配一条 tips 路径。
+ */
+function occupationIntro(name: string, code: OECCUPATION, descriptionSize: Size): RoleOccupationInfo {
+  return { name, description: `create_role/tips_${code}`, descriptionSize };
+}
+
+/** 职业介绍信息MAP */
 export const occupations = new Map<OECCUPATION, RoleOccupationInfo>();
 
-occupations.set(OECCUPATION.ZHAN, { name: "战士", description: "create_role/tips_1", descriptionSize: new Size(245, 51) });
-occupations.set(OECCUPATION.FA, { name: "魔法师", description: "create_role/tips_2", descriptionSize: new Size(249, 69) });
-occupations.set(OECCUPATION.DAO, { name: "道士", description: "create_role/tips_3", descriptionSize: new Size(249, 69) });
+occupations.set(OECCUPATION.ZHAN, occupationIntro("战士", OECCUPATION.ZHAN, new Size(245, 51)));
+occupations.set(OECCUPATION.FA, occupationIntro("魔法师", OECCUPATION.FA, new Size(249, 69)));
+occupations.set(OECCUPATION.DAO, occupationIntro("道士", OECCUPATION.DAO, new Size(249, 69)));
 
 /** 关系的角色信息显示位置关系map */
 export const roleInfoPositions = new Map<RELATION_SHIP, Vec2>();
