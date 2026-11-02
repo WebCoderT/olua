@@ -6,41 +6,51 @@ import { belts, clothes, equipmentSlotOrder, helmets, nicklaces, rings, shoes, w
  *
  * 商品 = **系统内的全部装备**：七个部位的装备 Map 全量收进来（含前后缀品质变体，
  * 一件基础装备 = 15 件变体，见 configs/equipments.buildEquipmentMap），购买后直接进背包。
- * 售价默认统一 1 绑定元宝/件；想给个别装备单独定价改 customPriceData，界面不用动。
- * 陈列与购买交互在 ui/components/dialogs/MallDialog，商品与价格都以这里为准。
+ * 陈列与购买交互在 ui/components/dialogs/MallDialog。
+ *
+ * **#603 第八域起客户端不存任何价格**：统一价与特殊价都在服务端（`mall_settings` /
+ * `mall_prices` 两张表，管理端「商城定价」可改），进游戏由 `GET /game-config` 快照下发，
+ * 这里只做落表与取价。以前在客户端写死的 `mallPrice = 1` 已删 —— 那份常量与服务端
+ * `MALL.defaultPrice` 是同一件事，两边各改一次迟早漂移。
  */
 
-/** 商城默认售价（绑定元宝 / 件）：全场统一价，特殊装备在 customPriceData 里覆盖 */
-export const mallPrice = 1;
+/** 特殊价（商品 id → 绑定元宝）：快照 `mallPrices` 段整表重建 */
+let specialPrices = new Map<string, number>();
 
-/** 特殊装备定价表（数组为源 + 尾部建 Map，key 只做关联）：不在此表的装备走 mallPrice 统一价 */
-const customPriceData: Array<{ id: string; price: number }> = [];
-const customPrices = new Map(customPriceData.map((entry) => [entry.id, entry.price]));
+/** 统一价（快照 `mallSettings.defaultPrice`）；null = 快照还没到 */
+let defaultPrice: number | null = null;
 
-/**
- * 服务端下发的定价覆写（#294 进游戏拉配置快照后设置；null = 未接入，走上面的本地表）
- * 特殊价优先，未定价商品走服务端统一价 —— 与服务端「特殊价优先于统一价」的口径一致
- */
-let serverPrices: Map<string, number> | null = null;
-let serverDefaultPrice: number | null = null;
+/** 只 warn 一次：快照没到就问价，说明调用时序错了（正常路径 `Game.start` 已 await 过配置） */
+let warnedMissing = false;
 
 /**
- * 接入服务端定价（configs/apply-snapshot 调用）：defaultPrice = mall_settings 统一价，
+ * 接入服务端定价（`configs/apply-snapshot` 调用）：defaultPrice = mall_settings 统一价，
  * prices = mall_prices 全量目录（price 为 null 的行是未定价，不入 Map）
  */
-export function applyMallPricing(defaultPrice: number, prices: Array<{ id: string; price: number | null }>): void {
+export function applyMallPricing(nextDefaultPrice: number, prices: Array<{ id: string; price: number | null }>): void {
   const map = new Map<string, number>();
   prices.forEach((entry) => {
     if (entry.price != null) map.set(entry.id, entry.price);
   });
-  serverPrices = map;
-  serverDefaultPrice = defaultPrice;
+  specialPrices = map;
+  defaultPrice = nextDefaultPrice;
 }
 
-/** 取某件物品在商城的售价（绑定元宝 / 件；服务端定价优先，未接入快照时走本地表） */
+/**
+ * 取某件物品在商城的售价（绑定元宝 / 件）：**特殊价优先，未定价走统一价**
+ *
+ * 与结算口径一致（服务端扣款用的就是这套规则）。快照没到就返回 0 并 warn 一次 ——
+ * 不在这里兜一个「出厂价」，那等于又在客户端存一份价格。
+ */
 export function getMallPrice(good: Goods): number {
-  if (serverPrices) return serverPrices.get(good.id ?? "") ?? serverDefaultPrice ?? mallPrice;
-  return customPrices.get(good.id ?? "") ?? mallPrice;
+  if (defaultPrice == null) {
+    if (!warnedMissing) {
+      warnedMissing = true;
+      console.warn("[mall] 商城定价快照还没到就取价了（返回 0）：检查调用时序，正常应在 Game.start 的 loadGameConfig 之后");
+    }
+    return 0;
+  }
+  return specialPrices.get(good.id ?? "") ?? defaultPrice;
 }
 
 /**

@@ -5,7 +5,9 @@
  * 盯的不变量（改商城后必须全绿）：
  * · 商品表 = 系统内全部装备（七个部位的装备 Map 全量，含 15 品质变体），无重复、id 都能解析回同一对象
  * · 排序稳定：部位序 → 等级 → 前缀 → 后缀
- * · 价格：默认统一 mallPrice（= 1 绑定元宝/件），getMallPrice 全场返回它
+ * · 价格：#603 第八域起客户端**不存任何价格** —— 统一价与特殊价都由服务端快照下发
+ *   （本测试模拟快照：统一价 1、无特殊价），getMallPrice 全场返回统一价；
+ *   快照没到就取价 → 0 且只 warn 一次（不兜出厂价）
  * · 购买链路（在沙箱里跑**真实的 StorageManager**）：客户端只发 { goodId, revision }，
  *   扣款与入包都以**服务端返回的那份**为准（#304 收权后本地不再自算）；
  *   非装备/认不出的 id、余额不足、背包满三种情况都不改数据（不扣钱、不进包）
@@ -30,7 +32,7 @@ if (sandbox) {
   void (async () => {
   const { StorageManager, Role, outDir, RoleApi } = sandbox;
   const { getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
-  const { getMallGoods, getMallPrice, mallPrice } = require(path.join(outDir, "configs/mall.js"));
+  const { getMallGoods, getMallPrice, applyMallPricing } = require(path.join(outDir, "configs/mall.js"));
   const { equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
 
   const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -141,11 +143,17 @@ if (sandbox) {
 
   //#endregion
 
-  //#region B. 价格：默认 1 绑定元宝
+  //#region B. 价格：全部来自服务端快照
 
-  console.log("\n— B. 价格（默认统一价）—");
-  check(mallPrice === 1, `默认售价 = 1 绑定元宝/件（实际 ${mallPrice}）`);
-  check(mallGoods.every((good) => getMallPrice(good) === mallPrice), "全场商品 getMallPrice 都返回统一价");
+  console.log("\n— B. 价格（快照下发，客户端不存）—");
+  check(getMallPrice(mallGoods[0]) === 0, "快照没到就取价 = 0（客户端不兜出厂价）", String(getMallPrice(mallGoods[0])));
+  applyMallPricing(1, []);
+  check(getMallPrice(mallGoods[0]) === 1, "统一价 1 全部生效", String(getMallPrice(mallGoods[0])));
+  check(mallGoods.every((good) => getMallPrice(good) === 1), "全场商品 getMallPrice 都返回统一价");
+  applyMallPricing(1, [{ id: mallGoods[0].id, price: 999 }]);
+  check(getMallPrice(mallGoods[0]) === 999, "特殊价优先于统一价", String(getMallPrice(mallGoods[0])));
+  check(getMallPrice(mallGoods[1]) === 1, "未定价的商品仍走统一价", String(getMallPrice(mallGoods[1])));
+  applyMallPricing(1, []);
 
   //#endregion
 

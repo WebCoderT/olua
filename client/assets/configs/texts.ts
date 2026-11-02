@@ -102,7 +102,7 @@ export const uiTexts = {
    * 带单位：卡片右侧孤零零一个数字会被读成「数量」而不是「要花多少」。
    */
   mall_price: "{value} 绑元",
-  /** 全场统一价说明（{price} = 统一价，见 configs/mall.mallPrice） */
+  /** 全场统一价说明（{price} = 服务端下发的统一价，见 configs/mall.getMallPrice） */
   mall_price_note: "全场装备统一 {price} 绑定元宝",
   /** 商城分页：翻页按钮文案与页码（{page} = 当前页，{total} = 总页数，见 configs/mall.getMallGoods 分页） */
   label_mall_first_page: "首 页",
