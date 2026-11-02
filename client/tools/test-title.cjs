@@ -126,6 +126,8 @@ const roleInfoSource = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
 const dialogSource = read("assets/ui/components/dialogs/TitleUpgradeDialog.ts");
 const textsSource = read("assets/configs/texts.ts");
 const npcSource = read("assets/configs/npc.ts");
+// #603 第七域：NPC 数据搬去服务端，点击行为单独一个文件（它会引 UI 组件）
+const npcClicksSource = read("assets/configs/npcClicks.ts");
 const hudSource = read("assets/configs/layout/hud.ts");
 const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
 const sizesSource = read("assets/configs/layout/sizes.ts");
@@ -148,7 +150,7 @@ check(/dir: title\.animation, kind: "frames"/.test(preloadSource) && /getTitleLe
 check(/static createTitleCard/.test(uiHelperSource) && /static createTitleAttributeList/.test(uiHelperSource) && /static createTitleAnimation/.test(uiHelperSource), "GameUiHelper 有称号三零件（卡片/属性表/动画）");
 check(/titleUpgradeDialogLayout\.list\.cardSize/.test(uiHelperSource) && /titleAttributeLabels/.test(uiHelperSource), "称号零件的几何与属性顺序都来自 configs（不写死）");
 check(/new TitleUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.titleButton/.test(roleInfoSource), "角色信息弹窗有「称号」按钮打开称号弹窗（唯一入口）");
-check(/new WarSoulDialog/.test(npcSource) && !/TitleUpgradeDialog/.test(npcSource), "NPC 只挂战魂弹窗，称号不走 NPC");
+check(/new WarSoulDialog/.test(npcClicksSource) && !/TitleUpgradeDialog/.test(npcClicksSource), "NPC 只挂战魂弹窗，称号不走 NPC");
 check(/createTitleCard|createTitleAttributeList|createTitleAnimation|upgradeTitle\(\)|RoleUIManager\.updateTitleShow/.test(dialogSource), "称号弹窗接线：零件/升级/头顶刷新");
 check(!/soulShow/.test(dialogSource), "称号弹窗没有「外显」勾选框（称号常显头顶）");
 check(/title_upgrade_dialog/.test(dialogsLayoutSource) && /titleButton: \{ name: "role_title_button"/.test(dialogsLayoutSource), "弹窗布局与入口按钮都在 configs/layout/dialogs");

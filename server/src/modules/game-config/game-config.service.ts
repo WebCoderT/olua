@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { AcquireChannel } from "../../common/constants/game-config";
 import { BizException } from "../../common/errors/biz.exception";
@@ -47,7 +47,6 @@ import {
   FASHIONS,
   ITEM_BASES,
   MONSTER_SKILLS,
-  NPCS,
   QUESTS,
   ITEM_TYPES,
   SKILLS,
@@ -57,9 +56,12 @@ import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed"
 import { TITLE_SEEDS } from "../../shared/title-seed";
 import { SOUL_SEEDS } from "../../shared/soul-seed";
 import { RANK_SEEDS } from "../../shared/rank-seed";
+import { NPC_SEED_ROWS } from "../../shared/npc-seed";
 
 /** 怪物 key 清单（出厂种子派生；成就击杀目标 / 任务击杀目标的存在性校验共用） */
 const MONSTER_SEED_KEYS = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
+/** NPC id 清单（#603 第七域起同样从服务端种子派生，不再读生成物里的 NPCS 表） */
+const NPC_SEED_KEYS = new Set(NPC_SEED_ROWS.map((row) => row.id));
 import { EquipmentDto, EquipmentQueryDto, UpdateEquipmentDto } from "./dto/equipment.dto";
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
@@ -104,6 +106,8 @@ const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDe
  */
 @Injectable()
 export class GameConfigService implements OnModuleInit {
+  private readonly logger = new Logger(GameConfigService.name);
+
   constructor(
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
@@ -505,6 +509,12 @@ export class GameConfigService implements OnModuleInit {
       ...existing,
       label: dto.label ?? existing.label,
       dialog: dto.dialog ?? existing.dialog,
+      // #603 第七域：外观也归管理端（客户端不再存一份），改完下次进游戏由快照重建
+      src: dto.src ?? existing.src,
+      scale_x: dto.scaleX ?? existing.scale_x,
+      scale_y: dto.scaleY ?? existing.scale_y,
+      pos_x: dto.posX ?? existing.pos_x,
+      pos_y: dto.posY ?? existing.pos_y,
       updated_at: Date.now(),
     };
     this.npcsRepo.update(next);
@@ -1067,13 +1077,13 @@ export class GameConfigService implements OnModuleInit {
         throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的击杀目标 ${row.objective_target} 不是已配置的怪物`);
       }
     } else if (row.objective_type === "talk") {
-      if (!(row.objective_target in (NPCS as Record<string, unknown>))) {
+      if (!NPC_SEED_KEYS.has(String(row.objective_target))) {
         throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的对话目标 ${row.objective_target} 不是已配置的 NPC`);
       }
     } else if (!(row.objective_target in (ITEM_TYPES as Record<string, unknown>))) {
       throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的收集目标 ${row.objective_target} 不是已配置的物品`);
     }
-    if (row.npc_id && !(row.npc_id in (NPCS as Record<string, unknown>))) {
+    if (row.npc_id && !NPC_SEED_KEYS.has(String(row.npc_id))) {
       throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的发布 NPC ${row.npc_id} 不是已配置的 NPC`);
     }
     if (row.prev_quest_id) {
@@ -1231,16 +1241,30 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** NPC seed：NPCS 直接灌（id + 名称），21 个；对话文案客户端没有数据形态，seed 空串（#258） */
+  /**
+   * NPC seed（#258 / #603 第七域）：NPC_SEED_ROWS 整行灌 —— 名称 / 对话（空串）/ 素材目录 /
+   * 缩放 / 偏移都在服务端种子里，客户端不再存任何一条。
+   * 存量库的行是「只有 id + 名称」的老形态，`seedRow` 的 INSERT OR IGNORE 会整行跳过，
+   * 所以这里补一次 `backfillAppearance`（只在 src 空着时填），否则老库的 NPC 会集体不显示。
+   */
   private seedNpcs() {
-    for (const [id, meta] of Object.entries(NPCS as Record<string, Record<string, unknown>>)) {
-      this.npcsRepo.seedRow({
-        id,
-        label: String(meta.label ?? ""),
+    let backfilled = 0;
+    for (const row of NPC_SEED_ROWS) {
+      const seeded = {
+        id: row.id,
+        label: row.label,
         dialog: "",
+        src: row.src,
+        scale_x: row.scale?.x ?? 1,
+        scale_y: row.scale?.y ?? 1,
+        pos_x: row.position?.x ?? 0,
+        pos_y: row.position?.y ?? 0,
         updated_at: 0,
-      });
+      };
+      this.npcsRepo.seedRow(seeded);
+      backfilled += this.npcsRepo.backfillAppearance(seeded);
     }
+    if (backfilled > 0) this.logger.log(`NPC 外观补全：${backfilled} 行老数据补上素材目录 / 缩放 / 偏移`);
   }
 
   /** 任务 seed（#396）：QUESTS 整行快照直接灌；reward_items 落库前序列化成 JSON */

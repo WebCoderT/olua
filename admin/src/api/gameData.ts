@@ -35,7 +35,6 @@ import {
   FASHIONS,
   ITEM_BASES,
   ITEM_LABELS,
-  NPCS,
   OCCUPATION_LABELS,
   SEX_LABELS,
   SKILLS,
@@ -384,11 +383,6 @@ export function statusIcon(id: string): string {
 /** 时装 id → 图标 */
 export function fashionIcon(id: string): string {
   return rowField(FASHIONS, id, "icon");
-}
-
-/** NPC id → 素材目录（图集动画，缩略图取首帧） */
-export function npcSrc(id: string): string {
-  return rowField(NPCS, id, "src");
 }
 
 /** 称号等级 → 动画图集目录（#590：服务端 title-seed，下标 = 等级 - 1；缩略图取首帧） */

@@ -505,12 +505,18 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
-      -- NPC 基础数据（#258）：主键是 NPC id（Tiled 对象组的关联键），清单固定不可增删行；
-      -- dialog 是对话文案列（客户端暂无对话数据形态，seed 为空串，运营可改）
+      -- NPC 数据（#258 / #603 第七域）：主键是 NPC id（Tiled 对象组的关联键），清单固定不可增删行；
+      -- label / dialog / src / scale / position 全是运营可改的表现数据（客户端不再存一份），
+      -- 进游戏由 GET /game-config 快照下发；src 是 resources 下的素材目录（图集动画）
       CREATE TABLE IF NOT EXISTS npcs (
         id         TEXT    PRIMARY KEY,
         label      TEXT    NOT NULL DEFAULT '',
         dialog     TEXT    NOT NULL DEFAULT '',
+        src        TEXT    NOT NULL DEFAULT '',
+        scale_x    REAL    NOT NULL DEFAULT 1,
+        scale_y    REAL    NOT NULL DEFAULT 1,
+        pos_x      REAL    NOT NULL DEFAULT 0,
+        pos_y      REAL    NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL DEFAULT 0
       );
 
@@ -867,6 +873,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");
+    // NPC 外观（#603 第七域）：客户端不再存素材目录 / 缩放 / 偏移，老库补列；
+    // src 先落空串，随后由 GameConfigService.seedNpcs 的 backfillAppearance 填（只在空串时填）
+    this.ensureColumn("npcs", "src", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("npcs", "scale_x", "REAL NOT NULL DEFAULT 1");
+    this.ensureColumn("npcs", "scale_y", "REAL NOT NULL DEFAULT 1");
+    this.ensureColumn("npcs", "pos_x", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("npcs", "pos_y", "REAL NOT NULL DEFAULT 0");
     this.migrateWorldMonsterInstanceIds();
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
