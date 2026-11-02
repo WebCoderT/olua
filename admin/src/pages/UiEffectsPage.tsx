@@ -166,10 +166,19 @@ function EffectPreview({
   }, [state, form, tick, kind]);
 
   if (state.phase === "loading") {
-    return <Card className="flex items-center justify-center p-6 text-sm text-slate-400">预览素材加载中…</Card>;
+    // 不套 Card：外层（左栏）已经是一张卡片，这里只要占住画布的坑
+    return (
+      <div className="flex items-center justify-center rounded-lg border border-slate-800 bg-slate-950 py-24 text-sm text-slate-400">
+        预览素材加载中…
+      </div>
+    );
   }
   if (state.phase === "error") {
-    return <Card className="p-5 text-xs leading-relaxed text-amber-400">{state.message}</Card>;
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-400">
+        {state.message}
+      </div>
+    );
   }
   return (
     <div className="flex flex-col items-center gap-2">
@@ -204,6 +213,9 @@ function EffectPreview({
  *
  * 预览的参考层按族取：升级特效是裸模（看摆位），掉落光效是掉落物图标 40×40 的占位框
  * （看「光柱相对图标多大、偏到哪」，光柱按客户端层级画在图标下层）。
+ *
+ * 内容分左右两栏：**左栏只管看**（预览画布 + 素材地址），**右栏只管改**（档位 / 参数 / 启用 / 保存）——
+ * 调参数时眼睛不用在「表单在上、预览在下」之间来回滚，改一个数左栏立刻重画。窄屏自动叠成一列（先看后改）。
  *
  * 每档的表单各自独立存在 `forms` 里，所以下拉框切档、页签切族都不会丢未保存的改动
  * （页签上带未保存计数，下拉项后缀「未保存」）。
@@ -302,7 +314,8 @@ export function UiEffectsPage() {
   const tabs = TAB_ORDER.filter((tab) => rows.some((row) => tabOf(row.key) === tab));
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+    /* 不加 max-w：与其它页面一致吃满内容区（同一套 layout 内边距），免得这个页面显得比别人窄一圈 */
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="特效管理"
         description="特效的表现参数（摆位 / 缩放 / 旋转 / 时长 / 开关），改完点保存、玩家下次触发即生效，不用重打客户端包。升级特效以裸模正面站立第一帧为参考；掉落光效以掉落物图标 40×40 为参考（光柱画在图标下层）。图集本体在客户端资源包里，后台改不了，所以没有新建 / 删除 —— 一个特效在不在，由客户端的消费代码决定。"
@@ -346,111 +359,129 @@ export function UiEffectsPage() {
           </div>
 
           {activeRow && activeForm ? (
-            <Card className="flex flex-col gap-4 p-5">
-              {activeTab === "drop" && lightRows.length > 0 ? (
-                <Field
-                  label="档位"
-                  width="w-64"
-                  hint="装备前缀越强，光柱越高档：1 号 普通 … 5 号 超神；6 号留给特殊装备（预留）"
-                >
-                  <Select
-                    value={activeLightKey ?? ""}
-                    onChange={(event) => setActiveLightKey(event.target.value)}
-                    aria-label="选择要调的光柱档位"
+            /* 内容分左右：左栏只管「看」（预览 + 素材地址），右栏只管「改」（参数 + 保存）。
+               窄屏（< lg）自动叠成一列，顺序仍是先看后改 */
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+              {/* 左栏：预览。宽度留给画布（460 + 卡片左右内边距），窄了 canvas 会被压变形 */}
+              <div className="w-full shrink-0 lg:w-[520px]">
+                <Card className="flex flex-col gap-3 p-5">
+                  <EffectPreview resRoot={resRoot} effectKey={activeRow.key} form={activeForm} />
+
+                  <Field
+                    label="资源根（预览素材地址，只影响预览，不影响保存）"
+                    hint="默认 /game-resources；本地开发指向游戏站 resources 时改这里"
                   >
-                    {lightRows.map((row) => (
-                      <option key={row.key} value={row.key}>
-                        {EFFECT_LABELS[row.key] ?? row.key}
-                        {isDirtyRow(row) ? "（未保存）" : ""}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              ) : null}
-
-              <EffectPreview resRoot={resRoot} effectKey={activeRow.key} form={activeForm} />
-
-              <Field label="资源根（预览素材地址，只影响预览，不影响保存）" hint="默认 /game-resources；本地开发指向游戏站 resources 时改这里">
-                <Input value={resRoot} onChange={(event) => changeResRoot(event.target.value)} placeholder="/game-resources" />
-              </Field>
-
-              {!activeForm.enabled ? (
-                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                  {activeKind === "dropItem"
-                    ? "光效已停用（enabled = false）—— 游戏里这件掉落物不再显示光柱（照常拾取），预览仍按参数显示供调整。"
-                    : "特效已停用（enabled = false）—— 游戏里升级不再播特效，预览仍按参数显示供调整。"}
-                </p>
-              ) : null}
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field
-                  label="偏移 X"
-                  hint={activeKind === "dropItem" ? "像素，右为正（相对掉落物图标中心）" : "像素，右为正（相对脚下原点）"}
-                >
-                  <Input type="number" value={activeForm.offsetX} onChange={(e) => patch(activeRow.key, { offsetX: e.target.value })} disabled={!canWrite} />
-                </Field>
-                <Field label="偏移 Y" hint={activeKind === "dropItem" ? "像素，上为正（相对图标中心）" : "像素，上为正"}>
-                  <Input type="number" value={activeForm.offsetY} onChange={(e) => patch(activeRow.key, { offsetY: e.target.value })} disabled={!canWrite} />
-                </Field>
-                <Field label="旋转" hint="度，顺时针">
-                  <Input type="number" value={activeForm.rotate} onChange={(e) => patch(activeRow.key, { rotate: e.target.value })} disabled={!canWrite} />
-                </Field>
-                <Field label="横向缩放" hint="1 = 原始尺寸">
-                  <Input type="number" step="0.1" value={activeForm.scaleX} onChange={(e) => patch(activeRow.key, { scaleX: e.target.value })} disabled={!canWrite} />
-                </Field>
-                <Field label="纵向缩放" hint="1 = 原始尺寸">
-                  <Input type="number" step="0.1" value={activeForm.scaleY} onChange={(e) => patch(activeRow.key, { scaleY: e.target.value })} disabled={!canWrite} />
-                </Field>
-                <Field label="一轮时长（毫秒）" hint="帧率 = 帧数 ÷ 时长">
-                  <Input type="number" step="100" value={activeForm.durationMs} onChange={(e) => patch(activeRow.key, { durationMs: e.target.value })} disabled={!canWrite} />
-                </Field>
+                    <Input value={resRoot} onChange={(event) => changeResRoot(event.target.value)} placeholder="/game-resources" />
+                  </Field>
+                </Card>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="flex items-center gap-2 text-sm text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={activeForm.enabled}
-                    onChange={(e) => patch(activeRow.key, { enabled: e.target.checked })}
-                    disabled={!canWrite}
-                    className="size-4 accent-indigo-500"
-                  />
-                  {activeKind === "dropItem" ? "启用光柱" : "启用特效"}
-                </label>
-
-                <span className="text-xs text-slate-600">
-                  {activeRow.updatedAt > 0 ? `最后修改：${activeRow.updatedBy || "—"} · ${new Date(activeRow.updatedAt).toLocaleString()}` : "仍是出厂值，从未改过"}
-                </span>
-
-                <div className="ml-auto flex items-center gap-3">
-                  {isDirty(activeForm, activeRow) ? <span className="text-xs font-medium text-amber-400">未保存</span> : null}
-                  <Button
-                    variant="primary"
-                    onClick={() => void submit(activeRow.key)}
-                    disabled={
-                      !canWrite ||
-                      !isDirty(activeForm, activeRow) ||
-                      !(
-                        numeric(activeForm.offsetX) &&
-                        numeric(activeForm.offsetY) &&
-                        numeric(activeForm.scaleX) &&
-                        numeric(activeForm.scaleY) &&
-                        numeric(activeForm.rotate) &&
-                        numeric(activeForm.durationMs) &&
-                        Number(activeForm.scaleX) > 0 &&
-                        Number(activeForm.scaleY) > 0 &&
-                        Number(activeForm.durationMs) >= 100
-                      ) ||
-                      savingKey === activeRow.key
-                    }
+              {/* 右栏：参数表单。改这里 → 左栏按新值立刻重画（未保存也生效） */}
+              <Card className="flex min-w-0 flex-1 flex-col gap-4 p-5">
+                {activeTab === "drop" && lightRows.length > 0 ? (
+                  <Field
+                    label="档位"
+                    width="w-72"
+                    hint="装备前缀越强，光柱越高档：1 号 普通 … 5 号 超神；6 号留给特殊装备（预留）"
                   >
-                    {savingKey === activeRow.key ? "保存中…" : "保存"}
-                  </Button>
+                    <Select
+                      value={activeLightKey ?? ""}
+                      onChange={(event) => setActiveLightKey(event.target.value)}
+                      aria-label="选择要调的光柱档位"
+                    >
+                      {lightRows.map((row) => (
+                        <option key={row.key} value={row.key}>
+                          {EFFECT_LABELS[row.key] ?? row.key}
+                          {isDirtyRow(row) ? "（未保存）" : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                ) : null}
+
+                {!activeForm.enabled ? (
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                    {activeKind === "dropItem"
+                      ? "光效已停用（enabled = false）—— 游戏里这件掉落物不再显示光柱（照常拾取），预览仍按参数显示供调整。"
+                      : "特效已停用（enabled = false）—— 游戏里升级不再播特效，预览仍按参数显示供调整。"}
+                  </p>
+                ) : null}
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <Field
+                    label="偏移 X"
+                    hint={activeKind === "dropItem" ? "像素，右为正（相对掉落物图标中心）" : "像素，右为正（相对脚下原点）"}
+                  >
+                    <Input type="number" value={activeForm.offsetX} onChange={(e) => patch(activeRow.key, { offsetX: e.target.value })} disabled={!canWrite} />
+                  </Field>
+                  <Field label="偏移 Y" hint={activeKind === "dropItem" ? "像素，上为正（相对图标中心）" : "像素，上为正"}>
+                    <Input type="number" value={activeForm.offsetY} onChange={(e) => patch(activeRow.key, { offsetY: e.target.value })} disabled={!canWrite} />
+                  </Field>
+                  <Field label="横向缩放" hint="1 = 原始尺寸">
+                    <Input type="number" step="0.1" value={activeForm.scaleX} onChange={(e) => patch(activeRow.key, { scaleX: e.target.value })} disabled={!canWrite} />
+                  </Field>
+                  <Field label="纵向缩放" hint="1 = 原始尺寸">
+                    <Input type="number" step="0.1" value={activeForm.scaleY} onChange={(e) => patch(activeRow.key, { scaleY: e.target.value })} disabled={!canWrite} />
+                  </Field>
+                  <Field label="旋转" hint="度，顺时针">
+                    <Input type="number" value={activeForm.rotate} onChange={(e) => patch(activeRow.key, { rotate: e.target.value })} disabled={!canWrite} />
+                  </Field>
+                  <Field label="一轮时长（毫秒）" hint="帧率 = 帧数 ÷ 时长">
+                    <Input type="number" step="100" value={activeForm.durationMs} onChange={(e) => patch(activeRow.key, { durationMs: e.target.value })} disabled={!canWrite} />
+                  </Field>
                 </div>
-              </div>
 
-              {!canWrite ? <p className="text-xs text-amber-400">当前管理员角色没有 gameConfig:write 权限点，只能看不能改。</p> : null}
-            </Card>
+                {/* 底部：启用开关 + 追账 + 保存（右栏不拉伸到左栏高度，这里紧跟参数，不靠 mt-auto 撑） */}
+                <div className="flex flex-col gap-3 border-t border-slate-800 pt-4">
+                  <label className="flex items-center gap-2 text-sm text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={activeForm.enabled}
+                      onChange={(e) => patch(activeRow.key, { enabled: e.target.checked })}
+                      disabled={!canWrite}
+                      className="size-4 accent-indigo-500"
+                    />
+                    {activeKind === "dropItem" ? "启用光柱" : "启用特效"}
+                  </label>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-xs text-slate-600">
+                      {activeRow.updatedAt > 0
+                        ? `最后修改：${activeRow.updatedBy || "—"} · ${new Date(activeRow.updatedAt).toLocaleString()}`
+                        : "仍是出厂值，从未改过"}
+                    </span>
+
+                    <div className="ml-auto flex items-center gap-3">
+                      {isDirty(activeForm, activeRow) ? <span className="text-xs font-medium text-amber-400">未保存</span> : null}
+                      <Button
+                        variant="primary"
+                        onClick={() => void submit(activeRow.key)}
+                        disabled={
+                          !canWrite ||
+                          !isDirty(activeForm, activeRow) ||
+                          !(
+                            numeric(activeForm.offsetX) &&
+                            numeric(activeForm.offsetY) &&
+                            numeric(activeForm.scaleX) &&
+                            numeric(activeForm.scaleY) &&
+                            numeric(activeForm.rotate) &&
+                            numeric(activeForm.durationMs) &&
+                            Number(activeForm.scaleX) > 0 &&
+                            Number(activeForm.scaleY) > 0 &&
+                            Number(activeForm.durationMs) >= 100
+                          ) ||
+                          savingKey === activeRow.key
+                        }
+                      >
+                        {savingKey === activeRow.key ? "保存中…" : "保存"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {!canWrite ? <p className="text-xs text-amber-400">当前管理员角色没有 gameConfig:write 权限点，只能看不能改。</p> : null}
+                </div>
+              </Card>
+            </div>
           ) : null}
         </>
       )}
