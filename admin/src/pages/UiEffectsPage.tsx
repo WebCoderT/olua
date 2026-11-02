@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PERMISSION, uiEffectsApi } from "../api";
 import type { UiEffect } from "../api";
 import { PageHeader } from "../components/PageHeader";
-import { Button, Card, Field, Input } from "../components/ui";
+import { Button, Card, Field, Input, Select } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import type { Atlas } from "./equipAlign/atlas";
@@ -19,7 +19,8 @@ import {
 /**
  * 特效 key → 页面展示名（key 的唯一来源在服务端 UI_EFFECT_KEYS；新特效登记后这里补一行中文名）
  *
- * 掉落光效一档一个页签（#634）：六张图集是六份美术，谁想单独放大某一档都该能做到。
+ * 掉落光效六个 key 共用一个页签，档位在页签内用下拉框选（#634）：六张图集是六份美术，
+ * 但「同一件事的六个档」，并排七个页签反而把升级特效挤没了。
  * 1~5 号按装备前缀强度升序（普通的 → 超神的），6 号留给特殊装备（`configs/light` 的自定义表）。
  */
 const EFFECT_LABELS: Record<string, string> = {
@@ -31,6 +32,16 @@ const EFFECT_LABELS: Record<string, string> = {
   light_5: "掉落光效 5 号",
   light_6: "掉落光效 6 号（预留）",
 };
+
+/** 页签（一族一个）：掉落光效六档不各占一个页签，档位在页内容里选 */
+type EffectTab = "upgrade" | "drop";
+
+/** 页签展示名与顺序（升级特效在前 —— 它是这个页面最初的用户） */
+const TAB_ORDER: EffectTab[] = ["upgrade", "drop"];
+const TAB_LABELS: Record<EffectTab, string> = { upgrade: "升级特效", drop: "掉落光效" };
+
+/** key 归哪个页签（判据与预览参考层同一条：掉落光效 = `light_*`） */
+const tabOf = (key: string): EffectTab => (previewKindOf(key) === "dropItem" ? "drop" : "upgrade");
 
 const PREVIEW_PREFS_KEY = "olua.uiEffects.prefs.v1";
 
@@ -180,9 +191,11 @@ function EffectPreview({
 /**
  * 特效管理（#594 升级特效 / #634 掉落光效）
  *
- * 页面按「一个特效一个页签」组织：升级特效一个页签，掉落光效一档一个页签
- * （`light_1`…`light_6`，六张图集是六份美术，各自可调）—— 页签即服务端 seed 出来的 key，
- * 新特效登记后这里自动多一个页签，页面结构不用动。
+ * 页面按「一族一个页签」组织：升级特效一个页签，掉落光效一个页签 —— 掉落光效的六个档位
+ * （`light_1`…`light_6`）在页内容顶部的下拉框里选，选中哪档就改哪档、看哪档的预览。
+ * 一档一个页签会排到七个，把「升级特效」挤到最右边，与「同一件事的六个档」这个事实也不符。
+ *
+ * 页签与下拉项都来自服务端 seed 出来的行：新登记一个 key，这里自动多一项，页面结构不用动。
  *
  * 管的是特效的**表现参数**（摆位 / 缩放 / 旋转 / 时长 / 开关），与武器外观同一套取向 ——
  * 调一次摆位不用重打客户端包。图集本体在客户端资源包里（升级特效 `effect/<key>/<key>.plist`、
@@ -192,13 +205,18 @@ function EffectPreview({
  * 预览的参考层按族取：升级特效是裸模（看摆位），掉落光效是掉落物图标 40×40 的占位框
  * （看「光柱相对图标多大、偏到哪」，光柱按客户端层级画在图标下层）。
  *
+ * 每档的表单各自独立存在 `forms` 里，所以下拉框切档、页签切族都不会丢未保存的改动
+ * （页签上带未保存计数，下拉项后缀「未保存」）。
+ *
  * 权限点 `gameConfig:read`（看）/ `gameConfig:write`（改）：界面按权限显隐只是体验，服务端守卫才是权威。
  */
 export function UiEffectsPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
   const [rows, setRows] = useState<UiEffect[]>([]);
   const [forms, setForms] = useState<Record<string, EffectForm>>({});
-  const [activeKey, setActiveKey] = useState<string | null>(null);
+  /** 当前页签（一族一个）；掉落光效再记一个「选中的档位」 */
+  const [activeTab, setActiveTab] = useState<EffectTab>("upgrade");
+  const [activeLightKey, setActiveLightKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [resRoot, setResRoot] = useState<string>(readResRoot);
@@ -209,7 +227,13 @@ export function UiEffectsPage() {
       const list = await uiEffectsApi.list();
       setRows(list.list);
       setForms(Object.fromEntries(list.list.map((row) => [row.key, formOf(row)])));
-      setActiveKey((prev) => prev && list.list.some((row) => row.key === prev) ? prev : (list.list[0]?.key ?? null));
+      // 刷新后停在原处：页签还在就留着，档位还在就留着（被删掉的 key 回落到第一个）
+      setActiveTab((prev) => (list.list.some((row) => tabOf(row.key) === prev) ? prev : tabOf(list.list[0]?.key ?? "upgrade")));
+      setActiveLightKey((prev) =>
+        prev && list.list.some((row) => tabOf(row.key) === "drop" && row.key === prev)
+          ? prev
+          : (list.list.find((row) => tabOf(row.key) === "drop")?.key ?? null),
+      );
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -241,7 +265,7 @@ export function UiEffectsPage() {
       });
       setRows((prev) => prev.map((row) => (row.key === key ? saved : row)));
       setForms((prev) => ({ ...prev, [key]: formOf(saved) }));
-      toastSuccess(`特效 ${key} 已保存，玩家下次触发即按新参数演`);
+      toastSuccess(`${EFFECT_LABELS[key] ?? key} 已保存，玩家下次触发即按新参数演`);
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -258,11 +282,24 @@ export function UiEffectsPage() {
     }
   };
 
+  const upgradeRow = rows.find((row) => tabOf(row.key) === "upgrade") ?? null;
+  const lightRows = rows.filter((row) => tabOf(row.key) === "drop");
+  /** 当前正在改的 key：升级页签 = 唯一那行；掉落页签 = 下拉框选中的档 */
+  const activeKey = activeTab === "drop" ? activeLightKey : (upgradeRow?.key ?? null);
   const activeRow = rows.find((row) => row.key === activeKey) ?? null;
   const activeForm = activeKey ? forms[activeKey] : null;
   const numeric = (text: string) => text.trim() !== "" && Number.isFinite(Number(text));
   /** 当前页签属于哪一族（决定预览参考层与几条提示的措辞） */
   const activeKind = activeRow ? previewKindOf(activeRow.key) : "role";
+  /** 某一行有没有未保存的改动（`forms` 里没有这行 = 还没渲染过，按未改处理） */
+  const isDirtyRow = (row: UiEffect) => {
+    const form = forms[row.key];
+    return form ? isDirty(form, row) : false;
+  };
+  /** 某个页签下有几处未保存（页签上的角标；切档 / 切族不会丢改动，得让人看得见） */
+  const dirtyCountOf = (tab: EffectTab) => rows.filter((row) => tabOf(row.key) === tab && isDirtyRow(row)).length;
+  /** 页签只展示有行的族（服务端 seed 少了哪族，页签就不出现） */
+  const tabs = TAB_ORDER.filter((tab) => rows.some((row) => tabOf(row.key) === tab));
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
@@ -277,26 +314,32 @@ export function UiEffectsPage() {
         <Card className="p-5 text-sm text-slate-400">还没有特效（服务端 seed 没有灌出任何一行 —— 检查 UI_EFFECT_DEFAULTS）。</Card>
       ) : (
         <>
-          {/* 页签栏：一个特效一个页签（升级特效 + 掉落光效六档）；新 key 登记后自动多一个，页面结构不用动。
-              页签多了会换行 —— 掉落光效的档位名偏长，横排一屏放不下 */}
+          {/* 页签栏：一族一个（升级特效 / 掉落光效）；掉落光效的六个档位在页内容里用下拉框选，
+              不再一档一个页签 —— 七个页签会把「升级特效」挤到最右边 */}
           <div className="flex flex-wrap items-center gap-1 border-b border-slate-800" role="tablist">
-            {rows.map((row) => {
-              const active = row.key === activeKey;
-              const dirty = forms[row.key] ? isDirty(forms[row.key], row) : false;
+            {tabs.map((tab) => {
+              const active = tab === activeTab;
+              const dirtyCount = dirtyCountOf(tab);
               return (
                 <button
-                  key={row.key}
+                  key={tab}
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setActiveKey(row.key)}
+                  onClick={() => setActiveTab(tab)}
                   className={`-mb-px rounded-t-lg border border-b-0 px-4 py-2 text-sm transition-colors ${
                     active
                       ? "border-slate-800 bg-slate-900 font-medium text-slate-100"
                       : "border-transparent text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  {EFFECT_LABELS[row.key] ?? row.key}
-                  {dirty ? <span className="ml-1.5 inline-block size-1.5 rounded-full bg-amber-400 align-middle" aria-label="未保存" /> : null}
+                  {TAB_LABELS[tab]}
+                  {dirtyCount > 0 ? (
+                    <span
+                      className="ml-1.5 inline-block size-1.5 rounded-full bg-amber-400 align-middle"
+                      aria-label={`${dirtyCount} 处未保存`}
+                      title={`${dirtyCount} 处未保存`}
+                    />
+                  ) : null}
                 </button>
               );
             })}
@@ -304,6 +347,27 @@ export function UiEffectsPage() {
 
           {activeRow && activeForm ? (
             <Card className="flex flex-col gap-4 p-5">
+              {activeTab === "drop" && lightRows.length > 0 ? (
+                <Field
+                  label="档位"
+                  width="w-64"
+                  hint="装备前缀越强，光柱越高档：1 号 普通 … 5 号 超神；6 号留给特殊装备（预留）"
+                >
+                  <Select
+                    value={activeLightKey ?? ""}
+                    onChange={(event) => setActiveLightKey(event.target.value)}
+                    aria-label="选择要调的光柱档位"
+                  >
+                    {lightRows.map((row) => (
+                      <option key={row.key} value={row.key}>
+                        {EFFECT_LABELS[row.key] ?? row.key}
+                        {isDirtyRow(row) ? "（未保存）" : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
+
               <EffectPreview resRoot={resRoot} effectKey={activeRow.key} form={activeForm} />
 
               <Field label="资源根（预览素材地址，只影响预览，不影响保存）" hint="默认 /game-resources；本地开发指向游戏站 resources 时改这里">
@@ -351,7 +415,7 @@ export function UiEffectsPage() {
                     disabled={!canWrite}
                     className="size-4 accent-indigo-500"
                   />
-                  启用特效
+                  {activeKind === "dropItem" ? "启用光柱" : "启用特效"}
                 </label>
 
                 <span className="text-xs text-slate-600">
