@@ -1,6 +1,6 @@
 import { Color, Size, Vec2, Vec3 } from "cc";
 import type { BattleAttributes, LevelConfig } from "../types/common";
-import type { TitleAttributes, TitleLevelConfig } from "../types/title";
+import type { TitleAcquireChannel, TitleAttributes, TitleLevelConfig } from "../types/title";
 import type { SoulAttributes, SoulLevelConfig } from "../types/soul";
 import type { RankAttributes, RankLevelConfig } from "../types/rank";
 import type { StatusConfig, StatusId, StatusSource } from "../types/status";
@@ -306,8 +306,69 @@ export function snapshotContractMessage(problems: SnapshotProblem[]): string {
  *   称号弹窗 / 头顶名牌 / 预加载全部在进游戏后才读这张表，空表窗口玩家看不到。
  */
 
+/**
+ * 升级链的一步（**三条成长线共用**：称号 / 战魂 / 军衔）
+ *
+ * - `next`   → 链上的下一档（升级按钮、价格预检、下一级增量都按它走）
+ * - `maxed`  → 已在链尾（真的没有下一档了）
+ * - `locked` → 当前档不在链上（运营把玩家已有的称号切出了 upgrade 渠道，或把这一档从链上删了）
+ * - `closed` → 链本身是空的（运营一档都没开放）
+ *
+ * 这四种必须分开，别为了少写一个分支把它们并成「不能升了」：
+ * 满级是玩家的进度、断链是运营改了配置、未开放是功能还没上线 —— 玩家看到的提示完全不同。
+ * 服务端同一口径见 `roles.service.resolveGrowthTarget`（GROWTH_CHANNEL_LOCKED / 链尾 null）。
+ */
+export type GrowthStep<T> =
+  | { kind: "next"; config: T }
+  | { kind: "maxed" }
+  | { kind: "locked" }
+  | { kind: "closed" };
+
+/**
+ * 在一条升级链上找当前档的下一步
+ *
+ * `chain` 必须**已经按运营配置的顺序排好**（调用方传 `titleUpgradeChain` /
+ * `soulUpgradeChain` / `rankLevels`）。`current = 0` 表示还没开始（返回链首）；
+ * 当前档在链上找不到 = 断链（locked），不是满级；链为空 = 未开放（closed）。
+ */
+export function growthStepOf<T extends { level: number }>(chain: readonly T[], current: number): GrowthStep<T> {
+  if (chain.length === 0) return { kind: "closed" };
+  if (current <= 0) return { kind: "next", config: chain[0] };
+  const index = chain.findIndex((config) => config.level === current);
+  if (index < 0) return { kind: "locked" };
+  const next = chain[index + 1];
+  return next ? { kind: "next", config: next } : { kind: "maxed" };
+}
+
 /** 称号等级序列（level 从 1 开始连续；快照到达前为空表） */
 export const titleLevels: TitleLevelConfig[] = [];
+
+/**
+ * 称号升级链（**只含 `acquireChannel === "upgrade"` 的行**，按 `upgradeOrder` 升序）
+ *
+ * 判据只看渠道（与服务端 `listUpgrade` 同口径）；链序缺失的行排最前（= SQLite NULL 在前）。
+ * 与 `titleLevels` 一样整表重建、数组引用不变（消费方存的引用不会失效）。
+ * 称号弹窗的左列表、升级按钮、「下一级增量」全部按这条链走 ——
+ * **运营没放出的等级不会出现在弹窗里**（以前是全量 34 阶都画出来，
+ * 玩家会看到一串点不动的空档，与后台配置对不上）。
+ *
+ * 管理端口径：称号列表里把渠道改成「称号升级」→ 服务端分配链尾序号 → 这里多一行；
+ * 在「称号成长列表」里拖动 → 这里顺序跟着变；改价 → `bindGold` 跟着变（同一个快照）。
+ */
+export const titleUpgradeChain: TitleLevelConfig[] = [];
+
+/** 从 titleLevels 重建升级链（applyTitleRows 末尾调用；**不要**在别处 push，链只能由表派生） */
+function rebuildTitleUpgradeChain(): void {
+  titleUpgradeChain.length = 0;
+  for (const config of titleLevels) {
+    // 判据只看渠道，与服务端 `title.repository.listUpgrade`（`WHERE acquire_channel = 'upgrade'`）保持同一口径：
+    // 客户端多一条「必须有 upgradeOrder」会让手工改库 / 老数据在后台看得见、游戏里却没有
+    if (config.acquireChannel !== "upgrade") continue;
+    titleUpgradeChain.push(config);
+  }
+  // 链序缺失的行排最前（SQLite 的 `ORDER BY upgrade_order ASC` 也是 NULL 在前）—— 两端顺序一致
+  titleUpgradeChain.sort((a, b) => (a.upgradeOrder ?? -1) - (b.upgradeOrder ?? -1));
+}
 
 /**
  * 快照 `titles` 段 → 运行时表（**整表重建**；消费方拿到的 `titleLevels` 引用不变）
@@ -326,6 +387,9 @@ export function applyTitleRows(rows: TitleRow[]): void {
       bindGold: Number(row.bindGold) || 0,
       animation: String(row.animation ?? ""),
       animationFrameRate: Number(row.animationFrameRate) || 10,
+      // 渠道与链序原样保留：链的可见范围与顺序都由运营在管理端决定，客户端不做二次判断
+      acquireChannel: (row.acquireChannel ?? "unavailable") as TitleAcquireChannel,
+      upgradeOrder: typeof row.upgradeOrder === "number" ? row.upgradeOrder : null,
       attributes: {
         maxHp: Number(row.attributes?.maxHp) || 0,
         hpRecover: Number(row.attributes?.hpRecover) || 0,
@@ -339,9 +403,15 @@ export function applyTitleRows(rows: TitleRow[]): void {
     });
   }
   titleLevels.sort((a, b) => a.level - b.level);
+  rebuildTitleUpgradeChain();
 }
 
-/** 称号满级（快照到达前为 0 —— 上游 UI 在进游戏后才会读它） */
+/**
+ * 称号表内的最大阶号（快照到达前为 0）
+ *
+ * **不是升级链的上限**：链可能只开放了其中几阶（见 `titleUpgradeChain`），
+ * 「还能不能升级」一律问 `nextTitleUpgrade(role.title).kind`。
+ */
 export function titleMaxLevel(): number {
   return titleLevels.length;
 }
@@ -369,6 +439,17 @@ export function getTitleLevel(level: number): TitleLevelConfig | null {
   if (level < 1) return null;
   return titleLevels.find((config) => config.level === level) ?? null;
 }
+
+/**
+ * 称号的下一步：链上下一档 / 已到链尾 / 断链
+ *
+ * 弹窗、价格预检、服务端请求的 `targetLevel` 全部走这里 ——
+ * **不要写 `role.title + 1`**：等级号与链序解耦，运营拖过顺序或没放出中间等级时，
+ * `level + 1` 会指向一个不在链上的等级，服务端会以「目标阶位不合法」拒绝。
+ */
+export function nextTitleUpgrade(current: number): GrowthStep<TitleLevelConfig> {
+  return growthStepOf(titleUpgradeChain, current);
+}
 //#endregion
 
 //#region 2 · 战魂（原 configs/soul.ts）
@@ -387,6 +468,22 @@ export function getTitleLevel(level: number): TitleLevelConfig | null {
 export const soulLevels: SoulLevelConfig[] = [];
 
 /**
+ * 战魂升级链（37 阶全量，按 `upgradeOrder` 升序）
+ *
+ * 战魂没有「获得渠道」概念，每一阶都在链上；但运营在管理端「战魂成长列表」里
+ * **可以拖动排序** —— 所以链序 ≠ 阶数。弹窗列表、升级按钮、下一阶增量都按这条链走。
+ * 与 `soulLevels` 一样整表重建、数组引用不变。
+ */
+export const soulUpgradeChain: SoulLevelConfig[] = [];
+
+/** 从 soulLevels 重建升级链（applySoulRows 末尾调用；链只能由表派生） */
+function rebuildSoulUpgradeChain(): void {
+  soulUpgradeChain.length = 0;
+  for (const config of soulLevels) soulUpgradeChain.push(config);
+  soulUpgradeChain.sort((a, b) => a.upgradeOrder - b.upgradeOrder);
+}
+
+/**
  * 快照 `souls` 段 → 运行时表（**整表重建**；消费方拿到的 `soulLevels` 引用不变）
  */
 export function applySoulRows(rows: SoulRow[]): void {
@@ -401,6 +498,8 @@ export function applySoulRows(rows: SoulRow[]): void {
       bindGold: Number(row.bindGold) || 0,
       animation: String(row.animation ?? ""),
       animationFrameRate: Number(row.animationFrameRate) || 10,
+      // 链序原样保留（战魂无渠道概念，全量都在链上，但顺序由运营拖）
+      upgradeOrder: Number(row.upgradeOrder) || row.level,
       attributes: {
         maxHp: Number(row.attributes?.maxHp) || 0,
         hpRecover: Number(row.attributes?.hpRecover) || 0,
@@ -414,9 +513,10 @@ export function applySoulRows(rows: SoulRow[]): void {
     });
   }
   soulLevels.sort((a, b) => a.level - b.level);
+  rebuildSoulUpgradeChain();
 }
 
-/** 战魂满级（快照到达前为 0） */
+/** 战魂表内的最大阶数（快照到达前为 0；「还能不能升」问 nextSoulUpgrade） */
 export function soulMaxLevel(): number {
   return soulLevels.length;
 }
@@ -443,6 +543,15 @@ export const soulAttributeLabels: { key: keyof SoulAttributes; label: string }[]
 export function getSoulLevel(level: number): SoulLevelConfig | null {
   if (level < 1) return null;
   return soulLevels.find((config) => config.level === level) ?? null;
+}
+
+/**
+ * 战魂的下一步：链上下一阶 / 已到链尾 / 断链（断链 = 当前阶被运营从链上挪走了）
+ *
+ * 与称号同一口径，**不要写 `role.soulOfWar + 1`**。
+ */
+export function nextSoulUpgrade(current: number): GrowthStep<SoulLevelConfig> {
+  return growthStepOf(soulUpgradeChain, current);
 }
 //#endregion
 
@@ -491,7 +600,7 @@ export function applyRankRows(rows: RankRow[]): void {
   rankLevels.sort((a, b) => a.level - b.level);
 }
 
-/** 军衔满阶（快照到达前为 0） */
+/** 军衔表内的最大阶数（快照到达前为 0；「还能不能进」问 nextRankUpgrade） */
 export function rankMaxLevel(): number {
   return rankLevels.length;
 }
@@ -518,6 +627,16 @@ export const rankAttributeLabels: { key: keyof RankAttributes; label: string }[]
 export function getRankLevel(level: number): RankLevelConfig | null {
   if (level < 1) return null;
   return rankLevels.find((config) => config.level === level) ?? null;
+}
+
+/**
+ * 军衔的下一步：下一阶 / 已到链尾 / 断链
+ *
+ * 军衔**没有** `upgradeOrder`（100 阶天然按阶就是链，管理端也不让拖动），
+ * 但走同一个三态口径 —— 三条成长线的调用形态保持一致，以后再加一条线不用另起一套。
+ */
+export function nextRankUpgrade(current: number): GrowthStep<RankLevelConfig> {
+  return growthStepOf(rankLevels, current);
 }
 //#endregion
 

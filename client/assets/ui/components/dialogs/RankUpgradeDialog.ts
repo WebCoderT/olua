@@ -3,7 +3,7 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
-import { getRankLevel, rankLevels, rankMaxLevel } from "../../../configs/game-config";
+import { getRankLevel, nextRankUpgrade, rankLevels, rankMaxLevel } from "../../../configs/game-config";
 import { rankUpgradeDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
@@ -90,8 +90,14 @@ export default class RankUpgradeDialog {
   private buildList(currentLevel: number) {
     if (!this.listContent) return;
     clearChildren(this.listContent);
+    if (rankLevels.length === 0) {
+      this.listContent.addChild(
+        GameUiHelper.createChainEmptyLabel("rank_chain_empty", layout.list.cardSize.width, layout.list.lockedColor, layout.list.cardFontSize),
+      );
+    }
     this.listCards = rankLevels.map((config) => {
-      const card = GameUiHelper.createRankCard(config, currentLevel, config.level === this.selectedLevel, () => this.selectLevel(config.level));
+      // 军衔按阶判定授衔（没有 upgrade_order，100 阶天然按阶）
+      const card = GameUiHelper.createRankCard(config, config.level <= currentLevel, config.level === this.selectedLevel, () => this.selectLevel(config.level));
       this.listContent!.addChild(card);
       return card;
     });
@@ -105,8 +111,7 @@ export default class RankUpgradeDialog {
     const currentLevel = StorageManager.findOnlineRole()?.rank ?? 0;
     const repaint = (target: number) => {
       const card = this.listCards[target - 1];
-      const config = getRankLevel(target);
-      if (card && isValid(card) && config) GameUiHelper.updateRankCard(card, config, currentLevel, target === this.selectedLevel);
+      if (card && isValid(card)) GameUiHelper.updateRankCard(card, target <= currentLevel, target === this.selectedLevel);
     };
     repaint(previous);
     repaint(level);
@@ -117,8 +122,7 @@ export default class RankUpgradeDialog {
   private updateCardStates() {
     const currentLevel = StorageManager.findOnlineRole()?.rank ?? 0;
     this.listCards.forEach((card, index) => {
-      const config = getRankLevel(index + 1);
-      if (isValid(card) && config) GameUiHelper.updateRankCard(card, config, currentLevel, index + 1 === this.selectedLevel);
+      if (isValid(card)) GameUiHelper.updateRankCard(card, index + 1 <= currentLevel, index + 1 === this.selectedLevel);
     });
   }
 
@@ -152,16 +156,24 @@ export default class RankUpgradeDialog {
     this.infoSlot.addChild(
       UiHelper.createLabel("rank_current", current ? getText("label_rank_current", { level: role.rank, label: current.label }) : getText("label_rank_none"), info.current.color, info.current.fontSize, info.current.position, info.current.size),
     );
-    // 右：所选阶属性 + 下一阶增量
+    // 右：所选阶属性 + 链上下一阶增量（军衔按阶，nextRankUpgrade 与「+1 阶」同义，走统一口径）
     clearChildren(this.attributeSlot);
-    this.attributeSlot.addChild(GameUiHelper.createRankAttributeList(config, getRankLevel(this.selectedLevel + 1)));
-    // 晋升按钮与绑定元宝（按钮始终针对当前军衔的下一阶；满衔置灰，文案随 maxedText 切换）
+    const nextStep = nextRankUpgrade(this.selectedLevel);
+    this.attributeSlot.addChild(GameUiHelper.createRankAttributeList(config, nextStep.kind === "next" ? nextStep.config : null));
+    // 晋升按钮与绑定元宝（按钮始终针对当前军衔在链上的下一阶；满衔置灰，文案随 maxedText 切换）
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("rank_upgrade_button_label")?.getComponent(Label);
-      const maxed = role.rank >= rankMaxLevel();
-      if (label) label.string = maxed ? layout.upgradeButton.maxedText : layout.upgradeButton.text;
-      if (sprite) sprite.grayscale = maxed;
+      const step = nextRankUpgrade(role.rank);
+      if (label) {
+        label.string =
+          step.kind === "next"
+            ? layout.upgradeButton.text
+            : step.kind === "maxed"
+              ? layout.upgradeButton.maxedText
+              : layout.upgradeButton.lockedText;
+      }
+      if (sprite) sprite.grayscale = step.kind !== "next";
     }
     if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = getText("label_bind_gold", { value: role.bindGold });
   }

@@ -4,7 +4,8 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
-import { getSoulLevel, soulLevels, soulMaxLevel } from "../../../configs/game-config";
+import { getSoulLevel, nextSoulUpgrade, soulUpgradeChain } from "../../../configs/game-config";
+import type { SoulLevelConfig } from "../../../types/soul";
 import { warSoulDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
@@ -13,11 +14,20 @@ import { clearChildren } from "../../utils/node/NodeTree";
 const layout = warSoulDialogLayout;
 
 /**
+ * 打开时默认选中的阶：当前已获得且在链上 → 它自己；否则链首（链为空时回落到当前阶）
+ */
+function defaultSelectedLevel(current: number): number {
+  if (soulUpgradeChain.some((config) => config.level === current)) return current;
+  return soulUpgradeChain[0]?.level ?? Math.max(1, current);
+}
+
+/**
  * 战魂弹窗（左中右三栏）
- * 左：所有战魂等级卡片的竖向滚动列表（按等级从上到下排列，已激活/未激活/选中三种状态）
+ * 左：**升级链上的**战魂卡片竖向滚动列表（37 阶全量都在链上，顺序由管理端拖动决定）
  * 中：所选等级的战魂动画 + 名称/描述/当前战魂信息 + 外显勾选框（勾选后当前等级动画挂主角右上角）
- * 右：所选等级的战魂属性（带下一级增量）+ 绑定元宝余额 + 升级按钮
- * 升级消耗绑定元宝（见 configs/soul），成功后整体刷新弹窗
+ * 右：所选等级的战魂属性（带链上下一阶的增量）+ 绑定元宝余额 + 升级按钮
+ * 升级消耗与「下一阶是哪一档」都来自服务端配置（`upgradeOrder` 链，见 configs/game-config），
+ * 成功后整体刷新弹窗
  */
 export default class WarSoulDialog {
   /** 当前预览的战魂等级（点击左侧卡片切换） */
@@ -34,8 +44,8 @@ export default class WarSoulDialog {
   /** 打开弹窗 */
   open() {
     const role = StorageManager.findOnlineRole();
-    // 默认预览当前战魂等级（尚未激活时预览 1 阶）
-    this.selectedLevel = Math.max(1, role?.soulOfWar ?? 1);
+    // 默认预览当前战魂阶（链上找不到时停在链首）
+    this.selectedLevel = defaultSelectedLevel(role?.soulOfWar ?? 0);
     const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
     // 左：战魂等级列表（可上下滑动）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
@@ -71,22 +81,30 @@ export default class WarSoulDialog {
   /** 整体刷新（选中等级切换、升级成功后调用）：列表状态 / 动画 / 信息 / 属性 / 按钮全部重建 */
   private refresh() {
     const role = StorageManager.findOnlineRole();
+    if (!role || !this.listContent || !this.animationSlot || !this.infoSlot || !this.attributeSlot) return;
+    if (!soulUpgradeChain.some((item) => item.level === this.selectedLevel)) {
+      this.selectedLevel = defaultSelectedLevel(role.soulOfWar);
+    }
     const config = getSoulLevel(this.selectedLevel);
-    if (!role || !config || !this.listContent || !this.animationSlot || !this.infoSlot || !this.attributeSlot) return;
-    // 左列表：按等级从上到下（soulLevels 本身升序），点击切换预览
+    if (!config) return;
+    // 左列表：按运营配置的成长链顺序（不是阶数顺序），点击切换预览
     clearChildren(this.listContent);
-    soulLevels.forEach((item) =>
+    if (soulUpgradeChain.length === 0) {
       this.listContent.addChild(
-        GameUiHelper.createSoulCard(
-          item,
-          role.soulOfWar,
-          item.level === this.selectedLevel,
-          () => {
-            if (this.selectedLevel === item.level) return;
-            this.selectedLevel = item.level;
-            this.refresh();
-          },
-        ),
+        GameUiHelper.createChainEmptyLabel("soul_chain_empty", layout.list.cardSize.width, layout.list.lockedColor, layout.list.cardFontSize),
+      );
+    }
+    /** 当前战魂在链上的位置（-1 = 不在链上，正常情况下不会发生：37 阶全量都在链里） */
+    const currentIndex = soulUpgradeChain.findIndex((item) => item.level === role.soulOfWar);
+    const reached = (item: SoulLevelConfig) =>
+      currentIndex >= 0 ? soulUpgradeChain.indexOf(item) <= currentIndex : item.level <= role.soulOfWar;
+    soulUpgradeChain.forEach((item) =>
+      this.listContent.addChild(
+        GameUiHelper.createSoulCard(item, reached(item), item.level === this.selectedLevel, () => {
+          if (this.selectedLevel === item.level) return;
+          this.selectedLevel = item.level;
+          this.refresh();
+        }),
       ),
     );
     // 中间动画：先销毁旧的再重建（不同等级图集不同）
@@ -112,21 +130,24 @@ export default class WarSoulDialog {
     });
     showToggle.setPosition(info.toggle.position.x, info.toggle.position.y);
     this.infoSlot.addChild(showToggle);
-    // 右侧属性：所选等级属性 + 下一级增量
+    // 右侧属性：所选阶属性 + 链上下一阶的增量（不是「阶数 + 1」—— 运营可拖动排序）
     clearChildren(this.attributeSlot);
-    this.attributeSlot.addChild(GameUiHelper.createSoulAttributeList(config, getSoulLevel(this.selectedLevel + 1)));
-    // 升级按钮与绑定元宝（按钮始终针对当前战魂等级的下一级）
+    const nextStep = nextSoulUpgrade(this.selectedLevel);
+    this.attributeSlot.addChild(GameUiHelper.createSoulAttributeList(config, nextStep.kind === "next" ? nextStep.config : null));
+    // 升级按钮与绑定元宝（按钮始终针对当前战魂在链上的下一阶；到链尾 / 断链都置灰，文案分开）
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("soul_upgrade_button_label")?.getComponent(Label);
-      const maxed = role.soulOfWar >= soulMaxLevel();
-      const next = getSoulLevel(role.soulOfWar + 1);
-      if (label) label.string = maxed ? layout.upgradeButton.maxedText : layout.upgradeButton.text;
-      if (sprite) sprite.grayscale = maxed;
-      if (label && !maxed && next) {
-        // 按钮下方提示下一级消耗（绑定元宝不足时点击会被 StorageManager 拦下并提示）
-        label.string = layout.upgradeButton.text;
+      const step = nextSoulUpgrade(role.soulOfWar);
+      if (label) {
+        label.string =
+          step.kind === "next"
+            ? layout.upgradeButton.text
+            : step.kind === "maxed"
+              ? layout.upgradeButton.maxedText
+              : layout.upgradeButton.lockedText;
       }
+      if (sprite) sprite.grayscale = step.kind !== "next";
     }
     if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = getText("label_bind_gold", { value: role.bindGold });
   }

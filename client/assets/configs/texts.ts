@@ -13,9 +13,19 @@ import type { TextRef } from "../types/common";
  * 自查：`node tools/audit-config-leak.cjs`（ui/ 里出现中文即报警）。
  */
 export const uiTexts = {
+  //#region 浮动提示：三条成长线共用（称号 / 战魂 / 军衔）
+  /** 运营一档都没开放（链为空）—— 与「已满级」「断链」分开，别把没开放的线说成玩家满级了 */
+  title_growth_closed_tip: "称号升级暂未开放",
+  soul_growth_closed_tip: "战魂升级暂未开放",
+  rank_growth_closed_tip: "军衔晋升暂未开放",
+  /** 升级弹窗左列表在链为空时的占位（不铺一排假卡片） */
+  label_growth_chain_empty: "暂未开放",
+
   //#region 浮动提示：战魂
   /** 战魂已到最高阶 */
   soul_max_tip: "战魂已满级",
+  /** 当前阶不在运营配置的成长链上（与「满级」区分：是路被改了，不是到头了） */
+  soul_chain_locked_tip: "当前战魂不在可升级的成长链上，无法续升",
   /** 绑定元宝不足以升级（{need} = 所需绑定元宝） */
   soul_bind_gold_tip: "绑定元宝不足，升级需要 {need}",
   /** 战魂升级成功（{level} 阶 · {label}） */
@@ -24,6 +34,8 @@ export const uiTexts = {
   //#region 浮动提示：称号
   /** 称号已到最高阶 */
   title_max_tip: "称号已满级",
+  /** 当前称号不在运营配置的成长链上（渠道被改成非「称号升级」，或这一级被移出链） */
+  title_chain_locked_tip: "当前称号不在可升级的成长链上，无法续升",
   /** 绑定元宝不足以升级（{need} = 所需绑定元宝） */
   title_bind_gold_tip: "绑定元宝不足，升级需要 {need}",
   /** 称号升级成功（{level} 阶 · {label}） */
@@ -32,6 +44,8 @@ export const uiTexts = {
   //#region 浮动提示：军衔
   /** 军衔已到最高阶 */
   rank_max_tip: "军衔已满衔",
+  /** 当前阶不在进阶链上（军衔按阶连续，正常不会出现；留作三条线同一口径的兜底） */
+  rank_chain_locked_tip: "当前军衔不在进阶链上，无法晋升",
   /** 绑定元宝不足以晋升（{need} = 所需绑定元宝） */
   rank_bind_gold_tip: "绑定元宝不足，晋升需要 {need}",
   /** 军衔晋升成功（{level} 阶 · {label}） */

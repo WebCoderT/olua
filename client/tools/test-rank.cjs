@@ -150,7 +150,7 @@ const npcClicksSource = read("assets/configs/npcClicks.ts");
 
 check(/rank: number = 0;/.test(roleSource) && /军衔阶数/.test(roleSource), "Role 有 rank 字段（0 = 未授衔）");
 check(/typeof role\.rank !== "number"\) role\.rank = 0;/.test(storageSource), "旧存档迁移：rank 缺失补 0（ensureRoleDefaults）");
-check(/static async upgradeRank\(\): Promise<boolean>/.test(storageSource) && /getRankLevel\(role\.rank \+ 1\)/.test(storageSource), "StorageManager.upgradeRank 按下一阶配置预检（预检只是 UX，推进在服务端）");
+check(/static async upgradeRank\(\): Promise<boolean>/.test(storageSource) && /nextRankUpgrade\(role\.rank\)/.test(storageSource), "StorageManager.upgradeRank 按链上下一阶预检（军衔按阶，三条线同一口径）");
 check(/createTip\("rank_max_tip"\)/.test(storageSource) && /rank_bind_gold_tip/.test(storageSource) && /rank_upgrade_tip/.test(storageSource), "晋升失败/成功都走浮动提示（configs/texts）");
 // #250：扣费与落阶都搬到服务端，客户端走三条成长线共用的 upgradeGrowthOnServer
 const growthBody = storageSource.slice(storageSource.indexOf("private static async upgradeGrowthOnServer"), storageSource.indexOf("static async upgradeSoul"));
@@ -168,7 +168,7 @@ check(/new RankUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDia
 check(!/RankUpgradeDialog/.test(npcClicksSource), "军衔不走 NPC（入口只在角色信息弹窗）");
 check(/createRankCard|updateRankCard|createRankBadge|upgradeRank\(\)/.test(dialogSource), "军衔弹窗接线：零件 + 晋升 + 状态刷新");
 check(/buildList\(role\?\.rank \?\? 0\);/.test(dialogSource) && !/buildList/.test(dialogSource.split("private selectLevel")[1].split("private updateCardStates")[0]), "100 阶列表只在打开时建一次，切换选中不重建（避免「点一下建 400 个节点」）");
-check(/updateRankCard\(card, config, currentLevel, target === this\.selectedLevel\)/.test(dialogSource), "切换选中只刷受影响的两张卡片外观");
+check(/updateRankCard\(card, target <= currentLevel, target === this\.selectedLevel\)/.test(dialogSource), "切换选中只刷受影响的两张卡片外观");
 check(/Layout\)\?\.updateLayout\(true\)/.test(dialogSource) && /scrollToOffset\(new Vec2\(0, -card\.position\.y/.test(dialogSource), "打开/晋升后把列表滚到选中那一阶（先强制排版再按卡片实际位置算偏移）");
 check(/rank_upgrade_dialog/.test(dialogsLayoutSource) && /rankButton: \{ name: "role_rank_button"/.test(dialogsLayoutSource), "弹窗布局与入口按钮都在 configs/layout/dialogs");
 for (const key of ["rank_max_tip", "rank_bind_gold_tip", "rank_upgrade_tip", "label_rank_active", "label_rank_locked", "label_rank_current", "label_rank_none", "label_rank_progress", "label_rank_head"]) {
