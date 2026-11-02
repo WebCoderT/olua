@@ -67,3 +67,6 @@ admin/tsconfig.tsbuildinfo
 
 # 散帧归档（~40GB，仅本机留底，永不入库；见 #288）
 _loose_frames_archive/
+
+# 本机待办清单（只给自己看，不入库）
+/TODO-FOR-USER.md
