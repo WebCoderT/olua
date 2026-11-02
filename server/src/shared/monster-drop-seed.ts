@@ -7,8 +7,8 @@
  * monsterDrops），客户端经快照 `monsterDrops` 段拿最终值（管理端可改的行不受影响，
  * 与 monsters 表同一条 seed 语义：只空库 INSERT，运营改过的不盖回）。
  *
- * 与 configs/drop（客户端）/ drop_tables 表的关系：具名表（common/elite/boss）在
- * drop.ts；**实际掉落以本表的每怪条目为准**（建 monsters 表时优先取这里的条目与抽取次数）。
+ * 与 drop_tables 表的关系：具名表（common/elite/boss）与兜底表在 drop-seed.ts（#603 从客户端
+ * configs/drop 搬来）；**实际掉落以本表的每怪条目为准**（建 monsters 表时优先取这里的条目与抽取次数）。
  *
  * 条目构成（按怪物等级 / 定位自动铺好，可手改）：
  * 1. 药品 / 材料：按等级分档（≤20 小药、21~40 中药、41+ 大药；铁矿 10 级起、宝石 21 级起），
