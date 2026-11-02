@@ -1,6 +1,7 @@
 # olua 长期记忆（索引；细节见 `.workbuddy/skills/` 与 `memory/2026-*.md`）
 
-> **纪律**：issue → 分支 `type/n-slug` → PR（写「关联 #n」，别写 `Closes`）→ 本地 `make ci` 全绿 → commit → CI 绿 → squash；记忆 / 技能同样走 PR。
+> **纪律**：issue → 分支 `type/n-slug` → PR（写「关联 #n」，别写 `Closes`）→ 本地 `make test-changed` → commit → CI（PR）绿 → squash；
+> 记忆 / 技能与代码**同一个 PR**（文档改动不触发 CI，但少一轮 PR 更省事）。全量 `make ci` 只在「发布前 / 心里没底」时手动跑。
 > 仓库 PUBLIC —— IP / 私钥 / 邀请码 / JWT 不进记忆。**website/ 永不改动**。分支只剩 master（判断残留看内容，不看 `--merged`）。本机待办 `TODO-FOR-USER.md` 已在 `.gitignore`。
 
 ## 过程纪律（跨域，没被任何 skill 覆盖）
@@ -25,7 +26,9 @@
 - 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据不透明（`guide` 例外：只校验、不补默认）；乐观锁 409+20006；`whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；`BizException` 默认 400。
 - `configs/` 与 `types/` 不许引 UI 组件（只许 `cc` 四个纯数据类 + `types/*` + `ApiModels` 的**类型**）；新 operationId 模块段登记 `gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries`。
 - 部署：compose 四服务（admin:80 / game:8080 / server:3100 / realtime:3101），`/api` 与 `/game-resources/` 反代；密钥只在 `deploy.env`；Cocos 只能 GUI 打包。
-- 回归 `make test-changed`；client-test 基线 59 套 / 55 过 4 红（红全是素材未入库）；门禁看 `make ci`（e2e 偶发 `EADDRINUSE` 是端口撞车，单跑那套即可）。
+- 回归 `make test-changed`；client-test 基线 59 套 / 55 过 4 红（红全是素材未入库）；门禁看 **CI（PR 上跑一次）**
+  —— `make ci` 是它的本机串行版，别拿本机全量当硬门禁：负载一高就红在 e2e「等待超时」上（单跑全绿）。
+  e2e 套件清单派生自 `server/package.json`（`tools/run-e2e.cjs`），新增脚本自动进 CI，不再维护 Makefile 清单。
 
 ## 进度
 - 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · 玩法补全 #394 · 背包穿戴收权 #556 · 管理端风格 #564 · 地图原点 #566 · 地图管理 #571/#573/#580 · 世界权威 #581 · 怪物配掉落 #584 · 刷怪区边界 #586 · 建号 #597 · 守卫清理 #598 · 邮件 #437/#439。

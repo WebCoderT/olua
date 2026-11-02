@@ -12,9 +12,14 @@
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
 #    make client-test      客户端单测（需要本机 Cocos 工程）
-#    make test-changed     日常回归硬门槛：改动哪跑哪（按改动范围挑最小的验证集）
+#    make test-changed     日常门禁：改动哪跑哪（提交前跑这条，秒级~分钟级）
 #    make verify           一条命令跑完全部门禁（含三端构建与全部 e2e；发布前全量确认用）
-#    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
+#    make ci               CI 跑的那一套（本机串行版；CI 上静态与 e2e 分片并行）
+#
+#  门禁分工（#631）：
+#    本机 = 快速反馈（test-changed，只跑受影响的那几套）
+#    CI   = 权威全量（PR 上跑一次，分片并行）
+#    合并后不再跑 —— PR 的 CI 跑的正是「master + 本次改动」的合并树，与 squash 后的树相同。
 #
 #  完整清单：make / make help
 # ==============================================================================
@@ -43,12 +48,16 @@ TSC ?= /Applications/Cocos/Creator/3.8.7/CocosCreator.app/Contents/Resources/app
 # 客户端测试需要的临时日志目录（失败时保留现场）
 LOGDIR ?= /tmp
 
+# 装依赖的方式：CI 用 install-ci（按锁文件精确安装），本机可 INSTALL=install 省时间
+INSTALL ?= install-ci
+
 # 用编辑器打开客户端工程时的 App 名（macOS）
 CREATOR ?= CocosCreator
 
 .PHONY: help info install install-ci env \
         dev dev-server dev-admin \
-        check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
+        check test verify ci ci-static e2e-all server-e2e-shard server-install-ci \
+        audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
         test-changed \
         audit-shared-data audit-equip-align-catalog \
         docker-build docker-up docker-down docker-logs \
@@ -313,7 +322,26 @@ server-e2e-map: ## 服务端地图管理 e2e（玩法配置可改 / 两套坐标
 	@echo "==> 服务端地图管理 e2e（只读）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:map
 
-server-verify: ## 服务端一条命令全验（编译 + 二十六套 e2e + 生成物审计）
+server-e2e-admin-mail: ## 服务端管理端邮件 e2e（模板 / 投递记录 / 重发）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:admin-mail
+
+server-e2e-mail-expiry: ## 服务端邮件过期回收 e2e（到期清理 / 附件回收 / 幂等）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:mail-expiry
+
+server-e2e-ui-effect: ## 服务端界面特效配置 e2e（下发表 / 只许改不许增删 / 权限）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:ui-effect
+
+server-install-ci: ## 只装服务端依赖（CI 的 e2e 分片用，比 install-ci 少装两端的包）
+	@cd server && $(NPM) ci
+
+e2e-all: ## 全部服务端 e2e（套件清单从 server/package.json 派生，新增脚本自动纳入）
+	@$(NODE) tools/run-e2e.cjs
+
+server-e2e-shard: ## CI 的 e2e 分片：make server-e2e-shard I=0 N=4（按实测耗时装箱，不用维护分组）
+	@if [ -z "$(I)" ] || [ -z "$(N)" ]; then echo "用法：make server-e2e-shard I=0 N=4"; exit 1; fi
+	@$(NODE) tools/run-e2e.cjs --shard=$(I)/$(N)
+
+server-verify: ## 服务端一条命令全验（编译 + 全部 e2e + 生成物审计）
 	@cd server && $(NPM) run verify
 
 db-backup: ## 备份 SQLite 数据文件（VACUUM INTO，服务运行中也能备；默认留最近 7 份）
@@ -418,31 +446,41 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 	@echo ""
 	@echo "✓ 静态检查通过（未跑测试）"
 
-test-changed: ## 日常回归硬门槛：改动哪跑哪（BASE=main 可指定基准；全量门禁仍是 verify）
+test-changed: ## 日常门禁（提交前跑这条）：改动哪跑哪（BASE=master 可指定基准）
 	@$(NODE) tools/test-changed.cjs $(if $(BASE),--base=$(BASE),)
 
-test: client-test server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map ## 全部测试：客户端 59 套 + 服务端二十六套 e2e
+test: client-test e2e-all ## 全部测试：客户端 59 套 + 服务端全部 e2e（清单派生自 package.json）
 	@echo ""
 	@echo "✓ 测试全部通过"
 
-verify: check server-build test admin-build ## 完整门禁：三端静态检查 + 三端构建 + 全部测试（含二十六套服务端 e2e）
+verify: check server-build test admin-build ## 完整门禁：三端静态检查 + 三端构建 + 全部测试（含全部服务端 e2e）
 	@echo ""
-	@echo "✓ 全部门禁通过（提交前跑这个）"
+	@echo "✓ 全部门禁通过（发布前跑这个；日常用 test-changed）"
 
 # ------------------------------------------------------------------------------
-#  CI（.github/workflows/ci.yml 只调这一条，门禁清单只此一处）
+#  CI（.github/workflows/ci.yml 只调 ci-static 与 server-e2e-shard）
+#
+#  PR 上跑一次全套，分两个 job 并行：
+#    static  = ci-static（类型检查 / 审计 / 两端构建）
+#    e2e × 4 = server-e2e-shard（套件清单派生自 server/package.json，按耗时装箱）
+#  合并后**不再跑**：PR 的 CI 跑的是 refs/pull/N/merge，即「master + 本次改动」，
+#  与 squash 之后的树相同，再跑一遍测不到新东西（#631）。
 #
 #  客户端门禁分两半（见根 FAQ「为什么 CI 不覆盖客户端」，决定走路径 B）：
-#   - `make client-check`（全工程 tsc）现已进 CI：Cocos 类型声明被 vendoring 进
+#   - `make client-check`（全工程 tsc）进 CI：Cocos 类型声明被 vendoring 进
 #     client/types/engine/（相对路径、含真实引擎 cc.d.ts），CI 无需 Cocos 编辑器。
 #   - `make client-test` 的单测里有若干套断言 assets/resources/ 下的真实素材
 #     （图集/帧序列/怪物帧 .meta），素材体积大、**有意不入库**（见 .gitignore），
 #     所以单测仍是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
 # ------------------------------------------------------------------------------
 
-ci: install-ci client-check audit server-build admin-build server-e2e server-e2e-roles server-e2e-guard server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map ## CI 门禁：服务端二十六套 e2e + 管理端构建 + 跨端审计 + 客户端类型检查
+ci-static: $(INSTALL) client-check audit server-build admin-build ## CI 静态半边：类型检查 + 审计 + 两端构建
 	@echo ""
-	@echo "✓ CI 门禁通过"
+	@echo "✓ 静态半边通过（CI 上它与 4 个 e2e 分片并行跑）"
+
+ci: ci-static e2e-all ## 门禁全量（本机串行版 = CI 跑过的全部内容；不放心时手动跑）
+	@echo ""
+	@echo "✓ 门禁全量通过"
 	@echo "  未覆盖（本地专属）：make client-test —— 需要本机 Cocos 工程与 assets/resources 素材"
 	@echo "  已覆盖：make client-check（类型声明 vendoring 进 client/types/engine/，无需编辑器）"
 
