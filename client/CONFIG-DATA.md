@@ -58,7 +58,7 @@
 | `quests` | `applyQuestRows` | `configs/quest-data.ts` `questData` | `shared/quest-seed.ts` → `quests` 表 | `/quests` |
 | `skills` | `applySkillRows`（→ `applySkillData`，整表重建） | `configs/skill-data.ts` `skillData` + `oeccupationSkills`（按行派生的职业映射） | `shared/skill-seed.ts` → `skills` 表 | `/skills` |
 | `statuses` | `applyStatusRows` | `configs/status.ts` `statuses` | `shared/status-seed.ts` | `/statuses` |
-| `fashions` | `applyFashionRows` | `configs/fashionClothes.ts` `fashionData` | `fashions` 表 ← `configs/fashionClothes.ts` | `/fashions` |
+| `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `configs/fashionClothes.ts` `fashionData`（空数组）+ 取源规则 | `shared/fashion-seed.ts` → `fashions` 表 | `/fashions` |
 | `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `configs/mall.ts`（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
 | `maps` / `mapTypes` | `applyMapRows` | `configs/map.ts` `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
 | `uiEffects` | `applyUiEffectRows` | `configs/effect.ts` `uiEffects` | `ui_effects` 表 | `/ui-effects` |
@@ -95,12 +95,12 @@
 | `material.ts` | `materials`（**空数组**，含图标） | `applyItemBaseData`（整表重建） |
 | `items.ts` | `items` 总表 = 装备 + 药品 + 材料的「id → 物品」索引 | `rebuildItemIndex()`（装备 → 药品 → 材料） |
 | `skill-data.ts` | `skillData`（**空数组**）+ `oeccupationSkills`（按行派生） | `applySkillData`（整表重建，含职业映射重算） |
+| `fashionClothes.ts` | `fashionData`（**空数组**）+ 外观取源规则（`getFashionOut` / `getFashionIn`） | `applyFashionData`（整表重建，含 icon / in / out） |
 
 ### 4.2 仍是「客户端持有 + 快照覆写」（#603 未搬完的部分）
 
 | 文件 | 行数 | 现在客户端存什么 | 阻力 |
 |---|---|---|---|
-| `fashionClothes.ts` | 229 | 时装行（icon / in / out 资源路径是表现层） | 资源路径是否入库要定（地图那套选择了「不入库」） |
 | `role.ts` | 198 | 职业表 + 移动速度 | 只剩少量常量 |
 | `monster.ts` | 65 | 只有 `monsterAI` 全局节奏常量 | 低优先 |
 
@@ -143,9 +143,10 @@
 `drop`（具名表 + 兜底表）、`battle`（战斗力权重）、`npc`、`mall`（默认售价）、
 **`equipments` + `growth`（第九域：装备/槽位/倍率/回收价曲线，含 1080 行装备数据）**、
 **`items` / `material` / `drug`（第十域：图标随行入库，物品总表只剩索引）**、
-**`skill-data`（第十一域：15 条技能行 + 职业归属 / 击退距离，`oeccupationSkills` 改为派生）**。
+**`skill-data`（第十一域：15 条技能行 + 职业归属 / 击退距离，`oeccupationSkills` 改为派生）**、
+**`fashionClothes`（第十二域：20 套时装，含 icon / in / out 资源路径 —— 路径不可按 id 推导，必须入库）**。
 
-剩余按阻力排序：`fashionClothes` → `role` / `monster`（AI 节奏常量）。
+剩余按阻力排序：`role` / `monster`（AI 节奏常量）。
 
 > 第九域的三层切分值得记住：**显示与规则**进 `equipments` / `equipment_slots` / `equipment_meta` 三张表；
 > **八项战斗属性**不进表，由 `growth-seed.equipmentStats(level, slot)` 公式算（#590）；

@@ -7597,7 +7597,7 @@
     },
     "/admin/fashions": {
       "get": {
-        "description": "id 清单固定（seed 自客户端 configs/fashionClothes 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；资源路径不开放编辑。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；资源路径不开放编辑。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminFashion.list",
         "parameters": [
           {
@@ -19995,7 +19995,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "时装 id（configs/fashionClothes，如 \"cloth_2\"；序列固定，不可增删行）"
+            "description": "时装 id（seed 自 shared/fashion-seed.ts，如 \"cloth_2\"；序列固定，不可增删行）"
           },
           "label": {
             "type": "string",

@@ -43,7 +43,6 @@ import {
 import {
   ACHIEVEMENTS,
   EQUIPMENT_BASES,
-  FASHIONS,
   MONSTER_SKILLS,
   QUESTS,
   ITEM_TYPES,
@@ -51,6 +50,7 @@ import {
 } from "../../shared/game-data.generated";
 import { DRUG_SEED_ROWS, ITEM_BASE_SEED_ROWS } from "../../shared/item-seed";
 import { SKILL_SEED_ROWS } from "../../shared/skill-seed";
+import { FASHION_SEED_ROWS } from "../../shared/fashion-seed";
 import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
 import { TITLE_SEEDS } from "../../shared/title-seed";
 import { SOUL_SEEDS } from "../../shared/soul-seed";
@@ -1553,19 +1553,34 @@ export class GameConfigService implements OnModuleInit {
     }
   }
 
-  /** 时装 seed：FASHIONS 直接灌（名称 / 文案 / 资源路径 / 售卖价 / 属性），20 套；渠道默认 unavailable（#257） */
+  /**
+   * 时装 seed（#257 / #603 第十二域）：`fashion-seed.ts` 的 `FASHION_SEED_ROWS` 整行灌 ——
+   * 名称 / 文案 / 图标 / 内观 / 外观资源 / 售卖价 / 八项属性都在服务端种子，
+   * 客户端 `configs/fashionClothes` 只剩空数组（进游戏由快照整表重建），20 套；
+   * 渠道默认 unavailable（运营按活动开放）。
+   */
   private seedFashions() {
-    for (const [id, meta] of Object.entries(FASHIONS as Record<string, Record<string, unknown>>)) {
+    for (const row of FASHION_SEED_ROWS) {
       this.fashionsRepo.seedRow({
-        id,
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        icon: String(meta.icon ?? ""),
-        in_res: String(meta.in ?? ""),
-        out_res: String(meta.out ?? ""),
-        sell_price: Number(meta.sellPrice) || 0,
+        id: row.id,
+        label: row.label,
+        description: row.description,
+        icon: row.icon,
+        in_res: row.inRes,
+        out_res: row.outRes,
+        sell_price: row.sellPrice,
         acquire_channel: SEED_ACQUIRE_CHANNEL,
-        ...flatAttributes(meta),
+        // 种子里的区间与快照同形（{min,max}），入库列是 min/max 拍平的两列
+        ...flatAttributes({
+          maxHp: row.maxHp,
+          hpRecover: row.hpRecover,
+          physicalAttack: [row.physicalAttack.min, row.physicalAttack.max],
+          magicAttack: [row.magicAttack.min, row.magicAttack.max],
+          taoistAttack: [row.taoistAttack.min, row.taoistAttack.max],
+          physicalDefense: [row.physicalDefense.min, row.physicalDefense.max],
+          magicDefense: [row.magicDefense.min, row.magicDefense.max],
+          taoistDefense: [row.taoistDefense.min, row.taoistDefense.max],
+        }),
         updated_at: 0,
       });
     }

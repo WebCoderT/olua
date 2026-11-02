@@ -831,7 +831,7 @@ export interface MonsterDropRow {
 /**
  * 时装配置（#257）：管理端「时装配置」的行
  *
- * 主键是时装 id（configs/fashionClothes，如 "cloth_2"）—— 清单固定，**不可增删行**。
+ * 主键是时装 id（shared/fashion-seed.ts，如 "cloth_2"）—— 清单固定，**不可增删行**。
  * 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS（属性当前全 0），
  * 运营可改；`icon` / `in_res` / `out_res` 是客户端资源路径（表现层），后台不改。
  * `acquire_channel` 的取值域复用称号的 AcquireChannel（见 common/constants/game-config，

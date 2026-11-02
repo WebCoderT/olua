@@ -360,7 +360,7 @@ export const routes = {
     /**
      * 时装配置列表（GET /admin/fashions）
      *
-     * id 清单固定（seed 自客户端 configs/fashionClothes 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
+     * id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
      */
     list: "/admin/fashions",
     /**

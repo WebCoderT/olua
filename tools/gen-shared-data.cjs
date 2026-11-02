@@ -98,7 +98,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "equipments", "role", "items", "monster", "drug", "material", "fashionClothes"].map(
+const SOURCE_FILES = ["growth", "equipments", "role", "items", "monster", "drug", "material"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -148,7 +148,7 @@ function main() {
 }
 
 function load(cfg, seeds) {
-  const { monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed, skillSeed } = seeds;
+  const { monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed, skillSeed, fashionSeed } = seeds;
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -175,9 +175,9 @@ function load(cfg, seeds) {
     monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
     // #603 起 NPC 出厂数据的服务端唯一书写处是 npc-seed.ts，客户端 configs/npc 只剩点击接线
     npcs: npcSeed.NPC_SEED_ROWS,
-    // 时装（#257）：管理端「时装配置」的 seed 来源 —— 纯数据（id/名称/文案/资源路径/
-    // 售卖价/属性），表现层参数未随恢复保留（见 fashionClothes.ts 文件头）
-    fashions: missing("fashionClothes.fashionData", cfg("fashionClothes").fashionData),
+    // 时装（#257 / #603 第十二域）：唯一书写处 = server/src/shared/fashion-seed.ts，
+    // 客户端 configs/fashionClothes 只剩空数组 + 整表重建（资源路径与属性都跟着行走）
+    fashions: fashionSeed.FASHION_SEED_ROWS,
     // 掉落（#254）：具名表（common/elite/boss）、兜底表与每怪独立表 —— 管理端
     // 「掉落配置」的 seed 来源；条目缺省值（weight=1 / chance=1 / count=[1,1]）
     // 在生成器规整为全显式，消费方不复制缺省规则
@@ -394,6 +394,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "mall-seed.ts"),
           path.join(sharedDir, "item-seed.ts"),
           path.join(sharedDir, "skill-seed.ts"),
+          path.join(sharedDir, "fashion-seed.ts"),
         ],
       },
       null,
@@ -418,6 +419,7 @@ function compileServerShared(work) {
     mallSeed: require(path.join(work, "server-out", "mall-seed.js")),
     itemSeed: require(path.join(work, "server-out", "item-seed.js")),
     skillSeed: require(path.join(work, "server-out", "skill-seed.js")),
+    fashionSeed: require(path.join(work, "server-out", "fashion-seed.js")),
   };
 }
 
@@ -745,33 +747,54 @@ function pickSellPrices(items) {
 }
 
 /**
- * 时装表 → [[时装 id, 管理端元数据]]（#257）
+ * 时装种子（`FASHION_SEED_ROWS`）→ [[时装 id, 元数据]]
  *
- * 来源是 `configs/fashionClothes`（#257 恢复为纯数据文件，见文件头）。名称 / 文案 /
- * 资源路径 / 售卖价 / 属性进快照（sellPrice 来自可选字段，缺省 0）；属性经
- * pickAttributes 拍平（当前配置全缺省 = 0，管理端可改，客户端消费等穿戴功能）。
+ * #603 第十二域起唯一书写处换成服务端 `fashion-seed.ts`：种子的形状**就是本生成物的形状**
+ * （资源路径 / 售卖价 / 八项属性都已在种子里拍平），这里只做校验与规整 ——
+ * 不再从客户端 `configs/fashionClothes` 读（那边只剩空数组 + 整表重建）。
  */
 function pickFashions(fashions) {
   const out = [];
   const seen = new Set();
   for (const item of fashions || []) {
-    if (!item || !item.id) throw new Error("configs/fashionClothes 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("fashion-seed 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`时装 id 重复：${item.id}`);
     seen.add(item.id);
     const row = {
       label: String(item.label ?? ""),
       description: String(item.description ?? ""),
       icon: String(item.icon ?? ""),
-      in: String(item.in ?? ""),
-      out: String(item.out ?? ""),
+      // 种子用快照里的字段名（inRes / outRes），生成物沿用历史的 in / out（admin 读它）
+      in: String(item.inRes ?? ""),
+      out: String(item.outRes ?? ""),
       sellPrice: round(item.sellPrice ?? 0),
-      // attributes 全缺省时 pickAttributes(undefined) 会返回 null —— 这里保证拍平形状恒在（全 0）
-      ...pickAttributes(item.attributes ?? {}),
+      ...pickAttributes(seedAttributesToTuples(item)),
     };
     out.push([item.id, row]);
   }
-  if (out.length === 0) throw new Error("configs/fashionClothes 的 fashionData 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  if (out.length === 0) throw new Error("fashion-seed 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
+}
+
+/**
+ * 种子里的属性区间（`{min,max}`，与快照 / 管理端同形）→ 生成物用的 `[min,max]` 元组
+ *
+ * 生成物的 `FASHIONS` 是**管理端读的那份**，形状自 #257 起就是元组；种子按快照形状写，
+ * 因为沙箱要用 `applyFashionData(种子)` 复现线上 `applyFashionData(快照)`。
+ * 转换只在这一处，别在消费方各转一遍。
+ */
+function seedAttributesToTuples(row) {
+  const tupleOf = (range) => [round(range?.min ?? 0), round(range?.max ?? 0)];
+  return {
+    maxHp: row.maxHp,
+    hpRecover: row.hpRecover,
+    physicalAttack: tupleOf(row.physicalAttack),
+    magicAttack: tupleOf(row.magicAttack),
+    taoistAttack: tupleOf(row.taoistAttack),
+    physicalDefense: tupleOf(row.physicalDefense),
+    magicDefense: tupleOf(row.magicDefense),
+    taoistDefense: tupleOf(row.taoistDefense),
+  };
 }
 
 /**

@@ -39,7 +39,7 @@ import { applyNpcRows } from "./npc";
 import { questData } from "./quest-data";
 import type { QuestData } from "./quest-data";
 import { rebuildQuests } from "./quest";
-import { fashionData } from "./fashionClothes";
+import { applyFashionData } from "./fashionClothes";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths } from "./role";
 import { applySkillData } from "./skill-data";
@@ -292,32 +292,17 @@ function questRowToConfig(row: QuestRow): QuestData {
 }
 
 /**
- * 覆写时装（名称 / 描述 / 价格 / 八项属性）
+ * 时装装载（#257 / #603 第十二域）
  *
- * **icon / in / out 不覆写**：资源路径以发布素材包为准（与 resources 纪律一致），
- * 服务端那份只是 seed 时的镜像。属性全 0 时也要照写（运营可能就是把加成清零）。
+ * #603 起客户端**没有任何时装出厂行**（`configs/fashionClothes` 只剩空数组 + 取源规则），
+ * 所以这里一律整表重建：快照里有什么就是什么。
+ *
+ * **icon / in / out 也来自快照**（与地图那套相反）：时装 id 与资源目录编号之间没有可推导的
+ * 约定（cloth_13 甚至没有内观图），路径只能入库跟着行走。属性全 0 时也要照写
+ * （运营可能就是把加成清零）。
  */
 export function applyFashionRows(rows: FashionRow[]): void {
-  if (!rows.length) return;
-  const overrides = new Map<string, FashionRow>();
-  rows.forEach((row) => overrides.set(row.id, row));
-  fashionData.forEach((fashion) => {
-    const row = overrides.get(fashion.id);
-    if (!row) return;
-    fashion.label = row.label;
-    fashion.description = row.description;
-    fashion.sellPrice = row.sellPrice;
-    const attributes = toBattleAttributes(row.attributes);
-    fashion.attributes = {
-      maxHp: attributes.maxHp,
-      physicalAttack: attributes.physicalAttack,
-      magicAttack: attributes.magicAttack,
-      taoistAttack: attributes.taoistAttack,
-      physicalDefense: attributes.physicalDefense,
-      magicDefense: attributes.magicDefense,
-      taoistDefense: attributes.taoistDefense,
-    };
-  });
+  applyFashionData(rows);
 }
 
 /** 状态行（服务端快照）→ 客户端状态配置 */

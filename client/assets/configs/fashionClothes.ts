@@ -1,18 +1,22 @@
 /**
- * 时装配置表（#257 启用）
+ * 时装配置表（#257 启用；#603 第十二域起**客户端零出厂数据**）
  *
- * 历史状态：本文件曾整份被注释（零导出、零消费方），#257 恢复为
- * **纯数据文件** —— 工具链 `tools/gen-shared-data.cjs` 要在 Node 垫片里编译加载
- * 本文件给三端生成公共数据快照（FASHION），所以这里只有数据、没有任何引擎依赖。
+ * ===========================================================================
+ * #603 第十二域：数据搬走，取源规则留下
+ * ===========================================================================
+ * 名称 / 文案 / 图标 / 内观资源 / 外观资源 / 售卖价 / 八项属性加成的唯一书写处是
+ * 服务端 `server/src/shared/fashion-seed.ts` → `fashions` 表（管理端「时装配置」可改）→
+ * `GET /game-config` 快照的 `fashions` 段 → 这里整表重建（`applyFashionData`）。
  *
- * 原注释数据里的表现层参数**全部是常量**（level=1 / sex=ALL / occupation=ALL /
- * sellPirce=0 / maxHp=0 / 六项攻防区间全 [0,0] / inPosition=(0,0) / outScale=1 /
- * outPositions 八向 (7.3,34.2) / tags 与 prefix、suffix 为空），未随恢复保留 ——
- * 等客户端时装穿戴功能落地时再按需恢复（原注释在 git 历史）。
+ * 留在本文件的是**取源规则**（外观优先时装、其次装备衣服、最后性别默认外观）与
+ * 按 id 查询的几个函数 —— 那是玩法逻辑，不是运营数据。
  *
- * 可选字段：in / out 是内观 / 外观资源路径（resources 相对路径，空串 = 无）；
- * sellPrice 与 attributes（maxHp + 六项区间）当前全部缺省（= 0），管理端
- * 「时装配置」可改，未来客户端需要非零值时在这里补数据后重新生成。
+ * **客户端加载期 `fashionData` 是空的** —— 进游戏前时装弹窗里一套都没有不是 bug，
+ * 那只是快照还没到。
+ *
+ * 资源路径为什么跟着行走：cloth_2 与 clothes/out/001 之间没有可推导的约定
+ * （编号与 id 不连续，cloth_13 连内观图都没有），所以路径必须入库；
+ * 而地图 `<id>/<id>`、特效 `effect/<key>/<key>.plist` 能按 id 推导，就不入库。
  */
 export interface FashionDataEntry {
   /** 时装 id（如 cloth_2；fashions 表主键，序列固定不可增删） */
@@ -30,6 +34,7 @@ export interface FashionDataEntry {
   /** 战斗属性加成（缺省全 0） */
   attributes?: {
     maxHp?: number;
+    hpRecover?: number;
     physicalAttack?: [number, number];
     magicAttack?: [number, number];
     taoistAttack?: [number, number];
@@ -39,168 +44,74 @@ export interface FashionDataEntry {
   };
 }
 
-export const fashionData: FashionDataEntry[] = [
-  {
-    id: "cloth_2",
-    label: "妖绯巫女",
-    description: "白红相间的东瀛巫女装束，周身缠绕着妖异的紫雾，据说来自异国的神秘祭司。",
-    icon: "clothes/icon/001",
-    in: "clothes/in/001",
-    out: "clothes/out/001",
-  },
-  {
-    id: "cloth_3",
-    label: "金棒阔少",
-    description: "金发紫衫的富家公子，扛着鎏金球棒、拎着漆皮宝箱，走路都带风。",
-    icon: "clothes/icon/002",
-    in: "clothes/in/002",
-    out: "clothes/out/002",
-  },
-  {
-    id: "cloth_4",
-    label: "绯樱刀姬",
-    description: "白裙红缨的女武士，裙摆沾着不灭的火光，太刀出鞘时如樱花绽落。",
-    icon: "clothes/icon/003",
-    in: "clothes/in/003",
-    out: "clothes/out/003",
-  },
-  {
-    id: "cloth_5",
-    label: "熔岩魔躯",
-    description: "由熔岩凝成的魔神之躯，金角獠牙、鬃毛流火，行走时大地都被烧红。",
-    icon: "clothes/icon/004",
-    in: "clothes/in/004",
-    out: "clothes/out/004",
-  },
-  {
-    id: "cloth_6",
-    label: "兽首金甲",
-    description: "肩披兽首的金甲战袍，红披风猎猎作响，佩剑燃着熊熊烈焰。",
-    icon: "clothes/icon/006",
-    in: "clothes/in/006",
-    out: "clothes/out/006",
-  },
-  {
-    id: "cloth_7",
-    label: "双焰鬼将",
-    description: "双手各持一把燃烧魔刀的鬼面战将，双翼喷焰，凶戾无比。",
-    icon: "clothes/icon/007",
-    in: "clothes/in/007",
-    out: "clothes/out/007",
-  },
-  {
-    id: "cloth_8",
-    label: "红金机甲",
-    description: "传说从异世界掉落的钢铁战衣，胸口能量核心散发着幽蓝的光芒。",
-    icon: "clothes/icon/008",
-    in: "clothes/in/008",
-    out: "clothes/out/008",
-  },
-  {
-    id: "cloth_9",
-    label: "星盾卫士",
-    description: "身披星条战衣，手持坚不可摧的圆盾，正义感满满的老兵。",
-    icon: "clothes/icon/009",
-    in: "clothes/in/009",
-    out: "clothes/out/009",
-  },
-  {
-    id: "cloth_11",
-    label: "黄金圣翼",
-    description: "铺展开的金色羽翼如神明降世，金光所照之处皆成圣域。",
-    icon: "clothes/icon/011",
-    in: "clothes/in/011",
-    out: "",
-  },
-  {
-    id: "cloth_12",
-    label: "英伦军花",
-    description: "笔挺军装的英气女官，站姿标准得像在阅兵场上。",
-    icon: "clothes/icon/012",
-    in: "",
-    out: "clothes/out/012",
-  },
-  {
-    id: "cloth_13",
-    label: "军装丽人",
-    description: "与军花气质相仿的礼服军装，英姿飒爽，气度不凡。",
-    icon: "clothes/icon/013",
-    in: "",
-    out: "clothes/out/013",
-  },
-  {
-    id: "cloth_16",
-    label: "暗黑骨甲",
-    description: "由魔兽骨壳拼成的黑甲，浑身上下唯一的亮光是一双幽蓝的眼睛。",
-    icon: "clothes/icon/016",
-    in: "clothes/in/016",
-    out: "clothes/out/016",
-  },
-  {
-    id: "cloth_18",
-    label: "烈焰神拳",
-    description: "火神附体般的魁梧战躯，双拳燃着不灭之火，头顶金环流焰。",
-    icon: "clothes/icon/018",
-    in: "clothes/in/018",
-    out: "clothes/out/018",
-  },
-  {
-    id: "cloth_19",
-    label: "赤绒猫娘",
-    description: "红衣猫耳少女，绒爪轻挥也能挠出漫天火花。",
-    icon: "clothes/icon/019",
-    in: "clothes/in/019",
-    out: "clothes/out/019",
-  },
-  {
-    id: "cloth_20",
-    label: "招财福猪",
-    description: "圆滚滚的福猪财主，怀里抱着吃不完的包子，是财运的象征。",
-    icon: "clothes/icon/020",
-    in: "clothes/in/020",
-    out: "clothes/out/020",
-  },
-  {
-    id: "cloth_22",
-    label: "蓝雷甲士",
-    description: "头生双角的铠甲武士，全身缠绕着蓝色雷霆，怒目如电。",
-    icon: "clothes/icon/022",
-    in: "clothes/in/022",
-    out: "clothes/out/022",
-  },
-  {
-    id: "cloth_24",
-    label: "月宫仙子",
-    description: "月下起舞的仙子，紫纱罗裙随风而动，疑似月宫下凡。",
-    icon: "clothes/icon/024",
-    in: "clothes/in/024",
-    out: "clothes/out/024",
-  },
-  {
-    id: "cloth_25",
-    label: "金翎雀帝",
-    description: "背后展开金焰雀羽的男人，传说是南方神鸟转世。",
-    icon: "clothes/icon/025",
-    in: "clothes/in/025",
-    out: "clothes/out/025",
-  },
-  {
-    id: "cloth_27",
-    label: "金龙帝袍",
-    description: "金龙盘冠的帝王战袍，举手投足间尽显威仪，似有龙吟环绕。",
-    icon: "clothes/icon/027",
-    in: "clothes/in/027",
-    out: "clothes/out/027",
-  },
-  {
-    id: "cloth_28",
-    label: "金身财神",
-    description: "金甲加身的财神爷，周身落满金币与火光，见者发财。",
-    icon: "clothes/icon/028",
-    in: "clothes/in/028",
-    out: "clothes/out/028",
-  },
-];
+/** 协议里的区间是 `{min,max}` 对象（与装备 / 称号同一形状），客户端内部用 [min,max] 元组 */
+export interface FashionRangeLike {
+  min: number;
+  max: number;
+}
+
+/** 服务端时装行（快照 `fashions` 段；与 `fashion-seed.ts` 的 `FashionSeedRow` 同源） */
+export interface FashionSeedLike {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  /** 注意服务端字段名带 Res 后缀（inRes / outRes），客户端沿用 in / out */
+  inRes: string;
+  outRes: string;
+  sellPrice: number;
+  attributes: {
+    maxHp?: number;
+    hpRecover?: number;
+    physicalAttack?: FashionRangeLike;
+    magicAttack?: FashionRangeLike;
+    taoistAttack?: FashionRangeLike;
+    physicalDefense?: FashionRangeLike;
+    magicDefense?: FashionRangeLike;
+    taoistDefense?: FashionRangeLike;
+  };
+}
+
+/** 时装运行时表（内容全部来自服务端；加载期为空） */
+export const fashionData: FashionDataEntry[] = [];
+
+/** 协议区间 → 客户端元组（缺省 = [0,0]；全 0 也要照写，运营可能就是把加成清零） */
+function toRange(range: FashionRangeLike | undefined): [number, number] {
+  return range ? [Number(range.min) || 0, Number(range.max) || 0] : [0, 0];
+}
+
+/**
+ * 整表重建时装（#603 第十二域）
+ *
+ * **整表重建而不是覆写已有行**：客户端已经没有出厂行了，快照里没有的 id 客户端就不该有。
+ * 数组是同一个引用（只 clear + push），弹窗 / 预载拿着的引用不变。
+ */
+export function applyFashionData(rows: FashionSeedLike[]): void {
+  fashionData.length = 0;
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string" || !row.id) continue;
+    const source = row.attributes ?? {};
+    fashionData.push({
+      id: row.id,
+      label: String(row.label ?? ""),
+      description: String(row.description ?? ""),
+      icon: String(row.icon ?? ""),
+      in: String(row.inRes ?? ""),
+      out: String(row.outRes ?? ""),
+      sellPrice: Number(row.sellPrice) || 0,
+      attributes: {
+        maxHp: Number(source.maxHp) || 0,
+        hpRecover: Number(source.hpRecover) || 0,
+        physicalAttack: toRange(source.physicalAttack),
+        magicAttack: toRange(source.magicAttack),
+        taoistAttack: toRange(source.taoistAttack),
+        physicalDefense: toRange(source.physicalDefense),
+        magicDefense: toRange(source.magicDefense),
+        taoistDefense: toRange(source.taoistDefense),
+      },
+    });
+  }
+}
 
 //#region 读取（#377 穿戴系统：外观取源规则只在这里写一遍）
 

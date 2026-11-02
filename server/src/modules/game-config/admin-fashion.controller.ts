@@ -15,7 +15,7 @@ import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from ".
  * 管理端 · 时装配置（#257）
  *
  * 与称号 / 战魂同一取向：**只有 list / update，没有 create / remove** ——
- * 时装 id 被客户端 configs/fashionClothes 与未来的穿戴 / 衣柜链路引用，清单固定
+ * 时装 id 被角色存档（fashion 字段）与未来的穿戴 / 衣柜链路引用，清单固定
  * （seed 自生成物 FASHIONS 的 20 套），e2e 会固化「POST/DELETE 404」。
  *
  * 可改：名称 / 描述 / 售卖价 / 获得渠道（复用称号 AcquireChannel，seed 默认 unavailable）/
@@ -32,7 +32,7 @@ export class AdminFashionController {
     operationId: "adminFashion.list",
     summary: "时装配置列表",
     description:
-      "id 清单固定（seed 自客户端 configs/fashionClothes 的 20 套），**没有创建 / 删除**。" +
+      "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。" +
       "`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n" +
       "属性 seed 时全 0（原配置就是零加成），在这里运营可改；资源路径不开放编辑。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(FASHION_SORT)}，\`order\` 取 asc / desc（默认 id 升序）。`,

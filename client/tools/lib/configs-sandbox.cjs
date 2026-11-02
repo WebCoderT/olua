@@ -160,6 +160,13 @@ function hydrateSnapshotTables(outDir) {
     require(path.join(outDir, "configs/skill-data.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
   }
 
+  // 时装（#603 第十二域）：衣柜 / 取源规则 / 预载的断言都读 fashionData，
+  // 数据在 fashion-seed.ts（种子形状 = 快照形状，直接走线上同一个 applyFashionData）
+  if (has("configs/fashionClothes.js")) {
+    const fashionSeed = require(compileServerShared("fashion-seed.ts", "olua-seed-fashion"));
+    require(path.join(outDir, "configs/fashionClothes.js")).applyFashionData(fashionSeed.FASHION_SEED_ROWS);
+  }
+
   if (!has("configs/equipments.js") || !has("configs/growth.js")) return;
 
   const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));

@@ -5094,7 +5094,7 @@ export type MallPriceRemove = {
 
 export type Fashion = {
   /**
-   * 时装 id（configs/fashionClothes，如 "cloth_2"；序列固定，不可增删行）
+   * 时装 id（seed 自 shared/fashion-seed.ts，如 "cloth_2"；序列固定，不可增删行）
    */
   id: string;
   /**

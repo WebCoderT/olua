@@ -1381,6 +1381,11 @@ async function main() {
     checkEqual(snap.skills?.length, Object.keys(shared.SKILLS).length, "快照技能行数 = 生成物（含释放限制字段）");
     checkEqual(snap.statuses?.length, Object.keys(shared.STATUSES).length, "快照状态行数 = 生成物");
     check(Boolean(snap.skills?.[0]?.castLockMs !== undefined && snap.skills?.[0]?.requireTarget !== undefined), "快照技能行带释放限制（castLockMs / requireTarget）");
+    // 时装（#603 第十二域）：客户端整表重建要靠这几列，路径必须跟着快照下来
+    const snapFashion2 = snap.fashions?.find((row) => row.id === "cloth_2");
+    checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20 套）");
+    check(Boolean(snapFashion2?.icon && snapFashion2?.inRes && snapFashion2?.outRes), "快照时装行带 icon / inRes / outRes（客户端据此整表重建，不自己拼路径）");
+    check(Boolean(snapFashion2?.attributes?.physicalAttack?.min !== undefined), "快照时装行带嵌套区间属性");
 
     // 字段形状抽检：camelCase、与管理端列表行同形状（称号渠道不预设值——前面的 region 已改过渠道）
     const adminTitles = await api(base, "GET", "/api/admin/titles", { token });

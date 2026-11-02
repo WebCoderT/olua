@@ -199,9 +199,9 @@ function main() {
   check(npcs.size === 2, "整表重建：快照里没有的 NPC 不会残留", `size=${npcs.size}`);
   check(typeof (npcAfter && npcAfter.onClick) === "function", "点击行为按 id 延迟接线（npcClicks 注册表）", typeof (npcAfter && npcAfter.onClick));
 
-  console.log("\n=== 时装：只覆写文案与数值 ===");
+  console.log("\n=== 时装：整表重建（资源路径也取快照）===");
 
-  const fashionBefore = fashionData.find((fashion) => fashion.id === "cloth_2");
+  check(fashionData.length === 20, "沙箱已按 fashion-seed 灌好 20 套（客户端自身零出厂行）", String(fashionData.length));
   snapshotApi.applyConfigSnapshot({
     fashions: [
       {
@@ -219,14 +219,17 @@ function main() {
     ],
   });
   const fashionAfter = fashionData.find((fashion) => fashion.id === "cloth_2");
-  check(fashionAfter.label === "测试时装" && fashionAfter.description === "测试时装描述", "名称与描述已覆写", fashionAfter.label);
-  check(fashionAfter.sellPrice === 4321, "售价已覆写", String(fashionAfter.sellPrice));
-  check(fashionAfter.attributes.maxHp === 500 && fashionAfter.attributes.physicalAttack[1] === 40, "八项属性已覆写", JSON.stringify(fashionAfter.attributes));
+  check(fashionData.length === 1, "整表重建：快照只给 1 行 → 衣柜里就只剩这 1 套", String(fashionData.length));
+  check(fashionAfter.label === "测试时装" && fashionAfter.description === "测试时装描述", "名称与描述来自快照", fashionAfter.label);
+  check(fashionAfter.sellPrice === 4321, "售价来自快照", String(fashionAfter.sellPrice));
+  check(fashionAfter.attributes.maxHp === 500 && fashionAfter.attributes.physicalAttack[1] === 40, "八项属性来自快照（区间 {min,max} → 客户端元组）", JSON.stringify(fashionAfter.attributes));
+  // 与地图那套相反：时装 id 与资源目录编号没有可推导的约定，路径只能跟着行走
   check(
-    fashionAfter.icon === fashionBefore.icon && fashionAfter.in === fashionBefore.in && fashionAfter.out === fashionBefore.out,
-    "时装的 icon / in / out 一律不动（服务端那份只是 seed 镜像）",
+    fashionAfter.icon === "clothes/icon/999" && fashionAfter.in === "clothes/in/999" && fashionAfter.out === "clothes/out/999",
+    "icon / inRes / outRes 也取快照（路径不可按 id 推导，必须入库）",
     `${fashionAfter.icon} / ${fashionAfter.in}`,
   );
+  check(fashionData.find((fashion) => fashion.id === "cloth_3") === undefined, "快照里没有的时装不会残留（下架如实反映）");
 
   console.log("\n=== 幂等与兜底 ===");
   const monsterRow = { id: "1", label: "测试怪", tier: "normal", level: 33, maxHp: 54321, attributes: { physicalAttack: { min: 11, max: 22 }, magicAttack: { min: 0, max: 0 }, taoistAttack: { min: 0, max: 0 }, physicalDefense: { min: 3, max: 6 }, magicDefense: { min: 3, max: 6 }, taoistDefense: { min: 3, max: 6 } } };
