@@ -127,7 +127,6 @@ node tools/test-bag-tidy.cjs                                 # run one suite
 | Script | Produces | Notes |
 | --- | --- | --- |
 | `gen-monster-config.cjs` | `../server/src/shared/monster-presentation.generated.ts` | Monster presentation manifest (#588 onward it writes to the **server**; the client keeps no copy): geometry measured from atlas plist base frames; rules are written in the script header, rerun after changing them |
-| `gen-monster-drops.cjs` | `assets/configs/monsterDrops.ts` | One independent drop table per monster |
 | `clean-role-empty-frames.cjs` | cleans up empty frame assets | Dry-run lists entries first, `--apply` actually acts; it backs up to the repository-root `.workbuddy/backup/` beforehand |
 
 ### Unit test sandbox (`tools/lib/`)
