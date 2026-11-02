@@ -13,7 +13,7 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, compileServerShared, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -56,6 +56,10 @@ function main() {
   const { skillData } = require(path.join(outDir, "configs/skill-data.js"));
   const { statuses } = require(path.join(outDir, "configs/status.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
+  // #603 起客户端 configs/status 只剩空 Map（数据唯一书写处是服务端 status-seed.ts），
+  // 先把真实种子灌进去，还原「快照到达前的客户端」与「覆写是原地改」这两个前提
+  const { STATUS_SEED_ROWS } = require(compileServerShared("status-seed.ts", "olua-status-seed"));
+  for (const { id, ...rest } of STATUS_SEED_ROWS) statuses.set(id, rest);
 
   console.log("\n=== 技能：数值 / 文案 / 释放限制都跟着服务端走 ===");
   const before = skillData.find((item) => item.id === "1000");
