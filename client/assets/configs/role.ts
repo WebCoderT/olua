@@ -1,7 +1,6 @@
 import { ACTION, SpeedRate } from "../types/animation";
 import { directions } from "./animation";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
-import type { SkillId } from "../types/skill";
 import { Size, Vec2 } from "cc";
 
 /** 角色移动速度-全局 */
@@ -173,27 +172,6 @@ roleInfoPositions.set(RELATION_SHIP.BROTHER, new Vec2());
 // 背包插槽行数和列数
 export const bagRow = 7; // 7行
 export const bagCol = 11; // 11列
-
-/**
- * 初始技能等级表（新角色全部解锁 1 级）
- *
- * #597 起建号由**服务端**构造（技能同口径：`1xxx` 玩家技能段全 1 级）；
- * 这里这份只给 `entities/Role` 的字段初始化与测试沙箱用，不再是建号的数据来源。
- */
-export const initialSkills: { [key in SkillId]: number } = {
-  "1000": 1,
-  "1001": 1,
-  "1002": 1,
-  "1003": 1,
-  "1004": 1,
-  "1005": 1,
-  "1006": 1,
-  "1007": 1,
-  "1008": 1,
-  "1009": 1,
-  "1010": 1,
-  "1011": 1,
-};
 
 /** 初始快捷键配置（5 格 = 数字键 1~5；#597 起服务端建号发空数组，这里只给读档补齐与测试用） */
 export const initialShortcutKeys: NeedSetShortcutKeyConfig[] = [

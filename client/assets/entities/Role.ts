@@ -5,7 +5,7 @@ import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../ty
 import { SkillId } from "../types/skill";
 import { MapId } from "../types/map";
 import type { GuideProgress } from "../types/guide";
-import { bagCol, bagRow, defaultRoleSpeedRate, initialShortcutKeys, initialSkills } from "../configs/role";
+import { bagCol, bagRow, defaultRoleSpeedRate } from "../configs/role";
 
 /**
  * 角色实体
@@ -84,9 +84,10 @@ export class Role implements BattleAttributes {
     [EQUIPMENT_TYPE.OTHER1]: null,
     [EQUIPMENT_TYPE.OTHER2]: null,
   };
-  skills: { [key in SkillId]: number } = { ...initialSkills };
-  /** 快捷键 */
-  shortcutKeys: NeedSetShortcutKeyConfig[] = initialShortcutKeys.map((config) => ({ ...config }));
+  /** 技能等级表（只由服务端数据水合，见 #597/#601；本类从不本地构造，#601 起客户端不再内置初始表） */
+  skills!: { [key in SkillId]: number };
+  /** 快捷键（只由服务端数据水合；槽位补齐在 StorageManager 读档时按 configs/role.initialShortcutKeys 做） */
+  shortcutKeys!: NeedSetShortcutKeyConfig[];
   /** 速度倍率 */
   speedRate: SpeedRate = { ...defaultRoleSpeedRate };
   /**
