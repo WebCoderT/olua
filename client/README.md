@@ -52,11 +52,14 @@
    - 文案统一走 `configs/texts`（模板带 `{占位符}`，取值用 `getText(key, params)`），代码里不写中文
    - 布局统一走 `configs/layout/*`，barrel 出口是 `configs/hudLayout`
    - `configs/` 与 `types/` **不依赖 UI 层**（配置只描述数据，回调与分支留在组件里）
-   - 其中**被三端共用的那几张**（战斗 / 装备 / 技能 / 物品 / 地图，外加 `types/role.ts`
+   - 其中**仍由客户端持有出厂数据的几张**（装备 / 技能 / 物品 / 时装 / 职业，外加 `types/role.ts`
      的枚举注释）改完要重生成公共数据：`node ../tools/gen-shared-data.cjs` —— 服务端与管理端读的就是它，忘了生成会被 `make audit-shared-data` 逮住
-   - **#590 起等级 / 三条成长线（战魂 / 称号 / 军衔）/ 成长曲线不在生成物里**：唯一书写处 =
-     `server/src/shared/{growth,title,soul,rank}-seed.ts`，客户端 `configs/{level,title,soul,rank}.ts`
-     只是**空运行时表**（快照到达后整表重建）；装备出厂属性公式（`equipmentStats`）也在服务端种子
+   - **越来越多数据的「唯一书写处」在服务端种子**（#590 起是等级 / 三条成长线 / 成长曲线 / 装备属性公式，
+     #603 起是怪物掉落 / 怪物技能 / 状态 / 任务 / 成就 / 掉落表 / 战斗力权重 / NPC）：客户端对应的
+     `configs/*.ts` 只是**空运行时表**，进游戏由配置快照整表重建 —— **不要再往这些文件里写数据**，
+     那等于又造一份真相
+   - **「这个数据归谁、改哪儿、客户端什么时候拿到」→ 查 [`CONFIG-DATA.md`](CONFIG-DATA.md)**（一张对照表：
+     快照段 / 落库函数 / 客户端表 / 服务端出厂 / 管理端页面）
 2. **接口文件是生成的，禁止手改**
    `assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts` 由服务端 Swagger 文档生成（见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)）。
    要加接口 → 改服务端 → `cd server && npm run gen:api` → 按编译报错改调用点。
