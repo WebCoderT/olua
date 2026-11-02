@@ -11,7 +11,7 @@
  * 沙箱垫片缺这两个导出，用 ccExtra 补上（本测试不会真的调碰撞判定）。
  */
 const path = require("path");
-const { prepare, check, finish } = require(path.join(__dirname, "lib/configs-sandbox.cjs"));
+const { prepare, compileServerShared, check, finish } = require(path.join(__dirname, "lib/configs-sandbox.cjs"));
 
 const outDir = prepare(
   "olua-status-combat",
@@ -20,6 +20,9 @@ const outDir = prepare(
 );
 
 const { statuses } = require(path.join(outDir, "configs/status.js"));
+// #603 起客户端不再内置状态数据，唯一书写处是服务端 status-seed.ts —— 直接灌真实种子
+const { STATUS_SEED_ROWS } = require(compileServerShared("status-seed.ts", "olua-status-seed"));
+for (const { id, ...rest } of STATUS_SEED_ROWS) statuses.set(id, rest);
 const {
   collectStatusCombatModifiers,
   resolveIncomingDamage,

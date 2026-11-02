@@ -411,19 +411,22 @@ export function applySkillRows(rows: SkillRow[]): void {
 }
 
 /**
- * 状态配置覆写（#367 / #372）
+ * 状态配置装载（#367 / #372 / #603）
  *
  * 覆写的是**注册表本身**（`statuses` 这个 Map 的元素内容），所以已经在身上生效的状态
  * 时长与图标也会跟着变（`StatusManager` 只记到期时间戳，读的仍是这份配置）。
- * 快照里有、本地没有的怪物状态同样追加 —— 服务端会在 `casts` 帧里带 statusId，
- * 客户端查不到配置就没法在怪物身上播特效。
+ *
+ * #603 起客户端 `configs/status` 里**没有任何状态数据**（只剩一张空 Map），所以
+ * 这里对**所有**未登记的行一律写入（不再区分 owner）—— 角色状态与怪物状态同表，
+ * 快照就是唯一来源。角色技能的 `casts` 帧只带 statusId，查不到配置就表现不出来，
+ * 所以缺行必须补而不是忽略。
  */
 export function applyStatusRows(rows: StatusRow[]): void {
   for (const row of rows) {
     const next = statusRowToConfig(row);
     const config = statuses.get(row.id);
     if (!config) {
-      if (row.owner === "monster") statuses.set(row.id, next);
+      statuses.set(row.id, next);
       continue;
     }
     Object.assign(config, next);
