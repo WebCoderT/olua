@@ -86,7 +86,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "status", "monster-skills", "quest-data", "achievement-data"].map(
+const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "status", "quest-data", "achievement-data"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -113,11 +113,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed } = compileServerShared(work);
+  const { growthSeed, monsterDropSeed, monsterSkillSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -131,7 +131,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed) {
+function load(cfg, monsterDropSeed, monsterSkillSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -168,7 +168,8 @@ function load(cfg, monsterDropSeed) {
     // 状态（#367）：管理端「状态配置」的 seed 来源 —— 角色与怪物同表，owner 区分
     statuses: missing("status.statuses", cfg("status").statuses),
     // 怪物技能挂载（#372）：哪只怪放哪些技能、优先级、冷却覆写 —— 服务端 AI 读表
-    monsterSkills: missing("monster-skills.monsterSkills", cfg("monster-skills").monsterSkills),
+    // #603 起挂载表的服务端唯一书写处是 monster-skill-seed.ts，客户端 configs 不再有这份
+    monsterSkills: monsterSkillSeed.MONSTER_SKILL_SEED,
     drugs: missing("drug.drugs", cfg("drug").drugs),
     materials: missing("material.materials", cfg("material").materials),
     // 任务（#396）：管理端「任务配置」的 seed 来源 —— 单目标（kill/talk/collect）+ 奖励
@@ -350,7 +351,12 @@ function compileServerShared(work) {
           types: [],
         },
         // #590 growth-seed（装备出厂属性公式）+ #602 monster-drop-seed（每怪独立掉落表）
-        files: [path.join(sharedDir, "growth-seed.ts"), path.join(sharedDir, "monster-drop-seed.ts")],
+        // #603 monster-skill-seed（怪物技能挂载）
+        files: [
+          path.join(sharedDir, "growth-seed.ts"),
+          path.join(sharedDir, "monster-drop-seed.ts"),
+          path.join(sharedDir, "monster-skill-seed.ts"),
+        ],
       },
       null,
       2,
@@ -363,6 +369,7 @@ function compileServerShared(work) {
   return {
     growthSeed: require(path.join(work, "server-out", "growth-seed.js")),
     monsterDropSeed: require(path.join(work, "server-out", "monster-drop-seed.js")),
+    monsterSkillSeed: require(path.join(work, "server-out", "monster-skill-seed.js")),
   };
 }
 
@@ -864,8 +871,8 @@ function pickMonsterSkills(map, monsters, skills) {
   const owners = new Map(skills.map(([id, row]) => [id, row.owner]));
   const out = [];
   for (const [monsterKey, entries] of Object.entries(map || {})) {
-    if (!monsters.has(monsterKey)) throw new Error(`configs/monster-skills 里的怪物 ${monsterKey} 不在怪物表里`);
-    if (!Array.isArray(entries) || entries.length === 0) throw new Error(`configs/monster-skills 的怪物 ${monsterKey} 挂载清单为空`);
+    if (!monsters.has(monsterKey)) throw new Error(`monster-skill-seed 里的怪物 ${monsterKey} 不在怪物种子（monster-seed.ts）里`);
+    if (!Array.isArray(entries) || entries.length === 0) throw new Error(`monster-skill-seed 的怪物 ${monsterKey} 挂载清单为空`);
     const seen = new Set();
     const rows = entries.map((entry) => {
       const skillId = String(entry?.skillId ?? "");
@@ -887,7 +894,7 @@ function pickMonsterSkills(map, monsters, skills) {
     });
     out.push([monsterKey, rows]);
   }
-  if (out.length === 0) throw new Error("configs/monster-skills 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  if (out.length === 0) throw new Error("monster-skill-seed 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 
