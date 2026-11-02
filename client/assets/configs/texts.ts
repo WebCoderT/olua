@@ -304,6 +304,23 @@ export const uiTexts = {
   progress_loading_tip: "加载中 {percent}% · {tip}",
   /** 加载失败 */
   progress_failed: "加载失败，请重新进入",
+  /** 阶段：拉运营配置快照（#604：进游戏前的硬依赖） */
+  progress_config: "运营配置",
+  /** 运营配置快照没拿到（#604）：停下并等玩家点重试，不构建游戏世界 */
+  progress_config_failed: "配置加载失败，请重试",
+  /** 失败面板上的重试按钮 */
+  progress_config_retry: "重试",
+  /** 契约破坏（服务端漏发段 / 形状不对）：{detail} = 逐条清单（段名 + 原因） */
+  config_snapshot_incomplete: "服务端配置快照不完整：{detail}",
+  /** 快照过了校验但落库时抛错：{detail} = 错误信息 */
+  config_snapshot_apply_failed: "配置快照落库失败：{detail}",
+  /** 请求本身没成（服务端没起 / 断网 / 令牌失效） */
+  config_snapshot_unreachable: "连不上服务端，配置没拉下来",
+  /** 同上，带错误详情 */
+  config_snapshot_unreachable_detail: "连不上服务端，配置没拉下来（{detail}）",
+
+  // 段名（「称号配置」「等级表」…）不在这里：它们是契约清单的一部分，跟着
+  // configs/snapshot-contract.ts 的 SNAPSHOT_SECTIONS 一起写 —— 两处各留一份必然漂。
   /** 阶段：读地图 */
   progress_map: "地图信息",
   /** 阶段：无需预加载 */

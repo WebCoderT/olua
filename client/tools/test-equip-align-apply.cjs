@@ -149,9 +149,11 @@ function main() {
     /Promise\.all\(\[loadSnapshotOnce\(\), loadAlignEveryEntry\(\), loadInAlignEveryEntry\(\)\]\)/.test(configLoader),
     "快照与两套几何并行拉（串行会平白多两个 RTT，而这些 RTT 卡在进游戏路径上）",
   );
+  // 判据按函数体取（别钉死整行文案：#604 把返回值从 void 改成了结果对象，钉死就会假红）
+  const snapshotFn = /function loadSnapshotOnce\(\)[\s\S]*?\n\}/.exec(configLoader);
+  const alignFn = /function loadAlignEveryEntry\(\)[\s\S]*?\n\}/.exec(configLoader);
   check(
-    /if \(snapshotLoaded\) return Promise\.resolve\(\)/.test(configLoader) &&
-      !/function loadAlignEveryEntry[\s\S]{0,200}?snapshotLoaded/.test(configLoader),
+    Boolean(snapshotFn && alignFn) && /snapshotLoaded/.test(snapshotFn[0]) && !/snapshotLoaded/.test(alignFn[0]),
     "几何每次进图都拉（只有快照被 loaded 短路 —— 否则退回选角再进图看不到新位置）",
   );
 

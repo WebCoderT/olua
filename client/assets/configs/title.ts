@@ -11,7 +11,7 @@ import type { Title as TitleRow } from "../ui/utils/net/ApiModels";
  * 口径与怪物（#588）、地图（#573）一致：
  * - **整表重建**（先清空再按行填，数组引用不变）：快照里没有的阶就是服务端没有的阶，
  *   留着本地旧行会让「管理端删了一阶」在客户端变成幽灵卡片；
- * - **快照先于预载必到**（`Game.start` 里 `loadGameConfig()` 在 `PreloadManager` 之前），
+ * - **快照先于预载必到**（`Loading` 场景里 `loadGameConfig()` 在 `PreloadManager` 之前，#604），
  *   称号弹窗 / 头顶名牌 / 预加载全部在进游戏后才读这张表，空表窗口玩家看不到。
  */
 

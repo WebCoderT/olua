@@ -1,12 +1,16 @@
-import { _decorator, Component, director, Label, Mask, Node, UITransform, Vec2 } from "cc";
+import { _decorator, Component, director, Label, Mask, Node, Size, UITransform, Vec2 } from "cc";
 import { mapSrcOf } from "../configs/map";
 import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
 import GameUiHelper from "./helpers/GameUiHelper";
+import UiHelper from "./helpers/UiHelper";
 import AnimationHelper from "./helpers/AnimationHelper";
 import StorageManager from "./core/StorageManager";
 import { loadingLayout } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
+import { installNetwork } from "./utils/net/NetworkSetup";
+import { loadGameConfig } from "./utils/net/ConfigLoader";
+import type { GameConfigLoadResult } from "./utils/net/ConfigLoader";
 
 const { ccclass } = _decorator;
 
@@ -18,8 +22,15 @@ const STAY_AFTER_LOADED = false;
  * 所有场景与地图切换都必须经过本过渡场景：
  * 场景只显示一行字，随资源加载实时显示百分比进度与当前阶段，
  * 目标场景与游戏资源全部加载完成后才真正进入游戏
- * 进度分配：目标场景资源 0~50%，进入 Game 前的游戏资源预加载 50~100%
- * （游戏资源 = 地图信息 + 地图内 NPC/怪物帧动画 + 角色穿戴的帧动画，见 core/PreloadManager）
+ * 进度分配：**运营配置快照**（#604，只在进 Game 时拉）→ 目标场景资源 0~50%，进入 Game 前的
+ * 游戏资源预加载 50~100%（游戏资源 = 地图信息 + 地图内 NPC/怪物帧动画 + 角色穿戴的帧动画，见 core/PreloadManager）
+ *
+ * ## 为什么运营配置在这里拉（#604）
+ * 预加载要读**快照里的表**（怪物资源行给帧动画目录、NPC 给对话对象、时装给外观图集…）。
+ * 以前快照在 `Game.start` 里才拉，而 Loading 的预载排在它之前 —— 那时这些表是空的，
+ * 所以「进图前预载完怪物 / NPC 帧动画」实际只对地图与角色生效，其余进图后逐个异步补。
+ * 提到这里之后：① 预载真正命中；② 配置是**硬依赖** —— 拉不到就停在 Loading，
+ * 而不是进一个「背包空、技能点不出来」的游戏（客户端出厂表已随 #603 全部退场）。
  */
 @ccclass("Loading")
 export class Loading extends Component {
@@ -30,6 +41,10 @@ export class Loading extends Component {
   private progressLabel: Label | null = null;
   /** 进度条填充的 Mask（宽度跟进度走，从内条左缘起裁切 —— 图不拉伸，见 configs bar.fillArea 注释） */
   private progressFillMask: UITransform | null = null;
+  /** 失败明细（#604）：只在配置拉不到时出现，重试时销毁 */
+  private failureDetail: Node | null = null;
+  /** 已停在失败态（等玩家点「重试」） */
+  private failed = false;
 
   start() {
     // 背景与进度文字（位置、字号与用图见 configs/hudLayout.loadingLayout）
@@ -70,6 +85,17 @@ export class Loading extends Component {
     const scene = SceneManager.pendingScene ?? "Login";
     const startedAt = Date.now();
     try {
+      // 运营配置快照（#604）：进 Game 之前拉。失败就停在原地（下面 showConfigFailure），
+      // 不构建游戏世界 —— 客户端没有出厂表可回落，带病进图只会看到「背包空、技能点不出来」
+      if (scene === "Game") {
+        installNetwork();
+        this.setProgress(1, getText("progress_config"));
+        const config = await loadGameConfig();
+        if (!config.ok) {
+          this.showConfigFailure(config);
+          return;
+        }
+      }
       // 预加载目标场景资源（0~50）
       await this.timed(`目标场景 ${scene}`, startedAt, () =>
         this.preloadScene(scene, (ratio) => this.setProgress(ratio * Loading.SCENE_PROGRESS_END)),
@@ -98,6 +124,63 @@ export class Loading extends Component {
       console.error("资源加载失败：", error);
       this.setProgressText(getText("progress_failed"));
     }
+  }
+
+  /**
+   * 配置没拉下来（#604）：停在 Loading，写明原因，等玩家点「重试」
+   *
+   * 两类失败都停在原地：`network`（服务端没起 / 断网）与 `contract`（服务端漏发段）。
+   * 区别只在明细文案 —— 前者「重试大概率就好」，后者要按 key 去服务端补段，
+   * 所以明细用的是 `缺少「技能配置」（skills）：整段缺失` 这种能直接对代码的措辞。
+   *
+   * 为什么是按钮而不是「点屏幕任意处重试」：Loading 场景里的图片节点都不吞事件，
+   * 在根节点上收 touchend 确实能收到，但那属于「没登记输入通道就当能点」——
+   * `make audit` 的 `audit-ui-click-through` 会直接把根节点上的点击监听判成穿点。
+   * 按钮走 `createButton`（自带 `blockClickThrough`），鼠标 / 触摸两条通道都是显式的。
+   */
+  private showConfigFailure(result: GameConfigLoadResult): void {
+    this.failed = true;
+    this.setProgressText(getText("progress_config_failed"));
+    console.error(`[Loading] ${result.reason === "contract" ? "配置契约不满足" : "配置拉取失败"}：${result.message ?? ""}`, result.problems ?? []);
+    this.destroyFailureDetail();
+    // 明细 + 重试按钮装在一个容器里：重试时一次销毁，位置都按 layout 的绝对坐标摆
+    const layout = loadingLayout.failure;
+    const panel = UiHelper.createNode("loading_config_failure");
+    this.node.addChild(panel);
+    // 明细单独一行（宽 1000、自动换行）：进度文字只有 12 号字，塞不下「缺了哪几段」
+    const detail = GameUiHelper.createText(
+      "loading_config_failure_detail",
+      truncate(result.message ?? "", 200),
+      layout.detailFontSize,
+      layout.detailPosition,
+      new Size(layout.detailWidth, 0),
+      layout.detailColor,
+    );
+    const label = detail.getComponent(Label);
+    if (label) {
+      label.overflow = Label.Overflow.RESIZE_HEIGHT;
+      label.enableWrapText = true;
+    }
+    panel.addChild(detail);
+    const retry = GameUiHelper.createMiddleButton("loading_config_retry", getText("progress_config_retry"), layout.retryPosition);
+    retry.on(Node.EventType.TOUCH_END, () => this.retryIfFailed(), this);
+    panel.addChild(retry);
+    this.failureDetail = panel;
+  }
+
+  /** 点「重试」= 从头再走一遍加载（配置是最前面那一步，会重拉快照） */
+  private retryIfFailed(): void {
+    if (!this.failed) return;
+    this.failed = false;
+    this.destroyFailureDetail();
+    this.setProgress(0);
+    void this.load();
+  }
+
+  private destroyFailureDetail(): void {
+    if (!this.failureDetail) return;
+    this.failureDetail.destroy();
+    this.failureDetail = null;
   }
 
   /** 记录阶段耗时（量化加载瓶颈，与 PreloadManager 的阶段耗时日志配套看） */
@@ -133,4 +216,9 @@ export class Loading extends Component {
       );
     });
   }
+}
+
+/** 截断长文案（失败明细可能是十几段的问题清单，屏幕上只留开头，全文在控制台） */
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…（完整清单见控制台）` : text;
 }

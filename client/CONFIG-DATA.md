@@ -21,20 +21,31 @@
 
 ```
 游戏启动（选角 → Loading → Game）
-  └─ ui/Game.ts：await loadGameConfig()          ← 必须在预加载之前，地图名/进入条件已不在客户端
+  └─ ui/Loading.ts：await loadGameConfig()        ← 在 preloadGame **之前**（#604）：预载要读怪物/NPC/时装表
        └─ ui/utils/net/ConfigLoader.ts
             ├─ GameConfigApi.snapshot()      GET /game-config                  快照只拉一次（进程内）
             ├─ GameConfigApi.equipAlign()    GET /game-config/equip-align      每次进图都拉
             └─ GameConfigApi.equipInAlign()  GET /game-config/equip-in-align   每次进图都拉
+                 └─ configs/snapshot-contract.ts   先校验契约（缺段 / 形状不对 → 抛错）
                  └─ configs/apply-snapshot.ts
-                      ├─ applyConfigSnapshot(snapshot)      逐段落库（缺段跳过）
+                      ├─ applyConfigSnapshot(snapshot)      逐段整表重建（段必填，没有「缺段跳过」）
                       ├─ applyEquipAlignRows(rows)          外观几何（先还原出厂值再覆写）
                       └─ applyEquipInAlignRows(rows)        内观几何（同上）
                            └─ 落进各 configs 运行时表；消费方 `import { items } from configs/items` 读法不变
 ```
 
-三个请求**并行**、失败**互不牵连**；任何一段拉不到就保留「空表 / 出厂值」，游戏照常能进
-（配置是运营调优，不是必需依赖）。失败会 `console.warn`，不静默吞 —— #527 的教训。
+三个请求**并行**；**快照是硬依赖**（#604）：段缺失 / 形状不对 → `applyConfigSnapshot` 抛错 →
+`loadGameConfig()` 返回 `ok:false` → **停在 Loading 界面**显示缺了哪几段、点屏幕重试，
+不构建游戏世界（客户端出厂表已随 #603 全部退场，「回落」等于回落到空表）。
+
+失败分两类，文案不同：`network`（服务端没起 / 断网 / 令牌失效，重试大概率就好）与
+`contract`（服务端漏发段，要按 key 去补）。两类都**不置「已加载」**，下次进图重试。
+
+两套**几何**失败仍不致命（缺行 = 按装备表里的出厂几何画，那正是「工作台没调过」的语义），
+只 `console.warn` —— 但绝不静默：一个 404 会被当成「保存没生效」（#527）。
+
+守点：`tools/audit-snapshot-contract.cjs` 钉住「客户端 `SNAPSHOT_SECTIONS` == 快照 DTO 字段 ==
+`snapshot()` 实际返回的键」，并检查 `applyConfigSnapshot` 先校验后落库、Loading 先拉配置再预载。
 
 ## 三、快照段 → 落库函数 → 客户端表 → 服务端出厂 → 管理端页面
 
@@ -129,9 +140,11 @@
 
 | 想做的事 | 调什么 | 在哪 |
 |---|---|---|
-| 进游戏时把服务端配置全部接住 | `await loadGameConfig()` | `ui/Game.ts` → `ui/utils/net/ConfigLoader.ts` |
+| 进游戏时把服务端配置全部接住 | `await loadGameConfig()`（返回 `{ok, reason, problems}`，**必须看 ok**） | `ui/Loading.ts` → `ui/utils/net/ConfigLoader.ts` |
 | 只刷内观几何（开弹窗时） | `refreshInAlign()` | 同上 |
-| 手动把一份快照灌进去（单测 / 调试） | `applyConfigSnapshot(snapshot)` | `configs/apply-snapshot.ts` |
+| 手动把一份快照灌进去（单测 / 调试） | `applyConfigSnapshot(snapshot)` —— **必须是完整快照**，缺段会抛（#604） | `configs/apply-snapshot.ts` |
+| 只灌某一类表（单测常用） | `applyContentSnapshot` / `applySkillSnapshot` / `applyGrowthSnapshot` | 同上（各自要求本入口的段都在） |
+| 快照段清单 / 契约校验 | `SNAPSHOT_SECTIONS` / `checkSnapshotContract()` | `configs/snapshot-contract.ts` |
 | 单表覆写 | `applyTitleRows` / `applyNpcRows` / `applyMapRows` / … | 各自 `configs/<域>.ts` 或 `apply-snapshot.ts` |
 | 读物品 / 装备 | `items`、`getItem()`、`getEquipment()` | `configs/items.ts` |
 | 读怪物 | `monsterResourceOf()` / `monsterStatsOrDefault()` / `monsterLabelOf()` | `configs/monsterRuntime.ts` |

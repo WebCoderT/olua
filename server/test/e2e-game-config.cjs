@@ -1319,6 +1319,28 @@ async function main() {
     checkEqual(snapshot.status, 200, "玩家令牌拉快照 → 200");
     const snap = snapshot.body?.data ?? {};
 
+    {
+      // #604：快照是**显式契约** —— 客户端缺段直接抛错并把玩家挡在 Loading 界面。
+      // 这里只钉运行时口径（键集合的一致性由 tools/audit-snapshot-contract.cjs 静态守）：
+      // 1) 没有任何一段是 undefined（DTO 声明了 value 却没赋值 = 客户端拿到 undefined，
+      //    静态审计看不见这种「表达式返回 undefined」）；
+      // 2) 契约里 minRows=1 的几段必须有行（空 = 客户端算不出来：血蓝全 0 / 没有装备格）。
+      const undefinedSections = Object.keys(snap).filter((key) => snap[key] === undefined);
+      checkEqual(undefinedSections.length, 0, `快照没有 undefined 段（${undefinedSections.join("、") || "无"}）`);
+      const emptySections = ["levels", "equipmentSlots", "maps", "mapTypes"].filter(
+        (key) => !Array.isArray(snap[key]) || snap[key].length === 0,
+      );
+      checkEqual(emptySections.length, 0, `关键段都非空（${emptySections.join("、") || "levels / equipmentSlots / maps / mapTypes"}）`);
+      check(
+        Boolean(snap.equipmentMeta && snap.mallSettings && snap.combatWeights),
+        "三个单值段都在（装备规则 / 商城统一价 / 战斗力权重）",
+      );
+      check(
+        Array.isArray(snap.equipmentMeta?.prefixRates) && snap.equipmentMeta.prefixRates.length > 0,
+        "装备规则带非空倍率（空了一件变体都展开不出来，而且不报错）",
+      );
+    }
+
     // 各表行数 = 管理端列表的全量（快照的形状与列表行一致）
     checkEqual(snap.titles?.length, titleSeed.TITLE_SEEDS.length, "快照称号行数 = 配置表");
     checkEqual(snap.souls?.length, soulSeed.SOUL_SEEDS.length, "快照战魂行数 = 配置表");

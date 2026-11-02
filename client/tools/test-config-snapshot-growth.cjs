@@ -84,7 +84,7 @@ function main() {
 
   console.log("\n=== levels 段整表重建（引用不变）===");
   const mapRef = levelMap;
-  snapshotApi.applyConfigSnapshot({ levels: levelRows() });
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows() });
   check(mapRef === levelMap, "levelMap 引用不变（消费方拿到的还是同一个 Map）");
   check(levelMap.size === growthSeed.ROLE_MAX_LEVEL, "行数 = 服务端 roleMaxLevel", `${levelMap.size}`);
   check(levelMap.get(1).maxHp === growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].maxHp, "1 级 maxHp = 种子展开值", String(levelMap.get(1).maxHp));
@@ -92,11 +92,13 @@ function main() {
   check(Array.isArray(levelMap.get(1).physicalAttack), "区间对象转回客户端元组 [min, max]", JSON.stringify(levelMap.get(1).physicalAttack));
 
   // 模拟服务端改曲线后下发的新值：同一份行数据整体放大
-  snapshotApi.applyConfigSnapshot({ levels: levelRows(2) });
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows(2) });
   check(levelMap.get(1).maxHp === growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].maxHp * 2, "第二份快照整表替换（不是只增量补行）", String(levelMap.get(1).maxHp));
 
   console.log("\n=== 三条成长线：titles / souls / ranks 段 ===");
-  snapshotApi.applyConfigSnapshot({ titles: titleRows(), souls: soulRows(), ranks: rankRows() });
+  title.applyTitleRows(titleRows());
+  soul.applySoulRows(soulRows());
+  rank.applyRankRows(rankRows());
   check(titleLevels.length === titleSeed.TITLE_SEEDS.length, "称号阶数 = 种子阶数", String(titleLevels.length));
   check(titleLevels[0].attributes.physicalAttack[0] === titleSeed.TITLE_SEEDS[0].attributes.physicalAttack[0], "称号属性 = 种子展开值（客户端零派生）");
   check(soulLevels.length === soulSeed.SOUL_SEEDS.length, "战魂阶数 = 种子阶数", String(soulLevels.length));
@@ -107,25 +109,36 @@ function main() {
   check(rankMax() === rankLevels.length, "rankMaxLevel() 读的是运行时表", String(rankMax()));
 
   console.log("\n=== 标量：roleMaxLevel 下发 ===");
-  snapshotApi.applyConfigSnapshot({ growthScalars: [{ key: "roleMaxLevel", value: 70, description: "", updatedAt: 0 }] });
+  snapshotApi.applyGrowthScalars([{ key: "roleMaxLevel", value: 70, description: "", updatedAt: 0 }]);
   check(maxLevel() === 70, "等级上限读到服务端的 70", String(maxLevel()));
-  snapshotApi.applyConfigSnapshot({ growthScalars: [{ key: "attributeRange.unknownRate", value: 999, description: "", updatedAt: 0 }] });
+  snapshotApi.applyGrowthScalars([{ key: "attributeRange.unknownRate", value: 999, description: "", updatedAt: 0 }]);
   check(maxLevel() === 70, "未知标量键被忽略，不影响其余参数", String(maxLevel()));
 
   console.log("\n=== 缩表：服务端把上限调小 ===");
   const shrunken = levelRows().filter((row) => row.level <= 50);
-  snapshotApi.applyConfigSnapshot({ levels: shrunken });
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: shrunken });
   check(levelMap.size === 50, "整表重建后行数跟着缩（管理端调小上限，客户端没有幽灵等级）", String(levelMap.size));
   check(!levelMap.has(51) && !levelMap.has(70), "50 级以上已清空");
 
-  console.log("\n=== 兜底：空快照不炸、重复覆写幂等 ===");
-  snapshotApi.applyConfigSnapshot({ levels: levelRows() });
+  console.log("\n=== 契约（#604）：空快照必须炸，不再「保留当前值」 ===");
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows() });
   const hpBefore = levelMap.get(1).maxHp;
-  snapshotApi.applyConfigSnapshot({});
-  check(levelMap.get(1).maxHp === hpBefore, "空快照（旧服务端）保留当前值");
-  check(maxLevel() === 70, "空快照不动等级上限", String(maxLevel()));
+  let contractError = "";
+  try {
+    snapshotApi.applyConfigSnapshot({});
+  } catch (error) {
+    contractError = String((error && error.message) || error);
+  }
+  check(contractError.indexOf("levels") >= 0, "空快照抛错，错误里点名 levels 段", contractError.slice(0, 60));
+  check(levelMap.get(1).maxHp === hpBefore, "抛错前不落库（等级表还是上一份快照的样子）");
+  check(maxLevel() === 70, "抛错不动等级上限", String(maxLevel()));
 
-  const reapply = () => snapshotApi.applyConfigSnapshot({ levels: levelRows(2), titles: titleRows(), souls: soulRows(), ranks: rankRows() });
+  const reapply = () => {
+    snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows(2) });
+    title.applyTitleRows(titleRows());
+    soul.applySoulRows(soulRows());
+    rank.applyRankRows(rankRows());
+  };
   reapply();
   const once = JSON.stringify([...levelMap.entries()]);
   reapply();
