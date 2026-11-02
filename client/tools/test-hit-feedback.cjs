@@ -37,14 +37,14 @@ function extractMethod(src, signature) {
 function main() {
   let outDir;
   try {
-    outDir = prepare("olua-hit-feedback", ["configs/effect.ts", "configs/layout/theme.ts", "configs/animation.ts", "configs/role.ts"]);
+    outDir = prepare("olua-hit-feedback", ["configs/game-config.ts", "configs/layout/theme.ts", "configs/animation.ts", "configs/role.ts"]);
   } catch (error) {
     fail(String(error.message ?? error));
     return;
   }
 
   const { uiTheme } = require(path.join(outDir, "configs/layout/theme.js"));
-  const { hitScreenFlash } = require(path.join(outDir, "configs/effect.js"));
+  const { hitScreenFlash } = require(path.join(outDir, "configs/game-config.js"));
   const { roleAnimationMap, actionNeedWeapon } = require(path.join(outDir, "configs/animation.js"));
   const { defaultRoleSpeedRate } = require(path.join(outDir, "configs/role.js"));
   console.log("\n=== 数值反馈：飘字错峰表（configs/layout/theme）===");
@@ -53,7 +53,7 @@ function main() {
   check(offsetXs.every((value) => typeof value === "number" && Number.isFinite(value)), "offsetXs 全为有限数字");
   check(new Set(offsetXs).size === offsetXs.length, "offsetXs 无重复（重复项等于浪费一个落点）");
 
-  console.log("\n=== 屏幕反馈：红闪配置（configs/effect.hitScreenFlash）===");
+  console.log("\n=== 屏幕反馈：红闪配置（configs/game-config.hitScreenFlash）===");
   check(!!hitScreenFlash.color, "color 已配置");
   check(typeof hitScreenFlash.maxOpacity === "number" && hitScreenFlash.maxOpacity > 0 && hitScreenFlash.maxOpacity <= 1, "maxOpacity ∈ (0, 1]（薄红提示，不能盖住画面）");
   check(hitScreenFlash.fadeIn > 0 && hitScreenFlash.fadeOut > 0, "淡入/淡出时长均 > 0");

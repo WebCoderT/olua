@@ -171,8 +171,8 @@ cd client
 
 ## 数据归属：怪物数据客户端为零（#588）
 
-怪物的一切数据都在服务端，客户端 `configs/monster.ts` 只剩两个全局行为常量
-（`monsterAI`：普攻间隔 / 距离；`monsterDefaultSpeedRate`：11 动作移速倍率打底）。
+怪物的一切数据都在服务端，客户端只剩两个全局行为常量
+（`configs/game-config.ts` 区 15 的 `monsterAI`：普攻间隔 / 距离；`monsterDefaultSpeedRate`：11 动作移速倍率打底）。
 **改之前先分清数据是哪一类**：
 
 | 类别 | 字段 | 唯一来源 | 改完怎么生效 |
@@ -181,12 +181,12 @@ cd client
 | 资源表现 | `icon` / `out` / `outOffset` / `contentSize` / `moveSpeed` / `aggressive` / `detectRange` / `speedRate` 覆盖 | `server/src/shared/monster-presentation.generated.ts`（`client/tools/gen-monster-config.cjs` 从图集 plist 实测生成） | 重跑生成器 + 重启服务端 |
 | 掉落 | 每怪掉落表 | 服务端 `monster_drops`（管理端改） | 保存即生效 |
 
-客户端运行时两张表（`configs/monsterRuntime.ts`）全部由快照填充：数值段
+客户端运行时两张表（`configs/game-config.ts` 区 16 的 `monsterRuntime` / `monsterResource`）全部由快照填充：数值段
 `applyMonsterRows`、表现段 `applyMonsterPresentations`。本地**没有副本**——
 快照缺行时数值退化为「名字 = key、攻防 [0,0]」（warn 一次）、资源缺行 spawn 直接
 跳过（没法渲染的怪比没有更糟）。归属口径由守点钉死
-（`node ../tools/audit-world-authority.cjs`：configs 不许再长数值字段、
-运行时表必须被快照两段填充、MonsterManager 不许 import configs/monster）。
+（`node ../tools/audit-world-authority.cjs`：怪物分区不许再长数值字段、
+运行时表必须被快照两段填充、MonsterManager 不许自己兜一份怪物数据）。
 
 **加一只怪 = 三步**：① 素材入库跑 `client/tools/gen-monster-config.cjs`；
 ② `server/src/shared/monster-seed.ts` 加一行四元组（数值唯一要写的地方）；

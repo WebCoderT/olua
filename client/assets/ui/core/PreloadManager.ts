@@ -1,12 +1,12 @@
 import { TiledMapAsset } from "cc";
 import { loadingConfig } from "../../configs/loading";
-import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../configs/map";
-import { monsterResourceOf } from "../../configs/monsterRuntime";
-import { npcs } from "../../configs/npc";
+import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../configs/game-config";
+import { monsterResourceOf } from "../../configs/game-config";
+import { npcs } from "../../configs/game-config";
 import { getRoleDefaultCloth } from "../../configs/role";
-import { getTitleLevel } from "../../configs/title";
+import { getTitleLevel } from "../../configs/game-config";
 import { getEquipment } from "../../configs/items";
-import { getFashionOut } from "../../configs/fashionClothes";
+import { getFashionOut } from "../../configs/game-config";
 import { getAssignedBorders } from "../../configs/border";
 import { getAssignedDetailBackgrounds } from "../../configs/background";
 import { getAssignedLights } from "../../configs/light";

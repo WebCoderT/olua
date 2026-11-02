@@ -43,7 +43,7 @@ ts-prune / jscpd 的每条输出都要用 Grep 全仓复核后再动手，五类
 
 jscpd 的重复块先定性再动手，四类**合理形态不要抽**：
 
-1. **数据表条目**（`configs/skill-data.ts` 280 行自重复、`configs/layout/dialogs.ts` 68 行）：
+1. **数据表条目**（`configs/game-config.ts` 区 13 的技能数值阶梯、`configs/layout/dialogs.ts` 68 行）：
    重复的是配置数据本身（每技能的数值阶梯、每个弹窗的布局数值）。
    抽工厂会把「一眼可见的数值」藏进间接层——配置文件的可读性就是它的价值。
 2. **双端生成物**（admin `api/models.ts` ↔ client `ApiModels.ts`，3675 行）：`gen-api` 的产物，改动走源头。

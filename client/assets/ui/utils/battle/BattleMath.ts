@@ -1,7 +1,7 @@
 import { BoxCollider2D, Node, Vec2 } from "cc";
 import { DIRECTION } from "../../../types/animation";
 import { BattleAttributes } from "../../../types/common";
-import { statuses } from "../../../configs/status";
+import { statuses } from "../../../configs/game-config";
 import { StatusId } from "../../../types/status";
 
 /**

@@ -1,8 +1,8 @@
 import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
-import { monsterResourceOf, monsterStatsOrDefault } from "../../configs/monsterRuntime";
+import { monsterResourceOf, monsterStatsOrDefault } from "../../configs/game-config";
 import { findSkillConfig, skills } from "../../configs/skill";
-import { statuses } from "../../configs/status";
-import { statusEffect } from "../../configs/effect";
+import { statuses } from "../../configs/game-config";
+import { statusEffect } from "../../configs/game-config";
 import { Monster } from "../../types/monster";
 import { SkillId } from "../../types/skill";
 import { ACTION } from "../../types/animation";

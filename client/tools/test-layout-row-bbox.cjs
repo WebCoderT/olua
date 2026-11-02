@@ -43,7 +43,7 @@ try {
       .map((f) => `configs/layout/${f}`),
     // 不放在 layout/ 下、但同样定义了「行」的布局
     "configs/achievement.ts",
-    "configs/quest.ts",
+    "configs/game-config.ts",
     "configs/mail.ts",
     "configs/social.ts",
   ];

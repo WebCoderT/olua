@@ -1,6 +1,6 @@
 import { Node, Vec3 } from "cc";
-import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/map";
-import { npcs } from "../../../configs/npc";
+import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/game-config";
+import { npcs } from "../../../configs/game-config";
 // 副作用导入：NPC 点击行为在 npcClicks 里登记（数据在服务端，行为留客户端）
 import "../../../configs/npcClicks";
 import LayerManager from "../../core/LayerManager";

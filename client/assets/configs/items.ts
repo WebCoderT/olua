@@ -1,5 +1,5 @@
 import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
-import { drugs } from "./drug";
+import { drugs } from "./game-config";
 import {
   belts,
   clothes,
@@ -12,7 +12,7 @@ import {
   shoes,
   weapons,
 } from "./equipments";
-import { materials } from "./material";
+import { materials } from "./game-config";
 
 /**
  * 物品总表：物品 id -> 物品数据

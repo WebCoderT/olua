@@ -27,7 +27,7 @@ const SERVER_CONFIG = "server/src/config/configuration.ts";
 const SERVER_ENV_EXAMPLE = "server/.env.example";
 const CLIENT_CHANNEL = "assets/ui/utils/net/CombatChannel.ts";
 const CLIENT_MANAGER = "assets/ui/core/OtherPlayerManager.ts";
-const CLIENT_EFFECT = "assets/configs/effect.ts";
+const CLIENT_EFFECT = "assets/configs/game-config.ts";
 
 /** 从一段源码里抽出某个 interface 的字段名（两空格缩进 + 可选 ?；注释行不匹配） */
 function fieldNames(source, interfaceName) {
@@ -72,7 +72,7 @@ try {
 
   check(/import RoleAppearance/.test(clientManager), "远端玩家复用 RoleAppearance（主角那套装配代码）");
   check(!/\bGraphics\b/.test(clientManager), "不再自绘占位圆（外观交给 RoleAppearance）");
-  check(!/otherPlayerGhost/.test(clientEffect), "占位圆配色配置已退役（configs/effect 里不再有）");
+  check(!/otherPlayerGhost/.test(clientEffect), "占位圆配色配置已退役（configs/game-config 里不再有）");
   check(!/otherPlayerGhost/.test(clientManager), "远端玩家不再引用占位配置");
   check((clientManager.match(/new RoleAppearance\(/g) || []).length === 1, "只在一处构造外观（避免同一节点叠两套动画组件互相抢帧）");
 

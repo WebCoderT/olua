@@ -3,7 +3,7 @@ import { TextRef } from "../../types/common";
 import { Equipment } from "../../types/good";
 import { OECCUPATION, SEX } from "../../types/role";
 import StorageManager from "./StorageManager";
-import { mapLabelOf, maps } from "../../configs/map";
+import { mapLabelOf, maps } from "../../configs/game-config";
 import { getText, textRef } from "../../configs/texts";
 import { MapId } from "../../types/map";
 

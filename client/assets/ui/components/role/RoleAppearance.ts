@@ -4,7 +4,7 @@ import { ACTION, DIRECTION, SpeedRate } from "../../../types/animation";
 import { SEX } from "../../../types/role";
 import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
 import { getEquipment } from "../../../configs/items";
-import { getFashionOut } from "../../../configs/fashionClothes";
+import { getFashionOut } from "../../../configs/game-config";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
 

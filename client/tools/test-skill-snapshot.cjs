@@ -57,10 +57,11 @@ function main() {
     return;
   }
 
-  const { skillData, oeccupationSkills } = require(path.join(outDir, "configs/skill-data.js"));
-  const { statuses } = require(path.join(outDir, "configs/status.js"));
+  const cfg = require(path.join(outDir, "configs/game-config.js"));
+  const { skillData, oeccupationSkills, statuses } = cfg;
+  // 每段的落库方法在 game-config（#626），总入口 / 组合入口在 apply-snapshot
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
-  // #603 起客户端 configs/status 只剩空 Map（数据唯一书写处是服务端 status-seed.ts），
+  // #603 起客户端 configs/game-config 只剩空 Map（数据唯一书写处是服务端 status-seed.ts），
   // 先把真实种子灌进去，还原「快照到达前的客户端」与「覆写是原地改」这两个前提
   const { STATUS_SEED_ROWS } = require(compileServerShared("status-seed.ts", "olua-status-seed"));
   for (const { id, ...rest } of STATUS_SEED_ROWS) statuses.set(id, rest);
@@ -70,7 +71,7 @@ function main() {
   // 客户端自身零出厂行（出厂数据唯一书写处是服务端 server/src/shared/skill-seed.ts）
   check(skillData.length > 0, "沙箱里的技能表由 skill-seed 灌好（不是客户端写死的行）", String(skillData.length));
   const { SKILL_SEED_ROWS } = require(compileServerShared("skill-seed.ts", "olua-skill-seed"));
-  snapshotApi.applySkillRows(SKILL_SEED_ROWS);
+  cfg.applySkillRows(SKILL_SEED_ROWS);
   check(skillData.length === SKILL_SEED_ROWS.length, "整表重建后行数 = 快照行数", `${skillData.length} / ${SKILL_SEED_ROWS.length}`);
   check(
     JSON.stringify(skillData.map((item) => item.id)) === JSON.stringify(SKILL_SEED_ROWS.map((row) => row.id)),
@@ -173,7 +174,7 @@ function main() {
   console.log("\n=== 状态：时长 / 文案 / 特效 / 三项战斗修正 ===");
   const statusBefore = statuses.get("2001");
   const statusBeforeObject = statusBefore;
-  snapshotApi.applyStatusRows([
+  cfg.applyStatusRows([
     {
       id: "2001",
       owner: "role",
@@ -202,7 +203,7 @@ function main() {
   check(statusAfter.combat.defenseMultiplier === 1.2, "防御倍率已覆写", String(statusAfter.combat.defenseMultiplier));
   check(statusAfter.effect === undefined, "特效传空串 = 清掉（只在图标栏显示）", String(statusAfter.effect));
 
-  snapshotApi.applyStatusRows([
+  cfg.applyStatusRows([
     {
       id: "2001",
       owner: "role",

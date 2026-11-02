@@ -1,4 +1,4 @@
-import { levelMap } from "../../../configs/level";
+import { levelMap } from "../../../configs/game-config";
 import type { Role } from "../../../entities/Role";
 
 /**

@@ -1,5 +1,5 @@
 import { Node, Size } from "cc";
-import { tiledGroupNames } from "../../../configs/map";
+import { tiledGroupNames } from "../../../configs/game-config";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { mapRectCenterToWorld } from "../../utils/map/MapPointMath";

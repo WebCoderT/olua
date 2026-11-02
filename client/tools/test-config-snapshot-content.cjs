@@ -56,12 +56,12 @@ function main() {
   }
 
   const { items, getItem } = require(path.join(outDir, "configs/items.js"));
-  const { drugs } = require(path.join(outDir, "configs/drug.js"));
-  const { materials } = require(path.join(outDir, "configs/material.js"));
-  const { monsterRuntime, monsterResource, applyMonsterPresentation, applyMonsterRuntimeStats } = require(path.join(outDir, "configs/monsterRuntime.js"));
-  const { npcs } = require(path.join(outDir, "configs/npc.js"));
-  const { fashionData } = require(path.join(outDir, "configs/fashionClothes.js"));
-  const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
+  const { drugs } = require(path.join(outDir, "configs/game-config.js"));
+  const { materials } = require(path.join(outDir, "configs/game-config.js"));
+  const { monsterRuntime, monsterResource, applyMonsterPresentation, applyMonsterRuntimeStats } = require(path.join(outDir, "configs/game-config.js"));
+  const { npcs } = require(path.join(outDir, "configs/game-config.js"));
+  const { fashionData } = require(path.join(outDir, "configs/game-config.js"));
+  const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
 
   // 沙箱的「快照到达前」状态：客户端自身零出厂行，表是 hydrateSnapshotTables 按服务端种子灌的。

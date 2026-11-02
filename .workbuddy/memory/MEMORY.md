@@ -30,15 +30,17 @@
 - **服务端权威**：伤害 / 掉落 / 经验 / 进度 / 金币 / 背包 / 穿戴 / 建号一律服务端算；客户端只留资源约定 + 手感参数。
 - 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据不透明（`guide` 例外：只校验、不补默认）；乐观锁 409+20006；
   `whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；`BizException` 默认 400。
-- `configs/` 与 `types/` 不许引 UI 组件；新 operationId 模块段登记 `tools/gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries`。
+- `configs/` 与 `types/` 不许引 UI 组件（只许 `cc` 四个纯数据类 + `types/*` + `ApiModels` 的**类型**）；新 operationId 模块段登记 `tools/gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries`。
 - 部署：compose 四服务（admin:80 / game:8080 / server:3100 / realtime:3101），`/api` 与 `/game-resources/` 反代；密钥只在 `deploy.env`；Cocos 只能 GUI 打包。
-- 回归 `make test-changed`；本机 client-test 基线 58 套 / 54 过 4 红（红全是素材未入库）；门禁看 `make ci`。
+- 回归 `make test-changed`；本机 client-test 基线 59 套 / 55 过 4 红（红全是素材未入库）；门禁看 `make ci`（e2e 偶发 `EADDRINUSE` 是端口撞车，单跑那套即可，不是代码问题）。
 
 ## 进度
 - 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · 玩法补全 #394 · 背包穿戴收权 #556 · 管理端风格 #564 ·
   地图原点 #566 · 地图管理 #571/#573/#580 · 世界权威 #581 · 怪物配掉落 #584 · 刷怪区边界 #586 · 建号 #597 · 守卫清理 #598 · 邮件 #437/#439。
 - **#603 出厂数据逐域搬到服务端（PR #624 收口）**：模板 = `shared/<域>-seed.ts` → 生成器减一项 → 服务端读种子 → 客户端清空表 + `apply*` 整表重建 → 守点「重生成逐字节不变」。
   资源路径判据：能按 id 推导的不入库（`map/<id>/<id>`、`effect/<key>/<key>.plist`），反之入库（药品 / 材料图标、时装 `icon/in/out`）。
-- **#604 快照显式契约**：`configs/snapshot-contract.ts` 是段清单的唯一书写处，缺段抛错并挡住进游戏（停在 Loading + 重试），`tools/audit-snapshot-contract.cjs` 钉三方一致。
+- **#604 快照显式契约**：段清单的唯一书写处现在是 `configs/game-config.ts` 区 0（#626 前是 `configs/snapshot-contract.ts`），缺段抛错并挡住进游戏（停在 Loading + 重试），`tools/audit-snapshot-contract.cjs` 钉三方一致。
+- **#626 二十一个快照域并成 `configs/game-config.ts`**（PR #627）：`//#region N · 标签（原 configs/xxx.ts）` 按域分区（编号稳定，守点按编号取区），`apply*` 必须放在自己的区里（放到上一个区尾巴上照样编译，但 `regionOf()` 读不到）；`items`/`equipments`/`skill`/`apply-snapshot` 不许被反向 import（依赖方向 `apply-snapshot → game-config → types`，`getMallGoods` 因此住 `equipments`）。
+  工具链跟着换 require 名字：`configs-sandbox` / `client-config-compile` / `gen-shared-data`（`SOURCE_FILES` 只剩 4 个入口）/ `audit-snapshot-contract` / `audit-world-authority`（`MONSTER_REGION = 15`）。生成物逐字节不变是验收口径。
 - open：#8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #605 战斗力权重编辑页 / #606 地图门槛硬拦。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 药品 3 档 / 装备 7 部位。

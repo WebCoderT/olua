@@ -1,5 +1,5 @@
 import { isValid, Node, Vec2, Vec3 } from "cc";
-import { skillEffect } from "../../configs/effect";
+import { skillEffect } from "../../configs/game-config";
 import type { Role } from "../../entities/Role";
 
 /**

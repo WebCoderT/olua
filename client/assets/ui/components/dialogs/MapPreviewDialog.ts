@@ -1,7 +1,7 @@
 import { EventMouse, EventTouch, Graphics, isValid, Node, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { mapLabelOf, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/map";
-import { monsterLabelOf, monsterResource } from "../../../configs/monsterRuntime";
-import { npcs } from "../../../configs/npc";
+import { mapLabelOf, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/game-config";
+import { monsterLabelOf, monsterResource } from "../../../configs/game-config";
+import { npcs } from "../../../configs/game-config";
 import { mapPreviewImage, mapPreviewDialogLayout } from "../../../configs/hudLayout";
 import { smallMapConfig } from "../../../configs/smallMap";
 import AutoBattle from "../../core/AutoBattle";

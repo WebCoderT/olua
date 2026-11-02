@@ -5,7 +5,7 @@
  * 编译沙箱（configs 编成 CommonJS + cc 垫片）见 client/tools/lib/configs-sandbox.cjs。
  * 装备数值的唯一来源 = 服务端 growth-seed 的 equipmentStats(level, slot)（#590：等级定档 ×
  * 部位权重 × EQUIPMENT_SET_POWER_RATE，公式随曲线一起搬去服务端）+ 前后缀倍率
- * （equipmentPrefixRates × equipmentSuffixRates，仍是客户端 configs/growth 的常量），
+ * （equipmentPrefixRates × equipmentSuffixRates，仍是客户端 configs/game-config 的常量），
  * configs/equipments 的条目里不写战斗数值 —— 本测试盯的就是这条链路的体感约定：
  *
  * · 同等级不同部位有清晰强度差（武器攻高防低 / 衣服血防主源 / 回血只在防御部位）
@@ -29,7 +29,7 @@ const lower = (value) => (Array.isArray(value) ? value[0] : value);
 function main() {
   let outDir;
   try {
-    outDir = prepare("olua-equipment-growth", ["configs/items.ts", "configs/growth.ts", "configs/equipments.ts"]);
+    outDir = prepare("olua-equipment-growth", ["configs/items.ts", "configs/game-config.ts", "configs/equipments.ts"]);
   } catch (error) {
     fail(String(error.message ?? error));
     return;
@@ -38,7 +38,7 @@ function main() {
   // #590：公式与曲线都在服务端种子；倍率仍是客户端 growth 的常量；装备条目用种子灌好真实值
   const growthSeed = require(compileServerShared("growth-seed.ts", "olua-equip-growth-seed"));
   seedRuntimeTables(outDir);
-  const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
+  const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
   const equipmentStats = growthSeed.equipmentStats;
   const equipmentGrowth = { setPowerRate: growthSeed.EQUIPMENT_SET_POWER_RATE };
   const getRoleLevelAttributes = growthSeed.getRoleLevelAttributes;

@@ -3,7 +3,7 @@
  * 时装穿戴系统单测（client/tools/test-fashion.cjs，issue #377）
  *
  * 盯的不变量（改时装 / 外观链后必须全绿）：
- * A. 数据：衣柜 = configs/fashionClothes 的 20 套（id 唯一、资源路径形状正确）
+ * A. 数据：衣柜 = configs/game-config 的 20 套（id 唯一、资源路径形状正确）
  * B. 存档：fashionCloth 是**时装 id**；旧档的数字 / 未知 id / 缺失一律迁成 null
  * C. 穿脱（沙箱里跑**真实的 StorageManager**）：穿上 / 脱下 / 重复穿 / 未知 id，
  *    以及「时装只换外观不换数值」—— 穿脱前后装备槽、血量上限、背包都不动
@@ -28,7 +28,7 @@ const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 if (sandbox) {
   const { StorageManager, Role, outDir } = sandbox;
-  const { fashionData, getFashion, getFashionOut, getFashionIn } = require(path.join(outDir, "configs/fashionClothes.js"));
+  const { fashionData, getFashion, getFashionOut, getFashionIn } = require(path.join(outDir, "configs/game-config.js"));
   const { getEquipment } = require(path.join(outDir, "configs/items.js"));
 
   /** 造一个在线角色（背包清空，避免初始装备干扰断言） */

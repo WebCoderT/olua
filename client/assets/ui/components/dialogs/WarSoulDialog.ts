@@ -4,7 +4,7 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
-import { getSoulLevel, soulLevels, soulMaxLevel } from "../../../configs/soul";
+import { getSoulLevel, soulLevels, soulMaxLevel } from "../../../configs/game-config";
 import { warSoulDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";

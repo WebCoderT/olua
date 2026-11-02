@@ -1,10 +1,10 @@
 import { Node } from "cc";
 import { Role } from "../../../entities/Role";
 import { getEquipment } from "../../../configs/items";
-import { getFashionIn } from "../../../configs/fashionClothes";
+import { getFashionIn } from "../../../configs/game-config";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { roleInShowLayout } from "../../../configs/hudLayout";
-import { EQUIP_ALIGN, placeInShowWeapon } from "../../../configs/equipAlign";
+import { EQUIP_ALIGN, placeInShowWeapon } from "../../../configs/game-config";
 
 /**
  * 角色内观组件（角色信息弹窗中的衣服 + 武器内观）

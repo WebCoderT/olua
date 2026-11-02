@@ -1,4 +1,4 @@
-import { npcClicks } from "./npc";
+import { npcClicks } from "./game-config";
 import MapTeleportDialog from "../ui/components/dialogs/MapTeleportDialog";
 import WarSoulDialog from "../ui/components/dialogs/WarSoulDialog";
 

@@ -13,22 +13,22 @@
  * · 接线：存档迁移（旧档 rank 补 0）、晋升链路、属性加成在服务端权威重算（#541）、入口按钮在角色信息弹窗（不走 NPC）
  * · 工程口径：100 阶列表只在打开时建一次，切换选中不重建（避免重演商城「打开就卡」那个坑）
  *
- * 数据层跑在沙箱里（configs/rank 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
+ * 数据层跑在沙箱里（configs/game-config 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
  * 的 seedRuntimeTables；插值公式断言直接读 server/src/shared/rank-seed.ts 源码），其余源码断言直接读文件。
  */
 const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, compileServerShared, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
-const outDir = prepare("olua-rank", ["configs/rank.ts", "configs/title.ts", "configs/soul.ts"]);
+const outDir = prepare("olua-rank", ["configs/game-config.ts", "configs/game-config.ts", "configs/game-config.ts"]);
 seedRuntimeTables(outDir);
 const rankSeed = require(compileServerShared("rank-seed.ts", "olua-rank-rank-seed"));
 const titleSeed = require(compileServerShared("title-seed.ts", "olua-rank-title-seed"));
 const soulSeed = require(compileServerShared("soul-seed.ts", "olua-rank-soul-seed"));
 const growthSeed = require(compileServerShared("growth-seed.ts", "olua-rank-growth-seed"));
-const { rankLevels, rankMaxLevel, getRankLevel, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
-const { titleLevels } = require(path.join(outDir, "configs/title.js"));
-const { soulLevels } = require(path.join(outDir, "configs/soul.js"));
+const { rankLevels, rankMaxLevel, getRankLevel, rankAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
+const { titleLevels } = require(path.join(outDir, "configs/game-config.js"));
+const { soulLevels } = require(path.join(outDir, "configs/game-config.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 const rankGrowth = rankSeed.RANK_GROWTH;
@@ -144,7 +144,7 @@ const dialogSource = read("assets/ui/components/dialogs/RankUpgradeDialog.ts");
 const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
 const sizesSource = read("assets/configs/layout/sizes.ts");
 const panelsSource = read("assets/configs/layout/panels.ts");
-const npcSource = read("assets/configs/npc.ts");
+const npcSource = read("assets/configs/game-config.ts");
 // #603 第七域：NPC 点击行为在 npcClicks（数据在服务端）
 const npcClicksSource = read("assets/configs/npcClicks.ts");
 

@@ -16,7 +16,7 @@
  * · 接线：Role 有字段并按等级初始化、StorageManager.ensureRoleDefaults 补旧存档、
  *   GameHelper.combatCalc 把五处来源相加且不把它当区间属性、Game.update 的每秒块同时结算血与蓝
  *
- * 数据层跑在沙箱里（真实的 configs/growth + soul + title + rank + equipments + good + 真实 HpHelper，
+ * 数据层跑在沙箱里（真实的 configs/game-config + soul + title + rank + equipments + good + 真实 HpHelper，
  * 见 lib/configs-sandbox.cjs），源码断言直接读文件。
  */
 const fs = require("fs");
@@ -25,9 +25,9 @@ const { PROJECT_ROOT, prepare, compileServerShared, seedRuntimeTables, check, fi
 
 const outDir = prepare("olua-hp-recover", [
   "configs/good.ts",
-  "configs/soul.ts",
-  "configs/title.ts",
-  "configs/rank.ts",
+  "configs/game-config.ts",
+  "configs/game-config.ts",
+  "configs/game-config.ts",
   "configs/equipments.ts",
   "ui/utils/battle/HpHelper.ts",
 ]);
@@ -36,12 +36,12 @@ const outDir = prepare("olua-hp-recover", [
 const growthSeed = require(compileServerShared("growth-seed.ts", "olua-hp-recover-growth"));
 const monsterSeed = require(compileServerShared("monster-seed.ts", "olua-hp-recover-monster"));
 seedRuntimeTables(outDir);
-const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/growth.js"));
+const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
 void equipmentPrefixRates;
 void equipmentSuffixRates;
-const { soulLevels, soulAttributeLabels } = require(path.join(outDir, "configs/soul.js"));
-const { titleLevels, titleAttributeLabels } = require(path.join(outDir, "configs/title.js"));
-const { rankLevels, rankAttributeLabels } = require(path.join(outDir, "configs/rank.js"));
+const { soulLevels, soulAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
+const { titleLevels, titleAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
+const { rankLevels, rankAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
 const { goodShowAttributes, goodShowAttributesLabel } = require(path.join(outDir, "configs/good.js"));
 const { clothes, getEquipmentVariantKey } = require(path.join(outDir, "configs/equipments.js"));
 const { EQUIPMENT_TYPE } = require(path.join(outDir, "types/good.js"));
@@ -184,9 +184,9 @@ check(
   `每秒回血上线前的旧存档会被补齐（缺失字段按 1 级裸回血 ${attributes[0].hpRecover}/秒 兜底）`,
 );
 
-// 量级：满养成合计回血 vs 同级普通怪的每秒输出（怪普攻间隔从 configs/monster 源码取，避免整份怪物配置进沙箱）
+// 量级：满养成合计回血 vs 同级普通怪的每秒输出（怪普攻间隔从 configs/game-config 源码取，避免整份怪物配置进沙箱）
 const monster = monsterSeed.expandMonsterSeed({ id: "probe", label: "探针", level: growthSeed.ROLE_MAX_LEVEL, tier: "normal" });
-const attackInterval = Number((read("assets/configs/monster.ts").match(/attackInterval:\s*(\d+)/) ?? [])[1]) || 2000;
+const attackInterval = Number((read("assets/configs/game-config.ts").match(/attackInterval:\s*(\d+)/) ?? [])[1]) || 2000;
 const average = ([min, max]) => (min + max) / 2;
 const monsterDps = Math.max(1, average(monster.physicalAttack) - average(last.physicalDefense)) / (attackInterval / 1000);
 const maxInvestment =
@@ -219,7 +219,7 @@ check(!/levelMap/.test(roleSource), "Role 不再按等级本地算回血（#597 
 
 const helperSource = read("assets/ui/core/GameHelper.ts");
 check(!/combatCalc/.test(helperSource), "GameHelper 里没有本地属性计算（#541 服务端权威：hpRecover 由 roleUpdate 帧下发，客户端只消费）");
-check(/Exclude<keyof BattleAttributes, "hpRecover">/.test(read("assets/configs/battle.ts")), "战斗力权重表把 hpRecover 排除在外（回血不计入战斗力/地图门槛）");
+check(/Exclude<keyof BattleAttributes, "hpRecover">/.test(read("assets/configs/game-config.ts")), "战斗力权重表把 hpRecover 排除在外（回血不计入战斗力/地图门槛）");
 
 check(/HpHelper\.ensureDefaults\(role\);/.test(read("assets/ui/core/StorageManager.ts")), "StorageManager.ensureRoleDefaults 补旧存档的回血字段");
 const hpHelperSource = read("assets/ui/utils/battle/HpHelper.ts");

@@ -3,7 +3,7 @@
  * 装备位置对齐单测（client/tools/test-equip-align.cjs，issue #504）
  *
  * 盯的不变量：
- * A. **对齐口径纯函数**（configs/equipAlign）：握持点与微调的数学性质 ——
+ * A. **对齐口径纯函数**（configs/game-config）：握持点与微调的数学性质 ——
  *    #541 起外观不再调用它（只认工作台/服务端的绝对位置），但内观仍在用，函数本身要保持正确。
  * B. **内观**：武器缩放到身体高度的固定倍数，位置同样贴握持点。
  * C. **配置层**：外观 outPositions 是 8 向绝对位置（出厂占位全 0，真值由服务端下发 / 工作台写库）。
@@ -19,8 +19,8 @@ const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sa
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 try {
-  const outDir = prepare("olua-equip-align", ["configs/equipAlign.ts", "configs/equipments.ts"]);
-  const align = require(path.join(outDir, "configs/equipAlign.js"));
+  const outDir = prepare("olua-equip-align", ["configs/game-config.ts", "configs/equipments.ts"]);
+  const align = require(path.join(outDir, "configs/game-config.js"));
   const { weapons, clothes } = require(path.join(outDir, "configs/equipments.js"));
 
   //#region A. 对齐口径（外观）

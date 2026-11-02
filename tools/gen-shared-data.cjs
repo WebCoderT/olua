@@ -95,12 +95,14 @@ const MONSTER_SEED_KEYS = (() => {
 /**
  * 参与生成的客户端配置（**唯一来源**；顺序只影响编译，不影响产物）
  *
- * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
- * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
+ * `items` 会把 `game-config`（药品 / 材料 / 成长 / 怪物手感…）与 `equipments` 一起拉进来
+ * （它建的是一张物品总表），`role` 带职业表。列在这里是为了「少一张就报错」，
+ * 不是为了让编译器找到它们 —— tsc 会自己顺着 import 走。
+ *
+ * #626 起成长 / 药品 / 材料 / 怪物手感不再各自一个文件，全在 `configs/game-config.ts`
+ * 的分区里；这里只列**入口**文件，不再按域拆。
  */
-const SOURCE_FILES = ["growth", "equipments", "role", "items", "monster", "drug", "material"].map(
-  (name) => path.join(ASSETS, "configs", `${name}.ts`),
-);
+const SOURCE_FILES = ["game-config", "equipments", "role", "items"].map((name) => path.join(ASSETS, "configs", `${name}.ts`));
 
 /**
  * 客户端类型文件（**不参与编译**，只按注释读枚举名）
@@ -129,8 +131,8 @@ function main() {
   // #603 第九 / 十 / 十一域：装备 / 药品 / 材料 / 技能数据的唯一书写处都在 server/src/shared，
   // 客户端那几张表**加载期是空的** —— 生成器先用种子把它们填起来，后面那套快照逻辑一行都不用改
   hydrateEquipment(cfg, seeds.equipmentSeed, seeds.itemSeed);
-  const prefixRates = cfg("growth").equipmentPrefixRates;
-  const suffixRates = cfg("growth").equipmentSuffixRates;
+  const prefixRates = cfg("game-config").equipmentPrefixRates;
+  const suffixRates = cfg("game-config").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(seeds.growthSeed, item, prefixRates, suffixRates);
   const snapshot = buildSnapshot(load(cfg, seeds), statsOf);
   const source = render(snapshot);
@@ -157,7 +159,7 @@ function load(cfg, seeds) {
   return {
     // 成长曲线参数只保留**装备倍率与回收价曲线**（客户端常量，装备批次再收）——
     // #590 起曲线本体 / 标量 / 等级表 / 三条成长线的书写处都在 server/src/shared/*-seed.ts
-    growth: cfg("growth"),
+    growth: cfg("game-config"),
     // 战斗力权重（#603 起唯一书写处 = server/src/shared/combat-seed.ts）：客户端以前是这里
     // 的 `configs/battle.combatCalc`，服务端抄一份 —— 现在反过来，这里只把它装成 Map 供
     // buildSnapshot 按同一形状展开（顺序 = Map 自然顺序 = 种子里的书写顺序）
@@ -172,7 +174,7 @@ function load(cfg, seeds) {
     // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
     // #588：怪物条目不再从客户端 configs 取 —— 数值唯一来源是服务端 monster-seed.ts，
     // 资源与表现是 monster-presentation.generated.ts；这里只保留 monsterAI 全局节奏
-    monsterAi: missing("monster.monsterAI", cfg("monster").monsterAI),
+    monsterAi: missing("monster.monsterAI", cfg("game-config").monsterAI),
     // #603 起 NPC 出厂数据的服务端唯一书写处是 npc-seed.ts，客户端 configs/npc 只剩点击接线
     npcs: npcSeed.NPC_SEED_ROWS,
     // 时装（#257 / #603 第十二域）：唯一书写处 = server/src/shared/fashion-seed.ts，
@@ -195,8 +197,8 @@ function load(cfg, seeds) {
     // 怪物技能挂载（#372）：哪只怪放哪些技能、优先级、冷却覆写 —— 服务端 AI 读表
     // #603 起挂载表的服务端唯一书写处是 monster-skill-seed.ts，客户端 configs 不再有这份
     monsterSkills: monsterSkillSeed.MONSTER_SKILL_SEED,
-    drugs: missing("drug.drugs", cfg("drug").drugs),
-    materials: missing("material.materials", cfg("material").materials),
+    drugs: missing("drug.drugs", cfg("game-config").drugs),
+    materials: missing("material.materials", cfg("game-config").materials),
     // 任务（#396）：管理端「任务配置」的 seed 来源 —— 单目标（kill/talk/collect）+ 奖励
     // #603 起任务表的服务端唯一书写处是 quest-seed.ts，客户端 configs 只剩空数组
     questData: questSeed.QUEST_SEED_ROWS,

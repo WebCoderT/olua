@@ -1,5 +1,5 @@
 import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { mapLabelOf } from "../../../configs/map";
+import { mapLabelOf } from "../../../configs/game-config";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
 import { uiImages, mapPreviewImage, smallMapImage, smallMapLayout } from "../../../configs/hudLayout";
 import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";

@@ -32,8 +32,9 @@ if (sandbox) {
   void (async () => {
   const { StorageManager, Role, outDir, RoleApi } = sandbox;
   const { getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
-  const { getMallGoods, getMallPrice, applyMallPricing } = require(path.join(outDir, "configs/mall.js"));
-  const { equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
+  const { getMallPrice, applyMallPricing } = require(path.join(outDir, "configs/game-config.js"));
+  // 「商品 = 全部装备」那份查询读七个部位表，所以住在 equipments（#626，见该函数注释）
+  const { getMallGoods, equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
 
   const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
   const mallSource = read("assets/ui/components/dialogs/MallDialog.ts");
@@ -230,7 +231,7 @@ if (sandbox) {
   check(!/"(mall|common|buttons)\//.test(mallCode), "MallDialog 里没有裸资源路径（图片走 configs 的 uiImages）");
 
   // 关键接线
-  check(/getMallGoods\(\)/.test(mallSource), "商品表来自 configs/mall.getMallGoods");
+  check(/getMallGoods\(\)/.test(mallSource), "商品表来自 configs/equipments.getMallGoods（全部装备，按部位序 → 等级 → 前缀 → 后缀）");
   check(/StorageManager\.buyMallGood\(/.test(mallSource), "购买走数据层 StorageManager.buyMallGood");
   check(/mallDialogLayout/.test(mallSource), "几何全部取自 configs/hudLayout.mallDialogLayout");
   check(/getText\("label_mall_buy"\)/.test(mallSource), "购买按钮文案走 configs/texts");
@@ -252,7 +253,7 @@ if (sandbox) {
   check(!/layout\.row/.test(mallSource), "不再引用已删除的 layout.row（旧的整行口径已清干净）");
 
   // 价格必须画在卡片上（#491）：玩家点「购买」之前得先看到要花多少
-  check(/getMallPrice\(good\)/.test(mallSource), "卡片价格取 configs/mall.getMallPrice（特殊价优先、未定价走统一价，卡片不自己算钱）");
+  check(/getMallPrice\(good\)/.test(mallSource), "卡片价格取 configs/game-config.getMallPrice（特殊价优先、未定价走统一价，卡片不自己算钱）");
   check(/getText\("mall_price", \{ value: getMallPrice\(good\) \}\)/.test(mallSource), "价格文案走 configs/texts 的 mall_price（带「绑元」单位，裸数字会被读成数量）");
   check(/mall_card_price_\$\{good\.id\}/.test(mallSource), "每张卡片都建价格节点（mall_card_price_<id>）");
   check(/Label\.HorizontalAlign\.RIGHT/.test(mallSource), "价格右对齐贴卡片右缘（与左对齐的品质行分列两侧）");
@@ -317,7 +318,7 @@ if (sandbox) {
   check(/mallBackground: mallImage\("bg"\)/.test(imagesSource), "商城背景图登记在 uiImages（resources/mall/bg）");
   check(/export const mallImage = \(name: string\) => `mall\/\$\{name\}`;/.test(imagesSource), "取图函数与目录收敛在 layout/images");
   check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/mall/bg.png")), "商城背景图素材存在（resources/mall/bg.png）");
-  check(fs.existsSync(path.join(PROJECT_ROOT, "assets/configs/mall.ts.meta")) && fs.existsSync(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/MallDialog.ts.meta")), "新增的 .ts 都带 .meta（进 Cocos 工程的前提）");
+  check(fs.existsSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts.meta")) && fs.existsSync(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/MallDialog.ts.meta")), "新增的 .ts 都带 .meta（进 Cocos 工程的前提）");
 
   //#endregion
 

@@ -10,7 +10,7 @@ import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import CombatChannel from "../../utils/net/CombatChannel";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { mapPointToWorld } from "../../utils/map/MapPointMath";
-import { mapSrcOf } from "../../../configs/map";
+import { mapSrcOf } from "../../../configs/game-config";
 
 /**
  * 地图组件（自身即地图节点）

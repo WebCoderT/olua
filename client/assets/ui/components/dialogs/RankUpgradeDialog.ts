@@ -3,7 +3,7 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
-import { getRankLevel, rankLevels, rankMaxLevel } from "../../../configs/rank";
+import { getRankLevel, rankLevels, rankMaxLevel } from "../../../configs/game-config";
 import { rankUpgradeDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";

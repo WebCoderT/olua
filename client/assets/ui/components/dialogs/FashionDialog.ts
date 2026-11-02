@@ -4,7 +4,7 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
 import { fashionDialogLayout } from "../../../configs/hudLayout";
-import { FashionDataEntry } from "../../../configs/fashionClothes";
+import { FashionDataEntry } from "../../../configs/game-config";
 import { clearChildren } from "../../utils/node/NodeTree";
 import { blockClickThrough } from "../../utils/input/UiHit";
 

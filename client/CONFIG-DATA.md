@@ -2,7 +2,7 @@
 
 > 这份文件是**索引**，不是权威：字段含义看代码注释，接口契约看 `server/openapi.json`。
 > 目的只有一个 —— 想改某个东西时，能一眼看出「它现在归谁、改哪儿、客户端什么时候拿到」。
-> 最后更新：2026-11-02（#603 逐域搬迁收口：第十三域 role / monster 复核后判定不搬，见第六节）。
+> 最后更新：2026-11-02（#626：21 个快照域文件合并为 `configs/game-config.ts`，本文所有表列改为「文件 + 分区」口径）。
 
 ## 一、一句话规则
 
@@ -13,7 +13,7 @@
 
 | 类别 | 例子 | 为什么留 |
 |---|---|---|
-| **资源约定** | `map.ts` 的 `mapSrcOf` / Tiled 对象组名、`animation.ts` 的方向下标 | 「加载哪张图 / 读哪个目录」是打包时的目录约定，不是运营数据；下发方永远改不到它 |
+| **资源约定** | `game-config.ts` 第 18 区的 `mapSrcOf` / Tiled 对象组名、`animation.ts` 的方向下标 | 「加载哪张图 / 读哪个目录」是打包时的目录约定，不是运营数据；下发方永远改不到它 |
 | **表现与手感** | `drop.ts` 的拾取半径、`role.ts` 的移动速度、`autoBattle.ts`、`layout/*` | 纯客户端手感 / 排版，改了要重新调手感，不是运营能盲调的 |
 | **界面文案** | `texts.ts`、`loading.ts` | UI 字面量，跟玩法数值无关 |
 
@@ -26,12 +26,12 @@
             ├─ GameConfigApi.snapshot()      GET /game-config                  快照只拉一次（进程内）
             ├─ GameConfigApi.equipAlign()    GET /game-config/equip-align      每次进图都拉
             └─ GameConfigApi.equipInAlign()  GET /game-config/equip-in-align   每次进图都拉
-                 └─ configs/snapshot-contract.ts   先校验契约（缺段 / 形状不对 → 抛错）
+                 └─ configs/game-config.ts 第 0 区   先校验契约（缺段 / 形状不对 → 抛错）
                  └─ configs/apply-snapshot.ts
                       ├─ applyConfigSnapshot(snapshot)      逐段整表重建（段必填，没有「缺段跳过」）
                       ├─ applyEquipAlignRows(rows)          外观几何（先还原出厂值再覆写）
                       └─ applyEquipInAlignRows(rows)        内观几何（同上）
-                           └─ 落进各 configs 运行时表；消费方 `import { items } from configs/items` 读法不变
+                           └─ 落进 game-config 各分区的运行时表；消费方读法不变（`import { items } from configs/items`）
 ```
 
 三个请求**并行**；**快照是硬依赖**（#604）：段缺失 / 形状不对 → `applyConfigSnapshot` 抛错 →
@@ -51,35 +51,38 @@
 
 ### 3.1 玩家侧快照（`GET /game-config`）
 
+> 客户端表分两处住：**快照域全在 `configs/game-config.ts`**（按 `//#region` 分局，下表「区 N」就是它），
+> 装备七张部位表与物品总表仍在 `configs/equipments.ts` / `configs/items.ts`（它们是「按 id 展开的算法」，不是快照段）。
+
 | 快照段 | 落库函数 | 落到哪个客户端表 | 服务端出厂（唯一书写处） | 管理端页面 |
 |---|---|---|---|---|
-| `combatWeights` | `applyCombatWeights` | `configs/battle.ts` `combatCalc` | `shared/combat-seed.ts` | ⚠ 无编辑页（待 #605） |
-| `titles` | `applyTitleRows` | `configs/title.ts` `titles` | `shared/title-seed.ts` | `/titles` |
-| `souls` | `applySoulRows` | `configs/soul.ts` `souls` | `shared/soul-seed.ts` | `/souls` |
-| `ranks` | `applyRankRows` | `configs/rank.ts` `ranks` | `shared/rank-seed.ts` | `/ranks` |
-| `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `configs/level.ts` `levels`、`configs/growth.ts` 的等级上限 | `shared/growth-seed.ts` | `/growth` |
+| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` | ⚠ 无编辑页（待 #605） |
+| `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels` | `shared/title-seed.ts` | `/titles` |
+| `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels` | `shared/soul-seed.ts` | `/souls` |
+| `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels` | `shared/rank-seed.ts` | `/ranks` |
+| `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `game-config` 区 4 `levelMap`、区 6 `roleMaxLevel` | `shared/growth-seed.ts` | `/growth` |
 | `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `shared/equipment-seed.ts` → `equipments` 表 | `/equipments` |
 | `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `shared/equipment-seed.ts` → `equipment_slots` 表 | `/equipment-settings` |
-| `equipmentMeta` | `applyEquipmentRules`（growth）/ `applyEquipmentQualityLabels`（equipments） | `configs/growth.ts` 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `shared/equipment-seed.ts` → `equipment_meta` 表 | `/equipment-settings` |
-| `items` | `applyItemRows`（→ `applyItemBaseData`，整表重建） | `configs/material.ts` `materials` | `shared/item-seed.ts` → `items` 表 | `/items` |
-| `drugs` | `applyDrugRows`（→ `applyDrugData`，整表重建） | `configs/drug.ts` `drugs` | `shared/item-seed.ts` → `drugs` 表 | `/drugs` |
-| `monsters` | `applyMonsterRows` | `configs/monsterRuntime.ts` `monsterRuntime` | `shared/monster-seed.ts` → `monsters` 表 | `/monsters` |
-| `monsterPresentations` | `applyMonsterPresentations` | `configs/monsterRuntime.ts` `monsterResource` | `shared/monster-presentation.generated.ts` | `/monsters`（掉落弹窗另有摘要） |
-| `npcs` | `applyNpcRows` | `configs/npc.ts` `npcs` | `shared/npc-seed.ts` → `npcs` 表 | `/npcs` |
-| `quests` | `applyQuestRows` | `configs/quest-data.ts` `questData` | `shared/quest-seed.ts` → `quests` 表 | `/quests` |
-| `skills` | `applySkillRows`（→ `applySkillData`，整表重建） | `configs/skill-data.ts` `skillData` + `oeccupationSkills`（按行派生的职业映射） | `shared/skill-seed.ts` → `skills` 表 | `/skills` |
-| `statuses` | `applyStatusRows` | `configs/status.ts` `statuses` | `shared/status-seed.ts` | `/statuses` |
-| `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `configs/fashionClothes.ts` `fashionData`（空数组）+ 取源规则 | `shared/fashion-seed.ts` → `fashions` 表 | `/fashions` |
-| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `configs/mall.ts`（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
-| `maps` / `mapTypes` | `applyMapRows` | `configs/map.ts` `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
-| `uiEffects` | `applyUiEffectRows` | `configs/effect.ts` `uiEffects` | `ui_effects` 表 | `/ui-effects` |
+| `equipmentMeta` | `applyEquipmentRules`（区 6）/ `applyEquipmentQualityLabels`（equipments） | `game-config` 区 6 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `shared/equipment-seed.ts` → `equipment_meta` 表 | `/equipment-settings` |
+| `items` | `applyItemRows`（→ `applyItemBaseData`，整表重建） | `game-config` 区 9 `materials` | `shared/item-seed.ts` → `items` 表 | `/items` |
+| `drugs` | `applyDrugRows`（→ `applyDrugData`，整表重建） | `game-config` 区 8 `drugs` | `shared/item-seed.ts` → `drugs` 表 | `/drugs` |
+| `monsters` | `applyMonsterRows` | `game-config` 区 16 `monsterRuntime` | `shared/monster-seed.ts` → `monsters` 表 | `/monsters` |
+| `monsterPresentations` | `applyMonsterPresentations` | `game-config` 区 16 `monsterResource` | `shared/monster-presentation.generated.ts` | `/monsters`（掉落弹窗另有摘要） |
+| `npcs` | `applyNpcRows` | `game-config` 区 10 `npcs` | `shared/npc-seed.ts` → `npcs` 表 | `/npcs` |
+| `quests` | `applyQuestRows` | `game-config` 区 11 `questData` + 区 12 `quests`（按行派生的注册表） | `shared/quest-seed.ts` → `quests` 表 | `/quests` |
+| `skills` | `applySkillRows`（→ `applySkillData`，整表重建） | `game-config` 区 13 `skillData` + `oeccupationSkills`（按行派生的职业映射） | `shared/skill-seed.ts` → `skills` 表 | `/skills` |
+| `statuses` | `applyStatusRows` | `game-config` 区 7 `statuses` | `shared/status-seed.ts` | `/statuses` |
+| `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `game-config` 区 14 `fashionData`（空数组）+ 取源规则 | `shared/fashion-seed.ts` → `fashions` 表 | `/fashions` |
+| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
+| `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
+| `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects` | `ui_effects` 表 | `/ui-effects` |
 
 ### 3.2 几何（两个独立接口，不进快照）
 
 | 接口 | 落库函数 | 落到哪里 | 管理端页面 |
 |---|---|---|---|
-| `GET /game-config/equip-align` | `applyEquipAlignRows` | `configs/equipAlign.ts`（外观位置 / 缩放 / 手调开关） | `/equip-align` |
-| `GET /game-config/equip-in-align` | `applyEquipInAlignRows` | `configs/equipAlign.ts`（内观：衣服对圆盘、武器对第一件衣服） | `/equip-in-align` |
+| `GET /game-config/equip-align` | `applyEquipAlignRows` | `game-config` 区 20（外观位置 / 缩放 / 手调开关） | `/equip-align` |
+| `GET /game-config/equip-in-align` | `applyEquipInAlignRows` | `game-config` 区 20（内观：衣服对圆盘、武器对第一件衣服） | `/equip-in-align` |
 
 **为什么这两个每次进图都拉、快照只拉一次**：几何是「人眼调一版、立刻要看效果」的东西，
 验收动作就是退回选角再进图（场景重载、JS 上下文不重来）；只拉一次会被当成「保存没生效」。
@@ -87,33 +90,42 @@
 
 ## 四、`configs/` 现有文件与归属
 
-### 4.1 空壳运行时表（内容全部来自服务端）
+### 4.1 `game-config.ts` 的 21 个分区（#626 合并；内容全部来自服务端）
 
-| 文件 | 表 | 填充者 |
-|---|---|---|
-| `level.ts` | `levels` | `applyLevelRows` |
-| `title.ts` / `soul.ts` / `rank.ts` | `titles` / `souls` / `ranks` | 各自的 `apply*Rows` |
-| `status.ts` | `statuses` | `applyStatusRows`（所有未登记行一律写入） |
-| `quest-data.ts` | `questData` | `applyQuestRows` |
-| `npc.ts` | `npcs` | `applyNpcRows`（整表重建） |
-| `battle.ts` | `combatCalc` | `applyCombatWeights` |
-| `monsterRuntime.ts` | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` |
-| `mall.ts` | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` |
-| `map.ts` | `maps` / `mapTypeGroups` | `applyMapRows` |
-| `equipments.ts` | 七张部位表 / `equipmentSlots` / `equipmentSlotOrder` / 品质文案 | `applyEquipmentData` / `applyEquipmentSlots` / `applyEquipmentQualityLabels` |
-| `growth.ts` | 前后缀倍率 / 回收价曲线（`roleMaxLevel` 也由 `growthScalars` 覆写） | `applyEquipmentRules` |
-| `drug.ts` | `drugs`（**空数组**，含图标） | `applyDrugData`（整表重建） |
-| `material.ts` | `materials`（**空数组**，含图标） | `applyItemBaseData`（整表重建） |
-| `items.ts` | `items` 总表 = 装备 + 药品 + 材料的「id → 物品」索引 | `rebuildItemIndex()`（装备 → 药品 → 材料） |
-| `skill-data.ts` | `skillData`（**空数组**）+ `oeccupationSkills`（按行派生） | `applySkillData`（整表重建，含职业映射重算） |
-| `fashionClothes.ts` | `fashionData`（**空数组**）+ 外观取源规则（`getFashionOut` / `getFashionIn`） | `applyFashionData`（整表重建，含 icon / in / out） |
+| 区 | 表 / 常量 | 填充者 | 原文件 |
+|---|---|---|---|
+| 0 | 契约 `SNAPSHOT_SECTIONS` | —（客户端自己的要求） | `snapshot-contract.ts` |
+| 1 / 2 / 3 | `titleLevels` / `soulLevels` / `rankLevels` | 各自的 `apply*Rows` | `title.ts` / `soul.ts` / `rank.ts` |
+| 4 | `levelMap` | `applyLevelRows` | `level.ts` |
+| 5 | `combatCalc` | `applyCombatWeights` | `battle.ts` |
+| 6 | 前后缀倍率 / 回收价曲线 / `roleMaxLevel` | `applyEquipmentRules` / `setRoleMaxLevel` | `growth.ts` |
+| 7 | `statuses` | `applyStatusRows`（所有未登记行一律写入） | `status.ts` |
+| 8 | `drugs`（**空数组**，含图标） | `applyDrugRows` → `applyDrugData`（整表重建） | `drug.ts` |
+| 9 | `materials`（**空数组**，含图标） | `applyItemRows` → `applyItemBaseData`（整表重建） | `material.ts` |
+| 10 | `npcs` | `applyNpcRows`（整表重建） | `npc.ts` |
+| 11 / 12 | `questData` / `quests`（派生注册表） | `applyQuestRows` → `rebuildQuests()` | `quest-data.ts` / `quest.ts` |
+| 13 | `skillData`（**空数组**）+ `oeccupationSkills`（按行派生） | `applySkillRows` → `applySkillData` | `skill-data.ts` |
+| 14 | `fashionData`（**空数组**）+ 外观取源规则（`getFashionOut` / `getFashionIn`） | `applyFashionRows` → `applyFashionData` | `fashionClothes.ts` |
+| 15 | `monsterAI` / `monsterDefaultSpeedRate`（**客户端手感**，见 4.2） | —（常量） | `monster.ts` |
+| 16 | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` | `monsterRuntime.ts` |
+| 17 | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` | `mall.ts` |
+| 18 | `maps` / `mapTypeGroups` + 资源约定（`mapSrcOf` / Tiled 名） | `applyMapRows` | `map.ts` |
+| 19 | `uiEffects` + 三个表现常量 | `applyUiEffectRows` | `effect.ts` |
+| 20 | 几何基线 / 手势锚点算法 | `applyEquipAlignRows`（在 `apply-snapshot`） | `equipAlign.ts` |
+
+仍在原文件的两张「算法表」（不是快照段，靠 `applyEquipmentData` / `rebuildItemIndex` 填）：
+
+| 文件 | 内容 |
+|---|---|
+| `equipments.ts` | 七张部位表 / `equipmentSlots` / `equipmentSlotOrder` / 品质文案 / 装备展开与几何纯函数 / `getMallGoods`（唯一要读七张表的读取函数，放这里避免成环） |
+| `items.ts` | `items` 总表 = 装备 + 药品 + 材料的「id → 物品」索引（`rebuildItemIndex()` 按装备 → 药品 → 材料） |
 
 ### 4.2 复核后判定「不搬」（#603 第十三域的结论）
 
-| 文件 | 剩下什么 | 为什么不入库 |
+| 文件 / 区 | 剩下什么 | 为什么不入库 |
 |---|---|---|
 | `role.ts` | `occupations`（3 行职业介绍）、移动速度、体型 / 碰撞盒、摇杆与鼠标死区、背包行列、快捷键布局、动作速度倍率 | 职业名的权威副本已在公共数据（生成物 `OCCUPATION_LABELS`）；介绍图路径按职业码可推导（`create_role/tips_<码>`），尺寸是素材量出来的；其余全是手感 / 布局参数（`client/README` 的「表现层」） |
-| `monster.ts` | `monsterAI`（普攻间隔 / 停下出手距离 / 待机游走节奏 / 击退时长）、`monsterDefaultSpeedRate` | 动画节奏与手感；服务端 tick 读的 6 个数值已由生成器收进 `MONSTER_AI`（**两端同源，不是两份**）。怪物真正的数值（血量 / 六项攻防 / 掉落）早在 `monsters` 表 |
+| `game-config` 区 15 | `monsterAI`（普攻间隔 / 停下出手距离 / 待机游走节奏 / 击退时长）、`monsterDefaultSpeedRate` | 动画节奏与手感；服务端 tick 读的 6 个数值已由生成器收进 `MONSTER_AI`（**两端同源，不是两份**）。怪物真正的数值（血量 / 六项攻防 / 掉落）早在 `monsters` 表 |
 
 > 判据沿用项目既定三条：**能按 id 推导的资源路径不入库**、**素材尺寸不是运营数值**、
 > **客户端只留资源约定与手感参数**。为了「搬完」而给 3 行 UI 文案建表 + 建页面，
@@ -121,17 +133,18 @@
 
 ### 4.3 客户端自己的东西（与运营数据无关）
 
-| 文件 | 内容 |
+| 文件 / 区 | 内容 |
 |---|---|
-| `map.ts` | 资源约定：`mapSrcOf`、Tiled 对象组 / 属性名（**不含**任何玩法数值） |
-| `npcClicks.ts` | NPC 点击行为（id → 弹窗）；会引 UI 组件，所以不能进 `npc.ts` |
-| `drop.ts` | 掉落物手感：拾取半径、提示节流、散落间距、拾取应答超时 |
-| `network.ts` | 服务端地址的唯一来源（按运行环境解析） |
-| `texts.ts` | 界面文案（`getText(key, params)`，代码里不写中文） |
-| `texts` 之外的 `layout/*`（`hudLayout.ts` 是 barrel） | 界面布局、尺寸、配色 |
-| `animation.ts` / `cursor.ts` / `debug.ts` / `loading.ts` | 动画方向下标 / 鼠标指针 / 调试开关 / 加载条 |
-| `equipAlign.ts` | 几何的运行时表 + 出厂值回落（快照例外之一） |
-| `autoBattle.ts` / `bottomNav.ts` / `smallMap.ts` / `guide.ts` 等 | 面板与人机交互参数 |
+| `configs/animation.ts` | 动画方向下标、动作时长 |
+| `configs/npcClicks.ts` | NPC 点击行为（id → 弹窗）；会引 UI 组件，所以不能进 `game-config` 区 10 |
+| `configs/drop.ts` | 掉落物手感：拾取半径、提示节流、散落间距、拾取应答超时 |
+| `configs/network.ts` | 服务端地址的唯一来源（按运行环境解析） |
+| `configs/texts.ts` | 界面文案（`getText(key, params)`，代码里不写中文） |
+| `configs/layout/*`（`hudLayout.ts` 是 barrel） | 界面布局、尺寸、配色 |
+| `configs/cursor.ts` / `debug.ts` / `loading.ts` | 鼠标指针 / 调试开关 / 加载条 |
+| `configs/autoBattle.ts` / `bottomNav.ts` / `smallMap.ts` / `guide.ts` 等 | 面板与人机交互参数 |
+| `game-config` 区 18 | 地图资源约定：`mapSrcOf`、Tiled 对象组 / 属性名（**不含**任何玩法数值） |
+| `game-config` 区 20 | 几何基线 + 手势锚点算法（出厂值回落，快照例外之一） |
 
 > 「`configs/` 不许写中文文案」「布局只走 `layout/*`」「`configs` 与 `types` 不依赖 UI 层」
 > 这三条由 `tools/audit-config-leak.cjs` 与 `audit-ui-click-through.cjs` 盯着。
@@ -144,15 +157,15 @@
 | 只刷内观几何（开弹窗时） | `refreshInAlign()` | 同上 |
 | 手动把一份快照灌进去（单测 / 调试） | `applyConfigSnapshot(snapshot)` —— **必须是完整快照**，缺段会抛（#604） | `configs/apply-snapshot.ts` |
 | 只灌某一类表（单测常用） | `applyContentSnapshot` / `applySkillSnapshot` / `applyGrowthSnapshot` | 同上（各自要求本入口的段都在） |
-| 快照段清单 / 契约校验 | `SNAPSHOT_SECTIONS` / `checkSnapshotContract()` | `configs/snapshot-contract.ts` |
-| 单表覆写 | `applyTitleRows` / `applyNpcRows` / `applyMapRows` / … | 各自 `configs/<域>.ts` 或 `apply-snapshot.ts` |
-| 读物品 / 装备 | `items`、`getItem()`、`getEquipment()` | `configs/items.ts` |
-| 读怪物 | `monsterResourceOf()` / `monsterStatsOrDefault()` / `monsterLabelOf()` | `configs/monsterRuntime.ts` |
-| 读 NPC | `npcs.get(id)`、`npcClicks[id]` | `configs/npc.ts` / `configs/npcClicks.ts` |
-| 读地图 | `maps` / `mapTypeGroups` / `mapSrcOf` / `mapLabelOf` | `configs/map.ts` |
-| 读商城价 | `getMallPrice(good)` | `configs/mall.ts` |
-| 算装备战斗力 / 对比 | `equipmentCombatValue(...)`（权重读 `configs/battle.ts`） | `configs/equipments.ts` |
-| 算装备回收价（基础件） | `equipmentRecyclePrice(level)` / `getRecyclePrice(equipment)` | `configs/growth.ts` / `configs/equipments.ts` |
+| 快照段清单 / 契约校验 | `SNAPSHOT_SECTIONS` / `checkSnapshotContract()` | `configs/game-config.ts` 区 0 |
+| 单表覆写 | `applyTitleRows` / `applyNpcRows` / `applyMapRows` / … | `configs/game-config.ts` 对应分区（`applyEquipAlignRows` 在 `apply-snapshot.ts`） |
+| 读物品 / 装备 | `items`、`getItem()`、`getEquipment()` | `configs/items.ts` / `configs/equipments.ts` |
+| 读怪物 | `monsterResourceOf()` / `monsterStatsOrDefault()` / `monsterLabelOf()` | `configs/game-config.ts` 区 16 |
+| 读 NPC | `npcs.get(id)`、`npcClicks[id]` | `configs/game-config.ts` 区 10 / `configs/npcClicks.ts` |
+| 读地图 | `maps` / `mapTypeGroups` / `mapSrcOf` / `mapLabelOf` | `configs/game-config.ts` 区 18 |
+| 读商城价 | `getMallPrice(good)` | `configs/game-config.ts` 区 17 |
+| 算装备战斗力 / 对比 | `equipmentCombatValue(...)`（权重读区 5 `combatCalc`） | `configs/equipments.ts` |
+| 算装备回收价（基础件） | `equipmentRecyclePrice(level)` / `getRecyclePrice(equipment)` | `configs/game-config.ts` 区 6 / `configs/equipments.ts` |
 
 ## 六、搬迁进度（#603）
 
@@ -176,3 +189,28 @@
 
 **每一域的验收口径都一样**：重新生成 `server/src/shared/game-data.generated.ts` 必须**逐字节相同**
 （或差异只在一句注释），否则说明数据在搬迁中被悄悄改了。
+
+## 七、为什么 21 个域合成一个文件（#626）
+
+#603 搬完之后每个域只剩「一张空表 + 一个 `apply*` + 一两个读取函数」，平均 80 行；改一个快照段
+要在二十个文件之间跳，而这些文件之间除「同属一份快照」外没有任何内聚关系。所以合并为
+`configs/game-config.ts`（`configs/` 从 47 个 `.ts` 降到 27 个）。三条纪律写在文件头，违反会静默出事：
+
+1. **只许引** `cc` 的四个纯数据类（`Vec2` / `Vec3` / `Size` / `Color`）、`../types/*`、
+   以及 `../ui/utils/net/ApiModels` 的**类型**。它处客户端单测的 Node 垫片链上
+   （`client/tools/lib/configs-sandbox.cjs` 只实现这四个类的构造函数），引一个 UI 组件就整条加载不起来。
+   → 守点 `client/tools/test-skill-decouple.cjs`（import 白名单）。
+2. **不许反向 import** `items` / `equipments` / `skill` / `apply-snapshot`：依赖方向永远是
+   `apply-snapshot → game-config → types`。唯一例外是 `getMallGoods`（要读七个部位表）——
+   它按语义住在 `equipments.ts`，不进 `game-config`。
+3. **`//#region N · 标签（原 configs/xxx.ts）`** 是分区标识，编号稳定：守点按编号取区
+   （`audit-world-authority` 的 `regionOf(source, 15)`）。**新增函数要放进它自己的分区里**，
+   放到上一个区的尾巴上照样能编译，但按区取源码的守点会读不到。
+
+同步改动的工具链（都是「换一个 require 名字」级别，语义没变）：
+`client/tools/lib/configs-sandbox.cjs`（单测垫片）、`tools/lib/client-config-compile.cjs`（生成器编译管线）、
+`tools/gen-shared-data.cjs`（`SOURCE_FILES` 只剩 4 个入口文件）、`tools/audit-snapshot-contract.cjs`（契约文件路径）、
+`tools/audit-world-authority.cjs`（按区取怪物数值字段）。
+
+**验收**：`make client-check` 0 错、`make client-test` 与合并前基线一致（55 过 / 4 红，红全是素材未入库）、
+`make audit` 15 条全绿；`gen-shared-data` 与 `gen-monster-config` 的产物**逐字节不变**。
