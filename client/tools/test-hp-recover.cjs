@@ -215,7 +215,7 @@ check(
 console.log("\n— F. 接线（源码断言）—");
 const roleSource = read("assets/entities/Role.ts");
 check(/hpRecover: number;/.test(roleSource) && /hpRecoverAccumulator: number = 0;/.test(roleSource), "Role 有 hpRecover 与 hpRecoverAccumulator 字段");
-check(/this\.hpRecover = levelMap\.get\(this\.level\)\.hpRecover;/.test(roleSource), "新建角色按等级初始化回血");
+check(!/levelMap/.test(roleSource), "Role 不再按等级本地算回血（#597 起数值全由服务端算，读档由 HpHelper 兜底）");
 
 const helperSource = read("assets/ui/core/GameHelper.ts");
 check(!/combatCalc/.test(helperSource), "GameHelper 里没有本地属性计算（#541 服务端权威：hpRecover 由 roleUpdate 帧下发，客户端只消费）");

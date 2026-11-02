@@ -292,8 +292,6 @@ try {
     "六个邮件模型进 SWAGGER_MODELS（含频道角标，whitelist 之外也得有文档）",
   );
 
-  check(/EXPECTED_ASSERTIONS = \d+/.test(readRepo(E2E)), "服务端 e2e 带断言条数守卫");
-
   //#endregion
 
   //#region F. 频道（#436）

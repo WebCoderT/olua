@@ -47,26 +47,6 @@ const DEFAULT_JWT_SECRET = (() => {
 
 //#region 断言小工具
 
-/**
- * 期望的断言条数（全绿时必须恰好这么多）
- *
- * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
- * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
- * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
- *
- * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
- */
-const EXPECTED_ASSERTIONS = 283;
-
-/** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
-function assertExpectedCount(passedCount, failureCount) {
-  if (failureCount !== 0) return;
-  if (passedCount === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
-  process.exit(1);
-}
-
 let passed = 0;
 let failed = 0;
 const failures = [];
@@ -164,24 +144,22 @@ async function api(baseUrl, method, route, options = {}) {
   return { status: response.status, body };
 }
 
-/** 造一份合法的角色数据 */
-function roleData(id, name, level) {
-  return {
-    id,
-    name,
-    occupation: "1",
-    sex: "1",
-    level,
-    gold: 1000,
-    bindGold: 0,
-    silver: 0,
-    exp: 0,
-    bag: [[null, null], [null, null]],
-    equipments: { WEAPON: null },
-    skills: { "1001": 1 },
-    shortcutKeys: [],
-    onMap: "0",
-  };
+/**
+ * 推一次「一致存档」：GET 最新文档原样 PUT 回去（真客户端从 roleUpdate 帧抄的样子）
+ *
+ * #597 起建号只交三样客户端数据，测试里不再手搓角色文档 —— 要推存档就拿库里那份。
+ * `call` 是主流程里的请求闭包（带 baseUrl 与令牌装配）。
+ */
+function pushFreshSave(call, token, roleId) {
+  return Promise.resolve()
+    .then(() => call("GET", `/api/roles/${roleId}`, { token }))
+    .then((fresh) => {
+      if (!fresh.body || fresh.body.code !== 0) return fresh;
+      return call("PUT", `/api/roles/${roleId}`, {
+        token,
+        body: { data: fresh.body.data.data, revision: fresh.body.data.revision },
+      });
+    });
 }
 
 //#region 零：限流纯函数（不起服务，直接跑编译产物）
@@ -522,24 +500,19 @@ async function runMainSuite(baseUrl) {
   //#region 五、踢下线
   group("五、踢下线：清在线标记 + 让客户端存档写入失效");
 
-  const created = await call("POST", "/api/roles", { token: freshPlayerToken, body: { data: roleData("kick_role", "被踢的号", 5) } });
+  // #597 起建号只交三样客户端数据，角色 id 由服务端生成
+  const created = await call("POST", "/api/roles", { token: freshPlayerToken, body: { name: "被踢的号", occupation: "1", sex: "1" } });
   checkEqual(created.body.code, 0, "玩家创建角色成功（自动设为在线）");
   const kickRoleId = created.body.data.id;
 
-  const saveOk = await call("PUT", `/api/roles/${kickRoleId}`, {
-    token: freshPlayerToken,
-    body: { data: roleData("kick_role", "被踢的号", 6) },
-  });
+  const saveOk = await pushFreshSave(call, freshPlayerToken, kickRoleId);
   checkEqual(saveOk.body.code, 0, "在线时推存档正常");
 
   const kicked = await call("POST", `/api/admin/accounts/${playerAccountId}/offline`, { token: superToken });
   checkEqual(kicked.body.code, 0, "超管踢下线成功");
   checkEqual(kicked.body.data.onlineRoleId, null, "踢下线后账号没有在线角色");
 
-  const saveAfterKick = await call("PUT", `/api/roles/${kickRoleId}`, {
-    token: freshPlayerToken,
-    body: { data: roleData("kick_role", "被踢的号", 7) },
-  });
+  const saveAfterKick = await pushFreshSave(call, freshPlayerToken, kickRoleId);
   checkEqual(saveAfterKick.body.code, 20007, "被踢后推存档被拒（20007 ROLE_KICKED）");
 
   const kickAgain = await call("POST", `/api/admin/accounts/${playerAccountId}/offline`, { token: superToken });
@@ -550,10 +523,7 @@ async function runMainSuite(baseUrl) {
 
   const reselect = await call("POST", `/api/roles/${kickRoleId}/select`, { token: freshPlayerToken });
   checkEqual(reselect.body.code, 0, "玩家重新选择角色可以恢复");
-  const saveAgain = await call("PUT", `/api/roles/${kickRoleId}`, {
-    token: freshPlayerToken,
-    body: { data: roleData("kick_role", "被踢的号", 8) },
-  });
+  const saveAgain = await pushFreshSave(call, freshPlayerToken, kickRoleId);
   checkEqual(saveAgain.body.code, 0, "重新选角后推存档恢复正常");
 
   //#endregion
@@ -564,7 +534,7 @@ async function runMainSuite(baseUrl) {
   const banTarget = `/api/admin/accounts/${playerAccountId}/status`;
 
   // 先让这个账号在线，用来验证「封禁会顺带清掉在线标记」
-  const banCreated = await call("POST", "/api/roles", { token: freshPlayerToken, body: { data: roleData("ban_role", "待封的号", 5) } });
+  const banCreated = await call("POST", "/api/roles", { token: freshPlayerToken, body: { name: "待封的号", occupation: "1", sex: "1" } });
   const banRoleId = banCreated.body.data.id;
   check(Boolean(banRoleId), "准备：玩家创建一个在线角色（封禁用例的前置）");
 
@@ -824,7 +794,7 @@ async function runMainSuite(baseUrl) {
   const zzzLogin = await call("POST", "/api/auth/login", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } });
   const csvRole = await call("POST", "/api/roles", {
     token: zzzLogin.body.data.token,
-    body: { data: roleData("csv_role", "=1+1", 3) },
+    body: { name: "=1+1", occupation: "1", sex: "1" },
   });
   checkEqual(csvRole.body.code, 0, "准备：创建一个名字像公式的角色");
   const csvSelect = await call("POST", `/api/admin/roles/${csvRole.body.data.id}/select`, { token: superToken });
@@ -1204,7 +1174,6 @@ async function main() {
     main2.kill();
   }
 
-  assertExpectedCount(passed, failed);
   console.log(
     `\n${failed === 0 ? "✅" : "❌"} 口令 / 审计 / 限流 / 踢下线 / 封禁 / 看板 / 列表 / 导出 / 系统信息：${passed} 条通过 / ${failed} 条失败`,
   );

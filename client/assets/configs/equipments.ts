@@ -146,7 +146,7 @@ const ZERO_EQUIPMENT_ATTRIBUTES: BattleAttributes = {
 /**
  * 装备数据表 → 装备配置 Map
  *
- * **key 只做关联**：背包 / 掉落表 / 职业初始装备（configs/role.getNewRoleEquipments）都用它引用，
+ * **key 只做关联**：背包 / 掉落表 / 掉落拾取入包都用它引用，
  * key 可以是任意字符串（"ring_1"、"cloth_fire" 都行），**不参与任何数值计算**。
  *
  * **属性不在加载期生成**（#590）：基础件属性唯一来源是服务端 `equipments` 表，
@@ -279,8 +279,8 @@ export function formatSignedAttributeValue(value: number[] | number): string {
 /**
  * 取某装备 Map 中**指定等级**的全部条目（含前后缀变体：一件基础装备 = 15 件同等级变体）
  *
- * 用途：把某等级的整组品质变体都发给角色（见 configs/role.getNewRoleEquipments ——
- * 出生背包里放全 15 个品质的 1 级武器，方便对比外观/边框）。
+ * 用途：把某等级的整组品质变体都取出来（#597 前的建号赠品用过它；
+ * 现在作为「按等级筛全部变体」的通用查询保留）。
  * 「等级」是装备的佩戴门槛，也是唯一的定强入口，因此这里按等级筛而不是按 key 筛。
  *
  * ⚠️ 同样必须用 `map.forEach`，理由见 getBaseEquipments（loose 编译会毁掉 `[...map.values()]`）

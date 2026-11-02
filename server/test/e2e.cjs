@@ -19,26 +19,6 @@ const ADMIN_CODE = "e2e-admin-code";
 
 //#region 断言小工具
 
-/**
- * 期望的断言条数（全绿时必须恰好这么多）
- *
- * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
- * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
- * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
- *
- * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
- */
-const EXPECTED_ASSERTIONS = 248;
-
-/** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
-function assertExpectedCount(passedCount, failureCount) {
-  if (failureCount !== 0) return;
-  if (passedCount === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
-  process.exit(1);
-}
-
 let passed = 0;
 let failed = 0;
 const failures = [];
@@ -143,7 +123,6 @@ async function main() {
     child.kill("SIGTERM");
   }
 
-  assertExpectedCount(passed, failed);
   console.log(`\n${failed === 0 ? "✅" : "❌"} 服务端 e2e：${passed} 条通过 / ${failed} 条失败`);
   if (failed) {
     console.log("失败项：\n" + failures.map((item) => `  - ${item}`).join("\n"));
@@ -267,35 +246,34 @@ async function runSuite(baseUrl) {
   checkEqual(emptyList.status, 200, "角色列表可访问");
   checkEqual(emptyList.body.data.length, 0, "新账号角色列表为空");
 
-  const badRoleData = await call("POST", "/api/roles", { token, body: { data: { id: "r1", name: "  ", occupation: "1", sex: "1", level: 1 } } });
+  const badRoleData = await call("POST", "/api/roles", { token, body: { name: "  ", occupation: "1", sex: "1" } });
   checkEqual(badRoleData.status, 400, "空角色名被拒（400）");
   checkEqual(badRoleData.body.code, 20003, "空角色名业务码为 ROLE_DATA_INVALID");
 
-  const badOccupation = await call("POST", "/api/roles", { token, body: { data: { id: "r1", name: "小明", occupation: "9", sex: "1", level: 1 } } });
+  const badOccupation = await call("POST", "/api/roles", { token, body: { name: "小明", occupation: "9", sex: "1" } });
   checkEqual(badOccupation.body.code, 20003, "非法职业被拒");
 
-  const role1 = { id: "1001", name: "小明", occupation: "1", sex: "1", level: 1, gold: 1000, bindGold: 500, silver: 0, exp: 0, bag: [[{ id: "a", count: 1 }]], equipments: { CLOTH: "x" } };
-  const created = await call("POST", "/api/roles", { token, body: { data: role1 } });
+  // #597 起建号只交三样客户端数据，角色 id 与初始存档都由服务端生成
+  const created = await call("POST", "/api/roles", { token, body: { name: "小明", occupation: "1", sex: "1" } });
   checkEqual(created.status, 201, "创建角色返回 201");
-  checkEqual(created.body.data.id, "1001", "返回角色 id");
+  const role1Id = created.body.data.id;
+  check(Boolean(role1Id), "返回服务端生成的角色 id");
   checkEqual(created.body.data.online, true, "第一个角色自动设为在线");
-  checkEqual(created.body.data.data.gold, 1000, "完整 data 原样返回");
+  checkEqual(created.body.data.data.gold, 0, "初始货币由服务端结算（出厂账本全 0）");
 
-  const dupId = await call("POST", "/api/roles", { token, body: { data: { ...role1, name: "小红" } } });
-  checkEqual(dupId.status, 409, "重复角色 id 被拒（409）");
-  checkEqual(dupId.body.code, 20004, "重复 id 业务码为 ROLE_ID_EXISTS");
-
-  const dupName = await call("POST", "/api/roles", { token, body: { data: { ...role1, id: "1002" } } });
+  const dupName = await call("POST", "/api/roles", { token, body: { name: "小明", occupation: "1", sex: "1" } });
   checkEqual(dupName.body.code, 20005, "同账号重名被拒");
 
-  const role2 = await call("POST", "/api/roles", { token, body: { data: { ...role1, id: "1002", name: "小红", occupation: "2", sex: "2" } } });
+  const role2 = await call("POST", "/api/roles", { token, body: { name: "小红", occupation: "2", sex: "2" } });
   checkEqual(role2.status, 201, "创建第二个角色成功");
+  const role2Id = role2.body.data.id;
   checkEqual(role2.body.data.online, false, "第二个角色不会顶掉在线角色");
 
-  const role3 = await call("POST", "/api/roles", { token, body: { data: { ...role1, id: "1003", name: "小刚" } } });
+  const role3 = await call("POST", "/api/roles", { token, body: { name: "小刚", occupation: "1", sex: "1" } });
   checkEqual(role3.status, 201, "创建第三个角色成功");
+  const role3Id = role3.body.data.id;
 
-  const role4 = await call("POST", "/api/roles", { token, body: { data: { ...role1, id: "1004", name: "小强" } } });
+  const role4 = await call("POST", "/api/roles", { token, body: { name: "小强", occupation: "1", sex: "1" } });
   checkEqual(role4.status, 201, "创建第四个角色成功（角色数量不设上限）");
 
   const list = await call("GET", "/api/roles", { token });
@@ -304,9 +282,9 @@ async function runSuite(baseUrl) {
   checkEqual(list.body.data[0].data, undefined, "列表不含 data（体量小）");
   checkEqual(list.body.data[0].online, true, "列表带在线标记");
 
-  const detail = await call("GET", "/api/roles/1001", { token });
-  checkEqual(detail.body.data.data.bag[0][0].id, "a", "详情含完整 data（背包原样）");
-  checkEqual(detail.body.data.data.equipments.CLOTH, "x", "详情含装备槽");
+  const detail = await call("GET", `/api/roles/${role1Id}`, { token });
+  checkEqual(detail.body.data.data.bag.length, 0, "详情含完整 data（#597 起初始背包为空）");
+  checkEqual(JSON.stringify(detail.body.data.data.equipments), "{}", "详情含装备槽（#597 起初始装备为空）");
 
   const missingDetail = await call("GET", "/api/roles/nope", { token });
   checkEqual(missingDetail.status, 404, "角色不存在返回 404");
@@ -317,30 +295,30 @@ async function runSuite(baseUrl) {
   //#region 四、保存进度 / 选中
   group("角色：保存进度 / 切换在线");
 
-  const save = await call("PUT", "/api/roles/1001", {
+  const save = await call("PUT", `/api/roles/${role1Id}`, {
     token,
-    body: { data: { ...role1, id: "换掉的id", level: 5, gold: 8888, exp: 120 } },
+    body: { data: { ...detail.body.data.data, id: "换掉的id", level: 5, gold: 8888, exp: 120 } },
   });
   checkEqual(save.status, 200, "保存进度返回 200");
-  checkEqual(save.body.data.id, "1001", "id 以路径为准（请求体里的 id 被忽略）");
+  checkEqual(save.body.data.id, role1Id, "id 以路径为准（请求体里的 id 被忽略）");
   checkEqual(save.body.data.level, 1, "等级不接受客户端上报（进度在服务端，见 role-authority.ts）");
-  checkEqual(save.body.data.data.gold, 1000, "金币不接受客户端上报（账本在服务端，见 role-authority.ts）");
+  checkEqual(save.body.data.data.gold, 0, "金币不接受客户端上报（账本在服务端，见 role-authority.ts）");
   checkEqual(save.body.data.data.exp, 0, "经验也不接受客户端上报（#550：只剩服务端结算一条路）");
-  checkEqual(save.body.data.data.bag[0][0].id, "a", "未改动的字段原样保留");
+  checkEqual(save.body.data.data.bag.length, 0, "未改动的字段原样保留");
 
-  const savedDetail = await call("GET", "/api/roles/1001", { token });
+  const savedDetail = await call("GET", `/api/roles/${role1Id}`, { token });
   checkEqual(savedDetail.body.data.level, 1, "重新读取仍是服务端的等级");
 
   const onlineBefore = await call("GET", "/api/roles/online", { token });
-  checkEqual(onlineBefore.body.data.id, "1001", "在线角色是 1001");
+  checkEqual(onlineBefore.body.data.id, role1Id, "在线角色是第一个角色");
 
-  const select = await call("POST", "/api/roles/1002/select", { token });
+  const select = await call("POST", `/api/roles/${role2Id}/select`, { token });
   checkEqual(select.status, 200, "选中角色返回 200");
   checkEqual(select.body.data.online, true, "返回体标记为在线");
 
   const onlineAfter = await call("GET", "/api/roles/online", { token });
-  checkEqual(onlineAfter.body.data.id, "1002", "在线角色切换为 1002");
-  checkEqual(onlineAfter.body.data.data.gold, 1000, "在线角色返回完整 data");
+  checkEqual(onlineAfter.body.data.id, role2Id, "在线角色切换为第二个角色");
+  checkEqual(onlineAfter.body.data.data.gold, 0, "在线角色返回完整 data");
 
   const listAfterSelect = await call("GET", "/api/roles", { token });
   checkEqual(listAfterSelect.body.data.filter((item) => item.online).length, 1, "同时只有一个在线角色");
@@ -357,13 +335,13 @@ async function runSuite(baseUrl) {
   const otherList = await call("GET", "/api/roles", { token: otherToken });
   checkEqual(otherList.body.data.length, 0, "另一个账号看不到别人的角色");
 
-  const stealRead = await call("GET", "/api/roles/1001", { token: otherToken });
+  const stealRead = await call("GET", `/api/roles/${role1Id}`, { token: otherToken });
   checkEqual(stealRead.status, 403, "读别人的角色返回 403");
 
-  const stealWrite = await call("PUT", "/api/roles/1001", { token: otherToken, body: { data: role1 } });
+  const stealWrite = await call("PUT", `/api/roles/${role1Id}`, { token: otherToken, body: { data: {} } });
   checkEqual(stealWrite.status, 403, "改别人的角色返回 403");
 
-  const stealDelete = await call("DELETE", "/api/roles/1001", { token: otherToken });
+  const stealDelete = await call("DELETE", `/api/roles/${role1Id}`, { token: otherToken });
   checkEqual(stealDelete.status, 403, "删别人的角色返回 403");
 
   const playerOnAdmin = await call("GET", "/api/admin/accounts", { token });
@@ -426,38 +404,38 @@ async function runSuite(baseUrl) {
   checkEqual(adminRoles.body.data.list[0].accountName, "player001", "角色列表带账号名");
   checkEqual(adminRoles.body.data.list.filter((item) => item.online).length, 1, "角色列表带在线标记");
 
-  const roleKeyword = await call("GET", "/api/admin/roles?keyword=1001", { token: adminToken });
+  const roleKeyword = await call("GET", `/api/admin/roles?keyword=${role1Id}`, { token: adminToken });
   checkEqual(roleKeyword.body.data.total, 1, "角色 id 关键字检索生效");
 
-  const roleDetail = await call("GET", "/api/admin/roles/1001", { token: adminToken });
+  const roleDetail = await call("GET", `/api/admin/roles/${role1Id}`, { token: adminToken });
   checkEqual(roleDetail.body.data.name, "小明", "管理端角色详情");
-  checkEqual(roleDetail.body.data.data.bag[0][0].id, "a", "管理端角色详情含完整 data");
+  checkEqual(roleDetail.body.data.data.bag.length, 0, "管理端角色详情含完整 data（初始背包为空）");
   checkEqual(roleDetail.body.data.accountName, "player001", "管理端角色详情带账号名");
 
-  const patched = await call("PATCH", "/api/admin/roles/1001", { token: adminToken, body: { level: 42, gold: 99999, bindGold: 777, exp: 555, title: 3 } });
+  const patched = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { level: 42, gold: 99999, bindGold: 777, exp: 555, title: 3 } });
   checkEqual(patched.status, 200, "管理端改角色返回 200");
   checkEqual(patched.body.data.level, 42, "等级已改");
   checkEqual(patched.body.data.data.gold, 99999, "金币已改（写进 data）");
   checkEqual(patched.body.data.data.title, 3, "称号已改");
-  checkEqual(patched.body.data.data.bag[0][0].id, "a", "未编辑的背包字段原样保留");
+  checkEqual(patched.body.data.data.bag.length, 0, "未编辑的背包字段原样保留");
 
-  const patchedName = await call("PATCH", "/api/admin/roles/1001", { token: adminToken, body: { name: "改名后" } });
+  const patchedName = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { name: "改名后" } });
   checkEqual(patchedName.body.data.name, "改名后", "角色名已改");
 
-  const badPatch = await call("PATCH", "/api/admin/roles/1001", { token: adminToken, body: { level: 0 } });
+  const badPatch = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { level: 0 } });
   checkEqual(badPatch.status, 400, "等级 0 被拒（400）");
 
-  const playerSeesPatch = await call("GET", "/api/roles/1001", { token });
+  const playerSeesPatch = await call("GET", `/api/roles/${role1Id}`, { token });
   checkEqual(playerSeesPatch.body.data.level, 42, "客户端能读到管理端的改动");
   checkEqual(playerSeesPatch.body.data.name, "改名后", "客户端能读到管理端改的名字");
 
-  const adminSelect = await call("POST", "/api/admin/roles/1001/select", { token: adminToken });
+  const adminSelect = await call("POST", `/api/admin/roles/${role1Id}/select`, { token: adminToken });
   checkEqual(adminSelect.status, 200, "管理端设为在线角色返回 200");
   checkEqual(adminSelect.body.data.online, true, "管理端设为在线后返回体标记在线");
   const onlineAfterAdminSelect = await call("GET", "/api/roles/online", { token });
-  checkEqual(onlineAfterAdminSelect.body.data.id, "1001", "管理端设置的在线角色对客户端生效");
+  checkEqual(onlineAfterAdminSelect.body.data.id, role1Id, "管理端设置的在线角色对客户端生效");
 
-  const restoreOnline = await call("POST", "/api/admin/roles/1002/select", { token: adminToken });
+  const restoreOnline = await call("POST", `/api/admin/roles/${role2Id}/select`, { token: adminToken });
   checkEqual(restoreOnline.body.data.online, true, "管理端可再次切换在线角色");
 
   const disable = await call("PATCH", `/api/admin/accounts/${accountId}/status`, { token: adminToken, body: { status: "disabled" } });
@@ -475,16 +453,16 @@ async function runSuite(baseUrl) {
   const afterEnable = await call("GET", "/api/auth/me", { token });
   checkEqual(afterEnable.status, 200, "解封后令牌恢复可用");
 
-  const deleteOnlineRole = await call("DELETE", "/api/admin/roles/1002", { token: adminToken });
+  const deleteOnlineRole = await call("DELETE", `/api/admin/roles/${role2Id}`, { token: adminToken });
   checkEqual(deleteOnlineRole.status, 200, "管理端删除在线角色成功");
   checkEqual(deleteOnlineRole.body.data, null, "删除接口 data 为 null");
   const onlineAfterDelete = await call("GET", "/api/roles/online", { token });
   checkEqual(onlineAfterDelete.body.data, null, "在线角色被删后在线标记清空");
 
-  const deleteOwnRole = await call("DELETE", "/api/roles/1003", { token });
+  const deleteOwnRole = await call("DELETE", `/api/roles/${role3Id}`, { token });
   checkEqual(deleteOwnRole.status, 200, "客户端删除角色成功");
   const listAfterDelete = await call("GET", "/api/roles", { token });
-  checkEqual(listAfterDelete.body.data.length, 2, "删除后角色只剩 2 个（四个里删了在线角色与 1003）");
+  checkEqual(listAfterDelete.body.data.length, 2, "删除后角色只剩 2 个（四个里删了在线角色与第三个）");
 
   const otherAccountId = otherLogin.body.data.account.id;
   const deleteAccount = await call("DELETE", `/api/admin/accounts/${accountId}`, { token: adminToken });

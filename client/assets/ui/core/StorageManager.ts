@@ -217,7 +217,11 @@ export default class StorageManager {
   static ensureRoleDefaults(role: Role) {
     MpHelper.ensureDefaults(role);
     HpHelper.ensureDefaults(role);
-    (Object.keys(role.equipments) as EQUIPMENT_TYPE[]).forEach((slot) => {
+    // #597 起服务端建号发空对象（槽位名是客户端枚举的事）—— 按 EQUIPMENT_TYPE 枚举补齐缺失槽；
+    // 旧存档存的是装备快照对象，迁移为只存装备 id（新格式经配置表实时解析，改配置重启即生效）
+    role.equipments ??= {} as Role["equipments"];
+    (Object.keys(EQUIPMENT_TYPE) as Array<keyof typeof EQUIPMENT_TYPE>).forEach((key) => {
+      const slot = EQUIPMENT_TYPE[key];
       const value = role.equipments[slot] as unknown;
       if (value && typeof value === "object") {
         // 旧快照对象：取它的 id 作为槽位值（快照无 id 或 id 不在配置表时视为空槽）

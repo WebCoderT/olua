@@ -379,7 +379,7 @@ async function expectFailure(action) {
     /await RoleApi\.select\(roleId\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource),
     "进游戏：服务端 select 返回完整数据（含修订号）→ 写本地缓存",
   );
-  check(/await RoleApi\.create\(\{ data: new Role\(name, occupation, sex\) as unknown as Record<string, unknown> \}\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource), "创建角色：服务端落库后回传的完整数据（含修订号）写进缓存");
+  check(/await RoleApi\.create\(\{ name, occupation, sex \}\)/.test(selectorSource) && /StorageManager\.cacheServerRole\(detail\)/.test(selectorSource), "创建角色：只交三样客户端数据（#597），服务端落库后回传的完整数据（含修订号）写进缓存");
   const removeIndex = selectorSource.indexOf("await RoleApi.remove(roleId)");
   const deleteIndex = selectorSource.indexOf("StorageManager.deleteRole(roleId)");
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");

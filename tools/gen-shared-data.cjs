@@ -24,7 +24,7 @@
  * ===========================================================================
  * 服务端是 `tsc -p tsconfig.build.json` 单包编译，源码根就是 `server/src`（产物 `dist/main.js`）。
  * 把一份 .ts 放到 `server/` 之外，TypeScript 会因 `rootDir` 把它算进公共根目录，
- * 产物会变成 `dist/server/src/main.js` —— 连带 7 套 e2e、Dockerfile、deploy 脚本一起改。
+ * 产物会变成 `dist/server/src/main.js` —— 连带 e2e、Dockerfile、deploy 脚本一起改。
  * 代价与收益不匹配，所以文件放在服务端源码树内的**中立位置**（`src/shared/`，与 modules 平级），
  * 管理端按相对路径直接 import 同一份（Vite 打包，无 rootDir 约束）。
  * **只有这一个文件** —— 两端读的是同一个文件，不是「两份同步的副本」。
@@ -146,8 +146,6 @@ function load(cfg) {
     equipmentMaps: EQUIPMENT_MAPS.map((name) => [name, missing(`equipments.${name}`, equipments[name])]),
     skillData: missing("skill-data", cfg("skill-data").skillData),
     occupations: missing("role.occupations", cfg("role").occupations),
-    // 建号初始货币（#548）：服务端 create 拿它当上界（客户端 `new Role(...)` 里那三个常量）
-    roleInitialCurrency: pickRoleInitialCurrency(missing("role", cfg("role"))),
     items: missing("items", cfg("items").items),
     // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
     // #588：怪物条目不再从客户端 configs 取 —— 数值唯一来源是服务端 monster-seed.ts，
@@ -966,30 +964,6 @@ function pickList(list, project) {
  * （曲线的段边界一改就两端分裂，且不会报错）。所以这里把 1..roleMaxLevel 的
  * **采样结果**直接进快照：两端读同一组数字，没有公式可漂移。
  */
-/**
- * 建号初始货币（#548）
- *
- * 客户端 `entities/Role` 的构造函数用 `configs/role` 的三个常量填 `gold / bindGold / silver`，
- * 服务端 `create` 拿这份做**上界**：角色第一次拿到的钱不可能超过配置给的起点。
- * 不校验的话，改包把 `initialGold` 改成九位数就能开号即暴富（存档里的账本字段服务端已经
- * 回填了，但「第一次写进去」的那一版是客户端给的）。
- */
-function pickRoleInitialCurrency(role) {
-  const out = {};
-  for (const [key, name] of [
-    ["gold", "initialGold"],
-    ["bindGold", "initialBindGold"],
-    ["silver", "initialSilver"],
-  ]) {
-    const value = Number(role[name]);
-    if (!Number.isFinite(value) || value < 0) {
-      throw new Error(`configs/role 的 ${name} 不是非负数：${role[name]}`);
-    }
-    out[key] = round(value);
-  }
-  return out;
-}
-
 function pickEquipmentRecyclePrices(growth) {
   const sample = growth.equipmentRecyclePrice;
   if (typeof sample !== "function") throw new Error("configs/growth 没有导出 equipmentRecyclePrice（改名了？）");
@@ -1089,9 +1063,6 @@ ${jsonTable("DROP_DEFAULT", "兜底掉落表（#254；怪物既无独立表也�
 
 /** 装备回收基础价（下标 = 等级 - 1；绑定元宝，普通·人级。变体价 = 本表 × 前后缀倍率再 Math.round，与客户端 buildEquipmentMap 同口径） */
 export const EQUIPMENT_RECYCLE_PRICES: number[] = ${JSON.stringify(s.equipmentRecyclePrices)};
-
-/** 建号初始货币（#548）：服务端 create 只把它当**上界**，客户端报更多一律按这份夹紧 */
-export const ROLE_INITIAL_CURRENCY: Record<"gold" | "bindGold" | "silver", number> = ${JSON.stringify(s.roleInitialCurrency)};
 
 /** 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；特殊价是运营数据不进快照 */
 export const MALL: Record<string, number> = {

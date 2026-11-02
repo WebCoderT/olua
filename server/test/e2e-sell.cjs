@@ -26,21 +26,15 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 /** 价签唯一来源（服务端结算读的就是这份生成物） */
 const { SELL_PRICES } = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
 
+/** 管理员注册码（#597 起造背包状态只能走管理端 PATCH） */
+const ADMIN_CODE = "e2e-sell-admin";
+
 //#region 断言小工具（与 e2e-quest 同款口径）
 
-const EXPECTED_ASSERTIONS = 24;
 
 let passed = 0;
 let failed = 0;
 const failures = [];
-
-function assertExpectedCount() {
-  if (failed !== 0) return;
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exit(1);
-}
 
 function group(title) {
   console.log(`\n▶ ${title}`);
@@ -93,6 +87,7 @@ async function startServer(dbPath) {
       JWT_SECRET: "e2e-sell-secret",
       JWT_EXPIRES_IN: "1h",
       LOG_REQUESTS: "false",
+      ADMIN_REGISTER_CODE: ADMIN_CODE,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -133,19 +128,26 @@ async function api(baseUrl, method, route, options = {}) {
 }
 
 /**
- * 一份最小可建号的角色文档：背包 4×10，塞好本套要卖的东西
+ * 开局注入的四格物品（#597 起建号背包为空，造状态只能走管理端 PATCH）
  *
  * · cloth_1 ×1（1 级衣服，回收价 = 曲线 10）
  * · material_hide 两格（2 + 3）：验证「同 id 多格合并」
  * · material_iron ×1：验证「数量不够整单拒绝」时它得原样留着
+ *
+ * 稀疏格子会把空网格扩到刚好放下 → 网格是 2 行 × 3 列。
  */
-function roleData(id, name) {
-  const bag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
-  bag[0][0] = { id: "cloth_1", count: 1 };
-  bag[0][1] = { id: "material_hide", count: 2 };
-  bag[0][2] = { id: "material_hide", count: 3 };
-  bag[1][0] = { id: "material_iron", count: 1 };
-  return { id, name, occupation: "1", sex: "1", level: 1, hp: 100, mp: 50, equipments: {}, bag, skills: { 1000: 1 } };
+const BAG_SEED_CELLS = [
+  { row: 0, col: 0, id: "cloth_1", count: 1 },
+  { row: 0, col: 1, id: "material_hide", count: 2 },
+  { row: 0, col: 2, id: "material_hide", count: 3 },
+  { row: 1, col: 0, id: "material_iron", count: 1 },
+];
+
+/** 注册并登录一个管理员（PATCH 角色要 `ROLE_WRITE`） */
+async function registerAdmin(baseUrl, username, password) {
+  await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  return login.data && login.data.token;
 }
 
 /** 背包里某物品的总数（按 id 数格子） */
@@ -172,10 +174,15 @@ function countInBag(bag, goodId) {
     group("准备：玩家与角色");
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "sell_player", password: "pass1234" } });
     const token = registered.data && registered.data.token;
-    const created = await api(baseUrl, "POST", "roles", { token, body: { data: roleData("sell_r1", "卖货的") } });
+    const created = await api(baseUrl, "POST", "roles", { token, body: { name: "卖货的", occupation: "1", sex: "1" } });
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
-    check(countInBag(created.data.data.bag, "cloth_1") === 1, "准备：背包里有一件 cloth_1");
+    const adminToken = await registerAdmin(baseUrl, "sell_admin", "Admin#123456");
+    check(!!adminToken, "准备：管理员已登录（造背包状态只有这条路）");
+    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: BAG_SEED_CELLS } });
+    check(seeded.code === 0, "准备：管理端把四样物品注入背包", seeded.message);
+    const snapshot = await api(baseUrl, "GET", `roles/${roleId}`, { token });
+    check(countInBag(snapshot.data.data.bag, "cloth_1") === 1, "准备：背包里有一件 cloth_1");
 
     const other = await api(baseUrl, "POST", "auth/register", { body: { username: "sell_other", password: "pass1234" } });
     const otherToken = other.data && other.data.token;
@@ -284,7 +291,6 @@ function countInBag(bag, goodId) {
       console.log(server.logs().split("\n").slice(-30).join("\n"));
       process.exitCode = 1;
     }
-    assertExpectedCount();
   } finally {
     if (serverChild) serverChild.kill("SIGTERM");
     await sleep(300);

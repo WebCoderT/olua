@@ -46,7 +46,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run start` | 跑已构建产物 |
 | `npm run swagger:emit` | 编译 + 由源码产出 `openapi.json`（契约的唯一来源） |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` —— **重新生成两端接口文件** |
-| `npm run test:e2e` | 主 e2e（248 条断言） |
+| `npm run test:e2e` | 主 e2e |
 | `npm run test:e2e:roles` | 角色管理专项（150 条） |
 | `npm run test:e2e:guard` | 运营与安全底座专项（283 条） |
 | `npm run test:e2e:mail` | 邮件通道专项（120 条；**假发信器**，不需要 SMTP 服务器） |
@@ -142,7 +142,7 @@ server/
 │   │   ├── database.service.ts     连接 / 建表 / ensureColumn 补列 / ensureSuperAdmin 兜底
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                 行类型与 JSON 列解析
-│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect 39 个仓储
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect
 │   ├── modules/
 │   │   ├── auth/                   玩家注册登录（JWT、令牌版本）
 │   │   ├── roles/                  角色 CRUD / 选角在线 / 存档推送（含 20006 / 20007 判定）
@@ -180,30 +180,30 @@ server/
 │       └── emit.ts                 ← 离线产出 openapi.json
 ├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 scripts/lib/db-tooling.cjs）
 ├── test/
-│   ├── e2e.cjs                     248 条断言（真实起服务 + 真实 HTTP 请求）
-│   ├── e2e-roles.cjs               150 条
-│   ├── e2e-guard.cjs               283 条
-│   ├── e2e-mail.cjs                120 条（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
-│   ├── e2e-account-email.cjs       28 条（邮箱可见性 / 补录去重 / 发信按账号兜底）
-│   ├── e2e-realtime.cjs            72 条（票据换连接 / 握手拒连 / 心跳与顶连接 / 优雅关闭）
-│   ├── e2e-combat.cjs              131 条（伤害结算上移：服务端算伤 / 幂等重发 / 目标查世界实例 / 清账不复活）
-│   ├── e2e-world.cjs               24 条（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
-│   ├── e2e-dual.cjs                14 条（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
-│   ├── e2e-zone.cjs                32 条（区服：注册选区 / 合并区边界 / 世界按区隔离 / 合并生效与代际失效）
-│   ├── e2e-guild.cjs               60 条（帮会：建帮与重名 / 申请覆盖 / 审批权限 / 人数上限 / 踢人转让退出 / 解散级联）
-│   ├── e2e-social.cjs              47 条（社交：好友申请与互加直接同意 / 拒绝不留痕 / 撤回与删除 / 敌人单向 / 镜像行 / 互见帧身份）
-│   ├── e2e-chat.cjs                35 条（聊天：世界同图广播 / 正文净化 / 限频读配置 / 帮会准入查库 / 私聊校验与离线整条拒绝）
-│   ├── e2e-quest.cjs               48 条（任务：接取门控 / talk·kill·collect 三目标推进 / 交付发奖一次落库 / 日常领奖后可重接）
-│   ├── e2e-sell.cjs                24 条（出售：快照价结算 / 同 id 多格合并 / 客户端报价无效 / 不可卖 / 整单拒绝 / 乐观锁 / 越权）
-│   ├── e2e-blocks.cjs              50 条（屏蔽与举报：单向拉黑 / 聊天与互见服务端过滤 / 举报去重与落库 / 管理端只读列表）
-│   ├── e2e-party.cjs               87 条（队伍：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出移交 / 解散 / 经验分成 / 屏蔽优先）
-│   ├── e2e-rank.cjs                56 条（排行榜：三榜名次与数值 / 并列竞赛排名 / 分页与 size 夹上限 / me 榜外名次 / 快照与定时重算 / 条目八字段）
-│   ├── e2e-achievement.cjs         39 条（成就：快照下发 / 累计型事件记账 / 状态型现算不落进度 / 领取与背包满转邮件 / 管理端配置与拒删）
-│   ├── e2e-game-mail.cjs           51 条（游戏内邮件：收件箱与未读·未领 / 已读幂等 / 领取与三种错误码 / 附件没领拒删 / 一键领取领到背包满 / 成就兜底转邮件 / 频道：四栏角标·按栏领取·非法频道 40000·社交与战斗投递）
-│   ├── e2e-admin-mail.cjs          29 条（管理端消息补发 #437：观察员 403 / 玩家令牌 401 / 频道收窄 / 角色不存在 404 / 形状校验 / 附件领到手 / reward 落位 / 离线收件 / 审计留痕 / 文档分组）
-│   ├── e2e-mail-expiry.cjs         15 条（收件箱保质期 #439：ttl 写入 / 读口即时消失 / 过期单封操作按不存在 / 清理判据：带未领附件不删·空永不删 / 批量上限跨批）
-│   ├── e2e-ui-effect.cjs           27 条（界面特效 #594：观察员可读不可写 / seed 出厂值 / 没有新建·删除 / 数值边界 / key 404 / 保存追账 / 快照即最新 / 审计 / 文档契约）
-│   └── backup.cjs                  87 条（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
+│   ├── e2e.cjs（真实起服务 + 真实 HTTP 请求）
+│   ├── e2e-roles.cjs
+│   ├── e2e-guard.cjs
+│   ├── e2e-mail.cjs（假发信器：入队 / 投递 / 重试上限 / 未启用时禁用）
+│   ├── e2e-account-email.cjs（邮箱可见性 / 补录去重 / 发信按账号兜底）
+│   ├── e2e-realtime.cjs（票据换连接 / 握手拒连 / 心跳与顶连接 / 优雅关闭）
+│   ├── e2e-combat.cjs（伤害结算上移：服务端算伤 / 幂等重发 / 目标查世界实例 / 清账不复活）
+│   ├── e2e-world.cjs（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
+│   ├── e2e-dual.cjs（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
+│   ├── e2e-zone.cjs（区服：注册选区 / 合并区边界 / 世界按区隔离 / 合并生效与代际失效）
+│   ├── e2e-guild.cjs（帮会：建帮与重名 / 申请覆盖 / 审批权限 / 人数上限 / 踢人转让退出 / 解散级联）
+│   ├── e2e-social.cjs（社交：好友申请与互加直接同意 / 拒绝不留痕 / 撤回与删除 / 敌人单向 / 镜像行 / 互见帧身份）
+│   ├── e2e-chat.cjs（聊天：世界同图广播 / 正文净化 / 限频读配置 / 帮会准入查库 / 私聊校验与离线整条拒绝）
+│   ├── e2e-quest.cjs（任务：接取门控 / talk·kill·collect 三目标推进 / 交付发奖一次落库 / 日常领奖后可重接）
+│   ├── e2e-sell.cjs（出售：快照价结算 / 同 id 多格合并 / 客户端报价无效 / 不可卖 / 整单拒绝 / 乐观锁 / 越权）
+│   ├── e2e-blocks.cjs（屏蔽与举报：单向拉黑 / 聊天与互见服务端过滤 / 举报去重与落库 / 管理端只读列表）
+│   ├── e2e-party.cjs（队伍：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出移交 / 解散 / 经验分成 / 屏蔽优先）
+│   ├── e2e-rank.cjs（排行榜：三榜名次与数值 / 并列竞赛排名 / 分页与 size 夹上限 / me 榜外名次 / 快照与定时重算 / 条目八字段）
+│   ├── e2e-achievement.cjs（成就：快照下发 / 累计型事件记账 / 状态型现算不落进度 / 领取与背包满转邮件 / 管理端配置与拒删）
+│   ├── e2e-game-mail.cjs（游戏内邮件：收件箱与未读·未领 / 已读幂等 / 领取与三种错误码 / 附件没领拒删 / 一键领取领到背包满 / 成就兜底转邮件 / 频道：四栏角标·按栏领取·非法频道 40000·社交与战斗投递）
+│   ├── e2e-admin-mail.cjs（管理端消息补发 #437：观察员 403 / 玩家令牌 401 / 频道收窄 / 角色不存在 404 / 形状校验 / 附件领到手 / reward 落位 / 离线收件 / 审计留痕 / 文档分组）
+│   ├── e2e-mail-expiry.cjs（收件箱保质期 #439：ttl 写入 / 读口即时消失 / 过期单封操作按不存在 / 清理判据：带未领附件不删·空永不删 / 批量上限跨批）
+│   ├── e2e-ui-effect.cjs（界面特效 #594：观察员可读不可写 / seed 出厂值 / 没有新建·删除 / 数值边界 / key 404 / 保存追账 / 快照即最新 / 审计 / 文档契约）
+│   └── backup.cjs（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
 ├── data/                           SQLite 数据文件（不进版本库）
 └── .env.example · package.json · tsconfig.json · tsconfig.build.json
@@ -211,7 +211,7 @@ server/
 
 ## 数据模型
 
-47 张表，全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
+数据表全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
 
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
@@ -270,7 +270,7 @@ server/
 模块按职责分域：**gateway**（`realtime/`：HTTP 取票 + WS 入口 + 伤害结算）、**world**（`world/`：怪物实例与 tick）、**combat**（`combat/`：属性汇总与比对**纯函数**）、**存档**（`auth/` `roles/` `admin/` 与仓储层）。规矩有三条，全由 `tools/audit-server-boundaries.cjs` 机器把守：
 
 - **跨域 import 走白名单边**：不在这张表里的跨模块引用，CI 直接 fail —— 加新边 = 改 `ALLOWED_EDGES` / `REPO_EDGES` = 有意识的决策，而不是顺手 `import` 一下；
-- **仓储只由全局 `DatabaseModule` 装配**（39 个仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
+- **仓储只由全局 `DatabaseModule` 装配**（仓储都在它那里 provide + export）：业务模块的 providers 里再注册一个同名仓储类，会与全局单例并存出**第二个实例**（mail 踩过：本地又注册了一遍 `AccountRepository`）；
 - **combat 只许引基础层**（common / shared / config）：它被存档与结算两侧引用，往上引任何实现都会成环。
 
 ## 进程拆分：存档进程与实时进程（#175）
@@ -314,7 +314,7 @@ server/
    并且**每次请求都回查一次库** —— 封禁 / 删除 / 改口令因此即时生效，不用等令牌过期
 2. **权限点**（`PermissionGuard`，注册在 `AuthGuard` 之后）：直接用 `request.user.role` 不再查库
 
-权限点的唯一来源是 `src/common/constants/permission.ts`（26 个权限点 / 3 种角色）：
+权限点的唯一来源是 `src/common/constants/permission.ts`：
 
 | 角色 | 权限 |
 | --- | --- |
@@ -337,7 +337,7 @@ server/
 
 ## 接口与契约
 
-当前 **170 个接口 / 140 条路径 / 268 个模型**，按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
+接口按「谁能调」分三组（`common/constants/swagger-tags.ts` 声明，顺序即展示顺序）：
 
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |

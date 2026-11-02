@@ -299,19 +299,13 @@ Before #14 a status only had name / icon / duration; it now also carries combat 
 - **Why it used to be "badly offset"**: the old implementation took the camera `worldToScreen` **physical pixel** coordinates and subtracted half the **design resolution** — two systems off by a view scale factor (the larger the window the worse the offset, and on high-texture-resolution screens it flew clean off screen); it also switched the dialog's and two child nodes' anchors to 0 / 1 midway, so `Layout` re-laid the content against the new anchors and everything shifted again. Everything now uses **screen-centre coordinates** (`item cell world position − LayerManager.UILayer world position`, the same system as the persistent HUD such as the character column and minimap) and positions by config, with anchors fixed at 0.5/0.5 — **do not** go back to positioning UI with `worldToScreen`
 - Regression tests: `node tools/test-good-detail-placement.cjs` (dialog fully visible across the 1920×1080 canvas × 25 anchor points, prefers the side toward the middle, does not cover the item when there is room, oversized dialog centred with no NaN, bounds taken from `designResolution`, pure function does not mutate its input, plus source assertions for the wiring and for "the old bug must not come back"; 36 checks in total)
 
-### Why does a new character's bag hold a pile of identically named weapons? How do I change the starting list?
+### Why is a new character's bag empty? How do I hand out starter items?
 
-Starting items come entirely from `configs/role.getNewRoleEquipments`, handed out in this order:
+Since #597 character creation lives entirely on the server: the client sends only name / occupation / sex, and the server writes a factory document — **empty bag (`bag: []`), empty equipment slots, zeroed ledger**. No starter items are granted anymore (the old `getNewRoleEquipments` / `initialGold` starter-gift configs are gone for good).
 
-1. **5 generic pieces**: ring / necklace / boots / helmet / belt (the `*_1` entry of each table);
-2. **every base weapon (20 pieces) + every base garment (12 pieces)**: that is, the "normal·mortal" entry of each table (`getBaseEquipments`);
-3. **the remaining prefix/suffix variants of weapons at a chosen level**: controlled by `configs/role.newRoleVariantWeaponLevel` (default `1`, set `0` to disable). Level 1 has only one weapon, `weapon_1`, so all 15 of its quality variants (normal·mortal → supreme·divine) go into the bag together — from birth you can compare the **appearance and borders** of different prefixes and suffixes side by side.
-
-So a new character starts with `5 + 20 + 12 + 14 = 51` pieces, and that pile of identically named weapons is those 15 qualities of the same level 1 weapon.
-
-- **To hand out other levels or other slots as a set**: change the level in `newRoleVariantWeaponLevel`, or add one more line like `getEquipmentsByLevel(clothes, level)` inside the function (`configs/equipments.getEquipmentsByLevel` is the generic query that returns every variant at a level).
-- **Capacity ceiling**: the bag has only `bagRow × bagCol = 7 × 11 = 77` cells. Anything beyond that is **truncated and dropped** by the `entities/Role` constructor with a `[role] N starter items exceed bag capacity 77 cells…` warning — seeing that log means it is time to trim the list or enlarge `configs/role.bagRow / bagCol` (which are also the source of the bag interface's cell count).
-- Regression tests: `node tools/test-new-role-bag.cjs` (all 15 variants present and unduplicated, every list item parseable by the item registry, capacity not exceeded, existing base pieces still handed out, bag structure not shared between two characters, source wiring assertions; 32 checks in total)
+- **To give a new character items**: use the admin structured edit `PATCH /admin/roles/:id` with sparse bag cells (`bag: [{row, col, id, count}]`; an empty array clears the bag), or in-game mail from operations — the `bag` in a client save is overwritten with the server's copy, so tampered saves have no effect.
+- **Bag size**: `bagRow × bagCol = 7 × 11` (`configs/role`) is still a client-side config the server does not know — the save semantics are "content from the server, shape from the client".
+- **Starter skills** (all 1xxx at level 1) come from the server's factory document; `configs/role.initialSkills` remains only for save-fallback and test sandboxes.
 
 ### How does the mall work? Where do I add goods or change prices?
 

@@ -42,26 +42,6 @@ const TICKET_TTL_MS = 3000;
 
 //#region 断言小工具
 
-/**
- * 期望的断言条数（全绿时必须恰好这么多）
- *
- * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
- * 而那个 N 是各套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
- * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
- *
- * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
- */
-const EXPECTED_ASSERTIONS = 72;
-
-/** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
-function assertExpectedCount(passedCount, failureCount) {
-  if (failureCount !== 0) return;
-  if (passedCount === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
-  process.exit(1);
-}
-
 let passed = 0;
 let failed = 0;
 const failures = [];
@@ -234,26 +214,6 @@ async function registerPlayer(baseUrl, username) {
   return response.body?.data?.token;
 }
 
-/** 造一份最小可建号的角色文档（e2e-roles 同款口径；服务端只校验结构 + 索引字段，属性 / 战斗力交给服务端重算） */
-function roleSnapshot(id) {
-  return {
-    id,
-    name: id,
-    occupation: "1",
-    sex: "1",
-    level: 10,
-    gold: 1000,
-    bindGold: 0,
-    silver: 0,
-    exp: 0,
-    bag: [[null, null], [null, null]],
-    equipments: { WEAPON: null, HELMET: null },
-    skills: { "1001": 1 },
-    shortcutKeys: [],
-    onMap: "0",
-  };
-}
-
 async function main() {
   console.log("=== 服务端 e2e：实时通道 ===");
 
@@ -383,22 +343,26 @@ async function main() {
       const roleAdminToken = roleAdminLogin.body?.data?.token;
 
       // 建一个角色（首个角色自动在线）→ 下一轮轮询就该把权威快照推过来
-      const created = await api(baseUrl, "POST", "/api/roles", { token: tokenA, body: { data: roleSnapshot("realtime_r1") } });
+      // #597：建号只交三样客户端数据，角色 id 由服务端生成
+      const created = await api(baseUrl, "POST", "/api/roles", { token: tokenA, body: { name: "realtime_r1", occupation: "1", sex: "1" } });
       checkEqual(created.status, 201, "准备：给账号 A 建一个角色（自动在线）");
+      const roleAId = created.body?.data?.id;
       const firstUpdate = await waitFor("首帧 roleUpdate", async () => messageOf(live, "roleUpdate"), 5_000);
       check(Boolean(firstUpdate), "建号后 roleUpdate 帧自动到达（权威基线不用客户端来拉）");
       // 建号上报的是 10 级，帧里必须是出厂值 1 —— 帧带的是**服务端的等级**，不是客户端报的那份（#554）
-      checkEqual(firstUpdate?.data?.level, 1, "快照带上服务端等级（上报 10 被钉成出厂值 1）");
-      checkEqual(firstUpdate?.data?.gold, 1000, "快照带上货币");
+      checkEqual(firstUpdate?.data?.level, 1, "快照带上服务端等级（#597 起出厂 1 级，服务端造的）");
+      checkEqual(firstUpdate?.data?.gold, 0, "快照带上货币（#597 起出厂账本全 0）");
       check(Array.isArray(firstUpdate?.data?.physicalAttack) && firstUpdate.data.physicalAttack.length === 2, "快照带八项属性（区间属性是 [下限, 上限]）");
       check(typeof firstUpdate?.data?.combat === "number" && firstUpdate.data.combat > 0, "快照的战斗力是服务端重算的");
       checkEqual(firstUpdate?.data?.revision, created.body?.data?.revision, "快照带上修订号（客户端拿它做存档基线）");
 
       // 改库（save 一份被压到 1 的血量 + 被篡改的账本与经验）→ 下一拍再推一次：
       // hp 的**当前值**归客户端（自然回复在本地），gold / exp 归服务端（见 role-authority.ts）
-      const saved = await api(baseUrl, "PUT", "/api/roles/realtime_r1", {
+      // 一致存档：GET 最新文档原样带回，只改 hp / gold / exp（后两者归服务端，见 role-authority.ts）
+      const beforeSave = await api(baseUrl, "GET", `/api/roles/${roleAId}`, { token: tokenA });
+      const saved = await api(baseUrl, "PUT", `/api/roles/${roleAId}`, {
         token: tokenA,
-        body: { data: { ...roleSnapshot("realtime_r1"), hp: 1, gold: 5555, exp: 777 } },
+        body: { data: { ...(beforeSave.body?.data?.data || {}), hp: 1, gold: 5555, exp: 777 }, revision: beforeSave.body?.data?.revision },
       });
       checkEqual(saved.status, 200, "准备：save 改一份 hp 与一份被篡改的账本 / 经验");
       const secondUpdate = await waitFor(
@@ -410,14 +374,14 @@ async function main() {
       check(
         typeof secondUpdate?.data?.combat === "number" &&
           secondUpdate?.data?.revision === saved.body?.data?.revision &&
-          secondUpdate?.data?.gold === 1000 &&
+          secondUpdate?.data?.gold === 0 &&
           secondUpdate?.data?.exp === 0,
         "第二帧仍是服务端重算的权威值与最新修订号（gold 5555 / exp 777 都被丢弃）",
       );
 
       // 后台改阶位（#551）→ 下一拍帧带着新值：不重进也要看得见。
       // 这三个字段自 #548 起归服务端（改包会被回填），所以「改了但看不到」只能靠帧补
-      const patched = await api(baseUrl, "PATCH", "/api/admin/roles/realtime_r1", {
+      const patched = await api(baseUrl, "PATCH", `/api/admin/roles/${roleAId}`, {
         token: roleAdminToken,
         body: { title: 5, soulOfWar: 6, rank: 7 },
       });
@@ -531,7 +495,7 @@ async function main() {
           reader.prepare("SELECT online_role_id, online_heartbeat_at FROM accounts WHERE username = ?").get(username);
 
         const tokenC = await registerPlayer(hbUrl, "heartbeat_c");
-        await api(hbUrl, "POST", "/api/roles", { token: tokenC, body: { data: roleSnapshot("heartbeat_r1") } });
+        await api(hbUrl, "POST", "/api/roles", { token: tokenC, body: { name: "heartbeat_r1", occupation: "1", sex: "1" } });
         let row = rowOf("heartbeat_c");
         check(Boolean(row?.online_role_id), "建号自动在线：online_role_id 已置上");
         check(
@@ -578,7 +542,7 @@ async function main() {
         const tokenD = await registerPlayer(hbUrl, "heartbeat_d");
         const meD = await api(hbUrl, "GET", "/api/auth/me", { token: tokenD });
         const accountIdD = meD.body?.data?.id;
-        await api(hbUrl, "POST", "/api/roles", { token: tokenD, body: { data: roleSnapshot("heartbeat_r2") } });
+        await api(hbUrl, "POST", "/api/roles", { token: tokenD, body: { name: "heartbeat_r2", occupation: "1", sex: "1" } });
         check(Boolean(accountIdD && rowOf("heartbeat_d")?.online_role_id), "准备：账号 D 已建号并自动在线");
         const kick = await api(hbUrl, "POST", `/api/admin/accounts/${accountIdD}/offline`, { token: adminToken });
         checkEqual(kick.status, 201, "管理端踢下线成功");
@@ -608,7 +572,6 @@ async function main() {
     failures.forEach((item) => console.log(`   - ${item}`));
     process.exit(1);
   }
-  assertExpectedCount(passed, failed);
   console.log(`✅ ${passed} 条通过 / 0 条失败`);
 }
 

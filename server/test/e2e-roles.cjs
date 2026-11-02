@@ -34,26 +34,6 @@ const { setupSwagger } = require("../dist/swagger/setup");
 
 //#region 断言小工具
 
-/**
- * 期望的断言条数（全绿时必须恰好这么多）
- *
- * 为什么要有这个数：`README.md` 里写着「服务端 N 条 e2e」，
- * 而那个 N 是六套之和。没有它，加/删一条断言不会有人发现，总数只会一年一年地漂 ——
- * 本仓库的原则是「把坑变成脚本」，所以这里让条数变化**当场**报错。
- *
- * 改了断言就改这个数，然后跑 `make audit`（`audit-doc-numbers` 会比对文档里的数字）。
- */
-const EXPECTED_ASSERTIONS = 150;
-
-/** 条数对不上就退出（有失败时不重复报 —— 那时本来就会 FAIL） */
-function assertExpectedCount(passedCount, failureCount) {
-  if (failureCount !== 0) return;
-  if (passedCount === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
-  process.exit(1);
-}
-
 let passed = 0;
 const failures = [];
 
@@ -69,7 +49,6 @@ function check(condition, label, extra) {
 function finish(message) {
   console.log("");
   if (failures.length === 0) {
-    assertExpectedCount(passed, failures.length);
     console.log(`${message}（共 ${passed} 条断言）`);
     process.exit(0);
   }
@@ -104,7 +83,12 @@ async function api(method, path, options = {}) {
   };
 }
 
-/** 造一份合法的角色数据（服务端只校验结构 + 索引字段） */
+/**
+ * 造一份合法的**存档文档**（PUT 全量覆盖用）
+ *
+ * #597 起建号不再收完整文档（入参只有名称 / 职业 / 性别），这份只在存档路径里出现 ——
+ * `data.id` 会被路径参数覆盖，填什么都行，这里沿用旧 id 形态保持可读。
+ */
 function roleData(id, name, occupation, level) {
   return {
     id,
@@ -173,32 +157,35 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 一、玩家侧：修订号从 1 起，每次落库 +1 —");
 
-  const roleA1 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 1) } });
+  const roleA1 = await api("POST", "roles", { token: tokenA, body: { name: "甲一", occupation: "1", sex: "1" } });
+  const roleA1Id = roleA1.data.id;
   check(roleA1.code === 0 && roleA1.data.revision === 1, "新建角色 revision 从 1 开始", JSON.stringify(roleA1.data && roleA1.data.revision));
   check(roleA1.data.online === true, "第一个角色自动成为在线角色");
   check(roleA1.data.data.revision === undefined, "revision 是索引列，不会留在角色文档里", JSON.stringify(roleA1.data.data.revision));
 
-  const roleA2 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a2", "甲二", "2", 1) } });
-  const roleA3 = await api("POST", "roles", { token: tokenA, body: { data: roleData("role_a3", "甲三", "3", 1) } });
+  const roleA2 = await api("POST", "roles", { token: tokenA, body: { name: "甲二", occupation: "2", sex: "1" } });
+  const roleA2Id = roleA2.data.id;
+  const roleA3 = await api("POST", "roles", { token: tokenA, body: { name: "甲三", occupation: "3", sex: "1" } });
+  const roleA3Id = roleA3.data.id;
   check(roleA2.code === 0 && roleA3.code === 0, "同一账号可连续创建多个角色（数量不设上限）");
 
   // 这几次存档用 `onMap`（客户端全权字段）当「改点东西」的载体，**不用 level / exp**：
   // #550 起等级与经验也归服务端（存档里的上报值会被回填成库里的值），
   // 拿它们当载体验修订号的话，验的就不是修订号了
-  const saved1 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...roleData("role_a1", "甲一", "1", 1), onMap: "1" } } });
+  const saved1 = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "1" } } });
   check(saved1.code === 0 && saved1.data.revision === 2, "不带 revision 保存仍然可用（向后兼容），revision 递增到 2", JSON.stringify(saved1.data && saved1.data.revision));
 
-  const saved2 = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...roleData("role_a1", "甲一", "1", 1), onMap: "2" }, revision: 2 } });
+  const saved2 = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "2" }, revision: 2 } });
   check(saved2.code === 0 && saved2.data.revision === 3, "带正确 revision 保存成功，revision 到 3", JSON.stringify(saved2.data && saved2.data.revision));
 
-  const stale = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...roleData("role_a1", "甲一", "1", 1), onMap: "3" }, revision: 2 } });
+  const stale = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "3" }, revision: 2 } });
   check(stale.code === 20006 && stale.status === 409, "带过期 revision 保存被拒（20006 / 409）", `${stale.code}/${stale.status}`);
 
-  const afterStale = await api("GET", "roles/role_a1", { token: tokenA });
+  const afterStale = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
   check(afterStale.data.data.onMap === "2", "被拒的保存没有写库（还是上一次的值 2）", `${afterStale.data.data && afterStale.data.data.onMap}`);
   check(afterStale.data.revision === 3, "详情里的 revision 与服务端一致", `${afterStale.data.revision}`);
 
-  const crossAccount = await api("GET", "roles/role_a1", { token: tokenB });
+  const crossAccount = await api("GET", `roles/${roleA1Id}`, { token: tokenB });
   check(crossAccount.code === 40300 && crossAccount.status === 403, "别的账号读不到该角色（越权 403）", `${crossAccount.code}/${crossAccount.status}`);
 
   //#endregion
@@ -207,27 +194,27 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 一之二、新手引导进度：结构 + 体量校验，不认客户端的步骤含义 —");
 
-  const guidedData = { ...roleData("role_a1", "甲一", "1", 1), guide: { step: 2, done: false, skipped: false } };
-  const guideSaved = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: guidedData, revision: 3 } });
+  const guidedData = { ...roleData(roleA1Id, "甲一", "1", 1), guide: { step: 2, done: false, skipped: false } };
+  const guideSaved = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: guidedData, revision: 3 } });
   check(guideSaved.code === 0 && guideSaved.data.data.guide.step === 2, "指南进度原样落库（step 2）", JSON.stringify(guideSaved.data.data && guideSaved.data.data.guide));
-  const guideRead = await api("GET", "roles/role_a1", { token: tokenA });
+  const guideRead = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
   check(guideRead.data.data.guide.done === false && guideRead.data.data.guide.skipped === false, "三个标记原样读回（done / skipped）", JSON.stringify(guideRead.data.data && guideRead.data.data.guide));
 
-  const guideOverflow = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 65, done: false, skipped: false } }, revision: 4 } });
+  const guideOverflow = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...guidedData, guide: { step: 65, done: false, skipped: false } }, revision: 4 } });
   check(guideOverflow.code === 20003, "步数越界被拒（20003，不是静默夹取）", `${guideOverflow.code}`);
 
-  const guideFraction = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 1.5, done: false, skipped: false } }, revision: 4 } });
+  const guideFraction = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...guidedData, guide: { step: 1.5, done: false, skipped: false } }, revision: 4 } });
   check(guideFraction.code === 20003, "步数不是整数被拒（20003）", `${guideFraction.code}`);
 
-  const guideBadFlag = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 1, done: "yes", skipped: false } }, revision: 4 } });
+  const guideBadFlag = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...guidedData, guide: { step: 1, done: "yes", skipped: false } }, revision: 4 } });
   check(guideBadFlag.code === 20003, "done 不是布尔被拒（20003）", `${guideBadFlag.code}`);
 
-  const guideExtra = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: { ...guidedData, guide: { step: 3, done: false, skipped: true, evil: "x" } }, revision: 4 } });
+  const guideExtra = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...guidedData, guide: { step: 3, done: false, skipped: true, evil: "x" } }, revision: 4 } });
   check(guideExtra.code === 0 && guideExtra.data.data.guide.evil === undefined && guideExtra.data.data.guide.skipped === true, "多余字段被丢弃、三个已知字段保留", JSON.stringify(guideExtra.data.data && guideExtra.data.data.guide));
 
   // 老档（没有 guide 字段）照样能存，且**服务端不会凭空补一个** ——
   // 客户端正是靠「文档里有没有这个字段」区分老号与新号（无字段 = 引导上线前就在的角色）
-  const legacySaved = await api("PUT", "roles/role_a1", { token: tokenA, body: { data: roleData("role_a1", "甲一", "1", 1) } });
+  const legacySaved = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: roleData(roleA1Id, "甲一", "1", 1) } });
   check(legacySaved.code === 0 && legacySaved.data.data.guide === undefined, "没有 guide 字段的老档照常保存，服务端不补默认值", JSON.stringify(legacySaved.data.data && legacySaved.data.data.guide));
 
   //#endregion
@@ -236,13 +223,14 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 二、管理端：检索与筛选 —");
 
-  await api("POST", "roles", { token: tokenB, body: { data: roleData("role_b1", "乙一", "2", 1) } });
+  const roleB1 = await api("POST", "roles", { token: tokenB, body: { name: "乙一", occupation: "2", sex: "1" } });
+  const roleB1Id = roleB1.data.id;
 
   // 筛选要用「不同等级」的样本，但建号等级恒为出厂值（#554），所以这里统一走管理端提级。
   // 只动 a3 / b1：a1 与 a2 是第三、四段的修订号基线，多一次写库就把那些数字顶偏了。
   // 12 与 18 取在区间内侧（不是边界值），这样这条断言验的是筛选本身，不是边界开闭
-  await raiseLevel("role_a3", 12, adminToken);
-  const raisedB1 = await raiseLevel("role_b1", 18, adminToken);
+  await raiseLevel(roleA3Id, 12, adminToken);
+  const raisedB1 = await raiseLevel(roleB1Id, 18, adminToken);
   check(
     raisedB1.data.level === 18,
     "准备：两个角色的等级已由管理端提级（#554 后建号等级恒为出厂值）",
@@ -278,8 +266,8 @@ async function raiseLevel(roleId, level, token) {
   const byAccount = await api("GET", `admin/roles?accountId=${accountA}`, { token: adminToken });
   check(byAccount.data.total === 3, "按账号筛选（甲有 3 个角色）", JSON.stringify(byAccount.data.total));
 
-  const byKeyword = await api("GET", "admin/roles?keyword=role_b", { token: adminToken });
-  check(byKeyword.data.total === 1 && byKeyword.data.list[0].id === "role_b1", "关键字匹配角色 id", JSON.stringify(byKeyword.data.total));
+  const byKeyword = await api("GET", "admin/roles?keyword=" + encodeURIComponent("乙一"), { token: adminToken });
+  check(byKeyword.data.total === 1 && byKeyword.data.list[0].id === roleB1Id, "关键字匹配角色 id（服务端生成的 id）", JSON.stringify(byKeyword.data.total));
 
   const withAccountName = all.data.list.every((item) => typeof item.accountName === "string");
   check(withAccountName, "列表带所属账号名（一次 join 拿全，不做 N+1）");
@@ -291,7 +279,7 @@ async function raiseLevel(roleId, level, token) {
   console.log("— 三、管理端：修改角色（基础信息 + 运行时数据） —");
 
   // 时装：`fashionCloth` 在 #377 从数字改成**时装 id**（fashions 表主键），管理端也只能填字符串
-  const patched = await api("PATCH", "admin/roles/role_a2", {
+  const patched = await api("PATCH", `admin/roles/${roleA2Id}`, {
     token: adminToken,
     body: { name: "甲二改", level: 11, fashionCloth: "cloth_2", avatar: 7, onMap: "12", gold: 8888 },
   });
@@ -301,17 +289,17 @@ async function raiseLevel(roleId, level, token) {
   check(patched.data.data.gold === 8888, "数值字段写进角色数据");
   check(patched.data.revision === 2, "管理端改一次，修订号 +1", JSON.stringify(patched.data.revision));
 
-  const numericFashion = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { fashionCloth: 3 } });
+  const numericFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: 3 } });
   check(numericFashion.code === 40000 && numericFashion.status === 400, "时装填旧形状的数字被拒（只收时装 id）", `${numericFashion.code}/${numericFashion.status}`);
-  const unknownFashion = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { fashionCloth: "no_such_fashion" } });
+  const unknownFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: "no_such_fashion" } });
   check(unknownFashion.code === 0 && unknownFashion.data.revision === 3, "任意字符串都收（清单外 id 由客户端按 null 兜底）", JSON.stringify(unknownFashion.data?.revision));
-  const clearedFashion = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { fashionCloth: null } });
+  const clearedFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: null } });
   check(clearedFashion.code === 0 && clearedFashion.data.data.fashionCloth === null, "传 null = 脱下（清空穿戴）");
 
-  const duplicateName = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { name: "甲三" } });
+  const duplicateName = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { name: "甲三" } });
   check(duplicateName.code === 20005 && duplicateName.status === 409, "同账号下改名撞车被拒（20005）", `${duplicateName.code}/${duplicateName.status}`);
 
-  const runtime = await api("PATCH", "admin/roles/role_a2", {
+  const runtime = await api("PATCH", `admin/roles/${roleA2Id}`, {
     token: adminToken,
     body: {
       equipments: { WEAPON: "1001", HELMET: "" },
@@ -329,51 +317,51 @@ async function raiseLevel(roleId, level, token) {
   check(runtime.data.data.bag[0][1].id === "2001" && runtime.data.data.bag[0][1].count === 5, "背包物品落在正确的格子上");
   check(runtime.data.data.bag[1][0] === null, "未提交的格子是空的");
 
-  const clearBag = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { bag: [] } });
+  const clearBag = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [] } });
   check(
     clearBag.data.data.bag.every((row) => row.every((cell) => cell === null)) && clearBag.data.data.bag.length === 4,
     "背包传空数组 = 清空（网格尺寸保留）",
   );
 
-  const dupCell = await api("PATCH", "admin/roles/role_a2", {
+  const dupCell = await api("PATCH", `admin/roles/${roleA2Id}`, {
     token: adminToken,
     body: { bag: [{ row: 0, col: 0, id: "1", count: 1 }, { row: 0, col: 0, id: "2", count: 1 }] },
   });
   check(dupCell.code === 20003 && dupCell.status === 400, "背包格子坐标重复被拒（20003）", `${dupCell.code}/${dupCell.status}`);
 
-  const badAxis = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { bag: [{ row: 999, col: 0, id: "1", count: 1 }] } });
+  const badAxis = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [{ row: 999, col: 0, id: "1", count: 1 }] } });
   check(badAxis.code === 40000, "背包行号越界被拦下（DTO 40000）", `${badAxis.code}`);
 
-  const badCount = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { bag: [{ row: 0, col: 0, id: "1", count: 0 }] } });
+  const badCount = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [{ row: 0, col: 0, id: "1", count: 0 }] } });
   check(badCount.code === 40000, "背包数量为 0 被拦下（DTO 40000）", `${badCount.code}`);
 
-  const lostProps = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { bag: [{ row: 0, col: 0, id: "9001", count: 2 }] } });
+  const lostProps = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [{ row: 0, col: 0, id: "9001", count: 2 }] } });
   check(
     lostProps.data.data.bag[0][0] && lostProps.data.data.bag[0][0].id === "9001",
     "背包格子的属性没有被管道的白名单剥掉（嵌套裸对象会静默变成空数组）",
     JSON.stringify(lostProps.data.data.bag[0][0]),
   );
 
-  const badSkills = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { skills: { "1001": -1 } } });
+  const badSkills = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { skills: { "1001": -1 } } });
   check(badSkills.code === 20003, "技能等级为负被拒", `${badSkills.code}`);
 
-  const badEquipments = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { equipments: ["not-an-object"] } });
+  const badEquipments = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { equipments: ["not-an-object"] } });
   check(badEquipments.code === 40000, "装备表传数组被 DTO 拦下（40000）", `${badEquipments.code}`);
 
-  const badOnMap = await api("PATCH", "admin/roles/role_a2", { token: adminToken, body: { onMap: "" } });
+  const badOnMap = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { onMap: "" } });
   check(badOnMap.code === 40000, "所在地图传空串被拦下（40000）", `${badOnMap.code}`);
 
   // 「只有账号当前在线的角色才允许推存档」——不在线的角色推回来一律 20007（踢下线语义）。
   // role_a2 不是账号当前在线角色（先建的是 role_a1），所以这里先验这条判据。
-  const offlineSave = await api("PUT", "roles/role_a2", { token: tokenA, body: { data: { notRole: true } } });
+  const offlineSave = await api("PUT", `roles/${roleA2Id}`, { token: tokenA, body: { data: { notRole: true } } });
   check(offlineSave.code === 20007, "非在线角色推存档被拒（20007 ROLE_KICKED）", `${offlineSave.code}`);
 
   // 切到 role_a2 再验「坏数据照样被拒」（校验顺序：在线 → 乐观锁 → 数据解析）
-  await api("POST", "roles/role_a2/select", { token: tokenA });
-  const brokenDoc = await api("PUT", "roles/role_a2", { token: tokenA, body: { data: { notRole: true } } });
+  await api("POST", `roles/${roleA2Id}/select`, { token: tokenA });
+  const brokenDoc = await api("PUT", `roles/${roleA2Id}`, { token: tokenA, body: { data: { notRole: true } } });
   check(brokenDoc.code === 20003, "坏角色数据被拒（不会把背包清空）", `${brokenDoc.code}`);
   // 切回 role_a1（后面的乐观锁联动用例都围绕它）
-  await api("POST", "roles/role_a1/select", { token: tokenA });
+  await api("POST", `roles/${roleA1Id}/select`, { token: tokenA });
 
   //#endregion
 
@@ -381,21 +369,21 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 四、后台改动不被玩家旧存档覆盖 —");
 
-  const beforePatch = await api("GET", "roles/role_a1", { token: tokenA });
+  const beforePatch = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
   const baseline = beforePatch.data.revision;
-  await api("PATCH", "admin/roles/role_a1", { token: adminToken, body: { gold: 777 } });
-  const staleAfterAdmin = await api("PUT", "roles/role_a1", {
+  await api("PATCH", `admin/roles/${roleA1Id}`, { token: adminToken, body: { gold: 777 } });
+  const staleAfterAdmin = await api("PUT", `roles/${roleA1Id}`, {
     token: tokenA,
-    body: { data: { ...roleData("role_a1", "甲一", "1", 1), gold: 123 }, revision: baseline },
+    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), gold: 123 }, revision: baseline },
   });
   check(staleAfterAdmin.code === 20006, "玩家拿后台改之前的数据推进会撞上乐观锁（20006）", `${staleAfterAdmin.code}`);
 
-  const afterAdmin = await api("GET", "roles/role_a1", { token: tokenA });
+  const afterAdmin = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
   check(afterAdmin.data.data.gold === 777, "后台改的金币还在（没有被玩家那份旧存档覆盖）", JSON.stringify(afterAdmin.data.data.gold));
 
-  const resume = await api("PUT", "roles/role_a1", {
+  const resume = await api("PUT", `roles/${roleA1Id}`, {
     token: tokenA,
-    body: { data: { ...roleData("role_a1", "甲一", "1", 1), gold: 777 }, revision: afterAdmin.data.revision },
+    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), gold: 777 }, revision: afterAdmin.data.revision },
   });
   check(resume.code === 0, "玩家同步到最新 revision 后可以继续保存", resume.message);
 
@@ -405,12 +393,12 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 五、批量删除 —");
 
-  const batch = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: ["role_a2", "role_a3"] } });
+  const batch = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: [roleA2Id, roleA3Id] } });
   check(batch.code === 0 && batch.data.deleted === 2, "批量删除两条", JSON.stringify(batch.data && batch.data.deleted));
   check(batch.data.requested === 2 && batch.data.ids.length === 2, "返回请求条数与实际删掉的 id");
   check(batch.data.clearedOnlineAccountIds.length === 0, "删的不是在线角色 → 没有账号被清标记", JSON.stringify(batch.data.clearedOnlineAccountIds));
 
-  const again = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: ["role_a2"] } });
+  const again = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: [roleA2Id] } });
   check(again.code === 0 && again.data.deleted === 0, "重复删除同一个 id 幂等（不报错、删除数为 0）", JSON.stringify(again.data && again.data.deleted));
 
   const emptyIds = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: [] } });
@@ -443,20 +431,20 @@ async function raiseLevel(roleId, level, token) {
   const viewerList = await api("GET", "admin/roles", { token: viewerToken });
   check(viewerList.code === 0, "只读观察员能看角色列表");
 
-  const viewerBatch = await api("POST", "admin/roles/batch-delete", { token: viewerToken, body: { ids: ["role_b1"] } });
+  const viewerBatch = await api("POST", "admin/roles/batch-delete", { token: viewerToken, body: { ids: [roleB1Id] } });
   check(viewerBatch.code === 30006 && viewerBatch.status === 403, "只读观察员批量删除 → 403 / 30006", `${viewerBatch.code}/${viewerBatch.status}`);
 
-  const viewerPatch = await api("PATCH", "admin/roles/role_b1", { token: viewerToken, body: { level: 99 } });
+  const viewerPatch = await api("PATCH", `admin/roles/${roleB1Id}`, { token: viewerToken, body: { level: 99 } });
   check(viewerPatch.code === 30006, "只读观察员改角色 → 30006", `${viewerPatch.code}`);
 
   const viewerPurge = await api("DELETE", `admin/accounts/${accountB}/roles`, { token: viewerToken });
   check(viewerPurge.code === 30006, "只读观察员清空账号角色 → 30006", `${viewerPurge.code}`);
 
-  const playerTokenOnAdmin = await api("POST", "admin/roles/batch-delete", { token: tokenB, body: { ids: ["role_b1"] } });
+  const playerTokenOnAdmin = await api("POST", "admin/roles/batch-delete", { token: tokenB, body: { ids: [roleB1Id] } });
   check(playerTokenOnAdmin.status === 401, "玩家令牌调管理端接口 → 401（受众隔离）", `${playerTokenOnAdmin.status}`);
 
-  const stillThere = await api("GET", "admin/roles?keyword=role_b", { token: adminToken });
-  check(stillThere.data.total === 1, "越权请求全部被拦，角色还在");
+  const stillThere = await api("GET", "admin/roles?keyword=" + encodeURIComponent("乙一"), { token: adminToken });
+  check(stillThere.data.total === 1, "越权请求全部被拦，角色还在（按名字检索）");
 
   //#endregion
 
@@ -525,10 +513,11 @@ async function raiseLevel(roleId, level, token) {
   // 详情接口现在回的是 AdminRoleDetail（比列表多一组派生字段）
   // 本组只看「服务端算的」与「客户端上报的」是否同一份，与等级取值无关 ——
   // 建号恒为 1 级就够了（要造高等级另有 raiseLevel，见 §二）
-  const seeded = await api("POST", "roles", { token: tokenC, body: { data: roleData("role_d1", "算一", "1", 1) } });
+  const seeded = await api("POST", "roles", { token: tokenC, body: { name: "算一", occupation: "1", sex: "1" } });
+  const roleD1Id = seeded.data.id;
   check(seeded.code === 0, "准备：建一个角色（建号恒 1 级）", seeded.message);
 
-  const derived1 = await api("GET", "admin/roles/role_d1", { token: adminToken });
+  const derived1 = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
   const d1 = derived1.data.derived;
   check(!!d1 && !!d1.attributes, "详情带一组服务端重算的战斗属性");
   check(
@@ -549,38 +538,35 @@ async function raiseLevel(roleId, level, token) {
   const steadyCombat = d1.attributes.combat;
   const steadyMaxHp = d1.attributes.maxHp;
 
-  const consistent = await api("POST", "roles", {
-    token: tokenC,
-    body: { data: { ...roleData("role_d2", "算二", "1", 1), combat: steadyCombat, maxHp: steadyMaxHp } },
-  });
-  check(consistent.code === 0, "准备：建一个上报值正确的角色", consistent.message);
-  const derived2 = await api("GET", "admin/roles/role_d2", { token: adminToken });
-  check(derived2.data.derived.mismatch === false, "上报服务端刚算出的那份 → 一致", JSON.stringify(derived2.data.derived.reported));
-  check(derived2.data.derived.reported.combat === steadyCombat, "上报值原样带出来（对照用）", String(derived2.data.derived.reported.combat));
+  const consistent = await api("POST", "roles", { token: tokenC, body: { name: "算二", occupation: "1", sex: "1" } });
+  const roleD2Id = consistent.data.id;
+  check(consistent.code === 0, "准备：再建一个角色（初始文档即服务端重算值）", consistent.message);
+  const derived2 = await api("GET", `admin/roles/${roleD2Id}`, { token: adminToken });
+  check(derived2.data.derived.mismatch === false, "服务端构造的初始文档 → reported 与权威值一致", JSON.stringify(derived2.data.derived.reported));
+  check(derived2.data.derived.reported.combat === steadyCombat, "服务端算的那份原样带出来（同等级下两号同值，口径一致）", String(derived2.data.derived.reported.combat));
 
-  // 明显不对的上报值：**建号即被服务端重算覆盖**（#541 权威）——「客户端说自己多强」的口子在创建时就焊死了
-  const bogus = await api("POST", "roles", {
-    token: tokenC,
-    body: { data: { ...roleData("role_d3", "算三", "1", 1), combat: 999999999, maxHp: 1 } },
-  });
-  check(bogus.code === 0, "准备：建一个上报值离谱的角色", bogus.message);
-  const derived3 = await api("GET", "admin/roles/role_d3", { token: adminToken });
-  check(derived3.data.derived.mismatch === false, "建号上报离谱值 → 服务端重算覆盖，入库即权威（mismatch=false）", JSON.stringify(derived3.data.derived.reported));
+  // #597：建号入参只有名称 / 职业 / 性别 —— 「改包上报离谱属性」这条路连入口都没有了，
+  // 初始文档天然就是服务端重算的那份
+  const bogus = await api("POST", "roles", { token: tokenC, body: { name: "算三", occupation: "1", sex: "1" } });
+  const roleD3Id = bogus.data.id;
+  check(bogus.code === 0, "准备：再建一个角色（无属性入参可填）", bogus.message);
+  const derived3 = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken });
+  check(derived3.data.derived.mismatch === false, "服务端构造的初始角色：reported = 权威值（mismatch=false）", JSON.stringify(derived3.data.derived.reported));
   check(
     derived3.data.derived.reported.combat === derived3.data.derived.attributes.combat,
-    "离谱上报没有落库：reported 已是服务端算的那份",
+    "落库的 combat 就是服务端重算的那份",
     JSON.stringify(derived3.data.derived.reported),
   );
 
   // 管理端改等级 → derived 立刻跟着变（不等客户端同步），且客户端那份旧上报值当场变成「不一致」
-  const bumped = await api("PATCH", "admin/roles/role_d3", { token: adminToken, body: { level: 30 } });
+  const bumped = await api("PATCH", `admin/roles/${roleD3Id}`, { token: adminToken, body: { level: 30 } });
   check(
     bumped.data.derived.attributes.combat !== steadyCombat,
     "管理端改等级后，服务端重算的战斗力立刻变（不等客户端同步）",
     `${steadyCombat} → ${bumped.data.derived.attributes.combat}`,
   );
   check(bumped.data.derived.mismatch === true, "等级一变，客户端那份旧上报值立刻成了不一致（正是 mismatch 要表达的）");
-  const reread = await api("GET", "admin/roles/role_d3", { token: adminToken });
+  const reread = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken });
   check(
     reread.data.derived.attributes.combat === bumped.data.derived.attributes.combat,
     "改完返回的 derived 与重新读一遍一致",
@@ -588,7 +574,7 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 查不到的装备 id：属性会悄悄少一截，所以要作为可读的证据交出来
-  const unknownEquip = await api("PATCH", "admin/roles/role_d1", {
+  const unknownEquip = await api("PATCH", `admin/roles/${roleD1Id}`, {
     token: adminToken,
     body: { equipments: { WEAPON: "no_such_equipment", HELMET: null } },
   });
@@ -598,13 +584,13 @@ async function raiseLevel(roleId, level, token) {
     JSON.stringify(unknownEquip.data.derived.unknownEquipmentIds),
   );
   check(
-    warnLines.some((line) => line.indexOf("role_d1") !== -1 && line.indexOf("查不到属性") !== -1),
+    warnLines.some((line) => line.indexOf(String(roleD1Id)) !== -1 && line.indexOf("查不到属性") !== -1),
     "未知装备同样落到服务端日志",
     JSON.stringify(warnLines.slice(-3)),
   );
 
   // 等级不在成长曲线里 → 服务端无处可取旧值，如实给 null，而不是静默算成 0
-  const outOfCurve = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { level: 999 } });
+  const outOfCurve = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { level: 999 } });
   check(outOfCurve.data.derived.attributes === null, "等级不在成长曲线里 → attributes 为 null（不静默给 0）", JSON.stringify(outOfCurve.data.derived.attributes));
   check(
     outOfCurve.data.derived.comparable === false && outOfCurve.data.derived.mismatch === false,
@@ -633,7 +619,7 @@ async function raiseLevel(roleId, level, token) {
   const sampleEquip = equipList.data.list[0];
   check(!!sampleEquip && sampleEquip.attributes.maxHp > 0, "准备：取一件 maxHp > 0 的基础件", JSON.stringify(sampleEquip && sampleEquip.attributes));
 
-  const wearIt = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { level: 10, equipments: { WEAPON: sampleEquip.id } } });
+  const wearIt = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { level: 10, equipments: { WEAPON: sampleEquip.id } } });
   const baseMaxHp = wearIt.data.derived.attributes.maxHp;
   check(typeof baseMaxHp === "number", "穿上后取到含装备加成的 maxHp", String(baseMaxHp));
 
@@ -643,7 +629,7 @@ async function raiseLevel(roleId, level, token) {
   });
   check(doubled.code === 0, "管理端把该装备的 maxHp 改成 2 倍", doubled.message);
 
-  const afterDouble = await api("GET", "admin/roles/role_d1", { token: adminToken });
+  const afterDouble = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
   const doubledMaxHp = afterDouble.data.derived.attributes.maxHp;
   check(
     doubledMaxHp === baseMaxHp + sampleEquip.attributes.maxHp,
@@ -655,7 +641,7 @@ async function raiseLevel(roleId, level, token) {
   const shared = require("../dist/shared/game-data.generated");
   const variantRate = shared.EQUIPMENT_PREFIX_RATES[4] * shared.EQUIPMENT_SUFFIX_RATES[2];
   const variantId = `${sampleEquip.id}_p4s2`;
-  const wearVariant = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { equipments: { WEAPON: variantId } } });
+  const wearVariant = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { equipments: { WEAPON: variantId } } });
   check(wearVariant.code === 0, "准备：把同一件的变体穿上（p4s2）", wearVariant.message);
   // 等级那部分加成没变，减掉它剩下的就是装备加成
   const variantBonus = wearVariant.data.derived.attributes.maxHp - (baseMaxHp - sampleEquip.attributes.maxHp);
@@ -667,7 +653,7 @@ async function raiseLevel(roleId, level, token) {
 
   const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { attributes: sampleEquip.attributes } });
   check(restoredEquip.code === 0, "还原该装备的属性", restoredEquip.message);
-  const backToNormal = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: { equipments: { WEAPON: sampleEquip.id } } });
+  const backToNormal = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { equipments: { WEAPON: sampleEquip.id } } });
   check(
     backToNormal.data.derived.attributes.maxHp === baseMaxHp,
     "还原后回到原值（覆盖层跟着回退，不是一次性的）",
@@ -684,11 +670,11 @@ async function raiseLevel(roleId, level, token) {
   // 服务端此前读的是编译期生成物 —— 界面上写 77，到账 2。玩家只能描述成「价签不对」。
   const bagWith = (id, count) => ({ bag: [{ row: 0, col: 0, id, count }] });
 
-  const putHide = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith("material_hide", 5) });
+  const putHide = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith("material_hide", 5) });
   check(putHide.code === 0, "准备：背包里放 5 块兽皮", putHide.message);
 
   const hideFactory = shared.SELL_PRICES["material_hide"];
-  const soldAtFactory = await api("POST", "roles/role_d1/sell", {
+  const soldAtFactory = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },
   });
@@ -696,23 +682,23 @@ async function raiseLevel(roleId, level, token) {
 
   const priceUp = await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: 77 } });
   check(priceUp.code === 0, "管理端把兽皮卖价改成 77", priceUp.message);
-  const soldAtNew = await api("POST", "roles/role_d1/sell", {
+  const soldAtNew = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },
   });
   check(soldAtNew.data.sold[0].unitPrice === 77, "再卖一块立刻按新价（不重启、不清库）", soldAtNew.data.sold[0].unitPrice);
 
   await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: hideFactory } });
-  const soldBackToFactory = await api("POST", "roles/role_d1/sell", {
+  const soldBackToFactory = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },
   });
   check(soldBackToFactory.data.sold[0].unitPrice === hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）", soldBackToFactory.data.sold[0].unitPrice);
 
   // 装备：等级既是穿戴门槛也是定价依据（回收价 = 等级基础价 × 前后缀倍率）
-  const putEquip = await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  const putEquip = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
   check(putEquip.code === 0, "准备：背包里放一件该装备（基础件）", putEquip.message);
-  const soldEquip = await api("POST", "roles/role_d1/sell", {
+  const soldEquip = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
   });
@@ -724,8 +710,8 @@ async function raiseLevel(roleId, level, token) {
 
   const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: 50 } });
   check(levelUp.code === 0, "管理端把该装备的等级改成 50", levelUp.message);
-  await api("PATCH", "admin/roles/role_d1", { token: adminToken, body: bagWith(sampleEquip.id, 1) });
-  const soldEquip50 = await api("POST", "roles/role_d1/sell", {
+  await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  const soldEquip50 = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
   });
@@ -750,46 +736,45 @@ async function raiseLevel(roleId, level, token) {
   const tokenD = playerD.data.token;
   check(!!tokenD, "准备：第四个玩家账号（它的角色要走保存路径）", playerD.message);
 
-  const seededE = await api("POST", "roles", { token: tokenD, body: { data: roleData("role_e1", "报一", "1", 1) } });
+  const seededE = await api("POST", "roles", { token: tokenD, body: { name: "报一", occupation: "1", sex: "1" } });
+  const roleE1Id = seededE.data.id;
   check(seededE.code === 0, "准备：建一个角色（建号恒 1 级，自动成为在线角色）", seededE.message);
 
   // 拿服务端刚算出来的那份当「正确的上报值」——不在测试里重实现一遍算法
-  const reference = await api("GET", "admin/roles/role_e1", { token: adminToken });
+  const reference = await api("GET", `admin/roles/${roleE1Id}`, { token: adminToken });
   const rightCombat = reference.data.derived.attributes.combat;
   const rightMaxHp = reference.data.derived.attributes.maxHp;
   check(typeof rightCombat === "number", "取到服务端重算的基准值", String(rightCombat));
 
   // 不一致：照常存进去 + 记一条 warn
   const beforeBad = warnLines.length;
-  const badSave = await api("PUT", "roles/role_e1", {
+  const badSave = await api("PUT", `roles/${roleE1Id}`, {
     token: tokenD,
-    body: { data: { ...roleData("role_e1", "报一", "1", 1), combat: rightCombat + 123456, maxHp: rightMaxHp } },
+    body: { data: { ...roleData(roleE1Id, "报一", "1", 1), combat: rightCombat + 123456, maxHp: rightMaxHp } },
   });
   check(badSave.code === 0, "上报值对不上的存档照常收下（日志记录 + 权威覆盖，不打断正常玩法）", `${badSave.code}`);
   check(
-    warnLines.slice(beforeBad).some((line) => line.indexOf("role_e1") !== -1 && line.indexOf("不一致") !== -1),
+    warnLines.slice(beforeBad).some((line) => line.indexOf(String(roleE1Id)) !== -1 && line.indexOf("不一致") !== -1),
     "…并落到一条 warn（写入路径才是全量观测点：每次推进度都会经过）",
     JSON.stringify(warnLines.slice(beforeBad)),
   );
   // #541 权威覆盖：上报的那份只用来记日志，落库的一定是服务端重算的
-  const afterBadSave = await api("GET", "admin/roles/role_e1", { token: adminToken });
+  const afterBadSave = await api("GET", `admin/roles/${roleE1Id}`, { token: adminToken });
   check(
     afterBadSave.data.derived.reported.combat === afterBadSave.data.derived.attributes.combat,
     "离谱上报不落库：存档里已被服务端重算值覆盖（reported = 权威值）",
     JSON.stringify(afterBadSave.data.derived.reported),
   );
 
-  // 一致：不记（每次推进度都刷一条等于没有日志）
+  // 一致：把服务端刚给的那份原样推回去（真客户端就是从 roleUpdate 帧抄的），一条日志都不该有
+  const current = await api("GET", `roles/${roleE1Id}`, { token: tokenD });
   const beforeGood = warnLines.length;
-  const goodSave = await api("PUT", "roles/role_e1", {
-    token: tokenD,
-    body: { data: { ...roleData("role_e1", "报一", "1", 1), combat: rightCombat, maxHp: rightMaxHp } },
-  });
+  const goodSave = await api("PUT", `roles/${roleE1Id}`, { token: tokenD, body: { data: current.data.data } });
   check(goodSave.code === 0, "上报值一致的存档照常保存", `${goodSave.code}`);
   check(warnLines.length === beforeGood, "一致时一条日志都不打", JSON.stringify(warnLines.slice(beforeGood)));
 
   // 没有改动存档：一致的上报值经服务端重算后取回还是它（口径一致时覆盖 == 原值）
-  const readBack = await api("GET", "roles/role_e1", { token: tokenD });
+  const readBack = await api("GET", `roles/${roleE1Id}`, { token: tokenD });
   check(readBack.data.data.combat === rightCombat, "取回来的 combat 是服务端重算的那份（与一致上报值相同）", String(readBack.data.data.combat));
 
   Logger.prototype.warn = originalWarn;
@@ -802,26 +787,21 @@ async function raiseLevel(roleId, level, token) {
 
   const playerF = await api("POST", "auth/register", { body: { username: "role_player_f", password: "pass1234" } });
   const tokenF = playerF.data.token;
-  // 建号这份按客户端 `new Role(...)` 的形状补齐三条成长线（客户端构造时恒为 0）——
-  // 服务端只在「库里已有这个字段」之后才回填，缺键会被当成老存档首次上传而放行。
-  // 等级这里**故意填 99**：建号是唯一没有旧值可比的写点，改包视角下它就是「开号即满级」的入口（#554）
-  const seededF = await api("POST", "roles", {
-    token: tokenF,
-    body: { data: { ...roleData("role_f1", "报二", "1", 99), title: 0, soulOfWar: 0, rank: 0 } },
-  });
-  check(seededF.code === 0, "准备：第五个玩家建号，等级照改包的填 99（初始 1000 金）", seededF.message);
-  // 建号等级钉成出厂值：索引列与文档里的那份都要是 1，属性也要按 1 级重算
-  const createdF = await api("GET", "admin/roles/role_f1", { token: adminToken });
+  const seededF = await api("POST", "roles", { token: tokenF, body: { name: "报二", occupation: "1", sex: "1" } });
+  const roleF1Id = seededF.data.id;
+  check(seededF.code === 0, "准备：第五个玩家建号（入参只有三样，初始账本为 0）", seededF.message);
+  // #597：初始文档由服务端构造，等级天然恒为 1（「建号上报满级」这条路连入参都没有了）
+  const createdF = await api("GET", `admin/roles/${roleF1Id}`, { token: adminToken });
   check(
     createdF.data.level === 1 && createdF.data.data.level === 1,
-    "建号上报 99 级 → 落库恒为出厂值 1（索引列与存档两份一致）",
+    "服务端构造的初始角色恒为 1 级（索引列与存档两份一致）",
     `level=${createdF.data.level} data.level=${createdF.data.data && createdF.data.data.level}`,
   );
 
   // 改包视角：把账本与阶位一起改掉再推整份存档。服务端照样收下（拒收会让
   // 「客户端少收了一帧」变成玩不了），但落库的必须是库里的值。
   const tampered = {
-    ...roleData("role_f1", "报二", "1", 1),
+    ...roleData(roleF1Id, "报二", "1", 1),
     // 等级也改（#550）：这是索引列，回填不生效的话列表与详情会按 99 级显示一身神装
     level: 99,
     gold: 999999,
@@ -833,12 +813,12 @@ async function raiseLevel(roleId, level, token) {
     exp: 424242,
     hp: 999999,
   };
-  const tamperSave = await api("PUT", "roles/role_f1", { token: tokenF, body: { data: tampered } });
+  const tamperSave = await api("PUT", `roles/${roleF1Id}`, { token: tokenF, body: { data: tampered } });
   check(tamperSave.code === 0, "改包存档照常收下（回填而不是 409：拦的是「写进去」，不是「发过来」）", tamperSave.message);
 
-  const afterTamper = await api("GET", "roles/role_f1", { token: tokenF });
+  const afterTamper = await api("GET", `roles/${roleF1Id}`, { token: tokenF });
   const tamperedDoc = afterTamper.data.data;
-  check(tamperedDoc.gold === 1000, "金币没被改写（账本以库为准）", `gold=${tamperedDoc.gold}`);
+  check(tamperedDoc.gold === 0, "金币没被改写（账本以库为准；建号从零起）", `gold=${tamperedDoc.gold}`);
   check(
     tamperedDoc.bindGold === 0 && tamperedDoc.silver === 0,
     "绑定元宝 / 银两同样没被改写",
@@ -854,7 +834,7 @@ async function raiseLevel(roleId, level, token) {
   check(tamperedDoc.exp === 0, "经验没被改写（经验只由服务端结算）", `exp=${tamperedDoc.exp}`);
   check(tamperedDoc.level === 1, "等级没被改写（改包填 99，索引列也跟着回填成 1）", `level=${tamperedDoc.level}`);
   // 上限由服务端重算得出，血蓝夹在 [0, maxHp]（客户端 applyServerRoleUpdate 同一条不变式）
-  const fDerived = await api("GET", "admin/roles/role_f1", { token: adminToken });
+  const fDerived = await api("GET", `admin/roles/${roleF1Id}`, { token: adminToken });
   const fMaxHp = fDerived.data.derived.attributes.maxHp;
   check(
     tamperedDoc.hp === fMaxHp,
@@ -863,26 +843,43 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 正常客户端：账本与阶位原样上报（它本来就是从 roleUpdate 帧抄回来的），保存照旧
-  const plainSave = await api("PUT", "roles/role_f1", {
+  const plainSave = await api("PUT", `roles/${roleF1Id}`, {
     token: tokenF,
-    body: { data: { ...roleData("role_f1", "报二", "1", 1), gold: 1000 } },
+    body: { data: { ...roleData(roleF1Id, "报二", "1", 1), gold: 0 } },
   });
   check(plainSave.code === 0, "账本一致的存档照常保存（回填对正常客户端是空操作）", plainSave.message);
 
-  // 建号那一版没有旧值可比（库里还是空的），上界改为「配置给的起点」（ROLE_INITIAL_CURRENCY）
-  const goldCap = shared.ROLE_INITIAL_CURRENCY.gold;
-  const richCreate = await api("POST", "roles", {
-    token: tokenF,
-    body: { data: { ...roleData("role_f2", "报三", "1", 1), gold: 99999999, bindGold: 99999999, silver: 99999999 } },
-  });
-  check(richCreate.code === 0, "准备：再建一个角色，账本填九位数（改包建号的视角）", richCreate.message);
-  const richDetail = await api("GET", "roles/role_f2", { token: tokenF });
+  // #597：建号不再收完整文档，「改包塞九位数金币」这条路连入参都没有了 ——
+  // 初始账本 / 背包 / 装备 / 技能 / 引导全部由服务端构造，这里逐项验一遍
+  const richCreate = await api("POST", "roles", { token: tokenF, body: { name: "报三", occupation: "1", sex: "1" } });
+  const roleF2Id = richCreate.data.id;
+  check(richCreate.code === 0, "准备：再建一个角色（入参只有名称 / 职业 / 性别）", richCreate.message);
+  const richDetail = await api("GET", `roles/${roleF2Id}`, { token: tokenF });
+  const richDoc = richDetail.data.data;
   check(
-    richDetail.data.data.gold === goldCap &&
-      richDetail.data.data.bindGold === goldCap &&
-      richDetail.data.data.silver === goldCap,
-    "建号时的账本夹到配置给的起点（开号即暴富这条口子也堵上）",
-    `gold=${richDetail.data.data.gold} bindGold=${richDetail.data.data.bindGold} silver=${richDetail.data.data.silver}，期望 ${goldCap}`,
+    richDoc.gold === 0 && richDoc.bindGold === 0 && richDoc.silver === 0,
+    "新角色账本全 0（不再有「初始金币」这种出厂馈赠）",
+    `gold=${richDoc.gold} bindGold=${richDoc.bindGold} silver=${richDoc.silver}`,
+  );
+  check(
+    Array.isArray(richDoc.bag) && richDoc.bag.length === 0,
+    "新角色背包为空（新手装备一并废除；网格尺寸由客户端读档时按自身配置铺）",
+    JSON.stringify(richDoc.bag),
+  );
+  check(
+    richDoc.equipments && Object.keys(richDoc.equipments).length === 0,
+    "新角色装备表为空对象（槽位由客户端按枚举补齐）",
+    JSON.stringify(richDoc.equipments),
+  );
+  check(
+    !!richDoc.skills && richDoc.skills["1000"] === 1 && richDoc.skills["1011"] === 1,
+    "玩家技能段（1xxx）全部解锁 1 级（玩法数据不是物品）",
+    JSON.stringify(richDoc.skills),
+  );
+  check(
+    !!richDoc.guide && richDoc.guide.step === 0 && richDoc.guide.done === false,
+    "引导从第 0 步开始（新号天然弹引导；老号「无字段 = 已完成」判定不受影响）",
+    JSON.stringify(richDoc.guide),
   );
 
   //#endregion

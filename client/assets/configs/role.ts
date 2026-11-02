@@ -1,10 +1,8 @@
 import { ACTION, SpeedRate } from "../types/animation";
 import { directions } from "./animation";
-import { Equipment, EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
 import type { SkillId } from "../types/skill";
 import { Size, Vec2 } from "cc";
-import { belts, clothes, helmets, nicklaces, rings, shoes, weapons, getBaseEquipments, getEquipmentsByLevel } from "./equipments";
 
 /** 角色移动速度-全局 */
 export const ROLE_WALK_SPEED = 2;
@@ -160,9 +158,7 @@ roleDefaultCloths.set(SEX.GRIL, {
  */
 export function getRoleDefaultCloth(sex: SEX): RoleDefaultCloth {
   return roleDefaultCloths.get(sex) ?? roleDefaultCloths.get(SEX.BOY)!;
-}
-
-/** 职业介绍信息MAP */
+}/** 职业介绍信息MAP */
 export const occupations = new Map<OECCUPATION, RoleOccupationInfo>();
 
 occupations.set(OECCUPATION.ZHAN, { name: "战士", description: "create_role/tips_1", descriptionSize: new Size(245, 51) });
@@ -178,12 +174,12 @@ roleInfoPositions.set(RELATION_SHIP.BROTHER, new Vec2());
 export const bagRow = 7; // 7行
 export const bagCol = 11; // 11列
 
-/** 初始金币数量 */
-export const initialGold = 10000;
-export const initialBindGold = 10000;
-export const initialSilver = 10000;
-
-/** 初始技能等级表（角色创建时全部解锁1级） */
+/**
+ * 初始技能等级表（新角色全部解锁 1 级）
+ *
+ * #597 起建号由**服务端**构造（技能同口径：`1xxx` 玩家技能段全 1 级）；
+ * 这里这份只给 `entities/Role` 的字段初始化与测试沙箱用，不再是建号的数据来源。
+ */
 export const initialSkills: { [key in SkillId]: number } = {
   "1000": 1,
   "1001": 1,
@@ -199,7 +195,7 @@ export const initialSkills: { [key in SkillId]: number } = {
   "1011": 1,
 };
 
-/** 初始快捷键配置（5 格 = 数字键 1~5） */
+/** 初始快捷键配置（5 格 = 数字键 1~5；#597 起服务端建号发空数组，这里只给读档补齐与测试用） */
 export const initialShortcutKeys: NeedSetShortcutKeyConfig[] = [
   { label: "1", key: 49, skillId: null },
   { label: "2", key: 50, skillId: null },
@@ -222,47 +218,3 @@ export const defaultRoleSpeedRate: SpeedRate = {
   [ACTION.DIE]: 1,
   [ACTION.TEST1]: 1,
 };
-
-/**
- * 新角色背包额外预置：**该等级武器的全部前后缀变体**（每件 15 个）也放进背包
- *
- * 1 级只有 weapon_1 一件 → 出生背包里就有 15 个品质各异的同名武器（普通的·人级 → 超神的·神级），
- * 方便一进游戏就对比不同前缀/后缀的装备外观与边框；设 0 即关闭。
- *
- * ⚠️ 背包只有 bagRow × bagCol 格（见上），改大这个等级或再往这里加表之前先算总格数：
- * 超出的条目会被 entities/Role 构造函数丢弃（那里会打一条 warn）
- */
-export const newRoleVariantWeaponLevel = 1;
-
-/**
- * 根据职业与性别获取新手装备
- *
- * 组成（顺序即背包里的摆放顺序）：
- * 1. 通用件：戒指 / 项链 / 鞋 / 头盔 / 腰带（各表的 `*_1`）；
- * 2. 全部**基础件**（「普通的·人级」）：所有武器 + 所有衣服；
- * 3. `newRoleVariantWeaponLevel` 那个等级的武器，**补上其余前后缀变体**（基础件已在第 2 步发过，不重复发）。
- */
-export function getNewRoleEquipments(occupation: OECCUPATION, sex: SEX): Equipment[] {
-  // 通用装备（按 key 从各装备 Map 取；缺配置的自动跳过）
-  const equipments: Equipment[] = [rings.get("ring_1"), nicklaces.get("necklace_1"), shoes.get("shoes_1"), helmets.get("helmet_1"), belts.get("belt_1")].filter((eq): eq is Equipment => !!eq);
-
-  /** 将所有基础武器放在装备列表中（背包只有 bagRow×bagCol 格，绝不能把全部装备的 15 倍变体都塞进来） */
-  const baseWeapons = getBaseEquipments(weapons);
-  /** 将所有基础衣服放在装备列表中 */
-  const baseClothes = getBaseEquipments(clothes);
-  // 基础件筛选为空说明配置/编译踩坑（例如打包后 Map 遍历失效），此时背包会静默缺装备，留一条可查的日志
-  if (baseWeapons.length === 0 || baseClothes.length === 0) {
-    console.warn(`[role] 新手装备基础件为空（武器 ${baseWeapons.length} / 衣服 ${baseClothes.length}），背包将缺少装备`);
-  }
-  baseWeapons.forEach((weapon) => equipments.push(weapon));
-  baseClothes.forEach((cloth) => equipments.push(cloth));
-
-  // 指定等级的武器：整组前后缀变体一起发（基础件「普通的·人级」上面已发过，这里只补其余 14 个变体）
-  if (newRoleVariantWeaponLevel > 0) {
-    getEquipmentsByLevel(weapons, newRoleVariantWeaponLevel).forEach((weapon) => {
-      if (weapon.prefix === EQUIPMENT_PREFIX.NORMAL && weapon.suffix === EQUIPMENT_SUFFIX.MORTAL) return;
-      equipments.push(weapon);
-    });
-  }
-  return equipments;
-}

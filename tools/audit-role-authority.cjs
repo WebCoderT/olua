@@ -31,7 +31,7 @@
  *   `Number(result.` 开头；`0` 仅允许出现在 `if (typeof x !== "number")` 的旧档补默认行
  * - 命中一行就 exit 1，并打印「文件:行 + 那一行原文 + 该怎么改」
  *
- * 输出风格与 `audit-doc-numbers.cjs` 一致：违规逐条指名道姓，exit 1。
+ * 输出风格与其他审计一致：违规逐条指名道姓，exit 1。
  */
 
 "use strict";
@@ -119,9 +119,12 @@ function checkSaveWired() {
   ]) {
     if (!pattern.test(slices.save)) problems.push(`${rel(ROLES_SERVICE)}：save() 没有调用 ${label} —— ${why}`);
   }
-  // 建号是唯一没有旧值可比的口子，上界靠这个函数
-  if (!/clampInitialCurrency\s*\(/.test(slices.create)) {
-    problems.push(`${rel(ROLES_SERVICE)}：create() 没有调用 clampInitialCurrency —— 建号的金币上界没封，改包能开号即暴富`);
+  // 建号不再收客户端 data（#597）：初始文档必须走服务端构造器，客户端没有任何「开号塞值」的口子
+  if (!/buildInitialRoleData\s*\(/.test(slices.create)) {
+    problems.push(`${rel(ROLES_SERVICE)}：create() 没有调用 buildInitialRoleData —— 初始存档必须由服务端构造（#597 后客户端入参只有名称 / 职业 / 性别）`);
+  }
+  if (/dto\.data|dto\.level|dto\.gold|dto\.exp/.test(slices.create)) {
+    problems.push(`${rel(ROLES_SERVICE)}：create() 读了 DTO 里的存档字段 —— #597 后建号入参只允许名称 / 职业 / 性别`);
   }
 }
 
@@ -229,5 +232,5 @@ if (problems.length) {
 }
 
 console.log(`✔ 权威边界完好：服务端独占 ${fields.length} 个字段（${fields.join(" / ")}）`);
-console.log("  · 清单在客户端实体里都存在 · save() 已挂 enforceServerAuthority + clampVitals，create() 已挂 clampInitialCurrency");
+console.log("  · 清单在客户端实体里都存在 · save() 已挂 enforceServerAuthority + clampVitals，create() 已挂 buildInitialRoleData（#597：初始文档服务端构造）");
 console.log("  · 客户端对这些字段的赋值全部来自服务端应答（或旧档补 0）");

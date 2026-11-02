@@ -22,8 +22,9 @@ import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
-import { decodeStoredRoleData, normalizeBagCells, normalizeLevel, parseRoleData, applyBagCells } from "./role-data.util";
-import { clampInitialCurrency, clampVitals, enforceServerAuthority, pinInitialLevel } from "./role-authority";
+import { decodeStoredRoleData, normalizeBagCells, normalizeEnum, normalizeLevel, normalizeName, parseRoleData, applyBagCells, ROLE_OCCUPATIONS, ROLE_SEXES } from "./role-data.util";
+import { clampVitals, enforceServerAuthority } from "./role-authority";
+import { buildInitialRoleData } from "./initial-role";
 import {
   BagGrid,
   cellAt,
@@ -124,37 +125,40 @@ export class RolesService {
   /**
    * 创建角色
    *
-   * 校验顺序：id 是否已存在 → 同账号是否重名（角色数量不设上限，选角界面按网格自动排）。
+   * #597 起建号职责整体在服务端：客户端只传**名称 / 职业 / 性别**三样（它自己才知道的：
+   * 输入框与选中态），初始数据（背包 / 装备 / 货币 / 技能 / 引导…）由 `buildInitialRoleData()`
+   * 构造 —— 背包、装备、货币全空不赠物品，技能全解锁 1 级，等级钉 1。
+   *
+   * 校验顺序：同账号是否重名（角色数量不设上限，选角界面按网格自动排）。
    * 第一个角色自动设为在线（与客户端「建完就能进游戏」的体验一致）。
    */
   create(accountId: string, dto: CreateRoleDto): RoleDto {
     const account = this.mustAccount(accountId);
-    const { fields, data } = parseRoleData(dto.data);
+    const name = normalizeName(dto.name);
+    const occupation = normalizeEnum(dto.occupation, ROLE_OCCUPATIONS, "职业");
+    const sex = normalizeEnum(dto.sex, ROLE_SEXES, "性别");
 
-    if (this.roles.findById(fields.id)) throw BizException.conflict(BizCode.ROLE_ID_EXISTS, "角色 id 已存在，请重试");
-    if (this.roles.findByAccountAndName(accountId, fields.name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
+    if (this.roles.findByAccountAndName(accountId, name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
 
+    const id = this.generateRoleId();
     const now = Date.now();
-    // 建号的账本只能到「配置给的起点」（#548）：库里还没有值可比，这是唯一需要单独封上界的地方
-    clampInitialCurrency(data);
-    // 建号等级钉成出厂值（#554）：这个字段在建号请求里没有任何合法用途，
-    // 放行等于「改个包就开号满级」——而且满级会越过等级曲线，让属性重算静默失效
-    const pinned = pinInitialLevel(data);
-    if (pinned.reported !== undefined && Number(pinned.reported) !== pinned.level) {
-      this.logger.warn(
-        `[roles] 建号等级被钉到 ${pinned.level}（客户端上报 ${pinned.reported}，role=${fields.id}）`,
-      );
-    }
-    // 战斗属性与战斗力在落库前由服务端重算（权威值）：客户端给的只是占位/参考
-    this.applyAuthoritativeAttributes(pinned.level, data);
+    // 初始文档由服务端构造（#597）：客户端入参里没有 data，自然也没有「改包开号满级 /
+    // 建号塞金币」这条路 —— 此前的 clampInitialCurrency / pinInitialLevel 随之整体退场
+    const data = buildInitialRoleData(id, name, occupation, sex);
+    // 战斗属性与战斗力在落库前由服务端重算（权威值），血蓝按满值起
+    this.applyAuthoritativeAttributes(1, data);
+    data.hp = data.maxHp;
+    data.mp = data.maxMp;
+    data.hpRecoverAccumulator = 0;
+    data.mpRecoverAccumulator = 0;
     const row: RoleRow = {
-      id: fields.id,
+      id,
       account_id: accountId,
-      name: fields.name,
-      occupation: fields.occupation,
-      sex: fields.sex,
-      level: pinned.level,
-      // 新角色的击杀数从 0 起（#400）：这一列只由结算路径 +1，创建时不给客户端任何话语权
+      name,
+      occupation,
+      sex,
+      level: 1,
+      // 新角色的击杀数从 0 起（#400）：这一列只由结算路径 +1
       kills: 0,
       data: JSON.stringify(data),
       revision: 1,
@@ -162,12 +166,21 @@ export class RolesService {
       updated_at: now,
     };
     this.roles.insert(row);
-    // 这里**刻意不做**战斗属性比对（与 save 那条不同）：建号这份 data 是客户端 `new Role(...)`
-    // 刚构造出来的初始存档，combat 是构造函数里的占位值 —— 但占位值不会落库：上面那行
-    // `applyAuthoritativeAttributes` 已经把它换成了服务端重算的真实值（1 级裸角色约 2310）。
     // 在线标记一律走 `setOnlineRole`（#547）：它顺带写心跳，否则这一行会被在线清算判成「没人」。
     if (!account.online_role_id) this.accounts.setOnlineRole(accountId, row.id);
     return RoleDto.from(row, account.online_role_id ?? row.id);
+  }
+
+  /**
+   * 生成一个不冲突的角色 id
+   *
+   * 沿用客户端时代的「时间戳字符串」形态（对玩家与运营都是不透明的 id，形态无需兼容什么，
+   * 但保持同类外观）；同毫秒撞车（同一账号狂点建号）时补随机后缀重试。
+   */
+  private generateRoleId(): string {
+    let id = Date.now().toString();
+    while (this.roles.findById(id)) id = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    return id;
   }
 
   /**

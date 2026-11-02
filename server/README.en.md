@@ -46,21 +46,21 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run start` | Run the built output |
 | `npm run swagger:emit` | Compile + emit `openapi.json` from source (the single source of the contract) |
 | `npm run gen:api` | `swagger:emit` + `node ../tools/gen-api.cjs` — **regenerate both ends' interface files** |
-| `npm run test:e2e` | Main e2e (248 assertions) |
-| `npm run test:e2e:roles` | Role-management suite (150 assertions) |
-| `npm run test:e2e:guard` | Operations & security base (283 assertions) |
-| `npm run test:e2e:mail` | Mail channel (120 assertions; **fake mailer**, no SMTP server needed) |
-| `npm run test:e2e:account-email` | Player email field (28 assertions) |
-| `npm run test:e2e:realtime` | Realtime channel (72 assertions; **real WebSocket handshake**, no browser needed) |
-| `npm run test:e2e:blocks` | Blocks and reports (50 assertions; one-way rows / server-side chat and presence filtering / report persistence and dedup) |
-| `npm run test:e2e:party` | Parties (87 assertions; invite creates the party / transfer and hand-over / exp sharing / blocks win) |
-| `npm run test:e2e:rank` | Leaderboards (56 assertions; ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
-| `npm run test:e2e:backup` | Backup / restore (87 assertions) |
-| `npm run test:e2e:bag` | Bag and worn equipment (38 assertions; equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
-| `npm run test:e2e:admin-mail` | Admin message top-up (29 assertions; #437 auth / channel narrowing / attachments claimable / offline recipient / audit trail) |
-| `npm run test:e2e:mail-expiry` | Inbox expiry (15 assertions; #439 ttl write / instant disappearance at read / purge criteria / batch cap) |
-| `npm run test:e2e:ui-effect` | UI effects (27 assertions; #594: read-only for viewers / seeded factory values / no create or delete / numeric bounds / snapshot is fresh / audit and doc contract) |
-| `npm run test:e2e:map` | Maps (122 assertions; **gameplay config is editable, the resource itself is not** / two coordinate systems reconciled / no create or delete / permissions and doc contract) |
+| `npm run test:e2e` | Main e2e |
+| `npm run test:e2e:roles` | Role-management suite |
+| `npm run test:e2e:guard` | Operations & security base |
+| `npm run test:e2e:mail` | Mail channel (**fake mailer**, no SMTP server needed) |
+| `npm run test:e2e:account-email` | Player email field |
+| `npm run test:e2e:realtime` | Realtime channel (**real WebSocket handshake**, no browser needed) |
+| `npm run test:e2e:blocks` | Blocks and reports (one-way rows / server-side chat and presence filtering / report persistence and dedup) |
+| `npm run test:e2e:party` | Parties (invite creates the party / transfer and hand-over / exp sharing / blocks win) |
+| `npm run test:e2e:rank` | Leaderboards (ranks and values on three boards / competition ranking / paging and `me` / snapshot and periodic recompute) |
+| `npm run test:e2e:backup` | Backup / restore |
+| `npm run test:e2e:bag` | Bag and worn equipment (equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
+| `npm run test:e2e:admin-mail` | Admin message top-up (#437 auth / channel narrowing / attachments claimable / offline recipient / audit trail) |
+| `npm run test:e2e:mail-expiry` | Inbox expiry (#439 ttl write / instant disappearance at read / purge criteria / batch cap) |
+| `npm run test:e2e:ui-effect` | UI effects (#594: read-only for viewers / seeded factory values / no create or delete / numeric bounds / snapshot is fresh / audit and doc contract) |
+| `npm run test:e2e:map` | Maps (**gameplay config is editable, the resource itself is not** / two coordinate systems reconciled / no create or delete / permissions and doc contract) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
@@ -143,7 +143,7 @@ server/
 │   │   ├── database.service.ts      connect / create tables / ensureColumn patch / ensureSuperAdmin backstop
 │   │   ├── database.module.ts
 │   │   ├── rows.ts                  row types and JSON-column parsing
-│   │   └── repositories/           39 repositories: account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect
+│   │   └── repositories/           account / admin / role / audit / system / announcement / mail / world-monster / map-spawn-area / map / zone / title / soul / growth / rank / equipment / drug / item / monster / npc / mall / fashion / drop-table / monster-drop / skill / status / monster-skill / guild / social / quest / quest-progress / report / party / achievement / role-achievement / role-mail / equip-align / equip-in-align / ui-effect
 │   ├── modules/
 │   │   ├── auth/                   player register/login (JWT, token version)
 │   │   ├── roles/                  character CRUD / online selection / save push (with 20006 / 20007 judgment)
@@ -183,30 +183,30 @@ server/
 │       └── emit.ts                 ← offline emit of openapi.json
 ├── scripts/                        backup / restore (VACUUM INTO + five-step restore, see scripts/lib/db-tooling.cjs)
 ├── test/
-│   ├── e2e.cjs                     248 assertions (real server + real HTTP requests)
-│   ├── e2e-roles.cjs               150 assertions
-│   ├── e2e-guard.cjs               283 assertions
-│   ├── e2e-mail.cjs                120 assertions (fake mailer: enqueue / deliver / retry cap / disabled when off)
-│   ├── e2e-account-email.cjs       28 assertions (email visibility / backfill dedup / mail falls back to the account)
-│   ├── e2e-realtime.cjs            72 assertions (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
-│   ├── e2e-combat.cjs              131 assertions (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
-│   ├── e2e-world.cjs               24 assertions (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
-│   ├── e2e-dual.cjs                14 assertions (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
-│   ├── e2e-zone.cjs                32 assertions (zones: registration zone choice / merge boundaries / per-zone world isolation / merge effect and epoch invalidation)
-│   ├── e2e-guild.cjs               60 assertions (guilds: creation and duplicate names / application overwrite / review permissions / member limit / kick·transfer·leave / disband cascade)
-│   ├── e2e-social.cjs              47 assertions (social: friend requests and instant accept on mutual add / reject leaves no trace / cancel and delete / one-directional enemies / mirrored rows / presence-frame identity)
-│   ├── e2e-chat.cjs                35 assertions (chat: same-map world broadcast / text sanitisation / config-driven rate limit / guild admission from the database / private-chat validation and full rejection when offline)
-│   ├── e2e-quest.cjs               48 assertions (quests: accept gating / talk, kill and collect objectives / turn-in rewards in a single write / daily re-acceptable after claiming)
-│   ├── e2e-sell.cjs                24 assertions (selling: snapshot pricing / same-id cells merged / client price ignored / not sellable / all-or-nothing / optimistic lock / foreign role)
-│   ├── e2e-blocks.cjs              50 assertions (blocks and reports: one-way rows / server-side filtering of chat and presence / report dedup and persistence / read-only admin list)
-│   ├── e2e-party.cjs               87 assertions (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
-│   ├── e2e-rank.cjs                56 assertions (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
-│   ├── e2e-achievement.cjs         39 assertions (achievements: snapshot delivery / cumulative kinds counted from events / state kinds evaluated on read with no stored progress / claiming and a full bag turning into mail / admin config and delete refusal)
-│   ├── e2e-game-mail.cjs           51 assertions (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail / channels: four fixed badges · per-channel claim · unknown channel 40000 · social and combat delivery)
-│   ├── e2e-admin-mail.cjs          29 assertions (admin message top-up #437: viewer 403 / player token 401 / channel narrowing / role not found 404 / shape validation / attachments claimable / reward placement / offline recipient / audit trail / doc grouping)
-│   ├── e2e-mail-expiry.cjs         15 assertions (inbox expiry #439: ttl write / instant disappearance at read / expired single-mail ops treated as missing / purge criteria: unclaimed attachments never purged · NULL never purged / batch cap across passes)
-│   ├── e2e-ui-effect.cjs           27 assertions (UI effects #594: viewer read-only / seeded factory values / no create or delete / numeric bounds / key 404 / save with audit fields / snapshot is fresh / audit / doc contract)
-│   └── backup.cjs                  87 assertions (backup while running / restore archiving / protective refusal / automatic scheduled backup)
+│   ├── e2e.cjs (real server + real HTTP requests)
+│   ├── e2e-roles.cjs
+│   ├── e2e-guard.cjs
+│   ├── e2e-mail.cjs (fake mailer: enqueue / deliver / retry cap / disabled when off)
+│   ├── e2e-account-email.cjs (email visibility / backfill dedup / mail falls back to the account)
+│   ├── e2e-realtime.cjs (ticket exchange / refused handshake / heartbeat and takeover / graceful shutdown)
+│   ├── e2e-combat.cjs (server-side damage: band check / idempotent replay / targets resolved from world instances / reset does not revive)
+│   ├── e2e-world.cjs (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
+│   ├── e2e-dual.cjs (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)
+│   ├── e2e-zone.cjs (zones: registration zone choice / merge boundaries / per-zone world isolation / merge effect and epoch invalidation)
+│   ├── e2e-guild.cjs (guilds: creation and duplicate names / application overwrite / review permissions / member limit / kick·transfer·leave / disband cascade)
+│   ├── e2e-social.cjs (social: friend requests and instant accept on mutual add / reject leaves no trace / cancel and delete / one-directional enemies / mirrored rows / presence-frame identity)
+│   ├── e2e-chat.cjs (chat: same-map world broadcast / text sanitisation / config-driven rate limit / guild admission from the database / private-chat validation and full rejection when offline)
+│   ├── e2e-quest.cjs (quests: accept gating / talk, kill and collect objectives / turn-in rewards in a single write / daily re-acceptable after claiming)
+│   ├── e2e-sell.cjs (selling: snapshot pricing / same-id cells merged / client price ignored / not sellable / all-or-nothing / optimistic lock / foreign role)
+│   ├── e2e-blocks.cjs (blocks and reports: one-way rows / server-side filtering of chat and presence / report dedup and persistence / read-only admin list)
+│   ├── e2e-party.cjs (parties: invite creates the party / accept, decline / kick, transfer / leader hand-over / disband / exp sharing / blocks win)
+│   ├── e2e-rank.cjs (leaderboards: ranks and values on three boards / competition ranking with ties / paging and size clamping / `me` outside the page / snapshot and periodic recompute / eight fields per entry)
+│   ├── e2e-achievement.cjs (achievements: snapshot delivery / cumulative kinds counted from events / state kinds evaluated on read with no stored progress / claiming and a full bag turning into mail / admin config and delete refusal)
+│   ├── e2e-game-mail.cjs (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail / channels: four fixed badges · per-channel claim · unknown channel 40000 · social and combat delivery)
+│   ├── e2e-admin-mail.cjs (admin message top-up #437: viewer 403 / player token 401 / channel narrowing / role not found 404 / shape validation / attachments claimable / reward placement / offline recipient / audit trail / doc grouping)
+│   ├── e2e-mail-expiry.cjs (inbox expiry #439: ttl write / instant disappearance at read / expired single-mail ops treated as missing / purge criteria: unclaimed attachments never purged · NULL never purged / batch cap across passes)
+│   ├── e2e-ui-effect.cjs (UI effects #594: viewer read-only / seeded factory values / no create or delete / numeric bounds / key 404 / save with audit fields / snapshot is fresh / audit / doc contract)
+│   └── backup.cjs (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)
 └── .env.example · package.json · tsconfig.json · tsconfig.build.json
@@ -214,7 +214,7 @@ server/
 
 ## Data model
 
-47 tables, all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
+Data tables are all created by `DatabaseService` at startup via `CREATE TABLE IF NOT EXISTS`; **existing databases are patched by `ensureColumn` (PRAGMA table_info)**, no migration scripts needed.
 
 | Table | Stores | Key points |
 | --- | --- | --- |
@@ -273,7 +273,7 @@ falling back to an empty object for writing would wipe the player's backpack/equ
 Modules split into domains by responsibility: **gateway** (`realtime/`: HTTP ticket + WS entry + damage settlement), **world** (`world/`: monster instances and the tick), **combat** (`combat/`: attribute summary and comparison **pure functions**), **archive** (`auth/` `roles/` `admin/` and the repository layer). Three rules, all machine-enforced by `tools/audit-server-boundaries.cjs`:
 
 - **Cross-domain imports go through whitelisted edges**: any cross-module reference outside the table fails CI — adding an edge means editing `ALLOWED_EDGES` / `REPO_EDGES`, a conscious decision rather than a casual `import`;
-- **Repositories are wired only by the global `DatabaseModule`** (all 39 repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
+- **Repositories are wired only by the global `DatabaseModule`** (all repositories are provided + exported there): registering a same-named repository class in a business module's providers would create a **second instance** next to the global singleton (mail hit this: it registered `AccountRepository` locally too);
 - **combat may only import the base layer** (common / shared / config): both the archive and settlement sides consume it, so reaching up into any implementation would form a cycle.
 
 ## Process split: archive process and realtime process (#175)
@@ -333,7 +333,7 @@ On refusal: no permission `403` + business code **30006**; protective refusal `4
 
 ## Interfaces and contract
 
-Currently **170 interfaces / 140 paths / 268 models**, grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
+Interfaces are grouped into three by "who can call" (`common/constants/swagger-tags.ts` declares, order = display order):
 
 | Group | Count | Token requirement |
 | --- | --- | --- |

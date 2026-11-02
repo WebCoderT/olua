@@ -42,9 +42,17 @@ export type Login = {
 
 export type CreateRole = {
   /**
-   * 角色完整数据（客户端 entities/Role 的 JSON；必须含 id / name / occupation / sex / level）
+   * 角色名（同一账号内唯一；去空白后 1~12 字）
    */
-  data: Record<string, unknown>;
+  name: string;
+  /**
+   * 职业（客户端 OECCUPATION 枚举值）
+   */
+  occupation: string;
+  /**
+   * 性别（客户端 SEX 枚举值）
+   */
+  sex: string;
 };
 
 export type SaveRole = {

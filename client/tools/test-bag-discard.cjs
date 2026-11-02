@@ -54,10 +54,10 @@ function makeRole(id, name) {
   return role;
 }
 
-/** 重置存档：只留一个在线角色，清空自带初始装备后按给定格子预置背包 */
+/** 重置存档：只留一个在线角色，按给定格子预置背包 */
 function seed(cells) {
   const role = makeRole("r1", "测试角色");
-  // 新建角色自带初始装备，先清空背包（保持 7×11 结构），让断言只针对预置的格子
+  // 保险起见仍清一遍（#597 前的存档可能带赠品），让断言只针对预置的格子
   role.bag = role.bag.map((row) => row.map(() => null));
   cells.forEach(({ row, col, id, count }) => {
     role.bag[row][col] = { id, count };
@@ -86,8 +86,8 @@ function filledCells() {
 const dataLayer = (async () => {
 console.log("— 数据层：StorageManager.discardBagGood —");
 
-// 0. 前提：新建角色自带初始装备（所以下面每组测试都先清空背包，断言才只针对预置格子）
-check(makeRole("probe", "探针").bag.some((row) => row.some((cell) => Boolean(cell))), "新角色自带初始装备（测试需先清空背包）");
+// 0. 前提：#597 起新建角色背包为空（不再赠送初始装备），预置的格子就是全部内容
+check(!makeRole("probe", "探针").bag.some((row) => row.some((cell) => Boolean(cell))), "新角色背包为空（#597 起建号不赠送物品）");
 
 // 1. 丢装备（不可叠加，count 恒 1）
 seed([{ row: 0, col: 0, id: equipment.id, count: 1 }]);

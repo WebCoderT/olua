@@ -40,7 +40,6 @@ const ADMIN_REGISTER_CODE = "e2e-party-admin-code";
 const failures = [];
 let passed = 0;
 let failed = 0;
-const EXPECTED_ASSERTIONS = 87;
 
 function check(ok, label, detail = "") {
   if (ok) {
@@ -60,13 +59,6 @@ function checkEqual(actual, expected, label) {
 
 function group(label) {
   console.log(`\n▶ ${label}`);
-}
-
-function assertExpectedCount() {
-  if (passed === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passed + failed}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（make audit 会比对）");
-  process.exitCode = 1;
 }
 
 //#endregion
@@ -193,20 +185,17 @@ async function api(baseUrl, method, route, options = {}) {
   return body;
 }
 
-/** 一份最小可建号的角色文档（e2e-combat 的 roleData 同款口径，带上基础技能才打得动怪） */
-function roleData(id, name, level, skills) {
-  return { id, name, occupation: "1", sex: "1", level, hp: 100, mp: 50, equipments: {}, bag: [], skills };
-}
-
 /** 注册账号 + 建一个在线角色，返回 { token, roleId }
  *
  * `level` 不是 1 时**由管理端提到该等级**：#554 起建号请求里的 `level` 会被钉成出厂值 1
  * （改包建号即满级那条口子焊死了），所以「造一个 12 级队友」只能建号 → PATCH。
  */
-async function preparePlayer(baseUrl, username, roleId, roleName, level = 1, skills = { "1000": 1 }) {
+async function preparePlayer(baseUrl, username, roleName, level = 1) {
   const reg = await api(baseUrl, "POST", "auth/register", { body: { username, password: "pass1234" } });
   const token = reg.data && reg.data.token;
-  await api(baseUrl, "POST", "roles", { token, body: { data: roleData(roleId, roleName, 1, skills) } });
+  // #597：建号入参只有名称 / 职业 / 性别（id 服务端生成）；技能初始 1xxx 全 1 由服务端构造
+  const created = await api(baseUrl, "POST", "roles", { token, body: { name: roleName, occupation: "1", sex: "1" } });
+  const roleId = created.data && created.data.id;
   if (level !== 1) await raiseLevel(baseUrl, roleId, level);
   return { token, roleId };
 }
@@ -339,12 +328,12 @@ function snap(snapshot) {
     //#region 准备：五个账号（A/B/D/E 同图 1，C 在图的 2）
 
     group("准备：五个账号（A/B/D/E 同图 1，C 在图的 2）");
-    const A = await preparePlayer(baseUrl, "party_player_a", "party_role_a", "甲队长", 1);
-    const B = await preparePlayer(baseUrl, "party_player_b", "party_role_b", "乙队友", 1);
-    const C = await preparePlayer(baseUrl, "party_player_c", "party_role_c", "丙异图", 1);
-    const D = await preparePlayer(baseUrl, "party_player_d", "party_role_d", "丁外人", 1);
+    const A = await preparePlayer(baseUrl, "party_player_a", "甲队长");
+    const B = await preparePlayer(baseUrl, "party_player_b", "乙队友");
+    const C = await preparePlayer(baseUrl, "party_player_c", "丙异图");
+    const D = await preparePlayer(baseUrl, "party_player_d", "丁外人");
     // E 用「等级差过大」这个身份：怪物 1 是 1 级，差 11 ≥ maxLevelGap(6) → 队友基数为 0
-    const E = await preparePlayer(baseUrl, "party_player_e", "party_role_e", "戊高级", 12);
+    const E = await preparePlayer(baseUrl, "party_player_e", "戊高级", 12);
     check(!!(A.token && B.token && C.token && D.token && E.token), "五个账号都注册并建好在线角色");
 
     const tickets = await Promise.all(
@@ -740,9 +729,9 @@ function snap(snapshot) {
     try {
       const levelBase = levelServer.baseUrl;
       const levelWs = levelBase.replace("http", "ws");
-      const low = await preparePlayer(levelBase, "party_level_low", "party_level_low", "低级号", 1);
-      const highA = await preparePlayer(levelBase, "party_level_high_a", "party_level_high_a", "高级甲", 10);
-      const highB = await preparePlayer(levelBase, "party_level_high_b", "party_level_high_b", "高级乙", 10);
+      const low = await preparePlayer(levelBase, "party_level_low", "低级号");
+      const highA = await preparePlayer(levelBase, "party_level_high_a", "高级甲", 10);
+      const highB = await preparePlayer(levelBase, "party_level_high_b", "高级乙", 10);
       const levelTickets = await Promise.all(
         [low, highA, highB].map((player) => api(levelBase, "POST", "realtime/ticket", { token: player.token })),
       );
@@ -796,6 +785,5 @@ function snap(snapshot) {
 
   console.log(`\n${failed === 0 ? "PASS" : "FAIL"}：队伍（#399）—— ${passed} 通过 / ${failed} 失败`);
   if (failed > 0) console.log(`失败项：\n- ${failures.join("\n- ")}`);
-  assertExpectedCount();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

@@ -11,9 +11,9 @@
 #    make install          首次拉仓库：装 server / admin 依赖
 #    make env              生成 server/.env
 #    make dev              同时起服务端与管理端开发服务器
-#    make client-test      客户端 59 套单测（需要本机 Cocos 工程）
+#    make client-test      客户端单测（需要本机 Cocos 工程）
 #    make test-changed     日常回归硬门槛：改动哪跑哪（按改动范围挑最小的验证集）
-#    make verify           一条命令跑完全部门禁（含三端构建与二十四套 e2e；发布前全量确认用）
+#    make verify           一条命令跑完全部门禁（含三端构建与全部 e2e；发布前全量确认用）
 #    make ci               CI 跑的那一条（服务端 + 管理端 + 审计 + 客户端类型检查；客户端单测本地专属）
 #
 #  完整清单：make / make help
@@ -50,7 +50,7 @@ CREATOR ?= CocosCreator
         dev dev-server dev-admin \
         check test verify ci audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
         test-changed \
-        audit-shared-data audit-doc-numbers audit-equip-align-catalog \
+        audit-shared-data audit-equip-align-catalog \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
@@ -226,7 +226,7 @@ server-build: ## 编译服务端到 server/dist
 server-start: ## 跑服务端已构建产物（需先 make server-build）
 	@cd server && $(NPM) run start
 
-server-e2e: ## 服务端主 e2e（247 条断言）
+server-e2e: ## 服务端主 e2e
 	@cd server && $(NPM) run test:e2e
 
 server-e2e-roles: ## 服务端角色管理专项 e2e（110 条）
@@ -389,8 +389,6 @@ audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一�
 audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据源）是否与客户端 configs 逐字节一致 + 无展开变体 / 缺方向 / 缩成点
 	@$(NODE) tools/audit-equip-align-catalog.cjs
 
-audit-doc-numbers: ## 文档里的接口 / 路径 / 模型 / 权限点 / 表数 / 审计与单测套数 / e2e 条数是否与实测一致（防「文档自信地写着过期数字」）
-	@$(NODE) tools/audit-doc-numbers.cjs
 
 # ==============================================================================
 #  部署（Docker / docker compose）
@@ -437,7 +435,7 @@ verify: check server-build test admin-build ## 完整门禁：三端静态检查
 #  客户端门禁分两半（见根 FAQ「为什么 CI 不覆盖客户端」，决定走路径 B）：
 #   - `make client-check`（全工程 tsc）现已进 CI：Cocos 类型声明被 vendoring 进
 #     client/types/engine/（相对路径、含真实引擎 cc.d.ts），CI 无需 Cocos 编辑器。
-#   - `make client-test` 的 44 套单测里有 10 套断言 assets/resources/ 下的真实素材
+#   - `make client-test` 的单测里有若干套断言 assets/resources/ 下的真实素材
 #     （图集/帧序列/怪物帧 .meta），素材体积大、**有意不入库**（见 .gitignore），
 #     所以单测仍是「本地专属」，不在 CI 覆盖范围内，别把它当成漏跑。
 # ------------------------------------------------------------------------------

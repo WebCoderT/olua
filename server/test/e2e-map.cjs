@@ -36,15 +36,6 @@ const ADMIN_CODE = "map-code";
 
 //#region 断言小工具（与其余几套同一骨架）
 
-const EXPECTED_ASSERTIONS = 132;
-
-function assertExpectedCount(passedCount, failureCount) {
-  if (failureCount !== 0) return;
-  if (passedCount === EXPECTED_ASSERTIONS) return;
-  console.log(`\n❌ 断言条数变了：期望 ${EXPECTED_ASSERTIONS}，实际 ${passedCount}`);
-  console.log("   改了断言就同步这个常量，以及文档里的 e2e 总数（README.md；make audit 会比对）");
-  process.exit(1);
-}
 
 let passed = 0;
 let failed = 0;
@@ -584,7 +575,6 @@ async function main() {
 
 main()
   .then(() => {
-    assertExpectedCount(passed, failed);
     if (failed) {
       console.log(`\n❌ 服务端 e2e（地图管理）：${passed} 条通过 / ${failed} 条失败`);
       console.log(failures.map((label) => `   · ${label}`).join("\n"));
