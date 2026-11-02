@@ -30,16 +30,20 @@
   装不下（配置改小）时整份退回原网格，不静默挪位置。
 - **给权威清单加字段 = 必然有一批测试在测「客户端能改它」**（#550 踩四套 / #556 踩三套：combat / dual / game-config）：
   先 `grep "PUT roles/"`，把造状态改成管理端 `PATCH /admin/roles/:id`（equipments/skills/bag 都支持结构化编辑）。
-- **文档数字**：加审计/单测会连坐 FAQ/各端 README/官网/skills（`audit-doc-numbers` 给行号），双语还要数字次数相等（`audit-docs-en`）。**中英必须一起改**（只改中文会被判「中文多 1 次」；`0.5 透明` vs `50% opacity` 这种同义异写也算不等）；新页面还要补 `admin/README` 的页面表与结构树 —— 数字审计只管数字，漏行它不管。
-  **根 README 从 #575 起不写数字句式**（「N 个接口 / 共 M 条 e2e」全删）：`audit-doc-numbers` 只在**匹配到句式**时校验、没有 MISS 检查，所以「不写」= 永不漂；比对处数从 58 降到 35（其余在 FAQ / 各端 README / 技能）。代价是 **`audit-docs-en` 的数字 multiset 仍要相等** —— 精简时中文写「三处 / 两个维度」而英文写 `3 / 2` 就会红，统一改成不带数字的写法最省事。
+- **文档数字（#598 起已废止）**：`audit-doc-numbers` / `audit-docs-en` 与全部 e2e 条数守卫已删除——只保留功能性审计，
+  文档里不再写「N 个接口 / M 条 e2e」这类会漂的数量描述；**website/ 永不改动**（用户指令：没说更新就永远不管）。
+  历史教训仍有效：给权威清单加字段会连坐一批测试；中英文档要同一次改完。
+- **批量结构化删代码别用跨行正则**（#598 踩）：`/\/\*\*[\s\S]*?...\*\//` 会从文件头第一个 `/**` 一路吃到目标函数尾，
+  把 require / 文件头 / 帮助函数全吃掉。用 node 脚本按行号区间做；恢复时从「第一条守卫行起整段丢弃」（逐行过滤会漏
+  函数体里不含关键词的行），`//#region` 这类有语义的注释不能当注释裁掉。e2e 助手 `checkEqual` 是 `===`，对象断言用 `JSON.stringify`。
 - 真机验证：真实 Chrome `headless:false` + playwright-core；自适应只测真实窗口（`viewport:null`）；`window.__cc` 要等 `__v.ready()`，`reload` 后重新 `ready()`。
 
 ## 架构不变量（细节 skill `olua-server` / `olua-admin` / `olua-client`）
 - 服务端权威：伤害/掉落/经验/进度/金币一律服务端算，客户端只演。
 - 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据是不透明文档（`guide` 例外：只校验结构、**不补默认值**）；乐观锁 409+20006；`whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；`BizException` 默认 400。
-- 新 operationId 模块段登记 `tools/gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries` 的 `REPO_EDGES`；新 e2e 登记 `audit-doc-numbers` 的 `E2E_SCRIPTS`。
+- 新 operationId 模块段登记 `tools/gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries` 的 `REPO_EDGES`。
 - 部署：compose 四服务（admin:80 / game:8080 / server:3100 / realtime:3101），`/api` 与 `/game-resources/` 反代到内网；密钥只在 `deploy.env`；先合 master 再发布；Cocos 只能 GUI 打包。
-- 本机 client-test 基线 **59 套 / 54 过 5 红**（红全是素材未入库）；CI 不跑它，门禁看 `make ci`。改了客户端动手最勤的地方（换装/背包/动画）要**自己跑一遍** `make client-test`，否则静态断言的假红会攒着没人发现（#557 就漏了一处）。
+- 本机 client-test 基线 **58 套 / 53 过 5 红**（红全是素材未入库；#597 删 `test-new-role-bag` 后 58）；CI 不跑它，门禁看 `make ci`。改了客户端动手最勤的地方（换装/背包/动画）要**自己跑一遍** `make client-test`，否则静态断言的假红会攒着没人发现（#557 就漏了一处）。
 
 ## 进度（细节见 2026-*.md）
 - 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · **玩法补全 #394 十二刀**。
@@ -89,4 +93,10 @@
   读口 SQL 过滤即时消失 + `GameMailPurgeService` 后台分批物理删（`MAIL_PURGE_BATCH`/`MAIL_PURGE_INTERVAL_MS`）；
   陷阱：`DELETE...LIMIT` 依赖编译开关（先 SELECT id 再 DELETE IN）、`Number("3600_000")`=NaN、`:memory:` 两连接不共享（in-process e2e 用 tmpdir 文件库）。
   用户待办见仓库根 `TODO-FOR-USER.md`（本地文件）。
+- 2026-11-02：**服务端建号收权 #597 + 数字守卫清理 #598（PR #599 → `1c291a1`）**：`POST /roles` 只收 `{name, occupation, sex}`，
+  id 与初始存档由 `buildInitialRoleData()` 服务端构造（背包/装备/货币空、技能 1xxx 全 1、等级钉 1）；`clampInitialCurrency` 退场，
+  `audit-role-authority` 判据改「create() 必须走 buildInitialRoleData 且不读 DTO 存档字段」。17 套 e2e 转最小建号
+  （状态注入走管理端 PATCH）；**e2e.cjs 漏在名单外 → 改 API 用法要 grep 全部调用点，别对着名单改**。删 `audit-doc-numbers`
+  / `audit-docs-en` 与全部 EXPECTED_ASSERTIONS 守卫（14 审计 / 29 套 e2e），文档数量描述全清，website/ 永不碰。
+  细节与恢复算法见 2026-11-02.md。
 - **回归门槛 = 改动哪跑哪**：`make test-changed`（tools/test-changed.cjs；BASE=<ref> 可选）。客户端单测按内容匹配；服务端 e2e 按模块表，表外/共享底座回落全量；已删文件要 existsSync 过滤（否则删除的审计还会进计划）；已知基线红 5 套（素材未入库）在 CLIENT_BASELINE_RED 容忍；全量门禁 make verify 只在发布前。
