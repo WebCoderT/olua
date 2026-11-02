@@ -14,18 +14,22 @@
  * 不需要再来改这里或 Makefile。**扫到 0 套直接报错**（宁可红，不许假绿）。
  *
  * ===========================================================================
- * 分片
+ * 分片（按耗时装箱，不是平均切）
  * ===========================================================================
- * CI 把同一份清单按 `index % N === shard` 切开并行跑（各片自带 server 构建产物）。
- * 切片只依赖「排序后的清单」，不依赖任何手写分组 —— 加套件不需要改分片配置。
- * 用法：node tools/run-e2e.cjs --shard=0/4
+ * 套件的耗时差一个数量级（backup 52s vs map 7s），按个数均分会出现「一片 2 分钟、
+ * 三片半分钟」—— 墙钟时间等于最慢那片，等于没并行。所以这里按 WEIGHT 做贪心装箱：
+ * 重的先放、每次丢给当前最轻的一片。
+ *
+ * WEIGHT 只是**相对档位**（本机实测 max/7s 取整），作用仅限于均衡：
+ *   - 没登记的套件按 1 算 —— 新增脚本照样会被分到某一片，**不需要来登记**
+ *   - 登记错了最坏只是某片慢几秒，不会漏跑（覆盖由清单决定，与权重无关）
  *
  * ===========================================================================
  * 用法
  * ===========================================================================
- *   node tools/run-e2e.cjs              全量串行（放弃 fail-fast 之外的一切魔法）
- *   node tools/run-e2e.cjs --shard=0/4  第 0 片，共 4 片
- *   node tools/run-e2e.cjs --list       只打印清单与切片结果，不执行
+ *   node tools/run-e2e.cjs              全部套件串行跑（本机 `make ci` 用）
+ *   node tools/run-e2e.cjs --shard=0/4  只跑第 0 片（CI 的矩阵 job 用）
+ *   node tools/run-e2e.cjs --list       只打印清单与装箱结果，不执行
  *
  * 退出码：全过 = 0；有一套失败 = 1（停在该套，余下的不跑 —— 修好再重跑）。
  */
@@ -43,17 +47,52 @@ delete process.env.NODE_OPTIONS;
 //#region 套件清单
 
 /**
- * 全部 e2e 套件（脚本名，如 `test:e2e:map`）
+ * 相对耗时档位（本机实测 2026-11-03，基准 ≈ 7s = 1 档）
  *
- * 顺序：聚合入口 `test:e2e` 排最前（它最慢，先跑能让分片负载更均匀），
- * 其余按名字排 —— 排序必须稳定，否则同一份代码在不同机器上会切出不同的片。
+ * 只用于分片均衡，不参与「跑哪些」的决定。想加档位就加，忘了加也只是薄厚不均。
  */
+const WEIGHT = {
+  "test:e2e:backup": 7,
+  "test:e2e:guard": 6,
+  "test:e2e:mail": 5,
+  "test:e2e:combat": 5,
+  "test:e2e:party": 4,
+  "test:e2e:realtime": 4,
+  "test:e2e:achievement": 2,
+  "test:e2e:world": 2,
+  "test:e2e:dual": 2,
+  "test:e2e:chat": 2,
+  "test:e2e:rank": 2,
+  "test:e2e:quest": 2,
+};
+
+function weightOf(script) {
+  return WEIGHT[script] ?? 1;
+}
+
+/** 全部 e2e 套件（脚本名，如 `test:e2e:map`），按名字排序 —— 稳定，切片才可复现 */
 function allSuites() {
   const pkg = JSON.parse(fs.readFileSync(path.join(SERVER, "package.json"), "utf8"));
-  const names = Object.keys(pkg.scripts).filter((key) => /^test:e2e(:|$)/.test(key));
-  const aggregate = names.filter((key) => key === "test:e2e");
-  const rest = names.filter((key) => key !== "test:e2e").sort();
-  return [...aggregate, ...rest];
+  return Object.keys(pkg.scripts)
+    .filter((key) => /^test:e2e(:|$)/.test(key))
+    .sort();
+}
+
+/**
+ * 贪心装箱：重的先放，每次丢进当前最轻的一片
+ *
+ * 返回第 `shard` 片的套件（重的在前 —— fail-fast 时先撞上慢的那套，早死早超生）。
+ */
+function shardOf(suites, shard, total) {
+  const order = [...suites].sort((a, b) => weightOf(b) - weightOf(a) || a.localeCompare(b));
+  const bins = Array.from({ length: total }, () => ({ load: 0, items: [] }));
+  for (const script of order) {
+    let target = bins[0];
+    for (const bin of bins) if (bin.load < target.load) target = bin;
+    target.items.push(script);
+    target.load += weightOf(script);
+  }
+  return bins[shard].items;
 }
 
 //#endregion
@@ -114,7 +153,7 @@ function main() {
     process.exit(1);
   }
 
-  const mine = suites.filter((_, index) => index % options.total === options.shard);
+  const mine = shardOf(suites, options.shard, options.total);
   const scope =
     options.total === 1
       ? `全部 ${suites.length} 套`

@@ -170,7 +170,7 @@ node tools/audit-api-generated.cjs && node tools/audit-api-hardcode.cjs \
 - **合并后那遍是纯重复。** PR 的 CI 跑的是 `refs/pull/N/merge` —— 「master + 本次改动」的合并树；squash 之后 master 的树与它相同。这一遍测不到任何新东西。
 - **本机那遍改成定向回归。** 提交前跑 `make test-changed`（改动哪跑哪），全量 `make ci` 留给「发布前 / 心里没底」。本机全量既慢又不稳：负载一高就红在 e2e 的「等待超时」断言上（同一份代码在 CI 上连续全绿），拿它当硬门禁等于自己制造假红。
 - **纯文档改动不跑。** `**/*.md` / `.workbuddy/**` / `design/**` / `website/**` 不可能让代码变坏，`paths-ignore` 直接不触发 —— 写记忆不再等四分钟。
-- **CI 内部拆并行。** `static`（类型检查 / 审计 / 两端构建）与 4 个 e2e 分片同时跑，全量从约 4.5 分钟降到约 2 分钟。分片清单从 `server/package.json` 的 `test:e2e*` 脚本**派生**（按 `index % N` 切），新增 e2e 脚本自动纳入 —— 以前 Makefile 里手写的清单漏了 3 套（`admin-mail` / `mail-expiry` / `ui-effect`，共 72 条断言）没人发现。
+- **CI 内部拆并行。** `static`（类型检查 / 审计 / 两端构建）与 4 个 e2e 分片同时跑，全量从约 4.5 分钟降到约 2 分钟以内。分片清单从 `server/package.json` 的 `test:e2e*` 脚本**派生**、按实测耗时贪心装箱（套件耗时可差一个数量级，均分等于没并行），新增 e2e 脚本自动纳入 —— 以前 Makefile 里手写的清单漏了 3 套（`admin-mail` / `mail-expiry` / `ui-effect`，共 72 条断言）没人发现。
 
 想手动重跑全量：`gh workflow run ci.yml`（或 GitHub 网页上的 `workflow_dispatch`）。
 

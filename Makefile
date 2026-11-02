@@ -337,7 +337,7 @@ server-install-ci: ## 只装服务端依赖（CI 的 e2e 分片用，比 install
 e2e-all: ## 全部服务端 e2e（套件清单从 server/package.json 派生，新增脚本自动纳入）
 	@$(NODE) tools/run-e2e.cjs
 
-server-e2e-shard: ## CI 的 e2e 分片：make server-e2e-shard I=0 N=4（切片按清单取模，不用维护分组）
+server-e2e-shard: ## CI 的 e2e 分片：make server-e2e-shard I=0 N=4（按实测耗时装箱，不用维护分组）
 	@if [ -z "$(I)" ] || [ -z "$(N)" ]; then echo "用法：make server-e2e-shard I=0 N=4"; exit 1; fi
 	@$(NODE) tools/run-e2e.cjs --shard=$(I)/$(N)
 
@@ -462,7 +462,7 @@ verify: check server-build test admin-build ## 完整门禁：三端静态检查
 #
 #  PR 上跑一次全套，分两个 job 并行：
 #    static  = ci-static（类型检查 / 审计 / 两端构建）
-#    e2e × 4 = server-e2e-shard（套件清单派生自 server/package.json，取模切片）
+#    e2e × 4 = server-e2e-shard（套件清单派生自 server/package.json，按耗时装箱）
 #  合并后**不再跑**：PR 的 CI 跑的是 refs/pull/N/merge，即「master + 本次改动」，
 #  与 squash 之后的树相同，再跑一遍测不到新东西（#631）。
 #

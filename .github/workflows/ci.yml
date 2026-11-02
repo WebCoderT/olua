@@ -11,8 +11,8 @@
 # ## 跑什么
 #   static  = `make ci-static`：客户端 tsc + 管理端构建 + 15 项跨端审计 + 服务端编译
 #   e2e × 4 = `make server-e2e-shard`：套件清单**派生自 server/package.json**
-#             （29 个 test:e2e* 脚本），按 index % N 切片 —— 新增 e2e 脚本自动进 CI，
-#             不需要来改这个文件。以前 Makefile 里手写的清单漏了 3 套
+#             （29 个 test:e2e* 脚本），按实测耗时贪心装箱（重的先放、丢给最轻的一片）——
+#             新增 e2e 脚本自动进 CI，不需要来改这个文件。以前 Makefile 里手写的清单漏了 3 套
 #             （admin-mail / mail-expiry / ui-effect），谁都没发现。
 #
 # ## 不跑什么（刻意，不是漏跑）
