@@ -86,7 +86,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "achievement-data"].map(
+const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -113,11 +113,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed } = compileServerShared(work);
+  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -131,7 +131,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed) {
+function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -177,7 +177,8 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed) {
     // #603 起任务表的服务端唯一书写处是 quest-seed.ts，客户端 configs 只剩空数组
     questData: questSeed.QUEST_SEED_ROWS,
     // 成就（#401）：条件与门槛的纯数据；kill 的 target 引用怪物 key、collect 引用物品 id
-    achievementData: missing("achievement-data", cfg("achievement-data").achievementData),
+    // #603 起成就表的服务端唯一书写处是 achievement-seed.ts（客户端那份零消费者）
+    achievementData: achievementSeed.ACHIEVEMENT_SEED_ROWS,
   };
 }
 
@@ -361,6 +362,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "monster-skill-seed.ts"),
           path.join(sharedDir, "status-seed.ts"),
           path.join(sharedDir, "quest-seed.ts"),
+          path.join(sharedDir, "achievement-seed.ts"),
         ],
       },
       null,
@@ -377,6 +379,7 @@ function compileServerShared(work) {
     monsterSkillSeed: require(path.join(work, "server-out", "monster-skill-seed.js")),
     statusSeed: require(path.join(work, "server-out", "status-seed.js")),
     questSeed: require(path.join(work, "server-out", "quest-seed.js")),
+    achievementSeed: require(path.join(work, "server-out", "achievement-seed.js")),
   };
 }
 
@@ -551,7 +554,7 @@ function pickAchievements(achievements, monsters, items) {
   if (items instanceof Map) for (const key of items.keys()) goodIds.add(String(key));
   else for (const key of Object.keys(items || {})) goodIds.add(key);
   for (const item of achievements || []) {
-    if (!item || !item.id) throw new Error("configs/achievement-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("achievement-seed.ts 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`成就 id 重复：${item.id}`);
     seen.add(item.id);
     if (!categories.has(item.category)) throw new Error(`成就 ${item.id} 的 category 非法：${item.category}`);
@@ -593,7 +596,7 @@ function pickAchievements(achievements, monsters, items) {
       },
     ]);
   }
-  if (out.length === 0) throw new Error("configs/achievement-data 的 achievementData 为空（改名或清空了？）");
+  if (out.length === 0) throw new Error("achievement-seed.ts 的 ACHIEVEMENT_SEED_ROWS 为空（改名或清空了？）");
   return out;
 }
 

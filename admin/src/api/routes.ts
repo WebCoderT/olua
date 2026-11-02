@@ -84,7 +84,7 @@ export const routes = {
     /**
      * 成就配置列表（GET /admin/achievements）
      *
-     * seed 自客户端 configs/achievement-data，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
+     * seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
      */
     list: "/admin/achievements",
     /**

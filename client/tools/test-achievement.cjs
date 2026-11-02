@@ -39,7 +39,6 @@ const SERVER_ADMIN_CONTROLLER = "server/src/modules/game-config/admin-achievemen
 const SERVER_BIZ_CODE = "server/src/common/constants/biz-code.ts";
 const SERVER_GENERATED = "server/src/shared/game-data.generated.ts";
 
-const CLIENT_DATA = "assets/configs/achievement-data.ts";
 const CLIENT_CONFIG = "assets/configs/achievement.ts";
 const CLIENT_STORE = "assets/ui/core/AchievementStore.ts";
 const CLIENT_DIALOG = "assets/ui/components/dialogs/AchievementDialog.ts";
@@ -60,14 +59,13 @@ function snapshotKeys(source, exportName) {
 }
 
 try {
-  // 两张纯数据表都能在沙箱里真跑：achievement.ts 只用 cc 的 Color/Size/Vec2，
-  // achievement-data.ts 连 import 都没有（它要给三端生成快照，见文件头注释）
-  const outDir = prepare("olua-achievement", ["configs/achievement.ts", "configs/achievement-data.ts"]);
+  // achievement.ts 只用 cc 的 Color/Size/Vec2，沙箱里真跑；
+  // #603 起成就数据的唯一书写处是服务端种子，直接编译真文件（客户端已无这份数据）
+  const outDir = prepare("olua-achievement", ["configs/achievement.ts"]);
   const config = require(path.join(outDir, "configs/achievement.js"));
-  const data = require(path.join(outDir, "configs/achievement-data.js"));
 
   const { achievementCategories, achievementDialogLayout: layout, achievementTexts: texts } = config;
-  const { achievementData } = data;
+  const { ACHIEVEMENT_SEED_ROWS: achievementData } = require(compileServerShared("achievement-seed.ts", "olua-achievement-seed"));
 
   const generated = readRepo(SERVER_GENERATED);
   // #588 起生成物没有 MONSTERS 了：怪物 key 的唯一来源是服务端种子（编译真文件取，不复刻解析）
