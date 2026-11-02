@@ -88,7 +88,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes"].map(
+const SOURCE_FILES = ["growth", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -115,11 +115,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed } = compileServerShared(work);
+  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -133,7 +133,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed) {
+function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -143,7 +143,10 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
     // 成长曲线参数只保留**装备倍率与回收价曲线**（客户端常量，装备批次再收）——
     // #590 起曲线本体 / 标量 / 等级表 / 三条成长线的书写处都在 server/src/shared/*-seed.ts
     growth: cfg("growth"),
-    battle: cfg("battle"),
+    // 战斗力权重（#603 起唯一书写处 = server/src/shared/combat-seed.ts）：客户端以前是这里
+    // 的 `configs/battle.combatCalc`，服务端抄一份 —— 现在反过来，这里只把它装成 Map 供
+    // buildSnapshot 按同一形状展开（顺序 = Map 自然顺序 = 种子里的书写顺序）
+    battle: { combatCalc: new Map(Object.entries(combatSeed.COMBAT_WEIGHTS_SEED)) },
     equipments,
     equipmentMaps: EQUIPMENT_MAPS.map((name) => [name, missing(`equipments.${name}`, equipments[name])]),
     skillData: missing("skill-data", cfg("skill-data").skillData),
@@ -367,6 +370,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "quest-seed.ts"),
           path.join(sharedDir, "achievement-seed.ts"),
           path.join(sharedDir, "drop-seed.ts"),
+          path.join(sharedDir, "combat-seed.ts"),
         ],
       },
       null,
@@ -385,6 +389,7 @@ function compileServerShared(work) {
     questSeed: require(path.join(work, "server-out", "quest-seed.js")),
     achievementSeed: require(path.join(work, "server-out", "achievement-seed.js")),
     dropSeed: require(path.join(work, "server-out", "drop-seed.js")),
+    combatSeed: require(path.join(work, "server-out", "combat-seed.js")),
   };
 }
 

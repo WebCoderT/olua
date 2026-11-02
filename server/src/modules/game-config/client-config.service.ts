@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
 import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
 import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
+import { COMBAT_WEIGHTS } from "../../shared/game-data.generated";
 import { MapService } from "../map/map.service";
 import { UiEffectService } from "../ui-effect/ui-effect.service";
 import { GameConfigService } from "./game-config.service";
@@ -52,6 +53,9 @@ export class ClientConfigService {
         return LevelDto.from(Number(level), attributes, row ? row.exp : Number(attributes.exp));
       }),
       growthScalars: this.growth.listScalars({ ...ALL }).list,
+      // #603：战斗力权重（唯一书写处 shared/combat-seed.ts）。客户端不再存倍率，
+      // 本地只留空 Map —— 「这件装备是不是更好」的提示用同一组数字判
+      combatWeights: COMBAT_WEIGHTS,
       mallPrices: this.mall.listPrices({ ...ALL }).list,
       mallSettings: this.mall.getSettings(),
       dropTables: this.drop.listTables().list,
