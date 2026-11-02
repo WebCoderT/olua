@@ -931,6 +931,10 @@ export interface SkillRow {
   require_target: number;
   /** 是否可被自动战斗 / 挂机释放（1 = 可以） */
   can_auto: number;
+  /** 职业归属（"1" 战士 / "2" 法师 / "3" 道士 / "4" 全职业；#603 第十一域：客户端技能栏按它重建映射） */
+  occupation: string;
+  /** 命中后的击退距离（像素；0 = 不击退。只对单体技能生效） */
+  push_distance: number;
   updated_at: number;
 }
 

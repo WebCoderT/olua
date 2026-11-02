@@ -42,12 +42,10 @@ import { rebuildQuests } from "./quest";
 import { fashionData } from "./fashionClothes";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths } from "./role";
-import { skillData } from "./skill-data";
+import { applySkillData } from "./skill-data";
 import { statuses } from "./status";
-import { SkillData, SkillTargetType, SkillType } from "../types/skill";
-import { OECCUPATION, SEX } from "../types/role";
+import { SEX } from "../types/role";
 import { StatusConfig, StatusSource } from "../types/status";
-import type { ACTION } from "../types/animation";
 import type { MonsterRuntimeStats } from "../types/monster";
 
 /**
@@ -322,40 +320,6 @@ export function applyFashionRows(rows: FashionRow[]): void {
   });
 }
 
-/**
- * 技能行（服务端快照）→ 客户端数值配置（不含释放实现）
- *
- * `oeccupation` 不来自服务端：它属于客户端布局（技能栏按 `oeccupationSkills` 列举 id），
- * 服务端也没有这一列 —— 覆写时保留本地的职业归属，追加时统一给「全职业」。
- */
-function skillRowToData(row: SkillRow, oeccupation: OECCUPATION = OECCUPATION.ALL): SkillData {
-  return {
-    id: row.id,
-    owner: row.owner === "monster" ? "monster" : "role",
-    label: row.label,
-    icon: row.icon,
-    cooldown: row.cooldown,
-    mpCost: row.mpCost,
-    targetType: row.targetType as SkillTargetType,
-    oeccupation,
-    level: row.levelReq,
-    description: row.description,
-    type: row.category as SkillType,
-    damageCoefficients: row.damageCoefficients.map((entry) => ({
-      baseType: entry.baseType as keyof BattleAttributes,
-      baseTypeRate: entry.baseTypeRate,
-    })),
-    distance: row.distance,
-    action: row.action as ACTION,
-    effect: row.effect || undefined,
-    effectIsOnSelf: row.effectOnSelf,
-    statusId: row.statusId || undefined,
-    castLockMs: row.castLockMs,
-    requireTarget: row.requireTarget,
-    canAuto: row.canAuto,
-  };
-}
-
 /** 状态行（服务端快照）→ 客户端状态配置 */
 function statusRowToConfig(row: StatusRow): StatusConfig {
   return {
@@ -377,27 +341,17 @@ function statusRowToConfig(row: StatusRow): StatusConfig {
 }
 
 /**
- * 技能配置覆写（#367 / #372）
+ * 技能配置装载（#367 / #372 / #603）
  *
- * 角色与怪物**一起覆写**（#372 起怪物技能也要按运营改过的值演出）：
- * - 本地已有的行 → 原地覆写（消费方拿到的引用不变，`skills` Map 由 `rebuildSkills()` 重建）；
- * - 本地没有、快照里是**怪物技能** → 追加（管理端能新建怪物技能，客户端必须能演新的动作 / 特效）；
- * - 本地没有、快照里是角色技能 → 忽略（角色技能清单固定在配置里，多出来的 id 没有实现）。
+ * #603 第十一域起客户端**没有任何技能出厂行**（`configs/skill-data` 只剩空数组 + 派生规则），
+ * 所以这里一律整表重建：快照里有什么就是什么，角色技能与怪物技能同表（`owner` 区分）。
  *
  * **不动 onClick**：技能释放实现是代码（configs/skill 按 id 接上），数据只描述
- * 「冷却 / 倍率 / 动作 / 特效 / 释放限制」。覆写后必须调 `rebuildSkills()`（见 ConfigLoader），
- * 否则 skills Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
+ * 「冷却 / 倍率 / 动作 / 特效 / 释放限制 / 职业归属 / 击退」。重建后必须调 `rebuildSkills()`
+ * （见 ConfigLoader），否则 `skills` Map 里还是旧对象 —— 消费方读的是 Map，不是这个数组。
  */
 export function applySkillRows(rows: SkillRow[]): void {
-  for (const row of rows) {
-    const config = skillData.find((item) => item.id === row.id);
-    if (!config) {
-      if (row.owner === "monster") skillData.push(skillRowToData(row));
-      continue;
-    }
-    const next = skillRowToData(row, config.oeccupation);
-    Object.assign(config, next);
-  }
+  applySkillData(rows);
 }
 
 /**

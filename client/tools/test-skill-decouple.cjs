@@ -19,7 +19,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { PROJECT_ROOT, findTsc, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, findTsc, prepare, compileServerShared, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -43,8 +43,28 @@ const sortDeep = (value) => {
   return value;
 };
 
-/** 11 档等差伤害系数（1001~1011 除 1008 外全是 3→4 这一档；1000 是 1→2，手写在下面当锚） */
-const rates = (from, to, count = 11) =>
+/**
+ * 默认值归一（#603 第十一域）：这几个字段写不写、写 `false / 0 / true` 对消费方**完全等价**
+ *
+ * - `effectIsOnSelf` 按真值判断（`EffectManager`：`config.effectIsOnSelf || …`）；
+ * - `castLockMs === 0` 与缺省同义（`RoleDisplay`：0 = 跟动画时长走）；
+ * - `requireTarget` 按 `!== false` 判断（`SkillManager`）；
+ * - `owner` 缺省即 role（`SkillConfig` 的约定）。
+ *
+ * 以前这些字段只在需要时才写，现在整行由服务端表下发、字段总是齐全 ——
+ * 不归一就会把「同一组数值换了个写法」判成数值漂移（假红）。归一之后
+ * `push` / `level` / 倍率 / 描述这些**真数值**仍然逐个钉死。
+ */
+const dropDefaults = (value) => {
+  const out = { ...value };
+  if (out.owner === "role") delete out.owner;
+  if (out.effectIsOnSelf === false) delete out.effectIsOnSelf;
+  if (out.requireTarget === true) delete out.requireTarget;
+  if (out.castLockMs === 0) delete out.castLockMs;
+  return out;
+};
+
+/** 11 档等差伤害系数（1001~1011 除 1008 外全是 3→4 这一档；1000 是 1→2，手写在下面当锚） */const rates = (from, to, count = 11) =>
   Array.from({ length: count }, (_, index) => Math.round((from + ((to - from) * index) / (count - 1)) * 100) / 100).map((value) => ({
     baseType: "physicalAttack",
     baseTypeRate: value,
@@ -56,6 +76,10 @@ const RATES_1000 = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2].map((valu
 /**
  * 12 个技能的期望数值（与 #31 重构前快照逐字节一致，改这里 = 改数值，必须走 issue）
  * 枚举值取其字符串字面量（SkillType "0"=主动 / SkillTargetType "1"=单体 / ACTION "stand" 等）
+ *
+ * #603 第十一域的一处**有意的修正**：1008 十步一杀的 `oeccupation` 从 "4"（全职业）改成 "1"（战士）。
+ * 以前字段写 ALL、而手写的 `oeccupationSkills` 又把它列在战士栏下 —— 两处自相矛盾，
+ * 谁读字段谁读清单决定它出不出来。现在字段是唯一来源，按技能栏的实际表现对齐到 "1"。
  */
 const EXPECTED = {
   "1000": { id: "1000", label: "‌基础剑术", icon: "skill/icon/1001", cooldown: 1, mpCost: 0, targetType: "1", oeccupation: "1", level: 1, description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关", type: "0", distance: 10, damageCoefficients: RATES_1000, action: "attack_near", canAuto: true },
@@ -66,7 +90,7 @@ const EXPECTED = {
   "1005": { id: "1005", label: "野蛮冲撞", icon: "skill/icon/1010", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "全版本通用的核心控场技能，10级可冲撞4格，65%概率将等级低于自身的目标撞飞并眩晕0.8秒，用于追击敌人、分割敌方阵型、抢BOSS卡位都非常实用", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: true },
   "1006": { id: "1006", label: "逐日剑法‌", icon: "skill/icon/2202", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "四格范围内的突进突袭技能，可快速拉近与远程职业的距离，弥补战士手短的短板，是PK中追击残血目标的利器", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: true },
   "1007": { id: "1007", label: "狮子吼", icon: "skill/icon/3007", cooldown: 1, mpCost: 12, targetType: "1", oeccupation: "1", level: 10, description: "范围麻痹技能，可震开并麻痹周围3格内的敌人，等级高于目标时必中，被围攻时能快速脱身，团战中可打乱敌方后排输出节奏", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: true },
-  "1008": { id: "1008", label: "十步一杀", icon: "skill/icon/1005", cooldown: 1, mpCost: 10, targetType: "0", oeccupation: "4", level: 10, description: "高阶专属技能，突进目标后有概率触发麻痹效果，是后期版本中打先手控制的神技", type: "0", distance: 200, damageCoefficients: [], action: "attack_far", canAuto: false, effect: "effect/skill/s_3010@0" },
+  "1008": { id: "1008", label: "十步一杀", icon: "skill/icon/1005", cooldown: 1, mpCost: 10, targetType: "0", oeccupation: "1", level: 10, description: "高阶专属技能，突进目标后有概率触发麻痹效果，是后期版本中打先手控制的神技", type: "0", distance: 200, damageCoefficients: [], action: "attack_far", canAuto: false, effect: "effect/skill/s_3010@0" },
   "1009": { id: "1009", label: "半月弯刀", icon: "skill/icon/1004", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "扇形范围群攻技能，可同时攻击身前半圆内的多个敌人，挂机清怪效率极高，被围时贴身释放也能快速清场突围", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: true },
   "1010": { id: "1010", label: "‌护体神盾", icon: "skill/icon/2009", cooldown: 60, mpCost: 15, statusId: "2001", requireTarget: false, targetType: "3", oeccupation: "1", level: 1, description: "被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false },
   "1011": { id: "1011", label: "金刚护体", icon: "skill/icon/1008", cooldown: 1, mpCost: 15, statusId: "2002", requireTarget: false, targetType: "1", oeccupation: "1", level: 10, description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false },
@@ -103,8 +127,8 @@ for (const [id, expected] of Object.entries(EXPECTED)) {
     check(false, `${id} 在技能表里`);
     continue;
   }
-  const same = JSON.stringify(sortDeep(skill)) === JSON.stringify(sortDeep(expected));
-  check(same, `${id} ${expected.label}：全部数值字段与期望一致`, same ? "" : `实际 ${JSON.stringify(sortDeep(skill))}`);
+  const same = JSON.stringify(sortDeep(dropDefaults(skill))) === JSON.stringify(sortDeep(dropDefaults(expected)));
+  check(same, `${id} ${expected.label}：全部数值字段与期望一致`, same ? "" : `实际 ${JSON.stringify(sortDeep(dropDefaults(skill)))}`);
 }
 
 // 数据模块的其余四个导出（消费方照旧从 configs/skill 拿，这里钉来源）
@@ -217,6 +241,11 @@ if (!tsc) {
 
       const wired = require(path.join(out, "configs/skill.js"));
       const stubs = require(warriorJs);
+      // #603 第十一域：客户端技能表加载期是空的（数据在 skill-seed.ts），
+      // 这里按线上同一条路灌种子再让接线层重算 skills Map —— 不灌就是「空 Map 全红」
+      const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill-wire"));
+      require(path.join(out, "configs/skill-data.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
+      wired.rebuildSkills();
       /** id → 应接的实现函数名（与 warrior.ts 的导出名一一对应） */
       const HANDLERS = {
         "1000": "skill_1000", "1001": "skill_1001", "1002": "skill_1000", "1003": "skill_1000",
@@ -237,7 +266,7 @@ if (!tsc) {
       // spread 之后的完整字段集 = A 段期望 + onClick 函数（JSON 会忽略函数值，onClick 的有无由上面同一性断言负责）
       const skill1000 = wired.skills.get("1000");
       check(
-        typeof skill1000.onClick === "function" && JSON.stringify(sortDeep({ ...skill1000, onClick: undefined })) === JSON.stringify(sortDeep(EXPECTED["1000"])),
+        typeof skill1000.onClick === "function" && JSON.stringify(sortDeep(dropDefaults({ ...skill1000, onClick: undefined }))) === JSON.stringify(sortDeep(dropDefaults(EXPECTED["1000"]))),
         "接线后 1000 完整字段集 = A 段期望（数值一个没丢）",
       );
     }

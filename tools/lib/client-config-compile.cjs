@@ -115,6 +115,11 @@ function loadItemSeed(work) {
   return loadSharedSeed(work, "item-seed.ts", "item-seed");
 }
 
+/** 编译服务端 `server/src/shared/skill-seed.ts`（#603 第十一域：技能出厂行） */
+function loadSkillSeed(work) {
+  return loadSharedSeed(work, "skill-seed.ts", "skill-seed");
+}
+
 /**
  * 编一个 `server/src/shared` 下的纯数据种子并 require 回来
  * @param {string} work createWork() 的临时目录
@@ -193,6 +198,19 @@ function hydrateItems(cfg, itemSeed) {
   return items.items;
 }
 
+/**
+ * 用 `skill-seed.ts` 把客户端那张空的技能表填起来（#603 第十一域）
+ *
+ * 与线上同一条路：`applySkillData` 整表重建技能行并重算「职业 → 技能 id」（快照落库用的
+ * 就是同一份实现）。**释放实现不在这一层**：`configs/skill` 的 onClick 要靠
+ * `skills/warrior` 接上，沙箱里只关心数值。
+ */
+function hydrateSkills(cfg, skillSeed) {
+  const skillData = cfg("skill-data");
+  skillData.applySkillData(skillSeed.SKILL_SEED_ROWS);
+  return skillData.skillData;
+}
+
 module.exports = {
   ROOT,
   ASSETS,
@@ -204,4 +222,6 @@ module.exports = {
   hydrateEquipment,
   loadItemSeed,
   hydrateItems,
+  loadSkillSeed,
+  hydrateSkills,
 };

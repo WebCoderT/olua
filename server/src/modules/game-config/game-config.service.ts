@@ -47,10 +47,10 @@ import {
   MONSTER_SKILLS,
   QUESTS,
   ITEM_TYPES,
-  SKILLS,
   STATUSES,
 } from "../../shared/game-data.generated";
 import { DRUG_SEED_ROWS, ITEM_BASE_SEED_ROWS } from "../../shared/item-seed";
+import { SKILL_SEED_ROWS } from "../../shared/skill-seed";
 import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
 import { TITLE_SEEDS } from "../../shared/title-seed";
 import { SOUL_SEEDS } from "../../shared/soul-seed";
@@ -760,6 +760,9 @@ export class GameConfigService implements OnModuleInit {
     if (dto.castLockMs !== undefined) next.cast_lock_ms = dto.castLockMs;
     if (dto.requireTarget !== undefined) next.require_target = dto.requireTarget ? 1 : 0;
     if (dto.canAuto !== undefined) next.can_auto = dto.canAuto ? 1 : 0;
+    // #603 第十一域：职业归属与击退距离也可改（前者决定技能栏归谁，后者只对单体技能生效）
+    if (dto.occupation !== undefined) next.occupation = dto.occupation;
+    if (dto.pushDistance !== undefined) next.push_distance = dto.pushDistance;
     // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态。
     // 只在本次请求**动了分类 / 倍率 / 状态**时才校验 —— 这三个字段之外的部分（名字、冷却、
     // 动作锁……）与约束无关；而且库里存在「分类是主动但没配倍率」的历史行（如 1008 十步一杀，
@@ -813,6 +816,9 @@ export class GameConfigService implements OnModuleInit {
       cast_lock_ms: dto.castLockMs ?? 0,
       require_target: dto.requireTarget === false ? 0 : 1,
       can_auto: dto.canAuto === true ? 1 : 0,
+      // 怪物技能没有「归哪个职业」的语义（服务端 AI 释放），一律全职业；击退默认不配
+      occupation: dto.occupation ?? "4",
+      push_distance: dto.pushDistance ?? 0,
       updated_at: Date.now(),
     };
     this.assertSkillConsistency(row);
@@ -1566,39 +1572,39 @@ export class GameConfigService implements OnModuleInit {
   }
 
   /**
-   * 技能 seed（#367）：SKILLS 是**整行**快照（owner/分类/动作/特效/冷却/倍率/挂载状态/释放限制），
-   * 直接按字段灌；damageCoefficients 落库前序列化成 JSON。
+   * 技能 seed（#603 第十一域）：`skill-seed.ts` 的 `SKILL_SEED_ROWS` 整行灌 ——
+   * 名称 / 图标 / 分类 / 目标 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 描述 / 倍率 /
+   * 挂载状态 / 施法锁 / 释放限制 / **职业归属** / **击退距离** 都在服务端种子,
+   * 客户端 `configs/skill-data` 只剩空数组（进游戏由快照整表重建）。
    *
    * 角色技能行 id 固定（客户端技能栏 / 快捷键 / 角色存档都引用它），所以这里只有 INSERT OR IGNORE。
    */
   private seedSkills() {
-    for (const [id, meta] of Object.entries(SKILLS as Record<string, Record<string, unknown>>)) {
-      const coefficients = Array.isArray(meta.damageCoefficients) ? meta.damageCoefficients : [];
+    for (const row of SKILL_SEED_ROWS) {
       this.skillsRepo.seedRow({
-        id,
-        owner: String(meta.owner ?? "role"),
-        label: String(meta.label ?? ""),
-        icon: String(meta.icon ?? ""),
-        category: String(meta.category ?? "0"),
-        target_type: String(meta.targetType ?? "1"),
-        action: String(meta.action ?? ""),
-        effect: String(meta.effect ?? ""),
-        effect_on_self: meta.effectOnSelf === true ? 1 : 0,
-        cooldown: Number(meta.cooldown) || 0,
-        mp_cost: Number(meta.mpCost) || 0,
-        distance: Number(meta.distance) || 0,
-        level_req: Number(meta.levelReq) || 1,
-        description: String(meta.description ?? ""),
+        id: row.id,
+        owner: row.owner,
+        label: row.label,
+        icon: row.icon,
+        category: row.category,
+        target_type: row.targetType,
+        action: row.action,
+        effect: row.effect,
+        effect_on_self: row.effectOnSelf ? 1 : 0,
+        cooldown: row.cooldown,
+        mp_cost: row.mpCost,
+        distance: row.distance,
+        level_req: row.levelReq,
+        description: row.description,
         damage_coefficients: JSON.stringify(
-          coefficients.map((entry) => {
-            const item = (entry ?? {}) as Record<string, unknown>;
-            return { baseType: String(item.baseType ?? ""), baseTypeRate: Number(item.baseTypeRate) || 0 };
-          }),
+          row.damageCoefficients.map((entry) => ({ baseType: String(entry.baseType ?? ""), baseTypeRate: Number(entry.baseTypeRate) || 0 })),
         ),
-        status_id: String(meta.statusId ?? ""),
-        cast_lock_ms: Number(meta.castLockMs) || 0,
-        require_target: meta.requireTarget === false ? 0 : 1,
-        can_auto: meta.canAuto === true ? 1 : 0,
+        status_id: row.statusId,
+        cast_lock_ms: row.castLockMs,
+        require_target: row.requireTarget ? 1 : 0,
+        can_auto: row.canAuto ? 1 : 0,
+        occupation: row.occupation,
+        push_distance: row.pushDistance,
         updated_at: 0,
       });
     }

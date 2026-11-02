@@ -152,6 +152,14 @@ function hydrateSnapshotTables(outDir) {
     if (has("configs/quest.js")) require(path.join(outDir, "configs/quest.js")).rebuildQuests();
   }
 
+  // 技能（#603 第十一域）：客户端 `configs/skill-data` 只剩空数组 + 「职业 → 技能 id」的派生规则，
+  // 数值在 skill-seed.ts —— 技能栏 / 快捷栏 / 技能弹窗 / 普攻距离判定的断言都读这张表。
+  // 放在装备那段的 early-return 之前：只编了 skill-data 的用例也要能拿到技能。
+  if (has("configs/skill-data.js")) {
+    const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill"));
+    require(path.join(outDir, "configs/skill-data.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
+  }
+
   if (!has("configs/equipments.js") || !has("configs/growth.js")) return;
 
   const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));

@@ -98,7 +98,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "fashionClothes"].map(
+const SOURCE_FILES = ["growth", "equipments", "role", "items", "monster", "drug", "material", "fashionClothes"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -125,14 +125,14 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, equipmentSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed, itemSeed } = compileServerShared(work);
-  // #603 第九 / 十域：装备 / 药品 / 材料数据的唯一书写处都在 server/src/shared，
+  const seeds = compileServerShared(work);
+  // #603 第九 / 十 / 十一域：装备 / 药品 / 材料 / 技能数据的唯一书写处都在 server/src/shared，
   // 客户端那几张表**加载期是空的** —— 生成器先用种子把它们填起来，后面那套快照逻辑一行都不用改
-  hydrateEquipment(cfg, equipmentSeed, itemSeed);
+  hydrateEquipment(cfg, seeds.equipmentSeed, seeds.itemSeed);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
-  const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed), statsOf);
+  const statsOf = (item) => scaledEquipmentStats(seeds.growthSeed, item, prefixRates, suffixRates);
+  const snapshot = buildSnapshot(load(cfg, seeds), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -147,7 +147,8 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed) {
+function load(cfg, seeds) {
+  const { monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed, combatSeed, npcSeed, mallSeed, skillSeed } = seeds;
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -163,7 +164,9 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
     battle: { combatCalc: new Map(Object.entries(combatSeed.COMBAT_WEIGHTS_SEED)) },
     equipments,
     equipmentMaps: EQUIPMENT_MAPS.map((name) => [name, missing(`equipments.${name}`, equipments[name])]),
-    skillData: missing("skill-data", cfg("skill-data").skillData),
+    // 技能行（#603 第十一域）：唯一书写处 = server/src/shared/skill-seed.ts，
+    // 客户端 configs/skill-data 只剩空数组 + 「职业 → 技能 id」的派生规则
+    skillRows: skillSeed.SKILL_SEED_ROWS,
     occupations: missing("role.occupations", cfg("role").occupations),
     items: missing("items", cfg("items").items),
     // 怪物 AI 节奏参数（#323：AI 收权后服务端 tick 也要用同一套数值）
@@ -206,7 +209,7 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
 /** 抽成一个与引擎、与 TS 类型都无关的纯数据快照 */
 function buildSnapshot(cfg, statsOf) {
   // 技能行两处要用：快照本身 + 怪物挂载校验（挂的必须是 owner=monster 的技能）
-  const skills = pickSkills(cfg.skillData);
+  const skills = pickSkills(cfg.skillRows);
   return {
     // —— 战斗数值（服务端算属性用；与它之前那份独立的 battle-rules 快照**逐值相同**，已合并）——
     combatWeights: pickMap(cfg.battle.combatCalc),
@@ -266,7 +269,7 @@ function buildSnapshot(cfg, statsOf) {
     equipmentSuffixRates: pickRates("equipmentSuffixRates", cfg.growth.equipmentSuffixRates, cfg.equipments.equipmentSuffixLabels),
     equipmentDisplayNames: pickEquipmentNames(cfg.equipmentMaps, cfg.equipments),
     equipmentSlotOf: pickEquipmentSlots(cfg.equipmentMaps),
-    skillLabels: pickSkillsLabels(cfg.skillData),
+    skillLabels: pickSkillsLabels(cfg.skillRows),
   };
 }
 
@@ -390,6 +393,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "npc-seed.ts"),
           path.join(sharedDir, "mall-seed.ts"),
           path.join(sharedDir, "item-seed.ts"),
+          path.join(sharedDir, "skill-seed.ts"),
         ],
       },
       null,
@@ -413,6 +417,7 @@ function compileServerShared(work) {
     npcSeed: require(path.join(work, "server-out", "npc-seed.js")),
     mallSeed: require(path.join(work, "server-out", "mall-seed.js")),
     itemSeed: require(path.join(work, "server-out", "item-seed.js")),
+    skillSeed: require(path.join(work, "server-out", "skill-seed.js")),
   };
 }
 
@@ -842,41 +847,48 @@ function pickMonsterDrops(monsterDropTables, monsters) {
 }
 
 /**
- * 技能表 → [[技能 id, 战斗数值]]
+ * 技能种子（`SKILL_SEED_ROWS`）→ [[技能 id, 战斗数值]]
  *
- * id 重复同样在这里挡掉（落进 `Record` 就是 TS1117）。
+ * #603 第十一域起单位换成服务端 `skill-seed.ts`：种子的字段名**就是本生成物与表的形状**
+ * （category / effectOnSelf / levelReq 都已在种子里改好名），这里只做两件事 ——
+ * 校验（缺 id / 重复 id 落进 `Record` 就是 TS1117）与数值规整，**不重新映射字段**：
+ * 重新映射等于把「字段叫什么」这件事复制出第二份，正是这条管线要消灭的东西。
  */
 function pickSkills(list) {
   const out = [];
   const seen = new Set();
   for (const item of list) {
-    if (!item || !item.id) throw new Error("configs/skill-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("skill-seed 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`技能 id 重复：${item.id}`);
     seen.add(item.id);
     const row = {
-      // #372：归属来自配置（角色技能缺省 role，怪物技能显式写 monster）。
+      // #372：归属来自数据（角色技能 role，怪物技能 monster）。
       // 技能行本身对两边同构 —— 分表只会让「同一个技能既给人又给怪」复制两份并漂移
       owner: item.owner === "monster" ? "monster" : "role",
       label: String(item.label ?? ""),
       icon: String(item.icon ?? ""),
       // category 就是客户端的 SkillType（"0" 主动 / "1" 被动 / "2" 状态 / "3" 回复），存原值不另起一套
-      category: String(item.type ?? "0"),
+      category: String(item.category ?? "0"),
       targetType: String(item.targetType ?? "1"),
       action: String(item.action ?? ""),
       effect: String(item.effect ?? ""),
-      effectOnSelf: item.effectIsOnSelf === true,
+      effectOnSelf: item.effectOnSelf === true,
       cooldown: round(item.cooldown ?? 0),
       mpCost: round(item.mpCost ?? 0),
       distance: round(item.distance ?? 0),
-      // level 在原表里是「学习/开启等级」，落库叫 level_req（避免与「技能等级」混读）
-      levelReq: round(item.level ?? 1),
+      // level_req 是「学习 / 开启等级」，与「技能等级」区分开
+      levelReq: round(item.levelReq ?? 1),
       description: String(item.description ?? ""),
       damageCoefficients: (item.damageCoefficients ?? []).map((c) => ({ baseType: c.baseType, baseTypeRate: round(c.baseTypeRate) })),
       statusId: String(item.statusId ?? ""),
       castLockMs: round(item.castLockMs ?? 0),
-      // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在配置里显式写 false
+      // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在种子里显式写 false
       requireTarget: item.requireTarget !== false,
       canAuto: item.canAuto === true,
+      // 职业归属（#603 第十一域）：客户端据此重建「职业 → 技能 id」，不再手写第二份清单
+      occupation: String(item.occupation ?? "4"),
+      // 击退距离（0 = 不击退）：技能击退是场上唯一能推动位置的途径，落库后才可运营
+      pushDistance: round(item.pushDistance ?? 0),
     };
     if (!Array.isArray(row.damageCoefficients)) throw new Error(`技能 ${item.id} 的 damageCoefficients 不是数组`);
     out.push([item.id, row]);
@@ -954,12 +966,12 @@ function pickMonsterSkills(map, monsters, skills) {
   return out;
 }
 
-/** 技能 id → 技能名 */
+/** 技能 id → 技能名（来源同 `pickSkills`：服务端 skill-seed.ts） */
 function pickSkillsLabels(list) {
   const out = [];
   const seen = new Set();
   for (const item of list) {
-    if (!item || !item.id) throw new Error("configs/skill-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("skill-seed 里有缺 id 的条目");
     if (seen.has(item.id)) throw new Error(`技能 id 重复：${item.id}`);
     seen.add(item.id);
     out.push([item.id, String(item.label ?? "")]);

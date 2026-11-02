@@ -13082,6 +13082,22 @@
           "canAuto": {
             "type": "boolean",
             "description": "是否可被自动战斗 / 挂机释放"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4"
+            ]
+          },
+          "pushDistance": {
+            "type": "number",
+            "description": "命中后的击退距离（像素；0 = 不击退；只对单体技能生效）",
+            "minimum": 0,
+            "maximum": 2000
           }
         }
       },
@@ -13185,6 +13201,22 @@
           "canAuto": {
             "type": "boolean",
             "description": "是否可被自动战斗 / 挂机释放"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4"
+            ]
+          },
+          "pushDistance": {
+            "type": "number",
+            "description": "命中后的击退距离（像素；0 = 不击退；只对单体技能生效）",
+            "minimum": 0,
+            "maximum": 2000
           },
           "id": {
             "type": "string",
@@ -19153,6 +19185,14 @@
             "type": "boolean",
             "description": "是否可被自动战斗 / 挂机释放"
           },
+          "occupation": {
+            "type": "string",
+            "description": "职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域）。客户端技能栏按它重建「职业 → 技能」映射，所以这一列是「技能归谁」的唯一来源"
+          },
+          "pushDistance": {
+            "type": "number",
+            "description": "命中后的击退距离（像素；0 = 不击退。只对单体技能生效）"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -19178,6 +19218,8 @@
           "castLockMs",
           "requireTarget",
           "canAuto",
+          "occupation",
+          "pushDistance",
           "updatedAt"
         ]
       },

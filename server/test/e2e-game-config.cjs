@@ -1845,6 +1845,16 @@ async function main() {
     checkEqual(skill1010?.statusId, "2001", "状态型技能 1010 的 statusId 来自配置（不再手写映射表）");
     checkEqual(skill1010?.requireTarget, false, "状态型技能不要求目标");
 
+    // —— 职业归属与击退（#603 第十一域）——
+    // 这两项以前只活在客户端：职业写在手写的 oeccupationSkills 里、击退写在技能行上，
+    // 新增技能要改两处。现在跟在技能行里，客户端按行重建那份映射。
+    checkEqual(skill1000?.occupation, shared.SKILLS["1000"].occupation, "职业归属 seed 与配置一致");
+    checkEqual(skill1000?.occupation, "1", "普攻归战士（技能栏按 occupation 重建）");
+    const skill1001 = roleSkills.body?.data?.list?.find((row) => row.id === "1001");
+    checkEqual(skill1001?.pushDistance, shared.SKILLS["1001"].pushDistance, "击退距离 seed 与配置一致");
+    checkEqual(skill1001?.pushDistance, 120, "烈火剑法击退 120 像素（场上唯一能推动怪物的途径）");
+    checkEqual(skill1010?.pushDistance, 0, "没配击退的技能是 0（不是「击退 0 像素」）");
+
     const skillKeyword = await api(base, "GET", "/api/admin/skills?keyword=" + encodeURIComponent("逐日"), { token });
     checkEqual(skillKeyword.body?.data?.total, 1, "关键字按技能名命中「逐日剑法」");
 
@@ -1864,6 +1874,10 @@ async function main() {
     checkEqual(badCooldown.status, 400, "冷却为负 → 400（DTO 拦下）");
     const badCategory = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { category: "9" } });
     checkEqual(badCategory.status, 400, "分类不在枚举里 → 400（DTO 拦下）");
+    const badOccupation = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { occupation: "9" } });
+    checkEqual(badOccupation.status, 400, "职业归属不在枚举里 → 400（DTO 拦下）");
+    const badPush = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { pushDistance: -1 } });
+    checkEqual(badPush.status, 400, "击退距离为负 → 400（往自己身后推没有意义）");
 
     // —— 跨字段约束：状态型必须挂状态 / 主动必须能打出伤害 / 状态必须真实存在 ——
     const statusWithoutId = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { category: "2", statusId: "" } });
@@ -1881,17 +1895,20 @@ async function main() {
     checkEqual(patchLock.body?.data?.castLockMs, 500, "动作锁已写入");
     checkEqual(patchLock.body?.data?.damageCoefficients?.length, 0, "顺带断言：1008 的倍率保持原样（空）");
 
-    // —— 正常更新生效：释放限制三件套 ——
+    // —— 正常更新生效：释放限制三件套 + 职业归属 / 击退 ——
     const patchSkill = await api(base, "PATCH", "/api/admin/skills/1000", {
       token,
-      body: { cooldown: 2.5, mpCost: 3, castLockMs: 700, requireTarget: false, canAuto: false },
+      body: { cooldown: 2.5, mpCost: 3, castLockMs: 700, requireTarget: false, canAuto: false, occupation: "2", pushDistance: 60 },
     });
-    checkEqual(patchSkill.status, 200, "PATCH 技能成功（冷却 / 耗蓝 / 动作锁 / 目标要求 / 自动释放）");
+    checkEqual(patchSkill.status, 200, "PATCH 技能成功（冷却 / 耗蓝 / 动作锁 / 目标要求 / 自动释放 / 职业 / 击退）");
     checkEqual(patchSkill.body?.data?.cooldown, 2.5, "响应里的冷却已更新");
     checkEqual(patchSkill.body?.data?.castLockMs, 700, "响应里的动作锁已更新");
     checkEqual(patchSkill.body?.data?.requireTarget, false, "响应里的「要求目标」已关掉");
+    checkEqual(patchSkill.body?.data?.occupation, "2", "响应里的职业归属已改成法师");
+    checkEqual(patchSkill.body?.data?.pushDistance, 60, "响应里的击退距离已写入");
     const skillReread = await api(base, "GET", "/api/admin/skills?keyword=1000", { token });
     checkEqual(skillReread.body?.data?.list?.[0]?.cooldown, 2.5, "重新读取冷却已是新值（落库了）");
+    checkEqual(skillReread.body?.data?.list?.[0]?.occupation, "2", "重新读取职业归属已是新值（落库了）");
 
     // —— 状态表 ——
     const statuses = await api(base, "GET", "/api/admin/statuses", { token });
@@ -1941,13 +1958,15 @@ async function main() {
     const snapSkill1000 = skillSnapshot.body?.data?.skills?.find((row) => row.id === "1000");
     checkEqual(snapSkill1000?.cooldown, 2.5, "快照里的技能已是管理端改过的冷却");
     checkEqual(snapSkill1000?.castLockMs, 700, "快照里的技能带释放动作锁（客户端按它锁出手）");
+    checkEqual(snapSkill1000?.occupation, "2", "快照里的技能带职业归属（客户端据此重建技能栏）");
+    checkEqual(snapSkill1000?.pushDistance, 60, "快照里的技能带击退距离（客户端据此推怪）");
     const snapStatus2001 = skillSnapshot.body?.data?.statuses?.find((row) => row.id === "2001");
     checkEqual(Object.keys(snapStatus2001?.combat ?? {}).length, 0, "快照里的状态修正跟着被清空（改配置对客户端生效的通道）");
 
     // 还原 seed 前提（不给后续追加的断言留脏数据）
     const restoreSkill = await api(base, "PATCH", "/api/admin/skills/1000", {
       token,
-      body: { cooldown: 1, mpCost: 0, castLockMs: 0, requireTarget: true, canAuto: true },
+      body: { cooldown: 1, mpCost: 0, castLockMs: 0, requireTarget: true, canAuto: true, occupation: "1", pushDistance: 0 },
     });
     checkEqual(restoreSkill.status, 200, "还原技能 1000 的释放限制");
     const restoreSkill1008 = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { castLockMs: 0 } });

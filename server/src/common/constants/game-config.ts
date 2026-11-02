@@ -122,6 +122,18 @@ export const SKILL_CATEGORY_LABELS: Record<string, string> = {
 /** 目标类型（= 客户端 `types/skill.SkillTargetType` 的枚举值：区域 / 单体 / 群体 / 自身） */
 export const SKILL_TARGET_TYPE_VALUES = ["0", "1", "2", "3"];
 
+/**
+ * 技能的职业归属（= 客户端 `types/role.OECCUPATION` 的枚举值，**逐值一致**）
+ *
+ * #603 第十一域起跟着技能行入库：客户端技能栏按这一列重建「职业 → 技能」映射,
+ * 所以它是「这个技能归谁」的唯一来源（以前那份手写映射已删）。
+ * 注意 4 = **全职业**（不是「第四个职业」）。
+ *
+ * 取值域与中文名都**不在这里定义**：职业码清单与名字的唯一来源是公共数据
+ * `shared/game-data` 的 `ROLE_OCCUPATION_CODES` / `OCCUPATION_LABELS`（由客户端
+ * `configs/role.occupations` 生成）—— 在这里再写一遍就是「客户端加了个职业、服务端不认」。
+ */
+
 /** 目标类型中文名（与客户端 skillTargetTypeLabels 一致） */
 export const SKILL_TARGET_TYPE_LABELS: Record<string, string> = {
   "0": "区域",

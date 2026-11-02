@@ -657,6 +657,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         cast_lock_ms        INTEGER NOT NULL DEFAULT 0,
         require_target      INTEGER NOT NULL DEFAULT 1,
         can_auto            INTEGER NOT NULL DEFAULT 0,
+        occupation          TEXT    NOT NULL DEFAULT '4',
+        push_distance       REAL    NOT NULL DEFAULT 0,
         updated_at          INTEGER NOT NULL DEFAULT 0
       );
 
@@ -949,6 +951,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 的 backfillIcon 一次性回填（只在 icon 还是空串时填）
     this.ensureColumn("drugs", "icon", "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn("items", "icon", "TEXT NOT NULL DEFAULT ''");
+    // 技能职业归属与击退距离（#603 第十一域）：客户端技能栏按 occupation 重建「职业→技能」映射，
+    // push_distance 以前只写在客户端配置里（快照不覆盖它），不补列这两项会一起丢
+    this.ensureColumn("skills", "occupation", "TEXT NOT NULL DEFAULT '4'");
+    this.ensureColumn("skills", "push_distance", "REAL NOT NULL DEFAULT 0");
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();
