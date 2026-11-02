@@ -86,7 +86,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "quest-data", "achievement-data"].map(
+const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop", "achievement-data"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -113,11 +113,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed } = compileServerShared(work);
+  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -131,7 +131,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed) {
+function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -174,7 +174,8 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed) {
     drugs: missing("drug.drugs", cfg("drug").drugs),
     materials: missing("material.materials", cfg("material").materials),
     // 任务（#396）：管理端「任务配置」的 seed 来源 —— 单目标（kill/talk/collect）+ 奖励
-    questData: missing("quest-data", cfg("quest-data").questData),
+    // #603 起任务表的服务端唯一书写处是 quest-seed.ts，客户端 configs 只剩空数组
+    questData: questSeed.QUEST_SEED_ROWS,
     // 成就（#401）：条件与门槛的纯数据；kill 的 target 引用怪物 key、collect 引用物品 id
     achievementData: missing("achievement-data", cfg("achievement-data").achievementData),
   };
@@ -222,6 +223,7 @@ function buildSnapshot(cfg, statsOf) {
     // `initialGold` 常量改包就变了，而「角色第一次拿到的钱」不可能超过配置给的起点
     roleInitialCurrency: cfg.roleInitialCurrency,
     // 任务（#396）：管理端可改的任务配置（主线链 / 日常 / 单目标 / 奖励）
+    // #603 起任务表的服务端唯一书写处是 quest-seed.ts（load() 已把种子填进 cfg.questData）
     quests: pickQuests(cfg.questData),
     // 成就（#401）：累计型（kill / quest）走事件、状态型（level / combat / collect）查询现算，
     // 配置只声明条件与门槛；target 的引用在生成期就校验（怪物 key / 物品 id 必须真实存在）
@@ -358,6 +360,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "monster-drop-seed.ts"),
           path.join(sharedDir, "monster-skill-seed.ts"),
           path.join(sharedDir, "status-seed.ts"),
+          path.join(sharedDir, "quest-seed.ts"),
         ],
       },
       null,
@@ -373,6 +376,7 @@ function compileServerShared(work) {
     monsterDropSeed: require(path.join(work, "server-out", "monster-drop-seed.js")),
     monsterSkillSeed: require(path.join(work, "server-out", "monster-skill-seed.js")),
     statusSeed: require(path.join(work, "server-out", "status-seed.js")),
+    questSeed: require(path.join(work, "server-out", "quest-seed.js")),
   };
 }
 
@@ -481,7 +485,7 @@ function pickQuests(quests) {
   const kinds = new Set(["main", "daily"]);
   const types = new Set(["kill", "talk", "collect"]);
   for (const item of quests || []) {
-    if (!item || !item.id) throw new Error("configs/quest-data 里有缺 id 的条目");
+    if (!item || !item.id) throw new Error("quest-seed.ts 里有缺 id 的任务条目");
     if (seen.has(item.id)) throw new Error(`任务 id 重复：${item.id}`);
     seen.add(item.id);
     if (!kinds.has(item.kind)) throw new Error(`任务 ${item.id} 的 kind 非法：${item.kind}`);
@@ -516,7 +520,7 @@ function pickQuests(quests) {
       },
     ]);
   }
-  if (out.length === 0) throw new Error("configs/quest-data 的 questData 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  if (out.length === 0) throw new Error("quest-seed.ts 的 questData 为空（改名或清空了？生成物少一张表比报错危险得多）");
   for (const [, row] of out) {
     if (row.prevQuestId && !seen.has(row.prevQuestId)) {
       throw new Error(`任务 ${row.id} 的 prevQuestId 引用了不存在的任务：${row.prevQuestId}`);
