@@ -558,7 +558,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 具名掉落表（#254）：主键是表 id（configs/drop 的 common/elite/boss + 兜底 default）；
+      -- 具名掉落表（#254）：主键是表 id（出厂值见 shared/drop-seed.ts 的 common/elite/boss + 兜底 default）；
       -- **允许动态增删**（运营自建新表给多怪复用，同 mall_prices 定位），
       -- 被 monster_drops.table_id 引用中的行在 service 拒删
       CREATE TABLE IF NOT EXISTS drop_tables (

@@ -17,7 +17,8 @@
  * 装备的键是**展开后**的物品 id（基础件原 key，或带前后缀的 `_pXsY`），与客户端
  * `getEquipment(id)` 同口径；`EQUIPMENT_DISPLAY_NAMES` 里的名字已经拼好，消费方不必自己拼。
  *
- * 不在范围：掉落（掉落结算还没上服务端，等世界权威那一刀）。
+ * 掉落表（DROP_TABLES / MONSTER_DROPS / DROP_DEFAULT）的出厂书写处在服务端
+ * server/src/shared/drop-seed.ts 与 monster-drop-seed.ts，这里只是把它们快照成三端可读的形状。
  */
 
 /** 六项区间型战斗属性。如 ["physicalAttack","magicAttack",...] */

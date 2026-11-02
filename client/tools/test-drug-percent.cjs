@@ -6,21 +6,20 @@
  * · drug_hp_pct / drug_mp_pct 注册进物品总表，效果是百分比（hpPercent/mpPercent），图标指向真实存在的 60×60 PNG
  * · resolveDrugRecovery（纯函数）：固定值与百分比各自累加、按 maxHp/maxMp 折算、四舍五入、负值按 0、空效果归零
  * · **所有怪物均可掉落**：服务端种子 monster-drop-seed.ts（#602 起唯一书写处）每只怪的条目池都含
- *   这两个 id；configs/drop 的三张具名表（common/elite/boss）与 defaultDropTable 也不缺（兜底口径一致）
+ *   这两个 id；drop-seed.ts 的三张具名表（common/elite/boss）与兜底表也不缺（兜底口径一致）
  * · 接线：StorageManager.useDrug 走 resolveDrugRecovery（不另抄一份回复量口径），魔法满值提示文案存在
  *
- * 数据层跑在沙箱里（真实的 configs/items + 服务端 monster-drop-seed + configs/drop，见 lib/configs-sandbox.cjs）。
+ * 数据层跑在沙箱里（真实的 configs/items + 服务端 monster-drop-seed / drop-seed，见 lib/configs-sandbox.cjs）。
  */
 const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, compileServerShared, check, finish } = require("./lib/configs-sandbox.cjs");
 
-// drop.ts 只依赖 types（type-only），与 items 同批编译；
-// #602 起每怪独立掉落表的唯一书写处在 server/src/shared/monster-drop-seed.ts（客户端 configs 不再有这份）
-const outDir = prepare("olua-drug-percent", ["configs/drop.ts"]);
+// 掉落表 #603 起全部在服务端种子（客户端 configs/drop 只剩运行时手感参数，没有表可读）
+const outDir = prepare("olua-drug-percent");
 const { items, resolveDrugRecovery } = require(path.join(outDir, "configs/items.js"));
 const { MONSTER_DROP_SEED_ROWS: monsterDropTables } = require(compileServerShared("monster-drop-seed.ts", "olua-monster-drop-seed"));
-const { dropTables, defaultDropTable } = require(path.join(outDir, "configs/drop.js"));
+const { DROP_TABLE_SEED_ROWS: dropTables, DROP_DEFAULT_SEED: defaultDropTable } = require(compileServerShared("drop-seed.ts", "olua-drop-seed"));
 const { GOOD_TYPE, isDrug } = require(path.join(outDir, "types/good.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -91,12 +90,14 @@ for (const config of monsterDropTables) {
 check(monsterCount > 0, `每怪独立掉落表非空（${monsterCount} 只怪）`);
 check(missingHp === 0 && missingMp === 0, `每只怪的条目池都含强效血/蓝药（缺血 ${missingHp} / 缺蓝 ${missingMp}）`);
 ["common", "elite", "boss"].forEach((id) => {
-  const ids = new Set(dropTables.get(id).entries.map((entry) => entry.goodId));
+  const table = dropTables.find((row) => row.id === id);
+  check(!!table, `具名掉落表 ${id} 存在`);
+  const ids = new Set((table?.entries ?? []).map((entry) => entry.goodId));
   check(ids.has(HP_ID) && ids.has(MP_ID), `具名掉落表 ${id} 也含两条强效药`);
 });
 {
   const ids = new Set(defaultDropTable.entries.map((entry) => entry.goodId));
-  check(ids.has(HP_ID) && ids.has(MP_ID), "defaultDropTable 兜底同样含两条强效药");
+  check(ids.has(HP_ID) && ids.has(MP_ID), "兜底掉落表 default 同样含两条强效药");
 }
 
 console.log("\n— D. 图标素材 —");

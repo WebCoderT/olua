@@ -50,7 +50,9 @@
  * - ~~时装~~：**#257 起已纳入**——`configs/fashionClothes` 恢复为纯数据文件（原整份注释、
  *   零导出零消费，表现层参数全是常量未随恢复保留，见该文件头），快照 FASHION
  *   带 id / 名称 / 文案 / 资源路径 / 售卖价 / 属性（当前全 0，管理端可改）。
- * - **掉落**：掉落结算还没上服务端（等世界权威那一刀），等它被启用再说。
+ * - ~~掉落~~：**#254 / #581 起已纳入**——抽表与入包都在服务端，具名表与兜底表的唯一书写处
+ *   是 `server/src/shared/drop-seed.ts`（#603 从客户端 configs/drop 搬来），每怪独立表在
+ *   `monster-drop-seed.ts`；客户端只剩 `dropRuntime` 手感参数。
  *
  * 用法：node tools/gen-shared-data.cjs
  */
@@ -86,7 +88,7 @@ const MONSTER_SEED_KEYS = (() => {
  * `items` 会把 `drug` / `material` / `equipments` 一起拉进来（它建的是一张物品总表），
  * `role` 带职业表，`map` 带地图表。列在这里是为了「少一张就报错」，不是为了让编译器找到它们。
  */
-const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes", "drop"].map(
+const SOURCE_FILES = ["growth", "battle", "equipments", "skill-data", "role", "items", "monster", "drug", "material", "npc-data", "mall", "fashionClothes"].map(
   (name) => path.join(ASSETS, "configs", `${name}.ts`),
 );
 
@@ -113,11 +115,11 @@ function main() {
   const { cfg } = configLoader(work);
   // #590：装备出厂数值公式随曲线搬去服务端（server/src/shared/growth-seed.ts 的 equipmentStats），
   // 客户端 configs 只剩零值结构 + 快照重算 —— 生成器从种子公式现算，不再从客户端 Map 读（读到的是 0）
-  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed } = compileServerShared(work);
+  const { growthSeed, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed } = compileServerShared(work);
   const prefixRates = cfg("growth").equipmentPrefixRates;
   const suffixRates = cfg("growth").equipmentSuffixRates;
   const statsOf = (item) => scaledEquipmentStats(growthSeed, item, prefixRates, suffixRates);
-  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed), statsOf);
+  const snapshot = buildSnapshot(load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed), statsOf);
   const source = render(snapshot);
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -131,7 +133,7 @@ function main() {
   cleanupWork(work);
 }
 
-function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed) {
+function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, achievementSeed, dropSeed) {
   const equipments = cfg("equipments");
   const missing = (name, value) => {
     if (!value) throw new Error(`configs/${name} 的导出为空 —— 改名或删了？（生成物少一张表比报错危险得多）`);
@@ -158,8 +160,9 @@ function load(cfg, monsterDropSeed, monsterSkillSeed, statusSeed, questSeed, ach
     // 掉落（#254）：具名表（common/elite/boss）、兜底表与每怪独立表 —— 管理端
     // 「掉落配置」的 seed 来源；条目缺省值（weight=1 / chance=1 / count=[1,1]）
     // 在生成器规整为全显式，消费方不复制缺省规则
-    dropTables: missing("drop.dropTables", cfg("drop").dropTables),
-    dropDefault: missing("drop.defaultDropTable", cfg("drop").defaultDropTable),
+    // #603 起具名表与兜底表的服务端唯一书写处是 drop-seed.ts，客户端 configs 只剩运行时手感参数
+    dropTables: new Map(dropSeed.DROP_TABLE_SEED_ROWS.map(({ id, ...rest }) => [id, rest])),
+    dropDefault: dropSeed.DROP_DEFAULT_SEED,
     // #602 起每怪独立掉落表的服务端唯一书写处是 monster-drop-seed.ts，客户端 configs 不再有这份
     monsterDropTables: monsterDropSeed.MONSTER_DROP_SEED_ROWS,
     // 商城统一价（#251）：全场默认售价（绑定元宝/件），服务端 mall_settings 的 seed 来源；
@@ -355,7 +358,7 @@ function compileServerShared(work) {
           types: [],
         },
         // #590 growth-seed（装备出厂属性公式）+ #602 monster-drop-seed（每怪独立掉落表）
-        // #603 monster-skill-seed（怪物技能挂载）
+        // #603 monster-skill-seed（怪物技能挂载）/ status / quest / achievement / drop（具名表 + 兜底表）
         files: [
           path.join(sharedDir, "growth-seed.ts"),
           path.join(sharedDir, "monster-drop-seed.ts"),
@@ -363,6 +366,7 @@ function compileServerShared(work) {
           path.join(sharedDir, "status-seed.ts"),
           path.join(sharedDir, "quest-seed.ts"),
           path.join(sharedDir, "achievement-seed.ts"),
+          path.join(sharedDir, "drop-seed.ts"),
         ],
       },
       null,
@@ -380,6 +384,7 @@ function compileServerShared(work) {
     statusSeed: require(path.join(work, "server-out", "status-seed.js")),
     questSeed: require(path.join(work, "server-out", "quest-seed.js")),
     achievementSeed: require(path.join(work, "server-out", "achievement-seed.js")),
+    dropSeed: require(path.join(work, "server-out", "drop-seed.js")),
   };
 }
 
@@ -753,7 +758,7 @@ function pickDropPicks(picks, where) {
 
 /** 单张掉落表 → { picks, entries }（entries 逐条规整，空表报错） */
 function pickDropTable(id, table) {
-  if (!table || !Array.isArray(table.entries)) throw new Error(`掉落表 ${id} 没有 entries 数组（configs/drop 改坏了？）`);
+  if (!table || !Array.isArray(table.entries)) throw new Error(`掉落表 ${id} 没有 entries 数组（drop-seed.ts 改坏了？）`);
   if (table.entries.length === 0) throw new Error(`掉落表 ${id} 的 entries 为空（掉不出东西的表不如报错）`);
   return {
     picks: pickDropPicks(table.picks, `掉落表 ${id}`),
@@ -770,7 +775,7 @@ function pickDropTables(tables) {
     seen.add(id);
     out.push([id, pickDropTable(id, table)]);
   });
-  if (out.length === 0) throw new Error("configs/drop 的 dropTables 为空（改名或清空了？生成物少一张表比报错危险得多）");
+  if (out.length === 0) throw new Error("drop-seed.ts 的 DROP_TABLE_SEED_ROWS 为空（改名或清空了？生成物少一张表比报错危险得多）");
   return out;
 }
 
@@ -1060,7 +1065,8 @@ function render(s) {
  * 装备的键是**展开后**的物品 id（基础件原 key，或带前后缀的 \`_pXsY\`），与客户端
  * \`getEquipment(id)\` 同口径；\`EQUIPMENT_DISPLAY_NAMES\` 里的名字已经拼好，消费方不必自己拼。
  *
- * 不在范围：掉落（掉落结算还没上服务端，等世界权威那一刀）。
+ * 掉落表（DROP_TABLES / MONSTER_DROPS / DROP_DEFAULT）的出厂书写处在服务端
+ * server/src/shared/drop-seed.ts 与 monster-drop-seed.ts，这里只是把它们快照成三端可读的形状。
  */
 
 /** 六项区间型战斗属性。如 ["physicalAttack","magicAttack",...] */
