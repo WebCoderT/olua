@@ -47,8 +47,13 @@ const ENDPOINT = {
   clientRequest: "client/assets/ui/utils/net/HttpClient.ts",
   clientRoutes: "client/assets/ui/utils/net/ApiRoutes.ts",
   adminRequest: "admin/src/api/http.ts",
-  // 静态素材读取（装备对齐工作台的 plist/png、图标首帧缩略图）：不碰 /api、不带令牌，因此单独放行
-  adminAssets: ["admin/src/pages/equipAlign/assets.ts", "admin/src/components/GameImage.tsx"],
+  // 静态素材读取（装备对齐工作台的 plist/png、图标首帧缩略图、图片选择器的素材清单）：
+  // 不碰 /api、不带令牌，因此单独放行
+  adminAssets: [
+    "admin/src/pages/equipAlign/assets.ts",
+    "admin/src/components/GameImage.tsx",
+    "admin/src/components/ImagePicker.tsx",
+  ],
   adminRoutes: "admin/src/api/routes.ts",
   adminEnv: "admin/.env.example",
   serverEnv: "server/.env.example",
