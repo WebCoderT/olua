@@ -859,6 +859,134 @@
         }
       }
     },
+    "/roles/{id}/fashion-buy": {
+      "post": {
+        "description": "渠道 = `fashions.acquire_channel === \"upgrade\"` 且 `sell_price > 0` 才可买（与称号渠道同语义）；\n价格只认 fashions 表（管理端改价即时生效），扣绑定元宝后写入拥有清单 `fashionsOwned`。\n\n拥有清单是**独占字段**：客户端存档上报无效，只能由购买与管理端发放书写 ——\n改包把清单填满不会让任何一件时装变成「已拥有」。\n\n失败路径：20016 渠道未开放 / 售价为 0 / 已拥有；20011 绑定元宝不足；乐观锁与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.fashionBuy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FashionBuyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "购买结果（余额 + 完整拥有清单）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FashionBuyResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "购买时装（扣费与拥有清单都在服务端）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/FashionBuyResultDto"
+        }
+      }
+    },
+    "/roles/{id}/fashion-wear": {
+      "post": {
+        "description": "改的是存档 `fashionCloth`；不在拥有清单（20017）或时装表里没有这个 id 都拒收。\n穿时装不改任何数值（时装只换外观），revision +1。\n\n`fashionId` 传 null = 脱下当前时装（幂等：没穿时也返回成功）。\n\n老档迁移：`fashionsOwned` 上线前的存档没有清单，首次穿 / 脱时把当前穿着认领进去。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.fashionWear",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FashionWearDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "穿着态与拥有清单",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FashionWearResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "穿 / 脱时装（「拥有才给穿」在服务端校验）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/FashionWearResultDto"
+        }
+      }
+    },
     "/roles/{id}/bag-op": {
       "post": {
         "description": "五个动作共用一条写路径，`action` 区分，字段组合在服务端逐条校验。\n\n**穿 / 脱 / 丢由服务端自己算**：`equip` 先证明这件东西真在那一格、确实是该部位的装备、等级够，再把旧装备放回刚腾出的格子；`unequip` 由服务端找第一个空格；`discard` 只认格子坐标。**整理 / 搬运只验守恒**：`move` / `tidy` 传操作后的完整内容（稀疏格子），服务端只校验「网格形状不变 + 同 id 总件数不变」—— 多一件少一件都会被拒。\n\n穿戴 / 卸下会重算战斗属性并把血蓝夹回上限（`combat` / `maxHp` 等字段随响应一起回来）。\n\n失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 / 等级不够）/ 20022 排布与库里对不上 / 20012 背包满（卸下时没有空格）；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -12078,6 +12206,42 @@
           "col"
         ]
       },
+      "FashionBuyDto": {
+        "type": "object",
+        "properties": {
+          "fashionId": {
+            "type": "string",
+            "description": "要买的时装 id（fashions 表主键，如 cloth_2）",
+            "example": "cloth_2"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "fashionId"
+        ]
+      },
+      "FashionWearDto": {
+        "type": "object",
+        "properties": {
+          "fashionId": {
+            "type": "string",
+            "description": "要穿的时装 id；null = 脱下当前时装",
+            "nullable": true
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "fashionId"
+        ]
+      },
       "BagOpCellDto": {
         "type": "object",
         "properties": {
@@ -12444,6 +12608,13 @@
             "type": "string",
             "description": "时装（外观）id，如 cloth_2；null = 脱掉时装",
             "nullable": true
+          },
+          "fashionsOwned": {
+            "description": "时装拥有清单（整份覆盖，如 [\"cloth_2\", \"cloth_5\"]）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "avatar": {
             "type": "number",
@@ -15401,6 +15572,67 @@
           "mp",
           "maxHp",
           "maxMp"
+        ]
+      },
+      "FashionBuyResultDto": {
+        "type": "object",
+        "properties": {
+          "fashionId": {
+            "type": "string",
+            "description": "本次购买的时装 id"
+          },
+          "price": {
+            "type": "number",
+            "description": "本次扣除的绑定元宝（= fashions.sell_price）"
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "购买后的绑定元宝余额"
+          },
+          "owned": {
+            "description": "购买后的拥有清单（含新买的这件；已拥有的 id 不会重复）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "revision": {
+            "type": "number",
+            "description": "最新修订号"
+          }
+        },
+        "required": [
+          "fashionId",
+          "price",
+          "bindGold",
+          "owned",
+          "revision"
+        ]
+      },
+      "FashionWearResultDto": {
+        "type": "object",
+        "properties": {
+          "fashionCloth": {
+            "type": "string",
+            "description": "穿着态（当前穿的时装 id，null = 未穿）",
+            "nullable": true
+          },
+          "owned": {
+            "description": "当前拥有清单",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "revision": {
+            "type": "number",
+            "description": "最新修订号"
+          }
+        },
+        "required": [
+          "fashionCloth",
+          "owned",
+          "revision"
         ]
       },
       "BagOpResultDto": {

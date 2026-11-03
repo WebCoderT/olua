@@ -166,6 +166,18 @@ export class AdminPatchRoleDto {
   @Length(0, ROLE_FIELD_VALUE_MAX_LENGTH, { message: "时装 id 过长" })
   fashionCloth?: string | null;
 
+  /**
+   * 时装拥有清单（#596：运营发放 / 回收的唯一入口）
+   *
+   * 整份覆盖（传什么清单就是什么清单）。id 是否真实存在不在这里校验 —— 与装备 / 技能同口径
+   * （内容清单由客户端配置定义）；客户端穿的时候还会再查一次 fashions 表。
+   */
+  @ApiPropertyOptional({ description: "时装拥有清单（整份覆盖，如 [\"cloth_2\", \"cloth_5\"]）", type: [String] })
+  @IsOptional()
+  @IsArray({ message: "时装拥有清单必须是数组" })
+  @IsString({ each: true, message: "时装 id 必须是字符串" })
+  fashionsOwned?: string[];
+
   @ApiPropertyOptional({ description: "头像编号" })
   @IsOptional()
   @IsInt({ message: "头像编号必须是整数" })

@@ -96,6 +96,10 @@ export const BizCode = {
   DRUG_RESOURCE_FULL: 20014,
   /** 复活无需进行（角色未死亡） */
   ROLE_NOT_DEAD: 20015,
+  /** 时装不可购买（渠道未开放 / 售价为 0 / 已拥有） */
+  FASHION_NOT_OFFERED: 20016,
+  /** 时装不在拥有清单里（没买过 / 不是运营发放的，穿不上） */
+  FASHION_NOT_OWNED: 20017,
   /**
    * 背包操作的目标不合法（格子越界 / 空格子 / 槽位空着）
    *

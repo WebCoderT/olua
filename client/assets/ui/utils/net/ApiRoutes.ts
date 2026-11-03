@@ -238,7 +238,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（13 个接口） */
+  /** role 模块（15 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -282,6 +282,18 @@ export const ApiRoutes = {
      * 回复量与药品管理端同源（drugs 表，管理端改回复量即时生效）：固定值 + 百分比 × maxHp/maxMp，各自封顶。
      */
     drugUse: (id: string) => `/roles/${encodeURIComponent(id)}/drug-use`,
+    /**
+     * 购买时装（扣费与拥有清单都在服务端）（POST /roles/{id}/fashion-buy）
+     *
+     * 渠道 = `fashions.acquire_channel === "upgrade"` 且 `sell_price > 0` 才可买（与称号渠道同语义）；
+     */
+    fashionBuy: (id: string) => `/roles/${encodeURIComponent(id)}/fashion-buy`,
+    /**
+     * 穿 / 脱时装（「拥有才给穿」在服务端校验）（POST /roles/{id}/fashion-wear）
+     *
+     * 改的是存档 `fashionCloth`；不在拥有清单（20017）或时装表里没有这个 id 都拒收。
+     */
+    fashionWear: (id: string) => `/roles/${encodeURIComponent(id)}/fashion-wear`,
     /**
      * 成长线升级（称号 / 战魂 / 军衔）（POST /roles/{id}/growth-upgrade）
      *

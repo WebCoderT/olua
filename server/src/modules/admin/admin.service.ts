@@ -307,6 +307,9 @@ export class AdminService {
     }
     // 基础信息里的外观与位置
     if (dto.fashionCloth !== undefined) next.fashionCloth = dto.fashionCloth;
+    // 时装拥有清单（#596）：运营发放 / 回收；穿着态归客户端 fashion-wear 接口（有「拥有才给穿」校验），
+    // 这里只改清单本身 —— 发放后客户端要穿还得走接口，正好让校验跑一遍
+    if (dto.fashionsOwned !== undefined) next.fashionsOwned = Array.from(new Set(dto.fashionsOwned.filter((id) => id.length > 0)));
     if (dto.avatar !== undefined) next.avatar = dto.avatar;
     if (dto.onMap !== undefined) next.onMap = dto.onMap;
     // 血蓝（#596 起服务端独占，这里是运营旁路）：改值同时重置回复结算游标，

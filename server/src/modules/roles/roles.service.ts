@@ -9,6 +9,8 @@ import { GROWTH_SCALARS } from "../../shared/growth-seed";
 import { drugOf, equipmentLevelOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
+import { FashionRepository } from "../../database/repositories/fashion.repository";
+import { AcquireChannel } from "../../common/constants/game-config";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
@@ -21,6 +23,7 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { FashionBuyDto, FashionBuyResultDto, FashionWearDto, FashionWearResultDto } from "./dto/fashion.dto";
 import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
 import { decodeStoredRoleData, normalizeBagCells, normalizeEnum, normalizeLevel, normalizeName, parseRoleData, applyBagCells, ROLE_OCCUPATIONS, ROLE_SEXES } from "./role-data.util";
@@ -72,6 +75,7 @@ export class RolesService {
     private readonly ranks: RankRepository,
     private readonly mallPricing: MallPricingService,
     private readonly drugs: DrugRepository,
+    private readonly fashions: FashionRepository,
     private readonly growth: GrowthRepository,
   ) {}
 
@@ -879,8 +883,122 @@ export class RolesService {
   }
 
   /**
-   * 击杀计数 +1（#400：排行榜的原料）
+   * 购买时装（#596：扣费与拥有清单都在服务端）
    *
+   * 渠道 = `fashions.acquire_channel === "upgrade"` 且 `sell_price > 0` 才可买
+   * （与称号的渠道语义同源：upgrade = 玩家花绑定元宝获得；grant = 运营发放，走管理端
+   * PATCH `fashionsOwned`；unavailable = 未开放）。价格只认 fashions 表（管理端改价即时生效）。
+   *
+   * 拥有清单 `fashionsOwned` 是**独占字段**（`SERVER_EXCLUSIVE_FIELDS`）：客户端上报无效，
+   * 只能由这里与管理端写。重复购买拒收（20016，不做「已拥有转退款」——那是新需求）。
+   *
+   * 失败路径：20016 渠道未开放 / 售价为 0 / 已拥有；20011 绑定元宝不足；20006 / 20007 同 save。
+   */
+  fashionBuy(accountId: string, roleId: string, dto: FashionBuyDto): FashionBuyResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const fashion = this.fashions.findByKey(dto.fashionId);
+    if (!fashion) throw BizException.conflict(BizCode.FASHION_NOT_OFFERED, "该时装不存在");
+    const price = Math.max(0, Math.floor(fashion.sell_price));
+    if (fashion.acquire_channel !== AcquireChannel.UPGRADE || price <= 0) {
+      throw BizException.conflict(BizCode.FASHION_NOT_OFFERED, "该时装未开放购买");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const owned = this.readFashionOwned(data);
+    if (owned.includes(fashion.id)) {
+      throw BizException.conflict(BizCode.FASHION_NOT_OFFERED, "已拥有该时装，无需重复购买");
+    }
+
+    const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
+    if (bindGold < price) {
+      throw BizException.conflict(BizCode.MALL_GOLD_NOT_ENOUGH, `绑定元宝不足，购买需要 ${price}`);
+    }
+    data.bindGold = bindGold - price;
+    owned.push(fashion.id);
+    data.fashionsOwned = owned;
+    const bindGoldAfter = bindGold - price;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return { fashionId: fashion.id, price, bindGold: bindGoldAfter, owned, revision: row.revision };
+  }
+
+  /**
+   * 穿 / 脱时装（#596：穿着态归服务端，「拥有才给穿」在这里校验）
+   *
+   * 穿时装不改任何数值（时装只换外观，见客户端 `applyFashionChange` 的同一口径），
+   * 所以不触发属性重算；穿着态是进度型写入，revision +1。
+   *
+   * 老档迁移：`fashionsOwned` 上线前的存档没有这个键 —— 第一次穿 / 脱时把**当前穿着**认领进
+   * 清单（它只能是历史合法穿着，否则早就被 #377 的校验清掉了），空档给空清单。
+   *
+   * 失败路径：20017 不在拥有清单 / 时装表里没有这个 id；20006 / 20007 同 save。
+   */
+  fashionWear(accountId: string, roleId: string, dto: FashionWearDto): FashionWearResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    // 迁移后的清单必须写回：readFashionOwned 对老档只做了「内存认领」，
+    // 不落库的话换设备 / 重进又变回无清单（第一次穿 / 脱的迁移就白做了）
+    const owned = this.readFashionOwned(data);
+    data.fashionsOwned = owned;
+    const target = dto.fashionId ? String(dto.fashionId) : null;
+    if (target) {
+      if (!owned.includes(target)) {
+        throw BizException.conflict(BizCode.FASHION_NOT_OWNED, "尚未拥有该时装，先购买或由运营发放");
+      }
+      if (!this.fashions.findByKey(target)) {
+        throw BizException.conflict(BizCode.FASHION_NOT_OWNED, "该时装不存在");
+      }
+    }
+    data.fashionCloth = target;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return { fashionCloth: target, owned, revision: row.revision };
+  }
+
+  /**
+   * 读存档里的时装拥有清单（带老档迁移：没有键时把当前穿着认领进去）
+   *
+   * 清单元素去重、只留字符串 —— 管理端 PATCH 与购买两条写路都过这里规整一次。
+   */
+  private readFashionOwned(data: Record<string, unknown>): string[] {
+    if (Array.isArray(data.fashionsOwned)) {
+      return Array.from(new Set(data.fashionsOwned.filter((id): id is string => typeof id === "string" && id.length > 0)));
+    }
+    // 老档迁移：清单没建过 → 当前穿着（若有的话）就是历史合法拥有
+    const worn = typeof data.fashionCloth === "string" && data.fashionCloth ? [data.fashionCloth] : [];
+    return worn;
+  }
+
+  /**
+   * 击杀计数 +1（#400：排行榜的原料）
    * 与 `applyKillExp` **分开调**，因为两者的判定不同：
    * - 经验会因等级差过大而记 0（`settleKillReward` 里 `exp > 0` 才入账）；
    * - 击杀数不看过不过期 —— 杀了就是杀了，哪怕一分经验没有。

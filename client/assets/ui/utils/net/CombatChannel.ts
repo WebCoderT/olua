@@ -315,6 +315,13 @@ export interface RoleAuthorityUpdate {
   title?: number;
   soulOfWar?: number;
   rank?: number;
+  /** 体验状态（#596 换设备云同步）：快捷键 / 引导进度 / 战魂外显 —— 归客户端书写、服务端存证 */
+  shortcutKeys?: Array<{ label: string; key: number; skillId: string | null }>;
+  guide?: { step: number; done: boolean; skipped: boolean };
+  soulShow?: boolean;
+  /** 时装（#596）：穿着态归服务端（另一台设备买了/穿了，帧带回就换外观）；清单是服务端独占字段 */
+  fashionCloth?: string | null;
+  fashionsOwned?: string[];
   maxHp?: number;
   hpRecover?: number;
   maxMp?: number;

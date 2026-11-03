@@ -28,6 +28,7 @@ import { MallPurchaseDto, MallPurchaseResultDto } from "../modules/roles/dto/mal
 import { SellEntryDto, SellGoodsDto, SellGoodsResultDto, SellLineDto } from "../modules/roles/dto/sell-goods.dto";
 import { DrugUseDto, DrugUseResultDto } from "../modules/roles/dto/drug-use.dto";
 import { ReviveResultDto } from "../modules/roles/dto/revive.dto";
+import { FashionBuyResultDto, FashionWearResultDto } from "../modules/roles/dto/fashion.dto";
 import { BagOpCellDto, BagOpDto, BagOpResultDto } from "../modules/roles/dto/bag-op.dto";
 import {
   SystemConfigItemDto,
@@ -161,6 +162,8 @@ export const SWAGGER_MODELS = [
   SellGoodsResultDto,
   DrugUseResultDto,
   ReviveResultDto,
+  FashionBuyResultDto,
+  FashionWearResultDto,
   BagOpDto,
   BagOpCellDto,
   BagOpResultDto,

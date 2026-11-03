@@ -179,8 +179,9 @@ const REPO_EDGES = {
   "database/repositories/npc.repository.ts": ["modules/game-config", "modules/quest"],
   // 商城定价（#251）：同上，只在 game-config 模块内读写（特殊价行动态增删，商品清单来自生成物）
   "database/repositories/mall.repository.ts": ["modules/game-config"],
-  // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写
-  "database/repositories/fashion.repository.ts": ["modules/game-config"],
+  // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；
+  // 时装收权（#596）后购买 / 穿脱（roles）也直读 —— 「拥有才给穿」与渠道校验都在服务端
+  "database/repositories/fashion.repository.ts": ["modules/game-config", "modules/roles"],
   // 掉落配置（#254）：game-config 读写；击杀掉落收权（#316）后结算（realtime）也直读
   // 两表 —— 管理端改掉落即时生效（具名表允许动态增删，每怪行与怪物一一对应）
   "database/repositories/drop-table.repository.ts": ["modules/game-config", "modules/realtime"],

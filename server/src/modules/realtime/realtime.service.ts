@@ -485,6 +485,14 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         title: Math.max(0, Math.floor(Number(data.title) || 0)),
         soulOfWar: Math.max(0, Math.floor(Number(data.soulOfWar) || 0)),
         rank: Math.max(0, Math.floor(Number(data.rank) || 0)),
+        // 体验状态（#596 换设备云同步）：归客户端书写、服务端存证，帧带回让另一台设备 /
+        // 后台改动不用重新选角就能看到。形状由客户端配置定义，这里只认「存在且形状对」
+        ...(Array.isArray(data.shortcutKeys) ? { shortcutKeys: data.shortcutKeys } : {}),
+        ...(data.guide && typeof data.guide === "object" ? { guide: data.guide as { step: number; done: boolean; skipped: boolean } } : {}),
+        ...(typeof data.soulShow === "boolean" ? { soulShow: data.soulShow } : {}),
+        // 时装（#596）：穿着态与拥有清单都归服务端 —— 购买 / 后台发放后不重进也看得见
+        ...(typeof data.fashionCloth === "string" || data.fashionCloth === null ? { fashionCloth: data.fashionCloth as string | null } : {}),
+        ...(Array.isArray(data.fashionsOwned) ? { fashionsOwned: data.fashionsOwned } : {}),
         ...(summary
           ? {
               maxHp: summary.maxHp,
