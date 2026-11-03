@@ -1,4 +1,4 @@
-import { Node, Rect, Size, TiledMap, Vec3 } from "cc";
+import { Node, Rect, Size, TiledMap } from "cc";
 
 /**
  * 地图坐标换算（纯函数模块）
@@ -15,11 +15,12 @@ import { Node, Rect, Size, TiledMap, Vec3 } from "cc";
  * 前提是「地图节点在世界原点」—— 这是整套口径的地基，所以本模块不接收 `map` 参数去叠世界坐标，
  * 也不打算靠运行时再算一遍来兜底：一旦有人移动地图层，这里会整体错位而不是悄悄自我修正。
  *
- * 入参一律是 **Tiled 原始坐标**：引擎 `getObjects()` 给的 y 已被 `TiledObjectGroup._init`
- * 翻转过一次（`y = 地图像素高 - y`），要走 `TiledObjects`（取 `object.offset` 的原值）。
+ * #676 之后这里只剩「整图范围」一件事：Tiled 坐标 → 世界坐标的两个换算函数
+ * （`mapPointToWorld` / `mapRectCenterToWorld`）随「读 TMX 对象组」一起下架了 ——
+ * 地图文件里已经没有对象组，服务端下发的点位与碰撞盒本来就是世界坐标。
  *
  * 锚点相关的两个引擎坑（少一步就整屏黑 / 偏半图）见 `GameMap.loadMap` 的注释与
- * 技能 `cocos-tiledmap-objectgroup` 的坑 1 / 坑 4，这里只管换算。
+ * 技能 `cocos-tiledmap-objectgroup` 的坑 1 / 坑 4。
  */
 
 /** 地图像素尺寸（格数 × 单格尺寸）；只有本模块与需要「整图范围」的调用方用得到 */
@@ -28,23 +29,6 @@ function getMapPixelSize(map: Node) {
   const mapSize = tiledMap.getMapSize();
   const tileSize = tiledMap.getTileSize();
   return new Size(mapSize.width * tileSize.width, mapSize.height * tileSize.height);
-}
-
-/**
- * Tiled 坐标 -> 世界坐标
- * @param x Tiled x（自左边缘向右量）
- * @param y Tiled y（自上边缘向下量）
- */
-export function mapPointToWorld(x: number, y: number) {
-  return new Vec3(x, -y);
-}
-
-/**
- * Tiled 矩形区域（左上角 + 尺寸）的中心 -> 世界坐标
- * 供「把节点摆在区域中心」这类调用方使用（刷怪区、碰撞区、预览图标记）
- */
-export function mapRectCenterToWorld(x: number, y: number, width: number, height: number) {
-  return mapPointToWorld(x + width / 2, y + height / 2);
 }
 
 /**

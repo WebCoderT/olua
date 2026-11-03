@@ -158,13 +158,13 @@ export interface MonsterAIState {
 
 /**
  * 怪物刷新区域
- * 对应地图 monster 对象组里的一个矩形区域（自定义属性 id/min/max）：
+ * 对应服务端 `map_spawn_areas` 的一行（#667 起由管理端绘制，随配置快照按中心点下发）：
  * 开图时在该区域内随机落点生成 max 只对应编号的怪物（只生成一次，不做刷新补充）
  */
 export interface MonsterSpawnArea {
-  /** 区域名称（地图里给区域起的名字，仅用于日志与调试显示） */
+  /** 区域名称（后台给区域起的名字，仅用于日志与调试显示） */
   label: string;
-  /** 怪物编号（服务端种子的 key，由自定义属性 id 指定） */
+  /** 怪物编号（服务端种子的 key） */
   monsterId: string;
   /** 区域中心（世界坐标，怪物落点以它为基准；地图节点位于原点时与本地坐标一致） */
   center: Vec3;

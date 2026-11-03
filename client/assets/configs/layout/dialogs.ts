@@ -201,7 +201,7 @@ export const mapPreviewDialogLayout = {
   /** 预览区下方的操作提示 */
   hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: new Color(255, 223, 170) },
   /**
-   * 预览图上的静态文字标记（开窗时按地图对象组建一次，随预览图一起移动/缩放）
+   * 预览图上的静态文字标记（开窗时按配置快照的点位 / 区域建一次，随预览图一起移动/缩放）
    * 三类标记：NPC 白点 + 点上方紧挨着的名称、刷怪区中心的怪物名称
    */
   marker: {

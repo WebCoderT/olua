@@ -1,13 +1,12 @@
 import { isValid, Node, Rect, Vec2 } from "cc";
 import { autoBattle } from "../../configs/autoBattle";
-import { tiledGroupNames, maps } from "../../configs/game-config";
+import { maps } from "../../configs/game-config";
 import { skills } from "../../configs/skill";
 import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import { canAttackTarget } from "../utils/battle/BattleMath";
-import { getMapWorldRect, mapPointToWorld } from "../utils/map/MapPointMath";
+import { getMapWorldRect } from "../utils/map/MapPointMath";
 import PathGrid from "../utils/map/PathGrid";
-import { TiledObject, getTiledObjectsFrom } from "../utils/map/TiledObjects";
 import GameUiHelper from "../helpers/GameUiHelper";
 import MonsterManager from "./MonsterManager";
 import SkillManager from "./SkillManager";
@@ -405,32 +404,25 @@ export default class AutoBattle {
   }
 
   /**
-   * 读地图里的静态障碍（Tiled collision 矩形 + 服务端快照里的 NPC 点位按估算体型占位），转成世界坐标矩形
+   * 读静态障碍（服务端快照里的碰撞盒 + NPC 点位按估算体型占位），转成世界坐标矩形
    *
-   * 碰撞盒仍读 TMX（它属于瓦片物理，归美术资源）；NPC 的点位读快照 —— #672 起那是唯一来源，
-   * 从 TMX 读会出现「后台把 NPC 挪了、寻路还绕着旧址」这种没人能解释的绕路。
+   * 两样都读快照（#672 / #676 起那是唯一来源）：地图文件里已经没有对象组，
+   * 从 TMX 读会得到空数组 —— 表现为「寻路穿墙」，而页面上看起来一切正常。
    */
   private static readStaticObstacles(map: Node): Rect[] {
     const rects: Rect[] = [];
-    getTiledObjectsFrom(map, tiledGroupNames.collision).forEach((object) => {
-      // 没有面积的元素（点、多边形）构不成矩形阻挡，与碰撞区生成器同一规则跳过
-      if (object.width <= 0 || object.height <= 0) return;
-      rects.push(this.tiledRectToWorld(object));
+    const layout = maps.get(this.mapId);
+    layout?.collisions.forEach((box) => {
+      // 快照里的碰撞盒已经是「中心 + 尺寸」，`Rect` 要的是左下角 → 往下挪半个高
+      rects.push(new Rect(box.x - box.w / 2, box.y - box.h / 2, box.w, box.h));
     });
-    const config = maps.get(this.mapId);
-    config?.npcs.forEach((point) => {
+    layout?.npcs.forEach((point) => {
       // 点位已经是世界坐标（#672），矩形按「以点为中心」摊开
       const width = autoBattle.npcObstacleSize.width;
       const height = autoBattle.npcObstacleSize.height;
       rects.push(new Rect(point.x - width / 2, point.y - height / 2, width, height));
     });
     return rects;
-  }
-
-  /** Tiled 矩形对象 -> 世界坐标矩形（Rect 的 x/y 是左下角 = Tiled 的左下角 `(x, y + h)` 取反） */
-  private static tiledRectToWorld(object: TiledObject): Rect {
-    const leftBottom = mapPointToWorld(object.x, object.y + object.height);
-    return new Rect(leftBottom.x, leftBottom.y, object.width, object.height);
   }
 
   /** 放弃当前目标：挂机时拉黑一段时间换下一个（无限重复的前提是不卡死在一只怪上），快速攻击直接结束 */
