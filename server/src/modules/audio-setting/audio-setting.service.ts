@@ -58,7 +58,11 @@ export class AudioSettingService implements OnModuleInit {
       });
       seeded += 1;
     }
+    // 清单外的行 = 改名 / 下线留下的孤儿（#685：`login_click` → `ui_click`）。
+    // 不补完再清的话，管理端会多出一项「客户端不认的 key」，点它没有任何声音也看不出原因
+    const dropped = this.audioSettings.deleteOrphans(AUDIO_KEYS);
     if (seeded > 0) this.logger.log(`音效配置已补 ${seeded} 行（共 ${this.audioSettings.countAll()} 个音效项）`);
+    if (dropped > 0) this.logger.log(`音效配置清掉 ${dropped} 行清单外的旧 key（改名 / 下线遗留）`);
   }
 
   /** 管理端列表（含展示名与追账字段） */

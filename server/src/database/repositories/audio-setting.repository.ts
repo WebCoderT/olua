@@ -27,7 +27,7 @@ export class AudioSettingRepository {
   /**
    * 全部行，按 **seed 顺序**（= `AUDIO_KEYS` 的登记顺序：登录背景音在前）
    *
-   * 不用 `ORDER BY audio_key`：字典序会把 `login_bgm` 和 `login_click` 排成「bgm 在前」纯属巧合，
+   * 不用 `ORDER BY audio_key`：字典序会把 `login_bgm` 和 `ui_click` 排成「bgm 在前」纯属巧合，
    * 以后加一个 `battle_hit` 就会插到最前面。行只来自 seed，`rowid` 就是登记顺序。
    */
   listAll(): AudioSettingRow[] {
@@ -49,5 +49,21 @@ export class AudioSettingRepository {
 
   countAll(): number {
     return this.db.count("SELECT COUNT(1) AS total FROM audio_settings");
+  }
+
+  /**
+   * 删掉不在清单里的行（返回删了几条）
+   *
+   * 为什么需要：key 改名（`login_click` → `ui_click`，#685）之后，老库里的旧行不会被
+   * `INSERT OR IGNORE` 覆盖，也不会自己消失 —— 管理端会多出一个「叫 login_click 的音效项」，
+   * 客户端根本不认这个 key（点了没有声音，也没有任何报错）。
+   *
+   * 删它是安全的：**行只来自 seed**（没有新建接口），表里出现清单外的 key 只可能是
+   * 我们改过清单（改名 / 下线），不可能是运营自己加的。
+   */
+  deleteOrphans(keys: readonly string[]): number {
+    if (keys.length === 0) return 0;
+    const holes = keys.map(() => "?").join(", ");
+    return this.db.execute(`DELETE FROM audio_settings WHERE audio_key NOT IN (${holes})`, [...keys]).changes;
   }
 }

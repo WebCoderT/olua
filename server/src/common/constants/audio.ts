@@ -15,11 +15,15 @@
  *
  * ## 路径口径（与用户 2026-11-04 的约定一致）
  *
- * - 相对 `client/assets/resources/`，**带扩展名**：`sounds/login_bg.wav`；
+ * - 相对 `client/assets/resources/`，**带扩展名**：`sounds/login_bgm.wav`；
  *   带扩展名的理由：与文件系统一一对应，管理端的目录列表 / 试听地址可以直接拼，
  *   不用「先猜扩展名再试」；客户端对接时按 `resources.load(去掉扩展名的路径, AudioClip)` 读。
  * - 只允许 `sounds/` 开头：音效文件就是放这里的，限制前缀能挡住「误填成图片路径」。
  * - 空串 = **未配置**（这一项不响），不是错误 —— 新加的音效通常先留空等美术给文件。
+ * - **命名约定：文件名与 key 同名**（`ui_click` → `sounds/ui_click.wav`，#685 用户授权改名后统一）。
+ *   不是校验规则（运营可以换成任何合规文件名），纯粹为了对齐：翻资源目录时一眼看出
+ *   「这个文件是哪个配置项」，反过来也一样。改 key 时顺手把文件也改掉。扩展名不统一
+ *   （素材给的是 wav 就是 wav），所以路径里必须带扩展名。
  *
  * ## 分类为什么也在这里
  *
@@ -31,7 +35,9 @@
 
 /** 音效分类（顺序 = 管理端 tab 顺序） */
 export const AUDIO_CATEGORIES = [
-  { key: "login", label: "登录与界面" },
+  // 「界面与交互」：登录背景音 + 全站按钮点击音。按钮音不只登录页用（#685 起所有按钮都响），
+  // 所以这一类的名字不能再叫「登录与界面」—— 分类名是给运营看的，得说清它管的是什么
+  { key: "login", label: "界面与交互" },
   { key: "combat", label: "战斗与角色" },
   { key: "item", label: "物品与货币" },
   { key: "growth", label: "成长与传送" },
@@ -45,20 +51,21 @@ export type AudioCategory = (typeof AUDIO_CATEGORIES)[number]["key"];
  *
  * 每个 key 都必须有客户端的调用点，否则就是永远不响的开关。对照表：
  * - `login_bgm` → `ui/Login.start`（进登录场景起播）、`ui/core/SceneManager.loadScene`（离场停）
- * - `login_click` → `ui/Login.submit`（点登录 / 注册按钮）
+ * - `ui_click` → `ui/core/SoundManager.bindClick`（**所有按钮**：`UiHelper.createButton` / `createToggle`
+ *   自动挂，手写按钮各自贴一行；技能快捷栏与世界对象不算按钮，不响）
  * - `warrior_attack` → `skills/warrior.skill_1000`（战士基础剑术，仅战士）
  * - `role_die_man` / `role_die_woman` → `ui/Game.checkRoleDeath`（按 `role.sex` 选一个）
- * - `item_drop` → `ui/core/DropManager.spawnResults`（掉落物真的铺到地上时）
+ * - `item_drop` → `ui/core/DropManager.spawnResults`（掉落物铺到地上）+ `applyPickedFrame`（捡起来）
  * - `equip_wear` → `ui/core/StorageManager.equipFromBag`（服务端接受之后）
  * - `money_change` → `ui/core/StorageManager.applyServerRoleUpdate`（三种货币任一变化）
- * - `bag_resort` → `ui/core/StorageManager.tidyBag`（一键整理成功）
+ * - `bag_resort` → `ui/core/StorageManager.tidyBag`（一键整理）+ `moveBagGood`（拖动搬格）
  * - `level_up` → `ui/core/StorageManager.applyKillReward` / `applyPartyExpGain`（`leveledUp`）
- * - `map_teleport` → `ui/core/StorageManager.changeOnMap`（校验通过、真的换图）
+ * - `map_teleport` → `ui/Game.start`（传送后进图、角色显示出来时；不是点传送的瞬间）
  */
 export const AUDIO_KEYS = [
-  // 登录与界面
+  // 界面与交互
   "login_bgm",
-  "login_click",
+  "ui_click",
   // 战斗与角色
   "warrior_attack",
   "role_die_man",
@@ -121,15 +128,17 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   login_bgm: {
     label: "登录场景背景音",
     category: "login",
-    filePath: "sounds/login_bg.wav",
+    filePath: "sounds/login_bgm.wav",
     volume: 60,
     loop: true,
     enabled: true,
   },
-  login_click: {
-    label: "登录场景点击登录按钮音",
+  ui_click: {
+    // 名字是「按钮点击音」而不是「登录按钮音」（#685）：它现在挂在所有按钮上，
+    // 展示名跟着真实用途走，运营看到名字就知道改它会波及全站
+    label: "按钮点击音",
     category: "login",
-    filePath: "sounds/click_button.wav",
+    filePath: "sounds/ui_click.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -145,7 +154,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   role_die_man: {
     label: "男角色死亡音",
     category: "combat",
-    filePath: "sounds/die_man.wav",
+    filePath: "sounds/role_die_man.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -153,7 +162,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   role_die_woman: {
     label: "女角色死亡音",
     category: "combat",
-    filePath: "sounds/die_woman.wav",
+    filePath: "sounds/role_die_woman.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -161,7 +170,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   item_drop: {
     label: "物品掉落音",
     category: "item",
-    filePath: "sounds/drop.wav",
+    filePath: "sounds/item_drop.wav",
     volume: 70,
     loop: false,
     enabled: true,
@@ -169,7 +178,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   equip_wear: {
     label: "穿戴装备成功音",
     category: "item",
-    filePath: "sounds/equipment_use_success.mp3",
+    filePath: "sounds/equip_wear.mp3",
     volume: 75,
     loop: false,
     enabled: true,
@@ -177,7 +186,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   money_change: {
     label: "金钱更新音",
     category: "item",
-    filePath: "sounds/money_change_success.mp3",
+    filePath: "sounds/money_change.mp3",
     volume: 70,
     loop: false,
     enabled: true,
@@ -185,7 +194,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   bag_resort: {
     label: "背包整理成功音",
     category: "item",
-    filePath: "sounds/bag_change_success.wav",
+    filePath: "sounds/bag_resort.wav",
     volume: 65,
     loop: false,
     enabled: true,
@@ -193,7 +202,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   level_up: {
     label: "升级成功音",
     category: "growth",
-    filePath: "sounds/upgrade_success.wav",
+    filePath: "sounds/level_up.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -201,7 +210,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   map_teleport: {
     label: "传送成功音",
     category: "growth",
-    filePath: "sounds/teleport_success.mp3",
+    filePath: "sounds/map_teleport.mp3",
     volume: 75,
     loop: false,
     enabled: true,
@@ -237,13 +246,13 @@ export function audioPathProblem(rawPath: string): string | null {
     return `路径太长（${path.length} 个字符，最多 ${AUDIO_LIMITS.pathMaxLength}）`;
   }
   if (path.startsWith("/")) {
-    return "不要以 / 开头：路径是相对 client/assets/resources/ 的（例如 sounds/login_bg.wav）";
+    return "不要以 / 开头：路径是相对 client/assets/resources/ 的（例如 sounds/login_bgm.wav）";
   }
   if (path.split("/").some((segment) => segment === ".." || segment === ".")) {
     return "路径里不许出现 . 或 ..（只能指向 resources 目录里面）";
   }
   if (!path.startsWith(`${AUDIO_LIMITS.rootDir}/`)) {
-    return `音效只能放在 ${AUDIO_LIMITS.rootDir}/ 下（例如 sounds/login_bg.wav）`;
+    return `音效只能放在 ${AUDIO_LIMITS.rootDir}/ 下（例如 sounds/login_bgm.wav）`;
   }
   const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
   if (!path.includes(".") || !AUDIO_LIMITS.extensions.includes(ext as (typeof AUDIO_LIMITS.extensions)[number])) {

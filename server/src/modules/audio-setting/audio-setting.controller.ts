@@ -18,10 +18,11 @@ import { AudioSettingService } from "./audio-setting.service";
  * （`client/assets/resources/sounds/`），服务端只存资源相对路径。
  *
  * 所以**没有 POST / DELETE**：一个 key 存在的前提是客户端有播它的代码（登录背景音 `login_bgm`、
- * 登录按钮音 `login_click`）。后续加音效（如「战斗背景音」「拾取音」）= 客户端写播放入口 +
+ * 按钮点击音 `ui_click`）。后续加音效（如「战斗背景音」「拾取音」）= 客户端写播放入口 +
  * `AUDIO_KEYS` 登记 + `AUDIO_DEFAULTS` 给出厂值，页面自动多一行。
  *
- * **本轮不下发客户端快照**：客户端还没有播放代码（用户定「先配置，后对接」）。
+ * 客户端怎么拿到（#683）：进游戏走配置快照的 `audio` 段，登录场景走公开接口
+ * `GET /game-config/audio` —— 两条路同形状，见 `AudioSettingService.configs()`。
  */
 @ApiAudience("admin")
 @Controller("admin/audio-settings")
@@ -35,7 +36,7 @@ export class AdminAudioSettingController {
     description:
       "全部音效项的配置：文件路径 / 音量 / 循环 / 开关 + 展示名 + 追账字段。\n\n" +
       "行由启动 seed 按 `AUDIO_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\n" +
-      "key 的取值域由客户端的播放入口决定（`login_bgm` 登录场景背景音 / `login_click` 登录按钮点击音）。\n\n" +
+      "key 的取值域由客户端的播放入口决定（`login_bgm` 登录场景背景音 / `ui_click` 全站按钮点击音）。\n\n" +
       "`filePath` 是相对 `client/assets/resources/` 的路径（带扩展名，如 `sounds/login_bg.wav`）；\n" +
       "**空串 = 未配置**（这一项不响），不是错误。",
     permissions: [Permission.GAME_CONFIG_READ],
@@ -60,11 +61,12 @@ export class AdminAudioSettingController {
       "  资源包不在服务端，查了只会掩盖「本地有、线上没有」；存在性由管理端的试听按钮当场暴露。\n" +
       `- \`volume\`：${AUDIO_LIMITS.volumeMin}~${AUDIO_LIMITS.volumeMax} 的整数（百分比）。\n` +
       "- `enabled = false`：客户端整个不播（连文件都不读），与「音量调 0」不是一回事。\n\n" +
-      "本轮只落库、管理端可见；客户端对接时由配置快照下发（客户端目前还没有播放代码）。\n\n" +
+      "保存后**下一次进游戏生效**：客户端进图时随配置快照取一次 `audio` 段（登录场景走公开接口\n" +
+      "`GET /game-config/audio`），没有热更新 —— 已经在游戏里的那一次不会变。\n\n" +
       "key 不存在 → 404（`50037`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
-  @ApiParam({ name: "id", description: "音效 key（登录背景音 login_bgm、登录按钮音 login_click）" })
+  @ApiParam({ name: "id", description: "音效 key（登录背景音 login_bgm、按钮点击音 ui_click）" })
   @ApiDataResponse(AudioSettingDto, { description: "保存后的音效配置（含追账字段）" })
   save(@Param("id") key: string, @Body() dto: SaveAudioSettingDto, @CurrentUser() actor: AuthenticatedUser): AudioSettingDto {
     return this.audioSettingService.save(key, dto, actor);
