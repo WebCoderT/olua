@@ -97,7 +97,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `EquipmentsPage` | **养成配置**（装备基础件 #252）：部位 / 等级段筛选 + 分页；**只收基础件**（37 件，变体在客户端按倍率展开）；编辑弹窗只开放等级 / 售卖价 / 八项属性（页面内 `EquipmentEditDialog`，不复用 GameConfigDialog —— 字段差异太大） |
 | `MonstersPage` | **养成配置**（怪物基础数据 #258 / 掉落 #584）：关键字 / 定位筛选 + 分页；编辑弹窗开放名称 / 等级 / 生命上限 / 六项攻防区间（页面内 `MonsterEditDialog`，区间字段复用 `RANGE_FIELDS`）；**改值即时生效**（世界播种与伤害结算直读 monsters 表）。列表带「掉落」列（来源徽标 + `dropSummaryText`：`common · 2~5 件 · 12 条` / `内联 3 条 · 抽 1~2` / `兜底表 default`）与行内「掉落」按钮 → `components/drop/MonsterDropDialog`（弹窗自己按 key 拉 `GET /admin/monster-drops/:key` + 具名表清单，写入只有 `PATCH /admin/monster-drops/:key` 一条路）。摘要来自服务端 `drop` 字段，**玩家侧快照不带它**（客户端不结算掉落） |
 | `NpcsPage` | **养成配置**（NPC 基础数据 #258）：关键字筛选 + 分页；编辑弹窗只有名称 / 对话文案（对话 seed 为空串，客户端暂无消费） |
-| `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改 / #580 可视化 / #667 刷怪区绘制）**：左侧 11 张图，右侧 = 上半「玩法配置」（可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半 **`components/map/MapCanvas`**（预览图上叠 SVG：刷怪区 + NPC/复活点/碰撞盒，可逐个开关、可「放大」到 72vh、点区域打开 `SpawnAreaForm`、点 NPC 打开点位弹窗）。**刷怪区在图上画**（#667）：点「绘制刷怪区」→ 画布进入 `drawMode`，指针拖矩形（`pointerdown/move/up` + `setPointerCapture`，虚线预览 + 实时尺寸，`Esc` 取消，小于 16px 当没画），松手打开 `components/map/SpawnAreaForm` 填名字 / 怪物（`EntityPickButton kind="monster"`）/ 数量；编辑同一表单，删除也在里面（`ConfirmDialog`）—— **删除路径只留一处**。坐标换算只在 `MapCanvas` 的 `worldBoxOf`（`cx = x + w/2`、`cy = -(y + h/2)`）与 `tiledBoxOf`（反函数），`viewBox` 就是 TMX 像素、`preserveAspectRatio="none"`，屏幕坐标按 `getBoundingClientRect` 各自换算 x/y。**#667 起 TMX 的 monster 组不再是来源**：画布上那层「Tiled 原始矩形虚线」与 `SpawnAreasDialog` 的对照列都删了（没有第二份真相，也就没什么可对）。其余观测块在 `components/map/MapDialogs`（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）；**刷怪区越界**由服务端算好后显示（`inBounds/overflow`：弹窗「在图内」列 + 地图上红色虚线 + 卡片 >0 时出徽标）—— 容器 `overflow-hidden` 会把越出 viewBox 的部分裁掉，「区域在图外」在图上表现为「区域不存在」，不能指望眼睛发现。**地图本身仍然不能新建/删除**（一张图存不存在由 TMX 决定，`PATCH /admin/maps/:id` 之外没有 POST/DELETE，`src` 塞进来会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
+| `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改 / #580 可视化 / #667 刷怪区绘制 / #672 NPC 与复活点）**：左侧 11 张图，右侧 = 上半「玩法配置」（可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半 **`components/map/MapCanvas`**（预览图上叠 SVG：刷怪区 + NPC/复活点/碰撞盒，可逐个开关、可「放大」到 72vh、点区域打开 `SpawnAreaForm`、点 NPC 打开点位弹窗）。**刷怪区在图上画**（#667）：切到「绘制刷怪区」模式（`mode="spawn"`，四种模式 `view / spawn / npc / revive` 之一），指针拖矩形（`pointerdown/move/up` + `setPointerCapture`，虚线预览 + 实时尺寸，`Esc` 取消，小于 16px 当没画），松手打开 `components/map/SpawnAreaForm` 填名字 / 怪物（`EntityPickButton kind="monster"`）/ 数量；编辑同一表单，删除也在里面（`ConfirmDialog`）—— **删除路径只留一处**。坐标换算只在 `MapCanvas` 的 `worldBoxOf`（`cx = x + w/2`、`cy = -(y + h/2)`）与 `tiledBoxOf`（反函数），`viewBox` 就是 TMX 像素、`preserveAspectRatio="none"`，屏幕坐标按 `getBoundingClientRect` 各自换算 x/y。**#667 起 TMX 的 monster 组不再是来源**：画布上那层「Tiled 原始矩形虚线」与 `SpawnAreasDialog` 的对照列都删了（没有第二份真相，也就没什么可对）。其余观测块在 `components/map/MapDialogs`（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）；**刷怪区越界**由服务端算好后显示（`inBounds/overflow`：弹窗「在图内」列 + 地图上红色虚线 + 卡片 >0 时出徽标）—— 容器 `overflow-hidden` 会把越出 viewBox 的部分裁掉，「区域在图外」在图上表现为「区域不存在」，不能指望眼睛发现。**地图本身仍然不能新建/删除**（一张图存不存在由 TMX 决定，`PATCH /admin/maps/:id` 之外没有 POST/DELETE，`src` 塞进来会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
 | `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自 `equipment_variants` 555 行）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
 | `DropConfigPage` | **掉落模版仓库**（#254 / #661 / #663）：只有具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器；「批量添加」走 `EntityPicker multiple` 多选）。条目池是**固定列宽栅格**（`ENTRY_GRID`：序 / 物品 / 权重 / 概率 / 数量 / 删，列头与行共用同一串 `grid-cols-[…]`）；**概率那一格按百分比填**（`EntryDraft.chancePct` 0~100，落库 ÷100），留空 = 必掉。具名表被引用中的行拒删。**每怪掉落不在这页** —— 怪物列表里每只怪自己一行「掉落」（`MonsterDropDialog`），两处列同一份数据只会互相打架。编辑器与弹窗是共用件（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`）—— 别再在页面里各写一套三选一 |
@@ -371,6 +371,29 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 与 `MapCanvas` 里刷怪区的换算必须是同一套（两处不一致 = 点位与区域错位，而且看起来都很「正常」）。
 底图用 `gameResUrl(mapPreview(mapId), "jpg")`，`<svg preserveAspectRatio="none">` 铺满，
 半径按 `width / 150` 缩放（写死 40 在 8192 的图上只有半个像素）。
+
+## 五点十三、在图上改点位（`MapCanvas` 四模式 + 拖动，#672）
+
+刷怪区 / NPC / 复活点三样都在**同一张预览图**上改，所以画布不再是「一个绘制开关」，而是
+`mode: "view" | "spawn" | "npc" | "revive"`。四个教训与引擎无关，纯粹是「在 SVG 上做编辑器」：
+
+1. **「空白处按下」挂垫底的透明 `<rect>`，不要挂 `<svg>`。** 挂 svg 时点到子元素会**双触发**
+   （子元素 handler 先跑，父元素那次渲染还看不到「已被子元素处理」的标记，靠 ref 打补丁只会越补越多）。
+   垫一层 `fill="transparent"`（`fill="none"` 不收事件）铺满 viewBox，子元素天然优先。
+2. **`pointOf(event)` 的基准必须是 `svg.getBoundingClientRect()`。** 用 `event.currentTarget` 时，
+   点在 `<g>` / `<circle>` 上拿到的是那个小圆的包围盒 —— 拖动坐标会算到图外，而且看不出是哪一步错的。
+3. **`pointerup` 里先判位移，再决定「点击」还是「提交」**（阈值 `dotRadius * 0.5`）。点位模式下
+   「点一下已有点」的语义就是「拖了 0 像素」，所以 `PointDot` **不能**再挂 `onClick` —— 两个入口会各开一次弹窗
+   （`draggable` 与 `openOnClick` 是两件事：编辑模式只给前者，查看模式只给后者）。
+4. **编辑模式下把刷怪区的 `pointerEvents` 关掉。** 否则「在刷怪区里点一下放 NPC」会先弹开区域表单。
+   同理 `spawn` 模式里点位也不吃事件。
+
+复活点**没有表单**：它只有一个坐标，所以「点它」的下一步是「切到能拖它的模式」，不是弹一个两个数字的框
+再让人关掉。清除单独一个按钮（`DELETE /revive-point` 幂等，连点两次不报错）。
+
+坐标仍然只走两个口子：`tiledPointOf` / `worldPointOf`（点）、`tiledBoxOf` / `worldBoxOf`（矩形）。
+**页面不重算越界**：`inBounds` 由服务端按地图尺寸算（容差 1px），页面再算一遍就是第二个口径；
+同图同 NPC 唯一也是服务端的唯一索引（页面先查一遍只是为了当场说话，判据必须与服务端一致）。
 
 ## 六、必踩的坑
 

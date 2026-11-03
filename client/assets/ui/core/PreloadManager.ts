@@ -1,8 +1,8 @@
 import { TiledMapAsset } from "cc";
 import { loadingConfig } from "../../configs/loading";
-import { tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../configs/game-config";
+import { mapSrcOf } from "../../configs/game-config";
 import { monsterResourceOf } from "../../configs/game-config";
-import { npcs } from "../../configs/game-config";
+import { maps, npcs } from "../../configs/game-config";
 import { getRoleDefaultCloth } from "../../configs/role";
 import { getTitleLevel } from "../../configs/game-config";
 import { getEquipment } from "../../configs/items";
@@ -14,7 +14,6 @@ import { getText } from "../../configs/texts";
 import { Role } from "../../entities/Role";
 import { AnimationKind, SpeedRate } from "../../types/animation";
 import AnimationHelper from "../helpers/AnimationHelper";
-import { readTiledObjects, readTiledObjectsFrom } from "../utils/map/TiledObjects";
 import { loadResourceAsync } from "../utils/resource/ResourceLoader";
 
 /** 一个预加载任务：需要预先加载的帧动画目录 + 用哪张动画表切割 */
@@ -34,7 +33,7 @@ export type PreloadProgress = (ratio: number, tip: string) => void;
  * 预加载管理器（静态类）
  * 进游戏前把"一进图就要用的资源"一次性加载完，避免进图后再逐个节点异步加载造成的卡顿与空档：
  * 1. 地图信息（tmx 与其图集依赖）
- * 2. 地图内所有 NPC 与怪物的帧动画（按对象组里的编号查配置得到资源目录）
+ * 2. 地图内所有 NPC 与怪物的帧动画（按**服务端快照**里的点位查配置得到资源目录，#672）
  * 3. 当前角色身上穿戴的衣服与武器帧动画
  * 跟进图无关的装饰资源（装备边框图集 / 装备详情背景帧序列）改为**后台**预载，不阻塞进图；
  * 光柱虽也是装饰，但掉落物落场就要显示，保留在关键路径
@@ -45,11 +44,11 @@ export type PreloadProgress = (ratio: number, tip: string) => void;
 export default class PreloadManager {
   /**
    * 预加载进入游戏场景所需的全部资源
-   * @param mapSrc 当前所在地图资源路径（configs/map 里的 src）
+   * @param mapId 当前所在地图的 id（资源路径由 `mapSrcOf` 按目录约定拼；帧动画按快照里的点位取）
    * @param role 当前在线角色（取其穿戴的衣服/武器外观；无角色时只加载地图部分）
    * @param onProgress 进度回调（可缺省：直接从 Game 场景启动时没有进度界面）
    */
-  static async preloadGame(mapSrc: string, role: Role | null, onProgress?: PreloadProgress) {
+  static async preloadGame(mapId: string, role: Role | null, onProgress?: PreloadProgress) {
     const startedAt = Date.now();
     onProgress?.(0, getText("progress_map"));
     // 装备边框图集与详情背景帧序列：都只在进图**之后**的背包/悬停详情里用，跟"能不能进图"无关 ——
@@ -57,12 +56,13 @@ export default class PreloadManager {
     // 换来的是进图等待时间直接少掉 40+ 个目录的加载（首进 Game 明显变快）
     void this.preloadBorders();
     void this.preloadDetailBackgrounds();
-    const mapAsset = await this.timed("地图信息", startedAt, () => loadResourceAsync<TiledMapAsset>(mapSrc, TiledMapAsset));
+    // 地图资源本身（tmx + 图集）仍然要等它到位：进图第一帧就该有地面
+    await this.timed("地图信息", startedAt, () => loadResourceAsync<TiledMapAsset>(mapSrcOf(mapId), TiledMapAsset));
     // 装备光柱帧序列：掉落物落场光柱就要在（进图即可能拾取），保留在关键路径；只有 5 个目录、很小
     const lightsStartedAt = Date.now();
     await this.preloadLights();
     console.log(`[PreloadManager] 光柱帧序列完成，耗时 ${Date.now() - lightsStartedAt}ms（自开始预加载起 ${Date.now() - startedAt}ms）`);
-    const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapAsset), ...this.getRoleAnimationTasks(role)]);
+    const tasks = this.uniqueTasks([...this.getMapAnimationTasks(mapId), ...this.getRoleAnimationTasks(role)]);
     await this.timed(`帧动画 ${tasks.length} 个目录`, startedAt, () => this.runTasks(tasks, onProgress, loadingConfig.mapRatio));
     console.log(`[PreloadManager] 游戏资源预加载全部完成，总耗时 ${Date.now() - startedAt}ms`);
   }
@@ -77,27 +77,29 @@ export default class PreloadManager {
 
   //#region 任务收集
 
-  /** 地图内需要预加载的帧动画：NPC 外观（整包循环）+ 怪物外观（按怪物动画表切割） */
-  private static getMapAnimationTasks(mapAsset: TiledMapAsset): PreloadTask[] {
-    const xml = mapAsset?.tmxXmlStr ?? "";
-    if (!xml) {
-      console.warn("[PreloadManager] 地图资源里没有 TMX 原文，无法预加载地图内的帧动画");
+  /**
+   * 地图内需要预加载的帧动画：NPC 外观（整包循环）+ 怪物外观（按怪物动画表切割）
+   *
+   * 数据来自**服务端快照**（`maps` 表的 `npcs` / `spawnAreas`），不读 TMX（#672）：
+   * 后台在图上放一个 NPC、拖一个刷怪区，下一次进图就该预加载到它 —— 从 TMX 读做不到这一点。
+   * 快照没到达时 `maps.get` 为空，只 warn 一次并跳过（进图照样能玩，NPC 走异步补加载）。
+   */
+  private static getMapAnimationTasks(mapId: string): PreloadTask[] {
+    const config = maps.get(mapId);
+    if (!config) {
+      console.warn(`[PreloadManager] 地图 ${mapId} 的配置还没到，跳过地图内的帧动画预加载`);
       return [];
     }
     const tasks: PreloadTask[] = [];
-    // NPC：对象类为 npc 的点位才有外观，复活点只是坐标（与 MapObjectSpawner 同一套读法）
-    readTiledObjectsFrom(xml, tiledGroupNames.npc, tiledGroupNames.legacyObjects)
-      .filter((object) => object.objectClass === tiledObjectClasses.npc)
-      .forEach((object) => {
-        const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
-        if (npc?.src) tasks.push({ dir: npc.src, kind: "frames" });
-      });
-    // 怪物：monster 对象组的 id 属性即怪物编号（#667 起刷怪区归后台，所以这里只是「照资源里有的先预加载」；
-    // 后台新加的、TMX 里没有的怪种不会被列进来 —— AnimationHelper 未预加载时走异步补加载，能显示，只是首帧慢）
-    readTiledObjects(xml, tiledGroupNames.monster).forEach((object) => {
-      const resource = monsterResourceOf(`${object.properties[tiledPropertyNames.id] ?? ""}`);
+    for (const point of config.npcs) {
+      const npc = npcs.get(point.npcId);
+      if (npc?.src) tasks.push({ dir: npc.src, kind: "frames" });
+    }
+    // 怪物：刷怪区的 monsterKey 就是怪物编号（同一个 key 出现在多个区里，靠 uniqueTasks 去重）
+    for (const area of config.spawnAreas) {
+      const resource = monsterResourceOf(area.monsterKey);
       if (resource?.out) tasks.push({ dir: resource.out, kind: "monster", speedRate: resource.speedRate });
-    });
+    }
     return tasks;
   }
 

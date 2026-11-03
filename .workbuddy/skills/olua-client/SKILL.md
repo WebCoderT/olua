@@ -13,10 +13,13 @@ Cocos 工程在 **`client/`**（用它打开这个目录；资源在 `client/ass
 
 1. **本地 `roles` 只是缓存，服务端才是权威。** 进游戏必须从服务端拿完整数据，拿不到**不进场景**；同时写入必须经过服务端。
 2. **游戏数据的唯一真相是客户端自己的 `assets/configs`。** 服务端只存一份不透明 JSON，它不认识装备槽位名、技能 id。所以「服务端校验失败」几乎总是**客户端发出去的形状不对**，而不是服务端不懂游戏。
-   **例外是地图（#573，用户定）**：地图的玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）**不在客户端**，
+   **例外是地图（#573 / #667 / #672，用户定）**：地图的玩法配置（名称 / 类型 / 进入条件）**不在客户端**，
    由 `GET /game-config` 下发、`applyMapRows` 整表覆写 `configs/game-config.ts` 区 18 的运行时表；客户端只留**资源约定**
-   （`mapSrcOf(id) = map/<id>/<id>`、对象组与属性名）。所以「地图名显示成『地图 0』」先看快照拉没拉到，
+   （`mapSrcOf(id) = map/<id>/<id>`、碰撞组名 `collision`）。所以「地图名显示成『地图 0』」先看快照拉没拉到，
    别去客户端找配置 —— 那里已经没有出厂数据了。
+   **NPC 点位 / 复活点 / 刷怪区同样归服务端**（`maps.npcs` / `maps.revive` / `maps.spawnAreas`）：
+   TMX 里那三个对象组客户端**一个都不读**了（`tiledGroupNames` 只剩 `collision`）。想在图上多看一个点位、
+   改一处刷怪区，去管理端「地图管理」，别再改 TMX —— 改了也不生效，而且没人会知道为什么。
 3. **怪物实例与掉落也只信服务端（#581）。** 进图无条件 `CombatChannel.sendWorldJoin(mapId)` 登记；服务端按
    `map_spawn_areas` 播种、按 `monster_drops` / `drop_tables` 抽掉落并**直接写背包**，`roles/pickDrop` 管
    「地上这件归谁」。客户端只做三件事：把下发实例落成节点、把 reward 演出来（`DropManager.spawnResults`

@@ -1,5 +1,5 @@
 import { EventMouse, EventTouch, Graphics, isValid, Node, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { mapLabelOf, tiledGroupNames, tiledObjectClasses, tiledPropertyNames } from "../../../configs/game-config";
+import { mapLabelOf, maps } from "../../../configs/game-config";
 import { monsterLabelOf, monsterResource } from "../../../configs/game-config";
 import { npcs } from "../../../configs/game-config";
 import { mapPreviewImage, mapPreviewDialogLayout } from "../../../configs/hudLayout";
@@ -9,8 +9,7 @@ import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
-import { getMapWorldRect, mapPointToWorld, mapRectCenterToWorld } from "../../utils/map/MapPointMath";
-import { getTiledObjects, getTiledObjectsFrom } from "../../utils/map/TiledObjects";
+import { getMapWorldRect } from "../../utils/map/MapPointMath";
 import { bindMousePress, getHitScreenPoint, getPointerButton, HAS_MOUSE, PointerButton } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import type RoleDisplay from "../role/RoleDisplay";
@@ -155,7 +154,11 @@ export default class MapPreviewDialog {
   /**
    * 生成预览图上的静态文字标记（开窗时一次性建好，随地图数据固定不变）
    * - NPC：白点画在标记层的 Graphics 上，名称文字紧贴在白点正上方
-   * - 刷怪区：区域中心显示该区怪物名称（区域不是矩形 / 怪物编号无配置的跳过，与刷怪生成同一套判据）
+   * - 刷怪区：区域中心显示该区怪物名称（怪物编号没有配置的跳过，与刷怪生成同一套判据）
+   *
+   * 数据来源是**服务端快照**（`maps` 的 `npcs` / `spawnAreas`，#672 / #667）：后台把 NPC 挪个位置，
+   * 这张小地图上的白点跟着动；从 TMX 读则永远停在美术同学最后一次导出时的位置。
+   * 坐标是世界坐标，`toPreview` 直接吃 —— 不再经过 `mapPointToWorld` 那次 y 取反。
    * 坐标一律走 createPreviewMapper（与动态点同一口径），因此标记与红点/黑点位置永远对得上
    */
   private buildMarkers(markerLayer: Node) {
@@ -163,28 +166,27 @@ export default class MapPreviewDialog {
     if (!map) return;
     const toPreview = this.createPreviewMapper(markerLayer);
     if (!toPreview) return;
+    const config = maps.get(AutoBattle.getMapId());
+    if (!config) return;
     const marker = mapPreviewDialogLayout.marker;
     const npcDots: SmallMapDot[] = [];
-    // NPC 白点 + 名称（复活点类点位不是 NPC，跳过；名称取 configs/npc 的 label，未配置的跳过）
-    getTiledObjectsFrom(map, tiledGroupNames.npc, tiledGroupNames.legacyObjects).forEach((object) => {
-      if (object.objectClass === tiledObjectClasses.revive || object.name === tiledObjectClasses.revive) return;
-      const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
+    // NPC 白点 + 名称（名称取 npcs 表的 label，表里没有的跳过 —— 与 MapObjectSpawner 的判据一致）
+    config.npcs.forEach((point) => {
+      const npc = npcs.get(point.npcId);
       if (!npc) return;
-      const world = mapPointToWorld(object.x, object.y);
-      const local = toPreview(world.x, world.y);
+      const local = toPreview(point.x, point.y);
       npcDots.push({ x: local.x, y: local.y, color: marker.npcDotColor, radius: marker.npcDotRadius });
       const labelPosition = new Vec2(local.x, local.y + marker.npcDotRadius + marker.npcLabelGap + marker.labelSize.height / 2);
-      markerLayer.addChild(GameUiHelper.createText(`npc_name_${object.name || npc.id}`, npc.label, marker.npcLabelFontSize, labelPosition, marker.labelSize, marker.npcLabelColor));
+      markerLayer.addChild(GameUiHelper.createText(`npc_name_${point.npcId}`, npc.label, marker.npcLabelFontSize, labelPosition, marker.labelSize, marker.npcLabelColor));
     });
     GameUiHelper.drawSmallMapDots(markerLayer.addComponent(Graphics), npcDots);
     // 刷怪区中心的怪物名称（#588：数值走运行时表，快照没到或缺行显示 key）
-    getTiledObjects(map, tiledGroupNames.monster).forEach((object) => {
-      if (object.width <= 0 || object.height <= 0) return;
-      const key = `${object.properties[tiledPropertyNames.id] ?? ""}`;
-      if (!monsterResource.has(key)) return;
-      const center = mapRectCenterToWorld(object.x, object.y, object.width, object.height);
-      const local = toPreview(center.x, center.y);
-      markerLayer.addChild(GameUiHelper.createText(`monster_area_name_${object.name || key}`, monsterLabelOf(key), marker.monsterLabelFontSize, local, marker.labelSize, marker.monsterLabelColor));
+    config.spawnAreas.forEach((area, index) => {
+      if (!monsterResource.has(area.monsterKey)) return;
+      const local = toPreview(area.cx, area.cy);
+      markerLayer.addChild(
+        GameUiHelper.createText(`monster_area_name_${area.monsterKey}_${index}`, monsterLabelOf(area.monsterKey), marker.monsterLabelFontSize, local, marker.labelSize, marker.monsterLabelColor),
+      );
     });
   }
 

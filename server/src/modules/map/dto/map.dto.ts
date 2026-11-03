@@ -156,6 +156,143 @@ export class MapSpawnAreaDto {
   overflow: MapSpawnAreaOverflowDto;
 }
 
+/**
+ * NPC 点位（**服务端库表** `map_npcs` 的一行；#672 起由管理端放置）
+ *
+ * 与刷怪区同口径：坐标是世界坐标（原点 = 地图左上角、y 轴向上，`cy` 为负），
+ * 由服务端按地图尺寸判 `inBounds` —— 管理端只显示结论，不自己再算一遍。
+ *
+ * `npcId` 关联 `npcs` 表（外观 / 名字 / 点击行为都在那边或客户端），
+ * 这张表只管「谁站在哪」。
+ */
+export class MapNpcDto {
+  @ApiProperty({ description: "点位行 id（改 / 删用它定位；换 NPC 时 id 不变）" })
+  id: number;
+
+  @ApiProperty({ description: "NPC id（npcs 表主键；客户端据此查外观与点击行为）" })
+  npcId: string;
+
+  @ApiProperty({ description: "NPC 名（查不到 npcs 行时回落成 id）" })
+  npcLabel: string;
+
+  @ApiProperty({ description: "世界坐标 x（原点 = 地图左上角）" })
+  cx: number;
+
+  @ApiProperty({ description: "世界坐标 y（y 轴向上，故为负）" })
+  cy: number;
+
+  @ApiProperty({ description: "是否落在图内（`[0, W] × [-H, 0]`，容差 1px）" })
+  inBounds: boolean;
+}
+
+/** 一个世界坐标点（下发客户端用；字段名就是 `Vec3` 的 x/y） */
+export class MapPositionDto {
+  @ApiProperty({ description: "世界坐标 x（原点 = 地图左上角）" })
+  x: number;
+
+  @ApiProperty({ description: "世界坐标 y（y 轴向上，故为负）" })
+  y: number;
+}
+
+/**
+ * 复活点（**服务端库表** `maps.revive_cx/cy`；#672 起由管理端点选）
+ *
+ * 管理端这一份用 `cx/cy`（与刷怪区、NPC 点位同一套字段名）；下发客户端那一份是
+ * `MapPositionDto`（`x/y`，直接塞 `Vec3`）—— 两份字段名不同是刻意的：改名字的那次提交
+ * 会同时改到两端，而「谁在哪一边」不用猜。
+ */
+export class MapRevivePointDto {
+  @ApiProperty({ description: "世界坐标 x（原点 = 地图左上角）" })
+  cx: number;
+
+  @ApiProperty({ description: "世界坐标 y（y 轴向上，故为负）" })
+  cy: number;
+
+  @ApiProperty({ description: "是否落在图内（`[0, W] × [-H, 0]`，容差 1px）" })
+  inBounds: boolean;
+}
+
+/**
+ * 新建 / 修改一个 NPC 点位
+ *
+ * 整份提交（`npcId` + 坐标）：换 NPC 与挪位置在页面上是同一次动作，分字段更新只会留下
+ * 「NPC 换了、坐标还是旧的」这种半成品。`npcId` 可以不等于原来的 —— 那就是换人，
+ * service 会按「同图同 NPC 唯一」重新查重。
+ */
+export class SaveMapNpcDto {
+  @ApiProperty({ description: "NPC id（必须在 npcs 表里存在）", example: "0002" })
+  @IsString({ message: "NPC id 必须是字符串" })
+  @Length(1, 64, { message: "NPC id 不能为空" })
+  npcId: string;
+
+  @ApiProperty({ description: "世界坐标 x（原点 = 地图左上角）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cx 必须是数字" })
+  cx: number;
+
+  @ApiProperty({ description: "世界坐标 y（y 轴向上，故为负）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cy 必须是数字" })
+  cy: number;
+}
+
+/** 设 / 挪复活点（每张图只有一个，`PUT` 即覆盖） */
+export class SaveRevivePointDto {
+  @ApiProperty({ description: "世界坐标 x（原点 = 地图左上角）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cx 必须是数字" })
+  cx: number;
+
+  @ApiProperty({ description: "世界坐标 y（y 轴向上，故为负）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cy 必须是数字" })
+  cy: number;
+}
+
+/** 删除 NPC 点位的结果（不留 204 空响应：前端要拿到 id 才能从本地列表里摘掉那一行） */
+export class MapNpcDeletedDto {
+  @ApiProperty({ description: "恒为 true（失败会抛 404，不会有 false）" })
+  deleted: boolean;
+
+  @ApiProperty({ description: "被删掉的点位行 id" })
+  id: number;
+}
+
+/** 清掉复活点的结果 */
+export class MapRevivePointClearedDto {
+  @ApiProperty({ description: "恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）" })
+  cleared: boolean;
+}
+
+/**
+ * 刷怪区中心点（**下发客户端用**）
+ *
+ * 客户端只需要「在哪画一个「怪物区域名」标签」，所以只给怪物 key 与中心点，
+ * 不给尺寸与数量 —— 少发的字段不会漂，多发的字段迟早有人拿去当判据。
+ */
+export class MapSpawnAreaPointDto {
+  @ApiProperty({ description: "怪物 key（客户端据此查名字与动画）" })
+  monsterKey: string;
+
+  @ApiProperty({ description: "区域中心 x（世界坐标）" })
+  cx: number;
+
+  @ApiProperty({ description: "区域中心 y（世界坐标，为负）" })
+  cy: number;
+}
+
+/** NPC 点位（下发客户端用：只有「谁」和「在哪」） */
+export class MapNpcPointDto {
+  @ApiProperty({ description: "NPC id（npcs 表主键）" })
+  npcId: string;
+
+  @ApiProperty({ description: "世界坐标 x" })
+  x: number;
+
+  @ApiProperty({ description: "世界坐标 y（为负）" })
+  y: number;
+}
+
 /** 场上怪物汇总（按区；**服务端库表** `world_monsters`） */
 export class MapWorldMonsterDto {
   @ApiProperty({ description: "区服 id" })
@@ -238,8 +375,14 @@ export class MapSummaryDto {
   @ApiProperty({ description: "图层数" })
   layerCount: number;
 
-  @ApiProperty({ description: "NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）" })
+  @ApiProperty({ description: "NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）" })
   npcCount: number;
+
+  @ApiProperty({ description: "服务端 NPC 点位数（map_npcs；#672 起点位归后台）" })
+  npcPointCount: number;
+
+  @ApiProperty({ description: "服务端是否设了复活点（maps.revive_cx/cy 非空）" })
+  hasRevivePoint: boolean;
 
   @ApiProperty({ description: "刷怪区对象数（客户端资源 monster 组的矩形数）" })
   monsterAreaCount: number;
@@ -247,7 +390,7 @@ export class MapSummaryDto {
   @ApiProperty({ description: "碰撞矩形数（客户端资源 collision 组的对象数）" })
   collisionCount: number;
 
-  @ApiProperty({ description: "复活点数（客户端资源里 klass=revive 的对象）" })
+  @ApiProperty({ description: "复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）" })
   reviveCount: number;
 
   @ApiProperty({ description: "服务端刷怪区行数（map_spawn_areas）" })
@@ -263,6 +406,9 @@ export class MapSummaryDto {
  * 与 `MapSummaryDto` 的区别只有「不带计数与尺寸」：客户端进游戏需要的是「这张图叫什么、
  * 属于哪一类、进去要什么条件」，TMX 里的对象数它自己就能数。少发的字段不会漂，
  * 多发的字段迟早有人拿去当判据。
+ *
+ * #672 起多带三样**点位**（NPC / 复活点 / 刷怪区中心）：这三样以前客户端是从 TMX 的
+ * 对象组里读的，现在归后台了 —— 客户端不再有任何「问你 TMX 在哪」的路径。
  */
 export class MapConfigDto {
   @ApiProperty({ description: "地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）" })
@@ -285,6 +431,25 @@ export class MapConfigDto {
 
   @ApiProperty({ description: "进入所需战魂阶（0 = 不限）" })
   soulOfWar: number;
+
+  @ApiProperty({
+    description: "NPC 点位（#672 起由后台放置；坐标已是世界坐标，客户端直接摆节点）",
+    type: [MapNpcPointDto],
+  })
+  npcs: MapNpcPointDto[];
+
+  @ApiProperty({
+    description: "复活点（null = 这张图没有复活点：客户端不进图定位、不回点复活）",
+    type: MapPositionDto,
+    nullable: true,
+  })
+  revive: MapPositionDto | null;
+
+  @ApiProperty({
+    description: "刷怪区中心点（只给「在哪画怪物区域名标签」，尺寸与数量不下发）",
+    type: [MapSpawnAreaPointDto],
+  })
+  spawnAreas: MapSpawnAreaPointDto[];
 }
 
 /** 地图类型分组（顺序 = 传送弹窗的分组顺序；文案的唯一来源在服务端） */
@@ -321,6 +486,16 @@ export class MapDetailDto extends MapSummaryDto {
 
   @ApiProperty({ description: "刷怪区（服务端库表，世界坐标）", type: [MapSpawnAreaDto] })
   spawnAreas: MapSpawnAreaDto[];
+
+  @ApiProperty({ description: "NPC 点位（服务端库表，世界坐标）", type: [MapNpcDto] })
+  npcPoints: MapNpcDto[];
+
+  @ApiProperty({
+    description: "复活点（服务端库表；null = 这张图没有复活点）",
+    type: MapRevivePointDto,
+    nullable: true,
+  })
+  revivePoint: MapRevivePointDto | null;
 
   @ApiProperty({ description: "场上怪物（按区分组；进程未启动过世界时为空）", type: [MapWorldMonsterDto] })
   worldMonsters: MapWorldMonsterDto[];

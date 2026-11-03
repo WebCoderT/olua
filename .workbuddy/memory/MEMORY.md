@@ -16,6 +16,11 @@
   权威侧会拒绝为**尸体**结算（`applyMonsterHit` 对 hp ≤ 0 返回 null，而 `casts` 照发），
   于是第一帧可能只有动作没有数值。改成「等一帧同时满足两边」（超时要盖过一个冷却周期），
   等不到才是真回归；本机绿 ≠ CI 绿（本机快、CI 慢，窗口才踩得到）。
+- **新增一张表 → `server/scripts/lib/config-tables.cjs` 两份清单必须同时登记**（配置 or 运行时）：
+  `config:export` 里的 `assertAllClassified()` 会全量比对，漏一张直接抛 —— #665 加了 `map_monitor_state/events`
+  却没登记，导致 `make config-export` 坏了两个版本没人发现（导出没人常跑）。顺手看 `CONFIG_TABLES` 的 33 张也进了审计口径。
+- **校验 config-sync 只能拿「同 schema 的库副本」**：`cp data/olua.db /tmp/x.db` 再 `config-import --db`（脚本自带
+  逐字节回读）。拿**新建库**（空库启动）会失败在列亲和性上（`drugs.level` 之类），那不是文件错。
 - **工具**：只信 Grep 工具（BSD `grep "a\|b"` 恒空）；批量替换 `perl -pi -e`（本机 `sed -i ''` 异常）；改完看行尾（`GameUiHelper.ts` 历史上是 CRLF，现已统一 LF —— 动手前 `grep -c $'\r'` 确认，别凭记忆假设）；子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof`。
 - 删改代码用 node 按行号区间（跨行正则会从文件头 `/**` 吃到函数尾）；`//#region` 是有语义的注释，不能当注释裁。
 - **一份数据只能一个来源**：库表（`config-sync.sql` 是它的导出物）→ 快照段 → `apply*` 整表重建，守点「导出一致 + 行数自洽」。代码里不许再有种子/生成物副本（`server/src/shared/` 已删）。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`），`configs-sandbox` 与真装载共用同一个 `apply*`。
@@ -68,6 +73,11 @@
   代码里没有第二份数值副本。**死旋钮已清**：`growth_scalars` 只剩 4 个全局标量（`attributeRange.*` 三条删）、
   回收价曲线整条链删（`equipment_meta.recycle_curve` 列 + 客户端 `sampleGrowth`/`equipmentRecyclePrice` +
   管理端卡片；价只认 `equipment_variants.sell_price`）。新增 `dropColumnIfExists()` 删老库死列。
+- **#672 地图点位收权（分支 `feat/672-map-points`）**：NPC 点位（`map_npcs`，`(map_id,npc_id)` 唯一 = 一图一个 NPC）
+  + 复活点（`maps.revive_cx/cy` **可空**，NULL 才是「没有」；垫 0 会让玩家一进图飞到左上角）搬到后台，
+  TMX 只剩瓦片 + 碰撞（`tiledGroupNames` 只剩 `collision`；`tiledObjectClasses`/`tiledPropertyNames` 已删）。
+  管理端 `MapCanvas` 四模式 `view|spawn|npc|revive` + NPC 拖动松手即存；客户端 `preloadGame(mapId, role)`（少一个能传错的参数）。
+  出厂迁移 `server/scripts/migrate-map-points.cjs` 读 `maps.content`（不解析 .tmx），`cx=x`、`cy=-y`，`INSERT OR IGNORE`。
 - open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。

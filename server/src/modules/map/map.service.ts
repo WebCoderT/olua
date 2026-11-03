@@ -4,13 +4,20 @@ import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue, SPAWN_AREA_LIMITS } fro
 import { BizException } from "../../common/errors/biz.exception";
 import { parseMonitorEvent, parseMonitorSnapshot } from "../../common/map-monitor";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
-import { spawnAreaInBounds, spawnAreaOverflow } from "../../common/utils/spawn-area-bounds.util";
+import {
+  pointInBounds,
+  pointOverflowText,
+  spawnAreaInBounds,
+  spawnAreaOverflow,
+} from "../../common/utils/spawn-area-bounds.util";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
+import { MapNpcRepository } from "../../database/repositories/map-npc.repository";
+import { NpcRepository } from "../../database/repositories/npc.repository";
 import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-area.repository";
 import { MapRepository } from "../../database/repositories/map.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
-import { MapRow, MapSpawnAreaRow } from "../../database/rows";
+import { MapNpcRow, MapRow, MapSpawnAreaRow, NpcRow } from "../../database/rows";
 import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
 import {
   MapMonitorDto,
@@ -24,11 +31,20 @@ import {
   MapGroupDto,
   MapLayerDto,
   MapListDto,
+  MapNpcDeletedDto,
+  MapNpcDto,
+  MapNpcPointDto,
+  MapPositionDto,
+  MapRevivePointClearedDto,
+  MapRevivePointDto,
   MapSourceDto,
   MapSpawnAreaDto,
+  MapSpawnAreaPointDto,
   MapSummaryDto,
   MapWorldMonsterDto,
   SaveMapConfigDto,
+  SaveMapNpcDto,
+  SaveRevivePointDto,
   SaveSpawnAreaDto,
 } from "./dto/map.dto";
 
@@ -42,6 +58,8 @@ import {
  * | `label` / `type` / `level` / `combat` / `soulOfWar` | `maps` 表 | **管理端**（`save`） |
  * | `layers` / `groups` / 尺寸 | `maps` 表的几何列 + `content` JSON（源自 TMX） | 改 TMX + 跑 `import-map-resources` |
  * | `spawnAreas` | `map_spawn_areas` 表 | **管理端绘制**（`createSpawnArea` / `updateSpawnArea` / `deleteSpawnArea`） |
+ * | `npcPoints` | `map_npcs` 表 | **管理端点放 / 拖动**（`createNpc` / `updateNpc` / `deleteNpc`） |
+ * | `revivePoint` | `maps.revive_cx/cy` | **管理端点选**（`setRevivePoint` / `clearRevivePoint`） |
  * | `worldMonsters` | `world_monsters` 表 | 世界服务运行时写 |
  *
  * 资源本体（TMX / 底图 / 预览图）仍在客户端资源包里 —— 所以**没有「新建地图」**：
@@ -73,20 +91,30 @@ export class MapService {
   constructor(
     private readonly maps: MapRepository,
     private readonly spawnAreas: MapSpawnAreaRepository,
+    private readonly npcPoints: MapNpcRepository,
     private readonly worldMonsters: WorldMonsterRepository,
     private readonly monsters: MonsterRepository,
+    private readonly npcs: NpcRepository,
     private readonly monitorRows: MapMonitorRepository,
   ) {}
 
 
-  /** 列表：全部图 + 各类对象计数（客户端资源）+ 服务端两处统计 */
+  /** 列表：全部图 + 各类对象计数（客户端资源）+ 服务端三处统计 */
   list(): MapListDto {
     const spawnCounts = new Map(this.spawnAreas.countByMap().map((row) => [row.map_id, row.total]));
+    const npcCounts = new Map(this.npcPoints.countByMap().map((row) => [row.map_id, row.total]));
     const monsterCounts = this.worldMonsterTotals();
 
     const list = this.maps
       .listAll()
-      .map((row) => this.summaryOf(row, spawnCounts.get(row.map_id) ?? 0, monsterCounts.get(row.map_id) ?? 0));
+      .map((row) =>
+        this.summaryOf(
+          row,
+          spawnCounts.get(row.map_id) ?? 0,
+          monsterCounts.get(row.map_id) ?? 0,
+          npcCounts.get(row.map_id) ?? 0,
+        ),
+      );
     const dto = new MapListDto();
     dto.total = list.length;
     dto.list = list;
@@ -98,8 +126,10 @@ export class MapService {
   /**
    * 玩法配置的精简列表（**配置快照用**）
    *
-   * 客户端进游戏要的就是这七个字段：凭 `id` 拼资源路径、凭 `label` 显示名字、
-   * 凭 `type` 分桶、凭三个数值判「能不能进」。尺寸与对象数不发 —— 客户端自己有 TMX。
+   * 客户端进游戏要的是：凭 `id` 拼资源路径、凭 `label` 显示名字、凭 `type` 分桶、
+   * 凭三个数值判「能不能进」，以及 #672 起的三块点位（NPC / 复活点 / 刷怪区中心）——
+   * 这三样以前客户端是从 TMX 的对象组里读的，现在 TMX 不再是来源。
+   * 尺寸与对象数仍然不发：客户端自己有 TMX。
    */
   configs(): MapConfigDto[] {
     return this.maps.listAll().map((row) => ({
@@ -110,6 +140,9 @@ export class MapService {
       level: row.level,
       combat: row.combat,
       soulOfWar: row.soul_of_war,
+      npcs: this.npcPoints.listByMap(row.map_id).map((point) => this.npcPointDtoOf(point)),
+      revive: this.revivePointDtoOf(row),
+      spawnAreas: this.spawnAreas.listByMap(row.map_id).map((area) => this.spawnAreaPointDtoOf(area)),
     }));
   }
 
@@ -208,7 +241,7 @@ export class MapService {
     return dto;
   }
 
-  /** 详情：基础 + 图层 + 对象组 + 刷怪区 + 场上怪物 + 来源说明 */
+  /** 详情：基础 + 图层 + 对象组 + 刷怪区 + NPC/复活点 + 场上怪物 + 来源说明 */
   detail(id: string): MapDetailDto {
     const row = this.requireRow(id);
     const content = this.contentOf(row);
@@ -223,6 +256,7 @@ export class MapService {
     // 判据只在服务端一处：页面直接显示 inBounds，不自己再算一遍 —— 两边各算迟早会分叉。
     const mapPixel = this.sizeOf(row);
     const areas: MapSpawnAreaDto[] = this.spawnAreas.listByMap(id).map((area) => this.areaDtoOf(area, mapPixel));
+    const npcPoints: MapNpcDto[] = this.npcPoints.listByMap(id).map((point) => this.npcDtoOf(point, mapPixel));
 
     const worldMonsters: MapWorldMonsterDto[] = this.worldMonsters
       .countByMap()
@@ -233,6 +267,7 @@ export class MapService {
       row,
       areas.length,
       worldMonsters.reduce((total, item) => total + item.total, 0),
+      npcPoints.length,
     );
     const detail = Object.assign(new MapDetailDto(), summary);
     detail.layers = content.layers.map((layer) => {
@@ -244,6 +279,8 @@ export class MapService {
     });
     detail.groups = groups;
     detail.spawnAreas = areas;
+    detail.npcPoints = npcPoints;
+    detail.revivePoint = this.revivePointOf(row, mapPixel);
     detail.worldMonsters = worldMonsters;
     detail.sources = this.sources();
     return detail;
@@ -272,7 +309,12 @@ export class MapService {
       `地图 ${id} 配置已更新：${before.label} → ${row.label} / 类型 ${before.type}→${row.type} / ` +
         `等级 ${before.level}→${row.level} / 战力 ${before.combat}→${row.combat} / 战魂 ${before.soul_of_war}→${row.soul_of_war}`,
     );
-    return this.summaryOf(row, this.spawnAreas.countByMap().find((item) => item.map_id === id)?.total ?? 0, 0);
+    return this.summaryOf(
+      row,
+      this.spawnAreas.countByMap().find((item) => item.map_id === id)?.total ?? 0,
+      0,
+      this.npcPoints.listByMap(id).length,
+    );
   }
 
   //#region 刷怪区（#667：后台直接画）
@@ -450,6 +492,178 @@ export class MapService {
 
   //#endregion
 
+  //#region 点位（#672：NPC 与复活点从 TMX 搬到后台）
+
+  /**
+   * 放一个 NPC 点位
+   *
+   * 四道校验与刷怪区同款（图有几何 / NPC 存在 / 同图不重复 / 点在图内），
+   * 只是「名字唯一」换成了「(map_id, npc_id) 唯一」—— 同一个 NPC 在一张图摆两份没有意义，
+   * 在**不同图**各摆一个是正常的（传送使者就是每张图一个）。
+   */
+  createNpc(mapId: string, dto: SaveMapNpcDto, actor: AuthenticatedUser): MapNpcDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const npc = this.requireNpc(dto.npcId);
+    this.requireNpcFree(mapId, npc.id, null);
+    const point = this.requirePointInBounds(mapPixel, dto, "NPC 点位");
+
+    const created = this.npcPoints.insert({
+      map_id: mapId,
+      npc_id: npc.id,
+      cx: point.cx,
+      cy: point.cy,
+      updated_at: Date.now(),
+    });
+    this.logger.log(
+      `地图 ${mapId} 新增 NPC 点位 #${created.id}：${npc.label}(${npc.id}) @ (${point.cx}, ${point.cy})（by ${actor.username}）`,
+    );
+    return this.npcDtoOf(created, mapPixel);
+  }
+
+  /**
+   * 改一个 NPC 点位（整份覆盖：换 NPC 与挪位置是同一次动作）
+   *
+   * 画布上拖动走的也是它 —— 拖完只提交新坐标，`npcId` 原样带回。
+   */
+  updateNpc(mapId: string, pointId: number, dto: SaveMapNpcDto, actor: AuthenticatedUser): MapNpcDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const before = this.requireNpcPoint(mapId, pointId);
+    const npc = this.requireNpc(dto.npcId);
+    this.requireNpcFree(mapId, npc.id, pointId);
+    const point = this.requirePointInBounds(mapPixel, dto, "NPC 点位");
+
+    this.npcPoints.update({ ...before, npc_id: npc.id, cx: point.cx, cy: point.cy, updated_at: Date.now() });
+    this.logger.log(
+      `地图 ${mapId} NPC 点位 #${pointId} 已更新：${before.npc_id} (${before.cx}, ${before.cy}) → ` +
+        `${npc.id} (${point.cx}, ${point.cy})（by ${actor.username}）`,
+    );
+    const updated = this.npcPoints.findById(pointId);
+    if (!updated) throw new Error(`NPC 点位 #${pointId} 刚更新却读不回来，库状态异常`);
+    return this.npcDtoOf(updated, mapPixel);
+  }
+
+  /** 删一个 NPC 点位（客户端下次进图就没有这个 NPC 了；已经在图里的人要换图才生效） */
+  deleteNpc(mapId: string, pointId: number, actor: AuthenticatedUser): MapNpcDeletedDto {
+    const before = this.requireNpcPoint(mapId, pointId);
+    this.npcPoints.remove(pointId);
+    this.logger.log(`地图 ${mapId} NPC 点位 #${pointId}（${before.npc_id}）已删除（by ${actor.username}）`);
+    return { deleted: true, id: pointId };
+  }
+
+  /**
+   * 设 / 挪复活点（每张图一个，`PUT` 即覆盖）
+   *
+   * 没有**独立的**「设」与「挪」：两件事写的是同一对列，多一个接口只会多一条要测的分支。
+   */
+  setRevivePoint(mapId: string, dto: SaveRevivePointDto, actor: AuthenticatedUser): MapRevivePointDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const point = this.requirePointInBounds(mapPixel, dto, "复活点");
+    this.maps.setRevivePoint(mapId, point.cx, point.cy);
+    this.logger.log(`地图 ${mapId} 复活点已设为 (${point.cx}, ${point.cy})（by ${actor.username}）`);
+    return { cx: point.cx, cy: point.cy, inBounds: pointInBounds(point, mapPixel) };
+  }
+
+  /** 清掉复活点（幂等：本来就没有也返回 cleared —— 清空是「变成没有」，不是「删一行」） */
+  clearRevivePoint(mapId: string, actor: AuthenticatedUser): MapRevivePointClearedDto {
+    this.requireRow(mapId);
+    this.maps.setRevivePoint(mapId, null, null);
+    this.logger.log(`地图 ${mapId} 复活点已清除（by ${actor.username}）`);
+    return { cleared: true };
+  }
+
+  /** NPC 必须在 npcs 表里（清单固定，没有「新建 NPC」接口 —— 这里拦住拼错的 id） */
+  private requireNpc(npcId: string): NpcRow {
+    const npc = this.npcs.findByKey(npcId.trim());
+    if (!npc) {
+      throw BizException.notFound(BizCode.MAP_NPC_NOT_FOUND, `NPC ${npcId} 不存在（npcs 表里没有这个 id）`);
+    }
+    return npc;
+  }
+
+  /** 同图同 NPC 唯一（`exceptId` = 改的时候排除自己） */
+  private requireNpcFree(mapId: string, npcId: string, exceptId: number | null): void {
+    const twin = this.npcPoints.findByNpc(mapId, npcId);
+    if (twin && twin.id !== exceptId) {
+      throw BizException.conflict(
+        BizCode.MAP_NPC_DUPLICATED,
+        `这张图已经有一个 NPC ${npcId} 了（点位 #${twin.id}）—— 想摆第二个请先挪走或删掉它`,
+      );
+    }
+  }
+
+  /** 取一个点位，且必须属于路径里那张图（防止拿 A 图的点位 id 去改 B 图） */
+  private requireNpcPoint(mapId: string, pointId: number): MapNpcRow {
+    const point = this.npcPoints.findById(pointId);
+    if (!point || point.map_id !== mapId) {
+      throw BizException.notFound(BizCode.MAP_NPC_POINT_NOT_FOUND, `地图 ${mapId} 没有 NPC 点位 #${pointId}`);
+    }
+    return point;
+  }
+
+  /**
+   * 点位在图内（与刷怪区同一套边界判据、同一个容差）
+   *
+   * 越界直接拒：点位是在画布上点出来的，点到图外只有两种可能 —— 手滑，或者坐标口径搞错了
+   * （y 忘了取反）。报「右 32 / 下 96」而不是只说「越界」，就是为了让人一眼看出是哪种。
+   */
+  private requirePointInBounds(
+    mapPixel: MapPixelSize,
+    point: { cx: number; cy: number },
+    what: string,
+  ): { cx: number; cy: number } {
+    const rounded = { cx: round2(point.cx), cy: round2(point.cy) };
+    if (!pointInBounds(rounded, mapPixel)) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `${what}超出地图边界（${pointOverflowText(rounded, mapPixel)} px），地图是 ${mapPixel.width}×${mapPixel.height} —— ` +
+          `世界坐标范围 x ∈ [0, ${mapPixel.width}]、y ∈ [-${mapPixel.height}, 0]`,
+      );
+    }
+    return rounded;
+  }
+
+  /** 行 → DTO（越界结论与读接口同源：`pointInBounds` 是唯一判据） */
+  private npcDtoOf(point: MapNpcRow, mapPixel: MapPixelSize): MapNpcDto {
+    return {
+      id: point.id,
+      npcId: point.npc_id,
+      npcLabel: this.npcLabelOf(point.npc_id),
+      cx: point.cx,
+      cy: point.cy,
+      inBounds: pointInBounds(point, mapPixel),
+    };
+  }
+
+  /** 复活点 → DTO（两列任一为空就当没有：它们同生同灭，半截数据按「没有」处理） */
+  private revivePointOf(row: MapRow, mapPixel: MapPixelSize): MapRevivePointDto | null {
+    if (row.revive_cx === null || row.revive_cy === null) return null;
+    const point = { cx: row.revive_cx, cy: row.revive_cy };
+    return { ...point, inBounds: pointInBounds(point, mapPixel) };
+  }
+
+  /** NPC 名（查不到就回落成 id：删了一行 NPC 配置也不该让地图页 500） */
+  private npcLabelOf(npcId: string): string {
+    return this.npcs.findByKey(npcId)?.label ?? npcId;
+  }
+
+  /** 下发客户端用的点位（只有「谁」和「在哪」；管理端那一份走 `npcDtoOf`，多 id 与越界结论） */
+  private npcPointDtoOf(point: MapNpcRow): MapNpcPointDto {
+    return { npcId: point.npc_id, x: point.cx, y: point.cy };
+  }
+
+  /** 下发客户端用的刷怪区中心（客户端只要「在哪画一个区域名标签」） */
+  private spawnAreaPointDtoOf(area: MapSpawnAreaRow): MapSpawnAreaPointDto {
+    return { monsterKey: area.monster_key, cx: area.cx, cy: area.cy };
+  }
+
+  /** 下发客户端用的复活点（两列任一为空就当没有） */
+  private revivePointDtoOf(row: MapRow): MapPositionDto | null {
+    if (row.revive_cx === null || row.revive_cy === null) return null;
+    return { x: row.revive_cx, y: row.revive_cy };
+  }
+
+  //#endregion
+
   /** 取一行，没有就 404（用 notFound：`new BizException(code, msg)` 默认是 400） */
   private requireRow(id: string): MapRow {
     const row = this.maps.getById(id);
@@ -509,7 +723,12 @@ export class MapService {
   }
 
   /** 列表/详情共用的一份基础字段 */
-  private summaryOf(row: MapRow, spawnAreaCount: number, worldMonsterCount: number): MapSummaryDto {
+  private summaryOf(
+    row: MapRow,
+    spawnAreaCount: number,
+    worldMonsterCount: number,
+    npcPointCount: number,
+  ): MapSummaryDto {
     const id = row.map_id;
     const size = this.sizeOf(row);
     const content = this.contentOf(row);
@@ -533,6 +752,8 @@ export class MapService {
     dto.height = size.height;
     dto.layerCount = content.layers.length;
     dto.npcCount = allObjects.filter((object) => object.klass === "npc").length;
+    dto.npcPointCount = npcPointCount;
+    dto.hasRevivePoint = row.revive_cx !== null && row.revive_cy !== null;
     dto.monsterAreaCount = content.groups.find((group) => group.name === "monster")?.objects.length ?? 0;
     dto.collisionCount = content.groups.find((group) => group.name === "collision")?.objects.length ?? 0;
     dto.reviveCount = allObjects.filter((object) => object.klass === "revive").length;
@@ -577,7 +798,7 @@ export class MapService {
         label: "对象组（Tiled 原始坐标）",
         origin: "db",
         ref: "maps 表（content 列）",
-        note: "坐标是 Tiled 原始口径（左上角、y 向下），用来对着编辑器核对；不是服务端在用的世界坐标。",
+        note: "坐标是 Tiled 原始口径（左上角、y 向下），用来对着编辑器核对；不是服务端在用的世界坐标。#672 起 npc 组只是资源对照（点位归下面的两张表），碰撞盒仍由客户端读它生成。",
       },
       {
         section: "spawnAreas",
@@ -585,6 +806,20 @@ export class MapService {
         origin: "db",
         ref: "map_spawn_areas 表",
         note: "在地图页上拖框绘制（#667 起归后台）；世界播种直接读它。改动在该图世界实例重新加载后生效。",
+      },
+      {
+        section: "npcPoints",
+        label: "NPC 点位（服务端整理后）",
+        origin: "db",
+        ref: "map_npcs 表",
+        note: "在地图页上点放 / 拖动（#672 起归后台）；客户端进游戏按快照摆节点。改动下次进游戏生效。",
+      },
+      {
+        section: "revivePoint",
+        label: "复活点（服务端整理后）",
+        origin: "db",
+        ref: "maps 表（revive_cx / revive_cy）",
+        note: "在地图页上点选（#672 起归后台）；客户端用它做进图定位与安全复活。没设 = 不进图定位。",
       },
       {
         section: "worldMonsters",

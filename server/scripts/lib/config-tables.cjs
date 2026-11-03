@@ -56,6 +56,7 @@ const CONFIG_TABLES = Object.freeze([
   "items",
   "mall_prices",
   "mall_settings",
+  "map_npcs",
   "map_spawn_areas",
   "maps",
   "monster_drops",
@@ -82,6 +83,7 @@ const CONFIG_TABLES = Object.freeze([
  * - 存档：roles / role_* / quest_progress
  * - 社交：guilds / guild_members / guild_applications / parties / party_members
  * - 投递：mail_queue
+ * - 监控投影：map_monitor_state / map_monitor_events（#665 实时地图监控，重启丢也无所谓）
  * - 世界：world_monsters / world_meta / zones
  */
 const RUNTIME_TABLES = Object.freeze([
@@ -94,6 +96,8 @@ const RUNTIME_TABLES = Object.freeze([
   "guild_members",
   "guilds",
   "mail_queue",
+  "map_monitor_events",
+  "map_monitor_state",
   "parties",
   "party_members",
   "quest_progress",

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -10,28 +10,38 @@ import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interfac
 import {
   MapDetailDto,
   MapListDto,
+  MapNpcDeletedDto,
+  MapNpcDto,
+  MapRevivePointClearedDto,
+  MapRevivePointDto,
   MapSpawnAreaDeletedDto,
   MapSpawnAreaDto,
   MapSummaryDto,
   SaveMapConfigDto,
+  SaveMapNpcDto,
+  SaveRevivePointDto,
   SaveSpawnAreaDto,
 } from "./dto/map.dto";
 import { MapMonitorDto, MapMonitorQueryDto } from "./dto/map-monitor.dto";
 import { MapService } from "./map.service";
 
 /**
- * 管理端 · 地图管理（#571 观测台 / #573 玩法配置可改）
+ * 管理端 · 地图管理（#571 观测台 / #573 玩法配置可改 / #667 刷怪区 / #672 点位）
  *
  * ## 能改的和不能改的
  *
- * 能改的只有**玩法配置**那五个字段：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶
- * （`PATCH /admin/maps/:id`）。它们以前写在客户端 `configs/map.ts` 里，改一个进入等级
- * 要重打整个客户端包；现在归服务端，保存即生效。
+ * 能改的是**服务端的整理结果**，三块各有自己的接口：
+ * - 玩法配置五字段（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）→ `PATCH /admin/maps/:id`；
+ * - 刷怪区 → `POST/PATCH/DELETE /admin/maps/:id/spawn-areas`（#667，地图页拖框）；
+ * - NPC 点位与复活点 → `POST/PATCH/DELETE .../npcs`、`PUT/DELETE .../revive-point`（#672，地图页点放 / 拖动）。
  *
  * 不能改的是**资源本体**：TMX、底图、预览图、图层与对象组。服务端连一列都没有 ——
- * 想改地图长什么样，路只有一条：换资源 → `node tools/import-map-resources.cjs`（可带 `--db`
- * 覆盖刷怪区）→ 重新打包客户端。所以这里**没有 POST / DELETE**（e2e 固化它们 404）：
- * 一张图存不存在由客户端的 TMX 决定，后台凭空建一行只会得到一张点开就黑屏的图。
+ * 想改地图长什么样，路只有一条：换资源 → `node tools/import-map-resources.cjs` → 重新打包客户端。
+ * 所以**没有「新建 / 删除地图」**（e2e 固化它们 404）：一张图存不存在由客户端的 TMX 决定，
+ * 后台凭空建一行只会得到一张点开就黑屏的图。
+ *
+ * #672 之前 NPC 点位与复活点写在 TMX 的 npc 对象组里（客户端四处读它），现在那组对象只剩
+ * 资源对照 —— 点位在库里，和刷怪区同一套坐标口径（世界坐标）。
  */
 @ApiAudience("admin")
 @Controller("admin/maps")
@@ -45,8 +55,8 @@ export class AdminMapController {
     description:
       "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n" +
       "计数分两类，**不要混着看**：\n" +
-      "- `npcCount` / `monsterAreaCount` / `collisionCount` / `reviveCount`：客户端 TMX 里的对象数（生成快照）；\n" +
-      "- `spawnAreaCount` / `worldMonsterCount`：服务端库表里的行数（`map_spawn_areas` / `world_monsters`）。\n\n" +
+      "- `npcCount` / `monsterAreaCount` / `collisionCount` / `reviveCount`：客户端 TMX 里的对象数（#672 起只剩资源对照）；\n" +
+      "- `spawnAreaCount` / `npcPointCount` / `hasRevivePoint` / `worldMonsterCount`：服务端库表里的行数。\n\n" +
       "不分页，按 id **数值**升序（`10` 排在 `9` 后面）。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
@@ -60,10 +70,10 @@ export class AdminMapController {
     operationId: "adminMap.detail",
     summary: "地图详情",
     description:
-      "列表字段 + 图层 + 对象组 + 刷怪区 + 场上怪物 + **每一块数据的来源**（`sources`）。\n\n" +
+      "列表字段 + 图层 + 对象组 + 刷怪区 + NPC 点位 + 复活点 + 场上怪物 + **每一块数据的来源**（`sources`）。\n\n" +
       "- `layers` / `groups`：TMX 快照，坐标是 **Tiled 原始口径**（左上角原点、y 向下），用于对着编辑器核对；\n" +
-      "- `spawnAreas`：服务端整理后的刷怪区（世界坐标，原点 = 地图左上角、y 轴向上）—— 与上面的\n" +
-      "  `groups[monster]` 不是同一份数据，页面并排显示就是为了核对两者是否一致；\n" +
+      "- `spawnAreas` / `npcPoints` / `revivePoint`：服务端整理后的地图内容（世界坐标，原点 = 地图左上角、y 轴向上）——\n" +
+      "  与上面的 `groups` 不是同一份数据，`groups` 现在只是资源对照；\n" +
       "- `worldMonsters`：按区聚合的场上实例（进程没跑过世界时为空数组）。\n\n" +
       "地图 id 不存在 → 404（`50032`）。",
     permissions: [Permission.GAME_CONFIG_READ],
@@ -186,5 +196,114 @@ export class AdminMapController {
     @CurrentUser() actor: AuthenticatedUser,
   ): MapSpawnAreaDeletedDto {
     return this.mapService.deleteSpawnArea(id, areaId, actor);
+  }
+
+  @Post(":id/npcs")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.createNpc",
+    summary: "放一个 NPC 点位（在图上点一下）",
+    description:
+      "管理端地图页「放置 NPC」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），\n" +
+      "与读接口的 `npcPoints` 完全同构 —— 画布（Tiled 口径）负责换算 `cx = x`、`cy = -y`。\n\n" +
+      "#672 之前 NPC 点位写在 TMX 的 `npc` 对象组里（属性 `id` 关联 `npcs` 表），现在点位归这张表，\n" +
+      "TMX 那组对象只剩资源对照。\n\n" +
+      "四道校验：\n" +
+      "- 地图存在且有像素尺寸（`50032`）；\n" +
+      "- `npcId` 在 `npcs` 表里（`50034`，404）；\n" +
+      "- 同图同 NPC 唯一（`20020`，409）—— 不同图各放一个是正常的（传送使者就是每图一个）；\n" +
+      "- 点位在图内（`40000`，文案带「往哪边偏了多少」）。\n\n" +
+      "**生效时机**：客户端在进游戏时拉配置快照、按它摆节点，所以图里的人要换图 / 重进才看得到新点位。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id（必须已有对应 TMX 资源）" })
+  @ApiDataResponse(MapNpcDto, { description: "新建的这一行（含 id / NPC 名 / 越界判定）" })
+  createNpc(
+    @Param("id") id: string,
+    @Body() dto: SaveMapNpcDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapNpcDto {
+    return this.mapService.createNpc(id, dto, actor);
+  }
+
+  @Patch(":id/npcs/:npcRowId")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.updateNpc",
+    summary: "修改 NPC 点位（换 NPC / 挪位置，整份覆盖）",
+    description:
+      "画布上拖动一个已有 NPC 点，松手就调它（`npcId` 原样带回，只换坐标）。\n" +
+      "换 NPC 也走这里 —— 入参与新建完全一致，整份覆盖。\n\n" +
+      "点位不属于这张图（或已被别人删掉）→ 404 `50035`；改成同图已存在的 NPC → 409 `20020`。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiParam({ name: "npcRowId", description: "点位行 id（详情里的 npcPoints[].id）" })
+  @ApiDataResponse(MapNpcDto, { description: "更新后的这一行" })
+  updateNpc(
+    @Param("id") id: string,
+    @Param("npcRowId", ParseIntPipe) npcRowId: number,
+    @Body() dto: SaveMapNpcDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapNpcDto {
+    return this.mapService.updateNpc(id, npcRowId, dto, actor);
+  }
+
+  @Delete(":id/npcs/:npcRowId")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.deleteNpc",
+    summary: "删除 NPC 点位",
+    description: "删掉这张图上的一个 NPC 点位。图里的人要换图 / 重进才看不到它。\n\n行不存在或不属于这张图 → 404 `50035`。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiParam({ name: "npcRowId", description: "点位行 id" })
+  @ApiDataResponse(MapNpcDeletedDto, { description: "删除结果（deleted + id）" })
+  deleteNpc(
+    @Param("id") id: string,
+    @Param("npcRowId", ParseIntPipe) npcRowId: number,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapNpcDeletedDto {
+    return this.mapService.deleteNpc(id, npcRowId, actor);
+  }
+
+  @Put(":id/revive-point")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.setRevivePoint",
+    summary: "设 / 挪复活点",
+    description:
+      "每张图最多一个复活点（沿用 #672 之前的粒度：TMX 里也是每图一个 `class=revive` 的点）。\n" +
+      "`PUT` 即覆盖 —— 「设」与「挪」写的是同一对列，没有单独的新增接口。\n\n" +
+      "客户端拿它做两件事：**进图时把角色定位到这里**、死亡后「安全复活」回到这里。\n" +
+      "没设的图不做定位（角色停在上次的位置），客户端会打一条 warn。\n\n" +
+      "校验：地图存在且有像素尺寸（`50032`）、点位在图内（`40000`）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiDataResponse(MapRevivePointDto, { description: "设好之后的复活点（含越界判定）" })
+  setRevivePoint(
+    @Param("id") id: string,
+    @Body() dto: SaveRevivePointDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapRevivePointDto {
+    return this.mapService.setRevivePoint(id, dto, actor);
+  }
+
+  @Delete(":id/revive-point")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.clearRevivePoint",
+    summary: "清掉复活点",
+    description:
+      "把这张图的复活点置空（两列置 NULL，不是删地图行）。**幂等**：本来就没有也返回 `cleared: true` ——\n" +
+      "「清空」的目标状态是「没有复活点」，重复点一次不该报错。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiDataResponse(MapRevivePointClearedDto, { description: "清空结果（cleared 恒为 true）" })
+  clearRevivePoint(@Param("id") id: string, @CurrentUser() actor: AuthenticatedUser): MapRevivePointClearedDto {
+    return this.mapService.clearRevivePoint(id, actor);
   }
 }

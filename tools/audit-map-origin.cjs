@@ -164,6 +164,14 @@ function checkImportTool() {
           "两个写入方迟早互相覆盖",
       );
     }
+    // #672：NPC 点位与复活点同理 —— 归后台，导入工具一碰就会把运维摆好的点位冲掉
+    if (/map_npcs|revive_cx|revive_cy/.test(line)) {
+      problem(
+        "tools/import-map-resources.cjs",
+        index + 1,
+        "导入工具不许写 map_npcs / maps.revive_cx,cy（#672 起点位归后台，走 POST/PATCH/DELETE /admin/maps/:id/npcs 与 PUT /revive-point）",
+      );
+    }
     // 坐标换算是管理端画布的事；这个工具一旦自己算世界坐标，就会出现第三份公式
     if (/\bcx\s*=|\bcy\s*=/.test(line)) {
       problem(

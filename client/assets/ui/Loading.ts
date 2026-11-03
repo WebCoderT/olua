@@ -1,5 +1,4 @@
 import { _decorator, Component, director, Label, Mask, Node, Size, UITransform, Vec2 } from "cc";
-import { mapSrcOf } from "../configs/game-config";
 import SceneManager from "./core/SceneManager";
 import PreloadManager from "./core/PreloadManager";
 import GameUiHelper from "./helpers/GameUiHelper";
@@ -103,10 +102,10 @@ export class Loading extends Component {
       // 进入游戏场景前预加载游戏资源（50~100）：地图信息 → 地图内 NPC/怪物帧动画 → 角色穿戴的帧动画
       if (scene === "Game") {
         const role = StorageManager.findOnlineRole();
-        // 路径按目录约定拼（#573）：地图玩法配置在服务端，但「加载哪张图」只取决于 id
+        // 资源路径与帧动画来源都按地图 id 走（#672：NPC / 刷怪区从服务端快照取，不读 TMX）
         if (role) {
           await this.timed("游戏资源（地图/帧动画）", startedAt, () =>
-            PreloadManager.preloadGame(mapSrcOf(role.onMap), role, (ratio, tip) => this.setProgress(Loading.SCENE_PROGRESS_END + ratio * (100 - Loading.SCENE_PROGRESS_END), tip)),
+            PreloadManager.preloadGame(role.onMap, role, (ratio, tip) => this.setProgress(Loading.SCENE_PROGRESS_END + ratio * (100 - Loading.SCENE_PROGRESS_END), tip)),
           );
         }
       }

@@ -29,6 +29,7 @@ import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
 import { MapMonitorRepository } from "./repositories/map-monitor.repository";
 import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository";
+import { MapNpcRepository } from "./repositories/map-npc.repository";
 import { MapRepository } from "./repositories/map.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
 import { SkillRepository } from "./repositories/skill.repository";
@@ -69,6 +70,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     WorldMonsterRepository,
     MapMonitorRepository,
     MapSpawnAreaRepository,
+    MapNpcRepository,
     MapRepository,
     ZoneRepository,
     TitleRepository,
@@ -118,6 +120,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     WorldMonsterRepository,
     MapMonitorRepository,
     MapSpawnAreaRepository,
+    MapNpcRepository,
     MapRepository,
     ZoneRepository,
     TitleRepository,

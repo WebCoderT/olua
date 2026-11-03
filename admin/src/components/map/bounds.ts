@@ -1,4 +1,4 @@
-import type { MapSpawnArea } from "../../api";
+import type { MapNpc, MapRevivePoint, MapSpawnArea } from "../../api";
 
 /**
  * 刷怪区越界的显示辅助（#586）
@@ -43,4 +43,17 @@ export function overflowTitle(area: MapSpawnArea): string {
 /** 这张图有几处越界（0 = 一切正常，页面此时不该有红字） */
 export function outOfBoundsCount(areas: MapSpawnArea[]): number {
   return areas.filter((area) => !area.inBounds).length;
+}
+
+/**
+ * 点位越界数（NPC 点位 + 复活点，#672）
+ *
+ * 点位没有 `overflow` 量（一个点谈不上"越出多少"），只有服务端给的 `inBounds` 是非。
+ * 所以这里只数个数 —— 与区域的 `outOfBoundsCount` 一起进页面右上角那个红徽标，
+ * 于是「图上有个点跑到图外了」不需要打开任何弹窗才会被发现。
+ */
+export function pointsOutOfBounds(detail: { npcPoints: MapNpc[]; revivePoint: MapRevivePoint | null }): number {
+  const npc = detail.npcPoints.filter((point) => !point.inBounds).length;
+  const revive = detail.revivePoint && !detail.revivePoint.inBounds ? 1 : 0;
+  return npc + revive;
 }

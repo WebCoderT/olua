@@ -21,6 +21,12 @@
  * 导入工具从 TMX 的浮点像素算中心，字段是整数列 —— 取整会让一个刚好贴边的区域
  * 报出 0.5~1 的「越界」。既然后果只是「贴边」而不是「跑到图外」，容差取 1，
  * 与 `tools/audit-map-origin.cjs` 第 6 条同口径（那边校验生成快照，这里校验库表）。
+ *
+ * ## 点位（#672）也在这里判
+ *
+ * NPC 点位与复活点是单点，边界的口径与矩形完全一样（同一张图的范围、同一个容差），
+ * 所以 `pointInBounds` / `pointOverflowText` 也放在这个文件 —— 「一个点在不在图内」
+ * 只该有一处判据，分成两个文件迟早一边改了另一边没改。
  */
 
 /** 一个刷怪区的几何（世界坐标；字段名与 `map_spawn_areas` 列一致） */
@@ -90,3 +96,47 @@ export function spawnAreaOverflowText(overflow: SpawnAreaOverflow): string {
     .map(([key, label]) => `${label} ${overflow[key]}`)
     .join(" / ");
 }
+
+//#region 点位（NPC / 复活点，#672）
+
+/**
+ * 一个点位（世界坐标）
+ *
+ * NPC 点位与复活点都是单点，判据只有「在不在 `[0, W] × [-H, 0]` 里」——
+ * 与矩形同一套边界、同一个容差，所以放在这个文件里（地图边界的判据只有一处）。
+ */
+export interface MapPoint {
+  cx: number;
+  cy: number;
+}
+
+/** 点位在图内（容差同刷怪区：贴边算在图内，取整误差不该变成「跑图外了」） */
+export function pointInBounds(point: MapPoint, map: MapPixelRect): boolean {
+  return (
+    point.cx >= -SPAWN_AREA_TOLERANCE &&
+    point.cx <= map.width + SPAWN_AREA_TOLERANCE &&
+    point.cy >= -map.height - SPAWN_AREA_TOLERANCE &&
+    point.cy <= SPAWN_AREA_TOLERANCE
+  );
+}
+
+/**
+ * 点位越界描述（在图内给空串）
+ *
+ * 报「右 32 / 下 96」这种「往哪边偏了多少」：点位错了只有两种可能 ——
+ * 算错了口径（y 忘了取反会整体跑到图下方）或者手滑点到图外，两个数的正负就能看出来。
+ */
+export function pointOverflowText(point: MapPoint, map: MapPixelRect): string {
+  const sides: string[] = [];
+  if (point.cx < -SPAWN_AREA_TOLERANCE) sides.push(`左 ${round(-point.cx)}`);
+  if (point.cx > map.width + SPAWN_AREA_TOLERANCE) sides.push(`右 ${round(point.cx - map.width)}`);
+  if (point.cy > SPAWN_AREA_TOLERANCE) sides.push(`上 ${round(point.cy)}`);
+  if (point.cy < -map.height - SPAWN_AREA_TOLERANCE) sides.push(`下 ${round(-map.height - point.cy)}`);
+  return sides.join(" / ");
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+//#endregion

@@ -550,7 +550,7 @@ export const routes = {
      */
     updateSettings: "/admin/mall/settings",
   },
-  /** adminMap 模块（7 个接口） */
+  /** adminMap 模块（12 个接口） */
   adminMap: {
     /**
      * 地图列表（GET /admin/maps）
@@ -561,7 +561,7 @@ export const routes = {
     /**
      * 地图详情（GET /admin/maps/{id}）
      *
-     * 列表字段 + 图层 + 对象组 + 刷怪区 + 场上怪物 + **每一块数据的来源**（`sources`）。
+     * 列表字段 + 图层 + 对象组 + 刷怪区 + NPC 点位 + 复活点 + 场上怪物 + **每一块数据的来源**（`sources`）。
      */
     detail: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
     /**
@@ -576,6 +576,36 @@ export const routes = {
      * 这张图**此刻**的样子 + 最近的文字流。数据来自实时进程每秒写的两张投影表（`map_monitor_state` / `map_monitor_events`）。
      */
     monitor: (id: string) => `/admin/maps/${encodeURIComponent(id)}/monitor`,
+    /**
+     * 放一个 NPC 点位（在图上点一下）（POST /admin/maps/{id}/npcs）
+     *
+     * 管理端地图页「放置 NPC」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），
+     */
+    createNpc: (id: string) => `/admin/maps/${encodeURIComponent(id)}/npcs`,
+    /**
+     * 删除 NPC 点位（DELETE /admin/maps/{id}/npcs/{npcRowId}）
+     *
+     * 删掉这张图上的一个 NPC 点位。图里的人要换图 / 重进才看不到它。
+     */
+    deleteNpc: (id: string, npcRowId: string) => `/admin/maps/${encodeURIComponent(id)}/npcs/${encodeURIComponent(npcRowId)}`,
+    /**
+     * 修改 NPC 点位（换 NPC / 挪位置，整份覆盖）（PATCH /admin/maps/{id}/npcs/{npcRowId}）
+     *
+     * 画布上拖动一个已有 NPC 点，松手就调它（`npcId` 原样带回，只换坐标）。
+     */
+    updateNpc: (id: string, npcRowId: string) => `/admin/maps/${encodeURIComponent(id)}/npcs/${encodeURIComponent(npcRowId)}`,
+    /**
+     * 清掉复活点（DELETE /admin/maps/{id}/revive-point）
+     *
+     * 把这张图的复活点置空（两列置 NULL，不是删地图行）。**幂等**：本来就没有也返回 `cleared: true` ——
+     */
+    clearRevivePoint: (id: string) => `/admin/maps/${encodeURIComponent(id)}/revive-point`,
+    /**
+     * 设 / 挪复活点（PUT /admin/maps/{id}/revive-point）
+     *
+     * 每张图最多一个复活点（沿用 #672 之前的粒度：TMX 里也是每图一个 `class=revive` 的点）。
+     */
+    setRevivePoint: (id: string) => `/admin/maps/${encodeURIComponent(id)}/revive-point`,
     /**
      * 新建刷怪区（在图上拖一个框）（POST /admin/maps/{id}/spawn-areas）
      *

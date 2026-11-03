@@ -1,6 +1,6 @@
 import { isValid, Node, Rect, Vec2 } from "cc";
 import { autoBattle } from "../../configs/autoBattle";
-import { tiledGroupNames, tiledObjectClasses } from "../../configs/game-config";
+import { tiledGroupNames, maps } from "../../configs/game-config";
 import { skills } from "../../configs/skill";
 import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";
@@ -30,6 +30,8 @@ export default class AutoBattle {
   private static roleDisplay: RoleDisplay | null = null;
   /** 当前地图节点（GameMap 注册，寻路网格的数据来源） */
   private static mapNode: Node | null = null;
+  /** 当前地图 id（读服务端快照里的 NPC 点位用；与 `mapNode` 同时注册） */
+  private static mapId = "";
   /** 寻路网格（按地图惰性构建，换图作废） */
   private static grid: PathGrid | null = null;
   /** 挂机开关 */
@@ -63,9 +65,15 @@ export default class AutoBattle {
     this.roleDisplay = roleDisplay;
   }
 
-  /** 注册当前地图（换图时由 GameMap 调用）：旧寻路网格作废，自动战斗目标清空（挂机开关保留） */
-  static setMap(map: Node) {
+  /**
+   * 注册当前地图（换图时由 GameMap 调用）：旧寻路网格作废，自动战斗目标清空（挂机开关保留）
+   *
+   * `mapId` 是给「NPC 当静态障碍」用的：点位在服务端快照里（#672），光有地图节点查不到
+   * 这张图上的 NPC 在哪。
+   */
+  static setMap(map: Node, mapId: string) {
     this.mapNode = map;
+    this.mapId = mapId;
     this.grid = null;
     this.path = [];
     this.pathIndex = 0;
@@ -140,6 +148,11 @@ export default class AutoBattle {
   /** 当前地图节点（小地图弹窗做世界坐标换算用；未注册或已失效返回 null） */
   static getMapNode(): Node | null {
     return this.mapNode && isValid(this.mapNode) ? this.mapNode : null;
+  }
+
+  /** 当前地图 id（读服务端快照里的点位用；空串 = 还没注册，调用方按「没有点位」处理） */
+  static getMapId(): string {
+    return this.mapId;
   }
 
   /**
@@ -391,7 +404,12 @@ export default class AutoBattle {
     return this.grid;
   }
 
-  /** 读地图里的静态障碍（Tiled collision 矩形 + NPC 点位按估算体型占位），转成世界坐标矩形 */
+  /**
+   * 读地图里的静态障碍（Tiled collision 矩形 + 服务端快照里的 NPC 点位按估算体型占位），转成世界坐标矩形
+   *
+   * 碰撞盒仍读 TMX（它属于瓦片物理，归美术资源）；NPC 的点位读快照 —— #672 起那是唯一来源，
+   * 从 TMX 读会出现「后台把 NPC 挪了、寻路还绕着旧址」这种没人能解释的绕路。
+   */
   private static readStaticObstacles(map: Node): Rect[] {
     const rects: Rect[] = [];
     getTiledObjectsFrom(map, tiledGroupNames.collision).forEach((object) => {
@@ -399,12 +417,12 @@ export default class AutoBattle {
       if (object.width <= 0 || object.height <= 0) return;
       rects.push(this.tiledRectToWorld(object));
     });
-    getTiledObjectsFrom(map, tiledGroupNames.npc, tiledGroupNames.legacyObjects).forEach((object) => {
-      if (object.objectClass !== tiledObjectClasses.npc) return;
-      const position = mapPointToWorld(object.x, object.y);
+    const config = maps.get(this.mapId);
+    config?.npcs.forEach((point) => {
+      // 点位已经是世界坐标（#672），矩形按「以点为中心」摊开
       const width = autoBattle.npcObstacleSize.width;
       const height = autoBattle.npcObstacleSize.height;
-      rects.push(new Rect(position.x - width / 2, position.y - height / 2, width, height));
+      rects.push(new Rect(point.x - width / 2, point.y - height / 2, width, height));
     });
     return rects;
   }
