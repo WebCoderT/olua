@@ -20,6 +20,7 @@ import {
   Mask,
 } from "cc";
 import { uiImages, uiTheme } from "../../configs/hudLayout";
+import SoundManager from "../core/SoundManager";
 import { blockClickThrough } from "../utils/input/UiHit";
 import { designResolution } from "../utils/layout/ScreenLayout";
 
@@ -293,6 +294,9 @@ export default class UiHelper {
     const node = this.createSprite(name, src, position, size);
     const button = node.addComponent(Button);
     button.transition = Button.Transition.SCALE;
+    // 按钮点击音（#685）：这里是项目的**按钮工厂**，挂在这里等于所有走它的按钮都有声音
+    // （登录 / 选角 / 弹窗 / 底部面板…）。手写按钮各自调 SoundManager.bindClick，见那边的说明
+    SoundManager.bindClick(node);
     // 点击逻辑走 Button 自己的 touch 通道；这里在鼠标通道上也登记一次命中拦截，
     // 否则按钮对 mouse 通道不可见，点击会继续穿透到下层 UI（见 utils/input/UiHit.blockClickThrough）
     blockClickThrough(node);
@@ -318,6 +322,8 @@ export default class UiHelper {
     node.addChild(selectedSpriteNode);
     toggle.target = spriteNode;
     toggle.checkMark = selectedSpriteNode.getComponent(Sprite);
+    // 勾选也是按钮（#685）：类目切换、开关型选项都走这里
+    SoundManager.bindClick(node);
     // 同 createButton：Toggle 也只走 touch 通道，需在鼠标通道补一次命中拦截
     blockClickThrough(node);
     return node;

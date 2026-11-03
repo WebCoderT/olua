@@ -46,6 +46,7 @@ import { TitleAttributes, TitleLevelConfig } from "../../types/title";
 import { RankAttributes, RankLevelConfig } from "../../types/rank";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
+import SoundManager from "../core/SoundManager";
 import { blockClickThrough, markClickThrough } from "../utils/input/UiHit";
 import { ensureMouseHitTestable, HAS_MOUSE, trackUiPress } from "../utils/input/Pointer";
 import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good";
@@ -414,6 +415,8 @@ export default class GameUiHelper {
       AnimationHelper.playLoopWithFrames(animationName, node, frames, roleSelectorLayout.previewFrameRate);
     });
     // 角色预览本身是可点元素（选角列表点击切换角色），鼠标通道补一次命中拦截
+    // 点击音同理（#685）：点角色卡就是点按钮
+    SoundManager.bindClick(role);
     blockClickThrough(role);
     return role;
   }
@@ -1216,6 +1219,8 @@ export default class GameUiHelper {
       ),
     );
     card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
+    SoundManager.bindClick(card);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
     blockClickThrough(card);
     return card;
@@ -1304,6 +1309,8 @@ export default class GameUiHelper {
     node.addChild(box);
     node.addChild(UiHelper.createLabel("soul_show_text", toggle.text, Color.WHITE, toggle.fontSize, new Vec2(toggle.textGap, 0), new Size(60, toggle.size.height), Label.HorizontalAlign.LEFT));
     node.on(Node.EventType.TOUCH_END, () => onClick(!checked), this);
+    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
+    SoundManager.bindClick(node);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
     blockClickThrough(node);
     return node;
@@ -1364,6 +1371,8 @@ export default class GameUiHelper {
       ),
     );
     card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
+    SoundManager.bindClick(card);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
     blockClickThrough(card);
     return card;
@@ -1454,6 +1463,8 @@ export default class GameUiHelper {
     // 选中状态、授衔状态与描边统一交给 updateRankCard（建与刷同一个口径）
     this.updateRankCard(card, activated, selected);
     card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
+    SoundManager.bindClick(card);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
     blockClickThrough(card);
     return card;

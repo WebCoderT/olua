@@ -7,6 +7,7 @@ import { getText } from "../../../configs/texts";
 import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
@@ -169,6 +170,8 @@ export default class AnnouncementBoardDialog {
     card.addChild(UiHelper.createLabel(`${item.name}_item_title_${index}`, view.title, titleColor, item.itemTitleFontSize, item.itemTitle.position, item.itemTitle.size, Label.HorizontalAlign.LEFT));
     card.addChild(UiHelper.createLabel(`${item.name}_item_meta_${index}`, this.itemMeta(view), item.itemMetaColor, item.itemMetaFontSize, item.itemMeta.position, item.itemMeta.size, Label.HorizontalAlign.LEFT));
     card.on(Node.EventType.TOUCH_END, () => this.select(view.id), this);
+    // 点击音（#685）：公告条目是手写按钮
+    SoundManager.bindClick(card);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton）：鼠标通道也要补一次命中拦截
     blockClickThrough(card);
     return card;

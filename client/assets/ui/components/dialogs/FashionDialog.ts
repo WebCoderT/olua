@@ -1,6 +1,7 @@
 import { Color, Graphics, isValid, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
+import SoundManager from "../../core/SoundManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
 import { fashionDialogLayout } from "../../../configs/hudLayout";
@@ -145,6 +146,8 @@ export default class FashionDialog {
     // 失败提示由请求层统一出（余额不足等），这里只在成功后刷新。
     // 卡片自己要收点击，必须在鼠标通道登记（否则点在卡片上会穿透到下层 UI）
     blockClickThrough(node);
+    // 点击音（#685）：时装卡是手写按钮（穿 / 脱 / 买都走这一张卡）
+    SoundManager.bindClick(node);
     node.on(Node.EventType.TOUCH_END, () => {
       if (equipped) {
         void StorageManager.unwearFashion().then((ok) => ok && this.refresh());

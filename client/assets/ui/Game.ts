@@ -325,6 +325,10 @@ export class Game extends Component {
     this.roleDisplay.updateSoulShow();
     // 称号外显（已激活称号则进图直接挂上，见 RoleDisplay.updateTitleShow）
     this.roleDisplay.updateTitleShow();
+    // 传送成功音（#685）：**角色摆出来之后**才响（标记由 StorageManager.changeOnMap 留下）。
+    // 放这里的三个理由：init() 走完主角外观动画已在播、外显也挂好了，玩家眼里「人到了」；
+    // 登录 / 选角进来的没有标记，不会误响；被地图门槛拦下的传送在 changeOnMap 里就 return 了，也不会响
+    if (StorageManager.consumeTeleportArrival()) void SoundManager.play("map_teleport");
     // 自动战斗（快速攻击/自动挂机）以主角为载体走位与出手
     AutoBattle.setRoleDisplay(this.roleDisplay);
     // 技能触发上下文（施法者/选中目标/怪物容器由主角组件提供）
