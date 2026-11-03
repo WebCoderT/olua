@@ -29,6 +29,7 @@ import { AchievementModule } from "./modules/achievement/achievement.module";
 import { GameMailModule } from "./modules/game-mail/game-mail.module";
 import { MapModule } from "./modules/map/map.module";
 import { UiEffectModule } from "./modules/ui-effect/ui-effect.module";
+import { AudioSettingModule } from "./modules/audio-setting/audio-setting.module";
 
 /**
  * 应用根模块
@@ -83,6 +84,9 @@ export class AppModule {
         MapModule,
         // 特效（#594 升级特效 / #634 掉落光效）：表现参数管理 + 配置快照下发，同地图，两个进程都要有
         UiEffectModule,
+        // 音效（#680）：登录背景音 / 按钮音的「文件 + 音量 + 循环 + 开关」，两个进程都要有
+        // （seed 在两个进程各跑一次是幂等的；快照下发等客户端有播放代码再加）
+        AudioSettingModule,
         ...(options.realtime ? [RealtimeModule, WorldModule] : []),
       ],
       providers: [

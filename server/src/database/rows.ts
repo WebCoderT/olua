@@ -471,6 +471,30 @@ export interface UiEffectRow {
   updated_at: number;
 }
 
+/**
+ * 音效配置一行（`audio_settings` 表；#680）
+ *
+ * 一行 = 一个音效项的「用哪个文件 / 多大声 / 循环不循环 / 开不开」。音频**文件本体**在
+ * 客户端资源包里（`client/assets/resources/sounds/`），这里只存资源相对路径 —— 与特效
+ * 「只存表现参数」同一条纪律：二进制不进库、路径可换可不重打包。
+ * 行由启动 seed 按 `AUDIO_DEFAULTS` 补出来，没有新建 / 删除语义（key 由客户端消费代码决定）。
+ */
+export interface AudioSettingRow {
+  /** 音效 key（登录背景音 login_bgm、登录按钮音 login_click；取值域见 common/constants/audio） */
+  audio_key: string;
+  /** 资源相对路径（带扩展名，如 `sounds/login_bg.wav`；**空串 = 未配置，这一项不响**） */
+  file_path: string;
+  /** 音量百分比（0~100，100 = 原始音量） */
+  volume: number;
+  /** 是否循环（背景音 1、点击音 0） */
+  loop: number;
+  /** 开关（0 = 关：客户端连文件都不读） */
+  enabled: number;
+  /** 最后一个改它的管理员账号名（追账用；与 audit_logs 能对上） */
+  updated_by: string;
+  updated_at: number;
+}
+
 //#endregion
 
 //#region 养成配置（称号 / 战魂）

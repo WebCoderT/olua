@@ -2,10 +2,10 @@
 --
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
--- 表 34 张 / 行 3393 条
+-- 表 35 张 / 行 3395 条
 -- olua config snapshot v1
--- tables: achievements,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,combat_weights=7,drop_tables=4,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=4,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
+-- counts: achievements=24,audio_settings=2,combat_weights=7,drop_tables=4,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=4,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -35,6 +35,11 @@ INSERT INTO "achievements" ("id", "category", "label", "description", "condition
 INSERT INTO "achievements" ("id", "category", "label", "description", "condition_type", "condition_target", "condition_count", "reward_gold", "reward_exp", "reward_items", "sort_order", "hidden", "updated_at") VALUES ('ach_collect_herb', 'explore', '草药行家', '背包里同时持有 50 株药草。', 'collect', 'material_herb', 50, 5000, 1100, '[]', 40, 0, 0);
 INSERT INTO "achievements" ("id", "category", "label", "description", "condition_type", "condition_target", "condition_count", "reward_gold", "reward_exp", "reward_items", "sort_order", "hidden", "updated_at") VALUES ('ach_collect_gem', 'explore', '珠光宝气', '背包里同时持有 5 颗宝石。', 'collect', 'material_gem', 5, 8000, 1800, '[]', 50, 0, 0);
 INSERT INTO "achievements" ("id", "category", "label", "description", "condition_type", "condition_target", "condition_count", "reward_gold", "reward_exp", "reward_items", "sort_order", "hidden", "updated_at") VALUES ('ach_collect_sun', 'explore', '日饮一壶', '背包里同时持有 20 瓶太阳水。', 'collect', 'drug_sun', 20, 12000, 2600, '[{"goodId":"material_gem","count":2}]', 60, 1, 0);
+
+-- ===== audio_settings（2 行）=====
+DELETE FROM "audio_settings";
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('login_bgm', 'sounds/login_bg.wav', 60, 1, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('login_click', 'sounds/click_button.wav', 80, 0, 1, '', 0);
 
 -- ===== combat_weights（7 行）=====
 DELETE FROM "combat_weights";

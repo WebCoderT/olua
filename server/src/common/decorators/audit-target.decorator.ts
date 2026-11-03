@@ -47,6 +47,7 @@ export const AUDIT_TARGET_TYPES = [
   "equipInAlign",
   "map",
   "uiEffect",
+  "audioSetting",
   "runtimeParams",
   "combatWeights",
   "guideSteps",

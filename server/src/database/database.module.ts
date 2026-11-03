@@ -48,6 +48,7 @@ import { RoleMailRepository } from "./repositories/role-mail.repository";
 import { EquipAlignRepository } from "./repositories/equip-align.repository";
 import { EquipInAlignRepository } from "./repositories/equip-in-align.repository";
 import { UiEffectRepository } from "./repositories/ui-effect.repository";
+import { AudioSettingRepository } from "./repositories/audio-setting.repository";
 
 /**
  * 数据层（全局模块）
@@ -109,6 +110,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     EquipAlignRepository,
     EquipInAlignRepository,
     UiEffectRepository,
+    AudioSettingRepository,
   ],
   exports: [
     DatabaseService,
@@ -160,6 +162,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     EquipAlignRepository,
     EquipInAlignRepository,
     UiEffectRepository,
+    AudioSettingRepository,
   ],
 })
 export class DatabaseModule {}

@@ -345,6 +345,21 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
+      -- 音效配置（#680）：一行 = 一个音效项的「用哪个文件 / 多大声 / 循环不循环 / 开不开」。
+      -- 文件本体在客户端资源包里（client/assets/resources/sounds/），这里只存**资源相对路径**
+      -- （带扩展名，如 'sounds/login_bg.wav'）—— 换一首曲子只要新文件已进资源包，不必重打客户端。
+      -- file_path 允许空串（= 未配置，这一项不响）；行由启动 seed 按 AUDIO_DEFAULTS 补出来，
+      -- 一个 key 存在的前提是客户端有播它的代码，所以没有「新建 / 删除音效」接口。
+      CREATE TABLE IF NOT EXISTS audio_settings (
+        audio_key  TEXT    PRIMARY KEY,
+        file_path  TEXT    NOT NULL DEFAULT '',
+        volume     INTEGER NOT NULL DEFAULT 100,
+        loop       INTEGER NOT NULL DEFAULT 0,
+        enabled    INTEGER NOT NULL DEFAULT 1,
+        updated_by TEXT    NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+
       -- 区服（#295 阶段二）：一行 = 一个游戏区。账号注册时选定归属区，
       -- 各区的世界（怪物实例）相互独立；合并区后 from 区在此打 merged_into 标记
       -- （不删行：区号是历史事实，管理端列表还要展示「已并入 X 区」）。

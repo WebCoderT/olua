@@ -41,6 +41,7 @@
  */
 const CONFIG_TABLES = Object.freeze([
   "achievements",
+  "audio_settings",
   "combat_weights",
   "drop_tables",
   "drugs",
