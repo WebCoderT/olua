@@ -883,6 +883,19 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 收件箱永远按「这个角色 + 时间倒序」取，未领数也用得上 claimed_at
       CREATE INDEX IF NOT EXISTS idx_role_mails_box ON role_mails(role_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_role_mails_unclaimed ON role_mails(role_id, claimed_at);
+
+      -- 客户端运行时参数（#605）：单行表（id 恒为 1），三个分组各一列 JSON。
+      -- drop / autoBattle 服务端不消费（只随配置快照下发，客户端用来调手感）；
+      -- guild 是**服务端校验门槛**（帮会名 / 公告 / 申请留言长度），客户端读到只为提前提示。
+      -- 存 JSON 而不是 22 个列：参数按分组增删频繁，加一个参数不该动表结构。
+      CREATE TABLE IF NOT EXISTS runtime_params (
+        id          INTEGER PRIMARY KEY CHECK (id = 1),
+        -- 列名带后缀：drop 是 SQL 保留字，裸用会让整段建表 SQL 语法错（第一次就踩了）
+        drop_params TEXT    NOT NULL DEFAULT '{}',
+        auto_battle TEXT    NOT NULL DEFAULT '{}',
+        guild_rules TEXT    NOT NULL DEFAULT '{}',
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

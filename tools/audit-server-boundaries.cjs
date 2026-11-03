@@ -157,6 +157,9 @@ const REPO_EDGES = {
   // 成长曲线（#256）：等级经验 / 曲线分段 / 标量参数同称号 / 战魂；
   // 击杀经验收权（#316）后存档域（roles）与结算（realtime，读标量算经验）也读
   "database/repositories/growth.repository.ts": ["modules/game-config", "modules/roles", "modules/realtime"],
+  // 运行时参数（#605）：game-config 读写（管理端 + 快照）；
+  // social 只**读帮会规则门槛**（名字 / 公告 / 申请留言长度），建帮与改公告的校验在那边
+  "database/repositories/runtime-params.repository.ts": ["modules/game-config", "modules/social"],
   "database/repositories/rank.repository.ts": ["modules/game-config", "modules/roles"],
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）

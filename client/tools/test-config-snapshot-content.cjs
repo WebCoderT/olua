@@ -305,6 +305,35 @@ function main() {
     `items=${items.size} / drugs=${drugs.length} / materials=${materials.length}`,
   );
 
+  //#region 运行时参数（#605）
+
+  console.log("\n=== 运行时参数：掉落手感 / 自动战斗随快照覆写 ===");
+  const { dropRuntime, applyDropRuntime } = require(path.join(outDir, "configs/drop.js"));
+  const { autoBattle, applyAutoBattleParams } = require(path.join(outDir, "configs/autoBattle.js"));
+  const dropRef = dropRuntime;
+  const tuning = {
+    drop: { autoPickupRadius: 72, scatterMinDistance: 60, pickReplyTimeout: 3000, fullTipInterval: 800 },
+    autoBattle: { maxTargetDistance: 300, moveByRun: false, cellSize: 24, clearance: 12, repathInterval: 200 },
+  };
+  snapshotApi.applyRuntimeParams(tuning);
+  check(dropRef === dropRuntime, "dropRuntime 对象引用不变（消费方持有的是同一个对象）");
+  check(dropRuntime.autoPickupRadius === 72 && dropRuntime.scatterMinDistance === 60, "掉落半径 / 散落间距按快照覆写", JSON.stringify(dropRuntime));
+  check(dropRuntime.pickReplyTimeout === 3000 && dropRuntime.fullTipInterval === 800, "拾取超时 / 满包间隔也覆写", JSON.stringify(dropRuntime));
+  check(autoBattle.maxTargetDistance === 300 && autoBattle.cellSize === 24, "自动战斗距离与网格边长覆写", `dist=${autoBattle.maxTargetDistance} cell=${autoBattle.cellSize}`);
+  check(autoBattle.moveByRun === false, "布尔开关（移动用跑步）也能覆写");
+  check(autoBattle.stuckRetryLimit === 3 && autoBattle.dashSnapRadius === 60, "快照里没给的键保持出厂值（部分下发不会把别的参数清零）", `retry=${autoBattle.stuckRetryLimit}`);
+  check(autoBattle.routeLine && autoBattle.routeLine.dotRadius === 3, "样式参数（routeLine）不受快照影响 —— 它不在下发范围");
+
+  // 坏值守卫：0 是合法值（关闭半径 / 关闭节流），负数与非数字一律保持当前值
+  applyDropRuntime({ autoPickupRadius: -5, scatterMinDistance: Number.NaN });
+  check(dropRuntime.autoPickupRadius === 72 && dropRuntime.scatterMinDistance === 60, "负数 / 非数字不覆盖（坏配置不会把半径变成 0 或 NaN）", JSON.stringify(dropRuntime));
+  applyDropRuntime({ autoPickupRadius: 0 });
+  check(dropRuntime.autoPickupRadius === 0, "0 是合法值（可以作为「关闭自动拾取」用）");
+  applyAutoBattleParams({ cellSize: 0, stuckRetryLimit: 0 });
+  check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 3, "网格边长与重试次数有下限 1（0 会让寻路 / 放弃逻辑失去意义）", `cell=${autoBattle.cellSize}`);
+
+  //#endregion
+
   finish("配置快照内容表：全部断言通过");
 }
 

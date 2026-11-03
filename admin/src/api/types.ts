@@ -491,6 +491,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   equipAlign: "装备外观对齐",
   equipInAlign: "装备内观对齐",
   uiEffect: "界面特效",
+  runtimeParams: "运行时参数",
 };
 
 /** 目标类型中文名（未知类型原样显示） */

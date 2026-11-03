@@ -786,6 +786,24 @@ export interface MallSettingsRow {
 }
 
 /**
+ * 客户端运行时参数（#605）：单行配置（id 恒为 1），三个分组各一列 JSON
+ *
+ * 列里存的是「运营改过的部分」，缺键回落到 `shared/runtime-seed.ts` 的出厂值 ——
+ * 这样加一个参数不用给存量库补列，也不用写迁移。
+ */
+export interface RuntimeParamsRow {
+  /** 恒为 1（单行表） */
+  id: number;
+  /** 掉落物手感参数（`DropRuntimeParams` 的 JSON）。`drop` 是 SQL 保留字，列名带后缀 */
+  drop_params: string;
+  /** 自动战斗 / 寻路参数（`AutoBattleParams` 的 JSON） */
+  auto_battle: string;
+  /** 帮会规则门槛（`GuildRuleParams` 的 JSON；服务端校验读它） */
+  guild_rules: string;
+  updated_at: number;
+}
+
+/**
  * 具名掉落表（#254）：`drop_tables` 表的一行
  *
  * 一行 = 一张可被多怪复用的掉落表（seed 自生成物 DROP_TABLES 的 common / elite / boss，

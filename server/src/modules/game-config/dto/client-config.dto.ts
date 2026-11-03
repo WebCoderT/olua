@@ -2,6 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ValidateNested } from "class-validator";
 import { DrugDto } from "./drug.dto";
+import { RuntimeParamsDto } from "./runtime-params.dto";
 import { DropTableDto, MonsterDropDto } from "./drop.dto";
 import { EquipmentDto, EquipmentMetaDto, EquipmentSlotDto } from "./equipment.dto";
 import { FashionDto } from "./fashion.dto";
@@ -180,4 +181,14 @@ export class GameConfigSnapshotDto {
   })
   @Type(() => EquipmentMetaDto)
   equipmentMeta!: EquipmentMetaDto;
+
+  @ApiProperty({
+    description:
+      "客户端运行时参数（#605，单行三组）：掉落手感（`drop`）/ 自动战斗与寻路（`autoBattle`）/ " +
+      "帮会规则门槛（`guild`）。前两组服务端只下发不消费，客户端据此覆写 `configs/drop` 与 " +
+      "`configs/autoBattle` 里原本写死的数值；`guild` 是服务端校验门槛，客户端读到只为**提前提示**",
+    type: RuntimeParamsDto,
+  })
+  @Type(() => RuntimeParamsDto)
+  runtimeParams!: RuntimeParamsDto;
 }

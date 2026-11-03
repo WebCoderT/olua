@@ -48,9 +48,17 @@ export default class DropManager {
   /**
    * 自动拾取半径：角色节点原点即脚底，与掉落物节点距离小于该值视为踩在物品上（见 configs/drop.dropRuntime）
    * 背包已满的提示间隔同样取自 dropRuntime，避免每帧重复反序列化背包数据
+   *
+   * **必须用 getter 现读，不能写成 `static readonly`**（#605 踩过）：运营参数是进游戏后
+   * 由快照覆写的，而静态字段的初始化发生在模块加载时 —— 那时快照还没到，取到的永远是
+   * 出厂值，后台改了「没生效」且没有任何报错。同类的坑还有 `const X = cfg.y` 的模块级快照。
    */
-  private static readonly AUTO_PICKUP_RADIUS = dropRuntime.autoPickupRadius;
-  private static readonly FULL_TIP_INTERVAL = dropRuntime.fullTipInterval;
+  private static get autoPickupRadius(): number {
+    return dropRuntime.autoPickupRadius;
+  }
+  private static get fullTipInterval(): number {
+    return dropRuntime.fullTipInterval;
+  }
   /** 上次背包已满提示时间戳 */
   private static fullTipTime = 0;
   /** 拾取应答在途的掉落物：节点 → 发出 pick 帧的时刻（超过 pickReplyTimeout 允许重试） */
@@ -105,9 +113,9 @@ export default class DropManager {
    * @param radius 拾取半径，缺省 AUTO_PICKUP_RADIUS
    * @returns 无（#581：入包只能等 picked 应答，这里没有「捡到了几件」可报）
    */
-  static autoPickup(rolePosition: Vec3, radius: number = this.AUTO_PICKUP_RADIUS): void {
+  static autoPickup(rolePosition: Vec3, radius: number = this.autoPickupRadius): void {
     // 背包已满的节流期内直接跳过：既避免每帧刷提示，也避免每帧重复尝试入包
-    if (Date.now() - this.fullTipTime < this.FULL_TIP_INTERVAL) return;
+    if (Date.now() - this.fullTipTime < this.fullTipInterval) return;
     Array.from(this.dropMap.keys()).forEach((node) => {
       // 已销毁的残留节点直接清理
       if (!isValid(node)) {
@@ -224,7 +232,7 @@ export default class DropManager {
   /** 背包已满提示（按 FULL_TIP_INTERVAL 节流，防止自动拾取时每帧刷屏） */
   private static notifyBagFull() {
     const now = Date.now();
-    if (now - this.fullTipTime < this.FULL_TIP_INTERVAL) return;
+    if (now - this.fullTipTime < this.fullTipInterval) return;
     this.fullTipTime = now;
     GameUiHelper.createTip("pickup_full_tip");
   }

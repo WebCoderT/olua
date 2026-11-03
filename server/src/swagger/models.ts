@@ -87,6 +87,16 @@ import {
   UpdateGrowthSegmentDto,
   UpdateLevelExpDto,
 } from "../modules/game-config/dto/growth.dto";
+import {
+  AutoBattleParamsDto,
+  DropRuntimeParamsDto,
+  GuildRuleParamsDto,
+  RuntimeParamsDto,
+  UpdateAutoBattleParamsDto,
+  UpdateDropRuntimeParamsDto,
+  UpdateGuildRuleParamsDto,
+  UpdateRuntimeParamsDto,
+} from "../modules/game-config/dto/runtime-params.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import { ZoneDto, AdminZoneDto, CreateZoneDto, MergeZoneDto } from "../modules/zone/dto/zone.dto";
@@ -264,6 +274,15 @@ export const SWAGGER_MODELS = [
   GrowthScalarPageDto,
   GrowthScalarQueryDto,
   UpdateGrowthScalarDto,
+  // 运行时参数（#605：掉落手感 / 自动战斗 / 帮会规则，单行三组）
+  RuntimeParamsDto,
+  DropRuntimeParamsDto,
+  AutoBattleParamsDto,
+  GuildRuleParamsDto,
+  UpdateRuntimeParamsDto,
+  UpdateDropRuntimeParamsDto,
+  UpdateAutoBattleParamsDto,
+  UpdateGuildRuleParamsDto,
   // 养成配置（军衔 #250）
   RankDto,
   RankPageDto,

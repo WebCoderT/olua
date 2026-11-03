@@ -3148,7 +3148,8 @@
                 "equipAlign",
                 "equipInAlign",
                 "map",
-                "uiEffect"
+                "uiEffect",
+                "runtimeParams"
               ]
             }
           },
@@ -3430,7 +3431,8 @@
                 "equipAlign",
                 "equipInAlign",
                 "map",
-                "uiEffect"
+                "uiEffect",
+                "runtimeParams"
               ]
             }
           },
@@ -8928,7 +8930,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数）。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {
@@ -9123,6 +9125,108 @@
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/EquipInAlignListDto"
         }
+      }
+    },
+    "/admin/runtime-params": {
+      "get": {
+        "description": "三个分组一起返回（**单行配置，没有分页**）：\n\n- `drop`：掉落物手感（拾取半径 / 散落间距 / 应答超时 / 满包提示间隔）—— 服务端只下发不消费；\n- `autoBattle`：自动战斗与寻路（目标距离 / 网格 / 重寻路节奏 / 卡住判定 / 吸附半径）—— 同上；\n- `guild`：帮会规则门槛（名字长度 / 公告长度 / 申请留言长度）—— **服务端校验读它**。\n\n缺键回落出厂值（`shared/runtime-seed.ts`），所以新增参数不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRuntimeParams.get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前生效值（含 updatedAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RuntimeParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "运行时参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RuntimeParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**部分更新**：只提交改动过的分组，组内只提交改动过的字段（没提交的保持原值）。\n\n单字段取值域由 DTO 校验；跨字段约束「帮会名最短 ≤ 最长」由服务端判（违反 → 40000）。\n\n改完立即生效：`guild` 影响下一次建帮 / 改公告的校验，其余两项在玩家下次进游戏拉快照后生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRuntimeParamsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RuntimeParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑运行时参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RuntimeParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
       }
     },
     "/admin/mails/templates": {
@@ -14554,6 +14658,142 @@
           "value"
         ]
       },
+      "UpdateDropRuntimeParamsDto": {
+        "type": "object",
+        "properties": {
+          "autoPickupRadius": {
+            "type": "number",
+            "description": "自动拾取半径（像素）"
+          },
+          "fullTipInterval": {
+            "type": "number",
+            "description": "背包已满的提示 / 重试间隔（毫秒）"
+          },
+          "scatterMinDistance": {
+            "type": "number",
+            "description": "多件掉落物的最小中心间距（像素）"
+          },
+          "pickReplyTimeout": {
+            "type": "number",
+            "description": "服务端拾取应答等待上限（毫秒）"
+          }
+        }
+      },
+      "UpdateAutoBattleParamsDto": {
+        "type": "object",
+        "properties": {
+          "maxTargetDistance": {
+            "type": "number",
+            "description": "自动选目标的最大距离（像素，0 = 不限）"
+          },
+          "moveByRun": {
+            "type": "boolean",
+            "description": "自动移动是否使用跑步速度"
+          },
+          "cellSize": {
+            "type": "number",
+            "description": "A* 网格单元边长（像素）"
+          },
+          "clearance": {
+            "type": "number",
+            "description": "通行余量（像素）"
+          },
+          "repathInterval": {
+            "type": "number",
+            "description": "重新寻路间隔（毫秒）"
+          },
+          "waypointTolerance": {
+            "type": "number",
+            "description": "到达路点的判定半径（像素）"
+          },
+          "stuckInterval": {
+            "type": "number",
+            "description": "卡住检测间隔（毫秒）"
+          },
+          "stuckDistance": {
+            "type": "number",
+            "description": "卡住判定位移阈值（像素）"
+          },
+          "stuckRetryLimit": {
+            "type": "number",
+            "description": "连续卡住多少次后放弃当前目标"
+          },
+          "targetBanDuration": {
+            "type": "number",
+            "description": "被放弃目标的拉黑时长（毫秒）"
+          },
+          "targetSearchInterval": {
+            "type": "number",
+            "description": "没目标时的重找间隔（毫秒）"
+          },
+          "arriveTolerance": {
+            "type": "number",
+            "description": "点击寻路的到达判定半径（像素）"
+          },
+          "teleportSnapRadius": {
+            "type": "number",
+            "description": "传送落点吸附半径（格）"
+          },
+          "dashSnapRadius": {
+            "type": "number",
+            "description": "突进类技能的落点吸附半径（像素）"
+          }
+        }
+      },
+      "UpdateGuildRuleParamsDto": {
+        "type": "object",
+        "properties": {
+          "nameMin": {
+            "type": "number",
+            "description": "帮会名最短字数"
+          },
+          "nameMax": {
+            "type": "number",
+            "description": "帮会名最长字数（必须 ≥ 最短字数）"
+          },
+          "noticeMax": {
+            "type": "number",
+            "description": "帮会公告最长字数（0 = 不限）"
+          },
+          "applicationMessageMax": {
+            "type": "number",
+            "description": "入帮申请留言最长字数（0 = 不限）"
+          }
+        }
+      },
+      "UpdateRuntimeParamsDto": {
+        "type": "object",
+        "properties": {
+          "drop": {
+            "description": "掉落物手感参数（只提交改动过的字段）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateDropRuntimeParamsDto"
+              }
+            ]
+          },
+          "autoBattle": {
+            "description": "自动战斗 / 寻路参数（只提交改动过的字段）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAutoBattleParamsDto"
+              }
+            ]
+          },
+          "guild": {
+            "description": "帮会规则门槛（只提交改动过的字段）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateGuildRuleParamsDto"
+              }
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "修改备注（写进审计日志的上下文，便于追溯「为什么改」）"
+          }
+        }
+      },
       "SendMailDto": {
         "type": "object",
         "properties": {
@@ -16874,7 +17114,8 @@
               "equipAlign",
               "equipInAlign",
               "map",
-              "uiEffect"
+              "uiEffect",
+              "runtimeParams"
             ]
           },
           "targetId": {
@@ -18472,6 +18713,199 @@
             "default": "desc"
           }
         }
+      },
+      "DropRuntimeParamsDto": {
+        "type": "object",
+        "properties": {
+          "autoPickupRadius": {
+            "type": "number",
+            "description": "自动拾取半径（像素）：脚底距离小于它即拾取",
+            "example": 40
+          },
+          "fullTipInterval": {
+            "type": "number",
+            "description": "背包已满的提示 / 重试间隔（毫秒）",
+            "example": 1500
+          },
+          "scatterMinDistance": {
+            "type": "number",
+            "description": "多件掉落物的最小中心间距（像素）",
+            "example": 52
+          },
+          "pickReplyTimeout": {
+            "type": "number",
+            "description": "服务端拾取应答等待上限（毫秒），超时允许重试",
+            "example": 5000
+          }
+        },
+        "required": [
+          "autoPickupRadius",
+          "fullTipInterval",
+          "scatterMinDistance",
+          "pickReplyTimeout"
+        ]
+      },
+      "AutoBattleParamsDto": {
+        "type": "object",
+        "properties": {
+          "maxTargetDistance": {
+            "type": "number",
+            "description": "自动选目标的最大距离（像素，0 = 不限，全图取最近）",
+            "example": 0
+          },
+          "moveByRun": {
+            "type": "boolean",
+            "description": "自动移动是否使用跑步速度",
+            "example": true
+          },
+          "cellSize": {
+            "type": "number",
+            "description": "A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢",
+            "example": 40
+          },
+          "clearance": {
+            "type": "number",
+            "description": "通行余量（像素）：障碍矩形向外扩张这么多再烙进网格",
+            "example": 20
+          },
+          "repathInterval": {
+            "type": "number",
+            "description": "重新寻路间隔（毫秒）",
+            "example": 400
+          },
+          "waypointTolerance": {
+            "type": "number",
+            "description": "到达路点的判定半径（像素）",
+            "example": 14
+          },
+          "stuckInterval": {
+            "type": "number",
+            "description": "卡住检测间隔（毫秒）",
+            "example": 500
+          },
+          "stuckDistance": {
+            "type": "number",
+            "description": "卡住判定：该间隔内位移小于此值视为卡住（像素）",
+            "example": 8
+          },
+          "stuckRetryLimit": {
+            "type": "number",
+            "description": "连续卡住多少次后放弃当前目标",
+            "example": 3
+          },
+          "targetBanDuration": {
+            "type": "number",
+            "description": "被放弃目标的拉黑时长（毫秒）",
+            "example": 5000
+          },
+          "targetSearchInterval": {
+            "type": "number",
+            "description": "场上没目标时，隔多久再找一次（毫秒）",
+            "example": 500
+          },
+          "arriveTolerance": {
+            "type": "number",
+            "description": "点击寻路的到达判定半径（像素）",
+            "example": 20
+          },
+          "teleportSnapRadius": {
+            "type": "number",
+            "description": "传送落点吸附半径（格）",
+            "example": 12
+          },
+          "dashSnapRadius": {
+            "type": "number",
+            "description": "突进类技能的落点吸附半径（像素）",
+            "example": 60
+          }
+        },
+        "required": [
+          "maxTargetDistance",
+          "moveByRun",
+          "cellSize",
+          "clearance",
+          "repathInterval",
+          "waypointTolerance",
+          "stuckInterval",
+          "stuckDistance",
+          "stuckRetryLimit",
+          "targetBanDuration",
+          "targetSearchInterval",
+          "arriveTolerance",
+          "teleportSnapRadius",
+          "dashSnapRadius"
+        ]
+      },
+      "GuildRuleParamsDto": {
+        "type": "object",
+        "properties": {
+          "nameMin": {
+            "type": "number",
+            "description": "帮会名最短字数",
+            "example": 2
+          },
+          "nameMax": {
+            "type": "number",
+            "description": "帮会名最长字数（必须 ≥ 最短字数）",
+            "example": 12
+          },
+          "noticeMax": {
+            "type": "number",
+            "description": "帮会公告最长字数（0 = 不限）",
+            "example": 200
+          },
+          "applicationMessageMax": {
+            "type": "number",
+            "description": "入帮申请留言最长字数（0 = 不限）",
+            "example": 50
+          }
+        },
+        "required": [
+          "nameMin",
+          "nameMax",
+          "noticeMax",
+          "applicationMessageMax"
+        ]
+      },
+      "RuntimeParamsDto": {
+        "type": "object",
+        "properties": {
+          "drop": {
+            "description": "掉落物手感参数（服务端只下发，不消费）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DropRuntimeParamsDto"
+              }
+            ]
+          },
+          "autoBattle": {
+            "description": "自动战斗 / 寻路参数（服务端只下发，不消费）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoBattleParamsDto"
+              }
+            ]
+          },
+          "guild": {
+            "description": "帮会规则门槛（服务端校验读它）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GuildRuleParamsDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒）",
+            "example": 1762000000000
+          }
+        },
+        "required": [
+          "drop",
+          "autoBattle",
+          "guild",
+          "updatedAt"
+        ]
       },
       "RankDto": {
         "type": "object",
@@ -21350,6 +21784,14 @@
                 "$ref": "#/components/schemas/EquipmentMetaDto"
               }
             ]
+          },
+          "runtimeParams": {
+            "description": "客户端运行时参数（#605，单行三组）：掉落手感（`drop`）/ 自动战斗与寻路（`autoBattle`）/ 帮会规则门槛（`guild`）。前两组服务端只下发不消费，客户端据此覆写 `configs/drop` 与 `configs/autoBattle` 里原本写死的数值；`guild` 是服务端校验门槛，客户端读到只为**提前提示**",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeParamsDto"
+              }
+            ]
           }
         },
         "required": [
@@ -21378,7 +21820,8 @@
           "mapTypes",
           "uiEffects",
           "equipmentSlots",
-          "equipmentMeta"
+          "equipmentMeta",
+          "runtimeParams"
         ]
       },
       "GuildSummaryDto": {

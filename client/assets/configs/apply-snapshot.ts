@@ -38,6 +38,8 @@ import {
 import { items, rebuildItemIndex } from "./items";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths, setMpRecoverPerSecond } from "./role";
+import { applyDropRuntime } from "./drop";
+import { applyAutoBattleParams } from "./autoBattle";
 import { SEX } from "../types/role";
 
 /**
@@ -247,6 +249,25 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applySkillSnapshot(snapshot);
   applyMapRows(snapshot.maps, snapshot.mapTypes);
   applyUiEffectRows(snapshot.uiEffects);
+  applyRuntimeParams(snapshot.runtimeParams);
+}
+
+/**
+ * 覆写运行时参数（#605）：掉落手感 + 自动战斗与寻路
+ *
+ * 这两组原本写死在客户端 `configs/drop.ts` / `configs/autoBattle.ts` 里，运营改不了；
+ * 现在服务端存一份（`shared/runtime-seed.ts` → `runtime_params` 表 → 管理端可改），
+ * 进游戏拉一次快照就覆写到本地参数对象上。
+ *
+ * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / DropScatter）
+ * 持有的是同一个对象的引用，换对象等于把改动写在空气里。
+ * `guild` 那组客户端目前不消费（帮会校验在服务端判，客户端只显示服务端返回的提示），
+ * 所以这里不接 —— 契约照样要求它下发（少发说明 `snapshot()` 被动过）。
+ */
+export function applyRuntimeParams(params: GameConfigSnapshot["runtimeParams"]): void {
+  if (!params) return;
+  applyDropRuntime(params.drop);
+  applyAutoBattleParams(params.autoBattle);
 }
 
 //#region 装备外观几何（#513）

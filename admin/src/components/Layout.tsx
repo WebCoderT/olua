@@ -49,6 +49,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/drops", label: "掉落配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/maps", label: "地图管理", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/ui-effects", label: "特效管理", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/runtime-params", label: "运行时参数", permission: PERMISSION.GAME_CONFIG_READ },
     ],
   },
   {

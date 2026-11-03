@@ -29,6 +29,8 @@ const soulSeed = require(path.join(SERVER_DIR, "dist", "shared", "soul-seed.js")
 const rankSeed = require(path.join(SERVER_DIR, "dist", "shared", "rank-seed.js"));
 const growthSeed = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.js"));
 const growthSeedScalars = growthSeed.GROWTH_SCALARS;
+// #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）的唯一书写处
+const { RUNTIME_PARAMS } = require(path.join(SERVER_DIR, "dist", "shared", "runtime-seed.js"));
 const growthSeedKeys = Object.keys(growthSeedScalars);
 // #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
 const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
@@ -495,6 +497,50 @@ async function main() {
     const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, body: { value: 50 } });
     checkEqual(viewerScalarWrite.status, 403, "观察员改标量参数 → 403");
     checkEqual(viewerScalarWrite.body?.code, 30006, "观察员改标量参数 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 六·五、运行时参数（#605）：单行三组 / 部分更新 / 跨字段校验 / 权限
+
+    group("六·五、运行时参数（掉落手感 / 自动战斗 / 帮会规则）");
+
+    const runtime = await api(base, "GET", "/api/admin/runtime-params", { token });
+    checkEqual(runtime.status, 200, "运行时参数可读");
+    checkEqual(runtime.body?.data?.drop?.autoPickupRadius, RUNTIME_PARAMS.drop.autoPickupRadius, "掉落拾取半径初值 = 出厂 seed");
+    checkEqual(runtime.body?.data?.autoBattle?.moveByRun, RUNTIME_PARAMS.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
+    checkEqual(runtime.body?.data?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会名上限初值 = 出厂 seed");
+    checkEqual(runtime.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+
+    const dropPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: 72 } } });
+    checkEqual(dropPatched.status, 200, "改掉落拾取半径成功");
+    checkEqual(dropPatched.body?.data?.drop?.autoPickupRadius, 72, "响应里是新半径");
+    checkEqual(dropPatched.body?.data?.drop?.scatterMinDistance, RUNTIME_PARAMS.drop.scatterMinDistance, "同组其它字段不动（部分更新）");
+    checkEqual(dropPatched.body?.data?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "别的分组不动");
+
+    const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, cellSize: 24 } } });
+    checkEqual(autoPatched.status, 200, "改自动战斗参数成功");
+    checkEqual(autoPatched.body?.data?.autoBattle?.moveByRun, false, "布尔开关按提交值生效");
+    checkEqual(autoPatched.body?.data?.autoBattle?.cellSize, 24, "网格边长按提交值生效");
+
+    const runtimeNegative = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: -1 } } });
+    checkEqual(runtimeNegative.status, 400, "负半径 → 400（DTO 取值域）");
+    const runtimeTooBig = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { cellSize: 0 } } });
+    checkEqual(runtimeTooBig.status, 400, "网格边长 0 → 400（下限 8）");
+    const runtimeGuildInverted = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { guild: { nameMin: 14, nameMax: 12 } } });
+    checkEqual(runtimeGuildInverted.status, 400, "帮会名最短 > 最长 → 400（跨字段校验）");
+    checkEqual(runtimeGuildInverted.body?.code, 40000, "跨字段违反用参数非法 40000");
+    const runtimeAfterReject = await api(base, "GET", "/api/admin/runtime-params", { token });
+    checkEqual(runtimeAfterReject.body?.data?.guild?.nameMin, RUNTIME_PARAMS.guild.nameMin, "被拒的提交没有落库（先校验后写）");
+    const runtimeUnknownKey = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { bogusParam: 5 } } });
+    checkEqual(runtimeUnknownKey.status, 200, "未知字段被白名单剥掉（不报错）");
+    checkEqual(runtimeUnknownKey.body?.data?.drop?.autoPickupRadius, 72, "剥掉之后其余值不变");
+    const viewerRuntimeWrite = await api(base, "PATCH", "/api/admin/runtime-params", { token: viewerToken, body: { drop: { autoPickupRadius: 50 } } });
+    checkEqual(viewerRuntimeWrite.status, 403, "观察员改运行时参数 → 403");
+    checkEqual(viewerRuntimeWrite.body?.code, 30006, "观察员改运行时参数 → 30006（权限点不足）");
+    const postRuntime = await api(base, "POST", "/api/admin/runtime-params", { token, body: {} });
+    checkEqual(postRuntime.status, 404, "POST → 404（单行配置没有创建）");
+    const deleteRuntime = await api(base, "DELETE", "/api/admin/runtime-params", { token });
+    checkEqual(deleteRuntime.status, 404, "DELETE → 404（单行配置没有删除）");
 
     //#endregion
 
@@ -1333,6 +1379,10 @@ async function main() {
     const snapshot = await api(base, "GET", "/api/game-config", { token: playerToken });
     checkEqual(snapshot.status, 200, "玩家令牌拉快照 → 200");
     const snap = snapshot.body?.data ?? {};
+    // #605：运行时参数随快照下发（六·五 段把拾取半径改成了 72，这里确认它真的到得了客户端）
+    checkEqual(snap.runtimeParams?.drop?.autoPickupRadius, 72, "运行时参数随快照下发（改完的值客户端拿得到）");
+    checkEqual(snap.runtimeParams?.autoBattle?.stuckRetryLimit, RUNTIME_PARAMS.autoBattle.stuckRetryLimit, "自动战斗参数是完整一组（不是只发改过的键）");
+    checkEqual(snap.runtimeParams?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会规则也在快照里（客户端用于提前提示）");
 
     {
       // #604：快照是**显式契约** —— 客户端缺段直接抛错并把玩家挡在 Loading 界面。

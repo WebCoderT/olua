@@ -9,6 +9,7 @@ import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
 import { DropConfigService } from "./drop-config.service";
+import { RuntimeParamsService } from "./runtime-params.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
 import { LevelDto } from "./dto/growth.dto";
 import { MonsterPresentationDto } from "./dto/monster.dto";
@@ -30,6 +31,7 @@ export class ClientConfigService {
     private readonly growth: GrowthConfigService,
     private readonly mall: MallPricingService,
     private readonly drop: DropConfigService,
+    private readonly runtimeParams: RuntimeParamsService,
     private readonly map: MapService,
     private readonly uiEffect: UiEffectService,
   ) {}
@@ -78,6 +80,9 @@ export class ClientConfigService {
       // 没有它们客户端连 555 个变体都展开不出来（倍率决定展开档数）
       equipmentSlots: this.gameConfig.listEquipmentSlots(),
       equipmentMeta: this.gameConfig.getEquipmentMeta(),
+      // #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）—— 原本写死在客户端的两份参数，
+      // 现在由运营在管理端改；客户端进游戏覆写本地（guild 那组同时也是服务端校验门槛）
+      runtimeParams: this.runtimeParams.get(),
     };
   }
 }

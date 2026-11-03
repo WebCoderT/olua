@@ -15,6 +15,7 @@ import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
 import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
+import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
 import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
@@ -180,6 +181,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <EquipmentSettingsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="runtime-params"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <RuntimeParamsPage />
               </RequirePermission>
             }
           />
