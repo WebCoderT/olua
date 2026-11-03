@@ -9,12 +9,12 @@
  * 所以「管理端能改什么」这个问题，答案必须由测试钉住，而不是靠读代码时的自觉。
  *
  * ## 七条主线
- * 1. **列表按 id 数值升序**（`10` 不许排到 `2` 前面），两种计数各归各位 ——
- *    `monsterAreaCount` 是客户端 TMX 的矩形数，`spawnAreaCount` 是服务端库表的行数，
- *    混在一起看就会得出「刷怪区和资源不一致」的假结论。
- * 2. **两套坐标不能混**：`groups` 是 Tiled 原始口径（左上角原点、y 向下），`spawnAreas` 是
- *    世界坐标（原点左上角、y 向上）。#667 起刷怪区归后台绘制、TMX 不再是它的来源，两者
- *    **不再要求重合** —— 但口径仍然是这两套，读接口的人不能拿 `groups` 的 y 去比 `cy`。
+ * 1. **列表按 id 数值升序**（`10` 不许排到 `2` 前面），各计数各归各位 ——
+ *    `spawnAreaCount` / `collisionCount` / `npcPointCount` 全是**服务端库表的行数**
+ *    （#676 起 TMX 里连对象组都没有了，不再有「资源侧计数」这种东西）。
+ * 2. **只剩一套坐标**：刷怪区 / 碰撞盒 / NPC 点位都是世界坐标（原点左上角、y 向上、`cy` 为负）。
+ *    #676 删掉了 `groups`（Tiled 原始口径），所以这一套里**不再有需要换算的第二份** ——
+ *    任何接口里再冒出 `y` 向下的原始矩形，就是有人把 TMX 读回来了。
  * 3. **玩法配置保存即生效**：PATCH 之后列表 / 详情 / **玩家配置快照** 三处同步反映 ——
  *    第三处最关键，它决定「客户端下次进游戏能不能看到新门槛」。
  * 4. **资源本体写不动**：请求里塞 `src` 也会被丢掉（白名单剥离），返回仍是 `map/<id>/<id>`；
@@ -158,7 +158,7 @@ async function main() {
 
     //#region 一、列表
 
-    group("一、列表：按 id 数值升序，两类计数各归各位");
+    group("一、列表：按 id 数值升序，各计数各归各位");
 
     const list = await api(base, "GET", "/api/admin/maps", { token: rootToken });
     checkEqual(list.status, 200, "管理端能读地图列表");
@@ -188,27 +188,29 @@ async function main() {
     checkEqual(map0.width, 8192, "像素宽 = 格数 × 单格宽");
     checkEqual(map0.height, 8192, "像素高");
     checkEqual(map0.layerCount, 2, "图层数（ground / wall）");
-    checkEqual(map0.monsterAreaCount, 3, "客户端 TMX 的刷怪矩形数");
-    // #672：npcCount / reviveCount 是**资源对照**（TMX 里还剩几个对象），真正生效的点位在下面两行
-    checkEqual(map0.npcCount, 1, "TMX 里 klass=npc 的对象数（资源对照，客户端已不消费）");
-    checkEqual(map0.reviveCount, 1, "TMX 里 klass=revive 的对象数（同上）");
     checkEqual(map0.npcPointCount, 1, "服务端 map_npcs 的点位数（#672 起这才是生效的那份）");
     checkEqual(map0.hasRevivePoint, true, "服务端有没有复活点（maps.revive_cx/cy 非空）");
-    checkEqual(map0.collisionCount, 99, "TMX 碰撞矩形数");
-    checkEqual(map0.spawnAreaCount, 3, "服务端 map_spawn_areas 的行数（与上面那个 3 是两件事）");
+    checkEqual(map0.spawnAreaCount, 3, "服务端 map_spawn_areas 的行数");
+    check(typeof map0.collisionCount === "number" && map0.collisionCount > 0, "碰撞盒计数是正数（服务端 map_collisions 行数）");
     checkEqual(map0.worldMonsterCount, 0, "没跑过世界时场上怪物数是 0（不是 null）");
 
+    // #676：TMX 里已经没有被服务端读的对象组了，三个「资源对照」计数一并下架 ——
+    // 留着它们就等于留了一条「资源里还有数据」的暗示，而这正是这一轮要消掉的东西。
+    check(
+      map0.monsterAreaCount === undefined && map0.npcCount === undefined && map0.reviveCount === undefined,
+      "TMX 口径的三个计数（monsterAreaCount / npcCount / reviveCount）已经不存在于响应里",
+    );
+
     checkEqual(rows.find((row) => row.id === "3")?.spawnAreaCount, 18, "3 号图 18 个刷怪区（出厂值随 config-sync.sql 首启灌入）");
-    checkEqual(rows.find((row) => row.id === "4")?.monsterAreaCount, 7, "4 号图 7 个刷怪矩形");
 
     const listNoToken = await api(base, "GET", "/api/admin/maps");
     checkEqual(listNoToken.status, 401, "没有令牌读不到列表");
 
     //#endregion
 
-    //#region 二、详情：两套坐标
+    //#region 二、详情：只剩一套坐标
 
-    group("二、详情：Tiled 原始坐标与服务器世界坐标并排，且能对上");
+    group("二、详情：碰撞盒 / 刷怪区 / NPC 点位都是世界坐标，TMX 的对象组不再出现");
 
     const detail = await api(base, "GET", "/api/admin/maps/0", { token: rootToken });
     checkEqual(detail.status, 200, "详情可读");
@@ -221,49 +223,41 @@ async function main() {
     checkEqual(layers[0]?.name, "ground", "图层名按 TMX 顺序");
     checkEqual(layers[0]?.width, 64, "图层尺寸（格）");
 
-    const groups = data.groups ?? [];
+    // #676：`groups` 这一栏整个下架了 —— TMX 里已经没有对象组，接口再下发它就是「有数据可读」的假象。
+    checkEqual(data.groups, undefined, "详情里没有 groups（TMX 对象组已整组删除，接口不再回显）");
+
+    const collisions = data.collisions ?? [];
+    checkEqual(collisions.length, data.collisionCount, "碰撞盒条数与列表里的计数一致（同一张表）");
+    check(collisions.length > 0, "0 号图有碰撞盒（由 db:migrate-map-collisions 从 TMX 搬过来）");
+    const box = collisions[0] ?? {};
     checkEqual(
-      groups.map((item) => item.name).join(","),
-      "monster,npc,collision",
-      "对象组按 TMX 顺序（monster / npc / collision）",
+      Object.keys(box).sort().join(","),
+      "cx,cy,fullyOutside,h,id,w",
+      "碰撞盒字段：行 id + 中心 + 尺寸 + 是否整块在图外（没有 inBounds —— 围墙本来就在图外）",
     );
-
-    const monsterGroup = groups.find((item) => item.name === "monster") ?? { objects: [] };
-    checkEqual(monsterGroup.objects.length, 3, "monster 组 3 个矩形");
-    const tiledRect = monsterGroup.objects[0] ?? {};
-    checkEqual(tiledRect.name, "1号怪物", "对象名来自 Tiled");
-    checkEqual(tiledRect.klass, "", "普通矩形没有 class（空串，不是 undefined）");
-    checkEqual(tiledRect.x, 384, "Tiled 原始 x（左上角原点）");
-    checkEqual(tiledRect.y, 2048, "Tiled 原始 y（左上角原点、y 向下）");
-    checkEqual(tiledRect.width, 1664, "矩形宽");
-    checkEqual(tiledRect.height, 1664, "矩形高");
-    checkEqual(tiledRect.properties?.id, "1", "自定义属性是原件：键值都是字符串");
-    checkEqual(tiledRect.properties?.max, "10", "max 也没被转成数字（有导出的格式就丢信息）");
-
-    const npcGroup = groups.find((item) => item.name === "npc") ?? { objects: [] };
-    checkEqual(npcGroup.objects.length, 2, "npc 组 2 个点对象（复活点 + 传送）");
-    checkEqual(npcGroup.objects[0]?.klass, "revive", "复活点靠 klass=revive 识别（不靠名字）");
-    checkEqual(npcGroup.objects[1]?.klass, "npc", "传送点 klass=npc");
-    checkEqual(npcGroup.objects[1]?.width, 0, "点对象宽为 0");
+    check(box.w > 0 && box.h > 0, "碰撞盒宽高都是正数");
+    check(typeof box.cx === "number" && typeof box.cy === "number", "中心点是数字（不是字符串回显）");
+    check(typeof box.fullyOutside === "boolean", "fullyOutside 是布尔（不是 0 / 1）");
+    // 反面判据：四面围墙是**半截**在图外（`x = -64`、宽 8320），不算「整块在外」。
+    // 判据方向写反（`top <= 0` 当成「在图上方」）会让 99 个里 97 个亮红灯 —— 这条就是钉这个的。
+    checkEqual(
+      collisions.filter((item) => item.fullyOutside).length,
+      0,
+      "0 号图没有整块在图外的盒子（围墙半截在外不算；判据写反会是 97）",
+    );
 
     const areas = data.spawnAreas ?? [];
     checkEqual(areas.length, 3, "服务端刷怪区 3 行（map_spawn_areas）");
     const area = areas[0] ?? {};
-    checkEqual(area.name, "1号怪物", "区域名沿用 Tiled 对象名（两栏才对得上）");
+    checkEqual(area.name, "1号怪物", "区域名沿用当年 Tiled 的对象名（库里存着，改名要自己动手）");
     checkEqual(area.monsterKey, "1", "怪物 key 是 configs/monster 的关联键");
     checkEqual(area.monsterLabel, "赤焰斗鸡", "怪物名从快照查出来（查不到才回落成 key）");
     checkEqual(area.min, 0, "区域最少只数");
     checkEqual(area.max, 10, "区域最多只数（播种按它展开）");
-    checkEqual(area.w, 1664, "区域宽与 Tiled 矩形一致");
-    checkEqual(area.h, 1664, "区域高与 Tiled 矩形一致");
+    checkEqual(area.w, 1664, "区域宽");
+    checkEqual(area.h, 1664, "区域高");
     checkEqual(area.cx, 1216, "区域中心 x（世界坐标）");
-    checkEqual(area.cy, -2880, "区域中心 y 为负 —— y 轴向上，与 Tiled 的 y 向下差一次取反");
-
-    // 唯一能证明「两栏说的是同一个矩形」的判据：Tiled 矩形中心 (x + w/2, y + h/2)
-    const tiledCenterX = tiledRect.x + tiledRect.width / 2;
-    const tiledCenterY = tiledRect.y + tiledRect.height / 2;
-    checkEqual(tiledCenterX, area.cx, "Tiled 矩形中心 x 等于服务端 cx（同一个矩形，没挪位置）");
-    checkEqual(-tiledCenterY, area.cy, "Tiled 矩形中心 y 取反等于 cy（只换了 y 的正方向）");
+    checkEqual(area.cy, -2880, "区域中心 y 为负 —— y 轴向上，与画布坐标差一次取反");
 
     // 边界约定（#586）：区域矩形必须整体落在图内 —— x ∈ [0, W]、y ∈ [-H, 0]。
     // 判据在服务端（`spawn-area-bounds.util.ts`），因为它校验的是**库表**：库表只在空库时按快照
@@ -284,11 +278,11 @@ async function main() {
     checkEqual((data.worldMonsters ?? []).length, 0, "没跑过世界的进程里 worldMonsters 是空数组（不是 500）");
 
     const sources = data.sources ?? [];
-    checkEqual(sources.length, 9, "每一块数据都带来源说明（9 条，#672 多了 NPC 点位与复活点）");
+    checkEqual(sources.length, 9, "每一块数据都带来源说明（9 条）");
     checkEqual(
       sources.map((item) => item.section).join(","),
-      "config,resource,size,layers,groups,spawnAreas,npcPoints,revivePoint,worldMonsters",
-      "来源覆盖页面上的每一栏",
+      "config,resource,size,layers,collisions,spawnAreas,npcPoints,revivePoint,worldMonsters",
+      "来源覆盖页面上的每一栏（#676 把 groups 换成了 collisions）",
     );
     checkEqual(
       [...new Set(sources.map((item) => item.origin))].sort().join(","),
@@ -298,7 +292,7 @@ async function main() {
     check(
       sources
         .filter((item) => item.origin === "db")
-        .every((item) => /^maps|map_spawn_areas|map_npcs|world_monsters/.test(item.ref)),
+        .every((item) => /^maps|map_spawn_areas|map_npcs|map_collisions|world_monsters/.test(item.ref)),
       "归到「库表」的每一条都写的是真表名（不是含糊的「服务端」）",
     );
     check(
@@ -549,13 +543,22 @@ async function main() {
       "MapDetailDto 里带着列表字段（继承在文档里也是扁平的，读文档的人不用翻父类）",
     );
     check(
-      Boolean(detailSchema.layers && detailSchema.spawnAreas && detailSchema.sources),
-      "MapDetailDto 有图层 / 刷怪区 / 来源三块",
+      Boolean(detailSchema.layers && detailSchema.spawnAreas && detailSchema.collisions && detailSchema.sources),
+      "MapDetailDto 有图层 / 刷怪区 / 碰撞盒 / 来源四块",
     );
     checkEqual(
       detailSchema.spawnAreas?.items?.$ref,
       "#/components/schemas/MapSpawnAreaDto",
       "spawnAreas 指向 MapSpawnAreaDto（不是随手的 object）",
+    );
+    checkEqual(
+      detailSchema.collisions?.items?.$ref,
+      "#/components/schemas/MapCollisionDto",
+      "collisions 指向 MapCollisionDto",
+    );
+    check(
+      schemas.MapGroupDto === undefined && schemas.MapObjectDto === undefined,
+      "文档里没有 MapGroupDto / MapObjectDto（TMX 对象组已经不是接口的一部分了）",
     );
     check(Boolean(schemas.SaveMapConfigDto), "有 SaveMapConfigDto（写入口只有这一个形状）");
     checkEqual(
