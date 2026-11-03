@@ -54,7 +54,7 @@
   `guildRules` 由 `GuildService` 现读运行时参数（DTO 只留结构上限）；战斗力权重 → `combat_weights` KV 表 + `/combat-weights` 页；
   `guideSteps` → `guide_settings` 单行表（整份数组）+ `/guide-steps` 页，`GUIDE_SPOTS`/`GUIDE_EVENTS` 白名单即客户端能力边界。
   纯函数读运营值只能走 `shared/runtime-overrides` 覆盖层（`combatWeightsOf()`）；表现层（颜色 / 节点名 / 气泡排版 / 全局文案）仍留客户端。
-- **#655 派生数据落库 + 曲线下架（分支 `feat/655-derived-tables`）**：`role_levels` 60 行（每级裸属性 + exp）、
+- **#655 派生数据落库 + 曲线下架（PR #657 已合并 2026-11-03）**：`role_levels` 60 行（每级裸属性 + exp）、
   `equipment_variants` 555 行（每行自带 label/level/sell_price/八项属性，回收价也在这）。运行时零现算：
   `roleLevelAttributesOf` / `equipmentAttributesOf` / `sellPriceOf` **只读表**，不再回落生成物
   （旧兜底是 bug：生成物为 `[min,max]` tuple，读方按 `{min,max}` 取）。曲线相关全删：
