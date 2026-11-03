@@ -47,5 +47,12 @@
   `guildRules` 由 `GuildService` 现读运行时参数（DTO 只留结构上限）；战斗力权重 → `combat_weights` KV 表 + `/combat-weights` 页；
   `guideSteps` → `guide_settings` 单行表（整份数组）+ `/guide-steps` 页，`GUIDE_SPOTS`/`GUIDE_EVENTS` 白名单即客户端能力边界。
   纯函数读运营值只能走 `shared/runtime-overrides` 覆盖层（`combatWeightsOf()`）；表现层（颜色 / 节点名 / 气泡排版 / 全局文案）仍留客户端。
+- **#655 派生数据落库 + 曲线下架（分支 `feat/655-derived-tables`）**：`role_levels` 60 行（每级裸属性 + exp）、
+  `equipment_variants` 555 行（每行自带 label/level/sell_price/八项属性，回收价也在这）。运行时零现算：
+  `roleLevelAttributesOf` / `equipmentAttributesOf` / `sellPriceOf` **只读表**，不再回落生成物
+  （旧兜底是 bug：生成物为 `[min,max]` tuple，读方按 `{min,max}` 取）。曲线相关全删：
+  `admin/level-exps`、`admin/growth-segments` 下线，两张表启动 `DROP`，管理端只剩「成长参数」（标量）；
+  `roleMaxLevel` 校验 = 必须等于 role_levels 行数。老库搬家 `make data-migrate`。
+  **待办**：`server/src/shared/` 整目录删除（见当日记忆的方案）。
 - open：#8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。
