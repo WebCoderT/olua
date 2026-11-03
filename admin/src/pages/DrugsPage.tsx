@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { drugIcon, drugsApi, formatTime, PERMISSION } from "../api";
 import type { Drug, PageResult } from "../api";
 import { GameIcon } from "../components/GameImage";
+import { ImagePicker } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -37,6 +38,8 @@ export function DrugsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Drug | null>(null);
   const [form, setForm] = useState<Drug | null>(null);
+  /** 图标选择器开合（编辑弹窗里的「选择」按钮） */
+  const [picking, setPicking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +79,7 @@ export function DrugsPage() {
   };
 
   const closeEdit = () => {
+    setPicking(false);
     setEditing(null);
     setForm(null);
   };
@@ -202,49 +206,81 @@ export function DrugsPage() {
       </Card>
 
       {form ? (
-        <Modal
-          open
-          title={<>编辑药品 · {editing?.id}</>}
-          hint="部分更新：只提交下方字段；回复量按「血/蓝固定值 + 百分比」四项独立生效（客户端各自封顶结算）。"
-          size="md"
-          onClose={closeEdit}
-          footer={<>
-            <Button variant="outline" onClick={closeEdit}>
-              取消
-            </Button>
-            <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
-              保存修改
-            </Button>
-          </>}
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="名称">
-              <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+        <>
+          <Modal
+            open
+            title={<>编辑药品 · {editing?.id}</>}
+            hint="部分更新：只提交下方字段；回复量按「血/蓝固定值 + 百分比」四项独立生效（客户端各自封顶结算）。"
+            size="md"
+            /* Esc 先到编辑弹窗：选择器开着时不能把编辑弹窗一起关掉（改了一半的内容会丢） */
+            onClose={() => {
+              if (!picking) closeEdit();
+            }}
+            footer={<>
+              <Button variant="outline" onClick={closeEdit}>
+                取消
+              </Button>
+              <Button disabled={!form.label.trim()} onClick={() => void submitEdit()}>
+                保存修改
+              </Button>
+            </>}
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="名称">
+                <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+              </Field>
+              <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理">
+                <Input
+                  type="number"
+                  min={0}
+                  value={String(form.sellPrice)}
+                  onChange={(event) => setForm({ ...form, sellPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
+                />
+              </Field>
+            </div>
+            <Field label="描述">
+              <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
             </Field>
-            <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理">
-              <Input
-                type="number"
-                min={0}
-                value={String(form.sellPrice)}
-                onChange={(event) => setForm({ ...form, sellPrice: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
-              />
+            <Field label="图标" hint="resources 相对路径（如 item/fs_2，不带扩展名）；空串 = 不显示图标">
+              <div className="flex items-center gap-2">
+                {/* 当前值的即时预览：换图时不用等保存就能看出对不对 */}
+                <GameIcon path={form.icon} alt={form.label} zoomable={false} />
+                <Input
+                  className="flex-1"
+                  value={form.icon}
+                  placeholder="item/fs_2"
+                  onChange={(event) => setForm({ ...form, icon: event.target.value })}
+                />
+                <Button variant="outline" className="shrink-0" onClick={() => setPicking(true)}>
+                  选择图片
+                </Button>
+              </div>
             </Field>
-          </div>
-          <Field label="描述">
-            <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-          </Field>
-          <Field label="图标" hint="resources 相对路径（如 item/fs_2）；空串 = 不显示图标">
-            <Input value={form.icon} onChange={(event) => setForm({ ...form, icon: event.target.value })} />
-          </Field>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}
-            {numberField("固定回复魔法", "使用后立即回复的 MP", "effectMp", 0, 100000000)}
-            {numberField("百分比回复血（%）", "按角色 maxHp 的百分比，50 = 50%", "effectHpPercent", 0, 100)}
-            {numberField("百分比回复蓝（%）", "按角色 maxMp 的百分比，50 = 50%", "effectMpPercent", 0, 100)}
-            {numberField("使用冷却（秒）", "0 = 无冷却", "cooldown", 0, 3600)}
-            {numberField("堆叠上限", "背包里最多叠多少个", "maxStack", 1, 9999)}
-          </div>
-        </Modal>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}
+              {numberField("固定回复魔法", "使用后立即回复的 MP", "effectMp", 0, 100000000)}
+              {numberField("百分比回复血（%）", "按角色 maxHp 的百分比，50 = 50%", "effectHpPercent", 0, 100)}
+              {numberField("百分比回复蓝（%）", "按角色 maxMp 的百分比，50 = 50%", "effectMpPercent", 0, 100)}
+              {numberField("使用冷却（秒）", "0 = 无冷却", "cooldown", 0, 3600)}
+              {numberField("堆叠上限", "背包里最多叠多少个", "maxStack", 1, 9999)}
+            </div>
+          </Modal>
+          {/*
+            图标选择器叠在编辑弹窗之上。Esc 是两个 Modal 各挂一个 window 监听：
+            编辑弹窗先注册、先收到 —— 不拦一下就会「关选择器顺带把编辑弹窗也关了」，
+            改了一半的内容全丢。放行条件见上面的 onClose。
+          */}
+          {picking ? (
+            <ImagePicker
+              open
+              title="选择药品图标"
+              rootDir="item"
+              value={form.icon}
+              onSelect={(path) => setForm({ ...form, icon: path })}
+              onClose={() => setPicking(false)}
+            />
+          ) : null}
+        </>
       ) : null}
     </div>
   );
