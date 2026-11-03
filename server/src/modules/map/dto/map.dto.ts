@@ -2,6 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsIn, IsInt, IsNumber, IsString, Length, Max, Min } from "class-validator";
 import {
+  COLLISION_BOX_LIMITS,
   MAP_ENTER_LIMITS,
   MAP_LABEL_MAX_LENGTH,
   MAP_TYPE_LABELS,
@@ -11,22 +12,24 @@ import {
 } from "../../../common/constants/map-config";
 
 /**
- * 地图管理的 DTO（#571 只读观测 / #573 玩法配置可改）
+ * 地图管理的 DTO（#571 只读观测 / #573 玩法配置可改 / #676 碰撞盒归后台）
  *
  * 地图分两半，**边界就在这两个名字之间**：
  * - **资源本体**（TMX / 底图 / 预览图）在客户端资源包里 —— 服务端一个字段都改不了；
- * - **整理结果**（名称 / 类型 / 进入条件 / 尺寸 / 刷怪区 / 场上怪物）归服务端，管理端可视化地改。
+ * - **整理结果**（名称 / 类型 / 进入条件 / 尺寸 / 图层 / 刷怪区 / 碰撞盒 / NPC 点位 / 场上怪物）
+ *   归服务端，管理端可视化地改。
  *
  * 所以这里能写的只有 `SaveMapConfigDto` 那五个字段 —— 没有「新建地图」的入参：
  * 一张图存不存在由客户端的 TMX 决定（行由启动 seed 按资源清单补出来）。
  *
  * 来源分两类，详情里的 `sources` 会把每一块标出来（页面上也是按这个分栏的）：
  * - `config`：客户端资源包（TMX / 底图 / 预览图）—— 服务端一个字段都改不了；
- * - `db`：服务端库表（`maps` 的名称 / 类型 / 进入条件 / 尺寸 / 图层 / 对象组、
- *   `map_spawn_areas` 刷怪区、`world_monsters` 场上实例）。
+ * - `db`：服务端库表（`maps` 的名称 / 类型 / 进入条件 / 尺寸 / 图层 / 复活点、
+ *   `map_spawn_areas` 刷怪区、`map_collisions` 碰撞盒、`map_npcs` 点位、`world_monsters` 场上实例）。
  *
- * #655 之前还有第三类 `snapshot`（尺寸 / 图层 / 对象组是仓库里的生成快照），
- * 那些列落库之后就没有「代码里的第二份」了 —— 所以现在只剩两类。
+ * #655 之前还有第三类 `snapshot`（尺寸 / 图层是仓库里的生成快照），那些列落库之后就没有
+ * 「代码里的第二份」了。**#676 之后连「TMX 里的对象组」这一类回显也没了**：地图文件只剩
+ * 瓦片与图层，`groups` 恒为空数组，点位 / 区域 / 碰撞盒全在各自的表里。
  */
 
 /** 图层（只取结构；瓦片数据在客户端，管理端不需要） */
@@ -39,51 +42,6 @@ export class MapLayerDto {
 
   @ApiProperty({ description: "纵向格数" })
   height: number;
-}
-
-/**
- * 对象组里的一个对象
- *
- * 坐标是 **Tiled 原始口径**（左上角原点、y 向下），与编辑器里看到的一致：
- * 这一块是「对着 Tiled 核对资源内容」用的，不做世界坐标换算。
- */
-export class MapObjectDto {
-  @ApiProperty({ description: "对象 id（图内唯一）" })
-  id: number;
-
-  @ApiProperty({ description: "对象名（如「1号怪物」「复活点」；可空）" })
-  name: string;
-
-  @ApiProperty({ description: "对象类（Tiled 的 type / class；空串 = 普通矩形）" })
-  klass: string;
-
-  @ApiProperty({ description: "Tiled 坐标 x（左上角原点）" })
-  x: number;
-
-  @ApiProperty({ description: "Tiled 坐标 y（左上角原点、y 向下）" })
-  y: number;
-
-  @ApiProperty({ description: "矩形宽（点对象为 0）" })
-  width: number;
-
-  @ApiProperty({ description: "矩形高（点对象为 0）" })
-  height: number;
-
-  @ApiProperty({
-    description: "自定义属性原件（刷怪区的 id / min / max 等，键值都是字符串）",
-    type: "object",
-    additionalProperties: { type: "string" },
-  })
-  properties: Record<string, string>;
-}
-
-/** 一个对象组（monster / npc / collision / 早期 objects） */
-export class MapGroupDto {
-  @ApiProperty({ description: "对象组名（TMX 里的名字）" })
-  name: string;
-
-  @ApiProperty({ description: "组内对象（按 TMX 内的出现顺序）", type: [MapObjectDto] })
-  objects: MapObjectDto[];
 }
 
 /**
@@ -104,6 +62,94 @@ export class MapSpawnAreaOverflowDto {
 
   @ApiProperty({ description: "矩形下边超出图底边多少（0 = 在图内）" })
   bottom: number;
+}
+
+/**
+ * 碰撞盒（**服务端库表** `map_collisions` 的一行；#676 起由管理端绘制）
+ *
+ * 与刷怪区同一套字段（中心 + 尺寸、世界坐标），但**没有 `inBounds`**：
+ * 每张图四面围墙本来就画在图外（`x = -64`、宽 8320），那是「把玩家关在图里」的手段，
+ * 拿刷怪区那条「越界就拒」的判据套上来，第一张图就会被判 4 个错。
+ *
+ * 只有 `fullyOutside`：整块落在图外 = 画面上完全看不到这个盒子。那才是需要人看一眼的信号。
+ */
+export class MapCollisionDto {
+  @ApiProperty({ description: "行 id（改 / 删用它定位；碰撞盒没有名字）" })
+  id: number;
+
+  @ApiProperty({ description: "矩形中心 x（世界坐标；原点 = 地图左上角）" })
+  cx: number;
+
+  @ApiProperty({ description: "矩形中心 y（世界坐标；y 轴向上，故为负）" })
+  cy: number;
+
+  @ApiProperty({ description: "矩形宽（像素）" })
+  w: number;
+
+  @ApiProperty({ description: "矩形高（像素）" })
+  h: number;
+
+  @ApiProperty({ description: "整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）" })
+  fullyOutside: boolean;
+}
+
+/**
+ * 新建 / 修改一个碰撞盒（#676）
+ *
+ * 入参与刷怪区同构（世界坐标 `cx/cy/w/h`），因为画的、存的和下发客户端的是同一份矩形：
+ * 客户端拿到就直接建节点（位置 = 中心、尺寸 = 宽高），不需要任何换算。
+ *
+ * 宽高下限比刷怪区小得多（1px）：碰撞盒可以是一条很薄的缝，不能拿「区域起码 16px」去卡它。
+ */
+export class SaveMapCollisionDto {
+  @ApiProperty({ description: "矩形中心 x（世界坐标；原点 = 地图左上角）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cx 必须是数字" })
+  cx: number;
+
+  @ApiProperty({ description: "矩形中心 y（世界坐标；y 轴向上，故为负）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cy 必须是数字" })
+  cy: number;
+
+  @ApiProperty({ description: `矩形宽（像素，至少 ${COLLISION_BOX_LIMITS.minSize}）` })
+  @Type(() => Number)
+  @IsNumber({}, { message: "矩形宽必须是数字" })
+  w: number;
+
+  @ApiProperty({ description: `矩形高（像素，至少 ${COLLISION_BOX_LIMITS.minSize}）` })
+  @Type(() => Number)
+  @IsNumber({}, { message: "矩形高必须是数字" })
+  h: number;
+}
+
+/** 删除碰撞盒的结果（要回 id：前端靠它从本地列表里摘掉那一行） */
+export class MapCollisionDeletedDto {
+  @ApiProperty({ description: "恒为 true（失败会抛 404，不会有 false）" })
+  deleted: boolean;
+
+  @ApiProperty({ description: "被删掉的碰撞盒行 id" })
+  id: number;
+}
+
+/**
+ * 碰撞盒（**下发客户端用**）
+ *
+ * 字段名是 `x / y / w / h`，与客户端的 `MapCollisionBox` 一一对应：客户端直接拿去
+ * `new Size(w, h)` + `setWorldPosition(x, y)`。少发字段不会漂，多发字段迟早有人当判据。
+ */
+export class MapCollisionBoxDto {
+  @ApiProperty({ description: "矩形中心 x（世界坐标）" })
+  x: number;
+
+  @ApiProperty({ description: "矩形中心 y（世界坐标，为负）" })
+  y: number;
+
+  @ApiProperty({ description: "矩形宽（像素）" })
+  w: number;
+
+  @ApiProperty({ description: "矩形高（像素）" })
+  h: number;
 }
 
 /**
@@ -375,23 +421,14 @@ export class MapSummaryDto {
   @ApiProperty({ description: "图层数" })
   layerCount: number;
 
-  @ApiProperty({ description: "NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）" })
-  npcCount: number;
-
   @ApiProperty({ description: "服务端 NPC 点位数（map_npcs；#672 起点位归后台）" })
   npcPointCount: number;
 
   @ApiProperty({ description: "服务端是否设了复活点（maps.revive_cx/cy 非空）" })
   hasRevivePoint: boolean;
 
-  @ApiProperty({ description: "刷怪区对象数（客户端资源 monster 组的矩形数）" })
-  monsterAreaCount: number;
-
-  @ApiProperty({ description: "碰撞矩形数（客户端资源 collision 组的对象数）" })
+  @ApiProperty({ description: "服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）" })
   collisionCount: number;
-
-  @ApiProperty({ description: "复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）" })
-  reviveCount: number;
 
   @ApiProperty({ description: "服务端刷怪区行数（map_spawn_areas）" })
   spawnAreaCount: number;
@@ -450,6 +487,13 @@ export class MapConfigDto {
     type: [MapSpawnAreaPointDto],
   })
   spawnAreas: MapSpawnAreaPointDto[];
+
+  @ApiProperty({
+    description:
+      "碰撞盒（#676 起归后台；客户端直接建静态碰撞体 + 当自动战斗的静态障碍）。空数组 = 这张图没有阻挡",
+    type: [MapCollisionBoxDto],
+  })
+  collisions: MapCollisionBoxDto[];
 }
 
 /** 地图类型分组（顺序 = 传送弹窗的分组顺序；文案的唯一来源在服务端） */
@@ -476,13 +520,10 @@ export class MapListDto {
   types: MapTypeGroupDto[];
 }
 
-/** 地图详情：列表字段 + 图层 / 对象组 / 刷怪区 / 场上怪物 / 来源说明 */
+/** 地图详情：列表字段 + 图层 / 刷怪区 / 点位 / 碰撞盒 / 场上怪物 / 来源说明 */
 export class MapDetailDto extends MapSummaryDto {
   @ApiProperty({ description: "图层（服务端生成快照，源自 TMX）", type: [MapLayerDto] })
   layers: MapLayerDto[];
-
-  @ApiProperty({ description: "对象组（Tiled 原始坐标，服务端生成快照）", type: [MapGroupDto] })
-  groups: MapGroupDto[];
 
   @ApiProperty({ description: "刷怪区（服务端库表，世界坐标）", type: [MapSpawnAreaDto] })
   spawnAreas: MapSpawnAreaDto[];
@@ -496,6 +537,9 @@ export class MapDetailDto extends MapSummaryDto {
     nullable: true,
   })
   revivePoint: MapRevivePointDto | null;
+
+  @ApiProperty({ description: "碰撞盒（服务端库表，世界坐标；可能超出地图边界）", type: [MapCollisionDto] })
+  collisions: MapCollisionDto[];
 
   @ApiProperty({ description: "场上怪物（按区分组；进程未启动过世界时为空）", type: [MapWorldMonsterDto] })
   worldMonsters: MapWorldMonsterDto[];

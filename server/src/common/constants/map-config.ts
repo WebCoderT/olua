@@ -87,6 +87,18 @@ export const SPAWN_AREA_LIMITS = {
   minSize: 16,
 } as const;
 
+/**
+ * 碰撞盒的限制（#676）
+ *
+ * 最短边只有 1px：碰撞盒可以是「一条缝」（贴墙的窄阻挡），拿刷怪区的 16px 去卡它会把
+ * 正常数据判成错。这里只拦「零面积 / 负数」这种一定是算错了的输入 —— 不做越界判定，
+ * 四面围墙本来就画在图外。
+ */
+export const COLLISION_BOX_LIMITS = {
+  /** 最短边（像素） */
+  minSize: 1,
+} as const;
+
 /** 一张图的出厂配置（落库前的默认值） */
 export interface MapDefault {
   id: string;

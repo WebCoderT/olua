@@ -145,8 +145,8 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心）。" +
-      "**客户端不再自己存这些**，也不再从 TMX 对象组里读点位 —— " +
+      "地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心；#676：碰撞盒）。" +
+      "**客户端不再自己存这些**，也不从 TMX 对象组里读任何东西 —— 地图文件只剩瓦片与图层，" +
       "`configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；" +
       "资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里",
     type: [MapConfigDto],

@@ -374,7 +374,13 @@ export interface MapRow {
   pixel_width: number;
   /** 地图像素高（= grid_rows × tile_height） */
   pixel_height: number;
-  /** 图层 + 对象组（JSON：`{ layers, groups }`，管理端详情页渲染它） */
+  /**
+   * 图层结构（JSON：`{ layers, groups }`，管理端详情页只渲染 `layers`）
+   *
+   * #676 起 `groups` **恒为空数组** —— TMX 里的对象组已由 `tools/strip-map-objects.cjs`
+   * 整组删除，碰撞盒也搬进了 `map_collisions`。字段留着是为了存量库的老 content 仍能解析
+   * （读方只看 `layers`，多出来的 `groups` 没人消费）。
+   */
   content: string;
   /**
    * 复活点世界坐标（#672；两个都可能是 null）
@@ -407,6 +413,31 @@ export interface MapNpcRow {
   cx: number;
   /** 世界坐标 y（y 轴向上，故为负） */
   cy: number;
+  updated_at: number;
+}
+
+/**
+ * 碰撞盒一行（`map_collisions` 表；#676 起由管理端绘制）
+ *
+ * 一行 = 一个轴对齐阻挡矩形（中心 + 尺寸，世界坐标，`cy` 为负）。以前这批矩形只在 TMX 的
+ * `collision` 对象组里 —— 客户端两处读（生成静态碰撞体 / 自动战斗的静态障碍），后台只能看。
+ *
+ * **允许超出地图边界**：每张图的四面围墙本来就画在图外（`x = -64`、宽 8320），那是「把玩家
+ * 关在图里」的手段。所以没有越界拒绝，界面上只有一个「整块在图外」的展示标记。
+ */
+export interface MapCollisionRow {
+  /** 行 id（改 / 删用它定位；Tiled 里这批对象都没有名字，页面按 id 指认） */
+  id: number;
+  /** 地图 id（= resources/map 下的目录名） */
+  map_id: string;
+  /** 矩形中心 x（世界坐标，左上角原点向右） */
+  cx: number;
+  /** 矩形中心 y（世界坐标，y 轴向上，故为负） */
+  cy: number;
+  /** 矩形宽（像素） */
+  w: number;
+  /** 矩形高（像素） */
+  h: number;
   updated_at: number;
 }
 

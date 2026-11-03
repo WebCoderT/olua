@@ -273,6 +273,25 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_map_npcs_natural ON map_npcs(map_id, npc_id);
       CREATE INDEX IF NOT EXISTS idx_map_npcs_map ON map_npcs(map_id);
 
+      -- 碰撞盒（#676）：一行 = 一个轴对齐阻挡矩形，坐标是世界坐标（中心 + 尺寸）。
+      -- 以前这批矩形只活在 TMX 的 collision 对象组里（客户端两处读：生成静态碰撞体、
+      -- 自动战斗的静态障碍），后台只能看不能改。现在归这张表，TMX 只留瓦片 ——
+      -- 「地图文件只做显示，所有数据在管理端」这条边界就是这张表换来的。
+      -- **允许超出地图边界**：现有每张图的四面围墙本来就画在图外（x=-64、宽 8320），
+      -- 那是「把玩家关在图里」的手段，不是数据错误，所以这里没有越界拒绝，只有一个
+      -- 「整块在图外」的展示标记（完全看不到的框要能一眼认出来）。
+      -- 没有名字列：碰撞盒是匿名的（Tiled 里这批对象也都没起名），页面按 id 指认。
+      CREATE TABLE IF NOT EXISTS map_collisions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id     TEXT    NOT NULL,
+        cx         REAL    NOT NULL,
+        cy         REAL    NOT NULL,
+        w          REAL    NOT NULL,
+        h          REAL    NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_map_collisions_map ON map_collisions(map_id);
+
       -- 地图玩法配置（#573）：一行 = 一张图的「整理结果」。
       -- 客户端只存资源本体（TMX / 图 / 预览图），名称 / 类型 / 进入条件这些**玩法数据**归服务端，
       -- 管理端「地图管理」页可视化地改它们，客户端进游戏时随配置快照拉走（configs/apply-snapshot）。
@@ -295,8 +314,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         tile_height INTEGER NOT NULL DEFAULT 128,
         pixel_width INTEGER NOT NULL DEFAULT 0,
         pixel_height INTEGER NOT NULL DEFAULT 0,
-        -- 图层 + 对象组（JSON：'{ layers: [...], groups: [...] }'）—— 管理端详情页的
-        -- 「图层 / 对象组」两块就渲染它；刷怪区另有一张表，不在这里
+        -- 图层结构（JSON：'{ layers: [...], groups: [...] }'）—— 管理端详情页的「图层」块渲染它。
+        -- #676 起 TMX 里的对象组已经整组删掉（点位 / 刷怪区 / 碰撞盒全在各自的表里），
+        -- 所以 groups 现在恒为空数组：留着这个键只是为了让老库的 JSON 还能被同一个解析器读。
+        -- 刷怪区 / NPC / 碰撞盒各有一张表，不在这里。
         content     TEXT    NOT NULL DEFAULT '{"layers":[],"groups":[]}',
         -- 复活点（#672）：每张图最多一个，NULL = 这张图没有复活点（客户端不进图定位、不回点复活）。
         -- 以前是 TMX 里 class=revive 的那个点，现在归后台；单值跟地图同生命周期，就不单开表了

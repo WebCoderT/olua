@@ -11980,7 +11980,7 @@
     },
     "/admin/maps": {
       "get": {
-        "description": "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n计数分两类，**不要混着看**：\n- `npcCount` / `monsterAreaCount` / `collisionCount` / `reviveCount`：客户端 TMX 里的对象数（#672 起只剩资源对照）；\n- `spawnAreaCount` / `npcPointCount` / `hasRevivePoint` / `worldMonsterCount`：服务端库表里的行数。\n\n不分页，按 id **数值**升序（`10` 排在 `9` 后面）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n计数全部是**服务端库表的行数**（#676 起 TMX 里已经没有对象组了）：\n- `spawnAreaCount` / `npcPointCount` / `hasRevivePoint` / `collisionCount`：这张图的配置规模；\n- `worldMonsterCount`：场上实例数（运行时）。\n\n不分页，按 id **数值**升序（`10` 排在 `9` 后面）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMap.list",
         "parameters": [],
         "responses": {
@@ -12027,7 +12027,7 @@
     },
     "/admin/maps/{id}": {
       "get": {
-        "description": "列表字段 + 图层 + 对象组 + 刷怪区 + NPC 点位 + 复活点 + 场上怪物 + **每一块数据的来源**（`sources`）。\n\n- `layers` / `groups`：TMX 快照，坐标是 **Tiled 原始口径**（左上角原点、y 向下），用于对着编辑器核对；\n- `spawnAreas` / `npcPoints` / `revivePoint`：服务端整理后的地图内容（世界坐标，原点 = 地图左上角、y 轴向上）——\n  与上面的 `groups` 不是同一份数据，`groups` 现在只是资源对照；\n- `worldMonsters`：按区聚合的场上实例（进程没跑过世界时为空数组）。\n\n地图 id 不存在 → 404（`50032`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "列表字段 + 图层 + 刷怪区 + NPC 点位 + 复活点 + 碰撞盒 + 场上怪物 + **每一块数据的来源**（`sources`）。\n\n- `layers`：TMX 的图层结构（地图文件里仅剩的数据）；\n- `spawnAreas` / `npcPoints` / `revivePoint` / `collisions`：服务端整理后的地图内容\n  （世界坐标，原点 = 地图左上角、y 轴向上，故 `cy` 为负）；\n- `worldMonsters`：按区聚合的场上实例（进程没跑过世界时为空数组）。\n\n地图 id 不存在 → 404（`50032`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMap.detail",
         "parameters": [
           {
@@ -12639,6 +12639,213 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/MapNpcDeletedDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/collisions": {
+      "post": {
+        "description": "管理端地图页「绘制碰撞盒」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），\n与读接口的 `collisions` 完全同构 —— 画布（Tiled 口径）负责换算 `cx = x + w/2`、`cy = -(y + h/2)`。\n\n#676 之前碰撞矩形只写在 TMX 的 `collision` 对象组里（客户端两处读：生成静态碰撞体、自动战斗的静态障碍），\n后台只能看。现在归这张表，**TMX 里已经没有对象组了**。\n\n校验只有两条：\n- 地图存在且有像素尺寸（`50032`）；\n- 宽高 ≥ 1px（`40000`）。\n\n**故意不判「在图内」**：每张图四面围墙本来就画在图外（`x = -64`、宽 8320），那是把玩家关在图里的手段。\n整块在图外的盒子会在详情里标 `fullyOutside`，但不会被拒。\n\n**生效时机**：客户端进游戏时按快照铺碰撞体，图里的人要换图 / 重进才生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.createCollision",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（必须已有对应 TMX 资源）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMapCollisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的这一行（含 id）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapCollisionDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "画一个碰撞盒（在图上拖一个框）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapCollisionDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/collisions/{boxId}": {
+      "patch": {
+        "description": "挪位置与改尺寸是同一次动作，入参与新建完全一致。**整份覆盖**而不是分字段：\n表单一次提交，分字段更新只会让两个标签页同时改时互相截半。\n\n行不属于这张图（或已被别人删掉）→ 404 `50036`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.updateCollision",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "boxId",
+            "required": true,
+            "in": "path",
+            "description": "碰撞盒行 id（详情里的 collisions[].id）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMapCollisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的这一行",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapCollisionDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改碰撞盒（整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapCollisionDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "删掉这张图上的一个碰撞盒。图里的人要换图 / 重进才会觉得「这里能过去了」——\n碰撞体是客户端进图时按快照铺的。\n\n行不存在或不属于这张图 → 404 `50036`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.deleteCollision",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "boxId",
+            "required": true,
+            "in": "path",
+            "description": "碰撞盒行 id",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除结果（deleted + id）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapCollisionDeletedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除碰撞盒",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapCollisionDeletedDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -16187,6 +16394,33 @@
           "npcId",
           "cx",
           "cy"
+        ]
+      },
+      "SaveMapCollisionDto": {
+        "type": "object",
+        "properties": {
+          "cx": {
+            "type": "number",
+            "description": "矩形中心 x（世界坐标；原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "矩形中心 y（世界坐标；y 轴向上，故为负）"
+          },
+          "w": {
+            "type": "number",
+            "description": "矩形宽（像素，至少 1）"
+          },
+          "h": {
+            "type": "number",
+            "description": "矩形高（像素，至少 1）"
+          }
+        },
+        "required": [
+          "cx",
+          "cy",
+          "w",
+          "h"
         ]
       },
       "SaveRevivePointDto": {
@@ -22807,6 +23041,33 @@
           "cy"
         ]
       },
+      "MapCollisionBoxDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "矩形中心 x（世界坐标）"
+          },
+          "y": {
+            "type": "number",
+            "description": "矩形中心 y（世界坐标，为负）"
+          },
+          "w": {
+            "type": "number",
+            "description": "矩形宽（像素）"
+          },
+          "h": {
+            "type": "number",
+            "description": "矩形高（像素）"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ]
+      },
       "MapConfigDto": {
         "type": "object",
         "properties": {
@@ -22861,6 +23122,13 @@
             "items": {
               "$ref": "#/components/schemas/MapSpawnAreaPointDto"
             }
+          },
+          "collisions": {
+            "description": "碰撞盒（#676 起归后台；客户端直接建静态碰撞体 + 当自动战斗的静态障碍）。空数组 = 这张图没有阻挡",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapCollisionBoxDto"
+            }
           }
         },
         "required": [
@@ -22873,7 +23141,8 @@
           "soulOfWar",
           "npcs",
           "revive",
-          "spawnAreas"
+          "spawnAreas",
+          "collisions"
         ]
       },
       "MapTypeGroupDto": {
@@ -23174,7 +23443,7 @@
             }
           },
           "maps": {
-            "description": "地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心）。**客户端不再自己存这些**，也不再从 TMX 对象组里读点位 —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里",
+            "description": "地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心；#676：碰撞盒）。**客户端不再自己存这些**，也不从 TMX 对象组里读任何东西 —— 地图文件只剩瓦片与图层，`configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MapConfigDto"
@@ -24658,76 +24927,6 @@
           "height"
         ]
       },
-      "MapObjectDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "number",
-            "description": "对象 id（图内唯一）"
-          },
-          "name": {
-            "type": "string",
-            "description": "对象名（如「1号怪物」「复活点」；可空）"
-          },
-          "klass": {
-            "type": "string",
-            "description": "对象类（Tiled 的 type / class；空串 = 普通矩形）"
-          },
-          "x": {
-            "type": "number",
-            "description": "Tiled 坐标 x（左上角原点）"
-          },
-          "y": {
-            "type": "number",
-            "description": "Tiled 坐标 y（左上角原点、y 向下）"
-          },
-          "width": {
-            "type": "number",
-            "description": "矩形宽（点对象为 0）"
-          },
-          "height": {
-            "type": "number",
-            "description": "矩形高（点对象为 0）"
-          },
-          "properties": {
-            "type": "object",
-            "description": "自定义属性原件（刷怪区的 id / min / max 等，键值都是字符串）",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "klass",
-          "x",
-          "y",
-          "width",
-          "height",
-          "properties"
-        ]
-      },
-      "MapGroupDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "对象组名（TMX 里的名字）"
-          },
-          "objects": {
-            "description": "组内对象（按 TMX 内的出现顺序）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapObjectDto"
-            }
-          }
-        },
-        "required": [
-          "name",
-          "objects"
-        ]
-      },
       "MapSpawnAreaOverflowDto": {
         "type": "object",
         "properties": {
@@ -24943,10 +25142,6 @@
             "type": "number",
             "description": "图层数"
           },
-          "npcCount": {
-            "type": "number",
-            "description": "NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）"
-          },
           "npcPointCount": {
             "type": "number",
             "description": "服务端 NPC 点位数（map_npcs；#672 起点位归后台）"
@@ -24955,17 +25150,9 @@
             "type": "boolean",
             "description": "服务端是否设了复活点（maps.revive_cx/cy 非空）"
           },
-          "monsterAreaCount": {
-            "type": "number",
-            "description": "刷怪区对象数（客户端资源 monster 组的矩形数）"
-          },
           "collisionCount": {
             "type": "number",
-            "description": "碰撞矩形数（客户端资源 collision 组的对象数）"
-          },
-          "reviveCount": {
-            "type": "number",
-            "description": "复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）"
+            "description": "服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）"
           },
           "spawnAreaCount": {
             "type": "number",
@@ -24992,12 +25179,9 @@
           "width",
           "height",
           "layerCount",
-          "npcCount",
           "npcPointCount",
           "hasRevivePoint",
-          "monsterAreaCount",
           "collisionCount",
-          "reviveCount",
           "spawnAreaCount",
           "worldMonsterCount"
         ]
@@ -25089,6 +25273,43 @@
           "inBounds"
         ]
       },
+      "MapCollisionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "行 id（改 / 删用它定位；碰撞盒没有名字）"
+          },
+          "cx": {
+            "type": "number",
+            "description": "矩形中心 x（世界坐标；原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "矩形中心 y（世界坐标；y 轴向上，故为负）"
+          },
+          "w": {
+            "type": "number",
+            "description": "矩形宽（像素）"
+          },
+          "h": {
+            "type": "number",
+            "description": "矩形高（像素）"
+          },
+          "fullyOutside": {
+            "type": "boolean",
+            "description": "整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）"
+          }
+        },
+        "required": [
+          "id",
+          "cx",
+          "cy",
+          "w",
+          "h",
+          "fullyOutside"
+        ]
+      },
       "MapDetailDto": {
         "type": "object",
         "properties": {
@@ -25152,10 +25373,6 @@
             "type": "number",
             "description": "图层数"
           },
-          "npcCount": {
-            "type": "number",
-            "description": "NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）"
-          },
           "npcPointCount": {
             "type": "number",
             "description": "服务端 NPC 点位数（map_npcs；#672 起点位归后台）"
@@ -25164,17 +25381,9 @@
             "type": "boolean",
             "description": "服务端是否设了复活点（maps.revive_cx/cy 非空）"
           },
-          "monsterAreaCount": {
-            "type": "number",
-            "description": "刷怪区对象数（客户端资源 monster 组的矩形数）"
-          },
           "collisionCount": {
             "type": "number",
-            "description": "碰撞矩形数（客户端资源 collision 组的对象数）"
-          },
-          "reviveCount": {
-            "type": "number",
-            "description": "复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）"
+            "description": "服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）"
           },
           "spawnAreaCount": {
             "type": "number",
@@ -25189,13 +25398,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MapLayerDto"
-            }
-          },
-          "groups": {
-            "description": "对象组（Tiled 原始坐标，服务端生成快照）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapGroupDto"
             }
           },
           "spawnAreas": {
@@ -25221,6 +25423,13 @@
                 "$ref": "#/components/schemas/MapRevivePointDto"
               }
             ]
+          },
+          "collisions": {
+            "description": "碰撞盒（服务端库表，世界坐标；可能超出地图边界）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapCollisionDto"
+            }
           },
           "worldMonsters": {
             "description": "场上怪物（按区分组；进程未启动过世界时为空）",
@@ -25253,19 +25462,16 @@
           "width",
           "height",
           "layerCount",
-          "npcCount",
           "npcPointCount",
           "hasRevivePoint",
-          "monsterAreaCount",
           "collisionCount",
-          "reviveCount",
           "spawnAreaCount",
           "worldMonsterCount",
           "layers",
-          "groups",
           "spawnAreas",
           "npcPoints",
           "revivePoint",
+          "collisions",
           "worldMonsters",
           "sources"
         ]
@@ -25314,6 +25520,23 @@
         },
         "required": [
           "cleared"
+        ]
+      },
+      "MapCollisionDeletedDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "恒为 true（失败会抛 404，不会有 false）"
+          },
+          "id": {
+            "type": "number",
+            "description": "被删掉的碰撞盒行 id"
+          }
+        },
+        "required": [
+          "deleted",
+          "id"
         ]
       },
       "MapMonitorMonsterDto": {

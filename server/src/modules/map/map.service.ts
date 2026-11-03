@@ -1,15 +1,23 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
-import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue, SPAWN_AREA_LIMITS } from "../../common/constants/map-config";
+import {
+  COLLISION_BOX_LIMITS,
+  MAP_TYPE_GROUPS,
+  MAP_TYPE_LABELS,
+  MapTypeValue,
+  SPAWN_AREA_LIMITS,
+} from "../../common/constants/map-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { parseMonitorEvent, parseMonitorSnapshot } from "../../common/map-monitor";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import {
   pointInBounds,
   pointOverflowText,
+  rectFullyOutside,
   spawnAreaInBounds,
   spawnAreaOverflow,
 } from "../../common/utils/spawn-area-bounds.util";
+import { MapCollisionRepository } from "../../database/repositories/map-collision.repository";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MapNpcRepository } from "../../database/repositories/map-npc.repository";
 import { NpcRepository } from "../../database/repositories/npc.repository";
@@ -17,7 +25,7 @@ import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-ar
 import { MapRepository } from "../../database/repositories/map.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
-import { MapNpcRow, MapRow, MapSpawnAreaRow, NpcRow } from "../../database/rows";
+import { MapCollisionRow, MapNpcRow, MapRow, MapSpawnAreaRow, NpcRow } from "../../database/rows";
 import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
 import {
   MapMonitorDto,
@@ -26,9 +34,11 @@ import {
   MapMonitorPlayerDto,
 } from "./dto/map-monitor.dto";
 import {
+  MapCollisionBoxDto,
+  MapCollisionDeletedDto,
+  MapCollisionDto,
   MapConfigDto,
   MapDetailDto,
-  MapGroupDto,
   MapLayerDto,
   MapListDto,
   MapNpcDeletedDto,
@@ -42,6 +52,7 @@ import {
   MapSpawnAreaPointDto,
   MapSummaryDto,
   MapWorldMonsterDto,
+  SaveMapCollisionDto,
   SaveMapConfigDto,
   SaveMapNpcDto,
   SaveRevivePointDto,
@@ -60,6 +71,7 @@ import {
  * | `spawnAreas` | `map_spawn_areas` 表 | **管理端绘制**（`createSpawnArea` / `updateSpawnArea` / `deleteSpawnArea`） |
  * | `npcPoints` | `map_npcs` 表 | **管理端点放 / 拖动**（`createNpc` / `updateNpc` / `deleteNpc`） |
  * | `revivePoint` | `maps.revive_cx/cy` | **管理端点选**（`setRevivePoint` / `clearRevivePoint`） |
+ * | `collisions` | `map_collisions` 表 | **管理端绘制**（`createCollision` / `updateCollision` / `deleteCollision`） |
  * | `worldMonsters` | `world_monsters` 表 | 世界服务运行时写 |
  *
  * 资源本体（TMX / 底图 / 预览图）仍在客户端资源包里 —— 所以**没有「新建地图」**：
@@ -92,6 +104,7 @@ export class MapService {
     private readonly maps: MapRepository,
     private readonly spawnAreas: MapSpawnAreaRepository,
     private readonly npcPoints: MapNpcRepository,
+    private readonly collisions: MapCollisionRepository,
     private readonly worldMonsters: WorldMonsterRepository,
     private readonly monsters: MonsterRepository,
     private readonly npcs: NpcRepository,
@@ -103,6 +116,7 @@ export class MapService {
   list(): MapListDto {
     const spawnCounts = new Map(this.spawnAreas.countByMap().map((row) => [row.map_id, row.total]));
     const npcCounts = new Map(this.npcPoints.countByMap().map((row) => [row.map_id, row.total]));
+    const collisionCounts = new Map(this.collisions.countByMap().map((row) => [row.map_id, row.total]));
     const monsterCounts = this.worldMonsterTotals();
 
     const list = this.maps
@@ -113,6 +127,7 @@ export class MapService {
           spawnCounts.get(row.map_id) ?? 0,
           monsterCounts.get(row.map_id) ?? 0,
           npcCounts.get(row.map_id) ?? 0,
+          collisionCounts.get(row.map_id) ?? 0,
         ),
       );
     const dto = new MapListDto();
@@ -127,9 +142,10 @@ export class MapService {
    * 玩法配置的精简列表（**配置快照用**）
    *
    * 客户端进游戏要的是：凭 `id` 拼资源路径、凭 `label` 显示名字、凭 `type` 分桶、
-   * 凭三个数值判「能不能进」，以及 #672 起的三块点位（NPC / 复活点 / 刷怪区中心）——
-   * 这三样以前客户端是从 TMX 的对象组里读的，现在 TMX 不再是来源。
-   * 尺寸与对象数仍然不发：客户端自己有 TMX。
+   * 凭三个数值判「能不能进」，以及点位与碰撞盒（NPC / 复活点 / 刷怪区中心 / 碰撞矩形）——
+   * 这四样以前客户端是从 TMX 的对象组里读的。**#676 起 TMX 里一个对象组都没了**
+   * （地图文件只做显示），所以客户端除了瓦片之外的一切都来自这一段。
+   * 尺寸与图层数仍然不发：客户端自己有 TMX。
    */
   configs(): MapConfigDto[] {
     return this.maps.listAll().map((row) => ({
@@ -143,6 +159,7 @@ export class MapService {
       npcs: this.npcPoints.listByMap(row.map_id).map((point) => this.npcPointDtoOf(point)),
       revive: this.revivePointDtoOf(row),
       spawnAreas: this.spawnAreas.listByMap(row.map_id).map((area) => this.spawnAreaPointDtoOf(area)),
+      collisions: this.collisions.listByMap(row.map_id).map((box) => this.collisionBoxDtoOf(box)),
     }));
   }
 
@@ -241,22 +258,17 @@ export class MapService {
     return dto;
   }
 
-  /** 详情：基础 + 图层 + 对象组 + 刷怪区 + NPC/复活点 + 场上怪物 + 来源说明 */
+  /** 详情：基础 + 图层 + 刷怪区 + NPC/复活点 + 碰撞盒 + 场上怪物 + 来源说明 */
   detail(id: string): MapDetailDto {
     const row = this.requireRow(id);
     const content = this.contentOf(row);
-    const groups = content.groups.map((group) => {
-      const dto = new MapGroupDto();
-      dto.name = group.name;
-      dto.objects = group.objects.map((object) => ({ ...object, properties: { ...object.properties } }));
-      return dto;
-    });
 
     // 越界判定按「这张图的实际像素尺寸」算（maps 表的几何列，与 TMX 头一致）。
     // 判据只在服务端一处：页面直接显示 inBounds，不自己再算一遍 —— 两边各算迟早会分叉。
     const mapPixel = this.sizeOf(row);
     const areas: MapSpawnAreaDto[] = this.spawnAreas.listByMap(id).map((area) => this.areaDtoOf(area, mapPixel));
     const npcPoints: MapNpcDto[] = this.npcPoints.listByMap(id).map((point) => this.npcDtoOf(point, mapPixel));
+    const collisions: MapCollisionDto[] = this.collisions.listByMap(id).map((box) => this.collisionDtoOf(box, mapPixel));
 
     const worldMonsters: MapWorldMonsterDto[] = this.worldMonsters
       .countByMap()
@@ -268,6 +280,7 @@ export class MapService {
       areas.length,
       worldMonsters.reduce((total, item) => total + item.total, 0),
       npcPoints.length,
+      collisions.length,
     );
     const detail = Object.assign(new MapDetailDto(), summary);
     detail.layers = content.layers.map((layer) => {
@@ -277,10 +290,10 @@ export class MapService {
       dto.height = layer.height;
       return dto;
     });
-    detail.groups = groups;
     detail.spawnAreas = areas;
     detail.npcPoints = npcPoints;
     detail.revivePoint = this.revivePointOf(row, mapPixel);
+    detail.collisions = collisions;
     detail.worldMonsters = worldMonsters;
     detail.sources = this.sources();
     return detail;
@@ -314,6 +327,7 @@ export class MapService {
       this.spawnAreas.countByMap().find((item) => item.map_id === id)?.total ?? 0,
       0,
       this.npcPoints.listByMap(id).length,
+      this.collisions.listByMap(id).length,
     );
   }
 
@@ -664,6 +678,114 @@ export class MapService {
 
   //#endregion
 
+  //#region 碰撞盒（#676：碰撞区域从 TMX 搬到后台）
+
+  /**
+   * 画一个碰撞盒
+   *
+   * 只有两道校验（图有几何 / 宽高不是零），**故意没有「在图内」那一条**：
+   * 每张图四面围墙本来就画在图外（`x = -64`、宽 8320），那是「把玩家关在图里」的手段。
+   * 拿刷怪区那条判据套上来，第一张图就会被判 4 个错 —— 判据错了比没有判据更糟。
+   */
+  createCollision(mapId: string, dto: SaveMapCollisionDto, actor: AuthenticatedUser): MapCollisionDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const box = this.requireBox(dto);
+
+    const created = this.collisions.insert({
+      map_id: mapId,
+      cx: box.cx,
+      cy: box.cy,
+      w: box.w,
+      h: box.h,
+      updated_at: Date.now(),
+    });
+    this.logger.log(
+      `地图 ${mapId} 新增碰撞盒 #${created.id}：${box.w}×${box.h} @ (${box.cx}, ${box.cy})（by ${actor.username}）`,
+    );
+    return this.collisionDtoOf(created, mapPixel);
+  }
+
+  /**
+   * 改一个碰撞盒（整份覆盖：挪位置与改尺寸是同一次动作）
+   *
+   * 画布上拖动走的也是它 —— 拖完只提交新中心，宽高原样带回。
+   */
+  updateCollision(mapId: string, boxId: number, dto: SaveMapCollisionDto, actor: AuthenticatedUser): MapCollisionDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const before = this.requireCollision(mapId, boxId);
+    const box = this.requireBox(dto);
+
+    this.collisions.update({ ...before, cx: box.cx, cy: box.cy, w: box.w, h: box.h, updated_at: Date.now() });
+    this.logger.log(
+      `地图 ${mapId} 碰撞盒 #${boxId} 已更新：(${before.cx}, ${before.cy}) ${before.w}×${before.h} → ` +
+        `(${box.cx}, ${box.cy}) ${box.w}×${box.h}（by ${actor.username}）`,
+    );
+    const updated = this.collisions.findById(boxId);
+    if (!updated) throw new Error(`碰撞盒 #${boxId} 刚更新却读不回来，库状态异常`);
+    return this.collisionDtoOf(updated, mapPixel);
+  }
+
+  /**
+   * 删一个碰撞盒
+   *
+   * **立刻生效**（不是「下次进图」）：碰撞体是客户端进图时按快照铺的，图里的人要换图 / 重进
+   * 才没有它 —— 与点位同一条生效时机，页面照实提示。
+   */
+  deleteCollision(mapId: string, boxId: number, actor: AuthenticatedUser): MapCollisionDeletedDto {
+    this.requireCollision(mapId, boxId);
+    this.collisions.remove(boxId);
+    this.logger.log(`地图 ${mapId} 碰撞盒 #${boxId} 已删除（by ${actor.username}）`);
+    return { deleted: true, id: boxId };
+  }
+
+  /**
+   * 碰撞盒的数值校验
+   *
+   * 数值统一收两位小数（与刷怪区同一口径：拖出来的 `123.4567` 进库没有意义，
+   * 也让 e2e 能直接对数字）。下限 1px —— 碰撞盒可以是一条贴墙的缝。
+   */
+  private requireBox(dto: SaveMapCollisionDto): { cx: number; cy: number; w: number; h: number } {
+    const box = { cx: round2(dto.cx), cy: round2(dto.cy), w: round2(dto.w), h: round2(dto.h) };
+    if (!Number.isFinite(box.cx) || !Number.isFinite(box.cy)) {
+      throw new BizException(BizCode.PARAM_INVALID, "碰撞盒的中心必须是数字");
+    }
+    if (box.w < COLLISION_BOX_LIMITS.minSize || box.h < COLLISION_BOX_LIMITS.minSize) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `碰撞盒太小（${box.w}×${box.h}），宽高都不能小于 ${COLLISION_BOX_LIMITS.minSize} 像素`,
+      );
+    }
+    return box;
+  }
+
+  /** 取一个碰撞盒，且必须属于路径里那张图（防止拿 A 图的行 id 去改 B 图） */
+  private requireCollision(mapId: string, boxId: number): MapCollisionRow {
+    const box = this.collisions.findById(boxId);
+    if (!box || box.map_id !== mapId) {
+      throw BizException.notFound(BizCode.MAP_COLLISION_NOT_FOUND, `地图 ${mapId} 没有碰撞盒 #${boxId}`);
+    }
+    return box;
+  }
+
+  /** 行 → 管理端 DTO（`fullyOutside` 与读接口同源，只此一处判） */
+  private collisionDtoOf(box: MapCollisionRow, mapPixel: MapPixelSize): MapCollisionDto {
+    return {
+      id: box.id,
+      cx: box.cx,
+      cy: box.cy,
+      w: box.w,
+      h: box.h,
+      fullyOutside: rectFullyOutside(box, mapPixel),
+    };
+  }
+
+  /** 行 → 下发客户端的矩形（字段名对齐客户端的 `MapCollisionBox`：直接建节点） */
+  private collisionBoxDtoOf(box: MapCollisionRow): MapCollisionBoxDto {
+    return { x: box.cx, y: box.cy, w: box.w, h: box.h };
+  }
+
+  //#endregion
+
   /** 取一行，没有就 404（用 notFound：`new BizException(code, msg)` 默认是 400） */
   private requireRow(id: string): MapRow {
     const row = this.maps.getById(id);
@@ -728,13 +850,12 @@ export class MapService {
     spawnAreaCount: number,
     worldMonsterCount: number,
     npcPointCount: number,
+    collisionCount: number,
   ): MapSummaryDto {
     const id = row.map_id;
     const size = this.sizeOf(row);
     const content = this.contentOf(row);
 
-    // npc / revive 的对象类可能落在 npc 组，也可能在早期地图的 objects 组里 —— 按 klass 全组扫
-    const allObjects = content.groups.flatMap((group) => group.objects);
     const dto = new MapSummaryDto();
     dto.id = id;
     dto.label = row.label;
@@ -751,12 +872,9 @@ export class MapService {
     dto.width = size.width;
     dto.height = size.height;
     dto.layerCount = content.layers.length;
-    dto.npcCount = allObjects.filter((object) => object.klass === "npc").length;
     dto.npcPointCount = npcPointCount;
     dto.hasRevivePoint = row.revive_cx !== null && row.revive_cy !== null;
-    dto.monsterAreaCount = content.groups.find((group) => group.name === "monster")?.objects.length ?? 0;
-    dto.collisionCount = content.groups.find((group) => group.name === "collision")?.objects.length ?? 0;
-    dto.reviveCount = allObjects.filter((object) => object.klass === "revive").length;
+    dto.collisionCount = collisionCount;
     dto.spawnAreaCount = spawnAreaCount;
     dto.worldMonsterCount = worldMonsterCount;
     return dto;
@@ -777,7 +895,7 @@ export class MapService {
         label: "资源本体（TMX / 底图 / 预览图）",
         origin: "config",
         ref: "client/assets/resources/map/<id>/",
-        note: "资源在客户端资源包里，后台改不了；换图要换资源，再跑 tools/import-map-resources.cjs 重新生成下面两块。",
+        note: "资源在客户端资源包里，后台改不了；换图要换资源，再跑 tools/import-map-resources.cjs 重新读几何与图层。**#676 起 TMX 里只有瓦片与图层**（对象组已整组删除），所以这张图的一切配置都在下面几块里。",
       },
       {
         section: "size",
@@ -791,14 +909,14 @@ export class MapService {
         label: "图层",
         origin: "db",
         ref: "maps 表（content 列）",
-        note: "TMX 的图层结构（JSON）；瓦片数据留在客户端资源里，这里只列结构。",
+        note: "TMX 的图层结构（JSON）；瓦片数据留在客户端资源里，这里只列结构。这是「地图文件」里仅剩的数据。",
       },
       {
-        section: "groups",
-        label: "对象组（Tiled 原始坐标）",
+        section: "collisions",
+        label: "碰撞盒（服务端整理后）",
         origin: "db",
-        ref: "maps 表（content 列）",
-        note: "坐标是 Tiled 原始口径（左上角、y 向下），用来对着编辑器核对；不是服务端在用的世界坐标。#672 起 npc 组只是资源对照（点位归下面的两张表），碰撞盒仍由客户端读它生成。",
+        ref: "map_collisions 表",
+        note: "在地图页上拖框绘制（#676 起归后台）；客户端按快照建静态碰撞体、自动战斗也拿它当静态障碍。允许超出地图边界（四面围墙就在图外），只有「整块在图外」会标出来。",
       },
       {
         section: "spawnAreas",

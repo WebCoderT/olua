@@ -265,6 +265,13 @@ export const BizCode = {
    * 想摆第二个，先把旧的挪走或删掉（同一个 NPC 在**不同图**各摆一个是正常的）。
    */
   MAP_NPC_DUPLICATED: 20020,
+  /**
+   * 碰撞盒不存在（#676）
+   *
+   * 与刷怪区、NPC 点位同一类：改 / 删一个已经被别人删掉的行。跨图引用也走这个码
+   * （拿 A 图的行 id 改 B 图 —— 从 B 图的角度看，那个 id 就是不存在）。
+   */
+  MAP_COLLISION_NOT_FOUND: 50036,
   //#endregion
 
   //#region 任务（#396）

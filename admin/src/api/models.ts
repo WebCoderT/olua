@@ -2050,6 +2050,25 @@ export type SaveMapNpc = {
   cy: number;
 };
 
+export type SaveMapCollision = {
+  /**
+   * 矩形中心 x（世界坐标；原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 矩形中心 y（世界坐标；y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 矩形宽（像素，至少 1）
+   */
+  w: number;
+  /**
+   * 矩形高（像素，至少 1）
+   */
+  h: number;
+};
+
 export type SaveRevivePoint = {
   /**
    * 世界坐标 x（原点 = 地图左上角）
@@ -6165,6 +6184,25 @@ export type MapSpawnAreaPoint = {
   cy: number;
 };
 
+export type MapCollisionBox = {
+  /**
+   * 矩形中心 x（世界坐标）
+   */
+  x: number;
+  /**
+   * 矩形中心 y（世界坐标，为负）
+   */
+  y: number;
+  /**
+   * 矩形宽（像素）
+   */
+  w: number;
+  /**
+   * 矩形高（像素）
+   */
+  h: number;
+};
+
 export type MapConfig = {
   /**
    * 地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）
@@ -6206,6 +6244,10 @@ export type MapConfig = {
    * 刷怪区中心点（只给「在哪画怪物区域名标签」，尺寸与数量不下发）
    */
   spawnAreas: MapSpawnAreaPoint[];
+  /**
+   * 碰撞盒（#676 起归后台；客户端直接建静态碰撞体 + 当自动战斗的静态障碍）。空数组 = 这张图没有阻挡
+   */
+  collisions: MapCollisionBox[];
 };
 
 export type MapTypeGroup = {
@@ -6390,7 +6432,7 @@ export type GameConfigSnapshot = {
    */
   achievements: Achievement[];
   /**
-   * 地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心）。**客户端不再自己存这些**，也不再从 TMX 对象组里读点位 —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里
+   * 地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心；#676：碰撞盒）。**客户端不再自己存这些**，也不从 TMX 对象组里读任何东西 —— 地图文件只剩瓦片与图层，`configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里
    */
   maps: MapConfig[];
   /**
@@ -7300,52 +7342,6 @@ export type MapLayer = {
   height: number;
 };
 
-export type MapObject = {
-  /**
-   * 对象 id（图内唯一）
-   */
-  id: number;
-  /**
-   * 对象名（如「1号怪物」「复活点」；可空）
-   */
-  name: string;
-  /**
-   * 对象类（Tiled 的 type / class；空串 = 普通矩形）
-   */
-  klass: string;
-  /**
-   * Tiled 坐标 x（左上角原点）
-   */
-  x: number;
-  /**
-   * Tiled 坐标 y（左上角原点、y 向下）
-   */
-  y: number;
-  /**
-   * 矩形宽（点对象为 0）
-   */
-  width: number;
-  /**
-   * 矩形高（点对象为 0）
-   */
-  height: number;
-  /**
-   * 自定义属性原件（刷怪区的 id / min / max 等，键值都是字符串）
-   */
-  properties: Record<string, string>;
-};
-
-export type MapGroup = {
-  /**
-   * 对象组名（TMX 里的名字）
-   */
-  name: string;
-  /**
-   * 组内对象（按 TMX 内的出现顺序）
-   */
-  objects: MapObject[];
-};
-
 export type MapSpawnAreaOverflow = {
   /**
    * 矩形左边超出图左边界多少（0 = 在图内）
@@ -7516,10 +7512,6 @@ export type MapSummary = {
    */
   layerCount: number;
   /**
-   * NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）
-   */
-  npcCount: number;
-  /**
    * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
    */
   npcPointCount: number;
@@ -7528,17 +7520,9 @@ export type MapSummary = {
    */
   hasRevivePoint: boolean;
   /**
-   * 刷怪区对象数（客户端资源 monster 组的矩形数）
-   */
-  monsterAreaCount: number;
-  /**
-   * 碰撞矩形数（客户端资源 collision 组的对象数）
+   * 服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）
    */
   collisionCount: number;
-  /**
-   * 复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）
-   */
-  reviveCount: number;
   /**
    * 服务端刷怪区行数（map_spawn_areas）
    */
@@ -7606,6 +7590,33 @@ export type MapRevivePoint = {
   inBounds: boolean;
 };
 
+export type MapCollision = {
+  /**
+   * 行 id（改 / 删用它定位；碰撞盒没有名字）
+   */
+  id: number;
+  /**
+   * 矩形中心 x（世界坐标；原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 矩形中心 y（世界坐标；y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 矩形宽（像素）
+   */
+  w: number;
+  /**
+   * 矩形高（像素）
+   */
+  h: number;
+  /**
+   * 整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）
+   */
+  fullyOutside: boolean;
+};
+
 export type MapDetail = {
   /**
    * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
@@ -7668,10 +7679,6 @@ export type MapDetail = {
    */
   layerCount: number;
   /**
-   * NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）
-   */
-  npcCount: number;
-  /**
    * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
    */
   npcPointCount: number;
@@ -7680,17 +7687,9 @@ export type MapDetail = {
    */
   hasRevivePoint: boolean;
   /**
-   * 刷怪区对象数（客户端资源 monster 组的矩形数）
-   */
-  monsterAreaCount: number;
-  /**
-   * 碰撞矩形数（客户端资源 collision 组的对象数）
+   * 服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）
    */
   collisionCount: number;
-  /**
-   * 复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）
-   */
-  reviveCount: number;
   /**
    * 服务端刷怪区行数（map_spawn_areas）
    */
@@ -7704,10 +7703,6 @@ export type MapDetail = {
    */
   layers: MapLayer[];
   /**
-   * 对象组（Tiled 原始坐标，服务端生成快照）
-   */
-  groups: MapGroup[];
-  /**
    * 刷怪区（服务端库表，世界坐标）
    */
   spawnAreas: MapSpawnArea[];
@@ -7719,6 +7714,10 @@ export type MapDetail = {
    * 复活点（服务端库表；null = 这张图没有复活点）
    */
   revivePoint: MapRevivePoint | null;
+  /**
+   * 碰撞盒（服务端库表，世界坐标；可能超出地图边界）
+   */
+  collisions: MapCollision[];
   /**
    * 场上怪物（按区分组；进程未启动过世界时为空）
    */
@@ -7756,6 +7755,17 @@ export type MapRevivePointCleared = {
    * 恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）
    */
   cleared: boolean;
+};
+
+export type MapCollisionDeleted = {
+  /**
+   * 恒为 true（失败会抛 404，不会有 false）
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的碰撞盒行 id
+   */
+  id: number;
 };
 
 export type MapMonitorMonster = {
