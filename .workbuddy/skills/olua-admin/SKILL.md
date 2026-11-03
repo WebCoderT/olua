@@ -420,7 +420,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
    `<objectgroup>`，支持 `--dry` / `--dir`）。顺序错了就是「搬出 0 行」：先迁点位 → 再迁碰撞 →
    再删对象组 → 再 `import-map-resources` 刷 content → 最后 `config-export`。
 
-## 五点十五、音效配置：路径入库，靠「试听」验证（#680）
+## 五点十五、音效配置：路径入库，靠「试听」验证（#680 / #685）
 
 音效页（`/audio`，`AudioSettingsPage`）与特效页（`/ui-effects`）长得像，但有一处**根本差别**，
 这一节记的就是它：
@@ -434,6 +434,9 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
    扩展名白名单（`.wav .mp3 .ogg .m4a`）。资源目录里临时放的中文名要先改名 —— 所以**选择器要把
    不合规的文件名挡在列表外**，别让人选完保存才吃 400（页面会提示「另有 N 个文件名不是英文」）。
    空串 = 未配置（合法状态，这一项不响），不是错误。
+   **命名约定：文件名与 key 同名**（`ui_click` → `sounds/ui_click.wav`，#685 用户授权统一改名）。
+   不是校验规则（运营可换任何合规文件名），纯粹为了对齐：翻资源目录一眼看出对应哪个配置项。
+   改文件时**连同 `.meta` 一起改**（uuid 在 meta 上，`resources.load` 按路径找，两边都对才不丢引用）。
 3. **服务端不检查文件是否存在**。资源包不在服务端（镜像里没有 `client/assets/resources`），强行查
    只会掩盖「本地有、线上没有」。所以**试听按钮是这个页面的核心**：能播 = 路径对、MIME 对、文件在。
    试听按表单当前值播（音量 / 循环都取未保存的值），与「保存后会是什么样」保持一致。
@@ -445,10 +448,17 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
    `GET /game-config/audio`（登录场景没有令牌，而背景音正是那时要响的）。两条路同形状（`AudioConfigDto`：
    只有 key / filePath / volume / loop / enabled，**不带**展示名 / 分类 / 追账），客户端只有一套读法。
    页面文案因此改成「保存后下次进游戏生效」，不再是「只落库不出声」。
-6. **素材清单两个来源同形状**（与图片选择器一个道理）：生产 `resources/audio-manifest.json`
+   **#685 起点击音是全站共用**（key `ui_click`，展示名「按钮点击音」，分类标签「界面与交互」）——
+   它不再只是登录按钮的音，改它会影响所有按钮；`item_drop` 在捡起物品时也响、`bag_resort` 在拖动搬格时也响、
+   `map_teleport` 挪到「传送后角色显示出来」那一刻。
+6. **改 key 要能落地到老库**（#685）：`login_click` → `ui_click` 之后，老库那行不会被 `INSERT OR IGNORE`
+   盖掉也不会自己消失 —— 管理端会多出一项「客户端不认的 key」（点了没声音，也看不出原因）。
+   `AudioSettingService.onModuleInit` 里补完行后调 `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行；
+   安全前提是**行只来自 seed**（没有新建接口），清单外的 key 只可能是我们改名或下线。
+7. **素材清单两个来源同形状**（与图片选择器一个道理）：生产 `resources/audio-manifest.json`
    （`make image-manifest` 一并生成，带扩展名）、开发 `/game-resources/__list?dir=sounds&audio=1`
    （vite 中间件扫盘）。都拿不到就降级成「手填 + 试听」，不阻塞配置。
-6. **静态素材读取要进审计白名单**：`fetch('/game-resources/...')` 直接写在页面里会被
+8. **静态素材读取要进审计白名单**：`fetch('/game-resources/...')` 直接写在页面里会被
    `audit-api-hardcode` 判红（管理端请求只许从 `api/http.ts` 发）。做法是像 `equipAlign/assets.ts`
    那样单独一个文件（`pages/audioSettings/assets.ts`）并在审计的 `adminAssets` 里登记，
    页面里连 `fetch` 都不出现。**提示文案里也别写 `http://localhost:8080`** —— 那同样算硬编码地址。
