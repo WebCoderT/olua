@@ -214,8 +214,6 @@ export class CombatSettlementService {
     const deathSpot = applied.killed
       ? (this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y })
       : null;
-    if (applied.killed) this.monsterAi.onMonsterKilled(cast.targetId);
-    else this.monsterAi.provoke(cast.targetId, accountId);
 
     // 击杀奖励（#316）：经验入账与掉落抽取都在服务端 —— 经验入账失败（打到一半被踢等）
     // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受
@@ -251,6 +249,19 @@ export class CombatSettlementService {
           respawnAt: target.respawnAt ?? Date.now(),
         });
       }
+      // AI 运行时清场 + 击杀事件广播（#689）：奖励结算完才清（kill 事件要带 drops），
+      // 同图观看者的下一拍 monster-ai 帧会带上，别人的屏幕据此清场与铺掉落。
+      // 幂等重发走 recentSettles 早退，不会重复广播。
+      this.monsterAi.onMonsterKilled(cast.targetId, {
+        zoneId: target.zoneId,
+        mapId: target.mapId,
+        accountId,
+        x: deathSpot?.x ?? target.x,
+        y: deathSpot?.y ?? target.y,
+        drops: reward.drops,
+      });
+    } else {
+      this.monsterAi.provoke(cast.targetId, accountId);
     }
 
     this.logger.debug(

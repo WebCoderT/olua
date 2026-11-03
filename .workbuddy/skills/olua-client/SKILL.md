@@ -29,6 +29,8 @@ Cocos 工程在 **`client/`**（用它打开这个目录；资源在 `client/ass
    带必填 `castId`）、点地上的东西发 pick 帧等 `applyPickResult`。**「通道断了就本地自己算」的分支一律不许加回来** ——
    守卫 `tools/audit-world-authority.cjs`（`ui/` 下出现 `spawnByAreas` / `rollDropTable` / `resolveDropTable` /
    `static hurt(` / `addGood(`，或 `skills/` 下出现 `calcSkillDamage(` / `MonsterManager.hurt(`，即判红）。
+   **别人的击杀走 `monster-ai` 帧的 `kills`（#689）**：死亡清场（无奖励路径）+ `spawnRemoteDrops` 铺掉落 ——
+   纯演出、无 pick 定位不可拾取（账本在击杀者名下），自己的击杀按 accountId 跳过（settle 已演）。
 
 ## 二、`ui/utils/net` 的分工（生成物 / 手写）
 

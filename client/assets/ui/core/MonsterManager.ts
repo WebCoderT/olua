@@ -20,7 +20,7 @@ import GuideStore from "./GuideStore";
 import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, WorldSnapshot } from "../utils/net/CombatChannel";
+import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
 import RealtimeClient from "../utils/net/RealtimeClient";
 
 /**
@@ -234,7 +234,29 @@ export default class MonsterManager {
       }
       this.onPlayerServerHit(hit);
     }
+    // 玩家击杀（#689）：别人的击杀在此清场与铺掉落 —— 死的是哪只、死在哪、掉了什么都在事件里；
+    // 自己的击杀跳过（settle 帧已经演过，这里再来一次会重复铺掉落）
+    for (const kill of data.kills ?? []) {
+      if (kill.accountId === myId) continue;
+      this.applyRemoteKill(kill);
+    }
     this.cleanupStatusEffects();
+  }
+
+  /**
+   * 别人击杀了一只怪的演出（#689）
+   *
+   * 两段都各自独立成立，顺序不分先后（节点可能因为换图 / 迟到事件而不在场）：
+   * - 怪还在场上 → 走既有的「无奖励死亡清场」（applyDamage killed 路径：播死亡动画、
+   *   注销数据与悬停，动画播完移除节点）—— 与世界快照的兜底清场同一口径，没有经验与掉落入账；
+   * - 掉落铺场：纯演出，没有 pick 定位（服务端账本在击杀者名下，#325 归属设计不变），
+   *   不可拾取 —— 点击与自动拾取都会跳过（见 DropManager.spawnRemoteDrops）。
+   */
+  private static applyRemoteKill(kill: MonsterKillEntry): void {
+    const node = this.instanceIndex.get(kill.instanceId);
+    const monster = node ? this.monsterMap.get(node) : null;
+    if (node && monster && monster.hp > 0) this.applyDamage(node, monster, 0, 0, true);
+    if (kill.drops.length) DropManager.spawnRemoteDrops(kill.drops, new Vec3(kill.x, kill.y));
   }
 
   /**
@@ -365,6 +387,9 @@ export default class MonsterManager {
    * - 场上有、快照里已死 → 断线期间被队友击杀的兜底：走既有死亡表现清场。
    */
   static applyWorldState(snapshot: WorldSnapshot) {
+    // 一次性日志（#689 排查互见问题用）：这条没出现 = 通道没连上 / 没进过图，
+    // 客户端在跑本地 AI —— 互见（players 帧）与击杀广播都不会有
+    if (!this.worldSeen) console.info("[world] 已收到世界快照，进入服务端权威模式（怪物行为与玩家互见由服务端驱动）");
     this.worldSeen = true;
     const seen = new Set<string>();
     for (const entry of snapshot.monsters) {
