@@ -243,6 +243,46 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - 页签几何在 `mailDialogLayout.tabs`（宽度 / 间距 / 选中态 / 角标偏移），整行居中按 `mailChannels.length` 算 ——
   加第六个页签不用手调坐标。
 
+## 五之七、音效：唯一可覆写的资源路径（#683）
+
+运营在管理端「音效配置」里改 11 项（登录背景音 / 点击登录 / 战士普攻 / 男女角色死亡 / 掉落 /
+穿戴 / 金钱变化 / 背包整理 / 升级 / 传送），客户端按 **key** 播，值是服务端下发的。
+实现只有 `ui/core/SoundManager.ts` 一处，挂点 11 处散在各业务函数里。
+
+**判据（改这块之前先读这四条）**
+
+- **`file_path` 是唯一允许服务端覆写的资源路径**。`configs/game-config` 开头的「资源路径一律不覆写」
+  对音效是显式例外，理由：图集/帧动画按 id 拼（换美术必须重打包），音效文件是运营挑的。
+  除它以外这一段没有任何路径字段 —— 别顺手把「播放延迟」「淡入时长」也塞进来当可配项。
+- **客户端没有本地兜底值**。`audioConfigOf(key)` 返回 null 就不播：表里没这个 key / `enabled = false` /
+  `filePath` 为空，三种情况都由它统一判，调用点不用各判一遍，也不要写 `?? 默认音量`。
+- **登录场景走公开接口**：配置快照要玩家令牌，而登录场景没有令牌 —— 那正是背景音要响的时候。
+  `SoundManager.ensureConfig()` 在表为空时拉 `GET /game-config/audio`（`@Public()`，与公告同口径），
+  落库走同一个 `applyAudioRows`；进游戏后表已被快照填好，这个函数一次都不会发请求。
+- **响在「服务端确认之后」**：`equip_wear` 在 `runBagOp` 返回非 null 之后、`map_teleport` 在
+  `getMapEnterRejectReason` 通过之后、`level_up` 在服务端给的 `leveledUp = true` 分支里。
+  提前播会把「点了但被拒」演成「成功」—— 这是这类表现层最容易犯的错。
+
+**实现要点（踩过的坑）**
+
+- **必须常驻节点**：场景切换会把节点全销毁，音效要跨场景响 → 首次 `init()` 建根节点 +
+  `director.addPersistRootNode(node)`。节点名 `sound_manager` 已进 `config-leak-allowlist`（引擎侧身份）。
+- **两路 AudioSource**：循环音（`music`）与一次性音（`sfx`）分开。只有一路时，
+  背景音写在 `clip` 上，任何一次 `play()` 都会把它顶掉。
+- **音量走 `playOneShot(clip, volumeScale)`**（最终 = `source.volume × volumeScale`），
+  `source.volume` 固定 1：否则调一个音效会连带影响同时响的另一个。
+- **同一首循环音不重来**（`musicKey`）：重复点登录按钮不该让背景音从头开始。
+  `stopMusic()` 在 `SceneManager.loadScene`（全项目唯一的场景切换入口）里调一次，同时清 `clip` 引用
+  （常驻节点不回收，不清就等于让 6 MB 曲子常驻内存）。
+- **加载失败静默**：资源包里没文件、服务端没下发、浏览器策略拦声音 —— 只 `console.warn`，不弹提示。
+  音效缺一个不该打断玩家；排查手段是管理端的「试听」。
+- **客户端 tsconfig 的 lib 不到 ES2018** → `Promise.finally` 编译不过（TS2550），收尾用 `.then()`。
+- **新音效 = 三处一起改**：服务端 `AUDIO_KEYS` / `AUDIO_DEFAULTS` 登记 + 客户端写调用点 + 管理端不用动
+  （tab 与文案都随接口下发）。只加常量不写调用点 = 一个永远不响的开关。
+- **文件名只能英文**（用户定）：Cocos 资源包按路径建索引。资源目录里临时放的中文名的那个文件已按
+  用户指定改名为 `warrior_attack.wav`（战士普攻），**改文件连同 `.meta` 一起改**（uuid 在 meta 上，
+  改对了 prefab 引用不会断）。
+
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 
 - `client/tools/lib/net-sandbox.cjs`：把 `configs/network` + `types/common` + `ui/utils/net/*` 编成 CommonJS 塞进沙箱，**`XMLHttpRequest` 由测试注入**，返回 `{ Api, HttpError, Session, RoleSync, ApiRoutes, ApiErrorTextKey, RELOGIN_BIZ_CODES, ROLE_SYNC_BIZ_CODES, getText, sys }`。

@@ -157,6 +157,10 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 - 无权限 → `403` + `30006`（message 写出缺哪个权限）；保护性拒绝 → `30007`（**最后一个启用中的超管**不能降级 / 停用 / 删除）；
 - `admins.role` 列由 `ensureColumn` 补 + `ensureSuperAdmin()` 兜底存量库；
 - **加管理端接口必须 `@ApiAdminDoc({ permissions: [...] })`** —— 它同时落三处：文档说明、`x-olua-permissions` 扩展、`RequirePermissions` 运行时元数据。只写文档不写装饰器 = **权限全放行**（真出过，被 e2e 抓出来的）。
+- **`@Public()` 只有一类正当理由：玩家还没拿到令牌那一刻要用的数据**。现有两处：`GET /announcements/active`
+  （登录页弹公告）与 `GET /game-config/audio`（#683，登录场景要播背景音，而快照要令牌）。
+  判据：**里面没有任何玩家数据 / 账号数据**，且客户端进到有令牌之后就不该再走它
+  （音效进游戏后读快照的 `audio` 段，两条路同形状 —— 别让同一个值有两个来源）。
 
 ## 四、数据层规矩
 
