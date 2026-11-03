@@ -9614,7 +9614,7 @@
         }
       },
       "post": {
-        "description": "建帮人自动成为帮主，**免费**；帮会名 2~12 字且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "建帮人自动成为帮主，**免费**；帮会名长度按「运行时参数 · 帮会规则」（出厂 2~12 字）且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "guild.create",
         "parameters": [],
         "requestBody": {
@@ -9753,7 +9753,7 @@
     },
     "/guilds/{id}/applications": {
       "post": {
-        "description": "留言 0~50 字。**重复申请只覆盖留言**，不会堆出两条。\n\n失败：50103 已在别的帮会 / 50101 帮会不存在 / 50107 人满了。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "留言长度按「运行时参数 · 帮会规则」（出厂 50 字）。**重复申请只覆盖留言**，不会堆出两条。\n\n失败：50103 已在别的帮会 / 50101 帮会不存在 / 50107 人满了。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "guild.apply",
         "parameters": [
           {
@@ -14847,12 +14847,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "帮会名（2~12 字，全局唯一）",
+            "description": "帮会名（长度按「运行时参数 · 帮会规则」的当前配置，出厂 2~12 字；全局唯一）",
             "example": "听雨阁"
           },
           "notice": {
             "type": "string",
-            "description": "公告（可选，0~200 字）",
+            "description": "公告（可选；长度按运行时参数，出厂 200 字）",
             "example": "新帮会，欢迎加入"
           }
         },
@@ -14865,7 +14865,7 @@
         "properties": {
           "message": {
             "type": "string",
-            "description": "留言（可选，0~50 字）；重复申请会**覆盖**上一条留言",
+            "description": "留言（可选；长度按运行时参数，出厂 50 字）；重复申请会**覆盖**上一条留言",
             "example": "每天在线，求收留"
           }
         }
@@ -14901,7 +14901,7 @@
         "properties": {
           "notice": {
             "type": "string",
-            "description": "公告（0~200 字；空字符串表示清空）",
+            "description": "公告（长度按运行时参数，出厂 200 字；空字符串表示清空）",
             "example": "本帮不收 20 级以下"
           }
         },
@@ -14914,12 +14914,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "帮会名（2~12 字，全局唯一）",
+            "description": "帮会名（长度按运行时参数，出厂 2~12 字；全局唯一）",
             "example": "听雨阁"
           },
           "notice": {
             "type": "string",
-            "description": "公告（0~200 字）",
+            "description": "公告（长度按运行时参数，出厂 200 字）",
             "example": "公告已重置"
           }
         }

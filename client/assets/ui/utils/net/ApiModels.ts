@@ -1726,18 +1726,18 @@ export type SendMail = {
 
 export type CreateGuild = {
   /**
-   * 帮会名（2~12 字，全局唯一）
+   * 帮会名（长度按「运行时参数 · 帮会规则」的当前配置，出厂 2~12 字；全局唯一）
    */
   name: string;
   /**
-   * 公告（可选，0~200 字）
+   * 公告（可选；长度按运行时参数，出厂 200 字）
    */
   notice?: string;
 };
 
 export type ApplyGuild = {
   /**
-   * 留言（可选，0~50 字）；重复申请会**覆盖**上一条留言
+   * 留言（可选；长度按运行时参数，出厂 50 字）；重复申请会**覆盖**上一条留言
    */
   message?: string;
 };
@@ -1758,18 +1758,18 @@ export type TransferGuild = {
 
 export type UpdateGuildNotice = {
   /**
-   * 公告（0~200 字；空字符串表示清空）
+   * 公告（长度按运行时参数，出厂 200 字；空字符串表示清空）
    */
   notice: string;
 };
 
 export type AdminUpdateGuild = {
   /**
-   * 帮会名（2~12 字，全局唯一）
+   * 帮会名（长度按运行时参数，出厂 2~12 字；全局唯一）
    */
   name?: string;
   /**
-   * 公告（0~200 字）
+   * 公告（长度按运行时参数，出厂 200 字）
    */
   notice?: string;
 };

@@ -189,6 +189,46 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     //#endregion
 
+    //#region 一·五、帮会规则门槛读运行时参数（#605）
+
+    group("一·五、帮会规则读运行时参数（管理端「运行时参数」页可改）");
+
+    const rulesBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    checkEqual(rulesBefore.data && rulesBefore.data.guild.nameMax, 12, "帮会名上限出厂 12 字（seed 自 shared/runtime-seed）");
+
+    const tighten = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { guild: { nameMax: 4, noticeMax: 6, applicationMessageMax: 5 } },
+    });
+    checkEqual(tighten.code, 0, "把名字上限收到 4 字 / 公告 6 字 / 留言 5 字");
+
+    const nameTooLong = await api(baseUrl, "POST", "guilds", { token: B.token, body: { name: "六个字的名字" } });
+    checkEqual(nameTooLong.code, 40000, "名字超上限被拒（40000 参数非法）", nameTooLong.message);
+    check(
+      typeof nameTooLong.message === "string" && nameTooLong.message.indexOf("2~4 字") >= 0,
+      "提示里带的是**当前配置**的区间（不是写死的 2~12）",
+      nameTooLong.message,
+    );
+    const noticeTooLong = await api(baseUrl, "POST", "guilds", { token: B.token, body: { name: "四字帮", notice: "这条公告明显超过六个字" } });
+    checkEqual(noticeTooLong.code, 40000, "公告超上限被拒", noticeTooLong.message);
+    const messageTooLong = await api(baseUrl, "POST", `guilds/${guildId}/applications`, { token: B.token, body: { message: "六个字的留言" } });
+    checkEqual(messageTooLong.code, 40000, "申请留言超上限被拒", messageTooLong.message);
+
+    // 两条被拒的建帮都没有落库：帮会表里还是只有 A 建的那一个
+    const guildsAfterReject = await api(baseUrl, "GET", "admin/guilds", { token: adminToken });
+    checkEqual(guildsAfterReject.data && guildsAfterReject.data.length, 1, "被拒的建帮没有落库（先校验后写）");
+
+    const restoreRules = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { guild: { nameMax: 12, noticeMax: 200, applicationMessageMax: 50 } },
+    });
+    checkEqual(restoreRules.code, 0, "复原出厂规则");
+    // 复原后同一条留言（13 字 > 刚才的 5 字上限）能提交 —— 证明规则是**每次现读**的，不是启动时定死
+    const messageAfterRestore = await api(baseUrl, "POST", `guilds/${guildId}/applications`, { token: B.token, body: { message: "复原后这条留言足够长了吧" } });
+    checkEqual(messageAfterRestore.code, 0, "复原后同样超长的留言能提交（规则现读，不是缓存）", messageAfterRestore.message);
+
+    //#endregion
+
     //#region 二、申请与重复申请
 
     group("二、申请：重复申请只覆盖留言 / 申请不等于入帮");

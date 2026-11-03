@@ -110,13 +110,13 @@ export const GuildApi = {
   /**
    * 创建帮会（POST /guilds）
    *
-   * 建帮人自动成为帮主，**免费**；帮会名 2~12 字且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。
+   * 建帮人自动成为帮主，**免费**；帮会名长度按「运行时参数 · 帮会规则」（出厂 2~12 字）且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。
    */
   create: (body: CreateGuild, options?: Options) => HttpClient.post<MyGuild>(ApiRoutes.guild.create, body, options),
   /**
    * 申请加入帮会（POST /guilds/{id}/applications）
    *
-   * 留言 0~50 字。**重复申请只覆盖留言**，不会堆出两条。
+   * 留言长度按「运行时参数 · 帮会规则」（出厂 50 字）。**重复申请只覆盖留言**，不会堆出两条。
    */
   apply: (id: string, body: ApplyGuild, options?: Options) => HttpClient.post<null>(ApiRoutes.guild.apply(id), body, options),
   /**

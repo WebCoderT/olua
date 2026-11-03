@@ -1,13 +1,20 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsBoolean, IsOptional, IsString, Length, MaxLength } from "class-validator";
 import { GuildApplicationWithRoleRow, GuildListRow, GuildMemberWithRoleRow, GuildRow } from "../../../database/rows";
-import {
-  GUILD_APPLICATION_MESSAGE_MAX,
-  GUILD_NAME_MAX,
-  GUILD_NAME_MIN,
-  GUILD_NOTICE_MAX,
-  GUILD_RANK_LABELS,
-} from "../../../common/constants/social";
+import { GUILD_RANK_LABELS } from "../../../common/constants/social";
+
+/**
+ * DTO 层的**结构上限**（不是业务规则）
+ *
+ * 帮会名 / 公告 / 留言的**业务窗口**由运行时参数决定（管理端「运行时参数」页可改，出厂
+ * 2~12 字 / 公告 200 / 留言 50），校验在 `GuildService` 里按当前配置判 —— 装饰器的 `@Length`
+ * 在类定义时求值，配置改了它不会跟着变。
+ *
+ * 这里只兜底「一眼就是攻击」的长度（比业务上限宽），保证超长串进不了业务层。
+ */
+const GUILD_NAME_STRUCT_MAX = 30;
+const GUILD_NOTICE_STRUCT_MAX = 2000;
+const GUILD_MESSAGE_STRUCT_MAX = 500;
 
 /** 帮会列表一行（浏览用：不含成员名单，人多的帮会名单能到几十条，列表里不需要） */
 export class GuildSummaryDto {
@@ -201,28 +208,31 @@ export class AdminGuildDetailDto extends AdminGuildDto {
 
 /** 创建帮会入参 */
 export class CreateGuildDto {
-  @ApiProperty({ description: `帮会名（${GUILD_NAME_MIN}~${GUILD_NAME_MAX} 字，全局唯一）`, example: "听雨阁" })
+  @ApiProperty({
+    description: "帮会名（长度按「运行时参数 · 帮会规则」的当前配置，出厂 2~12 字；全局唯一）",
+    example: "听雨阁",
+  })
   @IsString({ message: "帮会名必须是字符串" })
-  @Length(GUILD_NAME_MIN, GUILD_NAME_MAX, { message: `帮会名需为 ${GUILD_NAME_MIN}~${GUILD_NAME_MAX} 字` })
+  @Length(1, GUILD_NAME_STRUCT_MAX, { message: `帮会名最多 ${GUILD_NAME_STRUCT_MAX} 字` })
   name: string;
 
-  @ApiProperty({ description: `公告（可选，0~${GUILD_NOTICE_MAX} 字）`, required: false, example: "新帮会，欢迎加入" })
+  @ApiProperty({ description: "公告（可选；长度按运行时参数，出厂 200 字）", required: false, example: "新帮会，欢迎加入" })
   @IsOptional()
   @IsString({ message: "公告必须是字符串" })
-  @MaxLength(GUILD_NOTICE_MAX, { message: `公告最多 ${GUILD_NOTICE_MAX} 字` })
+  @MaxLength(GUILD_NOTICE_STRUCT_MAX, { message: `公告最多 ${GUILD_NOTICE_STRUCT_MAX} 字` })
   notice?: string;
 }
 
 /** 申请加入入参 */
 export class ApplyGuildDto {
   @ApiProperty({
-    description: `留言（可选，0~${GUILD_APPLICATION_MESSAGE_MAX} 字）；重复申请会**覆盖**上一条留言`,
+    description: "留言（可选；长度按运行时参数，出厂 50 字）；重复申请会**覆盖**上一条留言",
     required: false,
     example: "每天在线，求收留",
   })
   @IsOptional()
   @IsString({ message: "留言必须是字符串" })
-  @MaxLength(GUILD_APPLICATION_MESSAGE_MAX, { message: `留言最多 ${GUILD_APPLICATION_MESSAGE_MAX} 字` })
+  @MaxLength(GUILD_MESSAGE_STRUCT_MAX, { message: `留言最多 ${GUILD_MESSAGE_STRUCT_MAX} 字` })
   message?: string;
 }
 
@@ -235,9 +245,9 @@ export class ReviewGuildApplicationDto {
 
 /** 改公告入参（空字符串 = 清空公告） */
 export class UpdateGuildNoticeDto {
-  @ApiProperty({ description: `公告（0~${GUILD_NOTICE_MAX} 字；空字符串表示清空）`, example: "本帮不收 20 级以下" })
+  @ApiProperty({ description: "公告（长度按运行时参数，出厂 200 字；空字符串表示清空）", example: "本帮不收 20 级以下" })
   @IsString({ message: "公告必须是字符串" })
-  @MaxLength(GUILD_NOTICE_MAX, { message: `公告最多 ${GUILD_NOTICE_MAX} 字` })
+  @MaxLength(GUILD_NOTICE_STRUCT_MAX, { message: `公告最多 ${GUILD_NOTICE_STRUCT_MAX} 字` })
   notice: string;
 }
 
@@ -252,19 +262,19 @@ export class TransferGuildDto {
 /** 管理端改帮会入参（名字与公告都可改；名字仍要全局唯一） */
 export class AdminUpdateGuildDto {
   @ApiProperty({
-    description: `帮会名（${GUILD_NAME_MIN}~${GUILD_NAME_MAX} 字，全局唯一）`,
+    description: "帮会名（长度按运行时参数，出厂 2~12 字；全局唯一）",
     required: false,
     example: "听雨阁",
   })
   @IsOptional()
   @IsString({ message: "帮会名必须是字符串" })
-  @Length(GUILD_NAME_MIN, GUILD_NAME_MAX, { message: `帮会名需为 ${GUILD_NAME_MIN}~${GUILD_NAME_MAX} 字` })
+  @Length(1, GUILD_NAME_STRUCT_MAX, { message: `帮会名最多 ${GUILD_NAME_STRUCT_MAX} 字` })
   name?: string;
 
-  @ApiProperty({ description: `公告（0~${GUILD_NOTICE_MAX} 字）`, required: false, example: "公告已重置" })
+  @ApiProperty({ description: "公告（长度按运行时参数，出厂 200 字）", required: false, example: "公告已重置" })
   @IsOptional()
   @IsString({ message: "公告必须是字符串" })
-  @MaxLength(GUILD_NOTICE_MAX, { message: `公告最多 ${GUILD_NOTICE_MAX} 字` })
+  @MaxLength(GUILD_NOTICE_STRUCT_MAX, { message: `公告最多 ${GUILD_NOTICE_STRUCT_MAX} 字` })
   notice?: string;
 }
 

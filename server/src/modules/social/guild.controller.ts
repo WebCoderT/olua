@@ -4,7 +4,7 @@ import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-da
 import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
-import { GUILD_APPLICATION_MESSAGE_MAX, GUILD_MEMBER_LIMIT_DEFAULT } from "../../common/constants/social";
+import { GUILD_MEMBER_LIMIT_DEFAULT } from "../../common/constants/social";
 import {
   ApplyGuildDto,
   CreateGuildDto,
@@ -58,7 +58,7 @@ export class GuildController {
     operationId: "guild.create",
     summary: "创建帮会",
     description:
-      `建帮人自动成为帮主，**免费**；帮会名 2~12 字且全局唯一。` +
+      `建帮人自动成为帮主，**免费**；帮会名长度按「运行时参数 · 帮会规则」（出厂 2~12 字）且全局唯一。` +
       `已在帮会里会返回 50103（一个人只能在一个帮会）。`,
   })
   @ApiDataResponse(MyGuildDto, { status: HttpStatus.CREATED, description: "刚创建的帮会（含我的职位 = 帮主）" })
@@ -72,7 +72,7 @@ export class GuildController {
     operationId: "guild.apply",
     summary: "申请加入帮会",
     description:
-      `留言 0~${GUILD_APPLICATION_MESSAGE_MAX} 字。**重复申请只覆盖留言**，不会堆出两条。\n\n` +
+      "留言长度按「运行时参数 · 帮会规则」（出厂 50 字）。**重复申请只覆盖留言**，不会堆出两条。\n\n" +
       "失败：50103 已在别的帮会 / 50101 帮会不存在 / 50107 人满了。",
   })
   @ApiParam({ name: "id", description: "帮会 id" })

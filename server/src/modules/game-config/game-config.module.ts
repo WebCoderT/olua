@@ -47,6 +47,7 @@ import { AdminRuntimeParamsController } from "./admin-runtime-params.controller"
   controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController],
   providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
-  exports: [MallPricingService],
+  // 运行时参数（#605）：社交域（social）的帮会规则门槛要读同一份配置
+  exports: [MallPricingService, RuntimeParamsService],
 })
 export class GameConfigModule {}
