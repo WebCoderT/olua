@@ -59,7 +59,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:bag` | Bag and worn equipment (equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
 | `npm run test:e2e:admin-mail` | Admin message top-up (#437 auth / channel narrowing / attachments claimable / offline recipient / audit trail) |
 | `npm run test:e2e:mail-expiry` | Inbox expiry (#439 ttl write / instant disappearance at read / purge criteria / batch cap) |
-| `npm run test:e2e:ui-effect` | UI effects (#594: read-only for viewers / seeded factory values / no create or delete / numeric bounds / snapshot is fresh / audit and doc contract) |
+| `npm run test:e2e:ui-effect` | Effects (#594 level-up + #634 six drop lights): read-only for viewers / seeded factory values in seed order / no create or delete / numeric bounds / snapshot is fresh / audit and doc contract (34 assertions) |
 | `npm run test:e2e:map` | Maps (**gameplay config is editable, the resource itself is not** / two coordinate systems reconciled / no create or delete / permissions and doc contract) |
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
@@ -205,7 +205,7 @@ server/
 │   ├── e2e-game-mail.cjs (in-game mail: inbox with unread and unclaimed counters / idempotent read / claiming with three error codes / delete refusal with unclaimed attachments / claim-all stopping at a full bag / achievement fallback into mail / channels: four fixed badges · per-channel claim · unknown channel 40000 · social and combat delivery)
 │   ├── e2e-admin-mail.cjs (admin message top-up #437: viewer 403 / player token 401 / channel narrowing / role not found 404 / shape validation / attachments claimable / reward placement / offline recipient / audit trail / doc grouping)
 │   ├── e2e-mail-expiry.cjs (inbox expiry #439: ttl write / instant disappearance at read / expired single-mail ops treated as missing / purge criteria: unclaimed attachments never purged · NULL never purged / batch cap across passes)
-│   ├── e2e-ui-effect.cjs (UI effects #594: viewer read-only / seeded factory values / no create or delete / numeric bounds / key 404 / save with audit fields / snapshot is fresh / audit / doc contract)
+│   ├── e2e-ui-effect.cjs (effects #594 level-up + #634 six drop lights: viewer read-only / seeded factory values and order / no create or delete / numeric bounds / key 404 / save with audit fields / snapshot is fresh / audit / doc contract)
 │   └── backup.cjs (backup while running / restore archiving / protective refusal / automatic scheduled backup)
 ├── openapi.json                    machine-readable contract (committed to the repo)
 ├── data/                          SQLite data files (not versioned)

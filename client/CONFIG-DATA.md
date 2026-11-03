@@ -2,7 +2,7 @@
 
 > 这份文件是**索引**，不是权威：字段含义看代码注释，接口契约看 `server/openapi.json`。
 > 目的只有一个 —— 想改某个东西时，能一眼看出「它现在归谁、改哪儿、客户端什么时候拿到」。
-> 最后更新：2026-11-02（#626：21 个快照域文件合并为 `configs/game-config.ts`，本文所有表列改为「文件 + 分区」口径）。
+> 最后更新：2026-11-03（#634：掉落光效 `light_1`…`light_6` 纳入 `ui_effects`，摆位 / 缩放 / 旋转 / 时长 / 开关改由服务端下发；此前 #626 已把 21 个快照域文件合并为 `configs/game-config.ts`）。
 
 ## 一、一句话规则
 
@@ -75,7 +75,7 @@
 | `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `game-config` 区 14 `fashionData`（空数组）+ 取源规则 | `shared/fashion-seed.ts` → `fashions` 表 | `/fashions` |
 | `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
 | `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
-| `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects` | `ui_effects` 表 | `/ui-effects` |
+| `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6` 七行） | `ui_effects` 表 | `/ui-effects` |
 
 ### 3.2 几何（两个独立接口，不进快照）
 
@@ -110,7 +110,7 @@
 | 16 | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` | `monsterRuntime.ts` |
 | 17 | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` | `mall.ts` |
 | 18 | `maps` / `mapTypeGroups` + 资源约定（`mapSrcOf` / Tiled 名） | `applyMapRows` | `map.ts` |
-| 19 | `uiEffects` + 三个表现常量 | `applyUiEffectRows` | `effect.ts` |
+| 19 | `uiEffects`（升级特效 + 掉落光效六档）+ 技能/状态/选中/受击闪屏四个表现常量 | `applyUiEffectRows` | `effect.ts` |
 | 20 | 几何基线 / 手势锚点算法 | `applyEquipAlignRows`（在 `apply-snapshot`） | `equipAlign.ts` |
 
 仍在原文件的两张「算法表」（不是快照段，靠 `applyEquipmentData` / `rebuildItemIndex` 填）：

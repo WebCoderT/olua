@@ -1075,15 +1075,15 @@ export const titlesApi = {
 /** adminUiEffect 模块的接口（2 个，生成） */
 export const uiEffectsApi = {
   /**
-   * 界面特效列表（GET /admin/ui-effects）
+   * 特效列表（GET /admin/ui-effects）
    *
-   * 全部界面特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。
+   * 全部特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。
    *
    * 权限点：gameConfig:read
    */
   list: (options?: Options) => http.get<UiEffectList>(routes.adminUiEffect.list, options),
   /**
-   * 保存界面特效的表现参数（整份覆盖）（PATCH /admin/ui-effects/{id}）
+   * 保存特效的表现参数（整份覆盖）（PATCH /admin/ui-effects/{id}）
    *
    * 改的是**表现参数**：摆位偏移 / 横纵缩放 / 旋转 / 一轮时长 / 开关。保存后立刻生效 ——
    *

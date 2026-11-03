@@ -16,8 +16,8 @@
 - **素材 trim 三类规则相反**（改动前先确认是哪一类）：
   - `border`（品质边框）：图集未裁剪但 offset≠0 → **trim=true**，挂图标子节点，`playLoopAtlas`；
   - `background`（详情背景）：真裁剪 + offset≠0 → **trim=false**，换弹窗自身精灵帧，`playLoopDir`；
-  - `light`（掉落光柱）：同背景 trim=false；光柱在图标**之前** addChild = 下层；前缀 5 档 → `light/1~5`，`light/6` 留 `customEquipmentLightData`。
-  - 均 10fps、进图 `PreloadManager` 预载。
+  - `light`（掉落光柱）：同背景 trim=false；光柱在图标**之前** addChild = 下层；前缀 5 档 → `light/1~5`，`light/6` 留 `customEquipmentLightData`。**#634 起摆位 / 缩放 / 旋转 / 时长 / 开关归服务端 `ui_effects` 的 `light_1…light_6`**（`dropLightEffectConfig(key)`，偏移相对掉落物图标中心；时长 = 一轮总时长，出厂 = 帧数 × 100ms）；「哪档用哪张光柱」仍在 `configs/light.ts`。
+  - 均 10fps 口径（状态 / 选中光圈读 `frameRate`；光柱改由 `durationMs` 表达）、进图 `PreloadManager` 预载。
 - **素材扩展名必须等于真实格式**（role/{1,2} 曾混 368 个「.png 壳 + BMP 芯」→ Cocos 刷屏报错，工具 `client/tools/clean-role-empty-frames.cjs`）。**`resources/` 不被 git 追踪，删前必备份**。
 - **帧号基准 `configs/animation.animationFrameBases`**（role/2 = role/1 + 600）：按动作表切割的素材若与别目录连号**必登记**，`buildClips` 匹配前先减；**不减则片段全空且静默**。整包循环播放的（光柱等）不需要。
 - **默认外观按性别**：`configs/role.roleDefaultCloths: Map<SEX,…>`（BOY→role/1、GRIL→role/2，未登记回落男性）；字段用 `types/good.OutTransform`；`RoleAppearance` 穿衣用装备变换、裸衣用默认身体，同一套 `applyOutTransform`。守卫 `test-role-default-cloth.cjs`。

@@ -236,7 +236,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 界面特效配置（#594）：一行 = 一个特效 key 的「摆位 / 缩放 / 旋转 / 时长 / 开关」
+      -- 特效配置（#594 升级特效 / #634 掉落光效）：一行 = 一个特效 key 的「摆位 / 缩放 / 旋转 / 时长 / 开关」
       -- （与武器外观同一套取向）。图集本体在客户端资源包里，路径是两端约定
       -- effect/<key>/<key>.plist —— **不入库**（#573 同一条纪律：存了只会让人把客户端
       -- 指到不存在的图上）。行由启动 seed 按 UI_EFFECT_DEFAULTS 补出来，

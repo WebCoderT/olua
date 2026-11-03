@@ -8,16 +8,17 @@ import { UiEffectRepository } from "../../database/repositories/ui-effect.reposi
 import { SaveUiEffectDto, UiEffectConfigDto, UiEffectDto, UiEffectListDto } from "./dto/ui-effect.dto";
 
 /**
- * 界面特效（#594：升级特效的表现参数归服务端）
+ * 特效管理（#594 升级特效 / #634 掉落光效）
  *
  * 管的是**表现参数**（摆位 / 缩放 / 旋转 / 时长 / 开关），与武器外观（`inScaleX / inScaleY /
- * inRotate / inPosition`）同一套取向。图集本体在客户端资源包里（`effect/<key>/<key>.plist`
- * 两端约定，资源路径不入库 —— 理由见 `common/constants/ui-effect` 顶部），所以：
+ * inRotate / inPosition`）同一套取向。图集本体在客户端资源包里（`upgrade` = `effect/<key>/<key>.plist`、
+ * 掉落光效 = `effect/light/<key>.plist`，都是两端约定，资源路径不入库 —— 理由见
+ * `common/constants/ui-effect` 顶部），所以：
  *
  * - **没有新建 / 删除接口**：行由 `onModuleInit` 按 `UI_EFFECT_DEFAULTS` 补出来（幂等），
  *   一个 key 在不在取决于客户端有没有这个特效的消费代码 —— 后台造一行没人消费的行，
- *   等于一个永远不生效的开关。后续加特效（如「物品掉落在地图上的特效」）=
- *   客户端写消费代码 + `UI_EFFECT_KEYS` 登记 + `UI_EFFECT_DEFAULTS` 给出厂值，三步。
+ *   等于一个永远不生效的开关。后续加特效 = 客户端写消费代码 + `UI_EFFECT_KEYS` 登记 +
+ *   `UI_EFFECT_DEFAULTS` 给出厂值，三步。
  * - **读库即最新**：快照接口每次查表，保存后下一位触发特效的玩家就按新参数演。
  */
 @Injectable()
@@ -46,7 +47,7 @@ export class UiEffectService implements OnModuleInit {
       });
       seeded += 1;
     }
-    if (seeded > 0) this.logger.log(`界面特效配置已补 ${seeded} 行（共 ${this.uiEffects.countAll()} 个特效）`);
+    if (seeded > 0) this.logger.log(`特效配置已补 ${seeded} 行（共 ${this.uiEffects.countAll()} 个特效）`);
   }
 
   /** 管理端列表（含追账字段） */
@@ -94,7 +95,7 @@ export class UiEffectService implements OnModuleInit {
     };
     this.uiEffects.update(row);
     this.logger.log(
-      `界面特效 ${key} 已更新：摆位 (${before.offset_x},${before.offset_y})→(${row.offset_x},${row.offset_y}) / ` +
+      `特效 ${key} 已更新：摆位 (${before.offset_x},${before.offset_y})→(${row.offset_x},${row.offset_y}) / ` +
         `缩放 (${before.scale_x},${before.scale_y})→(${row.scale_x},${row.scale_y}) / 旋转 ${before.rotate}→${row.rotate} / ` +
         `时长 ${before.duration_ms}→${row.duration_ms}ms / 开关 ${before.enabled}→${row.enabled}`,
     );
@@ -105,7 +106,7 @@ export class UiEffectService implements OnModuleInit {
   private requireRow(key: string): UiEffectRow {
     const row = this.uiEffects.getByKey(key);
     if (!row) {
-      throw BizException.notFound(BizCode.UI_EFFECT_KEY_NOT_FOUND, `界面特效 ${key} 不存在（客户端没有这个特效的消费代码）`);
+      throw BizException.notFound(BizCode.UI_EFFECT_KEY_NOT_FOUND, `特效 ${key} 不存在（客户端没有这个特效的消费代码）`);
     }
     return row;
   }

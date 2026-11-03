@@ -416,7 +416,7 @@ export const SWAGGER_MODELS = [
   SaveMapConfigDto,
   MapListDto,
   MapDetailDto,
-  // 界面特效（#594）
+  // 特效（#594 升级特效 / #634 掉落光效）
   UiEffectDto,
   UiEffectConfigDto,
   UiEffectListDto,
