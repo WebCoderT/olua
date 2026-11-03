@@ -804,6 +804,21 @@ export interface RuntimeParamsRow {
 }
 
 /**
+ * 战斗力权重（#605）：`combat_weights` 表的一行 = 一个属性
+ *
+ * 出厂值来自 `shared/combat-seed.ts`（`COMBAT_WEIGHTS_SEED`，生成物 `COMBAT_WEIGHTS` 的源头），
+ * seed 幂等（INSERT OR IGNORE），后台只改 `weight`、不增删行。
+ * 表里缺某个 key 时由 service 回落出厂值 —— 与运行时参数同一套「缺键回落」口径。
+ */
+export interface CombatWeightRow {
+  /** 属性名（`maxHp` / `physicalAttack` / …），与生成物 `COMBAT_WEIGHTS` 的键完全一致 */
+  key: string;
+  /** 每 1 点该属性折算多少战斗力（区间属性按上下限之和再乘） */
+  weight: number;
+  updated_at: number;
+}
+
+/**
  * 具名掉落表（#254）：`drop_tables` 表的一行
  *
  * 一行 = 一张可被多怪复用的掉落表（seed 自生成物 DROP_TABLES 的 common / elite / boss，

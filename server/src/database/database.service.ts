@@ -896,6 +896,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         guild_rules TEXT    NOT NULL DEFAULT '{}',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 战斗力权重（#605）：属性名 → 倍率，**一个属性一行**。
+      -- 为什么是 KV 行而不是单行宽表：键就是属性名（maxHp / physicalAttack …），
+      -- 与快照 combatWeights 段（Record<string, number>）1:1，将来多一个权重属性
+      -- 只多一行、不动表结构；读写都是「按 key 取」，不需要知道总共有几列。
+      -- 出厂值在 shared/combat-seed.ts（生成物 COMBAT_WEIGHTS 的源头），缺行回落出厂。
+      CREATE TABLE IF NOT EXISTS combat_weights (
+        key        TEXT PRIMARY KEY,
+        weight     REAL    NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

@@ -30,12 +30,15 @@
  * 生成物回到「出厂值 + 兜底」的位置。
  */
 
-import {
-  COMBAT_RANGE_KEYS,
-  COMBAT_WEIGHTS,
-} from "../../shared/game-data.generated";
+import { COMBAT_RANGE_KEYS } from "../../shared/game-data.generated";
 import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
-import { equipmentAttributesOf, rankAttributesOf, soulAttributesOf, titleAttributesOf } from "../../shared/runtime-overrides";
+import {
+  combatWeightsOf,
+  equipmentAttributesOf,
+  rankAttributesOf,
+  soulAttributesOf,
+  titleAttributesOf,
+} from "../../shared/runtime-overrides";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */
 export interface RoleAttributeSource {
@@ -188,7 +191,8 @@ type GeneratedBundle = Record<string, unknown>;
 
 function computeCombat(maxHp: number, ranges: Record<string, [number, number]>): number {
   let total = 0;
-  for (const [key, weight] of Object.entries(COMBAT_WEIGHTS)) {
+  // #605：权重从覆盖层读（管理端「战斗力权重」页可改），缺省回落生成物的出厂值
+  for (const [key, weight] of Object.entries(combatWeightsOf())) {
     if (key === "maxHp") {
       total += maxHp * weight;
       continue;

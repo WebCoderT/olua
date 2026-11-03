@@ -31,6 +31,8 @@ import { MallPricingService } from "./mall-pricing.service";
 import { RuntimeConfigService } from "./runtime-config.service";
 import { RuntimeParamsService } from "./runtime-params.service";
 import { AdminRuntimeParamsController } from "./admin-runtime-params.controller";
+import { AdminCombatWeightsController } from "./admin-combat-weights.controller";
+import { CombatWeightsService } from "./combat-weights.service";
 
 /**
  * 养成配置（称号 / 战魂 / 军衔 / 装备基础件 / 药品 / 物品材料 / 怪物 / NPC / 商城定价 / 时装 /
@@ -44,10 +46,12 @@ import { AdminRuntimeParamsController } from "./admin-runtime-params.controller"
   // 地图玩法配置（#573）：配置快照要下发它（客户端据此判进入条件）
   // 特效（#594 升级特效 / #634 掉落光效）：配置快照要下发它（客户端特效按服务端参数演）
   imports: [MapModule, UiEffectModule],
-  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController],
-  providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelExpController, AdminGrowthSegmentController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController],
+  providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService, CombatWeightsService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   // 运行时参数（#605）：社交域（social）的帮会规则门槛要读同一份配置
+  // 战斗力权重（#605）：不需要对外导出 —— 服务端结算经 `shared/runtime-overrides` 的覆盖层读，
+  // 不跨模块注入（`role-attributes` 是纯函数，拿不到 Nest 的 provider）
   exports: [MallPricingService, RuntimeParamsService],
 })
 export class GameConfigModule {}

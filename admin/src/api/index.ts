@@ -52,6 +52,7 @@ export {
   growthSegmentsApi,
   growthScalarsApi,
   runtimeParamsApi,
+  combatWeightsApi,
 } from "./endpoints";
 export { routes } from "./routes";
 export type * from "./models";

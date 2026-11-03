@@ -31,6 +31,8 @@ const growthSeed = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.
 const growthSeedScalars = growthSeed.GROWTH_SCALARS;
 // #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）的唯一书写处
 const { RUNTIME_PARAMS } = require(path.join(SERVER_DIR, "dist", "shared", "runtime-seed.js"));
+// #605：战斗力权重的出厂值（管理端可改，这里对照「库里就是种子」）
+const { COMBAT_WEIGHTS_SEED } = require(path.join(SERVER_DIR, "dist", "shared", "combat-seed.js"));
 const growthSeedKeys = Object.keys(growthSeedScalars);
 // #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
 const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
@@ -541,6 +543,53 @@ async function main() {
     checkEqual(postRuntime.status, 404, "POST → 404（单行配置没有创建）");
     const deleteRuntime = await api(base, "DELETE", "/api/admin/runtime-params", { token });
     checkEqual(deleteRuntime.status, 404, "DELETE → 404（单行配置没有删除）");
+
+    //#endregion
+
+    //#region 六·六、战斗力权重（#605）：七项倍率入表 / 部分更新 / 全 0 拦住 / 权限
+
+    group("六·六、战斗力权重（生命 + 三系攻防）");
+
+    const weights = await api(base, "GET", "/api/admin/combat-weights", { token });
+    checkEqual(weights.status, 200, "战斗力权重可读");
+    checkEqual(weights.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "生命权重初值 = 出厂 seed");
+    checkEqual(weights.body?.data?.weights?.physicalAttack, COMBAT_WEIGHTS_SEED.physicalAttack, "物攻权重初值 = 出厂 seed");
+    checkEqual(weights.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+
+    const weightPatched = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: 7.5 } });
+    checkEqual(weightPatched.status, 200, "改魔法攻击权重成功（允许两位小数）");
+    checkEqual(weightPatched.body?.data?.weights?.magicAttack, 7.5, "响应里是新倍率");
+    checkEqual(weightPatched.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "没提交的属性保持原值（部分更新）");
+    check(weightPatched.body?.data?.updatedAt > 0, "改过之后 updatedAt 才不是 0");
+
+    const weightNegative = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: -1 } });
+    checkEqual(weightNegative.status, 400, "负权重 → 400（DTO 取值域）");
+    // 单项归零是合法调法（比如「战力不看魔攻」），要**七项同时为 0** 才拦 —— 那等于所有人战力恒 0
+    const weightOneZero = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: 0 } });
+    checkEqual(weightOneZero.status, 200, "只把一项归零是合法的（战力可以不计某一项）");
+    const weightAllZero = await api(base, "PATCH", "/api/admin/combat-weights", {
+      token,
+      body: { maxHp: 0, physicalAttack: 0, magicAttack: 0, taoistAttack: 0, physicalDefense: 0, magicDefense: 0, taoistDefense: 0 },
+    });
+    checkEqual(weightAllZero.status, 400, "七项全 0 → 400（会让所有地图准入失效）");
+    checkEqual(weightAllZero.body?.code, 40000, "全 0 用参数非法 40000");
+    const weightsAfterReject = await api(base, "GET", "/api/admin/combat-weights", { token });
+    checkEqual(weightsAfterReject.body?.data?.weights?.magicAttack, 0, "被拒的整份提交没有落库（仍是上一步的 0）");
+    checkEqual(weightsAfterReject.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "其余属性也没被这份提交改掉");
+    const weightUnknown = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { hpRecover: 3 } });
+    checkEqual(weightUnknown.status, 200, "未知属性被白名单剥掉（不报错）");
+    checkEqual(weightUnknown.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "剥掉之后其余值不变");
+    const viewerWeightWrite = await api(base, "PATCH", "/api/admin/combat-weights", { token: viewerToken, body: { maxHp: 20 } });
+    checkEqual(viewerWeightWrite.status, 403, "观察员改战斗力权重 → 403");
+    checkEqual(viewerWeightWrite.body?.code, 30006, "观察员改战斗力权重 → 30006（权限点不足）");
+    const postWeights = await api(base, "POST", "/api/admin/combat-weights", { token, body: {} });
+    checkEqual(postWeights.status, 404, "POST → 404（权重表没有创建）");
+    const deleteWeights = await api(base, "DELETE", "/api/admin/combat-weights", { token });
+    checkEqual(deleteWeights.status, 404, "DELETE → 404（权重表没有删除）");
+
+    // 复原出厂值：后面的断言（快照 / 战力）都以出厂口径为基线
+    const weightsRestored = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: COMBAT_WEIGHTS_SEED.magicAttack } });
+    checkEqual(weightsRestored.body?.data?.weights?.magicAttack, COMBAT_WEIGHTS_SEED.magicAttack, "复原魔法攻击权重");
 
     //#endregion
 
@@ -1384,6 +1433,19 @@ async function main() {
     checkEqual(snap.runtimeParams?.autoBattle?.stuckRetryLimit, RUNTIME_PARAMS.autoBattle.stuckRetryLimit, "自动战斗参数是完整一组（不是只发改过的键）");
     checkEqual(snap.runtimeParams?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会规则也在快照里（客户端用于提前提示）");
 
+    // #605：战斗力权重同样入表（六·六 段已复原成出厂值）—— 改一项，快照必须跟着变
+    checkEqual(snap.combatWeights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "战斗力权重随快照下发（出厂值）");
+    const weightChanged = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp + 5 } });
+    checkEqual(weightChanged.status, 200, "把生命权重调高 5");
+    const snapshotAfterWeight = await api(base, "GET", "/api/game-config", { token: playerToken });
+    checkEqual(
+      snapshotAfterWeight.body?.data?.combatWeights?.maxHp,
+      COMBAT_WEIGHTS_SEED.maxHp + 5,
+      "改完的权重客户端拿得到（快照读库，不是编译期常量）",
+    );
+    const weightRestoredAgain = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
+    checkEqual(weightRestoredAgain.status, 200, "还原生命权重（后面的断言以出厂口径为基线）");
+
     {
       // #604：快照是**显式契约** —— 客户端缺段直接抛错并把玩家挡在 Loading 界面。
       // 这里只钉运行时口径（键集合的一致性由 tools/audit-snapshot-contract.cjs 静态守）：
@@ -1517,6 +1579,19 @@ async function main() {
     checkEqual(growthCreate.status, 201, "创建成长线测试角色 → 201");
     const growthRoleId = growthCreate.body?.data?.id;
     let growthRevision = growthCreate.body?.data?.revision;
+
+    // #605：战力权重进了配置表 —— 服务端算战力必须读配置（覆盖层），不能还用编译期常量。
+    // 探针是「角色详情里的派生战力」（服务端现算）：翻倍生命权重 → 必须变大；还原 → 必须回原值。
+    const combatBefore = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    check(Number.isFinite(combatBefore) && combatBefore > 0, "角色详情能算出战力（结算探针）", String(combatBefore));
+    const heavierWeights = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp * 2 } });
+    checkEqual(heavierWeights.status, 200, "把生命权重翻倍");
+    const combatAfter = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    check(combatAfter > combatBefore, "生命权重翻倍后服务端算的战力立刻变大（结算读库、不是常量）", `${combatBefore} → ${combatAfter}`);
+    const weightBackToSeed = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
+    checkEqual(weightBackToSeed.status, 200, "还原生命权重");
+    const combatRestored = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    checkEqual(combatRestored, combatBefore, "还原后战力回到原值（覆盖层不是一次性的）");
 
     // seed 后全部称号渠道 unavailable → 升级链为空 → 即使 0 阶也没有下一阶
     const lockedTitle = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {

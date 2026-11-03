@@ -97,6 +97,11 @@ import {
   UpdateGuildRuleParamsDto,
   UpdateRuntimeParamsDto,
 } from "../modules/game-config/dto/runtime-params.dto";
+import {
+  CombatWeightsDto,
+  CombatWeightsResponseDto,
+  UpdateCombatWeightsDto,
+} from "../modules/game-config/dto/combat-weights.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import { ZoneDto, AdminZoneDto, CreateZoneDto, MergeZoneDto } from "../modules/zone/dto/zone.dto";
@@ -283,6 +288,10 @@ export const SWAGGER_MODELS = [
   UpdateDropRuntimeParamsDto,
   UpdateAutoBattleParamsDto,
   UpdateGuildRuleParamsDto,
+  // 战斗力权重（#605）
+  CombatWeightsDto,
+  CombatWeightsResponseDto,
+  UpdateCombatWeightsDto,
   // 养成配置（军衔 #250）
   RankDto,
   RankPageDto,

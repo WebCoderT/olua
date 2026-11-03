@@ -1697,6 +1697,41 @@ export type UpdateRuntimeParams = {
   note?: string;
 };
 
+export type UpdateCombatWeights = {
+  /**
+   * 生命上限权重
+   */
+  maxHp?: number;
+  /**
+   * 物理攻击权重
+   */
+  physicalAttack?: number;
+  /**
+   * 魔法攻击权重
+   */
+  magicAttack?: number;
+  /**
+   * 道术攻击权重
+   */
+  taoistAttack?: number;
+  /**
+   * 物理防御权重
+   */
+  physicalDefense?: number;
+  /**
+   * 魔法防御权重
+   */
+  magicDefense?: number;
+  /**
+   * 道术防御权重
+   */
+  taoistDefense?: number;
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
 export type SendMail = {
   /**
    * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
@@ -3145,7 +3180,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4246,6 +4281,48 @@ export type RuntimeParams = {
   guild: GuildRuleParams;
   /**
    * 最后修改时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type CombatWeights = {
+  /**
+   * 生命上限：每 1 点生命折算多少战力
+   */
+  maxHp: number;
+  /**
+   * 物理攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  physicalAttack: number;
+  /**
+   * 魔法攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  magicAttack: number;
+  /**
+   * 道术攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  taoistAttack: number;
+  /**
+   * 物理防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  physicalDefense: number;
+  /**
+   * 魔法防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  magicDefense: number;
+  /**
+   * 道术防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  taoistDefense: number;
+};
+
+export type CombatWeightsResponse = {
+  /**
+   * 当前生效权重（属性名 → 倍率）
+   */
+  weights: CombatWeights;
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过，仍是出厂值）
    */
   updatedAt: number;
 };

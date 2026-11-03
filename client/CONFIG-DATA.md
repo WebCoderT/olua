@@ -56,7 +56,7 @@
 
 | 快照段 | 落库函数 | 落到哪个客户端表 | 服务端出厂（唯一书写处） | 管理端页面 |
 |---|---|---|---|---|
-| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` | ⚠ 无编辑页（待 #605） |
+| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` → `combat_weights` 表 | `/combat-weights` |
 | `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels`（全量）+ `titleUpgradeChain`（渠道 = upgrade 的行，按 `upgradeOrder`） | `shared/title-seed.ts` → `titles` 表 | `/titles` |
 | `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels`（全量）+ `soulUpgradeChain`（全量，按 `upgradeOrder`） | `shared/soul-seed.ts` → `souls` 表 | `/souls` |
 | `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels`（100 阶按阶就是链） | `shared/rank-seed.ts` → `ranks` 表 | `/ranks` |

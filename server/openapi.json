@@ -3149,7 +3149,8 @@
                 "equipInAlign",
                 "map",
                 "uiEffect",
-                "runtimeParams"
+                "runtimeParams",
+                "combatWeights"
               ]
             }
           },
@@ -3432,7 +3433,8 @@
                 "equipInAlign",
                 "map",
                 "uiEffect",
-                "runtimeParams"
+                "runtimeParams",
+                "combatWeights"
               ]
             }
           },
@@ -9229,6 +9231,108 @@
         ]
       }
     },
+    "/admin/combat-weights": {
+      "get": {
+        "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`shared/combat-seed.ts`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminCombatWeights.get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前生效权重（含 updatedAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/CombatWeightsResponseDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "战斗力权重",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/CombatWeightsResponseDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**部分更新**：只提交改动过的属性（没提交的保持原值）。允许两位小数，取值 0~1000。\n\n七项不能同时为 0（否则所有角色战力恒为 0、地图准入全部失效）→ 40000。\n\n改完立即生效：服务端下一次算属性就用新倍率；客户端在玩家下次进游戏拉配置快照后生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminCombatWeights.update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCombatWeightsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/CombatWeightsResponseDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑战斗力权重",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/CombatWeightsResponseDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/mails/templates": {
       "get": {
         "description": "发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
@@ -14794,6 +14898,43 @@
           }
         }
       },
+      "UpdateCombatWeightsDto": {
+        "type": "object",
+        "properties": {
+          "maxHp": {
+            "type": "number",
+            "description": "生命上限权重"
+          },
+          "physicalAttack": {
+            "type": "number",
+            "description": "物理攻击权重"
+          },
+          "magicAttack": {
+            "type": "number",
+            "description": "魔法攻击权重"
+          },
+          "taoistAttack": {
+            "type": "number",
+            "description": "道术攻击权重"
+          },
+          "physicalDefense": {
+            "type": "number",
+            "description": "物理防御权重"
+          },
+          "magicDefense": {
+            "type": "number",
+            "description": "魔法防御权重"
+          },
+          "taoistDefense": {
+            "type": "number",
+            "description": "道术防御权重"
+          },
+          "note": {
+            "type": "string",
+            "description": "修改备注（写进审计日志的上下文，便于追溯「为什么改」）"
+          }
+        }
+      },
       "SendMailDto": {
         "type": "object",
         "properties": {
@@ -17115,7 +17256,8 @@
               "equipInAlign",
               "map",
               "uiEffect",
-              "runtimeParams"
+              "runtimeParams",
+              "combatWeights"
             ]
           },
           "targetId": {
@@ -18904,6 +19046,77 @@
           "drop",
           "autoBattle",
           "guild",
+          "updatedAt"
+        ]
+      },
+      "CombatWeightsDto": {
+        "type": "object",
+        "properties": {
+          "maxHp": {
+            "type": "number",
+            "description": "生命上限：每 1 点生命折算多少战力",
+            "example": 15
+          },
+          "physicalAttack": {
+            "type": "number",
+            "description": "物理攻击：每 1 点（区间按上下限之和）折算多少战力",
+            "example": 5
+          },
+          "magicAttack": {
+            "type": "number",
+            "description": "魔法攻击：每 1 点（区间按上下限之和）折算多少战力",
+            "example": 5
+          },
+          "taoistAttack": {
+            "type": "number",
+            "description": "道术攻击：每 1 点（区间按上下限之和）折算多少战力",
+            "example": 5
+          },
+          "physicalDefense": {
+            "type": "number",
+            "description": "物理防御：每 1 点（区间按上下限之和）折算多少战力",
+            "example": 10
+          },
+          "magicDefense": {
+            "type": "number",
+            "description": "魔法防御：每 1 点（区间按上下限之和）折算多少战力",
+            "example": 10
+          },
+          "taoistDefense": {
+            "type": "number",
+            "description": "道术防御：每 1 点（区间按上下限之和）折算多少战力",
+            "example": 10
+          }
+        },
+        "required": [
+          "maxHp",
+          "physicalAttack",
+          "magicAttack",
+          "taoistAttack",
+          "physicalDefense",
+          "magicDefense",
+          "taoistDefense"
+        ]
+      },
+      "CombatWeightsResponseDto": {
+        "type": "object",
+        "properties": {
+          "weights": {
+            "description": "当前生效权重（属性名 → 倍率）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CombatWeightsDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒，0 = 从未改过，仍是出厂值）",
+            "example": 1762000000000
+          }
+        },
+        "required": [
+          "weights",
           "updatedAt"
         ]
       },

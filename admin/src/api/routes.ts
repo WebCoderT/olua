@@ -208,6 +208,21 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
+  /** adminCombatWeights 模块（2 个接口） */
+  adminCombatWeights: {
+    /**
+     * 战斗力权重（GET /admin/combat-weights）
+     *
+     * 当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。
+     */
+    get: "/admin/combat-weights",
+    /**
+     * 编辑战斗力权重（PATCH /admin/combat-weights）
+     *
+     * **部分更新**：只提交改动过的属性（没提交的保持原值）。允许两位小数，取值 0~1000。
+     */
+    update: "/admin/combat-weights",
+  },
   /** adminDrop 模块（7 个接口） */
   adminDrop: {
     /**
