@@ -35,6 +35,8 @@ const STUB_IMPORTS = {
   "./RoleUIManager": "../../stubs/RoleUIManager",
   "./SceneManager": "../../stubs/SceneManager",
   "./SkillManager": "../../stubs/SkillManager",
+  // #683：音效（穿戴 / 金钱 / 整理 / 升级 / 传送的成功分支里各播一声）—— 表现层，顶成替身
+  "./SoundManager": "../../stubs/SoundManager",
   "./GameHelper": "../../stubs/GameHelper",
   "./LayerManager": "../../stubs/LayerManager",
   "../helpers/GameUiHelper": "../../stubs/GameUiHelper",
@@ -102,6 +104,15 @@ const STUBS = {
 `,
   "SkillManager.ts": `export default class SkillManager {
   static release(_skillId: unknown): boolean { return false; }
+}
+`,
+  // #683：StorageManager 现在会在「穿戴 / 金钱变化 / 整理 / 升级 / 传送」的确认分支里播一声。
+  // 沙箱里顶成记账式替身（play 只记 key）：音效是表现层，不该让存储层单测去加载 AudioClip
+  "SoundManager.ts": `/** 替身：只记下播过哪些 key（真实现见 ui/core/SoundManager） */
+export default class SoundManager {
+  static played: string[] = [];
+  static play(key: string): Promise<void> { this.played.push(key); return Promise.resolve(); }
+  static stopMusic(): void {}
 }
 `,
   "GameHelper.ts": `export default class GameHelper {

@@ -31,6 +31,7 @@ import GuideStore from "./core/GuideStore";
 import GuideOverlay from "./components/GuideOverlay";
 import { GUIDE_SPOT } from "../types/guide";
 import type { GuideSpot } from "../types/guide";
+import { SEX } from "../types/role";
 import ChatStore from "./core/ChatStore";
 import ChatBubbles from "./core/ChatBubbles";
 import QuestStore from "./core/QuestStore";
@@ -42,6 +43,7 @@ import RouteIndicator from "./core/RouteIndicator";
 import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
+import SoundManager from "./core/SoundManager";
 import StatusManager from "./core/StatusManager";
 import HoverTipManager from "./core/HoverTipManager";
 import GameUiHelper from "./helpers/GameUiHelper";
@@ -217,6 +219,9 @@ export class Game extends Component {
       return;
     }
     RealtimeClient.start();
+    // 音效（#683）：建常驻节点（跨场景不销毁，见 core/SoundManager）。配置已在上面那份快照里落库，
+    // 所以这里不拉任何东西 —— 之后每次 `SoundManager.play(key)` 都只是查表 + 播放。
+    SoundManager.init();
     // 获取角色信息（本地缓存由选角场景进游戏前写入，见 ui/RoleSelector.enterGame；
     // 旧存档缺失的字段由 StorageManager 在读取时统一补齐）
     const role = StorageManager.findOnlineRole();
@@ -533,6 +538,9 @@ export class Game extends Component {
     const role = StorageManager.findOnlineRole();
     if (!role || role.hp > 0 || !this.roleDisplay || this.roleDisplay.isDead()) return;
     AutoBattle.cancel();
+    // 死亡音（#683）：男女各一首，按角色性别取 —— 两个 key 都在管理端可配，
+    // 没配 / 停用的那个 `audioConfigOf` 会返回 null，这里不用判
+    void SoundManager.play(role.sex === SEX.GRIL ? "role_die_woman" : "role_die_man");
     this.roleDisplay.die();
     this.deathDialog = new DeathDialog({
       onReviveInPlace: () => this.reviveRole(false),

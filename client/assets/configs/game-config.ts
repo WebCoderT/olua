@@ -14,6 +14,7 @@ import type { DamageCoefficient, SkillData, SkillId } from "../types/skill";
 import { SkillTargetType, SkillType } from "../types/skill";
 import type { MonsterPresentation, MonsterRuntimeStats } from "../types/monster";
 import type {
+  AudioConfig as AudioConfigRow,
   Drug as DrugRow,
   Fashion as FashionRow,
   GameConfigSnapshot,
@@ -91,6 +92,7 @@ import type {
  * | 18 | 地图 | `maps` / `mapTypes` | `applyMapRows` |
  * | 19 | 界面特效（升级特效 + 掉落光效） | `uiEffects` | `applyUiEffectRows` |
  * | 20 | 装备几何锚点 | `equip-align` / `equip-in-align`（另两个接口） | `applyEquipAlignRows`（在 apply-snapshot） |
+ * | 21 | 音效 | `audio` | `applyAudioRows` |
  *
  * 守点：`tools/audit-snapshot-contract.cjs` —— 分区 0 的清单 == 服务端 `GameConfigSnapshotDto`
  * == `client-config.service.snapshot()` 实际下发的键。加一段配置要三处一起改。
@@ -180,6 +182,7 @@ export const SNAPSHOT_SECTIONS: SnapshotSectionSpec[] = [
   { key: "equipmentMeta", label: "装备规则", kind: "object" },
   { key: "runtimeParams", label: "运行时参数", kind: "object" },
   { key: "guideSteps", label: "新手引导步骤", kind: "array" },
+  { key: "audio", label: "音效配置", kind: "array" },
 ];
 
 /** 一处契约问题（key + 中文名 + 原因，直接拼进日志与界面） */
@@ -2225,3 +2228,79 @@ export function placeInShowWeapon(body: ContentBox, weapon: ContentBox, onLeft =
   return { x: pos.x, y: pos.y, scale };
 }
 //#endregion
+
+//#region 21 · 音效（原 configs/audio.ts，#683）
+/**
+ * 音效配置表（key → 用哪个文件 / 多大声 / 循环不循环 / 开不开）
+ *
+ * ## 为什么这一段的资源路径可以覆写
+ *
+ * 本文件开头那条纪律是「资源路径与几何一律不覆写」—— 让服务端下发路径就能把客户端指到
+ * 一张不存在的图上。音效是**唯一的例外**，而这条例外正是它存在的理由：
+ * 图集 / 帧动画的路径按 id 拼（`effect/<key>/<key>.plist`、`map/<id>/<id>`），换美术必须重打包；
+ * 音效文件是运营挑的，换一首登录曲只要新文件已经在资源包里。
+ * 所以 `filePath` 进库、随快照下发。除它之外，这里没有任何路径字段。
+ *
+ * ## 没有本地兜底
+ *
+ * 快照没到之前这张表是空的，`audioConfigOf()` 返回 null = **不播**。
+ * 写一份客户端默认值等于给「运营改了没生效」准备一个看不出来的解释。
+ *
+ * ## 「不播」的三种情况（判据都在 `audioConfigOf` 里，调用方不用各判一遍）
+ * - 表里没有这个 key（服务端没下发 / 清单没登记）
+ * - `enabled === false`（连文件都不读）
+ * - `filePath` 为空（这一项还没配文件）
+ */
+export const audioConfigs = new Map<string, AudioConfigRow>();
+
+/**
+ * 取一个音效的播放配置（null = 不播）
+ *
+ * 刻意不返回「兜底参数」：调用方拿到 null 就该什么都不做。
+ */
+export function audioConfigOf(key: string): AudioConfigRow | null {
+  const row = audioConfigs.get(key);
+  if (!row || !row.enabled) return null;
+  if (!row.filePath) return null;
+  return row;
+}
+
+/**
+ * 音效路径 → Cocos 资源路径（**去掉扩展名**）
+ *
+ * `sounds/login_bg.wav` → `sounds/login_bg`：服务端存的是带扩展名的文件路径（管理端要能直接拼
+ * 试听地址、要和文件系统一一对应），而 `resources.load` 认的是不带扩展名的资源路径。
+ * 转换只在这里做一次 —— 别让每个播放点自己 `split(".")`。
+ */
+export function audioResPathOf(filePath: string): string {
+  const slash = filePath.lastIndexOf("/");
+  const dot = filePath.lastIndexOf(".");
+  return dot > slash ? filePath.slice(0, dot) : filePath;
+}
+
+/**
+ * 覆写音效配置（#683，进游戏时一次 + 登录页拉一次公开接口）
+ *
+ * 三条口径与其它段一致：
+ * - **整表重建**（先 clear 再按行填）：表里没有的 key 客户端就不该有；
+ * - **坏行整条跳过**（缺 key / 音量不是数）：宁可这一项不响，也不要拿错参数播一次；
+ * - **不校验路径合法性**：那是服务端的活（`audioPathProblem`），客户端只负责「路径给了就去 load，
+ *   load 不到就不出声」—— 两处都判会让「为什么没声音」多一个可信度更低的原因。
+ */
+export function applyAudioRows(rows: AudioConfigRow[]): void {
+  audioConfigs.clear();
+  for (const row of rows ?? []) {
+    if (!row || typeof row.key !== "string" || !row.key) continue;
+    const volume = Number(row.volume);
+    if (!Number.isFinite(volume)) continue;
+    audioConfigs.set(row.key, {
+      key: row.key,
+      filePath: typeof row.filePath === "string" ? row.filePath.trim() : "",
+      volume: Math.min(100, Math.max(0, Math.round(volume))),
+      loop: row.loop === true,
+      enabled: row.enabled === true,
+    });
+  }
+}
+//#endregion
+

@@ -2,6 +2,7 @@ import { sys } from "cc";
 import RoleUIManager from "./RoleUIManager";
 import SceneManager from "./SceneManager";
 import SkillManager from "./SkillManager";
+import SoundManager from "./SoundManager";
 import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
@@ -429,6 +430,8 @@ export default class StorageManager {
       // 播放升级特效（#594：服务端可关 —— 关了不建节点）
       const upgradeEffect = GameUiHelper.createUpgradeEffect();
       if (upgradeEffect) LayerManager.addToUILayer(upgradeEffect);
+      // 升级音效（#683）：与特效同一处触发 —— `leveledUp` 是服务端判的，客户端不自己算
+      void SoundManager.play("level_up");
     }
     // 保存并刷新（revision 已与服务端对齐，下一次落盘不会撞乐观锁）
     this.updateOnlineRole(role);
@@ -459,6 +462,8 @@ export default class StorageManager {
       // 属性不本地重算（#541 服务端权威）：权威值由 roleUpdate 帧带回，也不补满血蓝（见方法注释）
       const upgradeEffect = GameUiHelper.createUpgradeEffect();
       if (upgradeEffect) LayerManager.addToUILayer(upgradeEffect);
+      // 升级音效（#683）：队友杀怪我升级，与自己杀怪同一个声音（玩家视角都是「我升级了」）
+      void SoundManager.play("level_up");
     }
     this.updateOnlineRole(role);
     this.updateUi(role);
@@ -492,6 +497,9 @@ export default class StorageManager {
   static applyServerRoleUpdate(update: RoleAuthorityUpdate): void {
     const role = this.findOnlineRole();
     if (!role) return;
+    // 金钱变化音（#683）：这一帧是所有货币变化的汇合点（任务发奖 / 商城 / 回收 / 后台改动），
+    // 所以只在**真的变了**的时候响 —— 每帧都响会盖过其它音效（这条帧每几秒就来一次）
+    const moneyChanged = update.gold !== role.gold || update.bindGold !== role.bindGold || update.silver !== role.silver;
     role.level = update.level;
     role.exp = Math.max(0, Math.floor(update.exp));
     role.combat = update.combat;
@@ -531,6 +539,8 @@ export default class StorageManager {
     role.hp = Math.min(role.hp, role.maxHp);
     role.revision = update.revision;
     this.updateUi(role);
+    // 金钱变化音放在刷 UI 之后：先让数字变，再出声（顺序反了会有「听到声音但数字还没动」的一帧）
+    if (moneyChanged) void SoundManager.play("money_change");
     // 角色信息弹窗开着的话，属性列表与战斗力一起跟上（升级/换装的面板刷新缺口在这补上）
     RoleUIManager.refreshRoleAttributes();
     if (titleChanged) RoleUIManager.updateTitleShow();
@@ -662,6 +672,9 @@ export default class StorageManager {
     const result = await this.runBagOp(role, { action: "equip", row, col });
     if (!result) return false;
     this.applyEquipmentChange(role, (result.slot as EQUIPMENT_TYPE | null) ?? good.slot);
+    // 穿戴成功音（#683）：服务端接受之后才响 —— 放在 `if (!result) return false` 后面，
+    // 「点了但被拒」不该有成功音
+    void SoundManager.play("equip_wear");
     return true;
   }
 
@@ -921,6 +934,8 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     RoleUIManager.refreshBag();
     GameUiHelper.createTip("bag_tidy_tip");
+    // 整理成功音（#683）：与上面那句提示同一处 —— 只有「服务端接受 + 界面刷完」才算成功
+    void SoundManager.play("bag_resort");
     return true;
   }
 
@@ -1260,6 +1275,9 @@ export default class StorageManager {
     role.onMap = mapId;
     // 保存
     this.updateOnlineRole(role);
+    // 传送成功音（#683）：校验已过、地图已切换才算成功（被等级 / 战斗力拦住的在这里之前就 return 了）。
+    // 先响再切场景 —— 换场景会走 Loading，声音跟过去正好盖住加载的那几秒
+    void SoundManager.play("map_teleport");
     // 重新进入游戏场景，走过渡场景完成新地图资源加载后再进入
     SceneManager.loadScene("Game");
   }

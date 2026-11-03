@@ -2,6 +2,7 @@ import { _decorator, Component, EditBox, Label, Layout, Node, UITransform, Vec2,
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
+import SoundManager from "./core/SoundManager";
 import { loginLayout } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { AuthApi, ZoneApi } from "./utils/net/Api";
@@ -61,6 +62,10 @@ export class Login extends Component {
       SceneManager.loadScene("RoleSelector");
       return;
     }
+    // 登录场景背景音（#683）：配置来自公开接口 `GET /game-config/audio`（登录页没有玩家令牌，
+    // 快照拉不到），`play` 内部先补配置再播，所以这里不用 await —— 背景音晚半秒起来比登录页
+    // 晚半秒出现好。已登录走上面的分支，不会响。
+    void SoundManager.play("login_bgm");
     // 位置/尺寸与用图统一见 configs/layout/scenes.loginLayout
     const layout = loginLayout;
     // 背景（不在舞台内：铺满整个屏幕）
@@ -219,6 +224,9 @@ export class Login extends Component {
   private async submit(action: () => Promise<AuthResult>) {
     if (this.submitting) return;
     this.submitting = true;
+    // 点击音（#683）：登录与注册共用这个入口 —— 按「点了就响」，不等服务端往返
+    // （失败也没关系，那是按钮的反馈音，不是成功音）
+    void SoundManager.play("login_click");
     try {
       const result = await action();
       Session.save(result.token, result.account);
