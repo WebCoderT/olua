@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Input } from "../ui";
+import { Button, Input } from "../ui";
 import { EntityImage } from "./EntityImage";
 import { filterOptions, groupNames } from "./catalog";
 import type { EntityOption } from "./catalog";
@@ -11,8 +11,9 @@ import type { EntityOption } from "./catalog";
  * - `EntityPicker` = 弹窗外壳 + 本组件（选装备 / 技能 / 物品）；
  * - 背包格子编辑 = 自己的弹窗外壳 + 本组件 + 数量输入。
  *
- * 渲染上限 `max`：技能有 1011 条、装备变体 555 条，一次性铺完会卡住主线程。
- * 超过就只画前 `max` 条并提示「缩小搜索范围」—— 比假装全都在（卡死）诚实。
+ * 渲染上限 `max`：技能有 1011 条、装备变体 555 条、怪物 220 只，一次性铺完会卡住主线程。
+ * 超过就先画 `max` 条，底部给一个「再显示 N 项」——**能翻到底**，不是只提示「缩小搜索范围」
+ * （分组也算「缩小范围」，可「普通怪」一组就有两百只，光靠分组翻不到最后一只）。
  */
 export function EntityPickerList({
   options,
@@ -36,15 +37,21 @@ export function EntityPickerList({
 }) {
   const [keyword, setKeyword] = useState("");
   const [group, setGroup] = useState<string | null>(null);
+  /** 已画多少条（「再显示 N 项」往上加；搜索 / 分组变化要回到首页，否则会记得上一次的深度） */
+  const [limit, setLimit] = useState(max);
 
   useEffect(() => {
     setKeyword("");
     setGroup(null);
   }, [resetKey]);
 
+  useEffect(() => {
+    setLimit(max);
+  }, [max, keyword, group, resetKey]);
+
   const groups = useMemo(() => groupNames(options), [options]);
   const filtered = useMemo(() => filterOptions(options, keyword, group), [options, keyword, group]);
-  const shown = filtered.slice(0, max);
+  const shown = filtered.slice(0, limit);
 
   return (
     // h-full 不能省：这个组件的滚动区靠 `flex-1 + overflow-y-auto` 限高，
@@ -105,10 +112,21 @@ export function EntityPickerList({
         )}
       </div>
 
-      <p className="text-[11px] text-slate-600">
-        共 {filtered.length} 项
-        {filtered.length > shown.length ? `，只画了前 ${shown.length} 项 —— 用搜索或分组缩小范围` : ""}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-slate-600">
+          共 {filtered.length} 项
+          {filtered.length > shown.length ? `，已画 ${shown.length} 项` : ""}
+        </p>
+        {filtered.length > shown.length ? (
+          <Button
+            variant="outline"
+            className="px-2 py-0.5 text-[11px]"
+            onClick={() => setLimit(limit + max)}
+          >
+            再显示 {Math.min(max, filtered.length - shown.length)} 项
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

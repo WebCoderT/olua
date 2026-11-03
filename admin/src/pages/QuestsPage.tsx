@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatTime, itemsApi, monstersApi, npcsApi, PERMISSION, questsApi } from "../api";
-import type { CreateQuest, Item, Monster, Npc, PageResult, Quest, QuestRewardItem, UpdateQuest } from "../api";
+import { formatTime, PERMISSION, questsApi } from "../api";
+import type { CreateQuest, PageResult, Quest, QuestRewardItem, UpdateQuest } from "../api";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { EntityPickButton } from "../components/entity/EntityPickButton";
-import { entityOptions } from "../components/entity/catalog";
+import { entityLabel, entityOptions } from "../components/entity/catalog";
+import type { EntityKind } from "../components/entity/catalog";
 import { anyPickerOpen } from "../components/pickerStack";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -18,8 +19,13 @@ const QUEST_KIND_LABELS: Record<string, string> = { main: "主线", daily: "日�
 /** 目标类型 → 中文（决定「目标」下拉框用哪张表） */
 const OBJECTIVE_TYPE_LABELS: Record<string, string> = { kill: "击杀怪物", talk: "与 NPC 对话", collect: "收集物品" };
 
-/** 目标类型 → 目标键取自哪张表（下拉框的候选来源） */
-const OBJECTIVE_TARGET_SOURCE: Record<string, "monster" | "npc" | "item"> = {
+/**
+ * 目标类型 → 目标键取自哪张实体表（选择器候选来源）
+ *
+ * 三张清单都来自 `catalog`（装备 / 物品 = 客户端配置生成物，怪物 / NPC = 服务端种子），
+ * 与「下拉里只有第一页 100 条」的老做法说再见 —— 220 只怪现在一只不少。
+ */
+const OBJECTIVE_TARGET_SOURCE: Record<string, EntityKind> = {
   kill: "monster",
   talk: "npc",
   collect: "item",
@@ -90,10 +96,16 @@ function checkNumber(text: string, options: { min: number; max: number; int?: bo
   return null;
 }
 
-/** 目标键 → 可读名字（表里查不到就原样显示键，不让它看起来像丢了数据） */
-function targetLabel(key: string, names: Map<string, string>): string {
-  const name = names.get(key);
-  return name ? `${name}（${key}）` : key;
+/**
+ * 键 → 「名字（键）」；查不到就原样显示键，不让它看起来像丢了数据
+ *
+ * 以前靠一张「拉回来的前 100 行」的名字表，第 101 只怪与全部 2200 件物品都显示成裸 id。
+ * 现在直接走 `catalog` 的全量清单：装备 / 物品 / 怪物 / NPC 都能取名。
+ */
+function keyLabel(kind: EntityKind, key: string): string {
+  if (!key) return "";
+  const name = entityLabel(kind, key);
+  return name && name !== key ? `${name}（${key}）` : key;
 }
 
 /**
@@ -111,9 +123,6 @@ function QuestDialog({
   open,
   creating,
   initial,
-  monsterOptions,
-  npcOptions,
-  itemOptions,
   questOptions,
   onCancel,
   onSubmit,
@@ -122,9 +131,6 @@ function QuestDialog({
   /** true = 新建（id 可填），false = 编辑（id 是行身份，不可改） */
   creating: boolean;
   initial: Quest | null;
-  monsterOptions: Monster[];
-  npcOptions: Npc[];
-  itemOptions: Item[];
   /** 可当前置的任务（含自己，自己那项在下拉里禁用） */
   questOptions: Quest[];
   onCancel: () => void;
@@ -135,6 +141,7 @@ function QuestDialog({
   const [submitting, setSubmitting] = useState(false);
   /** 奖励物品的候选（与服务端校验同一份物品总表；选择器只认 EntityOption） */
   const rewardOptions = useMemo(() => entityOptions("item"), []);
+  const npcCandidates = useMemo(() => entityOptions("npc"), []);
 
   useEffect(() => {
     if (!open) return;
@@ -143,14 +150,9 @@ function QuestDialog({
     setSubmitting(false);
   }, [open, creating, initial]);
 
-  /** 目标键的候选表：跟目标类型走 */
-  const targetOptions = useMemo(() => {
-    const type = form?.objectiveType ?? "kill";
-    const source = OBJECTIVE_TARGET_SOURCE[type];
-    if (source === "monster") return monsterOptions.map((row) => ({ id: row.id, label: row.label }));
-    if (source === "npc") return npcOptions.map((row) => ({ id: row.id, label: row.label }));
-    return itemOptions.map((row) => ({ id: row.id, label: row.label }));
-  }, [form?.objectiveType, monsterOptions, npcOptions, itemOptions]);
+  /** 目标键的候选表：跟目标类型走（怪物 / NPC / 物品三份全量清单） */
+  const targetKind: EntityKind = OBJECTIVE_TARGET_SOURCE[form?.objectiveType ?? "kill"] ?? "item";
+  const targetOptions = useMemo(() => entityOptions(targetKind), [targetKind]);
 
   if (!open || !form) return null;
 
@@ -278,17 +280,15 @@ function QuestDialog({
           <Input type="number" min={1} max={999} value={form.minLevel} onChange={(event) => set("minLevel", event.target.value)} />
         </Field>
         <Field label="发布 NPC" hint="决定玩家在谁那里接 / 交">
-          <Select value={form.npcId} onChange={(event) => set("npcId", event.target.value)}>
-            <option value="">（请选择）</option>
-            {npcOptions.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.id} · {item.label}
-              </option>
-            ))}
-            {form.npcId && !npcOptions.some((item) => item.id === form.npcId) ? (
-              <option value={form.npcId}>{form.npcId}（未在 NPC 表中）</option>
-            ) : null}
-          </Select>
+          <EntityPickButton
+            value={form.npcId}
+            options={npcCandidates}
+            kind="npc"
+            pickerTitle="选择发布 NPC"
+            placeholder="点这里挑 NPC"
+            emptyHint="NPC 清单来自服务端种子，空清单说明种子没加载"
+            onChange={(npcId) => set("npcId", npcId)}
+          />
         </Field>
       </div>
       <div>
@@ -304,17 +304,14 @@ function QuestDialog({
             </Select>
           </Field>
           <Field label="目标对象">
-            <Select value={form.objectiveTarget} onChange={(event) => set("objectiveTarget", event.target.value)}>
-              <option value="">（请选择）</option>
-              {targetOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.id} · {item.label}
-                </option>
-              ))}
-              {form.objectiveTarget && !targetOptions.some((item) => item.id === form.objectiveTarget) ? (
-                <option value={form.objectiveTarget}>{form.objectiveTarget}（未在当前表里）</option>
-              ) : null}
-            </Select>
+            <EntityPickButton
+              value={form.objectiveTarget}
+              options={targetOptions}
+              kind={targetKind}
+              pickerTitle={`选择要${OBJECTIVE_TYPE_LABELS[form.objectiveType] ?? "推进"}的对象`}
+              placeholder="点这里挑对象"
+              onChange={(target) => set("objectiveTarget", target)}
+            />
           </Field>
           <Field label="目标数量" hint="1~9999">
             <Input
@@ -420,10 +417,11 @@ export function QuestsPage() {
   const [editing, setEditing] = useState<Quest | null>(null);
   /** 删除中的任务 id（行内按钮 loading，防重复点） */
   const [removingId, setRemovingId] = useState<string | null>(null);
-  /** 三张候选表 + 任务全集：都只有几十行，一次拉满给下拉框用 */
-  const [monsterOptions, setMonsterOptions] = useState<Monster[]>([]);
-  const [npcOptions, setNpcOptions] = useState<Npc[]>([]);
-  const [itemOptions, setItemOptions] = useState<Item[]>([]);
+  /**
+   * 任务全集：只有它需要接口（任务能新建 / 删除，种子不是全量）。
+   * 怪物 / NPC / 物品的候选一律走 `catalog` 的静态全量清单 ——
+   * 从前这里三个 `size: 100` 的列表接口，直接导致「第 101 只怪选不到」。
+   */
   const [questOptions, setQuestOptions] = useState<Quest[]>([]);
 
   const load = useCallback(async () => {
@@ -443,19 +441,11 @@ export function QuestsPage() {
 
   useEffect(() => {
     let alive = true;
-    // 候选表拉不到不影响主流程：编辑时保留原值即可（下拉里会显示成「未在当前表里」）
-    void Promise.all([
-      monstersApi.list({ page: 1, size: 100 }),
-      npcsApi.list({ page: 1, size: 100 }),
-      itemsApi.list({ page: 1, size: 100 }),
-      questsApi.list({ page: 1, size: 100 }),
-    ])
-      .then(([monsters, npcs, items, quests]) => {
-        if (!alive) return;
-        setMonsterOptions(monsters.list);
-        setNpcOptions(npcs.list);
-        setItemOptions(items.list);
-        setQuestOptions(quests.list);
+    // 拉不到不影响主流程：编辑时保留原值即可（下拉里会显示成「未在任务表中」）
+    void questsApi
+      .list({ page: 1, size: 100 })
+      .then((quests) => {
+        if (alive) setQuestOptions(quests.list);
       })
       .catch(() => {
         /* 同上：候选缺失只影响下拉体验 */
@@ -464,15 +454,6 @@ export function QuestsPage() {
       alive = false;
     };
   }, []);
-
-  /** 名称查找表：表格里把「键」渲染成「名字（键）」 */
-  const names = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const item of monsterOptions) map.set(item.id, item.label);
-    for (const item of npcOptions) map.set(item.id, item.label);
-    for (const item of itemOptions) map.set(item.id, item.label);
-    return map;
-  }, [monsterOptions, npcOptions, itemOptions]);
 
   const submitSearch = () => {
     setPage(1);
@@ -621,15 +602,18 @@ export function QuestsPage() {
                     {item.prevQuestId ? <span className="font-mono">{item.prevQuestId}</span> : <span className="text-slate-600">—</span>}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>Lv.{item.minLevel}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{targetLabel(item.npcId, names)}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
-                    {OBJECTIVE_TYPE_LABELS[item.objective.type] ?? item.objective.type} · {targetLabel(item.objective.target, names)} ×
+                    {item.npcId ? keyLabel("npc", item.npcId) : <span className="text-slate-600">—</span>}
+                  </td>
+                  <td className={`${tdClass} text-xs text-slate-400`}>
+                    {OBJECTIVE_TYPE_LABELS[item.objective.type] ?? item.objective.type} ·{" "}
+                    {keyLabel(OBJECTIVE_TARGET_SOURCE[item.objective.type] ?? "item", item.objective.target)} ×
                     {item.objective.count}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
                     金币 {item.rewards.gold} · 经验 {item.rewards.exp}
                     {item.rewards.items.length > 0
-                      ? ` · ${item.rewards.items.map((entry) => `${names.get(entry.goodId) ?? entry.goodId}×${entry.count}`).join("、")}`
+                      ? ` · ${item.rewards.items.map((entry) => `${entityLabel("item", entry.goodId) || entry.goodId}×${entry.count}`).join("、")}`
                       : ""}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
@@ -673,9 +657,6 @@ export function QuestsPage() {
         open={dialogOpen}
         creating={creating}
         initial={editing}
-        monsterOptions={monsterOptions}
-        npcOptions={npcOptions}
-        itemOptions={itemOptions}
         questOptions={questOptions}
         onCancel={() => {
           setDialogOpen(false);

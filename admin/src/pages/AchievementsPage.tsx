@@ -139,6 +139,26 @@ export function AchievementsPage() {
   const [saving, setSaving] = useState(false);
   /** 物品候选（奖励物品 + 持有类条件的目标，同一份清单） */
   const itemOptions = useMemo(() => entityOptions("item"), []);
+  /**
+   * 怪物候选（击杀类条件的目标）
+   *
+   * 首项是「任意怪（`*`）」—— 成就有相当一部分是「累计击杀 N 只」而不是「打死某一只」，
+   * 这个特殊目标得能挑到，否则运营只能又去手打一个 `*`。
+   */
+  const monsterOptions = useMemo(
+    () => [
+      {
+        id: "*",
+        label: "任意怪",
+        note: "任意怪都计入进度（存 *）",
+        group: "特殊",
+        image: {},
+        search: "任意怪 any *",
+      },
+      ...entityOptions("monster"),
+    ],
+    [],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -354,7 +374,7 @@ export function AchievementsPage() {
             label="条件目标"
             hint={
               form.conditionType === "kill"
-                ? "怪物 key，或 * 表示任意怪"
+                ? "打哪只怪算进度；「任意怪」= 不限（存 *）"
                 : form.conditionType === "collect"
                   ? "持有哪些物品算进度：挑一样即可"
                   : "这两类不看目标，留空即可"
@@ -369,6 +389,15 @@ export function AchievementsPage() {
                 pickerTitle="选择要持有的物品"
                 placeholder="点这里挑物品"
                 onChange={(goodId) => setForm({ ...form, conditionTarget: goodId })}
+              />
+            ) : form.conditionType === "kill" ? (
+              <EntityPickButton
+                value={form.conditionTarget}
+                options={monsterOptions}
+                kind="monster"
+                pickerTitle="选择要击杀的怪物"
+                placeholder="点这里挑怪物"
+                onChange={(monsterId) => setForm({ ...form, conditionTarget: monsterId })}
               />
             ) : (
               <Input

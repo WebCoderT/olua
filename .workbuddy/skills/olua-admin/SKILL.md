@@ -151,12 +151,15 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - `mode="atlas"` 的「一套」= `rootDir` 之下的**第一段**，所以 `clothes/out/001` 不会拆成 `001/a1` 让运营去选动作。
 - **图标 / 动画字段别自己拼输入框 + 弹窗**：还要处理 `anyPickerOpen()` 的 Esc 放行，漏了就是「关选择器顺带把编辑弹窗关了」（弹窗嵌套时两个 Modal 各挂一个 window 监听，外层先注册先收到）。计数在 `components/pickerStack.ts`，`IconField` / `ImagePicker` / `EntityPicker` 各自登记，调用方只问 `anyPickerOpen()`。
 
-**物品 / 装备 / 技能的 id 字段一律用 `EntityPickButton`**（`components/entity/EntityPickButton.tsx`，#648）：图标 + 名字 + 一行说明的按钮，点开就是 `EntityPicker`（搜索 + 分组 + 网格）。**不许再让运营手填 `drug_hp_1` 这类 id，也不要用 2000 项的原生 `<select>`**：
+**物品 / 装备 / 技能 / 怪物 / NPC 的 id 字段一律用 `EntityPickButton`**（`components/entity/EntityPickButton.tsx`，#648 / #651）：图标 + 名字 + 一行说明的按钮，点开就是 `EntityPicker`（搜索 + 分组 + 网格）。**不许再让运营手填 `drug_hp_1` 这类 id，也不要用 2000 项的原生 `<select>`**：
 
-- `<EntityPickButton value={draft.goodId} options={entityOptions("item")} onChange={…}/>` —— 掉落条目、任务 / 成就奖励、成就「持有物品」条件；
-- 邮件附件 = `entityOptions("item")` + `entityOptions("fashion")` 两份拼接（时装不在物品总表）；
+- `<EntityPickButton value={draft.goodId} options={entityOptions("item")} onChange={…}/>` —— 掉落条目、任务 / 成就奖励、成就「持有物品」条件、邮件附件（邮件是 item + fashion 两份拼接，时装不在物品总表）；
+- `<EntityPickButton kind="monster" options={entityOptions("monster")} …/>` —— 任务目标（按类型切 monster / npc / item）、成就「累计击杀」的目标；`*`（任意怪）**不是清单里的行**，要调用方自己塞进候选第一位；
+- 任务「发布 NPC」、`talk` 类型目标用 `entityOptions("npc")`（缩略图是图集首帧）；
 - 候选清单统一来自 `entity/catalog.ts`（`entityOptions(kind)` 带模块级缓存），**页面不许自己拼候选数组**；
-- 服务端校验口径与清单必须是同一份：掉落条目卡的是 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），对应 `entityOptions("item")` —— 能选出来就必定存得进去，选不出来的（比如怪物 / 地图资源）说明它根本不该入库。
+- **别用「列表接口 + size: 100」当候选**：怪物 220 只、物品 2200+ 件，`size: 100` 那套会让第 101 只之后的怪根本选不到（任务页踩过，列表里还全显示裸 id）。固定清单（怪物 / NPC / 物品 / 装备 / 技能）走 catalog 静态清单，只有**可增删**的表（任务、掉落具名表）才该走接口；
+- 服务端校验口径与清单必须是同一份：掉落条目卡的是 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），对应 `entityOptions("item")` —— 能选出来就必定存得进去。
+- 怪物名字是**出厂名**（`monster-seed`），运行时权威在 `monsters` 表（管理端可改）：选择器显示种子名、**选中值永远是 id**，列表页显示表名。这两处不一致是已知代价，别为了「对齐」在选择器里再拉一次接口。
 
 ## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
 
@@ -294,10 +297,10 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 | 层 | 文件 | 职责 |
 |---|---|---|
-| 目录 | `entity/catalog.ts` | `entityOptions(kind)` / `entityLabel` / `entityNote` / `entityImage`（单图 or 图集首帧）+ `levelOptions(kind)` / `levelLabel` / `levelNote` / `levelImage` / `levelDescription`；模块级 `Map` 缓存，**数据只从 `api/gameData` 取** |
+| 目录 | `entity/catalog.ts` | `entityOptions(kind)`（`kind` = equipment / item / skill / drug / fashion / map / **monster** / **npc**）/ `entityLabel` / `entityNote` / `entityImage`（单图 or 图集首帧）+ `levelOptions(kind)` / `levelLabel` / `levelNote` / `levelImage` / `levelDescription`；模块级 `Map` 缓存，**数据只从 `api/gameData` 取** |
 | 原子 | `entity/EntityImage.tsx` | 单图 / 图集首帧 / **空值虚线方块**（不画「无图」占位：未激活、没穿时装是正常状态，画成缺资源会让人去找那张图） |
 | 卡片 | `entity/EntityCard.tsx` | 一张可点卡（图标 + 主标题 + 副标题 + 角标），空值画虚线、有值右上角 `×` 清除 |
-| 选择器 | `entity/EntityPickerList.tsx`（无壳）/ `entity/EntityPicker.tsx`（`Modal` 外壳） | 搜索 + 分组 chips + 网格；`max=120` 上限并提示「只画了前 N 项」；开着时登记到 `pickerStack`（Esc 放行） |
+| 选择器 | `entity/EntityPickerList.tsx`（无壳）/ `entity/EntityPicker.tsx`（`Modal` 外壳） | 搜索 + 分组 chips + 网格；一次最多画 120 条，底部「共 N 项，已画 M 项」+ **「再显示 N 项」**（分组救不了「普通怪」这种两百只的组）；开着时登记到 `pickerStack`（Esc 放行） |
 | 字段 | `entity/EntityPickButton.tsx` | 「图标 + 名字 + 一行说明」的行内按钮，点开即选择器（#648）——**页面里的物品 / 装备 / 技能 id 字段一律用它**，别再写 `Input` 或 2000 项原生 `select`；值不在清单里标黄「清单里没有这个 id」 |
 | 业务 | `entity/EquipSlots.tsx` / `LevelLadder.tsx` / `SkillList.tsx` / `BagGrid.tsx` | 部位槽位 / 档位阶梯 / 技能行 / 背包网格 |
 
