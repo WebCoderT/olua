@@ -14,12 +14,13 @@
 - **假绿 > 漏检**：扫描器吞异常会「扫 0 个也全绿」→ 断言模块数；错误断言精确匹配文案；缓存 TTL 压 0；重试写进被测助手；节点名用 key 不用图标。
 - **工具**：只信 Grep 工具（BSD `grep "a\|b"` 恒空）；批量替换 `perl -pi -e`（本机 `sed -i ''` 异常）；改完看行尾（`GameUiHelper.ts` 历史上是 CRLF，现已统一 LF —— 动手前 `grep -c $'\r'` 确认，别凭记忆假设）；子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof`。
 - 删改代码用 node 按行号区间（跨行正则会从文件头 `/**` 吃到函数尾）；`//#region` 是有语义的注释，不能当注释裁。
-- **一份数据只能一个来源**：`shared/<域>-seed.ts` → 生成物 → 表 → 快照 → `apply*`，守点「重生成 + 逐字节」；种子常量加 `_SEED` 防重名。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`），`configs-sandbox` 与生成器共用同一个 `apply*`。
+- **一份数据只能一个来源**：库表（`config-sync.sql` 是它的导出物）→ 快照段 → `apply*` 整表重建，守点「导出一致 + 行数自洽」。代码里不许再有种子/生成物副本（`server/src/shared/` 已删）。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`），`configs-sandbox` 与真装载共用同一个 `apply*`。
 - **「保存即生效」= 三件事**：服务端存值（没有行 = 出厂值，重置 = 删行且幂等）+ 客户端覆写前先还原出厂值 + 几何每次进图都拉。**先写清用户用什么动作看效果，再定拉取时机**；空 `catch` 会把 404 伪装成「没生效」；「没生效」三分诊 = 查库 + 「N 件未保存」计数 + 写请求。
 - **给权威清单加字段 = 必然有一批测试在测「客户端能改它」**：先 `grep "PUT roles/"`，造状态改走 `PATCH /admin/roles/:id`。
 - 浅拷贝共享的是**数组引用**（15 变体共享 `outPositions`）→ 按基础件命中全部变体要逐个对象赋值；回填「尺寸取客户端、内容取库里」要逐格保坐标；**注释说 A 代码做 B 时先统一**。
 - **babel loose**：`[...map.values()]` 装迭代器 → 一律 `Array.from`；客户端 tsconfig 无 ES2017 → 不用 `Object.entries`（TS2550）。
-- e2e `checkEqual` 是 `===`（对象用 `JSON.stringify`）；e2e 读 `server/dist/...generated.js`，改了 `shared/` 要先 `cd server && npm run build`；自适应只测 `viewport:null` 的真机窗口。
+- e2e `checkEqual` 是 `===`（对象用 `JSON.stringify`）；改了 `server/src` 的 DTO / 常量要先 `cd server && npm run build`（e2e 跑 `dist/`）；自适应只测 `viewport:null` 的真机窗口。
+- **e2e 期望值一律从快照算**（`server/test/lib/config-snapshot.cjs`），不写死出厂数：`rows()` / `index()` / `group()` / `count()`，空表用 `optionalRows()` 兜。
 - **改 DTO 连描述都算改契约**：`audit-api-generated` 的 A 段是「现算一遍逐字节比对」→ 动过 `@ApiProperty({description})` 必须 `cd server && npm run swagger:emit` + `node tools/gen-api.cjs`，否则审计直接红。
 - **「管理页看不到新行」先查服务端 seed 有没有跑**：`ui_effects` / `maps` 这类行只在 `onModuleInit` 按常量 `INSERT OR IGNORE` 补出来，跑着的进程还是老代码 → 库里没有新行、排序也还是旧的。**重启 3100 才生效，重启管理端没用**；页面列表只在进页面时拉一次，还得刷新。
 
@@ -58,7 +59,11 @@
   `roleLevelAttributesOf` / `equipmentAttributesOf` / `sellPriceOf` **只读表**，不再回落生成物
   （旧兜底是 bug：生成物为 `[min,max]` tuple，读方按 `{min,max}` 取）。曲线相关全删：
   `admin/level-exps`、`admin/growth-segments` 下线，两张表启动 `DROP`，管理端只剩「成长参数」（标量）；
-  `roleMaxLevel` 校验 = 必须等于 role_levels 行数。老库搬家 `make data-migrate`。
-  **待办**：`server/src/shared/` 整目录删除（见当日记忆的方案）。
+  `roleMaxLevel` 校验 = 必须等于 role_levels 行数。
+  **`server/src/shared/` 整目录已删除**（19 个 `*-seed.ts` + 5 个 `*.generated.ts` 全搬进 `config-sync.sql`），
+  代码里没有第二份数值副本。**死旋钮已清**：`growth_scalars` 只剩 4 个全局标量（`attributeRange.*` 三条删）、
+  回收价曲线整条链删（`equipment_meta.recycle_curve` 列 + 客户端 `sampleGrowth`/`equipmentRecyclePrice` +
+  管理端卡片；价只认 `equipment_variants.sell_price`）。新增 `dropColumnIfExists()` 删老库死列。
 - open：#8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
+- skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。

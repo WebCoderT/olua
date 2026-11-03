@@ -30,7 +30,7 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 | `config.ts` | 手写 | 读 `VITE_API_BASE_URL` + `buildUrl` + `API_TIMEOUT`（地址唯一来源） |
 | `http.ts` | 手写 | 请求唯一出口（见下） |
 | `types.ts` | 手写 | **服务端文档里没有的东西**：`ApiEnvelope` / `PageResult<T>` / `ApiError` / `BIZ_CODE` / `RELOGIN_CODES` / `PERMISSION` / 权限点与审计动作的中文名字典 / 时间与输入框换算。**游戏数据不在这里** |
-| `gameData.ts` | 引用**生成物** | 游戏数据的唯一入口：re-export 三端共用的 `server/src/shared/game-data.generated.ts`（相对路径 import，Vite 打包）+ 查表函数（`equipmentText` / `skillText` / `itemText` / `soulText` / `titleText` / `rankText` / `occupationLabel` / `sexLabel` / `slotLabel`） |
+| `gameData.ts` | 手写（**数据来自接口**） | 游戏数据的唯一查表入口：登录后 `Layout` 调一次 `ensureGameData()` 拉 `GET /admin/game-data`（与客户端快照同形，**源头是库**），索引成几张 Map，之后同步查（`equipmentText` / `skillText` / `itemText` / `soulText` / `titleText` / `rankText` / `occupationLabel` / `sexLabel` / `slotLabel`）；缓存没到回落显示 id 本身 |
 | `mapCatalog.ts` | 手写 | **地图名录的进程内缓存**（#573：地图名只在服务端 `maps` 表，而角色详情 / 实体选择器要**同步**读）—— `Layout` 挂载时 `ensureMapCatalog()` 拉一次，地图页保存成功后 `refreshMapCatalog()`；`mapText(id)` 缓存没到时回落显示 id |
 | `index.ts` | 手写 | barrel —— **页面 import 统一走 `../api`**，换生成物时页面一行都不用改 |
 
@@ -38,23 +38,23 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 `node tools/audit-api-hardcode.cjs`（地址 / 请求 / 路径的唯一来源，且**唯一来源文件必须带生成标记**）、
 `node tools/audit-shared-data.cjs`（公共游戏数据与客户端 configs 逐字节一致 + 每张表齐全非空 + **扫 `admin/src` 抓手抄的同名字典**）。
 
-### 游戏数据：一份来源，三端共用（用户 2026-10-13 定的硬要求，issue #117~#119）
+### 游戏数据：唯一权威是数据库（用户 2026-10-13 定的硬要求，issue #117~#122；#655 收口）
 
-装备 / 战魂 / 称号 / 军衔 / 技能 / 物品的名字与元数据，权威定义只有一处 —— 客户端
-`client/assets/configs`（外加 `client/assets/types/role.ts` 的枚举注释：「全职业」职业码与三个性别名只写在那儿）。
-管理端**不复制**：`api/gameData.ts` 按相对路径 import `server/src/shared/game-data.generated.ts`
-（由 `tools/gen-shared-data.cjs` 生成），**服务端与管理端读的是同一个文件**。
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 怪物的名字与元数据，权威定义只有一处 —— **数据库**
+（出厂快照 = `server/data/config-sync.sql`）。管理端**没有生成物可读**：`api/gameData.ts` 登录后
+`GET /admin/game-data` 拉一次快照（与客户端 `GET /game-config` 同一份、同一个 `snapshot()`），
+之后所有查表都是同步的。代码里没有任何数据副本，`server/src/shared/` 整个目录已删。
 
-**地图不在这一套里（#573）**：地图的玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）归服务端 `maps` 表，
-出厂值只是 `server/src/common/constants/map-config.ts` 的 seed，客户端只留资源约定（`map/<id>/<id>` 目录）；
-生成物里已经没有 `MAPS` / `MAP_LABELS`，页面上的地图名走 `api/mapCatalog.ts`。
+**地图不在这一套里（#573）**：地图的玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）在 `maps` 表，
+客户端只留资源约定（`map/<id>/<id>` 目录），页面上的地图名走 `api/mapCatalog.ts`。
 
-- **此前管理端自己抄过一份** `OCCUPATION_LABELS` / `SEX_LABELS`（写在 `types.ts` 里）—— 客户端改了这边不会知道，
-  已删掉改引用生成物；`audit-shared-data` 现在会扫 `admin/src` 抓「与生成物同名的字典型定义」。
-- 改数值 / 改文案 → 改客户端配置 → `node tools/gen-shared-data.cjs`（`make gen-shared-data`）。
-- 页面显示名字**一律过 `gameData.ts` 的查表函数**，不要自己拼（装备显示名含前后缀、部位归属都是生成器在
-  客户端数据上算好的；三张等级表是「下标 = 等级 - 1」，那一位差也只在 `gameData.ts` 里处理）。
-- **dev 模式**要读项目外的文件，`vite.config.ts` 放行了上层目录（`server.fs.allow: [".."]`）；构建不受影响。
+- **枚举是例外、必须在两端逐值一致**：职业 / 性别 / 怪物定位的中文名住在服务端 `common/constants/game-enums.ts`
+  （客户端 `assets/types/*` 镜像同一批值），管理端按相对路径 import 它 —— 加一个职业码只改一处，两边自动跟着变；
+  `audit-shared-data` 会扫 `admin/src` 抓「与枚举同名的字典型定义」（以前这里自己抄过一份 `OCCUPATION_LABELS`）。
+- 改数值 / 改文案 → 在管理端页面上改（就是改库）→ `make config-export` 重导快照提交，别人 `make config-import` 拿到。
+- 页面显示名字**一律过 `gameData.ts` 的查表函数**，不要自己拼（装备显示名含前后缀、部位归属都在
+  `equipment_variants` 表里逐条写好了；等级表不是「下标 = 等级 - 1」而是按 `level` 列查）。
+- **dev 模式**要读项目外的枚举文件，`vite.config.ts` 放行了上层目录（`server.fs.allow: [".."]`）；构建不受影响。
 
 ## 三、请求层口径（`http.ts`）
 
@@ -93,12 +93,12 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `AnnouncementsPage` | 公告列表与发布 / 编辑（`announcement:read` 看见、`announcement:write` 改，编辑走 `AnnouncementDialog`） |
 | `TitlesPage` / `SoulsPage` | **养成配置**（称号 / 战魂，`gameConfig:read/write`）：服务端分页主列表 + 顶部按钮唤起「成长列表」弹窗。见「养成配置页面模式」一节 |
 | `RanksPage` | **养成配置**（军衔 #250）：同上模式，无拖动排序（100 阶天然按阶），主列表带大段 Badge；`GameConfigDialog` kind="rank"（无动画栏、加大段名输入） |
-| `GrowthPage` | **养成配置**（成长曲线 #256）：三卡片（升级经验 / 曲线分段 / 标量参数）+ 共用 `NumberEditDialog`（fields spec 驱动）；分段保存走「先内存校验再落库」口径 |
+| `GrowthPage` | **养成配置**（成长参数 #256 / #655）：**只剩标量参数一栏**（`roleMaxLevel` / `expGain.*` / `mpRecoverPerSecond` 四个全局数）+ `NumberEditDialog`；升级经验与每级属性搬到「角色等级」页。曲线分段随曲线下架 —— 别再往这页加「一段带动十级」的旋钮 |
 | `EquipmentsPage` | **养成配置**（装备基础件 #252）：部位 / 等级段筛选 + 分页；**只收基础件**（37 件，变体在客户端按倍率展开）；编辑弹窗只开放等级 / 售卖价 / 八项属性（页面内 `EquipmentEditDialog`，不复用 GameConfigDialog —— 字段差异太大） |
 | `MonstersPage` | **养成配置**（怪物基础数据 #258 / 掉落 #584）：关键字 / 定位筛选 + 分页；编辑弹窗开放名称 / 等级 / 生命上限 / 六项攻防区间（页面内 `MonsterEditDialog`，区间字段复用 `RANGE_FIELDS`）；**改值即时生效**（世界播种与伤害结算直读 monsters 表）。列表带「掉落」列（来源徽标 + `dropSummaryText`：`common · 2~5 件 · 12 条` / `内联 3 条 · 抽 1~2` / `兜底表 default`）与行内「掉落」按钮 → `components/drop/MonsterDropDialog`（弹窗自己按 key 拉 `GET /admin/monster-drops/:key` + 具名表清单，写入只有 `PATCH /admin/monster-drops/:key` 一条路）。摘要来自服务端 `drop` 字段，**玩家侧快照不带它**（客户端不结算掉落） |
 | `NpcsPage` | **养成配置**（NPC 基础数据 #258）：关键字筛选 + 分页；编辑弹窗只有名称 / 对话文案（对话 seed 为空串，客户端暂无消费） |
 | `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改 / #580 可视化 + 弹窗）**：左侧 11 张图，右侧 = 上半「玩法配置」（可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半 **`components/map/MapCanvas`**（预览图上叠 SVG：刷怪区实线 + TMX 原始矩形虚线 + NPC/复活点/碰撞盒，可逐个开关、可「放大」到 72vh、点区域/点 NPC 打开对应弹窗并高亮那一行）。其余观测块全在 `components/map/MapDialogs` 的弹窗里（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）；**刷怪区越界**由服务端算好后显示（`MapSpawnArea.inBounds/overflow`，弹窗里「在图内」列 + 地图上红色虚线 + 地图卡片只在 >0 时出徽标）——提醒：容器 `overflow-hidden` 会把越出 viewBox 的部分裁掉，「区域在图外」在图上表现为「区域不存在」，不能指望眼睛发现—— **页面只留配置与地图**：地图页看不到地图等于没有地图页。**观测区没有编辑入口是功能定义不是缺口**：地图真相在客户端 TMX，换图只能改 TMX → 跑 `import-spawn-areas` → 重打包客户端（POST / PUT / DELETE 一律 404，超管也一样；`src` 塞进来也会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
-| `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自生成物 555 件变体）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
+| `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自 `equipment_variants` 555 行）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
 | `DropConfigPage` | **掉落配置**（#254）：上半部具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 **物品（`EntityPickButton` 可视化挑，不再手填 id）** / 权重 / 概率 / 数量区间）；下半部每怪掉落列表（关键字 / 来源筛选 + 分页，编辑弹窗三选一：引用具名表 / 内联条目+必填 picks / 清空 none）；具名表被引用中的行拒删。**弹窗与编辑器是共用件**（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`，怪物列表 #584 用同一份）—— 别再在页面里各写一套三选一 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
@@ -159,11 +159,11 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - 候选清单统一来自 `entity/catalog.ts`（`entityOptions(kind)` 带模块级缓存），**页面不许自己拼候选数组**；
 - **别用「列表接口 + size: 100」当候选**：怪物 220 只、物品 2200+ 件，`size: 100` 那套会让第 101 只之后的怪根本选不到（任务页踩过，列表里还全显示裸 id）。固定清单（怪物 / NPC / 物品 / 装备 / 技能）走 catalog 静态清单，只有**可增删**的表（任务、掉落具名表）才该走接口；
 - 服务端校验口径与清单必须是同一份：掉落条目卡的是 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），对应 `entityOptions("item")` —— 能选出来就必定存得进去。
-- 怪物名字是**出厂名**（`monster-seed`），运行时权威在 `monsters` 表（管理端可改）：选择器显示种子名、**选中值永远是 id**，列表页显示表名。这两处不一致是已知代价，别为了「对齐」在选择器里再拉一次接口。
+- 怪物名字来自 `monsters` 表（出厂行随快照灌库，管理端可改）：选择器显示表里的名字、**选中值永远是 id**。
 
 ## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
 
-养成配置 = 服务端启动 seed 的**固定等级序列**（称号 34 级 / 战魂 37 阶 / 军衔 100 阶 / 装备基础件 37 件），**只能改、不能增删**（POST/DELETE 接口根本不存在）。称号与战魂两页结构完全一致，改一处要想着另一处；军衔 / 成长曲线 / 装备各按自身字段形态复用或另起弹窗（见页面表）。
+养成配置 = 库里的**固定等级序列**（称号 34 级 / 战魂 37 阶 / 军衔 100 阶 / 角色等级 60 行 / 装备基础件 37 件 + 变体 555 行），**只能改、不能增删**（POST/DELETE 接口根本不存在）。称号与战魂两页结构完全一致，改一处要想着另一处；军衔 / 角色等级 / 装备各按自身字段形态复用或另起弹窗（见页面表）。
 
 **主列表**：服务端分页（`Pagination`，10/20/50/100）+ 「编辑」按钮弹 `GameConfigDialog` + 顶部「成长列表」按钮弹 `GameGrowthListDialog`。**主列表不显示价格**（#232/#234：价格唯一显示与修改口 = 成长列表）。
 
@@ -213,7 +213,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
   `vite.config.ts` 的 `gameResources()` 中间件；**同一个 URL 前缀**，页面里不要写环境分支。
 - **`fetch` 只能出现在 `src/pages/equipAlign/assets.ts`**：`audit-api-hardcode` 只放行这一个文件
   （读静态素材），页面里直接写 fetch 会被判成「请求绕开 `http.ts`」。
-- **「本机上有什么」不许进生成物**：`client/assets/resources/` 是 gitignore 的，清单带 `hasAsset`
+- **「本机上有什么」不许进快照**：`client/assets/resources/` 是 gitignore 的，清单带 `hasAsset`
   会让逐字节守点在 CI 上必然假红 → 运行时 `probeAtlas`（HEAD，只有 403/404/410 才算缺）。
 - **改语义要渐进**：武器的 `outPositions` 原本是「对自动算法的微调」，工作台直接写绝对值等于把它们
   全推到原点 → 加 `outManual` 标记，勾了才走绝对位置，没勾继续走运行时算法。
@@ -371,7 +371,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 2. `cd server && npm run gen:api` 重新产出文档与两端接口文件（`admin/src/api/endpoints.ts` / `models.ts` / `routes.ts`）。
 3. 管理端：`npx tsc --noEmit` 看报错，按生成的方法签名改调用点；新增页面走 `RequirePermission` 外壳 + `PERMISSION` 常量 + `Layout.tsx` 导航项。
 4. **同步受管文档数字**：接口数 / 路径数 / 模型数 / 管理端分组数变了就改 README / FAQ 双语 / resume / server README（见坑 11）。
-5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 生成物一致性）+ 仓库根 `make audit`（16 项跨端审计）。
+5. 验证：`make admin-build`（= tsc + vite build）+ 服务端 `npm run verify`（e2e 全套 + 契约审计）+ 仓库根 `make audit`（16 项跨端审计）。
 6. 仓库根 Makefile 等价目标：`make admin-build` / `make admin-typecheck` / `make gen-api` / `make verify`（全门禁）；`make help` 列全部。
 
 ## 八、提交纪律（强制，与仓库根纪律一致）
@@ -397,4 +397,4 @@ git checkout master -q && git pull --ff-only -q
 
 - 契约从哪来（`operationId` / 装饰器 / 生成器 / 守卫）：skill `olua-server` 的 `references/contract-pipeline.md`
 - 服务端权限模型与接口写法：skill `olua-server`
-- 客户端怎么消费同一份生成物：skill `olua-client`
+- 客户端怎么消费同一份快照：skill `olua-client`
