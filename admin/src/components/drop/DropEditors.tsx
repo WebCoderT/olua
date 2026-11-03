@@ -14,6 +14,14 @@ import { Button, Field, Input } from "../ui";
  * 这种细节上分叉。这里只放**纯编辑零件与形状转换**，弹窗本身各自组装。
  */
 
+/**
+ * 条目行的列宽（序 / 物品 / 权重 / 概率 / 数量 / 删）
+ *
+ * 列头与每一行共用同一串类名 —— 两处各写一份 `grid-cols-[…]`，改宽度时必定漏一处，
+ * 列头就会和下面的输入框错半格。
+ */
+const ENTRY_GRID = "grid grid-cols-[1.75rem_minmax(0,1fr)_4.5rem_5.5rem_7.5rem_1.75rem] items-center gap-2";
+
 /** 来源中文名（语义标注：引用具名表 / 内联条目 / 未配置走兜底） */
 export const DROP_SOURCE_LABELS: Record<string, string> = { table: "具名表", entries: "内联", none: "兜底" };
 export const DROP_SOURCE_TONE: Record<string, "indigo" | "green" | "slate"> = {
@@ -46,31 +54,46 @@ export function picksText(picks: unknown): string {
   return Array.isArray(picks) ? `${picks[0]}~${picks[1]}` : String(picks);
 }
 
-/** 条目行（编辑器内的可变形状：数字输入都是字符串） */
-export type EntryDraft = { goodId: string; weight: string; chance: string; countMin: string; countMax: string };
+/**
+ * 条目行（编辑器内的可变形状：数字输入都是字符串）
+ *
+ * 概率那一格是**百分比**（`chancePct`，0~100），不是服务端存的 0~1 —— 后台是给运营看的，
+ * 「5%」比「0.05」少一次心算；落库时除以 100（见 `entriesFrom`）。
+ */
+export type EntryDraft = { goodId: string; weight: string; chancePct: string; countMin: string; countMax: string };
+
+/** 概率 0~1 → 百分比输入值（去掉尾随零：`1 → 100`、`0.5 → 50`、`0.0333 → 3.33`） */
+function pctOfChance(chance: number): string {
+  const pct = Math.round(chance * 1_000_000) / 10_000;
+  return Number.isFinite(pct) ? String(pct) : "100";
+}
 
 export function entriesOf(entries: DropEntry[] | null): EntryDraft[] {
   return (entries ?? []).map((entry) => ({
     goodId: entry.goodId,
     weight: String(entry.weight ?? 1),
-    chance: String(entry.chance ?? 1),
+    chancePct: pctOfChance(entry.chance ?? 1),
     countMin: String(entry.count?.[0] ?? 1),
     countMax: String(entry.count?.[1] ?? 1),
   }));
 }
 
 export function entriesFrom(drafts: EntryDraft[]): DropEntry[] {
-  return drafts.map((draft) => ({
-    goodId: draft.goodId.trim(),
-    weight: Number(draft.weight) || 0,
-    chance: Number(draft.chance),
-    count: [Number(draft.countMin) || 1, Number(draft.countMax) || 1],
-  }));
+  return drafts.map((draft) => {
+    // 概率留空 = 必掉（服务端 `chance ?? 1` 的同一口径）；写 0 才是「永不掉落」
+    const pct = Number(draft.chancePct);
+    return {
+      goodId: draft.goodId.trim(),
+      weight: Number(draft.weight) || 0,
+      chance: Number.isFinite(pct) && draft.chancePct.trim() !== "" ? pct / 100 : 1,
+      count: [Number(draft.countMin) || 1, Number(draft.countMax) || 1],
+    };
+  });
 }
 
 /** 空行（新建条目 / 内联模式初值） */
 export function emptyEntryDraft(): EntryDraft {
-  return { goodId: "", weight: "1", chance: "1", countMin: "1", countMax: "1" };
+  return { goodId: "", weight: "1", chancePct: "100", countMin: "1", countMax: "1" };
 }
 
 /** 条目草稿的即时校验（显示层拦截；权威在服务端：goodId 存在性 / count min ≤ max） */
@@ -79,7 +102,8 @@ export function entryErrors(drafts: EntryDraft[]): string[] {
   drafts.forEach((draft, index) => {
     const where = `条目 ${index + 1}`;
     if (!draft.goodId.trim()) errors.push(`${where} 还没挑物品`);
-    if (Number(draft.chance) < 0 || Number(draft.chance) > 1) errors.push(`${where} 的概率要在 0~1 之间`);
+    const pct = Number(draft.chancePct);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) errors.push(`${where} 的概率要在 0~100 之间`);
     if (Number(draft.countMin) > Number(draft.countMax)) errors.push(`${where} 的数量下限大于上限`);
   });
   return errors;
@@ -88,11 +112,18 @@ export function entryErrors(drafts: EntryDraft[]): string[] {
 /**
  * 条目池编辑器（具名表与每怪内联共用一份）
  *
- * 每行：**物品（可视化挑选）** + 权重 + 概率 + 数量区间；可增删行。
+ * 版式对齐过的原因：以前是 `flex flex-wrap items-end` 一串**没有标签**的数字框 ——
+ * 权重 / 概率 / 数量三组输入长得一模一样，只能靠记住「第三、四个框是什么」；
+ * 换行时机还取决于物品名长短，两行的框对不齐。现在是一个**固定列宽的栅格**
+ * （序 / 物品 / 权重 / 概率 / 数量 / 删），列头写一次标签，每行只填值：
  *
- * 物品从 #648 起不再是文本框：以前要人背 `drug_hp_1` / `weapon_1_p0s1`，现在是「图标 + 名字 +
- * 一行说明」的按钮，点开就是可掉落的物品（**装备只列基础件** + 药品 + 材料）。候选集与服务端
- * 校验同一份（`ITEM_LABELS` → `dropItemOptions()`），所以能选出来的必定能存进去。
+ * - 权重：抽到哪一条的**相对占比**（同一池内归一化，0 = 永不抽到）；
+ * - 概率：抽中之后**实际掉出来**的几率，按百分比填（服务端存 0~1，这里 ÷100）；
+ * - 数量：掉出来的件数区间（相等即固定）。
+ *
+ * 物品从 #648 起不再是文本框：现在是「图标 + 名字 + 一行说明」的按钮，点开就是可掉落的
+ * 物品（**装备只列基础件** + 药品 + 材料），候选集与服务端校验同一份（`ITEM_LABELS` →
+ * `dropItemOptions()`），能选出来的必定能存进去。
  *
  * 「批量添加」走多选：一次勾十几种材料比开十几次弹窗快得多。装备的变体不在这里逐件点名 ——
  * 掉出来是哪一档由变体表决定，候选里没有 `xxx_p2s1` 这种行。
@@ -115,10 +146,18 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
     if (rows.length > 0) onChange([...drafts, ...rows]);
   };
 
+  // 权重合计：算「占比」用（0 权重的条目不会进 total 之外的任何分母）
+  const totalWeight = drafts.reduce((sum, draft) => sum + Math.max(0, Number(draft.weight) || 0), 0);
+
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">条目池（weight 权重 / chance 概率 0~1 / count 数量区间）</span>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-medium text-slate-400">
+          条目池
+          <span className="ml-1.5 font-normal text-slate-500">
+            共 {drafts.length} 条{totalWeight > 0 ? ` · 权重合计 ${totalWeight}` : ""}
+          </span>
+        </span>
         <div className="flex items-center gap-1.5">
           <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setBulkOpen(true)}>
             批量添加
@@ -128,39 +167,120 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
           </Button>
         </div>
       </div>
-      <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-        {drafts.map((draft, index) => (
-          <div key={index} className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[220px] flex-1">
-              <EntityPickButton
-                value={draft.goodId}
-                options={itemOptions}
-                kind="item"
-                pickerTitle={`选择条目 ${index + 1} 的物品`}
-                hint="装备只列基础件（掉出来是哪一档前后缀由变体表决定）/ 药品 / 材料；挑中即存它的 id。"
-                emptyHint="物品总表是空的 —— 先确认服务端配置已灌入（make config-import）"
-                onChange={(goodId) => update(index, { goodId })}
-              />
-            </div>
-            <div className="w-20"><Input type="number" min={0} step="0.01" aria-label="权重" value={draft.weight} onChange={(event) => update(index, { weight: event.target.value })} /></div>
-            <div className="w-20"><Input type="number" min={0} max={1} step="0.01" aria-label="概率" value={draft.chance} onChange={(event) => update(index, { chance: event.target.value })} /></div>
-            <div className="flex items-center gap-1">
-              <div className="w-16"><Input type="number" min={0} aria-label="数量下限" value={draft.countMin} onChange={(event) => update(index, { countMin: event.target.value })} /></div>
-              <span className="text-xs text-slate-600">~</span>
-              <div className="w-16"><Input type="number" min={0} aria-label="数量上限" value={draft.countMax} onChange={(event) => update(index, { countMax: event.target.value })} /></div>
-            </div>
-            <Button variant="outline" className="px-2 py-1 text-xs" disabled={drafts.length <= 1} onClick={() => remove(index)}>
-              删
-            </Button>
+
+      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40">
+        <div className={`${ENTRY_GRID} border-b border-slate-800 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-500`}>
+          <span className="text-center">序</span>
+          <span>物品</span>
+          <span className="text-center" title="抽到哪一条的相对占比（同一池内归一化；0 = 永不抽到）">
+            权重
+          </span>
+          <span className="text-center" title="抽中之后实际掉出来的几率，按百分比填">
+            概率
+          </span>
+          <span className="text-center" title="掉出来的件数区间（相等即固定）">
+            数量
+          </span>
+          <span aria-hidden="true" />
+        </div>
+
+        {drafts.length === 0 ? (
+          <p className="px-3 py-6 text-center text-xs text-slate-500">
+            还没有条目 —— 用「批量添加」一次挑多件，或「加一条」逐条配。
+          </p>
+        ) : (
+          <div className="divide-y divide-slate-800/60">
+            {drafts.map((draft, index) => {
+              const weight = Math.max(0, Number(draft.weight) || 0);
+              const share = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
+              return (
+                <div key={index} className={`${ENTRY_GRID} px-2 py-1.5 transition hover:bg-slate-900/50`}>
+                  <span className="text-center font-mono text-[11px] text-slate-500">{index + 1}</span>
+                  <EntityPickButton
+                    value={draft.goodId}
+                    options={itemOptions}
+                    kind="item"
+                    pickerTitle={`选择条目 ${index + 1} 的物品`}
+                    hint="装备只列基础件（掉出来是哪一档前后缀由变体表决定）/ 药品 / 材料；挑中即存它的 id。"
+                    emptyHint="物品总表是空的 —— 先确认服务端配置已灌入（make config-import）"
+                    onChange={(goodId) => update(index, { goodId })}
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="text-center"
+                    aria-label={`条目 ${index + 1} 权重`}
+                    title={weight > 0 ? `占本池 ${share.toFixed(share < 10 ? 1 : 0)}%` : "权重 0 = 这条永远不会被抽到"}
+                    value={draft.weight}
+                    onChange={(event) => update(index, { weight: event.target.value })}
+                  />
+                  {/* `%` 放在输入框外面：塞进框里要 `pr-*`，而 `Input` 自带的 `px-2.5` 不保证被覆盖 */}
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      className="text-center"
+                      aria-label={`条目 ${index + 1} 概率（百分比）`}
+                      title="抽中之后实际掉出来的几率"
+                      value={draft.chancePct}
+                      onChange={(event) => update(index, { chancePct: event.target.value })}
+                    />
+                    <span className="shrink-0 text-[10px] text-slate-500">%</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      className="text-center"
+                      aria-label={`条目 ${index + 1} 数量下限`}
+                      value={draft.countMin}
+                      onChange={(event) => update(index, { countMin: event.target.value })}
+                    />
+                    <span className="text-[10px] text-slate-600">~</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="text-center"
+                      aria-label={`条目 ${index + 1} 数量上限`}
+                      value={draft.countMax}
+                      onChange={(event) => update(index, { countMax: event.target.value })}
+                    />
+                  </div>
+                  {/*
+                    删除用原生按钮而不是 `Button`：这一格只有 1.75rem 宽，`Button` 自带的
+                    `px-3` 会把 28px 撑成 40px，栅格右边的列就错位了（类名覆盖在 Tailwind 里
+                    不按书写顺序生效，别赌）。
+                  */}
+                  <button
+                    type="button"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="删除这一条"
+                    aria-label={`删除条目 ${index + 1}`}
+                    disabled={drafts.length <= 1}
+                    onClick={() => remove(index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        )}
       </div>
+
+      <p className="mt-1.5 text-[11px] text-slate-500">
+        抽取顺序：按权重决定抽到哪一条 → 过概率 → 取件数；权重为 0 的条目永远不会被抽到。
+      </p>
+
       {bulkOpen ? (
         <EntityPicker
           open
           multiple
           title="批量添加掉落物品"
-          hint="勾选若干项后点「加入」—— 每条按权重 1 / 概率 1 / 数量 1~1 追加，之后逐行改数值即可。"
+          hint="勾选若干项后点「加入」—— 每条按权重 1 / 概率 100% / 数量 1~1 追加，之后逐行改数值即可。"
           options={itemOptions}
           emptyHint="物品总表是空的 —— 先确认服务端配置已灌入（make config-import）"
           onSelectMany={addMany}
@@ -205,7 +325,7 @@ export function EntriesPreview({ entries, max = 12 }: { entries: DropEntry[]; ma
         return (
           <span
             key={`${entry.goodId}-${index}`}
-            title={`${label}（${entry.goodId}）· 权重 ${entry.weight} · 概率 ${entry.chance}`}
+            title={`${label}（${entry.goodId}）· 权重 ${entry.weight} · 概率 ${pctOfChance(entry.chance ?? 1)}%`}
             className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/60 py-0.5 pl-0.5 pr-1.5"
           >
             <EntityImage image={entityImage("item", entry.goodId)} alt={label} size={20} />
