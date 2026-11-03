@@ -91,6 +91,9 @@ export const EXP_GAIN = {
   maxLevelGap: 6,
 } as const;
 
+/** 魔法值自然回复速度（点 / 秒）：血蓝收权（#596）后由服务端结算，运营可改（#605） */
+export const MP_RECOVER_PER_SECOND = 2;
+
 /** 成长标量参数键 → 数值（seed 进 growth_scalars 表，管理端可改；键名是管理端接口契约） */
 export const GROWTH_SCALARS: Record<string, number> = {
   roleMaxLevel: 60,
@@ -99,6 +102,8 @@ export const GROWTH_SCALARS: Record<string, number> = {
   "attributeRange.hpRecoverRate": ATTRIBUTE_RANGE.hpRecoverRate,
   "expGain.expPerLevel": EXP_GAIN.expPerLevel,
   "expGain.maxLevelGap": EXP_GAIN.maxLevelGap,
+  /** #605：原本写死在 role-authority 的常量，改为可配置（0 = 关闭自然回蓝） */
+  mpRecoverPerSecond: MP_RECOVER_PER_SECOND,
 };
 
 /** 角色等级上限（= 每条曲线末段的 to；改曲线先改末段，再来抬这个数） */

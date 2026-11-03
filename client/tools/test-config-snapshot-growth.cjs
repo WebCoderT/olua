@@ -7,7 +7,7 @@
  * · **零本地数据** —— 模块加载期 levelMap / titleLevels / soulLevels / rankLevels 全是空表
  * · **整表重建** —— 快照 `levels` / `titles` / `souls` / `ranks` 段到达后先清空再按行填
  *   （数组与 Map 的**引用不变**），服务端没有的行客户端就没有
- * · **上限走标量** —— roleMaxLevel 由 growthScalars 下发；未知标量键忽略不炸
+ * · **上限走标量** —— roleMaxLevel / mpRecoverPerSecond 由 growthScalars 下发；未知标量键忽略不炸
  * · **兜底不炸** —— 空快照（旧服务端）保留当前值；同一份快照重复覆写幂等
  *
  * 行数据用**真实服务端种子**（compileServerShared 编 growth-seed / title-seed /
@@ -113,6 +113,22 @@ function main() {
   check(maxLevel() === 70, "等级上限读到服务端的 70", String(maxLevel()));
   snapshotApi.applyGrowthScalars([{ key: "attributeRange.unknownRate", value: 999, description: "", updatedAt: 0 }]);
   check(maxLevel() === 70, "未知标量键被忽略，不影响其余参数", String(maxLevel()));
+
+  console.log("\n=== 标量：mpRecoverPerSecond 下发（#605）===");
+  // 与 roleMaxLevel 一样是 `export let`：CommonJS 下解构会拷成快照，必须按属性读
+  const roleConfig = require(path.join(outDir, "configs/role.js"));
+  const mpRate = () => roleConfig.mpRecoverPerSecond;
+  check(
+    roleConfig.mpRecoverPerSecond === growthSeed.GROWTH_SCALARS.mpRecoverPerSecond,
+    "出厂值 = 服务端种子（快照没到时的兜底两边一致）",
+    `${roleConfig.mpRecoverPerSecond} vs ${growthSeed.GROWTH_SCALARS.mpRecoverPerSecond}`,
+  );
+  snapshotApi.applyGrowthScalars([{ key: "mpRecoverPerSecond", value: 5, description: "", updatedAt: 0 }]);
+  check(mpRate() === 5, "回复速度随快照覆写成 5（客户端演出与结算同速）", String(mpRate()));
+  snapshotApi.applyGrowthScalars([{ key: "mpRecoverPerSecond", value: -3, description: "", updatedAt: 0 }]);
+  check(mpRate() === 0, "负数按 0 处理（配置拍错时宁可不回蓝，也不能倒扣）", String(mpRate()));
+  snapshotApi.applyGrowthScalars([{ key: "roleMaxLevel", value: 70, description: "", updatedAt: 0 }]);
+  check(mpRate() === 0, "只下发别的标量时回复速度保持不变（不是每次整份重置）", String(mpRate()));
 
   console.log("\n=== 缩表：服务端把上限调小 ===");
   const shrunken = levelRows().filter((row) => row.level <= 50);

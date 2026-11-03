@@ -476,6 +476,15 @@ async function main() {
     checkEqual(rateOver.status, 400, "比率超出取值域（>1）→ 400");
     const rateFraction = await api(base, "PATCH", "/api/admin/growth-scalars/expGain.expPerLevel", { token, body: { value: 5.5 } });
     checkEqual(rateFraction.status, 400, "整数参数传小数 → 400");
+    // #605：魔法自然回复速度入表（原本写死在 role-authority，管理端改不了）
+    const mpRecoverPatched = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: 3.5 } });
+    checkEqual(mpRecoverPatched.status, 200, "#605 魔法回复速度可改（小数合法）");
+    checkEqual(mpRecoverPatched.body?.data?.value, 3.5, "回复速度按提交值生效");
+    const mpRecoverNegative = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: -1 } });
+    checkEqual(mpRecoverNegative.status, 400, "恢复速度不能为负 → 400");
+    const mpRecoverZero = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: 0 } });
+    checkEqual(mpRecoverZero.body?.data?.value, 0, "0 合法（关闭自然回蓝）");
+    await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: growthSeedScalars.mpRecoverPerSecond } });
     const maxLevelJump = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 61 } });
     checkEqual(maxLevelJump.status, 400, "抬等级上限但曲线末段没跟上 → 400（跨表校验）");
     const scalarGhost = await api(base, "PATCH", "/api/admin/growth-scalars/nope", { token, body: { value: 1 } });

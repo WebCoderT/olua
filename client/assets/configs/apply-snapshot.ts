@@ -37,7 +37,7 @@ import {
 } from "./game-config";
 import { items, rebuildItemIndex } from "./items";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
-import { roleDefaultCloths } from "./role";
+import { roleDefaultCloths, setMpRecoverPerSecond } from "./role";
 import { SEX } from "../types/role";
 
 /**
@@ -81,17 +81,20 @@ function applyMallPrices(prices: MallPriceItem[], defaultPrice: number): void {
 }
 
 /**
- * 覆写成长标量参数（#361；#590 起客户端只消费 roleMaxLevel）
+ * 覆写成长标量参数（#361；#590 起客户端只消费 roleMaxLevel；#605 起加上魔法回复速度）
  *
  * 键名是管理端的接口契约（`GROWTH_SCALAR_SPECS`）。曲线派生类参数（attributeRange.* /
  * expGain.*）随 #590 移出客户端（属性与经验都由服务端展开进 `levels` 段），
- * 这里只保留等级上限的覆写；未知键直接忽略（服务端新增参数时旧客户端照常玩）。
+ * 这里只保留**客户端也要用**的那两个标量；未知键直接忽略（服务端新增参数时旧客户端照常玩）。
  */
 export function applyGrowthScalars(rows: GrowthScalar[]): void {
   rows.forEach((row) => {
     switch (row.key) {
       case "roleMaxLevel":
         setRoleMaxLevel(row.value);
+        return;
+      case "mpRecoverPerSecond":
+        setMpRecoverPerSecond(row.value);
         return;
       default:
         return;
