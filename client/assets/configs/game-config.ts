@@ -1472,6 +1472,8 @@ export interface FashionDataEntry {
   out?: string;
   /** 售卖价（原配置字段名 sellPirce，这里用正确拼写；缺省 0） */
   sellPrice?: number;
+  /** 获得渠道（upgrade = 可购买 / grant = 运营发放 / unavailable = 未开放；#596） */
+  acquireChannel: string;
   /** 战斗属性加成（缺省全 0） */
   attributes?: {
     maxHp?: number;
@@ -1501,6 +1503,8 @@ export interface FashionSeedLike {
   inRes: string;
   outRes: string;
   sellPrice: number;
+  /** 获得渠道（upgrade = 可购买 / grant = 运营发放 / unavailable = 未开放；#596 起弹窗用它算「能不能买」） */
+  acquireChannel?: string;
   attributes: {
     maxHp?: number;
     hpRecover?: number;
@@ -1540,6 +1544,7 @@ export function applyFashionData(rows: FashionSeedLike[]): void {
       in: String(row.inRes ?? ""),
       out: String(row.outRes ?? ""),
       sellPrice: Number(row.sellPrice) || 0,
+      acquireChannel: String(row.acquireChannel ?? "unavailable"),
       attributes: {
         maxHp: Number(source.maxHp) || 0,
         hpRecover: Number(source.hpRecover) || 0,

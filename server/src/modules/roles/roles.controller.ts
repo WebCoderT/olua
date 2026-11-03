@@ -10,6 +10,8 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { FashionBuyDto, FashionBuyResultDto, FashionWearDto, FashionWearResultDto } from "./dto/fashion.dto";
+import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto } from "./dto/sell-goods.dto";
 import { RolesService } from "./roles.service";
 
@@ -145,6 +147,58 @@ export class RolesController {
   @ApiDataResponse(DrugUseResultDto, { description: "使用后的角色（含本次回复量）" })
   drugUse(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: DrugUseDto): DrugUseResultDto {
     return this.rolesService.useDrug(user.id, id, dto);
+  }
+
+  @Post(":id/revive")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.revive",
+    summary: "复活：血蓝补到上限（满血由服务端落账）",
+    description:
+      "死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。\n\n" +
+      "客户端死亡弹窗的两个选项（原地 / 回城复活）都调它，差别只在**复活位置**（纯演出），\n" +
+      "满血这件事只在服务端发生 —— 改包上报满血存档是无效的（血蓝在 save 时被服务端结算值覆盖）。\n\n" +
+      "revision 不推进（与受击同一纪律：血量型写入走实时帧），返回值带上限供客户端照搬。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(ReviveResultDto, { description: "复活后的血蓝与上限" })
+  revive(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): ReviveResultDto {
+    return this.rolesService.revive(user.id, id);
+  }
+
+  @Post(":id/fashion-buy")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.fashionBuy",
+    summary: "购买时装（扣费与拥有清单都在服务端）",
+    description:
+      "渠道 = `fashions.acquire_channel === \"upgrade\"` 且 `sell_price > 0` 才可买（与称号渠道同语义）；\n" +
+      "价格只认 fashions 表（管理端改价即时生效），扣绑定元宝后写入拥有清单 `fashionsOwned`。\n\n" +
+      "拥有清单是**独占字段**：客户端存档上报无效，只能由购买与管理端发放书写 ——\n" +
+      "改包把清单填满不会让任何一件时装变成「已拥有」。\n\n" +
+      "失败路径：20016 渠道未开放 / 售价为 0 / 已拥有；20011 绑定元宝不足；乐观锁与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(FashionBuyResultDto, { description: "购买结果（余额 + 完整拥有清单）" })
+  fashionBuy(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: FashionBuyDto): FashionBuyResultDto {
+    return this.rolesService.fashionBuy(user.id, id, dto);
+  }
+
+  @Post(":id/fashion-wear")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.fashionWear",
+    summary: "穿 / 脱时装（「拥有才给穿」在服务端校验）",
+    description:
+      "改的是存档 `fashionCloth`；不在拥有清单（20017）或时装表里没有这个 id 都拒收。\n" +
+      "穿时装不改任何数值（时装只换外观），revision +1。\n\n" +
+      "`fashionId` 传 null = 脱下当前时装（幂等：没穿时也返回成功）。\n\n" +
+      "老档迁移：`fashionsOwned` 上线前的存档没有清单，首次穿 / 脱时把当前穿着认领进去。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(FashionWearResultDto, { description: "穿着态与拥有清单" })
+  fashionWear(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: FashionWearDto): FashionWearResultDto {
+    return this.rolesService.fashionWear(user.id, id, dto);
   }
 
   @Post(":id/bag-op")

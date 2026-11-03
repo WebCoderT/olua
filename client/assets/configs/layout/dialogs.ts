@@ -302,9 +302,23 @@ export const fashionDialogLayout = {
     border: new Color(92, 78, 52, 255),
     /** 未穿戴卡片的角标颜色 */
     stateColor: new Color(170, 170, 170, 255),
+    /** 可购买卡片的价格角标色（与元宝同色系） */
+    buyColor: new Color(226, 192, 116, 255),
+    /** 未拥有卡片的底色 / 描边 / 图标与名称置灰色（#596：没有的看得到、穿不了） */
+    lockedFill: new Color(16, 14, 12, 200),
+    lockedBorder: new Color(52, 46, 36, 255),
+    lockedTint: new Color(128, 122, 112, 255),
   },
-  /** 卡片上的状态文案 */
-  stateText: { equipped: "已穿戴", wearable: "点击穿上", unsupported: "无外观" },
+  /** 卡片上的状态文案（#596：未拥有的按获取渠道分流 —— 可购买的显示价格，其余置灰） */
+  stateText: {
+    equipped: "已穿戴",
+    wearable: "点击穿上",
+    unsupported: "无外观",
+    /** 未拥有但可购买（upgrade 渠道且 sellPrice > 0），{price} = 售价 */
+    buyable: "{price} 元宝",
+    /** 未开放获取渠道（grant / unavailable / 0 价 upgrade） */
+    locked: "未开放",
+  },
   /** 顶部提示文案（{label} 替换为时装名） */
   currentText: { worn: "当前穿戴：{label}", none: "当前没有穿时装" },
 };

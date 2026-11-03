@@ -182,6 +182,12 @@ export const RoleApi = {
   bagOp(roleId: string, body: any, options?: any): Promise<any> {
     return dispatch("bagOp", [roleId, body, options]);
   },
+  fashionBuy(roleId: string, body: any, options?: any): Promise<any> {
+    return dispatch("fashionBuy", [roleId, body, options]);
+  },
+  fashionWear(roleId: string, body: any, options?: any): Promise<any> {
+    return dispatch("fashionWear", [roleId, body, options]);
+  },
 };
 
 export default { RoleApi };
@@ -203,6 +209,21 @@ export type MallPurchaseResult = {
 
 export type DrugUseResult = {
   data: Record<string, unknown>;
+  revision: number;
+};
+
+/** #596：时装购买 / 穿脱的结果（真定义是自动生成的 ApiModels） */
+export type FashionBuyResult = {
+  fashionId: string;
+  price: number;
+  bindGold: number;
+  owned: string[];
+  revision: number;
+};
+
+export type FashionWearResult = {
+  fashionCloth: string | null;
+  owned: string[];
   revision: number;
 };
 

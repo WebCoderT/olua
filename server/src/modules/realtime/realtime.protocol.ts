@@ -682,6 +682,18 @@ export interface RealtimeRoleUpdateMessage {
     title?: number;
     soulOfWar?: number;
     rank?: number;
+    /**
+     * 体验状态（#596 换设备云同步）：快捷键 / 引导进度 / 战魂外显勾选
+     *
+     * 这些字段归**客户端书写**（玩家自己的偏好与进度，服务端不产生它们），但存档以服务端
+     * 为准 —— 帧把它们带回来，另一台设备 / 后台改动不用重新选角就能看到。可选（老端互认）。
+     */
+    shortcutKeys?: Array<{ label: string; key: number; skillId: string | null }>;
+    guide?: { step: number; done: boolean; skipped: boolean };
+    soulShow?: boolean;
+    /** 时装（#596）：穿着态与拥有清单 —— 购买 / 后台发放后不重进也看得见 */
+    fashionCloth?: string | null;
+    fashionsOwned?: string[];
     /** 八项战斗属性（区间属性 = [下限, 上限]）；等级不在成长曲线里时省略 */
     maxHp?: number;
     hpRecover?: number;

@@ -27,7 +27,7 @@ try {
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 if (sandbox) {
-  const { StorageManager, Role, outDir } = sandbox;
+  const { StorageManager, Role, RoleApi, outDir } = sandbox;
   const { fashionData, getFashion, getFashionOut, getFashionIn } = require(path.join(outDir, "configs/game-config.js"));
   const { getEquipment } = require(path.join(outDir, "configs/items.js"));
 
@@ -77,42 +77,82 @@ if (sandbox) {
 
   //#endregion
 
-  //#region C. 穿脱
+  //#region C. 穿脱（#596 收权：走服务端接口，成功才改本地）
 
-  console.log("\n— C. 穿脱：只换外观，不换数值 —");
-  seedRole();
-  const before = online();
-  const equipmentsBefore = JSON.stringify(before.equipments);
-  const hpBefore = before.maxHp;
+  console.log("\n— C. 穿脱：走服务端接口，成功才改本地 —");
+  // C 段开始是异步的（wearFashion / unwearFashion 都在等服务端应答），
+  // D / E 两段是纯静态断言，一并搬进 async 里保持报告顺序不变
+  (async () => {
+    seedRole({ fashionsOwned: ["cloth_2", "cloth_3"] });
+    const before = online();
+    const equipmentsBefore = JSON.stringify(before.equipments);
+    const hpBefore = before.maxHp;
 
-  check(StorageManager.wearFashion("cloth_2") === true, "穿上返回 true");
-  check(online().fashionCloth === "cloth_2", "穿上已落盘（重新读档可见）");
-  check(StorageManager.getWornFashion()?.id === "cloth_2", "getWornFashion 解析出当前时装");
-  check(StorageManager.wearFashion("cloth_2") === true, "重复穿同一件返回 true（幂等，不重复落盘）");
-  check(StorageManager.wearFashion("cloth_3") === true && online().fashionCloth === "cloth_3", "换另一件直接覆盖（不需要先脱）");
-  check(StorageManager.wearFashion("no_such_fashion") === false && online().fashionCloth === "cloth_3", "未知 id 穿不上且不改当前穿戴");
-  check(JSON.stringify(online().equipments) === equipmentsBefore, "穿时装不动装备槽");
-  check(online().maxHp === hpBefore, "穿时装不动血量上限（数值仍由装备决定）");
-  check(StorageManager.unwearFashion() === true && online().fashionCloth === null, "脱下返回 true 且落盘为 null");
-  check(StorageManager.unwearFashion() === false, "没穿时脱下返回 false");
-  check(online().maxHp === hpBefore && JSON.stringify(online().equipments) === equipmentsBefore, "脱下同样不动数值");
+    // 服务端应答 FashionWearResult（owned / revision 一并带回，本地照搬）
+    let wearCalls = 0;
+    RoleApi.handlers.fashionWear = (roleId, body) => {
+      wearCalls += 1;
+      check(roleId === "r1", "穿脱请求发给自己的角色（roleId 对）");
+      return { fashionCloth: body.fashionId ?? null, owned: ["cloth_2", "cloth_3"], revision: 40 + wearCalls };
+    };
+    await StorageManager.wearFashion("cloth_2");
+    check(online().fashionCloth === "cloth_2", "穿上成功且穿着态照搬服务端应答");
+    check(online().revision === 41, "revision 照搬服务端（乐观锁基线不脱节）");
+    check(online().fashionsOwned.join(",") === "cloth_2,cloth_3", "拥有清单照搬服务端（独占字段本地不造）");
 
-  // 装备与时装并存：外观由时装接管，装备槽里的那件仍然在（数值照旧）
-  seedRole();
-  const clothId = "cloth_1";
-  // findOnlineRole 每次都从 localStorage 解析出新对象 —— 改完必须把**同一个**对象交回数据层
-  const withCloth = online();
-  withCloth.equipments.cloth = clothId;
-  StorageManager.updateOnlineRole(withCloth);
-  StorageManager.wearFashion("cloth_4");
-  check(online().equipments.cloth === clothId, "穿着时装时装备槽里的衣服不丢（只是外观被时装盖住）");
-  check(getFashionOut(online().fashionCloth) === getFashion("cloth_4").out, "外观取源：时装优先于装备");
-  StorageManager.unwearFashion();
-  check(getFashionOut(online().fashionCloth) === null, "脱下后取源回落到装备衣服（getFashionOut 返回 null）");
+    // 服务端拒绝（未拥有）→ 本地不动
+    RoleApi.handlers.fashionWear = () => {
+      throw new Error("20017 尚未拥有该时装");
+    };
+    check((await StorageManager.wearFashion("cloth_4")) === false, "服务端拒绝时穿上返回 false");
+    check(online().fashionCloth === "cloth_2", "拒绝不改当前穿戴（权威在服务端）");
+    check(StorageManager.wearFashion("no_such_fashion") instanceof Promise, "未知 id 也会先问服务端（清单归服务端，本地没资格判）");
+    await StorageManager.wearFashion("no_such_fashion");
+    check(online().fashionCloth === "cloth_2", "未知 id 的穿不上（服务端 404/拒绝）");
 
-  //#endregion
+    check(JSON.stringify(online().equipments) === equipmentsBefore, "穿时装不动装备槽");
+    check(online().maxHp === hpBefore, "穿时装不动血量上限（数值仍由装备决定）");
+    check(StorageManager.wearFashion("cloth_3") instanceof Promise, "wearFashion 是 async（走服务端）");
 
-  //#region D. 外观取源（三处必须同口径）
+    // 脱下：null = 脱下，服务端幂等
+    RoleApi.handlers.fashionWear = () => ({ fashionCloth: null, owned: ["cloth_2", "cloth_3"], revision: 50 });
+    await StorageManager.unwearFashion();
+    check(online().fashionCloth === null, "脱下后穿着态为 null");
+    await StorageManager.unwearFashion();
+    check(online().fashionCloth === null, "没穿时再脱一次仍成功（服务端幂等，返回 true）");
+    check(online().maxHp === hpBefore && JSON.stringify(online().equipments) === equipmentsBefore, "脱下同样不动数值");
+
+    // 购买：扣费与清单都在服务端，本地照搬应答
+    seedRole({ bindGold: 100 });
+    RoleApi.handlers.fashionBuy = (roleId, body) => {
+      check(body.fashionId === "cloth_4", "购买请求带上时装 id");
+      return { fashionId: "cloth_4", price: 50, bindGold: 50, owned: ["cloth_4"], revision: 60 };
+    };
+    check((await StorageManager.buyFashion("cloth_4")) === true, "购买成功返回 true");
+    check(online().bindGold === 50 && online().fashionsOwned.join(",") === "cloth_4", "余额与清单照搬服务端应答");
+    RoleApi.handlers.fashionBuy = () => {
+      throw new Error("20011 绑定元宝不足");
+    };
+    check((await StorageManager.buyFashion("cloth_5")) === false, "服务端拒绝（钱不够）时返回 false");
+    check(online().fashionsOwned.join(",") === "cloth_4", "失败的购买不改本地清单");
+
+    // 装备与时装并存：外观由时装接管，装备槽里的那件仍然在（数值照旧）
+    seedRole({ fashionsOwned: ["cloth_4"] });
+    RoleApi.handlers.fashionWear = (_roleId, body) => ({ fashionCloth: body.fashionId ?? null, owned: ["cloth_4"], revision: 70 });
+    const clothId = "cloth_1";
+    // findOnlineRole 每次都从 localStorage 解析出新对象 —— 改完必须把**同一个**对象交回数据层
+    const withCloth = online();
+    withCloth.equipments.cloth = clothId;
+    StorageManager.updateOnlineRole(withCloth);
+    await StorageManager.wearFashion("cloth_4");
+    check(online().equipments.cloth === clothId, "穿着时装时装备槽里的衣服不丢（只是外观被时装盖住）");
+    check(getFashionOut(online().fashionCloth) === getFashion("cloth_4").out, "外观取源：时装优先于装备");
+    await StorageManager.unwearFashion();
+    check(getFashionOut(online().fashionCloth) === null, "脱下后取源回落到装备衣服（getFashionOut 返回 null）");
+
+    //#endregion
+
+    //#region D. 外观取源（三处必须同口径）
 
   console.log("\n— D. 外观取源：场景 / 预载 / 内观 —");
   const appearanceSource = read("assets/ui/components/role/RoleAppearance.ts");
@@ -162,7 +202,8 @@ if (sandbox) {
   }
   check(fs.existsSync(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/FashionDialog.ts.meta")), "新增弹窗带 .meta（进 Cocos 工程的前提）");
 
-  //#endregion
+    //#endregion
 
-  finish("PASS：时装穿戴（数据 / 存档迁移 / 穿脱 / 外观取源 / 界面接线）全部通过");
+    finish("PASS：时装穿戴（数据 / 存档迁移 / 穿脱 / 外观取源 / 界面接线）全部通过");
+  })();
 }

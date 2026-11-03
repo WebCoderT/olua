@@ -196,7 +196,7 @@
 **`equipments` + `growth`（第九域：装备/槽位/倍率/回收价曲线，含 1080 行装备数据）**、
 **`items` / `material` / `drug`（第十域：图标随行入库，物品总表只剩索引）**、
 **`skill-data`（第十一域：15 条技能行 + 职业归属 / 击退距离，`oeccupationSkills` 改为派生）**、
-**`fashionClothes`（第十二域：20 套时装，含 icon / in / out 资源路径 —— 路径不可按 id 推导，必须入库）**。
+**`fashionClothes`（第十二域：20 套时装，含 icon / in / out 资源路径与 `acquireChannel` 获得渠道 —— 路径不可按 id 推导，必须入库；渠道随 #596 收权进表，`upgrade` 且有价才可购买）**。
 
 **`role` / `monster`（第十三域）：复核后判定不搬** —— 剩下的全是表现层（职业介绍图路径可推导、
 尺寸取素材、AI 节奏与移动手感），判据见 4.2。至此 #603 的「运营数据进库」全部收口。

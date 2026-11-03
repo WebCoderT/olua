@@ -129,6 +129,28 @@ export type DrugUse = {
   revision?: number;
 };
 
+export type FashionBuy = {
+  /**
+   * 要买的时装 id（fashions 表主键，如 cloth_2）
+   */
+  fashionId: string;
+  /**
+   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   */
+  revision?: number;
+};
+
+export type FashionWear = {
+  /**
+   * 要穿的时装 id；null = 脱下当前时装
+   */
+  fashionId: string | null;
+  /**
+   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   */
+  revision?: number;
+};
+
 export type BagOpCell = {
   /**
    * 行
@@ -332,9 +354,21 @@ export type RolePatchPayload = {
    */
   rank?: number;
   /**
+   * 当前血量（0 = 死亡状态，玩家可走复活接口）
+   */
+  hp?: number;
+  /**
+   * 当前魔法值
+   */
+  mp?: number;
+  /**
    * 时装（外观）id，如 cloth_2；null = 脱掉时装
    */
   fashionCloth?: string | null;
+  /**
+   * 时装拥有清单（整份覆盖，如 ["cloth_2", "cloth_5"]）
+   */
+  fashionsOwned?: string[];
   /**
    * 头像编号
    */
@@ -2186,6 +2220,63 @@ export type DrugUseResult = {
    * 实际生效的魔法回复量（封顶后；0 = 魔法本已满）
    */
   recoveredMp: number;
+};
+
+export type ReviveResult = {
+  /**
+   * 复活后的生命值（= maxHp）
+   */
+  hp: number;
+  /**
+   * 复活后的魔法值（= maxMp）
+   */
+  mp: number;
+  /**
+   * 服务端重算的生命上限
+   */
+  maxHp: number;
+  /**
+   * 服务端重算的魔法上限
+   */
+  maxMp: number;
+};
+
+export type FashionBuyResult = {
+  /**
+   * 本次购买的时装 id
+   */
+  fashionId: string;
+  /**
+   * 本次扣除的绑定元宝（= fashions.sell_price）
+   */
+  price: number;
+  /**
+   * 购买后的绑定元宝余额
+   */
+  bindGold: number;
+  /**
+   * 购买后的拥有清单（含新买的这件；已拥有的 id 不会重复）
+   */
+  owned: string[];
+  /**
+   * 最新修订号
+   */
+  revision: number;
+};
+
+export type FashionWearResult = {
+  /**
+   * 穿着态（当前穿的时装 id，null = 未穿）
+   */
+  fashionCloth: string | null;
+  /**
+   * 当前拥有清单
+   */
+  owned: string[];
+  /**
+   * 最新修订号
+   */
+  revision: number;
 };
 
 export type BagOpResult = {

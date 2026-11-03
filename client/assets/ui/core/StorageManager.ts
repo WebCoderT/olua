@@ -261,6 +261,10 @@ export default class StorageManager {
     // 或者干脆没有这个字段 —— 一律按「没穿」处理；不是字符串或不在配置表里也按没穿
     const fashion = role.fashionCloth as unknown;
     role.fashionCloth = typeof fashion === "string" && getFashion(fashion) ? fashion : null;
+    // 时装拥有清单（#596）：归服务端书写，本地只照搬；旧档没有这一项按空清单处理
+    role.fashionsOwned = Array.isArray(role.fashionsOwned)
+      ? role.fashionsOwned.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [];
     // 新手引导（#402）：读不到 guide 的存档 = 引导上线前就在的角色 → 补成「已完成」，
     // 老号不该突然被弹一脸引导；新角色的 guide 由 Role 构造函数写入第 0 步
     role.guide = normalizeGuideProgress(role.guide, guideStepCount());
@@ -514,6 +518,16 @@ export default class StorageManager {
     if (update.title !== undefined) role.title = update.title;
     if (update.soulOfWar !== undefined) role.soulOfWar = update.soulOfWar;
     if (update.rank !== undefined) role.rank = update.rank;
+    // 体验状态（#596 换设备云同步）：归客户端书写、服务端存证 —— 另一台设备改了快捷键 /
+    // 后台重置了引导，帧带回就进本地档（下次读档 / 界面重建时生效；进行中的引导流程不回头）
+    if (Array.isArray(update.shortcutKeys)) role.shortcutKeys = update.shortcutKeys as Role["shortcutKeys"];
+    if (update.guide && typeof update.guide === "object") role.guide = update.guide as Role["guide"];
+    if (typeof update.soulShow === "boolean") role.soulShow = update.soulShow;
+    // 时装（#596）：穿着态变了要换外观（另一台设备买了/穿了，帧带回就换）；清单只进本地档。
+    // 走 applyFashionChange 与本地穿脱同一条收尾：不重算数值，只刷地图主角 / 内观 / 预载。
+    const fashionChanged = update.fashionCloth !== undefined && update.fashionCloth !== role.fashionCloth;
+    if (update.fashionCloth !== undefined) role.fashionCloth = update.fashionCloth;
+    if (Array.isArray(update.fashionsOwned)) role.fashionsOwned = update.fashionsOwned;
     role.hp = Math.min(role.hp, role.maxHp);
     role.revision = update.revision;
     this.updateUi(role);
@@ -521,6 +535,7 @@ export default class StorageManager {
     RoleUIManager.refreshRoleAttributes();
     if (titleChanged) RoleUIManager.updateTitleShow();
     if (soulChanged) RoleUIManager.updateSoulShow();
+    if (fashionChanged) this.applyFashionChange(role);
   }
 
   /**
@@ -666,36 +681,86 @@ export default class StorageManager {
     return true;
   }
 
-  //#region 时装（#377：只换外观，不换数值）
+  //#region 时装（#377 穿脱 / #596 拥有清单与购买：只换外观，不换数值）
 
   /**
-   * 穿上一件时装（换上 = 覆盖当前时装，不需要先脱）
-   *
-   * 与时装的「拥有」无关：本版是**衣柜口径**（表里 20 套任选），获取渠道（商城/活动/掉落）
-   * 另开一刀；等有了拥有清单，这里只多一道「有没有这件」的校验。
-   * 不校验性别/职业 —— 时装配置没有这两个维度。
-   *
-   * @param fashionId 时装 id（fashions 表主键，如 cloth_2）
-   * @returns 是否穿上（id 不在配置表里返回 false）
+   * 是否拥有某件时装（#596：清单归服务端，本地只读 `role.fashionsOwned`）
    */
-  static wearFashion(fashionId: string): boolean {
+  static ownsFashion(fashionId: string): boolean {
+    const owned = this.findOnlineRole()?.fashionsOwned;
+    return owned ? owned.indexOf(fashionId) !== -1 : false;
+  }
+
+  /**
+   * 购买时装（#596：扣费与拥有清单都在服务端）
+   *
+   * 服务端校验渠道（upgrade = 可购买）与价格（fashions 表，管理端改价即时生效），
+   * 扣绑定元宝后把清单带回 —— 本地照搬（清单是服务端独占字段，本地造的无效）。
+   * 失败（渠道没开 / 钱不够 / 已拥有）走请求层的失败出口提示，这里返回 false。
+   *
+   * @returns 是否购买成功
+   */
+  static async buyFashion(fashionId: string): Promise<boolean> {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    const revision = typeof role.revision === "number" ? role.revision : undefined;
+    let result: Awaited<ReturnType<typeof RoleApi.fashionBuy>>;
+    try {
+      result = await RoleApi.fashionBuy(role.id, { fashionId, revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    role.fashionsOwned = result.owned;
+    role.bindGold = result.bindGold;
+    role.revision = result.revision;
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    return true;
+  }
+
+  /**
+   * 穿上时装（#596：穿着态归服务端，「拥有才给穿」在服务端校验）
+   *
+   * 服务端成功才改本地穿着态（fashionCloth 照搬返回值）；穿时装不重算任何数值
+   * （只换外观，与 applyFashionChange 的口径一致）。
+   *
+   * @returns 是否穿上
+   */
+  static async wearFashion(fashionId: string): Promise<boolean> {
     const role = this.findOnlineRole();
     const fashion = getFashion(fashionId);
     if (!role || !fashion) return false;
-    if (role.fashionCloth === fashion.id) return true;
-    role.fashionCloth = fashion.id;
+    const revision = typeof role.revision === "number" ? role.revision : undefined;
+    let result: Awaited<ReturnType<typeof RoleApi.fashionWear>>;
+    try {
+      result = await RoleApi.fashionWear(role.id, { fashionId, revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（未拥有 / 乐观锁冲突等）
+    }
+    role.fashionCloth = result.fashionCloth;
+    role.fashionsOwned = result.owned;
+    role.revision = result.revision;
     this.applyFashionChange(role);
     return true;
   }
 
   /**
-   * 脱下当前时装（没穿时返回 false，不打扰）
-   * @returns 是否真的脱下了一件
+   * 脱下当前时装（#596：与服务端 fashion-wear 同一条路；没穿时服务端幂等返回成功）
+   * @returns 是否成功（服务端拒绝 = false，本地不动）
    */
-  static unwearFashion(): boolean {
+  static async unwearFashion(): Promise<boolean> {
     const role = this.findOnlineRole();
-    if (!role || !role.fashionCloth) return false;
-    role.fashionCloth = null;
+    if (!role) return false;
+    const revision = typeof role.revision === "number" ? role.revision : undefined;
+    let result: Awaited<ReturnType<typeof RoleApi.fashionWear>>;
+    try {
+      result = await RoleApi.fashionWear(role.id, { fashionId: null, revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过
+    }
+    role.fashionCloth = result.fashionCloth;
+    role.fashionsOwned = result.owned;
+    role.revision = result.revision;
     this.applyFashionChange(role);
     return true;
   }

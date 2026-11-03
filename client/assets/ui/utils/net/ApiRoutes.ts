@@ -238,7 +238,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（12 个接口） */
+  /** role 模块（15 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -283,6 +283,18 @@ export const ApiRoutes = {
      */
     drugUse: (id: string) => `/roles/${encodeURIComponent(id)}/drug-use`,
     /**
+     * 购买时装（扣费与拥有清单都在服务端）（POST /roles/{id}/fashion-buy）
+     *
+     * 渠道 = `fashions.acquire_channel === "upgrade"` 且 `sell_price > 0` 才可买（与称号渠道同语义）；
+     */
+    fashionBuy: (id: string) => `/roles/${encodeURIComponent(id)}/fashion-buy`,
+    /**
+     * 穿 / 脱时装（「拥有才给穿」在服务端校验）（POST /roles/{id}/fashion-wear）
+     *
+     * 改的是存档 `fashionCloth`；不在拥有清单（20017）或时装表里没有这个 id 都拒收。
+     */
+    fashionWear: (id: string) => `/roles/${encodeURIComponent(id)}/fashion-wear`,
+    /**
      * 成长线升级（称号 / 战魂 / 军衔）（POST /roles/{id}/growth-upgrade）
      *
      * 扣费与阶位推进都在服务端：按库里的成长链（upgrade_order / 军衔阶号）算出下一阶并校验 `targetLevel` 一致，扣绑定元宝后原子推进（revision +1）。
@@ -294,6 +306,12 @@ export const ApiRoutes = {
      * 价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。
      */
     mallPurchase: (id: string) => `/roles/${encodeURIComponent(id)}/mall-purchase`,
+    /**
+     * 复活：血蓝补到上限（满血由服务端落账）（POST /roles/{id}/revive）
+     *
+     * 死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。
+     */
+    revive: (id: string) => `/roles/${encodeURIComponent(id)}/revive`,
     /**
      * 选中（进入）角色（POST /roles/{id}/select）
      *

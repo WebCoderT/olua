@@ -24,6 +24,12 @@ export class Role implements BattleAttributes {
    * 历史的 `fashionCloth: number` 字段没人写过、也没人读，已在 #377 改成 id 形式（旧档里是数字或缺失时按 null 处理）。
    */
   fashionCloth: string | null = null;
+  /**
+   * 时装拥有清单（#596）：只能由服务端书写（购买 / 运营发放），客户端上报无效 ——
+   * 服务端 save 时这个字段会被**删掉**而不是回填（独占字段，见 server role-authority）。
+   * 帧与读档带回；旧档没有这一项时按空清单处理（弹窗里「未拥有」）。
+   */
+  fashionsOwned: string[] = [];
   relationShip: RELATION_SHIP = RELATION_SHIP.SELF;
   avatar: number = 0;
   gold: number = 0;

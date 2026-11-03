@@ -12,7 +12,10 @@
  * | 进度 | `level` / `exp` | **服务端** | 经验只由服务端结算（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台），客户端**没有**本地加经验路径（#550 删掉了泡点组件与"实时通道不可用"的兜底；那条路上连伤害都不结算，留着只是给改包留门）|
  * | 背包与穿戴 | `bag` / `equipments` / `skills` | **服务端** | 穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作全都走 `POST /roles/:id/bag-op`（#556），客户端不再本地改；`equipments` 还是属性重算的输入 —— 不收权等于把「塞一件没拥有的顶级装备」变成刷战力 |
  * | 派生值 | `combat` / `maxHp` / `hpRecover` / `maxMp` / 六项攻防 | **服务端重算** | 每次写档由 `applyAuthoritativeAttributes` 现算覆盖，**不走本文件的回填**（回填反而会把刚算好的值盖回旧的）|
- * | 客户端全权 | `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` / `relationShip` | 客户端 | 走图、喝药回血、时装外观、引导推进**都发生在本地**，且都不改数值（`hp`/`mp` 只做夹取，见 `clampVitals`）；时装还没有「拥有清单」，收权要先把获取渠道做出来 |
+ * | 血蓝 | `hp` / `mp`（+ 两个回复累加器与 `vitalsSettledAt` 游标） | **服务端结算**（#596） | 受击 / 用药 / 升级补满各有服务端写点，自然回复由 `settleVitalsAuthority` 在每次写档时按经过时间补齐，复活走 `POST /roles/:id/revive`；客户端那份只是血条平滑用的**演出预测**，save 时整体覆盖 |
+ * | 时装 | `fashionCloth` / `fashionsOwned`（清单） | **服务端**（#596） | 购买（扣费 + 渠道校验）与穿脱（拥有才给穿）各有一个接口；清单是**独占字段**（上报整份删除），穿着态走回填。改穿在另一台设备发生时由 `roleUpdate` 帧带回，客户端换外观 |
+ * | 体验状态 | `shortcutKeys` / `guide` / `soulShow` | 客户端书写、服务端存证（#596 云同步） | 纯本地体验（换设备要跟着走，但篡改无收益）；save 照收、`roleUpdate` 帧原样带回 |
+ * | 客户端全权 | `onMap` / `avatar` / `speedRate` / `relationShip` | 客户端 | 走图 / 头像 / 速度倍率 / 关系展示都发生在本地且不改数值；`onMap` 的位置自报另有**互见最小仲裁**（实时侧：非有限拒绝、瞬移帧屏蔽、持续异常跟随，见 `player-presence.service`） |
  *
  * 两条纪律：
  *
@@ -59,6 +62,22 @@ export const SERVER_PROGRESS_FIELDS = ["level", "exp"] as const;
 export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills"] as const;
 
 /**
+ * 时装（#596）：穿着态 `fashionCloth` 与拥有清单 `fashionsOwned` 都归服务端
+ *
+ * - `fashionCloth`：穿 / 脱走 `POST /roles/:id/fashion-wear`（服务端校验「拥有才给穿」）；
+ * - `fashionsOwned`：拥有清单只能由**购买**（`fashion-buy`）与**管理端发放**（PATCH）书写。
+ *
+ * `fashionCloth` 走普通的「回填」规则没问题 —— 存档里一直有这个键（#377 起建号就写 null）。
+ * `fashionsOwned` 是新字段，没有「老档放行」可言：上线时不存在会写它的旧客户端，
+ * 所以进 `SERVER_EXCLUSIVE_FIELDS` —— 库里没有就**删掉**上报值，而不是照单全收
+ * （否则改包第一次 PUT 就能白得全部时装）。
+ */
+export const SERVER_FASHION_FIELDS = ["fashionCloth"] as const;
+
+/** 独占字段：库里没有也不放行（见 `SERVER_FASHION_FIELDS` 注释） */
+export const SERVER_EXCLUSIVE_FIELDS = ["fashionsOwned"] as const;
+
+/**
  * 派生值：由 `applyAuthoritativeAttributes` 重算覆盖
  *
  * 这里**只登记**（给文档与审计一个可读清单），回填逻辑不碰它们 ——
@@ -77,12 +96,13 @@ export const SERVER_DERIVED_FIELDS = [
   "taoistDefense",
 ] as const;
 
-/** 服务端独占的全部字段（= 账本 + 阶位 + 进度 + 背包穿戴；派生值另算） */
+/** 服务端独占的全部字段（= 账本 + 阶位 + 进度 + 背包穿戴 + 时装穿着；派生值另算） */
 export const SERVER_OWNED_FIELDS: readonly string[] = [
   ...SERVER_LEDGER_FIELDS,
   ...SERVER_GROWTH_FIELDS,
   ...SERVER_PROGRESS_FIELDS,
   ...SERVER_INVENTORY_FIELDS,
+  ...SERVER_FASHION_FIELDS,
 ];
 
 /** 一次回填里的一个字段差异（只用于日志，不参与判定） */
@@ -146,7 +166,103 @@ export function enforceServerAuthority(
     drift.push({ field, stored: stored[field], reported: incoming[field] });
     incoming[field] = field === "bag" ? reconcileBag(stored[field], incoming[field]) : stored[field];
   }
+  for (const field of SERVER_EXCLUSIVE_FIELDS) {
+    // 独占字段（#596 时装拥有清单）：库里没有就删掉上报值 —— 没有「老档放行」例外，
+    // 否则改包第一次 PUT 就能把清单填满（见 SERVER_FASHION_FIELDS 注释）
+    if (!hasOwn(stored, field)) {
+      if (hasOwn(incoming, field)) {
+        drift.push({ field, stored: undefined, reported: incoming[field] });
+        delete incoming[field];
+      }
+      continue;
+    }
+    if (sameValue(stored[field], incoming[field])) continue;
+    drift.push({ field, stored: stored[field], reported: incoming[field] });
+    incoming[field] = stored[field];
+  }
   return drift;
+}
+
+/**
+ * 魔法值自然回复速度（点 / 秒）
+ *
+ * 与客户端 `configs/role.mpRecoverPerSecond` 是**同一个数**：血蓝收权（#596）后回复在服务端
+ * 结算，这个常量就是玩法数值而不是表现参数了。两端各写一份是因为 `configs/` 不能引服务端
+ * 代码（方向恒为服务端 → 客户端生成物），靠 `test-role-vitals.cjs` 断言两边相等钉住 ——
+ * 改回复速度要两边一起改，漏一边测试直接红。
+ */
+export const MP_RECOVER_PER_SECOND = 2;
+
+/** 回复结算的存档字段（服务端独占；客户端那份只是演出预测，save 时整体覆盖） */
+export const SERVER_VITALS_FIELDS = [
+  "hp",
+  "mp",
+  "hpRecoverAccumulator",
+  "mpRecoverAccumulator",
+  "vitalsSettledAt",
+] as const;
+
+/**
+ * 血蓝收权（#596）：以**库里上次落账的值**为基线，按经过时间结算自然回复后覆盖上报值
+ *
+ * 血蓝的权威链路在 #596 之后是：
+ * - 受击（怪 → 玩家）：实时进程 `applyMonsterHit` 落账（#323 起已有）；
+ * - 用药：`useDrug` 落账（#308）；
+ * - 升级补满：`applyKillExp` 落账（#316）；
+ * - **自然回复：本函数在每次服务端写档时按「距上次结算的经过时间」补齐**（lazy 结算，
+ *   不需要定时器 —— 上限夹取保证离开三天也只补到满，不会溢出）；
+ * - 复活：`POST /roles/:id/revive` 满血（客户端改包上报满血无效）。
+ *
+ * 客户端存档里带的 hp / mp / 两个 accumulator 只是它的**演出预测**（本地按帧回血让血条平滑），
+ * 一律丢弃。`vitalsSettledAt` 是结算游标：库里没有（部署后第一次写档）→ 不补发回复
+ * （避免给老号白送一大段「离线回血」），只落一个当前时间当下次结算的起点。
+ *
+ * 死亡（基线 hp ≤ 0）不回复血量 —— 满血复活必须走 revive 接口；魔法照常回复（与客户端
+ * MpHelper 同一口径，死亡流程不受蓝量影响）。
+ *
+ * 在**调用方**的顺序要求：`applyAuthoritativeAttributes` 之后调 —— 回复上限要用它算出的
+ * maxHp / maxMp；算不出上限（等级在曲线外）时跳过回复、只落结算游标。之后仍要 `clampVitals`
+ * 兜一道（本函数已保证区间内，这层纯防御）。
+ *
+ * @param stored  库里当前的存档文档
+ * @param incoming 客户端上报、且**已完成属性权威重算**的文档（会被就地覆盖血蓝四件套）
+ * @param now     本次结算时间（Date.now()，参数化只为测试可复现）
+ */
+export function settleVitalsAuthority(
+  stored: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  now: number,
+): void {
+  const settledAt = Number(stored.vitalsSettledAt);
+  const baseHp = Math.max(0, Math.floor(Number(stored.hp) || 0));
+  const baseMp = Math.max(0, Math.floor(Number(stored.mp) || 0));
+  // 游标不存在（老档第一次过服务端 / 部署后首写）→ 不补发回复，只落游标
+  const elapsed = Number.isFinite(settledAt) && settledAt > 0 ? Math.max(0, now - settledAt) : 0;
+
+  const maxHp = Math.floor(Number(incoming.maxHp) || 0);
+  const maxMp = Math.floor(Number(incoming.maxMp) || 0);
+  // 上限算不出（等级不在成长曲线的边角档）→ 保留基线血蓝，别把人改没
+  if (maxHp <= 0 || maxMp <= 0) {
+    incoming.hp = baseHp;
+    incoming.mp = baseMp;
+    incoming.vitalsSettledAt = now;
+    return;
+  }
+
+  // 生命：死亡不回复（复活走 revive 接口）；魔法照常
+  const hpAccumulated = Math.max(0, Number(stored.hpRecoverAccumulator) || 0) +
+    ((Number(incoming.hpRecover) || 0) * elapsed) / 1000;
+  const hpGain = baseHp > 0 ? Math.floor(hpAccumulated) : 0;
+  incoming.hp = Math.min(maxHp, baseHp + hpGain);
+  incoming.hpRecoverAccumulator = hpGain > 0 ? hpAccumulated - hpGain : Math.min(hpAccumulated, 0.999);
+
+  const mpAccumulated = Math.max(0, Number(stored.mpRecoverAccumulator) || 0) +
+    (MP_RECOVER_PER_SECOND * elapsed) / 1000;
+  const mpGain = Math.floor(mpAccumulated);
+  incoming.mp = Math.min(maxMp, baseMp + mpGain);
+  incoming.mpRecoverAccumulator = mpGain > 0 ? mpAccumulated - mpGain : Math.min(mpAccumulated, 0.999);
+
+  incoming.vitalsSettledAt = now;
 }
 
 /**

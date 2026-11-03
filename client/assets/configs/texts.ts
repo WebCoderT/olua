@@ -90,6 +90,8 @@ export const uiTexts = {
   drug_full_tip: "血量已满",
   /** 魔法值已满 */
   drug_mp_full_tip: "魔法值已满",
+  /** 复活请求失败（服务端拒绝或网络不通；死亡弹窗保留可重试） */
+  revive_failed_tip: "复活失败，请稍后重试",
 
   //#region 浮动提示：拾取
   /** 拾取到物品（{names} = 物品名列表或「名称 x数量」） */
