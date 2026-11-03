@@ -1430,14 +1430,29 @@ async function main() {
     checkEqual(monsterDropsList.body?.data?.list?.length, 20, "默认每页 20 条");
     checkEqual(monsterDropsList.body?.data?.list?.[0]?.monsterKey, "1", "默认按 key 数值升序（首行是怪 1，不是字典序的 \"1\",\"10\"…）");
     const monsterDrop1 = monsterDropsList.body?.data?.list?.find((row) => row.monsterKey === "1");
-    checkEqual(monsterDrop1?.source, "entries", "seed 全内联（source = entries）");
-    checkEqual(
-      JSON.stringify(monsterDrop1?.entries?.[0]),
-      JSON.stringify(monsterDrops["1"].entries[0]),
-      "怪 1 的首条目与配置一致",
+    // 来源不锁具体值：出厂虽然全是内联（entries），运营可以在管理端把任一怪指到具名掉落表
+    // （config-sync 跟着库走，指过表的行 source = table、entries 为空）—— 只锁「字段自洽」
+    check(
+      monsterDrop1?.source === "entries" || monsterDrop1?.source === "table",
+      "怪 1 的来源是 entries / table 之一（内联或指具名表）",
+      JSON.stringify(monsterDrop1?.source),
     );
+    if (monsterDrop1?.source === "entries") {
+      checkEqual(
+        JSON.stringify(monsterDrop1?.entries?.[0]),
+        JSON.stringify(monsterDrops["1"].entries[0]),
+        "内联行的首条目与配置一致",
+      );
+    } else {
+      check(!!monsterDrop1?.tableId, "指表行的 tableId 存在", JSON.stringify(monsterDrop1?.tableId));
+      check(
+        configSnapshot.rows("drop_tables").some((row) => row.id === monsterDrop1?.tableId),
+        `指表行指向的具名表存在（${monsterDrop1?.tableId}）`,
+      );
+    }
     const monsterDropsBySource = await api(base, "GET", "/api/admin/monster-drops?source=entries", { token });
-    checkEqual(monsterDropsBySource.body?.data?.total, monsterDropCount, "按来源筛 entries：全部怪物（seed 全内联）");
+    const inlineCount = Object.values(monsterDrops).filter((row) => row.source === "entries").length;
+    checkEqual(monsterDropsBySource.body?.data?.total, inlineCount, "按来源筛 entries：内联行的数量与配置一致");
     const monsterDropsKeyword = await api(base, "GET", "/api/admin/monster-drops?keyword=220", { token });
     checkEqual(monsterDropsKeyword.body?.data?.total, 1, "关键字精确命中怪 220");
     const monsterDropsBadSort = await api(base, "GET", "/api/admin/monster-drops?sort=evil", { token });

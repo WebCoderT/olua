@@ -112,6 +112,9 @@ const STUBS = {
 export default class SoundManager {
   static played: string[] = [];
   static play(key: string): Promise<void> { this.played.push(key); return Promise.resolve(); }
+  static playMove(): Promise<void> { this.played.push("move"); return Promise.resolve(); }
+  static startLoop(key: string): Promise<void> { this.played.push(key); return Promise.resolve(); }
+  static stopLoop(): void {}
   static stopMusic(): void {}
 }
 `,

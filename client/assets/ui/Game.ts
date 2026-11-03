@@ -58,6 +58,16 @@ import { loadGameConfig } from "./utils/net/ConfigLoader";
 import { describeError } from "./utils/net/ApiError";
 const { ccclass, property } = _decorator;
 
+/**
+ * 移动脚步音「起步一声 → 接循环」的间隔（毫秒，#685）
+ *
+ * 口径（用户定）：左右键点击地面 = 播放一次；长按持续移动 = 循环播放。
+ * 实现是「起步先单次播一遍，移动持续超过这个间隔再接上循环」——间隔取到脚步音
+ * 本体长度（438ms）之后一点，单击永远不会听到循环接管的接缝，长按只在尾音
+ * 自然落下的位置无缝续上。换文件后不用同步这个值：差个几十毫秒听不出来。
+ */
+const MOVE_LOOP_AFTER_MS = 450;
+
 @ccclass("Game")
 export class Game extends Component {
   @property({ type: Camera })
@@ -99,6 +109,12 @@ export class Game extends Component {
   private guideOverlay: GuideOverlay | null = null;
   /** 上一帧的主角世界坐标（引导「先动起来」按实际走过的距离判，不看按键） */
   private guideLastPosition: Vec3 | null = null;
+  /** 移动脚步音：本帧之前是否在移动（#685；只在状态翻转时动作，见 tickMoveSound） */
+  private moveSoundMoving = false;
+  /** 移动脚步音：本次移动开始的时间戳（超过 MOVE_LOOP_AFTER_MS 才接循环） */
+  private moveSoundStartedAt = 0;
+  /** 移动脚步音：循环是否已接上（接上后不再重复调 startLoop） */
+  private moveLoopRunning = false;
 
   async start() {
     // 网络层接线（幂等，登录场景已调过一次）：令牌失效回登录场景、请求失败统一飘字
@@ -412,6 +428,10 @@ export class Game extends Component {
     CursorManager.destroy();
     AutoBattle.reset();
     AutoBattleTips.reset();
+    // 移动脚步音的循环是常驻节点上的一路（不随本场景销毁），离开游戏必须显式停掉
+    SoundManager.stopLoop();
+    this.moveSoundMoving = false;
+    this.moveLoopRunning = false;
     RouteIndicator.reset();
     HoverTipManager.hide();
     StatusManager.reset();
@@ -432,6 +452,8 @@ export class Game extends Component {
     AutoBattle.tick(this.roleDisplay?.isManualMoving() ?? false);
     // 主角每帧驱动（选中目标失效校验 + 位移）
     this.roleDisplay?.update();
+    // 移动脚步音（#685：点地面走一步 = 播一声，长按持续移动 = 循环，停下即停）
+    this.tickMoveSound();
     // 角色自然回复（每秒结算一次并落盘：角色数据在存储层是反序列化对象，不落盘下次读取会回滚）
     // 魔法值按 configs/role.mpRecoverPerSecond 的固定速度；血量按角色的 hpRecover 属性
     // （等级 / 防御装备 / 战魂 / 称号 / 军衔之和，见 ui/utils/battle/HpHelper）。
@@ -487,6 +509,43 @@ export class Game extends Component {
     RoleUIManager.updateMonsterInfo();
     // 选中指示器跟随目标脚下（目标失效时自动销毁）
     RoleUIManager.updateMonsterSelect();
+  }
+
+  /**
+   * 移动脚步音（#685，口径来自用户：左右键点击地面 = 播放一次，长按持续移动 = 循环播放）
+   *
+   * 判的是「角色真的在移动」这个事实（手动 + 自动走位都算），不是某个输入事件 ——
+   * 鼠标点击、键盘、摇杆、挂机走位都是同一种「我在移动」，声音跟着事实走就不会漏。
+   * 单击的短暂移动天然只够播起步的一声；移动持续超过 MOVE_LOOP_AFTER_MS（脚步音
+   * 本体长度之后）才接上循环 —— 长按才有循环，单击永远听不到循环接管的接缝。
+   */
+  private tickMoveSound() {
+    const moving =
+      !!this.roleDisplay &&
+      !this.roleDisplay.isDead() &&
+      (this.roleDisplay.isManualMoving() || this.roleDisplay.isAutoMoving());
+    if (moving) {
+      if (!this.moveSoundMoving) {
+        // 起步：先单次播一声（单击的移动到这里就结束了，听感就是「点一下响一声」）
+        this.moveSoundMoving = true;
+        this.moveSoundStartedAt = Date.now();
+        this.moveLoopRunning = false;
+        void SoundManager.playMove();
+        return;
+      }
+      // 持续移动：起步的一声放完人还没停，接上循环（只接一次，之后每帧都是空转判断）
+      if (!this.moveLoopRunning && Date.now() - this.moveSoundStartedAt >= MOVE_LOOP_AFTER_MS) {
+        this.moveLoopRunning = true;
+        void SoundManager.startLoop("move");
+      }
+      return;
+    }
+    // 停下（或死亡）：循环立刻停；起步的一声不掐 —— 单击的那一声要让它自然播完
+    if (this.moveSoundMoving) {
+      this.moveSoundMoving = false;
+      this.moveLoopRunning = false;
+      SoundManager.stopLoop();
+    }
   }
 
   /**

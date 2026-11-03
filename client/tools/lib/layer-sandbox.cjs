@@ -29,6 +29,8 @@ const ASSETS = path.join(PROJECT_ROOT, "assets");
 /** LayerManager 里与层级无关的 import → 沙箱内的 stub 模块（相对 src/ui/core/ 的路径） */
 const STUB_IMPORTS = {
   "../utils/input/UiHit": "../../stubs/UiHit",
+  // #685 之后 LayerManager 还 import 了屏幕布局常量（纯数据）—— 单测给个同形状替身即可
+  "../utils/layout/ScreenLayout": "../../stubs/ScreenLayout",
 };
 
 //#region cc 垫片（Node 的兄弟序号语义 + isValid）
@@ -79,6 +81,10 @@ class Node {
   }
   on() {}
   off() {}
+  /** 位置只记不演（层级测试不关心坐标；LayerManager 的图层定位会调它） */
+  setPosition(position) {
+    this.position = position;
+  }
   getComponent() {
     return null;
   }
@@ -101,6 +107,9 @@ const STUBS = {
   "UiHit.ts": `/** 命中检测（与层级排序无关，单测里不需要真实实现） */
 export function isPointOnUi(): boolean { return false; }
 export function isPointOnWorldInteractive(): boolean { return false; }
+`,
+  "ScreenLayout.ts": `/** 屏幕布局常量（与层级排序无关，单测里只要形状对） */
+export const designResolution = { width: 1920, height: 1080 };
 `,
 };
 

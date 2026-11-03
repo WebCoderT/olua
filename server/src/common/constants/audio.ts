@@ -61,6 +61,7 @@ export type AudioCategory = (typeof AUDIO_CATEGORIES)[number]["key"];
  * - `bag_resort` → `ui/core/StorageManager.tidyBag`（一键整理）+ `moveBagGood`（拖动搬格）
  * - `level_up` → `ui/core/StorageManager.applyKillReward` / `applyPartyExpGain`（`leveledUp`）
  * - `map_teleport` → `ui/Game.start`（传送后进图、角色显示出来时；不是点传送的瞬间）
+ * - `move` → `ui/Game.update`（移动状态驱动，#685：起步播一声，持续移动就循环，停下即停）
  */
 export const AUDIO_KEYS = [
   // 界面与交互
@@ -70,6 +71,7 @@ export const AUDIO_KEYS = [
   "warrior_attack",
   "role_die_man",
   "role_die_woman",
+  "move",
   // 物品与货币
   "item_drop",
   "equip_wear",
@@ -164,6 +166,17 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
     category: "combat",
     filePath: "sounds/role_die_woman.wav",
     volume: 80,
+    loop: false,
+    enabled: true,
+  },
+  move: {
+    // 移动脚步音（#685 用户确认用途）：点地面走一步播一声、按住持续移动就循环。
+    // 「循环不循环」由客户端按移动状态决定（停下就停），不走 `loop` 字段 ——
+    // 这里给 false：运营把这项的循环开关打开也不会改变播放方式（客户端忽略它）
+    label: "移动脚步音",
+    category: "combat",
+    filePath: "sounds/move.wav",
+    volume: 65,
     loop: false,
     enabled: true,
   },

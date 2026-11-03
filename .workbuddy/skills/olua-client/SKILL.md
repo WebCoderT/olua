@@ -245,7 +245,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 
 ## 五之七、音效：唯一可覆写的资源路径（#683 / #685）
 
-运营在管理端「音效配置」里改 11 项（登录背景音 / 按钮点击 / 战士普攻 / 男女角色死亡 / 掉落 /
+运营在管理端「音效配置」里改 12 项（登录背景音 / 按钮点击 / 战士普攻 / 男女角色死亡 / 移动脚步 / 掉落 /
 穿戴 / 金钱变化 / 背包整理 / 升级 / 传送），客户端按 **key** 播，值是服务端下发的。
 实现只有 `ui/core/SoundManager.ts` 一处。
 
@@ -268,6 +268,15 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
   「点了传送就有声音」。做法是 `StorageManager.markTeleportArrival()` 留一个带 60 秒有效期的标记，
   `Game.start` 在 `roleDisplay.init()` 之后 `consumeTeleportArrival()` 取走并播 ——
   那时人已经站在新地图上了。**登录 / 选角进图没有标记，所以不会误响**。
+- **移动脚步音跟着「移动状态」走，不跟输入事件走（#685，口径用户定）**：点地面走一步 = 播一声，
+  长按持续移动 = 循环，停下即停。实现在 `Game.tickMoveSound`（每帧）：判
+  `isManualMoving() || isAutoMoving()`（鼠标 / 键盘 / 摇杆 / 挂机走位都是同一种「我在移动」），
+  状态翻真 → `playMove()` 单次播一声；持续超过 `MOVE_LOOP_AFTER_MS`（450ms，脚步音本体长度之后）
+  → `startLoop("move")` 接循环；翻假 → `stopLoop()`（起步那一声不掐，让它自然播完）。
+  两个坑：① 起步那一声**必须强制单次**（`playMove`，不走 `play()`）—— 运营把这项的「循环」
+  开关打开时 `play()` 会把它路由到背景音那一路，顶掉登录曲且永远停不下来；循环路是独立的
+  `loop` AudioSource（与 `music` 分开：起停节奏完全不同），**永远循环、由调用方起停**，
+  不听配置的 `loop` 字段。② `onDestroy` 必须 `stopLoop()`（循环挂在常驻节点上，不随场景销毁）。
 - **点击音只有一个入口 `SoundManager.bindClick(node)`**：有 `Button` 组件的监听
   `Button.EventType.CLICK`（引擎只在真点中并松开时 emit，置灰 / 拖出去不响），
   没有的退化成 `TOUCH_END`（项目里大量手写按钮就是一个节点 + TOUCH_END）。
@@ -289,7 +298,8 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 
 - **必须常驻节点**：场景切换会把节点全销毁，音效要跨场景响 → 首次 `init()` 建根节点 +
   `director.addPersistRootNode(node)`。节点名 `sound_manager` 已进 `config-leak-allowlist`（引擎侧身份）。
-- **两路 AudioSource**：循环音（`music`）与一次性音（`sfx`）分开。只有一路时，
+- **三路 AudioSource**：循环音（`music`，一次只播一首、切场景才停）、移动脚步循环（`loop`，
+  每步都可能起停）、一次性音（`sfx`，`playOneShot` 可叠加）。只有一路时，
   背景音写在 `clip` 上，任何一次 `play()` 都会把它顶掉。
 - **音量走 `playOneShot(clip, volumeScale)`**（最终 = `source.volume × volumeScale`），
   `source.volume` 固定 1：否则调一个音效会连带影响同时响的另一个。
