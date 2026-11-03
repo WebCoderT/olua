@@ -20,13 +20,20 @@ import { Button, Field, Input, Spinner } from "./ui";
  * 两个来源都给 `{ images: string[] }`（相对 resources 根、posix、**不带扩展名**），
  * 所以下面这段解析代码只有一条路径，不存在「本地调好了、部署上去没得选」。
  *
+ * ## 文件 vs 目录（清单只列图片，但候选未必是图片）
+ * 动画模式的「一套」有两种磁盘形态：`clothes/in/001` 是**文件**（`001.png` + `001.plist`），
+ * `clothes/out/001` 是**目录**（里面再分 `stand` / `run` / 八方向子目录，本体没有单张封面）。
+ * 清单里没有目录项，所以目录集由图片路径的各级父目录反推（`indexCatalog`），
+ * 判定见 `kindOf`：能出缩略图的（自身是图 / 目录里有同名图集本体）照旧画首帧，
+ * 纯目录画**文件夹图标** —— 别让「图集目录」长得像「素材缺失」。
+ *
  * ## 与 EntityPicker 的分工
  * 那个挑的是**游戏数据行**（装备 / 技能 / 物品的 id，带名字与说明）；
  * 这个挑的是**素材文件**（路径本身就是要存的值，没有名字可显示）。两者都复用 `Modal`，
  * 关闭行为（Esc / 点遮罩）不会各写一套。
  */
 
-type ImageCatalog = { images: string[]; source: "list" | "manifest" };
+type ImageCatalog = { images: string[]; source: "list" | "manifest"; index: CatalogIndex };
 
 /**
  * 挑什么：
@@ -52,6 +59,41 @@ function firstSegmentOf(relative: string): string {
   return slash > 0 ? relative.slice(0, slash) : relative;
 }
 
+/** 清单索引：文件集 + 目录集（后者由图片路径的各级父目录反推，清单本身不含目录项） */
+type CatalogIndex = { files: Set<string>; dirs: Set<string> };
+
+function indexCatalog(images: string[]): CatalogIndex {
+  const files = new Set<string>();
+  const dirs = new Set<string>();
+  for (const path of images) {
+    files.add(path);
+    let slash = path.lastIndexOf("/");
+    while (slash > 0) {
+      dirs.add(path.slice(0, slash));
+      slash = path.lastIndexOf("/", slash - 1);
+    }
+  }
+  return { files, dirs };
+}
+
+/**
+ * 这个值在磁盘上是什么：一张图 / 一个目录 / 清单里根本没有
+ *
+ * - `files.has(value)`：路径本身就是图（`clothes/in/001` → `clothes/in/001.png`）；
+ * - `files.has(value/同名)`：目录里放着**同名**图集本体（`titles/sfx_13009/sfx_13009.png`、
+ *   `npc/npc_2108/npc_2108.png`）—— 那张就是封面，按「图」处理；
+ * - 目录里只有子目录（`clothes/out/001` 的 `stand` / `run` / 八方向）→ 目录；
+ * - 连目录都不是（库里留着已删素材的路径）→ missing，交给 `GameFrame` 显示「无图」。
+ */
+type PathKind = "file" | "folder" | "missing";
+
+function kindOf(value: string, index: CatalogIndex): PathKind {
+  if (index.files.has(value)) return "file";
+  const name = value.slice(value.lastIndexOf("/") + 1);
+  if (index.files.has(`${value}/${name}`)) return "file";
+  return index.dirs.has(value) ? "folder" : "missing";
+}
+
 /** 清单缓存（一次会话只拉一次；失败不缓存，下次打开重试） */
 let catalogTask: Promise<ImageCatalog> | null = null;
 
@@ -68,7 +110,7 @@ function isStringArray(value: unknown): value is string[] {
 /** 拉图片清单：先问 dev 的目录接口，不在（生产）就退到落盘清单 */
 export function loadImageCatalog(): Promise<ImageCatalog> {
   if (catalogTask) return catalogTask;
-  catalogTask = (async (): Promise<ImageCatalog> => {
+  const plain = (async (): Promise<{ images: string[]; source: ImageCatalog["source"] }> => {
     try {
       const listed = (await fetchJson(`${GAME_RES_ROOT}/__list`)) as { images?: unknown };
       if (isStringArray(listed.images)) return { images: listed.images, source: "list" };
@@ -80,11 +122,15 @@ export function loadImageCatalog(): Promise<ImageCatalog> {
       throw new Error("图片清单格式不对（images 不是字符串数组）");
     }
     return { images: manifest.images, source: "manifest" };
-  })().catch((error: unknown) => {
-    // 失败丢弃缓存：dev server 刚重启完 / 素材目录刚拉到，再打开一次应该能成功
-    catalogTask = null;
-    throw error;
-  });
+  })();
+  catalogTask = plain
+    // 目录集跟着清单一起建好：几万条路径也只扫一遍，选择器与字段预览共用
+    .then((data) => ({ ...data, index: indexCatalog(data.images) }))
+    .catch((error: unknown) => {
+      // 失败丢弃缓存：dev server 刚重启完 / 素材目录刚拉到，再打开一次应该能成功
+      catalogTask = null;
+      throw error;
+    });
   return catalogTask;
 }
 
@@ -103,9 +149,13 @@ function trimSlashes(value: string): string {
  *
  * 分组 = 相对 `rootDir` 的第一段目录（如 rootDir=`item` 时，`item/potion/xxx` 归到 `potion`）；
  * 平铺目录（全部直接躺在 rootDir 下）没有分组条 —— 一条「全部」的筛选栏只是噪音。
+ *
+ * 每一项带 `thumb`：能不能出缩略图。不能 = 纯目录（外观那种「只有动作子目录」的一套），
+ * 画文件夹图标并标出里面的文件数 —— 让「图集目录」和「素材缺失」一眼可分。
  */
 function ImagePickerList({
   images,
+  index,
   rootDir,
   mode,
   current,
@@ -113,6 +163,8 @@ function ImagePickerList({
   max = 240,
 }: {
   images: string[];
+  /** 清单索引（文件集 / 目录集），由 `loadImageCatalog` 一并建好 */
+  index: CatalogIndex;
   /** 只看这个目录下的图（空 = 全部） */
   rootDir?: string;
   mode: ImagePickMode;
@@ -137,19 +189,30 @@ function ImagePickerList({
   const candidates = useMemo(() => {
     const scoped = prefix ? images.filter((path) => path.startsWith(prefix)) : images;
     if (mode === "image" || !prefix) {
-      return scoped.map((path) => ({ path, value: path, name: path.split("/").pop() ?? path }));
+      return scoped.map((path) => ({
+        path,
+        value: path,
+        name: path.slice(path.lastIndexOf("/") + 1),
+        thumb: true,
+        files: 1,
+      }));
     }
     const seen = new Set<string>();
-    const rows: { path: string; value: string; name: string }[] = [];
+    const counts = new Map<string, number>();
+    const rows: { path: string; value: string; name: string; thumb: boolean; files: number }[] = [];
     for (const path of scoped) {
       const segment = firstSegmentOf(path.slice(prefix.length));
       const value = `${trimSlashes(rootDir ?? "")}/${segment}`;
+      counts.set(value, (counts.get(value) ?? 0) + 1);
       if (seen.has(value)) continue;
       seen.add(value);
-      rows.push({ path, value, name: segment });
+      rows.push({ path, value, name: segment, thumb: kindOf(value, index) === "file", files: 0 });
     }
+    // 文件数要等整目录扫完才知道：第二遍补上（只补「一套」的行，量级是个位数）
+    for (const row of rows) row.files = counts.get(row.value) ?? row.files;
     return rows;
-  }, [images, prefix, mode, rootDir]);
+    // index 与 images 是一份清单的两半，同进同出
+  }, [images, index, prefix, mode, rootDir]);
 
   /** 相对 rootDir 的路径（分组用） */
   const relativeOf = (path: string): string => (prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path);
@@ -216,13 +279,13 @@ function ImagePickerList({
           </p>
         ) : (
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-            {shown.map(({ path, value, name }) => {
+            {shown.map(({ path, value, name, thumb, files }) => {
               const active = current === value;
               return (
                 <button
                   key={path}
                   type="button"
-                  title={value}
+                  title={thumb ? value : `${value}/ （目录 · ${files} 个文件）`}
                   onClick={() => onPick(value)}
                   className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 transition ${
                     active
@@ -230,13 +293,20 @@ function ImagePickerList({
                       : "border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60"
                   }`}
                 >
-                  {/* 图集用首帧预览：它可能就是一张整张拼图，直接 <img> 看不出是什么 */}
-                  {mode === "atlas" ? (
+                  {/*
+                    能出缩略图的画图（图集取首帧：它可能就是一张整张拼图，直接 <img> 看不出是什么）；
+                    纯目录画文件夹 —— 外观那种一套八个方向子目录、本体没有单张封面，
+                    以前会显示灰字「无图」，看起来像素材缺了。
+                  */}
+                  {!thumb ? (
+                    <FolderGlyph size={44} />
+                  ) : mode === "atlas" ? (
                     <GameFrame atlas={value} alt={name} size={44} zoomable={false} />
                   ) : (
                     <GameIcon path={value} alt={name} size={44} zoomable={false} />
                   )}
                   <span className="w-full truncate text-center text-[10px] text-slate-400">{name}</span>
+                  {!thumb ? <span className="text-[9px] text-amber-300/70">{files} 个文件</span> : null}
                 </button>
               );
             })}
@@ -264,6 +334,57 @@ function GroupChip({ active, onClick, children }: { active: boolean; onClick: ()
       {children}
     </button>
   );
+}
+
+/** 目录占位：一套图集是**目录**，本体没有单张封面 —— 画文件夹比画一格「无图」诚实 */
+function FolderGlyph({ size = 44 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex items-center justify-center rounded border border-slate-800 bg-slate-900/60 text-amber-300/75"
+      style={{ width: size, height: size }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width={size * 0.52}
+        height={size * 0.52}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3.5 7.6a2 2 0 0 1 2-2h3.1c.55 0 1.07.23 1.45.63l1.05 1.12h6.4a2 2 0 0 1 2 2v6.05a2 2 0 0 1-2 2h-12a2 2 0 0 1-2-2V7.6Z" />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * 动画模式下这个值在磁盘上是什么（`null` = 还没问到清单 —— 先按原行为画缩略图）
+ *
+ * 清单拉不到 / 不是动画模式时返回 `null`：不该因为接口挂了，字段预览就全变成文件夹。
+ */
+function usePathKind(value: string, mode: ImagePickMode): PathKind | null {
+  const [kind, setKind] = useState<PathKind | null>(null);
+  useEffect(() => {
+    if (!value || mode !== "atlas") {
+      setKind(null);
+      return;
+    }
+    let cancelled = false;
+    loadImageCatalog()
+      .then((catalog) => {
+        if (!cancelled) setKind(kindOf(value, catalog.index));
+      })
+      .catch(() => {
+        /* 清单拿不到就维持原行为 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [value, mode]);
+  return kind;
 }
 
 /**
@@ -377,6 +498,7 @@ export function ImagePicker({
       ) : catalog ? (
         <ImagePickerList
           images={catalog.images}
+          index={catalog.index}
           rootDir={rootDir}
           mode={mode}
           current={value}
@@ -425,15 +547,19 @@ export function IconField({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const kind = usePathKind(value, mode);
   return (
     <>
       <Field label={label} hint={hint}>
         <div className="flex items-center gap-2">
           {/*
-            预览随模式走：图标看这张图；动画看首帧（外观那种「按动作分子目录」的没有单张封面，
-            会显示「无图」占位 —— 这是事实，不是选错了）。
+            预览随模式走：图标看这张图；动画看首帧。有图集本体的（`titles/x/x.png`）出首帧，
+            纯目录的（外观那种「按动作 / 方向分子目录」）画文件夹 —— 以前这里显示「无图」，
+            看着像素材丢了。清单还没问到 / 拉不到时按原行为走，不硬改。
           */}
-          {mode === "atlas" ? (
+          {mode === "atlas" && kind === "folder" ? (
+            <FolderGlyph size={36} />
+          ) : mode === "atlas" ? (
             <GameFrame atlas={value} alt={label} size={36} zoomable={false} />
           ) : (
             <GameIcon path={value} alt={label} size={36} zoomable={false} />
