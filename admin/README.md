@@ -106,6 +106,16 @@ admin/
 
 候选清单与「叫什么、长什么样」全在 `components/entity/catalog.ts`（把 `api/gameData` 的生成物包成 `EntityOption`），页面不写游戏数据 —— 客户端加一件装备，选择器自动多一条。掉落条目的候选恰是服务端校验用的那份 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），所以**能选出来的必定能存进去**；值不在清单里（旧数据）时字段会标黄色「清单里没有这个 id」，而不是装作空值。
 
+**怪物 / NPC 的 id 也一样**（#651）：任务的目标对象与发布 NPC、成就「累计击杀」的目标都是同一个 `EntityPickButton`：
+
+```tsx
+<EntityPickButton value={form.objectiveTarget} options={entityOptions("monster")} kind="monster" onChange={…} />
+```
+
+`catalog` 的 `EntityKind` 覆盖 `equipment / item / skill / drug / fashion / map / monster / npc`。怪物与 NPC 的清单来自**服务端种子**（`monster-seed` / `npc-seed`，与 seed 进表的同一份），所以 220 只怪一只不少 —— 从前任务页用 `size: 100` 的列表接口，第 101 只之后的怪根本选不到，列表里也只显示裸 id。怪物名字是**出厂名**（运行时权威在 `monsters` 表，管理端可改），选中值永远是 id；成就的「任意怪」是 `*`，作为怪物清单里的第一个候选摆出来，不用再手打。
+
+选择器一次只渲染 120 条（技能 1011 条、物品 2200+ 条一次性铺完会卡主线程），底部写「共 N 项，已画 M 项」并给**「再显示 N 项」**按钮 —— 能翻到底，不必靠猜关键词（分组不算救命：「普通怪」一组就有两百只）。
+
 `mode="atlas"` 的「一套」由 `rootDir` 锚定（`clothes/out` 之下的 `001` 就是一套），一条规则同时覆盖三种磁盘形态（Cocos 图集目录 / 路径即基名 / 按动作分子目录），不会把 `001/a1` 这种内部动作目录漏给运营去选。
 
 > 顺带一个必须记住的坑：**选择器叠在编辑弹窗上时，编辑弹窗的 `onClose` 要判 `anyPickerOpen()`**（`components/pickerStack.ts`，`IconField` / `EntityPickButton` 都会自动登记）。两个 `Modal` 各挂一个 window 的 Esc 监听，编辑弹窗先注册先收到 —— 不拦就会「关选择器顺带把编辑弹窗也关了」，改了一半的内容全丢。页面只需要改 `onClose` 那一行：`onClose={() => { if (!anyPickerOpen()) onCancel(); }}`。图片清单有两个来源、同一个 JSON 形状：**开发**用 vite 中间件的 `GET /game-resources/__list?dir=item` 直接扫 `client/assets/resources`（素材一放进来就能选，零额外步骤）；**生产** nginx 只是静态反代、没有目录列表能力，读落盘清单 `resources/image-manifest.json`（`make image-manifest` 生成，随素材包分发）。拿不到清单时弹窗里给的是**可执行的提示**（素材目录在哪 / 该跑哪条命令），不是一句「加载失败」。

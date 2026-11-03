@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { dropApi, formatTime, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
+import { dropApi, formatTime, MONSTER_TIER_LABELS, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
 import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
@@ -12,8 +12,13 @@ import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
-/** 定位中文名（configs/monster 的 tier） */
-const TIER_LABELS: Record<string, string> = { normal: "普通", elite: "精英", boss: "首领" };
+/**
+ * 定位中文名：与选择器分组共用一份（`api/gameData` 的 `MONSTER_TIER_LABELS`）
+ *
+ * 再声明成 `Record<string, string>` 是因为接口里的 `tier` 是 `string` ——
+ * 直接拿种子那个强类型常量索引会 TS7053（键可能是任何字符串，得先收窄）。
+ */
+const TIER_LABELS: Record<string, string> = MONSTER_TIER_LABELS;
 const TIER_OPTIONS = Object.entries(TIER_LABELS);
 
 /** 属性摘要（列表列太窄，只报几个关键数；完整数值在编辑弹窗里） */

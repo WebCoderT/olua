@@ -36,6 +36,12 @@ import {
   mapPreview,
   mapText,
   maxStackOf,
+  MONSTER_TIER_LABELS,
+  monsterIcon,
+  monsterInfo,
+  monsterRows,
+  npcInfo,
+  npcRows,
   rankMeta,
   skillDescription,
   skillIcon,
@@ -51,7 +57,7 @@ import {
 } from "../../api";
 
 /** 有「清单」可挑的实体种类 */
-export type EntityKind = "equipment" | "item" | "skill" | "drug" | "fashion" | "map";
+export type EntityKind = "equipment" | "item" | "skill" | "drug" | "fashion" | "map" | "monster" | "npc";
 
 /** 有「阶梯」可挑的养成等级种类（下标从 1 起 = 第一档） */
 export type LevelKind = "title" | "soul" | "rank";
@@ -138,6 +144,14 @@ export function entityLabel(kind: EntityKind, id: string): string {
       return fashionText(id) || `未知时装 ${id}`;
     case "map":
       return mapText(id) || `未知地图 ${id}`;
+    case "monster": {
+      // 种子里的出厂名：怪物名字的运行时权威是 monsters 表（管理端可改），
+      // 选择器只负责「让你认出是哪只」，选中值永远是 id
+      const row = monsterInfo(id);
+      return row ? row.label : `未知怪物 ${id}`;
+    }
+    case "npc":
+      return npcInfo(id)?.label ?? `未知 NPC ${id}`;
     default:
       return id;
   }
@@ -177,6 +191,15 @@ export function entityNote(kind: EntityKind, id: string): string {
     case "map":
       // 地图只有名字与小地图底图，没有等级之类（等级门槛在客户端 map.ts 里，后台不复制）
       return id ? `地图 id ${id}` : "";
+    case "monster": {
+      const row = monsterInfo(id);
+      if (!row) return `怪物 key ${id}`;
+      // key 一定要露出来：掉落 / 任务 / 成就里存的是它，运营核对时按 key 对账
+      return [`Lv.${row.level}`, MONSTER_TIER_LABELS[row.tier] ?? row.tier, `key ${row.id}`].join(" · ");
+    }
+    case "npc":
+      // NPC 的显示名有重名（四个「神装使者」），编号才是唯一身份
+      return `NPC ${id}`;
     default:
       return id;
   }
@@ -209,6 +232,15 @@ export function entityImage(kind: EntityKind, id: string): EntityImage {
     case "map": {
       const preview = mapPreview(id);
       return preview ? { icon: preview, ext: "jpg" } : {};
+    }
+    case "monster": {
+      const icon = monsterIcon(id);
+      return icon ? { icon } : {};
+    }
+    case "npc": {
+      // NPC 的素材是图集动画目录（`npc/npc_2125`），缩略图取首帧
+      const src = npcInfo(id)?.src ?? "";
+      return src ? { frame: src } : {};
     }
     default:
       return {};
@@ -295,6 +327,14 @@ export function entityOptions(kind: EntityKind): EntityOption[] {
     options = mapIds()
       .map((id) => optionOf("map", id, "地图"))
       .sort((a, b) => Number(a.id) - Number(b.id));
+  } else if (kind === "monster") {
+    // `monsterRows()` 已按等级 → id 排好；分组用定位（普通 / 精英 / 首领），
+    // 组内保持等级序 —— 运营找怪时想的是「我要一只 30 级左右的」，不是字母序
+    options = monsterRows().map((row) =>
+      optionOf("monster", row.id, MONSTER_TIER_LABELS[row.tier] ?? row.tier),
+    );
+  } else if (kind === "npc") {
+    options = npcRows().map((row) => optionOf("npc", row.id, "NPC"));
   } else {
     options = fashionIds()
       .map((id) => optionOf("fashion", id, "时装"))

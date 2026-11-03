@@ -21,6 +21,8 @@
  * 齐全非空）；它还会扫 `admin/src`，抓「与生成物同名的字典型定义」。
  */
 
+import { MONSTER_SEED_ROWS, type MonsterSeedTier } from "../../../server/src/shared/monster-seed";
+import { NPC_SEED_ROWS } from "../../../server/src/shared/npc-seed";
 import { RANK_SEEDS } from "../../../server/src/shared/rank-seed";
 import { SOUL_SEEDS } from "../../../server/src/shared/soul-seed";
 import { TITLE_SEEDS } from "../../../server/src/shared/title-seed";
@@ -324,6 +326,82 @@ export function drugIds(): string[] {
 /** 全部时装 id */
 export function fashionIds(): string[] {
   return Object.keys(FASHIONS);
+}
+
+/* ===========================================================================
+ * 怪物 / NPC
+ *
+ * 清单来自**服务端种子**（`monster-seed` / `npc-seed`）—— 与 seed 进表的同一份，
+ * 不在这里另抄一本账。两点要知道：
+ * - 怪物名字是**出厂名**。运行时权威在 `monsters` 表（管理端可改名称），所以列表页
+ *   显示的是表里的名字；选择器里显示种子名，**id 才是权威**（选中值永远是 id）。
+ * - 怪物 key 与 NPC 编号都是固定清单（没有新建 / 删除），所以清单不会「长出来」新行。
+ * =========================================================================== */
+
+/** 怪物定位的中文名（列表筛选项与选择器分组共用一份） */
+export const MONSTER_TIER_LABELS: Record<MonsterSeedTier, string> = {
+  normal: "普通",
+  elite: "精英",
+  boss: "首领",
+};
+
+/** 怪物的一行（选择器 / 任务目标 / 成就条件共用） */
+export interface MonsterInfo {
+  id: string;
+  label: string;
+  level: number;
+  tier: MonsterSeedTier;
+}
+
+let monsterCache: MonsterInfo[] | null = null;
+
+/**
+ * 全部怪物（按等级 → id 数值序）
+ *
+ * 排序不用字典序：怪 id 是 "1" / "2" / "10"，字典序会把 10 排在 2 前面，
+ * 按等级排才符合「打怪的推进顺序」。
+ */
+export function monsterRows(): MonsterInfo[] {
+  if (!monsterCache) {
+    monsterCache = MONSTER_SEED_ROWS.map((row) => ({
+      id: row.id,
+      label: row.label,
+      level: row.level,
+      tier: row.tier,
+    })).sort((a, b) => a.level - b.level || Number(a.id) - Number(b.id));
+  }
+  return monsterCache;
+}
+
+/** 怪物 key → 一行（查不到返回 null，由调用方决定显示什么） */
+export function monsterInfo(id: string): MonsterInfo | null {
+  if (!id) return null;
+  return monsterRows().find((row) => row.id === id) ?? null;
+}
+
+/** NPC 的一行（`src` 是图集动画目录，选择器拿它当缩略图） */
+export interface NpcInfo {
+  id: string;
+  label: string;
+  src: string;
+}
+
+let npcCache: NpcInfo[] | null = null;
+
+/** 全部 NPC（按编号；同一批「未激活」的也照实列出来 —— 地图上引用得到就选得到） */
+export function npcRows(): NpcInfo[] {
+  if (!npcCache) {
+    npcCache = NPC_SEED_ROWS.map((row) => ({ id: row.id, label: row.label, src: row.src })).sort((a, b) =>
+      a.id.localeCompare(b.id),
+    );
+  }
+  return npcCache;
+}
+
+/** NPC 编号 → 一行（查不到返回 null） */
+export function npcInfo(id: string): NpcInfo | null {
+  if (!id) return null;
+  return npcRows().find((row) => row.id === id) ?? null;
 }
 
 /**

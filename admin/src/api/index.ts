@@ -126,7 +126,12 @@ export {
   levelCount,
   mapPreview,
   maxStackOf,
+  MONSTER_TIER_LABELS,
   monsterIcon,
+  monsterInfo,
+  monsterRows,
+  npcInfo,
+  npcRows,
   OCCUPATION_LABELS,
   occupationLabel,
   rankMeta,
@@ -149,6 +154,6 @@ export {
   titleMeta,
   titleText,
 } from "./gameData";
-export type { GrowthStepMeta } from "./gameData";
+export type { GrowthStepMeta, MonsterInfo, NpcInfo } from "./gameData";
 // 地图名录（#573）：名字只在服务端，这里只是「拉一次 + 进程内缓存」的读口
 export { ensureMapCatalog, mapCatalogLoaded, mapIds, mapText, refreshMapCatalog } from "./mapCatalog";
