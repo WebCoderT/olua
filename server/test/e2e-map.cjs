@@ -189,8 +189,11 @@ async function main() {
     checkEqual(map0.height, 8192, "像素高");
     checkEqual(map0.layerCount, 2, "图层数（ground / wall）");
     checkEqual(map0.monsterAreaCount, 3, "客户端 TMX 的刷怪矩形数");
-    checkEqual(map0.npcCount, 1, "TMX 里 klass=npc 的对象数");
-    checkEqual(map0.reviveCount, 1, "TMX 里 klass=revive 的对象数");
+    // #672：npcCount / reviveCount 是**资源对照**（TMX 里还剩几个对象），真正生效的点位在下面两行
+    checkEqual(map0.npcCount, 1, "TMX 里 klass=npc 的对象数（资源对照，客户端已不消费）");
+    checkEqual(map0.reviveCount, 1, "TMX 里 klass=revive 的对象数（同上）");
+    checkEqual(map0.npcPointCount, 1, "服务端 map_npcs 的点位数（#672 起这才是生效的那份）");
+    checkEqual(map0.hasRevivePoint, true, "服务端有没有复活点（maps.revive_cx/cy 非空）");
     checkEqual(map0.collisionCount, 99, "TMX 碰撞矩形数");
     checkEqual(map0.spawnAreaCount, 3, "服务端 map_spawn_areas 的行数（与上面那个 3 是两件事）");
     checkEqual(map0.worldMonsterCount, 0, "没跑过世界时场上怪物数是 0（不是 null）");
@@ -281,10 +284,10 @@ async function main() {
     checkEqual((data.worldMonsters ?? []).length, 0, "没跑过世界的进程里 worldMonsters 是空数组（不是 500）");
 
     const sources = data.sources ?? [];
-    checkEqual(sources.length, 7, "每一块数据都带来源说明（7 条）");
+    checkEqual(sources.length, 9, "每一块数据都带来源说明（9 条，#672 多了 NPC 点位与复活点）");
     checkEqual(
       sources.map((item) => item.section).join(","),
-      "config,resource,size,layers,groups,spawnAreas,worldMonsters",
+      "config,resource,size,layers,groups,spawnAreas,npcPoints,revivePoint,worldMonsters",
       "来源覆盖页面上的每一栏",
     );
     checkEqual(
@@ -295,8 +298,8 @@ async function main() {
     check(
       sources
         .filter((item) => item.origin === "db")
-        .every((item) => /^maps|map_spawn_areas|world_monsters/.test(item.ref)),
-      "归到「库表」的三条写的是真表名（不是含糊的「服务端」）",
+        .every((item) => /^maps|map_spawn_areas|map_npcs|world_monsters/.test(item.ref)),
+      "归到「库表」的每一条都写的是真表名（不是含糊的「服务端」）",
     );
     check(
       sources.filter((item) => item.origin === "config").every((item) => item.ref.includes("client/assets/")),
