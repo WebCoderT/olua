@@ -142,6 +142,14 @@ import {
   MapWorldMonsterDto,
   SaveMapConfigDto,
 } from "../modules/map/dto/map.dto";
+import {
+  MapMonitorDto,
+  MapMonitorDropDto,
+  MapMonitorEventDto,
+  MapMonitorMonsterDto,
+  MapMonitorPlayerDto,
+  MapMonitorQueryDto,
+} from "../modules/map/dto/map-monitor.dto";
 import { SaveUiEffectDto, UiEffectConfigDto, UiEffectDto, UiEffectListDto } from "../modules/ui-effect/dto/ui-effect.dto";
 
 /**
@@ -452,6 +460,13 @@ export const SWAGGER_MODELS = [
   SaveMapConfigDto,
   MapListDto,
   MapDetailDto,
+  // 实时地图监控（#665）
+  MapMonitorDto,
+  MapMonitorMonsterDto,
+  MapMonitorPlayerDto,
+  MapMonitorEventDto,
+  MapMonitorDropDto,
+  MapMonitorQueryDto,
   // 特效（#594 升级特效 / #634 掉落光效）
   UiEffectDto,
   UiEffectConfigDto,

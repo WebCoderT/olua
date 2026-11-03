@@ -150,6 +150,9 @@ const REPO_EDGES = {
   ],
   // 区服（#295）：注册选区校验活区（auth）、世界代际巡检（world）、开区/合并（zone）
   "database/repositories/zone.repository.ts": ["modules/zone", "modules/auth", "modules/world"],
+  // 实时地图监控（#665）：**两个域各占一半** —— 实时进程的采集器写（快照 + 击杀/刷新事件），
+  // 地图域只读（管理端 `/admin/maps/:id/monitor`）。它不是配置，是运行时的投影。
+  "database/repositories/map-monitor.repository.ts": ["modules/realtime", "modules/map"],
   // 刷怪区（#295）：播种来源表，与世界实例同属 world 模块
   "database/repositories/map-spawn-area.repository.ts": [
     "modules/world",

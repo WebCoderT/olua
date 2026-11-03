@@ -27,6 +27,7 @@ import { DropTableRepository } from "./repositories/drop-table.repository";
 import { MonsterDropRepository } from "./repositories/monster-drop.repository";
 import { TitleRepository } from "./repositories/title.repository";
 import { WorldMonsterRepository } from "./repositories/world-monster.repository";
+import { MapMonitorRepository } from "./repositories/map-monitor.repository";
 import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository";
 import { MapRepository } from "./repositories/map.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
@@ -66,6 +67,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     MailRepository,
     SystemRepository,
     WorldMonsterRepository,
+    MapMonitorRepository,
     MapSpawnAreaRepository,
     MapRepository,
     ZoneRepository,
@@ -114,6 +116,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     MailRepository,
     SystemRepository,
     WorldMonsterRepository,
+    MapMonitorRepository,
     MapSpawnAreaRepository,
     MapRepository,
     ZoneRepository,

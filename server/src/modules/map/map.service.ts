@@ -2,14 +2,22 @@ import { Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue } from "../../common/constants/map-config";
 import { BizException } from "../../common/errors/biz.exception";
+import { parseMonitorEvent, parseMonitorSnapshot } from "../../common/map-monitor";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { spawnAreaInBounds, spawnAreaOverflow } from "../../common/utils/spawn-area-bounds.util";
+import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-area.repository";
 import { MapRepository } from "../../database/repositories/map.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { MapRow } from "../../database/rows";
 import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
+import {
+  MapMonitorDto,
+  MapMonitorEventDto,
+  MapMonitorMonsterDto,
+  MapMonitorPlayerDto,
+} from "./dto/map-monitor.dto";
 import {
   MapConfigDto,
   MapDetailDto,
@@ -66,6 +74,7 @@ export class MapService {
     private readonly spawnAreas: MapSpawnAreaRepository,
     private readonly worldMonsters: WorldMonsterRepository,
     private readonly monsters: MonsterRepository,
+    private readonly monitorRows: MapMonitorRepository,
   ) {}
 
 
@@ -101,6 +110,101 @@ export class MapService {
       combat: row.combat,
       soulOfWar: row.soul_of_war,
     }));
+  }
+
+  /**
+   * 实时地图监控（#665）：这张图此刻的样子 + 最近的文字流
+   *
+   * ## 为什么读库而不是问实时进程
+   *
+   * 世界状态只活在实时进程内存里，本进程（存档 / 管理端 API）拿不到；两个进程之间只有
+   * 共享 SQLite（同 `monster-ai` 顶部说明）。实时进程的 `MapMonitorService` 每秒把状态投影
+   * 进 `map_monitor_state`，击杀 / 刷新写 `map_monitor_events` —— 这里只做「读 + 拼」。
+   *
+   * ## 三个必须照实返回的东西
+   *
+   * 1. **`staleMs`**：没人在那张图里时采集器不采样，快照会停住。页面必须能说
+   *    「最后采样 3 分钟前」，否则一张停更的图看起来和「图里没人、怪也都不在」一模一样；
+   * 2. **`zones`**：同一张图每个区各有一份世界（#295），监控得能切区；
+   * 3. **`cursor`**：事件按 id 增量拉，页面不会每秒重画 300 行。
+   *
+   * 快照坏掉（半截 JSON）时返回空列表 + `sampledAt = null`，不抛 500 —— 一张图的镜像
+   * 坏了不该让整个监控接口挂掉，页面会显示「没有可用快照」。
+   */
+  monitor(id: string, query: { zone?: number; since?: number; limit?: number }): MapMonitorDto {
+    const row = this.requireRow(id);
+    const size = this.sizeOf(row);
+    const states = this.monitorRows.listStates(id);
+    // 不指定区就用「最新写过快照的那个区」—— 玩家在哪个区，就看到哪个区
+    const zoneId = query.zone ?? states[0]?.zone_id ?? 1;
+    const state = states.find((item) => item.zone_id === zoneId) ?? null;
+    const snapshot = parseMonitorSnapshot(state?.payload);
+    const now = Date.now();
+    const since = Math.max(0, query.since ?? 0);
+    const limit = Math.min(200, Math.max(1, query.limit ?? 60));
+
+    const eventRows = this.monitorRows.listEvents(zoneId, id, since, limit);
+    const events: MapMonitorEventDto[] = [];
+    for (const eventRow of eventRows) {
+      const parsed = parseMonitorEvent(eventRow.payload);
+      if (!parsed) continue;
+      const dto = new MapMonitorEventDto();
+      dto.id = eventRow.id;
+      dto.at = parsed.at;
+      dto.kind = parsed.kind;
+      dto.instanceId = parsed.instanceId;
+      dto.monsterKey = parsed.monsterKey;
+      dto.label = parsed.label;
+      dto.x = parsed.x;
+      dto.y = parsed.y;
+      dto.killer = parsed.kind === "kill" ? parsed.killer : "";
+      dto.drops = parsed.kind === "kill" ? parsed.drops : [];
+      dto.respawnAt = parsed.kind === "kill" ? parsed.respawnAt : 0;
+      events.push(dto);
+    }
+
+    const dto = new MapMonitorDto();
+    dto.mapId = id;
+    dto.mapLabel = row.label;
+    dto.width = size.width;
+    dto.height = size.height;
+    dto.zoneId = zoneId;
+    dto.zones = states.map((item) => item.zone_id).sort((left, right) => left - right);
+    dto.sampledAt = snapshot?.sampledAt ?? null;
+    dto.updatedAt = state?.updated_at ?? null;
+    dto.staleMs = state ? Math.max(0, now - state.updated_at) : null;
+    dto.monsters = (snapshot?.monsters ?? []).map((monster) => {
+      const item = new MapMonitorMonsterDto();
+      item.instanceId = monster.instanceId;
+      item.monsterKey = monster.monsterKey;
+      item.label = monster.label;
+      item.x = monster.x;
+      item.y = monster.y;
+      item.hp = monster.hp;
+      item.maxHp = monster.maxHp;
+      item.alive = monster.alive;
+      // 倒计时按「现在」重算：快照里的 respawnInMs 是采样那一刻的数，页面晚 300ms 打开就偏了
+      item.respawnInMs =
+        monster.respawnAt === null ? null : Math.max(0, monster.respawnAt - now);
+      item.respawnAt = monster.respawnAt;
+      return item;
+    });
+    dto.players = (snapshot?.players ?? []).map((player) => {
+      const item = new MapMonitorPlayerDto();
+      item.accountId = player.accountId;
+      item.name = player.name;
+      item.x = player.x;
+      item.y = player.y;
+      item.hp = player.hp;
+      item.maxHp = player.maxHp;
+      item.moving = player.moving;
+      return item;
+    });
+    dto.events = events;
+    // 没有新事件时游标不能往前跳：原样回传 since，页面下一轮还从老地方问
+    const lastId = events.length > 0 ? events[events.length - 1].id : 0;
+    dto.cursor = lastId > 0 ? lastId : since;
+    return dto;
   }
 
   /** 详情：基础 + 图层 + 对象组 + 刷怪区 + 场上怪物 + 来源说明 */

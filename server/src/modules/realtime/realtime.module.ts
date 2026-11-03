@@ -6,6 +6,7 @@ import { WorldModule } from "../world/world.module";
 import { BlockService } from "./block.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
+import { MapMonitorService } from "./map-monitor.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { RealtimeController } from "./realtime.controller";
@@ -34,6 +35,14 @@ import { RealtimeService } from "./realtime.service";
 @Module({
   imports: [RolesModule, QuestModule, WorldModule, PartyModule],
   controllers: [RealtimeController],
-  providers: [RealtimeService, CombatSettlementService, MonsterAiService, PlayerPresenceService, ChatService, BlockService],
+  providers: [
+    RealtimeService,
+    CombatSettlementService,
+    MonsterAiService,
+    PlayerPresenceService,
+    MapMonitorService,
+    ChatService,
+    BlockService,
+  ],
 })
 export class RealtimeModule {}

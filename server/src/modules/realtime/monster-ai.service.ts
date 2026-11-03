@@ -339,6 +339,22 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     this.positions.delete(accountId);
   }
 
+  /**
+   * 一只怪此刻的模拟坐标（#665 实时地图监控用；没跑过 AI 的怪返回 null）
+   *
+   * 为什么监控要就地读它：`world_monsters.x/y` 是**出生点**（世界里唯一稳定的真相），
+   * 而这只怪现在被拉到哪了只有 AI 运行时知道（`MonsterRuntime.x/y`，不落盘）。
+   * 读不到 = 这只怪还没被 AI 驱动过（刚播种 / 图没人看），调用方退回出生点即可。
+   *
+   * 只读：不创建运行时（`runtimeOf` 会建，这里用 `findRuntime`），不然监控页一开
+   * 就会替全图的怪把 AI 运行时建出来 —— 那是 AI tick 的活，不是观察者的副作用。
+   */
+  livePositionOf(instanceId: string): { x: number; y: number; moving: boolean } | null {
+    const runtime = this.findRuntime(instanceId);
+    if (!runtime) return null;
+    return { x: runtime.x, y: runtime.y, moving: runtime.movingNow };
+  }
+
   //#endregion
 
   //#region 状态修正（#372：结算侧查询怪物身上的 buff）

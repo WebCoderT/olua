@@ -289,6 +289,32 @@ export interface WorldMonsterRow {
 }
 
 /**
+ * 实时地图监控的一帧镜像（`map_monitor_state` 表；#665）
+ *
+ * 高频写、只读展示：**不是一个权威来源**，重启后为空也无所谓（实时进程下一次采样就会补上）。
+ * `payload` 的形状见 `common/map-monitor.ts` 的 `MapMonitorSnapshot`（跨进程契约）。
+ */
+export interface MapMonitorStateRow {
+  zone_id: number;
+  map_id: string;
+  /** JSON：{ monsters, players, sampledAt } */
+  payload: string;
+  updated_at: number;
+}
+
+/** 实时地图监控的一条文字事件（`map_monitor_events` 表；#665；`payload` 见 `MapMonitorEvent`） */
+export interface MapMonitorEventRow {
+  id: number;
+  zone_id: number;
+  map_id: string;
+  /** 事件时刻（毫秒） */
+  at: number;
+  /** kill = 击杀 / respawn = 刷新 */
+  kind: string;
+  payload: string;
+}
+
+/**
  * 刷怪区一行（`map_spawn_areas` 表；#295 阶段一：刷怪区配置归服务端）
  *
  * 一行 = Tiled monster 对象组里的一个矩形区域（从 TMX 导入一次后归服务端）。

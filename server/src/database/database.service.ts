@@ -203,6 +203,36 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_world_monsters_map ON world_monsters(map_id);
       CREATE INDEX IF NOT EXISTS idx_world_monsters_zone ON world_monsters(zone_id, map_id);
 
+      -- 实时地图监控（#665）：世界进程每秒把「这张图现在长什么样」投影成一行，管理端只读它。
+      --
+      -- 为什么还要一张镜像表（world_monsters 不是已经有状态了吗）：那张表的 x/y 是**出生点**
+      -- （世界里唯一稳定的真相），而监控要看的是**此刻**的位置 —— 怪物 AI 的模拟坐标只活在
+      -- 实时进程内存里，且不落盘（见 monster-ai.service 的 MonsterRuntime）。管理端接口在
+      -- 存档进程（3100），两个进程之间只有 SQLite 这一条路，所以这里做一份高频镜像：
+      -- 它是**运行时投影，不是配置**，config-sync 的 32 张表里没有它，重启清空也无所谓。
+      CREATE TABLE IF NOT EXISTS map_monitor_state (
+        zone_id    INTEGER NOT NULL,
+        map_id     TEXT    NOT NULL,
+        -- JSON：{ monsters: [...], players: [...], sampledAt }
+        payload    TEXT    NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (zone_id, map_id)
+      );
+
+      -- 实时地图监控的文字流（#665）：一次击杀 / 一只怪重生 = 一行。
+      -- 存库而不是只放内存环形缓冲：管理端可能「刚打开页面」，这时它需要知道**它没看见的
+      -- 那几分钟发生过什么**；内存缓冲对「后来的人」等于不存在。行数按 (区, 图) 裁剪到上限。
+      CREATE TABLE IF NOT EXISTS map_monitor_events (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id INTEGER NOT NULL,
+        map_id  TEXT    NOT NULL,
+        at      INTEGER NOT NULL,
+        -- kill = 击杀（自带掉落与两个坐标）/ respawn = 刷新
+        kind    TEXT    NOT NULL,
+        payload TEXT    NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_map_monitor_events_map ON map_monitor_events(zone_id, map_id, id);
+
       -- 刷怪区（#295 阶段一）：一行 = Tiled monster 对象组的一个矩形区域，
       -- 从 TMX 导入一次后归服务端（tools/import-spawn-areas.cjs 生成快照，启动时空表自动 seed）。
       -- 坐标口径与客户端世界坐标一致（cx/cy 区域中心、w/h 尺寸），播种时区域内随机取点。

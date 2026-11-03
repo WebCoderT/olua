@@ -7553,6 +7553,220 @@ export type MapDetail = {
   sources: MapSource[];
 };
 
+export type MapMonitorMonster = {
+  /**
+   * 实例 id（服务端发牌，如 m1_z1_3）
+   */
+  instanceId: string;
+  /**
+   * 怪物 key（monsters 表主键）
+   */
+  monsterKey: string;
+  /**
+   * 怪物名
+   */
+  label: string;
+  /**
+   * 当前 x（世界坐标）：活怪是 AI 模拟位置，死怪是死亡点
+   */
+  x: number;
+  /**
+   * 当前 y（世界坐标）
+   */
+  y: number;
+  /**
+   * 当前血量
+   */
+  hp: number;
+  /**
+   * 血量上限
+   */
+  maxHp: number;
+  /**
+   * 是否存活（false = 死亡等重生）
+   */
+  alive: boolean;
+  /**
+   * 距重生还剩多少毫秒（存活时为 null）
+   */
+  respawnInMs: number | null;
+  /**
+   * 预定重生时刻（毫秒时间戳；存活时为 null）
+   */
+  respawnAt: number | null;
+};
+
+export type MapMonitorPlayer = {
+  /**
+   * 账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名（取不到回落账号名）
+   */
+  name: string;
+  /**
+   * x（世界坐标）
+   */
+  x: number;
+  /**
+   * y（世界坐标）
+   */
+  y: number;
+  /**
+   * 当前血量
+   */
+  hp: number;
+  /**
+   * 血量上限
+   */
+  maxHp: number;
+  /**
+   * 是否在移动
+   */
+  moving: boolean;
+};
+
+export type MapMonitorDrop = {
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 物品名（服务端从表现取；取不到为空串）
+   */
+  label: string;
+  /**
+   * 数量
+   */
+  count: number;
+  /**
+   * 落点 x（世界坐标）= 击杀点
+   */
+  x: number;
+  /**
+   * 落点 y（世界坐标）= 击杀点
+   */
+  y: number;
+};
+
+export type MapMonitorEvent = {
+  /**
+   * 自增 id（即翻页游标）
+   */
+  id: number;
+  /**
+   * 事件时刻（毫秒时间戳）
+   */
+  at: number;
+  /**
+   * 事件类型：kill 击杀 / respawn 刷新
+   */
+  kind: string;
+  /**
+   * 怪物实例 id
+   */
+  instanceId: string;
+  /**
+   * 怪物 key
+   */
+  monsterKey: string;
+  /**
+   * 怪物名
+   */
+  label: string;
+  /**
+   * 发生地点 x（世界坐标）：击杀 = 死亡点，刷新 = 出生点
+   */
+  x: number;
+  /**
+   * 发生地点 y（世界坐标）
+   */
+  y: number;
+  /**
+   * 击杀者角色名（刷新事件为空串）
+   */
+  killer: string;
+  /**
+   * 掉落（刷新事件为空数组）
+   */
+  drops: MapMonitorDrop[];
+  /**
+   * 这只怪下次刷新时刻（毫秒时间戳；刷新事件为 0）
+   */
+  respawnAt: number;
+};
+
+export type MapMonitor = {
+  /**
+   * 地图 id
+   */
+  mapId: string;
+  /**
+   * 地图名
+   */
+  mapLabel: string;
+  /**
+   * 地图像素宽（画布 viewBox 用）
+   */
+  width: number;
+  /**
+   * 地图像素高
+   */
+  height: number;
+  /**
+   * 这一帧是哪个区的世界（同一张图各区各有一份）
+   */
+  zoneId: number;
+  /**
+   * 这张图有哪些区留下过快照（页面据此切换区）
+   */
+  zones: number[];
+  /**
+   * 快照采样时刻（毫秒）；null = 这张图从没被采样过
+   */
+  sampledAt: number | null;
+  /**
+   * 快照写入时刻（毫秒）；null = 没有快照
+   */
+  updatedAt: number | null;
+  /**
+   * 快照距今多少毫秒（null = 没有快照；大 = 那张图没人看，数据已停）
+   */
+  staleMs: number | null;
+  /**
+   * 怪物（含死亡等重生的实例）
+   */
+  monsters: MapMonitorMonster[];
+  /**
+   * 玩家（同区同图）
+   */
+  players: MapMonitorPlayer[];
+  /**
+   * 文字事件（按时间升序）
+   */
+  events: MapMonitorEvent[];
+  /**
+   * 下一次请求带上的游标（本次返回的最大事件 id；没有事件时原样回传 since）
+   */
+  cursor: number;
+};
+
+export type MapMonitorQuery = {
+  /**
+   * 区服 id（不传 = 用该图最新的那份快照所在区）
+   */
+  zone?: number;
+  /**
+   * 事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）
+   */
+  since?: number;
+  /**
+   * 本次最多取多少条事件（默认 60，上限 200）
+   */
+  limit?: number;
+};
+
 export type UiEffect = {
   /**
    * 特效 key（升级特效 = upgrade、掉落光效 = light_1~light_6；取值域见 UI_EFFECT_KEYS）
@@ -7605,6 +7819,21 @@ export type UiEffectList = {
    * 全部特效行，按 seed 顺序（= UI_EFFECT_KEYS 登记顺序：升级特效在最前，掉落光效按档排）
    */
   list: UiEffect[];
+};
+
+export type AdminMapMonitorQuery = {
+  /**
+   * 区服 id（不传 = 用该图最新的那份快照所在区）
+   */
+  zone?: number;
+  /**
+   * 事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）
+   */
+  since?: number;
+  /**
+   * 本次最多取多少条事件（默认 60，上限 200）
+   */
+  limit?: number;
 };
 
 export type GameMailClaimAllQuery = {
