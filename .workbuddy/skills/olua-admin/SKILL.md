@@ -451,10 +451,12 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
    **#685 起点击音是全站共用**（key `ui_click`，展示名「按钮点击音」，分类标签「界面与交互」）——
    它不再只是登录按钮的音，改它会影响所有按钮；`item_drop` 在捡起物品时也响、`bag_resort` 在拖动搬格时也响、
    `map_teleport` 挪到「传送后角色显示出来」那一刻。
-6. **改 key 要能落地到老库**（#685）：`login_click` → `ui_click` 之后，老库那行不会被 `INSERT OR IGNORE`
-   盖掉也不会自己消失 —— 管理端会多出一项「客户端不认的 key」（点了没声音，也看不出原因）。
-   `AudioSettingService.onModuleInit` 里补完行后调 `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行；
-   安全前提是**行只来自 seed**（没有新建接口），清单外的 key 只可能是我们改名或下线。
+6. **改 key / 改出厂值都要能落地到老库**（#685）：`INSERT OR IGNORE` 只在「没有这行」时插入，
+   已有行一个字段都不动。所以 `login_click` → `ui_click` 之后老库那行还在（管理端多出一项
+   「客户端不认的 key」，点了没声音也看不出原因），而改了出厂文件路径的老行**还指着旧文件名**。
+   `AudioSettingService.onModuleInit` 两件事都做：`rebaseOnPreset`（只动 `updated_at = 0` 的行 ——
+   运营改过的行一个字都不改）+ `deleteOrphans(AUDIO_KEYS)`（清清单外的 key）。
+   安全前提：**行只来自 seed**（没有新建接口），清单外的 key 只可能是我们改名或下线。
 7. **素材清单两个来源同形状**（与图片选择器一个道理）：生产 `resources/audio-manifest.json`
    （`make image-manifest` 一并生成，带扩展名）、开发 `/game-resources/__list?dir=sounds&audio=1`
    （vite 中间件扫盘）。都拿不到就降级成「手填 + 试听」，不阻塞配置。

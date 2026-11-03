@@ -304,9 +304,19 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **文件名与 key 同名**（#685 用户授权改名后统一）：`sounds/ui_click.wav` ↔ `ui_click`。
   不是校验规则（运营可换任何合规文件名），纯粹为了对齐 —— 翻资源目录时一眼看出对应哪个配置项。
   **改文件连同 `.meta` 一起改**（uuid 在 meta 上，改对了 prefab / resources.load 都不受影响）。
-- **改名要能落地到老库**：`login_click` → `ui_click` 之后，老库里那行不会被 `INSERT OR IGNORE` 盖掉、
-  也不会自己消失 → `AudioSettingService.onModuleInit` 里 `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行。
-  安全前提是**行只来自 seed**（没有新建接口），清单外的 key 只可能是我们改名或下线。
+- **改出厂值（改名 / 换文件 / 调默认音量）要能落到老库上**，两件事都得做，缺一项就是「代码改了、
+  线上没变」：
+  1. **同步出厂行**：`INSERT OR IGNORE` 只在「没有这行」时插入，已有行一个字段都不动 →
+     改了 `AUDIO_DEFAULTS.filePath` 之后，老库里还指着 `sounds/login_bg.wav`，而资源已经叫
+     `login_bgm.wav` → 一进游戏全都没声音，且看不出原因（服务端不查文件存在性）。
+     `AudioSettingService.onModuleInit` 对 `updated_at = 0` 的行调 `rebaseOnPreset`（跟随出厂值）；
+     **`updated_at > 0` 的行一个字都不动** —— 那是运营的决定；
+  2. **清孤儿**：`login_click` → `ui_click` 之后旧行不会自己消失，会变成管理端一项
+     「客户端不认的 key」（点了没声音也没报错）→ `deleteOrphans(AUDIO_KEYS)`。
+     安全前提是**行只来自 seed**（没有新建接口），清单外的 key 只可能是我们改名或下线。
+  验证方式（e2e 覆盖不到：它用新库，onModuleInit 只跑一次）：`cp data/olua.db /tmp/x.db` →
+  把几行改回旧值（`updated_at = 0`）→ `DB_PATH=/tmp/x.db PORT=3199 REALTIME_EMBEDDED=false node dist/main.js`
+  → 看启动日志「有 N 行出厂值变了」+ 公开接口返回的是新路径。
 
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 

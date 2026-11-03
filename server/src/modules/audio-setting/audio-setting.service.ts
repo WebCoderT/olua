@@ -41,13 +41,24 @@ export class AudioSettingService implements OnModuleInit {
 
   constructor(private readonly audioSettings: AudioSettingRepository) {}
 
-  /** 按出厂值清单补行（幂等；运营改过的行不会被重启盖回来） */
+  /**
+   * 按出厂值清单补行 / 同步出厂值（幂等；运营改过的行不会被重启盖回来）
+   *
+   * 三种情况分开处理：
+   * 1. 没有这行 → seed（`INSERT OR IGNORE`）；
+   * 2. 有这行、`updated_at = 0`（运营从没改过）但和出厂值不一样 → **跟随出厂值**
+   *    （`rebaseOnPreset`）。没有这一步，代码里改出厂路径 / 音量在老库上一律不生效
+   *    —— #685 那批文件改名后，表里还指着旧文件名，进游戏全都没声音且看不出原因；
+   * 3. 有这行、`updated_at > 0` → 一个字都不动（那是运营的决定）。
+   *
+   * 最后清掉清单外的孤儿行（改名 / 下线遗留，见 `deleteOrphans`）。
+   */
   onModuleInit(): void {
     let seeded = 0;
+    let rebased = 0;
     for (const key of AUDIO_KEYS) {
-      if (this.audioSettings.getByKey(key)) continue;
       const preset = AUDIO_DEFAULTS[key];
-      this.audioSettings.seedRow({
+      const row: AudioSettingRow = {
         audio_key: key,
         file_path: preset.filePath,
         volume: preset.volume,
@@ -55,13 +66,20 @@ export class AudioSettingService implements OnModuleInit {
         enabled: preset.enabled ? 1 : 0,
         updated_by: "",
         updated_at: 0,
-      });
-      seeded += 1;
+      };
+      const existing = this.audioSettings.getByKey(key);
+      if (!existing) {
+        this.audioSettings.seedRow(row);
+        seeded += 1;
+        continue;
+      }
+      if (this.audioSettings.rebaseOnPreset(row)) rebased += 1;
     }
     // 清单外的行 = 改名 / 下线留下的孤儿（#685：`login_click` → `ui_click`）。
     // 不补完再清的话，管理端会多出一项「客户端不认的 key」，点它没有任何声音也看不出原因
     const dropped = this.audioSettings.deleteOrphans(AUDIO_KEYS);
     if (seeded > 0) this.logger.log(`音效配置已补 ${seeded} 行（共 ${this.audioSettings.countAll()} 个音效项）`);
+    if (rebased > 0) this.logger.log(`音效配置有 ${rebased} 行出厂值变了，已同步（运营改过的行未动）`);
     if (dropped > 0) this.logger.log(`音效配置清掉 ${dropped} 行清单外的旧 key（改名 / 下线遗留）`);
   }
 
