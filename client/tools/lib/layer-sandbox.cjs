@@ -85,6 +85,10 @@ class Node {
   setPosition(position) {
     this.position = position;
   }
+  /** 同上（initLayer 把世界层钉回原点时会调；参数是展开的 x/y/z，记个形状即可） */
+  setWorldPosition(x, y, z) {
+    this.position = { x, y, z };
+  }
   getComponent() {
     return null;
   }

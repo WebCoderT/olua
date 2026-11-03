@@ -79,6 +79,16 @@ export default class LayerManager {
     this.MonsterLayer = this.createLayer(scene, "monster_layer", Layer.MONSTER);
     this.EffectLayer = this.createLayer(scene, "effect_layer", Layer.EFFECT);
     this.UILayer = this.createLayer(scene, "ui_layer", Layer.UI);
+    // 五个世界层钉回世界原点：initLayer 的 scene 参数是 **Canvas**（Game 组件就挂在 Canvas 上），
+    // 而引擎会把 Canvas 对齐到屏幕中心（1920×1080 下即世界 (960,540)）—— 层容器作为它的子节点，
+    // 默认就坐在屏幕中心而不是世界原点。世界侧内容（主角/怪物/NPC/掉落/互见玩家）一律
+    // setWorldPosition 按世界坐标落位，不受父偏移影响；唯独地图瓦片（GameMap）按本地 (0,0)
+    // 挂进 MapLayer —— 层容器不归零，地图就整体偏差半个设计屏幕（锚点 (0,1) 的地基见 MapPointMath）。
+    // 用 setWorldPosition 而不是写死 designResolution/2：可见区中心随窗口/适配策略变，运行时算才稳。
+    // UILayer 不在此列：它的子节点按「屏幕中心为原点」的布局常量摆放，且每帧被 move() 跟着主角搬动。
+    for (const layer of [this.MapLayer, this.DropLayer, this.GameLayer, this.MonsterLayer, this.EffectLayer]) {
+      layer.setWorldPosition(0, 0, 0);
+    }
     // 注意：UI 根**没有 UITransform**，绝不能在它上面注册任何鼠标事件——
     // 引擎的 pointer-event-dispatcher 整理鼠标监听节点列表时会读 `trans!.cameraPriority`（非空断言），
     // 没有 UITransform 的节点会让每次鼠标事件都抛「Cannot read properties of null (reading 'cameraPriority')」，
