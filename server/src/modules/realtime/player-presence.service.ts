@@ -52,11 +52,28 @@ interface PresenceEntry {
   sentMoving: boolean;
   sentHp: number;
   sentMaxHp: number;
+  /**
+   * 位置可信度基线（#596 最小仲裁）：上次**被接受**的上报坐标与时刻、连续异常计数。
+   * 只影响 x/y 是否进在场表，hp / moving 不参与 —— 血量有权威落账链路，不在这一层管。
+   */
+  trustedX: number;
+  trustedY: number;
+  trustedAt: number;
+  posRejects: number;
 }
 
 function worldKey(zoneId: number, mapId: string): string {
   return `${zoneId}:${mapId}`;
 }
+
+/**
+ * 位置仲裁的「连续异常才跟随」阈值（#596 最小仲裁）
+ *
+ * 低于它：瞬移帧被整体屏蔽（别人的屏幕上不出现跳变）；达到它：视为合法重定位
+ * （复活 / 传送 / 客户端纠偏），接受并把速度基线挪过去。1 次太敏感（正常网络乱序
+ * 也可能造成一次大距离差），2 次起才有「持续性」可言。
+ */
+const POS_TRUST_STREAK = 2;
 
 /**
  * 玩家互见（#324：同图玩家的位置 / 血量 / 移动标记互见）
@@ -139,6 +156,12 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    *
    * maxHp / 账号名 / 外观只在首次见到该玩家时查一次库（都不常变，不值得每帧查）；
    * 外观另有按 `appearanceRefreshMs` 的懒刷新（#383，换装后要能被别人看到）。
+   *
+   * x/y 先过最小仲裁（#596）：非有限数直接丢；单帧速度超过 `posMaxSpeed()` 视作瞬移，
+   * 连续不足 `POS_TRUST_STREAK` 次就丢帧（别人的屏幕上不出现跳变），连续达到则接受并
+   * 重置基线 —— 复活 / 传送这类合法重定位是持续上报，短暂瞬移（作弊）是一次性的，
+   * 用「持续异常才跟随」把两边都兜住。hp 只夹有限与非负（上限不夹：maxHp 懒刷新有滞后，
+   * 夹上限会把刚升级玩家的合理血量抹成旧分母）。
    */
   updatePosition(accountId: string, username: string, zoneId: number, mapId: string, x: number, y: number, hp: number, moving: boolean): void {
     const existed = this.entries.get(accountId);
@@ -151,6 +174,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       this.usernames.set(accountId, roleName || username);
       const roleId = role?.id ?? "";
       const guild = this.readGuild(roleId);
+      const now = Date.now();
       this.entries.set(accountId, {
         zoneId,
         mapId,
@@ -159,13 +183,13 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         hp,
         maxHp,
         moving,
-        updatedAt: Date.now(),
+        updatedAt: now,
         roleId,
         guildId: guild.guildId,
         guildName: guild.guildName,
         partyId: this.partyOfRole?.(roleId) ?? "",
         appearance: this.readAppearance(role),
-        appearanceAt: Date.now(),
+        appearanceAt: now,
         sentAppearance: "",
         sentGuild: "",
         sentParty: "",
@@ -174,16 +198,26 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         sentMoving: !moving,
         sentHp: -1,
         sentMaxHp: -1,
+        trustedX: x,
+        trustedY: y,
+        trustedAt: now,
+        posRejects: 0,
       });
       return;
     }
-    existed.zoneId = zoneId;
-    existed.mapId = mapId;
-    existed.x = x;
-    existed.y = y;
-    existed.hp = hp;
-    existed.moving = moving;
     existed.updatedAt = Date.now();
+    // —— 位置仲裁（#596）：坐标可信才动 x/y，其余字段照旧 ——
+    // 换图（zoneId/mapId 与基线不同）不仲裁：基线还是上一张图的坐标，跨图距离必然超限，
+    // 而换图本来就该整体接受（worldJoin 会重建上下文），基线随接受重置。
+    const movedMap = existed.zoneId !== zoneId || existed.mapId !== mapId;
+    if (movedMap || this.acceptPosition(existed, x, y)) {
+      existed.zoneId = zoneId;
+      existed.mapId = mapId;
+      existed.x = x;
+      existed.y = y;
+    }
+    existed.hp = Number.isFinite(hp) ? Math.max(0, hp) : 0;
+    existed.moving = moving;
     // 外观 + 血条分母懒刷新（#383）：换装是低频事件，不值得每个 pos 帧查一次库（roles.online 是 DB 读）。
     // 分母顺带对齐的理由：换装 / 升级 / 晋升都会改 maxHp，而它只在首见时算过一次 ——
     // 不同步的话「换了新衣服，别人看到你的血条分母还是旧的」（最多迟一个刷新间隔）
@@ -199,6 +233,31 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       existed.guildName = guild.guildName;
       existed.appearanceAt = existed.updatedAt;
     }
+  }
+
+  /**
+   * 位置最小仲裁（#596）：返回这帧坐标能不能进在场表
+   *
+   * 非有限数视为垃圾帧；单帧速度（对**上次被接受的**上报）超过 `posMaxSpeed()` 视作瞬移。
+   * 拒绝的帧只加计数：连续达到 `POS_TRUST_STREAK` 次说明客户端真的重定位了（复活/传送），
+   * 跟随并把基线挪过去，让后续帧恢复正常仲裁 —— 持续异常才跟随，短暂瞬移被整体屏蔽。
+   */
+  private acceptPosition(entry: PresenceEntry, x: number, y: number): boolean {
+    // 非有限数是协议垃圾（不是「客户端重定位」），永不接受、也不计入跟随计数 ——
+    // 不然连续两帧 Infinity 会被下面的宽容分支放行，垃圾坐标广播出去就是 NaN 血条
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const dt = Math.max(0, (entry.updatedAt - entry.trustedAt) / 1000);
+    const dist = Math.hypot(x - entry.trustedX, y - entry.trustedY);
+    const plausible = dist <= this.posMaxSpeed() * dt;
+    if (plausible || entry.posRejects + 1 >= POS_TRUST_STREAK) {
+      entry.trustedX = x;
+      entry.trustedY = y;
+      entry.trustedAt = entry.updatedAt;
+      entry.posRejects = 0;
+      return true;
+    }
+    entry.posRejects += 1;
+    return false;
   }
 
   /**
@@ -445,6 +504,19 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
 
   private posStaleMs(): number {
     return Math.max(500, Number(this.config.get<number>("monsterAiPosStaleMs") ?? 3000));
+  }
+
+  /**
+   * 位置仲裁的速度上限（像素 / 秒，#596 最小仲裁）
+   *
+   * 取 1000 的理由：这是「荒谬级」阈值，不是贴着真实移速的钳制 —— 客户端跑步速度
+   * 经物理刚体换算后在百像素/秒量级，1000 已经是它的近 10 倍，正常移动（含卡顿后的
+   * 大步追帧）碰不到；而作弊瞬移通常一步跨出生点半径，单帧距离远超 1000 / 0.25s。
+   * 定宽阈值的好处是不依赖各单位（物理 PTM / Tiled 像素）的换算口径，先上线挡住
+   * 「零成本瞬移刷怪」，精确钳制等移速权威进属性汇总后再说。
+   */
+  private posMaxSpeed(): number {
+    return Math.max(100, Number(this.config.get<number>("playerPosMaxSpeed") ?? 1000));
   }
 
   /**

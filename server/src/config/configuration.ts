@@ -288,6 +288,8 @@ export interface AppConfiguration {
    * 让「别人换了衣服」最多迟这么久被看到（换装走 HTTP 存档，实时进程不会被告知）
    */
   playerAppearanceRefreshMs: number;
+  /** 位置仲裁的速度上限（像素/秒，#596 最小仲裁）：单帧位移超过它 × 时距视作瞬移 */
+  playerPosMaxSpeed: number;
   //#endregion
 
   //#region 社交（#388：帮会 / #389：好友与敌人）
@@ -443,6 +445,7 @@ export default function configuration(): AppConfiguration {
     monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
     playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
+    playerPosMaxSpeed: Number(process.env.PLAYER_POS_MAX_SPEED ?? 1000),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
     socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
     socialBlockLimit: Number(process.env.SOCIAL_BLOCK_LIMIT ?? 100),

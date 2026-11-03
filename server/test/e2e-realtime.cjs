@@ -362,9 +362,24 @@ async function main() {
       const beforeSave = await api(baseUrl, "GET", `/api/roles/${roleAId}`, { token: tokenA });
       const saved = await api(baseUrl, "PUT", `/api/roles/${roleAId}`, {
         token: tokenA,
-        body: { data: { ...(beforeSave.body?.data?.data || {}), hp: 1, gold: 5555, exp: 777 }, revision: beforeSave.body?.data?.revision },
+        body: {
+          data: {
+            ...(beforeSave.body?.data?.data || {}),
+            hp: 1,
+            gold: 5555,
+            exp: 777,
+            // 体验状态（#596 云同步）：归客户端书写，帧要原样带回
+            shortcutKeys: [{ label: "1", key: 49, skillId: "1001" }],
+            guide: { step: 3, done: false, skipped: false },
+            soulShow: true,
+            // 时装（#596）：穿着态与清单归服务端 —— 上报的改包值帧里不能出现
+            fashionCloth: "cloth_9",
+            fashionsOwned: ["cloth_9"],
+          },
+          revision: beforeSave.body?.data?.revision,
+        },
       });
-      checkEqual(saved.status, 200, "准备：save 改一份 hp 与一份被篡改的账本 / 经验");
+      checkEqual(saved.status, 200, "准备：save 改一份 hp 与一份被篡改的账本 / 经验（顺带写三个体验字段）");
       const secondUpdate = await waitFor(
         "第二帧 roleUpdate",
         async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.revision === saved.body?.data?.revision) ?? null,
@@ -379,14 +394,28 @@ async function main() {
           secondUpdate?.data?.hp !== 1,
         "第二帧仍是服务端权威值（gold 5555 / exp 777 丢弃，血量也以服务端结算为准——上报 1 无效）",
       );
+      // 体验状态原样带回（#596 换设备云同步）：帧不带它们，「另一台设备改了快捷键」就要重选角才看得见
+      check(
+        Array.isArray(secondUpdate?.data?.shortcutKeys) && secondUpdate.data.shortcutKeys[0]?.skillId === "1001",
+        "帧带快捷键绑定（体验状态云同步）",
+        JSON.stringify(secondUpdate?.data?.shortcutKeys),
+      );
+      check(secondUpdate?.data?.guide?.step === 3 && secondUpdate?.data?.soulShow === true, "帧带引导进度与战魂外显勾选", JSON.stringify({ guide: secondUpdate?.data?.guide, soulShow: secondUpdate?.data?.soulShow }));
+      // 时装（#596）：穿着态被库值回填（库里没穿 → null）、清单被整份删除（独占字段）—— 改包拿不到时装
+      check(
+        secondUpdate?.data?.fashionCloth === null && secondUpdate?.data?.fashionsOwned === undefined,
+        "帧里的时装以服务端为准（上报的穿着与清单都不出现）",
+        JSON.stringify({ fashionCloth: secondUpdate?.data?.fashionCloth, fashionsOwned: secondUpdate?.data?.fashionsOwned }),
+      );
 
       // 后台改阶位（#551）→ 下一拍帧带着新值：不重进也要看得见。
-      // 这三个字段自 #548 起归服务端（改包会被回填），所以「改了但看不到」只能靠帧补
+      // 这三个字段自 #548 起归服务端（改包会被回填），所以「改了但看不到」只能靠帧补。
+      // 时装发放（#596）搭同一趟车：管理端 PATCH 是 grant 语义的唯一写路，帧要带回
       const patched = await api(baseUrl, "PATCH", `/api/admin/roles/${roleAId}`, {
         token: roleAdminToken,
-        body: { title: 5, soulOfWar: 6, rank: 7 },
+        body: { title: 5, soulOfWar: 6, rank: 7, fashionCloth: "cloth_3", fashionsOwned: ["cloth_2", "cloth_3"] },
       });
-      checkEqual(patched.status, 200, "准备：管理端改三个阶位（称号 5 / 战魂 6 / 军衔 7）");
+      checkEqual(patched.status, 200, "准备：管理端改三个阶位 + 发放两套时装");
       const growthUpdate = await waitFor(
         "帧带上阶位",
         async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.title === 5) ?? null,
@@ -397,6 +426,12 @@ async function main() {
         growthUpdate?.data?.soulOfWar === 6 && growthUpdate?.data?.rank === 7,
         "三个阶位一起带（称号 / 战魂 / 军衔）",
         JSON.stringify({ title: growthUpdate?.data?.title, soul: growthUpdate?.data?.soulOfWar, rank: growthUpdate?.data?.rank }),
+      );
+      check(
+        growthUpdate?.data?.fashionCloth === "cloth_3" &&
+          JSON.stringify(growthUpdate?.data?.fashionsOwned) === JSON.stringify(["cloth_2", "cloth_3"]),
+        "帧带管理端发放的时装（穿着态 + 清单原样带回）",
+        JSON.stringify({ fashionCloth: growthUpdate?.data?.fashionCloth, fashionsOwned: growthUpdate?.data?.fashionsOwned }),
       );
     }
     //#endregion
@@ -560,6 +595,94 @@ async function main() {
         } catch {
           /* 临时库清不掉就算了（tmpdir 会兜底回收） */
         }
+      }
+    }
+    //#endregion
+
+    //#region 九、互见位置仲裁（#596）
+    group("九、互见位置仲裁：瞬移帧被屏蔽，持续异常才跟随");
+    {
+      // 独立一台服务：速度上限压到 500 像素/秒、广播 50ms 一拍 —— 瞬移与跟随都不用干等默认值
+      const presServer = await startServer({
+        PLAYER_SYNC_BROADCAST_MS: "50",
+        PLAYER_POS_MAX_SPEED: "500",
+      });
+      try {
+        const pUrl = presServer.baseUrl;
+        const tokenE = await registerPlayer(pUrl, "presence_e");
+        const tokenF = await registerPlayer(pUrl, "presence_f");
+        await api(pUrl, "POST", "/api/roles", { token: tokenE, body: { name: "presence_r1", occupation: "1", sex: "1" } });
+        await api(pUrl, "POST", "/api/roles", { token: tokenF, body: { name: "presence_r2", occupation: "1", sex: "1" } });
+
+        const tickE = (await api(pUrl, "POST", "/api/realtime/ticket", { token: tokenE })).body?.data?.ticket;
+        const tickF = (await api(pUrl, "POST", "/api/realtime/ticket", { token: tokenF })).body?.data?.ticket;
+        const mover = openSocket(`ws://127.0.0.1:${presServer.port}/api/realtime?ticket=${tickE}`);
+        const watcher = openSocket(`ws://127.0.0.1:${presServer.port}/api/realtime?ticket=${tickF}`);
+        await waitForHandshake("移动者的握手", mover);
+        await waitForHandshake("观看者的握手", watcher);
+        check(mover.opened && watcher.opened, "准备：两个连接都已建立");
+
+        // 观看者进图：成为 mapId "0" 的观看者，之后同图增量都会发给他
+        watcher.socket.send(JSON.stringify({ type: "worldJoin", data: { mapId: "0" } }));
+        await waitFor("观看者的 world 快照", async () => messageOf(watcher, "world"), 3_000);
+
+        /** 从观看者的 players 帧里找移动者的最新坐标 */
+        const seenPosition = () => {
+          for (let i = watcher.messages.length - 1; i >= 0; i -= 1) {
+            const frame = watcher.messages[i];
+            if (frame.type !== "players") continue;
+            const entry = (frame.data?.players ?? []).find((p) => p.username === "presence_r1");
+            if (entry) return { x: entry.x, y: entry.y, hp: entry.hp };
+          }
+          return null;
+        };
+
+        // 正常上报：位置进在场表并广播（首见 sentX=NaN 必有增量）
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 100, y: 100, hp: 50, moving: false } }));
+        const firstSeen = await waitFor("观看者看到移动者", seenPosition, 3_000);
+        check(Boolean(firstSeen), "正常上报的位置被互见广播");
+        checkEqual(firstSeen?.x, 100, "首见坐标就是上报值");
+
+        // 瞬移（跨半张地图）：速度上限 500px/s，单帧位移 ~56000px 远超 → 帧被屏蔽，
+        // 位置维持旧值 → 增量判据（坐标没变）不触发 → 观看者永远看不到 40000
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40000, y: 9000, hp: 50, moving: true } }));
+        await sleep(400); // 跨过几个广播节拍
+        const afterJump = seenPosition();
+        check(afterJump === null || afterJump.x !== 40000, "瞬移帧被屏蔽（观看者看不到跳变）", JSON.stringify(afterJump));
+
+        // 连续第二次同位置上报：达到「持续异常」阈值 → 视作合法重定位（复活/传送），跟随
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40000, y: 9000, hp: 50, moving: true } }));
+        const followed = await waitFor("持续瞬移被跟随", async () => {
+          const pos = seenPosition();
+          return pos && pos.x === 40000 ? pos : null;
+        }, 3_000);
+        check(Boolean(followed), "连续异常达到阈值后跟随（复活 / 传送不被永久锁死）");
+
+        // 跟随后的基线已重置：从新位置正常移动不再被拦（先隔一拍，单帧时距给够）
+        await sleep(300);
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40100, y: 9000, hp: 50, moving: true } }));
+        const movedOn = await waitFor("跟随后的正常移动", async () => {
+          const pos = seenPosition();
+          return pos && pos.x === 40100 ? pos : null;
+        }, 3_000);
+        check(Boolean(movedOn), "跟随重置基线后正常移动照常广播");
+
+        // 垃圾帧（非有限数）：永不接受，位置维持旧值；也不消耗跟随计数。
+        // 原始字符串发：JSON.stringify 会把 Infinity 变成 null，改包工具手里是任意字节
+        mover.socket.send('{"type":"pos","data":{"mapId":"0","x":1e999,"y":0,"hp":50,"moving":true}}');
+        await sleep(400);
+        const afterGarbage = seenPosition();
+        check(afterGarbage !== null && Number.isFinite(afterGarbage.x), "非有限坐标被拒绝（垃圾帧不进互见广播）", JSON.stringify(afterGarbage));
+
+        // 自报血量的唯一收窄：负数夹 0（死亡判据 <=0 的输入不能被改成负数绕过）
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40100, y: 9000, hp: -5, moving: false } }));
+        const hpSeen = await waitFor("负血量上报", async () => {
+          const pos = seenPosition();
+          return pos && pos.hp === 0 ? pos : null;
+        }, 3_000);
+        check(Boolean(hpSeen), "负数血量被夹到 0（AI 死亡判据不被负值绕过）", JSON.stringify(hpSeen));
+      } finally {
+        if (presServer.child.exitCode === null && presServer.child.signalCode === null) presServer.child.kill("SIGKILL");
       }
     }
     //#endregion
