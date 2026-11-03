@@ -92,21 +92,37 @@
   **不做拖动**（画布拖 = 新建，点已有 = 表单四个数）。管理端 `MapCanvas` 五模式 `view|spawn|npc|revive|collision`。
   迁移链顺序：`migrate-map-points` → `migrate-map-collisions` → `strip-map-objects` → `import-map-resources` → `config-export`。
 - **#680 管理端音效配置（PR #681 / `50c74d62`，2026-11-03，仅后台）**：`audio_settings`（`audio_key` 主键）
-  + `GET/PATCH /admin/audio-settings`（`50037` 找不到 key）；出厂两项 `login_bgm`（`sounds/login_bg.wav` 60% 循环）/
-  `login_click`（`sounds/click_button.wav` 80% 单次）。**与特效管理的根本差别：`file_path` 入库且带扩展名**
+  + `GET/PATCH /admin/audio-settings`（`50037` 找不到 key）；出厂两项 `login_bgm` / `ui_click`（当时的名字是
+  `login_click`，#685 已改名）。**与特效管理的根本差别：`file_path` 入库且带扩展名**
   （特效图集路径是两端约定、不存），所以换曲子只要新文件在资源包里。**只允许英文名**（`^sounds/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$`，
   中文 / 空格 / `..` / 绝对路径全拒），判据唯一处 `server/src/common/constants/audio.ts` 的 `audioPathProblem()`，
   页面有逐条对齐的副本做边输边提示 + `usableFiles` 过滤。**服务端不查文件是否存在**（资源包不在镜像里）→ 试听是唯一验证手段。
   目录清单双来源同形状：生产 `resources/audio-manifest.json`（nginx 无目录列表）/ dev `__list?dir=sounds&audio=1`。
-- **#683 音效接客户端 + 扩到 11 项 + 分类（2026-11-04）**：11 项 4 类（登录与界面 / 战斗与角色 /
-  物品与货币 / 成长与传送），**分类也写在服务端常量**（不进库：库里是运营改过的值，分类是清单本身）。
+- **#683 音效接客户端 + 扩到 11 项 + 分类（2026-11-04）**：11 项 4 类（#685 起第一类叫「界面与交互」：
+  背景音 + 全站按钮点击音），**分类也写在服务端常量**（不进库：库里是运营改过的值，分类是清单本身）。
   下发两条路、同形状 `AudioConfigDto`（key/filePath/volume/loop/enabled，不带展示名/分类/追账）：
   快照 `audio` 段 + **公开接口 `GET /game-config/audio`**（登录场景没令牌，而背景音正是那时要响）。
   客户端 `ui/core/SoundManager`：常驻节点（`addPersistRootNode`）+ 两路 AudioSource（循环音 / `playOneShot`），
   clip 缓存、音量走 volumeScale（`source.volume` 固定 1）。**`file_path` 是全项目唯一允许服务端覆写的资源路径**；
   客户端**没有本地兜底值**（表里没有 / 停用 / 空路径 → `audioConfigOf` 返回 null = 不播）。
   挂点都在「服务端确认之后」；掉落一次结算只响一次、金钱音只在三种货币真变时响；战士普攻按 `config.id === "1000"`
-  （`skill_1000` 被 1002~1011 复用）。资源：`木剑砍击音效.wav` → `warrior_attack.wav`（`.meta` 一起改，uuid 不变）。
+  （`skill_1000` 被 1002~1011 复用）。
+- **#685 音效四处修订（2026-11-04）**：① 点击音从「登录按钮」扩到**所有按钮** —— `login_click` 改名
+  `ui_click`（label「按钮点击音」），唯一入口 `SoundManager.bindClick(node)`：有 `Button` 组件监听
+  `Button.EventType.CLICK`（引擎只在真点中松开时 emit），否则 `TOUCH_END`；`UiHelper.createButton/createToggle`
+  自动挂（覆盖登录/选角/弹窗/面板/页签/列表小按钮），手写按钮各自贴一行（战魂/称号/军衔卡、底部导航、
+  挂机、任务追踪、成就领取、邮件五处、时装卡、举报分类、公告条目、登录区服、`tab-kit`）。
+  **技能快捷栏 / 世界对象（NPC·传送点·掉落物）/ 拖拽·摇杆刻意不响**。同一 key 高频带节流
+  （`play(key, minGapMs)` 判定在 `await` 之前）：按钮 60ms、自动拾取 80ms。
+  ② `item_drop` 在 `applyPickedFrame` 的 ok 分支也响（发 pick 帧只是请求，背包满拿不到这一声）。
+  ③ `bag_resort` 在 `moveBagGood` 成功后也响（失败分支已还原界面，那里不响）。
+  ④ `map_teleport` 从 `changeOnMap` 挪走：`markTeleportArrival()` 留 60 秒有效期的标记，
+  `Game.start` 在 `roleDisplay.init()` 之后 `consumeTeleportArrival()` 才播 —— 登录/选角进图没有标记，不误响。
+  **文件名统一成与 key 同名**（用户授权改名）：`sounds/ui_click.wav` / `role_die_man.wav` / `item_drop.wav` /
+  `equip_wear.mp3` / `money_change.mp3` / `bag_resort.wav` / `level_up.wav` / `map_teleport.mp3` / `login_bgm.wav`，
+  **连 `.meta` 一起改**（uuid 在 meta 上）。改名要能落地到老库 → `onModuleInit` 补完行后
+  `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行（安全前提：行只来自 seed，没有新建接口）。
+  `sounds/move.wav`（用户 01:31 新放）**没有对应 key，未配**，用途待确认。
 - open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。

@@ -1,5 +1,6 @@
 import { EditBox, EventTouch, Graphics, Label, Node, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import LayerManager from "../../core/LayerManager";
 import { reportDialogLayout as layout } from "../../../configs/hudLayout";
@@ -119,6 +120,7 @@ export default class ReportDialog extends Node {
       );
       node.addChild(label);
       node.on(Node.EventType.TOUCH_END, () => this.selectCategory(index), this);
+      SoundManager.bindClick(node);
       blockClickThrough(node);
       panel.addChild(node);
       this.categoryNodes.push(node);

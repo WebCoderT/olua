@@ -175,6 +175,9 @@ export class Login extends Component {
   /** 区服选择器的点击接线：PC 走 bindMousePress（按压起点在本节点才响应，防穿透），触屏走 TOUCH_END */
   private bindZonePicker() {
     if (!this.zoneLabel) return;
+    // 点击音（#685）：区服选择是文字型按钮，不走 UiHelper.createButton，自己贴一行。
+    // 只绑 TOUCH_END —— PC 上鼠标点击同样会派发 touch 通道，绑两路会响两声
+    SoundManager.bindClick(this.zoneLabel);
     if (HAS_MOUSE) {
       bindMousePress(this.zoneLabel, () => this.cycleZone(), this);
       return;
@@ -224,9 +227,8 @@ export class Login extends Component {
   private async submit(action: () => Promise<AuthResult>) {
     if (this.submitting) return;
     this.submitting = true;
-    // 点击音（#683）：登录与注册共用这个入口 —— 按「点了就响」，不等服务端往返
-    // （失败也没关系，那是按钮的反馈音，不是成功音）
-    void SoundManager.play("login_click");
+    // 点击音不在这里（#685 移到 SoundManager.bindClick）：登录 / 注册按钮是 UiHelper.createButton
+    // 建的，创建时就带上了；在这里再播一次会响两声
     try {
       const result = await action();
       Session.save(result.token, result.account);

@@ -243,13 +243,13 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - 页签几何在 `mailDialogLayout.tabs`（宽度 / 间距 / 选中态 / 角标偏移），整行居中按 `mailChannels.length` 算 ——
   加第六个页签不用手调坐标。
 
-## 五之七、音效：唯一可覆写的资源路径（#683）
+## 五之七、音效：唯一可覆写的资源路径（#683 / #685）
 
-运营在管理端「音效配置」里改 11 项（登录背景音 / 点击登录 / 战士普攻 / 男女角色死亡 / 掉落 /
+运营在管理端「音效配置」里改 11 项（登录背景音 / 按钮点击 / 战士普攻 / 男女角色死亡 / 掉落 /
 穿戴 / 金钱变化 / 背包整理 / 升级 / 传送），客户端按 **key** 播，值是服务端下发的。
-实现只有 `ui/core/SoundManager.ts` 一处，挂点 11 处散在各业务函数里。
+实现只有 `ui/core/SoundManager.ts` 一处。
 
-**判据（改这块之前先读这四条）**
+**判据（改这块之前先读这六条）**
 
 - **`file_path` 是唯一允许服务端覆写的资源路径**。`configs/game-config` 开头的「资源路径一律不覆写」
   对音效是显式例外，理由：图集/帧动画按 id 拼（换美术必须重打包），音效文件是运营挑的。
@@ -259,9 +259,31 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **登录场景走公开接口**：配置快照要玩家令牌，而登录场景没有令牌 —— 那正是背景音要响的时候。
   `SoundManager.ensureConfig()` 在表为空时拉 `GET /game-config/audio`（`@Public()`，与公告同口径），
   落库走同一个 `applyAudioRows`；进游戏后表已被快照填好，这个函数一次都不会发请求。
-- **响在「服务端确认之后」**：`equip_wear` 在 `runBagOp` 返回非 null 之后、`map_teleport` 在
-  `getMapEnterRejectReason` 通过之后、`level_up` 在服务端给的 `leveledUp = true` 分支里。
+  **只试一次**（`configTried`）：点击音是全站高频路径，不设闸门时服务端一挂、玩家每点一下就是一次请求。
+- **响在「服务端确认之后」**：`equip_wear` 在 `runBagOp` 返回非 null 之后、`level_up` 在服务端给的
+  `leveledUp = true` 分支里、`item_drop` 的拾取那一声在 `picked` 帧 ok 之后（发 `pick` 帧只是请求，
+  背包满 / 被拒都拿不到）、`bag_resort` 的搬格那一声在 `move` 请求成功之后（失败分支先把界面还原了）。
   提前播会把「点了但被拒」演成「成功」—— 这是这类表现层最容易犯的错。
+- **传送音不在点击瞬间响（#685）**：`changeOnMap` 之后还隔着 Loading 场景的资源加载，现在响等于
+  「点了传送就有声音」。做法是 `StorageManager.markTeleportArrival()` 留一个带 60 秒有效期的标记，
+  `Game.start` 在 `roleDisplay.init()` 之后 `consumeTeleportArrival()` 取走并播 ——
+  那时人已经站在新地图上了。**登录 / 选角进图没有标记，所以不会误响**。
+- **点击音只有一个入口 `SoundManager.bindClick(node)`**：有 `Button` 组件的监听
+  `Button.EventType.CLICK`（引擎只在真点中并松开时 emit，置灰 / 拖出去不响），
+  没有的退化成 `TOUCH_END`（项目里大量手写按钮就是一个节点 + TOUCH_END）。
+  `WeakSet` 防重复，所以创建器挂一次、构造里再挂一次也不会响两声。
+
+**按钮为什么这样铺（#685）**
+
+- `UiHelper.createButton` / `createToggle` 里自动挂 → 覆盖登录、选角、弹窗按钮、底部面板、
+  页签、列表行内小按钮（`createSmallButtion` / `createMiddleButton` / `createTexturedButton` 全走它）。
+- 手写按钮各自贴一行：`GameUiHelper` 的战魂 / 称号 / 军衔卡与外显勾选、`BottomNavButton`、
+  `AutoFightButton`、`QuestTracker`、`AchievementDialog` 的领取格、`MailDialog` 五处、`FashionDialog`
+  的时装卡、`ReportDialog` 分类、`AnnouncementBoardDialog` 条目、`Login` 的区服选择、`tab-kit` 页签。
+- **刻意不响的三类**（不是漏）：技能快捷栏（战斗中高频连点，会盖住战斗音效）、
+  世界侧对象（NPC / 传送点 / 掉落物，那是场景交互）、拖拽与摇杆（一次拖拽以 TOUCH_END 收尾）。
+- 同一个 key 的高频场景带节流：`play(key, minGapMs)`，按钮 60ms、自动拾取 80ms。
+  节流判定放在 `await` **之前**，否则同时进来的两次都能通过。
 
 **实现要点（踩过的坑）**
 
@@ -279,9 +301,12 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **客户端 tsconfig 的 lib 不到 ES2018** → `Promise.finally` 编译不过（TS2550），收尾用 `.then()`。
 - **新音效 = 三处一起改**：服务端 `AUDIO_KEYS` / `AUDIO_DEFAULTS` 登记 + 客户端写调用点 + 管理端不用动
   （tab 与文案都随接口下发）。只加常量不写调用点 = 一个永远不响的开关。
-- **文件名只能英文**（用户定）：Cocos 资源包按路径建索引。资源目录里临时放的中文名的那个文件已按
-  用户指定改名为 `warrior_attack.wav`（战士普攻），**改文件连同 `.meta` 一起改**（uuid 在 meta 上，
-  改对了 prefab 引用不会断）。
+- **文件名与 key 同名**（#685 用户授权改名后统一）：`sounds/ui_click.wav` ↔ `ui_click`。
+  不是校验规则（运营可换任何合规文件名），纯粹为了对齐 —— 翻资源目录时一眼看出对应哪个配置项。
+  **改文件连同 `.meta` 一起改**（uuid 在 meta 上，改对了 prefab / resources.load 都不受影响）。
+- **改名要能落地到老库**：`login_click` → `ui_click` 之后，老库里那行不会被 `INSERT OR IGNORE` 盖掉、
+  也不会自己消失 → `AudioSettingService.onModuleInit` 里 `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行。
+  安全前提是**行只来自 seed**（没有新建接口），清单外的 key 只可能是我们改名或下线。
 
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 

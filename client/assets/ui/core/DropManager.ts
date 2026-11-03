@@ -33,6 +33,15 @@ interface DropItem {
 /** 一次拾取请求的结果：pending = 已发 pick 帧等应答（**唯一**的正常结果）；full = 背包已满 */
 type PickOutcome = "pending" | "full";
 
+/**
+ * 拾取音的最小间隔（毫秒）
+ *
+ * 自动拾取会「走到哪捡到哪」，一片掉落物在几百毫秒内连着回十来个 `picked` 帧 ——
+ * 每帧都响就成了持续的嗡嗡声。80ms 大致等于「一次弯腰能听清的间隔」，
+ * 手动一个个点（人手间隔远大于它）不受影响。
+ */
+const PICKUP_SOUND_MIN_GAP_MS = 80;
+
 /** 拾取请求的返回值（#581 起没有「本地已入包」这一种：入包只能等服务端应答） */
 interface PickRequest {
   outcome: PickOutcome;
@@ -206,6 +215,10 @@ export default class DropManager {
       return;
     }
     StorageManager.applyPickResult(data.placed, data.revision);
+    // 拾取音（#685）：与铺到地上那声**同一个 key** —— 玩家听到的是「东西进包了」。
+    // 挂在这里而不是 `pickup()`：发 pick 帧只是「请求」，背包满 / 被拒都拿不到这一声。
+    // 带节流：自动拾取会连着回好几个 picked 帧（见 PICKUP_SOUND_MIN_GAP_MS）
+    void SoundManager.play("item_drop", PICKUP_SOUND_MIN_GAP_MS);
     // 新手引导（#402）：「捡起来」那一步的判据是**服务端应答 ok**（包里真的多了东西），
     // 不是「走到掉落物上」—— 背包满了被拒的那次不该算学会
     GuideStore.notify(GUIDE_EVENT.PICKUP);

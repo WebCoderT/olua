@@ -1,5 +1,6 @@
 import { EventKeyboard, Input, input, KeyCode, Node, Sprite } from "cc";
 import { Role } from "../../../entities/Role";
+import SoundManager from "../../core/SoundManager";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
 
 /**
@@ -33,6 +34,8 @@ export default class BottomNavButton extends Node {
     this.config = config;
     GameUiHelper.applyBottomNavBarButtonStyle(this, config, role);
     this.on(Node.EventType.TOUCH_END, this.onClick, this);
+    // 点击音（#685）：只绑点击，快捷键（键盘）不响 —— 那是操作，不是「点了个按钮」
+    SoundManager.bindClick(this);
     const keyCode = navKeyCode(config.shortcutKey);
     if (keyCode !== null) {
       input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);

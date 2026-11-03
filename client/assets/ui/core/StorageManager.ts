@@ -31,6 +31,15 @@ import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
 
 /**
+ * 传送标记的有效期（毫秒）
+ *
+ * 传送 → Loading（加载新地图资源）→ Game.start，正常几秒到十几秒。超过这个时长说明
+ * 那次进图中途失败了（配置没就绪被弹回 Loading、场景被切走），标记该作废 ——
+ * 否则下次从登录进来会莫名其妙响一声传送音。60 秒足够盖住最慢的一次资源加载。
+ */
+const TELEPORT_MARK_TTL_MS = 60000;
+
+/**
  * 存储管理器
  * 负责本地角色数据的读写，以及数据变更后的属性重算、UI刷新与外观更新
  *
@@ -40,6 +49,32 @@ import { guideStepCount } from "../../configs/guide";
  * - 账号与令牌不在这里，见 ui/utils/net/Session（clear 会一并清掉会话，避免清了存档还留着登录态）。
  */
 export default class StorageManager {
+  /**
+   * 「这次进游戏场景是传送过来的」时间戳（0 = 不是传送，#685）
+   *
+   * 传送音不能点在传送那一刻响（那时还在 Loading 场景里转圈，玩家听不出是传送还是加载），
+   * 要等角色真的出现在新地图上。而「进游戏场景」这件事本身分不出是登录进来的还是传送进来的，
+   * 所以由 `changeOnMap` 留一个标记、`Game.start` 在角色显示出来后取走。
+   */
+  private static teleportArrivedAt = 0;
+
+  /** 标记「接下来这次进图是传送」（由 changeOnMap 调用） */
+  private static markTeleportArrival() {
+    this.teleportArrivedAt = Date.now();
+  }
+
+  /**
+   * 取走传送标记（只在 `Game.start` 里调一次）
+   *
+   * 带有效期作废（见 TELEPORT_MARK_TTL_MS）：进图流程中途失败时这个标记不该留到下一次进图，
+   * 否则登录进来也会莫名其妙响一声传送音。
+   */
+  static consumeTeleportArrival(): boolean {
+    const pending = this.teleportArrivedAt > 0 && Date.now() - this.teleportArrivedAt < TELEPORT_MARK_TTL_MS;
+    this.teleportArrivedAt = 0;
+    return pending;
+  }
+
   /** 获取角色列表 */
   static getRoles(): Role[] {
     const roles = sys.localStorage.getItem("roles");
@@ -974,6 +1009,9 @@ export default class StorageManager {
    *
    * 与「整理」同一口径：**不弹提示** —— 拖动的反馈就是物品的位置/数量变化本身，
    * 每次落子都飘一条字反而吵；无效拖动（拖空格、拖回原格）静默返回 false
+   *
+   * 只有「真的换成了新排布」才响整理音（#685，用户口径：位置一变就该有反馈）：
+   * 请求失败那条分支已经先把界面还原了，那里不响。
    * @returns 是否有变动（起点为空、起终点相同、越界、无角色、请求失败时返回 false）
    */
   static async moveBagGood(fromRow: number, fromCol: number, toRow: number, toCol: number): Promise<boolean> {
@@ -993,6 +1031,9 @@ export default class StorageManager {
     }
     this.updateOnlineRole(role);
     RoleUIManager.refreshBag();
+    // 背包位置变化音（#685）：与「一键整理」同一个 key —— 玩家听到的是「东西挪好了」。
+    // 放在请求成功之后：上面失败分支已经把本地排布还原，那里不该响
+    void SoundManager.play("bag_resort");
     return true;
   }
 
@@ -1275,9 +1316,10 @@ export default class StorageManager {
     role.onMap = mapId;
     // 保存
     this.updateOnlineRole(role);
-    // 传送成功音（#683）：校验已过、地图已切换才算成功（被等级 / 战斗力拦住的在这里之前就 return 了）。
-    // 先响再切场景 —— 换场景会走 Loading，声音跟过去正好盖住加载的那几秒
-    void SoundManager.play("map_teleport");
+    // 传送成功音（#685）：**不在这里响**。此处到新地图出现还隔着 Loading 场景的资源加载，
+    // 现在响等于「点了传送就有声音」，玩家听不出成功。留标记，等 Game.start 把角色摆出来再播
+    // （见 consumeTeleportArrival；被等级 / 战斗力拦住的在上面就 return 了，不会留标记）
+    this.markTeleportArrival();
     // 重新进入游戏场景，走过渡场景完成新地图资源加载后再进入
     SceneManager.loadScene("Game");
   }

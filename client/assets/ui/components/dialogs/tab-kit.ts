@@ -1,4 +1,5 @@
 import { Color, Graphics, isValid, Label, Node, Size, Vec2 } from "cc";
+import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import { blockClickThrough } from "../../utils/input/UiHit";
 
@@ -47,6 +48,8 @@ export function createTabStrip<T extends string>(
     );
     node.addChild(label);
     node.on(Node.EventType.TOUCH_END, () => onSelect(tab));
+    // 点击音（#685）：页签也是按钮（六个多页弹窗共用这一处）
+    SoundManager.bindClick(node);
     blockClickThrough(node);
     dialog.addChild(node);
     nodes.set(tab, node);

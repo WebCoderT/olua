@@ -32,7 +32,7 @@ export class AudioSettingDto {
   })
   category: string;
 
-  @ApiProperty({ description: "分类展示名（随接口下发，页面不写死文案）", example: "登录与界面" })
+  @ApiProperty({ description: "分类展示名（随接口下发，页面不写死文案）", example: "界面与交互" })
   categoryLabel: string;
 
   @ApiProperty({

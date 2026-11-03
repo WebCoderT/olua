@@ -179,7 +179,10 @@ try {
   check(/if \(this\.unsubscribe\) \{\s*this\.unsubscribe\(\);/.test(dialog), "关闭时退订（否则弹窗销毁后还在重画）");
   check(/MailStore\.reload\(\)/.test(dialog), "每次打开都重拉（邮件是「有没有新的」，缓存没意义）");
   check(/onUnreadChange\?\.\(box \? box\.unread \+ box\.unclaimed : 0\)/.test(dialog), "未读数回调 = 未读 + 未领（两路都是「有东西要处理」）");
-  check(/if \(!row\.read && !busy\) node\.on\(Node\.EventType\.TOUCH_END/.test(dialog), "点行标已读，已读的行不再请求");
+  check(
+    /if \(!row\.read && !busy\) \{\s*node\.on\(Node\.EventType\.TOUCH_END, \(\) => void this\.onRead\(row\.id\), this\);\s*SoundManager\.bindClick\(node\);/.test(dialog),
+    "点行标已读，已读的行不再请求（点击音与它同一个条件：#685）",
+  );
   check(/const removable = row\.claimed \|\| this\.hasNoAttachment\(row\)/.test(dialog), "删除按钮的灰化判据：已领或无附件");
   check(/if \(!removable\) \{\s*GameUiHelper\.createTipText\(texts\.removeUnclaimed\)/.test(dialog), "不可删时给一句提示（不静默失败）");
   check(/items\.get\(item\.goodId\)\?\.label \?\? item\.goodId/.test(dialog), "附件摘要取共享快照里的物品名（取不到退回 id）");

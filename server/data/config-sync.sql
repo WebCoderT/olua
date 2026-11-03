@@ -38,17 +38,17 @@ INSERT INTO "achievements" ("id", "category", "label", "description", "condition
 
 -- ===== audio_settings（11 行）=====
 DELETE FROM "audio_settings";
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('login_bgm', 'sounds/login_bg.wav', 60, 1, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('login_click', 'sounds/click_button.wav', 80, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('login_bgm', 'sounds/login_bgm.wav', 60, 1, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('ui_click', 'sounds/ui_click.wav', 80, 0, 1, '', 0);
 INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('warrior_attack', 'sounds/warrior_attack.wav', 70, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('role_die_man', 'sounds/die_man.wav', 80, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('role_die_woman', 'sounds/die_woman.wav', 80, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('item_drop', 'sounds/drop.wav', 70, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('equip_wear', 'sounds/equipment_use_success.mp3', 75, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('money_change', 'sounds/money_change_success.mp3', 70, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('bag_resort', 'sounds/bag_change_success.wav', 65, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('level_up', 'sounds/upgrade_success.wav', 80, 0, 1, '', 0);
-INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('map_teleport', 'sounds/teleport_success.mp3', 75, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('role_die_man', 'sounds/role_die_man.wav', 80, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('role_die_woman', 'sounds/role_die_woman.wav', 80, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('item_drop', 'sounds/item_drop.wav', 70, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('equip_wear', 'sounds/equip_wear.mp3', 75, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('money_change', 'sounds/money_change.mp3', 70, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('bag_resort', 'sounds/bag_resort.wav', 65, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('level_up', 'sounds/level_up.wav', 80, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('map_teleport', 'sounds/map_teleport.mp3', 75, 0, 1, '', 0);
 
 -- ===== combat_weights（7 行）=====
 DELETE FROM "combat_weights";

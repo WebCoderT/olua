@@ -85,6 +85,10 @@ const REVIEWED = new Map([
     "世界侧对象（非 UI 层），刻意不在 mouse 通道登记：登记会顶掉 MOUSE_UP，让世界点击的全局监听收不到（点 NPC 就选不中了）；世界侧改由 markWorldInteractive + LayerManager.isPointOnWorldInteractive 跳过 NPC 上的按下与点击",
   ],
   ["assets/ui/utils/input/Pointer.ts#node", "bindPointerAction / bindMousePress 的内部实现，本身就在鼠标通道登记"],
+  [
+    "assets/ui/core/SoundManager.ts#node",
+    "bindClick 不是点击元素，是「给已有点击元素补一声点击音」的注册点：真正决定点不点得中的监听在调用方（按钮自己的 TOUCH_END / Button.CLICK），穿透由调用方各自的 blockClickThrough 负责，本文件不该也不需要在鼠标通道登记",
+  ],
 ]);
 
 /**

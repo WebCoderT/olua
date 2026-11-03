@@ -2,6 +2,7 @@ import { Color, Graphics, Label, Layout, Node, ScrollView, Size, Vec2, isValid }
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import MailStore from "../../core/MailStore";
+import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import { items } from "../../../configs/items";
 import { mailChannels, mailDialogLayout as layout, mailTexts as texts } from "../../../configs/mail";
@@ -173,6 +174,8 @@ export default class MailDialog {
     );
     if (unread > 0) node.addChild(this.createDot(key, unread));
     node.on(Node.EventType.TOUCH_END, () => MailStore.setChannel(key), this);
+    // 点击音（#685）：频道页签 + 行内按钮都是手写的，不走 UiHelper.createButton
+    SoundManager.bindClick(node);
     blockClickThrough(node);
     return node;
   }
@@ -272,7 +275,10 @@ export default class MailDialog {
     node.addChild(this.createAction(row, busy));
     node.addChild(this.createRemove(row, busy));
     // 点行标已读（已读的行不用再请求）
-    if (!row.read && !busy) node.on(Node.EventType.TOUCH_END, () => void this.onRead(row.id), this);
+    if (!row.read && !busy) {
+      node.on(Node.EventType.TOUCH_END, () => void this.onRead(row.id), this);
+      SoundManager.bindClick(node);
+    }
     return node;
   }
 
@@ -309,6 +315,7 @@ export default class MailDialog {
     );
     if (!row.claimed && !busy) {
       node.on(Node.EventType.TOUCH_END, () => void this.onClaim(row.id), this);
+      SoundManager.bindClick(node);
       blockClickThrough(node);
     }
     return node;
@@ -336,6 +343,7 @@ export default class MailDialog {
     );
     if (!busy) {
       node.on(Node.EventType.TOUCH_END, () => void this.onRemove(row, removable), this);
+      SoundManager.bindClick(node);
       blockClickThrough(node);
     }
     return node;
@@ -367,6 +375,7 @@ export default class MailDialog {
     );
     if (enabled) {
       node.on(Node.EventType.TOUCH_END, onTap, this);
+      SoundManager.bindClick(node);
       blockClickThrough(node);
     }
     return node;

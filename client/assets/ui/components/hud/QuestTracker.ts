@@ -1,6 +1,7 @@
 import { Color, Label, Node, Size, UITransform, Vec2, isValid } from "cc";
 import QuestStore from "../../core/QuestStore";
 import type { QuestView } from "../../core/QuestStore";
+import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import { questTrackerLayout as layout } from "../../../configs/hudLayout";
 import { blockClickThrough } from "../../utils/input/UiHit";
@@ -44,6 +45,8 @@ export default class QuestTracker extends Node {
     // 点追踪栏 = 开任务面板（不穿透到世界，否则会顺带走一步）
     blockClickThrough(this);
     this.on(Node.EventType.TOUCH_END, () => this.onOpen(), this);
+    // 点击音（#685）：整块追踪栏是「开任务面板」的按钮
+    SoundManager.bindClick(this);
     this.unsubscribe = QuestStore.onChange(() => this.render());
     this.render();
   }

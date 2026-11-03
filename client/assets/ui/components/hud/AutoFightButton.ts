@@ -1,6 +1,7 @@
 import { Node } from "cc";
 import { uiImages } from "../../../configs/hudLayout";
 import AutoBattle from "../../core/AutoBattle";
+import SoundManager from "../../core/SoundManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
 /**
@@ -15,6 +16,8 @@ export default class AutoFightButton extends Node {
     // 样式（尺寸/位置/图标底图/「挂机」文字）由 GameUiHelper 零件施加
     GameUiHelper.applyAutoFightButtonStyle(this);
     this.on(Node.EventType.TOUCH_END, this.onToggle, this);
+    // 点击音（#685）：挂机开关也是按钮
+    SoundManager.bindClick(this);
     // 场景销毁时注销状态回调，避免残留对已销毁按钮的引用
     this.once(Node.EventType.NODE_DESTROYED, () => AutoBattle.setHangStateListener(null));
     this.refresh(AutoBattle.isHangEnabled());

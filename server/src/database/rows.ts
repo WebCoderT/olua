@@ -480,7 +480,7 @@ export interface UiEffectRow {
  * 行由启动 seed 按 `AUDIO_DEFAULTS` 补出来，没有新建 / 删除语义（key 由客户端消费代码决定）。
  */
 export interface AudioSettingRow {
-  /** 音效 key（登录背景音 login_bgm、登录按钮音 login_click；取值域见 common/constants/audio） */
+  /** 音效 key（登录背景音 login_bgm、按钮点击音 ui_click；取值域见 common/constants/audio） */
   audio_key: string;
   /** 资源相对路径（带扩展名，如 `sounds/login_bg.wav`；**空串 = 未配置，这一项不响**） */
   file_path: string;

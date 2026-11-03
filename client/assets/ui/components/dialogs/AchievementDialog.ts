@@ -2,6 +2,7 @@ import { Graphics, Label, isValid, Node, ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import AchievementStore from "../../core/AchievementStore";
+import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import {
   achievementCategories,
@@ -221,6 +222,8 @@ export default class AchievementDialog {
     );
     if (claimable && !busy) {
       node.on(Node.EventType.TOUCH_END, () => void this.onClaim(row.id), this);
+      // 点击音（#685）：只有「可领取」这一格是真的按钮（不可领的那些不绑，点了也不该响）
+      SoundManager.bindClick(node);
       blockClickThrough(node);
     }
     return node;

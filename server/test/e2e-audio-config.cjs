@@ -84,7 +84,7 @@ async function api(method, path, options = {}) {
 function saveAudio(key, token, body) {
   return api("PATCH", `admin/audio-settings/${key}`, {
     token,
-    body: { filePath: "sounds/login_bg.wav", volume: 60, loop: true, enabled: true, ...body },
+    body: { filePath: "sounds/login_bgm.wav", volume: 60, loop: true, enabled: true, ...body },
   });
 }
 
@@ -152,10 +152,10 @@ function saveAudio(key, token, body) {
     check(rows.length === 11 && list.data.total === 11, "出厂 11 个音效项", `${rows.length}`);
 
     // 顺序 = `AUDIO_KEYS` 登记顺序（按分类成组）—— 管理端 tab 的分组与顺序就按它排，
-    // 换成字典序会让「登录与界面」不再排在最前面
+    // 换成字典序会让「界面与交互」不再排在最前面
     const EXPECTED_KEYS = [
       "login_bgm",
-      "login_click",
+      "ui_click",
       "warrior_attack",
       "role_die_man",
       "role_die_woman",
@@ -171,6 +171,13 @@ function saveAudio(key, token, body) {
       "按 AUDIO_KEYS 登记顺序返回（分类成组，不是字典序）",
       rows.map((row) => row.key).join(","),
     );
+
+    // 改名（#685：`login_click` → `ui_click`）的两条契约：
+    // 展示名要跟着用途走（它现在挂在所有按钮上，不再只是登录按钮），
+    // 旧 key 不能留着 —— 老库里的那行由 seed 的 deleteOrphans 清掉，管理端不该出现「点了没声音」的孤儿项
+    const clickRow = rows.filter((row) => row.key === "ui_click")[0];
+    check(clickRow?.label === "按钮点击音", "点击音展示名是「按钮点击音」（全站按钮共用）", clickRow?.label);
+    check(rows.every((row) => row.key !== "login_click"), "旧 key login_click 没有残留（改名后 seed 会清孤儿）", rows.map((r) => r.key).join(","));
 
     // 逐行的**形状**断言：不锁具体数值（出厂音量 / 路径随时会被运营改），只锁「该有的都在、类型对」
     for (const row of rows) {
@@ -218,7 +225,7 @@ function saveAudio(key, token, body) {
 
     const badPaths = [
       { filePath: "images/login_bg.wav", why: "不在 sounds/ 下" },
-      { filePath: "/sounds/login_bg.wav", why: "绝对路径（相对 resources 才是对的）" },
+      { filePath: "/sounds/login_bgm.wav", why: "绝对路径（相对 resources 才是对的）" },
       { filePath: "sounds/../secrets.wav", why: "出现 .." },
       { filePath: "sounds/login_bg.txt", why: "扩展名不在白名单" },
       { filePath: "sounds/login bg.wav", why: "文件名带空格" },
@@ -234,12 +241,12 @@ function saveAudio(key, token, body) {
     }
 
     // 空串 = 未配置，是合法状态（文件还没进资源包时就这样留着）
-    const cleared = await saveAudio("login_click", adminToken, { filePath: "", volume: 80, loop: false });
+    const cleared = await saveAudio("ui_click", adminToken, { filePath: "", volume: 80, loop: false });
     check(cleared.code === 0 && cleared.data.filePath === "", "空串合法（= 未配置，不是错误）", `${cleared.status}/${cleared.code}`);
 
     // 反斜杠（Windows 上复制来的路径）会被规范成正斜杠，而不是被拒
-    const backslash = await saveAudio("login_bgm", adminToken, { filePath: "sounds\\login_bg.wav" });
-    check(backslash.code === 0 && backslash.data.filePath === "sounds/login_bg.wav", "反斜杠规范成正斜杠", JSON.stringify(backslash.data?.filePath));
+    const backslash = await saveAudio("login_bgm", adminToken, { filePath: "sounds\\login_bgm.wav" });
+    check(backslash.code === 0 && backslash.data.filePath === "sounds/login_bgm.wav", "反斜杠规范成正斜杠", JSON.stringify(backslash.data?.filePath));
 
     // 多级目录合法（以后分场景建子目录不用改判据）
     const nested = await saveAudio("login_bgm", adminToken, { filePath: "sounds/login/bgm_main.wav" });
@@ -268,7 +275,7 @@ function saveAudio(key, token, body) {
     console.log("— 五、保存：整份覆盖 + 追账 + 再读一次还在 —");
 
     const saved = await saveAudio("login_bgm", adminToken, {
-      filePath: "sounds/login_bg.wav",
+      filePath: "sounds/login_bgm.wav",
       volume: 35,
       loop: false,
       enabled: false,
@@ -284,7 +291,7 @@ function saveAudio(key, token, body) {
     check(bgmAfter?.volume === 35 && bgmAfter?.enabled === false, "再读一次仍是保存后的值（落了库，不是内存）", JSON.stringify(bgmAfter));
 
     // 另一半没动：保存一项不该顺手改另一项
-    const clickAfter = (reloaded.data?.list ?? []).find((row) => row.key === "login_click");
+    const clickAfter = (reloaded.data?.list ?? []).find((row) => row.key === "ui_click");
     check(clickAfter?.volume === 80 && clickAfter?.loop === false, "另一个音效项没被连带改动", JSON.stringify(clickAfter));
 
     //#endregion
