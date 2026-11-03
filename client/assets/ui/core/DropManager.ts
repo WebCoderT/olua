@@ -24,10 +24,12 @@ interface DropItem {
   count: number;
   /**
    * 服务端结算的拾取定位（#325）：击杀那次的 castId + reward.drops 下标。
-   * **必填**（#581）：掉落物只可能来自 settle 帧的 reward —— 以前「缺省 = 本地口径的掉落，
+   * **必填**（#581）：自己击杀的掉落只可能来自 settle 帧的 reward —— 以前「缺省 = 本地口径的掉落，
    * 直接进本地背包」那条回滚已经删掉（它等于给客户端开了一条「自己造物品」的路）。
+   * **可缺省**（#689）：别人的击杀经 monster-ai 帧的 kills 广播铺场 —— 纯演出，
+   * 没有账本定位（pick 账在击杀者名下），不可拾取（见 requestPick 的守卫）。
    */
-  pick: { castId: number; index: number };
+  pick?: { castId: number; index: number };
 }
 
 /** 一次拾取请求的结果：pending = 已发 pick 帧等应答（**唯一**的正常结果）；full = 背包已满 */
@@ -93,11 +95,7 @@ export default class DropManager {
    * @returns 原样返回 results（便于日志/统计）
    */
   static spawnResults(results: DropResult[], position: Vec3, castId: number): DropResult[] {
-    // 掉落音（#683）：一次结算只响一次 —— 按件播会在「一堆怪同时死」时叠成一串噪音
-    if (results.length > 0) void SoundManager.play("item_drop");
-    // 先算全部散落点，再统一铺放：保证任意两件掉落物都不落在同一点上
-    const offsets = scatterDropPositions(results.length);
-    results.forEach((result, index) => {
+    return this.spawnAt(results, position, (result, index, offsets) => {
       const good = getItem(result.goodId);
       if (!good) {
         console.warn(`掉落物品不存在：${result.goodId}`);
@@ -105,17 +103,50 @@ export default class DropManager {
       }
       this.createDropNode(good, result.count, position, offsets[index], { castId, index });
     });
+  }
+
+  /**
+   * 把**别人击杀**的掉落铺到地面（#689：monster-ai 帧的 kills 事件）
+   *
+   * 与 spawnResults 的差别只有一样：没有 pick 定位 —— 服务端的掉落账本按击杀者的
+   * castId 记（#325 归属设计），别人的账号既没有账也不该能拾。所以这些节点：
+   * 不注册拾取指针（悬停不显示「可拾取」光标）、自动拾取跳过、点击不发 pick 帧。
+   * 演出部分（掉落音 / 散落 / 图标与数量）与自己的掉落完全同一套。
+   */
+  static spawnRemoteDrops(results: DropResult[], position: Vec3): DropResult[] {
+    return this.spawnAt(results, position, (result, index, offsets) => {
+      const good = getItem(result.goodId);
+      if (!good) {
+        console.warn(`掉落物品不存在：${result.goodId}`);
+        return;
+      }
+      this.createDropNode(good, result.count, position, offsets[index], null);
+    });
+  }
+
+  /** 铺场共用骨架：掉落音 + 散落点计算 + 逐件落节点（pickable 决定每件带不带拾取定位） */
+  private static spawnAt(
+    results: DropResult[],
+    position: Vec3,
+    place: (result: DropResult, index: number, offsets: Vec2[]) => void,
+  ): DropResult[] {
+    // 掉落音（#683）：一次结算只响一次 —— 按件播会在「一堆怪同时死」时叠成一串噪音
+    if (results.length > 0) void SoundManager.play("item_drop");
+    // 先算全部散落点，再统一铺放：保证任意两件掉落物都不落在同一点上
+    const offsets = scatterDropPositions(results.length);
+    results.forEach((result, index) => place(result, index, offsets));
     return results;
   }
 
-  /** 生成掉落物节点并挂载到掉落层（offset 为相对落点的散落偏移，保证各掉落物不重叠） */
-  private static createDropNode(good: Goods, count: number, position: Vec3, offset: Vec2, pick: { castId: number; index: number }) {
+  /** 生成掉落物节点并挂载到掉落层（offset 为相对落点的散落偏移；pick 为 null = 纯演出不可拾取） */
+  private static createDropNode(good: Goods, count: number, position: Vec3, offset: Vec2, pick: { castId: number; index: number } | null) {
     const { node } = GameUiHelper.createDropItem(good, count);
     LayerManager.addToDropLayer(node);
     node.setWorldPosition(position.x + offset.x, position.y + offset.y, position.z);
-    this.dropMap.set(node, { good, count, pick });
-    // 鼠标移到掉落物上时显示该物品大类对应的指针颜色（拾取/换图时注销，见 removeDropNode / reset）
-    CursorManager.registerHover(node, cursorConfig.priority.drop, () => getGoodCursorStyle(good.type));
+    this.dropMap.set(node, { good, count, pick: pick ?? undefined });
+    // 鼠标移到掉落物上时显示该物品大类对应的指针颜色（拾取/换图时注销，见 removeDropNode / reset）；
+    // 别人的掉落不可拾取（#689），不注册 —— 悬停不显示「可拾取」光标，避免误导
+    if (pick) CursorManager.registerHover(node, cursorConfig.priority.drop, () => getGoodCursorStyle(good.type));
   }
 
   /**
@@ -137,6 +168,8 @@ export default class DropManager {
       const position = node.getWorldPosition();
       const distance = Math.hypot(position.x - rolePosition.x, position.y - rolePosition.y);
       if (distance > radius) return;
+      // 别人的击杀掉落（#689）不可拾取：踩上去不触发任何请求
+      if (!this.dropMap.get(node)?.pick) return;
       const outcome = this.requestPick(node);
       if (outcome.outcome === "full") {
         this.notifyBagFull();
@@ -186,6 +219,9 @@ export default class DropManager {
   private static requestPick(node: Node): PickRequest {
     const drop = this.dropMap.get(node);
     if (!drop) return { outcome: "pending" }; // 竞态：刚被别的路径拾走，不当背包满处理
+    // 别人的击杀掉落（#689）：没有账本定位，本来就不该发 pick 帧（服务端也会拒）——
+    // 自动拾取在上游已跳过，这里是点击路径的兜底：当作无事发生
+    if (!drop.pick) return { outcome: "pending" };
     const sentAt = this.pendingPicks.get(node);
     if (sentAt !== undefined) {
       if (Date.now() - sentAt < dropRuntime.pickReplyTimeout) return { outcome: "pending" };

@@ -21,6 +21,11 @@ agent_created: true
 >   循环特效节点（子节点，随怪物移动 / 销毁），台账放 `MonsterManager.statusEffects`，
 >   每帧按 `expireAt` 清理。**不要复用 `StatusManager`**：它是「单 owner + 图标栏」的形状，
 >   怪物需要每只一份且没有图标栏。
+>
+> **#689 起怪物被击杀也有跨端事件**：`monster-ai` 帧的 **`kills`**（`{instanceId, accountId, x, y, drops[]}`）
+> = 有玩家（`accountId`）打死了这只怪 → 观看者据此做死亡清场（走既有「无奖励死亡清场」路径）
+> 与掉落铺场（`DropManager.spawnRemoteDrops`：纯演出、无 pick 定位不可拾取 —— 账本在击杀者名下）。
+> **自己的击杀按 accountId 跳过**：击杀者那份已由 settle 帧的 reward 演过，重复处理会双份掉落。
 
 
 ## 一、先分好层：数据归管理器，行为归 AI 静态类

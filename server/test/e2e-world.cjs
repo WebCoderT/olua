@@ -5,7 +5,8 @@
  * 盯的不变量（改世界层后必须全绿）：
  * 一、进图播种：worldJoin 创建实例并以 world 帧下发权威状态（instanceId 服务端发牌 /
  *     满血起算 / 重复 join 不翻倍）；第二个账号 join 同图看到**同一份**实例（世界跨账号共享）
- * 二、结算落世界：cast 的扣血直接写世界实例（快照如实反映）；打死由服务端判，快照带重生倒计时
+ * 二、结算落世界：cast 的扣血直接写世界实例（快照如实反映）；打死由服务端判，快照带重生倒计时；
+ *     击杀事件随 monster-ai 帧广播给同图观看者（#689：别人的屏幕据此清场与铺掉落）
  * 三、tick 重生：死亡满 respawn 阈值后由 tick 复活（满血回出生点），观看者收到 world 广播帧
  * 四、优雅关闭与重启恢复：SIGTERM 正常退出（exitCode 0）、状态已落盘；
  *     同库重启后 join 拿回扣过血的实例，卸载期间到期的重生被一次性补上
@@ -182,6 +183,17 @@ function connect(url) {
     closed: false,
     settles: [],
     worlds: [],
+    aiFrames: [],
+    /** 等「kill 事件里出现这只怪」（#689：击杀随 monster-ai 帧广播，广播节拍内必到） */
+    async waitForKill(instanceId, timeoutMs = 5_000) {
+      return waitFor(`instanceId=${instanceId} 的击杀事件`, async () => {
+        for (let i = session.aiFrames.length - 1; i >= 0; i -= 1) {
+          const kill = (session.aiFrames[i].kills ?? []).find((entry) => entry.instanceId === instanceId);
+          if (kill) return kill;
+        }
+        return null;
+      }, timeoutMs);
+    },
     async waitForSettle(castId, timeoutMs = 5_000) {
       return waitFor(`castId=${castId} 的 settle`, async () => {
         const hits = session.settles.filter((frame) => frame.castId === castId);
@@ -213,6 +225,7 @@ function connect(url) {
       const frame = JSON.parse(raw.toString());
       if (frame.type === "settle") session.settles.push(frame.data);
       if (frame.type === "world") session.worlds.push(frame.data);
+      if (frame.type === "monster-ai") session.aiFrames.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -320,6 +333,17 @@ function connect(url) {
     const afterKill = await sessionA.joinWorld("1");
     const corpse = afterKill.monsters.find((m) => m.instanceId === wA2.instanceId);
     check(!!corpse && corpse.alive === false && corpse.hp === 0 && typeof corpse.respawnInMs === "number", "死亡实例 alive=false 且带重生倒计时", JSON.stringify(corpse));
+
+    // 击杀事件广播（#689）：观看者（B）在 monster-ai 帧里收到 kills ——
+    // 别人的屏幕据此做死亡清场与掉落铺场（settle 帧只发击杀者，B 对这次击杀原本一无所知）
+    const meA = await api(baseUrl, "GET", "auth/me", { token: tokenA });
+    const killEventB = await sessionB.waitForKill(wA2.instanceId);
+    check(!!killEventB, "击杀事件随 monster-ai 帧广播给同图观看者（B）", JSON.stringify(killEventB));
+    checkEqual(killEventB && killEventB.accountId, meA.data && meA.data.id, "击杀事件带击杀者账号（客户端据此跳过自己的击杀）");
+    check(Array.isArray(killEventB && killEventB.drops), "击杀事件带掉落列表（可为空数组——这次什么都没掉也照发）", JSON.stringify(killEventB && killEventB.drops));
+    check(typeof (killEventB && killEventB.x) === "number" && typeof (killEventB && killEventB.y) === "number", "击杀事件带死亡点坐标（掉落物铺在这里）");
+    const killEventA = await sessionA.waitForKill(wA2.instanceId);
+    check(!!killEventA, "击杀者自己也收到同一帧（客户端按 accountId 自行跳过，服务端不做收件人剔除）");
 
     //#endregion
 

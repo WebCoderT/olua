@@ -285,7 +285,7 @@ export interface RealtimeMonsterCast {
   statusId?: string;
 }
 
-/** 服务端 → 客户端：怪物 AI 广播（位置增量 + 普攻/技能命中事件 + 技能释放，按地图分发给观看者） */
+/** 服务端 → 客户端：怪物 AI 广播（位置增量 + 普攻/技能命中事件 + 技能释放 + 玩家击杀，按地图分发给观看者） */
 export interface RealtimeMonsterAiMessage {
   type: "monster-ai";
   data: {
@@ -294,7 +294,28 @@ export interface RealtimeMonsterAiMessage {
     hits: RealtimeMonsterHit[];
     /** #372：这一拍释放的技能（含状态型；没有技能释放时是空数组，不是 undefined） */
     casts: RealtimeMonsterCast[];
+    /** #689：这一拍发生的玩家击杀（死亡清场 + 掉落铺场的跨端演出；没有击杀时是空数组） */
+    kills: RealtimeMonsterKill[];
   };
+}
+
+/**
+ * 怪物 AI 广播帧里的一次玩家击杀（#689）
+ *
+ * `settle` 帧的 `reward.drops` 只发击杀者本人（归属与账本都在他名下），同图其他观看者
+ * 对「这只怪死了、地上掉了什么」一无所知 —— 这条事件把**演出所需的最小集合**广播给全图：
+ * 死的是哪只（观看者据此清场）、谁打的（击杀者自己跳过 —— 那份已由 settle 演过）、
+ * 死在哪、掉了什么（铺到地面，纯演出不可拾取 —— 账本定位 pick 帧只认击杀者的 castId）。
+ */
+export interface RealtimeMonsterKill {
+  instanceId: string;
+  /** 击杀者账号（客户端据此跳过自己的击杀，避免与 settle 路径重复演出） */
+  accountId: string;
+  /** 死亡点（世界坐标；AI 运行时被清前取的模拟坐标，取不到退回出生点） */
+  x: number;
+  y: number;
+  /** 掉落结果（同一物品已合并数量；可为空数组 —— 这次什么都没掉，但死亡清场仍要走） */
+  drops: Array<{ goodId: string; count: number }>;
 }
 
 //#endregion

@@ -11,7 +11,7 @@ import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
-import type { RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit } from "./realtime.protocol";
+import type { RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill } from "./realtime.protocol";
 
 /**
  * 怪物 AI 参数（`runtime_params.monster_ai` 列，管理端「运行时参数」页可改）
@@ -243,7 +243,7 @@ function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: numb
  * 广播
  * ===========================================================================
  * 按 `MONSTER_AI_BROADCAST_MS` 节流：只发**有变化**的怪（位置变了或移动标记变了）
- * 加上这段时间的命中事件与技能释放 —— 站着的怪不发第二遍。帧形状见 protocol 的
+ * 加上这段时间的命中事件、技能释放与玩家击杀（#689）—— 站着的怪不发第二遍。帧形状见 protocol 的
  * `RealtimeMonsterAiMessage`；发谁由观看者集合决定（RealtimeService 接线）。
  */
 @Injectable()
@@ -260,6 +260,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private readonly pendingHits = new Map<string, RealtimeMonsterHit[]>();
   /** 本轮 tick 攒下的技能释放（`zone:mapId` → casts），广播时一并发出 */
   private readonly pendingCasts = new Map<string, RealtimeMonsterCast[]>();
+  /** 本轮攒下的玩家击杀（`zone:mapId` → kills，#689），广播时一并发出 */
+  private readonly pendingKills = new Map<string, RealtimeMonsterKill[]>();
 
   /** 技能缓存（#372）：怪物 key → 按释放顺序排好的 CastPlan；`loadedAt` 做 TTL */
   private skillPlans = new Map<string, CastPlan[]>();
@@ -281,7 +283,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     | ((
         zoneId: number,
         mapId: string,
-        data: { mapId: string; monsters: RealtimeMonsterAiEntry[]; hits: RealtimeMonsterHit[]; casts: RealtimeMonsterCast[] },
+        data: {
+          mapId: string;
+          monsters: RealtimeMonsterAiEntry[];
+          hits: RealtimeMonsterHit[];
+          casts: RealtimeMonsterCast[];
+          kills: RealtimeMonsterKill[];
+        },
       ) => void)
     | null = null;
 
@@ -329,9 +337,21 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     runtime.provoked = accountId;
   }
 
-  /** 怪物被击杀：AI 运行时作废（重生回出生点后按新的一轮游走重新开始，身上的状态一并清掉） */
-  onMonsterKilled(instanceId: string): void {
+  /**
+   * 怪物被击杀：AI 运行时作废（重生回出生点后按新的一轮游走重新开始，身上的状态一并清掉）；
+   * 带击杀事件（#689，结算侧在奖励结算完后调用）时攒进待广播队列，
+   * 同图观看者的下一拍 monster-ai 帧会带上 —— 死亡清场与掉落铺场的跨端演出全靠它。
+   */
+  onMonsterKilled(
+    instanceId: string,
+    kill?: { zoneId: number; mapId: string; accountId: string; x: number; y: number; drops: Array<{ goodId: string; count: number }> },
+  ): void {
     for (const map of this.runtimes.values()) map.delete(instanceId);
+    if (!kill) return;
+    const key = worldKey(kill.zoneId, kill.mapId);
+    const list = this.pendingKills.get(key) ?? [];
+    list.push({ instanceId, accountId: kill.accountId, x: kill.x, y: kill.y, drops: kill.drops });
+    this.pendingKills.set(key, list);
   }
 
   /** 连接断开 / 被踢：位置上报作废（该玩家的目标下轮 tick 自然丢失） */
@@ -444,9 +464,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       }
     }
 
-    // 没人看的分域：AI 运行时整份清掉（重进图时按出生点重建；身上的状态也一并作废）
+    // 没人看的分域：AI 运行时整份清掉（重进图时按出生点重建；身上的状态也一并作废）；
+    // 攒着没发出去的击杀事件随分域一起作废（没有观看者 = 没有人需要这场演出）
     for (const key of [...this.runtimes.keys()]) {
-      if (!viewedKeys.has(key)) this.runtimes.delete(key);
+      if (!viewedKeys.has(key)) {
+        this.runtimes.delete(key);
+        this.pendingKills.delete(key);
+      }
     }
   }
 
@@ -639,7 +663,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   //#region 广播：只发有变化的怪 + 攒下的命中与技能释放
 
   private broadcast(): void {
-    if (this.onBroadcast === null && this.pendingHits.size === 0 && this.pendingCasts.size === 0) return;
+    if (this.onBroadcast === null && this.pendingHits.size === 0 && this.pendingCasts.size === 0 && this.pendingKills.size === 0) return;
     for (const [key, runtimes] of this.runtimes) {
       const at = key.indexOf(":");
       const zoneId = Number(key.slice(0, at));
@@ -648,6 +672,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       this.pendingHits.delete(key);
       const casts = this.pendingCasts.get(key) ?? [];
       this.pendingCasts.delete(key);
+      const kills = this.pendingKills.get(key) ?? [];
+      this.pendingKills.delete(key);
       const monsters: RealtimeMonsterAiEntry[] = [];
       for (const [instanceId, runtime] of runtimes) {
         const moved = Math.abs(runtime.x - runtime.sentX) > 0.01 || Math.abs(runtime.y - runtime.sentY) > 0.01;
@@ -658,8 +684,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         runtime.sentY = runtime.y;
         runtime.sentMoving = runtime.movingNow;
       }
-      if (monsters.length === 0 && hits.length === 0 && casts.length === 0) continue;
-      this.onBroadcast?.(zoneId, mapId, { mapId, monsters, hits, casts });
+      if (monsters.length === 0 && hits.length === 0 && casts.length === 0 && kills.length === 0) continue;
+      this.onBroadcast?.(zoneId, mapId, { mapId, monsters, hits, casts, kills });
     }
   }
 

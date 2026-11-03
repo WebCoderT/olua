@@ -102,6 +102,8 @@ export interface MonsterAiFrame {
   hits: MonsterHitEntry[];
   /** #372：这一拍怪物释放的技能（含状态型；旧服务端不带该字段时按空数组处理） */
   casts?: MonsterCastEntry[];
+  /** #689：这一拍发生的玩家击杀（死亡清场 + 掉落铺场的跨端演出；旧服务端不带时按空数组处理） */
+  kills?: MonsterKillEntry[];
 }
 
 /** 怪物释放技能的演出指令（#372：协议见 realtime.protocol 的 RealtimeMonsterCast） */
@@ -110,6 +112,21 @@ export interface MonsterCastEntry {
   skillId: string;
   /** 有值 = 这次释放给怪物自己挂了这个状态（客户端据此在怪物身上播状态特效） */
   statusId?: string;
+}
+
+/**
+ * 怪物 AI 广播帧里的一次玩家击杀（#689：协议见 realtime.protocol 的 RealtimeMonsterKill）
+ *
+ * 别人的击杀没有 settle 帧（reward 只发击杀者），死亡清场与掉落铺场全靠这条事件；
+ * 击杀者自己按 accountId 跳过 —— 那份已由 settle 演过。
+ */
+export interface MonsterKillEntry {
+  instanceId: string;
+  accountId: string;
+  /** 死亡点（世界坐标；掉落物铺在这里） */
+  x: number;
+  y: number;
+  drops: Array<{ goodId: string; count: number }>;
 }
 
 /** 一名远端玩家的外观（#383：协议见 realtime.protocol 的 RealtimePlayerAppearance） */
