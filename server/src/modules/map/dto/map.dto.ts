@@ -1,11 +1,13 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsIn, IsInt, IsString, Length, Max, Min } from "class-validator";
+import { Type } from "class-transformer";
+import { IsIn, IsInt, IsNumber, IsString, Length, Max, Min } from "class-validator";
 import {
   MAP_ENTER_LIMITS,
   MAP_LABEL_MAX_LENGTH,
   MAP_TYPE_LABELS,
   MAP_TYPE_VALUES,
   MapTypeValue,
+  SPAWN_AREA_LIMITS,
 } from "../../../common/constants/map-config";
 
 /**
@@ -107,13 +109,12 @@ export class MapSpawnAreaOverflowDto {
 /**
  * 刷怪区（**服务端库表** `map_spawn_areas` 的一行）
  *
- * 与上面 `groups` 里的 monster 对象不是同一份数据：那一个是 Tiled 原始矩形，
- * 这一个是导入后按世界坐标整理过的区域 —— 管理端两栏并排显示，就是为了让人能核对
- * 「资源里的矩形」和「服务端真正在用的区域」是否对得上。
+ * #667 起这张表由**管理端绘制**写入，TMX 的 `monster` 对象组不再是它的来源
+ * （导入工具也不写它了）。所以这里只剩一套坐标：世界坐标。
  *
  * `inBounds` / `overflow` **由服务端按地图尺寸判**（`spawn-area-bounds.util.ts`），
  * 页面只显示结论：运行时刷怪读的是这张表，越界判定必须落在跑得起来的链路上 ——
- * 只校验生成快照的话，「旧口径时期 seed 过的库」会一直把怪刷在图外而没人发现。
+ * 新建 / 修改时同样是这个判据，越界直接拒（不是告警）。
  */
 export class MapSpawnAreaDto {
   @ApiProperty({ description: "行 id（导入顺序，发牌可复现）" })
@@ -380,4 +381,80 @@ export class SaveMapConfigDto {
   @Min(MAP_ENTER_LIMITS.soulOfWar.min, { message: `进入战魂阶不能小于 ${MAP_ENTER_LIMITS.soulOfWar.min}` })
   @Max(MAP_ENTER_LIMITS.soulOfWar.max, { message: `进入战魂阶不能大于 ${MAP_ENTER_LIMITS.soulOfWar.max}` })
   soulOfWar: number;
+}
+
+/**
+ * 新建 / 修改一个刷怪区（#667：后台直接画）
+ *
+ * ## 为什么入参是世界坐标，不是 Tiled 矩形
+ *
+ * 写进来的东西和读出去的东西必须同构：`MapSpawnAreaDto` 给的是 `cx/cy/w/h`（世界坐标），
+ * 表里存的也是这四列。如果入参换一套口径（Tiled 左上角），那服务里就要多一次换算，
+ * 而管理端读回来还得再换一次 —— 两处换算、两处可能错，而且 e2e 无法直接对照「写了什么、读到什么」。
+ *
+ * 管理端画布本来就是 Tiled 口径（底图坐标），它负责换算：
+ * `cx = x + w/2`、`cy = -(y + h/2)`（#566 后的口径，没有半图偏移）。
+ *
+ * ## `count` 为什么只有一个数
+ *
+ * 表里是 `min` / `max` 两列，但播种一直只按 `max` 展开、`min` 从没被读过（留给将来的
+ * 「维持最少 N 只」）。表单上摆两个数字只会让人问「min 填了为什么没反应」，
+ * 所以接口只收 `count`，落库时 `min = max = count` —— 想用 min 时再加字段，不提前占位。
+ */
+export class SaveSpawnAreaDto {
+  @ApiProperty({
+    description: `区域名（同一张图内唯一，运营自己起，如「1号刷怪区」）`,
+    minLength: SPAWN_AREA_LIMITS.name.min,
+    maxLength: SPAWN_AREA_LIMITS.name.max,
+  })
+  @IsString({ message: "区域名必须是字符串" })
+  @Length(SPAWN_AREA_LIMITS.name.min, SPAWN_AREA_LIMITS.name.max, {
+    message: `区域名不能为空且不超过 ${SPAWN_AREA_LIMITS.name.max} 个字`,
+  })
+  name: string;
+
+  @ApiProperty({ description: "怪物 key（monsters 表的 id，必须存在）", example: "1" })
+  @IsString({ message: "怪物 key 必须是字符串" })
+  @Length(1, 64, { message: "怪物 key 不能为空" })
+  monsterKey: string;
+
+  @ApiProperty({
+    description: "这一区维持多少只（1~200，播种按它展开）",
+    minimum: SPAWN_AREA_LIMITS.count.min,
+    maximum: SPAWN_AREA_LIMITS.count.max,
+  })
+  @Type(() => Number)
+  @IsInt({ message: "数量必须是整数" })
+  @Min(SPAWN_AREA_LIMITS.count.min, { message: `数量不能小于 ${SPAWN_AREA_LIMITS.count.min}` })
+  @Max(SPAWN_AREA_LIMITS.count.max, { message: `数量不能大于 ${SPAWN_AREA_LIMITS.count.max}` })
+  count: number;
+
+  @ApiProperty({ description: "区域中心 x（世界坐标；原点 = 地图左上角）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cx 必须是数字" })
+  cx: number;
+
+  @ApiProperty({ description: "区域中心 y（世界坐标；y 轴向上，故为负）" })
+  @Type(() => Number)
+  @IsNumber({}, { message: "cy 必须是数字" })
+  cy: number;
+
+  @ApiProperty({ description: `区域宽（像素，至少 ${SPAWN_AREA_LIMITS.minSize}）` })
+  @Type(() => Number)
+  @IsNumber({}, { message: "区域宽必须是数字" })
+  w: number;
+
+  @ApiProperty({ description: `区域高（像素，至少 ${SPAWN_AREA_LIMITS.minSize}）` })
+  @Type(() => Number)
+  @IsNumber({}, { message: "区域高必须是数字" })
+  h: number;
+}
+
+/** 删除刷怪区的结果（不留 204 空响应：前端要拿到 id 才能从本地列表里摘掉那一行） */
+export class MapSpawnAreaDeletedDto {
+  @ApiProperty({ description: "恒为 true（失败会抛 404，不会有 false）" })
+  deleted: boolean;
+
+  @ApiProperty({ description: "被删掉的行 id" })
+  id: number;
 }

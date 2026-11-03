@@ -58,8 +58,8 @@ export interface WorldMonsterSnapshot {
  *   是出生点，那是世界里唯一稳定的真相；
  * - 掉落 / 经验 —— 仍在客户端结算（各自有独立 issue）。
  *
- * 刷怪**区域**配置已归服务端（#295 阶段一）：`map_spawn_areas` 表由
- * `tools/import-spawn-areas.cjs` 直接从 Tiled 导入（出厂值随 `config-sync.sql` 首启灌入），
+ * 刷怪**区域**配置已归服务端（#295 阶段一 / #667 起由管理端地图页绘制）：
+ * `map_spawn_areas` 表是唯一来源（出厂值随 `config-sync.sql` 首启灌入，之后在后台改），
  * 进图 worldJoin 只带 mapId，播种完全由服务端按区域随机落点完成 —— 客户端不再上报计划。
  * 区维度（#295 阶段二）：世界按 `zone:mapId` 分域，每个区的新图都独立播种一份；
  * instanceId 带区段（`m<mapId>_z<zone>_<n>`），合并区时由管理端操作统一改写发牌。
@@ -359,7 +359,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
           this.logger.warn(
             `地图 ${mapId} 刷怪区「${area.name}」越出地图边界（${spawnAreaOverflowText(spawnAreaOverflow(area, mapPixel))}）—— ` +
               `中心 (${area.cx}, ${area.cy}) ${area.w}×${area.h}，图 ${mapPixel.width}×${mapPixel.height}；` +
-              "多半是库表还留着旧口径（重跑 node tools/import-spawn-areas.cjs --db），怪会刷在图外",
+              "多半是库表还留着旧口径（去地图管理页把这块区域重画一遍），怪会刷在图外",
           );
         }
         for (let index = 0; index < area.max; index += 1) {

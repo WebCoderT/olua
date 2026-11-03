@@ -1,7 +1,6 @@
 import { Modal } from "../Modal";
-import { Badge, EmptyState, tableClass, tdClass, thClass, theadClass } from "../ui";
-import type { MapDetail, MapObject } from "../../api";
-import { tiledBoxOf } from "./MapCanvas";
+import { Badge, Button, EmptyState, tableClass, tdClass, thClass, theadClass } from "../ui";
+import type { MapDetail, MapObject, MapSpawnArea } from "../../api";
 import { overflowText, overflowTitle } from "./bounds";
 
 /**
@@ -113,29 +112,37 @@ export function NpcPointsDialog({
   );
 }
 
-/** 刷怪区（服务端整理后的世界坐标）+ 同一个区域的 Tiled 原始矩形（核对用） */
+/**
+ * 刷怪区清单（服务端 `map_spawn_areas`，世界坐标）
+ *
+ * #667 起这张表由后台绘制写入，TMX 的 `monster` 组不再是来源 —— 所以原来那列
+ * 「Tiled 原始矩形 + 与实线重合」的对照已经删掉：没有第二份真相，也就没什么可对的。
+ * 行尾的「编辑」直接打开表单（删除也在表单里，删除路径只留一处）。
+ */
 export function SpawnAreasDialog({
   open,
   detail,
   focusId,
+  onEdit,
   onClose,
 }: {
   open: boolean;
   detail: MapDetail | null;
   focusId?: number;
+  /** 点「编辑」：上层打开表单（弹窗自己关闭） */
+  onEdit: (area: MapSpawnArea) => void;
   onClose: () => void;
 }) {
-  const tiledMonster = detail?.groups.find((group) => group.name === "monster")?.objects ?? [];
   return (
     <Modal
       open={open}
       title="刷怪区"
-      hint="实线数据来自服务端 map_spawn_areas（世界坐标：原点左上、y 轴向上，cy 为负）；「Tiled 原始」那一列是同区域的 TMX 矩形，两者应当重合；「在图内」由服务端按地图尺寸判（越界 = 怪会刷到图外，多半是库表还留着旧口径）"
+      hint="数据来自服务端 map_spawn_areas（世界坐标：原点左上、y 轴向上，cy 为负）。「在图内」由服务端按地图尺寸判 —— 新建 / 修改时越界会被直接拒，这里出现红色只会是历史数据"
       size="xl"
       onClose={onClose}
     >
       {!detail ? null : detail.spawnAreas.length === 0 ? (
-        <EmptyState title="没有刷怪区" description="安全地图不刷怪；或者这张图还没跑过 node tools/import-spawn-areas.cjs --db" />
+        <EmptyState title="没有刷怪区" description="安全地图不刷怪；野外图点「绘制刷怪区」，在底图上拖一个框就能加" />
       ) : (
         <div className="overflow-x-auto">
           <table className={tableClass}>
@@ -148,14 +155,11 @@ export function SpawnAreasDialog({
                 <th className={thClass}>世界中心</th>
                 <th className={thClass}>尺寸</th>
                 <th className={thClass}>在图内</th>
-                <th className={thClass}>Tiled 原始（左上角）</th>
+                <th className={thClass}>操作</th>
               </tr>
             </thead>
             <tbody>
               {detail.spawnAreas.map((area) => {
-                const box = tiledBoxOf(area);
-                const twin = tiledMonster.find((object) => object.name === area.name);
-                const match = twin ? twin.x === box.x && twin.y === box.y && twin.width === box.width && twin.height === box.height : null;
                 return (
                   <tr key={area.id}>
                     <td className={rowClass(area.id === focusId)}>{area.id}</td>
@@ -182,17 +186,10 @@ export function SpawnAreasDialog({
                         </span>
                       )}
                     </td>
-                    <td className={`${rowClass(area.id === focusId)} whitespace-normal`}>
-                      {twin ? (
-                        <span className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                          <span className="font-mono text-slate-400">
-                            ({twin.x}, {twin.y}) {twin.width}×{twin.height}
-                          </span>
-                          <Badge tone={match ? "green" : "red"}>{match ? "与实线重合" : "对不上"}</Badge>
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-600">Tiled 里没有同名区域</span>
-                      )}
+                    <td className={tdClass}>
+                      <Button variant="ghost" onClick={() => onEdit(area)}>
+                        编辑
+                      </Button>
                     </td>
                   </tr>
                 );

@@ -5,7 +5,7 @@
  * 对象属性原样保留（刷怪区的 id / min / max 等），服务端不在这里解释含义。
  *
  * 以前它是 `shared/map-content.generated.ts` 里的一张大常量（TMX 扫描产物），现在只是
- * `maps` 表一列的 JSON —— 写入方是 `tools/import-spawn-areas.cjs`，读方是管理端详情页
+ * `maps` 表一列的 JSON —— 写入方是 `tools/import-map-resources.cjs`，读方是管理端详情页
  * （让人能对着 Tiled 核对「资源里到底有什么」）。
  */
 export interface MapLayerInfo {

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Button, Card, EmptyState, Field as FormField, Input, Notice, Select, Spinner } from "../components/ui";
-import { MapCanvas, type MapLayerVisibility } from "../components/map/MapCanvas";
+import { Badge, Button, Card, EmptyState, Field as FormField, Input, Select, Spinner } from "../components/ui";
+import { MapCanvas, type DrawBox, type MapLayerVisibility } from "../components/map/MapCanvas";
 import { MapMonitorDialog } from "../components/map/MapMonitor";
+import { SpawnAreaFormDialog } from "../components/map/SpawnAreaForm";
 import { outOfBoundsCount } from "../components/map/bounds";
 import {
   GroupsDialog,
@@ -33,7 +34,7 @@ interface MapForm {
 type DialogKey = "layers" | "points" | "spawn" | "monsters" | "groups" | "sources" | "monitor" | null;
 
 /** 叠加层的默认开关：碰撞盒数量大（每图上百个），默认关；其余默认开 */
-const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, tiled: true, npc: true, revive: true, collision: false };
+const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: true, collision: false };
 
 /**
  * 地图管理（#571 观测台 / #573 玩法配置可改 / #580 可视化 + 弹窗）
@@ -80,6 +81,12 @@ export function MapsPage() {
   const [focusNpc, setFocusNpc] = useState<number | undefined>(undefined);
   /** 放大地图（密集的图在 620px 宽下标签会挤，这里给到 1024） */
   const [zoomed, setZoomed] = useState(false);
+  /** 绘制刷怪区模式：指针在图上拖矩形（#667） */
+  const [drawMode, setDrawMode] = useState(false);
+  /** 刚画出来的框（Tiled 口径）—— 有它就打开新建表单 */
+  const [draft, setDraft] = useState<DrawBox | null>(null);
+  /** 正在编辑的区域（有它就打开编辑表单）；与 draft 互斥 */
+  const [editArea, setEditArea] = useState<MapSpawnArea | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -147,10 +154,33 @@ export function MapsPage() {
     }
   };
 
-  /** 从图上点刷怪区 → 打开弹窗并定位到那一行 */
+  /** 从图上点刷怪区 → 直接打开编辑表单（列表弹窗仍然保留，用来总览与删） */
   const openArea = (area: MapSpawnArea) => {
-    setFocusArea(area.id);
-    setDialog("spawn");
+    setDraft(null);
+    setEditArea(area);
+  };
+
+  /** 画布上拖完一个框 → 打开新建表单（框已经带位置尺寸，只差「刷什么、几只」） */
+  const onDrawBox = (box: DrawBox) => {
+    setEditArea(null);
+    setDraft(box);
+  };
+
+  /** 刷怪区保存 / 删除之后：列表里的计数与详情里的区域都要跟着变 */
+  const reloadAfterSpawnChange = (message: string) => {
+    setDraft(null);
+    setEditArea(null);
+    void loadList();
+    if (selected) {
+      mapsApi
+        .detail(selected)
+        .then((data) => setDetail(data))
+        .catch(() => {
+          /* 错误已由请求层统一提示 */
+        });
+    }
+    // 提示由表单自己 toast；这里只负责把画布上的区域刷成新的
+    void message;
   };
 
   /** 从图上点 NPC / 复活点 → 打开弹窗并定位到那一行 */
@@ -277,9 +307,9 @@ export function MapsPage() {
                   title="地图"
                   description={
                     <>
-                      实线 = 服务端刷怪区（世界坐标）；虚线 = TMX 原始矩形（Tiled 坐标），两者重合才说明导入没算错。
+                      刷怪区现在**在这里画**：点「绘制刷怪区」后在图上拖出矩形，填怪物与数量即入库（#667 起 TMX 不再是刷怪区来源）。
                       <br />
-                      区域必须整体落在图内（x ∈ [0, 宽]、y ∈ [-高, 0]）：越界的那块会被画布裁掉，所以越界区域描成红色虚线。
+                      区域必须整体落在图内（x ∈ [0, 宽]、y ∈ [-高, 0]）：越界的那块会被画布裁掉，所以越界区域描成红色虚线 —— 新建时越界会被服务端直接拒。
                       <br />
                       资源 {detail.src || "—"} · {detail.cols}×{detail.rows} 格（{detail.width}×{detail.height} px）· 图层 {detail.layerCount} · NPC/复活点{" "}
                       {detail.npcCount}/{detail.reviveCount} · 刷怪区 {detail.spawnAreaCount}（资源 {detail.monsterAreaCount}）· 场上怪物 {detail.worldMonsterCount}
@@ -304,9 +334,20 @@ export function MapsPage() {
                     红色虚线 = 越出地图边界的区域（超出部分被画布裁掉，图上只剩缺角）
                   </p>
                   <div className="mt-2">
-                    <MapCanvas detail={detail} visible={layers} onPickArea={openArea} onPickNpc={openNpc} />
+                    <MapCanvas
+                      detail={detail}
+                      visible={layers}
+                      onPickArea={openArea}
+                      onPickNpc={openNpc}
+                      drawMode={drawMode}
+                      selectedAreaId={editArea?.id}
+                      onDrawBox={onDrawBox}
+                    />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button variant={drawMode ? "primary" : "ghost"} onClick={() => setDrawMode((previous) => !previous)}>
+                      {drawMode ? "退出绘制" : "绘制刷怪区"}
+                    </Button>
                     <Button variant="ghost" onClick={() => {
                         setFocusArea(undefined);
                         setDialog("spawn");
@@ -360,7 +401,30 @@ export function MapsPage() {
         ) : null}
       </Modal>
 
-      <SpawnAreasDialog open={dialog === "spawn"} detail={detail} focusId={focusArea} onClose={() => setDialog(null)} />
+      {detail ? (
+        <SpawnAreaFormDialog
+          open={!!draft || !!editArea}
+          mapId={detail.id}
+          detail={detail}
+          area={editArea}
+          draft={draft}
+          onClose={() => {
+            setDraft(null);
+            setEditArea(null);
+          }}
+          onSaved={reloadAfterSpawnChange}
+        />
+      ) : null}
+      <SpawnAreasDialog
+        open={dialog === "spawn"}
+        detail={detail}
+        focusId={focusArea}
+        onEdit={(area) => {
+          setDialog(null);
+          openArea(area);
+        }}
+        onClose={() => setDialog(null)}
+      />
       <NpcPointsDialog open={dialog === "points"} detail={detail} focusId={focusNpc} onClose={() => setDialog(null)} />
       <WorldMonstersDialog open={dialog === "monsters"} detail={detail} onClose={() => setDialog(null)} />
       {detail ? (
@@ -382,7 +446,6 @@ export function MapsPage() {
 function LayerLegend({ visible, onChange }: { visible: MapLayerVisibility; onChange: (next: MapLayerVisibility) => void }) {
   const items: Array<{ key: keyof MapLayerVisibility; label: string; color: string; dash?: boolean }> = [
     { key: "spawn", label: "刷怪区（服务端）", color: "#818cf8" },
-    { key: "tiled", label: "TMX 原始矩形", color: "#fbbf24", dash: true },
     { key: "npc", label: "NPC", color: "#38bdf8" },
     { key: "revive", label: "复活点", color: "#34d399" },
     { key: "collision", label: "碰撞盒", color: "#fb7185" },

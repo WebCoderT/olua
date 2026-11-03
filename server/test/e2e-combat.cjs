@@ -1089,12 +1089,33 @@ function connect(url) {
         ) || null,
       12_000,
     );
-    castPosTimerB && clearInterval(castPosTimerB);
     check(!!damagingFrame, "十：改成伤害型后服务端改放 9001（挂载改动 1 秒内生效）", JSON.stringify(damagingFrame));
     const damagingCast = damagingFrame && (damagingFrame.casts || []).find((entry) => entry.skillId === "9001");
     check(!!damagingCast && damagingCast.statusId === undefined, "十：伤害型 casts 不带 statusId", JSON.stringify(damagingCast));
-    const damagingHit = damagingFrame && (damagingFrame.hits || []).find((hit) => hit.instanceId === castMob.instanceId);
-    check(!!damagingHit, "十：伤害型技能同帧走 hits 下发（动作归 casts，数值归 hits）", JSON.stringify(damagingFrame && damagingFrame.hits));
+
+    // 「同帧」这条断言不能钉在**第一帧**上：上一阶段的沙包 A 停了上报之后，服务端的目标校验
+    // 还要等位置过期（posStaleMs = 2s）才会丢掉它 —— 这中间怪物完全可能对着 A **放这一发**，
+    // 而 `applyMonsterHit` 对 hp ≤ 0 的角色直接返回 null（不给尸体报命中），那一帧就是
+    // 「只有 casts、没有 hits」。钉死第一帧会随机红（CI 实测踩过：hits 是空数组）。
+    // 所以要等「同一帧里既有 9001 的 casts、又有这只怪的 hits」的那一帧：
+    // 服务端把两件事件攒在同一个 tick 里一起广播，等不到才是真回归。
+    const damagingPair = await waitFor(
+      "伤害型 casts 与 hits 同帧",
+      async () =>
+        casterB.session.ais.find(
+          (frame) =>
+            (frame.casts || []).some((entry) => entry.instanceId === castMob.instanceId && entry.skillId === "9001") &&
+            (frame.hits || []).some((hit) => hit.instanceId === castMob.instanceId),
+        ) || null,
+      15_000,
+    );
+    castPosTimerB && clearInterval(castPosTimerB);
+    const damagingHit = damagingPair && (damagingPair.hits || []).find((hit) => hit.instanceId === castMob.instanceId);
+    check(
+      !!damagingHit,
+      "十：伤害型技能同帧走 hits 下发（动作归 casts，数值归 hits）",
+      JSON.stringify(damagingPair && damagingPair.hits),
+    );
     check(
       !!damagingHit && damagingHit.damage >= 60,
       "十：技能伤害带倍率（物攻 50 × 1.8 扣物防后仍 > 60）",

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
-import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue } from "../../common/constants/map-config";
+import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue, SPAWN_AREA_LIMITS } from "../../common/constants/map-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { parseMonitorEvent, parseMonitorSnapshot } from "../../common/map-monitor";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
@@ -10,7 +10,7 @@ import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-ar
 import { MapRepository } from "../../database/repositories/map.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
-import { MapRow } from "../../database/rows";
+import { MapRow, MapSpawnAreaRow } from "../../database/rows";
 import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
 import {
   MapMonitorDto,
@@ -29,6 +29,7 @@ import {
   MapSummaryDto,
   MapWorldMonsterDto,
   SaveMapConfigDto,
+  SaveSpawnAreaDto,
 } from "./dto/map.dto";
 
 /**
@@ -39,8 +40,8 @@ import {
  * | 数据 | 存放 | 谁能改 |
  * |---|---|---|
  * | `label` / `type` / `level` / `combat` / `soulOfWar` | `maps` 表 | **管理端**（`save`） |
- * | `layers` / `groups` / 尺寸 | `maps` 表的几何列 + `content` JSON（源自 TMX） | 改 TMX + 跑 `import-spawn-areas` |
- * | `spawnAreas` | `map_spawn_areas` 表 | 导入工具写入 |
+ * | `layers` / `groups` / 尺寸 | `maps` 表的几何列 + `content` JSON（源自 TMX） | 改 TMX + 跑 `import-map-resources` |
+ * | `spawnAreas` | `map_spawn_areas` 表 | **管理端绘制**（`createSpawnArea` / `updateSpawnArea` / `deleteSpawnArea`） |
  * | `worldMonsters` | `world_monsters` 表 | 世界服务运行时写 |
  *
  * 资源本体（TMX / 底图 / 预览图）仍在客户端资源包里 —— 所以**没有「新建地图」**：
@@ -218,23 +219,10 @@ export class MapService {
       return dto;
     });
 
-    // 越界判定按「这张图的实际像素尺寸」算（MAP_PIXEL_SIZES 生成快照，与 TMX 头一致）。
+    // 越界判定按「这张图的实际像素尺寸」算（maps 表的几何列，与 TMX 头一致）。
     // 判据只在服务端一处：页面直接显示 inBounds，不自己再算一遍 —— 两边各算迟早会分叉。
     const mapPixel = this.sizeOf(row);
-    const areas: MapSpawnAreaDto[] = this.spawnAreas.listByMap(id).map((area) => ({
-      id: area.id,
-      name: area.name,
-      monsterKey: area.monster_key,
-      monsterLabel: this.monsterLabelOf(area.monster_key),
-      min: area.min,
-      max: area.max,
-      cx: area.cx,
-      cy: area.cy,
-      w: area.w,
-      h: area.h,
-      inBounds: spawnAreaInBounds(area, mapPixel),
-      overflow: spawnAreaOverflow(area, mapPixel),
-    }));
+    const areas: MapSpawnAreaDto[] = this.spawnAreas.listByMap(id).map((area) => this.areaDtoOf(area, mapPixel));
 
     const worldMonsters: MapWorldMonsterDto[] = this.worldMonsters
       .countByMap()
@@ -287,6 +275,181 @@ export class MapService {
     return this.summaryOf(row, this.spawnAreas.countByMap().find((item) => item.map_id === id)?.total ?? 0, 0);
   }
 
+  //#region 刷怪区（#667：后台直接画）
+
+  /**
+   * 新建一个刷怪区
+   *
+   * 四道校验都在这里，**不放进 DTO**：DTO 只拦格式（非空、范围、数字），
+   * 「怪物 key 在不在 monsters 表」「矩形在不在图内」需要读库、读这张图的几何，
+   * 属于业务判断。放在一处也让 e2e 能直接对着文案断言。
+   */
+  createSpawnArea(mapId: string, dto: SaveSpawnAreaDto, actor: AuthenticatedUser): MapSpawnAreaDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const name = dto.name.trim();
+    this.requireMonster(dto.monsterKey);
+    this.requireNameFree(mapId, name, null);
+    const box = this.requireAreaBox(mapPixel, dto);
+
+    const created = this.spawnAreas.insert({
+      map_id: mapId,
+      name,
+      monster_key: dto.monsterKey,
+      min: dto.count,
+      max: dto.count,
+      cx: box.cx,
+      cy: box.cy,
+      w: box.w,
+      h: box.h,
+      updated_at: Date.now(),
+    });
+    this.logger.log(
+      `地图 ${mapId} 新增刷怪区 #${created.id}「${name}」：${dto.monsterKey} × ${dto.count} @ ` +
+        `(${box.cx}, ${box.cy}) ${box.w}×${box.h}（by ${actor.username}）`,
+    );
+    return this.areaDtoOf(created, mapPixel);
+  }
+
+  /**
+   * 改一个刷怪区（整份覆盖，不是部分更新）
+   *
+   * 位置尺寸也允许改：画完发现框偏了一点，重画一个再删掉旧的太笨。
+   */
+  updateSpawnArea(mapId: string, areaId: number, dto: SaveSpawnAreaDto, actor: AuthenticatedUser): MapSpawnAreaDto {
+    const { mapPixel } = this.requireDrawableMap(mapId);
+    const before = this.requireArea(mapId, areaId);
+    const name = dto.name.trim();
+    this.requireMonster(dto.monsterKey);
+    this.requireNameFree(mapId, name, areaId);
+    const box = this.requireAreaBox(mapPixel, dto);
+
+    this.spawnAreas.update({
+      ...before,
+      name,
+      monster_key: dto.monsterKey,
+      min: dto.count,
+      max: dto.count,
+      cx: box.cx,
+      cy: box.cy,
+      w: box.w,
+      h: box.h,
+      updated_at: Date.now(),
+    });
+    this.logger.log(
+      `地图 ${mapId} 刷怪区 #${areaId}「${before.name}」已更新：${before.monster_key} × ${before.max} → ` +
+        `${dto.monsterKey} × ${dto.count}（by ${actor.username}）`,
+    );
+    const updated = this.spawnAreas.findById(areaId);
+    if (!updated) throw new Error(`刷怪区 #${areaId} 刚更新却读不回来，库状态异常`);
+    return this.areaDtoOf(updated, mapPixel);
+  }
+
+  /** 删一个刷怪区（删完这张图少一个区域；场上已有的怪不会消失，下一轮加载才按新区域播种） */
+  deleteSpawnArea(mapId: string, areaId: number, actor: AuthenticatedUser): { deleted: true; id: number } {
+    const before = this.requireArea(mapId, areaId);
+    this.spawnAreas.remove(areaId);
+    this.logger.log(`地图 ${mapId} 刷怪区 #${areaId}「${before.name}」已删除（by ${actor.username}）`);
+    return { deleted: true, id: areaId };
+  }
+
+  /**
+   * 能画的图：必须存在，且**必须有几何尺寸**
+   *
+   * 少了后半条会出现最难受的一种失败：图没有像素尺寸 → `spawnAreaInBounds` 把所有矩形都判越界
+   * → 报「越出地图边界 8192px」这种看着像坐标算错、实际是「这张图还没导入过几何」的话。
+   * 直接说不行，比让人去猜好。
+   */
+  private requireDrawableMap(mapId: string): { row: MapRow; mapPixel: MapPixelSize } {
+    const row = this.requireRow(mapId);
+    const mapPixel = this.sizeOf(row);
+    if (mapPixel.width <= 0 || mapPixel.height <= 0) {
+      throw new BizException(
+        BizCode.MAP_NOT_FOUND,
+        `地图 ${mapId} 没有像素尺寸（库里几何列是 0），没法判断区域是否在图内 —— 先跑 node tools/import-map-resources.cjs 补齐几何`,
+      );
+    }
+    return { row, mapPixel };
+  }
+
+  /** 怪物 key 必须在 monsters 表里（播种时也是同一判据：不认识就跳过并告警，这里提前拦住） */
+  private requireMonster(monsterKey: string): void {
+    if (!this.monsters.findByKey(monsterKey)) {
+      throw BizException.notFound(BizCode.MONSTER_NOT_FOUND, `怪物 ${monsterKey} 不存在（monsters 表里没有这个 key）`);
+    }
+  }
+
+  /** 同图区域名唯一（`exceptId` = 改的时候排除自己） */
+  private requireNameFree(mapId: string, name: string, exceptId: number | null): void {
+    const twin = this.spawnAreas.findByName(mapId, name);
+    if (twin && twin.id !== exceptId) {
+      throw BizException.conflict(BizCode.MAP_SPAWN_AREA_NAME_TAKEN, `这张图里已经有一个叫「${name}」的刷怪区（#${twin.id}）`);
+    }
+  }
+
+  /**
+   * 矩形合法性 + 在图内
+   *
+   * 越界**直接拒**（#586 只对历史数据告警，是因为那时候区域是导入进来的、拦了会变成
+   * 「这张图一只怪都没有」）。现在区域是人在图上画的 —— 画的时候就在图上，
+   * 越界只可能是算错了坐标，没有理由放行。数值统一收两位小数，与导入工具的落库口径一致。
+   */
+  private requireAreaBox(
+    mapPixel: MapPixelSize,
+    dto: SaveSpawnAreaDto,
+  ): { cx: number; cy: number; w: number; h: number } {
+    const box = { cx: round2(dto.cx), cy: round2(dto.cy), w: round2(dto.w), h: round2(dto.h) };
+    if (box.w < SPAWN_AREA_LIMITS.minSize || box.h < SPAWN_AREA_LIMITS.minSize) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `刷怪区太小（${box.w}×${box.h}），宽高都不能小于 ${SPAWN_AREA_LIMITS.minSize} 像素`,
+      );
+    }
+    if (!spawnAreaInBounds(box, mapPixel)) {
+      const overflow = spawnAreaOverflow(box, mapPixel);
+      const parts = [
+        overflow.left > 0 ? `左 ${overflow.left}` : "",
+        overflow.right > 0 ? `右 ${overflow.right}` : "",
+        overflow.top > 0 ? `上 ${overflow.top}` : "",
+        overflow.bottom > 0 ? `下 ${overflow.bottom}` : "",
+      ].filter(Boolean);
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `刷怪区超出地图边界（${parts.join("、")} px），地图是 ${mapPixel.width}×${mapPixel.height} —— ` +
+          `世界坐标范围 x ∈ [0, ${mapPixel.width}]、y ∈ [-${mapPixel.height}, 0]`,
+      );
+    }
+    return box;
+  }
+
+  /** 取一个刷怪区，且必须属于路径里那张图（防止拿 A 图的 areaId 去改 B 图） */
+  private requireArea(mapId: string, areaId: number): MapSpawnAreaRow {
+    const area = this.spawnAreas.findById(areaId);
+    if (!area || area.map_id !== mapId) {
+      throw BizException.notFound(BizCode.MAP_SPAWN_AREA_NOT_FOUND, `地图 ${mapId} 没有刷怪区 #${areaId}`);
+    }
+    return area;
+  }
+
+  /** 行 → DTO（越界量与读接口同源：`spawnAreaInBounds` 是唯一判据） */
+  private areaDtoOf(area: MapSpawnAreaRow, mapPixel: MapPixelSize): MapSpawnAreaDto {
+    return {
+      id: area.id,
+      name: area.name,
+      monsterKey: area.monster_key,
+      monsterLabel: this.monsterLabelOf(area.monster_key),
+      min: area.min,
+      max: area.max,
+      cx: area.cx,
+      cy: area.cy,
+      w: area.w,
+      h: area.h,
+      inBounds: spawnAreaInBounds(area, mapPixel),
+      overflow: spawnAreaOverflow(area, mapPixel),
+    };
+  }
+
+  //#endregion
+
   /** 取一行，没有就 404（用 notFound：`new BizException(code, msg)` 默认是 400） */
   private requireRow(id: string): MapRow {
     const row = this.maps.getById(id);
@@ -313,7 +476,7 @@ export class MapService {
         height: row.pixel_height,
       };
     }
-    this.logger.warn(`地图 ${row.map_id} 没有几何（重跑 node tools/import-spawn-areas.cjs）`);
+    this.logger.warn(`地图 ${row.map_id} 没有几何（重跑 node tools/import-map-resources.cjs）`);
     return EMPTY_MAP_PIXEL_SIZE;
   }
 
@@ -327,7 +490,7 @@ export class MapService {
     } catch {
       /* 落到下面的空内容 + warn */
     }
-    this.logger.warn(`地图 ${row.map_id} 的内容列不是合法 JSON（重跑 node tools/import-spawn-areas.cjs）`);
+    this.logger.warn(`地图 ${row.map_id} 的内容列不是合法 JSON（重跑 node tools/import-map-resources.cjs）`);
     return EMPTY_MAP_CONTENT;
   }
 
@@ -393,14 +556,14 @@ export class MapService {
         label: "资源本体（TMX / 底图 / 预览图）",
         origin: "config",
         ref: "client/assets/resources/map/<id>/",
-        note: "资源在客户端资源包里，后台改不了；换图要换资源，再跑 tools/import-spawn-areas.cjs 重新生成下面两块。",
+        note: "资源在客户端资源包里，后台改不了；换图要换资源，再跑 tools/import-map-resources.cjs 重新生成下面两块。",
       },
       {
         section: "size",
         label: "地图尺寸",
         origin: "db",
         ref: "maps 表（几何列）",
-        note: "由 tools/import-spawn-areas.cjs 从 TMX 头直接写库；换图后重跑工具即可，页面只读。",
+        note: "由 tools/import-map-resources.cjs 从 TMX 头直接写库；换图后重跑工具即可，页面只读。",
       },
       {
         section: "layers",
@@ -421,7 +584,7 @@ export class MapService {
         label: "刷怪区（服务端整理后）",
         origin: "db",
         ref: "map_spawn_areas 表",
-        note: "由导入工具按世界坐标写入（y 已取反、含区域中心与尺寸）；世界播种直接读它。",
+        note: "在地图页上拖框绘制（#667 起归后台）；世界播种直接读它。改动在该图世界实例重新加载后生效。",
       },
       {
         section: "worldMonsters",
@@ -432,4 +595,14 @@ export class MapService {
       },
     ];
   }
+}
+
+/**
+ * 坐标收两位小数
+ *
+ * 画布拖出来的是浮点（`1234.5678`），表里存两位就够了 —— 与导入工具当年的
+ * `round()` 同一口径，也让「重画一次同样的框」落库后逐字节一致（对比 / 重放都省心）。
+ */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

@@ -36,7 +36,7 @@ export function overflowTitle(area: MapSpawnArea): string {
   return [
     `「${area.name}」越出地图边界：${overflowText(area) || "（无）"} 像素`,
     `区域四边 x ∈ [${left}, ${right}]、y ∈ [${bottom}, ${top}]（世界坐标）`,
-    "超出图外的怪不会出现在画面上；重跑 node tools/import-spawn-areas.cjs --db 可把库表刷回 TMX 口径",
+    "超出图外的怪不会出现在画面上；在地图管理页把这块区域重画一遍即恢复（越界区域在新建/修改时会被服务端直接拒）",
   ].join("\n");
 }
 

@@ -19,9 +19,12 @@
  *    再叠一次世界坐标就是多余运算，也是「两套写法」的入口）。
  * 4. `LayerManager.move` 只许搬 UI 层与相机，**不许动地图层** —— 整套「世界坐标 = Tiled 坐标取反 y」
  *    的地基是「地图节点在世界原点」，地图层一旦被移动，所有点位会整体错位而不报错。
- * 5. `tools/import-spawn-areas.cjs` 里不许出现旧公式 `- mapW / 2` / `mapH / 2 -`。
- * 6. 生成的刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
- *    这是「生成物用错口径」唯一不需要跑客户端就能发现的判据。
+ * 5. `tools/import-map-resources.cjs` **不许碰刷怪区表、不许自己算世界坐标**（#667）——
+ *    刷怪区归后台绘制，写库只有 `POST/PATCH/DELETE /admin/maps/:id/spawn-areas` 一条路；
+ *    世界坐标只在管理端画布提交时换算，工具的 `content` 刻意保留 Tiled 原始口径。两个写入方、
+ *    两处公式，迟早互相覆盖/口径分叉。
+ * 6. 刷怪区快照必须落在图内（矩形四边都在 `[0,W] × [-H,0]` 里）—— 旧口径的值会越界，
+ *    这是「生成物用错口径」唯一不需要跑客户端就能发现的判据；现在后台画区也是同一判据（越界直接拒）。
  * 7. 客户端不许再出现 `mapCenter` 这类「地图中心」的命名（照旧代码抄回来最常见）。
  * 8. 越界判定必须落在**跑得起来的链路**上（#586）：`common/utils/spawn-area-bounds.util.ts` 是唯一判据，
  *    `map.service` 要真的用它算 `inBounds`、`world.service` 播种时要对越界区域告警 ——
@@ -37,7 +40,7 @@ const path = require("node:path");
 const REPO = path.resolve(__dirname, "..");
 const GAME_MAP = path.join(REPO, "client/assets/ui/components/map/GameMap.ts");
 const POINT_MATH = path.join(REPO, "client/assets/ui/utils/map/MapPointMath.ts");
-const IMPORT_TOOL = path.join(REPO, "tools/import-spawn-areas.cjs");
+const IMPORT_TOOL = path.join(REPO, "tools/import-map-resources.cjs");
 // 数据不再在源码里（#655）：地图几何与刷怪区都在库里，仓库里那份是 `make config-export`
 // 生成的快照。审计读快照而不是读库 —— CI 上没有 .db 文件，读库等于这条规则只在有库的机器上生效。
 const SNAPSHOT = path.join(REPO, "server/data/config-sync.sql");
@@ -148,14 +151,26 @@ function checkMapLayerStatic() {
 }
 
 function checkImportTool() {
-  const src = read(IMPORT_TOOL, "tools/import-spawn-areas.cjs");
+  const src = read(IMPORT_TOOL, "tools/import-map-resources.cjs");
   if (!src) return;
-  const lines = src.split("\n");
-  lines.forEach((line, index) => {
-    // 注释里允许提旧公式（讲清「旧口径是什么」），代码行不许
+  src.split("\n").forEach((line, index) => {
+    // 注释里说明「本工具不碰刷怪区」是允许的，代码行不许出现这张表
     if (/^\s*(\*|\/\/|\/\*)/.test(line)) return;
-    if (/-\s*mapW\s*\/\s*2/.test(line) || /mapH\s*\/\s*2\s*-/.test(line)) {
-      problem("tools/import-spawn-areas.cjs", index + 1, "刷怪区坐标还在用旧口径（减半宽、翻半高）：应为 cx = x + w/2、cy = -(y + h/2)");
+    if (/map_spawn_areas/.test(line)) {
+      problem(
+        "tools/import-map-resources.cjs",
+        index + 1,
+        "导入工具不许再写刷怪区表（#667 起刷怪区归后台绘制，走 POST/PATCH/DELETE /admin/maps/:id/spawn-areas）—— " +
+          "两个写入方迟早互相覆盖",
+      );
+    }
+    // 坐标换算是管理端画布的事；这个工具一旦自己算世界坐标，就会出现第三份公式
+    if (/\bcx\s*=|\bcy\s*=/.test(line)) {
+      problem(
+        "tools/import-map-resources.cjs",
+        index + 1,
+        "导入工具不该算世界坐标（cx / cy 只在管理端画布提交时换算）—— content 里刻意保留 Tiled 原始口径",
+      );
     }
   });
 }
@@ -253,7 +268,7 @@ function checkSpawnAreasInMap() {
   for (const area of areas) {
     const size = sizes[area.mapId];
     if (!size) {
-      problem("server/data/config-sync.sql", 0, `地图 ${area.mapId} 没有像素尺寸（pixel_width/height 是 0），但刷怪区表里有它 —— 重跑 node tools/import-spawn-areas.cjs 再 make config-export`);
+      problem("server/data/config-sync.sql", 0, `地图 ${area.mapId} 没有像素尺寸（pixel_width/height 是 0），但刷怪区表里有它 —— 先跑 node tools/import-map-resources.cjs 补几何，再 make config-export`);
       continue;
     }
     // 新口径：地图占 x∈[0,W]、y∈[-H,0]；区域矩形必须整体落在里面
@@ -268,14 +283,15 @@ function checkSpawnAreasInMap() {
     problem(
       "server/data/config-sync.sql",
       0,
-      `${line} —— 不在图内，多半是还在用「地图中心为原点」的旧口径（应 cx = x + w/2、cy = -(y + h/2)）`,
+      `${line} —— 不在图内，多半是还在用「地图中心为原点」的旧口径（应 cx = x + w/2、cy = -(y + h/2)）；` +
+        `去地图管理页把这块区域重画一遍，再 make config-export`,
     );
   }
   if (outside.length > 5) {
     problem(
       "server/data/config-sync.sql",
       0,
-      `同类越界区域共 ${outside.length} 个（上面只列了前 5 个）—— 重跑 node tools/import-spawn-areas.cjs + make config-export`,
+      `同类越界区域共 ${outside.length} 个（上面只列了前 5 个）—— 在地图管理页逐张图重画这些区域，再 make config-export`,
     );
   }
 }
