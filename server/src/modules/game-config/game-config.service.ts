@@ -552,6 +552,7 @@ export class GameConfigService implements OnModuleInit {
       label: dto.label ?? existing.label,
       description: dto.description ?? existing.description,
       icon: dto.icon ?? existing.icon,
+      level: dto.level ?? existing.level,
       sell_price: dto.sellPrice ?? existing.sell_price,
       max_stack: dto.maxStack ?? existing.max_stack,
       cooldown: dto.cooldown ?? existing.cooldown,

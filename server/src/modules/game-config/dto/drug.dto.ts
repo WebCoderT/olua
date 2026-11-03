@@ -12,6 +12,14 @@ export const DRUG_EFFECT_MAX = 100_000_000;
 export const DRUG_COOLDOWN_MAX = 3600;
 export const DRUG_MAX_STACK_MAX = 9_999;
 export const DRUG_SELL_PRICE_MAX = 100_000_000;
+/**
+ * 使用等级上限（防御性）
+ *
+ * 与角色等级上限的**默认值**（`growth-seed` 的 `roleMaxLevel` = 60）同档。
+ * 这里写死是因为 DTO 的 `@Max` 在类定义时求值，而 `roleMaxLevel` 之后还能被管理端改；
+ * 药品等级只是「建议使用等级」，比上限高一级没有意义，所以不跟着动态走。
+ */
+export const DRUG_LEVEL_MAX = 60;
 
 /** 管理端看到的一条药品配置 */
 export class DrugDto {
@@ -27,7 +35,7 @@ export class DrugDto {
   @ApiProperty({ description: "图标资源路径（resources 相对路径，如 item/fs_2）" })
   icon: string;
 
-  @ApiProperty({ description: "使用等级需求（暂不开放编辑）" })
+  @ApiProperty({ description: "使用等级需求（展示与背包排序口径，不拦用药；管理端可改）" })
   level: number;
 
   @ApiProperty({ description: "售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）" })
@@ -92,7 +100,7 @@ export class DrugPageDto extends PageMetaDto {
  *
  * **没有 Create / Delete**：药品 id 清单固定（被掉落表与背包引用），后台只允许改数值 ——
  * 这是有意不提供的能力，不是漏了（e2e 会固化「POST/DELETE 路由不存在」）。
- * `level` 不开放编辑（使用等级需求属客户端成长曲线定标的一部分，改曲线要连着改）。
+ * `level` 可改（#643）：它是「建议使用等级」，只影响展示与背包排序，服务端用药不拦。
  * 四项回复量按**键求和**后的单值提交（客户端 resolveDrugRecovery 逐项累加，语义等价）。
  */
 export class UpdateDrugDto {
@@ -119,6 +127,17 @@ export class UpdateDrugDto {
   @IsString({ message: "图标必须是字符串" })
   @MaxLength(200, { message: "图标路径不能超过 200 字" })
   icon?: string;
+
+  @ApiPropertyOptional({
+    description: "使用等级需求（不传则不改；1 ~ 角色等级上限）。只作用于展示与背包排序，不拦用药",
+    minimum: 1,
+    maximum: DRUG_LEVEL_MAX,
+  })
+  @IsOptional()
+  @IsInt({ message: "使用等级必须是整数" })
+  @Min(1, { message: "使用等级至少为 1" })
+  @Max(DRUG_LEVEL_MAX, { message: `使用等级不能超过 ${DRUG_LEVEL_MAX}` })
+  level?: number;
 
   @ApiPropertyOptional({
     description: "售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）",

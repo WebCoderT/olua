@@ -24,8 +24,10 @@ function effectSummary(item: Drug): string {
  * 药品配置管理（#253，养成配置第五页）
  *
  * **没有「新建」「删除」**：药品 id 清单固定（被掉落表与背包引用，启动时 seed 落库），
- * 只有「编辑」；`level` 不开放编辑（使用等级属客户端成长曲线定标的一部分）。
+ * 只有「编辑」。使用等级（`level`）自 #643 起可改：它只影响展示与背包排序，
+ * 服务端用药**不拦等级**（玩家血少时越级吃药是合理操作）。
  * 四项回复量是 effects 数组按键求和后的单值（客户端逐项累加，语义等价）。
+ * 魔法药走百分比回复、金创药走固定值 —— 同一张表里两种口径并存，编辑时看数值本身。
  * 商城售价不在这里（唯一写入口归商城定价 issue）。写操作要 `gameConfig:write`。
  */
 export function DrugsPage() {
@@ -92,6 +94,7 @@ export function DrugsPage() {
         label: form.label,
         description: form.description,
         icon: form.icon,
+        level: form.level,
         sellPrice: form.sellPrice,
         maxStack: form.maxStack,
         cooldown: form.cooldown,
@@ -124,7 +127,7 @@ export function DrugsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="药品配置"
-        description={<>id 清单固定（被掉落表与背包引用），只可编辑、不可新增 / 删除；使用等级需求不开放编辑（属客户端成长曲线定标）。
+        description={<>id 清单固定（被掉落表与背包引用），只可编辑、不可新增 / 删除；使用等级可改（只影响展示与背包排序，不拦用药）。
             商城售价归「商城定价」管理，不在这里。</>}
       />
 
@@ -257,6 +260,7 @@ export function DrugsPage() {
               </div>
             </Field>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {numberField("使用等级", "展示与背包排序用；服务端用药不拦等级", "level", 1, 60)}
               {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}
               {numberField("固定回复魔法", "使用后立即回复的 MP", "effectMp", 0, 100000000)}
               {numberField("百分比回复血（%）", "按角色 maxHp 的百分比，50 = 50%", "effectHpPercent", 0, 100)}
