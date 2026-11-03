@@ -6,6 +6,13 @@ agent_created: true
 
 # Cocos TiledMap 对象组实例化
 
+> **本项目的口径（#667 / #672）**：生成的 TMX 里 `monster` / `npc` 对象组仍然按老样子写（保持资源形态与旧工具兼容），
+> 但**客户端已经不读了** —— 刷怪区、NPC 点位、复活点由管理端「地图管理」直接放，存在服务端
+> （`map_spawn_areas` / `map_npcs` / `maps.revive_*`）。也就是说：新地图跑完 `tools/import-map-resources.cjs`
+> 之后，还要在管理端把刷怪区、NPC、复活点摆一遍，不然进图是一张空图（有地形、没怪、没 NPC、没复活点）。
+> 只有 `collision` 组仍然直接生效。
+
+
 ## 先记住四条引擎行为（否则必错）
 
 ### 坑 1：对象的「类 / Class」被解析器直接丢掉
