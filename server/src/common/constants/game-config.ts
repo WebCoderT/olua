@@ -58,6 +58,8 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
   "attributeRange.hpRecoverRate": { min: 0, max: 1, integer: false },
   "expGain.expPerLevel": { min: 1, max: 100000, integer: true },
   "expGain.maxLevelGap": { min: 0, max: 100, integer: true },
+  // 允许小数：回复是「每秒 N 点 × 经过秒数」累加的，0.5 这种半速配置是合法需求（#605）
+  "mpRecoverPerSecond": { min: 0, max: 1000, integer: false },
 };
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
@@ -68,6 +70,7 @@ export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
   "attributeRange.hpRecoverRate": "每秒回血 = 最大生命 × 该值（回血的唯一强度入口）",
   "expGain.expPerLevel": "每级基准经验：同级击杀经验 = (怪物等级+1) × 该值",
   "expGain.maxLevelGap": "角色与怪物等级差达到该值（含）后不再获得经验",
+  "mpRecoverPerSecond": "魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）",
 };
 
 /**

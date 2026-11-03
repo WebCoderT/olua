@@ -33,6 +33,7 @@
  */
 
 import {
+  COMBAT_WEIGHTS,
   DRUGS,
   EQUIPMENT_ATTRIBUTES,
   EQUIPMENT_BASES,
@@ -145,6 +146,15 @@ let rankBundles: Map<number, AttributeBundle> | null = null;
 let skillRows: Map<string, AttributeBundle> | null = null;
 let drugRows: Map<string, AttributeBundle> | null = null;
 let itemRows: Map<string, AttributeBundle> | null = null;
+
+/**
+ * 战斗力权重（#605）：属性名 → 倍率；null = 没有运营改动，回落生成物 `COMBAT_WEIGHTS`
+ *
+ * 由 `CombatWeightsService` 装载（它拥有 `combat_weights` 表：启动 seed 后装一次、
+ * 管理端每次 PATCH 后装一次）—— 与其余覆盖层由 `RuntimeConfigService` 装载不同，
+ * 因为这张表的读写都收在那一个 service 里。
+ */
+let combatWeights: Record<string, number> | null = null;
 
 //#endregion
 
@@ -313,6 +323,27 @@ export function applyDrugOverrides(rows: DrugOverride[]): void {
   drugRows = map;
 }
 
+/**
+ * 装进战斗力权重的当前值（`combat_weights` 表；传 null 清空回落生成物）
+ *
+ * **只认生成物里已有的键**：键集由 `shared/combat-seed.ts` 决定（那是战斗力的算法本身），
+ * 运营改的是「每一项值多少」，不是「有哪几项」—— 库里冒出未知键说明有人在手改数据，
+ * 直接忽略比让它参与求和更安全（否则一个拼错的键会静默抬高所有人的战力）。
+ * 非有限数字 / 负数同样忽略。
+ */
+export function applyCombatWeightsOverrides(weights: Record<string, number> | null): void {
+  if (!weights) {
+    combatWeights = null;
+    return;
+  }
+  const next: Record<string, number> = {};
+  for (const key of Object.keys(COMBAT_WEIGHTS)) {
+    const value = Number(weights[key]);
+    next[key] = Number.isFinite(value) && value >= 0 ? value : numberOr((COMBAT_WEIGHTS as Record<string, number>)[key]);
+  }
+  combatWeights = next;
+}
+
 /** 清空全部覆盖（e2e 之间隔离用；生产只在进程启动时天然为空） */
 export function resetRuntimeOverrides(): void {
   // 规则要先于装备清：装备覆盖里的价格是按当时那套倍率/曲线算好的，清掉任一都要重装
@@ -326,11 +357,24 @@ export function resetRuntimeOverrides(): void {
   skillRows = null;
   drugRows = null;
   itemRows = null;
+  combatWeights = null;
 }
 
 //#endregion
 
 //#region 读取（结算链路的唯一入口：先覆盖层、再生成物）
+
+/**
+ * 当前战斗力权重（**服务端算战力 / 地图准入门槛的唯一入口**）
+ *
+ * 运营在管理端「战斗力权重」页改完，下一次算属性就用新倍率 —— 客户端也从快照拿到
+ * 同一组数字（`applyCombatWeights`），两端不会「面板显示 1200、服务端按 1000 判准入」。
+ *
+ * 返回值是内部对象，**调用方只读**（不要改它：它被所有结算共享）。
+ */
+export function combatWeightsOf(): Record<string, number> {
+  return combatWeights ?? (COMBAT_WEIGHTS as Record<string, number>);
+}
 
 /** 某件装备（含变体）的当前属性；查不到返回 null（调用方按"没穿"处理并记账） */
 export function equipmentAttributesOf(id: string): AttributeBundle | null {

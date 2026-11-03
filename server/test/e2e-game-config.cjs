@@ -29,6 +29,12 @@ const soulSeed = require(path.join(SERVER_DIR, "dist", "shared", "soul-seed.js")
 const rankSeed = require(path.join(SERVER_DIR, "dist", "shared", "rank-seed.js"));
 const growthSeed = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.js"));
 const growthSeedScalars = growthSeed.GROWTH_SCALARS;
+// #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）的唯一书写处
+const { RUNTIME_PARAMS } = require(path.join(SERVER_DIR, "dist", "shared", "runtime-seed.js"));
+// #605：战斗力权重的出厂值（管理端可改，这里对照「库里就是种子」）
+const { COMBAT_WEIGHTS_SEED } = require(path.join(SERVER_DIR, "dist", "shared", "combat-seed.js"));
+// #605：新手引导步骤的出厂表（管理端可改，这里对照「库里就是种子」）
+const { GUIDE_STEP_SEEDS } = require(path.join(SERVER_DIR, "dist", "shared", "guide-seed.js"));
 const growthSeedKeys = Object.keys(growthSeedScalars);
 // #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
 const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
@@ -476,6 +482,15 @@ async function main() {
     checkEqual(rateOver.status, 400, "比率超出取值域（>1）→ 400");
     const rateFraction = await api(base, "PATCH", "/api/admin/growth-scalars/expGain.expPerLevel", { token, body: { value: 5.5 } });
     checkEqual(rateFraction.status, 400, "整数参数传小数 → 400");
+    // #605：魔法自然回复速度入表（原本写死在 role-authority，管理端改不了）
+    const mpRecoverPatched = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: 3.5 } });
+    checkEqual(mpRecoverPatched.status, 200, "#605 魔法回复速度可改（小数合法）");
+    checkEqual(mpRecoverPatched.body?.data?.value, 3.5, "回复速度按提交值生效");
+    const mpRecoverNegative = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: -1 } });
+    checkEqual(mpRecoverNegative.status, 400, "恢复速度不能为负 → 400");
+    const mpRecoverZero = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: 0 } });
+    checkEqual(mpRecoverZero.body?.data?.value, 0, "0 合法（关闭自然回蓝）");
+    await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: growthSeedScalars.mpRecoverPerSecond } });
     const maxLevelJump = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 61 } });
     checkEqual(maxLevelJump.status, 400, "抬等级上限但曲线末段没跟上 → 400（跨表校验）");
     const scalarGhost = await api(base, "PATCH", "/api/admin/growth-scalars/nope", { token, body: { value: 1 } });
@@ -486,6 +501,158 @@ async function main() {
     const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, body: { value: 50 } });
     checkEqual(viewerScalarWrite.status, 403, "观察员改标量参数 → 403");
     checkEqual(viewerScalarWrite.body?.code, 30006, "观察员改标量参数 → 30006（权限点不足）");
+
+    //#endregion
+
+    //#region 六·五、运行时参数（#605）：单行三组 / 部分更新 / 跨字段校验 / 权限
+
+    group("六·五、运行时参数（掉落手感 / 自动战斗 / 帮会规则）");
+
+    const runtime = await api(base, "GET", "/api/admin/runtime-params", { token });
+    checkEqual(runtime.status, 200, "运行时参数可读");
+    checkEqual(runtime.body?.data?.drop?.autoPickupRadius, RUNTIME_PARAMS.drop.autoPickupRadius, "掉落拾取半径初值 = 出厂 seed");
+    checkEqual(runtime.body?.data?.autoBattle?.moveByRun, RUNTIME_PARAMS.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
+    checkEqual(runtime.body?.data?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会名上限初值 = 出厂 seed");
+    checkEqual(runtime.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+
+    const dropPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: 72 } } });
+    checkEqual(dropPatched.status, 200, "改掉落拾取半径成功");
+    checkEqual(dropPatched.body?.data?.drop?.autoPickupRadius, 72, "响应里是新半径");
+    checkEqual(dropPatched.body?.data?.drop?.scatterMinDistance, RUNTIME_PARAMS.drop.scatterMinDistance, "同组其它字段不动（部分更新）");
+    checkEqual(dropPatched.body?.data?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "别的分组不动");
+
+    const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, cellSize: 24 } } });
+    checkEqual(autoPatched.status, 200, "改自动战斗参数成功");
+    checkEqual(autoPatched.body?.data?.autoBattle?.moveByRun, false, "布尔开关按提交值生效");
+    checkEqual(autoPatched.body?.data?.autoBattle?.cellSize, 24, "网格边长按提交值生效");
+
+    const runtimeNegative = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: -1 } } });
+    checkEqual(runtimeNegative.status, 400, "负半径 → 400（DTO 取值域）");
+    const runtimeTooBig = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { cellSize: 0 } } });
+    checkEqual(runtimeTooBig.status, 400, "网格边长 0 → 400（下限 8）");
+    const runtimeGuildInverted = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { guild: { nameMin: 14, nameMax: 12 } } });
+    checkEqual(runtimeGuildInverted.status, 400, "帮会名最短 > 最长 → 400（跨字段校验）");
+    checkEqual(runtimeGuildInverted.body?.code, 40000, "跨字段违反用参数非法 40000");
+    const runtimeAfterReject = await api(base, "GET", "/api/admin/runtime-params", { token });
+    checkEqual(runtimeAfterReject.body?.data?.guild?.nameMin, RUNTIME_PARAMS.guild.nameMin, "被拒的提交没有落库（先校验后写）");
+    const runtimeUnknownKey = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { bogusParam: 5 } } });
+    checkEqual(runtimeUnknownKey.status, 200, "未知字段被白名单剥掉（不报错）");
+    checkEqual(runtimeUnknownKey.body?.data?.drop?.autoPickupRadius, 72, "剥掉之后其余值不变");
+    const viewerRuntimeWrite = await api(base, "PATCH", "/api/admin/runtime-params", { token: viewerToken, body: { drop: { autoPickupRadius: 50 } } });
+    checkEqual(viewerRuntimeWrite.status, 403, "观察员改运行时参数 → 403");
+    checkEqual(viewerRuntimeWrite.body?.code, 30006, "观察员改运行时参数 → 30006（权限点不足）");
+    const postRuntime = await api(base, "POST", "/api/admin/runtime-params", { token, body: {} });
+    checkEqual(postRuntime.status, 404, "POST → 404（单行配置没有创建）");
+    const deleteRuntime = await api(base, "DELETE", "/api/admin/runtime-params", { token });
+    checkEqual(deleteRuntime.status, 404, "DELETE → 404（单行配置没有删除）");
+
+    //#endregion
+
+    //#region 六·六、战斗力权重（#605）：七项倍率入表 / 部分更新 / 全 0 拦住 / 权限
+
+    group("六·六、战斗力权重（生命 + 三系攻防）");
+
+    const weights = await api(base, "GET", "/api/admin/combat-weights", { token });
+    checkEqual(weights.status, 200, "战斗力权重可读");
+    checkEqual(weights.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "生命权重初值 = 出厂 seed");
+    checkEqual(weights.body?.data?.weights?.physicalAttack, COMBAT_WEIGHTS_SEED.physicalAttack, "物攻权重初值 = 出厂 seed");
+    checkEqual(weights.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+
+    const weightPatched = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: 7.5 } });
+    checkEqual(weightPatched.status, 200, "改魔法攻击权重成功（允许两位小数）");
+    checkEqual(weightPatched.body?.data?.weights?.magicAttack, 7.5, "响应里是新倍率");
+    checkEqual(weightPatched.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "没提交的属性保持原值（部分更新）");
+    check(weightPatched.body?.data?.updatedAt > 0, "改过之后 updatedAt 才不是 0");
+
+    const weightNegative = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: -1 } });
+    checkEqual(weightNegative.status, 400, "负权重 → 400（DTO 取值域）");
+    // 单项归零是合法调法（比如「战力不看魔攻」），要**七项同时为 0** 才拦 —— 那等于所有人战力恒 0
+    const weightOneZero = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: 0 } });
+    checkEqual(weightOneZero.status, 200, "只把一项归零是合法的（战力可以不计某一项）");
+    const weightAllZero = await api(base, "PATCH", "/api/admin/combat-weights", {
+      token,
+      body: { maxHp: 0, physicalAttack: 0, magicAttack: 0, taoistAttack: 0, physicalDefense: 0, magicDefense: 0, taoistDefense: 0 },
+    });
+    checkEqual(weightAllZero.status, 400, "七项全 0 → 400（会让所有地图准入失效）");
+    checkEqual(weightAllZero.body?.code, 40000, "全 0 用参数非法 40000");
+    const weightsAfterReject = await api(base, "GET", "/api/admin/combat-weights", { token });
+    checkEqual(weightsAfterReject.body?.data?.weights?.magicAttack, 0, "被拒的整份提交没有落库（仍是上一步的 0）");
+    checkEqual(weightsAfterReject.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "其余属性也没被这份提交改掉");
+    const weightUnknown = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { hpRecover: 3 } });
+    checkEqual(weightUnknown.status, 200, "未知属性被白名单剥掉（不报错）");
+    checkEqual(weightUnknown.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "剥掉之后其余值不变");
+    const viewerWeightWrite = await api(base, "PATCH", "/api/admin/combat-weights", { token: viewerToken, body: { maxHp: 20 } });
+    checkEqual(viewerWeightWrite.status, 403, "观察员改战斗力权重 → 403");
+    checkEqual(viewerWeightWrite.body?.code, 30006, "观察员改战斗力权重 → 30006（权限点不足）");
+    const postWeights = await api(base, "POST", "/api/admin/combat-weights", { token, body: {} });
+    checkEqual(postWeights.status, 404, "POST → 404（权重表没有创建）");
+    const deleteWeights = await api(base, "DELETE", "/api/admin/combat-weights", { token });
+    checkEqual(deleteWeights.status, 404, "DELETE → 404（权重表没有删除）");
+
+    // 复原出厂值：后面的断言（快照 / 战力）都以出厂口径为基线
+    const weightsRestored = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: COMBAT_WEIGHTS_SEED.magicAttack } });
+    checkEqual(weightsRestored.body?.data?.weights?.magicAttack, COMBAT_WEIGHTS_SEED.magicAttack, "复原魔法攻击权重");
+
+    //#endregion
+
+    //#region 六·七、新手引导步骤（#605）：整份读写 / 枚举白名单 / 唯一标识 / 权限
+
+    group("六·七、新手引导步骤（整份读写）");
+
+    const guide = await api(base, "GET", "/api/admin/guide-steps", { token });
+    checkEqual(guide.status, 200, "引导步骤可读");
+    checkEqual(guide.body?.data?.steps?.length, GUIDE_STEP_SEEDS.length, "步骤数 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.[0]?.id, GUIDE_STEP_SEEDS[0].id, "第 1 步的标识 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.[0]?.spot, GUIDE_STEP_SEEDS[0].spot, "第 1 步的高亮位 = 出厂种子");
+    checkEqual(guide.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+
+    const twoSteps = [
+      { id: "move", title: "先动起来", desc: "走两步看看。", spot: "joystick", trigger: "move" },
+      { id: "fight", title: "打一只怪", desc: "点技能出手。", spot: "shortcut", trigger: "kill" },
+    ];
+    const guidePatched = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: twoSteps } });
+    checkEqual(guidePatched.status, 200, "整份替换成功");
+    checkEqual(guidePatched.body?.data?.steps?.length, 2, "响应里就是提交的两步");
+    checkEqual(guidePatched.body?.data?.steps?.[1]?.id, "fight", "数组顺序 = 体验顺序");
+    checkEqual(guidePatched.body?.data?.steps?.[0]?.desc, "走两步看看。", "文案按提交值生效");
+    check(guidePatched.body?.data?.updatedAt > 0, "改过之后 updatedAt 才不是 0");
+
+    const guideBadSpot = await api(base, "PATCH", "/api/admin/guide-steps", {
+      token,
+      body: { steps: [{ id: "x", title: "标题", desc: "正文", spot: "nav:unknown", trigger: "move" }] },
+    });
+    checkEqual(guideBadSpot.status, 400, "白名单外的高亮位 → 400（客户端不认识它，玩家会卡在那一步）");
+    const guideBadEvent = await api(base, "PATCH", "/api/admin/guide-steps", {
+      token,
+      body: { steps: [{ id: "x", title: "标题", desc: "正文", spot: "joystick", trigger: "teleport" }] },
+    });
+    checkEqual(guideBadEvent.status, 400, "白名单外的推进事件 → 400（这个事件永远不会命中）");
+    const guideDuplicate = await api(base, "PATCH", "/api/admin/guide-steps", {
+      token,
+      body: {
+        steps: [
+          { id: "same", title: "甲", desc: "正文", spot: "joystick", trigger: "move" },
+          { id: "same", title: "乙", desc: "正文", spot: "joystick", trigger: "kill" },
+        ],
+      },
+    });
+    checkEqual(guideDuplicate.status, 400, "标识重复 → 400");
+    checkEqual(guideDuplicate.body?.code, 40000, "标识重复用参数非法 40000");
+    const guideEmpty = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: [] } });
+    checkEqual(guideEmpty.status, 400, "清空步骤 → 400（想关引导是让玩家走完，不是删配置）");
+    const guideAfterReject = await api(base, "GET", "/api/admin/guide-steps", { token });
+    checkEqual(guideAfterReject.body?.data?.steps?.length, 2, "被拒的提交没有落库（整份不动）");
+    const viewerGuideWrite = await api(base, "PATCH", "/api/admin/guide-steps", { token: viewerToken, body: { steps: twoSteps } });
+    checkEqual(viewerGuideWrite.status, 403, "观察员改引导步骤 → 403");
+    checkEqual(viewerGuideWrite.body?.code, 30006, "观察员改引导步骤 → 30006（权限点不足）");
+    const postGuide = await api(base, "POST", "/api/admin/guide-steps", { token, body: { steps: twoSteps } });
+    checkEqual(postGuide.status, 404, "POST → 404（单行配置没有创建）");
+    const deleteGuide = await api(base, "DELETE", "/api/admin/guide-steps", { token });
+    checkEqual(deleteGuide.status, 404, "DELETE → 404（单行配置没有删除）");
+
+    // 复原出厂表：快照断言以出厂口径为基线
+    const guideRestored = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: GUIDE_STEP_SEEDS } });
+    checkEqual(guideRestored.body?.data?.steps?.length, GUIDE_STEP_SEEDS.length, "复原出厂步骤表");
 
     //#endregion
 
@@ -1324,6 +1491,26 @@ async function main() {
     const snapshot = await api(base, "GET", "/api/game-config", { token: playerToken });
     checkEqual(snapshot.status, 200, "玩家令牌拉快照 → 200");
     const snap = snapshot.body?.data ?? {};
+    // #605：运行时参数随快照下发（六·五 段把拾取半径改成了 72，这里确认它真的到得了客户端）
+    checkEqual(snap.runtimeParams?.drop?.autoPickupRadius, 72, "运行时参数随快照下发（改完的值客户端拿得到）");
+    checkEqual(snap.runtimeParams?.autoBattle?.stuckRetryLimit, RUNTIME_PARAMS.autoBattle.stuckRetryLimit, "自动战斗参数是完整一组（不是只发改过的键）");
+    checkEqual(snap.runtimeParams?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会规则也在快照里（客户端用于提前提示）");
+
+    // #605：战斗力权重同样入表（六·六 段已复原成出厂值）—— 改一项，快照必须跟着变
+    checkEqual(snap.combatWeights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "战斗力权重随快照下发（出厂值）");
+    const weightChanged = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp + 5 } });
+    checkEqual(weightChanged.status, 200, "把生命权重调高 5");
+    const snapshotAfterWeight = await api(base, "GET", "/api/game-config", { token: playerToken });
+    checkEqual(
+      snapshotAfterWeight.body?.data?.combatWeights?.maxHp,
+      COMBAT_WEIGHTS_SEED.maxHp + 5,
+      "改完的权重客户端拿得到（快照读库，不是编译期常量）",
+    );
+    const weightRestoredAgain = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
+    checkEqual(weightRestoredAgain.status, 200, "还原生命权重（后面的断言以出厂口径为基线）");
+    // #605：新手引导步骤随快照下发（六·七 段已复原成出厂表）
+    checkEqual(snap.guideSteps?.length, GUIDE_STEP_SEEDS.length, "引导步骤随快照下发（客户端不再存这张表）");
+    checkEqual(snap.guideSteps?.[0]?.trigger, GUIDE_STEP_SEEDS[0].trigger, "第一步的推进事件与出厂种子一致");
 
     {
       // #604：快照是**显式契约** —— 客户端缺段直接抛错并把玩家挡在 Loading 界面。
@@ -1458,6 +1645,19 @@ async function main() {
     checkEqual(growthCreate.status, 201, "创建成长线测试角色 → 201");
     const growthRoleId = growthCreate.body?.data?.id;
     let growthRevision = growthCreate.body?.data?.revision;
+
+    // #605：战力权重进了配置表 —— 服务端算战力必须读配置（覆盖层），不能还用编译期常量。
+    // 探针是「角色详情里的派生战力」（服务端现算）：翻倍生命权重 → 必须变大；还原 → 必须回原值。
+    const combatBefore = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    check(Number.isFinite(combatBefore) && combatBefore > 0, "角色详情能算出战力（结算探针）", String(combatBefore));
+    const heavierWeights = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp * 2 } });
+    checkEqual(heavierWeights.status, 200, "把生命权重翻倍");
+    const combatAfter = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    check(combatAfter > combatBefore, "生命权重翻倍后服务端算的战力立刻变大（结算读库、不是常量）", `${combatBefore} → ${combatAfter}`);
+    const weightBackToSeed = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
+    checkEqual(weightBackToSeed.status, 200, "还原生命权重");
+    const combatRestored = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    checkEqual(combatRestored, combatBefore, "还原后战力回到原值（覆盖层不是一次性的）");
 
     // seed 后全部称号渠道 unavailable → 升级链为空 → 即使 0 阶也没有下一阶
     const lockedTitle = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {

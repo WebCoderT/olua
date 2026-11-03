@@ -129,6 +129,10 @@ const MODULES = {
   adminLevelExp: { target: "admin", export: "levelExpsApi" },
   adminGrowthSegment: { target: "admin", export: "growthSegmentsApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
+  // 运行时参数（#605）：掉落手感 / 自动战斗 / 帮会规则，单行三组 JSON
+  adminRuntimeParams: { target: "admin", export: "runtimeParamsApi" },
+  adminCombatWeights: { target: "admin", export: "combatWeightsApi" },
+  adminGuide: { target: "admin", export: "guideStepsApi" },
   adminSkill: { target: "admin", export: "skillsApi" },
   adminStatus: { target: "admin", export: "statusesApi" },
   adminZone: { target: "admin", export: "zonesApi" },

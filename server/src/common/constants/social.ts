@@ -22,15 +22,10 @@ export const GUILD_RANK_LABELS: Record<string, string> = {
   [GUILD_RANK.MEMBER]: "成员",
 };
 
-/** 帮会名长度（2~12 字：1 个字太容易撞名，太长在列表里放不下） */
-export const GUILD_NAME_MIN = 2;
-export const GUILD_NAME_MAX = 12;
-
-/** 公告长度上限（0 = 清空公告） */
-export const GUILD_NOTICE_MAX = 200;
-
-/** 入帮留言长度上限 */
-export const GUILD_APPLICATION_MESSAGE_MAX = 50;
+// 帮会名 / 公告 / 入帮留言的长度**不再在这里**（#605）：它们已升级为运行时参数，
+// 出厂值在 `shared/runtime-seed.ts` 的 `guild` 组，运营在管理端「运行时参数」页改，
+// 校验在 `GuildService` 里按当前配置判（DTO 只留宽一点的结构上限）。
+// 常量留在这里的旧写法会变成「第二份真相」—— 改配置不生效，改代码又要发版。
 
 /**
  * 帮会人数上限（默认值；可用 `GUILD_MEMBER_LIMIT` 覆盖）

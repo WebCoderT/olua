@@ -786,6 +786,53 @@ export interface MallSettingsRow {
 }
 
 /**
+ * 客户端运行时参数（#605）：单行配置（id 恒为 1），三个分组各一列 JSON
+ *
+ * 列里存的是「运营改过的部分」，缺键回落到 `shared/runtime-seed.ts` 的出厂值 ——
+ * 这样加一个参数不用给存量库补列，也不用写迁移。
+ */
+export interface RuntimeParamsRow {
+  /** 恒为 1（单行表） */
+  id: number;
+  /** 掉落物手感参数（`DropRuntimeParams` 的 JSON）。`drop` 是 SQL 保留字，列名带后缀 */
+  drop_params: string;
+  /** 自动战斗 / 寻路参数（`AutoBattleParams` 的 JSON） */
+  auto_battle: string;
+  /** 帮会规则门槛（`GuildRuleParams` 的 JSON；服务端校验读它） */
+  guild_rules: string;
+  updated_at: number;
+}
+
+/**
+ * 战斗力权重（#605）：`combat_weights` 表的一行 = 一个属性
+ *
+ * 出厂值来自 `shared/combat-seed.ts`（`COMBAT_WEIGHTS_SEED`，生成物 `COMBAT_WEIGHTS` 的源头），
+ * seed 幂等（INSERT OR IGNORE），后台只改 `weight`、不增删行。
+ * 表里缺某个 key 时由 service 回落出厂值 —— 与运行时参数同一套「缺键回落」口径。
+ */
+export interface CombatWeightRow {
+  /** 属性名（`maxHp` / `physicalAttack` / …），与生成物 `COMBAT_WEIGHTS` 的键完全一致 */
+  key: string;
+  /** 每 1 点该属性折算多少战斗力（区间属性按上下限之和再乘） */
+  weight: number;
+  updated_at: number;
+}
+
+/**
+ * 新手引导步骤（#605）：`guide_settings` 单行表
+ *
+ * 整张步骤表存在 `steps` 一列 JSON 数组里（有序，数组顺序即体验顺序）。
+ * 出厂值来自 `shared/guide-seed.ts`，缺行 / 坏 JSON 时 service 回落出厂值。
+ */
+export interface GuideSettingsRow {
+  /** 恒为 1（单行表） */
+  id: number;
+  /** `GuideStepSeed[]` 的 JSON（`id` / `title` / `desc` / `spot` / `trigger`） */
+  steps: string;
+  updated_at: number;
+}
+
+/**
  * 具名掉落表（#254）：`drop_tables` 表的一行
  *
  * 一行 = 一张可被多怪复用的掉落表（seed 自生成物 DROP_TABLES 的 common / elite / boss，

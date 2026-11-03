@@ -208,6 +208,21 @@ export const routes = {
      */
     register: "/admin/auth/register",
   },
+  /** adminCombatWeights 模块（2 个接口） */
+  adminCombatWeights: {
+    /**
+     * 战斗力权重（GET /admin/combat-weights）
+     *
+     * 当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。
+     */
+    get: "/admin/combat-weights",
+    /**
+     * 编辑战斗力权重（PATCH /admin/combat-weights）
+     *
+     * **部分更新**：只提交改动过的属性（没提交的保持原值）。允许两位小数，取值 0~1000。
+     */
+    update: "/admin/combat-weights",
+  },
   /** adminDrop 模块（7 个接口） */
   adminDrop: {
     /**
@@ -390,7 +405,7 @@ export const routes = {
     /**
      * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
      *
-     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数）。
+     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。
      */
     update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
   },
@@ -408,6 +423,21 @@ export const routes = {
      * 四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。
      */
     update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
+  },
+  /** adminGuide 模块（2 个接口） */
+  adminGuide: {
+    /**
+     * 新手引导步骤（GET /admin/guide-steps）
+     *
+     * 整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。
+     */
+    get: "/admin/guide-steps",
+    /**
+     * 编辑新手引导步骤（PATCH /admin/guide-steps）
+     *
+     * **整份替换**：提交的数组就是新的步骤表（顺序即体验顺序），不是增量。
+     */
+    update: "/admin/guide-steps",
   },
   /** adminGuild 模块（4 个接口） */
   adminGuild: {
@@ -678,6 +708,21 @@ export const routes = {
      * 按 id 列表删除（最多 100 条）。已不存在的 id 静默跳过（幂等）；作为某个账号在线角色的会被顺带清掉在线标记。返回实际删除的条数与涉及的账号 id。
      */
     batchRemove: "/admin/roles/batch-delete",
+  },
+  /** adminRuntimeParams 模块（2 个接口） */
+  adminRuntimeParams: {
+    /**
+     * 运行时参数（GET /admin/runtime-params）
+     *
+     * 三个分组一起返回（**单行配置，没有分页**）：
+     */
+    get: "/admin/runtime-params",
+    /**
+     * 编辑运行时参数（PATCH /admin/runtime-params）
+     *
+     * **部分更新**：只提交改动过的分组，组内只提交改动过的字段（没提交的保持原值）。
+     */
+    update: "/admin/runtime-params",
   },
   /** adminSkill 模块（4 个接口） */
   adminSkill: {

@@ -58,6 +58,8 @@ const ALLOWED_EDGES = [
   { from: "modules/admin", to: "modules/audit/audit.service.ts", why: "管理端写审计" },
   // roles 的属性汇总口径来自 combat 纯函数（存档返回值要带战斗力）
   { from: "modules/roles", to: "modules/combat/role-attributes.ts", why: "属性汇总纯函数" },
+  // 帮会规则门槛（#605）：建帮 / 改公告的长度校验读运行时参数（与快照下发同一份配置）
+  { from: "modules/social", to: "modules/game-config/runtime-params.service.ts", why: "帮会规则门槛读运行时参数" },
   { from: "modules/roles", to: "modules/combat/role-attribute-comparison.ts", why: "属性比对纯函数" },
   // 商城购买收权（#304）：扣费与入包在存档域，成交价读 game-config 的定价服务（特殊价/统一价同源）
   { from: "modules/roles", to: "modules/game-config/mall-pricing.service.ts", why: "商城购买读成交价" },
@@ -157,6 +159,11 @@ const REPO_EDGES = {
   // 成长曲线（#256）：等级经验 / 曲线分段 / 标量参数同称号 / 战魂；
   // 击杀经验收权（#316）后存档域（roles）与结算（realtime，读标量算经验）也读
   "database/repositories/growth.repository.ts": ["modules/game-config", "modules/roles", "modules/realtime"],
+  // 运行时参数（#605）：game-config 读写（管理端 + 快照）；
+  // social 只**读帮会规则门槛**（名字 / 公告 / 申请留言长度），建帮与改公告的校验在那边
+  "database/repositories/runtime-params.repository.ts": ["modules/game-config", "modules/social"],
+  "database/repositories/combat-weights.repository.ts": ["modules/game-config"],
+  "database/repositories/guide-settings.repository.ts": ["modules/game-config"],
   "database/repositories/rank.repository.ts": ["modules/game-config", "modules/roles"],
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）

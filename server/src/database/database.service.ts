@@ -883,6 +883,40 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 收件箱永远按「这个角色 + 时间倒序」取，未领数也用得上 claimed_at
       CREATE INDEX IF NOT EXISTS idx_role_mails_box ON role_mails(role_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_role_mails_unclaimed ON role_mails(role_id, claimed_at);
+
+      -- 客户端运行时参数（#605）：单行表（id 恒为 1），三个分组各一列 JSON。
+      -- drop / autoBattle 服务端不消费（只随配置快照下发，客户端用来调手感）；
+      -- guild 是**服务端校验门槛**（帮会名 / 公告 / 申请留言长度），客户端读到只为提前提示。
+      -- 存 JSON 而不是 22 个列：参数按分组增删频繁，加一个参数不该动表结构。
+      CREATE TABLE IF NOT EXISTS runtime_params (
+        id          INTEGER PRIMARY KEY CHECK (id = 1),
+        -- 列名带后缀：drop 是 SQL 保留字，裸用会让整段建表 SQL 语法错（第一次就踩了）
+        drop_params TEXT    NOT NULL DEFAULT '{}',
+        auto_battle TEXT    NOT NULL DEFAULT '{}',
+        guild_rules TEXT    NOT NULL DEFAULT '{}',
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 战斗力权重（#605）：属性名 → 倍率，**一个属性一行**。
+      -- 为什么是 KV 行而不是单行宽表：键就是属性名（maxHp / physicalAttack …），
+      -- 与快照 combatWeights 段（Record<string, number>）1:1，将来多一个权重属性
+      -- 只多一行、不动表结构；读写都是「按 key 取」，不需要知道总共有几列。
+      -- 出厂值在 shared/combat-seed.ts（生成物 COMBAT_WEIGHTS 的源头），缺行回落出厂。
+      CREATE TABLE IF NOT EXISTS combat_weights (
+        key        TEXT PRIMARY KEY,
+        weight     REAL    NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 新手引导步骤（#605）：单行表，整张步骤表存一列 JSON 数组。
+      -- 为什么整表一列而不是一行一步：步骤是**有序的一小张表**（出厂 6 步、上限 64 步），
+      -- 运营调的是「顺序 / 文案 / 高亮位 / 推进事件」，整份保存比逐行增删更贴近编辑动作
+      -- （与 equipment_meta 的回收价曲线同一手法）。行内顺序即体验顺序。
+      CREATE TABLE IF NOT EXISTS guide_settings (
+        id         INTEGER PRIMARY KEY CHECK (id = 1),
+        steps      TEXT    NOT NULL DEFAULT '[]',
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

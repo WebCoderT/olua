@@ -2,13 +2,15 @@ import { Injectable } from "@nestjs/common";
 import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
 import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
 import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
-import { COMBAT_WEIGHTS } from "../../shared/game-data.generated";
 import { MapService } from "../map/map.service";
 import { UiEffectService } from "../ui-effect/ui-effect.service";
 import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
 import { DropConfigService } from "./drop-config.service";
+import { RuntimeParamsService } from "./runtime-params.service";
+import { CombatWeightsService } from "./combat-weights.service";
+import { GuideSettingsService } from "./guide-settings.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
 import { LevelDto } from "./dto/growth.dto";
 import { MonsterPresentationDto } from "./dto/monster.dto";
@@ -30,6 +32,9 @@ export class ClientConfigService {
     private readonly growth: GrowthConfigService,
     private readonly mall: MallPricingService,
     private readonly drop: DropConfigService,
+    private readonly runtimeParams: RuntimeParamsService,
+    private readonly combatWeights: CombatWeightsService,
+    private readonly guide: GuideSettingsService,
     private readonly map: MapService,
     private readonly uiEffect: UiEffectService,
   ) {}
@@ -53,9 +58,10 @@ export class ClientConfigService {
         return LevelDto.from(Number(level), attributes, row ? row.exp : Number(attributes.exp));
       }),
       growthScalars: this.growth.listScalars({ ...ALL }).list,
-      // #603：战斗力权重（唯一书写处 shared/combat-seed.ts）。客户端不再存倍率，
-      // 本地只留空 Map —— 「这件装备是不是更好」的提示用同一组数字判
-      combatWeights: COMBAT_WEIGHTS,
+      // #603 战斗力权重 / #605 可配化：出厂值在 `shared/combat-seed.ts`，当前值在
+      // `combat_weights` 表（管理端「战斗力权重」页可改）。客户端本地只留空 Map ——
+      // 「这件装备是不是更好」的提示与服务端算战力用同一组数字
+      combatWeights: this.combatWeights.weights(),
       mallPrices: this.mall.listPrices({ ...ALL }).list,
       mallSettings: this.mall.getSettings(),
       dropTables: this.drop.listTables().list,
@@ -78,6 +84,12 @@ export class ClientConfigService {
       // 没有它们客户端连 555 个变体都展开不出来（倍率决定展开档数）
       equipmentSlots: this.gameConfig.listEquipmentSlots(),
       equipmentMeta: this.gameConfig.getEquipmentMeta(),
+      // #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）—— 原本写死在客户端的两份参数，
+      // 现在由运营在管理端改；客户端进游戏覆写本地（guild 那组同时也是服务端校验门槛）
+      runtimeParams: this.runtimeParams.get(),
+      // #605：新手引导步骤（出厂值在 shared/guide-seed.ts，运营在管理端「新手引导」页改）。
+      // 客户端本地不再存这张表 —— 改一句新手文案不用重打客户端包
+      guideSteps: this.guide.steps(),
     };
   }
 }

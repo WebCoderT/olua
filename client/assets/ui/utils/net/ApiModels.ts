@@ -1581,6 +1581,191 @@ export type UpdateGrowthScalar = {
   value: number;
 };
 
+export type UpdateDropRuntimeParams = {
+  /**
+   * 自动拾取半径（像素）
+   */
+  autoPickupRadius?: number;
+  /**
+   * 背包已满的提示 / 重试间隔（毫秒）
+   */
+  fullTipInterval?: number;
+  /**
+   * 多件掉落物的最小中心间距（像素）
+   */
+  scatterMinDistance?: number;
+  /**
+   * 服务端拾取应答等待上限（毫秒）
+   */
+  pickReplyTimeout?: number;
+};
+
+export type UpdateAutoBattleParams = {
+  /**
+   * 自动选目标的最大距离（像素，0 = 不限）
+   */
+  maxTargetDistance?: number;
+  /**
+   * 自动移动是否使用跑步速度
+   */
+  moveByRun?: boolean;
+  /**
+   * A* 网格单元边长（像素）
+   */
+  cellSize?: number;
+  /**
+   * 通行余量（像素）
+   */
+  clearance?: number;
+  /**
+   * 重新寻路间隔（毫秒）
+   */
+  repathInterval?: number;
+  /**
+   * 到达路点的判定半径（像素）
+   */
+  waypointTolerance?: number;
+  /**
+   * 卡住检测间隔（毫秒）
+   */
+  stuckInterval?: number;
+  /**
+   * 卡住判定位移阈值（像素）
+   */
+  stuckDistance?: number;
+  /**
+   * 连续卡住多少次后放弃当前目标
+   */
+  stuckRetryLimit?: number;
+  /**
+   * 被放弃目标的拉黑时长（毫秒）
+   */
+  targetBanDuration?: number;
+  /**
+   * 没目标时的重找间隔（毫秒）
+   */
+  targetSearchInterval?: number;
+  /**
+   * 点击寻路的到达判定半径（像素）
+   */
+  arriveTolerance?: number;
+  /**
+   * 传送落点吸附半径（格）
+   */
+  teleportSnapRadius?: number;
+  /**
+   * 突进类技能的落点吸附半径（像素）
+   */
+  dashSnapRadius?: number;
+};
+
+export type UpdateGuildRuleParams = {
+  /**
+   * 帮会名最短字数
+   */
+  nameMin?: number;
+  /**
+   * 帮会名最长字数（必须 ≥ 最短字数）
+   */
+  nameMax?: number;
+  /**
+   * 帮会公告最长字数（0 = 不限）
+   */
+  noticeMax?: number;
+  /**
+   * 入帮申请留言最长字数（0 = 不限）
+   */
+  applicationMessageMax?: number;
+};
+
+export type UpdateRuntimeParams = {
+  /**
+   * 掉落物手感参数（只提交改动过的字段）
+   */
+  drop?: UpdateDropRuntimeParams;
+  /**
+   * 自动战斗 / 寻路参数（只提交改动过的字段）
+   */
+  autoBattle?: UpdateAutoBattleParams;
+  /**
+   * 帮会规则门槛（只提交改动过的字段）
+   */
+  guild?: UpdateGuildRuleParams;
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type UpdateCombatWeights = {
+  /**
+   * 生命上限权重
+   */
+  maxHp?: number;
+  /**
+   * 物理攻击权重
+   */
+  physicalAttack?: number;
+  /**
+   * 魔法攻击权重
+   */
+  magicAttack?: number;
+  /**
+   * 道术攻击权重
+   */
+  taoistAttack?: number;
+  /**
+   * 物理防御权重
+   */
+  physicalDefense?: number;
+  /**
+   * 魔法防御权重
+   */
+  magicDefense?: number;
+  /**
+   * 道术防御权重
+   */
+  taoistDefense?: number;
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type GuideStep = {
+  /**
+   * 步骤标识（日志与单测用；同一份配置里唯一，不落存档）
+   */
+  id: string;
+  /**
+   * 气泡标题
+   */
+  title: string;
+  /**
+   * 气泡正文（一句话说清「做什么」）
+   */
+  desc: string;
+  /**
+   * 高亮语义位：joystick / nav:bag / nav:skill / nav:chat / shortcut（客户端按它现取节点，取不到就只显示气泡）
+   */
+  spot: "joystick" | "nav:bag" | "nav:skill" | "nav:chat" | "shortcut";
+  /**
+   * 推进事件：move / kill / pickup / openBag / openSkill / openChat（当前步收到它才前进，别的事件不越级）
+   */
+  trigger: "move" | "kill" | "pickup" | "openBag" | "openSkill" | "openChat";
+};
+
+export type UpdateGuideSteps = {
+  /**
+   * 步骤表（整份替换，顺序即体验顺序）
+   */
+  steps: GuideStep[];
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
 export type SendMail = {
   /**
    * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
@@ -1610,18 +1795,18 @@ export type SendMail = {
 
 export type CreateGuild = {
   /**
-   * 帮会名（2~12 字，全局唯一）
+   * 帮会名（长度按「运行时参数 · 帮会规则」的当前配置，出厂 2~12 字；全局唯一）
    */
   name: string;
   /**
-   * 公告（可选，0~200 字）
+   * 公告（可选；长度按运行时参数，出厂 200 字）
    */
   notice?: string;
 };
 
 export type ApplyGuild = {
   /**
-   * 留言（可选，0~50 字）；重复申请会**覆盖**上一条留言
+   * 留言（可选；长度按运行时参数，出厂 50 字）；重复申请会**覆盖**上一条留言
    */
   message?: string;
 };
@@ -1642,18 +1827,18 @@ export type TransferGuild = {
 
 export type UpdateGuildNotice = {
   /**
-   * 公告（0~200 字；空字符串表示清空）
+   * 公告（长度按运行时参数，出厂 200 字；空字符串表示清空）
    */
   notice: string;
 };
 
 export type AdminUpdateGuild = {
   /**
-   * 帮会名（2~12 字，全局唯一）
+   * 帮会名（长度按运行时参数，出厂 2~12 字；全局唯一）
    */
   name?: string;
   /**
-   * 公告（0~200 字）
+   * 公告（长度按运行时参数，出厂 200 字）
    */
   notice?: string;
 };
@@ -3029,7 +3214,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4016,6 +4201,175 @@ export type GrowthScalarQuery = {
    * 排序方向：asc 升序 / desc 降序
    */
   order?: "asc" | "desc";
+};
+
+export type DropRuntimeParams = {
+  /**
+   * 自动拾取半径（像素）：脚底距离小于它即拾取
+   */
+  autoPickupRadius: number;
+  /**
+   * 背包已满的提示 / 重试间隔（毫秒）
+   */
+  fullTipInterval: number;
+  /**
+   * 多件掉落物的最小中心间距（像素）
+   */
+  scatterMinDistance: number;
+  /**
+   * 服务端拾取应答等待上限（毫秒），超时允许重试
+   */
+  pickReplyTimeout: number;
+};
+
+export type AutoBattleParams = {
+  /**
+   * 自动选目标的最大距离（像素，0 = 不限，全图取最近）
+   */
+  maxTargetDistance: number;
+  /**
+   * 自动移动是否使用跑步速度
+   */
+  moveByRun: boolean;
+  /**
+   * A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢
+   */
+  cellSize: number;
+  /**
+   * 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格
+   */
+  clearance: number;
+  /**
+   * 重新寻路间隔（毫秒）
+   */
+  repathInterval: number;
+  /**
+   * 到达路点的判定半径（像素）
+   */
+  waypointTolerance: number;
+  /**
+   * 卡住检测间隔（毫秒）
+   */
+  stuckInterval: number;
+  /**
+   * 卡住判定：该间隔内位移小于此值视为卡住（像素）
+   */
+  stuckDistance: number;
+  /**
+   * 连续卡住多少次后放弃当前目标
+   */
+  stuckRetryLimit: number;
+  /**
+   * 被放弃目标的拉黑时长（毫秒）
+   */
+  targetBanDuration: number;
+  /**
+   * 场上没目标时，隔多久再找一次（毫秒）
+   */
+  targetSearchInterval: number;
+  /**
+   * 点击寻路的到达判定半径（像素）
+   */
+  arriveTolerance: number;
+  /**
+   * 传送落点吸附半径（格）
+   */
+  teleportSnapRadius: number;
+  /**
+   * 突进类技能的落点吸附半径（像素）
+   */
+  dashSnapRadius: number;
+};
+
+export type GuildRuleParams = {
+  /**
+   * 帮会名最短字数
+   */
+  nameMin: number;
+  /**
+   * 帮会名最长字数（必须 ≥ 最短字数）
+   */
+  nameMax: number;
+  /**
+   * 帮会公告最长字数（0 = 不限）
+   */
+  noticeMax: number;
+  /**
+   * 入帮申请留言最长字数（0 = 不限）
+   */
+  applicationMessageMax: number;
+};
+
+export type RuntimeParams = {
+  /**
+   * 掉落物手感参数（服务端只下发，不消费）
+   */
+  drop: DropRuntimeParams;
+  /**
+   * 自动战斗 / 寻路参数（服务端只下发，不消费）
+   */
+  autoBattle: AutoBattleParams;
+  /**
+   * 帮会规则门槛（服务端校验读它）
+   */
+  guild: GuildRuleParams;
+  /**
+   * 最后修改时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type CombatWeights = {
+  /**
+   * 生命上限：每 1 点生命折算多少战力
+   */
+  maxHp: number;
+  /**
+   * 物理攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  physicalAttack: number;
+  /**
+   * 魔法攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  magicAttack: number;
+  /**
+   * 道术攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  taoistAttack: number;
+  /**
+   * 物理防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  physicalDefense: number;
+  /**
+   * 魔法防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  magicDefense: number;
+  /**
+   * 道术防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  taoistDefense: number;
+};
+
+export type CombatWeightsResponse = {
+  /**
+   * 当前生效权重（属性名 → 倍率）
+   */
+  weights: CombatWeights;
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过，仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type GuideSteps = {
+  /**
+   * 步骤表（数组顺序 = 体验顺序）
+   */
+  steps: GuideStep[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
 };
 
 export type Rank = {
@@ -5796,6 +6150,14 @@ export type GameConfigSnapshot = {
    * 装备规则（#603 第九域，单行）：前后缀属性倍率 / 品质文案 / 回收价曲线。客户端靠倍率才知道要把每件基础件展开成几档变体，靠曲线算回收价 —— 缺这一段装备表整个是空的
    */
   equipmentMeta: EquipmentMeta;
+  /**
+   * 客户端运行时参数（#605，单行三组）：掉落手感（`drop`）/ 自动战斗与寻路（`autoBattle`）/ 帮会规则门槛（`guild`）。前两组服务端只下发不消费，客户端据此覆写 `configs/drop` 与 `configs/autoBattle` 里原本写死的数值；`guild` 是服务端校验门槛，客户端读到只为**提前提示**
+   */
+  runtimeParams: RuntimeParams;
+  /**
+   * 新手引导步骤（数组顺序 = 体验顺序）。客户端 `configs/guide` 不再存这张表 —— 运营改文案 / 顺序 / 高亮位 / 推进事件都不用重打客户端包
+   */
+  guideSteps: GuideStep[];
 };
 
 export type GuildSummary = {

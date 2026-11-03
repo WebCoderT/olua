@@ -159,6 +159,30 @@ function completeSnapshot(over = {}) {
       recycleCurve: [{ from: 1, to: 50, start: 10, perLevel: 1 }],
       updatedAt: 0,
     },
+    // #605：运行时参数也是契约的一段（单行三组；全字段给齐，段缺失的用例才能只怪那一处）
+    runtimeParams: {
+      drop: { autoPickupRadius: 40, fullTipInterval: 1500, scatterMinDistance: 52, pickReplyTimeout: 5000 },
+      autoBattle: {
+        maxTargetDistance: 0,
+        moveByRun: true,
+        cellSize: 40,
+        clearance: 20,
+        repathInterval: 400,
+        waypointTolerance: 14,
+        stuckInterval: 500,
+        stuckDistance: 8,
+        stuckRetryLimit: 3,
+        targetBanDuration: 5000,
+        targetSearchInterval: 500,
+        arriveTolerance: 20,
+        teleportSnapRadius: 12,
+        dashSnapRadius: 60,
+      },
+      guild: { nameMin: 2, nameMax: 12, noticeMax: 200, applicationMessageMax: 50 },
+      updatedAt: 0,
+    },
+    // #605：新手引导步骤（数组顺序 = 体验顺序）
+    guideSteps: [{ id: "move", title: "先动起来", desc: "走两步。", spot: "joystick", trigger: "move" }],
     ...over,
   };
 }

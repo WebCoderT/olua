@@ -4,6 +4,13 @@ import { Color, Size } from "cc";
  * 自动战斗配置（快速攻击与自动挂机共用）
  * 快速攻击：释放 canAuto 技能时没有可打目标/目标超出距离，自动选最近怪物走位到范围内连续出手
  * 自动挂机：开关打开后持续自动选目标攻击，目标死亡换下一个，无限重复
+ *
+ * **#605 起行为数值由运营配置**：`server/src/shared/runtime-seed.ts` 是唯一书写处，
+ * 管理端「运行时参数」页可改，随 `GET /game-config` 的 `runtimeParams.autoBattle` 段下发，
+ * `applyAutoBattleParams` 逐键覆写下面这份出厂值。
+ *
+ * **样式与几何不在下发范围**（`routeLine` 的颜色 / 半径 / 间距都没有运营含义，
+ * 属于表现层常量）：它们既不该进 JSON 配置，也不该让运营在后台改出「看不见的路线」。
  */
 export const autoBattle = {
   /** 自动选目标的最大距离（像素，0 = 不限，全图取最近） */
@@ -56,3 +63,57 @@ export const autoBattle = {
   },
 };
 
+/** 可被运营覆写的字段（快照 `runtimeParams.autoBattle` 段就是这些键） */
+export interface AutoBattleTuning {
+  maxTargetDistance: number;
+  moveByRun: boolean;
+  cellSize: number;
+  clearance: number;
+  repathInterval: number;
+  waypointTolerance: number;
+  stuckInterval: number;
+  stuckDistance: number;
+  stuckRetryLimit: number;
+  targetBanDuration: number;
+  targetSearchInterval: number;
+  arriveTolerance: number;
+  teleportSnapRadius: number;
+  dashSnapRadius: number;
+}
+
+/**
+ * 覆写自动战斗参数（#605；快照 `runtimeParams.autoBattle` 段到达时调一次）
+ *
+ * 逐键显式赋值而不是遍历：`autoBattle` 里混着 `Size` / `Color` / 嵌套对象，
+ * 遍历写法要么把它们带上（覆写成 NaN 就整条路线消失），要么得靠类型断言绕过去 ——
+ * 显式列出来反而是最不容易出错的一份清单，加参数时编译期就能提醒。
+ *
+ * 非法值（非数字 / 负数）保持当前值：宁可沿用旧手感，也不要让一次坏配置把
+ * 网格边长变成 0（A* 会直接搜不动）。
+ */
+export function applyAutoBattleParams(params: Partial<AutoBattleTuning> | undefined): void {
+  if (!params) return;
+  const num = (value: unknown, fallback: number): number => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
+  };
+  const rate = (value: unknown, fallback: number): number => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= 1 ? Math.floor(numeric) : fallback;
+  };
+  autoBattle.maxTargetDistance = num(params.maxTargetDistance, autoBattle.maxTargetDistance);
+  if (typeof params.moveByRun === "boolean") autoBattle.moveByRun = params.moveByRun;
+  // 网格边长与重试次数必须 ≥ 1（0 会让寻路 / 放弃逻辑失去意义）
+  autoBattle.cellSize = rate(params.cellSize, autoBattle.cellSize);
+  autoBattle.clearance = num(params.clearance, autoBattle.clearance);
+  autoBattle.repathInterval = num(params.repathInterval, autoBattle.repathInterval);
+  autoBattle.waypointTolerance = num(params.waypointTolerance, autoBattle.waypointTolerance);
+  autoBattle.stuckInterval = num(params.stuckInterval, autoBattle.stuckInterval);
+  autoBattle.stuckDistance = num(params.stuckDistance, autoBattle.stuckDistance);
+  autoBattle.stuckRetryLimit = rate(params.stuckRetryLimit, autoBattle.stuckRetryLimit);
+  autoBattle.targetBanDuration = num(params.targetBanDuration, autoBattle.targetBanDuration);
+  autoBattle.targetSearchInterval = num(params.targetSearchInterval, autoBattle.targetSearchInterval);
+  autoBattle.arriveTolerance = num(params.arriveTolerance, autoBattle.arriveTolerance);
+  autoBattle.teleportSnapRadius = num(params.teleportSnapRadius, autoBattle.teleportSnapRadius);
+  autoBattle.dashSnapRadius = num(params.dashSnapRadius, autoBattle.dashSnapRadius);
+}

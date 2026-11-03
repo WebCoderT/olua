@@ -56,7 +56,7 @@
 
 | 快照段 | 落库函数 | 落到哪个客户端表 | 服务端出厂（唯一书写处） | 管理端页面 |
 |---|---|---|---|---|
-| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` | ⚠ 无编辑页（待 #605） |
+| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` → `combat_weights` 表 | `/combat-weights` |
 | `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels`（全量）+ `titleUpgradeChain`（渠道 = upgrade 的行，按 `upgradeOrder`） | `shared/title-seed.ts` → `titles` 表 | `/titles` |
 | `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels`（全量）+ `soulUpgradeChain`（全量，按 `upgradeOrder`） | `shared/soul-seed.ts` → `souls` 表 | `/souls` |
 | `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels`（100 阶按阶就是链） | `shared/rank-seed.ts` → `ranks` 表 | `/ranks` |
@@ -76,6 +76,8 @@
 | `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
 | `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
 | `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6` 七行） | `ui_effects` 表 | `/ui-effects` |
+| `runtimeParams` | `applyRuntimeParams`（→ `applyDropRuntime` / `applyAutoBattleParams`） | `configs/drop.ts` `dropRuntime`（对象引用不变）、`configs/autoBattle.ts` `autoBattle`（只覆写行为参数，`routeLine` 样式不动） | `shared/runtime-seed.ts` → `runtime_params` 表 | `/runtime-params` |
+| `guideSteps` | `applyGuideSteps`（整表替换） | `configs/guide.ts` `guideSteps`（表现层：遮罩配色 / 节点名 / 排版仍在客户端） | `shared/guide-seed.ts` → `guide_settings` 表 | `/guide-steps` |
 
 ### 3.2 三条成长线的「升级路径」（后台配，客户端照做）
 

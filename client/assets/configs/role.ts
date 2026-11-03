@@ -65,10 +65,26 @@ export const joystickMove = {
 };
 
 /**
- * 角色魔法值自然回复速度（点/秒），设为 0 即关闭自然回复
+ * 角色魔法值自然回复速度（点/秒），0 = 关闭自然回复
+ *
+ * **可变**：真实值由服务端 `growth_scalars` 表的 `mpRecoverPerSecond` 决定（管理端「成长配置」可改），
+ * 进游戏后随快照 `growthScalars` 段覆写（#605）；这里的 2 只是快照没到时的出厂值。
+ * 血蓝收权（#596）后回复在**服务端**结算，客户端这份只用于血条 / 蓝条的平滑演出预测，
+ * 所以两边短暂不一致不会导致存档偏差 —— 但别拿它做玩法判定。
  * 最大魔法值见 configs/level 的等级配置（maxMp），技能消耗见 configs/skill 的 mpCost
  */
-export const mpRecoverPerSecond = 2;
+export let mpRecoverPerSecond = 2;
+
+/**
+ * 改魔法自然回复速度（**唯一写入口**）
+ *
+ * ESM 导入绑定是只读的，`apply-snapshot` 不能直接赋值 —— 收一个函数在这里，
+ * 写入点就还是只有本文件（与 `game-config.setRoleMaxLevel` 同一取向）。
+ * 负数按 0 处理：配置拍错时宁可「不回蓝」，也不能倒扣。
+ */
+export function setMpRecoverPerSecond(value: number): void {
+  mpRecoverPerSecond = Number.isFinite(value) ? Math.max(0, value) : 0;
+}
 
 /**
  * 角色默认外观（未穿戴衣服时按性别回退）

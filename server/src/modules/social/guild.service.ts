@@ -12,6 +12,7 @@ import { BizException } from "../../common/errors/biz.exception";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { GuildRow } from "../../database/rows";
 import { RolesService } from "../roles/roles.service";
+import { RuntimeParamsService } from "../game-config/runtime-params.service";
 import {
   AdminGuildDetailDto,
   AdminGuildDto,
@@ -51,12 +52,50 @@ export class GuildService {
     private readonly guilds: GuildRepository,
     private readonly roles: RolesService,
     private readonly config: ConfigService,
+    private readonly runtimeParams: RuntimeParamsService,
   ) {}
 
   /** 帮会人数上限（配置驱动；与帮会等级无关，见 common/constants/social） */
   private get memberLimit(): number {
     const value = Number(this.config.get<number>("guildMemberLimit") ?? GUILD_MEMBER_LIMIT_DEFAULT);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : GUILD_MEMBER_LIMIT_DEFAULT;
+  }
+
+  /**
+   * 帮会规则门槛（#605：从编译期常量升级为运行时参数）
+   *
+   * 唯一书写处是 `shared/runtime-seed.ts` 的 `guild` 组，运营在管理端「运行时参数」页改，
+   * **保存即生效**（每次建帮 / 改公告现读，不缓存）。出厂值 2~12 字 / 公告 200 / 留言 50。
+   *
+   * 为什么校验在 service 而不在 DTO：`@Length` 在类定义时求值，配置改了它不会变 ——
+   * DTO 只留**结构上限**（防止超长串进来），业务窗口在这里按当前配置判。
+   */
+  private rules() {
+    return this.runtimeParams.params().guild;
+  }
+
+  /** 帮会名长度（按当前配置的上下限） */
+  private assertName(name: string): void {
+    const { nameMin, nameMax } = this.rules();
+    if (name.length < nameMin || name.length > nameMax) {
+      throw new BizException(BizCode.PARAM_INVALID, `帮会名需为 ${nameMin}~${nameMax} 字`);
+    }
+  }
+
+  /** 公告长度（0 = 不限；空串 = 清空，永远合法） */
+  private assertNotice(notice: string): void {
+    const { noticeMax } = this.rules();
+    if (noticeMax > 0 && notice.length > noticeMax) {
+      throw new BizException(BizCode.PARAM_INVALID, `公告最多 ${noticeMax} 字`);
+    }
+  }
+
+  /** 入帮申请留言长度（0 = 不限） */
+  private assertApplicationMessage(message: string): void {
+    const { applicationMessageMax } = this.rules();
+    if (applicationMessageMax > 0 && message.length > applicationMessageMax) {
+      throw new BizException(BizCode.PARAM_INVALID, `留言最多 ${applicationMessageMax} 字`);
+    }
   }
 
   //#region 玩家侧
@@ -95,6 +134,10 @@ export class GuildService {
       throw BizException.conflict(BizCode.GUILD_ALREADY_IN, "你已经在一个帮会里了，先退出才能另建");
     }
     const name = dto.name.trim();
+    // 规则先判：长度不合规时说清「现在允许几个字」，比「已占用」更可能是真原因
+    this.assertName(name);
+    const notice = (dto.notice ?? "").trim();
+    this.assertNotice(notice);
     if (this.guilds.findByName(name)) {
       throw BizException.conflict(BizCode.GUILD_NAME_EXISTS, "这个帮会名已经被占用了");
     }
@@ -102,7 +145,7 @@ export class GuildService {
     const row: GuildRow = {
       id: `${GUILD_ID_PREFIX}${now.toString(36)}_${randomUUID().slice(0, 8)}`,
       name,
-      notice: (dto.notice ?? "").trim(),
+      notice,
       leader_id: role.id,
       level: 1,
       funds: 0,
@@ -129,7 +172,9 @@ export class GuildService {
     if (this.guilds.countMembers(guildId) >= this.memberLimit) {
       throw BizException.conflict(BizCode.GUILD_FULL, "这个帮会人满了");
     }
-    this.guilds.upsertApplication(guildId, role.id, message.trim(), Date.now());
+    const trimmed = message.trim();
+    this.assertApplicationMessage(trimmed);
+    this.guilds.upsertApplication(guildId, role.id, trimmed, Date.now());
   }
 
   /** 审批入帮申请（帮主 / 副帮主）：通过则入帮，拒绝直接删掉申请 */
@@ -209,7 +254,9 @@ export class GuildService {
     if (!isOfficer(membership.rank)) {
       throw BizException.forbidden(BizCode.GUILD_PERMISSION_DENIED, "只有帮主和副帮主能改公告");
     }
-    this.guilds.updateNotice(guild.id, notice.trim(), Date.now());
+    const trimmed = notice.trim();
+    this.assertNotice(trimmed);
+    this.guilds.updateNotice(guild.id, trimmed, Date.now());
     return this.mustMine(accountId);
   }
 
@@ -257,6 +304,7 @@ export class GuildService {
     const now = Date.now();
     if (dto.name !== undefined) {
       const name = dto.name.trim();
+      this.assertName(name);
       const other = this.guilds.findByName(name);
       if (other && other.id !== id) throw BizException.conflict(BizCode.GUILD_NAME_EXISTS, "这个帮会名已经被占用了");
       if (name !== guild.name) {
@@ -264,7 +312,9 @@ export class GuildService {
       }
     }
     if (dto.notice !== undefined) {
-      this.guilds.updateNotice(id, dto.notice.trim(), now);
+      const notice = dto.notice.trim();
+      this.assertNotice(notice);
+      this.guilds.updateNotice(id, notice, now);
     }
     return this.adminDetail(id);
   }

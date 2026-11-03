@@ -12,6 +12,7 @@
  * · revive：未死亡拒收（20015）；死亡时补满血蓝、上限是服务端重算值
  * · revive：revision 不推进（血量型写入走实时帧，与 applyMonsterHit 同一纪律）
  * · 管理端 PATCH hp/mp：运营旁路（救卡死号），改值同时重置结算游标
+ * · 自然回复速度：#605 起读 `growth_scalars.mpRecoverPerSecond`（管理端可改），改 0 不回蓝、改 20 明显回蓝
  * · 文档：revive 落在「玩家」分组，模型已登记
  *
  * 用法：先 `npm run build`，再 `node --disable-warning=ExperimentalWarning test/e2e-role-vitals.cjs`
@@ -52,6 +53,11 @@ function finish(message) {
   console.log(`FAIL：${failures.length} 条断言未通过（通过 ${passed} 条）`);
   failures.forEach((item, index) => console.log(`  ${index + 1}. ${item}`));
   process.exit(1);
+}
+
+/** 等一段时间（自然回复按真实流逝时间结算，只能用真等待来验；断言都取「至少/必须为」的单边，不怕机器慢） */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 //#endregion
@@ -166,6 +172,40 @@ function roleData(id, name, occupation, level, overrides = {}) {
     "伪造的游标被服务端时间覆盖",
     JSON.stringify(afterForged.data.data.vitalsSettledAt),
   );
+
+  //#endregion
+
+  //#region 一·五、自然回复速度读运营配置（#605）
+
+  console.log("— 一·五、魔法自然回复速度读 growth_scalars（#605）—");
+
+  // 这一段**故意 sleep**：要证明的是「配置值真的进了结算公式」，只断言接口回读等于提交值
+  // 只能证明存进去了、证明不了用上了。两段各 1.2 秒（合计约 2.4s），断言全取单边
+  // （「必须为 0」「至少 +20」），机器再慢也不会假红 —— 这是对上面「e2e 不 sleep」的有意例外。
+  const scalarPath = "admin/growth-scalars/mpRecoverPerSecond";
+  const lowMp = Math.max(1, Math.floor(maxMp / 4));
+  /** 把蓝清到 lowMp 并等一段时间，再走一次存档触发结算 —— 返回结算后的蓝量 */
+  const settleAfter = async (waitMs) => {
+    await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { mp: lowMp } });
+    await sleep(waitMs);
+    await api("PUT", `roles/${roleId}`, { token, body: { data: roleData(roleId, "血蓝", "1", 5) } });
+    const detailAfter = await api("GET", `roles/${roleId}`, { token });
+    return detailAfter.data.data.mp;
+  };
+
+  const offPatched = await api("PATCH", scalarPath, { token: adminToken, body: { value: 0 } });
+  check(offPatched.code === 0, "回复速度可改（0 = 关闭自然回蓝）", offPatched.message);
+  const mpWhenOff = await settleAfter(1200);
+  // 累加器在结算后必然 < 1（服务端只留小数部分），所以速度为 0 时一点都不该涨
+  check(mpWhenOff === lowMp, "速度为 0 时不回蓝（配置真的进了结算）", `${mpWhenOff} vs ${lowMp}`);
+
+  await api("PATCH", scalarPath, { token: adminToken, body: { value: 20 } });
+  const mpWhenFast = await settleAfter(1200);
+  check(mpWhenFast >= Math.min(maxMp, lowMp + 20), "速度为 20 时 1.2 秒至少回 20 点（越改越快的方向也对）", `${mpWhenFast}`);
+
+  // 还原出厂值：同一进程里后面还有复活/管理端旁路的断言，别把速度留在 20
+  const restored = await api("PATCH", scalarPath, { token: adminToken, body: { value: 2 } });
+  check(restored.code === 0, "还原出厂回复速度", restored.message);
 
   //#endregion
 

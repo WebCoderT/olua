@@ -9,6 +9,9 @@ import { RoleRepository } from "./repositories/role.repository";
 import { SoulRepository } from "./repositories/soul.repository";
 import { SystemRepository } from "./repositories/system.repository";
 import { GrowthRepository } from "./repositories/growth.repository";
+import { RuntimeParamsRepository } from "./repositories/runtime-params.repository";
+import { CombatWeightsRepository } from "./repositories/combat-weights.repository";
+import { GuideSettingsRepository } from "./repositories/guide-settings.repository";
 import { RankRepository } from "./repositories/rank.repository";
 import { EquipmentRepository } from "./repositories/equipment.repository";
 import { DrugRepository } from "./repositories/drug.repository";
@@ -75,6 +78,9 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     DropTableRepository,
     MonsterDropRepository,
     GrowthRepository,
+    RuntimeParamsRepository,
+    CombatWeightsRepository,
+    GuideSettingsRepository,
     SoulRepository,
     SkillRepository,
     StatusRepository,
@@ -117,6 +123,9 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     DropTableRepository,
     MonsterDropRepository,
     GrowthRepository,
+    RuntimeParamsRepository,
+    CombatWeightsRepository,
+    GuideSettingsRepository,
     SoulRepository,
     SkillRepository,
     StatusRepository,

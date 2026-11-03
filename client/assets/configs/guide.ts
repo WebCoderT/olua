@@ -3,11 +3,22 @@ import { GUIDE_EVENT, GUIDE_SPOT } from "../types/guide";
 import type { GuideEvent, GuideSpot } from "../types/guide";
 
 /**
- * 新手引导的步骤表（#402）
+ * 新手引导的步骤表（#402；#605 起由服务端下发）
  *
- * **步骤是数据不是代码**：文案 / 高亮目标 / 触发事件全在这里，`GuideStore` 只负责
+ * **步骤是数据不是代码**：文案 / 高亮目标 / 触发事件全在数据里，`GuideStore` 只负责
  * 「当前这一步的 trigger 到了就 +1」，`GuideOverlay` 只负责把这一步画出来。
- * 加一步 = 在这里加一条（前提是触发方式复用已有事件，见 types/guide.GUIDE_EVENT 的注释）。
+ *
+ * ## #605：表搬到服务端了
+ * 以前这张表写死在本文件（改一句文案要重打客户端包）。现在它来自配置快照的
+ * `guideSteps` 段（出厂值在 `server/src/shared/guide-seed.ts`，运营在管理端「新手引导」页改），
+ * 由 `applyGuideSteps()` **整表替换**：
+ * - 进游戏拉到快照之前，`guideSteps` 是**空表** —— `guideStepCount()` 为 0，
+ *   `normalizeGuideProgress` 会把存档里的进度按「已完成」处理（不会因为表还没到就把玩家
+ *   卡在第 0 步，也不会把已经走完的老号重新弹一遍）；
+ * - 快照到达后表才有内容（`ConfigLoader` 保证「配置就绪才进图」）。
+ *
+ * 本文件保留的是**客户端自己的那一半**：遮罩配色、节点名契约、气泡排版、全局文案 ——
+ * 这些是表现层，运营改了也没有意义（改颜色要重看一遍 UI，改节点名会让代码取不到节点）。
  *
  * 设计口径：
  * - **不锁操作**：遮罩只是视觉层，玩家随时能点「跳过」、随时能自己乱点；
@@ -28,50 +39,45 @@ export interface GuideStepConfig {
   trigger: GuideEvent;
 }
 
-export const guideSteps: GuideStepConfig[] = [
-  {
-    id: "move",
-    title: "先动起来",
-    desc: "拖住左下角的摇杆走两步；电脑上也可以按住方向键或点地面。",
-    spot: GUIDE_SPOT.JOYSTICK,
-    trigger: GUIDE_EVENT.MOVE,
-  },
-  {
-    id: "fight",
-    title: "打一只怪",
-    desc: "走近怪物，点下面的技能（或按 1~6）就能出手。",
-    spot: GUIDE_SPOT.SHORTCUT,
-    trigger: GUIDE_EVENT.KILL,
-  },
-  {
-    id: "loot",
-    title: "把掉落捡起来",
-    desc: "怪死了会掉东西，走上去就会自动拾取，东西直接进背包。",
-    spot: GUIDE_SPOT.NAV_BAG,
-    trigger: GUIDE_EVENT.PICKUP,
-  },
-  {
-    id: "bag",
-    title: "看看背包",
-    desc: "刚捡的装备和药都在这里：点格子看详情，装备可以直接穿上。",
-    spot: GUIDE_SPOT.NAV_BAG,
-    trigger: GUIDE_EVENT.OPEN_BAG,
-  },
-  {
-    id: "skill",
-    title: "认识你的技能",
-    desc: "技能列表里有全部技能和解锁等级，拖到快捷栏就能随时用。",
-    spot: GUIDE_SPOT.NAV_SKILL,
-    trigger: GUIDE_EVENT.OPEN_SKILL,
-  },
-  {
-    id: "social",
-    title: "别一个人玩",
-    desc: "聊天分世界 / 帮会 / 私聊三页；任务在左边的追踪栏，点一下就能打开任务面板。",
-    spot: GUIDE_SPOT.NAV_CHAT,
-    trigger: GUIDE_EVENT.OPEN_CHAT,
-  },
-];
+/** 当前步骤表（快照到达前为空 —— 见文件头「#605」那段） */
+export let guideSteps: GuideStepConfig[] = [];
+
+/**
+ * 整表替换（`apply-snapshot` 用）
+ *
+ * 逐行校验后**只认认识的步骤**：`spot` / `trigger` 是客户端能力白名单
+ * （`types/guide.GUIDE_SPOT` / `GUIDE_EVENT`），服务端 DTO 已经卡过一遍，这里再卡一遍是因为
+ * 「配了客户端不认识的值」的后果是**玩家卡在那一步永远推进不了**（事件永远不会命中）——
+ * 与其卡死，不如跳过这一步：少一步引导不影响玩，卡住是致命的。
+ *
+ * 空数组视为「服务端把引导关了」→ 表为空 → 进度按已完成处理。
+ */
+export function applyGuideSteps(rows: unknown): void {
+  if (!Array.isArray(rows)) return;
+  // 用 Object.keys + 索引而不是 Object.values：客户端 tsconfig 的 lib 没有 ES2017（TS2550）
+  const eventValues = Object.keys(GUIDE_EVENT).map((key) => GUIDE_EVENT[key as keyof typeof GUIDE_EVENT] as string);
+  const spotValues = Object.keys(GUIDE_SPOT).map((key) => GUIDE_SPOT[key as keyof typeof GUIDE_SPOT] as string);
+  const steps: GuideStepConfig[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const source = row as Record<string, unknown>;
+    const id = typeof source.id === "string" ? source.id : "";
+    const title = typeof source.title === "string" ? source.title : "";
+    const desc = typeof source.desc === "string" ? source.desc : "";
+    const spot = typeof source.spot === "string" ? source.spot : "";
+    const trigger = typeof source.trigger === "string" ? source.trigger : "";
+    if (!id || !title || !desc || seen.has(id)) continue;
+    // 用 indexOf 而不是 includes：客户端 tsconfig 的 lib 只到 ES2015（TS2550）
+    if (spotValues.indexOf(spot) < 0 || eventValues.indexOf(trigger) < 0) {
+      console.warn(`[guide] 跳过第 ${steps.length + 1} 步「${id}」：高亮位 ${spot} / 推进事件 ${trigger} 不在客户端支持范围内`);
+      continue;
+    }
+    seen.add(id);
+    steps.push({ id, title, desc, spot: spot as GuideSpot, trigger: trigger as GuideEvent });
+  }
+  guideSteps = steps;
+}
 
 /** 步骤总数（`step` 到它就算走完） */
 export function guideStepCount(): number {

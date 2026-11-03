@@ -5,7 +5,7 @@ import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
 import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_OF, ITEM_TYPES } from "../../shared/game-data.generated";
-import { GROWTH_SCALARS } from "../../shared/growth-seed";
+import { GROWTH_SCALARS, MP_RECOVER_PER_SECOND } from "../../shared/growth-seed";
 import { drugOf, equipmentLevelOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
@@ -244,7 +244,7 @@ export class RolesService {
     // 血蓝收权（#596）：以库里上次落账值为基线，按经过时间结算自然回复后**覆盖**客户端上报值
     // （客户端那份只是血条平滑用的演出预测）。死亡不回复 —— 满血复活必须走 revive 接口。
     // 必须在重算之后：回复上限要用刚算出的 maxHp / maxMp
-    settleVitalsAuthority(stored, data, Date.now());
+    settleVitalsAuthority(stored, data, Date.now(), this.mpRecoverPerSecond());
     // 上限是上面那步算出来的，夹在它之后；血蓝已由 settleVitalsAuthority 结算（这里纯防御）
     clampVitals(data);
     const row: RoleRow = {
@@ -631,7 +631,7 @@ export class RolesService {
     const data = decodeStoredRoleData(existing.data);
     // 先结算自然回复再判「已满」（#596）：两次用药之间攒的回复要先入账，
     // 否则攒一会儿就够满的药会被误判成「无需使用」拒掉
-    settleVitalsAuthority(data, data, Date.now());
+    settleVitalsAuthority(data, data, Date.now(), this.mpRecoverPerSecond());
     const cell = this.readBagCell(data, dto.row, dto.col);
     // 格子里必须是药品表里登记过的 id：背包里也可能有装备 / 材料，那些不走用药
     const drug = this.drugs.findByKey(cell.id);
@@ -841,7 +841,7 @@ export class RolesService {
     const data = decodeStoredRoleData(existing.data);
     // 先结算自然回复再扣伤害（#596）：两次受击之间攒的回复不能被这一次落账吃掉
     // （这里 stored 与 incoming 是同一个对象，函数内先读后写，顺序安全）
-    settleVitalsAuthority(data, data, Date.now());
+    settleVitalsAuthority(data, data, Date.now(), this.mpRecoverPerSecond());
     const previous = Math.max(0, Math.floor(Number(data.hp) || 0));
     if (previous <= 0) return null; // 已经死了：不再扣也不再报
     const { maxHp } = this.resolveResourceLimits(existing, data);
@@ -1215,6 +1215,19 @@ export class RolesService {
     const fromDb = Number(this.growth.findScalar("roleMaxLevel")?.value);
     if (Number.isFinite(fromDb) && fromDb >= 1) return Math.floor(fromDb);
     return Math.max(1, Math.floor(Number(GROWTH_SCALARS.roleMaxLevel) || 60));
+  }
+
+  /**
+   * 魔法自然回复速度（#605：从写死的常量改成 `growth_scalars` 表，管理端可改）
+   *
+   * 与等级上限同一读法：**每次结算现查库**（不在进程里缓存），所以管理端改完下一次写档
+   * 就按新速度走，不需要重启。读不到（老库没有这行 / 非数字）回落出厂值。
+   * 0 是合法值（关闭自然回蓝），只有负数才当配置拍错。
+   */
+  private mpRecoverPerSecond(): number {
+    const fromDb = Number(this.growth.findScalar("mpRecoverPerSecond")?.value);
+    if (Number.isFinite(fromDb) && fromDb >= 0) return fromDb;
+    return MP_RECOVER_PER_SECOND;
   }
 
   /**

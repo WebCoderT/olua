@@ -15,6 +15,9 @@ import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
 import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
+import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
+import { CombatWeightsPage } from "./pages/CombatWeightsPage";
+import { GuideStepsPage } from "./pages/GuideStepsPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
 import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
@@ -180,6 +183,30 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <EquipmentSettingsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="runtime-params"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <RuntimeParamsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="combat-weights"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <CombatWeightsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="guide-steps"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <GuideStepsPage />
               </RequirePermission>
             }
           />

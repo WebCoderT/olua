@@ -178,6 +178,8 @@ export const SNAPSHOT_SECTIONS: SnapshotSectionSpec[] = [
   { key: "uiEffects", label: "界面特效参数", kind: "array" },
   { key: "equipmentSlots", label: "装备槽位表", kind: "array", minRows: 1 },
   { key: "equipmentMeta", label: "装备规则", kind: "object" },
+  { key: "runtimeParams", label: "运行时参数", kind: "object" },
+  { key: "guideSteps", label: "新手引导步骤", kind: "array" },
 ];
 
 /** 一处契约问题（key + 中文名 + 原因，直接拼进日志与界面） */
