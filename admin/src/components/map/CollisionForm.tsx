@@ -70,7 +70,9 @@ export function CollisionFormDialog({
     numbers.h >= 1;
   // 与 Tiled 口径对照（左上角），只在数值有效时算 —— 填到一半显示乱码更糟
   const tiled = valid ? tiledBoxOf(numbers) : null;
-  // 整块在图外：与 Tiled 口径无关，按世界坐标判（图的 y 范围是 [-height, 0]）
+  // 整块在图外：与 Tiled 口径无关，按世界坐标判（图的 y 范围是 [-height, 0]）。
+  // 这里是**输入过程中的即时提示**（值还没落库，服务端算不出来）—— 权威值仍是保存后返回的
+  // `fullyOutside`（`rectFullyOutside` 唯一判据），两处口径必须一致，改一处就要改另一处。
   const fullyOutside =
     valid &&
     (numbers.cx + numbers.w / 2 <= 0 ||
