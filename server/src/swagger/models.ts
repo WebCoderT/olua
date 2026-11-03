@@ -137,10 +137,12 @@ import {
   MapObjectDto,
   MapSourceDto,
   MapSpawnAreaDto,
+  MapSpawnAreaDeletedDto,
   MapSummaryDto,
   MapTypeGroupDto,
   MapWorldMonsterDto,
   SaveMapConfigDto,
+  SaveSpawnAreaDto,
 } from "../modules/map/dto/map.dto";
 import {
   MapMonitorDto,
@@ -460,6 +462,9 @@ export const SWAGGER_MODELS = [
   SaveMapConfigDto,
   MapListDto,
   MapDetailDto,
+  // 刷怪区绘制（#667）
+  SaveSpawnAreaDto,
+  MapSpawnAreaDeletedDto,
   // 实时地图监控（#665）
   MapMonitorDto,
   MapMonitorMonsterDto,

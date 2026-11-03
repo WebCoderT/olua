@@ -2004,6 +2004,37 @@ export type SaveMapConfig = {
   soulOfWar: number;
 };
 
+export type SaveSpawnArea = {
+  /**
+   * 区域名（同一张图内唯一，运营自己起，如「1号刷怪区」）
+   */
+  name: string;
+  /**
+   * 怪物 key（monsters 表的 id，必须存在）
+   */
+  monsterKey: string;
+  /**
+   * 这一区维持多少只（1~200，播种按它展开）
+   */
+  count: number;
+  /**
+   * 区域中心 x（世界坐标；原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 区域中心 y（世界坐标；y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 区域宽（像素，至少 16）
+   */
+  w: number;
+  /**
+   * 区域高（像素，至少 16）
+   */
+  h: number;
+};
+
 export type SaveUiEffect = {
 };
 
@@ -7551,6 +7582,17 @@ export type MapDetail = {
    * 每一块数据的来源（页面按它渲染徽标）
    */
   sources: MapSource[];
+};
+
+export type MapSpawnAreaDeleted = {
+  /**
+   * 恒为 true（失败会抛 404，不会有 false）
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的行 id
+   */
+  id: number;
 };
 
 export type MapMonitorMonster = {

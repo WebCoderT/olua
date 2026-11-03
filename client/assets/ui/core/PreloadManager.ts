@@ -92,7 +92,8 @@ export default class PreloadManager {
         const npc = npcs.get(`${object.properties[tiledPropertyNames.id] ?? ""}`);
         if (npc?.src) tasks.push({ dir: npc.src, kind: "frames" });
       });
-    // 怪物：monster 对象组的 id 属性即怪物编号（与 tools/import-spawn-areas.cjs 同一套读法）
+    // 怪物：monster 对象组的 id 属性即怪物编号（#667 起刷怪区归后台，所以这里只是「照资源里有的先预加载」；
+    // 后台新加的、TMX 里没有的怪种不会被列进来 —— AnimationHelper 未预加载时走异步补加载，能显示，只是首帧慢）
     readTiledObjects(xml, tiledGroupNames.monster).forEach((object) => {
       const resource = monsterResourceOf(`${object.properties[tiledPropertyNames.id] ?? ""}`);
       if (resource?.out) tasks.push({ dir: resource.out, kind: "monster", speedRate: resource.speedRate });

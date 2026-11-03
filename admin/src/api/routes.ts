@@ -550,7 +550,7 @@ export const routes = {
      */
     updateSettings: "/admin/mall/settings",
   },
-  /** adminMap 模块（4 个接口） */
+  /** adminMap 模块（7 个接口） */
   adminMap: {
     /**
      * 地图列表（GET /admin/maps）
@@ -576,6 +576,24 @@ export const routes = {
      * 这张图**此刻**的样子 + 最近的文字流。数据来自实时进程每秒写的两张投影表（`map_monitor_state` / `map_monitor_events`）。
      */
     monitor: (id: string) => `/admin/maps/${encodeURIComponent(id)}/monitor`,
+    /**
+     * 新建刷怪区（在图上拖一个框）（POST /admin/maps/{id}/spawn-areas）
+     *
+     * 管理端地图页「绘制刷怪区」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），
+     */
+    createSpawnArea: (id: string) => `/admin/maps/${encodeURIComponent(id)}/spawn-areas`,
+    /**
+     * 删除刷怪区（DELETE /admin/maps/{id}/spawn-areas/{areaId}）
+     *
+     * 删掉这张图上的一个刷怪区。**场上已经刷出来的怪不会消失** —— 它们的世界实例还在库里，
+     */
+    deleteSpawnArea: (id: string, areaId: string) => `/admin/maps/${encodeURIComponent(id)}/spawn-areas/${encodeURIComponent(areaId)}`,
+    /**
+     * 修改刷怪区（整份覆盖）（PATCH /admin/maps/{id}/spawn-areas/{areaId}）
+     *
+     * 改怪、改数量、改位置尺寸都走它，入参与新建完全一致。**整份覆盖**而不是分字段：
+     */
+    updateSpawnArea: (id: string, areaId: string) => `/admin/maps/${encodeURIComponent(id)}/spawn-areas/${encodeURIComponent(areaId)}`,
   },
   /** adminMonster 模块（4 个接口） */
   adminMonster: {

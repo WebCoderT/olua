@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -7,7 +7,15 @@ import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Permission } from "../../common/constants/permission";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
-import { MapDetailDto, MapListDto, MapSummaryDto, SaveMapConfigDto } from "./dto/map.dto";
+import {
+  MapDetailDto,
+  MapListDto,
+  MapSpawnAreaDeletedDto,
+  MapSpawnAreaDto,
+  MapSummaryDto,
+  SaveMapConfigDto,
+  SaveSpawnAreaDto,
+} from "./dto/map.dto";
 import { MapMonitorDto, MapMonitorQueryDto } from "./dto/map-monitor.dto";
 import { MapService } from "./map.service";
 
@@ -21,7 +29,7 @@ import { MapService } from "./map.service";
  * 要重打整个客户端包；现在归服务端，保存即生效。
  *
  * 不能改的是**资源本体**：TMX、底图、预览图、图层与对象组。服务端连一列都没有 ——
- * 想改地图长什么样，路只有一条：换资源 → `node tools/import-spawn-areas.cjs`（可带 `--db`
+ * 想改地图长什么样，路只有一条：换资源 → `node tools/import-map-resources.cjs`（可带 `--db`
  * 覆盖刷怪区）→ 重新打包客户端。所以这里**没有 POST / DELETE**（e2e 固化它们 404）：
  * 一张图存不存在由客户端的 TMX 决定，后台凭空建一行只会得到一张点开就黑屏的图。
  */
@@ -105,5 +113,78 @@ export class AdminMapController {
   @ApiDataResponse(MapSummaryDto, { description: "保存后的这一行（含类型名与计数）" })
   save(@Param("id") id: string, @Body() dto: SaveMapConfigDto, @CurrentUser() actor: AuthenticatedUser): MapSummaryDto {
     return this.mapService.save(id, dto, actor);
+  }
+
+  @Post(":id/spawn-areas")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.createSpawnArea",
+    summary: "新建刷怪区（在图上拖一个框）",
+    description:
+      "管理端地图页「绘制刷怪区」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），\n" +
+      "与读接口的 `spawnAreas` 完全同构 —— 画布（Tiled 口径）负责换算 `cx = x + w/2`、`cy = -(y + h/2)`。\n\n" +
+      "四道校验（失败一律 400，`code` 会区分）：\n" +
+      "- 地图存在且有像素尺寸（没跑过 `import-map-resources` 的图挡住，否则越界会报成一句看不懂的话）；\n" +
+      "- `monsterKey` 在 `monsters` 表里（`50019`）；\n" +
+      "- 同图区域名唯一（`20019`，409）；\n" +
+      "- 宽高 ≥ 16px，且**整个矩形在图内**（`40000`，文案带四边越界量）。\n\n" +
+      "`count` 落库时同时写进 `min` 与 `max`（播种只读 `max`，`min` 留给将来的动态补怪）。\n\n" +
+      "**生效时机**：世界只在该图分域「尚无实例」时按区域播种，所以已有玩家在里面的图不会立刻按新区域补怪 ——\n" +
+      "要立刻看到效果，得等该分域卸载（10 分钟没人）或重启实时进程。页面照实提示这一点。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id（必须已有对应 TMX 资源）" })
+  @ApiDataResponse(MapSpawnAreaDto, { description: "新建的这一行（含 id 与越界判定）" })
+  createSpawnArea(
+    @Param("id") id: string,
+    @Body() dto: SaveSpawnAreaDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapSpawnAreaDto {
+    return this.mapService.createSpawnArea(id, dto, actor);
+  }
+
+  @Patch(":id/spawn-areas/:areaId")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.updateSpawnArea",
+    summary: "修改刷怪区（整份覆盖）",
+    description:
+      "改怪、改数量、改位置尺寸都走它，入参与新建完全一致。**整份覆盖**而不是分字段：\n" +
+      "表单一次提交，分字段更新只会让两个标签页同时改时互相截半。\n\n" +
+      "区域不属于这张图（或已被别人删掉）→ 404 `50033`。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiParam({ name: "areaId", description: "刷怪区行 id（详情里的 spawnAreas[].id）" })
+  @ApiDataResponse(MapSpawnAreaDto, { description: "更新后的这一行" })
+  updateSpawnArea(
+    @Param("id") id: string,
+    @Param("areaId", ParseIntPipe) areaId: number,
+    @Body() dto: SaveSpawnAreaDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapSpawnAreaDto {
+    return this.mapService.updateSpawnArea(id, areaId, dto, actor);
+  }
+
+  @Delete(":id/spawn-areas/:areaId")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.deleteSpawnArea",
+    summary: "删除刷怪区",
+    description:
+      "删掉这张图上的一个刷怪区。**场上已经刷出来的怪不会消失** —— 它们的世界实例还在库里，\n" +
+      "要等该分域重新加载（没人 10 分钟后卸载 / 重启实时进程）才会按新的区域表重新播种。\n\n" +
+      "行不存在或不属于这张图 → 404 `50033`。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiParam({ name: "areaId", description: "刷怪区行 id" })
+  @ApiDataResponse(MapSpawnAreaDeletedDto, { description: "删除结果（deleted + id）" })
+  deleteSpawnArea(
+    @Param("id") id: string,
+    @Param("areaId", ParseIntPipe) areaId: number,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapSpawnAreaDeletedDto {
+    return this.mapService.deleteSpawnArea(id, areaId, actor);
   }
 }

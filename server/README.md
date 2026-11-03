@@ -271,7 +271,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `equip_aligns` | 装备外观对齐几何（#513） | 一行 = 一件衣服 / 一把武器 / 一套裸模的**外观**几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`；`out_positions` 是 8 个方向的 `[x, y]` JSON；`out_manual = 1` 表示绝对位置（武器的渐进语义）；**没有行 = 用客户端配置里的值**，所以「重置」就是删行 |
 | `role_mails` | 游戏内邮件（#429 / 频道 #436 / 保质期 #439） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at` + `expires_at`（毫秒时间戳，NULL = 永不过期，由投递方在 send 时给 `ttlMs`）。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列，其 `MAIL_RETENTION_DAYS` 是投递记录的保留期，与收件箱保质期是两件事）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；**带未领附件的行即使过期也不清理**（过期不等于替玩家扔奖励），清理任务每轮最多删 `MAIL_PURGE_BATCH` 条；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
-| `map_spawn_areas` | 刷怪区（#295 阶段一） | **从客户端 Tiled 导入一次后归服务端**：`tools/import-spawn-areas.cjs` 生成 SPAWN_AREAS 快照（提交进仓库），启动时空表自动 seed；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId |
+| `map_spawn_areas` | 刷怪区（#295 阶段一 / #667 后台绘制） | **管理端地图页拖框绘制**（`POST/PATCH/DELETE /admin/maps/:id/spawn-areas`），TMX 的 monster 组不再是来源；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId。改动在该图世界实例重新加载后生效 |
 | `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验（出厂 = growth-seed 的曲线展开，#590） |
 | `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验）；出厂 = growth-seed（#590 起曲线唯一书写处在服务端种子） |
 | `growth_scalars` | 成长标量参数（#256） | 等级上限 / 属性区间倍率 / 经验节奏；各键取值域见服务端常量 |

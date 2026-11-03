@@ -12231,6 +12231,213 @@
         ]
       }
     },
+    "/admin/maps/{id}/spawn-areas": {
+      "post": {
+        "description": "管理端地图页「绘制刷怪区」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），\n与读接口的 `spawnAreas` 完全同构 —— 画布（Tiled 口径）负责换算 `cx = x + w/2`、`cy = -(y + h/2)`。\n\n四道校验（失败一律 400，`code` 会区分）：\n- 地图存在且有像素尺寸（没跑过 `import-map-resources` 的图挡住，否则越界会报成一句看不懂的话）；\n- `monsterKey` 在 `monsters` 表里（`50019`）；\n- 同图区域名唯一（`20019`，409）；\n- 宽高 ≥ 16px，且**整个矩形在图内**（`40000`，文案带四边越界量）。\n\n`count` 落库时同时写进 `min` 与 `max`（播种只读 `max`，`min` 留给将来的动态补怪）。\n\n**生效时机**：世界只在该图分域「尚无实例」时按区域播种，所以已有玩家在里面的图不会立刻按新区域补怪 ——\n要立刻看到效果，得等该分域卸载（10 分钟没人）或重启实时进程。页面照实提示这一点。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.createSpawnArea",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（必须已有对应 TMX 资源）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSpawnAreaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的这一行（含 id 与越界判定）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapSpawnAreaDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新建刷怪区（在图上拖一个框）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapSpawnAreaDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/spawn-areas/{areaId}": {
+      "patch": {
+        "description": "改怪、改数量、改位置尺寸都走它，入参与新建完全一致。**整份覆盖**而不是分字段：\n表单一次提交，分字段更新只会让两个标签页同时改时互相截半。\n\n区域不属于这张图（或已被别人删掉）→ 404 `50033`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.updateSpawnArea",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "areaId",
+            "required": true,
+            "in": "path",
+            "description": "刷怪区行 id（详情里的 spawnAreas[].id）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSpawnAreaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的这一行",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapSpawnAreaDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改刷怪区（整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapSpawnAreaDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "删掉这张图上的一个刷怪区。**场上已经刷出来的怪不会消失** —— 它们的世界实例还在库里，\n要等该分域重新加载（没人 10 分钟后卸载 / 重启实时进程）才会按新的区域表重新播种。\n\n行不存在或不属于这张图 → 404 `50033`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.deleteSpawnArea",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "areaId",
+            "required": true,
+            "in": "path",
+            "description": "刷怪区行 id",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除结果（deleted + id）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapSpawnAreaDeletedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除刷怪区",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapSpawnAreaDeletedDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/ui-effects": {
       "get": {
         "description": "全部特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\nkey 的取值域由客户端的消费代码决定（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6`）。\n\n不分页，按 seed 顺序（= `UI_EFFECT_KEYS` 的登记顺序，升级特效在最前）返回。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -15581,6 +15788,53 @@
           "level",
           "combat",
           "soulOfWar"
+        ]
+      },
+      "SaveSpawnAreaDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "区域名（同一张图内唯一，运营自己起，如「1号刷怪区」）",
+            "minLength": 1,
+            "maxLength": 24
+          },
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key（monsters 表的 id，必须存在）",
+            "example": "1"
+          },
+          "count": {
+            "type": "number",
+            "description": "这一区维持多少只（1~200，播种按它展开）",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "cx": {
+            "type": "number",
+            "description": "区域中心 x（世界坐标；原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "区域中心 y（世界坐标；y 轴向上，故为负）"
+          },
+          "w": {
+            "type": "number",
+            "description": "区域宽（像素，至少 16）"
+          },
+          "h": {
+            "type": "number",
+            "description": "区域高（像素，至少 16）"
+          }
+        },
+        "required": [
+          "name",
+          "monsterKey",
+          "count",
+          "cx",
+          "cy",
+          "w",
+          "h"
         ]
       },
       "SaveUiEffectDto": {
@@ -24459,6 +24713,23 @@
           "spawnAreas",
           "worldMonsters",
           "sources"
+        ]
+      },
+      "MapSpawnAreaDeletedDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "恒为 true（失败会抛 404，不会有 false）"
+          },
+          "id": {
+            "type": "number",
+            "description": "被删掉的行 id"
+          }
+        },
+        "required": [
+          "deleted",
+          "id"
         ]
       },
       "MapMonitorMonsterDto": {

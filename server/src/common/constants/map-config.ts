@@ -71,6 +71,22 @@ export const MAP_ENTER_LIMITS = {
 /** 地图名称的最大长度（超出就是粘错了东西，不是「名字长」） */
 export const MAP_LABEL_MAX_LENGTH = 24;
 
+/**
+ * 刷怪区的取值域（#667 后台绘制）
+ *
+ * `name`：区域名是运营自己起的（同图内唯一），24 与地图名同一口径；
+ * `count`：一个区维持多少只。上限 200 —— 一个区两百只已经会让「进图第一帧」的 world 帧
+ *   大到几万字节，再往上多半是数量填错了（比如把坐标填进数量框）；
+ * `minSize`：矩形最小边长（像素）。手抖点一下会得到一个 1×1 的框，那种区域能刷但不能用 ——
+ *   挡在接口层，比事后在图上找一个针尖大的框容易。
+ */
+export const SPAWN_AREA_LIMITS = {
+  name: { min: 1, max: 24 },
+  count: { min: 1, max: 200 },
+  /** 矩形最短边（像素）；管理端画布也按它做「太小的框不提交」 */
+  minSize: 16,
+} as const;
+
 /** 一张图的出厂配置（落库前的默认值） */
 export interface MapDefault {
   id: string;
@@ -91,8 +107,8 @@ export interface MapDefault {
  * 用数组而不是 `Record<string, …>`：键清单那种形状容易被误读成「又维护了一份地图表」，
  * 而这张表的真实语义是「新库第一次启动时按资源清单补行的默认值」。
  *
- * 资源清单本身不在这里 —— 它是 `MAP_CONTENTS` 的键（`tools/import-spawn-areas.cjs`
- * 扫 `client/assets/resources/map` 得到）。这里没有的图会被补成「空名 / 安全地图 / 无门槛」，
+ * 资源清单本身不在这里 —— 它是 `maps` 表的行（由 `tools/import-map-resources.cjs`
+ * 扫 `client/assets/resources/map` 补出来）。这里没有的图会被补成「空名 / 安全地图 / 无门槛」，
  * 运营在管理端填上即可。
  */
 export const MAP_DEFAULTS: MapDefault[] = [

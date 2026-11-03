@@ -13,8 +13,8 @@
  *    `monsterAreaCount` 是客户端 TMX 的矩形数，`spawnAreaCount` 是服务端库表的行数，
  *    混在一起看就会得出「刷怪区和资源不一致」的假结论。
  * 2. **两套坐标不能混**：`groups` 是 Tiled 原始口径（左上角原点、y 向下），`spawnAreas` 是
- *    世界坐标（原点左上角、y 向上）。**同一个矩形的中心必须对得上** —— 这是唯一能证明
- *    「两边说的是同一件事」的判据。
+ *    世界坐标（原点左上角、y 向上）。#667 起刷怪区归后台绘制、TMX 不再是它的来源，两者
+ *    **不再要求重合** —— 但口径仍然是这两套，读接口的人不能拿 `groups` 的 y 去比 `cy`。
  * 3. **玩法配置保存即生效**：PATCH 之后列表 / 详情 / **玩家配置快照** 三处同步反映 ——
  *    第三处最关键，它决定「客户端下次进游戏能不能看到新门槛」。
  * 4. **资源本体写不动**：请求里塞 `src` 也会被丢掉（白名单剥离），返回仍是 `map/<id>/<id>`；
@@ -195,7 +195,7 @@ async function main() {
     checkEqual(map0.spawnAreaCount, 3, "服务端 map_spawn_areas 的行数（与上面那个 3 是两件事）");
     checkEqual(map0.worldMonsterCount, 0, "没跑过世界时场上怪物数是 0（不是 null）");
 
-    checkEqual(rows.find((row) => row.id === "3")?.spawnAreaCount, 18, "3 号图 18 个刷怪区（启动时从快照 seed 进库）");
+    checkEqual(rows.find((row) => row.id === "3")?.spawnAreaCount, 18, "3 号图 18 个刷怪区（出厂值随 config-sync.sql 首启灌入）");
     checkEqual(rows.find((row) => row.id === "4")?.monsterAreaCount, 7, "4 号图 7 个刷怪矩形");
 
     const listNoToken = await api(base, "GET", "/api/admin/maps");

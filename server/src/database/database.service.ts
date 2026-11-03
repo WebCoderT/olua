@@ -233,10 +233,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE INDEX IF NOT EXISTS idx_map_monitor_events_map ON map_monitor_events(zone_id, map_id, id);
 
-      -- 刷怪区（#295 阶段一）：一行 = Tiled monster 对象组的一个矩形区域，
-      -- 从 TMX 导入一次后归服务端（tools/import-spawn-areas.cjs 生成快照，启动时空表自动 seed）。
+      -- 刷怪区（#295 阶段一 / #667 后台绘制）：一行 = 地图上一个矩形区域。
+      -- #667 起由**管理端地图页拖框建/改/删**（POST/PATCH/DELETE /admin/maps/:id/spawn-areas），
+      -- TMX 的 monster 对象组不再是来源，导入工具也不写这张表（审计守点盯着）。
       -- 坐标口径与客户端世界坐标一致（cx/cy 区域中心、w/h 尺寸），播种时区域内随机取点。
-      -- (map_id, name) 唯一：同名区域在一张图里没有并存的意义，重跑导入也幂等。
+      -- (map_id, name) 唯一：同名区域在一张图里没有并存的意义（接口先查再插，翻成中文 409）。
       CREATE TABLE IF NOT EXISTS map_spawn_areas (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         map_id      TEXT    NOT NULL,
@@ -1184,7 +1185,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    *
    * 平移不可重复执行（再来一次就整体偏半张图），所以用 `world_meta.coord_origin` 打标记：
    * 只在它还是 'center' 时做一次，做完置 'topleft'。地图尺寸读 `maps` 的几何列
-   * （`tools/import-spawn-areas.cjs` 从 TMX 头写进来的），认不出的 map_id 只 warn、不动数据。
+   * （`tools/import-map-resources.cjs` 从 TMX 头写进来的），认不出的 map_id 只 warn、不动数据。
    */
   private migrateMapCoordinateOrigin(): void {
     const pending = this.count("SELECT COUNT(1) AS total FROM world_meta WHERE coord_origin = 'center'");
@@ -1208,7 +1209,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       "SELECT DISTINCT map_id FROM world_monsters UNION SELECT DISTINCT map_id FROM map_spawn_areas",
     ).filter((row) => !known.has(row.map_id));
     if (unknown.length > 0) {
-      this.logger.warn(`地图原点迁移：这些 map_id 没有几何（先跑 node tools/import-spawn-areas.cjs），坐标未平移 —— ${unknown.map((row) => row.map_id).join(", ")}`);
+      this.logger.warn(`地图原点迁移：这些 map_id 没有几何（先跑 node tools/import-map-resources.cjs），坐标未平移 —— ${unknown.map((row) => row.map_id).join(", ")}`);
     }
     this.logger.log(`地图原点已改为左上角：平移 ${moved} 条世界坐标（${known.size} 张图）`);
   }
