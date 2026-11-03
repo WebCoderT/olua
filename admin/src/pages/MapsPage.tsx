@@ -3,6 +3,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, Button, Card, EmptyState, Field as FormField, Input, Notice, Select, Spinner } from "../components/ui";
 import { MapCanvas, type MapLayerVisibility } from "../components/map/MapCanvas";
+import { MapMonitorDialog } from "../components/map/MapMonitor";
 import { outOfBoundsCount } from "../components/map/bounds";
 import {
   GroupsDialog,
@@ -29,7 +30,7 @@ interface MapForm {
 }
 
 /** 打开中的观测弹窗（页面主视图只留配置 + 地图，其余按需打开） */
-type DialogKey = "layers" | "points" | "spawn" | "monsters" | "groups" | "sources" | null;
+type DialogKey = "layers" | "points" | "spawn" | "monsters" | "groups" | "sources" | "monitor" | null;
 
 /** 叠加层的默认开关：碰撞盒数量大（每图上百个），默认关；其余默认开 */
 const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, tiled: true, npc: true, revive: true, collision: false };
@@ -329,6 +330,9 @@ export function MapsPage() {
                     <Button variant="ghost" onClick={() => setDialog("monsters")}>
                       场上怪物（{detail.worldMonsterCount}）
                     </Button>
+                    <Button variant="ghost" onClick={() => setDialog("monitor")}>
+                      实时监控
+                    </Button>
                     <Button variant="ghost" onClick={() => setDialog("layers")}>
                       图层（{detail.layerCount}）
                     </Button>
@@ -367,6 +371,14 @@ export function MapsPage() {
       <SpawnAreasDialog open={dialog === "spawn"} detail={detail} focusId={focusArea} onClose={() => setDialog(null)} />
       <NpcPointsDialog open={dialog === "points"} detail={detail} focusId={focusNpc} onClose={() => setDialog(null)} />
       <WorldMonstersDialog open={dialog === "monsters"} detail={detail} onClose={() => setDialog(null)} />
+      {detail ? (
+        <MapMonitorDialog
+          open={dialog === "monitor"}
+          mapId={detail.id}
+          mapLabel={detail.label}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
       <LayersDialog open={dialog === "layers"} detail={detail} onClose={() => setDialog(null)} />
       <GroupsDialog open={dialog === "groups"} detail={detail} onClose={() => setDialog(null)} />
       <SourcesDialog open={dialog === "sources"} detail={detail} onClose={() => setDialog(null)} />

@@ -550,7 +550,7 @@ export const routes = {
      */
     updateSettings: "/admin/mall/settings",
   },
-  /** adminMap 模块（3 个接口） */
+  /** adminMap 模块（4 个接口） */
   adminMap: {
     /**
      * 地图列表（GET /admin/maps）
@@ -570,6 +570,12 @@ export const routes = {
      * 改的是**整理结果**：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶。保存后立刻生效 ——
      */
     save: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
+    /**
+     * 实时地图监控（GET /admin/maps/{id}/monitor）
+     *
+     * 这张图**此刻**的样子 + 最近的文字流。数据来自实时进程每秒写的两张投影表（`map_monitor_state` / `map_monitor_events`）。
+     */
+    monitor: (id: string) => `/admin/maps/${encodeURIComponent(id)}/monitor`,
   },
   /** adminMonster 模块（4 个接口） */
   adminMonster: {

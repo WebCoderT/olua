@@ -346,6 +346,41 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     return null;
   }
 
+  /**
+   * 一张图上此刻有哪些玩家、各在哪（#665 实时地图监控用）
+   *
+   * 与 `broadcast()` 的收件人口径不同：那个是「发给谁」，这个是「谁在图里」——
+   * 监控页要的是后者。数据就是互见帧的原料（位置 / 血量 / 移动标记），**不做任何加工**：
+   * 位置仲裁（#596）的结果已经在 `entry.x/y` 里，这里不再二次判定。
+   *
+   * 只读：不改变在场表、不触发广播。
+   */
+  playersOn(zoneId: number, mapId: string): Array<{
+    accountId: string;
+    name: string;
+    x: number;
+    y: number;
+    hp: number;
+    maxHp: number;
+    moving: boolean;
+  }> {
+    const rows: Array<{ accountId: string; name: string; x: number; y: number; hp: number; maxHp: number; moving: boolean }> = [];
+    for (const [accountId, entry] of this.entries) {
+      if (entry.zoneId !== zoneId || entry.mapId !== mapId) continue;
+      rows.push({
+        accountId,
+        name: this.usernameOf(accountId),
+        x: entry.x,
+        y: entry.y,
+        hp: entry.hp,
+        maxHp: entry.maxHp,
+        moving: entry.moving,
+      });
+    }
+    // 名字排序：同图同帧的多个玩家在监控里顺序稳定，不会因为 Map 迭代顺序抖动
+    return rows.sort((left, right) => left.name.localeCompare(right.name));
+  }
+
   //#endregion
 
   //#region 广播

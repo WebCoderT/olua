@@ -12147,6 +12147,90 @@
         ]
       }
     },
+    "/admin/maps/{id}/monitor": {
+      "get": {
+        "description": "这张图**此刻**的样子 + 最近的文字流。数据来自实时进程每秒写的两张投影表（`map_monitor_state` / `map_monitor_events`）。\n\n- `monsters`：全部实例（含死亡等重生的），`x` / `y` 是**世界坐标** —— 活着的怪是 AI 模拟位置，死掉的怪停在死亡点；`respawnInMs` / `respawnAt` 是「下次什么时候刷」；\n- `players`：同区同图的玩家（位置来自客户端 `pos` 帧，已过服务端最小仲裁）；\n- `events`：击杀（谁在哪打死了什么、掉了什么、几时刷新）与刷新，按时间升序，用 `cursor` 增量拉；\n- `staleMs`：快照距今多久。**没人在那张图里时采集器不采样**，这个值会一直涨 —— 页面必须照实说「最后采样 N 秒前」，别把停更的图当成「图里什么都没有」。\n\n坐标换算：画到地图上要 `tiledY = -y`（与刷怪区同一套世界坐标口径）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMap.monitor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（= resources/map 下的目录名，如 0 / 10）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "zone",
+            "required": false,
+            "in": "query",
+            "description": "区服 id（不传 = 用该图最新的那份快照所在区）",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "description": "事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "本次最多取多少条事件（默认 60，上限 200）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "这一帧的怪物 / 玩家 / 事件 + 游标与新鲜度",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapMonitorDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "实时地图监控",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapMonitorDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
     "/admin/ui-effects": {
       "get": {
         "description": "全部特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\nkey 的取值域由客户端的消费代码决定（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6`）。\n\n不分页，按 seed 顺序（= `UI_EFFECT_KEYS` 的登记顺序，升级特效在最前）返回。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -24376,6 +24460,308 @@
           "worldMonsters",
           "sources"
         ]
+      },
+      "MapMonitorMonsterDto": {
+        "type": "object",
+        "properties": {
+          "instanceId": {
+            "type": "string",
+            "description": "实例 id（服务端发牌，如 m1_z1_3）"
+          },
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key（monsters 表主键）"
+          },
+          "label": {
+            "type": "string",
+            "description": "怪物名"
+          },
+          "x": {
+            "type": "number",
+            "description": "当前 x（世界坐标）：活怪是 AI 模拟位置，死怪是死亡点"
+          },
+          "y": {
+            "type": "number",
+            "description": "当前 y（世界坐标）"
+          },
+          "hp": {
+            "type": "number",
+            "description": "当前血量"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "血量上限"
+          },
+          "alive": {
+            "type": "boolean",
+            "description": "是否存活（false = 死亡等重生）"
+          },
+          "respawnInMs": {
+            "type": "number",
+            "description": "距重生还剩多少毫秒（存活时为 null）",
+            "nullable": true
+          },
+          "respawnAt": {
+            "type": "number",
+            "description": "预定重生时刻（毫秒时间戳；存活时为 null）",
+            "nullable": true
+          }
+        },
+        "required": [
+          "instanceId",
+          "monsterKey",
+          "label",
+          "x",
+          "y",
+          "hp",
+          "maxHp",
+          "alive",
+          "respawnInMs",
+          "respawnAt"
+        ]
+      },
+      "MapMonitorPlayerDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "description": "账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名（取不到回落账号名）"
+          },
+          "x": {
+            "type": "number",
+            "description": "x（世界坐标）"
+          },
+          "y": {
+            "type": "number",
+            "description": "y（世界坐标）"
+          },
+          "hp": {
+            "type": "number",
+            "description": "当前血量"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "血量上限"
+          },
+          "moving": {
+            "type": "boolean",
+            "description": "是否在移动"
+          }
+        },
+        "required": [
+          "accountId",
+          "name",
+          "x",
+          "y",
+          "hp",
+          "maxHp",
+          "moving"
+        ]
+      },
+      "MapMonitorDropDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "物品 id"
+          },
+          "label": {
+            "type": "string",
+            "description": "物品名（服务端从表现取；取不到为空串）"
+          },
+          "count": {
+            "type": "number",
+            "description": "数量"
+          },
+          "x": {
+            "type": "number",
+            "description": "落点 x（世界坐标）= 击杀点"
+          },
+          "y": {
+            "type": "number",
+            "description": "落点 y（世界坐标）= 击杀点"
+          }
+        },
+        "required": [
+          "goodId",
+          "label",
+          "count",
+          "x",
+          "y"
+        ]
+      },
+      "MapMonitorEventDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "自增 id（即翻页游标）"
+          },
+          "at": {
+            "type": "number",
+            "description": "事件时刻（毫秒时间戳）"
+          },
+          "kind": {
+            "type": "string",
+            "description": "事件类型：kill 击杀 / respawn 刷新"
+          },
+          "instanceId": {
+            "type": "string",
+            "description": "怪物实例 id"
+          },
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key"
+          },
+          "label": {
+            "type": "string",
+            "description": "怪物名"
+          },
+          "x": {
+            "type": "number",
+            "description": "发生地点 x（世界坐标）：击杀 = 死亡点，刷新 = 出生点"
+          },
+          "y": {
+            "type": "number",
+            "description": "发生地点 y（世界坐标）"
+          },
+          "killer": {
+            "type": "string",
+            "description": "击杀者角色名（刷新事件为空串）"
+          },
+          "drops": {
+            "description": "掉落（刷新事件为空数组）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapMonitorDropDto"
+            }
+          },
+          "respawnAt": {
+            "type": "number",
+            "description": "这只怪下次刷新时刻（毫秒时间戳；刷新事件为 0）"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "kind",
+          "instanceId",
+          "monsterKey",
+          "label",
+          "x",
+          "y",
+          "killer",
+          "drops",
+          "respawnAt"
+        ]
+      },
+      "MapMonitorDto": {
+        "type": "object",
+        "properties": {
+          "mapId": {
+            "type": "string",
+            "description": "地图 id"
+          },
+          "mapLabel": {
+            "type": "string",
+            "description": "地图名"
+          },
+          "width": {
+            "type": "number",
+            "description": "地图像素宽（画布 viewBox 用）"
+          },
+          "height": {
+            "type": "number",
+            "description": "地图像素高"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "这一帧是哪个区的世界（同一张图各区各有一份）"
+          },
+          "zones": {
+            "description": "这张图有哪些区留下过快照（页面据此切换区）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "sampledAt": {
+            "type": "number",
+            "description": "快照采样时刻（毫秒）；null = 这张图从没被采样过",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "快照写入时刻（毫秒）；null = 没有快照",
+            "nullable": true
+          },
+          "staleMs": {
+            "type": "number",
+            "description": "快照距今多少毫秒（null = 没有快照；大 = 那张图没人看，数据已停）",
+            "nullable": true
+          },
+          "monsters": {
+            "description": "怪物（含死亡等重生的实例）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapMonitorMonsterDto"
+            }
+          },
+          "players": {
+            "description": "玩家（同区同图）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapMonitorPlayerDto"
+            }
+          },
+          "events": {
+            "description": "文字事件（按时间升序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapMonitorEventDto"
+            }
+          },
+          "cursor": {
+            "type": "number",
+            "description": "下一次请求带上的游标（本次返回的最大事件 id；没有事件时原样回传 since）"
+          }
+        },
+        "required": [
+          "mapId",
+          "mapLabel",
+          "width",
+          "height",
+          "zoneId",
+          "zones",
+          "sampledAt",
+          "updatedAt",
+          "staleMs",
+          "monsters",
+          "players",
+          "events",
+          "cursor"
+        ]
+      },
+      "MapMonitorQueryDto": {
+        "type": "object",
+        "properties": {
+          "zone": {
+            "type": "number",
+            "description": "区服 id（不传 = 用该图最新的那份快照所在区）"
+          },
+          "since": {
+            "type": "number",
+            "description": "事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）"
+          },
+          "limit": {
+            "type": "number",
+            "description": "本次最多取多少条事件（默认 60，上限 200）"
+          }
+        }
       },
       "UiEffectDto": {
         "type": "object",

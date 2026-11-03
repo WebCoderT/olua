@@ -13,6 +13,7 @@ import { RolesService } from "../roles/roles.service";
 import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
+import { MapMonitorService } from "./map-monitor.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from "./realtime.protocol";
@@ -81,6 +82,7 @@ export class CombatSettlementService {
     private readonly events: GameEventsService,
     private readonly party: PartyService,
     private readonly presence: PlayerPresenceService,
+    private readonly monitor: MapMonitorService,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -206,6 +208,12 @@ export class CombatSettlementService {
 
     // 怪物 AI（#323）：打伤 = 被动怪记恨这次出手的人（AI 收权后追击由服务端驱动）；
     // 击杀则清掉它的 AI 运行时（重生回出生点按新一轮游走开始）
+    //
+    // 死亡点要在清运行时**之前**取（#665 实时地图监控）：AI 运行时一删，这只怪「倒在哪」
+    // 就只剩出生点了；取不到（图没人看 / AI 还没跑过）退回出生点，那是服务端唯一稳定的坐标。
+    const deathSpot = applied.killed
+      ? (this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y })
+      : null;
     if (applied.killed) this.monsterAi.onMonsterKilled(cast.targetId);
     else this.monsterAi.provoke(cast.targetId, accountId);
 
@@ -227,6 +235,22 @@ export class CombatSettlementService {
         monsterLabel: stats.label,
         monsterTier: stats.tier,
       });
+      // 实时地图监控（#665）：这条文字（谁在哪打死了什么、掉了什么、几时刷新）给管理端看。
+      // 只在这一条「新结算」路径记 —— 幂等重发在上面早退，不会重复记两条。
+      if (deathSpot) {
+        this.monitor.recordKill({
+          instanceId: cast.targetId,
+          monsterKey: cast.monsterKey,
+          label: stats.label,
+          zoneId: target.zoneId,
+          mapId: target.mapId,
+          x: deathSpot.x,
+          y: deathSpot.y,
+          killer: this.roleNameOf(role),
+          drops: reward.drops,
+          respawnAt: target.respawnAt ?? Date.now(),
+        });
+      }
     }
 
     this.logger.debug(

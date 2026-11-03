@@ -292,6 +292,20 @@ export interface AppConfiguration {
   playerPosMaxSpeed: number;
   //#endregion
 
+  //#region 实时地图监控（#665：把内存里的世界投影成管理端可读的两张表）
+  /**
+   * 采样间隔（毫秒）
+   *
+   * 监控页的刷新节奏就是它：1 秒一帧够看清「哪儿有怪、谁死了」，再快只是给 SQLite
+   * 加写放大；再慢（> 3 秒）图上就要靠猜了。
+   */
+  mapMonitorMs: number;
+  /** 每区每图保留多少条文字事件（击杀 / 刷新）：滚到更早的事该去看运维日志，不是监控页 */
+  mapMonitorEventKeep: number;
+  /** 攒够多少条新事件才裁一次旧记录（每杀一只都 DELETE 会让 WAL 白涨） */
+  mapMonitorTrimEvery: number;
+  //#endregion
+
   //#region 社交（#388：帮会 / #389：好友与敌人）
   /**
    * 帮会人数上限（默认 50）
@@ -446,6 +460,9 @@ export default function configuration(): AppConfiguration {
     playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
     playerPosMaxSpeed: Number(process.env.PLAYER_POS_MAX_SPEED ?? 1000),
+    mapMonitorMs: Number(process.env.MAP_MONITOR_MS ?? 1000),
+    mapMonitorEventKeep: Number(process.env.MAP_MONITOR_EVENT_KEEP ?? 300),
+    mapMonitorTrimEvery: Number(process.env.MAP_MONITOR_TRIM_EVERY ?? 25),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
     socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
     socialBlockLimit: Number(process.env.SOCIAL_BLOCK_LIMIT ?? 100),

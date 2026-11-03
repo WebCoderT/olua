@@ -419,6 +419,36 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 - **迁移**：`ensureColumn` 补 `channel`（默认 system）+ 一次性回填
   `UPDATE role_mails SET channel = 'reward' WHERE kind = 'achievement' AND channel = 'system'`（幂等）。
 
+### 四之九、跨进程投影：实时进程写表，存档进程读表（#665）
+
+两个进程之间**只有共享 SQLite 这一条路**。要在管理端展示「世界内存里的东西」（怪物点位 / 血量 /
+重生倒计时 / 谁在图里 / 刚掉了什么），唯一的做法是**投影落库**，而不是加第二条 WS 或跨进程 RPC：
+
+```
+世界内存（实时进程）→ MapMonitorService 每 mapMonitorMs 采样 → map_monitor_state / map_monitor_events
+                                                                    ↓
+                          存档进程 GET /admin/maps/:id/monitor ← MapMonitorRepository（只读）
+```
+
+- **投影，不是权威**：删掉这两张表不影响游戏，重启后第一帧采样就补上；因此它们**不进 `config-sync.sql`**
+  （那是配置表，整表替换），也不做乐观锁、不提供改单条；
+- **只采「有人看的图」**（`world.viewedMaps()`）：没人看时 AI 不跑、也没有广播对象，采它等于给空气写库。
+  代价是快照会停 —— 所以**必须把新鲜度发出去**（`sampledAt` / `updatedAt` / `staleMs`），
+  否则「停更十小时」和「图里什么都没有」在页面上长得一模一样；
+- **死怪的坐标要单独记**：`monsterAi.onMonsterKilled` 会把运行时删掉（重生要回出生点），之后
+  `WorldMonster.x/y` 只剩出生点。所以结算侧**先取 `livePositionOf` 再清运行时**，采集器再用
+  `lastPosition` 记住倒下点 —— 图上那颗灰色残点才落在它真正倒下的地方；
+- **重生事件靠快照差分**（上一帧 dead → 这一帧 alive），不掺和 `WorldService.processRespawns`：
+  少一条跨模块因果链，也就不用给 world 加钩子；
+- **事件行要裁剪**（`mapMonitorEventKeep` / `mapMonitorTrimEvery`）：监控是「看最近发生了什么」，
+  不是审计。攒够 N 条才裁一次（每杀一只都 `DELETE` 会让 WAL 白涨）；
+- **游标语义**：`since=0` 取最新 `limit` 条（打开页面先看最近的事），`since>0` 取 `id > since` 升序；
+  **没有新事件时原样回传 `since`** —— 往前跳一格就是永久漏事件；
+- **`respawnInMs` 在读侧按 now 重算**，不要直接发快照里的值（快照是几百毫秒前的，倒计时会偏）；
+- 掉落物**不逐件记坐标**：客户端 `DropManager` 以死亡坐标为中心铺开，所以「物品在哪」= 击杀点。
+  给每件掉落另记坐标等于制造「表现层坐标的第二个来源」；
+- 采集器失败**只 warn 不停摆**（监控不是游戏主链路），单图异常吞在心里，下个周期再来。
+
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
 这几件事互相咬合，**改动时基本必须一起看**：
@@ -592,6 +622,7 @@ env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.
 - `test/e2e-roles.cjs` 的七段结构可直接照抄扩展：修订号 / 筛选 / 结构化字段 / 乐观锁联动 / 批量删除 / 权限 / 文档；
 - `test/e2e-guard.cjs` 是**两段式启动**：第一台服务把 IP 维度放宽（`LOGIN_IP_MAX_FAILURES=1000`）好单独验用户名维度，第二台把它调到 1 专验 IP 维度；零段直接 `require("../dist/common/utils/rate-limit.util.js")` 跑纯函数边界（不必起服务）。
 - `test/e2e-realtime.cjs` 用的是真 WebSocket 客户端（`ws`）：**拒连不是靠「连上再被关」验的**，而是听 `unexpected-response` 读回服务端手写的那份 HTTP 响应；存活探测靠 `autoPong: false` 让客户端故意不还 pong；优雅关闭靠给子进程发 `SIGTERM` 再断言「连接收到 `1001` + 进程确实退出了 + 日志落了收尾那一行」。把 `REALTIME_TICKET_TTL_MS` / `REALTIME_HEARTBEAT_MS` 调小（如 3000 / 1000）能让这些断言在秒级跑完。
+- `test/e2e-map-monitor.cjs`（#665）是**跨进程投影**的唯一护栏，四个要点：① 用临时**文件库**（`:memory:` 看不到库里的行，裁剪那条要直接数）；② 刷怪区播种必须放在 `startServer()` **之后**（出厂快照会整表替换）；③ 玩家出现在监控里靠 `pos` 帧（在场表只由它建立，`worldJoin` 不建）；④ 「采集会停」用**断开连接 + 两次读数 staleMs 递增**来验 —— 这是页面上「采集已停」的唯一证据，别改成断言快照被清空。
 
 ## 八、提交纪律（强制）
 

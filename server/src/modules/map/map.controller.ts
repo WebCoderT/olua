@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -8,6 +8,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Permission } from "../../common/constants/permission";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { MapDetailDto, MapListDto, MapSummaryDto, SaveMapConfigDto } from "./dto/map.dto";
+import { MapMonitorDto, MapMonitorQueryDto } from "./dto/map-monitor.dto";
 import { MapService } from "./map.service";
 
 /**
@@ -63,6 +64,27 @@ export class AdminMapController {
   @ApiDataResponse(MapDetailDto, { description: "地图详情" })
   detail(@Param("id") id: string): MapDetailDto {
     return this.mapService.detail(id);
+  }
+
+  @Get(":id/monitor")
+  @ApiAdminDoc({
+    operationId: "adminMap.monitor",
+    summary: "实时地图监控",
+    description:
+      "这张图**此刻**的样子 + 最近的文字流。数据来自实时进程每秒写的两张投影表（`map_monitor_state` / `map_monitor_events`）。\n\n" +
+      "- `monsters`：全部实例（含死亡等重生的），`x` / `y` 是**世界坐标** —— 活着的怪是 AI 模拟位置，" +
+      "死掉的怪停在死亡点；`respawnInMs` / `respawnAt` 是「下次什么时候刷」；\n" +
+      "- `players`：同区同图的玩家（位置来自客户端 `pos` 帧，已过服务端最小仲裁）；\n" +
+      "- `events`：击杀（谁在哪打死了什么、掉了什么、几时刷新）与刷新，按时间升序，用 `cursor` 增量拉；\n" +
+      "- `staleMs`：快照距今多久。**没人在那张图里时采集器不采样**，这个值会一直涨 —— 页面必须" +
+      "照实说「最后采样 N 秒前」，别把停更的图当成「图里什么都没有」。\n\n" +
+      "坐标换算：画到地图上要 `tiledY = -y`（与刷怪区同一套世界坐标口径）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiParam({ name: "id", description: "地图 id（= resources/map 下的目录名，如 0 / 10）" })
+  @ApiDataResponse(MapMonitorDto, { description: "这一帧的怪物 / 玩家 / 事件 + 游标与新鲜度" })
+  monitor(@Param("id") id: string, @Query() query: MapMonitorQueryDto): MapMonitorDto {
+    return this.mapService.monitor(id, query);
   }
 
   @Patch(":id")
