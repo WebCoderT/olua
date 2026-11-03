@@ -4,9 +4,11 @@ import { dropApi, PERMISSION } from "../../api";
 import { hasPermission } from "../../store/session";
 import { toastSuccess } from "../../store/toast";
 import { Modal } from "../Modal";
+import { anyPickerOpen } from "../pickerStack";
 import { Button, Field, Select, Spinner } from "../ui";
 import {
   EntriesEditor,
+  EntriesPreview,
   type EntryDraft,
   PicksEditor,
   type PicksDraft,
@@ -125,7 +127,10 @@ export function MonsterDropDialog({
       title={<>掉落 · {monsterLabel ?? `key ${monsterKey}`}</>}
       hint={<>整份替换：引用具名表 / 内联条目池 / 清空走兜底，三选一。掉落由服务端抽取并入包，改完即时生效（客户端不参与结算）。</>}
       size="lg"
-      onClose={onClose}
+      onClose={() => {
+        // 物品选择器叠在本弹窗上：关选择器不该顺手把这份改了一半的掉落一起关掉
+        if (!anyPickerOpen()) onClose();
+      }}
       footer={<>
         <Button variant="outline" disabled={saving} onClick={onClose}>
           取消
@@ -171,10 +176,14 @@ export function MonsterDropDialog({
                 <PicksEditor draft={picks} onChange={setPicks} />
               </div>
               {selectedTable ? (
-                <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
-                  这张表自己的件数是 <span className="font-mono text-slate-200">{picksText(selectedTable.picks)}</span>；
-                  上面留空就用它，填了就只对这只怪生效。
-                </p>
+                <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+                  <p className="text-xs text-slate-400">
+                    这张表自己的件数是 <span className="font-mono text-slate-200">{picksText(selectedTable.picks)}</span>；
+                    上面留空就用它，填了就只对这只怪生效。
+                  </p>
+                  {/* 「这张表里到底是什么」——共用表一改影响所有引用它的怪，别只看条数就点保存 */}
+                  <EntriesPreview entries={selectedTable.entries} />
+                </div>
               ) : null}
             </div>
           ) : null}

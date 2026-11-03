@@ -3,7 +3,8 @@ import { equipmentsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, s
 import type { ConfigAttributes, Equipment, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
-import { IconField, anyPickerOpen } from "../components/ImagePicker";
+import { IconField } from "../components/ImagePicker";
+import { anyPickerOpen } from "../components/pickerStack";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";

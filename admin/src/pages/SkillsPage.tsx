@@ -12,7 +12,8 @@ import {
 } from "../api";
 import type { CreateSkill, DamageCoefficient, PageResult, Skill, Status, UpdateSkill } from "../api";
 import { GameIcon } from "../components/GameImage";
-import { IconField, anyPickerOpen } from "../components/ImagePicker";
+import { IconField } from "../components/ImagePicker";
+import { anyPickerOpen } from "../components/pickerStack";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";

@@ -1,4 +1,5 @@
 import { Modal } from "../Modal";
+import { usePickerStackEntry } from "../pickerStack";
 import { EntityPickerList } from "./EntityPickerList";
 import type { EntityOption } from "./catalog";
 
@@ -13,6 +14,9 @@ import type { EntityOption } from "./catalog";
  *
  * 每次打开都重置搜索与分组（`resetKey` = open）：否则上一次挑装备的「武器」分组会
  * 带到下一次选技能里，界面上看起来像「没有可选的东西」。
+ *
+ * 与 `ImagePicker` 一样登记到 `pickerStack`：选择器叠在编辑弹窗上时，编辑弹窗的
+ * `onClose` 要靠 `anyPickerOpen()` 放行，否则「关选择器」会顺手把编辑弹窗一起关掉。
  */
 export function EntityPicker({
   open,
@@ -34,6 +38,8 @@ export function EntityPicker({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  usePickerStackEntry(open);
+
   return (
     <Modal
       open={open}

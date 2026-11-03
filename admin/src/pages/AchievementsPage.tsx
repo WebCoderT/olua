@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { achievementsApi, formatTime, PERMISSION } from "../api";
 import type { Achievement, AchievementQuery, PageResult } from "../api";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -7,6 +7,9 @@ import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
+import { EntityPickButton } from "../components/entity/EntityPickButton";
+import { entityOptions } from "../components/entity/catalog";
+import { anyPickerOpen } from "../components/pickerStack";
 
 /** 分类的中文名（与成就种子的 category 同值） */
 const CATEGORY_LABELS: Record<string, string> = {
@@ -31,7 +34,13 @@ const CUMULATIVE = new Set(["kill", "quest"]);
 type Category = "battle" | "growth" | "explore";
 type ConditionType = "kill" | "quest" | "level" | "combat" | "collect";
 
-/** 编辑 / 新建表单的草稿形状（奖励物品用「id:数量, id:数量」这一行文本，保存时解析） */
+/** 奖励物品的一条（数量用字符串承载，空串不会静默变 0） */
+interface RewardItemDraft {
+  goodId: string;
+  count: string;
+}
+
+/** 编辑 / 新建表单的草稿形状（奖励物品是结构化行 + 可视化挑选，不再是「id:数量」文本） */
 interface Draft {
   id: string;
   category: Category;
@@ -42,7 +51,7 @@ interface Draft {
   conditionCount: number;
   gold: number;
   exp: number;
-  itemsText: string;
+  items: RewardItemDraft[];
   sortOrder: number;
   hidden: boolean;
 }
@@ -59,7 +68,7 @@ function toDraft(item: Achievement): Draft {
     conditionCount: item.condition.count,
     gold: item.rewards.gold,
     exp: item.rewards.exp,
-    itemsText: item.rewards.items.map((entry) => `${entry.goodId}:${entry.count}`).join(", "),
+    items: item.rewards.items.map((entry) => ({ goodId: entry.goodId, count: String(entry.count) })),
     sortOrder: item.sortOrder,
     hidden: item.hidden,
   };
@@ -77,22 +86,19 @@ function emptyDraft(): Draft {
     conditionCount: 10,
     gold: 0,
     exp: 0,
-    itemsText: "",
+    items: [],
     sortOrder: 0,
     hidden: false,
   };
 }
 
-/** 奖励物品文本 → DTO 数组（格式错直接抛，交给上层提示） */
-function parseItems(text: string): Array<{ goodId: string; count: number }> {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  return trimmed.split(",").map((piece) => {
-    const [goodId, count] = piece.split(":");
-    const id = (goodId ?? "").trim();
-    const amount = Number((count ?? "").trim());
-    if (!id) throw new Error("奖励物品格式应为「物品id:数量」");
-    if (!Number.isInteger(amount) || amount <= 0) throw new Error(`物品 ${id} 的数量必须是正整数`);
+/** 奖励物品行 → DTO 数组（没挑物品 / 数量非法直接抛，交给上层提示） */
+function rewardItems(rows: RewardItemDraft[]): Array<{ goodId: string; count: number }> {
+  return rows.map((row, index) => {
+    const id = row.goodId.trim();
+    const amount = Number(row.count);
+    if (!id) throw new Error(`第 ${index + 1} 条奖励物品还没挑物品`);
+    if (!Number.isInteger(amount) || amount <= 0) throw new Error(`第 ${index + 1} 条奖励物品的数量必须是正整数`);
     return { goodId: id, count: amount };
   });
 }
@@ -131,6 +137,8 @@ export function AchievementsPage() {
   const [form, setForm] = useState<Draft | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** 物品候选（奖励物品 + 持有类条件的目标，同一份清单） */
+  const itemOptions = useMemo(() => entityOptions("item"), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -175,9 +183,9 @@ export function AchievementsPage() {
     if (!form) return;
     let items: Array<{ goodId: string; count: number }>;
     try {
-      items = parseItems(form.itemsText);
+      items = rewardItems(form.items);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "奖励物品格式不对");
+      window.alert(error instanceof Error ? error.message : "奖励物品填错了");
       return;
     }
     const payload = {
@@ -277,6 +285,8 @@ export function AchievementsPage() {
               : "状态型条件：进度按角色当前状态现算，改门槛会立刻改变所有人的达成状态。"
           }
           onClose={() => {
+            // 奖励物品 / 持有条件的物品选择器叠在本弹窗上：关选择器不该把整份成就表单一起关掉
+            if (anyPickerOpen()) return;
             setForm(null);
             setCreating(false);
           }}
@@ -346,14 +356,26 @@ export function AchievementsPage() {
               form.conditionType === "kill"
                 ? "怪物 key，或 * 表示任意怪"
                 : form.conditionType === "collect"
-                  ? "物品 id"
+                  ? "持有哪些物品算进度：挑一样即可"
                   : "这两类不看目标，留空即可"
             }
           >
-            <Input
-              value={form.conditionTarget}
-              onChange={(event) => setForm({ ...form, conditionTarget: event.target.value })}
-            />
+            {form.conditionType === "collect" ? (
+              // 持有类条件的目标就是物品 id —— 与奖励物品同一个可视化选择器，不用背 id
+              <EntityPickButton
+                value={form.conditionTarget}
+                options={itemOptions}
+                kind="item"
+                pickerTitle="选择要持有的物品"
+                placeholder="点这里挑物品"
+                onChange={(goodId) => setForm({ ...form, conditionTarget: goodId })}
+              />
+            ) : (
+              <Input
+                value={form.conditionTarget}
+                onChange={(event) => setForm({ ...form, conditionTarget: event.target.value })}
+              />
+            )}
           </Field>
           <Field label="门槛值" hint={cumulative ? "需要累计多少次" : "需要达到多少"}>
             <Input
@@ -375,9 +397,64 @@ export function AchievementsPage() {
             <Input type="number" value={form.exp} onChange={(event) => setForm({ ...form, exp: Number(event.target.value) || 0 })} />
           </Field>
           <div className="md:col-span-2">
-            <Field label="奖励物品" hint="格式：material_iron:2, material_gem:1（留空表示不给物品）">
-              <Input value={form.itemsText} onChange={(event) => setForm({ ...form, itemsText: event.target.value })} />
-            </Field>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-400">奖励物品（留空表示不给物品）</span>
+              <Button
+                variant="outline"
+                className="px-2.5 py-1 text-xs"
+                disabled={!canWrite}
+                onClick={() => setForm({ ...form, items: [...form.items, { goodId: "", count: "1" }] })}
+              >
+                加一条
+              </Button>
+            </div>
+            {form.items.length === 0 ? (
+              <p className="text-xs text-slate-500">没有物品奖励：只发金币与经验。</p>
+            ) : (
+              <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                {form.items.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <EntityPickButton
+                        value={entry.goodId}
+                        options={itemOptions}
+                        kind="item"
+                        pickerTitle={`选择第 ${index + 1} 条奖励物品`}
+                        hint="装备（含全部前后缀变体）/ 药品 / 材料都在这里。"
+                        onChange={(goodId) =>
+                          setForm({
+                            ...form,
+                            items: form.items.map((row, i) => (i === index ? { ...row, goodId } : row)),
+                          })
+                        }
+                      />
+                    </div>
+                    <span className="text-xs text-slate-600">×</span>
+                    <div className="w-24 shrink-0">
+                      <Input
+                        type="number"
+                        min={1}
+                        aria-label={`第 ${index + 1} 条奖励数量`}
+                        value={entry.count}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            items: form.items.map((row, i) => (i === index ? { ...row, count: event.target.value } : row)),
+                          })
+                        }
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1 text-xs text-rose-300"
+                      onClick={() => setForm({ ...form, items: form.items.filter((_, i) => i !== index) })}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>        </Modal>
       ) : null}

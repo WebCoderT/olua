@@ -6,7 +6,8 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
-import { IconField, anyPickerOpen } from "../components/ImagePicker";
+import { IconField } from "../components/ImagePicker";
+import { anyPickerOpen } from "../components/pickerStack";
 
 /** 槽位在角色弹窗里的位置分组（与服务端 `EquipmentSlotSeed.position` 同值域） */
 const POSITION_OPTIONS: Array<{ value: string; label: string }> = [

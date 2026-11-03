@@ -5,6 +5,7 @@ import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { MonsterDropDialog } from "../components/drop/MonsterDropDialog";
+import { anyPickerOpen } from "../components/pickerStack";
 import {
   DROP_SOURCE_LABELS,
   DROP_SOURCE_TONE,
@@ -74,7 +75,10 @@ function DropTableDialog({
       title={<>{creating ? "新建具名掉落表" : `编辑具名掉落表 · ${initial?.id}`}</>}
       hint="表可被多只怪复用；被引用中的表不能删。改表即时生效（服务端掉落结算直读表）。"
       size="lg"
-      onClose={onCancel}
+      onClose={() => {
+        // 物品选择器叠在本弹窗上（条目行里那个按钮）：关选择器不该把这份表一起关掉
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={<>
         <Button variant="outline" disabled={submitting} onClick={onCancel}>
           取消

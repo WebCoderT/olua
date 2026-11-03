@@ -3,7 +3,8 @@ import { ACQUIRE_CHANNEL, ACQUIRE_CHANNEL_LABELS } from "../api";
 import type { ConfigAttributes, Rank, Soul, Title } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "./AttributesEditor";
 import { Modal } from "./Modal";
-import { IconField, anyPickerOpen } from "./ImagePicker";
+import { IconField } from "./ImagePicker";
+import { anyPickerOpen } from "./pickerStack";
 import { Button, Field, Input, Notice, Select } from "./ui";
 
 /** 弹窗表单值（channel 仅称号、tier 仅军衔有；不相关的 kind 传过来时忽略）。价格不在这里 —— 唯一修改口在成长列表（#232/#234/#250） */
