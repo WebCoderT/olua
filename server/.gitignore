@@ -6,8 +6,11 @@ dist/
 .env
 .env.local
 
-# SQLite 数据文件
-data/
+# SQLite 数据文件（含玩家账号 / 存档 / 审计，绝不入库）
+# 唯一例外：配置同步快照 data/config-sync.sql —— 它**要**提交（多机同步用）
+# 注意必须写 `data/*` 而不是 `data/`：父目录整体被排除时，`!` 放不开里面的文件
+data/*
+!data/config-sync.sql
 
 # 备份产物（各自机器上的数据，不进版本库）
 backups/

@@ -63,6 +63,10 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:map` | 地图管理专项（122 条；**玩法配置可改 / 资源本体不可改** / 两套坐标对账 / 无新建·删除 / 权限与文档契约） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
+| `npm run config:export` | **把当前库的配置表覆盖写入 `data/config-sync.sql`**（提交它 = 同步给别人） |
+| `npm run config:import` | 把 `config-sync.sql` 灌进当前库（整表替换；账号与角色存档不动） |
+| `npm run config:check` | 检查快照是否落后于当前库（落后时退出码 1） |
+| `npm run test:config-sync` | 配置快照导出 / 导入测试（不起服务） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
 | `npm run verify` | **一条命令全验**：编译 + 二十八套 e2e + 生成物审计 |
 
@@ -178,7 +182,7 @@ server/
 │       ├── setup.ts                文档挂载（抽成函数，好让测试也生成一次来验分组/权限/悬空 $ref）
 │       ├── models.ts               文档用的响应模型
 │       └── emit.ts                 ← 离线产出 openapi.json
-├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 scripts/lib/db-tooling.cjs）
+├── scripts/                        备份 / 恢复（VACUUM INTO + 五步恢复，见 lib/db-tooling.cjs）+ 配置同步（lib/config-sql.cjs / 表分组在 lib/config-tables.cjs）
 ├── test/
 │   ├── e2e.cjs（真实起服务 + 真实 HTTP 请求）
 │   ├── e2e-roles.cjs
@@ -203,11 +207,50 @@ server/
 │   ├── e2e-admin-mail.cjs（管理端消息补发 #437：观察员 403 / 玩家令牌 401 / 频道收窄 / 角色不存在 404 / 形状校验 / 附件领到手 / reward 落位 / 离线收件 / 审计留痕 / 文档分组）
 │   ├── e2e-mail-expiry.cjs（收件箱保质期 #439：ttl 写入 / 读口即时消失 / 过期单封操作按不存在 / 清理判据：带未领附件不删·空永不删 / 批量上限跨批）
 │   ├── e2e-ui-effect.cjs（特效 #594 升级 + #634 掉落光效六档：观察员可读不可写 / seed 出厂值与顺序 / 没有新建·删除 / 数值边界 / key 404 / 保存追账 / 快照即最新 / 审计 / 文档契约）
+│   ├── config-sync.cjs（配置快照：分类守点 / 值转义 / 往返 / 改动同步 / 坏文件拒绝）
 │   └── backup.cjs（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
 ├── openapi.json                    机器可读契约（提交进仓库）
-├── data/                           SQLite 数据文件（不进版本库）
+├── data/                           SQLite 数据文件（不进版本库）；**例外：config-sync.sql 要提交**
 └── .env.example · package.json · tsconfig.json · tsconfig.build.json
 ```
+
+## 配置同步：多机各自跑本地时怎么对齐（#653）
+
+配置存在库里，而**种子只对空库生效**（所有 `seedRow` 都是 `INSERT OR IGNORE`）——
+改完种子推上去，对方 `git pull` 重启后库里那行还在，种子被整行跳过，一个值都不会变。
+要生效只能删库重建，而他那份库里有账号和角色存档。
+
+所以配置走**导入导出 SQL**，不碰种子、也不碰运行时数据：
+
+```bash
+make config-export     # 管理端改完 → 把库里 31 张配置表覆盖写入 data/config-sync.sql
+git add server/data/config-sync.sql && git commit
+# —— 另一台机器 ——
+git pull && make config-import       # 整表替换配置；账号与角色存档原样保留
+# 然后重启服务端（配置在进程内存里有副本）
+```
+
+| 命令 | 作用 |
+| --- | --- |
+| `make config-export` | 库 → `data/config-sync.sql`（只读导出，服务在跑也能导） |
+| `make config-import` | `data/config-sync.sql` → 库（整表替换，一个事务） |
+| `make config-check` | 快照是否落后于当前库（落后退出码 1，报「哪张表第几行」） |
+
+**哪些表进文件**：唯一分类处是 `scripts/lib/config-tables.cjs` —— 31 张配置表 + 21 张
+运行时表。账号 / 角色存档 / 审计 / 世界怪物实例永远不进。库里出现**没归类的表**时导出
+直接报错（新加表忘了分类，比漏同步更难查）。
+
+**为什么是整表替换而不是 upsert**：upsert 表达不了删除。配置里删掉一条之后，upsert 会让
+对方那行永远留着。所以每张表都是 `DELETE` + 逐行 `INSERT`，文件即快照。代价是**文件必须是
+全量的**，所以导入前会校验：格式标记、表清单完全一致、每张表恰好一条 `DELETE`、不含运行时表
+—— 少一张就拒绝（否则那张会被清空）。
+
+**三道自保**：导入前把当前配置留档到 `data/backups/config-before-import-<时间>.sql`；
+导入前校验；导入后**重新生成一份快照与文件逐字节比对**（不是「没抛异常就算成功」）。
+
+> 导入后必须**重启服务端**：`RuntimeConfigService` / `CombatWeightsService` 在启动时把值装进
+> 进程内存，实时进程 3101 也是各自的副本。单进程本地开发重启 3100 即可，四容器部署要连
+> `server-realtime` 一起重启。
 
 ## 数据模型
 
@@ -419,7 +462,8 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-二十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock）：
+二十九套测试里，二十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock），
+外加一套 `config-sync` 是纯脚本测试（配置快照不经过 HTTP，起服务只会把两类问题混在一起）：
 
 | 脚本 | 断言数 | 覆盖 |
 | --- | --- | --- |
@@ -435,6 +479,7 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-world.cjs` | **24** | 世界权威：**空图按刷怪区播种**（不认识的怪物 key 跳过、落点在区域矩形内、重复 join 不翻倍、账号间共享同一实例）/ 结算直接落世界（快照血量 = 结算血量、B 视角同步）/ 打死怪进重生队列 / **tick 到点重生并广播** / 优雅关闭全量落盘 / **重启后实例身份与血量原样恢复**（到期重生一次性补处理） |
 | `test/e2e-dual.cjs` | **14** | 双进程形态（#175）：存档进程（`REALTIME_EMBEDDED=false`）没有实时接口（取票 404）/ 实时进程凭**同一份库**校验令牌（取票 → WS → welcome）/ worldJoin 播种与 cast 结算在实时进程跑通 / 落盘后**测试进程开只读连接可见** `world_monsters`（WAL 承接跨进程写）/ 管理端在存档进程踢下线 → 实时进程巡检间隔内断连（close `4000`）/ 存档进程重置密码 → 旧令牌在实时进程取票被拒（`token_version` 对库比对） |
 | `test/backup.cjs` | **87** | 备份 / 恢复：运行中 `VACUUM INTO` 拿一致快照 / 恢复后旧库留档 / 坏文件与「服务可能在跑」的保护性拒绝 / 自动定时备份（真实进程、失败可见、到点判定纯函数） |
+| `test/config-sync.cjs` | **43** | 配置快照导出 / 导入（**不起服务**）：分类守点（新表漏归类当场报错）/ 值转义（单引号·换行·NULL）/ 往返逐字节等价 / 改值与删行能同步过去 / 有五种坏文件被拒绝 / `compare` 能定位到落后的是哪张表 |
 | `test/e2e-rank.cjs` | **56** | 排行榜（#400）：**三个榜（等级 / 战力 / 击杀）的名次与数值逐个对** / 并列时同名次（竞赛排名，同分再按 roleId 升序）/ 战力榜与等级榜不同序（证明不是照抄等级）/ 分页切片、空页、`size` 夹上限与非法分页 `/ `me` 榜内榜外名次都真实、当前无在线角色时返回「没有名次」、未登录被拒 / 刷新周期设为零时快照不随存档变、`computedAt` 不动 / 条目恰好八个字段且不带 `accountId`·`data`·在线状态 / 周期定时重算真的换了一份 |
 | `test/e2e-bag.cjs` | **38** | 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理与搬运全在服务端；**move·tidy 只验两条守恒**（网格形状 + 同 id 总件数）；等级门槛与部位由服务端判（1 级穿 10 级衣服被拒且衣服还在包里）；穿脱当场重算属性（脱掉加血装备血量跟着降）；**`PUT /roles/:id` 改不动背包 / 装备 / 技能**（回填而不是拒收）；**背包尺寸归客户端配置**（改大能长个且不丢东西，存档不重排位置）；错 revision → 20006、别人的角色 → 40300 |
 | `test/e2e-map.cjs` | **122** | 地图管理（#573，**玩法配置可改、资源本体不可改**）：11 张图按 id **数值**升序（`10` 不排到 `2` 前面）/ 两类计数各归各位（`monsterAreaCount` 是客户端 TMX 的矩形、`spawnAreaCount` 是库表行数）/ **两套坐标对账**（`groups` 是 Tiled 原始口径，`spawnAreas` 是世界坐标 —— 同一个矩形的中心必须对得上）/ **玩法配置保存即生效**（列表 / 详情 / **玩家配置快照**三处同步；请求里塞 `src` 被白名单剥掉，下发方改不到客户端加载哪张图）/ 参数越界（类型 / 等级 / 名称）一律 400 且没写进去 / **POST·PUT·DELETE 一律 404**（没有「新建 / 删除地图」这回事：图存不存在由 TMX 决定）/ 不存在的图 404 + 50032 / 观察员可读、写 403、无令牌 401 / 文档契约与「没有 Map 写模型」 |

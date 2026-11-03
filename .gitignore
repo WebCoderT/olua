@@ -70,3 +70,13 @@ _loose_frames_archive/
 
 # 本机待办清单（只给自己看，不入库）
 /TODO-FOR-USER.md
+
+#//////////////////////////
+# 本地数据库（玩家账号 / 密码哈希 / 角色存档 / 审计日志 / 世界怪物实例）
+#   **绝不进版本库**：仓库是 PUBLIC，提交一次 hash 就永久留在 git 历史里。
+#   配置同步走 server/data/config-sync.sql（那个文件要提交，不在这里忽略）。
+#//////////////////////////
+server/data/*.db
+server/data/*.db-wal
+server/data/*.db-shm
+server/data/backups/
