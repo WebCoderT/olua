@@ -164,7 +164,13 @@ import {
   MapMonitorQueryDto,
 } from "../modules/map/dto/map-monitor.dto";
 import { SaveUiEffectDto, UiEffectConfigDto, UiEffectDto, UiEffectListDto } from "../modules/ui-effect/dto/ui-effect.dto";
-import { AudioSettingDto, AudioSettingListDto, SaveAudioSettingDto } from "../modules/audio-setting/dto/audio-setting.dto";
+import {
+  AudioConfigDto,
+  AudioConfigListDto,
+  AudioSettingDto,
+  AudioSettingListDto,
+  SaveAudioSettingDto,
+} from "../modules/audio-setting/dto/audio-setting.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -502,8 +508,10 @@ export const SWAGGER_MODELS = [
   UiEffectConfigDto,
   UiEffectListDto,
   SaveUiEffectDto,
-  // 音效（#680 登录背景音 / 登录按钮音）
+  // 音效（#680 管理端配置 / #683 客户端下发）
   AudioSettingDto,
   AudioSettingListDto,
   SaveAudioSettingDto,
+  AudioConfigDto,
+  AudioConfigListDto,
 ];

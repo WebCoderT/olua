@@ -24,6 +24,8 @@
 - **加一张表别整份重导 `config-sync.sql`**：全新库 `config-export` 出的列顺序与仓库那份不同（历史 `ALTER TABLE` vs
   `CREATE TABLE`），整份覆盖 = 几千行假 diff。做法：只把新增那张表的节**拼接**进去，再手改表头三行（表数 / 行数 / tables / counts）。
   另：`cp` 库文件前先 `PRAGMA wal_checkpoint(TRUNCATE)`，否则新表还在 `-wal` 里 → 导入报 `no such table`。
+- **`make config-check` 常红在「用户手上正在改的那张表」**（如 `drop_tables` 库 5 / 文件 4）：先逐表比行数定位，
+  确认与本轮无关就**不要整份 `config-export`**（会把他没定稿的改动一起打包进提交）。
 - **工具**：只信 Grep 工具（BSD `grep "a\|b"` 恒空）；批量替换 `perl -pi -e`（本机 `sed -i ''` 异常）；改完看行尾（`GameUiHelper.ts` 历史上是 CRLF，现已统一 LF —— 动手前 `grep -c $'\r'` 确认，别凭记忆假设）；子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof`。
 - 删改代码用 node 按行号区间（跨行正则会从文件头 `/**` 吃到函数尾）；`//#region` 是有语义的注释，不能当注释裁。
 - **一份数据只能一个来源**：库表（`config-sync.sql` 是它的导出物）→ 快照段 → `apply*` 整表重建，守点「导出一致 + 行数自洽」。代码里不许再有种子/生成物副本（`server/src/shared/` 已删）。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`），`configs-sandbox` 与真装载共用同一个 `apply*`。
@@ -96,7 +98,15 @@
   中文 / 空格 / `..` / 绝对路径全拒），判据唯一处 `server/src/common/constants/audio.ts` 的 `audioPathProblem()`，
   页面有逐条对齐的副本做边输边提示 + `usableFiles` 过滤。**服务端不查文件是否存在**（资源包不在镜像里）→ 试听是唯一验证手段。
   目录清单双来源同形状：生产 `resources/audio-manifest.json`（nginx 无目录列表）/ dev `__list?dir=sounds&audio=1`。
-  **本轮不下发 `game-config` 快照**（e2e 有一条断言钉着），客户端对接时再加 `audio` 段并改那条断言。
+- **#683 音效接客户端 + 扩到 11 项 + 分类（2026-11-04）**：11 项 4 类（登录与界面 / 战斗与角色 /
+  物品与货币 / 成长与传送），**分类也写在服务端常量**（不进库：库里是运营改过的值，分类是清单本身）。
+  下发两条路、同形状 `AudioConfigDto`（key/filePath/volume/loop/enabled，不带展示名/分类/追账）：
+  快照 `audio` 段 + **公开接口 `GET /game-config/audio`**（登录场景没令牌，而背景音正是那时要响）。
+  客户端 `ui/core/SoundManager`：常驻节点（`addPersistRootNode`）+ 两路 AudioSource（循环音 / `playOneShot`），
+  clip 缓存、音量走 volumeScale（`source.volume` 固定 1）。**`file_path` 是全项目唯一允许服务端覆写的资源路径**；
+  客户端**没有本地兜底值**（表里没有 / 停用 / 空路径 → `audioConfigOf` 返回 null = 不播）。
+  挂点都在「服务端确认之后」；掉落一次结算只响一次、金钱音只在三种货币真变时响；战士普攻按 `config.id === "1000"`
+  （`skill_1000` 被 1002~1011 复用）。资源：`木剑砍击音效.wav` → `warrior_attack.wav`（`.meta` 一起改，uuid 不变）。
 - open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。

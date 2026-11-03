@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsBoolean, IsInt, IsString, Max, MaxLength, Min } from "class-validator";
-import { AUDIO_LIMITS } from "../../../common/constants/audio";
+import { AUDIO_CATEGORIES, AUDIO_LIMITS } from "../../../common/constants/audio";
 
 /**
  * 音效配置的 DTO（#680）
@@ -17,11 +17,23 @@ import { AUDIO_LIMITS } from "../../../common/constants/audio";
 
 /** 管理端列表 / 保存返回的一行（含展示名与追账字段） */
 export class AudioSettingDto {
-  @ApiProperty({ description: "音效 key（登录背景音 login_bgm、登录按钮音 login_click；取值域见 AUDIO_KEYS）", example: "login_bgm" })
+  @ApiProperty({
+    description: "音效 key（取值域见 AUDIO_KEYS：登录背景音 login_bgm、战士普攻 warrior_attack…）",
+    example: "login_bgm",
+  })
   key: string;
 
   @ApiProperty({ description: "展示名（中文，随接口下发 —— 页面不写死文案，加一个音效只改服务端常量）", example: "登录场景背景音" })
   label: string;
+
+  @ApiProperty({
+    description: `所属分类（管理端 tab 分组用；客户端不消费）。取值域：${AUDIO_CATEGORIES.map((item) => item.key).join(" / ")}`,
+    example: "login",
+  })
+  category: string;
+
+  @ApiProperty({ description: "分类展示名（随接口下发，页面不写死文案）", example: "登录与界面" })
+  categoryLabel: string;
 
   @ApiProperty({
     description:
@@ -75,3 +87,43 @@ export class AudioSettingListDto {
   })
   list!: AudioSettingDto[];
 }
+
+/**
+ * 客户端看到的音效配置（快照 `audio` 段 / 公开接口 `GET /game-config/audio` 共用）
+ *
+ * 比管理端那份少两样东西：
+ * - **追账字段不要**（`updatedBy` / `updatedAt` 是运营排障用的，玩家不需要知道是谁改的）；
+ * - **分类不要**：分类只决定管理端的 tab，客户端按 key 取用，多一个字段只会让人以为要读它。
+ *
+ * 路径**保留扩展名**（`sounds/login_bg.wav`）—— 客户端 `resources.load` 前自己去扩展名，
+ * 这样运营看到的与管理端一字不差，不会被「这里要带、那里不要带」绕进去。
+ */
+export class AudioConfigDto {
+  @ApiProperty({ description: "音效 key（客户端按它取用，不认分类）", example: "login_bgm" })
+  key: string;
+
+  @ApiProperty({
+    description: "资源相对路径（带扩展名，相对 resources/）；空串 = 未配置，这一项不播",
+    example: "sounds/login_bg.wav",
+  })
+  filePath: string;
+
+  @ApiProperty({ description: `音量百分比（${AUDIO_LIMITS.volumeMin}~${AUDIO_LIMITS.volumeMax}，100 = 原始音量）` })
+  volume: number;
+
+  @ApiProperty({ description: "是否循环播放（true 的那一项是背景音：切场景要停）" })
+  loop: boolean;
+
+  @ApiProperty({ description: "开关（false = 客户端整个不播，连文件都不读）" })
+  enabled: boolean;
+}
+
+/** 客户端音效配置列表（公开接口的返回体；快照里是裸数组，形状与本类的 list 一致） */
+export class AudioConfigListDto {
+  @ApiProperty({ description: "行数（= 音效 key 数）" })
+  total!: number;
+
+  @ApiProperty({ description: "全部音效配置，按 AUDIO_KEYS 登记顺序", type: [AudioConfigDto] })
+  list!: AudioConfigDto[];
+}
+

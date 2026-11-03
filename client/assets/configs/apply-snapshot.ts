@@ -13,6 +13,7 @@ import { GOOD_TYPE } from "../types/good";
 import type { EquipmentData, OutTransform } from "../types/good";
 // 快照的「表 + 每段落库」都在 configs/game-config（#626 合并），这里只做编排
 import {
+  applyAudioRows,
   applyCombatWeights,
   applyDrugRows,
   applyEquipmentRules,
@@ -258,6 +259,8 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyMapRows(snapshot.maps, snapshot.mapTypes);
   applyUiEffectRows(snapshot.uiEffects);
   applyRuntimeParams(snapshot.runtimeParams);
+  // #683：音效（文件路径 / 音量 / 循环 / 开关）—— 唯一由服务端覆写的资源路径，见 game-config 区 21
+  applyAudioRows(snapshot.audio);
   // #605：新手引导步骤（表在服务端，客户端只留表现层）
   applyGuideSteps(snapshot.guideSteps);
 }

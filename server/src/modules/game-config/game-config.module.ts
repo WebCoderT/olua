@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { MapModule } from "../map/map.module";
 import { UiEffectModule } from "../ui-effect/ui-effect.module";
+import { AudioSettingModule } from "../audio-setting/audio-setting.module";
 import { AdminAchievementController } from "./admin-achievement.controller";
 import { AdminGameDataController } from "./admin-game-data.controller";
 import { AdminDropController } from "./admin-drop.controller";
@@ -48,7 +49,8 @@ import { GuideSettingsService } from "./guide-settings.service";
 @Module({
   // 地图玩法配置（#573）：配置快照要下发它（客户端据此判进入条件）
   // 特效（#594 升级特效 / #634 掉落光效）：配置快照要下发它（客户端特效按服务端参数演）
-  imports: [MapModule, UiEffectModule],
+  // 音效（#683）：配置快照要下发它（客户端按 key 播 / 不播）—— 只借它的 service，不借控制器
+  imports: [MapModule, UiEffectModule, AudioSettingModule],
   controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminRoleLevelController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController, AdminGameDataController],
   providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService, CombatWeightsService, GuideSettingsService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价

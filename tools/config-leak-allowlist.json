@@ -95,6 +95,11 @@
       "rule": "cn",
       "match": "await this.timed(`帧动画",
       "reason": "同上：控制台诊断日志的阶段名（#224），玩家不可见。"
+    },
+    {
+      "file": "ui/core/SoundManager.ts",
+      "rule": "nodeName",
+      "reason": "new Node(\"sound_manager\") 是音效常驻节点（#683）的引擎侧身份：创建与使用都在 SoundManager 内，靠 director.addPersistRootNode 存活、从不按名查找，也没有任何可调含义（玩家看不到它）。"
     }
   ]
 }

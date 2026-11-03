@@ -102,7 +102,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
 | `DropConfigPage` | **掉落模版仓库**（#254 / #661 / #663）：只有具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器；「批量添加」走 `EntityPicker multiple` 多选）。条目池是**固定列宽栅格**（`ENTRY_GRID`：序 / 物品 / 权重 / 概率 / 数量 / 删，列头与行共用同一串 `grid-cols-[…]`）；**概率那一格按百分比填**（`EntryDraft.chancePct` 0~100，落库 ÷100），留空 = 必掉。具名表被引用中的行拒删。**每怪掉落不在这页** —— 怪物列表里每只怪自己一行「掉落」（`MonsterDropDialog`），两处列同一份数据只会互相打架。编辑器与弹窗是共用件（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`）—— 别再在页面里各写一套三选一 |
 | `UiEffectsPage` | **特效表现参数**（#594 / #634，`game-config:read/write`）：一族一个页签（升级特效 / 掉落光效），左栏预览右栏参数，改一个数左边立刻重画（未保存也生效）。图集路径是两端约定，所以没有新建 / 删除 |
-| `AudioSettingsPage` | **音效配置**（#680）：一个音效项一张卡 —— 文件路径（`sounds/xxx.wav`，**只能英文名**）/ 音量 / 循环 / 启用 + **试听**（按表单当前值播）。路径**入库**（与特效的差别），服务端不查文件存在性，验证靠试听；本轮只落库、不下发快照 —— 见「五点十五」 |
+| `AudioSettingsPage` | **音效配置**（#680）：一个音效项一张卡 —— 文件路径（`sounds/xxx.wav`，**只能英文名**）/ 音量 / 循环 / 启用 + **试听**（按表单当前值播）。路径**入库**（与特效的差别），服务端不查文件存在性，验证靠试听；**分 4 类 tab**（分类随接口下发）、**已下发客户端**（快照 audio 段 + 公开接口）—— 见「五点十五」 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
@@ -437,16 +437,26 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 3. **服务端不检查文件是否存在**。资源包不在服务端（镜像里没有 `client/assets/resources`），强行查
    只会掩盖「本地有、线上没有」。所以**试听按钮是这个页面的核心**：能播 = 路径对、MIME 对、文件在。
    试听按表单当前值播（音量 / 循环都取未保存的值），与「保存后会是什么样」保持一致。
-4. **本轮不下发配置快照**（用户定「先配置、后对接」）：`AudioSettingService` 已导出、`list()` 已备好，
-   但 `ClientConfigService` 里**没有** audio 段，e2e 里有一条断言钉着「快照里没有 audio」——
-   对接客户端时那条要一起改。
-5. **素材清单两个来源同形状**（与图片选择器一个道理）：生产 `resources/audio-manifest.json`
+4. **分类与文案都随接口下发，页面不写死**（#683）：每行带 `category` / `categoryLabel`（唯一书写处是
+   服务端 `AUDIO_DEFAULTS`），tab 栏**按行的出现顺序分组**（= `AUDIO_KEYS` 登记顺序，按分类成组），
+   所以加一个音效项 / 加一个分类只改服务端常量 —— 页面自动多一个 tab，不会留下空 tab。
+   `CATEGORY_ACCENTS` 里只有装饰色（tab 圆点 / 卡片左色条），未知分类落到默认色，加分类也不花。
+5. **已下发客户端**（#683）：`ClientConfigService.snapshot()` 的 `audio` 段 + 公开接口
+   `GET /game-config/audio`（登录场景没有令牌，而背景音正是那时要响的）。两条路同形状（`AudioConfigDto`：
+   只有 key / filePath / volume / loop / enabled，**不带**展示名 / 分类 / 追账），客户端只有一套读法。
+   页面文案因此改成「保存后下次进游戏生效」，不再是「只落库不出声」。
+6. **素材清单两个来源同形状**（与图片选择器一个道理）：生产 `resources/audio-manifest.json`
    （`make image-manifest` 一并生成，带扩展名）、开发 `/game-resources/__list?dir=sounds&audio=1`
    （vite 中间件扫盘）。都拿不到就降级成「手填 + 试听」，不阻塞配置。
 6. **静态素材读取要进审计白名单**：`fetch('/game-resources/...')` 直接写在页面里会被
    `audit-api-hardcode` 判红（管理端请求只许从 `api/http.ts` 发）。做法是像 `equipAlign/assets.ts`
    那样单独一个文件（`pages/audioSettings/assets.ts`）并在审计的 `adminAssets` 里登记，
    页面里连 `fetch` 都不出现。**提示文案里也别写 `http://localhost:8080`** —— 那同样算硬编码地址。
+
+页面版面的四层（#683）：页头 → 概览（`StatCard` ×4：音效项 / 已启用 / 缺少文件 / 未保存）→
+分类 tab（`role="tablist"` + 每类计数）→ 音效卡（左侧展示名 + key + 循环/追账，右侧文件行 + 试听 +
+音量 + 两个开关 + 保存）。「未保存」既在页头给总数、也在行上标 —— 一个音效一项一张卡时，
+没有行级提示会漏掉「改了但没存」的那一张。
 
 ## 六、必踩的坑
 

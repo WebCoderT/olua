@@ -1,6 +1,9 @@
 import { Controller, Get } from "@nestjs/common";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
+import { Public } from "../../common/decorators/public.decorator";
+import { AudioSettingService } from "../audio-setting/audio-setting.service";
+import { AudioConfigListDto } from "../audio-setting/dto/audio-setting.dto";
 import { ClientConfigService } from "./client-config.service";
 import { EquipAlignService } from "./equip-align.service";
 import { EquipInAlignService } from "./equip-in-align.service";
@@ -19,6 +22,7 @@ import { EquipInAlignListDto } from "./dto/equip-in-align.dto";
 export class ClientConfigController {
   constructor(
     private readonly clientConfig: ClientConfigService,
+    private readonly audioSetting: AudioSettingService,
     private readonly equipAlign: EquipAlignService,
     private readonly equipInAlign: EquipInAlignService,
   ) {}
@@ -37,6 +41,36 @@ export class ClientConfigController {
   @ApiDataResponse(GameConfigSnapshotDto, { description: "全部运营配置快照" })
   snapshot(): GameConfigSnapshotDto {
     return this.clientConfig.snapshot();
+  }
+
+  /**
+   * 音效配置（#683）—— **公开接口，不要令牌**
+   *
+   * 为什么单独开一个：快照要玩家令牌，而登录场景没有令牌，偏偏「登录背景音」就是那时候要响的。
+   * 这份数据是 11 行「文件路径 + 音量 + 循环 + 开关」，没有任何玩家数据，公开没有风险
+   * （与 `GET /announcements/active` 同一口径）。
+   *
+   * 进游戏之后**不用它**：快照里有同形状的 `audio` 段，客户端只保留一套「按 key 取配置」的读法。
+   * 换句话说这个接口只服务「进游戏之前那几秒」，别把游戏内的音效逻辑接到这里来
+   * （登录页拉过一次之后就别再拉了，否则会与快照里的值打架）。
+   */
+  @Get("audio")
+  @Public()
+  @ApiPlayerDoc({
+    operationId: "gameConfig.audio",
+    summary: "音效配置（公开：登录场景要播背景音，那时还没有令牌）",
+    description:
+      "全部音效项：`key` / `filePath`（相对 `resources/`，带扩展名）/ `volume`（0~100）/ `loop` / `enabled`。\n\n" +
+      "**不需要令牌** —— 登录场景没有令牌，而登录背景音正是那时要播的（与公告同一口径）。\n" +
+      "进游戏后改用配置快照的 `audio` 段（同形状），客户端不需要第二套读法。\n\n" +
+      "`filePath` 为空 = 这一项没配置（不播），不是错误。",
+  })
+  @ApiDataResponse(AudioConfigListDto, { description: "全部音效配置（total / list）" })
+  audio(): AudioConfigListDto {
+    const dto = new AudioConfigListDto();
+    dto.list = this.audioSetting.configs();
+    dto.total = dto.list.length;
+    return dto;
   }
 
   /**

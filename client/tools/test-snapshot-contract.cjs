@@ -182,6 +182,8 @@ function completeSnapshot(over = {}) {
     },
     // #605：新手引导步骤（数组顺序 = 体验顺序）
     guideSteps: [{ id: "move", title: "先动起来", desc: "走两步。", spot: "joystick", trigger: "move" }],
+    // #683：音效（客户端形状只有播放要用的五个字段）
+    audio: [{ key: "login_bgm", filePath: "sounds/login_bg.wav", volume: 60, loop: true, enabled: true }],
     ...over,
   };
 }

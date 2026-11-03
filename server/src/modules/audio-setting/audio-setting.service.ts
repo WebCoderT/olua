@@ -2,10 +2,15 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
-import { AUDIO_DEFAULTS, AUDIO_KEYS, AUDIO_LIMITS, audioLabelOf, audioPathProblem } from "../../common/constants/audio";
+import { AUDIO_DEFAULTS, AUDIO_KEYS, AUDIO_LIMITS, audioCategoryLabelOf, audioCategoryOf, audioLabelOf, audioPathProblem } from "../../common/constants/audio";
 import { AudioSettingRow } from "../../database/rows";
 import { AudioSettingRepository } from "../../database/repositories/audio-setting.repository";
-import { AudioSettingDto, AudioSettingListDto, SaveAudioSettingDto } from "./dto/audio-setting.dto";
+import {
+  AudioConfigDto,
+  AudioSettingDto,
+  AudioSettingListDto,
+  SaveAudioSettingDto,
+} from "./dto/audio-setting.dto";
 
 /**
  * 音效配置（#680）
@@ -21,8 +26,14 @@ import { AudioSettingDto, AudioSettingListDto, SaveAudioSettingDto } from "./dto
  * - **路径合法性在服务端判**：`sounds/` 前缀、扩展名白名单、不许 `..`、字符集收敛
  *   （判据在 `common/constants/audio` 的 `audioPathProblem`，管理端只做预检提示）。
  *
- * 本轮**不下发配置快照**：客户端还没有播放代码（用户 2026-11-04 明确「先不与客户端对接」）。
- * 对接时在 `ClientConfigService` 加一段 `audio`（读这里的 `list()` 即可），别在客户端写死默认值。
+ * ## 客户端怎么拿到这些值（#683）
+ *
+ * 两条路，形状都是 `AudioConfigDto[]`（`configs()`）：
+ * - **进游戏后**走配置快照的 `audio` 段（`ClientConfigService.snapshot()`）——
+ *   与其它运营配置同一趟，客户端 `applyAudioRows` 整表重建；
+ * - **登录场景**没有玩家令牌，快照拉不到，而「登录背景音」正是那时候要响的 →
+ *   `GET /game-config/audio`（`@Public()`，与公告同口径）。两条路读的是同一张表、同一个形状，
+ *   所以客户端只需要一套「按 key 取配置」的读法。
  */
 @Injectable()
 export class AudioSettingService implements OnModuleInit {
@@ -57,6 +68,19 @@ export class AudioSettingService implements OnModuleInit {
     dto.total = list.length;
     dto.list = list;
     return dto;
+  }
+
+  /**
+   * 客户端音效配置（快照 `audio` 段 + 公开接口 `GET /game-config/audio` 共用）
+   *
+   * 走 `listAll()` 的顺序（= `AUDIO_KEYS` 登记顺序），**不复用 `list()`**：
+   * 客户端不需要展示名 / 分类 / 追账字段，多下发一点东西就多一个「客户端是不是要读它」的疑问。
+   *
+   * 为什么登录页要单独一个公开接口：快照需要玩家令牌，而登录场景没有令牌 ——
+   * 那正是「登录背景音」要响的时候。见 `ClientConfigController.audio`。
+   */
+  configs(): AudioConfigDto[] {
+    return this.audioSettings.listAll().map((row) => this.configOf(row));
   }
 
   /**
@@ -124,12 +148,25 @@ export class AudioSettingService implements OnModuleInit {
     const dto = new AudioSettingDto();
     dto.key = row.audio_key;
     dto.label = audioLabelOf(row.audio_key);
+    dto.category = audioCategoryOf(row.audio_key);
+    dto.categoryLabel = audioCategoryLabelOf(dto.category);
     dto.filePath = row.file_path;
     dto.volume = row.volume;
     dto.loop = row.loop === 1;
     dto.enabled = row.enabled === 1;
     dto.updatedBy = row.updated_by;
     dto.updatedAt = row.updated_at;
+    return dto;
+  }
+
+  /** 客户端形状：只有播放要用的四个值 + key（没有展示名 / 分类 / 追账） */
+  private configOf(row: AudioSettingRow): AudioConfigDto {
+    const dto = new AudioConfigDto();
+    dto.key = row.audio_key;
+    dto.filePath = row.file_path;
+    dto.volume = row.volume;
+    dto.loop = row.loop === 1;
+    dto.enabled = row.enabled === 1;
     return dto;
   }
 }

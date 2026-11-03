@@ -13,6 +13,7 @@ import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import StorageManager from "./StorageManager";
 import GuideStore from "./GuideStore";
+import SoundManager from "./SoundManager";
 import { GUIDE_EVENT } from "../../types/guide";
 
 /** 掉落物运行时数据（节点 -> 物品与数量） */
@@ -83,6 +84,8 @@ export default class DropManager {
    * @returns 原样返回 results（便于日志/统计）
    */
   static spawnResults(results: DropResult[], position: Vec3, castId: number): DropResult[] {
+    // 掉落音（#683）：一次结算只响一次 —— 按件播会在「一堆怪同时死」时叠成一串噪音
+    if (results.length > 0) void SoundManager.play("item_drop");
     // 先算全部散落点，再统一铺放：保证任意两件掉落物都不落在同一点上
     const offsets = scatterDropPositions(results.length);
     results.forEach((result, index) => {

@@ -6349,6 +6349,29 @@ export type EquipmentMeta = {
   updatedAt: number;
 };
 
+export type AudioConfig = {
+  /**
+   * 音效 key（客户端按它取用，不认分类）
+   */
+  key: string;
+  /**
+   * 资源相对路径（带扩展名，相对 resources/）；空串 = 未配置，这一项不播
+   */
+  filePath: string;
+  /**
+   * 音量百分比（0~100，100 = 原始音量）
+   */
+  volume: number;
+  /**
+   * 是否循环播放（true 的那一项是背景音：切场景要停）
+   */
+  loop: boolean;
+  /**
+   * 开关（false = 客户端整个不播，连文件都不读）
+   */
+  enabled: boolean;
+};
+
 export type GameConfigSnapshot = {
   /**
    * 称号配置（34 阶，含渠道与升级链顺序）
@@ -6462,6 +6485,12 @@ export type GameConfigSnapshot = {
    * 新手引导步骤（数组顺序 = 体验顺序）。客户端 `configs/guide` 不再存这张表 —— 运营改文案 / 顺序 / 高亮位 / 推进事件都不用重打客户端包
    */
   guideSteps: GuideStep[];
+  /**
+   * 音效配置（#683：用哪个文件 / 多大声 / 循环不循环 / 开不开）。这是**唯一**由服务端覆写的资源路径 —— 其余资源路径都是两端约定（图集 / 帧动画按 id 拼），而音效文件是运营挑的，换一首曲子只要新文件在资源包里。
+   *
+   * 空 `filePath` = 这一项没配（不播）；`enabled = false` = 连文件都不读。
+   */
+  audio: AudioConfig[];
 };
 
 export type GuildSummary = {
@@ -8041,13 +8070,21 @@ export type UiEffectList = {
 
 export type AudioSetting = {
   /**
-   * 音效 key（登录背景音 login_bgm、登录按钮音 login_click；取值域见 AUDIO_KEYS）
+   * 音效 key（取值域见 AUDIO_KEYS：登录背景音 login_bgm、战士普攻 warrior_attack…）
    */
   key: string;
   /**
    * 展示名（中文，随接口下发 —— 页面不写死文案，加一个音效只改服务端常量）
    */
   label: string;
+  /**
+   * 所属分类（管理端 tab 分组用；客户端不消费）。取值域：login / combat / item / growth
+   */
+  category: string;
+  /**
+   * 分类展示名（随接口下发，页面不写死文案）
+   */
+  categoryLabel: string;
   /**
    * 资源相对路径（带扩展名，相对 client/assets/resources/；空串 = 未配置，这一项不响）
    */
@@ -8083,6 +8120,17 @@ export type AudioSettingList = {
    * 全部音效行，按 seed 顺序（= AUDIO_KEYS 登记顺序：登录背景音在前）
    */
   list: AudioSetting[];
+};
+
+export type AudioConfigList = {
+  /**
+   * 行数（= 音效 key 数）
+   */
+  total: number;
+  /**
+   * 全部音效配置，按 AUDIO_KEYS 登记顺序
+   */
+  list: AudioConfig[];
 };
 
 export type AdminMapMonitorQuery = {

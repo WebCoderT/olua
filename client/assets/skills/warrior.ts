@@ -5,6 +5,7 @@ import AutoBattle from "../ui/core/AutoBattle";
 import CursorManager from "../ui/core/CursorManager";
 import EffectManager from "../ui/core/EffectManager";
 import LayerManager from "../ui/core/LayerManager";
+import SoundManager from "../ui/core/SoundManager";
 import StatusManager from "../ui/core/StatusManager";
 import CombatChannel from "../ui/utils/net/CombatChannel";
 import { getDirectionByVector, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
@@ -14,6 +15,10 @@ import { HAS_MOUSE } from "../ui/utils/input/Pointer";
 export function skill_1000(context: SkillContext) {
   const { config, caster, target, monsters } = context;
   if (!target) return;
+  // 普攻音效（#683）：只有**战士的普通攻击**响这一声。
+  // 按 `config.id` 过滤而不是按函数：1002~1011 都复用本实现（配置里换的是动作与数值），
+  // 而「战士普通攻击」这个音效项指的就是 id 1000（基础剑术，occupation = 战士）。
+  if (config.id === "1000") void SoundManager.play("warrior_attack");
   // 面向目标播放技能配置的动作动画（config.action）——表现立刻走，不等服务端的往返
   caster.playSkillAttack(config.action, getDirectionToTarget(target, caster), config.castLockMs);
   const monster = monsters.getMonsterData(target);
