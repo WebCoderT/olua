@@ -132,7 +132,11 @@ const REPO_EDGES = {
   "database/repositories/audit.repository.ts": ["modules/audit", "modules/admin"],
   "database/repositories/announcement.repository.ts": ["modules/announcement"],
   // 地图玩法配置（#573）：只有地图域读写它 —— 配置快照与进图校验都经 MapService
-  "database/repositories/map.repository.ts": ["modules/map"],
+  // 世界播种（#655）：刷怪区与地图行都归这里，WorldService 进图发牌时只读（写仍在地图域）
+  "database/repositories/map.repository.ts": ["modules/map", "modules/world"],
+  // 怪物表现 / 资源（#655）：实时进程的权威 AI 读 aggressive / detectRange / moveSpeed，
+  // 配置快照经 GameConfigService 下发 —— 两处都读，没有写入口
+  "database/repositories/monster-presentation.repository.ts": ["modules/realtime", "modules/game-config"],
   // 界面特效（#594）：只有特效域读写它 —— 配置快照经 UiEffectService
   "database/repositories/ui-effect.repository.ts": ["modules/ui-effect"],
   "database/repositories/mail.repository.ts": ["modules/mail"],
@@ -161,13 +165,19 @@ const REPO_EDGES = {
   "database/repositories/growth.repository.ts": ["modules/game-config", "modules/roles", "modules/realtime"],
   // 运行时参数（#605）：game-config 读写（管理端 + 快照）；
   // social 只**读帮会规则门槛**（名字 / 公告 / 申请留言长度），建帮与改公告的校验在那边
-  "database/repositories/runtime-params.repository.ts": ["modules/game-config", "modules/social"],
+  // #655：怪物 AI 的运行时参数（刷新 / 追击 / 脱战）也从这里读 —— 纯读，写入口仍在 game-config
+  "database/repositories/runtime-params.repository.ts": ["modules/game-config", "modules/social", "modules/realtime"],
   "database/repositories/combat-weights.repository.ts": ["modules/game-config"],
   "database/repositories/guide-settings.repository.ts": ["modules/game-config"],
   "database/repositories/rank.repository.ts": ["modules/game-config", "modules/roles"],
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
-  // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）
+  // 战斗结算读的是 `equipment_variants` 的快照覆盖层，不直连这两个仓储
   "database/repositories/equipment.repository.ts": ["modules/game-config"],
+  // 装备变体（#655）：555 行逐一配置，只有 game-config 读写（管理端 + 快照）；
+  // 战斗结算走 `common/runtime-overrides` 的覆盖层，不直连仓储
+  "database/repositories/equipment-variant.repository.ts": ["modules/game-config"],
+  // 角色等级表（#655）：60 行属性 + 经验，只有 game-config 读写；结算同样走覆盖层（同上）
+  "database/repositories/role-level.repository.ts": ["modules/game-config"],
   // 装备对齐几何（#513）：只属于 game-config —— 它存的是客户端布局，服务端不参与任何计算，
   // 也就没有第二个域该读它（客户端那条路走的是快照接口，不经过仓储）
   "database/repositories/equip-align.repository.ts": ["modules/game-config"],
@@ -178,7 +188,7 @@ const REPO_EDGES = {
   // 物品与材料（#255）：同上，只在 game-config 模块内读写
   "database/repositories/item.repository.ts": ["modules/game-config"],
   // 怪物基础数据（#258）：game-config 读写之外，世界播种（world）与伤害结算（realtime）
-  // 也直读本表 —— 管理端改数值即时生效（快照只作 seed 来源，结算不走生成物）
+  // 也直读本表 —— 管理端改数值即时生效（#655 起库里就是唯一权威，没有生成物可绕）
   // #588：地图详情的刷怪区显示怪物名 —— 名字的权威来源是 monsters 表（只读一行），不再读生成物
   "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime", "modules/map"],
   // NPC 基础数据（#258）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；

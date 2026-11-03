@@ -38,8 +38,9 @@ const REPO = path.resolve(__dirname, "..");
 const GAME_MAP = path.join(REPO, "client/assets/ui/components/map/GameMap.ts");
 const POINT_MATH = path.join(REPO, "client/assets/ui/utils/map/MapPointMath.ts");
 const IMPORT_TOOL = path.join(REPO, "tools/import-spawn-areas.cjs");
-const SPAWN_AREAS = path.join(REPO, "server/src/modules/world/spawn-areas.generated.ts");
-const MAP_SIZES = path.join(REPO, "server/src/shared/map-sizes.generated.ts");
+// 数据不再在源码里（#655）：地图几何与刷怪区都在库里，仓库里那份是 `make config-export`
+// 生成的快照。审计读快照而不是读库 —— CI 上没有 .db 文件，读库等于这条规则只在有库的机器上生效。
+const SNAPSHOT = path.join(REPO, "server/data/config-sync.sql");
 const CLIENT_ASSETS = path.join(REPO, "client/assets");
 const LAYER_MANAGER = path.join(REPO, "client/assets/ui/core/LayerManager.ts");
 
@@ -159,42 +160,92 @@ function checkImportTool() {
   });
 }
 
-/** 解析生成物：mapId → 尺寸 / 区域列表（两份都是本仓库的生成物，格式固定） */
-function parseMapSizes(src) {
-  const sizes = {};
-  for (const line of src.split("\n")) {
-    const match = /^\s{2}"([^"]+)": \{ cols: \d+, rows: \d+, tileWidth: \d+, tileHeight: \d+, width: (\d+), height: (\d+) \}/.exec(line);
-    if (match) sizes[match[1]] = { width: Number(match[2]), height: Number(match[3]) };
+/**
+ * 解析快照里某张表的 INSERT 行 → 每行一个「列名 → 值」对象
+ *
+ * 快照的 INSERT 带显式列清单（`INSERT INTO "t" ("a", "b") VALUES (…);`），所以不必关心
+ * 物理列顺序。值只有这几种：数字字面量、单引号字符串（内部 `''` 转义）、NULL。
+ * 只解析本审计要用的两张表，别的一律跳过 —— 那 30 张表里有 JSON 列，没必要为它们写通用解析器。
+ */
+function readSnapshotRows(text, table) {
+  const prefix = `INSERT INTO "${table}" (`;
+  const rows = [];
+  for (const line of text.split("\n")) {
+    if (!line.startsWith(prefix)) continue;
+    const columnsEnd = line.indexOf(") VALUES (", prefix.length);
+    if (columnsEnd < 0) continue;
+    const columns = line
+      .slice(prefix.length, columnsEnd)
+      .split(", ")
+      .map((name) => name.replace(/"/g, ""));
+    const values = splitSqlValues(line.slice(columnsEnd + ") VALUES (".length, line.lastIndexOf(");")));
+    const row = {};
+    columns.forEach((name, index) => {
+      row[name] = values[index];
+    });
+    rows.push(row);
   }
-  return sizes;
+  return rows;
 }
 
-function parseSpawnAreas(src) {
-  const areas = [];
-  let mapId = null;
-  for (const line of src.split("\n")) {
-    const header = /^\s{2}"([^"]+)": \[$/.exec(line);
-    if (header) {
-      mapId = header[1];
+/** 拆一行 SQL 值（逗号分隔，但要跳过单引号里的逗号；`''` 是转义的单引号） */
+function splitSqlValues(text) {
+  const values = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "'") {
+      // 连续两个单引号是「一个单引号字符」，不改变引号状态
+      if (quoted && text[index + 1] === "'") {
+        current += "'";
+        index += 1;
+        continue;
+      }
+      quoted = !quoted;
+      current += char;
       continue;
     }
-    const area = /\{ name: "([^"]*)", monsterKey: "([^"]*)", min: -?\d+, max: -?\d+, cx: (-?[\d.]+), cy: (-?[\d.]+), w: ([\d.]+), h: ([\d.]+) \}/.exec(line);
-    if (area && mapId) {
-      areas.push({ mapId, name: area[1], cx: Number(area[3]), cy: Number(area[4]), w: Number(area[5]), h: Number(area[6]) });
+    if (char === "," && !quoted) {
+      values.push(coerceSqlValue(current.trim()));
+      current = "";
+      continue;
     }
+    current += char;
   }
-  return areas;
+  if (current.trim() !== "") values.push(coerceSqlValue(current.trim()));
+  return values;
+}
+
+/** SQL 字面量 → JS 值（只处理本审计用得到的三种） */
+function coerceSqlValue(raw) {
+  if (raw === "NULL") return null;
+  if (raw.startsWith("'") && raw.endsWith("'")) return raw.slice(1, -1).replace(/''/g, "'");
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : raw;
 }
 
 function checkSpawnAreasInMap() {
-  const sizes = parseMapSizes(read(MAP_SIZES, "server/src/shared/map-sizes.generated.ts"));
-  const areas = parseSpawnAreas(read(SPAWN_AREAS, "server/src/modules/world/spawn-areas.generated.ts"));
+  const text = read(SNAPSHOT, "server/data/config-sync.sql");
+  if (!text) return;
+  const sizes = {};
+  for (const row of readSnapshotRows(text, "maps")) {
+    sizes[String(row.map_id)] = { width: Number(row.pixel_width) || 0, height: Number(row.pixel_height) || 0 };
+  }
+  const areas = readSnapshotRows(text, "map_spawn_areas").map((row) => ({
+    mapId: String(row.map_id),
+    name: row.name,
+    cx: Number(row.cx),
+    cy: Number(row.cy),
+    w: Number(row.w),
+    h: Number(row.h),
+  }));
   if (areas.length === 0) {
-    problem("server/src/modules/world/spawn-areas.generated.ts", 0, "一个刷怪区都没解析出来 —— 生成物格式变了，请同步改本审计的解析（别让它空跑即通过）");
+    problem("server/data/config-sync.sql", 0, "一个刷怪区都没解析出来 —— 快照格式变了，请同步改本审计的解析（别让它空跑即通过）");
     return;
   }
   if (Object.keys(sizes).length === 0) {
-    problem("server/src/shared/map-sizes.generated.ts", 0, "一张地图尺寸都没解析出来 —— 同上");
+    problem("server/data/config-sync.sql", 0, "一张地图尺寸都没解析出来 —— 同上");
     return;
   }
   /** 越界区域（口径一错就一大片，逐条打会淹掉别的规则，只报前几条） */
@@ -202,7 +253,7 @@ function checkSpawnAreasInMap() {
   for (const area of areas) {
     const size = sizes[area.mapId];
     if (!size) {
-      problem("server/src/shared/map-sizes.generated.ts", 0, `地图 ${area.mapId} 没有尺寸快照，但刷怪区快照里有它（重跑 node tools/import-spawn-areas.cjs）`);
+      problem("server/data/config-sync.sql", 0, `地图 ${area.mapId} 没有像素尺寸（pixel_width/height 是 0），但刷怪区表里有它 —— 重跑 node tools/import-spawn-areas.cjs 再 make config-export`);
       continue;
     }
     // 新口径：地图占 x∈[0,W]、y∈[-H,0]；区域矩形必须整体落在里面
@@ -215,16 +266,16 @@ function checkSpawnAreasInMap() {
   }
   for (const line of outside.slice(0, 5)) {
     problem(
-      "server/src/modules/world/spawn-areas.generated.ts",
+      "server/data/config-sync.sql",
       0,
       `${line} —— 不在图内，多半是还在用「地图中心为原点」的旧口径（应 cx = x + w/2、cy = -(y + h/2)）`,
     );
   }
   if (outside.length > 5) {
     problem(
-      "server/src/modules/world/spawn-areas.generated.ts",
+      "server/data/config-sync.sql",
       0,
-      `同类越界区域共 ${outside.length} 个（上面只列了前 5 个）—— 重跑 node tools/import-spawn-areas.cjs`,
+      `同类越界区域共 ${outside.length} 个（上面只列了前 5 个）—— 重跑 node tools/import-spawn-areas.cjs + make config-export`,
     );
   }
 }

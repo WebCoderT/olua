@@ -11,7 +11,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { GUIDE_EVENTS, GUIDE_SPOTS, GUIDE_STEP_MAX } from "../../../shared/guide-seed";
+import { GUIDE_EVENTS, GUIDE_SPOTS, GUIDE_STEP_MAX } from "../../../common/constants/game-enums";
 
 /**
  * 新手引导步骤（#605）

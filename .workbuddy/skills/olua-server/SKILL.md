@@ -14,17 +14,27 @@ agent_created: true
 3. **产出接口契约** —— Swagger 文档 → 客户端与管理端的接口文件**全部由它生成**；
 4. **实时通道** —— 一条 WebSocket 长连接（目前只做「建连 + 心跳」，业务消息见 #34）。
 
-**最重要的一条心智模型**：游戏数据（装备 / 战魂 / 称号 / 军衔 / 技能 / 物品）的权威定义**只有一处** —— 客户端 `client/assets/configs`。
-服务端**不复制**它，而是引用它的引擎无关快照 `src/shared/game-data.generated.ts`（`node tools/gen-shared-data.cjs` 生成，`make audit-shared-data` 逐字节守着重生成必然一致）；管理端 import 的是**同一个文件**。
-三端**没有第二份副本**，谁都不许自己维护一份。服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，从不复制一份游戏配置过来。
+**最重要的一条心智模型（#655 定稿）**：游戏数据（等级 / 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 怪物 / 掉落 / 地图 / 特效…）的
+权威定义**只有一处 —— 数据库**。`server/data/config-sync.sql` 是它的**出厂快照**（32 张配置表，逐表整表替换），
+空库启动时由 `bootstrapConfigSnapshot()` 整份灌进去；运营在管理端改的就是库里的行，`make config-export` 把库重导回那份 SQL。
+代码里**没有第二份数值副本**：`server/src/shared/` 整个目录已删除，客户端 `configs/*` 全是**空的运行时表**
+（进游戏由 `GET /game-config` 快照整表重建），管理端也不 import 任何生成物 —— 它直接调 `/admin/*` 读写库。
+服务端只校验「结构 / 体量 / 归属 / 上限 / 重名」，不做任何派生计算（每级属性、每件装备的属性与回收价、
+每个变体的前后缀都是库里逐条写好的列）。
 
-**唯一的例外是地图（#573，用户定）**：地图只有「资源本体」在客户端（TMX / 底图 / 预览图，靠 `map/<id>/<id>`
-目录约定拼路径），**「对资源的整理结果」归服务端** —— 名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶进 `maps` 表，
-出厂值只是 `constants/map-config.ts` 里的 seed，管理端可视化改。所以「客户端不存玩法配置」是有意为之，不是缺口。
+**推论（改数据前先想清这四条）**：
+- 想改一个数值 → 改**库**（管理端页面或 `config-sync.sql` + `make config-import`），不要改代码里的常量；
+  改了代码常量而不在库里，等于写了个没人读的第二份。
+- 想给某个域加一个可配项 → 建**列/行 + 管理端页面 + 快照段**三件套，`GROWTH_SCALAR_SPECS` 那种「代码里挂一个改了没用的旋钮」是反例。
+- 测试只锁**字段格式与行为**，不锁数值（出厂值运营随时改，锁数值的红是假红）。
+- 出厂快照只在**空库首启**整表替换；服务端启动之后再写库才有效（e2e 播种踩过两次）。
+
+**地图是这条心智模型的一部分、不是例外**：资源本体（TMX / 底图 / 预览图）在客户端，靠 `map/<id>/<id>` 目录约定拼路径；
+「对资源的整理」（名称 / 类型 / 进入条件 / 像素尺寸 / 刷怪区）在 `maps` / `map_spawn_areas` 表里。
 
 **连「码的清单」与「文案」也不许手写**（#122）：`role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES`
-是 `Object.keys(OCCUPATION_LABELS / SEX_LABELS)`，DTO 里那行 `1 战士 / 2 魔法师 / …` 是
-`shared/game-data.ts` 的 `OCCUPATION_HINT` / `SEX_HINT` —— 客户端加一个职业码，这两处**自动跟着变**。
+派生自 `constants/game-enums.ts` 的 `ROLE_OCCUPATION_CODES` / `ROLE_SEX_CODES`（= `Object.keys(OCCUPATION_LABELS / SEX_LABELS)`），
+DTO 里那行 `1 战士 / 2 魔法师 / …` 用 `OCCUPATION_HINT` / `SEX_HINT` —— 加一个职业码，校验清单与文档说明**自动跟着变**。
 手动写回字面量（清单或文案）会被 `make audit-shared-data` 咬住。
 
 ## 一、目录与职责
@@ -70,13 +80,6 @@ server/src
     ⮑ 内部边界（#36）：跨模块 import 只能走 tools/audit-server-boundaries.cjs 的白名单边
       （ALLOWED_EDGES / REPO_EDGES）；仓储只由全局 DatabaseModule 装配（业务模块 providers 里
       再注册同名仓储 = 第二个实例，mail 踩过）；combat 纯函数只许引基础层。
-  shared/
-    game-data.generated.ts        公共游戏数据快照（**三端唯一的游戏数据来源**；@generated，
-                                  重生成 = node tools/gen-shared-data.cjs，守卫 = tools/audit-shared-data.cjs）
-    game-data.ts                  服务端门面（**手写**）：只做「派生 + 拼文案」——
-                                  ROLE_OCCUPATION_CODES / ROLE_SEX_CODES（取标签表的键）
-                                  与 OCCUPATION_HINT / SEX_HINT（DTO 描述里那一行）。
-                                  与管理端的 admin/src/api/gameData.ts 对称，数据都在上面那个文件里
   swagger/
     models.ts   SWAGGER_MODELS（要出现在文档里的 DTO 必须登记）
     setup.ts    buildSwaggerDocument() + setupSwagger(app)（main 与自动化测试**共用同一份**）
@@ -157,76 +160,37 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 ## 四、数据层规矩
 
-**4.0 游戏数据三端共用一份**（用户 2026-10-13 定的硬要求，见 issue #117~#122）
+**4.0 游戏数据的唯一权威 = 数据库**（#603 逐域上移，#655 收口）
 
-装备 / 战魂 / 称号 / 军衔 / 技能 / 物品的权威定义**只有一处**：客户端 `client/assets/configs`。
-服务端**不复制**，引用它的引擎无关快照 `src/shared/game-data.generated.ts`；管理端 import 的是**同一个文件**
-（Vite 按相对路径打包）—— **三端没有第二份副本**。地图的玩法配置是例外（#573，见开头那条心智模型）：进 `maps` 表，
-`constants/map-config.ts` 只提供出厂 seed，`gen-shared-data.cjs` 不再产出 `MAPS` / `MAP_LABELS`。
+`server/data/config-sync.sql` 是**全部配置表的出厂快照**（32 张；等级 60 行、装备变体 555 行、
+怪物 / 掉落 / 地图 / 刷怪区 / 特效 / 运行时参数都在里面）。空库启动时 `bootstrapConfigSnapshot()`
+整表灌入，之后运营在管理端改库，`make config-export` 把库重导回那份 SQL 提交 —— **多机同步靠 SQL，不靠种子**。
 
-- **生成** `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）：编客户端纯配置 → 在 Node 里加载 → 快照。
-  改数值 / 改文案都改客户端配置，然后重新生成。产物 ~255 KB / 3410 行 / 24 张数据表。
-- **守卫** `tools/audit-shared-data.cjs`（= `make audit-shared-data`）：重生成后**逐字节**比对，并断言数据表
-  **每张都在且非空** —— 逐字节比对发现不了「生成器自己少产一张数据表」（同一份代码必然一致，而消费方拿到
-  `undefined`：管理端页面空白、服务端查表得 0）。算法一致性曾是 `audit-combat-parity` 的事 —— #541
-  起客户端算子已删、属性只有服务端一份，这条审计随之删除。
-- **它还会扫两端源码**，抓「自己维护一份」的三种破法（#122）：①与生成物**同名**的字典定义；②把**短标签表**
-  （键数 ≤ 8、值全是字符串）的键清单写成数组字面量（`["1","2","3","4"]`）；③抄表的**行文**（`1 战士`）。
-  另有第三条专查 `roles/role-data.util.ts` 的 `ROLE_OCCUPATIONS` / `ROLE_SEXES` 必须是从公共数据**派生**的
-  （右侧不得是字面量数组）。扫之前**剥掉注释、跳过带 `@generated` 的文件** —— 注释里写反例是正常的，
-  两端的 `models.ts` / `ApiModels.ts` 本来就镜像着 DTO 描述。
-- **消费**：`modules/combat/role-attributes.ts` 只查表加总，**不做任何自行推算**；管理端拿它把裸 id 变成名字
-  （此前它自己抄了一份职业名与性别名 —— 那正是这条线要消灭的）。装备的**显示名与所属槽位在生成器里算好**
-  （复用客户端的 `getEquipmentNameParts` 与条目自带的 `slot`），消费方不做拼接。
-  **连「码的清单」与「文案」也派生**：`shared/game-data.ts`（手写门面，与管理端的 `api/gameData.ts` 对称）
-  给出 `ROLE_OCCUPATION_CODES` / `ROLE_SEX_CODES` 与 `OCCUPATION_HINT` / `SEX_HINT` ——
-  客户端加一个职业码，服务端的校验清单与 DTO 里那行 `1 战士 / 2 魔法师 / …` **自动跟着变**（不必改服务端一行）。
-- **已上移**：掉落（#581 —— `drop_tables` / `monster_drops` 进库当运营数据，`combat-settlement` 抽表、
-  `roles/pickDrop` 入包，客户端只演散落与拾取）。管理端入口是 `GET/POST/PATCH/DELETE /admin/drop-tables` +
-  `GET /admin/monster-drops`（列表）/ `GET /admin/monster-drops/:monsterKey`（单条，弹窗回填，#584）/
-  `PATCH /admin/monster-drops/:monsterKey`（**唯一写入路径**，三选一）；`GET /admin/monsters` 每行带 `drop` 摘要
-  （`AdminMonsterDto`），**玩家侧快照只下发 `MonsterDto`、不带摘要** —— 客户端不结算掉落。**不在范围**：时装（出厂在 `fashion-seed.ts`，
-  #603 起客户端那份表已清空、只剩快照落库 —— 不凭空造一份）。怪物数值服务端独有（#588：出厂数值 = `server/src/shared/monster-seed.ts` 四元组 + 曲线展开，进 `monsters` 表随快照下发；资源表现 = `monster-presentation.generated.ts` 随快照 `monsterPresentations` 段下发，客户端只剩 `configs/game-config.ts` 区 15 的 monsterAI 等全局常量）；怪物实例
-  属世界权威（#35，服务端读 `map_spawn_areas` 播种、tick 重生、状态落盘；#581 删掉了客户端进图自己刷的那条路）。
-- 生成物放在 `server/src/shared/` 而不是顶层 `shared/`：服务端是 `tsc -p tsconfig.build.json` 单包编译
-  （`rootDir` = `server/src`，产物 `dist/main.js`），放到 `server/` 外会把产物路径改成 `dist/server/src/main.js`，
-  连带 7 套 e2e、Dockerfile、deploy 一起改 —— 代价与收益不匹配。
+- **代码里没有第二份数值副本**：`server/src/shared/` 整个目录已删（旧的 `game-data.generated.ts`、
+  19 个 `*-seed.ts`、5 个 `*.generated.ts` 全没了）。服务端读库或读启动时建的**内存投影**
+  （`common/runtime-config-cache.ts`），客户端 `configs/*` 是空的运行时表（快照整表重建），
+  管理端直接调 `/admin/*` 读写库 —— 三方都不 import 任何生成物。
+- **派生值也落库**（#655）：`role_levels`（每级裸属性 + exp + maxMp + hpRecover）、
+  `equipment_variants`（555 行，含前后缀名 / 八项属性 / sell_price）、`equip_aligns`（32）/
+  `equip_in_aligns`（31）。运行时**零现算**：`roleLevelAttributesOf` / `equipmentAttributesOf` /
+  `sellPriceOf` 只读表，不回落到任何公式（旧兜底是 bug：生成物给的是 `[min,max]` 元组，读方按 `{min,max}` 取）。
+- **曲线全部下架**：`growth_segments` / `level_exps` 启动即 `DROP TABLE IF EXISTS`（老库收尾，新库空操作）。
+  管理端只剩「角色等级」60 行 + 「成长参数」四个全局标量（`roleMaxLevel` / `expGain.expPerLevel` /
+  `expGain.maxLevelGap` / `mpRecoverPerSecond`）。`GROWTH_SCALAR_SPECS` 里**不许再挂没有消费方的键** ——
+  `attributeRange.*` 那三个换算比率就是这么死掉的（管理端能改、运行时没人读，改了没反应）。
+- **加一个可配项 = 三件套**：库里的列/行 + 管理端页面（含 DTO 与仓储 UPDATE 列清单，漏一处就是 200 但值不动）
+  + 快照段（`createClientConfigDto` 与 `snapshot()` 同步加）。缺任何一件都不算配好。
+- **`make audit-shared-data` 守的是什么**：配置快照完整（表齐 / 每张非空 / 行数自洽）+ 枚举与客户端逐值一致 +
+  业务代码里没有第二份枚举 + 跨端常量对齐。它对的账是 `config-sync.sql`，不是生成物。
+- **旧坑已不适用**：「seed 是 `INSERT OR IGNORE`、改种子不生效」是 #603 时代的问题；现在出厂值本身就是快照
+  整表替换，改数据只有两条路 —— 管理端改库，或改 `config-sync.sql` 再 `make config-import`。
 
-**4.0.1 运营库优先：生成物是出厂值，库是当前真相**（#544）
-
-此前只有**客户端**吃运营改动（进游戏拉快照 + `apply-snapshot` 原地覆写），服务端结算读的仍是
-编译期生成物 —— 管理端把某件装备的攻击从 10 调到 20，玩家面板变了、服务端算伤害还是 10，
-**没有任何报错**。现在读取走 `src/shared/runtime-overrides.ts`：**先查运营库覆盖层、缺省回落生成物**。
-
-| 表 | 谁在结算时读 | 口径 |
-|---|---|---|
-| 装备（含 555 变体） | `role-attributes.ts` 的 `equipmentAttributesOf` | 库里只有 37 个基础件；变体按「基础件 × `EQUIPMENT_PREFIX_RATES` / `EQUIPMENT_SUFFIX_RATES`」重算，`Math.round` 与客户端 `buildEquipmentMap` 同一口径 |
-| 称号 / 战魂 / 军衔 | `titleAttributesOf` / `soulAttributesOf` / `rankAttributesOf` | 传**等级（1 起）**，函数内部转生成物下标（-1），调用方不重复那个容易写反的减一 |
-| 技能 | `combat-settlement.service.ts` 的 `skillOf` | 整行（冷却 / 伤害系数 / 耗蓝）；DB 列 → 生成物 camelCase 形状在覆盖层里一处映射 |
-| 药品 / 材料 | `roles.service.ts` 的 `drugOf` / `itemBaseOf` | 背包叠加上限 |
-
-- **装载时机只有两个**：`RuntimeConfigService.onApplicationBootstrap`（必须晚于各配置服务的
-  `onModuleInit` seed，否则读到空表 → 重启后运营改动"悄悄消失"）+ `GameConfigService.touchRuntime()`
-  （称号 / 战魂 / 军衔 / 装备 / 药品 / 技能 / 材料，每处配置写操作末尾各一行）。漏一处就是「保存了但没生效」。
-- **全量重装而不是增量**：37 件装备 + 34 级称号 + 37 阶战魂 + 100 阶军衔 + 15 技能 + 8 药品 + 5 材料，
-  几十毫秒，换「永不漏刷」。
-- **为什么不做成 async 查库**：`role-attributes` 是同步纯函数，被伤害结算 / 互见血条 / 战力 / 成就 /
-  存档重算六处共用；改成 async 会牵动整条链路。覆盖层是模块级内存表，读起来仍是同步的。
-- **卖价也走覆盖层**（#545）：`sellPriceOf(id)` 装备 = 等级基础价 × 前后缀倍率（`EQUIPMENT_RECYCLE_PRICES`
-  是**采样值**，不是把曲线公式抄一份），药品 / 材料 = 各自表的 `sell_price`，`null` = 不可卖（20018）。
-  口径必须与客户端 `applyEquipmentRows` 一致 —— 那里也是 `Math.round(curve(row.level) * rate)`。
-- **仍然读生成物的**（后续上移清单，别以为已经全接了）：状态 `STATUSES`（服务端目前不消费状态数值）、
-  物品大类 `ITEM_TYPES`（只用于「掉落表配了不存在的 id」的结构校验）、击杀经验公式（两端各写一份）。
-- **另一半缺口（未修）**：seed 是 `INSERT OR IGNORE` —— **改 `shared/*-seed.ts` 的出厂值，库里已有的行不会更新**
-  （重跑 seed 也只在空表生效）。所以「改种子 → 服务端」目前仍需清库或手工 SQL。要根治得给每行记
-  「出厂基线哈希」：DB 值 == 基线 → 说明运营没动过，可用新出厂值覆盖；不等 → 保留运营改动。
-  **注意这与「多机同步」是两件事**：同步走库 → SQL → 库，不经过种子（见 4.0.4）。
 
 **4.0.4 配置同步：库 ↔ SQL 快照（#653）**
 
 多人协作各自跑本地时，配置靠 `make config-export` / `make config-import` 对齐（不碰运行时数据）：
 
-- **分类唯一处** `scripts/lib/config-tables.cjs`（31 张配置 + 21 张运行时）。库里出现**没归类的表**，
+- **分类唯一处** `scripts/lib/config-tables.cjs`（32 张配置 + 22 张运行时）。库里出现**没归类的表**，
   导出直接报错 —— 新加表忘了分类由这条守点抓（比「漏同步」好查得多）。
 - **整表替换**（每张表 `DELETE` + 逐行 `INSERT`）：upsert 表达不了删除，会让对方库里删掉的行永远留着。
   代价是文件必须全量，所以导入前校验「表清单完全一致 + 每表恰好一条 DELETE + 不含运行时表」，
@@ -406,8 +370,9 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   仓储层 `markAchieved` / `markClaimed` 用 `INSERT … ON CONFLICT … DO UPDATE`，时间列写 `COALESCE(旧值, 新值)`
   —— 达成时刻只认第一次。
 
-引用校验要有两道：生成期（`tools/gen-shared-data.cjs` 的 `pickAchievements`，`kill` 目标必须是真实怪物 key 或 `"*"`、
-`collect` 必须是真实物品、奖励物品必须存在）+ 管理端保存时（`assertAchievementConsistency`）。
+引用校验只剩**保存时一道**（`assertAchievementConsistency`，管理端 POST/PATCH 都过）：`kill` 目标必须是真实怪物 key
+或 `"*"`、`collect` 必须是真实物品、奖励物品必须存在。原来还有「生成期」那道（`gen-shared-data.cjs` 的
+`pickAchievements`），随生成器退场 —— 现在没有生成期，就靠保存时拦，所以**绕过管理端直接改 SQL 是不设防的**。
 原因是这些错**不会报错**，只会让某条成就永远解锁不了。
 
 **改成就数据之后必须先 `npm run build` 再跑 e2e**：`e2e-achievement.cjs` 起的是 `dist/`，
@@ -550,7 +515,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   没有在线角色时 `rank = 0`（`LEADERBOARD_NO_RANK`，**不是 404**：榜本身是好的，只是这个人没名次）；
 - **`size` 超 `LEADERBOARD_TOP_N` 夹到上限**（不报错）；非法 `board` 走 `assertBoard` 抛 40000 并**列出可选值**（干巴巴一句「参数错误」等于让人猜）；
 - **条目只有八个字段**：不带 `accountId`、不带 `data`、**不带在线状态** —— 榜上标「在线」等于给人蹲点；
-- **战力算不出来给 0**：等级超出成长曲线 / 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数），**不许在榜里另算一版**；
+- **战力算不出来给 0**：等级在 `role_levels` 里没有对应行 / 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数），**不许在榜里另算一版**；
 - 边界审计：`modules/leaderboard` 要读 `modules/combat/role-attributes.ts` 与 `role`/`account` 仓储 → 在 `tools/audit-server-boundaries.cjs` 的 `ALLOWED_EDGES` / `REPO_EDGES` 各补一条边（带注释说明为什么必须是同一个数）。
 
 ## 六、必踩的坑
@@ -617,8 +582,8 @@ env -u NODE_OPTIONS npm run test:e2e:guard   # 只跑口令 / 审计 / 限流 / 
 env -u NODE_OPTIONS npm run test:e2e:realtime # 只跑实时通道专项（改握手 / 票据 / 心跳时先跑它）
 env -u NODE_OPTIONS npm run gen:api          # 改完接口重新产出 openapi.json + 两端接口文件
 ```
-> 改过客户端 `configs` 之后：`node tools/gen-shared-data.cjs` 重新生成公共数据（`make gen-shared-data`），
-> 忘了生成会被 `make audit-shared-data` 逮住。
+> 改过**数据**之后：管理端改库 → `make config-export` 重导 `server/data/config-sync.sql` 一起提交；
+> 忘了导出会被 `make config-check` 逮住（它比的是库与那份 SQL，不是任何生成物）。
 
 **e2e 的写法**（`test/e2e.cjs`、`test/e2e-roles.cjs`、`test/e2e-guard.cjs`）：真实起服务进程 + 真实 HTTP 请求 + **自带内存库**；
 它们会调 `setupSwagger(app)` 生成**真文档**，用来验「分组 / 权限标注 / 悬空 `$ref`」。

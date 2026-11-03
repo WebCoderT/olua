@@ -1,16 +1,11 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
-import { BizException } from "../../common/errors/biz.exception";
+import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
+import { BizException } from "../../common/errors/biz.exception";
+import { equipmentLevelOf, equipmentSlotOf, itemLabelOf } from "../../common/runtime-config-cache";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { EquipmentRepository } from "../../database/repositories/equipment.repository";
+import { EquipmentVariantRepository } from "../../database/repositories/equipment-variant.repository";
 import { MallRepository } from "../../database/repositories/mall.repository";
-import {
-  EQUIPMENT_ATTRIBUTES,
-  EQUIPMENT_BASES,
-  EQUIPMENT_DISPLAY_NAMES,
-  EQUIPMENT_SLOT_OF,
-  EQUIPMENT_SLOT_ORDER,
-  MALL,
-} from "../../shared/game-data.generated";
 import {
   MallPriceItemDto,
   MallPriceQueryDto,
@@ -19,7 +14,7 @@ import {
   UpdateMallSettingsDto,
 } from "./dto/mall.dto";
 
-/** 商品目录里的一行（构建一次，复用到进程退出；商品本体 = 装备全量变体，清单来自生成物） */
+/** 商品目录里的一行（商品本体 = 装备全量变体，来自 `equipment_variants` 表） */
 interface CatalogEntry {
   id: string;
   label: string;
@@ -27,27 +22,40 @@ interface CatalogEntry {
   level: number;
 }
 
+/** 全量拉取参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界的 100 限制 */
+const ALL = { page: 1, size: 1_000_000 };
+
 /**
- * 商城定价（#251）
+ * 商城定价（#251 / #655）
  *
- * **与配置表方向相反**：商品清单来自生成物（装备七部位全量变体，555 件），价格才是
- * 服务端数据 —— `mall_prices` 特殊价行**动态增删**（PUT upsert / DELETE 删行回到统一价），
- * `mall_settings` 单行统一价 seed 自生成物 MALL_DEFAULT_PRICE。
- * 列表 = 商品目录 LEFT JOIN 特殊价后**内存分页**（555 件一页装不下但内存排序毫无压力），
+ * **与配置表方向相反**：商品清单不是独立数据 —— 它就是装备全量变体（555 件，
+ * `equipment_variants` 表）；价格才是商城自己的数据 —— `mall_prices` 特殊价行
+ * **动态增删**（PUT upsert / DELETE 删行回到统一价），`mall_settings` 单行统一价
+ * （出厂值随 `config-sync.sql` 首次建库灌入）。
+ *
+ * 列表 = 装备变体 LEFT JOIN 特殊价后**内存分页**（555 件一页装不下但内存排序毫无压力），
  * 未定价的 `price` 为 null（走统一价）—— 与客户端 getMallPrice「特殊价优先，否则统一价」
  * 的取值口径一致。
+ *
+ * ## #655：目录每次现查库
+ * 以前目录在启动时按生成物构建一次（`EQUIPMENT_ATTRIBUTES` 等四张表联查）。
+ * 那是「代码里的第二份装备清单」：管理端改名 / 调等级后，商城列表还是旧值。
+ * 现在每次 `listPrices` 现查三张表（变体 / 基础件 / 部位），改完立刻反映。
  */
 @Injectable()
-export class MallPricingService implements OnModuleInit {
-  /** 商品目录（进程内只构建一次；装备清单是生成物，运行期不变） */
-  private catalog: CatalogEntry[] = [];
+export class MallPricingService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(MallPricingService.name);
 
-  constructor(private readonly mall: MallRepository) {}
+  constructor(
+    private readonly mall: MallRepository,
+    private readonly variants: EquipmentVariantRepository,
+    private readonly equipments: EquipmentRepository,
+  ) {}
 
-  /** 启动时构建商品目录 + seed 统一价（幂等；已存在的行原样保留） */
-  onModuleInit() {
-    this.catalog = this.buildCatalog();
-    this.mall.seedSettings(Number(MALL.defaultPrice) || 0);
+  onApplicationBootstrap(): void {
+    if (!this.mall.getSettings()) {
+      this.logger.error("mall_settings 没有行 —— 商城统一价缺失，购买会一直报错（跑 make config-import）");
+    }
   }
 
   getSettings(): MallSettingsDto {
@@ -71,7 +79,7 @@ export class MallPricingService implements OnModuleInit {
     const special = new Map(this.mall.listAll().map((row) => [row.id, row]));
 
     const keywordLower = keyword ? keyword.toLowerCase() : "";
-    const rows = this.catalog
+    const rows = this.catalog()
       .filter((entry) => {
         if (query.slot && entry.slot !== query.slot) return false;
         if (keywordLower && !entry.id.toLowerCase().includes(keywordLower) && !entry.label.includes(keyword)) return false;
@@ -95,7 +103,7 @@ export class MallPricingService implements OnModuleInit {
     return { list, total, page, size };
   }
 
-  /** 设置单件特殊价（PUT = upsert；商品 id 必须在生成物清单里） */
+  /** 设置单件特殊价（PUT = upsert；商品 id 必须是装备变体） */
   putPrice(id: string, dto: PutMallPriceDto): MallPriceItemDto {
     const entry = this.requireGood(id);
     this.mall.upsert({ id, price: dto.price, updated_at: Date.now() });
@@ -126,33 +134,43 @@ export class MallPricingService implements OnModuleInit {
 
   // —— 内部 ——
 
-  /** 商品 id 必须在生成物的装备清单里（商品本体不归定价管，但没有商品就没有定价） */
+  /** 商品 id 必须是装备变体（结算层已经知道所有装备 id，不必再查一次表） */
   private requireGood(id: string): CatalogEntry {
-    const entry = this.catalog.find((item) => item.id === id);
-    if (!entry) throw BizException.notFound(BizCode.MALL_GOOD_NOT_FOUND, `商品 ${id} 不在商城商品清单里`);
-    return entry;
+    const level = equipmentLevelOf(id);
+    if (level === null) throw BizException.notFound(BizCode.MALL_GOOD_NOT_FOUND, `商品 ${id} 不在商城商品清单里`);
+    return {
+      id,
+      label: itemLabelOf(id) ?? id,
+      slot: equipmentSlotOf(id) ?? "",
+      level,
+    };
   }
 
   private itemOf(entry: CatalogEntry, price: number, updatedAt: number): MallPriceItemDto {
     return { id: entry.id, label: entry.label, slot: entry.slot, level: entry.level, price, updatedAt };
   }
 
-  /** 构建商品目录：生成物四表联查 + 排序（部位序 → 等级 → id；与客户端 getMallGoods 同口径） */
-  private buildCatalog(): CatalogEntry[] {
-    const slotOrder = (slot: string) => EQUIPMENT_SLOT_ORDER[slot as keyof typeof EQUIPMENT_SLOT_ORDER] ?? Number.MAX_SAFE_INTEGER;
-    const entries = Object.keys(EQUIPMENT_ATTRIBUTES).map((id) => {
-      // 变体 id = `${baseId}_pXsY`；剥掉品质后缀即基础件 id（基础件本身没有 _p 段）
-      const baseId = id.replace(/_p\d+s\d+$/, "");
-      const base = EQUIPMENT_BASES[baseId as keyof typeof EQUIPMENT_BASES] as { level?: unknown } | undefined;
-      return {
-        id,
-        label: String(EQUIPMENT_DISPLAY_NAMES[id as keyof typeof EQUIPMENT_DISPLAY_NAMES] ?? id),
-        slot: String(EQUIPMENT_SLOT_OF[id as keyof typeof EQUIPMENT_SLOT_OF] ?? ""),
-        level: Number(base?.level) || 0,
-        order: 0,
-      };
-    });
-    entries.sort((a, b) => slotOrder(a.slot) - slotOrder(b.slot) || a.level - b.level || (a.id < b.id ? -1 : 1));
+  /**
+   * 构建商品目录：装备变体 + 基础件（部位）+ 部位表（排序）
+   *
+   * 排序口径与客户端 `getMallGoods` 一致：部位序 → 等级 → id。部位序来自
+   * `equipment_slots.sort_order`，所以运营调整部位顺序会直接反映到商城列表。
+   */
+  private catalog(): CatalogEntry[] {
+    const slotOrder = new Map(this.equipments.listSlots().map((row) => [row.key, Number(row.sort_order) || 0]));
+    const slotOfBase = new Map(this.equipments.list({ ...ALL }).map((row) => [row.id, row.slot]));
+    const entries = this.variants.listAll().map((row) => ({
+      id: row.id,
+      label: row.label,
+      slot: slotOfBase.get(row.base_id) ?? "",
+      level: Number(row.level) || 0,
+    }));
+    entries.sort(
+      (a, b) =>
+        (slotOrder.get(a.slot) ?? Number.MAX_SAFE_INTEGER) - (slotOrder.get(b.slot) ?? Number.MAX_SAFE_INTEGER) ||
+        a.level - b.level ||
+        (a.id < b.id ? -1 : 1),
+    );
     return entries;
   }
 }

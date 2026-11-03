@@ -109,6 +109,8 @@ function prepare(sandboxName, extraEntries = [], ccExtra = "") {
         },
         files: [
           path.join(PROJECT_ROOT, "assets/configs/items.ts"),
+          // 快照落库入口总是编：`hydrateSnapshotTables()` 要走线上同一条 `apply*` 链
+          path.join(PROJECT_ROOT, "assets/configs/apply-snapshot.ts"),
           ...extraEntries.map((entry) => path.join(PROJECT_ROOT, "assets", entry)),
         ],
       },
@@ -127,105 +129,56 @@ function prepare(sandboxName, extraEntries = [], ccExtra = "") {
 }
 
 /**
- * 把「#603 搬到服务端」的那几张表按线上同一条路灌进沙箱（装备 555 变体 + 战斗力权重）
+ * 把出厂数据按**线上同一条路**灌进沙箱
  *
- * 客户端 `configs/equipments` / `configs/growth` / `configs/battle` 加载期都是**空表**
- * （数据在服务端 `equipment-seed.ts` / `combat-seed.ts`），但配置层单测一直把
- * 「这些表有值」当既有前提（背包回收、整理、对比、掉落名、更好装备提示…）。
- * 这些断言测的不是「快照有没有到」，而是规则本身 —— 所以 `prepare()` 编完就灌好：
- * 与进游戏后 `applyConfigSnapshot` 的最终状态同形。
+ * 客户端那几张表（装备 555 变体 / 药品 / 材料 / 技能 / 时装 / 任务 / 引导 / 战力权重）
+ * 加载期都是**空表** —— 数据进游戏后由 `GET /game-config` 送下来。单测一直把「这些表有值」
+ * 当既有前提（背包回收、整理、对比、掉落名、更好装备提示…），而它们测的不是「快照有没有到」，
+ * 是规则本身，所以 `prepare()` 编完就灌好：与进游戏后 `applyConfigSnapshot` 的最终状态同形。
  *
- * 用**真实种子 + 真实装载函数**而不是在测试里造数据：展开规则（5×3 档、rate 相乘、
- * 回收价取整）只有 `buildEquipmentMap` 一份，测试与线上算出来的一定是同一组数字。
+ * #655 起数据只有一处权威 = 数据库，仓库里的逐行投影就是 `server/data/config-sync.sql`
+ * （`factory-data.cjs` 把它读成快照 DTO 形状）。所以这里**不再编服务端种子**，
+ * 调用的 `applyContentSnapshot` / `applySkillSnapshot` / `applyEquipments` 也与线上同一份实现。
  */
 function hydrateSnapshotTables(outDir) {
   const has = (rel) => fs.existsSync(path.join(outDir, rel));
-  // 新手引导步骤（#605）：客户端不再存这张表（服务端下发），单测里的步骤来自 guide-seed.ts。
+  const factory = require("./factory-data.cjs");
+  // 新手引导步骤（#605）：客户端不再存这张表（服务端下发）
   // 不灌就是空表 —— 而空表在客户端被当作「服务端把引导关了」，`guideStepCount()` 为 0，
   // 存档里的进度会被归一成「已完成」：引导相关断言会全部假绿。
   if (has("configs/guide.js")) {
-    const guideSeed = require(compileServerShared("guide-seed.ts", "olua-seed-guide"));
-    require(path.join(outDir, "configs/guide.js")).applyGuideSteps(guideSeed.GUIDE_STEP_SEEDS);
+    require(path.join(outDir, "configs/guide.js")).applyGuideSteps(factory.guideSteps());
   }
   // #626 起快照各域的表与落库都在 `configs/game-config`，一个 require 就能全灌
-  if (!has("configs/game-config.js")) return;
+  if (!has("configs/game-config.js") || !has("configs/apply-snapshot.js")) return;
   const cfg = require(path.join(outDir, "configs/game-config.js"));
+  const snap = require(path.join(outDir, "configs/apply-snapshot.js"));
 
-  // 任务（#603 第六域）：客户端只剩空数组，数据在 quest-seed.ts ——
-  // 任务面板 / 可接判定 / NPC 头顶标记的断言都读这张表
-  const questSeed = require(compileServerShared("quest-seed.ts", "olua-seed-quest"));
-  cfg.questData.length = 0;
-  questSeed.QUEST_SEED_ROWS.forEach((row) => cfg.questData.push(row));
-  // 任务仓读的是 quests Map（由 questData 重建），不重建就是空表
-  cfg.rebuildQuests();
-
-  // 技能（#603 第十一域）：客户端只剩空数组 + 「职业 → 技能 id」的派生规则，
-  // 数值在 skill-seed.ts —— 技能栏 / 快捷栏 / 技能弹窗 / 普攻距离判定的断言都读这张表。
-  const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill"));
-  cfg.applySkillData(skillSeed.SKILL_SEED_ROWS);
-
-  // 时装（#603 第十二域）：衣柜 / 取源规则 / 预载的断言都读 fashionData，
-  // 数据在 fashion-seed.ts（种子形状 = 快照形状，直接走线上同一个 applyFashionData）
-  const fashionSeed = require(compileServerShared("fashion-seed.ts", "olua-seed-fashion"));
-  cfg.applyFashionData(fashionSeed.FASHION_SEED_ROWS);
+  // 技能 / 状态：线上 `applySkillSnapshot` 那一段
+  snap.applySkillSnapshot({ skills: factory.skills(), statuses: factory.statuses() });
 
   if (!has("configs/equipments.js")) return;
 
-  const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
-  const equipmentSeed = require(requireEquipmentSeed());
-
   // 战斗力权重（#603）：空表时 equipmentCombatValue 恒 0，「更好装备」提示会把所有候选判成不更好
-  const combatSeed = require(compileServerShared("combat-seed.ts", "olua-seed-combat"));
-  cfg.applyCombatWeights(combatSeed.COMBAT_WEIGHTS_SEED);
+  cfg.applyCombatWeights(factory.combatWeights());
+  // 顺序讲究：倍率先装（它决定展开档数；空数组一件都展开不出来），再装槽位与文案
+  const meta = factory.equipmentMeta();
+  const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
+  cfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates);
+  equipmentsMod.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels);
+  equipmentsMod.applyEquipmentSlots(factory.equipmentSlots());
 
-  // 顺序讲究：倍率先装（它决定展开档数，空数组一件都展开不出来），再装槽位与文案
-  cfg.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
-  equipmentsMod.applyEquipmentQualityLabels(equipmentSeed.EQUIPMENT_PREFIX_LABEL_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_LABEL_SEEDS);
-  // 槽位的 order 就是种子数组下标（与 equipment_slots.sort_order 的出厂值同源）
-  equipmentsMod.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
-
-  const variants = equipmentsMod.applyEquipmentSeed(equipmentSeed.EQUIPMENT_SEED_ROWS);
-  if (variants.length === 0) throw new Error("装备种子一件都没展开出来");
-
-  // 药品 / 材料（#603 第十域）：客户端这两张表也是空的，数据在 item-seed.ts。
-  // 单测里背包里装的药、掉落名、商城条目都按 id 查这张表 —— 不灌就是「查不到该物品」。
-  const itemSeed = require(compileServerShared("item-seed.ts", "olua-seed-item"));
-  cfg.applyDrugData(itemSeed.DRUG_SEED_ROWS);
-  cfg.applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
-  // 总表按「装备 → 药品 → 材料」重建（顺序只有客户端这一份实现）
-  require(path.join(outDir, "configs/items.js")).rebuildItemIndex();
-
-  // 装备属性（#590）：种子不带八项属性（由 growth-seed.equipmentStats 公式算），展开出来的
-  // 变体属性是 0 —— 这里按「公式 × 前后缀倍率」重算，与生成物 / 服务端 seed 同一来源。
-  // items 总表与部位 Map 引用的是同一批对象，原地改一处即两边同步。
-  const growthSeed = require(compileServerShared("growth-seed.ts", "olua-seed-growth"));
-  const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
-  for (const map of [
-    equipmentsMod.clothes,
-    equipmentsMod.weapons,
-    equipmentsMod.rings,
-    equipmentsMod.nicklaces,
-    equipmentsMod.shoes,
-    equipmentsMod.helmets,
-    equipmentsMod.belts,
-  ]) {
-    map.forEach((item) => {
-      const stats = growthSeed.equipmentStats(Number(item.level) || 0, String(item.slot ?? ""));
-      const rate = (cfg.equipmentPrefixRates[Number(item.prefix) || 0] ?? 1) * (cfg.equipmentSuffixRates[Number(item.suffix) || 0] ?? 1);
-      item.maxHp = Math.round(stats.maxHp * rate);
-      item.hpRecover = Math.round(stats.hpRecover * rate);
-      for (const key of RANGE_KEYS) item[key] = [Math.round(stats[key][0] * rate), Math.round(stats[key][1] * rate)];
-      // recyclePrice 由 buildEquipmentMap 按「曲线 × rate」算好（曲线已由 applyEquipmentRules 装进来），不动
-    });
-  }
-}
-
-/** 装备种子编译产物（进程内只编一次：单测常在一个进程里 prepare 两次） */
-let equipmentSeedPath = null;
-
-function requireEquipmentSeed() {
-  if (!equipmentSeedPath) equipmentSeedPath = compileServerShared("equipment-seed.ts", "olua-seed-equipment");
-  return equipmentSeedPath;
+  // 内容表一次落完（装备 → 药品 → 材料 → 怪物 → NPC → 任务 → 时装），末尾自带 rebuildItemIndex
+  snap.applyContentSnapshot({
+    equipments: factory.equipmentVariants(),
+    drugs: factory.drugs(),
+    items: factory.items(),
+    monsters: factory.monsters(),
+    monsterPresentations: factory.monsterPresentations(),
+    npcs: factory.npcs(),
+    quests: factory.quests(),
+    fashions: factory.fashions(),
+  });
 }
 
 /** 取沙箱的 `cc` 垫片模块（ccExtra 里导出的可调状态在这里读改，例如屏幕尺寸/缩放） */
@@ -235,105 +188,33 @@ function loadCcShim(outDir) {
 }
 
 /**
- * 编译服务端 `server/src/shared` 下的纯数据源（如 monster-seed.ts）供单测真跑。
- * #588 起客户端没有怪物数值副本 —— 击杀目标 key、数值锚点等断言都改从种子取，
- * 用真实 expandMonsterSeed 展开而不是在测试里复刻一份公式。
- * @param {string} entry 相对 server/src/shared 的入口（如 "monster-seed.ts"）
- * @param {string} sandboxName 沙箱目录名，各脚本取不同名字互不干扰
- * @returns {string} 编译产物 JS 路径，直接 require
- */
-function compileServerShared(entry, sandboxName) {
-  const tscPath = findTsc();
-  if (!tscPath) throw new Error("缺少 tsc（同 prepare 的要求）");
-  const serverShared = path.resolve(PROJECT_ROOT, "..", "server", "src", "shared");
-  const sandbox = path.join(os.tmpdir(), sandboxName);
-  fs.rmSync(sandbox, { recursive: true, force: true });
-  fs.mkdirSync(sandbox, { recursive: true });
-  fs.writeFileSync(
-    path.join(sandbox, "tsconfig.json"),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2019",
-          module: "CommonJS",
-          moduleResolution: "node",
-          strict: false,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          rootDir: serverShared,
-          outDir: path.join(sandbox, "out"),
-          types: [],
-        },
-        files: [path.join(serverShared, entry)],
-      },
-      null,
-      2,
-    ),
-  );
-  const result = spawnSync(process.execPath, [tscPath, "-p", path.join(sandbox, "tsconfig.json")], { encoding: "utf8" });
-  if (result.status !== 0) {
-    console.error(result.stdout || "");
-    console.error(result.stderr || "");
-    throw new Error(`服务端 shared 编译失败（${entry}，tsc 退出码 ${result.status}）`);
-  }
-  return path.join(sandbox, "out", entry.replace(/\.ts$/, ".js"));
-}
-
-/**
- * 把服务端种子灌进沙箱里的运行时表（#590）
+ * 把出厂数据灌进沙箱里的运行时表（#590 / #655）
  *
- * #590 起等级 / 称号 / 战魂 / 军衔在客户端是**空运行时表**（快照到达后整表重建），
- * 而单测的 Role / UI 消费方在进游戏语境里才被用到 —— 测试里要拿到与快照一致的表，
- * 就用真实种子（compileServerShared）当场展开灌进去，**不**在测试里复刻任何一行数据。
+ * 等级 / 称号 / 战魂 / 军衔在客户端是**空运行时表**（快照到达后整表重建），而单测的
+ * Role / UI 消费方在进游戏语境里才被用到 —— 测试里要拿到与快照一致的表，就按线上
+ * 同一条路灌：数据来自 `server/data/config-sync.sql`（`factory-data.cjs` 读成 DTO 形状），
+ * 落库走 `applyGrowthSnapshot` / `apply*Rows` 这些真实实现，**不在测试里复刻任何一行数据**。
  *
  * @param {string} outDir prepare() / prepareStorage() 的产物目录
  * @returns {{ levelMap: Map<number, object>, titleLevels: object[], soulLevels: object[], rankLevels: object[] }}
  */
 function seedRuntimeTables(outDir) {
-  const growth = require(compileServerShared("growth-seed.ts", "olua-seed-growth"));
-
-  // 快照行形状：六项区间是 {min,max} 对象（种子与 LEVEL_ATTRIBUTES 里是 [min,max] 元组）
-  const range = (tuple) => ({ min: tuple[0], max: tuple[1] });
-  const toRangeAttributes = (attributes) => ({
-    maxHp: attributes.maxHp,
-    hpRecover: attributes.hpRecover,
-    physicalAttack: range(attributes.physicalAttack),
-    magicAttack: range(attributes.magicAttack),
-    taoistAttack: range(attributes.taoistAttack),
-    physicalDefense: range(attributes.physicalDefense),
-    magicDefense: range(attributes.magicDefense),
-    taoistDefense: range(attributes.taoistDefense),
-  });
-
   // #626 起四张表都在 `configs/game-config` 里，一个 require 全部拿到；
   // 产物里没有它说明这条测试链根本不消费这些表，直接返回 null（调用方各自按需断言）
   const has = (rel) => fs.existsSync(path.join(outDir, rel));
   if (!has("configs/game-config.js")) {
     return { levelMap: null, titleLevels: null, soulLevels: null, rankLevels: null };
   }
+  const factory = require("./factory-data.cjs");
   const cfg = require(path.join(outDir, "configs/game-config.js"));
 
-  cfg.applyLevelRows(
-    Object.entries(growth.ROLE_LEVEL_ATTRIBUTES).map(([key, a]) => ({
-      level: Number(key),
-      maxHp: a.maxHp,
-      maxMp: a.maxMp,
-      hpRecover: a.hpRecover,
-      physicalAttack: range(a.physicalAttack),
-      magicAttack: range(a.magicAttack),
-      taoistAttack: range(a.taoistAttack),
-      physicalDefense: range(a.physicalDefense),
-      magicDefense: range(a.magicDefense),
-      taoistDefense: range(a.taoistDefense),
-      exp: a.exp,
-    })),
-  );
-  const titleSeed = require(compileServerShared("title-seed.ts", "olua-seed-title"));
-  cfg.applyTitleRows(titleSeed.TITLE_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
-  const soulSeed = require(compileServerShared("soul-seed.ts", "olua-seed-soul"));
-  cfg.applySoulRows(soulSeed.SOUL_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
-  const rankSeed = require(compileServerShared("rank-seed.ts", "olua-seed-rank"));
-  cfg.applyRankRows(rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) })));
+  require(path.join(outDir, "configs/apply-snapshot.js")).applyGrowthSnapshot({
+    growthScalars: Object.entries(factory.growthScalars()).map(([key, value]) => ({ key, value })),
+    levels: factory.levels(),
+  });
+  cfg.applyTitleRows(factory.titles());
+  cfg.applySoulRows(factory.souls());
+  cfg.applyRankRows(factory.ranks());
 
   // 装备（#603 第九域）**不在这里** —— 它不再是「快照到达后才有」，而是 prepare() 编完就
   // 按线上同一条路灌好的既存前提（见本文件顶部的 hydrateSnapshotTables）。这里只管四张
@@ -378,4 +259,4 @@ function fail(message) {
 
 //#endregion
 
-module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, compileServerShared, hydrateSnapshotTables, seedRuntimeTables, check, finish, fail };
+module.exports = { PROJECT_ROOT, findTsc, prepare, loadCcShim, hydrateSnapshotTables, seedRuntimeTables, check, finish, fail };

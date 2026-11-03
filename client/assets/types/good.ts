@@ -186,12 +186,20 @@ export interface Equipment extends Good, BattleAttributes {
  * 战斗属性是**可选**的：不写就由 equipmentStats(level, slot) 按等级生成，
  * 写了就覆盖生成值（要单独给某件装备加特例时用）。
  *
- * prefix/suffix/recyclePrice 不在条目里配置：
- * prefix/suffix 由构建时按「前缀 × 后缀」全组合展开（基础件即「普通的·人级」，沿用原 key），见 configs/equipments；
- * recyclePrice 的缺省值按 level 从 configs/growth 的回收价曲线生成（想给某件装备单独定价才写它）。
+ * prefix/suffix/recyclePrice **可以**写在条目里（#655）：服务端快照下发的是
+ * 展开后的 555 个变体，每一行自带序号与最终回收价，客户端直接建表、不再乘倍率。
+ * 工具链（`applyEquipmentSeed`，只给生成器与单测沙箱用）仍然传「基础件」，由
+ * `buildEquipmentMap` 按倍率展开 —— 那条路只在 Node 里跑，不进游戏。
  */
 export type EquipmentData = Omit<Equipment, keyof BattleAttributes | "prefix" | "suffix" | "recyclePrice"> &
-  Partial<BattleAttributes> & { key: string; recyclePrice?: number };
+  Partial<BattleAttributes> & {
+    key: string;
+    recyclePrice?: number;
+    /** 前缀序号（0 = 普通的）；服务端变体行必带，种子行不带 */
+    prefix?: Equipment["prefix"];
+    /** 后缀序号（0 = 人级）；同上 */
+    suffix?: Equipment["suffix"];
+  };
 
 /** 药品使用效果（新增效果类型时在此扩展） */
 export interface DrugEffect {

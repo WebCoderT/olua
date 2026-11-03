@@ -1,11 +1,11 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { DropTableRepository } from "../../database/repositories/drop-table.repository";
 import { MonsterDropRepository, MonsterDropListOptions } from "../../database/repositories/monster-drop.repository";
 import { DropTableRow, MonsterDropRow } from "../../database/rows";
-import { DROP_DEFAULT, DROP_TABLES, ITEM_LABELS, MONSTER_DROPS } from "../../shared/game-data.generated";
+import { itemExists } from "../../common/runtime-config-cache";
 import {
   CreateDropTableDto,
   DropTableDto,
@@ -26,22 +26,17 @@ const DEFAULT_PAGE_SIZE = 20;
  * - `drop_tables` **允许动态增删**（运营自建新表给多怪复用，同 mall_prices 定位）；
  * - `monster_drops` 与怪物一一对应（key 清单固定），只许 PATCH 整份替换。
  *
- * seed 全部 INSERT OR IGNORE 幂等；JSON 列（picks / entries）的结构校验收在这里
+ * 出厂数据由 `server/data/config-sync.sql` 在空库首启时灌入（#655），这里不再有 seed：
+ * 代码里没有「第三份掉落表」，库里就是全部。JSON 列（picks / entries）的结构校验收在这里
  * （goodId 要查物品总表、picks 是联合类型），DTO 只负责 whitelist 认键。
- * 将来的服务端掉落结算直读这两张表（与 monsters 表同一读法，改表即时生效）。
+ * 服务端掉落结算直读这两张表（与 monsters 表同一读法，改表即时生效）。
  */
 @Injectable()
-export class DropConfigService implements OnModuleInit {
+export class DropConfigService {
   constructor(
     private readonly dropTablesRepo: DropTableRepository,
     private readonly monsterDropsRepo: MonsterDropRepository,
   ) {}
-
-  /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
-  onModuleInit() {
-    this.seedTables();
-    this.seedMonsterDrops();
-  }
 
   // —— 具名掉落表（CRUD）——
 
@@ -188,7 +183,7 @@ export class DropConfigService implements OnModuleInit {
   }
 
   /**
-   * 条目池校验：goodId 必须在物品总表里（生成物 ITEM_LABELS = 装备全量变体 + 药品 + 材料），
+   * 条目池校验：goodId 必须是真实存在的物品（装备变体 / 药品 / 材料三张表之一），
    * count 区间 0 ≤ min ≤ max。weight / chance 的单字段范围已由 DTO 挡过。
    */
   private assertEntries(entries: Array<{ goodId: string; weight?: number; chance?: number; count?: number[] }>): Array<{ goodId: string; weight: number; chance: number; count: [number, number] }> {
@@ -197,7 +192,7 @@ export class DropConfigService implements OnModuleInit {
     }
     return entries.map((entry, index) => {
       const where = `条目[${index}]`;
-      if (!ITEM_LABELS[entry.goodId]) {
+      if (!itemExists(entry.goodId)) {
         throw new BizException(BizCode.PARAM_INVALID, `${where} 的物品 ${entry.goodId} 不在物品总表里`);
       }
       if (entry.count !== undefined) {
@@ -215,31 +210,4 @@ export class DropConfigService implements OnModuleInit {
     });
   }
 
-  /** 具名表 seed：DROP_TABLES 直接灌（common/elite/boss）+ 兜底表 default（#254） */
-  private seedTables() {
-    const tables: Record<string, unknown> = { ...DROP_TABLES, ...DROP_DEFAULT };
-    for (const [id, table] of Object.entries(tables)) {
-      const shape = table as { picks: number | [number, number]; entries: Array<{ goodId: string; weight: number; chance: number; count: [number, number] }> };
-      this.dropTablesRepo.seedRow({
-        id,
-        picks: JSON.stringify(shape.picks),
-        entries: JSON.stringify(shape.entries),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /** 每怪掉落 seed：MONSTER_DROPS 直接灌（220 只全内联；key 与怪物清单已由生成器对齐） */
-  private seedMonsterDrops() {
-    for (const [monsterKey, table] of Object.entries(MONSTER_DROPS as Record<string, { picks: number | [number, number]; entries: unknown[] }>)) {
-      this.monsterDropsRepo.seedRow({
-        monster_key: monsterKey,
-        source: "entries",
-        table_id: null,
-        picks: JSON.stringify(table.picks),
-        entries: JSON.stringify(table.entries),
-        updated_at: 0,
-      });
-    }
-  }
 }

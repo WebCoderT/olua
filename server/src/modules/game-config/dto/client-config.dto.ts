@@ -4,7 +4,7 @@ import { ValidateNested } from "class-validator";
 import { DrugDto } from "./drug.dto";
 import { RuntimeParamsDto } from "./runtime-params.dto";
 import { DropTableDto, MonsterDropDto } from "./drop.dto";
-import { EquipmentDto, EquipmentMetaDto, EquipmentSlotDto } from "./equipment.dto";
+import { EquipmentMetaDto, EquipmentSlotDto, EquipmentVariantDto } from "./equipment.dto";
 import { FashionDto } from "./fashion.dto";
 import { GrowthScalarDto, LevelDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
@@ -46,9 +46,13 @@ export class GameConfigSnapshotDto {
   @Type(() => RankDto)
   ranks!: RankDto[];
 
-  @ApiProperty({ description: "装备基础件配置（555 件变体由客户端按前后缀倍率展开）", type: [EquipmentDto] })
-  @Type(() => EquipmentDto)
-  equipments!: EquipmentDto[];
+  @ApiProperty({
+    description:
+      "装备变体（555 件：37 基础件 × 5 前缀 × 3 后缀）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开",
+    type: [EquipmentVariantDto],
+  })
+  @Type(() => EquipmentVariantDto)
+  equipments!: EquipmentVariantDto[];
 
   @ApiProperty({ description: "药品配置", type: [DrugDto] })
   @Type(() => DrugDto)
@@ -81,9 +85,9 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— " +
-      "属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；" +
-      "客户端 levelMap 整表由这段填充，曲线与标量不再下发",
+      "等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— " +
+      "`role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；" +
+      "客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发",
     type: [LevelDto],
   })
   @Type(() => LevelDto)
@@ -95,7 +99,7 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 shared/combat-seed.ts）。" +
+      "战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 config-sync.sql）。" +
       "服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——" +
       "客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）",
     additionalProperties: { type: "number" },

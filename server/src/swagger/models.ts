@@ -56,7 +56,7 @@ import {
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
 import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "../modules/game-config/dto/rank.dto";
-import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, UpdateEquipmentDto } from "../modules/game-config/dto/equipment.dto";
+import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, EquipmentVariantDto, EquipmentVariantPageDto, EquipmentVariantQueryDto, UpdateEquipmentDto, UpdateEquipmentVariantDto } from "../modules/game-config/dto/equipment.dto";
 import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/game-config/dto/drug.dto";
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
 import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
@@ -77,15 +77,11 @@ import {
   GrowthScalarDto,
   GrowthScalarPageDto,
   GrowthScalarQueryDto,
-  GrowthSegmentDto,
-  GrowthSegmentPageDto,
-  GrowthSegmentQueryDto,
-  LevelExpDto,
-  LevelExpPageDto,
-  LevelExpQueryDto,
+  RoleLevelDto,
+  RoleLevelPageDto,
+  RoleLevelQueryDto,
   UpdateGrowthScalarDto,
-  UpdateGrowthSegmentDto,
-  UpdateLevelExpDto,
+  UpdateRoleLevelDto,
 } from "../modules/game-config/dto/growth.dto";
 import {
   AutoBattleParamsDto,
@@ -268,14 +264,11 @@ export const SWAGGER_MODELS = [
   ConfigAttributesDto,
   ConfigAttributeRangeDto,
   // 养成配置（成长曲线 #256）
-  LevelExpDto,
-  LevelExpPageDto,
-  LevelExpQueryDto,
-  UpdateLevelExpDto,
-  GrowthSegmentDto,
-  GrowthSegmentPageDto,
-  GrowthSegmentQueryDto,
-  UpdateGrowthSegmentDto,
+  // 养成配置（角色等级逐级配置 #655：取代曲线采样）
+  RoleLevelDto,
+  RoleLevelPageDto,
+  RoleLevelQueryDto,
+  UpdateRoleLevelDto,
   GrowthScalarDto,
   GrowthScalarPageDto,
   GrowthScalarQueryDto,
@@ -307,6 +300,11 @@ export const SWAGGER_MODELS = [
   EquipmentPageDto,
   EquipmentQueryDto,
   UpdateEquipmentDto,
+  // 养成配置（装备变体 #655：基础件 × 前后缀，取代运行时倍率展开）
+  EquipmentVariantDto,
+  EquipmentVariantPageDto,
+  EquipmentVariantQueryDto,
+  UpdateEquipmentVariantDto,
   // 养成配置（药品 #253）
   DrugDto,
   DrugPageDto,

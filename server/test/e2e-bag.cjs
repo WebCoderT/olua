@@ -28,10 +28,6 @@ const path = require("node:path");
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
-/** 属性与门槛的唯一来源（服务端算的就是这份生成物 + 运营覆盖层） */
-const { EQUIPMENT_BASES } = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
-const { ROLE_LEVEL_ATTRIBUTES } = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.js")); // #590：等级表唯一书写处 = growth-seed
-
 /** 管理员注册码（提等级要用；等级只能走管理端，见 #550 / #554） */
 const ADMIN_CODE = "e2e-bag-admin";
 
@@ -193,11 +189,16 @@ async function registerAdmin(baseUrl, username, password) {
   return login.data && login.data.token;
 }
 
-const BARE_MAX_HP = ROLE_LEVEL_ATTRIBUTES["1"].maxHp;
-/** 提到 10 级之后的裸模血量（等级曲线是另一张表，别拿 1 级那份去比） */
-const BARE_MAX_HP_AT_10 = ROLE_LEVEL_ATTRIBUTES["10"].maxHp;
-const CLOTH_1_MAX_HP = EQUIPMENT_BASES["cloth_1"].attributes.maxHp;
-const CLOTH_10_MAX_HP = EQUIPMENT_BASES["cloth_10"].attributes.maxHp;
+/** 属性与门槛的出厂值来源：配置快照（#655 后数据只有库里一份，快照是它的逐行投影） */
+const snap = require("./lib/config-snapshot.cjs");
+/** 裸模血量逐级不同 —— 等级表在 `role_levels`，别拿 1 级那份去比 10 级 */
+const roleLevels = snap.index("role_levels", "level");
+const BARE_MAX_HP = roleLevels[1].maxHp;
+const BARE_MAX_HP_AT_10 = roleLevels[10].maxHp;
+/** 装备属性也在库里逐条展开（基础件 = 前后缀都为 0 的那一行） */
+const equipBases = snap.index("equipments");
+const CLOTH_1_MAX_HP = equipBases["cloth_1"].maxHp;
+const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-bag-${Date.now()}.db`);

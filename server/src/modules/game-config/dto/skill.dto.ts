@@ -23,7 +23,7 @@ import {
   SKILL_OWNER_VALUES,
   SKILL_TARGET_TYPE_VALUES,
 } from "../../../common/constants/game-config";
-import { OCCUPATION_HINT, ROLE_OCCUPATION_CODES } from "../../../shared/game-data";
+import { OCCUPATION_HINT, ROLE_OCCUPATION_CODES } from "../../../common/constants/game-enums";
 import { SkillRow } from "../../../database/rows";
 
 /**

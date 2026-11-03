@@ -332,7 +332,13 @@ function prepareStorage(sandboxName, extraEntries = []) {
     copy(path.join(ASSETS, rel), target);
   });
 
-  const entries = [path.join(srcDir, "ui/core/StorageManager.ts"), ...extraEntries.map((rel) => path.join(srcDir, rel))];
+  const entries = [
+    path.join(srcDir, "ui/core/StorageManager.ts"),
+    // 快照落库入口（#655）：出厂数据来自 `server/data/config-sync.sql`，灌表走线上同一条
+    // `apply*` 链 —— 不编它，`hydrateSnapshotTables()` 就只能拿到空表
+    path.join(srcDir, "configs/apply-snapshot.ts"),
+    ...extraEntries.map((rel) => path.join(srcDir, rel)),
+  ];
   fs.writeFileSync(
     path.join(sandbox, "tsconfig.json"),
     JSON.stringify(

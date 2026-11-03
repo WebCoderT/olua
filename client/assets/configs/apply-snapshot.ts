@@ -52,7 +52,7 @@ import { SEX } from "../types/role";
  * 所以弹窗 / 战力计算 / 名牌外显 / 背包 / 图鉴零改动即读新值。
  *
  * #590 起称号 / 战魂 / 军衔 / 等级表是**整表重建**（与地图 #573 同款）：
- * 客户端没有本地数据兜底行（书写处在 server/src/shared/*-seed.ts），
+ * 客户端没有本地数据兜底行（书写处是数据库，出厂那份 = `server/data/config-sync.sql`），
  * 快照里没有的阶 / 级客户端就不存在 —— 「管理端删了一行」会如实反映。
  *
  * ## #604 起是**显式契约**，不再有「缺段跳过」
@@ -86,9 +86,9 @@ function applyMallPrices(prices: MallPriceItem[], defaultPrice: number): void {
 /**
  * 覆写成长标量参数（#361；#590 起客户端只消费 roleMaxLevel；#605 起加上魔法回复速度）
  *
- * 键名是管理端的接口契约（`GROWTH_SCALAR_SPECS`）。曲线派生类参数（attributeRange.* /
- * expGain.*）随 #590 移出客户端（属性与经验都由服务端展开进 `levels` 段），
- * 这里只保留**客户端也要用**的那两个标量；未知键直接忽略（服务端新增参数时旧客户端照常玩）。
+ * 键名是管理端的接口契约（`GROWTH_SCALAR_SPECS`）。属性 / 经验 / 回血全在 `levels` 段逐级给好，
+ * 标量里没有任何「换算比率」—— 这里只保留**客户端也要用**的那两个，未知键直接忽略
+ * （服务端新增参数时旧客户端照常玩）。
  */
 export function applyGrowthScalars(rows: GrowthScalar[]): void {
   rows.forEach((row) => {
@@ -158,6 +158,9 @@ function toBattleAttributes(attributes: ConfigAttributes): BattleAttributes {
  */
 function rowToEquipmentData(row: EquipmentRow): EquipmentData {
   const attributes = toBattleAttributes(row.attributes);
+  // #655：快照发的是展开后的变体行，行自带前后缀序号与最终回收价 ——
+  // 客户端不再乘倍率（sentinel 见 buildEquipmentMap 的两条路径判定）
+  const variant = row as EquipmentRow & { prefix?: number; suffix?: number };
   return {
     key: row.id,
     type: GOOD_TYPE.EQUIPMENT,
@@ -178,15 +181,18 @@ function rowToEquipmentData(row: EquipmentRow): EquipmentData {
     inRotate: row.inRotate,
     outScale: row.outScale,
     outPositions: (row.outPositions ?? []).map((point) => new Vec2(point.x, point.y)),
+    prefix: variant.prefix as EquipmentData["prefix"],
+    suffix: variant.suffix as EquipmentData["suffix"],
+    recyclePrice: row.sellPrice,
     ...attributes,
   };
 }
 
 /**
- * 装载装备（#603 第九域：整表重建）
+ * 装载装备（#603 第九域：整表重建；#655：快照发的是 555 个变体，不再在客户端展开）
  *
- * 服务端下发**基础件**（37 件）+ 全部显示字段，`applyEquipmentData` 按「前缀 × 后缀」
- * 展开成 555 条变体并按部位分表。物品总表（`items`）不在这里逐条写 —— 由
+ * 服务端下发**展开后的变体**（37 基础件 × 5 前缀 × 3 后缀 = 555）+ 全部显示字段，
+ * `applyEquipmentData` 直接按部位分表。物品总表（`items`）不在这里逐条写 —— 由
  * `applyContentSnapshot` 末尾的 `rebuildItemIndex()` 一次性重建（#603 第十域）,
  * 顺序「装备 → 药品 → 材料」只有那一处实现。
  */
@@ -237,8 +243,9 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   // #603：战斗力权重（客户端不再存倍率，唯一来源是服务端 combat-seed）
   applyCombatWeights(snapshot.combatWeights);
   // #603 第九域：装备规则**必须最先装** —— 它决定「每件基础件展开成几档变体」
-  // （倍率为空 = 一件都展开不出来）与「回收价怎么算」。顺序反了装备表整个是空的
-  applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates, snapshot.equipmentMeta.recycleCurve);
+  // （倍率为空 = 一件都展开不出来）。顺序反了装备表整个是空的。
+  // #655：回收价不在这里 —— 变体行的 `recyclePrice` 自己带价（见 equipments.ts 路径 1）
+  applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates);
   applyEquipmentQualityLabels(snapshot.equipmentMeta.prefixLabels, snapshot.equipmentMeta.suffixLabels);
   applyEquipmentSlots(snapshot.equipmentSlots);
   applyTitleRows(snapshot.titles);
@@ -259,7 +266,7 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
  * 覆写运行时参数（#605）：掉落手感 + 自动战斗与寻路
  *
  * 这两组原本写死在客户端 `configs/drop.ts` / `configs/autoBattle.ts` 里，运营改不了；
- * 现在服务端存一份（`shared/runtime-seed.ts` → `runtime_params` 表 → 管理端可改），
+ * 现在服务端存一份（`config-sync.sql` → `runtime_params` 表 → 管理端可改），
  * 进游戏拉一次快照就覆写到本地参数对象上。
  *
  * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / DropScatter）

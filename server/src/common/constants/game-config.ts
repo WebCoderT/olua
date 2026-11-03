@@ -27,22 +27,18 @@ export const ACQUIRE_CHANNEL_LABELS: Record<AcquireChannelValue, string> = {
   [AcquireChannel.UNAVAILABLE]: "无法获取",
 };
 
-// —— 成长曲线（#256）——
+// —— 成长参数（#256 / #655）——
 
-import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS } from "../../shared/game-data.generated";
-import { GROWTH_CURVES } from "../../shared/growth-seed";
-
-/**
- * 成长曲线键清单（**派生**自 growth-seed 的 GROWTH_CURVES，不许手写字面量清单 ——
- * 种子里增删曲线，这里与服务端校验自动跟着变）
- */
-export const GROWTH_CURVE_KEYS = Object.keys(GROWTH_CURVES);
+import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS } from "./game-enums";
 
 /**
  * 成长标量参数的取值域（键 → 约束）
  *
- * `min` / `max` 拦住明显拍错的值（把回血率写成 100、把等级上限写成 0 这类）；
- * `integer` 标记该键必须是整数。曲线分段自身的连续性校验在 service（跨行约束）。
+ * `min` / `max` 拦住明显拍错的值（把经验基数写成 0、把等级上限写成 0 这类）；
+ * `integer` 标记该键必须是整数。
+ *
+ * **只收「全线一个数」的全局参数**：#655 起每级属性 / 回血 / 魔法上限都是 `role_levels`
+ * 逐条配好的列，`attributeRange.*` 那三个换算比率已经没有消费方，随曲线一起下架了。
  */
 export interface GrowthScalarSpec {
   min: number;
@@ -53,9 +49,6 @@ export interface GrowthScalarSpec {
 
 export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
   "roleMaxLevel": { min: 1, max: 200, integer: true },
-  "attributeRange.minRate": { min: 0, max: 1, integer: false },
-  "attributeRange.mpRate": { min: 0, max: 10, integer: false },
-  "attributeRange.hpRecoverRate": { min: 0, max: 1, integer: false },
   "expGain.expPerLevel": { min: 1, max: 100000, integer: true },
   "expGain.maxLevelGap": { min: 0, max: 100, integer: true },
   // 允许小数：回复是「每秒 N 点 × 经过秒数」累加的，0.5 这种半速配置是合法需求（#605）
@@ -64,10 +57,7 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
 export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
-  "roleMaxLevel": "角色等级上限（四条曲线的最后一段必须正好覆盖到它）",
-  "attributeRange.minRate": "属性取值下限倍率：实际值在 [上限×minRate, 上限] 之间随机",
-  "attributeRange.mpRate": "最大魔法值 = 最大生命 × 该值",
-  "attributeRange.hpRecoverRate": "每秒回血 = 最大生命 × 该值（回血的唯一强度入口）",
+  "roleMaxLevel": "角色等级上限（必须等于「角色等级」页的行数：表里有几级就能升到几级）",
   "expGain.expPerLevel": "每级基准经验：同级击杀经验 = (怪物等级+1) × 该值",
   "expGain.maxLevelGap": "角色与怪物等级差达到该值（含）后不再获得经验",
   "mpRecoverPerSecond": "魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）",

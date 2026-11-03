@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
-import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue, mapDefaultOf } from "../../common/constants/map-config";
+import { MAP_TYPE_GROUPS, MAP_TYPE_LABELS, MapTypeValue } from "../../common/constants/map-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { spawnAreaInBounds, spawnAreaOverflow } from "../../common/utils/spawn-area-bounds.util";
@@ -9,8 +9,7 @@ import { MapRepository } from "../../database/repositories/map.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { MapRow } from "../../database/rows";
-import { MAP_CONTENTS, MapContent } from "../../shared/map-content.generated";
-import { MAP_PIXEL_SIZES, MapPixelSize } from "../../shared/map-sizes.generated";
+import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
 import {
   MapConfigDto,
   MapDetailDto,
@@ -32,12 +31,12 @@ import {
  * | 数据 | 存放 | 谁能改 |
  * |---|---|---|
  * | `label` / `type` / `level` / `combat` / `soulOfWar` | `maps` 表 | **管理端**（`save`） |
- * | `layers` / `groups` / 尺寸 | 生成快照（源自 TMX） | 改 TMX + 跑 `import-spawn-areas` |
+ * | `layers` / `groups` / 尺寸 | `maps` 表的几何列 + `content` JSON（源自 TMX） | 改 TMX + 跑 `import-spawn-areas` |
  * | `spawnAreas` | `map_spawn_areas` 表 | 导入工具写入 |
  * | `worldMonsters` | `world_monsters` 表 | 世界服务运行时写 |
  *
  * 资源本体（TMX / 底图 / 预览图）仍在客户端资源包里 —— 所以**没有「新建地图」**：
- * 行由 `onModuleInit` 按资源清单（`MAP_CONTENTS` 的键）补出来，一张没有 TMX 的「地图」
+ * 行由出厂快照（`server/data/config-sync.sql`）带进来，一张没有 TMX 的「地图」
  * 在客户端点开就是黑屏，后台不该造得出来。
  *
  * ## 为什么没有「拦连接」的判定（#573 考虑过，故意不做）
@@ -59,7 +58,7 @@ import {
  * 搬到服务端」的范围，记在这里等真需要时再做。
  */
 @Injectable()
-export class MapService implements OnModuleInit {
+export class MapService {
   private readonly logger = new Logger(MapService.name);
 
   constructor(
@@ -69,35 +68,6 @@ export class MapService implements OnModuleInit {
     private readonly monsters: MonsterRepository,
   ) {}
 
-  /**
-   * 按资源清单补行（幂等）
-   *
-   * 清单的真相是客户端 `resources/map/<id>/<id>.tmx` —— `MAP_CONTENTS` 正是扫那个目录
-   * 得到的（`tools/import-spawn-areas.cjs`）。出厂值来自 `MAP_DEFAULTS`（#573 搬迁时
-   * 从客户端 `configs/map.ts` 抄过来的 11 条）；清单里有、出厂表里没有的图补成
-   * 「空名 / 安全地图 / 无门槛」，等运营在管理端填。
-   *
-   * **`INSERT OR IGNORE`**：运营改过的行不会被重启盖回来（表里已有这个 id 就跳过）。
-   */
-  onModuleInit(): void {
-    let seeded = 0;
-    for (const id of Object.keys(MAP_CONTENTS)) {
-      if (this.maps.getById(id)) continue;
-      const preset = mapDefaultOf(id);
-      this.maps.seedRow({
-        map_id: id,
-        label: preset?.label ?? "",
-        type: preset?.type ?? "0",
-        level: preset?.level ?? 0,
-        combat: preset?.combat ?? 0,
-        soul_of_war: preset?.soulOfWar ?? 0,
-        updated_by: "",
-        updated_at: 0,
-      });
-      seeded += 1;
-    }
-    if (seeded > 0) this.logger.log(`地图配置已按资源清单补 ${seeded} 行（共 ${this.maps.countAll()} 张图）`);
-  }
 
   /** 列表：全部图 + 各类对象计数（客户端资源）+ 服务端两处统计 */
   list(): MapListDto {
@@ -136,7 +106,7 @@ export class MapService implements OnModuleInit {
   /** 详情：基础 + 图层 + 对象组 + 刷怪区 + 场上怪物 + 来源说明 */
   detail(id: string): MapDetailDto {
     const row = this.requireRow(id);
-    const content = this.contentOf(id);
+    const content = this.contentOf(row);
     const groups = content.groups.map((group) => {
       const dto = new MapGroupDto();
       dto.name = group.name;
@@ -146,7 +116,7 @@ export class MapService implements OnModuleInit {
 
     // 越界判定按「这张图的实际像素尺寸」算（MAP_PIXEL_SIZES 生成快照，与 TMX 头一致）。
     // 判据只在服务端一处：页面直接显示 inBounds，不自己再算一遍 —— 两边各算迟早会分叉。
-    const mapPixel = this.sizeOf(id);
+    const mapPixel = this.sizeOf(row);
     const areas: MapSpawnAreaDto[] = this.spawnAreas.listByMap(id).map((area) => ({
       id: area.id,
       name: area.name,
@@ -227,19 +197,34 @@ export class MapService implements OnModuleInit {
     return `map/${id}/${id}`;
   }
 
-  /** 尺寸快照；缺一张图时不让整个列表 500 —— 记一条 warn 并按 0 展示 */
-  private sizeOf(id: string): MapPixelSize {
-    const size = MAP_PIXEL_SIZES[id];
-    if (size) return size;
-    this.logger.warn(`地图 ${id} 没有尺寸快照（tools/import-spawn-areas.cjs 漏了这张图？）`);
-    return { cols: 0, rows: 0, tileWidth: 0, tileHeight: 0, width: 0, height: 0 };
+  /** 尺寸（`maps` 表的几何列）；一行没补过几何时按 0 展示，并留一条 warn 便于批量排查 */
+  private sizeOf(row: MapRow): MapPixelSize {
+    if (row.pixel_width > 0 && row.pixel_height > 0) {
+      return {
+        cols: row.grid_cols,
+        rows: row.grid_rows,
+        tileWidth: row.tile_width,
+        tileHeight: row.tile_height,
+        width: row.pixel_width,
+        height: row.pixel_height,
+      };
+    }
+    this.logger.warn(`地图 ${row.map_id} 没有几何（重跑 node tools/import-spawn-areas.cjs）`);
+    return EMPTY_MAP_PIXEL_SIZE;
   }
 
-  private contentOf(id: string): MapContent {
-    const content = MAP_CONTENTS[id];
-    if (content) return content;
-    this.logger.warn(`地图 ${id} 没有内容快照（assets 里缺 TMX？）`);
-    return { layers: [], groups: [] };
+  /** 图层 + 对象组（`maps.content` 列；JSON 坏了只影响这一张图的详情，不让列表 500） */
+  private contentOf(row: MapRow): MapContent {
+    try {
+      const parsed = JSON.parse(row.content || "{}") as Partial<MapContent>;
+      if (Array.isArray(parsed.layers) && Array.isArray(parsed.groups)) {
+        return { layers: parsed.layers, groups: parsed.groups };
+      }
+    } catch {
+      /* 落到下面的空内容 + warn */
+    }
+    this.logger.warn(`地图 ${row.map_id} 的内容列不是合法 JSON（重跑 node tools/import-spawn-areas.cjs）`);
+    return EMPTY_MAP_CONTENT;
   }
 
   private monsterLabelOf(key: string): string {
@@ -259,8 +244,8 @@ export class MapService implements OnModuleInit {
   /** 列表/详情共用的一份基础字段 */
   private summaryOf(row: MapRow, spawnAreaCount: number, worldMonsterCount: number): MapSummaryDto {
     const id = row.map_id;
-    const size = this.sizeOf(id);
-    const content = this.contentOf(id);
+    const size = this.sizeOf(row);
+    const content = this.contentOf(row);
 
     // npc / revive 的对象类可能落在 npc 组，也可能在早期地图的 objects 组里 —— 按 klass 全组扫
     const allObjects = content.groups.flatMap((group) => group.objects);
@@ -309,22 +294,22 @@ export class MapService implements OnModuleInit {
       {
         section: "size",
         label: "地图尺寸",
-        origin: "snapshot",
-        ref: "server/src/shared/map-sizes.generated.ts",
-        note: "由 tools/import-spawn-areas.cjs 从 TMX 头生成（随仓库提交）；换图后重跑工具即可，页面只读。",
+        origin: "db",
+        ref: "maps 表（几何列）",
+        note: "由 tools/import-spawn-areas.cjs 从 TMX 头直接写库；换图后重跑工具即可，页面只读。",
       },
       {
         section: "layers",
         label: "图层",
-        origin: "snapshot",
-        ref: "server/src/shared/map-content.generated.ts",
-        note: "TMX 的图层结构快照；瓦片数据留在客户端资源里，这里只列结构。",
+        origin: "db",
+        ref: "maps 表（content 列）",
+        note: "TMX 的图层结构（JSON）；瓦片数据留在客户端资源里，这里只列结构。",
       },
       {
         section: "groups",
         label: "对象组（Tiled 原始坐标）",
-        origin: "snapshot",
-        ref: "server/src/shared/map-content.generated.ts",
+        origin: "db",
+        ref: "maps 表（content 列）",
         note: "坐标是 Tiled 原始口径（左上角、y 向下），用来对着编辑器核对；不是服务端在用的世界坐标。",
       },
       {

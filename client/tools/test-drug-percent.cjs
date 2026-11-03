@@ -13,13 +13,15 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, compileServerShared, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const factory = require("./lib/factory-data.cjs");
 
-// 掉落表 #603 起全部在服务端种子（客户端 configs/drop 只剩运行时手感参数，没有表可读）
+// 掉落表 #603 起全部在服务端库里（客户端 configs/drop 只剩运行时手感参数，没有表可读）
 const outDir = prepare("olua-drug-percent");
 const { items, resolveDrugRecovery } = require(path.join(outDir, "configs/items.js"));
-const { MONSTER_DROP_SEED_ROWS: monsterDropTables } = require(compileServerShared("monster-drop-seed.ts", "olua-monster-drop-seed"));
-const { DROP_TABLE_SEED_ROWS: dropTables, DROP_DEFAULT_SEED: defaultDropTable } = require(compileServerShared("drop-seed.ts", "olua-drop-seed"));
+const monsterDropTables = factory.monsterDrops();
+const dropTables = factory.dropTables();
+const defaultDropTable = dropTables.find((row) => row.id === "default");
 const { GOOD_TYPE, isDrug } = require(path.join(outDir, "types/good.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");

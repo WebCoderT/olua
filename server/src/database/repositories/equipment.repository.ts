@@ -151,16 +151,6 @@ export class EquipmentRepository {
 
   // —— 规则表（#603 第九域，单行 id = 1）——
 
-  /** seed 规则行（已存在则跳过 —— 运营改过的倍率/曲线不会被配置更新覆盖回去） */
-  seedMeta(row: EquipmentMetaRow): void {
-    this.db.run(
-      `INSERT OR IGNORE INTO equipment_meta
-        (id, prefix_rates, suffix_rates, prefix_labels, suffix_labels, recycle_curve, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.prefix_rates, row.suffix_rates, row.prefix_labels, row.suffix_labels, row.recycle_curve, row.updated_at],
-    );
-  }
-
   /** 取规则行（表里没有行时返回 undefined —— 调用方决定兜什么） */
   getMeta(): EquipmentMetaRow | undefined {
     return this.db.get<EquipmentMetaRow>("SELECT * FROM equipment_meta WHERE id = 1");
@@ -169,8 +159,8 @@ export class EquipmentRepository {
   updateMeta(row: EquipmentMetaRow): { changes: number } {
     return this.db.execute(
       `UPDATE equipment_meta SET prefix_rates = ?, suffix_rates = ?, prefix_labels = ?, suffix_labels = ?,
-         recycle_curve = ?, updated_at = ? WHERE id = 1`,
-      [row.prefix_rates, row.suffix_rates, row.prefix_labels, row.suffix_labels, row.recycle_curve, row.updated_at],
+         updated_at = ? WHERE id = 1`,
+      [row.prefix_rates, row.suffix_rates, row.prefix_labels, row.suffix_labels, row.updated_at],
     );
   }
 

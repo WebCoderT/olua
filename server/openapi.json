@@ -3136,8 +3136,8 @@
                 "fashion",
                 "dropTable",
                 "monsterDrop",
-                "levelExp",
-                "growthSegment",
+                "roleLevel",
+                "equipmentVariant",
                 "growthScalar",
                 "skill",
                 "status",
@@ -3421,8 +3421,8 @@
                 "fashion",
                 "dropTable",
                 "monsterDrop",
-                "levelExp",
-                "growthSegment",
+                "roleLevel",
+                "equipmentVariant",
                 "growthScalar",
                 "skill",
                 "status",
@@ -3971,7 +3971,7 @@
     },
     "/admin/achievements": {
       "get": {
-        "description": "seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。\n\n`condition` 分两类：`kill` / `quest` 是**累计型**（进度由事件流落库），`level` / `combat` / `collect` 是**状态型**（每次查询按角色当前状态现算，不落进度）。\n\n**排序**：`sort` 取 `id` / `category` / `label` / `sortOrder` / `updatedAt`，`order` 取 asc / desc（默认分类内顺序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "seed 自 server/data/config-sync.sql，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。\n\n`condition` 分两类：`kill` / `quest` 是**累计型**（进度由事件流落库），`level` / `combat` / `collect` 是**状态型**（每次查询按角色当前状态现算，不落进度）。\n\n**排序**：`sort` 取 `id` / `category` / `label` / `sortOrder` / `updatedAt`，`order` 取 asc / desc（默认分类内顺序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAchievement.list",
         "parameters": [
           {
@@ -5535,7 +5535,7 @@
     },
     "/admin/equipments": {
       "get": {
-        "description": "**只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）不进管理端 —— 它是基础件乘前后缀倍率展开的。id / 部位结构固定，**没有创建 / 删除**。\n\n`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `slot` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "**只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。id / 部位结构固定，**没有创建 / 删除**。\n\n`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `slot` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipment.list",
         "parameters": [
           {
@@ -5671,7 +5671,7 @@
     },
     "/admin/equipments/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `level`：穿戴需求等级（装备定强的锚点）。\n- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。变体属性 = 基础属性 × 前后缀倍率，改基础件即改全部 15 个变体。\n- `slot` / `label` 不开放编辑（部位结构与文案属客户端资源约定）。\n- `id` 不存在 → 404（`50016`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `level`：穿戴需求等级（装备定强的锚点）。\n- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。改基础件**不再带动 15 个变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去「装备变体」页。\n- `slot` / `label` 不开放编辑（部位结构与文案属客户端资源约定）。\n- `id` 不存在 → 404（`50016`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminEquipment.update",
         "parameters": [
           {
@@ -5730,6 +5730,191 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/EquipmentDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/equipment-variants": {
+      "get": {
+        "description": "555 行 = 37 基础件 × 5 前缀 × 3 后缀。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称。\n\n**这是唯一能改单个变体数值的地方** —— 以前改基础件会连带 15 个变体按倍率一起变，现在每个变体是独立的一行。\n\n**排序**：`sort` 取 `id` / `baseId` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 baseId 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipmentVariant.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配变体 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "baseId",
+            "required": false,
+            "in": "query",
+            "description": "只列某个基础件的 15 个变体（如 cloth_1）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentVariantPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备变体列表（555 件）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentVariantPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/EquipmentVariantQueryDto"
+        }
+      }
+    },
+    "/admin/equipment-variants/{id}": {
+      "patch": {
+        "description": "**部分更新**：`label` / `level` / `sellPrice` 传哪个改哪个；`attributes` 是八项属性，**整份提交**。\n\n- 属性区间两端由服务端校验（下限 ≤ 上限），不合规 400（40000）。\n- 改完立刻重装结算层：服务端下一次算角色属性就用新值（客户端重进后生效）。\n- 变体 id 不存在 → 404（`50010`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipmentVariant.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "变体 id（如 cloth_1_p3s2；基础件本身就是 p0s0）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEquipmentVariantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的变体",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentVariantDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑装备变体",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentVariantDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -5858,7 +6043,7 @@
     },
     "/admin/equipment-meta": {
       "get": {
-        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n- `recycleCurve`：回收价曲线（分段线性）—— 背包「一键回收」与服务端卖装备结算共用。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n\n**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipmentMeta.get",
         "parameters": [],
         "responses": {
@@ -5889,7 +6074,7 @@
             "admin": []
           }
         ],
-        "summary": "装备规则（前后缀倍率 / 文案 / 回收价曲线）",
+        "summary": "装备规则（前后缀倍率 / 文案）",
         "tags": [
           "管理端"
         ],
@@ -5903,7 +6088,7 @@
         ]
       },
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 回收价曲线每档要求 `from ≤ to`、`start ≥ 0`、`perLevel ≥ 0`，违反 → 400。\n- 改完立刻重装服务端结算层：**卖装备的到账价与背包显示同步变**（不必重启）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminEquipmentMeta.update",
         "parameters": [],
         "requestBody": {
@@ -7785,7 +7970,7 @@
     },
     "/admin/fashions": {
       "get": {
-        "description": "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "id 清单固定（seed 自 config-sync.sql 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminFashion.list",
         "parameters": [
           {
@@ -8441,10 +8626,10 @@
         ]
       }
     },
-    "/admin/level-exps": {
+    "/admin/role-levels": {
       "get": {
-        "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。\n\n**排序**：`sort` 取 `level` / `exp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
-        "operationId": "adminLevelExp.list",
+        "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**：一行 = 该级的裸属性（血 / 蓝 / 回血 / 六项攻防区间）+ 升级经验。\n\n这是战斗结算与客户端等级表的**唯一来源** —— 曲线已从运行时移除，想调哪一级就改哪一行。\n\n`keyword` 按等级号模糊匹配。\n\n**排序**：`sort` 取 `level` / `exp` / `maxHp` / `maxMp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRoleLevel.list",
         "parameters": [
           {
             "name": "page",
@@ -8475,7 +8660,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "关键字（不同接口含义见其说明）",
+            "description": "关键字：按等级号模糊匹配",
             "schema": {
               "type": "string"
             }
@@ -8518,7 +8703,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/LevelExpPageDto"
+                          "$ref": "#/components/schemas/RoleLevelPageDto"
                         }
                       }
                     }
@@ -8533,27 +8718,27 @@
             "admin": []
           }
         ],
-        "summary": "升级经验列表",
+        "summary": "角色等级表",
         "tags": [
           "管理端"
         ],
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/LevelExpPageDto"
+          "$ref": "#/components/schemas/RoleLevelPageDto"
         },
         "x-olua-permissions": [
           "gameConfig:read"
         ],
         "x-olua-query-schema": {
-          "$ref": "#/components/schemas/LevelExpQueryDto"
+          "$ref": "#/components/schemas/RoleLevelQueryDto"
         }
       }
     },
-    "/admin/level-exps/{level}": {
+    "/admin/role-levels/{level}": {
       "patch": {
-        "description": "**部分更新**：只改 `exp`（等级本身不可改）。\n\n- `exp` ≥ 1（0 经验的等级永远升不上去）。\n- 改经验会改变升级节奏；怪物经验产出在客户端 `expGain` 口径里，两边要一起调。\n- 等级不存在 → 404（`50012`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
-        "operationId": "adminLevelExp.update",
+        "description": "**部分更新**：只改传了的字段（等级本身不可改）。\n\n- 六个区间都是 `xxxMin` / `xxxMax` 两个字段，校验「下限 ≤ 上限」（合并后判断）。\n- 改完立刻重装结算层，**服务端下一次结算就用新值**（不用重启）。\n- 客户端下次拉配置快照时生效 —— 已经进游戏的玩家要重进。\n- 等级不存在 → 404（`50012`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRoleLevel.update",
         "parameters": [
           {
             "name": "level",
@@ -8570,14 +8755,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateLevelExpDto"
+                "$ref": "#/components/schemas/UpdateRoleLevelDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "更新后的升级经验",
+            "description": "更新后的等级行",
             "content": {
               "application/json": {
                 "schema": {
@@ -8588,7 +8773,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/LevelExpDto"
+                          "$ref": "#/components/schemas/RoleLevelDto"
                         }
                       }
                     }
@@ -8603,220 +8788,14 @@
             "admin": []
           }
         ],
-        "summary": "编辑升级经验",
+        "summary": "编辑角色等级",
         "tags": [
           "管理端"
         ],
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/LevelExpDto"
-        },
-        "x-olua-permissions": [
-          "gameConfig:write"
-        ]
-      }
-    },
-    "/admin/growth-segments": {
-      "get": {
-        "description": "分段线性曲线的段（曲线键 × 段序固定，**没有创建 / 删除**）：`maxHp` / `attack` / `defense` / `killsPerLevel` 四条，每段 {fromLevel, toLevel, startValue, perLevel}，段间必须首尾相接、连续覆盖 1..roleMaxLevel。\n\n`curve` 按曲线键筛。\n\n**排序**：`sort` 取 `curve` / `seq` / `fromLevel` / `toLevel` / `startValue` / `perLevel` / `updatedAt`，`order` 取 asc / desc（默认 curve + seq 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
-        "operationId": "adminGrowthSegment.list",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "description": "页码，从 1 开始",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "example": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "size",
-            "required": false,
-            "in": "query",
-            "description": "每页条数（1~100）",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "example": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "keyword",
-            "required": false,
-            "in": "query",
-            "description": "关键字（不同接口含义见其说明）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "required": false,
-            "in": "query",
-            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
-            "schema": {
-              "example": "createdAt",
-              "type": "string"
-            }
-          },
-          {
-            "name": "order",
-            "required": false,
-            "in": "query",
-            "description": "排序方向：asc 升序 / desc 降序",
-            "schema": {
-              "default": "desc",
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          },
-          {
-            "name": "curve",
-            "required": false,
-            "in": "query",
-            "description": "按曲线键筛",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "maxHp",
-                "attack",
-                "defense",
-                "killsPerLevel"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "分页结果（list/total/page/size）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ApiEnvelopeDto"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/GrowthSegmentPageDto"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "admin": []
-          }
-        ],
-        "summary": "成长曲线分段列表",
-        "tags": [
-          "管理端"
-        ],
-        "x-olua-audience": "admin",
-        "x-olua-data-nullable": false,
-        "x-olua-data-schema": {
-          "$ref": "#/components/schemas/GrowthSegmentPageDto"
-        },
-        "x-olua-permissions": [
-          "gameConfig:read"
-        ],
-        "x-olua-query-schema": {
-          "$ref": "#/components/schemas/GrowthSegmentQueryDto"
-        }
-      }
-    },
-    "/admin/growth-segments/{curve}/{seq}": {
-      "patch": {
-        "description": "四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。\n\n- 跨行校验：改完后该曲线必须仍然连续覆盖 1..roleMaxLevel（首段 from=1、段间首尾相接、末段 to=roleMaxLevel），否则整单拒收 400（40000）。\n- **改曲线会影响军衔等效强度**（军衔按阶映射角色等级再打折）与怪物数值 —— 保存前想清楚。\n- 曲线或段序不存在 → 404（`50013`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
-        "operationId": "adminGrowthSegment.update",
-        "parameters": [
-          {
-            "name": "curve",
-            "required": true,
-            "in": "path",
-            "description": "曲线键（maxHp / attack / defense / killsPerLevel）",
-            "schema": {
-              "enum": [
-                "maxHp",
-                "attack",
-                "defense",
-                "killsPerLevel"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "name": "seq",
-            "required": true,
-            "in": "path",
-            "description": "段序号（1 起）",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateGrowthSegmentDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "更新后的曲线分段",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ApiEnvelopeDto"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/GrowthSegmentDto"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "admin": []
-          }
-        ],
-        "summary": "编辑曲线分段",
-        "tags": [
-          "管理端"
-        ],
-        "x-olua-audience": "admin",
-        "x-olua-data-nullable": false,
-        "x-olua-data-schema": {
-          "$ref": "#/components/schemas/GrowthSegmentDto"
+          "$ref": "#/components/schemas/RoleLevelDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -8934,7 +8913,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {
@@ -9133,7 +9112,7 @@
     },
     "/admin/runtime-params": {
       "get": {
-        "description": "三个分组一起返回（**单行配置，没有分页**）：\n\n- `drop`：掉落物手感（拾取半径 / 散落间距 / 应答超时 / 满包提示间隔）—— 服务端只下发不消费；\n- `autoBattle`：自动战斗与寻路（目标距离 / 网格 / 重寻路节奏 / 卡住判定 / 吸附半径）—— 同上；\n- `guild`：帮会规则门槛（名字长度 / 公告长度 / 申请留言长度）—— **服务端校验读它**。\n\n缺键回落出厂值（`shared/runtime-seed.ts`），所以新增参数不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "三个分组一起返回（**单行配置，没有分页**）：\n\n- `drop`：掉落物手感（拾取半径 / 散落间距 / 应答超时 / 满包提示间隔）—— 服务端只下发不消费；\n- `autoBattle`：自动战斗与寻路（目标距离 / 网格 / 重寻路节奏 / 卡住判定 / 吸附半径）—— 同上；\n- `guild`：帮会规则门槛（名字长度 / 公告长度 / 申请留言长度）—— **服务端校验读它**。\n\n缺键回落出厂值（`config-sync.sql`），所以新增参数不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminRuntimeParams.get",
         "parameters": [],
         "responses": {
@@ -9235,7 +9214,7 @@
     },
     "/admin/combat-weights": {
       "get": {
-        "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`shared/combat-seed.ts`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminCombatWeights.get",
         "parameters": [],
         "responses": {
@@ -9337,7 +9316,7 @@
     },
     "/admin/guide-steps": {
       "get": {
-        "description": "整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。\n\n`spot` / `trigger` 的取值是**客户端能力白名单**：一个新的高亮位要 `GuideOverlay` 认识这个节点，\n一个新的推进事件要在玩法代码里 `notify` 一次 —— 所以它们不能凭运营自由填写。\n\n缺行 / 坏行回落出厂值（`shared/guide-seed.ts`），坏行会被丢弃（好行保留）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。\n\n`spot` / `trigger` 的取值是**客户端能力白名单**：一个新的高亮位要 `GuideOverlay` 认识这个节点，\n一个新的推进事件要在玩法代码里 `notify` 一次 —— 所以它们不能凭运营自由填写。\n\n缺行 / 坏行回落出厂值（`config-sync.sql`），坏行会被丢弃（好行保留）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminGuide.get",
         "parameters": [],
         "responses": {
@@ -9434,6 +9413,53 @@
         },
         "x-olua-permissions": [
           "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/game-data": {
+      "get": {
+        "description": "与 `GET /game-config` **同一份快照**：称号 / 战魂 / 军衔 / 装备变体 / 药品 / 物品 / 怪物 / 怪物表现 / NPC / 时装 / 技能 / 状态 / 任务 / 成就 / 地图 / 等级表 / 成长标量 / 商城价 / 掉落表。\n\n管理端登录后拉一次存内存，用于「角色背包里那件装备叫什么」「掉落引用了哪只怪」这类**同步查表**的展示；名字与 id 都来自数据库，代码里不再有第二份数据副本。\n\n只读、无副作用、无参数。数据量约 1MB（555 件装备变体是大头），不要在每次渲染时调用。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGameData.snapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部运营配置（与客户端快照同形）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GameConfigSnapshotDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "游戏数据字典（管理端查表用）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GameConfigSnapshotDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
         ]
       }
     },
@@ -13987,6 +14013,34 @@
           }
         }
       },
+      "UpdateEquipmentVariantDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（基础名，不含前后缀文案；前后缀由客户端按下标拼）",
+            "maxLength": 50
+          },
+          "level": {
+            "type": "number",
+            "description": "穿戴需求等级（≥ 1）",
+            "minimum": 1
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "回收价（≥ 0；货币 = 绑定元宝）",
+            "minimum": 0
+          },
+          "attributes": {
+            "description": "八项属性（整份提交；不传则保留原值）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          }
+        }
+      },
       "UpdateEquipmentSlotDto": {
         "type": "object",
         "properties": {
@@ -14010,37 +14064,6 @@
             "minimum": 0
           }
         }
-      },
-      "EquipmentCurveSegmentDto": {
-        "type": "object",
-        "properties": {
-          "from": {
-            "type": "number",
-            "description": "起始等级（含）",
-            "minimum": 1
-          },
-          "to": {
-            "type": "number",
-            "description": "结束等级（含）",
-            "minimum": 1
-          },
-          "start": {
-            "type": "number",
-            "description": "起始等级的值（绑定元宝）",
-            "minimum": 0
-          },
-          "perLevel": {
-            "type": "number",
-            "description": "该档内每升一级的增量",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "from",
-          "to",
-          "start",
-          "perLevel"
-        ]
       },
       "UpdateEquipmentMetaDto": {
         "type": "object",
@@ -14071,13 +14094,6 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
-          },
-          "recycleCurve": {
-            "description": "回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EquipmentCurveSegmentDto"
             }
           }
         }
@@ -14827,46 +14843,90 @@
           }
         }
       },
-      "UpdateLevelExpDto": {
+      "UpdateRoleLevelDto": {
         "type": "object",
         "properties": {
           "exp": {
             "type": "number",
-            "description": "升到下一级所需经验（≥ 1，0 级经验永远升不上去）",
+            "description": "升到下一级所需经验（≥ 1）",
             "minimum": 1
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "生命上限（≥ 0）",
+            "minimum": 0
+          },
+          "maxMp": {
+            "type": "number",
+            "description": "魔法上限（≥ 0）",
+            "minimum": 0
+          },
+          "hpRecover": {
+            "type": "number",
+            "description": "每秒回血（≥ 0）",
+            "minimum": 0
+          },
+          "physicalAttackMin": {
+            "type": "number",
+            "description": "物攻下限（≥ 0）",
+            "minimum": 0
+          },
+          "physicalAttackMax": {
+            "type": "number",
+            "description": "物攻上限（≥ 0）",
+            "minimum": 0
+          },
+          "magicAttackMin": {
+            "type": "number",
+            "description": "魔攻下限（≥ 0）",
+            "minimum": 0
+          },
+          "magicAttackMax": {
+            "type": "number",
+            "description": "魔攻上限（≥ 0）",
+            "minimum": 0
+          },
+          "taoistAttackMin": {
+            "type": "number",
+            "description": "道攻下限（≥ 0）",
+            "minimum": 0
+          },
+          "taoistAttackMax": {
+            "type": "number",
+            "description": "道攻上限（≥ 0）",
+            "minimum": 0
+          },
+          "physicalDefenseMin": {
+            "type": "number",
+            "description": "物防下限（≥ 0）",
+            "minimum": 0
+          },
+          "physicalDefenseMax": {
+            "type": "number",
+            "description": "物防上限（≥ 0）",
+            "minimum": 0
+          },
+          "magicDefenseMin": {
+            "type": "number",
+            "description": "魔防下限（≥ 0）",
+            "minimum": 0
+          },
+          "magicDefenseMax": {
+            "type": "number",
+            "description": "魔防上限（≥ 0）",
+            "minimum": 0
+          },
+          "taoistDefenseMin": {
+            "type": "number",
+            "description": "道防下限（≥ 0）",
+            "minimum": 0
+          },
+          "taoistDefenseMax": {
+            "type": "number",
+            "description": "道防上限（≥ 0）",
+            "minimum": 0
           }
         }
-      },
-      "UpdateGrowthSegmentDto": {
-        "type": "object",
-        "properties": {
-          "fromLevel": {
-            "type": "number",
-            "description": "起始等级（含，≥ 1）",
-            "minimum": 1
-          },
-          "toLevel": {
-            "type": "number",
-            "description": "结束等级（含，≥ 起始等级）",
-            "minimum": 1
-          },
-          "startValue": {
-            "type": "number",
-            "description": "该段起始等级的值（≥ 0）",
-            "minimum": 0
-          },
-          "perLevel": {
-            "type": "number",
-            "description": "段内每升一级的增量（≥ 0）",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "fromLevel",
-          "toLevel",
-          "startValue",
-          "perLevel"
-        ]
       },
       "UpdateGrowthScalarDto": {
         "type": "object",
@@ -17433,8 +17493,8 @@
               "fashion",
               "dropTable",
               "monsterDrop",
-              "levelExp",
-              "growthSegment",
+              "roleLevel",
+              "equipmentVariant",
               "growthScalar",
               "skill",
               "status",
@@ -18727,7 +18787,7 @@
           }
         }
       },
-      "LevelExpDto": {
+      "RoleLevelDto": {
         "type": "object",
         "properties": {
           "level": {
@@ -18736,7 +18796,67 @@
           },
           "exp": {
             "type": "number",
-            "description": "升到下一级所需经验"
+            "description": "升到下一级所需经验（≥ 1）"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "生命上限（裸属性）"
+          },
+          "maxMp": {
+            "type": "number",
+            "description": "魔法上限（裸属性）"
+          },
+          "hpRecover": {
+            "type": "number",
+            "description": "每秒回血（裸属性）"
+          },
+          "physicalAttack": {
+            "description": "物攻区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "magicAttack": {
+            "description": "魔攻区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "taoistAttack": {
+            "description": "道攻区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "physicalDefense": {
+            "description": "物防区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "magicDefense": {
+            "description": "魔防区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
+          },
+          "taoistDefense": {
+            "description": "道防区间",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
+              }
+            ]
           },
           "updatedAt": {
             "type": "number",
@@ -18746,10 +18866,19 @@
         "required": [
           "level",
           "exp",
+          "maxHp",
+          "maxMp",
+          "hpRecover",
+          "physicalAttack",
+          "magicAttack",
+          "taoistAttack",
+          "physicalDefense",
+          "magicDefense",
+          "taoistDefense",
           "updatedAt"
         ]
       },
-      "LevelExpPageDto": {
+      "RoleLevelPageDto": {
         "type": "object",
         "properties": {
           "total": {
@@ -18768,10 +18897,10 @@
             "example": 20
           },
           "list": {
-            "description": "当前页的升级经验",
+            "description": "当前页的角色等级",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LevelExpDto"
+              "$ref": "#/components/schemas/RoleLevelDto"
             }
           }
         },
@@ -18782,7 +18911,7 @@
           "list"
         ]
       },
-      "LevelExpQueryDto": {
+      "RoleLevelQueryDto": {
         "type": "object",
         "properties": {
           "page": {
@@ -18802,7 +18931,7 @@
           },
           "keyword": {
             "type": "string",
-            "description": "关键字（不同接口含义见其说明）"
+            "description": "关键字：按等级号模糊匹配"
           },
           "sort": {
             "type": "string",
@@ -18817,135 +18946,6 @@
               "desc"
             ],
             "default": "desc"
-          }
-        }
-      },
-      "GrowthSegmentDto": {
-        "type": "object",
-        "properties": {
-          "curve": {
-            "type": "string",
-            "description": "曲线键（maxHp / attack / defense / killsPerLevel）",
-            "enum": [
-              "maxHp",
-              "attack",
-              "defense",
-              "killsPerLevel"
-            ]
-          },
-          "seq": {
-            "type": "number",
-            "description": "段序号（1 起；同曲线内不可增删段）"
-          },
-          "fromLevel": {
-            "type": "number",
-            "description": "起始等级（含）"
-          },
-          "toLevel": {
-            "type": "number",
-            "description": "结束等级（含）"
-          },
-          "startValue": {
-            "type": "number",
-            "description": "该段起始等级的值"
-          },
-          "perLevel": {
-            "type": "number",
-            "description": "段内每升一级的增量"
-          },
-          "updatedAt": {
-            "type": "number",
-            "description": "最近更新时间（毫秒）"
-          }
-        },
-        "required": [
-          "curve",
-          "seq",
-          "fromLevel",
-          "toLevel",
-          "startValue",
-          "perLevel",
-          "updatedAt"
-        ]
-      },
-      "GrowthSegmentPageDto": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "number",
-            "description": "总条数",
-            "example": 42
-          },
-          "page": {
-            "type": "number",
-            "description": "当前页码（从 1 开始）",
-            "example": 1
-          },
-          "size": {
-            "type": "number",
-            "description": "每页条数",
-            "example": 20
-          },
-          "list": {
-            "description": "当前页的曲线分段",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/GrowthSegmentDto"
-            }
-          }
-        },
-        "required": [
-          "total",
-          "page",
-          "size",
-          "list"
-        ]
-      },
-      "GrowthSegmentQueryDto": {
-        "type": "object",
-        "properties": {
-          "page": {
-            "type": "number",
-            "description": "页码，从 1 开始",
-            "example": 1,
-            "default": 1,
-            "minimum": 1
-          },
-          "size": {
-            "type": "number",
-            "description": "每页条数（1~100）",
-            "example": 20,
-            "default": 20,
-            "minimum": 1,
-            "maximum": 100
-          },
-          "keyword": {
-            "type": "string",
-            "description": "关键字（不同接口含义见其说明）"
-          },
-          "sort": {
-            "type": "string",
-            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
-            "example": "createdAt"
-          },
-          "order": {
-            "type": "string",
-            "description": "排序方向：asc 升序 / desc 降序",
-            "enum": [
-              "asc",
-              "desc"
-            ],
-            "default": "desc"
-          },
-          "curve": {
-            "type": "string",
-            "description": "按曲线键筛",
-            "enum": [
-              "maxHp",
-              "attack",
-              "defense",
-              "killsPerLevel"
-            ]
           }
         }
       },
@@ -19539,7 +19539,7 @@
             }
           },
           "attributes": {
-            "description": "八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）",
+            "description": "八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ConfigAttributesDto"
@@ -19655,6 +19655,218 @@
           "maxLevel": {
             "type": "number",
             "description": "等级段上限（含）"
+          }
+        }
+      },
+      "EquipmentVariantDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）"
+          },
+          "slot": {
+            "type": "string",
+            "description": "部位（EQUIPMENT_TYPE 的枚举值，如 cloth）"
+          },
+          "level": {
+            "type": "number",
+            "description": "穿戴需求等级（装备定强的锚点）"
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（如「青铜重甲」；前后缀由客户端拼在名字前后）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（装备详情弹窗正文）"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）"
+          },
+          "inAtlas": {
+            "type": "string",
+            "description": "内观图集（角色弹窗里穿在身上的那套；resources 相对路径）"
+          },
+          "outAtlas": {
+            "type": "string",
+            "description": "外观图集（场景里跟着角色走的那个；resources 相对路径）"
+          },
+          "tags": {
+            "description": "标签（如「第一大陆」；详情弹窗展示，无逻辑含义）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outScale": {
+            "type": "number",
+            "description": "外观缩放（1 = 原尺寸）"
+          },
+          "inScaleX": {
+            "type": "number",
+            "description": "内观横向缩放（1 = 原尺寸）"
+          },
+          "inScaleY": {
+            "type": "number",
+            "description": "内观纵向缩放（1 = 原尺寸）"
+          },
+          "inRotate": {
+            "type": "number",
+            "description": "内观旋转角度（度，0 = 不转）"
+          },
+          "inPosX": {
+            "type": "number",
+            "description": "内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）"
+          },
+          "inPosY": {
+            "type": "number",
+            "description": "内观锚点 y（弹窗坐标系，y 向上）"
+          },
+          "outPositions": {
+            "description": "外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentPointDto"
+            }
+          },
+          "attributes": {
+            "description": "八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "baseId": {
+            "type": "string",
+            "description": "所属基础件 id（如 cloth_1）"
+          },
+          "prefix": {
+            "type": "number",
+            "description": "前缀序号（0 = 普通的；文案与颜色按下标对齐，颜色留在客户端）"
+          },
+          "suffix": {
+            "type": "number",
+            "description": "后缀序号（0 = 人级）"
+          }
+        },
+        "required": [
+          "id",
+          "slot",
+          "level",
+          "sellPrice",
+          "label",
+          "description",
+          "occupation",
+          "sex",
+          "icon",
+          "inAtlas",
+          "outAtlas",
+          "tags",
+          "outScale",
+          "inScaleX",
+          "inScaleY",
+          "inRotate",
+          "inPosX",
+          "inPosY",
+          "outPositions",
+          "attributes",
+          "updatedAt",
+          "baseId",
+          "prefix",
+          "suffix"
+        ]
+      },
+      "EquipmentVariantPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的装备变体",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentVariantDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "EquipmentVariantQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配变体 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "baseId": {
+            "type": "string",
+            "description": "只列某个基础件的 15 个变体（如 cloth_1）"
           }
         }
       },
@@ -21181,7 +21393,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "时装 id（seed 自 shared/fashion-seed.ts，如 \"cloth_2\"；序列固定，不可增删行）"
+            "description": "时装 id（seed 自 config-sync.sql，如 \"cloth_2\"；序列固定，不可增删行）"
           },
           "label": {
             "type": "string",
@@ -21591,7 +21803,7 @@
           },
           "aggressive": {
             "type": "boolean",
-            "description": "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）"
+            "description": "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）"
           },
           "detectRange": {
             "type": "number",
@@ -21687,7 +21899,7 @@
           },
           "exp": {
             "type": "number",
-            "description": "升到下一级所需经验（level_exps 表的最终值）"
+            "description": "升到下一级所需经验（`role_levels.exp` 的最终值）"
           }
         },
         "required": [
@@ -22002,13 +22214,6 @@
               "type": "string"
             }
           },
-          "recycleCurve": {
-            "description": "回收价曲线（分段线性）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EquipmentCurveSegmentDto"
-            }
-          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -22019,7 +22224,6 @@
           "suffixRates",
           "prefixLabels",
           "suffixLabels",
-          "recycleCurve",
           "updatedAt"
         ]
       },
@@ -22048,10 +22252,10 @@
             }
           },
           "equipments": {
-            "description": "装备基础件配置（555 件变体由客户端按前后缀倍率展开）",
+            "description": "装备变体（555 件：37 基础件 × 5 前缀 × 3 后缀）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EquipmentDto"
+              "$ref": "#/components/schemas/EquipmentVariantDto"
             }
           },
           "drugs": {
@@ -22097,7 +22301,7 @@
             }
           },
           "levels": {
-            "description": "等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— 属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；客户端 levelMap 整表由这段填充，曲线与标量不再下发",
+            "description": "等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— `role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/LevelDto"
@@ -22112,7 +22316,7 @@
           },
           "combatWeights": {
             "type": "object",
-            "description": "战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 shared/combat-seed.ts）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）",
+            "description": "战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 config-sync.sql）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）",
             "additionalProperties": {
               "type": "number"
             }
@@ -23862,11 +24066,11 @@
           },
           "origin": {
             "type": "string",
-            "description": "来源类别：config 客户端配置 / snapshot 服务端生成快照 / db 服务端库表"
+            "description": "来源类别：config 客户端资源 / db 服务端库表"
           },
           "ref": {
             "type": "string",
-            "description": "具体文件或表名（config / snapshot 给路径，db 给表名）"
+            "description": "具体文件路径（config）或表名（db）"
           },
           "note": {
             "type": "string",

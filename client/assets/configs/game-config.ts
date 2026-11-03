@@ -55,7 +55,7 @@ import type {
  *    依赖方向永远是 `apply-snapshot → game-config → types`：`items` 要读药品 / 材料表、
  *    `equipments` 要读装备规则与战斗力权重，反过来引就成环。
  *    （`getMallGoods` 因此住在 `configs/equipments` —— 它读七个部位表。）
- * 3. **加载期这些表都是空的**（唯一书写处是服务端 `server/src/shared/*-seed.ts`）。
+ * 3. **加载期这些表都是空的**（唯一书写处是数据库，出厂那份 = `server/data/config-sync.sql`）。
  *    填充只有一条路：`Loading` 场景 `await loadGameConfig()` → 契约校验 →
  *    `applyConfigSnapshot`（见 `configs/apply-snapshot`）。**没有本地兜底数据**。
  *
@@ -265,9 +265,6 @@ function collectEquipmentMetaProblems(meta: Record<string, unknown>, problems: S
       });
     }
   }
-  if (!Array.isArray(meta.recycleCurve) || meta.recycleCurve.length === 0) {
-    problems.push({ key: "equipmentMeta", label: "装备规则", reason: "recycleCurve 为空（回收价算不出来）" });
-  }
 }
 
 /** 值的人话描述（报错用：区分 undefined / null / 字符串 / 数字） */
@@ -297,7 +294,7 @@ export function snapshotContractMessage(problems: SnapshotProblem[]): string {
 /**
  * 称号运行时表（#590 起客户端**零本地数据**）
  *
- * 数据唯一来源是服务端 `titles` 表（书写处 = `server/src/shared/title-seed.ts`，
+ * 数据唯一来源是服务端 `titles` 表（书写处 = `server/data/config-sync.sql`，
  * 管理端可改），进游戏时随快照 `titles` 段整表下发 —— 这里只剩运行时容器与取值函数，
  * 不再有任何称号数据或派生公式（等效等级映射搬去了服务端种子）。
  *
@@ -459,7 +456,7 @@ export function nextTitleUpgrade(current: number): GrowthStep<TitleLevelConfig> 
 /**
  * 战魂运行时表（#590 起客户端**零本地数据**）
  *
- * 数据唯一来源是服务端 `souls` 表（书写处 = `server/src/shared/soul-seed.ts`，
+ * 数据唯一来源是服务端 `souls` 表（书写处 = `server/data/config-sync.sql`，
  * 逐级明文表在服务端；管理端可改），进游戏时随快照 `souls` 段整表下发。
  * 这里只剩运行时容器与取值函数，不再有任何战魂数据。
  *
@@ -562,7 +559,7 @@ export function nextSoulUpgrade(current: number): GrowthStep<SoulLevelConfig> {
 /**
  * 军衔运行时表（#590 起客户端**零本地数据**）
  *
- * 数据唯一来源是服务端 `ranks` 表（书写处 = `server/src/shared/rank-seed.ts`，
+ * 数据唯一来源是服务端 `ranks` 表（书写处 = `server/data/config-sync.sql`，
  * 10 大段 × 10 阶与等效等级插值公式都在服务端；管理端可改文案与价格），
  * 进游戏时随快照 `ranks` 段整表下发（含 `tier` 大段名）。
  * 这里只剩运行时容器与取值函数，不再有任何军衔数据或插值公式。
@@ -697,7 +694,7 @@ export function getCurrentLevelExpRate(level: number, exp: number): number {
 /**
  * 战斗力权重（#603 起**客户端不再存数值**）
  *
- * 唯一书写处是服务端 `server/src/shared/combat-seed.ts`：服务端用它算角色战斗力
+ * 唯一书写处是服务端 `server/data/config-sync.sql`：服务端用它算角色战斗力
  * （`modules/combat/role-attributes.ts`），客户端只用它算「这件装备是不是更好」
  * （`configs/equipments.equipmentCombatValue`）。进游戏拉配置快照时，
  * `configs/apply-snapshot` 用快照的 `combatWeights` 段把这张表填满。
@@ -740,26 +737,15 @@ export function applyCombatWeights(weights: Record<string, number> | undefined):
  *
  * 这个文件历史上换过两次主人：
  * - #361 时代它是全角色数值的唯一来源（曲线 / 标量 / 属性派生全手写在客户端）；
- * - #590 起曲线、标量、等级表、三条成长线搬去服务端种子，客户端只剩「装备前后缀倍率 +
- *   回收价曲线 + roleMaxLevel」三样客户端常量；
- * - **#603 第九域起连那三样也不在客户端了**：倍率、品质文案、回收价曲线的唯一书写处是
- *   `server/src/shared/equipment-seed.ts`（→ `equipment_meta` 表，管理端可改），
- *   进游戏由配置快照 `equipmentMeta` 段下发，本文件只剩空运行时表 + 一段取样算术。
+ * - #590 起曲线、标量、等级表、三条成长线搬去服务端，客户端只剩「装备前后缀倍率 +
+ *   回收价曲线 + roleMaxLevel」三样常量；
+ * - **#603 起连那三样也不在客户端了**：唯一书写处是 `server/data/config-sync.sql`，进游戏由配置快照下发。
+ * - **#655 起回收价曲线也下架**：每件变体的 `recyclePrice` 是 `equipment_variants` 行里的一列
+ *   （服务端 `sellPriceOf` 读同一列）。本文件只剩「倍率 + 品质文案 + roleMaxLevel」三样运行时值，
+ *   加一段只给工具链用的装备展开。
  *
- * 所以这里**一个数字都不许再写**：想调倍率 / 回收价 / 等级上限，改服务端种子或管理端。
+ * 所以这里**一个数字都不许再写**：想调倍率 / 回收价 / 等级上限，改库（管理端）。
  */
-
-/** 一条分段线性曲线的一档：档内按等级线性增长，档间靠 perLevel 跳档 */
-export interface GrowthSegment {
-  /** 起始等级（含） */
-  from: number;
-  /** 结束等级（含） */
-  to: number;
-  /** 该档起始等级（from）的值 */
-  start: number;
-  /** 该档内每升一级的增量 */
-  perLevel: number;
-}
 
 /**
  * 角色等级上限（**可变**：快照 growthScalars 的 roleMaxLevel 覆写）
@@ -781,23 +767,6 @@ export function setRoleMaxLevel(level: number): void {
 }
 
 /**
- * 在分段线性曲线上取某等级的值（目前只服务回收价曲线；超出最后一段按最后一段斜率外推）
- *
- * 服务端 `equipment-seed.sampleEquipmentCurve` 是同一段算术（两端各写一份是因为
- * 服务端不能 import 客户端代码）—— 改这里必须同步改那边，判据是
- * `test-equipment-recycle` 里「客户端与服务端取价逐级相同」那组断言。
- */
-export function sampleGrowth(segments: GrowthSegment[], level: number): number {
-  if (level <= 0 || segments.length === 0) return 0;
-  let last = segments[0];
-  for (const segment of segments) {
-    if (level <= segment.to) return segment.start + (level - segment.from) * segment.perLevel;
-    last = segment;
-  }
-  return last.start + (level - last.from) * last.perLevel;
-}
-
-/**
  * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
  *
  * **空数组 = 快照还没到**：此时 `buildEquipmentMap` 展开不出任何变体（装备表整个是空的）。
@@ -808,34 +777,16 @@ export let equipmentPrefixRates: number[] = [];
 /** 装备后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）；空数组的含义同上 */
 export let equipmentSuffixRates: number[] = [];
 
-/** 装备回收价的成长曲线（背包「一键回收」与卖装备结算的计价依据）；空数组 = 快照没到 */
-export let equipmentRecycleCurve: GrowthSegment[] = [];
-
 /**
  * 装载装备规则（`configs/apply-snapshot` 调；快照 `equipmentMeta` 段）
  *
- * 只收正数倍率（≤ 0 或非数字会让变体属性变成 0 或负数，比「没升级」更糟）；
- * 曲线按原样收（取样函数自己处理越界）。
+ * 只收正数倍率（≤ 0 或非数字会让变体属性变成 0 或负数，比「没升级」更糟）。
+ * **回收价不在这里**：每件变体的 `recyclePrice` 在 `equipment_variants` 行里逐条写好了
+ * （#655，服务端 `sellPriceOf` 读的也是那一列），客户端不再有「按等级取曲线价」这条路。
  */
-export function applyEquipmentRules(prefixRates: number[], suffixRates: number[], recycleCurve: GrowthSegment[]): void {
+export function applyEquipmentRules(prefixRates: number[], suffixRates: number[]): void {
   equipmentPrefixRates = (prefixRates || []).map((rate) => Number(rate)).filter((rate) => Number.isFinite(rate) && rate > 0);
   equipmentSuffixRates = (suffixRates || []).map((rate) => Number(rate)).filter((rate) => Number.isFinite(rate) && rate > 0);
-  equipmentRecycleCurve = (recycleCurve || []).map((segment) => ({
-    from: Number(segment.from) || 0,
-    to: Number(segment.to) || 0,
-    start: Number(segment.start) || 0,
-    perLevel: Number(segment.perLevel) || 0,
-  }));
-}
-
-/**
- * 取某等级装备的回收基础价（普通·人级；前后缀倍率由调用方乘上）
- *
- * 曲线来自服务端（`equipmentMeta.recycleCurve`）—— 快照没到时返回 0，
- * **不兜一份本地曲线**（那等于又造一份价格真相，正是 #603 要消掉的东西）。
- */
-export function equipmentRecyclePrice(level: number): number {
-  return Math.max(0, Math.round(sampleGrowth(equipmentRecycleCurve, level)));
 }
 //#endregion
 
@@ -845,7 +796,7 @@ export function equipmentRecyclePrice(level: number): number {
  * 状态运行时表（#603 起客户端**不存任何状态数据**）
  *
  * 状态表（名称 / 图标 / 时长 / 来源 / 特效 / 战斗数值）的唯一书写处是服务端
- * `server/src/shared/status-seed.ts`：生成物 seed 进 statuses 表 → 管理端可改 →
+ * `server/data/config-sync.sql`：出厂值 seed 进 statuses 表 → 管理端可改 →
  * 随 `GET /game-config` 快照的 `statuses` 段下发，由 `apply-snapshot.applyStatusRows`
  * 灌进这张表（角色与怪物同表，owner 由服务端行带下来）。
  *
@@ -899,7 +850,7 @@ export function applyStatusRows(rows: StatusRow[]): void {
  * 药品配置（物品大类 GOOD_TYPE.DRUG）—— **客户端没有出厂数据**（#603 第十域）
  *
  * 名称 / 描述 / 图标 / 使用等级 / 售价 / 叠加 / 冷却 / 四段回复量的唯一书写处是
- * 服务端 `server/src/shared/item-seed.ts` → `drugs` 表（管理端「药品配置」可改）→
+ * 服务端 `server/data/config-sync.sql` → `drugs` 表（管理端「药品配置」可改）→
  * `GET /game-config` 快照的 `drugs` 段 → 这里整表重建（`applyDrugData`）。
  *
  * 以前这里是 8 条写死的行 + 「回复量按成长曲线定标」的注释；那些数字现在只在种子里，
@@ -992,7 +943,7 @@ export function applyDrugRows(rows: DrugRow[]): void {
  * 材料配置（物品大类 GOOD_TYPE.MATERIAL）—— **客户端没有出厂数据**（#603 第十域）
  *
  * 名称 / 描述 / 图标 / 等级 / 售价 / 叠加上限的唯一书写处是服务端
- * `server/src/shared/item-seed.ts` → `items` 表（管理端「物品配置」可改）→
+ * `server/data/config-sync.sql` → `items` 表（管理端「物品配置」可改）→
  * `GET /game-config` 快照的 `items` 段 → 这里整表重建（`applyItemBaseData`）。
  *
  * 这张表收的是 **MATERIAL / OTHER** 大类：装备在 `configs/equipments`（服务端 equipments 表）、
@@ -1058,12 +1009,12 @@ export function applyItemRows(rows: ItemRow[]): void {
  * NPC 运行时表（id → 配置）与点击注册表
  *
  * **#603 第七域起客户端不存任何 NPC 数据**（此前是 `configs/npc-data.ts` 的 21 条）：
- * 名称 / 素材目录 / 缩放 / 偏移都在服务端 `npcs` 表（出厂 = `server/src/shared/npc-seed.ts`），
+ * 名称 / 素材目录 / 缩放 / 偏移都在服务端 `npcs` 表（出厂 = `server/data/config-sync.sql`），
  * 进游戏时由 `GET /game-config` 快照的 `npcs` 段**整表重建**（`applyNpcRows`，先 clear）。
  * 运营在管理端改完，下次进游戏生效 —— 客户端不用重打包。
  *
- * **本文件不许引 UI 组件**：`configs/apply-snapshot` 会引它，而生成器与客户端单测要在
- * Node 垫片里加载那条链（`tools/gen-shared-data.cjs` / `client/tools/*.cjs`）。原来
+ * **本文件不许引 UI 组件**：`configs/apply-snapshot` 会引它，而客户端单测要在
+ * Node 垫片里加载那条链（`client/tools/*.cjs`）。原来
  * `npc-data.ts` 与 `npc.ts` 分家（#258）就是为了这件事，现在数据搬去服务端，剩下的
  * 点击接线继续留在 `configs/npcClicks.ts`（那边才引弹窗），本文件只放一个注册表。
  *
@@ -1113,7 +1064,7 @@ export function applyNpcRows(rows: NpcRow[]): void {
  * 任务数据类型与运行时表（#396；#603 起客户端**不存任何任务数据**）
  *
  * 这里只剩类型定义与一张空数组：任务的唯一书写处是服务端
- * `server/src/shared/quest-seed.ts` —— 生成物 seed 进 quests 表 → 管理端可改 →
+ * `server/data/config-sync.sql` —— 出厂值 seed 进 quests 表 → 管理端可改 →
  * 随 `GET /game-config` 快照的 `quests` 段下发，由 `apply-snapshot.applyQuestRows`
  * 灌进这张表（快照里新出现的任务会追加，`quests` Map 由 `rebuildQuests()` 重建）。
  *
@@ -1128,8 +1079,8 @@ export function applyNpcRows(rows: NpcRow[]): void {
  *   collect = 交付时背包持有物品 id ×count（会扣走）；
  * - `rewards.items`：奖励物品（goodId 必须存在于物品总表）。
  *
- * 新增 / 改任务去 `server/src/shared/quest-seed.ts`（新装库的 seed 来源），
- * 已上线的库走管理端「任务配置」页。
+ * 新增 / 改任务走管理端「任务配置」页；想让改动画进「出厂值」（别人 `make config-import` 之后也有这些行），
+ * 改完库跑 `make config-export` 重导 `server/data/config-sync.sql`。
  */
 export interface QuestObjective {
   /** kill = 击杀怪物（target = monster key）/ talk = 与 NPC 对话（target = npc id）/ collect = 收集物品（target = 物品 id） */
@@ -1268,7 +1219,7 @@ export const QUEST_KIND_LABELS: Record<string, string> = {
  * ===========================================================================
  * 名称 / 图标 / 分类 / 目标类型 / 动作 / 特效 / 冷却 / 魔法消耗 / 施法距离 / 学习等级 /
  * 描述 / 伤害倍率 / 挂载状态 / 施法锁 / 释放限制 / **职业归属 / 击退距离** 的唯一书写处是
- * 服务端 `server/src/shared/skill-seed.ts` → `skills` 表（管理端「技能配置」可改）→
+ * 服务端 `server/data/config-sync.sql` → `skills` 表（管理端「技能配置」可改）→
  * `GET /game-config` 快照的 `skills` 段 → 这里整表重建（`applySkillData`）。
  *
  * 留在本文件的是**对枚举值的翻译**（技能类型 / 目标类型文案）与**派生规则**（职业 → 技能 id），
@@ -1448,7 +1399,7 @@ export function applySkillRows(rows: SkillRow[]): void {
  * #603 第十二域：数据搬走，取源规则留下
  * ===========================================================================
  * 名称 / 文案 / 图标 / 内观资源 / 外观资源 / 售卖价 / 八项属性加成的唯一书写处是
- * 服务端 `server/src/shared/fashion-seed.ts` → `fashions` 表（管理端「时装配置」可改）→
+ * 服务端 `server/data/config-sync.sql` → `fashions` 表（管理端「时装配置」可改）→
  * `GET /game-config` 快照的 `fashions` 段 → 这里整表重建（`applyFashionData`）。
  *
  * 留在本文件的是**取源规则**（外观优先时装、其次装备衣服、最后性别默认外观）与
@@ -1610,7 +1561,7 @@ export function applyFashionRows(rows: FashionRow[]): void {
  *
  * 怪物的数据客户端一份都不存：
  * - **数值**（label / level / tier / maxHp / 六项攻防）唯一来源 = 服务端 `monsters` 表
- *   （出厂 = `server/src/shared/monster-seed.ts` 按曲线展开，管理端可改），随 `GET /game-config`
+ *   （出厂 = `server/data/config-sync.sql` 里 `monsters` 那批行，逐只配好，管理端可改），随 `GET /game-config`
  *   快照的 `monsters` 段下发，进本文件下面的怪物运行时表；
  * - **资源与表现**（icon / out / 几何 / 移动 / AI 参数）唯一来源 = 服务端
  *   `monster-presentation.generated.ts`（生成器从图集实测），随同一份快照的
@@ -1618,12 +1569,9 @@ export function applyFashionRows(rows: FashionRow[]): void {
  * - 怪物的「有没有数据」由快照决定：快照失败时场上**没有怪**（生成需要资源行），
  *   不像旧口径那样回落本地出厂值演 —— 断网时服务端也不发怪，两边一致。
  *
- * 这里剩下的常量是**全局行为**（不是每只怪的数据）：客户端演出的手感参数，
- * 加上服务端 AI 的节奏（#323 起两端同源 —— 生成器把下面 6 个数值收进
- * `server/src/shared/game-data.generated.ts` 的 `MONSTER_AI`，服务端 tick 读的就是它）。
- *
- * **改手感只改这里一处 + 重跑 `node tools/gen-shared-data.cjs`**，不需要两边各改一遍；
- * 反过来，只改服务端那份是不可能生效的（它没有独立书写处）。
+ * 这里剩下的常量是**客户端演出的手感参数**。服务端 AI 的节奏（攻击间隔 / 攻击距离 /
+ * 漫游速度倍率这些）**不在这里**：它们在库里的 `runtime_params.monster_ai` 单行表上，
+ * 管理端「运行时参数」页可改，服务端 tick 直接读那一列 —— 客户端改了也不会影响服务端。
  *
  * #603 第十三域复核结论：这一整块**不搬到表里** —— 它是动画节奏与手感（普攻间隔 / 停下出手的距离 /
  * 待机游走），不是运营数值；怪物真正的数值（血量 / 六项攻防 / 掉落）早已在 `monsters` 表。

@@ -6,7 +6,7 @@
  * 这一模块的核心约束是「**只许改，不许增删**」——这是需求方明确要的行为边界：
  *
  * ## 三条主线
- * 1. **seed 同源**：启动时从 game-data.generated 灌库，断言行数（34/37）、默认渠道、
+ * 1. **seed 同源**：启动时从配置快照（config-sync.sql）灌库，断言行数（34/37）、默认渠道、
  *    名与价格与客户端配置逐字段一致 —— 运营看到的初始表就是玩家侧数值。
  * 2. **能力边界**：POST / DELETE 路由不存在（404），改不存在的等级 → 404 + 专属业务码；
  *    参数越界（渠道枚举外 / 负价格 / min>max）→ 400。
@@ -22,35 +22,56 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "gamecfgadmin-code";
 
-// seed 的源头（编译产物）——断言「库里就是客户端配置」要用它对照
-const shared = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
-const titleSeed = require(path.join(SERVER_DIR, "dist", "shared", "title-seed.js")); // #590：三线数据唯一书写处 = 各自种子
-const soulSeed = require(path.join(SERVER_DIR, "dist", "shared", "soul-seed.js"));
-const rankSeed = require(path.join(SERVER_DIR, "dist", "shared", "rank-seed.js"));
-const growthSeed = require(path.join(SERVER_DIR, "dist", "shared", "growth-seed.js"));
-const growthSeedScalars = growthSeed.GROWTH_SCALARS;
-// #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）的唯一书写处
-const { RUNTIME_PARAMS } = require(path.join(SERVER_DIR, "dist", "shared", "runtime-seed.js"));
-// #605：战斗力权重的出厂值（管理端可改，这里对照「库里就是种子」）
-const { COMBAT_WEIGHTS_SEED } = require(path.join(SERVER_DIR, "dist", "shared", "combat-seed.js"));
-// #605：新手引导步骤的出厂表（管理端可改，这里对照「库里就是种子」）
-const { GUIDE_STEP_SEEDS } = require(path.join(SERVER_DIR, "dist", "shared", "guide-seed.js"));
-const growthSeedKeys = Object.keys(growthSeedScalars);
-// #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
-const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
-const { MONSTER_PRESENTATION_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "monster-presentation.generated.js"));
-// #603 第七域：NPC 出厂数据的唯一书写处（客户端 configs/npc-data 已删）
-const { NPC_SEED_ROWS } = require(path.join(SERVER_DIR, "dist", "shared", "npc-seed.js"));
-// #603 第九域：装备槽位 / 前后缀倍率 / 回收价曲线的唯一书写处（客户端 configs/equipments + growth 已空）
-const {
-  EQUIPMENT_SLOT_SEEDS,
-  EQUIPMENT_PREFIX_RATE_SEEDS,
-  EQUIPMENT_SUFFIX_RATE_SEEDS,
-  EQUIPMENT_PREFIX_LABEL_SEEDS,
-  EQUIPMENT_SUFFIX_LABEL_SEEDS,
-} = require(path.join(SERVER_DIR, "dist", "shared", "equipment-seed.js"));
-const monsterSeed1 = MONSTER_SEED_ROWS.find((row) => row.id === "1");
-const monsterAttrs1 = expandMonsterSeed(monsterSeed1);
+// 出厂值的预期来源：配置快照 `server/data/config-sync.sql`
+//
+// #655 之后数据只有一处权威 —— 数据库；而**库的逐行投影**就是这份快照（空库启动时
+// 由 bootstrapConfigSnapshot() 整份灌进去）。所以这里的断言长这样：
+// **接口返回的字段 == 快照里那一列**。比原来更严格 —— 它顺带钉住了
+// 「SQL → 建表 → 落库 → 读出来」这条链：快照写 60 / 接口返回 57，就说明中间丢了值。
+const configSnapshot = require("./lib/config-snapshot.cjs");
+
+/** 三线成长表（称号 / 战魂 / 军衔）：按等级升序，与「第 N 阶」一一对应 */
+const titles = configSnapshot.rows("titles").sort((a, b) => a.level - b.level);
+const souls = configSnapshot.rows("souls").sort((a, b) => a.level - b.level);
+const ranks = configSnapshot.rows("ranks").sort((a, b) => a.level - b.level);
+/** 角色等级表（每级一行：裸属性 + 升级所需经验）—— 行数就是等级上限 */
+const roleLevels = configSnapshot.index("role_levels", "level");
+const roleMaxLevel = configSnapshot.count("role_levels");
+/** 成长标量（等级上限 / 属性区间系数 / 每级经验倍率 / 蓝回复） */
+const growthScalars = Object.fromEntries(configSnapshot.rows("growth_scalars").map((row) => [row.key, row.value]));
+const growthScalarKeys = Object.keys(growthScalars);
+/** 运行时参数：库里是三个 JSON 列，接口按 drop / autoBattle / guild 三组下发 */
+const runtimeRow = configSnapshot.rows("runtime_params")[0];
+const runtime = { drop: runtimeRow.dropParams, autoBattle: runtimeRow.autoBattle, guild: runtimeRow.guildRules };
+/** 战斗力权重（属性名 → 倍率） */
+const weights = Object.fromEntries(configSnapshot.rows("combat_weights").map((row) => [row.key, row.weight]));
+/** 新手引导：整份步骤数组存在单行表里 */
+const guideSteps = configSnapshot.rows("guide_settings")[0].steps;
+/** 装备：37 个基础件 + 555 个变体（前后缀已逐条展开，回收价也在变体行上） */
+const equipBases = configSnapshot.index("equipments");
+const variants = configSnapshot.index("equipment_variants");
+const slotRows = configSnapshot.rows("equipment_slots").sort((a, b) => a.sortOrder - b.sortOrder);
+const equipMeta = configSnapshot.rows("equipment_meta")[0];
+/** 药品 / 材料（材料「大类」属客户端结构约定，不可编辑） */
+const drugs = configSnapshot.index("drugs");
+const items = configSnapshot.index("items");
+/** 怪物：数值逐条落库（不再有曲线展开），表现几何在 monster_presentation */
+const monsterRows = configSnapshot.rows("monsters").sort((a, b) => Number(a.id) - Number(b.id));
+const presentations = configSnapshot.rows("monster_presentation");
+const monsterSeed1 = monsterRows.find((row) => row.id === "1");
+/** NPC / 时装 / 技能 / 状态 / 怪物技能挂载 / 掉落表 */
+const npcRows = configSnapshot.rows("npcs");
+const npcs = configSnapshot.index("npcs");
+const fashions = configSnapshot.index("fashions");
+const skills = configSnapshot.index("skills");
+const statuses = configSnapshot.index("statuses");
+const mounts = configSnapshot.group("monster_skills", "monsterKey");
+const dropTables = configSnapshot.index("drop_tables");
+const monsterDrops = configSnapshot.index("monster_drops", "monsterKey");
+const mall = configSnapshot.rows("mall_settings")[0];
+/** 商城特殊价：出厂状态就是 0 行（全走统一价），有人定过价才有行 */
+const mallPriceRows = optionalRows("mall_prices");
+const mallCloth1 = mallPriceRows.find((row) => row.id === "cloth_1") ?? null;
 
 //#region 断言小工具（与其余几套同一骨架）
 
@@ -76,6 +97,36 @@ function check(condition, label) {
 
 function checkEqual(actual, expected, label) {
   return check(actual === expected, `${label}（期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}）`);
+}
+
+/**
+ * 快照里的「JSON 文本列」还原成值
+ *
+ * `picks` 这类列存的是 `JSON.stringify(...)` 的结果，读出来是一段文本（`"1"` / `"[2,4]"`）。
+ * 解析器只把明显的 `[` / `{` 开头的列当 JSON 解开，标量（`1`）会原样留成字符串 ——
+ * 所以比对前要自己再 parse 一次，否则「存进去 1、读出来 1」会被误判成类型不一致。
+ */
+function jsonColumn(value) {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * 可能为空的表（商城定价这类「运营按需加行」的表）
+ *
+ * `configSnapshot.rows()` 空表会抛错（防止读错表名），但出厂状态本来就是 0 行，
+ * 这里把「空」当成合法结果。
+ */
+function optionalRows(table) {
+  try {
+    return configSnapshot.rows(table);
+  } catch {
+    return [];
+  }
 }
 
 //#endregion
@@ -172,31 +223,34 @@ async function main() {
 
     //#region 一、seed 同源：启动灌库后的初始表 = 客户端配置
 
-    group("一、seed 同源：初始表来自 game-data.generated");
+    group("一、seed 同源：初始表来自配置快照");
 
-    const titles = await api(base, "GET", "/api/admin/titles", { token });
-    checkEqual(titles.status, 200, "称号列表可读");
-    checkEqual(titles.body?.data?.total, titleSeed.TITLE_SEEDS.length, `称号行数 = 配置表（${titleSeed.TITLE_SEEDS.length}）`);
-    checkEqual(titles.body?.data?.list?.length, titleSeed.TITLE_SEEDS.length, "默认一页装下全部称号");
+    const titlesRes = await api(base, "GET", "/api/admin/titles", { token });
+    checkEqual(titlesRes.status, 200, "称号列表可读");
+    checkEqual(titlesRes.body?.data?.total, titles.length, `称号行数 = 配置表（${titles.length}）`);
+    checkEqual(titlesRes.body?.data?.list?.length, titles.length, "默认一页装下全部称号");
 
-    const firstTitle = titles.body?.data?.list?.[0];
+    const firstTitle = titlesRes.body?.data?.list?.[0];
     checkEqual(firstTitle?.level, 1, "首行是 1 级");
-    checkEqual(firstTitle?.label, titleSeed.TITLE_SEEDS[0].label, "1 级称号名与配置一致");
-    checkEqual(firstTitle?.bindGold, titleSeed.TITLE_SEEDS[0].bindGold, "1 级升级价格与配置一致");
-    checkEqual(firstTitle?.acquireChannel, "unavailable", "初始渠道默认「无法获取」");
+    checkEqual(firstTitle?.label, titles[0].label, "1 级称号名与配置一致");
+    checkEqual(firstTitle?.bindGold, titles[0].bindGold, "1 级升级价格与配置一致");
+    // 渠道分布按「快照怎么写就怎么返回」断言 —— 出厂种子是「运营逐个开放」，
+    // 但库里的称号可能已经开了一批（快照就是库的投影，不能假设全是 unavailable）
+    const snapshotUpgradeCount = titles.filter((row) => row.acquireChannel === "upgrade").length;
+    checkEqual(firstTitle?.acquireChannel, titles[0].acquireChannel, "首行渠道 = 快照那一列");
     checkEqual(
-      titles.body?.data?.list?.filter((item) => item.acquireChannel === "unavailable").length,
-      titleSeed.TITLE_SEEDS.length,
-      "seed 后全部称号都是无法获取（运营逐个开放）",
+      titlesRes.body?.data?.list?.filter((item) => item.acquireChannel === "unavailable").length,
+      titles.length - snapshotUpgradeCount,
+      `渠道分布与快照一致（upgrade ${snapshotUpgradeCount} / unavailable ${titles.length - snapshotUpgradeCount}）`,
     );
 
-    const souls = await api(base, "GET", "/api/admin/souls", { token });
-    checkEqual(souls.status, 200, "战魂列表可读");
-    checkEqual(souls.body?.data?.total, soulSeed.SOUL_SEEDS.length, `战魂行数 = 配置表（${soulSeed.SOUL_SEEDS.length}）`);
-    checkEqual(souls.body?.data?.list?.[0]?.label, soulSeed.SOUL_SEEDS[0].label, "1 阶战魂名与配置一致");
-    check(Boolean(souls.body?.data?.list?.[0]?.attributes?.maxHp !== undefined), "战魂属性以嵌套结构返回");
+    const soulsRes = await api(base, "GET", "/api/admin/souls", { token });
+    checkEqual(soulsRes.status, 200, "战魂列表可读");
+    checkEqual(soulsRes.body?.data?.total, souls.length, `战魂行数 = 配置表（${souls.length}）`);
+    checkEqual(soulsRes.body?.data?.list?.[0]?.label, souls[0].label, "1 阶战魂名与配置一致");
+    check(Boolean(soulsRes.body?.data?.list?.[0]?.attributes?.maxHp !== undefined), "战魂属性以嵌套结构返回");
 
-    const titled = await api(base, "GET", `/api/admin/titles?keyword=${encodeURIComponent(titleSeed.TITLE_SEEDS[0].label)}`, { token });
+    const titled = await api(base, "GET", `/api/admin/titles?keyword=${encodeURIComponent(titles[0].label)}`, { token });
     checkEqual(titled.body?.data?.total, 1, "关键字能命中对应称号");
 
     //#endregion
@@ -251,9 +305,12 @@ async function main() {
     checkEqual(relabeled.body?.data?.bindGold, 12345, "上次改的价格保留（合并语义）");
 
     const upgraded = await api(base, "GET", "/api/admin/titles?acquireChannel=upgrade", { token });
-    checkEqual(upgraded.body?.data?.total, 1, "按渠道筛选：upgrade 只有刚改的那条");
+    // 基线 = 快照里已是 upgrade 的那批；1 级若本来就在链上，总数不变
+    const titleOneWasUpgrade = titles[0].acquireChannel === "upgrade";
+    const expectedUpgradeTotal = snapshotUpgradeCount + (titleOneWasUpgrade ? 0 : 1);
+    checkEqual(upgraded.body?.data?.total, expectedUpgradeTotal, `按渠道筛选：upgrade 共 ${expectedUpgradeTotal} 条（快照基线 + 刚改的）`);
     const unavailable = await api(base, "GET", "/api/admin/titles?acquireChannel=unavailable", { token });
-    checkEqual(unavailable.body?.data?.total, titleSeed.TITLE_SEEDS.length - 1, "其余称号仍在无法获取里");
+    checkEqual(unavailable.body?.data?.total, titles.length - expectedUpgradeTotal, "其余称号仍在无法获取里");
 
     const soulPriced = await api(base, "PATCH", "/api/admin/souls/1", { token, body: { bindGold: 888 } });
     checkEqual(soulPriced.body?.data?.bindGold, 888, "PATCH 战魂消耗生效");
@@ -289,6 +346,25 @@ async function main() {
 
     group("四、称号成长列表");
 
+    // 快照是库的投影：称号可能已经开了一批在链上（出厂设计是「运营逐个开放」）。
+    // 本节断言的是「进出列表 + 整串重排」的语义，先把链上现有的全部关掉，拿到干净基线，
+    // 否则断言会绑定在「库里恰好开了几个」这种与代码无关的快照状态上。
+    const openTitleLevels = titles
+      .filter((row) => row.acquireChannel === "upgrade")
+      .map((row) => row.level)
+      .sort((a, b) => a - b);
+    for (const level of openTitleLevels) {
+      await api(base, "PATCH", `/api/admin/titles/${level}`, { token, body: { acquireChannel: "unavailable" } });
+    }
+    const chainReset = await api(base, "GET", "/api/admin/titles/upgrade-list", { token });
+    checkEqual(
+      JSON.stringify(chainReset.body?.data?.map((item) => item.level)),
+      "[]",
+      `链已清空（关掉快照里已开放的 ${openTitleLevels.length} 个称号）`,
+    );
+    const reopenFirst = await api(base, "PATCH", "/api/admin/titles/1", { token, body: { acquireChannel: "upgrade" } });
+    checkEqual(reopenFirst.body?.data?.upgradeOrder, 1, "干净链上重新开放 1 级 → 序号 1");
+
     // 上文三已把 1 级改成 upgrade：它应已在成长列表里，序号 1
     const upgradeList1 = await api(base, "GET", "/api/admin/titles/upgrade-list", { token });
     checkEqual(upgradeList1.status, 200, "成长列表可读");
@@ -321,7 +397,7 @@ async function main() {
     const keptPrice = (await api(base, "GET", "/api/admin/titles?acquireChannel=unavailable", { token })).body?.data?.list?.find(
       (item) => item.level === 2,
     );
-    checkEqual(keptPrice?.bindGold, titleSeed.TITLE_SEEDS[1].bindGold, "切走后升级价格保留（不受进出列表影响）");
+    checkEqual(keptPrice?.bindGold, titles[1].bindGold, "切走后升级价格保留（不受进出列表影响）");
 
     // 再切回来：追加到尾（不恢复旧序号；序号允许留空洞，只保证相对顺序）
     const rejoin = await api(base, "PATCH", "/api/admin/titles/2", { token, body: { acquireChannel: "upgrade" } });
@@ -342,7 +418,7 @@ async function main() {
 
     group("五、战魂成长列表");
 
-    const soulLevels = Array.from({ length: soulSeed.SOUL_SEEDS.length }, (_, index) => index + 1);
+    const soulLevels = Array.from({ length: souls.length }, (_, index) => index + 1);
 
     // seed 后全量在列表里，初值顺序 = 阶数
     const soulUpgrade1 = await api(base, "GET", "/api/admin/souls/upgrade-list", { token });
@@ -391,95 +467,43 @@ async function main() {
 
     //#endregion
 
-    //#region 六、成长曲线（#256）：等级经验 / 曲线分段 / 标量参数
+    //#region 六、成长（#256 / #655）：曲线下架 + 标量参数
 
-    group("六、成长曲线：等级经验");
+    group("六、成长曲线已下架：旧路由一律 404");
 
-    const levelExps = await api(base, "GET", "/api/admin/level-exps", { token });
-    checkEqual(levelExps.status, 200, "升级经验列表可读");
-    const levelCount = growthSeed.ROLE_MAX_LEVEL;
-    checkEqual(levelExps.body?.data?.total, levelCount, `升级经验行数 = 等级上限（${levelCount}）`);
-    const firstExp = levelExps.body?.data?.list?.[0];
-    checkEqual(firstExp?.level, 1, "首行是 1 级");
-    checkEqual(firstExp?.exp, growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].exp, "1 级经验与配置一致");
+    // #655：曲线采样换成了 role_levels 逐级配置 —— 旧接口必须彻底消失，
+    // 留着「还能读写但不影响任何东西」的空壳，运营改完只会以为改了生效了。
+    for (const path of ["/api/admin/level-exps", "/api/admin/growth-segments", "/api/admin/growth-segments/maxHp/1"]) {
+      const gone = await api(base, "GET", path, { token });
+      checkEqual(gone.status, 404, `${path} 已下架（404）`);
+    }
+    const expPatchGone = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 1 } });
+    checkEqual(expPatchGone.status, 404, "PATCH 舊经验接口 → 404");
+    // 经验本身还在，只是并入 role_levels：改角色等级那一行就改了经验
+    const roleLevelExp = await api(base, "GET", "/api/admin/role-levels?page=1&size=60", { token });
+    checkEqual(roleLevelExp.body?.data?.list?.[0]?.exp, roleLevels[1].exp, "1 级经验与出厂值一致");
+    const expByRoleLevel = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 999 } });
+    checkEqual(expByRoleLevel.status, 200, "改角色等级 1 行的经验成功");
+    checkEqual(expByRoleLevel.body?.data?.exp, 999, "响应里的经验已更新");
+    const roleLevelExpZero = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 0 } });
+    checkEqual(roleLevelExpZero.status, 400, "经验 0 → 400（永远升不上去）");
+    const viewerRoleLevelWrite = await api(base, "PATCH", "/api/admin/role-levels/1", { token: viewerToken, body: { exp: 1 } });
+    checkEqual(viewerRoleLevelWrite.status, 403, "观察员改角色等级 → 403");
+    checkEqual(viewerRoleLevelWrite.body?.code, 30006, "观察员改角色等级 → 30006（权限点不足）");
 
-    const expPatched = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 999 } });
-    checkEqual(expPatched.status, 200, "PATCH 升级经验成功");
-    checkEqual(expPatched.body?.data?.exp, 999, "响应里的经验已更新");
-    const expGhost = await api(base, "PATCH", "/api/admin/level-exps/999", { token, body: { exp: 1 } });
-    checkEqual(expGhost.status, 404, "改不存在的等级经验 → 404");
-    checkEqual(expGhost.body?.code, 50012, "等级经验未找到用专属业务码 50012");
-    const expZero = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 0 } });
-    checkEqual(expZero.status, 400, "经验 0 → 400（永远升不上去）");
-    const postExp = await api(base, "POST", "/api/admin/level-exps", { token, body: { level: 61, exp: 1 } });
-    checkEqual(postExp.status, 404, "POST 升级经验 → 404（路由不存在）");
-    const deleteExp = await api(base, "DELETE", "/api/admin/level-exps/1", { token });
-    checkEqual(deleteExp.status, 404, "DELETE 升级经验 → 404（路由不存在）");
-    const viewerExpRead = await api(base, "GET", "/api/admin/level-exps", { token: viewerToken });
-    checkEqual(viewerExpRead.body?.code, 0, "观察员能看升级经验");
-    const viewerExpWrite = await api(base, "PATCH", "/api/admin/level-exps/1", { token: viewerToken, body: { exp: 1 } });
-    checkEqual(viewerExpWrite.status, 403, "观察员改升级经验 → 403");
-    checkEqual(viewerExpWrite.body?.code, 30006, "观察员改升级经验 → 30006（权限点不足）");
-
-    group("六、成长曲线：分段");
-
-    const segmentsAll = await api(base, "GET", "/api/admin/growth-segments", { token });
-    checkEqual(segmentsAll.status, 200, "曲线分段列表可读");
-    const curveKeys = Object.keys(growthSeed.GROWTH_CURVES);
-    const segmentTotal = curveKeys.reduce((sum, key) => sum + growthSeed.GROWTH_CURVES[key].length, 0);
-    checkEqual(segmentsAll.body?.data?.total, segmentTotal, `分段行数 = 曲线段总和（${segmentTotal}）`);
-    const segmentsMaxHp = await api(base, "GET", "/api/admin/growth-segments?curve=maxHp", { token });
-    checkEqual(segmentsMaxHp.body?.data?.list?.[0]?.fromLevel, 1, "首段从 1 级开始（连续覆盖）");
-    const badCurve = await api(base, "GET", "/api/admin/growth-segments?curve=mp", { token });
-    checkEqual(badCurve.status, 400, "曲线键枚举外筛选 → 400");
-
-    const seg1 = segmentsMaxHp.body?.data?.list?.[0];
-    const seg6 = segmentsMaxHp.body?.data?.list?.find((item) => item.seq === 6);
-    const segBreakFirst = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", {
-      token,
-      body: { fromLevel: 2, toLevel: seg1.toLevel, startValue: seg1.startValue, perLevel: seg1.perLevel },
-    });
-    checkEqual(segBreakFirst.status, 400, "首段 from 改成 2 → 400（必须从 1 连续覆盖）");
-    const segBreakLast = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/6", {
-      token,
-      body: { fromLevel: seg6.fromLevel, toLevel: seg6.toLevel - 1, startValue: seg6.startValue, perLevel: seg6.perLevel },
-    });
-    checkEqual(segBreakLast.status, 400, "末段 to 少 1 级 → 400（必须覆盖到 roleMaxLevel）");
-    const segOk = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", {
-      token,
-      body: { fromLevel: 1, toLevel: seg1.toLevel, startValue: 120, perLevel: seg1.perLevel },
-    });
-    checkEqual(segOk.status, 200, "合法的分段修改成功");
-    checkEqual(segOk.body?.data?.startValue, 120, "响应里的起始值已更新");
-    const segGhost = await api(base, "PATCH", "/api/admin/growth-segments/mp/1", {
-      token,
-      body: { fromLevel: 1, toLevel: 10, startValue: 1, perLevel: 1 },
-    });
-    checkEqual(segGhost.status, 404, "改不存在的曲线 → 404");
-    checkEqual(segGhost.body?.code, 50013, "曲线分段未找到用专属业务码 50013");
-    const segPartial = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", { token, body: { startValue: 130 } });
-    checkEqual(segPartial.status, 400, "分段部分提交 → 400（四个字段整份提交）");
-    const viewerSegWrite = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", {
-      token: viewerToken,
-      body: { fromLevel: 1, toLevel: 10, startValue: 1, perLevel: 1 },
-    });
-    checkEqual(viewerSegWrite.status, 403, "观察员改曲线 → 403");
-    checkEqual(viewerSegWrite.body?.code, 30006, "观察员改曲线 → 30006（权限点不足）");
-
-    group("六、成长曲线：标量参数");
+    group("六、成长参数：标量（曲线下架后剩下的全局参数）");
 
     const scalars = await api(base, "GET", "/api/admin/growth-scalars", { token });
     checkEqual(scalars.status, 200, "标量参数列表可读");
-    checkEqual(scalars.body?.data?.total, growthSeedKeys.length, `标量参数行数 = 配置（${growthSeedKeys.length}）`);
+    checkEqual(scalars.body?.data?.total, growthScalarKeys.length, `标量参数行数 = 配置（${growthScalarKeys.length}）`);
     const maxLevelRow = scalars.body?.data?.list?.find((item) => item.key === "roleMaxLevel");
-    checkEqual(maxLevelRow?.value, growthSeedScalars.roleMaxLevel, "等级上限初值与配置一致");
+    checkEqual(maxLevelRow?.value, growthScalars.roleMaxLevel, "等级上限初值与配置一致");
     check(Boolean(maxLevelRow?.description), "每个标量参数都带说明");
 
-    const ratePatched = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 0.8 } });
-    checkEqual(ratePatched.status, 200, "PATCH 比率参数成功");
-    checkEqual(ratePatched.body?.data?.value, 0.8, "响应里的比率已更新");
-    const rateOver = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 1.5 } });
-    checkEqual(rateOver.status, 400, "比率超出取值域（>1）→ 400");
+    // #655：`attributeRange.*` 三个换算比率随曲线下架 —— 它们已经不在了，写回旧键必须报「没有这个参数」
+    const removedKey = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 0.8 } });
+    checkEqual(removedKey.status, 404, "已下架的标量键（attributeRange.minRate）→ 404");
+    checkEqual(removedKey.body?.code, 50014, "下架键按「参数未找到」拒绝，不是静默接受");
     const rateFraction = await api(base, "PATCH", "/api/admin/growth-scalars/expGain.expPerLevel", { token, body: { value: 5.5 } });
     checkEqual(rateFraction.status, 400, "整数参数传小数 → 400");
     // #605：魔法自然回复速度入表（原本写死在 role-authority，管理端改不了）
@@ -490,13 +514,13 @@ async function main() {
     checkEqual(mpRecoverNegative.status, 400, "恢复速度不能为负 → 400");
     const mpRecoverZero = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: 0 } });
     checkEqual(mpRecoverZero.body?.data?.value, 0, "0 合法（关闭自然回蓝）");
-    await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: growthSeedScalars.mpRecoverPerSecond } });
+    await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: growthScalars.mpRecoverPerSecond } });
     const maxLevelJump = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 61 } });
-    checkEqual(maxLevelJump.status, 400, "抬等级上限但曲线末段没跟上 → 400（跨表校验）");
+    checkEqual(maxLevelJump.status, 400, "抬等级上限但等级表没有那一行 → 400（跨表校验）");
     const scalarGhost = await api(base, "PATCH", "/api/admin/growth-scalars/nope", { token, body: { value: 1 } });
     checkEqual(scalarGhost.status, 404, "改不存在的参数键 → 404");
     checkEqual(scalarGhost.body?.code, 50014, "标量参数未找到用专属业务码 50014");
-    const scalarKeyword = await api(base, "GET", "/api/admin/growth-scalars?keyword=minRate", { token });
+    const scalarKeyword = await api(base, "GET", "/api/admin/growth-scalars?keyword=recover", { token });
     checkEqual(scalarKeyword.body?.data?.total, 1, "关键字能命中对应参数");
     const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, body: { value: 50 } });
     checkEqual(viewerScalarWrite.status, 403, "观察员改标量参数 → 403");
@@ -508,18 +532,18 @@ async function main() {
 
     group("六·五、运行时参数（掉落手感 / 自动战斗 / 帮会规则）");
 
-    const runtime = await api(base, "GET", "/api/admin/runtime-params", { token });
-    checkEqual(runtime.status, 200, "运行时参数可读");
-    checkEqual(runtime.body?.data?.drop?.autoPickupRadius, RUNTIME_PARAMS.drop.autoPickupRadius, "掉落拾取半径初值 = 出厂 seed");
-    checkEqual(runtime.body?.data?.autoBattle?.moveByRun, RUNTIME_PARAMS.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
-    checkEqual(runtime.body?.data?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会名上限初值 = 出厂 seed");
-    checkEqual(runtime.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+    const runtimeRes = await api(base, "GET", "/api/admin/runtime-params", { token });
+    checkEqual(runtimeRes.status, 200, "运行时参数可读");
+    checkEqual(runtimeRes.body?.data?.drop?.autoPickupRadius, runtime.drop.autoPickupRadius, "掉落拾取半径初值 = 出厂 seed");
+    checkEqual(runtimeRes.body?.data?.autoBattle?.moveByRun, runtime.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
+    checkEqual(runtimeRes.body?.data?.guild?.nameMax, runtime.guild.nameMax, "帮会名上限初值 = 出厂 seed");
+    checkEqual(runtimeRes.body?.data?.updatedAt, runtimeRow.updatedAt, "updatedAt = 快照那一列（库里被人改过就不是 0）");
 
     const dropPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: 72 } } });
     checkEqual(dropPatched.status, 200, "改掉落拾取半径成功");
     checkEqual(dropPatched.body?.data?.drop?.autoPickupRadius, 72, "响应里是新半径");
-    checkEqual(dropPatched.body?.data?.drop?.scatterMinDistance, RUNTIME_PARAMS.drop.scatterMinDistance, "同组其它字段不动（部分更新）");
-    checkEqual(dropPatched.body?.data?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "别的分组不动");
+    checkEqual(dropPatched.body?.data?.drop?.scatterMinDistance, runtime.drop.scatterMinDistance, "同组其它字段不动（部分更新）");
+    checkEqual(dropPatched.body?.data?.guild?.nameMax, runtime.guild.nameMax, "别的分组不动");
 
     const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, cellSize: 24 } } });
     checkEqual(autoPatched.status, 200, "改自动战斗参数成功");
@@ -534,7 +558,7 @@ async function main() {
     checkEqual(runtimeGuildInverted.status, 400, "帮会名最短 > 最长 → 400（跨字段校验）");
     checkEqual(runtimeGuildInverted.body?.code, 40000, "跨字段违反用参数非法 40000");
     const runtimeAfterReject = await api(base, "GET", "/api/admin/runtime-params", { token });
-    checkEqual(runtimeAfterReject.body?.data?.guild?.nameMin, RUNTIME_PARAMS.guild.nameMin, "被拒的提交没有落库（先校验后写）");
+    checkEqual(runtimeAfterReject.body?.data?.guild?.nameMin, runtime.guild.nameMin, "被拒的提交没有落库（先校验后写）");
     const runtimeUnknownKey = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { bogusParam: 5 } } });
     checkEqual(runtimeUnknownKey.status, 200, "未知字段被白名单剥掉（不报错）");
     checkEqual(runtimeUnknownKey.body?.data?.drop?.autoPickupRadius, 72, "剥掉之后其余值不变");
@@ -552,16 +576,16 @@ async function main() {
 
     group("六·六、战斗力权重（生命 + 三系攻防）");
 
-    const weights = await api(base, "GET", "/api/admin/combat-weights", { token });
-    checkEqual(weights.status, 200, "战斗力权重可读");
-    checkEqual(weights.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "生命权重初值 = 出厂 seed");
-    checkEqual(weights.body?.data?.weights?.physicalAttack, COMBAT_WEIGHTS_SEED.physicalAttack, "物攻权重初值 = 出厂 seed");
-    checkEqual(weights.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+    const weightsRes = await api(base, "GET", "/api/admin/combat-weights", { token });
+    checkEqual(weightsRes.status, 200, "战斗力权重可读");
+    checkEqual(weightsRes.body?.data?.weights?.maxHp, weights.maxHp, "生命权重初值 = 出厂 seed");
+    checkEqual(weightsRes.body?.data?.weights?.physicalAttack, weights.physicalAttack, "物攻权重初值 = 出厂 seed");
+    checkEqual(weightsRes.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
 
     const weightPatched = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: 7.5 } });
     checkEqual(weightPatched.status, 200, "改魔法攻击权重成功（允许两位小数）");
     checkEqual(weightPatched.body?.data?.weights?.magicAttack, 7.5, "响应里是新倍率");
-    checkEqual(weightPatched.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "没提交的属性保持原值（部分更新）");
+    checkEqual(weightPatched.body?.data?.weights?.maxHp, weights.maxHp, "没提交的属性保持原值（部分更新）");
     check(weightPatched.body?.data?.updatedAt > 0, "改过之后 updatedAt 才不是 0");
 
     const weightNegative = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: -1 } });
@@ -577,10 +601,10 @@ async function main() {
     checkEqual(weightAllZero.body?.code, 40000, "全 0 用参数非法 40000");
     const weightsAfterReject = await api(base, "GET", "/api/admin/combat-weights", { token });
     checkEqual(weightsAfterReject.body?.data?.weights?.magicAttack, 0, "被拒的整份提交没有落库（仍是上一步的 0）");
-    checkEqual(weightsAfterReject.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "其余属性也没被这份提交改掉");
+    checkEqual(weightsAfterReject.body?.data?.weights?.maxHp, weights.maxHp, "其余属性也没被这份提交改掉");
     const weightUnknown = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { hpRecover: 3 } });
     checkEqual(weightUnknown.status, 200, "未知属性被白名单剥掉（不报错）");
-    checkEqual(weightUnknown.body?.data?.weights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "剥掉之后其余值不变");
+    checkEqual(weightUnknown.body?.data?.weights?.maxHp, weights.maxHp, "剥掉之后其余值不变");
     const viewerWeightWrite = await api(base, "PATCH", "/api/admin/combat-weights", { token: viewerToken, body: { maxHp: 20 } });
     checkEqual(viewerWeightWrite.status, 403, "观察员改战斗力权重 → 403");
     checkEqual(viewerWeightWrite.body?.code, 30006, "观察员改战斗力权重 → 30006（权限点不足）");
@@ -590,8 +614,8 @@ async function main() {
     checkEqual(deleteWeights.status, 404, "DELETE → 404（权重表没有删除）");
 
     // 复原出厂值：后面的断言（快照 / 战力）都以出厂口径为基线
-    const weightsRestored = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: COMBAT_WEIGHTS_SEED.magicAttack } });
-    checkEqual(weightsRestored.body?.data?.weights?.magicAttack, COMBAT_WEIGHTS_SEED.magicAttack, "复原魔法攻击权重");
+    const weightsRestored = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: weights.magicAttack } });
+    checkEqual(weightsRestored.body?.data?.weights?.magicAttack, weights.magicAttack, "复原魔法攻击权重");
 
     //#endregion
 
@@ -601,9 +625,9 @@ async function main() {
 
     const guide = await api(base, "GET", "/api/admin/guide-steps", { token });
     checkEqual(guide.status, 200, "引导步骤可读");
-    checkEqual(guide.body?.data?.steps?.length, GUIDE_STEP_SEEDS.length, "步骤数 = 出厂种子");
-    checkEqual(guide.body?.data?.steps?.[0]?.id, GUIDE_STEP_SEEDS[0].id, "第 1 步的标识 = 出厂种子");
-    checkEqual(guide.body?.data?.steps?.[0]?.spot, GUIDE_STEP_SEEDS[0].spot, "第 1 步的高亮位 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.length, guideSteps.length, "步骤数 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.[0]?.id, guideSteps[0].id, "第 1 步的标识 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.[0]?.spot, guideSteps[0].spot, "第 1 步的高亮位 = 出厂种子");
     checkEqual(guide.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
 
     const twoSteps = [
@@ -651,8 +675,8 @@ async function main() {
     checkEqual(deleteGuide.status, 404, "DELETE → 404（单行配置没有删除）");
 
     // 复原出厂表：快照断言以出厂口径为基线
-    const guideRestored = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: GUIDE_STEP_SEEDS } });
-    checkEqual(guideRestored.body?.data?.steps?.length, GUIDE_STEP_SEEDS.length, "复原出厂步骤表");
+    const guideRestored = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: guideSteps } });
+    checkEqual(guideRestored.body?.data?.steps?.length, guideSteps.length, "复原出厂步骤表");
 
     //#endregion
 
@@ -660,20 +684,20 @@ async function main() {
 
     group("七、军衔配置");
 
-    const ranks = await api(base, "GET", "/api/admin/ranks", { token });
-    checkEqual(ranks.status, 200, "军衔列表可读");
-    const rankCount = rankSeed.RANK_SEEDS.length;
-    checkEqual(ranks.body?.data?.total, rankCount, `军衔行数 = 配置表（${rankCount}）`);
-    checkEqual(ranks.body?.data?.list?.length, 100, "默认一页装下全部军衔");
-    const firstRank = ranks.body?.data?.list?.[0];
+    const ranksRes = await api(base, "GET", "/api/admin/ranks", { token });
+    checkEqual(ranksRes.status, 200, "军衔列表可读");
+    const rankCount = ranks.length;
+    checkEqual(ranksRes.body?.data?.total, rankCount, `军衔行数 = 配置表（${rankCount}）`);
+    checkEqual(ranksRes.body?.data?.list?.length, 100, "默认一页装下全部军衔");
+    const firstRank = ranksRes.body?.data?.list?.[0];
     checkEqual(firstRank?.level, 1, "首行是 1 阶");
-    checkEqual(firstRank?.label, rankSeed.RANK_SEEDS[0].label, "1 阶衔名与配置一致");
-    checkEqual(firstRank?.tier, rankSeed.RANK_SEEDS[0].tier, "1 阶大段名与配置一致");
-    checkEqual(firstRank?.bindGold, rankSeed.RANK_SEEDS[0].bindGold, "1 阶晋升价格与配置一致");
+    checkEqual(firstRank?.label, ranks[0].label, "1 阶衔名与配置一致");
+    checkEqual(firstRank?.tier, ranks[0].tier, "1 阶大段名与配置一致");
+    checkEqual(firstRank?.bindGold, ranks[0].bindGold, "1 阶晋升价格与配置一致");
     check(Boolean(firstRank?.attributes?.maxHp !== undefined), "军衔属性以嵌套结构返回");
     checkEqual(firstRank?.animation, undefined, "军衔没有动画字段（外观是头顶一行红字）");
 
-    const rankTierFiltered = await api(base, "GET", `/api/admin/ranks?tier=${encodeURIComponent(rankSeed.RANK_SEEDS[0].tier)}`, { token });
+    const rankTierFiltered = await api(base, "GET", `/api/admin/ranks?tier=${encodeURIComponent(ranks[0].tier)}`, { token });
     checkEqual(rankTierFiltered.body?.data?.total, 10, "按大段筛：每段恰好 10 阶");
 
     const rankPriced = await api(base, "PATCH", "/api/admin/ranks/1", { token, body: { bindGold: 500 } });
@@ -702,22 +726,22 @@ async function main() {
 
     const equipments = await api(base, "GET", "/api/admin/equipments", { token });
     checkEqual(equipments.status, 200, "装备列表可读");
-    const equipmentCount = Object.keys(shared.EQUIPMENT_BASES).length;
+    const equipmentCount = Object.keys(equipBases).length;
     checkEqual(equipments.body?.data?.total, equipmentCount, `装备行数 = 基础件配置表（${equipmentCount}）`);
     checkEqual(equipments.body?.data?.list?.length, equipmentCount, "默认一页装下全部基础件");
     const cloth14 = equipments.body?.data?.list?.find((row) => row.id === "cloth_14");
     check(Boolean(cloth14), "列表里有基础件 cloth_14");
-    checkEqual(cloth14?.slot, shared.EQUIPMENT_BASES["cloth_14"].slot, "cloth_14 部位与配置一致");
-    checkEqual(cloth14?.level, shared.EQUIPMENT_BASES["cloth_14"].level, "cloth_14 等级需求与配置一致");
-    checkEqual(cloth14?.label, shared.EQUIPMENT_BASES["cloth_14"].label, "cloth_14 名称与配置一致");
-    checkEqual(cloth14?.sellPrice, shared.EQUIPMENT_BASES["cloth_14"].sellPrice, "cloth_14 售卖价与配置一致");
-    checkEqual(cloth14?.attributes?.maxHp, shared.EQUIPMENT_BASES["cloth_14"].attributes.maxHp, "cloth_14 属性与配置一致（嵌套结构）");
+    checkEqual(cloth14?.slot, equipBases["cloth_14"].slot, "cloth_14 部位与配置一致");
+    checkEqual(cloth14?.level, equipBases["cloth_14"].level, "cloth_14 等级需求与配置一致");
+    checkEqual(cloth14?.label, equipBases["cloth_14"].label, "cloth_14 名称与配置一致");
+    checkEqual(cloth14?.sellPrice, equipBases["cloth_14"].sellPrice, "cloth_14 售卖价与配置一致");
+    checkEqual(cloth14?.attributes?.maxHp, equipBases["cloth_14"].maxHp, "cloth_14 属性与配置一致（快照平铺列 → 接口嵌套结构）");
     check(cloth14 && !cloth14.id.includes("_p"), "管理端只收基础件（变体 _pXsY 不进列表）");
 
-    const clothSlotCount = Object.values(shared.EQUIPMENT_BASES).filter((base) => base.slot === "cloth").length;
+    const clothSlotCount = Object.values(equipBases).filter((base) => base.slot === "cloth").length;
     const equipmentSlotFiltered = await api(base, "GET", "/api/admin/equipments?slot=cloth", { token });
     checkEqual(equipmentSlotFiltered.body?.data?.total, clothSlotCount, `按部位筛：cloth 恰好 ${clothSlotCount} 件`);
-    const levelBandCount = Object.values(shared.EQUIPMENT_BASES).filter((base) => base.level >= 40 && base.level <= 50).length;
+    const levelBandCount = Object.values(equipBases).filter((base) => base.level >= 40 && base.level <= 50).length;
     const equipmentBandFiltered = await api(base, "GET", "/api/admin/equipments?minLevel=40&maxLevel=50", { token });
     checkEqual(equipmentBandFiltered.body?.data?.total, levelBandCount, `按等级段筛（40..50 含端）：恰好 ${levelBandCount} 件`);
     const equipmentKeyword = await api(base, "GET", "/api/admin/equipments?keyword=" + encodeURIComponent("青铜"), { token });
@@ -746,9 +770,9 @@ async function main() {
     checkEqual(equipmentStructural.body?.data?.label, "改名尝试", "label 可编辑（#603 从客户端源码搬来）");
     const equipmentRestoreLabel = await api(base, "PATCH", "/api/admin/equipments/cloth_14", {
       token,
-      body: { label: shared.EQUIPMENT_BASES["cloth_14"].label },
+      body: { label: equipBases["cloth_14"].label },
     });
-    checkEqual(equipmentRestoreLabel.body?.data?.label, shared.EQUIPMENT_BASES["cloth_14"].label, "名称已还原（不污染后续关键字断言）");
+    checkEqual(equipmentRestoreLabel.body?.data?.label, equipBases["cloth_14"].label, "名称已还原（不污染后续关键字断言）");
 
     // 显示字段整份提交（#603）：资源路径 / 几何 / 职业性别 / 标签 / 描述
     const eightPositions = Array.from({ length: 8 }, (_, index) => ({ x: index, y: -index }));
@@ -821,10 +845,10 @@ async function main() {
 
     const slots = await api(base, "GET", "/api/admin/equipment-slots", { token });
     checkEqual(slots.status, 200, "槽位表可读");
-    checkEqual(slots.body?.data?.length, EQUIPMENT_SLOT_SEEDS.length, `槽位行数 = 种子（${EQUIPMENT_SLOT_SEEDS.length}）`);
-    checkEqual(slots.body?.data?.[0]?.key, EQUIPMENT_SLOT_SEEDS[0].key, "按 sort_order 升序（第一行 = 种子第一项）");
+    checkEqual(slots.body?.data?.length, slotRows.length, `槽位行数 = 种子（${slotRows.length}）`);
+    checkEqual(slots.body?.data?.[0]?.key, slotRows[0].key, "按 sort_order 升序（第一行 = 种子第一项）");
     checkEqual(slots.body?.data?.[0]?.order, 0, "排序从 0 起");
-    checkEqual(slots.body?.data?.[0]?.label, EQUIPMENT_SLOT_SEEDS[0].label, "槽位名称与种子一致");
+    checkEqual(slots.body?.data?.[0]?.label, slotRows[0].label, "槽位名称与种子一致");
 
     const slotAuthoring = await api(base, "GET", "/api/admin/equipment-slots", { token: viewerToken });
     checkEqual(slotAuthoring.body?.code, 0, "观察员能看槽位表");
@@ -843,18 +867,18 @@ async function main() {
     checkEqual(slotPatched.body?.data?.order, 5, "槽位排序已更新（背包整理序同源）");
     const slotRestored = await api(base, "PATCH", "/api/admin/equipment-slots/cloth", {
       token,
-      body: { label: EQUIPMENT_SLOT_SEEDS.find((slot) => slot.key === "cloth").label, order: EQUIPMENT_SLOT_SEEDS.findIndex((slot) => slot.key === "cloth") },
+      body: { label: slotRows.find((slot) => slot.key === "cloth").label, order: slotRows.findIndex((slot) => slot.key === "cloth") },
     });
     checkEqual(slotRestored.status, 200, "槽位已还原（不污染快照断言）");
 
     const meta = await api(base, "GET", "/api/admin/equipment-meta", { token });
     checkEqual(meta.status, 200, "装备规则可读");
     const metaRow = meta.body?.data ?? {};
-    checkEqual(metaRow.prefixRates?.length, EQUIPMENT_PREFIX_RATE_SEEDS.length, `前缀倍率档数 = 种子（${EQUIPMENT_PREFIX_RATE_SEEDS.length}）`);
-    checkEqual(metaRow.suffixRates?.length, EQUIPMENT_SUFFIX_RATE_SEEDS.length, `后缀倍率档数 = 种子（${EQUIPMENT_SUFFIX_RATE_SEEDS.length}）`);
-    checkEqual(metaRow.prefixLabels?.[0], EQUIPMENT_PREFIX_LABEL_SEEDS[0], "前缀文案与种子一致");
-    checkEqual(metaRow.suffixLabels?.[0], EQUIPMENT_SUFFIX_LABEL_SEEDS[0], "后缀文案与种子一致");
-    check(Array.isArray(metaRow.recycleCurve) && metaRow.recycleCurve.length > 0, "回收价曲线至少一段（采样表由它派生）");
+    checkEqual(metaRow.prefixRates?.length, equipMeta.prefixRates.length, `前缀倍率档数 = 种子（${equipMeta.prefixRates.length}）`);
+    checkEqual(metaRow.suffixRates?.length, equipMeta.suffixRates.length, `后缀倍率档数 = 种子（${equipMeta.suffixRates.length}）`);
+    checkEqual(metaRow.prefixLabels?.[0], equipMeta.prefixLabels[0], "前缀文案与种子一致");
+    checkEqual(metaRow.suffixLabels?.[0], equipMeta.suffixLabels[0], "后缀文案与种子一致");
+    check(metaRow.recycleCurve === undefined, "回收价曲线已从契约里退场（#655 改成逐条 sell_price）");
     const metaByViewer = await api(base, "GET", "/api/admin/equipment-meta", { token: viewerToken });
     checkEqual(metaByViewer.body?.code, 0, "观察员能看装备规则");
     const metaWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-meta", { token: viewerToken, body: { prefixRates: [1] } });
@@ -863,16 +887,13 @@ async function main() {
     const metaAsymmetric = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.5], prefixLabels: ["一档"] } });
     checkEqual(metaAsymmetric.status, 400, "倍率与文案长度不一致 → 400");
     checkEqual(metaAsymmetric.body?.code, 40000, "跨字段校验用 40000（参数非法）");
-    const metaBadCurve = await api(base, "PATCH", "/api/admin/equipment-meta", {
+    // 下架字段写回来必须验不出来（whitelist 会剥掉，接口照常 200 但值不变）
+    const metaGhostField = await api(base, "PATCH", "/api/admin/equipment-meta", {
       token,
-      body: { recycleCurve: [{ from: 10, to: 1, start: 1, perLevel: 1 }] },
+      body: { recycleCurve: [{ from: 1, to: 10, start: 1, perLevel: 1 }] },
     });
-    checkEqual(metaBadCurve.status, 400, "曲线 from > to → 400");
-    const metaNegative = await api(base, "PATCH", "/api/admin/equipment-meta", {
-      token,
-      body: { recycleCurve: [{ from: 1, to: 10, start: -1, perLevel: 1 }] },
-    });
-    checkEqual(metaNegative.status, 400, "曲线 start < 0 → 400");
+    checkEqual(metaGhostField.status, 200, "写已下架的 recycleCurve 不报错（whitelist 静默剥掉）");
+    check(metaGhostField.body?.data?.recycleCurve === undefined, "响应里没有 recycleCurve（字段真的没了）");
 
     const metaPatched = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.1, 1.2, 1.3, 1.5] } });
     checkEqual(metaPatched.status, 200, "PATCH 前缀倍率成功");
@@ -880,14 +901,13 @@ async function main() {
     const metaRestored = await api(base, "PATCH", "/api/admin/equipment-meta", {
       token,
       body: {
-        prefixRates: EQUIPMENT_PREFIX_RATE_SEEDS,
-        suffixRates: EQUIPMENT_SUFFIX_RATE_SEEDS,
-        prefixLabels: EQUIPMENT_PREFIX_LABEL_SEEDS,
-        suffixLabels: EQUIPMENT_SUFFIX_LABEL_SEEDS,
-        recycleCurve: metaRow.recycleCurve,
+        prefixRates: equipMeta.prefixRates,
+        suffixRates: equipMeta.suffixRates,
+        prefixLabels: equipMeta.prefixLabels,
+        suffixLabels: equipMeta.suffixLabels,
       },
     });
-    checkEqual(metaRestored.body?.data?.prefixRates?.[4], EQUIPMENT_PREFIX_RATE_SEEDS[4], "倍率已还原（不污染后续结算断言）");
+    checkEqual(metaRestored.body?.data?.prefixRates?.[4], equipMeta.prefixRates[4], "倍率已还原（不污染后续结算断言）");
 
     //#endregion
 
@@ -895,25 +915,25 @@ async function main() {
 
     group("九、药品配置");
 
-    const drugs = await api(base, "GET", "/api/admin/drugs", { token });
-    checkEqual(drugs.status, 200, "药品列表可读");
-    const drugCount = Object.keys(shared.DRUGS).length;
-    checkEqual(drugs.body?.data?.total, drugCount, `药品行数 = 配置表（${drugCount}）`);
-    checkEqual(drugs.body?.data?.list?.length, drugCount, "默认一页装下全部药品");
-    const drugHp1 = drugs.body?.data?.list?.find((row) => row.id === "drug_hp_1");
+    const drugsRes = await api(base, "GET", "/api/admin/drugs", { token });
+    checkEqual(drugsRes.status, 200, "药品列表可读");
+    const drugCount = Object.keys(drugs).length;
+    checkEqual(drugsRes.body?.data?.total, drugCount, `药品行数 = 配置表（${drugCount}）`);
+    checkEqual(drugsRes.body?.data?.list?.length, drugCount, "默认一页装下全部药品");
+    const drugHp1 = drugsRes.body?.data?.list?.find((row) => row.id === "drug_hp_1");
     check(Boolean(drugHp1), "列表里有药品 drug_hp_1");
-    checkEqual(drugHp1?.label, shared.DRUGS["drug_hp_1"].label, "drug_hp_1 名称与配置一致");
-    checkEqual(drugHp1?.sellPrice, shared.DRUGS["drug_hp_1"].sellPrice, "drug_hp_1 售卖价与配置一致");
-    checkEqual(drugHp1?.effectHp, shared.DRUGS["drug_hp_1"].hp, "drug_hp_1 固定回复量与配置一致（effects 求和）");
-    checkEqual(drugHp1?.maxStack, shared.DRUGS["drug_hp_1"].maxStack, "drug_hp_1 堆叠上限与配置一致");
-    checkEqual(drugHp1?.cooldown, shared.DRUGS["drug_hp_1"].cooldown, "drug_hp_1 冷却与配置一致");
+    checkEqual(drugHp1?.label, drugs["drug_hp_1"].label, "drug_hp_1 名称与配置一致");
+    checkEqual(drugHp1?.sellPrice, drugs["drug_hp_1"].sellPrice, "drug_hp_1 售卖价与配置一致");
+    checkEqual(drugHp1?.effectHp, drugs["drug_hp_1"].effectHp, "drug_hp_1 固定回复量与配置一致（effects 求和）");
+    checkEqual(drugHp1?.maxStack, drugs["drug_hp_1"].maxStack, "drug_hp_1 堆叠上限与配置一致");
+    checkEqual(drugHp1?.cooldown, drugs["drug_hp_1"].cooldown, "drug_hp_1 冷却与配置一致");
     // #603 第十域：图标也入库了（客户端不再自带，拼不出 item/fs_2 这类路径）
-    checkEqual(drugHp1?.icon, shared.DRUGS["drug_hp_1"].icon, "drug_hp_1 图标与配置一致（图标在表里）");
-    const drugSun = drugs.body?.data?.list?.find((row) => row.id === "drug_sun");
-    checkEqual(drugSun?.effectHp, shared.DRUGS["drug_sun"].hp, "drug_sun 固定回血与配置一致");
-    checkEqual(drugSun?.effectMp, shared.DRUGS["drug_sun"].mp, "drug_sun 固定回蓝与配置一致");
-    const drugPct = drugs.body?.data?.list?.find((row) => row.id === "drug_hp_pct");
-    checkEqual(drugPct?.effectHpPercent, shared.DRUGS["drug_hp_pct"].hpPercent, "drug_hp_pct 百分比回复与配置一致");
+    checkEqual(drugHp1?.icon, drugs["drug_hp_1"].icon, "drug_hp_1 图标与配置一致（图标在表里）");
+    const drugSun = drugsRes.body?.data?.list?.find((row) => row.id === "drug_sun");
+    checkEqual(drugSun?.effectHp, drugs["drug_sun"].effectHp, "drug_sun 固定回血与配置一致");
+    checkEqual(drugSun?.effectMp, drugs["drug_sun"].effectMp, "drug_sun 固定回蓝与配置一致");
+    const drugPct = drugsRes.body?.data?.list?.find((row) => row.id === "drug_hp_pct");
+    checkEqual(drugPct?.effectHpPercent, drugs["drug_hp_pct"].effectHpPercent, "drug_hp_pct 百分比回复与配置一致");
 
     const drugKeywordLabel = await api(base, "GET", "/api/admin/drugs?keyword=" + encodeURIComponent("金创"), { token });
     checkEqual(drugKeywordLabel.body?.data?.total, 5, "关键字按名称命中五档金创药");
@@ -931,8 +951,8 @@ async function main() {
     checkEqual(drugIconPatched.body?.data?.icon, "item/fs_9", "图标可编辑（#603 第十域）");
     const drugIconBad = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: "x".repeat(201) } });
     checkEqual(drugIconBad.status, 400, "图标路径超过 200 字 → 400");
-    const drugIconRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: shared.DRUGS["drug_hp_1"].icon } });
-    checkEqual(drugIconRestore.body?.data?.icon, shared.DRUGS["drug_hp_1"].icon, "图标已还原出厂值");
+    const drugIconRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { icon: drugs["drug_hp_1"].icon } });
+    checkEqual(drugIconRestore.body?.data?.icon, drugs["drug_hp_1"].icon, "图标已还原出厂值");
     const drugBadPercent = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { effectHpPercent: 120 } });
     checkEqual(drugBadPercent.status, 400, "百分比回复超过 100 → 400");
     checkEqual(drugBadPercent.body?.code, 40000, "百分比校验用 40000（参数非法）");
@@ -946,8 +966,8 @@ async function main() {
     const drugLevelBad = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: 99 } });
     checkEqual(drugLevelBad.status, 400, "使用等级超过上限 60 → 400");
     checkEqual(drugLevelBad.body?.code, 40000, "使用等级越界用 40000（参数非法）");
-    const drugLevelRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: shared.DRUGS["drug_hp_1"].level } });
-    checkEqual(drugLevelRestore.body?.data?.level, shared.DRUGS["drug_hp_1"].level, "使用等级已还原出厂值");
+    const drugLevelRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: drugs["drug_hp_1"].level } });
+    checkEqual(drugLevelRestore.body?.data?.level, drugs["drug_hp_1"].level, "使用等级已还原出厂值");
     const postDrug = await api(base, "POST", "/api/admin/drugs", { token, body: { id: "drug_new" } });
     checkEqual(postDrug.status, 404, "POST 药品 → 404（路由不存在）");
     const deleteDrug = await api(base, "DELETE", "/api/admin/drugs/drug_hp_1", { token });
@@ -964,18 +984,18 @@ async function main() {
 
     group("十、物品与材料配置");
 
-    const items = await api(base, "GET", "/api/admin/items", { token });
-    checkEqual(items.status, 200, "物品列表可读");
-    const itemCount = Object.keys(shared.ITEM_BASES).length;
-    checkEqual(items.body?.data?.total, itemCount, `物品行数 = 配置表（${itemCount}）`);
-    checkEqual(items.body?.data?.list?.length, itemCount, "默认一页装下全部物品");
-    const hide = items.body?.data?.list?.find((row) => row.id === "material_hide");
+    const itemsRes = await api(base, "GET", "/api/admin/items", { token });
+    checkEqual(itemsRes.status, 200, "物品列表可读");
+    const itemCount = Object.keys(items).length;
+    checkEqual(itemsRes.body?.data?.total, itemCount, `物品行数 = 配置表（${itemCount}）`);
+    checkEqual(itemsRes.body?.data?.list?.length, itemCount, "默认一页装下全部物品");
+    const hide = itemsRes.body?.data?.list?.find((row) => row.id === "material_hide");
     check(Boolean(hide), "列表里有物品 material_hide");
-    checkEqual(hide?.type, shared.ITEM_BASES["material_hide"].type, "material_hide 大类与配置一致");
-    checkEqual(hide?.label, shared.ITEM_BASES["material_hide"].label, "material_hide 名称与配置一致");
-    checkEqual(hide?.sellPrice, shared.ITEM_BASES["material_hide"].sellPrice, "material_hide 售卖价与配置一致");
-    checkEqual(hide?.maxStack, shared.ITEM_BASES["material_hide"].maxStack, "material_hide 堆叠上限与配置一致");
-    checkEqual(hide?.icon, shared.ITEM_BASES["material_hide"].icon, "material_hide 图标与配置一致（图标在表里）");
+    checkEqual(hide?.type, items["material_hide"].type, "material_hide 大类与配置一致");
+    checkEqual(hide?.label, items["material_hide"].label, "material_hide 名称与配置一致");
+    checkEqual(hide?.sellPrice, items["material_hide"].sellPrice, "material_hide 售卖价与配置一致");
+    checkEqual(hide?.maxStack, items["material_hide"].maxStack, "material_hide 堆叠上限与配置一致");
+    checkEqual(hide?.icon, items["material_hide"].icon, "material_hide 图标与配置一致（图标在表里）");
 
     const itemsTyped = await api(base, "GET", "/api/admin/items?type=material", { token });
     checkEqual(itemsTyped.body?.data?.total, itemCount, "按大类筛 material：恰好全部物品");
@@ -991,15 +1011,15 @@ async function main() {
     checkEqual(itemPatched.body?.data?.maxStack, 500, "响应里的堆叠上限已更新");
     const itemIconPatched = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: "item/2010299" } });
     checkEqual(itemIconPatched.body?.data?.icon, "item/2010299", "物品图标可编辑（#603 第十域）");
-    const itemIconRestore = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: shared.ITEM_BASES["material_hide"].icon } });
-    checkEqual(itemIconRestore.body?.data?.icon, shared.ITEM_BASES["material_hide"].icon, "物品图标已还原出厂值");
+    const itemIconRestore = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { icon: items["material_hide"].icon } });
+    checkEqual(itemIconRestore.body?.data?.icon, items["material_hide"].icon, "物品图标已还原出厂值");
     const itemGhost = await api(base, "PATCH", "/api/admin/items/material_none", { token, body: { label: "x" } });
     checkEqual(itemGhost.status, 404, "改不存在的物品 → 404");
     checkEqual(itemGhost.body?.code, 50018, "物品未找到用专属业务码 50018");
     const itemStructural = await api(base, "PATCH", "/api/admin/items/material_hide", { token, body: { type: "drug", level: 99 } });
     checkEqual(itemStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
-    checkEqual(itemStructural.body?.data?.type, shared.ITEM_BASES["material_hide"].type, "type 不可编辑（大类属客户端结构约定）");
-    checkEqual(itemStructural.body?.data?.level, shared.ITEM_BASES["material_hide"].level, "level 不可编辑");
+    checkEqual(itemStructural.body?.data?.type, items["material_hide"].type, "type 不可编辑（大类属客户端结构约定）");
+    checkEqual(itemStructural.body?.data?.level, items["material_hide"].level, "level 不可编辑");
     const postItem = await api(base, "POST", "/api/admin/items", { token, body: { id: "material_new" } });
     checkEqual(postItem.status, 404, "POST 物品 → 404（路由不存在）");
     const deleteItem = await api(base, "DELETE", "/api/admin/items/material_hide", { token });
@@ -1018,7 +1038,7 @@ async function main() {
 
     const monsters = await api(base, "GET", "/api/admin/monsters", { token });
     checkEqual(monsters.status, 200, "怪物列表可读");
-    const monsterCount = MONSTER_SEED_ROWS.length;
+    const monsterCount = monsterRows.length;
     checkEqual(monsters.body?.data?.total, monsterCount, `怪物行数 = 配置表（${monsterCount}）`);
     checkEqual(monsters.body?.data?.list?.length, 100, "默认每页 100 条（220 只装不下一页）");
     const monstersPage2 = await api(base, "GET", "/api/admin/monsters?page=2", { token });
@@ -1031,11 +1051,11 @@ async function main() {
     check(Boolean(monster1), "列表里有怪物 key \"1\"");
     checkEqual(monster1?.label, monsterSeed1.label, "怪物 1 名称与种子一致");
     checkEqual(monster1?.tier, monsterSeed1.tier, "怪物 1 定位与种子一致");
-    checkEqual(monster1?.maxHp, monsterAttrs1.maxHp, "怪物 1 生命上限与种子展开值一致");
+    checkEqual(monster1?.maxHp, monsterSeed1.maxHp, "怪物 1 生命上限与库里的行一致");
     checkEqual(
       JSON.stringify([monster1?.attributes?.physicalAttack?.min, monster1?.attributes?.physicalAttack?.max]),
-      JSON.stringify(monsterAttrs1.physicalAttack),
-      "怪物 1 物攻区间与种子展开值一致（快照数组 → min/max 结构）",
+      JSON.stringify([monsterSeed1.physicalAttackMin, monsterSeed1.physicalAttackMax]),
+      "怪物 1 物攻区间与库里的行一致（单列 min/max → min/max 结构）",
     );
 
     const monsterKeyword = await api(base, "GET", "/api/admin/monsters?keyword=" + encodeURIComponent(monsterSeed1.label), { token });
@@ -1045,8 +1065,8 @@ async function main() {
     // 分档口径从快照现算（#436）：这条以前写的是「全部怪物，当前全是普通怪」——
     // 那是 `configs/monster.ts` 建 Map 时把 tier 解构掉又没放回的 bug 留下的印记，
     // tier 修好后 220 只怪里只有 199 只是普通怪，照抄老数字会立刻假红。
-    const normalCount = MONSTER_SEED_ROWS.filter((row) => row.tier === "normal").length;
-    const bossCount = MONSTER_SEED_ROWS.filter((row) => row.tier === "boss").length;
+    const normalCount = monsterRows.filter((row) => row.tier === "normal").length;
+    const bossCount = monsterRows.filter((row) => row.tier === "boss").length;
     checkEqual(
       `${monstersNormal.body?.data?.total}/${monstersBoss.body?.data?.total}`,
       `${normalCount}/${bossCount}`,
@@ -1105,30 +1125,30 @@ async function main() {
 
     group("十二、NPC 基础数据");
 
-    const npcs = await api(base, "GET", "/api/admin/npcs", { token });
-    checkEqual(npcs.status, 200, "NPC 列表可读");
-    const npcCount = Object.keys(shared.NPCS).length;
-    checkEqual(npcs.body?.data?.total, npcCount, `NPC 行数 = 配置表（${npcCount}）`);
-    checkEqual(npcs.body?.data?.list?.length, npcCount, "默认一页装下全部 NPC");
-    const npc2 = npcs.body?.data?.list?.find((row) => row.id === "0002");
+    const npcsRes = await api(base, "GET", "/api/admin/npcs", { token });
+    checkEqual(npcsRes.status, 200, "NPC 列表可读");
+    const npcCount = Object.keys(npcs).length;
+    checkEqual(npcsRes.body?.data?.total, npcCount, `NPC 行数 = 配置表（${npcCount}）`);
+    checkEqual(npcsRes.body?.data?.list?.length, npcCount, "默认一页装下全部 NPC");
+    const npc2 = npcsRes.body?.data?.list?.find((row) => row.id === "0002");
     check(Boolean(npc2), "列表里有 NPC 0002");
-    checkEqual(npc2?.label, shared.NPCS["0002"].label, "NPC 0002 名称与配置一致");
+    checkEqual(npc2?.label, npcs["0002"].label, "NPC 0002 名称与配置一致");
     checkEqual(npc2?.dialog, "", "对话文案 seed 为空串（客户端暂无对话数据形态）");
 
     // #603 第七域：外观（素材目录 / 缩放 / 偏移）也在库里 —— 客户端不再存任何 NPC 显示数据
-    const npcSeed2 = NPC_SEED_ROWS.find((row) => row.id === "0002");
-    const npcSeedPlain = NPC_SEED_ROWS.find((row) => row.id === "1001");
+    const npcSeed2 = npcRows.find((row) => row.id === "0002");
+    const npcSeedPlain = npcRows.find((row) => row.id === "1001");
     checkEqual(npc2?.src, npcSeed2.src, "素材目录 seed 自 npc-seed（0002）");
     checkEqual(npc2?.scaleX, 1.5, "0002 横向缩放 seed 自 npc-seed");
     checkEqual(npc2?.scaleY, 1.5, "0002 纵向缩放 seed 自 npc-seed");
     checkEqual(npc2?.posX, 11, "0002 横向偏移 seed 自 npc-seed");
     checkEqual(npc2?.posY, 0, "0002 纵向偏移 seed 自 npc-seed");
-    const npcPlain = npcs.body?.data?.list?.find((row) => row.id === "1001");
+    const npcPlain = npcsRes.body?.data?.list?.find((row) => row.id === "1001");
     checkEqual(npcPlain?.src, npcSeedPlain.src, "素材目录 seed 自 npc-seed（1001）");
     checkEqual(npcPlain?.scaleX, 1, "没配缩放的 NPC 落默认 1（不是 NULL）");
     checkEqual(npcPlain?.posX, 0, "没配偏移的 NPC 落默认 0（不是 NULL）");
     check(
-      npcs.body?.data?.list?.every((row) => typeof row.src === "string" && row.src.length > 0),
+      npcsRes.body?.data?.list?.every((row) => typeof row.src === "string" && row.src.length > 0),
       "全部 NPC 都有素材目录（空 src = 客户端查不到素材、NPC 不显示）",
     );
 
@@ -1177,10 +1197,10 @@ async function main() {
 
     group("十三、商城定价");
 
-    const mallGoodsTotal = Object.keys(shared.EQUIPMENT_ATTRIBUTES).length;
+    const mallGoodsTotal = Object.keys(variants).length;
     const mallSettings = await api(base, "GET", "/api/admin/mall/settings", { token });
     checkEqual(mallSettings.status, 200, "统一价可读");
-    checkEqual(mallSettings.body?.data?.defaultPrice, shared.MALL.defaultPrice, `统一价 seed 与配置一致（${shared.MALL.defaultPrice}）`);
+    checkEqual(mallSettings.body?.data?.defaultPrice, mall.defaultPrice, `统一价 seed 与配置一致（${mall.defaultPrice}）`);
 
     const mallSettingsPatched = await api(base, "PATCH", "/api/admin/mall/settings", { token, body: { defaultPrice: 3 } });
     checkEqual(mallSettingsPatched.status, 200, "PATCH 统一价成功");
@@ -1196,9 +1216,9 @@ async function main() {
     checkEqual(mallPrices.body?.data?.list?.length, 20, "默认每页 20 条");
     const mallFirst = mallPrices.body?.data?.list?.[0];
     checkEqual(mallFirst?.id, "cloth_1", "首行是有货部位里最靠前的商品（部位序 → 等级 → id）");
-    checkEqual(mallFirst?.price, null, "seed 后没有任何特殊价（未定价走统一价）");
-    checkEqual(mallFirst?.updatedAt, null, "未定价的更新时间为 null");
-    checkEqual(mallFirst?.label, shared.EQUIPMENT_DISPLAY_NAMES["cloth_1"], "商品显示名来自生成物（前后缀已拼好）");
+    checkEqual(mallFirst?.price, mallCloth1?.price ?? null, "首行定价 = 快照（没配过就是 null，走统一价）");
+    checkEqual(mallFirst?.updatedAt, mallCloth1?.updatedAt ?? null, "定过价才有更新时间，没配过是 null");
+    checkEqual(mallFirst?.label, variants["cloth_1"].label, "商品显示名来自生成物（前后缀已拼好）");
     const mallLastPage = await api(base, "GET", "/api/admin/mall/prices?page=28&size=20", { token });
     checkEqual(mallLastPage.body?.data?.list?.length, mallGoodsTotal - 27 * 20, "末页补齐剩余商品");
 
@@ -1248,22 +1268,22 @@ async function main() {
 
     group("十四、时装配置");
 
-    const fashions = await api(base, "GET", "/api/admin/fashions", { token });
-    checkEqual(fashions.status, 200, "时装列表可读");
-    const fashionCount = Object.keys(shared.FASHIONS).length;
-    checkEqual(fashions.body?.data?.total, fashionCount, `时装行数 = 配置表（${fashionCount}）`);
-    checkEqual(fashions.body?.data?.list?.length, fashionCount, "默认一页装下全部时装");
-    const fashion2 = fashions.body?.data?.list?.find((row) => row.id === "cloth_2");
+    const fashionsRes = await api(base, "GET", "/api/admin/fashions", { token });
+    checkEqual(fashionsRes.status, 200, "时装列表可读");
+    const fashionCount = Object.keys(fashions).length;
+    checkEqual(fashionsRes.body?.data?.total, fashionCount, `时装行数 = 配置表（${fashionCount}）`);
+    checkEqual(fashionsRes.body?.data?.list?.length, fashionCount, "默认一页装下全部时装");
+    const fashion2 = fashionsRes.body?.data?.list?.find((row) => row.id === "cloth_2");
     check(Boolean(fashion2), "列表里有时装 cloth_2");
-    checkEqual(fashion2?.label, shared.FASHIONS["cloth_2"].label, "cloth_2 名称与配置一致");
-    checkEqual(fashion2?.description, shared.FASHIONS["cloth_2"].description, "cloth_2 描述与配置一致");
-    checkEqual(fashion2?.icon, shared.FASHIONS["cloth_2"].icon, "cloth_2 图标路径与配置一致");
-    checkEqual(fashion2?.inRes, shared.FASHIONS["cloth_2"].in, "cloth_2 内观路径与配置一致");
-    checkEqual(fashion2?.outRes, shared.FASHIONS["cloth_2"].out, "cloth_2 外观路径与配置一致");
+    checkEqual(fashion2?.label, fashions["cloth_2"].label, "cloth_2 名称与配置一致");
+    checkEqual(fashion2?.description, fashions["cloth_2"].description, "cloth_2 描述与配置一致");
+    checkEqual(fashion2?.icon, fashions["cloth_2"].icon, "cloth_2 图标路径与配置一致");
+    checkEqual(fashion2?.inRes, fashions["cloth_2"].inRes, "cloth_2 内观路径与配置一致");
+    checkEqual(fashion2?.outRes, fashions["cloth_2"].outRes, "cloth_2 外观路径与配置一致");
     checkEqual(fashion2?.sellPrice, 0, "售卖价 seed 为 0（原配置全零）");
     checkEqual(fashion2?.acquireChannel, "unavailable", "获得渠道 seed 默认无法获取");
     checkEqual(fashion2?.attributes?.maxHp, 0, "属性嵌套结构返回且 seed 全 0（maxHp）");
-    const fashion12 = fashions.body?.data?.list?.find((row) => row.id === "cloth_12");
+    const fashion12 = fashionsRes.body?.data?.list?.find((row) => row.id === "cloth_12");
     checkEqual(fashion12?.inRes, "", "cloth_12 无内观（seed 空串）");
 
     const fashionKeyword = await api(base, "GET", "/api/admin/fashions?keyword=" + encodeURIComponent("巫女"), { token });
@@ -1275,7 +1295,7 @@ async function main() {
     const fashionBadSort = await api(base, "GET", "/api/admin/fashions?sort=evil", { token });
     checkEqual(
       JSON.stringify(fashionBadSort.body?.data?.list?.[0]?.id),
-      JSON.stringify(fashions.body?.data?.list?.[0]?.id),
+      JSON.stringify(fashionsRes.body?.data?.list?.[0]?.id),
       "白名单外的 sort 退回默认排序（防注入）",
     );
 
@@ -1332,9 +1352,9 @@ async function main() {
     checkEqual(fashionResTooLong.status, 400, "资源路径超长 → 400（防御性上限 200）");
     const fashionResRestored = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
       token,
-      body: { icon: shared.FASHIONS["cloth_2"].icon, inRes: shared.FASHIONS["cloth_2"].in, outRes: shared.FASHIONS["cloth_2"].out },
+      body: { icon: fashions["cloth_2"].icon, inRes: fashions["cloth_2"].inRes, outRes: fashions["cloth_2"].outRes },
     });
-    checkEqual(fashionResRestored.body?.data?.inRes, shared.FASHIONS["cloth_2"].in, "复原内观路径（后面的断言以出厂口径为基线）");
+    checkEqual(fashionResRestored.body?.data?.inRes, fashions["cloth_2"].inRes, "复原内观路径（后面的断言以出厂口径为基线）");
     const postFashion = await api(base, "POST", "/api/admin/fashions", { token, body: { id: "cloth_99" } });
     checkEqual(postFashion.status, 404, "POST 时装 → 404（路由不存在）");
     const deleteFashion = await api(base, "DELETE", "/api/admin/fashions/cloth_2", { token });
@@ -1353,13 +1373,13 @@ async function main() {
 
     const dropTablesList = await api(base, "GET", "/api/admin/drop-tables", { token });
     checkEqual(dropTablesList.status, 200, "具名掉落表列表可读");
-    const seedTableCount = Object.keys(shared.DROP_TABLES).length + Object.keys(shared.DROP_DEFAULT).length;
-    checkEqual(dropTablesList.body?.data?.total, seedTableCount, `具名表张数 = seed（${seedTableCount}：common/elite/boss + 兜底 default）`);
+    const seedTableCount = Object.keys(dropTables).length;
+    checkEqual(dropTablesList.body?.data?.total, seedTableCount, `具名表张数 = 配置表（${seedTableCount}：common/elite/boss + 兜底 default）`);
     const commonTable = dropTablesList.body?.data?.list?.find((row) => row.id === "common");
     check(Boolean(commonTable), "列表里有具名表 common");
     checkEqual(
       JSON.stringify([commonTable?.picks, commonTable?.entries?.[0]]),
-      JSON.stringify([shared.DROP_TABLES["common"].picks, shared.DROP_TABLES["common"].entries[0]]),
+      JSON.stringify([jsonColumn(dropTables["common"].picks), dropTables["common"].entries[0]]),
       "common 表的抽取次数与首条目和配置一致",
     );
     check(Boolean(dropTablesList.body?.data?.list?.find((row) => row.id === "default")), "兜底表 default 也在列表里");
@@ -1405,7 +1425,7 @@ async function main() {
 
     const monsterDropsList = await api(base, "GET", "/api/admin/monster-drops", { token });
     checkEqual(monsterDropsList.status, 200, "每怪掉落列表可读");
-    const monsterDropCount = Object.keys(shared.MONSTER_DROPS).length;
+    const monsterDropCount = Object.keys(monsterDrops).length;
     checkEqual(monsterDropsList.body?.data?.total, monsterDropCount, `每怪行数 = 配置表（${monsterDropCount}）`);
     checkEqual(monsterDropsList.body?.data?.list?.length, 20, "默认每页 20 条");
     checkEqual(monsterDropsList.body?.data?.list?.[0]?.monsterKey, "1", "默认按 key 数值升序（首行是怪 1，不是字典序的 \"1\",\"10\"…）");
@@ -1413,7 +1433,7 @@ async function main() {
     checkEqual(monsterDrop1?.source, "entries", "seed 全内联（source = entries）");
     checkEqual(
       JSON.stringify(monsterDrop1?.entries?.[0]),
-      JSON.stringify(shared.MONSTER_DROPS["1"].entries[0]),
+      JSON.stringify(monsterDrops["1"].entries[0]),
       "怪 1 的首条目与配置一致",
     );
     const monsterDropsBySource = await api(base, "GET", "/api/admin/monster-drops?source=entries", { token });
@@ -1510,24 +1530,24 @@ async function main() {
     const snap = snapshot.body?.data ?? {};
     // #605：运行时参数随快照下发（六·五 段把拾取半径改成了 72，这里确认它真的到得了客户端）
     checkEqual(snap.runtimeParams?.drop?.autoPickupRadius, 72, "运行时参数随快照下发（改完的值客户端拿得到）");
-    checkEqual(snap.runtimeParams?.autoBattle?.stuckRetryLimit, RUNTIME_PARAMS.autoBattle.stuckRetryLimit, "自动战斗参数是完整一组（不是只发改过的键）");
-    checkEqual(snap.runtimeParams?.guild?.nameMax, RUNTIME_PARAMS.guild.nameMax, "帮会规则也在快照里（客户端用于提前提示）");
+    checkEqual(snap.runtimeParams?.autoBattle?.stuckRetryLimit, runtime.autoBattle.stuckRetryLimit, "自动战斗参数是完整一组（不是只发改过的键）");
+    checkEqual(snap.runtimeParams?.guild?.nameMax, runtime.guild.nameMax, "帮会规则也在快照里（客户端用于提前提示）");
 
     // #605：战斗力权重同样入表（六·六 段已复原成出厂值）—— 改一项，快照必须跟着变
-    checkEqual(snap.combatWeights?.maxHp, COMBAT_WEIGHTS_SEED.maxHp, "战斗力权重随快照下发（出厂值）");
-    const weightChanged = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp + 5 } });
+    checkEqual(snap.combatWeights?.maxHp, weights.maxHp, "战斗力权重随快照下发（出厂值）");
+    const weightChanged = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: weights.maxHp + 5 } });
     checkEqual(weightChanged.status, 200, "把生命权重调高 5");
     const snapshotAfterWeight = await api(base, "GET", "/api/game-config", { token: playerToken });
     checkEqual(
       snapshotAfterWeight.body?.data?.combatWeights?.maxHp,
-      COMBAT_WEIGHTS_SEED.maxHp + 5,
+      weights.maxHp + 5,
       "改完的权重客户端拿得到（快照读库，不是编译期常量）",
     );
-    const weightRestoredAgain = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
+    const weightRestoredAgain = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: weights.maxHp } });
     checkEqual(weightRestoredAgain.status, 200, "还原生命权重（后面的断言以出厂口径为基线）");
     // #605：新手引导步骤随快照下发（六·七 段已复原成出厂表）
-    checkEqual(snap.guideSteps?.length, GUIDE_STEP_SEEDS.length, "引导步骤随快照下发（客户端不再存这张表）");
-    checkEqual(snap.guideSteps?.[0]?.trigger, GUIDE_STEP_SEEDS[0].trigger, "第一步的推进事件与出厂种子一致");
+    checkEqual(snap.guideSteps?.length, guideSteps.length, "引导步骤随快照下发（客户端不再存这张表）");
+    checkEqual(snap.guideSteps?.[0]?.trigger, guideSteps[0].trigger, "第一步的推进事件与出厂种子一致");
 
     {
       // #604：快照是**显式契约** —— 客户端缺段直接抛错并把玩家挡在 Loading 界面。
@@ -1552,10 +1572,30 @@ async function main() {
     }
 
     // 各表行数 = 管理端列表的全量（快照的形状与列表行一致）
-    checkEqual(snap.titles?.length, titleSeed.TITLE_SEEDS.length, "快照称号行数 = 配置表");
-    checkEqual(snap.souls?.length, soulSeed.SOUL_SEEDS.length, "快照战魂行数 = 配置表");
-    checkEqual(snap.ranks?.length, rankSeed.RANK_SEEDS.length, "快照军衔行数 = 配置表（100 阶）");
-    checkEqual(snap.equipments?.length, Object.keys(shared.EQUIPMENT_BASES).length, "快照装备基础件行数 = 生成物");
+    checkEqual(snap.titles?.length, titles.length, "快照称号行数 = 配置表");
+    checkEqual(snap.souls?.length, souls.length, "快照战魂行数 = 配置表");
+    checkEqual(snap.ranks?.length, ranks.length, "快照军衔行数 = 配置表（100 阶）");
+    // #655：快照发的是 555 个**变体**（37 基础件 × 5 前缀 × 3 后缀），每行都是最终数值，
+    // 客户端不再按倍率展开 —— 所以这里对的是「变体总数」，不是基础件数
+    const expectedVariants =
+      Object.keys(equipBases).length *
+      equipMeta.prefixRates.length *
+      equipMeta.suffixRates.length;
+    checkEqual(snap.equipments?.length, expectedVariants, "快照装备 = 全部变体（37 × 5 × 3 = 555）");
+    {
+      // 变体是独立行而不是现算 —— 抽查最强档，确认「迁移/seed 的展开口径」与倍率一致，
+      // 否则「管理端改了一件变体」和「客户端看到的数值」会从这里开始分叉
+      const baseRow = snap.equipments?.find((item) => item.id === "cloth_1") ?? {};
+      const topRow = snap.equipments?.find((item) => item.id === "cloth_1_p4s2") ?? {};
+      const rate = equipMeta.prefixRates[4] * equipMeta.suffixRates[2];
+      checkEqual(
+        topRow?.attributes?.maxHp,
+        Math.round((baseRow.attributes?.maxHp ?? 0) * rate),
+        "变体属性 = 基础件 × 前后缀倍率（展开口径与旧版一致）",
+      );
+      checkEqual(topRow?.prefix, 4, "变体行带前缀序号（客户端按它取品质文案与颜色）");
+      checkEqual(topRow?.suffix, 2, "变体行带后缀序号");
+    }
     {
       // #603 第九域：客户端 `configs/equipments` 已经没有装备数据 —— 显示字段全在这段里，缺字段 = 装备整表是空的
       const row = snap.equipments?.find((item) => item.id === "cloth_1") ?? {};
@@ -1564,12 +1604,12 @@ async function main() {
       check(typeof row.inPosX === "number" && typeof row.inPosY === "number", "快照装备行带内观锚点（数字）");
       check(Array.isArray(row.tags) && typeof row.attributes?.maxHp === "number", "快照装备行带标签与八项属性");
     }
-    checkEqual(snap.equipmentSlots?.length, EQUIPMENT_SLOT_SEEDS.length, `快照槽位行数 = 种子（${EQUIPMENT_SLOT_SEEDS.length}）`);
-    checkEqual(snap.equipmentMeta?.prefixRates?.length, EQUIPMENT_PREFIX_RATE_SEEDS.length, "快照带前后缀倍率（客户端展开 15 个变体的依据）");
-    checkEqual(snap.equipmentMeta?.prefixLabels?.[0], EQUIPMENT_PREFIX_LABEL_SEEDS[0], "快照带品质文案");
-    check(Array.isArray(snap.equipmentMeta?.recycleCurve) && snap.equipmentMeta.recycleCurve.length > 0, "快照带回收价曲线（客户端算回收价）");
-    checkEqual(snap.drugs?.length, Object.keys(shared.DRUGS).length, "快照药品行数 = 生成物");
-    checkEqual(snap.items?.length, Object.keys(shared.ITEM_BASES).length, "快照物品行数 = 生成物");
+    checkEqual(snap.equipmentSlots?.length, slotRows.length, `快照槽位行数 = 种子（${slotRows.length}）`);
+    checkEqual(snap.equipmentMeta?.prefixRates?.length, equipMeta.prefixRates.length, "快照带前后缀倍率（客户端展开 15 个变体的依据）");
+    checkEqual(snap.equipmentMeta?.prefixLabels?.[0], equipMeta.prefixLabels[0], "快照带品质文案");
+    check(snap.equipmentMeta?.recycleCurve === undefined, "快照不带回收价曲线（价随变体一行下发）");
+    checkEqual(snap.drugs?.length, Object.keys(drugs).length, "快照药品行数 = 生成物");
+    checkEqual(snap.items?.length, Object.keys(items).length, "快照物品行数 = 生成物");
     {
       // #603 第十域：客户端不带图标了 —— 快照必须带，缺了整套物品显示成白块
       const drugRow = snap.drugs?.find((row) => row.id === "drug_hp_1") ?? {};
@@ -1577,10 +1617,10 @@ async function main() {
       const itemRow = snap.items?.find((row) => row.id === "material_hide") ?? {};
       check(Boolean(itemRow.icon && itemRow.type), "快照物品行带图标与大类");
     }
-    checkEqual(snap.monsters?.length, MONSTER_SEED_ROWS.length, "快照怪物行数 = 种子（220）");
+    checkEqual(snap.monsters?.length, monsterRows.length, "快照怪物行数 = 种子（220）");
     check(!("drop" in (snap.monsters?.[0] ?? {})), "玩家侧快照的怪物不带掉落摘要（客户端不结算掉落，#584）");
     // #588：表现段 —— 客户端零副本，icon / out / 几何 / 移速全靠这一段下发
-    checkEqual(snap.monsterPresentations?.length, MONSTER_PRESENTATION_ROWS.length, `快照表现段行数 = 生成物（${MONSTER_PRESENTATION_ROWS.length}）`);
+    checkEqual(snap.monsterPresentations?.length, presentations.length, `快照表现段行数 = 生成物（${presentations.length}）`);
     {
       const first = snap.monsterPresentations?.[0] ?? {};
       check(Boolean(first.icon && first.out), "表现行带 icon / out（客户端渲染与预载的路径来源）");
@@ -1590,7 +1630,7 @@ async function main() {
       check(typeof first.moveSpeed === "number" && first.moveSpeed > 0, "表现行带正的 moveSpeed");
       check(typeof first.aggressive === "boolean" && typeof first.detectRange === "number", "表现行带 AI 参数（aggressive / detectRange）");
     }
-    checkEqual(snap.npcs?.length, Object.keys(shared.NPCS).length, "快照 NPC 行数 = 种子");
+    checkEqual(snap.npcs?.length, Object.keys(npcs).length, "快照 NPC 行数 = 种子");
     {
       // #603 第七域：快照必须带外观 —— 客户端已经没有 npc-data 兜底，缺字段 = 素材加载不到
       const row = snap.npcs?.find((item) => item.id === "0002") ?? {};
@@ -1598,8 +1638,8 @@ async function main() {
       check(typeof row.scaleX === "number" && typeof row.scaleY === "number", "快照 NPC 行带缩放（数字）");
       check(typeof row.posX === "number" && typeof row.posY === "number", "快照 NPC 行带偏移（数字）");
     }
-    checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20）");
-    checkEqual(snap.levels?.length, growthSeed.ROLE_MAX_LEVEL, "快照等级行数 = 等级上限（#590：levels 段替代 levelExps + growthSegments）");
+    checkEqual(snap.fashions?.length, Object.keys(fashions).length, "快照时装行数 = 生成物（20）");
+    checkEqual(snap.levels?.length, roleMaxLevel, "快照等级行数 = 等级上限（#590：levels 段替代 levelExps + growthSegments）");
     check(
       Boolean(Array.isArray(snap.levels) && snap.levels.length > 0 && typeof snap.levels[0].exp === "number" && typeof snap.levels[0].maxHp === "number"),
       "快照等级行带最终属性与升级经验（客户端不再派生）",
@@ -1609,13 +1649,13 @@ async function main() {
     check(Boolean(snap.mallSettings?.defaultPrice > 0), "快照带商城统一价");
     check(Boolean(Array.isArray(snap.mallPrices) && snap.mallPrices.length > 0), "快照带商城定价目录");
     checkEqual(snap.dropTables?.length, seedTableCount, `快照具名掉落表张数 = seed（${seedTableCount}）`);
-    checkEqual(snap.monsterDrops?.length, Object.keys(shared.MONSTER_DROPS).length, "快照每怪掉落行数 = 生成物（220）");
-    checkEqual(snap.skills?.length, Object.keys(shared.SKILLS).length, "快照技能行数 = 生成物（含释放限制字段）");
-    checkEqual(snap.statuses?.length, Object.keys(shared.STATUSES).length, "快照状态行数 = 生成物");
+    checkEqual(snap.monsterDrops?.length, Object.keys(monsterDrops).length, "快照每怪掉落行数 = 生成物（220）");
+    checkEqual(snap.skills?.length, Object.keys(skills).length, "快照技能行数 = 生成物（含释放限制字段）");
+    checkEqual(snap.statuses?.length, Object.keys(statuses).length, "快照状态行数 = 生成物");
     check(Boolean(snap.skills?.[0]?.castLockMs !== undefined && snap.skills?.[0]?.requireTarget !== undefined), "快照技能行带释放限制（castLockMs / requireTarget）");
     // 时装（#603 第十二域）：客户端整表重建要靠这几列，路径必须跟着快照下来
     const snapFashion2 = snap.fashions?.find((row) => row.id === "cloth_2");
-    checkEqual(snap.fashions?.length, Object.keys(shared.FASHIONS).length, "快照时装行数 = 生成物（20 套）");
+    checkEqual(snap.fashions?.length, Object.keys(fashions).length, "快照时装行数 = 生成物（20 套）");
     check(Boolean(snapFashion2?.icon && snapFashion2?.inRes && snapFashion2?.outRes), "快照时装行带 icon / inRes / outRes（客户端据此整表重建，不自己拼路径）");
     check(Boolean(snapFashion2?.attributes?.physicalAttack?.min !== undefined), "快照时装行带嵌套区间属性");
 
@@ -1636,7 +1676,7 @@ async function main() {
     checkEqual(snapshot2.body?.data?.titles?.[0]?.label, "快照验证·改名", "管理端改值后重新拉快照反映新值（改配置对客户端生效的通道）");
     const restore = await api(base, "PATCH", `/api/admin/titles/${snap.titles[0].level}`, {
       token,
-      body: { label: titleSeed.TITLE_SEEDS[0].label },
+      body: { label: titles[0].label },
     });
     checkEqual(restore.status, 200, "还原称号名（不污染其他断言）");
 
@@ -1667,11 +1707,11 @@ async function main() {
     // 探针是「角色详情里的派生战力」（服务端现算）：翻倍生命权重 → 必须变大；还原 → 必须回原值。
     const combatBefore = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
     check(Number.isFinite(combatBefore) && combatBefore > 0, "角色详情能算出战力（结算探针）", String(combatBefore));
-    const heavierWeights = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp * 2 } });
+    const heavierWeights = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: weights.maxHp * 2 } });
     checkEqual(heavierWeights.status, 200, "把生命权重翻倍");
     const combatAfter = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
     check(combatAfter > combatBefore, "生命权重翻倍后服务端算的战力立刻变大（结算读库、不是常量）", `${combatBefore} → ${combatAfter}`);
-    const weightBackToSeed = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
+    const weightBackToSeed = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: weights.maxHp } });
     checkEqual(weightBackToSeed.status, 200, "还原生命权重");
     const combatRestored = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
     checkEqual(combatRestored, combatBefore, "还原后战力回到原值（覆盖层不是一次性的）");
@@ -1733,7 +1773,7 @@ async function main() {
     checkEqual(up1.status, 200, "升 1 阶称号 → 200");
     checkEqual(up1.body?.data?.consumed, price1, "consumed = 库里 1 阶价格");
     checkEqual(up1.body?.data?.gainedLevel, 1, "gainedLevel = 1");
-    checkEqual(up1.body?.data?.gainedLabel, titleSeed.TITLE_SEEDS[0].label, "gainedLabel = 1 阶称号名");
+    checkEqual(up1.body?.data?.gainedLabel, titles[0].label, "gainedLabel = 1 阶称号名");
     checkEqual(up1.body?.data?.data?.title, 1, "存档 title 推进到 1");
     checkEqual(up1.body?.data?.data?.bindGold, 999999999 - price1, "存档 bindGold 扣减到位");
     checkEqual(up1.body?.data?.revision, growthRevision + 1, "revision 原子 +1");
@@ -2063,14 +2103,14 @@ async function main() {
 
     group("二十、技能与状态配置");
 
-    const skillTotal = Object.keys(shared.SKILLS).length;
-    const roleSkillTotal = Object.values(shared.SKILLS).filter((row) => row.owner === "role").length;
-    const statusTotal = Object.keys(shared.STATUSES).length;
+    const skillTotal = Object.keys(skills).length;
+    const roleSkillTotal = Object.values(skills).filter((row) => row.owner === "role").length;
+    const statusTotal = Object.keys(statuses).length;
 
-    const skills = await api(base, "GET", "/api/admin/skills?size=100", { token });
-    checkEqual(skills.status, 200, "技能列表可读");
-    checkEqual(skills.body?.data?.total, skillTotal, `技能行数 = 配置表（${skillTotal}）`);
-    checkEqual(skills.body?.data?.list?.[0]?.id, "1000", "默认按 id 数值升序（角色 1000 段在前）");
+    const skillsRes = await api(base, "GET", "/api/admin/skills?size=100", { token });
+    checkEqual(skillsRes.status, 200, "技能列表可读");
+    checkEqual(skillsRes.body?.data?.total, skillTotal, `技能行数 = 配置表（${skillTotal}）`);
+    checkEqual(skillsRes.body?.data?.list?.[0]?.id, "1000", "默认按 id 数值升序（角色 1000 段在前）");
 
     const roleSkills = await api(base, "GET", "/api/admin/skills?owner=role&size=100", { token });
     checkEqual(roleSkills.body?.data?.total, roleSkillTotal, `owner=role 筛出全部角色技能（${roleSkillTotal}）`);
@@ -2085,12 +2125,12 @@ async function main() {
 
     const skill1000 = roleSkills.body?.data?.list?.find((row) => row.id === "1000");
     check(Boolean(skill1000), "列表里有技能 1000");
-    checkEqual(skill1000?.label, shared.SKILLS["1000"].label, "技能 1000 名称与配置一致");
-    checkEqual(skill1000?.castLockMs, shared.SKILLS["1000"].castLockMs, "castLockMs seed 与配置一致");
-    checkEqual(skill1000?.requireTarget, shared.SKILLS["1000"].requireTarget, "requireTarget seed 与配置一致");
+    checkEqual(skill1000?.label, skills["1000"].label, "技能 1000 名称与配置一致");
+    checkEqual(skill1000?.castLockMs, skills["1000"].castLockMs, "castLockMs seed 与配置一致");
+    checkEqual(skill1000?.requireTarget, Boolean(skills["1000"].requireTarget), "requireTarget seed 与配置一致（列是 0/1，接口给布尔）");
     checkEqual(
       skill1000?.damageCoefficients?.length,
-      shared.SKILLS["1000"].damageCoefficients.length,
+      skills["1000"].damageCoefficients.length,
       "伤害系数条数 = 配置表（下标 = 等级 - 1）",
     );
     const skill1010 = roleSkills.body?.data?.list?.find((row) => row.id === "1010");
@@ -2100,10 +2140,10 @@ async function main() {
     // —— 职业归属与击退（#603 第十一域）——
     // 这两项以前只活在客户端：职业写在手写的 oeccupationSkills 里、击退写在技能行上，
     // 新增技能要改两处。现在跟在技能行里，客户端按行重建那份映射。
-    checkEqual(skill1000?.occupation, shared.SKILLS["1000"].occupation, "职业归属 seed 与配置一致");
+    checkEqual(skill1000?.occupation, skills["1000"].occupation, "职业归属 seed 与配置一致");
     checkEqual(skill1000?.occupation, "1", "普攻归战士（技能栏按 occupation 重建）");
     const skill1001 = roleSkills.body?.data?.list?.find((row) => row.id === "1001");
-    checkEqual(skill1001?.pushDistance, shared.SKILLS["1001"].pushDistance, "击退距离 seed 与配置一致");
+    checkEqual(skill1001?.pushDistance, skills["1001"].pushDistance, "击退距离 seed 与配置一致");
     checkEqual(skill1001?.pushDistance, 120, "烈火剑法击退 120 像素（场上唯一能推动怪物的途径）");
     checkEqual(skill1010?.pushDistance, 0, "没配击退的技能是 0（不是「击退 0 像素」）");
 
@@ -2163,17 +2203,17 @@ async function main() {
     checkEqual(skillReread.body?.data?.list?.[0]?.occupation, "2", "重新读取职业归属已是新值（落库了）");
 
     // —— 状态表 ——
-    const statuses = await api(base, "GET", "/api/admin/statuses", { token });
-    checkEqual(statuses.status, 200, "状态列表可读");
-    checkEqual(statuses.body?.data?.total, statusTotal, `状态行数 = 配置表（${statusTotal}）`);
-    const status2001 = statuses.body?.data?.list?.find((row) => row.id === "2001");
+    const statusesRes = await api(base, "GET", "/api/admin/statuses", { token });
+    checkEqual(statusesRes.status, 200, "状态列表可读");
+    checkEqual(statusesRes.body?.data?.total, statusTotal, `状态行数 = 配置表（${statusTotal}）`);
+    const status2001 = statusesRes.body?.data?.list?.find((row) => row.id === "2001");
     check(Boolean(status2001), "列表里有状态 2001");
-    checkEqual(status2001?.label, shared.STATUSES["2001"].label, "状态 2001 名称与配置一致");
-    checkEqual(status2001?.duration, shared.STATUSES["2001"].duration, "持续时间 seed 与配置一致");
+    checkEqual(status2001?.label, statuses["2001"].label, "状态 2001 名称与配置一致");
+    checkEqual(status2001?.duration, statuses["2001"].duration, "持续时间 seed 与配置一致");
     checkEqual(status2001?.combat?.blockChance, 0.3, "格挡概率 seed 与配置一致");
     checkEqual(status2001?.combat?.blockFactor, 0.5, "格挡系数 seed 与配置一致");
     check(status2001?.combat?.defenseMultiplier === undefined, "没配的维度不出现在 combat 里（不是 0）");
-    const status2002 = statuses.body?.data?.list?.find((row) => row.id === "2002");
+    const status2002 = statusesRes.body?.data?.list?.find((row) => row.id === "2002");
     checkEqual(status2002?.combat?.defenseMultiplier, 1.5, "状态 2002 的防御倍率 seed 与配置一致");
     checkEqual(status2002?.effectHoldLast, false, "特效不停尾帧（脉冲类才勾）");
 
@@ -2225,7 +2265,7 @@ async function main() {
     checkEqual(restoreSkill1008.status, 200, "还原技能 1008 的动作锁");
     const restoreStatus = await api(base, "PATCH", "/api/admin/statuses/2001", {
       token,
-      body: { duration: shared.STATUSES["2001"].duration, combat: { blockChance: 0.3, blockFactor: 0.5 } },
+      body: { duration: statuses["2001"].duration, combat: { blockChance: 0.3, blockFactor: 0.5 } },
     });
     checkEqual(restoreStatus.status, 200, "还原状态 2001 的时长与修正");
 
@@ -2235,7 +2275,7 @@ async function main() {
 
     group("二十一、怪物技能与挂载");
 
-    const mountSeed = shared.MONSTER_SKILLS["200"];
+    const mountSeed = mounts["200"];
     const mountList = await api(base, "GET", "/api/admin/monsters/200/skills", { token });
     checkEqual(mountList.status, 200, "怪物 200 的技能挂载可读");
     checkEqual(mountList.body?.data?.total, mountSeed.length, `挂载条数 = 配置表（${mountSeed.length} 条）`);
@@ -2245,7 +2285,7 @@ async function main() {
       "9002,9003,9001",
       "同优先级按技能 id 升序，priority 2 的 9001 收尾",
     );
-    checkEqual(mountList.body?.data?.list?.[0]?.skillLabel, shared.SKILLS["9002"].label, "挂载行带技能名（列表不用再查一次技能表）");
+    checkEqual(mountList.body?.data?.list?.[0]?.skillLabel, skills["9002"].label, "挂载行带技能名（列表不用再查一次技能表）");
     check(mountList.body?.data?.list?.[0]?.cooldown === null, "没配冷却覆写时是 null（= 回落到技能自身的 cooldown）");
 
     const ghostMount = await api(base, "GET", "/api/admin/monsters/monster_nope/skills", { token });

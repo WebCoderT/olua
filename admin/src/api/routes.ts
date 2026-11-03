@@ -84,7 +84,7 @@ export const routes = {
     /**
      * 成就配置列表（GET /admin/achievements）
      *
-     * seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
+     * seed 自 server/data/config-sync.sql，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
      */
     list: "/admin/achievements",
     /**
@@ -328,9 +328,9 @@ export const routes = {
   /** adminEquipmentMeta 模块（2 个接口） */
   adminEquipmentMeta: {
     /**
-     * 装备规则（前后缀倍率 / 文案 / 回收价曲线）（GET /admin/equipment-meta）
+     * 装备规则（前后缀倍率 / 文案）（GET /admin/equipment-meta）
      *
-     * 单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。
+     * 单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。
      */
     get: "/admin/equipment-meta",
     /**
@@ -355,12 +355,27 @@ export const routes = {
      */
     update: (key: string) => `/admin/equipment-slots/${encodeURIComponent(key)}`,
   },
+  /** adminEquipmentVariant 模块（2 个接口） */
+  adminEquipmentVariant: {
+    /**
+     * 装备变体列表（555 件）（GET /admin/equipment-variants）
+     *
+     * 555 行 = 37 基础件 × 5 前缀 × 3 后缀。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称。
+     */
+    list: "/admin/equipment-variants",
+    /**
+     * 编辑装备变体（PATCH /admin/equipment-variants/{id}）
+     *
+     * **部分更新**：`label` / `level` / `sellPrice` 传哪个改哪个；`attributes` 是八项属性，**整份提交**。
+     */
+    update: (id: string) => `/admin/equipment-variants/${encodeURIComponent(id)}`,
+  },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {
     /**
      * 装备基础件配置列表（GET /admin/equipments）
      *
-     * **只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）不进管理端 —— 它是基础件乘前后缀倍率展开的。id / 部位结构固定，**没有创建 / 删除**。
+     * **只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。id / 部位结构固定，**没有创建 / 删除**。
      */
     list: "/admin/equipments",
     /**
@@ -375,7 +390,7 @@ export const routes = {
     /**
      * 时装配置列表（GET /admin/fashions）
      *
-     * id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
+     * id 清单固定（seed 自 config-sync.sql 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
      */
     list: "/admin/fashions",
     /**
@@ -384,6 +399,15 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (id: string) => `/admin/fashions/${encodeURIComponent(id)}`,
+  },
+  /** adminGameData 模块（1 个接口） */
+  adminGameData: {
+    /**
+     * 游戏数据字典（管理端查表用）（GET /admin/game-data）
+     *
+     * 与 `GET /game-config` **同一份快照**：称号 / 战魂 / 军衔 / 装备变体 / 药品 / 物品 / 怪物 / 怪物表现 / NPC / 时装 / 技能 / 状态 / 任务 / 成就 / 地图 / 等级表 / 成长标量 / 商城价 / 掉落表。
+     */
+    snapshot: "/admin/game-data",
   },
   /** adminGameMail 模块（1 个接口） */
   adminGameMail: {
@@ -405,24 +429,9 @@ export const routes = {
     /**
      * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
      *
-     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。
+     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。
      */
     update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
-  },
-  /** adminGrowthSegment 模块（2 个接口） */
-  adminGrowthSegment: {
-    /**
-     * 成长曲线分段列表（GET /admin/growth-segments）
-     *
-     * 分段线性曲线的段（曲线键 × 段序固定，**没有创建 / 删除**）：`maxHp` / `attack` / `defense` / `killsPerLevel` 四条，每段 {fromLevel, toLevel, startValue, perLevel}，段间必须首尾相接、连续覆盖 1..roleMaxLevel。
-     */
-    list: "/admin/growth-segments",
-    /**
-     * 编辑曲线分段（PATCH /admin/growth-segments/{curve}/{seq}）
-     *
-     * 四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。
-     */
-    update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
   },
   /** adminGuide 模块（2 个接口） */
   adminGuide: {
@@ -480,21 +489,6 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (id: string) => `/admin/items/${encodeURIComponent(id)}`,
-  },
-  /** adminLevelExp 模块（2 个接口） */
-  adminLevelExp: {
-    /**
-     * 升级经验列表（GET /admin/level-exps）
-     *
-     * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。
-     */
-    list: "/admin/level-exps",
-    /**
-     * 编辑升级经验（PATCH /admin/level-exps/{level}）
-     *
-     * **部分更新**：只改 `exp`（等级本身不可改）。
-     */
-    update: (level: string) => `/admin/level-exps/${encodeURIComponent(level)}`,
   },
   /** adminMail 模块（4 个接口） */
   adminMail: {
@@ -669,6 +663,21 @@ export const routes = {
      * 按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。
      */
     list: "/admin/reports",
+  },
+  /** adminRoleLevel 模块（2 个接口） */
+  adminRoleLevel: {
+    /**
+     * 角色等级表（GET /admin/role-levels）
+     *
+     * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**：一行 = 该级的裸属性（血 / 蓝 / 回血 / 六项攻防区间）+ 升级经验。
+     */
+    list: "/admin/role-levels",
+    /**
+     * 编辑角色等级（PATCH /admin/role-levels/{level}）
+     *
+     * **部分更新**：只改传了的字段（等级本身不可改）。
+     */
+    update: (level: string) => `/admin/role-levels/${encodeURIComponent(level)}`,
   },
   /** adminRole 模块（6 个接口） */
   adminRole: {

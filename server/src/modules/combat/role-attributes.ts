@@ -26,19 +26,18 @@
  * 面板与伤害分裂，且没有任何报错。覆盖层由 `RuntimeConfigService` 在启动时与管理端
  * 每次写操作后装载。
  *
- * 数据来源仍是同一份（客户端的 `client/assets/configs` → 生成物），只是**真相搬到了库里**：
- * 生成物回到「出厂值 + 兜底」的位置。
+ * 数据来源只有一处：数据库（出厂快照 `server/data/config-sync.sql`）。
  */
 
-import { COMBAT_RANGE_KEYS } from "../../shared/game-data.generated";
-import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
+import { COMBAT_RANGE_KEYS } from "../../common/constants/game-enums";
 import {
   combatWeightsOf,
   equipmentAttributesOf,
   rankAttributesOf,
+  roleLevelAttributesOf,
   soulAttributesOf,
   titleAttributesOf,
-} from "../../shared/runtime-overrides";
+} from "../../common/runtime-config-cache";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */
 export interface RoleAttributeSource {
@@ -132,7 +131,7 @@ export function summarizeRoleAttributes(source: RoleAttributeSource): RoleAttrib
 export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): { summary: RoleAttributeSummary | null; notes: RoleAttributeNotes } {
   const notes: RoleAttributeNotes = { unknownEquipmentIds: [] };
 
-  const levelBundle = lookupGeneratedBundle(ROLE_LEVEL_ATTRIBUTES, source.level);
+  const levelBundle = roleLevelAttributesOf(source.level);
   if (!levelBundle) return { summary: null, notes };
 
   const equipmentBundles = collectEquipmentBundles(source.equipments, notes);
@@ -218,14 +217,6 @@ function rangeOf(bundle: GeneratedBundle, key: string): [number, number] | null 
   const high = Number(value[1]);
   if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
   return [low, high];
-}
-
-/** 按**等级键**查表（角色等级那一支：键就是等级本身） */
-function lookupGeneratedBundle(table: GeneratedBundle, level: number): GeneratedBundle | null {
-  const value = Number(level);
-  if (!Number.isFinite(value)) return null;
-  const bundle = table[String(Math.trunc(value))];
-  return bundle && typeof bundle === "object" ? (bundle as GeneratedBundle) : null;
 }
 
 /** 收集穿戴装备的属性包（查不到的 id 跳过，但记进 notes） */

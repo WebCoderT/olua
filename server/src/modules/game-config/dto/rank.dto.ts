@@ -3,7 +3,7 @@ import { Type } from "class-transformer";
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { RankRow } from "../../../database/rows";
-import { RANK_TIERS } from "../../../shared/rank-seed";
+import { RANK_TIERS } from "../../../common/constants/game-enums";
 import { ConfigAttributesDto, ConfigAttributeRangeDto, SoulRowShape } from "./title.dto";
 
 /** 名称 / 描述 / 大段名的长度上限（与称号同一档） */

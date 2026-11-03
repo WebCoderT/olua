@@ -16,6 +16,8 @@
 const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+/** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql） */
+const factory = require("./lib/factory-data.cjs");
 
 /** 构造服务端的八项属性（区间是 {min,max} 对象，客户端用元组） */
 const attributes = (maxHp, hpRecover, attack, defense) => ({
@@ -70,7 +72,9 @@ function main() {
   console.log("\n=== 快照到达前的表（沙箱按线上同一条路灌种子）===");
   check(drugs.length === 11, "药品表 11 种（#603 第十域：数据在 item-seed；金创药 5 档 + 魔法药 3 档 + 太阳水 + 两种百分比药）", `size=${drugs.length}`);
   check(fashionData.length === 20, "时装表 20 套（#603 第十二域：数据在 fashion-seed）", String(fashionData.length));
-  check(npcs.size === 0, "NPC 表为空（客户端没有本地兜底）", `size=${npcs.size}`);
+  // #655：沙箱里这张表由快照灌满（线上也是同一条 apply* 链），所以判据从「空」改成「行数 = 快照行数」；
+  // 「客户端没有本地兜底」由源码断言守（game-config.ts 里 npcs 以空 Map 起）
+  check(npcs.size === factory.npcs().length, "NPC 表行数 = 快照行数（客户端自身零出厂行）", `size=${npcs.size}`);
 
   console.log("\n=== 装备：只下发基础件，变体按倍率重算 ===");
   const baseBefore = getItem("cloth_1");
@@ -136,6 +140,38 @@ function main() {
     variantAfter.recyclePrice === Math.round(baseAfter.recyclePrice * rate) && variantAfter.recyclePrice > baseAfter.recyclePrice,
     "回收价按「服务端等级 × 倍率」重算（变体比基础件贵）",
     `${baseAfter.recyclePrice} / ${variantAfter.recyclePrice}`,
+  );
+
+  // #655：服务端下发的是**展开后的变体行**（自带 prefix / suffix / 最终价），
+  // 客户端必须原样建表 —— 再乘一次倍率就会变成 4.2² 倍，这是最容易踩的回归
+  console.log("\n=== 装备变体行：数值是最终值，客户端不再乘倍率（#655） ===");
+  const variantRow = {
+    ...equipmentRow,
+    id: "cloth_1_p4s2",
+    sellPrice: 4321,
+    level: 12,
+    prefix: 4,
+    suffix: 2,
+    attributes: attributes(4321, 21, 420, 84),
+    updatedAt: 0,
+  };
+  snapshotApi.applyContentSnapshot(contentSnapshot({ equipments: [variantRow] }));
+  const directVariant = getItem("cloth_1_p4s2");
+  check(!!directVariant, "变体行能按 id 建进装备表", String(Boolean(directVariant)));
+  check(
+    directVariant.maxHp === 4321,
+    "变体 maxHp = 服务端行原值（不再 × 前后缀倍率）",
+    `${directVariant.maxHp}（若被再乘一次会变成 ${Math.round(4321 * rate)}）`,
+  );
+  check(
+    directVariant.physicalAttack[0] === 420 && directVariant.recyclePrice === 4321,
+    "变体攻击区间与回收价同样原样落地",
+    `${JSON.stringify(directVariant.physicalAttack)} / ${directVariant.recyclePrice}`,
+  );
+  check(
+    directVariant.prefix === 4 && directVariant.suffix === 2,
+    "前后缀序号取自服务端行（详情弹窗按它取品质文案与颜色）",
+    `${directVariant.prefix}/${directVariant.suffix}`,
   );
 
   console.log("\n=== 药品：整表重建 + 扁平四值还原成 effects（#603 第十域） ===");

@@ -242,23 +242,18 @@ function makeFrail(dbPath, monsterKey) {
   db.close();
 }
 
-/** 预先往临时库里插刷怪区（boss 201 与普通怪 1 各一区，击杀组用） */
+/**
+ * 往临时库里插刷怪区（boss 201 与普通怪 1 各一区，击杀组用）
+ *
+ * **必须在服务端启动之后调**：`bootstrapConfigSnapshot()` 在空库首启时会把
+ * `map_spawn_areas` 整表替换成出厂快照（地图 1 是「赤焰斗鸡 ×12」，没有 boss），
+ * 启动前插进去的行一个都留不下 —— 于是 `killByKey("201")` 永远等不到那只怪。
+ * 先 DELETE 掉地图 1 的出厂区，再插这一套要的两行。
+ */
 function seedSpawnAreas(dbPath) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        map_id      TEXT    NOT NULL,
-        name        TEXT    NOT NULL,
-        monster_key TEXT    NOT NULL,
-        min         INTEGER NOT NULL DEFAULT 0,
-        max         INTEGER NOT NULL DEFAULT 0,
-        cx          REAL    NOT NULL,
-        cy          REAL    NOT NULL,
-        w           REAL    NOT NULL,
-        h           REAL    NOT NULL,
-        updated_at  INTEGER NOT NULL DEFAULT 0
-      );`);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
   const insert = db.prepare(
     `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -316,12 +311,13 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-game-mail-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
   let serverChild = null;
   try {
     const { baseUrl } = server;
     serverChild = server.child;
+    // 出厂快照已把刷怪区灌好 —— 换成这一套要的两行（见 seedSpawnAreas 注释）
+    seedSpawnAreas(dbPath);
     // 击杀组要能一击打死（BOSS 本身几万血）；改库必须赶在 joinWorld 播种之前
     makeFrail(dbPath, "201");
     makeFrail(dbPath, "1");

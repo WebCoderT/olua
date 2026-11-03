@@ -1039,6 +1039,25 @@ export type UpdateEquipment = {
   attributes?: ConfigAttributes;
 };
 
+export type UpdateEquipmentVariant = {
+  /**
+   * 名称（基础名，不含前后缀文案；前后缀由客户端按下标拼）
+   */
+  label?: string;
+  /**
+   * 穿戴需求等级（≥ 1）
+   */
+  level?: number;
+  /**
+   * 回收价（≥ 0；货币 = 绑定元宝）
+   */
+  sellPrice?: number;
+  /**
+   * 八项属性（整份提交；不传则保留原值）
+   */
+  attributes?: ConfigAttributes;
+};
+
 export type UpdateEquipmentSlot = {
   /**
    * 槽位中文名（不传则不改；≤20 字）
@@ -1058,25 +1077,6 @@ export type UpdateEquipmentSlot = {
   order?: number;
 };
 
-export type EquipmentCurveSegment = {
-  /**
-   * 起始等级（含）
-   */
-  from: number;
-  /**
-   * 结束等级（含）
-   */
-  to: number;
-  /**
-   * 起始等级的值（绑定元宝）
-   */
-  start: number;
-  /**
-   * 该档内每升一级的增量
-   */
-  perLevel: number;
-};
-
 export type UpdateEquipmentMeta = {
   /**
    * 前缀倍率（整份替换；1~10 项，每项 > 0）
@@ -1094,10 +1094,6 @@ export type UpdateEquipmentMeta = {
    * 后缀文案（整份替换；必须与后缀倍率等长）
    */
   suffixLabels?: string[];
-  /**
-   * 回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）
-   */
-  recycleCurve?: EquipmentCurveSegment[];
 };
 
 export type EquipAlignPoint = {
@@ -1560,30 +1556,71 @@ export type UpdateMonsterDrop = {
   entries?: DropEntry[];
 };
 
-export type UpdateLevelExp = {
+export type UpdateRoleLevel = {
   /**
-   * 升到下一级所需经验（≥ 1，0 级经验永远升不上去）
+   * 升到下一级所需经验（≥ 1）
    */
   exp?: number;
-};
-
-export type UpdateGrowthSegment = {
   /**
-   * 起始等级（含，≥ 1）
+   * 生命上限（≥ 0）
    */
-  fromLevel: number;
+  maxHp?: number;
   /**
-   * 结束等级（含，≥ 起始等级）
+   * 魔法上限（≥ 0）
    */
-  toLevel: number;
+  maxMp?: number;
   /**
-   * 该段起始等级的值（≥ 0）
+   * 每秒回血（≥ 0）
    */
-  startValue: number;
+  hpRecover?: number;
   /**
-   * 段内每升一级的增量（≥ 0）
+   * 物攻下限（≥ 0）
    */
-  perLevel: number;
+  physicalAttackMin?: number;
+  /**
+   * 物攻上限（≥ 0）
+   */
+  physicalAttackMax?: number;
+  /**
+   * 魔攻下限（≥ 0）
+   */
+  magicAttackMin?: number;
+  /**
+   * 魔攻上限（≥ 0）
+   */
+  magicAttackMax?: number;
+  /**
+   * 道攻下限（≥ 0）
+   */
+  taoistAttackMin?: number;
+  /**
+   * 道攻上限（≥ 0）
+   */
+  taoistAttackMax?: number;
+  /**
+   * 物防下限（≥ 0）
+   */
+  physicalDefenseMin?: number;
+  /**
+   * 物防上限（≥ 0）
+   */
+  physicalDefenseMax?: number;
+  /**
+   * 魔防下限（≥ 0）
+   */
+  magicDefenseMin?: number;
+  /**
+   * 魔防上限（≥ 0）
+   */
+  magicDefenseMax?: number;
+  /**
+   * 道防下限（≥ 0）
+   */
+  taoistDefenseMin?: number;
+  /**
+   * 道防上限（≥ 0）
+   */
+  taoistDefenseMax?: number;
 };
 
 export type UpdateGrowthScalar = {
@@ -3226,7 +3263,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4020,22 +4057,58 @@ export type SoulQuery = {
   order?: "asc" | "desc";
 };
 
-export type LevelExp = {
+export type RoleLevel = {
   /**
    * 等级（1 起；序列固定，不可增删行）
    */
   level: number;
   /**
-   * 升到下一级所需经验
+   * 升到下一级所需经验（≥ 1）
    */
   exp: number;
   /**
+   * 生命上限（裸属性）
+   */
+  maxHp: number;
+  /**
+   * 魔法上限（裸属性）
+   */
+  maxMp: number;
+  /**
+   * 每秒回血（裸属性）
+   */
+  hpRecover: number;
+  /**
+   * 物攻区间
+   */
+  physicalAttack: ConfigAttributeRange;
+  /**
+   * 魔攻区间
+   */
+  magicAttack: ConfigAttributeRange;
+  /**
+   * 道攻区间
+   */
+  taoistAttack: ConfigAttributeRange;
+  /**
+   * 物防区间
+   */
+  physicalDefense: ConfigAttributeRange;
+  /**
+   * 魔防区间
+   */
+  magicDefense: ConfigAttributeRange;
+  /**
+   * 道防区间
+   */
+  taoistDefense: ConfigAttributeRange;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
 };
 
-export type LevelExpPage = {
+export type RoleLevelPage = {
   /**
    * 总条数
    */
@@ -4049,12 +4122,12 @@ export type LevelExpPage = {
    */
   size: number;
   /**
-   * 当前页的升级经验
+   * 当前页的角色等级
    */
-  list: LevelExp[];
+  list: RoleLevel[];
 };
 
-export type LevelExpQuery = {
+export type RoleLevelQuery = {
   /**
    * 页码，从 1 开始
    */
@@ -4064,7 +4137,7 @@ export type LevelExpQuery = {
    */
   size?: number;
   /**
-   * 关键字（不同接口含义见其说明）
+   * 关键字：按等级号模糊匹配
    */
   keyword?: string;
   /**
@@ -4075,83 +4148,6 @@ export type LevelExpQuery = {
    * 排序方向：asc 升序 / desc 降序
    */
   order?: "asc" | "desc";
-};
-
-export type GrowthSegment = {
-  /**
-   * 曲线键（maxHp / attack / defense / killsPerLevel）
-   */
-  curve: "maxHp" | "attack" | "defense" | "killsPerLevel";
-  /**
-   * 段序号（1 起；同曲线内不可增删段）
-   */
-  seq: number;
-  /**
-   * 起始等级（含）
-   */
-  fromLevel: number;
-  /**
-   * 结束等级（含）
-   */
-  toLevel: number;
-  /**
-   * 该段起始等级的值
-   */
-  startValue: number;
-  /**
-   * 段内每升一级的增量
-   */
-  perLevel: number;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type GrowthSegmentPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的曲线分段
-   */
-  list: GrowthSegment[];
-};
-
-export type GrowthSegmentQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字（不同接口含义见其说明）
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 按曲线键筛
-   */
-  curve?: "maxHp" | "attack" | "defense" | "killsPerLevel";
 };
 
 export type GrowthScalar = {
@@ -4539,7 +4535,7 @@ export type Equipment = {
    */
   outPositions: EquipmentPoint[];
   /**
-   * 八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）
+   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
    */
   attributes: ConfigAttributes;
   /**
@@ -4600,6 +4596,151 @@ export type EquipmentQuery = {
    * 等级段上限（含）
    */
   maxLevel?: number;
+};
+
+export type EquipmentVariant = {
+  /**
+   * 装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）
+   */
+  id: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   */
+  slot: string;
+  /**
+   * 穿戴需求等级（装备定强的锚点）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 名称（如「青铜重甲」；前后缀由客户端拼在名字前后）
+   */
+  label: string;
+  /**
+   * 描述（装备详情弹窗正文）
+   */
+  description: string;
+  /**
+   * 职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
+   */
+  occupation: string;
+  /**
+   * 性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）
+   */
+  sex: string;
+  /**
+   * 图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   */
+  icon: string;
+  /**
+   * 内观图集（角色弹窗里穿在身上的那套；resources 相对路径）
+   */
+  inAtlas: string;
+  /**
+   * 外观图集（场景里跟着角色走的那个；resources 相对路径）
+   */
+  outAtlas: string;
+  /**
+   * 标签（如「第一大陆」；详情弹窗展示，无逻辑含义）
+   */
+  tags: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY: number;
+  /**
+   * 内观旋转角度（度，0 = 不转）
+   */
+  inRotate: number;
+  /**
+   * 内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）
+   */
+  inPosX: number;
+  /**
+   * 内观锚点 y（弹窗坐标系，y 向上）
+   */
+  inPosY: number;
+  /**
+   * 外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发
+   */
+  outPositions: EquipmentPoint[];
+  /**
+   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 所属基础件 id（如 cloth_1）
+   */
+  baseId: string;
+  /**
+   * 前缀序号（0 = 普通的；文案与颜色按下标对齐，颜色留在客户端）
+   */
+  prefix: number;
+  /**
+   * 后缀序号（0 = 人级）
+   */
+  suffix: number;
+};
+
+export type EquipmentVariantPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的装备变体
+   */
+  list: EquipmentVariant[];
+};
+
+export type EquipmentVariantQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配变体 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只列某个基础件的 15 个变体（如 cloth_1）
+   */
+  baseId?: string;
 };
 
 export type Drug = {
@@ -5555,7 +5696,7 @@ export type MallPriceRemove = {
 
 export type Fashion = {
   /**
-   * 时装 id（seed 自 shared/fashion-seed.ts，如 "cloth_2"；序列固定，不可增删行）
+   * 时装 id（seed 自 config-sync.sql，如 "cloth_2"；序列固定，不可增删行）
    */
   id: string;
   /**
@@ -5793,7 +5934,7 @@ export type MonsterPresentation = {
    */
   moveSpeed: number;
   /**
-   * 是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）
+   * 是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）
    */
   aggressive: boolean;
   /**
@@ -5848,7 +5989,7 @@ export type Level = {
    */
   taoistDefense: ConfigAttributeRange;
   /**
-   * 升到下一级所需经验（level_exps 表的最终值）
+   * 升到下一级所需经验（`role_levels.exp` 的最终值）
    */
   exp: number;
 };
@@ -6048,10 +6189,6 @@ export type EquipmentMeta = {
    */
   suffixLabels: string[];
   /**
-   * 回收价曲线（分段线性）
-   */
-  recycleCurve: EquipmentCurveSegment[];
-  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -6071,9 +6208,9 @@ export type GameConfigSnapshot = {
    */
   ranks: Rank[];
   /**
-   * 装备基础件配置（555 件变体由客户端按前后缀倍率展开）
+   * 装备变体（555 件：37 基础件 × 5 前缀 × 3 后缀）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开
    */
-  equipments: Equipment[];
+  equipments: EquipmentVariant[];
   /**
    * 药品配置
    */
@@ -6099,7 +6236,7 @@ export type GameConfigSnapshot = {
    */
   fashions: Fashion[];
   /**
-   * 等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— 属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；客户端 levelMap 整表由这段填充，曲线与标量不再下发
+   * 等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— `role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发
    */
   levels: Level[];
   /**
@@ -6107,7 +6244,7 @@ export type GameConfigSnapshot = {
    */
   growthScalars: GrowthScalar[];
   /**
-   * 战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 shared/combat-seed.ts）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）
+   * 战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 config-sync.sql）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）
    */
   combatWeights: Record<string, number>;
   /**
@@ -7194,11 +7331,11 @@ export type MapSource = {
    */
   label: string;
   /**
-   * 来源类别：config 客户端配置 / snapshot 服务端生成快照 / db 服务端库表
+   * 来源类别：config 客户端资源 / db 服务端库表
    */
   origin: string;
   /**
-   * 具体文件或表名（config / snapshot 给路径，db 给表名）
+   * 具体文件路径（config）或表名（db）
    */
   ref: string;
   /**

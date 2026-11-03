@@ -77,9 +77,11 @@ const waitFor = async (label, predicate, timeoutMs = 15_000) => {
 };
 
 /**
- * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）。
- * 表先建好再插行，服务端启动时 CREATE TABLE IF NOT EXISTS 与空表 seed 都不会动它。
- * 第三行故意用不存在的怪物 key：验证播种对不认识的 key 跳过不炸。
+ * 把地图 1 的刷怪区换成这一套要的三行（#295：播种来源 = map_spawn_areas，客户端不再上报计划）。
+ *
+ * **必须在服务端就绪之后调用**：#655 起空库首启会用 `config-sync.sql` 把 32 张配置表整表灌一遍，
+ * 启动前写进来的行会被整表替换掉（那正是「出厂值只在库里」的代价）。灌完之后再把地图 1 换成本套的
+ * 小矩形，播种才是可控的两只。第三行故意用不存在的怪物 key：验证播种对不认识的 key 跳过不炸。
  */
 function seedSpawnAreas(dbPath) {
   const { DatabaseSync } = require("node:sqlite");
@@ -97,6 +99,7 @@ function seedSpawnAreas(dbPath) {
         h           REAL    NOT NULL,
         updated_at  INTEGER NOT NULL DEFAULT 0
       );`);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
   const insert = db.prepare(
     `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -223,9 +226,10 @@ function connect(url) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-world-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   let server = await startServer(dbPath);
   try {
+    // 启动时出厂快照已把 map_spawn_areas 整表灌好 —— 现在换成这一套要的三行（见 seedSpawnAreas 的注释）
+    seedSpawnAreas(dbPath);
     // 重启段会换新端口：baseUrl 必须 let，connectAs 闭包每次读当前值
     let { baseUrl } = server;
 

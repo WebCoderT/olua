@@ -336,6 +336,20 @@ export interface MapRow {
   combat: number;
   /** 进入所需战魂阶（0 = 无限制） */
   soul_of_war: number;
+  /** 横向格数（几何来自 TMX，运营不改） */
+  grid_cols: number;
+  /** 纵向格数 */
+  grid_rows: number;
+  /** 单格宽（像素） */
+  tile_width: number;
+  /** 单格高（像素） */
+  tile_height: number;
+  /** 地图像素宽（= grid_cols × tile_width） */
+  pixel_width: number;
+  /** 地图像素高（= grid_rows × tile_height） */
+  pixel_height: number;
+  /** 图层 + 对象组（JSON：`{ layers, groups }`，管理端详情页渲染它） */
+  content: string;
   /** 最后一个改它的管理员账号名（追账用；与 audit_logs 能对上） */
   updated_by: string;
   updated_at: number;
@@ -457,29 +471,41 @@ export interface SoulRow {
 
 //#region 成长曲线（#256）
 
-/** 等级经验一行（`level_exps` 表）：一行 = 一个等级升到下一级所需经验 */
+/**
+ * 角色等级一行（`role_levels` 表；#655）
+ *
+ * 一行 = 一个等级的**最终裸属性 + 升级经验**。曲线（`growth_segments`）已从运行时移除，
+ * 这 60 行随出厂快照灌进库，之后只由管理端逐行改 —— 运行时与快照都只读它。
+ */
+/**
+ * 升级经验（**不是一张表**：#655 起经验并进 `role_levels.exp`，这个形状只用来
+ * 在仓储与业务之间传「某一级要多少经验」三列，写法与其它 Row 保持一致）
+ */
 export interface LevelExpRow {
-  /** 等级（1 起；主键，不可增删行） */
   level: number;
-  /** 升到下一级所需经验（≥ 1；客户端升级判定读的就是它） */
   exp: number;
   updated_at: number;
 }
 
-/** 成长曲线分段一行（`growth_segments` 表）：一行 = 某条曲线的一个分段 */
-export interface GrowthSegmentRow {
-  /** 曲线键（configs/growth 的 roleGrowth 四条：maxHp / attack / defense / killsPerLevel） */
-  curve: string;
-  /** 段序号（1 起；同曲线内不可增删行，只许改内容） */
-  seq: number;
-  /** 起始等级（含） */
-  from_level: number;
-  /** 结束等级（含） */
-  to_level: number;
-  /** 该段起始等级的值 */
-  start_value: number;
-  /** 段内每升一级的增量 */
-  per_level: number;
+export interface RoleLevelRow {
+  level: number;
+  /** 升到下一级所需经验（原 level_exps.exp；主键同级一一对应） */
+  exp: number;
+  max_hp: number;
+  max_mp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
   updated_at: number;
 }
 
@@ -590,6 +616,45 @@ export interface EquipmentRow {
 }
 
 /**
+ * 装备变体一行（`equipment_variants` 表；#655）
+ *
+ * 一行 = 一件**具体可掉落 / 可穿戴**的装备（基础件 × 前后缀，37 × 15 = 555 行）。
+ * 以前是「基础件属性 × 前后缀倍率」在运行时现算，现在每一行都是独立配置：
+ * 属性、卖价、穿戴等级都可单独改，`equipments` 只留 37 个基础件当模板与名称来源。
+ */
+export interface EquipmentVariantRow {
+  /** 变体 id（基础件原 id，或 `cloth_1_p3s2`；主键 = 物品 id） */
+  id: string;
+  /** 基础件 id（`equipments.id`；用于按基础件筛变体 / 连带改名） */
+  base_id: string;
+  /** 前缀序号（0 = 普通；下标与品质文案、颜色对齐） */
+  prefix: number;
+  /** 后缀序号（0 = 人级） */
+  suffix: number;
+  /** 完整名称（已拼好，如「精良的青铜重甲」—— 消费方不必再拼） */
+  label: string;
+  /** 穿戴需求等级 */
+  level: number;
+  /** 回收价（货币 = 绑定元宝；一键回收按它结算） */
+  sell_price: number;
+  max_hp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
+/**
  * 装备槽位（#603 第九域）：13 行，主键是 EQUIPMENT_TYPE 的枚举值
  *
  * `sort_order` 同时是角色弹窗的槽位排列顺序与背包「一键整理」的部位序 ——
@@ -625,8 +690,6 @@ export interface EquipmentMetaRow {
   prefix_labels: string;
   /** 后缀文案 JSON（`["人级", "天级", "神级"]`） */
   suffix_labels: string;
-  /** 回收价曲线 JSON（`[{ from, to, start, perLevel }, …]`） */
-  recycle_curve: string;
   updated_at: number;
 }
 
@@ -788,7 +851,7 @@ export interface MallSettingsRow {
 /**
  * 客户端运行时参数（#605）：单行配置（id 恒为 1），三个分组各一列 JSON
  *
- * 列里存的是「运营改过的部分」，缺键回落到 `shared/runtime-seed.ts` 的出厂值 ——
+ * 列里存的是「运营改过的部分」，缺键回落到 `config-sync.sql` 的出厂值 ——
  * 这样加一个参数不用给存量库补列，也不用写迁移。
  */
 export interface RuntimeParamsRow {
@@ -800,13 +863,37 @@ export interface RuntimeParamsRow {
   auto_battle: string;
   /** 帮会规则门槛（`GuildRuleParams` 的 JSON；服务端校验读它） */
   guild_rules: string;
+  /** 怪物 AI 参数（`MonsterAiParams` 的 JSON；服务端权威 AI 每 tick 读它） */
+  monster_ai: string;
+  updated_at: number;
+}
+
+/**
+ * 怪物表现 / 资源（`monster_presentation` 表；#655）
+ *
+ * 一行 = 一只怪的图集路径 + 基准帧几何 + AI 视觉参数。数值在 `monsters`，这里只有
+ * 「长什么样、怎么动」—— 所以这张表**没有管理端写入口**，是资源侧生成物。
+ */
+export interface MonsterPresentationRow {
+  id: string;
+  icon: string;
+  out: string;
+  out_offset_x: number;
+  out_offset_y: number;
+  content_width: number;
+  content_height: number;
+  move_speed: number;
+  aggressive: number;
+  detect_range: number;
+  /** 动作名 → 速度倍率的 JSON（空对象 = 全用默认） */
+  speed_rate: string;
   updated_at: number;
 }
 
 /**
  * 战斗力权重（#605）：`combat_weights` 表的一行 = 一个属性
  *
- * 出厂值来自 `shared/combat-seed.ts`（`COMBAT_WEIGHTS_SEED`，生成物 `COMBAT_WEIGHTS` 的源头），
+ * 出厂值来自 `config-sync.sql`（`COMBAT_WEIGHTS_SEED`，生成物 `COMBAT_WEIGHTS` 的源头），
  * seed 幂等（INSERT OR IGNORE），后台只改 `weight`、不增删行。
  * 表里缺某个 key 时由 service 回落出厂值 —— 与运行时参数同一套「缺键回落」口径。
  */
@@ -822,7 +909,7 @@ export interface CombatWeightRow {
  * 新手引导步骤（#605）：`guide_settings` 单行表
  *
  * 整张步骤表存在 `steps` 一列 JSON 数组里（有序，数组顺序即体验顺序）。
- * 出厂值来自 `shared/guide-seed.ts`，缺行 / 坏 JSON 时 service 回落出厂值。
+ * 出厂值来自 `config-sync.sql`，缺行 / 坏 JSON 时 service 回落出厂值。
  */
 export interface GuideSettingsRow {
   /** 恒为 1（单行表） */
@@ -878,7 +965,7 @@ export interface MonsterDropRow {
 /**
  * 时装配置（#257）：管理端「时装配置」的行
  *
- * 主键是时装 id（shared/fashion-seed.ts，如 "cloth_2"）—— 清单固定，**不可增删行**。
+ * 主键是时装 id（config-sync.sql，如 "cloth_2"）—— 清单固定，**不可增删行**。
  * 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS（属性当前全 0），
  * 运营可改；`icon` / `in_res` / `out_res` 是客户端资源路径（表现层），后台不改。
  * `acquire_channel` 的取值域复用称号的 AcquireChannel（见 common/constants/game-config，

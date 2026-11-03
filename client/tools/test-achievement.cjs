@@ -22,7 +22,9 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, compileServerShared, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+/** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql） */
+const factory = require("./lib/factory-data.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 /** PROJECT_ROOT 是 client/，服务端与根目录要往上走一层 */
@@ -37,7 +39,6 @@ const SERVER_ACHIEVEMENT_REPO = "server/src/database/repositories/role-achieveme
 const SERVER_CONFIG = "server/src/modules/game-config/game-config.service.ts";
 const SERVER_ADMIN_CONTROLLER = "server/src/modules/game-config/admin-achievement.controller.ts";
 const SERVER_BIZ_CODE = "server/src/common/constants/biz-code.ts";
-const SERVER_GENERATED = "server/src/shared/game-data.generated.ts";
 
 const CLIENT_CONFIG = "assets/configs/achievement.ts";
 const CLIENT_STORE = "assets/ui/core/AchievementStore.ts";
@@ -49,30 +50,34 @@ const CLIENT_GAME = "assets/ui/Game.ts";
 /** 数一个字符串出现次数 */
 const count = (source, needle) => source.split(needle).length - 1;
 
-/** 抽一段生成物里某张表的 key（形状：`  "key": {…},`） */
-function snapshotKeys(source, exportName) {
-  const head = source.indexOf(`export const ${exportName}`);
-  if (head < 0) return [];
-  const tail = source.indexOf("\n};", head);
-  const body = source.slice(head, tail < 0 ? source.length : tail);
-  return Array.from(body.matchAll(/^ {2}"([^"]+)": /gm)).map((match) => match[1]);
-}
-
 try {
   // achievement.ts 只用 cc 的 Color/Size/Vec2，沙箱里真跑；
-  // #603 起成就数据的唯一书写处是服务端种子，直接编译真文件（客户端已无这份数据）
+  // #655 起成就数据的唯一来源是配置快照（客户端已无这份数据）
   const outDir = prepare("olua-achievement", ["configs/achievement.ts"]);
   const config = require(path.join(outDir, "configs/achievement.js"));
 
   const { achievementCategories, achievementDialogLayout: layout, achievementTexts: texts } = config;
-  const { ACHIEVEMENT_SEED_ROWS: achievementData } = require(compileServerShared("achievement-seed.ts", "olua-achievement-seed"));
 
-  const generated = readRepo(SERVER_GENERATED);
-  // #588 起生成物没有 MONSTERS 了：怪物 key 的唯一来源是服务端种子（编译真文件取，不复刻解析）
-  const { MONSTER_SEED_ROWS } = require(compileServerShared("monster-seed.ts", "olua-monster-seed-ach"));
-  const monsterKeys = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
-  const itemKeys = new Set(snapshotKeys(generated, "ITEM_LABELS"));
-  const achievementKeys = snapshotKeys(generated, "ACHIEVEMENTS");
+  // 库里的成就是平铺列（condition_type / reward_gold …），与 GET /game-config 的 DTO 同形
+  const achievementData = factory.achievements().map((row) => ({
+    id: row.id,
+    category: row.category,
+    label: row.label,
+    description: row.description,
+    hidden: row.hidden,
+    order: row.sortOrder,
+    condition: { type: row.conditionType, target: row.conditionTarget, count: row.conditionCount },
+    rewards: { gold: row.rewardGold, exp: row.rewardExp, items: row.rewardItems ?? [] },
+  }));
+
+  const monsterKeys = new Set(factory.monsters().map((row) => String(row.id)));
+  // 「物品」在成就里是通称：材料 / 药品 / 装备变体都可能被收藏或当奖励
+  const itemKeys = new Set([
+    ...factory.items().map((row) => row.id),
+    ...factory.drugs().map((row) => row.id),
+    ...factory.equipmentVariants().map((row) => row.id),
+  ]);
+  const achievementKeys = factory.achievements().map((row) => row.id);
 
   //#region A. 配置表
 

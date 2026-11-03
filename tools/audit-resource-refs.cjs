@@ -28,11 +28,11 @@
  *      backgrounds/sfx_* 目录里必须有同名 plist（<name>/<name>.plist）。
  *      #542 起图集与散帧目录同路径（atlas 夹层已移除）；AnimationHelper 的口径是
  *      「图集优先、散帧兜底」，两者全缺 = 该外观整片空白。
- *   4. 服务端快照核对（管理端 / DB 数据层）：configs → gen-shared-data → 快照 →
- *      DB seed 是管理端数据的来路；快照里带资源路径的字段（FASHIONS 的 icon/in/out、
- *      怪物表现清单 monster-presentation.generated 的 out 路径，#588 起怪物资源
- *      不进快照生成物）必须同样命中磁盘——客户端 configs 被上面三层守住，
- *      这一层守服务端与管理端口径，资源换版时管理端数据不会悄悄断链。
+ *   4. 服务端快照核对（管理端 / DB 数据层）：#655 起数据只在库里，仓库里那份是
+ *      `make config-export` 的投影（server/data/config-sync.sql）。表里带资源路径的
+ *      字段（titles.animation、fashions 的 icon/in_res/out_res、monster_presentation.out）
+ *      必须同样命中磁盘——客户端 configs 被上面三层守住，这一层守库 / 管理端口径，
+ *      资源换版时管理端数据不会悄悄断链。
  *
  * 不查什么：resources 里存在但代码没引用的素材（噪音大，增删素材不等于要改代码）；
  * manifest 与磁盘的一致性（那是 client/tools/resources_sync.py verify 的职责，单一来源）；
@@ -44,6 +44,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+
+const { readRows, readSnapshotText } = require("./lib/snapshot-sql.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const RES_ROOT = path.join(ROOT, "client", "assets", "resources");
@@ -197,14 +199,22 @@ for (const [value, sources] of refs) {
 
 //#region 2. 展开型引用（模板串的取值在数据表数值字段里）
 
-/** 称号：id 唯一书写处 = 服务端 title-seed 的 TITLE_SOURCE_ROWS（#590 起客户端 title.ts 不再有数据）→ titles/sfx_<id> 目录 */
-const titleSource = stripComments(fs.readFileSync(path.join(ROOT, "server/src/shared/title-seed.ts"), "utf8"));
-const titleIds = [...titleSource.matchAll(/\{\s*id:\s*(\d+),\s*factor:/g)].map((m) => Number(m[1]));
-if (!titleIds.length) failures.push("展开核对：title-seed.ts 里解析不出称号 id（写法变了？）");
-for (const id of titleIds) {
-  const dir = `titles/sfx_${id}`;
+/** 称号：外观目录唯一书写处 = `titles` 表的 `animation` 列（#590 起客户端 title.ts 不再有数据，
+ *  #655 起连服务端种子也没有 —— 行在库里）→ `titles/sfx_<id>` 目录 */
+const snapshotText = readSnapshotText();
+const snapshotRows = snapshotText
+  ? {
+      titles: readRows(snapshotText, "titles"),
+      fashions: readRows(snapshotText, "fashions"),
+      presentations: readRows(snapshotText, "monster_presentation"),
+    }
+  : null;
+if (!snapshotRows) failures.push(`展开核对：找不到配置快照 server/data/config-sync.sql（跑一次 make config-export）`);
+const titleDirs = (snapshotRows?.titles ?? []).map((row) => String(row.animation ?? "")).filter(Boolean);
+if (!titleDirs.length) failures.push("展开核对：快照里解析不出称号外观目录（titles.animation 全空？）");
+for (const dir of titleDirs) {
   if (dirExists(dir)) passed += 1;
-  else failures.push(`称号外观断链：${dir}（configs/title.ts id=${id}）`);
+  else failures.push(`称号外观断链：${dir}（titles.animation）`);
 }
 
 /** 详情背景：background.ts 的 detailBackgroundSerials 数组体（编号常多个同行）→ 散帧目录或图集 */
@@ -282,72 +292,52 @@ for (const [tree, dirPattern] of [["npc", /^npc_\w+$/], ["backgrounds", /^sfx_\w
 
 //#region 4. 服务端快照核对（管理端 / DB 数据层的资源路径）
 
-// 管理端与 DB 的数据链路：configs → gen-shared-data → 快照（server/src/shared/game-data.generated.ts）
-// → DB fashions 等 seed（INSERT OR IGNORE）。快照里带资源路径的字段必须与新资源磁盘一致，
-// 否则资源换版时管理端数据会悄悄断链（客户端 configs 已被上面 1~3 层守住，这一层守服务端口径）。
+// 管理端与 DB 的数据链路：#655 起 data 只在库里，仓库里那份是 `make config-export` 的投影。
+// 表里带资源路径的字段必须与磁盘素材一致，否则资源换版时管理端数据会悄悄断链
+// （客户端 configs 已被上面 1~3 层守住，这一层守服务端 / 库的口径）。
 
-const SNAPSHOT_FILE = path.join(ROOT, "server", "src", "shared", "game-data.generated.ts");
-if (fs.existsSync(SNAPSHOT_FILE)) {
-  const snapshot = fs.readFileSync(SNAPSHOT_FILE, "utf8");
-
-  /** 抓 `export const NAME: Record<string, unknown> = {...};` 字面量（生成物是紧凑 JSON + 尾逗号） */
-  function grabRecord(name) {
-    const matched = new RegExp(`export const ${name}: Record<string, unknown> = (\\{[\\s\\S]*?\\n\\});`).exec(snapshot);
-    if (!matched) return null;
-    return JSON.parse(matched[1].replace(/,(\s*[}\]])/g, "$1"));
-  }
-
-  const fashions = grabRecord("FASHIONS");
-  if (fashions) {
-    for (const [id, row] of Object.entries(fashions)) {
-      for (const field of ["icon", "in", "out"]) {
-        const value = row[field];
-        if (!value) continue;
-        if (resourceExists(value)) {
-          passed += 1;
-        } else {
-          failures.push(`快照时装断链：FASHIONS.${id}.${field} = ${value}（DB fashions seed 同源，管理端时装页会引用）`);
-        }
-      }
+for (const row of snapshotRows?.fashions ?? []) {
+  for (const field of ["icon", "in_res", "out_res"]) {
+    const value = String(row[field] ?? "");
+    if (!value) continue;
+    if (resourceExists(value)) {
+      passed += 1;
+    } else {
+      failures.push(`库内时装断链：fashions.${row.id}.${field} = ${value}（管理端时装页会引用）`);
     }
   }
+}
 
-  // #588 起怪物资源表现（icon/out/几何）住在独立生成物里，不在快照生成物中 ——
-  // 每行的 out 直接内嵌 key（`out: "monster/out/<id>"`），从它取 key 逐一核对磁盘。
-  // 清单存在但一条都解析不出来 = 生成物形状变了，必须报红而不是静默跳过。
-  const MONSTER_PRESENTATION_FILE = path.join(ROOT, "server", "src", "shared", "monster-presentation.generated.ts");
-  if (fs.existsSync(MONSTER_PRESENTATION_FILE)) {
-    const presentation = fs.readFileSync(MONSTER_PRESENTATION_FILE, "utf8");
-    const monsterKeys = Array.from(presentation.matchAll(/out: "monster\/out\/([^"]+)"/g), (m) => m[1]);
-    if (monsterKeys.length === 0) {
-      failures.push(`怪物表现清单解析不到任何 out 路径（monster-presentation.generated.ts 形状变了？）`);
-    }
-    for (const key of monsterKeys) {
-      // 怪物外观：monster/out/<key> 目录里的图集 plist（#542 起图集就在目录里，
-      // plist 在动作子目录中，任意深度命中即算有图集）或散帧
-      if (dirExists(`monster/out/${key}`)) {
-        const hasPlist = [...diskFiles].some(
-          (p) => p.startsWith(`monster/out/${key.toLowerCase()}/`) && p.endsWith(".plist"),
-        );
-        const hasLoose = [...diskFiles].some(
-          (p) => p.startsWith(`monster/out/${key.toLowerCase()}/`) && EXTS.has(path.extname(p).slice(1)),
-        );
-        if (hasLoose || hasPlist) {
-          passed += 1;
-          continue;
-        }
-      }
-      failures.push(`怪物表现断链：monster/out key=${key}（monster/out 无内容，客户端按 key 拼外观路径）`);
+// 怪物资源表现（icon / out / 几何）在 `monster_presentation` 表：
+// 每行的 out 直接内嵌 key（`monster/out/<id>`），从它取 key 逐一核对磁盘。
+// 表里有行但一条 out 都解析不出来 = 数据不全，必须报红而不是静默跳过。
+const monsterRows = snapshotRows?.presentations ?? [];
+if (monsterRows.length === 0) {
+  failures.push("快照里 monster_presentation 一行都没有（怪物外观无从核对）");
+}
+for (const row of monsterRows) {
+  const out = String(row.out ?? "");
+  if (!out) continue;
+  // 怪物外观：monster/out/<key> 目录里的图集 plist（#542 起图集就在目录里，
+  // plist 在动作子目录中，任意深度命中即算有图集）或散帧
+  if (dirExists(out)) {
+    const prefix = `${out.toLowerCase()}/`;
+    const hasPlist = [...diskFiles].some((p) => p.startsWith(prefix) && p.endsWith(".plist"));
+    const hasLoose = [...diskFiles].some((p) => p.startsWith(prefix) && EXTS.has(path.extname(p).slice(1)));
+    if (hasLoose || hasPlist) {
+      passed += 1;
+      continue;
     }
   }
+  failures.push(`怪物表现断链：${out}（monster_presentation.id=${row.id}，客户端按 out 拼外观路径）`);
 }
 
 //#endregion
 
 //#region 汇总
 
-const auditCount = refs.size + titleIds.length + bgSerials.length + lightSerials.length;
-console.log(`扫描 ${SCAN_DIRS.length} 个源码目录：静态引用 ${refs.size} · 称号 ${titleIds.length} · 详情背景 ${bgSerials.length} · 光柱 ${lightSerials.length}，加磁盘结构核对共 ${passed} 处命中`);
+const auditCount = refs.size + titleDirs.length + bgSerials.length + lightSerials.length;
+console.log(`扫描 ${SCAN_DIRS.length} 个源码目录：静态引用 ${refs.size} · 称号 ${titleDirs.length} · 详情背景 ${bgSerials.length} · 光柱 ${lightSerials.length}，加磁盘结构核对共 ${passed} 处命中`);
 
 if (failures.length === 0) {
   console.log(`\n✔ 资源引用与磁盘素材一致（核对 ${passed} 处）`);

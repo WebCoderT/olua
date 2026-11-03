@@ -1,291 +1,130 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatTime, growthScalarsApi, growthSegmentsApi, levelExpsApi, PERMISSION } from "../api";
-import type { GrowthScalar, GrowthSegment, LevelExp, PageResult } from "../api";
+import { formatTime, growthScalarsApi, PERMISSION } from "../api";
+import type { GrowthScalar, PageResult } from "../api";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
-import { Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
+import { Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastError, toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
-/** 曲线键 → 中文名（展示用；键清单以服务端 seed 的为准，未登记的原样显示键名） */
-const CURVE_LABELS: Record<string, string> = {
-  maxHp: "生命曲线",
-  attack: "攻击曲线",
-  defense: "防御曲线",
-  killsPerLevel: "升级节奏曲线",
+/** 参数键 → 中文名（说明在行里由服务端给，这里只补一个短名，未登记的原样显示键名） */
+const SCALAR_LABELS: Record<string, string> = {
+  roleMaxLevel: "角色等级上限",
+  "expGain.expPerLevel": "每级经验基数",
+  "expGain.maxLevelGap": "等级差经验衰减",
+  mpRecoverPerSecond: "每秒自然回蓝",
 };
 
-/** 曲线下拉选项的顺序（展示用，不在清单里的键排在最后） */
-const CURVE_ORDER = ["maxHp", "attack", "defense", "killsPerLevel"];
-
-/** 军衔映射基准的提示：改曲线 / 标量都会连锁影响军衔等效强度（#250 的映射基准在这里） */
-const RANK_IMPACT_HINT = "保存会影响军衔等效强度：军衔属性按阶映射角色等级再打折，曲线一动全线跟着变。";
-
 /**
- * 成长曲线管理（#256）
+ * 成长参数（#256 / #655）
  *
- * 三块数据都**只可编辑、不可增删**（行的形状由客户端 configs/growth 定义，服务端 seed 固定）：
- * - 升级经验表：每级升到下一级所需经验；
- * - 曲线分段：四条分段线性曲线的段（段间必须首尾相接，服务端做连续性校验）；
- * - 标量参数：等级上限 / 属性区间倍率 / 经验节奏。
+ * **只剩标量参数**：升级经验与每级属性已经搬到「角色等级」页（`role_levels`，60 行逐条），
+ * 曲线分段随曲线一起下架 —— 原来这一页能改「10 级这段曲线的斜率」，
+ * 改一个数会带动整段等级，出问题要逐级对着表看才知道哪级跳了；现在改哪级就是哪级。
  *
- * 写操作要 `gameConfig:write`，只读观察员能看不能改。
+ * 留在这里的都是**全局参数**：等级上限、经验节奏、自然回蓝 ——
+ * 它们的语义本来就是「全线一个数」，没有逐级版本。
  */
 export function GrowthPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
+  const [keyword, setKeyword] = useState("");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(20);
+  const [data, setData] = useState<PageResult<GrowthScalar> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<GrowthScalar | null>(null);
 
-  // —— 升级经验 ——
-  const [expPage, setExpPage] = useState(1);
-  const [expSize, setExpSize] = useState(20);
-  const [exps, setExps] = useState<PageResult<LevelExp> | null>(null);
-  const [expLoading, setExpLoading] = useState(true);
-  const [expEditing, setExpEditing] = useState<LevelExp | null>(null);
-
-  // —— 曲线分段 ——
-  const [segCurve, setSegCurve] = useState("");
-  const [segPage, setSegPage] = useState(1);
-  const [segSize, setSegSize] = useState(20);
-  const [segments, setSegments] = useState<PageResult<GrowthSegment> | null>(null);
-  const [segLoading, setSegLoading] = useState(true);
-  const [segEditing, setSegEditing] = useState<GrowthSegment | null>(null);
-
-  // —— 标量参数 ——
-  const [scalarKeyword, setScalarKeyword] = useState("");
-  const [scalarPage, setScalarPage] = useState(1);
-  const [scalarSize, setScalarSize] = useState(20);
-  const [scalars, setScalars] = useState<PageResult<GrowthScalar> | null>(null);
-  const [scalarLoading, setScalarLoading] = useState(true);
-  const [scalarEditing, setScalarEditing] = useState<GrowthScalar | null>(null);
-
-  const loadExps = useCallback(async () => {
-    setExpLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      setExps(await levelExpsApi.list({ page: expPage, size: expSize }));
+      setData(await growthScalarsApi.list({ page, size, keyword: query || undefined }));
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
-      setExpLoading(false);
+      setLoading(false);
     }
-  }, [expPage, expSize]);
-
-  const loadSegments = useCallback(async () => {
-    setSegLoading(true);
-    try {
-      setSegments(await growthSegmentsApi.list({ page: segPage, size: segSize, curve: (segCurve || undefined) as GrowthSegment["curve"] }));
-    } catch {
-      /* 错误已由请求层统一提示 */
-    } finally {
-      setSegLoading(false);
-    }
-  }, [segPage, segSize, segCurve]);
-
-  const loadScalars = useCallback(async () => {
-    setScalarLoading(true);
-    try {
-      setScalars(await growthScalarsApi.list({ page: scalarPage, size: scalarSize, keyword: scalarKeyword || undefined }));
-    } catch {
-      /* 错误已由请求层统一提示 */
-    } finally {
-      setScalarLoading(false);
-    }
-  }, [scalarPage, scalarSize, scalarKeyword]);
+  }, [page, size, query]);
 
   useEffect(() => {
-    void loadExps();
-  }, [loadExps]);
-  useEffect(() => {
-    void loadSegments();
-  }, [loadSegments]);
-  useEffect(() => {
-    void loadScalars();
-  }, [loadScalars]);
+    void load();
+  }, [load]);
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        title="成长曲线"
-        description={<>升级经验、角色裸属性曲线与经验节奏收口到后台（#256）。三类数据都只可编辑、不可新增 / 删除；
-            改曲线会连锁影响军衔等效强度（军衔按阶映射角色等级再打折）与怪物数值。</>}
+        title="成长参数"
+        description={
+          <>
+            全局数值参数（等级上限 / 区间比例 / 经验节奏 / 回蓝）。每级的具体数值在「角色等级」页逐行配置 —— 曲线已下架。
+          </>
+        }
       />
 
-      <Card
-        title="升级经验表"
-        description="每行是「升到下一级所需经验」；改经验即改升级节奏。"
-        actions={expLoading ? <Spinner /> : null}
-      >
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead className={theadClass}>
-              <tr>
-                <th className={thClass}>等级</th>
-                <th className={thClass}>升到下一级所需经验</th>
-                <th className={thClass}>更新时间</th>
-                <th className={`${thClass} text-right`}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {exps?.list.map((item) => (
-                <tr key={item.level} className="transition hover:bg-slate-800/30">
-                  <td className={tdClass}>{item.level}</td>
-                  <td className={tdClass}>{item.exp.toLocaleString()}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
-                  <td className={`${tdClass} text-right`}>
-                    <Button
-                      variant="outline"
-                      className="px-2.5 py-1 text-xs"
-                      disabled={!canWrite}
-                      onClick={() => setExpEditing(item)}
-                    >
-                      编辑
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!expLoading && exps && exps.list.length === 0 ? <EmptyState title="没有数据" /> : null}
-        <Pagination
-          page={expPage}
-          size={expSize}
-          total={exps?.total ?? 0}
-          onChange={setExpPage}
-          onSizeChange={(next) => {
-            setExpSize(next);
-            setExpPage(1);
-          }}
-        />
-      </Card>
-
-      <Card
-        title="曲线分段"
-        description="分段线性曲线：段间首尾相接、连续覆盖 1..等级上限（服务端做连续性校验，改坏了整单拒收）。"
-        actions={segLoading ? <Spinner /> : null}
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="w-44">
-            <Select
-              value={segCurve}
-              onChange={(event) => {
-                setSegCurve(event.target.value);
-                setSegPage(1);
-              }}
-            >
-              <option value="">全部曲线</option>
-              {CURVE_ORDER.filter((key) => key in CURVE_LABELS).map((key) => (
-                <option key={key} value={key}>
-                  {CURVE_LABELS[key]}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead className={theadClass}>
-              <tr>
-                <th className={thClass}>曲线</th>
-                <th className={thClass}>段</th>
-                <th className={thClass}>等级范围</th>
-                <th className={thClass}>起始值</th>
-                <th className={thClass}>每级增量</th>
-                <th className={thClass}>更新时间</th>
-                <th className={`${thClass} text-right`}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {segments?.list.map((item) => (
-                <tr key={`${item.curve}-${item.seq}`} className="transition hover:bg-slate-800/30">
-                  <td className={tdClass}>{CURVE_LABELS[item.curve] ?? item.curve}</td>
-                  <td className={tdClass}>第 {item.seq} 段</td>
-                  <td className={tdClass}>
-                    {item.fromLevel} ~ {item.toLevel}
-                  </td>
-                  <td className={tdClass}>{item.startValue.toLocaleString()}</td>
-                  <td className={tdClass}>{item.perLevel.toLocaleString()}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
-                  <td className={`${tdClass} text-right`}>
-                    <Button
-                      variant="outline"
-                      className="px-2.5 py-1 text-xs"
-                      disabled={!canWrite}
-                      onClick={() => setSegEditing(item)}
-                    >
-                      编辑
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!segLoading && segments && segments.list.length === 0 ? <EmptyState title="没有匹配的分段" /> : null}
-        <Pagination
-          page={segPage}
-          size={segSize}
-          total={segments?.total ?? 0}
-          onChange={setSegPage}
-          onSizeChange={(next) => {
-            setSegSize(next);
-            setSegPage(1);
-          }}
-        />
-      </Card>
-
-      <Card
-        title="标量参数"
-        description="等级上限 / 属性区间倍率 / 经验节奏等数值参数；每个键的语义见说明列。"
-        actions={scalarLoading ? <Spinner /> : null}
-      >
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+      <Card>
+        <div className="flex flex-wrap items-end gap-2">
           <Field width="w-56" label="参数键 / 说明">
-              <Input
-                value={scalarKeyword}
-                placeholder="支持模糊匹配"
-                onChange={(event) => setScalarKeyword(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    setScalarPage(1);
-                    void loadScalars();
-                  }
-                }}
-              />
-            </Field>
+            <Input
+              value={keyword}
+              placeholder="支持模糊匹配"
+              onChange={(event) => setKeyword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  setPage(1);
+                  setQuery(keyword.trim());
+                }
+              }}
+            />
+          </Field>
           <Button
             onClick={() => {
-              setScalarPage(1);
-              void loadScalars();
+              setPage(1);
+              setQuery(keyword.trim());
             }}
           >
             查询
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setKeyword("");
+              setPage(1);
+              setQuery("");
+            }}
+          >
+            重置
+          </Button>
         </div>
+      </Card>
+
+      <Card
+        title="参数列表"
+        actions={loading ? <Spinner /> : null}
+        description={canWrite ? undefined : "当前角色没有「修改养成配置」权限，列表只读。"}
+      >
         <div className="overflow-x-auto">
           <table className={tableClass}>
             <thead className={theadClass}>
               <tr>
-                <th className={thClass}>参数键</th>
+                <th className={thClass}>参数</th>
+                <th className={thClass}>键</th>
+                <th className={thClass}>当前值</th>
                 <th className={thClass}>说明</th>
-                <th className={thClass}>值</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
             </thead>
             <tbody>
-              {scalars?.list.map((item) => (
-                <tr key={item.key} className="transition hover:bg-slate-800/30">
-                  <td className={`${tdClass} font-mono text-xs`}>{item.key}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{item.description}</td>
-                  <td className={tdClass}>{item.value}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+              {data?.list.map((row) => (
+                <tr key={row.key} className="transition hover:bg-slate-800/30">
+                  <td className={`${tdClass} font-medium text-slate-100`}>{SCALAR_LABELS[row.key] ?? row.key}</td>
+                  <td className={`${tdClass} font-mono text-xs text-slate-400`}>{row.key}</td>
+                  <td className={tdClass}>{row.value}</td>
+                  <td className={`${tdClass} text-xs text-slate-400`}>{row.description}</td>
+                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(row.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
-                    <Button
-                      variant="outline"
-                      className="px-2.5 py-1 text-xs"
-                      disabled={!canWrite}
-                      onClick={() => setScalarEditing(item)}
-                    >
+                    <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => setEditing(row)}>
                       编辑
                     </Button>
                   </td>
@@ -294,141 +133,61 @@ export function GrowthPage() {
             </tbody>
           </table>
         </div>
-        {!scalarLoading && scalars && scalars.list.length === 0 ? <EmptyState title="没有匹配的参数" /> : null}
+
+        {!loading && data && data.list.length === 0 ? <EmptyState title="没有匹配的参数" /> : null}
+
         <Pagination
-          page={scalarPage}
-          size={scalarSize}
-          total={scalars?.total ?? 0}
-          onChange={setScalarPage}
+          page={page}
+          size={size}
+          total={data?.total ?? 0}
+          onChange={setPage}
           onSizeChange={(next) => {
-            setScalarSize(next);
-            setScalarPage(1);
+            setSize(next);
+            setPage(1);
           }}
         />
       </Card>
 
-      <NumberEditDialog
-        open={expEditing !== null}
-        title={`编辑 ${expEditing?.level ?? ""} 级升级经验`}
-        hint="经验 ≥ 1；升级节奏建议连同怪物经验产出一起评估。"
-        fields={[{ key: "exp", label: "升到下一级所需经验", integer: true, min: 1 }]}
-        initial={{ exp: expEditing?.exp ?? 0 }}
-        onClose={() => setExpEditing(null)}
-        onSubmit={async ({ exp }) => {
-          if (!expEditing) return false;
-          try {
-            await levelExpsApi.update(String(expEditing.level), { exp });
-            toastSuccess(`${expEditing.level} 级升级经验已更新`);
-            setExpEditing(null);
-            await loadExps();
-            return true;
-          } catch {
-            return false;
-          }
-        }}
-      />
-
-      <NumberEditDialog
-        open={segEditing !== null}
-        title={`编辑 ${CURVE_LABELS[segEditing?.curve ?? ""] ?? segEditing?.curve ?? ""} 第 ${segEditing?.seq ?? ""} 段`}
-        hint={RANK_IMPACT_HINT}
-        fields={[
-          { key: "fromLevel", label: "起始等级（含）", integer: true, min: 1 },
-          { key: "toLevel", label: "结束等级（含）", integer: true, min: 1 },
-          { key: "startValue", label: "该段起始等级的值", integer: true, min: 0 },
-          { key: "perLevel", label: "段内每升一级的增量", integer: true, min: 0 },
-        ]}
-        initial={{
-          fromLevel: segEditing?.fromLevel ?? 0,
-          toLevel: segEditing?.toLevel ?? 0,
-          startValue: segEditing?.startValue ?? 0,
-          perLevel: segEditing?.perLevel ?? 0,
-        }}
-        onClose={() => setSegEditing(null)}
-        onSubmit={async (value) => {
-          if (!segEditing) return false;
-          try {
-            await growthSegmentsApi.update(segEditing.curve, String(segEditing.seq), {
-              fromLevel: value.fromLevel,
-              toLevel: value.toLevel,
-              startValue: value.startValue,
-              perLevel: value.perLevel,
-            });
-            toastSuccess(`${CURVE_LABELS[segEditing.curve] ?? segEditing.curve} 第 ${segEditing.seq} 段已更新`);
-            setSegEditing(null);
-            await loadSegments();
-            return true;
-          } catch (error) {
-            toastError(error instanceof Error ? error.message : "保存失败");
-            return false;
-          }
-        }}
-      />
-
-      <NumberEditDialog
-        open={scalarEditing !== null}
-        title={`编辑参数 ${scalarEditing?.key ?? ""}`}
-        hint={RANK_IMPACT_HINT}
-        fields={[{ key: "value", label: "参数值", integer: Number.isInteger(scalarEditing?.value), min: 0 }]}
-        initial={{ value: scalarEditing?.value ?? 0 }}
-        onClose={() => setScalarEditing(null)}
-        onSubmit={async ({ value }) => {
-          if (!scalarEditing) return false;
-          try {
-            await growthScalarsApi.update(scalarEditing.key, { value });
-            toastSuccess(`参数 ${scalarEditing.key} 已更新`);
-            setScalarEditing(null);
-            await loadScalars();
-            return true;
-          } catch {
-            return false;
-          }
-        }}
-      />
+      {editing ? (
+        <ScalarDialog
+          row={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-/** 数值字段描述（弹窗按它渲染输入行；integer 决定步进与小数校验交给服务端兜底） */
-interface NumberFieldSpec {
-  key: string;
-  label: string;
-  integer: boolean;
-  min: number;
-}
-
 /**
- * 数值编辑弹窗（本页三块数据共用）
+ * 改一个标量参数
  *
- * 受控开合；每次打开按 initial 重建表单（useEffect([open])），编辑另一条不残留。
- * 提交回调返回 true 才由弹窗关闭；失败就地展示服务端文案（跨行校验的报错都在服务端）。
+ * 只有 `value` 可改（键是接口契约、说明在服务端字典里）。取值域由服务端 DTO 校验，
+ * 前端只拦「空 / 非数字」—— 两处都写一遍范围，改口径时会漏掉一边。
  */
-function NumberEditDialog(props: {
-  open: boolean;
-  title: string;
-  hint?: string;
-  fields: NumberFieldSpec[];
-  initial: Record<string, number>;
-  onClose: () => void;
-  onSubmit: (value: Record<string, number>) => Promise<boolean>;
-}) {
-  const { open, title, hint, fields, initial, onClose, onSubmit } = props;
-  const [value, setValue] = useState<Record<string, number>>(initial);
+function ScalarDialog({ row, onClose, onSaved }: { row: GrowthScalar; onClose: () => void; onSaved: () => void }) {
+  const [value, setValue] = useState(String(row.value));
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (open) setValue(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const parsed = Number(value.trim());
+  const valid = value.trim() !== "" && Number.isFinite(parsed);
 
-  if (!open) return null;
-
-  const submit = async () => {
+  const save = async () => {
+    if (!valid) {
+      toastError("请输入数字");
+      return;
+    }
     setSaving(true);
     try {
-      const ok = await onSubmit(value);
-      if (!ok) setSaving(false);
+      await growthScalarsApi.update(row.key, { value: parsed });
+      toastSuccess(`${SCALAR_LABELS[row.key] ?? row.key} 已改为 ${parsed}`);
+      onSaved();
     } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
       setSaving(false);
     }
   };
@@ -436,32 +195,24 @@ function NumberEditDialog(props: {
   return (
     <Modal
       open
-      title={title}
-      hint={hint}
-      size="md"
+      size="sm"
+      title={`编辑 ${SCALAR_LABELS[row.key] ?? row.key}`}
+      hint={row.description}
       onClose={onClose}
-      footer={<>
-        <Button variant="outline" disabled={saving} onClick={onClose}>
-          取消
-        </Button>
-        <Button disabled={saving} onClick={() => void submit()}>
-          {saving ? "保存中…" : "保存"}
-        </Button>
-      </>}
+      footer={
+        <>
+          <Button variant="outline" disabled={saving} onClick={onClose}>
+            取消
+          </Button>
+          <Button disabled={!valid || saving} loading={saving} onClick={() => void save()}>
+            保存
+          </Button>
+        </>
+      }
     >
-      <div className="flex flex-col gap-3">
-        {fields.map((field) => (
-          <Field key={field.key} label={field.label}>
-            <Input
-              type="number"
-              step={field.integer ? 1 : "any"}
-              min={field.min}
-              value={String(value[field.key] ?? "")}
-              onChange={(event) => setValue({ ...value, [field.key]: Number(event.target.value) })}
-            />
-          </Field>
-        ))}
-      </div>
+      <Field label="值">
+        <Input value={value} inputMode="decimal" onChange={(event) => setValue(event.target.value)} />
+      </Field>
     </Modal>
   );
 }

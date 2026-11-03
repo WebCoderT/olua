@@ -154,12 +154,12 @@ code-prune: ## 死代码扫描（ts-prune 三端；输出需人工复核，见 s
 	@echo "==> 死代码扫描（候选 ≠ 必删，逐条复核口径见技能文档）"
 	@cd server && $(NODE) node_modules/ts-prune/lib/index.js -p tsconfig.json --ignore "generated|node_modules" \
 		| grep -v "used in module" \
-		| grep -vE "game-data\.ts|shared/game-data\.generated\.ts|api/models\.ts|ApiModels\.ts|utils/net/Api\.ts" \
+		| grep -vE "api/models\.ts|ApiModels\.ts|utils/net/Api\.ts" \
 		| grep -vE "configs/(monster|skill-data)\.ts:.*default" \
 		| grep -vE "realtime/realtime\.protocol\.ts" \
 		| grep -v "rate-limit\.util\.ts.*remainingAttempts" \
 		|| true
-	@echo "  已过滤：共享快照 re-export、gen-api 双端生成物、Cocos 场景挂载类 default、"
+	@echo "  已过滤：gen-api 双端生成物、Cocos 场景挂载类 default、"
 	@echo "          协议帧 interface（契约文档）、remainingAttempts（e2e-guard 动态引用）"
 	@echo "  复核口径：候选还要对 e2e(.cjs 动态 require)、场景组件、模块内自用再查一遍"
 
@@ -199,7 +199,7 @@ client-test-one: ## 单跑一套客户端单测：make client-test-one T=test-ba
 	@echo "==> $(T)"
 	@$(NODE) client/tools/$(T).cjs
 
-client-gen-monster: ## 重写 configs/monster.ts（几何取自素材 .meta，保留手工字段）
+client-gen-monster: ## 重新测量怪物表现几何并写库（monster_presentation 的 content / offset / aggressive）
 	@echo "==> 重新生成怪物配置"
 	@$(NODE) client/tools/gen-monster-config.cjs
 	@echo "  改完务必跑：make client-test-one T=test-monster-config"
@@ -366,11 +366,6 @@ gen-api: ## 重新生成接口契约（openapi.json + 客户端与管理端生�
 	@$(NODE) tools/audit-api-generated.cjs > /dev/null && echo "  生成物一致性 ✓"
 	@echo "  下一步：管理端 make admin-build，客户端 make client-check（签名不一致会直接编译报错）"
 
-gen-shared-data: ## 重新生成公共游戏数据（战斗数值 + 名字，来源 = client/assets/configs）
-	@echo "==> 编译客户端纯配置 + 快照"
-	@$(NODE) tools/gen-shared-data.cjs
-	@$(NODE) tools/audit-shared-data.cjs > /dev/null && echo "  生成物一致性 ✓"
-
 # ==============================================================================
 #  管理端（admin/）
 # ==============================================================================
@@ -420,7 +415,7 @@ audit-click: ## 全屏模态是否两条路都拦住了点击穿透
 audit-deploy: ## Docker / compose / nginx 的跨文件接线是否对得上
 	@$(NODE) tools/audit-deploy.cjs
 
-audit-shared-data: ## 公共游戏数据是否与客户端 configs 逐字节一致 + 表齐全非空（数据漂移）+ 角色上限不超过选角站位
+audit-shared-data: ## 配置快照完整（表齐 / 每张非空 / 行数自洽）+ 枚举与客户端逐值一致 + 业务代码里没有第二份枚举 + 跨端常量对齐
 	@$(NODE) tools/audit-shared-data.cjs
 
 audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据源）是否与客户端 configs 逐字节一致 + 无展开变体 / 缺方向 / 缩成点

@@ -4,9 +4,16 @@ import { BizException } from "../../common/errors/biz.exception";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
-import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_OF, ITEM_TYPES } from "../../shared/game-data.generated";
-import { GROWTH_SCALARS, MP_RECOVER_PER_SECOND } from "../../shared/growth-seed";
-import { drugOf, equipmentLevelOf, itemBaseOf, sellPriceOf } from "../../shared/runtime-overrides";
+import {
+  drugOf,
+  equipmentLevelOf,
+  equipmentSlotOf,
+  growthScalarOf,
+  isEquipmentSlot,
+  itemBaseOf,
+  itemTypeOf,
+  sellPriceOf,
+} from "../../common/runtime-config-cache";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { FashionRepository } from "../../database/repositories/fashion.repository";
@@ -229,7 +236,7 @@ export class RolesService {
     // 装备槽位的脏数据（部位不符 / 同一件穿在多个槽位）必须在重算**之前**清掉：
     // 属性重算是遍历 `equipments` 的所有值累加的，不看键 —— 同一件算三遍就是三倍战力
     // （收权之前的老存档没经过这层校验，清理只打日志，不打扰玩家）
-    const cleanedWorn = sanitizeEquipments(readWornEquipments(data.equipments), (id) => this.equipmentSlotOf(id));
+    const cleanedWorn = sanitizeEquipments(readWornEquipments(data.equipments), (id) => equipmentSlotOf(id));
     if (cleanedWorn.dropped.length) {
       this.logger.warn(
         `角色 ${roleId} 的装备槽位有脏数据，已清理：` +
@@ -492,8 +499,9 @@ export class RolesService {
       throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法拾取");
     }
 
-    // 物品类型来自生成物总表：掉落表是管理端可改的数据，里面配上不存在的 id 要在这里拦下
-    const itemType: string | undefined = (ITEM_TYPES as Record<string, string>)[goodId];
+    // 物品类型来自三张配置表（装备变体 / 药品 / 材料）：掉落表是管理端可改的数据，
+    // 里面配上不存在的 id 要在这里拦下
+    const itemType = itemTypeOf(goodId);
     if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `掉落物品不存在：${goodId}`);
 
     const data = decodeStoredRoleData(existing.data);
@@ -708,7 +716,7 @@ export class RolesService {
     let grid: BagGrid = readBagGrid(data.bag);
     // 老存档的装备槽位可能是收权之前写进去的：顺手清掉「部位不符 / 同一件穿多格」的脏数据，
     // 否则属性重算会把它算进战力（见 sanitizeEquipments 的注释）
-    const cleaned = sanitizeEquipments(readWornEquipments(data.equipments), (id) => this.equipmentSlotOf(id));
+    const cleaned = sanitizeEquipments(readWornEquipments(data.equipments), (id) => equipmentSlotOf(id));
     if (cleaned.dropped.length) {
       this.logger.warn(
         `角色 ${roleId} 的装备槽位有脏数据，已清理：` +
@@ -722,7 +730,7 @@ export class RolesService {
       case "equip": {
         const cell = cellAt(grid, dto.row, dto.col);
         if (!cell) throw new BizException(BizCode.BAG_TARGET_INVALID, "这一格没有可以穿戴的装备");
-        const equipmentSlot = this.equipmentSlotOf(cell.id);
+        const equipmentSlot = equipmentSlotOf(cell.id);
         if (!equipmentSlot) throw new BizException(BizCode.BAG_EQUIP_REJECTED, "这件物品不是装备，无法穿戴");
         const required = equipmentLevelOf(cell.id);
         if (required === null) throw new BizException(BizCode.BAG_EQUIP_REJECTED, `认不出的装备：${cell.id}`);
@@ -736,7 +744,7 @@ export class RolesService {
       case "unequip": {
         if (!dto.slot) throw new BizException(BizCode.BAG_TARGET_INVALID, "缺少装备槽位");
         // 槽位名不在客户端那套清单里（改包塞了个 other99）→ 连脱都不用脱，直接拒绝
-        if (!(dto.slot in EQUIPMENT_SLOTS)) {
+        if (!isEquipmentSlot(dto.slot)) {
           throw new BizException(BizCode.BAG_TARGET_INVALID, `没有这个装备槽位：${dto.slot}`);
         }
         unequipSlot(grid, worn, dto.slot);
@@ -780,19 +788,6 @@ export class RolesService {
     };
     this.roles.replace(row);
     return BagOpResultDto.fromRow(row, account.online_role_id, dto.action, slot);
-  }
-
-  /**
-   * 物品 id → 装备槽位（不是装备返回 null）
-   *
-   * 槽位表来自生成物 `EQUIPMENT_SLOT_OF`（含前后缀变体，基础件与变体的部位必然一致），
-   * 所以这里不需要再解析变体 id。注意它**不含**运营改过的部位 —— 部位不参与结算，
-   * 管理端也改不了它（装备配置页只改等级与八项属性）。
-   */
-  private equipmentSlotOf(id: string): string | null {
-    if (!id) return null;
-    const slot = (EQUIPMENT_SLOT_OF as Record<string, string>)[id];
-    return typeof slot === "string" && slot ? slot : null;
   }
 
   /** 读存档背包网格的指定格子（网格不是数组 / 坐标越界 / 格子为空 → 同一个 20013 失败语义） */
@@ -1014,8 +1009,8 @@ export class RolesService {
   /**
    * 击杀经验入账（#316：经验的结算在服务端）
    *
-   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **level_exps 表**（#256
-   * 管理端可改，即时生效）判定升级、循环升到曲线封顶（`growth_scalars.roleMaxLevel`），
+   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **role_levels.exp**（#655
+   * 60 行逐级配好，管理端可改、即时生效）判定升级、循环升到 `growth_scalars.roleMaxLevel` 封顶，
    * `roles.level` 索引列与 revision 原子推进。
    *
    * @returns 入账后的角色状态（level / expNow / expNeed / leveledUp / revision）；
@@ -1103,7 +1098,7 @@ export class RolesService {
 
     // 2) 奖励物品：逐份入包（放不下 20012，此时还没落库）
     for (const item of rewards.items ?? []) {
-      const itemType: string | undefined = (ITEM_TYPES as Record<string, string>)[item.goodId];
+      const itemType = itemTypeOf(item.goodId);
       if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `奖励物品不存在：${item.goodId}`);
       this.placeGoodsIntoBag(data, item.goodId, itemType, Math.max(1, Math.floor(item.count)));
     }
@@ -1111,7 +1106,7 @@ export class RolesService {
     // 3) 金币（都在 data JSON 里，没有专用列）
     data.gold = Math.max(0, Math.floor(Number(data.gold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
 
-    // 4) 经验 + 升级（与 applyKillExp 同一算法：level_exps 表判定、循环升到曲线封顶）
+    // 4) 经验 + 升级（与 applyKillExp 同一算法：role_levels.exp 判定、循环升到等级上限）
     let level = Math.max(1, existing.level);
     let expNow = Math.max(0, Math.floor(Number(data.exp) || 0)) + Math.max(0, Math.floor(rewards.exp ?? 0));
     let leveledUp = false;
@@ -1201,7 +1196,7 @@ export class RolesService {
     return existing;
   }
 
-  /** 升到下一级所需经验（level_exps 表；升级路径与实时进程 roleUpdate 帧共用；曲线没铺到的等级回落 0） */
+  /** 升到下一级所需经验（`role_levels.exp`；升级路径与实时进程 roleUpdate 帧共用；表里没有那一级回落 0） */
   expNeedAt(level: number): number {
     return this.expNeedOf(level);
   }
@@ -1210,24 +1205,25 @@ export class RolesService {
     return Math.max(0, Math.floor(Number(this.growth.findLevelExp(level)?.exp) || 0));
   }
 
-  /** 等级上限（growth_scalars 表，管理端可改；读不到退回生成物 seed 值） */
+  /** 等级上限（growth_scalars 表，管理端可改；表里没有就按 1 级算，宁可卡住也不凭空放大） */
   private roleMaxLevel(): number {
     const fromDb = Number(this.growth.findScalar("roleMaxLevel")?.value);
     if (Number.isFinite(fromDb) && fromDb >= 1) return Math.floor(fromDb);
-    return Math.max(1, Math.floor(Number(GROWTH_SCALARS.roleMaxLevel) || 60));
+    const fromCache = growthScalarOf("roleMaxLevel");
+    return Math.max(1, Math.floor(fromCache ?? 1));
   }
 
   /**
    * 魔法自然回复速度（#605：从写死的常量改成 `growth_scalars` 表，管理端可改）
    *
    * 与等级上限同一读法：**每次结算现查库**（不在进程里缓存），所以管理端改完下一次写档
-   * 就按新速度走，不需要重启。读不到（老库没有这行 / 非数字）回落出厂值。
-   * 0 是合法值（关闭自然回蓝），只有负数才当配置拍错。
+   * 就按新速度走，不需要重启。读不到（老库没有这行 / 非数字）按 0 处理 —— 0 本来就是
+   * 合法值（关闭自然回蓝），所以「没配」与「关掉」在这个键上同义。
    */
   private mpRecoverPerSecond(): number {
     const fromDb = Number(this.growth.findScalar("mpRecoverPerSecond")?.value);
     if (Number.isFinite(fromDb) && fromDb >= 0) return fromDb;
-    return MP_RECOVER_PER_SECOND;
+    return growthScalarOf("mpRecoverPerSecond") ?? 0;
   }
 
   /**

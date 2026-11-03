@@ -23,8 +23,35 @@ const path = require("node:path");
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
-/** 价签唯一来源（服务端结算读的就是这份生成物） */
-const { SELL_PRICES } = require(path.join(SERVER_DIR, "dist", "shared", "game-data.generated.js"));
+/**
+ * 价签唯一来源：配置快照（`server/data/config-sync.sql`）
+ *
+ * #655 起不再有 `dist/shared/game-data.generated.js` —— 装备的回收价逐条落在
+ * `equipment_variants.sell_price`（那一行就是到账价），药品 / 材料在各自表的
+ * `sell_price` 上。这里按与服务端 `sellPriceOf()` 同一优先级拼成一张 id → 单价表，
+ * 断言「接口结算的单价 == 库里的列」。
+ */
+const snap = require("./lib/config-snapshot.cjs");
+const SELL_PRICES = {
+  ...Object.fromEntries(snap.rows("items").map((row) => [row.id, row.sellPrice])),
+  ...Object.fromEntries(snap.rows("drugs").map((row) => [row.id, row.sellPrice])),
+  ...Object.fromEntries(snap.rows("equipment_variants").map((row) => [row.id, row.sellPrice])),
+};
+
+/**
+ * 商城实付价（与 `MallService` 同口径：`mall_prices` 有行且非 null 用那一行的价，
+ * 否则用 `mall_settings.default_price`）
+ *
+ * 这里**不能假定「统一价」**：`cloth_1` 在快照里带着运营设的特殊价 1111，
+ * 按统一价算预算就会在「准备：从商城买一件 cloth_1」这一步买不起 —— 假红。
+ */
+const MALL_PRICES = Object.fromEntries(
+  snap
+    .rows("mall_prices")
+    .map((row) => [row.id, row.price === null || row.price === undefined ? null : Number(row.price)]),
+);
+const MALL_DEFAULT_PRICE = Number(snap.rows("mall_settings")[0]?.defaultPrice ?? 0);
+const mallPriceOf = (id) => MALL_PRICES[id] ?? MALL_DEFAULT_PRICE;
 
 /** 管理员注册码（#597 起造背包状态只能走管理端 PATCH） */
 const ADMIN_CODE = "e2e-sell-admin";
@@ -250,7 +277,15 @@ function countInBag(bag, goodId) {
     //#region 五、数量不够 → 整单拒绝
 
     group("五、数量不够（整单拒绝，不做部分扣除）");
-    // 重新放一件装备进包，用来验证「合法那条也不会被扣」
+    // 重新放一件装备进包，用来验证「合法那条也不会被扣」。
+    // 先把余额补够：商城单价来自快照（cloth_1 有特殊价），硬编码一个「够用」的数迟早过期
+    const refillPrice = mallPriceOf("cloth_1");
+    const goldNow = await api(baseUrl, "GET", `roles/${roleId}`, { token });
+    const bindGoldNow = Number((goldNow.data.data || {}).bindGold || 0);
+    if (bindGoldNow < refillPrice) {
+      const topped = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: refillPrice } });
+      check(topped.code === 0, `准备：绑定元宝补到 ${refillPrice}（= 快照里的商城价）`, topped.message);
+    }
     const refill = await api(baseUrl, "POST", `roles/${roleId}/mall-purchase`, { token, body: { goodId: "cloth_1" } });
     check(refill.code === 0, "准备：从商城买一件 cloth_1（补回背包）", refill.message);
 

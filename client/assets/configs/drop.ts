@@ -2,7 +2,7 @@
  * 掉落物的**运行时手感参数**（#603 起本文件只剩这一项；#605 起数值改为运营可配）
  *
  * 掉落表本身不在客户端：具名表与兜底表的唯一书写处是服务端
- * `server/src/shared/drop-seed.ts`，每只怪的独立表在 `monster-drop-seed.ts`；
+ * `server/data/config-sync.sql`（`drop_tables` 具名表 + `monster_drops` 每怪独立表，都在同一次导出里）；
  * 启动时 seed 进 `drop_tables` / `monster_drops`，运营在管理端「掉落配置」改。
  * 抽取也只在服务端做（`combat-settlement.service`），客户端拿到的是一次结算的**结果**
  * （settle 帧的 `reward.drops`），本地没有任何抽奖代码。

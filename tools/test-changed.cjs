@@ -98,8 +98,7 @@ const SERVER_MODULE_E2E = [
   ["src/modules/achievement", ["achievement"]],
   ["src/modules/map", ["map"]],
   ["src/modules/admin", ["guard"]],
-  // 共享数据 / 建库 / 进程装配是「所有套件的底座」—— 动了就全量
-  ["src/shared", "ALL"],
+  // 建库 / 进程装配是「所有套件的底座」—— 动了就全量
   ["src/database", "ALL"],
   ["src/common", "ALL"],
   ["src/config", "ALL"],
@@ -155,7 +154,7 @@ function buildPlan(files) {
         if (rel === "server/.env.example" || rel.startsWith("server/src/config/")) {
           plan.audits.add("audit-api-hardcode");
         }
-        if (rel.startsWith("server/src/shared/") || rel.startsWith("server/src/database/")) {
+        if (rel.startsWith("server/src/database/")) {
           plan.audits.add("audit-shared-data");
         }
         const hit = SERVER_MODULE_E2E.find(([dir]) => rel.startsWith(`server/${dir}`));
@@ -166,6 +165,12 @@ function buildPlan(files) {
           serverNeedsAllE2E = true;
           plan.notes.push(`server/src 下表外路径 ${rel} —— e2e 回落全量（补进 SERVER_MODULE_E2E 后可收敛）`);
         }
+      } else if (rel === "server/data/config-sync.sql") {
+        // 出厂快照变了 = 全服数据变了（#655：这张文件是配置的唯一书写处），
+        // e2e 的期望值大量取自它，所以按「全量」处理是有道理的，不是保守。
+        plan.audits.add("audit-shared-data");
+        serverNeedsAllE2E = true;
+        plan.notes.push("server/data/config-sync.sql 改动 → e2e 全量（配置数据影响面无法静态收敛）");
       } else if (rel.startsWith("server/test/")) {
         // 直接改了某个测试：跑它自己。
         // e2e-*.cjs → `test:e2e:<名>`；其余（config-sync.cjs）→ `test:<名>`，它们不起服务

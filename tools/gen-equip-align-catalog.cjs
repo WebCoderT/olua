@@ -8,8 +8,9 @@
  * 管理端的装备对齐页要列出「所有衣服 / 所有武器 / 两套裸模」以及它们**当前的几何值**
  * （outScale / outPositions / 内观 inPosition / inScale），这些数据的唯一来源是
  * 客户端配置 `client/assets/configs`。管理端是独立的 Vite 前端，不能直接 import 那些
- * .ts（它们 `import { Vec2 } from "cc"`），所以按 `gen-shared-data.cjs` 同一套路把它们
- * 编译成 JS 再读值，快照成一份纯 JSON 给页面用。
+ * .ts（它们 `import { Vec2 } from "cc"`），所以按 `lib/client-config-compile.cjs` 同一套路
+ * 把它们编译成 JS 再读值，快照成一份纯 JSON 给页面用；装备那部分来自库里的出厂数据
+ * （`server/data/config-sync.sql`），不再有客户端种子。
  *
  * **这是派生清单，不是第二份数据**：改了客户端配置就重跑本脚本（`audit-shared-data`
  * 的兄弟守点 `audit-equip-align-catalog` 会重生成后逐字节比对）。
@@ -44,14 +45,13 @@ const {
   compileClientConfig,
   configLoader,
   cleanupWork,
-  loadEquipmentSeed,
   hydrateEquipment,
 } = require("./lib/client-config-compile.cjs");
 
 const OUT = process.env.EQUIP_ALIGN_OUT || path.join(ROOT, "admin", "src", "data", "equip-align.catalog.json");
 
 const SOURCE_FILES = [
-  ...["equipments", "role", "animation"].map((name) => path.join(ASSETS, "configs", `${name}.ts`)),
+  ...["equipments", "role", "animation", "apply-snapshot"].map((name) => path.join(ASSETS, "configs", `${name}.ts`)),
   // 内观视图的底座（#523）：角色信息弹窗的背景图与尺寸在 layout/dialogs，别在页面里抄第二份
   path.join(ASSETS, "configs", "layout", "dialogs.ts"),
 ];
@@ -60,9 +60,9 @@ function main() {
   const work = createWork("equip-catalog");
   compileClientConfig(work, SOURCE_FILES);
   const { cfg, layoutCfg } = configLoader(work);
-  // #603 第九域：客户端 `configs/equipments` 加载期是空表（数据在服务端 equipment-seed.ts）——
-  // 不先把种子灌回来，这里生成的清单里衣服 / 武器全是 0 件（审计会当场报「clothes 是空表」）
-  hydrateEquipment(cfg, loadEquipmentSeed(work));
+  // #603 第九域：客户端 `configs/equipments` 加载期是空表（数据在服务端库里）——
+  // 不先把出厂数据灌回来，这里生成的清单里衣服 / 武器全是 0 件（审计会当场报「clothes 是空表」）
+  hydrateEquipment(cfg);
   const catalog = buildCatalog({
     equipments: cfg("equipments"),
     role: cfg("role"),

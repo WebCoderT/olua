@@ -118,8 +118,10 @@ Sync timing, failure handling and debounce details: [client/FAQ.md](client/FAQ.e
 
 There are also a few **gameplay config tables produced by generators** (not API artifacts, but artifacts nonetheless):
 
-- `server/src/shared/monster-presentation.generated.ts` ← `client/tools/gen-monster-config.cjs` (the monster presentation manifest; from #588 on it is written to the server, geometry measured from atlas plist base frames)
 - `configs/monsterDrops.ts` ← `client/tools/gen-monster-drops.cjs` (drop tables)
+- Monster presentation geometry no longer has an artifact: since #655 `client/tools/gen-monster-config.cjs` only **measures
+  the assets** and writes `outOffset` / `contentSize` / `aggressive` back into the geometry columns of the
+  `monster_presentation` table (then run `make config-export`)
 
 Their rules are written in the header of each script — re-run the script instead of editing the output.
 

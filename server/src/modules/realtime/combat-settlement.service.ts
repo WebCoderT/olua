@@ -1,6 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { GROWTH_SCALARS } from "../../shared/growth-seed";
-import { skillOf } from "../../shared/runtime-overrides";
+import { growthScalarOf, skillOf } from "../../common/runtime-config-cache";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
@@ -323,17 +322,24 @@ export class CombatSettlementService {
 
   /** 击杀经验（与客户端 getKillExp 同口径；角色与怪物等级差为绝对值） */
   private killExpFor(roleLevel: number, monsterLevel: number): number {
-    const perLevel = this.scalarNumber("expGain.expPerLevel", GROWTH_SCALARS["expGain.expPerLevel"]);
-    const maxGap = this.scalarNumber("expGain.maxLevelGap", GROWTH_SCALARS["expGain.maxLevelGap"]);
+    const perLevel = this.scalarNumber("expGain.expPerLevel");
+    const maxGap = this.scalarNumber("expGain.maxLevelGap");
     const gap = Math.abs(roleLevel - monsterLevel);
     if (gap >= maxGap) return 0;
     return Math.max(1, Math.round((monsterLevel + 1) * perLevel * (1 - gap / maxGap)));
   }
 
-  /** 成长标量（growth_scalars 表即时生效；读不到用生成物 seed 值兜底） */
-  private scalarNumber(key: string, fallback: number): number {
+  /**
+   * 成长标量（`growth_scalars` 表即时生效）
+   *
+   * 现读库优先（管理端改完下一笔结算就认），读不到再取启动时装载的那一份。
+   * 两处都没有 = 没配 → 0（`maxLevelGap = 0` 会让所有击杀都不给经验，是显眼的坏配置，
+   * 不会像「悄悄用一个代码里的常数」那样被忽略）。
+   */
+  private scalarNumber(key: string): number {
     const fromDb = Number(this.growth.findScalar(key)?.value);
-    return Number.isFinite(fromDb) && fromDb > 0 ? fromDb : fallback;
+    if (Number.isFinite(fromDb) && fromDb > 0) return fromDb;
+    return growthScalarOf(key) ?? 0;
   }
 
   /**

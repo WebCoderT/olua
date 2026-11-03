@@ -17,10 +17,11 @@ make code-dup     # jscpd 扫三端 + tools 的重复块（≥120 token）
 
 - 运行前提：`cd server && npm install`（两个工具在 server devDependencies）。
 - `code-prune` 的白名单（Makefile 里的 grep -vE）对应**已判定为合理形态**的输出：
-  共享快照 re-export（`game-data.ts` / `game-data.generated.ts`）、gen-api 双端生成物
-  （`api/models.ts` / `ApiModels.ts` / `utils/net/Api.ts`）、Cocos 场景挂载类 default、
+  gen-api 双端生成物（`api/models.ts` / `ApiModels.ts` / `utils/net/Api.ts`）、Cocos 场景挂载类 default、
   realtime 协议帧 interface（契约文档）、`remainingAttempts`（e2e-guard.cjs 动态 require）。
   新增合理形态时**更新 Makefile 白名单并注释理由**，不要每次手抄输出。
+  （#655 起 `game-data.ts` / `game-data.generated.ts` 已随 `server/src/shared/` 一起删除，白名单里不再留它们 ——
+  留在白名单里等于给「共享快照 re-export」这种已经不存在的形态开永久免检。）
 
 ## 二、候选 ≠ 必删：复核口径（最重要）
 

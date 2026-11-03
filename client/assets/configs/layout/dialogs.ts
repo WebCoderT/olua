@@ -581,7 +581,7 @@ export const goodDetailLayout = {
     paddingX: 8,
   },
   /** 底部装饰 logo（复用游戏 logo 图，尺寸比登录页小一圈） */
-  footerLogo: { image: uiImages.gameLogo, size: new Size(220, 120) },
+  footerLogo: { image: uiImages.gameLogo, size: new Size(220, 80) },
   /**
    * 摆放（鼠标悬停在物品上时弹窗的位置，规则见 ui/utils/layout/ScreenLayout.getPopupPosition）
    * 弹窗锚点恒为 0.5/0.5（内容排版交给自身 Layout），位置按「物品中心 + 这些间距」算：
@@ -1016,9 +1016,9 @@ export const chatDialogLayout = {
   position: new Vec2(-730, -395),
   /** 窗体底板（半透明深色 + 金色细边；颜色必须在配置里，组件不写字面量） */
   box: {
-    fill: new Color(16, 20, 32, 215),
-    border: new Color(255, 214, 102, 170),
-    radius: 10,
+    fill: new Color(0, 0, 0, 215),
+    border: new Color(0, 0, 0, 255),
+    radius: 2,
     borderWidth: 1.5,
     padding: 20,
   },

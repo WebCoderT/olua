@@ -139,6 +139,32 @@ export const LEVEL_EXP_SORT: SortSpec<"level" | "exp" | "updatedAt"> = {
   defaultOrder: "asc",
 };
 
+/** 角色等级表（#655）：默认按等级升序 —— 60 行就是一张逐级的属性价目表 */
+export const ROLE_LEVEL_SORT: SortSpec<"level" | "exp" | "maxHp" | "maxMp" | "updatedAt"> = {
+  columns: {
+    level: "level",
+    exp: "exp",
+    maxHp: "max_hp",
+    maxMp: "max_mp",
+    updatedAt: "updated_at",
+  },
+  default: "level",
+  defaultOrder: "asc",
+};
+
+/** 装备变体列表（#655）：默认按基础件 + 前缀 + 后缀升序（同一件装备的 15 个变体连成一片） */
+export const EQUIPMENT_VARIANT_SORT: SortSpec<"id" | "baseId" | "level" | "sellPrice" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    baseId: "base_id",
+    level: "level",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "baseId",
+  defaultOrder: "asc",
+};
+
 /** 成长曲线分段列表：默认按曲线键 + 段序升序（同一曲线的分段连成一片） */
 export const GROWTH_SEGMENT_SORT: SortSpec<"curve" | "seq" | "fromLevel" | "toLevel" | "startValue" | "perLevel" | "updatedAt"> = {
   columns: {

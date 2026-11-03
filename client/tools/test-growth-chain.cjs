@@ -18,19 +18,10 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, compileServerShared, check, finish, fail } = require("./lib/configs-sandbox.cjs");
-
-/** 快照行里的属性是 {min,max} 对象（种子是 [min,max] 元组） */
-const toRangeAttributes = (attributes) => ({
-  maxHp: attributes.maxHp,
-  hpRecover: attributes.hpRecover,
-  physicalAttack: { min: attributes.physicalAttack[0], max: attributes.physicalAttack[1] },
-  magicAttack: { min: attributes.magicAttack[0], max: attributes.magicAttack[1] },
-  taoistAttack: { min: attributes.taoistAttack[0], max: attributes.taoistAttack[1] },
-  physicalDefense: { min: attributes.physicalDefense[0], max: attributes.physicalDefense[1] },
-  magicDefense: { min: attributes.magicDefense[0], max: attributes.magicDefense[1] },
-  taoistDefense: { min: attributes.taoistDefense[0], max: attributes.taoistDefense[1] },
-});
+const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+/** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql）；属性已是 {min,max} */
+const factory = require("./lib/factory-data.cjs");
+const rowsOf = (list) => list.map(({ updatedAt, ...row }) => row);
 
 /** 源码断言（读真实文件，盯「接线」而不是复刻实现） */
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -45,29 +36,29 @@ function main() {
   }
 
   const cfg = require(path.join(outDir, "configs/game-config.js"));
-  const titleSeed = require(compileServerShared("title-seed.ts", "olua-chain-title"));
-  const soulSeed = require(compileServerShared("soul-seed.ts", "olua-chain-soul"));
-  const rankSeed = require(compileServerShared("rank-seed.ts", "olua-chain-rank"));
+  const titleRowsAll = rowsOf(factory.titles());
+  const soulRowsAll = rowsOf(factory.souls());
+  const rankRowsAll = rowsOf(factory.ranks());
 
   /**
    * 称号行：默认按服务端 seedTitles 的口径（渠道「无法获取」、无链序），
    * patch 只改运营字段，不动任何数值
    */
   const titleRows = (patch) =>
-    titleSeed.TITLE_SEEDS.map((row) => {
-      const base = { ...row, attributes: toRangeAttributes(row.attributes), acquireChannel: "unavailable", upgradeOrder: null };
+    titleRowsAll.map((row) => {
+      const base = { ...row, acquireChannel: "unavailable", upgradeOrder: null };
       return patch ? { ...base, ...patch(row) } : base;
     });
   const soulRows = (patch) =>
-    soulSeed.SOUL_SEEDS.map((row) => {
-      const base = { ...row, attributes: toRangeAttributes(row.attributes), upgradeOrder: row.level };
+    soulRowsAll.map((row) => {
+      const base = { ...row, upgradeOrder: row.level };
       return patch ? { ...base, ...patch(row) } : base;
     });
-  const rankRows = () => rankSeed.RANK_SEEDS.map((row) => ({ ...row, attributes: toRangeAttributes(row.attributes) }));
+  const rankRows = () => rankRowsAll.map((row) => ({ ...row }));
 
   console.log("\n=== A. 出厂：一档都没开放 ===");
   cfg.applyTitleRows(titleRows());
-  check(cfg.titleLevels.length === titleSeed.TITLE_SEEDS.length, "称号表仍是全量（头顶名牌 / 当前称号展示要用）", String(cfg.titleLevels.length));
+  check(cfg.titleLevels.length === titleRowsAll.length, "称号表仍是全量（头顶名牌 / 当前称号展示要用）", String(cfg.titleLevels.length));
   check(cfg.titleUpgradeChain.length === 0, "升级链为空 —— 出厂全部「无法获取」，客户端不该显示它们");
   const closed = cfg.nextTitleUpgrade(0);
   check(closed.kind === "closed", "链空时下一步 = closed（未开放），不能报成 maxed（满级）", closed.kind);
@@ -86,7 +77,7 @@ function main() {
   check(cfg.nextTitleUpgrade(3).config.level === 1, "3 阶的下一档 = 链上第 3 位 1 阶（链可能倒着走）", String(cfg.nextTitleUpgrade(3).config?.level));
   check(cfg.nextTitleUpgrade(1).kind === "maxed", "链尾 1 阶 → maxed（真的到总头了）", cfg.nextTitleUpgrade(1).kind);
   check(cfg.nextTitleUpgrade(2).kind === "locked", "2 阶不在链上 → locked（断链，不能报满级）", cfg.nextTitleUpgrade(2).kind);
-  check(cfg.getTitleLevel(1).label === titleSeed.TITLE_SEEDS[0].label, "getTitleLevel 仍按等级号取（预览 / 头顶名牌不看链序）");
+  check(cfg.getTitleLevel(1).label === titleRowsAll[0].label, "getTitleLevel 仍按等级号取（预览 / 头顶名牌不看链序）");
   check(cfg.getTitleLevel(2) !== null, "未开放的 2 阶在表里仍然存在（玩家已获得时头顶照样显示）");
 
   console.log("\n=== B2. 只有渠道、没有链序的行也要进链（与服务端 listUpgrade 同口径）===");
@@ -102,7 +93,7 @@ function main() {
 
   console.log("\n=== D. 战魂：全量在链上，但顺序跟运营拖 ===");
   cfg.applySoulRows(soulRows());
-  check(cfg.soulUpgradeChain.length === soulSeed.SOUL_SEEDS.length, "战魂 37 阶全量进链（没有获得渠道概念）", String(cfg.soulUpgradeChain.length));
+  check(cfg.soulUpgradeChain.length === soulRowsAll.length, "战魂 37 阶全量进链（没有获得渠道概念）", String(cfg.soulUpgradeChain.length));
   check(cfg.soulUpgradeChain[0].level === 1 && cfg.nextSoulUpgrade(0).config.level === 1, "出厂链序 = 阶数（0 阶 → 1 阶）");
   // 把 5 阶拖到最前：5 → 1，其余整体后移一位
   cfg.applySoulRows(soulRows((row) => ({ upgradeOrder: row.level === 5 ? 1 : row.level + 1 })));

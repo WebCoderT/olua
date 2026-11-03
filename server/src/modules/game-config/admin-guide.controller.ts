@@ -30,7 +30,7 @@ export class AdminGuideController {
       "整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。\n\n" +
       "`spot` / `trigger` 的取值是**客户端能力白名单**：一个新的高亮位要 `GuideOverlay` 认识这个节点，\n" +
       "一个新的推进事件要在玩法代码里 `notify` 一次 —— 所以它们不能凭运营自由填写。\n\n" +
-      "缺行 / 坏行回落出厂值（`shared/guide-seed.ts`），坏行会被丢弃（好行保留）。",
+      "缺行 / 坏行回落出厂值（`config-sync.sql`），坏行会被丢弃（好行保留）。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiDataResponse(GuideStepsDto, { description: "当前步骤表（含 updatedAt）" })

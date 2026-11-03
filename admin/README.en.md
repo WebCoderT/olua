@@ -113,28 +113,26 @@ Write actions disable their button per permission point (`disabled`) and show "i
 
 ## Where the game data comes from (shared by all three sides)
 
-The names and metadata for equipment / War Soul / Title / Rank / skills / items have **one** authoritative
-definition — the client's `client/assets/configs` (plus the enum comments in `client/assets/types/role.ts`, where the
-"all classes" occupation code and the three gender names live).
+The names and values for equipment / War Soul / Title / Rank / skills / items / NPCs / fashion / monsters / maps have
+**one** authoritative definition — **the database** (factory values live in `server/data/config-sync.sql` and are loaded
+into an empty database on first boot by `bootstrapConfigSnapshot()`).
 
-**Maps are the exception (#573)**: a map's gameplay config (label / type / entry level / entry combat / entry War Soul
-tier) now lives in the server's `maps` table. The factory values sit in `server/src/common/constants/map-config.ts`
-(seeded from the resource list on first boot, so an operator's edits survive a restart), and the client keeps only the
-resource conventions (`map/<id>/<id>` layout, object group and property names). The map catalogue has to be read
-**synchronously** (role details and the entity picker need names mid-render), so it goes through the in-process cache in
-`src/api/mapCatalog.ts`: `ensureMapCatalog()` on `Layout` mount, `refreshMapCatalog()` after a successful save on the maps page.
+The admin does **not** keep a copy: `src/api/gameData.ts` calls `GET /admin/game-data` once after login (the same
+snapshot the client gets from `GET /game-config`) and indexes it into a few Maps, so every lookup afterwards is a
+synchronous cache read. **There is no data copy in code.**
 
-The admin does **not** keep a copy: `src/api/gameData.ts` imports the shared artifact by relative path
-(`server/src/shared/game-data.generated.ts`, produced by `tools/gen-shared-data.cjs`) and Vite bundles it directly —
-the server and the admin read the **same file**.
+- To change a number or a label → edit it on the matching admin page (it is saved to the database immediately), then run
+  `make config-export` to sync `config-sync.sql`; `make config-check` tells you when the two have drifted;
+- **Never write another dictionary of data here or in a page**: `make audit-shared-data` scans `admin/src` and fails if an
+  enum (occupation / sex / slot …) is copied a second time — the one handwritten place for enums is
+  `server/src/common/constants/game-enums.ts`;
+- Every name in the UI goes through a lookup helper (`equipmentText` / `skillText` / `itemText` / `soulText` /
+  `titleText` / `rankText`… in `gameData.ts`, and `mapText` in `mapCatalog.ts`). They only look up and fall back to the
+  raw id — they never re-derive anything; equipment display names (prefix/suffix included) are the
+  `equipment_variants.label` column of the snapshot.
 
-- To change a number or a label → edit the client config → `node tools/gen-shared-data.cjs` (forgetting to regenerate is caught by `make audit-shared-data`);
-- **Never write another dictionary here or in a page**: `make audit-shared-data` scans `admin/src` and fails on any dictionary definition that shares a name with the artifact;
-- Every name in the UI goes through a lookup helper (`equipmentText` / `skillText` / `itemText` / `soulText` / `titleText` /
-  `rankText`… in `gameData.ts`, and `mapText` in `mapCatalog.ts`). They only look up and fall back to showing the raw id —
-  they never re-derive anything: equipment display names (prefix/suffix included) and slot attribution are computed by the
-  generator on top
-  of the client's own data.
+> Until the cache arrives (login in flight / request failed) name lookups fall back to the raw id, so it is obvious the
+> data has not loaded yet.
 
 > Dev mode reads a file **outside** the project, so `vite.config.ts` allows the parent directory (`server.fs.allow: [".."]`);
 > the build (rollup) is unaffected.

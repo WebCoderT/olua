@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { equipmentMetaApi, equipmentSlotsApi, formatTime, PERMISSION } from "../api";
-import type { EquipmentCurveSegment, EquipmentMeta, EquipmentSlot } from "../api";
+import type { EquipmentMeta, EquipmentSlot } from "../api";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
@@ -105,7 +105,6 @@ type MetaDraft = {
   prefixRates: string[];
   suffixLabels: string[];
   suffixRates: string[];
-  curve: Array<{ from: string; to: string; start: string; perLevel: string }>;
 };
 
 function toMetaDraft(meta: EquipmentMeta): MetaDraft {
@@ -114,12 +113,6 @@ function toMetaDraft(meta: EquipmentMeta): MetaDraft {
     prefixRates: meta.prefixRates.map((rate) => String(rate)),
     suffixLabels: meta.suffixLabels.map(String),
     suffixRates: meta.suffixRates.map((rate) => String(rate)),
-    curve: meta.recycleCurve.map((segment) => ({
-      from: String(segment.from),
-      to: String(segment.to),
-      start: String(segment.start),
-      perLevel: String(segment.perLevel),
-    })),
   };
 }
 
@@ -128,7 +121,8 @@ function toMetaDraft(meta: EquipmentMeta): MetaDraft {
  *
  * 这一页收的是「以前写死在客户端源码里的两样东西」：
  * - **槽位表**（13 行）：名称 / 底图 / 位置分组 / 排序 —— 排序同时是背包「一键整理」的部位序；
- * - **装备规则**（单行）：前后缀倍率与文案（展开 15 个变体的依据）、回收价曲线（背包回收的计价依据）。
+ * - **装备规则**（单行）：前后缀倍率与文案（展开 15 个变体的依据）。
+ *   回收价 #655 起不在这一页 —— 逐条在「装备变体」页改 `sellPrice`。
  *
  * 两个「不能做」的边界写在页面上：槽位不能新增 / 删除（key 是客户端枚举），
  * 倍率不能只改一半（倍率与文案必须等长，服务端会拒）。
@@ -185,18 +179,6 @@ export function EquipmentSettingsPage() {
     patch(kind === "prefix" ? { prefixLabels: labels, prefixRates: rates } : { suffixLabels: labels, suffixRates: rates });
   };
 
-  const patchCurve = (index: number, field: keyof MetaDraft["curve"][number], value: string) => {
-    if (!draft) return;
-    const curve = draft.curve.slice();
-    curve[index] = { ...curve[index], [field]: value };
-    patch({ curve });
-  };
-
-  const curveValid =
-    !!draft &&
-    draft.curve.length > 0 &&
-    draft.curve.every((segment) => isNumber(segment.from) && isNumber(segment.to) && isNumber(segment.start) && isNumber(segment.perLevel)) &&
-    draft.curve.every((segment) => Number(segment.from) <= Number(segment.to));
   const ratesValid =
     !!draft &&
     draft.prefixRates.length > 0 &&
@@ -204,7 +186,7 @@ export function EquipmentSettingsPage() {
     draft.suffixRates.every((rate) => isNumber(rate) && Number(rate) > 0) &&
     draft.prefixLabels.every((label) => label.trim() !== "") &&
     draft.suffixLabels.every((label) => label.trim() !== "");
-  const canSave = !!draft && curveValid && ratesValid && !saving;
+  const canSave = !!draft && ratesValid && !saving;
 
   const saveMeta = async () => {
     if (!draft) return;
@@ -215,12 +197,6 @@ export function EquipmentSettingsPage() {
         suffixRates: draft.suffixRates.map(Number),
         prefixLabels: draft.prefixLabels.map((label) => label.trim()),
         suffixLabels: draft.suffixLabels.map((label) => label.trim()),
-        recycleCurve: draft.curve.map<EquipmentCurveSegment>((segment) => ({
-          from: Number(segment.from),
-          to: Number(segment.to),
-          start: Number(segment.start),
-          perLevel: Number(segment.perLevel),
-        })),
       };
       const saved = await equipmentMetaApi.update(payload);
       setMeta(saved);
@@ -337,76 +313,15 @@ export function EquipmentSettingsPage() {
       </Card>
 
       <Card
-        title="装备回收价曲线"
-        actions={
-          <div className="flex items-center gap-2">
-            {loading ? <Spinner /> : null}
-            <Button
-              variant="outline"
-              className="px-2.5 py-1 text-xs"
-              disabled={!canWrite || !draft}
-              onClick={() => draft && patch({ curve: [...draft.curve, { from: "1", to: "1", start: "0", perLevel: "0" }] })}
-            >
-              添加一段
-            </Button>
-          </div>
-        }
-        description="背包「一键回收」的基础价按等级在这条分段线性曲线上取（再乘前后缀倍率）。from ≤ to、start / perLevel ≥ 0；超出最后一段按最后一段斜率外推。"
+        title="回收价"
+        description="逐条配置（#655）：每件变体的回收价在「装备变体」页改 sellPrice 那一列，服务端结算与客户端背包读的是同一列 —— 这里不再有「按等级取曲线价」。改价去那一页，改完记得 make config-export。"
       >
-        {draft ? (
-          <div className="overflow-x-auto">
-            <table className={tableClass}>
-              <thead className={theadClass}>
-                <tr>
-                  <th className={thClass}>起始等级</th>
-                  <th className={thClass}>结束等级</th>
-                  <th className={thClass}>起始价</th>
-                  <th className={thClass}>每级增量</th>
-                  <th className={`${thClass} text-right`}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draft.curve.map((segment, index) => (
-                  <tr key={index}>
-                    <td className={tdClass}>
-                      <Input type="number" value={segment.from} disabled={!canWrite} onChange={(event) => patchCurve(index, "from", event.target.value)} />
-                    </td>
-                    <td className={tdClass}>
-                      <Input type="number" value={segment.to} disabled={!canWrite} onChange={(event) => patchCurve(index, "to", event.target.value)} />
-                    </td>
-                    <td className={tdClass}>
-                      <Input type="number" value={segment.start} disabled={!canWrite} onChange={(event) => patchCurve(index, "start", event.target.value)} />
-                    </td>
-                    <td className={tdClass}>
-                      <Input type="number" value={segment.perLevel} disabled={!canWrite} onChange={(event) => patchCurve(index, "perLevel", event.target.value)} />
-                    </td>
-                    <td className={`${tdClass} text-right`}>
-                      <Button
-                        variant="outline"
-                        className="px-2.5 py-1 text-xs"
-                        disabled={!canWrite || draft.curve.length <= 1}
-                        onClick={() => patch({ curve: draft.curve.filter((_, position) => position !== index) })}
-                      >
-                        删除
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-        {draft && !curveValid ? (
-          <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-            曲线至少要有一段；每段的数字都要能解析，且起始等级 ≤ 结束等级。
-          </p>
-        ) : null}
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">
             {meta ? `上次保存：${formatTime(meta.updatedAt)}` : ""}
           </p>
           <Button disabled={!canWrite || !canSave} loading={saving} onClick={() => void saveMeta()}>
-            保存倍率与曲线
+            保存倍率与文案
           </Button>
         </div>
       </Card>

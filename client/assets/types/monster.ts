@@ -13,7 +13,7 @@ export type MonsterTier = "normal" | "elite" | "boss";
 /**
  * 怪物运行时数值（#588 数据归属收口）
  *
- * 唯一来源 = 服务端 `monsters` 表（出厂值由 `server/src/shared/monster-seed.ts` 展开 seed，
+ * 唯一来源 = 服务端 `monsters` 表（出厂值由 `server/data/config-sync.sql` 展开 seed，
  * 管理端 `PATCH /admin/monsters/:id` 可改），经 `GET /game-config` 快照下发，
  * `configs/monsterRuntime` 的运行时数值表持有 —— 客户端 configs/monster **不再有本地副本**。
  */

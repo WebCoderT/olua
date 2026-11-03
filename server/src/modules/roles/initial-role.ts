@@ -1,4 +1,4 @@
-import { SKILL_LABELS } from "../../shared/game-data.generated";
+import { playerSkillIds } from "../../common/runtime-config-cache";
 
 /**
  * 新角色的初始数据（#597：建号职责整体搬到服务端）
@@ -9,7 +9,7 @@ import { SKILL_LABELS } from "../../shared/game-data.generated";
  * - **背包、装备、货币全空，不赠送任何物品** —— 此前客户端 `new Role(...)` 会塞一套
  *   新手装备与初始金币，整体废除；要给某个号发东西走管理端（`PATCH /admin/roles/:id`）。
  * - **技能保持「全部解锁 1 级」**：技能等级是玩法数据不是物品，全 0 会让新角色无法战斗。
- *   玩家技能段 = 共享技能标签表里的 `1xxx`（`9xxx` 是怪物技能段，不发给玩家）。
+ *   玩家技能 = `skills` 表里 `owner = role` 的行（怪物技能不发给玩家）。
  * - **「客户端配置才知道形状」的字段发空壳**：装备槽名（EQUIPMENT_TYPE 枚举）、
  *   背包尺寸（bagRow × bagCol）、快捷键按键码都在客户端配置里，服务端复制必然漂移 ——
  *   发空对象 / 空数组，客户端 `StorageManager.ensureRoleDefaults` 读档时按**当前配置**补齐。
@@ -17,12 +17,10 @@ import { SKILL_LABELS } from "../../shared/game-data.generated";
  *   （maxHp / 攻防 / 战斗力），`hp / mp` 按满值起。
  */
 
-/** 初始技能等级表：玩家技能段（1xxx）全部 1 级 */
+/** 初始技能等级表：`skills` 表里 owner=role 的技能全部 1 级（怪物技能不发给玩家） */
 function buildInitialSkills(): Record<string, number> {
   const skills: Record<string, number> = {};
-  for (const id of Object.keys(SKILL_LABELS)) {
-    if (id.startsWith("1")) skills[id] = 1;
-  }
+  for (const id of playerSkillIds()) skills[id] = 1;
   return skills;
 }
 

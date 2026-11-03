@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { adminRoleLabel, authApi, ensureMapCatalog, PERMISSION } from "../api";
+import { adminRoleLabel, authApi, ensureGameData, ensureMapCatalog, PERMISSION } from "../api";
 import { APP_TITLE } from "../api/config";
 import { clearSession, hasPermission, readAdmin, readToken, saveSession, subscribeSession } from "../store/session";
 import { Badge, Button } from "./ui";
@@ -12,7 +12,7 @@ import { Badge, Button } from "./ui";
  * 与后端的 `@RequirePermissions` 一一对应（见服务端 constants/permission）。
  * 「我的账号」不做成导航项：它是每个人的私有页面，放在右上角身份栏更顺手。
  *
- * 32 项按功能分成四个可折叠分组 + 一个顶层独立项（概览）：
+ * 分组按功能分成四个可折叠分组 + 一个顶层独立项（概览）：
  * 路由本身仍是扁平路径（`App.tsx` 不用动），分组只是侧栏的视觉与交互层次。
  */
 type NavItem = { to: string; label: string; end?: boolean; permission: string | null };
@@ -39,6 +39,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "战斗与装备",
     items: [
       { to: "/equipments", label: "装备配置", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/equipment-variants", label: "装备变体", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equipment-settings", label: "槽位与规则", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equip-align", label: "装备对齐", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equip-in-align", label: "内观对齐", permission: PERMISSION.GAME_CONFIG_READ },
@@ -63,7 +64,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/drugs", label: "药品配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/items", label: "物品配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/fashions", label: "时装配置", permission: PERMISSION.GAME_CONFIG_READ },
-      { to: "/growth", label: "成长曲线", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/growth", label: "成长参数", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/role-levels", label: "角色等级", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/quests", label: "任务配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/achievements", label: "成就配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/mall", label: "商城定价", permission: PERMISSION.GAME_CONFIG_READ },
@@ -155,6 +157,13 @@ export function Layout() {
   // 登录后进到布局就拉一次，失败静默（只是名字回落成 id，不挡任何页面）
   useEffect(() => {
     void ensureMapCatalog();
+  }, []);
+
+  // 游戏数据字典（#655）：装备 / 物品 / 技能 / 怪物 / NPC 的名字与下拉清单都在数据库，
+  // 与地图名录同一个套路 —— 登录后拉一次 `GET /admin/game-data`，之后同步查表。
+  // 放在布局里而不是每个页面：这些名字在表格、选择器、详情页到处都要用。
+  useEffect(() => {
+    void ensureGameData();
   }, []);
 
   /**

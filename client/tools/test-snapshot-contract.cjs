@@ -156,7 +156,6 @@ function completeSnapshot(over = {}) {
       suffixRates: [1, 2, 3],
       prefixLabels: ["普通的", "精良的", "优秀的", "史诗的", "传说的"],
       suffixLabels: ["人级", "地级", "天级"],
-      recycleCurve: [{ from: 1, to: 50, start: 10, perLevel: 1 }],
       updatedAt: 0,
     },
     // #605：运行时参数也是契约的一段（单行三组；全字段给齐，段缺失的用例才能只怪那一处）

@@ -1,13 +1,12 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { MapRepository } from "../../database/repositories/map.repository";
 import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-area.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
 import { WorldMonsterRow } from "../../database/rows";
 import { spawnAreaInBounds, spawnAreaOverflow, spawnAreaOverflowText } from "../../common/utils/spawn-area-bounds.util";
-import { MAP_PIXEL_SIZES } from "../../shared/map-sizes.generated";
-import { SPAWN_AREAS } from "./spawn-areas.generated";
 
 /** 服务端持有的一只怪物实例（权威状态；内存形态，落盘见 WorldMonsterRow） */
 export interface WorldMonster {
@@ -59,8 +58,8 @@ export interface WorldMonsterSnapshot {
  *   是出生点，那是世界里唯一稳定的真相；
  * - 掉落 / 经验 —— 仍在客户端结算（各自有独立 issue）。
  *
- * 刷怪**区域**配置已归服务端（#295 阶段一）：`map_spawn_areas` 表从 Tiled 导入一次
- * （tools/import-spawn-areas.cjs 生成 SPAWN_AREAS 快照，启动时空表自动 seed），
+ * 刷怪**区域**配置已归服务端（#295 阶段一）：`map_spawn_areas` 表由
+ * `tools/import-spawn-areas.cjs` 直接从 Tiled 导入（出厂值随 `config-sync.sql` 首启灌入），
  * 进图 worldJoin 只带 mapId，播种完全由服务端按区域随机落点完成 —— 客户端不再上报计划。
  * 区维度（#295 阶段二）：世界按 `zone:mapId` 分域，每个区的新图都独立播种一份；
  * instanceId 带区段（`m<mapId>_z<zone>_<n>`），合并区时由管理端操作统一改写发牌。
@@ -114,43 +113,15 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     private readonly worldMonsters: WorldMonsterRepository,
     private readonly monsterConfigs: MonsterRepository,
     private readonly spawnAreas: MapSpawnAreaRepository,
+    private readonly mapConfigs: MapRepository,
     private readonly zones: ZoneRepository,
   ) {}
 
   onApplicationBootstrap(): void {
-    this.seedSpawnAreas();
     this.epoch = this.zones.getEpoch();
     const total = this.worldMonsters.countAll();
     this.tickTimer = setInterval(() => this.tick(), this.tickMs()).unref();
     this.logger.log(`世界权威已启动（tick ${this.tickMs()}ms / 落盘节流 ${this.persistMs()}ms / 重生 ${this.respawnMs()}ms，库里已有 ${total} 只怪）`);
-  }
-
-  /**
-   * 刷怪区 seed（#295）：表空时从 SPAWN_AREAS 快照灌入（INSERT OR IGNORE 幂等）。
-   * 快照由导入工具从 Tiled 生成并提交进仓库 —— 部署机没有客户端素材也能 seed。
-   * 非空表不重灌：导入工具 --db 才是整份替换的入口。
-   */
-  private seedSpawnAreas(): void {
-    if (this.spawnAreas.countAll() > 0) return;
-    let count = 0;
-    for (const [mapId, areas] of Object.entries(SPAWN_AREAS)) {
-      for (const area of areas) {
-        this.spawnAreas.seedRow({
-          map_id: mapId,
-          name: area.name,
-          monster_key: area.monsterKey,
-          min: area.min,
-          max: area.max,
-          cx: area.cx,
-          cy: area.cy,
-          w: area.w,
-          h: area.h,
-          updated_at: 0,
-        });
-        count += 1;
-      }
-    }
-    this.logger.log(`map_spawn_areas 空表，已从快照 seed ${count} 个刷怪区`);
   }
 
   /** 优雅关闭：停 tick + 全量落盘（SQLite 连接随后由 DatabaseService 收尾） */
@@ -364,7 +335,20 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
       const areas = this.spawnAreas.listByMap(mapId);
       // 越界区域只告警不拦（#586）：拦掉会让「改了配置忘了重跑导入工具」变成「这张图一只怪都没有」，
       // 那比怪刷在图外更难查；但也不能闷着 —— 库表可能还是旧口径时期 seed 的，静态审计看不见它。
-      const mapPixel = MAP_PIXEL_SIZES[mapId];
+      const mapRow = this.mapConfigs.getById(mapId);
+      // 越界判定用「这张图在库里的几何」：行没补过几何（pixel_width = 0）时跳过判定，
+      // 只留一条 warn —— 判成「全越界」会把 62 个刷怪区全刷成警告噪声
+      const mapPixel =
+        mapRow && mapRow.pixel_width > 0
+          ? {
+              cols: mapRow.grid_cols,
+              rows: mapRow.grid_rows,
+              tileWidth: mapRow.tile_width,
+              tileHeight: mapRow.tile_height,
+              width: mapRow.pixel_width,
+              height: mapRow.pixel_height,
+            }
+          : null;
       let seeded = 0;
       for (const area of areas) {
         if (!this.monsterConfigs.findByKey(area.monster_key)) {

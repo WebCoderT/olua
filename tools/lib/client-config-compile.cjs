@@ -1,8 +1,9 @@
 /**
- * 客户端配置编译管线（gen-shared-data / gen-equip-align-catalog 共用）
+ * 客户端配置编译管线（gen-equip-align-catalog 用）
  *
- * 客户端 `client/assets/configs` 是三端数据的唯一来源，但它 `import { Vec2 } from "cc"`
- * —— 管理端 / 服务端读不到。两个生成器都要走同一条路：把配置源文件用 tsc 编译进临时目录、
+ * 客户端 `client/assets/configs` 里还有**只属于客户端**的配置（角色裸模几何 / 弹窗版式 /
+ * 动画参数），它们 `import { Vec2 } from "cc"` —— 管理端读不到。生成器要走同一条路：
+ * 把配置源文件用 tsc 编译进临时目录、
  * 用 cc 垫片让它在 Node 里加载起来、再快照成各自的产物。这套「编译 + 垫片」就收在这里，
  * 生成器只保留自己的 SOURCE_FILES 与 load/快照逻辑。
  */
@@ -99,103 +100,32 @@ function cleanupWork(work) {
 }
 
 /**
- * 编译服务端 `server/src/shared/equipment-seed.ts` 并返回模块（#603 第九域）
+ * 用**数据库里的出厂数据**把装备表灌进沙箱（#655）
  *
- * 装备 / 槽位 / 前后缀倍率 / 回收价曲线的唯一书写处已经搬到服务端，客户端
- * `configs/equipments` 与 `configs/growth` 加载期是**空表**。要在 Node 里生成任何
- * 「装备清单 / 装备数值」类产物，都得先把种子拿过来 —— 与 `prepare()` 里的
- * `hydrateSnapshotTables`（单测沙箱）同一条思路。
+ * 客户端 `configs/equipments` 加载期是空表 —— 装备（37 个基础件 × 15 档 = 555 个变体、
+ * 含属性 / 回收价 / 几何）全部在服务端库里，进游戏由 `GET /game-config` 送下来。
+ * 生成器要在 Node 里画一张「所有衣服 / 所有武器」的清单，就得先把它灌回来：
+ * 数据来自 `server/data/config-sync.sql`（库的逐行投影），落库走线上同一个
+ * `applyEquipments`（`configs/apply-snapshot`）—— 与进游戏后客户端拿到的表逐字段同形。
  */
-function loadEquipmentSeed(work) {
-  return loadSharedSeed(work, "equipment-seed.ts", "equipment-seed");
-}
-
-/** 编译服务端 `server/src/shared/item-seed.ts`（#603 第十域：药品 / 材料出厂行） */
-function loadItemSeed(work) {
-  return loadSharedSeed(work, "item-seed.ts", "item-seed");
-}
-
-/**
- * 编一个 `server/src/shared` 下的纯数据种子并 require 回来
- * @param {string} work createWork() 的临时目录
- * @param {string} file 相对 server/src/shared 的文件名（如 "item-seed.ts"）
- * @param {string} tag 产物子目录名（同一 work 里编多个种子时不互相覆盖）
- */
-function loadSharedSeed(work, file, tag) {
-  const sharedDir = path.join(ROOT, "server", "src", "shared");
-  const tsconfig = path.join(work, `tsconfig.${tag}.json`);
-  const outDir = path.join(work, `${tag}-out`);
-  fs.writeFileSync(
-    tsconfig,
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          module: "CommonJS",
-          moduleResolution: "node",
-          outDir,
-          rootDir: sharedDir,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          strict: false,
-          noEmitOnError: false,
-          types: [],
-        },
-        files: [path.join(sharedDir, file)],
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
-  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
-  if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
-  execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return require(path.join(outDir, file.replace(/\.ts$/, ".js")));
-}
-
-/**
- * 用装备种子把客户端那几张空表填起来（#603 第九域）
- *
- * 与线上同一条路：先装规则（倍率决定展开档数），再装槽位与品质文案，最后用
- * `applyEquipmentSeed` 展开 555 条变体并写进物品总表（编了 `configs/items` 才写）。
- * **展开规则只写一份**（客户端 `buildEquipmentMap`），所以生成物与线上客户端算出来的
- * 一定是同一组数字。
- */
-function hydrateEquipment(cfg, equipmentSeed) {
+function hydrateEquipment(cfg) {
+  const factory = require(path.join(ROOT, "client", "tools", "lib", "factory-data.cjs"));
   const equipments = cfg("equipments");
   // #626 起装备规则（growth 区）在 configs/game-config
-  const snap = cfg("game-config");
+  const snapCfg = cfg("game-config");
+  const meta = factory.equipmentMeta();
 
-  snap.applyEquipmentRules(equipmentSeed.EQUIPMENT_PREFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_RATE_SEEDS, equipmentSeed.EQUIPMENT_RECYCLE_CURVE_SEED);
-  equipments.applyEquipmentQualityLabels(equipmentSeed.EQUIPMENT_PREFIX_LABEL_SEEDS, equipmentSeed.EQUIPMENT_SUFFIX_LABEL_SEEDS);
-  // 槽位的 order 就是种子数组下标（`equipment_slots.sort_order` 的出厂值同源）
-  equipments.applyEquipmentSlots(equipmentSeed.EQUIPMENT_SLOT_SEEDS.map((slot, order) => ({ ...slot, order })));
+  snapCfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates);
+  equipments.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels);
+  equipments.applyEquipmentSlots(factory.equipmentSlots());
 
-  const variants = equipments.applyEquipmentSeed(equipmentSeed.EQUIPMENT_SEED_ROWS);
-  if (variants.length === 0) throw new Error("装备一件都没展开出来（倍率种子为空？）");
+  // 快照发的是**展开后的变体行**（行自带前后缀序号与最终属性 / 回收价），不乘任何倍率
+  cfg("apply-snapshot").applyEquipments(factory.equipmentVariants());
+  const variants = [];
+  equipments.clothes.forEach((item) => variants.push(item));
+  if (variants.length === 0) throw new Error("装备一件都没灌进来（快照的 equipment_variants 是空的？）");
   return variants;
 }
-
-/**
- * 用 `item-seed.ts` 把药品 / 材料那两张空表填起来（#603 第十域）
- *
- * 与线上同一条路：`applyDrugData` / `applyItemBaseData` 整表重建（客户端那两个函数就是
- * 快照落库用的同一份实现），最后 `rebuildItemIndex()` 重建「id → 物品」总表。
- *
- * **必须在 `hydrateEquipment` 之后调**：总表顺序是「装备 → 药品 → 材料」,
- * 装备先进部位表，重建时才会排在最前。
- */
-function hydrateItems(cfg, itemSeed) {
-  // #626 起药品 / 材料表在 configs/game-config
-  const snap = cfg("game-config");
-  snap.applyDrugData(itemSeed.DRUG_SEED_ROWS);
-  snap.applyItemBaseData(itemSeed.ITEM_BASE_SEED_ROWS);
-  const items = cfg("items");
-  if (typeof items.rebuildItemIndex === "function") items.rebuildItemIndex();
-  return items.items;
-}
-
 module.exports = {
   ROOT,
   ASSETS,
@@ -203,8 +133,5 @@ module.exports = {
   compileClientConfig,
   configLoader,
   cleanupWork,
-  loadEquipmentSeed,
   hydrateEquipment,
-  loadItemSeed,
-  hydrateItems,
 };
