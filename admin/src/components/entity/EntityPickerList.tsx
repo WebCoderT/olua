@@ -18,6 +18,7 @@ import type { EntityOption } from "./catalog";
 export function EntityPickerList({
   options,
   current,
+  selected,
   onPick,
   hint,
   max = 120,
@@ -25,8 +26,10 @@ export function EntityPickerList({
   resetKey,
 }: {
   options: EntityOption[];
-  /** 当前已选（高亮用） */
+  /** 当前已选（单选高亮用） */
   current?: string;
+  /** 多选模式下已勾选的 id（传了它就按多选渲染：点一项是「勾 / 取消」） */
+  selected?: string[];
   onPick: (id: string) => void;
   /** 列表上方的说明（如「只列出衣服部位的装备」） */
   hint?: string;
@@ -35,6 +38,7 @@ export function EntityPickerList({
   /** 变化时清空搜索与分组（弹窗每次打开传一个新值，避免残留上一次的筛选） */
   resetKey?: unknown;
 }) {
+  const multiple = selected !== undefined;
   const [keyword, setKeyword] = useState("");
   const [group, setGroup] = useState<string | null>(null);
   /** 已画多少条（「再显示 N 项」往上加；搜索 / 分组变化要回到首页，否则会记得上一次的深度） */
@@ -87,12 +91,13 @@ export function EntityPickerList({
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((option) => {
-              const active = current === option.id;
+              const active = multiple ? (selected?.includes(option.id) ?? false) : current === option.id;
               return (
                 <button
                   key={option.id}
                   type="button"
                   title={`${option.label}（${option.id}）\n${option.note}`}
+                  aria-pressed={multiple ? active : undefined}
                   onClick={() => onPick(option.id)}
                   className={`flex items-center gap-2 rounded-lg border p-2 text-left transition ${
                     active
@@ -105,6 +110,17 @@ export function EntityPickerList({
                     <span className="block truncate text-xs text-slate-100">{option.label}</span>
                     <span className="block truncate text-[10px] text-slate-500">{option.note}</span>
                   </span>
+                  {/* 多选才画勾：单选点一下就走，多选框型对齐与否一眼看不出 */}
+                  {multiple ? (
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                        active ? "border-indigo-400 bg-indigo-500 text-white" : "border-slate-600 text-transparent"
+                      }`}
+                    >
+                      ✓
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

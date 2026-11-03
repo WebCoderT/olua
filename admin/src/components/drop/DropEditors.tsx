@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { DropEntry, DropTable, MonsterDropSummary } from "../../api";
 import { EntityImage } from "../entity/EntityImage";
 import { EntityPickButton } from "../entity/EntityPickButton";
-import { entityImage, entityLabel, entityOptions } from "../entity/catalog";
+import { EntityPicker } from "../entity/EntityPicker";
+import { dropItemOptions, entityImage, entityLabel } from "../entity/catalog";
 import { Button, Field, Input } from "../ui";
 
 /**
@@ -90,12 +91,16 @@ export function entryErrors(drafts: EntryDraft[]): string[] {
  * 每行：**物品（可视化挑选）** + 权重 + 概率 + 数量区间；可增删行。
  *
  * 物品从 #648 起不再是文本框：以前要人背 `drug_hp_1` / `weapon_1_p0s1`，现在是「图标 + 名字 +
- * 一行说明」的按钮，点开就是全部可掉落的物品（装备全量变体 + 药品 + 材料）。候选集与服务端
- * 校验同一份（`ITEM_LABELS` → `entityOptions("item")`），所以能选出来的必定能存进去。
+ * 一行说明」的按钮，点开就是可掉落的物品（**装备只列基础件** + 药品 + 材料）。候选集与服务端
+ * 校验同一份（`ITEM_LABELS` → `dropItemOptions()`），所以能选出来的必定能存进去。
+ *
+ * 「批量添加」走多选：一次勾十几种材料比开十几次弹窗快得多。装备的变体不在这里逐件点名 ——
+ * 掉出来是哪一档由变体表决定，候选里没有 `xxx_p2s1` 这种行。
  */
 export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onChange: (next: EntryDraft[]) => void }) {
-  // 2200 多条的清单由 catalog 缓存，这里只是取一次引用
-  const itemOptions = useMemo(() => entityOptions("item"), []);
+  // 2200 多条的清单由 catalog 缓存；掉落口径的过滤（去变体）也只算一次
+  const itemOptions = useMemo(() => dropItemOptions(), []);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const update = (index: number, patch: Partial<EntryDraft>) => {
     onChange(drafts.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)));
@@ -103,13 +108,25 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
   const remove = (index: number) => onChange(drafts.filter((_, i) => i !== index));
   const add = () => onChange([...drafts, emptyEntryDraft()]);
 
+  /** 多选结果 → 追加成新行（已在条目池里的跳过：同一件东西配两条只会互相摊薄权重） */
+  const addMany = (ids: string[]) => {
+    const existing = new Set(drafts.map((draft) => draft.goodId.trim()).filter(Boolean));
+    const rows = ids.filter((id) => !existing.has(id)).map((id) => ({ ...emptyEntryDraft(), goodId: id }));
+    if (rows.length > 0) onChange([...drafts, ...rows]);
+  };
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-medium text-slate-400">条目池（weight 权重 / chance 概率 0~1 / count 数量区间）</span>
-        <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={add}>
-          加一条
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setBulkOpen(true)}>
+            批量添加
+          </Button>
+          <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={add}>
+            加一条
+          </Button>
+        </div>
       </div>
       <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
         {drafts.map((draft, index) => (
@@ -120,8 +137,8 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
                 options={itemOptions}
                 kind="item"
                 pickerTitle={`选择条目 ${index + 1} 的物品`}
-                hint="装备（含全部前后缀变体）/ 药品 / 材料都在这里；挑中即存它的 id。"
-                emptyHint="物品总表是空的 —— 先确认客户端配置已生成（make client-gen-…）"
+                hint="装备只列基础件（掉出来是哪一档前后缀由变体表决定）/ 药品 / 材料；挑中即存它的 id。"
+                emptyHint="物品总表是空的 —— 先确认服务端配置已灌入（make config-import）"
                 onChange={(goodId) => update(index, { goodId })}
               />
             </div>
@@ -138,6 +155,18 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
           </div>
         ))}
       </div>
+      {bulkOpen ? (
+        <EntityPicker
+          open
+          multiple
+          title="批量添加掉落物品"
+          hint="勾选若干项后点「加入」—— 每条按权重 1 / 概率 1 / 数量 1~1 追加，之后逐行改数值即可。"
+          options={itemOptions}
+          emptyHint="物品总表是空的 —— 先确认服务端配置已灌入（make config-import）"
+          onSelectMany={addMany}
+          onClose={() => setBulkOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

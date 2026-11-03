@@ -352,6 +352,25 @@ export function groupNames(options: EntityOption[]): string[] {
   return seen;
 }
 
+/**
+ * 掉落用物品清单：装备**只列基础件**，药品 / 材料照旧
+ *
+ * 为什么：一件基础装有 15 个前后缀变体（`cloth_1_p3s2` …），它们不是「不同的掉落物」——
+ * 掉出来是哪一档由变体表决定，不是靠运营在掉落条目里一件件点名。以前把 555 个变体全铺进
+ * 候选，运营挑一条 `helmet_1_p2s1` 就等于把「掉什么品质」写死在这只怪身上。
+ * 判据用 `equipmentBaseId`（基础件返回自身，变体返回它的基础件，非装备返回空）。
+ */
+let dropItemCache: EntityOption[] | null = null;
+
+export function dropItemOptions(): EntityOption[] {
+  if (dropItemCache) return dropItemCache;
+  dropItemCache = entityOptions("item").filter((option) => {
+    const base = equipmentBaseId(option.id);
+    return !base || base === option.id;
+  });
+  return dropItemCache;
+}
+
 /** 关键字 + 分组过滤（关键字对 id / 名字 / 副标题都匹配） */
 export function filterOptions(options: EntityOption[], keyword: string, group: string | null): EntityOption[] {
   const needle = keyword.trim().toLowerCase();

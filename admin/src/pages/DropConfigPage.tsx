@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { dropApi, formatTime, PERMISSION } from "../api";
-import type { DropEntry, DropTable, MonsterDrop, PageResult } from "../api";
+import type { DropEntry, DropTable } from "../api";
 import { Modal } from "../components/Modal";
-import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
-import { MonsterDropDialog } from "../components/drop/MonsterDropDialog";
+import { Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { anyPickerOpen } from "../components/pickerStack";
 import {
-  DROP_SOURCE_LABELS,
-  DROP_SOURCE_TONE,
   EntriesEditor,
   type EntryDraft,
   PicksEditor,
@@ -103,10 +99,14 @@ function DropTableDialog({
 }
 
 /**
- * 掉落配置管理（#254）
+ * 掉落（模版）配置（#254 / #661）
  *
- * 上：具名掉落表卡片组（完整 CRUD，被引用中的表拒绝删除）；
- * 下：每怪掉落列表（检索 + 分页 + 编辑弹窗，三选一整份替换）。
+ * 本页只做**掉落模版**：具名掉落表卡片组（完整 CRUD，被引用中的表拒绝删除）。
+ *
+ * 「每怪掉落」不在这里 —— 怪物列表（`MonstersPage`）里每只怪自己有一行「掉落」，
+ * 打开就是同一个弹窗（引用模版 / 内联条目 / 清空走兜底）。两处各放一份列表的话，
+ * 同一份数据在两张表里各显示一次，改了一边还得跑去另一边核对。
+ *
  * 条目物品名走 gameData 查表；写操作要 `gameConfig:write`。
  */
 export function DropConfigPage() {
@@ -116,15 +116,6 @@ export function DropConfigPage() {
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [tableCreating, setTableCreating] = useState(false);
   const [editingTable, setEditingTable] = useState<DropTable | null>(null);
-
-  const [draftKeyword, setDraftKeyword] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(20);
-  const [data, setData] = useState<PageResult<MonsterDrop> | null>(null);
-  const [loading, setLoading] = useState(true);
-  /** 正在编辑掉落的怪物 key（null = 弹窗关闭） */
-  const [dropKey, setDropKey] = useState<string | null>(null);
 
   const loadTables = useCallback(async () => {
     setTablesLoading(true);
@@ -137,40 +128,9 @@ export function DropConfigPage() {
     }
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setData(await dropApi.listMonsterDrops({ page, size, keyword: keyword || undefined }));
-    } catch {
-      /* 错误已由请求层统一提示 */
-    } finally {
-      setLoading(false);
-    }
-  }, [page, size, keyword]);
-
   useEffect(() => {
     void loadTables();
   }, [loadTables]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const submitSearch = () => {
-    setPage(1);
-    setKeyword(draftKeyword.trim());
-  };
-
-  const resetSearch = () => {
-    setDraftKeyword("");
-    setPage(1);
-    setKeyword("");
-  };
-
-  const handleSizeChange = (next: number) => {
-    setSize(next);
-    setPage(1);
-  };
 
   /** 具名表：创建 / 更新（弹窗双用） */
   const submitTable = async (value: { id: string; picks: number | [number, number]; entries: DropEntry[] }): Promise<boolean> => {
@@ -202,14 +162,13 @@ export function DropConfigPage() {
     }
   };
 
-  /** 每怪：弹窗自己按 key 拉数据并保存（#584 起与怪物列表共用同一个弹窗） */
-
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="掉落配置"
-        description={<>具名掉落表可被多怪复用（可新建 / 删除，被引用中的拒绝删）；每怪掉落与怪物一一对应，只可整份替换
-            （引用具名表 / 内联条目池 / 清空走兜底）。改完即时生效（服务端掉落结算直读表，无需客户端更新）。</>}
+        description={<>这一页只维护掉落模版：具名掉落表可被多怪复用（可新建 / 删除，被引用中的拒绝删）。
+            每只怪引用哪张模版、或给它写一份内联条目，都在「怪物列表」里那一行「掉落」上改 —— 本页不再重复列一遍。
+            改完即时生效（服务端掉落结算直读表，无需客户端更新）。</>}
       />
 
       <Card
@@ -277,73 +236,6 @@ export function DropConfigPage() {
         {!tablesLoading && tables && tables.length === 0 ? <EmptyState title="还没有具名掉落表" description="点「新建表」建一张" /> : null}
       </Card>
 
-      <Card title="每怪掉落">
-        <div className="flex flex-wrap items-end gap-2">
-          <Field width="w-56" label="怪物 key">
-              <Input
-                value={draftKeyword}
-                placeholder="支持模糊匹配"
-                onChange={(event) => setDraftKeyword(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") submitSearch();
-                }}
-              />
-            </Field>
-          <Button onClick={submitSearch}>查询</Button>
-          <Button variant="outline" onClick={resetSearch}>
-            重置
-          </Button>
-        </div>
-      </Card>
-
-      <Card title="怪物掉落列表" actions={loading ? <Spinner /> : null} description={canWrite ? undefined : "当前角色没有「修改养成配置」权限，列表只读。"}>
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead className={theadClass}>
-              <tr>
-                <th className={thClass}>key</th>
-                <th className={thClass}>来源</th>
-                <th className={thClass}>具名表 / 抽取件数</th>
-                <th className={thClass}>条目数</th>
-                <th className={thClass}>更新时间</th>
-                <th className={`${thClass} text-right`}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.list.map((item) => (
-                <tr key={item.monsterKey} className="transition hover:bg-slate-800/30">
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.monsterKey}</td>
-                  <td className={tdClass}>
-                    <Badge tone={DROP_SOURCE_TONE[item.source] ?? "slate"}>{DROP_SOURCE_LABELS[item.source] ?? item.source}</Badge>
-                  </td>
-                  <td className={`${tdClass} font-mono text-xs`}>
-                    {item.source === "table"
-                      ? `${item.tableId ?? ""}${item.picks !== null ? ` · ${picksText(item.picks)}` : ""}`
-                      : picksText(item.picks) || "—"}
-                  </td>
-                  <td className={tdClass}>{item.entries?.length ?? "-"}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
-                  <td className={`${tdClass} text-right`}>
-                    <Button
-                      variant="outline"
-                      className="px-2.5 py-1 text-xs"
-                      disabled={!canWrite}
-                      onClick={() => setDropKey(item.monsterKey)}
-                    >
-                      编辑
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {!loading && data && data.list.length === 0 ? <EmptyState title="没有匹配的怪物" description="换个筛选条件试试" /> : null}
-
-        <Pagination page={page} size={size} total={data?.total ?? 0} onChange={setPage} onSizeChange={handleSizeChange} />
-      </Card>
-
       <DropTableDialog
         open={tableDialogOpen}
         creating={tableCreating}
@@ -353,15 +245,6 @@ export function DropConfigPage() {
           setEditingTable(null);
         }}
         onSubmit={submitTable}
-      />
-
-      <MonsterDropDialog
-        monsterKey={dropKey}
-        onClose={() => setDropKey(null)}
-        onSaved={() => {
-          setDropKey(null);
-          void load();
-        }}
       />
     </div>
   );
