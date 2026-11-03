@@ -12,6 +12,10 @@
 - **e2e 在 `startServer()` 之前写库无效**：`bootstrapConfigSnapshot()` 会把配置表整表替换。
   播种要放启动之后，并先 `DELETE` 出厂行（`e2e-world` / `e2e-game-mail` 都踩过）。
 - **假绿 > 漏检**：扫描器吞异常会「扫 0 个也全绿」→ 断言模块数；错误断言精确匹配文案；缓存 TTL 压 0；重试写进被测助手；节点名用 key 不用图标。
+- **跨时间的耦合断言别钉「第一个匹配」**（#670）：`find(...)[0]` 当样本会随机红 ——
+  权威侧会拒绝为**尸体**结算（`applyMonsterHit` 对 hp ≤ 0 返回 null，而 `casts` 照发），
+  于是第一帧可能只有动作没有数值。改成「等一帧同时满足两边」（超时要盖过一个冷却周期），
+  等不到才是真回归；本机绿 ≠ CI 绿（本机快、CI 慢，窗口才踩得到）。
 - **工具**：只信 Grep 工具（BSD `grep "a\|b"` 恒空）；批量替换 `perl -pi -e`（本机 `sed -i ''` 异常）；改完看行尾（`GameUiHelper.ts` 历史上是 CRLF，现已统一 LF —— 动手前 `grep -c $'\r'` 确认，别凭记忆假设）；子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof`。
 - 删改代码用 node 按行号区间（跨行正则会从文件头 `/**` 吃到函数尾）；`//#region` 是有语义的注释，不能当注释裁。
 - **一份数据只能一个来源**：库表（`config-sync.sql` 是它的导出物）→ 快照段 → `apply*` 整表重建，守点「导出一致 + 行数自洽」。代码里不许再有种子/生成物副本（`server/src/shared/` 已删）。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`），`configs-sandbox` 与真装载共用同一个 `apply*`。
@@ -40,7 +44,7 @@
   e2e 套件清单派生自 `server/package.json`（`tools/run-e2e.cjs`），新增脚本自动进 CI，不再维护 Makefile 清单。
 
 ## 进度
-- 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · 玩法补全 #394 · 背包穿戴收权 #556 · 管理端风格 #564 · 地图原点 #566 · 地图管理 #571/#573/#580 · 世界权威 #581 · 怪物配掉落 #584 · 刷怪区边界 #586 · 建号 #597 · 守卫清理 #598 · 邮件 #437/#439 · 掉落光效入特效管理 #634 · 成长线按后台升级路径 #635（客户端派生链 `titleUpgradeChain` / `soulUpgradeChain` + 四态 `growthStepOf`，空链 = closed 不许冒充满级；`getXxxLevel` 仍按等级号读全表，头顶外显不跟链序）· **存档权威化收官 #596（PR #639）**：hp/mp lazy 结算 + 复活接口 · 时装 buy/wear（清单独占字段）· 体验字段（shortcutKeys/guide/soulShow）帧云同步 · 互见位置最小仲裁（瞬移屏蔽 / 持续异常跟随）· **物品 id 字段可视化 #648（PR #649）**：`EntityPickButton`（字段自带 `EntityPicker`）铺到掉落条目 / 任务奖励 / 成就奖励 + 持有条件 / 邮件附件；`anyPickerOpen()` 收进 `components/pickerStack.ts`（`IconField` 与 `EntityPicker` 各自登记）。 **#651（PR #652）**：catalog 的 `EntityKind` 扩到 8 种（加 `monster` / `npc`，清单来自服务端种子）；任务目标 / 发布 NPC / 成就击杀条件全部可视化 —— **固定清单别用 `size: 100` 的分页接口当候选**（第 101 只怪选不到）。 · **配置同步 #653（PR #654）**：`make config-export/import/check`，31 张配置表**整表替换**写成 `server/data/config-sync.sql`（运行时表一张不进）。**种子是 `INSERT OR IGNORE`，只对空库生效** —— 多机同步不能靠改种子（推上去对方库里那行还在，一个值都不变）。
+- 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · 玩法补全 #394 · 背包穿戴收权 #556 · 管理端风格 #564 · 地图原点 #566 · 地图管理 #571/#573/#580 · 世界权威 #581 · 怪物配掉落 #584 · 刷怪区边界 #586 · **刷怪区改后台绘制 #667（PR #668 / `4f70d26f`）** · 建号 #597 · 守卫清理 #598 · 邮件 #437/#439 · 掉落光效入特效管理 #634 · 成长线按后台升级路径 #635（客户端派生链 `titleUpgradeChain` / `soulUpgradeChain` + 四态 `growthStepOf`，空链 = closed 不许冒充满级；`getXxxLevel` 仍按等级号读全表，头顶外显不跟链序）· **存档权威化收官 #596（PR #639）**：hp/mp lazy 结算 + 复活接口 · 时装 buy/wear（清单独占字段）· 体验字段（shortcutKeys/guide/soulShow）帧云同步 · 互见位置最小仲裁（瞬移屏蔽 / 持续异常跟随）· **物品 id 字段可视化 #648（PR #649）**：`EntityPickButton`（字段自带 `EntityPicker`）铺到掉落条目 / 任务奖励 / 成就奖励 + 持有条件 / 邮件附件；`anyPickerOpen()` 收进 `components/pickerStack.ts`（`IconField` 与 `EntityPicker` 各自登记）。 **#651（PR #652）**：catalog 的 `EntityKind` 扩到 8 种（加 `monster` / `npc`，清单来自服务端种子）；任务目标 / 发布 NPC / 成就击杀条件全部可视化 —— **固定清单别用 `size: 100` 的分页接口当候选**（第 101 只怪选不到）。 · **配置同步 #653（PR #654）**：`make config-export/import/check`，31 张配置表**整表替换**写成 `server/data/config-sync.sql`（运行时表一张不进）。**种子是 `INSERT OR IGNORE`，只对空库生效** —— 多机同步不能靠改种子（推上去对方库里那行还在，一个值都不变）。
 - **#603 出厂数据逐域搬到服务端（PR #624）**：模板 = `shared/<域>-seed.ts` → 服务端读种子 → 客户端清空表 + `apply*` 整表重建 → 守点「重生成逐字节不变」。资源路径判据：能按 id 推导的不入库（`map/<id>/<id>`、`effect/<key>/<key>.plist`），反之入库（药品 / 材料图标、时装 `icon/in/out`）。
 - **#604 / #626 快照层**：段清单唯一书写处 = `configs/game-config.ts` 区 0，缺段抛错并停在 Loading 重试（加一段 = DTO / `snapshot()` / 区 0 三处一起改）。
   #626 把 21 个域文件并进 `game-config.ts`（`//#region N · 标签（原 configs/xxx.ts）`，编号稳定、守点按编号取区）：**`apply*` 必须放进自己的区**（放到上一个区尾巴照样编译，但 `regionOf()` 读不到 —— 真踩过）；`items`/`equipments`/`skill`/`apply-snapshot` 不许被反向 import（方向恒为 `apply-snapshot → game-config → types`，`getMallGoods` 因此住 `equipments`）。工具链只换 require 名字（`configs-sandbox` / `client-config-compile` / `test-*.cjs` / `gen-shared-data` 的 `SOURCE_FILES` 只剩 4 个入口 / `audit-world-authority` 的 `MONSTER_REGION=15`）。
@@ -64,6 +68,6 @@
   代码里没有第二份数值副本。**死旋钮已清**：`growth_scalars` 只剩 4 个全局标量（`attributeRange.*` 三条删）、
   回收价曲线整条链删（`equipment_meta.recycle_curve` 列 + 客户端 `sampleGrowth`/`equipmentRecyclePrice` +
   管理端卡片；价只认 `equipment_variants.sell_price`）。新增 `dropColumnIfExists()` 删老库死列。
-- open：#8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
+- open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。
