@@ -475,7 +475,7 @@ export interface SoulRow {
  * 角色等级一行（`role_levels` 表；#655）
  *
  * 一行 = 一个等级的**最终裸属性 + 升级经验**。曲线（`growth_segments`）已从运行时移除，
- * 这 60 行由迁移脚本一次性展开写入，之后只由管理端逐行改 —— 运行时与快照都只读它。
+ * 这 60 行随出厂快照灌进库，之后只由管理端逐行改 —— 运行时与快照都只读它。
  */
 /**
  * 升级经验（**不是一张表**：#655 起经验并进 `role_levels.exp`，这个形状只用来
@@ -690,8 +690,6 @@ export interface EquipmentMetaRow {
   prefix_labels: string;
   /** 后缀文案 JSON（`["人级", "天级", "神级"]`） */
   suffix_labels: string;
-  /** 回收价曲线 JSON（`[{ from, to, start, perLevel }, …]`） */
-  recycle_curve: string;
   updated_at: number;
 }
 

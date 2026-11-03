@@ -1077,25 +1077,6 @@ export type UpdateEquipmentSlot = {
   order?: number;
 };
 
-export type EquipmentCurveSegment = {
-  /**
-   * 起始等级（含）
-   */
-  from: number;
-  /**
-   * 结束等级（含）
-   */
-  to: number;
-  /**
-   * 起始等级的值（绑定元宝）
-   */
-  start: number;
-  /**
-   * 该档内每升一级的增量
-   */
-  perLevel: number;
-};
-
 export type UpdateEquipmentMeta = {
   /**
    * 前缀倍率（整份替换；1~10 项，每项 > 0）
@@ -1113,10 +1094,6 @@ export type UpdateEquipmentMeta = {
    * 后缀文案（整份替换；必须与后缀倍率等长）
    */
   suffixLabels?: string[];
-  /**
-   * 回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）
-   */
-  recycleCurve?: EquipmentCurveSegment[];
 };
 
 export type EquipAlignPoint = {
@@ -3286,7 +3263,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "roleLevel" | "equipmentVariant" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -6012,7 +5989,7 @@ export type Level = {
    */
   taoistDefense: ConfigAttributeRange;
   /**
-   * 升到下一级所需经验（level_exps 表的最终值）
+   * 升到下一级所需经验（`role_levels.exp` 的最终值）
    */
   exp: number;
 };
@@ -6212,10 +6189,6 @@ export type EquipmentMeta = {
    */
   suffixLabels: string[];
   /**
-   * 回收价曲线（分段线性）
-   */
-  recycleCurve: EquipmentCurveSegment[];
-  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -6263,7 +6236,7 @@ export type GameConfigSnapshot = {
    */
   fashions: Fashion[];
   /**
-   * 等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— 属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；客户端 levelMap 整表由这段填充，曲线与标量不再下发
+   * 等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— `role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发
    */
   levels: Level[];
   /**

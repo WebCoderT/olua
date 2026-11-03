@@ -1009,8 +1009,8 @@ export class RolesService {
   /**
    * 击杀经验入账（#316：经验的结算在服务端）
    *
-   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **level_exps 表**（#256
-   * 管理端可改，即时生效）判定升级、循环升到曲线封顶（`growth_scalars.roleMaxLevel`），
+   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **role_levels.exp**（#655
+   * 60 行逐级配好，管理端可改、即时生效）判定升级、循环升到 `growth_scalars.roleMaxLevel` 封顶，
    * `roles.level` 索引列与 revision 原子推进。
    *
    * @returns 入账后的角色状态（level / expNow / expNeed / leveledUp / revision）；
@@ -1106,7 +1106,7 @@ export class RolesService {
     // 3) 金币（都在 data JSON 里，没有专用列）
     data.gold = Math.max(0, Math.floor(Number(data.gold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
 
-    // 4) 经验 + 升级（与 applyKillExp 同一算法：level_exps 表判定、循环升到曲线封顶）
+    // 4) 经验 + 升级（与 applyKillExp 同一算法：role_levels.exp 判定、循环升到等级上限）
     let level = Math.max(1, existing.level);
     let expNow = Math.max(0, Math.floor(Number(data.exp) || 0)) + Math.max(0, Math.floor(rewards.exp ?? 0));
     let leveledUp = false;
@@ -1196,7 +1196,7 @@ export class RolesService {
     return existing;
   }
 
-  /** 升到下一级所需经验（level_exps 表；升级路径与实时进程 roleUpdate 帧共用；曲线没铺到的等级回落 0） */
+  /** 升到下一级所需经验（`role_levels.exp`；升级路径与实时进程 roleUpdate 帧共用；表里没有那一级回落 0） */
   expNeedAt(level: number): number {
     return this.expNeedOf(level);
   }

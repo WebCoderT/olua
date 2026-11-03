@@ -85,9 +85,9 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— " +
-      "属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；" +
-      "客户端 levelMap 整表由这段填充，曲线与标量不再下发",
+      "等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— " +
+      "`role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；" +
+      "客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发",
     type: [LevelDto],
   })
   @Type(() => LevelDto)

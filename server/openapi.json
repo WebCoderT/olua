@@ -3136,10 +3136,8 @@
                 "fashion",
                 "dropTable",
                 "monsterDrop",
-                "levelExp",
                 "roleLevel",
                 "equipmentVariant",
-                "growthSegment",
                 "growthScalar",
                 "skill",
                 "status",
@@ -3423,10 +3421,8 @@
                 "fashion",
                 "dropTable",
                 "monsterDrop",
-                "levelExp",
                 "roleLevel",
                 "equipmentVariant",
-                "growthSegment",
                 "growthScalar",
                 "skill",
                 "status",
@@ -6047,7 +6043,7 @@
     },
     "/admin/equipment-meta": {
       "get": {
-        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n- `recycleCurve`：回收价曲线（分段线性）—— 背包「一键回收」与服务端卖装备结算共用。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n\n**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipmentMeta.get",
         "parameters": [],
         "responses": {
@@ -6078,7 +6074,7 @@
             "admin": []
           }
         ],
-        "summary": "装备规则（前后缀倍率 / 文案 / 回收价曲线）",
+        "summary": "装备规则（前后缀倍率 / 文案）",
         "tags": [
           "管理端"
         ],
@@ -6092,7 +6088,7 @@
         ]
       },
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 回收价曲线每档要求 `from ≤ to`、`start ≥ 0`、`perLevel ≥ 0`，违反 → 400。\n- 改完立刻重装服务端结算层：**卖装备的到账价与背包显示同步变**（不必重启）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminEquipmentMeta.update",
         "parameters": [],
         "requestBody": {
@@ -8917,7 +8913,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {
@@ -14069,37 +14065,6 @@
           }
         }
       },
-      "EquipmentCurveSegmentDto": {
-        "type": "object",
-        "properties": {
-          "from": {
-            "type": "number",
-            "description": "起始等级（含）",
-            "minimum": 1
-          },
-          "to": {
-            "type": "number",
-            "description": "结束等级（含）",
-            "minimum": 1
-          },
-          "start": {
-            "type": "number",
-            "description": "起始等级的值（绑定元宝）",
-            "minimum": 0
-          },
-          "perLevel": {
-            "type": "number",
-            "description": "该档内每升一级的增量",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "from",
-          "to",
-          "start",
-          "perLevel"
-        ]
-      },
       "UpdateEquipmentMetaDto": {
         "type": "object",
         "properties": {
@@ -14129,13 +14094,6 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
-          },
-          "recycleCurve": {
-            "description": "回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EquipmentCurveSegmentDto"
             }
           }
         }
@@ -17535,10 +17493,8 @@
               "fashion",
               "dropTable",
               "monsterDrop",
-              "levelExp",
               "roleLevel",
               "equipmentVariant",
-              "growthSegment",
               "growthScalar",
               "skill",
               "status",
@@ -21943,7 +21899,7 @@
           },
           "exp": {
             "type": "number",
-            "description": "升到下一级所需经验（level_exps 表的最终值）"
+            "description": "升到下一级所需经验（`role_levels.exp` 的最终值）"
           }
         },
         "required": [
@@ -22258,13 +22214,6 @@
               "type": "string"
             }
           },
-          "recycleCurve": {
-            "description": "回收价曲线（分段线性）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EquipmentCurveSegmentDto"
-            }
-          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -22275,7 +22224,6 @@
           "suffixRates",
           "prefixLabels",
           "suffixLabels",
-          "recycleCurve",
           "updatedAt"
         ]
       },
@@ -22353,7 +22301,7 @@
             }
           },
           "levels": {
-            "description": "等级表（#590：1..roleMaxLevel 每级的裸属性与最终升级经验）。**客户端不再自己派生** —— 属性由服务端 growth-seed 按曲线展开，exp 取 level_exps 表（管理端可改）；客户端 levelMap 整表由这段填充，曲线与标量不再下发",
+            "description": "等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— `role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/LevelDto"

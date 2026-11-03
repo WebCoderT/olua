@@ -470,7 +470,7 @@ export class GameConfigService {
    * 改装备规则（部分更新；整份替换语义）
    *
    * 跨字段校验只在这里做：**倍率与文案必须等长**（差一位就是「某一档没有名字」，
-   * 客户端名称会拼出 `undefined·人级`）；曲线每档 `from ≤ to`。
+   * 客户端名称会拼出 `undefined·人级`）。回收价不在这里（#655：逐条在 `equipment_variants`）。
    */
   updateEquipmentMeta(dto: UpdateEquipmentMetaDto): EquipmentMetaDto {
     const current = this.getEquipmentMeta();
@@ -478,20 +478,11 @@ export class GameConfigService {
     const suffixRates = dto.suffixRates ?? current.suffixRates;
     const prefixLabels = dto.prefixLabels ?? current.prefixLabels;
     const suffixLabels = dto.suffixLabels ?? current.suffixLabels;
-    const recycleCurve = dto.recycleCurve ?? current.recycleCurve;
     if (prefixRates.length !== prefixLabels.length) {
       throw new BizException(BizCode.PARAM_INVALID, `前缀倍率（${prefixRates.length} 项）与文案（${prefixLabels.length} 项）长度必须一致`);
     }
     if (suffixRates.length !== suffixLabels.length) {
       throw new BizException(BizCode.PARAM_INVALID, `后缀倍率（${suffixRates.length} 项）与文案（${suffixLabels.length} 项）长度必须一致`);
-    }
-    for (const segment of recycleCurve) {
-      if (segment.to < segment.from) {
-        throw new BizException(BizCode.PARAM_INVALID, `回收价曲线有一档 from=${segment.from} > to=${segment.to}`);
-      }
-      if (segment.start < 0 || segment.perLevel < 0) {
-        throw new BizException(BizCode.PARAM_INVALID, "回收价曲线的 start / perLevel 不能为负");
-      }
     }
     this.equipments.updateMeta({
       id: 1,
@@ -499,7 +490,6 @@ export class GameConfigService {
       suffix_rates: JSON.stringify(suffixRates),
       prefix_labels: JSON.stringify(prefixLabels),
       suffix_labels: JSON.stringify(suffixLabels),
-      recycle_curve: JSON.stringify(recycleCurve),
       updated_at: Date.now(),
     });
     this.touchRuntime();

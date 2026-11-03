@@ -265,9 +265,6 @@ function collectEquipmentMetaProblems(meta: Record<string, unknown>, problems: S
       });
     }
   }
-  if (!Array.isArray(meta.recycleCurve) || meta.recycleCurve.length === 0) {
-    problems.push({ key: "equipmentMeta", label: "装备规则", reason: "recycleCurve 为空（回收价算不出来）" });
-  }
 }
 
 /** 值的人话描述（报错用：区分 undefined / null / 字符串 / 数字） */
@@ -740,26 +737,15 @@ export function applyCombatWeights(weights: Record<string, number> | undefined):
  *
  * 这个文件历史上换过两次主人：
  * - #361 时代它是全角色数值的唯一来源（曲线 / 标量 / 属性派生全手写在客户端）；
- * - #590 起曲线、标量、等级表、三条成长线搬去服务端种子，客户端只剩「装备前后缀倍率 +
- *   回收价曲线 + roleMaxLevel」三样客户端常量；
- * - **#603 第九域起连那三样也不在客户端了**：倍率、品质文案、回收价曲线的唯一书写处是
- *   `server/data/config-sync.sql`（→ `equipment_meta` 表，管理端可改），
- *   进游戏由配置快照 `equipmentMeta` 段下发，本文件只剩空运行时表 + 一段取样算术。
+ * - #590 起曲线、标量、等级表、三条成长线搬去服务端，客户端只剩「装备前后缀倍率 +
+ *   回收价曲线 + roleMaxLevel」三样常量；
+ * - **#603 起连那三样也不在客户端了**：唯一书写处是 `server/data/config-sync.sql`，进游戏由配置快照下发。
+ * - **#655 起回收价曲线也下架**：每件变体的 `recyclePrice` 是 `equipment_variants` 行里的一列
+ *   （服务端 `sellPriceOf` 读同一列）。本文件只剩「倍率 + 品质文案 + roleMaxLevel」三样运行时值，
+ *   加一段只给工具链用的装备展开。
  *
- * 所以这里**一个数字都不许再写**：想调倍率 / 回收价 / 等级上限，改服务端种子或管理端。
+ * 所以这里**一个数字都不许再写**：想调倍率 / 回收价 / 等级上限，改库（管理端）。
  */
-
-/** 一条分段线性曲线的一档：档内按等级线性增长，档间靠 perLevel 跳档 */
-export interface GrowthSegment {
-  /** 起始等级（含） */
-  from: number;
-  /** 结束等级（含） */
-  to: number;
-  /** 该档起始等级（from）的值 */
-  start: number;
-  /** 该档内每升一级的增量 */
-  perLevel: number;
-}
 
 /**
  * 角色等级上限（**可变**：快照 growthScalars 的 roleMaxLevel 覆写）
@@ -781,23 +767,6 @@ export function setRoleMaxLevel(level: number): void {
 }
 
 /**
- * 在分段线性曲线上取某等级的值（目前只服务回收价曲线；超出最后一段按最后一段斜率外推）
- *
- * 服务端 `equipment-seed.sampleEquipmentCurve` 是同一段算术（两端各写一份是因为
- * 服务端不能 import 客户端代码）—— 改这里必须同步改那边，判据是
- * `test-equipment-recycle` 里「客户端与服务端取价逐级相同」那组断言。
- */
-export function sampleGrowth(segments: GrowthSegment[], level: number): number {
-  if (level <= 0 || segments.length === 0) return 0;
-  let last = segments[0];
-  for (const segment of segments) {
-    if (level <= segment.to) return segment.start + (level - segment.from) * segment.perLevel;
-    last = segment;
-  }
-  return last.start + (level - last.from) * last.perLevel;
-}
-
-/**
  * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
  *
  * **空数组 = 快照还没到**：此时 `buildEquipmentMap` 展开不出任何变体（装备表整个是空的）。
@@ -808,34 +777,16 @@ export let equipmentPrefixRates: number[] = [];
 /** 装备后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）；空数组的含义同上 */
 export let equipmentSuffixRates: number[] = [];
 
-/** 装备回收价的成长曲线（背包「一键回收」与卖装备结算的计价依据）；空数组 = 快照没到 */
-export let equipmentRecycleCurve: GrowthSegment[] = [];
-
 /**
  * 装载装备规则（`configs/apply-snapshot` 调；快照 `equipmentMeta` 段）
  *
- * 只收正数倍率（≤ 0 或非数字会让变体属性变成 0 或负数，比「没升级」更糟）；
- * 曲线按原样收（取样函数自己处理越界）。
+ * 只收正数倍率（≤ 0 或非数字会让变体属性变成 0 或负数，比「没升级」更糟）。
+ * **回收价不在这里**：每件变体的 `recyclePrice` 在 `equipment_variants` 行里逐条写好了
+ * （#655，服务端 `sellPriceOf` 读的也是那一列），客户端不再有「按等级取曲线价」这条路。
  */
-export function applyEquipmentRules(prefixRates: number[], suffixRates: number[], recycleCurve: GrowthSegment[]): void {
+export function applyEquipmentRules(prefixRates: number[], suffixRates: number[]): void {
   equipmentPrefixRates = (prefixRates || []).map((rate) => Number(rate)).filter((rate) => Number.isFinite(rate) && rate > 0);
   equipmentSuffixRates = (suffixRates || []).map((rate) => Number(rate)).filter((rate) => Number.isFinite(rate) && rate > 0);
-  equipmentRecycleCurve = (recycleCurve || []).map((segment) => ({
-    from: Number(segment.from) || 0,
-    to: Number(segment.to) || 0,
-    start: Number(segment.start) || 0,
-    perLevel: Number(segment.perLevel) || 0,
-  }));
-}
-
-/**
- * 取某等级装备的回收基础价（普通·人级；前后缀倍率由调用方乘上）
- *
- * 曲线来自服务端（`equipmentMeta.recycleCurve`）—— 快照没到时返回 0，
- * **不兜一份本地曲线**（那等于又造一份价格真相，正是 #603 要消掉的东西）。
- */
-export function equipmentRecyclePrice(level: number): number {
-  return Math.max(0, Math.round(sampleGrowth(equipmentRecycleCurve, level)));
 }
 //#endregion
 

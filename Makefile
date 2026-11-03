@@ -154,12 +154,12 @@ code-prune: ## 死代码扫描（ts-prune 三端；输出需人工复核，见 s
 	@echo "==> 死代码扫描（候选 ≠ 必删，逐条复核口径见技能文档）"
 	@cd server && $(NODE) node_modules/ts-prune/lib/index.js -p tsconfig.json --ignore "generated|node_modules" \
 		| grep -v "used in module" \
-		| grep -vE "game-data\.ts|shared/game-data\.generated\.ts|api/models\.ts|ApiModels\.ts|utils/net/Api\.ts" \
+		| grep -vE "api/models\.ts|ApiModels\.ts|utils/net/Api\.ts" \
 		| grep -vE "configs/(monster|skill-data)\.ts:.*default" \
 		| grep -vE "realtime/realtime\.protocol\.ts" \
 		| grep -v "rate-limit\.util\.ts.*remainingAttempts" \
 		|| true
-	@echo "  已过滤：共享快照 re-export、gen-api 双端生成物、Cocos 场景挂载类 default、"
+	@echo "  已过滤：gen-api 双端生成物、Cocos 场景挂载类 default、"
 	@echo "          协议帧 interface（契约文档）、remainingAttempts（e2e-guard 动态引用）"
 	@echo "  复核口径：候选还要对 e2e(.cjs 动态 require)、场景组件、模块内自用再查一遍"
 

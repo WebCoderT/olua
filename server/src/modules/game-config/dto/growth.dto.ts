@@ -43,7 +43,7 @@ export class LevelDto {
   @ApiProperty({ description: "道防区间", type: ConfigAttributeRangeDto })
   taoistDefense: ConfigAttributeRangeDto;
 
-  @ApiProperty({ description: "升到下一级所需经验（level_exps 表的最终值）" })
+  @ApiProperty({ description: "升到下一级所需经验（`role_levels.exp` 的最终值）" })
   exp: number;
 
   /** 从 `role_levels` 表行拼一行（#655：属性已是最终值，不再按曲线展开） */

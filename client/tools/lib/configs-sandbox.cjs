@@ -164,7 +164,7 @@ function hydrateSnapshotTables(outDir) {
   // 顺序讲究：倍率先装（它决定展开档数；空数组一件都展开不出来），再装槽位与文案
   const meta = factory.equipmentMeta();
   const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
-  cfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates, meta.recycleCurve);
+  cfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates);
   equipmentsMod.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels);
   equipmentsMod.applyEquipmentSlots(factory.equipmentSlots());
 

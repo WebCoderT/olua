@@ -4,12 +4,12 @@
  *
  * 编译沙箱（把 configs 编成 CommonJS + cc 垫片）见 client/tools/lib/configs-sandbox.cjs。
  *
- * 盯的不变量（改回收价曲线 / 改回收算法后必须全绿）：
- * · 每件装备都有回收价（> 0），药品/材料/解析不出配置的 id 一律不计价
+ * 盯的不变量（改回收算法后必须全绿）：
+ * · 每件装备都有回收价（正整数），药品/材料/解析不出配置的 id 一律不计价
  * · 回收只搬走**装备**：非装备格子连引用都不动、行列数不变、返回新数组不改入参
  * · 件数与合计价 = 逐格逐件累加（含「叠着的装备」这种脏数据：按 count 计价，不白拿走）
- * · 计价口径：基础价按等级从曲线取，前后缀变体乘同一个 rate（超神·神级 = ×4.2）
- * · 等级越高越值钱；同等级时前后缀越强越值钱
+ * · 方向：等级越高越值钱、前后缀越强越值钱（#655 起价是 `equipment_variants.sell_price`
+ *   逐条数据，这里只验方向与形态，不锁任何具体数字）
  * · 空背包/没有装备的背包 → 空结算（count 0 / totalPrice 0）
  * · 幂等：连续回收两次，第二次必为空结算且背包不再变化
  * · summarizeBagRecycle（按钮上的预览）与实际回收结果完全一致
@@ -31,7 +31,6 @@ function main() {
 
   const { items, getItem, summarizeBagRecycle, recycleBagEquipmentGrid } = require(path.join(outDir, "configs/items.js"));
   const { getRecyclePrice } = require(path.join(outDir, "configs/equipments.js"));
-  const { equipmentRecyclePrice, equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
   const { bagRow, bagCol } = require(path.join(outDir, "configs/role.js"));
   const { isEquipment } = require(path.join(outDir, "types/good.js"));
 
@@ -72,11 +71,13 @@ function main() {
   const noPrice = allEquipments.filter(({ good }) => getRecyclePrice(good) <= 0);
   check(allEquipments.length > 0, "配置表里能读到装备", `${allEquipments.length} 件（含前后缀变体）`);
   check(noPrice.length === 0, "所有装备的回收价都 > 0", noPrice.length ? `无价：${noPrice.map((e) => e.id).join(", ")}` : `共 ${allEquipments.length} 件`);
-  const baseNoPrice = baseEquipments.filter(({ good, id }) => getRecyclePrice(good) !== equipmentRecyclePrice(good.level) || equipmentRecyclePrice(good.level) <= 0);
+  // #655：价是 `equipment_variants.sell_price` 的一列，逐条配好 —— 不再有「按等级取曲线价」，
+  // 所以这里只验「有价、是正整数、跟等级/前后缀同向」，不锁任何具体数字
+  const badBase = baseEquipments.filter(({ good }) => !Number.isInteger(getRecyclePrice(good)) || getRecyclePrice(good) <= 0);
   check(
-    baseNoPrice.length === 0,
-    "基础件（普通·人级）的价与等级曲线一致且 > 0",
-    baseNoPrice.length ? `不符：${baseNoPrice.map((e) => e.id).join(", ")}` : `基础件 ${baseEquipments.length} 件，覆盖 1~${baseEquipments[baseEquipments.length - 1].good.level} 级`,
+    badBase.length === 0,
+    "基础件（普通·人级）的价是正整数",
+    badBase.length ? `不符：${badBase.map((e) => e.id).join(", ")}` : `基础件 ${baseEquipments.length} 件，覆盖 1~${baseEquipments[baseEquipments.length - 1].good.level} 级`,
   );
   const nonEquipmentWithPrice = [];
   items.forEach((good, id) => {
@@ -97,25 +98,22 @@ function main() {
     if (getRecyclePrice(baseEquipments[i].good) <= getRecyclePrice(baseEquipments[i - 1].good)) levelMonotonic = false;
   }
   check(levelMonotonic, "等级越高回收价越高（价只由 等级 × 前后缀 决定，与部位无关）");
+  const low = baseEquipments[0];
   const top = baseEquipments[baseEquipments.length - 1];
   check(
-    getRecyclePrice(top.good) === 39900 && equipmentRecyclePrice(60) === 39900,
-    "60 级基础件回收价 = 曲线值 39,900",
-    `${top.id}(lv${top.good.level}) = ${getRecyclePrice(top.good)}`,
+    getRecyclePrice(top.good) > getRecyclePrice(low.good),
+    "最高级基础件比 1 级基础件贵",
+    `${low.id}(lv${low.good.level}) = ${getRecyclePrice(low.good)} → ${top.id}(lv${top.good.level}) = ${getRecyclePrice(top.good)}`,
   );
 
-  const variantOk = allEquipments.every(({ good }) => {
-    const rate = equipmentPrefixRates[good.prefix] * equipmentSuffixRates[good.suffix];
-    return getRecyclePrice(good) === Math.round(equipmentRecyclePrice(good.level) * rate);
-  });
-  check(variantOk, "所有变体价 = 等级基础价 × 前后缀倍率", "超神·神级 = ×4.2");
+  const variantPositive = allEquipments.every(({ good }) => Number.isInteger(getRecyclePrice(good)) && getRecyclePrice(good) > 0);
+  check(variantPositive, "所有变体价都是正整数（逐条配的那一列）");
   const maxVariant = allEquipments.find(({ id }) => id.endsWith("_p4s2"));
   if (maxVariant) {
-    const basePrice = equipmentRecyclePrice(maxVariant.good.level);
     check(
-      getRecyclePrice(maxVariant.good) === Math.round(basePrice * 4.2),
-      "变体价 = 基础价 × 4.2（超神·神级）",
-      `${maxVariant.id} = ${getRecyclePrice(maxVariant.good)}（基础件 ${basePrice}）`,
+      getRecyclePrice(maxVariant.good) > getRecyclePrice(getItem(maxVariant.id.replace(/_p4s2$/, ""))),
+      "顶配变体（超神·神级）比同件基础件贵",
+      `${maxVariant.id} = ${getRecyclePrice(maxVariant.good)}`,
     );
   }
 

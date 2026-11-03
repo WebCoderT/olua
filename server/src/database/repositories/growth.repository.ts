@@ -18,21 +18,14 @@ export interface GrowthScalarListOptions {
  *
  * 为什么还留在这里：`roles.service` 的升级判定走本仓储。以前它读 `level_exps`，
  * 现在读 `role_levels` —— 表没了还留着旧读法就会「管理端改了经验、玩家按旧值升级」。
- * 老库的 `level_exps` 由 `make data-migrate` 一次性搬进 `role_levels` 后删除。
+ * 老库的 `level_exps` / `growth_segments` 由启动时的 `DROP TABLE IF EXISTS` 清掉
+ * （数据早就随快照灌进 `role_levels` 了，见 `database.service` 的 ensure 段）。
  */
 @Injectable()
 export class GrowthRepository {
   constructor(private readonly db: DatabaseService) {}
 
   // —— 等级经验 ——
-
-  updateLevelExp(row: LevelExpRow): { changes: number } {
-    return this.db.execute("UPDATE role_levels SET exp = ?, updated_at = ? WHERE level = ?", [
-      row.exp,
-      row.updated_at,
-      row.level,
-    ]);
-  }
 
   findLevelExp(level: number): LevelExpRow | undefined {
     return this.db.get<LevelExpRow>("SELECT level, exp, updated_at FROM role_levels WHERE level = ?", [level]);

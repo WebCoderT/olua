@@ -11,9 +11,6 @@ import { PageHeader } from "../components/PageHeader";
 /** 参数键 → 中文名（说明在行里由服务端给，这里只补一个短名，未登记的原样显示键名） */
 const SCALAR_LABELS: Record<string, string> = {
   roleMaxLevel: "角色等级上限",
-  "attributeRange.minRate": "属性区间下限比例",
-  "attributeRange.mpRate": "魔法上限比例",
-  "attributeRange.hpRecoverRate": "回血换算比例",
   "expGain.expPerLevel": "每级经验基数",
   "expGain.maxLevelGap": "等级差经验衰减",
   mpRecoverPerSecond: "每秒自然回蓝",
@@ -26,7 +23,7 @@ const SCALAR_LABELS: Record<string, string> = {
  * 曲线分段随曲线一起下架 —— 原来这一页能改「10 级这段曲线的斜率」，
  * 改一个数会带动整段等级，出问题要逐级对着表看才知道哪级跳了；现在改哪级就是哪级。
  *
- * 留在这里的都是**全局参数**：等级上限、区间下限比例、经验节奏、自然回蓝 ——
+ * 留在这里的都是**全局参数**：等级上限、经验节奏、自然回蓝 ——
  * 它们的语义本来就是「全线一个数」，没有逐级版本。
  */
 export function GrowthPage() {

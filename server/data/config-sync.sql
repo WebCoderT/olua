@@ -2,10 +2,10 @@
 --
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
--- 表 32 张 / 行 1770 条
+-- 表 32 张 / 行 1767 条
 -- olua config snapshot v1
 -- tables: achievements,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,combat_weights=7,drop_tables=4,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=7,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- counts: achievements=24,combat_weights=7,drop_tables=4,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=4,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -138,7 +138,7 @@ INSERT INTO "equip_in_aligns" ("id", "in_scale_x", "in_scale_y", "in_x", "in_y",
 
 -- ===== equipment_meta（1 行）=====
 DELETE FROM "equipment_meta";
-INSERT INTO "equipment_meta" ("id", "prefix_rates", "suffix_rates", "prefix_labels", "suffix_labels", "recycle_curve", "updated_at") VALUES (1, '[1,1.1,1.2,1.3,1.4]', '[1,2,3]', '["普通的","强化的","精良的","极品的","超神的"]', '["人级","天级","神级"]', '[{"from":1,"to":10,"start":10,"perLevel":5},{"from":11,"to":20,"start":60,"perLevel":20},{"from":21,"to":30,"start":260,"perLevel":70},{"from":31,"to":40,"start":960,"perLevel":270},{"from":41,"to":50,"start":3600,"perLevel":840},{"from":51,"to":60,"start":12000,"perLevel":3100}]', 0);
+INSERT INTO "equipment_meta" ("id", "prefix_rates", "suffix_rates", "prefix_labels", "suffix_labels", "updated_at") VALUES (1, '[1,1.1,1.2,1.3,1.4]', '[1,2,3]', '["普通的","强化的","精良的","极品的","超神的"]', '["人级","天级","神级"]', 0);
 
 -- ===== equipment_slots（13 行）=====
 DELETE FROM "equipment_slots";
@@ -777,12 +777,9 @@ INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res
 INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res", "sell_price", "acquire_channel", "max_hp", "hp_recover", "physical_attack_min", "physical_attack_max", "magic_attack_min", "magic_attack_max", "taoist_attack_min", "taoist_attack_max", "physical_defense_min", "physical_defense_max", "magic_defense_min", "magic_defense_max", "taoist_defense_min", "taoist_defense_max", "updated_at") VALUES ('cloth_27', '金龙帝袍', '金龙盘冠的帝王战袍，举手投足间尽显威仪，似有龙吟环绕。', 'clothes/icon/027', 'clothes/in/027', 'clothes/out/027', 0, 'unavailable', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res", "sell_price", "acquire_channel", "max_hp", "hp_recover", "physical_attack_min", "physical_attack_max", "magic_attack_min", "magic_attack_max", "taoist_attack_min", "taoist_attack_max", "physical_defense_min", "physical_defense_max", "magic_defense_min", "magic_defense_max", "taoist_defense_min", "taoist_defense_max", "updated_at") VALUES ('cloth_28', '金身财神', '金甲加身的财神爷，周身落满金币与火光，见者发财。', 'clothes/icon/028', 'clothes/in/028', 'clothes/out/028', 0, 'unavailable', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
--- ===== growth_scalars（7 行）=====
+-- ===== growth_scalars（4 行）=====
 DELETE FROM "growth_scalars";
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('roleMaxLevel', 60, '角色等级上限（四条曲线的最后一段必须正好覆盖到它）', 0);
-INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('attributeRange.minRate', 0.7, '属性取值下限倍率：实际值在 [上限×minRate, 上限] 之间随机', 0);
-INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('attributeRange.mpRate', 0.5, '最大魔法值 = 最大生命 × 该值', 0);
-INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('attributeRange.hpRecoverRate', 0.01, '每秒回血 = 最大生命 × 该值（回血的唯一强度入口）', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('expGain.expPerLevel', 5, '每级基准经验：同级击杀经验 = (怪物等级+1) × 该值', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('expGain.maxLevelGap', 6, '角色与怪物等级差达到该值（含）后不再获得经验', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('mpRecoverPerSecond', 2, '魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）', 0);

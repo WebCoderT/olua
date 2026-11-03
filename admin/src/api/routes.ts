@@ -328,9 +328,9 @@ export const routes = {
   /** adminEquipmentMeta 模块（2 个接口） */
   adminEquipmentMeta: {
     /**
-     * 装备规则（前后缀倍率 / 文案 / 回收价曲线）（GET /admin/equipment-meta）
+     * 装备规则（前后缀倍率 / 文案）（GET /admin/equipment-meta）
      *
-     * 单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。
+     * 单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。
      */
     get: "/admin/equipment-meta",
     /**
@@ -429,7 +429,7 @@ export const routes = {
     /**
      * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
      *
-     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），attributeRange.minRate ∈ [0, 1]，attributeRange.mpRate ∈ [0, 10]，attributeRange.hpRecoverRate ∈ [0, 1]，expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。
+     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]。
      */
     update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
   },

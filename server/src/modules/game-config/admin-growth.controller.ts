@@ -24,9 +24,9 @@ import {
 /**
  * 管理端 · 角色等级表（#655）
  *
- * 60 行 = 每级的最终裸属性 + 升级经验。曲线（`growth-segments`）已不再是运行时输入，
+ * 60 行 = 每级的最终裸属性 + 升级经验。曲线（`growth_segments`）已不再是运行时输入，
  * 这张表就是权威：改哪一级就只影响哪一级，没有「改一段曲线带动 10 级」的连带效果。
- * 与旧接口的关系：`admin/level-exps` 只剩经验一列（同一个数据源），这里给全字段。
+ * `admin/level-exps` 已随曲线下线 —— 经验就是这张表的 `exp` 列，没有第二个接口。
  */
 @ApiAudience("admin")
 @Controller("admin/role-levels")

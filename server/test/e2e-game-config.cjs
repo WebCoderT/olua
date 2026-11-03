@@ -500,11 +500,10 @@ async function main() {
     checkEqual(maxLevelRow?.value, growthScalars.roleMaxLevel, "等级上限初值与配置一致");
     check(Boolean(maxLevelRow?.description), "每个标量参数都带说明");
 
-    const ratePatched = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 0.8 } });
-    checkEqual(ratePatched.status, 200, "PATCH 比率参数成功");
-    checkEqual(ratePatched.body?.data?.value, 0.8, "响应里的比率已更新");
-    const rateOver = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 1.5 } });
-    checkEqual(rateOver.status, 400, "比率超出取值域（>1）→ 400");
+    // #655：`attributeRange.*` 三个换算比率随曲线下架 —— 它们已经不在了，写回旧键必须报「没有这个参数」
+    const removedKey = await api(base, "PATCH", "/api/admin/growth-scalars/attributeRange.minRate", { token, body: { value: 0.8 } });
+    checkEqual(removedKey.status, 404, "已下架的标量键（attributeRange.minRate）→ 404");
+    checkEqual(removedKey.body?.code, 50014, "下架键按「参数未找到」拒绝，不是静默接受");
     const rateFraction = await api(base, "PATCH", "/api/admin/growth-scalars/expGain.expPerLevel", { token, body: { value: 5.5 } });
     checkEqual(rateFraction.status, 400, "整数参数传小数 → 400");
     // #605：魔法自然回复速度入表（原本写死在 role-authority，管理端改不了）
@@ -521,7 +520,7 @@ async function main() {
     const scalarGhost = await api(base, "PATCH", "/api/admin/growth-scalars/nope", { token, body: { value: 1 } });
     checkEqual(scalarGhost.status, 404, "改不存在的参数键 → 404");
     checkEqual(scalarGhost.body?.code, 50014, "标量参数未找到用专属业务码 50014");
-    const scalarKeyword = await api(base, "GET", "/api/admin/growth-scalars?keyword=minRate", { token });
+    const scalarKeyword = await api(base, "GET", "/api/admin/growth-scalars?keyword=recover", { token });
     checkEqual(scalarKeyword.body?.data?.total, 1, "关键字能命中对应参数");
     const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, body: { value: 50 } });
     checkEqual(viewerScalarWrite.status, 403, "观察员改标量参数 → 403");
@@ -879,7 +878,7 @@ async function main() {
     checkEqual(metaRow.suffixRates?.length, equipMeta.suffixRates.length, `后缀倍率档数 = 种子（${equipMeta.suffixRates.length}）`);
     checkEqual(metaRow.prefixLabels?.[0], equipMeta.prefixLabels[0], "前缀文案与种子一致");
     checkEqual(metaRow.suffixLabels?.[0], equipMeta.suffixLabels[0], "后缀文案与种子一致");
-    check(Array.isArray(metaRow.recycleCurve) && metaRow.recycleCurve.length > 0, "回收价曲线至少一段（采样表由它派生）");
+    check(metaRow.recycleCurve === undefined, "回收价曲线已从契约里退场（#655 改成逐条 sell_price）");
     const metaByViewer = await api(base, "GET", "/api/admin/equipment-meta", { token: viewerToken });
     checkEqual(metaByViewer.body?.code, 0, "观察员能看装备规则");
     const metaWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-meta", { token: viewerToken, body: { prefixRates: [1] } });
@@ -888,16 +887,13 @@ async function main() {
     const metaAsymmetric = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.5], prefixLabels: ["一档"] } });
     checkEqual(metaAsymmetric.status, 400, "倍率与文案长度不一致 → 400");
     checkEqual(metaAsymmetric.body?.code, 40000, "跨字段校验用 40000（参数非法）");
-    const metaBadCurve = await api(base, "PATCH", "/api/admin/equipment-meta", {
+    // 下架字段写回来必须验不出来（whitelist 会剥掉，接口照常 200 但值不变）
+    const metaGhostField = await api(base, "PATCH", "/api/admin/equipment-meta", {
       token,
-      body: { recycleCurve: [{ from: 10, to: 1, start: 1, perLevel: 1 }] },
+      body: { recycleCurve: [{ from: 1, to: 10, start: 1, perLevel: 1 }] },
     });
-    checkEqual(metaBadCurve.status, 400, "曲线 from > to → 400");
-    const metaNegative = await api(base, "PATCH", "/api/admin/equipment-meta", {
-      token,
-      body: { recycleCurve: [{ from: 1, to: 10, start: -1, perLevel: 1 }] },
-    });
-    checkEqual(metaNegative.status, 400, "曲线 start < 0 → 400");
+    checkEqual(metaGhostField.status, 200, "写已下架的 recycleCurve 不报错（whitelist 静默剥掉）");
+    check(metaGhostField.body?.data?.recycleCurve === undefined, "响应里没有 recycleCurve（字段真的没了）");
 
     const metaPatched = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.1, 1.2, 1.3, 1.5] } });
     checkEqual(metaPatched.status, 200, "PATCH 前缀倍率成功");
@@ -909,7 +905,6 @@ async function main() {
         suffixRates: equipMeta.suffixRates,
         prefixLabels: equipMeta.prefixLabels,
         suffixLabels: equipMeta.suffixLabels,
-        recycleCurve: metaRow.recycleCurve,
       },
     });
     checkEqual(metaRestored.body?.data?.prefixRates?.[4], equipMeta.prefixRates[4], "倍率已还原（不污染后续结算断言）");
@@ -1612,7 +1607,7 @@ async function main() {
     checkEqual(snap.equipmentSlots?.length, slotRows.length, `快照槽位行数 = 种子（${slotRows.length}）`);
     checkEqual(snap.equipmentMeta?.prefixRates?.length, equipMeta.prefixRates.length, "快照带前后缀倍率（客户端展开 15 个变体的依据）");
     checkEqual(snap.equipmentMeta?.prefixLabels?.[0], equipMeta.prefixLabels[0], "快照带品质文案");
-    check(Array.isArray(snap.equipmentMeta?.recycleCurve) && snap.equipmentMeta.recycleCurve.length > 0, "快照带回收价曲线（客户端算回收价）");
+    check(snap.equipmentMeta?.recycleCurve === undefined, "快照不带回收价曲线（价随变体一行下发）");
     checkEqual(snap.drugs?.length, Object.keys(drugs).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(items).length, "快照物品行数 = 生成物");
     {

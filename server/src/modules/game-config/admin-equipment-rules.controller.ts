@@ -71,12 +71,13 @@ export class AdminEquipmentRulesController {
   @Get("equipment-meta")
   @ApiAdminDoc({
     operationId: "adminEquipmentMeta.get",
-    summary: "装备规则（前后缀倍率 / 文案 / 回收价曲线）",
+    summary: "装备规则（前后缀倍率 / 文案）",
     description:
-      "单行配置。客户端 `configs/equipments` 展开 15 个变体、`configs/growth` 算回收价都读它。\n\n" +
+      "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n" +
       "- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n" +
-      "- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n" +
-      "- `recycleCurve`：回收价曲线（分段线性）—— 背包「一键回收」与服务端卖装备结算共用。",
+      "- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n\n" +
+      "**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n" +
+      "服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiDataResponse(EquipmentMetaDto, { description: "装备规则" })
@@ -92,8 +93,7 @@ export class AdminEquipmentRulesController {
     description:
       "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n" +
       "- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n" +
-      "- 回收价曲线每档要求 `from ≤ to`、`start ≥ 0`、`perLevel ≥ 0`，违反 → 400。\n" +
-      "- 改完立刻重装服务端结算层：**卖装备的到账价与背包显示同步变**（不必重启）。",
+      "- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiDataResponse(EquipmentMetaDto, { description: "更新后的装备规则" })

@@ -538,15 +538,15 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 装备规则（#603 第九域）：单行表（id 恒为 1），存前后缀倍率 / 文案 / 回收价曲线。
-      -- 三个数组都是 JSON 文本 —— 它们是「一组同长的表」，拆成列反而要多维护行数约束
+      -- 装备规则（#603 第九域）：单行表（id 恒为 1），存前后缀倍率 / 文案。
+      -- 四个数组都是 JSON 文本 —— 它们是「一组同长的表」，拆成列反而要多维护行数约束。
+      -- 回收价曲线 #655 下架（逐条价在 equipment_variants.sell_price），老库那列由 ensure 段删掉
       CREATE TABLE IF NOT EXISTS equipment_meta (
         id            INTEGER PRIMARY KEY CHECK (id = 1),
         prefix_rates  TEXT    NOT NULL DEFAULT '[]',
         suffix_rates  TEXT    NOT NULL DEFAULT '[]',
         prefix_labels TEXT    NOT NULL DEFAULT '[]',
         suffix_labels TEXT    NOT NULL DEFAULT '[]',
-        recycle_curve TEXT    NOT NULL DEFAULT '[]',
         updated_at    INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1069,8 +1069,12 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();
-    // 曲线退场的收尾（#655）：这两张表的数据已经搬进 role_levels，留着只会让人以为还能改
+    // 曲线退场的收尾（#655）：老库的这两张表还留着就会让人以为「还能改」—— 每次启动顺手清掉
+    // （`IF EXISTS`，新库就是两条空操作；数据早已由快照灌进 role_levels）
     this.db.exec("DROP TABLE IF EXISTS level_exps; DROP TABLE IF EXISTS growth_segments;");
+    // 回收价曲线同样下架（#655）：老库 equipment_meta 里还留着 recycle_curve 列，
+    // 导出是 `SELECT *`，不删列它就会一直躺在 config-sync.sql 里
+    this.dropColumnIfExists("equipment_meta", "recycle_curve");
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(
@@ -1185,6 +1189,19 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     if (columns.some((item) => item.name === column)) return;
     this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
     this.logger.log(`表 ${table} 补列：${column}`);
+  }
+
+  /**
+   * 删掉一张表上已经没有消费方的列（只在列还在时动作）
+   *
+   * 为什么需要它：配置快照是 `SELECT *` 导出的 —— 表里留着一列没人读的字段，
+   * 它就会一直出现在 `config-sync.sql` 里，下一个人会以为那还是个旋钮。
+   */
+  private dropColumnIfExists(table: string, column: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[];
+    if (!columns.some((item) => item.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
+    this.logger.log(`表 ${table} 删列：${column}（已无消费方）`);
   }
 
   /** 执行写语句（无返回） */

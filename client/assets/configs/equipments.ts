@@ -9,7 +9,7 @@ import {
   GOOD_TYPE,
 } from "../types/good";
 import type { BattleAttributes } from "../types/common";
-import { equipmentPrefixRates, equipmentRecyclePrice, equipmentSuffixRates } from "./game-config";
+import { equipmentPrefixRates, equipmentSuffixRates } from "./game-config";
 import { combatCalc as combatCalcWeights } from "./game-config";
 
 /**
@@ -189,8 +189,9 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
       continue;
     }
 
-    // 路径 2：种子基础件（工具链）—— 按倍率展开成 15 件
-    const baseRecyclePrice = entry.recyclePrice ?? equipmentRecyclePrice(rest.level);
+    // 路径 2：种子基础件（**只给工具链**，运行时全走路径 1）—— 按倍率展开成 15 件。
+    // 回收价 #655 起是逐条数据，种子行没带就是 0（工具链不编价，真实价格只认快照变体行）
+    const baseRecyclePrice = entry.recyclePrice ?? 0;
     for (let p = 0; p < equipmentPrefixRates.length; p++) {
       for (let s = 0; s < equipmentSuffixRates.length; s++) {
         const rate = equipmentPrefixRates[p] * equipmentSuffixRates[s];

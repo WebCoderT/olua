@@ -130,7 +130,7 @@ export interface RealtimeSettleOk {
 /**
  * 一次击杀的奖励（#316：经验与掉落的结算都在服务端）
  *
- * - 经验：服务端按自己的成长标量（growth_scalars）与等级经验表（level_exps）算出入账，
+ * - 经验：服务端按自己的成长标量（growth_scalars）与等级表（role_levels.exp）算出入账，
  *   **落账在先**——`level / expNow / revision` 就是入账后的角色状态，客户端照着演即可；
  * - 掉落：读 monster_drops / drop_tables 表（管理端改值即时生效）按权重/概率/数量抽取，
  *   客户端只负责把列表铺到地面演拾取，「掉什么、掉多少」不再是客户端的决定。

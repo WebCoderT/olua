@@ -465,34 +465,12 @@ export class UpdateEquipmentSlotDto {
   order?: number;
 }
 
-/** 回收价曲线的一档（分段线性：档内按等级线性增长，档间靠 perLevel 跳档） */
-export class EquipmentCurveSegmentDto {
-  @ApiProperty({ description: "起始等级（含）", minimum: 1 })
-  @IsInt({ message: "起始等级必须是整数" })
-  @Min(1, { message: "起始等级不能小于 1" })
-  from: number;
-
-  @ApiProperty({ description: "结束等级（含）", minimum: 1 })
-  @IsInt({ message: "结束等级必须是整数" })
-  @Min(1, { message: "结束等级不能小于 1" })
-  to: number;
-
-  @ApiProperty({ description: "起始等级的值（绑定元宝）", minimum: 0 })
-  @IsNumber({}, { message: "起始价必须是数字" })
-  @Min(0, { message: "起始价不能为负" })
-  start: number;
-
-  @ApiProperty({ description: "该档内每升一级的增量", minimum: 0 })
-  @IsNumber({}, { message: "每级增量必须是数字" })
-  @Min(0, { message: "每级增量不能为负" })
-  perLevel: number;
-}
-
 /**
  * 装备规则（单行）
  *
- * 前后缀倍率与文案**按下标一一对应**（长度必须相同，service 会校验）；
- * 回收价曲线只服务「背包一键回收」与卖装备结算，服务端与客户端读同一段采样算术。
+ * 前后缀倍率与文案**按下标一一对应**（长度必须相同，service 会校验）。
+ * **回收价不在这里**（#655）：每件变体的 `sell_price` 是 `equipment_variants` 行里的一列，
+ * 按等级取曲线价那套已经下架 —— 运营要调价就改那一行，不再有「改一段曲线带动全表」。
  */
 export class EquipmentMetaDto {
   @ApiProperty({ description: "前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）", type: [Number] })
@@ -507,10 +485,6 @@ export class EquipmentMetaDto {
   @ApiProperty({ description: "后缀文案（与倍率同长）", type: [String] })
   suffixLabels: string[];
 
-  @ApiProperty({ description: "回收价曲线（分段线性）", type: [EquipmentCurveSegmentDto] })
-  @Type(() => EquipmentCurveSegmentDto)
-  recycleCurve: EquipmentCurveSegmentDto[];
-
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -520,7 +494,6 @@ export class EquipmentMetaDto {
     dto.suffixRates = parseNumberArray(row.suffix_rates);
     dto.prefixLabels = parseStringArray(row.prefix_labels);
     dto.suffixLabels = parseStringArray(row.suffix_labels);
-    dto.recycleCurve = parseCurve(row.recycle_curve);
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -565,15 +538,6 @@ export class UpdateEquipmentMetaDto {
   @IsString({ each: true, message: "文案必须是字符串" })
   @MaxLength(10, { each: true, message: "每档文案不超过 10 字" })
   suffixLabels?: string[];
-
-  @ApiPropertyOptional({ description: "回收价曲线（整份替换；1~20 档，每档 from ≤ to、start ≥ 0、perLevel ≥ 0）", type: [EquipmentCurveSegmentDto] })
-  @IsOptional()
-  @IsArray({ message: "回收价曲线必须是数组" })
-  @ArrayMinSize(1, { message: "回收价曲线至少 1 档" })
-  @ArrayMaxSize(20, { message: "回收价曲线最多 20 档" })
-  @ValidateNested({ each: true })
-  @Type(() => EquipmentCurveSegmentDto)
-  recycleCurve?: EquipmentCurveSegmentDto[];
 }
 
 /** JSON 文本列 → 数字数组（脏数据降级成空数组） */
@@ -581,25 +545,6 @@ function parseNumberArray(text: string): number[] {
   try {
     const parsed = JSON.parse(text);
     return Array.isArray(parsed) ? parsed.map((item) => Number(item)).filter((item) => Number.isFinite(item)) : [];
-  } catch {
-    return [];
-  }
-}
-
-/** JSON 文本列 → 曲线分段（脏数据降级成空数组） */
-function parseCurve(text: string): EquipmentCurveSegmentDto[] {
-  try {
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((item) => {
-      const row = (item ?? {}) as Record<string, unknown>;
-      const segment = new EquipmentCurveSegmentDto();
-      segment.from = Number(row.from) || 0;
-      segment.to = Number(row.to) || 0;
-      segment.start = Number(row.start) || 0;
-      segment.perLevel = Number(row.perLevel) || 0;
-      return segment;
-    });
   } catch {
     return [];
   }

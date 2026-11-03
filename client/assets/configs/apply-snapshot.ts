@@ -86,9 +86,9 @@ function applyMallPrices(prices: MallPriceItem[], defaultPrice: number): void {
 /**
  * 覆写成长标量参数（#361；#590 起客户端只消费 roleMaxLevel；#605 起加上魔法回复速度）
  *
- * 键名是管理端的接口契约（`GROWTH_SCALAR_SPECS`）。曲线派生类参数（attributeRange.* /
- * expGain.*）随 #590 移出客户端（属性与经验都由服务端展开进 `levels` 段），
- * 这里只保留**客户端也要用**的那两个标量；未知键直接忽略（服务端新增参数时旧客户端照常玩）。
+ * 键名是管理端的接口契约（`GROWTH_SCALAR_SPECS`）。属性 / 经验 / 回血全在 `levels` 段逐级给好，
+ * 标量里没有任何「换算比率」—— 这里只保留**客户端也要用**的那两个，未知键直接忽略
+ * （服务端新增参数时旧客户端照常玩）。
  */
 export function applyGrowthScalars(rows: GrowthScalar[]): void {
   rows.forEach((row) => {
@@ -243,8 +243,9 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   // #603：战斗力权重（客户端不再存倍率，唯一来源是服务端 combat-seed）
   applyCombatWeights(snapshot.combatWeights);
   // #603 第九域：装备规则**必须最先装** —— 它决定「每件基础件展开成几档变体」
-  // （倍率为空 = 一件都展开不出来）与「回收价怎么算」。顺序反了装备表整个是空的
-  applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates, snapshot.equipmentMeta.recycleCurve);
+  // （倍率为空 = 一件都展开不出来）。顺序反了装备表整个是空的。
+  // #655：回收价不在这里 —— 变体行的 `recyclePrice` 自己带价（见 equipments.ts 路径 1）
+  applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates);
   applyEquipmentQualityLabels(snapshot.equipmentMeta.prefixLabels, snapshot.equipmentMeta.suffixLabels);
   applyEquipmentSlots(snapshot.equipmentSlots);
   applyTitleRows(snapshot.titles);
