@@ -177,6 +177,12 @@ const ASSIGNMENT_EXCEPTIONS = [
     match: "role.bag = previous;",
     why: "拖动被服务端拒绝后回滚乐观 UI（不留「看着动了其实没动」的网格）",
   },
+  {
+    file: "ui/core/StorageManager.ts",
+    field: "fashionCloth",
+    match: 'role.fashionCloth = typeof fashion === "string"',
+    why: "老档清洗（#377 存量）：历史存档里 fashionCloth 是数字 / 未知 id 时收敛成 null —— 不是「换穿着」，穿着态仍只走 fashion-wear",
+  },
 ];
 
 /** 判据 3：客户端对账本 / 阶位 / 进度的赋值只能来自服务端 */
