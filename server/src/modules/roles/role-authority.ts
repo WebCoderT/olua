@@ -12,7 +12,8 @@
  * | 进度 | `level` / `exp` | **服务端** | 经验只由服务端结算（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台），客户端**没有**本地加经验路径（#550 删掉了泡点组件与"实时通道不可用"的兜底；那条路上连伤害都不结算，留着只是给改包留门）|
  * | 背包与穿戴 | `bag` / `equipments` / `skills` | **服务端** | 穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作全都走 `POST /roles/:id/bag-op`（#556），客户端不再本地改；`equipments` 还是属性重算的输入 —— 不收权等于把「塞一件没拥有的顶级装备」变成刷战力 |
  * | 派生值 | `combat` / `maxHp` / `hpRecover` / `maxMp` / 六项攻防 | **服务端重算** | 每次写档由 `applyAuthoritativeAttributes` 现算覆盖，**不走本文件的回填**（回填反而会把刚算好的值盖回旧的）|
- * | 客户端全权 | `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` / `relationShip` | 客户端 | 走图、喝药回血、时装外观、引导推进**都发生在本地**，且都不改数值（`hp`/`mp` 只做夹取，见 `clampVitals`）；时装还没有「拥有清单」，收权要先把获取渠道做出来 |
+ * | 血蓝 | `hp` / `mp`（+ 两个回复累加器与 `vitalsSettledAt` 游标） | **服务端结算**（#596） | 受击 / 用药 / 升级补满各有服务端写点，自然回复由 `settleVitalsAuthority` 在每次写档时按经过时间补齐，复活走 `POST /roles/:id/revive`；客户端那份只是血条平滑用的**演出预测**，save 时整体覆盖 |
+ * | 客户端全权 | `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` / `relationShip` | 客户端 | 走图、时装外观、引导推进**都发生在本地**，且都不改数值（时装还没有「拥有清单」，收权要先把获取渠道做出来） |
  *
  * 两条纪律：
  *
@@ -147,6 +148,88 @@ export function enforceServerAuthority(
     incoming[field] = field === "bag" ? reconcileBag(stored[field], incoming[field]) : stored[field];
   }
   return drift;
+}
+
+/**
+ * 魔法值自然回复速度（点 / 秒）
+ *
+ * 与客户端 `configs/role.mpRecoverPerSecond` 是**同一个数**：血蓝收权（#596）后回复在服务端
+ * 结算，这个常量就是玩法数值而不是表现参数了。两端各写一份是因为 `configs/` 不能引服务端
+ * 代码（方向恒为服务端 → 客户端生成物），靠 `test-role-vitals.cjs` 断言两边相等钉住 ——
+ * 改回复速度要两边一起改，漏一边测试直接红。
+ */
+export const MP_RECOVER_PER_SECOND = 2;
+
+/** 回复结算的存档字段（服务端独占；客户端那份只是演出预测，save 时整体覆盖） */
+export const SERVER_VITALS_FIELDS = [
+  "hp",
+  "mp",
+  "hpRecoverAccumulator",
+  "mpRecoverAccumulator",
+  "vitalsSettledAt",
+] as const;
+
+/**
+ * 血蓝收权（#596）：以**库里上次落账的值**为基线，按经过时间结算自然回复后覆盖上报值
+ *
+ * 血蓝的权威链路在 #596 之后是：
+ * - 受击（怪 → 玩家）：实时进程 `applyMonsterHit` 落账（#323 起已有）；
+ * - 用药：`useDrug` 落账（#308）；
+ * - 升级补满：`applyKillExp` 落账（#316）；
+ * - **自然回复：本函数在每次服务端写档时按「距上次结算的经过时间」补齐**（lazy 结算，
+ *   不需要定时器 —— 上限夹取保证离开三天也只补到满，不会溢出）；
+ * - 复活：`POST /roles/:id/revive` 满血（客户端改包上报满血无效）。
+ *
+ * 客户端存档里带的 hp / mp / 两个 accumulator 只是它的**演出预测**（本地按帧回血让血条平滑），
+ * 一律丢弃。`vitalsSettledAt` 是结算游标：库里没有（部署后第一次写档）→ 不补发回复
+ * （避免给老号白送一大段「离线回血」），只落一个当前时间当下次结算的起点。
+ *
+ * 死亡（基线 hp ≤ 0）不回复血量 —— 满血复活必须走 revive 接口；魔法照常回复（与客户端
+ * MpHelper 同一口径，死亡流程不受蓝量影响）。
+ *
+ * 在**调用方**的顺序要求：`applyAuthoritativeAttributes` 之后调 —— 回复上限要用它算出的
+ * maxHp / maxMp；算不出上限（等级在曲线外）时跳过回复、只落结算游标。之后仍要 `clampVitals`
+ * 兜一道（本函数已保证区间内，这层纯防御）。
+ *
+ * @param stored  库里当前的存档文档
+ * @param incoming 客户端上报、且**已完成属性权威重算**的文档（会被就地覆盖血蓝四件套）
+ * @param now     本次结算时间（Date.now()，参数化只为测试可复现）
+ */
+export function settleVitalsAuthority(
+  stored: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  now: number,
+): void {
+  const settledAt = Number(stored.vitalsSettledAt);
+  const baseHp = Math.max(0, Math.floor(Number(stored.hp) || 0));
+  const baseMp = Math.max(0, Math.floor(Number(stored.mp) || 0));
+  // 游标不存在（老档第一次过服务端 / 部署后首写）→ 不补发回复，只落游标
+  const elapsed = Number.isFinite(settledAt) && settledAt > 0 ? Math.max(0, now - settledAt) : 0;
+
+  const maxHp = Math.floor(Number(incoming.maxHp) || 0);
+  const maxMp = Math.floor(Number(incoming.maxMp) || 0);
+  // 上限算不出（等级不在成长曲线的边角档）→ 保留基线血蓝，别把人改没
+  if (maxHp <= 0 || maxMp <= 0) {
+    incoming.hp = baseHp;
+    incoming.mp = baseMp;
+    incoming.vitalsSettledAt = now;
+    return;
+  }
+
+  // 生命：死亡不回复（复活走 revive 接口）；魔法照常
+  const hpAccumulated = Math.max(0, Number(stored.hpRecoverAccumulator) || 0) +
+    ((Number(incoming.hpRecover) || 0) * elapsed) / 1000;
+  const hpGain = baseHp > 0 ? Math.floor(hpAccumulated) : 0;
+  incoming.hp = Math.min(maxHp, baseHp + hpGain);
+  incoming.hpRecoverAccumulator = hpGain > 0 ? hpAccumulated - hpGain : Math.min(hpAccumulated, 0.999);
+
+  const mpAccumulated = Math.max(0, Number(stored.mpRecoverAccumulator) || 0) +
+    (MP_RECOVER_PER_SECOND * elapsed) / 1000;
+  const mpGain = Math.floor(mpAccumulated);
+  incoming.mp = Math.min(maxMp, baseMp + mpGain);
+  incoming.mpRecoverAccumulator = mpGain > 0 ? mpAccumulated - mpGain : Math.min(mpAccumulated, 0.999);
+
+  incoming.vitalsSettledAt = now;
 }
 
 /**

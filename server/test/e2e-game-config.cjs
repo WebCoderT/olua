@@ -1681,7 +1681,8 @@ async function main() {
 
     const drugPlayer = await registerPlayer("drug_player");
     check(Boolean(drugPlayer), "药品玩家注册成功");
-    // #597：建号只交三样客户端数据 —— 摆药走管理端 PATCH（服务端权威），压低血量走 PUT 存档
+    // #597：建号只交三样客户端数据 —— 摆药走管理端 PATCH（服务端权威）；
+    // #596 血蓝收权后「压血量」也走管理端 PATCH（hp/mp 已是服务端独占，PUT 上报无效）
     const drugCreate = await api(base, "POST", "/api/roles", {
       token: drugPlayer,
       body: { name: "药品测试员", occupation: "1", sex: "1" },
@@ -1693,14 +1694,11 @@ async function main() {
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 2 }] },
     });
     checkEqual(drugSeed.status, 200, "管理端摆两瓶金创药（(0,0) x2）");
+    const drugLow = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, { token, body: { hp: 10 } });
+    checkEqual(drugLow.status, 200, "血量压到 10（管理端旁路，供「10 + 60」断言用）");
     const drugFresh = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
-    checkEqual(drugFresh.status, 200, "取到最新存档（压血量与后续 PUT 的基底）");
-    const drugLow = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
-      token: drugPlayer,
-      body: { data: { ...drugFresh.body?.data?.data, hp: 10 }, revision: drugFresh.body?.data?.revision },
-    });
-    checkEqual(drugLow.status, 200, "血量压到 10（存档写点，供「10 + 60」断言用）");
-    const drugRev0 = drugLow.body?.data?.revision;
+    checkEqual(drugFresh.status, 200, "取到最新存档（后续用药的 revision 基线）");
+    const drugRev0 = drugFresh.body?.data?.revision;
 
     // seed 回复量：drug_hp_1 固定回 60（1 级角色 maxHp 远大于 70，不会触顶）
     const drugUsed = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
@@ -1752,18 +1750,20 @@ async function main() {
     checkEqual(hpFullUse.body?.code, 20014, "无需用药 → 20014");
 
     // 太阳水：血满蓝不满也照用，只回蓝的部分（recoveredHp = 0）
+    // #596：血蓝走管理端 PATCH 旁路（hp 给到重算上限即满，mp 压到 10）
+    const drugMaxHp = drugFresh.body?.data?.data?.maxHp;
+    check(Number(drugMaxHp) > 0, "前置：拿得到服务端重算的 maxHp", JSON.stringify(drugMaxHp));
     const sunPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
       body: { bag: [{ row: 0, col: 1, id: "drug_sun", count: 1 }] },
     });
     checkEqual(sunPlaced.status, 200, "摆好太阳水（管理端摆格，血满蓝低）");
-    const sunSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
-      token: drugPlayer,
-      body: { data: { ...drugFresh.body?.data?.data, hp: 999999, mp: 10 } },
-    });
+    const sunSave = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, { token, body: { hp: drugMaxHp, mp: 10 } });
+    checkEqual(sunSave.status, 200, "血量顶满、魔法压到 10（管理端旁路）");
+    const sunFresh = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
     const sunUsed = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
-      body: { row: 0, col: 1, revision: sunSave.body?.data?.revision },
+      body: { row: 0, col: 1, revision: sunFresh.body?.data?.revision },
     });
     checkEqual(sunUsed.status, 200, "血满蓝不满用太阳水 → 200");
     checkEqual(sunUsed.body?.data?.recoveredHp, 0, "血量已满 → recoveredHp = 0");
@@ -1775,24 +1775,26 @@ async function main() {
     );
 
     // 血蓝全满 → 拒用不扣药
+    const drugMaxMp = drugFresh.body?.data?.data?.maxMp;
     const fullPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 2 }] },
     });
     checkEqual(fullPlaced.status, 200, "摆好满血满蓝 + 一格药（管理端摆格）");
-    const fullSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
-      token: drugPlayer,
-      body: { data: { ...drugFresh.body?.data?.data, hp: 999999, mp: 999999 } },
+    const fullSave = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
+      token,
+      body: { hp: drugMaxHp, mp: drugMaxMp },
     });
+    const fullFresh = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
     const allFullUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
-      body: { row: 0, col: 0, revision: fullSave.body?.data?.revision },
+      body: { row: 0, col: 0, revision: fullFresh.body?.data?.revision },
     });
     checkEqual(allFullUse.status, 409, "血蓝全满用药 → 409");
     checkEqual(allFullUse.body?.code, 20014, "血蓝全满 → 20014");
     // 失败不产生任何写入：revision 不推进、药不扣
     const afterFull = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
-    checkEqual(afterFull.body?.data?.revision, fullSave.body?.data?.revision, "拒绝用药不推进 revision");
+    checkEqual(afterFull.body?.data?.revision, fullFresh.body?.data?.revision, "拒绝用药不推进 revision");
     checkEqual(afterFull.body?.data?.data?.bag?.[0]?.[0]?.count, 2, "拒绝用药不扣药（数量仍 2）");
 
     // 目标不合法：非药品格子 / 空格子 / 坐标越界

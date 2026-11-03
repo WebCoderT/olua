@@ -21,9 +21,10 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
 import { decodeStoredRoleData, normalizeBagCells, normalizeEnum, normalizeLevel, normalizeName, parseRoleData, applyBagCells, ROLE_OCCUPATIONS, ROLE_SEXES } from "./role-data.util";
-import { clampVitals, enforceServerAuthority } from "./role-authority";
+import { clampVitals, enforceServerAuthority, settleVitalsAuthority } from "./role-authority";
 import { buildInitialRoleData } from "./initial-role";
 import {
   BagGrid,
@@ -151,6 +152,8 @@ export class RolesService {
     data.mp = data.maxMp;
     data.hpRecoverAccumulator = 0;
     data.mpRecoverAccumulator = 0;
+    // 回复结算游标（#596）：从建号这一刻起算，之后每次服务端写档按经过时间补回复
+    data.vitalsSettledAt = now;
     const row: RoleRow = {
       id,
       account_id: accountId,
@@ -214,7 +217,8 @@ export class RolesService {
     // 权威边界（见 role-authority.ts）：账本 / 成长线阶位 / 进度以库为准，客户端报上来的一律丢弃；
     // 老存档里没有这些键时不回填（客户端那份是唯一来源，删掉等于把玩家的钱清零）。
     // `level` 另有索引列（`roles.level`）压过文档里的那份 —— 列表排序与筛选读的是列，列才是真相
-    this.enforceAuthority({ ...decodeStoredRoleData(existing.data), level: existing.level }, data);
+    const stored = decodeStoredRoleData(existing.data);
+    this.enforceAuthority({ ...stored, level: existing.level }, data);
     // 等级可能被上面回填改掉，索引列必须从**回填后**的文档重取：
     // 否则 `row.level`（客户端报的）与 `data.level`（库里的）各说一套，列表与详情对不上
     const level = normalizeLevel(data.level);
@@ -233,7 +237,11 @@ export class RolesService {
     // 客户端那份自 #541 起只是演，谁强由这里的公式说了算
     this.warnIfAttributesMismatch(roleId, level, data);
     this.applyAuthoritativeAttributes(level, data);
-    // 上限是上面那步算出来的，夹在它之后；血蓝的「当前值」仍归客户端（自然回复在本地）
+    // 血蓝收权（#596）：以库里上次落账值为基线，按经过时间结算自然回复后**覆盖**客户端上报值
+    // （客户端那份只是血条平滑用的演出预测）。死亡不回复 —— 满血复活必须走 revive 接口。
+    // 必须在重算之后：回复上限要用刚算出的 maxHp / maxMp
+    settleVitalsAuthority(stored, data, Date.now());
+    // 上限是上面那步算出来的，夹在它之后；血蓝已由 settleVitalsAuthority 结算（这里纯防御）
     clampVitals(data);
     const row: RoleRow = {
       ...existing,
@@ -617,6 +625,9 @@ export class RolesService {
     }
 
     const data = decodeStoredRoleData(existing.data);
+    // 先结算自然回复再判「已满」（#596）：两次用药之间攒的回复要先入账，
+    // 否则攒一会儿就够满的药会被误判成「无需使用」拒掉
+    settleVitalsAuthority(data, data, Date.now());
     const cell = this.readBagCell(data, dto.row, dto.col);
     // 格子里必须是药品表里登记过的 id：背包里也可能有装备 / 材料，那些不走用药
     const drug = this.drugs.findByKey(cell.id);
@@ -824,6 +835,9 @@ export class RolesService {
     if (!account || !existing || account.online_role_id !== existing.id) return null;
 
     const data = decodeStoredRoleData(existing.data);
+    // 先结算自然回复再扣伤害（#596）：两次受击之间攒的回复不能被这一次落账吃掉
+    // （这里 stored 与 incoming 是同一个对象，函数内先读后写，顺序安全）
+    settleVitalsAuthority(data, data, Date.now());
     const previous = Math.max(0, Math.floor(Number(data.hp) || 0));
     if (previous <= 0) return null; // 已经死了：不再扣也不再报
     const { maxHp } = this.resolveResourceLimits(existing, data);
@@ -832,6 +846,36 @@ export class RolesService {
     // 不推进修订号（见方法注释）：血量以实时帧为准，revision 留给进度型写入
     this.roles.updateDataKeepRevision(existing.id, JSON.stringify(data), Date.now());
     return { hp, maxHp };
+  }
+
+  /**
+   * 复活（#596：满血由服务端落账，客户端改包上报满血无效）
+   *
+   * 死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零两个回复累加器并重置结算游标；
+   * 未死亡时拒收（20015）—— 客户端应当在死亡弹窗里调这个接口，而不是本地把血改满。
+   *
+   * **刻意不推进 revision**（与 `applyMonsterHit` 同一纪律）：血量型写入走实时帧同步，
+   * revision 只由「进度型」写入推进。返回值带上下限，客户端直接照搬刷新血球。
+   */
+  revive(accountId: string, roleId: string): ReviveResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    if (Math.max(0, Math.floor(Number(data.hp) || 0)) > 0) {
+      throw BizException.conflict(BizCode.ROLE_NOT_DEAD, "角色未死亡，无需复活");
+    }
+    const { maxHp, maxMp } = this.resolveResourceLimits(existing, data);
+    data.hp = maxHp;
+    data.mp = maxMp;
+    data.hpRecoverAccumulator = 0;
+    data.mpRecoverAccumulator = 0;
+    data.vitalsSettledAt = Date.now();
+    this.roles.updateDataKeepRevision(existing.id, JSON.stringify(data), Date.now());
+    return { hp: maxHp, mp: maxMp, maxHp, maxMp };
   }
 
   /**

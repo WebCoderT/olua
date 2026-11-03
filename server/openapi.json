@@ -805,6 +805,60 @@
         }
       }
     },
+    "/roles/{id}/revive": {
+      "post": {
+        "description": "死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。\n\n客户端死亡弹窗的两个选项（原地 / 回城复活）都调它，差别只在**复活位置**（纯演出），\n满血这件事只在服务端发生 —— 改包上报满血存档是无效的（血蓝在 save 时被服务端结算值覆盖）。\n\nrevision 不推进（与受击同一纪律：血量型写入走实时帧），返回值带上限供客户端照搬。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.revive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "复活后的血蓝与上限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ReviveResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "复活：血蓝补到上限（满血由服务端落账）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ReviveResultDto"
+        }
+      }
+    },
     "/roles/{id}/bag-op": {
       "post": {
         "description": "五个动作共用一条写路径，`action` 区分，字段组合在服务端逐条校验。\n\n**穿 / 脱 / 丢由服务端自己算**：`equip` 先证明这件东西真在那一格、确实是该部位的装备、等级够，再把旧装备放回刚腾出的格子；`unequip` 由服务端找第一个空格；`discard` 只认格子坐标。**整理 / 搬运只验守恒**：`move` / `tidy` 传操作后的完整内容（稀疏格子），服务端只校验「网格形状不变 + 同 id 总件数不变」—— 多一件少一件都会被拒。\n\n穿戴 / 卸下会重算战斗属性并把血蓝夹回上限（`combat` / `maxHp` 等字段随响应一起回来）。\n\n失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 / 等级不够）/ 20022 排布与库里对不上 / 20012 背包满（卸下时没有空格）；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -12378,6 +12432,14 @@
             "type": "number",
             "description": "军衔阶数"
           },
+          "hp": {
+            "type": "number",
+            "description": "当前血量（0 = 死亡状态，玩家可走复活接口）"
+          },
+          "mp": {
+            "type": "number",
+            "description": "当前魔法值"
+          },
           "fashionCloth": {
             "type": "string",
             "description": "时装（外观）id，如 cloth_2；null = 脱掉时装",
@@ -15312,6 +15374,33 @@
           "drugId",
           "recoveredHp",
           "recoveredMp"
+        ]
+      },
+      "ReviveResultDto": {
+        "type": "object",
+        "properties": {
+          "hp": {
+            "type": "number",
+            "description": "复活后的生命值（= maxHp）"
+          },
+          "mp": {
+            "type": "number",
+            "description": "复活后的魔法值（= maxMp）"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "服务端重算的生命上限"
+          },
+          "maxMp": {
+            "type": "number",
+            "description": "服务端重算的魔法上限"
+          }
+        },
+        "required": [
+          "hp",
+          "mp",
+          "maxHp",
+          "maxMp"
         ]
       },
       "BagOpResultDto": {

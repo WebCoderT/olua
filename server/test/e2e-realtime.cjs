@@ -356,9 +356,9 @@ async function main() {
       check(typeof firstUpdate?.data?.combat === "number" && firstUpdate.data.combat > 0, "快照的战斗力是服务端重算的");
       checkEqual(firstUpdate?.data?.revision, created.body?.data?.revision, "快照带上修订号（客户端拿它做存档基线）");
 
-      // 改库（save 一份被压到 1 的血量 + 被篡改的账本与经验）→ 下一拍再推一次：
-      // hp 的**当前值**归客户端（自然回复在本地），gold / exp 归服务端（见 role-authority.ts）
-      // 一致存档：GET 最新文档原样带回，只改 hp / gold / exp（后两者归服务端，见 role-authority.ts）
+      // 改库（save 一份血量被压到 1 的存档 + 被篡改的账本与经验）→ 下一拍再推一次：
+      // #596 起血蓝也归服务端（上报的 hp:1 会被结算基线覆盖），gold / exp 本来就归服务端
+      // 一致存档：GET 最新文档原样带回，只改 hp / gold / exp（三者都归服务端，见 role-authority.ts）
       const beforeSave = await api(baseUrl, "GET", `/api/roles/${roleAId}`, { token: tokenA });
       const saved = await api(baseUrl, "PUT", `/api/roles/${roleAId}`, {
         token: tokenA,
@@ -367,7 +367,7 @@ async function main() {
       checkEqual(saved.status, 200, "准备：save 改一份 hp 与一份被篡改的账本 / 经验");
       const secondUpdate = await waitFor(
         "第二帧 roleUpdate",
-        async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.hp === 1) ?? null,
+        async () => live.messages.find((message) => message.type === "roleUpdate" && message.data?.revision === saved.body?.data?.revision) ?? null,
         5_000,
       );
       check(Boolean(secondUpdate), "改库后下一拍 roleUpdate 跟上（跨进程写库也逃不过轮询）");
@@ -375,8 +375,9 @@ async function main() {
         typeof secondUpdate?.data?.combat === "number" &&
           secondUpdate?.data?.revision === saved.body?.data?.revision &&
           secondUpdate?.data?.gold === 0 &&
-          secondUpdate?.data?.exp === 0,
-        "第二帧仍是服务端重算的权威值与最新修订号（gold 5555 / exp 777 都被丢弃）",
+          secondUpdate?.data?.exp === 0 &&
+          secondUpdate?.data?.hp !== 1,
+        "第二帧仍是服务端权威值（gold 5555 / exp 777 丢弃，血量也以服务端结算为准——上报 1 无效）",
       );
 
       // 后台改阶位（#551）→ 下一拍帧带着新值：不重进也要看得见。

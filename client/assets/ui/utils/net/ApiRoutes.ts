@@ -238,7 +238,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（12 个接口） */
+  /** role 模块（13 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -294,6 +294,12 @@ export const ApiRoutes = {
      * 价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。
      */
     mallPurchase: (id: string) => `/roles/${encodeURIComponent(id)}/mall-purchase`,
+    /**
+     * 复活：血蓝补到上限（满血由服务端落账）（POST /roles/{id}/revive）
+     *
+     * 死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。
+     */
+    revive: (id: string) => `/roles/${encodeURIComponent(id)}/revive`,
     /**
      * 选中（进入）角色（POST /roles/{id}/select）
      *

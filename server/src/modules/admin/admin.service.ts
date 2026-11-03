@@ -309,6 +309,13 @@ export class AdminService {
     if (dto.fashionCloth !== undefined) next.fashionCloth = dto.fashionCloth;
     if (dto.avatar !== undefined) next.avatar = dto.avatar;
     if (dto.onMap !== undefined) next.onMap = dto.onMap;
+    // 血蓝（#596 起服务端独占，这里是运营旁路）：改值同时重置回复结算游标，
+    // 否则下一次玩家存档会把「游标到现在」的离线时长一次性补成回复
+    if (dto.hp !== undefined || dto.mp !== undefined) {
+      if (dto.hp !== undefined) next.hp = dto.hp;
+      if (dto.mp !== undefined) next.mp = dto.mp;
+      next.vitalsSettledAt = Date.now();
+    }
     // 运行时数据（结构化；逐项校验在 role-data.util，服务端不认识客户端的配置清单）
     if (dto.equipments !== undefined) next.equipments = normalizeEquipments(dto.equipments);
     if (dto.skills !== undefined) next.skills = normalizeSkills(dto.skills);

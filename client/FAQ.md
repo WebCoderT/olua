@@ -283,7 +283,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 - **数值语义在配置**：`StatusConfig.combat`（`types/status.ts`）三个可选字段——`blockChance`（格挡概率 0-1）、`blockFactor`（格挡触发时伤害乘的系数，0.5 = 减半）、`defenseMultiplier`（防御乘法系数）。不配 `combat` 的状态是纯表现状态，不参与结算
 - **现行口径**：护体神盾（2001）= 30% 概率格挡、格挡时本次伤害 ×0.5；金刚护体（2002）= 防御 ×1.5
-- **结算位置**：只作用于「玩家受到怪物伤害」这一条路（`MonsterAI.hitPlayer → applyHitDamage`）——玩家血量归客户端管，在这里接状态不会与服务端权威打架；玩家打怪的伤害已上移服务端（#34），状态不加在输出侧
+- **结算位置**：只作用于「玩家受到怪物伤害」这一条路（`MonsterAI.hitPlayer → applyHitDamage`）——#596 血蓝收权后这份结算是**演出预测**（权威血量以服务端 hit 帧为准，见 `roles.applyMonsterHit`）；玩家打怪的伤害已上移服务端（#34），状态不加在输出侧。注意：服务端侧的受击结算（`realtime/monster-ai.service`）目前**不带**状态修正，服务端模式下格挡 / 加防状态对受击不生效 —— 已知口径差，收口时两端要么都带要么都不带
 - **公式**：防御项 = 防御区间随机值 × `defenseMultiplier`（四舍五入），伤害 = max(0, 攻 - 防)；格挡在命中后掷一次 0-1，< `blockChance` 即触发，触发时伤害 × `blockFactor`（四舍五入，不为负）
 - **多状态叠加**：格挡概率取**最大值**（不叠概率）、格挡系数取**最小值**（取更保护的一个）、防御系数**连乘**——汇总逻辑在 `BattleMath.collectStatusCombatModifiers`（纯函数）
 - **随机数**：格挡判定核心 `resolveIncomingDamage(damage, modifiers, roll)` 的 roll 由调用方给，单测给定值即可复现；运行期 `applyHitDamage` 掷 `Math.random`

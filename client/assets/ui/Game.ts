@@ -46,6 +46,7 @@ import SkillManager from "./core/SkillManager";
 import StatusManager from "./core/StatusManager";
 import HoverTipManager from "./core/HoverTipManager";
 import GameUiHelper from "./helpers/GameUiHelper";
+import { RoleApi } from "./utils/net/Api";
 import { partyDialogLayout } from "../configs/hudLayout";
 import RoleSync from "./utils/net/RoleSync";
 import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
@@ -542,21 +543,36 @@ export class Game extends Component {
   }
 
   /**
-   * 复活：补满血量与魔法值并落盘刷新视图，然后按复活方式收尾——
-   * 原地复活：留在死亡位置直接起身；安全复活：先传送回当前地图的复活点再起身
+   * 复活（#596 血蓝收权：满血由服务端落账，本地只负责演出）
+   *
+   * 先调 `POST /roles/:id/revive` 拿服务端结算的满血值（照搬进本地档并落盘），
+   * 成功后才起身 —— 服务端拒绝（20015 未死亡 / 20007 被下线）或网络失败时保持死亡弹窗
+   * 可重试，避免「本地起身、服务端还是 0 血」的两边不一致。
+   *
+   * 按复活方式收尾——原地复活：留在死亡位置直接起身；安全复活：先传送回当前地图的复活点再起身
+   * （复活点定位走 GameMap 的 revive 回调，与进图定位同一套换算）。
    */
   private reviveRole(safe: boolean) {
     const role = StorageManager.findOnlineRole();
     if (!role) return;
-    role.hp = role.maxHp;
-    role.mp = role.maxMp;
-    StorageManager.updateOnlineRole(role);
-    RoleUIManager.updateRoleData(role);
-    // 安全复活先传送（复活点定位走 GameMap 的 revive 回调，与进图定位同一套换算）
-    if (safe) this.gameMap?.revive();
-    this.roleDisplay?.revive();
-    this.deathDialog?.destroy();
-    this.deathDialog = null;
+    void RoleApi.revive(role.id)
+      .then((result) => {
+        const current = StorageManager.findOnlineRole();
+        if (!current) return;
+        // 血蓝照搬服务端（上限也可能因等级 / 装备在死亡期间变化而与本地不同）
+        current.hp = result.hp;
+        current.mp = result.mp;
+        if (result.maxHp > 0) current.maxHp = result.maxHp;
+        if (result.maxMp > 0) current.maxMp = result.maxMp;
+        StorageManager.updateOnlineRole(current);
+        RoleUIManager.updateRoleData(current);
+        // 安全复活先传送（复活点定位走 GameMap 的 revive 回调，与进图定位同一套换算）
+        if (safe) this.gameMap?.revive();
+        this.roleDisplay?.revive();
+        this.deathDialog?.destroy();
+        this.deathDialog = null;
+      })
+      .catch(() => GameUiHelper.createTip("revive_failed_tip"));
   }
 
   //#endregion

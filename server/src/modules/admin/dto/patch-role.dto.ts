@@ -132,6 +132,26 @@ export class AdminPatchRoleDto {
   @Max(ADMIN_NUMBER_FIELD_MAX, { message: "军衔阶数数值过大" })
   rank?: number;
 
+  /**
+   * 当前血量（#596 血蓝收权后服务端独占，管理端是**唯一**的旁路写点：救卡死号 / 复活测试）
+   *
+   * 超过上限的部分会在玩家下一次存档时被自然回复结算夹回（上限以服务端重算为准）；
+   * 改的同时服务端会重置回复结算游标，不会把「离线时长」补成一大段回复。
+   */
+  @ApiPropertyOptional({ description: "当前血量（0 = 死亡状态，玩家可走复活接口）" })
+  @IsOptional()
+  @IsInt({ message: "血量必须是整数" })
+  @Min(0, { message: "血量不能为负" })
+  @Max(ADMIN_NUMBER_FIELD_MAX, { message: "血量数值过大" })
+  hp?: number;
+
+  @ApiPropertyOptional({ description: "当前魔法值" })
+  @IsOptional()
+  @IsInt({ message: "魔法值必须是整数" })
+  @Min(0, { message: "魔法值不能为负" })
+  @Max(ADMIN_NUMBER_FIELD_MAX, { message: "魔法值数值过大" })
+  mp?: number;
+
   //#region 基础信息（外观与位置）
 
   /**

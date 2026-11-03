@@ -94,6 +94,8 @@ export const BizCode = {
   DRUG_USE_TARGET_INVALID: 20013,
   /** 用药无需进行（血量与魔法值均已满，回复不动任何一项） */
   DRUG_RESOURCE_FULL: 20014,
+  /** 复活无需进行（角色未死亡） */
+  ROLE_NOT_DEAD: 20015,
   /**
    * 背包操作的目标不合法（格子越界 / 空格子 / 槽位空着）
    *

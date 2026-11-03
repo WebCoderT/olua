@@ -10,6 +10,7 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto } from "./dto/sell-goods.dto";
 import { RolesService } from "./roles.service";
 
@@ -145,6 +146,23 @@ export class RolesController {
   @ApiDataResponse(DrugUseResultDto, { description: "使用后的角色（含本次回复量）" })
   drugUse(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: DrugUseDto): DrugUseResultDto {
     return this.rolesService.useDrug(user.id, id, dto);
+  }
+
+  @Post(":id/revive")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.revive",
+    summary: "复活：血蓝补到上限（满血由服务端落账）",
+    description:
+      "死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。\n\n" +
+      "客户端死亡弹窗的两个选项（原地 / 回城复活）都调它，差别只在**复活位置**（纯演出），\n" +
+      "满血这件事只在服务端发生 —— 改包上报满血存档是无效的（血蓝在 save 时被服务端结算值覆盖）。\n\n" +
+      "revision 不推进（与受击同一纪律：血量型写入走实时帧），返回值带上限供客户端照搬。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(ReviveResultDto, { description: "复活后的血蓝与上限" })
+  revive(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): ReviveResultDto {
+    return this.rolesService.revive(user.id, id);
   }
 
   @Post(":id/bag-op")

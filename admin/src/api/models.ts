@@ -332,6 +332,14 @@ export type RolePatchPayload = {
    */
   rank?: number;
   /**
+   * 当前血量（0 = 死亡状态，玩家可走复活接口）
+   */
+  hp?: number;
+  /**
+   * 当前魔法值
+   */
+  mp?: number;
+  /**
    * 时装（外观）id，如 cloth_2；null = 脱掉时装
    */
   fashionCloth?: string | null;
@@ -2186,6 +2194,25 @@ export type DrugUseResult = {
    * 实际生效的魔法回复量（封顶后；0 = 魔法本已满）
    */
   recoveredMp: number;
+};
+
+export type ReviveResult = {
+  /**
+   * 复活后的生命值（= maxHp）
+   */
+  hp: number;
+  /**
+   * 复活后的魔法值（= maxMp）
+   */
+  mp: number;
+  /**
+   * 服务端重算的生命上限
+   */
+  maxHp: number;
+  /**
+   * 服务端重算的魔法上限
+   */
+  maxMp: number;
 };
 
 export type BagOpResult = {
