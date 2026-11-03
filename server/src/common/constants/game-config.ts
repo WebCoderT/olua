@@ -27,16 +27,9 @@ export const ACQUIRE_CHANNEL_LABELS: Record<AcquireChannelValue, string> = {
   [AcquireChannel.UNAVAILABLE]: "无法获取",
 };
 
-// —— 成长曲线（#256）——
+// —— 成长参数（#256 / #655）——
 
 import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS } from "../../shared/game-data.generated";
-import { GROWTH_CURVES } from "../../shared/growth-seed";
-
-/**
- * 成长曲线键清单（**派生**自 growth-seed 的 GROWTH_CURVES，不许手写字面量清单 ——
- * 种子里增删曲线，这里与服务端校验自动跟着变）
- */
-export const GROWTH_CURVE_KEYS = Object.keys(GROWTH_CURVES);
 
 /**
  * 成长标量参数的取值域（键 → 约束）

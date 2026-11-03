@@ -507,12 +507,12 @@ function connect(url) {
     check(!!(killedA2 && killedA2.killed), "A：第二只也打死了");
     checkEqual(readKills(dbPath, killerA.roleId), 2, "A：击杀计数累加到 2（不是被后一次覆盖成 1）");
 
-    // —— B. 升级：level_exps 管理端改值即时生效 ——
+    // —— B. 升级：role_levels 管理端改值即时生效（#655 经验并入角色等级行）——
 
-    const levelExpsBefore = await api(baseUrl, "GET", "admin/level-exps?page=1&size=100", { token: adminToken });
-    const levelOneRow = levelExpsBefore.data && levelExpsBefore.data.list.find((row) => row.level === 1);
-    check(!!levelOneRow, "B：读到 1 级经验 seed 行", JSON.stringify(levelOneRow));
-    await api(baseUrl, "PATCH", "admin/level-exps/1", { token: adminToken, body: { exp: 5 } });
+    const roleLevelsBefore = await api(baseUrl, "GET", "admin/role-levels?page=1&size=60", { token: adminToken });
+    const levelOneRow = roleLevelsBefore.data && roleLevelsBefore.data.list.find((row) => row.level === 1);
+    check(!!levelOneRow, "B：读到 1 级角色等级行（含经验）", JSON.stringify(levelOneRow));
+    await api(baseUrl, "PATCH", "admin/role-levels/1", { token: adminToken, body: { exp: 5 } });
 
     const killerB = await newPlayer("combat_rwb");
     const mobB2 = await aliveMonster(killerB, "2");
@@ -520,11 +520,11 @@ function connect(url) {
     const killedB = await killMonster(killerB, mobB2.monsterKey, mobB2.instanceId);
     // 怪物 3 是 2 级：1 级角色打它差 1 级 → (2+1)×5×(1−1/6) = 12.5 → 13；1 级升 2 级只需 5（刚被管理端改小）→ 升 1 级剩 8
     check(!!(killedB && killedB.reward) && killedB.reward.exp === 13, "B：击杀 2 级怪经验 = 15×(1−1/6) = 13", JSON.stringify(killedB && killedB.reward));
-    check(!!(killedB && killedB.reward) && killedB.reward.leveledUp === true && killedB.reward.level === 2 && killedB.reward.expNow === 8, "B：管理端改 level_exps 即时生效（升到 2 级，本级剩 8）", JSON.stringify(killedB && killedB.reward));
+    check(!!(killedB && killedB.reward) && killedB.reward.leveledUp === true && killedB.reward.level === 2 && killedB.reward.expNow === 8, "B：管理端改角色等级 1 行的经验即时生效（升到 2 级，本级剩 8）", JSON.stringify(killedB && killedB.reward));
     const roleB = await api(baseUrl, "GET", `roles/${killerB.roleId}`, { token: killerB.token });
     check(roleB.code === 0 && roleB.data.level === 2 && roleB.data.data.exp === 8, "B：服务端已升级（level 列 = 2，data.exp = 8）", JSON.stringify({ level: roleB.data && roleB.data.level, exp: roleB.data && roleB.data.data && roleB.data.data.exp }));
     // 还原：把 1 级经验改回 seed 值（本库独立，但保持「测试后还原 seed」的纪律）
-    await api(baseUrl, "PATCH", "admin/level-exps/1", { token: adminToken, body: { exp: levelOneRow.exp } });
+    await api(baseUrl, "PATCH", "admin/role-levels/1", { token: adminToken, body: { exp: levelOneRow.exp } });
 
     // —— C. 确定性掉落：monster_drops 管理端改值即时生效 ——
 

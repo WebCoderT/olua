@@ -128,10 +128,8 @@ const MODULES = {
   adminMall: { target: "admin", export: "mallApi" },
   adminFashion: { target: "admin", export: "fashionsApi" },
   adminDrop: { target: "admin", export: "dropApi" },
-  adminLevelExp: { target: "admin", export: "levelExpsApi" },
   // 角色等级表（#655）：60 行属性 + 经验；levelExps 只剩经验一列（同源），这里是全字段
   adminRoleLevel: { target: "admin", export: "roleLevelsApi" },
-  adminGrowthSegment: { target: "admin", export: "growthSegmentsApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
   // 运行时参数（#605）：掉落手感 / 自动战斗 / 帮会规则，单行三组 JSON
   adminRuntimeParams: { target: "admin", export: "runtimeParamsApi" },

@@ -391,82 +391,31 @@ async function main() {
 
     //#endregion
 
-    //#region 六、成长曲线（#256）：等级经验 / 曲线分段 / 标量参数
+    //#region 六、成长（#256 / #655）：曲线下架 + 标量参数
 
-    group("六、成长曲线：等级经验");
+    group("六、成长曲线已下架：旧路由一律 404");
 
-    const levelExps = await api(base, "GET", "/api/admin/level-exps", { token });
-    checkEqual(levelExps.status, 200, "升级经验列表可读");
-    const levelCount = growthSeed.ROLE_MAX_LEVEL;
-    checkEqual(levelExps.body?.data?.total, levelCount, `升级经验行数 = 等级上限（${levelCount}）`);
-    const firstExp = levelExps.body?.data?.list?.[0];
-    checkEqual(firstExp?.level, 1, "首行是 1 级");
-    checkEqual(firstExp?.exp, growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].exp, "1 级经验与配置一致");
+    // #655：曲线采样换成了 role_levels 逐级配置 —— 旧接口必须彻底消失，
+    // 留着「还能读写但不影响任何东西」的空壳，运营改完只会以为改了生效了。
+    for (const path of ["/api/admin/level-exps", "/api/admin/growth-segments", "/api/admin/growth-segments/maxHp/1"]) {
+      const gone = await api(base, "GET", path, { token });
+      checkEqual(gone.status, 404, `${path} 已下架（404）`);
+    }
+    const expPatchGone = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 1 } });
+    checkEqual(expPatchGone.status, 404, "PATCH 舊经验接口 → 404");
+    // 经验本身还在，只是并入 role_levels：改角色等级那一行就改了经验
+    const roleLevelExp = await api(base, "GET", "/api/admin/role-levels?page=1&size=60", { token });
+    checkEqual(roleLevelExp.body?.data?.list?.[0]?.exp, growthSeed.ROLE_LEVEL_ATTRIBUTES["1"].exp, "1 级经验与出厂值一致");
+    const expByRoleLevel = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 999 } });
+    checkEqual(expByRoleLevel.status, 200, "改角色等级 1 行的经验成功");
+    checkEqual(expByRoleLevel.body?.data?.exp, 999, "响应里的经验已更新");
+    const roleLevelExpZero = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 0 } });
+    checkEqual(roleLevelExpZero.status, 400, "经验 0 → 400（永远升不上去）");
+    const viewerRoleLevelWrite = await api(base, "PATCH", "/api/admin/role-levels/1", { token: viewerToken, body: { exp: 1 } });
+    checkEqual(viewerRoleLevelWrite.status, 403, "观察员改角色等级 → 403");
+    checkEqual(viewerRoleLevelWrite.body?.code, 30006, "观察员改角色等级 → 30006（权限点不足）");
 
-    const expPatched = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 999 } });
-    checkEqual(expPatched.status, 200, "PATCH 升级经验成功");
-    checkEqual(expPatched.body?.data?.exp, 999, "响应里的经验已更新");
-    const expGhost = await api(base, "PATCH", "/api/admin/level-exps/999", { token, body: { exp: 1 } });
-    checkEqual(expGhost.status, 404, "改不存在的等级经验 → 404");
-    checkEqual(expGhost.body?.code, 50012, "等级经验未找到用专属业务码 50012");
-    const expZero = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 0 } });
-    checkEqual(expZero.status, 400, "经验 0 → 400（永远升不上去）");
-    const postExp = await api(base, "POST", "/api/admin/level-exps", { token, body: { level: 61, exp: 1 } });
-    checkEqual(postExp.status, 404, "POST 升级经验 → 404（路由不存在）");
-    const deleteExp = await api(base, "DELETE", "/api/admin/level-exps/1", { token });
-    checkEqual(deleteExp.status, 404, "DELETE 升级经验 → 404（路由不存在）");
-    const viewerExpRead = await api(base, "GET", "/api/admin/level-exps", { token: viewerToken });
-    checkEqual(viewerExpRead.body?.code, 0, "观察员能看升级经验");
-    const viewerExpWrite = await api(base, "PATCH", "/api/admin/level-exps/1", { token: viewerToken, body: { exp: 1 } });
-    checkEqual(viewerExpWrite.status, 403, "观察员改升级经验 → 403");
-    checkEqual(viewerExpWrite.body?.code, 30006, "观察员改升级经验 → 30006（权限点不足）");
-
-    group("六、成长曲线：分段");
-
-    const segmentsAll = await api(base, "GET", "/api/admin/growth-segments", { token });
-    checkEqual(segmentsAll.status, 200, "曲线分段列表可读");
-    const curveKeys = Object.keys(growthSeed.GROWTH_CURVES);
-    const segmentTotal = curveKeys.reduce((sum, key) => sum + growthSeed.GROWTH_CURVES[key].length, 0);
-    checkEqual(segmentsAll.body?.data?.total, segmentTotal, `分段行数 = 曲线段总和（${segmentTotal}）`);
-    const segmentsMaxHp = await api(base, "GET", "/api/admin/growth-segments?curve=maxHp", { token });
-    checkEqual(segmentsMaxHp.body?.data?.list?.[0]?.fromLevel, 1, "首段从 1 级开始（连续覆盖）");
-    const badCurve = await api(base, "GET", "/api/admin/growth-segments?curve=mp", { token });
-    checkEqual(badCurve.status, 400, "曲线键枚举外筛选 → 400");
-
-    const seg1 = segmentsMaxHp.body?.data?.list?.[0];
-    const seg6 = segmentsMaxHp.body?.data?.list?.find((item) => item.seq === 6);
-    const segBreakFirst = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", {
-      token,
-      body: { fromLevel: 2, toLevel: seg1.toLevel, startValue: seg1.startValue, perLevel: seg1.perLevel },
-    });
-    checkEqual(segBreakFirst.status, 400, "首段 from 改成 2 → 400（必须从 1 连续覆盖）");
-    const segBreakLast = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/6", {
-      token,
-      body: { fromLevel: seg6.fromLevel, toLevel: seg6.toLevel - 1, startValue: seg6.startValue, perLevel: seg6.perLevel },
-    });
-    checkEqual(segBreakLast.status, 400, "末段 to 少 1 级 → 400（必须覆盖到 roleMaxLevel）");
-    const segOk = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", {
-      token,
-      body: { fromLevel: 1, toLevel: seg1.toLevel, startValue: 120, perLevel: seg1.perLevel },
-    });
-    checkEqual(segOk.status, 200, "合法的分段修改成功");
-    checkEqual(segOk.body?.data?.startValue, 120, "响应里的起始值已更新");
-    const segGhost = await api(base, "PATCH", "/api/admin/growth-segments/mp/1", {
-      token,
-      body: { fromLevel: 1, toLevel: 10, startValue: 1, perLevel: 1 },
-    });
-    checkEqual(segGhost.status, 404, "改不存在的曲线 → 404");
-    checkEqual(segGhost.body?.code, 50013, "曲线分段未找到用专属业务码 50013");
-    const segPartial = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", { token, body: { startValue: 130 } });
-    checkEqual(segPartial.status, 400, "分段部分提交 → 400（四个字段整份提交）");
-    const viewerSegWrite = await api(base, "PATCH", "/api/admin/growth-segments/maxHp/1", {
-      token: viewerToken,
-      body: { fromLevel: 1, toLevel: 10, startValue: 1, perLevel: 1 },
-    });
-    checkEqual(viewerSegWrite.status, 403, "观察员改曲线 → 403");
-    checkEqual(viewerSegWrite.body?.code, 30006, "观察员改曲线 → 30006（权限点不足）");
-
-    group("六、成长曲线：标量参数");
+    group("六、成长参数：标量（曲线下架后剩下的全局参数）");
 
     const scalars = await api(base, "GET", "/api/admin/growth-scalars", { token });
     checkEqual(scalars.status, 200, "标量参数列表可读");
@@ -492,7 +441,7 @@ async function main() {
     checkEqual(mpRecoverZero.body?.data?.value, 0, "0 合法（关闭自然回蓝）");
     await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: growthSeedScalars.mpRecoverPerSecond } });
     const maxLevelJump = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 61 } });
-    checkEqual(maxLevelJump.status, 400, "抬等级上限但曲线末段没跟上 → 400（跨表校验）");
+    checkEqual(maxLevelJump.status, 400, "抬等级上限但等级表没有那一行 → 400（跨表校验）");
     const scalarGhost = await api(base, "PATCH", "/api/admin/growth-scalars/nope", { token, body: { value: 1 } });
     checkEqual(scalarGhost.status, 404, "改不存在的参数键 → 404");
     checkEqual(scalarGhost.body?.code, 50014, "标量参数未找到用专属业务码 50014");

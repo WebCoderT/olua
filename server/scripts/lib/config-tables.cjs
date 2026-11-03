@@ -14,7 +14,7 @@
  *
  * **配置表** = 「管理端能改、改完要下发给客户端或参与结算」的表。三条都算：
  * 1. 进 `GET /game-config` 快照的（物品 / 怪物 / 技能 / 称号 / 地图 …）；
- * 2. 不进快照但服务端现算要用的（`growth_segments` 曲线段、`monster_skills`、
+ * 2. 不进快照但服务端现算要用的（`growth_scalars` 标量、`monster_skills`、
  *    `map_spawn_areas` 刷怪区）；
  * 3. 走独立接口下发的外观几何（`equip_aligns` / `equip_in_aligns`）。
  *
@@ -52,10 +52,8 @@ const CONFIG_TABLES = Object.freeze([
   "equipments",
   "fashions",
   "growth_scalars",
-  "growth_segments",
   "guide_settings",
   "items",
-  "level_exps",
   "mall_prices",
   "mall_settings",
   "map_spawn_areas",

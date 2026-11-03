@@ -27,21 +27,17 @@
  * - 只在内存：进程重启后由 `RuntimeConfigService.onModuleInit` 重新装（DB 是持久的）；
  * - **缺表 = 没有运营改动**（Map 为 null）→ 回落生成物，行为与「上这一层之前」逐值相同；
  * - 形状与生成物**逐字段对齐**（管理端 DTO 也是同一形状），这里不发明第二套命名；
- * - 装备变体按「基础件 × 前后缀倍率」重算，倍率取生成物里那两张表 —— 与客户端
- *   `buildEquipmentMap` / `applyEquipmentRows` 是同一组数字与同一个取整口径（`Math.round`），
- *   否则管理端改一件、服务端算出另一件。
+ * - 装备变体逐行可改（#655）：一行就是这一件的最终属性 / 等级 / 回收价，
+ *   运行时不再按倍率现算。
  */
 
 import {
   COMBAT_WEIGHTS,
   DRUGS,
-  EQUIPMENT_ATTRIBUTES,
   EQUIPMENT_BASES,
   ITEM_BASES,
-  SELL_PRICES,
   SKILLS,
 } from "./game-data.generated";
-import { ROLE_LEVEL_ATTRIBUTES } from "./growth-seed";
 import { RANK_LEVEL_ATTRIBUTES } from "./rank-seed";
 import { SOUL_LEVEL_ATTRIBUTES } from "./soul-seed";
 import { TITLE_LEVEL_ATTRIBUTES } from "./title-seed";
@@ -382,28 +378,21 @@ export function combatWeightsOf(): Record<string, number> {
 }
 
 /**
- * 某等级的角色裸属性；表里没有该级时回落生成物（出厂值兜底）
+ * 某等级的角色裸属性 —— `role_levels` 是**唯一来源**（60 行，管理端逐行维护）
  *
- * #655：`role_levels` 是权威，60 行都由管理端逐行维护。生成物只兜两种情况：
- * 迁移还没跑（空库启动），以及等级超出表范围（运营调低了 roleMaxLevel 但存档里有老角色）。
+ * 表里没有该级就返回 null（调用方按「这一级没有配置」处理）：
+ * #655 之前这里还会回落曲线展开的常量，结果是运营把某级删了也照样有值，
+ * 「有没有配」在运行时看不出来。空表 = 迁移没跑，`refreshAll` 会 warn。
  */
 export function roleLevelAttributesOf(level: number | undefined): AttributeBundle | null {
   const value = Number(level);
   if (!Number.isFinite(value) || value < 1) return null;
-  const levelValue = Math.trunc(value);
-  const fromTable = roleLevelRows?.get(levelValue);
-  if (fromTable) return fromTable;
-  const bundle = (ROLE_LEVEL_ATTRIBUTES as Record<string, AttributeBundle>)[String(levelValue)];
-  return bundle && typeof bundle === "object" ? bundle : null;
+  return roleLevelRows?.get(Math.trunc(value)) ?? null;
 }
 
 /** 某件装备（含变体）的当前属性；查不到返回 null（调用方按"没穿"处理并记账） */
 export function equipmentAttributesOf(id: string): AttributeBundle | null {
-  return (
-    equipmentVariantRows?.get(id)?.bundle ??
-    (EQUIPMENT_ATTRIBUTES as Record<string, AttributeBundle>)[id] ??
-    null
-  );
+  return equipmentVariantRows?.get(id)?.bundle ?? null;
 }
 
 /**
@@ -458,8 +447,8 @@ export function itemBaseOf(id: string): AttributeBundle | null {
  * 1. 装备（含变体）→ `equipment_variants.sell_price`（#655 起逐行配置；以前是
  *    「等级基础价 × 前后缀倍率」现算，现在这一行直接就是到账价）；
  * 2. 药品 / 材料 → 各自表里的 `sell_price`（运营在管理端改的就是它）；
- * 3. 都没有 → 回落生成物 `SELL_PRICES`（出厂价签）；仍然没有 = `null` = 不可卖
- *    （任务物 / 关键道具就靠这条拦住，`SELL_NOT_SELLABLE`）。
+ * 3. 两张表都没有 = `null` = 不可卖（任务物 / 关键道具就靠这条拦住，
+ *    `SELL_NOT_SELLABLE`）。
  */
 export function sellPriceOf(id: string): number | null {
   const equipment = equipmentVariantRows?.get(id)?.price;
@@ -468,8 +457,7 @@ export function sellPriceOf(id: string): number | null {
   if (drug) return numberOr(drug.sellPrice);
   const item = itemRows?.get(id);
   if (item) return numberOr(item.sellPrice);
-  const factory = (SELL_PRICES as Record<string, number>)[id];
-  return factory === undefined ? null : numberOr(factory);
+  return null;
 }
 
 //#endregion

@@ -1,26 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService, SqlParam } from "../database.service";
-import { GrowthScalarRow, GrowthSegmentRow, LevelExpRow } from "../rows";
-import { GROWTH_SCALAR_SORT, GROWTH_SEGMENT_SORT, LEVEL_EXP_SORT } from "../sort-specs";
+import { GrowthScalarRow, LevelExpRow } from "../rows";
+import { GROWTH_SCALAR_SORT } from "../sort-specs";
 import { resolveSort } from "../sort.util";
-
-/** 等级经验列表查询条件 */
-export interface LevelExpListOptions {
-  page: number;
-  size: number;
-  sort?: string;
-  order?: string;
-}
-
-/** 成长曲线分段列表查询条件 */
-export interface GrowthSegmentListOptions {
-  page: number;
-  size: number;
-  /** 按曲线键筛（maxHp / attack / defense / killsPerLevel） */
-  curve?: string;
-  sort?: string;
-  order?: string;
-}
 
 /** 成长标量参数列表查询条件 */
 export interface GrowthScalarListOptions {
@@ -32,41 +14,20 @@ export interface GrowthScalarListOptions {
 }
 
 /**
- * 成长曲线数据访问（#256：level_exps / growth_segments / growth_scalars 三张表）
+ * 升级经验的数据访问（#655：**权威表 = `role_levels.exp`**，与 60 行属性同居一行）
  *
- * 与称号 / 战魂同一取向：**没有 insert / remove 的对外语义** —— 行只能来自启动 seed
- * （`seedRow`，INSERT OR IGNORE 幂等），后台接口只改内容。曲线的形状（几条曲线、几段、
- * 几个标量）由客户端 configs/growth 定义，服务端不提供增删。
+ * 为什么还留在这里：`roles.service` 的升级判定走本仓储。以前它读 `level_exps`，
+ * 现在读 `role_levels` —— 表没了还留着旧读法就会「管理端改了经验、玩家按旧值升级」。
+ * 老库的 `level_exps` 由 `make data-migrate` 一次性搬进 `role_levels` 后删除。
  */
 @Injectable()
 export class GrowthRepository {
   constructor(private readonly db: DatabaseService) {}
 
   // —— 等级经验 ——
-  //
-  // #655：经验的**权威表**变成 `role_levels.exp`（与 60 行属性同居一行），
-  // `level_exps` 只剩「迁移来源 + 老库兼容」的身份。这里三个读方法都先查新表，
-  // 因为 `roles.service` 的升级判定直接走本仓储 —— 不改这里就会出现
-  // 「管理端改了经验、玩家还是按旧值升级」。
-
-  seedLevelExp(row: LevelExpRow): void {
-    // 只写老表：新表的 60 行由 `GrowthConfigService.seedRoleLevels` 整行写入
-    // （这里 INSERT 只给三列的话，属性列会停在默认 0，那是「升级后血量为 0」的源头）
-    this.db.run("INSERT OR IGNORE INTO level_exps (level, exp, updated_at) VALUES (?, ?, ?)", [
-      row.level,
-      row.exp,
-      row.updated_at,
-    ]);
-  }
 
   updateLevelExp(row: LevelExpRow): { changes: number } {
-    const updated = this.db.execute("UPDATE role_levels SET exp = ?, updated_at = ? WHERE level = ?", [
-      row.exp,
-      row.updated_at,
-      row.level,
-    ]);
-    if (updated.changes > 0) return updated;
-    return this.db.execute("UPDATE level_exps SET exp = ?, updated_at = ? WHERE level = ?", [
+    return this.db.execute("UPDATE role_levels SET exp = ?, updated_at = ? WHERE level = ?", [
       row.exp,
       row.updated_at,
       row.level,
@@ -74,79 +35,7 @@ export class GrowthRepository {
   }
 
   findLevelExp(level: number): LevelExpRow | undefined {
-    const fromRoleLevels = this.db.get<LevelExpRow>(
-      "SELECT level, exp, updated_at FROM role_levels WHERE level = ?",
-      [level],
-    );
-    if (fromRoleLevels) return fromRoleLevels;
-    return this.db.get<LevelExpRow>("SELECT * FROM level_exps WHERE level = ?", [level]);
-  }
-
-  listLevelExps(options: LevelExpListOptions): LevelExpRow[] {
-    return this.db.all<LevelExpRow>(
-      `SELECT level, exp, updated_at FROM role_levels
-       ORDER BY ${resolveSort(LEVEL_EXP_SORT, options.sort, options.order)}
-       LIMIT ? OFFSET ?`,
-      [options.size, (options.page - 1) * options.size],
-    );
-  }
-
-  countLevelExps(): number {
-    const total = this.db.count("SELECT COUNT(1) AS total FROM role_levels");
-    return total > 0 ? total : this.db.count("SELECT COUNT(1) AS total FROM level_exps");
-  }
-
-  // —— 曲线分段 ——
-
-  seedSegment(row: GrowthSegmentRow): void {
-    this.db.run(
-      `INSERT OR IGNORE INTO growth_segments (curve, seq, from_level, to_level, start_value, per_level, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [row.curve, row.seq, row.from_level, row.to_level, row.start_value, row.per_level, row.updated_at],
-    );
-  }
-
-  updateSegment(row: GrowthSegmentRow): { changes: number } {
-    return this.db.execute(
-      `UPDATE growth_segments
-       SET from_level = ?, to_level = ?, start_value = ?, per_level = ?, updated_at = ?
-       WHERE curve = ? AND seq = ?`,
-      [row.from_level, row.to_level, row.start_value, row.per_level, row.updated_at, row.curve, row.seq],
-    );
-  }
-
-  findSegment(curve: string, seq: number): GrowthSegmentRow | undefined {
-    return this.db.get<GrowthSegmentRow>("SELECT * FROM growth_segments WHERE curve = ? AND seq = ?", [curve, seq]);
-  }
-
-  /** 某条曲线的全部分段（按段序升序 —— 连续性校验按这个顺序做） */
-  listSegmentsOfCurve(curve: string): GrowthSegmentRow[] {
-    return this.db.all<GrowthSegmentRow>("SELECT * FROM growth_segments WHERE curve = ? ORDER BY seq ASC", [curve]);
-  }
-
-  listSegments(options: GrowthSegmentListOptions): GrowthSegmentRow[] {
-    const { clause, params } = this.segmentWhere(options);
-    return this.db.all<GrowthSegmentRow>(
-      `SELECT * FROM growth_segments ${clause}
-       ORDER BY ${resolveSort(GROWTH_SEGMENT_SORT, options.sort, options.order)}
-       LIMIT ? OFFSET ?`,
-      [...params, options.size, (options.page - 1) * options.size],
-    );
-  }
-
-  countSegments(options: GrowthSegmentListOptions): number {
-    const { clause, params } = this.segmentWhere(options);
-    return this.db.count(`SELECT COUNT(1) AS total FROM growth_segments ${clause}`, params);
-  }
-
-  private segmentWhere(options: GrowthSegmentListOptions): { clause: string; params: SqlParam[] } {
-    const where: string[] = [];
-    const params: SqlParam[] = [];
-    if (options.curve) {
-      where.push("curve = ?");
-      params.push(options.curve);
-    }
-    return { clause: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
+    return this.db.get<LevelExpRow>("SELECT level, exp, updated_at FROM role_levels WHERE level = ?", [level]);
   }
 
   // —— 标量参数 ——

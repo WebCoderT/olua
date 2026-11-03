@@ -424,21 +424,6 @@ export const routes = {
      */
     update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
   },
-  /** adminGrowthSegment 模块（2 个接口） */
-  adminGrowthSegment: {
-    /**
-     * 成长曲线分段列表（GET /admin/growth-segments）
-     *
-     * 分段线性曲线的段（曲线键 × 段序固定，**没有创建 / 删除**）：`maxHp` / `attack` / `defense` / `killsPerLevel` 四条，每段 {fromLevel, toLevel, startValue, perLevel}，段间必须首尾相接、连续覆盖 1..roleMaxLevel。
-     */
-    list: "/admin/growth-segments",
-    /**
-     * 编辑曲线分段（PATCH /admin/growth-segments/{curve}/{seq}）
-     *
-     * 四个数值字段**整份提交、整份替换**（段的边界与斜率是一体的，部分提交会出现「改了 to 忘了下一段 from」的半截状态）。
-     */
-    update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
-  },
   /** adminGuide 模块（2 个接口） */
   adminGuide: {
     /**
@@ -495,21 +480,6 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (id: string) => `/admin/items/${encodeURIComponent(id)}`,
-  },
-  /** adminLevelExp 模块（2 个接口） */
-  adminLevelExp: {
-    /**
-     * 升级经验列表（GET /admin/level-exps）
-     *
-     * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**。每行是「升到下一级所需经验」。
-     */
-    list: "/admin/level-exps",
-    /**
-     * 编辑升级经验（PATCH /admin/level-exps/{level}）
-     *
-     * **部分更新**：只改 `exp`（等级本身不可改）。
-     */
-    update: (level: string) => `/admin/level-exps/${encodeURIComponent(level)}`,
   },
   /** adminMail 模块（4 个接口） */
   adminMail: {

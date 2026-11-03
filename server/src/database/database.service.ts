@@ -429,27 +429,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE INDEX IF NOT EXISTS idx_equipment_variants_base ON equipment_variants(base_id);
 
-      -- 成长曲线（#256）：升级经验 + 分段曲线 + 标量参数，三张表都**只能改内容、不能增删行**
-      -- （行的形状由客户端 configs/growth 定义，seed 时落库）。
-      -- 改曲线会连锁影响军衔等效强度与怪物数值 —— 军衔映射基准（#250）与结算口径都以它为底。
-      -- ⚠️ #655：level_exps / growth_segments 已被 role_levels 取代，运行时不再读（保留列只做迁移来源）
-      CREATE TABLE IF NOT EXISTS level_exps (
-        level      INTEGER PRIMARY KEY,
-        exp        INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL DEFAULT 0
-      );
-
-      CREATE TABLE IF NOT EXISTS growth_segments (
-        curve       TEXT    NOT NULL,
-        seq         INTEGER NOT NULL,
-        from_level  INTEGER NOT NULL,
-        to_level    INTEGER NOT NULL,
-        start_value INTEGER NOT NULL DEFAULT 0,
-        per_level   INTEGER NOT NULL DEFAULT 0,
-        updated_at  INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (curve, seq)
-      );
-
+      -- 成长标量（#256）：等级上限 / 区间倍率 / 经验节奏 / 回蓝这类**非曲线**参数。
+      -- 曲线（growth_segments）与旧经验表（level_exps）已在 #655 删除 —— 经验并进
+      -- role_levels.exp，属性逐级写在 role_levels，运行时不再采样插值。
       CREATE TABLE IF NOT EXISTS growth_scalars (
         key         TEXT PRIMARY KEY,
         value       REAL    NOT NULL,
@@ -1047,6 +1029,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();
+    // 曲线退场的收尾（#655）：这两张表的数据已经搬进 role_levels，留着只会让人以为还能改
+    this.db.exec("DROP TABLE IF EXISTS level_exps; DROP TABLE IF EXISTS growth_segments;");
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(

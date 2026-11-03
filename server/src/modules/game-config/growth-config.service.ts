@@ -6,47 +6,32 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import {
   GrowthRepository,
   GrowthScalarListOptions,
-  GrowthSegmentListOptions,
-  LevelExpListOptions,
 } from "../../database/repositories/growth.repository";
 import { RoleLevelRepository } from "../../database/repositories/role-level.repository";
-import { GrowthScalarRow, GrowthSegmentRow, RoleLevelRow } from "../../database/rows";
-import {
-  GROWTH_CURVES,
-  GROWTH_SCALARS,
-  ROLE_LEVEL_ATTRIBUTES,
-} from "../../shared/growth-seed";
+import { GrowthScalarRow, RoleLevelRow } from "../../database/rows";
+import { GROWTH_SCALARS, ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import {
   GrowthScalarDto,
   GrowthScalarQueryDto,
-  GrowthSegmentDto,
-  GrowthSegmentQueryDto,
-  LevelExpDto,
-  LevelExpQueryDto,
   RoleLevelDto,
   RoleLevelQueryDto,
   UpdateGrowthScalarDto,
-  UpdateGrowthSegmentDto,
-  UpdateLevelExpDto,
   UpdateRoleLevelDto,
 } from "./dto/growth.dto";
 import { RuntimeConfigService } from "./runtime-config.service";
 
-/** 曲线表默认每页条数：曲线行数都不大，默认一页装下全量 */
+/** 列表默认每页条数：这些表行数都不大，默认一页装下全量 */
 const DEFAULT_PAGE_SIZE = 100;
 
 /**
- * 成长曲线业务（#256）
+ * 成长业务（#655：**只剩「角色等级」与「标量参数」两块**）
  *
- * 三张表都是「**只读 seed、只写更新**」：等级序列与曲线形状来自客户端 configs
- * （经 game-data.generated 快照），服务启动时 INSERT OR IGNORE 灌库 —— 幂等，
- * 且**不会覆盖运营已改的值**；后台接口只有 list / update，没有 create / remove。
+ * 曲线分段（`growth_segments`）与旧经验表（`level_exps`）已随曲线一起删除：
+ * 60 行 `role_levels` 直接存每级的最终裸属性与升级经验，运行时不再采样插值。
+ * 后台接口只有 list / update，没有 create / remove —— 等级序列固定 1..roleMaxLevel。
  *
- * 跨行 / 跨表校验（DTO 只能管单字段）：
- * - 曲线分段改完后，同曲线的分段必须**连续覆盖 1..roleMaxLevel**（首段 from=1、
- *   段间首尾相接、末段 to=roleMaxLevel）—— 插值口径「段间跳档」依赖这个形状，
- *   断档会在玩家升到中途时取到错的曲线值；
- * - `roleMaxLevel` 改值必须与**每条曲线**的末段 to 一致（四条曲线一起覆盖）。
+ * 保留的 `growth_scalars` 是**非曲线的参数**（等级上限 / 区间倍率 / 经验节奏 / 回蓝），
+ * 改它影响全线而不是某一段。
  */
 @Injectable()
 export class GrowthConfigService implements OnModuleInit {
@@ -58,9 +43,7 @@ export class GrowthConfigService implements OnModuleInit {
 
   /** 启动时把出厂值 seed 进库（幂等；已存在的行原样保留） */
   onModuleInit() {
-    this.seedLevelExps();
     this.seedRoleLevels();
-    this.seedSegments();
     this.seedScalars();
   }
 
@@ -124,84 +107,6 @@ export class GrowthConfigService implements OnModuleInit {
     return RoleLevelDto.from(this.roleLevels.findByLevel(level)!);
   }
 
-  // —— 等级经验 ——
-
-  /** 某一级的最终升级经验（读 role_levels；表里没有时回落旧的 level_exps，迁移前兼容） */
-  findLevelExp(level: number) {
-    const row = this.roleLevels.findByLevel(level);
-    if (row) return { level: row.level, exp: row.exp, updated_at: row.updated_at };
-    return this.growth.findLevelExp(level);
-  }
-
-  listLevelExps(query: LevelExpQueryDto): PageResult<LevelExpDto> {
-    const options: LevelExpListOptions = {
-      page: query.page ?? 1,
-      size: query.size ?? DEFAULT_PAGE_SIZE,
-      sort: query.sort,
-      order: query.order,
-    };
-    // #655：经验已经并进 role_levels，旧接口保留路径（管理端老页面/脚本还在用），
-    // 但数据源同一份 —— 两边各读一张表就是「改了这个页面、那个页面不变」。
-    const rows = this.roleLevels.list({ page: options.page, size: options.size, sort: options.sort, order: options.order });
-    const list = rows.map((row) => LevelExpDto.from({ level: row.level, exp: row.exp, updated_at: row.updated_at }));
-    return { list, total: this.roleLevels.count(), page: options.page, size: options.size };
-  }
-
-  updateLevelExp(level: number, dto: UpdateLevelExpDto): LevelExpDto {
-    const existing = this.roleLevels.findByLevel(level);
-    if (!existing) throw BizException.notFound(BizCode.LEVEL_EXP_NOT_FOUND, `等级 ${level} 的升级经验不存在`);
-    const next: RoleLevelRow = { ...existing, exp: dto.exp ?? existing.exp, updated_at: Date.now() };
-    this.roleLevels.update(next);
-    this.runtime.refreshAll();
-    const row = this.roleLevels.findByLevel(level)!;
-    return LevelExpDto.from({ level: row.level, exp: row.exp, updated_at: row.updated_at });
-  }
-
-  // —— 曲线分段 ——
-
-  listSegments(query: GrowthSegmentQueryDto): PageResult<GrowthSegmentDto> {
-    const options: GrowthSegmentListOptions = {
-      page: query.page ?? 1,
-      size: query.size ?? DEFAULT_PAGE_SIZE,
-      curve: query.curve,
-      sort: query.sort,
-      order: query.order,
-    };
-    const list = this.growth.listSegments(options).map(GrowthSegmentDto.from);
-    return { list, total: this.growth.countSegments(options), page: options.page, size: options.size };
-  }
-
-  /**
-   * 编辑一段曲线（四个数值字段整份提交）
-   *
-   * 单字段合法性交给 DTO；这里只做跨行约束 —— **先在内存里合并出改后的整条曲线并校验**，
-   * 通过了才落库（先写后验会把被拒的脏值留在库里，后续所有合法修改都会跟着挂）。
-   * 曲线必须仍然连续覆盖 1..roleMaxLevel，否则整单拒收（40000）。
-   */
-  updateSegment(curve: string, seq: number, dto: UpdateGrowthSegmentDto): GrowthSegmentDto {
-    const existing = this.growth.findSegment(curve, seq);
-    if (!existing) throw BizException.notFound(BizCode.GROWTH_SEGMENT_NOT_FOUND, `曲线 ${curve} 的第 ${seq} 段不存在`);
-    if (dto.fromLevel > dto.toLevel) {
-      throw new BizException(BizCode.PARAM_INVALID, "起始等级不能大于结束等级");
-    }
-    const merged: GrowthSegmentRow = {
-      ...existing,
-      from_level: dto.fromLevel,
-      to_level: dto.toLevel,
-      start_value: dto.startValue,
-      per_level: dto.perLevel,
-      updated_at: Date.now(),
-    };
-    const prospective = this.growth
-      .listSegmentsOfCurve(curve)
-      .filter((row) => row.seq !== seq)
-      .concat(merged)
-      .sort((a, b) => a.seq - b.seq);
-    this.assertCurveContiguous(curve, prospective);
-    this.growth.updateSegment(merged);
-    return GrowthSegmentDto.from(this.growth.findSegment(curve, seq)!);
-  }
-
   // —— 标量参数 ——
 
   listScalars(query: GrowthScalarQueryDto): PageResult<GrowthScalarDto> {
@@ -228,17 +133,14 @@ export class GrowthConfigService implements OnModuleInit {
         throw new BizException(BizCode.PARAM_INVALID, `参数 ${key} 必须是整数`);
       }
     }
-    // 等级上限是四条曲线的覆盖终点，改它必须连曲线一起改（先改曲线末段，再来抬上限）
+    // 等级上限不再由「曲线末段覆盖到哪」决定，而是**等级表的行数**：想开到 61 级，
+    // 就多一行 61 级；只抬数字会让 61 级没有属性可读（结算取不到裸属性）
     if (key === "roleMaxLevel") {
-      const mismatched = Object.keys(GROWTH_CURVES).filter((curve) => {
-        const segments = this.growth.listSegmentsOfCurve(curve);
-        const last = segments[segments.length - 1];
-        return !last || last.to_level !== dto.value;
-      });
-      if (mismatched.length > 0) {
+      const rows = this.roleLevels.count();
+      if (dto.value !== rows) {
         throw new BizException(
           BizCode.PARAM_INVALID,
-          `曲线 ${mismatched.join(" / ")} 的最后一段没有覆盖到 ${dto.value}，先把末段 to 改过来再调等级上限`,
+          `等级上限必须等于角色等级表的行数（当前 ${rows} 行）—— 想开更高等级就加对应的一行`,
         );
       }
     }
@@ -250,44 +152,25 @@ export class GrowthConfigService implements OnModuleInit {
   // —— 内部 ——
 
   /**
-   * 曲线连续性校验：首段 from=1、段间首尾相接、末段 to = 标量 roleMaxLevel。
-   * 接收**合并后**的段数组（含尚未落库的修改）—— 校验的是「将要变成的形状」。
-   */
-  private assertCurveContiguous(curve: string, segments: GrowthSegmentRow[]): void {
-    const maxLevel = this.growth.findScalar("roleMaxLevel")?.value;
-    let expected = 1;
-    for (const segment of segments) {
-      if (segment.from_level !== expected) {
-        throw new BizException(
-          BizCode.PARAM_INVALID,
-          `曲线 ${curve} 第 ${segment.seq} 段从 ${segment.from_level} 开始，应从 ${expected} 开始（段间必须首尾相接）`,
-        );
-      }
-      expected = segment.to_level + 1;
-    }
-    if (maxLevel !== undefined && expected - 1 !== maxLevel) {
-      throw new BizException(
-        BizCode.PARAM_INVALID,
-        `曲线 ${curve} 覆盖到 ${expected - 1} 级，与等级上限 ${maxLevel} 不一致（末段 to 必须等于 roleMaxLevel）`,
-      );
-    }
-  }
-
-  /**
    * 角色等级 seed（#655）：60 行最终属性写进 `role_levels`
    *
    * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
    * 属性直接取 `ROLE_LEVEL_ATTRIBUTES`（曲线展开后的常量），经验优先取刚 seed 的
    * `level_exps` —— 这样「空库自举」与「老库迁移」两条路得到的值逐值相同。
    */
+  /**
+   * 角色等级 seed（#655）：60 行最终属性写进 `role_levels`
+   *
+   * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
+   * 出厂值 = `ROLE_LEVEL_ATTRIBUTES`（60 行常量，曲线展开的一次性结果已经落成字面量）。
+   */
   private seedRoleLevels() {
     if (this.roleLevels.count() > 0) return;
     for (const [levelKey, attributes] of Object.entries(ROLE_LEVEL_ATTRIBUTES)) {
       const level = Number(levelKey);
-      const expRow = this.growth.findLevelExp(level);
       this.roleLevels.seedRow({
         level,
-        exp: Math.max(1, Math.round(expRow ? expRow.exp : attributes.exp)),
+        exp: Math.max(1, Math.round(attributes.exp)),
         max_hp: attributes.maxHp,
         max_mp: attributes.maxMp,
         hp_recover: attributes.hpRecover,
@@ -304,34 +187,6 @@ export class GrowthConfigService implements OnModuleInit {
         taoist_defense_min: attributes.taoistDefense[0],
         taoist_defense_max: attributes.taoistDefense[1],
         updated_at: 0,
-      });
-    }
-  }
-
-  /** 等级经验 seed：ROLE_LEVEL_ATTRIBUTES 每级的 exp（升级所需经验与曲线共用同一来源） */
-  private seedLevelExps() {
-    for (const [level, attributes] of Object.entries(ROLE_LEVEL_ATTRIBUTES)) {
-      this.growth.seedLevelExp({
-        level: Number(level),
-        exp: Math.max(1, Math.round(attributes.exp ?? 1)),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /** 曲线分段 seed：GROWTH_CURVES 四条曲线的段原样落库 */
-  private seedSegments() {
-    for (const [curve, segments] of Object.entries(GROWTH_CURVES)) {
-      (segments as unknown as Array<Record<string, number>>).forEach((segment, index) => {
-        this.growth.seedSegment({
-          curve,
-          seq: index + 1,
-          from_level: Math.round(segment.from ?? 0),
-          to_level: Math.round(segment.to ?? 0),
-          start_value: Math.round(segment.start ?? 0),
-          per_level: Math.round(segment.perLevel ?? 0),
-          updated_at: 0,
-        });
       });
     }
   }

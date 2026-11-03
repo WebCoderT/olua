@@ -2,10 +2,10 @@
 --
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
--- 表 33 张 / 行 1634 条
+-- 表 31 张 / 行 1550 条
 -- olua config snapshot v1
--- tables: achievements,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,growth_segments,guide_settings,items,level_exps,mall_prices,mall_settings,map_spawn_areas,maps,monster_drops,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,combat_weights=7,drop_tables=4,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=7,growth_segments=24,guide_settings=1,items=5,level_exps=60,mall_prices=1,mall_settings=1,map_spawn_areas=62,maps=11,monster_drops=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- tables: achievements,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_spawn_areas,maps,monster_drops,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
+-- counts: achievements=24,combat_weights=7,drop_tables=4,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=7,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_spawn_areas=62,maps=11,monster_drops=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -787,33 +787,6 @@ INSERT INTO "growth_scalars" VALUES ('expGain.expPerLevel', 5, '每级基准经�
 INSERT INTO "growth_scalars" VALUES ('expGain.maxLevelGap', 6, '角色与怪物等级差达到该值（含）后不再获得经验', 0);
 INSERT INTO "growth_scalars" VALUES ('mpRecoverPerSecond', 2, '魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）', 0);
 
--- ===== growth_segments（24 行）=====
-DELETE FROM "growth_segments";
-INSERT INTO "growth_segments" VALUES ('maxHp', 1, 1, 10, 100, 18, 0);
-INSERT INTO "growth_segments" VALUES ('maxHp', 2, 11, 20, 330, 59, 0);
-INSERT INTO "growth_segments" VALUES ('maxHp', 3, 21, 30, 1080, 192, 0);
-INSERT INTO "growth_segments" VALUES ('maxHp', 4, 31, 40, 3520, 630, 0);
-INSERT INTO "growth_segments" VALUES ('maxHp', 5, 41, 50, 11500, 2070, 0);
-INSERT INTO "growth_segments" VALUES ('maxHp', 6, 51, 60, 37700, 6780, 0);
-INSERT INTO "growth_segments" VALUES ('attack', 1, 1, 10, 20, 4, 0);
-INSERT INTO "growth_segments" VALUES ('attack', 2, 11, 20, 62, 11, 0);
-INSERT INTO "growth_segments" VALUES ('attack', 3, 21, 30, 184, 33, 0);
-INSERT INTO "growth_segments" VALUES ('attack', 4, 31, 40, 550, 100, 0);
-INSERT INTO "growth_segments" VALUES ('attack', 5, 41, 50, 1650, 290, 0);
-INSERT INTO "growth_segments" VALUES ('attack', 6, 51, 60, 4800, 860, 0);
-INSERT INTO "growth_segments" VALUES ('defense', 1, 1, 10, 6, 1, 0);
-INSERT INTO "growth_segments" VALUES ('defense', 2, 11, 20, 18, 3, 0);
-INSERT INTO "growth_segments" VALUES ('defense', 3, 21, 30, 55, 10, 0);
-INSERT INTO "growth_segments" VALUES ('defense', 4, 31, 40, 165, 30, 0);
-INSERT INTO "growth_segments" VALUES ('defense', 5, 41, 50, 495, 87, 0);
-INSERT INTO "growth_segments" VALUES ('defense', 6, 51, 60, 1440, 258, 0);
-INSERT INTO "growth_segments" VALUES ('killsPerLevel', 1, 1, 10, 10, 2, 0);
-INSERT INTO "growth_segments" VALUES ('killsPerLevel', 2, 11, 20, 32, 3, 0);
-INSERT INTO "growth_segments" VALUES ('killsPerLevel', 3, 21, 30, 65, 4, 0);
-INSERT INTO "growth_segments" VALUES ('killsPerLevel', 4, 31, 40, 110, 6, 0);
-INSERT INTO "growth_segments" VALUES ('killsPerLevel', 5, 41, 50, 175, 8, 0);
-INSERT INTO "growth_segments" VALUES ('killsPerLevel', 6, 51, 60, 260, 10, 0);
-
 -- ===== guide_settings（1 行）=====
 DELETE FROM "guide_settings";
 INSERT INTO "guide_settings" VALUES (1, '[{"id":"move","title":"先动起来","desc":"拖住左下角的摇杆走两步；电脑上也可以按住方向键或点地面。","spot":"joystick","trigger":"move"},{"id":"fight","title":"打一只怪","desc":"走近怪物，点下面的技能（或按 1~6）就能出手。","spot":"shortcut","trigger":"kill"},{"id":"loot","title":"把掉落捡起来","desc":"怪死了会掉东西，走上去就会自动拾取，东西直接进背包。","spot":"nav:bag","trigger":"pickup"},{"id":"bag","title":"看看背包","desc":"刚捡的装备和药都在这里：点格子看详情，装备可以直接穿上。","spot":"nav:bag","trigger":"openBag"},{"id":"skill","title":"认识你的技能","desc":"技能列表里有全部技能和解锁等级，拖到快捷栏就能随时用。","spot":"nav:skill","trigger":"openSkill"},{"id":"social","title":"别一个人玩","desc":"聊天分世界 / 帮会 / 私聊三页；任务在左边的追踪栏，点一下就能打开任务面板。","spot":"nav:chat","trigger":"openChat"}]', 0);
@@ -825,69 +798,6 @@ INSERT INTO "items" VALUES ('material_iron', 'material', '铁矿', '常见的矿
 INSERT INTO "items" VALUES ('material_cloth', 'material', '粗布', '粗糙的布料，可用于制作衣物。', 1, 2, 99, 0, 'item/2030410');
 INSERT INTO "items" VALUES ('material_gem', 'material', '宝石', '蕴含灵气的宝石，可用于强化装备。', 10, 50, 99, 0, 'item/2030702');
 INSERT INTO "items" VALUES ('material_herb', 'material', '药草', '常见的草药，可用于炼制药品。', 1, 2, 99, 0, 'item/2030810');
-
--- ===== level_exps（60 行）=====
-DELETE FROM "level_exps";
-INSERT INTO "level_exps" VALUES (1, 100, 0);
-INSERT INTO "level_exps" VALUES (2, 180, 0);
-INSERT INTO "level_exps" VALUES (3, 280, 0);
-INSERT INTO "level_exps" VALUES (4, 400, 0);
-INSERT INTO "level_exps" VALUES (5, 540, 0);
-INSERT INTO "level_exps" VALUES (6, 700, 0);
-INSERT INTO "level_exps" VALUES (7, 880, 0);
-INSERT INTO "level_exps" VALUES (8, 1080, 0);
-INSERT INTO "level_exps" VALUES (9, 1300, 0);
-INSERT INTO "level_exps" VALUES (10, 1540, 0);
-INSERT INTO "level_exps" VALUES (11, 1920, 0);
-INSERT INTO "level_exps" VALUES (12, 2275, 0);
-INSERT INTO "level_exps" VALUES (13, 2660, 0);
-INSERT INTO "level_exps" VALUES (14, 3075, 0);
-INSERT INTO "level_exps" VALUES (15, 3520, 0);
-INSERT INTO "level_exps" VALUES (16, 3995, 0);
-INSERT INTO "level_exps" VALUES (17, 4500, 0);
-INSERT INTO "level_exps" VALUES (18, 5035, 0);
-INSERT INTO "level_exps" VALUES (19, 5600, 0);
-INSERT INTO "level_exps" VALUES (20, 6195, 0);
-INSERT INTO "level_exps" VALUES (21, 7150, 0);
-INSERT INTO "level_exps" VALUES (22, 7935, 0);
-INSERT INTO "level_exps" VALUES (23, 8760, 0);
-INSERT INTO "level_exps" VALUES (24, 9625, 0);
-INSERT INTO "level_exps" VALUES (25, 10530, 0);
-INSERT INTO "level_exps" VALUES (26, 11475, 0);
-INSERT INTO "level_exps" VALUES (27, 12460, 0);
-INSERT INTO "level_exps" VALUES (28, 13485, 0);
-INSERT INTO "level_exps" VALUES (29, 14550, 0);
-INSERT INTO "level_exps" VALUES (30, 15655, 0);
-INSERT INTO "level_exps" VALUES (31, 17600, 0);
-INSERT INTO "level_exps" VALUES (32, 19140, 0);
-INSERT INTO "level_exps" VALUES (33, 20740, 0);
-INSERT INTO "level_exps" VALUES (34, 22400, 0);
-INSERT INTO "level_exps" VALUES (35, 24120, 0);
-INSERT INTO "level_exps" VALUES (36, 25900, 0);
-INSERT INTO "level_exps" VALUES (37, 27740, 0);
-INSERT INTO "level_exps" VALUES (38, 29640, 0);
-INSERT INTO "level_exps" VALUES (39, 31600, 0);
-INSERT INTO "level_exps" VALUES (40, 33620, 0);
-INSERT INTO "level_exps" VALUES (41, 36750, 0);
-INSERT INTO "level_exps" VALUES (42, 39345, 0);
-INSERT INTO "level_exps" VALUES (43, 42020, 0);
-INSERT INTO "level_exps" VALUES (44, 44775, 0);
-INSERT INTO "level_exps" VALUES (45, 47610, 0);
-INSERT INTO "level_exps" VALUES (46, 50525, 0);
-INSERT INTO "level_exps" VALUES (47, 53520, 0);
-INSERT INTO "level_exps" VALUES (48, 56595, 0);
-INSERT INTO "level_exps" VALUES (49, 59750, 0);
-INSERT INTO "level_exps" VALUES (50, 62985, 0);
-INSERT INTO "level_exps" VALUES (51, 67600, 0);
-INSERT INTO "level_exps" VALUES (52, 71550, 0);
-INSERT INTO "level_exps" VALUES (53, 75600, 0);
-INSERT INTO "level_exps" VALUES (54, 79750, 0);
-INSERT INTO "level_exps" VALUES (55, 84000, 0);
-INSERT INTO "level_exps" VALUES (56, 88350, 0);
-INSERT INTO "level_exps" VALUES (57, 92800, 0);
-INSERT INTO "level_exps" VALUES (58, 97350, 0);
-INSERT INTO "level_exps" VALUES (59, 102000, 0);
-INSERT INTO "level_exps" VALUES (60, 106750, 0);
 
 -- ===== mall_prices（1 行）=====
 DELETE FROM "mall_prices";

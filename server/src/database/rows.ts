@@ -463,6 +463,16 @@ export interface SoulRow {
  * 一行 = 一个等级的**最终裸属性 + 升级经验**。曲线（`growth_segments`）已从运行时移除，
  * 这 60 行由迁移脚本一次性展开写入，之后只由管理端逐行改 —— 运行时与快照都只读它。
  */
+/**
+ * 升级经验（**不是一张表**：#655 起经验并进 `role_levels.exp`，这个形状只用来
+ * 在仓储与业务之间传「某一级要多少经验」三列，写法与其它 Row 保持一致）
+ */
+export interface LevelExpRow {
+  level: number;
+  exp: number;
+  updated_at: number;
+}
+
 export interface RoleLevelRow {
   level: number;
   /** 升到下一级所需经验（原 level_exps.exp；主键同级一一对应） */
@@ -482,32 +492,6 @@ export interface RoleLevelRow {
   magic_defense_max: number;
   taoist_defense_min: number;
   taoist_defense_max: number;
-  updated_at: number;
-}
-
-/** 等级经验一行（`level_exps` 表）：一行 = 一个等级升到下一级所需经验 */
-export interface LevelExpRow {
-  /** 等级（1 起；主键，不可增删行） */
-  level: number;
-  /** 升到下一级所需经验（≥ 1；客户端升级判定读的就是它） */
-  exp: number;
-  updated_at: number;
-}
-
-/** 成长曲线分段一行（`growth_segments` 表）：一行 = 某条曲线的一个分段 */
-export interface GrowthSegmentRow {
-  /** 曲线键（configs/growth 的 roleGrowth 四条：maxHp / attack / defense / killsPerLevel） */
-  curve: string;
-  /** 段序号（1 起；同曲线内不可增删行，只许改内容） */
-  seq: number;
-  /** 起始等级（含） */
-  from_level: number;
-  /** 结束等级（含） */
-  to_level: number;
-  /** 该段起始等级的值 */
-  start_value: number;
-  /** 段内每升一级的增量 */
-  per_level: number;
   updated_at: number;
 }
 
