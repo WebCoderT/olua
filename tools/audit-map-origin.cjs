@@ -14,9 +14,10 @@
  *    里注册 ANCHOR_CHANGED 监听，而建图时地图节点还没入场景、图层未启用，地图那次 `_syncAnchorPoint()`
  *    没人接：`leftDownToCenter` 停在按默认锚点 0.5 算的 (W/2, H/2)，瓦片照旧铺在中心；坐标换算却已按
  *    左上角把角色送到 (x, -y) → 落在错位的图之外 = **整屏黑**（#568）。这条最容易漏，因为它不报错。
- * 3. `MapPointMath.mapPointToWorld` 的函数体必须是 `(x, y) -> (x, -y)` —— 任何 `- W/2`、
- *    `H/2 -` 都说明半图偏移又回来了；换算函数不许再收 `map` 参数（地图节点恒在世界原点，
- *    再叠一次世界坐标就是多余运算，也是「两套写法」的入口）。
+ * 3. `client/assets` 里**不许再出现 Tiled 坐标换算与对象组读取**（#676）—— 地图文件只剩瓦片与
+ *    图层，点位 / 刷怪区 / 碰撞盒由服务端下发**世界坐标**。`MapPointMath` 只保留 `getMapWorldRect`
+ *    （整图范围），`mapPointToWorld` / `mapRectCenterToWorld` / `TiledObjects` / `tiledGroupNames`
+ *    一旦回来，就说明又有人在读 TMX 的对象坐标 = 数据有两个来源，后台改完不生效的 bug 会重来。
  * 4. `LayerManager.move` 只许搬 UI 层与相机，**不许动地图层** —— 整套「世界坐标 = Tiled 坐标取反 y」
  *    的地基是「地图节点在世界原点」，地图层一旦被移动，所有点位会整体错位而不报错。
  * 5. `tools/import-map-resources.cjs` **不许碰刷怪区表、不许自己算世界坐标**（#667）——
@@ -114,21 +115,55 @@ function checkLayerAnchorResync() {
 function checkPointMath() {
   const src = read(POINT_MATH, "client/assets/ui/utils/map/MapPointMath.ts");
   if (!src) return;
-  // 函数体只允许一次 y 取反：`return new Vec3(x, -y);`
-  if (!/export function mapPointToWorld\(\s*x: number,\s*y: number\s*\)\s*\{\s*return new Vec3\(x, -y\);\s*\}/.test(src)) {
+  // #676：Tiled 坐标 → 世界坐标的两个换算函数随「读 TMX 对象组」一起下架了 ——
+  // 地图文件里已经没有对象组，服务端下发的点位 / 区域 / 碰撞盒本来就是世界坐标。
+  // 所以这里反过来判：**不许再回来**。回来就意味着又有人在读 TMX 的对象坐标。
+  // 只看代码行：文件头正是用来记「这两个函数为什么下架」的，注释里出现名字是应该的。
+  src.split("\n").forEach((line, index) => {
+    if (/^\s*(\*|\/\/|\/\*)/.test(line)) return;
+    if (/mapPointToWorld|mapRectCenterToWorld/.test(line)) {
+      problem(
+        "client/assets/ui/utils/map/MapPointMath.ts",
+        index + 1,
+        "不许再出现 mapPointToWorld / mapRectCenterToWorld（#676 起客户端不读 TMX 对象组，点位与碰撞盒由服务端下世界坐标）",
+      );
+    }
+  });
+  // 整图范围必须还在：小地图 / 预览图 / 寻路网格都靠它，删掉了这些地方只能在本地各算一遍
+  if (!/export function getMapWorldRect\(/.test(src)) {
     problem(
       "client/assets/ui/utils/map/MapPointMath.ts",
       0,
-      "mapPointToWorld 必须是 `(x, y) -> (x, -y)`：出现 -W/2、H/2- 之类就是半图偏移回来了（#566 只保留 y 取反）",
+      "getMapWorldRect 必须还在（小地图 / 预览 / 寻路网格取整图范围的唯一处）",
     );
   }
-  // 换算函数不再收 map 参数：地图节点恒在世界原点，再叠一次世界坐标是多余运算
-  if (/mapPointToWorld\([^)]*map[^)]*\)|mapRectCenterToWorld\([^)]*map[^)]*\)/.test(src)) {
-    problem(
-      "client/assets/ui/utils/map/MapPointMath.ts",
-      0,
-      "换算函数不该再收 map 参数（地图节点在世界原点，本地坐标即世界坐标）—— 收了就会有人以为还要再叠一次",
-    );
+}
+
+/**
+ * 客户端的碰撞盒 / 点位 / 区域必须读快照，不许有第二条来源（#676）
+ *
+ * 这条守的是「地图文件只做显示」这件事本身：只要还有一处从 TMX 读对象（`TiledObjects`、
+ * `tiledGroupNames`、`getObjectGroup`），数据就有两个来源，后台改完不生效的 bug 会重来。
+ */
+function checkNoTiledObjects() {
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.ts$/.test(entry.name)) continue;
+      const text = fs.readFileSync(full, "utf8");
+      if (/\btiledGroupNames\b|\bTiledObjects\b|getObjectGroup\(|getObjects\(\)/.test(text)) {
+        offenders.push(path.relative(REPO, full));
+      }
+    }
+  };
+  walk(CLIENT_ASSETS);
+  for (const file of offenders) {
+    problem(file, 0, "客户端不许再读 TMX 的对象组（#676）：碰撞盒 / 刷怪区 / NPC 点位一律读配置快照");
   }
 }
 
@@ -364,6 +399,7 @@ function checkBoundsWired() {
 checkAnchoredBeforeAsset();
 checkLayerAnchorResync();
 checkPointMath();
+checkNoTiledObjects();
 checkMapLayerStatic();
 checkImportTool();
 checkSpawnAreasInMap();
@@ -371,7 +407,9 @@ checkLegacyNaming();
 checkBoundsWired();
 
 if (problems.length === 0) {
-  console.log("✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、换算只有 y 取反、地图层静止、刷怪区坐标全部落在图内（快照 + 库表两条路都有判据）");
+  console.log(
+    "✓ 地图原点口径：锚点 (0,1) 在 tmxAsset 之前、建图后图层重算过、客户端不再换算 Tiled 坐标也读不到对象组、地图层静止、刷怪区坐标全部落在图内（快照 + 库表两条路都有判据）",
+  );
   process.exit(0);
 }
 

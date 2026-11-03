@@ -351,6 +351,12 @@ db-restore: ## 恢复数据（用法：make db-restore FILE=server/backups/olua-
 	@if [ -z "$(FILE)" ]; then echo "  用法：make db-restore FILE=<备份文件>（可加 FORCE=1）"; exit 1; fi
 	@cd server && $(NPM) run db:restore -- $(FILE) $(if $(FORCE),--force,)
 
+db-migrate-map-collisions: ## 一次性：把 maps.content 里的碰撞矩形灌进 map_collisions（#676）
+	cd server && $(NODE) --disable-warning=ExperimentalWarning scripts/migrate-map-collisions.cjs
+
+map-strip-objects: ## 把 TMX 里的对象组整组删掉（地图文件只留瓦片；#676）
+	$(NODE) tools/strip-map-objects.cjs
+
 config-export: ## 把当前库里的配置表覆盖写入 server/data/config-sync.sql（提交它 = 同步给别人）
 	@cd server && $(NPM) run config:export
 
