@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mapPreview } from "../../api";
-import type { MapDetail, MapNpc, MapObject, MapRevivePoint, MapSpawnArea } from "../../api";
+import type { MapCollision, MapDetail, MapNpc, MapRevivePoint, MapSpawnArea } from "../../api";
 import { gameResUrl } from "../GameImage";
 import { overflowText } from "./bounds";
 
@@ -22,7 +22,7 @@ import { overflowText } from "./bounds";
  * 进（读库 → 画）：`x = cx`、`y = -cy`（`tiledPointOf`）；矩形再按中心反算（`tiledBoxOf`）。
  * 出（画 → 提交）：`cx = x`、`cy = -y`（`worldPointOf`）；矩形同理（`worldBoxOf`）。
  *
- * ## 四种模式（#672 从「绘制开关」扩成模式）
+ * ## 五种模式（#672 从「绘制开关」扩成模式，#676 加了碰撞盒）
  *
  * | 模式 | 按下空白 | 按下已有对象 |
  * |---|---|---|
@@ -30,9 +30,16 @@ import { overflowText } from "./bounds";
  * | `spawn` | 拖出矩形 → 新建刷怪区 | 不响应（拖拽期间误触会不停弹窗） |
  * | `npc` | 松手处 = 新 NPC 点位的坐标 | **拖动**，松手即保存；没拖动就算点击 → 打开编辑 |
  * | `revive` | 松手处 = 复活点 | 拖动复活点同理 |
+ * | `collision` | 拖出矩形 → 新建碰撞盒 | 不响应（拖拽期间误触会不停弹窗） |
  *
- * 三种编辑模式都有同一个「防手滑」底座：太小的框不提交（`MIN_DRAW_PX`）、
- * `Esc` 取消、`touchAction: none`（拖拽时别让页面跟着滚）。
+ * 四种编辑模式都有同一个「防手滑」底座：太小的框不提交（`MIN_DRAW_PX` /
+ * `MIN_COLLISION_DRAW_PX`）、`Esc` 取消、`touchAction: none`（拖拽时别让页面跟着滚）。
+ *
+ * ## 碰撞盒为什么只能「画新的 + 点开改」，不能拖
+ *
+ * 刷怪区和碰撞盒都是矩形，但拖动一个「可能延伸到图外」的大矩形需要处理「抓住的是框内哪一点」
+ * 与「指针出了 viewBox 怎么算」两件事，而它的收益只是省掉两次坐标输入 ——
+ * 表单里四个数字（加 Tiled 口径对照）足够精确。所以：画布上拖 = 新建，点已有 = 打开表单。
  *
  * ## 别把点击处理挂在 `<svg>` 上，挂在垫底的那块透明矩形上
  *
@@ -63,8 +70,8 @@ export interface MapLayerVisibility {
   collision: boolean;
 }
 
-/** 画布模式：看 / 画刷怪区 / 放 NPC / 设复活点 */
-export type CanvasMode = "view" | "spawn" | "npc" | "revive";
+/** 画布模式：看 / 画刷怪区 / 放 NPC / 设复活点 / 画碰撞盒 */
+export type CanvasMode = "view" | "spawn" | "npc" | "revive" | "collision";
 
 /** 画布上拖出来的矩形（**Tiled 口径**：左上角原点、y 向下；可直接对应 `viewBox`） */
 export interface DrawBox {
@@ -100,6 +107,13 @@ const DOT_RADIUS_RATIO = 1 / 175;
 const LABEL_RATIO = 1 / 60;
 /** 拖出来的框小于这个像素（TMX 单位）就当没画 —— 与 `SPAWN_AREA_LIMITS.minSize` 同一口径 */
 export const MIN_DRAW_PX = 16;
+/**
+ * 碰撞盒的最小绘制尺寸（TMX 单位）
+ *
+ * 比刷怪区低：碰撞盒可以是「贴墙的一条缝」（现有数据里有 96×28、102×33 这种），
+ * 拿 16px 去卡会让人画不出正常的小阻挡。服务端下限是 1px，这里留 4px 纯粹是防手抖。
+ */
+export const MIN_COLLISION_DRAW_PX = 4;
 
 export function MapCanvas({
   detail,
@@ -108,12 +122,15 @@ export function MapCanvas({
   onPickNpc,
   onPickRevive,
   onDrawBox,
+  onDrawCollisionBox,
+  onPickCollision,
   onPlaceNpc,
   onMoveNpc,
   onPlaceRevive,
   mode = "view",
   selectedAreaId,
   selectedNpcId,
+  selectedCollisionId,
   maxWidth = "min(100%, 62vh)",
 }: {
   detail: MapDetail;
@@ -126,6 +143,10 @@ export function MapCanvas({
   onPickRevive?: (point: MapRevivePoint) => void;
   /** 画完一个矩形（Tiled 口径）；由上层换算成世界坐标并打开表单 */
   onDrawBox?: (box: DrawBox) => void;
+  /** 画完一个碰撞盒（Tiled 口径）—— 与刷怪区分开是因为两边的表单不一样 */
+  onDrawCollisionBox?: (box: DrawBox) => void;
+  /** 点击一个已有碰撞盒：打开编辑表单 */
+  onPickCollision?: (box: MapCollision) => void;
   /** `npc` 模式点空白：把落点（Tiled 口径）交给上层打开「放哪个 NPC」的表单 */
   onPlaceNpc?: (point: DrawPoint) => void;
   /** `npc` 模式拖动已有 NPC 点并松手（已经判断过「确实移动了」） */
@@ -138,6 +159,8 @@ export function MapCanvas({
   selectedAreaId?: number;
   /** 正在编辑的 NPC 点：圈加粗 + 换色 */
   selectedNpcId?: number;
+  /** 正在编辑的碰撞盒：描边加粗（碰撞盒没有名字，全靠高亮认人） */
+  selectedCollisionId?: number;
   /** 宽度上限：页面上按视口高度限（一屏能同时看到配置与地图），放大镜里给 100% */
   maxWidth?: string;
 }) {
@@ -153,7 +176,7 @@ export function MapCanvas({
   const ratio = detail.height > 0 ? detail.width / detail.height : 1;
   const dotRadius = Math.max(8, detail.width * DOT_RADIUS_RATIO);
   const labelSize = Math.max(20, detail.width * LABEL_RATIO);
-  const collisionObjects = collisionOf(detail);
+  const collisionBoxes = detail.collisions;
   const editing = mode !== "view";
 
   /**
@@ -201,14 +224,14 @@ export function MapCanvas({
   /**
    * 空白处按下（垫底透明矩形）
    *
-   * 三种模式三种含义：画框 / 放 NPC / 设复活点。全都把指针捕获到 `svg` 上 ——
+   * 四种编辑模式四种含义：画刷怪区 / 画碰撞盒 / 放 NPC / 设复活点。全都把指针捕获到 `svg` 上 ——
    * 之后 move / up 统一由 `svg` 收，拖到图外也不会丢事件。
    */
   const onBackgroundDown = (event: React.PointerEvent<SVGRectElement>) => {
     if (!editing || event.button !== 0) return;
     event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
     const point = pointOf(event);
-    if (mode === "spawn") {
+    if (mode === "spawn" || mode === "collision") {
       setDraft({ x0: point.x, y0: point.y, x1: point.x, y1: point.y });
       return;
     }
@@ -241,9 +264,12 @@ export function MapCanvas({
     if (draft) {
       const box = normalizeBox({ ...draft, x1: point.x, y1: point.y });
       setDraft(null);
-      // 太小的框当没画：手抖点一下会得到一个 1×1 的区域，那种区域能刷但不能用
-      if (box.width < MIN_DRAW_PX || box.height < MIN_DRAW_PX) return;
-      onDrawBox?.(box);
+      // 太小的框当没画：手抖点一下会得到一个 1×1 的区域，那种区域能刷但不能用。
+      // 碰撞盒允许更薄（贴墙的缝），所以两边门槛不同
+      const minSize = mode === "collision" ? MIN_COLLISION_DRAW_PX : MIN_DRAW_PX;
+      if (box.width < minSize || box.height < minSize) return;
+      if (mode === "collision") onDrawCollisionBox?.(box);
+      else onDrawBox?.(box);
       return;
     }
     if (!drag) return;
@@ -301,7 +327,7 @@ export function MapCanvas({
         className={`absolute inset-0 h-full w-full ${editing ? "cursor-crosshair" : ""} ${dragging ? "cursor-grabbing" : ""}`}
         style={editing ? { touchAction: "none" } : undefined}
         role="img"
-        aria-label={`${detail.label} 的刷怪区与点位`}
+        aria-label={`${detail.label} 的刷怪区、点位与碰撞盒`}
         onPointerMove={movePointer}
         onPointerUp={releasePointer}
         onPointerCancel={() => {
@@ -319,23 +345,35 @@ export function MapCanvas({
           onPointerDown={onBackgroundDown}
         />
 
-        {/* 碰撞盒：垫在最底层，只给轮廓（填充会糊住底图，反而看不出刷怪区压在什么地形上） */}
+        {/* 碰撞盒（服务端 map_collisions）：垫在最底层，只给轮廓 —— 填充会糊住底图，
+            反而看不出刷怪区压在什么地形上。查看模式下点开可改（画盒模式下整层不吃事件） */}
         {visible.collision &&
-          collisionObjects.map((object) => (
-            <rect
-              key={`collision-${object.id}`}
-              x={object.x}
-              y={object.y}
-              width={object.width}
-              height={object.height}
-              fill={COLOR.collision}
-              fillOpacity={0.16}
-              stroke={COLOR.collision}
-              strokeOpacity={0.65}
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
+          collisionBoxes.map((box) => {
+            const rect = tiledBoxOf(box);
+            const active = box.id === selectedCollisionId;
+            return (
+              <rect
+                key={`collision-${box.id}`}
+                x={rect.x}
+                y={rect.y}
+                width={rect.width}
+                height={rect.height}
+                fill={COLOR.collision}
+                fillOpacity={active ? 0.3 : 0.16}
+                stroke={box.fullyOutside ? COLOR.outside : COLOR.collision}
+                strokeOpacity={0.65}
+                strokeWidth={active ? 2.5 : 1}
+                strokeDasharray={box.fullyOutside ? `${labelSize * 0.3} ${labelSize * 0.2}` : undefined}
+                vectorEffect="non-scaling-stroke"
+                className={editing ? undefined : "cursor-pointer"}
+                // 画盒模式下整层不接事件：否则「在碰撞盒上按下」会开表单而不是开始拖新框
+                pointerEvents={editing ? "none" : undefined}
+                onClick={() => onPickCollision?.(box)}
+              >
+                <title>{`碰撞盒 #${box.id}\n世界坐标中心 (${box.cx}, ${box.cy}) ${box.w}×${box.h}${box.fullyOutside ? "\n⚠ 整块落在地图外，画面上看不到它（四面围墙允许超出，但这种是数据错误）" : ""}`}</title>
+              </rect>
+            );
+          })}
 
         {/* 服务端刷怪区（实）：click 打开编辑弹窗。绘制模式下不响应点击（否则一按就弹窗） */}
         {visible.spawn &&
@@ -495,6 +533,7 @@ const MODE_HINT: Record<CanvasMode, { text: string; color: string } | null> = {
   spawn: { text: "在图上拖出矩形 = 新建刷怪区 · Esc 取消", color: "#ddd6fe" },
   npc: { text: "点空白 = 放一个 NPC（再选是谁）· 拖已有点 = 挪位置 · Esc 取消", color: "#bae6fd" },
   revive: { text: "点哪里 = 复活点就设在哪里 · 拖动已有点 = 挪位置 · Esc 取消", color: "#a7f3d0" },
+  collision: { text: "在图上拖出矩形 = 新建碰撞盒 · 查看模式下点已有框可改 · Esc 取消", color: "#fecdd3" },
 };
 
 /**
@@ -581,9 +620,19 @@ function normalizeBox(box: { x0: number; y0: number; x1: number; y1: number }): 
   };
 }
 
-/** 世界坐标的刷怪区 → Tiled 口径的矩形（`cy = -(y + h/2)` 的反函数） */
-export function tiledBoxOf(area: MapSpawnArea): { x: number; y: number; width: number; height: number } {
-  return { x: area.cx - area.w / 2, y: -area.cy - area.h / 2, width: area.w, height: area.h };
+/**
+ * 世界坐标的矩形 → Tiled 口径的矩形（`cy = -(y + h/2)` 的反函数）
+ *
+ * 刷怪区与碰撞盒共用：两者在几何上是同一种东西（中心 + 尺寸），只是玩法含义不同。
+ * 参数收成结构类型而不是 `MapSpawnArea`，就是为了不必为碰撞盒再写一份同样的算式。
+ */
+export function tiledBoxOf(box: { cx: number; cy: number; w: number; h: number }): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  return { x: box.cx - box.w / 2, y: -box.cy - box.h / 2, width: box.w, height: box.h };
 }
 
 /** Tiled 口径的矩形 → 提交给服务端的世界坐标（`cx = x + w/2`、`cy = -(y + h/2)`） */
@@ -611,12 +660,3 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** 取一个对象组（不存在给空数组：地图不一定有 collision 组） */
-function groupOf(detail: MapDetail, name: string): MapObject[] {
-  return detail.groups.find((group) => group.name === name)?.objects ?? [];
-}
-
-/** 碰撞盒（对象组 collision）—— 碰撞不归后台管（它属于 TMX 的瓦片物理），这里只画 */
-export function collisionOf(detail: MapDetail): MapObject[] {
-  return groupOf(detail, "collision");
-}

@@ -3,12 +3,13 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, Button, Card, EmptyState, Field as FormField, Input, Select, Spinner } from "../components/ui";
 import { MapCanvas, type CanvasMode, type DrawBox, type DrawPoint, type MapLayerVisibility } from "../components/map/MapCanvas";
+import { CollisionFormDialog } from "../components/map/CollisionForm";
 import { MapMonitorDialog } from "../components/map/MapMonitor";
 import { NpcPointFormDialog } from "../components/map/NpcPointForm";
 import { outOfBoundsCount, pointsOutOfBounds } from "../components/map/bounds";
 import { SpawnAreaFormDialog } from "../components/map/SpawnAreaForm";
 import {
-  GroupsDialog,
+  CollisionsDialog,
   LayersDialog,
   NpcPointsDialog,
   SourcesDialog,
@@ -16,7 +17,7 @@ import {
   WorldMonstersDialog,
 } from "../components/map/MapDialogs";
 import { mapsApi, refreshMapCatalog } from "../api";
-import type { MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
+import type { MapCollision, MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
 import { toastSuccess } from "../store/toast";
 
 /** 类型码（服务端生成的字面量联合："0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
@@ -32,7 +33,7 @@ interface MapForm {
 }
 
 /** 打开中的观测弹窗（页面主视图只留配置 + 地图，其余按需打开） */
-type DialogKey = "layers" | "points" | "spawn" | "monsters" | "groups" | "sources" | "monitor" | null;
+type DialogKey = "layers" | "points" | "spawn" | "collisions" | "monsters" | "sources" | "monitor" | null;
 
 /** 叠加层的默认开关：碰撞盒数量大（每图上百个），默认关；其余默认开 */
 const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: true, collision: false };
@@ -50,7 +51,11 @@ const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: tru
  * | 块 | 能不能改 | 改了怎么生效 |
  * |---|---|---|
  * | 名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 | **能改**（`PATCH /admin/maps/:id`） | 立即（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
- * | 图层 / 对象组 / 刷怪区 / 场上怪物 | 只读 | 改 TMX → 跑导入工具 → 重打包客户端 |
+ * | 刷怪区 / NPC 点位 / 复活点 / 碰撞盒 | **能改**（在图上拖框 / 点放） | 客户端下次进游戏拉快照（世界播种等该图分域重新加载） |
+ * | 图层 / 场上怪物 | 只读 | 改 TMX → 跑导入工具 → 重打包客户端 |
+ *
+ * #676 起 TMX 里**一个对象组都没有**（`tools/strip-map-objects.cjs` 整组删除），
+ * 地图文件 = 瓦片 + 图层，只负责显示。所以「对象组」那块视图也一起下架了。
  *
  * ## 为什么观测数据都在弹窗里
  *
@@ -61,11 +66,10 @@ const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: tru
  *
  * | 展示块 | 口径 | 来源 |
  * |---|---|---|
- * | 对象组 / NPC / 复活点 | **Tiled 原始坐标**（左上角原点、y 向下） | 服务端生成快照（源自 TMX） |
- * | 刷怪区 | **世界坐标**（原点 = 地图左上角、y 轴向上，故 cy 为负） | `map_spawn_areas` 表 |
+ * | 刷怪区 / NPC 点位 / 复活点 / 碰撞盒 | **世界坐标**（原点 = 地图左上角、y 轴向上，故 cy 为负） | 各自的库表 |
  *
- * 同一块区域两条路的数值本来就不同（差一次 y 取反），不是数据不一致 —— 图上让它们重合，
- * 才是「导入没算错」的判据。
+ * 画布是 Tiled 口径（左上角、y 向下），所以「读库 → 画」只做一次 `y = -cy`、提交时反过来。
+ * 换算只在 `MapCanvas` 的 `tiledBoxOf` / `worldBoxOf` 两处，别在页面里再手算一遍。
  */
 export function MapsPage() {
   const [list, setList] = useState<MapSummary[]>([]);
@@ -80,6 +84,7 @@ export function MapsPage() {
   const [dialog, setDialog] = useState<DialogKey>(null);
   const [focusArea, setFocusArea] = useState<number | undefined>(undefined);
   const [focusNpc, setFocusNpc] = useState<number | undefined>(undefined);
+  const [focusCollision, setFocusCollision] = useState<number | undefined>(undefined);
   /** 放大地图（密集的图在 620px 宽下标签会挤，这里给到 1024） */
   const [zoomed, setZoomed] = useState(false);
   /** 画布模式：看 / 画刷怪区 / 放 NPC / 设复活点（#672 从「绘制开关」扩成四态） */
@@ -92,6 +97,10 @@ export function MapsPage() {
   const [npcDraft, setNpcDraft] = useState<DrawPoint | null>(null);
   /** 正在编辑的 NPC 点位；与 npcDraft 互斥 */
   const [editNpc, setEditNpc] = useState<MapNpc | null>(null);
+  /** 刚拖出来的碰撞盒（Tiled 口径）—— 有它就打开新建表单 */
+  const [collisionDraft, setCollisionDraft] = useState<DrawBox | null>(null);
+  /** 正在编辑的碰撞盒；与 collisionDraft 互斥 */
+  const [editCollision, setEditCollision] = useState<MapCollision | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -166,6 +175,8 @@ export function MapsPage() {
     setEditArea(null);
     setNpcDraft(null);
     setEditNpc(null);
+    setCollisionDraft(null);
+    setEditCollision(null);
   };
 
   /** 从图上点刷怪区 → 直接打开编辑表单（列表弹窗仍然保留，用来总览与删） */
@@ -203,6 +214,18 @@ export function MapsPage() {
     }
   };
 
+  /** `collision` 模式拖完一个框 → 打开新建表单（框已带位置尺寸，只差确认 / 微调） */
+  const onDrawCollisionBox = (box: DrawBox) => {
+    setEditCollision(null);
+    setCollisionDraft(box);
+  };
+
+  /** 点图上已有的碰撞盒 → 打开编辑表单（碰撞盒没有名字，靠画布高亮认人） */
+  const openCollision = (box: MapCollision) => {
+    setCollisionDraft(null);
+    setEditCollision(box);
+  };
+
   /** `revive` 模式点空白 → 直接设 / 挪复活点（不需要表单：位置就是全部信息） */
   const onPlaceRevive = async (point: DrawPoint) => {
     if (!detail) return;
@@ -233,6 +256,8 @@ export function MapsPage() {
     setEditArea(null);
     setNpcDraft(null);
     setEditNpc(null);
+    setCollisionDraft(null);
+    setEditCollision(null);
     void loadList();
     if (!selected) return;
     mapsApi
@@ -266,6 +291,8 @@ export function MapsPage() {
     setEditArea(null);
     setNpcDraft(null);
     setEditNpc(null);
+    setCollisionDraft(null);
+    setEditCollision(null);
   };
 
   const dirty = !!form && !!detail && !sameForm(form, formOf(detail));
@@ -276,7 +303,7 @@ export function MapsPage() {
     <div className="space-y-3">
       <PageHeader
         title="地图管理"
-        description="玩法配置、刷怪区、NPC 与复活点都在这里改，保存即生效；底图与碰撞仍是客户端资源。"
+        description="玩法配置、刷怪区、NPC、复活点与碰撞盒都在这里改，保存即生效；地图文件只剩瓦片（底图与预览图是资源）。"
         actions={
           <>
             <Badge tone="indigo">可编辑玩法配置</Badge>
@@ -320,6 +347,8 @@ export function MapsPage() {
                         <span>刷怪区 {item.spawnAreaCount}</span>
                         <span>·</span>
                         <span>NPC {item.npcPointCount}</span>
+                        <span>·</span>
+                        <span>碰撞 {item.collisionCount}</span>
                         {/* 复活点只有「有 / 没有」两种状态：没有时不必占位，写出来反而像少了一个 */}
                         {item.hasRevivePoint ? <span className="text-emerald-400/70">· 复活点</span> : null}
                       </div>
@@ -390,14 +419,15 @@ export function MapsPage() {
                   title="地图"
                   description={
                     <>
-                      刷怪区、NPC 与复活点都在**这张图上改**（#667 / #672 起 TMX 不再是它们的来源）：
+                      刷怪区、NPC、复活点、碰撞盒都在**这张图上改**（#667 / #672 / #676 起 TMX 不再是它们的来源）：
                       选模式 → 在图上拖 / 点一下，填完即入库。
                       <br />
-                      位置必须落在图内：越界的那块会被画布裁掉，所以越界的区域描成红色虚线、越界的点位画成红圈虚线 —— 新建时越界会被服务端直接拒。
+                      区域与点位必须落在图内：越界的那块会被画布裁掉，所以越界的区域描成红色虚线、越界的点位画成红圈虚线 —— 新建时越界会被服务端直接拒。
+                      **碰撞盒例外**：四面围墙本来就画在图外，允许越界，只有「整块在图外」会标红。
                       <br />
                       资源 {detail.src || "—"} · {detail.cols}×{detail.rows} 格（{detail.width}×{detail.height} px）· 图层 {detail.layerCount} · NPC{" "}
-                      {detail.npcPoints.length} · 复活点 {detail.revivePoint ? "已设" : "未设"} · 刷怪区 {detail.spawnAreaCount} · 场上怪物{" "}
-                      {detail.worldMonsterCount}
+                      {detail.npcPoints.length} · 复活点 {detail.revivePoint ? "已设" : "未设"} · 刷怪区 {detail.spawnAreaCount} · 碰撞盒{" "}
+                      {detail.collisions.length} · 场上怪物 {detail.worldMonsterCount}
                     </>
                   }
                   actions={
@@ -416,7 +446,7 @@ export function MapsPage() {
                   <LayerLegend visible={layers} onChange={setLayers} />
                   <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
                     <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-dashed" style={{ borderColor: "#f43f5e" }} />
-                    红色虚线 = 越出地图边界的区域 / 点位（超出部分被画布裁掉，图上只剩缺角）
+                    红色虚线 = 越出地图边界的区域 / 点位（超出部分被画布裁掉，图上只剩缺角）；碰撞盒不参与越界计数（围墙本来就画在图外）
                   </p>
                   <div className="mt-2">
                     <MapCanvas
@@ -428,7 +458,10 @@ export function MapsPage() {
                       mode={mode}
                       selectedAreaId={editArea?.id}
                       selectedNpcId={editNpc?.id}
+                      selectedCollisionId={editCollision?.id}
                       onDrawBox={onDrawBox}
+                      onDrawCollisionBox={onDrawCollisionBox}
+                      onPickCollision={openCollision}
                       onPlaceNpc={onPlaceNpc}
                       onMoveNpc={onMoveNpc}
                       onPlaceRevive={onPlaceRevive}
@@ -469,8 +502,14 @@ export function MapsPage() {
                     <Button variant="ghost" onClick={() => setDialog("layers")}>
                       图层（{detail.layerCount}）
                     </Button>
-                    <Button variant="ghost" onClick={() => setDialog("groups")}>
-                      对象组（{detail.groups.length}）
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setFocusCollision(undefined);
+                        setDialog("collisions");
+                      }}
+                    >
+                      碰撞盒（{detail.collisions.length}）
                     </Button>
                     <Button variant="ghost" onClick={() => setDialog("sources")}>
                       数据来源
@@ -511,6 +550,20 @@ export function MapsPage() {
           onClose={() => {
             setDraft(null);
             setEditArea(null);
+          }}
+          onSaved={reloadDetail}
+        />
+      ) : null}
+      {detail ? (
+        <CollisionFormDialog
+          open={!!collisionDraft || !!editCollision}
+          mapId={detail.id}
+          detail={detail}
+          box={editCollision}
+          draft={collisionDraft}
+          onClose={() => {
+            setCollisionDraft(null);
+            setEditCollision(null);
           }}
           onSaved={reloadDetail}
         />
@@ -563,7 +616,16 @@ export function MapsPage() {
         />
       ) : null}
       <LayersDialog open={dialog === "layers"} detail={detail} onClose={() => setDialog(null)} />
-      <GroupsDialog open={dialog === "groups"} detail={detail} onClose={() => setDialog(null)} />
+      <CollisionsDialog
+        open={dialog === "collisions"}
+        detail={detail}
+        focusId={focusCollision}
+        onEdit={(box) => {
+          setDialog(null);
+          openCollision(box);
+        }}
+        onClose={() => setDialog(null)}
+      />
       <SourcesDialog open={dialog === "sources"} detail={detail} onClose={() => setDialog(null)} />
     </div>
   );
@@ -578,6 +640,7 @@ export function MapsPage() {
 function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: CanvasMode) => void }) {
   const items: Array<{ key: CanvasMode; label: string; active: string }> = [
     { key: "spawn", label: "绘制刷怪区", active: "bg-violet-500/20 text-violet-200" },
+    { key: "collision", label: "绘制碰撞盒", active: "bg-rose-500/20 text-rose-200" },
     { key: "npc", label: "放置 NPC", active: "bg-sky-500/20 text-sky-200" },
     { key: "revive", label: "设复活点", active: "bg-emerald-500/20 text-emerald-200" },
   ];
