@@ -115,7 +115,7 @@ function hydrateEquipment(cfg) {
   const snapCfg = cfg("game-config");
   const meta = factory.equipmentMeta();
 
-  snapCfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates, meta.recycleCurve);
+  snapCfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates);
   equipments.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels);
   equipments.applyEquipmentSlots(factory.equipmentSlots());
 

@@ -128,7 +128,7 @@ const MODULES = {
   adminMall: { target: "admin", export: "mallApi" },
   adminFashion: { target: "admin", export: "fashionsApi" },
   adminDrop: { target: "admin", export: "dropApi" },
-  // 角色等级表（#655）：60 行属性 + 经验；levelExps 只剩经验一列（同源），这里是全字段
+  // 角色等级表（#655）：60 行属性 + 经验（同表同行，没有独立的「升级经验」接口了）
   adminRoleLevel: { target: "admin", export: "roleLevelsApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
   // 运行时参数（#605）：掉落手感 / 自动战斗 / 帮会规则，单行三组 JSON
